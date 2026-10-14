@@ -125,6 +125,10 @@ public enum SettingsSearchCatalog {
     public static let touchBarToggleTitleKey = "触控栏歌词"
     /// 「快捷键」页「展开/收起触控栏歌词」那一行的标题。那一行只在有触控栏时出现,没有触控栏时设置搜索不收这一条。
     public static let touchBarHotkeyTitleKey = "展开/收起触控栏歌词"
+    /// 「歌词显示」页「网页歌词」那一段的分段取值(`AppearanceSettingsTab.Section.webLyrics`),同触控栏不是一个 `LyricsSurface`。
+    public static let webLyricsSectionValue = "webLyrics"
+    /// 那一段总开关的标题。
+    public static let webLyricsToggleTitleKey = "网页歌词"
 
     /// 面包屑里不是 L10n 键的品牌名(AccountDestination.title 对这几个直接返回字面量)。守卫核
     /// 键是否在 catalog 里时跳过它们。
@@ -202,6 +206,15 @@ public enum SettingsSearchCatalog {
                             sectionValue: touchBarSectionValue,
                             titleKey: title, subtitleKey: sub, keywords: kw,
                             pathKeys: ["歌词显示", "触控栏"] + (group.map { [$0] } ?? []))
+    }
+
+    /// 「歌词显示 › 网页歌词」那一段(19 章)。没有编辑台和抽屉,`drawer` 留空。
+    private static func webLyrics(_ title: String, sub: String? = nil, kw: [String] = []) -> SettingsSearchEntry {
+        SettingsSearchEntry(destination: .tab("appearance"),
+                            sectionKey: LyricsSurface.appearanceSectionStorageKey,
+                            sectionValue: webLyricsSectionValue,
+                            titleKey: title, subtitleKey: sub, keywords: kw,
+                            pathKeys: ["歌词显示", "网页歌词"])
     }
 
     private static func shortcut(_ title: String, sub: String? = nil, kw: [String] = []) -> SettingsSearchEntry {
@@ -375,6 +388,17 @@ public enum SettingsSearchCatalog {
         surface(.menuBar, "悬停显示播放控制", kw: ["悬停", "播放控制", "鼠标"], group: "行为"),
         surface(.menuBar, "无歌词时显示歌名", kw: ["歌名", "兜底", "没有歌词"], group: "行为"),
         surface(.menuBar, "恢复默认", sub: "不含宽度和总开关", kw: ["重置"]),
+
+        // ---- 歌词显示 › 网页歌词 ----
+        webLyrics(webLyricsToggleTitleKey, sub: "在浏览器中显示歌词：手机、平板与歌词窗口一致，OBS 浏览器源与悬浮歌词一致",
+                  kw: ["网页", "浏览器", "副屏", "手机", "平板", "iPad", "OBS", "直播", "web", "开关"]),
+        webLyrics("允许局域网设备访问", sub: "同一 Wi-Fi 下的手机、平板扫描二维码即可打开，链接带有随机密钥",
+                  kw: ["局域网", "手机", "平板", "二维码", "Wi-Fi", "LAN"]),
+        webLyrics("副屏画面", kw: ["副屏", "浏览器", "打开", "预览", "localhost"]),
+        webLyrics("允许局域网设备控制播放", sub: "在手机、平板上点按钮暂停、切歌，点歌词跳到那一句",
+                  kw: ["控制", "遥控", "播放", "暂停", "切歌", "按钮", "手机", "平板"]),
+        webLyrics("OBS 浏览器源", kw: ["OBS", "直播", "浏览器源", "推流", "链接"]),
+        webLyrics("手机、平板", kw: ["手机", "平板", "iPad", "副屏", "二维码", "链接"]),
 
         // ---- 歌词显示 › 触控栏 ----
         touchBar(touchBarToggleTitleKey, kw: ["Touch Bar", "触控栏", "功能栏", "Control Strip", "开关"]),

@@ -96,6 +96,8 @@ enum ConfigPortability {
         // 收听里程碑报过哪几档、累计数上次看到多少(ListenMilestoneCenter)—— 跟上面
         // np:unknownPlayerNotices 同一类「这台机器报过没有」。
         "np:listenMilestoneLedger",
+        // 网页歌词局域网链接的密钥:换一台机器就该是另一把,也不该随备份、镜像、诊断带出去。
+        "np:webLyricsToken",
         "np:overlayStyle",
         "np:overlayPositionTop",
         "np:overlayPositionOrigin",

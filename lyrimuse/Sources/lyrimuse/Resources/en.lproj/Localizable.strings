@@ -166,6 +166,7 @@
 "MusicBrainz 别名" = "Alias on MusicBrainz";
 "MusicBrainz 录音 ID 一致" = "Same MusicBrainz recording";
 "Musixmatch 拒绝了匿名令牌请求（反爬限流，hint=captcha），并非网络故障，稍后重试通常可恢复" = "Musixmatch rejected the anonymous token request (anti-bot rate limiting, hint=captcha) — not a network fault, this usually recovers after a while";
+"OBS 浏览器源" = "OBS Browser Source";
 "QQ 音乐" = "QQ Music";
 "QQ 音乐专辑页" = "QQ Music album page";
 "QQ 音乐播放的歌曲 ID 一致" = "Same QQ Music song ID from playback";
@@ -404,6 +405,8 @@
 "停止搜索" = "Stop Searching";
 "停止自动匹配" = "Stop Auto-Matching";
 "停止重新匹配" = "Stop Re-matching";
+"允许局域网设备控制播放" = "Let Devices on Your Local Network Control Playback";
+"允许局域网设备访问" = "Allow Devices on Your Local Network";
 "光盘" = "Disc";
 "免费开源，感谢你的 ⭐ 支持" = "Free and open source. A ⭐ means a lot — thank you!";
 "全屏时隐藏" = "Hide in Full Screen";
@@ -530,6 +533,7 @@
 "前往配置「%@」" = "Configure “%@”";
 "前进" = "Forward";
 "剩余时长" = "Remaining";
+"副屏画面" = "Second Screen";
 "副行" = "Second Line";
 "功能栏中的图标，轻点即可展开歌词" = "An icon in the Control Strip — tap it to expand the lyrics";
 "功能清单" = "Feature List";
@@ -618,6 +622,7 @@
 "各处显示为纯音乐，不会自动搜索歌词。原有歌词仍会保留，取消标记即可恢复" = "Shown as Instrumental everywhere, and lyrics aren’t searched for automatically. The existing lyrics are kept and come back when you unmark it";
 "合唱署名" = "Artist credit";
 "合并明细" = "Play Breakdown";
+"同一 Wi-Fi 下的手机、平板扫描二维码即可打开，链接带有随机密钥" = "Phones and tablets on the same Wi-Fi can open it by scanning the QR code. The link includes a random key.";
 "同一首歌另外几份改过的歌词会换成这一份，其他写法也跟着用它。被换掉的那几份会另存一份备份。" = "The other corrected lyrics of this song will be replaced with these, and its other versions will use them too. The replaced lyrics are kept in a backup.";
 "同名但时长不同，按另一段录音单独保存歌词" = "Same title but a different length, so its lyrics are saved separately as another recording";
 "同曲条目" = "Entries for This Song";
@@ -691,9 +696,12 @@
 "在功能栏中显示 Lyrimuse 图标，轻点展开歌词" = "Adds a Lyrimuse button to the Control Strip; tap it to show lyrics";
 "在后台下载，退出 Lyrimuse 时安装" = "Downloads in the background and installs when you quit Lyrimuse";
 "在外部编辑器中编辑歌词" = "Edit Lyrics in External Editor";
+"在手机、平板上点按钮暂停、切歌，点歌词跳到那一句" = "Tap the buttons on a phone or tablet to pause or skip, or tap a lyric to jump to it";
 "在播放器中播放任意歌曲，歌词将自动显示" = "Play something in your player and lyrics will appear here";
 "在歌词下方显示一行译文" = "Show a line of translation under the lyrics";
 "在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱颜色」，其余使用「未唱颜色」。仅在显示歌词时出现。" = "Puts a menu bar icon at the far left or right of the lyrics slot; its color fills from the bottom up to show playback progress — the filled part in Sung Color, the rest in Unsung Color. Only appears while lyrics are showing.";
+"在浏览器中打开" = "Open in Browser";
+"在浏览器中显示歌词：手机、平板与歌词窗口一致，OBS 浏览器源与悬浮歌词一致" = "Show lyrics in a browser: on phones and tablets they match the Lyrics Window, as an OBS browser source they match the Floating Lyrics.";
 "在浏览器里听歌也能显示歌词。点「+」配对你用的浏览器，进度直接从网页读，换歌后马上对准。" = "Lyrics work for songs playing in a browser too. Click + to pair the browser you use; the position is read straight from the page, so lyrics line up right after a song change.";
 "在浏览器里授权" = "Authorize in Your Browser";
 "在系统设置中打开 Lyrimuse，然后点「重启歌词引擎」。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。" = "Turn on Lyrimuse in System Settings, then click Restart Lyrics Engine. If it’s already on but still not working, remove Lyrimuse with “−” and add it back with “+”.";
@@ -1037,6 +1045,7 @@
 "所选条目无逐字时间轴" = "The selected entry has no word timing";
 "手动调整" = "Manually Adjusted";
 "手动重新匹配" = "Manual re-match";
+"手机、平板" = "Phones & Tablets";
 "打包日志、崩溃记录与运行状态，已移除账号凭据；含曲目名与本机路径，公开前请检查" = "Logs, crash reports and app state in one file, with account credentials removed. Track names and local paths stay in, so review it before posting publicly";
 "打开" = "Open";
 "打开 %@" = "Open %@";
@@ -1392,6 +1401,7 @@
 "未运行" = "Not Running";
 "未返回候选" = "No candidate returned";
 "未连接" = "Not connected";
+"未连接局域网" = "Not connected to a local network";
 "未配置" = "Not set up";
 "未配置（可选）" = "Not configured (optional)";
 "本地暂无待补交的收听记录" = "No scrobbles are waiting locally";
@@ -1585,6 +1595,7 @@
 "正在记录" = "Scrobbling now";
 "正在读取其余歌曲…" = "Loading the rest…";
 "正在连接 Discord…" = "Connecting to Discord…";
+"正在连接 Lyrimuse…" = "Connecting to Lyrimuse…";
 "正在采用…" = "Applying…";
 "正在重启歌词引擎并重新检查授权…" = "Restarting the lyrics engine and waiting for it to check access again…";
 "正在重启歌词引擎，需要重新读取歌词缓存，通常需要一到两分钟…" = "Restarting the lyrics engine. It has to read the whole lyrics cache again, which usually takes a minute or two…";
@@ -1705,6 +1716,7 @@
 "用于将当前播放状态推送到网页小组件和状态徽章" = "Pushes the current playback status to the web widget and status badge";
 "用当前配色覆盖" = "Overwrite with Current Colors";
 "用户名下方显示" = "Shown Under Your Name";
+"用手机相机扫描二维码" = "Scan the QR code with your phone's camera";
 "由副行决定" = "Set by Second Line";
 "申请页只需填写「应用名称」，其余可留空。提交后页面会显示 API Key 和 Shared Secret；Secret 只显示这一次，以后找不回来，忘了就再建一个应用。" = "The form only needs an application name; leave everything else blank. After you submit it, the page shows your API Key and Shared Secret. The secret is shown only this once and can't be looked up later — if you lose it, create another application.";
 "界面语言" = "Language";
@@ -1735,6 +1747,7 @@
 "立即更新" = "Update Now";
 "立即联网自动匹配缺失的歌词，无需等待歌曲再次播放" = "Auto-match missing lyrics online now instead of waiting for each song to play again";
 "立即重启" = "Restart Now";
+"端口 %lld 已被占用，网页歌词未能启动" = "Port %lld is already in use. Web Lyrics could not start.";
 "第" = "Page";
 "第 %1$d 步，共 %2$d 步" = "Step %1$d of %2$d";
 "第 %@ 天" = "Day %@";
@@ -1834,6 +1847,8 @@
 "网页推送" = "Web Push";
 "网页播放器" = "Web Players";
 "网页播放器不会主动报告精确进度，开启此选项可在切歌后立即校准。" = "Web players don't report precise position; this switch lets Lyrimuse recalibrate right after a track change.";
+"网页歌词" = "Web Lyrics";
+"网页歌词未能启动：%@" = "Web Lyrics could not start: %@";
 "网页版" = "Web";
 "罗马字，如 こんにちは → konnichiwa" = "Romaji, e.g. こんにちは → konnichiwa";
 "罗马字，如 안녕하세요 → annyeonghaseyo" = "Romanization, e.g. 안녕하세요 → annyeonghaseyo";
@@ -2095,6 +2110,7 @@
 "连接后可获取 Apple Music 官方歌词，需要 Apple Music 订阅" = "Connect to get Apple Music's official lyrics. Requires an Apple Music subscription";
 "连接失败或超时，未收到任何响应" = "Connection failed or timed out with no response";
 "连接失败或超时：%@" = "Connection failed or timed out: %@";
+"连接已断开，正在重连…" = "Disconnected. Reconnecting…";
 "连接账号" = "Connect";
 "连续收听 %d 次，点按展开每一次" = "Played %d times in a row — click to show each one";
 "连续混音版，与原版编排不同" = "Continuous mix, arranged differently from the original";
@@ -2189,6 +2205,7 @@
 "钉钉" = "DingTalk";
 "钢琴键" = "Piano Keys";
 "链接" = "Link";
+"链接无效或已失效" = "This link is invalid or has expired.";
 "链接需以 http:// 或 https:// 开头" = "The link must start with http:// or https://";
 "锁定/解锁位置" = "Lock/Unlock Position";
 "锁定位置" = "Lock Position";

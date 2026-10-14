@@ -2432,6 +2432,8 @@ private struct AppearanceSettingsTab: View {
                 case .touchBar: EmptyView()
                 // 歌词窗口是一扇按需打开的真窗口,不做编辑台也不钉预览:要看效果就把那扇窗开着调。
                 case .lyricsWindow: EmptyView()
+                // 网页歌词没有预览:要看效果就在浏览器里打开链接。
+                case .webLyrics: EmptyView()
                 }
             }
             .animation(.easeOut(duration: 0.18), value: sectionRaw)
@@ -2486,7 +2488,7 @@ private struct AppearanceSettingsTab: View {
     /// `PanelQuickTarget.touchBar`)。分段取值在 `SettingsSearchCatalog.touchBarSectionValue`,
     /// 目录那边同样单列一个构造器。
     private enum Section: String, CaseIterable, Identifiable {
-        case overlay, notch, menuBar, touchBar, lyricsWindow
+        case overlay, notch, menuBar, touchBar, lyricsWindow, webLyrics
         var id: Self { self }
         var title: String {
             switch self {
@@ -2495,6 +2497,7 @@ private struct AppearanceSettingsTab: View {
             case .menuBar: return L10n.t("菜单栏")
             case .touchBar: return L10n.t("触控栏")
             case .lyricsWindow: return L10n.t("歌词窗口")
+            case .webLyrics: return L10n.t("网页歌词")
             }
         }
     }
@@ -2688,6 +2691,17 @@ private struct AppearanceSettingsTab: View {
                         lyricsWindowResetRow
                     }
                 }
+            }
+            .background { LastfmGlassGlow() }
+        case .webLyrics:
+            // 网页本身没有样式设置:副屏照歌词窗口画、OBS 照悬浮歌词画(19 章)。卡片不跟总开关联动,关着也能先看链接。
+            VStack(spacing: 14) {
+                modeToggleCard(
+                    icon: "safari",
+                    title: L10n.t(SettingsSearchCatalog.webLyricsToggleTitleKey),
+                    subtitle: L10n.t("在浏览器中显示歌词：手机、平板与歌词窗口一致，OBS 浏览器源与悬浮歌词一致"),
+                    isOn: $settings.webLyricsEnabled)
+                WebLyricsSettingsCard()
             }
             .background { LastfmGlassGlow() }
         }
@@ -7151,7 +7165,7 @@ private struct HotkeyCell<Recorder: View>: View {
 }
 
 /// 拷贝一条 `lyrimuse://` 链接;拷完图标换成对勾一会儿。悬停提示带上链接本身,不拷也看得见是哪一条。
-private struct CopyLinkButton: View {
+struct CopyLinkButton: View {
     let url: URL
     @State private var copied = false
 

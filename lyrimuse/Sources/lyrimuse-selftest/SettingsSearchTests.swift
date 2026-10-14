@@ -90,12 +90,13 @@ func runSettingsSearchTests() {
         guard let structRange = settingsView.range(of: "struct AppearanceSettingsTab") else { return [] }
         return enumCaseNames(after: "private enum Section:", in: String(settingsView[structRange.upperBound...]))
     }()
-    // 前三段跟 LyricsSurface 一一对应;第四段「触控栏」、第五段「歌词窗口」都不是 LyricsSurface(触控栏不按
-    // 宽度断句,歌词窗口没有常驻开关),取值只在目录那边各有一份常量。
+    // 前三段跟 LyricsSurface 一一对应;第四段「触控栏」、第五段「歌词窗口」、第六段「网页歌词」都不是 LyricsSurface
+    // (触控栏不按宽度断句,歌词窗口没有常驻开关,网页歌词不是这台 Mac 上的界面),取值只在目录那边各有一份常量。
     expectEqual(appearanceSectionCases,
                 LyricsSurface.allCases.map(\.appearanceSectionRawValue)
-                    + [SettingsSearchCatalog.touchBarSectionValue, SettingsSearchCatalog.lyricsWindowSectionValue],
-                "设置搜索: 「歌词显示」页前三段跟 LyricsSurface 一一对应,第四段是触控栏、第五段是歌词窗口")
+                    + [SettingsSearchCatalog.touchBarSectionValue, SettingsSearchCatalog.lyricsWindowSectionValue,
+                       SettingsSearchCatalog.webLyricsSectionValue],
+                "设置搜索: 「歌词显示」页前三段跟 LyricsSurface 一一对应,第四段是触控栏、第五段是歌词窗口、第六段是网页歌词")
     expectEqual(SettingsSearchCatalog.lyricsSectionDefault, lyricsSectionCases.first,
                 "设置搜索: 「歌词」页默认分段 = 枚举第一个 case")
     expectEqual(SettingsSearchCatalog.lastfmSectionDefault, lastfmSectionCases.first,

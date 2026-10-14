@@ -1003,6 +1003,57 @@
       "dest" : "tab:appearance",
       "path" : [
         "歌词显示",
+        "网页歌词"
+      ],
+      "subtitle" : "在浏览器中显示歌词：手机、平板与歌词窗口一致，OBS 浏览器源与悬浮歌词一致",
+      "title" : "网页歌词"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "网页歌词"
+      ],
+      "subtitle" : "同一 Wi-Fi 下的手机、平板扫描二维码即可打开，链接带有随机密钥",
+      "title" : "允许局域网设备访问"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "网页歌词"
+      ],
+      "title" : "副屏画面"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "网页歌词"
+      ],
+      "subtitle" : "在手机、平板上点按钮暂停、切歌，点歌词跳到那一句",
+      "title" : "允许局域网设备控制播放"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "网页歌词"
+      ],
+      "title" : "OBS 浏览器源"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "网页歌词"
+      ],
+      "title" : "手机、平板"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
         "触控栏"
       ],
       "title" : "触控栏歌词"

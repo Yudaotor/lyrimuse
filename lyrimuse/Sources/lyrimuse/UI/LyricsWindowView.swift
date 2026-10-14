@@ -12,7 +12,7 @@ import LyrimuseCore
 /// 要按锚点存在性分支,重锚低频);填色闭包里的 anchor/offset 仍直读协调器(TimelineView
 /// 按帧重跑,见 KaraokeWordText)。
 @MainActor
-private final class WindowPlayback: ObservableObject {
+final class WindowPlayback: ObservableObject {
     // ---- 来自 PlaybackCoordinator ----
     @Published private(set) var title = ""
     @Published private(set) var displayTitle = ""
@@ -6354,7 +6354,7 @@ private struct SingleGlyphRenderer: TextRenderer {
 /// = 次级元素清一色淡奶油,对比度靠 文字淡 vs 背景艳 的饱和度差。唯一压暗分支:背景
 /// 又亮又淡(近白封面,bgV>0.75 且 S<0.5),淡奶油提不出对比,退成 bgV−0.32 的深色
 /// (AM 白封面同款)。只给文字类调用用 —— 进度条已播段是控件,别传。
-private func amVibrantColor(layers: WindowBackgroundLayers?, satScale: Double, satCap: Double,
+func amVibrantColor(layers: WindowBackgroundLayers?, satScale: Double, satCap: Double,
                             brightness: Double, fallback: Color,
                             minContrastToBackground: Double? = nil) -> Color {
     guard let layers, layers.tintSaturation > 0.01 else { return fallback }

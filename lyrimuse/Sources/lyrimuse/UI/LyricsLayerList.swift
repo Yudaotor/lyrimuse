@@ -59,6 +59,8 @@ struct LyricsLayerList: NSViewRepresentable {
 final class LyricsLayerListView: NSView {
     var nowProvider: (() -> Int)?
     var onTapLine: ((Int) -> Void)?
+    /// 不挂窗口、交给离屏渲染画(网页歌词的副屏,19 章);传给间奏点,让它们没有窗口也装动画。
+    var rendersDetached = false
 
     private let clip = FlippedView()
     private let scrollView = NSScrollView()
@@ -515,6 +517,7 @@ final class LyricsLayerListView: NSView {
         }
         guard let (index, marker) = want else { return }
         let v = GapDotsNSView()
+        v.rendersDetached = rendersDetached
         v.positionProvider = { [weak self] _ in
             self?.nowProvider?() ?? marker.startMs
         }
@@ -569,6 +572,12 @@ final class LyricsLayerListView: NSView {
             let opacity = hovered ? 1 : Float(LyricsWindowDepth.opacity(distance: d))
             let blur = (s.style.reduceMotion || hovered || s.suspendsBlur) ? 0
                 : LyricsWindowDepth.blurRadius(distance: d, fontSize: s.style.fontSize)
+            // 离屏渲染时每个逐字遮罩都是一趟单独的绘制,画在 App 主线程上:不在唱的行内容不变,缓存成位图,
+            // 每帧只重画当前行。挂在窗口上时由 WindowServer 合成,不缓存。见 19 章决策 3。
+            if rendersDetached {
+                r.layer.shouldRasterize = d != 0
+                r.layer.rasterizationScale = s.style.scale
+            }
             let old = depthTargets[i]
             guard old?.opacity != opacity || old?.blur != blur else { continue }
             depthTargets[i] = (opacity, blur, hovered)
@@ -792,6 +801,11 @@ final class LyricsLayerListView: NSView {
 
     override func mouseExited(with event: NSEvent) {
         setHovered(nil)
+    }
+
+    /// 不挂窗口时按位置判点中哪一行(网页歌词副屏的点按,19 章),坐标是列表自己的。
+    func lineIndex(at point: NSPoint) -> Int? {
+        line(at: point)
     }
 
     /// 行的命中区是整行宽的一块不动的矩形(按排版位置算,不跟着错开的位移走,07 章决策 98)。

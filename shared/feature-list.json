@@ -1080,6 +1080,35 @@
               "收听里程碑"
             ]
           ]
+        },
+        {
+          "id": "web-lyrics",
+          "title": {
+            "zh-Hans": "网页歌词：手机、平板当副屏，或作为 OBS 浏览器源",
+            "en": "Web lyrics: a phone or tablet as a second screen, or an OBS browser source",
+            "zh-Hant": "網頁歌詞：手機、平板當副螢幕，或作為 OBS 瀏覽器來源"
+          },
+          "desc": {
+            "zh-Hans": "在浏览器里看歌词。手机、平板上显示的就是歌词窗口的画面；OBS 那条背景透明，字体和颜色跟悬浮歌词一样。只用这台 Mac 时不对网络开放；打开「允许局域网设备访问」后，同一 Wi-Fi 下的设备扫码即可打开，链接带有随机密钥。",
+            "en": "Lyrics in a browser. Phones and tablets show exactly what the lyrics window shows; the OBS version has a transparent background and the same fonts and colors as the floating lyrics. Nothing is exposed to the network until you turn on \"Allow Devices on Your Local Network\"; then devices on the same Wi-Fi can scan a QR code to open it, and the link carries a random key.",
+            "zh-Hant": "在瀏覽器裡看歌詞。手機、平板上顯示的就是歌詞視窗的畫面；OBS 那條背景透明，字體和顏色跟浮動歌詞一樣。只用這台 Mac 時不對網路開放；打開「允許區域網路裝置存取」後，同一 Wi-Fi 下的裝置掃描 QR Code 即可開啟，連結帶有隨機金鑰。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "webLyricsEnabled"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "网页歌词",
+              "网页歌词"
+            ],
+            [
+              "歌词显示",
+              "网页歌词",
+              "允许局域网设备访问"
+            ]
+          ]
         }
       ]
     },

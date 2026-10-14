@@ -111,6 +111,8 @@ final class GapDotsNSView: NSView {
     private static let windowSamplesPerSecond = 20.0
 
     var positionProvider: ((Date) -> Int)?
+    /// 不挂窗口、交给离屏渲染画(网页歌词的副屏,19 章):这时也照常装动画。
+    var rendersDetached = false
     private var config: Config?
     private var dots: [CALayer] = []
     /// 装动画那一刻的(歌词位置, 媒体时间),对表时外推「动画此刻推到哪」。
@@ -194,7 +196,7 @@ final class GapDotsNSView: NSView {
         }
         CATransaction.commit()
         installedAt = nil
-        guard c.running, window != nil else { return }
+        guard c.running, window != nil || rendersDetached else { return }
 
         let media = CACurrentMediaTime()
         installedAt = (pos, media)

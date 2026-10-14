@@ -41,6 +41,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Lock position, long-press to drag](#feature-lock-position) | Settings › Lyrics Display › Floating Lyrics › Behavior › Lock Position |
 | [Hidden from screenshots and screen sharing](#feature-hide-in-screenshots) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Screenshots |
 | [Hide or shrink when paused](#feature-hide-when-paused) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide When Paused |
+| [Web lyrics: a phone or tablet as a second screen, or an OBS browser source](#feature-web-lyrics) | Settings › Lyrics Display › Web Lyrics › Web Lyrics |
 | [YouTube Music and Spotify Web in your browser](#feature-web-players) | Settings › Player › Web |
 | [Skip YouTube Music ads automatically](#feature-skip-youtube-ads) | Settings › Player › Web › Skip YouTube Music Ads Automatically |
 | [Start and quit together with your player](#feature-player-linkage) | Settings › Player › Linkage › Launch When Lyrimuse Opens |
@@ -426,6 +427,16 @@ When a song reaches its 100th, 1,000th or 10,000th play, or your Last.fm total p
 - On by default
 - Settings: Lyrics Display › Notch › Behavior › Listening Milestones
 
+<a id="feature-web-lyrics"></a>
+
+### Web lyrics: a phone or tablet as a second screen, or an OBS browser source
+
+Lyrics in a browser. Phones and tablets show exactly what the lyrics window shows; the OBS version has a transparent background and the same fonts and colors as the floating lyrics. Nothing is exposed to the network until you turn on "Allow Devices on Your Local Network"; then devices on the same Wi-Fi can scan a QR code to open it, and the link carries a random key.
+
+- Off by default
+- Settings: Lyrics Display › Web Lyrics › Web Lyrics
+- Settings: Lyrics Display › Web Lyrics › Allow Devices on Your Local Network
+
 <a id="section-players"></a>
 
 ## Players and playback
@@ -703,7 +714,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 242 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 248 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -900,6 +911,15 @@ Every setting in the Settings window, by where it lives: 242 in all. Type a name
 
 - **Show Controls on Hover**: Hover over the menu bar lyrics to turn them into Previous / Play-Pause / Next; move away and the lyrics return. Doesn't take over once the lyrics shrink back to the icon after pausing, or when the slot is too narrow for three buttons. Clicking outside the three buttons still opens the panel.
 - **Show Title When No Lyrics**: While a song has no lyrics or is still being searched, keep the lyrics slot with the song title instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads
+
+### Lyrics Display › Web Lyrics
+
+- **Web Lyrics**: Show lyrics in a browser: on phones and tablets they match the Lyrics Window, as an OBS browser source they match the Floating Lyrics.
+- **Allow Devices on Your Local Network**: Phones and tablets on the same Wi-Fi can open it by scanning the QR code. The link includes a random key.
+- **Second Screen**
+- **Let Devices on Your Local Network Control Playback**: Tap the buttons on a phone or tablet to pause or skip, or tap a lyric to jump to it
+- **OBS Browser Source**
+- **Phones & Tablets**
 
 ### Lyrics Display › Touch Bar
 

@@ -315,7 +315,7 @@ extension SettingsDeepLink {
                    ["players": "players", "linkage": "linkage", "permissions": "permissions"]),
         "appearance": (LyricsSurface.appearanceSectionStorageKey,
                        ["overlay": "overlay", "notch": "notch", "menu-bar": "menuBar", "touch-bar": "touchBar",
-                        "lyrics-window": "lyricsWindow"]),
+                        "lyrics-window": "lyricsWindow", "web-lyrics": "webLyrics"]),
         "account/lastfm": (SettingsSearchCatalog.lastfmSectionKey,
                            ["stats": "stats", "chart": "chart", "on-this-day": "onThisDay", "settings": "settings"]),
         "account/discord": (SettingsSearchCatalog.discordSectionKey,

@@ -216,6 +216,11 @@ final class AppSettings: ObservableObject {
         static let discordListeningName = "np:discordListeningName"
         static let discordKeepWhenPaused = "np:discordKeepWhenPaused"
         static let discordExcludedBundles = "np:discordExcludedBundles"
+        // 网页歌词(WebLyricsServer,19 章)。
+        static let webLyricsEnabled = "np:webLyricsEnabled"
+        static let webLyricsAllowLAN = "np:webLyricsAllowLAN"
+        static let webLyricsAllowLANControl = "np:webLyricsAllowLANControl"
+        static let webLyricsToken = "np:webLyricsToken"
         static let discordBadge = "np:discordBadge"
         static let discordButtonListen = "np:discordButtonListen"
         static let discordButtonGetLyrimuse = "np:discordButtonGetLyrimuse"
@@ -800,6 +805,20 @@ final class AppSettings: ObservableObject {
     @Published var nowPlayingNotifications: Bool {
         didSet { defaults.set(nowPlayingNotifications, forKey: Keys.nowPlayingNotifications) }
     }
+    /// 网页歌词(`WebLyricsServer`,19 章)。默认关:开着就监听一个本机端口。
+    @Published var webLyricsEnabled: Bool {
+        didSet { defaults.set(webLyricsEnabled, forKey: Keys.webLyricsEnabled) }
+    }
+    /// 别的设备能不能打开。关着时只绑 127.0.0.1。
+    @Published var webLyricsAllowLAN: Bool {
+        didSet { defaults.set(webLyricsAllowLAN, forKey: Keys.webLyricsAllowLAN) }
+    }
+    /// 别的设备能不能点副屏上的播放控制和歌词。本机打开的副屏不受它管。
+    @Published var webLyricsAllowLANControl: Bool {
+        didSet { defaults.set(webLyricsAllowLANControl, forKey: Keys.webLyricsAllowLANControl) }
+    }
+    /// 局域网链接里的密钥,第一次用到时生成,之后不变(手机上存的书签一直有效)。本机专属,不进配置备份。
+    @Published private(set) var webLyricsToken: String
     /// Discord「正在听」(`DiscordPresenceController`)。默认关。
     @Published var discordPresenceEnabled: Bool {
         didSet { defaults.set(discordPresenceEnabled, forKey: Keys.discordPresenceEnabled) }
@@ -2134,6 +2153,16 @@ final class AppSettings: ObservableObject {
         showInDock = (defaults.object(forKey: Keys.showInDock) as? Bool) ?? true
         nowPlayingNotifications = (defaults.object(forKey: Keys.nowPlayingNotifications) as? Bool)
             ?? Self.defaultNowPlayingNotifications
+        webLyricsEnabled = (defaults.object(forKey: Keys.webLyricsEnabled) as? Bool) ?? false
+        webLyricsAllowLAN = (defaults.object(forKey: Keys.webLyricsAllowLAN) as? Bool) ?? false
+        webLyricsAllowLANControl = (defaults.object(forKey: Keys.webLyricsAllowLANControl) as? Bool) ?? false
+        if let token = defaults.string(forKey: Keys.webLyricsToken), !token.isEmpty {
+            webLyricsToken = token
+        } else {
+            let token = WebLyricsAccess.makeToken()
+            defaults.set(token, forKey: Keys.webLyricsToken)
+            webLyricsToken = token
+        }
         discordPresenceEnabled = (defaults.object(forKey: Keys.discordPresenceEnabled) as? Bool) ?? false
         discordStatusDisplay = defaults.string(forKey: Keys.discordStatusDisplay)
             .flatMap(DiscordPresence.StatusLine.init(rawValue:)) ?? .title
