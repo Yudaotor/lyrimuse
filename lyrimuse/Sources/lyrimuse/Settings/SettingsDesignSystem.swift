@@ -1781,7 +1781,7 @@ struct SettingsGlassTabPicker<T: Hashable>: View {
                     .frame(height: compact ? 22 : 26)
                     .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SettingsGlassHoverButtonStyle(showsFill: !selected))
                 .disabled(disabled)
                 .accessibilityAddTraits(selected ? .isSelected : [])
                 .background {
@@ -1867,7 +1867,7 @@ struct SettingsGlassPopoverMenu<Item: Hashable>: View {
             .frame(height: height)
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsGlassHoverButtonStyle(isOpen: shown))
         .settingsCardBackground(cornerRadius: height / 2)
         .fixedSize()
         .popover(isPresented: $shown, arrowEdge: .bottom) {
@@ -1955,13 +1955,57 @@ struct SettingsGlassActionMenu: View {
             }
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsGlassHoverButtonStyle(isOpen: shown))
         .settingsCardBackground(cornerRadius: height / 2)
         .fixedSize()
         .modifier(OptionalHelp(text: help))
         .popover(isPresented: $shown, arrowEdge: .bottom) {
             SettingsGlassMenuEntries(entries: entries) { shown = false }
         }
+    }
+}
+
+/// 玻璃件里自己画的按钮(玻璃下拉 / 动作菜单 / 字体选择的胶囊、胶囊分段里没选中的档、胶囊里的 − / + 和 ⓘ 小圆钮)的
+/// 悬停 / 按下 / 弹层开着三态:在玻璃上面垫一层淡底,悬停淡、弹层开着实一点、按下最实,形状同按钮的 `contentShape`
+/// 那颗胶囊(方形标签就是圆)。别改成给玻璃加 `.interactive()`:胶囊里有好几颗按钮时整块一起亮,分不出是哪颗,
+/// 弹层开着那一态它也给不了。`pressScale` 只给小圆钮用,胶囊整颗缩的话里面的字跟着缩,玻璃底不缩,会错开。见 14 章决策 105。
+struct SettingsGlassHoverButtonStyle: ButtonStyle {
+    /// 这颗按钮点开的弹层正开着。
+    var isOpen = false
+    /// false = 不画淡底(胶囊分段里选中的那一档,底下已经有强调色胶囊)。
+    var showsFill = true
+    var pressScale: CGFloat = 1
+
+    func makeBody(configuration: Configuration) -> some View {
+        SettingsGlassHoverButtonBody(configuration: configuration, isOpen: isOpen,
+                                     showsFill: showsFill, pressScale: pressScale)
+    }
+}
+
+private struct SettingsGlassHoverButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let isOpen: Bool
+    let showsFill: Bool
+    let pressScale: CGFloat
+    @State private var hovering = false
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        configuration.label
+            .background(Capsule().fill(Color.primary.opacity(fillLevel)))
+            .scaleEffect(configuration.isPressed && !reduceMotion ? pressScale : 1)
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.12), value: hovering)
+            .animation(.easeOut(duration: 0.12), value: isOpen)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+    }
+
+    private var fillLevel: Double {
+        guard showsFill, isEnabled else { return 0 }
+        if configuration.isPressed { return 0.13 }
+        if isOpen { return 0.09 }
+        return hovering ? 0.06 : 0
     }
 }
 
@@ -2017,6 +2061,7 @@ struct SettingsPillSegmentedControl<T: Hashable>: View {
     let label: (T) -> String
     var minWidth: CGFloat = 52
     var fillsWidth = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 2) {
@@ -2033,12 +2078,14 @@ struct SettingsPillSegmentedControl<T: Hashable>: View {
                         .padding(.vertical, 4)
                         .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SettingsGlassHoverButtonStyle(showsFill: !isSelected))
                 .foregroundStyle(isSelected ? Color.white : Color.primary)
                 .background(Capsule().fill(isSelected ? Color.accentColor : Color.clear))
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
+        // 选中底换档时淡入淡出。只挂在这一排里面,理由同 `SettingsGlassTabPicker` 的动画那条。
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: selection)
         .padding(2)
         .background(Capsule().fill(Color.primary.opacity(0.06)))
         .fixedSize(horizontal: !fillsWidth, vertical: true)

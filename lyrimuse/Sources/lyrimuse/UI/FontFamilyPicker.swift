@@ -106,7 +106,7 @@ struct FontFamilyPicker: View {
             .contentShape(Capsule())
         }
         // 外观同玻璃下拉(`SettingsGlassMenuPicker` 的 compact 档):同一浮层里下面那行「粗细」就是它。
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsGlassHoverButtonStyle(isOpen: showingList))
         .settingsCardBackground(cornerRadius: 14)
         .fixedSize()
         .popover(isPresented: $showingList, arrowEdge: .bottom) { picker }

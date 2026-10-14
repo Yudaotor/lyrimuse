@@ -2157,7 +2157,7 @@ private struct LyricsSettingsTab: View {
             .disabled(scopedOffsetMs >= limit)
             .accessibilityLabel(L10n.t("提前"))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
         .foregroundStyle(.secondary)
         .settingsCardBackground(cornerRadius: 14)
         .fixedSize()

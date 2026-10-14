@@ -139,7 +139,7 @@ struct GlassInfoButton: View {
                 .frame(width: 22, height: 22)
                 .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsGlassHoverButtonStyle(isOpen: isPresented, pressScale: 0.9))
         .settingsCardBackground(cornerRadius: 11)
         .accessibilityLabel(text)
         .onHover { inside in
