@@ -4907,6 +4907,10 @@ func runSourceContractTests() {
         expectEqual(statusMenu.contains("action: #selector(toggleTouchBarLyrics)))")
                         && statusMenu.contains("item.setShortcut(KeyboardShortcuts.getShortcut(for: shortcut))"), true,
                     "右键菜单: 显示用户录的快捷键;触控栏那一项翻的是总开关,不挂展开 / 收起的快捷键")
+        expectEqual(statusMenu.contains("if let update = SparkleUpdaterManager.shared.availableUpdate {")
+                        && statusMenu.contains("selector: #selector(openSoftwareUpdate)")
+                        && statusMenu.contains("AppActions.shared.requestSettings(.softwareUpdate)"), true,
+                    "右键菜单: 有未装的新版本时「检查更新…」换成新版本提示,点了翻到「软件更新」页(同面板底栏)")
     }
 
     // ---- 关于页页头的漂浮符号走 Core Animation----

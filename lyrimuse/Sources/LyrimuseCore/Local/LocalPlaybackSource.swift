@@ -178,14 +178,8 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var currentAdSlot: YouTubeMusicAdProbe.AdSlot? = nil
     /// 「广告中」那一行的倒计时从哪来(`AdCountdown`)。跟着 `isCurrentTrackAdBreak` 一起收:不在广告里恒为 `.track`。
     @Published public private(set) var adCountdown: AdCountdown = .track
-    // 当前曲目已生效的歌词时间轴校正值(毫秒)——跟 syncEngine.offsetMs 保持一致,供菜单栏
-    // "歌词时间轴"菜单展示累计校准值/决定"重置"按钮是否显示用。实测排查坐实:
-    // 这里之前没有这个属性,PlaybackCoordinator 自己用 "\(artist)|\(title)" 现拼了一个跟
-    // LyricsOffsetStore 实际存储用的 key(LyricsOffsetStore.trackKey,多拼了一段内容指纹)
-    // 完全对不上的 key 去查询,导致查到的值永远是 0——用户点"提前"好几次,nudge 本身其实
-    // 已经生效(syncEngine.offsetMs 真的改了、歌词显示也真的偏移了),但菜单标题/"重置"
-    // 按钮永远没有任何反馈,看起来就像完全没生效。改成不重新拼 key、直接转发这里的
-    // syncEngine.offsetMs 权威值,从根上消除"两处各自算 key、容易算歪"这个问题。
+    // 当前曲目已生效的歌词时间轴校正值(毫秒),直接转发 syncEngine.offsetMs。别在外面按「歌手|歌名」
+    // 自己拼 key 去 LyricsOffsetStore 查:那边的 LyricsOffsetStore.trackKey 还拼了一段内容指纹,拼不对就永远查到 0。
     //
     // 这个值是**实际生效的总偏移** = 全局基准 + 这首歌的微调
     // (见 LyricsOffsetStore.effectiveOffset)。所有"把歌词时间轴对齐到播放位置"的地方
@@ -194,8 +188,7 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var currentLyricsOffsetMs: Int = 0
     // 上面那个总偏移里**只属于这首歌**的那一半(不含全局基准)。
     //
-    // 菜单标题和「重置」按钮认它:显示总和的话,用户看到"歌词时间轴(+0.8s)"、点了重置
-    // 却只回到 +0.5s(全局基准还在),数字对不上操作 —— 那比不显示更让人困惑。
+    // 菜单里偏移那一行的数值和 ↺ 归零认它:显示总和的话,归零后数字停在全局基准上,对不上操作。
     @Published public private(set) var trackLyricsOffsetMs: Int = 0
     // "歌词窗口"背景用的模糊封面图——原始图片数据(JPEG/PNG),不是 NSImage:
     // LyrimuseCore 这一层刻意不引入 AppKit/SwiftUI(见 Package.swift 的单向依赖注释),
