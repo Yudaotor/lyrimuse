@@ -214,12 +214,10 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 这一首播放器推的是登记在案的占位图(`KnownPlaceholderArtwork`),没当封面用。高清替代据此把它当成「播放器没有
     /// 封面」,去缓存里找按这首自己的身份解析出来的那张(见 03 章决策 32)。换歌、换上真封面时清掉。
     @Published public private(set) var artworkIsPlaceholder = false
-    /// Spotify 原生客户端这首歌在 Spotify 图床上的封面地址(AppleScript `artwork url`,640 档),由
-    /// `SpotifyPositionProbe` 开播 2.5s 后那次脚本顺带带回来(经 noteSpotifyArtwork 落到这里,
-    /// 先核对还是这首)。换歌 / 停播置 nil;Spotify 网页版由 BrowserPositionProbe 从页面带回同一格式的地址
-    ///,其它播放器恒 nil。消费方是
-    /// `PlaybackCoordinator.refreshSpotifyOriginalCover`:系统那份封面(实测 600×600)本来就身份精确,
-    /// 这条只为把歌词窗口那张 920px 卡换成**同一张图**的原图档,见 03 章「高清替代」。
+    /// Spotify 原生客户端这首歌在 Spotify 图床上的封面地址(AppleScript `artwork url`,640 档),由 `SpotifyPositionProbe`
+    /// 开播 2.5s 后的那次脚本顺带带回来(经 noteSpotifyArtwork 落到这里,先核对还是这首)。换歌 / 停播置 nil;Spotify 网页版由
+    /// BrowserPositionProbe 从页面带回同一格式的地址,其它播放器恒 nil。消费方是 `PlaybackCoordinator.refreshSpotifyOriginalCover`:
+    /// 系统那份封面(600×600)本来就身份精确,这条只为把歌词窗口那张 920px 卡换成同一张图的原图档,见 03 章「高清替代」。
     @Published public private(set) var spotifyArtworkURL: URL?
     /// YouTube Music 网页版页面上这首的专辑图地址,浏览器位置探针顺带读到的(还是这首才收,见 noteWebPageArtwork)。
     /// 换歌 / 停播置 nil。只给 App 外面用(Discord 状态的封面),界面不用它。
@@ -251,10 +249,6 @@ public final class LocalPlaybackSource: ObservableObject {
     private var radioStationCardLoaded = false
     private var pendingStationCardKey: String?
 
-    // (之前这里有一个全局的"卡拉OK效果"开关:关掉就让引擎不解析逐字数据,四个
-    //  展示面一起退成整行高亮。已撤:引擎始终解析逐字数据,"要不要逐字填色"改成悬浮歌词 /
-    //  灵动岛 / 菜单栏各自的开关,由各展示面在自己的消费点上把 `SyncedLyricLine` 压成整行
-    //  (`SyncedLyricLine.lineLevel`);歌词窗口迷你尺寸另有一颗、完整尺寸始终逐字。见 AppSettings.overlayLyricsKaraoke。)
     /// 要给哪几种文字标罗马音。改了立刻重新加载当前这首 —— 这道开关同时管服务端字段和
     /// 客户端兜底(见 LyricsSyncEngine.romanizationText 那道 guard)。
     @Published public var romanizationScripts: RomanizationScripts = .default {
@@ -429,22 +423,16 @@ public final class LocalPlaybackSource: ObservableObject {
         return MediaControlClient.kasetVideoID(forTrackKey: snapshot.trackKey)
     }
 
-    // ---- 播放位置平滑(加,修 QQ 音乐"歌词时间不准") --------------------
+    // ---- 播放位置平滑 --------------------
     //
-    // QQ 音乐没有 AppleScript,elapsedTime 来自 media-control --now 的 elapsedTimeNow
-    // 外推值(见 MediaControlClient.swift)——实测坐实:同一首歌连续轮询,单次读数相对
-    // 真实经过的时间能有 ±1~1.5 秒的抖动(不是持续偏向一个方向,是每次独立采样各自的
-    // 误差,推测是 QQ 音乐自己上报 Now Playing 信息给系统的节奏本来就不是每次都精确
-    // 刷新)。Apple Music 走的 AppleScript player position 没有这个问题,精确到
-    // ~0.1s。过去不管哪个播放器,每次轮询(2 秒一次)都无条件把这次读数直接当成新锚点
-    // ——QQ 音乐下逐字歌词填色因此每 2 秒就带着这份噪声跳一下,肉眼可见"歌词时间不准"。
+    // 不能每次轮询都把读数直接当新锚点:QQ 音乐没有 AppleScript,elapsedTime 来自 media-control --now 的 elapsedTimeNow
+    // 外推值(见 MediaControlClient.swift),同一首歌连续轮询,单次读数相对真实经过的时间能有 ±1~1.5 秒的抖动(每次独立
+    // 采样各自的误差,不是持续偏向一个方向),逐字填色会每 2 秒带着这份噪声跳一下。
     //
-    // 做法:只在真的发生"不
-    // 连续"(换歌、暂停与播放切换、或者这次读数跟"按上一次锚点+经过的真实时间外推"的
-    // 预测值差太多,说明真的 seek/跳曲了)时才信任这次读数重新锚定;平稳播放期间改成
-    // 按真实 wall-clock 经过的时间累加,不理会每次读数自身的抖动。这套逻辑对 Apple
-    // Music 同样安全——它的读数本来就精确,预测值和读数几乎总是相差无几,不会触发"跟
-    // 预测差太多"这个分支,观感上跟直接按读数累加没有差别。
+    // 做法:只在真的发生"不连续"(换歌、暂停与播放切换、或者读数跟"按上一次锚点 + 经过的真实时间外推"的预测值差太多,
+    // 说明真的 seek/跳曲了)时才信任这次读数重新锚定;平稳播放期间按真实 wall-clock 经过的时间累加,不理会每次读数自身的
+    // 抖动。读数本来就精确的源(Apple Music 走 AppleScript player position,~0.1s)预测值和读数几乎总是相差无几,不会触发
+    // "跟预测差太多"这个分支。
     private var trackPosSeconds: Double = 0
     private var posTrackingKey = ""
     /// 上一轮那首是不是广告(换歌那一拍它就是"上一首是不是广告",见 spotifyNaturalStartKind)。
@@ -459,8 +447,7 @@ public final class LocalPlaybackSource: ObservableObject {
     // 每次 resolvePositionSeconds 退出时统一更新(defer),换歌/暂停恢复不需要单独清:
     // 那些路径本身就会把它刷成当轮读数,下一轮的差值语义自然正确。
     private var posPrevReported: Double?
-    // "真实读数 − 墙钟外推值"偏差的滑动平均——见 servoDecision 的注释,
-    // 实测排查坐实的"锁死偏差"问题的修复状态。播种/跳变/校正后都归零重新累计。
+    // "真实读数 − 墙钟外推值"偏差的滑动平均,见 servoDecision 的注释。播种/跳变/校正后都归零重新累计。
     private var posErrEMA: Double = 0
     /// 最近一次"播放器说状态变了"的信号到达时刻(只记真状态信号,不记纯锚点刷新)。
     private var posStateSignalAt: Date?
@@ -501,23 +488,17 @@ public final class LocalPlaybackSource: ObservableObject {
 
     // 地板量化源的「前向棘轮」阈值。
     //
-    // 实测坐实(QQ 音乐,采样 media-control 原始字段 + 程序化暂停/恢复):
-    // QQ 音乐上报给 MediaRemote 的位置**只有整数秒**(6.0/21.0/23.0/25.0),而且锚点翻转
-    // 瞬间 elapsedTimeNow 向前跳了 +1.001s —— 向下取整意味着每个锚点相对真实位置
-    // **只会晚、不会早**(0~1s,平均 0.5s)。用户视角就是"歌词永远比实际唱的慢半个字"。
+    // QQ 音乐上报给 MediaRemote 的位置只有整数秒(6.0/21.0/23.0/25.0),锚点翻转瞬间 elapsedTimeNow 向前跳 +1.001s:向下取整
+    // 意味着每个锚点相对真实位置只会晚、不会早(0~1s,平均 0.5s),用户视角就是"歌词永远比实际唱的慢半个字"。这个偏差是单向的,
+    // servoDecision 那套按零均值噪声设计的 EMA 收敛到 -0.5s 左右、永远够不到 1.0s 门槛,换歌/恢复播放那一刻播种进来的取整滞后
+    // 不会被纠正。
     //
-    // 这推翻了 servoDecision 注释里"±1~1.5s 抖动是零均值噪声"的前提:取整偏差是单向的,
-    // EMA 收敛到 -0.5s 左右、永远够不到 1.0s 门槛,于是换歌/恢复播放那一刻播种进来的
-    // 取整滞后**永远不被纠正**。
-    //
-    // 棘轮的依据是一条不等式:对地板量化源,reported = 真实位置 - 取整误差 ≤ 真实位置,
-    // 恒成立。所以只要 reported > predicted,就**证明** predicted 落后于真实位置,立刻
-    // 向前采纳是安全的(不可能冲过头);反方向(reported < predicted)则分不清是"新锚点
-    // 取整得更狠"还是"真实回退",维持原有 EMA 路径不动 —— 前者是单向噪声该忽略,后者
-    // (漏观察的短暂停这类)靠 EMA 持续同号累积去修,跟改动前完全一致。
+    // 棘轮的依据是一条不等式:对地板量化源,reported = 真实位置 - 取整误差 ≤ 真实位置,恒成立。所以只要 reported > predicted,
+    // 就证明 predicted 落后于真实位置,立刻向前采纳是安全的(不可能冲过头);反方向(reported < predicted)分不清是"新锚点取整
+    // 得更狠"还是"真实回退",走原有 EMA 路径:前者是单向噪声该忽略,后者(漏观察的短暂停这类)靠 EMA 持续同号累积去修。
     // 0.05s 的下限只为过滤同锚点外推的 ±2ms 漂移,别为它白白重建锚点。
-    // nonisolated:被 shouldRatchetForward(nonisolated 纯函数)引用,不可变 Sendable
-    // 常量脱离 MainActor 隔离是安全的(不标的话 && 右侧的 autoclosure 会报隔离警告)。
+    // nonisolated:被 shouldRatchetForward(nonisolated 纯函数)引用,不可变 Sendable 常量脱离 MainActor 隔离是安全的(不标的话
+    // && 右侧的 autoclosure 会报隔离警告)。
     private nonisolated static let flooredForwardSnapEpsilonSecs = 0.05
 
     /// 位置数据源的三档画像 —— 伺服参数和棘轮适用性都按它选。
@@ -550,15 +531,10 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// bundleID → 数据源画像。纯函数,selftest 直接覆盖。
     public nonisolated static func positionSourceTier(forBundleID bundleID: String?) -> PositionSourceTier {
-        // 把默认档从 noisyFloored 翻成 cleanExtrapolated,并把真正"整秒下取整 +
-        // 大抖动"的那两个显式列出来。
-        //
-        // 理由是实测:noisyFloored 那一档的两样东西(1.0s 大门槛 + 前向棘轮)都只对**整秒
-        // 量化**的源成立 —— 棘轮的前提是"报告值 ≤ 真实位置"(下取整才恒成立)。而所有走
-        // media-control 的源实测都是**纯墙钟外推、无量化**:酷狗(实测 23 秒
-        // 累计偏差 +0.0011s)、Arc(同款,小数位完全连续)。也就是说 noisyFloored 是**少数
-        // 派**,把它当默认档等于让每一个没被显式登记的源都套上一副不适用的参数,而 1.0s
-        // 门槛意味着 1 秒以内的固定偏差永远修不掉。
+        // 默认档是 cleanExtrapolated,真正"整秒下取整 + 大抖动"的源显式登记成 noisyFloored。noisyFloored 那一档的两样东西
+        // (1.0s 大门槛 + 前向棘轮)都只对整秒量化的源成立(棘轮的前提是"报告值 ≤ 真实位置",下取整才恒成立),而走
+        // media-control 的源多数是纯墙钟外推、无量化:酷狗(23 秒累计偏差 +0.0011s)、Arc(同款,小数位完全连续)。把
+        // noisyFloored 当默认档等于让每一个没被显式登记的源都套上一副不适用的参数,1.0s 门槛意味着 1 秒以内的固定偏差永远修不掉。
         //
         // bundleID 为 nil(压根没有来源信息)也走这一档:所谓"保守"应该是"别用前提不成立的
         // 棘轮",而不是"选那个门槛最大的"。
@@ -573,16 +549,14 @@ public final class LocalPlaybackSource: ObservableObject {
         }
     }
 
-    /// 见 flooredForwardSnapEpsilonSecs。纯函数,selftest 直接覆盖。
-    ///
     /// 浏览器探针那笔一次性地面真值,差多少才值得重锚。
     ///
     /// 0.30s 的取法:探针值做完去地板补偿后,自身残余误差是 ±0.5s 内的均匀分布(标准差 ≈0.29s),
     /// 再叠上页面文字本身 ±0.1s 的跳变抖动。门槛低于这个量级只会来回抖,高于它就白白放过
     /// 实测中最常见的那档 0.7~0.9s 系统性偏差。
     ///
-    /// 值得重锚的判据是"比噪声大",不是"比 1 秒大" —— 用 `servoDecision` 那套给周期性
-    /// 噪声源设计的门槛来卡一次性样本,是这条纠偏此前从不生效的直接原因。
+    /// 值得重锚的判据是"比噪声大",不是"比 1 秒大":用 `servoDecision` 那套给周期性噪声源设计的门槛来卡一次性样本,
+    /// 这条纠偏几乎从不生效。
     public static let groundTruthSnapToleranceSecs: Double = 0.30
 
     /// Spotify 播放中途重发的「晚锚点」:新的 elapsedTime 比真实位置晚 1~2 秒,单看 MediaRemote
@@ -637,6 +611,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 只对地板量化源(noisyFloored)生效:棘轮的依据是"reported ≤ 真实位置"这条
     /// 不等式,而 Spotify 的读数恰恰恒略**超前**真值,对它棘轮
     /// 只会把位置锁在抖动的上包络、且 EMA 每次吸附都被清零,永远修不回来。
+    /// 见 flooredForwardSnapEpsilonSecs。纯函数,selftest 直接覆盖。
     public nonisolated static func shouldRatchetForward(
         reported: Double, predicted: Double, tier: PositionSourceTier
     ) -> Bool {
@@ -866,27 +841,23 @@ public final class LocalPlaybackSource: ObservableObject {
         bundleID == PlaybackPlayer.qqMusic.bundleIdentifier ? 0.12 : 0
     }
 
-    // 实测排查坐实的设计缺陷修复:原来"稳定播放"分支只按墙钟外推、完全不回看
-    // 真实读数,任何播种时刻带进来的偏差——App 启动那一拍的读数毛刺、恰好整个落在两次
-    // 2 秒轮询之间而完全没被观察到的短暂停(墙钟累加器会把暂停时长也当播放时间加进去)——
-    // 只要小于 2 秒的 seek 容差,就会永久锁死、永远不被纠正(诊断日志坐实:一次启动播种
-    // 偏差 0.205s,之后每一轮 reported−predicted 恒等于 +0.205,150 秒纹丝不动;用户视角
-    // 就是"本地进度跟网页差了一截,而且一直差着")。
+    // 稳定播放期间不能只按墙钟外推、完全不回看真实读数:任何播种时刻带进来的偏差(App 启动那一拍的读数毛刺、恰好整个落在两次
+    // 2 秒轮询之间而完全没被观察到的短暂停,墙钟累加器会把暂停时长也当播放时间加进去)只要小于 2 秒的 seek 容差,就会永久
+    // 锁死(reported−predicted 恒等于同一个值,本地进度跟网页一直差一截)。
     //
-    // 修法:对偏差做指数滑动平均(EMA),持续、同号的真实偏差会让 EMA 收敛到偏差值本身,
-    // 超过门槛就把外推基准一次性校正回真实读数(snap)并触发重新锚定;而零均值的读数噪声
-    // (QQ 音乐 elapsedTimeNow 的 ±1~1.5s 抖动)在 EMA 里相互抵消、到不了门槛,原有的
-    // 抗抖动能力不受影响。三档参数按数据源画像选(见 PositionSourceTier):
+    // 所以对偏差做指数滑动平均(EMA):持续、同号的真实偏差会让 EMA 收敛到偏差值本身,超过门槛就把外推基准一次性校正回真实
+    // 读数(snap)并触发重新锚定;零均值的读数噪声(QQ 音乐 elapsedTimeNow 的 ±1~1.5s 抖动)在 EMA 里相互抵消、到不了门槛。
+    // 三档参数按数据源画像选(见 PositionSourceTier):
     // - precise(Apple Music,AppleScript 播放头,读数精确到 ~0.1s):alpha 0.5、门槛
     //   0.15s——持续偏差两三轮(4~6 秒)就校正,稳定期读数噪声 ±0.06s 的 EMA 幅度 ~±0.04,
     //   离门槛很远,不会误触发。
-    // - cleanExtrapolated(Spotify,拆档):alpha 0.3、门槛 0.4s——稳态抖动
+    // - cleanExtrapolated(media-control 纯墙钟外推的源):alpha 0.3、门槛 0.4s——稳态抖动
     //   ±0.05s 离门槛很远;换歌初期播种进来的 0.4~1.3s 超前(MediaRemote 脏窗口)两轮
     //   (~4 秒)就校正;暂停/切换瞬间的单发陈旧读数(实测 -1.27s)只把 EMA 推到 -0.38,
     //   不触发回跳,下一轮干净读数就衰减掉。
     // - noisyFloored(QQ 音乐/网易云,media-control 外推读数):alpha 0.3、门槛
     //   1.0s——±1.5s 零均值抖动的 EMA 分布 ~±0.6,大部分时间到不了 1.0;真有持续 1 秒
-    //   以上的锁死偏差(同样低于 2 秒 seek 容差、原来永远修不掉的那种)时几轮后能修正。
+    //   以上的锁死偏差(同样低于 2 秒 seek 容差)时几轮后能修正。
     // 纯函数,selftest 直接覆盖(nonisolated:不碰任何 @MainActor 隔离状态)。
     public nonisolated static func servoDecision(errEMA: Double, error: Double, tier: PositionSourceTier) -> (newEMA: Double, snap: Bool) {
         let alpha: Double, threshold: Double
@@ -1073,7 +1044,7 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// Spotify 自己的钟是不是进了歌尾那段(外推与读数都在最后几秒)。纯函数,selftest 直接覆盖。
     ///
-    /// 歌尾最后一秒它会**停住或往回退**(数据见 02 章「订正」),这时读数既不是真声也不是
+    /// 歌尾最后一秒它会**停住或往回退**(数据见 02 章「订正:自然切歌之后偏快、暂停才对齐」),这时读数既不是真声也不是
     /// "钟已对齐",拿它喂伺服或 `playerClockResynced` 都会把
     /// 位置往回拽 —— 而下一首的自然切歌校正正要拿这一段的连续外推当真值,拽一下就把下一首的偏置估歪
     /// 同样的量。所以这一段照外推走。
@@ -1091,11 +1062,11 @@ public final class LocalPlaybackSource: ObservableObject {
     //
     // `player position` 是解码器的钟,每次起播都先于出声跑一截,量取决于那一刻缓冲了多少,
     // **按起播方式分得很开、同一种方式里很稳**(ScreenCaptureKit 截 Spotify 的音频当真值直接量的,
-    // 数据见 02 章「订正」):手动点播 / 没预载的换歌 ~0.24,播放中拖动 ~0.45,预载好的无缝换歌 0.49~0.73
+    // 数据见 02 章「订正:自然切歌之后偏快、暂停才对齐」):手动点播 / 没预载的换歌 ~0.24,播放中拖动 ~0.45,预载好的无缝换歌 0.49~0.73
     // (这一档波动最大,先验取均值)。
     // 暂停后恢复那一档不在这里 —— 那一拍有真值,当场量(resumeLead)。
     //
-    // 别再拿"上一首连续放完 = 新曲真值"去估新曲的领先量:交界处声音并不连续(实测新曲出声比
+    // 别拿"上一首连续放完 = 新曲真值"去估新曲的领先量:交界处声音并不连续(实测新曲出声比
     // 旧曲名义结尾晚 0.5~0.8s,随曲目变),连续性一估就小、甚至估成负数被拒,整首偏快。
     //
     // 先验取实测值;每次暂停再用冻结值反推这一段真实的领先量(pauseResidualLead),按档慢慢修正
@@ -1259,7 +1230,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 恢复播放那一拍,Spotify 自己的钟领先真声多少。纯函数,selftest 直接覆盖。
     ///
     /// 那个钟是解码器的钟,**每次重新起播都先跑一截**:恢复后第一笔读数比「暂停值 + 恢复后走过的时间」
-    /// 领先 0~1.5s(实测见 02 章「订正」),下一拍伺服就吸附过去、整首偏快,直到下一次暂停它才对回来。
+    /// 领先 0~1.5s(实测见 02 章「订正:自然切歌之后偏快、暂停才对齐」),下一拍伺服就吸附过去、整首偏快,直到下一次暂停它才对回来。
     /// 播种值(resumeSeedSeconds:暂停值 + 状态信号至今)就是真声,差值即领先量。守卫与自然切歌同一套。
     public nonisolated static func resumeLead(raw: Double, seed: Double) -> Double? {
         let lead = raw - seed
@@ -1325,24 +1296,20 @@ public final class LocalPlaybackSource: ObservableObject {
 
     // ---- Spotify 探针钟的领先量(按输出设备分别记) ----
     //
-    // AppleScript `player position` 不是用户耳朵里的位置:它比 Spotify 暂停 / 恢复时发布给 MediaRemote
-    // 的冻结值**恒定领先一段**,量级跟音频输出路径走 —— 真机:内建输出时 0.06~0.14s(vampire /
-    // Adore You / RAYE / IDGAF),切到蓝牙 AirPods 之后 0.51~0.65s(Kiss It Better / London Boy),
-    // 26s 连续采样里 AppleScript 钟与 MediaRemote 外推的差是常数(不是开播瞬态)。用户对"准"的
-    // 判据就是暂停再播之后的位置(= 冻结 / 恢复锚点那套钟),所以探针值要先扣掉这段领先量,
-    // 否则整首歌偏快一个蓝牙延迟(用户 17:39 报「感觉有一点点偏快」)。
+    // AppleScript `player position` 不是用户耳朵里的位置:它比 Spotify 暂停 / 恢复时发布给 MediaRemote 的冻结值恒定领先一段,
+    // 量级跟音频输出路径走(内建输出时 0.06~0.14s,蓝牙 AirPods 0.51~0.65s;26s 连续采样里 AppleScript 钟与 MediaRemote 外推的
+    // 差是常数,不是开播瞬态)。用户对"准"的判据就是暂停再播之后的位置(= 冻结 / 恢复锚点那套钟),所以探针值要先扣掉这段
+    // 领先量,否则整首歌偏快一个蓝牙延迟。
     //
-    // 领先量没法直接读,但每次 Spotify 界面里按暂停都送来一份真值:偏置随暂停锚点作废那一拍,
-    // 「我们停在的位置 − Spotify 冻结值」= 探针领先量(+ 外推漂移 ±0.06)。只在偏置是探针量的时候学
-    // (自然切歌估的偏置有自己的误差来源),|残差|>1.5s 不学(暂停中拖了进度条之类)。
+    // 领先量没法直接读,但每次 Spotify 界面里按暂停都送来一份真值:偏置随暂停锚点作废那一拍,「我们停在的位置 − Spotify 冻结值」
+    // = 探针领先量(+ 外推漂移 ±0.06)。只在偏置是探针量的时候学(自然切歌估的偏置有自己的误差来源),|残差|>1.5s 不学(暂停中
+    // 拖了进度条之类)。
     //
-    // **按默认输出设备分别记**(用户 18:0x 追问「不用蓝牙了依旧准确吧,逻辑必须通用」):领先量是输出
-    // 链路的属性,一台机器上蓝牙 0.55 / 内建 0.1 交替出现,单个 EMA 在每次切换后都要靠两三次暂停慢慢
-    // 收敛、中间那段反着偏。所以按 `AudioOutputRoute.Current.uid` 存一张表(np:spotifyProbeLeadByDevice,
-    // 机器本地,不随配置搬家),取值时看此刻的默认输出:学过就用学过的,没学过按传输类型给先验
-    // (probeLeadPrior:蓝牙 0.5、内建 0.1,其余 0),第一份残差直接采信、之后 EMA α=0.5。默认输出一换
-    // (AudioOutputRoute.startObserving)立刻换值,并且正在放 Spotify 且偏置是探针量的就再问一次探针
-    // (requestConfirmation),让位置在 ~1s 内按新领先量重折,不等用户暂停。
+    // 按默认输出设备分别记:领先量是输出链路的属性,一台机器上蓝牙 0.55 / 内建 0.1 交替出现,单个 EMA 在每次切换后都要靠两三次
+    // 暂停慢慢收敛、中间那段反着偏。所以按 `AudioOutputRoute.Current.uid` 存一张表(np:spotifyProbeLeadByDevice,机器本地,不随
+    // 配置搬家),取值时看此刻的默认输出:学过就用学过的,没学过按传输类型给先验(probeLeadPrior:蓝牙 0.5、内建 0.1,其余 0),
+    // 第一份残差直接采信、之后 EMA α=0.5。默认输出一换(AudioOutputRoute.startObserving)立刻换值,并且正在放 Spotify 且偏置是
+    // 探针量的就再问一次探针(requestConfirmation),让位置在 ~1s 内按新领先量重折,不等用户暂停。
     private static let probeLeadByDeviceDefaultsKey = "np:spotifyProbeLeadByDevice"
     private static let anchorLagDefaultsKey = "np:anchorLagByPlayer"
     /// 旧的单值键;启动时若表为空就把它归到当前设备名下,然后删掉。
@@ -1362,11 +1329,9 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 纯函数,selftest 直接覆盖:一次暂停量到的残差怎么更新这台设备的领先量。
     ///
-    /// 残差是**扣过当前领先量之后**还剩的偏差(我们停在的位置已经减过 `current`),所以真值 =
-    /// current + residual,不是 residual 本身 —— 把残差当真值直接采信会越学越离谱:真机
-    /// 19:43 先验 0.5 下量到残差 0.07(真值 0.57)却把领先量写成 0.07,19:49 再量到残差 0.50 又折成 0.285
-    /// (日志 `probe lead learned` 两行对出来的)。没学过的设备第一份直接采信 current +
-    /// residual(先验只是起点),学过的按 α=0.5 往真值靠;残差离谱返回原值。
+    /// 残差是扣过当前领先量之后还剩的偏差(我们停在的位置已经减过 `current`),所以真值 = current + residual,不是 residual 本身:
+    /// 把残差当真值直接采信会越学越离谱(先验 0.5 下量到残差 0.07,真值是 0.57,却会被写成 0.07)。没学过的设备第一份直接采信
+    /// current + residual(先验只是起点),学过的按 α=0.5 往真值靠;残差离谱返回原值。
     public nonisolated static func learnedProbeLead(current: Double, residual: Double, hasPrior: Bool) -> Double {
         guard abs(residual) <= probeLeadMaxResidualSecs else { return current }
         guard hasPrior else { return current + residual }
@@ -1381,7 +1346,7 @@ public final class LocalPlaybackSource: ObservableObject {
     // MediaSession 晚于真声更新);Spotify 同病但走 `SpotifyPositionProbe` 那条地面真值路。
     //
     // 自然切歌那套(`naturalAdvanceCorrection`)救不了这一类:旧曲外推和"换歌被观察到"同样
-    // 晚这一段,overrun 里两边抵消成 ~0,估不出偏置(真机 `bias=0.000` 逐条坐实)。
+    // 晚这一段,overrun 里两边抵消成 ~0,估不出偏置(估出来恒为 0)。
     //
     // 唯一的真值来源是播放器**自己重发一次带真实位置的锚点** —— 汽水音乐每首歌快放完时必有
     // 一次(真机:每首歌换歌前 2~3 秒),暂停时也有一次。那一刻量出的残差就是这个播放器的滞后量,
@@ -1457,11 +1422,9 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 这一首的锚点滞后样本还作不作数。
     ///
-    /// 滞后量的定义是"开播锚点比真声晚多少",所以只有**从开播锚点一路墙钟外推下来、中途没被
-    /// 重锚过**的那种曲子量出来才是它。 这道闸是真机打脸补上的:App 在别人已经放到一半时
-    /// 启动(位置走"首次观察"直接采信读数那条路),歌尾量到的残差是 **1.046** —— 把它当滞后学
-    /// 进去,下一首直接偏快一秒,比原来的滞后更难受。凡是重锚过(seek / 恢复播放 / 探针介入 /
-    /// 单曲循环回绕)的曲子一律不采样,宁可少学几次。
+    /// 滞后量的定义是"开播锚点比真声晚多少",所以只有从开播锚点一路墙钟外推下来、中途没被重锚过的那种曲子量出来才是它。
+    /// App 在别人已经放到一半时启动(位置走"首次观察"直接采信读数那条路),歌尾量到的残差可能超过 1 秒,把它当滞后学进去,
+    /// 下一首直接偏快一秒。凡是重锚过(seek / 恢复播放 / 探针介入 / 单曲循环回绕)的曲子一律不采样,宁可少学几次。
     private var posAnchorLagSampleValid = false
 
     /// 这个播放器走不走锚点滞后这套(学一个平均滞后、下一首开播预置)。纯函数,selftest 直接覆盖。
@@ -1613,9 +1576,8 @@ public final class LocalPlaybackSource: ObservableObject {
     /// (原始 elapsedTime 不变),那时暂停值来自我们自己按开播锚点外推,偏置照旧扣 —— 所以判据是
     /// "锚点的原始 elapsedTime 还是不是量偏置时那个",不是"现在是不是暂停"。
     ///
-    /// 从"开播锚点 = elapsedTime 0"改成"= 量偏置时的那个值":Spotify 有时开播半秒内会把锚点
-    /// 从 0@T 改发成 1.923@T(BIRDS OF A FEATHER 实测),按旧判据这首歌任何偏置都活不过下一拍;
-    /// `measuredAgainst` 缺失时退回旧判据。
+    /// 判据是"= 量偏置时的那个值",不是"= elapsedTime 0":Spotify 有时开播半秒内会把锚点从 0@T 改发成 1.923@T,只认 0 的话
+    /// 这首歌任何偏置都活不过下一拍。`measuredAgainst` 缺失时按 elapsedTime 0 判。
     ///
     /// `anchorElapsedTime == nil` = 这一拍读的是播放器自己的钟(Spotify 的 AppleScript `player position`),
     /// 没有锚点可比。那个钟**一暂停就对回出声位置**(暂停冻结值比暂停前一刻的读数退回一个偏置量,
@@ -1649,10 +1611,9 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 播放时钟的只读快照,给「导出诊断信息」用(第 14 章 §7)。
     ///
-    /// 为什么需要它:「歌词慢半拍」是这个 App 最难复现、也最常被报的一类问题,而它至少有
-    /// 四种成因,修法完全不同 —— 帧率掉了 / `positionSourceTier` 判错(把精确源当成外推源)/
-    /// 伺服在反复 snap(位置读数抖)/ 自然切歌偏置估歪。在此之前诊断报告里**一行播放时钟
-    /// 状态都没有**,这四种在报障里长得一模一样,只能靠猜加翻引擎日志。
+    /// 为什么需要它:「歌词慢半拍」是这个 App 最难复现、也最常被报的一类问题,而它至少有四种成因,修法完全不同 —— 帧率掉了 /
+    /// `positionSourceTier` 判错(把精确源当成外推源)/ 伺服在反复 snap(位置读数抖)/ 自然切歌偏置估歪。诊断报告里没有播放时钟
+    /// 状态的话,这四种在报障里长得一模一样,只能靠猜加翻引擎日志。
     ///
     /// 这些全是本来就在内存里的字段,这里只是把它们读出来 —— 零热路径成本,不新增任何计算。
     /// 刻意做成一次性快照而不是 @Published:诊断导出是"点一下读一次"的动作,做成发布属性
@@ -1723,12 +1684,11 @@ public final class LocalPlaybackSource: ObservableObject {
         return isSpotifyNative && !title.isEmpty && (album.isEmpty || artist.isEmpty || title == "—")
     }
 
-    /// 「广告中」标志的状态机(纯函数,selftest 钉着;从 apply 里收出来):
+    /// 「广告中」标志的状态机(纯函数,selftest 钉着):
     ///   - 换曲那一拍按当下字段/页面判定定初值(`adByFields`);
     ///   - 同曲期间字段/页面说是广告 → 往 true 棘轮(Spotify 广告字段会闪变,见 apply() 里那段);
-    ///   - 同曲期间**页面明确说是歌**(`.song`,不是 nil)→ 回落成 false —— 只有 YouTube Music 的
-    ///     音乐视频会走到这一条:前贴片广告跟正片共用同一份 MediaSession 元数据,判定会在同一个
-    /// key 下先 ad 后 song(见 YouTubeMusicAdProbe.verdictMaxAge 的提醒);
+    ///   - 同曲期间页面明确说是歌(`.song`,不是 nil)→ 回落成 false。只有 YouTube Music 的音乐视频会走到这一条:前贴片广告跟
+    ///     正片共用同一份 MediaSession 元数据,判定会在同一个 key 下先 ad 后 song(见 YouTubeMusicAdProbe.verdictMaxAge 的注释);
     ///   - 其余保持不变(含 nil:探针超时/还没探到,不许把已判定的广告抹掉,也不许把歌变成广告)。
     /// Spotify 的 AppleScript 复核在别处异步把它置 true,跟这里不冲突(它传进来的 pageVerdict 恒为 nil)。
     public static func nextAdBreakState(
@@ -1756,7 +1716,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 换曲那一拍对 Spotify 原生客户端做广告分类:先看 Spotify 自己刚广播的通知
     /// (`SpotifyNotificationHint`,Track ID 前缀是权威分类、且比 MediaRemote 早到),按快照的歌名/歌手核对是
     /// 同一首才采信 —— 说是广告就当场置位,说是曲目就到此为止,**不再 fork osascript**。通知没到 / 对不上这首
-    /// (App 刚启动、Spotify 没广播)才退回下面那次 AppleScript 复核,行为不劣于旧状。
+    /// (App 刚启动、Spotify 没广播)才退回 AppleScript 复核(classifySpotifyViaAppleScript)。
     /// 只在 换曲 + 原生 Spotify + 字段启发式没判中 时调。
     private func spotifyNativeAdCheckForNewTrack(snapshot: MediaControlSnapshot) {
         if let hint = spotifyNotificationHint, hint.matches(title: snapshot.title, artist: snapshot.artist) {
@@ -1963,9 +1923,6 @@ public final class LocalPlaybackSource: ObservableObject {
         musicVideoOffsetMs = 0
     }
 
-    /// 权威广告判据:AppleScript 的 `spotify url` 对广告返回 "spotify:ad:…"。
-    /// 每次换曲最多一次、后台异步,失败静默退回字段启发式(不劣于旧状)。结果回来时先核对
-    /// 还是不是同一首 —— 广告只有二三十秒,晚到的 true 不能扣在下一首真歌头上。
     /// 「上次在听」这一拍写进去之前的样子(见 apply 里 np:lastTrack* 那一段)。只留最近一次。
     private var lastTrackBeforeWrite: (key: String, title: String?, artist: String?, album: String?, persistedTitle: String?)?
 
@@ -1983,6 +1940,8 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 问一次 `spotify url`,按 URI 类型处置这一条:广告 → 置「广告中」并撤回「上次在听」;不是音乐(播客单集、DJ 口播)→
     /// 按通知的格式补记一条给 `MediaControlClient`(它只认通知),再补查一次,这一条就当没在放。歌不动。
+    /// 权威广告判据:AppleScript 的 `spotify url` 对广告返回 "spotify:ad:…"。每次换曲最多一次、后台异步,失败静默退回字段启发式。
+    /// 结果回来时先核对还是不是同一首:广告只有二三十秒,晚到的 true 不能扣在下一首真歌头上。
     private func classifySpotifyViaAppleScript(forKey key: String, title: String?, artist: String?) {
         Task.detached(priority: .utility) {
             guard let r = ProcessRunner.run(
@@ -2015,7 +1974,7 @@ public final class LocalPlaybackSource: ObservableObject {
     // 调用方(apply())用这个标记判断"这次真的有必要重新构造 anchor 吗"——见那边注释。
     /// `isGroundTruthSeed`:这一笔读数是不是**探针直接问播放器要来的地面真值**(浏览器探针问网页 DOM、
     /// Spotify 探针问 AppleScript `player position`),而不是 MediaRemote 报的外推值。为真时走一条
-    /// 专门的重锚路径,见函数体里那段提醒。`anchorElapsedTime`:这拍快照的原始锚点 elapsedTime,只用来
+    /// 专门的重锚路径,见函数体里地面真值那一支的注释。`anchorElapsedTime`:这拍快照的原始锚点 elapsedTime,只用来
     /// 给新量出的偏置记"对着哪个锚点量的"(biasSurvivesAnchor)。`streamRaw`:探针那一拍 MediaRemote 自己的
     /// 读数(snapshot.elapsedTime),偏置按它折,见地面真值分支。
     /// - gaplessLeadBundleID: 这一拍的播放器,仅当它 `carriesGaplessLead`(否则 nil)。自然切歌校正、
@@ -2044,8 +2003,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 直接沿用当前外推值(等于"这一轮不更新位置"),等播放器状态跟上。
         // 只对同一首歌生效:seek 永远发生在曲内,换歌那一拍(拖到结尾触发自然切歌/
         // seek 后 1.2s 内恰好换歌)不能被整拍拒收——否则新曲第一拍被吞、apply() 末尾又
-        // 已把 posTrackingKey 推进成新曲,换歌分支(含自然切歌校正)被永久跳过
-        //。
+        // 已把 posTrackingKey 推进成新曲,换歌分支(含自然切歌校正)被永久跳过。
         if key == posTrackingKey,
            let target = lastSeekTargetSecs, let prev = lastSeekPrevSecs, let at = lastSeekAt,
            Self.shouldRejectStalePositionAfterSeek(
@@ -2212,34 +2170,24 @@ public final class LocalPlaybackSource: ObservableObject {
             posErrEMA = 0
             return (trackPosSeconds, true)
         }
-        // 探针的**一次性地面真值**:不走 EMA,超过门槛直接重锚。
+        // 探针的一次性地面真值:不走 EMA,超过门槛直接重锚。
         //
-        // 这条必须有,否则这个纠偏**几乎永远不会生效**(用真机日志坐实)。
-        // 它是"每首歌一次"的样本,而 `servoDecision` 对 noisyFloored 是 alpha 0.3 / 门槛 1.0
-        // —— 单个样本最多把 EMA 推到 `0.3 × 误差`,要误差超过 **3.33 秒**才可能触发。实测
-        // 连着三首歌 `ema=-0.197 / -0.206 / -0.226`、`snap=false`,而同期离屏逐帧量到的真实
-        // 偏差是 0.7~0.9 秒(App 偏快):**探针每次都测准了、每次都被扔掉**。
+        // 这条必须有,否则这个纠偏几乎永远不会生效:它是"每首歌一次"的样本,而 `servoDecision` 对 noisyFloored 是 alpha 0.3 /
+        // 门槛 1.0,单个样本最多把 EMA 推到 `0.3 × 误差`,要误差超过 3.33 秒才可能触发;这档常见的真实偏差只有 0.7~0.9 秒。
         //
-        // 一次性直接采信跟 `BrowserPositionProbe` 类头注那条"不要持续覆盖"的教训**不冲突**:
-        // 那次的病根是**每 ~0.9 秒**拿一份整秒读数覆盖一次连续外推,造成周期性回退;这里每首歌
-        // 只发生一次,采信完立刻把稳态精度交还给连续外推。
+        // 一次性直接采信跟 `BrowserPositionProbe` 类头注那条"不持续覆盖"不冲突:那条防的是每 ~0.9 秒拿一份整秒读数覆盖一次连续
+        // 外推、造成周期性回退;这里每首歌只发生一次,采信完立刻把稳态精度交还给连续外推。
         //
-        // 位置有讲究(从 seek 分支之后挪到冻结守卫之前):探针这一笔不是流里的样本,
-        // 冻结 / 回绕 / seek 三条守卫对它都是误判 —— 尤其 seek 分支:差超过 2s 时把它当"用户拖动"
-        // 采信后顺手清偏置,下一拍流读数又差回 2s、再被当成一次拖动重锚回去,纠偏活不过一拍。
-        // 它仍必须排在前向棘轮**之前** —— 浏览器探针值做过去地板补偿(`flooredMidpointBiasSecs`),
-        // 不再满足棘轮赖以成立的"reported ≤ 真实位置"。
+        // 位置有讲究,排在冻结守卫之前:探针这一笔不是流里的样本,冻结 / 回绕 / seek 三条守卫对它都是误判。尤其 seek 分支:差超过
+        // 2s 时把它当"用户拖动"采信后顺手清偏置,下一拍流读数又差回 2s、再被当成一次拖动重锚回去,纠偏活不过一拍。它仍必须排在
+        // 前向棘轮之前:浏览器探针值做过去地板补偿(`flooredMidpointBiasSecs`),不再满足棘轮赖以成立的"reported ≤ 真实位置"。
         //
-        // **Spotify(cleanExtrapolated)要把量到的差折进偏置,不能只重锚一次**:Spotify
-        // 给歌曲发 now-playing 常晚 ~2s 而 elapsedTime 仍是 0,之后整首歌 MediaRemote 的每笔
-        // 读数都从这个晚打的锚点外推、恒定落后 ~2s。只重锚一次的话,下一拍起流读数与外推
-        // 差回 ~2s:差 >2s 走 seek 分支当场拽回,差 <2s 三拍 EMA 拽回(限幅 ±0.75、门槛
-        // 0.4)—— 实测(vampire 15:01:07 重锚 +1.956,
-        // 15:01:42 暂停时又落后 1.817、errEMA≈0(伺服认为一切正常)。把 Δ 折进 posReportedBiasSecs
-        // (负值=锚点落后)之后,后续每笔读数先加回这段差,与重锚后的外推一致,伺服才不会再"纠正"回去。
-        // 探针值本身在 Spotify 的钟域里,与流读数同源,先扣同一个旧偏置再比是对的(gapless 时
-        // 它同样超前真声 ~0.9s,见 SpotifyPositionProbe 头注)。偏置归属这一拍的锚点
-        // (biasSurvivesAnchor):暂停 / 拖动后 Spotify 重发的锚点是准的,偏置随之作废。
+        // Spotify(cleanExtrapolated)要把量到的差折进偏置,不能只重锚一次:Spotify 给歌曲发 now-playing 常晚 ~2s 而 elapsedTime
+        // 仍是 0,之后整首歌 MediaRemote 的每笔读数都从这个晚打的锚点外推、恒定落后 ~2s。只重锚一次的话,下一拍起流读数与外推差回
+        // ~2s:差 >2s 走 seek 分支当场拽回,差 <2s 三拍 EMA 拽回(限幅 ±0.75、门槛 0.4),暂停时又落后将近 2 秒而伺服认为一切正常。
+        // 把 Δ 折进 posReportedBiasSecs(负值=锚点落后)之后,后续每笔读数先加回这段差,与重锚后的外推一致,伺服才不会再"纠正"
+        // 回去。探针值本身在 Spotify 的钟域里,与流读数同源,先扣同一个旧偏置再比是对的(gapless 时它同样超前真声 ~0.9s,见
+        // SpotifyPositionProbe 头注)。偏置归属这一拍的锚点(biasSurvivesAnchor):暂停 / 拖动后 Spotify 重发的锚点是准的,偏置随之作废。
         if isGroundTruthSeed {
             // 网页探针的精确读数是页面自己的钟,不在流读数的钟域里,不扣流的旧偏置。
             let truth = groundTruthFromBrowser ? rawReported : reported
@@ -2256,15 +2204,11 @@ public final class LocalPlaybackSource: ObservableObject {
                 return resolveSteadyState(reported: reported, predicted: predicted, key: key, tier: tier)
             }
             if tier == .cleanExtrapolated, let streamRaw {
-                // 偏置 = **这一拍流读数** − 探针值,不是 predicted − 探针值(
-                // greedy 实测:开播半秒 Spotify 把锚点从 0@47 改发成 2.434@48,流读数已跟着新锚点、
-                // 我们的外推还在旧锚点上,两者差 1.45s;按 predicted 折出 −2.025,流读数再扣它就
-                // 超前真声 1.5s,暂停时 delta=+0.523、恢复回退 −1.100)。偏置的定义是"流读数相对
+                // 偏置 = 这一拍流读数 − 探针值,不是 predicted − 探针值:开播半秒 Spotify 可能把锚点从 0 改发成 2.4 左右,流读数已跟着
+                // 新锚点、我们的外推还在旧锚点上,按 predicted 折会把这段差也折进去,流读数再扣它就超前真声。偏置的定义是"流读数相对
                 // 真声偏多少",量它就得拿流读数本身当被减数;我们自己的外推只决定"这一下要不要重锚"。
-                // 不设上限:探针已经两次采样验过钟在走(SpotifyPositionProbe.clockIsRunning),而流那边
-                // 倒是会差出 60~110 秒(Spotify 把开播那份 now-playing 带着新时间戳晚发,elapsed 0.367
-                // / 2.458 落在播到 60s / 110s 的时候,决策 29)—— 上限取 6s 会恰好把这两次真纠偏
-                // 都挡了。
+                // 不设上限:探针已经两次采样验过钟在走(SpotifyPositionProbe.clockIsRunning),而流那边倒是会差出 60~110 秒(Spotify
+                // 把开播那份 now-playing 带着新时间戳晚发,决策 29),上限取 6s 会恰好把这类真纠偏挡掉。
                 setReportedBias(
                     Self.probeMeasuredBias(streamRaw: streamRaw, probeRaw: rawReported),
                     anchorElapsed: anchorElapsedTime, fromProbe: !groundTruthFromBrowser,
@@ -2377,7 +2321,7 @@ public final class LocalPlaybackSource: ObservableObject {
             // 锚点与真声对齐(与手动点播同一性质),自然切歌偏置随之作废——清零并改信
             // 原始读数,否则整首歌会反向偏慢一个旧偏置。
             //
-            // 已知边界(对抗审查确认,单源本质歧义、接受不修):偏置在位时,
+            // 已知边界(单源本质歧义,不修):偏置在位时,
             // 用户在 Spotify 自己界面里**小幅**拖动(幅度 < 偏置+2s ≈ 3s)——重打后的
             // 锚点是准的,但扣着旧偏置的读数跳变量 |d−bias| 不过 2s 门槛,进不来这个
             // 分支,伺服会把该曲余下部分收敛到"真声−偏置"(恒慢 ~0.9s)。单凭
@@ -2674,38 +2618,23 @@ public final class LocalPlaybackSource: ObservableObject {
         stopFastTimer()
     }
 
-    // Music.app 每次换歌/暂停/恢复播放都会往分布式通知中心广播一条
-    // "com.apple.Music.playerInfo"(系统级、无需任何额外权限,跟已有的"自动化"权限
-    // 无关)。借鉴 FlowX(Kadxy/FlowX,同类菜单栏歌词工具)加上这条订阅,
-    // 补上 2 秒轮询天然的感知延迟。
+    // Music.app 每次换歌/暂停/恢复播放都会往分布式通知中心广播一条 "com.apple.Music.playerInfo"(系统级、无需任何额外权限,
+    // 跟"自动化"权限无关),Spotify 有自己的 com.spotify.client.PlaybackStateChanged。两个都订阅,补上 2 秒轮询天然的感知延迟。
+    // QQ 音乐/网易云没有等价通知,它们靠 media-control 的事件流(见 MediaControlStreamWatcher)。
     //
-    // 设计取舍(刻意的,不要"顺手优化"掉):通知**只当作"提前触发一次 poll()"的信号**,
-    // 完全不从 notification.userInfo 里取标题/播放状态/位置去直接喂状态——虽然那份
-    // userInfo 里确实带着这些字段(FlowX 就是直接用的)。理由是这个类的状态机已经相当
-    // 微妙(poll 世代号防乱序、resolvePositionSeconds 的位置平滑+伺服校正、
-    // ensureFastTimerRunning 的生命周期),再引入一条"绕过 poll() 直接改状态"的并行
-    // 路径,就会出现两套数据源需要互相对账:通知先到还是轮询先到、通知里的位置跟
-    // AppleScript 读数哪个更准、平滑器该信谁——这些都是实打实的乱序 bug 温床。现在的
-    // 写法让所有状态变更仍然只发生在 apply() 这一条路径上,通知的唯一作用是让那条路径
-    // 提早跑一次,已有的世代号防护(见 poll())原样继续生效、不需要任何改动。
+    // 通知只当作"提前触发一次 poll()"的信号,别"顺手优化"成从 notification.userInfo 里取标题/播放状态/位置直接喂状态(userInfo
+    // 里确实带着这些字段)。这个类的状态机已经相当微妙(poll 世代号防乱序、resolvePositionSeconds 的位置平滑 + 伺服校正、
+    // ensureFastTimerRunning 的生命周期),再引入一条"绕过 poll() 直接改状态"的并行路径,就要两套数据源互相对账:通知先到还是
+    // 轮询先到、通知里的位置跟 AppleScript 读数哪个更准、平滑器该信谁,这些都是乱序 bug 温床。所有状态变更只发生在 apply() 这
+    // 一条路径上,通知的唯一作用是让那条路径提早跑一次,世代号防护(见 poll())照常生效。
     //
-    // 有一个划得很窄的例外(与 02 章决策 1 里 stream watcher 那条同性质):Spotify 那条通知
-    // 的 userInfo 会被读 **Track ID / Name / Artist 三个键**,只为给换曲那一拍的广告分类提供权威依据
-    // (`spotify:ad:` 前缀,跟 AppleScript `spotify url` 是同一个值,但不用 fork 子进程、而且比 MediaRemote
-    // 那份 now-playing 早到)。位置、播放状态、标题**仍然一律不从通知喂**;分类结果也只在 apply() 里、按快照的
-    // 歌名/歌手核对过之后才生效(见 spotifyNativeAdCheckForNewTrack)。通知没收到就退回原来的 osascript。
+    // 一个划得很窄的例外(与 02 章决策 1 里 stream watcher 那条同性质):Spotify 那条通知的 userInfo 会被读 Track ID / Name /
+    // Artist 三个键,只为给换曲那一拍的广告分类提供权威依据(`spotify:ad:` 前缀,跟 AppleScript `spotify url` 是同一个值,但不用
+    // fork 子进程、而且比 MediaRemote 那份 now-playing 早到)。位置、播放状态、标题仍然一律不从通知喂;分类结果也只在 apply() 里、
+    // 按快照的歌名/歌手核对过之后才生效(见 spotifyNativeAdCheckForNewTrack)。通知没收到就退回 osascript。
     //
-    // Apple Music 和 Spotify 都广播分布式通知,两个都订阅。
-    //
-    // 这里原来写着"Spotify 不广播这个通知……这些播放器没有等价机制",那句话是错的:
-    // Spotify 有自己的 com.spotify.client.PlaybackStateChanged(审阅
-    // lycrics_notch 时发现,它的 SpotifyController 一直在用),我们却只订阅了 Apple Music
-    // 那条,于是 Spotify 用户白等 2 秒轮询。QQ 音乐/网易云确实没有等价通知,它们靠
-    // media-control 的事件流(见 MediaControlStreamWatcher)。
-    //
-    // 两条订阅都不按 features.players 条件挂载:某个播放器可能开着但不在当前选中集合里,
-    // 那种情况下补查一次 poll() 完全无害(poll() 自己会核对 bundleIdentifier,见
-    // MediaControlClient.fetchSnapshot 的各条分支)。
+    // 两条订阅都不按 features.players 条件挂载:某个播放器可能开着但不在当前选中集合里,那种情况下补查一次 poll() 完全无害
+    // (poll() 自己会核对 bundleIdentifier,见 MediaControlClient.fetchSnapshot 的各条分支)。
     private func startObservingPlayerInfoNotification() {
         startStreamWatcher()
         // Spotify 位置探针顺带带回的图床地址落到 spotifyArtworkURL(还是这首才收,见 noteSpotifyArtwork)。
@@ -2828,9 +2757,8 @@ public final class LocalPlaybackSource: ObservableObject {
     // 连发被合并成一次查询,且这次查询稳定发生在状态真正切换完之后(最后一条通知
     // +231ms,再等 250ms,查询落在 ~+480ms,远晚于 ~+294ms 的状态稳定点)。
     //
-    // 即便如此仍明显优于改动前:感知延迟从"平均 1 秒、最坏 2 秒"降到 ~0.5 秒且稳定。
-    // 2 秒轮询 Timer 继续独立运行不动,是这套机制的兜底——去抖动/取消逻辑万一有任何
-    // 边界情况没覆盖到,最坏也只是退化成改动之前的行为,不会漏状态。
+    // 感知延迟 ~0.5 秒且稳定(只靠 2 秒轮询是平均 1 秒、最坏 2 秒)。2 秒轮询 Timer 继续独立运行,是这套机制的兜底:
+    // 去抖动/取消逻辑万一有边界情况没覆盖到,最坏也只是退化成只靠轮询,不会漏状态。
     /// `freezeExtrapolation` = 这个信号有没有可能意味着播放状态变了。
     ///
     /// 别无条件冻:冻结期间位置**完全不走**,而逐字填色直接读这个锚点 —— 一次信号就是
@@ -2867,8 +2795,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 还在按播放速度往前跑,等真相到达时显示位置已经超前了将近半秒 —— 一切到暂停的
     /// 冻结位置(pausedPositionMs 是播放器报的真实值)就往回跳:进度条退一点、时间数字
     /// 倒退一秒、运气不好还跨过一句歌词,歌词跟着"变一下"。
-    /// 现象是的就是这个("为什么有时候暂停的时候进度条会突然回退一点")——
-    /// "有时候"正对应那半秒是否恰好跨过一句歌词的边界。
+    /// 表现是"暂停时进度条有时突然回退一点","有时"正对应那半秒是否恰好跨过一句歌词的边界。
     ///
     /// 冻住之后,误差只剩通知本身那 ~116ms,跳变基本看不出来。
     ///
@@ -2919,20 +2846,13 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 此刻该用的轮询间隔。暂停(有曲目没在放)6s:用户在播放器里拖进度条这类"不发通知
     /// 的静默变化"最坏晚 6s 被兜到,可接受;空闲(连曲目都没有)10s。
     ///
-    /// **刚失去快照的头几拍必须留在 2s 档**。`clearIfWasPlaying()` 会把
-    /// title 清空(那是对的,停播不该留半吊子状态),于是下面那行立刻判成"空闲"、降到 10s ——
-    /// 而快照变 nil 最常见的原因**根本不是空闲**,是浏览器播放的广告闸 fail-closed 丢了这一拍
-    /// (`trustedPlaybackRejected` → 探针判定还没到 → `gate` 拒)。一拍本该 2 秒就自愈的
-    /// 抖动,被这次降档自己延长成 10 秒:**一次拿不到 → 把下次去拿的时间推迟 5 倍**,而
-    /// 探针 ~187ms 就把结果放进缓存了,没人去读。
+    /// 刚失去快照的头几拍必须留在 2s 档。`clearIfWasPlaying()` 会把 title 清空(那是对的,停播不该留半吊子状态),于是下面那行
+    /// 立刻判成"空闲"、降到 10s,而快照变 nil 最常见的原因根本不是空闲,是浏览器播放的广告闸 fail-closed 丢了这一拍
+    /// (`trustedPlaybackRejected` → 探针判定还没到 → `gate` 拒)。一拍本该 2 秒就自愈的抖动,被降档自己延长成 10 秒:一次拿不到
+    /// → 把下次去拿的时间推迟 5 倍,而探针 ~187ms 就把结果放进缓存了,没人去读;这段时间菜单栏塌成图标、灵动岛退到兜底图标。
     ///
-    /// 真机实测(16:02:24.464 `snapshot failed` → 16:02:31.486 `snapshot recovered`)
-    /// 真空期 **7.0 秒**,期间菜单栏 16:02:27.651 `slot rebuild: fixed(223.5) -> icon(38.5)`
-    /// 塌成图标、灵动岛同时退到兜底图标。那 7 秒还是**侥幸**:靠 16:02:31 一条 media-control
-    /// 事件唤醒补查才提前救回,没有那条事件就是满 10 秒。
-    ///
-    /// 3 拍 = 6 秒:真停播(Music.app 退出 / 播放列表放完)时多跑两次 poll 就降档,代价可忽略;
-    /// 而任何"一两拍就自愈"的抖动全程留在 2s 档。
+    /// 3 拍 = 6 秒:真停播(Music.app 退出 / 播放列表放完)时多跑两次 poll 就降档,代价可忽略;而任何"一两拍就自愈"的抖动全程
+    /// 留在 2s 档。
     ///
     /// 播放器说在放、声音还没走起来(`MediaControlSnapshot.isWaitingToPlay`:加载、广告、卡住)也留在 2s 档。
     private var desiredPollInterval: TimeInterval {
@@ -3039,17 +2959,6 @@ public final class LocalPlaybackSource: ObservableObject {
         fastTimer = nil
     }
 
-    /// 没有 anchor(暂停,或曲目还在但位置已冻结)时按冻结位置 pausedPositionMs 解一次当前
-    /// 歌词行;真的没有冻结位置、或引擎里没有歌词内容时才清空。
-    ///
-    /// apply() 和 fastTick() 必须都走这里。这两处本来各写了一份"anchor 为 nil 就三连
-    /// 清空",于是把 apply() 那份改成"暂停不清行"之后,fastTick() 那份还在原样清 —— 而
-    /// seek(toMs:) 末尾是**无条件**调 fastTick() 的(为了拖动进度条时歌词立刻跟到新位置),
-    /// 所以暂停状态下拖一次进度条,行又被清掉,要等下一次 apply()(2 秒轮询)才回来。抽成
-    /// 一处,两边不可能再错开。
-    ///
-    /// 不要在这里另外加 currentLyricsOffsetMs:activeLine/upcomingLineText/activeLineIndex
-    /// 内部都会先做 rawPosMs + offsetMs(见 LyricsSyncEngine),手动再加一次就是双倍校正。
     /// 记下这个台的台卡。名字一变就落盘;封面要等取图那条路回来(台卡那一拍常常没有图)。
     private func noteRadioStationCard(name: String, hash: String, trackKey: String) {
         pendingStationCardKey = trackKey
@@ -3114,6 +3023,14 @@ public final class LocalPlaybackSource: ObservableObject {
         if !currentLineFillSettled { currentLineFillSettled = true }
     }
 
+    /// 没有 anchor(暂停,或曲目还在但位置已冻结)时按冻结位置 pausedPositionMs 解一次当前歌词行;真的没有冻结位置、或引擎里
+    /// 没有歌词内容时才清空。
+    ///
+    /// apply() 和 fastTick() 必须都走这里,别各写一份"anchor 为 nil 就清空":seek(toMs:) 末尾无条件调 fastTick()(拖动进度条时
+    /// 歌词立刻跟到新位置),两份不一致的话,暂停状态下拖一次进度条,行就被清掉,要等下一次 apply()(2 秒轮询)才回来。
+    ///
+    /// 不要在这里另外加 currentLyricsOffsetMs:activeLine/upcomingLineText/activeLineIndex 内部都会先做 rawPosMs + offsetMs
+    /// (见 LyricsSyncEngine),手动再加一次就是双倍校正。
     private func resolveLinesForPausedPosition() {
         lineSelectionHeldMs = nil
         guard let frozen = pausedPositionMs, syncEngine.hasContent, !lyricLinesSuppressed else {
@@ -3121,8 +3038,7 @@ public final class LocalPlaybackSource: ObservableObject {
             return
         }
         refreshMusicVideoOffset(atRawMs: frozen)
-        // 打包查询:四个值要的是同一个 posMs 的同一次定位,原来四个入口各自从头扫一遍
-        // (性能审计,见 LyricsSyncEngine.tickQuery)。
+        // 打包查询:四个值要的是同一个 posMs 的同一次定位,见 LyricsSyncEngine.tickQuery。
         let r = syncEngine.tickQuery(atMs: frozen, trackEndMs: currentDurationMs)
         if r.line != currentLine { currentLine = r.line }
         if r.compactLine != compactLine { compactLine = r.compactLine }
@@ -3162,11 +3078,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 该显示哪一行,绝大多数 tick 其实还是同一行——无条件赋值会让悬浮窗所在的
         // LyricsOverlayView(以及任何订阅 PlaybackCoordinator 的其它 View,比如"歌词
         // 管理"窗口)整个 body 跟着每一拍都重算一遍,造成播放期间的卡顿。
-        // 打包查询:当前行/下一句/行下标/间奏下标要的是同一个 pos 的
-        // 同一次定位,原来四个入口各自独立扫一遍数组(原注释"这个量级完全可以忽略"没错,
-        // 但 tickQuery 让下标只算一次、还带单调窗口记忆化,调用方也从四行收敛成一次调用)。
-        // "只在真的变化时才赋值"的规则原样保留 —— 这四个是 @Published,SwiftUI 不管新旧值
-        // 是否相等,只要赋值就会通知订阅者重新渲染,而绝大多数 tick 其实还是同一行。
+        // 打包查询:当前行/下一句/行下标/间奏下标要的是同一个 pos 的同一次定位,tickQuery 让下标只算一次、还带单调窗口记忆化。
         // 选句用的位置:小幅往回纠正时停在上一拍那里(见 LineSelectionHold);填色和下一拍的时刻照实际位置。
         let selectPos = LineSelectionHold.position(raw: pos, held: lineSelectionHeldMs)
         lineSelectionHeldMs = selectPos
@@ -3195,9 +3107,8 @@ public final class LocalPlaybackSource: ObservableObject {
     /// KaraokeFill.lineFillSettledMs(selftest 覆盖);这里只负责跟填色视图同一个时间基准
     /// 比较 —— 视图的 currentMs = 外推位置 + offsetMs(见 LyricsOverlayView.mainLine),
     /// 词的时间戳是歌词原始时间轴,所以这里同样要加 offsetMs 再比。
-    // 阈值是**行级常量**(只由词/组的时间轴决定),原来每个 tick 都对全行词+组重算一遍
-    // O(词数)浮点循环——按行记忆化:引擎的行是按下标记忆化的同一
-    // 实例,`==` 走同一性快路径,换行才真的重算一次,tick 退化为一次整数比较。
+    // 阈值是行级常量(只由词/组的时间轴决定),按行记忆化:引擎的行是按下标记忆化的同一实例,`==` 走同一性快路径,换行才真的
+    // 重算一次,tick 退化为一次整数比较。
     private var settledThresholdLines: [SyncedLyricLine?] = []
     private var settledThresholdIndex: Int?
     private var settledThresholdMs = 0
@@ -3228,10 +3139,8 @@ public final class LocalPlaybackSource: ObservableObject {
             }
             // 必须用 effectiveOffsetMs(含歌词自带的 [offset:]),不能用 offsetMs:
             // settledThresholdMs 来自词时间戳(歌词原始时间轴),而"播放位置 → 歌词时间轴"
-            // 的换算就是引擎那句「所有查询入口都必须用 effectiveOffsetMs」管的事 ——
-            // 全链路核对 [offset:] 处理时抓到这里是唯一漏改的入口(
-            // 那次只改了引擎内部五个入口,这处在引擎外面、漏了),带非零 offset 的歌
-            // "行内填色已完成"的判定会偏差相应毫秒数。
+            // 的换算就是引擎那句「所有查询入口都必须用 effectiveOffsetMs」管的事;这处在引擎外面,用 offsetMs 的话带非零 [offset:]
+            // 的歌"行内填色已完成"的判定会偏差相应毫秒数。
             settled = rawMs + syncEngine.effectiveOffsetMs >= settledThresholdMs
         } else {
             settled = true
@@ -3300,27 +3209,18 @@ public final class LocalPlaybackSource: ObservableObject {
 
     // nil 快照(真的没有任何曲目在加载)和"有曲目但不是 Apple Music"共用同一套清理。
     //
-    // 改:title/artist/album 以前**故意不清**,理由写的是"保留最近一次播放
-    // 的信息,跟暂停分支的既有行为一致"。那个理由站不住 —— **暂停根本不走这条路径**:
-    // 暂停时 media-control 仍然给出一份带曲目的快照(playing=false),走的是 apply(),
-    // 曲目信息本来就留着。能走到这里的只有"真的什么都没在放"。
+    // title/artist/album 一起清:暂停根本不走这条路径(暂停时 media-control 仍然给出一份带曲目的快照,playing=false,走的是
+    // apply(),曲目信息本来就留着),能走到这里的只有"真的什么都没在放"。只清歌词不清曲目的话,一张专辑放完之后"歌词窗口"会停在
+    // 一个半吊子状态:曲名歌手还在,封面变回占位音符、配色没了、歌词列表空了写着"无歌词",看着像坏了而不是像停了。别的界面早就
+    // 防过空标题:菜单栏那条 `if !coordinator.title.isEmpty` 直接不显示这一行,灵动岛 `poller.title.isEmpty ? "♪" : poller.title`
+    // 回退成音符。
     //
-    // 于是一张专辑放完之后,"歌词窗口"会停在一个半吊子状态:曲名歌手还在,封面变回占位
-    // 音符、配色没了、歌词列表空了写着"无歌词" —— 现象是的就是这个,看着像坏了而不是像
-    // 停了。曲目信息一起清掉,各界面才会一致地表达"现在没有在放"。
+    // allLines/artworkData 也要清:LyricsWindowView 判断"有没有内容可展示"用的是 `allLines.isEmpty`,不清空这个数组,"歌词窗口"
+    // 会无限期冻结显示停播前那首歌的完整歌词列表和封面模糊背景,直到下一次真正播放新曲目。
     //
-    // 别的界面早就防过空标题:菜单栏那条 `if !coordinator.title.isEmpty` 直接不显示这一行,
-    // 灵动岛 `poller.title.isEmpty ? "♪" : poller.title` 回退成音符,都不需要改。
-    //
-    // allLines/artworkData 这两个是补上的——之前漏清,导致播放彻底停止(不是
-    // 暂停,是这两处调用点代表的"真的没有任何曲目在加载"/"当前不是 Apple Music 在报告")
-    // 后,"歌词窗口"会无限期冻结显示停播前那首歌的完整歌词列表和封面模糊背景,直到下一次
-    // 真正播放新曲目才会刷新——因为 LyricsWindowView 判断"有没有内容可展示"用的是
-    // `allLines.isEmpty`,不清空这个数组,视图就没有任何理由切回"无歌词"占位态。
-    //
-    // 条件不能只看 isPlayingNow:「先暂停、再退出播放器 / 暂停后 stop」恰好走到这里,而这时 isPlayingNow 早就是 false,
-    // 只看它的话整段什么都不做,播放器都关了,悬浮窗、灵动岛、歌词窗口还一直挂着那首暂停的歌。改成「还有这首歌的
-    // 任何残留」就清;清完这几样都空了,之后每拍再进来什么都不做。
+    // 条件不能只看 isPlayingNow:「先暂停、再退出播放器 / 暂停后 stop」恰好走到这里,而这时 isPlayingNow 早就是 false,只看它的话
+    // 整段什么都不做,播放器都关了,悬浮窗、灵动岛、歌词窗口还一直挂着那首暂停的歌。条件是「还有这首歌的任何残留」;清完这几样
+    // 都空了,之后每拍再进来什么都不做。
     private func clearIfWasPlaying() {
         if Self.hasTrackStateToClear(isPlaying: isPlayingNow, title: title, lastKey: lastKey,
                                      pausedPositionMs: pausedPositionMs, hasAnchor: anchor != nil) {
@@ -3405,20 +3305,14 @@ public final class LocalPlaybackSource: ObservableObject {
         }
     }
 
-    // poll 之间乱序完成的保护——实测排查坐实:每次 Timer 触发都新起一个
-    // Task,内部子进程调用(几十~上百毫秒,但权限弹窗/系统繁忙等情况下可能明显变慢)之间
-    // 没有任何互斥,较早发起的一次如果比较晚发起的一次更慢完成,会在 apply() 里用一份
-    // 过期快照覆盖掉刚刚已经生效的新快照,造成标题/歌词短暂跳回上一首歌。用单调递增的
-    // 世代号标记"这是第几次发起的轮询",子进程返回后只在"比已经生效的那一轮更新"时
-    // 才继续走 apply()/clearIfWasPlaying()(见 pollResultIsCurrent)——跟 fetchArtworkForCurrentTrack() 已经用
-    // expectedKey 做的事是同一个模式,只是这里换歌与否都要防护,不能用 trackKey 当
-    // 世代标识。
+    // poll 之间乱序完成的保护:每次 Timer 触发都新起一个 Task,内部子进程调用(几十~上百毫秒,权限弹窗/系统繁忙时可能明显变慢)
+    // 之间没有任何互斥,较早发起的一次如果比较晚发起的一次更慢完成,会在 apply() 里用一份过期快照覆盖掉刚生效的新快照,标题/歌词
+    // 短暂跳回上一首歌。用单调递增的世代号标记"这是第几次发起的轮询",子进程返回后只在"比已经生效的那一轮更新"时才继续走
+    // apply()/clearIfWasPlaying()(见 pollResultIsCurrent)。跟 fetchArtworkForCurrentTrack() 用 expectedKey 做的事是同一个模式,
+    // 只是这里换歌与否都要防护,不能用 trackKey 当世代标识。
     //
-    // poll 现在有两个调用方(2 秒轮询 Timer + playerInfo 通知补查,见
-    // handlePlayerInfoChanged),这道防护对新入口天然同样成立、不需要任何改动——它保护的
-    // 是"任意两次 poll() 的返回乱序",跟这两次分别是谁触发的无关。通知补查跟定时轮询
-    // 挨得很近(通知先到、轮询紧随其后)时,后发起的那次赢,先发起的那次结果被丢弃,
-    // 正是想要的行为。
+    // poll 有两个调用方(2 秒轮询 Timer + playerInfo 通知补查,见 handlePlayerInfoChanged),这道防护保护的是"任意两次 poll() 的
+    // 返回乱序",跟谁触发的无关。通知补查跟定时轮询挨得很近时,后发起的那次赢,先发起的那次结果被丢弃,正是想要的行为。
     private var pollGeneration = 0
     /// 单飞:同一时刻只有一轮 poll 在飞,在飞时来的请求合并成回来后补跑一次(见 PollSingleFlight)。
     private var pollFlight = PollSingleFlight()
@@ -3507,13 +3401,9 @@ public final class LocalPlaybackSource: ObservableObject {
         generation > appliedGeneration && generation > invalidatedThrough
     }
 
-    /// 连续多少次 poll() 拿到了 nil 快照——给下面"snapshot failed"那行判断该不该打日志用。
-    /// 实测坐实的问题:这条路径原来无条件每拍都打一遍 `.error`,而空闲档
-    /// (没在放歌)轮询间隔只有 10s,一晚上挂机就是几百条一模一样的行——诊断导出一份
-    /// 24 小时 App Log 里这一条能占到三成,把真正有用的信号淹没掉。改成只在**状态刚
-    /// 变成这样**(从"有快照"变成"没有")时才打一次;如果这个状态持续存在(比如权限
-    /// 真的被收回了),每隔一段时间(约 5 分钟,`% 30` × 10s 空闲档)再打一次,不完全
-    /// 沉默——不然真出问题时诊断导出里反而一条线索都没有。
+    /// 连续多少次 poll() 拿到了 nil 快照,给下面"snapshot failed"那行判断该不该打日志用:只在状态刚变成这样(从"有快照"变成
+    /// "没有")时打一次;状态持续存在时(比如权限真的被收回了)每隔约 5 分钟(`% 30` × 10s 空闲档)再打一次,不完全沉默。每拍都打
+    /// 的话,空闲档 10s 一拍,一晚上挂机就是几百条一模一样的行,能占到诊断导出 24 小时日志的三成,把有用的信号淹没掉。
     private var consecutiveNilSnapshots = 0
     /// 这一串连续拿不到快照是从哪一刻开始的。焦点那一档的宽限按秒算,见
     /// `MediaControlClient.focusHeldGraceSeconds`。
@@ -3560,9 +3450,8 @@ public final class LocalPlaybackSource: ObservableObject {
                     // `+` 拼运行时 String——先把可变的那半拼成局部变量,再一次性插值进去。
                     let streakSuffix = self.consecutiveNilSnapshots > 1
                         ? " streak=\(self.consecutiveNilSnapshots)" : ""
-                    // 说出**具体是哪一种**。原来这句把三种原因合成
-                    // 一句话、还漏掉了第四种(焦点被别的 App 占走 / 私有通道坏了),用户交上来的
-                    // 诊断日志里只有这一句,指不出任何方向。枚举见 MediaControlClient.SnapshotFailure。
+                    // 说出具体是哪一种(枚举见 MediaControlClient.SnapshotFailure):几种原因合成一句话的话,诊断日志里只有这一句时
+                    // 指不出任何方向。
                     let reason = snapshotFailure?.rawValue ?? "unknown"
                     // notice 而不是 error:这多数时候是正常状态(Music 没开 / 没曲目在放),
                     // 落盘留线索就够,不该在 error 级别里跟真正的故障混在一起。后缀显式 .public ——
@@ -3638,7 +3527,7 @@ public final class LocalPlaybackSource: ObservableObject {
         //
         // 缓存里还没有这首歌时(刚换曲、歌词还在解析)**保留快照自己那份**,绝不置 0:
         // 进度锚点按 durationMs 夹位置(ProgressClock),0 会把位置钉死在开头、整档没有歌词
-        // —— 真踩过一次。代价只是换曲后头几秒分母偏大,缓存一落地自己纠正。
+        // 代价只是换曲后头几秒分母偏大,缓存一落地自己纠正。
         //
         // 放在 apply 最前面而不是 MediaControlClient 里:EnrichCacheReader 是 @MainActor 隔离的,
         // 快照那条路是 nonisolated,够不着。
@@ -3666,7 +3555,7 @@ public final class LocalPlaybackSource: ObservableObject {
         }
         // 台卡:开台那一刻系统会先推一张 **artist 为空、title 就是台名**的载荷(实测三次:
         // `|NCT 127`、`|YEONJUN`、`|petal radio`,enrich key 的第一段是歌手)。这是**唯一**能拿到
-        // 台名台标的时机 —— 口白期间系统一个字段都不变(抓了整段 61 秒的口白坐实)。
+        // 台名台标的时机 —— 口白期间系统一个字段都不变(整段 61 秒的口白都是这样)。
         // 判据与理由见 RadioStationCard。
         let stationHash = MediaControlClient.currentRadioStationHash()
         if stationHash != nil, !radioStationCardLoaded {
@@ -3711,8 +3600,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // @Published,Combine 不管新旧值是否相等,只要赋值就会通知订阅者。同一首歌播放期间
         // 这四个字段每 2 秒轮询其实拿到的都是同一份值,无条件赋值会让"歌词窗口"(以及任何
         // 订阅 PlaybackCoordinator 的其它 View)的整个 body 跟着每 2 秒重算一次——
-        // 实测排查坐实,这是"歌词窗口"封面模糊背景每 2 秒被重新解码+重新高斯模糊的根因
-        // 之一(另一个是下面的 anchor,两处需要一起改才能真正消除这个重渲染)。
+        // 歌词窗口的封面模糊背景就会每 2 秒重新解码 + 重新高斯模糊(下面的 anchor 同理,两处都得只在变化时赋值)。
         let newTitle = snapshot.title ?? ""
         if newTitle != title { title = newTitle }
         let newArtist = snapshot.artist ?? ""
@@ -3743,9 +3631,7 @@ public final class LocalPlaybackSource: ObservableObject {
         }
         // 广告判定必须在下面 np:lastTrack* 落盘**之前**算出来:那几个键是"上次在听什么"
         // (停播页的唱片 hero、待机页、歌词窗口都读它),一段广告不该被记成上次在听的歌。
-        // 之前不需要管这件事 —— YT Music 的广告在 MediaControlClient 那道闸
-        // 就被整条丢掉了,根本走不到这里;现在它会走到(为了让 UI 能显示「广告中」,见
-        // YouTubeMusicAdProbe.Gate.acceptAsAd),所以这道保护要在这里补上。
+        // YT Music 的广告会走到这里(为了让 UI 能显示「广告中」,见 YouTubeMusicAdProbe.Gate.acceptAsAd),所以这道保护要在这里做。
         // 判定语义见下面 isCurrentTrackAdBreak 那一段。
         let isSpotifyNative = snapshot.bundleIdentifier == PlaybackPlayer.spotify.bundleIdentifier
         let resolvedBundleID = BrowserPositionProbe.probeTargetBundleID(forReported: snapshot.bundleIdentifier)
@@ -3760,17 +3646,13 @@ public final class LocalPlaybackSource: ObservableObject {
         // 读的是 **badge 口径**(`cachedBadgeVerdict`，02 章决策 #26):只靠裸标题撑起来的
         // 广告判定在这里算「拿不准」(nil)。换歌那两三秒页面标题就是裸的「YouTube Music」,而 YT Music
         // 首次发布元数据常常不带 album、会被 MediaControlClient 那道闸踢一次探针 —— 恰好探到,弱 ad 就
-        // 缓存到了下一首歌的 key 下,下一拍换曲按当下判定定初值,整首真歌被贴「广告中」(举例:
-        // Safari 播 Prince《It's Gonna Be Lonely》1:15 处仍「广告中」、歌词却正常)。gate 那边仍按任一命中即广告。
+        // 缓存到了下一首歌的 key 下,下一拍换曲按当下判定定初值,整首真歌被贴「广告中」。gate 那边仍按任一命中即广告。
         let youTubeMusicVerdict = YouTubeMusicAdProbe.shared.cachedBadgeVerdict(forKey: youTubeMusicAdKey)
-        // Spotify **网页版**只认页面的正向证据(`SpotifyWebAdProbe` 判成广告),**不再**套原生那套
-        // "album 空 / artist 空 / 标题「—」"字段启发式:`isSpotifyWeb` 只说明"这个浏览器**配对过** Spotify 网页版",不说明此刻在放的是
-        // Spotify —— 这台机器上 Safari / Arc 同时配对了 spotifyWeb 和 youtubeMusic,于是 YT Music 里
-        // 一首 album 为空的 MV(王子《Why You Wanna Treat Me So Bad?》,MV 常常不报专辑名)被那条
-        // "album 空即广告"整首标成「广告中」,而 YT Music 探针明明判它是歌;同专辑带专辑名的
-        // 《Sexy Dancer》就正常 —— 差别只在 album 空不空。网页版广告的形状(artist 空)本来就只有在
-        // `SpotifyWebAdProbe` 判成广告时才过得了 MediaControlClient 那道闸(见 spotifyWebAdAccepted),
-        // 这里读同一份缓存,两边口径一致;原生 Spotify 的启发式 + AppleScript 复核原样不动。
+        // Spotify 网页版只认页面的正向证据(`SpotifyWebAdProbe` 判成广告),不套原生那套"album 空 / artist 空 / 标题「—」"字段
+        // 启发式:`isSpotifyWeb` 只说明"这个浏览器配对过 Spotify 网页版",不说明此刻在放的是 Spotify(一个浏览器可以同时配对
+        // spotifyWeb 和 youtubeMusic),YT Music 里 album 为空的 MV(MV 常常不报专辑名)会被"album 空即广告"整首标成「广告中」。
+        // 网页版广告的形状(artist 空)本来就只有在 `SpotifyWebAdProbe` 判成广告时才过得了 MediaControlClient 那道闸(见
+        // spotifyWebAdAccepted),这里读同一份缓存,两边口径一致;原生 Spotify 的启发式 + AppleScript 复核原样不动。
         let spotifyWebVerdict: SpotifyWebAdProbe.Verdict? = isSpotifyWeb
             ? SpotifyWebAdProbe.shared.cachedVerdict(
                 forKey: SpotifyWebAdProbe.trackKey(artist: snapshot.artist, title: snapshot.title))
@@ -3802,50 +3684,26 @@ public final class LocalPlaybackSource: ObservableObject {
             lastPersistedTrackTitle = newTitle
         }
         // Spotify 广告插播判断(字段启发式 + 同曲棘轮 + AppleScript 权威)。
-        // 不能每一拍都按"当下字段"重判 —— 广告字段会**闪变**(开播 album 空、几拍后
-        // 补齐,Blinds.com 坐实),看走眼的那几拍 UI 会退回"歌名 + 搜索歌词中"。
-        // 换曲那一拍按加宽的启发式(album 空/artist 空/标题「—」)定初值,同曲期间只往 true
-        // 棘轮、不回落;是 Spotify 就再异步问一次本尊
-        // (`spotify url` 前缀是权威分类,广告可以带全 artist/title/album 骗过启发式),
-        // 结果回来仍是这首才采纳。结论写进播放状态的 ad,引擎不另判、只认它(上报、搜歌词都按它挡)。
+        // 不能每一拍都按"当下字段"重判:广告字段会闪变(开播 album 空、几拍后补齐),看走眼的那几拍 UI 会退回"歌名 + 搜索歌词中"。
+        // 换曲那一拍按加宽的启发式(album 空/artist 空/标题「—」)定初值,同曲期间只往 true 棘轮、不回落;是原生 Spotify 就再异步
+        // 问一次本尊(`spotify url` 前缀是权威分类,广告可以带全 artist/title/album 骗过启发式),结果回来仍是这首才采纳。结论写进
+        // 播放状态的 ad,引擎不另判、只认它(上报、搜歌词都按它挡)。
         //
-        // **网页版 Spotify 也要认**(对拍坐实:Last.fm 那张卡的
-        // "正在记录"行原样显示了一条"广告"——`!playback.isAdBreak` 那道闸没拦住,因为下面
-        // `isSpotify` 原来只认原生客户端的 bundleIdentifier,浏览器代理进程报的是
-        // `com.apple.WebKit.GPU`/浏览器自己的 bundle id,永远对不上)。现场抓的真实广告
-        // 样本:`album=""  artist=""  title="广告"  duration≈30s`——跟原生客户端广告同一套
-        // 字段信号,不需要另外发明判据,只需要把"这是不是 Spotify"的判断扩到网页版。
-        // `BrowserPositionProbe.shared.platformBrowserPairs` 是用户在「网页播放器」设置页
-        // 显式配对过的浏览器与平台关系(跟 kickIfNeeded 用的是同一份数据、同一把锁),
-        // 配对了 "spotifyWeb" 的浏览器标签页播放就按 Spotify 处理。
+        // 网页版:Spotify 网页版只认 `SpotifyWebAdProbe` 的正向证据(广告样本 `album="" artist="" title="广告" duration≈30s`),
+        // 不按"配对过 spotifyWeb"套原生那套启发式:配对关系不等于此刻在放 Spotify(一个浏览器可能两个平台都配了),会把 YT Music 里
+        // 没有专辑名的 MV 整首判成广告。YouTube Music 网页版的广告 artist 是广告主频道名、非空,跟"真歌但没报专辑名"在字段上分不开,
+        // 只能问页面(`YouTubeMusicAdProbe` 异步查、结果进缓存)。判据收在 `adBreakByFields`(纯函数,selftest 钉着)。
         //
-        // **YouTube Music 网页版也要认**("chrome 上播 YT Music 的
-        // 广告也像 Spotify 那样显示出来是广告")。它跟 Spotify 走的不是同一条判据:Spotify
-        // 广告靠字段形状就能认(album/artist 空、标题「—」),而 YT Music 广告的 artist 是
-        // 广告主频道名、**非空**,跟"真歌但没报专辑名"在字段上完全分不开 —— 只能问页面。
-        // 那次查询由 `YouTubeMusicAdProbe` 异步做、结果进缓存,上面 `isYouTubeMusicAd`
-        // 读的就是它。在此之前这类广告在 MediaControlClient 那道闸就被整条丢掉了,后果是
-        // 30 秒广告期间灵动岛/悬浮窗整个塌成"未在播放"、广告完了再弹回来。
-        //
-        // 上面这段"网页版也要认"的落地方式改了:**不再**把 `isSpotify` 扩成"配对过
-        // 网页版就按 Spotify 启发式判",而是网页版只认 `SpotifyWebAdProbe` 的正向证据 —— 配对关系
-        // 不等于此刻在放 Spotify(Safari / Arc 两个平台都配了),按配对套启发式会把 YT Music 里
-        // 没有专辑名的 MV 整首判成广告。判据收在 `adBreakByFields`(纯函数,selftest 钉着)。
-        //
-        // isSpotifyNative/isSpotifyWeb/youTubeMusicVerdict/adByFields 几个局部量在上面
-        // np: 落盘那段之前就算好了(广告不该被记成"上次在听"),这里直接用。
-        // 同曲棘轮有一个**例外**:YouTube Music 的**音乐视频**前贴片广告不是
-        // 独立的 now-playing 条目,它在 `#movie_player` 里放、MediaSession 元数据却一直是这首歌
-        // 自己的 —— 于是页面判定会在**同一个 key** 下先 ad 后 song。只往 true 棘轮的话,前贴片
-        // 一过、整首 MV 都挂着「广告中」(现象是的就是这个,Safari 播王子《Why You Wanna Treat
-        // Me So Bad?》当场坐实,引擎日志里三轮 rejected 之后才 now playing)。所以页面**明确**
-        // 说是歌(`.song`,不是 nil)时允许回落;Spotify 那套字段启发式 + AppleScript 复核不受
-        // 影响(它们的 verdict 恒为 nil)。状态机收在 nextAdBreakState 里,selftest 钉着。
-        // pageVerdict 只在**原生 Spotify** 上置 nil(它有自己的 AppleScript 复核语义);浏览器播放一律
-        // 传 YT Music 探针的判定 —— 不能按 isSpotifyWeb 置 nil,那会让"配对了 Spotify 网页版的浏览器"
-        // 里的 YT Music MV 在前贴片放完后回落不了(修正,同上一段)。
-        // 「是不是新曲」跟 lastKey 用同一把尺子(identityKey):拿 trackKey 比的话,署名不可信的播放器
-        // 两者恒不相等,每拍都算新曲,同曲期间只往「广告」方向棘轮的规则就失效了。
+        // isSpotifyNative/isSpotifyWeb/youTubeMusicVerdict/adByFields 几个局部量在上面 np: 落盘那段之前就算好了(广告不该被记成
+        // "上次在听"),这里直接用。
+        // 同曲棘轮有一个例外:YouTube Music 的音乐视频前贴片广告不是独立的 now-playing 条目,它在 `#movie_player` 里放、
+        // MediaSession 元数据却一直是这首歌自己的,于是页面判定会在同一个 key 下先 ad 后 song。只往 true 棘轮的话,前贴片一过、
+        // 整首 MV 都挂着「广告中」。所以页面明确说是歌(`.song`,不是 nil)时允许回落;Spotify 那套字段启发式 + AppleScript 复核
+        // 不受影响(它们的 verdict 恒为 nil)。状态机收在 nextAdBreakState 里,selftest 钉着。
+        // pageVerdict 只在原生 Spotify 上置 nil(它有自己的 AppleScript 复核语义);浏览器播放一律传 YT Music 探针的判定,不能按
+        // isSpotifyWeb 置 nil:那会让配对了 Spotify 网页版的浏览器里的 YT Music MV 在前贴片放完后回落不了。
+        // 「是不是新曲」跟 lastKey 用同一把尺子(identityKey):拿 trackKey 比的话,署名不可信的播放器两者恒不相等,每拍都算新曲,
+        // 同曲期间只往「广告」方向棘轮的规则就失效了。
         let nextAd = Self.nextAdBreakState(
             previous: isCurrentTrackAdBreak, isNewTrack: snapshot.identityKey != lastKey,
             adByFields: adByFields,
@@ -3855,7 +3713,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 上一次插播的「1/2」。读的是**同一份缓存**(`cachedReading`),不额外踢探针 —— 它跟
         // 上面那条 `cachedBadgeVerdict` 是同一次读数的两个字段,不会出现"判定说广告、计数
         // 却来自另一拍"的错位。徽章从 1/2 翻到 2/2 最多滞后一个探测周期(广告期间 5 秒一探),
-        // 评审时确认可接受 —— 为一个装饰性计数把 AppleEvent 往返频率翻倍不值。
+        // 可以接受:为一个装饰性计数把 AppleEvent 往返频率翻倍不值。
         let nextAdSlot = nextAd
             ? YouTubeMusicAdProbe.shared.cachedReading(forKey: youTubeMusicAdKey)?.adSlot
             : nil
@@ -3866,10 +3724,9 @@ public final class LocalPlaybackSource: ObservableObject {
             previous: adCountdown, sameTrack: snapshot.identityKey == lastKey)
         if adCountdown != nextCountdown { adCountdown = nextCountdown }
         // 只要「广告中」还亮着、而且是浏览器播放,就**每拍**再踢一次 YT Music 探针(决策 #26)。
-        // 原来探针只在 MediaControlClient 那道闸"album 为空"时才被踢:YT Music 首次发布元数据常常不带
-        // album、几百毫秒后重发才带上 —— 重发之后基础守卫直接放行,**再没有任何地方去问页面**,状态机等的
-        // 那个 `.song` 永远不会来;60 秒可读期一过判定变 nil、按「保持」走,整首歌挂着「广告中」直到换歌
-        // (决策 25 修的"广告 5 秒再探"在这条路上根本没人触发)。kickIfNeeded 内部按判定分档(广告 5 秒
+        // 只在 MediaControlClient 那道闸"album 为空"时才踢的话:YT Music 首次发布元数据常常不带 album、几百毫秒后重发才带上,
+        // 重发之后基础守卫直接放行、再没有地方去问页面,状态机等的那个 `.song` 永远不会来;60 秒可读期一过判定变 nil、按「保持」
+        // 走,整首歌挂着「广告中」直到换歌(决策 25 的"广告 5 秒再探"在这条路上没人触发)。kickIfNeeded 内部按判定分档(广告 5 秒
         // 一探、歌 60 秒不动),真广告期间也就是每 5 秒一次往返。不踢的情况:原生 Spotify(它有自己的
         // AppleScript 复核语义,pageVerdict 恒 nil);`spotifyWebVerdict == .ad`(那是 Spotify 网页广告,
         // 去问 YT Music 标签页只会 NOTFOUND 白烧一次往返);非浏览器 bundle 在 kickIfNeeded 里自然 no-op。
@@ -3903,18 +3760,13 @@ public final class LocalPlaybackSource: ObservableObject {
         // 到浏览器探针那一段(`if trackChanged`)再读它只会读到新值。留它是为了让探针的
         // "重新开放额度"日志能分辨这次到底是**真换歌**(旧 key 非空、跟新的不一样)还是
         // **中断后重新接上**(旧 key 为空 —— 快照变 nil 那条路径把 lastKey 清成了 "",
-        // 见上面 `lastKey = ""` 一带)。加:真机上实测到同一首歌连续播放期间
-        // 探针额度被重开了 4 次(同一个 pid,排除了重启),但当时的日志分辨不出是哪一种。
+        // 见上面 `lastKey = ""` 一带)。
         let previousKey = lastKey
-        // 同一首歌播到中途,引擎还可能给它补出译文、或者换上一份更好的歌词(见
-        // 引擎的 backfillTranslation / retryLyricsUpgrade / rescoreLyrics)。原来这里
-        // 只在换歌或"完全没歌词"时才重读,于是这类中途补上的东西要等下一次换歌才看得到 ——
-        // 表现是"为什么当前这歌没有英文译文",而译文其实早在 19 秒前就翻好并落盘了。
+        // 同一首歌播到中途,引擎还可能给它补出译文、或者换上一份更好的歌词(见引擎的 backfillTranslation / retryLyricsUpgrade /
+        // rescoreLyrics)。所以每拍都按 mtime 看一次,不只在换歌或"完全没歌词"时才重读:否则中途补上的东西要等下一次换歌才看得到。
         //
-        // 不要加"已经有译文了就不用再盯"这类省事的闸门。试过一版,当场被
-        // 一个真实场景打脸:译文不只会从无到有,还会**被顶替** —— 网易云先给一份固定中文的
-        // 社区译文(于是"已有译文"成立、不再盯了),采集器随后判定它语言跟设置对不上、机翻
-        // 成英文写回去,而这边已经不看了,界面就一直停在那份中文上。
+        // 别加"已经有译文了就不用再盯"这类闸门:译文不只会从无到有,还会被顶替。网易云先给一份固定中文的社区译文("已有译文"成立、
+        // 不再盯了),采集器随后判定它语言跟设置对不上、机翻成英文写回去,而这边已经不看了,界面就一直停在那份中文上。
         //
         // 代价是可控的:mtime 只是一次 stat,而重新解析只在文件真的被改写时发生 —— 那时候
         // 下一次 lookup() 本来也要重新解析(EnrichCacheReader 自己就是按 mtime 缓存的)。
@@ -4129,8 +3981,7 @@ public final class LocalPlaybackSource: ObservableObject {
             // (cleanExtrapolated);QQ 音乐 / 网易云=整秒下取整带抖动(noisyFloored)。
             // 各档伺服参数见 servoDecision。
             let tier = Self.positionSourceTier(forBundleID: snapshot.bundleIdentifier)
-            // 浏览器地面真值探针(见 BrowserPositionProbe 头注,
-            // 改成一次性纠偏后再补一版):对受支持的浏览器+网站,换歌后探测一次网页 DOM
+            // 浏览器地面真值探针(见 BrowserPositionProbe 头注):对受支持的浏览器+网站,换歌后探测一次网页 DOM
             // 拿真实播放位置,当"精确种子值"喂给 resolvePositionSeconds(tier 按
             // noisyFloored——它就是整秒地板量化读数),走正常的 seek-跳变/棘轮/EMA 判定,
             // 而不是绕开整套伺服逻辑直接采信。命中一次大跳变就会重锚,解决"换歌后进度
@@ -4151,12 +4002,9 @@ public final class LocalPlaybackSource: ObservableObject {
             let rawReportedForResolve: Double
             let effectiveTier: PositionSourceTier
             var usedBrowserProbe = false
-            // **这里不要再加"拿 MediaRemote 位置当参照物"的守卫。** 加过一道
-            // (`isPlausibleCorrection(probed:reference:)`,reference 传 `snapshot.elapsedTime`),
-            // 当天就被真机抓出来删掉了:这个探针存在的前提就是网页播放器的 `elapsedTime`
-            // **恒为 0**,拿它当参照物,守卫直接退化成"只有页面放在前 8 秒内的修正才采纳",
-            // 而消费又是每首歌一次性的 —— 整首歌都跑在错锚点上。完整原委和"为什么换成外推值
-            // 同样不行"见 `BrowserPositionProbe.pageClockIsRunning` 一带的头注。
+            // 别在这里加"拿 MediaRemote 位置当参照物"的守卫:这个探针存在的前提就是网页播放器的 `elapsedTime` 恒为 0,拿它当参照物,
+            // 守卫就退化成"只有页面放在前 8 秒内的修正才采纳",而消费又是每首歌一次性的,整首歌都跑在错锚点上(换成外推值同样不行,
+            // 见 `BrowserPositionProbe.pageClockIsRunning` 一带的头注)。
             // 可信度判据已经全部下沉进探针内部(同一首歌 + 页面的钟在走),那里才有能证明这
             // 两件事的材料;这一层只负责把探针值当"精确种子"喂进伺服逻辑。
             var browserProbePrecise = false
@@ -4260,7 +4108,7 @@ public final class LocalPlaybackSource: ObservableObject {
             // 完全相同的 extrapolatedPositionMs(now:) 结果(旧锚点的 fetchedAt+
             // progressMs 组合本身已经蕴含了外推到任意后续时刻的正确基准),重新赋值纯属
             // 多余的 @Published 通知。anchor 是结构体、不是 Equatable(fetchedAt 每次
-            // 构造都不同,天然没法直接比较新旧是否相等),所以改成显式判断"这次是不是真的
+            // 构造都不同,天然没法直接比较新旧是否相等),所以显式判断"这次是不是真的
             // 需要重新锚定"——首次锚定/换歌/真实不连续(didReanchor)/倍速或时长变化,
             // 缺一不可,不能只挑一两个条件。
             let needsNewAnchor = anchor == nil || trackChanged || didReanchor
@@ -4385,21 +4233,6 @@ public final class LocalPlaybackSource: ObservableObject {
         EnrichCacheReader.reloadSoon()
     }
 
-    /// 跳到曲目内的某个位置(毫秒)——发指令给播放器,并**立刻**把本地外推重锚到目标位置。
-    ///
-    /// 为什么必须自己重锚、不能等下一轮轮询自愈:
-    /// ① 轮询是 2 秒一轮(reschedulePollTimer),不重锚的话最坏要等 2 秒歌词才跟上,而拖
-    ///    进度条这个动作用户预期是即时反馈;
-    /// ② 更要命的是小幅拖动会被**永久**吞掉:resolvePositionSeconds 里那道
-    ///    seekJumpToleranceSecs(2 秒)判定"读数跟外推差 2 秒以内算稳定播放,继续按旧基准
-    ///    外推",拖动幅度小于 2 秒时它压根不认为发生了跳变,伺服 EMA 也会把这点差异当噪声
-    ///    慢慢磨平——歌词会一直按拖动前的基准走。
-    ///
-    /// 重锚要同时改三处,少一处就会被下一轮"稳定播放"分支按旧值覆盖回去:trackPosSeconds
-    /// (外推累加器)、posPrevWall(外推的墙钟基准)、posErrEMA(清零,拖动不是需要伺服慢慢
-    /// 校正的漂移)。anchor 也当场重建,让 UI 这一帧就跳过去,不等 apply()。
-    ///
-    /// 暂停状态下也允许拖:此时 anchor 是 nil、pausedPositionMs 才是显示源,所以只更新它。
     // seek 之后短暂不信"更像 seek 之前"的位置读数,见 seek(toMs:) 与
     // shouldRejectStalePositionAfterSeek 的注释。
     private var lastSeekTargetSecs: Double?
@@ -4480,6 +4313,17 @@ public final class LocalPlaybackSource: ObservableObject {
         poll()
     }
 
+    /// 跳到曲目内的某个位置(毫秒):发指令给播放器,并立刻把本地外推重锚到目标位置。
+    ///
+    /// 必须自己重锚、不能等下一轮轮询自愈:
+    /// ① 轮询是 2 秒一轮(reschedulePollTimer),不重锚的话最坏要等 2 秒歌词才跟上,而拖进度条这个动作用户预期是即时反馈;
+    /// ② 小幅拖动会被永久吞掉:resolvePositionSeconds 里那道 seekJumpToleranceSecs(2 秒)判定"读数跟外推差 2 秒以内算稳定播放,
+    ///    继续按旧基准外推",拖动幅度小于 2 秒时它压根不认为发生了跳变,伺服 EMA 也会把这点差异当噪声慢慢磨平。
+    ///
+    /// 重锚要同时改三处,少一处就会被下一轮"稳定播放"分支按旧值覆盖回去:trackPosSeconds(外推累加器)、posPrevWall(外推的墙钟
+    /// 基准)、posErrEMA(清零,拖动不是需要伺服慢慢校正的漂移)。anchor 也当场重建,让 UI 这一帧就跳过去,不等 apply()。
+    ///
+    /// 暂停状态下也允许拖:此时 anchor 是 nil、pausedPositionMs 才是显示源,所以只更新它。
     public func seek(toMs targetMs: Int) {
         guard acceptsSeek else {
             logger.notice("seek ignored: \(self.isCurrentTrackAdBreak ? "an ad is playing" : "the current player does not accept seek commands", privacy: .public)")
@@ -4616,8 +4460,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 把「全局基准 + 这个播放器那档 + 这首歌的微调」算出来灌进引擎,并把两个对外属性刷成一致。
     ///
     /// 所有入口(换歌词内容、nudge、reset、改全局基准/从 store 重读)都走这里。
-    /// 原来它们各自赋两次值,加了全局基准之后每处都要多算一步 —— 分散写迟早漏掉一处,而
-    /// 漏掉的表现是"某条路径下全局偏移不生效",只在特定操作顺序下复现,极难归因。
+    /// 别让它们各自赋值:分散写迟早漏掉一处,漏掉的表现是"某条路径下全局偏移不生效",只在特定操作顺序下复现,极难归因。
     private func applyOffsets() {
         // 播放到这首歌时把 pin 状态跟当前校正值重新对一遍(双向,见那个方法的注释)。只看这条写法自己键下的值,
         // 读穿来的不算。幂等,状态已经一致时是纯内存判断。
@@ -4644,7 +4487,7 @@ public final class LocalPlaybackSource: ObservableObject {
         //
         // 必须含它:这个属性的唯一用途是"把歌词时间轴换算到播放位置",而歌词窗口点某一行
         // 反算 seek 目标用的就是 `行时间 − currentLyricsOffsetMs`。漏掉 LRC 那一层的话,带
-        // 非零 offset 的歌点行会跳到隔壁行 —— 正是这个属性当初存在的理由(注释见上面)。
+        // 非零 offset 的歌点行会跳到隔壁行。
         // 用户可见的那两个数(设置页的基准、菜单里的单曲值)都不含它,那是对的:LRC offset
         // 不是用户调出来的,不该出现在"你调了多少"里。
         let effectiveWithLRC = effective + musicVideoOffsetMs + spatialAudioOffsetMs + syncEngine.lrcOffsetMs
@@ -4673,7 +4516,7 @@ public final class LocalPlaybackSource: ObservableObject {
 
     // 跟 syncEngine 实际加载的歌词内容(lyrics+lyricsYRC)绑在一起算出来的 key——见
     // reloadCurrentLyrics() 里怎么算的。只在换歌词内容那一刻更新一次,nudge/reset 直接
-    // 复用,不用每次都重新拼一遍(也保证跟当初读校正值时用的是同一个 key)。
+    // 复用,不用每次都重新拼一遍(也保证跟读校正值时用的是同一个 key)。
     private var currentOffsetKey = ""
 
     // 同一首歌在 LyricsPinStore 里的身份 —— 归一化的 enrich key(artist|title|album),
@@ -4689,7 +4532,7 @@ public final class LocalPlaybackSource: ObservableObject {
     private var currentStationHash: String?
 
     /// 这首歌**在这个台上**的时间轴校准 key。不是电台 / 拿不到台标哈希 / 还没有曲目身份 → 空串,
-    /// 那一层整个不适用,行为跟这个功能加进来之前逐字相同。
+    /// 那一层整个不适用。
     private var currentRadioOffsetKey: String {
         guard lastSnapshot?.isRadio == true, let hash = currentStationHash else { return "" }
         return LyricsOffsetStore.radioKey(stationHash: hash, trackKey: currentOffsetKey)
@@ -4701,12 +4544,9 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// enrich 缓存**已解码那一代**的版本(= `EnrichCacheReader.decodedContentVersion`)。
     ///
-    /// 为什么要把它 @Published 出去:引擎解析一首没听过的歌要**好几秒**
-    /// (实测「七月上」13:52:52 开播、13:53:00 才把 cover_url 写进缓存,晚 8 秒),而
-    /// `PlaybackCoordinator.refreshHighResCover()` 原来**只**由 曲目/封面字节 的变化触发、
-    /// 换歌后 300ms 查一次就完 —— 那一刻缓存里还没有这首歌,于是 clearHighRes() 之后
-    /// **永不重试**,整首歌都停在系统那张 100×100 上(这正是「网易云封面依然很糊」的根因)。
-    /// 这个信号让"缓存里多了东西"也能成为一个重查触发点 —— 判据跟歌词重载用的是**同一代**
+    /// 为什么要把它 @Published 出去:引擎解析一首没听过的歌要好几秒(cover_url 可能晚 8 秒才写进缓存),只靠曲目 / 封面字节的
+    /// 变化触发的话,`PlaybackCoordinator.refreshHighResCover()` 换歌后 300ms 那一次查询时缓存里还没有这首歌,clearHighRes() 之后
+    /// 就不再重试,整首歌都停在系统那张 100×100 上。这个信号让"缓存里多了东西"也能成为一个重查触发点,判据跟歌词重载用的是同一代
     /// 版本号,不会出现"歌词换上了、封面没跟上"的偏差。
     ///
     /// 只在**变化**时赋值:@Published 是 willSet 语义,同值重复赋会白广播一轮下游订阅。
@@ -4747,10 +4587,8 @@ public final class LocalPlaybackSource: ObservableObject {
             title: snapshot.title ?? "",
             album: snapshot.album ?? ""
         )
-        // 见过中文歌词就记一笔(粘性,只置不清)。判据改用共享的
-        // `ChineseVariant.affects` —— 这里原本手抄了一份"有汉字、且没有假名",注释还写着
-        // "判据跟 ChineseVariant.converted 一致",那正说明它该是同一个函数而不是两份抄写。
-        // 刻意放在下面的等值闸**之前**——闸命中早退时这两个标志也必须照常更新。
+        // 见过中文歌词就记一笔(粘性,只置不清)。判据用共享的 `ChineseVariant.affects`,跟转换本身是同一个函数,别在这里另抄一份。
+        // 刻意放在下面的等值闸之前:闸命中早退时这两个标志也必须照常更新。
         let raw = found?.lyrics ?? ""
         if !sawChineseLyrics, ChineseVariant.affects(raw) {
             sawChineseLyrics = true
@@ -4761,14 +4599,11 @@ public final class LocalPlaybackSource: ObservableObject {
             lyrics: raw,
             translation: found?.lyricsTr ?? "",
             translationVisible: showsTranslation)
-        // 内容等值闸:失效键是整个 enrich 缓存文件的 mtime,引擎
-        // 给**别的歌**写盘(专辑预取最多 30 首逐个落盘/译文回填/重打分)都会带着一字未变的
-        // found 走到这里 —— 原来每次都白跑简繁转换×3 + 全套解析过滤 + 整曲罗马音/分词重算
-        // + allLines/gapMarkers 重建,单次 10-50ms 主线程,正撞上 30Hz 填色渲染。快照含
-        // resolved/instrumental:它们翻转("搜索中"→"确实没有")时快照必不相等,不会被
-        // 闸吞掉;比较用 String ==(mtime 已变时 lookup 是新解码实例,引用比较必 miss,
-        // 别指望它)。 闸只跳"重算",不跳上面的粘性置位;闸后的 found 派生赋值
-        // (hasLyricsContent 等)在快照相等时算出来的必然是同值,skip 无害。
+        // 内容等值闸:失效键是整个 enrich 缓存文件的 mtime,引擎给别的歌写盘(专辑预取最多 30 首逐个落盘/译文回填/重打分)都会带着
+        // 一字未变的 found 走到这里;不早退的话每次都白跑简繁转换×3 + 全套解析过滤 + 整曲罗马音/分词重算 + allLines/gapMarkers
+        // 重建,单次 10-50ms 主线程,正撞上 30Hz 填色渲染。快照含 resolved/instrumental:它们翻转("搜索中"→"确实没有")时快照
+        // 必不相等,不会被闸吞掉;比较用 String ==(mtime 已变时 lookup 是新解码实例,引用比较必 miss,别指望它)。闸只跳"重算",
+        // 不跳上面的粘性置位;闸后的 found 派生赋值(hasLyricsContent 等)在快照相等时算出来的必然是同值,skip 无害。
         let reloadSnapshot = LyricsReloadSnapshot(
             trackKey: "\(snapshot.artist ?? "")|\(snapshot.title ?? "")|\(snapshot.album ?? "")",
             lyrics: raw,
@@ -4915,10 +4750,9 @@ public final class LocalPlaybackSource: ObservableObject {
     // 上一首的),旧封面最多再挂 3 秒。取图还在路上时期限另算,见 artworkInFlightBackstop —— 那段时间没有任何
     // 证据说明这首歌没有封面,只是子进程还没回来。
     private static let artworkStaleTimeout: TimeInterval = 3
-    // 一次取图还在路上时的兜底期限:子进程最多跑 MediaControlClient.artworkTimeout 就会被收掉,再加
-    // artworkStaleTimeout 的宽限。期限原来从换歌那一刻(以及每次重试之前)起算 3 秒,隐含的假设是「取图几百
-    // 毫秒就回来」;机器满载时起子进程、读几百 KB 的 base64 本身就可能超过 3 秒,兜底在取图还没返回时先开火,
-    // 同一张专辑的下一首也会先把封面清掉、几秒后才回来。这个期限只防子进程真卡死,正常取图远远用不到。
+    // 一次取图还在路上时的兜底期限:子进程最多跑 MediaControlClient.artworkTimeout 就会被收掉,再加 artworkStaleTimeout 的宽限。
+    // 机器满载时起子进程、读几百 KB 的 base64 本身就可能超过 3 秒,期限太短的话兜底会在取图还没返回时先开火,同一张专辑的下一首
+    // 也会先把封面清掉、几秒后才回来。这个期限只防子进程真卡死,正常取图远远用不到。
     private static let artworkInFlightBackstop: TimeInterval = MediaControlClient.artworkTimeout + artworkStaleTimeout
     private var artworkStaleTimeoutTask: Task<Void, Never>?
 
@@ -4939,23 +4773,17 @@ public final class LocalPlaybackSource: ObservableObject {
         }
     }
 
-    // 换歌后取图拿到 nil 时的重试节奏(秒)。实测坐实:切歌那一刻系统 Now Playing
-    // 的封面往往还没更新完,media-control 会先返回"有新曲目元数据、但没有 artworkData"。
-    // 不能一次 nil 就当成"这首歌没有封面"定案——那样会导致整首歌都显示占位音符 + 系统
-    // 浅色背景(实测切歌后录屏:左栏平均亮度从 0.446 升到 0.946 并**一直保持**,不是闪一下),
-    // 表现就是"切歌白屏一下子",只是通常重新播到下一首又碰巧取到了才不容易被注意到。
+    // 换歌后取图拿到 nil 时的重试节奏(秒)。切歌那一刻系统 Now Playing 的封面往往还没更新完,media-control 会先返回"有新曲目
+    // 元数据、但没有 artworkData"。不能一次 nil 就当成"这首歌没有封面"定案:整首歌都会显示占位音符 + 系统浅色背景(切歌后录屏:
+    // 左栏平均亮度从 0.446 升到 0.946 并一直保持),表现是"切歌白屏一下子"。
     //
-    // 间隔递增而不是等间隔:绝大多数情况第一次重试(0.3s)就有了,不值得为罕见的慢场景把
-    // 每次切歌都拖长。
+    // 间隔递增而不是等间隔:绝大多数情况第一次重试(0.3s)就有了,不值得为罕见的慢场景把每次切歌都拖长。
     //
-    // 不能只按这几个 sleep 之和(2.1s)去论证"落在 artworkStaleTimeout(3s)之内"——
-    // 这条链上还有最多 4 次 attempt(),每次都要 fork media-control 子进程、把几百 KB 的
-    // base64 封面读到 EOF、waitUntilExit 再解码,单次就是几百毫秒量级(见本文件取图那段
-    // 注释)。只要平均往返超过 ~225ms,3s 的兜底就会在重试还没跑完时先开火,把旧封面清掉
-    // ——正好重演它当初要消除的那次白屏(先闪成系统浅色背景,重试成功后再闪回来,两次跳变)。
-    // 修法是每次重试前把兜底任务重新排一遍(见 fetchArtworkForCurrentTrack 里的调用),期限盖住
-    // 这次等待加下一次取图(artworkInFlightBackstop),既不会打断重试,也保留了"子进程真挂住就别
-    // 无限期挂着旧封面"这个原始目的。
+    // 不能只按这几个 sleep 之和(2.1s)去论证"落在 artworkStaleTimeout(3s)之内":这条链上还有最多 4 次 attempt(),每次都要
+    // fork media-control 子进程、把几百 KB 的 base64 封面读到 EOF、waitUntilExit 再解码,单次就是几百毫秒量级。只要平均往返超过
+    // ~225ms,3s 的兜底就会在重试还没跑完时先开火,把旧封面清掉(先闪成系统浅色背景,重试成功后再闪回来)。所以每次重试前把兜底
+    // 任务重新排一遍(见 fetchArtworkForCurrentTrack 里的调用),期限盖住这次等待加下一次取图(artworkInFlightBackstop),既不会
+    // 打断重试,也保留"子进程真挂住就别无限期挂着旧封面"。
     private static let artworkRetryDelays: [TimeInterval] = [0.3, 0.6, 1.2]
 
     // 首轮定案后按这张表再确认几次(累计 3 / 8 / 16 / 31 秒)。两件事靠它收敛:
@@ -4989,9 +4817,8 @@ public final class LocalPlaybackSource: ObservableObject {
     // 清成灰底、下一拍真图才到。
     private static let artworkHoldLimit: TimeInterval = 9
 
-    /// 封面载荷的曲目标识和当前曲目是否算同一首。大小写不敏感:media-control 对同一首歌
-    /// 报过大小写不一致的元数据(enrich 缓存那边为 "2 Bad"/"Scream" 踩过,见相应 memory),
-    /// 这里按大小写敏感比对的话,那类歌会被误判成"别的歌的封面"而永远显示占位。
+    /// 封面载荷的曲目标识和当前曲目是否算同一首。大小写不敏感:media-control 对同一首歌报过大小写不一致的元数据,按大小写敏感
+    /// 比对的话那类歌会被误判成"别的歌的封面"而永远显示占位。
     public nonisolated static func artworkKeyMatches(_ payloadKey: String, _ expectedKey: String) -> Bool {
         payloadKey.compare(expectedKey, options: [.caseInsensitive]) == .orderedSame
     }
@@ -5020,13 +4847,8 @@ public final class LocalPlaybackSource: ObservableObject {
         artworkFetchGeneration += 1
         let generation = artworkFetchGeneration
         Task {
-            // 取图和算平均色都在同一个后台 Task.detached 里做完——两者共用同一份原始
-            // 图片字节,没必要为了"少写一个函数"分成两次异步往返各自触发一次 MainActor
-            // 跳转。computeAverageHex 是 nonisolated 的纯函数,可以在这个非 MainActor 的
-            // 闭包里直接调用。
-            // 取图不再顺手预算均值色:重试打满 key 不匹配、confirm
-            // 拿到相同字节这些**注定丢弃**的路径上,预算的取色纯属白烧;改成确定采纳那一刻
-            // 再算一次(仍在后台,见 hexFor)。
+            // 取图不顺手预算均值色:重试打满 key 不匹配、confirm 拿到相同字节这些注定丢弃的路径上,预算的取色纯属白烧;确定采纳
+            // 那一刻再算(仍在后台,见 hexFor)。
             // miss:没取到图时为什么,进日志(见 artworkMissDescription)。
             @MainActor func attempt() async -> (data: Data?, payloadKey: String?, miss: String?) {
                 // Kaset 的系统会话里从不带图,封面是它自己报的那张(`MediaControlClient.kasetArtwork`)。每次取都按此刻认下的播放器挑:
@@ -5205,9 +5027,8 @@ public final class LocalPlaybackSource: ObservableObject {
     // 整张图平均成一个像素,而不是 K-means/直方图那类更贵的聚类算法,对"给悬浮歌词提供
     // 一个跟封面基调呼应的强调色"这个用途完全够用。
     //
-    // 这里**只求均值,不做任何亮度调整**。之前它顺手调了 brightenedAccent,
-    // 结果是桌面悬浮歌词也吃到了那条为灵动岛(永远深底)定的"保证够亮"地板 —— 见
-    // artworkAverageHex 和 accentAgainstStroke 的注释。提亮/压暗按消费面各自处理。
+    // 这里只求均值,不做任何亮度调整:"保证够亮"那条地板是给灵动岛(永远深底)定的,桌面悬浮歌词不该吃到,见 artworkAverageHex 和
+    // accentAgainstStroke 的注释。提亮/压暗按消费面各自处理。
     //
     // nonisolated:纯函数,不读写这个类的任何 @MainActor 隔离状态,允许从
     // fetchArtworkForCurrentTrack() 里的后台 Task.detached 闭包(非 MainActor)直接调用,
@@ -5223,9 +5044,7 @@ public final class LocalPlaybackSource: ObservableObject {
         computeAverageHex(ciImage: CIImage(cgImage: cgImage))
     }
 
-    // CIContext 创建不便宜(实测 ~15ms)且线程安全,进程级复用一个 —— 跟
-    // PlaybackCoordinator.blurBakeContext 同一个理由/写法(性能审计,
-    // 原来每次取色都新建一个,每次换歌 2 次左右纯属重复)。
+    // CIContext 创建不便宜(~15ms)且线程安全,进程级复用一个,跟 PlaybackCoordinator.blurBakeContext 同一个理由/写法。
     nonisolated(unsafe) private static let averageHexContext =
         CIContext(options: [.workingColorSpace: NSNull()])
 
@@ -5259,7 +5078,7 @@ public final class LocalPlaybackSource: ObservableObject {
     ///  ② 乘法保持 RGB 比例 = 保持饱和度,一个暗而浓的酒红被提到该亮度后依然浓,
     ///    贴在歌词上非常刺眼。
     ///
-    /// 改成 HSB 空间处理:
+    /// 在 HSB 空间处理:
     ///  - 近黑直接兜底成中性灰,不试图从噪点里"抢救"色相;
     ///  - 提亮多少,就按同一比例压低多少饱和度 —— 被提亮的颜色天然该更淡,这正是
     ///    人眼对"亮色"的预期,也避免了上面第 ② 条的刺眼。
@@ -5312,9 +5131,8 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// `NotchCardStyle.coverArt` 背景上那层黑色叠加的不透明度——`NotchLyricsView.
     /// backgroundLayer` 拿它铺 `Color.black.opacity(...)`,`accentForCoverArtBackground`
-    /// (下面)拿它**推算**背景实际有多亮。两处必须用同一个数,所以提成命名常量而不是各自
-    /// 写一遍 0.45——修对比度问题之前就是这么各写各的,两处数字一旦以后有一处
-    /// 改动没同步,contrast 的估算值就会跟渲染出来的背景对不上,静默失效。
+    /// (下面)拿它推算背景实际有多亮。两处必须用同一个数,所以提成命名常量:各写一遍 0.45 的话,一处改动没同步,contrast 的估算值
+    /// 就会跟渲染出来的背景对不上,静默失效。
     nonisolated public static let notchCoverArtOverlayOpacity: Double = 0.45
 
     /// coverArt 卡片风格下,给灵动岛文字保足够对比度。
@@ -5362,7 +5180,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 不透明像素 #ADABA6,相对亮度 0.671,而描边是纯白)。 别在这一侧套那条亮度地板:
     /// 不兜底时同一张近黑封面算出来是 #160B21,深字配白边非常清楚。
     ///
-    /// ### 判据换成"跟描边的对比度"
+    /// ### 判据是"跟描边的对比度"
     ///
     /// 描边是紧贴字形外沿的那一圈,字**直接相邻**的永远是它,不是背景 —— 字幕类显示靠
     /// 描边在任意背景上都能读,正是这个道理。所以这一侧要保证的不是"够亮"而是"跟描边
@@ -5422,34 +5240,19 @@ public final class LocalPlaybackSource: ObservableObject {
             return blendToLuminance(r: r, g: g, b: b, target: lower, towardWhite: false)
         }
 
-        // 优先方向差一点点够不到边界(灵动岛「封面偏白、歌词却是全黑,
-        // 太突兀」):贴着边界(纯白/纯黑)已经接近达标时,宁可就地收下这个"差一点点"
-        // 的结果,也不要为了凑够数值目标翻到对面走极端——翻方向在几何上总能精确命中
-        // minContrast(往反方向去到 lower/upper 就是照着目标解出来的),数值上永远"更
-        // 好",但对一张偏白的封面,翻过去意味着把文字砸成近乎纯黑,观感上是灾难,
-        // 不是"差一点点"能比的。
+        // 优先方向差一点点够不到边界(灵动岛「封面偏白、歌词却是全黑」很突兀):贴着边界(纯白/纯黑)已经接近达标时,宁可就地
+        // 收下这个"差一点点"的结果,也不要为了凑够数值目标翻到对面走极端。翻方向在几何上总能精确命中 minContrast,数值上永远
+        // "更好",但对一张偏白的封面,翻过去意味着把文字砸成近乎纯黑。
         //
-        // 这里**不能**写 95% 容忍度:手算的假设场景(luma≈0.187)看着能过,而真实封面
-        // (方大同《红豆》,Timeless 专辑,大面积白底
-        // 配一角深色人像)一测,问题还在——真实封面均值色算出来 luma≈0.779,coverArt
-        // 背景估出来 luma≈0.207,贴纯白只能到对比度 4.08,只有 minContrast=4.5 的
-        // 90.7%,被 95% 的门槛卡在外面,照样翻成了近黑。教训:**手算的假设数字算得再
-        // 仔细,也不能替代拿真实素材跑一遍**——这条经验在这个仓库里已经不是第一次
-        // 印证(第九轮背景取色那次也是纸面系数一个个假设都对、样本一放大就露馅)。
-        // 这版把容忍度从 95% 放宽到 80%,用《红豆》这组真实数字(见下面 selftest)
-        // 和原有的假设场景一起钉住,两组都过。
+        // 容忍度取 80%,不取 95%:大面积白底配一角深色人像的真实封面,coverArt 背景估出来 luma≈0.207,贴纯白只能到对比度 4.08,
+        // 是 minContrast=4.5 的 90.7%,95% 会把它卡在外面、照样翻成近黑(selftest 钉着这组真实数字和一组假设场景)。
         //
-        // 判据双重限定,不能只看"离目标够不够近":① 贴边界的实际对比度必须先过 WCAG
-        // 大号文字基线 3.0(所有调用方字号都够格用这条基线)——这一步保证 minContrast
-        // 本来就是默认值 3.0 的调用方(比如下面的全区间扫描)永远不会走进这条分支:
-        // canGoUp 为 false 在 minContrast==3.0 时数学上等价于贴边界对比度 <3.0,必然
-        // 过不了这道闸,行为原样不变,这条数学关系不随下面这个比例常数变化,调整比例
-        // 不会影响这条安全性。② 贴边界还要接近 minContrast 本身(取 80%)——只有
-        // minContrast 明显高于基线(比如 coverArt 那条路的 4.5)、且贴边界的结果离
-        // 那个更高目标也没差太远时才生效;像下面 selftest 的 mid-gray 反例
-        // (minContrast=7.0,贴边界只够到目标的 57%),跟《红豆》案例的 90.7% 差着
-        // 34 个百分点,离得足够远,仍然应该老实翻方向或取更好端点——80% 卡在两者中间,
-        // 两头都留了余量,不是贴着《红豆》那组数字的下边界硬凑的。
+        // 判据双重限定,不能只看"离目标够不够近":① 贴边界的实际对比度必须先过 WCAG 大号文字基线 3.0(所有调用方字号都够格用这条
+        // 基线),这保证 minContrast 本来就是默认值 3.0 的调用方(比如下面的全区间扫描)永远不会走进这条分支:canGoUp 为 false 在
+        // minContrast==3.0 时数学上等价于贴边界对比度 <3.0,必然过不了这道闸,这条关系不随下面这个比例常数变化。② 贴边界还要接近
+        // minContrast 本身(取 80%):只有 minContrast 明显高于基线(比如 coverArt 那条路的 4.5)、且贴边界的结果离那个更高目标也
+        // 没差太远时才生效;selftest 的 mid-gray 反例(minContrast=7.0,贴边界只够到目标的 57%)离得足够远,仍然老实翻方向或取更好
+        // 端点。80% 卡在两者中间,两头都留了余量。
         let closeEnoughFloor = 3.0
         let closeEnoughRatio = 0.80
         if preferUp, !canGoUp {
