@@ -89,7 +89,14 @@ func resetOriginTitleState(t *testing.T) {
 	savedTitles := appleStorefrontTitleCache
 	appleStorefrontTitleCache = map[string]string{}
 	appleStorefrontTitleMu.Unlock()
+	appleRecordingLocaleMu.Lock()
+	savedLocales := appleRecordingLocaleCache
+	appleRecordingLocaleCache = map[string]appleRecordingFacts{}
+	appleRecordingLocaleMu.Unlock()
 	t.Cleanup(func() {
+		appleRecordingLocaleMu.Lock()
+		appleRecordingLocaleCache = savedLocales
+		appleRecordingLocaleMu.Unlock()
 		appleMusicISRCMu.Lock()
 		appleMusicISRCCache = savedISRC
 		appleMusicISRCMu.Unlock()
@@ -195,7 +202,7 @@ func TestLyricOriginRecording(t *testing.T) {
 		}
 	}
 	if rs := reqs(); strings.Join(rs, ",") != "jp|JPPO02100112,jp|JPU901900003,jp|JPU901900002,jp|JPU901900001" {
-		t.Errorf("请求不对(没有 ISRC、没有原产地、同一个 ISRC 再问时都不该发): %q", rs)
+		t.Errorf("请求不对(没有 ISRC、同一个 ISRC 再问、有英文正文又是美国 ISRC 时都不该发): %q", rs)
 	}
 }
 

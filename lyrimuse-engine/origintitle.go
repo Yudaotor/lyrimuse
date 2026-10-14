@@ -8,6 +8,7 @@ import (
 	"net/http"
 	neturl "net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -64,6 +65,148 @@ func isrcOriginStorefront(isrc string) string {
 		return ""
 	}
 	return isrcOriginCountries[strings.ToUpper(isrc[:2])]
+}
+
+// recordingOrigins:这条录音该去问的原产地商店(originStorefronts),和拿去问的 ISRC。标签、ISRC 登记国都定不出原产地、手上又一行
+// 正文都没有(samples 为空)时,拿这条录音的身份问一次 Apple 曲库,按它报的演唱语言(audioLocale)定(localeOriginStorefronts):
+// 有 ISRC 按 ISRC 问;没有 ISRC、正在放的是 Apple 目录里的这一条(playbackTrackIDsFor)时按目录 id 问,同时带回 ISRC。有正文时
+// 不问:正文的文字就是更直接的信号,全是拉丁字母的多半是西文歌,问了也是 en,原产地曲名轮里每首西文歌都会白问一次。见 09 章决策 244。
+func recordingOrigins(ctx context.Context, artist, title, album string, durationSecs float64, samples []string, isrc string) ([]string, string) {
+	all := append([]string{artist, title, album}, samples...)
+	if origins := originStorefronts(isrc, title, all...); len(origins) > 0 || len(samples) > 0 {
+		return origins, isrc
+	}
+	appleID := ""
+	if isrc == "" {
+		appleID, _ = playbackTrackIDsFor(artist, title, album)
+	}
+	if isrc == "" && appleID == "" {
+		return nil, ""
+	}
+	locale, idISRC := appleRecordingLocale(ctx, isrc, appleID, durationSecs)
+	if isrc == "" {
+		isrc = idISRC
+	}
+	if isrc == "" {
+		return nil, ""
+	}
+	origins := originStorefronts(isrc, title, all...)
+	for _, c := range localeOriginStorefronts(locale) {
+		if appleChineseStorefront(strings.ToUpper(c)) && containsCJKScript(stripParens(title)) {
+			continue
+		}
+		if !slices.Contains(origins, c) {
+			origins = append(origins, c)
+		}
+	}
+	return origins, isrc
+}
+
+// localeOriginStorefronts:Apple 曲库报的演唱语言(audioLocale,如 ja、ko、zh-Hans-CN、zh-Hant-HK)对应的原产地商店(小写)。
+// 中文给三个中文区:简繁标记分不出上架的商店(台湾登记的周杰伦报 zh-Hans-CN),只拿它定顺序,繁体 / 粤语 tw、hk、cn,其余 cn、tw、hk。
+// 英文、没有人声(zxx)等不是原产地信号,空。
+func localeOriginStorefronts(locale string) []string {
+	lang, _, _ := strings.Cut(strings.ToLower(locale), "-")
+	switch lang {
+	case "ja":
+		return []string{"jp"}
+	case "ko":
+		return []string{"kr"}
+	case "th":
+		return []string{"th"}
+	case "ru":
+		return []string{"ru"}
+	case "zh", "cmn", "yue":
+		if lang == "yue" || strings.Contains(locale, "Hant") {
+			return []string{"tw", "hk", "cn"}
+		}
+		return []string{"cn", "tw", "hk"}
+	}
+	return nil
+}
+
+// appleRecordingLocaleCache:appleRecordingLocale 的结论(含查空),键「isrc:<ISRC>」或「id:<目录 id>」,只在内存;满了随手丢一条。
+const appleRecordingLocaleMax = 1024
+
+type appleRecordingFacts struct {
+	locale, isrc string
+}
+
+var (
+	appleRecordingLocaleMu    sync.Mutex
+	appleRecordingLocaleCache = map[string]appleRecordingFacts{}
+)
+
+// appleRecordingLocale:这条录音在 Apple 曲库里报的演唱语言。有 ISRC 按 ISRC 依次问 us、cn(先有的那个,一个 ISRC 挂着几个发行时
+// 按时长挑,同 pickISRCSong);只有目录 id 时在它所在的商店(目录锚点的链接,没有就 us)按 id 问,ISRC 也取回来(时长对得上才认)。
+// 只要 developer token;没问成不记结论。
+func appleRecordingLocale(ctx context.Context, isrc, appleID string, durationSecs float64) (locale, idISRC string) {
+	key := "isrc:" + isrc
+	if isrc == "" {
+		key = "id:" + appleID
+	}
+	appleRecordingLocaleMu.Lock()
+	if v, ok := appleRecordingLocaleCache[key]; ok {
+		appleRecordingLocaleMu.Unlock()
+		return v.locale, v.isrc
+	}
+	appleRecordingLocaleMu.Unlock()
+	var facts appleRecordingFacts
+	answered := false
+	if isrc != "" {
+		devToken := applemusicEnsureDeveloperToken(ctx)
+		if devToken == "" {
+			return "", ""
+		}
+		for _, sf := range []string{"us", "cn"} {
+			raw, status, err := applemusicAPIGet(ctx, sf+"/songs?filter[isrc]="+neturl.QueryEscape(isrc), devToken, "")
+			if err != nil || status != http.StatusOK {
+				continue
+			}
+			answered = true
+			var resp struct {
+				Data []applemusicSong `json:"data"`
+			}
+			if json.Unmarshal(raw, &resp) != nil {
+				continue
+			}
+			if s, ok := pickISRCSongEntry(resp.Data, durationSecs); ok {
+				facts.locale = s.Attributes.AudioLocale
+				break
+			}
+		}
+	} else {
+		sf := "us"
+		if id, err := strconv.ParseInt(appleID, 10, 64); err == nil {
+			if t, ok := appleCatalogTrackCachedOnly(id); ok {
+				if s := appleStorefrontFromURL(t.TrackViewURL); s != "" {
+					sf = s
+				}
+			}
+		}
+		songs, ok := appleCatalogSongsByID(ctx, sf, []string{appleID})
+		if ok {
+			answered = true
+			song, has := songs[appleID]
+			if has {
+				facts.locale = song.audioLocale
+				facts.isrc = isrcFromAppleSong(song, has, durationSecs)
+			}
+		}
+	}
+	if !answered {
+		return "", ""
+	}
+	appleRecordingLocaleMu.Lock()
+	if _, exists := appleRecordingLocaleCache[key]; !exists && len(appleRecordingLocaleCache) >= appleRecordingLocaleMax {
+		for old := range appleRecordingLocaleCache {
+			delete(appleRecordingLocaleCache, old)
+			break
+		}
+	}
+	appleRecordingLocaleCache[key] = facts
+	appleRecordingLocaleMu.Unlock()
+	return facts.locale, facts.isrc
 }
 
 // chineseOriginStorefronts:样本里有以汉字为主的,三个中文区商店按问的顺序给出(小写):有一条是繁体就 tw、hk、cn,否则 cn、tw、hk。
@@ -130,7 +273,7 @@ func originRecordingByISRC(ctx context.Context, title, isrc string, origins []st
 // 署名 / 曲名 / 专辑名和首轮歌词正文(samples)的文字系统判(originStorefronts)。先按 ISRC 查(originRecordingByISRC,
 // 带回署名);没有 ISRC 或查不出时用区服遍历留下的结论(只读缓存,不打请求,只有曲名)。
 func lyricOriginRecording(ctx context.Context, artist, title, album string, durationSecs float64, samples []string, isrc string) originRecording {
-	origins := originStorefronts(isrc, title, append([]string{artist, title, album}, samples...)...)
+	origins, isrc := recordingOrigins(ctx, artist, title, album, durationSecs, samples, isrc)
 	if len(origins) == 0 {
 		return originRecording{}
 	}
@@ -149,7 +292,8 @@ func titleReverseOriginTitle(ctx context.Context, artist, title, album string, d
 	if t := appleStorefrontCanonicalTitle(ctx, artist, title, album, durationSecs, samples); crossScriptBase(title, t) {
 		return t
 	}
-	return originRecordingByISRC(ctx, title, isrc, originStorefronts(isrc, title, append([]string{artist, title, album}, samples...)...), durationSecs).title
+	origins, isrc := recordingOrigins(ctx, artist, title, album, durationSecs, samples, isrc)
+	return originRecordingByISRC(ctx, title, isrc, origins, durationSecs).title
 }
 
 // appleMusicISRCCache:appleMusicRecordingByISRC 的结论(含查空),键 isrc|storefront,只在内存。条数封顶
@@ -209,22 +353,31 @@ func appleMusicRecordingByISRC(ctx context.Context, isrc, storefront string, dur
 // pickISRCSong:一个 ISRC 常挂着好几个发行(单曲、专辑、精选),取时长最接近本地、而且差在
 // appleStorefrontCrossScriptToleranceSecs 之内的那一条的曲名和署名;没有本地时长时取第一条有曲名的。纯函数。
 func pickISRCSong(songs []applemusicSong, durationSecs float64) originRecording {
-	var best originRecording
+	s, ok := pickISRCSongEntry(songs, durationSecs)
+	if !ok {
+		return originRecording{}
+	}
+	return originRecording{title: strings.TrimSpace(s.Attributes.Name), artist: strings.TrimSpace(s.Attributes.ArtistName)}
+}
+
+// pickISRCSongEntry:pickISRCSong 挑中的那一条本身(有曲名的里面时长差 4 秒以内最接近的;没有本地时长取第一条有曲名的)。
+func pickISRCSongEntry(songs []applemusicSong, durationSecs float64) (applemusicSong, bool) {
+	var best applemusicSong
+	found := false
 	bestDiff := math.Inf(1)
 	for _, s := range songs {
-		rec := originRecording{title: strings.TrimSpace(s.Attributes.Name), artist: strings.TrimSpace(s.Attributes.ArtistName)}
-		if rec.title == "" {
+		if strings.TrimSpace(s.Attributes.Name) == "" {
 			continue
 		}
 		if durationSecs <= 0 {
-			return rec
+			return s, true
 		}
 		d := math.Abs(float64(s.Attributes.DurationInMillis)/1000 - durationSecs)
 		if d <= appleStorefrontCrossScriptToleranceSecs && d < bestDiff {
-			best, bestDiff = rec, d
+			best, bestDiff, found = s, d, true
 		}
 	}
-	return best
+	return best, found
 }
 
 // originTitleRound:原产地曲名轮。本地曲名在原产地商店里换了一套文字写(罗马字写的日文歌名)时,缺着的源
@@ -258,8 +411,7 @@ func titleReverseOriginArtistRound(ctx context.Context, artist, title, album str
 	if len(lyricSourcesWorthAliasRetry(ctx, results)) == 0 {
 		return ne, results
 	}
-	isrc := trustedRecordingISRC(artist, title, album, durationSecs, results)
-	origins := originStorefronts(isrc, title, append([]string{artist, title, album}, samples...)...)
+	origins, isrc := recordingOrigins(ctx, artist, title, album, durationSecs, samples, trustedRecordingISRC(artist, title, album, durationSecs, results))
 	origin := originRecordingByISRC(ctx, title, isrc, origins, durationSecs)
 	if origin.artist == "" || normLoose(origin.artist) == normLoose(artist) || normLoose(origin.title) != normLoose(correctedTitle) {
 		return ne, results

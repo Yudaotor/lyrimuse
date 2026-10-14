@@ -170,3 +170,138 @@ func TestAppleStorefrontTitleCacheMigratesV1(t *testing.T) {
 		t.Errorf("存盘该写成当前版本、只剩查到的那条: %+v", f)
 	}
 }
+
+func TestLocaleOriginStorefronts(t *testing.T) {
+	for _, c := range []struct {
+		locale string
+		want   []string
+	}{
+		{"ja", []string{"jp"}},
+		{"ko", []string{"kr"}},
+		{"zh-Hans-CN", []string{"cn", "tw", "hk"}},
+		{"zh-Hant-HK", []string{"tw", "hk", "cn"}},
+		{"yue-HK", []string{"tw", "hk", "cn"}},
+		{"en-US", nil},
+		{"zxx", nil},
+		{"", nil},
+	} {
+		if got := localeOriginStorefronts(c.locale); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%q: got %v, want %v", c.locale, got, c.want)
+		}
+	}
+}
+
+// localeSong:带演唱语言与 ISRC 的曲库条目。
+func localeSong(id, name, artist string, ms int, locale, isrc string) applemusicSong {
+	s := isrcSong(name, artist, ms)
+	s.ID, s.Attributes.AudioLocale, s.Attributes.Isrc = id, locale, isrc
+	return s
+}
+
+// withLocaleCatalogFake:Apple Music 曲库的 songs?filter[isrc] 与 songs?ids 换成假服务器;songs 按「storefront|isrc」或
+// 「storefront|id:<id>」给,返回收到的这些键。顺带清掉演唱语言的结论缓存。
+func withLocaleCatalogFake(t *testing.T, songs map[string][]applemusicSong) func() []string {
+	t.Helper()
+	appleRecordingLocaleMu.Lock()
+	saved := appleRecordingLocaleCache
+	appleRecordingLocaleCache = map[string]appleRecordingFacts{}
+	appleRecordingLocaleMu.Unlock()
+	t.Cleanup(func() {
+		appleRecordingLocaleMu.Lock()
+		appleRecordingLocaleCache = saved
+		appleRecordingLocaleMu.Unlock()
+	})
+	var mu sync.Mutex
+	var got []string
+	withAMLLFake(t, func(w http.ResponseWriter, r *http.Request, target string) {
+		const prefix = "https://amp-api.music.apple.com/v1/catalog/"
+		if !strings.HasPrefix(target, prefix) || !strings.HasSuffix(target, "/songs") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		key := strings.TrimSuffix(strings.TrimPrefix(target, prefix), "/songs") + "|"
+		if ids := r.URL.Query().Get("ids"); ids != "" {
+			key += "id:" + ids
+		} else {
+			key += r.URL.Query().Get("filter[isrc]")
+		}
+		mu.Lock()
+		got = append(got, key)
+		mu.Unlock()
+		b, _ := json.Marshal(struct {
+			Data []applemusicSong `json:"data"`
+		}{songs[key]})
+		_, _ = w.Write(b)
+	})
+	return func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), got...)
+	}
+}
+
+// 标签、ISRC 登记国都定不出原产地、又一行正文都没有时,按这条录音在 Apple 曲库里的演唱语言定:美国登记的韩文歌问 kr;没有 ISRC、
+// 正在放的是 Apple 目录里的这一条时按目录 id 问,ISRC 一起带回;按文字已经定得出、有正文、什么身份都没有时都不问曲库。
+func TestRecordingOriginsFallBackToAudioLocale(t *testing.T) {
+	withTestDevToken(t)
+	resetOriginTitleState(t)
+	reqs := withLocaleCatalogFake(t, map[string][]applemusicSong{
+		"us|USA2P2531718":  {localeSong("1", "Spring Day (Live)", "BTS", 300000, "ko", "USA2P2531718")},
+		"us|id:1715794640": {localeSong("1715794640", "The Agreement Under the Cherry Blossom Tree", "Kekekea", 189460, "zh-Hans-CN", "CNZ781903632")},
+		"us|USUG12100342":  {localeSong("2", "Love Story (Taylor's Version)", "Taylor Swift", 235000, "en-US", "USUG12100342")},
+		"cn|DEA000000001":  {localeSong("3", "Lan Hua Cao", "Some Singer", 200000, "zh-Hans-CN", "DEA000000001")},
+	})
+	if got, isrc := recordingOrigins(qqRoundCtx(), "BTS", "Spring Day (Live)", "Live", 300, nil, "USA2P2531718"); !reflect.DeepEqual(got, []string{"kr"}) || isrc != "USA2P2531718" {
+		t.Errorf("美国登记的韩文歌、没有正文: %v %q", got, isrc)
+	}
+	if got, _ := recordingOrigins(qqRoundCtx(), "Taylor Swift", "Love Story (Taylor's Version)", "Fearless", 235, nil, "USUG12100342"); got != nil {
+		t.Errorf("英文歌不是原产地信号: %v", got)
+	}
+	if got, _ := recordingOrigins(qqRoundCtx(), "Some Singer", "Lan Hua Cao", "Album", 200, nil, "DEA000000001"); !reflect.DeepEqual(got, []string{"cn", "tw", "hk"}) {
+		t.Errorf("美区没有这条、大陆有: %v", got)
+	}
+	if got, _ := recordingOrigins(qqRoundCtx(), "Taylor Swift", "Love Story", "Fearless", 235, []string{"[00:01.00]plain english words"}, "USCJY0803275"); got != nil {
+		t.Errorf("有英文正文:不问曲库: %v", got)
+	}
+	const artist, title, album = "Kekekea", "The Agreement Under the Cherry Blossom Tree", "The Agreement Under the Cherry Blossom Tree - Single"
+	notePlayingAppleCatalogID(artist, title, album, 1715794640)
+	t.Cleanup(func() {
+		playbackTrackIDMu.Lock()
+		delete(playbackTrackIDHints, enrichKey(artist, title, album))
+		playbackTrackIDMu.Unlock()
+	})
+	if got, isrc := recordingOrigins(qqRoundCtx(), artist, title, album, 189.5, nil, ""); !reflect.DeepEqual(got, []string{"cn", "tw", "hk"}) || isrc != "CNZ781903632" {
+		t.Errorf("按目录 id 问: %v %q", got, isrc)
+	}
+	if got, _ := recordingOrigins(qqRoundCtx(), "Fujii Kaze", "Tabiji", "LOVE ALL SERVE ALL", 277, []string{originJapaneseLRC}, "JPPO02100112"); !reflect.DeepEqual(got, []string{"jp"}) {
+		t.Errorf("按文字定得出: %v", got)
+	}
+	if got, _ := recordingOrigins(qqRoundCtx(), "Nobody", "Song", "Album", 200, nil, ""); got != nil {
+		t.Errorf("什么身份都没有: %v", got)
+	}
+	recordingOrigins(qqRoundCtx(), "BTS", "Spring Day (Live)", "Live", 300, nil, "USA2P2531718")
+	if rs := strings.Join(reqs(), ","); rs != "us|USA2P2531718,us|USUG12100342,us|DEA000000001,cn|DEA000000001,us|id:1715794640" {
+		t.Errorf("请求不对(定得出、没身份、同一条再问时都不该发;us 有这首就不再问 cn): %q", rs)
+	}
+}
+
+// 完全没有正文、三项标签全是拉丁字母、Apple Music 也没给出候选(拿不到 ISRC)时,正在放的这一条按目录 id 问出演唱语言与 ISRC,
+// 再按 ISRC 在大陆商店查到原名。
+func TestLyricOriginRecordingWithoutAnyLyrics(t *testing.T) {
+	withTestDevToken(t)
+	resetOriginTitleState(t)
+	withLocaleCatalogFake(t, map[string][]applemusicSong{
+		"us|id:1715794640": {localeSong("1715794640", "The Agreement Under the Cherry Blossom Tree", "Kekekea", 189460, "zh-Hans-CN", "CNZ781903632")},
+		"cn|CNZ781903632":  {isrcSong("樱花树下的约定", "柯柯柯啊", 189460)},
+	})
+	const artist, title, album = "Kekekea", "The Agreement Under the Cherry Blossom Tree", "The Agreement Under the Cherry Blossom Tree - Single"
+	notePlayingAppleCatalogID(artist, title, album, 1715794640)
+	t.Cleanup(func() {
+		playbackTrackIDMu.Lock()
+		delete(playbackTrackIDHints, enrichKey(artist, title, album))
+		playbackTrackIDMu.Unlock()
+	})
+	if got := lyricOriginRecording(qqRoundCtx(), artist, title, album, 189.5, nil, ""); got != (originRecording{"樱花树下的约定", "柯柯柯啊"}) {
+		t.Fatalf("got %+v", got)
+	}
+}
