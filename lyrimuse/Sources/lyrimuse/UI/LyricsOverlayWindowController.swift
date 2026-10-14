@@ -471,7 +471,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private var presetDragRejectedThisPress = false
 
     /// 「所在屏幕:跟随当前窗口」。真值在 `AppSettings.overlayFollowsActiveScreen`,这里是订阅来的镜像。开着时不借屏、
-    /// 不送回锚点那块屏,换屏只看焦点屏(`NSScreen.main`,有键盘焦点的窗口所在那块屏):只在它**换了**、并且新的那块
+    /// 不送回锚点那块屏,换屏只看焦点屏(`focusedScreen()`,前台 App 最前面那扇窗口所在那块屏):只在它**换了**、并且新的那块
     /// 稳定了 `activeScreenSettleDelay` 之后才搬。按「窗口不在焦点屏上」去判的话,用户把歌词拖到另一块屏,下一秒就会
     /// 被拽回焦点屏。见 04 章决策 63。
     private var followsActiveScreen = false
@@ -1926,7 +1926,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 焦点屏换了没有。换了先记下,稳定 `activeScreenSettleDelay` 再搬;拖着窗口时不动。
     private func checkActiveScreen(now: Date = Date()) {
         guard followsActiveScreen, !isDragArmed,
-              let id = NSScreen.main.flatMap(ScreenIdentity.id(of:)) else { return }
+              let id = focusedScreen().flatMap(ScreenIdentity.id(of:)) else { return }
         guard id != followedScreenID else {
             pendingActiveScreen = nil
             return
@@ -1942,11 +1942,30 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         followActiveScreen(force: false)
     }
 
+    /// 焦点屏:前台 App 最前面那扇普通窗口(layer 0)跟哪块屏重叠最多。别换回 `NSScreen.main`:Lyrimuse 不在前台时
+    /// 它不跟别的 App 的焦点走,焦点在外接屏上照样报内置屏(见 04 章决策 64)。前台 App 此刻没有在屏的普通窗口时返回 nil,不换屏。
+    private func focusedScreen() -> NSScreen? {
+        guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier else { return nil }
+        let windows = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+            as? [[String: Any]]) ?? []
+        // 列表按从前到后排:前台 App 的第一扇看得见的普通窗口就是它最前面那扇。太小的多半是看不见的辅助窗口。
+        for info in windows where (info[kCGWindowOwnerPID as String] as? pid_t) == pid
+            && (info[kCGWindowLayer as String] as? Int) == 0
+            && ((info[kCGWindowAlpha as String] as? Double) ?? 1) > 0 {
+            guard let dict = info[kCGWindowBounds as String] as? NSDictionary,
+                  let bounds = CGRect(dictionaryRepresentation: dict as CFDictionary),
+                  bounds.width >= 40, bounds.height >= 40 else { continue }
+            let screens = NSScreen.screens
+            return OverlayPlacement.screenIndex(ofWindowBounds: bounds, screens: screens.map(\.frame)).map { screens[$0] }
+        }
+        return nil
+    }
+
     /// 把窗口落到焦点屏上:预设模式按预设在那块屏上重算,自由模式按屏内相对位置搬过去
     /// (`OverlayPlacement.relocated`)。`force`:窗口已经在焦点屏上也重新对一次(屏幕参数变了、刚打开开关)。
     private func followActiveScreen(force: Bool) {
         pendingActiveScreen = nil
-        guard let window, let active = NSScreen.main else { return }
+        guard let window, let active = focusedScreen() else { return }
         followedScreenID = ScreenIdentity.id(of: active)
         let target = active.visibleFrame
         let current = baseFrame(of: window)

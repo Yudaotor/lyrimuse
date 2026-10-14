@@ -4950,6 +4950,14 @@ func runSourceContractTests() {
                         && statusMenu.contains("selector: #selector(openSoftwareUpdate)")
                         && statusMenu.contains("AppActions.shared.requestSettings(.softwareUpdate)"), true,
                     "右键菜单: 有未装的新版本时「检查更新…」换成新版本提示,点了翻到「软件更新」页(同面板底栏)")
+
+        // 悬浮歌词「跟随当前窗口」认焦点屏(04 章决策 64):Lyrimuse 不在前台时 NSScreen.main 不跟别的 App 的焦点走。
+        let overlayController = stripComments(code("UI/LyricsOverlayWindowController.swift"))
+        expectEqual(overlayController.contains("let id = focusedScreen().flatMap(ScreenIdentity.id(of:))")
+                        && overlayController.contains("guard let window, let active = focusedScreen() else { return }")
+                        && overlayController.contains("OverlayPlacement.screenIndex(ofWindowBounds: bounds, screens: screens.map(\\.frame))")
+                        && overlayController.contains("NSWorkspace.shared.frontmostApplication?.processIdentifier"), true,
+                    "跟随当前窗口: 焦点屏按前台 App 最前面那扇窗口认,不用 NSScreen.main")
     }
 
     // ---- 关于页页头的漂浮符号走 Core Animation----

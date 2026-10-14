@@ -163,6 +163,24 @@ public enum OverlayPlacement {
         }
     }
 
+    /// 一扇窗口落在哪块屏上:跟它重叠面积最大的那块,返回下标;一块都不沾时 nil。`windowBounds` 是窗口服务器的坐标
+    /// (`CGWindowListCopyWindowInfo` 的 `kCGWindowBounds`:原点在主屏左上角、y 往下),`screens` 是 AppKit 坐标的
+    /// `NSScreen.frame`(原点在主屏左下角、y 往上),第一个是主屏,两套坐标按它的高度翻转。「跟随当前窗口」拿它认焦点屏,
+    /// 见 04 章决策 64。
+    public static func screenIndex(ofWindowBounds windowBounds: CGRect, screens: [CGRect]) -> Int? {
+        guard let primary = screens.first else { return nil }
+        let flipped = CGRect(x: windowBounds.minX, y: primary.maxY - windowBounds.maxY,
+                             width: windowBounds.width, height: windowBounds.height)
+        var best: (index: Int, area: CGFloat)?
+        for (index, screen) in screens.enumerated() {
+            let overlap = screen.intersection(flipped)
+            guard !overlap.isNull, overlap.width > 0, overlap.height > 0 else { continue }
+            let area = overlap.width * overlap.height
+            if area > (best?.area ?? 0) { best = (index, area) }
+        }
+        return best?.index
+    }
+
     /// 「跟随当前窗口」把窗口从 `from` 这块屏的可见区搬到 `to` 那块:保持在屏内的相对位置 —— 中心横坐标、顶边离可见区
     /// 顶边的距离各按可见区宽、高的比例换算 —— 再整个夹进 `to`。所有屏共用这一份相对位置,用户在哪块屏上拖过,换屏后
     /// 还在那块屏上的同一个相对位置。预设模式不走这里(按 `presetFrame` 在目标屏上重算)。见 04 章决策 63。

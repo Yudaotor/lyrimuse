@@ -1285,6 +1285,19 @@ func runOverlayTests() {
         expectEqual(squeezed.maxX <= narrow.maxX && squeezed.minX >= narrow.minX && squeezed.minY >= narrow.minY
                     && squeezed.maxY <= narrow.maxY, true, "跟随当前窗口: 靠边的窗口到了窄屏上整个夹进可见区")
 
+        // 认焦点屏:窗口服务器坐标(主屏左上原点、y 往下)翻成 AppKit 坐标再按重叠面积挑屏。布局照真机:外接屏在内置屏上方、往左错开。
+        let screenFrames = [CGRect(x: 0, y: 0, width: 1470, height: 956), CGRect(x: -553, y: 956, width: 2560, height: 1440)]
+        expectEqual(OverlayPlacement.screenIndex(ofWindowBounds: CGRect(x: 0, y: 33, width: 1470, height: 845), screens: screenFrames), 0,
+                    "认焦点屏: 内置屏上铺满的窗口在内置屏")
+        expectEqual(OverlayPlacement.screenIndex(ofWindowBounds: CGRect(x: -300, y: -1200, width: 800, height: 600), screens: screenFrames), 1,
+                    "认焦点屏: y 为负(主屏上方)的窗口在外接屏")
+        expectEqual(OverlayPlacement.screenIndex(ofWindowBounds: CGRect(x: 100, y: -100, width: 400, height: 400), screens: screenFrames), 0,
+                    "认焦点屏: 跨两块屏时归重叠多的那块")
+        expectEqual(OverlayPlacement.screenIndex(ofWindowBounds: CGRect(x: 100, y: -300, width: 400, height: 400), screens: screenFrames), 1,
+                    "认焦点屏: 跨两块屏、上半截多时归外接屏")
+        expectEqual(OverlayPlacement.screenIndex(ofWindowBounds: CGRect(x: 5000, y: 5000, width: 100, height: 100), screens: screenFrames), nil,
+                    "认焦点屏: 一块屏都不沾时不认")
+
         // 「自由」模式控制排放卡片上方还是下方,按卡片位置判:卡片上方放得下整个槽位才放上方。
         let slot = OverlayPlacement.controlsSlotHeight
         expectEqual(slot, 30, "控制排翻面: 槽位高 = 胶囊 22 + 上下各 4")
