@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"sort"
 	"strings"
@@ -147,17 +149,30 @@ func winningCandidateArtist(e enrichEntry) string {
 //     少一档别名而已,绝不动用户的文件。
 //
 // 因此这里只做"读 + 解 + 塞进内存",一个错误分支都不额外处理。
+//
+// 主缓存之上再叠两份常驻进程还没整份落盘的改动,先后同 App 的 EnrichCacheReader:比主缓存新的待落盘小文件
+// (enrichpending.go),最上面是比主缓存新的在播单条快照(playingentry.go)。整份落盘最多攒 enrichBackgroundSaveDelay,
+// 这段时间里放过、预取过的歌只在这两份里,不叠的话子命令读不到它们的 ISRC、平台曲目页、学到的署名。主缓存不在时照叠。
+// 见 09 章决策 252。
 func loadEnrichCacheReadOnly(path string) {
+	m := map[string]enrichEntry{}
 	data, err := os.ReadFile(path)
-	if err != nil {
+	switch {
+	case err == nil:
+		if err := json.Unmarshal(data, &m); err != nil || m == nil {
+			return
+		}
+		hydrateEnrichBodies(m, enrichBodiesDirFor(path)) // 只读正文小文件,不动它们
+	case !errors.Is(err, fs.ErrNotExist):
 		noteFileErr("read", path, err)
 		return
 	}
-	var m map[string]enrichEntry
-	if err := json.Unmarshal(data, &m); err != nil || m == nil {
-		return
+	for k, e := range readEnrichPendingIfNewer(enrichPendingPathFor(path), path) {
+		m[k] = e
 	}
-	hydrateEnrichBodies(m, enrichBodiesDirFor(path)) // 只读正文小文件,不动它们
+	if k, e, ok := readPlayingEntryIfNewer(playingEntryPathFor(path), path); ok {
+		m[k] = e
+	}
 	enrichMu.Lock()
 	enrichCache = m
 	enrichMu.Unlock()

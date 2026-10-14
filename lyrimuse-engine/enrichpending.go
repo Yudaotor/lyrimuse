@@ -15,7 +15,8 @@ import (
 // 主缓存每次都整份重写(二十几 MB),而一次改动通常只有几条:放歌时后台预取、补全、扫库一直在改别的歌,
 // 原来 30 秒攒一次,一小时整份写上百次、两三 GB(15 章决策 26 之后的实测)。整份落盘放宽到
 // enrichBackgroundSaveDelay 之后,改过的条目先写进这份小文件(enrichPendingWriteDelay 攒一下):
-//   - App 读主缓存时,这份比主缓存新就把它的条目叠上去(歌词管理的列表、补空扫描的进度不用等整份落盘);
+//   - App 读主缓存时,这份比主缓存新就把它的条目叠上去(歌词管理的列表、补空扫描的进度不用等整份落盘);一次性子命令
+//     只读加载(loadEnrichCacheReadOnly)时同样叠上去;
 //   - 引擎启动时这份比主缓存新就叠回内存(上一次没来得及整份落盘就退出 / 崩溃,改动不丢);
 //   - 整份落盘之后清掉已经写进主缓存的那些 key,一条不剩就删掉文件。
 //
@@ -26,7 +27,12 @@ func enrichPendingPath() string {
 	if enrichPath == "" {
 		return ""
 	}
-	return filepath.Join(filepath.Dir(enrichPath), clientName+"-enrich-pending.json")
+	return enrichPendingPathFor(enrichPath)
+}
+
+// enrichPendingPathFor:主缓存 cachePath 旁边那份待落盘小文件。
+func enrichPendingPathFor(cachePath string) string {
+	return filepath.Join(filepath.Dir(cachePath), clientName+"-enrich-pending.json")
 }
 
 type enrichPendingFile struct {
@@ -171,6 +177,29 @@ func enrichPendingSavedThrough(seq uint64) {
 	enrichPendingNow()
 }
 
+// readEnrichPendingIfNewer:待落盘小文件 path 比主缓存 cachePath 新(主缓存不在也算)时读出它的条目;比主缓存旧(已经写进去了)、
+// 不在、读不了都是 nil。
+func readEnrichPendingIfNewer(path, cachePath string) map[string]enrichEntry {
+	pst, err := os.Stat(path)
+	if err != nil {
+		return nil
+	}
+	if cst, err := os.Stat(cachePath); err == nil && !pst.ModTime().After(cst.ModTime()) {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		slog.Error("enrich pending: read", "err", err)
+		return nil
+	}
+	var f enrichPendingFile
+	if err := json.Unmarshal(data, &f); err != nil {
+		slog.Error("enrich pending: unreadable, ignored", "err", err)
+		return nil
+	}
+	return f.Entries
+}
+
 // applyEnrichPendingAtLoad:启动读完主缓存之后调。小文件比主缓存新,说明上一次退出前那批改动没来得及整份落盘:
 // 叠回内存、记成待落盘,下一次整份保存一并写掉。比主缓存旧的是已经写进去了,不动(下一次写小文件时会删掉)。
 func applyEnrichPendingAtLoad(cachePath string) {
@@ -178,33 +207,17 @@ func applyEnrichPendingAtLoad(cachePath string) {
 	if path == "" {
 		return
 	}
-	pst, err := os.Stat(path)
-	if err != nil {
-		return
-	}
-	if cst, err := os.Stat(cachePath); err == nil && !pst.ModTime().After(cst.ModTime()) {
-		return
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		slog.Error("enrich pending: read", "err", err)
-		return
-	}
-	var f enrichPendingFile
-	if err := json.Unmarshal(data, &f); err != nil {
-		slog.Error("enrich pending: unreadable, ignored", "err", err)
-		return
-	}
-	if len(f.Entries) == 0 {
+	entries := readEnrichPendingIfNewer(path, cachePath)
+	if len(entries) == 0 {
 		return
 	}
 	enrichMu.Lock()
-	for k, e := range f.Entries {
+	for k, e := range entries {
 		enrichCache[k] = e
 		enrichPendingSeq++
 		enrichPendingKeys[k] = enrichPendingSeq
 	}
 	enrichDirty = true
 	enrichMu.Unlock()
-	log.Printf("cache: restored %d entries changed after the last full save", len(f.Entries))
+	log.Printf("cache: restored %d entries changed after the last full save", len(entries))
 }

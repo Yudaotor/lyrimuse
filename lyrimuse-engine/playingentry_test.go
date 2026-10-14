@@ -49,54 +49,79 @@ func TestCommitPlayingKeyWritesEntryBeforeFullSave(t *testing.T) {
 	}
 }
 
-// 一次性子命令读完主缓存之后,单条快照比主缓存新就盖上去,不比它新就不动;快照不在、坏了都不动。
-func TestOverlayPlayingEntryReadOnly(t *testing.T) {
-	dir := t.TempDir()
-	cachePath, path := dir+"/cache.json", dir+"/playing.json"
-	const key = "leehom wang|gong zhuan zi zhuan|revolution"
-	writeAt := func(p string, b []byte, at time.Time) {
+// 一次性子命令只读加载:主缓存之上叠比它新的待落盘小文件,再叠比它新的在播单条快照;不比主缓存新的、坏了的、不在的都不叠;
+// 主缓存不在时照叠。
+func TestLoadEnrichCacheReadOnlyOverlaysUnsavedChanges(t *testing.T) {
+	const a, b, c = "x|played earlier|y", "x|untouched|y", "x|playing|y"
+	base := time.Now().Add(-time.Hour)
+	write := func(t *testing.T, p string, v any, at time.Time) {
 		t.Helper()
-		if err := os.WriteFile(p, b, 0o644); err != nil {
+		data, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, data, 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.Chtimes(p, at, at); err != nil {
 			t.Fatal(err)
 		}
 	}
-	snapshot, err := json.Marshal(playingEntryFile{Key: key, Entry: enrichEntry{ISRCs: []string{"TWA479820001"}, TS: 9}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	base := time.Now().Add(-time.Hour)
-	for _, c := range []struct {
-		name      string
-		snapshot  []byte
-		snapAt    time.Time
-		noCache   bool
-		wantTS    int64
-		wantFound bool
+	main := map[string]enrichEntry{a: {TS: 1}, b: {TS: 1}, c: {TS: 1}}
+	pending := enrichPendingFile{Entries: map[string]enrichEntry{a: {TS: 2, ISRCs: []string{"TWA479820001"}}, c: {TS: 2}}}
+	playing := playingEntryFile{Key: c, Entry: enrichEntry{TS: 3}}
+	for _, tc := range []struct {
+		name                  string
+		noMain                bool
+		pendingAt, playingAt  time.Duration // 相对主缓存的修改时间
+		brokenPending         bool
+		wantA, wantB, wantC   int64
+		wantBMissing, noFiles bool
 	}{
-		{"快照更新", snapshot, base.Add(time.Minute), false, 9, true},
-		{"快照更旧", snapshot, base.Add(-time.Minute), false, 1, true},
-		{"同一时刻算不比它新", snapshot, base, false, 1, true},
-		{"主缓存读不到", snapshot, base, true, 9, true},
-		{"快照坏了", []byte("{"), base.Add(time.Minute), false, 1, true},
+		{name: "两份都比主缓存新", pendingAt: time.Minute, playingAt: 2 * time.Minute, wantA: 2, wantB: 1, wantC: 3},
+		{name: "小文件比主缓存旧", pendingAt: -time.Minute, playingAt: time.Minute, wantA: 1, wantB: 1, wantC: 3},
+		{name: "快照比主缓存旧", pendingAt: time.Minute, playingAt: -time.Minute, wantA: 2, wantB: 1, wantC: 2},
+		{name: "同一时刻都不算新", wantA: 1, wantB: 1, wantC: 1},
+		{name: "小文件坏了", pendingAt: time.Minute, brokenPending: true, wantA: 1, wantB: 1, wantC: 1},
+		{name: "主缓存不在", noMain: true, wantA: 2, wantBMissing: true, wantC: 3},
+		{name: "两份都不在", noFiles: true, wantA: 1, wantB: 1, wantC: 1},
 	} {
-		os.Remove(cachePath)
-		if !c.noCache {
-			writeAt(cachePath, []byte("{}"), base)
-		}
-		writeAt(path, c.snapshot, c.snapAt)
-		withEnrichCache(t, map[string]enrichEntry{key: {TS: 1}})
-		overlayPlayingEntryReadOnly(path, cachePath)
-		e, ok := enrichCache[key]
-		if ok != c.wantFound || e.TS != c.wantTS {
-			t.Errorf("%s: got ok=%v TS=%d, want TS=%d", c.name, ok, e.TS, c.wantTS)
-		}
-	}
-	withEnrichCache(t, map[string]enrichEntry{})
-	overlayPlayingEntryReadOnly(dir+"/missing.json", cachePath)
-	if len(enrichCache) != 0 {
-		t.Error("快照不在时不该动缓存")
+		t.Run(tc.name, func(t *testing.T) {
+			withEnrichCache(t, nil)
+			dir := t.TempDir()
+			cachePath := dir + "/" + clientName + "-enrich-cache.json"
+			if !tc.noMain {
+				write(t, cachePath, main, base)
+			}
+			if !tc.noFiles {
+				if tc.brokenPending {
+					if err := os.WriteFile(enrichPendingPathFor(cachePath), []byte("{"), 0o644); err != nil {
+						t.Fatal(err)
+					}
+					at := base.Add(tc.pendingAt)
+					if err := os.Chtimes(enrichPendingPathFor(cachePath), at, at); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					write(t, enrichPendingPathFor(cachePath), pending, base.Add(tc.pendingAt))
+				}
+				if !tc.brokenPending {
+					write(t, playingEntryPathFor(cachePath), playing, base.Add(tc.playingAt))
+				}
+			}
+			loadEnrichCacheReadOnly(cachePath)
+			if got := enrichCache[a].TS; got != tc.wantA {
+				t.Errorf("放过的那首 TS = %d, want %d", got, tc.wantA)
+			}
+			if eb, ok := enrichCache[b]; ok == tc.wantBMissing || (ok && eb.TS != tc.wantB) {
+				t.Errorf("没改过的那首 = %+v ok=%v, want TS %d missing=%v", eb, ok, tc.wantB, tc.wantBMissing)
+			}
+			if got := enrichCache[c].TS; got != tc.wantC {
+				t.Errorf("正在放的那首 TS = %d, want %d", got, tc.wantC)
+			}
+			if tc.name == "两份都比主缓存新" && len(enrichCache[a].ISRCs) != 1 {
+				t.Errorf("小文件里的号要跟着条目进来: %+v", enrichCache[a])
+			}
+		})
 	}
 }

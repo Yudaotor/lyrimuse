@@ -352,6 +352,46 @@ func TestPlaybackISRCJob(t *testing.T) {
 	}
 }
 
+// 正在放的那首当场补到号之后走带 key 的存盘:这一条进待落盘小文件(一次性子命令和 App 不用等整份落盘),没补到不记。
+func TestPlaybackISRCJobSavesThisEntry(t *testing.T) {
+	withTempDecisionCache(t)
+	savedKeys, savedInflight := enrichPendingKeys, isrcPlaybackInflight
+	savedNow, savedSave := enrichPendingNow, enrichSaveNow
+	t.Cleanup(func() {
+		enrichMu.Lock()
+		enrichPendingKeys, isrcPlaybackInflight = savedKeys, savedInflight
+		enrichMu.Unlock()
+		enrichPendingNow, enrichSaveNow = savedNow, savedSave
+	})
+	enrichPendingNow, enrichSaveNow = func() {}, func() {}
+	deps := isrcSweepDeps{amazon: func(asin string) string {
+		if asin == "B00FAEYA98" {
+			return "TWA479820001"
+		}
+		return ""
+	}}
+	for _, c := range []struct {
+		key, asin string
+		want      bool
+	}{
+		{"Leehom Wang|Gong Zhuan Zi Zhuan|Revolution", "B00FAEYA98", true},
+		{"Leehom Wang|Nothing|Revolution", "B00NOTHING", false},
+	} {
+		enrichMu.Lock()
+		enrichPendingKeys, isrcPlaybackInflight = map[string]uint64{}, map[string]bool{c.key: true}
+		enrichCache[c.key] = enrichEntry{DurationSecs: 256}
+		enrichMu.Unlock()
+		runPlaybackISRCJobWith(isrcSweepJob{key: c.key, amazonASIN: c.asin, readAmazon: true}, deps)
+		enrichMu.Lock()
+		_, pending := enrichPendingKeys[c.key]
+		isrcs := enrichCache[c.key].ISRCs
+		enrichMu.Unlock()
+		if pending != c.want || (c.want && len(isrcs) != 1) {
+			t.Errorf("%s: 进待落盘 = %v(want %v), isrcs = %v", c.key, pending, c.want, isrcs)
+		}
+	}
+}
+
 func TestISRCFromAppleSong(t *testing.T) {
 	song := appleCatalogSong{isrc: "HKA351501001", durationSecs: 281.093}
 	if got := isrcFromAppleSong(song, true, 281.093); got != "HKA351501001" {

@@ -617,8 +617,12 @@ func playbackISRCJobLocked(key string, e enrichEntry, bundleID, anchorLink strin
 }
 
 // runPlaybackISRCJob:在后台把 playbackISRCJobLocked 起的那一轮做完、写回。
-func runPlaybackISRCJob(job isrcSweepJob) {
-	outcomes, _ := runISRCSweepJobs(context.Background(), []isrcSweepJob{job}, isrcSweepLiveDeps)
+func runPlaybackISRCJob(job isrcSweepJob) { runPlaybackISRCJobWith(job, isrcSweepLiveDeps) }
+
+// runPlaybackISRCJobWith 同 runPlaybackISRCJob,取号的几支由 deps 给(单测换成不联网的)。写回走带 key 的存盘
+// (requestEnrichSaveFor):这一条当场进单条快照和待落盘小文件,App 和一次性子命令不用等整份落盘就读得到这个号。
+func runPlaybackISRCJobWith(job isrcSweepJob, deps isrcSweepDeps) {
+	outcomes, _ := runISRCSweepJobs(context.Background(), []isrcSweepJob{job}, deps)
 	o := outcomes[job.key]
 	enrichMu.Lock()
 	delete(isrcPlaybackInflight, job.key)
@@ -628,7 +632,7 @@ func runPlaybackISRCJob(job isrcSweepJob) {
 	}
 	enrichMu.Unlock()
 	if changed {
-		requestEnrichBackgroundSave()
+		requestEnrichSaveFor(job.key)
 		if len(o.isrcs) > 0 {
 			log.Printf("isrc: %q recorded %d code(s) while playing (%s)", job.key, len(o.isrcs), strings.Join(o.done, " "))
 		}

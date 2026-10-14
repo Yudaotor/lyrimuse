@@ -105,17 +105,16 @@ func TestSearchLyricsAttachesCachedVideoID(t *testing.T) {
 	}
 }
 
-// search-lyrics 读完主缓存、开搜之前把比它新的在播单条快照盖上去,见 overlayPlayingEntryReadOnly。
-func TestSearchLyricsOverlaysPlayingEntry(t *testing.T) {
+// search-lyrics 开搜之前用只读加载读缓存:它叠上常驻进程还没整份落盘的改动(待落盘小文件、在播单条快照),见 loadEnrichCacheReadOnly。
+func TestSearchLyricsLoadsUnsavedChanges(t *testing.T) {
 	src, err := os.ReadFile("searchcli.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := string(src)
-	load := strings.Index(s, "loadEnrichCacheReadOnly(enrichCachePath)")
-	overlay := strings.Index(s, `overlayPlayingEntryReadOnly(filepath.Join(filepath.Dir(cfgPath), clientName+"-playing-entry.json"), enrichCachePath)`)
+	load := strings.Index(s, `loadEnrichCacheReadOnly(filepath.Join(filepath.Dir(cfgPath), clientName+"-enrich-cache.json"))`)
 	search := strings.Index(s, "scoredLyricCandidatesStreaming(searchCtx")
-	if load < 0 || overlay < 0 || search < 0 || overlay < load || overlay > search {
-		t.Error("search-lyrics 要在读完主缓存之后、开搜之前盖上在播单条快照")
+	if load < 0 || search < 0 || load > search {
+		t.Error("search-lyrics 要在开搜之前用 loadEnrichCacheReadOnly 读缓存")
 	}
 }
