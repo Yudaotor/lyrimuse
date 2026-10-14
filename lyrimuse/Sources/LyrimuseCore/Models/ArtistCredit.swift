@@ -16,8 +16,9 @@ import Foundation
 /// 把 "A & B" 缩窄成 "A" 正是那次回归的形态。
 public enum ArtistCredit {
     /// 合 credit 的分隔符。跟引擎侧 `isArtistCreditSep`(match.go)同一份,
-    /// **但 `/` 单独处理**(见 slashHeadIsPlausible)。
-    private static let separators: Set<Character> = ["、", "&", ",", "，"]
+    /// **但 `/` 单独处理**(见 slashHeadIsPlausible)。`×` 是日文、中文合作署名的常用写法;` x `、`+`、`with`
+    /// 不收,它们出现在乐队本名里。见 09 章决策 248。
+    private static let separators: Set<Character> = ["、", "&", ",", "，", "×"]
 
     /// feat. 家族:`A feat. B` / `A (ft. B)` 也算多人 credit。
     private static let featMarkers = ["feat.", "feat ", "ft.", "ft ", "featuring"]
@@ -68,9 +69,10 @@ public enum ArtistCredit {
         return head
     }
 
-    /// 当分隔符用的中文「和」换成 `&`,跟引擎 `normalizeArtistCreditHanAnd`(match.go)同一条判据:
-    /// 两侧都是 ASCII 字母(`Tom和Jerry`),或者两侧紧邻的连续汉字段都至少两个字(`陶喆和盧廣仲`);
-    /// `李和平` 两侧各一个字,是人名,不动。逐字判断,不用正则整串替换:连续几个「和」时正则会漏掉一半。
+    /// 当分隔符用的中文「和」换成 `&`,跟引擎 `normalizeArtistCreditHanAnd`(match.go)同一条判据:两侧各自是拉丁字母
+    /// (含带附加符号的,isLatinLetter)或者紧邻的连续汉字段至少两个字,两侧都够格才算(`Tom和Jerry`、`陶喆和盧廣仲`、
+    /// `ROSÉ和Bruno Mars`、`DAYOUNG和朴载范`);`李和平` 两侧各一个字,是人名,不动。逐字判断,不用正则整串替换:
+    /// 连续几个「和」时正则会漏掉一半。
     static func normalizedHanAnd(_ s: String) -> String {
         guard s.contains("和") else { return s }
         let chars = Array(s)
@@ -79,7 +81,6 @@ public enum ArtistCredit {
             return (0x4E00...0x9FFF).contains(v) || (0x3400...0x4DBF).contains(v)
                 || (0x20000...0x2EBEF).contains(v) || (0xF900...0xFAFF).contains(v) || v == 0x3007
         }
-        func isASCIILetter(_ c: Character) -> Bool { c.isASCII && c.isLetter }
         func hanRun(from start: Int, step: Int) -> Int {
             var n = 0
             var j = start
@@ -89,14 +90,26 @@ public enum ArtistCredit {
         var out = ""
         for (i, c) in chars.enumerated() {
             if c == "和", i > 0, i < chars.count - 1,
-               (isASCIILetter(chars[i - 1]) && isASCIILetter(chars[i + 1]))
-                || (hanRun(from: i - 1, step: -1) >= 2 && hanRun(from: i + 1, step: 1) >= 2) {
+               chars[i - 1].unicodeScalars.last.map { isLatinLetter($0) } == true || hanRun(from: i - 1, step: -1) >= 2,
+               chars[i + 1].unicodeScalars.first.map { isLatinLetter($0) } == true || hanRun(from: i + 1, step: 1) >= 2 {
                 out.append("&")
             } else {
                 out.append(c)
             }
         }
         return out
+    }
+
+    /// 拉丁字母,含带附加符号的(É、ñ、ø):基本拉丁、拉丁-1 增补、拉丁扩展 A/B、拉丁扩展附加这几段里的字母。跟引擎
+    /// isLatinLetter(match.go)同一份范围,改一边必须改另一边。按码点判:「和」左边看前一个字的最后一个码点、右边看后一个字的
+    /// 第一个码点,跟引擎按 rune 逐个看对得上。
+    static func isLatinLetter(_ u: Unicode.Scalar) -> Bool {
+        switch u.properties.generalCategory {
+        case .uppercaseLetter, .lowercaseLetter, .titlecaseLetter, .modifierLetter, .otherLetter:
+            return u.value < 0x250 || (0x1E00...0x1EFF).contains(u.value)
+        default:
+            return false
+        }
     }
 
     /// 只有 `/` 一个分隔符时,切出来的头部像不像一个真的艺人名。

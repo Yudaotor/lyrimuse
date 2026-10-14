@@ -555,6 +555,18 @@ func runCacheKeyTests() {
         expectEqual(ArtistCredit.primary("Tom和Jerry"), "Tom", "合唱 credit: 两侧是字母的「和」是分隔符")
         expectEqual(ArtistCredit.primary("李和平"), nil, "合唱 credit: 「李和平」是人名,不切")
         expectEqual(ArtistCredit.primary("周杰伦和"), nil, "合唱 credit: 结尾的「和」不切")
+        expectEqual(ArtistCredit.primary("ROSÉ和Bruno Mars"), "ROSÉ", "合唱 credit: 带附加符号的字母挨着「和」也切")
+        expectEqual(ArtistCredit.primary("DAYOUNG和朴载范"), "DAYOUNG", "合唱 credit: 一侧字母一侧 ≥2 个汉字的「和」也切")
+        expectEqual(ArtistCredit.primary("王力宏和Selina"), "王力宏", "合唱 credit: 一侧 ≥2 个汉字一侧字母的「和」也切")
+        expectEqual(ArtistCredit.primary("Jay和平"), nil, "合唱 credit: 「和」一侧只有一个汉字,不切")
+        expectEqual(ArtistCredit.primary("Привет和Мир"), nil, "合唱 credit: 西里尔字母不算拉丁字母,不切")
+        expectEqual(ArtistCredit.primary("Rose\u{301}和Bruno Mars"), nil,
+                    "合唱 credit: 「和」左边是组合附加符号(没合成的 é)时不切,跟引擎按码点看对得上")
+        expectEqual(ArtistCredit.primary("DAOKO×米津玄師"), "DAOKO", "合唱 credit: × 分隔取第一位")
+        expectEqual(ArtistCredit.primary("TOMORROW X TOGETHER"), nil, "合唱 credit: 乐队本名里的 X 不切")
+        expectEqual(ArtistCredit.primary("Florence + The Machine"), nil, "合唱 credit: 乐队本名里的 + 不切")
+        expectEqual(EnrichCacheKeys.looseKey("DAOKO×米津玄師|打上花火|x"), EnrichCacheKeys.looseKey("DAOKO&米津玄師|打上花火|x"),
+                    "宽松 key: × 跟别的合唱分隔符一样折成 &(跟引擎 loosenEnrichKey 同一份)")
         expectEqual(ArtistCredit.primary("UMI, 金泰亨"), "UMI", "合唱 credit: 逗号分隔")
         expectEqual(ArtistCredit.primary("Daniel Caesar feat. Mustafa"), "Daniel Caesar",
                     "合唱 credit: feat. 也算多人")

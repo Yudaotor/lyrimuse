@@ -205,7 +205,7 @@ public enum EnrichCacheKeys {
     /// 合 credit 的分隔符,跟引擎的 `isArtistCreditSep`(match.go)同一份。
     /// 全部折成同一个字符,让 `A/B/C` 和 `A & B & C` 判成同一首歌 —— 实测:
     /// 播放器报斜杠式、专辑预取从 Apple Music 曲目表拿到 & 式,缓存里长出 12 组重复。
-    private static let creditSeparators: Set<Unicode.Scalar> = ["/", "、", "&", ",", "，"]
+    private static let creditSeparators: Set<Unicode.Scalar> = ["/", "、", "&", ",", "，", "×"]
 
     public static func looseKey(_ key: String) -> String {
         var out = String.UnicodeScalarView()

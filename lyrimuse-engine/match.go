@@ -536,7 +536,7 @@ const lyricOvershootToleranceSecs = 5.0
 // (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
 const lyricsScoringVersion = 29
 
-const lyricsScoringRevision = 4
+const lyricsScoringRevision = 5
 
 // lyricsScoringStamp 是一条歌词按哪一版打分规则选出来的:主版本号 + 开发修订号。存成两个整数、按这两段比大小,
 // 不存小数:小数比大小时 29.10 会排在 29.9 前面。
@@ -1199,7 +1199,7 @@ func artistCreditParts(s string) []string {
 // 没找到"):同一首歌在库里有两份标签——"Khalil Fong & Fiona Sit"(能拆开,首歌手变体轮
 // 正常触发,已经解析成功)和"Khalil Fong和Fiona Sit"(拆不开,变体轮从未触发,一直没
 // 解析出来)。原因是"和"压根不在 isArtistCreditSep/isArtistCreditPrimarySep 认的分隔符
-// 集合里(只有 `/、&,，`),整串被当成一个谁都不认识的艺人名。
+// 集合里(只有 `/、&,，` 这几个标点),整串被当成一个谁都不认识的艺人名。
 //
 // 不能直接把 '和' 塞进那两个分隔符字符集:那两个字符集里的成员全是纯标点,几乎不可能
 // 出现在真实人名/乐队名内部;"和"是常见汉字,真实存在"李和平"这类名字本身就含"和"的情况,
@@ -1240,8 +1240,8 @@ func normalizeArtistCreditHanAnd(s string) string {
 	b.Grow(len(s))
 	for i, r := range runes {
 		if r == '和' && i > 0 && i < len(runes)-1 &&
-			((isASCIILetter(runes[i-1]) && isASCIILetter(runes[i+1])) ||
-				(hanRunLenBefore(runes, i) >= 2 && hanRunLenAfter(runes, i) >= 2)) {
+			(isLatinLetter(runes[i-1]) || hanRunLenBefore(runes, i) >= 2) &&
+			(isLatinLetter(runes[i+1]) || hanRunLenAfter(runes, i) >= 2) {
 			b.WriteByte('&')
 			continue
 		}
@@ -1283,6 +1283,13 @@ func isASCIILetter(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
 }
 
+// isLatinLetter:拉丁字母,含带附加符号的(É、ñ、ø):基本拉丁、拉丁-1 增补、拉丁扩展 A/B、拉丁扩展附加这几段里的字母。
+// normalizeArtistCreditHanAnd 判「和」两侧用:两侧各自是拉丁字母或连续 ≥2 个汉字才算连接词(`ROSÉ和Bruno Mars`、
+// `DAYOUNG和朴载范` 也切),见 09 章决策 248。跟 Swift 侧 ArtistCredit.isLatinLetter 同一份范围,改一边必须改另一边。
+func isLatinLetter(r rune) bool {
+	return unicode.IsLetter(r) && (r < 0x250 || (r >= 0x1E00 && r <= 0x1EFF))
+}
+
 // isArtistCreditSep 是"多人合credit"字符串的分隔符集合。
 //
 // **只有 artistCreditParts 用它**。原注释写的是"artistCreditParts/firstCreditedArtist
@@ -1296,8 +1303,11 @@ func isASCIILetter(r rune) bool {
 // 没有直接加进这个字符集,见 normalizeArtistCreditHanAnd 头注——那条注释里"两处都要改"
 // 的教训在这里换了个形式适用:两个分隔符函数都调用点都必须先过 normalizeArtistCreditHanAnd
 // 预处理,漏了哪一个都会导致同一首歌在"拆得开"和"拆不开"之间行为不一致。
+//
+// `×`(U+00D7)是日文、中文合作署名的常用写法(`A×B`);` x `、`+`、`with` 不收,它们出现在乐队本名里
+// (`TOMORROW X TOGETHER`、`Florence + The Machine`)。见 09 章决策 248。
 func isArtistCreditSep(r rune) bool {
-	return r == '/' || r == '、' || r == '&' || r == ',' || r == '，'
+	return r == '/' || r == '、' || r == '&' || r == ',' || r == '，' || r == '×'
 }
 
 // isArtistCreditPrimarySep 是"取第一位艺人"时的**主分隔符档**。刻意**不含 `/`** ——
@@ -1306,7 +1316,7 @@ func isArtistCreditSep(r rune) bool {
 // artistCreditRunMatches 再把连续段拼回去(见 artistcreditrun_test.go)。两处需求相反,
 // 硬共用一份才是坑的来源。
 func isArtistCreditPrimarySep(r rune) bool {
-	return r == '、' || r == '&' || r == ',' || r == '，'
+	return r == '、' || r == '&' || r == ',' || r == '，' || r == '×'
 }
 
 // firstCreditedField 按 sep 切,只有真切出 ≥2 段才算"这是个合credit 串"。

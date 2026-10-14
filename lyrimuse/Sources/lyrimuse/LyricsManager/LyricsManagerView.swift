@@ -208,11 +208,11 @@ extension EnrichCacheStore.Summary {
 // 歌手筛选下拉按"主歌手"合并——同一位歌手的合唱曲目(如"宇多田ヒカル & Skrillex")
 // 不应该在下拉里单独占一行,应该并进"宇多田ヒカル"那一项里;选中某位歌手后,连同他/她
 // 参与的合唱曲目也一起展示出来,不是只看完全同名的条目。分隔符跟 lyrimuse-engine/match.go 的
-// artistCreditParts 用同一套(/、&,，),取分割后的第一段作为归并键,大小写/首尾空白
+// artistCreditParts 用同一套(/、&,，×),取分割后的第一段作为归并键,大小写/首尾空白
 // 不影响判定,但下拉里展示、真正拿去比较分组的是原始未分割的 artist 全文里截出来的
 // 第一段(保留原始大小写/写法,不额外转小写)。
 func primaryArtist(_ full: String) -> String {
-    let seps = CharacterSet(charactersIn: "/、&,，")
+    let seps = CharacterSet(charactersIn: "/、&,，×")
     let first = full.components(separatedBy: seps).first ?? full
     return first.trimmingCharacters(in: .whitespaces)
 }

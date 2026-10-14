@@ -22,6 +22,13 @@ func TestNormalizeArtistCreditHanAnd(t *testing.T) {
 		{"陶喆和盧廣仲和蔡健雅", "陶喆&盧廣仲&蔡健雅", "连续多个中文'和'同样要各自独立判断"},
 		{"阿三和四", "阿三和四", "右侧中文段只有1字('四'),不达标,原样保留"},
 		{"陶喆和盧廣仲、蔡健雅", "陶喆&盧廣仲、蔡健雅", "中文段的边界到已有分隔符('、')为止,不跨过去连着数"},
+		{"ROSÉ和Bruno Mars", "ROSÉ&Bruno Mars", "带附加符号的字母也算拉丁字母"},
+		{"DAYOUNG和朴载范", "DAYOUNG&朴载范", "一侧拉丁字母、一侧≥2字中文段,也当分隔符"},
+		{"王力宏和Selina", "王力宏&Selina", "一侧≥2字中文段、一侧拉丁字母,也当分隔符"},
+		{"Jay和平", "Jay和平", "右侧中文段只有1字,不达标,原样保留"},
+		{"2和3", "2和3", "数字不是字母,原样保留"},
+		{"Привет和Мир", "Привет和Мир", "西里尔字母不算拉丁字母,原样保留"},
+		{"Rose\u0301和Bruno Mars", "Rose\u0301和Bruno Mars", "左边是组合附加符号(没合成的 é),按码点看不是字母"},
 	}
 	for _, c := range cases {
 		if got := normalizeArtistCreditHanAnd(c.in); got != c.want {
@@ -41,6 +48,25 @@ func TestArtistCreditPartsHanAnd(t *testing.T) {
 	}
 	if got := artistCreditParts("陶喆和盧廣仲"); !reflect.DeepEqual(got, []string{"陶喆", "卢广仲"}) {
 		t.Errorf("artistCreditParts(%q) = %v, want [陶喆 卢广仲]（含 toSimplified）", "陶喆和盧廣仲", got)
+	}
+	if got := artistCreditParts("DAOKO×米津玄師"); !reflect.DeepEqual(got, []string{"daoko", "米津玄师"}) {
+		t.Errorf("artistCreditParts(%q) = %v, want [daoko 米津玄师]", "DAOKO×米津玄師", got)
+	}
+	if got := artistCreditParts("TOMORROW X TOGETHER"); len(got) != 1 {
+		t.Errorf("artistCreditParts(乐队本名里的 X) = %v, 不该被切开", got)
+	}
+}
+
+// `×` 跟别的合唱分隔符一样:编目匹配按它拆署名,宽松 key 把它折成 `&`(App 侧 EnrichCacheKeys.looseKey 同一份)。
+func TestArtistCreditTimesSign(t *testing.T) {
+	if got := catalogCreditNames("DAOKO×米津玄師"); !reflect.DeepEqual(got, []string{"DAOKO", "米津玄師"}) {
+		t.Errorf("catalogCreditNames(%q) = %v, want [DAOKO 米津玄師]", "DAOKO×米津玄師", got)
+	}
+	if got := catalogCreditNames("ROSÉ和Bruno Mars"); !reflect.DeepEqual(got, []string{"ROSÉ", "Bruno Mars"}) {
+		t.Errorf("catalogCreditNames(%q) = %v, want [ROSÉ Bruno Mars]", "ROSÉ和Bruno Mars", got)
+	}
+	if a, b := loosenEnrichKey("DAOKO×米津玄師|打上花火|x"), loosenEnrichKey("DAOKO&米津玄師|打上花火|x"); a != b {
+		t.Errorf("loosenEnrichKey 没把 × 折成 &: %q vs %q", a, b)
 	}
 }
 

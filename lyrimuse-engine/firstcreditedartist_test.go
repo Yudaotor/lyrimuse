@@ -62,6 +62,13 @@ func TestFirstCreditedArtistSlashInName(t *testing.T) {
 		// normalizeArtistCreditHanAnd 头注)——不拆开时"陶喆和盧廣仲"恒取不出首歌手,
 		// 七个源全部搜不到;单独查"陶喆"四个源立刻命中。
 		{"陶喆和盧廣仲", "陶喆", "两侧都是≥2字的中文段,应能拆开"},
+		// `×` 是合作署名的分隔符;「和」两侧各自是拉丁字母(含带附加符号的)或 ≥2 字中文段就当连接词。
+		{"DAOKO×米津玄師", "DAOKO", "× 分隔"},
+		{"ROSÉ和Bruno Mars", "ROSÉ", "带附加符号的字母挨着'和'"},
+		{"DAYOUNG和朴载范", "DAYOUNG", "一侧字母一侧中文"},
+		// 乐队本名里的 X / + 不是分隔符
+		{"TOMORROW X TOGETHER", "TOMORROW X TOGETHER", "X 不切"},
+		{"Florence + The Machine", "Florence + The Machine", "+ 不切"},
 	}
 	for _, c := range cases {
 		if got := firstCreditedArtist(c.in); got != c.want {
