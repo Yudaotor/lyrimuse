@@ -670,6 +670,12 @@ func runPlayerIdentityTests() {
         expectEqual(placeholder("Groove Salad", nil, true), false, "电台流: 在放的不拦")
         expectEqual(placeholder("[connecting to host] http://127.0.0.1:8765/stream", nil, true), true,
                     "电台流: 没收到第一份标题、在放时也报「[connecting to host] 网址」,照样不是歌")
+        expectEqual([placeholder("Buffering 12%", nil, false), placeholder("Buffering 100%", nil, true)], [true, true],
+                    "电台流: 攒缓冲那几拍(在放时也报)不是歌")
+        expectEqual([P.isBufferingTitle("Buffering 1000%"), P.isBufferingTitle("Buffering %"),
+                     P.isBufferingTitle("Buffering 50% - Song"), P.isBufferingTitle("buffering 50%")],
+                    [false, false, false, false], "电台流: 只认整串「Buffering 1~3 位数字%」")
+        expectEqual(placeholder("Buffering 50%", 200, true), false, "电台流: 有时长的本地文件叫这个名字也不拦")
         expectEqual(placeholder("track08", 60, false), false, "电台流: 有时长的本地文件不拦")
         expectEqual(P.streamPlaceholder(bundleID: PlaybackPlayer.kkbox.bundleIdentifier, title: "x", artist: nil, duration: nil,
                                         playing: false), false, "电台流: 只认 reAMP")

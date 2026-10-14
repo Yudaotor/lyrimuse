@@ -177,15 +177,24 @@ public enum PlayerTitleSplit {
     private static let streamTitles = OSAllocatedUnfairLock<[String: (artist: String, title: String)]>(initialState: [:])
 
     /// 电台流里不是歌的那几种,调用方当成没在放音乐(`MediaControlClient.playerContentNotMusic`),不拿去查歌词:
-    /// 标题里带网址的(「[connecting to host] 网址」:连接那一拍;没收到第一份标题时在放也一直是它);连上之前单报台名那一拍
-    /// (没在放、拆不出歌手);台里插播的台标广告(歌手或歌名里带着台名,`mentionsStation`)。只认 reAMP。纯函数,selftest 覆盖。
+    /// 标题里带网址的(「[connecting to host] 网址」:连接那一拍;没收到第一份标题时在放也一直是它);攒缓冲那几拍
+    /// (`isBufferingTitle`,在放时也是它);连上之前单报台名那一拍(没在放、拆不出歌手);台里插播的台标广告(歌手或歌名里
+    /// 带着台名,`mentionsStation`)。只认 reAMP。纯函数,selftest 覆盖。
     public static func streamPlaceholder(bundleID: String?, title: String?, artist: String?, duration: Double?,
                                          playing: Bool?) -> Bool {
         guard let bundleID, bundleIDs.contains(bundleID), isStream(duration: duration),
               (artist ?? "").trimmingCharacters(in: .whitespaces).isEmpty else { return false }
-        if let title, title.contains("://") || mentionsStation(title) { return true }
+        if let title, title.contains("://") || isBufferingTitle(title) || mentionsStation(title) { return true }
         guard playing != true else { return false }
         return (split(bundleID: bundleID, title: title, artist: artist, isStream: true)?.artist ?? "").isEmpty
+    }
+
+    /// reAMP 攒缓冲时整串标题是「Buffering 12%」(写死在程序里,不随界面语言变)。纯函数,selftest 覆盖。
+    public static func isBufferingTitle(_ title: String) -> Bool {
+        let prefix = "Buffering "
+        guard title.hasPrefix(prefix), title.hasSuffix("%") else { return false }
+        let digits = title.dropFirst(prefix.count).dropLast()
+        return (1...3).contains(digits.count) && digits.allSatisfy { $0.isASCII && $0.isNumber }
     }
 
     /// 电台流标题「歌手 - 歌名 (台名和简介)」的前半截里提到了台名:台名取括号里冒号、方括号之前那段,至少 4 个字符,

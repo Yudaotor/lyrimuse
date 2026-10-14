@@ -140,8 +140,8 @@ public enum MediaControlClient {
     // MARK: - 切歌间隙保持(见 PlayerGapHold)
 
     /// 这一拍是「播放器在放、但不是音乐」(KKBOX / Amazon 的播客单集,见 `TrustedPlayers.artistlessContent`;网易云的
-    /// 播客单集,见 `NeteasePodcastQueue`;Spotify 的播客单集与 DJ 口播,见 `spotifyNoticeSaysNotMusic`;reAMP 电台流连上之前
-    /// 那两拍,见 `PlayerTitleSplit.streamPlaceholder`)就当没在放:
+    /// 播客单集,见 `NeteasePodcastQueue`;Spotify 的播客单集与 DJ 口播,见 `spotifyNoticeSaysNotMusic`;reAMP 电台流连上、攒缓冲
+    /// 那几拍,见 `PlayerTitleSplit.streamPlaceholder`)就当没在放:
     /// 切歌间隙保持当场放手(不然会把上一首撑满整个窗口),调用方直接交回 nil、不退回去问别家的暂停会话。
     private static func playerContentNotMusic(bundleID: String, snapshot: MediaControlSnapshot) -> Bool {
         let artistless = TrustedPlayers.artistlessContent(bundleID: bundleID, artist: snapshot.artist,
