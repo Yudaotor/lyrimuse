@@ -15,7 +15,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Yudaotor)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/N7gVy66Gp3)
-[![Telegram](https://img.shields.io/badge/Telegram-Join-26A5E4?logo=telegram&logoColor=white)](https://t.me/+l_H_ZpiP62QwZTZl)
+[![Telegram](https://img.shields.io/badge/Telegram-Join-26A5E4?logo=telegram&logoColor=white)](https://t.me/lyrimuse)
 
 </div>
 
@@ -310,7 +310,7 @@ LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3，支援 macOS 10.11 以�
 - **問題與建議**：在 App 裡打開設定 › 關於 › 回報問題，或在選單列圖像上按右鍵，選擇「回報問題…」。會打開 GitHub 的新增 issue 頁面，版本、系統與正在使用的播放器已經填好，選一類填寫即可：問題回報、歌詞搜不到或不對、想支援一個播放器、功能建議。
 - **某首歌的歌詞不對**：在歌詞管理裡打開這首歌的「搜尋候選歌詞」，按一下左下角的「找不到正確的歌詞？到 GitHub 回報」，歌名、歌手、專輯、目前使用的歌詞來源與有結果的來源會一併帶上。
 - **使用上的疑問**：到討論區的[問答分類](https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a)提問。
-- **與其他使用者交流**：加入 [Discord 伺服器](https://discord.gg/N7gVy66Gp3) 或 [Telegram 群組](https://t.me/+l_H_ZpiP62QwZTZl)，也可以在裡面提問、回報問題與提出建議。中文使用者在 Discord 有獨立的「中文交流」頻道與「反馈」論壇，在 Telegram 有「中文交流」話題。
+- **與其他使用者交流**：加入 [Discord 伺服器](https://discord.gg/N7gVy66Gp3) 或 [Telegram 群組](https://t.me/lyrimuse)，也可以在裡面提問、回報問題與提出建議。中文使用者在 Discord 有獨立的「中文交流」頻道與「反馈」論壇，在 Telegram 有「中文交流」話題。
 - **沒有 GitHub 帳號**：寄信到 yudaotor@qq.com。設定 › 關於 裡「回報問題」那一行的郵件圖像會自動附上版本與系統資訊，按右鍵可拷貝位址。
 - **安全性問題**：依 [SECURITY.md](SECURITY.md) 的方式私下回報，不要公開提交 issue。
 
