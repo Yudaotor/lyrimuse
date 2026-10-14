@@ -1077,7 +1077,7 @@ private struct MenuBarPanelView: View {
                     .frame(width: 36, height: 36)
                     .background(
                         Circle().fill(on ? AnyShapeStyle(Color.accentColor)
-                                         : AnyShapeStyle(Color(nsColor: .quaternarySystemFill)))
+                                         : AnyShapeStyle(Color(nsColor: .tertiarySystemFill)))
                     )
                 VStack(spacing: 1) {
                     // 缩字保留但门槛提到 0.85:正常语言都放得下,它只兜"某种翻译特别长"的
@@ -1352,7 +1352,7 @@ private struct PanelProgressSection: View {
         return VStack(spacing: 3) {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color(nsColor: .quaternarySystemFill).opacity(0.9))
+                    Capsule().fill(Color(nsColor: .tertiarySystemFill))
                     Capsule().fill(Color.accentColor)
                         .frame(width: max(4, geo.size.width * fraction))
                 }
@@ -1396,7 +1396,7 @@ private struct PanelProgressSection: View {
                 Text("-" + Self.mmss(max(0, durationMs - currentMs)))
             }
             .font(.system(size: 9.5).monospacedDigit())
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -1436,7 +1436,7 @@ private struct PanelProgressSection: View {
             // 调过就换强调色:这首被单独调过,一眼看得出来。
             Text(offsetText)
                 .foregroundStyle(trackLyricsOffsetMs != 0 ? AnyShapeStyle(Color.accentColor)
-                                                          : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
+                                                          : AnyShapeStyle(HierarchicalShapeStyle.secondary))
                 .frame(width: 64)
                 // 只有真调过才让它变成「归零」按钮 —— 已经是 0 时点了什么都不会发生,
                 // 那种按钮比没有更糟(跟右键菜单里「重置」按需出现同一个道理)。
@@ -1473,7 +1473,7 @@ private struct PanelProgressSection: View {
                 // 横杠,再轻就读成一条分隔线而不是按钮了。
                 .font(.system(size: 10, weight: .semibold))
                 // 比两边的时间数字略实一点:它们是读数,这两个是能按的。
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.primary.opacity(0.7))
                 .frame(width: 16, height: 14)
         }
         .help(help)

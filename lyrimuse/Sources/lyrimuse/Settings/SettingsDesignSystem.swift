@@ -2118,8 +2118,8 @@ private final class ShadowRefreshingGlassView: NSGlassEffectView {
 
 extension View {
     /// 菜单栏面板里的卡片(正在播放卡、钮块、快捷设置卡)。macOS 26 起是浮在整块玻璃底上的透明那一档玻璃(`.clear`)+
-    /// 白色发丝亮边,同首启引导的卡片:底是常规那一档,两档叠着卡片才浮得起来;背后发白时玻璃边界很淡,亮边保证看得见。
-    /// 更早的系统和关了玻璃的地方同设置页卡片。见 06 章决策 47。
+    /// 一圈发丝边,同首启引导的卡片:底是常规那一档,两档叠着卡片才浮得起来。发丝边深色外观是白色亮边;浅色外观是淡黑边,
+    /// 背后发白时玻璃和卡片都近乎纯白,白边看不见。更早的系统和关了玻璃的地方同设置页卡片。见 06 章决策 47、49。
     func menuBarPanelCardBackground(cornerRadius: CGFloat) -> some View {
         modifier(MenuBarPanelCardBackground(cornerRadius: cornerRadius))
     }
@@ -2128,12 +2128,14 @@ extension View {
 private struct MenuBarPanelCardBackground: ViewModifier {
     let cornerRadius: CGFloat
     @Environment(\.settingsGlassDisabled) private var glassDisabled
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         if #available(macOS 26.0, *), !glassDisabled {
             content.glassEffect(.clear, in: shape)
-                .overlay(shape.strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5))
+                .overlay(shape.strokeBorder(colorScheme == .dark ? Color.white.opacity(0.3) : Color.black.opacity(0.08),
+                                            lineWidth: 0.5))
         } else {
             content.settingsCardBackground(cornerRadius: cornerRadius)
         }
