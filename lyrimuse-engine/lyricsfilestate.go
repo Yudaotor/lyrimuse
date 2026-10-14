@@ -82,13 +82,18 @@ func lyricsStampOf(info fs.FileInfo, crc uint32) lyricsFileStamp {
 }
 
 // lyricsFileUnchanged:name 的大小和修改时间跟记录一致,返回记录里的校验值。
+// lyricsStateName:记录和目录列表里文件名的键,一律转成 NFC。引擎按缓存键算出的文件名是 NFC,目录里的却可能是
+// 分解写法(NFD,带重音字母、浊点假名的名字):APFS 按规范等价认文件,不改写名字,覆盖写入也留着旧名。按原样当键的话,
+// 这些文件每次全量导出都被当成不在、重写一遍,修改时间刷成最新(歌词管理按更新时间排就总排最前)。见 09 章决策 247。
+func lyricsStateName(name string) string { return composeNFC(name) }
+
 func lyricsFileUnchanged(dir, name string, info fs.FileInfo) (uint32, bool) {
 	lyricsFileStateMu.Lock()
 	defer lyricsFileStateMu.Unlock()
 	if !lyricsFileStateReady || lyricsFileStateDir != dir || info == nil {
 		return 0, false
 	}
-	s, ok := lyricsFileStateFiles[name]
+	s, ok := lyricsFileStateFiles[lyricsStateName(name)]
 	if !ok || s.Size != info.Size() || s.ModNs != info.ModTime().UnixNano() {
 		return 0, false
 	}
@@ -99,7 +104,7 @@ func recordLyricsFile(dir, name string, info fs.FileInfo, crc uint32) {
 	lyricsFileStateMu.Lock()
 	defer lyricsFileStateMu.Unlock()
 	if lyricsFileStateReady && lyricsFileStateDir == dir && info != nil {
-		lyricsFileStateFiles[name] = lyricsStampOf(info, crc)
+		lyricsFileStateFiles[lyricsStateName(name)] = lyricsStampOf(info, crc)
 	}
 }
 
@@ -107,7 +112,7 @@ func forgetLyricsFile(dir, name string) {
 	lyricsFileStateMu.Lock()
 	defer lyricsFileStateMu.Unlock()
 	if lyricsFileStateReady && lyricsFileStateDir == dir {
-		delete(lyricsFileStateFiles, name)
+		delete(lyricsFileStateFiles, lyricsStateName(name))
 	}
 }
 
@@ -155,9 +160,16 @@ func listLyricsDir(dir string) map[string]fs.FileInfo {
 		if e.IsDir() {
 			continue
 		}
-		if info, err := e.Info(); err == nil {
-			out[e.Name()] = info
+		info, err := e.Info()
+		if err != nil {
+			continue
 		}
+		// 键按 NFC(见 lyricsStateName)。同一个名字两种写法各有一份时留新的那份。
+		key := lyricsStateName(e.Name())
+		if prev, ok := out[key]; ok && !info.ModTime().After(prev.ModTime()) {
+			continue
+		}
+		out[key] = info
 	}
 	return out
 }

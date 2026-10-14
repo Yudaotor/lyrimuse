@@ -117,6 +117,38 @@ func TestLyricsFileStateSkipsUnchangedFiles(t *testing.T) {
 	}
 }
 
+// 目录里的文件名是分解写法(NFD)时,内容没变的文件照样不重写:不然每次启动修改时间都刷成最新。
+func TestLyricsExportSkipsUnchangedDecomposedFilenames(t *testing.T) {
+	dir := withLyricsFileStateEnv(t)
+	const key = "Gareth.T|碧麗宮|THE PROT\u00c9G\u00c9"
+	withEnrichCache(t, map[string]enrichEntry{key: {Lyrics: "[00:01.00]bik1 lai6", LyricsSource: "kugou"}})
+	exportLyricsFiles()
+	composed := filepath.Join(dir, sanitizeLyricsFilename(key)+".lrc")
+	decomposed := filepath.Join(dir, sanitizeLyricsFilename("Gareth.T|碧麗宮|THE PROTE\u0301GE\u0301")+".lrc")
+	if err := os.Rename(composed, decomposed); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-time.Hour).Truncate(time.Second)
+	if err := os.Chtimes(decomposed, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := listLyricsDir(dir)[filepath.Base(composed)]; !ok {
+		t.Fatal("目录列表要能按 NFC 名字查到分解写法的文件")
+	}
+
+	// 模拟重启:内存记录清掉,导入再全量导出。
+	resetLyricsFileStateForTest()
+	importLyricsFromFiles()
+	exportLyricsFiles()
+	info, err := os.Stat(composed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.ModTime().Equal(old) {
+		t.Fatalf("内容没变的分解写法文件不该被重写,修改时间从 %v 变成了 %v", old, info.ModTime())
+	}
+}
+
 // 记录是按歌词文件夹区分的:换了文件夹,旧记录一概不认,全量读。
 func TestLyricsFileStateIgnoredForOtherDir(t *testing.T) {
 	dir := withLyricsFileStateEnv(t)
