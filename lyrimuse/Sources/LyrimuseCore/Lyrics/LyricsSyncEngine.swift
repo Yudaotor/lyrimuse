@@ -688,6 +688,11 @@ public final class LyricsSyncEngine {
         options: [.caseInsensitive]
     )
 
+    /// 不带 ISRC 这个词、整行只有编码的写法(`TWV451500005`、`TW-EW7-20-01006`)。少了这个词作佐证,
+    /// 形状收紧:整行只有这一串(调用方先去掉首尾空白)、字母只认大写、分段只认连字符。见 08 章决策 51。
+    private static let bareISRCPattern = try! NSRegularExpression(
+        pattern: #"^[A-Z]{2}-?[A-Z0-9]{3}-?\d{2}-?\d{5}$"#)
+
     /// 「英文角色名 : 拉丁人名」——半角冒号、而且冒号右边**没有**中日文的那一档署名行。
     ///
     /// 为什么现有两条拉丁规则都够不着:全角那条要求冒号是「：」;半角那条要求冒号右边出现
@@ -1244,9 +1249,11 @@ public final class LyricsSyncEngine {
         options: [.caseInsensitive]
     )
 
-    /// 见 `isrcPattern`。
+    /// 见 `isrcPattern`、`bareISRCPattern`。
     public static func matchesISRCLine(_ text: String) -> Bool {
-        isrcPattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+        if isrcPattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil { return true }
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        return bareISRCPattern.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) != nil
     }
 
     public static func matchesDateStampLine(_ text: String) -> Bool {

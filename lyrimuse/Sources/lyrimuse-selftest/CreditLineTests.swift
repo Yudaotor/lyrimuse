@@ -446,11 +446,26 @@ func runCreditLineTests() {
                     "ISRC: 带连字符的分段写法(全库另一种实测形态)")
         expectEqual(LyricsSyncEngine.matchesISRCLine("ISRC: TW-B87-02-11301"), true,
                     "ISRC: 带冒号写法")
-        // 反向:必须同时有 ISRC 这个词**和**那 12 位编码形状,少一样都不算。
+        // 反向:有 ISRC 这个词时后面必须跟着编码。
         expectEqual(LyricsSyncEngine.matchesISRCLine("ISRC 是国际标准录音码"), false,
                     "ISRC(反向): 只有词没有编码不算")
-        expectEqual(LyricsSyncEngine.matchesISRCLine("TWB870211301"), false,
-                    "ISRC(反向): 只有编码没有词不算")
+        // 不带这个词、整行只有编码的写法,见 08 章决策 51。
+        expectEqual(LyricsSyncEngine.matchesISRCLine("TWV451500005"), true,
+                    "ISRC: 不带词、整行只有编码")
+        expectEqual(LyricsSyncEngine.matchesISRCLine("TW-EW7-20-01006 "), true,
+                    "ISRC: 不带词的分段写法,行尾带空格")
+        // 反向:没有词作佐证时,整行只能是这一串、字母大写、分段只用连字符。
+        expectEqual(LyricsSyncEngine.matchesISRCLine("twv451500005"), false,
+                    "ISRC(反向): 不带词时小写字母不算")
+        expectEqual(LyricsSyncEngine.matchesISRCLine("编号 TWV451500005"), false,
+                    "ISRC(反向): 不带词时行里还有别的字不算")
+        expectEqual(LyricsSyncEngine.matchesISRCLine("TW V45 15 00005"), false,
+                    "ISRC(反向): 不带词时用空格分段不算")
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            ["原来在你眼中 你从没放弃过我", "混音 : 王力宏",
+             "OP : Homeboy Music,Inc Taiwan Branch", "TWV451500005"]),
+                    [false, true, true, true],
+                    "ISRC: 歌末只有编码的那一行跟前面的署名一起删(真歌词不动)")
 
         // ② 「英文角色名 : 拉丁人名」——半角冒号且右边没有中日文那一档。
         // 同一份歌词里 `Executive Producer : 林暐哲` 早就被删(半角那条要求右边有 CJK),
@@ -1326,6 +1341,8 @@ func runCreditLineTests() {
             ("Artist: Queen", "元数据"),
             ("Singer:Maroon 5", "元数据"),
             ("Songs Title：teach me", "元数据"),
+            ("TWV451500005", "ISRC 编码,不带词"),
+            ("TW-EW7-20-01006", "ISRC 编码,不带词、连字符分段"),
         ]
         for (line, family) in mustDrop {
             expectEqual(verdict(line), true, "语料回归(必须删掉, \(family)): \(line)")
