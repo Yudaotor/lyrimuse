@@ -113,6 +113,33 @@ func iconBadge(_ systemName: String, tint: Color, top: Color? = nil, size: CGFlo
     IconBadge(systemName: systemName, tint: tint, top: top, size: size, cornerRadius: cornerRadius)
 }
 
+/// 「关于」页头的品牌圆按钮(Discord、Telegram):标签是铺满整颗圆的品牌图,高度跟旁边的玻璃胶囊一致。
+/// 悬停略提亮、按下略缩,外加一层软阴影,跟玻璃按钮一样从底色上抬起来。
+private struct AboutBrandCircleButtonStyle: ButtonStyle {
+    static let diameter: CGFloat = 24
+
+    func makeBody(configuration: Configuration) -> some View {
+        AboutBrandCircleButtonBody(configuration: configuration)
+    }
+}
+
+private struct AboutBrandCircleButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        configuration.label
+            .brightness(configuration.isPressed ? -0.06 : hovering ? 0.06 : 0)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.92 : 1)
+            .shadow(color: .black.opacity(0.14), radius: 3, y: 1)
+            .contentShape(Circle())
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.12), value: hovering)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+    }
+}
+
 private struct IconBadge: View {
     let systemName: String
     let tint: Color
@@ -7349,29 +7376,28 @@ private struct AboutSettingsTab: View {
                     }
                 }
                 .settingsGlassButtons()
-                // 只放 Discord 标志、不带字:去向写在悬停提示和读屏标签里。见 14 章决策 80。
+                // Discord、Telegram 两颗只放标志、不带字,去向写在悬停提示和读屏标签里。品牌图本身铺满整颗圆,
+                // 别套玻璃圆框(框里再放一块圆角方图是两层形状)。见 14 章决策 80、110、111。
                 Button {
                     NSWorkspace.shared.open(FeedbackLinks.discordInviteURL)
                 } label: {
-                    accountIconBadge(.discord, size: 16, cornerRadius: 4)
+                    accountIconBadge(.discord, size: AboutBrandCircleButtonStyle.diameter,
+                                     cornerRadius: AboutBrandCircleButtonStyle.diameter / 2)
                 }
-                .settingsGlassButtons()
-                .buttonBorderShape(.circle)
+                .buttonStyle(AboutBrandCircleButtonStyle())
                 .help(L10n.t("Discord 社区"))
                 .accessibilityLabel(L10n.t("Discord 社区"))
                 .accessibilityHint(L10n.t("与其他用户交流，也可在此提问或提出建议"))
                 .settingsSearchHighlight(title: L10n.t("Discord 社区"))
-                // 同 Discord:只放标志,去向写在悬停提示和读屏标签里。见 14 章决策 110。
                 Button {
                     NSWorkspace.shared.open(FeedbackLinks.telegramInviteURL)
                 } label: {
                     Image(nsImage: telegramBadgeImage)
                         .resizable()
-                        .frame(width: 16, height: 16)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .frame(width: AboutBrandCircleButtonStyle.diameter, height: AboutBrandCircleButtonStyle.diameter)
+                        .clipShape(Circle())
                 }
-                .settingsGlassButtons()
-                .buttonBorderShape(.circle)
+                .buttonStyle(AboutBrandCircleButtonStyle())
                 .help(L10n.t("Telegram 群组"))
                 .accessibilityLabel(L10n.t("Telegram 群组"))
                 .accessibilityHint(L10n.t("与其他用户交流，也可在此提问或提出建议"))
