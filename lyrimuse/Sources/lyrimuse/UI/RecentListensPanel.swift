@@ -113,7 +113,7 @@ struct RecentListensPanel: View {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 10, weight: .semibold))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassIcon())
             .foregroundStyle(secondaryTextColor)
             .disabled(stats.recentPaging)
             .help(L10n.t("刷新"))
@@ -433,7 +433,7 @@ struct PendingListensPanel: View {
                 Text(L10n.t("连接 Last.fm…"))
                     .font(.system(size: 10, weight: .semibold))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassIcon())
             .foregroundStyle(secondaryTextColor)
         }
         .padding(.bottom, 10)

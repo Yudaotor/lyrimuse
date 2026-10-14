@@ -1210,7 +1210,7 @@ struct AccountLinkingTab: View {
                     // 锁拉丁语区,理由同 SettingsRawRow 里那处注释。
                     Image(systemName: "xmark").environment(\.locale, Locale(identifier: "en"))
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.glassIcon())
                 .controlSize(.small)
                 .accessibilityLabel(L10n.t("关闭"))
             }
@@ -1786,10 +1786,11 @@ struct AccountLinkingTab: View {
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.secondary)
                         .frame(width: 24, height: 24)
-                        .background(Color.primary.opacity(0.08), in: Circle())
                         .contentShape(Circle())
                 }
-                .buttonStyle(.plain)
+                // 玻璃小圆钮。
+                .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
+                .settingsCardBackground(cornerRadius: 12)
                 .keyboardShortcut(.cancelAction)
                 .help(L10n.t("取消"))
             }

@@ -216,7 +216,7 @@ private struct PlayerChip<Icon: View>: View {
                         .strokeBorder(ChoiceHighlight.stroke(isSelected: selected, scheme: colorScheme),
                                       lineWidth: ChoiceHighlight.lineWidth(isSelected: selected)))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsGlassHoverButtonStyle(cornerRadius: 8))
         .help(label)
         // 旁白要能读出"勾没勾"—— 视觉上只在描边和饱和度里,VoiceOver 听不出来。
         .accessibilityLabel(label)

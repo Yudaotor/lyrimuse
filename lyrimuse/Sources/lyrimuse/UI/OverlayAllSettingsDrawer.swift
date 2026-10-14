@@ -128,7 +128,7 @@ struct OverlayAllSettingsDrawer: View {
             .padding(.vertical, SettingsRowMetrics.verticalPadding)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassRow)
         .accessibilityLabel(L10n.t("全部设置"))
         // VoiceOver 里这一行是"展开/收起"而不是普通按钮 —— 抽屉是键盘用户到达那 18 项的
         // 唯一入口(的 16 项 + 并进「行为」组的两行自动隐藏),读不出

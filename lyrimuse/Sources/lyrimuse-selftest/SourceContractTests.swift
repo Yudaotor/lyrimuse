@@ -42,7 +42,7 @@ func runSourceContractTests() {
         expectEqual(window.isEmpty, false, "歌词窗口纯图标键: 读不到 UI/LyricsWindowView.swift")
         expectEqual(unlabeled, [], "歌词窗口纯图标键: 悬停提示后面要紧跟读屏名(带文字的控件加进 textHelps)")
         expectEqual(window.contains(".accessibilityLabel(windowController.isAlwaysOnTop ? L10n.t(\"取消置顶\") : L10n.t(\"置于最顶层\"))")
-                        && window.contains("circleIcon(\"ellipsis\")\n            }\n            .buttonStyle(.plain)\n            .accessibilityLabel(L10n.t(\"更多\"))"), true,
+                        && window.contains("circleIcon(\"ellipsis\")\n            }\n            .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))\n            .accessibilityLabel(L10n.t(\"更多\"))"), true,
                     "歌词窗口纯图标键: 置顶(提示是两句、读屏名只取前一句)和「⋯」(没有悬停提示)也有读屏名")
     }
 
@@ -4104,7 +4104,7 @@ func runSourceContractTests() {
         expectEqual(!songRowSource.isEmpty && !songRowSource.contains(".onHover"), true,
                     "歌词管理: 列表行不放悬停按钮")
         // 模式切换高亮实际显示的那一档,这首没有的那一档不亮。
-        expectEqual(managerParts.contains("shown == option ? Color.primary.opacity(0.1)")
+        expectEqual(managerParts.contains("shown == option ? Color.accentColor : Color.clear")
                     && manager.contains("shown: effectiveDisplayMode(summary),"), true,
                     "歌词管理: 模式切换高亮这首实际显示的那一档")
         // 开窗、换歌只选中不滚动,只有「定位」滚动(11 章决策 64)。

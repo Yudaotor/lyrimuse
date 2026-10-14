@@ -864,7 +864,7 @@ struct LastfmStatsSection: View {
                     } label: {
                         Image(systemName: "arrow.clockwise").font(.system(size: 11))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.glassIcon())
                     .foregroundStyle(.secondary)
                     .help(L10n.t("立即刷新"))
                 }
@@ -1091,10 +1091,10 @@ struct LastfmStatsSection: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 5)
             .padding(.vertical, 1)
-            .background(Capsule().fill(Color.primary.opacity(0.07)))
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsGlassHoverButtonStyle())
+        .settingsCardBackground(cornerRadius: .greatestFiniteMagnitude)
         .help(expanded ? L10n.t("收起") : String(format: L10n.t("连续收听 %d 次，点按展开每一次"), count))
         .accessibilityLabel(String(format: L10n.t("连续收听 %d 次，点按展开每一次"), count))
         .accessibilityValue(expanded ? L10n.t("展开") : L10n.t("收起"))
@@ -1171,7 +1171,7 @@ struct LastfmStatsSection: View {
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassRow)
             .help(collapsed.wrappedValue ? L10n.t("展开") : L10n.t("收起"))
             // 紧跟标题的控件(榜单的「Top N」):放在折叠按钮外面,空白处就不再是折叠的点击区
             if let accessory {
@@ -1201,10 +1201,11 @@ struct LastfmStatsSection: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(enabled ? Color.primary : Color.secondary.opacity(0.5))
                 .frame(width: 26, height: 26)
-                .background(Circle().fill(Color.primary.opacity(enabled ? 0.08 : 0.04)))
                 .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        // 玻璃小圆钮;不可点时淡底不亮,字形变灰。
+        .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
+        .settingsCardBackground(cornerRadius: 13)
         .help(label)
         .accessibilityLabel(label)
         .disabled(!enabled || stats.recentPaging)
@@ -1743,7 +1744,7 @@ private struct RecentLoveHeart: View {
                         .frame(width: recentLoveColumnWidth, height: 16)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glassIcon())
                 .disabled(!canWrite)
                 .help(loved ? L10n.t("已在 Last.fm 上喜欢") : L10n.t("在 Last.fm 上喜欢"))
                 .accessibilityLabel(loved ? L10n.t("已在 Last.fm 上喜欢") : L10n.t("在 Last.fm 上喜欢"))

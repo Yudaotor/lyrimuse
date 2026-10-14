@@ -160,10 +160,10 @@ struct LyricsManagerFollowButton: View {
                 .font(.system(size: 12, weight: .medium))
                 .padding(.horizontal, 11)
                 .padding(.vertical, 6)
-                .background(Capsule().fill(follow ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.06)))
+                .background(Capsule().fill(follow ? Color.accentColor.opacity(0.12) : Color.clear))
                 .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .lyricsManagerChipButton()
         .foregroundStyle(follow ? Color.accentColor : Color.secondary)
         .help(L10n.t("高亮当前句并保持在可见范围内；手动滚动时暂停，再次点按可恢复"))
         .fixedSize()
@@ -256,13 +256,23 @@ struct LyricsManagerChip: View {
         .lineLimit(1)
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(Capsule().fill(selected ? Color.accentColor : Color.primary.opacity(0.07)))
+        // 没选中的底是玻璃,由调用点挂在按钮外面(`lyricsManagerChipButton`):挂在这里的话悬停淡底会被玻璃盖住。
+        .background(Capsule().fill(selected ? Color.accentColor : Color.clear))
         .contentShape(Capsule())
         .fixedSize()
     }
 }
 
-/// 「筛选」里「来源」「歌手」「专辑」那种点开是一张单选表的胶囊:没选时描边 + ▾,选了某一项时强调色浅底、写出选的是什么。
+extension View {
+    /// 歌词管理里那些胶囊按钮(状态、歌词类型、来源 / 歌手 / 专辑)的外层:玻璃胶囊 + 悬停 / 按下 / 弹层开着三态。
+    /// `selected` 的那颗底下已经是强调色,不画淡底。
+    func lyricsManagerChipButton(selected: Bool = false, isOpen: Bool = false) -> some View {
+        buttonStyle(SettingsGlassHoverButtonStyle(isOpen: isOpen, showsFill: !selected))
+            .settingsCardBackground(cornerRadius: .greatestFiniteMagnitude)
+    }
+}
+
+/// 「筛选」里「来源」「歌手」「专辑」那种点开是一张单选表的胶囊:玻璃胶囊 + ▾,选了某一项时强调色字、浅底,写出选的是什么。
 struct LyricsManagerMenuChip: View {
     let title: String
     let active: Bool
@@ -279,7 +289,6 @@ struct LyricsManagerMenuChip: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(Capsule().fill(active ? Color.accentColor.opacity(0.14) : Color.clear))
-        .overlay(Capsule().strokeBorder(active ? Color.accentColor.opacity(0.4) : Color.primary.opacity(0.16), lineWidth: 0.5))
         .contentShape(Capsule())
         .frame(maxWidth: 200)
         .fixedSize()
@@ -343,7 +352,7 @@ struct LyricsManagerOptionList: View {
             .frame(height: 26)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassListRow)
     }
 }
 
@@ -785,11 +794,11 @@ struct LyricsManagerModePicker: View {
                     Text(option.title)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 5)
-                        .background(Capsule().fill(shown == option ? Color.primary.opacity(0.1) : Color.clear))
+                        .background(Capsule().fill(shown == option ? Color.accentColor : Color.clear))
                         .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(enabled ? Color.primary : Color.secondary.opacity(0.55))
+                .buttonStyle(SettingsGlassHoverButtonStyle(showsFill: shown != option))
+                .foregroundStyle(shown == option ? Color.white : enabled ? Color.primary : Color.secondary.opacity(0.55))
                 .modifier(UnavailableModeNote(text: enabled ? nil : unavailableHelp(option)))
             }
         }
@@ -894,7 +903,7 @@ struct LyricsManagerOffsetControl: View {
                     .foregroundStyle(Color.accentColor)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassIcon())
         .font(.system(size: 12, weight: .medium))
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -1693,9 +1702,9 @@ struct LyricsManagerLineEditor: View {
                         .font(.system(size: 11, weight: .medium))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.primary.opacity(0.07)))
+                        .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .lyricsManagerChipButton()
                 .foregroundStyle(.secondary)
                 .help(L10n.t("将此句恢复为编辑前的内容"))
             }
@@ -1868,7 +1877,7 @@ struct LyricsManagerLineEditor: View {
                     .foregroundStyle(isCurrent ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(HierarchicalShapeStyle.secondary))
                     .underline(true, color: Color.secondary.opacity(0.3))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassIcon())
             .help(L10n.t("修改此句的时间戳"))
         }
     }

@@ -202,7 +202,7 @@ struct SongVersionsSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(isSelected ? Color.primary.opacity(0.14) : Color.clear))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassListRow)
     }
 
     private var currentTag: some View {
@@ -444,7 +444,7 @@ struct SongVersionsSheet: View {
             .background(isCurrent ? Color.accentColor.opacity(0.07) : Color.clear)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassListRow)
         .allowsHitTesting(!isCurrent)
         .help(isCurrent ? "" : L10n.t("与当前条目对比"))
     }
@@ -490,7 +490,7 @@ struct SongVersionsSheet: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.05)))
+        .settingsCardBackground(cornerRadius: 12, inSheet: true)
     }
 
     private func lyricsCard(_ v: Version) -> some View {
@@ -599,7 +599,7 @@ struct SongVersionsSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassListRow)
     }
 
     private func diffCell(_ line: LyricLine?, highlight: Bool) -> some View {

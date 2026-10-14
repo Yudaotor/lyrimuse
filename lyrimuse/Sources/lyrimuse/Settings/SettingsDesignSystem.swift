@@ -55,10 +55,10 @@ extension View {
     /// `.glassEffect`,旧系统退回 quaternary 圆角底 —— 跟上面的卡片背景同一个取舍,不在旧系统上
     /// 模拟玻璃。不用 `.interactive()`:那是按钮的悬停 / 按压回弹,输入框不需要。两档都补 0.5pt
     /// 发丝描边:侧栏本身就是半透明材质,玻璃压在材质上边界很淡,描边保证框看得见。
-    /// 调用点在 Settings/SettingsSearch.swift 的 `SettingsSearchField`。
+    /// 调用点在 Settings/SettingsSearch.swift 的 `SettingsSearchField`、歌词管理侧栏的搜索框。
     @ViewBuilder
-    func settingsSearchFieldBackground() -> some View {
-        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+    func settingsSearchFieldBackground(cornerRadius: CGFloat = 8) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         if #available(macOS 26.0, *) {
             glassEffect(.regular, in: shape)
                 .overlay(shape.strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5))
@@ -1975,10 +1975,31 @@ struct SettingsGlassHoverButtonStyle: ButtonStyle {
     /// false = 不画淡底(胶囊分段里选中的那一档,底下已经有强调色胶囊)。
     var showsFill = true
     var pressScale: CGFloat = 1
+    /// 淡底的圆角,跟按钮外面那层玻璃一致;nil = 胶囊。
+    var cornerRadius: CGFloat?
+    /// 淡底比按钮标签往外扩多少(负数往里收),不改布局。小图标、文字按钮的标签贴着字形,不扩的话淡底只有字那么大。
+    var fillInset: CGFloat = 0
 
     func makeBody(configuration: Configuration) -> some View {
-        SettingsGlassHoverButtonBody(configuration: configuration, isOpen: isOpen,
-                                     showsFill: showsFill, pressScale: pressScale)
+        SettingsGlassHoverButtonBody(configuration: configuration, isOpen: isOpen, showsFill: showsFill,
+                                     pressScale: pressScale, cornerRadius: cornerRadius, fillInset: fillInset)
+    }
+}
+
+extension ButtonStyle where Self == SettingsGlassHoverButtonStyle {
+    /// 没有底的小图标 / 文字按钮(行尾的 ⓘ、拷贝、移除、刷新这类):淡底往外扩一圈,按下略缩。
+    static func glassIcon(isOpen: Bool = false) -> SettingsGlassHoverButtonStyle {
+        SettingsGlassHoverButtonStyle(isOpen: isOpen, pressScale: 0.9, fillInset: 4)
+    }
+
+    /// 整行可点、标签自带行内边距的(「全部设置」抽屉头、卡片里的折叠标题):圆角淡底往里收一点,不碰卡片边。
+    static var glassRow: SettingsGlassHoverButtonStyle {
+        SettingsGlassHoverButtonStyle(cornerRadius: 8, fillInset: -4)
+    }
+
+    /// 弹层 / 列表里一行一个选项的(字体列表、单选表、记录行):圆角淡底贴着行。
+    static var glassListRow: SettingsGlassHoverButtonStyle {
+        SettingsGlassHoverButtonStyle(cornerRadius: 6)
     }
 }
 
@@ -1987,13 +2008,18 @@ private struct SettingsGlassHoverButtonBody: View {
     let isOpen: Bool
     let showsFill: Bool
     let pressScale: CGFloat
+    let cornerRadius: CGFloat?
+    let fillInset: CGFloat
     @State private var hovering = false
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         configuration.label
-            .background(Capsule().fill(Color.primary.opacity(fillLevel)))
+            // 圆角给得比边长一半还大时按胶囊画,nil 正好走这条。
+            .background(RoundedRectangle(cornerRadius: cornerRadius ?? .greatestFiniteMagnitude, style: .continuous)
+                .fill(Color.primary.opacity(fillLevel))
+                .padding(-fillInset))
             .scaleEffect(configuration.isPressed && !reduceMotion ? pressScale : 1)
             .onHover { hovering = $0 }
             .animation(.easeOut(duration: 0.12), value: hovering)

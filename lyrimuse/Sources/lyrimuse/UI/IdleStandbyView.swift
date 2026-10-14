@@ -636,7 +636,7 @@ private struct IdleLastTrackHero: View {
                     Button(L10n.t("换一句")) {
                         withAnimation(.easeInOut(duration: 0.28)) { quoteIndex += 1 }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.glassIcon())
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                 }

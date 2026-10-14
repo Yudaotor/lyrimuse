@@ -580,7 +580,7 @@ struct LyricsLibraryStatsPanel: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassIcon(isOpen: progressDetailShown))
         .help(Self.remainingText(status, fallbackSecondsPerTrack: fallbackSecondsPerTrack))
         .popover(isPresented: $progressDetailShown, arrowEdge: .bottom) {
             FillSweepProgressDetail(status: status, fallbackSecondsPerTrack: fallbackSecondsPerTrack)

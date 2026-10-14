@@ -178,7 +178,7 @@ struct FontFamilyPicker: View {
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassListRow)
             .foregroundStyle(.secondary)
             if let importError {
                 Text(importError)
@@ -257,7 +257,7 @@ struct FontFamilyPicker: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassListRow)
     }
 }
 
@@ -287,7 +287,7 @@ private struct ImportedFontRow: View {
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassListRow)
             Button(action: onDelete) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.tertiary)

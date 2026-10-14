@@ -357,7 +357,7 @@ private struct HeatmapDayPopover: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassListRow)
         .help(entry.lastPlayed.map { String(format: L10n.t("当天最后一次收听：%@"), LastfmStatsSection.absolute($0)) } ?? "")
     }
 }

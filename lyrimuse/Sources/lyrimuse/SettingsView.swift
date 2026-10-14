@@ -1082,7 +1082,7 @@ private struct LyricsSettingsTab: View {
                     .frame(width: 18, height: 18)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassIcon())
             .help(String(format: L10n.t("无法读取 %@ 的歌词缓存，点按查看处理方法"), source.displayName))
             .popover(
                 isPresented: Binding(
@@ -1116,7 +1116,7 @@ private struct LyricsSettingsTab: View {
                     .frame(width: 18, height: 18)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassIcon())
             .help(String(format: L10n.t("%@ 近期运行异常，点按查看详情"), source.displayName))
             .popover(
                 isPresented: Binding(
@@ -1151,7 +1151,7 @@ private struct LyricsSettingsTab: View {
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(needsAttention ? Color.orange : Color.secondary)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.glassIcon())
                     .help(L10n.t("Apple Music 账号连接"))
                 }
             }
@@ -2022,7 +2022,7 @@ private struct LyricsSettingsTab: View {
             }
             .contentShape(shape)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsGlassHoverButtonStyle(cornerRadius: 10))
         .help(help)
         .accessibilityAddTraits(on ? [.isSelected] : [])
     }
@@ -2289,7 +2289,7 @@ private struct LyricsSettingsTab: View {
                 } label: {
                     Image(systemName: "chevron.up")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glassIcon())
                 .disabled(index == 0)
                 .accessibilityLabel(L10n.t("上移"))
                 Button {
@@ -2297,7 +2297,7 @@ private struct LyricsSettingsTab: View {
                 } label: {
                     Image(systemName: "chevron.down")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glassIcon())
                 .disabled(index == visible.count - 1)
                 .accessibilityLabel(L10n.t("下移"))
             }
@@ -4144,7 +4144,7 @@ struct LyricsWindowAllSettingsDrawer<Content: View>: View {
             .padding(.vertical, SettingsRowMetrics.verticalPadding)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassRow)
         .accessibilityLabel(L10n.t("全部设置"))
         .accessibilityAddTraits(isExpanded ? .isSelected : [])
         .accessibilityValue(isExpanded ? L10n.t("已展开") : L10n.t("已折叠"))
@@ -4334,7 +4334,7 @@ private struct NotchAllSettingsDrawer: View {
             .padding(.vertical, SettingsRowMetrics.verticalPadding)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassRow)
         .accessibilityLabel(L10n.t("全部设置"))
         .accessibilityAddTraits(isExpanded ? .isSelected : [])
         .accessibilityValue(isExpanded ? L10n.t("已展开") : L10n.t("已折叠"))
@@ -4684,7 +4684,7 @@ private struct PlayerSettingsTab: View {
                                 .monospacedDigit()
                             if chosen < shown.count {
                                 Button(L10n.t("全选")) { FeatureSettingsStore.shared.selectPlayers(Set(shown)) }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(.glassIcon())
                                     .font(.system(size: 11.5))
                                     .foregroundStyle(Color.accentColor)
                             }
@@ -4955,7 +4955,7 @@ private struct PlayerSettingsTab: View {
                     expandedTrustedBundleID = nil
                     untrustPlayer(bundleID)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glassIcon())
                 .foregroundStyle(.secondary)
                 Spacer()
             }
@@ -5409,7 +5409,7 @@ private struct PlayerSettingsTab: View {
                     }
                 }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassIcon())
         .help(browserSetupIncomplete(bundleID: bundleID)
               ? L10n.t("配置尚未完成，点按查看缺少的项目")
               : L10n.t("已配置，点按可查看或移除"))
@@ -5553,7 +5553,7 @@ private struct PlayerSettingsTab: View {
                     expandedBrowserBundleID = nil
                     expandedBrowserPlatformID = nil
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glassIcon())
                 .foregroundStyle(.secondary)
                 Spacer()
             }
@@ -7170,7 +7170,7 @@ private struct CopyLinkButton: View {
                 .frame(width: 16, height: 16)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.glassIcon())
         .foregroundStyle(copied ? Color.green : Color.secondary)
         .help(copied ? L10n.t("已拷贝") : L10n.t("拷贝链接") + "\n" + url.absoluteString)
         .accessibilityLabel(L10n.t("拷贝链接"))
@@ -7384,12 +7384,10 @@ private struct AboutSettingsTab: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            // 跟卡片同一套"低透明度填充 + 发丝描边"(见 settingsCardBackground 的理由):纯填充在浅色底上
-            // 几乎看不出边界。
-            .background(Capsule().fill(Color.primary.opacity(0.06)))
-            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
         }
-        .buttonStyle(.plain)
+        // 玻璃胶囊,同页头 GitHub 那颗。
+        .buttonStyle(SettingsGlassHoverButtonStyle())
+        .settingsCardBackground(cornerRadius: .greatestFiniteMagnitude)
         .help(L10n.t("点按拷贝版本信息，便于反馈问题"))
         .animation(.easeInOut(duration: 0.15), value: versionCopied)
     }
@@ -7436,7 +7434,7 @@ private struct AboutSettingsTab: View {
                 FeedbackReporter.openNewIssue()
             } accessory: {
                 Button { FeedbackReporter.openEmail() } label: { Image(systemName: "envelope") }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.glassIcon())
                     .foregroundStyle(.secondary)
                     .help(String(format: L10n.t("无 GitHub 账号时，可发送邮件至 %@；右键点按可拷贝地址"), FeedbackLinks.feedbackEmail))
                     .accessibilityLabel(L10n.t("邮件反馈"))

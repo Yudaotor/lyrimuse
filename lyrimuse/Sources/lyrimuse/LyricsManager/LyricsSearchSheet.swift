@@ -656,8 +656,7 @@ struct LyricsSearchSheet: View {
             queryRow(L10n.t("专辑"), text: $album)
         }
         .padding(.horizontal, 12)
-        .background(shape.fill(Color.primary.opacity(0.045)))
-        .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
+        .settingsCardBackground(cornerRadius: 12, inSheet: true)
         .onSubmit { Task { await load() } }
     }
 
@@ -793,7 +792,7 @@ struct LyricsSearchSheet: View {
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.045)))
+            .settingsCardBackground(cornerRadius: 10, inSheet: true)
         }
     }
 
@@ -952,7 +951,7 @@ struct LyricsSearchSheet: View {
                 } label: {
                     label
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glassListRow)
             } else {
                 label
             }

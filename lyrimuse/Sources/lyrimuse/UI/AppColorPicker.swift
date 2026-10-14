@@ -53,7 +53,7 @@ struct AppColorPicker: View {
                 // `.contentShape(Rectangle())`(那边是本仓已经验证过的解法,这里照抄)。
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassIcon(isOpen: isPresented))
         .popover(isPresented: $isPresented, arrowEdge: .bottom) { picker }
     }
 
@@ -173,7 +173,7 @@ struct AppColorPicker: View {
             Image(systemName: "eyedropper")
                 .font(.system(size: 12, weight: .medium))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassIcon())
         .foregroundStyle(.secondary)
         .help(L10n.t("从屏幕取色"))
     }

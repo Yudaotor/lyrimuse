@@ -1333,7 +1333,7 @@ struct LyricsManagerView: View {
                 Button(action: clearSearch) {
                     Image(systemName: "xmark.circle.fill")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glassIcon())
                 .foregroundStyle(.tertiary)
                 .help(L10n.t("清空搜索"))
             } else if !searchFieldFocused {
@@ -1345,7 +1345,8 @@ struct LyricsManagerView: View {
         .font(.system(size: 13))
         .padding(.horizontal, 10)
         .frame(height: 32)
-        .background(shape.fill(Color.primary.opacity(0.06)))
+        // 玻璃底同设置窗侧栏的搜索框。
+        .settingsSearchFieldBackground(cornerRadius: 10)
         .overlay(shape.strokeBorder(searchFieldFocused ? Color.accentColor.opacity(0.55) : Color.clear, lineWidth: 1.5))
         .animation(.easeOut(duration: 0.12), value: searchFieldFocused)
         .onChange(of: searchText) { _, newValue in
@@ -1379,10 +1380,12 @@ struct LyricsManagerView: View {
             .font(.system(size: 12.5, weight: .medium))
             .padding(.horizontal, 11)
             .frame(height: 32)
-            .background(shape.fill(hasPopoverFilters ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.06)))
+            .background(shape.fill(hasPopoverFilters ? Color.accentColor.opacity(0.14) : Color.clear))
             .contentShape(shape)
         }
-        .buttonStyle(.plain)
+        // 玻璃底、圆角同左边的搜索框;悬停 / 按下 / 筛选面板开着三态。
+        .buttonStyle(SettingsGlassHoverButtonStyle(isOpen: showFilterPopover, cornerRadius: 10))
+        .settingsCardBackground(cornerRadius: 10)
         .fixedSize()
         .popover(isPresented: $showFilterPopover, arrowEdge: .bottom) { filterPopover }
     }
@@ -1400,7 +1403,7 @@ struct LyricsManagerView: View {
                             LyricsManagerChip(title: kind.label, count: (kinds[kind] ?? 0) > 0 ? kinds[kind] : nil,
                                               selected: kindFilter == .only(kind))
                         }
-                        .buttonStyle(.plain)
+                        .lyricsManagerChipButton(selected: kindFilter == .only(kind))
                     }
                 }
             }
@@ -1442,6 +1445,8 @@ struct LyricsManagerView: View {
         return SettingsFlowRow(spacing: 6) {
             ForEach(Self.statusOrder, id: \.self) { statusChip($0, count: counts[$0]) }
         }
+        // 选中底换档时淡入淡出。只挂在这一排里面:改 statusFilter 也会重筛下面的列表,列表那边不跟着动画。
+        .animation(.easeOut(duration: 0.15), value: statusFilter)
     }
 
     private static func statusTitle(_ status: LyricsManagerStatus) -> String {
@@ -1461,7 +1466,7 @@ struct LyricsManagerView: View {
                               count: (count ?? 0) > 0 || status == .all ? count : nil,
                               selected: statusFilter == status)
         }
-        .buttonStyle(.plain)
+        .lyricsManagerChipButton(selected: statusFilter == status)
         .help(Self.statusHelp(status))
     }
 
@@ -1478,7 +1483,7 @@ struct LyricsManagerView: View {
         } label: {
             LyricsManagerMenuChip(title: sourceFilter.label, active: sourceFilter != .all)
         }
-        .buttonStyle(.plain)
+        .lyricsManagerChipButton(isOpen: showSourcePicker)
         .popover(isPresented: $showSourcePicker, arrowEdge: .bottom) {
             let options = SourceFilter.options(extraSources: store.extraSources).filter { $0 != .all }
             LyricsManagerOptionList(
@@ -1497,7 +1502,7 @@ struct LyricsManagerView: View {
         } label: {
             LyricsManagerMenuChip(title: artistFilter ?? L10n.t("全部歌手"), active: artistFilter != nil)
         }
-        .buttonStyle(.plain)
+        .lyricsManagerChipButton(isOpen: showArtistPicker)
         .popover(isPresented: $showArtistPicker, arrowEdge: .bottom) {
             LyricsManagerOptionList(
                 allTitle: L10n.t("全部歌手"),
@@ -1513,7 +1518,7 @@ struct LyricsManagerView: View {
         } label: {
             LyricsManagerMenuChip(title: albumFilter ?? L10n.t("全部专辑"), active: albumFilter != nil)
         }
-        .buttonStyle(.plain)
+        .lyricsManagerChipButton(isOpen: showAlbumPicker)
         .popover(isPresented: $showAlbumPicker, arrowEdge: .bottom) {
             LyricsManagerOptionList(
                 allTitle: L10n.t("全部专辑"),
@@ -3564,7 +3569,7 @@ struct LyricsManagerView: View {
                     .fixedSize()
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glassIcon())
                 .help(L10n.t("查看识别为同一首歌的其他条目，可拆分误识别的条目"))
             }
             if summary.durationSecs > 0 {
@@ -3905,7 +3910,7 @@ struct LyricsManagerView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.04)))
+        .settingsCardBackground(cornerRadius: 10)
     }
 
     /// 整段文本编辑:歌词(整行 LRC,或逐字拼出来的每一行)、译文、读音各一个框。
@@ -3958,7 +3963,7 @@ struct LyricsManagerView: View {
                         Label(showCopyLyricsFeedback ? L10n.t("已拷贝") : L10n.t("拷贝"),
                               systemImage: showCopyLyricsFeedback ? "checkmark" : "doc.on.doc")
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.glassIcon())
                     .foregroundStyle(.secondary)
                     .font(.caption)
                     .disabled(text.wrappedValue.isEmpty)
@@ -4246,7 +4251,7 @@ struct LyricsManagerView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.04)))
+            .settingsCardBackground(cornerRadius: 10)
             .padding(.top, 14)
             ScrollView {
                 Text(plainLyricsText)

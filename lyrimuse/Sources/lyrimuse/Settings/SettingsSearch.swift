@@ -270,7 +270,7 @@ struct SettingsSearchField: View {
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glassIcon())
                 .accessibilityLabel(L10n.t("清除搜索"))
             }
         }

@@ -540,7 +540,7 @@ struct LastfmFootprintView: View {
                     .padding(.top, 12)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glassRow)
                 .help(L10n.t("收起"))
                 switch d {
                 case .hours:
@@ -641,7 +641,7 @@ struct LastfmFootprintView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassListRow)
         .help(entry.lastPlayed.map { String(format: L10n.t("当天最后一次收听：%@"), LastfmStatsSection.absolute($0)) } ?? "")
     }
 

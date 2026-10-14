@@ -448,7 +448,7 @@ struct TouchBarAllSettingsDrawer: View {
             .padding(.vertical, SettingsRowMetrics.verticalPadding)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassRow)
         .accessibilityLabel(L10n.t("全部设置"))
         .accessibilityAddTraits(isExpanded ? .isSelected : [])
         .accessibilityValue(isExpanded ? L10n.t("已展开") : L10n.t("已折叠"))

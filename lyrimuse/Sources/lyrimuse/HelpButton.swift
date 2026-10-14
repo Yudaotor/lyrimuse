@@ -20,7 +20,7 @@ struct HelpButton: View {
             Image(systemName: "questionmark.circle")
                 .foregroundStyle(.secondary)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassIcon(isOpen: isPresented))
         .popover(isPresented: $isPresented, arrowEdge: .trailing) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(text).font(.callout)

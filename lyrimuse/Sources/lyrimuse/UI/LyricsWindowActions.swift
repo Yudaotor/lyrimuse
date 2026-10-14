@@ -240,7 +240,7 @@ struct LyricsWindowActionsCapsule: View {
                 .frame(width: 30, height: 30)
                 .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
         .help(label)
         .accessibilityLabel(label)
         .keyboardShortcut(shortcut, modifiers: .command)
@@ -261,7 +261,7 @@ struct LyricsWindowActionsCapsule: View {
                 .frame(width: 30, height: 30)
                 .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
         .help(label)
         .accessibilityLabel(label)
         .onHover { inside in
@@ -282,7 +282,7 @@ struct LyricsWindowActionsCapsule: View {
                     .frame(width: 30, height: 30)
                     .contentShape(Circle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
             .help(L10n.t("在外部编辑器中编辑歌词"))
             .accessibilityLabel(L10n.t("在外部编辑器中编辑歌词"))
         }
@@ -352,7 +352,7 @@ struct LyricsWindowActionsCapsule: View {
             .frame(width: 30, height: 30)
             .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
         .help(label)
         .accessibilityLabel(label)
         .keyboardShortcut("r", modifiers: .command)

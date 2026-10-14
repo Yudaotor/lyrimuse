@@ -2976,7 +2976,7 @@ struct LyricsWindowView: View {
                             } label: {
                                 translationButtonLabel
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
                             .help(L10n.t("译文与读音"))
                             .accessibilityLabel(L10n.t("译文与读音"))
                             .anchorPreference(key: TranslationMenuButtonBoundsKey.self, value: .bounds) { $0 }
@@ -3693,7 +3693,7 @@ struct LyricsWindowView: View {
                 } label: {
                     circleIcon(favorited ? "star.fill" : "star")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
                 .help(L10n.t(favorited ? "取消喜欢" : "喜欢"))
                 .accessibilityLabel(L10n.t(favorited ? "取消喜欢" : "喜欢"))
             }
@@ -3708,7 +3708,7 @@ struct LyricsWindowView: View {
             } label: {
                 circleIcon("ellipsis")
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
             .accessibilityLabel(L10n.t("更多"))
             .anchorPreference(key: MoreMenuButtonBoundsKey.self, value: .bounds) { $0 }
             // 「设置…」("加在三个点旁边"):这扇窗口本身没有右键菜单/
@@ -3724,7 +3724,7 @@ struct LyricsWindowView: View {
             } label: {
                 circleIcon("gearshape")
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
             .help(L10n.t("设置…"))
             .accessibilityLabel(L10n.t("设置…"))
         }
@@ -4308,7 +4308,7 @@ struct LyricsWindowView: View {
                 .background(Circle().fill(active ? Color.white.opacity(0.84) : Color.clear))
                 .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
         .help(help)
         .accessibilityLabel(help)
         .accessibilityAddTraits(active ? .isSelected : [])
@@ -6671,7 +6671,7 @@ private struct WindowVolumeCapsule: View {
                                 output.isExternal
                                     ? AnyShapeStyle(Color.red) : AnyShapeStyle(capsuleIconColor))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
                     .help(L10n.t("音频输出"))
                     .accessibilityLabel(L10n.t("音频输出"))
                     .anchorPreference(key: OutputMenuButtonBoundsKey.self, value: .bounds) { $0 }
@@ -7373,7 +7373,7 @@ private struct InfoPanelLinksRow: View {
                 Text(name + " ↗")
                     .font(.system(size: 13, weight: .medium))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassIcon())
             .foregroundStyle(Color.accentColor)
         }
     }
@@ -7701,7 +7701,7 @@ private struct NowPlayingCountBadge: View {
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
                         .foregroundStyle(textColor)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glassIcon())
                 .help(L10n.t("在设置中查看 Last.fm"))
                 .transition(.opacity)
             }
@@ -8019,7 +8019,7 @@ private struct ChartsPanelView: View {
             .padding(.vertical, 4)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassListRow)
         .help(L10n.t("在 Apple Music 中打开"))
     }
 

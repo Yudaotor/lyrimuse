@@ -697,7 +697,7 @@ private struct MenuBarPanelView: View {
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 18, height: 18)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glassIcon())
                 .modifier(OptionalHelp(text: PlaybackCoordinator.shared.resolvedPlayerDisplayName))
             }
     }

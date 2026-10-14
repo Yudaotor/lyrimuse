@@ -343,7 +343,7 @@ func runIdlePageTests() {
         func source(_ rel: String) -> String {
             (try? String(contentsOf: sources.appendingPathComponent(rel), encoding: .utf8)) ?? ""
         }
-        let otherGlass = ["glassEffect(", "buttonStyle(.glass", "lyricsWindowFloatingPanelBackground(",
+        let otherGlass = ["glassEffect(", "buttonStyle(.glass)", "buttonStyle(.glassProminent", "lyricsWindowFloatingPanelBackground(",
                           "settingsFloatingBarBackground(", "settingsGlassMenu(", "settingsGlassMenuCapsule(",
                           "editorToolbarButtonStyle(", "onboardingCardBackground(", "SettingsGlassTabPicker("]
         for rel in ["UI/IdleStandbyView.swift", "UI/RecentListensPanel.swift", "UI/MiniIdleStandby.swift"] {
