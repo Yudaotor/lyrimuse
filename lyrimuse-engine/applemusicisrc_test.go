@@ -66,6 +66,11 @@ func TestApplemusicISRCCandidates(t *testing.T) {
 			amTestSong("comp", "When I Was Your Man", "Bruno Mars", "Chilled R&B", 214000, true),
 			amTestSong("orig", "When I Was Your Man", "Bruno Mars", "Unorthodox Jukebox", 214000, true)},
 			"", 214, "comp,orig|"},
+		{"同档时长跟本地更接近的排前面,再取前三条", []applemusicSong{
+			amTestSong("cmp", "公转自转", "王力宏", "力宏二十", 256720, true), amTestSong("one", "公转自转", "王力宏", "The Only One", 260000, true),
+			amTestSong("fire", "公转自转", "王力宏", "火力全开", 257813, true), amTestSong("star", "公转自转", "王力宏", "星座圣典", 256480, true),
+			amTestSong("alb", "公转自转", "王力宏", "公转.自转", 256227, true)},
+			"Revolution", 256, "|alb,star,cmp"},
 		{"每组最多三条", []applemusicSong{
 			amTestSong("a", "X", "Y", "A", 200000, true), amTestSong("b", "X", "Y", "A", 200000, true),
 			amTestSong("c", "X", "Y", "A", 200000, true), amTestSong("d", "X", "Y", "A", 200000, true),
@@ -272,5 +277,101 @@ func TestApplemusicLyricCacheKeyIncludesISRC(t *testing.T) {
 	}
 	if r := applemusicLyric(qqRoundCtx(), "测试歌手", "测试曲", "测试专辑", 200, "", "TEST00000001"); r.album != "测试专辑 (Deluxe)" || lookups != 1 {
 		t.Fatalf("有了 ISRC 该重新取: album=%q lookups=%d", r.album, lookups)
+	}
+}
+
+// amTestWordTTML:三行逐字的 TTML(带时间轴至少要三行,见 isTimedLRC)。
+const amTestWordTTML = `<tt xmlns="http://www.w3.org/ns/ttml" xmlns:itunes="http://music.apple.com/lyric-ttml-internal" itunes:timing="Word"><body><div>` +
+	`<p begin="1.0" end="2.0"><span begin="1.0" end="1.5">我绕</span><span begin="1.5" end="2.0">着你</span></p>` +
+	`<p begin="3.0" end="4.0"><span begin="3.0" end="3.5">一圈</span><span begin="3.5" end="4.0">公转</span></p>` +
+	`<p begin="5.0" end="6.0"><span begin="5.0" end="5.5">一圈</span><span begin="5.5" end="6.0">自转</span></p></div></body></tt>`
+
+// 按 ISRC 直取到同一条录音挂在几张专辑下:时长最接近的排前面;它只有逐行时接着试后面的,带逐字、时长跟本地差 1.5 秒以内的用它,
+// 差得多的不用;都只有逐行用第一条;为找逐字多问的那次出错时交出已经拿到的逐行那份;本地时长未知时取到第一份带时间轴的就停。
+func TestApplemusicISRCPrefersWordTimingAcrossAlbums(t *testing.T) {
+	const code = "TWA479820001"
+	type entry struct {
+		id, album string
+		ms        int
+		ttml      string // 逐字端点的 TTML;空串是这一条被限流
+	}
+	for _, c := range []struct {
+		name        string
+		entries     []entry
+		dur         float64
+		wantAlbum   string
+		wantWord    bool
+		wantFetches int32
+	}{
+		{"最接近的就带逐字", []entry{{"cmp", "力宏二十", 256720, amTestLineTTML}, {"alb", "公转.自转", 256227, amTestWordTTML}},
+			256, "公转.自转", true, 1},
+		{"最接近的只有逐行、后面那条带逐字", []entry{{"cmp", "力宏二十", 256100, amTestLineTTML}, {"alb", "公转.自转", 256900, amTestWordTTML}},
+			256, "公转.自转", true, 2},
+		{"后面那条带逐字但时长差太多", []entry{{"cmp", "力宏二十", 256100, amTestLineTTML}, {"one", "The Only One", 260000, amTestWordTTML}},
+			256, "力宏二十", false, 2},
+		{"都只有逐行", []entry{{"cmp", "力宏二十", 256100, amTestLineTTML}, {"alb", "公转.自转", 256900, amTestLineTTML}},
+			256, "力宏二十", false, 2},
+		{"多问的那次被限流", []entry{{"cmp", "力宏二十", 256100, amTestLineTTML}, {"alb", "公转.自转", 256900, ""}},
+			256, "力宏二十", false, 2},
+		{"本地时长未知", []entry{{"cmp", "力宏二十", 256100, amTestLineTTML}, {"alb", "公转.自转", 256900, amTestWordTTML}},
+			0, "力宏二十", false, 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			withApplemusicCreds(t, "cn")
+			var fetches int32
+			var songs []applemusicSong
+			ttml := map[string]string{}
+			for _, e := range c.entries {
+				songs = append(songs, amTestSong(e.id, "公转自转", "王力宏", e.album, e.ms, true))
+				ttml[e.id] = e.ttml
+			}
+			withLRCLIBFake(t, func(r *http.Request) (int, http.Header, string) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/v1/catalog/cn/search"):
+					return http.StatusOK, nil, amTestSearchBody()
+				case amTestIsISRCLookup(r, code):
+					return http.StatusOK, nil, amTestISRCBody(songs...)
+				case strings.HasSuffix(r.URL.Path, "/syllable-lyrics"):
+					atomic.AddInt32(&fetches, 1)
+					id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/v1/catalog/cn/songs/"), "/syllable-lyrics")
+					if ttml[id] == "" {
+						return http.StatusTooManyRequests, nil, ""
+					}
+					return http.StatusOK, nil, amTestLyricsBody(ttml[id])
+				}
+				return http.StatusNotFound, nil, ""
+			})
+			r := resolveApplemusicLyric(qqRoundCtx(), "Leehom Wang", "Gong Zhuan Zi Zhuan", "Revolution", c.dur, code)
+			if r.album != c.wantAlbum || (r.yrc != "") != c.wantWord || !isTimedLRC(r.lyrics) {
+				t.Errorf("album=%q 逐字=%v lyrics=%q,want album=%q 逐字=%v", r.album, r.yrc != "", r.lyrics, c.wantAlbum, c.wantWord)
+			}
+			if fetches != c.wantFetches {
+				t.Errorf("问了 %d 次逐字端点,want %d", fetches, c.wantFetches)
+			}
+		})
+	}
+}
+
+// 按名字搜出来的候选:第一条只有逐行也就用它,不为找逐字去问后面那条(可能是另一份录音)。
+func TestApplemusicNameCandidatesStopAtFirstTimed(t *testing.T) {
+	withApplemusicCreds(t, "cn")
+	var second int32
+	withLRCLIBFake(t, func(r *http.Request) (int, http.Header, string) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/v1/catalog/cn/search"):
+			return http.StatusOK, nil, amTestSearchBody(
+				amTestSong("std", "Kiss It Better", "Rihanna", "ANTI", 253000, true),
+				amTestSong("live", "Kiss It Better", "Rihanna", "ANTI", 253000, true))
+		case strings.HasSuffix(r.URL.Path, "/songs/std/syllable-lyrics"):
+			return http.StatusOK, nil, amTestLyricsBody(amTestLineTTML)
+		case strings.HasSuffix(r.URL.Path, "/songs/live/syllable-lyrics"):
+			atomic.AddInt32(&second, 1)
+			return http.StatusOK, nil, amTestLyricsBody(amTestWordTTML)
+		}
+		return http.StatusNotFound, nil, ""
+	})
+	r := resolveApplemusicLyric(qqRoundCtx(), "Rihanna", "Kiss It Better", "ANTI", 253, "")
+	if r.yrc != "" || !isTimedLRC(r.lyrics) || second != 0 {
+		t.Errorf("按名字搜的取到第一份带时间轴的就停: 逐字=%v 问了第二条 %d 次", r.yrc != "", second)
 	}
 }
