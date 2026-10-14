@@ -93,7 +93,9 @@ func runSearchLyricsCLI(args []string) {
 		// 顺带也会重蹈上面 Apple 目录锚点/同源加权那两段警告的覆辙:弹窗的名次跟自动
 		// 决策对不上。 这条 CLI **只读不写**这份缓存(整条搜索链路不碰 commitEnrichEntry),
 		// 不会跟常驻引擎抢写同一个文件。
-		loadEnrichCacheReadOnly(filepath.Join(filepath.Dir(cfgPath), clientName+"-enrich-cache.json"))
+		enrichCachePath := filepath.Join(filepath.Dir(cfgPath), clientName+"-enrich-cache.json")
+		loadEnrichCacheReadOnly(enrichCachePath)
+		overlayPlayingEntryReadOnly(filepath.Join(filepath.Dir(cfgPath), clientName+"-playing-entry.json"), enrichCachePath)
 		// 重音字母旁多切空格的第二级证据,跟常驻引擎一样从这份缓存建(见 accentsplit.go)。
 		refreshAccentCacheWords()
 		// 补:main 在 loadFeatureFlags 之后紧跟着有这一行,而这条 CLI 子命令

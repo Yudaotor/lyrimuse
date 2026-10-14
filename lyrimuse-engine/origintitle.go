@@ -233,8 +233,10 @@ func chineseOriginStorefronts(samples ...string) []string {
 }
 
 // trustedRecordingISRC:这一条录音的 ISRC。播放器给的(playbackISRC,就是正在播的这一条)优先,其次是已被认可的
-// Apple Music 候选报的(acceptedAppleMusicISRC),再次是已被认可的 Deezer 候选报的(Apple Music 这一轮没给出可用候选时)。
-// 都没有返回空。
+// Apple Music 候选报的(acceptedAppleMusicISRC),再次是已被认可的 Deezer 候选报的(Apple Music 这一轮没给出可用候选时),
+// 最后是缓存里这首记着的(confidentISRC:播放器报过或核对过的号;检索配的不算)。手动搜索是另起的进程、没有播放状态,
+// 罗马字曲名这一轮又常常一个候选都没有,只剩缓存这一条能去原产地商店查原名,见 09 章决策 245。
+// 都没有返回空。调用方不能持有 enrichMu。
 func trustedRecordingISRC(artist, title, album string, durationSecs float64, results []scoredLyricCandidateResult) string {
 	if code := playbackISRC(artist, title, album); code != "" {
 		return code
@@ -242,7 +244,13 @@ func trustedRecordingISRC(artist, title, album string, durationSecs float64, res
 	if code := acceptedAppleMusicISRC(results, durationSecs); code != "" {
 		return code
 	}
-	return acceptedSourceISRC(results, "deezer", durationSecs)
+	if code := acceptedSourceISRC(results, "deezer", durationSecs); code != "" {
+		return code
+	}
+	if e, ok := resolvedEnrichEntry(artist, title, album); ok {
+		return e.confidentISRC()
+	}
+	return ""
 }
 
 // originRecording:这一条录音在原产地商店里的曲名和署名。artist 为空 = 只知道曲名(区服遍历的结论不带署名)。

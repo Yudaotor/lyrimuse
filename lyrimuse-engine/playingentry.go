@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"sync"
 )
@@ -56,4 +57,33 @@ func writePlayingEntry(key string) {
 	if err != nil {
 		slog.Error("playing entry: write", "key", key, "err", err)
 	}
+}
+
+// overlayPlayingEntryReadOnly:一次性子命令读完主缓存(loadEnrichCacheReadOnly)之后,正在播的那首的单条快照 path 比
+// 主缓存 cachePath 新,就把那一条盖进内存(同 App 的 EnrichCacheReader.lookup,按 mtime 挑)。常驻进程整份落盘最多攒
+// enrichBackgroundSaveDelay,刚放起来的这首在那之前只在快照里:不盖的话手动搜索读不到它的 ISRC、Amazon 曲目页、
+// 学到的署名,见 09 章决策 245。只读,不写任何文件。
+func overlayPlayingEntryReadOnly(path, cachePath string) {
+	pi, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	if ci, err := os.Stat(cachePath); err == nil && !pi.ModTime().After(ci.ModTime()) {
+		return
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		noteFileErr("read", path, err)
+		return
+	}
+	var f playingEntryFile
+	if err := json.Unmarshal(data, &f); err != nil || f.Key == "" {
+		return
+	}
+	enrichMu.Lock()
+	if enrichCache == nil {
+		enrichCache = map[string]enrichEntry{}
+	}
+	enrichCache[f.Key] = f.Entry
+	enrichMu.Unlock()
 }

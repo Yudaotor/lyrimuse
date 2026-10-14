@@ -104,3 +104,18 @@ func TestSearchLyricsAttachesCachedVideoID(t *testing.T) {
 		t.Error("search-lyrics 要在开搜之前按缓存给 ctx 挂上 videoId")
 	}
 }
+
+// search-lyrics 读完主缓存、开搜之前把比它新的在播单条快照盖上去,见 overlayPlayingEntryReadOnly。
+func TestSearchLyricsOverlaysPlayingEntry(t *testing.T) {
+	src, err := os.ReadFile("searchcli.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(src)
+	load := strings.Index(s, "loadEnrichCacheReadOnly(enrichCachePath)")
+	overlay := strings.Index(s, `overlayPlayingEntryReadOnly(filepath.Join(filepath.Dir(cfgPath), clientName+"-playing-entry.json"), enrichCachePath)`)
+	search := strings.Index(s, "scoredLyricCandidatesStreaming(searchCtx")
+	if load < 0 || overlay < 0 || search < 0 || overlay < load || overlay > search {
+		t.Error("search-lyrics 要在读完主缓存之后、开搜之前盖上在播单条快照")
+	}
+}

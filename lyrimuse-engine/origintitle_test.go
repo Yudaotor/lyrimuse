@@ -260,6 +260,34 @@ func TestTrustedRecordingISRC(t *testing.T) {
 	}
 }
 
+// 这一轮没有可认的候选、也不在放时,退到缓存里这首记着的号:播放器报过的、核对过的算,检索配的不算;
+// 这一轮认下的候选仍然优先。
+func TestTrustedRecordingISRCFallsBackToCachedEntry(t *testing.T) {
+	key := enrichKey("Leehom Wang", "Gong Zhuan Zi Zhuan", "Revolution")
+	searchedKey := enrichKey("Leehom Wang", "Searched Only", "Revolution")
+	withEnrichCache(t, map[string]enrichEntry{
+		key:         {ISRCs: []string{"TWA479820001"}, ISRCLevels: map[string]string{"TWA479820001": isrcLevelVerified}},
+		searchedKey: {ISRCs: []string{"TWA479899999"}, ISRCLevels: map[string]string{"TWA479899999": isrcLevelSearched}},
+	})
+	if got := trustedRecordingISRC("Leehom Wang", "Gong Zhuan Zi Zhuan", "Revolution", 256, nil); got != "TWA479820001" {
+		t.Errorf("没有候选时取缓存里核对过的号: got %q", got)
+	}
+	if got := trustedRecordingISRC("Leehom Wang", "Searched Only", "Revolution", 256, nil); got != "" {
+		t.Errorf("检索配的号不算: got %q", got)
+	}
+	am := []scoredLyricCandidateResult{{Source: "applemusic", Score: 900, ISRC: "USX111111111", SourceReportedDurationSecs: 256}}
+	if got := trustedRecordingISRC("Leehom Wang", "Gong Zhuan Zi Zhuan", "Revolution", 256, am); got != "USX111111111" {
+		t.Errorf("这一轮认下的候选优先: got %q", got)
+	}
+	dz := []scoredLyricCandidateResult{{Source: "deezer", Score: 700, ISRC: "USX222222222", SourceReportedDurationSecs: 256}}
+	if got := trustedRecordingISRC("Leehom Wang", "Gong Zhuan Zi Zhuan", "Revolution", 256, dz); got != "USX222222222" {
+		t.Errorf("这一轮认下的 Deezer 候选也排在缓存前面: got %q", got)
+	}
+	if got := trustedRecordingISRC("Leehom Wang", "Other Song", "Revolution", 256, nil); got != "" {
+		t.Errorf("缓存里没有这首: got %q", got)
+	}
+}
+
 // 原产地曲名轮:缺着的源拿原产地曲名问一轮,补上的候选带改写记号;已经齐了、或者拿不到原产地曲名时一个请求都不发。
 func TestOriginTitleRound(t *testing.T) {
 	saved, savedResolve := features(), musixmatchResolve
