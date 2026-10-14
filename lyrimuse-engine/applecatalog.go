@@ -11,6 +11,7 @@ import (
 	neturl "net/url"
 	"os"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -703,7 +704,9 @@ var (
 	appleStorefrontTitleDirty bool
 )
 
-const appleStorefrontTitleCacheVersion = 1
+// 版本 2:华语歌的区服遍历在 CN 定位不到专辑时接着问 TW / HK(appleStorefrontIdentitiesAndTitle)。版本 1 的空结论是在更少的
+// 商店里得出的,读入时丢掉、用到时重查;查到的曲名照旧有效。
+const appleStorefrontTitleCacheVersion = 2
 
 type appleStorefrontTitleFile struct {
 	Version int               `json:"version"`
@@ -718,12 +721,29 @@ func loadAppleStorefrontTitleCache(path string) {
 		return
 	}
 	var f appleStorefrontTitleFile
-	if err := json.Unmarshal(data, &f); err == nil && f.Version == appleStorefrontTitleCacheVersion && f.Entries != nil {
-		appleStorefrontTitleMu.Lock()
-		appleStorefrontTitleCache = f.Entries
-		appleStorefrontTitleMu.Unlock()
-		noteCacheLoaded(path, fmt.Sprintf("%d Apple storefront title entries", len(f.Entries)))
+	if err := json.Unmarshal(data, &f); err != nil || f.Entries == nil {
+		return
 	}
+	migrated := false
+	switch f.Version {
+	case appleStorefrontTitleCacheVersion:
+	case 1:
+		for k, v := range f.Entries {
+			if v == "" {
+				delete(f.Entries, k)
+			}
+		}
+		migrated = true
+	default:
+		return
+	}
+	appleStorefrontTitleMu.Lock()
+	appleStorefrontTitleCache = f.Entries
+	if migrated {
+		appleStorefrontTitleDirty = true
+	}
+	appleStorefrontTitleMu.Unlock()
+	noteCacheLoaded(path, fmt.Sprintf("%d Apple storefront title entries", len(f.Entries)))
 }
 
 func saveAppleStorefrontTitleCache() {
@@ -848,7 +868,12 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 	var out []string
 	probed := false // 至少有一个商店真的定位到了专辑、取过它的曲目表
 	complete = true // 每个商店都问成了(搜索真的答了、定位到的专辑真的取到了曲目表)
-	for _, country := range appleStorefrontsFor(append([]string{artist, title, album}, lyricSamples...)...) {
+	stores, chineseFallback := appleStorefrontScanStorefronts(append([]string{artist, title, album}, lyricSamples...)...)
+	chineseLocated := false
+	for _, country := range stores {
+		if chineseFallback[country] && chineseLocated {
+			continue
+		}
 		bestID, bestScore := int64(0), 0
 		rs, reached := itunesSearch(ctx, q, country)
 		if !reached {
@@ -862,6 +887,9 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 		}
 		if bestID == 0 {
 			continue
+		}
+		if appleChineseStorefront(country) {
+			chineseLocated = true
 		}
 		tracks := itunesLookupTracks(ctx, bestID, country)
 		if len(tracks) == 0 {
@@ -918,6 +946,29 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 		saveAppleStorefrontTitleCache()
 	}
 	return out, canonicalTitle, complete
+}
+
+// appleStorefrontScanStorefronts:区服遍历问哪些商店。appleStorefrontsFor 那几个照问;样本里有以汉字为主的,再把三个中文区里
+// 还没在列的接在后面(chineseOriginStorefronts 的顺序),标成兜底:前面的中文区商店已经定位到这张专辑时就不问 —— 华语歌的
+// 曲库分在 CN / TW / HK,港台歌手的专辑大陆商店多半没有,简繁看不出是哪个;大陆商店有的歌一个请求都不多。见 09 章决策 243。
+func appleStorefrontScanStorefronts(samples ...string) (stores []string, chineseFallback map[string]bool) {
+	stores = appleStorefrontsFor(samples...)
+	for _, c := range chineseOriginStorefronts(samples...) {
+		u := strings.ToUpper(c)
+		if slices.Contains(stores, u) {
+			continue
+		}
+		if chineseFallback == nil {
+			chineseFallback = map[string]bool{}
+		}
+		stores = append(stores, u)
+		chineseFallback[u] = true
+	}
+	return stores, chineseFallback
+}
+
+func appleChineseStorefront(country string) bool {
+	return country == "CN" || country == "TW" || country == "HK"
 }
 
 // appleStorefrontTrackMatches:挑中的那张专辑里,这一条曲目是不是本地正在放的这首歌。有时长就以时长为主

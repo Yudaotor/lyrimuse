@@ -161,7 +161,7 @@ const originJapaneseLRC = "[00:05.00]あの日の空を覚えている\n[00:10.0
 	"[00:20.00]風が吹いて花が咲いて\n[00:25.00]ただ前を向いて歩いていく"
 
 // 原产地曲名:先按 ISRC 查(带回署名),没有 ISRC、或查到的跟本地曲名没换文字时用区服遍历的结论(不打请求、没有署名);
-// 只有括号里换了文字的结论不算;样本里没有原产地文字时不查。
+// 只有括号里换了文字的结论不算;样本里没有原产地文字时只看 ISRC 的登记国,登记在美国等不是原产地的国家就不查。
 func TestLyricOriginRecording(t *testing.T) {
 	withTestDevToken(t)
 	resetOriginTitleState(t)
@@ -187,7 +187,8 @@ func TestLyricOriginRecording(t *testing.T) {
 		{"ISRC 查到的没换文字时用区服遍历的结论", "Fujii Kaze", "Tabiji", "LOVE ALL SERVE ALL", "JPU901900003", 277, samples, originRecording{title: "旅路"}},
 		{"只有括号里换了文字的结论不算", "宇多田光", "In My Room", "First Love", "JPU901900002", 300, samples, originRecording{}},
 		{"区服遍历没有结论时按 ISRC 查", "back number", "Suiheisen", "Suiheisen - Single", "JPU901900001", 285, samples, originRecording{"水平線", "back number"}},
-		{"样本里没有原产地文字时不查", "back number", "Suiheisen", "Suiheisen - Single", "JPU901900001", 285, []string{"[00:01.00]plain english words"}, originRecording{}},
+		{"样本里没有原产地文字、ISRC 登记在日本:按登记国的商店查", "back number", "Suiheisen", "Suiheisen - Single", "JPU901900001", 285, []string{"[00:01.00]plain english words"}, originRecording{"水平線", "back number"}},
+		{"样本里没有原产地文字、ISRC 登记在美国:不查", "back number", "Suiheisen", "Suiheisen - Single", "USUM71900001", 285, []string{"[00:01.00]plain english words"}, originRecording{}},
 	} {
 		if got := lyricOriginRecording(qqRoundCtx(), c.artist, c.title, c.album, c.dur, c.samples, c.isrc); got != c.want {
 			t.Errorf("%s: got %+v, want %+v", c.name, got, c.want)

@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	neturl "net/url"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -25,15 +26,67 @@ func crossScriptBase(local, canonical string) bool {
 	return l != "" && c != "" && artistScriptDiffers(l, c)
 }
 
-// originStorefronts:appleStorefrontsFor 在基线 CN / US 之外按样本的文字系统加进来的商店,小写(Apple Music 曲库接口的写法)。
-func originStorefronts(samples ...string) []string {
+// originStorefronts:这首歌的原产地商店,按这个顺序问(小写,Apple Music 曲库接口的写法)。
+//   - ISRC 的登记国有对应商店的(isrcOriginStorefront)排最前:三项标签全是罗马字、又没有任何正文时,它是唯一的原产地线索;
+//   - 再是 appleStorefrontsFor 在基线 CN / US 之外按样本文字系统加进来的(假名 → jp、谚文 → kr……);
+//   - 本地曲名没有中日韩文字、样本里又有以汉字为主的,最后接上三个中文区商店(chineseOriginStorefronts):华语歌的曲库分在
+//     cn / tw / hk,常常只在其中一两个上架(港台歌手的歌大陆商店多半没有),简繁看不出是哪个。排在别的商店后面:日文歌的正文
+//     汉字一多也会被判成汉字为主,先问 jp 才拿得到日文原名。本地曲名带中日韩文字时中文区那边也是,换不了文字,不问。
+//
+// 样本里要包含本地曲名。见 09 章决策 243。
+func originStorefronts(isrc, title string, samples ...string) []string {
 	var out []string
+	add := func(c string) {
+		if c != "" && !slices.Contains(out, c) {
+			out = append(out, c)
+		}
+	}
+	add(isrcOriginStorefront(isrc))
 	for _, c := range appleStorefrontsFor(samples...) {
 		if c != "CN" && c != "US" {
-			out = append(out, strings.ToLower(c))
+			add(strings.ToLower(c))
+		}
+	}
+	if !containsCJKScript(stripParens(title)) {
+		for _, c := range chineseOriginStorefronts(samples...) {
+			add(c)
 		}
 	}
 	return out
+}
+
+// isrcOriginCountries:ISRC 前两位(登记国)→ 原产地商店。只收 appleStorefrontsFor 按文字系统会挑的几个区和三个中文区;美国等
+// 其余登记国(含 QM / QZ 这类美国代发的前缀)不是原产地信号。
+var isrcOriginCountries = map[string]string{"JP": "jp", "KR": "kr", "TH": "th", "RU": "ru", "CN": "cn", "TW": "tw", "HK": "hk"}
+
+func isrcOriginStorefront(isrc string) string {
+	if len(isrc) < 2 {
+		return ""
+	}
+	return isrcOriginCountries[strings.ToUpper(isrc[:2])]
+}
+
+// chineseOriginStorefronts:样本里有以汉字为主的,三个中文区商店按问的顺序给出(小写):有一条是繁体就 tw、hk、cn,否则 cn、tw、hk。
+// 没有以汉字为主的样本时空。
+func chineseOriginStorefronts(samples ...string) []string {
+	han, trad := false, false
+	for _, s := range samples {
+		if dominantScript(s) != scriptHan {
+			continue
+		}
+		han = true
+		if toSimplified(s) != s {
+			trad = true
+		}
+	}
+	switch {
+	case !han:
+		return nil
+	case trad:
+		return []string{"tw", "hk", "cn"}
+	default:
+		return []string{"cn", "tw", "hk"}
+	}
 }
 
 // trustedRecordingISRC:这一条录音的 ISRC。播放器给的(playbackISRC,就是正在播的这一条)优先,其次是已被认可的
@@ -54,15 +107,21 @@ type originRecording struct {
 	title, artist string
 }
 
-// originRecordingByISRC:按 ISRC 依次问 origins 里的商店,第一个曲名跟本地曲名换了文字(crossScriptBase)的那条;没有返回零值。
+// originRecordingByISRC:按 ISRC 依次问 origins 里的商店,第一个上架了这条录音的商店说了算:它的曲名跟本地曲名换了文字
+// (crossScriptBase)就返回那条,没换(那边也这么写,本地写法就是原名)就是零值、后面的商店不再问。都没有这条录音时零值。
 func originRecordingByISRC(ctx context.Context, title, isrc string, origins []string, durationSecs float64) originRecording {
 	if isrc == "" {
 		return originRecording{}
 	}
 	for _, sf := range origins {
-		if rec := appleMusicRecordingByISRC(ctx, isrc, sf, durationSecs); crossScriptBase(title, rec.title) {
+		rec := appleMusicRecordingByISRC(ctx, isrc, sf, durationSecs)
+		if rec.title == "" {
+			continue
+		}
+		if crossScriptBase(title, rec.title) {
 			return rec
 		}
+		return originRecording{}
 	}
 	return originRecording{}
 }
@@ -71,7 +130,7 @@ func originRecordingByISRC(ctx context.Context, title, isrc string, origins []st
 // 署名 / 曲名 / 专辑名和首轮歌词正文(samples)的文字系统判(originStorefronts)。先按 ISRC 查(originRecordingByISRC,
 // 带回署名);没有 ISRC 或查不出时用区服遍历留下的结论(只读缓存,不打请求,只有曲名)。
 func lyricOriginRecording(ctx context.Context, artist, title, album string, durationSecs float64, samples []string, isrc string) originRecording {
-	origins := originStorefronts(append([]string{artist, title, album}, samples...)...)
+	origins := originStorefronts(isrc, title, append([]string{artist, title, album}, samples...)...)
 	if len(origins) == 0 {
 		return originRecording{}
 	}
@@ -90,7 +149,7 @@ func titleReverseOriginTitle(ctx context.Context, artist, title, album string, d
 	if t := appleStorefrontCanonicalTitle(ctx, artist, title, album, durationSecs, samples); crossScriptBase(title, t) {
 		return t
 	}
-	return originRecordingByISRC(ctx, title, isrc, originStorefronts(append([]string{artist, title, album}, samples...)...), durationSecs).title
+	return originRecordingByISRC(ctx, title, isrc, originStorefronts(isrc, title, append([]string{artist, title, album}, samples...)...), durationSecs).title
 }
 
 // appleMusicISRCCache:appleMusicRecordingByISRC 的结论(含查空),键 isrc|storefront,只在内存。条数封顶
@@ -199,8 +258,9 @@ func titleReverseOriginArtistRound(ctx context.Context, artist, title, album str
 	if len(lyricSourcesWorthAliasRetry(ctx, results)) == 0 {
 		return ne, results
 	}
-	origins := originStorefronts(append([]string{artist, title, album}, samples...)...)
-	origin := originRecordingByISRC(ctx, title, trustedRecordingISRC(artist, title, album, durationSecs, results), origins, durationSecs)
+	isrc := trustedRecordingISRC(artist, title, album, durationSecs, results)
+	origins := originStorefronts(isrc, title, append([]string{artist, title, album}, samples...)...)
+	origin := originRecordingByISRC(ctx, title, isrc, origins, durationSecs)
 	if origin.artist == "" || normLoose(origin.artist) == normLoose(artist) || normLoose(origin.title) != normLoose(correctedTitle) {
 		return ne, results
 	}
