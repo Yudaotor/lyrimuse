@@ -93,6 +93,11 @@ type applemusicResult struct {
 	// 不是拿歌名去 amp-api 搜出来的。透传给 lyricCandidate.identityFromLocalClient,
 	// 是同源加权的准入条件之一。
 	fromLocalClient bool
+	// songID:取词的那个目录条目的 id(本地缓存那份为空)。
+	songID string
+	// fromPlayerCatalogID:取词的条目就是播放侧记下的那个目录 id(过了 appleCatalogAnchor 校验,见 platformtrackid.go),
+	// 是正在播的这一条录音本身,跟 fromLocalClient 一样透传给 identityFromLocalClient。见 09 章决策 256。
+	fromPlayerCatalogID bool
 }
 
 func (r applemusicResult) empty() bool { return r.lyrics == "" && r.yrc == "" }
@@ -1139,8 +1144,8 @@ func applemusicKeyedLRC(ttml, block string) string {
 }
 
 // resolveApplemusicLyric:①确认用户令牌在手(没有就直接判 applemusic_not_connected,
-// 一个网络请求都不发);②isrc 非空时按 ISRC 直取这条录音的各个上架条目(applemusicSongsByISRC),专辑跟本地对得上的
-// 先取词;③按名字搜索、身份闸淘汰、按分数排序(applemusicNameCandidates),按名次逐条取词;④还没有带时间轴的,
+// 一个网络请求都不发);②catalogID 非空时先按目录 id 直取那一条(applemusicSongByID);③isrc 非空时按 ISRC 直取这条录音的各个上架条目(applemusicSongsByISRC),专辑跟本地对得上的
+// 先取词;④按名字搜索、身份闸淘汰、按分数排序(applemusicNameCandidates),按名次逐条取词;⑤还没有带时间轴的,
 // 再取 ISRC 条目里专辑对不上的那些。取词**先逐字后逐行**,逐字那份同时也能产出逐行(parseAMLLTTML 会一并给出 lrc),
 // 所以只有逐字不存在时才退到 /lyrics;所有候选都没有带时间轴的,才交出第一份纯文本(按上面的先后)。
 //
@@ -1148,8 +1153,9 @@ func applemusicKeyedLRC(ttml, block string) string {
 // Deezer 严,而搜索结果第一条几乎总是对的(hasTimeSynced 还额外加了 200 分把有时间轴的
 // 顶到前面),顺序取到第一条有词的就停,通常只花一个往返。
 //
+// catalogID:正在播的这首在 Apple 目录里的 id(同 applemusicLyric),没有时为空。
 // isrc:这次播放的这条录音的 ISRC(lyricSourceISRC;只有 Spotify 原生客户端在播时有),没有时为空。
-func resolveApplemusicLyric(ctx context.Context, artist, title, album string, durationSecs float64, isrc string) applemusicResult {
+func resolveApplemusicLyric(ctx context.Context, artist, title, album string, durationSecs float64, catalogID, isrc string) applemusicResult {
 	userToken, storefront := applemusicLoadUserToken()
 	if userToken == "" {
 		applemusicSetLastFailureReason(lyricFailureReasonAppleMusicNotConnected)
@@ -1182,6 +1188,12 @@ func resolveApplemusicLyric(ctx context.Context, artist, title, album string, du
 		return timed, !timed.empty()
 	}
 
+	// 按目录 id 直取:就是 Music.app 正在放的那一条,歌词也是它歌词页显示的那一份。
+	if catalogID != "" {
+		if r, done := try(applemusicSongByID(ctx, storefront, catalogID, devToken), false); done {
+			return r
+		}
+	}
 	// 按 ISRC 直取:拿到的是正在播的这条录音本身,歌名 / 歌手写法跟本地对不上也取得到(Apple 上的名字常多带
 	// 「feat.」「(Live)」这类尾巴)。条目的专辑跟本地对不上(这条录音只挂在合辑下)时排到名字检索后面,
 	// 名字挑得中时用名字挑的那条。见 09 章决策 146。
@@ -1273,6 +1285,26 @@ func applemusicFetchCandidates(ctx context.Context, storefront string, candidate
 		}
 	}
 	return lineTimed, plain, false
+}
+
+// applemusicSongByID 取 storefront 这个区里目录 id 为 id 的那一条;没上架、没有歌词、没问成都返回 nil。
+func applemusicSongByID(ctx context.Context, storefront, id, devToken string) []applemusicSong {
+	raw, status, err := applemusicAPIGet(ctx, neturl.PathEscape(storefront)+"/songs/"+neturl.PathEscape(id), devToken, "")
+	if err != nil || status != http.StatusOK {
+		return nil
+	}
+	var out struct {
+		Data []applemusicSong `json:"data"`
+	}
+	if json.Unmarshal(raw, &out) != nil {
+		return nil
+	}
+	for _, s := range out.Data {
+		if s.ID == id && s.Attributes.HasLyrics {
+			return []applemusicSong{s}
+		}
+	}
+	return nil
 }
 
 // applemusicSongsByISRC 按 ISRC 直取这条录音在 storefront 这个区上架的条目(同一条录音常同时挂在单曲、专辑和
@@ -1382,7 +1414,7 @@ func applemusicResultFrom(s applemusicSong, p amllResult, plainOnly bool) applem
 		lyrics: lyrics, yrc: yrc, tr: p.tr, roma: p.roma, bg: p.bg, songwriters: p.songwriters,
 		title: s.Attributes.Name, artist: s.Attributes.ArtistName, album: s.Attributes.AlbumName,
 		cover: s.cover(), durationSecs: float64(s.Attributes.DurationInMillis) / 1000,
-		isrc: s.Attributes.Isrc, plainOnly: plainOnly,
+		isrc: s.Attributes.Isrc, plainOnly: plainOnly, songID: s.ID,
 	}
 }
 
@@ -1416,7 +1448,9 @@ func applemusicLyric(ctx context.Context, artist, title, album string, durationS
 		return r
 	}
 
-	r := resolveApplemusicLyric(ctx, artist, title, album, durationSecs, isrc)
+	r := resolveApplemusicLyric(ctx, artist, title, album, durationSecs, catalogID, isrc)
+	// 按名字搜到的碰巧也是这一条同样算:身份由目录 id 定,不看是哪条路取到的。
+	r.fromPlayerCatalogID = catalogID != "" && r.songID == catalogID
 	if !r.empty() {
 		applemusicMu.Lock()
 		applemusicCache[key] = r

@@ -363,7 +363,8 @@ type lyricCandidate struct {
 	plainTextOnly bool
 	// identityFromLocalClient:这条候选的**身份**(是哪首歌)由播放器客户端自己的本地数据
 	// 给定,不是拿歌名去搜索猜出来的。这几条路径置位,各自给的东西不同:
-	//   - kugou / applemusic:歌词正文就在本地(KRC / TTML),零网络;
+	//   - kugou / applemusic:歌词正文就在本地(KRC / TTML),零网络;applemusic 另有一条:Music.app 报的目录 id
+	//     (校验过的)直取的那一条,正文联网取;
 	//   - qq / netease / soda:本地只给权威曲目 id(songmid / songID / track id),正文照旧
 	//     联网取 —— 但"是哪首歌"这一步已经不经搜索、没有挑错版本的余地;
 	//   - lyricfind:Kaset 报的 videoId(或它待播队列里给这首配的音轨版本),直接取那一版的歌词页
@@ -536,7 +537,7 @@ const lyricOvershootToleranceSecs = 5.0
 // (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
 const lyricsScoringVersion = 29
 
-const lyricsScoringRevision = 6
+const lyricsScoringRevision = 7
 
 // lyricsScoringStamp 是一条歌词按哪一版打分规则选出来的:主版本号 + 开发修订号。存成两个整数、按这两段比大小,
 // 不存小数:小数比大小时 29.10 会排在 29.9 前面。

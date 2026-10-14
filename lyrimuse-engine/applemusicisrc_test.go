@@ -102,7 +102,7 @@ func TestApplemusicPrefersISRCRecording(t *testing.T) {
 		}
 		return http.StatusNotFound, nil, ""
 	})
-	r := resolveApplemusicLyric(qqRoundCtx(), "Rihanna", "Kiss It Better", "ANTI", 253, "QM5FT1600115")
+	r := resolveApplemusicLyric(qqRoundCtx(), "Rihanna", "Kiss It Better", "ANTI", 253, "", "QM5FT1600115")
 	if r.album != "ANTI (Deluxe)" || !isTimedLRC(r.lyrics) || r.plainOnly {
 		t.Fatalf("该用按 ISRC 直取到的那一条: album=%q plainOnly=%v lyrics=%q", r.album, r.plainOnly, r.lyrics)
 	}
@@ -210,7 +210,7 @@ func TestApplemusicISRCFallsBackToNameSearch(t *testing.T) {
 				}
 				return http.StatusNotFound, nil, ""
 			})
-			r := resolveApplemusicLyric(qqRoundCtx(), "Bruno Mars", "When I Was Your Man", "Unorthodox Jukebox", 214, c.isrc)
+			r := resolveApplemusicLyric(qqRoundCtx(), "Bruno Mars", "When I Was Your Man", "Unorthodox Jukebox", 214, "", c.isrc)
 			if r.empty() || r.title != c.wantTitle || r.plainOnly != c.wantPlain {
 				t.Fatalf("got title=%q plainOnly=%v lyrics=%q", r.title, r.plainOnly, r.lyrics)
 			}
@@ -242,7 +242,7 @@ func TestApplemusicISRCTokenRejectedStops(t *testing.T) {
 		}
 		return http.StatusNotFound, nil, ""
 	})
-	if r := resolveApplemusicLyric(qqRoundCtx(), "Rihanna", "Kiss It Better", "ANTI", 253, "QM5FT1600115"); !r.empty() || searches != 0 {
+	if r := resolveApplemusicLyric(qqRoundCtx(), "Rihanna", "Kiss It Better", "ANTI", 253, "", "QM5FT1600115"); !r.empty() || searches != 0 {
 		t.Fatalf("令牌被拒该整路放弃: lyrics=%q searches=%d", r.lyrics, searches)
 	}
 }
@@ -341,7 +341,7 @@ func TestApplemusicISRCPrefersWordTimingAcrossAlbums(t *testing.T) {
 				}
 				return http.StatusNotFound, nil, ""
 			})
-			r := resolveApplemusicLyric(qqRoundCtx(), "Leehom Wang", "Gong Zhuan Zi Zhuan", "Revolution", c.dur, code)
+			r := resolveApplemusicLyric(qqRoundCtx(), "Leehom Wang", "Gong Zhuan Zi Zhuan", "Revolution", c.dur, "", code)
 			if r.album != c.wantAlbum || (r.yrc != "") != c.wantWord || !isTimedLRC(r.lyrics) {
 				t.Errorf("album=%q 逐字=%v lyrics=%q,want album=%q 逐字=%v", r.album, r.yrc != "", r.lyrics, c.wantAlbum, c.wantWord)
 			}
@@ -370,7 +370,7 @@ func TestApplemusicNameCandidatesStopAtFirstTimed(t *testing.T) {
 		}
 		return http.StatusNotFound, nil, ""
 	})
-	r := resolveApplemusicLyric(qqRoundCtx(), "Rihanna", "Kiss It Better", "ANTI", 253, "")
+	r := resolveApplemusicLyric(qqRoundCtx(), "Rihanna", "Kiss It Better", "ANTI", 253, "", "")
 	if r.yrc != "" || !isTimedLRC(r.lyrics) || second != 0 {
 		t.Errorf("按名字搜的取到第一份带时间轴的就停: 逐字=%v 问了第二条 %d 次", r.yrc != "", second)
 	}

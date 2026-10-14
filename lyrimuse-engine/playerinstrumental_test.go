@@ -383,7 +383,7 @@ func TestPlayerInstrumentalSignalsAreWired(t *testing.T) {
 		"trackFoundNoLyrics: noLyrics, noVocals: noVocals,",
 		"appleNoVocals := forPlaying && r.lyrics == \"\" && appleID != \"\" && playingPlayer() == playerAppleMusic && applemusicCatalogNoVocals(ctx, appleID)",
 		"lyricSourceResult{noVocals: appleNoVocals, source: \"applemusic\",",
-		"identityFromLocalClient: r.fromLocalClient || appleNoVocals}",
+		"identityFromLocalClient: r.fromLocalClient || r.fromPlayerCatalogID || appleNoVocals}",
 		"if src := playerInstrumentalSource(raw, results); src != \"\" {",
 		"forPlaying := playerSignalApplies(ctx)",
 		"r.forPlayingTrack = forPlaying\n\t\t\traw[r.source] = r",
