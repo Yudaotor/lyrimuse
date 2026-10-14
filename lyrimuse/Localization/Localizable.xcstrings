@@ -36389,36 +36389,36 @@
         }
       }
     },
-    "源自台湾的流媒体音乐 App" : {
+    "台湾、香港常用的流媒体音乐 App" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A music streaming app from Taiwan"
+            "value" : "A music streaming app popular in Taiwan and Hong Kong"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "源自台灣的串流音樂 App"
+            "value" : "台灣、香港常用的串流音樂 App"
           }
         }
       }
     },
-    "源自瑞典的流媒体音乐 App" : {
+    "全球用户最多的流媒体音乐 App" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A music streaming app from Sweden"
+            "value" : "The world's most popular music streaming app"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "源自瑞典的串流音樂 App"
+            "value" : "全球用戶最多的串流音樂 App"
           }
         }
       }

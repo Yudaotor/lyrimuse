@@ -405,6 +405,7 @@
 "光盘" = "Disc";
 "免费开源，感谢你的 ⭐ 支持" = "Free and open source. A ⭐ means a lot — thank you!";
 "全屏时隐藏" = "Hide in Full Screen";
+"全球用户最多的流媒体音乐 App" = "The world's most popular music streaming app";
 "全角/半角" = "Full-width/half-width";
 "全选" = "Select All";
 "全选 %@ 首" = "Select All (%@)";
@@ -601,6 +602,7 @@
 "只识别勾选的播放器；没勾的不显示歌词，也不计入收听记录。" = "Only the players you check are detected. The rest don't show lyrics or count toward your listening history.";
 "可在任意 App 中触发，需包含 ⌘、⌥ 或 ⌃ 之一" = "Works in any app; must include ⌘, ⌥ or ⌃";
 "可在快捷指令、Raycast、Alfred 等工具中打开；指针移到上方的快捷键上，可拷贝对应动作的链接" = "Open these from Shortcuts, Raycast, Alfred and similar tools. Hover over a shortcut above to copy the link for that action.";
+"台湾、香港常用的流媒体音乐 App" = "A music streaming app popular in Taiwan and Hong Kong";
 "右" = "Right";
 "右侧" = "Right";
 "右侧颜色" = "Right Color";
@@ -1661,9 +1663,7 @@
 "清除搜索" = "Clear Search";
 "清除筛选" = "Clear Filters";
 "渐变" = "Gradient";
-"源自台湾的流媒体音乐 App" = "A music streaming app from Taiwan";
 "源自报曲长不符" = "Source duration mismatch";
-"源自瑞典的流媒体音乐 App" = "A music streaming app from Sweden";
 "滚动" = "Scroll";
 "演唱：%@" = "by %@";
 "灵动岛" = "Notch";
