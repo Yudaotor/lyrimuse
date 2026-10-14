@@ -336,9 +336,10 @@ func TestApplyShareRound(t *testing.T) {
 	keys := []string{"G|Song|1", "G|Song|2", "G|Song|3", "G|Song|4"}
 	entries := func() map[string]enrichEntry {
 		return map[string]enrichEntry{
-			keys[0]: {Song: "s", Lyrics: songShareLRC("a"), LyricsSource: "qq"},
+			keys[0]: {Song: "s", Lyrics: songShareLRC("a"), LyricsSource: "qq",
+				LyricsDecision: &lyricsDecision{Path: lyricsDecisionPathFirstResolve, DecidedAt: 100, Winner: "qq"}},
 			keys[1]: {Song: "s", Lyrics: songShareLRC("n"), LyricsSource: "netease"},
-			keys[2]: {Song: "s"},
+			keys[2]: {Song: "s", LyricsDecision: &lyricsDecision{Path: lyricsDecisionPathFirstResolve, DecidedAt: 100}},
 			keys[3]: {Song: "s", Lyrics: songShareLRC("k"), LyricsSource: "kuwo"},
 		}
 	}
@@ -381,6 +382,12 @@ func TestApplyShareRound(t *testing.T) {
 		}
 		if ap := got.LyricsDecisionApplied; ap == nil || ap.Path != lyricsDecisionPathSongEntityShare || ap.ReusedFrom != wantFrom {
 			t.Errorf("%s 的出处: %+v", k, ap)
+		}
+		// 搜的那条:这一轮也是它最近一次评估;跟着用的那条留着自己那一份。
+		if ld := got.LyricsDecision; i == 0 && ld != got.LyricsDecisionApplied {
+			t.Errorf("%s 搜的就是它,最近一次评估要是这一轮: %+v", k, ld)
+		} else if i == 1 && (ld == nil || ld.Path != lyricsDecisionPathFirstResolve || ld.DecidedAt != 100) {
+			t.Errorf("%s 跟着用的,最近一次评估留着自己的: %+v", k, ld)
 		}
 		if p, _ := readPreEntry(t, k); p.Synced != songOffsetFingerprint(champ, "[0,500]c") {
 			t.Errorf("%s 的留底: %+v", k, p)
@@ -1382,5 +1389,59 @@ func TestShareManualPassReleasesStrayAutoCopies(t *testing.T) {
 	}
 	if tally.strays != 2 {
 		t.Errorf("计数: %d", tally.strays)
+	}
+}
+
+// 存量迁移:按组重搜时被拿名字去搜的那条,最近一次评估比共享那一轮早的,改成指向共享那一轮;跟着用的(记着 reused_from)、
+// 最近一次评估本来就不比它早的、出处不是共享的都不动。歌词一个字都不碰。
+func TestMigrateShareLatestDecisions(t *testing.T) {
+	share := func(at int64, from string) *lyricsDecision {
+		return &lyricsDecision{Path: lyricsDecisionPathSongEntityShare, DecidedAt: at, Winner: "qq", Applied: true, ReusedFrom: from}
+	}
+	old := &lyricsDecision{Path: lyricsDecisionPathFirstResolve, DecidedAt: 100, Winner: "migu", Applied: true}
+	newer := &lyricsDecision{Path: lyricsDecisionPathRescore, DecidedAt: 900, Winner: "kugou"}
+	searched := share(500, "")
+	withTempDecisionCache(t)
+	enrichMu.Lock()
+	enrichCache = map[string]enrichEntry{
+		"a|searched|x": {Lyrics: "qq 的词", LyricsSource: "qq", LyricsDecision: old, LyricsDecisionApplied: searched},
+		"a|follower|x": {Lyrics: "qq 的词", LyricsSource: "qq", LyricsDecision: old, LyricsDecisionApplied: share(500, "a|searched|x")},
+		"a|newer|x":    {Lyrics: "qq 的词", LyricsSource: "qq", LyricsDecision: newer, LyricsDecisionApplied: share(500, "")},
+		"a|own|x":      {Lyrics: "migu 的词", LyricsSource: "migu", LyricsDecision: old, LyricsDecisionApplied: old},
+		"a|nolatest|x": {Lyrics: "qq 的词", LyricsSource: "qq", LyricsDecisionApplied: share(500, "")},
+	}
+	enrichMu.Unlock()
+	migrateShareLatestDecisions()
+	if got := enrichCache["a|searched|x"]; got.LyricsDecision != searched || got.LyricsDecisionApplied != searched || got.Lyrics != "qq 的词" {
+		t.Errorf("搜的那条要两槽同一份、歌词不动: %+v", got)
+	}
+	for k, want := range map[string]*lyricsDecision{"a|follower|x": old, "a|newer|x": newer, "a|own|x": old, "a|nolatest|x": nil} {
+		if got := enrichCache[k].LyricsDecision; got != want {
+			t.Errorf("%s 不该动: %+v", k, got)
+		}
+	}
+	// 改完当场整份落盘:读回来,搜的那条两槽是同一轮。
+	withEnrichCache(t, nil)
+	loadEnrichCacheReadOnly(enrichPath)
+	if got := enrichCache["a|searched|x"]; got.LyricsDecision == nil || got.LyricsDecision.Path != lyricsDecisionPathSongEntityShare ||
+		got.LyricsDecision.DecidedAt != 500 || got.LyricsDecisionApplied == nil || got.LyricsDecisionApplied.DecidedAt != 500 {
+		t.Errorf("落盘读回: %+v / %+v", got.LyricsDecision, got.LyricsDecisionApplied)
+	}
+	if got := enrichCache["a|follower|x"].LyricsDecision; got == nil || got.DecidedAt != 100 {
+		t.Errorf("落盘读回,跟着用的那条不动: %+v", got)
+	}
+}
+
+// 接线:启动时跑这道迁移,排在决策明细挪去旁路目录之前。
+func TestShareLatestDecisionMigrationIsWired(t *testing.T) {
+	src, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(src)
+	step := strings.Index(s, `startupStep("migrateShareLatestDecisions", migrateShareLatestDecisions)`)
+	externalize := strings.Index(s, `startupStep("externalizeDecisions", externalizeDecisionsAtStartup)`)
+	if step < 0 || externalize < 0 || step > externalize {
+		t.Error("main.go 要在 externalizeDecisions 之前跑 migrateShareLatestDecisions")
 	}
 }

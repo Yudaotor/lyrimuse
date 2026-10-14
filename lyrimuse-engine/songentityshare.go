@@ -608,6 +608,10 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 			dd.ReusedFrom = round.Key
 		}
 		songShareApplyChoice(&e, top, &round, roma, &dd)
+		if k == round.Key {
+			// 搜的就是这一条的名字:这一轮也是它最近一次评估,两槽同一份(同自动重评换词那一支)。见 18 章决策 71。
+			e.LyricsDecision = e.LyricsDecisionApplied
+		}
 		enrichCache[k] = e
 		translateAfterLyricsSwapLocked(k)
 		changed = append(changed, k)

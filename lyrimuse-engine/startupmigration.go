@@ -117,6 +117,10 @@ const (
 	// trackEnrichment 放到没有时长的条目时自己补,不再产生。
 	migrationListenDurations        = "listen_durations"
 	migrationListenDurationsVersion = 1
+	// migrationShareLatestDecisions:存量里按组重搜的那条写法,最近一次评估改成共享那一轮(songsharelatest.go)。运行期
+	// applyShareRound 两槽一起写,不再产生。
+	migrationShareLatestDecisions        = "share_latest_decisions"
+	migrationShareLatestDecisionsVersion = 1
 )
 
 // loadMigrationState 读水位文件。文件不存在 / 解不出来都当作"一道都没跑过",照常全量跑 ——

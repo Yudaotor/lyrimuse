@@ -402,6 +402,8 @@ func main() {
 	// 正文只有纯音乐占位的存量条目标上纯音乐(见 instrumentalplaceholder.go)。只打标、不改正文;排在
 	// migrateManualPickMarks 之后,它补记的手动选定留痕这一步要看。
 	startupStep("migrateInstrumentalPlaceholders", migrateInstrumentalPlaceholders)
+	// 按组重搜的那条写法,最近一次评估改成共享那一轮(见 songsharelatest.go)。只动解析决策两槽;排在决策明细挪去旁路目录之前。
+	startupStep("migrateShareLatestDecisions", migrateShareLatestDecisions)
 	startupStep("exportLyricsFiles", exportLyricsFiles)
 	// 判决记录的候选明细挪到旁路目录(decisionstore.go)。必须在 migrateSodaCoverURLs 之后:那道迁移扫的是
 	// 内存里候选的 cover_url,拆完就扫不到了。
