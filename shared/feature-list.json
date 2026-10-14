@@ -1541,8 +1541,28 @@
           "settings": [
             [
               "通用",
-              "语言、启动与通知",
+              "外观与语言",
               "语言"
+            ]
+          ]
+        },
+        {
+          "id": "appearance",
+          "title": {
+            "zh-Hans": "浅色、深色或跟随系统",
+            "en": "Light, dark or automatic",
+            "zh-Hant": "淺色、深色或跟隨系統"
+          },
+          "desc": {
+            "zh-Hans": "设置、歌词窗口、歌词管理和菜单栏面板可以固定用浅色或深色，默认跟随系统。悬浮歌词仍跟随系统，灵动岛始终是深色。",
+            "en": "Settings, the Lyrics Window, Lyrics Manager and the menu bar panel can stay light or dark; by default they follow your system. Floating lyrics still follow the system, and the notch is always dark.",
+            "zh-Hant": "設定、歌詞視窗、歌詞管理和選單列面板可以固定用淺色或深色，預設跟隨系統。浮動歌詞仍跟隨系統，動態島始終是深色。"
+          },
+          "settings": [
+            [
+              "通用",
+              "外观与语言",
+              "外观"
             ]
           ]
         },
@@ -1651,7 +1671,7 @@
           "settings": [
             [
               "通用",
-              "语言、启动与通知",
+              "启动与通知",
               "开机启动"
             ]
           ]
@@ -1675,7 +1695,7 @@
           "settings": [
             [
               "通用",
-              "语言、启动与通知",
+              "启动与通知",
               "静默启动"
             ]
           ]
@@ -1699,7 +1719,7 @@
           "settings": [
             [
               "通用",
-              "语言、启动与通知",
+              "启动与通知",
               "换歌时显示通知"
             ]
           ]

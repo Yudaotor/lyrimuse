@@ -49,8 +49,8 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Show what you're playing on Discord](#feature-discord) | Settings › Discord › Show on Discord |
 | [A shareable now-playing web page](#feature-now-playing-page) | Settings › Lab Features › Web Push › Connection Info |
 | [Daily, weekly, monthly and yearly listening digests](#feature-digests) | Settings › Lab Features › Push Alerts › Alerts |
-| [Launch silently](#feature-silent-launch) | Settings › General › Language, Startup & Notifications › Launch Silently |
-| [Notify when the song changes](#feature-song-notifications) | Settings › General › Language, Startup & Notifications › Notify When the Song Changes |
+| [Launch silently](#feature-silent-launch) | Settings › General › Startup & Notifications › Launch Silently |
+| [Notify when the song changes](#feature-song-notifications) | Settings › General › Startup & Notifications › Notify When the Song Changes |
 | [Automatic updates and betas](#feature-updates) | Settings › Software Update › Update Settings › Check Automatically |
 
 <a id="section-lyrics"></a>
@@ -600,7 +600,15 @@ The first time you open Lyrimuse, it walks you through choosing players, pairing
 
 Follows your system by default; switching takes effect at once, without a restart.
 
-- Settings: General › Language, Startup & Notifications › Language
+- Settings: General › Appearance & Language › Language
+
+<a id="feature-appearance"></a>
+
+### Light, dark or automatic
+
+Settings, the Lyrics Window, Lyrics Manager and the menu bar panel can stay light or dark; by default they follow your system. Floating lyrics still follow the system, and the notch is always dark.
+
+- Settings: General › Appearance & Language › Appearance
 
 <a id="feature-shortcuts"></a>
 
@@ -642,7 +650,7 @@ Turn it off to keep only the menu bar icon.
 Opens Lyrimuse when you log in to your Mac.
 
 - On by default
-- Settings: General › Language, Startup & Notifications › Launch at Login
+- Settings: General › Startup & Notifications › Launch at Login
 
 <a id="feature-silent-launch"></a>
 
@@ -651,7 +659,7 @@ Opens Lyrimuse when you log in to your Mac.
 Starts without opening any window, just the menu bar icon.
 
 - Off by default
-- Settings: General › Language, Startup & Notifications › Launch Silently
+- Settings: General › Startup & Notifications › Launch Silently
 
 <a id="feature-song-notifications"></a>
 
@@ -660,7 +668,7 @@ Starts without opening any window, just the menu bar icon.
 A system notification for every new song.
 
 - Off by default
-- Settings: General › Language, Startup & Notifications › Notify When the Song Changes
+- Settings: General › Startup & Notifications › Notify When the Song Changes
 
 <a id="feature-backup"></a>
 
@@ -695,7 +703,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 241 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 242 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1010,9 +1018,13 @@ Every setting in the Settings window, by where it lives: 241 in all. Type a name
 - **Animate Icon**
 - **Show in Dock**
 
-### General › Language, Startup & Notifications
+### General › Appearance & Language
 
+- **Appearance**: Colors of Settings, the Lyrics Window, Lyrics Manager and the menu bar panel
 - **Language**
+
+### General › Startup & Notifications
+
 - **Launch at Login**
 - **Launch Silently**
 - **Notify When the Song Changes**

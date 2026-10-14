@@ -630,6 +630,7 @@
 "向 Discord 好友展示正在收听的歌曲" = "Let your Discord friends see what you're listening to";
 "含明文凭证；导出为设置与歌词库两个文件，导入将覆盖全部设置" = "Contains credentials in plain text; exports two files, settings and lyrics library; importing replaces all settings";
 "听到哪里才记一次 Scrobble。\n50%：一半或 4 分钟，先到为准（官方规则）。\n75% / 90%：听满对应比例。\n曲终：播完才记，中途切歌不记。" = "How far you listen before it's scrobbled.\n50%: half the track or 4 minutes, whichever comes first (Last.fm's rule).\n75% / 90%: that share of the track.\nTrack End: only when played through; skips don't count.";
+"启动与通知" = "Startup & Notifications";
 "启动失败（%@）。可先「暂时跳过」，之后在设置的「播放器 → 歌词引擎」中重试，该页面会显示更详细的状态。" = "Couldn't start (%@). You can skip this for now and retry later under Settings → Player → Lyrics Engine, which reports a more detailed status.";
 "启动时不打开窗口，仅保留菜单栏图标与歌词显示；开启后同时隐藏 Dock 图标" = "Opens no windows at launch, keeping only the menu bar icon and lyrics displays; turning it on also hides the Dock icon";
 "启用" = "Enable";
@@ -709,6 +710,8 @@
 "复制修复命令" = "Copy Fix Command";
 "复用其他专辑中的同一首歌曲" = "Reused from the same recording on another album";
 "复用同一首歌曲的其他歌手写法" = "Reused from the same song under another artist spelling";
+"外观" = "Appearance";
+"外观与语言" = "Appearance & Language";
 "多" = "More";
 "多 %@ 句" = "%@ extra lines";
 "多 %@ 句#one" = "%@ extra line";
@@ -1882,7 +1885,7 @@
 "菜单栏" = "Menu Bar";
 "菜单栏与 Dock" = "Menu Bar & Dock";
 "菜单栏图标" = "Menu Bar Icon";
-"菜单栏图标、启动与通知，以及备份与迁移" = "Menu bar icon, startup & notifications, and backups";
+"菜单栏图标、外观与语言、启动与通知，以及备份与迁移" = "Menu bar icon, appearance & language, startup & notifications, and backups";
 "菜单栏图标：%@" = "Menu bar icon: %@";
 "菜单栏歌词" = "Menu Bar Lyrics";
 "菜单栏歌词的字重。「常规」即系统菜单栏的默认字重；中文只加粗不加宽，英文字重越大宽度略增" = "How heavy the menu bar lyrics are drawn. Regular is exactly the system default weight. Chinese only gets bolder, Latin text also gets slightly wider.";
@@ -1916,6 +1919,7 @@
 "设备控制和数据访问" = "Device Control and Data Access";
 "设置" = "Settings";
 "设置…" = "Settings…";
+"设置、歌词窗口、歌词管理与菜单栏面板的配色" = "Colors of Settings, the Lyrics Window, Lyrics Manager and the menu bar panel";
 "设置已保存；歌词库写入失败，可再次点按「更新备份」" = "Settings saved, but the lyrics library couldn’t be written. Click Update Backup to try again";
 "设置已导出；歌词库写入失败，仅导出了设置文件" = "Settings exported; writing the lyrics library failed, so only the settings file was written";
 "设置已导出；歌词库打包失败，仅导出了设置文件" = "Settings exported; the lyrics library could not be packaged this time, so only the settings file was written";
@@ -1948,7 +1952,6 @@
 "该组合是本 App 菜单中「%@」的快捷键。" = "That combination is the keyboard shortcut for “%@” in this app’s menu.";
 "该选项已关闭。当前仍可使用是因为浏览器尚未重启，重启后将失效" = "This switch has been turned off — it still works right now only because the browser hasn't restarted yet, and it will stop working after a restart";
 "语言" = "Language";
-"语言、启动与通知" = "Language, Startup & Notifications";
 "语言不符" = "Language mismatch";
 "请作者喝杯咖啡" = "Buy the Author a Coffee";
 "请先在此卡片中填写：%@" = "Fill in %@ first";

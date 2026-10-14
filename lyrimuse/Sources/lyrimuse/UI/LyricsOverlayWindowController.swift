@@ -109,6 +109,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private var isPlayingObserver: AnyCancellable?
     private var noLyricsObserver: AnyCancellable?
     private var shadowObserver: AnyCancellable?
+    private var appearanceObserver: AnyCancellable?
     private var placementModeObserver: AnyCancellable?
     private var showHoverControlsObserver: AnyCancellable?
     /// 位置模式。真值在 `AppSettings.overlayPlacementMode`,这里是订阅
@@ -551,6 +552,11 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 不同,这边的背景是用户可开关的。sink 订阅时立即回放当前值,初始状态也走这里。
         shadowObserver = AppSettings.shared.$backgroundIsVisible.sink { [weak self] visible in
             self?.window?.hasShadow = visible
+        }
+
+        // 毛玻璃底压在桌面上,深浅跟系统走,不跟 设置 › 通用 › 外观(见 AppAppearanceMode 头注)。
+        appearanceObserver = SystemAppearanceStore.shared.surfaceAppearancePublisher().sink { [weak self] appearance in
+            self?.window?.appearance = appearance
         }
 
         // 位置模式。初始值上面建窗口时已经用过(presetOrigin),这里只接**之后的**

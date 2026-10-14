@@ -148,6 +148,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 已经注册过再调一次没有副作用;用户手动关掉之后这里读到 false,也不会偷偷再打开。
         // 顺带清掉旧方案留在 ~/Library/LaunchAgents 的 plist(见 LoginItemManager 头注)。
         LoginItemManager.shared.syncAtLaunch(enabled: AppSettings.shared.launchAtLoginEnabled)
+        // 外观要赶在任何窗口建出来之前定下;init 里的赋值不触发 didSet。
+        AppSettings.shared.appearanceMode.apply()
         AppSettings.shared.syncLaunchAtLoginFromSystem()
         // 必须是这个函数的第一件事:AppSettings 在 init 里一次性把所有属性从 UserDefaults
         // 读进内存(下面第一次访问 AppSettings.shared 时发生),恢复晚了就只落了盘、这次启动

@@ -178,6 +178,7 @@ enum DiagnosticsExporter {
         lines.append("config.json: \(describe(config.fileState))")
         lines.append("lyrimuse-features.json: \(describe(FeatureSettingsStore.shared.fileState))")
         lines.append("App language: \(settings.appLanguage)")
+        lines.append("App appearance: \(settings.appearanceMode.rawValue)")
         lines.append("Classic overlay enabled: \(settings.classicOverlayEnabled)")
         lines.append("Notch overlay enabled: \(settings.notchOverlayEnabled)")
         lines.append("ListenBrainz configured (submit): \(config.isListenBrainzConfigured)")

@@ -59,6 +59,7 @@ enum DebugDeepLinks {
                 "onActiveSpace": w.isOnActiveSpace,
                 "occlusionVisible": w.occlusionState.contains(.visible),
                 "level": w.level.rawValue,
+                "appearance": w.effectiveAppearance.name.rawValue,
             ]
         }
         let position = p.anchor?.extrapolatedPositionMs() ?? p.pausedPositionMs
@@ -87,6 +88,9 @@ enum DebugDeepLinks {
                 "lyricsWindowOpen": defaults.bool(forKey: LyricsWindowSession.openKey),
                 "lyricsWindowMini": defaults.bool(forKey: LyricsWindowSession.miniModeKey),
             ],
+            "appearance": ["mode": s.appearanceMode.rawValue, "app": NSApp.effectiveAppearance.name.rawValue,
+                           "systemDark": SystemAppearanceStore.shared.isDark,
+                           "menuBarDark": MenuBarAppearanceStore.shared.isDark],
             "checkpoint": checkpointSaved != nil,
             "simulation": PlaybackSimulation.current.map { sim -> Any in
                 ["title": sim.title, "artist": sim.artist, "positionSecs": sim.elapsed(at: Date()),

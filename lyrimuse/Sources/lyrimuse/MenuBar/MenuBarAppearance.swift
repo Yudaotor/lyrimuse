@@ -47,9 +47,8 @@ final class MenuBarAppearanceStore: ObservableObject {
     static let shared = MenuBarAppearanceStore()
 
     /// 真实菜单栏此刻是不是深色。初值取系统外观 —— 状态栏项建起来之前(App 刚启动那一瞬)
-    /// 没有别的依据,而绝大多数情况下两者一致。
-    @Published private(set) var isDark: Bool = NSApp?.effectiveAppearance
-        .bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+    /// 没有别的依据,而绝大多数情况下两者一致。不读 `NSApp.effectiveAppearance`:设置里选了浅色 / 深色时它是那一档。
+    @Published private(set) var isDark: Bool = SystemAppearanceStore.readSystemIsDark()
 
     /// 观察点:真菜单栏上那颗状态栏按钮。弱引用 —— 按钮每次重建都是新的,旧的随旧项一起没了,
     /// 这里只认 `observe(_:)` 最后登记的那一颗。

@@ -327,6 +327,8 @@ final class AppSettings: ObservableObject {
         // 只写(负责持久化+驱动"通用"tab 的语言 Picker),两处各自独立实现,不要互相
         // import,理由见 L10n.swift 顶部注释(L10n 不依赖 @MainActor 的 AppSettings)。
         static let appLanguage = "np:appLanguage"
+        // 外观:跟随系统 / 浅色 / 深色,取值见 AppAppearanceMode。
+        static let appearanceMode = "np:appearanceMode"
         static let hasShownAutomationOnboarding = "np:hasShownAutomationOnboarding" // 已废弃,只在 init() 里读一次做迁移
         static let hasCompletedOnboarding = "np:hasCompletedOnboarding"
         /// 罗马音默认值改为跟界面语言走时,老用户保留四项全开的那次迁移做过没有。机器状态,不随配置导出。
@@ -1218,6 +1220,13 @@ final class AppSettings: ObservableObject {
     // "system"(跟随系统语言,默认)/"zh-hans"/"en"——手动覆盖 L10n 的语言解析。做成
     // @Published 而不是写完 UserDefaults 就完事,是为了让所有观察 AppSettings.shared 的界面
     // 在切换的一瞬间就重新渲染成新语言,不用重启 App。
+    /// App 普通窗口的外观,改了当场生效(`AppAppearanceMode.apply`)。启动时那一次在 AppDelegate。默认 `.system`。
+    @Published var appearanceMode: AppAppearanceMode {
+        didSet {
+            defaults.set(appearanceMode.rawValue, forKey: Keys.appearanceMode)
+            appearanceMode.apply()
+        }
+    }
     @Published var appLanguage: String {
         didSet {
             defaults.set(appLanguage, forKey: Keys.appLanguage)
@@ -2278,6 +2287,8 @@ final class AppSettings: ObservableObject {
         notchShowsTrackDrop = (defaults.object(forKey: Keys.notchShowsTrackDrop) as? Bool)
             ?? Self.defaultNotchShowsTrackDrop
         appLanguage = defaults.string(forKey: Keys.appLanguage) ?? "system"
+        appearanceMode = defaults.string(forKey: Keys.appearanceMode)
+            .flatMap(AppAppearanceMode.init(rawValue:)) ?? .system
         hasCompletedOnboarding = (defaults.object(forKey: Keys.hasCompletedOnboarding) as? Bool)
             ?? (defaults.object(forKey: Keys.hasShownAutomationOnboarding) as? Bool) ?? false
         hasOfferedICloudImport =

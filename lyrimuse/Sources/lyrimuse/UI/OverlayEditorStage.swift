@@ -814,6 +814,8 @@ struct OverlayEditorStage: View {
             contentRowRectsSpace: Self.canvasSpace,
             onContentRowRectsChange: { contentRowRects = $0 },
             previewLine: Self.previewLine)
+            // 真窗口按系统深浅画(LyricsOverlayWindowController 的 appearanceObserver),预览跟它一致。
+            .followsSystemAppearance()
             .frame(width: cardWidth, height: cardHeight, alignment: .top)
             .coordinateSpace(name: Self.canvasSpace)
             // 裁到窗口自己的边界上。常态下这一层什么也不做(卡高就是量出来的内容高度),它兜的

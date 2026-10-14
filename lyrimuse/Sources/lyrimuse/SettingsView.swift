@@ -6252,15 +6252,16 @@ private struct GeneralSettingsTab: View {
     var body: some View {
         SettingsPage(
             title: L10n.t("通用"),
-            subtitle: L10n.t("菜单栏图标、启动与通知，以及备份与迁移")
+            subtitle: L10n.t("菜单栏图标、外观与语言、启动与通知，以及备份与迁移")
         ) {
-            // 三张卡:菜单栏与 Dock / 语言、启动与通知 / 备份与迁移(含清除全部设置)。各行说明一律写成常显副标题,
+            // 四张卡:菜单栏与 Dock / 外观与语言 / 启动与通知 / 备份与迁移(含清除全部设置)。各行说明一律写成常显副标题,
             // 这一页不放「?」。
             //
             // **这一页没有预览**:菜单栏就在屏幕顶上,选哪款抬头就看得见,不需要在设置页里
             // 再仿一条。别把仿菜单栏的 MenuBarIconStage 那套加回来。
             VStack(spacing: 14) {
                 menuBarCard
+                appearanceCard
                 startupCard
                 backupCard
             }
@@ -6323,23 +6324,48 @@ private struct GeneralSettingsTab: View {
         }
     }
 
-    /// 「语言、启动与通知」:语言、开机启动、静默启动、换歌通知。
-    private var startupCard: some View {
+    /// 「外观与语言」:外观、语言。
+    private var appearanceCard: some View {
         SettingsCard(cornerRadius: 18) {
-            SettingsCardHeader(title: L10n.t("语言、启动与通知"))
-            // 下拉菜单而不是分段控件:以后再加语言,这一行的宽度也不变。
-            SettingsRow(icon: "globe", title: L10n.t("语言")) {
-                Picker("", selection: $settings.appLanguage) {
-                    Text(L10n.t("跟随系统")).tag("system")
-                    Text(L10n.t("简体中文")).tag("zh-hans")
-                    // 语言名一律用该语言自己的写法(简体中文 / 繁體中文 / English),三档下都不翻译。
-                    Text(L10n.t("繁體中文")).tag("zh-hant")
-                    Text("English").tag("en")
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
+            SettingsCardHeader(title: L10n.t("外观与语言"))
+            // 副标题点名管到哪几处:悬浮歌词、灵动岛不跟这一项(见 AppAppearanceMode 头注)。
+            SettingsRow(
+                icon: "circle.lefthalf.filled",
+                title: L10n.t("外观"),
+                subtitle: L10n.t("设置、歌词窗口、歌词管理与菜单栏面板的配色")
+            ) {
+                SettingsGlassTabPicker(
+                    selection: $settings.appearanceMode,
+                    options: AppAppearanceMode.allCases,
+                    label: \.title,
+                    compact: true
+                )
             }
             CardDivider()
+            // 下拉菜单而不是分段控件:以后再加语言,这一行的宽度也不变。
+            SettingsRow(icon: "globe", title: L10n.t("语言")) {
+                SettingsGlassMenuPicker(
+                    selection: $settings.appLanguage,
+                    options: ["system", "zh-hans", "zh-hant", "en"],
+                    label: { code in
+                        switch code {
+                        case "zh-hans": return L10n.t("简体中文")
+                        // 语言名一律用该语言自己的写法(简体中文 / 繁體中文 / English),三档下都不翻译。
+                        case "zh-hant": return L10n.t("繁體中文")
+                        case "en": return "English"
+                        default: return L10n.t("跟随系统")
+                        }
+                    },
+                    compact: true
+                )
+            }
+        }
+    }
+
+    /// 「启动与通知」:开机启动、静默启动、换歌通知。
+    private var startupCard: some View {
+        SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("启动与通知"))
             SettingsRow(icon: "power", title: L10n.t("开机启动")) {
                 Toggle("", isOn: $settings.launchAtLoginEnabled)
             }
