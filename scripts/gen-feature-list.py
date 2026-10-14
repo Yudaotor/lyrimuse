@@ -44,7 +44,7 @@ CHROME = {
         "index_title": "全部设置项",
         "index_intro": "设置窗口里的每一项，按所在位置列出，共 {n} 项。在设置窗口侧栏顶部的搜索框里输入名称，可以直接跳到那一项。",
         "settings": "设置",
-        "labs": "实验室功能",
+        "labs": "实验室",
         "mini_only": "（仅迷你尺寸）",
         "full_only": "（仅完整尺寸）",
         "sep": "：",
@@ -64,7 +64,7 @@ CHROME = {
         "index_title": "Every setting",
         "index_intro": "Every setting in the Settings window, by where it lives: {n} in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.",
         "settings": "Settings",
-        "labs": "Lab Features",
+        "labs": "Labs",
         "mini_only": " (mini size only)",
         "full_only": " (full size only)",
         "sep": ": ",
@@ -84,7 +84,7 @@ CHROME = {
         "index_title": "全部設定項目",
         "index_intro": "設定視窗裡的每一項，依所在位置列出，共 {n} 項。在設定視窗側邊欄頂部的搜尋欄位輸入名稱，可以直接跳到那一項。",
         "settings": "設定",
-        "labs": "實驗室功能",
+        "labs": "實驗室",
         "mini_only": "（僅迷你尺寸）",
         "full_only": "（僅完整尺寸）",
         "sep": "：",
@@ -195,7 +195,7 @@ def load_model(root: Path = ROOT) -> dict:
         return all(loc.get(lang, {}).get("stringUnit", {}).get("value") for lang in ("en", "zh-Hant"))
 
     def location(entry: dict, with_title: bool, prefix: bool) -> dict:
-        keys = (["设置"] if prefix else []) + (["实验室功能"] if entry["dest"] in labs else []) \
+        keys = (["设置"] if prefix else []) + (["实验室"] if entry["dest"] in labs else []) \
             + entry["path"] + ([entry["title"]] if with_title else [])
         return {lang: " › ".join(tr(k, lang) for k in keys) for lang in LANGS}
 

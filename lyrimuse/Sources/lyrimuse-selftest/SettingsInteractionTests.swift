@@ -606,6 +606,7 @@ func runSettingsInteractionTests() {
         expectEqual(D(path: "/account/discord"), .account(.discord), "设置深链: Discord 页")
         expectEqual(D(path: "/software-update"), .softwareUpdate, "设置深链: 软件更新页")
         expectEqual(D(path: "/lastfm-suggestions"), .lastfmSuggestions, "设置深链: Last.fm 账号建议页")
+        expectEqual(D(path: "/labs"), .labs, "设置深链: 实验室总览页")
         expectEqual(D(path: ""), nil, "设置深链: 没有路径 → nil(只开窗口)")
         expectEqual(D(path: "/account"), nil, "设置深链: 只有 account → nil")
         expectEqual(D(path: "/account/spotify"), nil, "设置深链: 不存在的账号 → nil")

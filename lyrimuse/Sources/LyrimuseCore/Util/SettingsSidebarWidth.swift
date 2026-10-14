@@ -12,7 +12,7 @@ public enum SettingsSidebarWidth {
         case label(String)
         /// 图标 + 文字 + 行尾计数徽标:有健康警告时的「播放器」。
         case labelWithBadge(String)
-        /// 图标 + 文字 + 状态图标:「实验室功能」里的账号。
+        /// 图标 + 文字 + 状态图标:「实验室」。
         case account(String)
         /// 13pt 文字 + 行尾计数徽标,没有图标:「有软件更新可用」「Last.fm 账号建议」。
         case badge(String)

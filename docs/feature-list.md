@@ -45,10 +45,10 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Skip YouTube Music ads automatically](#feature-skip-youtube-ads) | Settings › Player › Web › Skip YouTube Music Ads Automatically |
 | [Start and quit together with your player](#feature-player-linkage) | Settings › Player › Linkage › Launch When Lyrimuse Opens |
 | [Last.fm scrobbling and listening profile](#feature-lastfm) | Settings › Last.fm › Settings › Scrobble Rules |
-| [Scrobble to ListenBrainz too](#feature-listenbrainz) | Settings › Lab Features › ListenBrainz › Account Info |
+| [Scrobble to ListenBrainz too](#feature-listenbrainz) | Settings › Labs › ListenBrainz › Account Info |
 | [Show what you're playing on Discord](#feature-discord) | Settings › Discord › Show on Discord |
-| [A shareable now-playing web page](#feature-now-playing-page) | Settings › Lab Features › Web Push › Connection Info |
-| [Daily, weekly, monthly and yearly listening digests](#feature-digests) | Settings › Lab Features › Push Alerts › Alerts |
+| [A shareable now-playing web page](#feature-now-playing-page) | Settings › Labs › Web Push › Connection Info |
+| [Daily, weekly, monthly and yearly listening digests](#feature-digests) | Settings › Labs › Push Alerts › Alerts |
 | [Launch silently](#feature-silent-launch) | Settings › General › Startup & Notifications › Launch Silently |
 | [Notify when the song changes](#feature-song-notifications) | Settings › General › Startup & Notifications › Notify When the Song Changes |
 | [Automatic updates and betas](#feature-updates) | Settings › Software Update › Update Settings › Check Automatically |
@@ -545,10 +545,10 @@ Plays are recorded on your Mac while Last.fm is not connected, or when one fails
 
 ### Scrobble to ListenBrainz too
 
-Each play goes to Last.fm and ListenBrainz from the same reading, so the two agree. Plays your iPhone sends to Last.fm can be copied into ListenBrainz as well. Under Lab Features, which is collapsed in the sidebar by default.
+Each play goes to Last.fm and ListenBrainz from the same reading, so the two agree. Plays your iPhone sends to Last.fm can be copied into ListenBrainz as well. Under Labs in the sidebar.
 
 - Off by default
-- Settings: Lab Features › ListenBrainz › Account Info
+- Settings: Labs › ListenBrainz › Account Info
 
 <a id="feature-discord"></a>
 
@@ -566,23 +566,23 @@ Your profile and friends list show the player, title, artist, artwork and a prog
 
 ### A shareable now-playing web page
 
-A public page with what you are playing and your history, with optional guestbook, reactions, visitor count, top 10 artists and a vinyl look. ListenBrainz alone gives live playback and history; deploy a Cloudflare Worker from the guide for the rest. Under Lab Features.
+A public page with what you are playing and your history, with optional guestbook, reactions, visitor count, top 10 artists and a vinyl look. ListenBrainz alone gives live playback and history; deploy a Cloudflare Worker from the guide for the rest. Under Labs.
 
 - Off by default
-- Settings: Lab Features › Web Push › Connection Info
+- Settings: Labs › Web Push › Connection Info
 
 <a id="feature-digests"></a>
 
 ### Daily, weekly, monthly and yearly listening digests
 
-Sent to you as push notifications through Bark, DingTalk, WeCom, Discord, Feishu, ServerChan or Telegram. Each of the four has its own switch. Under Lab Features.
+Sent to you as push notifications through Bark, DingTalk, WeCom, Discord, Feishu, ServerChan or Telegram. Each of the four has its own switch. Under Labs.
 
 - Off by default
-- Settings: Lab Features › Push Alerts › Alerts
-- Settings: Lab Features › Push Alerts › Daily Listening Report
-- Settings: Lab Features › Push Alerts › Weekly Listening Digest
-- Settings: Lab Features › Push Alerts › Monthly Listening Digest
-- Settings: Lab Features › Push Alerts › Yearly Listening Digest
+- Settings: Labs › Push Alerts › Alerts
+- Settings: Labs › Push Alerts › Daily Listening Report
+- Settings: Labs › Push Alerts › Weekly Listening Digest
+- Settings: Labs › Push Alerts › Monthly Listening Digest
+- Settings: Labs › Push Alerts › Yearly Listening Digest
 
 <a id="section-general"></a>
 
@@ -1064,7 +1064,7 @@ Every setting in the Settings window, by where it lives: 242 in all. Type a name
 - **Activity Log**: The lyrics engine’s raw log, for your own troubleshooting
 - **Config Folder**: Plain text with account credentials. Appearance and shortcuts aren’t here; to move everything, use Backup & Migration
 
-### Lab Features › ListenBrainz
+### Labs › ListenBrainz
 
 - **Account Info**
 
@@ -1078,11 +1078,11 @@ Every setting in the Settings window, by where it lives: 242 in all. Type a name
 - **Tracks Under 30 Seconds**: On: scrobbled too, once half-played. Off: not scrobbled (Last.fm's rule).
 - **Players to Scrobble**
 
-### Lab Features › Web Push
+### Labs › Web Push
 
 - **Connection Info**: Deploy the web app first and get an access token. Setup steps are in the project README: https://github.com/Yudaotor/lyrimuse
 
-### Lab Features › Push Alerts
+### Labs › Push Alerts
 
 - **Alerts**
 - **Weekly Listening Digest**

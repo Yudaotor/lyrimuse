@@ -45,10 +45,10 @@ Lyrimuse 是 macOS 上的開源（GPL-3.0）逐字歌詞 App，支援 macOS 14 �
 | [自動略過 YouTube Music 廣告](#feature-skip-youtube-ads) | 設定 › 播放器 › 網頁版 › 自動略過 YouTube Music 廣告 |
 | [跟播放器一起啟動、一起結束](#feature-player-linkage) | 設定 › 播放器 › 連動 › 打開 Lyrimuse 時啟動 |
 | [Last.fm 打卡與聽歌檔案](#feature-lastfm) | 設定 › Last.fm › 設定 › Scrobble 規則 |
-| [同步到 ListenBrainz](#feature-listenbrainz) | 設定 › 實驗室功能 › ListenBrainz › 帳號資訊 |
+| [同步到 ListenBrainz](#feature-listenbrainz) | 設定 › 實驗室 › ListenBrainz › 帳號資訊 |
 | [在 Discord 上顯示正在聽的歌](#feature-discord) | 設定 › Discord › 在 Discord 上顯示 |
-| [可分享的「正在聽什麼」網頁](#feature-now-playing-page) | 設定 › 實驗室功能 › 網頁推送 › 連線資訊 |
-| [日報、週報、月報和年度聽歌小結](#feature-digests) | 設定 › 實驗室功能 › 推播提醒 › 提醒 |
+| [可分享的「正在聽什麼」網頁](#feature-now-playing-page) | 設定 › 實驗室 › 網頁推送 › 連線資訊 |
+| [日報、週報、月報和年度聽歌小結](#feature-digests) | 設定 › 實驗室 › 推播提醒 › 提醒 |
 | [靜默啟動](#feature-silent-launch) | 設定 › 一般 › 啟動與通知 › 靜默啟動 |
 | [換歌時顯示通知](#feature-song-notifications) | 設定 › 一般 › 啟動與通知 › 換歌時顯示通知 |
 | [自動更新與測試版](#feature-updates) | 設定 › 軟體更新 › 更新設定 › 自動檢查 |
@@ -545,10 +545,10 @@ Apple Music、Spotify 和 Kaset 要「自動化」權限才能讀取播放狀態
 
 ### 同步到 ListenBrainz
 
-每次播放用同一份播放狀態分別送給 Last.fm 和 ListenBrainz，兩邊對得上。還可以把 iPhone 上經 Last.fm 記下的播放轉進 ListenBrainz。在側邊欄預設收合的「實驗室功能」裡。
+每次播放用同一份播放狀態分別送給 Last.fm 和 ListenBrainz，兩邊對得上。還可以把 iPhone 上經 Last.fm 記下的播放轉進 ListenBrainz。在側邊欄的「實驗室」裡。
 
 - 預設關閉
-- 設定位置：實驗室功能 › ListenBrainz › 帳號資訊
+- 設定位置：實驗室 › ListenBrainz › 帳號資訊
 
 <a id="feature-discord"></a>
 
@@ -566,23 +566,23 @@ Apple Music、Spotify 和 Kaset 要「自動化」權限才能讀取播放狀態
 
 ### 可分享的「正在聽什麼」網頁
 
-一個公開網頁，顯示你正在聽的歌和聽歌歷史，可以加留言牆、表情回應、訪客計數、Top10 歌手榜和黑膠效果。只設定好 ListenBrainz 就能顯示即時播放和歷史，想要更多再照教學部署一個 Cloudflare Worker。在「實驗室功能」裡。
+一個公開網頁，顯示你正在聽的歌和聽歌歷史，可以加留言牆、表情回應、訪客計數、Top10 歌手榜和黑膠效果。只設定好 ListenBrainz 就能顯示即時播放和歷史，想要更多再照教學部署一個 Cloudflare Worker。在「實驗室」裡。
 
 - 預設關閉
-- 設定位置：實驗室功能 › 網頁推送 › 連線資訊
+- 設定位置：實驗室 › 網頁推送 › 連線資訊
 
 <a id="feature-digests"></a>
 
 ### 日報、週報、月報和年度聽歌小結
 
-透過推播送給你，支援 Bark、釘釘、企業微信、Discord、飛書、Server醬和 Telegram。四種各自開關。在「實驗室功能」裡。
+透過推播送給你，支援 Bark、釘釘、企業微信、Discord、飛書、Server醬和 Telegram。四種各自開關。在「實驗室」裡。
 
 - 預設關閉
-- 設定位置：實驗室功能 › 推播提醒 › 提醒
-- 設定位置：實驗室功能 › 推播提醒 › 每日聽歌報告
-- 設定位置：實驗室功能 › 推播提醒 › 每週聽歌小結
-- 設定位置：實驗室功能 › 推播提醒 › 每月聽歌小結
-- 設定位置：實驗室功能 › 推播提醒 › 年度聽歌小結
+- 設定位置：實驗室 › 推播提醒 › 提醒
+- 設定位置：實驗室 › 推播提醒 › 每日聽歌報告
+- 設定位置：實驗室 › 推播提醒 › 每週聽歌小結
+- 設定位置：實驗室 › 推播提醒 › 每月聽歌小結
+- 設定位置：實驗室 › 推播提醒 › 年度聽歌小結
 
 <a id="section-general"></a>
 
@@ -1064,7 +1064,7 @@ Apple Music、Spotify 和 Kaset 要「自動化」權限才能讀取播放狀態
 - **執行記錄檔**：歌詞引擎的原始記錄檔，供自行排查
 - **設定檔案夾**：純文字，含帳號憑證；外觀與快速鍵不在這裡，整體遷移請使用「備份與遷移」
 
-### 實驗室功能 › ListenBrainz
+### 實驗室 › ListenBrainz
 
 - **帳號資訊**
 
@@ -1078,11 +1078,11 @@ Apple Music、Spotify 和 Kaset 要「自動化」權限才能讀取播放狀態
 - **短於 30 秒的曲目**：開：也 Scrobble，播放過半即記。關：不記（官方規則）。
 - **Scrobble 的播放器**
 
-### 實驗室功能 › 網頁推送
+### 實驗室 › 網頁推送
 
 - **連線資訊**：需先部署網頁端並取得存取權杖。部署步驟見專案 README 的「網頁端」一節：https://github.com/Yudaotor/lyrimuse#网页端
 
-### 實驗室功能 › 推播提醒
+### 實驗室 › 推播提醒
 
 - **提醒**
 - **每週聽歌小結**

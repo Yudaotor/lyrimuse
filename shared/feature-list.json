@@ -1396,9 +1396,9 @@
             "zh-Hant": "同步到 ListenBrainz"
           },
           "desc": {
-            "zh-Hans": "每次播放用同一份播放状态分别发给 Last.fm 和 ListenBrainz，两边对得上。还可以把 iPhone 上经 Last.fm 记下的播放转进 ListenBrainz。在侧栏默认折叠的「实验室功能」里。",
-            "en": "Each play goes to Last.fm and ListenBrainz from the same reading, so the two agree. Plays your iPhone sends to Last.fm can be copied into ListenBrainz as well. Under Lab Features, which is collapsed in the sidebar by default.",
-            "zh-Hant": "每次播放用同一份播放狀態分別送給 Last.fm 和 ListenBrainz，兩邊對得上。還可以把 iPhone 上經 Last.fm 記下的播放轉進 ListenBrainz。在側邊欄預設收合的「實驗室功能」裡。"
+            "zh-Hans": "每次播放用同一份播放状态分别发给 Last.fm 和 ListenBrainz，两边对得上。还可以把 iPhone 上经 Last.fm 记下的播放转进 ListenBrainz。在侧栏的「实验室」里。",
+            "en": "Each play goes to Last.fm and ListenBrainz from the same reading, so the two agree. Plays your iPhone sends to Last.fm can be copied into ListenBrainz as well. Under Labs in the sidebar.",
+            "zh-Hant": "每次播放用同一份播放狀態分別送給 Last.fm 和 ListenBrainz，兩邊對得上。還可以把 iPhone 上經 Last.fm 記下的播放轉進 ListenBrainz。在側邊欄的「實驗室」裡。"
           },
           "default": "off",
           "settings": [
@@ -1451,9 +1451,9 @@
             "zh-Hant": "可分享的「正在聽什麼」網頁"
           },
           "desc": {
-            "zh-Hans": "一个公开网页，显示你正在听的歌和听歌历史，可以加留言墙、表情回应、访客计数、Top10 歌手榜和黑胶效果。只配好 ListenBrainz 就能显示实时播放和历史，想要更多再照教程部署一个 Cloudflare Worker。在「实验室功能」里。",
-            "en": "A public page with what you are playing and your history, with optional guestbook, reactions, visitor count, top 10 artists and a vinyl look. ListenBrainz alone gives live playback and history; deploy a Cloudflare Worker from the guide for the rest. Under Lab Features.",
-            "zh-Hant": "一個公開網頁，顯示你正在聽的歌和聽歌歷史，可以加留言牆、表情回應、訪客計數、Top10 歌手榜和黑膠效果。只設定好 ListenBrainz 就能顯示即時播放和歷史，想要更多再照教學部署一個 Cloudflare Worker。在「實驗室功能」裡。"
+            "zh-Hans": "一个公开网页，显示你正在听的歌和听歌历史，可以加留言墙、表情回应、访客计数、Top10 歌手榜和黑胶效果。只配好 ListenBrainz 就能显示实时播放和历史，想要更多再照教程部署一个 Cloudflare Worker。在「实验室」里。",
+            "en": "A public page with what you are playing and your history, with optional guestbook, reactions, visitor count, top 10 artists and a vinyl look. ListenBrainz alone gives live playback and history; deploy a Cloudflare Worker from the guide for the rest. Under Labs.",
+            "zh-Hant": "一個公開網頁，顯示你正在聽的歌和聽歌歷史，可以加留言牆、表情回應、訪客計數、Top10 歌手榜和黑膠效果。只設定好 ListenBrainz 就能顯示即時播放和歷史，想要更多再照教學部署一個 Cloudflare Worker。在「實驗室」裡。"
           },
           "default": "off",
           "settings": [
@@ -1471,9 +1471,9 @@
             "zh-Hant": "日報、週報、月報和年度聽歌小結"
           },
           "desc": {
-            "zh-Hans": "通过推送发给你，支持 Bark、钉钉、企业微信、Discord、飞书、Server酱和 Telegram。四种各自开关。在「实验室功能」里。",
-            "en": "Sent to you as push notifications through Bark, DingTalk, WeCom, Discord, Feishu, ServerChan or Telegram. Each of the four has its own switch. Under Lab Features.",
-            "zh-Hant": "透過推播送給你，支援 Bark、釘釘、企業微信、Discord、飛書、Server醬和 Telegram。四種各自開關。在「實驗室功能」裡。"
+            "zh-Hans": "通过推送发给你，支持 Bark、钉钉、企业微信、Discord、飞书、Server酱和 Telegram。四种各自开关。在「实验室」里。",
+            "en": "Sent to you as push notifications through Bark, DingTalk, WeCom, Discord, Feishu, ServerChan or Telegram. Each of the four has its own switch. Under Labs.",
+            "zh-Hant": "透過推播送給你，支援 Bark、釘釘、企業微信、Discord、飛書、Server醬和 Telegram。四種各自開關。在「實驗室」裡。"
           },
           "default": "off",
           "check": {

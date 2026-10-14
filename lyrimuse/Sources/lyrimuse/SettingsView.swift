@@ -55,147 +55,110 @@ enum SettingsTab: String, Hashable, CaseIterable, Identifiable {
         }
     }
 
+    /// 白色实心、笔画粗细相近的一组:20pt 方块里要一眼认得出,细节碎的符号(一段排版、整块键盘、几个小方块拼的
+    /// 窗口)在这个尺寸会糊成一团。「播放器」讲的是选哪个音乐 App,不用播放三角形。见 14 章决策 107。
     var icon: String {
         switch self {
-        case .lyrics: return "text.quote"
-        case .player: return "play.circle"
-        // 画笔是"外观"的语言,跟着改名一起换掉。rectangle.3.group 读出来是"同一份内容摆在
-        // 好几处",正对上这一页的实际结构(歌词能出现在三个地方);也不跟侧边栏现有的
-        // text.quote/play.circle/keyboard/gearshape/info.circle 撞。
-        case .appearance: return "rectangle.3.group"
-        case .shortcuts: return "keyboard"
-        case .general: return "gearshape"
-        case .about: return "info.circle"
+        case .lyrics: return "quote.opening"
+        case .player: return "music.note"
+        // 大窗口上叠一个小窗口:歌词浮在屏幕上。
+        case .appearance: return "pip.fill"
+        case .shortcuts: return "command"
+        // 带辐条的齿轮,同系统设置「通用」。
+        case .general: return "gear"
+        case .about: return "info"
         }
     }
 
-    // tint 特意避开已经在用的四个账号色(orange/pink/blue/red)和歌词来源色点(red/
-    // green/cyan/purple,见 LyricsManagerView.swift 的 sourceColor)——"歌词显示"尤其不用
-    // 青色系,因为默认打开的是"歌词"分类,会跟侧边栏里同屏出现的 LRCLIB 色点(cyan)
-    // 太接近;"通用"用灰色齿轮,呼应 macOS 系统设置里"通用"的既有印象;"快捷键"用
-    // teal,跟歌词来源色点的 cyan 有区分度、也不撞现有任何一个分类色;"播放器"用
-    // mint,同样是上面这份"避开列表"之外、目前分类里也还没人用过的颜色。
+    /// 色块渐变的下端(`tint`)和上端(`tintTop`)。照系统设置的图标:系统色、几乎是平的(上端只亮一点点),
+    /// 灰色那几格是中灰。七格(含「实验室」,`labsIconBadge`)相邻两格不同色系;明黄配白色符号压不住,用橙。
+    /// 不再避开歌词来源色点和账号色:侧栏 20pt 的色块跟页面里几 pt 的色点、账号品牌图大小差得多,同屏不会认错。
+    /// 见 14 章决策 107。
     var tint: Color {
         switch self {
-        case .lyrics: return .indigo
-        case .player: return .mint
-        case .appearance: return .yellow
-        case .shortcuts: return .teal
-        case .general: return .gray
-        // 蓝色是"关于/信息"这类内容在 macOS 上最约定俗成的配色(系统"关于本机"/大多数
-        // App 的 info.circle 图标都是蓝色),不跟其余分类的既有配色规避逻辑冲突。
-        case .about: return .blue
+        case .lyrics: return settingsHex(0x5856E0)
+        case .player: return settingsHex(0xF52A52)
+        case .appearance: return settingsHex(0xFF9100)
+        case .shortcuts: return settingsHex(0x86868B)
+        case .general: return settingsHex(0x86868B)
+        case .about: return settingsHex(0x0A7CF5)
+        }
+    }
+
+    var tintTop: Color {
+        switch self {
+        case .lyrics: return settingsHex(0x6D6BEE)
+        case .player: return settingsHex(0xFF4268)
+        case .appearance: return settingsHex(0xFFA21F)
+        case .shortcuts: return settingsHex(0x96969B)
+        case .general: return settingsHex(0x96969B)
+        case .about: return settingsHex(0x1A8CFF)
         }
     }
 }
 
-// 图标徽标——彩色圆角方块背景 + 白色 SF Symbol,侧边栏行(20pt/圆角5)和账号详情页头
-// (36pt/圆角8)共用同一份渲染逻辑,不各自重复手写一遍。
+/// 0xRRGGBB → sRGB 颜色。
+func settingsHex(_ value: UInt32) -> Color {
+    Color(.sRGB, red: Double((value >> 16) & 0xFF) / 255, green: Double((value >> 8) & 0xFF) / 255,
+          blue: Double(value & 0xFF) / 255)
+}
+
+// 图标徽标——彩色圆角方块背景 + 白色 SF Symbol,侧边栏行(20pt/圆角5)、账号页页头(36～56pt)、建议页(28pt)
+// 共用同一份渲染逻辑,不各自重复手写一遍。照系统设置的图标画:符号大(占方块六成多)、白到浅灰的渐变加一道细阴影,
+// 色块几乎是平的(上端只亮一点点)。`top` 不给时从 `tint` 往白色掺一点点得到。深浅外观同一套颜色,深色下不压暗
+// (系统设置的图标也不压)。见 14 章决策 107。
 //
-// 方块用连续圆角(continuous),并叠一层上亮下暗的竖向渐变 + 半透明白描边 —— 跟系统设置的
-// 图标一样略带体积感,纯平色块摆在旁边一眼就能看出不是一家的。渐变只叠在色块上,白色符号
-// 不受影响;深色模式的亮度封顶(SettingsIconTint)作用于底色。
-//
-// 真身是 View 类型而不是自由函数:深色模式压暗色块要读 @Environment(\.colorScheme),
-// 自由函数拿不到 environment。对外仍是同名自由函数,调用点不用改。
-func iconBadge(_ systemName: String, tint: Color, size: CGFloat = 20, cornerRadius: CGFloat = 5) -> some View {
-    IconBadge(systemName: systemName, tint: tint, size: size, cornerRadius: cornerRadius)
+// 真身是 View 类型而不是自由函数,对外仍是同名自由函数,调用点不用改。
+func iconBadge(_ systemName: String, tint: Color, top: Color? = nil, size: CGFloat = 20, cornerRadius: CGFloat = 5) -> some View {
+    IconBadge(systemName: systemName, tint: tint, top: top, size: size, cornerRadius: cornerRadius)
 }
 
 private struct IconBadge: View {
     let systemName: String
     let tint: Color
+    let top: Color?
     let size: CGFloat
     let cornerRadius: CGFloat
-    @Environment(\.colorScheme) private var colorScheme
 
-    /// 符号外接框占整个方块的比例。22pt 方块 × 0.62 = 13.6pt,跟圆形符号
-    /// (play.circle/info.circle)本来的墨迹宽度 13.0pt 基本持平——被收窄的只有过宽的那几个。
-    private static let glyphRatio: CGFloat = 0.62
+    /// 符号字号占方块边长的比例(20pt 方块 ≈ 12.8pt)。
+    private static let glyphRatio: CGFloat = 0.64
+    /// 按字号排之后个别符号视觉上偏大 / 偏小,逐个微调。没列的按 1。
+    private static let opticalScale: [String: CGFloat] = [
+        "gear": 1.08, "quote.opening": 0.95, "flask.fill": 0.95, "pip.fill": 0.9, "command": 0.9,
+        "dot.radiowaves.left.and.right": 0.75,
+    ]
 
     var body: some View {
-        // 逐符号归一化:resizable + scaledToFit 把每个符号的**外接框**装进同一个内框,过宽的
-        // 自己缩下去,本来就方的几乎不动。
-        //
-        // 不设 .font/.imageScale 的话符号吃环境默认的 13pt,而 SF Symbol 之间是按**大写字母高度**
-        // 对齐的、不是按外接框对齐 —— 同一字号下宽符号必然比圆符号占掉多得多的横向空间(22pt 方块
-        // 里 rectangle.3.group 的墨迹占 81%、dot.radiowaves.left.and.right 75%、keyboard 73%,而
-        // play.circle / info.circle 只有 59%)。统一调小字号救不了:那是等比缩,相对差距原样保留。
-        //
-        // 同时保证符号大小跟着 size 走:否则 36pt 徽标里的符号仍是 22pt 那档大小,墨迹只占方块
-        // 33%~50%,一个小图标飘在大方块中间。
-        //
-        // 代价说清楚:resizable 会连描边粗细一起缩放,严格说破坏了 SF Symbol 跨图标的统一线重
-        // (Apple 因此不建议对 SF Symbol 用 resizable)。这里换来的是"每个彩色方块里的图形占位
-        // 一致",对一组并排的徽标来说更重要。
-        let base = colorScheme == .dark ? SettingsIconTint.dimmedForDarkMode(tint) : tint
+        // 按字号排,SF Symbol 自己按光学大小对齐、线重统一。别改回 resizable + scaledToFit 按外接框塞进同一个
+        // 内框:三角形会被撑满整格,细长的「i」被拉得又高又细,宽符号被压扁,同一排大小、粗细各不相同。
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         Image(systemName: systemName)
-            .resizable()
-            .scaledToFit()
-            .frame(width: size * Self.glyphRatio, height: size * Self.glyphRatio)
-            .foregroundStyle(.white)
+            .font(.system(size: size * Self.glyphRatio * (Self.opticalScale[systemName] ?? 1), weight: .medium))
+            // 侧栏 List 会给行首图标放大一档 imageScale,按字号排的符号会被它再放大、顶满方块,钉回 medium。
+            .imageScale(.medium)
+            .foregroundStyle(LinearGradient(colors: [.white, Color(white: 0.90)], startPoint: .top, endPoint: .bottom))
+            .shadow(color: .black.opacity(0.22), radius: size * 0.02, y: size * 0.02)
             .frame(width: size, height: size)
             .background {
-                shape.fill(base)
-                    // 上亮下暗:顶部掺一点白、底部压一点黑,幅度很小,只为让色块有一点体积感。
+                shape.fill(LinearGradient(colors: [top ?? SettingsIconTint.lightened(tint), tint],
+                                          startPoint: .top, endPoint: .bottom))
                     .overlay(shape.fill(LinearGradient(
-                        colors: [.white.opacity(0.20), .white.opacity(0.02), .black.opacity(0.07)],
+                        colors: [.white.opacity(0.06), .clear, .black.opacity(0.04)],
                         startPoint: .top, endPoint: .bottom)))
-                    // 半透明白描边 = 系统图标那圈细高光;0.5pt 在 Retina 下正好一个像素。
-                    .overlay(shape.strokeBorder(.white.opacity(0.16), lineWidth: 0.5))
+                    // 半透明白描边 = 系统图标那圈细高光。
+                    .overlay(shape.strokeBorder(.white.opacity(0.10), lineWidth: max(0.5, size / 40)))
             }
     }
 }
 
-/// 深色模式下给徽标色块的亮度封顶。
-///
-/// 侧边栏这批 tint 里有几个绝对亮度非常高,压在深色底上像在发光 —— yellow #FFD600 相对亮度
-/// 0.694、mint #00DAC3 0.541、teal #00D2E0 0.515,而 indigo/blue/red 都只有 0.25~0.28。更实的
-/// 问题是压在色块上的那个**白色 SF Symbol**:白色在 yellow 上只有 1.41:1、mint 1.78:1、
-/// teal 1.86:1,远低于 WCAG 对图形/UI 部件的 3:1。"发光"和"图标糊掉"是同一个根因。
-///
-/// 上限 0.30 是解出来的:白色相对亮度是 1.0,要保住 3:1 就要求 (1.0+0.05)/(L+0.05) >= 3,
-/// 即 L <= 0.30 —— "色块最多亮到白图标还合格为止"。
-///
-/// 压暗在**线性光**里做:线性 RGB 三通道同乘一个系数,相对亮度按同一系数线性下降(亮度就是
-/// 三通道线性值的加权和),而三者比例不变 = 色相和饱和度分毫不动。所以有闭式解
-/// k = 上限 / 当前亮度,不需要二分逼近。已经低于上限的色块原样返回 —— indigo/blue/red 实际
-/// 都不会被动到,gray 只会从 0.316 挪到 0.300(肉眼看不出)。
-///
-/// **只在深色模式下用**。浅色模式下白图标压在 yellow 上同样只有 1.51:1,但那边色块不会在亮底
-/// 上"发光",而压暗会把黄压成橄榄色、丢掉"黄"的身份。要改浅色的话,把 IconBadge 里那个
-/// colorScheme 判断去掉即可。
+/// 徽标色块渐变的上端。
 enum SettingsIconTint {
-    /// 白图标要保住 3:1,色块相对亮度的上限。
-    static let luminanceCap = 0.30
-
-    static func dimmedForDarkMode(_ tint: Color) -> Color {
-        // 系统色(.yellow/.mint/…)是随外观解析的动态色,必须显式在 darkAqua 下取值——
-        // body 求值时的 currentDrawing 不保证就是深色。
-        var resolved: NSColor?
-        NSAppearance(named: .darkAqua)?.performAsCurrentDrawingAppearance {
-            resolved = NSColor(tint).usingColorSpace(.sRGB)
-        }
-        guard let base = resolved else { return tint }
-        let r = linearized(base.redComponent)
-        let g = linearized(base.greenComponent)
-        let b = linearized(base.blueComponent)
-        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-        guard luminance > luminanceCap else { return tint }
-        let k = luminanceCap / luminance
-        return Color(nsColor: NSColor(srgbRed: encoded(r * k), green: encoded(g * k),
-                                      blue: encoded(b * k), alpha: base.alphaComponent))
-    }
-
-    private static func linearized(_ c: CGFloat) -> Double {
-        let v = Double(c)
-        return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
-    }
-
-    private static func encoded(_ c: Double) -> CGFloat {
-        let v = c <= 0.0031308 ? c * 12.92 : 1.055 * pow(c, 1 / 2.4) - 0.055
-        return CGFloat(min(max(v, 0), 1))
+    /// 往白色掺一点点(sRGB 里按比例混):系统设置的图标色块几乎是平的,上端只亮一点。
+    static func lightened(_ tint: Color, by amount: Double = 0.10) -> Color {
+        guard let base = NSColor(tint).usingColorSpace(.sRGB) else { return tint }
+        func mix(_ c: CGFloat) -> CGFloat { c + (1 - c) * CGFloat(amount) }
+        return Color(nsColor: NSColor(srgbRed: mix(base.redComponent), green: mix(base.greenComponent),
+                                      blue: mix(base.blueComponent), alpha: base.alphaComponent))
     }
 }
 
@@ -208,6 +171,9 @@ enum SettingsSidebarItem: Hashable {
     case softwareUpdate
     /// 「Last.fm 账号建议」页(仿系统设置「Apple 账户建议」)。侧栏只在有待处理的建议时有一行指向它。
     case lastfmSuggestions
+    /// 「实验室」总览页(LabsPage)。住在实验室的几页(`AccountDestination.livesInLabs`)没有自己的侧栏行,
+    /// 停在它们上面时侧栏亮的是「实验室」这一行(见 `sidebarSelection`)。
+    case labs
 }
 
 extension SettingsSidebarItem {
@@ -227,6 +193,7 @@ extension SettingsSidebarItem {
             }
         case .softwareUpdate: self = .softwareUpdate
         case .lastfmSuggestions: self = .lastfmSuggestions
+        case .labs: self = .labs
         }
     }
 }
@@ -266,9 +233,6 @@ struct SettingsView: View {
     @ObservedObject private var updateBadge = SoftwareUpdateBadge.shared
     /// 「Last.fm 账号建议」那一行出不出现、计数几条。只订阅这一份列表(见 LastfmSuggestionsStore)。
     @ObservedObject private var suggestions = LastfmSuggestionsStore.shared
-    // 默认收起、点击 Section 头才展开,不持久化(每次打开设置窗口都从收起状态开始)。
-    // 变量名跟 Section 标题「实验室功能」不一致是有意的:变量名是内部实现细节,不跟用户可见文案走。
-    @State private var isAdditionalFeaturesExpanded = false
     /// 侧栏顶部搜索框的文字。非空时侧栏 List 换成结果列表;不持久化。
     @State private var settingsSearchText = ""
     /// 搜索框的焦点。放在这里而不是搜索框自己身上,因为让出焦点的时机在这一层:选了侧栏别的分类、
@@ -472,11 +436,6 @@ struct SettingsView: View {
             selection = .softwareUpdate
         case .account(let name):
             if let destination = AccountDestination.allCases.first(where: { String(describing: $0) == name }) {
-                // ListenBrainz / 网页推送 / 推送提醒住在默认折叠的「实验室功能」区,不展开的话
-                // detail 切过去了、侧栏却高亮不到任何一行(同 onJumpToAccount 那条注释)。
-                if destination.livesInLabs {
-                    withAnimation { isAdditionalFeaturesExpanded = true }
-                }
                 selection = .account(destination)
             }
         }
@@ -489,8 +448,8 @@ struct SettingsView: View {
     /// Settings/SettingsSidebarChrome.swift 头注):
     ///   ① 身份区(Last.fm 头像 + 用户名,其下「关联平台」一行)+ 有待处理建议时的「Last.fm 账号建议」行 + 有新版本时的「有软件更新可用」行;
     ///   ② 六个分类,分组之间只留空白、不加小标题 —— 系统设置的侧栏没有这种标题;
-    ///   ③ 「实验室功能」用原生 `Section(isExpanded:)` 折叠(Finder / 邮件侧栏那种悬停露出的
-    ///      显示/隐藏),标题旁的「?」悬浮提示放在自定义 header 里。
+    ///   ③ 「实验室」单独一组、一行普通分类,点进去是总览页(LabsPage)。别改回可折叠的 Section:折叠标题是一行淡灰小字,
+    ///      看不出能点,而且每次开窗都是收起的,里面的功能不翻就不知道有。见 14 章决策 106。
     @ViewBuilder private var sidebarSections: some View {
         Section {
             LastfmIdentityRow()
@@ -519,34 +478,34 @@ struct SettingsView: View {
             sidebarLabel(.about)
         }
 
-        // 默认收起、点 header 才展开,不持久化(每次打开设置窗口都从收起状态开始)。
-        // 变量名跟 Section 标题「实验室功能」不一致是有意的,理由同上。
-        //
-        // 用带 `header:` 尾闭包的 `Section(isExpanded:header:)` 重载 —— 那个 header 是任意 View,
-        // 「?」图标照放(放不下的是 `Section(_ title:isExpanded:)` 那个便捷初始化)。
-        // Last.fm、Discord 不在这里:它们在顶上的身份区(`AccountDestination.livesInLabs`)。
-        Section(isExpanded: $isAdditionalFeaturesExpanded) {
-            ForEach(AccountDestination.allCases.filter(\.livesInLabs)) { destination in
-                AccountSidebarRow(destination: destination)
-                    .tag(SettingsSidebarItem.account(destination))
+        Section {
+            // 停在实验室的某一页时这一行已经算选中,List 不会再写一次选中:点它回总览靠这颗按钮(同系统设置点上一级回到它的首页)。
+            // 侧栏 List 的行上 `onTapGesture` / `simultaneousGesture` 都收不到点击(实测),行里的按钮收得到。
+            Button { selection = .labs } label: {
+                LabsSidebarRow()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
             }
-        } header: {
-            // tooltip 弹出延迟看着像没反应,其实是系统默认 tooltip 延迟(~1~1.5s)本身偏长,
-            // 真正的调整点是 AppDelegate.swift 里的 NSInitialToolTipDelay,会影响整个 App
-            // 所有 .help() 提示,不是这一处独有的问题。
-            HStack(spacing: 4) {
-                Text(L10n.t("实验室功能"))
-                Image(systemName: "questionmark.circle")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .help(L10n.t("实验性 Beta 功能"))
+            .buttonStyle(.plain)
+            .tag(SettingsSidebarItem.labs)
         }
+    }
+
+    /// 交给侧栏 List 的选中:住在实验室的几页显示成「实验室」那一行亮着(同系统设置进到子页面时侧栏亮着上一级),
+    /// 其余原样。写回时原样写进 `selection`。
+    private var sidebarSelection: Binding<SettingsSidebarItem?> {
+        Binding(
+            get: {
+                if case .account(let destination)? = selection, destination.livesInLabs { return .labs }
+                return selection
+            },
+            set: { selection = $0 }
+        )
     }
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $selection) {
+            List(selection: sidebarSelection) {
                 // 搜索框里有字时整张侧栏换成结果列表(系统设置就是这么做的);清空就回来。
                 // 分类内容本体在 sidebarSections。
                 if isSearchingSettings {
@@ -580,15 +539,9 @@ struct SettingsView: View {
                 case .tab(.about): AboutSettingsTab()
                 case .softwareUpdate: SoftwareUpdatePage()
                 case .lastfmSuggestions: LastfmSuggestionsPage()
+                case .labs: LabsPage { selection = .account($0) }
                 case .account(let destination):
                     AccountLinkingTab(destination: destination, onJumpToAccount: { target in
-                        // 跳转目标如果落在"实验室功能"这个默认折叠的区域里(比如从 Last.fm 卡片跳去
-                        // 配置 ListenBrainz),detail 面板会正常切过去,但侧边栏因为这一行还没展开、
-                        // 根本不存在于列表里,高亮不到任何一行,看起来就是"跳过去了但侧边栏什么都
-                        // 没选中"。身份区里的 Last.fm、Discord 常驻可见,不需要展开这个折叠区。
-                        if target.livesInLabs {
-                            withAnimation { isAdditionalFeaturesExpanded = true }
-                        }
                         selection = .account(target)
                     })
                 case nil: ContentUnavailableView(L10n.t("选择左侧的设置分类"), systemImage: "gearshape")
@@ -661,16 +614,14 @@ struct SettingsView: View {
             // 同一次请求在信箱里的那份一并清掉,免得下次新建窗口时又被它顶一次。
             AppActions.shared.pendingSettingsSelection = nil
         }
-        // 记住顶层分类(见 SettingsTab.lastTabStorageKey)。只记 .tab:账号页多半在默认折叠的
-        // 「实验室功能」区里,记了它下次新建窗口就会是"detail 切过去了、侧栏却高亮不到任何一行"
-        // 的状态(同 onJumpToAccount 那条注释);而且账号页的落点本来就由引导页的信箱管。
+        // 记住顶层分类(见 SettingsTab.lastTabStorageKey)。只记 .tab:账号页、实验室的落点由引导页的信箱和深链管。
         // 六个顶层分类都记,包括「关于」——上次停在低频页下次也落在那里,行为可预测。
         .onChange(of: selection) { previous, item in
             if case .tab(let tab)? = item { lastTabRaw = tab.rawValue }
             // 选中的那一行从侧栏里消失时,List 会把选中清成 nil:「有软件更新可用」随更新装完 / 跳过而消失、
-            // 输入搜索词后侧栏整个换成结果列表、在账号页上收起「实验室功能」都是。页面本身还在,别退成
-            // 「选择左侧的设置分类」(清空搜索后也回不来),把选中放回去(此时侧栏没有行亮着,跟账号页在折叠区里
-            // 那种情形一样)。用户在侧栏里点不出「什么都不选」,所以凡是变成 nil 都是这种情形。
+            // 输入搜索词后侧栏整个换成结果列表都是。页面本身还在,别退成
+            // 「选择左侧的设置分类」(清空搜索后也回不来),把选中放回去(此时侧栏没有行亮着)。
+            // 用户在侧栏里点不出「什么都不选」,所以凡是变成 nil 都是这种情形。
             if item == nil, let previous {
                 selection = previous
                 return
@@ -726,7 +677,7 @@ struct SettingsView: View {
                 }
             }
         } icon: {
-            iconBadge(tab.icon, tint: tab.tint)
+            iconBadge(tab.icon, tint: tab.tint, top: tab.tintTop)
         }
         .tag(SettingsSidebarItem.tab(tab))
     }
@@ -738,7 +689,7 @@ struct SettingsView: View {
             $0 == .player ? .labelWithBadge($0.title) : .label($0.title)
         }
         rows.append(.label(LinkedPlatformsRow.title))
-        rows += AccountDestination.allCases.filter(\.livesInLabs).map { .account($0.title) }
+        rows.append(.account(LabsSidebarRow.title))
         rows += [.badge(SoftwareUpdateSidebarRow.title), .badge(LastfmSuggestionsSidebarRow.title),
                  .identityTitle(LastfmIdentityRow.connectTitle),
                  .identitySubtitle(LastfmIdentityRow.connectSubtitle), .identitySubtitle(LastfmIdentityRow.connectedSubtitle)]
@@ -755,6 +706,7 @@ struct SettingsView: View {
         case .account(let destination): return destination.title
         case .softwareUpdate: return L10n.t("软件更新")
         case .lastfmSuggestions: return L10n.t("Last.fm 账号建议")
+        case .labs: return L10n.t("实验室")
         case nil: return L10n.t("设置")
         }
     }

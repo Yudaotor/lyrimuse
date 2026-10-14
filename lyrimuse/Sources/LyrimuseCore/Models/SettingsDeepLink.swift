@@ -7,6 +7,7 @@ import Foundation
 ///     /account/listenbrainz /account/lastfm /account/relay /account/bark /account/discord    账号页
 ///     /software-update       软件更新页(App 侧另认 ?check=1)
 ///     /lastfm-suggestions    Last.fm 账号建议页
+///     /labs                  「实验室」总览页
 ///
 /// 认不出的路径返回 nil,App 只把设置窗口叫出来、停在上次的分类。大小写不敏感。
 public enum SettingsDeepLink: Equatable {
@@ -14,6 +15,7 @@ public enum SettingsDeepLink: Equatable {
     case account(Account)
     case softwareUpdate
     case lastfmSuggestions
+    case labs
 
     public enum Account: String, CaseIterable {
         case listenbrainz, lastfm, relay, bark, discord
@@ -28,6 +30,7 @@ public enum SettingsDeepLink: Equatable {
             switch parts[0] {
             case "software-update": self = .softwareUpdate
             case "lastfm-suggestions": self = .lastfmSuggestions
+            case "labs": self = .labs
             default:
                 guard Self.tabNames.contains(parts[0]) else { return nil }
                 self = .tab(parts[0])

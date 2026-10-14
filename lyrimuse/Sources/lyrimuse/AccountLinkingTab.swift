@@ -201,7 +201,7 @@ enum AccountDestination: Hashable, CaseIterable, Identifiable {
         }
     }
 
-    /// 住在侧栏默认折叠的「实验室功能」区里。Last.fm、Discord 在顶上的身份区,常驻可见。
+    /// 住在侧栏的「实验室」里(总览页 LabsPage 列出它们)。Last.fm、Discord 在顶上的身份区。
     var livesInLabs: Bool {
         switch self {
         case .listenBrainz, .stateRelay, .bark: return true
@@ -773,27 +773,7 @@ struct AccountLinkingTab: View {
     // 每张卡片最上面这句"整体介绍"文案(描述整张卡是干什么的,不是某一个 Section 的)
     // 放在这里,在 detailHeader 和 Form 之间,不塞进任何一个 Section 的 header/footer——
     // footer 只能放纯文字且只描述那一个 Section,不适合放"整张卡"级别的介绍。
-    private var cardIntroText: String? {
-        switch destination {
-        case .listenBrainz:
-            // 只说这张卡是干什么的,跟 Last.fm 那句同一个句式。原来这里还捎带讲了
-            // "建立完整听歌历史""也是网页展示/听歌报告的可选数据来源" —— 那些是后果和
-            // 别处的用法,不是这张卡要回答的问题,堆在标题下面只会让人一眼抓不到重点。
-            return L10n.t("将播放记录同步到 ListenBrainz")
-        case .stateRelay:
-            return L10n.t("用于将当前播放状态推送到网页小组件和状态徽章")
-        case .lastfm:
-            // "读取"方向(同步到 ListenBrainz)没有独立开关:这个判定要求"Last.fm 桥接
-            // 凭据 + ListenBrainz 都配好"(toggleGuarded 的 sameCardHint/crossCard 两层
-            // 校验)才生效,单独留一个开关没有实际区分度。跟"网页推送"那两个字段"填好
-            // 就是唯一的开关"是同一个思路(见 stateRelayFields 的 footer 注释)。
-            return L10n.t("将播放记录同步到 Last.fm")
-        case .bark:
-            return L10n.t("接收 Lyrimuse 的推送通知")
-        case .discord:
-            return L10n.t("向 Discord 好友展示正在收听的歌曲")
-        }
-    }
+    private var cardIntroText: String? { destination.intro }
 
     @ViewBuilder
     private var fields: some View {
@@ -2638,5 +2618,30 @@ private struct PendingListenRow: View {
         .padding(.vertical, 5)
         .contentShape(Rectangle())
         .onHover { inside in isHovered = inside }
+    }
+}
+
+extension AccountDestination {
+    /// 页头说明下面那一句,「实验室」总览页每行的说明也用它。
+    var intro: String {
+        switch self {
+        case .listenBrainz:
+            // 只说这张卡是干什么的,跟 Last.fm 那句同一个句式。原来这里还捎带讲了
+            // "建立完整听歌历史""也是网页展示/听歌报告的可选数据来源" —— 那些是后果和
+            // 别处的用法,不是这张卡要回答的问题,堆在标题下面只会让人一眼抓不到重点。
+            return L10n.t("将播放记录同步到 ListenBrainz")
+        case .stateRelay:
+            return L10n.t("用于将当前播放状态推送到网页小组件和状态徽章")
+        case .lastfm:
+            // "读取"方向(同步到 ListenBrainz)没有独立开关:这个判定要求"Last.fm 桥接
+            // 凭据 + ListenBrainz 都配好"(toggleGuarded 的 sameCardHint/crossCard 两层
+            // 校验)才生效,单独留一个开关没有实际区分度。跟"网页推送"那两个字段"填好
+            // 就是唯一的开关"是同一个思路(见 stateRelayFields 的 footer 注释)。
+            return L10n.t("将播放记录同步到 Last.fm")
+        case .bark:
+            return L10n.t("接收 Lyrimuse 的推送通知")
+        case .discord:
+            return L10n.t("向 Discord 好友展示正在收听的歌曲")
+        }
     }
 }

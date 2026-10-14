@@ -8630,48 +8630,48 @@
         }
       }
     },
-    "实验室功能" : {
+    "实验室" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lab Features"
+            "value" : "Labs"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "实验室功能"
+            "value" : "实验室"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "實驗室功能"
+            "value" : "實驗室"
           }
         }
       }
     },
-    "实验性 Beta 功能" : {
+    "还在试验中的功能，之后的版本可能会调整" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Experimental beta features"
+            "value" : "Features still being tried out. They may change in later versions."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "实验性 Beta 功能"
+            "value" : "还在试验中的功能，之后的版本可能会调整"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "實驗性 Beta 功能"
+            "value" : "仍在試驗中的功能，之後的版本可能會調整"
           }
         }
       }

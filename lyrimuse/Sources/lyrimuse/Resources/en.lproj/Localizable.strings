@@ -735,8 +735,7 @@
 "完成，开始 Scrobble" = "Done — Start Scrobbling";
 "完整尺寸" = "Full Size";
 "定位" = "Locate";
-"实验室功能" = "Lab Features";
-"实验性 Beta 功能" = "Experimental beta features";
+"实验室" = "Labs";
 "宽度" = "Width";
 "宽度模式" = "Width Mode";
 "对齐方式" = "Alignment";
@@ -2034,6 +2033,7 @@
 "返回" = "Back";
 "还剩 %@" = "%@ left";
 "还原" = "Revert";
+"还在试验中的功能，之后的版本可能会调整" = "Features still being tried out. They may change in later versions.";
 "还差最后几步：请完成下方标为橙色的项目" = "Almost there: complete the items marked in orange below";
 "还有 %@ 条" = "and %@ more";
 "还有未完成的项目" = "Some Items Need Attention";
