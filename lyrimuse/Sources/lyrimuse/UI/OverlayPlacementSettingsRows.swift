@@ -11,7 +11,7 @@ import SwiftUI
 // (屏幕 / Dock 变化时要反复重算,不能靠设置行"顺手调一下"),这里只写值,一个 `.shared` 都不碰。
 
 /// 「位置」三选一铺满整宽,下面常显一段说明。不再是一行「位置」+ 尾部控件:两个宿主(浮层、抽屉组)的标题都已经叫「位置」,
-/// 再来一行同名行是同一句话说两遍,三个选项还被挤到右边贴边。说明原来收在「?」里,改成常显。
+/// 再来一行同名行是同一句话说两遍,三个选项还被挤到右边贴边。说明原来收在「?」里,改成常显,只说明选中的那一档。
 @MainActor
 struct OverlayPlacementSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -21,7 +21,7 @@ struct OverlayPlacementSettingsRows: View {
             SettingsRawRow {
                 VStack(alignment: .leading, spacing: 8) {
                     OverlayPlacementSegmentedControl(selection: $settings.overlayPlacementMode, fillsWidth: true)
-                    Text(L10n.t("自由：可拖移到任意位置。\n顶部居中 / 底部居中：在菜单栏下方 / Dock 上方水平居中，屏幕或 Dock 变化时自动对齐；此模式下窗口不可拖移。"))
+                    Text(placementHelp)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -41,13 +41,24 @@ struct OverlayPlacementSettingsRows: View {
                             label: { $0 ? L10n.t("跟随当前窗口") : L10n.t("固定") },
                             minWidth: 56)
                     }
-                    Text(L10n.t("跟随当前窗口：你在另一块屏幕上操作窗口时，悬浮歌词跟过去，在屏幕里的相对位置不变。"))
+                    Text(settings.overlayFollowsActiveScreen
+                         ? L10n.t("你切到哪块屏幕，歌词就跟到哪块，位置不变")
+                         : L10n.t("一直留在你放它的那块屏幕"))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .settingsSearchHighlight(title: L10n.t("所在屏幕"))
+        }
+    }
+
+    /// 只说明选中的那一档,一句话;三档一起列出来太长。
+    private var placementHelp: String {
+        switch settings.overlayPlacementMode {
+        case .free: return L10n.t("可拖到任意位置")
+        case .topCenter: return L10n.t("固定在菜单栏下方正中，不能拖动")
+        case .bottomCenter: return L10n.t("固定在 Dock 上方正中，不能拖动")
         }
     }
 }

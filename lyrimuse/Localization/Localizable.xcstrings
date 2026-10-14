@@ -27797,29 +27797,6 @@
         }
       }
     },
-    "自由：可拖移到任意位置。\n顶部居中 / 底部居中：在菜单栏下方 / Dock 上方水平居中，屏幕或 Dock 变化时自动对齐；此模式下窗口不可拖移。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Free: drag it anywhere.\nTop Center / Bottom Center: centered just below the menu bar / just above the Dock, re-aligned automatically when the screen or Dock changes; the window can't be dragged in these modes."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自由：可拖移到任意位置。\n顶部居中 / 底部居中：在菜单栏下方 / Dock 上方水平居中，屏幕或 Dock 变化时自动对齐；此模式下窗口不可拖移。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自由：可拖移到任意位置。\n頂部置中 / 底部置中：在選單列下方 / Dock 上方水平置中，螢幕或 Dock 變化時自動對齊；此模式下視窗不可拖移。"
-          }
-        }
-      }
-    },
     "补交未完成，请稍后重试" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -46944,25 +46921,117 @@
         }
       }
     },
-    "跟随当前窗口：你在另一块屏幕上操作窗口时，悬浮歌词跟过去，在屏幕里的相对位置不变。" : {
+    "可拖到任意位置" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Follow Active Window: when you work in a window on another screen, the floating lyrics move there and keep the same relative position."
+            "value" : "Drag it anywhere"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "跟随当前窗口：你在另一块屏幕上操作窗口时，悬浮歌词跟过去，在屏幕里的相对位置不变。"
+            "value" : "可拖到任意位置"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "跟隨目前視窗：你在另一塊螢幕上操作視窗時，浮動歌詞跟過去，在螢幕裡的相對位置不變。"
+            "value" : "可拖到任意位置"
+          }
+        }
+      }
+    },
+    "固定在菜单栏下方正中，不能拖动" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pinned centered below the menu bar; can't be dragged"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "固定在菜单栏下方正中，不能拖动"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "固定在選單列下方正中，無法拖動"
+          }
+        }
+      }
+    },
+    "固定在 Dock 上方正中，不能拖动" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pinned centered above the Dock; can't be dragged"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "固定在 Dock 上方正中，不能拖动"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "固定在 Dock 上方正中，無法拖動"
+          }
+        }
+      }
+    },
+    "你切到哪块屏幕，歌词就跟到哪块，位置不变" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Follows you to whichever screen you're using, in the same spot"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你切到哪块屏幕，歌词就跟到哪块，位置不变"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你切到哪塊螢幕，歌詞就跟到哪塊，位置不變"
+          }
+        }
+      }
+    },
+    "一直留在你放它的那块屏幕" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stays on the screen you put it on"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一直留在你放它的那块屏幕"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一直留在你放它的那塊螢幕"
           }
         }
       }
