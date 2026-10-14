@@ -334,7 +334,7 @@ public enum PlayCountFold {
     /// 头词黑名单;6=同日第三批(****):R1 守卫套到原串(中文歌名的 Live 版不再
     /// 并进录音室版)+ 版本尾缀分隔符归一;7=第三批的修正(并行核实推翻了归一的一半):
     /// 裸场次标记不归一 + dashSuffixSplit 真取最后一个分隔符 + 归一后补剥一次目录学噪音 +
-    /// 别名表剔掉 jasonchan/kun。 前几版都装过机、盘上可能已被盖成那个号,
+    /// 别名表剔掉 jasonchan/kun;8=归一前先去掉看不见的格式字符(stripInvisible)。 前几版都装过机、盘上可能已被盖成那个号,
     /// 所以每一批都必须再 +1,否则「版本相等直接采用盘上旧键、永不迁移」。
     ///
     /// **`familyKey`/`canonicalArtist`/歌名别名表的改动不算在内,不用 +1**:
@@ -343,7 +343,7 @@ public enum PlayCountFold {
     /// (版本相等/不等)**都无条件**调用 `rebuildPrimaryCreditFamilies`(读代码
     /// 确认),也就是每次启动都会用当前 `familyKey` 重新分组,不需要靠这个版本号触发迁移。
     /// 新增歌名别名表时特意验证过这一点,没有 +1。
-    public static let foldVersion = 7
+    public static let foldVersion = 8
 
     /// key 的 memo:单次 key 要走 2 次 NFKC + 2 次 ICU 繁简
     /// transform(各自新建 CFMutableString),几十 µs 量级;而每次刷新最近记录都对同一批
@@ -671,11 +671,11 @@ public enum PlayCountFold {
         return t
     }
 
-    /// NFKC(全角→半角) → 繁简(ICU) → 小写。
+    /// 去掉看不见的格式字符(stripInvisible) → NFKC(全角→半角) → 繁简(ICU) → 小写。
     /// 模块内可见:PlayCountFoldExplainer 要沿这条流水线逐级比对给出「为什么并进来」,
     /// 必须用同一个函数而不是再写一遍归一。
     static func normalized(_ s: String) -> String {
-        let nfkc = s.precomposedStringWithCompatibilityMapping
+        let nfkc = stripInvisible(s).precomposedStringWithCompatibilityMapping
         let m = NSMutableString(string: nfkc) as CFMutableString
         CFStringTransform(m, nil, "Hant-Hans" as CFString, false)
         return (m as String).lowercased()
@@ -701,6 +701,14 @@ public enum PlayCountFold {
             if han.count >= 2 { return han }
         }
         return t
+    }
+
+    /// 去掉看不见的格式字符(Unicode 一般类别 Cf:零宽空格、U+2060 字连接符、BOM、方向标记……),只差这些的两种写法
+    /// 算同一种(12 章决策 76)。按码点去,别按 Character 过滤:零宽连接符、零宽非连接符粘在前一个字形簇里,按簇去不掉。
+    /// 模块内可见,理由同 normalized。
+    static func stripInvisible(_ s: String) -> String {
+        guard s.unicodeScalars.contains(where: { $0.properties.generalCategory == .format }) else { return s }
+        return String(String.UnicodeScalarView(s.unicodeScalars.filter { $0.properties.generalCategory != .format }))
     }
 
     /// 模块内可见,理由同 normalized。

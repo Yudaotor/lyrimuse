@@ -1276,6 +1276,15 @@ func runLastfmTests() {
         // 空格/大小写/歌手繁简
         expectEqual(F.key(artist: "陶喆", title: "Susan 说"),
                     F.key(artist: "陶喆", title: "susan说"), "折叠键: 空格与大小写")
+        expectEqual(F.key(artist: "Gareth.T", title: "\u{2060}千人操"), F.key(artist: "Gareth.T", title: "千人操"),
+                    "折叠键: 看不见的字连接符(U+2060)不算")
+        expectEqual(F.key(artist: "周\u{200B}杰伦\u{FEFF}", title: "晴\u{200E}天"), F.key(artist: "周杰伦", title: "晴天"),
+                    "折叠键: 零宽空格、BOM、方向标记都不算")
+        expectEqual(F.foldTitle("a\u{200C}b"), F.foldTitle("ab"), "折叠键: 粘在前一个字上的零宽非连接符也去掉")
+        expectEqual(F.familyKey(artist: "Gareth.T", title: "\u{2060}千人操"), F.familyKey(artist: "Gareth.T", title: "千人操"),
+                    "折叠键: 写法族同样不看格式字符")
+        expectEqual(LocalArtistAliases.artistKey("\u{2060}HUSH, 孙盛希"), LocalArtistAliases.artistKey("HUSH"),
+                    "折叠键: 歌手键同样不看格式字符")
         expectEqual(F.key(artist: "陳奕迅", title: "富士山下"),
                     F.key(artist: "陈奕迅", title: "富士山下"), "折叠键: 歌手名繁简")
         // 段落交错的双语名不收敛(宁可漏合不错合)
@@ -2024,6 +2033,8 @@ func runLastfmTests() {
                     "合并原因: 只差大小写 → 大小写/空格")
         expectEqual(r(("Prince", "Call My Name"), ("Prince", "CallMyName")), [.caseOrSpacing],
                     "合并原因: 只差空格 → 大小写/空格")
+        expectEqual(r(("Gareth.T", "千人操"), ("Gareth.T", "\u{2060}千人操")), [.caseOrSpacing],
+                    "合并原因: 只差看不见的格式字符 → 大小写/空格")
         expectEqual(r(("丁世光", "一口(The Day You Left Me)"), ("丁世光", "一口（The Day You Left Me）")), [.fullwidth],
                     "合并原因: 全角括号 → 全角/半角(丁世光《一口》实测)")
         expectEqual(r(("盧廣仲", "我不是农人"), ("盧廣仲", "我不是農人")), [.hanScript],

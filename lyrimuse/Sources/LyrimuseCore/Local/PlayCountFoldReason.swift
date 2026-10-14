@@ -46,10 +46,10 @@ public enum PlayCountFoldExplainer {
         return out
     }
 
-    // 各级归一。顺序 = PlayCountFold.key/foldTitle 里的真实步骤顺序:先是最轻的(大小写/空格),
+    // 各级归一。顺序 = PlayCountFold.key/foldTitle 里的真实步骤顺序:先是最轻的(大小写/空格/看不见的格式字符),
     // 再 NFKC、繁简、剥目录学噪音、版本尾缀归一、双语拼接收敛,最后才是别名表。
     private static func loose(_ s: String) -> String {
-        PlayCountFold.stripSpaces(s.lowercased())
+        PlayCountFold.stripSpaces(PlayCountFold.stripInvisible(s).lowercased())
     }
     private static func nfkc(_ s: String) -> String {
         loose(s.precomposedStringWithCompatibilityMapping)
