@@ -7,23 +7,20 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "featur
 
 // 十二个歌词源——rawValue 必须跟 lyrimuse-engine/features.go 的 lyricSourceXxx 常量逐字对应,
 // 这是两侧通过共享 json 文件交换的字符串。displayName/color 直接委托给
-// LyricsManagerView.swift 已有的 sourceDisplayName/sourceColor(那两个函数今天也在给
+// LyricsManagerView.swift 已有的 sourceDisplayName/sourceColor(那两个函数也在给
 // "歌词管理"窗口的来源筛选/列表用),不重复维护第二份名字/颜色映射。
 //
 // **声明顺序是有语义的,不是随手排的**,它同时是两处的顺序:
-//   ① 设置页「歌词来源」那张卡里九个勾选框的展示序(`ForEach(LyricsSource.allCases)`);
+//   ① 设置页「歌词来源」那张卡里勾选框的展示序(`ForEach(LyricsSource.allCases)`);
 //   ② 「顺序优先」模式下 `lyricsSourceOrder` 的**默认值**(见下面 @Published 的初值)——
 //      也就是新装机器上"按顺序取第一个有结果的源"真正的取用顺序。用户拖拽排过之后
 //      以自己那份为准,改这里只影响没排过的人。
 // 所以它必须跟引擎 `features.go` 的 `lyricsSourceDefaultOrder` **逐字同序**,
 // 否则同一台机器在首次写盘前后表现不同(那边注释也钉着这条)。
 //
-// 排序依据(按实测调整):前五个按真实采用率排 —— 用户本机 3744 条 enrich 缓存里
-// 最终被采用的歌词来自 酷狗 1506(40.2%)/ 网易云 1125(30.0%)/ QQ 732(19.6%)/
-// Musixmatch 176(4.7%)/ LRCLIB 74(2.0%),酷狗是第一主力却长期排在第三,这次提到首位。
-// 后五个(amll/lyricfind/kuwo/migu/deezer)**刻意不按采用率排**:它们分别是 /
-// 08-31 / 08-31 / 09-04 / 09-13 才接入的,那 3744 条缓存绝大多数早于它们存在,采用数 0~16 是
-// 样本偏差、不是覆盖率结论。等各自跑满一段时间再拿数据说话,别用"没赶上考试"当"考砸了"。
+// 排序依据:前五个(酷狗 / 网易云 / QQ / Musixmatch / LRCLIB)按实测的最终采用率排;后面几个
+// **刻意不按采用率排**:它们接入得晚,统计时的缓存绝大多数早于它们存在,采用数低是样本偏差、
+// 不是覆盖率结论,等各自跑满一段时间再拿数据说话。
 // deezer 跟 lyricfind 数据同源(都是 LyricFind 供词),但两条管道各走各的接口:接它既是
 // 给那家版权方补条后路,也因为 Deezer 的法语曲库覆盖更好,见 lyrimuse-engine/deezer.go 头注。
 public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable {
@@ -149,7 +146,7 @@ public enum LastfmMatchMode: String, CaseIterable, Identifiable, Codable {
 // 界面形状(catalog = true、raw = false),features.json 的字段一个没动,引擎侧
 // resolveScrobbleTags 也不用跟着改。
 //
-// 做成选项而不是继续用开关:「改写曲名」四个字没说出**改成什么**,开关只表达得了开/关,
+// 做成选项而不是开关:「改写曲名」四个字没说出**改成什么**,开关只表达得了开/关,
 // 选项能把「改用编目里的写法」和「原样发」两件事都摆在明面上。
 public enum LastfmTrackRule: String, CaseIterable, Identifiable, Codable {
     case catalog, raw
@@ -185,11 +182,11 @@ public enum LastfmArtistRule: String, CaseIterable, Identifiable, Codable {
 // 引擎只认这四个串,拼错就静默退回官方规则。
 //
 // - half("50"):官方规则,曲长一半或 4 分钟,先到为准(默认)。这也是 ListenBrainz 那一路提交的时刻,
-//   所以这一档下 Last.fm 跟加这个设置之前一样当场发。
+//   所以这一档下 Last.fm 跟 ListenBrainz 同一刻发。
 // - threeQuarters("75") / ninety("90"):听满曲长的 75% / 90%,纯按已播时长算,不套 4 分钟上限。
 // - end("end"):一直放到结尾才记,中途切歌不记(判据见引擎 poller.go sessionEndedNaturally)。
 //
-// **只管 Last.fm**(「只考虑 lastfm 的」):ListenBrainz、网页中继照旧在官方阈值那一刻提交,
+// **只管 Last.fm**:ListenBrainz、网页中继照旧在官方阈值那一刻提交,
 // Last.fm 那一路(含给它兜底的本地收听日志)挂起到点再发。官方规则是下限,所以没有低于一半的档;
 // 曲长未知时按官方规则。
 public enum LastfmScrobblePoint: String, CaseIterable, Identifiable, Codable {
@@ -207,7 +204,7 @@ public enum LastfmScrobblePoint: String, CaseIterable, Identifiable, Codable {
 
 // lyrimuse-features.json 的形状(引擎侧 features.go 的 featureFlagsFile 读同一份文件)。所有字段可选:
 // nil = 文件里没写。这份文件只有 App 写:load() 每次把缺项补上默认值、把旧写法(下面标了遗留字段 / 迁移标记的
-// 那几个键)改成新写法,跟盘上不一样就当场整份写回;引擎只认文件,不再自己补默认值、跑迁移。
+// 那几个键)改成新写法,跟盘上不一样就当场整份写回;引擎只认文件,不自己补默认值、跑迁移。
 // 这个版本不认识的键原样保留(见 FeatureSettingsStore.document)。
 struct FeatureFlagsFile: Codable, Equatable {
     // player:**遗留字段**(被下面的 players 取代)。旧版本只能选一个播放器时写的就是这个键;players 缺失时
@@ -366,7 +363,7 @@ struct FeatureFlagsFile: Codable, Equatable {
 // 账号卡片的开关(lastfmMirrorScrobble/weeklyDigest)共用同一份数据层——读写
 // ~/.config/lyrimuse/lyrimuse-features.json,跟
 // lyrimuse-engine/features.go 是同一份共享文件的两侧独立实现。Last.fm 桥接
-// (读 Last.fm 转发进 ListenBrainz + 喂网页"正在播放")不再是这里的一个独立开关——
+// (读 Last.fm 转发进 ListenBrainz + 喂网页"正在播放")没有独立开关——
 // Last.fm 桥接凭据 + ListenBrainz 账号都配好就自动生效,跟引擎侧
 // poller.go 的 bridge() 判断条件一致,见那边的注释。
 //
@@ -374,7 +371,7 @@ struct FeatureFlagsFile: Codable, Equatable {
 // `Task { await features.save() }`,持久化+重启挪到后台执行,但从用户视角"点开关
 // 立刻生效"这个体验不变(不需要等;设置窗口底部有一条**不阻塞**的状态条
 // EngineApplyStatusBar:重启进行中一行小字、重启失败给原因和「重试」、后台服务被主动停用给
-// 中性提示——lastError 从此有人读)。"账号连接"tab 底部那条
+// 中性提示)。"账号连接"tab 底部那条
 // 批量保存栏(isDirty/saveBar)管的是 ConfigStore 的文本/密钥字段,跟这个 store 的开关
 // 无关,不要混为一谈。
 @MainActor
@@ -391,8 +388,7 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var players: Set<PlaybackPlayer> = [.auto]
 
     /// 点一下切换这个播放器的选中状态,并落盘。设置页「播放器」卡和引导页「选择播放器」
-    /// 那一步共用这一份(从 `SettingsView.toggleSelectedPlayer` 提上来 ——
-    /// 引导页同日从单选改成多选,两处各写一遍就有两份"最后一个能不能取消"的判断)。
+    /// 那一步共用这一份(两处各写一遍就有两份"最后一个能不能取消"的判断)。
     ///
     /// 「自动识别」跟具体播放器不是互斥关系,可以一起勾——见 PlaybackPlayerPreference
     /// 的注释,勾了自动识别之后它按超集处理,不会因为同时也勾了具体播放器就退化。
@@ -421,9 +417,9 @@ public final class FeatureSettingsStore: ObservableObject {
     }
 
     /// 预解析待播曲目。字段名和 json 键(`album_prefetch`)是这个功能只预取
-    /// 「同一张专辑里其它曲目」那阵子留下的,语义**已经扩到整条播放队列**(见
-    /// lyrimuse-engine/upcoming.go)。不改名是刻意的:改了就要多一个迁移标记,而迁移标记漏写一边
-    /// 的坑刚踩过(`applemusic_lyrics`),为一个纯内部的名字不值得。
+    /// 「同一张专辑里其它曲目」时起的,语义**已经扩到整条播放队列**(见
+    /// lyrimuse-engine/upcoming.go)。不改名是刻意的:改了就要多一个迁移标记,迁移标记漏写一边
+    /// 就会静默出错,为一个纯内部的名字不值得。
     @Published public var albumPrefetch = true
     /// 「自动跟进算法升级」——关掉之后,已经选定的歌词不再被后台的重打分/升级重搜换掉。
     @Published public var lyricsAutoUpgrade = true
@@ -500,7 +496,7 @@ public final class FeatureSettingsStore: ObservableObject {
     }
     /// 默认 false:短于 30 秒不记(Last.fm 官方规则)。
     @Published public var scrobbleShortTracks = false
-    /// 默认 .half:官方规则那一刻就发,跟加这个设置之前一样。
+    /// 默认 .half:官方规则那一刻就发。
     @Published public var lastfmScrobblePoint: LastfmScrobblePoint = .half
     @Published public var weeklyDigest = false
     @Published public var dailyDigest = false
@@ -554,8 +550,16 @@ public final class FeatureSettingsStore: ObservableObject {
 
     static let fileURL = LyrimusePaths.configFile("lyrimuse-features.json")
 
+    /// 用户排的顺序补全成全部源的排列:认得的按原顺序保留(去重),没排进去的按 `LyricsSource.allCases`(默认顺序)
+    /// 补在末尾。别在对不上时整体退回默认顺序 —— 那样每加一个新源,「顺序优先」模式下用户手排的顺序就被静默清掉。
+    static func completedLyricsSourceOrder(_ order: [LyricsSource]) -> [LyricsSource] {
+        var seen = Set<LyricsSource>()
+        let kept = order.filter { seen.insert($0).inserted }
+        return kept + LyricsSource.allCases.filter { !seen.contains($0) }
+    }
+
     /// 这台机器是不是**头一回**用 lyrimuse。只给"新装的默认值跟老用户不一样"的开关用
-    /// (引入时只有 `lastfmScrobbleArtistMode` 一个,见它的声明)。
+    /// (目前是 `lastfmMatchMode`,见它的声明)。
     ///
     /// 为什么非要这么一个东西:想给某个开关换默认值时,"从没设置过"和"显式选了旧默认值"
     /// 在 features.json 里**长得一模一样** —— persistFile() 写的是全量快照,所以用户只要
@@ -574,15 +578,7 @@ public final class FeatureSettingsStore: ObservableObject {
     /// 三条**全都往"老机器"那边倒**,这是刻意的:判错的代价不对称。判成老机器,最坏是
     /// 新用户拿到旧默认值,他在设置里一眼看得见、随手能改;判成新机器却其实是老用户,等于
     /// 背着他改了 scrobble 行为 —— 而 scrobble 落进 Last.fm 之后基本删不掉。同一条
-    /// "写侧不可逆、宁可不动"的取舍贯穿这个开关,见 lastfmScrobbleArtistMode 的声明。
-    /// 用户排的顺序补全成全部源的排列:认得的按原顺序保留(去重),没排进去的按 `LyricsSource.allCases`(默认顺序)
-    /// 补在末尾。原来对不上就整体退回默认顺序 —— 每加一个新源,「顺序优先」模式下用户手排的顺序就被静默清掉。
-    static func completedLyricsSourceOrder(_ order: [LyricsSource]) -> [LyricsSource] {
-        var seen = Set<LyricsSource>()
-        let kept = order.filter { seen.insert($0).inserted }
-        return kept + LyricsSource.allCases.filter { !seen.contains($0) }
-    }
-
+    /// "写侧不可逆、宁可不动"的取舍贯穿这个开关,见 lastfmMatchMode 的声明。
     static var isFreshInstall: Bool {
         if UserDefaults.standard.object(forKey: "np:hasCompletedOnboarding") != nil { return false }
         let fm = FileManager.default
@@ -743,8 +739,6 @@ public final class FeatureSettingsStore: ObservableObject {
     /// 磁盘上存在、但**这个版本**的 FeatureFlagsFile 不认识的键,原样留着,写盘时再合并回去
     /// —— 否则多设备同步时(如 Mac A 已更新到新版、Mac B 还没跟上,B 写盘时按旧版 struct
     /// 重新编码)会把新版才有的字段丢掉,再同步回去就连累了另一台机器。
-    ///
-    /// 隔壁 ConfigStore 走 `raw: [String: Any]` 整字典读写(见那边 :72-78)。
     ///
     /// 两个 Store 统一走 Core `JSONConfigDocument`:磁盘上那份对象(全部键,含不认识的)的镜像
     /// 就是 `document.raw`,写盘时 `save(fields:knownKeys:)` 按「已知键以本次编码为准、其余原样保留」合并 ——
@@ -995,11 +989,6 @@ public final class FeatureSettingsStore: ObservableObject {
         pendingUntilServiceEnabled = false
     }
 
-    // 重启去抖的状态原来在这里,整体挪进了共享的
-    // EngineRestartCoordinator —— 原因不是嫌它写得不好,而是它只能是**私有**的:
-    // 看不见 ConfigStore 也在重启,于是"改一个凭据 + 改一个开关"照样两次重启,正好是
-    // 它当初想消灭的那个场景。别在这里重新加一份局部去抖。
-    // 独立保存入口(持久化+重启+提交快照一步到位)——给本文件里每一个即时保存的开关用。
     /// 这次保存改了哪些顶层键(json 键名)。拿它问 `EngineRestartPolicy` 要不要重启引擎。
     /// 编码失败(只会是编程错误)时返回空集合 —— 空集合按"不知道改了什么"处理,照旧重启。
     private var changedFileKeysSinceLastSave: Set<String> {
@@ -1017,6 +1006,9 @@ public final class FeatureSettingsStore: ObservableObject {
         return EngineRestartPolicy.changedKeys(from: fields(old), to: fields(new))
     }
 
+    // 独立保存入口(持久化+重启+提交快照一步到位)——给本文件里每一个即时保存的开关用。重启去抖在共享的
+    // EngineRestartCoordinator 里:私有的一份看不见 ConfigStore 也在重启,"改一个凭据 + 改一个开关"照样两次
+    // 重启。别在这里重新加一份局部去抖。
     @discardableResult
     public func save() async -> Bool {
         // 在 persistFile() **之前**算:那一步之后 savedSnapshot 还没动,但先算出来更不容易漏。

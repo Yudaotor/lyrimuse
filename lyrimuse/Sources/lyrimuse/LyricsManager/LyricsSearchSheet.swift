@@ -1788,8 +1788,8 @@ struct LyricsSearchSheet: View {
         isCurrent: Bool, duplicate: LyricsCandidateDuplicates.Match?
     ) -> some View {
         // 一个标签都没有时整排不渲染(而不是渲染一个空的 WrapLayout):空 Layout 高度是 0
-        // 但外层 VStack 照样给它算 4pt 间距,那一行看起来就比别的行多垫了一截。来源标从
-        // 这排挪走之后这种"全空"是真会发生的——一条有逐行时间戳、没译文没罗马音、既不
+        // 但外层 VStack 照样给它算 4pt 间距,那一行看起来就比别的行多垫了一截。来源标可以
+        // 不在这排(showsSource 为 false),所以"全空"是真会发生的——一条有逐行时间戳、没译文没罗马音、既不
         // 重复也不是当前使用的普通候选,剩下的就是空。
         if hasAnyCharacteristicBadge(c, showsSource: showsSource, isCurrent: isCurrent, duplicate: duplicate) {
             // WrapLayout 而不是 HStack:最多可能同时有六个标签(逐字/译文/罗马音/来源/内容或文字相同/当前使用),
@@ -1854,7 +1854,7 @@ struct LyricsSearchSheet: View {
             || showsSource || duplicate != nil || isCurrent
     }
 
-    /// 名字和颜色走全局那一份:Spotify、Amazon Music、KKBOX 的本地歌词不在 `LyricsSource` 里,别改回按枚举取名
+    /// 名字和颜色走全局那一份:Spotify、Amazon Music、KKBOX 的本地歌词不在 `LyricsSource` 里,别改成按枚举取名
     /// (取不到就露出小写的原始 id)。
     private func sourceBadge(_ source: String) -> some View {
         let tint = sourceColor(source)
@@ -2009,7 +2009,7 @@ struct LyricsSearchSheet: View {
                 // 到达的,currentSource 对应的那条不一定在第一批就到,所以只要用户还没
                 // 手动点过(userPickedSource),每来一批新候选都重新评估一次,等它一出现
                 // 就切过去,不是只在第一次到达时判断一锤子买卖。用户已经手动点过之后这里
-                // 整段直接跳过,不会倒回去抢用户已经选定的行(原有设计的这条原则不变)。
+                // 整段直接跳过,不会倒回去抢用户已经选定的行。
                 // currentSource 为空(比如这首歌还没有任何已生效来源)或它对应的候选
                 // 始终没搜到时,退回"目前排最前"兜底,且只兜底一次(已经选中过东西就不再
                 // 因为"还是没等到 currentSource"而重新改选)。
