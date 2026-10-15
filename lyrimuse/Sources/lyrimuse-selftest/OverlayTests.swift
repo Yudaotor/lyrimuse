@@ -1744,6 +1744,20 @@ func runOverlayTests() {
         func src(_ name: String) -> String {
             (try? String(contentsOf: ui.appendingPathComponent(name), encoding: .utf8)) ?? ""
         }
+        /// `signature` 起到与它之后第一个 `{` 配对的 `}` 为止;找不到返回空串。
+        func body(_ signature: String, in text: String) -> String {
+            guard let start = text.range(of: signature), let open = text[start.lowerBound...].firstIndex(of: "{") else { return "" }
+            var depth = 0
+            var i = open
+            while i < text.endIndex {
+                if text[i] == "{" { depth += 1 } else if text[i] == "}" {
+                    depth -= 1
+                    if depth == 0 { return String(text[start.lowerBound...i]) }
+                }
+                i = text.index(after: i)
+            }
+            return ""
+        }
         let view = src("LyricsOverlayView.swift")
         let controller = src("LyricsOverlayWindowController.swift")
         expectEqual(view.components(separatedBy: "timingEpoch: playback.timingEpoch").count - 1, 3,
@@ -1818,7 +1832,7 @@ func runOverlayTests() {
                     true, "悬浮接线: 「长按拖动」关着时指针停在歌词文字上先接住点击,按下和拖动都不漏给下层")
         expectEqual(controller.contains("guard !edgeCaptured, !controlCaptured, !lyricsCaptured, !fontZoomCaptured, !isDragArmed else { return }"), true,
                     "悬浮接线: 歌词文字、调字号接管着时不还原穿透")
-        expectEqual(controller.contains("restorePointerCaptureAfterDrag()\n        // 实测把窗口拖到了哪儿")
+        expectEqual(body("private func finishArmedDrag() {", in: controller).contains("restorePointerCaptureAfterDrag()")
                     && !controller.contains("ignoresMouseEvents = true\n            isDragArmed = false")
                     && !controller.contains("ignoresMouseEvents = true\n            recomputeControlsBelowCard()"),
                     true, "悬浮接线: 拖完或拖动作废时按接管状态还原,指针还在字上就接着接住")
