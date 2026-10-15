@@ -1536,10 +1536,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 iconButton(.next, "forward.fill")
             }
             .opacity(playback.controlsWithheldReason == nil ? 1 : PlaybackCoordinator.withheldControlOpacity)
-            // 「喜欢」——对应 Apple Music 里那颗心(脚本字典里的 favorited)、Kaset 里的赞。只有这两个播放器
-            // 有这个概念,所以 playback.isFavorited 为 nil(别的播放器/没拿到自动化权限)时整个
-            // 按钮不出现,而不是显示一颗永远点不亮的心。跟前面三个播放按钮同属"对当前这首歌
-            // 的操作",放在同一组里、竖线之前。
+            // 「喜欢」:哪些播放器有见 MusicPlaybackController.supportsFavorite;playback.isFavorited 为 nil
+            // (这个播放器没有这回事 / 没拿到权限)时整个按钮不出现,而不是显示一颗永远点不亮的心。跟前面
+            // 三个播放按钮同属"对当前这首歌的操作",放在同一组里、竖线之前。
             //
             // 不走控制器的 withMusicPermission:那个包装是为播放控制准备的(先查权限、被拒就 NSSound.beep()),
             // 而这里的权限检查和乐观更新都在 PlaybackCoordinator.toggleFavorited() 里一起做了,再套一层会
