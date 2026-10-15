@@ -91,8 +91,8 @@ public enum LyrimusePaths {
     }
 
     /// 传给引擎的环境变量 —— 常驻 job 的 plist(`EnvironmentVariables`)和 App spawn 的每一个一次性子命令
-    /// (search-lyrics / healthcheck / backfill…)都要带上,否则子命令会落回引擎自己的默认目录、跟本 App 不是同一份数据。
-    /// 正式版传的就是引擎的默认值,所以永远只有一条代码路径,不存在「正式版不传」这种分叉。
+    /// (search-lyrics / healthcheck / backfill…)都要带上:路径以这里为准,引擎自己的默认值只是兜底。
+    /// 传的值等于引擎的默认值,照样要传 —— 只留一条代码路径,两侧默认值哪天对不上也不会读到两份数据。
     /// Go 侧的读取方是 `paths.go` 的 `configDir()` / `logFilePath()` / `appBundleID()`。
     public static var engineEnvironment: [String: String] {
         [

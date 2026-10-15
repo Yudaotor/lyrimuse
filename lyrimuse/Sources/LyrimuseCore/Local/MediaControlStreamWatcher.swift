@@ -113,7 +113,7 @@ public final class MediaControlStreamWatcher {
     // App 被直接 kill(build.sh 重装、崩溃)时退出回调不会跑,media-control 的 stream 子进程就被
     // launchd 收养、一直活着:它只在 Now Playing 变化时才往管道写,父进程没了也不会马上因为写管道失败
     // 而退出(实测一个活了 3 天多)。每重启一次多一个。所以每次启动先扫一遍,把父进程已经是 launchd、
-    // 路径是**这个 App 包里**那份 adapter 的 stream 进程结束掉 —— 别的 App 包(Dev 变体、别处装的副本)
+    // 路径是**这个 App 包里**那份 adapter 的 stream 进程结束掉 —— 别的 App 包(别处装的副本)
     // 的不碰。
 
     private static var reapedOrphans = false

@@ -540,7 +540,7 @@ enum DiagnosticsExporter {
         // stdout / stderr 分两路:报告本体走 stdout,探测曲触发的网络审计行走 stderr,合成一路会交叉穿插。
         // ProcessRunner 并发读空两根管子、到点先 SIGTERM 再 SIGKILL;是不是被它杀的看 `timedOut`,
         // 别用 terminationReason == .uncaughtSignal 去猜(任何信号杀死的进程都会命中)。
-        // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.engineEnvironment。
+        // 子命令必须跟本 App 同一份配置目录 / 日志文件,见 LyrimusePaths.engineEnvironment。
         guard let result = ProcessRunner.run(
             enginePath, DiagnosticsHealthCheck.arguments, timeout: DiagnosticsHealthCheck.timeoutSeconds,
             environment: LyrimusePaths.engineProcessEnvironment(), captureStderr: true)

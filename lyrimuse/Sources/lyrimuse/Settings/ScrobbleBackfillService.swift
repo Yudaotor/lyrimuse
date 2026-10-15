@@ -50,25 +50,15 @@ final class ScrobbleBackfillService: ObservableObject {
         var quarantined = 0
         var abortedReason: String?
 
-        // 手写 init(from) —— **不能**靠上面那些属性默认值(修的真 bug:界面报
-        // 「补提交没能完成，请稍后再试」,而 Last.fm 那边 26 条全补进去了、本地回执也写了)。
+        // 手写 init(from) —— **不能**靠上面那些属性默认值:Swift 自动合成的解码器对**非可选**属性一律走
+        // decode(_:forKey:),缺 key 直接 throw,**属性默认值不参与解码**。而 Go 那边
+        // `Items []backfillItem json:"items,omitempty"` 只在 dry-run 分支填(backfill.go runBackfill),
+        // 真跑的输出没有 items 键 → keyNotFound → run() 里那句 try? 吞成 nil → lastRunFailed:补提交其实
+        // 成功了,界面却报失败。
         //
-        // Swift 自动合成的解码器对**非可选**属性一律走 decode(_:forKey:),缺 key 直接 throw,
-        // **属性默认值不参与解码**。而 Go 那边 `Items []backfillItem json:"items,omitempty"`
-        // 只在 dry-run 分支填(backfill.go runBackfill:真跑那条路径从来不设 Items),于是
-        // **每一次真跑**的输出都没有 items 键 → keyNotFound → run() 里那句 try? 吞成 nil →
-        // lastRunFailed。也就是说:回填子进程 exit 0、scrobble 发出去了、服务端确认了、
-        // markBackfilled 的回执行也落了盘,只有 App 读不懂结果。
-        //
-        // 它从 da7d5d2(功能上线那次)起就这样 —— Go 的 omitempty 和 Swift 的非可选属性两边
-        // 都一个字没改过。之前 lastRunFailed 还不存在,nil 表现为一声不吭,所以
-        // 它悄悄活过了每一趟真跑(08-27 / 09-03 / 09-06 / 09-12),那天的「反馈」修复只是把
-        // 它从"静默"变成"报一句失败"。
-        //
-        // 同一个坑在「重新自动匹配」的结论上踩过一次 —— 两处是同一条 Go→Swift 边界上的同一个语义错配。所以这里
-        // **所有**字段一律 decodeIfPresent:今天只有 items 带 omitempty,但哪天谁给 eligible
-        // 加一个,不该再炸第三次。selftest 里「omitempty 边界」那道守卫从 Go 的 struct tag
-        // 反推这条要求。
+        // 所以**所有**字段一律 decodeIfPresent:今天只有 items 带 omitempty,哪天谁给 eligible 加一个也不会炸。
+        // 「重新自动匹配」的结论是同一条 Go→Swift 边界上的同一类错配。selftest 里「omitempty 边界」那道守卫
+        // 从 Go 的 struct tag 反推这条要求。
         private enum CodingKeys: String, CodingKey {
             case items, eligible, accepted, ignored, skippedTooOld, quarantined, abortedReason
         }
@@ -223,14 +213,9 @@ final class ScrobbleBackfillService: ObservableObject {
         return await Task.detached(priority: .userInitiated) { () -> Bool in
             // 用 ProcessRunner:带超时,而且 stdout 会被先读空再等退出(见它的注释)。
             //
-            // **environment 必须显式传**(修的真 bug:点删除没反应)。这条是
-            // 唯一一个漏了它的引擎子命令调用点 —— 因为它走 ProcessRunner,而那个函数
-            // 当时压根没有环境参数,另外五处(search-lyrics / 源自检 / Last.fm 统计 ×2 /
-            // 诊断导出)都是自己 new Process、顺手就把 engineProcessEnvironment 设上了。
-            // 不传的后果:delete-listen 按引擎自己的默认规则找配置目录,**Dev 变体**
-            // 下 App 读的是 ~/.config/lyrimuse-dev、删的却是 ~/.config/lyrimuse,那几条 uts
-            // 在正式版日志里根本不存在 → deleted:0 → ok=false → 列表原样重拉一遍 → 界面上
-            // 就是"点了没反应"。正式版两个目录同名,所以这个 bug 只在 Dev 上现形。
+            // **environment 必须显式传**:delete-listen 要跟 App 读的是同一份收听日志,不传就按引擎自己的
+            // 默认规则找配置目录(见 LyrimusePaths.engineEnvironment)。删错了目录的表现是 deleted:0 →
+            // ok=false → 列表原样重拉一遍,界面上就是"点了没反应"。
             guard let r = ProcessRunner.run(
                 path, ["delete-listen", "-uts", String(uts)], timeout: 15,
                 environment: LyrimusePaths.engineProcessEnvironment()), r.succeeded
@@ -253,7 +238,7 @@ final class ScrobbleBackfillService: ObservableObject {
             let timeout: TimeInterval = dryRun ? 20 : 15 * 60
             guard let result = ProcessRunner.run(
                 path, dryRun ? ["backfill-lastfm", "-dry-run"] : ["backfill-lastfm"], timeout: timeout,
-                // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.engineEnvironment。
+                // 子命令必须跟本 App 同一份配置目录 / 日志文件,见 LyrimusePaths.engineEnvironment。
                 environment: LyrimusePaths.engineProcessEnvironment(), captureStderr: true)
             else {
                 logger.error("backfill spawn failed: \(path, privacy: .public)")

@@ -150,10 +150,8 @@ public enum EngineServiceManager {
     /// 拿不到(文件不存在/执行失败/输出为空)时返回 nil——不确定就不要瞎猜,调用方应该
     /// 把 nil 当"这次没法判断"处理,不要当成"版本不一致"报出来。
     public static func bundledEngineVersion() -> String? {
-        // 带环境:这是 App 唯一一处直接 spawn 引擎的地方(其余走 launchd / ProcessRunner)。
-        // `version` 子命令今天不读配置目录,所以带不带都跑得出结果;显式传是为了让"每处 spawn
-        // 都带环境"这条不变量真的处处成立,而不是靠"这个子命令恰好不读配置"来豁免 —— 下次给
-        // version 加一句"顺便报一下配置目录"就会在 Dev 变体上读错目录。
+        // 带环境:`version` 子命令不读配置目录,带不带都跑得出结果;显式传是为了让"每处 spawn 都带环境"
+        // 这条不变量处处成立,而不是靠"这个子命令恰好不读配置"来豁免。
         let (status, output) = runCapturing(
             bundledEnginePath, ["version"], environment: LyrimusePaths.engineProcessEnvironment())
         guard status == 0 else { return nil }
@@ -239,8 +237,7 @@ public enum EngineServiceManager {
             "ProcessType": "Interactive",
             "StandardOutPath": logPath,
             "StandardErrorPath": logPath,
-            // 引擎的配置目录与日志文件跟本 App 的变体走(正式版传的就是它自己的默认值,Dev 传
-            // ~/.config/lyrimuse-dev 那套)。Go 侧 paths.go 读这两个环境变量,见 LyrimusePaths.engineEnvironment。
+            // 引擎的配置目录与日志文件以 App 这边为准。Go 侧 paths.go 读这几个环境变量,见 LyrimusePaths.engineEnvironment。
             "EnvironmentVariables": LyrimusePaths.engineEnvironment,
         ]
         let data: Data
@@ -343,12 +340,9 @@ public enum EngineServiceManager {
     /// 传 `mergeStderr: true`,stderr 并进同一个管道,一次读完。
     ///
     /// `environment` 传 nil = 继承本进程(launchctl 那些调用点就该如此);spawn **引擎**
-    /// 的调用点必须显式传 `LyrimusePaths.engineProcessEnvironment()`,否则子命令会落回默认
-    /// 配置目录、跟本 App 不是同一份数据(Dev 变体下就是两个目录)。补:此前这里
-    /// 压根没有这个参数,`bundledEngineVersion()` 是**真的不带环境在 spawn 引擎**,
-    /// 而 selftest 那道"每处 spawn 都要带环境"的守卫按 `process.executableURL` 字面量数,
-    /// 这个函数的变量叫 `p`、字面量对不上,于是 execs=0/envs=0 恰好"配平"、漏数了它 ——
-    /// 守卫成立靠的是变量名巧合。守卫的匹配已一并放宽成 `.executableURL = URL(fileURLWithPath:`。
+    /// 的调用点必须显式传 `LyrimusePaths.engineProcessEnvironment()`,否则子命令会落回默认配置目录
+    /// (见 LyrimusePaths.engineEnvironment)。selftest 那道"每处 spawn 都要带环境"的守卫剥掉注释后按
+    /// `.executableURL = URL(fileURLWithPath:` 和 `ProcessRunner.run(` 数调用点,新的 spawn 写法要让它数得到。
     private static func runCapturing(
         _ path: String, _ args: [String], environment: [String: String]? = nil, mergeStderr: Bool = false
     ) -> (status: Int32, output: String) {

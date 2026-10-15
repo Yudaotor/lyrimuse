@@ -4023,7 +4023,7 @@ final class LastfmStatsService: ObservableObject {
         Task.detached(priority: .userInitiated) {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: enginePath)
-            // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.engineEnvironment。
+            // 子命令必须跟本 App 同一份配置目录 / 日志文件,见 LyrimusePaths.engineEnvironment。
             process.environment = LyrimusePaths.engineProcessEnvironment()
             // -all-periods:四个时段一次进程拿全(Go 侧四路并发取数),切时段零等待、
             // 也免了每档各一次 spawn + 磁盘加载。
@@ -4256,7 +4256,7 @@ final class LastfmStatsService: ObservableObject {
         do {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: enginePath)
-            // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.engineEnvironment。
+            // 子命令必须跟本 App 同一份配置目录 / 日志文件,见 LyrimusePaths.engineEnvironment。
             process.environment = LyrimusePaths.engineProcessEnvironment()
             process.arguments = ["artist-avatars"] + missing
             let pipe = Pipe()
