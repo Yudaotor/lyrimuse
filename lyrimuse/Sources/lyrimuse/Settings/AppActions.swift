@@ -36,6 +36,11 @@ final class AppActions {
     /// 看到当前这首歌"。
     let quickSearchRefreshRequests = PassthroughSubject<Void, Never>()
 
+    /// 「重新运行引导…」要从头再来:回到第一页、清掉走过的进度、重放开场。引导窗口已经开着时 `openOnboarding`
+    /// 只是把它带到前台,靠这一下补上;窗口是新开的,开场由它自己进门时放(同 `quickSearchRefreshRequests` 的做法)。
+    /// 授权后把引导带回前台那条路只调 `openOnboarding`,不发这个。见 14 章决策 109。
+    let onboardingRestartRequests = PassthroughSubject<Void, Never>()
+
     /// 歌词窗口里弹「搜索候选歌词」面板的请求(`lyrimuse://lyrics-window/search`)。跟设置那一对同样两条路:信箱管
     /// 「歌词窗口还没建出来」(LyricsWindowView 的 `.onAppear` 读),subject 管「已经开着」;都走 `requestLyricsWindowSearch()`。
     var pendingLyricsWindowSearch = false

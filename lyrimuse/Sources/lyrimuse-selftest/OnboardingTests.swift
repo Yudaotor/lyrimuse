@@ -3,11 +3,12 @@ import Foundation
 import LyrimuseCore
 
 // 引导页的纯逻辑:流程判断(`OnboardingFlow`:走哪几步、翻页夹下标、锁、收尾标记、体检清单、
-// 收尾页顺序)和最后一页那阵撒花的几何(`ConfettiField`)。
+// 收尾页顺序)、第一页开场的时间轴与月桂冠几何(`OnboardingIntro` / `LaurelWreath`)和最后一页那阵撒花的几何(`ConfettiField`)。
 // 「两个宿主只有一份实现」「引导页走的是这些函数」这类跨文件约束靠 contracts 组的源码扫描守着,
 // 那些断言留在那边;勾选切换与勾选即请求权限这两个共享判据在 players 组。
 func runOnboardingTests() {
     checkOnboardingFlow()
+    checkOnboardingIntro()
     // ---- 撒花:同一个 seed 同一场雪 ----
     //
     // 这条是下面所有断言的前提:core 里那个 SplitMix64 是自己写的,一旦有人图省事换成
@@ -333,4 +334,120 @@ private func checkOnboardingFlow() {
         expectEqual(F.liveCheck(input(offline: true)), .offline, "放一首歌试试: 还在找又断网 → 网络问题")
         expectEqual(F.liveCheck(input()), .searching, "放一首歌试试: 其余情况是还在找")
     }
+}
+
+// 第一页开场(14 章决策 109):时间轴的先后、光点可复现、光球落在图标上、月桂冠不压图标。
+private func checkOnboardingIntro() {
+    typealias I = OnboardingIntro
+
+    // ---- 缓动曲线 ----
+    for (name, curve) in [("ease", I.Curve.ease), ("soft", I.Curve.soft), ("easeInOut", I.Curve.easeInOut)] {
+        expectEqual(abs(curve(0)) < 1e-6 && abs(curve(1) - 1) < 1e-6, true, "开场缓动: \(name) 两端是 0 和 1")
+    }
+    let samples = stride(from: 0.0, through: 1.0, by: 0.01).map { I.Curve.soft($0) }
+    let peak = samples.max() ?? 0
+    expectEqual(peak > 1 && peak < 1.06, true, "开场缓动: soft 只带一点点回弹(过冲在 6% 以内),实际峰值 \(peak)")
+    expectEqual(I.Segment(1, 2).progress(0), 0, "开场时间段: 段前是 0")
+    expectEqual(I.Segment(1, 2).progress(5), 1, "开场时间段: 段后是 1")
+
+    // ---- 时间轴的先后 ----
+    expectEqual(I.islandEarsOpen.start < I.islandDrop.start, true, "开场时间轴: 灵动岛先长出耳朵,再往下长出歌词那一行")
+    expectEqual(I.islandDrop.end <= I.sing.start + 0.35, true, "开场时间轴: 灵动岛基本展开了才开始唱")
+    expectEqual(I.islandDropClose.start < I.islandEarsClose.start, true, "开场时间轴: 收回时先收歌词那一行,再收耳朵")
+    expectEqual(I.sing.end <= I.burstStart, true, "开场时间轴: 唱完才碎成光点")
+    expectEqual((0..<I.stringCount).allSatisfy { I.pluckStart($0) >= I.sing.start && I.pluckStart($0) <= I.sing.end }, true,
+                "开场时间轴: 五根弦都在唱的那段里被拨响")
+    expectEqual(I.bloomStart < I.orbFlight.start && I.orbFlight.start <= I.islandEarsClose.start
+                    && I.orbFlight.end <= I.flash.start + 0.25, true,
+                "开场时间轴: 灵动岛开始收回 → 收耳朵的同时挤出光球(不留空档) → 落地,落地前后闪光")
+    expectEqual(I.nightOut.end <= I.handoff + 0.6, true, "开场时间轴: 底色基本褪掉时欢迎页才进场")
+    expectEqual(I.flash.start < I.handoff && I.handoff < I.end && I.flash.end <= I.end && I.nightOut.end <= I.end, true,
+                "开场时间轴: 闪光和亮灯在开场摘掉之前收干净")
+    expectEqual(I.lyreStrokeDelays.count, 5 + I.stringCount, "开场时间轴: 里拉琴五笔琴身 + 五根弦各有描线延迟")
+
+    // ---- 灵动岛:刘海 → 展开 → 收回刘海 ----
+    let notch = CGSize(width: 110, height: 24)
+    func island(_ t: Double) -> CGSize { I.islandSize(t, notch: notch, earsWidth: 202, openWidth: 260, openHeight: 58) }
+    expectEqual(island(0), notch, "开场灵动岛: 一开始就是刘海大小")
+    let earsOnly = island(I.islandDrop.start)
+    expectEqual(earsOnly.height == notch.height && earsOnly.width > notch.width, true,
+                "开场灵动岛: 往下展开之前只长耳朵(变宽),高度还是刘海那么高")
+    expectEqual(island(I.islandDrop.end), CGSize(width: 260, height: 58), "开场灵动岛: 展开段结束时正好是唱歌的大小")
+    expectEqual(island(I.end), notch, "开场灵动岛: 最后收回刘海大小")
+
+    // ---- 光球最后正好是图标 ----
+    let target = CGPoint(x: 240, y: 180)
+    let landed = I.orbState(I.end, centerX: 240, notchBottom: 24, target: target)
+    expectEqual(abs(landed.center.x - target.x) < 1e-6 && abs(landed.center.y - target.y) < 1e-6, true, "开场光球: 落在图标中心")
+    expectEqual(abs(landed.diameter - 84) < 1e-6 && abs(landed.radius - 21) < 1e-6 && landed.icon == 1 && landed.stretch == 0, true,
+                "开场光球: 落地是图标的大小和圆角,图标完全显出来,没有拉长")
+    let midFlight = I.orbState(I.orbFlight.start + I.orbFlight.duration * 0.7, centerX: 240, notchBottom: 24, target: target)
+    expectEqual(midFlight.icon > 0 && midFlight.icon < 1, true, "开场光球: 后半程图标和光球交叠着换过去,不是到点一下子换")
+    expectEqual(I.orbState(0, centerX: 240, notchBottom: 24, target: target).opacity, 0, "开场光球: 滴出来之前看不见")
+
+    // ---- 光点:可复现、个数、都在开场摘掉前到达 ----
+    func evenSpans(count: Int, from start: Double, width: Double) -> [ClosedRange<Double>] {
+        var spans: [ClosedRange<Double>] = []
+        for index in 0..<count {
+            let lower = start + Double(index) * width
+            spans.append(lower...(lower + width))
+        }
+        return spans
+    }
+    let spans = evenSpans(count: 9, from: 100, width: 30)
+    let island = CGPoint(x: 240, y: 20)
+    let a = I.particles(charSpans: spans, lineTop: 380, lineHeight: 44, target: island, seed: 42)
+    let b = I.particles(charSpans: spans, lineTop: 380, lineHeight: 44, target: island, seed: 42)
+    expectEqual(a, b, "开场光点: 同一个 seed 同一阵光点")
+    expectEqual(a.count, spans.count * I.particlesPerChar, "开场光点: 每个字 \(I.particlesPerChar) 颗")
+    let lineRange = spans[0].lowerBound...spans[spans.count - 1].upperBound
+    expectEqual(a.allSatisfy { lineRange.contains(Double($0.origin.x)) }, true,
+                "开场光点: 都从这一行字里出发")
+    expectEqual(I.burstStart + I.particlesDuration(a) < I.end, true, "开场光点: 开场摘掉之前全部飞到")
+    let longLine = evenSpans(count: 26, from: 0, width: 16)
+    let long = I.particles(charSpans: longLine, lineTop: 380, lineHeight: 44, target: island, seed: 7)
+    expectEqual(I.burstStart + I.particlesDuration(long) < I.end, true, "开场光点: 英文那句(二十多个字符)也在开场摘掉之前飞到")
+    if let first = a.first {
+        expectEqual(I.particleState(first, sinceBurst: first.delay - 0.01, target: island) == nil, true, "开场光点: 出发前不画")
+        if let mid = I.particleState(first, sinceBurst: first.delay + first.duration / 2, target: island) {
+            expectEqual(mid.alpha > 0 && mid.alpha <= 1, true, "开场光点: 半路的不透明度在 0...1")
+        } else {
+            expectEqual(true, false, "开场光点: 半路应该画得出来")
+        }
+        expectEqual(I.particleState(first, sinceBurst: first.delay + first.duration + 0.01, target: island) == nil, true,
+                    "开场光点: 到了就不画")
+    }
+
+    // ---- 月桂冠:叶子不压图标、不出画布 ----
+    let icon = LaurelWreath.iconRect
+    func distance(_ p: CGPoint, to rect: CGRect) -> Double {
+        let dx = max(Double(rect.minX) - Double(p.x), 0, Double(p.x) - Double(rect.maxX))
+        let dy = max(Double(rect.minY) - Double(p.y), 0, Double(p.y) - Double(rect.maxY))
+        return (dx * dx + dy * dy).squareRoot()
+    }
+    let points = LaurelWreath.leaves.flatMap(LaurelWreath.outline)
+    let closest = points.map { distance($0, to: icon) }.min() ?? 0
+    expectEqual(closest >= LaurelWreath.minimumClearance, true,
+                "月桂冠: 每片叶子离图标至少 \(LaurelWreath.minimumClearance)pt(不跟图标叠在一起),实际最近 \(closest)")
+    var stemPoints: [CGPoint] = []
+    for stem in LaurelWreath.stems {
+        for step in 0...50 { stemPoints.append(LaurelWreath.point(on: stem, Double(step) / 50)) }
+    }
+    let stemClosest = stemPoints.map { distance($0, to: icon) }.min() ?? 0
+    expectEqual(stemClosest >= LaurelWreath.minimumClearance, true, "月桂冠: 枝也不压图标")
+    let box = CGRect(x: 0, y: 0, width: LaurelWreath.box, height: LaurelWreath.box)
+    expectEqual((points + stemPoints).allSatisfy { box.contains($0) }, true, "月桂冠: 枝叶都在画布里(不被裁掉)")
+    expectEqual(LaurelWreath.leaves.count, LaurelWreath.stems.count * (LaurelWreath.nodesPerStem * 2 + 1),
+                "月桂冠: 每根枝每个节点一对叶子,枝头一片顶叶")
+    // 左右两根枝镜像:同一位置的叶子以画布中线对称。
+    let mid = LaurelWreath.box / 2
+    let half = LaurelWreath.leaves.count / 2
+    var mirrored = true
+    for index in 0..<half {
+        let left = LaurelWreath.leaves[index], right = LaurelWreath.leaves[index + half]
+        let dx = (Double(left.base.x) - mid) + (Double(right.base.x) - mid)
+        let dy = Double(left.base.y) - Double(right.base.y)
+        if abs(dx) > 1e-6 || abs(dy) > 1e-6 { mirrored = false }
+    }
+    expectEqual(mirrored, true, "月桂冠: 左右两根枝镜像对称")
 }

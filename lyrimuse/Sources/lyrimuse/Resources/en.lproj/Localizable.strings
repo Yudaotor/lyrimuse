@@ -366,8 +366,6 @@
 "从此句开始播放" = "Play from this line";
 "从自动备份恢复" = "Restore from Auto Backup";
 "从资料库删除" = "Delete from Library";
-"以上方式可同时开启，请先选择当前需要的，之后可随时在设置中分别开关" = "These can all be on at once — pick what you want for now and change it any time in Settings";
-"以上方式均已关闭，播放时不会显示歌词。可随时通过菜单栏图标重新开启" = "They’re all off, so no lyrics will show while music plays. The menu bar icon is always there — you can turn them back on from it";
 "以下位置 Lyrimuse 无法写入，歌词引擎因此无法启动：" = "Lyrimuse can't write to these locations, so the lyrics engine can't start:";
 "以下播放器尚未安装，可提前选择，安装后自动生效" = "These players aren't installed yet. Select one now and it takes effect once installed.";
 "以下条目已识别为同一首歌，播放次数合并统计；如有误识别，可将其拆分。" = "These entries are identified as the same song and their plays are combined. Split any that were misidentified.";
@@ -420,6 +418,7 @@
 "全部不显示" = "None shown";
 "全部专辑" = "All Albums";
 "全部关闭" = "All Off";
+"全部关闭后不会显示歌词" = "With all of these off, no lyrics are shown";
 "全部功能、所在位置与默认开关" = "Every feature, where it is in Settings, and whether it is on by default";
 "全部同步" = "All Synced";
 "全部屏幕" = "All Displays";
@@ -536,7 +535,6 @@
 "剩余时长" = "Remaining";
 "副屏画面" = "Second Screen";
 "副行" = "Second Line";
-"功能栏中的图标，轻点即可展开歌词" = "An icon in the Control Strip — tap it to expand the lyrics";
 "功能清单" = "Feature List";
 "加入信任列表" = "Trust This App";
 "加签密钥（可选）" = "Signing Secret (Optional)";
@@ -599,6 +597,7 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ more songs had no source response · Auto-Match All";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ more song had no source response · Auto-Match All";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d more couldn't be written to the lyrics folder. Check write access and disk space.";
+"只作用于悬浮歌词和歌词窗口" = "Applies only to Floating Lyrics and the Lyrics Window";
 "只作用于能完整显示的句子；显示不下、需横向滚动的句子不受影响。「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左" = "Applies only to lines that fit; lines that scroll horizontally aren't affected. Automatic follows the duet parts: each singer's lines sit on their side, choruses are centered, and lines without duet info stay left";
 "只列能翻成当前译文语言的语言，所以可能比「系统设置」里少几种。点一下没下载的就能下载" = "Only languages that can be translated into your translation language are listed, so there may be a few fewer than in System Settings. Click one that isn't downloaded to download it.";
 "只搜没有歌词或只有纯文本的歌" = "Only songs with no lyrics or only plain text";
@@ -607,6 +606,7 @@
 "只有勾选的播放器会 Scrobble；网页播放器按浏览器算。" = "Only checked players scrobble; web players count as their browser.";
 "只用于悬浮歌词、灵动岛、菜单栏和触控栏" = "Only for Floating Lyrics, Notch, Menu Bar and Touch Bar";
 "只识别勾选的播放器；没勾的不显示歌词，也不计入收听记录。" = "Only the players you check are detected. The rest don't show lyrics or count toward your listening history.";
+"可同时开启多种" = "You can turn on more than one";
 "可在任意 App 中触发，需包含 ⌘、⌥ 或 ⌃ 之一" = "Works in any app; must include ⌘, ⌥ or ⌃";
 "可在快捷指令、Raycast、Alfred 等工具中打开；指针移到上方的快捷键上，可拷贝对应动作的链接" = "Open these from Shortcuts, Raycast, Alfred and similar tools. Hover over a shortcut above to copy the link for that action.";
 "可拖到任意位置" = "Drag it anywhere";
@@ -699,7 +699,6 @@
 "在外部编辑器中编辑歌词" = "Edit Lyrics in External Editor";
 "在手机、平板上点按钮暂停、切歌，点歌词跳到那一句" = "Tap the buttons on a phone or tablet to pause or skip, or tap a lyric to jump to it";
 "在播放器中播放任意歌曲，歌词将自动显示" = "Play something in your player and lyrics will appear here";
-"在歌词下方显示一行译文" = "Show a line of translation under the lyrics";
 "在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱颜色」，其余使用「未唱颜色」。仅在显示歌词时出现。" = "Puts a menu bar icon at the far left or right of the lyrics slot; its color fills from the bottom up to show playback progress — the filled part in Sung Color, the rest in Unsung Color. Only appears while lyrics are showing.";
 "在浏览器中打开" = "Open in Browser";
 "在浏览器中显示歌词：手机、平板与歌词窗口一致，OBS 浏览器源与悬浮歌词一致" = "Show lyrics in a browser: on phones and tablets they match the Lyrics Window, as an OBS browser source they match the Floating Lyrics.";
@@ -707,7 +706,6 @@
 "在浏览器里授权" = "Authorize in Your Browser";
 "在系统设置中打开 Lyrimuse，然后点「重启歌词引擎」。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。" = "Turn on Lyrimuse in System Settings, then click Restart Lyrics Engine. If it’s already on but still not working, remove Lyrimuse with “−” and add it back with “+”.";
 "在线 — %d" = "Online — %d";
-"在菜单栏中显示一行歌词" = "A single line in the menu bar";
 "在设置中查看 Last.fm" = "View Last.fm in Settings";
 "在访达中显示" = "Show in Finder";
 "在访达中显示歌词文件" = "Show Lyrics File in Finder";
@@ -987,6 +985,7 @@
 "开（默认）：匹配算法或评分规则更新后，会在后台重新评估已有歌词，并可能更换为更合适的版本\n关：歌词确定后不再自动更换；首次解析、手动重新搜索和手动编辑不受影响" = "On (default): when the matching algorithm or scoring rules change, existing lyrics are re-evaluated in the background and may be swapped for a better match\nOff: once chosen, lyrics are never swapped automatically; first-time lookups, manual re-searches and manual edits are unaffected";
 "开（默认）：同一首歌在不同播放器、不同专辑版本下、可确认为同一录音的条目使用同一份歌词，手动修改一并同步\n关：各条目分别匹配歌词，已同步的条目恢复为原来的歌词" = "On (default): entries of the same song from different players or album editions that are confirmed to be the same recording use the same lyrics, and manual edits apply to all of them\nOff: each entry is matched on its own, and entries that were synced go back to their original lyrics";
 "开：也 Scrobble，播放过半即记。\n关：不记（官方规则）。" = "On: scrobbled too, once half-played.\nOff: not scrobbled (Last.fm's rule).";
+"弦上那句，终得分明" = "Clear as a plucked string";
 "当前" = "Current";
 "当前 %@" = "Current %@";
 "当前使用" = "In use";
@@ -996,8 +995,6 @@
 "当前播放的是 DJ Mix 专辑中的一段（歌名带 [Mixed]、专辑带 (DJ Mix)）。这类曲目截取自整场演出，前后带有过渡，长度与原版不同，原版歌词的时间轴无法对齐，且没有歌词源收录混音版的时间轴" = "You’re playing one segment of a DJ Mix album (the track is tagged [Mixed], the album (DJ Mix)) — it’s cut out of a full set, with transitions on either side and a length that doesn’t match the original, so the original lyrics’ timeline can’t line up. And no source carries a timeline for the mixed version.";
 "当前播放的是伴奏版（歌名或专辑标着伴奏 / 纯音乐 / Instrumental），没有人声，人声版歌词不采用，按纯音乐显示" = "This is an instrumental version (its title or album says Instrumental), so it has no vocals; vocal lyrics are not used and it is shown as instrumental";
 "当前无正在播放的歌曲" = "Nothing Is Playing";
-"当前未在播放。桌面悬浮歌词会立即显示，灵动岛、菜单栏和触控栏歌词将在开始播放后显示" = "Nothing is playing right now — Desktop Floating Lyrics appears straight away; Notch, Menu Bar and Touch Bar Lyrics only show up once playback starts";
-"当前未在播放。桌面悬浮歌词会立即显示，灵动岛和菜单栏歌词将在开始播放后显示" = "Nothing is playing right now — Desktop Floating Lyrics appears straight away; Notch Lyrics and Menu Bar Lyrics only show up once playback starts";
 "当前条目" = "Current Entry";
 "当前条目无歌词" = "The current entry has no lyrics";
 "当前歌词" = "Current Lyric";
@@ -1268,7 +1265,10 @@
 "显示内容" = "What's Shown";
 "显示哪些播放器" = "Players Shown";
 "显示在" = "Show On";
-"显示在桌面上" = "Sits on your desktop";
+"显示在刘海处" = "Shown beside the notch";
+"显示在屏幕顶部中央" = "Shown at the top center of the screen";
+"显示在歌词下方" = "Shown under the lyrics";
+"显示在菜单栏右侧" = "Shown on the right of the menu bar";
 "显示封面" = "Show Artwork";
 "显示开关" = "Show & Hide";
 "显示播放控制" = "Show Playback Controls";
@@ -1470,6 +1470,7 @@
 "标题吻合" = "Title match";
 "样式" = "Style";
 "桌面悬浮歌词" = "Desktop Floating Lyrics";
+"桌面歌词，为 Mac 全新构想" = "Desktop lyrics, reimagined for the Mac";
 "检查中…" = "Checking…";
 "检查更新" = "Check for Updates";
 "检查更新…" = "Check for Updates…";
@@ -1659,6 +1660,7 @@
 "测试失败：%@" = "Couldn't test lyrics sources: %@";
 "测试版更新" = "Beta Updates";
 "浓淡" = "Density";
+"浮在所有窗口之上" = "Floats above all windows";
 "淡化时点按会落到下面的窗口；按住 ⌥ 恢复不透明，就能操作" = "While faded, clicks go to the window underneath. Hold ⌥ to make it opaque again and use it";
 "淡化时点按穿透" = "Click Through While Faded";
 "深色" = "Dark";
@@ -1689,10 +1691,13 @@
 "滚动" = "Scroll";
 "演唱：%@" = "by %@";
 "灵动岛" = "Notch";
+"灵动岛、菜单栏和触控栏歌词在播放时显示" = "Notch, menu bar and Touch Bar lyrics show up during playback";
+"灵动岛和菜单栏歌词在播放时显示" = "Notch and menu bar lyrics show up during playback";
 "灵动岛宽度" = "Notch Card Width";
 "灵动岛展开宽度" = "Notch Card Expanded Width";
 "灵动岛所在屏幕有 App 全屏时隐藏" = "Hides while an app is full screen on its display";
 "灵动岛歌词" = "Notch Lyrics";
+"点一下跳过" = "Click to skip";
 "点按「复制修复命令」，打开「终端」，粘贴后按回车，按提示输入开机密码（输入时不显示字符），然后再点按「启用」" = "Click Copy Fix Command, open Terminal, paste it and press Return, enter your login password when asked (nothing shows as you type), then click Enable.";
 "点按「开始使用」，让歌词随旋律逐句亮起" = "Click “Get Started” and let every line light up with the music";
 "点按下载" = "Click to download";
@@ -2045,6 +2050,7 @@
 "跳过广告" = "Skip Ad";
 "跳过广告需要「辅助功能」权限" = "Skipping ads needs Accessibility permission";
 "软件更新" = "Software Update";
+"轻点功能栏图标展开" = "Tap the icon in the Control Strip to expand";
 "较上周 %@" = "%@ vs last week";
 "较粗" = "Semibold";
 "辅助功能" = "Accessibility";
@@ -2074,15 +2080,12 @@
 "还需 %@ 次" = "%@ to go";
 "这一天收听 %@ 次，听得最多的是以下歌曲" = "%@ plays that day, most played below";
 "这一天收听 %@ 次，听得最多的是以下歌曲#one" = "%@ play that day, most played below";
-"这两个开关作用于悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏可在各自的「副行」中选择译文或读音" = "These switches apply to Floating Lyrics and the Lyrics Window; the Notch, Menu Bar and Touch Bar each pick translation or romanization in their own “Second Line”";
-"这两个开关作用于悬浮歌词和歌词窗口；灵动岛和菜单栏可在各自的「副行」中选择译文或读音" = "These switches apply to Floating Lyrics and the Lyrics Window; the Notch and Menu Bar pick translation or romanization in their own “Second Line” setting";
 "这也是你最长的一次连续" = "Your longest streak yet";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常是广告、播客或有声书。人工修正、标为纯音乐、校准过时间轴的记录和正在播放的歌曲不在其中；再次播放时会重新匹配。" = "These entries have no lyrics and either no artist or a duration over 20 minutes — usually ads, podcasts, or audiobooks. Manually edited, instrumental, and calibrated entries and the song now playing aren’t included. They’ll be matched again if played.";
 "这份歌词无时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮" = "These lyrics have no timing. Once adopted they only show as static text in the Lyrics Window, and won't highlight word by word or line by line as the song plays";
 "这份歌词是同一首歌另一种写法「%@」的人工修正，那边改了这边跟着改；直接改这一条就成为它自己的修正" = "These lyrics are the manual correction made on “%@”, another version of this song, and follow it when it changes. Editing this one makes it its own correction.";
 "这台 Mac 上未安装此播放器" = "This player isn't installed on this Mac";
 "这台 Mac 上未安装的播放器" = "Players not installed on this Mac";
-"这台 Mac 无刘海，将显示在屏幕顶部中央" = "No notch on this Mac, so it sits at the top center";
 "这是 Lyrimuse 本身。" = "That’s Lyrimuse itself.";
 "这条候选歌词无译文" = "No translation in this candidate";
 "这条候选歌词无读音" = "No romanization in this candidate";
@@ -2228,8 +2231,6 @@
 "除 %@ 外" = "All except %@";
 "随匹配算法更新重新选择" = "Re-Pick After Algorithm Updates";
 "随机播放" = "Shuffle";
-"随正在播放的歌曲显示歌词，可显示在桌面、灵动岛、菜单栏、触控栏和歌词窗口中，并支持对照译文与标注读音。接下来几步将完成基本设置，之后可随时在设置中更改" = "Shows lyrics for whatever’s playing — on the desktop, around the notch, in the menu bar, on the Touch Bar or in a lyrics window, with translations and romanization if you like. The next few steps set it up for you; you can change everything later in Settings.";
-"随正在播放的歌曲显示歌词，可显示在桌面、灵动岛、菜单栏和歌词窗口中，并支持对照译文与标注读音。接下来几步将完成基本设置，之后可随时在设置中更改" = "Shows lyrics for whatever’s playing — on the desktop, around the notch, in the menu bar or in a lyrics window, with translations and romanization if you like. The next few steps set it up for you; you can change everything later in Settings.";
 "随演唱进度将已演唱部分显示为系统强调色。仅在歌曲有逐字时间轴时生效；打开菜单反白期间暂停着色" = "Tints the sung portion with the system accent color, following the vocal timing. Only takes effect when this track has word-level timing; fill pauses while the menu is open and highlighted";
 "隐私" = "Privacy";
 "隐藏…" = "Hide…";
@@ -2292,8 +2293,8 @@
 "黑字描边" = "Black Text with Outline";
 "黑胶唱片" = "Vinyl";
 "默认" = "Default";
-"默认为日文、韩文、中文和粤语标注读音，可在设置中按语言关闭" = "Japanese, Korean, Chinese and Cantonese are all annotated by default; turn any of them off in Settings";
-"默认为日文、韩文和粤语标注读音，普通话拼音可在设置中开启" = "Japanese, Korean and Cantonese are annotated by default; turn on Mandarin pinyin in Settings";
+"默认标注日文、韩文、中文和粤语" = "On by default for Japanese, Korean, Chinese and Cantonese";
+"默认标注日文、韩文和粤语" = "On by default for Japanese, Korean and Cantonese";
 "默认跟随系统菜单栏，可在 10～16pt 之间调整，16pt 仍在菜单栏项高度内。拖回系统字号处即恢复跟随。" = "Follows the system menu bar by default; adjustable from 10 to 16pt, and 16pt still fits the menu bar item. Drag back to the system size to follow it again.";
 "鼠标停在封面上时也显示这一行。" = "Also shown when hovering over the cover.";
 "（%@）" = " (%@)";

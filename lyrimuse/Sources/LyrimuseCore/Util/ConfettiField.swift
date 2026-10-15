@@ -79,7 +79,7 @@ public struct ConfettiField {
     ///     "一层雪",挡住这一页那几行字;再少落不满一屏。
     ///   - seed: 决定这一场雪的样子。同一个 seed 每次一模一样(见类型头注 ①)。
     public init(pieceCount: Int = 130, seed: UInt64 = 0x4C79_7269_4D75_7365) {
-        var rng = Random(seed: seed)
+        var rng = SeededRandom(seed: seed)
         let count = max(0, pieceCount)
         var made: [Piece] = []
         made.reserveCapacity(count)
@@ -143,31 +143,5 @@ public struct ConfettiField {
             // 系数刻意小于 1 —— 转得跟翻面一样快就看不清是纸片了。
             angle: piece.tilt + spin * 0.35,
             colorIndex: piece.colorIndex)
-    }
-
-    /// 确定性伪随机(SplitMix64)。
-    ///
-    /// **不用 `Double.random(in:)`**:那个走系统 RNG,同一个 seed 也每次不同,于是"这一场雪
-    /// 长什么样"根本没法断言(整份类型头注 ① 那条性质就是为它写的)。这里要的随机只是
-    /// "看着乱",不需要密码学强度;SplitMix64 短、无状态依赖、跨平台同结果。
-    private struct Random {
-        private var state: UInt64
-
-        init(seed: UInt64) { state = seed }
-
-        mutating func next() -> UInt64 {
-            state = state &+ 0x9E37_79B9_7F4A_7C15
-            var z = state
-            z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
-            z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
-            return z ^ (z >> 31)
-        }
-
-        /// 0 ..< 1。取高 53 位 —— Double 的有效位就这么多,低位给了也是丢。
-        mutating func unit() -> Double { Double(next() >> 11) * (1.0 / 9_007_199_254_740_992.0) }
-
-        mutating func double(_ lower: Double, _ upper: Double) -> Double {
-            lower + (upper - lower) * unit()
-        }
     }
 }

@@ -62,6 +62,18 @@ struct OnboardingView: View {
     /// 跟 `step` / `furthestStep` 同一档**不持久化**:引导本身是一次性流程,存下来只会多一个
     /// 跟"这次走到哪"对不上的字段。
     @State private var confettiBurst = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 第一页的开场在放:放的那一刻起算;nil = 没在放(放完、跳过、减弱动态效果)。见 14 章决策 109。
+    @State private var introStart: Date?
+    @State private var introTask: Task<Void, Never>?
+    /// 欢迎页的内容进场了没。开场期间藏着(位置照排,光球要落到图标那里),交接时依次进场。
+    @State private var welcomeRevealed = false
+    /// 月桂冠开始长的时刻;nil = 直接画完整的。
+    @State private var wreathStart: Date?
+    /// 欢迎页图标的中心(全局坐标),开场的光球落到这里。
+    @State private var welcomeIconCenter: CGPoint = .zero
+    /// 翻页方向:往后翻新页从右推入,往回翻从左推入。见 `goTo`。
+    @State private var navDirection: CGFloat = 1
 
     /// 步骤与流程判断(走哪几步、翻页夹下标、锁、体检清单、收尾页顺序)都在
     /// `OnboardingFlow`(LyrimuseCore,selftest onboarding 组钉着),这里只调用和排版。
@@ -189,7 +201,7 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             // 这一层 ScrollView 是**溢出兜底**,不是"让内容可以随便长"。
             //
-            // 窗口固定 480×500、不可拖拽(App.swift 的 .windowResizability(.contentSize)),
+            // 窗口固定 480×600、不可拖拽(App.swift 的 .windowResizability(.contentSize)),
             // 在此之前内容超出就是**静默裁切**:超出的部分既不滚动也不撑大窗口,只会被切掉
             // 或压成省略号,而且在开发机上通常看不出来 —— 最坏情况是英文界面(同一句话普遍
             // 比中文多占一到两行)叠上「辅助功能 → 更大文字」。`.basedOnSize` 让内容装得下
@@ -198,15 +210,19 @@ struct OnboardingView: View {
             // 各步骤自己的高度预算(尤其"两条提示互斥"那种)照旧要守 —— 这层只是保证"预算
             // 算错时用户还够得着下面的东西",不是把预算作废。
             ScrollView(.vertical) {
-                Group {
-                    switch currentStep {
-                    case .welcome: welcomeStep
-                    case .playerChoice: playerChoiceStep
-                    case .browserPairing: browserPairingStep
-                    case .background: backgroundStep
-                    case .displayMode: displayModeStep
-                    case .done: doneStep
+                ZStack(alignment: .topLeading) {
+                    Group {
+                        switch currentStep {
+                        case .welcome: welcomeStep
+                        case .playerChoice: playerChoiceStep
+                        case .browserPairing: browserPairingStep
+                        case .background: backgroundStep
+                        case .displayMode: displayModeStep
+                        case .done: doneStep
+                        }
                     }
+                    .id(currentStep)
+                    .transition(stepTransition)
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
                 .padding(.horizontal, 28)
@@ -238,7 +254,7 @@ struct OnboardingView: View {
                         .controlSize(.large)
                         .settingsGlassButtons()
                 }
-                Button(isLastStep ? L10n.t("开始使用") : L10n.t("下一步")) {
+                Button(isLastStep ? L10n.t("开始使用") : step == 0 ? L10n.t("开始") : L10n.t("下一步")) {
                     if isLastStep {
                         finish()
                     } else {
@@ -256,14 +272,37 @@ struct OnboardingView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
         }
-        .frame(width: 480, height: 500)
+        // 600 高:按各页实际内容量过(14 章决策 109),选播放器、让它跑起来两页在 500 高时就要滚动。
+        .frame(width: 480, height: 600)
+        // 欢迎页背后一层静止的淡光晕,接着开场里的光晕;别的页没有。夹在内容和整窗玻璃之间。
+        .background {
+            GeometryReader { geo in
+                OnboardingGlowBlobs(size: geo.size)
+                    .opacity(currentStep == .welcome && welcomeRevealed ? 0.26 : 0)
+                    .animation(.easeOut(duration: 1), value: welcomeRevealed)
+                    .animation(.easeOut(duration: 0.3), value: currentStep)
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+        }
         // 整扇窗的玻璃底(macOS 26+ 液态玻璃、窗口透明,旧系统磨砂材质),伸进标题栏那一截(窗口是
         // `.hiddenTitleBar`,见 App.swift),从窗顶一直铺到窗底;内容本身仍在安全区内,不会跑到红绿灯底下。
         .onboardingWindowBackground()
         // 撒花盖在**整扇窗**上(叠在 `.frame` 之后,所以它正好是窗口那么大):纸片会从进度点和
-        // 「开始使用」上面落过去,而不是只落在上面那块内容区里 —— 后者在这个 500pt 高的窗口里
+        // 「开始使用」上面落过去,而不是只落在上面那块内容区里 —— 后者在这个 600pt 高的窗口里
         // 看着像"纸片撞在一条看不见的线上"。它自己从不吃点击,按钮照常能按(见 ConfettiOverlay)。
         .overlay { ConfettiOverlay(burst: confettiBurst) }
+        // 第一页的开场盖在整扇窗上、伸进标题栏(灵动岛贴着窗口上沿),底栏也在它下面。
+        .overlay {
+            if let introStart {
+                OnboardingIntroView(line: L10n.t("弦上那句，终得分明"), start: introStart,
+                                    iconCenterGlobal: welcomeIconCenter, interactive: !welcomeRevealed,
+                                    onSkip: skipIntro)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+            }
+        }
+        .onPreferenceChange(OnboardingIconCenterKey.self) { welcomeIconCenter = $0 }
         // 窗口标题跟着界面语言走。App.swift 里 `Window(L10n.t("欢迎使用 Lyrimuse"), id:)`
         // 的那个标题在 scene 构造时**只求值一次**,用户在第一步把语言切成英文之后它还是
         // 中文;`.navigationTitle` 每次重算 body 都会重新应用,正好补上这一处。
@@ -301,6 +340,8 @@ struct OnboardingView: View {
         // 这一步"才是要庆祝的那件事。`onChange` 只在值真变了时触发,所以停在这一页不会反复
         // 重放;退回去再翻回来会再撒一阵(那是用户主动重新走到终点)。
         .onChange(of: currentStep) { _, new in
+            // 开场还在放就翻走了(回车键按的是「开始」):直接收掉。
+            if new != .welcome, introStart != nil { skipIntro() }
             if new == .done { confettiBurst += 1 }
             if new == .done || new == .background { fullDiskAccess.refresh() }
         }
@@ -332,7 +373,9 @@ struct OnboardingView: View {
             }
         }
         .onReceive(Self.liveInputs) { liveInput = $0 }
+        .onReceive(AppActions.shared.onboardingRestartRequests) { restartFromBeginning() }
         .onAppear {
+            startIntroIfNeeded()
             automation.refresh(automationTargets)
             Task { await refreshEngineRunning() }
             // 「YouTube Music」那一格的选中态按**当前真实配置**播种:已经配过
@@ -418,48 +461,76 @@ struct OnboardingView: View {
 
     // 语言选择并在这一页,不再是后面单独的一步。`L10n.t` 每次调用都重新解析
     // 语言(见 L10n.swift 里"不缓存"那段),所以在这里一改,**从下一步开始整个向导都是新
-    // 语言** —— 而它原来排在第 6 步,前 5 步早就用错的语言讲完了。
+    // 语言**。开机启动在「让它跑起来」那一页(跟后台运行放在一起)。
+    //
+    // 居中排:图标(外圈月桂冠)、标题、一句说明,底下语言胶囊和版权那一行。开场期间这些都藏着,开场结束时
+    // 图标接替光球、其余依次进场(见 14 章决策 109)。
     private var welcomeStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(spacing: 0) {
+            Spacer(minLength: 16)
+                .frame(maxHeight: 56)
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
-                .frame(width: 64, height: 64)
+                .frame(width: 84, height: 84)
+                // 月桂冠比图标大一圈,挂在 overlay 上不占布局;叶子离图标的间距由 core 的几何保证(selftest 钉着)。
+                .overlay {
+                    if welcomeRevealed {
+                        LaurelWreathView(growStart: wreathStart)
+                            .frame(width: LaurelWreath.box, height: LaurelWreath.box)
+                    }
+                }
+                .background {
+                    GeometryReader { geo in
+                        let frame = geo.frame(in: .global)
+                        Color.clear.preference(key: OnboardingIconCenterKey.self,
+                                               value: CGPoint(x: frame.midX, y: frame.midY))
+                    }
+                }
                 .accessibilityHidden(true)
+                .onboardingReveal(0, when: welcomeRevealed, instant: true)
             Text(L10n.t("欢迎使用 Lyrimuse"))
-                .font(.title.bold())
-            Text(touchBar.isPresent
-                 ? L10n.t("随正在播放的歌曲显示歌词，可显示在桌面、灵动岛、菜单栏、触控栏和歌词窗口中，并支持对照译文与标注读音。接下来几步将完成基本设置，之后可随时在设置中更改")
-                 : L10n.t("随正在播放的歌曲显示歌词，可显示在桌面、灵动岛、菜单栏和歌词窗口中，并支持对照译文与标注读音。接下来几步将完成基本设置，之后可随时在设置中更改"))
+                .font(.system(size: 26, weight: .bold))
+                .multilineTextAlignment(.center)
+                // 月桂冠伸到图标下面约 40pt,标题让开它。
+                .padding(.top, 52)
+                .onboardingReveal(1, when: welcomeRevealed)
+            // 同 GitHub README 的标语。
+            Text(L10n.t("桌面歌词，为 Mac 全新构想"))
+                .font(.system(size: 14))
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-            // 两个跟「这台 Mac 上怎么用它」有关的偏好:界面语言、开机启动。
-            VStack(alignment: .leading, spacing: 0) {
-                setupRow(icon: "globe", tint: .secondary, title: L10n.t("界面语言"), subtitle: nil) {
-                    // 选项和写法同 设置 › 通用 › 语言(语言名一律用该语言自己的写法)。
-                    SettingsGlassMenuPicker(
-                        selection: $settings.appLanguage,
-                        options: ["system", "zh-hans", "zh-hant", "en"],
-                        label: { code in
-                            switch code {
-                            case "zh-hans": return L10n.t("简体中文")
-                            case "zh-hant": return L10n.t("繁體中文")
-                            case "en": return "English"
-                            default: return L10n.t("跟随系统")
-                            }
-                        },
-                        compact: true
-                    )
-                    .accessibilityLabel(L10n.t("界面语言"))
-                }
-                setupDivider
-                setupRow(icon: "power", tint: .secondary, title: L10n.t("开机时自动启动 Lyrimuse"), subtitle: nil) {
-                    // 标题传给开关本身再 labelsHidden:视觉不变,旁白读得出这是哪个开关。
-                    Toggle(L10n.t("开机时自动启动 Lyrimuse"), isOn: $settings.launchAtLoginEnabled)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                }
+                .padding(.top, 8)
+                .onboardingReveal(2, when: welcomeRevealed)
+            Spacer(minLength: 20)
+            HStack(spacing: 8) {
+                Image(systemName: "globe")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                Text(L10n.t("界面语言"))
+                    .font(.system(size: 13))
+                // 选项和写法同 设置 › 通用 › 语言(语言名一律用该语言自己的写法)。
+                SettingsGlassMenuPicker(
+                    selection: $settings.appLanguage,
+                    options: ["system", "zh-hans", "zh-hant", "en"],
+                    label: { code in
+                        switch code {
+                        case "zh-hans": return L10n.t("简体中文")
+                        case "zh-hant": return L10n.t("繁體中文")
+                        case "en": return "English"
+                        default: return L10n.t("跟随系统")
+                        }
+                    },
+                    compact: true
+                )
+                .accessibilityLabel(L10n.t("界面语言"))
             }
-            .onboardingCard()
+            .padding(.leading, 14)
+            .padding(.trailing, 6)
+            .padding(.vertical, 5)
+            .onboardingCardBackground(cornerRadius: 18, fallbackFill: Color.primary.opacity(0.035),
+                                      fallbackStroke: Color.primary.opacity(0.08))
+            .onboardingReveal(3, when: welcomeRevealed)
             // 一句不阻断的告知 + 链接,正文在 README(见 LegalNotices 头注),设置「关于」页
             // 还有同一个入口。刻意**不做**阻断式的「接受」页:引导的原则是介绍性内容不锁下一步,GPL 个人
             // 工具也没有需要「接受」的条款 —— 「接受版本号存偏好」那套是分发渠道场景的产物。
@@ -470,7 +541,12 @@ struct OnboardingView: View {
                     .buttonStyle(.link)
             }
             .font(.callout)
+            .padding(.top, 12)
+            .onboardingReveal(4, when: welcomeRevealed)
         }
+        .frame(maxWidth: .infinity)
+        // 内容在滚动区里,要撑满可见高度,语言胶囊才落到底部(上下内边距共 44)。
+        .containerRelativeFrame(.vertical) { height, _ in max(height - 44, 0) }
     }
 
     /// 标题问句 + 一句交代 Lyrimuse 跟着谁显示歌词;下面是装在一张淡玻璃卡里的 `PlayerPicker`
@@ -480,11 +556,13 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(L10n.t("选择播放器"))
                 .font(.title2.bold())
+                .onboardingReveal(0)
             // 这句不逐个列播放器名:网格里的卡片就是完整清单,文案里再列一遍每加一家就得回来改。
             Text(L10n.t("Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改"))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 6)
+                .onboardingReveal(1)
             // 图标网格(「自动识别」是其中一张卡)跟设置页「播放器」卡是同一个组件(PlayerPicker),两处必须长得一样。
             // 网格只摆装了的播放器,没装的收进「更多播放器」,摆放规则见 PlayerPickerLayout。
             //
@@ -505,6 +583,7 @@ struct OnboardingView: View {
             .onboardingCardBackground(cornerRadius: 14, fallbackFill: Color.primary.opacity(0.035),
                                       fallbackStroke: Color.primary.opacity(0.08))
             .padding(.top, 16)
+            .onboardingReveal(2)
         }
     }
 
@@ -556,8 +635,10 @@ struct OnboardingView: View {
         return VStack(alignment: .leading, spacing: 16) {
             Text(L10n.t("YouTube Music 使用哪个浏览器？"))
                 .font(.title2.bold())
+                .onboardingReveal(0)
             Text(L10n.t("YouTube Music 在浏览器中播放，Lyrimuse 需要知道是哪个浏览器才能读取播放进度。请选择常用的浏览器（可多选），随后系统会请求授权，选择允许即可；之后可在设置的「网页播放器」中更改"))
                 .foregroundStyle(.secondary)
+                .onboardingReveal(1)
             if candidates.isEmpty {
                 // 默认候选一个都没有。实践中几乎进不来这个分支(macOS 上 Safari 恒存在,
                 // 而 `candidateBrowsers` 只过滤"装没装"),留着是因为它比一个空网格诚实。
@@ -580,6 +661,7 @@ struct OnboardingView: View {
                 .padding(14)
                 .onboardingCardBackground(cornerRadius: 14, fallbackFill: Color.primary.opacity(0.035),
                                           fallbackStroke: Color.primary.opacity(0.08))
+                .onboardingReveal(2)
                 // 这里**曾经**有一行小字「亮起来的就是已经配好的；再点一下取消」,
                 // 同日加上又被去掉("去掉这个文案")。加它的理由是:点一张
                 // 已经亮着的卡做的是取消配对,而正文邀请的是"选",怕用户误删(那天确实误删过
@@ -636,7 +718,8 @@ struct OnboardingView: View {
 
     /// 「让它跑起来」这一页:一张卡片里的一组状态行 —— 歌词引擎(必装,走到这一页自动开始装),
     /// 以及按需出现的每家播放器自动化权限、完全磁盘访问、辅助功能。每行只写名称和状态,需要处理时才出现
-    /// 按钮;两项权限各有什么用收在卡片下面。开机启动是偏好不是要核对的状态,放在欢迎页。
+    /// 按钮;两项权限各有什么用收在卡片下面。卡片最后一行是开机启动:它是偏好不是要核对的状态,跟后台运行放在
+    /// 一起(见 14 章决策 109)。
     ///
     /// 歌词引擎和开机启动**不是同一件事**:引擎是独立的 launchd job(KeepAlive,装上
     /// 之后本来就开机自启),开机启动开关管的是 Lyrimuse 这个 App 自己(`LoginItemManager`)。
@@ -650,8 +733,10 @@ struct OnboardingView: View {
         return VStack(alignment: .leading, spacing: 14) {
             Text(L10n.t("启用歌词引擎与权限"))
                 .font(.title2.bold())
+                .onboardingReveal(0)
             Text(L10n.t("请启用歌词引擎，并开启以下权限；未开启的权限只影响对应功能"))
                 .foregroundStyle(.secondary)
+                .onboardingReveal(1)
             VStack(alignment: .leading, spacing: 0) {
                 setupRow(icon: engineIcon, tint: engineTint, title: L10n.t("歌词引擎"),
                          subtitle: L10n.t("识别歌曲、查找歌词和封面；仅在本机运行，查找歌词时只发送歌名、歌手等曲目信息")) {
@@ -691,8 +776,16 @@ struct OnboardingView: View {
                     setupDivider
                     accessibilityRow
                 }
+                setupDivider
+                setupRow(icon: "power", tint: .secondary, title: L10n.t("开机时自动启动 Lyrimuse"), subtitle: nil) {
+                    // 标题传给开关本身再 labelsHidden:视觉不变,旁白读得出这是哪个开关。
+                    Toggle(L10n.t("开机时自动启动 Lyrimuse"), isOn: $settings.launchAtLoginEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
             }
             .onboardingCard()
+            .onboardingReveal(2)
             if let note = permissionBenefitNote(fdaTargets, axTargets) {
                 Text(note)
                     .font(.caption)
@@ -871,7 +964,8 @@ struct OnboardingView: View {
         .padding(.vertical, verticalPadding)
     }
 
-    /// 左侧是一个 SF Symbol 的卡片行。
+    /// 左侧是一个 SF Symbol 的卡片行。状态变了(未授权 → 已授权、安装中 → 运行中)图标用系统的符号替换动画换过去、
+    /// 轻轻跳一下;右边的控件淡入淡出换过去(14 章决策 109)。
     private func setupRow<Trailing: View>(icon: String, tint: Color, title: String, subtitle: String?,
                                           verticalPadding: CGFloat = 9,
                                           @ViewBuilder trailing: () -> Trailing) -> some View {
@@ -880,8 +974,13 @@ struct OnboardingView: View {
                 .font(.system(size: 15))
                 .foregroundStyle(tint)
                 .environment(\.locale, Locale(identifier: "en"))
+                .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce, value: icon)
+                .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7), value: icon)
         } trailing: {
             trailing()
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: icon)
         }
     }
 
@@ -912,29 +1011,26 @@ struct OnboardingView: View {
     /// (`RomanizationScripts.defaultScripts(chineseUI:)`,跟界面语言走)对绝大多数人本来就是对的,细调留给设置页。
     ///
     /// 两个开关同时设悬浮歌词和歌词窗口两份(之后在「歌词显示」里各自改,见 `overlayAndWindow`);灵动岛、菜单栏
-    /// 和触控栏的译文 / 罗马音走各自的「副行」(`LyricSecondaryLine`),不受这两个开关影响,页脚那句据此写
-    /// (触控栏只在这台 Mac 有触控栏时提)。
+    /// 和触控栏的译文 / 罗马音走各自的「副行」(`LyricSecondaryLine`),不受这两个开关影响,页脚那句据此写。
     private var lyricsExtrasSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 0) {
                 toggleRow(
                     icon: "text.bubble",
                     title: L10n.t("显示译文"),
-                    subtitle: L10n.t("在歌词下方显示一行译文"),
+                    subtitle: L10n.t("显示在歌词下方"),
                     isOn: overlayAndWindow(\.overlayShowTranslation, \.showTranslation))
                 setupDivider
                 toggleRow(
                     icon: "textformat.alt",
                     title: L10n.t("显示读音"),
                     subtitle: settings.romanizationScripts.contains(.chinese)
-                        ? L10n.t("默认为日文、韩文、中文和粤语标注读音，可在设置中按语言关闭")
-                        : L10n.t("默认为日文、韩文和粤语标注读音，普通话拼音可在设置中开启"),
+                        ? L10n.t("默认标注日文、韩文、中文和粤语")
+                        : L10n.t("默认标注日文、韩文和粤语"),
                     isOn: overlayAndWindow(\.overlayShowRomanization, \.showRomanization))
             }
             .onboardingCard()
-            Text(touchBar.isPresent
-                 ? L10n.t("这两个开关作用于悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏可在各自的「副行」中选择译文或读音")
-                 : L10n.t("这两个开关作用于悬浮歌词和歌词窗口；灵动岛和菜单栏可在各自的「副行」中选择译文或读音"))
+            Text(L10n.t("只作用于悬浮歌词和歌词窗口"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -974,15 +1070,17 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.t("选择歌词显示方式"))
                 .font(.title2.bold())
-            Text(L10n.t("以上方式可同时开启，请先选择当前需要的，之后可随时在设置中分别开关"))
+                .onboardingReveal(0)
+            Text(L10n.t("可同时开启多种"))
                 .foregroundStyle(.secondary)
+                .onboardingReveal(1)
 
             // 显示方式一张引导卡片、译文与读音一张,同第 1、4 步的卡片行(14 章决策 91)。
             VStack(alignment: .leading, spacing: 0) {
                 displayModeRow(
                     kind: .classic,
                     title: L10n.t("桌面悬浮歌词"),
-                    subtitle: L10n.t("显示在桌面上"),
+                    subtitle: L10n.t("浮在所有窗口之上"),
                     isOn: Binding(
                         get: { settings.classicOverlayEnabled },
                         set: { LyricsOverlayWindowController.shared.setVisible($0) }))
@@ -991,8 +1089,8 @@ struct OnboardingView: View {
                     kind: .notch,
                     title: L10n.t("灵动岛歌词"),
                     subtitle: hasNotchedScreen
-                        ? L10n.t("紧贴屏幕顶部的刘海显示")
-                        : L10n.t("这台 Mac 无刘海，将显示在屏幕顶部中央"),
+                        ? L10n.t("显示在刘海处")
+                        : L10n.t("显示在屏幕顶部中央"),
                     isOn: Binding(
                         get: { settings.notchOverlayEnabled },
                         set: { NotchLyricsWindowController.shared.setVisible($0) }))
@@ -1000,36 +1098,38 @@ struct OnboardingView: View {
                 displayModeRow(
                     kind: .menuBar,
                     title: L10n.t("菜单栏歌词"),
-                    subtitle: L10n.t("在菜单栏中显示一行歌词"),
+                    subtitle: L10n.t("显示在菜单栏右侧"),
                     isOn: $settings.showLyricsInMenuBar)
                 if touchBar.isPresent {
                     displayModeDivider
                     displayModeRow(
                         kind: .touchBar,
                         title: L10n.t("触控栏歌词"),
-                        subtitle: L10n.t("功能栏中的图标，轻点即可展开歌词"),
+                        subtitle: L10n.t("轻点功能栏图标展开"),
                         isOn: $settings.showLyricsInTouchBar)
                 }
             }
             .onboardingCard()
+            .onboardingReveal(2)
 
-            // 这两条提示**互斥**,任何时候最多出现一条 —— 窗口固定 480×500,两条同时出现会把这一步
+            // 这两条提示**互斥**,任何时候最多出现一条 —— 窗口固定 480×600,两条同时出现会把这一步
             // 顶出窗口(超出时外层只是滚动兜底,见 body 头注)。全关时"等播起来才看得到"也没意义了,
             // 所以警告优先。
             if noDisplayModeEnabled {
                 displayModeNote(
                     icon: "exclamationmark.triangle.fill",
                     tint: .orange,
-                    text: L10n.t("以上方式均已关闭，播放时不会显示歌词。可随时通过菜单栏图标重新开启"))
+                    text: L10n.t("全部关闭后不会显示歌词"))
             } else if !isPlayingNow {
                 displayModeNote(
                     icon: "info.circle.fill",
                     tint: .secondary,
                     text: touchBar.isPresent
-                        ? L10n.t("当前未在播放。桌面悬浮歌词会立即显示，灵动岛、菜单栏和触控栏歌词将在开始播放后显示")
-                        : L10n.t("当前未在播放。桌面悬浮歌词会立即显示，灵动岛和菜单栏歌词将在开始播放后显示"))
+                        ? L10n.t("灵动岛、菜单栏和触控栏歌词在播放时显示")
+                        : L10n.t("灵动岛和菜单栏歌词在播放时显示"))
             }
             lyricsExtrasSection
+                .onboardingReveal(3)
         }
     }
 
@@ -1164,7 +1264,9 @@ struct OnboardingView: View {
         let pending = items.filter { !$0.ok && !$0.isOptional } + items.filter { !$0.ok && $0.isOptional }
         return VStack(alignment: .leading, spacing: 14) {
             doneHeader(allOK: allOK)
+                .onboardingReveal(0)
             liveBanner
+                .onboardingReveal(1)
             if !pending.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(pending.enumerated()), id: \.element.id) { index, item in
@@ -1173,11 +1275,15 @@ struct OnboardingView: View {
                     }
                 }
                 .onboardingCard()
+                .onboardingReveal(2)
             }
             HStack(alignment: .top, spacing: 10) {
                 playersTile
+                    .onboardingReveal(3)
                 menuBarTile
+                    .onboardingReveal(4)
                 lastfmTile
+                    .onboardingReveal(5)
             }
             // 见 finish():歌词引擎没起来时这次不算走完引导,下次启动还会再问。写在脸上,不做无声惩罚。
             if !engineRunning {
@@ -1549,11 +1655,73 @@ struct OnboardingView: View {
 
     /// 翻到某一步。所有翻页都走它 —— `step` 的加减法和 `furthestStep` 的推进收在一处,
     /// 免得"下一步"按钮、进度点、体检清单的「去处理」各记一套。
+    ///
+    /// 翻页带方向推入(见 14 章决策 109)。方向先单独落进一次渲染,下一拍才换页:被换下去那一页的退场动画取的是它
+    /// 最后一次渲染时挂的 transition,方向和换页在同一拍改的话,它拿到的还是上一次的方向。
     private func goTo(_ index: Int) {
         let next = OnboardingFlow.navigate(to: index, from: .init(step: step, furthest: furthestStep),
                                            stepCount: steps.count)
-        step = next.step
-        furthestStep = next.furthest
+        guard next.step != step || next.furthest != furthestStep else { return }
+        navDirection = next.step >= step ? 1 : -1
+        let animation: Animation = reduceMotion ? .easeOut(duration: 0.2) : .timingCurve(0.22, 1, 0.36, 1, duration: 0.46)
+        Task { @MainActor in
+            withAnimation(animation) {
+                step = next.step
+                furthestStep = next.furthest
+            }
+        }
+    }
+
+    /// 新页从翻页方向那一侧推入、旧页往另一侧退出,都带淡入淡出;减弱动态效果时只淡入淡出。
+    private var stepTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(insertion: .offset(x: 56 * navDirection).combined(with: .opacity),
+                           removal: .offset(x: -56 * navDirection).combined(with: .opacity))
+    }
+
+    // MARK: - 开场
+
+    /// 窗口出现时停在第一页才放;减弱动态效果时不放,欢迎页直接是完整的。
+    private func startIntroIfNeeded() {
+        guard step == 0, !reduceMotion else {
+            welcomeRevealed = true
+            return
+        }
+        welcomeRevealed = false
+        wreathStart = nil
+        introStart = Date()
+        introTask?.cancel()
+        introTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(OnboardingIntro.handoff))
+            guard !Task.isCancelled else { return }
+            revealWelcome()
+            try? await Task.sleep(for: .seconds(OnboardingIntro.end - OnboardingIntro.handoff))
+            guard !Task.isCancelled else { return }
+            introStart = nil
+        }
+    }
+
+    /// 「重新运行引导…」:回到第一页、清掉走过的进度,重放开场。窗口新开时它会紧跟着进门那次再放一遍,
+    /// 两次相隔几毫秒,看到的就是一次。
+    private func restartFromBeginning() {
+        introTask?.cancel()
+        navDirection = -1
+        step = 0
+        furthestStep = 0
+        startIntroIfNeeded()
+    }
+
+    /// 点一下跳过,或者开场还没完就翻走了:欢迎页直接进场,开场淡掉。
+    private func skipIntro() {
+        introTask?.cancel()
+        introTask = nil
+        if !welcomeRevealed { revealWelcome() }
+        withAnimation(.easeOut(duration: 0.25)) { introStart = nil }
+    }
+
+    private func revealWelcome() {
+        welcomeRevealed = true
+        wreathStart = Date()
     }
 
     /// 跳到某一个具体步骤(体检清单的「去处理」用)。那一步不在本轮列表里就什么都不做 ——
@@ -1600,6 +1768,11 @@ private struct DisplayModeThumbnail: View {
 
     let kind: Kind
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 示意图里的歌词条来回动(14 章决策 109):桌面歌词、触控栏那条从左往右染色,灵动岛那条一伸一缩,菜单栏那条左右滚。
+    /// 只动缩放和位移;减弱动态效果时停在染满的样子。
+    @State private var playing = false
+
     static let width: CGFloat = 56
     private static let height: CGFloat = 36
     private static let menuBarHeight: CGFloat = 6
@@ -1621,6 +1794,20 @@ private struct DisplayModeThumbnail: View {
         .overlay(Self.shape.strokeBorder(Color.primary.opacity(0.18), lineWidth: 1))
         // 纯装饰:位置信息已经由同一行的标题和副标题说清楚了,不让旁白再念一遍图形。
         .accessibilityHidden(true)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { playing = true }
+        }
+    }
+
+    /// 正在唱的那一条:淡底上一条强调色从左往右染过去。
+    private func singingLine(width: CGFloat, height: CGFloat) -> some View {
+        ZStack(alignment: .leading) {
+            Capsule().fill(Color.accentColor.opacity(0.3))
+            Capsule().fill(Color.accentColor)
+                .scaleEffect(x: playing || reduceMotion ? 1 : 0.2, anchor: .leading)
+        }
+        .frame(width: width, height: height)
     }
 
     @ViewBuilder
@@ -1629,7 +1816,7 @@ private struct DisplayModeThumbnail: View {
         case .classic:
             // 桌面偏下方的两行歌词,第一行用强调色表示"正在唱的这一句"。
             VStack(spacing: 4) {
-                Capsule().fill(Color.accentColor).frame(width: 32, height: 4)
+                singingLine(width: 32, height: 4)
                 Capsule().fill(Color.primary.opacity(0.3)).frame(width: 22, height: 3)
             }
             .frame(width: Self.width, height: Self.height, alignment: .center)
@@ -1644,6 +1831,7 @@ private struct DisplayModeThumbnail: View {
                 Capsule()
                     .fill(Color.accentColor)
                     .frame(width: 15, height: 4)
+                    .scaleEffect(x: playing ? 1 : 0.55, anchor: .leading)
                     .padding(.top, 1)
             }
             .frame(width: Self.width, alignment: .center)
@@ -1655,6 +1843,7 @@ private struct DisplayModeThumbnail: View {
                 Capsule()
                     .fill(Color.accentColor)
                     .frame(width: 20, height: 3)
+                    .offset(x: playing ? 0 : -5)
                     .padding(.trailing, 3)
             }
             .frame(width: Self.width, height: Self.menuBarHeight, alignment: .trailing)
@@ -1664,9 +1853,7 @@ private struct DisplayModeThumbnail: View {
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                         .fill(Color.primary.opacity(0.85))
-                    Capsule()
-                        .fill(Color.accentColor)
-                        .frame(width: 22, height: 3)
+                    singingLine(width: 22, height: 3)
                         .padding(.leading, 8)
                 }
                 .frame(width: Self.width - 8, height: Self.menuBarHeight)
@@ -1686,8 +1873,57 @@ private struct DisplayModeThumbnail: View {
     }
 }
 
+/// 欢迎页图标中心(全局坐标)。开场的光球落到这里。
+///
+/// 合并时只认报了值的那个:没设这个偏好的兄弟视图也会带着默认值参与合并,直接取后一个会被它们的 `.zero` 盖掉,
+/// 光球就落到窗口左上角去了。
+private struct OnboardingIconCenterKey: PreferenceKey {
+    static let defaultValue: CGPoint = .zero
+    static func reduce(value: inout CGPoint, nextValue: () -> CGPoint) {
+        let next = nextValue()
+        if next != .zero { value = next }
+    }
+}
+
+/// 一页里的标题、说明、主卡片依次进场:往上浮 12pt + 淡入,每项错开 55ms。见 14 章决策 109。
+///
+/// `ready` 为假时先藏着(欢迎页等开场交接);`instant` 是到点直接出现、不做动画(欢迎页的图标接替光球,
+/// 再浮一次就重影了)。减弱动态效果时也是直接出现。
+private struct OnboardingReveal: ViewModifier {
+    let index: Int
+    let ready: Bool
+    let instant: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown || instant ? 0 : 12)
+            .onAppear { if ready { show() } }
+            // 「重新运行引导」时欢迎页还开着、元素早已显出来:跟着藏回去,开场结束再进场一次。
+            .onChange(of: ready) { _, now in if now { show() } else { shown = false } }
+    }
+
+    private func show() {
+        guard !shown else { return }
+        guard !reduceMotion, !instant else {
+            shown = true
+            return
+        }
+        withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.56).delay(Double(index) * 0.055 + 0.06)) {
+            shown = true
+        }
+    }
+}
+
 private extension View {
-    /// 引导页里的卡片:欢迎页的两个偏好、「让它跑起来」的状态行、收尾页待处理那张共用一份。材质见
+    func onboardingReveal(_ index: Int, when ready: Bool = true, instant: Bool = false) -> some View {
+        modifier(OnboardingReveal(index: index, ready: ready, instant: instant))
+    }
+
+    /// 引导页里的卡片:「让它跑起来」的状态行、收尾页待处理那张等共用一份。材质见
     /// `onboardingCardBackground`。
     func onboardingCard() -> some View {
         padding(.horizontal, 12)

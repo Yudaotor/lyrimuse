@@ -212,7 +212,10 @@ private struct ChoiceCardChrome: ViewModifier {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.choiceCardsOnGlass) private var onGlassRequested
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovering = false
+    /// 勾上 / 取消时整张卡先压到 0.94 再弹回来,手感上「按到了」。
+    @State private var pressScale: CGFloat = 1
 
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 11, style: .continuous) }
 
@@ -269,6 +272,8 @@ private struct ChoiceCardChrome: ViewModifier {
                         // 垫一层窗口底色,免得对号压在卡片描边上糊成一团。
                         .background(Circle().fill(Color(nsColor: .windowBackgroundColor)))
                         .padding(5)
+                        // 勾上时从小弹出来(14 章决策 109)。
+                        .transition(.scale(scale: 0.3).combined(with: .opacity))
                 } else if isCoveredByAuto {
                     // 对号的位置换成"自动"那味儿的角标。用 `sparkles` 而不是「自动识别」卡
                     // 自己那个 `wand.and.stars`:后者的字形明显扁,`Circle()` 背景会按短边
@@ -286,8 +291,15 @@ private struct ChoiceCardChrome: ViewModifier {
                 guard highlightsOnHover else { return }
                 isHovering = hovering
             }
+            .scaleEffect(pressScale)
             .animation(.easeOut(duration: 0.12), value: isHovering)
-            .animation(.easeOut(duration: 0.18), value: isSelected)
+            .animation(reduceMotion ? .easeOut(duration: 0.18) : .spring(response: 0.32, dampingFraction: 0.55), value: isSelected)
+            .onChange(of: isSelected) { _, _ in
+                guard !reduceMotion else { return }
+                withAnimation(.easeOut(duration: 0.08)) { pressScale = 0.94 } completion: {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) { pressScale = 1 }
+                }
+            }
     }
 }
 

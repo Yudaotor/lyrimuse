@@ -2148,6 +2148,17 @@ extension View {
                 .overlay(shape.strokeBorder(fallbackStroke))
         }
     }
+
+    /// 首启引导开场里灵动岛的底:内容(放大模糊的封面)裁成灵动岛的形状,macOS 26+ 叠一层带色调的常规液态玻璃,
+    /// 折射窗口里它背后的开场底色和光晕;旧系统退回磨砂材质。见 14 章决策 109。
+    @ViewBuilder
+    func onboardingIslandGlass<S: Shape>(in shape: S, tint: Color) -> some View {
+        if #available(macOS 26.0, *) {
+            clipShape(shape).glassEffect(.regular.tint(tint), in: shape)
+        } else {
+            background(.ultraThinMaterial).clipShape(shape)
+        }
+    }
 }
 
 // MARK: - 菜单栏面板的玻璃

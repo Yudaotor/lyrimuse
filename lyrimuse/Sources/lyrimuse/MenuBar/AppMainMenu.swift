@@ -11,7 +11,11 @@ enum AppMenuActions {
     }
 
     /// 引导可以重来:走完的人后来想重新配一遍(换了播放器、服务被自己关掉了、想重新给权限)也得有入口。
-    static func rerunOnboarding() { AppActions.shared.openOnboarding?() }
+    /// 窗口开着时也从第一页重来、重放开场(`onboardingRestartRequests`)。
+    static func rerunOnboarding() {
+        AppActions.shared.openOnboarding?()
+        AppActions.shared.onboardingRestartRequests.send()
+    }
 
     /// 跟设置「关于」页的「反馈问题」同一个入口,见 FeedbackReporter。
     static func reportIssue() { FeedbackReporter.openNewIssue() }

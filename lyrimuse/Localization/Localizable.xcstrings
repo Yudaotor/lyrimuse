@@ -3939,25 +3939,19 @@
         }
       }
     },
-    "以上方式均已关闭，播放时不会显示歌词。可随时通过菜单栏图标重新开启" : {
+    "全部关闭后不会显示歌词" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "They’re all off, so no lyrics will show while music plays. The menu bar icon is always there — you can turn them back on from it"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "以上方式均已关闭，播放时不会显示歌词。可随时通过菜单栏图标重新开启"
+            "value" : "With all of these off, no lyrics are shown"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "以上方式均已關閉，播放時不會顯示歌詞。可隨時透過選單列圖像重新開啟"
+            "value" : "全部關閉後不會顯示歌詞"
           }
         }
       }
@@ -16612,48 +16606,36 @@
         }
       }
     },
-    "当前未在播放。桌面悬浮歌词会立即显示，灵动岛和菜单栏歌词将在开始播放后显示" : {
+    "灵动岛和菜单栏歌词在播放时显示" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nothing is playing right now — Desktop Floating Lyrics appears straight away; Notch Lyrics and Menu Bar Lyrics only show up once playback starts"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当前未在播放。桌面悬浮歌词会立即显示，灵动岛和菜单栏歌词将在开始播放后显示"
+            "value" : "Notch and menu bar lyrics show up during playback"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "目前未在播放。桌面浮動歌詞會立即顯示，動態島和選單列歌詞將在開始播放後顯示"
+            "value" : "動態島和選單列歌詞在播放時顯示"
           }
         }
       }
     },
-    "当前未在播放。桌面悬浮歌词会立即显示，灵动岛、菜单栏和触控栏歌词将在开始播放后显示" : {
+    "灵动岛、菜单栏和触控栏歌词在播放时显示" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nothing is playing right now — Desktop Floating Lyrics appears straight away; Notch, Menu Bar and Touch Bar Lyrics only show up once playback starts"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当前未在播放。桌面悬浮歌词会立即显示，灵动岛、菜单栏和触控栏歌词将在开始播放后显示"
+            "value" : "Notch, menu bar and Touch Bar lyrics show up during playback"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "目前未在播放。桌面浮動歌詞會立即顯示，動態島、選單列和觸控列歌詞將在開始播放後顯示"
+            "value" : "動態島、選單列和觸控列歌詞在播放時顯示"
           }
         }
       }
@@ -18878,48 +18860,36 @@
         }
       }
     },
-    "在菜单栏中显示一行歌词" : {
+    "显示在菜单栏右侧" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A single line in the menu bar"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在菜单栏中显示一行歌词"
+            "value" : "Shown on the right of the menu bar"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在選單列中顯示一行歌詞"
+            "value" : "顯示在選單列右側"
           }
         }
       }
     },
-    "功能栏中的图标，轻点即可展开歌词" : {
+    "轻点功能栏图标展开" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "An icon in the Control Strip — tap it to expand the lyrics"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "功能栏中的图标，轻点即可展开歌词"
+            "value" : "Tap the icon in the Control Strip to expand"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "功能列中的圖像，輕點即可展開歌詞"
+            "value" : "輕點功能列圖像展開"
           }
         }
       }
@@ -19933,25 +19903,19 @@
         }
       }
     },
-    "显示在桌面上" : {
+    "浮在所有窗口之上" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sits on your desktop"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示在桌面上"
+            "value" : "Floats above all windows"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "顯示在桌面上"
+            "value" : "浮在所有視窗之上"
           }
         }
       }
@@ -21445,48 +21409,53 @@
         }
       }
     },
-    "以上方式可同时开启，请先选择当前需要的，之后可随时在设置中分别开关" : {
+    "可同时开启多种" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "These can all be on at once — pick what you want for now and change it any time in Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "以上方式可同时开启，请先选择当前需要的，之后可随时在设置中分别开关"
+            "value" : "You can turn on more than one"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "以上方式可同時開啟，請先選擇目前需要的，之後可隨時在設定中分別開關"
+            "value" : "可同時開啟多種"
           }
         }
       }
     },
-    "这台 Mac 无刘海，将显示在屏幕顶部中央" : {
+    "显示在刘海处" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No notch on this Mac, so it sits at the top center"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这台 Mac 无刘海，将显示在屏幕顶部中央"
+            "value" : "Shown beside the notch"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "這台 Mac 無瀏海，將顯示在螢幕頂部中央"
+            "value" : "顯示在瀏海處"
+          }
+        }
+      }
+    },
+    "显示在屏幕顶部中央" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shown at the top center of the screen"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示在螢幕頂部中央"
           }
         }
       }
@@ -24679,71 +24648,36 @@
         }
       }
     },
-    "在歌词下方显示一行译文" : {
+    "显示在歌词下方" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show a line of translation under the lyrics"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在歌词下方显示一行译文"
+            "value" : "Shown under the lyrics"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在歌詞下方顯示一行譯文"
+            "value" : "顯示在歌詞下方"
           }
         }
       }
     },
-    "这两个开关作用于悬浮歌词和歌词窗口；灵动岛和菜单栏可在各自的「副行」中选择译文或读音" : {
+    "只作用于悬浮歌词和歌词窗口" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "These switches apply to Floating Lyrics and the Lyrics Window; the Notch and Menu Bar pick translation or romanization in their own “Second Line” setting"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这两个开关作用于悬浮歌词和歌词窗口；灵动岛和菜单栏可在各自的「副行」中选择译文或读音"
+            "value" : "Applies only to Floating Lyrics and the Lyrics Window"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "這兩個開關作用於浮動歌詞和歌詞視窗；動態島和選單列可在各自的「副行」中選擇譯文或讀音"
-          }
-        }
-      }
-    },
-    "这两个开关作用于悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏可在各自的「副行」中选择译文或读音" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "These switches apply to Floating Lyrics and the Lyrics Window; the Notch, Menu Bar and Touch Bar each pick translation or romanization in their own “Second Line”"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这两个开关作用于悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏可在各自的「副行」中选择译文或读音"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這兩個開關作用於浮動歌詞和歌詞視窗；動態島、選單列和觸控列可在各自的「副行」中選擇譯文或讀音"
+            "value" : "只作用於浮動歌詞和歌詞視窗"
           }
         }
       }
@@ -24920,25 +24854,19 @@
         }
       }
     },
-    "默认为日文、韩文、中文和粤语标注读音，可在设置中按语言关闭" : {
+    "默认标注日文、韩文、中文和粤语" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Japanese, Korean, Chinese and Cantonese are all annotated by default; turn any of them off in Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "默认为日文、韩文、中文和粤语标注读音，可在设置中按语言关闭"
+            "value" : "On by default for Japanese, Korean, Chinese and Cantonese"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "預設為日文、韓文、中文和粵語標註讀音，可在設定中按語言關閉"
+            "value" : "預設標註日文、韓文、中文和粵語"
           }
         }
       }
@@ -32436,48 +32364,53 @@
         }
       }
     },
-    "随正在播放的歌曲显示歌词，可显示在桌面、灵动岛、菜单栏和歌词窗口中，并支持对照译文与标注读音。接下来几步将完成基本设置，之后可随时在设置中更改" : {
+    "桌面歌词，为 Mac 全新构想" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Shows lyrics for whatever’s playing — on the desktop, around the notch, in the menu bar or in a lyrics window, with translations and romanization if you like. The next few steps set it up for you; you can change everything later in Settings."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "随正在播放的歌曲显示歌词，可显示在桌面、灵动岛、菜单栏和歌词窗口中，并支持对照译文与标注读音。接下来几步将完成基本设置，之后可随时在设置中更改"
+            "value" : "Desktop lyrics, reimagined for the Mac"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "隨正在播放的歌曲顯示歌詞，可顯示在桌面、動態島、選單列和歌詞視窗中，並支援對照譯文與標註讀音。接下來幾步將完成基本設定，之後可隨時在設定中更改"
+            "value" : "桌面歌詞，為 Mac 全新構想"
           }
         }
       }
     },
-    "随正在播放的歌曲显示歌词，可显示在桌面、灵动岛、菜单栏、触控栏和歌词窗口中，并支持对照译文与标注读音。接下来几步将完成基本设置，之后可随时在设置中更改" : {
+    "弦上那句，终得分明" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Shows lyrics for whatever’s playing — on the desktop, around the notch, in the menu bar, on the Touch Bar or in a lyrics window, with translations and romanization if you like. The next few steps set it up for you; you can change everything later in Settings."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "随正在播放的歌曲显示歌词，可显示在桌面、灵动岛、菜单栏、触控栏和歌词窗口中，并支持对照译文与标注读音。接下来几步将完成基本设置，之后可随时在设置中更改"
+            "value" : "Clear as a plucked string"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "隨正在播放的歌曲顯示歌詞，可顯示在桌面、動態島、選單列、觸控列和歌詞視窗中，並支援對照譯文與標註讀音。接下來幾步將完成基本設定，之後可隨時在設定中更改"
+            "value" : "弦上那句，終得分明"
+          }
+        }
+      }
+    },
+    "点一下跳过" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click to skip"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "點一下跳過"
           }
         }
       }
@@ -32942,25 +32875,19 @@
         }
       }
     },
-    "默认为日文、韩文和粤语标注读音，普通话拼音可在设置中开启" : {
+    "默认标注日文、韩文和粤语" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Japanese, Korean and Cantonese are annotated by default; turn on Mandarin pinyin in Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "默认为日文、韩文和粤语标注读音，普通话拼音可在设置中开启"
+            "value" : "On by default for Japanese, Korean and Cantonese"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "預設為日文、韓文和粵語標註讀音，國語拼音可在設定中開啟"
+            "value" : "預設標註日文、韓文和粵語"
           }
         }
       }

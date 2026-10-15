@@ -74,7 +74,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "settings-ui", summary: "设置页交互纯逻辑:顺序优先列表拖拽排序(滞回 / 让位 / 写回)/ 导入字体 / 配置包自报信息 / 系统语言(样例与引擎共用)/ 设置深链 / 设置窗侧栏宽度与收不起", run: runSettingsInteractionTests),
     TestGroup(name: "deep-links", summary: "lyrimuse:// 路由表:老链接兼容 / 认不出不落进授权回调 / 往返 / 设置二级分段对得上 App 枚举", run: runDeepLinkTests),
     TestGroup(name: "settings-search", summary: "设置搜索:目录 ↔ 源码调用点 ↔ catalog 三方对账 / 匹配排序", run: runSettingsSearchTests),
-    TestGroup(name: "onboarding", summary: "首启引导:步骤序列 / 翻页防越界 / 锁与收尾 / 体检清单 / 收尾页顺序 / 撒花几何", run: runOnboardingTests),
+    TestGroup(name: "onboarding", summary: "首启引导:步骤序列 / 翻页防越界 / 锁与收尾 / 体检清单 / 收尾页顺序 / 开场时间轴与月桂冠 / 撒花几何", run: runOnboardingTests),
     TestGroup(name: "contracts", summary: "跨文件契约(多数靠 #filePath 扫源码文本):设置页分段 / 本地化 / 滑杆 / 封面口径 / 灵动岛对齐 / 引导页", run: runSourceContractTests),
     TestGroup(name: "ops-diagnostics", summary: "诊断脱敏 / 备份发现 / 导入策略 / 安全写文件 / launchd / 进程", run: runOpsDiagnosticsTests),
 ]

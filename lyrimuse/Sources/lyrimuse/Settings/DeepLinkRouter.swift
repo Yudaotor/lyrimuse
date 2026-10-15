@@ -44,7 +44,7 @@ enum DeepLinkRouter {
         case .menuBarMenu:
             MenuBarStatusItem.shared.popUpMenuFromDeepLink()
         case .onboarding:
-            AppActions.shared.openOnboarding?()
+            AppMenuActions.rerunOnboarding()
         case let .action(action, on, stepSeconds):
             LyrimuseActionRunner.perform(action, on: on, stepMs: stepSeconds.map { Int(($0 * 1000).rounded()) })
         case let .copyLyric(includeTranslation):
