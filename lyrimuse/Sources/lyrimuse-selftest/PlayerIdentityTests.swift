@@ -875,6 +875,10 @@ func runPlayerIdentityTests() {
         expectEqual(G.missingArtworkUsesMatchedCover(bundleID: reamp), true, "reAMP 封面: 没封面时用匹配到的那张")
         expectEqual(G.missingArtworkUsesMatchedCover(bundleID: PlaybackPlayer.kaset.bundleIdentifier), true,
                     "reAMP 封面: 从不报封面的 Kaset 照旧")
+        expectEqual(G.missingArtworkUsesMatchedCover(bundleID: PlaybackPlayer.lxMusic.bundleIdentifier), true,
+                    "洛雪封面: 系统那份清空后用匹配到的那张")
+        expectEqual(G.systemNeverHasArtwork(bundleID: PlaybackPlayer.lxMusic.bundleIdentifier), false,
+                    "洛雪封面: 系统那份有图就用系统那份")
         expectEqual(G.missingArtworkUsesMatchedCover(bundleID: PlaybackPlayer.appleMusic.bundleIdentifier), false,
                     "reAMP 封面: 别的播放器没封面照旧显示占位音符(决策 41)")
         expectEqual(G.systemNeverHasArtwork(bundleID: reamp), false, "reAMP 封面: 文件里嵌了封面就用系统那份")
@@ -2855,6 +2859,9 @@ private func amazonFavoriteChecks() {
     expectEqual(API.httpsCover("http://p2.music.126.net/x.jpg")?.absoluteString, "https://p2.music.126.net/x.jpg", "洛雪开放 API: 网易云图床换 https")
     expectEqual(API.httpsCover("data:image/png;base64,AAAA"), nil, "洛雪开放 API: data 地址不给")
     expectEqual(API.httpsCover("http://example.com/a.jpg"), nil, "洛雪开放 API: 没核过的图床不给")
+    expectEqual(API.httpsCover(" /data/oss/resource/00/5t/1k/a.webp ")?.absoluteString,
+                "https://d.musicapp.migu.cn/data/oss/resource/00/5t/1k/a.webp", "洛雪开放 API: 咪咕不带主机的地址补上主机")
+    expectEqual(API.httpsCover("/other/a.jpg"), nil, "洛雪开放 API: 别的不带主机的地址不给")
     // 歌词对时自检:配对、正负号、不同字不配、离太远不配。
     var check = LXMusicLyricCheck(track: "特别的人")
     expectEqual(check.noteTheirs("爱一个人或许要慷慨", at: t0), false, "对时自检: 洛雪先换句,先记着")

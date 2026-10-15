@@ -825,9 +825,14 @@ func lxMusicCoverURL(artist, title string, durationSecs float64) string {
 var lxMusicKuwoImageHost = regexp.MustCompile(`^img\d\.kuwo\.cn$`)
 
 // lxMusicHTTPSCover 把洛雪记的封面地址换成 https:各家图床逐个核过 https 下同一路径给的是同一张图;img1.kwcdn.kuwo.cn
-// 不认 https,同一路径在 img1.kuwo.cn 上是同一张(字节一致)。没核过的图床不给。
+// 不认 https,同一路径在 img1.kuwo.cn 上是同一张(字节一致)。咪咕记的多是不带主机的「/data/oss/…」,补成 d.musicapp.migu.cn。
+// 没核过的图床不给。
 func lxMusicHTTPSCover(raw string) string {
-	u, err := neturl.Parse(strings.TrimSpace(raw))
+	raw = strings.TrimSpace(raw)
+	if strings.HasPrefix(raw, "/data/oss/") {
+		raw = "https://d.musicapp.migu.cn" + raw
+	}
+	u, err := neturl.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return ""
 	}

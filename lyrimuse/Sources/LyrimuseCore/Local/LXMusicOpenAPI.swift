@@ -215,9 +215,11 @@ public final class LXMusicOpenAPI: NSObject, URLSessionDataDelegate, @unchecked 
     }
 
     /// 推来的封面地址换成 Discord 认的 https:跟引擎的 `lxMusicHTTPSCover`(lyrimuse-engine/lxmusic.go)同一张图床表,两处同步改
-    /// (见 09 章决策 263)。`data:` 地址、没核过的图床不给。
+    /// (见 09 章决策 263)。咪咕记的多是不带主机的「/data/oss/…」,补成 d.musicapp.migu.cn。`data:` 地址、没核过的图床不给。
     public static func httpsCover(_ raw: String) -> URL? {
-        guard var parts = URLComponents(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+        var raw = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw.hasPrefix("/data/oss/") { raw = "https://d.musicapp.migu.cn" + raw }
+        guard var parts = URLComponents(string: raw),
               let scheme = parts.scheme?.lowercased(), scheme == "http" || scheme == "https",
               let host = parts.host?.lowercased(), !host.isEmpty else { return nil }
         if host == "img1.kwcdn.kuwo.cn" {

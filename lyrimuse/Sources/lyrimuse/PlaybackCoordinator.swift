@@ -1688,7 +1688,7 @@ final class PlaybackCoordinator: ObservableObject {
         let systemSize = CoverArtReplacementGate.pixelSize(of: s.artworkData)
         let systemPixels = systemSize.width
         // 系统那份够大且是方形(或者压根没有封面 —— 那时该显示占位音符,不该悄悄换成缓存里
-        // 匹配到的另一张图;从不往系统里报封面的、放本地文件的播放器除外,见 CoverArtReplacementGate.missingArtworkUsesMatchedCover)就不动。
+        // 匹配到的另一张图;从不往系统里报封面的、放本地文件的播放器和洛雪除外,见 CoverArtReplacementGate.missingArtworkUsesMatchedCover)就不动。
         // 「不是封面的形状」(YouTube Music MV 的 16:9 视频缩略图)跟「太小」一样要找替代,两条
         // 的后续接受判据不同,见 CoverArtReplacementGate.accepts。
         let playerOwn = Self.currentPlayerOwnCover()
