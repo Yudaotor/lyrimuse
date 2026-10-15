@@ -26,12 +26,9 @@ import (
 
 // applemusicLyric 是歌词第十一个候选来源(Apple Music 官方)。
 //
-// 接它的理由跟前十个源都不一样:它不是"再补一家覆盖率"，而是**唯一一家给得出时间轴、
-// 却在现有十源之外**的信源。拿用户本机 enrich 缓存做过全量核对:5634 首里
-// 158 首十源一个字都取不回来,其中 92 首能对上 Apple catalog id、查到 88 首,
-// **18 首 Apple 侧 hasTimeSyncedLyrics=true**(另 15 首只有纯文本、55 首 Apple 也没有,
-// 后者多是器乐/现场,本来就不该有词)。也就是说这一路能补上当前缺口的两成(按带时间轴
-// 口径)到三成七(含纯文本)。触发这次接入的 ALOISIO《BESO DE ESOS》就在这 18 首里。
+// 接它的理由跟前十个源都不一样:它不是"再补一家覆盖率",而是**唯一一家给得出时间轴、
+// 却在其余各源之外**的信源 —— 其余源一个字都取不回来的歌里,有一部分在 Apple 侧
+// hasTimeSyncedLyrics=true(另有一部分只有纯文本;Apple 也没有的多是器乐/现场,本来就不该有词)。
 //
 // 为什么其余候选源一个都没接:逐个实测过。Musixmatch 对这类歌
 // has_subtitles=0(有词无时间轴),而 Spotify / Tidal / Amazon 的歌词后端都是 Musixmatch,
@@ -231,7 +228,7 @@ func applemusicReadStatus() applemusicStatus {
 // applemusicLoadUserToken 读用户令牌与 storefront。不发网络请求。
 // storefront 读不出来时返回**空串**,调用方必须自己去 applemusicEnsureStorefront 问清楚。
 //
-// 这里以前会在拿不到时退到 "us",那是个会导致整源静默全灭的设计。
+// 拿不到时别退到 "us" 之类的默认区,那会让整个源静默全灭。
 // storefront 不只决定"查哪个区的曲库",它同时决定**取词那一趟的鉴权**:Apple 校验的是
 // URL 里的 storefront 段 == 用户订阅的区,跟歌属于哪个区无关。实测同一个 id 同一个令牌,
 // cn 路径 200、us/gb/es/jp/de 路径一律 404(对照组用各区都有的大热门,排除了"歌本身没有")。
@@ -257,7 +254,7 @@ func applemusicLoadUserToken() (string, string) {
 // applemusicEnsureStorefront:令牌文件里没记下 storefront 时,问 Apple 要权威答案并记下(applemusicNoteStorefront)。
 //
 // 为什么需要这条路:登录窗口是从 itua cookie 取 storefront 的,而它跟 media-user-token
-// 由 Apple 的登录流程分别写入,未必同时就位;登录侧已经改成等一会儿,但等不到时宁可留空,
+// 由 Apple 的登录流程分别写入,未必同时就位;登录侧会等一会儿,等不到时宁可留空,
 // 也不猜。这里用 /v1/me/storefront 收尾 —— 它要 developer token + media-user-token
 // 两者(实测:只带 user token 回 401、只带 dev token 回 403),而这两样引擎都有,
 // App 侧没有 developer token 的获取机制,所以这一步只能放在这边。
@@ -698,9 +695,7 @@ func (s applemusicSong) cover() string {
 	u = strings.ReplaceAll(u, "{f}", "jpg")
 	// {c} 是裁切/填充代码,Apple 的模板是 `{w}x{h}{c}.{f}` —— 漏掉它,URL 里会留下一个
 	// 花括号占位符,整条链接直接 400(实测:同一张图 .../1000x1000{c}.jpg 回 400、
-	// .../1000x1000bb.jpg 回 200)。这一路的封面因此从来没成功加载过一次
-	// (本机 enrich 缓存里 mzstatic 封面 0 条)。bb = black background padding,
-	// 就是 Apple 自家网页在用的那个值。
+	// .../1000x1000bb.jpg 回 200)。bb = black background padding,就是 Apple 自家网页在用的那个值。
 	u = strings.ReplaceAll(u, "{c}", "bb")
 	return u
 }
@@ -891,7 +886,7 @@ func applemusicEnglishTagFrom(defaultTag string, supported []string) string {
 // 比别的源多一道**便宜闸**:hasLyrics=false 的直接淘汰 —— Apple 在搜索结果里就告诉了
 // 我们有没有词,不必等到取词那一趟才发现是空的。注意**不**在这里要求 hasTimeSynced:
 // 只有纯文本的歌仍然值得取回来走 plainOnly 通道(跟 musixmatch 那道 has_subtitles 闸的
-// 取舍一致 —— 那边 2026 年就踩过"因为没时间轴就整首丢掉"的坑)。纯函数,便于单测。
+// 取舍一致:别因为没时间轴就整首丢掉)。纯函数,便于单测。
 func applemusicCandidateScore(s applemusicSong, artist, title, album string, durationSecs float64) int {
 	if strings.TrimSpace(s.ID) == "" {
 		return -1
@@ -948,7 +943,7 @@ type applemusicLyricsPayload struct {
 		Attributes struct {
 			TTML string `json:"ttml"`
 			// TTMLLocalizations:带 extend=ttmlLocalizations 时回的是这个字段(同一份文档,多了
-			// <translations> / <transliterations>),ttml 那个字段不再出现。
+			// <translations> / <transliterations>),这时没有 ttml 那个字段。
 			TTMLLocalizations string `json:"ttmlLocalizations"`
 		} `json:"attributes"`
 	} `json:"data"`
@@ -1076,11 +1071,9 @@ var (
 // 时间轴不从译文自己身上取:译文的 <text for="Lxxx"> 用 key 指回正文的
 // <p itunes:key="Lxxx">,所以时间戳一律以正文那边为准,两轨天然对齐。
 //
-// **key 对不上的行直接丢,不按顺序硬凑**。Apple 自己的数据偶尔就是错位的:实测 6 首
-// 带真翻译的歌里 5 首 key 完全对齐(69/69、54/54、102/102、65/65、89/89),剩下一首
-// (Michael Jackson《Butterflies》)译文用的是 L83274 起的一套编号、正文是 L1 起,交集为
-// 零,而且行数也不等(42 对 38)。那种情况下按顺序对齐必然错位 —— 错位的译文比没有译文糟,
-// 所以宁可整首不给。
+// **key 对不上的行直接丢,不按顺序硬凑**。Apple 自己的数据偶尔就是错位的:抽样里多数带真翻译的歌
+// key 完全对齐,但也有一首译文用的是另一套编号、跟正文交集为零,而且行数也不等。那种情况下按顺序
+// 对齐必然错位 —— 错位的译文比没有译文糟,所以宁可整首不给。
 func applemusicSubtitleTranslation(ttml string) string {
 	block := amSubtitleBlockRe.FindStringSubmatch(ttml)
 	if block == nil {
