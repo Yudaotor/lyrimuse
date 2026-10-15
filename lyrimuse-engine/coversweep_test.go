@@ -24,12 +24,14 @@ type coverSweepCall struct {
 func withCoverSweepFakes(t *testing.T, rounds [][2]int32, onBackfill func(key string)) (*[]coverSweepCall, *[]time.Duration) {
 	t.Helper()
 	savedBackfill, savedRound, savedWait, savedSave := coverSweepBackfill, coverSweepNetworkRound, coverSweepWait, coverSweepSave
+	savedQQAlbumName := coverSweepQQAlbumName
 	enrichMu.Lock()
 	savedInflight := enrichInflight
 	enrichInflight = map[string]bool{}
 	enrichMu.Unlock()
 	t.Cleanup(func() {
 		coverSweepBackfill, coverSweepNetworkRound, coverSweepWait, coverSweepSave = savedBackfill, savedRound, savedWait, savedSave
+		coverSweepQQAlbumName = savedQQAlbumName
 		enrichMu.Lock()
 		enrichInflight = savedInflight
 		enrichMu.Unlock()
@@ -38,6 +40,7 @@ func withCoverSweepFakes(t *testing.T, rounds [][2]int32, onBackfill func(key st
 	var waits []time.Duration
 	coverSweepWait = func(_ context.Context, d time.Duration) { waits = append(waits, d) }
 	coverSweepSave = func() {}
+	coverSweepQQAlbumName = func(context.Context, string) (string, error) { return "", nil }
 	coverSweepBackfill = func(ctx context.Context, key, artist, title, album string, dur float64) {
 		calls = append(calls, coverSweepCall{key, artist, title, album, dur, isBackgroundOutbound(ctx), coverSweepSaveDeferred(ctx)})
 		if onBackfill != nil {
@@ -349,6 +352,346 @@ func TestCoverSweepFillFromDecisionsReplacesAnotherAlbumCover(t *testing.T) {
 	for key, want := range map[string]string{"A|fits|Alb": "https://n/2.jpg", "A|qq|Alb": "https://q/1.jpg", "A|nocand|Alb": "https://n/1.jpg"} {
 		if got := enrichCache[key].CoverURL; got != want {
 			t.Errorf("%s 不该动: 得到 %q", key, got)
+		}
+	}
+}
+
+// 后台补封面开头:同一张专辑已经有一条归属核实过的设备封面,归属没核实的(没记专辑的 QQ、写着另一张专辑的网易云)换成那张,
+// cover_album 记本地专辑、主色清空;已经逐字对上的、播放器自己的、没封面的、同一张图的、正在解析的、别的歌手或专辑的不动;
+// 设备封面自己的 cover_album 没对上的不借出去(03 章决策 47)。
+func TestCoverSweepBorrowVerifiedSiblings(t *testing.T) {
+	const album = "世纪典藏【绝赞版】"
+	device := "file:///Users/x/.config/lyrimuse/artwork/essential.jpg"
+	withEnrichCache(t, map[string]enrichEntry{
+		"Michael Jackson|Smooth Criminal|" + album: {CoverURL: device, CoverSource: "device", CoverAlbum: album},
+		"Michael Jackson|Off the Wall|" + album:    {CoverURL: "https://qq/bad.jpg", CoverSource: "qq", AccentColor: "#aa0000"},
+		"Michael Jackson|Beat It|" + album:         {CoverURL: "https://n/1.jpg", CoverSource: "netease", CoverAlbum: "Thriller"},
+		"Michael Jackson|Bad|" + album:             {CoverURL: "https://apple/e.jpg", CoverSource: "apple", CoverAlbum: album},
+		"Michael Jackson|Dirty Diana|" + album:     {CoverURL: "file:///other.jpg", CoverSource: "player", CoverAlbum: album},
+		"Michael Jackson|Human Nature|" + album:    {},
+		"Michael Jackson|Leave Me Alone|" + album:  {CoverURL: device, CoverSource: "qq", AccentColor: "#111111"},
+		"Michael Jackson|P.Y.T.|" + album:          {CoverURL: "https://qq/bad.jpg", CoverSource: "qq"},
+		"Prince|Kiss|" + album:                     {CoverURL: "https://qq/p.jpg", CoverSource: "qq"},
+		"Michael Jackson|Thriller|Thriller":        {CoverURL: "https://qq/t.jpg", CoverSource: "qq"},
+		"别的歌手|甲|别的专辑":                              {CoverURL: "file:///x.jpg", CoverSource: "device"},
+		"别的歌手|乙|别的专辑":                              {CoverURL: "https://qq/y.jpg", CoverSource: "qq"},
+	})
+	enrichMu.Lock()
+	savedInflight := enrichInflight
+	enrichInflight = map[string]bool{"Michael Jackson|P.Y.T.|" + album: true}
+	enrichDirty = false
+	enrichMu.Unlock()
+	t.Cleanup(func() {
+		enrichMu.Lock()
+		enrichInflight = savedInflight
+		enrichMu.Unlock()
+	})
+	if n := coverSweepBorrowVerifiedSiblings(); n != 2 {
+		t.Fatalf("换了 %d 条, 要 2", n)
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	for _, title := range []string{"Off the Wall", "Beat It"} {
+		e := enrichCache["Michael Jackson|"+title+"|"+album]
+		if e.CoverURL != device || e.CoverSource != "device" || e.CoverAlbum != album || e.AccentColor != "" {
+			t.Errorf("%s 该换成同专辑核实过的设备封面: %+v", title, e)
+		}
+	}
+	for key, want := range map[string]string{
+		"Michael Jackson|Bad|" + album:            "https://apple/e.jpg",
+		"Michael Jackson|Dirty Diana|" + album:    "file:///other.jpg",
+		"Michael Jackson|Human Nature|" + album:   "",
+		"Michael Jackson|Leave Me Alone|" + album: device,
+		"Michael Jackson|P.Y.T.|" + album:         "https://qq/bad.jpg",
+		"Prince|Kiss|" + album:                    "https://qq/p.jpg",
+		"Michael Jackson|Thriller|Thriller":       "https://qq/t.jpg",
+		"别的歌手|乙|别的专辑":                             "https://qq/y.jpg",
+	} {
+		if got := enrichCache[key].CoverURL; got != want {
+			t.Errorf("%s 不该动: 得到 %q", key, got)
+		}
+	}
+	if e := enrichCache["Michael Jackson|Leave Me Alone|"+album]; e.CoverSource != "qq" || e.AccentColor != "#111111" {
+		t.Errorf("已经是同一张图的不该改来源、清主色: %+v", e)
+	}
+	if !enrichDirty {
+		t.Error("换了封面要置脏")
+	}
+}
+
+// 存量 QQ 封面没记专辑的,按封面地址里的专辑 mid 查回专辑名:同一个 mid 只查一次,按 mid 排序查,两次之间隔 coverSweepNameGap;
+// 已经记了的、别的来源的、地址认不出 mid 的不查;QQ 答了没名字的留空(03 章决策 47)。
+func TestCoverSweepNameQQCoverAlbums(t *testing.T) {
+	_, waits := withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+	bad, other := qqAlbumCoverURL("0034Gnut4OoYpJ"), qqAlbumCoverURL("003Other")
+	withEnrichCache(t, map[string]enrichEntry{
+		"Michael Jackson|Off the Wall|世纪典藏":  {CoverURL: bad, CoverSource: "qq"},
+		"Michael Jackson|Rock With You|世纪典藏": {CoverURL: bad, CoverSource: "qq"},
+		"Michael Jackson|Thriller|世纪典藏":      {CoverURL: other, CoverSource: "qq"},
+		"Michael Jackson|Bad|Bad":            {CoverURL: bad, CoverSource: "qq", CoverAlbum: "Bad 25"},
+		"Michael Jackson|Beat It|世纪典藏":       {CoverURL: bad, CoverSource: "netease"},
+		"Michael Jackson|Human Nature|世纪典藏":  {CoverURL: "https://example.invalid/q.jpg", CoverSource: "qq"},
+	})
+	var asked []string
+	coverSweepQQAlbumName = func(_ context.Context, mid string) (string, error) {
+		asked = append(asked, mid)
+		if mid == "0034Gnut4OoYpJ" {
+			return "Bad", nil
+		}
+		return "", nil
+	}
+	if n := coverSweepNameQQCoverAlbums(context.Background()); n != 2 {
+		t.Fatalf("记上 %d 条, 要 2", n)
+	}
+	if !reflect.DeepEqual(asked, []string{"0034Gnut4OoYpJ", "003Other"}) {
+		t.Errorf("查了 %v", asked)
+	}
+	if !reflect.DeepEqual(*waits, []time.Duration{coverSweepNameGap}) {
+		t.Errorf("等待 %v", *waits)
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	for key, want := range map[string]string{
+		"Michael Jackson|Off the Wall|世纪典藏":  "Bad",
+		"Michael Jackson|Rock With You|世纪典藏": "Bad",
+		"Michael Jackson|Thriller|世纪典藏":      "",
+		"Michael Jackson|Bad|Bad":            "Bad 25",
+		"Michael Jackson|Beat It|世纪典藏":       "",
+		"Michael Jackson|Human Nature|世纪典藏":  "",
+	} {
+		if got := enrichCache[key].CoverAlbum; got != want {
+			t.Errorf("%s 的 cover_album = %q, 要 %q", key, got, want)
+		}
+	}
+}
+
+// 连着 coverSweepOfflineLimit 个 mid 都没问成就停,一条都不记。
+func TestCoverSweepNameQQCoverAlbumsStopsWhenUnreached(t *testing.T) {
+	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+	cache := map[string]enrichEntry{}
+	for i := range coverSweepOfflineLimit + 3 {
+		cache[fmt.Sprintf("A|t%d|Alb", i)] = enrichEntry{CoverURL: qqAlbumCoverURL(fmt.Sprintf("00%dMid", i)), CoverSource: "qq"}
+	}
+	withEnrichCache(t, cache)
+	asked := 0
+	coverSweepQQAlbumName = func(context.Context, string) (string, error) {
+		asked++
+		return "", errQQNotReached
+	}
+	if n := coverSweepNameQQCoverAlbums(context.Background()); n != 0 || asked != coverSweepOfflineLimit {
+		t.Errorf("记上 %d 条、问了 %d 次, 要 0 条、%d 次", n, asked, coverSweepOfflineLimit)
+	}
+}
+
+// 同一遍里先记上 QQ 封面在 QQ 上的专辑,紧接着那步就把另一张专辑的封面换成歌词胜出那个源自带、专辑对得上的。
+func TestRunCoverSweepReplacesQQCoverOfAnotherAlbum(t *testing.T) {
+	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+	const key = "Michael Jackson|Off the Wall|世纪典藏"
+	withEnrichCache(t, map[string]enrichEntry{
+		key: {CoverURL: qqAlbumCoverURL("0034Gnut4OoYpJ"), CoverSource: "qq", Lyrics: coverSweepLyrics,
+			LyricsDecision: &lyricsDecision{Winner: "soda", Candidates: []lyricsDecisionCandidate{
+				{Source: "soda", Score: 1310, Album: "世纪典藏", CoverURL: "https://s/essential.jpg"}}}},
+	})
+	coverSweepQQAlbumName = func(context.Context, string) (string, error) { return "Bad", nil }
+	runCoverSweep(context.Background())
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	if e := enrichCache[key]; e.CoverURL != "https://s/essential.jpg" || e.CoverSource != "soda" || e.CoverAlbum != "世纪典藏" {
+		t.Errorf("记上专辑之后该换成专辑对得上的候选封面: %+v", e)
+	}
+}
+
+// 正在提前提交的条目(enrichProvisional)不动。
+func TestCoverSweepBorrowVerifiedSiblingsSkipsProvisional(t *testing.T) {
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|lender|Alb": {CoverURL: "file:///d.jpg", CoverSource: "device", CoverAlbum: "Alb"},
+		"A|early|Alb":  {CoverURL: "https://qq/e.jpg", CoverSource: "qq"},
+	})
+	enrichMu.Lock()
+	savedProvisional := enrichProvisional
+	enrichProvisional = map[string]bool{"A|early|Alb": true}
+	enrichMu.Unlock()
+	t.Cleanup(func() {
+		enrichMu.Lock()
+		enrichProvisional = savedProvisional
+		enrichMu.Unlock()
+	})
+	if n := coverSweepBorrowVerifiedSiblings(); n != 0 {
+		t.Errorf("换了 %d 条, 正在提前提交的不该动", n)
+	}
+}
+
+// 同一张专辑有几条能借的设备封面时,取 key 最小的那条:map 的遍历顺序每次不同,不排序的话借到哪张不定。
+func TestCoverSweepBorrowVerifiedSiblingsPicksSmallestKey(t *testing.T) {
+	for range 20 {
+		withEnrichCache(t, map[string]enrichEntry{
+			"A|a|Alb": {CoverURL: "file:///a.jpg", CoverSource: "device", CoverAlbum: "Alb"},
+			"A|b|Alb": {CoverURL: "file:///b.jpg", CoverSource: "device", CoverAlbum: "Alb"},
+			"A|c|Alb": {CoverURL: "https://qq/c.jpg", CoverSource: "qq"},
+		})
+		coverSweepBorrowVerifiedSiblings()
+		if got := enrichCache["A|c|Alb"].CoverURL; got != "file:///a.jpg" {
+			t.Fatalf("借到 %q, 要 key 最小那条的 file:///a.jpg", got)
+		}
+	}
+}
+
+// 一遍跑下来,同专辑核实过的设备封面在第一步就借出去了。
+func TestRunCoverSweepBorrowsVerifiedSibling(t *testing.T) {
+	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|lender|Alb": {CoverURL: "file:///d.jpg", CoverSource: "device", CoverAlbum: "Alb", Lyrics: coverSweepLyrics},
+		"A|other|Alb":  {CoverURL: "https://qq/o.jpg", CoverSource: "qq", Lyrics: coverSweepLyrics},
+	})
+	runCoverSweep(context.Background())
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	if e := enrichCache["A|other|Alb"]; e.CoverURL != "file:///d.jpg" || e.CoverSource != "device" || e.CoverAlbum != "Alb" {
+		t.Errorf("该借到同专辑核实过的设备封面: %+v", e)
+	}
+}
+
+// 只给没记专辑的 QQ 封面查:已经记了专辑的、别的来源挂着 QQ 图床地址的,它们独占的 mid 不查。
+func TestCoverSweepNameQQCoverAlbumsAsksOnlyUnnamedQQCovers(t *testing.T) {
+	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|named|Alb":   {CoverURL: qqAlbumCoverURL("001Named"), CoverSource: "qq", CoverAlbum: "Named"},
+		"A|netease|Alb": {CoverURL: qqAlbumCoverURL("002Netease"), CoverSource: "netease"},
+		"A|unnamed|Alb": {CoverURL: qqAlbumCoverURL("003Unnamed"), CoverSource: "qq"},
+	})
+	var asked []string
+	coverSweepQQAlbumName = func(_ context.Context, mid string) (string, error) {
+		asked = append(asked, mid)
+		return "Unnamed", nil
+	}
+	coverSweepNameQQCoverAlbums(context.Background())
+	if !reflect.DeepEqual(asked, []string{"003Unnamed"}) {
+		t.Errorf("查了 %v, 只该查 003Unnamed", asked)
+	}
+}
+
+// 查专辑名那一下,条目的封面被换成了另一个专辑的 QQ 图、或者被别处占去解析:查回来的名字不往它身上记。
+func TestCoverSweepNameQQCoverAlbumsSkipsEntriesChangedMeanwhile(t *testing.T) {
+	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+	mid := "0034Gnut4OoYpJ"
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|kept|Alb":    {CoverURL: qqAlbumCoverURL(mid), CoverSource: "qq"},
+		"A|moved|Alb":   {CoverURL: qqAlbumCoverURL(mid), CoverSource: "qq"},
+		"A|claimed|Alb": {CoverURL: qqAlbumCoverURL(mid), CoverSource: "qq"},
+	})
+	coverSweepQQAlbumName = func(context.Context, string) (string, error) {
+		enrichMu.Lock()
+		e := enrichCache["A|moved|Alb"]
+		e.CoverURL = qqAlbumCoverURL("009Other")
+		enrichCache["A|moved|Alb"] = e
+		enrichInflight["A|claimed|Alb"] = true
+		enrichMu.Unlock()
+		return "Bad", nil
+	}
+	if n := coverSweepNameQQCoverAlbums(context.Background()); n != 1 {
+		t.Fatalf("记上 %d 条, 要 1", n)
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	for key, want := range map[string]string{"A|kept|Alb": "Bad", "A|moved|Alb": "", "A|claimed|Alb": ""} {
+		if got := enrichCache[key].CoverAlbum; got != want {
+			t.Errorf("%s 的 cover_album = %q, 要 %q", key, got, want)
+		}
+	}
+}
+
+// 没问成的连败计数遇到一次问成就清零:失败、成功、失败交替时一个 mid 都不漏。
+func TestCoverSweepNameQQCoverAlbumsResetsTheStreak(t *testing.T) {
+	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+	total := 2*(coverSweepOfflineLimit-1) + 1
+	cache := map[string]enrichEntry{}
+	for i := range total {
+		cache[fmt.Sprintf("A|t%02d|Alb", i)] = enrichEntry{CoverURL: qqAlbumCoverURL(fmt.Sprintf("0%02dMid", i)), CoverSource: "qq"}
+	}
+	withEnrichCache(t, cache)
+	asked := 0
+	coverSweepQQAlbumName = func(context.Context, string) (string, error) {
+		asked++
+		if asked == coverSweepOfflineLimit {
+			return "", nil
+		}
+		return "", errQQNotReached
+	}
+	coverSweepNameQQCoverAlbums(context.Background())
+	if asked != total {
+		t.Errorf("问了 %d 个 mid, 要 %d 个", asked, total)
+	}
+}
+
+// 有别的歌在解析时先等它解析完再查。
+func TestCoverSweepNameQQCoverAlbumsYieldsToResolvingEntries(t *testing.T) {
+	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|q|Alb": {CoverURL: qqAlbumCoverURL("001Mid"), CoverSource: "qq"},
+	})
+	enrichMu.Lock()
+	enrichInflight["B|playing|X"] = true
+	enrichMu.Unlock()
+	var waits []time.Duration
+	coverSweepWait = func(_ context.Context, d time.Duration) {
+		waits = append(waits, d)
+		enrichMu.Lock()
+		delete(enrichInflight, "B|playing|X")
+		enrichMu.Unlock()
+	}
+	coverSweepQQAlbumName = func(context.Context, string) (string, error) {
+		enrichMu.Lock()
+		busy := len(enrichInflight) > 0
+		enrichMu.Unlock()
+		if busy {
+			t.Error("还有歌在解析就去查了")
+		}
+		return "Q", nil
+	}
+	if n := coverSweepNameQQCoverAlbums(context.Background()); n != 1 || !reflect.DeepEqual(waits, []time.Duration{coverSweepYieldPoll}) {
+		t.Errorf("记上 %d 条, 等待 %v", n, waits)
+	}
+}
+
+// 设备条目没有图(cover_url 空)时不当借出方,不能把别的曲目的封面换成空。
+func TestCoverSweepBorrowVerifiedSiblingsNeedsALenderWithACover(t *testing.T) {
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|blank|Alb": {CoverSource: "device", CoverAlbum: "Alb"},
+		"A|q|Alb":     {CoverURL: "https://qq/q.jpg", CoverSource: "qq"},
+	})
+	if n := coverSweepBorrowVerifiedSiblings(); n != 0 || enrichCache["A|q|Alb"].CoverURL != "https://qq/q.jpg" {
+		t.Errorf("换了 %d 条, 封面 %q", n, enrichCache["A|q|Alb"].CoverURL)
+	}
+}
+
+// 查专辑名那一下,条目换成了别的来源、或者已经被别处记上了专辑:都不再往它身上记。
+func TestCoverSweepNameQQCoverAlbumsSkipsEntriesTakenMeanwhile(t *testing.T) {
+	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+	url := qqAlbumCoverURL("0034Gnut4OoYpJ")
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|kept|Alb":      {CoverURL: url, CoverSource: "qq"},
+		"A|resourced|Alb": {CoverURL: url, CoverSource: "qq"},
+		"A|filled|Alb":    {CoverURL: url, CoverSource: "qq"},
+	})
+	coverSweepQQAlbumName = func(context.Context, string) (string, error) {
+		enrichMu.Lock()
+		e := enrichCache["A|resourced|Alb"]
+		e.CoverSource = "device"
+		enrichCache["A|resourced|Alb"] = e
+		e = enrichCache["A|filled|Alb"]
+		e.CoverAlbum = "Other"
+		enrichCache["A|filled|Alb"] = e
+		enrichMu.Unlock()
+		return "Bad", nil
+	}
+	if n := coverSweepNameQQCoverAlbums(context.Background()); n != 1 {
+		t.Fatalf("记上 %d 条, 要 1", n)
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	for key, want := range map[string]string{"A|kept|Alb": "Bad", "A|resourced|Alb": "", "A|filled|Alb": "Other"} {
+		if got := enrichCache[key].CoverAlbum; got != want {
+			t.Errorf("%s 的 cover_album = %q, 要 %q", key, got, want)
 		}
 	}
 }

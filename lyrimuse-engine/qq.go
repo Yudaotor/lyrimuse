@@ -705,19 +705,34 @@ func qqAlbumCoverURL(albumMid string) string {
 		"M000" + albumMid + ".jpg"
 }
 
-// qqSongCoverAndSinger returns (album cover URL, primary singer name) for a QQ
+// qqCoverAlbumMidRe 匹配 QQ 专辑封面地址(qqAlbumCoverURL 拼的那种)里的专辑 mid。T002 是专辑封面,T001 的歌手头像不认。
+var qqCoverAlbumMidRe = regexp.MustCompile(`/music/photo_new/T002R[0-9]+x[0-9]+M000([0-9A-Za-z]+)\.jpg`)
+
+// qqCoverAlbumMid 从 QQ 专辑封面的地址取出专辑 mid;不是 QQ 图床、或者认不出来时返回空。
+func qqCoverAlbumMid(url string) string {
+	if !strings.Contains(url, "y.qq.com/music/photo_new/") && !strings.Contains(url, "y.gtimg.cn/music/photo_new/") {
+		return ""
+	}
+	if m := qqCoverAlbumMidRe.FindStringSubmatch(url); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+// qqSongCoverAndSinger returns (album cover URL, primary singer name, album name) for a QQ
 // song mid via qqSongDetail. The singer is
 // returned so callers can re-verify identity before trusting the cover (a QQ
-// smartbox hit can itself be a fan/cover account; see qqCoverFallback).
-func qqSongCoverAndSinger(ctx context.Context, mid string) (cover, singer string) {
+// smartbox hit can itself be a fan/cover account; see qqCoverFallback); the album
+// name is the album the cover belongs to on QQ, which is what cover_album records.
+func qqSongCoverAndSinger(ctx context.Context, mid string) (cover, singer, album string) {
 	d, ok := qqSongDetail(ctx, mid)
 	if !ok || d.albumMid == "" {
-		return "", ""
+		return "", "", ""
 	}
 	if len(d.singers) > 0 {
 		singer = d.singers[0].name
 	}
-	return qqAlbumCoverURL(d.albumMid), singer
+	return qqAlbumCoverURL(d.albumMid), singer, d.albumName
 }
 
 // qqSongCatalogMids 取一首歌的 专辑 mid 与 首位歌手 mid —— 歌词窗口「前往专辑/前往艺人」
@@ -740,13 +755,14 @@ func qqSongCatalogMids(ctx context.Context, mid string) (albumMid, singerMid str
 // qqCoverFallback 在网易云曲库里没有这位歌手的真身时(版权整体下架的歌手在网易云上只剩仿冒号,见 artistMatches 注释)从 QQ 音乐
 // 取官方封面。smartbox 搜索结果和详情接口的歌手字段两处都要求严格(非宽松)歌手匹配,QQ 那边的仿冒号/翻唱号哪一步都混不进来。
 // 第二个返回值是 QQ 音乐核实过的官方歌手名,用来统一同一歌手在历史记录里时而中文时而英文、时而全大写的写法(PRINCE/Prince)。
+// 第三个返回值是这张封面在 QQ 上所属的专辑(单曲详情里的专辑名),调用方记进 cover_album(见 03 章决策 47)。
 //
 // 有专辑名时跟 resolveQQMusicMatch 用同一套专辑感知挑选(qqPickCandidateWithAlbum,按 albumScore 选最贴合本地专辑的那条),
 // 单独过一遍下面的身份校验:只取 smartbox 第一条身份对得上的,同一首歌被合辑/精选集顶替时就会拿到精选集封面。通不过(或
 // 没传专辑名)时退回"逐条按 smartbox 原始顺序试、第一条双重校验通过就用"。
-func qqCoverFallback(ctx context.Context, artist, title, album string) (cover, canonicalArtist string) {
+func qqCoverFallback(ctx context.Context, artist, title, album string) (cover, canonicalArtist, coverAlbum string) {
 	if artist == "" || title == "" {
-		return "", ""
+		return "", "", ""
 	}
 	// 跟 netease.go 里 chosen 分支同样的道理:本地标签本来就是多人合credit(如"Prince
 	// & The Revolution")时,QQ 的 singer 字段可能只单独记了其中一位——不把这个当统一
@@ -763,32 +779,32 @@ func qqCoverFallback(ctx context.Context, artist, title, album string) (cover, c
 		cands = append(cands, qqCand{mid: it.Mid, title: it.Name, artist: it.Singer, album: it.Album,
 			interval: it.Interval, exact: lyricTitleSameName(it.Name, title), sameNumber: lyricTitleSameNumber(it.Name, title)})
 	}
-	tryCand := func(c qqCand) (string, string, bool) {
-		cover, singer := qqSongCoverAndSinger(ctx, c.mid)
+	tryCand := func(c qqCand) (string, string, string, bool) {
+		cover, singer, coverAlbum := qqSongCoverAndSinger(ctx, c.mid)
 		if cover == "" || !artistMatches(singer, artist) {
-			return "", "", false
+			return "", "", "", false
 		}
 		if !singleArtist {
-			return cover, "", true
+			return cover, "", coverAlbum, true
 		}
-		return cover, singer, true
+		return cover, singer, coverAlbum, true
 	}
 	if album != "" {
 		// 挑选跟 resolveQQMusicMatch 用同一个函数:条数上限只约束要另查一次专辑名的候选(搜索结果自带专辑名的全部参与比较),
 		// 别按前几条一刀切 —— 本地专辑那一版排在后面时会回落成合辑封面。这里没有本地时长,传 0。
 		best, ok, _ := qqPickCandidateWithAlbum(cands, artist, album, 0, func(mid string) string { return qqSongAlbum(ctx, mid) })
 		if ok {
-			if cover, singer, ok := tryCand(best); ok {
-				return cover, singer
+			if cover, singer, coverAlbum, ok := tryCand(best); ok {
+				return cover, singer, coverAlbum
 			}
 		}
 	}
 	for _, c := range cands {
-		if cover, singer, ok := tryCand(c); ok {
-			return cover, singer
+		if cover, singer, coverAlbum, ok := tryCand(c); ok {
+			return cover, singer, coverAlbum
 		}
 	}
-	return "", ""
+	return "", "", ""
 }
 
 // qqResponseMaxBytes QQ 各个 JSON 接口(搜索、联想、musicu、详情)一次应答读多少为止。正常应答几十 KB。

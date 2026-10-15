@@ -25,9 +25,9 @@ func (f *fakeCoverRetry) lookups() coverRetryLookups {
 			}
 			return appleMusicMatch{cover: f.have["apple|"+artist+"|"+title], album: "Apple 专辑"}
 		},
-		qq: func(_ context.Context, artist, title, _ string) (string, string) {
+		qq: func(_ context.Context, artist, title, _ string) (string, string, string) {
 			f.calls = append(f.calls, "qq|"+artist+"|"+title)
-			return f.have["qq|"+artist+"|"+title], ""
+			return f.have["qq|"+artist+"|"+title], "", "QQ 专辑"
 		},
 		deezer: func(_ context.Context, isrc string) (deezerTrack, bool) {
 			f.calls = append(f.calls, "deezer|"+isrc)
@@ -46,7 +46,7 @@ func dzTrack(artist, title, album, cover string) deezerTrack {
 func TestRetryMissingCoverSplitsBilingualTitle(t *testing.T) {
 	f := &fakeCoverRetry{have: map[string]string{"qq|周杰伦|淘金小鎮": "https://y.qq.com/cover.jpg"}}
 	r, ok := retryMissingCover(context.Background(), f.lookups(), "周杰伦", "Gold Rush Town 淘金小鎮", "", 266, nil, nil)
-	if !ok || r != (coverRetryResult{"https://y.qq.com/cover.jpg", "qq", ""}) {
+	if !ok || r != (coverRetryResult{"https://y.qq.com/cover.jpg", "qq", "QQ 专辑"}) {
 		t.Fatalf("got %+v ok=%v, calls %v", r, ok, f.calls)
 	}
 	want := []string{"netease|周杰伦|淘金小鎮", "apple|周杰伦|淘金小鎮", "qq|周杰伦|淘金小鎮"}

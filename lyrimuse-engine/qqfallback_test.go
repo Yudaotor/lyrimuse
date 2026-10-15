@@ -140,8 +140,8 @@ func TestQQSongDetailFallsBackToNextWebHost(t *testing.T) {
 	if qqSongAlbum(qqRoundCtx(), "m1") != "叶惠美" {
 		t.Error("qqSongAlbum 该取到专辑名")
 	}
-	if cover, singer := qqSongCoverAndSinger(qqRoundCtx(), "m1"); cover != qqAlbumCoverURL("alb1") || singer != "周杰伦" {
-		t.Errorf("qqSongCoverAndSinger: %q %q", cover, singer)
+	if cover, singer, album := qqSongCoverAndSinger(qqRoundCtx(), "m1"); cover != qqAlbumCoverURL("alb1") || singer != "周杰伦" || album != "叶惠美" {
+		t.Errorf("qqSongCoverAndSinger: %q %q %q", cover, singer, album)
 	}
 	if am, sm := qqSongCatalogMids(qqRoundCtx(), "m1"); am != "alb1" || sm != "sg1" {
 		t.Errorf("qqSongCatalogMids: %q %q", am, sm)
@@ -355,5 +355,87 @@ func TestQQSingerSuggestionsOnlySwitchesHosts(t *testing.T) {
 	}
 	if f.count("u.y.qq.com/musicu:DoSearchForQQMusicDesktop") != 0 {
 		t.Error("歌手联想不该退到网关的歌手搜索")
+	}
+}
+
+// 专辑名:首选主机挂了换下一个,取到后按 mid 缓存;QQ 答查无(code 非 0)算问成了、名字为空;几个主机都挂了返回错误、不缓存。
+func TestQQAlbumName(t *testing.T) {
+	qqAlbumNameMu.Lock()
+	savedNames := qqAlbumNameCache
+	qqAlbumNameCache = map[string]string{}
+	qqAlbumNameMu.Unlock()
+	t.Cleanup(func() {
+		qqAlbumNameMu.Lock()
+		qqAlbumNameCache = savedNames
+		qqAlbumNameMu.Unlock()
+	})
+	f := withQQFakeReq(t, func(r *http.Request, target string) (int, string) {
+		mid := r.URL.Query().Get("albummid")
+		switch {
+		case target == "c.y.qq.com/v8/fcg-bin/fcg_v8_album_info_cp.fcg":
+			return http.StatusInternalServerError, ""
+		case mid == "0034Gnut4OoYpJ":
+			return http.StatusOK, `{"code":0,"data":{"name":" Bad "}}`
+		case mid == "missing":
+			return http.StatusOK, `{"code":1101,"subcode":1101,"message":"para error!"}`
+		}
+		return http.StatusBadGateway, ""
+	})
+	ctx := qqRoundCtx()
+	for range 2 {
+		if name, err := qqAlbumName(ctx, "0034Gnut4OoYpJ"); err != nil || name != "Bad" {
+			t.Fatalf("该从备用主机取到专辑名: %q %v", name, err)
+		}
+	}
+	if n := f.count("shc.y.qq.com/v8/fcg-bin/fcg_v8_album_info_cp.fcg"); n != 1 {
+		t.Errorf("取到过的专辑名该缓存: 打了 %d 次", n)
+	}
+	if name, err := qqAlbumName(ctx, "missing"); err != nil || name != "" {
+		t.Errorf("查无算问成了、名字为空: %q %v", name, err)
+	}
+	if _, err := qqAlbumName(ctx, "down"); err == nil {
+		t.Error("几个主机都挂了该返回错误")
+	}
+	qqAlbumNameMu.Lock()
+	_, missingCached := qqAlbumNameCache["missing"]
+	_, downCached := qqAlbumNameCache["down"]
+	qqAlbumNameMu.Unlock()
+	if !missingCached || downCached {
+		t.Errorf("问成了的缓存、没问成的不缓存: missing=%v down=%v", missingCached, downCached)
+	}
+}
+
+// 从 QQ 专辑封面地址取专辑 mid:带尺寸、带查询参数的都认;歌手头像(T001)、别的主机、没有 mid 的不认。
+func TestQQCoverAlbumMid(t *testing.T) {
+	for url, want := range map[string]string{
+		qqAlbumCoverURL("0034Gnut4OoYpJ"):                                                "0034Gnut4OoYpJ",
+		"https://y.gtimg.cn/music/photo_new/T002R300x300M000003Gnut.jpg?max_age=2592000": "003Gnut",
+		"https://y.qq.com/music/photo_new/T001R800x800M000003Nz2So3XXYek.jpg":            "",
+		"https://example.com/music/photo_new/T002R800x800M0000034Gnut4OoYpJ.jpg":         "",
+		"https://y.qq.com/music/photo_new/T002R800x800.jpg":                              "",
+		"": "",
+	} {
+		if got := qqCoverAlbumMid(url); got != want {
+			t.Errorf("qqCoverAlbumMid(%q) = %q, want %q", url, got, want)
+		}
+	}
+}
+
+// QQ 兜底封面带回这张图在 QQ 上所属的专辑:是单曲详情里的专辑名,不是搜索结果里那首报的专辑。
+func TestQQCoverFallbackReturnsTheCoverAlbum(t *testing.T) {
+	withQQFake(t, func(target string) (int, string) {
+		switch {
+		case strings.HasSuffix(target, "/soso/fcgi-bin/client_search_cp"):
+			return http.StatusOK, `{"code":0,"data":{"song":{"list":[{"mid":"m1","title":"Off the Wall","interval":246,"singer":[{"name":"Michael Jackson"}],"album":{"name":"Off the Wall"}}]}}}`
+		case strings.HasSuffix(target, "/splcloud/fcgi-bin/smartbox_new.fcg"):
+			return http.StatusOK, `{"code":0,"data":{"song":{"itemlist":[]},"album":{"itemlist":[]},"singer":{"itemlist":[]}}}`
+		case strings.HasSuffix(target, "/v8/fcg-bin/fcg_play_single_song.fcg"):
+			return http.StatusOK, `{"code":0,"data":[{"id":1,"interval":246,"language":0,"album":{"mid":"0034Gnut4OoYpJ","name":"Bad"},"singer":[{"mid":"s1","name":"Michael Jackson"}]}]}`
+		}
+		return http.StatusNotFound, ""
+	})
+	cover, _, album := qqCoverFallback(qqRoundCtx(), "Michael Jackson", "Off the Wall", "世纪典藏【绝赞版】")
+	if cover != qqAlbumCoverURL("0034Gnut4OoYpJ") || album != "Bad" {
+		t.Fatalf("got cover=%q album=%q", cover, album)
 	}
 }

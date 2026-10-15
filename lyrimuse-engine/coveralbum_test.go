@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -409,41 +411,66 @@ func TestCoverSwapAllowedAcceptsBorrowedDeviceCover(t *testing.T) {
 	}
 }
 
-// 存量清洗:擦掉借用时盖上的假归属戳(本机实测 386 条)。
-func TestMigrateBorrowedCoverAlbums(t *testing.T) {
-	savedCache := enrichCache
-	defer func() { enrichCache = savedCache }()
-
-	enrichCache = map[string]enrichEntry{
-		// 被盖过章的:擦掉。
-		"Michael Jackson|Hold My Hand|Michael": {CoverURL: "https://qq/ultimate.jpg", CoverSource: "qq", CoverAlbum: "Michael"},
-		// qq 档本来就没戳:不动(也证明这个迁移是幂等的)。
-		"某歌手|甲|某专辑": {CoverURL: "https://qq/a.jpg", CoverSource: "qq"},
-		// 另外三档的戳都是真的,一个字节都不许动。
-		"某歌手|乙|某专辑": {CoverURL: "file:///x/artwork/b.jpg", CoverSource: "device", CoverAlbum: "某专辑"},
-		"某歌手|丙|某专辑": {CoverURL: "https://netease/c.jpg", CoverSource: "netease", CoverAlbum: "某专辑"},
-		"某歌手|丁|某专辑": {CoverURL: "https://apple/d.jpg", CoverSource: "apple", CoverAlbum: "某专辑"},
+// QQ 兜底那张换不换上:没拿到不换;原来没封面、没有本地专辑可比时换;原来有一张时,按它在 QQ 上的专辑算不比原来那张更不对版才换。
+func TestQQFallbackCoverTaken(t *testing.T) {
+	existing := func(album string) enrichEntry {
+		return enrichEntry{CoverURL: "https://n/1.jpg", CoverSource: "netease", CoverAlbum: album}
 	}
-	migrateBorrowedCoverAlbums()
-	if got := enrichCache["Michael Jackson|Hold My Hand|Michael"].CoverAlbum; got != "" {
-		t.Errorf("被盖过章的 qq 条目该被擦掉 cover_album, got %q", got)
+	const gold = "JTW 西游记 (Gold) [Explicit]"
+	cases := []struct {
+		name                         string
+		e                            enrichEntry
+		qqCover, qqAlbum, coverAlbum string
+		want                         bool
+	}{
+		{"没拿到", existing(""), "", gold, gold, false},
+		{"原来没封面", enrichEntry{}, "https://q/1.jpg", "Bad", "世纪典藏【绝赞版】", true},
+		{"原来没封面、cover_album 却写着本地专辑", enrichEntry{CoverAlbum: "世纪典藏【绝赞版】"}, "https://q/1.jpg", "Bad", "世纪典藏【绝赞版】", true},
+		{"没有本地专辑可比", existing("别的"), "https://q/1.jpg", "Bad", "", true},
+		{"QQ 逐字对上,原来只是包含", existing("JTW西游记"), "https://q/1.jpg", gold, gold, true},
+		{"两张都对不上版", existing("Off the Wall"), "https://q/1.jpg", "Bad", "世纪典藏【绝赞版】", true},
+		{"QQ 更不对版", existing("JTW西游记"), "https://q/1.jpg", "Bad", gold, false},
 	}
-	// 封面本身不动:换封面交给自愈路径(理由见 coverstampmigrate.go 头注)。
-	if got := enrichCache["Michael Jackson|Hold My Hand|Michael"].CoverURL; got != "https://qq/ultimate.jpg" {
-		t.Errorf("迁移不该动 cover_url, got %q", got)
-	}
-	for _, k := range []string{"某歌手|乙|某专辑", "某歌手|丙|某专辑", "某歌手|丁|某专辑"} {
-		if enrichCache[k].CoverAlbum != "某专辑" {
-			t.Errorf("%s 的 cover_album 是真的,不该被擦", k)
+	for _, c := range cases {
+		if got := qqFallbackCoverTaken(c.e, c.qqCover, c.qqAlbum, c.coverAlbum); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
 		}
 	}
-	// 幂等:再跑一遍什么都不变。enrichEntry 带切片字段、不能直接比,挑这次迁移唯一
-	// 会碰的三个字段比。
-	before := enrichCache["某歌手|甲|某专辑"]
-	migrateBorrowedCoverAlbums()
-	after := enrichCache["某歌手|甲|某专辑"]
-	if after.CoverURL != before.CoverURL || after.CoverSource != before.CoverSource ||
-		after.CoverAlbum != before.CoverAlbum {
-		t.Error("第二遍迁移不该改动任何条目")
+}
+
+// 同专辑借 QQ 邻居的图:邻居 cover_album 明确是另一张专辑的不借;对得上的、早先存下没记专辑的照借,都不认领归属(03 章决策 47)。
+func TestSiblingAlbumCoverSkipsQQCoverOfAnotherAlbum(t *testing.T) {
+	savedCache := enrichCache
+	defer func() { enrichCache = savedCache }()
+	const album = "世纪典藏【绝赞版】"
+	enrichCache = map[string]enrichEntry{
+		"Michael Jackson|Billie Jean|" + album: {CoverURL: "https://qq/bad.jpg", CoverSource: "qq", CoverAlbum: "Bad"},
+	}
+	if url, _, _ := siblingAlbumCover("Michael Jackson", "Off the Wall", album); url != "" {
+		t.Errorf("另一张专辑的 QQ 图不该借, got %q", url)
+	}
+	enrichCache = map[string]enrichEntry{
+		"Michael Jackson|Billie Jean|" + album: {CoverURL: "https://qq/bad.jpg", CoverSource: "qq", CoverAlbum: "Bad"},
+		"Michael Jackson|Thriller|" + album:    {CoverURL: "https://qq/fits.jpg", CoverSource: "qq", CoverAlbum: album},
+	}
+	if url, source, verified := siblingAlbumCover("Michael Jackson", "Off the Wall", album); url != "https://qq/fits.jpg" || source != "qq" || verified {
+		t.Errorf("对得上的 QQ 图照借、不认领归属: (%q, %q, %v)", url, source, verified)
+	}
+	enrichCache = map[string]enrichEntry{
+		"Michael Jackson|Thriller|" + album: {CoverURL: "https://qq/legacy.jpg", CoverSource: "qq"},
+	}
+	if url, _, _ := siblingAlbumCover("Michael Jackson", "Off the Wall", album); url != "https://qq/legacy.jpg" {
+		t.Errorf("没记专辑的 QQ 图照借, got %q", url)
+	}
+}
+
+// QQ 兜底那段接线(在 resolveTrackEnrichment 里,功能测试搭不起来):换不换由 qqFallbackCoverTaken 判,换上时 cover_album 记 QQ 报的专辑。
+func TestQQFallbackCoverWiredWithItsAlbum(t *testing.T) {
+	src, err := os.ReadFile("enrich.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), "if qqFallbackCoverTaken(e, qqCover, qqAlbum, coverAlbum) {\n\t\t\te.CoverURL, e.CoverSource, e.CoverAlbum = qqCover, \"qq\", qqAlbum\n") {
+		t.Error("enrich.go 里 QQ 兜底该经 qqFallbackCoverTaken 判、换上时记 qqAlbum")
 	}
 }

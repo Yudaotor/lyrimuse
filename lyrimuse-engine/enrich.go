@@ -1108,6 +1108,13 @@ func preferAppleCoverOverNetease(neteaseAlbum, appleAlbum, appleCover, localAlbu
 	return albumScore(neteaseAlbum, localAlbum) == 0 && albumScore(appleAlbum, localAlbum) > 0
 }
 
+// qqFallbackCoverTaken 判断 QQ 兜底拿到的那张封面换不换上:没拿到不换;原来没封面时换;原来有一张时,QQ 那张贴合本地专辑的
+// 程度(albumScore,按它在 QQ 上所属的专辑算)不比原来那张差才换 —— 两张都对不上版、或者没有本地专辑可比(两边都是 0 分)时
+// 照样换,只是不拿更不对版的顶掉更贴的那张。纯函数。见 03 章决策 47。
+func qqFallbackCoverTaken(e enrichEntry, qqCover, qqAlbum, coverAlbum string) bool {
+	return qqCover != "" && (e.CoverURL == "" || albumScore(qqAlbum, coverAlbum) >= albumScore(e.CoverAlbum, coverAlbum))
+}
+
 // coverNeedsAlbumCheck 判断这条记录的封面值不值得重新解析一次 —— 只针对网易云那档:
 //
 //   - cover_album 有值、但对不上正在播的这张专辑(< 200,不是严格相等)→ 该重解析;
@@ -1197,9 +1204,8 @@ func coverSwapAllowedWith(old, fresh enrichEntry, album string, deviceUpgradable
 		// qqCoverFallback 自己已经在 resolveTrackEnrichment 里按 albumScore 避开了
 		// 精选集/合辑才会被选中(见那里的注释),不需要再靠 fresh.NeteaseURL 佐证。
 		// 这一档也可能是"网易云/Apple 都给了封面但都对不上本地专辑版本"时的纠正结果
-		// (见 resolveTrackEnrichment 里那个 guard)——QQ 从不回传 CoverAlbum,恒为 0 分,
-		// 没有这一档的话,好不容易查到的对版封面会被下面那条
-		// albumScore(fresh.CoverAlbum, album) > 0 拦住,永远存不进缓存,每次自愈都白查一次。
+		// (见 resolveTrackEnrichment 里那个 guard):这时网易云多半没给出对版的那张,QQ 那张的 cover_album
+		// 又是它在 QQ 上的写法,走下面那条会被拦住,好不容易查到的对版封面永远存不进缓存,每次自愈都白查一次。
 		return true
 	}
 	return fresh.NeteaseURL != "" && album != "" && albumScore(fresh.CoverAlbum, album) > 0
@@ -1214,9 +1220,10 @@ func coverSwapAllowedWith(old, fresh enrichEntry, album string, deviceUpgradable
 // 能借的邻居分两档,第三个返回值说这张图的归属够不够格声明(调用方据此决定盖不盖 cover_album):
 //   - device:那张图是这张专辑的某一首在本机播放时系统给的,归属由"设备当时确实在播这首歌"保证,可以连归属一起借走。
 //     要求邻居自己那条记录的 cover_album 已经逐字对上这张专辑,不在这里替它推断。
-//   - qq:qqCoverFallback 按 albumScore 把关过才会被选中,图有用但不认领归属(QQ 从不回传专辑名),不盖 cover_album。
-//     盖了就把"未认领归属"升级成"逐字对上专辑":App 侧 localAlbumVerifiedCovers 会拿它越过 Last.fm 自带图,引擎侧
-//     coverNeedsAlbumCheck 撞上 200 分也从此不再复查,QQ 给的合集图就这样顶掉了对图。
+//   - qq:qqCoverFallback 按 albumScore 把关过才会被选中,图有用但不认领归属,不盖 cover_album(邻居的 cover_album 记的是
+//     那张图在 QQ 上属于哪张专辑,明确是另一张专辑的不借)。盖了就把"未认领归属"升级成"逐字对上专辑":App 侧
+//     localAlbumVerifiedCovers 会拿它越过 Last.fm 自带图,引擎侧 coverNeedsAlbumCheck 撞上 200 分也从此不再复查,
+//     QQ 给的合集图就这样顶掉了对图。
 //
 // netease / apple 两档不借:它们的 cover_album 是源自己报的专辑名,同名不同版(重发/纪念版换了封面)照样能逐字对上,
 // 借过去等于把靠文字对上的答案当成实测证据传染给另一首歌。
@@ -1238,7 +1245,7 @@ func siblingAlbumCover(artist, title, album string) (url, source string, albumVe
 
 // siblingCoverLocked 在同一张专辑(同歌手、逐字同专辑名)的邻居里挑一张封面。
 // verifiedOnly = true 只认"归属可外借"的那一档(见 coverSourceLendsAlbumIdentity,且要求
-// 邻居自己的 cover_album 已经逐字对上),false 只认 qq 档。**调用方必须持有 enrichMu。**
+// 邻居自己的 cover_album 已经逐字对上),false 只认 qq 档(cover_album 明确是另一张专辑的不认)。**调用方必须持有 enrichMu。**
 //
 // 按 key **定序**扫,不吃 map 的随机迭代顺序:同一张专辑有两条可借邻居时,不排序的话
 // 每次启动可能借到不同的图,表现是"这首歌的封面偶尔自己变了"、且复现不出来。
@@ -1257,10 +1264,10 @@ func siblingCoverLocked(self, artist, album string, verifiedOnly bool) (url, sou
 			continue
 		}
 		if verifiedOnly {
-			if !coverSourceLendsAlbumIdentity(e.CoverSource) || albumScore(e.CoverAlbum, album) != 200 {
+			if !siblingLendsAlbumIdentity(e, album) {
 				continue
 			}
-		} else if e.CoverSource != "qq" {
+		} else if e.CoverSource != "qq" || (e.CoverAlbum != "" && !candidateCoverAlbumFits(e.CoverAlbum, album)) {
 			continue
 		}
 		a, _, al := splitEnrichKey(key)
@@ -1278,6 +1285,13 @@ func siblingCoverLocked(self, artist, album string, verifiedOnly bool) (url, sou
 // 核实过的),改这里一行,借用和自愈两条路径同时跟上。
 func coverSourceLendsAlbumIdentity(source string) bool {
 	return source == "device"
+}
+
+// siblingLendsAlbumIdentity:这条邻居的封面能不能连归属一起借给专辑 album 的其它曲目 —— 来源够格
+// (coverSourceLendsAlbumIdentity)、自己的 cover_album 逐字对上这张专辑。siblingCoverLocked 和后台补封面那一步
+// (coverSweepBorrowVerifiedSiblings)共用。
+func siblingLendsAlbumIdentity(e enrichEntry, album string) bool {
+	return e.CoverURL != "" && coverSourceLendsAlbumIdentity(e.CoverSource) && albumScore(e.CoverAlbum, album) == 200
 }
 
 // hasAlbumVerifiedSiblingCoverLocked:这张专辑里有没有一条"归属可外借"的邻居封面。
@@ -1309,17 +1323,18 @@ func hasAlbumVerifiedSiblingCoverLocked(artist, album string) bool {
 // 网易云那条判据一个字节都不用动(它的整张测试表也就原样成立)。
 //
 // 判据刻意收得很窄 —— "有邻居可借"才算缺。放宽成"qq 档 + cover_album 为空就重查"的话,
-// QQ 正常给对图的那一大类(它从不回传专辑名,cover_album 恒空)会每条白重试满 5 次
+// QQ 正常给对图的那一大类(早先存下的 cover_album 是空的)会每条白重试满 5 次
 // (peripheralBackfillMaxAttempts)、永远补不上一个补不了的字段,正是 coverNeedsAlbumCheck
 // 当初收窄要避开的成本。device / player 两档自己不用升(身份最硬),直接排除。
 func coverCanUpgradeToVerifiedSiblingLocked(e enrichEntry, artist, album string) bool {
-	if album == "" || e.CoverSource == "device" || e.CoverSource == "player" || e.CoverURL == "" {
-		return false
-	}
-	if albumScore(e.CoverAlbum, album) == 200 {
-		return false
-	}
-	return hasAlbumVerifiedSiblingCoverLocked(artist, album)
+	return coverAwaitsVerifiedSibling(e, album) && hasAlbumVerifiedSiblingCoverLocked(artist, album)
+}
+
+// coverAwaitsVerifiedSibling:这条的封面归属还没核实 —— 有封面、不是 device / player(身份最硬,自己不用升)、cover_album
+// 没逐字对上本地专辑。同专辑有归属核实过的邻居时值得换成那张;coverCanUpgradeToVerifiedSiblingLocked 和后台补封面那一步
+// (coverSweepBorrowVerifiedSiblings)共用。
+func coverAwaitsVerifiedSibling(e enrichEntry, album string) bool {
+	return e.CoverURL != "" && e.CoverSource != "device" && e.CoverSource != "player" && albumScore(e.CoverAlbum, album) != 200
 }
 
 // lyricSourcesWithCandidates 挑出这一轮真的给出了可用候选的源(负分是"纯音乐"/"曲库里有
@@ -3441,18 +3456,13 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 		// QQ 侧的仿冒号蒙混过关;传入 album 让 qqCoverFallback 内部按 albumScore
 		// 避开精选集/合辑顶替原始专辑封面。
 		// 第二个返回值(QQ 侧的歌手名)刻意丢弃:它不该进 canonical_artist(理由见上面
-		// 解析链路那段)。这里只要封面。
-		qqCover, _ := qqCoverFallback(ctx, coverArtist, coverTitle, coverAlbum)
-		if qqCover != "" {
-			// 只在真拿到值时才覆盖——若 QQ 也没有,保留网易云/Apple 那张"对不上版但好歹
-			// 有图"的兜底,好过把已有封面抹成空。
-			// CoverAlbum 显式清空(不是"留着不动"):这条分支可能是从 e.CoverAlbum 已经写着
-			// 网易云那个不对版专辑名的状态换过来的,留着旧值会让 cover_album 挂着一个跟当前
-			// 这张封面(QQ 来源)根本不是一回事的专辑名 —— qqCoverFallback 不回传专辑名,而它
-			// 内部已经按 albumScore 避开了精选集/合辑,不需要再被 coverNeedsAlbumCheck 复查
-			// 一次(该函数本来就只查 CoverSource=="netease" 那档,清不清空不影响它,纯粹是
-			// 为了不留一条名不副实的字段)。
-			e.CoverURL, e.CoverSource, e.CoverAlbum = qqCover, "qq", ""
+		// 解析链路那段)。第三个是这张封面在 QQ 上所属的专辑,记进 cover_album:对不上本地专辑时
+		// 下面 coverOfAnotherAlbum 才判得出来(见 03 章决策 47)。
+		qqCover, _, qqAlbum := qqCoverFallback(ctx, coverArtist, coverTitle, coverAlbum)
+		// 拿到了、而且不比已有那张更不对版才换(qqFallbackCoverTaken)——QQ 也没有时保留网易云/Apple 那张
+		// "对不上版但好歹有图"的兜底,好过把已有封面抹成空。
+		if qqFallbackCoverTaken(e, qqCover, qqAlbum, coverAlbum) {
+			e.CoverURL, e.CoverSource, e.CoverAlbum = qqCover, "qq", qqAlbum
 		}
 	}
 	// 网易云/Apple/QQ 各自的单曲检索都试过了,仍然没能给出精确对版的封面时,最后问一次
@@ -5343,7 +5353,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			// cover 即可。查不到就留空(候选不拿别的封面兜底,见 rankLyricSourceResults)。
 			// 排在 QRC 之后、不跟它并发:两边都读同一份单曲详情(qqSongDetail),QRC 走通时详情已在缓存里,
 			// 并发的话两边同时没命中缓存,同一个详情请求会发两次。
-			qqCover, _ = qqSongCoverAndSinger(ctx, qqMid)
+			qqCover, _, _ = qqSongCoverAndSinger(ctx, qqMid)
 			<-lyricDone
 			// 整行接口没给词时用 QRC 压出来的整行,见 qqLineLyric。
 			lyr, qqInstrumental, qqNoLyrics = qqLineLyric(qqLyr, qrc), qqLyr.instrumental, qqLyr.trackFoundNoLyrics

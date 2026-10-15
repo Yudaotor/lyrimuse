@@ -219,6 +219,71 @@ func qqAlbumSongsWebAt(ctx context.Context, host, albumMid string) ([]qqAlbumSon
 	return songs, nil
 }
 
+var (
+	qqAlbumNameMu    sync.Mutex
+	qqAlbumNameCache = map[string]string{}
+)
+
+// qqAlbumName 按专辑 mid 取它在 QQ 上的专辑名(网页版专辑接口 fcg_v8_album_info_cp 的 data.name),按 mid 缓存。
+// 没问成返回错误、不缓存;问成了、QQ 答查无(code 非 0,不存在的 mid 实测回 1101)或没给名字返回空串,同样缓存。
+// 给后台补封面补存量 QQ 封面的 cover_album 用(coverSweepNameQQCoverAlbums)。
+func qqAlbumName(ctx context.Context, albumMid string) (string, error) {
+	if albumMid == "" {
+		return "", nil
+	}
+	qqAlbumNameMu.Lock()
+	name, ok := qqAlbumNameCache[albumMid]
+	qqAlbumNameMu.Unlock()
+	if ok {
+		return name, nil
+	}
+	err := qqTryHosts(ctx, qqWebHosts, func(host string) error {
+		got, err := qqAlbumNameWebAt(ctx, host, albumMid)
+		if err == nil {
+			name = got
+		}
+		return err
+	})
+	if err != nil {
+		return "", err
+	}
+	qqAlbumNameMu.Lock()
+	qqAlbumNameCache[albumMid] = name
+	qqAlbumNameMu.Unlock()
+	return name, nil
+}
+
+func qqAlbumNameWebAt(ctx context.Context, host, albumMid string) (string, error) {
+	u := "https://" + host + "/v8/fcg-bin/fcg_v8_album_info_cp.fcg?format=json&albummid=" + neturl.QueryEscape(albumMid)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Referer", "https://y.qq.com/")
+	req.Header.Set("User-Agent", qqUA)
+	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("album_info_cp status %d", resp.StatusCode)
+	}
+	var out struct {
+		Code int `json:"code"`
+		Data struct {
+			Name string `json:"name"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, qqResponseMaxBytes)).Decode(&out); err != nil {
+		return "", err
+	}
+	if out.Code != 0 {
+		return "", nil
+	}
+	return strings.TrimSpace(out.Data.Name), nil
+}
+
 // ---- 单曲详情 ----
 //
 // 专辑名、封面、歌手 mid、数字 songID、官方时长、语种都出自同一条单曲详情,按 mid 缓存一份,

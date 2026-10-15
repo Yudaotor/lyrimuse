@@ -126,7 +126,7 @@ func migrateManualPickMarks() {
 		}
 		enrichCache[k] = e
 	}
-	// 置脏,理由同 migrateBorrowedCoverAlbums。
+	// 置脏:不置的话下面那次保存是空操作,每次启动都重跑一遍、只能等别的写入顺带落盘。
 	if cleared > 0 {
 		enrichDirty = true
 	}

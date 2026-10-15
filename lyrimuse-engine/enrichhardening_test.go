@@ -40,20 +40,12 @@ func TestSiblingCoverPicksSmallestKey(t *testing.T) {
 	}
 }
 
-// 两个迁移改了内存要置脏,不然那次保存是空操作。
+// 迁移改了内存要置脏,不然那次保存是空操作。
 func TestStartupMigrationsMarkDirty(t *testing.T) {
 	withTempDecisionCache(t)
 	enrichMu.Lock()
 	enrichPath = "" // 不落盘:只看脏标记
-	enrichCache["a|t|b"] = enrichEntry{CoverSource: "qq", CoverAlbum: "b", CoverURL: "u"}
 	enrichCache["a|t2|b"] = enrichEntry{Lyrics: "[00:01.00]x", LyricsSource: "qq", LyricsSourceChoice: "qq"}
-	enrichDirty = false
-	enrichMu.Unlock()
-	migrateBorrowedCoverAlbums()
-	if !enrichDirty {
-		t.Fatal("migrateBorrowedCoverAlbums 应当置脏")
-	}
-	enrichMu.Lock()
 	enrichDirty = false
 	enrichMu.Unlock()
 	migrateManualPickMarks()

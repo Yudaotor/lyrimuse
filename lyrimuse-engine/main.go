@@ -323,12 +323,8 @@ func main() {
 		}
 	})
 	startupStep("migrateEnrichKeys", migrateEnrichKeys)
-	// 存量「借来的封面被盖上归属戳」清洗(见 coverstampmigrate.go)。
-	// 位置只有两条约束:loadEnrichCache 之后(要有 enrichPath 才落得了盘)、
-	// migrateEnrichKeys 之后(它落盘的得是归一化过的 key)。跟歌词那条 import/export
-	// 链**没有**先后关系 —— 它一个歌词字段都不碰,只擦 cover_album。
-	startupStep("migrateBorrowedCoverAlbums", migrateBorrowedCoverAlbums)
-	// 已经存成设备封面的播放器占位图清掉(见 knownplaceholder.go),约束同上一条。
+	// 已经存成设备封面的播放器占位图清掉(见 knownplaceholder.go)。位置只有两条约束:loadEnrichCache 之后
+	// (要有 enrichPath 才落得了盘)、migrateEnrichKeys 之后(它落盘的得是归一化过的 key)。
 	startupStep("migrateKnownPlaceholderCovers", migrateKnownPlaceholderCovers)
 	// 决策存档里汽水候选封面缺 `~模板-处理参数` 后缀的,补上(见 sodacovermigrate.go)。
 	startupStep("migrateSodaCoverURLs", migrateSodaCoverURLs)

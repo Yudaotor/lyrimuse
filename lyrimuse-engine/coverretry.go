@@ -13,13 +13,13 @@ import (
 // 第 1、2 步另外试去掉合作署名的写法:歌手取第一位(「Khalil Fong feat. Hanggai」→「Khalil Fong」),曲名去掉 feat. 那段
 // (「Drunken (feat. Hanggai)」→「Drunken」),见决策 38。
 //
-// 写 CoverAlbum 跟三源同一个口径:网易云 / Apple / Deezer 写来源自己报的专辑名,QQ 不回传、写空。见 03 章决策 37。
+// 写 CoverAlbum 跟三源同一个口径:网易云 / Apple / QQ / Deezer 都写来源自己报的专辑名。见 03 章决策 37、47。
 
 // coverRetryLookups:补查用到的联网调用。包级变量 coverRetry 是正式那一套,单测换成假的。
 type coverRetryLookups struct {
 	netease func(ctx context.Context, artist, title, album string, durationSecs float64) neteaseInfo
 	apple   func(ctx context.Context, artist, title, album string, durationSecs float64) appleMusicMatch
-	qq      func(ctx context.Context, artist, title, album string) (string, string)
+	qq      func(ctx context.Context, artist, title, album string) (string, string, string)
 	deezer  func(ctx context.Context, isrc string) (deezerTrack, bool)
 }
 
@@ -132,8 +132,8 @@ func retryMissingCover(ctx context.Context, l coverRetryLookups, artist, title, 
 		if m := l.apple(ctx, q.artist, q.title, album, q.duration); m.cover != "" {
 			return coverRetryResult{m.cover, "apple", m.album}, true
 		}
-		if cover, _ := l.qq(ctx, q.artist, q.title, album); cover != "" {
-			return coverRetryResult{cover, "qq", ""}, true
+		if cover, _, coverAlbum := l.qq(ctx, q.artist, q.title, album); cover != "" {
+			return coverRetryResult{cover, "qq", coverAlbum}, true
 		}
 	}
 	if !lyricSourceEnabled("deezer") {

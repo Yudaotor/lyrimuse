@@ -25,6 +25,11 @@ import (
 // 一遍开头先不联网补一轮:没封面、存着的歌词判决里胜出的那个源自带封面且专辑逐字对上的,直接补上
 // (coverSweepFillFromDecisions,外围补全的次数、节流不管这一步)。
 //
+// 那一轮之前还有两步:同一张专辑已经有一条归属核实过的设备封面、自己的封面归属没核实的,直接换成那张
+// (coverSweepBorrowVerifiedSiblings,不联网,不等被播到);存量 QQ 封面没记专辑的,按封面地址里的专辑 mid 查回它在
+// QQ 上的专辑名记进 cover_album(coverSweepNameQQCoverAlbums,一个 mid 只查一次),那一轮就判得出它是不是另一张专辑的。
+// 见 03 章决策 47。
+//
 // 小设备封面(deviceCoverSmall)排在后面各核一次:先在本机播放器数据、歌词判决的各源候选里找同一张图的清晰版
 // (upgradeSmallDeviceCover),找不到、外围补全的上限又没到,再走一次外围补全按远程结果比。每条隔
 // coverUpgradeRecheckInterval 才再核(CoverUpgradeCheckTS):新发行的歌要过一阵才进各家曲库。一个请求都没成功的
@@ -65,6 +70,8 @@ var (
 	coverSweepUpgradeLocal = upgradeSmallDeviceCover
 	// coverSweepSave 把攒着的改动存盘。单测换成计数。
 	coverSweepSave = requestEnrichBackgroundSave
+	// coverSweepQQAlbumName 按专辑 mid 查 QQ 上的专辑名。单测换成假的。
+	coverSweepQQAlbumName = qqAlbumName
 )
 
 type coverSweepDeferSaveKey struct{}
@@ -104,6 +111,14 @@ type coverSweepPass struct {
 
 // runCoverSweep 跑一遍:先补没封面的,再核小设备封面。
 func runCoverSweep(ctx context.Context) coverSweepPass {
+	if n := coverSweepBorrowVerifiedSiblings(); n > 0 {
+		slog.Info("cover sweep: took the album's verified device cover", "count", n)
+		coverSweepSave()
+	}
+	if n := coverSweepNameQQCoverAlbums(ctx); n > 0 {
+		slog.Info("cover sweep: recorded the QQ album of stored QQ covers", "count", n)
+		coverSweepSave()
+	}
 	if n := coverSweepFillFromDecisions(); n > 0 {
 		slog.Info("cover sweep: filled from the lyrics winner", "count", n)
 		coverSweepSave()
@@ -285,6 +300,117 @@ func coverSweepFillFromDecisions() int {
 		enrichMu.Unlock()
 	}
 	return filled
+}
+
+// coverSweepBorrowVerifiedSiblings:封面归属没核实的条目(coverAwaitsVerifiedSibling),同一张专辑已经有一条归属核实过的设备
+// 封面时直接换成那张,判据跟 siblingCoverLocked 的 device 档一样(siblingLendsAlbumIdentity、歌手对得上、专辑繁简折叠后相同、
+// 有几条可借时取 key 最小的);cover_album 记本地专辑,主色清空(同 coverSweepFillFromDecisions)。已经是同一张图的不动。纯内存、
+// 不联网,不等这首被播到才走 coverCanUpgradeToVerifiedSiblingLocked 那条自愈。先按专辑把能借的分好桶再挑:逐条问
+// siblingCoverLocked 的话每条都要扫一遍整个缓存。返回换了几条。见 03 章决策 47。
+func coverSweepBorrowVerifiedSiblings() int {
+	type lender struct {
+		key, artist string
+		e           enrichEntry
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	lenders := map[string][]lender{}
+	for key, e := range enrichCache {
+		if !coverSourceLendsAlbumIdentity(e.CoverSource) {
+			continue
+		}
+		artist, _, album := splitEnrichKey(key)
+		if album != "" {
+			simp := toSimplified(album)
+			lenders[simp] = append(lenders[simp], lender{key, artist, e})
+		}
+	}
+	for _, ls := range lenders {
+		sort.Slice(ls, func(i, j int) bool { return ls[i].key < ls[j].key })
+	}
+	borrowed := 0
+	for key, e := range enrichCache {
+		artist, _, album := splitEnrichKey(key)
+		if !coverAwaitsVerifiedSibling(e, album) || enrichInflight[key] || enrichProvisional[key] {
+			continue
+		}
+		for _, l := range lenders[toSimplified(album)] {
+			if !siblingLendsAlbumIdentity(l.e, album) || !artistMatches(l.artist, artist) {
+				continue
+			}
+			if l.e.CoverURL != e.CoverURL {
+				e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor = l.e.CoverURL, l.e.CoverSource, album, ""
+				enrichCache[key] = e
+				borrowed++
+			}
+			break
+		}
+	}
+	if borrowed > 0 {
+		enrichDirty = true
+	}
+	return borrowed
+}
+
+// coverSweepNameGap:查存量 QQ 封面的专辑名时两次请求之间隔多久。
+const coverSweepNameGap = time.Second
+
+// coverSweepNameQQCoverAlbums:存量 QQ 封面没记专辑的(cover_album 空),按封面地址里的专辑 mid(qqCoverAlbumMid)查回它在
+// QQ 上的专辑名记进 cover_album,之后 coverOfAnotherAlbum 才判得出它是不是另一张专辑的。一个 mid 只查一次,两次之间隔
+// coverSweepNameGap;QQ 答了没有名字的留空;连着 coverSweepOfflineLimit 个 mid 都没问成就停,下一遍再来。返回记上几条。
+// 见 03 章决策 47。
+func coverSweepNameQQCoverAlbums(ctx context.Context) int {
+	keysByMid := map[string][]string{}
+	enrichMu.Lock()
+	for key, e := range enrichCache {
+		if e.CoverSource != "qq" || e.CoverAlbum != "" {
+			continue
+		}
+		if mid := qqCoverAlbumMid(e.CoverURL); mid != "" {
+			keysByMid[mid] = append(keysByMid[mid], key)
+		}
+	}
+	enrichMu.Unlock()
+	mids := make([]string, 0, len(keysByMid))
+	for mid := range keysByMid {
+		mids = append(mids, mid)
+	}
+	sort.Strings(mids)
+	named, unreached := 0, 0
+	for i, mid := range mids {
+		if i > 0 {
+			coverSweepWait(ctx, coverSweepNameGap)
+		}
+		coverSweepYield(ctx)
+		if ctx.Err() != nil {
+			break
+		}
+		name, err := coverSweepQQAlbumName(withBackgroundOutbound(ctx), mid)
+		if err != nil {
+			if unreached++; unreached >= coverSweepOfflineLimit {
+				slog.Warn("cover sweep: QQ album lookups got no answer, stopping", "streak", unreached, "album_mid", mid)
+				break
+			}
+			continue
+		}
+		unreached = 0
+		if name == "" {
+			continue
+		}
+		enrichMu.Lock()
+		for _, key := range keysByMid[mid] {
+			e, ok := enrichCache[key]
+			if !ok || e.CoverSource != "qq" || e.CoverAlbum != "" || qqCoverAlbumMid(e.CoverURL) != mid || enrichInflight[key] {
+				continue
+			}
+			e.CoverAlbum = name
+			enrichCache[key] = e
+			enrichDirty = true
+			named++
+		}
+		enrichMu.Unlock()
+	}
+	return named
 }
 
 // sortCoverSweepKeys 按歌手、专辑、key 排(同一张专辑的挨着补)。
