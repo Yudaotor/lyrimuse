@@ -1101,8 +1101,18 @@
         "触控栏",
         "样式"
       ],
-      "subtitle" : "歌词使用封面主色；无法获取时为白色",
-      "title" : "跟随封面"
+      "subtitle" : "白色、跟随封面或自定义颜色",
+      "title" : "歌词颜色"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "触控栏",
+        "样式"
+      ],
+      "subtitle" : "未唱部分与副行的亮度",
+      "title" : "暗部亮度"
     },
     {
       "dest" : "tab:appearance",

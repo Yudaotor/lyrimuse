@@ -172,7 +172,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     /// 主行那一格的上缘和高:一行时占满整条高,两行时挪到上面那一格(`setRowLayout`)。
     private lazy var mainRowTop = lyricsView.topAnchor.constraint(equalTo: lyricsContainer.topAnchor)
     private lazy var mainRowHeight = lyricsView.heightAnchor.constraint(equalToConstant: TouchBarLyricsCell.barHeight)
-    /// 「跟随封面」时歌词的颜色(`TouchBarLyricsCell.coverAccent(hex:)`);取不到封面主色时 nil,退回白色。
+    /// 「歌词颜色」选「跟随封面」时歌词的颜色(`TouchBarLyricsCell.coverAccent(hex:)`);取不到封面主色时 nil,退回白色。
     private var coverAccent: NSColor?
     /// 展开态那三项,建一次留着(触控栏重新展开时会再问代理要)。
     private var items: [NSTouchBarItem.Identifier: NSTouchBarItem] = [:]
@@ -244,7 +244,11 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                 .sink { [weak self] _ in self?.scheduleRefresh() },
             settings.$touchBarLyricsKaraoke.dropFirst().removeDuplicates()
                 .sink { [weak self] _ in self?.scheduleRefresh() },
-            settings.$touchBarLyricsFollowsCover.dropFirst().removeDuplicates()
+            settings.$touchBarLyricsColorMode.dropFirst().removeDuplicates()
+                .sink { [weak self] _ in self?.scheduleRefresh() },
+            settings.$touchBarLyricsColorHex.dropFirst().removeDuplicates()
+                .sink { [weak self] _ in self?.scheduleRefresh() },
+            settings.$touchBarLyricsDimLevel.dropFirst().removeDuplicates()
                 .sink { [weak self] _ in self?.scheduleRefresh() },
             settings.$touchBarSecondaryLine.dropFirst().removeDuplicates()
                 .sink { [weak self] _ in self?.scheduleRefresh() },
@@ -717,8 +721,9 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                                               offsetMs: p.currentLyricsOffsetMs),
             rate: p.anchor?.rate ?? 1,
             font: TouchBarLyricsCell.mainFont(fontSize: settings.touchBarLyricsFontSize, secondary: secondary),
-            color: TouchBarLyricsCell.lyricColor(followsCover: settings.touchBarLyricsFollowsCover,
-                                                 coverAccent: coverAccent),
+            color: TouchBarLyricsCell.lyricColor(mode: settings.touchBarLyricsColorMode, coverAccent: coverAccent,
+                                                 customHex: settings.touchBarLyricsColorHex),
+            dimLevel: TouchBarLyricsStyle.clampedDimLevel(settings.touchBarLyricsDimLevel),
             karaoke: settings.touchBarLyricsKaraoke,
             alignment: settings.touchBarLyricsAlignment,
             still: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)

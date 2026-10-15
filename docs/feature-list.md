@@ -714,7 +714,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 249 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 250 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -935,7 +935,8 @@ Every setting in the Settings window, by where it lives: 249 in all. Type a name
 ### Lyrics Display › Touch Bar › Style
 
 - **Karaoke Effect**
-- **Follow Cover Art**: Lyrics use the cover's main color, or white when none is available
+- **Lyrics Color**: White, cover art color or a custom color
+- **Dimmed Text Brightness**: Brightness of unsung words and the second line
 
 ### Lyrics Display › Touch Bar › Layout
 

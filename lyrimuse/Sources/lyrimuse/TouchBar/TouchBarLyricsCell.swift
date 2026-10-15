@@ -19,10 +19,9 @@ enum TouchBarLyricsCell {
     /// 副行的字体:11pt,比主行细一档(同灵动岛副行)。
     static let secondaryFont = NSFont.systemFont(ofSize: CGFloat(TouchBarLyricsStyle.twoRowSecondaryFontSize),
                                                  weight: .regular)
-    /// 歌词句的颜色:白色,开了「跟随封面」用封面主色(`coverAccent(hex:)`)。还没唱到的部分打 `unsungAlpha` 这个折,
-    /// 打折走 `dimmedOnBlack`(不暗于白字打同一个折)。触控栏底色恒黑,不跟系统浅深色。
+    /// 歌词句默认的颜色;「歌词颜色」另有封面主色、自选色两档(`lyricColor(mode:coverAccent:customHex:)`)。还没唱到的部分打
+    /// 「暗部亮度」那个折(`Inputs.dimLevel`),打折走 `dimmedOnBlack`(不暗于白字打同一个折)。触控栏底色恒黑,不跟系统浅深色。
     static let lyricColor = NSColor.white
-    static let unsungAlpha: CGFloat = 0.45
     /// 不是歌词的那几档(间奏、歌名、广告)。
     static let secondaryColor = NSColor.white.withAlphaComponent(0.6)
     static let interludeText = "•••"
@@ -55,8 +54,10 @@ enum TouchBarLyricsCell {
         var rate: Double
         /// 主行的字体(`mainFont(fontSize:secondary:)`)。
         var font: NSFont
-        /// 歌词句的颜色(`lyricColor(followsCover:coverAccent:)`)。
+        /// 歌词句的颜色(`lyricColor(mode:coverAccent:customHex:)`)。
         var color: NSColor
+        /// 「暗部亮度」:没唱到的字打的折,副行按它同比抬(`TouchBarLyricsStyle.secondaryRowOpacity(for:dimLevel:)`)。
+        var dimLevel: Double
         /// 「卡拉OK效果」开没开。
         var karaoke: Bool
         /// 「对齐方式」:装得下的短句靠哪边;「自动」在这里按每一行的对唱声部落成具体方向(`side(_:duetSide:)`)。
@@ -192,8 +193,13 @@ enum TouchBarLyricsCell {
         return NSColor(srgbRed: lifted.r, green: lifted.g, blue: lifted.b, alpha: 1)
     }
 
-    static func lyricColor(followsCover: Bool, coverAccent: NSColor?) -> NSColor {
-        followsCover ? (coverAccent ?? lyricColor) : lyricColor
+    /// 「歌词颜色」那一档落成的颜色:跟随封面取不到主色、自选色存坏了时都是白色。自选色照原色用。
+    static func lyricColor(mode: TouchBarLyricsColorMode, coverAccent: NSColor?, customHex: String) -> NSColor {
+        switch mode {
+        case .white: return lyricColor
+        case .cover: return coverAccent ?? lyricColor
+        case .custom: return NSColor(hexStringWithAlpha: customHex)?.withAlphaComponent(1) ?? lyricColor
+        }
     }
 
     /// 黑底上打 `opacity` 这个折的歌词色(未唱的部分、副行),不暗于白字打同一个折;算法见 Core
@@ -225,7 +231,7 @@ enum TouchBarLyricsCell {
             let alignment = side(inputs.alignment, duetSide: line.side)
             if let words = line.words, !words.isEmpty {
                 // 卡拉OK效果关着:照样按逐字时间轴跟唱滚动,只是不染色(已唱、未唱同一个颜色)。
-                let unsung = inputs.karaoke ? dimmedOnBlack(inputs.color, opacity: unsungAlpha) : inputs.color
+                let unsung = inputs.karaoke ? dimmedOnBlack(inputs.color, opacity: CGFloat(inputs.dimLevel)) : inputs.color
                 return makeSpec(key: line.plainText ?? "", words: words, base: unsung, fill: inputs.color,
                                 window: nil, alignment: alignment, inputs)
             }
@@ -246,7 +252,8 @@ enum TouchBarLyricsCell {
         guard let text = content.secondaryText(kind, nextLineText: nextLineText) else { return nil }
         var row = inputs
         row.font = secondaryFont
-        let color = dimmedOnBlack(inputs.color, opacity: CGFloat(TouchBarLyricsStyle.secondaryRowOpacity(for: kind)))
+        let color = dimmedOnBlack(inputs.color,
+                                  opacity: CGFloat(TouchBarLyricsStyle.secondaryRowOpacity(for: kind, dimLevel: inputs.dimLevel)))
         let duetSide: LyricDuet.Side?
         if kind == .nextLine {
             duetSide = nextLineSide
@@ -290,6 +297,17 @@ enum TouchBarLyricsCell {
             timingEpoch: inputs.timingEpoch,
             rate: inputs.rate,
             still: inputs.still)
+    }
+}
+
+extension TouchBarLyricsColorMode {
+    /// 「歌词颜色」那一排的档名。
+    var displayName: String {
+        switch self {
+        case .white: return L10n.t("白色")
+        case .cover: return L10n.t("跟随封面")
+        case .custom: return L10n.t("自定义")
+        }
     }
 }
 

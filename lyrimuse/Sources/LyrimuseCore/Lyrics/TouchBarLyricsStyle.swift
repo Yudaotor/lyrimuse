@@ -1,5 +1,20 @@
 import Foundation
 
+/// 触控栏歌词句的颜色从哪来:白色、封面主色(取不到时白色)、用户自选的颜色。见 17 章决策 51。
+public enum TouchBarLyricsColorMode: String, CaseIterable, Sendable {
+    case white
+    case cover
+    case custom
+
+    /// 存着的值;没存过时按旧的「跟随封面」开关落档(开着 → 跟随封面,关着 → 白色),两样都没存过用 `fallback`。
+    public static func resolved(stored: String?, legacyFollowsCover: Bool?,
+                                fallback: TouchBarLyricsColorMode) -> TouchBarLyricsColorMode {
+        if let stored, let mode = TouchBarLyricsColorMode(rawValue: stored) { return mode }
+        if let legacyFollowsCover { return legacyFollowsCover ? .cover : .white }
+        return fallback
+    }
+}
+
 /// 触控栏歌词的字号:默认 16pt,可调 13~20pt。上限按触控栏 30pt 的高定:图层行的位图高 = 字体上下伸 + 2pt,
 /// 系统字体 20pt 约 26pt,23pt 就顶满 30pt(selftest 按系统字体逐档核着)。存着的值越界时,用的地方夹回区间。
 /// 副行开着时两行的字号不听这一项,见下面「副行开着时的两行」。
@@ -39,6 +54,25 @@ public enum TouchBarLyricsStyle {
         case .translation: return 0.75
         case .romanization: return 0.6
         }
+    }
+
+    // MARK: - 暗部亮度
+    //
+    // 「暗部亮度」:没唱到的字直接打这个折;副行三档(`secondaryRowOpacity(for:)`)按它跟默认值的比例同比抬,封顶 1。
+    // 默认值时跟加这一项之前一样。见 17 章决策 51。
+
+    public static let dimLevelRange: ClosedRange<Double> = 0.2...1
+    public static let defaultDimLevel: Double = 0.45
+
+    /// 夹进 `dimLevelRange`;不是有限数(存坏了)时用默认值。
+    public static func clampedDimLevel(_ level: Double) -> Double {
+        guard level.isFinite else { return defaultDimLevel }
+        return min(max(level, dimLevelRange.lowerBound), dimLevelRange.upperBound)
+    }
+
+    /// 副行在这一档暗部亮度下的不透明度。
+    public static func secondaryRowOpacity(for kind: LyricSecondaryLine, dimLevel: Double) -> Double {
+        min(1, secondaryRowOpacity(for: kind) * clampedDimLevel(dimLevel) / defaultDimLevel)
     }
 
     /// 黑底上打折的歌词色(未唱的部分、副行):效果同在黑底上打 `opacity` 这个透明度,但压暗之后的感知亮度(Rec.709

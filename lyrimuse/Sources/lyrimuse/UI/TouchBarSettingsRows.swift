@@ -44,7 +44,7 @@ extension TouchBarSettingsGroup {
         switch self {
         // 「歌词」520:对齐方式四档胶囊分段 + 不折行的行名。
         case .lyrics: SettingsPopoverShell(title: title, width: 520) { TouchBarLyricsRows() }
-        case .style: SettingsPopoverShell(title: title, width: 400) { TouchBarStyleRows() }
+        case .style: SettingsPopoverShell(title: title, width: 520) { TouchBarStyleRows() }
         // 「布局」四个开关两列小块、封面和三键的左 / 右下拉挂在小块里;「行为」三个开关两列。
         // 别排成一行三格:要 780 宽,浮层伸出设置窗口外。
         case .layout: SettingsPopoverShell(title: title, width: 560) { TouchBarLayoutRows() }
@@ -110,8 +110,9 @@ struct TouchBarLyricsRows: View {
     }
 }
 
-/// 「样式」组:卡拉OK效果、跟随封面。触控栏底色恒黑,不给配色(见 17 章决策 5)。系统开了「减弱动态效果」时
-/// 卡拉OK效果那一行多一句副标题,说明这时不逐字填色(17 章决策 43)。
+/// 「样式」组:卡拉OK效果、歌词颜色(白色 / 跟随封面 / 自定义,自定义时挂色块)、暗部亮度。底色恒黑,自选色照原色画,
+/// 没唱到的部分和副行仍有亮度下限(17 章决策 30、51)。系统开了「减弱动态效果」时卡拉OK效果那一行多一句副标题,
+/// 说明这时不逐字填色(17 章决策 43)。
 struct TouchBarStyleRows: View {
     @ObservedObject private var settings = AppSettings.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -128,9 +129,45 @@ struct TouchBarStyleRows: View {
                     Toggle("", isOn: $settings.touchBarLyricsKaraoke)
                 }
                 CardDivider()
-                SettingsRow(icon: "paintpalette", title: L10n.t("跟随封面"),
-                            subtitle: L10n.t("歌词使用封面主色；无法获取时为白色")) {
-                    Toggle("", isOn: $settings.touchBarLyricsFollowsCover)
+                SettingsRow(icon: "paintpalette", title: L10n.t("歌词颜色"),
+                            subtitle: settings.touchBarLyricsColorMode == .cover
+                                ? L10n.t("歌词使用封面主色；无法获取时为白色") : nil) {
+                    HStack(spacing: 8) {
+                        SettingsGlassTabPicker(
+                            selection: $settings.touchBarLyricsColorMode,
+                            options: TouchBarLyricsColorMode.allCases,
+                            label: \.displayName,
+                            compact: true
+                        )
+                        .fixedSize()
+                        if settings.touchBarLyricsColorMode == .custom {
+                            AppColorPicker(selection: Binding(
+                                get: {
+                                    Color(nsColor: TouchBarLyricsCell.lyricColor(
+                                        mode: .custom, coverAccent: nil, customHex: settings.touchBarLyricsColorHex))
+                                },
+                                set: { settings.touchBarLyricsColorHex = $0.hexStringWithAlpha }
+                            ), supportsOpacity: false)
+                        }
+                    }
+                }
+                CardDivider()
+                SettingsRow(icon: "sun.max", title: L10n.t("暗部亮度"),
+                            subtitle: L10n.t("未唱部分与副行的亮度")) {
+                    HStack(spacing: 8) {
+                        SteppedSlider(value: Binding(
+                            get: { TouchBarLyricsStyle.clampedDimLevel(settings.touchBarLyricsDimLevel) },
+                            set: { newValue in
+                                guard newValue != settings.touchBarLyricsDimLevel else { return }
+                                settings.touchBarLyricsDimLevel = newValue
+                            }
+                        ), in: TouchBarLyricsStyle.dimLevelRange, step: 0.05)
+                        .frame(width: 150)
+                        Text(verbatim: "\(Int((TouchBarLyricsStyle.clampedDimLevel(settings.touchBarLyricsDimLevel) * 100).rounded()))%")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 46, alignment: .trailing)
+                    }
                 }
             }
         }
@@ -245,7 +282,9 @@ enum TouchBarStyleDefaults {
         settings.touchBarLyricsAlignment = AppSettings.defaultTouchBarLyricsAlignment
         // 「样式」
         settings.touchBarLyricsKaraoke = AppSettings.defaultTouchBarLyricsKaraoke
-        settings.touchBarLyricsFollowsCover = AppSettings.defaultTouchBarLyricsFollowsCover
+        settings.touchBarLyricsColorMode = AppSettings.defaultTouchBarLyricsColorMode
+        settings.touchBarLyricsColorHex = AppSettings.defaultTouchBarLyricsColorHex
+        settings.touchBarLyricsDimLevel = TouchBarLyricsStyle.defaultDimLevel
         // 「布局」
         settings.touchBarShowsArtwork = AppSettings.defaultTouchBarShowsArtwork
         settings.touchBarArtworkSide = AppSettings.defaultTouchBarArtworkSide
@@ -356,10 +395,16 @@ struct TouchBarEditorToolbar: View {
             }
             return L10n.list(parts)
         case .style:
-            return SettingsToggleSummary.text([
-                (title: L10n.t("卡拉OK"), isOn: settings.touchBarLyricsKaraoke),
-                (title: L10n.t("跟随封面"), isOn: settings.touchBarLyricsFollowsCover),
-            ])
+            // 卡拉OK 开着才报;颜色一直报;暗部亮度非默认才报。
+            var parts: [String] = []
+            if settings.touchBarLyricsKaraoke { parts.append(L10n.t("卡拉OK")) }
+            parts.append(settings.touchBarLyricsColorMode == .custom
+                         ? L10n.t("自定义颜色") : settings.touchBarLyricsColorMode.displayName)
+            let dim = TouchBarLyricsStyle.clampedDimLevel(settings.touchBarLyricsDimLevel)
+            if abs(dim - TouchBarLyricsStyle.defaultDimLevel) > 0.001 {
+                parts.append(String(format: L10n.t("暗部 %@"), "\(Int((dim * 100).rounded()))%"))
+            }
+            return L10n.list(parts)
         case .layout:
             // 只列显示着的;摆在右边(非默认)时带上位置。
             var parts: [String] = []

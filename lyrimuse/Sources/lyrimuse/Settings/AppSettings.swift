@@ -243,7 +243,11 @@ final class AppSettings: ObservableObject {
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
         static let showLyricsInTouchBar = "np:showLyricsInTouchBar"
         static let touchBarLyricsKaraoke = "np:touchBarLyricsKaraoke"
+        /// 旧的「跟随封面」开关,只在 `touchBarLyricsColorMode` 没存过时读一次来落档。
         static let touchBarLyricsFollowsCover = "np:touchBarLyricsFollowsCover"
+        static let touchBarLyricsColorMode = "np:touchBarLyricsColorMode"
+        static let touchBarLyricsColorHex = "np:touchBarLyricsColorHex"
+        static let touchBarLyricsDimLevel = "np:touchBarLyricsDimLevel"
         static let touchBarLyricsFontSize = "np:touchBarLyricsFontSize"
         static let touchBarShowsArtwork = "np:touchBarShowsArtwork"
         static let touchBarShowsControls = "np:touchBarShowsControls"
@@ -578,7 +582,9 @@ final class AppSettings: ObservableObject {
     // 「歌词显示 › 触控栏」那一段十项的默认值:`init()` 的 fallback 和 `TouchBarStyleDefaults.restoreDefaults()` 读同一组。
     // 字号的默认值在 Core(`TouchBarLyricsStyle.defaultFontSize`)。取值见 17 章决策 31、33。
     static let defaultTouchBarLyricsKaraoke = true
-    static let defaultTouchBarLyricsFollowsCover = true
+    static let defaultTouchBarLyricsColorMode = TouchBarLyricsColorMode.cover
+    /// 空 = 还没选过,「自定义」那一档先画白色。
+    static let defaultTouchBarLyricsColorHex = ""
     static let defaultTouchBarShowsArtwork = false
     static let defaultTouchBarShowsControls = false
     static let defaultTouchBarSecondaryLine = LyricSecondaryLine.nextLine
@@ -894,13 +900,20 @@ final class AppSettings: ObservableObject {
     @Published var showLyricsInTouchBar: Bool {
         didSet { defaults.set(showLyricsInTouchBar, forKey: Keys.showLyricsInTouchBar) }
     }
-    // 触控栏歌词那一段的外观与布局:卡拉OK效果、跟随封面、字号、显示封面 / 播放控制(连同各自的位置)、对齐方式、
+    // 触控栏歌词那一段的外观与布局:卡拉OK效果、歌词颜色(连同自选色)、暗部亮度、字号、显示封面 / 播放控制(连同各自的位置)、对齐方式、
     // 副行、展开时隐藏功能栏(TouchBarLyricsController 订阅,改了当场生效)。字号存原值,越界由用的地方夹回 `TouchBarLyricsStyle.fontSizeRange`。
     @Published var touchBarLyricsKaraoke: Bool {
         didSet { defaults.set(touchBarLyricsKaraoke, forKey: Keys.touchBarLyricsKaraoke) }
     }
-    @Published var touchBarLyricsFollowsCover: Bool {
-        didSet { defaults.set(touchBarLyricsFollowsCover, forKey: Keys.touchBarLyricsFollowsCover) }
+    @Published var touchBarLyricsColorMode: TouchBarLyricsColorMode {
+        didSet { defaults.set(touchBarLyricsColorMode.rawValue, forKey: Keys.touchBarLyricsColorMode) }
+    }
+    @Published var touchBarLyricsColorHex: String {
+        didSet { defaults.set(touchBarLyricsColorHex, forKey: Keys.touchBarLyricsColorHex) }
+    }
+    /// 存原值,越界由用的地方夹回 `TouchBarLyricsStyle.dimLevelRange`。
+    @Published var touchBarLyricsDimLevel: Double {
+        didSet { defaults.set(touchBarLyricsDimLevel, forKey: Keys.touchBarLyricsDimLevel) }
     }
     @Published var touchBarLyricsFontSize: Double {
         didSet { defaults.set(touchBarLyricsFontSize, forKey: Keys.touchBarLyricsFontSize) }
@@ -2134,8 +2147,13 @@ final class AppSettings: ObservableObject {
         showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false
         showLyricsInTouchBar = (defaults.object(forKey: Keys.showLyricsInTouchBar) as? Bool) ?? false
         touchBarLyricsKaraoke = (defaults.object(forKey: Keys.touchBarLyricsKaraoke) as? Bool) ?? Self.defaultTouchBarLyricsKaraoke
-        touchBarLyricsFollowsCover = (defaults.object(forKey: Keys.touchBarLyricsFollowsCover) as? Bool)
-            ?? Self.defaultTouchBarLyricsFollowsCover
+        touchBarLyricsColorMode = TouchBarLyricsColorMode.resolved(
+            stored: defaults.string(forKey: Keys.touchBarLyricsColorMode),
+            legacyFollowsCover: defaults.object(forKey: Keys.touchBarLyricsFollowsCover) as? Bool,
+            fallback: Self.defaultTouchBarLyricsColorMode)
+        touchBarLyricsColorHex = defaults.string(forKey: Keys.touchBarLyricsColorHex) ?? Self.defaultTouchBarLyricsColorHex
+        touchBarLyricsDimLevel = (defaults.object(forKey: Keys.touchBarLyricsDimLevel) as? Double)
+            ?? TouchBarLyricsStyle.defaultDimLevel
         touchBarLyricsFontSize = (defaults.object(forKey: Keys.touchBarLyricsFontSize) as? Double)
             ?? TouchBarLyricsStyle.defaultFontSize
         touchBarShowsArtwork = (defaults.object(forKey: Keys.touchBarShowsArtwork) as? Bool) ?? Self.defaultTouchBarShowsArtwork

@@ -211,6 +211,30 @@ func runTouchBarTests() {
                         && S.secondaryRowOpacity(for: .romanization) > S.secondaryRowOpacity(for: .nextLine)
                         && S.secondaryRowOpacity(for: .nextLine) > 0, true,
                     "触控栏副行: 译文最清楚、读音次之、下一句最淡")
+
+        // 暗部亮度(17 章决策 51):默认值跟加这一项之前一样;副行按它同比抬、封顶 1;越界、存坏了夹回区间。
+        let kinds: [LyricSecondaryLine] = [.off, .nextLine, .translation, .romanization]
+        for kind in kinds {
+            expectEqual(abs(S.secondaryRowOpacity(for: kind, dimLevel: S.defaultDimLevel) - S.secondaryRowOpacity(for: kind)) < 1e-9,
+                        true, "触控栏暗部亮度: 默认值时副行 \(kind) 不变")
+            expectEqual(S.secondaryRowOpacity(for: kind, dimLevel: 1) <= 1, true, "触控栏暗部亮度: 副行 \(kind) 封顶 1")
+        }
+        expectEqual(S.secondaryRowOpacity(for: .translation, dimLevel: 1), 1, "触控栏暗部亮度: 拉满时译文满亮")
+        expectEqual(S.secondaryRowOpacity(for: .nextLine, dimLevel: 0.9) > S.secondaryRowOpacity(for: .nextLine), true,
+                    "触控栏暗部亮度: 调高时副行跟着亮")
+        expectEqual(S.secondaryRowOpacity(for: .translation, dimLevel: 0.2) < S.secondaryRowOpacity(for: .translation), true,
+                    "触控栏暗部亮度: 调低时副行跟着暗")
+        expectEqual(S.clampedDimLevel(0.05), S.dimLevelRange.lowerBound, "触控栏暗部亮度: 太低夹到下限")
+        expectEqual(S.clampedDimLevel(3), 1, "触控栏暗部亮度: 太高夹到 1")
+        expectEqual(S.clampedDimLevel(.nan), S.defaultDimLevel, "触控栏暗部亮度: 存坏了用默认值")
+
+        // 歌词颜色(17 章决策 51):存过就用存的;没存过按旧的「跟随封面」开关落档;都没有用默认。
+        typealias M = TouchBarLyricsColorMode
+        expectEqual(M.resolved(stored: "custom", legacyFollowsCover: true, fallback: .cover), .custom, "触控栏歌词颜色: 存过的优先")
+        expectEqual(M.resolved(stored: nil, legacyFollowsCover: true, fallback: .white), .cover, "触控栏歌词颜色: 旧开关开着 → 跟随封面")
+        expectEqual(M.resolved(stored: nil, legacyFollowsCover: false, fallback: .cover), .white, "触控栏歌词颜色: 旧开关关着 → 白色")
+        expectEqual(M.resolved(stored: nil, legacyFollowsCover: nil, fallback: .cover), .cover, "触控栏歌词颜色: 都没存过用默认")
+        expectEqual(M.resolved(stored: "bogus", legacyFollowsCover: false, fallback: .cover), .white, "触控栏歌词颜色: 存坏了按旧开关")
     }
 
     // ---- 黑底上打折的歌词色(未唱的部分、副行):不暗于白字打同一个折,只往亮里补,色相族不变,未唱仍比已唱暗 ----
@@ -727,7 +751,8 @@ func runTouchBarTests() {
         expectEqual(touchBarBranch?.contains("TouchBarEditorToolbar()") == true
                         && touchBarBranch?.contains("TouchBarAllSettingsDrawer()") == true, true,
                     "触控栏: .touchBar 那一支装着工具栏和「全部设置」抽屉")
-        for key in ["touchBarLyricsKaraoke", "touchBarLyricsFollowsCover", "touchBarLyricsFontSize",
+        for key in ["touchBarLyricsKaraoke", "touchBarLyricsColorMode", "touchBarLyricsColorHex", "touchBarLyricsDimLevel",
+                    "touchBarLyricsFontSize",
                     "touchBarShowsArtwork", "touchBarShowsControls", "touchBarSecondaryLine",
                     "touchBarArtworkSide", "touchBarControlsSide", "touchBarHidesControlStrip",
                     "touchBarLyricsAlignment", "touchBarShowsMoreKey", "touchBarExpandOnPlay", "touchBarCollapseWhenPaused",
@@ -739,9 +764,9 @@ func runTouchBarTests() {
         expectEqual(restore.contains("showLyricsInTouchBar"), false, "触控栏: 「恢复默认」不碰总开关")
         // 主行未唱的部分、副行在黑底上打折都走 dimmedOnBlack,不直接打透明度(跟随封面时那样会发糊)。
         let dimmedColorCell = code(appDir.appendingPathComponent("TouchBar/TouchBarLyricsCell.swift")) ?? ""
-        expectEqual(dimmedColorCell.contains("dimmedOnBlack(inputs.color, opacity: unsungAlpha)")
-                        && dimmedColorCell.contains("dimmedOnBlack(inputs.color, opacity: CGFloat(TouchBarLyricsStyle.secondaryRowOpacity(for: kind)))")
-                        && !dimmedColorCell.contains("withAlphaComponent(unsungAlpha)")
+        expectEqual(dimmedColorCell.contains("dimmedOnBlack(inputs.color, opacity: CGFloat(inputs.dimLevel))")
+                        && dimmedColorCell.contains("opacity: CGFloat(TouchBarLyricsStyle.secondaryRowOpacity(for: kind, dimLevel: inputs.dimLevel))")
+                        && !dimmedColorCell.contains("withAlphaComponent(CGFloat(inputs.dimLevel))")
                         && !dimmedColorCell.contains("withAlphaComponent(CGFloat(TouchBarLyricsStyle.secondaryRowOpacity"), true,
                     "触控栏配色: 未唱的部分、副行打折走 dimmedOnBlack")
         // 自动展开 / 收起(17 章决策 45):启用那一刻先记状态再订阅播放状态(订阅的头一拍丢掉);四项一起防抖;可见状态的变化

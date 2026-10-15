@@ -101,8 +101,10 @@ struct TouchBarPreviewStage: View {
         let inputs = TouchBarLyricsCell.Inputs(
             startMs: snapshot.startMs, dwellMs: snapshot.dwellMs, isPlaying: snapshot.isPlaying,
             timingEpoch: snapshot.timingEpoch, rate: snapshot.rate, font: font,
-            color: TouchBarLyricsCell.lyricColor(followsCover: settings.touchBarLyricsFollowsCover,
-                                                 coverAccent: snapshot.coverAccent),
+            color: TouchBarLyricsCell.lyricColor(mode: settings.touchBarLyricsColorMode,
+                                                 coverAccent: snapshot.coverAccent,
+                                                 customHex: settings.touchBarLyricsColorHex),
+            dimLevel: TouchBarLyricsStyle.clampedDimLevel(settings.touchBarLyricsDimLevel),
             karaoke: settings.touchBarLyricsKaraoke,
             alignment: settings.touchBarLyricsAlignment,
             still: reduceMotion)

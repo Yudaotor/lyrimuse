@@ -1306,6 +1306,8 @@
 "暂时无法读取这首歌曲的歌词，请稍后重试" = "Couldn't read this song's lyrics right now. Try again later.";
 "暂时跳过" = "Skip for now";
 "暂时隐藏" = "Hide Temporarily";
+"暗部 %@" = "Dimmed %@";
+"暗部亮度" = "Dimmed Text Brightness";
 "曲名" = "Title";
 "曲名变体：补查未应答的源" = "Title variant: re-queried sources that didn't respond";
 "曲目信息" = "Track Info";
@@ -1357,6 +1359,7 @@
 "未列出的 App 会在检测到时提示添加。此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用。" = "Apps not listed here are suggested when detected. They aren't specifically supported, so compatibility isn't guaranteed and some features may be unavailable.";
 "未发现无效记录" = "No Invalid Entries";
 "未启用" = "Not Enabled";
+"未唱部分与副行的亮度" = "Brightness of unsung words and the second line";
 "未唱颜色" = "Unsung Color";
 "未在播放" = "Not Playing";
 "未在运行，无法获取当前状态" = "Not running, so its status can’t be read";
@@ -1556,6 +1559,7 @@
 "歌词行的高度，常态与展开时相同。默认恰好容纳文字（开启副行时更高），可调高" = "How tall the lyric row is, the same at rest and when expanded. By default it just fits the text (taller with the second line on); you can make it taller";
 "歌词超出曲长" = "Lyrics overshoot track length";
 "歌词预览" = "Lyrics";
+"歌词颜色" = "Lyrics Color";
 "歌词（LRC）" = "Lyrics (LRC)";
 "歌词（逐字）" = "Lyrics (Word-Timed)";
 "正值提前显示，负值延后显示" = "Positive = show earlier, negative = show later";
@@ -1724,6 +1728,8 @@
 "登录中…" = "Signing In…";
 "登录已过期，请重新连接" = "Sign-in has expired; reconnect to continue";
 "白字描边" = "White Text with Outline";
+"白色" = "White";
+"白色、跟随封面或自定义颜色" = "White, cover art color or a custom color";
 "相邻的短句放得进一行时并成一行" = "Neighbouring short lines are joined when they fit on one line";
 "知道了" = "OK";
 "短于 30 秒的曲目" = "Tracks Under 30 Seconds";
