@@ -29,6 +29,7 @@ func songEvidenceEdges(vs []songVariant, dir string) ([]songEdge, map[string]int
 	b.idEdges()
 	b.nameEdges()
 	b.familyEdges()
+	b.bareEdges()
 	b.lyricsEdges()
 	return b.edges, b.drops
 }
@@ -367,6 +368,41 @@ func (b *songEdgeBuilder) familyEdges() {
 					continue
 				}
 				b.add(songEdge{kind: songEvidenceFamily, a: ms[i], b: ms[j], share: x.artist == y.artist && x.title == y.title})
+			}
+		}
+	}
+}
+
+// bareEdges:同一位主歌手、写法族不同而去掉结尾说明括号后同名(songBareTitle)、两边都有时长且差不超过闸的写法连边
+// (同一首歌在不同播放器、商店里带不带译名或主题曲说明)。两边时长几乎相等(songSameLength)时才连共享组:括号里写的
+// 说不准只是说明,差到一两秒的可能是另一次录音,算同一首歌、各用各的词。
+func (b *songEdgeBuilder) bareEdges() {
+	buckets := map[string][]int{}
+	var keys []string
+	for i := range b.vs {
+		f := b.vs[i].bare
+		if f == "" || b.vs[i].durationSecs <= 0 {
+			continue
+		}
+		if buckets[f] == nil {
+			keys = append(keys, f)
+		}
+		buckets[f] = append(buckets[f], i)
+	}
+	sort.Strings(keys)
+	for _, f := range keys {
+		ms := buckets[f]
+		for i := 0; i < len(ms); i++ {
+			for j := i + 1; j < len(ms); j++ {
+				x, y := &b.vs[ms[i]], &b.vs[ms[j]]
+				if x.family == y.family || !songArtistMatch(x.primary, y.primary) {
+					continue
+				}
+				if ok, _ := songDurationsWithinGate(x, y); !ok {
+					b.drop(songEvidenceBare, "duration", 1)
+					continue
+				}
+				b.add(songEdge{kind: songEvidenceBare, a: ms[i], b: ms[j], share: songSameLength(x, y)})
 			}
 		}
 	}

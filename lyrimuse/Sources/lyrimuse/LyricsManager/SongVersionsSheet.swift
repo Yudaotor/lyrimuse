@@ -682,11 +682,13 @@ struct SongVersionsSheet: View {
         }
     }
 
-    /// 一条依据的整句说法;「歌手相同、歌名相同」那条两边时长都知道时写出差几秒。
+    /// 一条依据的整句说法;「歌手相同、歌名相同」「除括号里的说明外歌名相同」两条两边时长都知道时写出差几秒。
     private func evidenceSentence(_ kind: String, _ current: Version?, _ v: Version) -> String {
-        if kind == "family", let a = current?.durationSecs, let b = v.durationSecs {
+        if kind == "family" || kind == "bare_title", let a = current?.durationSecs, let b = v.durationSecs {
             let gap = abs(a - b)
-            return String(format: L10n.t("艺人、曲名一致，时长相差 %@ 秒"), gap < 0.95 ? String(format: "%.1f", gap) : String(Int(gap.rounded())))
+            let seconds = gap < 0.95 ? String(format: "%.1f", gap) : String(Int(gap.rounded()))
+            return String(format: kind == "family" ? L10n.t("艺人、曲名一致，时长相差 %@ 秒")
+                : L10n.t("艺人一致，曲名除括号里的说明外一致，时长相差 %@ 秒"), seconds)
         }
         return Self.evidenceLabel(kind)
     }
@@ -970,6 +972,7 @@ struct SongVersionsSheet: View {
         case "netease_song": return L10n.t("网易云音乐检索结果为同一曲目")
         case "qq_song": return L10n.t("QQ 音乐检索结果为同一曲目")
         case "family": return L10n.t("艺人、曲名一致，时长相近")
+        case "bare_title": return L10n.t("艺人一致，曲名除括号里的说明外一致，时长相近")
         case "lyrics": return L10n.t("两条独立匹配的歌词一致")
         case "apple_name": return L10n.t("与 Apple Music 目录中的曲名吻合")
         case "netease_name": return L10n.t("与网易云音乐目录中的曲名吻合")

@@ -158,6 +158,7 @@ type songEntityState struct {
 const (
 	songTermID     = "i\x1f"
 	songTermFamily = "f\x1f"
+	songTermBare   = "b\x1f"
 	songTermName   = "n\x1f"
 	songTermArtist = "a\x1f"
 )
@@ -190,6 +191,9 @@ func songEntityTerms(v *songVariant) []string {
 	if v.family != "" {
 		out = append(out, songTermFamily+v.family)
 	}
+	if v.bare != "" {
+		out = append(out, songTermBare+v.bare)
+	}
 	for _, n := range v.catalogNames {
 		if f := songFamilyTitle(n.name); f != "" {
 			out = append(out, songTermName+f)
@@ -203,7 +207,8 @@ func songEntityTerms(v *songVariant) []string {
 }
 
 // songEntityProbes:能跟 v 连证据边的写法在索引里会落在哪几项:同一个 id(idEdges);同一个写法族(familyEdges,也是 v 当名字边
-// 那一头 x 时的 y);目录名字折成 v 的写法族的(v 当 x);v 的目录名字折成的写法族(v 当 y);同一个主歌手(lyricsEdges)。
+// 那一头 x 时的 y);去掉说明括号后同名的(bareEdges);目录名字折成 v 的写法族的(v 当 x);v 的目录名字折成的写法族(v 当 y);
+// 同一个主歌手(lyricsEdges)。
 // 加一种证据边要在这里补上它的分桶。
 func songEntityProbes(v *songVariant) []string {
 	var out []string
@@ -212,6 +217,9 @@ func songEntityProbes(v *songVariant) []string {
 	}
 	if v.family != "" {
 		out = append(out, songTermFamily+v.family, songTermName+v.family)
+	}
+	if v.bare != "" {
+		out = append(out, songTermBare+v.bare)
 	}
 	for _, n := range v.catalogNames {
 		if f := songFamilyTitle(n.name); f != "" {

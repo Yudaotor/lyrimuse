@@ -1918,6 +1918,8 @@
 "艺人" = "Artist";
 "艺人、曲名一致，时长相差 %@ 秒" = "Same artist and title, durations %@ s apart";
 "艺人、曲名一致，时长相近" = "Same artist and title, similar duration";
+"艺人一致，曲名除括号里的说明外一致，时长相差 %@ 秒" = "Same artist, same title apart from bracketed notes, durations %@ s apart";
+"艺人一致，曲名除括号里的说明外一致，时长相近" = "Same artist, same title apart from bracketed notes, similar duration";
 "节拍器" = "Metronome";
 "获取" = "Sources";
 "获取 Lyrimuse" = "Get Lyrimuse";

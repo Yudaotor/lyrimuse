@@ -45852,6 +45852,23 @@
         }
       }
     },
+    "艺人一致，曲名除括号里的说明外一致，时长相差 %@ 秒" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same artist, same title apart from bracketed notes, durations %@ s apart"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "藝人一致，曲名除括號裡的說明外一致，時長相差 %@ 秒"
+          }
+        }
+      }
+    },
     "在列表中显示" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -46262,6 +46279,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "藝人、曲名一致，時長相近"
+          }
+        }
+      }
+    },
+    "艺人一致，曲名除括号里的说明外一致，时长相近" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same artist, same title apart from bracketed notes, similar duration"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "藝人一致，曲名除括號裡的說明外一致，時長相近"
           }
         }
       }

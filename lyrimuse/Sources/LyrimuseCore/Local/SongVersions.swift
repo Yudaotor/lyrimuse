@@ -97,7 +97,7 @@ public enum SongVersions {
     public static let evidenceOrder = [
         "isrc", "mb_recording", "spotify_track", "amazon_asin", "kkbox_song", "soda_track", "youtube_video",
         "apple_song_player", "netease_song_player", "qq_song_player", "kugou_song_player",
-        "apple_song", "netease_song", "qq_song", "family", "lyrics", "apple_name", "netease_name",
+        "apple_song", "netease_song", "qq_song", "family", "bare_title", "lyrics", "apple_name", "netease_name",
     ]
 
     public static let tableURL = LyrimusePaths.configFile("lyrimuse-song-entities.json")

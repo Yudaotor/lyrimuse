@@ -27,6 +27,8 @@ const (
 
 const (
 	songEvidenceFamily = "family"
+	// songEvidenceBare:去掉结尾不是版本标注的括号(译名、主题曲说明)之后同名,见 bareEdges。
+	songEvidenceBare   = "bare_title"
 	songEvidenceLyrics = "lyrics"
 )
 
@@ -56,6 +58,7 @@ var songEvidenceKinds = map[string]songEvidenceKind{
 	songEvidenceAppleName:   {order: 60},
 	songEvidenceNeteaseName: {order: 61},
 	songEvidenceFamily:      {order: 40},
+	songEvidenceBare:        {order: 41},
 	songEvidenceLyrics:      {order: 50},
 }
 

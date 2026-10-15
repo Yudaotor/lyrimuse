@@ -18,19 +18,21 @@ import (
 func songIncrementalSynthetic() map[string]enrichEntry {
 	ne := func(id string) string { return "https://music.163.com/song?id=" + id }
 	return map[string]enrichEntry{
-		"Gate|Hello|One":       {DurationSecs: 201, NeteaseURL: ne("901")},
-		"Gate|Hello|Two":       {DurationSecs: 201.4, NeteaseURL: ne("901")},
-		"Gate|Hallo|Three":     {DurationSecs: 201.2, NeteaseURL: ne("901")},
-		"Veto|Song|Studio":     {DurationSecs: 180, ISRCs: []string{"USVVV1100001"}, Lyrics: songShareLRC("v1")},
-		"Veto|Song (Live)|Hk":  {DurationSecs: 180.5, ISRCs: []string{"USVVV1100009"}, Lyrics: songShareLRC("v1")},
-		"Veto|Song|Best":       {DurationSecs: 180.3, ISRCs: []string{"USVVV1100001"}},
-		"Lyr|晴天|Album":         {DurationSecs: 269, Lyrics: songShareLRC("ly"), LyricsSource: "qq"},
-		"Lyr|Sunny Day|Album":  {DurationSecs: 269.3, Lyrics: songShareLRC("ly"), LyricsSource: "netease"},
-		"Solo|Alone|One":       {DurationSecs: 99},
-		"Pair|Twin|A":          {DurationSecs: 150, SpotifyTrackID: "4uLU6hMCjMI75M1A2tKUQC"},
-		"Pair|Twin|B":          {DurationSecs: 150.2, SpotifyTrackID: "4uLU6hMCjMI75M1A2tKUQC", Lyrics: songShareLRC("tw")},
-		"Pair|Twin (Remix)|C":  {DurationSecs: 210, SpotifyTrackID: "5uLU6hMCjMI75M1A2tKUQD"},
-		"Gate|Hello (Live)|Hk": {DurationSecs: 230, NeteaseURL: ne("902")},
+		"Gate|Hello|One":             {DurationSecs: 201, NeteaseURL: ne("901")},
+		"Gate|Hello|Two":             {DurationSecs: 201.4, NeteaseURL: ne("901")},
+		"Gate|Hallo|Three":           {DurationSecs: 201.2, NeteaseURL: ne("901")},
+		"Veto|Song|Studio":           {DurationSecs: 180, ISRCs: []string{"USVVV1100001"}, Lyrics: songShareLRC("v1")},
+		"Veto|Song (Live)|Hk":        {DurationSecs: 180.5, ISRCs: []string{"USVVV1100009"}, Lyrics: songShareLRC("v1")},
+		"Veto|Song|Best":             {DurationSecs: 180.3, ISRCs: []string{"USVVV1100001"}},
+		"Lyr|晴天|Album":               {DurationSecs: 269, Lyrics: songShareLRC("ly"), LyricsSource: "qq"},
+		"Lyr|Sunny Day|Album":        {DurationSecs: 269.3, Lyrics: songShareLRC("ly"), LyricsSource: "netease"},
+		"Solo|Alone|One":             {DurationSecs: 99},
+		"Pair|Twin|A":                {DurationSecs: 150, SpotifyTrackID: "4uLU6hMCjMI75M1A2tKUQC"},
+		"Pair|Twin|B":                {DurationSecs: 150.2, SpotifyTrackID: "4uLU6hMCjMI75M1A2tKUQC", Lyrics: songShareLRC("tw")},
+		"Pair|Twin (Remix)|C":        {DurationSecs: 210, SpotifyTrackID: "5uLU6hMCjMI75M1A2tKUQD"},
+		"Gate|Hello (Live)|Hk":       {DurationSecs: 230, NeteaseURL: ne("902")},
+		"Bare|不散的筵席（I Miss You）|One": {DurationSecs: 240},
+		"Bare|不散的筵席|Two":             {DurationSecs: 240.2},
 	}
 }
 

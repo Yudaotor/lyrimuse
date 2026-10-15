@@ -76,6 +76,7 @@ type songVariant struct {
 	artist, title, album string // 键里的三段;歌名去掉了 ~durN 变体位标记
 	primary              string // 主歌手:合唱、feat. 取第一位(artistCreditPrimary)
 	family               string // 写法族歌名键(songFamilyTitle)
+	bare                 string // 去掉结尾说明括号后的写法族歌名键(songBareTitle)
 	han                  bool   // 主标题含汉字 / 假名(songCoreTitle)
 	tailed               bool   // 主标题之外还带括号 / 方括号 / 破折号尾巴(目录噪音不算)
 	durationSecs         float64
@@ -139,6 +140,7 @@ func songVariantOf(key string, e enrichEntry, pinned bool) songVariant {
 		album:               album,
 		primary:             artistCreditPrimary(artist),
 		family:              songFamilyTitle(title),
+		bare:                songBareTitle(title),
 		han:                 songContainsHanLike(core),
 		durationSecs:        math.Max(e.DurationSecs, 0),
 		resolvedSecs:        math.Max(e.ResolvedDurationSecs, 0),
@@ -320,6 +322,13 @@ func songYouTubeVideoID(u string) string {
 // 伴奏这类版本词留着。
 func songFamilyTitle(title string) string {
 	return normLoose(songStripTitleNoise(title))
+}
+
+// songBareTitle:先像 lyricSearchTitle 那样从结尾剥掉不是版本标注的括号(译名「(I Miss You)」、主题曲说明),碰到版本词、
+// 明说第几个的编号就停,再取写法族歌名键。「不散的筵席（I Miss You）」和「不散的筵席」相同;「Song (#6)」和「Song (#11)」、
+// 「Song (唯Ver.)」和「Song (律Ver.)」括号留着,不同。
+func songBareTitle(title string) string {
+	return songFamilyTitle(lyricSearchTitle(title))
 }
 
 var songDashSuffixRe = regexp.MustCompile(`\s+[-\x{2013}\x{2014}]\s+`)

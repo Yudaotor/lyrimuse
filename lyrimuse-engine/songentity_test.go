@@ -489,6 +489,56 @@ func TestSongEntityFamilyEdgeShare(t *testing.T) {
 	}
 }
 
+// 去掉说明括号后同名(bare_title):同一位主歌手、带不带译名或主题曲说明的两种写法算同一首;时长几乎相等才共用歌词;
+// 编号、版本标注、版本词的括号留着,不同的不连。
+func TestSongEntityBareTitleEdge(t *testing.T) {
+	for _, c := range []struct {
+		name        string
+		a, b        string
+		da, db      float64
+		same, share bool
+	}{
+		{"译名", "Singer|不散的筵席（I Miss You）|One", "Singer|不散的筵席|Two", 240, 240.3, true, true},
+		{"主题曲说明", "Singer|我們 (《後來的我們》電影主題曲)|One", "Singer|我們|Two", 240, 240.2, true, true},
+		{"时长差一秒多:同一首、各用各的词", "Singer|不散的筵席（I Miss You）|One", "Singer|不散的筵席|Two", 240, 241.5, true, false},
+		{"时长差过闸", "Singer|不散的筵席（I Miss You）|One", "Singer|不散的筵席|Two", 240, 243, false, false},
+		{"编号不同", "Singer|Song (#6)|One", "Singer|Song (#11)|One", 200, 200, false, false},
+		{"版本标注不同", "Singer|Song (唯Ver.)|One", "Singer|Song (律Ver.)|One", 200, 200, false, false},
+		{"现场版", "Singer|Song (Live)|One", "Singer|Song|Two", 200, 200, false, false},
+		{"别的歌手", "Singer|不散的筵席（I Miss You）|One", "Other|不散的筵席|Two", 240, 240, false, false},
+	} {
+		vs := []songVariant{
+			songTestVariant(c.a, enrichEntry{DurationSecs: c.da}, nil),
+			songTestVariant(c.b, enrichEntry{DurationSecs: c.db}, nil),
+		}
+		b, of := songTestBuild(t, vs, nil)
+		if got := songTestSame(of, c.a, c.b); got != c.same {
+			t.Errorf("%s: 同一首 = %v,要 %v", c.name, got, c.same)
+		}
+		if got := c.same && b.shareOf[0] == b.shareOf[1]; got != c.share {
+			t.Errorf("%s: 共用歌词 = %v,要 %v", c.name, got, c.share)
+		}
+	}
+}
+
+func TestSongBareTitle(t *testing.T) {
+	for _, c := range []struct {
+		a, b string
+		same bool
+	}{
+		{"不散的筵席（I Miss You）", "不散的筵席", true},
+		{"神探 (The Detective)", "神探", true},
+		{"Song (#6)", "Song", false},
+		{"Song (Off Vocal)", "Song", false},
+		{"Song (花柳香子 Ver.)", "Song", false},
+		{"Song (feat. Guest)", "Song", true},
+	} {
+		if got := songBareTitle(c.a) == songBareTitle(c.b); got != c.same {
+			t.Errorf("songBareTitle(%q) 与 (%q) 相同 = %v,要 %v", c.a, c.b, got, c.same)
+		}
+	}
+}
+
 // 时间轴错开的否决只在两边时长有差别时算:时长几乎相等(任一侧整秒时放宽到 1 秒)时是其中一份歌词错位,照并。
 func TestSongEntityTimelineVetoNeedsDifferentLength(t *testing.T) {
 	words := songTestWords("shift", 30)
