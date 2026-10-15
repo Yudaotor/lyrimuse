@@ -63,11 +63,14 @@ var enrichKeyVersionWords = []string{
 	"现场", "伴奏", "翻唱", "重制", "修复", "版", "纯音乐", "前奏", "间奏",
 	// 角色歌、偶像企划标的演唱版本(「ソロ・バージョン」「花柳香子ソロ」):各角色的独唱版、合唱版是不同的录音。
 	"バージョン", "ヴァージョン", "ソロ",
+	// 同一张碟里原唱的伴奏版(「(Off Vocal)」)、剪短的版本(「(Game Size)」「(TVサイズ)」)、重新编曲的版本
+	// (「(IGNITED arrangement)」):伴奏版、编曲版跟原唱时长差不多,时长消歧(resolveEnrichKeyForDuration)分不开。
+	"off vocal", "off-vocal", "offvocal", "オフボーカル", "オフ・ボーカル", "サイズ", "arrange",
 }
 
 // enrichKeyVersionWordTokens:前后都不是 ASCII 字母、数字、下划线时才算版本标记的词(「花柳香子 ver」「Solo」)。
 // 当子串认会把 forever、never 里的 ver 也算上。Swift 侧 EnrichCacheKeys.versionWordTokens 同一张表、同一种认法。
-var enrichKeyVersionWordTokens = []string{"ver", "solo"}
+var enrichKeyVersionWordTokens = []string{"ver", "solo", "size"}
 
 // 只匹配**结尾**的一组括号。中间出现的括号不动:那种位置的括号更可能是歌名本身的一部分,
 // 而结尾括号在各家曲库里几乎专门用来挂译名/版本标注。半角全角、圆括号方括号方头括号都收。

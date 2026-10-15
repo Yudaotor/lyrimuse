@@ -35,12 +35,13 @@ public enum EnrichCacheKeys {
         // enrichKeyVersionWords 头注。
         "慢板", "快板",
         "现场", "伴奏", "翻唱", "重制", "修复", "版", "纯音乐", "前奏", "间奏",
-        // 角色歌、偶像企划标的演唱版本,见 enrichkey.go 同一处。
+        // 角色歌、偶像企划标的演唱版本,以及伴奏版、剪短的版本,见 enrichkey.go 同一处。
         "バージョン", "ヴァージョン", "ソロ",
+        "off vocal", "off-vocal", "offvocal", "オフボーカル", "オフ・ボーカル", "サイズ", "arrange",
     ]
 
     /// 前后都不是 ASCII 字母、数字、下划线时才算版本标记的词。跟 enrichkey.go 的 enrichKeyVersionWordTokens 同一张表。
-    static let versionWordTokens = ["ver", "solo"]
+    static let versionWordTokens = ["ver", "solo", "size"]
 
     /// 引擎 containsASCIIWord 的 Swift 版:按 UTF-8 字节找,紧挨着的前后一个字节都不是 ASCII 字母、数字或下划线才算。
     static func containsASCIIWord(_ s: String, _ w: String) -> Bool {

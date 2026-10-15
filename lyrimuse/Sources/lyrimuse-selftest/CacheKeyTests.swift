@@ -323,6 +323,13 @@ func runCacheKeyTests() {
             ("Forever 里的 ver 不算", "Song (Forever Young)", "Song"),
             ("Never 里的 ver 不算", "歌名（Never Again）", "歌名"),
             ("Solomon 里的 solo 不算", "Song (Solomon)", "Song"),
+            ("Off Vocal 保留", "Song (Off Vocal)", "Song (Off Vocal)"),
+            ("两层 off vocal 停在最外层", "Song (off vocal) [off vocal]", "Song (off vocal) [off vocal]"),
+            ("オフボーカル保留", "Song (オフボーカル)", "Song (オフボーカル)"),
+            ("Game Size 保留", "Song (Game Size)", "Song (Game Size)"),
+            ("TVサイズ保留", "Song (TVサイズ)", "Song (TVサイズ)"),
+            ("Supersize 里的 size 不算", "Song (Supersize)", "Song"),
+            ("arrangement 保留", "銀腕・アガートラーム(IGNITED arrangement)", "銀腕・アガートラーム(IGNITED arrangement)"),
             // 边界
             ("括号就是整个歌名", "(Interlude)", "(Interlude)"),
             ("括号就是整个歌名2", "（前奏）", "（前奏）"),
