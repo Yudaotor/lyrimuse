@@ -37,7 +37,7 @@ import (
 //  2. Google(googleTranslateLines):无 key、无日配额,未公开端点,挂了自动冷却;
 //  3. MyMemory(translateChunk):公开 API,但有日配额。
 //
-// 取舍与端点实测见 docs/features/10-translation-romanization.md 决策 20(1~3 级)、决策 30(第 0 级)。
+// 取舍与端点实测见 10 章决策 20(1~3 级)、10 章决策 30(第 0 级)。
 //
 // MyMemory 实测日译中/英译中的质量对"看个大意"这个用途够用:
 //
@@ -119,25 +119,13 @@ func chunkLinesByBytes(texts []string, maxBytes int) [][]string {
 	return chunks
 }
 
-// 【已删除】looksLikeTargetLanguage
-//
-// 它做的是"整首歌是不是已经就是目标语言,是的话整个跳过"。判据是 looksChinese ——
-// 汉字占多数就算中文,而且注释明确写着"中英混排的华语歌也应该判成中文"。
-//
-// 那句话对**它原本要判的东西**是对的:looksChinese 是用来认"已有译文是什么语言"的
-// (translationUsable 里那三处),一份中英混排的中文译文当然算中文译文。
-// 但用它来判"正文要不要翻"就错了 —— 华语歌里整行英文的副歌很常见,
-// 《方大同 - 月亮代表我的心》44 行里 35 行中文、8 行 "It represent my heart!",
-// 汉字占多数 到 判成"已经是中文" 到 整首跳过,那 8 行英文永远等不到译文
-// (现象是的就是这个)。
-//
-// 两处调用都删了,改由**逐行**判定接管:
-//   - needsTranslationBackfill 靠 hasTranslatableLines(有任何一行需要翻才起 goroutine,
-//     省配额的意图一样达到,而且更准);
-//   - machineTranslateLRCWithBase 内部本来就是逐行挑行、翻完按下标散回去的
-//     (没送去翻的行留空串),那套逻辑一直是对的,只是被这道整首闸挡在门外没机会跑。
-// 逐行判据是 translationScript:「我们的时光 baby 一起走过」主体是汉字 到 不翻;
-// 「It represent my heart!」主体是拉丁 到 翻。行内混排和整行外语,这才分得开。
+// 「正文要不要翻」只能**逐行**判(translationScript),别加"整首已经是目标语言就整个跳过"的整首判定。
+// looksChinese 那种"汉字占多数就算中文"的判据,用来认"已有译文是什么语言"是对的(translationUsable
+// 里那三处,一份中英混排的中文译文当然算中文译文);拿来判正文就错了 —— 华语歌里整行英文的副歌很常见,
+// 汉字占多数 → 判成"已经是中文" → 整首跳过,那几行英文永远等不到译文。
+// 逐行判:「我们的时光 baby 一起走过」主体是汉字 → 不翻;「It represent my heart!」主体是拉丁 → 翻。
+// 行内混排和整行外语,这样才分得开。needsTranslationBackfill(hasTranslatableLines)和
+// machineTranslateLRCWithBase(逐行挑行、翻完按下标散回去)走的都是这一套。
 
 // looksChinese 判断一段文本是不是中文。只认中文这一种语言 —— 判别只是个兜底,用在
 // 没记语言的老条目上,而"是不是中文"恰好是唯一需要判、也判得准的一种(会自带译文的
@@ -169,12 +157,10 @@ func translationUsable(e enrichEntry, target string) bool {
 	}
 	// 记的语言跟正文自相矛盾时,以**正文**为准 —— 标签会骗人,正文不会。
 	//
-	// 实测抓到:App 侧"采纳候选/手改译文"那条路(EnrichCacheStore.saveEdit)
-	// 只写 lyrics_tr,不动 lyrics_tr_lang / lyrics_tr_source。于是采纳一份网易云的中文
-	// 社区译文之后,语言标签还留着上一轮机翻写的 "en",这道门一看"语言 en、目标 en"就放行,
-	// 机翻永远不会再接手 —— 用户把译文语言选成英文,却永远只看到中文。那条写入路径已经
-	// 修好,但这里也要挡一层:这是唯一消费 LyricsTrLang 的地方,把不变式钉在这里,既能自愈
-	// 已经写坏的老条目,也不指望以后每一个写入方都记得同步这两个字段。
+	// 写入方只改 lyrics_tr、漏了 lyrics_tr_lang 时(比如采纳一份中文社区译文,语言标签还留着上一轮
+	// 机翻写的 "en"),这道门一看"语言 en、目标 en"就放行,机翻永远不会再接手 —— 用户把译文语言选成
+	// 英文,却永远只看到中文。这是唯一消费 LyricsTrLang 的地方,把不变式钉在这里,既能自愈已经写坏的
+	// 老条目,也不指望以后每一个写入方都记得同步这两个字段。
 	lang := e.LyricsTrLang
 	if lang != "" && !strings.HasPrefix(strings.ToLower(lang), "zh") && looksChinese(e.LyricsTr) {
 		lang = "" // 标签说不是中文、正文明明是中文 → 当作语言不详,走下面的文本判别
@@ -220,22 +206,21 @@ func machineTranslateLRC(ctx context.Context, hc *http.Client, lyrics, target, a
 
 // ── 逐行按文字系统分流 ───────────────────────────────────────────────────────
 //
-// 日英混排的歌(主歌日文、副歌整段英文,如宇多田ヒカル的 First Love)译文目标选
-// 英文时,两个后端对**整批文本**做语种识别都判成"英文",于是
+// 日英混排的歌(主歌日文、副歌整段英文)译文目标选英文时,两个后端对**整批文本**做语种识别
+// 都判成"英文",于是
 //
 //	on-device helper: {"ok":false,"source":"en","reason":"same-language"}
 //	MyMemory:         "PLEASE SELECT TWO DISTINCT LANGUAGES"
 //
 // 前者退成"不可用"、后者直接报错,一路走到 TranslationRetryCount++;攒够 3 次之后这首歌
-// **永久**不再尝试。用户看到的就是"明明选了英文译文,这首歌一句译文都没有",而它那些日文
-// 行显然是需要翻的。
+// **永久**不再尝试,而它那些日文行显然是需要翻的。
 //
-// 修法:送去翻之前先逐行看文字系统,只把"跟目标语言不是同一套文字"的行送过去 —— 副歌那些
-// 英文行本来就不需要译文(assembleTranslationLRC 也早就会跳过"没翻动"的行),剩下的日文行
+// 所以送去翻之前先逐行看文字系统,只把"跟目标语言不是同一套文字"的行送过去 —— 副歌那些
+// 英文行本来就不需要译文(assembleTranslationLRC 也会跳过"没翻动"的行),剩下的日文行
 // 单独成批,后端识别出来就是日文,两边都能正常工作。
 //
 // 只分到"翻译上真正有区别"的粒度。源和目标共用同一套文字时(法语歌 → 英文译文)这套判断
-// 帮不上忙 —— 但那种情况整批识别本来也会失败,不比现在更糟。
+// 帮不上忙 —— 但那种情况整批识别本来也会失败。
 type lyricScript int
 
 const (
@@ -448,7 +433,7 @@ func selectTranslationWork(lyrics, target, artist, title string) translationWork
 	}
 	// 只把"跟目标语言不是同一套文字"的行送去翻,理由见 dominantScript 那一段。
 	//
-	// 署名行先剔掉:`[00:02.000] 母带: Chris Gehringer @ Sterling Sound` 这种行英文词
+	// 署名行先剔掉:`[00:02.000] 母带: Name @ Studio` 这种行英文词
 	// 比汉字多,算成拉丁文行,于是被当歌词送去翻。三个后果:展示端本来就会
 	// 用 creditLinePattern 把它过滤掉(白翻)、退到 MyMemory 的机器白烧配额、而且它会拉高
 	// 下面 assembleTranslationLRC 的 attempted 分母 —— 署名行占比高的短歌可能因此撞上
@@ -458,12 +443,10 @@ func selectTranslationWork(lyrics, target, artist, title string) translationWork
 	// 那条纯结构正则(短汉字 + 冒号),「男：It represent my heart!」会被它命中 —— 那是
 	// 真歌词,剔掉就等于对唱歌的英文行永远没译文。带上这一份的说话人标签当豁免才分得开。
 	//
-	// 按原文**去重**再送翻:副歌反复的歌(如 Michael Jackson《Beat It》)
-	// 逐行独立发请求,同一句"Just beat it (beat it), beat it (beat it)"出现 7 次,翻译
-	// 结果对同一份输入**不保证一致**——on-device 的 TranslationSession.Request 逐行互不
-	// 知情,7 次里 6 次原样吐回来、只有 1 次真翻了,而 assembleTranslationLRC 那条"翻出来
-	// 等于原文就不写进译文栏"的规则会把那 6 次全部悄悄丢掉。歌词越重复,译文看起来就越
-	// 支离破碎,却不是网络配额或语言包的问题。
+	// 按原文**去重**再送翻:副歌反复的歌,同一句逐行独立发请求时翻译结果对同一份输入**不保证一致**——
+	// on-device 的 TranslationSession.Request 逐行互不知情,实测同一句出现 7 次、6 次原样吐回来、只有
+	// 1 次真翻了,而 assembleTranslationLRC 那条"翻出来等于原文就不写进译文栏"的规则会把那 6 次全部
+	// 悄悄丢掉。歌词越重复,译文看起来就越支离破碎,却不是网络配额或语言包的问题。
 	//
 	// occurrences[k] 记录 uniqueTexts[k] 这句话在原文里出现过的**全部**下标——翻完按
 	// uniqueTexts 的下标算出结果,一次性广播回它的每一个出现位置,保证同一句话不管重复
@@ -474,10 +457,9 @@ func selectTranslationWork(lyrics, target, artist, title string) translationWork
 	//
 	// 展示端的正文行会由 LyricDuet 把这个前缀剥掉(它靠标签决定这一行摆左边还是右边),
 	// 译文行走的是另一条路、没人剥 —— 于是主歌词显示「Make a little space」、底下译文是
-	// 「V1：留出一点空间」。实测 Michael Jackson《Heal the World》(applemusic 源的 TTML
-	// ttm:agent="v1"/"v2")95 行全中。
+	// 「V1：留出一点空间」(applemusic 源的 TTML 带 ttm:agent="v1"/"v2" 时整首每一行都中)。
 	//
-	// 剥在**送翻之前**而不是只在展示端兜底,还顺带修两件事:
+	// 剥在**送翻之前**而不是只在展示端兜底,还能避开两件事:
 	//   1. 标签本身会被当成句子的一部分翻译 —— 小写 `v1：` 回吐成大写「V1：」就是翻译器
 	//      按句首词处理过的痕迹,它还可能牵连后半句的语气和断句;
 	//   2. 同一句词挂着不同标签(`v1：Make a little space` / `v2：Make a little space`)
@@ -763,7 +745,7 @@ func untranslatedIndexes(texts, out []string) []int {
 // assembleTranslationLRC 把逐行译文拼回一份跟主歌词同时间戳的 LRC。两条翻译路径(端上
 // helper / MyMemory)共用,保证它们产出的形状完全一致。
 // attempted 是这次**真正送去翻**的行数(不是整首歌的行数)。下面那道"翻出来太少就当没成"
-// 的闸门必须拿它当分母 —— 只翻"跟目标语言不同文字"的行,像 First Love 这种
+// 的闸门必须拿它当分母 —— 只翻"跟目标语言不同文字"的行,像
 // 日英混排的歌,一半行本来就不需要译文,用总行数当分母会把一份完全正常的译文判成失败。
 func assembleTranslationLRC(lines []lrcLine, translated []string, attempted int) translationResult {
 	var b strings.Builder
@@ -941,12 +923,10 @@ const (
 // 播放时按新语言重翻。
 //
 // 为什么需要:needsTranslationBackfill 本来就能判出"记录的语言 != 当前目标"并触发重翻,
-// 但那道判断只在**播放到这首歌、或它排在待播队列里时**才跑(见 translatestart.go)。于是用户把
-// 译文语言从英文改回中文之后,以前听过的歌仍然显示英文译文,直到碰巧再放一次 ——
-// 现象是的就是这个。当时实测本机缓存:12 条语言不匹配,其中 11 条"会在下次播放时重翻",
-// 也就是机制在、只是没有触发的机会。
+// 但那道判断只在**播放到这首歌、或它排在待播队列里时**才跑(见 translatestart.go)。只靠它的话,
+// 用户把译文语言从英文改回中文之后,以前听过的歌仍然显示英文译文,直到碰巧再放一次。
 //
-// 两个触发点:启动时扫一遍(main.go 的启动步骤);运行中改了译文语言 —— 改设置不再重启引擎,
+// 两个触发点:启动时扫一遍(main.go 的启动步骤);运行中改了译文语言 —— 改设置不重启引擎,
 // features.json 由 maybeReloadFeatures 热重读,它发现语言变了就调 reapplyTranslationLanguage。
 // 只挂启动那一处的话,运行中改语言之后旧语言的机翻会一直留着(机翻开关关着时一直显示)。
 //
@@ -1039,9 +1019,7 @@ func needsTranslationBackfill(e enrichEntry, key string) bool {
 	// 别起 goroutine —— 否则会一次次翻出空结果、把三次重试额度白白烧完。排在节流之后:这一步
 	// 要把整首歌过一遍筛选,而这个函数每轮轮询都在 enrichMu 里跑。
 	//
-	// 这里曾经还有一道 looksLikeTargetLanguage 的**整首**判定排在前面,它把
-	// "汉字占多数"的歌整首跳过,于是华语歌里整行英文的副歌永远等不到译文。
-	// 已删除,理由见文件上方那段【已删除】注释 —— 下面这条逐行判定完全覆盖它的意图。
+	// 别在这之前加"整首已经是目标语言就跳过"的整首判定,理由见文件上方逐行判定那段。
 	return translatableMemoFor(key, e.Lyrics, target)
 }
 
@@ -1096,9 +1074,8 @@ func backfillTranslation(key string) {
 	enrichMu.Lock()
 	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读
 	// 文件),只把 enrichDirty 标成 true 是不够的:补出来的东西只活在引擎内存里,
-	// 界面永远看不到。现象是"译文语言切成英文了还是没有翻译",日志里译文明明
-	// 一首首翻出来了,而缓存文件停在两小时前——就是这里漏了这一步。resolveEnrichAsync /
-	// backfillPeripheralFields 一直是"解锁→saveEnrichCache",另外三条补全路径全漏了。
+	// 界面永远看不到。resolveEnrichAsync / backfillPeripheralFields 和这几条补全路径都是
+	// "解锁→saveEnrichCache",新加补全路径时别漏这一步。
 	//
 	// 顺序不能反:saveEnrichCache 和 exportLyricsFiles 自己都要拿同一把 enrichMu,
 	// 在持锁期间调用会死锁。

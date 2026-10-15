@@ -77,9 +77,8 @@ func TestChunkForTranslationOversizedSingleLine(t *testing.T) {
 	}
 }
 
-// 逐行判定取代了原来的整首判定(looksLikeTargetLanguage,删,理由见
-// translate.go 那段【已删除】注释)。这组用例保留原来那些场景,并补上它判错的那一类:
-// **整行外语**。
+// 「要不要翻」逐行判(理由见 translate.go 里逐行判定那段)。用例里专门有**整行外语**这一类:
+// 整首判定会把它整首跳过。
 func TestLineNeedsTranslation(t *testing.T) {
 	cases := []struct {
 		name, text, target string
