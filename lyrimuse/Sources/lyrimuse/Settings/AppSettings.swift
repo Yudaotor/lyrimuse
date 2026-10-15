@@ -1945,11 +1945,10 @@ final class AppSettings: ObservableObject {
             defaults.set(json, forKey: Keys.customColorThemesJSON)
         }
     }
-    // 设置页"浏览器歌词同步"卡片:哪个网页音乐平台(BrowserPositionProbe.supportedPlatforms
-    // 的 id)配对了哪些浏览器(FeatureSettingsStore.trustedPlayers 的 bundle id)。只是
-    // AppSettings 这边的持久化——真正让探针生效要靠 SettingsView 双写进
-    // BrowserPositionProbe.shared.platformBrowserPairs(跟 romanizationScripts 同一个模式,
-    // 见那边注释),这个属性本身不会被 LyrimuseCore 直接读到。
+    // 设置页「网页版」卡片:哪个网页音乐平台(BrowserPositionProbe.supportedPlatforms 的 id)配对了哪些
+    // 浏览器(FeatureSettingsStore.trustedPlayers 的 bundle id)。只是 AppSettings 这边的持久化——真正让探针
+    // 生效要靠写配对的地方双写进 BrowserPositionProbe.shared.platformBrowserPairs(见 BrowserPairing,跟
+    // romanizationScripts 同一个模式),这个属性本身不会被 LyrimuseCore 直接读到。
     @Published var browserPlatformPairs: [String: Set<String>] {
         didSet {
             let json = (try? JSONEncoder().encode(browserPlatformPairs)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"

@@ -4,30 +4,17 @@ import Foundation
 ///
 /// ## 为什么需要它
 ///
-/// 在此之前,浏览器里播 YouTube Music **压根不会被识别**(「为什么我现在用 chrome
-/// 播放的 YouTube music 不能识别到」)。根因不是 bug,是 `TrustedPlayers.notASong` 那道
-/// 防视频守卫:信任的非内置播放器,artist 或 album 有一个为空就整条丢掉。而 YouTube Music
-/// 经 MediaSession 报出来的 album **常常是空的**,于是被当成"浏览器里的视频"挡在门外。
+/// `TrustedPlayers.notASong` 那道防视频守卫:信任的非内置播放器,artist 或 album 有一个为空就整条丢掉。
+/// 而 YouTube Music 经 MediaSession 报出来的 album 常常是空的(是"常常"不是"总是":同一个浏览器里有的歌
+/// 报得出专辑名),于是被当成"浏览器里的视频"挡在门外。这条复核是给报不出专辑名的那些兜底。
 ///
-/// 是"常常"不是"总是"(别写成"恒为空"):同一个
-/// Chrome 里播 YT Music,「死神」「September」的 album 是空的,而「Bad」报的是
-/// `The Essential Michael Jackson`。所以这不是"YT Music 一律进不来",而是"看运气"——
-/// 报了专辑名的那些歌本来就能进,这条复核是给报不出来的那些兜底。
-///
-/// 那道守卫本身是对的(定,album 是四份真实样本里唯一 100% 分得开歌与视频的
-/// 字段),它的注释当时就写明了代价:「电台/单曲场景下真音乐 App 若不报专辑名会被误挡……
-/// 宁可漏认,不要把视频写进永久收听历史」。YouTube Music 正好踩在这个代价上。
+/// 那道守卫本身是对的(album 是真实样本里唯一 100% 分得开歌与视频的字段),代价是不报专辑名的真音乐会被
+/// 误挡;YouTube Music 正好踩在这个代价上。
 ///
 /// ## 为什么不能简单地"给 music.youtube.com 免检 album"
 ///
-/// 因为 album 那一条**同时也在挡广告**。抓了两条真实广告(media-control 与
-/// 页面 JS 同一时刻成对采样):
-///
-///     title=「Liese Jelly to Bubble 全新登場!染髮新革命」 artist=KAO Hong Kong          album="" dur=30.021
-///     title=「趁早把握出生頭3年腦部發育黃金期…」          artist=香港美贊臣 Mead Johnson album="" dur=20.001
-///
-/// **artist 是非空的**(广告主的频道名)。免检 album 之后这两条会畅通无阻地被当成
-/// "KAO Hong Kong 的一首歌"。
+/// 因为 album 那一条**同时也在挡广告**:真实广告(media-control 与页面 JS 同一时刻成对采样)是 album 为空、
+/// **artist 非空**(广告主的频道名),免检 album 之后广告会被当成"广告主的一首歌"畅通无阻。
 ///
 /// ## 判据:问页面本身,不猜字段
 ///
@@ -41,11 +28,10 @@ import Foundation
 /// 三个信号都读、**任一命中就算广告**(不取多数):误判成广告只是这一轮没识别(下一轮
 /// 自我纠正),误判成歌是把广告永久写进 Last.fm。
 ///
-/// 但「裸标题」在**换歌边界**上会单独误报(实测,见 `badgeVerdict`):上一首刚结束到
-/// 下一首 `<video>` 起播之间的两三秒,`document.title` 就是裸的「YouTube Music」,而 MediaSession 这时
-/// 可能已经换成下一首了(18:07:19 抓到的边界样本:`0|0|1 title=[YouTube Music] vt=0.0`)。所以
-/// "任一命中即广告"只用于 `gate`(拿不准就丢这一轮,下一轮自愈);**界面上写「广告中」**只认强信号
-/// (ad-showing / 徽章),见 `badgeVerdict` / `cachedBadgeVerdict`。
+/// 但「裸标题」在**换歌边界**上会单独误报(见 `badgeVerdict`):上一首刚结束到下一首 `<video>` 起播之间的
+/// 两三秒,`document.title` 就是裸的「YouTube Music」,而 MediaSession 这时可能已经换成下一首了(边界样本形如
+/// `0|0|1 title=[YouTube Music] vt=0.0`)。所以"任一命中即广告"只用于 `gate`(拿不准就丢这一轮,下一轮自愈);
+/// **界面上写「广告中」**只认强信号(ad-showing / 徽章),见 `badgeVerdict` / `cachedBadgeVerdict`。
 ///
 /// 判据只有 App 这一份:引擎认的是 App 播放状态里的 ad 标记。selftest 里有断言钉住 JS 里那几个标志串。
 ///
@@ -69,9 +55,8 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// 「这条来自信任浏览器、基础守卫要拒的播放,到底怎么处置」——三条出口收成一个纯函数。
     ///
     /// 收成函数是为了能被 selftest 钉住:真正的调用点 `MediaControlClient
-    /// .trustedPlaybackRejected` 是 `private static`,selftest(独立 target)看不见,而这
-    /// 三条出口里有一条是才**特意改掉**的(见 `.acceptAsAd`),没有覆盖的话
-    /// 谁都不知道它哪天被改回去。
+    /// .trustedPlaybackRejected` 是 `private static`,selftest(独立 target)看不见,而 `.acceptAsAd`
+    /// 最容易被顺手改回 `reject`(理由见它的注释),没有覆盖的话谁都不知道它哪天被改回去。
     public enum Gate: Equatable, Sendable {
         /// 放行,当一首歌处理。
         case acceptAsSong
@@ -125,19 +110,18 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// 改用竖线分隔的裸文本;这里照抄同一条纪律。
     ///
     /// 返回 `a|b|c|slot|album`:前三个各为 0/1(ad-showing / 广告徽章 / 裸标题),第四段是
-    /// **广告徽章上的计数**(加,形如 `1/2`,取不到就是空串),最后一段是
-    /// **页面上读到的专辑名**(加,可能为空)。判定不在 JS 里做 —— 放在
+    /// **广告徽章上的计数**(形如 `1/2`,取不到就是空串),最后一段是
+    /// **页面上读到的专辑名**(可能为空)。判定不在 JS 里做 —— 放在
     /// `parse(_:)` 里才跑得了单测。
     ///
     /// **专辑名必须放最后一段**:它是任意文本,理论上可以含 `|`。`parse` 因此按
-    /// "最多切 5 段"来切,最后一段原样保留(含里面的 `|`)。加计数段时它被插在
-    /// 专辑名**前面**、不是追加在末尾,正是这个原因(评审时被指出:追加在后面要么拆坏
-    /// 专辑名、要么从专辑名尾巴上偷走一段)。
+    /// "最多切 5 段"来切,最后一段原样保留(含里面的 `|`)。计数段排在专辑名**前面**也是这个原因:
+    /// 排在后面要么拆坏专辑名、要么从专辑名尾巴上偷走一段。
     ///
     /// **计数在 JS 里就归一成 `1/2` 这种受限形状**,不回原始徽章文字 —— 徽章文字是
     /// 本地化的自由文本(中文「赞助商广告 1/2 ·」),原样回传会把 `|` 和换行的隐患带进来,
-    /// 而这个文件的纪律是"专辑名之外的每一段都形状受限"。抓数字用
-    /// 抓法是**语言无关的两步**(只认斜杠的话,英文界面的 "Ad 1 of 2" 抓不到):
+    /// 而这个文件的纪律是"专辑名之外的每一段都形状受限"。抓数字的办法是**语言无关的两步**
+    /// (只认斜杠的话,英文界面的 "Ad 1 of 2" 抓不到):
     ///
     ///  1. 先把**时间样式**的数字整段剔掉(`[0-9]+:[0-9]+`,全局)。徽章上常常还挂着「· 0:20」
     ///     这类剩余时长,不先剔掉的话第 2 步会把 `20 · 1` 当成一对。
@@ -148,14 +132,14 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// JS 里**双引号和反斜杠都不许出现**(整段要嵌进 AppleScript 的双引号串,selftest 两条
     /// 守卫盯着),所以写不了 `\d`、写不了正则字面量,只能 `new RegExp('…')`。
     ///
-    /// 归一成 `1/2` 之后 Swift / Go 两侧的 parse 一个字都不用改,`AdSlot` 那三道合理性检查
+    /// 归一成 `1/2` 之后 Swift / Go 两侧的 parse 照同一个形状解,`AdSlot` 那三道合理性检查
     /// 继续兜底:日文 / 韩文「2件中1件目」这种**总数在前**的写法会解成 `2/1`,被"总数不小于
     /// 序号"挡掉 → 不显示。宁缺毋错。只播一条广告时徽章通常不带计数(「赞助商广告 ·」)、
     /// 或者只有时间(「广告 · 0:20」)→ 两种都是空串。
     ///
     /// 找专辑用**遍历 + indexOf**,不用 CSS 属性选择器 `a[href*=...]`:选择器里那个值
     /// 含 `/`,不加引号不是合法 CSS 标识符,而加引号只能加单引号 —— 单引号又已经被外面
-    /// 那层 JS 字符串占了(JS 里只许用单引号,见上面那条提醒)。遍历没有这个死结。
+    /// 那层 JS 字符串占了(JS 里只许用单引号,见上面)。遍历没有这个死结。
     /// 认专辑靠 `browse/MPREb` 这个前缀:YouTube Music 的**专辑** browse id 一律以
     /// `MPREb_` 开头,歌手链接是 `channel/UC…`,所以这一条既跟语言无关(不受 byline 里
     /// 「2026年」这类本地化后缀影响),也不会把歌手/播放量误当成专辑。
@@ -199,13 +183,11 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// (自己的 title/artist),换成广告身份就变了、缓存 key 自然失效,所以这个值只是兜"同一首歌
     /// 播很久"的情况,不需要很短。
     ///
-    /// 但**音乐视频(MV)的前贴片广告不是独立条目**:前贴片在
-    /// `#movie_player` 里放、MediaSession 元数据却一直是**这首歌自己的** —— 引擎日志
-    /// 08:30:22～08:30:37 三轮 `rejected as advertisement (王子 - Why You Wanna…)`,08:31:27 才
-    /// `now playing`(正好是这 60 秒缓存到期后的第一轮)。也就是说同一个 key 下判定会从 ad 翻成
-    /// song,"按曲目身份缓存是安全的"这条前提对 MV 不成立。**可读有效期仍是 60 秒**(读到一个
-    /// 稍旧的 ad 判定总好过读到 nil —— nil 会让 `gate` fail-closed 把快照整条丢掉、广告中途
-    /// UI 塌成"未在播放"),但**再探一次的间隔**按判定分档,见 `refreshInterval(for:)`。
+    /// 但**音乐视频(MV)的前贴片广告不是独立条目**:前贴片在 `#movie_player` 里放、MediaSession
+    /// 元数据却一直是**这首歌自己的**,同一个 key 下判定会从 ad 翻成 song(前贴片放完),"按曲目身份缓存
+    /// 是安全的"这条前提对 MV 不成立。**可读有效期仍是 60 秒**(读到一个稍旧的 ad 判定总好过读到 nil ——
+    /// nil 会让 `gate` fail-closed 把快照整条丢掉、广告中途 UI 塌成"未在播放"),但**再探一次的间隔**按判定
+    /// 分档,见 `refreshInterval(for:)`。
     public static let verdictMaxAge: TimeInterval = 60
     /// 判定是**广告**时,多久之后就该再问一次页面。广告一条只有 5～30 秒,前贴片放完页面就是
     /// 歌了 —— 5 秒一探,ad→song 的翻转最多晚 5 秒被看到(外加一次 ~0.2 秒的 AppleEvent 往返),
@@ -214,19 +196,11 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
 
     /// 判定是**歌**时的再探间隔。
     ///
-    /// **必须严格小于 `verdictMaxAge`** —— 这是这两个量之间的不变量,selftest 钉着。
-    /// 之前这里就是 `verdictMaxAge` 本身(两个 60),于是下面 `refreshInterval`
-    /// 注释里那句"两者之间的窄窗里 `cachedReading` 仍返回旧判定,不会出现 nil"对广告档成立、
-    /// 对歌档**根本没有窄窗**:可读期与再探间隔同时到点,age 跨过 60 的那一拍必然同时满足
-    /// ①`cachedReading` 刚过期返回 nil、②这一拍才开始**异步**重探(结果这一拍拿不到),
-    /// 于是 `gate` fail-closed → 快照整条丢掉 → `clearIfWasPlaying()` → 三个展示面一起塌成
-    /// "未在播放"。也就是说**一首 album 为空的歌,每 60 秒就掉一次真空期**,不是只在
-    /// 换曲/广告边界 —— "广告之后几秒没有歌曲信息"只是最显眼的那一次。
-    ///
-    /// 真机日志坐实(Safari 播 YT Music,`音樂頑童 - teachme` 那一首 253 秒):
-    /// `local` 类别的 `snapshot failed` 出现在 15:57:45 / 15:58:17 / 15:59:19 / 16:00:20 /
-    /// 16:01:22 / 16:02:24,间隔 60.2 / 62.1 / 62.2 / 62.2 秒 —— 与「60 秒可读期 + 一个 2 秒
-    /// 轮询拍」严丝合缝,而那首歌全程正常播放(16:02:31 的锚点还在报 253.694s)。
+    /// **必须严格小于 `verdictMaxAge`** —— 这是这两个量之间的不变量,selftest 钉着。两者相等时没有窄窗:
+    /// 可读期与再探间隔同时到点,age 跨过 60 的那一拍必然同时满足 ①`cachedReading` 刚过期返回 nil、
+    /// ②这一拍才开始**异步**重探(结果这一拍拿不到),于是 `gate` fail-closed → 快照整条丢掉 →
+    /// `clearIfWasPlaying()` → 三个展示面一起塌成"未在播放":一首 album 为空的歌每 60 秒就掉一次真空期
+    /// (真机日志里 `snapshot failed` 的间隔正是 60 秒可读期加一个 2 秒轮询拍)。
     ///
     /// 45 秒留出 15 秒重叠窗:一次探测往返实测 ~187ms,15 秒足够它落地续期,稳态播放期间
     /// 判定因此**永不为 nil**。代价是一首 4 分钟的歌从 4 次 AppleEvent 变成 5 次。
@@ -279,7 +253,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// 这一条治的是**换曲 / 广告边界那一拍**:新 key 下缓存必然是空的(`cachedReading` 按 key
     /// 比对),`gate` fail-closed 丢掉这一拍是设计如此,但丢完之后原本要干等一整个轮询周期才有
     /// 人拿探针刚探回来的结果。挂上它之后这段等待从"一拍"变成探针往返本身(~187ms)。
-    /// 没挂 sink 就退化回旧行为(等下一拍),不会出错。
+    /// 没挂 sink 就等下一拍,不会出错。
     private var resultSink: (@Sendable (_ key: String) -> Void)?
 
     private init() {}
@@ -349,11 +323,9 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// 只切 5 段(`maxSplits: 4`):最后一段是专辑名,是任意文本、可能自带 `|`,原样保留。
     /// 段数**多于** 5 在这套切法下不存在。
     ///
-    /// **只认 5 段,不给旧形状留兼容分支**(这一点评审时先猜错、被 selftest
-    /// 打回来才定的)。评审建议过"5 段=新形状、4 段=旧形状"两分支兜底,听起来稳妥,实际
-    /// **做不到**:专辑名里自带 `|` 是明确支持的(`0|0|0|A|B` 这条守卫就是钉它的),那时旧形状
-    /// 切出来也是 5 段、跟新形状**逐字同形**,于是 `A` 被当计数、`B` 被当专辑名 —— 守卫当场
-    /// 变红。段数根本不足以区分两种形状,所以不猜:JS 与 parse 永远同版本同二进制,现行 JS
+    /// **只认 5 段,不给 4 段的形状留兼容分支**:两分支兜底做不到 —— 专辑名里自带 `|` 是明确支持的
+    /// (`0|0|0|A|B` 这条守卫就是钉它的),那时 4 段形状切出来也是 5 段、跟 5 段形状**逐字同形**,`A` 会被当
+    /// 计数、`B` 被当专辑名。段数根本不足以区分两种形状,所以不猜:JS 与 parse 永远同版本同二进制,现行 JS
     /// (`omittingEmptySubsequences: false`)一定回 5 段,少于 5 段就是畸形输入,专辑名取不到、
     /// 计数也没有,但**前三段的判定照样解**(那三段的位置在任何形状里都没变过)。
     ///
@@ -365,7 +337,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         // AppleScript 有时把返回值再包一层双引号,只脱**两头恰好一对**,再把里面被转义的 `\"` / `\\` 还原
         // (Chromium 的 `execute … javascript` 会把返回值里的双引号真的转义成 `\"`,见 BrowserTabProbeScript 头注)。
-        // 原来把首尾所有双引号都剥掉:专辑名以引号结尾时末尾那个被吃掉,中间的还带着反斜杠,这个脏值会被补进快照、
+        // 别把首尾所有双引号都剥掉:专辑名以引号结尾时末尾那个会被吃掉,中间的还带着反斜杠,这个脏值会被补进快照、
         // 当成歌词缓存 key 的专辑段。
         if s.count >= 2, s.hasPrefix("\""), s.hasSuffix("\"") {
             s = String(s.dropFirst().dropLast())
@@ -388,7 +360,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
             default: return nil // 形状不对,不做任何推断
             }
         }
-        // 只认 5 段,理由见头注那条提醒(4 段兼容做不到 —— 专辑名含 `|` 时两种形状同形)。
+        // 只认 5 段,理由见函数头注释(4 段兼容做不到 —— 专辑名含 `|` 时两种形状同形)。
         let adSlot = parts.count == 5 ? AdSlot(rawPair: String(parts[3])) : nil
         let albumField: Substring? = parts.count == 5 ? parts[4] : nil
         // 专辑名里的换行压平:osascript 的输出是按行读的,真混进换行会让下游的日志/
@@ -410,7 +382,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     ///   - **只靠裸标题**撑起来的 `.ad` → nil(「拿不准」)。
     ///
     /// 为什么裸标题在这里不算数:换歌的那两三秒页面 `document.title` 会退成裸的「YouTube Music」
-    /// (18:07:19 抓到的边界样本:上一首刚结束、`<video>` 停在 0.0、标题已是「YouTube Music」),
+    /// (边界样本:上一首刚结束、`<video>` 停在 0.0、标题已是「YouTube Music」),
     /// 而 MediaSession 这时可能已经换成了下一首 —— 此时若恰好探了一次(YT Music 首次发布元数据常常不带
     /// album,`trustedPlaybackRejected` 会踢探针),弱 `.ad` 就缓存到了**下一首歌的 key** 下;下一拍换曲按
     /// 当下判定定初值,整首真歌被贴上「广告中」。真广告期间三个信号 22/22 同时命中(见头注),裸标题从没
@@ -429,21 +401,10 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
 
     /// 该不该拿探针读到的专辑名去补上游那份 —— 以及补成什么。nil = 不动上游那份。
     ///
-    /// YouTube Music 播一张专辑时,第一首歌不上送专辑名——实测(两张不同专辑、四个采样)
-    /// 坐实**是 YouTube Music 自己的疏漏,不是这条链路丢的**:
-    ///
-    /// | 队列位置 | 曲名 | 页面 byline 上的专辑 | `mediaSession.album` |
-    /// |---|---|---|---|
-    /// | #0 | Reasons, i love you | Reasons, i love you | **空** |
-    /// | #1 | Not enough seasons | Reasons, i love you | 有 |
-    /// | #2 | Be kind to myself | Reasons, i love you | 有 |
-    /// | #0(另一张) | Heavy on Me | **Already Gone** | **空** |
-    ///
-    /// 机制:YT Music 开一条新队列时,在专辑上下文解析出来**之前**就把 MediaSession 元数据
-    /// 设好了,之后不再刷新这一首 —— 所以页面上后来有了专辑名,MediaSession 里那份却永远
-    /// 停在空。第二首起队列数据已经在手,就带上了。
-    /// 最后那一行是**关键反例**:它证明规律是"队列第一首",不是我们一度猜的"专辑名跟
-    /// 曲名相同就去重"(那张专辑名和曲名并不一样,照样是空)。别再往回猜那个。
+    /// YouTube Music 开一条新队列时,在专辑上下文解析出来**之前**就把 MediaSession 元数据设好了、之后不再
+    /// 刷新这一首 —— 所以队列第一首的 `mediaSession.album` 永远是空的,页面 byline 上却有专辑名;第二首起
+    /// 队列数据已经在手,就带上了(两张不同专辑、四个采样对照过,是 YouTube Music 自己的疏漏,不是这条链路
+    /// 丢的)。规律是"队列第一首",不是"专辑名跟曲名相同就去重":专辑名和曲名不一样的第一首照样是空。
     ///
     /// 三条同时成立才替换:
     ///   - 上游报的是空(**非空一律不动** —— 上游那份是权威,探针只补缺,不做纠正);
@@ -493,7 +454,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
             return
         }
         // 已经有这个 key 的新鲜判定就不用再探(省掉稳态播放期间持续的 AppleEvent 往返)。
-        // "新鲜"按判定分档:歌 60 秒,广告 5 秒 —— MV 的前贴片广告放完后同一个 key 会翻成歌,
+        // "新鲜"按判定分档:歌 45 秒,广告 5 秒 —— MV 的前贴片广告放完后同一个 key 会翻成歌,
         // 60 秒不再问就会把「广告中」多挂 60 秒(见 refreshInterval(for:))。
         if cachedKey == key, let at = cachedAt, let reading = cachedReadingValue,
            Date().timeIntervalSince(at) <= Self.refreshInterval(for: reading.verdict) {
@@ -573,10 +534,8 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// 裸 `try…end try`。
     /// 保留这个入口只为两件事:①它的文本契约已经被 selftest 钉住(用 tell application id、
     /// 按域名过滤标签页、两处执行点都套 with timeout、有 NOTFOUND 兜底);②读代码的人从这个
-    /// 类点进去就能看到脚本长什么样。模板本体抽到 `BrowserTabProbeScript` ——
-    /// `SpotifyWebAdProbe` 要跑一模一样的东西,只是域名和 JS 不同,复制第二份等于把那些踩出来的
-    /// 教训复制一份再等它们漂开。抽取当天用 harness 逐字节比对过:两种方言的输出跟抽取前
-    /// 完全相同(chromium 2769 字符 / safari 2763 字符)。
+    /// 类点进去就能看到脚本长什么样。模板本体在 `BrowserTabProbeScript` —— `SpotifyWebAdProbe` 要跑一模一样的
+    /// 东西,只是域名和 JS 不同,复制第二份只会让两份慢慢漂开。
     public static func buildAppleScript(bundleID: String, family: BrowserAutomationPermission.Family) -> String {
         BrowserTabProbeScript.build(bundleID: bundleID, family: family, hostMarker: hostMarker,
                                     js: probeJS, eventTimeoutSeconds: eventTimeoutSeconds)

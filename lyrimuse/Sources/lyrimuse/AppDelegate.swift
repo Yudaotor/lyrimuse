@@ -16,16 +16,6 @@ enum LaunchPhase {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    // 新增:接住"连接 Last.fm 账号"授权页跳回来的 lyrimuse:// 回调(见
-    // build.sh 的 CFBundleURLTypes + LastfmAuthFlow.authorizeURL 的 cb= 参数)。
-    // 用最传统的 NSAppleEventManager 注册方式,而不是 SwiftUI 的 .onOpenURL——这个
-    // App 没有 WindowGroup 承载这个修饰符最典型的挂载点(MenuBarExtra/Settings 这类
-    // Scene 上是否稳定接收 GetURL 事件没有十足把握),Apple Event Manager 是 AppKit
-    // 官方文档明确支持、且这个项目里 MusicAutomationPermission 已经在用的同一层
-    // 机制,更可靠。必须在 applicationWillFinishLaunching(而不是 didFinishLaunching)
-    // 里注册——早于 launchServices 把已经攒着的 GetURL 事件投递进来,注册晚了会
-    // 错过"双击链接直接启动 App"这种冷启动场景(虽然这次的场景是 App 已经在跑,但
-    // 仍然照 Apple 官方推荐的时机来,不留隐患)。
     /// `lyrimuse --unregister-login-item`(scripts/uninstall.sh 在删 App 包之前调):只注销登录项就退出,
     /// 不建窗口、不起服务。见 LoginItemManager.unregisterForUninstall。
     private var isUnregisterLoginItemRun: Bool {
@@ -33,9 +23,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
-        // stdout / stderr 落到 ~/Library/Logs/lyrimuse-app.log(在进程内自己重定向):
-        // 此前靠 LaunchAgent plist 的 StandardErrorPath,而 App 改成登录项后由 LaunchServices 起,
-        // 没有 launchd 替我们接管这两个流。第一件事就做,后面任何一行 Swift 运行时的报错都别漏。
+        // stdout / stderr 落到 ~/Library/Logs/lyrimuse-app.log(在进程内自己重定向):App 作为登录项由
+        // LaunchServices 起,没有 launchd 替我们接管这两个流。第一件事就做,后面任何一行 Swift 运行时的报错都别漏。
         StandardStreamRedirect.installIfNeeded()
         // 退出原因日志(见 AppExit):SIGTERM 要在这里就接住,不然 launchctl kickstart -k
         // 这条最常见的退出路径连 applicationShouldTerminate 都到不了。
@@ -46,6 +35,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         terminateOlderInstances()
+        // 接住"连接 Last.fm 账号"授权页跳回来的 lyrimuse:// 回调(见 build.sh 的 CFBundleURLTypes +
+        // LastfmAuthFlow.authorizeURL 的 cb= 参数)以及各条深链。用 NSAppleEventManager 注册,不用 SwiftUI 的
+        // .onOpenURL:这个 App 没有 WindowGroup 这个最典型的挂载点(MenuBarExtra/Settings 这类 Scene 上是否稳定
+        // 接收 GetURL 事件没有把握),Apple Event Manager 是 AppKit 官方明确支持的机制。必须在
+        // applicationWillFinishLaunching(而不是 didFinishLaunching)里注册:早于 LaunchServices 把攒着的
+        // GetURL 事件投递进来,注册晚了会错过"双击链接直接启动 App"这种冷启动场景。
         NSAppleEventManager.shared().setEventHandler(
             self,
             andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
@@ -56,12 +51,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // 同一个 App 同时跑起两份时,把**比自己老**的那几份请走,只留最新启动的这一个。
     //
-    // 实测抓到过双实例:开机自启走的是 LaunchAgent(label me.yudaotor.lyrimuse,
-    // 直接 exec 二进制),而从访达/聚焦/Dock 再打开一次会另外注册成一个 application.* 的
-    // job —— LaunchServices 那条"同一个 bundle 只开一份"的常规约束拦不住前者起的那份,
-    // 于是两个实例并存。表现相当隐蔽:两扇桌面悬浮歌词窗**坐标完全重合**,两边各自独立
-    // 解析歌词,切歌那几秒进度不同步,看上去就是"一次显示了两首歌的词",等两边收敛到同一句
-    // 之后文字完全重叠又"自己好了"。除了显示,两份实例还会各跑一套轮询、各自 scrobble。
+    // 由 launchd 直接 exec 二进制起来的那份(LaunchAgent,label me.yudaotor.lyrimuse)不受 LaunchServices
+    // "同一个 bundle 只开一份"的约束,从访达/聚焦/Dock 再打开一次会另外注册成一个 application.* 的 job,
+    // 两个实例并存。表现相当隐蔽:两扇桌面悬浮歌词窗**坐标完全重合**,两边各自独立解析歌词,切歌那几秒
+    // 进度不同步,看上去就是"一次显示了两首歌的词",等两边收敛到同一句之后文字完全重叠又"自己好了"。
+    // 除了显示,两份实例还会各跑一套轮询、各自 scrobble。
     //
     // 选"新的赢"而不是"老的赢":用户刚刚双击打开、或刚装了新版本重启,期待生效的都是新
     // 启动的这一份;开发时 build.sh 换完二进制重启,也该是新二进制接管。
@@ -69,10 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 只请走**严格早于**自己启动的那几份,避免两份几乎同时起来时互相踢掉、一个都不剩。
     //
     // 判先后**不能**用 NSRunningApplication.launchDate:那个字段只有经 LaunchServices
-    // 启动(双击/open)的进程才有,而这里最要防的恰恰是 LaunchAgent 直接 exec 二进制起来的
-    // 那一份 —— 它的 launchDate 是 nil。 别用 launchDate 写这个守卫:实测三个
-    // 实例并存、守卫一次都没触发,探针打出来两个实例的 launchDate 全是 nil。
-    // 改用 sysctl 读内核记的真实进程启动时间,对任何来路的进程都有效。
+    // 启动(双击/open)的进程才有,launchd 直接 exec 起来的那一份是 nil,守卫会一次都不触发。
+    // 用 sysctl 读内核记的真实进程启动时间,对任何来路的进程都有效。
     //
     // 先 terminate()(礼貌退出,让对方有机会把缓存落盘),3 秒后还没走再 forceTerminate ——
     // 留着一个僵着不退的旧实例,等于这个守卫白做。
@@ -96,22 +88,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// 进程启动时间(Unix 秒),取自内核的 kinfo_proc。任何来路的进程都有,不像
-    /// NSRunningApplication.launchDate 只对经 LaunchServices 启动的有效。
     private var cancellables = Set<AnyCancellable>()
 
     /// Dock 图标右键菜单的自定义部分(设置/歌词管理/歌词窗口/Last.fm 四个跳转)。
     /// 见 DockMenu.swift 顶部注释——跟 applicationDockMenu(_:) 配对使用。
     private let dockMenuController = DockMenuController()
 
-    /// 用户对照 Apple Music 自己的 Dock 菜单要求加的常用跳转,见
-    /// DockMenuController 顶部注释。这里返回的菜单会被 AppKit 摆在它自动追加的那部分
-    /// (窗口列表/"选项"子菜单/显示所有窗口/隐藏/退出)**上面**,不需要在这个方法里
-    /// 重复那些系统默认项。
+    /// Dock 菜单里的常用跳转(对照 Apple Music 的 Dock 菜单),见 DockMenuController 顶部注释。这里返回的
+    /// 菜单会被 AppKit 摆在它自动追加的那部分(窗口列表/"选项"子菜单/显示所有窗口/隐藏/退出)**上面**,
+    /// 不需要在这个方法里重复那些系统默认项。
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         dockMenuController.makeMenu()
     }
 
+    /// 进程启动时间(Unix 秒),取自内核的 kinfo_proc。任何来路的进程都有,不像
+    /// NSRunningApplication.launchDate 只对经 LaunchServices 启动的有效。
     private static func processStartTime(_ pid: pid_t) -> TimeInterval? {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
         var info = kinfo_proc()
@@ -214,24 +205,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 主线程卡住几秒就记一行、卡久了采一次调用栈(见 MainThreadWatchdog)。
         MainThreadWatchdog.shared.start()
 
-        // 这一句决定 App 是普通应用(占 Dock + 进 Cmd-Tab)还是菜单栏专属应用。
-        //
-        // 更正:这段原来写"默认(没碰过'在 Dock 中显示'这个设置的人)是
-        // .accessory"、"不需要 Info.plist 的 LSUIElement" —— 两句都不对。showInDock 的
-        // 兜底是 `?? true`(AppSettings.init),所以新用户走的是 .regular、**有** Dock 图标;
-        // 而 build.sh 打包时确实写了 LSUIElement=true,是这里在启动时把它翻回 .regular。
-        // 两处一起看才说得通:plist 让它默认不占 Dock,这一行按用户的设置再决定要不要占。
+        // 这一句决定 App 是普通应用(占 Dock + 进 Cmd-Tab)还是菜单栏专属应用。build.sh 打包时写了
+        // LSUIElement=true(plist 让它默认不占 Dock),这一行按用户的设置再决定要不要占:showInDock 的
+        // 兜底是 `?? true`(AppSettings.init),所以新用户走的是 .regular、有 Dock 图标。
         //
         // AppSettings.showInDock 的 didSet 不会在它自己 init() 赋初值这一步触发
         // (Swift 语义,实测见 ConfigPortability.clearAllConfig 上那段),所以这里必须
         // 显式按持久化的值应用一次。
         NSApp.setActivationPolicy(settings.showInDock ? .regular : .accessory)
-        // (之前这里还推一份全局 preferWordLevelKaraoke。已撤:逐字填色改成各展示面
-        //  自己的开关,引擎始终解析逐字数据,不再有要往 Core 推的全局值。)
+        // LocalPlaybackSource 自己不读 UserDefaults(它在 LyrimuseCore 里,够不到 AppSettings),下面这几项
+        // 启动时不推一次的话它会一直用默认值,用户的选择要等到下次在设置页里改动才生效。
         LocalPlaybackSource.shared.chineseVariant = settings.lyricsChineseVariant
-        // 跟上面那行同一个理由:LocalPlaybackSource 自己不读 UserDefaults(它在
-        // LyrimuseCore 里,够不到 AppSettings),启动时不推一次的话它会一直用默认值,
-        // 用户的选择要等到下次在设置页里改动才生效。
         LocalPlaybackSource.shared.romanizationScripts = settings.romanizationScripts
         LocalPlaybackSource.shared.splitsLongLyricLines = settings.splitLongLyricLines
         LocalPlaybackSource.shared.mergesShortLyricLines = settings.mergeShortLyricLines
@@ -257,7 +241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
         // 同一个理由:BrowserPositionProbe 也在 LyrimuseCore 里,够不到 AppSettings,
-        // 启动时不推一次的话"浏览器歌词同步"卡片里配好的配对要等用户重新打开设置页
+        // 启动时不推一次的话「网页版」卡片里配好的配对要等用户重新打开设置页
         // 才会生效。
         BrowserPositionProbe.shared.platformBrowserPairs = settings.browserPlatformPairs
         // 引擎那几路网页平台探针也只对配对过的浏览器跑(引擎 browserpairs.go),配对关系得镜像进
@@ -276,26 +260,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         BrowserAutomationPermission.manuallyAddedFamilies = settings.manualBrowserFamilies
             .compactMapValues { BrowserAutomationPermission.Family(rawValue: $0) }
 
-        // 状态栏那一项(图标/歌词/滚动歌词 + 下拉菜单)。之前这是 App.swift 里
-        // 的一个 MenuBarExtra 场景,现在是自建的 NSStatusItem,得在这里显式启动。
+        // 状态栏那一项(图标/歌词/滚动歌词 + 下拉菜单)是自建的 NSStatusItem,得在这里显式启动。
         // 生命周期自持(靠 Combine 订阅设置/播放状态),这里只需要点一次。
         //
-        // 从原来排在引擎对账、悬浮歌词/灵动岛窗口创建、通知中心注册、
-        // NotchMirrorManager 等一堆重活之后,挪到了这里——"把图标挪到贴近系统
-        // 图标的位置",调研结论(见 MenuBarPositionHint.swift 头注 / docs/features/
-        // 06-menubar.md):macOS 没有公开 API 能保证第三方状态栏图标的位置,唯一站得住脚、
-        // 成本几乎为零的手段是"如果这个 App 恰好跟别的菜单栏 App 同一时刻启动(比如都是
-        // 登录项),谁先把 NSStatusItem 建出来、谁就更可能落在更靠右的位置"这条经验规律——
-        // 所以把创建时机尽量往前提,减少建项之前要跑的同步代码。
+        // 创建时机尽量往前提:macOS 没有公开 API 能保证第三方状态栏图标的位置,唯一站得住脚、成本几乎
+        // 为零的手段是"如果这个 App 恰好跟别的菜单栏 App 同一时刻启动(比如都是登录项),谁先把
+        // NSStatusItem 建出来、谁就更可能落在更靠右的位置"这条经验规律(见 MenuBarPositionHint.swift 头注
+        // 与 06 章)。
         //
         // 往前只能提到这里,不能再往前:PlaybackCoordinator.start() 依赖上面这几行刚灌完的
         // Core 单例快照(LocalPlaybackSource.chineseVariant/
         // romanizationScripts/showsTranslation、BrowserPositionProbe.platformBrowserPairs、
         // BrowserAutomationPermission.manuallyAddedFamilies)——提前到这些赋值之前的话,
-        // PlaybackCoordinator 启动时读到的还是默认值,后果是"用户配置的这几项设置每次
-        // 启动都要等到去设置页里改一下才生效"。而往后的中文歌词粘性标记订阅、悬浮歌词/
-        // 灵动岛窗口创建、通知中心注册、NotchMirrorManager 等都跟状态栏这一项的创建互不
-        // 相干,能让的同步耗时都在这里让给了它。
+        // PlaybackCoordinator 启动时读到的还是默认值,用户配置的这几项设置每次启动都要等到去设置页里
+        // 改一下才生效。往后的中文歌词粘性标记订阅、悬浮歌词/灵动岛窗口创建、通知中心注册、
+        // NotchMirrorManager 等都跟状态栏这一项的创建互不相干,能让的同步耗时都让给了它。
         //
         // 没有任何保证:这条经验规律只在"恰好同时启动"时可能生效,对已经在运行的其他
         // 菜单栏 App 完全无效。真正可靠的是引导用户自己 ⌘+拖拽——见
@@ -319,17 +298,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 碰关闭的那个,它就不会凭空建一个不需要的窗口(见 NotchLyricsWindowController
         // 顶部注释里这条不变量的详细说明)。
         //
-        // 实测排查坐实、删掉这里原来的 setVisible(true) 调用:isVisible 现在
-        // 是持久化的用户偏好(见两个控制器各自的 restoredVisible()),.shared 的 init()
-        // 本身已经会用恢复出来的这个值触发一次 updateActualVisibility(见
-        // NotchLyricsWindowController.init() 里 isPlayingObserver 那段注释——订阅
-        // PlaybackCoordinator.$isPlayingNow 的一瞬间就会拿当下的 isVisible 显示/隐藏
-        // 一次)。这里如果还调 setVisible(true),会在 init() 刚刚正确恢复出"用户上次关掉
-        // 了"这个状态之后,立刻无条件覆盖成 true 并重新持久化——用户明明关掉了灵动岛/
-        // 悬浮歌词,下次打开 App 它又会自己重新出现,菜单里的勾选状态也会被这一行悄悄
-        // 改回勾选,这正是之前的真实 bug。下面几行 setLocked/setHiddenFromCapture/
-        // setHideWhenNotPlaying 本身已经足够触发 .shared 的构造,不需要再额外调
-        // setVisible 才能"顺便"建出窗口。
+        // 别在这里调 setVisible(true):isVisible 是持久化的用户偏好,.shared 的 init() 订阅播放状态的那一刻
+        // 就会按恢复出来的 isVisible 显示/隐藏一次;再无条件调 setVisible(true) 会把"用户上次关掉了"覆盖成
+        // true 并重新持久化 —— 关掉的灵动岛/悬浮歌词下次打开 App 又自己出现,菜单里的勾选也被悄悄改回。
+        // 下面几行 setLocked/setHiddenFromCapture/setHideWhenNotPlaying 本身已经足够触发 .shared 的构造。
         if settings.classicOverlayEnabled {
             LyricsOverlayWindowController.shared.setLocked(settings.lockPosition)
             LyricsOverlayWindowController.shared.setHiddenFromCapture(settings.hideDuringScreenCapture)
@@ -353,9 +325,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotchMirrorManager.start()
         // 触控栏歌词(默认关,设置 › 歌词显示 › 触控栏)。开着就把图标放进功能栏。
         TouchBarLyricsController.shared.start()
-        // PlaybackCoordinator.shared.start() / MenuBarStatusItem.shared.start() 挪到上面
-        // BrowserAutomationPermission.manuallyAddedFamilies 那一行之后了(
-        // 见那边的注释)——状态栏项的创建时机要尽量靠前。
+        // PlaybackCoordinator.shared.start() / MenuBarStatusItem.shared.start() 在上面 BrowserAutomationPermission
+        // .manuallyAddedFamilies 那一行之后(状态栏项的创建时机要尽量靠前,见那边的注释)。
         // 「发现新播放器」的系统通知。
         // registerCategory 必须在**投递之前**调:setNotificationCategories 是整表替换,
         // 投递时 categoryIdentifier 查不到的话通知照样显示但**按钮不出现**、而且不报错;
@@ -375,13 +346,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DiscordPresenceController.shared.start()
         // 网页歌词的本地服务(默认关,设置 › 歌词显示 › 网页歌词)。
         WebLyricsServer.shared.start()
-        // 捕获 openSettings/openWindow 这两个环境 action 的隐藏锚点窗口。原来这件事挂在
-        // MenuBarExtra 的 label 上,随 MenuBarExtra 一起没了 —— 见该文件注释。
+        // 捕获 openSettings/openWindow 这两个环境 action 的隐藏锚点窗口(见该文件注释)。
         MenuBarSceneActions.install()
 
-        // 打开 Lyrimuse 时顺带启动用户勾选的播放器(从"唯一具体播放器 + 一个布尔"改成逐播放器
-        // 集合,见 LyrimuseCore.PlayerLinkage 头注;勾选 ∩ 当前候选才算)。只启动还没运行的 —— 已经在跑就
-        // 什么都不做,不做多余的"带到前台"动作;activates=false 避免用户正在用别的 App 时被抢焦点。
+        // 打开 Lyrimuse 时顺带启动用户勾选的播放器(逐播放器勾选,见 LyrimuseCore.PlayerLinkage 头注;勾选 ∩
+        // 当前候选才算)。只启动还没运行的 —— 已经在跑就什么都不做,不做多余的"带到前台"动作;activates=false
+        // 避免用户正在用别的 App 时被抢焦点。
         let playersToLaunch = PlayerLinkage.effective(settings.launchPlayersOnLyrimuseOpen,
                                                       selectedPlayers: FeatureSettingsStore.shared.players)
         for player in playersToLaunch where !player.bundleIdentifier.isEmpty {
@@ -419,51 +389,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 设置/歌词窗口),不实现这个 delegate 方法的话,点 Dock 图标(只在"showInDock"开着、
     // 走 .regular 激活策略时才会有 Dock 图标)完全没有默认行为。
     //
-    // 按点 Dock 图标**只**弹歌词窗口,任何情况下都不弹设置。
-    // (原来那版参照 Bartender/iStat Menus 这类纯配置型工具"把设置页当唯一主窗口"的做法
-    // —— 那类工具除了设置页没有别的可看,这里不一样;设置另有 ⌘, / 菜单栏菜单 / 主菜单
-    // 三个入口,不缺这一个。)
+    // 点 Dock 图标**只**弹歌词窗口,任何情况下都不弹设置:设置另有 ⌘, / 菜单栏菜单 / 主菜单三个入口,
+    // 不缺这一个。两处刻意的写法,都是为了"不要冒出设置窗":
     //
-    // 两处刻意的写法,都是为了"不要冒出设置窗":
-    //
-    // ① **不再退回 openSettings**。歌词窗口那个 action 是 SwiftUI 环境 action,由一个隐藏
+    // ① **不退回 openSettings**。歌词窗口那个 action 是 SwiftUI 环境 action,由一个隐藏
     //    锚点视图捕获进 AppActions(见 MenuBarSceneActions)。它理论上启动就捕获了,但在
     //    "刚重启、锚点视图还没挂上"那一瞬是 nil —— 那种情况下**不能**退回设置窗口,否则
-    //    "点 Dock 弹出设置"照样会发生。宁可这一下什么都不发生(下一下就正常),也不要弹出
-    //    用户明确说不想看的窗。
+    //    "点 Dock 弹出设置"照样会发生。宁可这一下什么都不发生(下一下就正常)。
     //
     // ② **返回 false,不给 AppKit 默认行为**。返回 true 等于告诉 AppKit"按你的老规矩来",
     //    而它的老规矩是"把这个 App 的窗口恢复/带回前台" —— 包括用户之前关掉的设置窗
-    //    (SwiftUI 的 Settings 场景关掉之后 NSWindow 对象仍然活着,只是 orderOut,实测
+    //    (SwiftUI 的 Settings 场景关掉之后 NSWindow 对象仍然活着,只是 orderOut,
     //    `check-windows` 能看到它 onscreen=false 地挂在那儿)。返回 false = "这次 reopen
-    //    我自己处理完了",AppKit 不再多做动作,于是只有歌词窗口会出来。
+    //    我自己处理完了",AppKit 不再多做动作。
     //
-    // 不看 hasVisibleWindows——隔离探针坐实这个参数对本 App **恒为 true**(悬浮/
-    // 灵动岛的 NSPanel、状态栏窗口都算"可见"),7 天 23 次 reopen 日志无一例外;改看
-    // AuxiliaryWindowActivation.hasAnyOpen——用户进一步收窄了这条规则:
-    // 只有在设置/歌词管理/歌词窗口/引导这四扇窗**一扇都没开着**时,才顺便开歌词窗口;
-    // 只要还有任意一扇开着(哪怕被最小化到 Dock 里),就把开着的窗口带回来(还原被最小化的、
-    // 把已有窗口带到前台),不再额外抢开歌词窗口。这不会重新踩上面②警告过的坑:那个坑是
-    // "用户明确关掉的设置窗被系统默认行为带回来";而 hasAnyOpen 为 true 时,意味着确实还有
-    // 窗口**没被关掉**(`.onDisappear` 只在真正关闭时触发、最小化不触发——探针实测,
-    // AuxiliaryWindowActivation 的 Dock 图标借用/还原逻辑早就在依赖这条),不会误判"已关闭"
-    // 为"开着"。
+    // 不看 hasVisibleWindows:它对本 App **恒为 true**(悬浮/灵动岛的 NSPanel、状态栏窗口都算"可见")。
+    // 改看 AuxiliaryWindowActivation.hasAnyOpen:设置/歌词管理/歌词窗口/引导这四扇窗**一扇都没开着**时
+    // 才开歌词窗口;只要还有任意一扇开着(哪怕被最小化到 Dock 里),就把开着的窗口带回来(还原被最小化的、
+    // 把已有窗口带到前台),不额外抢开歌词窗口。这不会踩上面②的坑:那个坑是"用户明确关掉的设置窗被系统
+    // 默认行为带回来";hasAnyOpen 为 true 意味着确实还有窗口**没被关掉**(`.onDisappear` 只在真正关闭时
+    // 触发、最小化不触发,AuxiliaryWindowActivation 的 Dock 图标借用/还原逻辑也依赖这条)。
     //
     // "带回来"这一步**自己做**,不能 `return true` 交给 AppKit:AppKit 默认 reopen 只在
     // **没有任何普通窗口可见**时还原**一扇**最小化窗口,有一扇可见就什么都不做——设置窗开着、
-    // 歌词窗口最小化时,点 Dock 就会没反应。探针与结论见
-    // AuxiliaryWindowActivation.bringOpenWindowsForward 的注释。
+    // 歌词窗口最小化时,点 Dock 就会没反应。见 AuxiliaryWindowActivation.bringOpenWindowsForward 的注释。
     //
     // 再补一条兜底,保证**每一下点击都有可见结果**:App **本来就在前台**、开着的窗口也本来就全在
     // 最前面(比如用户正在设置窗里,又去点了一下 Dock 图标;或者上一下点击已经把窗口带回来了、
-    // 用户再点一下)时,"带回来"什么都改变不了,这时落回开歌词窗口那条路——它不违背 08-25 的意思
-    // (那条是"不要**替代**还原动作去抢开歌词窗口",不是"设置开着就永远不准开");歌词窗口本来就在
-    // 最前面时这一步只是把它再 front 一次,无副作用。
+    // 用户再点一下)时,"带回来"什么都改变不了,这时落回开歌词窗口那条路:要防的是"**替代**还原动作
+    // 去抢开歌词窗口",不是"设置开着就永远不准开";歌词窗口本来就在最前面时这一步只是把它再 front 一次。
     //
     // "本来就在前台"这个前提**必须**有:从别的 App 点 Dock 切回来的那一下,激活本身就把窗口带到
     // 前台了(那就是可见结果),这一下不能再多开歌词窗口。判据不能用 NSApp.isActive(reopen 跑的
-    // 时候它已经是 true)、也不能只看 didBecomeActive 有没有到——日志里两种顺序都出现过
-    // (多数是 didBecomeActive 早 ~100ms 到,02:25 那次是 reopen 早 1ms 到),所以两头都记:
+    // 时候它已经是 true)、也不能只看 didBecomeActive 有没有到——它跟 reopen 谁先到两种顺序都有
+    // (多数是 didBecomeActive 早 ~100ms,偶尔 reopen 早 1ms),所以两头都记:
     // didResignActive 把 isActiveForReopen 清掉、didBecomeActive 设上并记时间,reopen 时
     // 「标记还没设上」或「设上不到 1 秒」都算"这一下是切回来的点击"。
     private var isActiveForReopen = false
@@ -502,18 +461,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // **点系统通知也会走到这里** —— 系统激活 App 时就会触发 reopen,而那时用户要的是
         // 设置页,不是歌词窗口。
         //
-        // 两次踩坑的教训都写在这儿,别再走回去:
-        //  ① 只做「延后 0.3 秒开窗、通知回调来了就取消」不够 —— 那只堵了"reopen 先到"
-        //     那一半。实测真实顺序是反的:didReceive 10:48:46.878 → reopen 10:48:47.171,
-        //     取消跑在前面、扑了个空。
-        //  ② 抑制窗口如果用 `(NSApp.delegate as? AppDelegate)?.…` 来设
-        //     那个转型在 SwiftUI 的 @NSApplicationDelegateAdaptor 下**拿不到**
-        //     我们的 AppDelegate,**无声失败**(日志里那行 suppressed 从来没出现过就是证据;
-        //     那也是全仓唯一一处 NSApp.delegate 用法,本来就没有先例可参照)。
-        //
-        // 现在的形态:标记放 AppActions(那个单例存在的意义就是这类桥接),**同一个判据
-        // 查两次** —— 进来时查一次、延后任务真要开窗前再查一次。一个机制盖住两种顺序,
-        // 通知那边只管设标记、不需要反过来调我们。
+        // 抑制标记放 AppActions(那个单例存在的意义就是这类桥接),**同一个判据查两次** —— 进来时查一次、
+        // 延后任务真要开窗前再查一次:通知回调和 reopen 谁先到两种顺序都有(通知回调可能比 reopen 早
+        // 约 0.3 秒),只做「延后开窗、通知回调来了就取消」只堵得住 reopen 先到的那一半。通知那边只管设标记、
+        // 不需要反过来调我们。别用 `(NSApp.delegate as? AppDelegate)?.…` 去设:那个转型在 SwiftUI 的
+        // @NSApplicationDelegateAdaptor 下拿不到我们的 AppDelegate,会无声失败。
         //
         // 顺手记这次 reopen 的发送方(`reopenSender`),查「谁让窗口弹出来」靠它。
         reopenLogger.notice("reopen: hasVisibleWindows=\(flag, privacy: .public) from=\(Self.reopenSender(), privacy: .public)")
@@ -560,16 +512,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return Date() < until
     }
 
-    // Cmd+Q / 菜单"退出 Lyrimuse"的正常退出路径——补上:AccountLinkingTab
-    // 里文本字段(Token/API Key 等)的自动保存是 1.2 秒防抖(见该文件 performAutoSave
-    // 的 onReceive),如果用户刚打完字就立刻 Cmd+Q,防抖计时器根本没机会触发,那次
-    // 编辑连磁盘都没写进去就随着进程退出彻底丢失——同一个文件里 .onDisappear 那道
-    // 兜底只覆盖"切换到别的账号卡片/关掉设置窗口"这两种场景,不覆盖"直接退出整个
-    // App":SwiftUI 的 .onDisappear 不保证在进程被终止时对每个视图都执行一遍,尤其是
-    // Settings 这类按需构造的 Scene。这里在真正退出前先同步检查 ConfigStore 是否还有
-    // 没保存的改动:没有就直接放行,不拖慢正常退出;有就用 .terminateLater 暂缓退出,
-    // 异步存盘(顺带重启引擎)完成后再 reply(toApplicationShouldTerminate:) 放行
-    // ——不管存盘成功与否都放行,避免磁盘写入异常时把 Cmd+Q 卡死。
+    // Cmd+Q / 菜单"退出 Lyrimuse"的正常退出路径。账号设置里的文本字段(Token/API Key 等)是防抖自动保存的,
+    // 用户刚打完字就立刻 Cmd+Q 的话,防抖计时器根本没机会触发,那次编辑会随着进程退出彻底丢失;SwiftUI 的
+    // .onDisappear 也不保证在进程被终止时对每个视图都执行一遍。所以真正退出前先同步检查 ConfigStore 是否还有
+    // 没保存的改动(isDirty):没有就直接放行,不拖慢正常退出;有就用 .terminateLater 暂缓退出,异步存盘
+    // (顺带重启引擎)完成后再 reply(toApplicationShouldTerminate:) 放行——不管存盘成功与否都放行,避免磁盘
+    // 写入异常时把 Cmd+Q 卡死。
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // 退出原因日志:所有退出路径的汇合点,在这里打、只打一次。原因由 AppExit.request
         // 登记,没登记的按信号推断(Sparkle 正在装更新 → sparkle_install,否则 external_request)。
@@ -587,18 +535,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return .terminateLater
     }
 
-    /// 锁屏/解锁时暂停或恢复歌词那一拍。
-    ///
-    /// 这两个通知在 **DistributedNotificationCenter**,不是 NotificationCenter.default
-    /// 也不是 NSWorkspace 的那个 —— 挂错地方会静默永不触发。
-    /// 只暂停渲染,不碰 2 秒 poll(理由见 LocalPlaybackSource.setScreenLocked)。
     // MARK: - 滚轮兜底转发
     //
-    // 装的诊断探针(每个进到本 App 的滚轮事件都记一遍命中测试的完整视图层级链)
-    // 已经在删掉:它当年是为了定位"设置窗某些位置滚不动"这个 bug,根因确实
-    // 靠它三轮实测钉死了(见下面注释),但探针本身此后一直原样留着继续跑,诊断导出里
-    // 一份 24 小时日志能出现好几条几百字符长的视图层级 dump,对当年那次调查已经没有任何
-    // 价值,纯粹是噪音。真正的修复(下面的 forwardScrollIfStranded)不依赖探针,继续保留。
+    // 为什么需要:设置窗某些位置滚轮滚不动、挪到旁边就好。事件**确实进到了设置窗**(没离开本 App,跟悬浮窗
+    // 热区、焦点、别的 App 的透明窗都无关),但 hitTest 停在 NSHostingView<ColumnView> 上、没能走进滚动视图,
+    // 而那个滚动视图**包含鼠标点、不隐藏、alpha 满、从它往上每一层都含点**。按 AppKit 语义(点在自己范围内 →
+    // 倒序问子视图 → 全 nil 才返回自己),这只能是某个子视图的 hitTest 返回了 nil —— SwiftUI
+    // NavigationSplitView 内部的行为,我们改不动,而且同一位置几次采样里树的形状都不一致。
+    //
+    // 所以不追根因,**替 AppKit 补一次投递**(forwardScrollIfStranded):只在"本来就没人会处理"时介入。
+    //
+    // 挑目标的四条硬条件,少一条都可能滚错东西:
+    //   ① frame(窗口坐标)包含鼠标点;
+    //   ② 不隐藏、alpha 足;
+    //   ③ **真的有东西可滚**(documentView 大于 contentView)—— 这条把那个空的残留滚动视图、
+    //      以及不在指针下的侧边栏排除掉,是"别滚错"的关键;
+    //   ④ 多个候选取**面积最小**的(最内层、最具体)。
     private var scrollForwardMonitor: Any?
 
     private func installScrollForwardMonitor() {
@@ -608,32 +560,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
-    //
-    // 为什么需要:用户连报五次「设置窗某些位置滚不动、挪到旁边就好」。三轮探针把
-    // 事实钉死了 —— 事件**确实进到了设置窗**,但 hitTest 停在 NSHostingView<ColumnView> 上、
-    // 没能走进滚动视图;而那个滚动视图**包含鼠标点、不隐藏、alpha 满、从它往上每一层都含点**
-    // (日志里没有任何失败记录)。按 AppKit 语义(点在自己范围内 → 倒序问子视图 → 全 nil 才返回
-    // 自己),这只能是某个子视图的 hitTest 返回了 nil。那是 SwiftUI NavigationSplitView 内部
-    // 的行为,我们改不动;而且两次采样里树的形状还不一致(辅助功能树报内容滚动区
-    // (220,33 680x487),探针在同一宿主视图子树里找到的是 (0,33 900x519),不是同一个)。
-    //
-    // 所以不追根因,改成**替 AppKit 补一次投递**:只在"本来就没人会处理"时介入。
-    //
-    // 之前四轮误判的教训一并记在这:先怀疑悬浮窗胶囊热区(实际用户 lockPosition 开着、胶囊
-    // 压根不渲染)、再怀疑焦点、再怀疑微信那扇 layer=3 透明窗和液态玻璃层
-    // (探针证明事件根本没离开本 App)。**每一次都是靠日志/实测打回来的,不是靠想。**
-    //
-    // 挑目标的四条硬条件,少一条都可能滚错东西:
-    //   ① frame(窗口坐标)包含鼠标点;
-    //   ② 不隐藏、alpha 足;
-    //   ③ **真的有东西可滚**(documentView 大于 contentView)—— 这条把那个空的残留滚动视图、
-    //      以及不在指针下的侧边栏排除掉,是"别滚错"的关键;
-    //   ④ 多个候选取**面积最小**的(最内层、最具体)。
     private static let scrollForwardLog = Logger(
         subsystem: "me.yudaotor.lyrimuse", category: "scroll-forward")
     private static var lastForwardLogAt = Date.distantPast
 
-    /// 上一次判定的结果,给同一次滚动手势复用。 存 `NSScrollView?` 而不是 Bool:
+    /// 上一次判定的结果,给同一次滚动手势复用。存 `NSScrollView?` 而不是 Bool:
     /// "放行"和"转发给某个具体视图"都要能原样重放。
     private static var lastScrollDecision: (windowNumber: Int, point: CGPoint,
                                             at: Date, target: NSScrollView?)?
@@ -642,22 +573,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static func forwardScrollIfStranded(_ event: NSEvent) -> NSEvent? {
         guard let win = event.window else { return event }
         let loc = event.locationInWindow
-        // **必须缓存这个判定**:不缓存时,主线程采样里这个函数下面能挂着
-        // **74/1439 个采样**,因为下面是一整条 `-[NSThemeFrame _performHitTestForContext:]` →
-        // `NSHostingView.hitTest` 到 `PlatformHitTestingManager.hitTest` 到
-        // `MultiViewResponder.containsGlobalPoints` 的**深度递归** —— 也就是说下面那句
-        // `root?.hitTest(loc)` 会把整个窗口的 SwiftUI 视图树递归走一遍。
+        // **必须缓存这个判定**:下面那句 `root?.hitTest(loc)` 会把整个窗口的 SwiftUI 视图树递归走一遍
+        // (`NSThemeFrame._performHitTestForContext` → `NSHostingView.hitTest` → … → `MultiViewResponder
+        // .containsGlobalPoints` 的深度递归,主线程采样里能占到 74/1439)。这个函数装在**全局滚轮监视器**里,
+        // 触控板惯性滚动每秒发几十到上百个事件,每个都重算就是每秒几十到上百次全窗口递归命中测试压在主线程上,
+        // 页面越深越卡(设置页 Last.fm 那一页最长最深,最明显;卡顿跟 Last.fm 的数据链路无关)。
         //
-        // 而这个函数装在**全局滚轮监视器**里:触控板惯性滚动每秒发几十到上百个事件,于是
-        // 每秒就有几十到上百次全窗口递归命中测试压在主线程上。页面越深越卡 —— 设置页
-        // Last.fm 那一段正好是最长最深的一页,所以在那儿最明显。
-        //
-        // 排查时曾经一路怀疑 Last.fm 的数据链路(冷缓存、每行的播放次数请求、封面兜底、
-        // 简繁写法索引…),**全部是错的方向**:这跟 Last.fm 一点关系都没有,是个全局的、
-        // 任何窗口任何页面都在付的成本,只是那一页把它放大到了看得见。**别再顺着数据层查。**
-        //
-        // 修法不动判定逻辑本身,只是不再每个事件都重算:滚动手势期间指针本来就不动,
-        // 判定一次就够。同窗口 + 指针没挪 + 没过期 → 直接重放上次结论。
+        // 滚动手势期间指针本来就不动,判定一次就够:同窗口 + 指针没挪 + 没过期 → 直接重放上次结论。
         let nowDate = Date()
         if let cached = lastScrollDecision,
            ScrollForwardDecision.canReuse(cachedWindow: cached.windowNumber,
@@ -736,6 +658,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ScreenVisibility.shared.setHidden(hidden)
     }
 
+    /// 锁屏/解锁、熄屏/唤醒、切换用户时暂停或恢复歌词那一拍(三种情况合起来判,见 applyScreenHidden 上面那段)。
+    ///
+    /// 锁屏那两个通知在 **DistributedNotificationCenter**,不是 NotificationCenter.default
+    /// 也不是 NSWorkspace 的那个 —— 挂错地方会静默永不触发。
+    /// 只暂停渲染,不碰 2 秒 poll(理由见 LocalPlaybackSource.setScreenLocked)。
     private func startObservingScreenLock() {
         let center = DistributedNotificationCenter.default()
         for (name, locked) in [("com.apple.screenIsLocked", true), ("com.apple.screenIsUnlocked", false)] {
@@ -770,10 +697,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 音量提示跟着灵动岛开关走 —— 灵动岛关着的话提示条根本没有地方显示,挂 CoreAudio
     /// 监听也只是白监听。
     ///
-    /// 去掉了它自己那个开关(原来还要 && notchVolumeBanner),固定随灵动岛开启。
-    ///
     /// sink 闭包里用的是**参数**而不是回头去读 AppSettings:@Published 在 willSet 时机
-    /// 发布,那一刻属性还是旧值(本项目已实测踩过这个坑)。
+    /// 发布,那一刻属性还是旧值。
     private func startObservingVolumeBannerPreference() {
         AppSettings.shared.$notchOverlayEnabled
             .sink { notchEnabled in

@@ -4289,7 +4289,7 @@ private struct NotchAllSettingsDrawer: View {
 
     /// 宽度滑杆。编辑台里那条调整条改的是同一个值,这里是它的兜底通路。
     ///
-    /// 三条 ls-Rocky 核过的坑,都不是随手能猜对的:
+    /// 三条容易猜错的约束:
     ///   ① 区间/读数走 `NotchEditorStage` 那两个**静态**入口(`usableWidthRangeOnCurrentScreen`
     ///      / `effectiveWidth(baseWidth:)`),自己现算屏幕几何、不碰 `.shared`——这里没有
     ///      编辑台的 chrome 可以问。
@@ -4301,8 +4301,7 @@ private struct NotchAllSettingsDrawer: View {
     ///      `static let`,哪怕只是读一下也会执行 init() 建出整扇窗;灵动岛关着的用户碰一下
     ///      这根滑杆,不该凭空多一套窗口。
     /// step 10(不是画布那条的 2):这里是兜底通路,旁边没有实时预览,粗一点好落值;落盘值
-    /// 不是 10 的倍数也没关系,step 只约束滑杆自己产生的值,不约束模型(悬浮歌词那根已经
-    /// 验过这条)。
+    /// 不是 10 的倍数也没关系,step 只约束滑杆自己产生的值,不约束模型。
     private var widthRow: some View {
         SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
             HStack(spacing: 8) {

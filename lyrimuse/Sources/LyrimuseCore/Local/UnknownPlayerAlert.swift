@@ -7,9 +7,8 @@ import Foundation
 ///
 /// ## 为什么判据要下沉到这里
 ///
-/// 原来那套门槛是写在 View 的 `if` 里的(SettingsView.unknownPlayerCard)。通知那条路必然要
-/// 再抄一份 —— **抄漏是必然的**,而抄漏的后果很难看:通知让你去信任,点进设置页那张卡却不在;
-/// 或者反过来。所以拆成两层,两边都调这里:
+/// 卡片(SettingsView.unknownPlayerCard)和通知两条路要用同一套门槛,各写一份必然抄漏,而抄漏的后果
+/// 很难看:通知让你去信任,点进设置页那张卡却不在;或者反过来。所以拆成两层,两边都调这里:
 ///  - `shouldOffer`:**卡片和通知共用**。回答"这个观察值该不该提议信任"。
 ///  - `shouldAnnounce`:通知**专属**的额外门槛。通知是我们主动打扰用户,门槛该比卡片高。
 public enum UnknownPlayerAlert {
@@ -21,8 +20,7 @@ public enum UnknownPlayerAlert {
     // MARK: - 第一层:卡片和通知共用
 
     /// 这个观察值该不该提议信任。四条:
-    ///  1. 只在「自动识别」下 —— 选了具体播放器时,信任名单压根不参与判断
-    ///     (那条路走 fetchMediaControlSnapshot(expectedBundleID:),只认那一个 bundle id)。
+    ///  1. 只在「自动识别」下 —— 选了具体播放器时,信任名单压根不参与判断(只认选中的那几个播放器)。
     ///     漏了这条的体验是:点了信任、列表里多一条、行为一点没变、下次还提示;
     ///  2. 观察不陈旧(freshWindow);
     ///  3. 歌手名**和**专辑名都非空 —— 跟 TrustedPlayers.notASong 同判据(**同样 trim 后判空**)。
@@ -38,8 +36,8 @@ public enum UnknownPlayerAlert {
         guard !id.isEmpty else { return false }
         // 负数(时钟回拨/观察时刻在未来)当"新鲜" —— 宁可多提示一次也别静默
         guard now.timeIntervalSince(observedAt) < freshWindow else { return false }
-        // trim 后判空,跟 TrustedPlayers.notASong 完全一致。卡片原来写的是裸 isEmpty,
-        // 于是 album = " " 的播放能过卡片、过不了守卫 —— 那是个既有 bug,这次一并抹平。
+        // trim 后判空,跟 TrustedPlayers.notASong 完全一致:裸 isEmpty 会让 album = " " 的播放过了这一层、
+        // 却过不了那道守卫。
         guard !artist.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !album.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         return !isAccepted(id)
@@ -51,7 +49,7 @@ public enum UnknownPlayerAlert {
     ///
     /// 这些 App 会报 Now Playing、而且能过 artist/album 都非空那道门槛,但它们不是音乐播放器:
     /// 播客(artist=节目名、album 常常非空)一旦被信任就会被当歌打卡进 Last.fm/ListenBrainz
-    /// 的**永久历史**;微信语音/视频号是这台机器上真正"天天来一次"的那个。
+    /// 的**永久历史**;微信语音/视频号也会天天冒出来。
     ///
     /// 刻意**不**写成"整个 com.apple.* 都静音":Safari 放网页音乐跟 Chrome 一样正当,
     /// 一刀切会把它也埋掉。只列点名的。
@@ -67,10 +65,8 @@ public enum UnknownPlayerAlert {
 
     /// 提醒次数上限与最短间隔。
     ///
-    /// 为什么不是"一辈子只提醒一次":实测这台机器**现在就开着专注模式**
-    /// (com.apple.focus.work 的 assertion 从 01:36 起没有失效记录),还有 App 启动触发的
-    /// DND 和每天 00:00 的定时 DND。DND 下横幅根本不弹、静默进通知中心,被一次
-    /// 「清除全部」就永久丢失 —— "只提醒一次"在这种机器上等于没提醒。
+    /// 为什么不是"一辈子只提醒一次":专注模式 / 勿扰(包括 App 启动触发的和定时开的)下横幅根本不弹、
+    /// 静默进通知中心,被一次「清除全部」就永久丢失 —— 常开专注模式的机器上"只提醒一次"等于没提醒。
     /// 所以给三次机会、每次至少隔一天;信任成功后 shouldOffer 天然不再成立,自动停。
     public static let maxAnnounces = 3
     public static let announceCooldown: TimeInterval = 24 * 3600
@@ -86,8 +82,8 @@ public enum UnknownPlayerAlert {
     ///  5. 不在静音名单里;
     ///  6. `appDisplayName` 反查得到 —— 反查不到 App 名(`com.apple.WebKit.GPU` 这种)
     ///     说明它不是用户能理解的东西,通知标题只能摆一串 bundle id,别弹;
-    ///  7. 稳定性:同一个 bundle id 连续被观察到够久。实测这台机器上焦点抖动是常态
-    ///     (12 分钟里 4 组亚秒级往返 Music 与 Chrome),不设这道门会为一个只抢了两秒
+    ///  7. 稳定性:同一个 bundle id 连续被观察到够久。焦点抖动是常态
+    ///     (实测 12 分钟里 4 组亚秒级往返 Music 与 Chrome),不设这道门会为一个只抢了两秒
     ///     焦点的 App 烧掉它那几次提醒机会;
     ///  8. 次数与冷却(见 maxAnnounces / announceCooldown)。
     public static func shouldAnnounce(
@@ -110,7 +106,7 @@ public enum UnknownPlayerAlert {
     /// `shouldAnnounce` 拆出来给灵动岛的**被动**提示用(收起态左耳换成那个 App 的图标 + 小圆点、hover 展开
     /// 的空闲面板变成信任提议,见 App 层 `NotchUnknownPlayerPrompt`):它不打扰人 —— 没 hover 就是一枚换了
     /// 图的图标 —— 所以不受 ⑧ 次数 / 冷却限制,播放器一直放着就一直挂着;但 ⑤⑥⑦ 一条不少:播客这类 App
-    /// 不该在灵动岛上天天挂一枚带红点的图标(跟通知同一个理由,用户对播客也定了「不处理」),
+    /// 不该在灵动岛上天天挂一枚带红点的图标(跟通知同一个理由),
     /// 反查不到名字的标题只能摆 bundle id,稳定性门槛则是左耳图标不能为两秒的焦点抖动来回换。
     /// `shouldAnnounce` = 这个 && ⑧,两者永远同源。
     public static func qualifiesForAnnounce(
@@ -127,8 +123,8 @@ public enum UnknownPlayerAlert {
         return stableFor >= stableWindow && stableHits >= stableHitsNeeded
     }
 
-    /// 「正在放:歌手 - 歌名」那一截,通知正文与灵动岛提示共用(从 UnknownPlayerNotifier 里抽出来,
-    /// 两处别各拼一份);两段都空给 nil,调用方退回 bundle id。
+    /// 「正在放:歌手 - 歌名」那一截,通知正文与灵动岛提示共用(两处别各拼一份);两段都空给 nil,
+    /// 调用方退回 bundle id。
     public static func nowPlayingDescription(artist: String, title: String) -> String? {
         let parts = [artist, title].map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         return parts.isEmpty ? nil : parts.joined(separator: " - ")
