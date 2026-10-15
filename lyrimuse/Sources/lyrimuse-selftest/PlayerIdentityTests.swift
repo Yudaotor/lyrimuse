@@ -2807,6 +2807,7 @@ private func amazonFavoriteChecks() {
     }
     let synth = API.nowPlayingSnapshot(full, now: t0.addingTimeInterval(0.75))
     expectEqual(synth?.bundleIdentifier, PlaybackPlayer.lxMusic.bundleIdentifier, "洛雪合成读数: 记在洛雪名下")
+    expectEqual(synth?.isMusicApp, true, "洛雪合成读数: 标成音乐播放器的读数(LocalPlaybackSource 只收这种)")
     expectEqual(synth?.title == "特别的人" && synth?.artist == "方大同" && synth?.album == "未来" && synth?.duration == 262.4, true,
                 "洛雪合成读数: 歌名、歌手、专辑、时长取推来的")
     expectEqual(synth?.playing == true && synth?.positionIsPrecise == true && synth?.elapsedTime.map { abs($0 - 28.88) < 0.001 } == true,

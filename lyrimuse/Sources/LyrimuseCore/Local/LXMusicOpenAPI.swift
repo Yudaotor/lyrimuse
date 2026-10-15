@@ -151,7 +151,8 @@ public final class LXMusicOpenAPI: NSObject, URLSessionDataDelegate, @unchecked 
         return abs(v - expected) > resyncSecs
     }
 
-    /// 推来的状态合成一份洛雪的读数,系统会话这一拍不报洛雪时顶上(`MediaControlClient`)。在放、进度在走时位置标精确;
+    /// 推来的状态合成一份洛雪的读数,系统会话这一拍不报洛雪时顶上(`MediaControlClient`)。`isMusicApp` 要填 true:
+    /// `LocalPlaybackSource.poll` 只收这个标记为 true 的读数(同 Kaset 那份)。在放、进度在走时位置标精确;
     /// 报在放而进度还没走按等着出声;暂停就是暂停。出错、停止、没有歌名或进度时 nil。纯函数,selftest 覆盖。
     public static func nowPlayingSnapshot(_ s: State, now: Date) -> MediaControlSnapshot? {
         guard s.status == "playing" || s.status == "paused",
@@ -162,7 +163,7 @@ public final class LXMusicOpenAPI: NSObject, URLSessionDataDelegate, @unchecked 
         return MediaControlSnapshot(
             title: name, artist: s.singer, album: album?.isEmpty == false ? album : nil,
             duration: (s.duration ?? 0) > 0 ? s.duration : nil, elapsedTime: position, playing: nil, playbackRate: nil,
-            isMusicApp: false, bundleIdentifier: PlaybackPlayer.lxMusic.bundleIdentifier,
+            isMusicApp: true, bundleIdentifier: PlaybackPlayer.lxMusic.bundleIdentifier,
             anchorElapsedTime: nil, isRadio: nil, capturedAt: now)
             .withLXMusicClock(position: position, playing: s.status == "playing", rate: rate, waiting: !s.advancing)
     }
