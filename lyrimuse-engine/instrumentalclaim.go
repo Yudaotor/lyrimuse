@@ -2,19 +2,14 @@ package main
 
 import (
 	"log"
-	"regexp"
 	"sync"
 )
 
 // 源匹配到的是伴奏版、在放的这首不是:那个源给的纯音乐信号说的是伴奏版,不算这首的。见 09 章决策 238。
 
-// instrumentalAbbrevTag 认歌名括号里的伴奏缩写:QQ 常写的「(Inst.)」「(inst)」、日系的「(Off Vocal)」。
-// 只用在纯音乐信号这一处,不进打分的版本词表(distinctRecordingVersionTags / versionTagAliases)。
-var instrumentalAbbrevTag = regexp.MustCompile(`(?i)[(\[（【][^)\]）】]*\b(?:inst\b\.?|off[\s-]*vocal\b)[^)\]）】]*[)\]）】]`)
-
-// titleClaimsInstrumentalVersion:歌名(或专辑)说明这是伴奏版。
+// titleClaimsInstrumentalVersion:歌名(或专辑)说明这是伴奏版,「(Inst.)」「(Off Vocal)」这类缩写也算(版本词表认)。
 func titleClaimsInstrumentalVersion(title, album string) bool {
-	return localIsInstrumentalVersion(title, album) || instrumentalAbbrevTag.MatchString(title)
+	return localIsInstrumentalVersion(title, album)
 }
 
 var instrumentalClaimLogged sync.Map

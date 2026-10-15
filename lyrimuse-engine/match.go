@@ -537,7 +537,7 @@ const lyricOvershootToleranceSecs = 5.0
 // (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
 const lyricsScoringVersion = 29
 
-const lyricsScoringRevision = 7
+const lyricsScoringRevision = 8
 
 // lyricsScoringStamp 是一条歌词按哪一版打分规则选出来的:主版本号 + 开发修订号。存成两个整数、按这两段比大小,
 // 不存小数:小数比大小时 29.10 会排在 29.9 前面。
@@ -2508,6 +2508,9 @@ var distinctRecordingVersionTags = []string{
 	// 这些**带前缀**的写法,Apple 用的裸 "(DJ Mix)" 一条都不认;曲名后缀「[Mixed]」另走
 	// isContinuousMixSegment(整段精确),见那边头注。
 	"dj mix", "continuous mix",
+	// 伴奏版的缩写:QQ 常写的「(Inst.)」「(inst)」,日系的「(Off Vocal)」「(オフボーカル)」,都折成 instrumental
+	// (versionTagAliases)。inst 按词元认,「Instant」「Instinct」不算。见 09 章决策 260。
+	"inst", "off vocal", "offvocal", "オフボーカル",
 }
 
 // versionTagWordForms:拉丁限定词除了原形还认哪几种词形。titleVersionTags 原来对拉丁词用子串匹配,
@@ -2534,16 +2537,20 @@ var versionTagWordForms = map[string][]string{
 // liveAlbumIdentityConflict、titleMatchTierPoints 的括号档)都只看集合大小与成员,不认字面。
 // 全库决策回放见 docs/features/09 第 50 条。
 var versionTagAliases = map[string]string{
-	"现场":       "live",
-	"不插电":      "unplugged",
-	"伴奏":       "instrumental",
-	"纯音乐":      "instrumental",
-	"清唱":       "a cappella",
-	"阿卡贝拉":     "a cappella",
-	"acapella": "a cappella",
-	"混音":       "remix",
-	"加长版":      "extended",
-	"排练":       "rehearsal",
+	"现场":        "live",
+	"不插电":       "unplugged",
+	"伴奏":        "instrumental",
+	"纯音乐":       "instrumental",
+	"inst":      "instrumental",
+	"off vocal": "instrumental",
+	"offvocal":  "instrumental",
+	"オフボーカル":    "instrumental",
+	"清唱":        "a cappella",
+	"阿卡贝拉":      "a cappella",
+	"acapella":  "a cappella",
+	"混音":        "remix",
+	"加长版":       "extended",
+	"排练":        "rehearsal",
 	// DJ Mix / Continuous Mix /「[Mixed]」说的是同一件事(一场连续混音里的一段),折成同一个键。
 	// 刻意**不**跟 djRemixVersionTag("dj混音")合并:那个是单曲被某位 DJ 重新混音上传,
 	// 跟"整场演出连播剪出一段"不是同一种录音差异。

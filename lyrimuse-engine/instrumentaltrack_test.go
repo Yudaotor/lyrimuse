@@ -28,6 +28,16 @@ func TestLocalIsInstrumentalVersion(t *testing.T) {
 		{"Song (Live)", "", false},
 		{"Song (Karaoke Version)", "", false},
 		{"Instrumental Love", "", false},
+		{"Lady In My Life (Inst.)", "", true},
+		{"Lady In My Life (inst)", "", true},
+		{"夜に駆ける (Off Vocal)", "", true},
+		{"Song [Off-Vocal Ver.]", "", true},
+		{"Song (offvocal)", "", true},
+		{"夜に駆ける (オフボーカル)", "", true},
+		{"夜に駆ける (オフ・ボーカル)", "", true},
+		{"Instant Crush", "", false},
+		{"Song (Instinct)", "", false},
+		{"Song (feat. Instinct)", "", false},
 	} {
 		if got := localIsInstrumentalVersion(c.title, c.album); got != c.want {
 			t.Errorf("localIsInstrumentalVersion(%q, %q) = %v, want %v", c.title, c.album, got, c.want)
