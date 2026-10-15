@@ -29,6 +29,10 @@
 逐个核对:那一章存在、该节里有编号为 MM 的条目、而且只有一条。只有号、没有章号的「见决策 MM」
 定位不了章,不核对。
 
+带章号却写成「已知坑」的指针(「NN 章已知坑 N」「docs/features/NN 已知坑 N」)一律拒收:它们不进上面的
+核对,号指错、文档里重号都发现不了。改成「NN 章决策 MM」,号用 show 核对内容。没有章号的「docs 已知坑 N」
+跟「见决策 MM」一样定位不了章,不拦。
+
 `docs/features/` 在 .gitignore 里,干净 clone 上没有这些文档 —— 这时直接放行(退出码 0)。
 命中问题时非零退出,逐条打印 `file:line`。
 
@@ -72,6 +76,9 @@ REF = re.compile(r'(?:第\s*)?(\d{2})\s*章(?:的)?决策\s*#?(\d{1,3})((?:\s*[�
 PLACEHOLDER = re.compile(r'((?:第\s*)?(\d{2})\s*章(?:的)?决策\s*#?(?:\d{1,3}\s*[、/,]\s*#?)*)\?\?')
 # check 用:不管带不带章号、前面列没列号,留下的 ?? 都算没填。
 ANY_PLACEHOLDER = re.compile(r'决策\s*#?(?:\d{1,3}\s*[、/,]\s*#?)*\?\?')
+# 带章号的「已知坑」写法:「09 章已知坑 12」「第 11 章的已知坑 7」「docs/features/09 的已知坑 12」
+# 「docs/features/11-lyrics-manager.md 已知坑 7」。
+KNOWN_ISSUE_REF = re.compile(r'(?:(?:第\s*)?\d{2}\s*章|docs/features/\d{2}[\w.-]*)\s*(?:的)?\s*已知坑\s*#?\d{1,3}')
 
 
 def chapter_file(chapter):
@@ -250,6 +257,8 @@ def check(args):
             # 本脚本的说明里要写出占位的样子,不算
             if os.path.abspath(path) != SELF and ANY_PLACEHOLDER.search(line):
                 bad.append(f'{rel}:{lineno}: 决策号还是占位 ??,用 append <章> <正文文件> --fill <文件…> 分号并填上')
+            if os.path.abspath(path) != SELF and KNOWN_ISSUE_REF.search(line):
+                bad.append(f'{rel}:{lineno}: 指针写成了「已知坑」,核对不到;改成「NN 章决策 MM」,号用 show <章> <号> 对一眼内容')
             for m in REF.finditer(line):
                 chapter = m.group(1)
                 if chapter not in cache:

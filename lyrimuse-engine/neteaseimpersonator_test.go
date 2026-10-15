@@ -13,7 +13,7 @@ import "testing"
 //	   限定词、专辑亲和、时长吻合那几道打分闸的**输入**,扣掉等于把放行歌词之后唯一的
 //	   把关依据也一起拿走。
 //
-// 详见 withholdImpersonatorRiddenIdentity 的注释与 docs/features/09 的已知坑 12。
+// 详见 withholdImpersonatorRiddenIdentity 的注释与 09 章决策 12。
 func TestWithholdImpersonatorRiddenIdentity(t *testing.T) {
 	full := neteaseInfo{
 		Cover:        "https://p1.music.126.net/cover.jpg",
