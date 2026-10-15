@@ -148,6 +148,14 @@ func TestVersionLabel(t *testing.T) {
 		{"Forever Young", "", false},
 		{"Live", "", false},
 		{"feat. 方大同", "", false},
+		{"女声版", "女声", true},
+		{"女聲版", "女声", true},
+		{"钢琴版本", "钢琴", true},
+		{"DJ阿若版", "dj阿若", true},
+		{"Live版", "", false},
+		{"现场版", "", false},
+		{"伴奏版", "", false},
+		{"粤语版", "", false},
 	}
 	for _, c := range cases {
 		got, ok := versionLabel(c.in)
@@ -178,9 +186,25 @@ func TestVersionLabelsConflict(t *testing.T) {
 		{"HAPPY PARTY TRAIN (小原鞠莉 Solo Ver.)", "HAPPY PARTY TRAIN (Mari Ohara Solo Version)", false},
 		{"FG ROADSTER (水宮枢 SOLO ver.)", "FG ROADSTER (Mizumiya Su SOLO ver.)", false},
 		{"Song (Mia Taylor Version)", "Song (Emma Verde Version)", true},
-		{"Song (2023 Ver.)", "Song (唯Ver.)", true},
+		{"Song (2023 Ver.)", "Song (唯Ver.)", false},
+		{"Song (2023 Ver.)", "Song (2020 Ver.)", true},
+		{"很任性 (摇滚版)", "很任性 (2017版)", false},
+		{"乐园 (华尔滋弦乐演奏版)", "乐园 (华尔兹弦乐演奏版)", false},
+		{"Song (DJ小蒋版)", "Song (DJ阿卓版)", true},
+		{"Song (Single Version)", "Song (7\" Version)", false},
 		{"約束になれ僕らの歌 (ミア・テイラー Ver.)", "約束になれ僕らの歌 (優木せつ菜 Ver.) (Setsuna Yuki Version)", true},
 		{"約束になれ僕らの歌 (ミア・テイラー Ver.)", "約束になれ僕らの歌 (ミア・テイラー Ver.) (Mia Taylor Version)", false},
+		{"Song (女声版)", "Song (男声版)", true},
+		{"Song (女聲版)", "Song (女声版)", false},
+		{"Song (Live版)", "Song (现场版)", false},
+		{"Song (DJ阿若版)", "Song (DJ阿树版)", true},
+		{"Song (女声版)", "Song", false},
+		{"Move on now! 〜美月ソロ Ver.〜", "Move on now! 〜リサソロ Ver.〜", true},
+		{"Move on now! 〜美月ソロ Ver.〜", "Move on now! (美月ソロ Ver.)", false},
+		{"Song -花柳香子 ver.-", "Song (石動双葉 Ver.)", true},
+		{"Song - 女声版", "Song (男声版)", true},
+		{"RVR～ライジングボルテッカーズラップ～ (ドットVer.)", "RVR～ライジングボルテッカーズラップ～ (オリオVer.)", true},
+		{"RVR～ライジングボルテッカーズラップ～ (ドットVer.)", "RVR～ライジングボルテッカーズラップ～", false},
 	}
 	for _, c := range cases {
 		if got := versionLabelsConflict(c.a, c.b); got != c.want {

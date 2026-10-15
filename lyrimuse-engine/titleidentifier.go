@@ -189,24 +189,63 @@ func titleIdentifiersConflict(a, b string) bool {
 	return false
 }
 
-// 版本标注:括号里写明这是哪一版的那一段 —— 「(高海千歌 Solo Ver.)」「(唯Ver.)」「(香子×真矢ver.)」「(Japanese ver.)」
-// 「(Long Ver.)」。去掉 ver / version / バージョン / ヴァージョン / ソロ / solo 这几个词,剩下的就是哪一版。同一首歌
-// 各角色的独唱版、合唱版、长短版、各语言版,歌词正文常常一样,分行、时间轴、谁唱哪句不一样,时长又接近,只能靠这一段分开。
-// 见 09 章决策 257。
+// 版本标注:歌名里写明这是哪一版的那一段 —— 「(高海千歌 Solo Ver.)」「(唯Ver.)」「(香子×真矢ver.)」「(Japanese ver.)」
+// 「(Long Ver.)」「(女声版)」「〜いちごソロ Ver.〜」。去掉 ver / version / バージョン / ヴァージョン / ソロ / solo / 版 这几个词,
+// 剩下的就是哪一版。同一首歌各角色的独唱版、合唱版、长短版、各语言版,歌词正文常常一样,分行、时间轴、谁唱哪句不一样,
+// 时长又接近,只能靠这一段分开。见 09 章决策 257、261。
 var (
 	versionLabelWordRe      = regexp.MustCompile(`\bver\b\.?|\bversion\b|バージョン|ヴァージョン|ソロ|\bsolo\b`)
 	versionLabelSeparatorRe = regexp.MustCompile(`[×&＆・、,/+＋]`)
+	// 波浪号、前后连字符包着的一段(「Song 〜いちごソロ Ver.〜」「Song -花柳香子 ver.-」):不在括号里的标注。
+	versionLabelWaveRe   = regexp.MustCompile(`[〜～~]([^〜～~]+)[〜～~]`)
+	versionLabelHyphenRe = regexp.MustCompile(`(?:^|\s)-([^-]+)-\s*$`)
+	// 「版」那一种标注里要先去掉的拉丁版本词(distinctRecordingVersionTags 里的拉丁词,按整词)。
+	versionLabelKnownTagRe = regexp.MustCompile(`\b(?:` + strings.Join(asciiVersionTagPatterns(), "|") + `)\b`)
 )
+
+// asciiVersionTagPatterns:distinctRecordingVersionTags 里的拉丁词,转成正则(词之间的空格认任意空白)。
+func asciiVersionTagPatterns() []string {
+	var out []string
+	for _, tag := range distinctRecordingVersionTags {
+		if isASCIITag(tag) {
+			out = append(out, strings.Join(strings.Fields(regexp.QuoteMeta(tag)), `\s+`))
+		}
+	}
+	return out
+}
 
 // versionLabel:一段括号(inner 不带括号本身)里的版本标注。去掉标注词之后按分隔符拆开(多人合唱的写法顺序不定)、
 // 每段只留字母和数字、排好序连起来;不是版本标注、或者只剩没说是哪一版的「Solo Ver.」「ソロ・バージョン」时 ok 为假。
 func versionLabel(inner string) (label string, ok bool) {
 	s := strings.ToLower(foldDiacritics(narrowASCII(inner)))
 	if !versionLabelWordRe.MatchString(s) {
+		return versionLabelBan(s)
+	}
+	return versionLabelParts(versionLabelWordRe.ReplaceAllString(s, " "))
+}
+
+// versionLabelBan:中文写的「X版」「X版本」(「女声版」「钢琴版」「DJ阿若版」)。已经认得的版本词(live、现场、伴奏、remix……,
+// 由 versionTagsMismatch 按同义词比,「(Live版)」和「(现场版)」是同一版)和语种标签(另有批级判决)先去掉,剩下的名字才比。
+// s 已经转小写、半角、去重音。
+func versionLabelBan(s string) (string, bool) {
+	s = toSimplified(s)
+	if !strings.Contains(s, "版") || languageVersionTagOfSegment(s) != "" {
 		return "", false
 	}
+	s = strings.ReplaceAll(strings.ReplaceAll(s, "版本", " "), "版", " ")
+	s = versionLabelKnownTagRe.ReplaceAllString(s, " ")
+	for _, tag := range distinctRecordingVersionTags {
+		if !isASCIITag(tag) {
+			s = strings.ReplaceAll(s, tag, " ")
+		}
+	}
+	return versionLabelParts(s)
+}
+
+// versionLabelParts:去掉标注词之后的那一段按分隔符拆开、每段只留字母和数字、排好序连起来;什么都不剩时 ok 为假。
+func versionLabelParts(s string) (string, bool) {
 	var parts []string
-	for _, seg := range versionLabelSeparatorRe.Split(versionLabelWordRe.ReplaceAllString(s, " "), -1) {
+	for _, seg := range versionLabelSeparatorRe.Split(s, -1) {
 		var b strings.Builder
 		for _, r := range seg {
 			if unicode.IsLetter(r) || unicode.IsDigit(r) {
@@ -237,7 +276,7 @@ func versionLabelsConflict(a, b string) bool {
 			if !versionLabelSameScript(x, y) {
 				continue
 			}
-			if strings.Contains(x, y) || strings.Contains(y, x) {
+			if strings.Contains(x, y) || strings.Contains(y, x) || versionLabelsOneRuneApart(x, y) {
 				return false
 			}
 			compared = true
@@ -246,15 +285,14 @@ func versionLabelsConflict(a, b string) bool {
 	return compared
 }
 
-// versionLabelSameScript:两个标注写的是同一类文字:都只有拉丁字母,或者都有拉丁字母以外的字母(汉字、假名、谚文……);
-// 有一边一个字母都没有(「2023」)也算。
+// versionLabelSameScript:两个标注写的是同一类文字:都只有拉丁字母,或者都有拉丁字母以外的字母(汉字、假名、谚文……),
+// 或者都只有数字。只有数字的(「2017」)多是年份,说不清跟「摇滚」「唯」是什么关系,只跟数字比。
 func versionLabelSameScript(a, b string) bool {
-	ca, cb := versionLabelScript(a), versionLabelScript(b)
-	return ca == "" || cb == "" || ca == cb
+	return versionLabelScript(a) == versionLabelScript(b)
 }
 
 func versionLabelScript(label string) string {
-	script := ""
+	script := "digit"
 	for _, r := range label {
 		if !unicode.IsLetter(r) {
 			continue
@@ -267,14 +305,43 @@ func versionLabelScript(label string) string {
 	return script
 }
 
+// versionLabelsOneRuneApart:两个标注一样长、至少 6 个字、不是纯数字、只差一个字(「华尔滋弦乐演奏」对「华尔兹弦乐演奏」:
+// 错别字、异体字)。短的不放宽:「女声」对「男声」、「dj阿若」对「dj阿树」、「2023」对「2020」都只差一个字。
+func versionLabelsOneRuneApart(a, b string) bool {
+	ra, rb := []rune(a), []rune(b)
+	if len(ra) != len(rb) || len(ra) < 6 || versionLabelScript(a) == "digit" {
+		return false
+	}
+	diff := 0
+	for i := range ra {
+		if ra[i] != rb[i] {
+			diff++
+		}
+	}
+	return diff <= 1
+}
+
 func versionLabels(title string) []string {
 	var out []string
-	for _, seg := range parentheticalSegments(title) {
+	for _, seg := range versionLabelSegments(title) {
 		if l, ok := versionLabel(seg); ok {
 			out = append(out, l)
 		}
 	}
 	return out
+}
+
+// versionLabelSegments:歌名里可能写着版本标注的几段:括号里的、最后一个「 - 」之后的(titleQualifierSegments),
+// 波浪号、前后连字符包着的。
+func versionLabelSegments(title string) []string {
+	segs := titleQualifierSegments(title)
+	for _, m := range versionLabelWaveRe.FindAllStringSubmatch(title, -1) {
+		segs = append(segs, m[1])
+	}
+	if m := versionLabelHyphenRe.FindStringSubmatch(title); m != nil {
+		segs = append(segs, m[1])
+	}
+	return segs
 }
 
 // lyricSearchTitle 是交给各歌词源去搜、去挑候选的歌名:跟 normEnrichTitle 一样从结尾一层层剥括号,碰到版本标记或明说
