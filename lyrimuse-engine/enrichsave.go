@@ -155,6 +155,21 @@ func isEnrichPlayingKey(key string) bool {
 	return cur != nil && *cur == key
 }
 
+// playingEnrichKey:正在播的这首落在哪条缓存上:精确的 key 有条目就是它,没有就是兜底找到的那条(canonicalEnrichKey),
+// 都没有就是精确的 key(马上要按它新建)。跟 trackEnrichment 的 playKey 同一个口径。
+func playingEnrichKey(artist, title, album string) string {
+	key := enrichKey(artist, title, album)
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	if _, ok := enrichCache[key]; ok {
+		return key
+	}
+	if alt, ok := canonicalEnrichKey(key); ok {
+		return alt
+	}
+	return key
+}
+
 // noteEnrichPlayingKey 换歌那一拍记下正在播的那首。内存里已经有这首的条目(预取过)就当场写它的单条快照:
 // 它的整份落盘可能还攒着,App 先读快照出词。不再借换歌把排着的整份落盘提前:上一首和预取的那些改动在小文件里
 // (enrichpending.go),App 叠得上。

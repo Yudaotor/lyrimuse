@@ -4674,15 +4674,13 @@ public final class LocalPlaybackSource: ObservableObject {
             lyrics: found?.lyrics ?? "",
             lyricsYRC: found?.lyricsYRC ?? ""
         )
-        // 必须走 EnrichCacheKeys.normalizedKey,不能拿播放器报的原始三段自己拼:
-        // 「歌词管理」那边的 pinKey 是缓存 key 本身(已归一化),两边不一致的话,在管理页
-        // 校准的歌跟播放时钉住的歌就是两个身份 —— 而歌名带结尾译名括号的曲目(实测这台
-        // 机器 2483 首里 111 首,4.5%)恰好都落在这个差异上。
-        currentPinKey = EnrichCacheKeys.normalizedKey(
-            artist: snapshot.artist ?? "",
-            title: snapshot.title ?? "",
-            album: snapshot.album ?? ""
-        )
+        // 钉在这首实际落着的那条缓存上(EnrichCacheReader.resolvedKey,含旧规则兜底),去掉时长变体位:「歌词管理」那边的
+        // pinKey 是缓存 key 本身,两边不一致的话,在管理页校准的歌跟播放时钉住的歌就是两个身份。缓存里还没有这首时用
+        // EnrichCacheKeys.normalizedKey(引擎马上按它新建),不能拿播放器报的原始三段自己拼。
+        let pinArtist = snapshot.artist ?? "", pinTitle = snapshot.title ?? "", pinAlbum = snapshot.album ?? ""
+        currentPinKey = EnrichCacheKeys.strippingDurationVariant(
+            EnrichCacheReader.resolvedKey(artist: pinArtist, title: pinTitle, album: pinAlbum)
+                ?? EnrichCacheKeys.normalizedKey(artist: pinArtist, title: pinTitle, album: pinAlbum))
         currentOffsetSiblings = EnrichCacheReader.offsetSiblings(
             artist: snapshot.artist ?? "", title: snapshot.title ?? "", album: snapshot.album ?? "")
         applyOffsets()

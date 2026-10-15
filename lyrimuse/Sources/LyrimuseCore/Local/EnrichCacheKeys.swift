@@ -113,9 +113,45 @@ public enum EnrichCacheKeys {
         }
     }
 
-    /// 歌词缓存 key 的唯一构造点(Swift 侧)。跟引擎的 enrichKey 逐字节一致。
+    /// 歌词缓存 key 的唯一构造点(Swift 侧)。跟引擎的 enrichKey 逐字节一致:完整歌名,只清洗(cleanTag)。查不到时的兜底
+    /// 见 EnrichCacheReader 的 fallbackKey(跟引擎 canonicalEnrichKey 同一个口径)。
     public static func normalizedKey(artist: String, title: String, album: String) -> String {
+        cleanTag(artist) + "|" + cleanTag(title) + "|" + cleanTag(album)
+    }
+
+    /// 旧规则的 key(引擎 legacyEnrichKey):歌名去掉结尾的译名/副标题括号(normalizedTitle)。存量条目都是按它建的。
+    public static func legacyKey(artist: String, title: String, album: String) -> String {
         cleanTag(artist) + "|" + normalizedTitle(title) + "|" + cleanTag(album)
+    }
+
+    /// 一条 key 按旧规则算出来的样子(引擎 legacyOfEnrichKey),歌名里的时长变体位「~durN」照留;切不出三段时原样返回。
+    public static func legacyKey(ofKey key: String) -> String {
+        let parts = key.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
+        guard parts.count == 3 else { return key }
+        let title = String(parts[1])
+        let base = strippingDurationVariantTitle(title)
+        let suffix = String(title.dropFirst(base.count))
+        return cleanTag(String(parts[0])) + "|" + normalizedTitle(base) + suffix + "|" + cleanTag(String(parts[2]))
+    }
+
+    /// key 的歌名那一段;切不出三段时是空串。
+    public static func titleSegment(_ key: String) -> String {
+        let parts = key.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
+        return parts.count == 3 ? String(parts[1]) : ""
+    }
+
+    /// 引擎 enrichLegacyClaimedByOther:旧规则那条已经是另一种带括号写法的(条目记下的播放器原样歌名里有去括号后相同、
+    /// 本身不同的,而且 title 不在其中)。
+    public static func legacyClaimedByOther(reportedTitles: [String], title: String) -> Bool {
+        let title = cleanTag(title)
+        let legacy = normalizedTitle(title)
+        var other = false
+        for r in reportedTitles {
+            let t = cleanTag(r)
+            if t == title { return false }
+            if !t.isEmpty, t != legacy, normalizedTitle(t) == legacy { other = true }
+        }
+        return other
     }
 
     // 跟 lyrimuse-engine/lyricsexport.go 的 sanitizeLyricsFilename 逐字对应的 Swift 版本:

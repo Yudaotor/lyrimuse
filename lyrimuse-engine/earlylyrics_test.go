@@ -375,7 +375,7 @@ func TestEarlyLyricsIsWired(t *testing.T) {
 		"\t\t\t\tearlyWatch.observe(raw[\"netease\"].ne, scored, doneSources)\n",
 		"\t\tcase <-earlyWatch.graceC():\n\t\t\tearlyWatch.endGrace()\n\t\t\tearlyWatch.observe(raw[\"netease\"].ne, scoreAndSort(), doneSources)\n",
 		"\tearlyWatch.finish(enabledDone(), totalSources)\n",
-		"context.WithCancel(withEarlyLyricsTarget(withYouTubeMusicVideoID(context.Background(), kasetVideoID), hintKey))",
+		"context.WithCancel(withEarlyLyricsTarget(withYouTubeMusicVideoID(context.Background(), kasetVideoID), playKey))",
 		"\t\t\t\tif shownFirst == \"\" {\n\t\t\t\t\tshownFirst = picked.Source\n\t\t\t\t}\n",
 	} {
 		if !strings.Contains(src, needle) {

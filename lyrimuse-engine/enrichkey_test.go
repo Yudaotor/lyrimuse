@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -96,20 +97,23 @@ func TestEnrichKeyIsIdempotent(t *testing.T) {
 }
 
 func TestPlanEnrichKeyMigrationGroups(t *testing.T) {
+	// key 用完整歌名:带译名括号的写法跟不带的各是一条,启动迁移不再把它们并到一起(查找时由 canonicalEnrichKey 兜底);
+	// 只差不可见空白的仍是同一个 key,照旧并。
 	cache := map[string]enrichEntry{
 		"丁世光|不散的筵席|神經志 The Journal":                       {LyricsSource: "netease"},
 		"丁世光|不散的筵席（I Miss You）|神經志 The Journal":           {LyricsSource: "kugou"},
 		"丁世光|The Girl In Red (Interlude)|神經志 The Journal": {LyricsSource: "qq"},
+		"丁世光|晚安\u00a0|神經志 The Journal":                    {LyricsSource: "qq"},
+		"丁世光|晚安|神經志 The Journal":                          {LyricsSource: "kugou"},
 	}
 	got := planEnrichKeyMigration(cache)
 	want := map[string][]string{
-		"丁世光|不散的筵席|神經志 The Journal": {
-			"丁世光|不散的筵席|神經志 The Journal",
-			"丁世光|不散的筵席（I Miss You）|神經志 The Journal",
-		},
+		"丁世光|不散的筵席|神經志 The Journal":             {"丁世光|不散的筵席|神經志 The Journal"},
+		"丁世光|不散的筵席（I Miss You）|神經志 The Journal": {"丁世光|不散的筵席（I Miss You）|神經志 The Journal"},
 		"丁世光|The Girl In Red (Interlude)|神經志 The Journal": {
 			"丁世光|The Girl In Red (Interlude)|神經志 The Journal",
 		},
+		"丁世光|晚安|神經志 The Journal": {"丁世光|晚安|神經志 The Journal", "丁世光|晚安\u00a0|神經志 The Journal"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("planEnrichKeyMigration = %#v, want %#v", got, want)
@@ -117,19 +121,17 @@ func TestPlanEnrichKeyMigrationGroups(t *testing.T) {
 }
 
 func TestPlanEnrichKeyMigrationDurationGuard(t *testing.T) {
-	// 两个译名括号(都不等于归一化后的 nk 本身)时长差太多,不该被合并 —— 模拟
-	// 跟上面「慢板/快板」这一类同理:关键词清单没漏词(两个都是译名,理应剥括号),
-	// 但时长说明这其实是两个不同的录音。时长兼容的那条仍按原逻辑重命名到 nk,
-	// 只有真正冲突的那条被排除、保留在自己原来的 key 下。
+	// 两条只差不可见空白(都不等于归一化后的 nk 本身)、时长差太多,不该被合并:时长说明这其实是两个不同的录音。
+	// 时长兼容的那条仍按原逻辑重命名到 nk,只有真正冲突的那条被排除、保留在自己原来的 key 下。
 	t.Run("时长差太多不合并", func(t *testing.T) {
 		cache := map[string]enrichEntry{
-			"某人|神探（Sherlock）|专辑":      {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 68},
-			"某人|神探（The Detective）|专辑": {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 261},
+			"某人|神探\u00a0|专辑": {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 68},
+			"某人|神探\u3000|专辑": {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 261},
 		}
 		got := planEnrichKeyMigration(cache)
 		want := map[string][]string{
-			"某人|神探|专辑":                {"某人|神探（Sherlock）|专辑"},
-			"某人|神探（The Detective）|专辑": {"某人|神探（The Detective）|专辑"},
+			"某人|神探|专辑":       {"某人|神探\u00a0|专辑"},
+			"某人|神探\u3000|专辑": {"某人|神探\u3000|专辑"},
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("planEnrichKeyMigration = %#v, want %#v", got, want)
@@ -139,14 +141,14 @@ func TestPlanEnrichKeyMigrationDurationGuard(t *testing.T) {
 	// 时长接近(差在 12% 阈值以内)的正常按原逻辑合并 —— 守卫不能误伤真正的重复条目。
 	t.Run("时长接近正常合并", func(t *testing.T) {
 		cache := map[string]enrichEntry{
-			"丁世光|不散的筵席|神經志 The Journal":             {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 258},
-			"丁世光|不散的筵席（I Miss You）|神經志 The Journal": {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 261},
+			"丁世光|不散的筵席|神經志 The Journal":       {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 258},
+			"丁世光|不散的筵席\u00a0|神經志 The Journal": {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 261},
 		}
 		got := planEnrichKeyMigration(cache)
 		want := map[string][]string{
 			"丁世光|不散的筵席|神經志 The Journal": {
 				"丁世光|不散的筵席|神經志 The Journal",
-				"丁世光|不散的筵席（I Miss You）|神經志 The Journal",
+				"丁世光|不散的筵席\u00a0|神經志 The Journal",
 			},
 		}
 		if !reflect.DeepEqual(got, want) {
@@ -158,8 +160,8 @@ func TestPlanEnrichKeyMigrationDurationGuard(t *testing.T) {
 	// 否则一次升级就把全库没时长字段的旧条目全部冻结在原地。
 	t.Run("时长未知不拦合并", func(t *testing.T) {
 		cache := map[string]enrichEntry{
-			"丁世光|不散的筵席|神經志 The Journal":             {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 0},
-			"丁世光|不散的筵席（I Miss You）|神經志 The Journal": {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 261},
+			"丁世光|不散的筵席|神經志 The Journal":       {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 0},
+			"丁世光|不散的筵席\u00a0|神經志 The Journal": {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 261},
 		}
 		got := planEnrichKeyMigration(cache)
 		if len(got) != 1 {
@@ -171,18 +173,95 @@ func TestPlanEnrichKeyMigrationDurationGuard(t *testing.T) {
 	// 该组里分数更高的另一条冲突)——三方打架,宁可整组都不合并。
 	t.Run("nk名字冲突时整组放弃合并", func(t *testing.T) {
 		cache := map[string]enrichEntry{
-			"丁世光|不散的筵席|神經志 The Journal":             {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 68},
-			"丁世光|不散的筵席（I Miss You）|神經志 The Journal": {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 261},
+			"丁世光|不散的筵席|神經志 The Journal":       {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 68},
+			"丁世光|不散的筵席\u00a0|神經志 The Journal": {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 261},
 		}
 		got := planEnrichKeyMigration(cache)
 		want := map[string][]string{
-			"丁世光|不散的筵席|神經志 The Journal":             {"丁世光|不散的筵席|神經志 The Journal"},
-			"丁世光|不散的筵席（I Miss You）|神經志 The Journal": {"丁世光|不散的筵席（I Miss You）|神經志 The Journal"},
+			"丁世光|不散的筵席|神經志 The Journal":       {"丁世光|不散的筵席|神經志 The Journal"},
+			"丁世光|不散的筵席\u00a0|神經志 The Journal": {"丁世光|不散的筵席\u00a0|神經志 The Journal"},
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("planEnrichKeyMigration = %#v, want both kept standalone: %#v", got, want)
 		}
 	})
+}
+
+func TestEnrichKeyKeepsFullTitle(t *testing.T) {
+	if got := enrichKey("丁世光", "不散的筵席（I Miss You）", "神經志 The Journal"); got != "丁世光|不散的筵席（I Miss You）|神經志 The Journal" {
+		t.Errorf("enrichKey 要留着完整歌名: %q", got)
+	}
+	if got := legacyEnrichKey("丁世光", "不散的筵席（I Miss You）", "神經志 The Journal"); got != "丁世光|不散的筵席|神經志 The Journal" {
+		t.Errorf("legacyEnrichKey 按旧规则剥括号: %q", got)
+	}
+	for in, want := range map[string]string{
+		"A|Song (I Miss You)|B":      "A|Song|B",
+		"A|Song (I Miss You)~dur2|B": "A|Song~dur2|B",
+		"A|Song (Live)|B":            "A|Song (Live)|B",
+		"A|Song|B":                   "A|Song|B",
+	} {
+		if got := legacyOfEnrichKey(in); got != want {
+			t.Errorf("legacyOfEnrichKey(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestEnrichLegacyClaimedByOther(t *testing.T) {
+	rep := func(titles ...string) enrichEntry {
+		e := enrichEntry{Reported: map[string]reportedName{}}
+		for i, ti := range titles {
+			e.Reported[fmt.Sprintf("bundle%d", i)] = reportedName{Title: ti}
+		}
+		return e
+	}
+	for _, c := range []struct {
+		name  string
+		e     enrichEntry
+		title string
+		want  bool
+	}{
+		{"没记过原样写法", enrichEntry{}, "Song (#11)", false},
+		{"记的就是这一种", rep("Song (#11)"), "Song (#11)", false},
+		{"记的是另一种", rep("Song (#6)"), "Song (#11)", true},
+		{"两种都记过", rep("Song (#6)", "Song (#11)"), "Song (#11)", false},
+		{"记的去括号后不同", rep("Other (#6)"), "Song (#11)", false},
+	} {
+		if got := enrichLegacyClaimedByOther(c.e, c.title); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// 查不到完整歌名的 key 时的兜底(canonicalEnrichKey):带说明括号的写法用旧规则那条;那条是另一种写法的就不用;
+// 不带括号的写法用去括号后相同的那条;括号里写的不一样的两条不互相借。
+func TestCanonicalEnrichKeyLegacyFallback(t *testing.T) {
+	saved := enrichCache
+	t.Cleanup(func() { enrichCache = saved })
+	for _, c := range []struct {
+		name  string
+		cache map[string]enrichEntry
+		query string
+		want  string
+	}{
+		{"带译名的写法用旧条目", map[string]enrichEntry{"A|不散的筵席|B": {}}, "A|不散的筵席（I Miss You）|B", "A|不散的筵席|B"},
+		{"旧条目是另一种写法的", map[string]enrichEntry{"A|Song|B": {Reported: map[string]reportedName{"x": {Title: "Song (#6)"}}}}, "A|Song (#11)|B", ""},
+		{"不带括号的写法用带译名的那条", map[string]enrichEntry{"A|不散的筵席（I Miss You）|B": {}}, "A|不散的筵席|B", "A|不散的筵席（I Miss You）|B"},
+		{"括号里不一样的两条不互借", map[string]enrichEntry{"A|Song (#6)|B": {}}, "A|Song (#11)|B", ""},
+		{"大小写照旧宽松", map[string]enrichEntry{"A|song|B": {}}, "A|Song|B", "A|song|B"},
+		{"别的专辑不借", map[string]enrichEntry{"A|不散的筵席|C": {}}, "A|不散的筵席（I Miss You）|B", ""},
+		{"旧规则那条精确在就用它,不挑只差大小写的", map[string]enrichEntry{
+			"A|Song|B": {}, "A|song|B": {Lyrics: "[00:01.00]x", LyricsScore: 900},
+		}, "A|Song (I Miss You)|B", "A|Song|B"},
+	} {
+		enrichCache = c.cache
+		got, ok := canonicalEnrichKey(c.query)
+		if !ok {
+			got = ""
+		}
+		if got != c.want {
+			t.Errorf("%s: canonicalEnrichKey(%q) = %q, want %q", c.name, c.query, got, c.want)
+		}
+	}
 }
 
 func TestEnrichKeyDurationVariant(t *testing.T) {

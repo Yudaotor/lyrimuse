@@ -22,12 +22,12 @@ const (
 
 var musicVideoDurationHints = map[string]float64{}
 
-// noteMusicVideoDuration 记下正在播的 MV 的视频时长(秒)。key 与 enrichKey 同一套归一化。
+// noteMusicVideoDuration 记下正在播的 MV 的视频时长(秒)。key 按旧规则算(legacyEnrichKey,trackEnrichment 的 hintKey)。
 func noteMusicVideoDuration(artist, title, album string, videoSecs float64) {
 	if videoSecs <= 0 {
 		return
 	}
-	key := enrichKey(artist, title, album)
+	key := legacyEnrichKey(artist, title, album)
 	if key == "" {
 		return
 	}

@@ -360,7 +360,7 @@ func spotifyLocalLyricsTrackID(artist, title, album string) (id, idAlbum string)
 		return id, album
 	}
 	exact := enrichKey(artist, title, album)
-	prefix := enrichKey(artist, title, "")
+	prefix := legacyEnrichKey(artist, title, "")
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
 	if e, ok := enrichCache[exact]; ok && e.SpotifyTrackID != "" {
@@ -368,7 +368,7 @@ func spotifyLocalLyricsTrackID(artist, title, album string) (id, idAlbum string)
 	}
 	bestKey := ""
 	for k, e := range enrichCache {
-		if e.SpotifyTrackID != "" && strings.HasPrefix(k, prefix) && (bestKey == "" || k < bestKey) {
+		if e.SpotifyTrackID != "" && strings.HasPrefix(legacyOfEnrichKey(k), prefix) && (bestKey == "" || k < bestKey) {
 			bestKey, id = k, e.SpotifyTrackID
 		}
 	}

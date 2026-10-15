@@ -19,13 +19,13 @@ const radioDurationHintCap = 512
 
 var radioDurationHints = map[string]float64{}
 
-// noteRadioDuration 记下这首歌的真实曲长(秒)。key 与 enrichKey 同一套归一化。
+// noteRadioDuration 记下这首歌的真实曲长(秒)。key 按旧规则算(legacyEnrichKey,trackEnrichment 的 hintKey)。
 // 非正值不记 —— 目录还没给出来时就是 0,记进去等于把"未知"当成事实。
 func noteRadioDuration(artist, title, album string, secs float64) {
 	if secs <= 0 {
 		return
 	}
-	key := enrichKey(artist, title, album)
+	key := legacyEnrichKey(artist, title, album)
 	if key == "" {
 		return
 	}

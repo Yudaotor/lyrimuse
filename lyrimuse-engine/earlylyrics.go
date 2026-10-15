@@ -128,7 +128,7 @@ func nativeLyricSourcePending(answered func(string) bool) bool {
 
 type earlyLyricsTargetKey struct{}
 
-// withEarlyLyricsTarget 记下这次首次解析是哪一首:按播放器原样标签算的 key,poller 记正在播那首(noteEnrichPlayingKey)用的就是它。
+// withEarlyLyricsTarget 记下这次首次解析是哪一首:trackEnrichment 的 playKey,poller 记正在播那首(noteEnrichPlayingKey)用的也是这个口径。
 func withEarlyLyricsTarget(ctx context.Context, key string) context.Context {
 	return context.WithValue(ctx, earlyLyricsTargetKey{}, key)
 }

@@ -12,6 +12,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -32,9 +33,10 @@ import (
 // 拼歌名,跟引擎自己算出来的 lyrics_score 谁高谁低毫无关系 —— 这条更要命,等于把
 // 已经算好的质量判断丢掉了。
 //
-// 归一化只做两件事,刻意保守:
-//  1. cleanMediaTag —— 不可见空白/全角空格,跟 App 侧清洗播放器标签的 cleanTag 同一套规则。
-//  2. 去掉歌名结尾**括号里的译名/副标题**。
+// key 里的歌名是播放器原样的完整歌名,只做 cleanMediaTag(不可见空白/全角空格,跟 App 侧清洗播放器标签的 cleanTag
+// 同一套规则)。上面那种同一首歌两种写法,靠查找时的兜底合在一条上(canonicalEnrichKey):带说明括号的写法先找旧规则
+// (legacyEnrichKey,去掉结尾的译名/副标题括号)那条,不带的写法找去括号后相同的那条;括号里写的不一样的两种写法
+// (「Song (#6)」「Song (#11)」)各是一条。见 09 章决策 264。
 //
 // 明确**不做**的:不转小写、不折繁简。这两样都会污染显示 —— 缓存条目里根本没有单独的
 // title/artist/album 字段,"歌词管理"列表显示的就是 key 拆出来的那三段,转了小写就会看到
@@ -77,9 +79,66 @@ var enrichKeyVersionWordTokens = []string{"ver", "solo", "size"}
 var enrichKeyTrailingBracket = regexp.MustCompile(`\s*[（(\[【]([^）)\]】]*)[）)\]】]\s*$`)
 
 // enrichKey 是歌词缓存 key 的唯一构造点。所有会往 enrichCache 里写/查的地方都必须走它
-// (trackEnrichment / 专辑预取 / 从 lyrics 文件导入),漏掉一处就会重新长出重复条目。
+// (trackEnrichment / 专辑预取 / 从 lyrics 文件导入),漏掉一处就会重新长出重复条目。查不到时的兜底见 canonicalEnrichKey。
 func enrichKey(artist, title, album string) string {
+	return cleanMediaTag(artist) + "|" + cleanMediaTag(title) + "|" + cleanMediaTag(album)
+}
+
+// legacyEnrichKey:旧规则的 key,歌名去掉结尾的译名/副标题括号(normEnrichTitle)。存量条目都是按它建的;按歌名记的
+// 提示表(Spotify 曲目 id、播放侧曲目 id、电台曲长、MV 时长)写的一边是播放器原样的歌名、读的一边常是流水线里剥过括号的,
+// 两边都按它算才对得上。
+func legacyEnrichKey(artist, title, album string) string {
 	return cleanMediaTag(artist) + "|" + normEnrichTitle(title) + "|" + cleanMediaTag(album)
+}
+
+// legacyOfEnrichKey:一条缓存 key 按旧规则算出来的样子(歌名里的时长变体位「~durN」照留);切不出三段时原样返回。按 key 记忆化。
+func legacyOfEnrichKey(key string) string {
+	legacyKeyMemoMu.RLock()
+	v, ok := legacyKeyMemo[key]
+	legacyKeyMemoMu.RUnlock()
+	if ok {
+		return v
+	}
+	if strings.Count(key, "|") < 2 {
+		return key
+	}
+	artist, title, album := splitEnrichKey(key)
+	suffix := enrichKeyDurationVariantRe.FindString(title)
+	v = legacyEnrichKey(artist, strings.TrimSuffix(title, suffix), album)
+	if suffix != "" {
+		a, t, al := splitEnrichKey(v)
+		v = a + "|" + t + suffix + "|" + al
+	}
+	legacyKeyMemoMu.Lock()
+	if len(legacyKeyMemo) >= looseKeyMemoMax {
+		legacyKeyMemo = map[string]string{}
+	}
+	legacyKeyMemo[key] = v
+	legacyKeyMemoMu.Unlock()
+	return v
+}
+
+var (
+	legacyKeyMemoMu sync.RWMutex
+	legacyKeyMemo   = map[string]string{}
+)
+
+// enrichLegacyClaimedByOther:旧规则那条条目已经是另一种带括号写法的(播放器原样报的歌名记在 Reported 里,跟 title 去括号后
+// 相同、本身不同,而且 title 不在其中):「Song (#11)」不借「Song (#6)」放出来的那条。没记过原样写法的不算。纯函数。
+func enrichLegacyClaimedByOther(e enrichEntry, title string) bool {
+	title = cleanMediaTag(title)
+	legacy := normEnrichTitle(title)
+	other := false
+	for _, r := range e.Reported {
+		t := cleanMediaTag(r.Title)
+		if t == title {
+			return false
+		}
+		if t != "" && t != legacy && normEnrichTitle(t) == legacy {
+			other = true
+		}
+	}
+	return other
 }
 
 // normEnrichTitle 反复剥掉结尾的译名括号,碰到版本标记就停手。搜歌词、挑候选用的歌名另见 lyricSearchTitle。

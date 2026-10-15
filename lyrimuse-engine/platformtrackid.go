@@ -59,7 +59,7 @@ func notePlayingAppleCatalogID(artist, title, album string, trackID int64) {
 	if title == "" || trackID <= 0 {
 		return
 	}
-	notePlaybackTrackID(enrichKey(artist, title, album), func(v *playbackTrackIDs) {
+	notePlaybackTrackID(legacyEnrichKey(artist, title, album), func(v *playbackTrackIDs) {
 		v.appleCatalogID = strconv.FormatInt(trackID, 10)
 	})
 }
@@ -70,7 +70,7 @@ func notePlayingSpotifyTrackID(artist, title, album, id string) {
 	if title == "" || id == "" {
 		return
 	}
-	notePlaybackTrackID(enrichKey(artist, title, album), func(v *playbackTrackIDs) {
+	notePlaybackTrackID(legacyEnrichKey(artist, title, album), func(v *playbackTrackIDs) {
 		v.spotifyTrackID = id
 	})
 }
@@ -103,6 +103,6 @@ func playbackTrackIDsFor(artist, title, album string) (appleCatalogID, spotifyTr
 	}
 	playbackTrackIDMu.Lock()
 	defer playbackTrackIDMu.Unlock()
-	v := playbackTrackIDHints[enrichKey(artist, title, album)]
+	v := playbackTrackIDHints[legacyEnrichKey(artist, title, album)]
 	return v.appleCatalogID, v.spotifyTrackID
 }

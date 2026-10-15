@@ -288,6 +288,15 @@ func decisionSongDurationSecs(d *lyricsDecision) float64 {
 // 源本身有十一个,别名轮还会给同一个源带回好几条,不封顶单行能冲到几百字节。
 const lyricsDecisionLogMaxCandidates = 12
 
+// lyricsDecisionIsPlaying:这条决策评估的是不是在播那首(playingKey 是 poller 记下的那条)。决策记的是流水线里剥过括号的歌名,
+// 在播那首的 key 可能是完整歌名,按旧规则比(legacyOfEnrichKey);播放器没报专辑、这一轮拿登记专辑搜的(lyricsSearchAlbum)
+// 时在播那首的 key 里没有专辑。纯函数。
+func lyricsDecisionIsPlaying(d *lyricsDecision, playingKey string) bool {
+	pk := legacyOfEnrichKey(playingKey)
+	return pk == legacyEnrichKey(d.QueryArtist, d.QueryTitle, d.QueryAlbum) ||
+		d.QueryAlbum != "" && pk == legacyEnrichKey(d.QueryArtist, d.QueryTitle, "")
+}
+
 // logLyricsDecision 把一份决策压成一行日志。
 //
 // 为什么要有这一行:缓存里的 lyrics_decision 只留最近一次、下一轮就被覆盖,而
@@ -326,9 +335,7 @@ func logLyricsDecision(d *lyricsDecision, picked *scoredLyricCandidateResult, qu
 		winner, score = picked.Source, picked.Score
 	}
 	cur := enrichPlayingKey.Load()
-	// 播放器没报专辑、这一轮拿登记专辑搜的(lyricsSearchAlbum):在播那首的 key 里没有专辑。
-	playing := cur != nil && (*cur == enrichKey(d.QueryArtist, d.QueryTitle, d.QueryAlbum) ||
-		d.QueryAlbum != "" && *cur == enrichKey(d.QueryArtist, d.QueryTitle, ""))
+	playing := cur != nil && lyricsDecisionIsPlaying(d, *cur)
 	attrs := []any{
 		"path", d.Path,
 		// playing:评估的是不是此刻在播的那首。预取、补空、全量扫库的决策都是 false。

@@ -1222,7 +1222,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		log.Printf("now playing: %s - %s (album=%q duration=%.0fs bundle=%s)", p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Duration, p.cur.Bundle)
 		// 记下正在播的这首:它的提交当场写单条快照、整份落盘最多节流 2 秒,别的歌的落盘攒着(见 enrichsave.go)。
 		// 只能在这里记 —— trackEnrichment 也会被「上一首」调到(切歌后给上一首提交收听、空闲时中继推上一首)。
-		noteEnrichPlayingKey(enrichKey(p.cur.Artist, p.cur.Title, p.cur.Album))
+		noteEnrichPlayingKey(playingEnrichKey(p.cur.Artist, p.cur.Title, p.cur.Album))
 		// 顺手把接下来会播的那几首也丢到后台解析,提前解析好等真播到时大概率不用现等。
 		// 优先读播放器自己的队列,读不到才退回"同一张专辑里的其它曲目"——两层的理由见
 		// upcoming.go 头注。

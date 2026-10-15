@@ -352,10 +352,23 @@ func runCacheKeyTests() {
             "PRINCE|The Girl In Red (Interlude)|神經志 The Journal",
             "缓存key: 不转小写也不折繁简"
         )
-        // 幂等:迁移每次引擎启动都会跑一遍
+        // key 用完整歌名(只清洗);旧规则的 key 剥括号,存量条目按它建(跟引擎 TestEnrichKeyKeepsFullTitle 同一组)
         let once = K.normalizedKey(artist: "丁世光", title: "不散的筵席（I Miss You）", album: "神經志 The Journal")
-        expectEqual(once, "丁世光|不散的筵席|神經志 The Journal", "缓存key: 三段拼接")
+        expectEqual(once, "丁世光|不散的筵席（I Miss You）|神經志 The Journal", "缓存key: 三段拼接,歌名完整")
+        expectEqual(K.legacyKey(artist: "丁世光", title: "不散的筵席（I Miss You）", album: "神經志 The Journal"),
+                    "丁世光|不散的筵席|神經志 The Journal", "缓存key: 旧规则剥括号")
         expectEqual(K.normalizedTitle("不散的筵席"), "不散的筵席", "缓存key: 归一化过的再算一次不变")
+        for (input, want) in [("A|Song (I Miss You)|B", "A|Song|B"), ("A|Song (I Miss You)~dur2|B", "A|Song~dur2|B"),
+                              ("A|Song (Live)|B", "A|Song (Live)|B"), ("A|Song|B", "A|Song|B")] {
+            expectEqual(K.legacyKey(ofKey: input), want, "缓存key: 旧规则形态 \(input)")
+        }
+        for (name, reported, title, want) in [
+            ("没记过原样写法", [String](), "Song (#11)", false), ("记的就是这一种", ["Song (#11)"], "Song (#11)", false),
+            ("记的是另一种", ["Song (#6)"], "Song (#11)", true), ("两种都记过", ["Song (#6)", "Song (#11)"], "Song (#11)", false),
+            ("记的去括号后不同", ["Other (#6)"], "Song (#11)", false),
+        ] {
+            expectEqual(K.legacyClaimedByOther(reportedTitles: reported, title: title), want, "缓存key: 旧条目被占着 \(name)")
+        }
 
         // ---- looseKey:只用于查询兜底的宽松形态 ----
         //
@@ -666,19 +679,55 @@ func runCacheKeyTests() {
         let artist = "Denzel Curry/GIZZLE/Bren Joy"
         let title = "Dynasties and Dystopia (from the series Arcane League of Legends)"
         let album = "Arcane League of Legends (Soundtrack from the Animated Series)"
-        expectEqual(EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album),
+        expectEqual(EnrichCacheKeys.legacyKey(artist: artist, title: title, album: album),
                     "Denzel Curry/GIZZLE/Bren Joy|Dynasties and Dystopia|"
                         + "Arcane League of Legends (Soundtrack from the Animated Series)",
-                    "缓存 key: 歌名结尾的 (from the series …) 副题被剥掉,专辑名原样保留")
-        // looseKey 接不住这个差异 —— 这正是"必须用 normalizedKey 而不是手拼 + looseKey"的理由
+                    "缓存 key: 旧规则剥掉歌名结尾的 (from the series …) 副题,专辑名原样保留")
+        // looseKey 接不住这个差异 —— 存量条目按旧规则存着,找它要走 legacyKey,不能靠手拼 + looseKey
         expectEqual(EnrichCacheKeys.looseKey("\(artist)|\(title)|\(album)")
                         == EnrichCacheKeys.looseKey(
-                            EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)),
+                            EnrichCacheKeys.legacyKey(artist: artist, title: title, album: album)),
                     false,
                     "缓存 key: looseKey 折不掉结尾副题(所以手拼 key 连兜底都命不中)")
         // 版本限定词(Live/Remix 等)必须**保留** —— 那是另一次录音,不是副题噪音
         expectEqual(EnrichCacheKeys.normalizedTitle("Purple Rain (Live)"), "Purple Rain (Live)",
                     "缓存 key: 版本限定词不剥")
+    }
+
+    // MARK: - 缓存 key 用完整歌名:查不到时的兜底(跟引擎 TestCanonicalEnrichKeyLegacyFallback 同一组)
+    do {
+        func entry(_ json: String) -> EnrichCacheEntry {
+            try! JSONDecoder().decode(EnrichCacheEntry.self, from: Data(json.utf8))
+        }
+        let plain = entry("{}")
+        let claimed = entry(#"{"reported":{"x":{"title":"Song (#6)"}}}"#)
+        let better = entry(#"{"lyrics":"[00:01.00]x","lyrics_score":900}"#)
+        let cases: [(String, [String: EnrichCacheEntry], String, String?)] = [
+            ("带译名的写法用旧条目", ["A|不散的筵席|B": plain], "A|不散的筵席（I Miss You）|B", "A|不散的筵席|B"),
+            ("旧条目是另一种写法的", ["A|Song|B": claimed], "A|Song (#11)|B", nil),
+            ("不带括号的写法用带译名的那条", ["A|不散的筵席（I Miss You）|B": plain], "A|不散的筵席|B", "A|不散的筵席（I Miss You）|B"),
+            ("括号里不一样的两条不互借", ["A|Song (#6)|B": plain], "A|Song (#11)|B", nil),
+            ("大小写照旧宽松", ["A|song|B": plain], "A|Song|B", "A|song|B"),
+            ("别的专辑不借", ["A|不散的筵席|C": plain], "A|不散的筵席（I Miss You）|B", nil),
+            ("旧规则那条精确在就用它,不挑只差大小写的", ["A|Song|B": plain, "A|song|B": better], "A|Song (I Miss You)|B", "A|Song|B"),
+        ]
+        for (name, all, query, want) in cases {
+            let loose = EnrichCacheReader.groupIndex(all) { EnrichCacheKeys.looseKey($0) }
+            let legacyLoose = EnrichCacheReader.groupIndex(all) { EnrichCacheKeys.looseKey(EnrichCacheKeys.legacyKey(ofKey: $0)) }
+            let got = EnrichCacheReader.fallbackKey(query, in: all, loose: { loose[EnrichCacheKeys.looseKey($0)] },
+                                                    legacyLoose: { legacyLoose[EnrichCacheKeys.looseKey($0)] })
+            expectEqual(got, want, "缓存key兜底: \(name)")
+        }
+        let snap: [(String, String, String, Bool)] = [
+            ("快照是旧规则那条", "A|不散的筵席|B", "A|不散的筵席（I Miss You）|B", true),
+            ("快照是带译名的那条、查的不带", "A|不散的筵席（I Miss You）|B", "A|不散的筵席|B", true),
+            ("时长变体位不算", "A|不散的筵席~dur2|B", "A|不散的筵席（I Miss You）|B", true),
+            ("括号里不一样的两条", "A|Song (#6)|B", "A|Song (#11)|B", false),
+            ("别的歌", "A|别的歌|B", "A|不散的筵席|B", false),
+        ]
+        for (name, snapshotKey, query, want) in snap {
+            expectEqual(EnrichCacheReader.playingSnapshotMatches(snapshotKey, query), want, "正在播放快照: \(name)")
+        }
     }
 
     // MARK: - looseKey 必须折平合 credit 分隔符(跟引擎的 loosenEnrichKey 同步)

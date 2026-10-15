@@ -272,7 +272,7 @@ final class LyricsExternalEditor {
         let newKey = LyricsOffsetStore.trackKey(artist: session.artist, title: session.title, lyrics: new.lyrics, lyricsYRC: new.yrc)
         LyricsOffsetStore.shared.carryOffset(
             from: oldKey, to: newKey,
-            pinKey: EnrichCacheKeys.normalizedKey(artist: session.artist, title: session.title, album: session.album),
+            pinKey: EnrichCacheKeys.strippingDurationVariant(session.key),
             siblings: EnrichCacheReader.offsetSiblings(forKey: session.key))
     }
 

@@ -209,7 +209,14 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         case manualLyrics = "manual_lyrics"
         case lyricsScore = "lyrics_score"
         case bodyFields = "body_fields"
+        case reported
     }
+
+    /// 各播放器原样报的歌名(引擎 enrichEntry.Reported,跟写法键不一样时才记)。查找兜底判旧条目是不是另一种写法的用
+    /// (EnrichCacheKeys.legacyClaimedByOther)。
+    let reportedTitles: [String]
+
+    private struct ReportedName: Decodable { let title: String? }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -279,6 +286,8 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         manualLyrics = try c.decodeIfPresent(Bool.self, forKey: .manualLyrics)
         lyricsScore = try c.decodeIfPresent(Int.self, forKey: .lyricsScore)
         bodyFields = try c.decodeIfPresent(Int.self, forKey: .bodyFields)
+        reportedTitles = ((try? c.decodeIfPresent([String: ReportedName].self, forKey: .reported)) ?? [:])
+            .values.compactMap(\.title)
     }
 
     /// 有没有逐字:完整条目看字段本身,精简条目看位图(位图带 known 位才可信,见 EnrichCacheSlim.Fields)。
@@ -419,6 +428,9 @@ public enum EnrichCacheReader {
     // 宽松匹配索引(looseKey → 组内代表 key,挑法见 betterEntry),跟 cachedEntries 同寿命、惰性
     // 构建 —— 见 looseIndex。
     private static var cachedLooseIndex: [String: String]?
+    // 按旧规则形态的宽松索引(looseKey(legacyKey(ofKey:)) → 组内代表 key),跟 cachedLooseIndex 同寿命、惰性构建 ——
+    // 见 fallbackKey。
+    private static var cachedLegacyLooseIndex: [String: String]?
     /// 已解码那一版每条的校验值(见 EnrichIndexDiff),下一版只解码变了的那几条。跟 cachedEntries 同寿命。
     private static var cachedFingerprints: EnrichIndexDiff.Fingerprints?
     /// 已解码内容的代号:每采纳一版、每清空一次都加一。增量结果是按某一代算的,回主线程时换过代就作废。
@@ -697,7 +709,7 @@ public enum EnrichCacheReader {
     public static func resolvedKey(artist: String, title: String, album: String) -> String? {
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         if let p = freshPlayingEntry(),
-           EnrichCacheKeys.looseKey(EnrichCacheKeys.strippingDurationVariant(p.key)) == EnrichCacheKeys.looseKey(key) {
+           playingSnapshotMatches(p.key, key) {
             return p.key
         }
         guard let all = loadEntries() else { return nil }
@@ -767,7 +779,7 @@ public enum EnrichCacheReader {
         // 引擎刚写的「正在放的这一条」:它是按真实时长挑过变体的(见 matchedKey),所以按去掉
         // `~durN` 之后的 key 认 —— 正在放的是变体时,播放器报的三段拼出来的永远是基条目的 key。
         if let p = freshPlayingEntry(),
-           EnrichCacheKeys.looseKey(EnrichCacheKeys.strippingDurationVariant(p.key)) == EnrichCacheKeys.looseKey(key) {
+           playingSnapshotMatches(p.key, key) {
             let e = p.entry
             return makeLyrics(e, lyrics: e.lyrics ?? "", tr: e.lyricsTr ?? "", roma: e.lyricsRoma ?? "",
                               yrc: e.lyricsYRC ?? "", plain: e.plainLyrics ?? "", bg: e.lyricsBG ?? "")
@@ -843,7 +855,7 @@ public enum EnrichCacheReader {
     public static func storedEntry(artist: String, title: String, album: String) -> StoredEntry? {
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         if let p = freshPlayingEntry(),
-           EnrichCacheKeys.looseKey(EnrichCacheKeys.strippingDurationVariant(p.key)) == EnrichCacheKeys.looseKey(key) {
+           playingSnapshotMatches(p.key, key) {
             return storedEntry(p.entry, key: p.key)
         }
         guard let all = loadEntries(), let matched = matchedKey(key, in: all), let entry = all[matched] else { return nil }
@@ -891,10 +903,82 @@ public enum EnrichCacheReader {
     ///
     /// 命中之后再按时长挑变体,见 `durationVariantKey(for:in:)`。
     private static func matchedKey(_ key: String, in all: [String: EnrichCacheEntry]) -> String? {
-        guard let base = all[key] != nil ? key : looseIndex(in: all)[EnrichCacheKeys.looseKey(key)] else {
+        guard let base = all[key] != nil ? key : fallbackKey(key, in: all) else {
             return nil
         }
         return durationVariantKey(for: base, in: all)
+    }
+
+    /// 精确 key 没有条目时的兜底(用缓存着的两份宽松索引),见下面那个纯函数。
+    private static func fallbackKey(_ key: String, in all: [String: EnrichCacheEntry]) -> String? {
+        let loose = looseIndex(in: all)
+        return fallbackKey(key, in: all, loose: { loose[memoizedLooseKey($0)] },
+                           legacyLoose: { legacyLooseIndex(in: all)[memoizedLooseKey($0)] })
+    }
+
+    /// 精确 key 没有条目时的兜底,跟引擎 canonicalEnrichKey 同一个口径:歌名带说明括号的 key 先用旧规则那条(没被另一种写法
+    /// 占着,EnrichCacheKeys.legacyClaimedByOther);再按宽松 key 找;不带括号的 key 还认去括号后相同的条目,带括号的只认旧规则
+    /// 形态、没被占着的那条,不认括号里写的不一样的另一条。几条候选按 betterEntry 挑。loose / legacyLoose 是两份宽松索引的
+    /// 查法(参数是 key,返回组内代表 key,见 groupIndex)。纯函数。
+    public nonisolated static func fallbackKey(_ key: String, in all: [String: EnrichCacheEntry],
+                                               loose: (String) -> String?, legacyLoose: (String) -> String?) -> String? {
+        let legacy = EnrichCacheKeys.legacyKey(ofKey: key)
+        let bracketed = legacy != key
+        let title = EnrichCacheKeys.titleSegment(key)
+        func unclaimed(_ k: String) -> Bool {
+            guard let e = all[k] else { return false }
+            return !EnrichCacheKeys.legacyClaimedByOther(reportedTitles: e.reportedTitles, title: title)
+        }
+        if bracketed, unclaimed(legacy) { return legacy }
+        var candidates: [String] = []
+        if let k = loose(key) { candidates.append(k) }
+        if bracketed {
+            if let k = loose(legacy), EnrichCacheKeys.legacyKey(ofKey: k) == k, unclaimed(k) { candidates.append(k) }
+        } else if let k = legacyLoose(legacy) {
+            candidates.append(k)
+        }
+        var best: String?
+        for k in candidates where k != key {
+            guard let e = all[k] else { continue }
+            if let b = best, let current = all[b], !betterEntry(e, current, k, b) { continue }
+            best = k
+        }
+        return best
+    }
+
+    /// 按 group 把条目分组,每组挑 betterEntry 最好的那条当代表:group 是 looseKey 时就是宽松索引,是 looseKey(legacyKey(ofKey:))
+    /// 时是旧规则形态的宽松索引。纯函数。
+    public nonisolated static func groupIndex(_ all: [String: EnrichCacheEntry], group: (String) -> String) -> [String: String] {
+        var index: [String: String] = [:]
+        index.reserveCapacity(all.count)
+        for (k, e) in all {
+            let g = group(k)
+            if let existing = index[g], let current = all[existing] {
+                if betterEntry(e, current, k, existing) { index[g] = k }
+            } else {
+                index[g] = k
+            }
+        }
+        return index
+    }
+
+    /// 旧规则形态的宽松索引(groupIndex 按 looseKey(legacyKey(ofKey:)) 分组)。惰性构建,只在不带括号的 key 精确、宽松都没中时
+    /// 才建。
+    private static func legacyLooseIndex(in all: [String: EnrichCacheEntry]) -> [String: String] {
+        if let cachedLegacyLooseIndex { return cachedLegacyLooseIndex }
+        let index = groupIndex(all) { memoizedLooseKey(EnrichCacheKeys.legacyKey(ofKey: $0)) }
+        cachedLegacyLooseIndex = index
+        return index
+    }
+
+    /// 正在播放快照(引擎写的是它解析时用的那条,可能是旧规则那条)对不对得上这次查的 key:宽松 key 相同,或者按旧规则相同
+    /// 且(这次查的 key 不带括号,或者快照那条是旧规则形态)。时长变体位不算。
+    public nonisolated static func playingSnapshotMatches(_ snapshotKey: String, _ key: String) -> Bool {
+        let pk = EnrichCacheKeys.strippingDurationVariant(snapshotKey)
+        if EnrichCacheKeys.looseKey(pk) == EnrichCacheKeys.looseKey(key) { return true }
+        let pl = EnrichCacheKeys.legacyKey(ofKey: pk), ql = EnrichCacheKeys.legacyKey(ofKey: key)
+        guard EnrichCacheKeys.looseKey(pl) == EnrichCacheKeys.looseKey(ql) else { return false }
+        return ql == key || pl == pk
     }
 
     private static func matchedEntry(_ key: String, in all: [String: EnrichCacheEntry]) -> EnrichCacheEntry? {
@@ -924,7 +1008,8 @@ public enum EnrichCacheReader {
     /// 时间轴整首都是错的;8 个位都冲突才退回基条目,跟引擎一样。
     private static func durationVariantKey(for base: String, in all: [String: EnrichCacheEntry]) -> String? {
         guard let playing = playingDuration,
-              memoizedLooseKey(playing.key) == memoizedLooseKey(base),
+              memoizedLooseKey(EnrichCacheKeys.legacyKey(ofKey: playing.key))
+                  == memoizedLooseKey(EnrichCacheKeys.legacyKey(ofKey: base)),
               EnrichCacheKeys.durationMismatch(all[base]?.durationSecs, playing.secs) else { return base }
         for n in 2...EnrichCacheKeys.maxDurationVariants {
             let vk = EnrichCacheKeys.durationVariant(base, n: n)
@@ -1763,7 +1848,7 @@ public enum EnrichCacheReader {
     /// 单条快照对不上时再看待落盘条目(上一首、预取过的歌,整份最多攒 10 分钟才落盘),按 key 原样查。
     private static func freshPlayingEntry(forKey key: String) -> EnrichCacheEntry? {
         if let p = freshPlayingEntry(),
-           EnrichCacheKeys.looseKey(EnrichCacheKeys.strippingDurationVariant(p.key)) == EnrichCacheKeys.looseKey(key) {
+           playingSnapshotMatches(p.key, key) {
             return p.entry
         }
         return freshPendingEntries()?[key]
@@ -1815,6 +1900,7 @@ public enum EnrichCacheReader {
             cachedCoverIndex = nil
             cachedAlbumCoverIndex = nil
             cachedLooseIndex = nil
+            cachedLegacyLooseIndex = nil
             cachedAliasTables = nil; aliasTablesGeneration += 1
             return
         }
@@ -1886,6 +1972,7 @@ public enum EnrichCacheReader {
             cachedCoverIndex = nil
             cachedAlbumCoverIndex = nil
             cachedLooseIndex = nil
+            cachedLegacyLooseIndex = nil
             cachedAliasTables = nil; aliasTablesGeneration += 1
             cachedFingerprints = nil; contentGeneration += 1
             return
@@ -2000,6 +2087,7 @@ public enum EnrichCacheReader {
             cachedCoverIndex = d.covers
             cachedAlbumCoverIndex = d.albumCovers
             cachedLooseIndex = d.loose
+            cachedLegacyLooseIndex = nil
             looseKeyMemo = d.looseKeyMemo
             titleCoverKeyMemo = d.titleCoverKeyMemo
             albumCoverKeyMemo = d.albumCoverKeyMemo
@@ -2008,6 +2096,7 @@ public enum EnrichCacheReader {
             cachedCoverIndex = nil
             cachedAlbumCoverIndex = nil
             cachedLooseIndex = nil
+            cachedLegacyLooseIndex = nil
         case .keep:
             break
         }
@@ -2051,6 +2140,7 @@ public enum EnrichCacheReader {
                 cachedCoverIndex = nil
                 cachedAlbumCoverIndex = nil
                 cachedLooseIndex = nil
+                cachedLegacyLooseIndex = nil
                 cachedAliasTables = nil; aliasTablesGeneration += 1
                 cachedFingerprints = nil; contentGeneration += 1
             }

@@ -1551,14 +1551,20 @@ struct LyricsManagerView: View {
 
     /// 正在放的这首在列表里对应哪一条:跟 focusCurrentlyPlaying 同一套候选(归一化 key、原样拼的 key、各自的宽松 key),
     /// 占位行也算。换歌、列表重读、占位行变了之后各算一次,不在 body 里现算。
+    /// 正在播的这首在缓存里的条目 key:EnrichCacheReader.resolvedKey(精确 → 旧规则 → 宽松,跟悬浮窗读歌词同一套),
+    /// 还没有条目时是 EnrichCacheKeys.normalizedKey(引擎马上按它新建,占位行也用它)。
+    static func nowPlayingEntryKey(_ playback: PlaybackCoordinator) -> String {
+        EnrichCacheReader.resolvedKey(artist: playback.artist, title: playback.title, album: playback.album)
+            ?? EnrichCacheKeys.normalizedKey(artist: playback.artist, title: playback.title, album: playback.album)
+    }
+
     private func refreshNowPlayingKey() {
         let playback = PlaybackCoordinator.shared
         guard !playback.artist.isEmpty || !playback.title.isEmpty else {
             if nowPlayingKey != nil { nowPlayingKey = nil }
             return
         }
-        let normalizedKey = EnrichCacheKeys.normalizedKey(
-            artist: playback.artist, title: playback.title, album: playback.album)
+        let normalizedKey = Self.nowPlayingEntryKey(playback)
         let rawKey = "\(playback.artist)|\(playback.title)|\(playback.album)"
         let candidates = normalizedKey == rawKey ? [normalizedKey] : [normalizedKey, rawKey]
         let resolved: String?
@@ -2829,8 +2835,7 @@ struct LyricsManagerView: View {
             placeholderSummary = nil
             return
         }
-        let key = EnrichCacheKeys.normalizedKey(
-            artist: playback.artist, title: playback.title, album: playback.album)
+        let key = Self.nowPlayingEntryKey(playback)
         // 缓存里已经有真实条目了(引擎搜完了,不管搜到没搜到)——占位行让位,
         // 真实那一行会随下一次 summaries 重建自然出现在列表里。
         guard !store.hasEntry(forKey: key) else {
@@ -2896,17 +2901,11 @@ struct LyricsManagerView: View {
     // 普通函数内直接访问单例属性即可,不用建立订阅。
     private func focusCurrentlyPlaying(scrollProxy: ScrollViewProxy, scroll: Bool = true) {
         let playback = PlaybackCoordinator.shared
-        // key 必须走 EnrichCacheKeys.normalizedKey —— 那是缓存 key 在 Swift 侧的**唯一
-        // 构造点**(逐字节镜像引擎的 enrichKey)。手拼 "artist|title|album" 会漏掉
-        // 两道清洗:cleanTag(各类空格/零宽字符)和 normalizedTitle(循环剥结尾括号里的副题)。
-        //
-        // Apple Music 报的是「Dynasties and Dystopia (from the series Arcane League of
-        // Legends)」,而缓存里那条 key 是剥掉副题的「Dynasties and Dystopia」——精确匹配
-        // 落空,而 looseKey 只折大小写/空格/繁简、折不掉那段副题,于是本函数静默返回,
-        // 表现成"开窗压根没定位"。悬浮窗/灵动岛那边没事:EnrichCacheReader 一直走的是
-        // normalizedKey。
-        let normalizedKey = EnrichCacheKeys.normalizedKey(
-            artist: playback.artist, title: playback.title, album: playback.album)
+        // key 走 nowPlayingEntryKey(悬浮窗、灵动岛读歌词时找条目的那一套,含旧规则兜底)。手拼 "artist|title|album"
+        // 会漏掉清洗(cleanTag),也找不到按旧规则存着的条目:Apple Music 报的是「Dynasties and Dystopia (from the
+        // series Arcane League of Legends)」,缓存里那条可能是剥掉副题的「Dynasties and Dystopia」,looseKey 只折
+        // 大小写/空格/繁简、折不掉那段副题,本函数会静默返回,表现成"开窗压根没定位"。
+        let normalizedKey = Self.nowPlayingEntryKey(playback)
         // 原样拼的那个仍留作第二候选:key 归一化上线前入库的老条目按未清洗的写法存着
         // (磁盘上那份 .pre-keynorm.bak 就是那次迁移留下的),迁移漏掉的个案还能靠它命中。
         let rawKey = "\(playback.artist)|\(playback.title)|\(playback.album)"

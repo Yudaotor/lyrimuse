@@ -636,10 +636,11 @@ func enrichAlbumsFor(artist, title string, n int) []string {
 	counts := map[string]int{}
 	enrichMu.Lock()
 	for k := range enrichCache {
-		if !strings.HasPrefix(k, prefix) {
+		lk := legacyOfEnrichKey(k)
+		if !strings.HasPrefix(lk, prefix) {
 			continue
 		}
-		if album := strings.TrimSpace(k[len(prefix):]); album != "" {
+		if album := strings.TrimSpace(lk[len(prefix):]); album != "" {
 			counts[album]++
 		}
 	}

@@ -114,9 +114,9 @@ func prefetchAlbumTracks(label string, tracks []albumTrack, currentArtist, curre
 	// `A & B`),逐字节比几乎必然漏 —— 于是正在播的这首被当成"另一首"又预取一遍,
 	// 在缓存里留下一条只差写法的重复条目(实测 Ticking Away 就是这么来的:那张专辑
 	// 只有 1 首,预取队列里那一首正是它自己)。
-	currentLoose := loosenEnrichKey(enrichKey(currentArtist, currentTitle, album))
+	currentLoose := loosenEnrichKey(legacyEnrichKey(currentArtist, currentTitle, album))
 	for _, t := range tracks {
-		if t.title == "" || loosenEnrichKey(enrichKey(t.artist, t.title, album)) == currentLoose {
+		if t.title == "" || loosenEnrichKey(legacyEnrichKey(t.artist, t.title, album)) == currentLoose {
 			continue // 当前正在播的这首已经走正常路径解析,不用重复触发
 		}
 		// 走 enrichKey 而不是自己拼:这条路径的曲目名来自**歌词平台**(网易云的曲目

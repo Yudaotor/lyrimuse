@@ -597,15 +597,28 @@ var enrichLooseMatchLogged = map[string]bool{}
 //
 // 线性扫而不是维护一份小写索引:写入点分散在几条补全路径里,索引得每处都记得同步。扫一遍的成本在每条现算一次
 // loosenEnrichKey(繁转简)上,那一步按输入记忆化了(见 loosekey.go)。
+//
+// 再加一层旧规则(legacyOfEnrichKey,见 enrichKey 头注):key 的歌名带说明括号时,旧规则那条没被另一种写法占着
+// (enrichLegacyClaimedByOther)就直接用它;宽松比对也按旧规则的样子比 —— 不带括号的 key 认任何去括号后相同的条目,
+// 带括号的 key 只认旧规则形态、没被占着的那几条,不认括号里写的不一样的另一条。
 func canonicalEnrichKey(key string) (string, bool) {
+	legacy := legacyOfEnrichKey(key)
+	bracketed := legacy != key
+	_, title, _ := splitEnrichKey(key)
+	if bracketed {
+		if e, ok := enrichCache[legacy]; ok && !enrichLegacyClaimedByOther(e, title) {
+			return legacy, true
+		}
+	}
 	loose := loosenEnrichKey(key)
+	looseLegacy := loosenEnrichKey(legacy)
 	// 必须挑出**确定的**那一条,不能"遍历时撞见谁就用谁"—— Go 的 map 遍历顺序是随机的,
 	// 而缓存里真的存在一个宽松键对应多条的情况(上面孙燕姿那组是三条)。随机命中的后果是
 	// 同一首歌这次读到 A 的歌词、下次读到 B 的,时间轴还可能不一样,排查起来像见了鬼。
 	// 用 betterEnrichEntry 挑最好的那条 —— 跟迁移合并时的胜者规则同一套,两处结论一致。
 	best := ""
 	for existing, e := range enrichCache {
-		if existing == key || loosenEnrichKey(existing) != loose {
+		if existing == key || !canonicalEnrichKeyMatches(existing, e, loose, looseLegacy, bracketed, title) {
 			continue
 		}
 		if best == "" || betterEnrichEntry(e, enrichCache[best], existing, best) {
@@ -616,6 +629,21 @@ func canonicalEnrichKey(key string) (string, bool) {
 		return "", false
 	}
 	return best, true
+}
+
+// canonicalEnrichKeyMatches:existing 这条能不能给宽松 key 是 loose、旧规则宽松 key 是 looseLegacy 的那首歌用(见 canonicalEnrichKey)。
+func canonicalEnrichKeyMatches(existing string, e enrichEntry, loose, looseLegacy string, bracketed bool, title string) bool {
+	if loosenEnrichKey(existing) == loose {
+		return true
+	}
+	el := legacyOfEnrichKey(existing)
+	if loosenEnrichKey(el) != looseLegacy {
+		return false
+	}
+	if !bracketed {
+		return true
+	}
+	return el == existing && !enrichLegacyClaimedByOther(e, title)
 }
 
 // looseInflightKey 在**正在后台解析**的队列里找宽松等价的 key。
@@ -727,9 +755,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	// 播放器原样报的那一份(下面歌名会归一化),跟写法键不一样时记进条目(noteReportedNameLocked)。
 	reported := reportedName{Title: title, Artist: artist, Album: album}
 	key := enrichKey(artist, title, album)
-	// Spotify 曲目 ID 提示按**原始** key 存(poller 那边也是拿原始 artist/title/album 算的,见 spotifytrack.go);
-	// 下面 key 可能被 canonical / 时长变体重定向,提示的查找键要留一份原样的。
-	hintKey := key
+	// 按歌名记的提示表(Spotify 曲目 ID、电台曲长、MV 时长)按旧规则的 key 存(见 legacyEnrichKey),下面 key 可能被
+	// canonical / 时长变体重定向,提示的查找键单独算。
+	hintKey := legacyEnrichKey(artist, title, album)
 	// Apple Music 页:有已校验的目录锚点就用它的(见 appleCatalogLinkFor)。锚点按播放器报的原标题核对,先按原标题查,
 	// 下面标题归一之后再补查一次。另一把锁(appleCatalogMu),在取 enrichMu 之前取。
 	anchorLink := appleCatalogLinkFor(artist, title, album, durationSecs)
@@ -780,6 +808,8 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			key, e, ok = alt, enrichCache[alt], true
 		}
 	}
+	// 正在播的这首记在哪条上(poller 换歌时按 playingEnrichKey 记的就是它):兜底找到的那条,时长变体不算在内。
+	playKey := key
 	correctDuration := false
 	// 播放器自己说是同一段录音(sameRecordingAsPlaying),时长对不上不算换了版本:不另开「~durN」,也不按时长重搜歌词。
 	sameRecordingStay := false
@@ -1012,8 +1042,8 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 不挂在 run() 的进程级 ctx 下面:进程整体退出时这些 goroutine 反正会跟着
 		// 主进程一起消失,不需要额外传导那层取消;这里只需要"能单独取消某一个 key"
 		// 这一件事。
-		// 解析的是正在播的这首时,首轮里歌词可以先上屏(见 earlylyrics.go);判据按原样标签的 hintKey,poller 记在播那首用的就是它。
-		cancelCtx, cancel := context.WithCancel(withEarlyLyricsTarget(withYouTubeMusicVideoID(context.Background(), kasetVideoID), hintKey))
+		// 解析的是正在播的这首时,首轮里歌词可以先上屏(见 earlylyrics.go);判据按 playKey,poller 记在播那首用的就是它。
+		cancelCtx, cancel := context.WithCancel(withEarlyLyricsTarget(withYouTubeMusicVideoID(context.Background(), kasetVideoID), playKey))
 		cancelCtx = withLyricSearchTitle(cancelCtx, searchTitle)
 		cancelCtx = withPlayerCover(cancelCtx, playerCover)
 		enrichCancelFuncs[key] = cancel
@@ -6015,7 +6045,7 @@ func migratePlayersFromAppleAnchors() {
 	appleCatalogMu.Lock()
 	anchorKeys := make(map[string]string, len(appleCatalogCache))
 	for id, t := range appleCatalogCache {
-		anchorKeys[id] = enrichKey(t.ArtistName, t.TrackName, t.AlbumName)
+		anchorKeys[id] = legacyEnrichKey(t.ArtistName, t.TrackName, t.AlbumName)
 	}
 	appleCatalogMu.Unlock()
 	enrichMu.Lock()
@@ -6027,7 +6057,7 @@ func migratePlayersFromAppleAnchors() {
 			continue
 		}
 		artist, title, album := splitEnrichKey(k)
-		if enrichKey(artist, enrichKeyDurationVariantRe.ReplaceAllString(title, ""), album) != want {
+		if legacyEnrichKey(artist, enrichKeyDurationVariantRe.ReplaceAllString(title, ""), album) != want {
 			continue
 		}
 		changed := notePlayerLocked(&e, appleMusicBundleID)
@@ -6061,6 +6091,10 @@ func migrateListenDurations(listens []listenLogLine) {
 		if l.T == "l" && l.DUR > 0 && l.TI != "" {
 			k := enrichKey(l.AR, l.TI, l.AL)
 			durs[k] = append(durs[k], l.DUR)
+			// 旧规则建的条目按去括号后的歌名找(收听记录里是原样歌名)。
+			if lk := legacyEnrichKey(l.AR, l.TI, l.AL); lk != k {
+				durs[lk] = append(durs[lk], l.DUR)
+			}
 		}
 	}
 	enrichMu.Lock()

@@ -74,7 +74,7 @@ func noteSpotifyTrackID(artist, title, album, id string) {
 	if id == "" || title == "" {
 		return
 	}
-	key := enrichKey(artist, title, album)
+	key := legacyEnrichKey(artist, title, album)
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
 	if len(spotifyTrackIDHints) >= spotifyTrackIDHintCap {

@@ -70,7 +70,7 @@ func enrichLyricsWinnerArtists(artist, title string) (names []string, pending bo
 	defer enrichMu.Unlock()
 	found := false
 	for k, e := range enrichCache {
-		if !strings.HasPrefix(k, prefix) {
+		if !strings.HasPrefix(legacyOfEnrichKey(k), prefix) {
 			continue
 		}
 		found = true

@@ -317,11 +317,11 @@ var errSpotifyStateNoQueue = errors.New("spotify state")
 
 // spotifyTrackIDHintFor 取换曲那一拍记下的 Spotify 曲目 id(见 spotifytrack.go)。
 //
-// 提示表按 enrichKey(artist, title, album) 存,这里拿不到 album,所以按前两段匹配。提示用完不删,同一首歌
+// 提示表按 legacyEnrichKey(artist, title, album) 存,这里拿不到 album,所以按前两段匹配。提示用完不删,同一首歌
 // 从单曲和专辑各放过一次,表里就有两条同前缀的 —— 先认最近一次换曲记下的那条;不是它、又不止一条时
 // 不猜(map 遍历序是随机的,猜错就是拿别的录音的 id 去核对)。
 func spotifyTrackIDHintFor(artist, title string) string {
-	prefix := enrichKey(artist, title, "") // 专辑段为空,正好是「artist|title|」这个前缀
+	prefix := legacyEnrichKey(artist, title, "") // 专辑段为空,正好是「artist|title|」这个前缀
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
 	if strings.HasPrefix(spotifyTrackIDLastKey, prefix) {

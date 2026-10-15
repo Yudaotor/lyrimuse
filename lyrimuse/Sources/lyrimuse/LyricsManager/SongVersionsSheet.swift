@@ -144,7 +144,8 @@ struct SongVersionsSheet: View {
     static var nowPlayingKey: String? {
         let playback = PlaybackCoordinator.shared
         guard playback.resolvedPlayerBundleID != nil, !playback.title.isEmpty else { return nil }
-        return EnrichCacheKeys.normalizedKey(artist: playback.artist, title: playback.title, album: playback.album)
+        return EnrichCacheReader.resolvedKey(artist: playback.artist, title: playback.title, album: playback.album)
+            ?? EnrichCacheKeys.normalizedKey(artist: playback.artist, title: playback.title, album: playback.album)
     }
 
     private var versionList: some View {
