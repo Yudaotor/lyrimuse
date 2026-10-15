@@ -883,7 +883,7 @@ public enum MediaControlClient {
     /// 所以这一档该维持而不是清空。
     ///
     /// 取 300 秒:比典型单曲长,覆盖绝大多数"看个视频再回来";再长就会在"看视频期间顺手把音乐停了"
-    /// 这种情况下,把一份早已不成立的状态挂在屏幕上。 焦点一回来就立刻按真实状态纠正(实测无
+    /// 这种情况下,把一份早已不成立的状态挂在屏幕上。焦点一回来就立刻按真实状态纠正(实测无
     /// 延迟),所以这个上限只影响"焦点一直被占着"那段时间里的显示。
     public static let focusHeldGraceSeconds: Double = 300
 
@@ -1561,8 +1561,8 @@ public enum MediaControlClient {
         // 第一级:问播放器**自己的钟**(只有 Apple Music / Spotify / Kaset 有 AppleScript 字典)。
         //
         // 顺序是这样定的,别调过来:per-client 探针拿回来的是**同一份 MediaRemote 载荷**,
-        // 因此原样继承了那条链的锚点缺陷 —— Spotify 的开播锚点实测晚 ~2s(决策 28:+1.91 /
-        // +1.96 / +2.14),Apple Music 手动点歌时会连发好几个 elapsed=0 锚点(决策 35)。
+        // 因此原样继承了那条链的锚点缺陷 —— Spotify 的开播锚点实测晚 ~2s(02 章决策 28:+1.91 /
+        // +1.96 / +2.14),Apple Music 手动点歌时会连发好几个 elapsed=0 锚点(02 章决策 35)。
         // 真机对照:焦点被占期间暂停 Spotify,走 JXA 时 `pause transition delta=-0.157`,
         // 走探针时 `delta=-2.039`。AppleScript 那份带的只是输出链路的领先量(0.06~0.65s),
         // 明显更小。
@@ -1924,19 +1924,14 @@ public enum MediaControlClient {
         }
     }
 
-    // 真正调用 media-control 子进程、解析原始输出——fetchMediaControlSnapshot(核对
-    // 单一 expectedBundleID)和 fetchAutoDetectedSnapshot(核对"是不是这几个已知播放器
-    // 之一")共用同一份子进程调用逻辑,只是各自拿到 bundleID 之后核对的规则不同。
-    // 封面图——跟上面 fetchSnapshot()/fetchRawMediaControlSnapshot() 完全独立的一条轻量
+    // 封面图——跟 fetchSnapshot()/fetchRawMediaControlSnapshot() 完全独立的一条轻量
     // 取图路径,只在换歌那一刻调一次(见 LocalPlaybackSource.apply()/
     // fetchArtworkForCurrentTrack()),不掺进每 2 秒一次的常规轮询,避免每次都解码几百
     // KB 的 base64 图片数据。这里刻意统一走 media-control——不管当前选的是哪个播放器,
-    // 包括 Apple Music:实测坐实(`media-control get --now`,不带 --no-artwork)对 Apple
-    // Music 的系统级 Now Playing 会话同样能读到 artworkData 字段(systemwide
-    // MediaRemote,不是只有 QQ音乐/网易云音乐才有),不需要另外给 Apple Music 走
-    // AppleScript 的 track.artworks() 去拿封面(那条路要把二进制图片数据想办法序列化过
-    // JSON,明显更麻烦,而且完全没必要碰这个项目里唯一对播放位置精度敏感、已经调好的
-    // AppleScript 集成)。
+    // 包括 Apple Music:实测(`media-control get --now`,不带 --no-artwork)对 Apple
+    // Music 的系统级 Now Playing 会话同样能读到 artworkData 字段,不需要另外给 Apple Music
+    // 走 AppleScript 的 track.artworks() 去拿封面(那条路要把二进制图片数据想办法序列化过
+    // JSON,明显更麻烦)。
     // trackKey:这份封面在 get --now 载荷里对应的曲目标识(跟 MediaControlSnapshot.trackKey
     // 同一套推导)。切歌瞬间系统侧 Now Playing 可能还没更新完,这一把抓到的会是**上一首**的
     // 完整条目(旧标题+旧封面)——载荷自己的 artist/title 是识别这种情况的唯一依据,调用方
@@ -2457,7 +2452,7 @@ public enum MediaControlClient {
         return true
     }
 
-    /// 只对实测过的播放器开(决策 41)。
+    /// 只对实测过的播放器开(02 章决策 41)。
     public nonisolated static func correctsFromResetAnchor(bundleID: String?) -> Bool {
         bundleID == PlaybackPlayer.kugou.bundleIdentifier
     }
@@ -2848,6 +2843,8 @@ public enum MediaControlClient {
         ungatedLock.unlock()
     }
 
+    /// 真正调用 media-control 子进程、解析原始输出。fetchAutoDetectedSnapshot、fetchMultiSelectedSnapshot、
+    /// fetchMediaControlSnapshot 共用这一份子进程调用,各自拿到 bundleID 之后按自己的规则核对。
     private static func fetchRawMediaControlSnapshot() -> (MediaControlSnapshot, String)? {
         guard let binaryPath = binaryPath() else {
             setSnapshotFailure(.mediaControlMissing)
@@ -3027,7 +3024,7 @@ public enum MediaControlClient {
             isRadio: isRadio ? true : nil
         )
         // 读到之后主线程可能要等一两百毫秒才处理(换歌那一刻加载封面 / 歌词,实测 0.21s),位置得按读到的时刻
-        // 补到处理那一刻(见 MediaControlSnapshot.capturedAt)。只对实测过的播放器开(决策 41)。
+        // 补到处理那一刻(见 MediaControlSnapshot.capturedAt)。只对实测过的播放器开(02 章决策 41)。
         if Self.stampsCaptureTime(bundleID: bundleID) || amazonPosition != nil { snapshot.capturedAt = sampledAt }
         if republish.hold != nil { snapshot.isWaitingToPlay = true }
         snapshot.republishDueBy = republish.dueBy
@@ -3066,7 +3063,7 @@ public enum MediaControlClient {
     }
 
     /// 问不到 Spotify 的 AppleScript 时,拿它那条通知里的 `Playback Position` 当它自己的钟。MediaRemote 的开播锚点
-    /// 整首晚一截(决策 28),通知在开播那一刻就到,按收到的时刻推出来的位置跟 `player position` 只差一两百毫秒。
+    /// 整首晚一截(02 章决策 28),通知在开播那一刻就到,按收到的时刻推出来的位置跟 `player position` 只差一两百毫秒。
     /// 只在放着、通知说的是这首歌、而且不早于 MediaRemote 最近一次重发锚点超过 `spotifyNoticeAnchorSlackSecs` 时用:
     /// 拖动后 MediaRemote 重发的锚点是准的,比它旧的通知让位。产出的读数不带锚点(`anchorElapsedTime` = nil),
     /// 下游按「播放器自己的钟」处置,跟 AppleScript 那份同一套起播领先量(见 02 章决策 63)。纯函数,selftest 直接覆盖。

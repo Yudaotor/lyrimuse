@@ -1,20 +1,15 @@
 import Foundation
 import LyrimuseCore
 
-/// 全局限速队列:所有到 Last.fm 的请求(唯一出口 LastfmStatsService.request)都先在
-/// 这里排队取"通行证"再真正发出,取代之前散落在各处的局部节流
-/// (ensureTitleFormsIndex/refreshDailyCounts 各自的 `Task.sleep(150ms)`)。
+/// 全局限速队列:所有到 Last.fm 的请求(LastfmStatsService.requestDetailed、LastfmLoveModel)都先在
+/// 这里排队取"通行证"再真正发出。别在调用方各自 sleep 节流:各写各的、互不知道对方存在,同时跑时
+/// 叠加的请求量轻松顶到甚至超过 Last.fm 实测约 5 req/s 的限速,新账号首次连接、历史全量扫描正在跑
+/// 的时候所有界面都会跟着卡。
 ///
-/// 为什么不用令牌桶:两条历史全量扫描(见 LastfmHistorySync)是持续型负载,需要的是
+/// 为什么不用令牌桶:历史全量扫描(LastfmStatsService.syncHistoryIfNeeded)是持续型负载,需要的是
 /// **严格限制瞬时速率**,不是"允许攒桶后突发打光"——对 Last.fm 这种没有公开配额文档、
 /// 靠社区实测摸出软限速的接口,突发比持续更容易撞线。用固定间隔调度更直白:每隔
-/// `interval` 放行一个请求,跟现有代码里 `Task.sleep(150ms)` 是同一种节流思路,
-/// 只是收进一个统一的地方管,不再各写各的、互不知道对方存在。
-///
-/// 因:新账号首次连接 Last.fm 后所有界面都卡、常听加载失败要反复刷新——
-/// 根因是 ensureTitleFormsIndex(写法索引全量建索引)和 refreshDailyCounts(热力图全量
-/// 同步)各自独立分页扫**同一段历史**,互不协调,同时跑时叠加的请求量轻松顶到甚至超过
-/// Last.fm 实测约 5 req/s 的限速。
+/// `interval` 放行一个请求。
 actor LastfmRateLimiter {
     static let shared = LastfmRateLimiter()
 
