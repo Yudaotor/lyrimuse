@@ -520,11 +520,10 @@ struct OverlayEditorStage: View {
     /// 悬浮淡化 / 悬停控制条)+ `AutoHideItem` 各项(截屏隐藏 / 暂停隐藏 / 无歌词隐藏)。
     /// 项数跟着 `allCases` 走,这里不写死。
     ///
-    /// **两个来源必须都算,而且要跟「行为」浮层 /
-    /// `OverlayAllSettingsDrawer.behaviorGroup`(两处调同一份 `OverlayBehaviorSettingsRows`)
+    /// **两个来源必须都算,而且要跟 `OverlayBehaviorSettingsRows`(「行为」浮层和抽屉「行为」组都调它)
     /// 的内容一致**:少算自动隐藏那几项不会编译报错,
     /// 只会让这颗按钮在它们开着时照旧显示「全部关闭」—— 一个会撒谎的派生值。灵动岛那边
-    /// (`NotchEditorStage.behaviorSummary`)是同一天为同一个原因写的同一个形状。
+    /// (`NotchEditorStage.behaviorSummary`)是同一个形状。
     ///
     /// 这里读的是 `binding(...).wrappedValue` 的 **get** 分支,而 `AutoHideItem` 的 get
     /// 必须是纯 AppSettings 读、一个 `.shared` 都不许有 —— 这句摘要在悬浮歌词**关着**的时候

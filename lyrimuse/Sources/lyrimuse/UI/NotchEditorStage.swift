@@ -688,8 +688,8 @@ struct NotchEditorStage: View {
     /// (`.showLyrics` 在「歌词行」浮层,见 `lyricRowSummary`)+ `AutoHideItem`
     /// 各项 + `NotchBehaviorItem` 的全屏隐藏 / 换歌显示歌名 / 收听里程碑。
     ///
-    /// **两个来源必须都算,而且要跟 `NotchBehaviorPopover` /
-    /// `NotchAllSettingsDrawer.behaviorGroup` 的内容一致**:少算自动隐藏那几项不会编译报错,
+    /// **两个来源必须都算,而且要跟 `NotchBehaviorSettingsRows`(「行为」浮层和抽屉「行为」组都调它)
+    /// 的内容一致**:少算自动隐藏那几项不会编译报错,
     /// 只会让这颗按钮在它们开着时照旧显示「全部关闭」—— 一个会撒谎的派生值。
     ///
     /// 三项都开时摘要会拼成一长串(「暂停时收起、截屏时隐藏、暂停时隐藏」),交给

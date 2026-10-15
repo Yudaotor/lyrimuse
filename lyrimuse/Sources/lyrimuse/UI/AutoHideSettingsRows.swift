@@ -4,53 +4,29 @@ import SwiftUI
 // 「自动隐藏」三项(截屏时隐藏 / 暂停时隐藏 / 纯音乐/无歌词时隐藏)的唯一一份实现。第三项在灵动岛上是
 // 「纯音乐/无歌词时收起歌词行」:只收歌词行、不整卡隐藏,标题和 ⓘ 按形态分开写。
 //
-// **搬家史**(两次,一天之隔,方向不同,别把后一次读成前一次的回退):
-//   ① 原来它是「歌词显示」页第四段「其它」里一张跨形态的卡、**只有一份值**。
-//      "把这两个配置全都塞到对应的页面里面去,悬浮歌词和灵动岛都塞一个进去",
-//      于是「其它」段整个撤掉、值也拆成两份(`hideDuringScreenCapture`/`hideWhenNotPlaying`
-//      归悬浮歌词,`notchHide*` 归灵动岛),两个形态各得一张独立的「自动隐藏」卡。
-//   ② (本文件):"不要单独放在外面,要遵循设计理念,放到行为卡片里面去"
-//      —— 那两张独立卡整个删掉(连带 `SettingsView.autoHideCard(...)` 这个函数),两行并进
-//      各形态**已经存在**的「行为」入口。
+// 这几项放在各形态的「行为」入口里,不单独开一张「自动隐藏」卡:它们跟「行为」里那几项(锁定位置 /
+// 长按拖动 / 悬浮淡化 / 暂停时收起)是同一类东西 —— **设一次就不动、而且在编辑台上看不出任何变化**
+// (判据见 OverlayBehaviorSettingsRows.swift 顶部)。
 //
-// 为什么并进「行为」是对的、而不是又一次挪窝:这两项跟「行为」里原有那几项(锁定位置 /
-// 长按拖动 / 悬浮淡化 / 暂停时收起)是同一类东西 —— **设一次就不动、而且在编辑台上看不出
-// 任何变化**。悬浮歌词那一组「行为」当初就是按这条判据从「窗口」卡里拆出来的
-// (见 OverlayBehaviorSettingsRows.swift 顶部),截屏隐藏/暂停隐藏落进同一组是那条判据的
-// 延伸,不是新规矩。
+// **值按形态分两份,不能合成一份**(悬浮歌词 `hideDuringScreenCapture` / `hideWhenNotPlaying` /
+// `hideWhenNoLyrics`,灵动岛 `notchHide*` / `notchCollapseLyricsWhenNoLyrics`)。按形态分栏展示,用户就会
+// **按形态去理解**这些开关(「我在灵动岛页面关掉的,当然只关灵动岛」)。`AutoHideSurface` 最大的诱惑正是
+// "共用一份值、按 surface 只换文案" —— **共用的是渲染与文案,不是值**:改文案两个形态一起变是预期的;
+// Binding 必须按 surface 分流到各自的 AppSettings 键和各自的 WindowController。
 //
-// ** 拆成两份值这一步没有回退,而且不能回退。** 一旦按形态分栏展示,用户就会**按形态去
-// 理解**这两个开关(「我在灵动岛页面关掉的,当然只关灵动岛」)。本文件里 `AutoHideSurface`
-// 这个新抽象最大的诱惑正是"共用一份值、按 surface 只换文案" —— 那是刚被推翻
-// 的方案。**共用的是渲染与文案,不是值**:改文案两个形态一起变是预期的;Binding 必须按
-// surface 分流到各自的 AppSettings 键和各自的 WindowController。
-//
-// 同理**别把 AutoHideItem 并进 `OverlayBehaviorItem` 或 `NotchBehaviorItem`**:那两个
-// 枚举都是单形态的(Binding 里写死了自己那一个控制器),合并会立刻需要一个 surface 参数。
-// (之前这里还有第二条理由:`OverlayBehaviorItem` 当时的宿主之一是三列小格,
-//  格子版式不画副标题和 ⓘ 气泡,并进 `allCases` 会静默丢掉文案。那张卡当天就被换成浮层了,
-//  这条不再成立;**上面那条按形态分流的理由没变**。)
+// 同理**别把 AutoHideItem 并进 `OverlayBehaviorItem` 或 `NotchBehaviorItem`**:那两个枚举都是单形态的
+// (Binding 里写死了自己那一个控制器),合并会立刻需要一个 surface 参数。
 //
 // **宿主有两处(每个形态一份分组视图),增删内容必须一起对**(漏一处不会编译报错,只会表现成
 // "在这个入口改了有用、在那个入口找不到"):
-//   ① 悬浮歌词:`OverlayBehaviorSettingsRows`(OverlayBehaviorSettingsRows.swift)——
-//      工具栏「行为」浮层和「全部设置」抽屉「行为」组(此前叫「窗口」组)调的是这同一份视图
-//   ② 灵动岛:`NotchBehaviorSettingsRows`(SettingsView.swift)—— 同日同一条改法,工具栏「行为」浮层
-//      和「全部设置」抽屉「行为」组调同一份
-// (之前是四处:两个形态各自的浮层和抽屉组分别拼一次,靠注释警告别漏。)
-// (① 又搬过一次:并进来时它还是编辑台下面那张常驻卡 `OverlayBehaviorBar`
-//  的末尾两行,同日"和灵动岛设置页一样…放到上面的小按钮里面,点了出现下拉框",
-//  那张卡整个删掉、五项进了浮层。**值仍然是两份**,这次搬家不影响那条禁令。)
-// 同一形态的两处 item 内容按既有约定必须**逐字相同**;此外两个编辑台工具栏按钮上那句摘要
-// (`OverlayEditorStage.behaviorSummary` / `NotchEditorStage.behaviorSummary`)也要把这两项
-// 算进去 —— 漏了就会出现"浮层里两个开关都开着、按钮摘要仍然写着「全部关闭」"这种会撒谎的
-// 派生值。
-//
-// **分隔线的分工**(同 OverlayBehaviorSettingsRows / NotchBehaviorSettingsRows 的约定):
-// 本组件只在**自己两行之间**插一条 `CardDivider()`,首尾都不插;"本组之前"那一条由宿主插。
-// `SettingsCard` 只是 `VStack(spacing: 0)`,不会替谁补分隔线。
+//   ① 悬浮歌词:`OverlayBehaviorSettingsRows`(OverlayBehaviorSettingsRows.swift)
+//   ② 灵动岛:`NotchBehaviorSettingsRows`(SettingsView.swift)
+// 各自的工具栏「行为」浮层和「全部设置」抽屉「行为」组调的是同一份视图,自动隐藏这几项都经
+// `AutoHideToggleTiles` 渲染。此外两个编辑台工具栏按钮上那句摘要(`OverlayEditorStage.behaviorSummary` /
+// `NotchEditorStage.behaviorSummary`)也要把这几项算进去 —— 漏了就会出现"浮层里开关开着、按钮摘要
+// 仍然写着「全部关闭」"这种会撒谎的派生值。
 
-/// 这两行服务的是哪个形态。用来分流 Binding(各自的 AppSettings 键 + 各自的 WindowController);
+/// 自动隐藏这几项服务的是哪个形态。用来分流 Binding(各自的 AppSettings 键 + 各自的 WindowController);
 /// 文案除了无歌词那一项(两个形态做的事不同)都逐字相同,理由见文件头。
 enum AutoHideSurface {
     case desktopOverlay
@@ -109,12 +85,11 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
     /// 观察者,见 `NotchLyricsWindowController` 顶部那条不变量)。关着的那个形态一行都不能碰,
     /// 否则表现成"用户没开灵动岛,在设置页拨一下开关,屏幕顶上凭空冒出一个胶囊"。
     ///
-    /// 改版前这条不变量是**结构性**保证的:`autoHideCard` 只收 Binding、不认识任何控制器。
-    /// 现在控制器被请进了枚举内部(四个宿主各传一份 Binding 会变成四份重复的守卫逻辑,那是
-    /// 更大的漂移风险),防线因此退化成"靠这条注释" —— 所以它写在这里,别删。
+    /// 控制器调用写在枚举内部(由每个宿主各传一份 Binding 会变成几份重复的守卫逻辑,漂移风险更大),
+    /// 这条不变量因此没有结构性保证,只靠这条注释 —— 别删。
     ///
     /// `get:` 分支必须是**纯 AppSettings 读**,一个 `.shared` 都不许有。两条路径会在形态
-    /// **关着**的时候求值 get:① 四个宿主的 body(设置项刻意不跟总开关联动,关着也照样渲染);
+    /// **关着**的时候求值 get:① 宿主的 body(设置项刻意不跟总开关联动,关着也照样渲染);
     /// ② 两个编辑台工具栏按钮上那句摘要(`OverlayEditorStage.behaviorSummary` /
     /// `NotchEditorStage.behaviorSummary`)为了拼串会读 `wrappedValue`。
     ///
@@ -179,10 +154,10 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
     }
 }
 
-/// 标准设置行,每项一行。宿主都调这一份,只把 `surface` 换掉。
+/// 标准设置行版本,每项一行,只把 `surface` 换掉。
 ///
-/// `@ObservedObject` 是**必需**的,不是照抄的样板:宿主里 `NotchBehaviorPopover` 自己不观察 `AppSettings`,现在只靠父层(`AppearanceSettingsTab` /
-/// `NotchEditorStage`)的对象级失效顺带刷新。新组件继续吃这个隐式依赖的话,哪天它被放进第五个
+/// `@ObservedObject` 是**必需**的,不是照抄的样板:宿主里 `NotchBehaviorPopover` 自己不观察 `AppSettings`,只靠父层(`AppearanceSettingsTab` /
+/// `NotchEditorStage`)的对象级失效顺带刷新。新组件继续吃这个隐式依赖的话,哪天它被放进一个
 /// 不观察 AppSettings 的宿主,开关就会显示陈旧值("在另一个入口改完再回来看,还是旧的")。
 /// 同 `NotchLyricRowSettingsRows`。
 @MainActor
@@ -207,7 +182,7 @@ struct AutoHideSettingsRows: View {
     }
 }
 
-/// 自动隐藏几项的小块版本,放进 `SettingsToggleGrid`(浮层里一列一个开关太高)。内容、顺序跟 `AutoHideSettingsRows` 一致。
+/// 自动隐藏几项的小块版本,放进 `SettingsTileGrid`(一列一个开关太高)。内容、顺序都按 `AutoHideItem.allCases`。
 @MainActor
 struct AutoHideToggleTiles: View {
     let surface: AutoHideSurface
