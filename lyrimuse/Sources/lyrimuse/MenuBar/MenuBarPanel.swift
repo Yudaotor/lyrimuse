@@ -98,7 +98,7 @@ private final class PanelPlayback: ObservableObject {
             // 面板只读 compactLine、不读 currentLine:两者每句各变一次、不同步,订后者等于每句多重绘一次整个面板。
             p.$isPlayingSmoothed.removeDuplicates().sink { [weak self] in self?.isPlayingSmoothed = $0 },
             // 面板里那一行歌词跟状态栏项是同一个展示面(菜单栏),吃同一颗「卡拉OK效果」
-            // (`menuBarLyricsKaraoke`,是它唯一的闸——此前还叠着一颗全局开关):关着时把行
+            // (`menuBarLyricsKaraoke`,是它唯一的闸):关着时把行
             // 压成整行(`SyncedLyricLine.lineLevel`),`lyricContent` 的判定链自然落到 `.plain`。
             // 状态栏项自己在 `MenuBarStatusItem.karaokeFillPath` 里判这颗开关,不经这里。
             Publishers.CombineLatest(p.$menuBarLyrics.map(\.compactLine), s.$menuBarLyricsKaraoke)
@@ -137,10 +137,10 @@ private final class PanelPlayback: ObservableObject {
     }
 }
 
-// 菜单栏左键面板(用户从九个设计方向里选定 F「控制中心风」):
+// 菜单栏左键面板(「控制中心风」):
 // 一张全宽「正在播放」卡 + 2×2 大圆钮块(开关/入口,带状态副文字) + 一条细底栏。
-// 右键仍是原来那棵完整 NSMenu(MenuBarStatusMenu)——所有低频功能的家不动,
-// 面板只承载高频:看一眼在放什么、切歌/拖进度、开关两种歌词悬浮层、进统计。
+// 右键是那棵完整 NSMenu(MenuBarStatusMenu)——所有低频功能的家,
+// 面板只承载高频:看一眼在放什么、切歌/拖进度、开关两种歌词悬浮层、进歌词管理。
 //
 // 窗口是自建的**不激活 App 的面板**(`MenuBarPanelWindow`,同 Spotlight / 控制中心那一类),不是 NSPopover:
 // 弹出就是 key window,控件按「当前窗口」的样子画,不用先点一下才亮;又不激活 App —— 激活会把用户正在用的
@@ -154,7 +154,7 @@ final class MenuBarPanelController {
     private weak var anchorButton: NSStatusBarButton?
     /// 「点到别的 App 上」的收起路径:全局监视器只收得到**别的 App** 的事件。
     private var outsideClickMonitor: Any?
-    /// 「点到本 App 别的窗口上」的收起路径(NSPopover 的 .transient 原来管的那一半)。
+    /// 「点到本 App 别的窗口上」的收起路径(相当于 NSPopover .transient 管的那一半)。
     private var localClickMonitor: Any?
     /// 切 Space 也要收 —— 面板会出现在每个 Space 上(见 MenuBarPanelWindow 的 collectionBehavior),
     /// 不收的话切走之后它还挂在那儿。挂在 NSWorkspace 的通知中心,拆的时候也要从那边拆。
@@ -474,8 +474,8 @@ private struct MenuBarPanelView: View {
     /// 渐变)。包了的话,收起快捷设置时整行歌词会跟着跳一下:歌词行本来跟这次展开/收起
     /// 毫无关系,却被顺带补间了一次。
     ///
-    /// 而这个动画本来也没什么用:面板高度是 NSPopover 的窗口尺寸,归 AppKit 自己的
-    /// resize 动画管(pop.animates),SwiftUI 这一层补间不到它。等于是白担了副作用。
+    /// 而这个动画本来也没什么用:面板高度是窗口尺寸,由控制器按内容报的尺寸摆(见
+    /// FirstMouseHostingView),SwiftUI 这一层补间不到它。等于是白担了副作用。
     private func setQuickTarget(_ target: PanelQuickTarget?) {
         quickTarget = target
         MenuBarPanelDebugState.quickTarget = target?.deepLinkValue
@@ -583,8 +583,7 @@ private struct MenuBarPanelView: View {
                              on: PanelQuickTarget.touchBar.isEnabled, quick: .touchBar,
                              action: toggleTouchBarAction)
                 }
-                // 这一格从「统计」换成「歌词管理」(统计入口收进
-                // 设置窗口的 Last.fm 账号页),底栏那条「歌词管理…」随之撤掉,不留双入口。
+                // 「歌词管理」(统计入口在设置窗口的 Last.fm 账号页),底栏不另放一条「歌词管理…」,不留双入口。
                 // 短按开窗,长按 / 右键翻到背面:正在放的这首的几个动作(PanelLyricsManagerRows)。
                 knobTile(symbol: PanelQuickTarget.lyricsManager.symbolName,
                          title: PanelQuickTarget.lyricsManager.panelTitle,
@@ -614,7 +613,7 @@ private struct MenuBarPanelView: View {
         if playback.isRadioTalkBreak, let station = playback.radioStationName, !station.isEmpty {
             return station
         }
-        // 没歌在放就留白,不再摆一个占位破折号。那一横不携带任何
+        // 没歌在放就留白,别摆占位破折号。那一横不携带任何
         // 信息:封面已经是空封面、歌手/专辑也都是空的,"没在放"这件事已经说得很清楚了,
         // 再画一横反倒像"有一首歌但名字读不出来"。
         //
@@ -718,7 +717,7 @@ private struct MenuBarPanelView: View {
                 trackHeader
                 lyricLine
                 // 进度条独立成 PanelProgressSection 子视图:拖动/悬停
-                // 状态自持,拖一次 seek 不再整面板逐指针事件重估。
+                // 状态自持,拖一次 seek 不会整面板逐指针事件重估。
                 PanelProgressSection(
                     anchor: playback.anchor,
                     pausedPositionMs: playback.pausedPositionMs,
@@ -916,13 +915,10 @@ private struct MenuBarPanelView: View {
                 }
             }
             .lineLimit(1)
-            // 掐掉一切**环境**动画事务(实测:从快捷设置返回的那一下,
-            // 正在填色的单词偶尔"跳一下")—— setQuickTarget 的 withAnimation 事务会把
-            // 同一帧里撞上的 30Hz 填色跳变也做成 0.15s 插值。填色是离散刷新,每帧直接
+            // 掐掉一切**环境**动画事务:祖先上任何一次 withAnimation 事务都会把同一帧里撞上的
+            // 30Hz 填色跳变也做成插值,正在填色的单词就"跳一下"。填色是离散刷新,每帧直接
             // 落到新位置,永远不该吃任何外来动画。只挂在这个填色 HStack 上:外层
             // MarqueeText 自己的滚动动画不经过这里,不受影响。
-            // (同款坑见 memory:swiftui-implicit-animation-at-ancestor-animates-
-            // unrelated-layout —— 祖先事务连带 animate 子树里不相干的变化。)
             .transaction { $0.animation = nil }
         }
     }
@@ -934,8 +930,7 @@ private struct MenuBarPanelView: View {
         // displayArtworkImage 而不是裸 artworkImage:高清替代优先,口径跟灵动岛/歌词窗口/
         // 悬浮歌词一致(见那个属性的注释;漏了它的表现是同一首歌两处封面不一样)。
         if playback.isCurrentTrackAdBreak {
-            // 广告期间换成广告标识(「只要识别到是广告的话,封面部分都用这个
-            // 替代」)。底沿用下面"没有封面"那块同一个渐变,只把符号从 music.note 换成
+            // 广告期间封面换成广告标识。底沿用下面"没有封面"那块同一个渐变,只把符号从 music.note 换成
             // megaphone.fill —— 跟灵动岛、歌词窗口是同一枚,同一件事全App 一种画法。
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(LinearGradient(colors: [.blue.opacity(0.55), .purple.opacity(0.45)],
@@ -968,7 +963,7 @@ private struct MenuBarPanelView: View {
 
     private func controlButton(_ symbol: String, size: CGFloat,
                                action: @escaping () -> Void) -> some View {
-        // cornerRadius 13 = 26pt 高的胶囊,视觉上就是个圆钮;沿用原来的 30×26 命中区,
+        // cornerRadius 13 = 26pt 高的胶囊,视觉上就是个圆钮;命中区 30×26,
         // 不改尺寸(改了会把卡片撑高)。
         ChipButton(cornerRadius: 13, action: action) {
             Image(systemName: symbol)
@@ -1062,15 +1057,14 @@ private struct MenuBarPanelView: View {
             // 图标在**上**、文字在下(不是图标在左、文字在右):
             // 面板内容宽 316,一排三个 + 9pt 间距 → 每格 99pt,再扣掉 16pt 内边距、28pt 图标
             // 和 7pt 间隔,留给文字只有 **48pt**。「菜单栏歌词」在 11pt 下要 55pt,靠
-            // minimumScaleFactor(0.82) 缩到 9pt 勉强够,实测仍被截成「菜单栏...」;英文更
-            // 没救 —— "Floating Lyrics"/"Menu Bar Lyrics" 缩到 0.72 都还在截断。
+            // minimumScaleFactor(0.82) 缩到 9pt 也会被截成「菜单栏...」;英文更没救 ——
+            // "Floating Lyrics"/"Menu Bar Lyrics" 缩到 0.72 都还在截断。
             //
-            // 改成竖排之后文字独占整格宽度(约 83pt),中英文都完整显示。离线四方案并排渲过
-            // (图标在左 / 收紧度量+缩字 / 图标在上 / 每行两个),只有这一种两种语言都过关:
-            // "每行两个"也能放下,但三个歌词展示形态就不在同一排了,而它们是同级三兄弟。
+            // 竖排时文字独占整格宽度(约 83pt),中英文都完整显示。"每行两个"也能放下,但三个歌词展示形态就
+            // 不在同一排了,而它们是同级三兄弟。
             //
-            // 代价:每格高一些(图标不再跟文字并排占同一行高)。菜单栏面板是 popover,
-            // 纵向余量本来就宽松,换来的是不必为每种语言各想一套缩写。
+            // 代价:每格高一些(图标不跟文字并排占同一行高)。面板纵向余量本来就宽松,换来的是不必为每种
+            // 语言各想一套缩写。
             VStack(spacing: 5) {
                 SymbolImage(name: symbol, size: 16, weight: .semibold)
                     .foregroundStyle(on ? Color.white : Color.secondary)
@@ -1081,7 +1075,7 @@ private struct MenuBarPanelView: View {
                     )
                 VStack(spacing: 1) {
                     // 缩字保留但门槛提到 0.85:正常语言都放得下,它只兜"某种翻译特别长"的
-                    // 意外,不再是常态依赖。
+                    // 意外,不是常态依赖。
                     Text(title).font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
@@ -1108,12 +1102,8 @@ private struct MenuBarPanelView: View {
 
     // MARK: 底栏(低频入口;完整功能在右键菜单里)
     //
-    // 收敛成两项:「歌词管理…」上移进钮块网格(见 knobGrid),
-    // 「更多」撤掉(完整菜单本来就有右键这个入口,面板里再放一份是双入口),
-    // 换成直接的「退出」。
-    // 右下角那格再换:「退出」撤掉(退出留在右键菜单与 ⌘Q),改放**当前
-    // 版本号**,点了跳设置「关于」页;查到还没装的新版本时这一格变成「有新版本 vX.Y.Z」,点了
-    // 拉起 Sparkle 的更新窗口(见 versionFooterItem)。
+    // 「设置…」+(连着 Last.fm 时)Last.fm 那一格 + 右下角的版本号(见 versionFooterItem)。「歌词管理」在钮块
+    // 网格里(见 knobGrid),退出留在右键菜单与 ⌘Q;完整菜单只在右键,面板里不放第二份。
 
     private var footer: some View {
         HStack(spacing: 0) {
@@ -1147,8 +1137,8 @@ private struct MenuBarPanelView: View {
                 icon: { Image(systemName: "arrow.down.circle.fill").font(.system(size: 10.5)) }
             ) {
                 close()
-                // 更新界面在设置窗口的「软件更新」页(不再是 Sparkle 的弹窗),跟下面版本号
-                // 那格同一条路翻过去;页面上已经摆着查到的版本和「立即更新」。
+                // 更新界面在设置窗口的「软件更新」页,跟下面版本号那格同一条路翻过去;页面上已经摆着
+                // 查到的版本和「立即更新」。
                 AppActions.shared.requestSettings(.softwareUpdate)
                 AppActions.shared.openSettings?()
             }
@@ -1217,7 +1207,7 @@ private struct MenuBarPanelView: View {
         return footerItem(title: name.isEmpty ? "Last.fm" : name, tint: tint, help: help,
                           icon: icon) {
             close()
-            // 一次性信箱把设置窗口直接翻到 Last.fm 那一页,跟原来「统计」那一格同一条路。
+            // 一次性信箱把设置窗口直接翻到 Last.fm 那一页。
             AppActions.shared.requestSettings(.account(.lastfm))
             AppActions.shared.openSettings?()
         }
@@ -1257,9 +1247,8 @@ private struct MenuBarPanelView: View {
 
 /// 面板里所有小控件共用的「悬停/按下」反馈。
 ///
-/// 。原来播放键/底栏/时间轴箭头全是
-/// `.buttonStyle(.plain)` —— 那个样式**什么反馈都不给**:鼠标压上去、按下去,画面一动
-/// 不动,手感像按在图片上。这类反馈只要有一处缺,那一处就显得"按不动",所以统一成一份。
+/// 别用 `.buttonStyle(.plain)`:那个样式**什么反馈都不给**,鼠标压上去、按下去画面一动不动,
+/// 手感像按在图片上。这类反馈只要有一处缺,那一处就显得"按不动",所以统一成一份。
 ///
 /// @State 必须住在**每个按钮自己**身上(每个按钮各有各的悬停状态),所以是个独立的
 /// View 而不是一个 modifier 函数。
@@ -1316,7 +1305,7 @@ private struct ChipStyle: ButtonStyle {
 // MARK: - 进度条(播放态外推 / 暂停态冻结,拖动松手才 seek —— 跟灵动岛同一套语义)
 
 /// 独立子视图(性能审计,同灵动岛 NotchScrubber 的拆法):拖动的 @GestureState
-/// 和悬停状态在这里自持 —— 原来挂在面板根视图上,拖一次 seek 每个指针事件整面板重估。
+/// 和悬停状态在这里自持 —— 挂在面板根视图上的话,拖一次 seek 每个指针事件整面板重估。
 /// 时间轴微调那三个控件也住在这里(它们就在进度条下面那行,读的也是同一批值)。
 private struct PanelProgressSection: View {
     let anchor: ProgressAnchor?
@@ -1402,14 +1391,13 @@ private struct PanelProgressSection: View {
 
     // MARK: 歌词时间轴微调(从右键菜单搬进来,用户点的 A)
 
-    /// 歌词早了/晚了半秒时就地校准。右键菜单里那个子菜单**保持原样**(还没动它),这里是
-    /// 第二个入口。
+    /// 歌词早了/晚了半秒时就地校准。右键菜单里还有一个子菜单入口。
     ///
     /// 搬进来的理由是**连点**:这是全 App 最典型的"边听边调" —— 对不上时往往要连点两三下
     /// 才贴合,而 NSMenu 点一下就整个关掉,调三次要开三次菜单、每次还要再进一层子菜单。
     /// 面板不会因为点了按钮而关,可以连着点到满意为止。
     ///
-    /// 位置在进度条下面那一行的正中间:那一行原本只有左右两个时间数字、中间一大片空着,
+    /// 位置在进度条下面那一行的正中间:那一行只有左右两个时间数字、中间一大片空着,
     /// 是白捡的位置(整张卡片一点没变高);而且那一行的主题本来就是"时间",歌词时间轴是
     /// 时间的一种,摆这儿不突兀。
     private var offsetControls: some View {
@@ -1421,15 +1409,13 @@ private struct PanelProgressSection: View {
             // 左右分工按这一行的参照系来定:这一行左右夹着 1:02 / -5:28 两个播放时间,
             // 读者的参照系是播放器——右 = 往前 = 赶快一点。
             //
-            // 圆箭头不是 Apple 的「快退/快进 15 秒」符号(gobackward/goforward):那对符号
-            // 在这个位置容易被读成"调播放进度",± 没有方向隐喻,只说"把这个数字调大/调小"。
+            // 用 ± 而不是圆箭头或 Apple 的「快退/快进 15 秒」符号(gobackward/goforward):那些在这个位置
+            // 容易被读成"调播放进度",± 没有方向隐喻,只说"把这个数字调大/调小"。
             offsetButton("minus", help: nudgeHelp(L10n.t("延后"))) {
                 _ = PlaybackCoordinator.shared.nudgeLyricsOffset(by: -lyricsOffsetStepMs)
             }
-            // 中间这一格必须带「歌词」这个**词**:0 时只放一个 ⏱ 图标的话,这一整行左右
-            // 夹着 1:02 / -5:28 两个播放时间——两个圆箭头夹一个钟表,在这个语境里怎么看
-            // 都像"快退/快进",容易误读成调播放进度,位置本身就是误导源,光换图标救不回来,
-            // 得有个词把它跟播放进度切开。
+            // 中间这一格必须带「歌词」这个**词**:这一整行左右夹着两个播放时间,两颗按钮夹一个图标在这个
+            // 语境里怎么看都像"快退/快进",容易误读成调播放进度,得有个词把它跟播放进度切开。
             //
             // 定宽 64pt:实测最宽的形态是英文两位数负值 "Lyrics -12.5s" = 60.9pt(9.5pt
             // 等宽数字)。不定宽的话两颗按钮会随数值长短左右跳。
@@ -1469,7 +1455,7 @@ private struct PanelProgressSection: View {
         // 尺寸保持原样:这一行的行高就是被这 14pt 撑起来的,动了会连带改卡片高度。
         ChipButton(cornerRadius: 7, pressScale: 0.88, action: action) {
             Image(systemName: symbol)
-                // semibold 而不是 medium:± 比原来那两颗圆箭头细得多,minus 更是只有一根
+                // semibold 而不是 medium:± 很细,minus 更是只有一根
                 // 横杠,再轻就读成一条分隔线而不是按钮了。
                 .font(.system(size: 10, weight: .semibold))
                 // 比两边的时间数字略实一点:它们是读数,这两个是能按的。
