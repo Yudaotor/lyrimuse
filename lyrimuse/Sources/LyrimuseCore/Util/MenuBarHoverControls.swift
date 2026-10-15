@@ -1,8 +1,7 @@
 import Foundation
 
-// 菜单栏歌词的「鼠标悬停就换成三个走带控制键」。"就是可以选择是否
-// 开启鼠标移动到菜单栏歌词的位置的时候歌词消失,变为三个控制键,点击就可以进行暂停,上下
-// 切歌的控制;类似酷狗音乐的"(附酷狗菜单栏截图:图标 + ⏮ ⏸ ⏭)。
+// 菜单栏歌词的「鼠标悬停就换成三个走带控制键」:悬停时歌词收掉,换成上一首 / 播放暂停 / 下一首
+// 三个键,点了就控制播放。
 //
 // ---- 这个文件只管几何 ----
 //
@@ -41,9 +40,8 @@ public enum MenuBarHoverControls {
     /// 详见 `layout(in:)`。
     public static var minimumWidth: CGFloat { pitch * CGFloat(MenuBarTransportControl.allCases.count) }
 
-    /// 在这一项的按钮矩形里排三个键:整块水平居中(跟歌词那一格在按钮里居中的算法一致,
-    /// 见 `MenuBarScrollingLabel.layout`),纵向占满 —— 命中区在垂直方向上不设门槛,
-    /// 菜单栏只有 22pt 高,让用户去瞄中间那 16pt 是自找的麻烦。
+    /// 在给定的矩形(歌词那一格,见 `lyricsSlot`)里排三个键:整块水平居中,纵向占满 —— 命中区在
+    /// 垂直方向上不设门槛,菜单栏只有 22pt 高,让用户去瞄中间那 16pt 是自找的麻烦。
     ///
     /// 装不下返回 nil,调用方据此**放弃接管**。这不是"画窄一点"能糊过去的:自适应宽度模式下
     /// 一句 `♪` 的槽宽只有二三十点,硬塞三个键会挤成一坨谁也点不准,还把本来看得见的歌词
@@ -85,21 +83,17 @@ public enum MenuBarHoverControls {
     ///
     /// ---- 为什么这份算式要在这里、而且只有一份 ----
     ///
-    /// 现象是"点了暂停,生效的是上一首"。日志坐实:同一个功能,三个键的矩形在
-    /// `48.5/72.5/96.5` 和 `36/60/84` 两套之间跳 —— 差 12.5pt,正好够点到隔壁那个键。
-    /// 病根是歌词格原先问**歌词层**要(它按 `plan.windowWidth` 算),而 `plan` 是**易失**的:
-    /// 悬停接管时被清一次(只留图标)、暂停收成图标时又被清一次;而状态栏项的 `displayClass`
-    /// 因为重建节流还停在陈旧的 `"fixed"`,于是"该不该接管"说是,"歌词格在哪"却答不上来,
-    /// 退回整个按钮居中 —— 位置就跳了。
-    ///
-    /// 修法是换一个**不会失效**的输入:槽宽(`item.length`)。它是这一项的硬事实,重建才会变,
-    /// 而重建期间本来就不接管。算式下沉到这里,`MenuBarScrollingLabel` 摆图层和状态栏项算
+    /// 输入只用**不会失效**的槽宽(`item.length`):它是这一项的硬事实,重建才会变,而重建期间本来就
+    /// 不接管。别问**歌词层**要(它按 `plan.windowWidth` 算):`plan` 是**易失**的 —— 悬停接管时被清一次
+    /// (只留图标)、暂停收成图标时又被清一次,而状态栏项的 `displayClass` 可能因为重建节流还停在陈旧的
+    /// `"fixed"`,"该不该接管"说是、"歌词格在哪"却答不上来,三个键的位置就在两套之间跳,差 12.5pt 正好够
+    /// 点到隔壁那个键(06 章决策 21)。算式下沉到这里,`MenuBarScrollingLabel` 摆图层和状态栏项算
     /// 悬停三键都调它 —— 两个入口一份算式,而且能被 selftest 钉死。
     ///
     /// - Parameters:
     ///   - buttonWidth: 按钮(= 这一项)有多宽。
     ///   - contentWidth: 「图标 + 间距 + 歌词格」整块内容多宽。状态栏项那边 =
-    ///     `item.length - 系统内边距`;歌词层那边 = `plan.windowWidth + reservedIconWidth`。
+    ///     `item.length - lyricsSlotPadding`;歌词层那边 = `plan.windowWidth + reservedIconWidth`。
     ///   - reservedIconWidth: 歌词旁那枚图标额外占的宽(图标宽 + 间距);没开就是 0。
     ///   - iconLeading: 图标在左边(true)还是右边/没有(false)。
     /// - Returns: 歌词格的 x 与宽度;算不出来(宽度非正)返回 nil。
@@ -110,19 +104,11 @@ public enum MenuBarHoverControls {
         // 整块内容钳在按钮里(bounds 短暂陈旧时别把内容甩出去 —— 跟歌词层 layout 同一条防线)。
         let contentW = min(contentWidth, buttonWidth)
         guard contentW > 0, buttonWidth > 0 else { return nil }
-        // 整块**贴按钮前缘**,不居中(用户圈图:「正常图标与图标之间的间隙没有那么大呀」)。
-        //
-        // `contentWidth` 传的是 `item.length - <槽内边距>`。当时那个内边距是 18pt,居中等于把它
-        // 平分到两边,左边那 9pt 就成了一段凭空多出来的空隙 —— 实测对拍:相邻两个系统图标
-        // 之间 23pt,而方块图标到我们这枚 ♪≡ 是 29.5pt,多出来的正是它。
-        //
-        // 贴前缘之后那点余量全部落到尾部,这一项跟左邻居的间距就跟别的项一样了。
-        // 同日晚些时候查清楚了「18pt 是谁要的」:打日志对账 `requested`/`button.bounds.width`
-        // /`item.length` 三个数,按钮宽恒等于我们申请的槽宽 —— **AppKit 一点都没多要**,那 18pt
-        // 全是我们自己留的。于是歌词态的内边距降到 4pt(只防裁边),图标态保留 18pt(那一态靠
-        // AppKit 居中 `button.image`,左右各 9pt 才跟别的状态栏图标观感一致)。
-        // 见 `MenuBarStatusItem.fixedSlotPadding` / `lyricsSlotPadding`。 这跟「歌词在格子里怎么对齐」(`plan.alignment`)是两回事:
-        // 那个管的是文字在**歌词格内**的位置,这里管的是**整块内容在按钮内**的位置。
+        // 整块**贴按钮前缘**,不居中:居中会把槽宽里留的那点余量平分到两边,左边那一半就成了一段凭空多出来的
+        // 空隙,这一项跟左邻居的间距比别的项都大(实测相邻系统图标之间 23pt)。贴前缘之后余量全部落到尾部,
+        // 跟左邻居的间距就跟别的项一样了(余量多少见 `MenuBarStatusItem.lyricsSlotPadding`)。
+        // 这跟「歌词在格子里怎么对齐」(`plan.alignment`)是两回事:那个管的是文字在**歌词格内**的位置,
+        // 这里管的是**整块内容在按钮内**的位置。
         let left: CGFloat = 0
         let clipW = max(0, contentW - reservedIconWidth)
         guard clipW > 0 else { return nil }
