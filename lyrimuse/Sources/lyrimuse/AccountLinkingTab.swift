@@ -11,10 +11,8 @@ enum DestinationStatus {
     case disabled                  // 灰:开关关闭,不管凭据填没填都不报错(仅"功能开关"tab 用)
     // 这是个**可选**功能,而且用户一个字段都没填过 —— 侧边栏不给徽标。
     //
-    // 这几项(ListenBrainz / 网页推送 / 推送提醒 / Last.fm)原来都走
-    // .missingCreds,于是侧边栏一排橙色警告三角。但"你没配这个可选功能"根本不是问题,
-    // 拿警告图标去说它,等于让用户在一列感叹号里自己分辨哪个才是真出事了 —— 而真出事
-    // (.error)恰恰长得差不多。没什么要说的时候就什么都不说。
+    // "你没配这个可选功能"根本不是问题,拿警告图标去说它,等于让用户在一列感叹号里自己分辨哪个才是真
+    // 出事了 —— 而真出事(.error)恰恰长得差不多。没什么要说的时候就什么都不说。
     //
     // 跟 .missingCreds 的分界是"碰没碰过":填了一半(网页推送有地址没令牌、
     // ListenBrainz 有 token 没用户名)仍然是 .missingCreds —— 那种"我明明配过却不工作"
@@ -113,12 +111,6 @@ private struct DestinationStatusIndicator: View {
     }
 }
 
-// 敏感凭据字段(Token/API Key/Secret)的统一展示方式——已经填过的凭据不再永久摆一个
-// 遮罩输入框(一排圆点堆在一起不好看,而且反正内容不可见,摆着也没有信息量);改成一行
-// 紧凑的"已设置 + 更改"状态,只有从没填过、或者用户主动点"更改"时,才展开成可编辑的
-// SecureField。isEditing 的初始值取决于构造时刻 value 是否为空——已配置的字段一开始
-// 收起,从没配置过的字段一开始就是展开可填状态,行为上跟原来"直接摆一个 SecureField"
-// 没有区别,只是多了"配置好之后收起来"这一步。
 /// 输入框前面常驻一个标题。设置页这些卡片不在 Form 里,TextField 自己的 label 不显示,
 /// 只剩框里的占位字 —— 一填上内容就看不出这一栏是什么。
 private struct LabeledInputRow<Field: View>: View {
@@ -138,6 +130,10 @@ private struct LabeledInputRow<Field: View>: View {
     }
 }
 
+// 敏感凭据字段(Token/API Key/Secret)的统一展示方式:填过的凭据收成一行紧凑的"已设置 + 更改"
+// (遮罩输入框一排圆点不好看,内容反正不可见,摆着也没有信息量);只有从没填过、或者用户主动点"更改"
+// 时,才展开成可编辑的 SecureField。isEditing 的初始值取决于构造时刻 value 是否为空 —— 已配置的字段
+// 一开始收起,从没配置过的字段一开始就是展开可填状态。
 private struct SecretFieldRow: View {
     let label: String
     @Binding var value: String
@@ -210,11 +206,9 @@ enum AccountDestination: Hashable, CaseIterable, Identifiable {
     }
 }
 
-// 账号图标徽标——ListenBrainz/网页推送/推送提醒仍用 iconBadge(SF Symbol 白色剪影+纯色
-// 圆角方块背景);Last.fm 换成真实品牌图标(见 lastfmBadgeImage 注释),不再用泛化的
-// 循环箭头符号凑数。放在这里而不是 SettingsView.swift 的 iconBadge 旁边——只有
-// AccountDestination 这一种目的地需要"某个 case 换成自定义图片"这个分支,不该让通用的
-// iconBadge 也认识 AccountDestination。
+// 账号图标徽标:Last.fm、ListenBrainz、Discord 用品牌图,网页推送 / 推送提醒用 iconBadge(SF Symbol 白色
+// 剪影 + 纯色圆角方块背景)。放在这里而不是 SettingsView.swift 的 iconBadge 旁边——只有 AccountDestination
+// 需要"某个 case 换成自定义图片"这个分支,不该让通用的 iconBadge 也认识 AccountDestination。
 @ViewBuilder
 func accountIconBadge(_ destination: AccountDestination, size: CGFloat = 20, cornerRadius: CGFloat = 5) -> some View {
     switch destination {
@@ -258,15 +252,8 @@ let telegramBadgeImage: NSImage = {
     return AppIconResolver.prerendered(image)
 }()
 
-// 真实的 Last.fm 品牌图标(红底+白色"scrobble"符号),取代之前拿 SF Symbol 循环箭头
-// 凑数的做法——素材取自 Simple Icons(CC0 授权、专门收录给第三方集成场景用的品牌图标
-// 合集),矢量描摹自 Last.fm 官方标志,不是从官网截图里抠像素。跟 MenuBarMenu.swift 里
-// menuBarIconImage 同一套加载方式:用 Bundle.main 而不是 Bundle.module(原因见
-// L10n.swift 顶部注释),PNG 由 build.sh 拷进 Contents/Resources/。不设 isTemplate——
-// 这不是状态栏图标,不需要跟随系统明暗色重新上色,品牌色本身就该固定显示红+白。
-// ListenBrainz 官方 logo(左紫右橙的六边形),取代之前拿 SF Symbol 的 waveform.circle.fill
-// 凑数的做法。跟 lastfmBadgeImage 同一套路:矢量描摹官方素材而不是截图抠像素 —— 原始 SVG
-// 取自 MetaBrainz 自己的 design-system 仓库(brand/logos/ListenBrainz/.../logo_icon.svg),
+// ListenBrainz 官方 logo(左紫右橙的六边形)。跟 lastfmBadgeImage 同一套路:矢量描摹官方素材而不是
+// 截图抠像素 —— 原始 SVG 取自 MetaBrainz 自己的 design-system 仓库(brand/logos/ListenBrainz/.../logo_icon.svg),
 // 那边原文就是两个多边形(#353070 / #EB743B),照它的坐标重画成 PNG。
 // 底色留透明:官方 logo 本身是双色图形、不是"纯色底+白符号"那种形状,填一层底反而失真,
 // 而透明底在浅色/深色模式下都立得住。
@@ -287,16 +274,14 @@ private let listenBrainzBadgeImage: NSImage = {
 ///
 /// 资源本身四角是**不透明的纯白**:实测 LastfmIcon.png 512×512、`hasAlpha=true` 但
 /// **一个透明像素都没有**,红色圆角方块之外的四角是 R1 G1 B1 A1(圆角半径约边长的 20%)。
-/// 浅色界面上白角混在白底里看不出来,深色模式下就是四个白点 —— 用户在菜单栏
-/// 面板底栏那一处报的就是这个。
+/// 浅色界面上白角混在白底里看不出来,深色模式下就是四个白点。
 ///
 /// 所以每一处都得按圆角裁一次。半径默认取 **22%**(比美术的 ~20% 略大),宁可切掉一丝红也
 /// 不留白边;调用方要对齐别处的圆角时可以显式传。
 ///
 /// 没去改那张 PNG:白角要抠干净得按几何遮罩或从四角泛洪,而图**内部**的"as"字母也是纯白,
 /// 全局键白会把字母一起打穿;裁剪这条路的边缘由 SwiftUI 抗锯齿,更干净也可逆。
-// 不加 @MainActor:accountIconBadge 是 nonisolated 的自由函数,得能调它
-// (它原本就在那里直接访问 lastfmBadgeImage,隔离级别没有变化)。
+// 不加 @MainActor:accountIconBadge 是 nonisolated 的自由函数,得能调它。
 func lastfmBadge(size: CGFloat, cornerRadius: CGFloat? = nil) -> some View {
     Image(nsImage: lastfmBadgeImage)
         .resizable()
@@ -305,6 +290,10 @@ func lastfmBadge(size: CGFloat, cornerRadius: CGFloat? = nil) -> some View {
                                     style: .continuous))
 }
 
+// 真实的 Last.fm 品牌图标(红底+白色"scrobble"符号)。素材取自 Simple Icons(CC0 授权、专门收录给第三方集成
+// 场景用的品牌图标合集),矢量描摹自 Last.fm 官方标志,不是从官网截图里抠像素。用 Bundle.main 而不是
+// Bundle.module(原因见 L10n.swift 顶部注释),PNG 由 build.sh 拷进 Contents/Resources/。不设 isTemplate ——
+// 它不需要跟随系统明暗色重新上色,品牌色本身就该固定显示红+白。
 let lastfmBadgeImage: NSImage = {
     guard let path = Bundle.main.path(forResource: "LastfmIcon", ofType: "png"),
           let image = NSImage(contentsOfFile: path) else {
@@ -469,13 +458,11 @@ struct AccountSidebarRow: View {
 }
 
 // 账号连接:回答"配好了没有"这个问题;每张账号卡片里也带对应的"要不要用这个功能"
-// 开关(比如"推送状态到网页/徽章"),但那是各个账号自己的开关,不是一个笼统的"功能
-// 开关"分类——不依赖任何账号的纯行为开关(比如封面/主色/平台跳转链接)已经从可关闭
-// 设置项直接删掉、改成无条件执行,不再需要一个单独的地方安放它们。
+// 开关(比如"推送状态到网页/徽章"),那是各个账号自己的开关,不是一个笼统的"功能开关"分类。
 //
-// 只负责渲染"某一个目的地"的详情/编辑区+底部保存栏,不再自己管"当前选中哪个账号"——
-// 侧边栏(AccountSidebarRow)现在跟 SettingsView 的分类列表拍平在同一个 List 里,"选中
-// 哪个目的地"这件事完全交给外层,这个 View 只需要知道 destination 是谁。
+// 只负责渲染"某一个目的地"的详情/编辑区+底部保存栏,不管"当前选中哪个账号"——侧边栏
+// (AccountSidebarRow)跟 SettingsView 的分类列表在同一个 List 里,"选中哪个目的地"这件事完全交给
+// 外层,这个 View 只需要知道 destination 是谁。
 //
 // 完全不依赖 FeatureSettingsStore——只碰 ConfigStore,底部保存栏直接复用现成的
 // ConfigStore.save()(持久化+异步重启+提交快照一步到位)。字段直接双向绑定 ConfigStore
@@ -504,9 +491,8 @@ struct AccountLinkingTab: View {
     @ObservedObject private var mirrorStatus = LastfmMirrorStatusWatcher.shared
     // 「网页推送」页那行推送状态说明的数据源(见 RelayPushStatusWatcher)。
     @ObservedObject private var relayStatus = RelayPushStatusWatcher.shared
-    // 改成默认展开——原来默认收起是为了"攒到几十首时不该把整页
-    // 顶开",但用户更想一进页面就直接看到清单,想收起自己点一下就好,不做成偏好持久化
-    // (只是这一次开窗的初始状态,不需要跨次记住)。
+    // 默认展开:一进页面就直接看到清单,想收起自己点一下;清单自己限高滚动(见 pendingListensRow),
+    // 攒到几十首也不会把整页顶开。不做成偏好持久化(只是这一次开窗的初始状态)。
     @State private var pendingListensExpanded = true
     // 只为了让手动切换语言时这块详情页重新渲染,同 AccountSidebarRow 的理由。
     @ObservedObject private var languageSettings = AppSettings.shared
@@ -535,25 +521,19 @@ struct AccountLinkingTab: View {
     @State private var lastfmKeysEditing = false
 
     var body: some View {
-        // 从 .formStyle(.grouped) 换成跟其余六个设置分类同一套卡片组件
-        // (见 SettingsDesignSystem.swift)。页头从"左对齐的小徽标 + 标题"改成居中的
-        // "大徽标 + 大标题 + 说明",跟其它分类一致;底部那条自动保存状态栏保持原样留在
-        // 滚动区之外——它是常驻状态,不该跟着内容滚走。
+        // 用跟其余设置分类同一套卡片组件(见 SettingsDesignSystem.swift);底部那条自动保存状态栏留在
+        // 滚动区之外 —— 它是常驻状态,不该跟着内容滚走。
         //
-        // 这次只改外壳:.onReceive 的自动保存防抖、.onDisappear 的兜底保存、
-        // .alert 的前置条件提示全部原样保留在同一个位置。Last.fm 连接流程那一块
-        // (lastfmConnectArea/stepDots)和 SecretFieldRow 也没有拆成 SettingsRow ——
-        // 它们各自带着真实逻辑(密钥的展开/收起、三步授权状态机),硬塞进"图标+标题+尾部
-        // 控件"这个模子要重写控件本身,而这是全 App 最不该冒风险重写的地方(授权流程一旦
-        // 坏掉,用户连不上账号且不容易看出是 UI 改动导致的)。这些成组控件整块放进
+        // Last.fm 连接向导和 SecretFieldRow 没有拆成 SettingsRow:它们各自带着真实逻辑(密钥的展开/收起、
+        // 三步授权状态机),硬塞进"图标+标题+尾部控件"这个模子要重写控件本身,而这是全 App 最不该冒风险
+        // 重写的地方(授权流程一旦坏掉,用户连不上账号且不容易看出是 UI 改动导致的)。这些成组控件整块放进
         // SettingsRawRow,拿到跟其它行一致的内边距即可。
         VStack(spacing: 0) {
             SettingsPageCustomHeader {
                 if destination == .lastfm {
-                    // Last.fm 页改成「账号卡」页头(用户提议:图标和名字在左,右边
-                    // 两行分别是开关和状态):原来"居中大徽标 + 大标题 + 一句说明"再加一张两行的
-                    // 连接卡,光是页头就占掉近 200pt,而这页真正要看的是下面的统计。其它三个目的地
-                    // 是表单页、没有"身份 + 开关"这组东西,维持居中页头。
+                    // Last.fm 页用「账号卡」页头(图标和名字在左,右边两行分别是开关和状态):居中大徽标 + 大标题 +
+                    // 说明再加一张连接卡,光是页头就占掉近 200pt,而这页真正要看的是下面的统计。其它目的地是表单页、
+                    // 没有"身份 + 开关"这组东西,维持居中页头。
                     VStack(spacing: 14) {
                         lastfmProfileCard
                         lastfmSuggestionsGroup
@@ -674,9 +654,9 @@ struct AccountLinkingTab: View {
     }
 
     // digestCrossCard:给 toggleGuarded 的 crossCard 参数用——按"这次实际会用哪个数据源"
-    // 动态指向对应的账号卡片,不再像改动前那样写死指向 Last.fm。source 为空(两个账号都
-    // 没配)时仍需要给一个具体的 target(toggleGuarded 的 tuple 里这个字段不是 Optional),
-    // 这里选 ListenBrainz 卡片没有特殊含义,纯粹是两个都不满足时随便选一个当跳转目标。
+    // 动态指向对应的账号卡片。source 为空(两个账号都没配)时仍需要给一个具体的 target(toggleGuarded
+    // 的 tuple 里这个字段不是 Optional),这里选 ListenBrainz 卡片没有特殊含义,纯粹是两个都不满足时
+    // 随便选一个当跳转目标。
     private func digestCrossCard(source: String) -> (hint: String?, target: AccountDestination) {
         switch source {
         case "lastfm": return (hint: config.lastfmBridgeMissingHint(), target: .lastfm)
@@ -687,17 +667,14 @@ struct AccountLinkingTab: View {
 
     // digestSourcePicked:两个"数据源" Picker 的 set 分支共用。
     //
-    // 原来这里是无条件 `features.xxxDigestSource = $0; save()`,而 get 读的是
-    // resolvedDigestSource(**解析后**的值)——两边口径不一致。选一个还没配好的源(比如
-    // ListenBrainz 一个字段都没填)会同时发生两件事:偏好被静默写盘并触发 save()(重写
-    // 配置文件、重启引擎),而 Picker 因为 get 把它解析回 Last.fm 立刻弹回去。用户
-    // 看到的是"点了没反应",但一个看不见的偏好已经落盘,等哪天真把那个账号配好,数据源
-    // 会自己悄悄换过去。
+    // get 读的是 resolvedDigestSource(**解析后**的值),所以 set 不能无条件写偏好:选一个还没配好的源
+    // (比如 ListenBrainz 一个字段都没填)时,偏好会被静默写盘并触发 save()(重写配置文件、重启引擎),
+    // Picker 却因为 get 把它解析回 Last.fm 立刻弹回去 —— 用户看到"点了没反应",等哪天真把那个账号配好,
+    // 数据源会自己悄悄换过去。
     //
-    // 现在:没配好就不写偏好、也不重启引擎,复用开关那套 missingPrereqAlert
-    // ("需要先配置「X」"+跳转到对应账号卡片)给出跟 toggleGuarded 一致的反馈。
-    // digestCrossCard 本来就是按 source 返回 (hint, target) 的,直接拿它判断配好了没。
-    // 反过来,如果之前已经落过一个用不了的偏好,用户改选一个配好的源就能把它治回来。
+    // 所以没配好就不写偏好、也不重启引擎,复用开关那套 missingPrereqAlert("需要先配置「X」"+跳转到
+    // 对应账号卡片)给出跟 toggleGuarded 一致的反馈。digestCrossCard 本来就是按 source 返回 (hint, target)
+    // 的,直接拿它判断配好了没。已经落过一个用不了的偏好时,改选一个配好的源就能把它治回来。
     private func digestSourcePicked(_ picked: String, current: String, apply: (String) -> Void) {
         guard picked != current else { return }
         let cross = digestCrossCard(source: picked)
@@ -800,7 +777,7 @@ struct AccountLinkingTab: View {
 
     private func checkListenBrainzToken() {
         tokenCheck.tokenChanged(config.listenbrainzToken, knownUser: config.listenbrainzUser) { user in
-            // 用户名不再由用户手填,但配置里这个字段还在(听歌报告要用),由校验结果回填。
+            // 用户名不让用户手填,配置里这个字段(听歌报告要用)由校验结果回填。
             if config.listenbrainzUser != user { config.listenbrainzUser = user }
         }
     }
@@ -808,10 +785,9 @@ struct AccountLinkingTab: View {
 
     // Token 校验的状态显示。
     //
-    // 这里**没有**"用户名"输入框了。原来除了 Token 还要用户手抄一遍自己的用户名
-    // (标着"听歌报告需要"),而那正是服务端凭 Token 就能告诉我们的东西 —— 抄错了还只会
-    // 在几天后的听歌报告里才暴露。现在填完 Token 当场校验,顺带把用户名取回来写进配置,
-    // 这一行同时兼作"连接成功了没"的反馈,见 ListenBrainzTokenCheck。
+    // 这里**没有**"用户名"输入框:用户名是服务端凭 Token 就能告诉我们的东西,让用户手抄一遍,抄错了
+    // 只会在几天后的听歌报告里才暴露。填完 Token 当场校验,顺带把用户名取回来写进配置,这一行同时兼作
+    // "连接成功了没"的反馈,见 ListenBrainzTokenCheck。
     @ViewBuilder
     private var listenBrainzTokenStatus: some View {
         switch tokenCheck.state {
@@ -969,35 +945,29 @@ struct AccountLinkingTab: View {
 
     // 两个功能共用一套"账号信息"凭据:Last.fm 的只读接口(user.getrecenttracks 等)
     // 不校验签名,同一对 API Key/Secret 既能免签名供桥接读,也能签名走连接流程供
-    // 镜像写,不需要在 Last.fm 后台建两个"应用"分别填。下面只剩"写入记录"这一个还
-    // 需要手动开关的 Section——"读取"那一半(同步到 ListenBrainz)没有独立开关,
-    // 理由见上面 cardIntro 附近的注释。
+    // 镜像写,不需要在 Last.fm 后台建两个"应用"分别填。"读取"那一半(同步到 ListenBrainz)没有独立开关。
     //
-    // 这一页 99% 的时间处于"已连接"态,配置期才需要的东西(用户名输入框、
-    // API Key/Secret 两行、"前往申请")不该永久平铺着。现在:
-    //   - 已连接时主界面只剩一行状态 + 一行开关;未连接时页头整张是欢迎卡,只有一颗连接按钮;
+    // 这一页 99% 的时间处于"已连接"态,配置期才需要的东西(API Key/Secret 两行、"前往申请")不该永久
+    // 平铺着:
+    //   - 已连接时页头只剩一行状态 + 一行开关;未连接时页头整张是欢迎卡,只有一颗连接按钮;
     //   - API Key/Secret 收进"连接向导"sheet,只在配置那一刻出现;
-    //   - 连接成功自动开启 scrobble——消灭"已连接但开关
-    //     没开"这个死状态(用户以为连上就会记录,实际还差一个开关);断开时同步关掉;
-    //   - 手填用户名框删掉:授权成功返回的真实用户名自动回填(LastfmAuthFlow 里已有
-    //     该逻辑),桥接/周报读的就是它。
+    //   - 连接成功自动开启 scrobble —— 不留"已连接但开关没开"这个死状态(用户以为连上就会记录,实际还差
+    //     一个开关);断开时同步关掉;
+    //   - 没有用户名输入框:授权成功返回的真实用户名自动回填(LastfmAuthFlow),桥接/周报读的就是它。
 
-    // Last.fm 详情页按 tab 分段(跟「歌词显示」页同一个范式,见
-    // SettingsView.LyricsSettingsTab.Section 的注释):连接卡 / 统计 / 最近记录 / 榜单 /
-    // 那年今日,一次只关心其中一件事时不用先滚过其它几件。
+    // Last.fm 详情页按 tab 分段(跟「歌词显示」页同一个范式,见 SettingsView.LyricsSettingsTab.Section 的注释):
+    // 统计 / 榜单 / 足迹 / 设置,一次只关心其中一件事时不用先滚过其它几件。
     //
-    // 「统计」和「最近记录」合并成一段:这两个数字/列表是连着看的一件事
-    // (见 LastfmStatsSection.body 里 `.stats` 分支同时画 statsCard + recentCard)。
+    // 「统计」里同时画统计卡和最近记录(见 LastfmStatsSection.body 里 `.stats` 分支):这两个数字/列表是连着看的一件事。
     //
-    // 「连接」**不是**一个 tab(撤掉):Scrobble 开关/连接状态
-    // 是这一页唯一"不看哪个 tab 都该一直看得见"的东西——开关本来就该常驻在最上面,
-    // 塞进某一个 tab 里等于只有点开那个 tab 才碰得到它。做法是 lastfmProfileCard(页头账号卡)
-    // 挪到 tab 选择器**外面**、无条件渲染;下面这三段只负责"已连接之后想细看的几件事"。
+    // 「连接」**不是**一个 tab:Scrobble 开关/连接状态是这一页唯一"不看哪个 tab 都该一直看得见"的东西,
+    // 塞进某一个 tab 里等于只有点开那个 tab 才碰得到它。lastfmProfileCard(页头账号卡)在 tab 选择器
+    // **外面**、无条件渲染;下面这几段只负责"已连接之后想细看的几件事"。
     private enum LastfmSection: String, CaseIterable, Identifiable {
         case stats, chart, onThisDay
-        /// 「设置」段("这里单开一个设置tab页,装在这里面")。
+        /// 「设置」段。
         ///
-        /// 装的是**跟 Last.fm 上送行为有关、但不是开关本身**的那些配置。为什么不继续摆在
+        /// 装的是**跟 Last.fm 上送行为有关、但不是开关本身**的那些配置。为什么不摆在
         /// 上面那张常驻的连接卡里:那张卡的定位是"不看哪个 tab 都该一直看得见的东西"
         /// (Scrobble 开关、连接状态、待补清单),往里加设置项会把它撑成一张什么都装的卡;
         /// 而这些设置恰恰是"想调的时候才去找"的类型,归到一段里正合适。
@@ -1007,7 +977,7 @@ struct AccountLinkingTab: View {
             switch self {
             case .stats: return L10n.t("统计")
             case .chart: return L10n.t("榜单")
-            case .onThisDay: return L10n.t("足迹") // 2026-09-03 改名:这一段现在是「收听足迹」+「那年今日」两张卡,足迹在上
+            case .onThisDay: return L10n.t("足迹") // 这一段是「收听足迹」+「那年今日」两张卡,足迹在上
             case .settings: return L10n.t("设置")
             }
         }
@@ -1019,8 +989,8 @@ struct AccountLinkingTab: View {
     // 切换**不**包 withAnimation:「榜单」段的分段选择器(歌手/专辑/歌曲)和时段菜单都是 AppKit 桥接
     // 控件(NSSegmentedControl/NSPopUpButton),被 withAnimation 包住的状态变化会让
     // SwiftUI 用隐式的 opacity 过渡去插值这次 case 切换——这类控件在淡入过程里还没
-    // 拿到最终 frame 就先合成了一帧,肉眼看到的就是"两个控件暂时叠在一起"。改成不包
-    // withAnimation 之后切 tab 是硬切,不再有这个过渡窗口。
+    // 拿到最终 frame 就先合成了一帧,肉眼看到的就是"两个控件暂时叠在一起"。不包 withAnimation,
+    // 切 tab 就是硬切,没有这个过渡窗口。
     private var lastfmSectionPicker: some View {
         SettingsGlassTabPicker(
             selection: Binding(
@@ -1052,11 +1022,10 @@ struct AccountLinkingTab: View {
     ///
     /// 出现条件是「有待补内容」,不是「未连接」:**数据层**攒不攒歌看的是另一个谓词
     /// ——引擎侧 lastfmScrobblerIfEnabled 一见 `!features.LastfmMirrorScrobble`
-    /// 就返回 nil,于是 `p.lfm == nil` 到 appendListen 开始写(lastfm.go:67 /
-    /// poller.go:545)。「已连接、但 Scrobble 开关关掉」同样在攒歌,两个谓词必须对齐,
-    /// 否则这条路径下用户只能看到另一行干巴巴的条数、点不开清单。
+    /// 就返回 nil,于是 `p.lfm == nil` 到 appendListen 开始写(lastfm.go / poller.go)。「已连接、但 Scrobble
+    /// 开关关掉」同样在攒歌,两个谓词必须对齐,否则这条路径下用户只能看到另一行干巴巴的条数、点不开清单。
     ///
-    /// 「补交」按钮跟计数放在一起:它原本自己独占一行(标题「补提交历史收听」),跟这一行说的是同一个数字。
+    /// 「补交」按钮跟计数放在一起:两者说的是同一个数字。
     ///
     /// 保留的那条设计决定:回填**必须人工点一下**,不做连接成功自动弹窗。这一步往用户的
     /// Last.fm 写数据,而 scrobble 落进去基本删不掉(只能在网页上一条条手删);自动弹窗
@@ -1178,17 +1147,15 @@ struct AccountLinkingTab: View {
     /// 条件是 `eligible > 0`——**全部补成功**(eligible 归 0)恰恰是唯一什么都看不到的
     /// 情况,不单独持有这句结果的话,点一下,整行连同结果一起从界面上消失,跟没点过一样。
     ///
-    /// 同源的另外两个洞一并堵上:
-    /// - 子进程压根没跑成(spawn 失败/非零退出/输出解不出来)时 `lastRun` 是 nil,以前一声不吭,
-    ///   现在靠 `lastRunFailed` 跟"还没跑过"区分开;
-    /// - `abortedReason` 从加进 Outcome 那天起就**没有任何显示面** —— 限流(29)、凭据失效、
-    ///   服务端拒收整批全走它,用户同样什么都看不到。
+    /// 同源的另外两种情况也要有一句话:
+    /// - 子进程压根没跑成(spawn 失败/非零退出/输出解不出来)时 `lastRun` 是 nil,靠 `lastRunFailed` 跟
+    ///   "还没跑过"区分开;
+    /// - `abortedReason`(限流(29)、凭据失效、服务端拒收整批)要显示出来,不然用户同样什么都看不到。
     private func backfillRunResultText() -> String? {
         if backfill.lastRunFailed { return L10n.t("补交未完成，请稍后重试") }
         guard let last = backfill.lastRun else { return nil }
-        // 无条件先报「已补 N 条」,0 也报。用户要的是"我点的那一下到底发生了什么",
-        // 而"一条都没补上"同样是一个答案 —— 原来这里要求三项之和 > 0 才出声,
-        // 于是"什么都没发生"这种最需要解释的情况反而最安静。
+        // 无条件先报「已补 N 条」,0 也报。用户要的是"我点的那一下到底发生了什么",而"一条都没补上"同样是
+        // 一个答案;别加"三项之和 > 0 才出声"的门槛,那样"什么都没发生"这种最需要解释的情况反而最安静。
         var parts = [String(format: L10n.t("已补 %@ 条"), "\(last.accepted)")]
         if last.quarantined > 0 {
             // 隔离的条目常驻引擎会自己去 Last.fm 核对、确认没有就重交,不用再点。
@@ -1229,9 +1196,9 @@ struct AccountLinkingTab: View {
 
     @ViewBuilder
     private var lastfmFields: some View {
-        // 连接状态常驻在 tab 选择器**外面**,不随下面三段切换——理由见 LastfmSection
+        // 连接状态常驻在 tab 选择器**外面**,不随下面几段切换——理由见 LastfmSection
         // 头注:开关这种"一直该碰得到"的东西不该只在点开某一个 tab 时才看得见。
-        // 它就是页头本身(lastfmProfileCard,见 body),这里不再重复放一张卡。
+        // 它就是页头本身(lastfmProfileCard,见 body),这里不重复放一张卡。
         if lastfmConnected {
             lastfmSectionPicker
             // LastfmStatsSection 自己的刷新逻辑靠的是这个 View 不因为切 tab 被卸载
@@ -1250,22 +1217,13 @@ struct AccountLinkingTab: View {
     /// 规则卡每一行在通用行距之外上下再各留的空隙:这张卡单独放在一段里,行距放松一点。
     private static let lastfmRuleRowExtraPadding: CGFloat = 3
 
-    /// 「设置」段的内容。
+    /// 「设置」段的内容:「Scrobble 规则」卡(匹配模式 / 时机 / 短曲目 / 播放器,各自的说明见卡里)。
     ///
-    /// 目前两项:匹配模式(三档:智能 / 自定义 / 原始,自定义再展开三个维度,绑
-    /// `features.lastfmMatchMode`)、短于 30 秒的曲目(绑
-    /// `features.scrobbleShortTracks`,默认关)。前一项就在引擎侧做完了
-    /// (`resolveScrobbleArtist` + `features.lastfm_scrobble_first_artist_only`,带单测和 JSON
-    /// 往返测试,文档也写了),但**一直没有任何界面入口** —— 只能手改
-    /// `~/.config/lyrimuse/lyrimuse-features.json`。用户来问"我怎么找不到这个配置项呢,是
-    /// 做了吗",找不到是对的。
-    ///
-    /// (当天先补在上面那张连接卡里、Scrobble 开关正下方,同一天用户改主意:单开一段装。
-    /// 判据见 LastfmSection.settings 的注释 —— 连接卡的定位是"不看哪个 tab 都该一直看得见
-    /// 的东西",不该长成一张什么都装的卡。)
+    /// 单开一段装,不塞进页头那张账号卡:账号卡的定位是"不看哪个 tab 都该一直看得见的东西"(见
+    /// LastfmSection.settings 的注释),不该长成一张什么都装的卡。
     ///
     /// 这一段**只在已连接时才挂载**(见 lastfmFields),所以这里不必再判 lastfmConnected;
-    /// 但 Scrobble 开关关着时这一项无从谈起(没有上送),那种情况给一句说明而不是一个
+    /// 但 Scrobble 开关关着时这些规则无从谈起(没有上送),那种情况给一句说明而不是一排
     /// 点了不影响任何事的控件。
     @ViewBuilder
     private var lastfmScrobbleSettingsCard: some View {
@@ -1353,7 +1311,7 @@ struct AccountLinkingTab: View {
                     .padding(.vertical, Self.lastfmRuleRowExtraPadding)
                 }
                 CardDivider()
-                // Scrobble 时机(原话「只考虑 lastfm 的」):一次收听听到哪里才记到
+                // Scrobble 时机:一次收听听到哪里才记到
                 // Last.fm。官方规则(曲长一半或 4 分钟)是下限,所以只给更严的档:75% / 90% / 曲终。
                 // **只管 Last.fm**:引擎侧 ListenBrainz 那一路仍在官方阈值那一刻提交,Last.fm 那一路
                 // 挂在会话上到点再发(poller.go recordLastfmListen / settleLastfmPending;「曲终」的判据
@@ -1375,12 +1333,10 @@ struct AccountLinkingTab: View {
                 }
                 .padding(.vertical, Self.lastfmRuleRowExtraPadding)
                 CardDivider()
-                // 短曲目(加的开关,默认关)。Last.fm 官方规则 "The track must be
-                // longer than 30 seconds" 是给客户端的,服务端不拒收;这里默认照规则办,用户显式打开
-                // 才放行。**只管 Last.fm**:引擎侧短曲目进了漏斗之后由 shortTrackLastfmOnly 挡住
-                // ListenBrainz 那一路("这个配置项是 lastfm 的,和 listenbrainz 没有一点关系");
-                // 本地收听日志/回填照记,它们本来就是给 Last.fm 兜底的。文案照这张卡的惯例只写效果,
-                // 同一天再简化过一次。
+                // 短曲目(默认关)。Last.fm 官方规则 "The track must be longer than 30 seconds" 是给客户端的,
+                // 服务端不拒收;这里默认照规则办,用户显式打开才放行。**只管 Last.fm**:引擎侧短曲目进了漏斗之后由
+                // shortTrackLastfmOnly 挡住 ListenBrainz 那一路;本地收听日志/回填照记,它们本来就是给 Last.fm 兜底的。
+                // 文案照这张卡的惯例只写效果。
                 SettingsRow(
                     icon: "timer",
                     title: L10n.t("短于 30 秒的曲目"),
@@ -1437,28 +1393,18 @@ struct AccountLinkingTab: View {
         return FeatureSettingsStore.appDisplayName(forBundleID: bundleID) ?? bundleID
     }
 
-    /// 「连接」段:Scrobble 开关、待补清单、熔断红条、已连接状态/断开。
-    ///
-    /// refreshPending 必须挂在**这整张卡**上,不能挂在下面 pendingListensRow /
-    /// 熔断红条那两行里。
-    //
-    // 实测"断开听了几首、回来什么都没有"抓到的死锁:那两行的显示条件都是
-    // `eligible > 0`,而 eligible 又只有 refreshPending 跑过才不是 0 —— 把刷新挂在它们
-    // 自己的 .onAppear 上,就成了"不显示 → 不刷新 → 永远是 0 → 永远不显示"。
-    // 当时数据层是完全正确的(日志里躺着 3 条待补),纯粹是界面永远不去问一次。
-    //
-    // 拆 tab 之后这张卡改成只在「连接」段选中时才挂载,onAppear/task 因此
-    // 只在这一段活跃时跑——这没问题:它们喂的 backfill.pending 只喂这张卡自己的
-    // pendingListensRow,不像 LastfmStatsSection 的刷新要跨 4 个 tab 共用,离开这一段
-    // 不会让别的 tab 变旧,回来再 onAppear 一次就补齐。
-    /// Last.fm 页的页头「账号卡」。已连接时第一行:品牌图标 + 用户名(后面跟去个人主页的小图标)+「Last.fm 账号」,右边是连接
-    /// 状态与动作(断开 / 重新连接);第二行是「Scrobble 到 Last.fm」开关。未连接时整张换成欢迎卡(lastfmWelcomeContent)。待处理的建议不进这张卡,在卡下面单独一组
-    /// (lastfmSuggestionsGroup)。
     /// 页头卡里的分隔线从卡片左内边距起画:这张卡的行没有图标列,用 CardDivider 的缩进会让线悬在半空。
     private var lastfmProfileDivider: some View {
         Divider().padding(.leading, SettingsRowMetrics.horizontalPadding)
     }
 
+    /// Last.fm 页的页头「账号卡」。已连接时第一行:品牌图标 + 用户名(后面跟去个人主页的小图标)+「Last.fm 账号」,右边是连接
+    /// 状态与动作(断开 / 重新连接);第二行是「Scrobble 到 Last.fm」开关。未连接时整张换成欢迎卡(lastfmWelcomeContent)。待处理的建议不进这张卡,在卡下面单独一组
+    /// (lastfmSuggestionsGroup)。待补清单、「Last.fm 拒绝了写入」红条和补提交的结果也在这张卡里。
+    ///
+    /// refreshPending 必须挂在**这整张卡**上,不能挂在待补清单 / 红条那两行里:那两行的显示条件都是
+    /// `eligible > 0`,而 eligible 又只有 refreshPending 跑过才不是 0 —— 把刷新挂在它们自己的 .onAppear 上,
+    /// 就成了"不显示 → 不刷新 → 永远是 0 → 永远不显示"。
     private var lastfmProfileCard: some View {
         SettingsCard(cornerRadius: 18) {
             if lastfmConnected {
@@ -1490,7 +1436,7 @@ struct AccountLinkingTab: View {
                 lastfmWelcomeContent
             }
             // 只要本地攒了东西就把它们列出来 —— 不看连没连账号,理由见 pendingListensRow
-            // 的文档注释(界面原来按 lastfmConnected 分岔,而数据层看的是 Scrobble 开关)。
+            // 的文档注释。
             //
             // 光说"会记在本地"是空头承诺 —— 用户没法验证到底记了没有、记了什么。列出来
             // 之后这件事就是可核对的,连账号时也能预期"补上去大概是这些"。
@@ -1499,8 +1445,7 @@ struct AccountLinkingTab: View {
                 if lastfmConnected { lastfmProfileDivider }
                 pendingListensRow
             } else if let result = backfillRunResultText() {
-                // 清单空了 = 这一次把能补的都补上去了。这恰恰是最该说一句话的时刻,
-                // 而在此之前它是唯一一种一句话都没有的时刻(见 backfillRunResultText)。
+                // 清单空了 = 这一次把能补的都补上去了。这恰恰是最该说一句话的时刻(见 backfillRunResultText)。
                 lastfmProfileDivider
                 backfillResultRow(result)
             }
@@ -1526,9 +1471,8 @@ struct AccountLinkingTab: View {
         .onChange(of: features.lastfmMirrorScrobble) { _, _ in backfill.refreshPending() }
         // 页面开着的这段时间里盯住收听日志:每攒进一首,待补数就该跟着涨。
         //
-        // 实测:关掉开关后停在这一页干等,数字一直是旧的,重新进 tab 才刷新
-        // 出来 —— 因为上面两个 onChange 都只在"状态翻转那一瞬"触发,而后续每首歌播完是
-        // 引擎单方面往磁盘追加,界面这边没有任何信号。
+        // 上面两个 onChange 只在"状态翻转那一瞬"触发,而后续每首歌播完是引擎单方面往磁盘追加,界面这边
+        // 没有任何信号 —— 停在这一页干等,数字就一直是旧的。
         //
         // 只 stat mtime、不无脑重跑:算待补数要 spawn 一个引擎子进程(dry-run),
         // 按秒轮询它太重;stat 一个文件几乎免费,变了才真去算。busy 时不推进 seen,
@@ -1701,14 +1645,11 @@ struct AccountLinkingTab: View {
     /// 统计归零(数字/榜单/头像都是这个账号的,重连别人不该看到前任数据)、关掉
     /// scrobble 开关(断开后一定发不出去,不留假状态)。
     ///
-    /// `lastfmUser` 补进来 —— 在此之前这个不变量集**不完整**,实测
-    /// 「断开了怎么还有」:清掉的只是**写**那一侧(session key + 授权返回的用户名),而
-    /// `lastfmUser` 是**授权流程自己写的**(LastfmAuthFlow),它加上任一 api key 就是一副
-    /// 完整可用的**只读**凭据(Last.fm 的读接口只要用户名 + key、不需要 session)。
-    /// 于是 `LastfmStatsService.credentials` 逐字段回退时拼出 (lastfmUser, scrobbleAPIKey),
-    /// `isConnected` 仍为真 —— 下面 resetAll() 刚把统计清空,轮询下一拍就原样拉回来了。
-    /// 顺带这对凭据也是引擎那条桥接(手机播放镜像进 LB / 每日小结 / 艺人名归并)的
-    /// 唯一开关,不清等于「断开了 Last.fm,后台还在读你的 Last.fm」。
+    /// `lastfmUser` 也要清:它是**授权流程自己写的**(LastfmAuthFlow),加上任一 api key 就是一副完整可用的
+    /// **只读**凭据(Last.fm 的读接口只要用户名 + key、不需要 session)。只清**写**那一侧(session key + 授权
+    /// 返回的用户名)的话,`LastfmStatsService.credentials` 逐字段回退时拼出 (lastfmUser, scrobbleAPIKey),
+    /// `isConnected` 仍为真 —— 下面 resetAll() 刚把统计清空,轮询下一拍就原样拉回来了。这对凭据也是引擎那条
+    /// 桥接(手机播放镜像进 LB / 每日小结 / 艺人名归并)的唯一开关,不清等于「断开了 Last.fm,后台还在读你的 Last.fm」。
     /// 只清用户名、不动 api key:key 是应用级的,清了重连要重新配;没有用户名它已经拉不到任何东西。
     private func performLastfmDisconnect() {
         config.lastfmScrobbleSessionKey = ""
@@ -1824,9 +1765,8 @@ struct AccountLinkingTab: View {
         .padding(20)
         .frame(width: 460)
         .onAppear { lastfmKeysEditing = !lastfmKeysReady }
-        // Esc / 点外面关掉 sheet 时状态机跟着复位 —— 原来残留在 waitingForBrowserAuth,
-        // 下次打开向导直接停在中间步骤,还带着一个已经作废的 token。成功
-        // 自动关闭那条路里 reset 已经调用过,这里重复调用无害(幂等)。
+        // Esc / 点外面关掉 sheet 时状态机跟着复位,不然残留在 waitingForBrowserAuth,下次打开向导直接停在
+        // 中间步骤,还带着一个已经作废的 token。成功自动关闭那条路里 reset 已经调用过,这里重复调用无害(幂等)。
         .onDisappear { lastfmConnect.reset() }
         .onChange(of: lastfmConnectSucceeded) { _, ok in
             guard ok else { return }
@@ -2018,7 +1958,7 @@ struct AccountLinkingTab: View {
                 Spacer()
                 lastfmProfileLinkButton
                 Button(L10n.t("断开")) {
-                    // 同一套不变量,复用主卡的方法。不再弹确认:这里已经在
+                    // 同一套不变量,复用主卡的方法。不弹确认:这里已经在
                     // 「重新连接」两层交互之下,误点概率低,sheet 上叠 alert 反而别扭。
                     performLastfmDisconnect()
                 }
@@ -2637,9 +2577,8 @@ extension AccountDestination {
     var intro: String {
         switch self {
         case .listenBrainz:
-            // 只说这张卡是干什么的,跟 Last.fm 那句同一个句式。原来这里还捎带讲了
-            // "建立完整听歌历史""也是网页展示/听歌报告的可选数据来源" —— 那些是后果和
-            // 别处的用法,不是这张卡要回答的问题,堆在标题下面只会让人一眼抓不到重点。
+            // 只说这张卡是干什么的,跟 Last.fm 那句同一个句式。"建立完整听歌历史""也是网页展示/听歌报告的可选
+            // 数据来源"那些是后果和别处的用法,不是这张卡要回答的问题,别堆在标题下面。
             return L10n.t("将播放记录同步到 ListenBrainz")
         case .stateRelay:
             return L10n.t("用于将当前播放状态推送到网页小组件和状态徽章")
