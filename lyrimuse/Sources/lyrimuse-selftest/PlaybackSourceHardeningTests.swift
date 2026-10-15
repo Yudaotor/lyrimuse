@@ -453,11 +453,13 @@ private func wiringContracts() {
                 && lxClient.contains("return heldAcrossPlayerGap(preferringLXMusicOpenAPI(withKaset, wanted: lxMusicWanted))")
                 && lxClient.contains("let target: PlaybackPlayer? = kasetPreferred ? .kaset : lxMusicPreferred ? .lxMusic : scriptTarget"),
                 true, "洛雪退路: 系统不报洛雪时用开放 API 顶上(自动识别、多选两条路),播放控制跟着发给它")
-    expectEqual(lxClient.contains("if running, found?.bundleIdentifier != PlaybackPlayer.lxMusic.bundleIdentifier,")
+    expectEqual(lxClient.contains("if wanted, found?.bundleIdentifier != PlaybackPlayer.lxMusic.bundleIdentifier,")
                 && lxClient.contains("           kasetWins(over: found, kaset: synthesized) {"),
                 true, "洛雪退路: 系统报的就是洛雪不顶替;别家在放时不顶替、别家暂停着只在洛雪在放时顶替(同 Kaset)")
-    expectEqual(code("LyrimuseCore/Local/LXMusicOpenAPI.swift").contains("let wanted = active || appRunning"), true,
-                "洛雪退路: 洛雪开着就保持订阅,不只在系统报洛雪时")
+    expectEqual(code("LyrimuseCore/Local/LXMusicOpenAPI.swift").contains("let wanted = active || appRunning || task != nil"), true,
+                "洛雪退路: 洛雪开着就保持订阅,不只在系统报洛雪时;连着的不因一拍没认出它就断开")
+    expectEqual(code("LyrimuseCore/Local/LXMusicOpenAPI.swift").contains(#"NetworkAuditLog.record(service: "image", operation: "lxmusic.artwork""#),
+                true, "洛雪退路: 下开放 API 推的封面记进对外请求审计日志")
     expectEqual(source.contains("if LXMusicOpenAPI.outputsToDefaultDevice(LXMusicOpenAPI.shared.currentConfig()) {\n                    beginLXMusicColdStart(signalAt: Date(), watch: true)"),
                 true, "洛雪冷恢复: 洛雪选了别的输出设备时不等默认设备")
     expectEqual(source.contains("if let lxTrack, Self.lxMusicArtworkNeedsFallback(")

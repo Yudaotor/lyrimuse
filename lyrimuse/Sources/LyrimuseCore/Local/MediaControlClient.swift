@@ -817,7 +817,8 @@ public enum MediaControlClient {
             && !NSRunningApplication.runningApplications(withBundleIdentifier: PlaybackPlayer.lxMusic.bundleIdentifier).isEmpty
         LXMusicOpenAPI.shared.noteAppRunning(running)
         var lx: MediaControlSnapshot?
-        if running, found?.bundleIdentifier != PlaybackPlayer.lxMusic.bundleIdentifier,
+        // 订阅连着(`currentState` 不是 nil)就说明洛雪活着,不再看 `running`:那个后台线程上偶尔返回空。
+        if wanted, found?.bundleIdentifier != PlaybackPlayer.lxMusic.bundleIdentifier,
            let state = LXMusicOpenAPI.shared.currentState(),
            let synthesized = LXMusicOpenAPI.nowPlayingSnapshot(state, now: Date()),
            kasetWins(over: found, kaset: synthesized) {

@@ -290,10 +290,12 @@ public final class LXMusicOpenAPI: NSObject, URLSessionDataDelegate, @unchecked 
         if running { keepAlive(active: true) }
     }
 
-    /// 在放洛雪时每拍调(`active` 为真):开着就保持订阅,关了、端口变了就断开重来;不在放洛雪、洛雪也没开着时断开。
+    /// 在放洛雪时每拍调(`active` 为真):开着就保持订阅,关了、端口变了就断开重来。已经连着的不因为一拍没在放洛雪、
+    /// 没认出它开着就断开:`appRunning` 来自 `NSRunningApplication`,后台线程上偶尔返回空(16 章 §3 表),断了要隔
+    /// `retrySecs` 才重连;洛雪退出时它那头会断开连接(`didCompleteWithError`)。
     public func keepAlive(active: Bool) {
         lock.lock()
-        let wanted = active || appRunning
+        let wanted = active || appRunning || task != nil
         lock.unlock()
         let config = wanted ? currentConfig() : nil
         let want = config?.enabled == true ? config?.port : nil
@@ -379,16 +381,18 @@ public final class LXMusicOpenAPI: NSObject, URLSessionDataDelegate, @unchecked 
         if let cached, cached.url == url { return cached.data }
         var request = URLRequest(url: url)
         request.timeoutInterval = 3
+        let started = Date()
         let done = DispatchSemaphore(value: 0)
-        let box = OSAllocatedUnfairLock<Data?>(initialState: nil)
-        URLSession.shared.dataTask(with: request) { data, response, _ in
-            if (response as? HTTPURLResponse)?.statusCode == 200, let data, NSImage(data: data) != nil {
-                box.withLock { $0 = data }
-            }
+        let box = OSAllocatedUnfairLock<(data: Data?, status: Int?, error: Error?)>(initialState: (nil, nil, nil))
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            box.withLock { $0 = (data, (response as? HTTPURLResponse)?.statusCode, error) }
             done.signal()
         }.resume()
         _ = done.wait(timeout: .now() + 3.5)
-        guard let data = box.withLock({ $0 }) else { return nil }
+        let got = box.withLock { $0 }
+        NetworkAuditLog.record(service: "image", operation: "lxmusic.artwork", host: url.host ?? "",
+                               statusCode: got.status, durationMs: Date().timeIntervalSince(started) * 1000, error: got.error)
+        guard got.status == 200, let data = got.data, CoverArtReplacementGate.isImage(data) else { return nil }
         lock.lock()
         artworkCache = (url, data)
         lock.unlock()
