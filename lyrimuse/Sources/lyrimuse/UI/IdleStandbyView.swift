@@ -42,7 +42,8 @@ struct IdleStandbyView: View {
                 // 收听总览没有本地替代来源(三个数字全靠 Last.fm 的每日归档),
                 // 未连接就没有东西可画,直接省略——不画空卡、不画破折号,沿用
                 // 「没连账号也不难看」那条既有契约。
-                // 收听总览和右列最近播放各一张玻璃卡(同设置页),唱片 hero 不进卡、仍浮在柔光上。
+                // 收听总览、唱片 hero、右列最近播放各一张玻璃卡(同设置页);hero 那张撑满左列余下高度,
+                // 下沿跟右列对齐(07 章决策 159)。
                 if stats.isConnected {
                     IdleOverviewCard()
                         .padding(EdgeInsets(top: 14, leading: 18, bottom: 12, trailing: 18))
@@ -51,7 +52,9 @@ struct IdleStandbyView: View {
                 }
                 IdleLastTrackHero(player: player, onResume: onResume,
                                   onOpenPlayer: onOpenPlayer, onOpenAlbum: onOpenAlbum)
+                    .padding(20)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .settingsCardBackground(cornerRadius: 18)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // 跟右列同一个顶部间距,两张卡上沿对齐。
@@ -524,10 +527,20 @@ private struct IdleLastTrackHero: View {
 
     // MARK: 有上次那首
 
+    /// 卡片高度不够时先缩封面、再去掉那句歌词:窗口最矮 480pt,全尺寸那版会溢出卡片。
     private var trackHero: some View {
+        ViewThatFits(in: .vertical) {
+            trackHeroContent(coverSize: 216, showsQuote: true)
+            trackHeroContent(coverSize: 168, showsQuote: true)
+            trackHeroContent(coverSize: 168, showsQuote: false)
+            trackHeroContent(coverSize: 120, showsQuote: false)
+        }
+    }
+
+    private func trackHeroContent(coverSize: CGFloat, showsQuote: Bool) -> some View {
         VStack(spacing: 0) {
             cover
-                .frame(width: 216, height: 216)
+                .frame(width: coverSize, height: coverSize)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
             // 带上是哪个播放器:没有「继续播放」的播放器,按钮里才写播放器名,有的话光看按钮看不出来。
@@ -587,7 +600,7 @@ private struct IdleLastTrackHero: View {
             .buttonBorderShape(.capsule)
             .controlSize(.large)
             .padding(.top, 18)
-            if !quotes.isEmpty {
+            if showsQuote, !quotes.isEmpty {
                 quoteBand
                     .padding(.top, 30)
             }
