@@ -41,6 +41,7 @@ Lyrimuse 是 macOS 上的开源（GPL-3.0）逐字歌词 App，支持 macOS 14 �
 | [锁定位置、长按才能拖](#feature-lock-position) | 设置 › 歌词显示 › 悬浮歌词 › 行为 › 锁定位置 |
 | [截屏、录屏、共享屏幕时隐藏](#feature-hide-in-screenshots) | 设置 › 歌词显示 › 悬浮歌词 › 行为 › 截屏时隐藏 |
 | [暂停时隐藏或收起](#feature-hide-when-paused) | 设置 › 歌词显示 › 悬浮歌词 › 行为 › 暂停时隐藏 |
+| [全屏时隐藏悬浮歌词](#feature-overlay-hide-in-full-screen) | 设置 › 歌词显示 › 悬浮歌词 › 行为 › 全屏时隐藏 |
 | [网页歌词：手机、平板当副屏，或作为 OBS 浏览器源](#feature-web-lyrics) | 设置 › 歌词显示 › 网页歌词 › 网页歌词 |
 | [浏览器里的 YouTube Music、Spotify 网页版](#feature-web-players) | 设置 › 播放器 › 网页版 |
 | [自动跳过 YouTube Music 广告](#feature-skip-youtube-ads) | 设置 › 播放器 › 网页版 › 自动跳过 YouTube Music 广告 |
@@ -409,6 +410,15 @@ Apple Music 上有动态封面的专辑，完整尺寸的歌词窗口里封面�
 - 默认开启
 - 设置位置：歌词显示 › 灵动岛 › 行为 › 全屏时隐藏
 
+<a id="feature-overlay-hide-in-full-screen"></a>
+
+### 全屏时隐藏悬浮歌词
+
+悬浮歌词默认一直浮在全屏 App 上面。打开后，看视频、玩游戏等全屏的时候它先藏起来，切回桌面再出来。
+
+- 默认关闭
+- 设置位置：歌词显示 › 悬浮歌词 › 行为 › 全屏时隐藏
+
 <a id="feature-title-on-change"></a>
 
 ### 换歌时显示歌名
@@ -714,7 +724,7 @@ Apple Music、Spotify 和 Kaset 要「自动化」权限才能读播放状态；
 
 ## 全部设置项
 
-设置窗口里的每一项，按所在位置列出，共 251 项。在设置窗口侧栏顶部的搜索框里输入名称，可以直接跳到那一项。
+设置窗口里的每一项，按所在位置列出，共 252 项。在设置窗口侧栏顶部的搜索框里输入名称，可以直接跳到那一项。
 
 ### 歌词 › 获取
 
@@ -828,6 +838,7 @@ Apple Music、Spotify 和 Kaset 要「自动化」权限才能读播放状态；
 - **截屏时隐藏**
 - **暂停时隐藏**
 - **纯音乐/无歌词时隐藏**
+- **全屏时隐藏**
 
 ### 歌词显示 › 灵动岛
 

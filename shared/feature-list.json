@@ -1032,6 +1032,31 @@
           ]
         },
         {
+          "id": "overlay-hide-in-full-screen",
+          "title": {
+            "zh-Hans": "全屏时隐藏悬浮歌词",
+            "en": "Floating lyrics step aside in full screen",
+            "zh-Hant": "全螢幕時隱藏浮動歌詞"
+          },
+          "desc": {
+            "zh-Hans": "悬浮歌词默认一直浮在全屏 App 上面。打开后，看视频、玩游戏等全屏的时候它先藏起来，切回桌面再出来。",
+            "en": "Floating lyrics normally stay on top of full screen apps. Turn this on and they hide while a video, game or any app is full screen, then come back when you leave it.",
+            "zh-Hant": "浮動歌詞預設一直浮在全螢幕 App 上面。開啟後，看影片、玩遊戲等全螢幕的時候它先藏起來，切回桌面再出來。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "overlayHideInFullScreen"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "行为",
+              "全屏时隐藏"
+            ]
+          ]
+        },
+        {
           "id": "title-on-change",
           "title": {
             "zh-Hans": "换歌时显示歌名",

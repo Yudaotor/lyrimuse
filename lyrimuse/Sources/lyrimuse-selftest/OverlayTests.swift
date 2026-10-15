@@ -7,6 +7,7 @@ import Foundation
 
 @MainActor
 func runOverlayTests() {
+    checkOverlayFullScreenHide()
     // ---- GapDotsCurve.opacityKeyframes:间奏三点交给 Core Animation 的亮度关键帧 ----
     do {
         let start = 10_000, end = 22_000

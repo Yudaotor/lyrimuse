@@ -47893,6 +47893,23 @@
           }
         }
       }
+    },
+    "所在屏幕有 App 全屏时隐藏" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hides while an app is full screen on its display"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所在螢幕有 App 全螢幕時隱藏"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

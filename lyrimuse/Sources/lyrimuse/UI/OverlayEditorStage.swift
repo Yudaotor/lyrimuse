@@ -537,10 +537,11 @@ struct OverlayEditorStage: View {
     /// 独立的工具栏入口之后不再算进来 —— 它有自己的摘要。
     private var behaviorSummary: String {
         SettingsToggleSummary.text(
-            OverlayBehaviorItem.allCases.map { (title: $0.title, isOn: $0.binding.wrappedValue) }
+            OverlayBehaviorItem.allCases.filter { !$0.isAutoHide }.map { (title: $0.title, isOn: $0.binding.wrappedValue) }
                 + AutoHideItem.allCases.map {
                     (title: $0.title(for: .desktopOverlay), isOn: $0.binding(for: .desktopOverlay).wrappedValue)
-                })
+                }
+                + OverlayBehaviorItem.allCases.filter(\.isAutoHide).map { (title: $0.title, isOn: $0.binding.wrappedValue) })
     }
 
     /// 工具栏按钮。浮层挂在**这颗按钮**上、往上弹(`arrowEdge: .top`):箭头指着点的那颗,浮层盖住的是上面的工具栏和

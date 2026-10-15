@@ -1878,7 +1878,7 @@ func runNotchTests() {
         expectEqual(controller.contains("noLyricsObserver?.cancel()"), true, "无歌词收起契约: 副本 teardown 摘掉订阅")
         let overlayController = read("LyricsOverlayWindowController.swift")
         expectEqual(overlayController.contains("AppSettings.shared.$hideWhenNoLyrics\n            .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)")
-                    && overlayController.contains("let shouldShow = isVisible && !hiddenForNoLyrics && (!hideWhenNotPlaying || isPlayingNow)"), true,
+                    && overlayController.contains("let shouldShow = OverlayVisibility.shouldShow(isVisible: isVisible, hiddenForNoLyrics: hiddenForNoLyrics,"), true,
                     "无歌词隐藏契约: 悬浮歌词订阅自己那一份开关,并进显隐判据")
         expectEqual(controller.contains("AppSettings.shared.$notchHideInFullScreen\n            .combineLatest(FullScreenSpaceMonitor.shared.$fullScreenDisplays)"), true,
                     "全屏契约: 每个实例(含镜像副本)自己订阅开关与全屏表,值从 sink 参数拿")

@@ -318,6 +318,7 @@ final class AppSettings: ObservableObject {
         static let notchHideInFullScreen = "np:notchHideInFullScreen"
         // 「纯音乐/无歌词时隐藏」,悬浮歌词和灵动岛各一份;灵动岛那份是收起歌词行,键名不跟着改(改了已开着的会丢)。
         static let hideWhenNoLyrics = "np:hideWhenNoLyrics"
+        static let overlayHideInFullScreen = "np:overlayHideInFullScreen"
         static let notchCollapseLyricsWhenNoLyrics = "np:notchHideWhenNoLyrics"
         // 收听里程碑:灵动岛自己撑开报喜(ListenMilestoneCenter)。
         static let notchListenMilestones = "np:notchListenMilestones"
@@ -1150,6 +1151,11 @@ final class AppSettings: ObservableObject {
     /// 每个窗口实例(含灵动岛镜像副本)自己订阅。
     @Published var hideWhenNoLyrics: Bool {
         didSet { defaults.set(hideWhenNoLyrics, forKey: Keys.hideWhenNoLyrics) }
+    }
+    /// 悬浮歌词「全屏时隐藏」:所在屏幕的当前 Space 是全屏 App 时整扇藏起来。默认关(悬浮歌词一直盖在全屏 App 上面),
+    /// 跟灵动岛、迷你窗那两颗同名开关各管各的。控制器自己订阅,不经设置页调控制器。见 04 章决策 65。
+    @Published var overlayHideInFullScreen: Bool {
+        didSet { defaults.set(overlayHideInFullScreen, forKey: Keys.overlayHideInFullScreen) }
     }
     @Published var notchCollapseLyricsWhenNoLyrics: Bool {
         didSet { defaults.set(notchCollapseLyricsWhenNoLyrics, forKey: Keys.notchCollapseLyricsWhenNoLyrics) }
@@ -2259,6 +2265,7 @@ final class AppSettings: ObservableObject {
         notchHideInFullScreen = (defaults.object(forKey: Keys.notchHideInFullScreen) as? Bool)
             ?? Self.defaultNotchHideInFullScreen
         hideWhenNoLyrics = (defaults.object(forKey: Keys.hideWhenNoLyrics) as? Bool) ?? false
+        overlayHideInFullScreen = (defaults.object(forKey: Keys.overlayHideInFullScreen) as? Bool) ?? false
         notchCollapseLyricsWhenNoLyrics = (defaults.object(forKey: Keys.notchCollapseLyricsWhenNoLyrics) as? Bool)
             ?? Self.defaultNotchCollapseLyricsWhenNoLyrics
         notchListenMilestones = (defaults.object(forKey: Keys.notchListenMilestones) as? Bool)

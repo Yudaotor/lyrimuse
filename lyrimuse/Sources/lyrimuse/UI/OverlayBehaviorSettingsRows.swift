@@ -22,6 +22,9 @@ import SwiftUI
 // 放在行为项后面。别为了"都是行为项"把它们并进下面这个枚举:那几项要同时服务灵动岛(靠
 // `AutoHideSurface` 分流到灵动岛的键和另一个控制器),而 `OverlayBehaviorItem` 的 Binding 写死打的是
 // 悬浮窗控制器。
+//
+// 例外是「全屏时隐藏」(`OverlayBehaviorItem.hideInFullScreen`):它只属于悬浮歌词(灵动岛的同名开关在
+// `NotchBehaviorItem` 里),所以留在这个枚举,只是按 `isAutoHide` 画进「自动隐藏」那一格。
 
 /// 行为项的唯一真源:文案、图标、以及那个"改了要连带让真窗口生效"的 Binding。
 ///
@@ -38,8 +41,14 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
     /// 悬停时露不露出那排播放控制按钮。排在 `fadeOnHover` 后面:两项都是
     /// "指针悬到歌词上会发生什么",放一起读者好对照(一个让歌词淡开、一个叫出按钮排)。
     case showHoverControls
+    /// 所在屏幕的当前 Space 是全屏 App 时整扇藏起来。画在「自动隐藏」那一格(`isAutoHide`),跟截屏 / 暂停
+    /// 那几项并排;不并进 `AutoHideItem`:灵动岛的同名开关在 `NotchBehaviorItem` 里,两边不是一一对应。
+    case hideInFullScreen
 
     var id: String { rawValue }
+
+    /// 画在「自动隐藏」那一格、不在「窗口」那一格。
+    var isAutoHide: Bool { self == .hideInFullScreen }
 
     var icon: String {
         switch self {
@@ -49,6 +58,7 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
         // 这一项管的就是那排播放按钮本身,用播放/暂停符号最直白;不用 cursorarrow 一族,
         // 免得跟上一行的「悬浮淡化」在图标上也撞成一对。
         case .showHoverControls: return "playpause.circle"
+        case .hideInFullScreen: return "arrow.up.left.and.arrow.down.right"
         }
     }
 
@@ -58,6 +68,15 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
         case .dragNeedsLongPress: return L10n.t("长按拖动")
         case .fadeOnHover: return L10n.t("悬浮淡化")
         case .showHoverControls: return L10n.t("悬停时显示控制条")
+        case .hideInFullScreen: return L10n.t("全屏时隐藏")
+        }
+    }
+
+    /// ⓘ 帮助。只有「全屏时隐藏」有。
+    var help: String? {
+        switch self {
+        case .hideInFullScreen: return L10n.t("所在屏幕有 App 全屏时隐藏")
+        case .lockPosition, .dragNeedsLongPress, .fadeOnHover, .showHoverControls: return nil
         }
     }
 
@@ -110,6 +129,9 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
             return Binding(
                 get: { settings.overlayShowHoverControls },
                 set: { settings.overlayShowHoverControls = $0 })
+        // 只写设置:控制器自己订阅这个值(同「纯音乐/无歌词时隐藏」),不碰 `.shared`,也就不用守卫。
+        case .hideInFullScreen:
+            return Binding(get: { settings.overlayHideInFullScreen }, set: { settings.overlayHideInFullScreen = $0 })
         case .fadeOnHover:
             return Binding(
                 get: { settings.overlayFadeOnHover },
@@ -129,7 +151,7 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
 
 // MARK: - 「行为」组的行(浮层与抽屉同一份)
 
-/// 「行为」那一组:锁定位置 / 长按拖动 / 悬浮淡化 / 悬停时显示控制条 + 自动隐藏几项。
+/// 「行为」那一组:锁定位置 / 长按拖动 / 悬浮淡化 / 悬停时显示控制条 + 自动隐藏几项(含 `OverlayBehaviorItem.hideInFullScreen`)。
 /// 编辑台「行为」浮层(`OverlayEditorStage.toolbarButton`)和抽屉「行为」组(`OverlayAllSettingsDrawer`)调的
 /// 是这同一份。
 ///
@@ -148,12 +170,15 @@ struct OverlayBehaviorSettingsRows: View {
             // 「位置」三选一**不在这一组**:它有自己的「位置」入口,抽屉里也单独一组,见
             // `OverlayPlacementSettingsRows.swift`。这一组是 `OverlayBehaviorItem` 的各项开关 + 自动隐藏几项。
             SettingsTileGrid(title: L10n.t("窗口"), columns: 3) {
-                ForEach(OverlayBehaviorItem.allCases) { item in
+                ForEach(OverlayBehaviorItem.allCases.filter { !$0.isAutoHide }) { item in
                     SettingsToggleTile(icon: item.icon, title: item.title, isOn: item.binding)
                 }
             }
             SettingsTileGrid(title: L10n.t("自动隐藏"), columns: 3) {
                 AutoHideToggleTiles(surface: .desktopOverlay)
+                ForEach(OverlayBehaviorItem.allCases.filter(\.isAutoHide)) { item in
+                    SettingsToggleTile(icon: item.icon, title: item.title, help: item.help, isOn: item.binding)
+                }
             }
         }
     }

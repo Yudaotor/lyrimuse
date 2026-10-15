@@ -41,6 +41,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Lock position, long-press to drag](#feature-lock-position) | Settings › Lyrics Display › Floating Lyrics › Behavior › Lock Position |
 | [Hidden from screenshots and screen sharing](#feature-hide-in-screenshots) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Screenshots |
 | [Hide or shrink when paused](#feature-hide-when-paused) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide When Paused |
+| [Floating lyrics step aside in full screen](#feature-overlay-hide-in-full-screen) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Full Screen |
 | [Web lyrics: a phone or tablet as a second screen, or an OBS browser source](#feature-web-lyrics) | Settings › Lyrics Display › Web Lyrics › Web Lyrics |
 | [YouTube Music and Spotify Web in your browser](#feature-web-players) | Settings › Player › Web |
 | [Skip YouTube Music ads automatically](#feature-skip-youtube-ads) | Settings › Player › Web › Skip YouTube Music Ads Automatically |
@@ -409,6 +410,15 @@ Notch lyrics tuck away while a video, game or any app is full screen.
 - On by default
 - Settings: Lyrics Display › Notch › Behavior › Hide in Full Screen
 
+<a id="feature-overlay-hide-in-full-screen"></a>
+
+### Floating lyrics step aside in full screen
+
+Floating lyrics normally stay on top of full screen apps. Turn this on and they hide while a video, game or any app is full screen, then come back when you leave it.
+
+- Off by default
+- Settings: Lyrics Display › Floating Lyrics › Behavior › Hide in Full Screen
+
 <a id="feature-title-on-change"></a>
 
 ### Title drops in on song change
@@ -714,7 +724,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 251 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 252 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -828,6 +838,7 @@ Every setting in the Settings window, by where it lives: 251 in all. Type a name
 - **Hide in Screenshots**
 - **Hide When Paused**
 - **Hide for Instrumentals & No Lyrics**
+- **Hide in Full Screen**
 
 ### Lyrics Display › Notch
 

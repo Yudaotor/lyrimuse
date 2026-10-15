@@ -69,6 +69,12 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     @Published private(set) var hideWhenNotPlaying: Bool = AppSettings.shared.hideWhenNotPlaying
     /// 「纯音乐/无歌词时隐藏」开着、这首没有歌词(`NoLyricsAutoHide.hides`),由 noLyricsObserver 写入。
     private var hiddenForNoLyrics = false
+    /// 「全屏时隐藏」开着、窗口所在屏幕的当前 Space 是全屏 App(`OverlayVisibility.fullScreenHides`),
+    /// 由 applyFullScreenCover / refreshFullScreenCover 写入。
+    private var coveredByFullScreen = false
+    /// 「全屏时隐藏」的两个输入,存订阅收到的值:换屏时重算要用,别回读 AppSettings / 监视器(willSet 坑)。
+    private var fullScreenHideEnabled = false
+    private var fullScreenDisplays: Set<String> = []
 
     private var moveObserver: NSObjectProtocol?
     private var screenObserver: NSObjectProtocol?
@@ -92,6 +98,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private var moveDebounceTimer: Timer?
     private var isPlayingObserver: AnyCancellable?
     private var noLyricsObserver: AnyCancellable?
+    private var fullScreenObserver: AnyCancellable?
+    private var windowScreenObserver: NSObjectProtocol?
     private var shadowObserver: AnyCancellable?
     private var appearanceObserver: AnyCancellable?
     private var placementModeObserver: AnyCancellable?
@@ -645,11 +653,25 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
                 hiddenForNoLyrics = hide
                 updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
             }
+        // 「全屏时隐藏」:开关和全屏表两个输入同时从参数拿(同一个 willSet 坑);窗口换了屏另外重算一次。
+        fullScreenObserver = AppSettings.shared.$overlayHideInFullScreen
+            .combineLatest(FullScreenSpaceMonitor.shared.$fullScreenDisplays)
+            .sink { [weak self] enabled, displays in
+                self?.applyFullScreenCover(enabled: enabled, displays: displays)
+            }
+        if let window {
+            windowScreenObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didChangeScreenNotification, object: window, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshFullScreenCover() }
+            }
+        }
     }
 
     deinit {
         if let moveObserver { NotificationCenter.default.removeObserver(moveObserver) }
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
+        if let windowScreenObserver { NotificationCenter.default.removeObserver(windowScreenObserver) }
         if let globalMouseMonitor { NSEvent.removeMonitor(globalMouseMonitor) }
         if let localMouseMonitor { NSEvent.removeMonitor(localMouseMonitor) }
     }
@@ -690,7 +712,33 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
     }
 
-    // 实际是否显示 = 用户手动偏好(isVisible) AND 没因无歌词隐藏 AND (没开暂停时隐藏 OR 当前正在播放)。
+    private func applyFullScreenCover(enabled: Bool, displays: Set<String>) {
+        fullScreenHideEnabled = enabled
+        fullScreenDisplays = displays
+        refreshFullScreenCover()
+    }
+
+    /// 「全屏时隐藏」:窗口所在屏幕的当前 Space 是全屏 App 时整扇藏起来,切回桌面再摆出来。按 frame 跟各块屏的
+    /// 交叠面积找屏:藏着(orderOut)的窗口 `screen` 不可靠(同迷你窗,07 章决策 142)。
+    private func refreshFullScreenCover() {
+        var covered = false
+        if fullScreenHideEnabled, let frame = window?.frame {
+            let screen = NSScreen.screens.max { a, b in
+                let ia = a.frame.intersection(frame), ib = b.frame.intersection(frame)
+                return ia.width * ia.height < ib.width * ib.height
+            }
+            covered = FullScreenSpaces.covers(screenID: screen.flatMap(ScreenIdentity.id(of:)),
+                                              isMainScreen: screen != nil && screen == NSScreen.screens.first,
+                                              fullScreenDisplays: fullScreenDisplays)
+        }
+        let hide = OverlayVisibility.fullScreenHides(enabled: fullScreenHideEnabled, coveredByFullScreenApp: covered)
+        guard hide != coveredByFullScreen else { return }
+        coveredByFullScreen = hide
+        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
+    }
+
+    // 实际是否显示 = 用户手动偏好(isVisible) AND 没因无歌词隐藏 AND 没因全屏隐藏 AND (没开暂停时隐藏 OR 当前正在播放)
+    //(`OverlayVisibility.shouldShow`)。
     // 不直接改 isVisible 本身——isVisible 就是纯粹的"用户手动想不想看见"这一件事,菜单栏
     // "显示悬浮歌词"复选框读的也是这个值;暂停时被自动隐藏不应该让那个复选框跟着变成
     // 未勾选状态,不然看起来像是被谁悄悄关掉了。
@@ -702,7 +750,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 当前值即可(如果做成默认参数,默认值表达式在 Swift 6 严格并发模式下是 nonisolated
     // 上下文,访问 @MainActor 单例会报错,所以强制显式传参而不是偷懒用默认值)。
     private func updateActualVisibility(isPlayingNow: Bool) {
-        let shouldShow = isVisible && !hiddenForNoLyrics && (!hideWhenNotPlaying || isPlayingNow)
+        let shouldShow = OverlayVisibility.shouldShow(isVisible: isVisible, hiddenForNoLyrics: hiddenForNoLyrics,
+                                                      coveredByFullScreen: coveredByFullScreen,
+                                                      hideWhenNotPlaying: hideWhenNotPlaying, isPlaying: isPlayingNow)
         if shouldShow { window?.orderFront(nil) } else { window?.orderOut(nil) }
         refreshSurfaceVisible()
         // 兜底:万一上屏之后系统没发遮挡变化通知,这里过一小会儿再核一次,别让填色停在「看不见」。

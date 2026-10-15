@@ -333,6 +333,7 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "截屏时隐藏", kw: ["截图", "录屏", "会议", "共享屏幕", "防截屏"], group: "行为"),
         surface(.overlay, "暂停时隐藏", kw: ["自动隐藏", "暂停", "没在播放"], group: "行为"),
         surface(.overlay, "纯音乐/无歌词时隐藏", kw: ["自动隐藏", "纯音乐", "无歌词", "没有歌词", "伴奏", "instrumental"], group: "行为"),
+        surface(.overlay, "全屏时隐藏", kw: ["全屏", "隐藏", "自动隐藏", "遮挡", "看视频", "玩游戏", "fullscreen"], group: "行为"),
         // 「位置」自成一组(工具栏第二行第三颗 / 抽屉「位置」组),标题就是组名,不带 group。
         surface(.overlay, "位置", kw: ["自由", "顶部居中", "底部居中", "Dock", "预设", "对齐"]),
         surface(.overlay, "所在屏幕", kw: ["屏幕", "多屏", "外接屏", "显示器", "跟随", "跟随当前窗口", "固定"]),
