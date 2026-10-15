@@ -119,6 +119,9 @@
 "%d 行文本不同" = "%d lines differ";
 "%d 项存在差异（以红色标示）" = "%d differences (highlighted in red)";
 "/ %@ 页" = "of %@";
+"1. 在洛雪里打开「设置」，找到「开放 API」" = "1. In LX Music, open Settings and find Open API";
+"2. 勾上「启用开放 API 服务」" = "2. Check Enable Open API service";
+"3. 「允许来自局域网的访问」不用勾" = "3. Leave Allow access from LAN unchecked";
 "Amazon Music 专辑页" = "Amazon Music album page";
 "Amazon Music 曲目 ID 一致" = "Same Amazon Music track ID";
 "Amazon Music 歌手页" = "Amazon Music artist page";
@@ -157,6 +160,7 @@
 "Lyric × Muse——把歌词交给音乐女神" = "Lyric × Muse — hand your lyrics to the Muse";
 "LyricFind（经由 YouTube Music 检索）" = "LyricFind (searched via YouTube Music)";
 "Lyrimuse" = "Lyrimuse";
+"Lyrimuse 从这里读洛雪自己的播放进度、调它的音量" = "Lyrimuse reads LX Music's own playback position here and adjusts its volume";
 "Lyrimuse 反馈" = "Lyrimuse Feedback";
 "Lyrimuse 启动时同时打开勾选的播放器，已在运行的播放器不受影响，也不会抢占焦点" = "When Lyrimuse starts, open the checked players too. Ones already running are left alone, and nothing steals focus";
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse shows lyrics for whichever app is playing. You can change this in Settings any time";
@@ -537,6 +541,7 @@
 "副行" = "Second Line";
 "功能清单" = "Feature List";
 "加入信任列表" = "Trust This App";
+"加到%@的稍后播放" = "Play Later in %@";
 "加签密钥（可选）" = "Signing Secret (Optional)";
 "加粗" = "Bold";
 "加载失败" = "Couldn't load";
@@ -665,6 +670,7 @@
 "圆角" = "Corners";
 "在 %@ 上收听" = "Listen on %@";
 "在 %@ 中打开" = "Open in %@";
+"在 %@ 中搜索" = "Search in %@";
 "在 %@ 中播放" = "Play in %@";
 "在 %@ 中显示" = "Show in %@";
 "在 Apple Music 中打开" = "Open in Apple Music";
@@ -700,6 +706,7 @@
 "在手机、平板上点按钮暂停、切歌，点歌词跳到那一句" = "Tap the buttons on a phone or tablet to pause or skip, or tap a lyric to jump to it";
 "在播放器中播放任意歌曲，歌词将自动显示" = "Play something in your player and lyrics will appear here";
 "在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱颜色」，其余使用「未唱颜色」。仅在显示歌词时出现。" = "Puts a menu bar icon at the far left or right of the lyrics slot; its color fills from the bottom up to show playback progress — the filled part in Sung Color, the rest in Unsung Color. Only appears while lyrics are showing.";
+"在洛雪的设置里打开开放 API 后可调音量" = "Turn on Open API in LX Music settings to adjust its volume";
 "在浏览器中打开" = "Open in Browser";
 "在浏览器中显示歌词：手机、平板与歌词窗口一致，OBS 浏览器源与悬浮歌词一致" = "Show lyrics in a browser: on phones and tablets they match the Lyrics Window, as an OBS browser source they match the Floating Lyrics.";
 "在浏览器里听歌也能显示歌词。点「+」配对你用的浏览器，进度直接从网页读，换歌后马上对准。" = "Lyrics work for songs playing in a browser too. Click + to pair the browser you use; the position is read straight from the page, so lyrics line up right after a song change.";
@@ -840,6 +847,7 @@
 "已修改 %@ 处" = "%@ changes";
 "已修改 %@ 处#one" = "%@ change";
 "已停止重新匹配" = "Re-matching stopped";
+"已允许局域网访问，同一网络里的设备也能控制洛雪" = "LAN access is allowed, so devices on the same network can also control LX Music";
 "已减少推荐" = "Suggested Less";
 "已删除" = "Deleted";
 "已刷新" = "Refreshed";
@@ -874,6 +882,7 @@
 "已恢复 %d 个歌词文件（新增 %d、覆盖 %d）" = "Restored %d lyrics files (%d added, %d overwritten)";
 "已恢复 %d 个歌词文件（新增 %d、覆盖 %d）#one" = "Restored %d lyrics file (%d added, %d overwritten)";
 "已手动停止" = "Stopped manually";
+"已打开" = "On";
 "已找到 %@ 首" = "%@ found so far";
 "已找到 %@ 首，找到后会自动移出此列表" = "%@ found so far; found songs are removed from this list automatically";
 "已折叠" = "Collapsed";
@@ -978,6 +987,7 @@
 "开始播放时自动展开" = "Expand When Playback Starts";
 "开机启动" = "Launch at Login";
 "开机时自动启动 Lyrimuse" = "Launch Lyrimuse at login";
+"开源的音乐播放器，曲库来自国内各大平台" = "An open-source player for music from Chinese streaming platforms";
 "开源组件与词典" = "Open-source components and dictionaries";
 "开源许可证" = "Open-Source License";
 "开着 %@ 个" = "%@ on";
@@ -1014,6 +1024,7 @@
 "快捷键" = "Keyboard Shortcuts";
 "快捷键：⌘↩" = "Shortcut: ⌘↩";
 "快速开关" = "Quick Toggles";
+"怎么打开" = "How to Turn On";
 "总 Scrobble" = "Total scrobbles";
 "总分 %@" = "Total %@";
 "恢复" = "Reset";
@@ -1059,6 +1070,7 @@
 "打开授权页" = "Open Authorization Page";
 "打开歌词窗口" = "Open Lyrics Window";
 "打开歌词管理" = "Open Lyrics Manager";
+"打开洛雪音乐" = "Open LX Music";
 "打开窗口" = "Open Windows";
 "打开系统设置" = "Open System Settings";
 "打开菜单栏面板" = "Open Menu Bar Panel";
@@ -1371,6 +1383,7 @@
 "未完成" = "Not done";
 "未应答" = "No response";
 "未开启" = "Disabled";
+"未打开 · 打开后进度更准，还能调洛雪的音量" = "Off · Turn it on for more accurate timing and LX Music volume control";
 "未找到匹配的设置" = "No matching settings";
 "未找到可打开文本文件的应用" = "No app was found that can open text files";
 "未找到带时间戳的版本，已自动采用纯文本歌词（可在「歌词窗口」中查看）" = "No timed version found; plain-text lyrics were adopted automatically (viewable in the Lyrics Window)";
@@ -1652,6 +1665,8 @@
 "沿用同一首歌另一种写法「%@」的校正，在这里调整后记在这一条上" = "Uses the timing correction from “%@”, another version of this song. Adjusting it here saves it to this version.";
 "沿用同一首歌的人工修正" = "Uses the manual correction from another version of this song";
 "沿用同一首歌的修正" = "From Another Version";
+"洛雪音乐" = "LX Music";
+"洛雪音乐开放 API" = "LX Music Open API";
 "浅色" = "Light";
 "浅色卡片" = "Light Card";
 "测试" = "Test";

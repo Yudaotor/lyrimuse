@@ -17,7 +17,8 @@ import (
 //   - 网易云:客户端曲库 dbTrack 里这首的 album.picUrl(neteaselocal.go 的索引),图床给的 http 换成 https;
 //   - QQ 音乐:播放列表归档里当前这首的 albumInfo.albumMid,按 qqAlbumCoverURL 拼;
 //   - KKBOX:客户端缓存的单曲详情里的专辑图 600 档(kkboxPlayingInfo.cover);
-//   - Amazon Music:目录缓存里这首(按 ASIN)的 album.image,换成同尺寸的 JPEG。
+//   - Amazon Music:目录缓存里这首(按 ASIN)的 album.image,换成同尺寸的 JPEG;
+//   - 洛雪音乐:列表里这一首的 meta.picUrl(放过才有),换成 https(lxMusicCoverURL)。
 // Spotify、Kaset、YouTube Music 网页版的封面地址 App 自己读得到,不经这里。
 
 // 同一首多久再读一次:trackEnrichment 在同一首歌的播放期间每几秒进来一次,本机数据(sqlite、plist、LevelDB)
@@ -44,14 +45,14 @@ func playerCoverTTL(cover string) time.Duration {
 	return playerCoverHitTTL
 }
 
-// playerCoverURLFor:当前播放器给这首记下的封面地址;不是上面四家、本机数据里没有都返回 ""。要读别的 App 的
+// playerCoverURLFor:当前播放器给这首记下的封面地址;不是上面五家、本机数据里没有都返回 ""。要读别的 App 的
 // 本机文件,调用方不能持着 enrichMu(Amazon 那条经 amazonASINFor 会取它)。kkbox 是同一拍已经取好的那份
 // (kkboxPlayingInfoFor 自己记 30 秒)。
 func playerCoverURLFor(bundleID, artist, title, album string, durationSecs float64, kkbox kkboxPlayingInfo) string {
 	switch bundleID {
 	case kkboxBundleID:
 		return kkbox.cover
-	case neteaseMusicBundleID, qqMusicBundleID, amazonMusicBundleID:
+	case neteaseMusicBundleID, qqMusicBundleID, amazonMusicBundleID, lxMusicBundleID:
 	default:
 		return ""
 	}
@@ -71,6 +72,8 @@ func playerCoverURLFor(bundleID, artist, title, album string, durationSecs float
 		cover = qqPlayingCoverURL(artist, title)
 	case amazonMusicBundleID:
 		cover = amazonPlayingCoverURL(artist, title, album)
+	case lxMusicBundleID:
+		cover = lxMusicCoverURL(artist, title, durationSecs)
 	}
 	playerCoverMu.Lock()
 	for k, m := range playerCoverMemo {

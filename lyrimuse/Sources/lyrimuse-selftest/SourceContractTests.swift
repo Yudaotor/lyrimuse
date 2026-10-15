@@ -851,10 +851,10 @@ func runSourceContractTests() {
                 } else {
                     expectEqual(true, false, "封面沉降: 找不到二次确认那道 guard")
                 }
-                // 首轮没等到这首的图(载荷仍是上一首的 / 是登记在案的占位图)不能当成"没有封面"清空:
+                // 首轮没等到这首的图(载荷仍是上一首的 / 洛雪标题换了图还是上一首的 / 是登记在案的占位图)不能当成"没有封面"清空:
                 // Spotify 换歌后系统侧常要 3~30 秒才切过来,清空会让歌词窗口整窗回落再闪回来。
-                expectEqual(lps3.components(separatedBy: "holdingPrevious = true").count - 1, 2,
-                            "封面沉降: 载荷仍是上一首的、以及认出占位图,两种都要留着旧封面等二次确认")
+                expectEqual(lps3.components(separatedBy: "holdingPrevious = true").count - 1, 3,
+                            "封面沉降: 载荷仍是上一首的、洛雪图还是上一首的、认出占位图,三种都要留着旧封面等二次确认")
                 expectEqual(lps3.contains("expected=\\(expectedKey, privacy: .public), dropping"), false,
                             "封面沉降: 重试打满仍是别的歌的图时别再把封面置空")
                 // 清旧封面在确认循环里做,别交给定时器:确认间隔和兜底期限都是 3 秒,必然撞在同一档上。

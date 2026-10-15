@@ -1,0 +1,23 @@
+{
+  "schema" : 1,
+  "tracks" : [
+    {
+      "added_at_ms" : 1792041200000,
+      "album" : "",
+      "artist" : "林忆莲",
+      "title" : "至少还有你"
+    },
+    {
+      "added_at_ms" : 1792069000000,
+      "album" : "世界",
+      "artist" : "逃跑计划",
+      "title" : "夜空中最亮的星"
+    },
+    {
+      "added_at_ms" : 1792069500000,
+      "album" : "",
+      "artist" : "方大同",
+      "title" : "特别的人"
+    }
+  ]
+}

@@ -19,6 +19,9 @@ private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: 
 //   整份顶替;系统那边一拍都没有它、或者落回别的播放器暂停着的旧会话时,它开着就直接问
 //   (`preferringPlayingKaset`)。解读见 KasetPlayerInfo。
 //
+// - 洛雪音乐:用户打开了它的开放 API 时,系统那边这一拍没给出在放的歌(什么都没有、别家暂停着的旧会话、它换歌撤掉了会话)
+//   就用它推的状态合成一份(`preferringLXMusicOpenAPI`),播放控制也直接发给它。
+//
 // - QQ 音乐/网易云音乐:两者都完全没有 AppleScript 支持(没有 .sdef 文件,也没开 NSAppleScriptEnabled),只能走系统级
 //   MediaRemote(经内置的 `media-control` 二进制读,build.sh 拷贝进 app bundle,不需要用户自己装任何东西,见该文件注释;
 //   BSD-3-Clause 开源,https://github.com/ungive/media-control)。原始 elapsedTime/timestamp 字段在稳定播放期间会整段冻结,
@@ -111,11 +114,16 @@ public enum MediaControlClient {
     private static func rawSnapshot(players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {
         // 这份设置不认 Kaset(没开自动识别也没勾它)时,上一次顶替系统那边的记录作废,播放控制别再发给它。
         if !players.contains(.auto), !players.contains(.kaset) { forgetKasetPreference() }
-        if players.contains(.auto) { return heldAcrossPlayerGap(preferringPlayingKaset(fetchAutoDetectedSnapshot())) }
+        let lxMusicWanted = players.contains(.auto) || players.contains(.lxMusic)
+        if !lxMusicWanted { forgetLXMusicPreference() }
+        if players.contains(.auto) {
+            return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(fetchAutoDetectedSnapshot()), wanted: true))
+        }
         if players == [.appleMusic] { return radioAwareAppleMusicSnapshot() }
         guard !players.isEmpty else { return nil }
         let selected = fetchMultiSelectedSnapshot(players)
-        return heldAcrossPlayerGap(players.contains(.kaset) ? preferringPlayingKaset(selected) : selected)
+        let withKaset = players.contains(.kaset) ? preferringPlayingKaset(selected) : selected
+        return heldAcrossPlayerGap(preferringLXMusicOpenAPI(withKaset, wanted: lxMusicWanted))
     }
 
     // MARK: - 切歌间隙保持(见 PlayerGapHold)
@@ -788,6 +796,54 @@ public enum MediaControlClient {
         return kaset ?? found
     }
 
+    /// 此刻正顶替系统那边、改用洛雪开放 API 推的读数时,系统报的是谁("nothing" = 什么都没报);没在顶替为 nil。
+    /// 播放控制据此直接发给洛雪(`focusControlContext`),日志在它变化时打一条。只在 `kasetLock` 里读写。
+    private static var lxMusicPreferredOver: String?
+
+    /// 这一拍的读数是不是洛雪开放 API 合成的(系统那边没报洛雪)。收藏读写据此改按它推的歌名认这一首。
+    public static var lxMusicReadViaOpenAPI: Bool {
+        kasetLock.lock()
+        defer { kasetLock.unlock() }
+        return lxMusicPreferredOver != nil
+    }
+
+    /// 别的来源这一拍没给出在放的歌、洛雪又开着且用户打开了它的开放 API,就用它推的状态合成一份(`LXMusicOpenAPI.nowPlayingSnapshot`)。
+    /// 系统那边可能一拍都没有它:系统的「正在播放」只有一个位置,被网页视频之类占了;它换歌时撤掉会话那半秒落回别家暂停着的旧会话。
+    /// 取舍同 Kaset(`kasetWins`):别的来源什么都没有时洛雪暂停着的那首也报;别的来源有一首暂停着的,只在洛雪在放或正要放时才换过去。
+    /// `wanted`:设置认洛雪(自动识别或勾了它)。洛雪开着就让订阅一直连着(`noteAppRunning`),本机 HTTP,不弹任何权限框。
+    /// 见 02 章决策 134。
+    private static func preferringLXMusicOpenAPI(_ found: MediaControlSnapshot?, wanted: Bool) -> MediaControlSnapshot? {
+        let running = wanted
+            && !NSRunningApplication.runningApplications(withBundleIdentifier: PlaybackPlayer.lxMusic.bundleIdentifier).isEmpty
+        LXMusicOpenAPI.shared.noteAppRunning(running)
+        var lx: MediaControlSnapshot?
+        if running, found?.bundleIdentifier != PlaybackPlayer.lxMusic.bundleIdentifier,
+           let state = LXMusicOpenAPI.shared.currentState(),
+           let synthesized = LXMusicOpenAPI.nowPlayingSnapshot(state, now: Date()),
+           kasetWins(over: found, kaset: synthesized) {
+            lx = synthesized
+        }
+        let other = lx == nil ? nil : (found?.bundleIdentifier ?? "nothing")
+        kasetLock.lock()
+        let changed = lxMusicPreferredOver != other
+        lxMusicPreferredOver = other
+        kasetLock.unlock()
+        if changed {
+            if let other {
+                logger.notice("now playing: the system reports \(other, privacy: .public); reading LX Music via its open API")
+            } else {
+                logger.notice("now playing: back to the system's reading for LX Music")
+            }
+        }
+        return lx ?? found
+    }
+
+    private static func forgetLXMusicPreference() {
+        kasetLock.lock()
+        lxMusicPreferredOver = nil
+        kasetLock.unlock()
+    }
+
     private static func forgetKasetPreference() {
         kasetLock.lock()
         kasetPreferredOver = nil
@@ -1430,6 +1486,7 @@ public enum MediaControlClient {
     public static func focusControlContext() -> (scriptTarget: PlaybackPlayer?, directQueryTarget: PlaybackPlayer?, heldElsewhere: Bool) {
         kasetLock.lock()
         let kasetPreferred = kasetPreferredOver != nil
+        let lxMusicPreferred = lxMusicPreferredOver != nil
         kasetLock.unlock()
         appleMusicFocusLock.lock()
         let scriptTarget = fallbackActive && fallbackViaAppleScript ? lastAcceptedDirectQueryPlayer : channelFallbackPlayer
@@ -1442,7 +1499,8 @@ public enum MediaControlClient {
         let droppedSessionPlayer = holdingDroppedSession
             ? PlaybackPlayer.builtin(forBundleID: gapHoldLast?.snapshot.bundleIdentifier) : nil
         gapHoldLock.unlock()
-        return (kasetPreferred ? .kaset : scriptTarget, directQueryTarget ?? droppedSessionPlayer, heldElsewhere)
+        let target: PlaybackPlayer? = kasetPreferred ? .kaset : lxMusicPreferred ? .lxMusic : scriptTarget
+        return (target, directQueryTarget ?? droppedSessionPlayer, heldElsewhere)
     }
 
     /// 回退查询失败只关闭读取开关,不证明焦点恢复。targetGone 由被接受的快照清零;

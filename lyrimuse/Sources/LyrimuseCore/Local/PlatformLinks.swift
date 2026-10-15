@@ -73,6 +73,8 @@ public struct PlatformLinks: Sendable, Equatable {
     public let kkboxWeb: URL?
     /// KKBOX 歌手页的网页地址(`kkboxArtist` 是进 App 的深链),见 `kkboxArtistWebURL`。
     public let kkboxArtistWeb: URL?
+    /// 洛雪里这一首来自哪个平台(只认 QQ、网易云,见 `lxMusicPlatform(songID:)`):用洛雪放时简介面板给那家的歌曲页。
+    public let lxMusicPlatform: Platform?
 
     public var isEmpty: Bool {
         appleMusic == nil && qqSong == nil && qqAlbum == nil && qqArtist == nil && neteaseSong == nil && spotifySong == nil
@@ -90,7 +92,7 @@ public struct PlatformLinks: Sendable, Equatable {
                 spotifyAlbum: URL? = nil, spotifyArtist: URL? = nil,
                 youtubeMusicAlbum: URL? = nil, youtubeMusicArtist: URL? = nil,
                 appleMusicWeb: URL? = nil, kkboxWeb: URL? = nil,
-                kkboxArtistWeb: URL? = nil) {
+                kkboxArtistWeb: URL? = nil, lxMusicPlatform: Platform? = nil) {
         self.appleMusic = appleMusic
         self.qqSong = qqSong
         self.qqAlbum = qqAlbum
@@ -114,6 +116,7 @@ public struct PlatformLinks: Sendable, Equatable {
         self.appleMusicWeb = appleMusicWeb
         self.kkboxWeb = kkboxWeb
         self.kkboxArtistWeb = kkboxArtistWeb
+        self.lxMusicPlatform = lxMusicPlatform
     }
 
     /// 歌曲页所在的平台 —— 给「简介」面板那行选文案用(名字在 App 层本地化,这里只给身份)。
@@ -127,6 +130,7 @@ public struct PlatformLinks: Sendable, Equatable {
     /// - Apple Music 播放 → Apple Music 曲目页(`music://`,进 App);QQ 音乐 → QQ 歌曲页;网易云 →
     ///   网易云歌曲页;Spotify(原生客户端,或浏览器里配对成 `spotifyWeb` 的网页版)→ Spotify 曲目页。
     /// - Kaset → YouTube Music 歌曲页(用它放的时候引擎才存)。汽水 → 汽水的网页分享页(同样是用它放的时候才存)。
+    /// - 洛雪音乐 → 这一首所属平台(QQ / 网易云)的歌曲页,见 `lxMusicPlatform(songID:)`;来自别的平台时 nil。
     /// - 酷狗 / 浏览器里的 YouTube Music / 认不出来的播放器 → nil:引擎没存酷狗歌曲页(酷狗网页版能开的只有
     ///   `kugou.com/mixsong/<EMixSongID>.html`,那个编码 ID 只有带签名的网页版搜索接口才给),浏览器里放的
     ///   YouTube Music 没存链接。调用方据 nil 整行隐藏,不拿别的平台顶上。
@@ -148,8 +152,23 @@ public struct PlatformLinks: Sendable, Equatable {
         case PlaybackPlayer.amazonMusic.bundleIdentifier: return amazonSong.map { (.amazonMusic, $0) }
         case PlaybackPlayer.kaset.bundleIdentifier: return youtubeMusicSong.map { (.youtubeMusic, $0) }
         case PlaybackPlayer.soda.bundleIdentifier: return sodaSong.map { (.soda, $0) }
+        case PlaybackPlayer.lxMusic.bundleIdentifier:
+            switch lxMusicPlatform {
+            case .qqMusic?: return qqSong.map { (.qqMusic, $0) }
+            case .netease?: return neteaseSong.map { (.netease, $0) }
+            default: return nil
+            }
         default: return nil
         }
+    }
+
+    /// 洛雪本地库里的曲目 id(引擎记在 `player_song_ids` 里洛雪那一项)是「平台缩写_平台曲目 id」,前缀说的是这首来自哪个平台:
+    /// `tx_` 是 QQ 音乐、`wy_` 是网易云;别的平台(酷我、酷狗、咪咕)没有对应的歌曲页,返回 nil。纯函数,selftest 覆盖。
+    public static func lxMusicPlatform(songID: String?) -> Platform? {
+        guard let songID else { return nil }
+        if songID.hasPrefix("tx_") { return .qqMusic }
+        if songID.hasPrefix("wy_") { return .netease }
+        return nil
     }
 
     /// 同一套「当前播放器自己那个平台」的规则,只给网页地址(给 App 外面用,比如 Discord 状态里的链接):

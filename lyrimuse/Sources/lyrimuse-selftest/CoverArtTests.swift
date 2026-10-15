@@ -2009,6 +2009,32 @@ func runCoverArtTests() {
         let png = Data([0x89, 0x50, 0x4E, 0x47])
         expectEqual(S.artworkMissDescription(data: nil, payloadKey: nil, miss: "the system reports nothing", expectedKey: "a|b"),
                     "the system reports nothing", "取图失败说明: 取图那边给的原因原样带上")
+        let lx = PlaybackPlayer.lxMusic.bundleIdentifier
+        let old = Data([1, 2, 3]), fresh = Data([4, 5, 6])
+        expectEqual(S.lxMusicArtworkIsPrevious(bundleID: lx, data: old, previousData: old, previousAlbum: "Empty Love",
+                                               album: "Starry Sea"), true,
+                    "洛雪换歌: 跟上一首挂着的那张字节相同、专辑不同,当成还没换图")
+        expectEqual(S.lxMusicArtworkIsPrevious(bundleID: lx, data: old, previousData: old, previousAlbum: "十一月的萧邦",
+                                               album: "十一月的萧邦 "), false,
+                    "洛雪换歌: 同一张专辑的下一首,同一张图照常采纳")
+        expectEqual(S.lxMusicArtworkIsPrevious(bundleID: lx, data: old, previousData: old, previousAlbum: "", album: "x"), false,
+                    "洛雪换歌: 缺专辑名说不清是不是同一张,照常采纳")
+        expectEqual(S.lxMusicArtworkIsPrevious(bundleID: lx, data: fresh, previousData: old, previousAlbum: "a", album: "b"), false,
+                    "洛雪换歌: 换了新图照常采纳")
+        expectEqual(S.lxMusicArtworkIsPrevious(bundleID: lx, data: old, previousData: nil, previousAlbum: "a", album: "b"), false,
+                    "洛雪换歌: 换歌时没挂着封面,照常采纳")
+        // 洛雪的系统封面要不要退到开放 API 推的那张。
+        func fallback(_ system: (Data, String)?, previous: Data? = nil) -> Bool {
+            S.lxMusicArtworkNeedsFallback(system.map { (data: $0.0, trackKey: $0.1) }, expectedKey: "方大同|特别的人", bundleID: lx,
+                                          previousData: previous, previousAlbum: "危险世界", album: "未来")
+        }
+        expectEqual(fallback(nil), true, "洛雪封面退路: 系统没给图")
+        expectEqual(fallback((fresh, "陈粒|小半")), true, "洛雪封面退路: 系统那张不是这一首的")
+        expectEqual(fallback((old, "方大同|特别的人"), previous: old), true, "洛雪封面退路: 系统那张还是上一首的旧图")
+        expectEqual(fallback((fresh, "方大同|特别的人"), previous: old), false, "洛雪封面退路: 系统给了这一首的新图就用它")
+        expectEqual(S.lxMusicArtworkIsPrevious(bundleID: PlaybackPlayer.appleMusic.bundleIdentifier, data: old, previousData: old,
+                                               previousAlbum: "a", album: "b"), false,
+                    "洛雪换歌: 只认洛雪,别的播放器不变")
         expectEqual(S.artworkMissDescription(data: nil, payloadKey: nil, miss: nil, expectedKey: "a|b"), "no artwork",
                     "取图失败说明: 没给原因也没有图")
         expectEqual(S.artworkMissDescription(data: png, payloadKey: "x|y", miss: nil, expectedKey: "a|b"),

@@ -2,7 +2,7 @@ import AppKit
 import LyrimuseCore
 import os
 
-/// `lyrimuse://debug/…`:本机验证时不打扰用户的几样工具(状态快照、窗口快照、记下 / 恢复、模拟播放)。见 14 章决策 98。
+/// `lyrimuse://debug/…`:本机验证时不打扰用户的几样工具(状态快照、窗口快照、记下 / 恢复、模拟播放、喜欢与音量)。见 14 章决策 98。
 ///
 /// **只在本机偏好 `debug:deepLinks` 为真时执行**(`defaults write me.yudaotor.lyrimuse debug:deepLinks -bool true`):
 /// 任何网页都能拉起 `lyrimuse://`,而这里会把正在听什么、开着哪些窗口写到盘上,还能关窗、改开关。网页改不了本机偏好;
@@ -39,6 +39,12 @@ enum DebugDeepLinks {
             logger.notice("debug simulate on")
         case .simulateOff:
             endSimulation()
+        case .toggleFavorite:
+            PlaybackCoordinator.shared.toggleFavorited()
+            logger.notice("debug favorite toggle")
+        case let .volume(percent):
+            PlaybackCoordinator.shared.setVolume(percent)
+            logger.notice("debug volume \(percent, privacy: .public)")
         }
     }
 
@@ -79,6 +85,10 @@ enum DebugDeepLinks {
                 "line": p.currentLine?.plainText ?? "",
                 "trackLyricsOffsetMs": p.trackLyricsOffsetMs,
                 "playMode": p.playbackMode.map { $0.rawValue as Any } ?? NSNull(),
+                "favorited": p.isFavorited.map { $0 as Any } ?? NSNull(),
+                "volume": p.soundVolume.map { $0 as Any } ?? NSNull(),
+                "volumeHint": p.volumeHint ?? NSNull(),
+                "volumeHintLevel": p.volumeHintLevel ?? NSNull(),
             ],
             "settings": [
                 "overlay": s.classicOverlayEnabled, "notch": s.notchOverlayEnabled, "menuBar": s.showLyricsInMenuBar,

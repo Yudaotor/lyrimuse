@@ -787,6 +787,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	// Amazon Music 曲目页:它的时钟那一拍记下的 ASIN,另一把锁,同样放在锁外取。
 	amazonURL := amazonTrackURLFor(bundleID, artist, title)
 	amazonLyricsAvail := amazonLocalLyricsAvailable(bundleID, artist, title, album)
+	lxMusicLyricsAvail := lxMusicLyricsAvailable(bundleID, artist, title, durationSecs)
 	localFileLyricsAvail := localFileLyricsAvailable(bundleID, artist, title)
 	youtubeMusicURL := youtubeMusicWatchURL(kasetVideoID)
 	// 播放器自己给这首记下的封面地址:读它本机的数据,同样放在锁外(见 playercover.go)。
@@ -953,7 +954,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		recheck := lyricsRecheckForLocked(key, e, lyricsRecheckScene{
 			album: album, bundleID: bundleID, kasetVideoID: kasetVideoID, pinned: pinned, wrongDuration: wrongDuration,
 			kkboxLyrics: kkboxInfo.lyrics, amazonLyrics: amazonLyricsAvail, spotifyLyrics: spotifyLyricsAvail,
-			localFileLyrics: localFileLyricsAvail,
+			localFileLyrics: localFileLyricsAvail, lxMusicLyrics: lxMusicLyricsAvail,
 		})
 		// 一次只跑一路后台任务(都会重新取锁改同一条记录),下次播放时轮到下一个。
 		// 设备直送封面排最前面:只在"新曲目开始播放" + 现有封面还不是设备直送 / 播放器自带这两档时才
@@ -1031,6 +1032,11 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		commitEnrichSave(key)
 		exportLyricsFilesFor(key)
 		return e.fields()
+	}
+	// 洛雪这一拍还没报时长:首次解析等下一拍(见 lxMusicAwaitsDuration)。
+	if lxMusicAwaitsDuration(bundleID, durationSecs) {
+		enrichMu.Unlock()
+		return nil
 	}
 	// 从没见过这首歌:首次解析,不阻塞 poll 循环。
 	// 去重要连**在途**的一起查(不只是 enrichInflight[key] 这一个精确键)——理由见
@@ -1760,7 +1766,7 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bo
 	nativeMissedOut := hasNativeLyricSource() && !isNativeLyricSource(e.LyricsSource) &&
 		slices.ContainsFunc(e.LyricsSourcesSeen, func(s string) bool {
 			return isNativeLyricSource(s) && s != kkboxLocalLyricsSource && s != amazonLocalLyricsSource &&
-				s != localFileLyricsSource &&
+				s != localFileLyricsSource && s != lxMusicLocalLyricsSource &&
 				(s != lyricSourceLyricFind || e.LyricsNativeVideoID == "")
 		})
 	// 版本时长对不上(预取用了另一个版本的时长做校验)跟"同源落选"一样,本身就是重来
@@ -3734,7 +3740,8 @@ func pickLyricCandidate(scored []scoredLyricCandidateResult) *scoredLyricCandida
 			}
 		}
 		// KKBOX / Spotify / Amazon Music 本地歌词不在用户排的顺序里(它们不是歌词源):顺序里的源都没给出可用的,才轮到它们。
-		for _, local := range []string{kkboxLocalLyricsSource, spotifyLocalLyricsSource, amazonLocalLyricsSource, localFileLyricsSource} {
+		for _, local := range []string{kkboxLocalLyricsSource, spotifyLocalLyricsSource, amazonLocalLyricsSource, localFileLyricsSource,
+			lxMusicLocalLyricsSource} {
 			for i := range scored {
 				if scored[i].Source == local && usable(scored[i]) {
 					return &scored[i]
@@ -4809,6 +4816,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	spl := raw[spotifyLocalLyricsSource]
 	amz := raw[amazonLocalLyricsSource]
 	localLRC := raw[localFileLyricsSource]
+	lxm := raw[lxMusicLocalLyricsSource]
 	sodaLyr, sodaYRC, sodaTr, sodaTitle, sodaArtist, sodaAlbum, sodaCover, sodaDur := soda.lyr, soda.yrc, soda.tr, soda.matchTitle, soda.matchArtist, soda.matchAlbum, soda.matchCover, soda.srcDur
 	amll := raw["amll"].amll
 	// 候选的封面只用它自己那个源给的,没有就空着(「搜索候选歌词」弹窗显示占位图,「解析决策」全空时整列不出现);
@@ -4949,6 +4957,18 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			title:                      amz.matchTitle, artist: amz.matchArtist, album: amz.matchAlbum,
 			cover:                   amz.matchCover,
 			identityFromLocalClient: amz.identityFromLocalClient,
+		})
+	}
+	if lxm.lyr != "" {
+		// 洛雪本地歌词(用洛雪放歌时读它存下的那份原版,按平台曲目 id 认身份,带逐字和译文,见 lxmusic.go)。
+		lxmUsableTr, lxmUsableRoma := usableValueAdd(lxm.lyr, lxm.tr, "zh", lxm.roma, features().LyricsTranslationLanguage)
+		candidates = append(candidates, lyricCandidate{
+			source: lxMusicLocalLyricsSource, lyrics: lxm.lyr,
+			wordTimingYRC: usableYRC(lxm.lyr, lxm.yrc), hasWordTiming: usableWordTiming(lxm.lyr, lxm.yrc),
+			hasUsableTranslation: lxmUsableTr, hasUsableRomanization: lxmUsableRoma,
+			sourceReportedDurationSecs: lxm.srcDur,
+			title:                      lxm.matchTitle, artist: lxm.matchArtist, album: lxm.matchAlbum,
+			identityFromLocalClient: lxm.identityFromLocalClient,
 		})
 	}
 	if localLRC.lyr != "" {
@@ -5185,6 +5205,15 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			if c.hasUsableTranslation {
 				r.LyricsTr = miguTr
 				r.LyricsTrLang = "zh"
+			}
+		case lxMusicLocalLyricsSource:
+			// 洛雪存下的是平台原版的译文 / 音译轨(国内平台的译文固定中文),口径同 qq。
+			if c.hasUsableTranslation {
+				r.LyricsTr = lxm.tr
+				r.LyricsTrLang = "zh"
+			}
+			if usableRomaForResult(c.lyrics, lxm.roma) {
+				r.LyricsRoma = lxm.roma
 			}
 		case "deezer":
 			// Deezer 的译文按请求时的译文语言设置取(deezer.go deezerAcceptLanguage),标同一个语言;
@@ -5635,6 +5664,10 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// reAMP 正在放的文件同目录同名的 .lrc 同 KKBOX:正用它放这首时读(见 localfilelyrics.go)。
 		if r, ok := localFileLyricsFor(idArtist, idTitle, durationSecs); ok {
 			raw[localFileLyricsSource] = r
+		}
+		// 洛雪存下的原版歌词同 KKBOX:正用洛雪放这首时读(见 lxmusic.go)。
+		if r, ok := lxMusicLocalLyricsFor(ctx, idArtist, idTitle, durationSecs); ok {
+			raw[lxMusicLocalLyricsSource] = r
 		}
 	}
 	// scoreAndSort 用目前为止已经到手的原始结果重新构建候选、算 corroboratedEndings、

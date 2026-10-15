@@ -14,6 +14,16 @@ public enum ProcessAudioOutput {
         }
     }
 
+    /// 默认输出设备此刻在不在转(有没有哪个 App 在往它送声音)。蓝牙耳机闲着时为假,开始出声前那一刻才转起来。读不到时 nil。
+    public static func defaultOutputDeviceIsRunning() -> Bool? {
+        var addr = address(kAudioHardwarePropertyDefaultOutputDevice)
+        var device = AudioObjectID(0)
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &device) == noErr,
+              device != 0 else { return nil }
+        return uint32Property(device, kAudioDevicePropertyDeviceIsRunningSomewhere).map { $0 != 0 }
+    }
+
     private static func address(_ selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
         AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal,
                                    mElement: kAudioObjectPropertyElementMain)

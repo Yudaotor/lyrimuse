@@ -30,6 +30,8 @@ import (
 //                   (见 kkboxqueue.go)。开着随机时按 shuffleCandidates 交一批。
 //   Kaset        —— App 代问它的 AppleScript `get play queue`,队列就是播放顺序(开随机也是);曲目身份由 App
 //                   整理好(见 kasetqueue.go)。
+//   洛雪音乐     —— 本地库里有各列表的曲目和顺序,记着在放哪个列表的第几首(见 lxmusic.go);「稍后播放」不落盘。
+//                   开着随机时按 shuffleCandidates 交一批。
 //
 // 所以队列路径拿不到时**退回同专辑预取**,而不是什么都不做:这些情况恰恰会从"有预取"
 // 退成"没有"。系统层面也没有兜底 —— MediaRemote 的导出符号里,队列相关的全是
@@ -90,6 +92,8 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 	case reampBundleID:
 		// 没有脚本接口,本地数据里也没有播放列表,读不到接下来放什么(02 章决策 126)。
 		return nil, false
+	case lxMusicBundleID:
+		return lxMusicUpcoming(artist, title, n)
 	}
 	return browserUpcoming(artist, title, bundleID, durationSecs, n)
 }
@@ -196,11 +200,13 @@ func prefetchUpcoming(currentArtist, currentTitle, album, bundleID string, durat
 
 // upcomingQueueStamp 是这家播放器队列文件此刻的改写标记;"" = 这家不按文件变化重读。
 // 只给「放到一半队列会被改写」的播放器:网易云「下一首播放」把歌插进 playingList 并当场重写这份文件,
-// 不重读的话插进来的歌要等它开播才有人去解析。见 09 章决策 224。
+// 不重读的话插进来的歌要等它开播才有人去解析。见 09 章决策 224。洛雪是快放完时预加载下一首写了本地库(lxMusicPreloadedNext)。
 func upcomingQueueStamp(bundleID string) string {
 	switch bundleID {
 	case neteaseMusicBundleID:
 		return neteaseQueueStamp()
+	case lxMusicBundleID:
+		return lxMusicQueueStamp()
 	}
 	return ""
 }

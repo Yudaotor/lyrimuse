@@ -18,6 +18,7 @@ const (
 	playerAmazonMusic = "amazon_music"
 	playerKaset       = "kaset"
 	playerReamp       = "reamp"
+	playerLXMusic     = "lx_music"
 	playerAuto        = "auto"
 )
 
@@ -33,6 +34,7 @@ const (
 	amazonMusicBundleID  = "com.amazon.music"
 	kasetBundleID        = "com.sertacozercan.Kaset"
 	reampBundleID        = "ru.alexfreud.ReAmp"
+	lxMusicBundleID      = "cn.toside.music.desktop"
 )
 
 // allPlayerIDs 是 "players" 字段的全部合法取值(含 auto),isValidPlayerValue 用。
@@ -47,6 +49,7 @@ var allPlayerIDs = []string{
 	playerAmazonMusic,
 	playerKaset,
 	playerReamp,
+	playerLXMusic,
 	playerAuto,
 }
 
@@ -63,6 +66,7 @@ var playerBundleIDs = map[string]string{
 	playerAmazonMusic: amazonMusicBundleID,
 	playerKaset:       kasetBundleID,
 	playerReamp:       reampBundleID,
+	playerLXMusic:     lxMusicBundleID,
 }
 
 // builtinPlayerBundleIDs 是内置播放器的 bundle id 集合 —— isKnownPlayerBundleID
@@ -78,6 +82,7 @@ var builtinPlayerBundleIDs = map[string]bool{
 	amazonMusicBundleID:  true,
 	kasetBundleID:        true,
 	reampBundleID:        true,
+	lxMusicBundleID:      true,
 }
 
 // playerProcessNames 是「播放器标识 → 可执行文件名」,companion-launch 的 pgrep -x 用。
@@ -93,10 +98,11 @@ var playerProcessNames = map[string]string{
 	playerAmazonMusic: "Amazon Music",
 	playerKaset:       "Kaset",
 	playerReamp:       "Reamp",
+	playerLXMusic:     "lx-music-desktop",
 }
 
 // knownPlayerProcessNames 是上表的全部取值 —— 选了「自动识别」时盯全部。
-var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "Reamp"}
+var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "Reamp", "lx-music-desktop"}
 
 // playerScrobbleLabels 是「bundle id → ListenBrainz 的 media_player 标签」。
 var playerScrobbleLabels = map[string]string{
@@ -110,6 +116,7 @@ var playerScrobbleLabels = map[string]string{
 	amazonMusicBundleID:  "Amazon Music (macOS)",
 	kasetBundleID:        "Kaset (macOS)",
 	reampBundleID:        "reAMP (macOS)",
+	lxMusicBundleID:      "LX Music (macOS)",
 }
 
 // defaultScrobbleLabel:既不是内置播放器、也不在信任列表里时的兜底标签。
@@ -127,6 +134,7 @@ var playerNativeLyricSources = map[string]string{
 	playerAmazonMusic: "amazon",
 	playerKaset:       "lyricfind",
 	playerReamp:       "localfile",
+	playerLXMusic:     "lxmusic",
 }
 
 // playerNeedsFullDiskAccess 是「播放器标识 → 引擎读它的客户端文件要不要

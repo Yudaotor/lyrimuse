@@ -69,12 +69,12 @@ func enrichCreatedThisPlayLocked(key string) bool {
 }
 
 // playingSongIDFor:这个播放器这一拍报的这首歌的曲目 id,跟条目里 PlayerSongIDs 记的是同一种(Apple Music 是目录锚点里的
-// 曲目 id,QQ 音乐、网易云、酷狗是它们本机记的歌曲 id)。别的播放器不报,返回空串。
+// 曲目 id,QQ 音乐、网易云、酷狗是它们本机记的歌曲 id,洛雪是它本地库里那一条的 id)。别的播放器不报,返回空串。
 func playingSongIDFor(bundleID, anchorLink string, ids playerCatalogIDs) string {
 	switch bundleID {
 	case appleMusicBundleID:
 		return appleCatalogIDFromURL(anchorLink)
-	case qqMusicBundleID, neteaseMusicBundleID, kugouMusicBundleID:
+	case qqMusicBundleID, neteaseMusicBundleID, kugouMusicBundleID, lxMusicBundleID:
 		return ids.songID
 	}
 	return ""

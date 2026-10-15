@@ -253,8 +253,8 @@ private func checkDiscordActivity() {
     typealias A = DiscordPresence.Application
     func app(_ player: PlaybackPlayer) -> A { DiscordPresence.application(forBundleID: player.bundleIdentifier, webPlatformID: nil) }
     expectEqual([app(.appleMusic), app(.kaset), app(.spotify), app(.qqMusic), app(.netease), app(.kugou), app(.soda),
-                 app(.kkbox), app(.amazonMusic), app(.reamp)],
-                [.appleMusic, .youtubeMusic, .spotify, .qqMusic, .netease, .kugou, .soda, .kkbox, .amazonMusic, .reamp],
+                 app(.kkbox), app(.amazonMusic), app(.reamp), app(.lxMusic)],
+                [.appleMusic, .youtubeMusic, .spotify, .qqMusic, .netease, .kugou, .soda, .kkbox, .amazonMusic, .reamp, .lxMusic],
                 "Discord 应用: 内置播放器各归各的应用,Kaset 归 YouTube Music")
     expectEqual(DiscordPresence.application(forBundleID: "com.apple.WebKit.GPU", webPlatformID: "youtubeMusic"), .youtubeMusic,
                 "Discord 应用: 浏览器里的 YouTube Music 归 YouTube Music")
@@ -264,7 +264,14 @@ private func checkDiscordActivity() {
                 "Discord 应用: 认不出的播放器用 Lyrimuse 那个")
     expectEqual(DiscordPresence.applicationID(forBundleID: "com.example.player", webPlatformID: nil), DiscordPresence.applicationID,
                 "Discord 应用: Lyrimuse 那个的 ID")
-    let builtInIDs = PlaybackPlayer.allCases.filter { $0 != .auto }.map {
+    // 还没在 Discord 开发者后台建应用的播放器(建应用要作者过人机验证),暂时用 Lyrimuse 那个;建好之后把 ID 补进
+    // DiscordPresence 再从这里拿掉。
+    let awaitingApplication: Set<PlaybackPlayer> = []
+    for player in awaitingApplication {
+        expectEqual(DiscordPresence.applicationID(forBundleID: player.bundleIdentifier, webPlatformID: nil),
+                    DiscordPresence.applicationID, "Discord 应用: \(player) 还没建应用,用 Lyrimuse 那个")
+    }
+    let builtInIDs = PlaybackPlayer.allCases.filter { $0 != .auto && !awaitingApplication.contains($0) }.map {
         DiscordPresence.applicationID(forBundleID: $0.bundleIdentifier, webPlatformID: nil)
     }
     expectEqual(builtInIDs.allSatisfy { !$0.isEmpty && $0.allSatisfy(\.isNumber) }, true,

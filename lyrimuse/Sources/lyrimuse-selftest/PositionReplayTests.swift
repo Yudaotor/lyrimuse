@@ -20,6 +20,10 @@ private final class ReplayRig {
     /// 最近到达的锚点是不是在暂停中发布的(线上由 stream watcher 记,见 MediaControlClient.latestAnchorPublishedWhilePaused)。
     var anchorPublishedWhilePaused = false
     var route: AudioOutputRoute.Current?
+    /// 洛雪配置里的播放速度(线上读 `config_v2.json`,见 LXMusicPlaybackRate)。
+    var lxRate: LXMusicPlaybackRate.Setting?
+    /// 洛雪开放 API 推来的状态(线上由 LXMusicOpenAPI 订阅攒出来)。
+    var lxAPI: LXMusicOpenAPI.State?
     private(set) var source: LocalPlaybackSource!
 
     init(_ name: String) {
@@ -42,7 +46,9 @@ private final class ReplayRig {
             spotifyProbeTrackChanged: { _, _ in },
             spotifyProbeConsume: { _, _, _ in nil },
             spotifyProbeRequestConfirmation: { _ in },
-            latestAnchorPublishedWhilePaused: { [unowned self] in self.anchorPublishedWhilePaused })
+            latestAnchorPublishedWhilePaused: { [unowned self] in self.anchorPublishedWhilePaused },
+            lxMusicPlaybackRate: { [unowned self] in self.lxRate },
+            lxMusicOpenAPI: { [unowned self] active in active ? self.lxAPI : nil })
         source = LocalPlaybackSource.makeForPositionReplay(environment: env)
     }
 
@@ -113,6 +119,10 @@ func runPositionReplayTests() {
     replayQQLateZeroAnchor()
     replayNeteaseLateStartAnchor()
     replayKugouLateStartAnchor()
+    replayLXMusicLateStartLeadHolds()
+    replayLXMusicColdResume()
+    replayLXMusicRateChange()
+    replayLXMusicOpenAPIClock()
     replayKKBOXFollowsRepublishedAnchor()
     replayKKBOXPauseHoldsUntilPauseAnchor()
     replayKKBOXStallHolds()
@@ -572,6 +582,152 @@ private func replayKugouLateStartAnchor() {
     rig.tick(mediaControl(kugou, "Boys", anchor: 54.86, elapsed: 54.865, duration: 163), at: at(11.49))
     expectEqual(near(rig.shown(at: at(11.49)), 54.865 + 0.443, 0.02), true,
                 "回放·酷狗 开播锚点晚到: 起点补 0.44(\(fmt(rig.shown(at: at(11.49)))))")
+}
+
+/// 洛雪手动下一首:43.95 报在放、声音同时响起,44.475 才发新歌的 0 锚点。起点补上晚到的 0.525,之后每 2 秒一拍、锚点不再变:
+/// 补上的这一截 20 秒后还在,伺服不拿锚点外推把它拉回去(不折进偏置时第 5 拍就拉回去了)。见 02 章决策 129。
+@MainActor
+private func replayLXMusicLateStartLeadHolds() {
+    func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
+    let lx = PlaybackPlayer.lxMusic.bundleIdentifier
+    let rig = ReplayRig("lx-late-start-holds")
+    defer { rig.tearDown() }
+    rig.tick(mediaControl(lx, "特别的人", anchor: 40, elapsed: 40, duration: 259), at: at(30))
+    rig.tick(mediaControl(lx, "特别的人", anchor: 40, elapsed: 52, duration: 259), at: at(42))
+    rig.source.replayPlayerStateEvent(at: at(43.79), freeze: true)
+    rig.source.replayResumeSignal(at: at(43.95))
+    rig.tick(mediaControl(lx, "离开我的依赖", anchor: 0, elapsed: 0.025, duration: 263), at: at(44.5))
+    expectEqual(near(rig.shown(at: at(44.5)), 0.55, 0.02), true, "回放·洛雪 开播锚点晚到: 起点补 0.525(\(fmt(rig.shown(at: at(44.5)))))")
+    for t in stride(from: 46.5, through: 64.5, by: 2) {
+        rig.tick(mediaControl(lx, "离开我的依赖", anchor: 0, elapsed: t - 44.475, duration: 263), at: at(t))
+    }
+    expectEqual(near(rig.shown(at: at(64.5)), 20.55, 0.02), true,
+                "回放·洛雪 开播锚点晚到: 补上的那一截 20 秒后还在(\(fmt(rig.shown(at: at(64.5)))),想要 20.550)")
+    // 暂停:系统按晚到的锚点外推出 20.525,真停在 21.05;恢复的锚点是真停住的位置。补的那一截随暂停作废,恢复后照真值走。
+    rig.source.replayPlayerStateEvent(at: at(65), freeze: true)
+    rig.tick(mediaControl(lx, "离开我的依赖", anchor: 20.525, elapsed: 20.525, duration: 263, playing: false), at: at(65.1))
+    expectEqual(near(rig.shown(at: at(65.1)), 21.05, 0.02), true, "回放·洛雪 暂停: 按屏上位置停住(\(fmt(rig.shown(at: at(65.1)))))")
+    rig.source.replayResumeSignal(at: at(70))
+    for t in stride(from: 70.3, through: 90.3, by: 2) {
+        rig.tick(mediaControl(lx, "离开我的依赖", anchor: 21.05, elapsed: 21.05 + t - 70, duration: 263), at: at(t))
+    }
+    expectEqual(near(rig.shown(at: at(90.3)), 41.35, 0.02), true,
+                "回放·洛雪 暂停后恢复: 补的那一截随暂停作废,20 秒后照真值走(\(fmt(rig.shown(at: at(90.3)))),想要 41.350)")
+    rig.tick(mediaControl(lx, "离开我的依赖", anchor: 100, elapsed: 100, duration: 263), at: at(92))
+    expectEqual(near(rig.shown(at: at(92)), 100, 0.02), true, "回放·洛雪 拖动: 跟新锚点(\(fmt(rig.shown(at: at(92)))))")
+}
+
+/// 洛雪停了一分半再放、蓝牙耳机闲着:100 报在放,锚点是它停住的真进度 28.9(暂停时系统外推出的是 28.95),101.0 设备才转起来、
+/// 这时才出声。设备转起来之前停在暂停位置,转起来之后从锚点起算,20 秒后还对得上;设备在转时照旧(对照)。见 02 章决策 129。
+@MainActor
+private func replayLXMusicColdResume() {
+    func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
+    let lx = PlaybackPlayer.lxMusic.bundleIdentifier
+    for coldDevice in [true, false] {
+        let rig = ReplayRig("lx-cold-resume-\(coldDevice)")
+        defer { rig.tearDown() }
+        rig.tick(mediaControl(lx, "特别的人", anchor: 20, elapsed: 20, duration: 259), at: at(0))
+        rig.tick(mediaControl(lx, "特别的人", anchor: 20, elapsed: 28, duration: 259), at: at(8))
+        rig.source.replayPlayerStateEvent(at: at(8.9), freeze: true)
+        rig.tick(mediaControl(lx, "特别的人", anchor: 28.95, elapsed: 28.95, duration: 259, playing: false), at: at(9))
+        rig.source.replayResumeSignal(at: at(100))
+        if coldDevice { rig.source.replayLXMusicColdStartSignal(at: at(100)) }
+        rig.tick(mediaControl(lx, "特别的人", anchor: 28.9, elapsed: 29.2, duration: 259), at: at(100.3))
+        guard coldDevice else {
+            expectEqual(near(rig.shown(at: at(100.3)), 29.2, 0.02), true,
+                        "回放·洛雪 恢复(设备在转): 照旧按恢复信号至今走(\(fmt(rig.shown(at: at(100.3)))))")
+            continue
+        }
+        expectEqual(near(rig.shown(at: at(100.3)), 28.9, 0.02), true,
+                    "回放·洛雪 冷恢复: 设备转起来之前停在暂停位置(\(fmt(rig.shown(at: at(100.3)))))")
+        rig.source.replayLXMusicAudioStarted(at: at(101.0))
+        rig.tick(mediaControl(lx, "特别的人", anchor: 28.9, elapsed: 29.95, duration: 259), at: at(101.05))
+        expectEqual(near(rig.shown(at: at(101.05)), 28.95, 0.02), true,
+                    "回放·洛雪 冷恢复: 设备转起来后从锚点起算(\(fmt(rig.shown(at: at(101.05)))))")
+        for t in stride(from: 103.0, through: 121.0, by: 2) {
+            rig.tick(mediaControl(lx, "特别的人", anchor: 28.9, elapsed: 28.9 + t - 100.3, duration: 259), at: at(t))
+        }
+        expectEqual(near(rig.shown(at: at(121)), 48.9, 0.02), true,
+                    "回放·洛雪 冷恢复: 20 秒后还对得上,伺服不拉回锚点外推(\(fmt(rig.shown(at: at(121)))),想要 48.900)")
+        // 再停一次、马上恢复(设备在转):系统按恢复锚点外推出 50.6,真停在 49.9;冷恢复折进的偏置随暂停作废。
+        rig.source.replayPlayerStateEvent(at: at(122), freeze: true)
+        rig.tick(mediaControl(lx, "特别的人", anchor: 50.6, elapsed: 50.6, duration: 259, playing: false), at: at(122.1))
+        rig.source.replayResumeSignal(at: at(130))
+        for t in stride(from: 130.3, through: 150.3, by: 2) {
+            rig.tick(mediaControl(lx, "特别的人", anchor: 49.9, elapsed: 49.9 + t - 130, duration: 259), at: at(t))
+        }
+        expectEqual(near(rig.shown(at: at(150.3)), 70.2, 0.02), true,
+                    "回放·洛雪 冷恢复后再暂停、恢复: 偏置随暂停作废(\(fmt(rig.shown(at: at(150.3)))),想要 70.200)")
+    }
+}
+
+/// 洛雪 10.5 秒时从 1 倍改成 1.25 倍:系统那份速度和锚点不变(20 秒处、1 倍),配置 0.3 秒后写盘。下一拍从改的那一刻起按 1.25 倍走,
+/// 20 秒后还对得上;之后暂停、恢复,它按 1.25 倍重报,照真值走。见 02 章决策 130。
+@MainActor
+private func replayLXMusicRateChange() {
+    func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
+    let lx = PlaybackPlayer.lxMusic.bundleIdentifier
+    let rig = ReplayRig("lx-rate-change")
+    defer { rig.tearDown() }
+    rig.lxRate = LXMusicPlaybackRate.Setting(rate: 1, changedAt: at(-600))
+    for t in stride(from: 0.0, through: 10.0, by: 2) {
+        rig.tick(mediaControl(lx, "特别的人", anchor: 20, elapsed: 20 + t, duration: 259), at: at(t))
+    }
+    rig.lxRate = LXMusicPlaybackRate.Setting(rate: 1.25, changedAt: at(10.5))
+    rig.tick(mediaControl(lx, "特别的人", anchor: 20, elapsed: 32, duration: 259), at: at(12))
+    expectEqual(near(rig.shown(at: at(12)), 32.375, 0.02), true, "回放·洛雪 中途改 1.25 倍: 下一拍从改的那一刻起按新速度(\(fmt(rig.shown(at: at(12)))))")
+    for t in stride(from: 14.0, through: 30.0, by: 2) {
+        rig.tick(mediaControl(lx, "特别的人", anchor: 20, elapsed: 20 + t, duration: 259), at: at(t))
+    }
+    expectEqual(near(rig.shown(at: at(30)), 54.875, 0.02), true,
+                "回放·洛雪 中途改 1.25 倍: 20 秒后还对得上(\(fmt(rig.shown(at: at(30)))),想要 54.875)")
+    rig.source.replayPlayerStateEvent(at: at(31), freeze: true)
+    rig.tick(mediaControl(lx, "特别的人", anchor: 56.125, elapsed: 56.125, duration: 259, playing: false), at: at(31.1))
+    rig.source.replayResumeSignal(at: at(40))
+    for t in stride(from: 40.3, through: 50.3, by: 2) {
+        rig.tick(.forReplay(title: "特别的人", artist: "Fujii Kaze", album: "Prema", duration: 259, elapsedTime: 56.125 + (t - 40) * 1.25,
+                            playing: true, playbackRate: 1.25, bundleIdentifier: lx, anchorElapsedTime: 56.125), at: at(t))
+    }
+    // 容差 0.1:恢复那一拍的前跳上界按秒算、不乘速度(resumeSeedSeconds),1.25 倍时少走 0.3 × 0.25 = 0.075。
+    expectEqual(near(rig.shown(at: at(50.3)), 56.125 + 10.3 * 1.25, 0.1), true,
+                "回放·洛雪 改速度后暂停、恢复: 它按新速度重报,照真值走(\(fmt(rig.shown(at: at(50.3)))))")
+}
+
+/// 洛雪开了开放 API:系统那份锚点慢 0.5 秒(晚到的开播锚点),它推的进度是准的 —— 屏上照它推的走,不再补晚到锚点那一截;
+/// 停了一分半再放、声音还没走起来那段进度停着,屏上等着,走起来后接上。见 02 章决策 131。
+@MainActor
+private func replayLXMusicOpenAPIClock() {
+    func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
+    let lx = PlaybackPlayer.lxMusic.bundleIdentifier
+    let rig = ReplayRig("lx-open-api")
+    defer { rig.tearDown() }
+    func api(_ progress: Double, at t: Double, advancing: Bool = true, status: String = "playing") -> LXMusicOpenAPI.State {
+        var s = LXMusicOpenAPI.State()
+        s.status = status; s.name = "离开我的依赖"; s.singer = "Fujii Kaze"; s.progress = progress; s.progressAt = at(t)
+        s.advancing = advancing; s.playbackRate = 1
+        return s
+    }
+    rig.source.replayResumeSignal(at: at(43.95))
+    for t in stride(from: 44.5, through: 60.5, by: 2) {
+        rig.lxAPI = api(t - 43.95 - 0.1, at: t - 0.1)
+        rig.tick(mediaControl(lx, "离开我的依赖", anchor: 0, elapsed: t - 44.475, duration: 263), at: at(t))
+    }
+    expectEqual(near(rig.shown(at: at(60.5)), 16.55, 0.03), true,
+                "回放·洛雪 开放 API: 照它推的进度走,不跟慢 0.5 秒的系统锚点(\(fmt(rig.shown(at: at(60.5)))),想要 16.550)")
+    rig.source.replayPlayerStateEvent(at: at(61), freeze: true)
+    rig.lxAPI = api(17.05, at: 61, advancing: false, status: "paused")
+    rig.tick(mediaControl(lx, "离开我的依赖", anchor: 16.5, elapsed: 16.5, duration: 263, playing: false), at: at(61.1))
+    rig.source.replayResumeSignal(at: at(150))
+    rig.lxAPI = api(17.05, at: 150.2, advancing: false)
+    rig.tick(mediaControl(lx, "离开我的依赖", anchor: 17.05, elapsed: 17.35, duration: 263), at: at(150.3))
+    expectEqual(near(rig.shown(at: at(150.3)), 17.05, 0.02), true,
+                "回放·洛雪 开放 API: 恢复后声音没走起来,停在那份进度(\(fmt(rig.shown(at: at(150.3)))))")
+    for t in stride(from: 151.3, through: 171.3, by: 2) {
+        rig.lxAPI = api(17.05 + (t - 0.1 - 151.0), at: t - 0.1)
+        rig.tick(mediaControl(lx, "离开我的依赖", anchor: 17.05, elapsed: 17.05 + t - 150.2, duration: 263), at: at(t))
+    }
+    expectEqual(near(rig.shown(at: at(171.3)), 37.35, 0.03), true,
+                "回放·洛雪 开放 API: 声音 151.0 走起来后照它推的走(\(fmt(rig.shown(at: at(171.3)))),想要 37.350)")
 }
 
 private let kkboxID = PlaybackPlayer.kkbox.bundleIdentifier

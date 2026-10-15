@@ -168,7 +168,15 @@ func runPlaybackStateTests() {
     appleBefore.bundle = "com.apple.Music"
     var appleLag = neteaseLag
     appleLag.bundle = "com.apple.Music"
-    expectEqual(T.isTorn(current: appleBefore, next: appleLag), false, "撕裂快照: 只有时长没跟上的这一种只认网易云和汽水")
+    expectEqual(T.isTorn(current: appleBefore, next: appleLag), false, "撕裂快照: 只有时长没跟上的这一种只认网易云、汽水、洛雪")
+    // 真机:洛雪按「上一首」从《演员》回到《一样的月光》,第一份歌名、歌手已换,时长和位置还是《演员》的,0.47 秒后才跟上。
+    let lx = PlaybackPlayer.lxMusic.bundleIdentifier
+    let lxBefore = T.Fields(title: "演员", artist: "薛之谦", album: "绅士", bundle: lx, duration: 261.249569, isRadio: false)
+    let lxLag = T.Fields(title: "一样的月光", artist: "徐佳莹", album: "LaLa首张创作专辑", bundle: lx, duration: 261.249569, isRadio: false)
+    expectEqual(T.isTorn(current: lxBefore, next: lxLag), true, "撕裂快照: 洛雪换了歌、时长还是上一首的")
+    var lxReal = lxLag
+    lxReal.duration = 240.386667
+    expectEqual(T.isTorn(current: lxBefore, next: lxReal), false, "撕裂快照: 洛雪时长跟上来就是真换歌")
     // 真机:汽水暂停着从 step.jad依加《夜奔》换到 Michael Jackson,第一份整包歌手、专辑已换,时长还是《夜奔》的(09 章决策 237)。
     let soda = PlaybackPlayer.soda.bundleIdentifier
     let sodaBefore = T.Fields(title: "夜奔", artist: "step.jad依加", album: "夜奔", bundle: soda, duration: 199.779, isRadio: false)

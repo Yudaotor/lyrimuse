@@ -529,8 +529,11 @@ struct LastfmStatsSection: View {
                 .buttonStyle(.plain)
                 .disabled(!interactive)
                 .rowHoverHighlight(enabled: interactive)
-                .modifier(ChartRowContextMenu(enabled: interactive && Self.appLinksHaveMenu(stats.appLinks(kind: kind, entry: e))) {
-                    Self.appLinksMenu(stats.appLinks(kind: kind, entry: e), artistName: e.name)
+                .modifier(ChartRowContextMenu(enabled: interactive && Self.appLinksHaveMenu(stats.appLinks(kind: kind, entry: e),
+                                                                                         track: Self.lxTrack(kind: kind, entry: e),
+                                                                                         search: Self.lxSearch(kind: kind, entry: e))) {
+                    Self.appLinksMenu(stats.appLinks(kind: kind, entry: e), artistName: e.name, track: Self.lxTrack(kind: kind, entry: e),
+                                      search: Self.lxSearch(kind: kind, entry: e))
                 })
                 if expanded {
                     // 缩进对齐到缩略图那一列:名次 16 + 间距 10(有升降列再加 34 + 10)
@@ -543,8 +546,11 @@ struct LastfmStatsSection: View {
 
     /// 榜单行、最近记录行和实时行的右键菜单:只放能直接进 App 的(Apple Music / Spotify / KKBOX 打开,Kaset / QQ 音乐播放;
     /// 链接来自本机歌词缓存,没装的播放器不列)。落到浏览器的平台页不放;一项都没有的行不弹菜单。`artistName` 只在歌手行取歌手页时用。
+    /// `track` 是歌曲行的歌名歌手:洛雪按歌名歌手自己搜,不要缓存里的链接,装了就给「播放」「稍后播放」两项(`LXMusicLinks`);
+    /// 「稍后播放」的那首另记下来给引擎预解析(`LXMusicPlayLater`)。`search` 是歌手、专辑行在洛雪里搜的字,装了就给「搜索」。
     @ViewBuilder
-    fileprivate static func appLinksMenu(_ links: ChartAppLinks?, artistName: String) -> some View {
+    fileprivate static func appLinksMenu(_ links: ChartAppLinks?, artistName: String, track: LXMusicLinks.Track? = nil,
+                                         search: String? = nil) -> some View {
         if let url = links?.appleMusic {
             Button(L10n.t("在 Apple Music 中打开")) { Self.openInMusic(url) }
         } else if let url = links?.artistPages?.appleMusic {
@@ -570,9 +576,43 @@ struct LastfmStatsSection: View {
         if let mid = links?.qqSongMID, Self.isInstalled(.qqMusic) {
             Button(String(format: L10n.t("在 %@ 中播放"), PlaybackPlayer.qqMusic.displayName)) { Self.playInQQMusic(mid: mid) }
         }
+        if let track, Self.isInstalled(.lxMusic),
+           let play = LXMusicLinks.searchPlayURL(track, playLater: false),
+           let later = LXMusicLinks.searchPlayURL(track, playLater: true) {
+            Button(String(format: L10n.t("在 %@ 中播放"), PlaybackPlayer.lxMusic.displayName)) { NSWorkspace.shared.open(play) }
+            Button(String(format: L10n.t("加到%@的稍后播放"), PlaybackPlayer.lxMusic.displayName)) {
+                Self.openInBackground(later)
+                Task.detached(priority: .utility) { LXMusicPlayLater.record(track) }
+            }
+        }
+        if let search, Self.isInstalled(.lxMusic), let url = LXMusicLinks.searchURL(keywords: search) {
+            Button(String(format: L10n.t("在 %@ 中搜索"), PlaybackPlayer.lxMusic.displayName)) { NSWorkspace.shared.open(url) }
+        }
     }
 
-    fileprivate static func appLinksHaveMenu(_ links: ChartAppLinks?) -> Bool {
+    /// 歌曲榜一行的歌名歌手(给洛雪那两项用);专辑榜、歌手榜不给。
+    fileprivate static func lxTrack(kind: LastfmStatsService.ChartKind, entry e: LastfmStatsService.ChartEntry) -> LXMusicLinks.Track? {
+        kind == .tracks ? LXMusicLinks.Track(title: e.name, artist: e.detail) : nil
+    }
+
+    /// 歌手榜、专辑榜一行在洛雪里搜什么:歌手名;专辑名加歌手名。歌曲榜不给(它有「播放」那两项)。
+    fileprivate static func lxSearch(kind: LastfmStatsService.ChartKind, entry e: LastfmStatsService.ChartEntry) -> String? {
+        switch kind {
+        case .artists: return e.name
+        case .albums: return [e.name, e.detail].filter { !$0.isEmpty }.joined(separator: " ")
+        case .tracks: return nil
+        }
+    }
+
+    /// 交给播放器、不把它带到前台:「稍后播放」不打断正在放的,用户也不用切过去。
+    private static func openInBackground(_ url: URL) {
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = false
+        NSWorkspace.shared.open(url, configuration: config)
+    }
+
+    fileprivate static func appLinksHaveMenu(_ links: ChartAppLinks?, track: LXMusicLinks.Track? = nil, search: String? = nil) -> Bool {
+        if track != nil || search != nil, Self.isInstalled(.lxMusic) { return true }
         guard let links else { return false }
         return links.appleMusic != nil || links.artistAlbum != nil || links.artistMBID != nil
             || links.artistPages?.appleMusic != nil
@@ -1072,8 +1112,10 @@ struct LastfmStatsSection: View {
             if let url = Self.trackURL(artist: t.artist, title: t.title) { NSWorkspace.shared.open(url) }
         }
         .rowHoverHighlight()
-        .modifier(ChartRowContextMenu(enabled: Self.appLinksHaveMenu(stats.trackAppLinks(artist: t.artist, title: t.title))) {
-            Self.appLinksMenu(stats.trackAppLinks(artist: t.artist, title: t.title), artistName: t.artist)
+        .modifier(ChartRowContextMenu(enabled: Self.appLinksHaveMenu(stats.trackAppLinks(artist: t.artist, title: t.title),
+                                                                     track: LXMusicLinks.Track(title: t.title, artist: t.artist, album: t.album))) {
+            Self.appLinksMenu(stats.trackAppLinks(artist: t.artist, title: t.title), artistName: t.artist,
+                              track: LXMusicLinks.Track(title: t.title, artist: t.artist, album: t.album))
         })
     }
 
@@ -1623,9 +1665,11 @@ private struct LiveScrobbleRow: View {
                 .environment(\.recentRowHovered, hovered)
                 .onHover { hovered = $0 }
                 .modifier(ChartRowContextMenu(
-                    enabled: LastfmStatsSection.appLinksHaveMenu(stats.trackAppLinks(artist: live.artist, title: live.title))) {
+                    enabled: LastfmStatsSection.appLinksHaveMenu(stats.trackAppLinks(artist: live.artist, title: live.title),
+                                                                 track: LXMusicLinks.Track(title: live.title, artist: live.artist))) {
                     LastfmStatsSection.appLinksMenu(stats.trackAppLinks(artist: live.artist, title: live.title),
-                                                    artistName: live.artist)
+                                                    artistName: live.artist,
+                                                    track: LXMusicLinks.Track(title: live.title, artist: live.artist))
                 })
             } else {
                 Color.clear.frame(height: 0)

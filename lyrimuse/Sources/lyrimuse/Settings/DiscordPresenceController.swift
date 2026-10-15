@@ -578,18 +578,24 @@ final class DiscordPresenceController: ObservableObject {
         let videoFrame = source.kasetVideoFrameURL ?? source.webPageVideoFrameURL
         let appleTrackID = source.appleCatalogTrackID
         let relayBase = ConfigStore.shared.stateRelayURL
+        // 洛雪开放 API 开着时推来的封面地址(没进列表的歌也有),换成 Discord 认的 https。
+        let lxCover = reportedBundleID == PlaybackPlayer.lxMusic.bundleIdentifier
+            ? LXMusicOpenAPI.shared.currentState()
+                .flatMap { LXMusicOpenAPI.describes($0, title: source.title, artist: source.artist) ? $0.picURL : nil }
+                .flatMap(LXMusicOpenAPI.httpsCover)
+            : nil
         let key = [reportedBundleID ?? "", webPlatform ?? "", source.artist, source.title, source.album,
                    source.enrichContentVersion.map { String($0.timeIntervalSince1970) } ?? "",
                    source.spotifyArtworkURL?.absoluteString ?? "", kasetCover?.absoluteString ?? "", kasetVideo ?? "",
                    source.webPageArtworkURL?.absoluteString ?? "", videoFrame?.absoluteString ?? "",
-                   appleTrackID.map { String($0) } ?? "", relayBase]
+                   appleTrackID.map { String($0) } ?? "", relayBase, lxCover?.absoluteString ?? ""]
             .joined(separator: "\n")
         if let extras, extras.key == key { return extras }
         let links = EnrichCacheReader.platformLinks(artist: source.artist, title: source.title, album: source.album)
         let song = links?.songWebLink(forPlayerBundleID: reportedBundleID, webPlatformID: webPlatform)
             ?? kasetVideo.flatMap { PlatformLinks.youtubeMusicWatchURL("https://music.youtube.com/watch?v=" + $0) }
         let playerCovers = EnrichCacheReader.playerCoverURLs(artist: source.artist, title: source.title, album: source.album)
-        let own = source.spotifyArtworkURL ?? kasetCover ?? source.webPageArtworkURL
+        let own = source.spotifyArtworkURL ?? kasetCover ?? source.webPageArtworkURL ?? lxCover
             ?? reportedBundleID.flatMap { playerCovers[$0] }
         // 缓存里的 cover_url 常是设备直送、存在本机的文件:不是 https 的不直接用,只拿来换中继上的地址。
         let cached = EnrichCacheReader.albumMatchedCoverURL(artist: source.artist, title: source.title, album: source.album)

@@ -2,7 +2,7 @@ import Foundation
 
 /// 换曲时系统先发布新标题、歌手 / 专辑 / 时长 / 播放器还停在上一首的那种快照(「撕裂快照」),按住不采纳。
 ///
-/// 判据有两种,都不判电台(电台的时长是整档节目):只换了标题、其余逐位不变;或者网易云 / 汽水换了歌、时长还是上一首的
+/// 判据有两种,都不判电台(电台的时长是整档节目):只换了标题、其余逐位不变;或者网易云 / 汽水 / 洛雪换了歌、时长还是上一首的
 /// (`durationLags`)。按住最多 `maxHold`;形态解除(身份变了或时长跟上来了)立即放行。
 /// 见 09 章决策 69。
 public struct TornTrackHold: Sendable {
@@ -69,9 +69,9 @@ public struct TornTrackHold: Sendable {
         return current.duration > 0 && abs(current.duration - next.duration) < 0.01
     }
 
-    /// 网易云、汽水换歌时,新歌的第一份快照常带着上一首的时长(歌名、歌手、专辑已经换了;汽水连位置也是上一首的)。
-    /// 时长逐位不变就当撕裂按住,等它跟上来;只认这两家。非会员试听连着几首时长相同是常态,试听段长度的不判。
-    /// 见 09 章决策 192、237。
+    /// 网易云、汽水、洛雪换歌时,新歌的第一份快照常带着上一首的时长(歌名、歌手、专辑已经换了;汽水、洛雪连位置也是上一首的)。
+    /// 时长逐位不变就当撕裂按住,等它跟上来;只认这三家。非会员试听连着几首时长相同是常态,试听段长度的不判;洛雪没有试听段,
+    /// 时长是音频元素读出来的小数,两首逐位相同的情形实际碰不到。见 09 章决策 192、237,02 章决策 128。
     static func durationLags(current: Fields, next: Fields) -> Bool {
         guard current.bundle == next.bundle, current.duration > 0, abs(current.duration - next.duration) < 0.01 else {
             return false
@@ -81,6 +81,8 @@ public struct TornTrackHold: Sendable {
             return !neteaseTrialLength.contains(next.duration)
         case PlaybackPlayer.soda.bundleIdentifier:
             return !sodaPreviewLengths.contains { $0.contains(next.duration) }
+        case PlaybackPlayer.lxMusic.bundleIdentifier:
+            return true
         default:
             return false
         }

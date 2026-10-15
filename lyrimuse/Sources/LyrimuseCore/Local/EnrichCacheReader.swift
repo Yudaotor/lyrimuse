@@ -69,6 +69,9 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     let qqSingerMid: String?
     // 汽水音乐歌曲页(引擎的 enrichEntry.SodaURL,用汽水放这首时按它本机数据里的曲目 id 拼的)。只喂 PlatformLinks.sodaSong。
     let sodaURL: String?
+    // 各播放器报的这一首的曲目 id(引擎的 enrichEntry.PlayerSongIDs,键是 bundle id)。只用洛雪那一项,喂
+    // PlatformLinks.lxMusicPlatform。
+    let playerSongIDs: [String: String]?
     // 各播放器自己给这首记下的专辑 id、第一位歌手的 id(引擎的 enrichEntry.SodaAlbumID 那一组,见
     // lyrimuse-engine/playercatalog.go;YouTube Music 的跟专辑一起判,见 kasetalbum.go)。只喂 PlatformLinks 的专辑页、歌手页。
     let sodaAlbumID: String?
@@ -173,6 +176,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         case qqAlbumMid = "qq_album_mid"
         case qqSingerMid = "qq_singer_mid"
         case sodaURL = "soda_url"
+        case playerSongIDs = "player_song_ids"
         case sodaAlbumID = "soda_album_id"
         case sodaArtistID = "soda_artist_id"
         case kkboxAlbumID = "kkbox_album_id"
@@ -251,6 +255,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         qqAlbumMid = try c.decodeIfPresent(String.self, forKey: .qqAlbumMid)
         qqSingerMid = try c.decodeIfPresent(String.self, forKey: .qqSingerMid)
         sodaURL = try c.decodeIfPresent(String.self, forKey: .sodaURL)
+        playerSongIDs = try? c.decodeIfPresent([String: String].self, forKey: .playerSongIDs)
         sodaAlbumID = try c.decodeIfPresent(String.self, forKey: .sodaAlbumID)
         sodaArtistID = try c.decodeIfPresent(String.self, forKey: .sodaArtistID)
         kkboxAlbumID = try c.decodeIfPresent(String.self, forKey: .kkboxAlbumID)
@@ -636,7 +641,8 @@ public enum EnrichCacheReader {
                 ? nil : ap.appleMusicURL.flatMap { URL(string: $0) },
             kkboxWeb: PlatformLinks.kkboxAppURL(songPage: kk.kkboxURL ?? "") == nil
                 ? nil : kk.kkboxURL.flatMap { URL(string: $0) },
-            kkboxArtistWeb: PlatformLinks.kkboxArtistWebURL(songPage: kk.kkboxURL ?? "", artistID: own(entry.kkboxArtistID, kk.kkboxArtistID)))
+            kkboxArtistWeb: PlatformLinks.kkboxArtistWebURL(songPage: kk.kkboxURL ?? "", artistID: own(entry.kkboxArtistID, kk.kkboxArtistID)),
+            lxMusicPlatform: PlatformLinks.lxMusicPlatform(songID: entry.playerSongIDs?[PlaybackPlayer.lxMusic.bundleIdentifier]))
         return links.isEmpty ? nil : links
     }
 

@@ -6624,10 +6624,18 @@ private struct WindowVolumeCapsule: View {
     @MainActor
     private final class Model: ObservableObject {
         @Published private(set) var soundVolume: Int?
-        private var sub: AnyCancellable?
+        @Published private(set) var volumeHint: String?
+        @Published private(set) var volumeHintLevel: Int?
+        private var subs: [AnyCancellable] = []
         init() {
-            sub = PlaybackCoordinator.shared.$soundVolume.removeDuplicates()
-                .sink { [weak self] in self?.soundVolume = $0 }
+            subs = [
+                PlaybackCoordinator.shared.$soundVolume.removeDuplicates()
+                    .sink { [weak self] in self?.soundVolume = $0 },
+                PlaybackCoordinator.shared.$volumeHint.removeDuplicates()
+                    .sink { [weak self] in self?.volumeHint = $0 },
+                PlaybackCoordinator.shared.$volumeHintLevel.removeDuplicates()
+                    .sink { [weak self] in self?.volumeHintLevel = $0 },
+            ]
         }
     }
 
@@ -6703,6 +6711,27 @@ private struct WindowVolumeCapsule: View {
                 // 有封面背景时边缘走白色 —— 那一圈亮边正是"玻璃光泽"的来源;纯色底
                 // (没有封面)下白边会显得脏,退回中性描边。
                 rim: hasArtworkBackground ? Color.white.opacity(0.28) : Color.primary.opacity(0.10))
+        } else if let hint = model.volumeHint {
+            // 调不了音量、但说得清怎么才能调(洛雪没开开放 API):同样的胶囊灰着、拖不动,悬停给那句话;
+            // 档位照洛雪配置文件里那份显示,读不到时是 0。
+            HStack(spacing: compact ? 8 : 10) {
+                volumeSlider(volume: model.volumeHintLevel ?? 0)
+                    .frame(width: compact ? 58 : 114, height: compact ? 18 : 22)
+                Image(systemName: model.volumeHintLevel.map(volumeLevelIcon) ?? "speaker.slash.fill")
+                    .font(.system(size: compact ? 13 : 17))
+                    .frame(width: compact ? 18 : 24, alignment: .leading)
+            }
+            .opacity(0.4)
+            .allowsHitTesting(false)
+            .foregroundStyle(capsuleIconColor)
+            .frame(height: compact ? 22 : nil)
+            .padding(.horizontal, compact ? 12 : 14)
+            .padding(.vertical, compact ? 6 : 7)
+            .clearGlassCapsule(
+                rim: hasArtworkBackground ? Color.white.opacity(0.28) : Color.primary.opacity(0.10))
+            .contentShape(Capsule())
+            .help(hint)
+            .accessibilityLabel(hint)
         }
     }
 

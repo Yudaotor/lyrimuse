@@ -4562,6 +4562,9 @@ private struct PlayerSettingsTab: View {
     // 收到"进程挂了"这类通知,只能被动查。
     // 三态而不是 Bool —— 要展示"装了但没跑起来"这个中间态(见 LaunchdJobState)。
     @State private var engineState: LaunchdJobState = .notRegistered
+    /// 洛雪开放 API 那一行:它配置里开没开、端口、局域网(`LXMusicOpenAPI.currentConfig`,按修改时间缓存)。
+    @State private var lxOpenAPIConfig: LXMusicOpenAPI.Config?
+    @State private var showsLXOpenAPIGuide = false
     @State private var isTogglingEngineService = false
     // 只在"这次点了启用、结果没启动起来"时才为真,切走这个 tab 就清掉,不会把上一次失败的
     // 提示留着误导下一次操作。没有它的话,点"启用"失败后前台只会看到红叉+"未运行",跟从没
@@ -5837,6 +5840,9 @@ private struct PlayerSettingsTab: View {
         let automationTargets = automation.visiblePlayers(for: stores.players)
         let diskTargets = fullDiskAccess.visiblePlayers(for: stores.players)
         let accessibilityTargets = accessibility.visiblePlayers(for: stores.players)
+        let showsLXOpenAPI = (stores.players.contains(.lxMusic) || stores.players.contains(.auto))
+            && InstalledPlayersCache.current().contains(.lxMusic)
+        let permissionRows = !automationTargets.isEmpty || !diskTargets.isEmpty || !accessibilityTargets.isEmpty
         return SettingsCard(cornerRadius: 18) {
             SettingsCardHeader(title: L10n.t("权限与服务")) {
                 Text(L10n.t("权限只列出所选播放器用得到的"))
@@ -5847,7 +5853,8 @@ private struct PlayerSettingsTab: View {
             automationRows(automationTargets)
             fullDiskAccessRows(diskTargets, afterRows: !automationTargets.isEmpty)
             accessibilityRows(accessibilityTargets, afterRows: !automationTargets.isEmpty || !diskTargets.isEmpty)
-            if !automationTargets.isEmpty || !diskTargets.isEmpty || !accessibilityTargets.isEmpty {
+            lxOpenAPIRows(showsLXOpenAPI, afterRows: permissionRows)
+            if permissionRows || showsLXOpenAPI {
                 CardDivider()
             }
             engineRows
@@ -5858,6 +5865,7 @@ private struct PlayerSettingsTab: View {
             if !automationTargets.isEmpty { automation.refresh(automationTargets) }
             if !diskTargets.isEmpty { fullDiskAccess.refresh() }
             if !accessibilityTargets.isEmpty { accessibility.refresh() }
+            if showsLXOpenAPI { lxOpenAPIConfig = LXMusicOpenAPI.shared.currentConfig() }
             refreshEngineState()
             refreshEngineVersionCheck()
             refreshEngineFolderFindings()
@@ -5872,6 +5880,10 @@ private struct PlayerSettingsTab: View {
         .settingsPolling(every: 2) {
             if !diskTargets.isEmpty { fullDiskAccess.refresh() }
             if !accessibilityTargets.isEmpty { accessibility.refresh() }
+            if showsLXOpenAPI {
+                let config = LXMusicOpenAPI.shared.currentConfig()
+                if config != lxOpenAPIConfig { lxOpenAPIConfig = config }
+            }
         }
         // 引擎状态不能只在 onAppear 读一次。
         //
@@ -5974,6 +5986,38 @@ private struct PlayerSettingsTab: View {
                 CardDivider()
                 SettingsNote {
                     AccessibilityPermissionGuide()
+                }
+            }
+        }
+    }
+
+    /// 洛雪音乐的开放 API(在洛雪自己的设置里打开):开了进度用它自己的、能调它的音量。不是权限、不开也照常能用,所以没开时
+    /// 灰着、不算故障,侧栏不报。选了洛雪(或自动识别)、本机装了才出现。见 02 章决策 131。
+    @ViewBuilder
+    private func lxOpenAPIRows(_ shows: Bool, afterRows: Bool) -> some View {
+        if shows {
+            let on = lxOpenAPIConfig?.enabled == true
+            if afterRows { CardDivider() }
+            SettingsRow(
+                icon: on ? "checkmark.circle.fill" : "minus.circle.fill",
+                iconTint: on ? .green : .secondary,
+                title: L10n.t("洛雪音乐开放 API"),
+                subtitle: on ? L10n.t("已打开") : L10n.t("未打开 · 打开后进度更准，还能调洛雪的音量"),
+                help: L10n.t("Lyrimuse 从这里读洛雪自己的播放进度、调它的音量")
+            ) {
+                if !on {
+                    Button(L10n.t("怎么打开")) { showsLXOpenAPIGuide = true }
+                        .popover(isPresented: $showsLXOpenAPIGuide, arrowEdge: .bottom) {
+                            LXOpenAPIGuide { showsLXOpenAPIGuide = false }
+                        }
+                }
+            }
+            if on, lxOpenAPIConfig?.bindLan == true {
+                CardDivider()
+                SettingsNote {
+                    Text(L10n.t("已允许局域网访问，同一网络里的设备也能控制洛雪"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -7262,6 +7306,32 @@ private struct HotkeyGrid: View {
 /// 可伸缩成员,SwiftUI **均分**剩余宽度而不是"先按理想宽度发",尾部太挤时自绘内容会被压到
 /// 下限(见 04 章「设计决策」第 15 条,英文标签被压成「Left-Ali…」那次)。数字被压掉一位
 /// 比不显示更糟,所以先钉死它的理想宽度。
+/// 「怎么打开」那个气泡:在洛雪里要点的三步(字取自洛雪自己的界面),和一颗把洛雪拉到前台的键(它没有直达设置页的链接)。
+private struct LXOpenAPIGuide: View {
+    let dismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.t("1. 在洛雪里打开「设置」，找到「开放 API」"))
+                Text(L10n.t("2. 勾上「启用开放 API 服务」"))
+                Text(L10n.t("3. 「允许来自局域网的访问」不用勾"))
+            }
+            .font(.callout)
+            .fixedSize(horizontal: false, vertical: true)
+            Button(L10n.t("打开洛雪音乐")) {
+                if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: PlaybackPlayer.lxMusic.bundleIdentifier) {
+                    NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+                }
+                dismiss()
+            }
+            .settingsGlassButtons()
+        }
+        .padding(14)
+        .frame(width: 300, alignment: .leading)
+    }
+}
+
 private struct GitHubStarsBadge: View {
     let count: Int
 

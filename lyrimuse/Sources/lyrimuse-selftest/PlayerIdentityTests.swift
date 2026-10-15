@@ -122,6 +122,20 @@ func runPlayerIdentityTests() {
                     "控制分派: 焦点被占、屏上这首靠直查问到(没有 AppleScript) → 不发,发了会控到网页视频")
         expectEqual(held(false, .spotify), Route.spotifyScript, "控制分派: 焦点被占但能发 AppleScript → 照发 AppleScript")
         expectEqual(held(true, nil), Route.appleMusicScript, "控制分派: 只勾 Apple Music → 不受焦点影响")
+        // 洛雪:读数是开放 API 顶上来的(焦点回退到它),或焦点被占、屏上这首是它被撤会话保持出来的,都直接发给它。
+        for command in ["toggle-play-pause", "next-track", "previous-track", "seek"] {
+            expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: .lxMusic,
+                                                             mediaControlCommand: command), Route.lxMusicDirect,
+                        "控制分派: 回退到洛雪 → 直接发给它(\(command))")
+            expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil, focusHeldElsewhere: true,
+                                                             directQueryFallback: .lxMusic, mediaControlCommand: command),
+                        Route.lxMusicDirect, "控制分派: 焦点被占、屏上这首是洛雪 → 直接发给它(\(command))")
+        }
+        expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: .lxMusic, mediaControlCommand: "x"),
+                    Route.mediaControl, "控制分派: 洛雪接不了的指令照旧")
+        expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                                                         directQueryFallback: .lxMusic, mediaControlCommand: "next-track"),
+                    Route.mediaControl, "控制分派: 焦点正常时洛雪照走 media-control")
         // QQ 有声节目:歌曲详情的 track_info.version 是 7(02 章决策 118)。
         func detail(_ body: String) -> Data { Data(body.utf8) }
         expectEqual(QQSongInfo.isSpokenAudio(fromDetail: detail(#"{"code":0,"songinfo":{"code":0,"data":{"track_info":{"version":7,"name":"通史-000引言"}}}}"#)),
@@ -213,7 +227,8 @@ func runPlayerIdentityTests() {
                 focusHeldElsewhere: true, directQueryFallback: .soda, mediaControlCommand: "seek"),
                 Route.withheld, "汽水失焦: 跳转没有通路")
             expectEqual(PlaybackMenuControl.command(forMenuTitle: "播放", player: .soda), nil, "汽水没有菜单标题表(按播放条)")
-            for player in PlaybackPlayer.allCases where !PlaybackMenuControl.players.contains(player) {
+            // 洛雪不按菜单,失焦时直接发给它本体(另测,见「控制分派」那几条)。
+            for player in PlaybackPlayer.allCases where !PlaybackMenuControl.players.contains(player) && player != .lxMusic {
                 for command in [Command.playPause, .nextTrack, .previousTrack] {
                     expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
                         focusHeldElsewhere: true, directQueryFallback: player, mediaControlCommand: command.rawValue),
@@ -441,6 +456,7 @@ func runPlayerIdentityTests() {
             .amazonMusic: ("amazon_music", "com.amazon.music"),
             .kaset: ("kaset", "com.sertacozercan.Kaset"),
             .reamp: ("reamp", "ru.alexfreud.ReAmp"),
+            .lxMusic: ("lx_music", "cn.toside.music.desktop"),
         ]
         for (player, want) in expected {
             expectEqual(player.rawValue, want.raw, "播放器契约: \(player) 的 rawValue")
@@ -923,6 +939,7 @@ func runPlayerIdentityTests() {
                                      .favorite, .learnsAnchorLag, .arrivesWhole, .adSharesTrackIdentity,
                                      .systemNeverHasArtwork, .catalogMenuRows]),
             .reamp: (nil, [.extendedControls, .gaplessLead, .lateAnchorProbe, .arrivesWhole]),
+            .lxMusic: (nil, [.extendedControls, .favorite, .lateAnchorProbe]),
         ]
         expectEqual(PlaybackPlayer.allCases.count, table.count + 1,
                     "决定表: 新增播放器要在这里补一行,逐项决定它走哪条路(+1 是 .auto)")
@@ -2666,6 +2683,224 @@ private func amazonFavoriteChecks() {
                 [true, false], "Amazon 界面: 确认框只按实心那颗(另一颗是取消)")
     expectEqual(A.isNowPlayingRoot(["x3", "childViewShowing", "nowPlayingShowing", "hasTrackLoaded"]), true,
                 "Amazon 界面: 正在播放页开着时根上带 nowPlayingShowing")
+
+    // 洛雪「搜索并播放」链接:data 是整段 JSON 的 URL 编码,解回来字段齐全;& = + 都编码掉。
+    func lxPayload(_ url: URL?) -> [String: Any]? {
+        guard let url, url.scheme == "lxmusic", url.host == "music", url.path == "/searchPlay",
+              let q = url.query, q.hasPrefix("data="), !q.dropFirst(5).contains("&"),
+              let json = String(q.dropFirst(5)).removingPercentEncoding,
+              let obj = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else { return nil }
+        return obj
+    }
+    let lxPlay = lxPayload(LXMusicLinks.searchPlayURL(
+        LXMusicLinks.Track(title: "Me & You = +1", artist: "方大同", album: "危险世界", durationSecs: 259.08), playLater: false))
+    expectEqual(lxPlay?["name"] as? String, "Me & You = +1", "洛雪播放链接: 歌名里的 & = + 原样带过去")
+    expectEqual(lxPlay?["singer"] as? String, "方大同", "洛雪播放链接: 歌手")
+    expectEqual(lxPlay?["albumName"] as? String, "危险世界", "洛雪播放链接: 专辑")
+    expectEqual(lxPlay?["interval"] as? String, "04:19", "洛雪播放链接: 时长写成 mm:ss")
+    expectEqual(lxPlay?["playLater"] as? Bool, false, "洛雪播放链接: 立刻播放")
+    let lxLater = lxPayload(LXMusicLinks.searchPlayURL(LXMusicLinks.Track(title: "晴天", artist: ""), playLater: true))
+    expectEqual(lxLater?["playLater"] as? Bool, true, "洛雪播放链接: 稍后播放")
+    expectEqual(lxLater?["singer"] == nil && lxLater?["albumName"] == nil && lxLater?["interval"] == nil, true,
+                "洛雪播放链接: 没有的字段不带")
+    expectEqual(LXMusicLinks.searchPlayURL(LXMusicLinks.Track(title: "  ", artist: "周杰伦"), playLater: false), nil,
+                "洛雪播放链接: 没有歌名不给")
+    // 洛雪搜索链接(歌手、专辑行)。
+    func lxSearchPayload(_ url: URL?) -> [String: Any]? {
+        guard let url, url.scheme == "lxmusic", url.host == "music", url.path == "/search",
+              let q = url.query, q.hasPrefix("data="), !q.dropFirst(5).contains("&"),
+              let json = String(q.dropFirst(5)).removingPercentEncoding,
+              let obj = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else { return nil }
+        return obj
+    }
+    expectEqual(lxSearchPayload(LXMusicLinks.searchURL(keywords: " 危险世界 方大同 "))?["keywords"] as? String, "危险世界 方大同",
+                "洛雪搜索链接: 搜的字去首尾空白")
+    expectEqual(lxSearchPayload(LXMusicLinks.searchURL(keywords: "A&B=+"))?["keywords"] as? String, "A&B=+", "洛雪搜索链接: & = + 原样带过去")
+    expectEqual((lxSearchPayload(LXMusicLinks.searchURL(keywords: String(repeating: "字", count: 200)))?["keywords"] as? String)?.count,
+                LXMusicLinks.searchMaxLength, "洛雪搜索链接: 截到它校验的上限")
+    expectEqual(LXMusicLinks.searchURL(keywords: "  "), nil, "洛雪搜索链接: 空的不给")
+    // 「稍后播放」记录:样例跟引擎各读一遍;加、划掉、过期、上限。
+    typealias Later = LXMusicPlayLater
+    let laterSample = Later.decode(FileIO.read(URL(fileURLWithPath: "../shared/testdata/lx-play-later.json")))
+    expectEqual(laterSample.map(\.title), ["至少还有你", "夜空中最亮的星", "特别的人"], "稍后播放样例: 按先后解出三首")
+    expectEqual(laterSample.dropFirst().first?.album == "世界" && laterSample.first?.addedAtMs == 1_792_041_200_000, true,
+                "稍后播放样例: 专辑与加入时刻(毫秒)")
+    let laterNow = Date(timeIntervalSince1970: 1_792_070_000)
+    let added = Later.adding(LXMusicLinks.Track(title: " 晴天 ", artist: "周杰伦", album: "叶惠美"), to: laterSample, now: laterNow)
+    expectEqual(added.map(\.title), ["夜空中最亮的星", "特别的人", "晴天"], "稍后播放: 接在末尾,顺手清掉超过 6 小时的")
+    expectEqual(added.last?.addedAtMs == 1_792_070_000_000 && added.last?.album == "叶惠美", true, "稍后播放: 记下加入时刻和专辑")
+    expectEqual(Later.adding(LXMusicLinks.Track(title: "特别的人", artist: "方大同"), to: added, now: laterNow).map(\.title),
+                ["夜空中最亮的星", "晴天", "特别的人"], "稍后播放: 同一首再加挪到末尾,不重复")
+    expectEqual(Later.adding(LXMusicLinks.Track(title: "x", artist: " "), to: added, now: laterNow).count, 3, "稍后播放: 没歌手不记")
+    expectEqual(Later.removing(title: "特别的人", artist: "方大同 ", from: added, now: laterNow).map(\.title), ["夜空中最亮的星", "晴天"],
+                "稍后播放: 洛雪放到了就划掉(去空白、不分大小写)")
+    var many: [Later.Entry] = []
+    for i in 0..<40 { many = Later.adding(LXMusicLinks.Track(title: "t\(i)", artist: "a"), to: many, now: laterNow) }
+    expectEqual(many.count == Later.maxCount && many.first?.title == "t10", true, "稍后播放: 最多记 30 首,丢最早的")
+    expectEqual(Later.decode(Later.encode(added)) == added, true, "稍后播放: 写出去读得回来")
+    expectEqual(Later.encode(added).map { String(decoding: $0, as: UTF8.self).contains(#""added_at_ms""#) }, true,
+                "稍后播放: 键名跟引擎一致")
+    expectEqual(Later.decode(Data(#"{"schema":2,"tracks":[]}"#.utf8)).isEmpty, true, "稍后播放: 认不出的版本当没有")
+    expectEqual(Later.maxAge, 6 * 3600, "稍后播放: 6 小时,跟引擎 lxMusicPlayLaterTTL 一致")
+
+    // 洛雪开放 API:配置、推送解析、位置外推、认这一首、音量换算、封面换 https。
+    typealias API = LXMusicOpenAPI
+    let cfg = API.config(in: Data(#"{"setting":{"openAPI.enable":true,"openAPI.port":"23331","openAPI.bindLan":true}}"#.utf8))
+    expectEqual(cfg, API.Config(enabled: true, port: 23331, bindLan: true), "洛雪开放 API: 读开关、端口(字符串也认)、局域网")
+    expectEqual(API.config(in: Data(#"{"setting":{}}"#.utf8)), API.Config(enabled: false, port: 23330, bindLan: false),
+                "洛雪开放 API: 没这几项时按默认(关着、23330)")
+    let t0 = Date(timeIntervalSince1970: 1_790_000_000)
+    var st = API.State()
+    for (event, data) in [("status", #""playing""#), ("name", #""特别的人""#), ("singer", #""方大同""#), ("progress", "28.13"),
+                          ("playbackRate", "1"), ("collect", "true"), ("volume", "20"), ("picUrl", #""http://img1.kwcdn.kuwo.cn/a.jpg""#)] {
+        st = API.applying(event: event, data: data, to: st, at: t0)
+    }
+    expectEqual(st.advancing, false, "洛雪开放 API: 头一份进度还不知道在不在走")
+    expectEqual(API.position(st, now: t0.addingTimeInterval(0.5)), 28.13, "洛雪开放 API: 进度没走时不外推(恢复后等出声)")
+    st = API.applying(event: "progress", data: "28.38", to: st, at: t0.addingTimeInterval(0.25))
+    expectEqual(st.advancing, true, "洛雪开放 API: 进度走了")
+    expectEqual(API.position(st, now: t0.addingTimeInterval(0.75)).map { abs($0 - 28.88) < 0.001 }, true, "洛雪开放 API: 在走时按速度外推")
+    expectEqual(API.position(st, now: t0.addingTimeInterval(9)).map { abs($0 - 29.38) < 0.001 }, true,
+                "洛雪开放 API: 最多外推 1 秒(再久没推多半卡住了)")
+    func pushed(_ s: API.State, _ progress: String, after secs: Double, status: String? = nil) -> API.State {
+        var next = status.map { var b = s; b.status = $0; return b } ?? s
+        next = API.applying(event: "progress", data: progress, to: next, at: s.progressAt!.addingTimeInterval(secs))
+        return next
+    }
+    expectEqual(API.progressJumped(from: st, to: pushed(st, "28.646", after: 0.266)), false, "洛雪开放 API: 照常走的下一份不补查")
+    expectEqual(API.progressJumped(from: st, to: pushed(st, "28.47", after: 0.53)), true,
+                "洛雪开放 API: 恢复后走了一点又停下等设备,落后外推 0.44 秒,马上补查")
+    expectEqual(API.progressJumped(from: st, to: pushed(st, "95", after: 0.266)), true, "洛雪开放 API: 拖了进度条,马上补查")
+    var held = st
+    held.status = "paused"
+    expectEqual(API.progressJumped(from: held, to: pushed(held, "28.4", after: 5)), false, "洛雪开放 API: 暂停中进度没动不补查")
+    expectEqual(API.progressJumped(from: held, to: pushed(held, "60", after: 5)), true, "洛雪开放 API: 暂停中拖了进度条,马上补查")
+    var waiting = held
+    waiting.status = "playing"
+    waiting.advancing = false
+    expectEqual(API.progressJumped(from: waiting, to: pushed(waiting, "28.404", after: 0.14)), false,
+                "洛雪开放 API: 等出声时进度蹭一点不算跳(由 advancing 变化补查)")
+    var other = pushed(st, "3", after: 0.266)
+    other.name = "演员"
+    expectEqual(API.progressJumped(from: st, to: other), false, "洛雪开放 API: 换了歌不算跳")
+    // 配置文件里的输出设备、音量、静音(开放 API 之外的那一级)。
+    let devCfg = API.config(in: Data(#"{"setting":{"player.mediaDeviceId":"9f1c","player.volume":0.8,"player.isMute":false}}"#.utf8))
+    expectEqual(devCfg?.mediaDeviceID, "9f1c", "洛雪配置: 输出设备")
+    expectEqual(API.outputsToDefaultDevice(devCfg), false, "洛雪配置: 选了别的输出设备,不走默认设备")
+    expectEqual(API.outputsToDefaultDevice(API.config(in: Data(#"{"setting":{"player.mediaDeviceId":"default"}}"#.utf8))), true,
+                "洛雪配置: default 跟系统走")
+    expectEqual(API.outputsToDefaultDevice(API.config(in: Data(#"{"setting":{}}"#.utf8))), true, "洛雪配置: 没这一项按跟系统走")
+    expectEqual(API.outputsToDefaultDevice(nil), true, "洛雪配置: 读不到配置按跟系统走")
+    expectEqual(API.configVolumePercent(devCfg), 80, "洛雪配置: 音量 0.8 是 80")
+    expectEqual(API.configVolumePercent(API.config(in: Data(#"{"setting":{"player.volume":0.8,"player.isMute":true}}"#.utf8))), 0,
+                "洛雪配置: 静音算 0")
+    expectEqual(API.configVolumePercent(API.config(in: Data(#"{"setting":{"player.volume":3}}"#.utf8))), 100, "洛雪配置: 越界夹住")
+    expectEqual(API.configVolumePercent(API.config(in: Data(#"{"setting":{}}"#.utf8))), nil, "洛雪配置: 没有音量这一项为 nil")
+    // 系统不报洛雪时用推来的状态合成的读数。
+    var full = st
+    for (event, data) in [("albumName", #""未来""#), ("duration", "262.4")] {
+        full = API.applying(event: event, data: data, to: full, at: t0.addingTimeInterval(0.25))
+    }
+    let synth = API.nowPlayingSnapshot(full, now: t0.addingTimeInterval(0.75))
+    expectEqual(synth?.bundleIdentifier, PlaybackPlayer.lxMusic.bundleIdentifier, "洛雪合成读数: 记在洛雪名下")
+    expectEqual(synth?.title == "特别的人" && synth?.artist == "方大同" && synth?.album == "未来" && synth?.duration == 262.4, true,
+                "洛雪合成读数: 歌名、歌手、专辑、时长取推来的")
+    expectEqual(synth?.playing == true && synth?.positionIsPrecise == true && synth?.elapsedTime.map { abs($0 - 28.88) < 0.001 } == true,
+                true, "洛雪合成读数: 在放、进度在走,位置外推到此刻并标精确")
+    var waitingFull = full
+    waitingFull.advancing = false
+    let waitingSynth = API.nowPlayingSnapshot(waitingFull, now: t0.addingTimeInterval(0.75))
+    expectEqual(waitingSynth?.playing == false && waitingSynth?.isWaitingToPlay == true, true, "洛雪合成读数: 报在放而进度没走,等着出声")
+    var pausedFull = full
+    pausedFull.status = "paused"
+    expectEqual(API.nowPlayingSnapshot(pausedFull, now: t0.addingTimeInterval(5))?.playing, false, "洛雪合成读数: 暂停")
+    for status in ["error", "stoped"] {
+        var s = full
+        s.status = status
+        expectEqual(API.nowPlayingSnapshot(s, now: t0) == nil, true, "洛雪合成读数: \(status) 不报")
+    }
+    var nameless = full
+    nameless.name = " "
+    expectEqual(API.nowPlayingSnapshot(nameless, now: t0) == nil, true, "洛雪合成读数: 没有歌名不报")
+    // 播放控制直接发给洛雪:开放 API 优先,再退到 lxmusic://player/…
+    func link(_ action: String) -> API.DirectControl { .link(URL(string: "lxmusic://player/" + action)!) }
+    expectEqual(API.directControl("toggle-play-pause", arguments: [], apiConnected: true, playing: true),
+                [.api(path: "/pause", query: nil), link("togglePlay")], "洛雪直接控制: 在放时切换 = 开放 API 暂停,不成再走链接")
+    expectEqual(API.directControl("toggle-play-pause", arguments: [], apiConnected: true, playing: false),
+                [.api(path: "/play", query: nil), link("togglePlay")], "洛雪直接控制: 暂停时切换 = 开放 API 播放")
+    expectEqual(API.directControl("toggle-play-pause", arguments: [], apiConnected: true, playing: nil), [link("togglePlay")],
+                "洛雪直接控制: 说不上在不在放时只走链接")
+    expectEqual(API.directControl("next-track", arguments: [], apiConnected: false, playing: nil), [link("skipNext")],
+                "洛雪直接控制: 没开开放 API 走链接")
+    expectEqual(API.directControl("previous-track", arguments: [], apiConnected: true, playing: true),
+                [.api(path: "/skip-prev", query: nil), link("skipPrev")], "洛雪直接控制: 上一首")
+    expectEqual(API.directControl("seek", arguments: ["61.500"], apiConnected: true, playing: true),
+                [.api(path: "/seek", query: "offset=61.500")], "洛雪直接控制: 跳转只有开放 API")
+    expectEqual(API.directControl("seek", arguments: ["61.500"], apiConnected: false, playing: true), [],
+                "洛雪直接控制: 没开开放 API 跳不了")
+    expectEqual(API.directControl("volume", arguments: [], apiConnected: true, playing: true), [], "洛雪直接控制: 认不出的指令不发")
+    expectEqual(API.directControlCommands, Set(["toggle-play-pause", "play", "pause", "next-track", "previous-track", "seek"]),
+                "洛雪直接控制: 能直接发的指令")
+    expectEqual(API.describes(st, title: "特别的人", artist: "方大同"), true, "洛雪开放 API: 认得出这一首")
+    expectEqual(API.describes(st, title: "特别的人", artist: "林俊杰"), false, "洛雪开放 API: 歌手对不上不认")
+    expectEqual(API.volumePercent(st), 20, "洛雪开放 API: 音量推的就是 0~100")
+    var quiet = st
+    quiet.volume = 1
+    expectEqual(API.volumePercent(quiet), 1, "洛雪开放 API: 音量 1 是 1%,不是满格")
+    expectEqual(st.collect, true, "洛雪开放 API: 收藏")
+    let renamed = API.applying(event: "name", data: #""演员""#, to: st, at: t0.addingTimeInterval(1))
+    expectEqual(renamed.progress == nil && !renamed.advancing, true, "洛雪开放 API: 换歌时清掉上一首的进度")
+    expectEqual(API.httpsCover("http://img1.kwcdn.kuwo.cn/a.jpg")?.absoluteString, "https://img1.kuwo.cn/a.jpg",
+                "洛雪开放 API: kwcdn 换成认 https 的主机(同引擎 lxMusicHTTPSCover)")
+    expectEqual(API.httpsCover("http://p2.music.126.net/x.jpg")?.absoluteString, "https://p2.music.126.net/x.jpg", "洛雪开放 API: 网易云图床换 https")
+    expectEqual(API.httpsCover("data:image/png;base64,AAAA"), nil, "洛雪开放 API: data 地址不给")
+    expectEqual(API.httpsCover("http://example.com/a.jpg"), nil, "洛雪开放 API: 没核过的图床不给")
+    // 歌词对时自检:配对、正负号、不同字不配、离太远不配。
+    var check = LXMusicLyricCheck(track: "特别的人")
+    expectEqual(check.noteTheirs("爱一个人或许要慷慨", at: t0), false, "对时自检: 洛雪先换句,先记着")
+    expectEqual(check.noteOurs("爱一个人 或许要慷慨。", at: t0.addingTimeInterval(0.2)), true, "对时自检: 去掉空格标点后配上")
+    check.noteOurs("若只想要被爱", at: t0.addingTimeInterval(3))
+    check.noteTheirs("若只想要被爱", at: t0.addingTimeInterval(3.1))
+    check.noteTheirs("最后没有了对白", at: t0.addingTimeInterval(6))
+    check.noteOurs("最后没有了对白", at: t0.addingTimeInterval(20))
+    check.noteOurs("Totally different", at: t0.addingTimeInterval(21))
+    expectEqual(check.deltas.map { ($0 * 1000).rounded() / 1000 }, [0.2, -0.1], "对时自检: 我们晚为正、早为负;离太远、字对不上不算")
+    expectEqual(check.summary().map { abs($0.median - 0.05) < 0.001 && $0.count == 2 }, true, "对时自检: 中位数")
+
+    // 洛雪的「我的收藏」:本地库里 listId 为 love 的那份,按歌名和歌手逐字对。
+    typealias LX = LXMusicFavoriteControl
+    let lxDB = NSTemporaryDirectory() + "lyrimuse-selftest-lx-\(ProcessInfo.processInfo.processIdentifier)-\(UUID().uuidString).db"
+    defer { try? FileManager.default.removeItem(atPath: lxDB) }
+    let create = Process()
+    create.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
+    create.arguments = [lxDB, """
+        CREATE TABLE my_list_music_info (id TEXT, listId TEXT, name TEXT, singer TEXT, source TEXT, interval TEXT, meta TEXT);
+        INSERT INTO my_list_music_info VALUES ('kw_1','love','特别的人','方大同','kw','04:19','{}');
+        INSERT INTO my_list_music_info VALUES ('kw_2','temp','晴天','周杰伦','kw','04:29','{}');
+        INSERT INTO my_list_music_info VALUES ('kw_3','love','It''s You','A''s','kw','03:00','{}');
+        """]
+    if (try? create.run()) != nil {
+        create.waitUntilExit()
+        expectEqual(LX.isCollected(title: "特别的人", artist: "方大同", databasePath: lxDB), true, "洛雪收藏: 收藏列表里有")
+        expectEqual(LX.isCollected(title: "晴天", artist: "周杰伦", databasePath: lxDB), false, "洛雪收藏: 只在别的列表里不算")
+        expectEqual(LX.isCollected(title: "特别的人", artist: "林俊杰", databasePath: lxDB), false, "洛雪收藏: 歌手对不上不算")
+        expectEqual(LX.isCollected(title: "It's You", artist: "A's", databasePath: lxDB), true, "洛雪收藏: 名字里的单引号转义")
+    }
+    expectEqual(LX.isCollected(title: "特别的人", artist: "方大同", databasePath: lxDB + ".missing"), nil, "洛雪收藏: 库不在读不出")
+
+    // 洛雪的歌来自哪个平台看它本地库里的曲目 id 前缀,简介面板给那家的歌曲页。
+    expectEqual([PlatformLinks.lxMusicPlatform(songID: "tx_003cSLOO35W3yP"), PlatformLinks.lxMusicPlatform(songID: "wy_28403111"),
+                 PlatformLinks.lxMusicPlatform(songID: "kw_4100778"), PlatformLinks.lxMusicPlatform(songID: nil)],
+                [.qqMusic, .netease, nil, nil], "洛雪平台: tx_ 是 QQ、wy_ 是网易云,别的没有歌曲页")
+    let qqPage = URL(string: "https://y.qq.com/n/ryqq/songDetail/003cSLOO35W3yP")!
+    let nePage = URL(string: "https://music.163.com/song?id=28403111")!
+    func lxLinks(_ platform: PlatformLinks.Platform?) -> PlatformLinks {
+        PlatformLinks(appleMusic: nil, qqSong: qqPage, qqAlbum: nil, qqArtist: nil, neteaseSong: nePage, lxMusicPlatform: platform)
+    }
+    let lxBundle = PlaybackPlayer.lxMusic.bundleIdentifier
+    expectEqual(lxLinks(.qqMusic).songLink(forPlayerBundleID: lxBundle)?.url, qqPage, "洛雪歌曲页: 来自 QQ 给 QQ 那页")
+    expectEqual(lxLinks(.netease).songLink(forPlayerBundleID: lxBundle)?.url, nePage, "洛雪歌曲页: 来自网易云给网易云那页")
+    expectEqual(lxLinks(nil).songLink(forPlayerBundleID: lxBundle) == nil, true, "洛雪歌曲页: 来自酷我等别的平台不拿别家顶上")
 }
 
 /// 用闸门让 AX 桩停在后台,由主线程的一次事件放行。验证响应与失败契约,不按耗时阈值判断、不操作真实播放器。

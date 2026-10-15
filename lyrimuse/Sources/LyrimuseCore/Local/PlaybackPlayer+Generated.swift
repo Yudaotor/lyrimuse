@@ -28,6 +28,8 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     case kaset = "kaset"
     /// 仿 Winamp 的本地文件播放器,走 media-control,没有 AppleScript 字典、没有 URL scheme。系统会话里不报歌手和专辑:有歌手标签时标题是「歌手 - 歌名」,只有歌名时是歌名,没有标签时是带扩展名的文件名;App 侧按进程号找到它开着的当前文件读标签,读不到再按第一个「 - 」拆(PlayerTitleSplit)。nativeLyricSource 填 localfile:不是歌词源,是正在放的文件同目录同名的 .lrc(localfilelyrics.go)。时长只报整数秒。开播、自动连播、跳转的锚点对真实出声在 0.01 秒以内,归 cleanExtrapolated。暂停那一拍先报旧锚点、约 1 秒后才补上停住的位置,恢复那一拍先报进度 0 的锚点,暂停时 playbackRate 仍是 1。processName 5 字节。
     case reamp = "reamp"
+    /// 开源的 Electron 播放器(lx-music-desktop),走 media-control,没有 AppleScript 字典、没有沙盒。系统会话由网页的 MediaSession 填:歌名、歌手、专辑、封面齐全,进度在开播、恢复、跳转时按音频元素的 currentTime 写一次(带播放速度),之后不重发。换歌先发一帧新歌名、时长 0、不在放,约 0.6 秒后才补上时长和在放;上一首偶尔先发一帧新歌名配上一首的时长和位置。自然连播时先把会话撤掉约 0.5 秒,系统会落回别家暂停着的会话,所以 dropsSessionBetweenTracks。暂停那一拍报的是系统按上一个锚点外推的值,比停住的位置多出暂停事件那几十毫秒。nativeLyricSource 填 lxmusic:不是歌词源,是洛雪放过的歌它自己存下的原版歌词(按平台曲目 id,lxmusic.go)。按客户端单问时它报的 bundle id 是 Electron(ad-hoc 签名的标识),系统当选的那份是 cn.toside.music.desktop。processName 16 字节。
+    case lxMusic = "lx_music"
     /// 不是一个具体 App——把「谁在报 Now Playing」交给系统仲裁。bundleID 空字符串是刻意的,调用方据此 no-op 掉需要具体 App 的联动。
     case auto = "auto"
 
@@ -47,6 +49,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .amazonMusic: return "com.amazon.music"
         case .kaset: return "com.sertacozercan.Kaset"
         case .reamp: return "ru.alexfreud.ReAmp"
+        case .lxMusic: return "cn.toside.music.desktop"
         case .auto: return ""
         }
     }
@@ -63,6 +66,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .amazonMusic: return "amazon"
         case .kaset: return "lyricfind"
         case .reamp: return "localfile"
+        case .lxMusic: return "lxmusic"
         default: return nil
         }
     }
@@ -82,6 +86,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .amazonMusic: return "cleanExtrapolated"
         case .kaset: return "noisyFloored"
         case .reamp: return "cleanExtrapolated"
+        case .lxMusic: return "cleanExtrapolated"
         default: return nil
         }
     }
@@ -181,6 +186,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     public var dropsSessionBetweenTracks: Bool {
         switch self {
         case .kkbox: return true
+        case .lxMusic: return true
         default: return false
         }
     }

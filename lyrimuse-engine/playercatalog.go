@@ -25,6 +25,8 @@ import (
 //   - QQ 音乐、网易云:播放列表(QQ 的 PlayingList.archive、网易云的 playingList)里当前这首的歌曲 id 与所在专辑的 id,
 //     成对记进 PlayerSongIDs / PlayerAlbumIDs(18 章决策 65、67);
 //   - 酷狗:「此刻在播」plist 里当前这首的 strFileHash 在客户端曲库里的 mixId 与 albumId,同样成对记(18 章决策 69)。
+//   - 洛雪音乐:本地库里当前这首那一条的 id(「平台_平台曲目 id」)记进 PlayerSongIDs;它来自 QQ / 网易云时,按平台曲目 id
+//     拼出那家的歌曲页,QQURL / NeteaseURL 空着时补上(lxmusic.go,09 章决策 258)。
 // YouTube Music(Kaset)的专辑页、歌手页 id 跟专辑判定一起记(kasetalbum.go)。
 //
 // 专辑、歌手只存 id,不存拼好的地址:带 _url 的字段都按歌曲页对待,要进 fields()、ListenBrainz 白名单和中继 links;
@@ -38,9 +40,10 @@ const (
 )
 
 // playerCatalogIDs:song 是歌曲页(只有汽水走这里),album / artist 是那家自己的 id,songID 是播放器报的这一首的歌曲 id、
-// songAlbum 是它所在的专辑 id(QQ 音乐、网易云走这里,成对记进 PlayerSongIDs / PlayerAlbumIDs)。
+// songAlbum 是它所在的专辑 id(QQ 音乐、网易云走这里,成对记进 PlayerSongIDs / PlayerAlbumIDs)。qqSong / neteaseSong 是
+// 洛雪给的这一首在 QQ / 网易云的歌曲页。
 type playerCatalogIDs struct {
-	song, album, artist, songID, songAlbum string
+	song, album, artist, songID, songAlbum, qqSong, neteaseSong string
 }
 
 var (
@@ -64,7 +67,8 @@ func (m playerCatalogAt) ttl() time.Duration {
 // 调用方不能持着 enrichMu(Amazon 那条经 amazonASINFor 会取它的锁)。
 func playerCatalogIDsFor(bundleID, artist, title, album string, durationSecs float64) playerCatalogIDs {
 	switch bundleID {
-	case sodaMusicBundleID, kkboxBundleID, amazonMusicBundleID, spotifyBundleID, qqMusicBundleID, neteaseMusicBundleID, kugouMusicBundleID:
+	case sodaMusicBundleID, kkboxBundleID, amazonMusicBundleID, spotifyBundleID, qqMusicBundleID, neteaseMusicBundleID, kugouMusicBundleID,
+		lxMusicBundleID:
 	default:
 		return playerCatalogIDs{}
 	}
@@ -93,6 +97,8 @@ func playerCatalogIDsFor(bundleID, artist, title, album string, durationSecs flo
 		ids.songID, ids.songAlbum = neteasePlayingSong(artist, title, durationSecs)
 	case kugouMusicBundleID:
 		ids.songID, ids.songAlbum = kugouPlayingSong(artist, title, durationSecs)
+	case lxMusicBundleID:
+		ids = lxMusicPlayingCatalogIDs(artist, title, durationSecs)
 	}
 	if !playerSongIDOK(bundleID, ids.songID) {
 		ids.songID = ""
@@ -123,6 +129,17 @@ func applyPlayerCatalogIDsLocked(e *enrichEntry, bundleID string, ids playerCata
 	if bundleID == qqMusicBundleID || bundleID == neteaseMusicBundleID || bundleID == kugouMusicBundleID {
 		return notePlayerSongLocked(e, bundleID, ids.songID, ids.songAlbum)
 	}
+	if bundleID == lxMusicBundleID {
+		// 歌曲页只在空着时补:已有的是检索配的那一版,不拿洛雪这条去盖(同 locallibrarylinks.go 头注)。
+		changed := notePlayerSongIDLocked(e, bundleID, ids.songID)
+		if e.QQURL == "" && ids.qqSong != "" {
+			e.QQURL, changed = ids.qqSong, true
+		}
+		if e.NeteaseURL == "" && ids.neteaseSong != "" {
+			e.NeteaseURL, changed = ids.neteaseSong, true
+		}
+		return changed
+	}
 	var fields []*string
 	var values []string
 	switch bundleID {
@@ -152,6 +169,8 @@ func playerSongIDOK(bundleID, id string) bool {
 		return catalogIDChars(id, 8, 32, isASCIIAlnumRune)
 	case neteaseMusicBundleID, kugouMusicBundleID:
 		return catalogIDChars(id, 1, 20, isASCIIDigitRune)
+	case lxMusicBundleID:
+		return catalogIDChars(id, 3, 80, func(r rune) bool { return isASCIIAlnumRune(r) || r == '_' })
 	}
 	return false
 }

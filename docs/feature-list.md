@@ -443,9 +443,9 @@ Lyrics in a browser. Phones and tablets show exactly what the lyrics window show
 
 <a id="feature-players"></a>
 
-### Ten players, pick several or detect automatically
+### Eleven players, pick several or detect automatically
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music and the YouTube Music app Kaset. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, the Winamp-style reAMP and the YouTube Music app Kaset. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.
 
 - Settings: Player › Music Apps
 
@@ -492,7 +492,7 @@ Apple Music, Spotify and Kaset need Automation permission to read what is playin
 
 ### Playback controls and seeking
 
-Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them, and NetEase Cloud Music, Kugou Music and Soda Music have like. Play, pause and skipping can have global shortcuts. While something like a browser video holds Now Playing, play, pause and skipping for QQ Music and NetEase Cloud Music go through their own menus, and seeking isn't available.
+Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them, and NetEase Cloud Music, Kugou Music, Soda Music and LX Music have like, with LX Music volume too once Open API is on in its settings. Play, pause and skipping can have global shortcuts. While something like a browser video holds Now Playing, play, pause and skipping for QQ Music and NetEase Cloud Music go through their own menus, and seeking isn't available.
 
 - Settings: Lyrics Display › Notch › Expanded State › Show Playback Controls
 - Settings: Keyboard Shortcuts › Play/Pause
@@ -714,7 +714,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 250 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 251 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -764,6 +764,7 @@ Every setting in the Settings window, by where it lives: 250 in all. Type a name
 - **Automation Permission**
 - **Full Disk Access**
 - **Accessibility**
+- **LX Music Open API**: Lyrimuse reads LX Music's own playback position here and adjusts its volume
 - **Lyrics Engine**: Reads playback state and fetches lyrics and artwork
 
 ### Player › Linkage

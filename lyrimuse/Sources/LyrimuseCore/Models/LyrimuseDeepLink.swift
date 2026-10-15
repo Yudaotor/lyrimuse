@@ -70,6 +70,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case simulate(title: String, artist: String, album: String, duration: Double?, position: Double, playing: Bool)
         /// 结束模拟,交还真实播放器(`debug/simulate?off=1`)。
         case simulateOff
+        /// 翻转当前曲目的「喜欢」,跟点歌词窗口那颗心走同一条路(`debug/favorite`)。
+        case toggleFavorite
+        /// 把播放器音量设成 0…100,跟拖歌词窗口的音量条走同一条路(`debug/volume?percent=`)。
+        case volume(percent: Int)
     }
 
     /// `action/` 下不对应快捷键的那几个名字(跟 `LyrimuseAction.linkName` 不能重名,selftest 核对)。
@@ -158,6 +162,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                     duration: seconds("duration").flatMap { $0 > 0 ? $0 : nil }, position: seconds("position") ?? 0,
                     playing: value("playing").flatMap(Self.parseBool) ?? true))
             }
+        case ("debug", "/favorite"):
+            self = .debug(.toggleFavorite)
+        case ("debug", "/volume"):
+            guard let percent = value("percent").flatMap(Int.init), (0...100).contains(percent) else { return nil }
+            self = .debug(.volume(percent: percent))
         case ("lastfm-auth-callback", _):
             self = .lastfmAuthCallback
         default:
@@ -250,6 +259,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case .simulateOff:
                 components.path = "/simulate"
                 components.queryItems = [URLQueryItem(name: "off", value: "1")]
+            case .toggleFavorite: components.path = "/favorite"
+            case let .volume(percent):
+                components.path = "/volume"
+                components.queryItems = [URLQueryItem(name: "percent", value: String(percent))]
             }
         case .lastfmAuthCallback:
             components.host = "lastfm-auth-callback"

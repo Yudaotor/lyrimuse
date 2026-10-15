@@ -1123,14 +1123,14 @@
         {
           "id": "players",
           "title": {
-            "zh-Hans": "十个播放器，可多选或自动识别",
-            "en": "Ten players, pick several or detect automatically",
-            "zh-Hant": "十個播放器，可多選或自動辨識"
+            "zh-Hans": "十一个播放器，可多选或自动识别",
+            "en": "Eleven players, pick several or detect automatically",
+            "zh-Hant": "十一個播放器，可多選或自動辨識"
           },
           "desc": {
-            "zh-Hans": "Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music，以及 YouTube Music 客户端 Kaset。可以同时选几个，也可以留在自动识别，跟着 macOS「正在播放」里的那个走。Apple Music 电台也能用，主播说话时显示电台名和台标。",
-            "en": "Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music and the YouTube Music app Kaset. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.",
-            "zh-Hant": "Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music，以及 YouTube Music 用戶端 Kaset。可以同時選幾個，也可以留在自動辨識，跟著 macOS「正在播放」裡的那個走。Apple Music 電台也能用，主持人說話時顯示電台名稱和台標。"
+            "zh-Hans": "Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、洛雪音乐、KKBOX、Amazon Music、仿 Winamp 的 reAMP，以及 YouTube Music 客户端 Kaset。可以同时选几个，也可以留在自动识别，跟着 macOS「正在播放」里的那个走。Apple Music 电台也能用，主播说话时显示电台名和台标。",
+            "en": "Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, the Winamp-style reAMP and the YouTube Music app Kaset. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.",
+            "zh-Hant": "Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、洛雪音樂、KKBOX、Amazon Music、仿 Winamp 的 reAMP，以及 YouTube Music 用戶端 Kaset。可以同時選幾個，也可以留在自動辨識，跟著 macOS「正在播放」裡的那個走。Apple Music 電台也能用，主持人說話時顯示電台名稱和台標。"
           },
           "settings": [
             [
@@ -1253,9 +1253,9 @@
             "zh-Hant": "播放控制、拖移進度列"
           },
           "desc": {
-            "zh-Hans": "在歌词窗口和展开的灵动岛上播放、暂停、切歌，拖进度条跳转。随机、循环、喜欢和音量看播放器支持：Apple Music、Spotify、Kaset、QQ 音乐、Amazon Music 和浏览器里的 YouTube Music 各支持其中几项或全部，网易云音乐、酷狗音乐和汽水音乐有喜欢。播放、暂停和切歌也能绑全局快捷键。浏览器视频这类 App 占着系统的「正在播放」时，QQ 音乐和网易云音乐的播放、暂停和切歌改按它们自己的菜单，这时不能拖进度跳转。",
-            "en": "Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them, and NetEase Cloud Music, Kugou Music and Soda Music have like. Play, pause and skipping can have global shortcuts. While something like a browser video holds Now Playing, play, pause and skipping for QQ Music and NetEase Cloud Music go through their own menus, and seeking isn't available.",
-            "zh-Hant": "在歌詞視窗和展開的動態島上播放、暫停、切歌，拖移進度列跳轉。隨機、循環、喜歡和音量看播放器支援：Apple Music、Spotify、Kaset、QQ 音樂、Amazon Music 和瀏覽器裡的 YouTube Music 各支援其中幾項或全部，網易雲音樂、酷狗音樂和汽水音樂有喜歡。播放、暫停和切歌也能設定全域快速鍵。瀏覽器影片這類 App 占著系統的「正在播放」時，QQ 音樂和網易雲音樂的播放、暫停和切歌改按它們自己的選單，這時不能拖移進度跳轉。"
+            "zh-Hans": "在歌词窗口和展开的灵动岛上播放、暂停、切歌，拖进度条跳转。随机、循环、喜欢和音量看播放器支持：Apple Music、Spotify、Kaset、QQ 音乐、Amazon Music 和浏览器里的 YouTube Music 各支持其中几项或全部，网易云音乐、酷狗音乐、汽水音乐和洛雪音乐有喜欢，洛雪在它的设置里打开开放 API 后还能调音量。播放、暂停和切歌也能绑全局快捷键。浏览器视频这类 App 占着系统的「正在播放」时，QQ 音乐和网易云音乐的播放、暂停和切歌改按它们自己的菜单，这时不能拖进度跳转。",
+            "en": "Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them, and NetEase Cloud Music, Kugou Music, Soda Music and LX Music have like, with LX Music volume too once Open API is on in its settings. Play, pause and skipping can have global shortcuts. While something like a browser video holds Now Playing, play, pause and skipping for QQ Music and NetEase Cloud Music go through their own menus, and seeking isn't available.",
+            "zh-Hant": "在歌詞視窗和展開的動態島上播放、暫停、切歌，拖移進度列跳轉。隨機、循環、喜歡和音量看播放器支援：Apple Music、Spotify、Kaset、QQ 音樂、Amazon Music 和瀏覽器裡的 YouTube Music 各支援其中幾項或全部，網易雲音樂、酷狗音樂、汽水音樂和洛雪音樂有喜歡，洛雪在它的設定裡開啟開放 API 後還能調整音量。播放、暫停和切歌也能設定全域快速鍵。瀏覽器影片這類 App 占著系統的「正在播放」時，QQ 音樂和網易雲音樂的播放、暫停和切歌改按它們自己的選單，這時不能拖移進度跳轉。"
           },
           "settings": [
             [

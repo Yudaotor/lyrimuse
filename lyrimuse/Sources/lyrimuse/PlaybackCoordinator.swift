@@ -502,6 +502,10 @@ final class PlaybackCoordinator: ObservableObject {
     /// Music.app 自己的输出音量(0~100)。nil = 当前播放器没有这个概念/没拿到权限,
     /// 跟"喜欢""播放模式"同一个约定,界面据此整个不显示这个控件。
     @Published private(set) var soundVolume: Int?
+    /// 读不到音量、但能说清怎么才有时的那句话(音量胶囊灰着显示、悬停给它):在放洛雪、它的开放 API 没开。别的时候 nil。
+    @Published private(set) var volumeHint: String?
+    /// 有 `volumeHint` 时灰着的胶囊显示的档位:洛雪配置文件里的音量(`LXMusicOpenAPI.configVolumePercent`,只读);读不到为 nil。
+    @Published private(set) var volumeHintLevel: Int?
 
     /// 音量写入的合流状态:同一时刻只允许一次 osascript 在飞,拖动期间新来的值只更新
     /// pendingVolumeTarget,等在飞的那次回来再补写最后一个值。
@@ -611,6 +615,17 @@ final class PlaybackCoordinator: ObservableObject {
         if isFavorited != nil { isFavorited = nil }
         applyPlaybackMode(nil)
         if soundVolume != nil { soundVolume = nil }
+        applyVolumeHint(player: nil, volume: nil)
+    }
+
+    /// 见 volumeHint。读洛雪的配置文件(按修改时间缓存,很便宜)。
+    private func applyVolumeHint(player: PlaybackPlayer?, volume: Int?) {
+        let config = player == .lxMusic && volume == nil ? LXMusicOpenAPI.shared.currentConfig() : nil
+        let hint = player == .lxMusic && volume == nil && config?.enabled != true
+            ? L10n.t("在洛雪的设置里打开开放 API 后可调音量") : nil
+        let level = hint == nil ? nil : LXMusicOpenAPI.configVolumePercent(config)
+        if volumeHint != hint { volumeHint = hint }
+        if volumeHintLevel != level { volumeHintLevel = level }
     }
 
     /// 换歌时的三项后台回读(喜欢/播放模式/音量)合并成**一次** osascript 子进程,不分三次 fork、
@@ -626,6 +641,7 @@ final class PlaybackCoordinator: ObservableObject {
                 // 见 07 章决策 146。
                 applyPlaybackMode(nil)
                 if soundVolume != nil { soundVolume = nil }
+                applyVolumeHint(player: nil, volume: nil)
                 refreshFavorited()
             } else {
                 clearExtendedControls()
@@ -655,6 +671,7 @@ final class PlaybackCoordinator: ObservableObject {
                 if self.volumeActionSeq == volSeq, self.soundVolume != state.volume {
                     self.soundVolume = state.volume
                 }
+                self.applyVolumeHint(player: player, volume: state.volume)
             }
         }
     }
@@ -736,6 +753,7 @@ final class PlaybackCoordinator: ObservableObject {
                 ? MusicPlaybackController.soundVolume(for: player) : nil
             await MainActor.run { [weak self] in
                 guard let self, self.volumeActionSeq == seq else { return }
+                self.applyVolumeHint(player: player, volume: value)
                 guard self.soundVolume != value else { return }
                 self.soundVolume = value
             }
@@ -942,6 +960,20 @@ final class PlaybackCoordinator: ObservableObject {
         // 这一组里的去抖都挂主队列、别挂 RunLoop.main:菜单栏菜单开着时主线程在事件跟踪模式里转,RunLoop.main 的计时器
         // 要等菜单关了才走,换歌后的高清封面、收藏 / 随机状态都会跟着晚(见 01 章决策 11)。
         cancellables = [
+            // 洛雪开放 API 开着时,屏上每换一句告诉它一声,跟洛雪自己换句的时刻比(只进日志,见 LXMusicLyricCheck)。
+            $currentLine.map { $0?.plainText ?? "" }.removeDuplicates()
+                .sink { [weak self] text in
+                    guard self?.currentPlayer == .lxMusic else { return }
+                    LXMusicOpenAPI.shared.noteDisplayedLine(text, at: Date())
+                },
+            // 洛雪开放 API 推来收藏、音量的变化(在洛雪里点的也算):回读这两项。
+            NotificationCenter.default.publisher(for: LXMusicOpenAPI.controlsChangedNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in
+                    guard let self, self.currentPlayer == .lxMusic else { return }
+                    self.refreshFavorited()
+                    self.refreshVolume()
+                },
             s.$title.assign(to: \.title, on: self),
             s.$title.map(TrackNameDisplay.cleaned).removeDuplicates().assign(to: \.displayTitle, on: self),
             // 换歌就重读一次"喜欢"状态。用 title+artist 组合去重而不是只看 title:同名不同

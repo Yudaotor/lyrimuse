@@ -26,6 +26,10 @@ public struct PlaybackPositionEnvironment {
     public var spotifyProbeRequestConfirmation: (_ key: String) -> Void
     /// 最近到达的锚点是不是在暂停中发布的(见 `MediaControlClient.latestAnchorPublishedWhilePaused`)。
     public var latestAnchorPublishedWhilePaused: () -> Bool
+    /// 洛雪配置里的播放速度和改它的时刻(见 `LXMusicPlaybackRate`);只在洛雪在放时问。
+    public var lxMusicPlaybackRate: () -> LXMusicPlaybackRate.Setting?
+    /// 洛雪开放 API 推来的状态(见 `LXMusicOpenAPI`);`active` 是这一拍在不在放洛雪,线上据此保持或断开订阅。没开 / 没连上时 nil。
+    public var lxMusicOpenAPI: (_ active: Bool) -> LXMusicOpenAPI.State?
 
     public init(
         defaults: UserDefaults,
@@ -40,9 +44,13 @@ public struct PlaybackPositionEnvironment {
         spotifyProbeConsume: @escaping (String, Double, Date) -> Double?,
         spotifyProbeRequestConfirmation: @escaping (String) -> Void,
         latestAnchorPublishedWhilePaused: @escaping () -> Bool,
-        browserProbeSeeked: @escaping (Date) -> Void = { _ in }
+        browserProbeSeeked: @escaping (Date) -> Void = { _ in },
+        lxMusicPlaybackRate: @escaping () -> LXMusicPlaybackRate.Setting? = { nil },
+        lxMusicOpenAPI: @escaping (Bool) -> LXMusicOpenAPI.State? = { _ in nil }
     ) {
+        self.lxMusicOpenAPI = lxMusicOpenAPI
         self.browserProbeSeeked = browserProbeSeeked
+        self.lxMusicPlaybackRate = lxMusicPlaybackRate
         self.defaults = defaults
         self.readPositionBias = readPositionBias
         self.writePositionBias = writePositionBias
@@ -71,6 +79,11 @@ public struct PlaybackPositionEnvironment {
             spotifyProbeConsume: { SpotifyPositionProbe.shared.consumeCorrection(forKey: $0, rate: $1, now: $2) },
             spotifyProbeRequestConfirmation: { SpotifyPositionProbe.shared.requestConfirmation(forKey: $0) },
             latestAnchorPublishedWhilePaused: { MediaControlClient.latestAnchorPublishedWhilePaused() },
-            browserProbeSeeked: { BrowserPositionProbe.shared.discardReadings(before: $0) })
+            browserProbeSeeked: { BrowserPositionProbe.shared.discardReadings(before: $0) },
+            lxMusicPlaybackRate: { LXMusicPlaybackRate.shared.current() },
+            lxMusicOpenAPI: { active in
+                LXMusicOpenAPI.shared.keepAlive(active: active)
+                return active ? LXMusicOpenAPI.shared.currentState() : nil
+            })
     }
 }

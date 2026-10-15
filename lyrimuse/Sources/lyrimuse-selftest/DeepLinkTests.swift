@@ -157,6 +157,10 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://action/play-mode?mode=loop") == nil && link("lyrimuse://action/play-mode") == nil, true,
                     "播放模式: 认不出的取值、没带取值都认不出")
         expectEqual(link("lyrimuse://debug/simulate?artist=x"), nil, "模拟播放: 没给歌名认不出")
+        expectEqual(link("lyrimuse://debug/favorite"), .debug(.toggleFavorite), "debug: 翻转喜欢")
+        expectEqual(link("lyrimuse://debug/volume?percent=35"), .debug(.volume(percent: 35)), "debug: 音量")
+        expectEqual(link("lyrimuse://debug/volume?percent=101") == nil && link("lyrimuse://debug/volume") == nil, true,
+                    "debug: 音量超出 0…100、没带取值都认不出")
 
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         func source(_ rel: String) -> String {
@@ -234,6 +238,7 @@ func runDeepLinkTests() {
             .debug(.state), .debug(.checkpoint), .debug(.restore), .debug(.snapshot(window: "panel")),
             .debug(.simulate(title: "Orange Moon", artist: "Khalil", album: "", duration: 280, position: 12.5, playing: false)),
             .debug(.simulate(title: "x", artist: "y", album: "z", duration: nil, position: 0, playing: true)), .debug(.simulateOff),
+            .debug(.toggleFavorite), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
             .setPlayMode(.list), .setPlayMode(.shuffle), .setPlayMode(.repeatAll), .setPlayMode(.repeatOne),
         ] + LyrimuseAction.allCases.map { .action($0, on: nil, stepSeconds: nil) }
         for value in all {

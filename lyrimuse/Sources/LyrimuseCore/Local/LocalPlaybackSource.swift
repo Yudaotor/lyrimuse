@@ -457,6 +457,17 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 这一段在放从哪一刻开始:暂停信号到了清掉,之后第一个「恢复播放」信号才记,后面再来的不覆盖。QQ 换歌时带新歌名和
     /// 0 锚点的那一行里也有 `playing:true`,`posResumeSignalAt` 会被它刷新成跟锚点同时,见 qqLateZeroAnchorLead。
     private var posResumeEpisodeAt: Date?
+    /// 洛雪冷启动(见 lxMusicColdStartPosition):在放信号(哪个播放器发的都记)到时默认输出设备没在转。`signalAnchor` 是那一刻快照里的锚点,
+    /// `audioAt` 是设备转起来的时刻(后台盯着记)。用过一次、暂停或等过点就清掉。
+    private var lxColdStart: (signalAt: Date, signalAnchor: Double?, audioAt: Date?)?
+    private var lxColdStartWatch: Task<Void, Never>?
+    /// 洛雪中途改速度(见 lxMusicRateCorrected):这一拍按哪次改速度修正过读数,`lxRateAnchoredChange` 是已经按它重锚过的那次。
+    private var lxRateChange: Date?
+    private var lxRateAnchoredChange: Date?
+    /// 这一拍的位置用的是洛雪开放 API 推的(见 lxMusicOpenAPISnapshot);`lxOpenAPILogged` 记上一次日志里说的是哪种,变了才记。
+    private var lxOpenAPIActive = false
+    private var lxOpenAPILogged: Bool?
+    private var lxOpenAPIErrorLogged: String?
 
     /// 这一拍的「恢复信号」还算不算数:只认几秒之内到的。靠轮询(暂停档 6 秒一拍)发现恢复时,手上那个是暂停那一刻的
     /// 旧信号,拿它的年龄当前跳上界,会把起点砍到「暂停值 + 两秒多」,那一拍最多落后约 4 秒;这种时候跟拿不到信号
@@ -708,8 +719,71 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 见 lateStartAnchorLead。只放实测过「先报在放、锚点晚到、真起点在报在放那一刻」的播放器。
     public nonisolated static let lateStartAnchorPlayers: Set<String> = [
-        PlaybackPlayer.netease.bundleIdentifier, PlaybackPlayer.kugou.bundleIdentifier,
+        PlaybackPlayer.netease.bundleIdentifier, PlaybackPlayer.kugou.bundleIdentifier, PlaybackPlayer.lxMusic.bundleIdentifier,
     ]
+
+    /// 洛雪自然连播:上一首放到头、会话撤掉之后,新歌「在放、进度 0」一拍报齐,没有提前到的在放信号,声音却比这个锚点早
+    /// `lxMusicNaturalStartLeadSecs` 左右。在放信号比锚点早到过(手动换歌)的交给 `lateStartAnchorLead`,这里不补;
+    /// 比的是两者相差多少(跟 `lateStartAnchorLead` 同一个算法),不是这一段在放了多久 —— 轮询晚几百毫秒才看到这一拍、
+    /// 一直在放没停过,在放都算开始得早。`playingSince` 是这一段在放开始到这一拍过了多久,`previousPlayedToEnd` 是上一首
+    /// 在放、外推已经走到结尾附近。见 02 章决策 128。纯函数,selftest 直接覆盖。
+    public nonisolated static func lxMusicNaturalStartLead(bundleID: String?, anchorElapsed: Double?, rawReported: Double,
+                                                           playingSince: TimeInterval?, previousPlayedToEnd: Bool) -> Double {
+        guard bundleID == PlaybackPlayer.lxMusic.bundleIdentifier, let anchorElapsed, anchorElapsed == 0,
+              previousPlayedToEnd else { return 0 }
+        if let playingSince, lateStartAnchorGapRange.contains(playingSince - (rawReported - anchorElapsed)) { return 0 }
+        return lxMusicNaturalStartLeadSecs
+    }
+
+    /// 见 lxMusicNaturalStartLead。只录洛雪的声音、跳回 0 秒量出开头的静音扣掉,四次自然连播早 0.36~0.39 秒。
+    public nonisolated static let lxMusicNaturalStartLeadSecs: Double = 0.38
+
+    /// 洛雪停了十来秒以上再放(或闲着时点播):先报在放,锚点是那一刻的进度,可它这时才重新打开音频输出,输出设备闲着
+    /// (蓝牙耳机睡了)时还要 0.4~0.8 秒才出声,进度停在锚点上等着,之后也不补报锚点。在放信号到时默认输出设备没在转,
+    /// 就等它转起来,那一刻才是真起点:位置 = 那之后发的锚点 + 设备转起来至今。`signalAnchor` 是在放信号那一刻快照里的锚点,
+    /// 锚点还是它时(新的那份还没到)不算。设备在转(别的 App 在出声,或者暂停没多久、音频输出还开着)时几乎当场出声,不管。
+    /// 见 02 章决策 129。纯函数,selftest 直接覆盖。
+    public nonisolated static func lxMusicColdStartPosition(anchorElapsed: Double?, signalAnchor: Double?, audioAt: Date?,
+                                                            rate: Double, now: Date) -> Double? {
+        guard let anchorElapsed, let audioAt, anchorElapsed != signalAnchor else { return nil }
+        return anchorElapsed + max(0, now.timeIntervalSince(audioAt)) * rate
+    }
+
+    /// 洛雪播放中途改速度:它只改音频元素、不重报会话,系统那份速度和锚点都还是旧的。`setting` 是它配置里的速度和改的时刻
+    /// (见 `LXMusicPlaybackRate`)。在放、两份速度不一样时,读数从改的那一刻起换成新速度。它暂停、恢复、跳转、换歌时按新速度
+    /// 重报,那之后两份一样,不动。连着改了几次只看得到最后一次。见 02 章决策 130。纯函数,selftest 直接覆盖。
+    public nonisolated static func lxMusicRateCorrected(_ snapshot: MediaControlSnapshot, setting: LXMusicPlaybackRate.Setting?,
+                                                        now: Date) -> MediaControlSnapshot {
+        guard snapshot.bundleIdentifier == PlaybackPlayer.lxMusic.bundleIdentifier, snapshot.playing == true, let setting,
+              let reported = snapshot.playbackRate, reported > 0, abs(setting.rate - reported) > 0.001,
+              let elapsed = snapshot.elapsedTime else { return snapshot }
+        let since = max(0, (snapshot.capturedAt ?? now).timeIntervalSince(setting.changedAt))
+        return snapshot.withPlaybackRate(setting.rate, elapsed: elapsed + (setting.rate - reported) * since)
+    }
+
+    /// 洛雪开放 API 开着、推来的又是系统会话报的这一首时,位置、速度换成它推的(外推到读数那一刻),在放时标精确、去掉锚点:
+    /// 这一路不靠系统锚点,晚到锚点的补偿、冷启动等设备、中途改速度的修正都用不上。报在放而进度还没走(恢复后输出设备还没转起来)
+    /// 按等着出声处理;报出错按没在放(洛雪默认出错自动跳下一首)。对不上这一首、没有进度时 nil,照旧走系统会话那一套。
+    /// 见 02 章决策 131。纯函数,selftest 直接覆盖。
+    public nonisolated static func lxMusicOpenAPISnapshot(_ s: MediaControlSnapshot, state: LXMusicOpenAPI.State?,
+                                                          now: Date) -> MediaControlSnapshot? {
+        guard s.bundleIdentifier == PlaybackPlayer.lxMusic.bundleIdentifier, let state,
+              LXMusicOpenAPI.describes(state, title: s.title, artist: s.artist),
+              let position = LXMusicOpenAPI.position(state, now: s.capturedAt ?? now) else { return nil }
+        let rate = (state.playbackRate ?? 0) > 0 ? (state.playbackRate ?? 1) : 1
+        let systemPlaying = s.playing == true
+        switch state.status {
+        case "error":
+            return s.withLXMusicClock(position: position, playing: false, rate: rate, waiting: false)
+        case "playing":
+            return s.withLXMusicClock(position: position, playing: systemPlaying, rate: rate, waiting: !state.advancing)
+        default:
+            return s.withLXMusicClock(position: position, playing: systemPlaying, rate: rate, waiting: false)
+        }
+    }
+
+    /// 见 lxMusicColdStartPosition。在放信号之后最多等设备转起来这么久,过了不管。
+    public nonisolated static let lxMusicColdStartWaitSecs: TimeInterval = 3
 
     /// 见 lateStartAnchorLead。超过上沿更像是中途卡了一下,不当成晚到的开播锚点。
     public nonisolated static let lateStartAnchorGapRange: ClosedRange<Double> = 0.15...0.8
@@ -820,10 +894,13 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 所以暂停事件冻住了外推时,暂停那一拍按屏上位置停住(见 posHeldPause),之后它再报的值按 `pausedReadingReplacesShown`
     /// 决定换不换。见 02 章决策 118。
     /// reAMP 暂停那一拍报的是上一份锚点(恢复播放后那份常没被更正,偏零点几秒),约 1 秒后才补准确的停住位置,
-    /// 同样按屏上位置停住。见 02 章决策 126。只认这两家。纯函数,selftest 直接覆盖。
+    /// 同样按屏上位置停住。见 02 章决策 126。
+    /// 洛雪暂停时不报停在哪,系统按上一份锚点外推出一个值;开播锚点晚到时补上的那一截不在里面。见 02 章决策 129。
+    /// 只认这三家。纯函数,selftest 直接覆盖。
     public nonisolated static func holdsShownPositionAtPause(bundleID: String?, frozenByEvent: Bool) -> Bool {
         guard frozenByEvent else { return false }
         return bundleID == PlaybackPlayer.qqMusic.bundleIdentifier || bundleID == PlaybackPlayer.reamp.bundleIdentifier
+            || bundleID == PlaybackPlayer.lxMusic.bundleIdentifier
     }
 
     /// 按屏上位置停住的暂停,播放器再报的值什么时候换上:比屏上还靠前(下取整的值都比真位置早,还靠前说明屏上落后),
@@ -993,9 +1070,13 @@ public final class LocalPlaybackSource: ObservableObject {
     ///
     /// Amazon Music 不开:它的位置是 `AmazonMusicPlayhead` 自己的钟,自然连播的出声延迟由界面校准
     /// (`AmazonMusicUIProbe`)量出来扣掉;这里再按连续性估一遍就是扣两次,整首慢一个偏置。见 02 章决策 68。
+    ///
+    /// 洛雪不开:它换歌不是无缝的(会话撤掉、重新加载再开播),新歌的锚点是落后真声、不是超前,按连续性估出来的是负数;
+    /// 自然连播晚到的那一截由 `lxMusicNaturalStartLead` 按实测补。见 02 章决策 128。
     public nonisolated static func carriesGaplessLead(tier: PositionSourceTier, bundleID: String?) -> Bool {
         if bundleID == PlaybackPlayer.kugou.bundleIdentifier { return false }
         if bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier { return false }
+        if bundleID == PlaybackPlayer.lxMusic.bundleIdentifier { return false }
         return tier == .cleanExtrapolated || bundleID == PlaybackPlayer.spotify.bundleIdentifier
     }
 
@@ -1276,10 +1357,14 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 这份偏置是对着哪个锚点量的(那一刻快照的原始 anchorElapsedTime)。偏置只对这个锚点成立,
     /// 锚点一换就作废,见 biasSurvivesAnchor。偏置为 0 时恒为 nil。
     private var posBiasAnchorElapsed: Double?
+    /// 当前偏置是对着这份锚点补的起点差(洛雪:晚到的开播锚点、设备冷启动)。洛雪在放时不重发锚点,偏置一直有效,
+    /// 锚点换了(暂停、拖动)才作废,见 biasSurvivesAnchor;不像别的不带领先量的源那样每拍清零。
+    private var posBiasHeldToAnchor = false
 
     private func setReportedBias(_ bias: Double, anchorElapsed: Double?, fromProbe: Bool = false,
-                                 fromBrowserProbe: Bool = false, startKind: SpotifyStartKind? = nil) {
+                                 fromBrowserProbe: Bool = false, startKind: SpotifyStartKind? = nil, heldToAnchor: Bool = false) {
         posReportedBiasSecs = bias
+        posBiasHeldToAnchor = bias != 0 && heldToAnchor
         posBiasAnchorElapsed = bias == 0 ? nil : anchorElapsed
         posBiasFromProbe = bias != 0 && fromProbe
         posBiasFromBrowserProbe = bias != 0 && fromBrowserProbe
@@ -1434,8 +1519,12 @@ public final class LocalPlaybackSource: ObservableObject {
     ///
     /// reAMP 不走:开播锚点对出声在 0.01 秒以内,它第一次重发是暂停后补报的停住位置,量到的是那份冻结值自己的误差
     /// (±0.1 秒),学进去会给下一首开头白加一截。见 02 章决策 126。
+    ///
+    /// 洛雪不走:播放中不重发锚点,第一次重发是暂停那一拍系统按上一个锚点外推的冻结值,量不出开播锚点晚了多少;
+    /// 开播晚到的那一截由 `lateStartAnchorLead` / `lxMusicNaturalStartLead` 逐首补。见 02 章决策 128。
     public nonisolated static func learnsAnchorLag(bundleID: String?) -> Bool {
         bundleID != PlaybackPlayer.kugou.bundleIdentifier && bundleID != PlaybackPlayer.reamp.bundleIdentifier
+            && bundleID != PlaybackPlayer.lxMusic.bundleIdentifier
     }
 
     /// 这个播放器播放中会持续重发准的锚点,外推只是两次重发之间的补间:KKBOX 约每 1.06s 一次、逐次一致,
@@ -1986,7 +2075,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // bias(正=超前,负=落后),先扣掉再进入后续所有判断。raw 值只在三处直接用:换歌时的偏置
         // 估计、冻结检测的逐笔差分(常量偏置在差分里天然消掉,但语义上按原始值记)、
         // 以及真实 seek 之后的重新采信(Spotify 重打的新锚点是准的,偏置随之作废)。
-        if gaplessLeadBundleID == nil, posReportedBiasSecs != 0 {
+        if gaplessLeadBundleID == nil, posReportedBiasSecs != 0, !posBiasHeldToAnchor {
             // 同 key 跨播放器接续(同一首歌从 Spotify 切到别的源)不触发换歌分支——偏置
             // 只对 Spotify 这类会领先的源有意义,源变了立即作废。
             setReportedBias(0, anchorElapsed: nil)
@@ -2024,6 +2113,12 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 观察/别的播放器)原样采信这次读数、偏置清零。只对 carriesGaplessLead 的源启用:
                 // Apple Music 的播放头本身就是真值,QQ/网易云的整秒地板会把偏置估计噪声化。
                 var corrected: (seed: Double, bias: Double)?
+                // 上一首在放、外推已经走到结尾附近(见 lxMusicNaturalStartLead)。判法同下面的自然切歌,但不看 carriesGaplessLead。
+                let previousPlayedToEnd: Bool = {
+                    guard posWasPlaying, let prevWall = posPrevWall, posPrevDurationSecs > 0 else { return false }
+                    let overrun = trackPosSeconds + now.timeIntervalSince(prevWall) * (rate > 0 ? rate : 1) - posPrevDurationSecs
+                    return abs(overrun) <= Self.naturalAdvanceWindowSecs
+                }()
                 // Spotify 自己的钟不走连续性估计,按起播方式给领先量(见 SpotifyStartKind)。
                 let isSpotifyPlayerClock = gaplessLeadBundleID == PlaybackPlayer.spotify.bundleIdentifier
                     && anchorElapsedTime == nil
@@ -2089,11 +2184,18 @@ public final class LocalPlaybackSource: ObservableObject {
                     + Self.lateStartAnchorLead(
                         bundleID: lastSnapshot?.bundleIdentifier, anchorElapsed: anchorElapsedTime, rawReported: rawReported,
                         playingSince: playingSince)
+                    + Self.lxMusicNaturalStartLead(
+                        bundleID: lastSnapshot?.bundleIdentifier, anchorElapsed: anchorElapsedTime, rawReported: rawReported,
+                        playingSince: playingSince, previousPlayedToEnd: previousPlayedToEnd)
                 if let bundle = lastSnapshot?.bundleIdentifier,
                    bundle == PlaybackPlayer.qqMusic.bundleIdentifier || Self.lateStartAnchorPlayers.contains(bundle) {
-                    logger.notice("start anchor: raw=\(rawReported, format: .fixed(precision: 3)) anchorElapsed=\(anchorElapsedTime ?? -1, format: .fixed(precision: 3)) playingSince=\(playingSince ?? -1, format: .fixed(precision: 3))s lead=\(startLead, format: .fixed(precision: 3))")
+                    logger.notice("start anchor: raw=\(rawReported, format: .fixed(precision: 3)) anchorElapsed=\(anchorElapsedTime ?? -1, format: .fixed(precision: 3)) playingSince=\(playingSince ?? -1, format: .fixed(precision: 3))s previousPlayedToEnd=\(previousPlayedToEnd) lead=\(startLead, format: .fixed(precision: 3))")
                 }
                 trackPosSeconds += startLead
+                if startLead != 0, lastSnapshot?.bundleIdentifier == PlaybackPlayer.lxMusic.bundleIdentifier {
+                    // 补上的这一截折进偏置,伺服不拿锚点外推把它拉回去。见 02 章决策 129。
+                    setReportedBias(posReportedBiasSecs - startLead, anchorElapsed: anchorElapsedTime, heldToAnchor: true)
+                }
                 if natural == nil, seedLag == 0, let restoredBias {
                     // App 重启后的第一拍,接着用上一个进程给这首歌量的偏置(见 restorablePlayerClockBias)。
                     logger.notice("anchor bias restored after relaunch: \(restoredBias, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)))")
@@ -2119,12 +2221,17 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 「恢复播放」那种信号晚于这次暂停:看到恢复晚了也拿它当上界、不封顶(见 resumeSignalAge)。
                 let resumeSignalAge = Self.resumeSignalAge(resumeSignalAt: posResumeSignalAt, now: now)
                 let sinceSignal = resumeSignalAge ?? freshSignalAge ?? Self.resumeMaxForwardCapSecs
-                trackPosSeconds = Self.resumeReadingNeverLeads(bundleID: lastSnapshot?.bundleIdentifier)
+                // 洛雪冷启动还在等设备转起来:还没出声,先停在暂停位置,转起来再按 lxMusicColdStartPosition 重算。
+                let awaitingAudio = lastSnapshot?.bundleIdentifier == PlaybackPlayer.lxMusic.bundleIdentifier && !lxOpenAPIActive
+                    && lxColdStart.map { $0.audioAt == nil } ?? false
+                // 洛雪开放 API 推的是它音频元素的进度,恢复时声音没走起来它也停着,跟 Kaset 一样原样采信。
+                trackPosSeconds = Self.resumeReadingNeverLeads(bundleID: lastSnapshot?.bundleIdentifier) || lxOpenAPIActive
                     ? reported
                     : Self.resumeSeedSeconds(
                         reported: reported,
                         frozen: pausedPositionMs.map { Double($0) / 1000 },
-                        maxForwardSecs: sinceSignal - Self.resumeAudioLagSecs(bundleID: lastSnapshot?.bundleIdentifier),
+                        maxForwardSecs: awaitingAudio
+                            ? 0 : sinceSignal - Self.resumeAudioLagSecs(bundleID: lastSnapshot?.bundleIdentifier),
                         capSecs: resumeSignalAge == nil ? Self.resumeMaxForwardCapSecs : .infinity)
                 let frozen = pausedPositionMs.map { Double($0) / 1000 }
                 posAnchorLagSampleValid = Self.resumeContinuesStartAnchor(bundleID: lastSnapshot?.bundleIdentifier, frozen: frozen)
@@ -2559,6 +2666,7 @@ public final class LocalPlaybackSource: ObservableObject {
     public func replayPlayerStateEvent(at date: Date, freeze: Bool) {
         posStateSignalAt = date
         if freeze { posResumeEpisodeAt = nil }
+        if freeze { clearLXMusicColdStart() }
         if freeze { freezeExtrapolationUntilNextPoll(now: date) }
     }
 
@@ -2569,6 +2677,68 @@ public final class LocalPlaybackSource: ObservableObject {
     public func replayRestartBar(_ bar: Double?) {
         guard posResumeAnchorWatch != nil, Self.resumeZeroIsRestart(barSeconds: bar, shown: trackPosSeconds) else { return }
         posRestartFromBar = true
+    }
+
+    /// 洛雪开放 API 这一拍用没用上,变了记一行;报出错时每首记一次。
+    private func noteLXMusicOpenAPI(using: Bool, isLXMusic: Bool, state: LXMusicOpenAPI.State?, title: String?) {
+        lxOpenAPIActive = using
+        if isLXMusic, lxOpenAPILogged != using {
+            lxOpenAPILogged = using
+            logger.notice("lx open api: \(using ? "using LX's own clock" : "not in use (off, not connected or another track)", privacy: .public)")
+        }
+        if using, state?.status == "error", lxOpenAPIErrorLogged != title {
+            lxOpenAPIErrorLogged = title
+            logger.notice("lx open api: LX reports a playback error, treating it as not playing")
+        }
+    }
+
+    /// 洛雪开放 API 推来播放类的变化(在放 / 暂停 / 出错、换歌、速度、声音走起来):跟系统通知一样补查一次。
+    public func lxMusicOpenAPIChanged() {
+        handlePlayerInfoChanged(freezeExtrapolation: false, stateSignal: true)
+    }
+
+    /// 回放:洛雪的在放信号到时默认输出设备没在转(线上在 handlePlayerInfoChanged 里判)。
+    public func replayLXMusicColdStartSignal(at date: Date) { beginLXMusicColdStart(signalAt: date, watch: false) }
+
+    /// 回放:默认输出设备转起来了(线上由 watchLXMusicColdStart 在后台盯着记)。
+    public func replayLXMusicAudioStarted(at date: Date) {
+        if lxColdStart != nil { lxColdStart?.audioAt = date }
+    }
+
+    /// 见 lxMusicColdStartPosition。`watch` 为真时在后台每 10 毫秒看一次默认输出设备,转起来就记下时刻、马上轮询一次。
+    private func beginLXMusicColdStart(signalAt: Date, watch: Bool) {
+        lxColdStartWatch?.cancel()
+        lxColdStart = (signalAt, lastSnapshot?.anchorElapsedTime, nil)
+        guard watch else { return }
+        let deadline = signalAt.addingTimeInterval(Self.lxMusicColdStartWaitSecs)
+        lxColdStartWatch = Task.detached(priority: .userInitiated) { [weak self] in
+            while Date() < deadline, !Task.isCancelled {
+                if ProcessAudioOutput.defaultOutputDeviceIsRunning() == true {
+                    await self?.noteLXMusicAudioStarted(at: Date(), signalAt: signalAt)
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(10))
+            }
+            await self?.expireLXMusicColdStart(signalAt: signalAt)
+        }
+    }
+
+    private func noteLXMusicAudioStarted(at date: Date, signalAt: Date) {
+        guard lxColdStart?.signalAt == signalAt else { return }
+        lxColdStart?.audioAt = date
+        poll()
+    }
+
+    private func expireLXMusicColdStart(signalAt: Date) {
+        guard lxColdStart?.signalAt == signalAt, lxColdStart?.audioAt == nil else { return }
+        logger.notice("lx cold start: output device still idle \(Self.lxMusicColdStartWaitSecs, format: .fixed(precision: 1))s after the playing signal, leaving the position as is")
+        lxColdStart = nil
+    }
+
+    private func clearLXMusicColdStart() {
+        lxColdStartWatch?.cancel()
+        lxColdStartWatch = nil
+        lxColdStart = nil
     }
 
     /// 回放:一条「恢复播放」信号到达(线上是 handlePlayerInfoChanged 的 resumeSignal)。
@@ -2718,6 +2888,14 @@ public final class LocalPlaybackSource: ObservableObject {
     // 它自己的通知和 MediaRemote 的事件,合并后只查一次)。
     private func startStreamWatcher() {
         guard streamWatcher == nil else { return }
+        LXMusicOpenAPI.shared.setChangeHandler { change in
+            switch change {
+            case .playback:
+                Task { @MainActor [weak self] in self?.lxMusicOpenAPIChanged() }
+            case .controls:
+                NotificationCenter.default.post(name: LXMusicOpenAPI.controlsChangedNotification, object: nil)
+            }
+        }
         let watcher = MediaControlStreamWatcher { [weak self] pauseSignal, resumeSignal in
             MainActor.assumeIsolated {
                 self?.handlePlayerInfoChanged(freezeExtrapolation: pauseSignal,
@@ -2771,10 +2949,22 @@ public final class LocalPlaybackSource: ObservableObject {
         // 记时刻和冻结外推是**两件事**:冻结只认暂停(纯锚点刷新冻了就是每句一顿),
         // 而"状态什么时候变的"这个上界,暂停和恢复都要记。
         if stateSignal { posStateSignalAt = Date() }
-        if freezeExtrapolation, stateSignal { posResumeEpisodeAt = nil }
+        if freezeExtrapolation, stateSignal {
+            posResumeEpisodeAt = nil
+            clearLXMusicColdStart()
+        }
         if resumeSignal {
             posResumeSignalAt = Date()
             if posResumeEpisodeAt == nil { posResumeEpisodeAt = posResumeSignalAt }
+            // 不看上一份是不是洛雪:打开洛雪点歌时 App 记着的还是别的播放器。只在洛雪的读数上用,见调用处。洛雪在它设置里
+            // 选了别的输出设备时不等默认设备:那台可能一直闲着,等满 3 秒歌词就定住 3 秒(见 02 章决策 134)。
+            if lxColdStart == nil, ProcessAudioOutput.defaultOutputDeviceIsRunning() == false {
+                if LXMusicOpenAPI.outputsToDefaultDevice(LXMusicOpenAPI.shared.currentConfig()) {
+                    beginLXMusicColdStart(signalAt: Date(), watch: true)
+                } else {
+                    logger.notice("lx cold start: LX Music outputs to a device of its own choosing, not waiting for the default one")
+                }
+            }
         }
         if freezeExtrapolation { freezeExtrapolationUntilNextPoll() }
         pendingNotificationPoll?.cancel()
@@ -3789,6 +3979,10 @@ public final class LocalPlaybackSource: ObservableObject {
         if trackChanged || ((!syncEngine.hasContent || enrichMTime != lastEnrichMTime) && !enrichRebuilding) {
             if trackChanged {
                 logger.notice("track changed: \(snapshot.artist ?? "", privacy: .public) - \(snapshot.title ?? "", privacy: .public)")
+                if snapshot.bundleIdentifier == PlaybackPlayer.lxMusic.bundleIdentifier {
+                    let title = snapshot.title, artist = snapshot.artist
+                    Task.detached(priority: .utility) { LXMusicPlayLater.noteStartedPlaying(title: title, artist: artist) }
+                }
                 // 上一首的图床地址跟着换歌走;新地址要等探针 2.5s 后带回来(见 spotifyArtworkURL)。
                 if spotifyArtworkURL != nil { spotifyArtworkURL = nil }
                 if webPageArtworkURL != nil { webPageArtworkURL = nil }
@@ -3842,7 +4036,7 @@ public final class LocalPlaybackSource: ObservableObject {
             // 重试几轮加起来更久,这段时间里旧封面一直挂着。所以再加一道超时兜底,见 scheduleArtworkStaleTimeout;
             // 第一次取图还在路上,期限按 artworkInFlightBackstop 排。
             scheduleArtworkStaleTimeout(forKey: key, after: Self.artworkInFlightBackstop)
-            fetchArtworkForCurrentTrack(expectedKey: key)
+            fetchArtworkForCurrentTrack(expectedKey: key, album: snapshot.album, bundleID: snapshot.bundleIdentifier)
         }
 
         // elapsedTime 对 Apple Music 是 Music.app 自己实时算出来的精确播放位置;对 QQ
@@ -3886,8 +4080,15 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 位置状态机:这一拍的快照 → 锚点 / 暂停位置 / 偏置,以及各项学习。`apply` 每拍调一次;
     /// 回放测试经 `replayPosition` 直接调它(外部依赖全走 `env`,见 PlaybackPositionEnvironment)。
     /// - isAdBreak: 这一首此刻是不是广告(`isCurrentTrackAdBreak`),下一次换歌时当"上一首是不是广告"用。
-    private func applyPosition(snapshot: MediaControlSnapshot, key: String, trackChanged: Bool, previousKey: String,
+    private func applyPosition(snapshot reading: MediaControlSnapshot, key: String, trackChanged: Bool, previousKey: String,
                                isSpotifyNative: Bool, isAdBreak: Bool, now: Date) {
+        let isLXMusic = reading.bundleIdentifier == PlaybackPlayer.lxMusic.bundleIdentifier
+        let apiState = env.lxMusicOpenAPI(isLXMusic)
+        let viaAPI = Self.lxMusicOpenAPISnapshot(reading, state: apiState, now: now)
+        noteLXMusicOpenAPI(using: viaAPI != nil, isLXMusic: isLXMusic, state: apiState, title: reading.title)
+        let rateSetting = viaAPI == nil && isLXMusic && reading.playing == true ? env.lxMusicPlaybackRate() : nil
+        let snapshot = viaAPI ?? Self.lxMusicRateCorrected(reading, setting: rateSetting, now: now)
+        lxRateChange = viaAPI == nil && snapshot.playbackRate != reading.playbackRate ? rateSetting?.changedAt : nil
         let playing = snapshot.playing == true
         if playing || trackChanged { posHeldPause = nil }
         // 网页探针的每首额度换歌就重开,不管这一拍在不在播、有没有时长。别挪进下面 `if playing, let duration` 那支:
@@ -3912,7 +4113,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 锚点(暂停冻结 / 恢复 / 拖动,原始 elapsedTime 变了)就作废;读的是 Spotify 自己的钟时暂停即作废。
         // 见 biasSurvivesAnchor。放在播放/暂停两个分支之前 —— 暂停分支的 pausedPositionMs 和播放分支的
         // resolvePositionSeconds 都要看到清零后的值。
-        if isSpotifyNative || posBiasFromBrowserProbe, key == posTrackingKey, posReportedBiasSecs != 0,
+        if isSpotifyNative || posBiasFromBrowserProbe || posBiasHeldToAnchor, key == posTrackingKey, posReportedBiasSecs != 0,
            !Self.biasSurvivesAnchor(anchorElapsedTime: snapshot.anchorElapsedTime, measuredAgainst: posBiasAnchorElapsed, playing: playing) {
             logger.notice("anchor bias dropped: elapsed=\(snapshot.anchorElapsedTime ?? -1, format: .fixed(precision: 3)) (-1 = player clock) measuredAgainst=\(self.posBiasAnchorElapsed ?? -1, format: .fixed(precision: 3)) bias=\(self.posReportedBiasSecs, format: .fixed(precision: 3)) playing=\(playing)")
             // 暂停发布的冻结值是耳朵里的位置,跟我们(探针纠过的)停在的位置一比就是探针钟的领先量。
@@ -4087,7 +4288,7 @@ public final class LocalPlaybackSource: ObservableObject {
                     posSpotifyForeignClockSince = nil
                 }
             }
-            let (positionSeconds, didReanchor) = resolvePositionSeconds(
+            var (positionSeconds, didReanchor) = resolvePositionSeconds(
                 reported: rawReportedForResolve, rate: rate, key: key, now: now,
                 tier: effectiveTier,
                 gaplessLeadBundleID: Self.carriesGaplessLead(tier: effectiveTier, bundleID: snapshot.bundleIdentifier)
@@ -4098,6 +4299,27 @@ public final class LocalPlaybackSource: ObservableObject {
                 groundTruthFromBrowser: browserProbePrecise,
                 anchorElapsedTime: snapshot.anchorElapsedTime, streamRaw: snapshot.elapsedTime,
                 anchorLagSeed: usedBrowserProbe ? 0 : anchorLag(forBundleID: snapshot.bundleIdentifier))
+            if let cold = lxColdStart, snapshot.bundleIdentifier == PlaybackPlayer.lxMusic.bundleIdentifier,
+               let started = Self.lxMusicColdStartPosition(anchorElapsed: snapshot.anchorElapsedTime, signalAnchor: cold.signalAnchor,
+                                                           audioAt: cold.audioAt, rate: rate, now: now) {
+                logger.notice("lx cold start: output device started \(cold.audioAt.map { $0.timeIntervalSince(cold.signalAt) } ?? -1, format: .fixed(precision: 3))s after the playing signal, anchor \(snapshot.anchorElapsedTime ?? -1, format: .fixed(precision: 3)) → \(started, format: .fixed(precision: 3)) (was \(positionSeconds, format: .fixed(precision: 3)))")
+                clearLXMusicColdStart()
+                setReportedBias(rawReportedForResolve - started, anchorElapsed: snapshot.anchorElapsedTime, heldToAnchor: true)
+                trackPosSeconds = started
+                posErrEMA = 0
+                positionSeconds = started
+                didReanchor = true
+            }
+            if let change = lxRateChange, change != lxRateAnchoredChange {
+                // 换上新速度的头一拍:上一拍到现在按旧速度外推过,按修正过的读数重锚(偏置照留)。
+                lxRateAnchoredChange = change
+                let corrected = rawReportedForResolve - posReportedBiasSecs
+                logger.notice("lx rate change: \(snapshot.playbackRate ?? -1, format: .fixed(precision: 2))x since \(now.timeIntervalSince(change), format: .fixed(precision: 2))s ago, \(positionSeconds, format: .fixed(precision: 3)) → \(corrected, format: .fixed(precision: 3))")
+                trackPosSeconds = corrected
+                posErrEMA = 0
+                positionSeconds = corrected
+                didReanchor = true
+            }
             if !posWasPlaying, key == posTrackingKey, let prevPaused = pausedPositionMs {
                 // 暂停→恢复翻转的那一拍(同曲)。delta = 恢复后第一笔 − 暂停冻结值。
                 env.browserProbeReopenAfterResume(key)
@@ -4833,6 +5055,32 @@ public final class LocalPlaybackSource: ObservableObject {
         return nil
     }
 
+    /// 洛雪换歌后交给系统的头一两张封面可能还是上一首的,载荷里的标题却已经是新歌,按标识认不出:跟换歌时挂着的那张字节相同、
+    /// 两首的专辑名又都有且不同,就当成它还没换图。专辑相同(同一张专辑的下一首)或缺专辑名时照常采纳。见 02 章决策 132。纯函数,selftest 覆盖。
+    /// 洛雪这一把系统封面要不要退到开放 API 推的那张:没取到、载荷不是这一首、或还是上一首的旧图(`lxMusicArtworkIsPrevious`)。
+    /// 纯函数,selftest 覆盖。见 02 章决策 134。
+    public nonisolated static func lxMusicArtworkNeedsFallback(_ system: (data: Data, trackKey: String)?, expectedKey: String,
+                                                              bundleID: String?, previousData: Data?, previousAlbum: String?,
+                                                              album: String?) -> Bool {
+        guard let system else { return true }
+        return !artworkKeyMatches(system.trackKey, expectedKey)
+            || lxMusicArtworkIsPrevious(bundleID: bundleID, data: system.data, previousData: previousData,
+                                        previousAlbum: previousAlbum, album: album)
+    }
+
+    public nonisolated static func lxMusicArtworkIsPrevious(bundleID: String?, data: Data?, previousData: Data?,
+                                                            previousAlbum: String?, album: String?) -> Bool {
+        guard bundleID == PlaybackPlayer.lxMusic.bundleIdentifier, let data, let previousData, data == previousData else {
+            return false
+        }
+        let before = previousAlbum?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let now = album?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !before.isEmpty && !now.isEmpty && before.compare(now, options: [.caseInsensitive]) != .orderedSame
+    }
+
+    /// 上一轮取图时那首的专辑名(`lxMusicArtworkIsPrevious` 拿它跟这一首比)。
+    private var artworkFetchAlbum: String?
+
     /// 二次确认那张表跑完、这首还没有系统封面时,隔多久再取一次:5 分钟内 15 秒一次,之后 60 秒一次。纯函数,selftest 覆盖。
     public nonisolated static func artworkLateRetryDelay(afterWaiting waited: TimeInterval) -> TimeInterval {
         waited < 300 ? 15 : 60
@@ -4841,9 +5089,12 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 每起一轮取图加一。同一首重新开播(快照断过一拍、切走又切回)会另起一轮,上一轮还在等晚到的封面就让给它。
     private var artworkFetchGeneration = 0
 
-    private func fetchArtworkForCurrentTrack(expectedKey: String) {
+    private func fetchArtworkForCurrentTrack(expectedKey: String, album: String?, bundleID: String?) {
         artworkFetchGeneration += 1
         let generation = artworkFetchGeneration
+        let previousData = artworkData
+        let previousAlbum = artworkFetchAlbum
+        artworkFetchAlbum = album
         Task {
             // 取图不顺手预算均值色:重试打满 key 不匹配、confirm 拿到相同字节这些注定丢弃的路径上,预算的取色纯属白烧;确定采纳
             // 那一刻再算(仍在后台,见 hexFor)。
@@ -4852,6 +5103,9 @@ public final class LocalPlaybackSource: ObservableObject {
                 // Kaset 的系统会话里从不带图,封面是它自己报的那张(`MediaControlClient.kasetArtwork`)。每次取都按此刻认下的播放器挑:
                 // 换歌那一拍记在了别的来源名下,后面的重试照样取得到 Kaset 那张(02 章决策 91)。
                 let fromKaset = self.lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier
+                // 洛雪:系统那张取不到、不是这一首、或还是上一首的旧图时,退到开放 API 推来的封面(没开它时什么都不做)。
+                let lxTrack = self.lastResolvedBundleID == PlaybackPlayer.lxMusic.bundleIdentifier
+                    ? (title: self.lastSnapshot?.title, artist: self.lastSnapshot?.artist) : nil
                 return await Self.runOffPool(Self.artworkQueue) { () -> (Data?, String?, String?) in
                     if fromKaset {
                         guard let result = MediaControlClient.kasetArtwork(forTrackKey: expectedKey) else {
@@ -4860,6 +5114,13 @@ public final class LocalPlaybackSource: ObservableObject {
                         return (result.data, result.trackKey, nil)
                     }
                     let fetched = MediaControlClient.fetchArtworkExplained()
+                    if let lxTrack, Self.lxMusicArtworkNeedsFallback(
+                        fetched.artwork.map { ($0.data, $0.trackKey) }, expectedKey: expectedKey, bundleID: bundleID,
+                        previousData: previousData, previousAlbum: previousAlbum, album: album),
+                       let data = LXMusicOpenAPI.shared.artworkData(title: lxTrack.title, artist: lxTrack.artist) {
+                        logger.notice("artwork: using LX Music's open API cover for \(expectedKey, privacy: .public) (\(fetched.artwork == nil ? "system has none" : "system's is not this track's", privacy: .public))")
+                        return (data, expectedKey, nil)
+                    }
                     guard let result = fetched.artwork else { return (nil, nil, fetched.miss) }
                     return (result.data, result.trackKey, nil)
                 }
@@ -4874,7 +5135,11 @@ public final class LocalPlaybackSource: ObservableObject {
             // 重试,绝不能直接挂上(举例:网易云云盘歌若直接挂上,会沿用上一首封面)。
             func isFinal(_ data: Data?, _ payloadKey: String?) -> Bool {
                 guard data != nil, let payloadKey else { return false }
-                return Self.artworkKeyMatches(payloadKey, expectedKey)
+                return Self.artworkKeyMatches(payloadKey, expectedKey) && !isPrevious(data)
+            }
+            func isPrevious(_ data: Data?) -> Bool {
+                Self.lxMusicArtworkIsPrevious(bundleID: bundleID, data: data, previousData: previousData,
+                                              previousAlbum: previousAlbum, album: album)
             }
             var (data, payloadKey, miss) = await attempt()
             // 没定案就重试几次。每次重试前都重新核对 expectedKey——期间用户可能又切了
@@ -4902,6 +5167,9 @@ public final class LocalPlaybackSource: ObservableObject {
             var holdingPrevious = false
             if let payloadKey, data != nil, !Self.artworkKeyMatches(payloadKey, expectedKey) {
                 logger.notice("artwork payload key mismatch after retries: payload=\(payloadKey, privacy: .public) expected=\(expectedKey, privacy: .public), keeping previous cover")
+                holdingPrevious = true
+            } else if isPrevious(data) {
+                logger.notice("artwork: LX Music still reports the previous track's cover for \(expectedKey, privacy: .public), waiting for the new one")
                 holdingPrevious = true
             } else if let data, KnownPlaceholderArtwork.isPlaceholder(data) {
                 logger.notice("artwork placeholder recognized: bytes=\(data.count), keeping previous cover")
@@ -4948,7 +5216,7 @@ public final class LocalPlaybackSource: ObservableObject {
                                                        expectedKey: expectedKey)
                 // 留着的旧封面恰好就是这首的(同一张专辑的下一首,字节相同):等到了,别再按期限清掉。
                 if holdingPrevious, let confirmData = confirm.data, let confirmKey = confirm.payloadKey,
-                   Self.artworkKeyMatches(confirmKey, expectedKey), confirmData == self.artworkData {
+                   Self.artworkKeyMatches(confirmKey, expectedKey), confirmData == self.artworkData, !isPrevious(confirmData) {
                     holdingPrevious = false
                     if self.artworkIsPlaceholder { self.artworkIsPlaceholder = false }
                     self.artworkStaleTimeoutTask?.cancel()
@@ -4960,6 +5228,7 @@ public final class LocalPlaybackSource: ObservableObject {
                       // 这一档又读到占位图:字节确实跟当前挂着的不一样,但它不是真封面,
                       // 换上去等于把上面那道闸白拦一次。
                       !KnownPlaceholderArtwork.isPlaceholder(confirmData),
+                      !isPrevious(confirmData),
                       confirmData != self.artworkData else {
                     // 留着旧封面等到了期限还没等到这首的图:当场清掉,理由见 artworkHoldLimit。
                     if holdingPrevious, waited >= Self.artworkHoldLimit {
@@ -5006,7 +5275,8 @@ public final class LocalPlaybackSource: ObservableObject {
                 guard stillWaiting() else { return }
                 guard let lateData = late.data,
                       Self.artworkMissDescription(data: late.data, payloadKey: late.payloadKey, miss: late.miss,
-                                                  expectedKey: expectedKey) == nil
+                                                  expectedKey: expectedKey) == nil,
+                      !isPrevious(lateData)
                 else { continue }
                 let lateHex = await hexFor(lateData)
                 guard stillWaiting() else { return }

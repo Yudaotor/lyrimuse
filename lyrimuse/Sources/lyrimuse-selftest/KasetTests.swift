@@ -817,17 +817,18 @@ func runKasetTests() {
                         && src("../native/nowplaying-clients/nowplaying-clients.m").contains(
                             "emit(want ? sendSeek(h, [NSString stringWithUTF8String:want], atof(seekEnv)) : nil);"), true,
                     "Kaset 契约: 跳转带上跳转前在不在放、定向发给 Kaset 本体,helper 有 seek 模式")
-        expectEqual(playbackSource.contains("                let fromKaset = self.lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier\n                return await Self.runOffPool(Self.artworkQueue)"),
+        expectEqual(playbackSource.contains("            @MainActor func attempt() async -> (data: Data?, payloadKey: String?, miss: String?) {")
+                    && playbackSource.contains("                let fromKaset = self.lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier\n                // 洛雪:"),
                     true, "Kaset 契约: 封面每次取都按此刻认下的播放器挑")
         expectEqual(client.contains("if snapshot == nil, player != .kaset,\n           let probed = NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: player.bundleIdentifier) {"), true,
                     "Kaset 契约: 焦点回退不拿系统按 bundle id 存的那份(换歌后常停在上一首)")
-        expectEqual(client.contains("if players.contains(.auto) { return heldAcrossPlayerGap(preferringPlayingKaset(fetchAutoDetectedSnapshot())) }"), true,
+        expectEqual(client.contains("return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(fetchAutoDetectedSnapshot()), wanted: true))"), true,
                     "Kaset 契约: 自动识别时系统那边没在放就问它")
-        expectEqual(client.contains("return heldAcrossPlayerGap(players.contains(.kaset) ? preferringPlayingKaset(selected) : selected)"), true,
+        expectEqual(client.contains("let withKaset = players.contains(.kaset) ? preferringPlayingKaset(selected) : selected"), true,
                     "Kaset 契约: 勾了它的多选同样问,没勾的不问")
         expectEqual(client.contains("if !players.contains(.auto), !players.contains(.kaset) { forgetKasetPreference() }"), true,
                     "Kaset 契约: 设置不认 Kaset 时清掉顶替记录(播放控制别再发给它)")
-        expectEqual(client.contains("return (kasetPreferred ? .kaset : scriptTarget, directQueryTarget ?? droppedSessionPlayer, heldElsewhere)"), true,
+        expectEqual(client.contains("let target: PlaybackPlayer? = kasetPreferred ? .kaset : lxMusicPreferred ? .lxMusic : scriptTarget"), true,
                     "Kaset 契约: 顶替系统那边时播放控制直接发给它")
         expectEqual(src("lyrimuse/LastfmStatsSection.swift").contains(
             #"if let url = links?.kaset, Self.isInstalled(.kaset) {"#), true, "Kaset 契约: 榜单右键「在 Kaset 中播放」只在装了 Kaset 时出")

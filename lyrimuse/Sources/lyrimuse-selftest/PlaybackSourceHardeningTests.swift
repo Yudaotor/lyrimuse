@@ -431,13 +431,46 @@ private func wiringContracts() {
 
     // 换歌后取图还在路上时不清旧封面:兜底期限按"一次取图最多能跑多久"定(子进程超时 + 宽限)。从换歌 / 每次重试前
     // 起算 3 秒的话,机器满载时取图本身就能超过它,同一张专辑的下一首也会先把封面清掉、几秒后才回来。
-    let fetchArtwork = body("private func fetchArtworkForCurrentTrack(expectedKey: String) {", in: source)
+    let fetchArtwork = body("private func fetchArtworkForCurrentTrack(expectedKey: String, album: String?, bundleID: String?) {", in: source)
     expectEqual(source.contains("artworkInFlightBackstop: TimeInterval = MediaControlClient.artworkTimeout + artworkStaleTimeout"), true,
                 "封面兜底: 取图在路上时的期限 = 子进程超时 + 宽限")
     expectEqual(source.contains("scheduleArtworkStaleTimeout(forKey: key, after: Self.artworkInFlightBackstop)"), true,
                 "封面兜底: 换歌那一刻排的兜底要盖住第一次取图")
     expectEqual(fetchArtwork.contains("after: Self.artworkRetryDelays[round] + Self.artworkInFlightBackstop)"), true,
                 "封面兜底: 每次重试前排的兜底要盖住这次等待加下一次取图")
+    // 洛雪换歌头一张图可能还是上一首的(lxMusicArtworkIsPrevious):首轮定案、首轮留旧图、二次确认两处、晚到重取都要过这一道。
+    expectEqual(fetchArtwork.contains("Self.artworkKeyMatches(payloadKey, expectedKey) && !isPrevious(data)")
+                && fetchArtwork.contains("} else if isPrevious(data) {")
+                && fetchArtwork.components(separatedBy: "!isPrevious(confirmData)").count - 1 == 2
+                && fetchArtwork.contains("!isPrevious(lateData)"), true,
+                "洛雪换歌封面: 取图每一步都认「还是上一首的图」")
+    expectEqual(code("LyrimuseCore/Local/LXMusicOpenAPI.swift")
+                    .contains("|| (event == \"progress\" && Self.progressJumped(from: before, to: state)) {\n                    changes.insert(.playback)"),
+                true, "洛雪开放 API: 进度跳了马上补查(恢复卡住、拖进度条)")
+    // 洛雪的几级退路都接上了。
+    let lxClient = code("LyrimuseCore/Local/MediaControlClient.swift")
+    expectEqual(lxClient.contains("return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(fetchAutoDetectedSnapshot()), wanted: true))")
+                && lxClient.contains("return heldAcrossPlayerGap(preferringLXMusicOpenAPI(withKaset, wanted: lxMusicWanted))")
+                && lxClient.contains("let target: PlaybackPlayer? = kasetPreferred ? .kaset : lxMusicPreferred ? .lxMusic : scriptTarget"),
+                true, "洛雪退路: 系统不报洛雪时用开放 API 顶上(自动识别、多选两条路),播放控制跟着发给它")
+    expectEqual(lxClient.contains("if running, found?.bundleIdentifier != PlaybackPlayer.lxMusic.bundleIdentifier,")
+                && lxClient.contains("           kasetWins(over: found, kaset: synthesized) {"),
+                true, "洛雪退路: 系统报的就是洛雪不顶替;别家在放时不顶替、别家暂停着只在洛雪在放时顶替(同 Kaset)")
+    expectEqual(code("LyrimuseCore/Local/LXMusicOpenAPI.swift").contains("let wanted = active || appRunning"), true,
+                "洛雪退路: 洛雪开着就保持订阅,不只在系统报洛雪时")
+    expectEqual(source.contains("if LXMusicOpenAPI.outputsToDefaultDevice(LXMusicOpenAPI.shared.currentConfig()) {\n                    beginLXMusicColdStart(signalAt: Date(), watch: true)"),
+                true, "洛雪冷恢复: 洛雪选了别的输出设备时不等默认设备")
+    expectEqual(source.contains("if let lxTrack, Self.lxMusicArtworkNeedsFallback(")
+                && source.contains("let data = LXMusicOpenAPI.shared.artworkData(title: lxTrack.title, artist: lxTrack.artist)"),
+                true, "洛雪退路: 系统封面取不到、不是这首、是旧图时用开放 API 推的封面")
+    expectEqual(source.contains("Task.detached(priority: .utility) { LXMusicPlayLater.noteStartedPlaying(title: title, artist: artist) }"),
+                true, "稍后播放: 洛雪换到那首就从记录里划掉")
+    expectEqual(code("lyrimuse/LastfmStatsSection.swift").contains("Task.detached(priority: .utility) { LXMusicPlayLater.record(track) }"),
+                true, "稍后播放: 从收听统计加进洛雪稍后播放时记下来")
+    expectEqual(code("LyrimuseCore/Local/LXMusicFavoriteControl.swift").contains("guard let now = currentTrack() else { return nil }"),
+                true, "洛雪退路: 收藏按开放 API 顶上来的那首认")
+    expectEqual(code("LyrimuseCore/Local/MusicPlaybackController.swift").contains("if !LXMusicOpenAPI.shared.sendDirect(mediaControlCommand, arguments: arguments) {"),
+                true, "洛雪退路: 直接控制按开放 API → 链接的顺序发")
     expectEqual(fetchArtwork.contains("self.scheduleArtworkStaleTimeout(forKey: expectedKey)\n"), false,
                 "封面兜底: 重试前别再排默认的 3 秒期限")
     expectEqual(source.contains("artworkQueue = DispatchQueue(label: \"lyrimuse.playback.artwork\", qos: .userInitiated)"), true,

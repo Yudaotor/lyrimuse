@@ -609,6 +609,7 @@ func lyricSourceEnabled(source string) bool {
 // isPlayerLocalLyricSource:这份候选是不是读播放器自己缓存来的(KKBOX / Spotify / Amazon Music 本地歌词)。
 func isPlayerLocalLyricSource(source string) bool {
 	return source == kkboxLocalLyricsSource || source == spotifyLocalLyricsSource || source == amazonLocalLyricsSource ||
+		source == lxMusicLocalLyricsSource ||
 		source == localFileLyricsSource
 }
 

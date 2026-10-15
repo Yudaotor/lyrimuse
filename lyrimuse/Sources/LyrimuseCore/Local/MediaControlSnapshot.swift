@@ -48,7 +48,8 @@ public struct MediaControlSnapshot: Decodable {
     public var isMusicVideo: Bool? = nil
     /// 播放器说在放(或正要放),声音却还没走起来:加载、广告、缓冲卡住。这时 `playing` 是 false、位置停着,
     /// `LocalPlaybackSource` 据此把轮询留在播放中的节拍,声音一走起来就接上(这几种时候播放器不一定发系统通知,
-    /// 按暂停档等 6 秒才看得到)。Kaset 的快照(`KasetPlayerInfo.snapshot`)和 KKBOX 重发断档时(`MediaControlClient.republishHold`)
+    /// 按暂停档等 6 秒才看得到)。Kaset 的快照(`KasetPlayerInfo.snapshot`)、KKBOX 重发断档时(`MediaControlClient.republishHold`)、
+    /// 洛雪开放 API 报在放而进度没走时(`withLXMusicClock`)
     /// 填。`with…` 系列副本不带它:那几条路(署名 / 专辑 / 试听段 / 电台 / 空档保持)不经过 Kaset;KKBOX 停住的那份经空档保持时
     /// 只少这个标记,位置照旧停着。
     public var isWaitingToPlay: Bool? = nil
@@ -64,8 +65,8 @@ public struct MediaControlSnapshot: Decodable {
     /// 理由同 `isWaitingToPlay`。
     public var adDuration: Double? = nil
     public var adElapsed: Double? = nil
-    /// 这一拍的位置来自精确的播放时钟:`LocalPlaybackSource` 把它跟网页探针的精确读数一样当真值,差过门槛就重锚。只有
-    /// Kaset 的快照在用内嵌网页那份会话的时钟时填(`KasetPlayerInfo.snapshot`)。`with…` 系列副本不带它,理由同 `isWaitingToPlay`。
+    /// 这一拍的位置来自精确的播放时钟:`LocalPlaybackSource` 把它跟网页探针的精确读数一样当真值,差过门槛就重锚。
+    /// Kaset 的快照在用内嵌网页那份会话的时钟时填(`KasetPlayerInfo.snapshot`),洛雪开放 API 推的进度在走时填(`withLXMusicClock`)。`with…` 系列副本不带它,理由同 `isWaitingToPlay`。
     public var positionIsPrecise: Bool? = nil
     /// 发布这份会话的进程号(media-control 的 `processIdentifier`)。只有 media-control 那条路在构造时填;`with…` 系列副本
     /// 不带它。reAMP 按它找正在放的文件读标签(`PlayerTitleSplit`),别的地方不用。
@@ -128,6 +129,28 @@ public struct MediaControlSnapshot: Decodable {
             elapsedTime: newElapsed, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
             anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: newCapturedAt)
+    }
+
+    /// 换掉速度和位置的副本(读数时刻不变)。唯一的用处是洛雪播放中途改速度(`LocalPlaybackSource.lxMusicRateCorrected`)。
+    /// 写成显式方法,理由同 `withAlbum`。
+    public func withPlaybackRate(_ newRate: Double, elapsed newElapsed: Double) -> MediaControlSnapshot {
+        MediaControlSnapshot(
+            title: title, artist: artist, album: album, duration: duration,
+            elapsedTime: newElapsed, playing: playing, playbackRate: newRate,
+            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt)
+    }
+
+    /// 位置、速度换成洛雪开放 API 推来的那份的副本(`LocalPlaybackSource.lxMusicOpenAPISnapshot`):没有锚点,在放时标精确;
+    /// `playing` 是这一拍算不算在放;`waiting` 为真时(报在放、声音还没走起来)按没在放、等着出声处理。写成显式方法,理由同 `withAlbum`。
+    public func withLXMusicClock(position: Double, playing: Bool, rate: Double, waiting: Bool) -> MediaControlSnapshot {
+        let advancing = playing && !waiting
+        return MediaControlSnapshot(
+            title: title, artist: artist, album: album, duration: duration,
+            elapsedTime: position, playing: advancing, playbackRate: advancing ? rate : 0,
+            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
+            anchorElapsedTime: nil, isRadio: isRadio, capturedAt: capturedAt,
+            isWaitingToPlay: playing && waiting ? true : nil, positionIsPrecise: advancing ? true : nil)
     }
 
     /// 当成在放、换掉位置和读数时刻的副本。唯一的用处是会话在放时被撤掉的那段保持(`PlayerGapHold.shouldHoldWhileOutputting`):

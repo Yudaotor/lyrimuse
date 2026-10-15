@@ -51,6 +51,7 @@ func TestMain(m *testing.M) {
 	applemusicLocalDirOverride = filepath.Join(missing, "fsCachedData")
 	sodaLocalQueueOverride = filepath.Join(missing, "QueueCache")
 	sodaPreloadOverride = filepath.Join(missing, "entries.db")
+	lxMusicDataDirOverride = filepath.Join(missing, "LxDatas")
 	// 播放队列那几家(upcoming.go 的第一层):prefetchUpcoming 挂在 poller 换歌路径上,
 	// 经它的测试同样会读到真实队列,所以每一家的队列文件都要在这里指到不存在的路径
 	// (QQ / 酷狗旧库 / 网易云这几份也不例外)。

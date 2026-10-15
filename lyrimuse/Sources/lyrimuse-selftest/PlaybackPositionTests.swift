@@ -1712,6 +1712,8 @@ func runPlaybackPositionTests() {
                     "reAMP 暂停: 暂停那一拍报的是上一份锚点,按屏上位置停住(02 章决策 126)")
         expectEqual(LocalPlaybackSource.holdsShownPositionAtPause(bundleID: reampID, frozenByEvent: false), false,
                     "reAMP 暂停: 外推没被暂停事件冻住时不停住")
+        expectEqual(LocalPlaybackSource.holdsShownPositionAtPause(bundleID: PlaybackPlayer.lxMusic.bundleIdentifier, frozenByEvent: true), true,
+                    "洛雪暂停: 系统按上一份锚点外推出的值不含补上的那一截,按屏上位置停住")
         let replaces = LocalPlaybackSource.pausedReadingReplacesShown
         expectEqual(replaces(110, 110.605), false, "QQ 暂停: 补发的下取整值比屏上早,不换")
         expectEqual(replaces(109, 110.295), false, "QQ 暂停: 少报一秒的旧值不换")
@@ -1807,6 +1809,89 @@ func runPlaybackPositionTests() {
         expectEqual(near4(neLate(kugouID, 54.86, 54.865, 0.445), 0.44), true, "酷狗晚到的开播锚点: 试听片段从中段起播,晚 0.44 就补 0.44")
         expectEqual(neLate(kugouID, 0.025, 0.06, 0.02), 0, "酷狗晚到的开播锚点: 锚点先到、在放后到不补")
         expectEqual(neLate(PlaybackPlayer.soda.bundleIdentifier, 0, 0.3, 0.72), 0, "晚到的开播锚点: 汽水不动")
+        // 洛雪手动换歌:在放比锚点早到 0.54 秒(《夜曲》),声音从在放那一刻起(02 章决策 128)。
+        let lx = PlaybackPlayer.lxMusic.bundleIdentifier
+        expectEqual(near4(neLate(lx, 0, 0.01, 0.55), 0.54), true, "洛雪晚到的开播锚点: 在放早到 0.54 秒就补 0.54")
+        expectEqual(neLate(lx, 0, 0.01, 0.02), 0, "洛雪晚到的开播锚点: 在放和锚点同一拍到(《李白》,锚点是准的)不补")
+        // 洛雪自然连播:新歌「在放、进度 0」一拍报齐,声音早约 0.38 秒。
+        let lxNatural = { LocalPlaybackSource.lxMusicNaturalStartLead(bundleID: $0, anchorElapsed: $1, rawReported: $2, playingSince: $3,
+                                                                       previousPlayedToEnd: $4) }
+        let lxLead = LocalPlaybackSource.lxMusicNaturalStartLeadSecs
+        expectEqual(lxNatural(lx, 0, 0.26, 0.28, true), lxLead, "洛雪自然连播: 轮询晚 0.28 秒才看到、在放和锚点同一拍到,补一截")
+        expectEqual(lxNatural(lx, 0, 0.26, 21.4, true), lxLead, "洛雪自然连播: 一直在放没停过(在放早就开始了),照补")
+        expectEqual(lxNatural(lx, 0, 0.26, nil, true), lxLead, "洛雪自然连播: 没记到在放信号也补")
+        expectEqual(lxNatural(lx, 0, 0.26, 0.28, false), 0, "洛雪自然连播: 上一首没放到头(中途点了别的歌)不补")
+        expectEqual(lxNatural(lx, 0, 0.01, 0.55, true), 0, "洛雪自然连播: 在放比锚点早到 0.54 秒的交给晚到锚点那条,不重复补")
+        expectEqual(lxNatural(lx, 12.0, 12.3, 0.3, true), 0, "洛雪自然连播: 锚点不是 0(恢复、跳转)不补")
+        expectEqual(lxNatural(PlaybackPlayer.kkbox.bundleIdentifier, 0, 0.26, 0.28, true), 0, "洛雪自然连播: 别的播放器不动")
+        expectEqual(LocalPlaybackSource.carriesGaplessLead(tier: .cleanExtrapolated, bundleID: lx), false,
+                    "洛雪: 不按连续性估自然切歌超前量(它的新歌锚点是落后、不是超前)")
+        expectEqual(LocalPlaybackSource.learnsAnchorLag(bundleID: lx), false, "洛雪: 不学锚点滞后")
+        // 洛雪冷启动:设备转起来那一刻才是真起点,位置 = 之后发的锚点 + 转起来至今。
+        let t0 = Date(timeIntervalSince1970: 1_790_000_000)
+        let cold = { LocalPlaybackSource.lxMusicColdStartPosition(anchorElapsed: $0, signalAnchor: $1, audioAt: $2, rate: 1,
+                                                                  now: t0.addingTimeInterval(1)) }
+        expectEqual(cold(28.13, 28.83, t0.addingTimeInterval(0.6)).map { near4($0, 28.53) }, true,
+                    "洛雪冷启动: 设备 0.4 秒前转起来,位置 = 锚点 + 0.4")
+        expectEqual(cold(28.83, 28.83, t0.addingTimeInterval(0.6)), nil, "洛雪冷启动: 锚点还是在放信号那一刻的(新的没到)不算")
+        expectEqual(cold(28.13, 28.83, nil), nil, "洛雪冷启动: 设备还没转起来不算")
+        expectEqual(cold(0, 122.0, t0.addingTimeInterval(1.2)).map { near4($0, 0) }, true, "洛雪冷启动: 转起来的时刻比这一拍还晚,从锚点起")
+        // 洛雪播放中途改速度:系统那份还是旧速度,读数从改的那一刻起换成配置里的新速度。
+        func lxReading(_ elapsed: Double, rate: Double = 1, playing: Bool = true, bundle: String = lx) -> MediaControlSnapshot {
+            .forReplay(title: "特别的人", artist: "方大同", duration: 259, elapsedTime: elapsed, playing: playing,
+                       playbackRate: playing ? rate : 0, bundleIdentifier: bundle, anchorElapsedTime: 20, capturedAt: t0)
+        }
+        let faster = LXMusicPlaybackRate.Setting(rate: 1.25, changedAt: t0.addingTimeInterval(-4))
+        let fixed = LocalPlaybackSource.lxMusicRateCorrected(lxReading(30), setting: faster, now: t0)
+        expectEqual(near4(fixed.elapsedTime ?? 0, 31) && fixed.playbackRate == 1.25, true,
+                    "洛雪中途改速度: 4 秒前改成 1.25 倍,读数多走 1 秒、速度换成 1.25")
+        expectEqual(LocalPlaybackSource.lxMusicRateCorrected(lxReading(30, rate: 1.25), setting: faster, now: t0).elapsedTime, 30,
+                    "洛雪中途改速度: 系统那份已经是新速度(暂停、跳转后重报过)不动")
+        expectEqual(LocalPlaybackSource.lxMusicRateCorrected(lxReading(30, playing: false), setting: faster, now: t0).elapsedTime, 30,
+                    "洛雪中途改速度: 暂停着不动")
+        expectEqual(LocalPlaybackSource.lxMusicRateCorrected(lxReading(30, bundle: PlaybackPlayer.kugou.bundleIdentifier), setting: faster,
+                                                             now: t0).playbackRate, 1, "洛雪中途改速度: 别的播放器不动")
+        let later = LXMusicPlaybackRate.Setting(rate: 1.25, changedAt: t0.addingTimeInterval(1))
+        let notYet = LocalPlaybackSource.lxMusicRateCorrected(lxReading(30), setting: later, now: t0)
+        expectEqual(notYet.elapsedTime == 30 && notYet.playbackRate == 1.25, true, "洛雪中途改速度: 改的时刻晚于读数时刻,位置不补、速度照换")
+        // 洛雪开放 API 推来的是这一首时,位置换成它的、标精确、去掉锚点;恢复后还没出声按等着出声;出错按没在放;不是这一首不用。
+        var api = LXMusicOpenAPI.State()
+        api.status = "playing"; api.name = "特别的人"; api.singer = "方大同"
+        api.progress = 40; api.progressAt = t0.addingTimeInterval(-0.5); api.advancing = true; api.playbackRate = 1
+        let viaAPI = LocalPlaybackSource.lxMusicOpenAPISnapshot(lxReading(30), state: api, now: t0)
+        expectEqual(viaAPI.map { near4($0.elapsedTime ?? 0, 40.5) && $0.positionIsPrecise == true && $0.anchorElapsedTime == nil
+                                 && $0.playing == true }, true, "洛雪开放 API: 位置换成它推的(外推到读数那一刻)、标精确、去掉锚点")
+        api.advancing = false
+        let waiting = LocalPlaybackSource.lxMusicOpenAPISnapshot(lxReading(30), state: api, now: t0)
+        expectEqual(waiting.map { $0.playing == false && $0.isWaitingToPlay == true && near4($0.elapsedTime ?? 0, 40) }, true,
+                    "洛雪开放 API: 报在放、进度没走 → 等着出声,停在那份进度")
+        api.status = "error"
+        expectEqual(LocalPlaybackSource.lxMusicOpenAPISnapshot(lxReading(30), state: api, now: t0)
+                        .map { $0.playing == false && $0.isWaitingToPlay == nil }, true, "洛雪开放 API: 报出错按没在放")
+        api.status = "playing"; api.name = "演员"
+        expectEqual(LocalPlaybackSource.lxMusicOpenAPISnapshot(lxReading(30), state: api, now: t0) == nil, true,
+                    "洛雪开放 API: 推来的不是这一首,不用")
+        expectEqual(LocalPlaybackSource.lxMusicOpenAPISnapshot(lxReading(30), state: nil, now: t0) == nil, true,
+                    "洛雪开放 API: 没开 / 没连上,不用")
+        // 配置文件:速度和改的时刻;只改别的设置(音量)重写文件时,时刻沿用上次的。
+        let rateDir = FileManager.default.temporaryDirectory.appendingPathComponent("lyrimuse-selftest-lxrate-\(UUID().uuidString)")
+        _ = FileIO.createDirectory(rateDir)
+        defer { _ = FileIO.remove(rateDir) }
+        let rateFile = rateDir.appendingPathComponent("config_v2.json")
+        func writeConfig(rate: Double, volume: Double, modified: Date) {
+            _ = FileIO.write("{\"version\":\"2.1.0\",\"setting\":{\"player.playbackRate\":\(rate),\"player.volume\":\(volume)}}", to: rateFile)
+            try? FileManager.default.setAttributes([.modificationDate: modified], ofItemAtPath: rateFile.path)
+        }
+        let reader = LXMusicPlaybackRate(configURL: rateFile)
+        expectEqual(reader.current(), nil, "洛雪速度: 没有配置文件时 nil")
+        writeConfig(rate: 1.25, volume: 1, modified: t0)
+        expectEqual(reader.current(), LXMusicPlaybackRate.Setting(rate: 1.25, changedAt: t0.addingTimeInterval(-0.3)),
+                    "洛雪速度: 读到 1.25,改的时刻是文件修改时间往前 0.3 秒")
+        writeConfig(rate: 1.25, volume: 0.5, modified: t0.addingTimeInterval(30))
+        expectEqual(reader.current()?.changedAt, t0.addingTimeInterval(-0.3), "洛雪速度: 只改了音量,改速度的时刻不动")
+        writeConfig(rate: 1, volume: 0.5, modified: t0.addingTimeInterval(60))
+        expectEqual(reader.current(), LXMusicPlaybackRate.Setting(rate: 1, changedAt: t0.addingTimeInterval(59.7)), "洛雪速度: 改回 1 倍记新时刻")
+        expectEqual(LXMusicPlaybackRate.rate(in: Data("{\"setting\":{}}".utf8)), nil, "洛雪速度: 没有这一项 nil")
 
         // 跟随重发锚点(KKBOX)的两条判据。
         let L2 = LocalPlaybackSource.self

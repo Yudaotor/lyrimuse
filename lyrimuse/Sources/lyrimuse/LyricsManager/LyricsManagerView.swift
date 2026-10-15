@@ -292,6 +292,9 @@ func sourceColor(_ source: String) -> Color {
     // 本地歌词文件(不是歌词源:reAMP 正在放的文件同目录同名的 .lrc,见 lyrimuse-engine/localfilelyrics.go)。系统色都被占了,
     // 取偏紫的灰,跟「无来源」的 .secondary 分得开。
     case "localfile": return Color(hue: 0.75, saturation: 0.25, brightness: 0.7)
+    // 洛雪本地歌词(不是歌词源:用洛雪放歌时读它存下的那份原版,见 lyrimuse-engine/lxmusic.go)。品牌绿跟 QQ 音乐的 .green
+    // 分不开,系统色也没有空位,取偏青的海绿。
+    case "lxmusic": return Color(hue: 0.42, saturation: 0.55, brightness: 0.72)
     default: return .secondary
     }
 }
@@ -336,6 +339,8 @@ func sourceDisplayName(_ source: String) -> String {
     case "amazon": return "Amazon Music"
     // 本地歌词文件——同 KKBOX,不在 LyricsSource 里,只在这份词确实来自正在放的文件同名的 .lrc 时显示。
     case "localfile": return L10n.t("本地歌词文件")
+    // 洛雪本地歌词——同 KKBOX,不在 LyricsSource 里,只在这份词确实来自洛雪存下的那份时显示。
+    case "lxmusic": return L10n.t("洛雪音乐")
     case "": return L10n.t("无来源")
     default: return source
     }

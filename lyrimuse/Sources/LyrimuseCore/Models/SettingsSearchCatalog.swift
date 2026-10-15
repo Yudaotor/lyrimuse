@@ -294,6 +294,7 @@ public enum SettingsSearchCatalog {
         player("permissions", "自动化权限", kw: ["权限", "AppleScript", "自动化", "Apple Music", "Spotify"]),
         player("permissions", "完全磁盘访问权限", kw: ["权限", "磁盘", "隐私", "歌词缓存", "播放队列", "QQ音乐", "网易云音乐", "酷狗音乐"]),
         player("permissions", "辅助功能权限", kw: ["权限", "辅助功能", "隐私", "播放进度", "Amazon Music"]),
+        player("permissions", "洛雪音乐开放 API", kw: ["洛雪", "LX Music", "开放 API", "Open API", "音量", "播放进度"]),
         player("permissions", "歌词引擎", kw: ["lyrimuse-engine", "collector", "launchd", "服务", "运行状态", "后台采集服务", "后台服务", "采集"]),
         player("linkage", "播放器联动", kw: ["启动", "退出", "联动"]),
         player("linkage", "打开 Lyrimuse 时启动", kw: ["联动", "启动播放器"]),

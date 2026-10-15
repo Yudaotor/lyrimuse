@@ -384,7 +384,7 @@ public enum MusicPlaybackController {
     /// media-control 走的系统级 MediaRemote 只有播放控制 —— 对它们只能不显示这些控件(各家实测见 07 章决策 130)。
     public static func supportsExtendedControls(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .spotify || player == .kaset || player == .qqMusic || player == .amazonMusic
-            || player == .reamp
+            || player == .reamp || player == .lxMusic
     }
 
     /// 这个播放器的循环档位里有没有「单曲循环」。见 MusicPlaybackMode.nextRepeat。
@@ -393,10 +393,10 @@ public enum MusicPlaybackController {
     }
 
     /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐、网易云音乐和酷狗音乐(菜单栏「喜欢歌曲」)、
-    /// Amazon Music(加进资料库)、汽水音乐(底部播放条那颗心)。
+    /// Amazon Music(加进资料库)、汽水音乐(底部播放条那颗心)、洛雪音乐(「我的收藏」)。
     public static func supportsFavorite(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .kaset || player == .qqMusic || player == .netease || player == .kugou
-            || player == .amazonMusic || player == .soda
+            || player == .amazonMusic || player == .soda || player == .lxMusic
     }
 
     /// 「喜欢」不走脚本接口、读的是别处的播放器:菜单栏那一项(`MenuTitleFavorite`,酷狗是播放条那颗心)、Amazon 的日志加资料库、
@@ -426,6 +426,7 @@ public enum MusicPlaybackController {
         case .kugou: return KugouMenuControl.readFavorited()
         case .amazonMusic: return AmazonMusicFavoriteControl.readFavorited()
         case .soda: return SodaMusicControl.readFavorited()
+        case .lxMusic: return LXMusicFavoriteControl.readFavorited()
         default: return nil
         }
     }
@@ -454,6 +455,8 @@ public enum MusicPlaybackController {
             return AmazonMusicFavoriteControl.setFavorited(value)
         case .soda:
             return SodaMusicControl.setFavorited(value)
+        case .lxMusic:
+            return LXMusicFavoriteControl.setFavorited(value)
         default:
             return false
         }
@@ -649,6 +652,10 @@ public enum MusicPlaybackController {
                                          mode: ReampMenuControl.readMode()
                                              .map { PlaybackModeState(mode: $0, options: ReampMenuControl.options) },
                                          volume: nil)
+        case .lxMusic:
+            // 音量只有用户在洛雪里打开了开放 API 才有(`LXMusicOpenAPI`);播放顺序它的接口不给改,不接。
+            return ExtendedControlsState(favorited: includeFavorited ? LXMusicFavoriteControl.readFavorited() : nil,
+                                         mode: nil, volume: LXMusicOpenAPI.shared.currentState().flatMap(LXMusicOpenAPI.volumePercent))
         // 其余播放器一律没有这些控件 —— 它们的 .app 里根本没有 .sdef(不可脚本化),
         // 而 media-control 走的系统级 MediaRemote 只有播放控制、没有音量和模式的概念。
         // 写成 default 而不是逐个列举,是为了让「接一个新播放器」只需要改
@@ -759,6 +766,8 @@ public enum MusicPlaybackController {
             return AmazonMusicModeControl.readMode().map { PlaybackModeState(mode: $0, options: AmazonMusicModeControl.options) }
         case .reamp:
             return ReampMenuControl.readMode().map { PlaybackModeState(mode: $0, options: ReampMenuControl.options) }
+        case .lxMusic: // 洛雪的播放顺序开放 API 不给读写,只接了音量和收藏。
+            return nil
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return nil
         }
@@ -836,6 +845,8 @@ public enum MusicPlaybackController {
             return AmazonMusicModeControl.setMode(mode)
         case .reamp:
             return ReampMenuControl.setMode(mode)
+        case .lxMusic: // 同 playbackMode(for:)。
+            return false
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return false
         }
@@ -864,6 +875,8 @@ public enum MusicPlaybackController {
             return nil
         case .amazonMusic, .reamp: // 这两家只接了随机 / 循环,音量不接。
             return nil
+        case .lxMusic: // 开放 API 开着才有,没开时 nil(胶囊换成说明怎么打开)。
+            return LXMusicOpenAPI.shared.currentState().flatMap(LXMusicOpenAPI.volumePercent)
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return nil
         }
@@ -887,6 +900,8 @@ public enum MusicPlaybackController {
             return runKasetJXACapturing("        K.setVolume(\(v));\n        return \"ok\";") == "ok"
         case .qqMusic, .amazonMusic, .reamp: // 同 soundVolume(for:):这几家不接音量。
             return false
+        case .lxMusic:
+            return LXMusicOpenAPI.shared.setVolume(v)
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return false
         }
@@ -983,6 +998,9 @@ public enum MusicPlaybackController {
         case menuAccessibility(PlaybackPlayer, PlaybackMenuControl.Command)
         /// 跳转定向发给 Kaset 本体那份会话(`NowPlayingClientsProbe.sendSeek`),不发给系统当前会话。只有跳转走这条,见 `seekRoute`。
         case kasetDirect
+        /// 直接发给洛雪本体:开放 API 连着走它,不行退到 `lxmusic://player/…`(`LXMusicOpenAPI.sendDirect`)。读数是开放 API
+        /// 顶替来的、或焦点不在它身上而屏上这首是它的时候走这条。
+        case lxMusicDirect
         /// 不发。焦点被别的 App 占着、屏上这首又没有 AppleScript 可发:media-control 的指令会落在占用者身上。
         /// 按 bundle id 定向发(`MRMediaRemoteSendCommandToApp`)也不行 —— 目标不接时它不报错,照样落到焦点上,
         /// 见 02 章决策 51。
@@ -999,11 +1017,15 @@ public enum MusicPlaybackController {
         case .appleMusic: return .appleMusicScript
         case .spotify: return .spotifyScript
         case .kaset: return .kasetScript
+        case .lxMusic where LXMusicOpenAPI.directControlCommands.contains(mediaControlCommand): return .lxMusicDirect
         default:
             guard focusHeldElsewhere else { return .mediaControl }
             if let player = directQueryFallback, PlaybackMenuControl.players.contains(player),
                let command = PlaybackMenuControl.Command(rawValue: mediaControlCommand) {
                 return .menuAccessibility(player, command)
+            }
+            if directQueryFallback == .lxMusic, LXMusicOpenAPI.directControlCommands.contains(mediaControlCommand) {
+                return .lxMusicDirect
             }
             return .withheld
         }
@@ -1072,6 +1094,14 @@ public enum MusicPlaybackController {
             runKasetDirectSeek(kasetDirectSeek, fallbackCommand: mediaControlCommand, fallbackArguments: mediaControlArguments)
         case .menuAccessibility(let player, let command):
             dispatchMenuAccessibility(command, for: player, completion: completion)
+        case .lxMusicDirect:
+            let arguments = mediaControlArguments
+            commandQueue.async {
+                commandSerial &+= 1
+                if !LXMusicOpenAPI.shared.sendDirect(mediaControlCommand, arguments: arguments) {
+                    _ = withhold(mediaControlCommand, reason: "LX Music: no direct way for it (open API off)")
+                }
+            }
         case .withheld:
             return withhold(mediaControlCommand, reason: "now playing focus is held by another app")
         }
