@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -30,6 +31,10 @@ import (
 // QQ 上的专辑名记进 cover_album(coverSweepNameQQCoverAlbums,一个 mid 只查一次),那一轮就判得出它是不是另一张专辑的。
 // 见 03 章决策 47。
 //
+// 那一轮之后,同一张专辑里有核实过的设备封面、各首的封面又不止一个地址的,给整张专辑定一张封面
+// (coverSweepSettleAlbumCovers):各首按图比,不止一张图时以 Apple 目录这张专辑的封面为准,Apple 没有这张专辑时用设备封面
+// 那张;跟定下的不是同一张图的换成它,定下的记进 CoverSettled,之后设备封面、外围补全都不再换掉它。见 03 章决策 48。
+//
 // 小设备封面(deviceCoverSmall)排在后面各核一次:先在本机播放器数据、歌词判决的各源候选里找同一张图的清晰版
 // (upgradeSmallDeviceCover),找不到、外围补全的上限又没到,再走一次外围补全按远程结果比。每条隔
 // coverUpgradeRecheckInterval 才再核(CoverUpgradeCheckTS):新发行的歌要过一阵才进各家曲库。一个请求都没成功的
@@ -52,6 +57,13 @@ const (
 	// coverMissingRetryRules:缺封面的补法第几版,多了一道补查就加一(第 1 版:双语曲名、判决里的歌手写法、Deezer,
 	// 03 章决策 37;放宽歌词候选自带的封面、去掉 feat. 署名,决策 38)。
 	coverMissingRetryRules = 1
+
+	// coverSweepAppleGap:给专辑定封面时两次问 Apple 目录之间隔多久(iTunes Search 按 IP 限流)。coverSettleAppleTries:一张专辑
+	// 最多拿几首去问。
+	coverSweepAppleGap    = 10 * time.Second
+	coverSettleAppleTries = 2
+	// coverPictureMemoMax:按地址记着的封面指纹最多几张,满了清空重记。
+	coverPictureMemoMax = 4096
 )
 
 var (
@@ -72,6 +84,16 @@ var (
 	coverSweepSave = requestEnrichBackgroundSave
 	// coverSweepQQAlbumName 按专辑 mid 查 QQ 上的专辑名。单测换成假的。
 	coverSweepQQAlbumName = qqAlbumName
+	// coverSweepCoverImage 取一张封面的缩图;coverSweepAppleCover 问 Apple 目录这首所在专辑的封面,reached 说问到没有。
+	// 给专辑定封面那一步用,单测都换成假的。
+	coverSweepCoverImage = loadCoverImage
+	coverSweepAppleCover = func(ctx context.Context, artist, title, album string, durationSecs float64) (cover, coverAlbum string, reached bool) {
+		m, reached := appleMusicMatchCachedReached(ctx, artist, title, album, durationSecs)
+		return m.cover, m.album, reached
+	}
+
+	coverPictureMu   sync.Mutex
+	coverPictureMemo = map[string]coverPicture{}
 )
 
 type coverSweepDeferSaveKey struct{}
@@ -121,6 +143,10 @@ func runCoverSweep(ctx context.Context) coverSweepPass {
 	}
 	if n := coverSweepFillFromDecisions(); n > 0 {
 		slog.Info("cover sweep: filled from the lyrics winner", "count", n)
+		coverSweepSave()
+	}
+	if switched, settled := coverSweepSettleAlbumCovers(ctx); settled > 0 {
+		slog.Info("cover sweep: settled album covers", "entries", settled, "switched", switched)
 		coverSweepSave()
 	}
 	enrichMu.Lock()
@@ -411,6 +437,311 @@ func coverSweepNameQQCoverAlbums(ctx context.Context) int {
 		enrichMu.Unlock()
 	}
 	return named
+}
+
+// coverPicture:一张封面的 8×8 指纹(coverFingerprint,不裁边:带黑边的跟不带的算两张)和它是不是补边的长方形图
+// (coverContentLetterboxed)。fp 为 0 是没取到或者是纯色图,比不了。
+type coverPicture struct {
+	fp          uint64
+	letterboxed bool
+}
+
+// same:两张都比得了,指纹距离在 coverFingerprintMaxDistance 以内。
+func (p coverPicture) same(q coverPicture) bool {
+	return p.fp != 0 && q.fp != 0 && coverFingerprintDistance(p.fp, q.fp) <= coverFingerprintMaxDistance
+}
+
+// coverSweepPicture 取一张封面的 coverPicture,取到的按地址记着(设备封面的文件名就是内容的哈希,远程图地址不变图就不变)。
+func coverSweepPicture(ctx context.Context, url string) coverPicture {
+	coverPictureMu.Lock()
+	p, ok := coverPictureMemo[url]
+	coverPictureMu.Unlock()
+	if ok {
+		return p
+	}
+	img := coverSweepCoverImage(ctx, url)
+	if img == nil {
+		return coverPicture{}
+	}
+	p = coverPicture{coverFingerprint(img), coverContentLetterboxed(img)}
+	if p.fp == 0 {
+		return p
+	}
+	coverPictureMu.Lock()
+	if len(coverPictureMemo) >= coverPictureMemoMax {
+		coverPictureMemo = map[string]coverPicture{}
+	}
+	coverPictureMemo[url] = p
+	coverPictureMu.Unlock()
+	return p
+}
+
+// coverSettleMember:给专辑定封面时的一条:key、key 里的歌手和专辑、读出来时的条目。
+type coverSettleMember struct {
+	key, artist, album string
+	e                  enrichEntry
+}
+
+// coverSettleOutcome:一张专辑这一遍定没定下来。
+type coverSettleOutcome int
+
+const (
+	coverSettleDecided coverSettleOutcome = iota
+	// coverSettleUnreached:有图没取到、Apple 没问到,下一遍再定。
+	coverSettleUnreached
+	// coverSettleUndecided:Apple 没有这张专辑、设备封面那张又是补边的长方形图,不定。
+	coverSettleUndecided
+)
+
+// coverSettlePlan:一张专辑定下的那张图(ref)、给要换的条目用的那一份(rep)、组里各地址的图(pics),by 记是怎么定的。
+type coverSettlePlan struct {
+	ref  coverPicture
+	rep  enrichEntry
+	pics map[string]coverPicture
+	by   string
+}
+
+// coverSweepSettleAlbumCovers:同一张专辑(歌手对得上、专辑名繁简折叠后相同)里有一条归属核实过的设备封面(或者之前定过)、
+// 各首的封面又不止一个地址的,给整张专辑定一张封面(coverSettlePlanFor),跟它不是同一张图的条目换成它,所有条目记下
+// CoverSettled(见 coverSettled)。一张专辑有图没取到、Apple 没问到时这一遍不定它,连着 coverSweepOfflineLimit 张都这样就停;
+// 每张专辑之前先给在解析的歌让路。返回记下几条、其中换了几条。见 03 章决策 48。
+func coverSweepSettleAlbumCovers(ctx context.Context) (switched, settled int) {
+	enrichMu.Lock()
+	groups := coverSettleGroupsLocked()
+	enrichMu.Unlock()
+	unreached, askedApple := 0, false
+	for _, g := range groups {
+		coverSweepYield(ctx)
+		if ctx.Err() != nil {
+			break
+		}
+		plan, outcome := coverSettlePlanFor(ctx, g, &askedApple)
+		if outcome == coverSettleUnreached {
+			if unreached++; unreached >= coverSweepOfflineLimit {
+				slog.Warn("cover sweep: album covers could not be compared, stopping", "streak", unreached, "key", g[0].key)
+				break
+			}
+			continue
+		}
+		unreached = 0
+		if outcome != coverSettleDecided {
+			continue
+		}
+		s, n := coverSettleApply(g, plan)
+		settled += s
+		switched += n
+		if n > 0 {
+			slog.Info("cover sweep: settled an album's cover", "key", g[0].key, "by", plan.by, "switched", n, "cover", plan.rep.CoverURL)
+		}
+	}
+	return switched, settled
+}
+
+// coverSettleGroupsLocked 把有封面的条目按专辑分组(专辑名繁简折叠后相同、歌手对得上),挑出该定封面的那些组
+// (coverSettleGroupDue),组内、组间都按 key 排。解析中、提前提交的条目不进组。调用方持有 enrichMu。
+func coverSettleGroupsLocked() [][]coverSettleMember {
+	buckets := map[string][]coverSettleMember{}
+	for key, e := range enrichCache {
+		if e.CoverURL == "" || enrichInflight[key] || enrichProvisional[key] {
+			continue
+		}
+		artist, _, album := splitEnrichKey(key)
+		if album != "" {
+			simp := toSimplified(album)
+			buckets[simp] = append(buckets[simp], coverSettleMember{key, artist, album, e})
+		}
+	}
+	var groups [][]coverSettleMember
+	for _, ms := range buckets {
+		sort.Slice(ms, func(i, j int) bool { return ms[i].key < ms[j].key })
+		var byArtist [][]coverSettleMember
+		for _, m := range ms {
+			placed := false
+			for i, g := range byArtist {
+				if artistMatches(g[0].artist, m.artist) {
+					byArtist[i], placed = append(g, m), true
+					break
+				}
+			}
+			if !placed {
+				byArtist = append(byArtist, []coverSettleMember{m})
+			}
+		}
+		for _, g := range byArtist {
+			if coverSettleGroupDue(g) {
+				groups = append(groups, g)
+			}
+		}
+	}
+	sort.Slice(groups, func(i, j int) bool { return groups[i][0].key < groups[j][0].key })
+	return groups
+}
+
+// coverSettleGroupDue:这组该定封面 —— 有一条核实过的设备封面(siblingLendsAlbumIdentity)或者之前定过,有一条还没定下,
+// 封面不止一个地址(都是同一个地址就没什么可比的)。
+func coverSettleGroupDue(g []coverSettleMember) bool {
+	anchored, pending := false, false
+	urls := map[string]bool{}
+	for _, m := range g {
+		anchored = anchored || siblingLendsAlbumIdentity(m.e, m.album) || coverSettled(m.e)
+		pending = pending || !coverSettled(m.e)
+		urls[m.e.CoverURL] = true
+	}
+	return anchored && pending && len(urls) > 1
+}
+
+// coverSettlePlanFor 给一组定封面,各首的封面按图比(coverSweepPicture):
+//   - 之前定过的:照 key 最小那条定下的那张;
+//   - 都是同一张图:就是它;
+//   - 不止一张:Apple 目录这张专辑的封面(coverSettleApplePicture)跟组里哪张是同一张图就定哪张;Apple 没有这张专辑、给的是
+//     第三张图时,定 key 最小那条核实过的设备封面那张(它是补边的长方形图时不定)。
+//
+// rep 在跟定下的那张是同一张图的条目里按 coverSettleRank 挑。askedApple:这一遍问过 Apple 没有,再问之前先隔 coverSweepAppleGap。
+func coverSettlePlanFor(ctx context.Context, g []coverSettleMember, askedApple *bool) (coverSettlePlan, coverSettleOutcome) {
+	plan := coverSettlePlan{pics: map[string]coverPicture{}}
+	for _, m := range g {
+		if _, ok := plan.pics[m.e.CoverURL]; ok {
+			continue
+		}
+		p := coverSweepPicture(withBackgroundOutbound(ctx), m.e.CoverURL)
+		if p.fp == 0 {
+			return plan, coverSettleUnreached
+		}
+		plan.pics[m.e.CoverURL] = p
+	}
+	plan.ref, plan.by = coverSettlePicture(g, plan.pics)
+	if plan.by == "" {
+		apple, reached := coverSettleApplePicture(ctx, g, plan.pics, askedApple)
+		if !reached {
+			return plan, coverSettleUnreached
+		}
+		plan.ref, plan.by = coverSettleFallback(g, plan.pics, apple)
+		if plan.by == "" {
+			return plan, coverSettleUndecided
+		}
+	}
+	best := -1
+	for i, m := range g {
+		if !plan.pics[m.e.CoverURL].same(plan.ref) {
+			continue
+		}
+		if best < 0 || coverSettleRank(m.e) < coverSettleRank(g[best].e) {
+			best = i
+		}
+	}
+	if best < 0 {
+		return plan, coverSettleUndecided
+	}
+	plan.rep = g[best].e
+	return plan, coverSettleDecided
+}
+
+// coverSettlePicture:不用问 Apple 就定得下的那两种 —— 之前定过(照 key 最小那条)、都是同一张图;都不是返回空的 by。
+func coverSettlePicture(g []coverSettleMember, pics map[string]coverPicture) (coverPicture, string) {
+	for _, m := range g {
+		if coverSettled(m.e) {
+			return pics[m.e.CoverURL], "settled"
+		}
+	}
+	first := pics[g[0].e.CoverURL]
+	for _, m := range g {
+		if !pics[m.e.CoverURL].same(first) {
+			return coverPicture{}, ""
+		}
+	}
+	return first, "same"
+}
+
+// coverSettleFallback:组里有跟 Apple 那张是同一张图的就定 Apple 那张;没有时定 key 最小那条核实过的设备封面那张,它是补边的
+// 长方形图(不是封面本来的样子)时不定,返回空的 by。
+func coverSettleFallback(g []coverSettleMember, pics map[string]coverPicture, apple coverPicture) (coverPicture, string) {
+	for _, m := range g {
+		if pics[m.e.CoverURL].same(apple) {
+			return apple, "apple"
+		}
+	}
+	for _, m := range g {
+		if siblingLendsAlbumIdentity(m.e, m.album) {
+			if p := pics[m.e.CoverURL]; !p.letterboxed {
+				return p, "device"
+			}
+			break
+		}
+	}
+	return coverPicture{}, ""
+}
+
+// coverSettleApplePicture:Apple 目录给这张专辑的封面的图。组里有 Apple 给的、专辑对得上的封面就用它,不再问;否则按 key 顺序
+// 拿头 coverSettleAppleTries 首去问(coverSweepAppleCover),专辑对得上(candidateCoverAlbumFits)的才算。Apple 没有这张专辑
+// 返回 fp 为 0 的图;没问到、图没取到返回 false。
+func coverSettleApplePicture(ctx context.Context, g []coverSettleMember, pics map[string]coverPicture, asked *bool) (coverPicture, bool) {
+	for _, m := range g {
+		if m.e.CoverSource == "apple" && candidateCoverAlbumFits(m.e.CoverAlbum, m.album) {
+			return pics[m.e.CoverURL], true
+		}
+	}
+	for i, m := range g {
+		if i == coverSettleAppleTries {
+			break
+		}
+		if *asked {
+			coverSweepWait(ctx, coverSweepAppleGap)
+		}
+		*asked = true
+		if ctx.Err() != nil {
+			return coverPicture{}, false
+		}
+		_, title, _ := splitEnrichKey(m.key)
+		cover, coverAlbum, reached := coverSweepAppleCover(withBackgroundOutbound(ctx), m.artist, title, m.album, m.e.DurationSecs)
+		if !reached {
+			return coverPicture{}, false
+		}
+		if cover == "" || !candidateCoverAlbumFits(coverAlbum, m.album) {
+			continue
+		}
+		p := coverSweepPicture(withBackgroundOutbound(ctx), cover)
+		return p, p.fp != 0
+	}
+	return coverPicture{}, true
+}
+
+// coverSettleRank:定下的那张图有几份地址时,给要换的条目挑哪一份,小的优先:网易云(清晰,国内加载得出来)、够清晰的设备封面、
+// 别的 https、其余;同档取 key 小的(调用方按 key 顺序挑)。设备封面大不大要读本机文件,调用方不能持着 enrichMu。
+func coverSettleRank(e enrichEntry) int {
+	switch {
+	case e.CoverSource == "netease":
+		return 0
+	case e.CoverSource == "device" && !deviceCoverSmall(e.CoverURL):
+		return 1
+	case strings.HasPrefix(e.CoverURL, "https://"):
+		return 2
+	}
+	return 3
+}
+
+// coverSettleApply 按 plan 写回一组:跟定下的是同一张图的原样记下 CoverSettled,不是的换成 plan.rep 那一份(地址、来源、
+// cover_album、主色)再记下。读出来之后封面被换过、解析中、提前提交、已经定下的不动。返回记下几条、其中换了几条。
+func coverSettleApply(g []coverSettleMember, plan coverSettlePlan) (settled, switched int) {
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	for _, m := range g {
+		e, ok := enrichCache[m.key]
+		if !ok || e.CoverURL != m.e.CoverURL || enrichInflight[m.key] || enrichProvisional[m.key] || coverSettled(e) {
+			continue
+		}
+		if !plan.pics[e.CoverURL].same(plan.ref) {
+			e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor =
+				plan.rep.CoverURL, plan.rep.CoverSource, plan.rep.CoverAlbum, plan.rep.AccentColor
+			switched++
+		}
+		e.CoverSettled = e.CoverURL
+		enrichCache[m.key] = e
+		settled++
+	}
+	if settled > 0 {
+		enrichDirty = true
+	}
+	return settled, switched
 }
 
 // sortCoverSweepKeys 按歌手、专辑、key 排(同一张专辑的挨着补)。

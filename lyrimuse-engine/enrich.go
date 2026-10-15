@@ -453,6 +453,11 @@ type enrichEntry struct {
 	PublicCoverURL string `json:"public_cover_url,omitempty"`
 	PublicCoverFor string `json:"public_cover_for,omitempty"`
 
+	// CoverSettled:后台补封面给这张专辑定下的封面(coverSweepSettleAlbumCovers),记的是定下时这条的 CoverURL。只在它等于现在的
+	// CoverURL 时算数(coverSettled):设备封面、外围补全、借同专辑封面都不再换掉它;封面被别处换过,旧记录自动作废,下一遍后台
+	// 补封面再定。不进 fields()。见 03 章决策 48。
+	CoverSettled string `json:"cover_settled,omitempty"`
+
 	// YouTubeMusicAlbum:用 Kaset 放这首歌时,按 YouTube Music 的登记判出来的专辑(见 kasetalbum.go)。给 App 界面、上送,
 	// 以及播放器没报专辑时搜歌词用(见 lyricsSearchAlbum;Kaset 报的专辑那一栏放歌单时是歌单名,不用),不进缓存 key。
 	YouTubeMusicAlbum string `json:"youtube_music_album,omitempty"`
@@ -924,8 +929,8 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 设备直送封面排最前面:只在"新曲目开始播放" + 现有封面还不是设备直送 / 播放器自带这两档时才
 		// 起——后一条门槛避免同一首歌每次重播都重新取一遍设备封面(coverSource 一旦
 		// 变成 "device" 或 "player" 就此定案,不再需要每次播放都重新验证,见 applyDeviceCoverUpgrade
-		// 头注)。
-		if isNewTrack && e.CoverSource != "device" && e.CoverSource != "player" && !enrichInflight[key] {
+		// 头注)。后台补封面给专辑定下的封面(coverSettled)设备封面不再顶掉,也不起。
+		if isNewTrack && e.CoverSource != "device" && e.CoverSource != "player" && !coverSettled(e) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go applyDeviceCoverUpgrade(withPlayerCover(context.Background(), playerCover), key, artist, title, album, bundleID)
 		} else if isNewTrack && e.CoverSource == "device" && !deviceCoverUpgradeTried[key] && !enrichInflight[key] &&
@@ -1135,8 +1140,10 @@ func qqFallbackCoverTaken(e enrichEntry, qqCover, qqAlbum, coverAlbum string) bo
 //
 // 一条最多查 5 次(peripheralBackfillMaxAttempts)、每次隔 10 分钟,跟其它几个缺字段
 // 共用同一套节流与上限,所以存量条目不会在升级后一股脑全部重跑。
+//
+// 后台补封面给专辑定下的封面(coverSettled)不查:定的时候已经跟同专辑各首、Apple 目录按图比过。
 func coverNeedsAlbumCheck(e enrichEntry, album string) bool {
-	if album == "" || e.CoverSource != "netease" {
+	if album == "" || e.CoverSource != "netease" || coverSettled(e) {
 		return false
 	}
 	if e.CoverAlbum == "" {
@@ -1166,6 +1173,13 @@ func coverSwapAllowed(old, fresh enrichEntry, album string) bool {
 func coverSwapAllowedWith(old, fresh enrichEntry, album string, deviceUpgradable func(deviceURL, candidateURL string) bool) bool {
 	if fresh.CoverURL == "" {
 		return false
+	}
+	// 后台补封面给这张专辑定下的封面(coverSettled):旧的是就不换;新的是就换,那是照定下的那张取的(见 finishTrackEnrichment)。
+	if coverSettled(old) {
+		return false
+	}
+	if coverSettled(fresh) {
+		return true
 	}
 	// device 一旦定案就不再按文字匹配的结果换掉:身份由"设备当时确实在播这首歌"保证(同 applyDeviceCoverUpgrade 头注)。
 	// 不能走下面"fresh.CoverSource=='qq' 就无条件接受"那一档:canonical_artist 永远解不出来的歌手(不需要中文别名的那类),
@@ -1331,10 +1345,39 @@ func coverCanUpgradeToVerifiedSiblingLocked(e enrichEntry, artist, album string)
 }
 
 // coverAwaitsVerifiedSibling:这条的封面归属还没核实 —— 有封面、不是 device / player(身份最硬,自己不用升)、cover_album
-// 没逐字对上本地专辑。同专辑有归属核实过的邻居时值得换成那张;coverCanUpgradeToVerifiedSiblingLocked 和后台补封面那一步
-// (coverSweepBorrowVerifiedSiblings)共用。
+// 没逐字对上本地专辑、不是后台补封面给专辑定下的(coverSettled)。同专辑有归属核实过的邻居时值得换成那张;
+// coverCanUpgradeToVerifiedSiblingLocked 和后台补封面那一步(coverSweepBorrowVerifiedSiblings)共用。
 func coverAwaitsVerifiedSibling(e enrichEntry, album string) bool {
-	return e.CoverURL != "" && e.CoverSource != "device" && e.CoverSource != "player" && albumScore(e.CoverAlbum, album) != 200
+	return e.CoverURL != "" && e.CoverSource != "device" && e.CoverSource != "player" && albumScore(e.CoverAlbum, album) != 200 &&
+		!coverSettled(e)
+}
+
+// coverSettled:这条的封面是后台补封面给专辑定下的那张,之后没被别处换过(见 enrichEntry.CoverSettled)。
+func coverSettled(e enrichEntry) bool {
+	return e.CoverURL != "" && e.CoverURL == e.CoverSettled
+}
+
+// settledAlbumCover:这张专辑(同歌手、专辑名繁简折叠后相同)后台补封面定下的封面,几条都定过时取 key 最小的那条;没定过
+// 返回 false。首次解析、重新解析照它取(见 finishTrackEnrichment)。
+func settledAlbumCover(artist, album string) (enrichEntry, bool) {
+	if album == "" {
+		return enrichEntry{}, false
+	}
+	simpAlbum := toSimplified(album)
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	bestKey, best := "", enrichEntry{}
+	for key, e := range enrichCache {
+		if !coverSettled(e) || (bestKey != "" && key >= bestKey) {
+			continue
+		}
+		a, _, al := splitEnrichKey(key)
+		if (al != album && toSimplified(al) != simpAlbum) || !artistMatches(a, artist) {
+			continue
+		}
+		bestKey, best = key, e
+	}
+	return best, bestKey != ""
 }
 
 // lyricSourcesWithCandidates 挑出这一轮真的给出了可用候选的源(负分是"纯音乐"/"曲库里有
@@ -2905,7 +2948,7 @@ func deviceCoverUpgradePass(ctx context.Context, key, artist, title, album, bund
 	// 又已经算成功收工——当作条目还没落盘,留给下一档。
 	provisional := enrichProvisional[key]
 	enrichMu.Unlock()
-	if !exists || provisional || existing.CoverURL == deviceCoverURL {
+	if !exists || provisional || existing.CoverURL == deviceCoverURL || coverSettled(existing) {
 		return false
 	}
 	// 低分辨率的设备封面不该盖掉"同一张图的高清版"。判据表见 coverquality.go 头注;这处跟首次解析那处必须同时存在,
@@ -2928,9 +2971,9 @@ func deviceCoverUpgradePass(ctx context.Context, key, artist, title, album, bund
 	}
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
-	if !ok || enrichProvisional[key] || e.CoverURL == cover {
-		// 这段等待期间条目被"歌词管理"删掉了,或者(竞态)另一路已经写过同一张封面——
-		// 两种情况都不该再写。
+	if !ok || enrichProvisional[key] || e.CoverURL == cover || coverSettled(e) {
+		// 这段等待期间条目被"歌词管理"删掉了,(竞态)另一路已经写过同一张封面,或者后台补封面刚给专辑定下了封面——
+		// 都不该再写。
 		enrichMu.Unlock()
 		return false
 	}
@@ -3089,8 +3132,8 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 	if !rejectedNeteaseCover && coverSwapAllowedWith(e, fresh, coverAlbum, func(deviceURL, candidateURL string) bool {
 		return preDeviceURL != "" && deviceURL == preDeviceURL && candidateURL == fresh.CoverURL && preUpgradable
 	}) {
-		e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor =
-			fresh.CoverURL, fresh.CoverSource, fresh.CoverAlbum, fresh.AccentColor
+		e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor, e.CoverSettled =
+			fresh.CoverURL, fresh.CoverSource, fresh.CoverAlbum, fresh.AccentColor, fresh.CoverSettled
 	}
 	// 没封面,或留下的那张明确是另一张专辑的(coverOfAnotherAlbum):换成歌词胜出那个源自带、专辑对得上的;换掉旧封面时主色清空。
 	if winnerCover != "" && winnerCover != e.CoverURL && (e.CoverURL == "" || coverOfAnotherAlbum(e, album)) {
@@ -3489,6 +3532,10 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 	}
 	// 三源和同专辑邻居都没给出封面:按双语曲名拆出的那段、歌词判决里认下的歌手写法、ISRC 在 Deezer 上的那条补查(coverretry.go)。
 	fillMissingCover(ctx, &e, scored, artist, title, album, durationSecs, coverArtist, coverTitle, coverAlbum, coverDuration)
+	// 后台补封面已经给这张专辑定下了封面:照定下的那张。下面的设备封面、播放器自带的、歌词候选自带的都不再顶掉它(coverSettled)。
+	if s, ok := settledAlbumCover(lookupArtist, album); ok {
+		e.CoverURL, e.CoverSource, e.CoverAlbum, e.CoverSettled = s.CoverURL, s.CoverSource, s.CoverAlbum, s.CoverURL
+	}
 	if deviceCoverURL == "" {
 		deviceCoverURL = lateDeviceCover(ctx, artist, title)
 	}

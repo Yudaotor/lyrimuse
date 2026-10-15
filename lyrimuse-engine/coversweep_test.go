@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"image"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,14 +25,21 @@ type coverSweepCall struct {
 func withCoverSweepFakes(t *testing.T, rounds [][2]int32, onBackfill func(key string)) (*[]coverSweepCall, *[]time.Duration) {
 	t.Helper()
 	savedBackfill, savedRound, savedWait, savedSave := coverSweepBackfill, coverSweepNetworkRound, coverSweepWait, coverSweepSave
-	savedQQAlbumName := coverSweepQQAlbumName
+	savedQQAlbumName, savedCoverImage, savedAppleCover := coverSweepQQAlbumName, coverSweepCoverImage, coverSweepAppleCover
+	coverPictureMu.Lock()
+	savedPictures := coverPictureMemo
+	coverPictureMemo = map[string]coverPicture{}
+	coverPictureMu.Unlock()
 	enrichMu.Lock()
 	savedInflight := enrichInflight
 	enrichInflight = map[string]bool{}
 	enrichMu.Unlock()
 	t.Cleanup(func() {
 		coverSweepBackfill, coverSweepNetworkRound, coverSweepWait, coverSweepSave = savedBackfill, savedRound, savedWait, savedSave
-		coverSweepQQAlbumName = savedQQAlbumName
+		coverSweepQQAlbumName, coverSweepCoverImage, coverSweepAppleCover = savedQQAlbumName, savedCoverImage, savedAppleCover
+		coverPictureMu.Lock()
+		coverPictureMemo = savedPictures
+		coverPictureMu.Unlock()
 		enrichMu.Lock()
 		enrichInflight = savedInflight
 		enrichMu.Unlock()
@@ -41,6 +49,8 @@ func withCoverSweepFakes(t *testing.T, rounds [][2]int32, onBackfill func(key st
 	coverSweepWait = func(_ context.Context, d time.Duration) { waits = append(waits, d) }
 	coverSweepSave = func() {}
 	coverSweepQQAlbumName = func(context.Context, string) (string, error) { return "", nil }
+	coverSweepCoverImage = func(context.Context, string) image.Image { return nil }
+	coverSweepAppleCover = func(context.Context, string, string, string, float64) (string, string, bool) { return "", "", true }
 	coverSweepBackfill = func(ctx context.Context, key, artist, title, album string, dur float64) {
 		calls = append(calls, coverSweepCall{key, artist, title, album, dur, isBackgroundOutbound(ctx), coverSweepSaveDeferred(ctx)})
 		if onBackfill != nil {

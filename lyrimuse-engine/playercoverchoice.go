@@ -75,7 +75,12 @@ func playerCoverOverDeviceWith(cover, deviceCoverURL, current string, overrides 
 // 不漏掉它们,见 CoverArtReplacementGate.deviceArtworkMinEdge),歌词窗口那张大卡要画到 ~560px。判据不是"谁更大"
 // (那会把"设备那张 120px 是**对的**、远端那张高清是**挂错的**"这种情形反过来),而是"两张图是不是同一张"——同一张就拿
 // 高清那份,不一样就身份优先。完整判据表见 coverquality.go 头注。
+//
+// 后台补封面给专辑定下的封面(coverSettled)两样都不顶:定的时候已经跟设备封面按图比过。
 func applyDeviceOrPlayerCover(ctx context.Context, e *enrichEntry, deviceCoverURL, album string) {
+	if coverSettled(*e) {
+		return
+	}
 	if deviceCoverURL == "" {
 		if e.CoverURL == "" {
 			if cover := playerCoverFor(ctx); cover != "" {
@@ -181,10 +186,11 @@ func winnerCandidateCover(d *lyricsDecision, album string) (cover, source, cover
 }
 
 // coverOfAnotherAlbum:条目这张封面自己报的专辑明确不是本地这张(candidateCoverAlbumFits 判不过)—— 按文字匹配挑出来的
-// 网易云 / Apple 那张落在了合辑、精选集或别的发行上。本地没报专辑、这张封面没报专辑(QQ 那档恒空)时判不出来,返回 false。
-// 设备封面、播放器自带的记的就是本地专辑,恒为 false。纯函数。见 03 章决策 44。
+// 网易云 / Apple 那张落在了合辑、精选集或别的发行上。本地没报专辑、这张封面没报专辑(早先存下的 QQ 封面)时判不出来,返回 false。
+// 设备封面、播放器自带的记的就是本地专辑,恒为 false;后台补封面给专辑定下的(coverSettled)按图比过,也是 false。纯函数。
+// 见 03 章决策 44、48。
 func coverOfAnotherAlbum(e enrichEntry, album string) bool {
-	if e.CoverURL == "" || strings.TrimSpace(album) == "" || strings.TrimSpace(e.CoverAlbum) == "" {
+	if e.CoverURL == "" || coverSettled(e) || strings.TrimSpace(album) == "" || strings.TrimSpace(e.CoverAlbum) == "" {
 		return false
 	}
 	return !candidateCoverAlbumFits(e.CoverAlbum, album)

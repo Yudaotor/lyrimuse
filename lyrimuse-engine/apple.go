@@ -137,20 +137,27 @@ func appleMusicMatchCachedOnly(artist, title, album string) appleMusicMatch {
 
 // durationSecs:本地这首的时长,未知传 0。只在单曲专辑名只是曲名、署名对不上时用来认同一份录音(appleSameSingleByAnotherName)。
 func appleMusicMatchCached(ctx context.Context, artist, title, album string, durationSecs float64) appleMusicMatch {
+	m, _ := appleMusicMatchCachedReached(ctx, artist, title, album, durationSecs)
+	return m
+}
+
+// appleMusicMatchCachedReached 同 appleMusicMatchCached,另外回答这次问到 Apple 没有:命中缓存、在负缓存的窗口里都算问到了。
+// 没问到时的空结果不说明 Apple 没有这首。
+func appleMusicMatchCachedReached(ctx context.Context, artist, title, album string, durationSecs float64) (appleMusicMatch, bool) {
 	if title == "" {
-		return appleMusicMatch{}
+		return appleMusicMatch{}, true
 	}
 	key := artist + "|" + title + "|" + album
 	appleURLMu.Lock()
 	if v, ok := appleURLCache[key]; ok {
 		appleURLMu.Unlock()
-		return v
+		return v, true
 	}
 	appleURLMu.Unlock()
 
 	// 刚问过、Apple 确实没有 —— 窗口内不再重跑那一轮多商店搜索(见 appleMatchMissTTL)。
 	if appleMatchInMissWindow(key, time.Now()) {
-		return appleMusicMatch{}
+		return appleMusicMatch{}, true
 	}
 
 	m, reached := resolveAppleMusicMatch(ctx, artist, title, album, durationSecs)
@@ -159,10 +166,10 @@ func appleMusicMatchCached(ctx context.Context, artist, title, album string, dur
 		appleURLCache[key] = m
 		delete(appleURLMissUntil, key) // 查到了就把负缓存清掉
 		appleURLMu.Unlock()
-		return m
+		return m, true
 	}
 	noteAppleMatchMiss(key, reached, time.Now())
-	return m
+	return m, reached
 }
 
 // resolveAppleMusicMatch returns the Apple Music song match, disambiguated by

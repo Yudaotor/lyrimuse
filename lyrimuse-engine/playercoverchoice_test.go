@@ -231,7 +231,7 @@ func TestPlayerCoverIsWired(t *testing.T) {
 	enrich := string(mustRead(t, "enrich.go"))
 	for _, n := range []string{
 		"cancelCtx = withPlayerCover(cancelCtx, playerCover)",
-		"if isNewTrack && e.CoverSource != \"device\" && e.CoverSource != \"player\" && !enrichInflight[key] {",
+		"if isNewTrack && e.CoverSource != \"device\" && e.CoverSource != \"player\" && !coverSettled(e) && !enrichInflight[key] {",
 		"go applyDeviceCoverUpgrade(withPlayerCover(context.Background(), playerCover), key,",
 		"} else if isNewTrack && e.CoverSource == \"device\" && !deviceCoverUpgradeTried[key] && !enrichInflight[key] &&\n\t\t\tdeviceCoverSmall(e.CoverURL) {",
 		"deviceCoverUpgradeTried[key] = true\n\t\t\tenrichInflight[key] = true\n\t\t\tgo upgradeSmallDeviceCover(withPlayerCover(context.Background(), playerCover), key, e.CoverURL,\n\t\t\t\tartist, title, album, durationSecs)",
