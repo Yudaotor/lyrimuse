@@ -26,32 +26,23 @@ import (
 // lyrimuse/build.sh(打包 App 时构建这份引擎,CI 发版也走它)和
 // lyrimuse-engine/build.sh(本地只重建引擎时用),注入的都是跟 App 的
 // CFBundleShortVersionString **同一个来源**的版本号(LYRIMUSE_VERSION 环境变量,
-// 没有就取最近一个 git tag)。
+// 没有就取最近一个 git tag)。手写的话两个本该同源的版本号一个自动一个手动,靠人发版时
+// 记得改,漏一次 User-Agent / ListenBrainz submission_client 就谎报一整个发布周期。
 //
 // **必须是 var,不能是 const** —— Go 的 `-ldflags -X` 只能写 var,对 const
 // **静默失败**:构建照样 exit 0、不报错不警告,而值原封不动
 // (`go build -ldflags "-X main.clientVersion=9.9.9"` 之后 `lyrimuse-engine version`
-// 仍然打印旧值)。谁要是哪天顺手把它改回 const,注入就会无声无息地失效,回到下面
-// 说的那个老毛病——`versioninjection_test.go` 有一条断言专门钉住这件事。
-//
-// **为什么改成注入**:在此之前这里是手动维护的字面量,而 App 侧版本号
-// 一直是从 git tag 自动派生的——两个版本号一个自动一个手动,靠人在发版时记得改这一行
-// 来同步。实际记录:v1.1.0 补同步一次、v1.2.0 补一次、**v1.3.0 漏了**(User-Agent/
-// ListenBrainz submission_client 谎报了一整个发布周期)、v1.4.0 补上、**v1.5.0 又漏了**
-// (用户在另一台机器装了 1.5.0 的 dmg,设置页报「App 1.5.0 · 采集服务 1.4.0」)。
-// 同一个坑两年内踩两次,说明问题不在"谁不小心",在于机制本身要求人工同步两个本该
-// 同源的值。改成从构建脚本注入之后,这一行不再需要任何人手动维护。
+// 仍然打印旧值)。`versioninjection_test.go` 有一条断言专门钉住这件事。
 //
 // 默认值 "dev" 是**故意选的一眼假值**,不是占位版本号:裸 `go build`/`go test` 出来的
-// 二进制会自报 dev,一眼看出"这不是发布构建"。刻意不写成某个具体版本号——那正是这次
-// 事故最坏的形态:一个看起来完全正常、实际早就过时的版本号,没有任何人会起疑。
-// (同一条原则见 lyrimuse/build.sh 里 APP_VERSION 退到 0.0.0 那段注释。)
+// 二进制会自报 dev,一眼看出"这不是发布构建"。别写成某个具体版本号 —— 一个看起来完全
+// 正常、实际早就过时的版本号,没有任何人会起疑。(同一条原则见 lyrimuse/build.sh 里
+// APP_VERSION 退到 0.0.0 那段注释。)
 var clientVersion = "dev"
 
 const (
-	// 项目最早叫 applemusic-nowplaying,后来改名 Lyrimuse 时这个常量
-	// 没跟着一起改——配置目录/文件名前缀/User-Agent/ListenBrainz submission_client
-	// 全部由它派生,现在统一改过来,不做旧路径兼容(不写自动迁移代码)。
+	// 配置目录/文件名前缀/User-Agent/ListenBrainz submission_client 全部由它派生。
+	// 不兼容项目旧名(applemusic-nowplaying)下的路径,不写自动迁移。
 	clientName = "lyrimuse"
 
 	pollInterval      = 5 * time.Second
@@ -91,20 +82,18 @@ const (
 func main() {
 	// 日志出口最先装(logsink.go),在任何子命令分流之前 —— 子命令各自 loadConfig、不走
 	// 下面的主流程,漏了它们同样会把 api_key 写进日志。时间戳(UTC、带 Z,跟 App 侧 os.Logger
-	// 的 +0000 对得上表)/ 等级 / 脱敏 / 重复折叠 / 轮转全在那条链上;之前这里是
-	// log.SetFlags(LUTC) + installLogScrubbing 两步,slog 桥接后 log 包自己不再打时间前缀。
-	// 常驻模式写自己打开的日志文件,子命令写 stderr。
+	// 的 +0000 对得上表)/ 等级 / 脱敏 / 重复折叠 / 轮转全在那条链上(slog 桥接,log 包自己
+	// 不打时间前缀)。常驻模式写自己打开的日志文件,子命令写 stderr。
 	installLogSink(isDaemonInvocation(os.Args))
 	// `lyrimuse-engine version`:一次性子命令,只打印 clientVersion 就退出——App 侧设置页
 	// "后台采集服务"卡片靠它检测"App 本体版本"跟"实际打包进这份 App 的引擎版本"
-	// 是否一致。 别小看这道自检:clientVersion(见其声明处注释)手动同步漏掉一次,
-	// User-Agent/ListenBrainz submission_client 就会谎报,而且没有别的机制能让
-	// 用户/开发者自己发现这个不一致。跟 search-lyrics 一样,检查要放在 flag.Parse() 之前。
+	// 是否一致。这是唯一能让用户/开发者看见两者不一致的地方(版本号注入失效、或 App 里
+	// 打包了旧引擎)。跟 search-lyrics 一样,检查要放在 flag.Parse() 之前。
 	if len(os.Args) > 1 && os.Args[1] == "version" {
 		fmt.Println(clientVersion)
 		return
 	}
-	// `lyrimuse-engine search-lyrics ...`:一次性子命令,desktop-lyrics 的"歌词管理"窗口靠
+	// `lyrimuse-engine search-lyrics ...`:一次性子命令,App 的「歌词管理」窗口靠
 	// Process 调用它来手动重新搜索候选歌词(见 searchcli.go)——检查放在 flag.Parse()
 	// 之前,不然位置参数 "search-lyrics" 会被当成未知 flag 报错。
 	if len(os.Args) > 1 && os.Args[1] == "search-lyrics" {
@@ -181,7 +170,7 @@ func main() {
 	cfg, err := loadConfig(*cfgPath)
 	if err != nil {
 		// 走到这儿只剩"文件在但读不出来"(权限/IO)一种情况——内容有问题已经在
-		// loadConfig 里降级成 loadIssues 了,不再打死进程。见 loadConfig 的注释:
+		// loadConfig 里降级成 loadIssues 了,不打死进程。见 loadConfig 的注释:
 		// KeepAlive 下 Fatal 等于崩溃循环,而核心功能根本不需要配置。
 		fatalExit(exitReasonConfigUnreadable, "err=%v", err)
 	}
@@ -198,9 +187,6 @@ func main() {
 	if cfg.Token == "" {
 		log.Printf("no listenbrainz_token configured: ListenBrainz submission disabled, running locally only (playback tracking and lyrics/cover enrichment still work)")
 	}
-	// desktop-lyrics"设置"窗口的"功能开关"分组写这份共享文件,引擎启动时读一次
-	// (没有文件监听,改了要重启才生效,跟 config.json/enrichCache 同一套约定)。放在
-	// loadEnrichCache 之前——下面读 features().LyricsDir 要用到。
 	// 常驻路径才加单实例锁(上面的一次性子命令都在更早的分支里 return 了,不受影响)。
 	// 拿不到锁说明已有实例在跑:退出码 0,launchd 的 KeepAlive 会按自己的节流重试,
 	// 等旧实例真退了再接管。
@@ -215,25 +201,21 @@ func main() {
 	// 启动迁移之前 —— 重启后台服务之后界面等的就是这份结论。
 	setLocalCacheAccessPath(configFilePath(clientName + "-local-cache-access.json"))
 	probeLocalCacheAccess()
+	// App 的设置写这份共享文件(features),放在 loadEnrichCache 之前——下面读
+	// features().LyricsDir 要用到。改了不用重启,见下面 setFeaturesPathAt。
 	featureFlagsPath := filepath.Join(filepath.Dir(*cfgPath), clientName+"-features.json")
 	featuresBaseline, _ := os.Stat(featureFlagsPath)
 	setFeatures(loadFeatureFlags(featureFlagsPath))
-	// 改设置**不再需要重启**:登记这个路径之后,features() 会按 mtime 自己重读(featuresreload.go)。
+	// 改设置不用重启:登记这个路径之后,features() 会按 mtime 自己重读(featuresreload.go)。
 	// 只有常驻进程登记 —— 上面那些一次性 CLI 子命令都在更早的分支里 return 了,它们不长跑、
-	// 没有"中途被改"这回事,不登记就一次盘都不探,行为与热重读上线之前逐字节一致。
+	// 没有"中途被改"这回事,不登记就一次盘都不探。
 	//
 	// lyrics_dir 换了要搬一次家(导入新目录 + 整份导出),那一步等下面的启动迁移跑完才放开,
 	// 见 lyricsdirswitch.go 的 enableLyricsDirSwitch。
 	setFeaturesPathAt(featureFlagsPath, featuresBaseline)
-	// 这两项在全局热重读之前就各自做过一份按键的 mtime 重读。现在 features() 整体会重读,它们其实
-	// 已经冗余了 —— 留着不改是因为它们读的是同一个文件、结论必然一致,而合并要动 lyricSourceEnabled /
-	// lastfmExcluded 两条判定链上的每个调用点,风险与收益不成比例。后续清理时连同这条注释一起删。
+	// 这两项各自还做一份按键的 mtime 重读,跟 features() 的整体重读读的是同一个文件,结论必然一致。
 	setLastfmExcludePath(featureFlagsPath)
 	setLyricSourcesPath(featureFlagsPath)
-	// (删掉了这里的 `nativeLyricSources = resolveNativeLyricSources(features().Players)`。
-	//  同源加权的判据不该是"用户勾了哪些播放器",而是"**这一刻在放的是哪个**"——现在由
-	//  trackEnrichment 每首歌按 bundleID 设一次,见 match.go 里 nativeLyricSources 的注释。
-	//  顺带,原注释那句"换播放器本来就要重启引擎"对多选年代也不成立了。)
 	// 回收目标降到 GOGC=50(gctune.go),赶在加载缓存之前:加载那一下的临时分配最多。
 	tuneDaemonGC()
 	// 曲目元信息缓存落盘在 config 同目录，重启后不重解析同一首歌。
@@ -293,20 +275,10 @@ func main() {
 	// 复用 /push 那套地址与令牌 —— 是同一个中继、同一份认证。见 artworkrelay.go 头注。
 	// 同一个地址也决定网页取色那些只为网页算的东西要不要算,见 relay.go 的 webRelayURL 头注。
 	setStateRelay(cfg.StateRelayURL, cfg.StateRelayToken)
-	// 存量 key 归一化,必须夹在这里:要在 importLyricsFromFiles() 之前(否则老文件会按
-	// 旧头部标签把刚合并掉的条目又导回来,而且两份文件抢同一个 key,内容每次重启随机翻转),
-	// 又要在 lyricsDir() 定下来之后(它得删掉落选条目的导出文件)。见 enrichkey.go。
-	// 「配置搬家」带过来的决策数据(enrich 缓存的非歌词字段),见 enrichrestore.go 头注。
-	// 位置有三条硬约束:要在 loadEnrichCache 之后(要有 enrichPath 才落得了盘)、
-	// migrateEnrichKeys 之前(备份里的 key 是导出那台机器当时的写法,得跟着一起归一化)、
-	// importLyricsFromFiles 之前(那一步负责让 lyrics/ 文件族赢下六个歌词字段)。
-	// 绝大多数启动这个文件不存在,直接早退,零成本。
-	// 从这里到 exportLyricsFiles 的一整段是**同步**的,跑在打出 "starting" 之前 ——
-	// 也就是说这段没跑完,引擎根本还没开始盯播放,用户那边是"重启后歌词迟迟不出来"。
-	// 实测 6952 条缓存 + 20046 个歌词文件的冷启动要 40 多秒,而这段原本一行日志都不打,
-	// 排查时完全是黑盒(得靠"缓存加载完"和 "starting" 两条日志之间的空档去推)。所以每一步
-	// 都计时,超过 300ms 的打一行。真正贵的那道(migrateLyricTimelines,实测 9~10 秒)另外
-	// 带了水位闸,跑过一遍就跳过,见 startupmigration.go。
+	// 从这里到 exportLyricsFiles 的一整段是**同步**的,跑在打出 "starting" 之前 —— 这段没跑完,
+	// 引擎根本还没开始盯播放,用户那边是"重启后歌词迟迟不出来"(缓存大的机器冷启动要几十秒)。
+	// 所以每一步都计时,超过 300ms 的打一行;最贵的那道(migrateLyricTimelines)另外带了水位闸,
+	// 跑过一遍就跳过,见 startupmigration.go。
 	startupStep := func(name string, fn func()) {
 		s := time.Now()
 		fn()
@@ -314,6 +286,11 @@ func main() {
 			log.Printf("startup: %s took %s", name, d.Round(10*time.Millisecond))
 		}
 	}
+	// 「配置搬家」带过来的决策数据(enrich 缓存的非歌词字段),见 enrichrestore.go 头注。
+	// 位置有三条硬约束:要在 loadEnrichCache 之后(要有 enrichPath 才落得了盘)、
+	// migrateEnrichKeys 之前(备份里的 key 是导出那台机器当时的写法,得跟着一起归一化)、
+	// importLyricsFromFiles 之前(那一步负责让 lyrics/ 文件族赢下六个歌词字段)。
+	// 绝大多数启动这个文件不存在,直接早退,零成本。
 	// 搬家带来的是**别的机器**导出的数据,可能停在更早的形态 —— 采纳到东西就作废水位,
 	// 让下面那些存量迁移这一轮照常全量跑。
 	enrichRestorePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-restore.json")
@@ -322,6 +299,9 @@ func main() {
 			invalidateMigrationState("enrich restore adopted")
 		}
 	})
+	// 存量 key 归一化,必须夹在这里:要在 importLyricsFromFiles() 之前(否则老文件会按
+	// 旧头部标签把刚合并掉的条目又导回来,而且两份文件抢同一个 key,内容每次重启随机翻转),
+	// 又要在 lyricsDir() 定下来之后(它得删掉落选条目的导出文件)。见 enrichkey.go。
 	startupStep("migrateEnrichKeys", migrateEnrichKeys)
 	// 已经存成设备封面的播放器占位图清掉(见 knownplaceholder.go)。位置只有两条约束:loadEnrichCache 之后
 	// (要有 enrichPath 才落得了盘)、migrateEnrichKeys 之后(它落盘的得是归一化过的 key)。
@@ -372,10 +352,6 @@ func main() {
 	// 同样夹在 import 与 export 之间,理由同上;放在空白词条清洗**之后**,因为那一步会
 	// 改动 YRC 的词条结构,重挂要读的是清洗完的最终逐字轴。
 	startupStep("migrateLyricTimelines", migrateLyricTimelines)
-	// 存量「用户选定的源」→「手动选定」留痕(见 manualpickmigrate.go)。
-	// 必须排在上面三步**之后**:import / YRC 空白清洗 / 时间轴重挂都会重写 Lyrics 和
-	// LyricsYRC,而这一步要按最终内容算指纹。排在它们之前的话指纹当场过期,老用户打开
-	// 「手动选定歌词后锁定」照样一首都锁不上,且没有任何迹象。
 	// 存量台语歌补记 SongLanguage、清掉普通话拼音(见 hokkien.go)。夹在 import 与 export 之间:清掉的罗马音由
 	// exportLyricsFiles 同步成删掉 .roma.lrc;排在 migrateManualPickMarks 之前,那一步按最终内容算指纹。
 	startupStep("migrateHokkienSongLanguage", migrateHokkienSongLanguage)
@@ -394,6 +370,10 @@ func main() {
 	startupStep("migrateListenDurations", func() {
 		migrateListenDurations(readListenLogAt(filepath.Join(filepath.Dir(*cfgPath), clientName+"-listens.jsonl")))
 	})
+	// 存量「用户选定的源」→「手动选定」留痕(见 manualpickmigrate.go)。
+	// 必须排在上面三步**之后**:import / YRC 空白清洗 / 时间轴重挂都会重写 Lyrics 和
+	// LyricsYRC,而这一步要按最终内容算指纹。排在它们之前的话指纹当场过期,老用户打开
+	// 「手动选定歌词后锁定」照样一首都锁不上,且没有任何迹象。
 	startupStep("migrateManualPickMarks", migrateManualPickMarks)
 	// 正文只有纯音乐占位的存量条目标上纯音乐(见 instrumentalplaceholder.go)。只打标、不改正文;排在
 	// migrateManualPickMarks 之后,它补记的手动选定留痕这一步要看。
@@ -468,7 +448,7 @@ func main() {
 	// 紧跟在版本行后面:排查任何行为差异之前,先把"配置不一样"这个变量排除掉。
 	logFeatureSnapshot()
 	// 存量设备封面补传。放后台:它只是把已有的图确认/补到中继上,不该挡住 run()。
-	// 先读回上次的确认记录 —— 记录里还没过期的那些这一轮直接跳过,不再重复 HEAD
+	// 先读回上次的确认记录 —— 记录里还没过期的那些这一轮直接跳过,不重复 HEAD
 	// (见 artworkconfirmed.go 头注:这是把「每次重启约 700 次 KV 读」降到 0 的那一步)。
 	// 必须在 sweepDeviceArtwork 之前,也必须在 artworkRelayURL 定下来之后(换中继要作废旧记录)。
 	loadArtworkConfirmed()
@@ -496,8 +476,8 @@ func main() {
 		fatalExit(exitReasonRunError, "err=%v", err)
 	}
 	// 走到这里是正常收尾。ctx 被信号取消(launchctl kickstart -k 重启、bootout 卸载、终端 Ctrl-C
-	// 都是 SIGTERM / SIGINT)是常驻引擎最常见的退出 —— 之前这条路一行日志都没有,
-	// 排「引擎为什么自己退了」只能拿 launchd 状态猜。见 exitreason.go。
+	// 都是 SIGTERM / SIGINT)是常驻引擎最常见的退出,这条路要打一行日志,不然排「引擎为什么
+	// 自己退了」只能拿 launchd 状态猜。见 exitreason.go。
 	if ctx.Err() != nil {
 		logExit(exitReasonSignal, "context canceled by SIGTERM/SIGINT")
 	} else {
