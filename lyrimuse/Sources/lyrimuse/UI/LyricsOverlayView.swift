@@ -12,15 +12,14 @@ enum OverlayMetrics {
     static let cardBottomPadding: CGFloat = 8
 }
 
-/// 悬浮歌词的**窄订阅代理**(性能审计落地,照「歌词管理」LiveRowPlayback 的
-/// 既有模式):PlaybackCoordinator 有 30+ 个 @Published、AppSettings 有 40+ 个,而
-/// ObservableObject 的 objectWillChange 不分字段 —— 悬浮窗原来整对象订阅这两个单例,
-/// 歌词窗口拖音量滑杆(soundVolume)、灵动岛/歌词窗口专属的封面与统计、设置页那几个
-/// 与悬浮窗无关的宽度滑杆,每一次写入都会打醒它整个 body。这里只转发悬浮窗真正读的
+/// 悬浮歌词的窄订阅代理(同「歌词管理」LiveRowPlayback 的模式):PlaybackCoordinator 有 30+ 个
+/// @Published、AppSettings 有 40+ 个,而 ObservableObject 的 objectWillChange 不分字段 —— 整对象订阅
+/// 这两个单例的话,歌词窗口拖音量滑杆(soundVolume)、灵动岛/歌词窗口专属的封面与统计、设置页那几个
+/// 与悬浮窗无关的宽度滑杆,每一次写入都会打醒悬浮窗整个 body。这里只转发悬浮窗真正读的
 /// 字段,值类型一律 removeDuplicates。
 ///
 /// sink 里只能用收到的参数值,不能回读源属性 —— @Published 在 willSet 时机发布,
-/// 回读拿到的是上一拍的旧值(本仓在 hideWhenNotPlaying 上实测踩过)。
+/// 回读拿到的是上一拍的旧值。
 ///
 /// anchor / currentLyricsOffsetMs 故意**不在**这里:它们只被 TimelineView 的每帧闭包
 /// 消费,闭包按帧重跑、自己直读 PlaybackCoordinator.shared 就是最新值;订阅只会让
@@ -149,8 +148,8 @@ private final class OverlayPlayback: ObservableObject {
     /// 四行字体的 AppKit 孪生,测宽用(见 `OverlayNaturalWidth`)。
     @Published private(set) var overlayNSFonts = OverlayNSFonts()
     /// 播放时间基准的指纹(锚点重发、暂停位置、歌词时间轴总偏移)和播放速率,交给图层行:
-    /// 主行改成图层动画之后只在装的那一刻读一次时间,这几样变了没人叫它重对 —— 同一句里拖进度、
-    /// 暂停时拖进度、调一次 200ms 的偏移(小于图层行 250ms 的重装阈值),填色都停在旧位置直到换行。
+    /// 图层行只在装的那一刻读一次时间,这几样变了要靠它叫图层行重对,否则同一句里拖进度、
+    /// 暂停时拖进度、调一次 200ms 的偏移(小于图层行 250ms 的重装阈值),填色都会停在旧位置直到换行。
     @Published private(set) var timingEpoch: Int = 0
     /// 这首只有一份没时间戳的纯文本(`PlaybackCoordinator.currentTrackPlainLyrics` 非空)。悬浮窗没法跟唱它,
     /// 但也不该说「暂无歌词」—— 歌词窗口那边正把它当静态文字显示着,两处说法得对得上。
@@ -286,21 +285,11 @@ private final class OverlayPlayback: ObservableObject {
     }
 }
 
-// 悬浮窗内容:逐字高亮时用渐变扫过效果(近似网页版 CSS 渐变裁字的视觉,不追求逐像素
-// 还原),否则整行高亮;罗马音在上、译文在下,都是可选的小字。
-//
-// 换行不做任何动画(纯属性跳变,不经过 SwiftUI 动画事务),逐字填色用 TimelineView
-// 按渲染帧频直接从播放位置现算 fillFraction(不经过 Timer 采样+插值)——两者都是为了
-// 尽可能流畅、开销尽可能小,具体机制见下面 mainLine/wordText 的注释。
-/// `LyricsOverlayView` 需要从"承载它的那个东西"那里知道的全部状态 —— 四个只读量加一次回调。
+/// `LyricsOverlayView` 需要从"承载它的那个东西"那里知道的全部状态 —— 一组只读量加一次回调。
 ///
-/// 抽成协议是为了让**同一份视图**既能装进真窗口,也能装进设置页那块编辑台
-/// (`OverlayEditorStage`),照灵动岛 `NotchChromeSource` 的先例。编辑台原来画的是另一份
-/// 刻意简化的渲染(`OverlayLyricsCanvas`,已删:只有主歌词一行,没有译文/罗马音/
-/// `WrapLayout` 换行/下一句预览/对唱分声部与声部指示),两份渲染必然越漂越远 —— 而"漂"在设置页预览上
-/// 是致命的:它存在的全部意义就是所见即所得。本仓已经为"同一个视觉属性两条渲染路径"付过
-/// 两次账(「对齐方式」在预览条上失效并且修好后又回归;灵动岛手搓预览跟真卡差了一整排
-/// 元素),这是第三次,也是最后一次 —— 编辑台从此渲染的就是真视图本身。
+/// 抽成协议是为了让同一份视图既能装进真窗口,也能装进设置页那块编辑台(`OverlayEditorStage`),
+/// 照灵动岛 `NotchChromeSource` 的先例。编辑台不另画一份简化渲染:两份渲染必然越漂越远,而设置页
+/// 预览存在的全部意义就是所见即所得(见 04 章「编辑台改造记录」第八步)。
 ///
 /// 预览侧**绝不能**拿 `LyricsOverlayWindowController.shared` 来凑这几个属性:那是个
 /// `static let`,光是读一下属性就会执行 init() 建窗口并 orderFront —— 悬浮歌词关着的用户
@@ -355,7 +344,7 @@ protocol OverlayChromeSource: ObservableObject {
     /// nil,松手提交之后才跟上 —— 拖动中不写设置、不碰真窗口,见 `OverlayRowSpacingDraft`。
     var rowSpacingDraft: OverlayRowSpacing.Values? { get }
     /// 这扇窗此刻真的看得见(打开着、没被 orderOut、occlusionState 含 `.visible`)。看不见时图层行停表、
-    /// 间奏点停表 —— 灵动岛、歌词窗口早就按各自的可见性停了,悬浮窗原来一直当自己看得见。
+    /// 间奏点停表,同灵动岛、歌词窗口按各自的可见性停表。
     /// 预览外壳没有自己的窗口,走默认的 true,停不停由设置窗口推下来的 `previewHostVisible` 管。
     var isSurfaceVisible: Bool { get }
 }
@@ -369,8 +358,7 @@ extension OverlayChromeSource {
 ///
 /// 为什么要它:没在播放(或这首歌还没解析出歌词)时,真视图走的是 `mainLine` 的占位分支
 /// (♪ /「搜索歌词中…」/「暂无歌词」),搬进设置页就是一张几乎空的卡 —— 而"改文字色/
-/// 字体/描边能当场看见"正是那块预览存在的全部理由(这是共用画布当初带示例句的原因,
-/// 换成真视图之后得由真视图自己提供同一个能力)。
+/// 字体/描边能当场看见"正是那块预览存在的全部理由。
 ///
 /// 带上译文/罗马音/下一句三条示例文字,是为了让那三个显隐开关在**没歌放**的时候也能当场
 /// 看出效果 —— 它们各有独立的字号和不透明度,是这一页最难凭想象判断的几项。
@@ -383,16 +371,14 @@ struct OverlayPreviewLine {
 
 /// 控制排横向落点用的声部快照 —— 指针压在按钮上的那段时间里冻住不动。
 ///
-/// 为什么要冻(跟"控制排跟着歌词换边"同一次改动):对唱歌逐句换人唱时歌词
-/// 每几秒就换一次边,控制排跟着换边之后,**换边的幅度就是大半个窗宽**(1016pt 宽的窗、
-/// 默认字号下两个落点差 759pt)。用户瞄准某颗按钮的那零点几秒里正好赶上换行,按钮排会
-/// 整条从指针底下抽走 —— 轻则点空(事件穿透到桌面),重则点到挪过来的**另一颗**按钮上,
+/// 为什么要冻:对唱歌逐句换人唱时歌词每几秒就换一次边,控制排跟着换边,幅度就是大半个窗宽
+/// (1016pt 宽的窗、默认字号下两个落点差 759pt)。用户瞄准某颗按钮的那零点几秒里正好赶上换行,
+/// 按钮排会整条从指针底下抽走 —— 轻则点空(事件穿透到桌面),重则点到挪过来的另一颗按钮上,
 /// 而这一排里有「关闭悬浮窗」和「锁定位置」两颗点错了要费事收拾的。
 ///
 /// 判据用的是"指针**压在按钮排上**"(`OverlayChromeSource.isHoveringControlPill`),不是
-/// "控制排显示着"(`isHoveringForControls`)—— 后者的命中区是"歌词 ∪ 控制排"的包围盒
-/// (前更宽,是整扇窗),指针只是停在**歌词**上、根本没在瞄按钮的时候也会一起
-/// 冻住,那正好又变回要修的那个现象(按钮不在歌词上方)。
+/// "控制排显示着"(`isHoveringForControls`)—— 后者的命中区是"歌词 ∪ 控制排"的包围盒,
+/// 指针只是停在歌词上、根本没在瞄按钮的时候也会一起冻住,控制排就不再跟着歌词换边。
 /// 指针一离开按钮排,下一行就立刻回到"跟着歌词走"。
 private enum OverlayControlsSidePin: Equatable {
     /// 没冻:跟着当前行走。
@@ -405,29 +391,30 @@ private enum OverlayControlsSidePin: Equatable {
     case pinned(LyricDuet.Side?)
 }
 
+/// 悬浮窗内容:主歌词,下面依次是罗马音、译文(都是可选的小字)和下一句预览。
+/// 逐字填色走 AppKit 图层行(见 mainLine);换句默认是纯属性跳变,开了换句动画时
+/// 由舞台交给 Core Animation(见 lineChangeRows)。
 struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     // 不直接 @ObservedObject 整个 PlaybackCoordinator/AppSettings —— 见 OverlayPlayback
     // 的注释,那两个单例上与悬浮窗无关的高频写入会打醒整个 body。
     @StateObject private var playback = OverlayPlayback()
     /// 逐字行文字实际矩形的旁路,见 WrapContentRectSink。@State 保证视图重建时是同一个实例。
     @State private var wrapContentSink = WrapContentRectSink()
-    // 悬停展示控制按钮/长按拖动这套手势整个搬到了 WindowController 用全局鼠标监听器
-    // 实现(背景常年点击穿透,原生 .onHover 收不到事件),这里只读它算出来的结果
-    // (isHoveringForControls/isDragArmed)展示对应视觉效果,不再自己维护 @State。
+    // 悬停展示控制按钮/长按拖动这套手势由 WindowController 用全局鼠标监听器实现
+    // (背景常年点击穿透,原生 .onHover 收不到事件),这里只读它算出来的结果
+    // (isHoveringForControls/isDragArmed)展示对应视觉效果,不自己维护 @State。
     //
-    // 故意不写成 "= LyricsOverlayWindowController.shared" 默认值——这个 View 正是在
+    // 别写成 "= LyricsOverlayWindowController.shared" 默认值:这个 View 正是在
     // LyricsOverlayWindowController 自己的 init() 里被构造出来的(装进 NSHostingView),
-    // 这时候 .shared 这个 static let 的一次性初始化(dispatch_once)还没跑完,任何在这个
-    // 构造过程中对 .shared 的再次访问都会在同一线程递归触发同一个 dispatch_once,被
-    // 系统直接判定成非法重入而 SIGTRAP 崩溃(实测坐实:EXC_BREAKPOINT,栈顶正是
-    // _dispatch_once_wait 卡在这个默认值上)。改成必填参数,由外部显式传入当时已经
-    // 拿到手的 self,不再经过 .shared 这层。
-    // 不加 private——需要在另一个文件(LyricsOverlayWindowController.swift)里通过
-    // 编译器合成的 memberwise init 传入,标 private 会让那个 init 的访问级别一并降到
-    // private,导致跨文件调不到。
-    // 类型是**协议**而不是那个具体类:设置页编辑台要渲染同一份视图,
-    // 而它绝不能碰 .shared —— 见 OverlayChromeSource 顶部那条提醒。真窗口那唯一一个
-    // 构造点靠类型推导拿到 Chrome == LyricsOverlayWindowController,一个字都不用改。
+    // 这时候 .shared 这个 static let 的一次性初始化(dispatch_once)还没跑完,构造过程中
+    // 再访问 .shared 会在同一线程递归触发同一个 dispatch_once,被系统判成非法重入而
+    // SIGTRAP 崩溃(EXC_BREAKPOINT,栈顶是 _dispatch_once_wait)。所以是必填参数,由外部
+    // 显式传入当时已经拿到手的 self。
+    // 不加 private:另一个文件(LyricsOverlayWindowController.swift)要通过编译器合成的
+    // memberwise init 传入,标 private 会让那个 init 的访问级别一并降到 private,跨文件调不到。
+    // 类型是协议而不是那个具体类:设置页编辑台要渲染同一份视图,而它绝不能碰 .shared
+    // (见 OverlayChromeSource 的注释)。真窗口那唯一一个构造点靠类型推导拿到
+    // Chrome == LyricsOverlayWindowController。
     @ObservedObject var overlayController: Chrome
     /// 只给按钮悬停高亮用(见 `iconButton`):辅助功能开了「减弱动态效果」就不补间,但高亮
     /// **照画** —— 它回答的是"指针现在在哪颗按钮上",是功能反馈,不是装饰(同灵动岛那批
@@ -482,7 +469,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     // 判据本体在 Core(`OverlayControlHitTest.controlsShown`,有 selftest),不要在这里
     // 就地展开:控制器侧 `handleMouseEvent` 的 `controlsShown` 要跟这里**逐字同一条** ——
     // 它决定收不收回点击穿透、点击分发到哪颗按钮。两边长歪就是"看不见却挡手"或
-    // "看得见点不动"。加「悬停时显示控制条」开关时合并的。
+    // "看得见点不动"。
     /// 拖动中不显示:那时点不了,而且拖动全程控制排换在卡片下方(见 `LyricsOverlayWindowController.armDragIfStillPressed`)。
     private var controlsVisible: Bool {
         OverlayControlHitTest.controlsShown(
@@ -551,7 +538,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         .coordinateSpace(name: overlayCoordSpaceName)
         .modifier(controlTooltipOverlay)
         // 纯测量用,不影响视觉——把这次渲染真正需要的高度(按钮槽位+歌词卡片)报给窗口控制器
-        // 去调整窗口高度,长歌词换行到第二行时窗口跟着变高,而不是被原来写死的高度裁掉。
+        // 去调整窗口高度,长歌词换行到第二行时窗口跟着变高、不被裁掉。
         .background(
             GeometryReader { proxy in
                 Color.clear.preference(key: ContentHeightPreferenceKey.self, value: proxy.size.height)
@@ -593,14 +580,14 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         }
         // 内容必须**贴着窗口的锚边**放(贴顶;「底部居中」下贴底),不能让它在窗口里居中。
         //
-        // 在这一行之前,根视图只约束了宽度,高度就是内容的固有高度;而窗口高度有 120pt 的
+        // 这一行之前的修饰符只约束了宽度,高度就是内容的固有高度;而窗口高度有 120pt 的
         // 地板(updateHeight 里的 max(overlayDefaultHeight, …)),单行歌词的内容比它矮不少。
         // NSHostingView 比内容高的时候,SwiftUI 默认把内容**垂直居中**放 —— 于是内容高度一变,
         // 整块内容(连同歌词文字)就会在窗口里上下移动半个差值。
         //
         // 用独立的 SwiftUI 沙盒逐像素量过(同样的修饰符链 + 固定 120pt 宿主):
-        //   居中(改前):静止时内容顶边距窗口顶 30.0pt,内容变高后 17.0pt —— 上移 13pt
-        //   贴顶(改后):两种状态都是 0.0pt —— 纹丝不动
+        //   居中:静止时内容顶边距窗口顶 30.0pt,内容变高后 17.0pt —— 上移 13pt
+        //   贴顶:两种状态都是 0.0pt —— 纹丝不动
         //
         // 贴哪一边跟窗口从哪一边长是同一件事(LyricsOverlayWindowController.updateHeight):守顶边
         // 向下长就贴顶,「底部居中」守底边向上长就贴底 —— 这样锚边那一侧的文字永远不动,只有
@@ -644,12 +631,12 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 播放控制排 / 锁定态解锁提示 / 位置已固定提示 三者共用的那一个槽位。常驻、透明度切换,
     /// 三个状态**等高**(胶囊 22pt + 离卡片 4pt + 离窗口边 4pt),切来切去歌词不跳。
     private var controlsSlot: some View {
-        // 锁定态下这个槙位换成"解锁"提示,不叠在歌词上面——跟播放控制排共用同一个槙位、同一套"常驻+
-        // 透明度切换"处理,理由跟下面播放控制排的注释一致:槙位常驻才能保证歌词位置
+        // 锁定态下这个槽位换成"解锁"提示,不叠在歌词上面——跟播放控制排共用同一个槽位、同一套"常驻+
+        // 透明度切换"处理,理由跟下面播放控制排的注释一致:槽位常驻才能保证歌词位置
         // 不随悬不悬停跳动。
         Group {
             // 预设模式下想拖窗口被拒:这个槽位临时换成一条醒目的"🔒 已固定"胶囊;同时卡片
-            // 整体左右抖一下(见 lyricsCard 上的 ShakeEffect)。优先级最高:此刻用户的手正在窗口上。
+            // 整体左右抖一下(见 lyricsCard 上的 OverlayRejectShake)。优先级最高:此刻用户的手正在窗口上。
             if let notice = overlayController.placementLockNotice {
                 placementLockPill(notice)
             } else if playback.lockPosition {
@@ -666,14 +653,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     // 把这排按钮的真实位置汇报上去,当作点击穿透的例外热区(见
                     // WindowController.updateControlsHotZone)。
                     //
-                    // 这里**永远报真实矩形**,不能写成"没显示时报 .zero"来兼表可见性。
-                    // 实测坐实:那样写的话观察者收到的恒为 .zero —— 这个 key 的
-                    // reduce 是"后来者覆盖",而树里别的分支(外层那个测高度的 background 里的
-                    // Color.clear)会贡献 defaultValue(.zero)并排在后面,把真实矩形冲掉。
-                    // 日志里能直接看到两行并排:GeometryReader 算出 (341.5,0.1,217,48),
-                    // 而 onPreferenceChange 收到 (0,0,0,0)。
-                    // 现在 .zero 只有一个含义 ——"这一轮没有任何人报告位置",可见性判断挪到
-                    // 控制器侧(见 handleMouseEvent 里的 controlsShown)。
+                    // 这里永远报真实矩形,不写成"没显示时报 .zero"来兼表可见性:.zero 只有一个含义 ——
+                    // "这一轮没有任何人报告位置"(树里没设过这个 key 的分支贡献的就是它,见
+                    // ControlsFramePreferenceKey),可见性判断在控制器侧(见 handleMouseEvent 里的 controlsShown)。
                     .background(
                         GeometryReader { proxy in
                             Color.clear.preference(
@@ -684,14 +666,11 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     )
             }
         }
-        // 跟窗口边留一点呼吸空间——这个槙位若紧贴 VStack 顶端、跟窗口内容区顶边零距离,
-        // 锁定态下"🔒 解锁"这颗孤立的小胶囊尤其明显。 这两个 padding 必须挂在
-        // Group 上(三个分支的**外面**),不能只加给 unlockPill 自己——playbackControls
-        // 不加的话,状态之间又会变回不一样高,"锁定/解锁切换时内容整体挪动"这个坏行为
-        // 会复发(见下面播放控制排/解锁提示各自注释里记的那个高度不对齐的坑)。
-        // 槽位在卡片下方时两条边对调:离窗口边的那 4pt 在下、离卡片的那 4pt 在上
-        // (原来"离卡片 4pt"写在两颗胶囊自己身上的 .padding(.bottom, 4),
-        //  为了能翻面挪到了这里)。
+        // 跟窗口边留一点呼吸空间——这个槽位若紧贴 VStack 顶端、跟窗口内容区顶边零距离,
+        // 锁定态下"🔒 解锁"这颗孤立的小胶囊尤其明显。这两个 padding 必须挂在
+        // Group 上(三个分支的外面),不能只加给 unlockPill 自己——playbackControls
+        // 不加的话三个状态就不一样高,锁定/解锁切换时内容会整体挪动。
+        // 槽位在卡片下方时两条边对调:离窗口边的那 4pt 在下、离卡片的那 4pt 在上。
         .padding(controlsSlotBelow ? .bottom : .top, 4)
         .padding(controlsSlotBelow ? .top : .bottom, 4)
         // 整格高度钉在 OverlayPlacement.controlsSlotHeight:「自由」模式翻面时窗口按这个数反向挪,卡片才不动。
@@ -703,10 +682,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         //
         // 留白 = 卡片内缩 + 卡片水平内边距(`OverlayCardGeometry.controlsInsets`,跟卡片
         // 共用 core 里同一份几何),再按同一个方向靠边 —— 按钮排的近侧边缘因此跟歌词块
-        // 的近侧边缘严格重合,不是靠肉眼凑。合唱/普通歌两侧对称,`.center` 下位置跟改动
-        // 前逐像素相同。
+        // 的近侧边缘严格重合,不是靠肉眼凑。合唱/普通歌两侧对称,按钮排居中。
         //
-        // 故意**不加动画**:歌词换行本身就是纯属性跳变(见文件头),按钮排跟着一起
+        // 故意**不加动画**:歌词换行默认是纯属性跳变(见 LyricsOverlayView 的注释),按钮排跟着一起
         // 硬切才对得上;而且动画途中 `ControlRectsPreferenceKey` 会逐帧上报中间位置,
         // 控制器按矩形分发的点击会落在"飞到一半"的按钮上。
         //
@@ -718,7 +696,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     }
 
     /// 对唱歌词的左右分栏(见 LyricDuet)——这是**对齐方向**用的值,已经套过设置页的
-    /// 「对齐方式」覆盖(见 OverlayDuetAlignmentOverride):自动模式下等价于旧行为
+    /// 「对齐方式」覆盖(见 OverlayDuetAlignmentOverride):自动模式下按真实声部
     /// (nil = 没有演唱者标记的普通歌,兜底居中);非自动模式下**每一行**(不管有没有
     /// 真实声部信息)都固定成用户选的那个方向。
     ///
@@ -730,9 +708,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
 
     /// 下一句预览摆哪一边——**独立于当前行的 duetSide 算**,不能假定下一句跟当前句是
     /// 同一位演唱者。对唱歌交替演唱时(比如逐句男/女/男/女切换的歌),下一句几乎每次都
-    /// 换边;固定继承 duetSide 的话,视觉上会永远像是当前这位接着唱下一句
-    /// (例如《All Night》女声"U got to dance all night"被摆在
-    /// 男声"All night"底下)。同样套过对齐方式覆盖,理由跟 duetSide 一致。
+    /// 换边;固定继承 duetSide 的话,视觉上会永远像是当前这位接着唱下一句。
+    /// 同样套过对齐方式覆盖,理由跟 duetSide 一致。
     private var nextLineDuetSide: LyricDuet.Side {
         playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: playback.nextLineSide)
     }
@@ -804,7 +781,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// (见 `OverlayCardGeometry`)。加总之后按钮排的近侧边缘跟歌词块的近侧边缘严格重合。
     ///
     /// 留白让开时按钮排要跟着让开同样多(`scale`),否则长句把歌词块推到卡片边缘、按钮排
-    /// 还钉在原来的缩进上 —— 又是一次"按钮不在歌词上方"。
+    /// 还钉在没缩放的缩进上,不在歌词上方。
     private var controlsInsets: (leading: CGFloat, trailing: CGFloat) {
         guard controlsFollowLyrics else { return (0, 0) }
         return OverlayCardGeometry.controlsInsets(
@@ -824,14 +801,13 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     ///
     /// 对唱歌逐句换人唱时,下一句预览从"更小的字号"跳到"当前行的
     /// 正常字号"这个变化,跟位置的变化(见 nextLineInsetsDelta)叠在一起格外抖——普通歌
-    /// 因为位置没变,这个字号跳变本来就不明显,不需要跟着一起改。
+    /// 因为位置没变,这个字号跳变本来就不明显,不需要放大。
     ///
-    /// 判据**不能**只看 `nextLineSide != nil`,必须跟当前行的 side 比较——
-    /// 对唱歌里同一位演唱者连唱两句(下一句 side 跟当前行相同,不会真的跳)也被一并放大了
-    /// 字号,这种情况跟普通歌一样该用小字号预览,后来收紧了这个条件:只有下一句
-    /// **真的**换了人唱、即将发生位置+字号的双重跳变时才值得用大字号提前"预告"。
-    /// nextLineInsetsDelta 不需要跟着改——两句 side 相同时 duetInsets(next) 跟
-    /// duetInsets(current) 天然算出同一份值,delta 本来就是 0,已经隐含了这条判据。
+    /// 判据**不能**只看 `nextLineSide != nil`,必须跟当前行的 side 比较:同一位演唱者连唱两句时
+    /// 下一句 side 跟当前行相同、不会真的跳,该跟普通歌一样用小字号预览。只有下一句真的换了人唱、
+    /// 即将发生位置+字号的双重跳变时才值得用大字号提前"预告"。
+    /// nextLineInsetsDelta 不需要这条判据——两句 side 相同时 duetInsets(next) 跟
+    /// duetInsets(current) 天然算出同一份值,delta 本来就是 0。
     private var nextLinePreviewFont: Font {
         // 前奏/间奏「•••」下方没有当前行陪衬——这句其实是接下来的第一句本身,不是伴随
         // 当前行的预告小字,跟下面对唱换人那条理由(提前预告位置跳变)不是一回事,不受
@@ -884,9 +860,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// `Text`,宽度就是文字自己的宽度 —— 外层 `.frame(maxWidth: .infinity)` 不写
     /// alignment 时默认居中,于是整块内容被摆回正中,VStack 里的 duetAlignment 根本
     /// 没有发挥余地,leading/trailing/center 三种 side 渲染出来一模一样。
-    /// 逐字那一支侥幸生效,只是因为 WrapLayout 恒声明占满被提议的整宽。
-    /// (修:在此之前行级歌词的对唱分栏 100% 失效,而且前缀已被剥掉,
-    /// 屏幕上比不做这个功能时信息更少。)
+    /// 逐字那一支不写也对得齐,只是因为它恒声明占满被提议的整宽。
     private var duetFrameAlignment: Alignment { frameAlignment(for: duetSide) }
 
     /// 把这个视图的 frame 报进歌词文字矩形的并集(见 LyricsTextRectPreferenceKey)。
@@ -904,7 +878,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 别的那几支(行级歌词、间奏的 ♪、「暂无歌词」这些状态文案)是裸 Text、frame 本身就是
     /// 文字范围,按整 frame 走。
     ///
-    /// 判"该不该用 sink"要认 **owner**,不能只判 `.zero`(实测):那几支
+    /// 判"该不该用 sink"要认 **owner**,不能只判 `.zero`:那几支
     /// 压根不经过 WrapLayout,没人写 sink,而一首逐字歌只要排过一行 sink 就再也不是 `.zero`
     /// —— 于是间奏的 ♪ 会顶着上一句歌词的宽高上报,命中区往右糊出一大片。见 WrapContentRectSink。
     private func reportingMainLineRect<V: View>(_ v: V) -> some View {
@@ -920,8 +894,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             })
     }
 
-    /// 按**给定**声部算两侧留白——从只认 `currentLine.side` 的计算属性
-    /// 改成参数化:下一句预览要按**它自己**的声部单独算一份insets,不能沿用当前行那份
+    /// 按给定声部算两侧留白:下一句预览要按它自己的声部单独算一份 insets,不能沿用当前行那份
     /// (见调用点 nextLineInsetsDelta 的注释)。
     ///
     /// 只有真的有声部信息才留白:side 为 nil 时(普通歌、对唱歌第一个标记之前的前奏,
@@ -930,12 +903,11 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 必须传经过 `OverlayDuetAlignmentOverride.effectiveDecorationSide` 处理过的值
     /// (自动模式下就是原始的 `currentLine?.side` / `nextLineSide`,非自动模式下强制
     /// 为 nil)。
-    /// (映射本身搬进 core 的 `OverlayCardGeometry` —— 卡片上方那排控制按钮
-    /// 要贴的是**同一条边**,两处必须逐字一致,见该类型声明处的注释。这里只是把
-    /// `duetInsetUnit` 喂进去,数值和取舍一个字没变。)
-    /// 多喂一个 `duetStageInset`:窗口比默认宽时左右声部的近侧也缩进,把两栏收进
-    /// 卡片正中一条固定宽度的带里(见 OverlayCardGeometry 顶部「对唱舞台」)。下一句预览的
-    /// `nextLineInsetsDelta` 和控制排的 `controlsInsets` 都从这里派生,自然一起跟着走。
+    /// 映射本身在 core 的 `OverlayCardGeometry`:卡片上方那排控制按钮要贴的是同一条边,
+    /// 两处必须一致,见该类型声明处的注释。这里把 `duetInsetUnit` 和 `duetStageInset` 喂进去;
+    /// 后者让窗口比默认宽时左右声部的近侧也缩进,把两栏收进卡片正中一条固定宽度的带里
+    /// (见 OverlayCardGeometry 顶部「对唱舞台」)。下一句预览的 `nextLineInsetsDelta` 和
+    /// 控制排的 `controlsInsets` 都从这里派生,自然一起跟着走。
     private func duetInsets(for side: LyricDuet.Side?) -> (leading: CGFloat, trailing: CGFloat) {
         OverlayCardGeometry.cardInsets(for: side, unit: playback.duetInsetUnit,
                                        stageInset: playback.duetStageInset)
@@ -959,17 +931,16 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 下一句预览要额外补偿的内边距——让它按**自己真正会用到的**位置摆,不是"当前行
     /// 缩进之后、在剩下的空间里尽量靠边"。
     ///
-    /// `lyricsCard`
-    /// 整块的 `.padding(duetInsets...)` 是按**当前行**的声部算的,下一句预览虽然自己有
+    /// `lyricsCard` 整块的 `.padding(duetInsets...)` 是按**当前行**的声部算的,下一句预览虽然自己有
     /// `.frame(alignment: frameAlignment(for: nextLineDuetSide))` 决定往哪边靠,但它是
     /// 嵌在这个已经按当前行缩进过的卡片**内部**——当下一句换了个人唱(声部跟当前行不
     /// 一样)时,预览只是"在当前行的缩进基础上尽量靠左/右",不是它真正激活时(那时缩进
     /// 会按它自己的声部重新算)会落在的位置,切换瞬间就会跳一下。
     ///
-    /// 修法:算出"下一句真正应该有的 insets"与"当前行已经加在外层卡片上的 insets"之差,
+    /// 所以算出"下一句真正应该有的 insets"与"当前行已经加在外层卡片上的 insets"之差,
     /// 叠加在预览这一行自己身上——外层贡献 `duetInsets(currentSide)`,这里再补
     /// `nextInsets − currentInsets`,两者相加就等于预览独立按 `nextInsets` 摆放,跟它变成
-    /// 当前行时会用到的 insets 完全一致,不会再跳。
+    /// 当前行时会用到的 insets 完全一致,切换时不跳。
     private var nextLineInsetsDelta: (leading: CGFloat, trailing: CGFloat) {
         let override = playback.duetAlignmentOverride
         let current = duetInsets(for: override.effectiveDecorationSide(realSide: line?.side))
@@ -1012,9 +983,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     }
 
     /// 换行模式的主歌词行:按可用宽度折成几行、每行一条图层行(`WrappedKaraokeRows`)。颜色、罗马音配色、
-    /// 描边、停表判据跟 `layerScrollingKaraokeRow` 逐项一致;对齐按声部(`duetRowAlignment`,同原来
-    /// `WrapLayout` 的 rowAlignment);文字矩形照旧写进 `wrapContentSink`(owner = `overlayLineLayoutKey`),
-    /// 鼠标命中那条路不用动。
+    /// 描边、停表判据跟 `layerScrollingKaraokeRow` 逐项一致;对齐按声部(`duetRowAlignment`,同
+    /// `WrapLayout` 的 rowAlignment);文字矩形同样写进 `wrapContentSink`(owner = `overlayLineLayoutKey`),
+    /// 鼠标命中走同一条路。
     private func layerWrappedKaraokeRows(words: [SyncedLyricWord]) -> some View {
         WrappedKaraokeRows(
             spec: .init(
@@ -1182,9 +1153,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 travel: reduceMotion ? 0 : CGFloat(overlayController.placementLockShakeTick)))
             .animation(reduceMotion ? nil : .linear(duration: 0.45),
                        value: overlayController.placementLockShakeTick)
-            // 对唱歌词按演唱者分左右。不带标记的歌 duetSide 恒为 .center,
-            // 跟原来完全一致——除非「对齐方式」覆盖生效,那时
-            // duetSide 会固定成用户选的方向,不带标记的普通歌也会跟着一起改对齐。
+            // 对唱歌词按演唱者分左右。不带标记的歌 duetSide 恒为 .center;「对齐方式」覆盖
+            // 生效时 duetSide 固定成用户选的方向,不带标记的普通歌也跟着一起改对齐。
             .multilineTextAlignment(duetTextAlignment)
     }
 
@@ -1210,11 +1180,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             } else {
                 reportingMainLineRect(mainLine)
                     .reportsContentRow(.main, in: contentRowRectsSpace)
-                // 罗马音在**歌词下面、译文上面**。从歌词上面挪下来 —— 歌词窗口
-                // (LyricsWindowView)早就是这个顺序了,这里是漏改的那一处,同一首歌只要解析不出
-                // 词组就会跳到上面显示,四种组合里唯一的异类。
+                // 罗马音在歌词下面、译文上面,跟歌词窗口(LyricsWindowView)同一个顺序。
                 //
-                // 为什么是下面(调研结论):这里标的是**罗马字/音译**,不是注音。注音(furigana、
+                // 为什么是下面:这里标的是**罗马字/音译**,不是注音。注音(furigana、
                 // 拼音)是给"认得这套字、只是不确定读音"的读者用的,绑到单个字符,惯例在上方
                 // (CSS ruby-position 默认 over);而音译是给"根本不认得这套字"的人跟着唱的,
                 // 是一条跟译文并列的平行文本行,惯例在下方 —— 维基百科 Furigana 条目里唯一提到
@@ -1228,8 +1196,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 // 有逐词标注(perWordRomanization)时,读音已经标在每个词的正下方了,这一整行
                 // 就不再重复一遍。
                 // line 为 nil 时(前奏/间奏「•••」下方没有当前行陪衬)退到 nextLineRomanization——
-                // 那句其实是接下来的第一句本身,该按正常行的规格展示,不是"预览小字没有罗马音"
-                // 那条既有限制的例外,是同一份数据换了个取值来源。
+                // 那句其实是接下来的第一句本身,该按正常行的规格展示。
                 //
                 // 三行(罗马音/译文/下一句预览)的先后顺序**不是恒定的**,取决于 `line` 是否
                 // 为 nil——`nextLinePreviewRow` 在这两种状态下扮演的角色完全不同:
@@ -1238,9 +1205,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 //  - `line` 为 nil(前奏/间奏「•••」下方):`romanizationRowText`/`translationRowText`
                 //    退到的正是 `nextLinePreviewRow` 展示的**同一句**,而且用的是 mainFont 整行
                 //    大小(见 nextLinePreviewFont)、俨然就是这段时间里的"伪正文"——它必须排在
-                //    自己的罗马音/译文**前面**,跟任何一句正常行"正文→罗马音→译文"同一个顺序;
-                //    维持原顺序的话,读到的是"译文在前、原文在后",倒着念——截图实测复现过
-                //    这个倒序。
+                //    自己的罗马音/译文**前面**,跟任何一句正常行"正文→罗马音→译文"同一个顺序,
+                //    否则读到的是"译文在前、原文在后",倒着念。
                 if line == nil {
                     nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
                         .padding(.top, CGFloat(rowSpacing.nextLine))
@@ -1257,12 +1223,11 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                         .padding(.top, CGFloat(rowSpacing.nextLine))
                 }
             }
-            // 补上——第一次解锁「锁定位置」时短暂弹一次的手势提示,4 秒后
-            // 自动消失,只弹一次(见 LyricsOverlayWindowController.hasShownDragHintKey
-            // 处的注释)。放在播放控制按钮上面同一个位置,不额外占用固定空间。
-            // 同一个位置现在还兼做全局快捷键的操作回声(见 transientHint)。
-            // 在这之前,只开桌面悬浮歌词的用户按「歌词提前/延后」是**完全没有反馈**的
-            // —— 那条提示只有灵动岛渲染,而这两个键恰恰是最需要看到累计值的。
+            // 第一次解锁「锁定位置」时短暂弹一次的手势提示,4 秒后自动消失,只弹一次
+            // (见 LyricsOverlayWindowController.hasShownDragHintKey 处的注释)。排在歌词下面,
+            // 只在有内容时出现,不额外占用固定空间。
+            // 同一个位置还兼做全局快捷键的操作回声(见 transientHint):只开桌面悬浮歌词的用户按
+            // 「歌词提前/延后」也要看得到累计值。
             if let hint = overlayController.transientHint {
                 Text(hint)
                     .font(.caption)
@@ -1285,9 +1250,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     .transition(.opacity)
             }
         }
-        // 对唱歌词按演唱者分左右。不带标记的歌 duetSide 恒为 .center,
-        // 跟原来完全一致——除非「对齐方式」覆盖生效,那时
-        // duetSide 会固定成用户选的方向,不带标记的普通歌也会跟着一起改对齐。
+        // 对唱歌词按演唱者分左右。不带标记的歌 duetSide 恒为 .center;「对齐方式」覆盖
+        // 生效时 duetSide 固定成用户选的方向,不带标记的普通歌也跟着一起改对齐。
         .multilineTextAlignment(duetTextAlignment)
     }
 
@@ -1532,8 +1496,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 锁定态 hover 时是否露出"解锁"提示。判据本体在 Core(`OverlayControlHitTest
     /// .unlockPillShown`,有 selftest),跟 `controlsVisible` 一样不要在这里就地展开——
     /// 控制器侧 `handleMouseEvent`/`hoveredControl` 要用**同一条**,长歪就是"看不见却挡手"
-    /// 或"看得见点不动"。接了 `showHoverControls`:「悬停时显示控制条」关掉时,
-    /// 锁定态也不再露出这颗图标——解锁还有菜单栏面板/菜单/全局热键三条路,不会把用户
+    /// 或"看得见点不动"。「悬停时显示控制条」关掉时(`showHoverControls`),
+    /// 锁定态也不露出这颗图标——解锁还有菜单栏面板/菜单/全局热键三条路,不会把用户
     /// 困住,理由见 `unlockPillShown` 声明处。
     private var unlockPillVisible: Bool {
         OverlayControlHitTest.unlockPillShown(
@@ -1542,33 +1506,29 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             hoverControlsEnabled: overlayController.showHoverControls)
     }
 
-    /// 锁定态 hover 时露出的解锁提示——跟播放控制排共用**同一个槙位**(body 里的
-    /// VStack 顶部那一格),不叠在歌词上面。
+    /// 锁定态 hover 时露出的解锁提示——跟播放控制排共用同一个槽位(body 里 VStack 的
+    /// controlsSlot),不叠在歌词上面。
     ///
-    /// **纯图标,不带「解锁」文字**:手写 HStack+Text 自己拼一套尺寸/padding 去凑
-    /// "跟 playbackControls 一样大",数字调得再准也仍然是**两套独立拼出来的样式**,
-    /// 观感对不齐。改成直接调 `iconButton(.unlockPill, "lock.fill", primary:
-    /// true)`——跟 `playbackControls` 里其它按钮**同一个构造函数**,自带同一套
-    /// 22pt/19pt 尺寸表、同一条 `ControlRectsPreferenceKey` 矩形上报(下面不再需要单独
-    /// 挂一次 `.background(GeometryReader...)`),外层套的 `.padding(.horizontal, 2)`
-    /// 也跟 `playbackControls` 的胶囊内边距逐字一致——保证的
-    /// 不是"数字算出来一样",是"用的是同一份代码",两个状态之间不会再有肉眼可辨的差异。
+    /// 纯图标、不带「解锁」文字,直接用 `iconButton(.unlockPill, "lock.fill", primary: true)`:
+    /// 跟 `playbackControls` 里其它按钮同一个构造函数,自带同一套 22pt/19pt 尺寸表、同一条
+    /// `ControlRectsPreferenceKey` 矩形上报,外层的 `.padding(.horizontal, 2)` 也跟 `playbackControls`
+    /// 的胶囊内边距一致。别手写 HStack+Text 另拼一套尺寸/padding 去凑"跟 playbackControls 一样大":
+    /// 数字调得再准也是两套独立拼出来的样式,两个状态之间观感对不齐。
     /// 图标用 `lock.fill`(锁着的锁),跟未锁定时 `iconButton(.lock, "lock.open.fill")`
-    /// (开着的锁)对称:开锁图标 = 点了会锁上,锁着图标 = 点了会解锁。不再单独放"解锁"
-    /// 文字——这一排其它图标(展开/设置/关闭)也都是纯图标无文字,统一风格。
+    /// (开着的锁)对称:开锁图标 = 点了会锁上,锁着图标 = 点了会解锁。这一排其它图标
+    /// (展开/设置/关闭)也都是纯图标无文字。
     private var unlockPill: some View {
         iconButton(.unlockPill, "lock.fill", primary: true)
             .padding(.horizontal, 2)
-            // 玻璃跟着可见性一起关 —— 理由见 overlayCapsuleBackground 那条提醒(不关的话,
+            // 玻璃跟着可见性一起关 —— 理由见 overlayCapsuleBackground 的注释(不关的话,
             // 设置页编辑台里这块胶囊会穿过外面的 .opacity(0) 显出来)。
             .overlayCapsuleBackground(visible: unlockPillVisible)
-            // 离卡片的 4pt 不再写在这里 —— 挪到 controlsSlot 上,槽位放到卡片下方时它要翻面。
+            // 离卡片的 4pt 不写在这里,在 controlsSlot 上:槽位放到卡片下方时它要翻面。
             .transition(.opacity)
     }
 
     private var playbackControls: some View {
-        // 这排常驻在歌词上方,越小越不挡视线,间距收到 5(跟下面 iconButton 的尺寸收紧
-        // 同一个方向)。
+        // 这排挨着歌词,越小越不挡视线,间距取 5。
         HStack(spacing: 5) {
             Group {
                 iconButton(.previous, "backward.fill")
@@ -1581,34 +1541,26 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             // 按钮不出现,而不是显示一颗永远点不亮的心。跟前面三个播放按钮同属"对当前这首歌
             // 的操作",放在同一组里、竖线之前。
             //
-            // 不走 controlButton:那个包装是为播放控制准备的(先查权限、被拒就 NSSound.beep()),
+            // 不走控制器的 withMusicPermission:那个包装是为播放控制准备的(先查权限、被拒就 NSSound.beep()),
             // 而这里的权限检查和乐观更新都在 PlaybackCoordinator.toggleFavorited() 里一起做了,再套一层会
             // 变成查两遍权限。
             if let favorited = playback.isFavorited {
-                // .help() 去掉了:窗口常年点击穿透,SwiftUI 连 hover 都收不到,那个 tooltip
-                // 永远不会弹出来 —— 留着只是一段看起来有效、其实永不触发的死代码。
-                // (同一对文案在「歌词窗口」那颗心上仍在用,本地化条目不受影响。)
+                // 不挂 .help():窗口常年点击穿透,SwiftUI 连 hover 都收不到,系统 tooltip 永远不会弹;
+                // 提示气泡见 controlTooltipOverlay。
                 iconButton(.favorite, favorited ? "heart.fill" : "heart")
                     .foregroundStyle(favorited ? Color.red : Color.white)
             }
-            // 用一条竖线跟前面三个播放按钮分组,提示这是不同类别的操作——这一组是"窗口级"
-            // 操作(展开/锁定/设置/关闭),不是"对当前这首歌"的操作。点了锁定之后
+            // 用一条竖线跟前面的播放按钮分组,提示这是不同类别的操作——这一组是"窗口级"
+            // 操作(展开/调整宽度/设置/锁定/关闭),不是"对当前这首歌"的操作。点了锁定之后
             // playback.lockPosition 变 true,这一整排控制按钮(包括它自己)会立刻消失
-            // (见 body 里 isHoveringForControls && !playback.lockPosition 那个条件),换成
-            // 悬浮在歌词上方的"解锁"提示(见 unlockPill)。淡到 0.18(原 0.25)——
-            // 视觉打磨的一部分,配合下面变窄的胶囊,分隔线也收得更柔和。
+            // (见 controlsVisible),换成同一个槽位里的"解锁"提示(见 unlockPill)。
             Rectangle()
                 .fill(Color.white.opacity(0.18))
                 .frame(width: 1, height: 12)
-            // 参考 QQ 音乐悬浮歌词补的三个按钮。相对顺序原来照抄参考图
-            // (展开 → 锁定 → 设置 → 关闭),把**锁定和设置对调**,
-            // 现在是 展开 → 设置 → 锁定 → 关闭。
-            //
-            // 这么排也更站得住:锁定是这一排里唯一**会让整排立刻消失**的按钮(点完
-            // lockPosition 变 true,controlsVisible 的条件不再成立,整条胶囊换成 unlockPill)。
-            // 把它从中间挪到紧挨关闭键的位置,两个"用完这排就没了"的操作凑在一起,而设置
-            // (弹菜单,排还在)跟展开(开新窗,排还在)留在前面 —— 按"点完这排还在不在"分组,
-            // 比原来照搬参考图更有道理。
+            // 按"点完这排还在不在"排:锁定是这一排里唯一会让整排立刻消失的按钮(点完
+            // lockPosition 变 true,controlsVisible 的条件不再成立,整条胶囊换成 unlockPill),
+            // 放在紧挨关闭键的位置,两个"用完这排就没了"的操作凑在一起;展开(开新窗)、
+            // 调整宽度、设置(弹菜单)点完这排都还在,留在前面。
             iconButton(.expandToLyricsWindow, "arrow.up.left.and.arrow.down.right")
             // 点亮 = 「调整宽度」模式开着,再点一下退出。
             iconButton(.adjustWidth, "arrow.left.and.right.square", active: overlayController.isAdjustingWidth)
@@ -1619,11 +1571,10 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         // 胶囊贴着按钮:上下不留边,高度就是播放键的 22pt;左右留 2pt,两端半圆不压到首尾按钮的高亮圆。见 04 章决策 56。
         .padding(.horizontal, 2)
         // 玻璃必须跟着 controlsVisible 一起关,光靠外面那句 .opacity(controlsVisible ? 1 : 0)
-        // 藏不住它 —— 见 overlayCapsuleBackground 那条提醒。
+        // 藏不住它 —— 见 overlayCapsuleBackground 的注释。
         .overlayCapsuleBackground(visible: controlsVisible)
-        // 这排按钮挪到歌词卡片**上方**之后,隔开"按钮胶囊和歌词卡片之间"那道缝的 4pt
-        // 曾写在这里(.bottom);槽位在「顶部居中」下会翻到卡片下方,那 4pt 挪到
-        // controlsSlot 上按上下翻面,这里不再带。
+        // 隔开按钮胶囊和歌词卡片的那 4pt 不写在这里,在 controlsSlot 上:槽位在「顶部居中」下
+        // 会翻到卡片下方,那 4pt 要按上下翻面。
     }
 
     /// 悬停在哪颗按钮上、且那颗按钮此刻看得见 —— 提示气泡的候选。按钮高亮用的 `hoveredControl`
@@ -1684,55 +1635,29 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         .accessibilityLabel(text)
     }
 
-    // 跟 GlobalHotkeys.swift 里播放控制三个动作同一套"点了才校验权限"逻辑——没问过就
-    // 顺手弹一次系统授权对话框,已经拒绝过就用 NSSound.beep() 给一个"没有生效"的听觉
-    // 反馈,不需要在悬浮窗里再单独设计一套提示 UI(补上,理由跟
-    // GlobalHotkeys.swift 同一处注释一致)。只有选了 Apple Music 才真的会走到这个
-    // 权限检查,见 MusicAutomationPermission.checkForCurrentPlayer 注释。
-    //
-    // 必须用 checkForCurrentPlayerSafely(异步)——理由见该方法定义处的注释:同步版本
-    // 在还没问过时会直接触达有据可查、可能永久挂起主线程的系统 API。iconButton 的
-    // action 是同步闭包(Button(action:) 要求),用 Task { ... } 包一层去调用异步版本。
-    // controlButton(那层"点了才校验 Apple Music 自动化权限"的包装)已经搬到
-    // LyricsOverlayWindowController.withMusicPermission —— 点击既然改由控制器分发,
-    // 守卫也得跟着过去,不然会变成"View 里留一份没人调的守卫"。
-
-    // 图标用 lock.open.fill——画的是"当前是开着的"这个状态,点一下把它关上/锁定,跟
-    // 另外三个播放按钮统一用 .fill 系列图标保持视觉一致。不经过 controlButton 那层
-    // "先查 Apple Music 自动化权限"的守卫——锁定位置这个动作跟自动化播放控制完全不
-    // 搭边,复用会引入一个跟这个按钮语义不匹配的隐藏依赖,所以两者共享的只是纯视觉
-    // 样式(iconButton),各自的守卫/动作逻辑分开写。
-    // lockButton 同理并入 iconButton(.lock, …),动作在控制器的 performControlAction 里。
-
     /// 胶囊里的一个图标。**刻意不是 Button** —— 悬浮窗常年 ignoresMouseEvents=true,
     /// SwiftUI 一个鼠标事件都收不到,挂 Button 只会留下永不触发的死代码。点击由
     /// LyricsOverlayWindowController 按下面上报的矩形自己分发。
     ///
-    /// 代价(拍板接受):没有按下变暗、没有 hover 高亮。原来用的是
-    /// .buttonStyle(.plain),本来就没有 hover 高亮,真正少掉的只有按下那一下的变暗。
-    /// 换来的是「一个整窗布尔量同时服务点击和滚轮」这个矛盾被彻底删掉。
-    ///
-    /// **hover 高亮补回来了**(「悬浮歌词这上面的按钮帮我开一个鼠标移上去
-    /// 有交互的动效视觉 ux 效果」)。补的不是 `.onHover` —— 那条路照旧走不通,补的是"控制器
-    /// 拿它本来就在算的那次命中测试告诉我哪颗被压着"(`Chrome.hoveredControl`),视图只负责
-    /// 画。指针挪到哪颗,哪颗底下浮起一圈白色圆形高亮、图标同时轻微放大,离开就收回去。
+    /// hover 高亮不走 `.onHover`(那条路走不通),而是控制器拿它本来就在算的那次命中测试告诉
+    /// 视图哪颗被压着(`Chrome.hoveredControl`),视图只负责画:指针挪到哪颗,哪颗底下浮起一圈
+    /// 白色圆形高亮、图标同时轻微放大,离开就收回去。
     ///
     /// **上报矩形的那层 `.background(GeometryReader…)` 必须留在最外面,悬停的变形只准
     /// 发生在它里面**。那个矩形就是控制器分发点击用的判据:一旦让它跟着 hover 一起放大,
     /// 指针停在按钮边缘时就会变成"变大→仍然命中→保持变大"和"缩回→不再命中→缩回"来回抖
     /// 的自激反馈,而且按钮的可点区域会随指针位置伸缩。所以放大只加在 `Image` 上、高亮圆
-    /// 只当背景画,`.frame` 那一层的尺寸**逐像素不变**(19/22pt),外层量到的还是原来那个矩形。
+    /// 只当背景画,`.frame` 那一层的尺寸**逐像素不变**(19/22pt),外层量到的矩形不随悬停变。
     ///
-    /// 按下那一下仍然没有反馈:点击是在 `.leftMouseDown` 就派发掉的,而 `.settingsMenu`
+    /// 按下那一下没有反馈:点击是在 `.leftMouseDown` 就派发掉的,而 `.settingsMenu`
     /// 会当场弹出一个跑自己事件循环的 NSMenu —— "按下变暗、松手复原"在那条路上很容易卡成
-    /// 一个永远按着的按钮。真要补,得做成不依赖 mouseUp 的定时闪一下,不是这次的范围。
+    /// 一个永远按着的按钮。要补得做成不依赖 mouseUp 的定时闪一下。
     private func iconButton(_ id: OverlayControlID, _ systemName: String,
                             primary: Bool = false, active: Bool = false) -> some View {
         let hovered = overlayController.hoveredControl == id
         return Image(systemName: systemName)
-            // 常驻按钮排要露出来才挡桌面,尽量小是这一排存在的前提,不是可以慢慢打磨的
-            // 细节。20/24pt 的点击矩形对鼠标操作(这排按钮从不用于触摸)仍然够点,
-            // 比这更小会开始不好点准。
+            // 按钮排露出来就挡着桌面,尽量小是这一排的前提。19/22pt 的点击矩形对鼠标操作
+            // (这排按钮从不用于触摸)仍然够点,再小就不好点准。
             .font(.system(size: primary ? 12 : 10.5, weight: .semibold))
             .foregroundStyle(.white)
             // 图标自己放大一点点。1.16 是"看得出来但不跳"的量:这排图标只有 10.5/12pt,
@@ -1751,7 +1676,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             // reduceMotion 下不补间,但高亮照画(见 reduceMotion 声明处)。
             .animation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.72),
                        value: hovered)
-            // 这一层必须是最外面的(见上面那条提醒):它量的是点击判据,不能跟着悬停动。
+            // 这一层必须是最外面的(见 iconButton 的注释):它量的是点击判据,不能跟着悬停动。
             .background(
                 GeometryReader { proxy in
                     Color.clear.preference(
@@ -1771,8 +1696,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             // 就是纯玻璃,alpha 越高越接近下面那档纯色卡片。材质默认档 .regular 而不是
             // .thick(灵动岛那档):悬浮歌词压在壁纸/别的窗口上,厚材质几乎把底下盖成
             // 一块灰板,失去"透出壁纸"的意义;默认也不是 .ultraThin,浅色壁纸上白字会不够清楚。
-            // Material 全部五档都能选(见 OverlayGlassIntensity)——上面这条
-            // 默认档取舍的理由仍然成立,只是从"写死"变成了"没碰过这颗设置时落在哪一档"。
+            // Material 全部五档都能选(见 OverlayGlassIntensity),上面说的是没碰过这项设置时的默认档。
             // 材质在这扇 isOpaque=false、backgroundColor=.clear 的 NSPanel 里能直接渲染,
             // NotchLyricsWindow 用 .thickMaterial 是同一条路。系统「减少透明度」开着时材质
             // 自动退成近乎不透明的底色,不用特判。
@@ -1786,9 +1710,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
                 .fill(playback.backgroundColor)
         } else {
-            // 未开启背景色(默认状态)时保留原来近乎透明的拖拽捕获层——纯透明区域有时候
-            // 完全接不到拖拽手势,这里给个极淡的背景让 isMovableByWindowBackground 在
-            // 整块区域都能生效。
+            // 未开启背景色(默认状态)时垫一层近乎透明的底:纯透明区域接不到拖拽手势(WindowServer
+            // 按像素 alpha 判指针落在哪扇窗),给个极淡的背景让长按拖动在整块区域都能生效。
             Color.black.opacity(0.001)
         }
     }
@@ -1801,8 +1724,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             layerScrollingKaraokeRow(words: words)
         } else if let words = line?.words {
             // 换行模式同样走图层:按宽度切成几行,每行一条图层行各自填色(见 WrappedKaraokeRows 头注)。
-            // 原来这里是 30Hz TimelineView 包整个 WrapLayout、每个字一个渐变 Text,悬浮窗每拍整窗
-            // 布局 + 提交一遍(实测播放中 9.3%,滚动模式的图层路 4.0%)。
+            // 别退回 30Hz TimelineView 包整个 WrapLayout、每个字一个渐变 Text 的写法:悬浮窗每拍
+            // 整窗布局 + 提交一遍,实测 CPU 9.3%,滚动模式的图层路 4.0%(见 04 章决策 30)。
             layerWrappedKaraokeRows(words: words)
         } else if let text = line?.mainText, rowPlan.main == .paced, let window = pacedWindow {
             // 没有逐字时间轴:按这一句显示多久配速,开头停一会儿、句末前滚完,暂停就停。
@@ -2105,10 +2028,10 @@ extension View {
         modifier(OptionalTextStroke(enabled: enabled, color: color, maskSource: maskSource()))
     }
 
-    /// 悬浮窗控制胶囊的材质(用户在几套视觉方案里选了"液态玻璃 + 纯色兜底"):
+    /// 悬浮窗控制胶囊的材质(液态玻璃 + 纯色兜底):
     /// 有液态玻璃的系统(macOS 26+)用 `.glassEffect`,没有就退回纯色深底胶囊——跟
     /// SettingsDesignSystem.swift 的 `settingsCardBackground` 同一个取舍(`#available`
-    /// 门控,旧系统不模拟液态玻璃,直接用改版前的样子)。`playbackControls`/`unlockPill`
+    /// 门控,旧系统不模拟液态玻璃)。`playbackControls`/`unlockPill`
     /// 共用这一份实现——视觉上是"同一片材质"在两种内容之间切换,不能各自写一份、观感对不上。
     ///
     /// 两个分支都补一条发丝描边,理由跟 `settingsCardBackground` 那条一致、而且更必要:
@@ -2126,14 +2049,12 @@ extension View {
     /// `GlassEffectContainer` 会把它内部**所有**带 `.glassEffect` 的子树收拢进容器自己那一趟
     /// 玻璃渲染里(容器存在的意义就是让多块玻璃共享采样、靠近时互相融合),而容器和玻璃视图
     /// **之间**那一层 `.opacity` 在这趟渲染里不生效 —— 连玻璃托着的内容(这排图标)一起原样
-    /// 画出来。真悬浮窗没有容器,所以一直是对的;而设置页的编辑台渲染的是同一份视图,
-    /// `SettingsPage` 又把整页内容包在 `SettingsGlassContainer` 里(见 SettingsDesignSystem),
-    /// 于是「预览里凭空多出一排点不动的播放控制按钮」。
-    /// 复现与证据见 docs/features/04-desktop-overlay.md「编辑台改造」第九步。
+    /// 画出来。真悬浮窗没有容器;而设置页的编辑台渲染的是同一份视图,`SettingsPage` 又把整页内容
+    /// 包在 `SettingsGlassContainer` 里(见 SettingsDesignSystem),只靠 `.opacity(0)` 的话预览里会
+    /// 凭空多出一排点不动的播放控制按钮。复现与证据见 04 章「编辑台改造记录」第九步。
     ///
     /// 只有**玻璃那一档**需要这个参数。纯色兜底那一档(旧系统)不进任何玻璃容器,外面
-    /// 那句 `.opacity(0)` 本来就藏得住它,原样不动。可见时这条修饰符链跟改动前逐字一致 ——
-    /// 真悬浮窗的观感一个像素都没变。
+    /// 那句 `.opacity(0)` 本来就藏得住它。
     ///
     /// (`glassEffect(_:in:isEnabled:)` 这台机器的 SDK 上没有,只能用分支;代价是切换那一下
     /// 玻璃层换了视图身份 —— 落在 body 那条 `.animation(_:value: controlsVisible)` 的事务里,
@@ -2159,9 +2080,8 @@ extension View {
 
 /// 歌词**文字**实际占据的矩形(悬浮窗坐标空间),多行/多元素取并集。
 ///
-/// 给「指针划过时让开」用:原来的判据是整个窗口矩形,而窗口比文字大得多 —— 上下有卡片
-/// 内边距和播放控制槽位、左右是 WrapLayout 撑满留下的空白,于是指针在歌词**附近**就触发
-/// 了淡出(现象是的正是这个)。
+/// 给「指针划过时让开」用:不能拿整个窗口矩形当判据,窗口比文字大得多 —— 上下有卡片
+/// 内边距和播放控制槽位、左右是 WrapLayout 撑满留下的空白,指针在歌词附近就会触发淡出。
 ///
 /// reduce 必须**合并**、且跳过零矩形:树里没设过这个 key 的分支(测高度那些 Color.clear)
 /// 会贡献 .zero,覆盖式写法会把真实矩形冲掉 —— 同 ControlRectsPreferenceKey 那个坑。
@@ -2174,27 +2094,6 @@ private struct LyricsTextRectPreferenceKey: PreferenceKey {
     }
 }
 
-/// 这次渲染需要多高(按钮槽位 + 歌词卡片)。真窗口拿它调窗高(updateHeight),编辑台拿它
-/// 定卡高(OverlayEditorStage.cardHeight)。
-///
-/// reduce 必须取**最大值**,不能无脑 `value = nextValue()` —— 跟
-/// `ControlsFramePreferenceKey` / `ControlRectsPreferenceKey` 那两条是同一个坑的第三例:
-/// 全树只有一处真的设过这个 key(上面那个测高度的 `GeometryReader`),**其余每一个分支都在
-/// 贡献 `defaultValue`(0)**;覆盖式写法的结果取决于"谁排在最后",一旦 0 排在后面,真实
-/// 高度就被冲掉,消费方收到的恒为 0。
-///
-/// 同一次渲染里
-/// `GeometryReader` 明明量到 206.2,`onPreferenceChange` 收到的却是 **0.0**(单变量对照,
-/// 四个宿主一致);把这一行从
-/// `value = nextValue()` 换成 `max` —— 别的一个字不改 —— 四个宿主立刻全部收到 206.2。
-/// 编辑台的后果最刺眼:卡高被 `max(120, ceil(0))` 摁在 120pt 的地板上,`.clipped()` 把译文
-/// 和下一句预览整个裁掉,看起来就像"编辑台不画译文"。
-/// 第九步那条"探针进程里 onPreferenceChange 恒收到 0、是精简启动路径的产物"的结论**是
-/// 错的**,别再照着它把这类现象当环境噪声放过 —— 病根一直在这三行里。
-///
-/// 取 max 而不是"跳过零值再覆盖":本 key 只有一个写入方,`max` 与"那唯一一次写入的值"恒等
-/// (其余分支都是 0),内容变矮时也照样报得下去(每一趟布局都从 defaultValue 重新归约,
-/// 不会记住上一趟的旧值)。
 /// 悬浮歌词卡片里的几行。设置页编辑台按它划可点区域(`OverlayEditorStage.cardHotspots`)。
 enum OverlayContentRow: Hashable {
     case main, romanization, translation, nextLine
@@ -2290,6 +2189,21 @@ private extension View {
     }
 }
 
+/// 这次渲染需要多高(按钮槽位 + 歌词卡片)。真窗口拿它调窗高(updateHeight),编辑台拿它
+/// 定卡高(OverlayEditorStage.cardHeight)。
+///
+/// reduce 必须取**最大值**,不能无脑 `value = nextValue()` —— 跟
+/// `ControlsFramePreferenceKey` / `ControlRectsPreferenceKey` 是同一个坑:
+/// 全树只有一处真的设过这个 key(body 里那个测高度的 `GeometryReader`),**其余每一个分支都在
+/// 贡献 `defaultValue`(0)**;覆盖式写法的结果取决于"谁排在最后",一旦 0 排在后面,真实
+/// 高度就被冲掉,消费方收到的恒为 0(`GeometryReader` 量到 206.2,`onPreferenceChange` 收到 0.0)。
+/// 编辑台的后果最刺眼:卡高被 `max(120, ceil(0))` 摁在 120pt 的地板上,`.clipped()` 把译文
+/// 和下一句预览整个裁掉,看起来就像"编辑台不画译文"。探针进程里 onPreferenceChange 恒收到 0
+/// 也是这个原因,别当成精简启动路径带来的环境噪声。
+///
+/// 取 max 而不是"跳过零值再覆盖":本 key 只有一个写入方,`max` 与"那唯一一次写入的值"恒等
+/// (其余分支都是 0),内容变矮时也照样报得下去(每一趟布局都从 defaultValue 重新归约,
+/// 不会记住上一趟的旧值)。
 private struct ContentHeightPreferenceKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -2301,8 +2215,7 @@ private struct ContentHeightPreferenceKey: PreferenceKey {
 ///
 /// reduce 必须**合并**、而且**跳过零矩形**,不能无脑 value = nextValue():
 /// 树里没设过这个 key 的分支(外层测高度的 background 里那个 Color.clear)会贡献
-/// defaultValue,覆盖式写法会把真实矩形冲掉 —— 这个坑在
-/// ControlsFramePreferenceKey 上实测踩过一次,见它的注释。
+/// defaultValue,覆盖式写法会把真实矩形冲掉 —— 同 ControlsFramePreferenceKey。
 private struct ControlRectsPreferenceKey: PreferenceKey {
     static let defaultValue: [OverlayControlID: CGRect] = [:]
     static func reduce(value: inout [OverlayControlID: CGRect],
@@ -2314,40 +2227,27 @@ private struct ControlRectsPreferenceKey: PreferenceKey {
 private struct ControlsFramePreferenceKey: PreferenceKey {
     static var defaultValue: CGRect = .zero
     // 保留最后一个**非零**报告,而不是无脑 value = nextValue()。树里没设过这个 key 的分支
-    // (比如外层测高度的 background 里那个 Color.clear)会贡献 defaultValue(.zero),按原来的
-    // 写法排在后面就会把真正报上来的矩形冲掉 —— 实测就是这么坏的。
+    // (比如外层测高度的 background 里那个 Color.clear)会贡献 defaultValue(.zero),覆盖式
+    // 写法下它排在后面就会把真正报上来的矩形冲掉。
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
         let next = nextValue()
         if next != .zero { value = next }
     }
 }
 
-// 自动换行布局(SwiftUI Layout 协议,macOS 14+起支持,项目 Package.swift 的最低部署目标
-// 早就是 macOS 14,不用额外提版本)。逐字歌词一个字一个 Text 排成一排,原来的
-// HStack(spacing: 0) 从不换行,遇到宽度不够时会把每个子 Text 压缩到自己装不下、表现成
-// 省略号。这个布局改成:一行装不下下一个字就自动另起一行;并且把每一行整体居中(先按
-// "这一行能不能再塞下一个字"分组算出每行,再在摆放时把整行按 (可用宽度-这一行实际宽度)/2
-// 整体右移),跟这个界面其它文字元素统一的居中风格保持一致。刻意不处理"单个字本身就比
-// 一整行还宽"这种极端情况——真实歌词数据里几乎不会出现,出现了也就是这一"行"单独超宽,
-// 不做防御性拆分。
-// 从 private 改成 internal:纯几何计算的自定义换行布局,不依赖这个文件里
-// 任何其它状态,"歌词窗口"(UI/LyricsWindowView.swift)复用它给当前行的逐字高亮做
-// 换行,不需要另起一份重复实现——同一个 target 内跨文件访问,行为对这里的悬浮窗
-// 零影响。
 /// WrapLayout 排完之后文字**真正占据**的那块矩形,相对它自己 bounds 的原点。
 ///
 /// 为什么要它、为什么是引用类型:「鼠标划过歌词才让开」需要知道文字的真实范围,而
 /// WrapLayout 的布局尺寸是**撑满整宽**的(对唱左右对齐要靠这个)。Layout 协议里没法写
 /// PreferenceKey,而给逐字行的每个字挂 GeometryReader 会把几何依赖拖进 60fps 填色热路径
-/// (这个坑项目里踩过,见 durable note swiftui-geometry-anchor-token-drags-panel-into-
-/// per-frame-rebuild)。所以走一个纯引用的旁路:布局阶段写进来,AppKit 侧的鼠标事件
+/// (同类的坑见 07 章决策 0)。所以走一个纯引用的旁路:布局阶段写进来,AppKit 侧的鼠标事件
 /// 处理直接读 —— 不经过 SwiftUI 的渲染循环,零重建成本。
 final class WrapContentRectSink {
     /// 相对 WrapLayout bounds 原点的矩形。`.zero` = 还没排过 / 没有内容。
     var rect: CGRect = .zero
     /// 这块矩形是**哪一行**排出来的(WrapLayout 的 `contentKey`)。
     ///
-    /// 没有它就会读到**上一行的残值**,现象是的就是这个:间奏时主行换成
+    /// 没有它就会读到**上一行的残值**:间奏时主行换成
     /// `Text("♪")`(以及行级歌词、「暂无歌词」这些状态文案),**整条分支压根不经过 WrapLayout**
     /// —— 没人写 sink,而 `reportingMainLineRect` 照读不误,于是上报出"♪ 的位置 + 上一句歌词
     /// 的宽高"那么一块矩形,往右糊出一大片。`.zero` 守卫拦不住:一首逐字歌只要排过一行,
@@ -2359,6 +2259,11 @@ final class WrapContentRectSink {
     var owner: AnyHashable?
 }
 
+/// 自动换行布局(SwiftUI Layout 协议)。逐字歌词一个字一个 Text 排成一排,HStack(spacing: 0)
+/// 从不换行,宽度不够时会把每个子 Text 压缩到自己装不下、表现成省略号;这个布局一行装不下
+/// 下一个字就另起一行,每一行按 `rowAlignment` 整体对齐。刻意不处理"单个字本身就比一整行
+/// 还宽"这种极端情况——真实歌词数据里几乎不会出现,出现了也就是这一"行"单独超宽,不做防御性拆分。
+/// 纯几何计算、不依赖这个文件里的其它状态,歌词窗口、歌词管理也复用它。
 struct WrapLayout: Layout {
     // 换行/对齐的几何计算全在 WrapLayoutMath(LyrimuseCore)里,selftest 够得到;这里只剩
     // Layout 协议的壳:量尺寸、缓存、把算好的坐标交给 SwiftUI 去 place。
@@ -2369,8 +2274,8 @@ struct WrapLayout: Layout {
     var rowAlignment: RowAlignment = .center
     /// 内容身份 key:调用方把**一切影响子视图固有尺寸**的输入
     /// (行文本身份 + 完整字体身份 family/size/weight + 罗马音开关)拼成一个 Hashable
-    /// 传进来 —— key 和子视图数量都没变,updateCache 就跳过整行重新测宽。nil = 关闭守卫,
-    /// 保持"每回合全量重测"的旧行为(冷调用点不用改)。
+    /// 传进来 —— key 和子视图数量都没变,updateCache 就跳过整行重新测宽。nil = 关闭守卫、
+    /// 每回合全量重测,冷调用点不必传。
     /// 漏掉一个影响尺寸的输入 = 拿陈旧尺寸错误换行,宁可多进 key 也别少。
     var contentKey: AnyHashable? = nil
     /// 可选:把"文字实际占据的矩形"写到这里,给鼠标命中判定用(见 WrapContentRectSink)。
@@ -2382,16 +2287,13 @@ struct WrapLayout: Layout {
 
     // 量一次子视图尺寸就存住,别每次调用都重量一遍。
     //
-    // 用 sample 量到的现场:"歌词窗口"播放带逐字歌词的歌时,主线程 90%+ 的时间
-    // 在 NSHostingView.layout,栈顶就是这个 Layout 的 sizeThatFits。原因是逐字填色由
-    // TimelineView 按渲染帧频驱动(60~120Hz),而这里**每次** sizeThatFits/placeSubviews
-    // 都会 `subviews.map { $0.sizeThatFits(.unspecified) }` 把整行每个字重新测一遍 ——
-    // SwiftUI 一个布局回合里本来就会多次询问尺寸,再乘以帧率,就是一秒几千次文字排版。
+    // 逐字填色由 TimelineView 按渲染帧频驱动(60~120Hz)时,如果每次 sizeThatFits/placeSubviews
+    // 都 `subviews.map { $0.sizeThatFits(.unspecified) }` 把整行每个字重新测一遍,SwiftUI 一个布局
+    // 回合里本来就会多次询问尺寸,再乘以帧率,就是一秒几千次文字排版(sample 里主线程 90%+ 在
+    // NSHostingView.layout,栈顶就是这个 Layout 的 sizeThatFits)。
     //
-    // 缓存原来只在"子视图集合真的变了"时重建(updateCache)——但 SwiftUI 在子视图**值**
-    // 更新(逐 tick 的渐变变化)时同样回调 updateCache,于是填色期间每个布局回合仍然
-    // 全量重测。补 contentKey 守卫:key/数量都没变就直接复用,顺带把 rows
-    // (换行分组)也缓存住 —— 原来 sizeThatFits/placeSubviews 各自把 rows() 重算一遍。
+    // SwiftUI 在子视图值更新(逐 tick 的渐变变化)时同样回调 updateCache,只在"子视图集合真的变了"
+    // 时重建缓存挡不住,所以加 contentKey 守卫:key/数量都没变就直接复用,rows(换行分组)也一起缓存。
     struct Cache {
         var sizes: [CGSize]
         var contentKey: AnyHashable?
