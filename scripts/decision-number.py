@@ -4,6 +4,8 @@
 
     python3 scripts/decision-number.py append <章> <正文文件|-> [--fill <文件…>]   # 记一条新决策,打印分到的号
     python3 scripts/decision-number.py check [文件…]              # 核对指针(不带参数 = 全仓)
+    python3 scripts/decision-number.py show <章> <号…>            # 打印这几条决策的正文
+    python3 scripts/decision-number.py which <章> <行号>          # 文档这一行属于哪条决策
 
 # append
 
@@ -29,6 +31,16 @@
 
 `docs/features/` 在 .gitignore 里,干净 clone 上没有这些文档 —— 这时直接放行(退出码 0)。
 命中问题时非零退出,逐条打印 `file:line`。
+
+check 只核号在不在,指错了号照样通过。新写或改过的指针,用 show 把那条决策的正文打出来对一眼内容。
+
+# show / which
+
+show 打印该章里这几个号的决策全文:从这一条开头到下一条决策开头,夹在中间的小列表算这一条的。
+号重了几条都打出来,并在 stderr 提示;没有这个号的退出码 1。
+
+which 报文档第几行落在哪条决策里(号和标题行),给注释里的论证找指针用。别往上找最近的「数字. 」行,
+那会落到嵌套的小列表上;这里跟 check 用同一套数号规则。不在这一节的决策里的行退出码 1。
 
 决策条目是这一节里顶格的「数字. 」开头的行(早期的条目没有加粗标题,同样算)。小节里嵌着的
 1. 2. 3. 小列表不算:按出现顺序切成连续编号的段,不从 1 开始的段一律算决策;从 1 开始的段只有
@@ -79,27 +91,34 @@ def section_bounds(text):
     return m.end(), (nxt.start() if nxt else len(text))
 
 
-def decision_numbers(text, start, end):
-    """[start, end) 里的决策号(含重复),跳过小节里从 1 重新数起的小列表。"""
+def decision_entries(text, start, end):
+    """[start, end) 里的决策条目 [(号, 行首偏移)](含重复),跳过小节里从 1 重新数起的小列表。"""
     runs = []
-    for n in (int(x) for x in ITEM.findall(text, start, end)):
-        if runs and n == runs[-1][-1] + 1:
-            runs[-1].append(n)
+    for m in ITEM.finditer(text, start, end):
+        n = int(m.group(1))
+        if runs and n == runs[-1][-1][0] + 1:
+            runs[-1].append((n, m.start()))
         else:
-            runs.append([n])
+            runs.append([(n, m.start())])
     if not runs:
         return []
-    top = max(max(r) for r in runs)
-    keep = [r[0] != 1 or top in r for r in runs]
+    top = max(n for r in runs for n, _ in r)
+    keep = [r[0][0] != 1 or any(n == top for n, _ in r) for r in runs]
     # 每个不从 1 开始的段只认一个接着数的段。紧挨在它前面的小列表往往也在 10 个号以内,
     # 够得着的都算进来就会跟主列表撞号。
     for j, later in enumerate(runs):
-        if later[0] == 1:
+        first = later[0][0]
+        if first == 1:
             continue
-        reach = [i for i in range(j) if runs[i][0] == 1 and later[0] <= runs[i][-1] + 10]
+        reach = [i for i in range(j) if runs[i][0][0] == 1 and first <= runs[i][-1][0] + 10]
         if reach:
-            keep[min(reach, key=lambda i: (abs(later[0] - runs[i][-1] - 1), i))] = True
-    return [n for r, k in zip(runs, keep) if k for n in r]
+            keep[min(reach, key=lambda i: (abs(first - runs[i][-1][0] - 1), i))] = True
+    return [e for r, k in zip(runs, keep) if k for e in r]
+
+
+def decision_numbers(text, start, end):
+    """[start, end) 里的决策号(含重复),规则见 decision_entries。"""
+    return [n for n, _ in decision_entries(text, start, end)]
 
 
 def numbers(path):
@@ -163,6 +182,52 @@ def append(chapter, body_src, fill=()):
         print(f'  填号 {os.path.relpath(f, ROOT)}: {count} 处')
 
 
+def load_section(chapter):
+    """(章号, 全文, 决策一节的边界);找不到章或这一节就退出。"""
+    path = chapter_file(chapter)
+    if not path:
+        sys.exit(f'找不到第 {chapter} 章的文档')
+    text = open(path, encoding='utf-8').read()
+    b = section_bounds(text)
+    if b is None:
+        sys.exit(f'{os.path.basename(path)} 里没有「## 设计决策与已知坑」一节')
+    return os.path.basename(path)[:2], text, b
+
+
+def show(chapter, wanted):
+    chap, text, (start, end) = load_section(chapter)
+    entries = decision_entries(text, start, end)
+    rc = 0
+    for want in wanted:
+        hits = [i for i, (n, _) in enumerate(entries) if n == want]
+        if not hits:
+            print(f'{chap} 章没有决策 {want}', file=sys.stderr)
+            rc = 1
+            continue
+        if len(hits) > 1:
+            print(f'{chap} 章决策 {want} 有 {len(hits)} 条,指针指不准', file=sys.stderr)
+        for i in hits:
+            stop = entries[i + 1][1] if i + 1 < len(entries) else end
+            print(text[entries[i][1]:stop].rstrip('\n') + '\n')
+    return rc
+
+
+def which(chapter, lineno):
+    chap, text, (start, end) = load_section(chapter)
+    lines = text.split('\n')
+    if not 1 <= lineno <= len(lines):
+        sys.exit(f'没有第 {lineno} 行(全文 {len(lines)} 行)')
+    offset = sum(len(l) + 1 for l in lines[:lineno - 1])
+    owner = [(n, off) for n, off in decision_entries(text, start, end) if off <= offset]
+    if not start <= offset < end or not owner:
+        print(f'第 {lineno} 行不在「设计决策与已知坑」一节的决策里', file=sys.stderr)
+        return 1
+    n, off = owner[-1]
+    title = text[off:].split('\n', 1)[0]
+    print(f'{chap} 章决策 {n}: {title[:120]}')
+    return 0
+
+
 def code_files(args):
     if args:
         return [a for a in args if a.endswith(CODE_EXT) and os.path.isfile(a)]
@@ -210,6 +275,10 @@ def check(args):
 def main():
     if len(sys.argv) >= 2 and sys.argv[1] == 'check':
         return check(sys.argv[2:])
+    if len(sys.argv) >= 4 and sys.argv[1] == 'show' and all(a.isdigit() for a in sys.argv[3:]):
+        return show(sys.argv[2], [int(a) for a in sys.argv[3:]])
+    if len(sys.argv) == 4 and sys.argv[1] == 'which' and sys.argv[3].isdigit():
+        return which(sys.argv[2], int(sys.argv[3]))
     if len(sys.argv) == 4 and sys.argv[1] == 'append':
         append(sys.argv[2], sys.argv[3])
         return 0
