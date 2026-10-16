@@ -4740,7 +4740,7 @@ func enabledLyricSourceCount() int {
 type lyricSourceResult struct {
 	source                  string
 	ne                      neteaseInfo
-	lyr, yrc, tr, roma      string // roma:源自带罗马音(逐行 LRC),目前只有 qq 走这里(网易云的在 ne.Roma),2026-09-02 加
+	lyr, yrc, tr, roma      string // roma:源自带罗马音(逐行 LRC),目前只有 qq 走这里(网易云的在 ne.Roma)
 	bg                      string // 背景人声轨(YRC 语法,形状见 amllResult.bg)。只有 applemusic 走这里,amll 的在 amll.bg。
 	matchTitle, matchArtist string
 	matchAlbum, matchCover  string

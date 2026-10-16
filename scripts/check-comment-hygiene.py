@@ -31,10 +31,13 @@
 
 # 范围
 
-只看**注释行**(整行以 // /// # * /* 开头)和 Python 的文档字符串(模块 / 类 / 函数开头那一段,
-按语法树认);行尾注释和别的字符串字面量不扫 —— 误报的代价比漏报大,规则宁可窄。不可见字符那一条
-例外:扫整行,字符串和 rune 字面量里的同样算(这类字符最常藏在那里);允许的空白只有普通空格、tab、
-回车。命中任何一条即非零退出并打印 `file:line`。
+只看注释:整行注释(以 // /// # * /* 开头)、行尾注释(`code // …`、`code /* … */`,Python 与 shell 是
+`code # …`)和 Python 的文档字符串(模块 / 类 / 函数开头那一段,按语法树认)。行尾注释先去掉字符串和
+rune 字面量(含跨行的三引号字符串、Go / JS 反引号字符串、Swift 原始字符串和 shell 的 heredoc),再取
+注释标记之后的部分,所以字符串里的同样文字不算;shell 的 # 只在词首才算注释(`$#`、`${#x}` 不算)。
+别的字符串字面量一律不扫 —— 误报的代价比漏报大,规则宁可窄。不可见字符那一条例外:扫整行,字符串和
+rune 字面量里的同样算(这类字符最常藏在那里);允许的空白只有普通空格、tab、回车。命中任何一条即
+非零退出并打印 `file:line`。
 
 易误伤:注释里的「用户」多数指 **App 的最终用户**(正当语义),「这一轮 / 上一轮」在本仓
 多指**一轮歌词源查询**(领域词) —— 所以人物归因那条只匹配「用户+要求/反馈/拍板…」这类
@@ -60,8 +63,12 @@ SKIP_DIRS = {'.build', '.git', 'node_modules', '__pycache__', 'vendor', 'Derived
 SKIP_FILES = {'scripts/check-comment-hygiene.py'}
 EXTS = ('.swift', '.go', '.js', '.mjs', '.ts', '.py', '.sh')
 
-# 整行注释才扫。行尾注释(`code // …`)与字符串里的同样文字一律放过。
+# 整行注释。行尾注释由 trailing_comments() 先去掉字符串再取。
 COMMENT_LINE = re.compile(r'^\s*(//|///|#|\*|/\*)')
+C_LIKE_EXTS = ('.swift', '.go', '.js', '.mjs', '.ts')
+SWIFT_RAW_OPEN = re.compile(r'(#+)("""|")')
+SH_HEREDOC = re.compile(r'(?<!<)<<(-?)\s*([\'"]?)([A-Za-z_][A-Za-z0-9_]*)\2')
+SH_WORD_START = set(' \t;&|()')
 
 RULES = [
     (u'日期戳',
@@ -101,6 +108,213 @@ def invisible_char(line):
         if ch not in INVISIBLE_OK and unicodedata.category(ch) in INVISIBLE_CATEGORIES:
             return ch
     return None
+
+
+def _skip_quoted(line, i, quote):
+    """line[i] 是开引号:返回配对的闭引号之后的位置,这一行里没闭合返回 None。反斜杠转义下一个字符。"""
+    j = i + 1
+    while j < len(line):
+        if line[j] == '\\':
+            j += 2
+            continue
+        if line[j] == quote:
+            return j + 1
+        j += 1
+    return None
+
+
+def _c_like_comments(lines, swift):
+    """Swift / Go / JS 的行尾注释 {行号: 注释正文}。跨行的块注释、三引号字符串、反引号字符串、
+    Swift 原始字符串都带着状态往下走,字符串里的 // 不算。"""
+    out = {}
+    close = None
+    for no, line in enumerate(lines, 1):
+        i, code, n = 0, False, len(line)
+        if close is not None:
+            end = line.find(close)
+            if end < 0:
+                continue
+            i, close, code = end + len(close), None, True
+        elif not any(t in line for t in ('//', '/*', '`', '"""')):
+            continue
+        while i < n:
+            c = line[i]
+            if line.startswith('//', i):
+                if code:
+                    out[no] = line[i + 2:]
+                break
+            if line.startswith('/*', i):
+                end = line.find('*/', i + 2)
+                if code:
+                    out[no] = line[i + 2:end if end >= 0 else n]
+                if end < 0:
+                    close = '*/'
+                    break
+                i = end + 2
+                continue
+            m = SWIFT_RAW_OPEN.match(line, i) if swift and c == '#' else None
+            if m:
+                term = m.group(2) + m.group(1)
+                end = line.find(term, m.end())
+                code = True
+                if end < 0:
+                    close = term if m.group(2) == '"""' else None
+                    break
+                i = end + len(term)
+                continue
+            if line.startswith('"""', i):
+                end = line.find('"""', i + 3)
+                code = True
+                if end < 0:
+                    close = '"""'
+                    break
+                i = end + 3
+                continue
+            if c == '`':
+                end = line.find('`', i + 1)
+                code = True
+                if end < 0:
+                    close = None if swift else '`'
+                    break
+                i = end + 1
+                continue
+            if c in '"\'':
+                end = _skip_quoted(line, i, c)
+                code = True
+                if end is None:
+                    break
+                i = end
+                continue
+            code = code or not c.isspace()
+            i += 1
+    return out
+
+
+def _py_comments(lines):
+    """Python 的行尾注释 {行号: 注释正文}。三引号字符串跨行带状态,字符串里的 # 不算。"""
+    out = {}
+    close = None
+    for no, line in enumerate(lines, 1):
+        i, code, n = 0, False, len(line)
+        if close is not None:
+            end = line.find(close)
+            if end < 0:
+                continue
+            i, close, code = end + 3, None, True
+        elif '#' not in line and '"""' not in line and "'''" not in line:
+            continue
+        while i < n:
+            c = line[i]
+            if c == '#':
+                if code:
+                    out[no] = line[i + 1:]
+                break
+            if c in '"\'':
+                if line.startswith(c * 3, i):
+                    end = line.find(c * 3, i + 3)
+                    code = True
+                    if end < 0:
+                        close = c * 3
+                        break
+                    i = end + 3
+                    continue
+                end = _skip_quoted(line, i, c)
+                code = True
+                if end is None:
+                    break
+                i = end
+                continue
+            code = code or not c.isspace()
+            i += 1
+    return out
+
+
+def _sh_comments(lines):
+    """shell 的行尾注释 {行号: 注释正文}。# 在词首才算注释;引号跨行、heredoc 正文都带状态跳过。"""
+    out = {}
+    quote = None
+    heredoc = None
+    for no, line in enumerate(lines, 1):
+        if heredoc is not None:
+            word, dash = heredoc
+            if (line.lstrip('\t') if dash else line) == word:
+                heredoc = None
+            continue
+        i, code, n = 0, False, len(line)
+        if quote is not None:
+            end = line.find("'") + 1 if quote == "'" else (_skip_quoted(' ' + line, 0, '"') or 0) - 1
+            if end <= 0:
+                continue
+            i, quote, code = end, None, True
+        cut = n
+        while i < n:
+            c = line[i]
+            if c == '#' and (i == 0 or line[i - 1] in SH_WORD_START):
+                if code:
+                    out[no] = line[i + 1:]
+                cut = i
+                break
+            if c == '\\':
+                code = True
+                i += 2
+                continue
+            if c == "'":
+                end = line.find("'", i + 1)
+                code = True
+                if end < 0:
+                    quote = "'"
+                    break
+                i = end + 1
+                continue
+            if c == '"':
+                end = _skip_quoted(line, i, '"')
+                code = True
+                if end is None:
+                    quote = '"'
+                    break
+                i = end
+                continue
+            code = code or not c.isspace()
+            i += 1
+        m = SH_HEREDOC.search(line[:cut])
+        if m and quote is None:
+            heredoc = (m.group(3), m.group(1) == '-')
+    return out
+
+
+# 行尾注释切分的自检样例:(扩展名, 源码, 期望的 {行号: 注释正文})。全仓扫描前先跑一遍,切错了直接退出码 2,不拿错的切分去扫。
+TRAILING_SAMPLES = [
+    ('.go', u'x := 1 // 是\ns := "http://a // 不是"\nq := `\n// 不是\n` // 是\n', {1: u' 是', 5: u' 是'}),
+    ('.swift', u'let a = "x" /* 是 */ + "y"\nlet r = #"a "// 不是" b"#\nlet m = """\n  // 不是\n  """ // 是\n',
+     {1: u' 是 ', 5: u' 是'}),
+    ('.js', u'const t = `a\n// 不是\n`; // 是\n', {3: u' 是'}),
+    ('.py', u's = "# 不是"  # 是\nt = """\n# 不是\n"""  # 是\n', {1: u' 是', 4: u' 是'}),
+    ('.sh', u'n=${#arr[@]} # 是\necho "$#"\ncat <<EOF\nx # 不是\nEOF\nk=1#不是\nv="a\n# 不是" # 是\n',
+     {1: u' 是', 8: u' 是'}),
+]
+
+
+def trailing_selftest():
+    """行尾注释切分跑一遍样例,返回出错的样例说明(空列表 = 全对)。"""
+    bad = []
+    for ext, src, want in TRAILING_SAMPLES:
+        got = trailing_comments('sample' + ext, src.split('\n'))
+        if got != want:
+            bad.append(u'%s 样例:期望 %r,实际 %r' % (ext, want, got))
+    got = [(h[1], h[2]) for h in scan_text(os.path.join(ROOT, 'sample.go'),
+                                           u'x := 1 // 09-02 起改\ns := "// 2026-09-02"\n')]
+    if got != [(1, u'日期戳')]:
+        bad.append(u'行尾注释没套词表:期望 [(1, 日期戳)],实际 %r' % (got,))
+    return bad
+
+
+def trailing_comments(fp, lines):
+    """这个文件里每一行的行尾注释正文 {行号: 文本}(整行注释不在里面,照旧按整行扫)。"""
+    if fp.endswith(C_LIKE_EXTS):
+        return _c_like_comments(lines, fp.endswith('.swift'))
+    if fp.endswith('.py') or (lines and 'python' in lines[0]):
+        return _py_comments(lines)
+    return _sh_comments(lines)
 
 
 def wanted(path):
@@ -160,7 +374,42 @@ def docstring_lines(fp, text):
     return out
 
 
+def scan_text(fp, text):
+    """一个文件的全部命中:[(相对路径, 行号, 规则名, 命中片段, 提示, 整行)]。"""
+    hits = []
+    rel = os.path.relpath(fp, ROOT)
+    lines = text.split('\n')
+    docs = docstring_lines(fp, text)
+    trailing = trailing_comments(fp, lines)
+    for i, line in enumerate(lines, 1):
+        ch = invisible_char(line)
+        if ch is not None:
+            frag = u'U+%04X %s' % (ord(ch), unicodedata.name(ch, ''))
+            hits.append((rel, i, u'不可见字符', frag, INVISIBLE_HINT, line.strip()))
+        if COMMENT_LINE.match(line) or i in docs:
+            target = line
+        elif i in trailing:
+            target = trailing[i]
+        else:
+            continue
+        for name, pat, hint in RULES:
+            m = pat.search(target)
+            if m:
+                hits.append((rel, i, name, m.group(0), hint, line.strip()))
+    return hits
+
+
 def main(argv):
+    if argv == ['--selftest'] or not argv:
+        bad = trailing_selftest()
+        if bad:
+            print(u'注释卫生检查:行尾注释切分自检没过,检查器自己坏了')
+            for b in bad:
+                print(u'  ' + b)
+            return 2
+        if argv:
+            print(u'行尾注释切分自检:通过')
+            return 0
     hits = []
     for fp in iter_files(argv):
         try:
@@ -168,19 +417,7 @@ def main(argv):
                 text = f.read()
         except (UnicodeDecodeError, OSError):
             continue
-        lines = text.split('\n')
-        docs = docstring_lines(fp, text)
-        for i, line in enumerate(lines, 1):
-            ch = invisible_char(line)
-            if ch is not None:
-                frag = u'U+%04X %s' % (ord(ch), unicodedata.name(ch, ''))
-                hits.append((os.path.relpath(fp, ROOT), i, u'不可见字符', frag, INVISIBLE_HINT, line.strip()))
-            if not COMMENT_LINE.match(line) and i not in docs:
-                continue
-            for name, pat, hint in RULES:
-                m = pat.search(line)
-                if m:
-                    hits.append((os.path.relpath(fp, ROOT), i, name, m.group(0), hint, line.strip()))
+        hits.extend(scan_text(fp, text))
 
     if not hits:
         print(u'注释卫生检查:通过')
