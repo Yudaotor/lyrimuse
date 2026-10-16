@@ -95,6 +95,8 @@ func loadCoverImage(ctx context.Context, coverURL string) image.Image {
 	} else if strings.Contains(coverURL, "i.kfs.io/") {
 		// KKBOX 图床按路径里的 fit 档出图,取色、比指纹 64 档就够。
 		small = kkboxCoverAtEdge(small, "64")
+	} else {
+		small = miguJPEGCover(small)
 	}
 	cli := &http.Client{Timeout: 4 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, small, nil)
@@ -120,6 +122,16 @@ func loadCoverImage(ctx context.Context, coverURL string) image.Image {
 		return nil
 	}
 	return img
+}
+
+// miguJPEGCover:咪咕图床(d.musicapp.migu.cn)的 .webp 封面换成同一路径的 .jpg —— 给的是同一张图的 JPEG,引擎只注册了
+// JPEG / PNG 解码,webp 解不开,比指纹、取主色都取不到图,给专辑定封面时整组算「有图没取到」、一直定不了(见 03 章决策 52)。
+// 别的地址原样返回。纯函数。
+func miguJPEGCover(u string) string {
+	if strings.Contains(u, "d.musicapp.migu.cn/") && strings.HasSuffix(u, ".webp") {
+		return strings.TrimSuffix(u, ".webp") + ".jpg"
+	}
+	return u
 }
 
 // coverRequestReferer:取封面图时带的 Referer。QQ 音乐图床按 Referer 防盗链,给错了才可能被拒,给 y.qq.com;别的给

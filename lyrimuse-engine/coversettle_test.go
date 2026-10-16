@@ -854,3 +854,19 @@ func TestSettleAlbumCoversReunifiesSettledGroups(t *testing.T) {
 		}
 	}
 }
+
+// 咪咕的 .webp 封面取同一路径的 .jpg 来比指纹(引擎解不了 webp),别的地址不动;loadCoverImage 接上了它。见 03 章决策 52。
+func TestMiguJPEGCover(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://d.musicapp.migu.cn/data/oss/resource/00/2q/fo/a.webp": "https://d.musicapp.migu.cn/data/oss/resource/00/2q/fo/a.jpg",
+		"https://d.musicapp.migu.cn/data/oss/resource/00/2q/fo/a.jpg":  "https://d.musicapp.migu.cn/data/oss/resource/00/2q/fo/a.jpg",
+		"https://example.com/a.webp":                                   "https://example.com/a.webp",
+	} {
+		if got := miguJPEGCover(in); got != want {
+			t.Errorf("miguJPEGCover(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if !strings.Contains(string(mustRead(t, "color.go")), "\t} else {\n\t\tsmall = miguJPEGCover(small)\n\t}") {
+		t.Error("loadCoverImage 要接上 miguJPEGCover")
+	}
+}
