@@ -368,7 +368,7 @@ final class WebLyricsConnection {
                     case WebSocketFrame.Opcode.ping.rawValue:
                         nw.send(content: WebSocketFrame.encode(frame.payload, opcode: .pong), completion: .contentProcessed { _ in })
                     case WebSocketFrame.Opcode.text.rawValue:
-                        if case .screen = role { server?.screens.pointer(self, payload: frame.payload) }
+                        if case .screen = role { server?.screens.message(self, payload: frame.payload) }
                     default:
                         break
                     }

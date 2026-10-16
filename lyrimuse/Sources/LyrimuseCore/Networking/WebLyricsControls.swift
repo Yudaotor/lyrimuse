@@ -51,6 +51,21 @@ public struct WebLyricsWheel: Equatable, Sendable {
     }
 }
 
+/// 副屏网页报自己看不看得见:`{"vis":0}` / `{"vis":1}`,连上时发一次,`visibilitychange` 时再发。标签页切到后台、
+/// 窗口被整个盖住或最小化时浏览器报不可见。没报过的网页按看得见算。见 19 章决策 13。
+public enum WebLyricsVisibility {
+    public static func parse(_ payload: Data) -> Bool? {
+        guard payload.count <= 64,
+              let object = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
+              let flag = object["vis"] as? NSNumber else { return nil }
+        switch flag.doubleValue {
+        case 0: return false
+        case 1: return true
+        default: return nil
+        }
+    }
+}
+
 /// 副屏左栏那排播放控制的位置,照 `LyricsWindowView.playbackControls`:随机贴左缘、循环贴右缘,
 /// 上一首 / 播放 / 下一首成组居中;各档尺寸按封面边长算再夹值(同 `ctrl(_:_:_:)`)。坐标是左栏自己的,y 向下。
 public struct WebLyricsControlsLayout: Equatable, Sendable {

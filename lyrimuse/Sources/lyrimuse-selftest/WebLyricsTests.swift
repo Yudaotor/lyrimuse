@@ -128,6 +128,10 @@ func runWebLyricsTests() {
         expectEqual(WebLyricsWheel.parse(Data(#"{"whl":[0.5,0.5,9]}"#.utf8))?.dy, 2, "网页歌词: 一次滚动最多算两屏")
         expectEqual(WebLyricsWheel.parse(Data(#"{"whl":[1.5,0.5,0.1]}"#.utf8)), nil, "网页歌词: 滚轮在画面外不认")
         expectEqual(WebLyricsPointer.parse(Data(#"{"whl":[0.5,0.5,0.1]}"#.utf8)), nil, "网页歌词: 滚轮消息不当指针事件")
+        expectEqual(WebLyricsVisibility.parse(Data(#"{"vis":0}"#.utf8)), false, "网页歌词: 副屏报不可见")
+        expectEqual(WebLyricsVisibility.parse(Data(#"{"vis":1}"#.utf8)), true, "网页歌词: 副屏报看得见")
+        expectEqual(WebLyricsVisibility.parse(Data(#"{"vis":0.5}"#.utf8)), nil, "网页歌词: 可见性只认 0 / 1")
+        expectEqual(WebLyricsVisibility.parse(Data(#"{"ptr":["d",0.5,0.5]}"#.utf8)), nil, "网页歌词: 指针事件不当可见性")
         expectEqual(WebLyricsPointer.permits(remoteIsLoopback: true, lanControlEnabled: false), true, "网页歌词: 本机副屏一律能点")
         expectEqual(WebLyricsPointer.permits(remoteIsLoopback: false, lanControlEnabled: false), false,
                     "网页歌词: 别的设备默认不能控制播放")
@@ -313,8 +317,15 @@ func runWebLyricsTests() {
                     true, "网页歌词: 歌词窗口「…」菜单的直接动作跟副屏共用 LyricsMoreMenuModel")
         expectEqual(sourceBytes(pagesSource, contain: "touch-action: none;"), true, "网页歌词: 副屏画布自己接拖动,浏览器不拿去滚页面、缩放")
         expectEqual(sourceBytes(app("WebLyrics/WebLyricsServer.swift"),
-                                contain: "if case .screen = role { server?.screens.pointer(self, payload: frame.payload) }"), true,
-                    "网页歌词: 只有副屏连接的文本帧当点按")
+                                contain: "if case .screen = role { server?.screens.message(self, payload: frame.payload) }"), true,
+                    "网页歌词: 只有副屏连接的文本帧当点按 / 可见性")
+        expectEqual(sourceBytes(pagesSource, contain: "document.addEventListener('visibilitychange', sendVisibility);"), true,
+                    "网页歌词: 副屏网页可见性一变就报给 App")
+        expectEqual(sourceBytes(pagesSource, contain: "socket.onopen = () => { retry = 1000; sendVisibility(); };"), true,
+                    "网页歌词: 副屏网页连上时先报一次可见性(后台标签页重连上来也算数)")
+        expectEqual(sourceBytes(app("WebLyrics/WebLyricsScreen.swift"),
+                                contain: "let active = viewersVisible && (playback.isPlayingNow || now < fastUntil)"), true,
+                    "网页歌词: 这一尺寸的网页全看不见时按暂停那一档出帧")
         expectEqual(sourceBytes(app("WebLyrics/WebLyricsScreen.swift"),
                                 contain: "lanControlEnabled: AppSettings.shared.webLyricsAllowLANControl"), true,
                     "网页歌词: 点按过控制开关")

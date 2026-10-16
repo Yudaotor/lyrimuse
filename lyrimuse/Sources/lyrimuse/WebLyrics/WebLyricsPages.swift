@@ -125,6 +125,11 @@ enum WebLyricsPages {
           requestAnimationFrame(frame);
           // 浏览器不把这页当成在显示时(从别的 App 打开的小窗、不在前台的标签页)rAF 可能一直不来:停了 50ms 以上就由定时器接着放
           setInterval(() => { if (performance.now() - lastFrame > 50) present(); }, 16);
+          // 标签页切到后台、窗口被盖住或最小化时告诉 App,它就不再按 60 帧画
+          function sendVisibility() {
+            if (ws && ws.readyState === 1) ws.send(JSON.stringify({ vis: document.visibilityState === 'hidden' ? 0 : 1 }));
+          }
+          document.addEventListener('visibilitychange', sendVisibility);
           function connect() {
             const url = new URL('/ws', location.href);
             url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -135,7 +140,7 @@ enum WebLyricsPages {
             const socket = new WebSocket(url);
             ws = socket;
             socket.binaryType = 'arraybuffer';
-            socket.onopen = () => { retry = 1000; };
+            socket.onopen = () => { retry = 1000; sendVisibility(); };
             socket.onmessage = (e) => {
               if (typeof e.data === 'string') {
                 try {

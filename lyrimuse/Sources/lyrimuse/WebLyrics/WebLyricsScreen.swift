@@ -3,6 +3,7 @@ import Combine
 import CoreVideo
 import LyrimuseCore
 import Metal
+import OSLog
 import QuartzCore
 import SwiftUI
 import VideoToolbox
@@ -15,7 +16,8 @@ final class WebLyricsScreenHub {
 
     private var renderers: [WebLyricsViewport: WebLyricsScreenRenderer] = [:]
     private var order: [WebLyricsViewport] = []
-    private var viewers: [ObjectIdentifier: (connection: WebLyricsConnection, viewport: WebLyricsViewport)] = [:]
+    private var viewers: [ObjectIdentifier: (connection: WebLyricsConnection, viewport: WebLyricsViewport, visible: Bool)] = [:]
+    private static let log = Logger(subsystem: "me.yudaotor.lyrimuse", category: "web-lyrics")
 
     func add(_ connection: WebLyricsConnection, viewport requested: WebLyricsViewport) {
         var viewport = requested
@@ -31,8 +33,9 @@ final class WebLyricsScreenHub {
                 renderer.start()
             }
         }
-        viewers[ObjectIdentifier(connection)] = (connection, viewport)
+        viewers[ObjectIdentifier(connection)] = (connection, viewport, true)
         renderers[viewport]?.requestFrame()
+        refreshVisibility(viewport)
     }
 
     func remove(_ connection: WebLyricsConnection) {
@@ -42,16 +45,29 @@ final class WebLyricsScreenHub {
         order.removeAll { $0 == entry.viewport }
     }
 
-    /// 网页发回来的指针事件。别的设备要「允许局域网设备控制播放」开着才算数。
-    func pointer(_ connection: WebLyricsConnection, payload: Data) {
-        guard let entry = viewers[ObjectIdentifier(connection)],
-              WebLyricsPointer.permits(remoteIsLoopback: connection.isLoopback,
+    /// 网页发回来的文本消息:可见性(谁都能报),指针、滚轮(别的设备要「允许局域网设备控制播放」开着才算数)。
+    func message(_ connection: WebLyricsConnection, payload: Data) {
+        let id = ObjectIdentifier(connection)
+        guard let entry = viewers[id] else { return }
+        if let visible = WebLyricsVisibility.parse(payload) {
+            guard visible != entry.visible else { return }
+            viewers[id]?.visible = visible
+            Self.log.notice("screen viewer \(visible ? "visible" : "hidden", privacy: .public)")
+            refreshVisibility(entry.viewport)
+            return
+        }
+        guard WebLyricsPointer.permits(remoteIsLoopback: connection.isLoopback,
                                        lanControlEnabled: AppSettings.shared.webLyricsAllowLANControl) else { return }
         if let event = WebLyricsPointer.parse(payload) {
             renderers[entry.viewport]?.handlePointer(event)
         } else if let wheel = WebLyricsWheel.parse(payload) {
             renderers[entry.viewport]?.handleWheel(wheel)
         }
+    }
+
+    /// 这一尺寸的网页里只要有一个看得见就照常出帧,全看不见时降到暂停那一档。
+    private func refreshVisibility(_ viewport: WebLyricsViewport) {
+        renderers[viewport]?.setViewersVisible(viewers.values.contains { $0.viewport == viewport && $0.visible })
     }
 
     private func broadcastText(_ text: String, for viewport: WebLyricsViewport) {
@@ -146,6 +162,9 @@ final class WebLyricsScreenRenderer {
     private var shownIdle: Bool?
     private var frames: WebLyricsFrameSource?
     private var timer: Timer?
+    /// 这一尺寸的网页里有没有看得见的。全看不见时出帧和主线程节拍都按暂停那一档,不停到 0:浏览器把明明摆在屏上的
+    /// 小窗报成不可见时(同 rAF 不来的那种窗口),画面只是变慢、不会定住。见 19 章决策 13。
+    private var viewersVisible = true
 
     init(viewport: WebLyricsViewport) {
         self.viewport = viewport
@@ -224,6 +243,12 @@ final class WebLyricsScreenRenderer {
         subs = []
         frames?.stop()
         frames = nil
+    }
+
+    func setViewersVisible(_ visible: Bool) {
+        guard visible != viewersVisible else { return }
+        viewersVisible = visible
+        if visible { requestFrame() } else { commit() }
     }
 
     /// 新网页连上来时立刻出一帧,不等下一拍。
@@ -535,7 +560,7 @@ final class WebLyricsScreenRenderer {
         CATransaction.commit()
         CATransaction.flush()
 
-        let active = playback.isPlayingNow || now < fastUntil
+        let active = viewersVisible && (playback.isPlayingNow || now < fastUntil)
         frames?.setPace(fast: active)
         let interval = active ? Self.modelInterval : Self.idleModelInterval
         if interval != timerInterval { scheduleTimer(interval: interval) }
