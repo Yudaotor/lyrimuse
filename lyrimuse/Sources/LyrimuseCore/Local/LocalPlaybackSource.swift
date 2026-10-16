@@ -5082,6 +5082,9 @@ public final class LocalPlaybackSource: ObservableObject {
         return (data, "its list")
     }
 
+    /// 上一次记「用了洛雪自带封面」那行日志的那首:取图每隔几秒复核一次,同一首只记第一次。
+    private nonisolated static let lxOwnArtworkLoggedKey = OSAllocatedUnfairLock<String?>(initialState: nil)
+
     /// 上一轮取图时那首的专辑名(`lxMusicArtworkIsPrevious` 拿它跟这一首比)。
     private var artworkFetchAlbum: String?
 
@@ -5121,7 +5124,9 @@ public final class LocalPlaybackSource: ObservableObject {
                         return (result.data, result.trackKey, nil)
                     }
                     if let lxTrack, let own = Self.lxMusicOwnArtwork(title: lxTrack.title, artist: lxTrack.artist, listed: lxTrack.listed) {
-                        logger.notice("artwork: using LX Music's own cover for \(expectedKey, privacy: .public) (from \(own.from, privacy: .public))")
+                        if Self.lxOwnArtworkLoggedKey.withLock({ last in defer { last = expectedKey }; return last != expectedKey }) {
+                            logger.notice("artwork: using LX Music's own cover for \(expectedKey, privacy: .public) (from \(own.from, privacy: .public))")
+                        }
                         return (own.data, expectedKey, nil)
                     }
                     let fetched = MediaControlClient.fetchArtworkExplained()

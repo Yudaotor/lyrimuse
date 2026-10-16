@@ -463,7 +463,9 @@ private func wiringContracts() {
     expectEqual(source.contains("if LXMusicOpenAPI.outputsToDefaultDevice(LXMusicOpenAPI.shared.currentConfig()) {\n                    beginLXMusicColdStart(signalAt: Date(), watch: true)"),
                 true, "洛雪冷恢复: 洛雪选了别的输出设备时不等默认设备")
     expectEqual(sourceBytes(source, contain: "if let lxTrack, let own = Self.lxMusicOwnArtwork(title: lxTrack.title, artist: lxTrack.artist, listed: lxTrack.listed) {\n"
-                            + "                        logger.notice(\"artwork: using LX Music's own cover for \\(expectedKey, privacy: .public) (from \\(own.from, privacy: .public))\")\n"
+                            + "                        if Self.lxOwnArtworkLoggedKey.withLock({ last in defer { last = expectedKey }; return last != expectedKey }) {\n"
+                            + "                            logger.notice(\"artwork: using LX Music's own cover for \\(expectedKey, privacy: .public) (from \\(own.from, privacy: .public))\")\n"
+                            + "                        }\n"
                             + "                        return (own.data, expectedKey, nil)\n"
                             + "                    }\n"
                             + "                    let fetched = MediaControlClient.fetchArtworkExplained()"),
