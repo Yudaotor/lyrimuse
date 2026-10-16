@@ -225,7 +225,7 @@ LOG_FILE="$HOME/Library/Logs/lyrimuse.log"
 # 不带 hash 后缀,保持"干净三段数字"这条硬约束,但至少不会常年停在一个早就过时的
 # 占位值上;真拿不到 tag(比如浅克隆、不是 git 仓库)才退到 0.0.0 这个一眼假的占位值,
 # 不会看着像一个正常但过时的版本号。
-APP_VERSION="${LYRIMUSE_VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')}"
+APP_VERSION="${LYRIMUSE_VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)}"
 [ -z "$APP_VERSION" ] && APP_VERSION="0.0.0"
 # CFBundleVersion(Sparkle 比大小用的构建号)由 scripts/build-version.sh 从展示版本算出 —— 映射只有那一份,
 # release.yml 生成 appcast 时从这里写进 Info.plist 的值回读、selftest 拿它跟 Core 的 ReleaseVersion 交叉校验。
