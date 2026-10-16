@@ -13,7 +13,8 @@ import (
 // playerCoverURLFor 读到的是当前播放器从它本机数据里给这首记下的那张专辑图,身份跟设备封面一样由播放器自己保证,
 // 但往往比它交给系统的那份清晰(KKBOX 交给系统的恒为 150×150)。三处用它:
 //   - 设备封面要顶掉现有封面时,先看它是不是跟设备封面同一张图、更清晰(playerCoverOverDevice);
-//   - 网易云 / Apple / QQ / 同专辑邻居都没给出封面、设备封面也还没到时,直接用它(applyDeviceOrPlayerCover);
+//   - 网易云 / Apple / QQ / 同专辑邻居都没给出封面、或给的明确是另一张专辑的,设备封面也还没到时,直接用它
+//     (applyDeviceOrPlayerCover;存量的由后台补封面换,coverSweepFillFromPlayerCovers);
 //   - 存量的小设备封面换成它,本机播放器数据里按歌名记着的也算(upgradeSmallDeviceCover);
 //   - 小设备封面碰上它,不比是不是同一张图,用它(smallDeviceCoverYieldsTo)。
 
@@ -112,7 +113,8 @@ func applyDeviceOrPlayerCover(ctx context.Context, e *enrichEntry, deviceCoverUR
 		return
 	}
 	if deviceCoverURL == "" {
-		if e.CoverURL == "" {
+		// 那一串没给、或给的明确是另一张专辑的(coverOfAnotherAlbum):用播放器自带的,见 03 章决策 51。
+		if e.CoverURL == "" || coverOfAnotherAlbum(*e, album) {
 			if cover := playerCoverFor(ctx); cover != "" {
 				e.CoverURL, e.CoverSource, e.CoverAlbum = cover, "player", album
 			}

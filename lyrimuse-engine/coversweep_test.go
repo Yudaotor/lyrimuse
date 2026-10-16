@@ -705,3 +705,131 @@ func TestCoverSweepNameQQCoverAlbumsSkipsEntriesTakenMeanwhile(t *testing.T) {
 		}
 	}
 }
+
+// 没封面、或封面明确是另一张专辑的条目,记着播放器自带封面的直接换上,记成 player、cover_album 记本地专辑;专辑对得上的、
+// 专辑定下的、没记自带封面的不动。见 03 章决策 51。
+func TestCoverSweepFillFromPlayerCovers(t *testing.T) {
+	const own = "https://m.media-amazon.com/images/I/51y00kgscmL._SX500_.jpg"
+	amazon := map[string]string{"com.amazon.music": own}
+	other := enrichEntry{CoverURL: "https://d/1.jpg", CoverSource: "deezer", CoverAlbum: "The Only One", AccentColor: "#112233",
+		PlayerCovers: amazon, Players: []string{"com.amazon.music"}}
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|other|Open Fire [Clean]": other,
+		"A|empty|Open Fire [Clean]": {PlayerCovers: amazon},
+		"A|fits|Open Fire [Clean]": {CoverURL: "https://a/1.jpg", CoverSource: "apple", CoverAlbum: "Open Fire",
+			PlayerCovers: amazon},
+		"A|settled|Open Fire [Clean]": func() enrichEntry {
+			e := other
+			e.CoverSettled = e.CoverURL
+			return e
+		}(),
+		"A|noown|Open Fire [Clean]": {CoverURL: "https://d/1.jpg", CoverSource: "deezer", CoverAlbum: "The Only One"},
+		"A|already|Open Fire [Clean]": {CoverURL: own, CoverSource: "player", CoverAlbum: "Open Fire [Clean]",
+			PlayerCovers: amazon},
+	})
+	if n := coverSweepFillFromPlayerCovers(); n != 2 {
+		t.Fatalf("换上 %d 条, 要 2", n)
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	if e := enrichCache["A|other|Open Fire [Clean]"]; e.CoverURL != own || e.CoverSource != "player" ||
+		e.CoverAlbum != "Open Fire [Clean]" || e.AccentColor != "" {
+		t.Errorf("另一张专辑的封面换成自带的、主色清空: %+v", e)
+	}
+	if e := enrichCache["A|empty|Open Fire [Clean]"]; e.CoverURL != own || e.CoverSource != "player" {
+		t.Errorf("没封面的补上自带的: %+v", e)
+	}
+	for _, k := range []string{"A|fits|Open Fire [Clean]", "A|settled|Open Fire [Clean]", "A|noown|Open Fire [Clean]"} {
+		if e := enrichCache[k]; e.CoverSource == "player" {
+			t.Errorf("%s 不该换: %+v", k, e)
+		}
+	}
+}
+
+func TestCoverSweepRunsPlayerCoverStepBeforeDecisions(t *testing.T) {
+	src := string(mustRead(t, "coversweep.go"))
+	own, dec := strings.Index(src, "if n := coverSweepFillFromPlayerCovers(); n > 0 {"), strings.Index(src, "if n := coverSweepFillFromDecisions(); n > 0 {")
+	if own < 0 || dec < 0 || own > dec {
+		t.Errorf("一遍里先换播放器自带的,再从歌词判决补: %d %d", own, dec)
+	}
+}
+
+// 没封面、或封面是另一张专辑的条目,借同一张专辑、同一位歌手里封面属于这张专辑的那条;出借的按专辑定下的、设备、播放器自带、
+// 其它排;歌手按官方名也认;cover_album 空着的、另一张专辑的不借出;专辑定下的、专辑对得上的不动。见 03 章决策 51。
+func TestCoverSweepBorrowAlbumSiblings(t *testing.T) {
+	withEnrichCache(t, map[string]enrichEntry{
+		"Khalil Fong|Zz Lady Sue|This Love": {CoverURL: "file:///a/device.jpg", CoverSource: "device", CoverAlbum: "This Love", CanonicalArtist: "方大同"},
+		"Khalil Fong|Tou Xiao|This Love":    {CoverURL: "https://a/1.jpg", CoverSource: "apple", CoverAlbum: "This Love", CanonicalArtist: "方大同"},
+		"方大同|Love Love Love|This Love":      {CoverURL: "https://a/2.jpg", CoverSource: "apple", CoverAlbum: "Love Unlimited", AccentColor: "#123456"},
+		"方大同|Empty|This Love":               {},
+		"方大同|Fits|This Love":                {CoverURL: "https://n/1.jpg", CoverSource: "netease", CoverAlbum: "This Love"},
+		"别人|Song|This Love":                 {CoverURL: "https://q/2.jpg", CoverSource: "qq", CoverAlbum: "Other"},
+		"丁世光|Intro|神經志 (The Journal)":       {CoverURL: "https://q/3.jpg", CoverSource: "qq", CoverAlbum: "Night & Day"},
+		"丁世光|E.T.|神经志 (The Journal)":        {CoverURL: "https://n/2.jpg", CoverSource: "netease", CoverAlbum: "神经志"},
+		"丁世光|Unknown|神经志 (The Journal)":     {CoverURL: "https://n/3.jpg", CoverSource: "netease"},
+		"X|Lonely|Solo Album":               {CoverURL: "https://q/4.jpg", CoverSource: "qq", CoverAlbum: "Other"},
+		"Y|Settled|Grp":                     {CoverURL: "https://q/1.jpg", CoverSource: "qq", CoverAlbum: "Other", CoverSettled: "https://q/1.jpg"},
+		"Y|Lender|Grp":                      {CoverURL: "https://n/4.jpg", CoverSource: "netease", CoverAlbum: "Grp"},
+	})
+	if n := coverSweepBorrowAlbumSiblings(); n != 3 {
+		t.Fatalf("借了 %d 条, 要 3", n)
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	for _, k := range []string{"方大同|Love Love Love|This Love", "方大同|Empty|This Love"} {
+		if e := enrichCache[k]; e.CoverURL != "file:///a/device.jpg" || e.CoverSource != "device" || e.CoverAlbum != "This Love" ||
+			e.AccentColor != "" {
+			t.Errorf("%s 借设备封面那条(官方名「方大同」对上),主色清空: %+v", k, e)
+		}
+	}
+	if e := enrichCache["丁世光|Intro|神經志 (The Journal)"]; e.CoverURL != "https://n/2.jpg" || e.CoverAlbum != "神经志" {
+		t.Errorf("专辑繁简不同也算同一张,借 cover_album 对得上的那条: %+v", e)
+	}
+	for k, want := range map[string]string{
+		"方大同|Fits|This Love":  "https://n/1.jpg",
+		"Y|Settled|Grp":       "https://q/1.jpg",
+		"别人|Song|This Love":   "https://q/2.jpg",
+		"X|Lonely|Solo Album": "https://q/4.jpg",
+	} {
+		if e := enrichCache[k]; e.CoverURL != want {
+			t.Errorf("%s 不该换: %+v", k, e)
+		}
+	}
+}
+
+func TestAlbumSiblingLends(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		e    enrichEntry
+		want bool
+	}{
+		{"没封面", enrichEntry{}, false},
+		{"设备封面", enrichEntry{CoverURL: "f", CoverSource: "device"}, true},
+		{"播放器自带", enrichEntry{CoverURL: "f", CoverSource: "player"}, true},
+		{"专辑定下的", enrichEntry{CoverURL: "f", CoverSource: "qq", CoverAlbum: "Other", CoverSettled: "f"}, true},
+		{"cover_album 对上", enrichEntry{CoverURL: "f", CoverSource: "netease", CoverAlbum: "Album"}, true},
+		{"cover_album 空着", enrichEntry{CoverURL: "f", CoverSource: "netease"}, false},
+		{"另一张专辑", enrichEntry{CoverURL: "f", CoverSource: "netease", CoverAlbum: "Other"}, false},
+	} {
+		if got := albumSiblingLends(c.e, "Album"); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+	if albumSiblingLendRank(enrichEntry{CoverURL: "f", CoverSettled: "f", CoverSource: "qq"}) >= albumSiblingLendRank(enrichEntry{CoverURL: "f", CoverSource: "device"}) ||
+		albumSiblingLendRank(enrichEntry{CoverSource: "device"}) >= albumSiblingLendRank(enrichEntry{CoverSource: "player"}) ||
+		albumSiblingLendRank(enrichEntry{CoverSource: "player"}) >= albumSiblingLendRank(enrichEntry{CoverSource: "netease"}) {
+		t.Error("出借先后:专辑定下的、设备、播放器自带、其它")
+	}
+	if !albumSiblingArtistMatches("方大同", "", "Khalil Fong", "方大同") || !albumSiblingArtistMatches("Khalil Fong", "方大同", "方大同", "") ||
+		albumSiblingArtistMatches("别人", "", "Khalil Fong", "方大同") {
+		t.Error("歌手按写法或官方名对上")
+	}
+}
+
+func TestCoverSweepBorrowsAlbumSiblingsAfterDecisions(t *testing.T) {
+	src := string(mustRead(t, "coversweep.go"))
+	dec, sib := strings.Index(src, "if n := coverSweepFillFromDecisions(); n > 0 {"), strings.Index(src, "if n := coverSweepBorrowAlbumSiblings(); n > 0 {")
+	if dec < 0 || sib < 0 || sib < dec {
+		t.Errorf("一遍里先从歌词判决补,再借同专辑的: %d %d", dec, sib)
+	}
+}

@@ -121,6 +121,10 @@ func TestApplyDeviceOrPlayerCover(t *testing.T) {
 	}{
 		{"没有设备封面、那一串也空着:用播放器自带的", with(same), "", enrichEntry{}, same, "player"},
 		{"没有设备封面、那一串给了:不动", with(same), "", enrichEntry{CoverURL: remoteOther, CoverSource: "netease"}, remoteOther, "netease"},
+		{"没有设备封面、那一串给的是另一张专辑的:用播放器自带的", with(same), "",
+			enrichEntry{CoverURL: remoteOther, CoverSource: "netease", CoverAlbum: "Other Album"}, same, "player"},
+		{"没有设备封面、那一串给的专辑对得上:不动", with(same), "",
+			enrichEntry{CoverURL: remoteOther, CoverSource: "netease", CoverAlbum: "专辑"}, remoteOther, "netease"},
 		{"什么都没有:空着", context.Background(), "", enrichEntry{}, "", ""},
 		{"小设备封面、那一串是另一张、播放器自带的是同一张:用播放器的", with(same), device,
 			enrichEntry{CoverURL: remoteOther, CoverSource: "netease"}, same, "player"},

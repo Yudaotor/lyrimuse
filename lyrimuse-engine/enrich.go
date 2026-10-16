@@ -1229,8 +1229,8 @@ func coverSwapAllowedWith(old, fresh enrichEntry, album string, deviceUpgradable
 	if old.CoverSource == "device" {
 		return deviceUpgradable(old.CoverURL, fresh.CoverURL)
 	}
-	// 播放器自带的封面(player)身份由播放器自己的本机数据保证,补全时按文字匹配出来的结果不换掉它;它自己也只补空着的、
-	// 升级小设备封面(上面那档),不换掉已有的按文字匹配出来的封面。
+	// 播放器自带的封面(player)身份由播放器自己的本机数据保证,补全时按文字匹配出来的结果不换掉它;它自己只补空着的、
+	// 换掉明确是另一张专辑的(coverSweepFillFromPlayerCovers)、升级小设备封面(上面那档),别的按文字匹配出来的封面不换。
 	if old.CoverSource == "player" {
 		return false
 	}

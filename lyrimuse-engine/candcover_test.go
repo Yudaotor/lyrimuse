@@ -155,7 +155,8 @@ func TestUpgradeSmallLetterboxedDeviceCover(t *testing.T) {
 	}
 }
 
-// 后台补封面开头不联网补一轮:没封面、存着的判决里胜出的那个源自带封面且专辑逐字对上的补上,别的不动。
+// 后台补封面开头不联网补一轮:没封面、存着的判决里胜出的那个源自带封面且专辑逐字对上的补上;判决补不上的空条目随后借同专辑
+// 补上的那条(coverSweepBorrowAlbumSiblings),已有封面的不动。
 func TestCoverSweepFillsFromLyricsWinner(t *testing.T) {
 	dec := func(album, cover string) *lyricsDecision {
 		return &lyricsDecision{Winner: "kugou", Candidates: []lyricsDecisionCandidate{
@@ -176,8 +177,8 @@ func TestCoverSweepFillsFromLyricsWinner(t *testing.T) {
 		t.Errorf("该补上胜者那张: %+v", e)
 	}
 	for _, k := range []string{"A|other|半生雪", "A|nodec|半生雪"} {
-		if e := enrichCache[k]; e.CoverURL != "" {
-			t.Errorf("%s 不该补: %+v", k, e)
+		if e := enrichCache[k]; e.CoverURL != "https://k/1.jpg" || e.CoverSource != "kugou" {
+			t.Errorf("%s 判决补不上,借同专辑补上的那张: %+v", k, e)
 		}
 	}
 	if e := enrichCache["A|has|半生雪"]; e.CoverURL != "https://n/1.jpg" {

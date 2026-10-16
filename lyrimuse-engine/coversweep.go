@@ -144,8 +144,16 @@ func runCoverSweep(ctx context.Context) coverSweepPass {
 		slog.Info("cover sweep: recorded the QQ album of stored QQ covers", "count", n)
 		coverSweepSave()
 	}
+	if n := coverSweepFillFromPlayerCovers(); n > 0 {
+		slog.Info("cover sweep: took the player's own cover", "count", n)
+		coverSweepSave()
+	}
 	if n := coverSweepFillFromDecisions(); n > 0 {
 		slog.Info("cover sweep: filled from the lyrics winner", "count", n)
+		coverSweepSave()
+	}
+	if n := coverSweepBorrowAlbumSiblings(); n > 0 {
+		slog.Info("cover sweep: borrowed the album's cover from a sibling", "count", n)
 		coverSweepSave()
 	}
 	if switched, settled := coverSweepSettleAlbumCovers(ctx); settled > 0 {
@@ -328,6 +336,134 @@ func coverSweepFillFromDecisions() int {
 		enrichMu.Unlock()
 	}
 	return filled
+}
+
+// coverSweepFillFromPlayerCovers:没封面、或封面明确是另一张专辑的(coverOfAnotherAlbum)条目,记着播放器自带封面
+// (player_covers,entryPlayerCover 挑)的直接换上,记成 player、cover_album 记本地专辑,换掉旧封面时主色清空(同
+// coverSweepFillFromDecisions)。专辑定下的(coverSettled)不动。纯内存、不联网;排在从歌词判决补之前:自带封面是播放器
+// 按这首记的,判决里的候选只是专辑对得上。见 03 章决策 51。返回换了几条。
+func coverSweepFillFromPlayerCovers() int {
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	filled := 0
+	for key, e := range enrichCache {
+		if enrichInflight[key] || enrichProvisional[key] {
+			continue
+		}
+		// 专辑定下的,coverOfAnotherAlbum 恒为 false,不动。
+		album := entryListedAlbum(key, e)
+		if e.CoverURL != "" && !coverOfAnotherAlbum(e, album) {
+			continue
+		}
+		own := entryPlayerCover(e)
+		if own == "" || own == e.CoverURL {
+			continue
+		}
+		if e.CoverURL != "" {
+			e.AccentColor = ""
+		}
+		e.CoverURL, e.CoverSource, e.CoverAlbum = own, "player", album
+		enrichCache[key] = e
+		enrichDirty = true
+		filled++
+	}
+	return filled
+}
+
+// coverSweepBorrowAlbumSiblings:没封面、或封面明确是另一张专辑的(coverOfAnotherAlbum)条目,借同一张专辑(歌词管理显示的专辑
+// 繁简折叠后相同)、同一位歌手(albumSiblingArtistMatches)里封面属于这张专辑的那条(albumSiblingLends)。出借的按专辑定下的、设备、
+// 播放器自带、其它的顺序,同档取 key 小的;cover_album 记出借那条的,主色清空。专辑定下的不动。纯内存、不联网,排在从歌词判决补
+// 之后:按专辑统一封面的几步都没补上的才轮到这里。见 03 章决策 51。返回借了几条。
+func coverSweepBorrowAlbumSiblings() int {
+	type lender struct {
+		key, artist string
+		e           enrichEntry
+		rank        int
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	lenders := map[string][]lender{}
+	for key, e := range enrichCache {
+		album := entryListedAlbum(key, e)
+		if album == "" || !albumSiblingLends(e, album) {
+			continue
+		}
+		artist, _, _ := splitEnrichKey(key)
+		simp := toSimplified(album)
+		lenders[simp] = append(lenders[simp], lender{key, artist, e, albumSiblingLendRank(e)})
+	}
+	for _, ls := range lenders {
+		sort.Slice(ls, func(i, j int) bool {
+			if ls[i].rank != ls[j].rank {
+				return ls[i].rank < ls[j].rank
+			}
+			return ls[i].key < ls[j].key
+		})
+	}
+	borrowed := 0
+	for key, e := range enrichCache {
+		if enrichInflight[key] || enrichProvisional[key] || coverSettled(e) {
+			continue
+		}
+		album := entryListedAlbum(key, e)
+		if album == "" || (e.CoverURL != "" && !coverOfAnotherAlbum(e, album)) {
+			continue
+		}
+		artist, _, _ := splitEnrichKey(key)
+		for _, l := range lenders[toSimplified(album)] {
+			if l.key == key || !albumSiblingArtistMatches(artist, e.CanonicalArtist, l.artist, l.e.CanonicalArtist) {
+				continue
+			}
+			if l.e.CoverURL != e.CoverURL {
+				coverAlbum := l.e.CoverAlbum
+				if strings.TrimSpace(coverAlbum) == "" {
+					coverAlbum = album
+				}
+				e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor = l.e.CoverURL, l.e.CoverSource, coverAlbum, ""
+				enrichCache[key] = e
+				borrowed++
+			}
+			break
+		}
+	}
+	if borrowed > 0 {
+		enrichDirty = true
+	}
+	return borrowed
+}
+
+// albumSiblingLends:这条的封面能不能借给专辑 album 的其它曲目:有封面,而且明确属于这张专辑 —— 专辑定下的、设备封面和播放器自带的
+// (记的就是本地专辑)、cover_album 有值并对得上(candidateCoverAlbumFits)。cover_album 空着的说不清是哪张,不借。纯函数。
+func albumSiblingLends(e enrichEntry, album string) bool {
+	if e.CoverURL == "" {
+		return false
+	}
+	if coverSettled(e) || e.CoverSource == "device" || e.CoverSource == "player" {
+		return true
+	}
+	return candidateCoverAlbumFits(e.CoverAlbum, album)
+}
+
+// albumSiblingLendRank:出借的先后,小的优先:专辑定下的、设备封面、播放器自带、其它。纯函数。
+func albumSiblingLendRank(e enrichEntry) int {
+	switch {
+	case coverSettled(e):
+		return 0
+	case e.CoverSource == "device":
+		return 1
+	case e.CoverSource == "player":
+		return 2
+	}
+	return 3
+}
+
+// albumSiblingArtistMatches:借封面的两条是不是同一位歌手:写法键里的歌手对得上(artistMatches),或任一边曲库核实过的官方歌手名
+// (canonical_artist)对得上另一边 ——「Khalil Fong」那条的官方名是「方大同」。纯函数。
+func albumSiblingArtistMatches(artist, canonical, lenderArtist, lenderCanonical string) bool {
+	return artistMatches(artist, lenderArtist) ||
+		(canonical != "" && artistMatches(canonical, lenderArtist)) ||
+		(lenderCanonical != "" && artistMatches(artist, lenderCanonical)) ||
+		(canonical != "" && lenderCanonical != "" && artistMatches(canonical, lenderCanonical))
 }
 
 // coverSweepBorrowVerifiedSiblings:封面归属没核实的条目(coverAwaitsVerifiedSibling),同一张专辑已经有一条归属核实过的设备
