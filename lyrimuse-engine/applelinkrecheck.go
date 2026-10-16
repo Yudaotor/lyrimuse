@@ -93,8 +93,7 @@ func clearStaleAppleLink(e enrichEntry) enrichEntry {
 	e.PeripheralRetryCount = 0
 	if e.CoverSource == "apple" {
 		e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor = "", "", "", ""
-		e.MotionCoverURL, e.MotionPreviewURL = "", ""
-		e.MotionCoverChecked, e.MotionCoverIdentityVerified = false, false
+		e.clearMotionVerdict()
 	}
 	return e
 }

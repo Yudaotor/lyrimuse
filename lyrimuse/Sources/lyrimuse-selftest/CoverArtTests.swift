@@ -2077,4 +2077,61 @@ func runCoverArtTests() {
                             .contains("let data = FileIO.read(url), CoverArtReplacementGate.isImage(data)"), true,
                     "系统封面(契约): media-control 载荷、nowplaying-clients、Kaset 下载、同目录封面都只收读得出图头的数据")
     }
+
+    // ---- 动态封面认对照封面;占位专辑名下的播放器图不当封面 ----
+    do {
+        typealias R = EnrichCacheReader
+        func entry(_ json: String) -> EnrichCacheEntry {
+            try! JSONDecoder().decode(EnrichCacheEntry.self, from: Data(json.utf8))
+        }
+        let a = "https://p1.music.126.net/a.jpg", b = "https://p1.music.126.net/b.jpg"
+        expectEqual(R.motionCoverCurrent(entry(#"{"cover_url":"\#(a)","motion_cover_url":"m","motion_cover_for":"\#(a)"}"#)), true,
+                    "动态封面: 引擎对着这张封面核的,用")
+        expectEqual(R.motionCoverCurrent(entry(#"{"cover_url":"\#(b)","motion_cover_url":"m","motion_cover_for":"\#(a)"}"#)), false,
+                    "动态封面: 封面后来换了,不用,等引擎重核")
+        expectEqual(R.motionCoverCurrent(entry(#"{"motion_cover_url":"m","motion_cover_for":"\#(a)"}"#)), false,
+                    "动态封面: 封面清空了,不用")
+        expectEqual(R.motionCoverCurrent(entry(#"{"cover_url":"\#(a)","motion_cover_url":"m"}"#)), true,
+                    "动态封面: 早先没记对照封面的照旧用(播之前 App 自己再比)")
+        let photo = "https://d.musicapp.migu.cn/data/oss/resource/00/45/cq/a.webp"
+        let lx = PlaybackPlayer.lxMusic.bundleIdentifier
+        let covers = entry(#"{"player_covers":{"\#(lx)":"\#(photo)","x":"file:///a.jpg"}}"#)
+        expectEqual(R.playerCovers(in: covers, album: "3121"), [lx: URL(string: photo)!], "播放器自带封面: 只收 https")
+        expectEqual(R.playerCovers(in: covers, album: " 单曲发行 ").isEmpty, true, "播放器自带封面: 占位专辑名下记的是歌手照片,不给")
+        let playerPhoto = entry(#"{"cover_url":"\#(photo)","cover_source":"player"}"#)
+        expectEqual(R.usableCoverURL(playerPhoto, album: "单曲发行") == nil, true, "缓存封面: 占位专辑名下播放器给的那张不给")
+        expectEqual(R.usableCoverURL(playerPhoto, album: "3121"), URL(string: photo), "缓存封面: 真专辑照常给")
+        expectEqual(R.usableCoverURL(entry(#"{"cover_url":"\#(a)","cover_source":"netease"}"#), album: "单曲发行"), URL(string: a),
+                    "缓存封面: 占位专辑名下按歌曲匹配到的照常给")
+        expectEqual(PlaceholderAlbum.contains("单曲发行"), true, "占位专辑名: 单曲发行")
+        expectEqual(PlaceholderAlbum.contains("单曲"), false, "占位专辑名: 别的不算")
+        expectEqual(PlaceholderAlbum.contains(nil), false, "占位专辑名: 没报不算")
+        var pushed = LXMusicOpenAPI.State()
+        pushed.picURL = "/data/oss/resource/00/45/cq/a.webp"
+        pushed.albumName = "3121"
+        expectEqual(LXMusicOpenAPI.ownCoverURL(pushed), URL(string: photo), "洛雪推的封面: 真专辑照常给")
+        pushed.albumName = "单曲发行"
+        expectEqual(LXMusicOpenAPI.ownCoverURL(pushed) == nil, true, "洛雪推的封面: 占位专辑名下是歌手照片,不给")
+        // 接线契约(扫源码)
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func src(_ rel: String) -> String {
+            (try? String(contentsOfFile: sources.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+        }
+        let coordinator = src("lyrimuse/PlaybackCoordinator.swift")
+        expectEqual(coordinator.contains("let file = await MotionCoverStore.shared.prepare(master: found.master, reference: compareFrame ? reference : nil)")
+                        && !coordinator.contains("if let hit = MotionCoverStore.shared.cachedFile(master: found.master) {")
+                        && coordinator.contains("$highResArtworkImage\n                .dropFirst()")
+                        && coordinator.contains(".sink { [weak self] _ in self?.refreshMotionCover() },"), true,
+                    "动态封面(契约): 盘上已有的也要跟显示的封面比;高清替代换了重新比")
+        let store = src("lyrimuse/MotionCoverStore.swift")
+        expectEqual(store.contains("if let hit = cachedFile(master: master) {\n            guard let reference else { return hit }\n            return await checkCached(hit, key: key, reference: reference)"), true,
+                    "动态封面(契约): 命中盘上那份时按参照图比一次")
+        expectEqual(src("LyrimuseCore/Local/EnrichCacheReader.swift")
+                        .contains("guard let entry, motionCoverCurrent(entry), let s = entry.motionCoverURL"), true,
+                    "动态封面(契约): 引擎核的不是这一条现在的封面时不给")
+        expectEqual(src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains("listed: EnrichCacheReader.playerCoverURLs(")
+                        && src("LyrimuseCore/Local/LXMusicOpenAPI.swift").contains("let url = Self.ownCoverURL(state) else { return nil }")
+                        && src("lyrimuse/Settings/DiscordPresenceController.swift").contains("LXMusicOpenAPI.ownCoverURL($0)"), true,
+                    "占位专辑名(契约): 洛雪自带封面、开放 API 取图、Discord 都走滤过占位专辑的入口")
+    }
 }

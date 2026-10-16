@@ -594,8 +594,8 @@ func motionCoverAlbumIDFromAppleURL(appleURL string) int64 {
 
 var appleAlbumIDInURLRE = regexp.MustCompile(`/album/[^/]*/(\d+)`)
 
-// motionCoverNeedsRecheckAgainstOwnCover:backfillPeripheralFields 跑完这一轮之后,这条
-// 记录的动态封面结论是不是**一位都没落下** —— 既没有地址,也没有"查过了"。
+// motionCoverNeedsRecheckAgainstOwnCover:backfillPeripheralFields 跑完这一轮之后,这条记录还没有对着它现在这张封面核过的
+// 动态封面结论 —— 一位都没落下,或者落下的是对着别的封面核的(motionVerdictCurrent)。
 //
 // 是的话就得拿它自己那张封面补算一次(recheckMotionCoverAgainstCurrentCover),否则它会
 // 永远停在"没查过"。这不是罕见分支:`freshApplies`(motionCoverFreshResultAppliesTo)
@@ -605,7 +605,60 @@ var appleAlbumIDInURLRE = regexp.MustCompile(`/album/[^/]*/(\d+)`)
 // 反过来三种情形都不补,免得白发请求:fresh 的结论已经落到这张封面上了、这条已经有动态
 // 封面了、这条已经核对过了(那一位存在的全部意义就是防重复核对)。
 func motionCoverNeedsRecheckAgainstOwnCover(freshApplies bool, e enrichEntry) bool {
-	return !freshApplies && e.MotionCoverURL == "" && !e.MotionCoverChecked
+	return !freshApplies && !motionVerdictCurrent(e)
+}
+
+// motionVerdictCurrent:这条有动态封面结论(有地址,或核过),而且是对着它现在这张封面核的(MotionCoverFor)。封面后来换过、
+// 或结论早于记下对照封面的,都不算:App 不用,引擎重核(motionVerdictStale)。见 03 章决策 53。
+func motionVerdictCurrent(e enrichEntry) bool {
+	return (e.MotionCoverChecked || e.MotionCoverURL != "") && e.MotionCoverFor == e.CoverURL
+}
+
+// motionVerdictStale:有动态封面结论,但不是对着现在这张封面核的。
+func motionVerdictStale(e enrichEntry) bool {
+	return (e.MotionCoverChecked || e.MotionCoverURL != "") && e.MotionCoverFor != e.CoverURL
+}
+
+// clearMotionVerdict:动态封面这一组整组清掉。
+func (e *enrichEntry) clearMotionVerdict() {
+	e.MotionCoverURL, e.MotionPreviewURL, e.MotionCoverFor = "", "", ""
+	e.MotionCoverChecked, e.MotionCoverIdentityVerified = false, false
+}
+
+// recordMotionVerdict:对着现在这张封面核出的结论整组换上(master 为空就是没有动态封面),记下对照的封面。
+func (e *enrichEntry) recordMotionVerdict(master, preview string, identity bool) {
+	e.MotionCoverURL, e.MotionPreviewURL = master, preview
+	e.MotionCoverChecked, e.MotionCoverIdentityVerified = true, identity
+	e.MotionCoverFor = e.CoverURL
+}
+
+// motionRecheckTried:这次启动里播到时已经重核过作废结论的条目(trackEnrichment 判)。调用方持有 enrichMu。
+var motionRecheckTried = map[string]bool{}
+
+// recheckPlayingMotionCover:播到这首时重核作废的动态封面结论,收工时放掉 enrichInflight。
+func recheckPlayingMotionCover(key, title, album string) {
+	defer func() {
+		enrichMu.Lock()
+		delete(enrichInflight, key)
+		enrichMu.Unlock()
+	}()
+	recheckMotionCoverAgainstCurrentCover(context.Background(), key, title, album)
+}
+
+// motionCoverAlbumHasKnownVideo:这条记录所属的专辑,本地缓存里已经确认有动态封面。专辑还没查过时回 false(motionCoverWorthBackfill
+// 回 true),一个请求都不发,可以拿来在全量扫描里筛出要取图核对的那几条。
+func motionCoverAlbumHasKnownVideo(e enrichEntry, artist, title, album string) bool {
+	albumID, ok := appleCatalogAlbumIDFor(artist, title, album)
+	if !ok {
+		albumID = motionCoverAlbumIDFromAppleURL(e.AppleURL)
+	}
+	if albumID <= 0 {
+		return false
+	}
+	motionCoverMu.Lock()
+	defer motionCoverMu.Unlock()
+	mc, cached := motionCoverCache[fmt.Sprint(albumID)]
+	return cached && mc.Master != ""
 }
 
 // motionCoverWorthBackfill:这条**已存在**的记录值不值得为了动态封面再补一次。

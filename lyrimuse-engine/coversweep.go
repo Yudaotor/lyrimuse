@@ -37,6 +37,8 @@ import (
 // (coverSweepSettleAlbumCovers):各首按图比,不止一张图时以 Apple 目录这张专辑的封面为准,Apple 没有这张专辑时用设备封面
 // 那张;跟定下的不是同一张图的换成它,定下的记进 CoverSettled,之后设备封面、外围补全都不再换掉它。见 03 章决策 48。
 //
+// 一遍跑完再重核动态封面结论作废了的条目(封面换过,coverSweepRecheckStaleMotion)。
+//
 // 小设备封面(deviceCoverSmall)排在后面各核一次:先在本机播放器数据、歌词判决的各源候选里找同一张图的清晰版
 // (upgradeSmallDeviceCover),找不到、外围补全的上限又没到,再走一次外围补全按远程结果比。每条隔
 // coverUpgradeRecheckInterval 才再核(CoverUpgradeCheckTS):新发行的歌要过一阵才进各家曲库。一个请求都没成功的
@@ -83,6 +85,8 @@ var (
 	coverSweepNetworkRound = withNetworkRound
 	// coverSweepUpgradeLocal 在本机播放器数据、歌词判决的各源候选里给小设备封面找清晰版。单测换成假的。
 	coverSweepUpgradeLocal = upgradeSmallDeviceCover
+	// coverSweepRecheckMotion 重核一条作废的动态封面结论,返回写没写。单测换成假的。
+	coverSweepRecheckMotion = recheckMotionCoverAgainstCurrentCover
 	// coverSweepSave 把攒着的改动存盘。单测换成计数。
 	coverSweepSave = requestEnrichBackgroundSave
 	// coverSweepQQAlbumName 按专辑 mid 查 QQ 上的专辑名。单测换成假的。
@@ -121,10 +125,83 @@ func startCoverSweeper(ctx context.Context) {
 		case <-time.After(delay):
 		}
 		delay = coverSweepInterval
-		if runCoverSweep(ctx).offline {
+		offline := runCoverSweep(ctx).offline
+		if !offline {
+			offline = coverSweepRecheckStaleMotion(ctx).offline
+		}
+		if offline {
 			delay = coverSweepOfflineRetry
 		}
 	}
+}
+
+// coverSweepMotionGap:重核动态封面时两条要取图的之间隔多久。
+const coverSweepMotionGap = time.Second
+
+// coverSweepMotionPass:重核动态封面那一遍的结果。rechecked:写下了新结论的条数;dropped:其中摘掉动态封面的;offline:连着
+// coverSweepOfflineLimit 条要取图的都没查成,提前停下了。
+type coverSweepMotionPass struct {
+	rechecked, dropped int
+	offline            bool
+}
+
+// coverSweepRecheckStaleMotion:动态封面结论作废的条目(motionVerdictStale:封面后来换过,或结论早于记下对照封面)按现在的封面
+// 逐条重核(recheckMotionCoverAgainstCurrentCover),排在补封面那几步之后,核的是这一遍换完的封面。专辑没有动态封面的只读本地缓存;
+// 要取图的两条之间隔 coverSweepMotionGap,每条之前先给在解析的歌让路。见 03 章决策 53。
+func coverSweepRecheckStaleMotion(ctx context.Context) coverSweepMotionPass {
+	type stale struct {
+		key, title, album string
+		images, had       bool
+	}
+	enrichMu.Lock()
+	var list []stale
+	for key, e := range enrichCache {
+		if !motionVerdictStale(e) || enrichInflight[key] || enrichProvisional[key] {
+			continue
+		}
+		artist, title, album := splitEnrichKey(key)
+		list = append(list, stale{key, title, album, motionCoverAlbumHasKnownVideo(e, artist, title, album), e.MotionCoverURL != ""})
+	}
+	enrichMu.Unlock()
+	var pass coverSweepMotionPass
+	if len(list) == 0 {
+		return pass
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].key < list[j].key })
+	misses, unsaved := 0, 0
+	for _, s := range list {
+		coverSweepYield(ctx)
+		if ctx.Err() != nil {
+			break
+		}
+		if coverSweepRecheckMotion(ctx, s.key, s.title, s.album) {
+			pass.rechecked++
+			misses = 0
+			enrichMu.Lock()
+			if e, ok := enrichCache[s.key]; ok && s.had && e.MotionCoverURL == "" {
+				pass.dropped++
+			}
+			enrichMu.Unlock()
+			if unsaved++; unsaved >= coverSweepSaveEvery {
+				coverSweepSave()
+				unsaved = 0
+			}
+		} else if s.images {
+			if misses++; misses >= coverSweepOfflineLimit {
+				pass.offline = true
+				break
+			}
+		}
+		if s.images {
+			coverSweepWait(ctx, coverSweepMotionGap)
+		}
+	}
+	if unsaved > 0 {
+		coverSweepSave()
+	}
+	slog.Info("cover sweep: rechecked stale motion covers", "stale", len(list), "rechecked", pass.rechecked,
+		"dropped", pass.dropped, "offline", pass.offline)
+	return pass
 }
 
 // coverSweepPass 是一遍的结果。offlineItems:一个请求都没成功的条数;offline:连续 coverSweepOfflineLimit 条这样,这一遍

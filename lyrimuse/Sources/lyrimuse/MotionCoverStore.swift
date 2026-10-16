@@ -50,6 +50,8 @@ final class MotionCoverStore {
     /// 终审没过的 (key, 参照图) 组合。跟 `failed` 分开的理由见上;**带上参照图的指纹**是
     /// 关键:封面一换就是一个新组合,自然会再试一次,而参照图没变时不重复下载那几 MB。
     private var referenceRejected: Set<String> = []
+    /// 终审过了的 (key, 参照图) 组合:盘上那份再跟同一张参照图比时不再解帧。
+    private var referencePassed: Set<String> = []
 
     private var directory: URL { LyrimusePaths.configFile("motion-covers") }
 
@@ -63,7 +65,7 @@ final class MotionCoverStore {
         return url
     }
 
-    /// 取这张专辑的动态封面本地文件:盘上有就直接给,没有就下一份。
+    /// 取这张专辑的动态封面本地文件:盘上有就跟参照图比一次再给(`checkCached`),没有就下一份。
     ///
     /// 幂等 —— 同一个 master 并发调多次只会真下一次。失败返回 nil 且这一次运行里不再重试
     /// (见 `failed`)。**任何一步失败都只是"这首没有动态封面"**,不往上抛错(理由见
@@ -73,8 +75,11 @@ final class MotionCoverStore {
     ///   会拿视频**中段**的真实一帧跟它比一次,理由见 `verifyMatchesReference` 的注释。传
     ///   nil(拿不到当前封面,比如刚换歌那一瞬)就跳过这道终审,不因为一时缺参照而白白拒了。
     func prepare(master: URL, reference: CoverFingerprint.Reference?) async -> URL? {
-        if let hit = cachedFile(master: master) { return hit }
         let key = cacheKey(for: master)
+        if let hit = cachedFile(master: master) {
+            guard let reference else { return hit }
+            return await checkCached(hit, key: key, reference: reference)
+        }
         if failed.contains(key) { return nil }
         // 同一份参照图上次就没过终审,不必再下一遍那几 MB;参照图一换就是新组合,自然重试。
         if let reference, referenceRejected.contains(Self.rejectionKey(key, reference)) { return nil }
@@ -96,6 +101,9 @@ final class MotionCoverStore {
                 self.inflight[key] = nil
                 switch outcome {
                 case .ready(let file):
+                    if let reference {
+                        self.referencePassed.insert(Self.rejectionKey(key, reference))
+                    }
                     return file
                 case .referenceMismatch:
                     if let reference {
@@ -113,6 +121,24 @@ final class MotionCoverStore {
         }
         inflight[key] = (task, reference)
         return await task.value
+    }
+
+    /// 盘上那份跟参照图比一次:视频中段那一帧,同下载时的终审(`verifyMatchesReference`)。动画只叠在跟它是同一张图的封面上,
+    /// 盘上的那份是对着别的封面下的(同一张专辑在别的条目上、引擎后来换了这条的封面)也得比。结果按 (资源, 参照图) 记着。
+    private func checkCached(_ file: URL, key: String, reference: CoverFingerprint.Reference) async -> URL? {
+        let pair = Self.rejectionKey(key, reference)
+        if referencePassed.contains(pair) { return file }
+        if referenceRejected.contains(pair) { return nil }
+        switch await Self.verifyMatchesReference(file, reference: reference) {
+        case .pass:
+            referencePassed.insert(pair)
+            return file
+        case .mismatch:
+            referenceRejected.insert(pair)
+            return nil
+        case .undecidable:
+            return nil
+        }
     }
 
     /// `failed` / `referenceRejected` 两张表的键各自独立:前者按资源,后者按 (资源, 参照图)。

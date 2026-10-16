@@ -578,11 +578,10 @@ final class DiscordPresenceController: ObservableObject {
         let videoFrame = source.kasetVideoFrameURL ?? source.webPageVideoFrameURL
         let appleTrackID = source.appleCatalogTrackID
         let relayBase = ConfigStore.shared.stateRelayURL
-        // 洛雪开放 API 开着时推来的封面地址(没进列表的歌也有),换成 Discord 认的 https。
+        // 洛雪开放 API 开着时推来的封面地址(没进列表的歌也有),换成 Discord 认的 https;占位专辑名下的不给(见 ownCoverURL)。
         let lxCover = reportedBundleID == PlaybackPlayer.lxMusic.bundleIdentifier
             ? LXMusicOpenAPI.shared.currentState()
-                .flatMap { LXMusicOpenAPI.describes($0, title: source.title, artist: source.artist) ? $0.picURL : nil }
-                .flatMap(LXMusicOpenAPI.httpsCover)
+                .flatMap { LXMusicOpenAPI.describes($0, title: source.title, artist: source.artist) ? LXMusicOpenAPI.ownCoverURL($0) : nil }
             : nil
         let key = [reportedBundleID ?? "", webPlatform ?? "", source.artist, source.title, source.album,
                    source.enrichContentVersion.map { String($0.timeIntervalSince1970) } ?? "",

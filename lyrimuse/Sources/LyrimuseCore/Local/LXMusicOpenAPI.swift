@@ -215,6 +215,13 @@ public final class LXMusicOpenAPI: NSObject, URLSessionDataDelegate, @unchecked 
         return min(100, Int(v.rounded()))
     }
 
+    /// 推来的这一首自己的封面(`picUrl` 换成 https,见 `httpsCover`)。占位专辑名(`PlaceholderAlbum`)下给的是歌手照片,不当封面。
+    /// 纯函数,selftest 覆盖。
+    public static func ownCoverURL(_ s: State) -> URL? {
+        guard !PlaceholderAlbum.contains(s.albumName), let raw = s.picURL else { return nil }
+        return httpsCover(raw)
+    }
+
     /// 推来的封面地址换成 Discord 认的 https:跟引擎的 `lxMusicHTTPSCover`(lyrimuse-engine/lxmusic.go)同一张图床表,两处同步改
     /// (见 09 章决策 263)。咪咕记的多是不带主机的「/data/oss/…」,补成 d.musicapp.migu.cn。`data:` 地址、没核过的图床不给。
     public static func httpsCover(_ raw: String) -> URL? {
@@ -373,11 +380,11 @@ public final class LXMusicOpenAPI: NSObject, URLSessionDataDelegate, @unchecked 
         return false
     }
 
-    /// 推来的封面(`picUrl`,换成 https)下载下来,推来的是这一首(`describes`)才下;同一个地址不重下。下不到、不是图为 nil。
+    /// 推来的封面(`ownCoverURL`)下载下来,推来的是这一首(`describes`)才下;同一个地址不重下。下不到、不是图为 nil。
     /// 会阻塞到下载结束(最多 3 秒),不要在主线程调。
     public func artworkData(title: String?, artist: String?) -> Data? {
         guard let state = currentState(), Self.describes(state, title: title, artist: artist),
-              let raw = state.picURL, let url = Self.httpsCover(raw) else { return nil }
+              let url = Self.ownCoverURL(state) else { return nil }
         return artworkData(url: url)
     }
 

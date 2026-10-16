@@ -250,7 +250,8 @@ func pickAppleAlbumHintLogged(key string, cands []albumHintCandidate, artist, ti
 	return album
 }
 
-// coverAlbumForTrack:封面复查 / 换封面判定用的专辑名(03 章决策 16)。播放器报了专辑就是它;没报时,ctx 上挂着
+// coverAlbumForTrack:封面复查 / 换封面判定用的专辑名(03 章决策 16)。播放器报了专辑就是它(占位专辑名按没报,见
+// albumIsPlaceholder);没报时,ctx 上挂着
 // Kaset 这首的 videoId 就用 YouTube Music 给它登记的专辑(kasetListedAlbumFor),再没有就用 Apple 目录回填的那个
 // (都只读缓存、不等网络,没命中就后台补一次、这一轮按空处理)。回填名只进挑选过程(Apple 匹配打分 / 网易云 vs Apple
 // 对版 / QQ、同专辑邻居两道 guard / coverSwapAllowed / coverNeedsHintCheck),绝不落盘成 cover_album:那个字段是
@@ -259,7 +260,7 @@ func pickAppleAlbumHintLogged(key string, cands []albumHintCandidate, artist, ti
 //
 // 内部经 lyricResolvedArtists 取 enrichMu:持有 enrichMu 时不能调(trackEnrichment 要在取锁之前算好)。
 func coverAlbumForTrack(ctx context.Context, artist, title, album string, durationSecs float64) string {
-	if album != "" {
+	if coverAlbumOrNone(album) != "" {
 		return album
 	}
 	if listed := kasetListedAlbumFor(youTubeMusicVideoIDFrom(ctx), durationSecs, artist, title); listed != "" {

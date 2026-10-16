@@ -59,7 +59,7 @@ var songEntityFieldClasses = map[string]songFieldClass{
 
 	"cover_url": songFieldAlbum, "cover_source": songFieldAlbum, "cover_album": songFieldAlbum, "accent_color": songFieldAlbum,
 	"motion_cover_url": songFieldAlbum, "motion_preview_url": songFieldAlbum, "motion_cover_checked": songFieldAlbum,
-	"motion_cover_identity_verified": songFieldAlbum, "qq_album_mid": songFieldAlbum, "spotify_album_id": songFieldAlbum,
+	"motion_cover_identity_verified": songFieldAlbum, "motion_cover_for": songFieldAlbum, "qq_album_mid": songFieldAlbum, "spotify_album_id": songFieldAlbum,
 	"kkbox_album_id": songFieldAlbum, "amazon_album_asin": songFieldAlbum, "soda_album_id": songFieldAlbum, "player_album_ids": songFieldAlbum,
 	"youtube_music_album": songFieldAlbum, "youtube_music_album_id": songFieldAlbum,
 	"youtube_music_album_lang": songFieldAlbum, "youtube_music_album_rev": songFieldAlbum,

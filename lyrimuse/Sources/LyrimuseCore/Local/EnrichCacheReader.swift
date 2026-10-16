@@ -42,6 +42,9 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     /// 引擎是靠**专辑身份核验**放行这段动画的(这条的封面就是 Apple 那张专辑的官方封面,
     /// 只是动画首帧长得不一样)。App 侧据此跳过中段帧终审,理由见 `PlaybackCoordinator.refreshMotionCover`。
     let motionCoverIdentityVerified: Bool?
+    /// 引擎核上面这组动态封面结论时对照的那张封面(引擎 enrichEntry.MotionCoverFor)。跟这一条现在的 `coverURL` 不一样就是
+    /// 封面后来换过,结论不用,见 `EnrichCacheReader.motionCoverCurrent`。
+    let motionCoverFor: String?
     // 这张封面在**来源平台上属于哪张专辑**(lyrimuse-engine/enrich.go 的 e.CoverAlbum,
     // 落盘)。Swift 侧解码——「最近记录」需要区分"缓存里有图"
     // 和"缓存里这张图确实属于这行的专辑":后者才有资格纠正 Last.fm 自带图,见
@@ -167,6 +170,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         case motionCoverURL = "motion_cover_url"
         case motionPreviewURL = "motion_preview_url"
         case motionCoverIdentityVerified = "motion_cover_identity_verified"
+        case motionCoverFor = "motion_cover_for"
         case coverAlbum = "cover_album"
         case instrumental
         case ts
@@ -246,6 +250,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         motionCoverURL = try c.decodeIfPresent(String.self, forKey: .motionCoverURL)
         motionPreviewURL = try c.decodeIfPresent(String.self, forKey: .motionPreviewURL)
         motionCoverIdentityVerified = try c.decodeIfPresent(Bool.self, forKey: .motionCoverIdentityVerified)
+        motionCoverFor = try c.decodeIfPresent(String.self, forKey: .motionCoverFor)
         coverAlbum = try c.decodeIfPresent(String.self, forKey: .coverAlbum)
         instrumental = try c.decodeIfPresent(Bool.self, forKey: .instrumental)
         ts = try c.decodeIfPresent(Int64.self, forKey: .ts)
@@ -1141,10 +1146,16 @@ public enum EnrichCacheReader {
     /// (App 刚启动)或落后于它时,`lookup` 从这份拿得到歌词,封面也得从这份拿,不然是有词没图。
     public static func albumMatchedCoverURL(artist: String, title: String, album: String) -> URL? {
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        if let s = freshPlayingEntry(forKey: key)?.coverURL, let url = URL(string: s) { return url }
+        if let url = freshPlayingEntry(forKey: key).flatMap({ usableCoverURL($0, album: album) }) { return url }
         guard let all = loadEntries() else { return nil }
-        if let s = matchedEntry(key, in: all)?.coverURL, let url = URL(string: s) { return url }
-        return nil
+        return matchedEntry(key, in: all).flatMap { usableCoverURL($0, album: album) }
+    }
+
+    /// 条目记的封面地址。占位专辑名(`PlaceholderAlbum`)下来源是播放器自己给的那张(歌手照片)不给:引擎启动时把它换掉,App 先于
+    /// 引擎读到旧缓存时别铺上它,铺上了正在放的这首就一直是它(高清替代只在没铺图时补查)。纯函数,selftest 覆盖。
+    public nonisolated static func usableCoverURL(_ entry: EnrichCacheEntry, album: String) -> URL? {
+        guard let s = entry.coverURL, !(PlaceholderAlbum.contains(album) && entry.coverSource == "player") else { return nil }
+        return URL(string: s)
     }
 
     /// 播放器没报歌手时引擎认出来的歌手 / 专辑(见 03 章决策 32)。查法同 `albumMatchedCoverURL`;条目里没有为 nil。
@@ -1172,6 +1183,12 @@ public enum EnrichCacheReader {
             guard let all = loadEntries() else { return [:] }
             entry = matchedEntry(key, in: all)
         }
+        return playerCovers(in: entry, album: album)
+    }
+
+    /// 一条条目记下的播放器自带封面(只收 https)。占位专辑名(`PlaceholderAlbum`)下记的是歌手照片,不给。纯函数,selftest 覆盖。
+    public nonisolated static func playerCovers(in entry: EnrichCacheEntry?, album: String) -> [String: URL] {
+        guard !PlaceholderAlbum.contains(album) else { return [:] }
         var out: [String: URL] = [:]
         for (bundleID, raw) in entry?.playerCovers ?? [:] {
             if let url = URL(string: raw), url.scheme?.lowercased() == "https" { out[bundleID] = url }
@@ -1209,10 +1226,11 @@ public enum EnrichCacheReader {
     /// 动态画面**,而动态的东西比一张静态错图扎眼得多。引擎侧那一串图像校验也是同一个
     /// 立场 —— 两侧一致地宁缺毋滥。
     ///
-    /// `identityVerified`:引擎靠专辑身份核验放行的(见 `motionCoverIdentityVerified`)。
+    /// `identityVerified`:引擎靠专辑身份核验放行的(见 `motionCoverIdentityVerified`);`cover` 是这一条现在的封面。引擎核的
+    /// 不是这张封面(`motionCoverCurrent`)时不给。
     public static func albumMatchedMotionCover(
         artist: String, title: String, album: String
-    ) -> (master: URL, preview: String?, identityVerified: Bool)? {
+    ) -> (master: URL, preview: String?, identityVerified: Bool, cover: URL?)? {
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         // 「正在放的这一条」比已解码缓存新时先看它,同 albumMatchedCoverURL。
         let entry: EnrichCacheEntry?
@@ -1222,8 +1240,16 @@ public enum EnrichCacheReader {
             guard let all = loadEntries() else { return nil }
             entry = matchedEntry(key, in: all)
         }
-        guard let entry, let s = entry.motionCoverURL, let url = URL(string: s) else { return nil }
-        return (url, entry.motionPreviewURL, entry.motionCoverIdentityVerified ?? false)
+        guard let entry, motionCoverCurrent(entry), let s = entry.motionCoverURL, let url = URL(string: s) else { return nil }
+        return (url, entry.motionPreviewURL, entry.motionCoverIdentityVerified ?? false, entry.coverURL.flatMap(URL.init(string:)))
+    }
+
+    /// 条目上的动态封面结论还作不作数:引擎记下的对照封面(`motion_cover_for`)就是这一条现在的封面。封面后来换过的不用,等引擎
+    /// 按新封面重核;早先没记对照封面的照旧用,播之前 App 自己再跟显示的封面比一次(`PlaybackCoordinator.refreshMotionCover`)。
+    /// 见 03 章决策 53。纯函数,selftest 覆盖。
+    public nonisolated static func motionCoverCurrent(_ entry: EnrichCacheEntry) -> Bool {
+        guard let pinned = entry.motionCoverFor, !pinned.isEmpty else { return true }
+        return pinned == (entry.coverURL ?? "")
     }
 
     /// 比 albumMatchedCoverURL 再严一档:不光条目按专辑键命中,**这张封面自己**(cover_album,

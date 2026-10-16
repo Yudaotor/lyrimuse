@@ -3890,14 +3890,15 @@ func runSourceContractTests() {
     // ---- 动态封面「专辑身份核验」这一位:引擎写、App 读,两侧的接线----
     //
     // 引擎靠专辑身份核验放行一段动画时(首帧跟封面对不上,但这条的封面就是 Apple 那张
-    // 专辑的官方封面),在 enrich 上记 `motion_cover_identity_verified`;App 见到它就跳过中段帧
+    // 专辑的官方封面),在 enrich 上记 `motion_cover_identity_verified`;App 见到它、显示的又是引擎那张封面时跳过中段帧
     // 终审 —— 那道终审跟首帧比对是同一个代理判据,不跳过就会把刚确认的身份原样否掉
     // (Taylor Swift《Midnights》、XLOV《I,God》那一类)。这条链上有三处一改就会静默失效、
     // 其它守卫还全绿的地方,钉在这里:
     // ① JSON 键:Go 的 struct tag 与 Swift 的 CodingKeys 一字不差(对不上就恒为 nil);
     // ② 引擎里每一处**逐字段**拷 motion 字段的地方都带上这一位(按"拷 MotionPreviewURL 的
     //    行数 == 写这一位的行数"数 —— 漏一处就是地址落下了、这一位没落,App 照常终审);
-    // ③ App 侧真的据它把终审的参照图置空。
+    // ③ App 侧真的据它跳过中段帧终审;
+    // ④ 对照封面那一位(`motion_cover_for`)同样两侧键一致、每处逐字段拷都带上(漏了结论就一直作废)。
     do {
         let packageDir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -3915,6 +3916,9 @@ func runSourceContractTests() {
                         "动态封面身份核验: 引擎的 struct tag")
             expectEqual(reader.contains("case motionCoverIdentityVerified = \"motion_cover_identity_verified\""), true,
                         "动态封面身份核验: Swift 侧 CodingKeys(键没对上就恒为 nil,Midnights 那一类又会被终审否掉)")
+            expectEqual(enrichGo.contains("json:\"motion_cover_for,omitempty\"")
+                            && reader.contains("case motionCoverFor = \"motion_cover_for\""), true,
+                        "动态封面对照封面: 两侧 JSON 键一字不差(对不上就恒为 nil,封面换过的动画照样叠上去)")
             for (name, text) in [("enrich.go", enrichGo), ("motionrecheckcli.go", recheckGo)] {
                 let lines = code(text)
                 let previewCopies = lines.filter { $0.contains("MotionPreviewURL = ") }.count
@@ -3922,14 +3926,19 @@ func runSourceContractTests() {
                 expectEqual(previewCopies > 0 && previewCopies == identityCopies, true,
                             "动态封面身份核验: \(name) 里每处拷 MotionPreviewURL 的地方都得带上这一位"
                             + "(拷地址 \(previewCopies) 处 / 写这一位 \(identityCopies) 处)")
+                let pinCopies = lines.filter { $0.contains("MotionCoverFor = ") }.count
+                expectEqual(previewCopies == pinCopies, true,
+                            "动态封面对照封面: \(name) 里每处拷 MotionPreviewURL 的地方都得带上 MotionCoverFor"
+                            + "(拷地址 \(previewCopies) 处 / 写对照封面 \(pinCopies) 处)")
             }
-            expectEqual(coordinator.contains("if found.identityVerified {"), true,
-                        "动态封面身份核验: refreshMotionCover 要据这一位跳过终审")
+            expectEqual(coordinator.contains("let engineCover = found.identityVerified ? found.cover.map(EnrichCacheReader.nativeSizedCoverURL) : nil")
+                            && coordinator.contains("reference: compareFrame ? reference : nil"), true,
+                        "动态封面身份核验: refreshMotionCover 据这一位、显示的就是引擎那张封面时跳过中段帧终审")
             // 终审用的封面指纹在后台算(03 章决策 34):放回主线程不报错,只表现成换歌那一下掉几帧。
-            expectEqual(coordinator.contains("let reference = await Task.detached(priority: .utility) {\n"
-                                             + "                referenceImage.map(CoverFingerprint.reference(of:))")
-                            && coordinator.components(separatedBy: "CoverFingerprint.reference(of:)").count == 2, true,
-                        "动态封面: 终审用的封面指纹只在后台那个闭包里算")
+            expectEqual(coordinator.contains("let reference = await Task.detached(priority: .utility) { CoverFingerprint.reference(of: shown) }.value")
+                            && coordinator.components(separatedBy: "CoverFingerprint.reference(of:").count == 2
+                            && coordinator.contains("await Task.detached(priority: .utility) { CoverFingerprint.matches(cover, reference: reference).same }.value"),
+                        true, "动态封面: 终审用的封面指纹、核对是不是引擎那张封面,都只在后台闭包里算")
         } else {
             expectEqual(true, false, "动态封面身份核验: 读不到 enrich.go / motionrecheckcli.go / EnrichCacheReader.swift / PlaybackCoordinator.swift(路径挪了?)")
         }

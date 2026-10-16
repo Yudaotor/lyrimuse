@@ -49,6 +49,10 @@ func playerCoverTTL(cover string) time.Duration {
 // 本机文件,调用方不能持着 enrichMu(Amazon 那条经 amazonASINFor 会取它)。kkbox 是同一拍已经取好的那份
 // (kkboxPlayingInfoFor 自己记 30 秒)。
 func playerCoverURLFor(bundleID, artist, title, album string, durationSecs float64, kkbox kkboxPlayingInfo) string {
+	// 占位专辑名下播放器给的是歌手照片,不是专辑封面,见 albumIsPlaceholder。
+	if albumIsPlaceholder(album) {
+		return ""
+	}
 	switch bundleID {
 	case kkboxBundleID:
 		return kkbox.cover

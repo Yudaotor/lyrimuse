@@ -1144,6 +1144,12 @@ final class PlaybackCoordinator: ObservableObject {
             settings.$motionCoverEnabled
                 .dropFirst()
                 .sink { [weak self] enabled in self?.refreshMotionCover(enabled: enabled) },
+            // 动态封面要跟显示的封面比:高清替代换上、撤掉都重新比一次(见 refreshMotionCover)。
+            $highResArtworkImage
+                .dropFirst()
+                .removeDuplicates { $0 === $1 }
+                .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+                .sink { [weak self] _ in self?.refreshMotionCover() },
             NotificationCenter.default.publisher(for: NSNotification.Name.NSProcessInfoPowerStateDidChange)
                 .receive(on: RunLoop.main)
                 .sink { [weak self] _ in self?.refreshMotionCover() },
@@ -1760,19 +1766,19 @@ final class PlaybackCoordinator: ObservableObject {
         }
     }
 
-    /// 动态封面:查这张专辑有没有,有就把本地文件备好。
+    /// 动态封面:查这张专辑有没有,有就把本地文件备好,跟此刻显示的封面是同一张图才叠上去。
     ///
     /// 纪律逐条照 `refreshHighResCover`,理由也一样:
     ///   * **重新从数据源读快照**,不用订阅回调的参数(那几个值来自 willSet 时机,彼此可能不是
     ///     同一首歌的);
     ///   * **换歌立刻撤掉上一首那份** —— 留着的话新歌开头会顶着上一首的动画,比"先静态后动"糟；
     ///   * 已是 nil 就不再赋 nil(@Published 是 willSet 语义,白广播会穿透下游去重);
-    ///   * 下载回来后再校验一次 `title` 没变。
+    ///   * 比完、下载完再校验一次 `title` 没变。
     ///
     /// 跟那条**不同**的两点:
     ///   * 用 `albumMatchedMotionCover`(精确 key → 仍然认专辑的 looseMatch),同样不退到"忽略专辑"
     ///     那一级 —— 在这里退一步拿到的是**另一张专辑的动画**,比一张静态错图扎眼得多；
-    ///   * 盘上已经有那份文件时**同步**换上、不走 Task:同一张专辑的下一首歌不该再闪一次静态图。
+    ///   * 同一张专辑的下一首:盘上那份已经在播就先留着,比完对不上再撤,不闪回静态图。
     /// - Parameter enabled: 开关刚拨动时由订阅传进来的新值(那一刻 AppSettings 里还是旧值);其余调用读设置。
     private func refreshMotionCover(onlyIfMissing: Bool = false, enabled: Bool? = nil) {
         if onlyIfMissing, motionCoverFile != nil { return }
@@ -1802,40 +1808,41 @@ final class PlaybackCoordinator: ObservableObject {
             clear()
             return
         }
-        if let hit = MotionCoverStore.shared.cachedFile(master: found.master) {
-            if motionCoverFile != hit { motionCoverFile = hit }
-            return
-        }
-        // 下载完成后 MotionCoverStore 要拿视频中段的真实一帧跟它比一次(见该类型
-        // verifyMatchesReference 的注释)——当前显示的就是这张,跟六处图像消费面同一口径
-        // (highResArtworkImage 优先,没有才退系统那份)。这里拿不到(比如刚换歌那一瞬
-        // 封面还没到)就传 nil,MotionCoverStore 会跳过终审,不因为一时缺参照白白拒了。
+        // 动画只叠在跟它是同一张图的封面上:拿视频中段那一帧跟此刻显示的封面(highResArtworkImage 优先,没有才退系统那份,
+        // 跟六处图像消费面同一口径)比,盘上已有的那份也比,比过的按参照图记着不重复解帧(MotionCoverStore.prepare)。封面还没到
+        // 就先不叠:封面到了(artworkData、highResArtworkImage 变了)会再走一遍。见 03 章决策 53。
         //
-        // 引擎靠**专辑身份核验**放行的,这里**必须**传 nil 跳过终审。那道终审比的是
-        // "动画画面像不像封面",跟引擎的首帧比对是同一个代理判据;身份核验之所以存在,
-        // 正是因为这个判据对"Apple 把同一张封面做成另一种呈现"必然判错(满幅原图 vs 带标题的
-        // 方版、上色版 vs 压银浮雕版)。再拿它终审一次,就是把刚确认的身份原样否掉。
+        // 引擎靠专辑身份核验放行的(identityVerified),核的是引擎这条的封面就是 Apple 那张专辑的官方封面;动画首帧本来就跟封面
+        // 长得不一样(满幅原图 vs 带标题的方版、上色版 vs 压银浮雕版),再拿中段帧比会把确认过的身份否掉。这一种只确认此刻显示的
+        // 就是引擎那张封面(同一张图),是就不比中段帧,不是照常比。
         //
         // 主线程只取一次 CGImage,指纹放到后台算:整图、去边各 64 次 CIAreaAverage,在主线程上换歌那一下要占
         // 一百多毫秒(03 章决策 34)。
-        let referenceImage: CGImage?
-        if found.identityVerified {
-            referenceImage = nil
-        } else {
-            referenceImage = (highResArtworkImage ?? artworkImage)?
-                .cgImage(forProposedRect: nil, context: nil, hints: nil)
+        guard let shown = (highResArtworkImage ?? artworkImage)?.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            clear()
+            return
         }
-        clear()
+        let cached = MotionCoverStore.shared.cachedFile(master: found.master)
+        if cached == nil || motionCoverFile != cached { clear() }
+        let engineCover = found.identityVerified ? found.cover.map(EnrichCacheReader.nativeSizedCoverURL) : nil
+        let shownIsEngineCover = engineCover != nil && highResArtworkImage != nil && highResCoverApplied?.url == engineCover
         motionCoverTask = Task { [weak self] in
-            let reference = await Task.detached(priority: .utility) {
-                referenceImage.map(CoverFingerprint.reference(of:))
-            }.value
+            let reference = await Task.detached(priority: .utility) { CoverFingerprint.reference(of: shown) }.value
+            var compareFrame = !shownIsEngineCover
+            if compareFrame, let engineCover,
+               let cover = await ImageMemoryCache.shared.load(engineCover)?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                let same = await Task.detached(priority: .utility) { CoverFingerprint.matches(cover, reference: reference).same }.value
+                compareFrame = !same
+            }
             guard !Task.isCancelled else { return }
-            let file = await MotionCoverStore.shared.prepare(master: found.master, reference: reference)
-            guard let file, !Task.isCancelled else { return }
-            // 下载期间换歌了 —— 这份是上一首的。
-            guard LocalPlaybackSource.shared.title == title else { return }
-            self?.motionCoverFile = file
+            let file = await MotionCoverStore.shared.prepare(master: found.master, reference: compareFrame ? reference : nil)
+            // 比的、下载的这段时间换歌了 —— 这份是上一首的。
+            guard !Task.isCancelled, LocalPlaybackSource.shared.title == title else { return }
+            if let file {
+                if self?.motionCoverFile != file { self?.motionCoverFile = file }
+            } else if self?.motionCoverFile != nil {
+                self?.motionCoverFile = nil
+            }
         }
     }
 

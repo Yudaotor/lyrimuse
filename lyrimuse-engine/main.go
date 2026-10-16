@@ -306,6 +306,8 @@ func main() {
 	// 已经存成设备封面的播放器占位图清掉(见 knownplaceholder.go)。位置只有两条约束:loadEnrichCache 之后
 	// (要有 enrichPath 才落得了盘)、migrateEnrichKeys 之后(它落盘的得是归一化过的 key)。
 	startupStep("migrateKnownPlaceholderCovers", migrateKnownPlaceholderCovers)
+	// 占位专辑名下记成封面的播放器图换掉(见 placeholderalbum.go),约束同上。
+	startupStep("migratePlaceholderAlbumCovers", migratePlaceholderAlbumCovers)
 	// 决策存档里汽水候选封面缺 `~模板-处理参数` 后缀的,补上(见 sodacovermigrate.go)。
 	startupStep("migrateSodaCoverURLs", migrateSodaCoverURLs)
 	// 合唱串存下的 canonical_artist 清掉(见 multicreditcanonical.go),约束同上面几条。

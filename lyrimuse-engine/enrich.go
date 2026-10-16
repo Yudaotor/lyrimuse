@@ -151,6 +151,10 @@ type enrichEntry struct {
 	// 封面",这个按**记录**记"这一条的封面跟那段动画是不是同一张" —— 后者只能逐条判,因为
 	// cover_url 是逐条决定的(同一张专辑的不同曲目可能落到单曲封面)。
 	MotionCoverChecked bool `json:"motion_cover_checked,omitempty"`
+	// MotionCoverFor:动态封面这一组结论(MotionCoverURL / MotionPreviewURL / MotionCoverChecked / MotionCoverIdentityVerified)是对着
+	// 哪张封面(CoverURL)核出来的。跟 CoverURL 不一样就是封面后来换过,结论作废(motionVerdictCurrent):App 不用它,引擎按现在
+	// 这张重核。见 03 章决策 53。
+	MotionCoverFor string `json:"motion_cover_for,omitempty"`
 	// MotionCoverIdentityVerified:这条的动态封面是靠**专辑身份核验**放行的 —— 首帧跟封面
 	// 对不上,但这条的封面就是 Apple 那张专辑的官方封面(专辑 ID 确定无误),见
 	// decideMotionCover。App 侧据此**跳过**中段帧终审:那道终审跟首帧比对是同一个代理判据,
@@ -978,6 +982,11 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			enrichInflight[key] = true
 			go upgradeSmallDeviceCover(withPlayerCover(context.Background(), playerCover), key, e.CoverURL,
 				artist, title, album, durationSecs)
+		} else if motionVerdictStale(e) && !motionRecheckTried[key] && !enrichInflight[key] {
+			// 动态封面结论是对着别的封面核的(封面后来换过):按现在这张重核。每个条目每次启动只试一次,没查成的留给后台补封面那一遍。
+			motionRecheckTried[key] = true
+			enrichInflight[key] = true
+			go recheckPlayingMotionCover(key, title, album)
 		} else if (needsPeripheralBackfill(e, artist, album) ||
 			(coverNeedsHintCheck(e, album, coverAlbum) && peripheralBackfillWindowOpen(e)) ||
 			(inferredIdentityWorthBackfill(e, artist, title, durationSecs) && peripheralBackfillWindowOpen(e)) ||
@@ -1402,10 +1411,11 @@ func coverSettled(e enrichEntry) bool {
 // entryListedAlbum:这条写法所在的专辑,跟 App 歌词管理显示的同一个(LocalPlaybackSource.albumOrListed,两处一起改):写法键里的
 // 专辑,键里没有时用 Kaset 按 YouTube Music 登记判出来的(YouTubeMusicAlbum)。按专辑统一封面的几步(按判决补封面、借同专辑
 // 核实过的设备封面、给专辑定封面、解析时照定下的取)都按它认专辑,不然 Kaset 放的那几首在歌词管理里跟同专辑排在一起,
-// 封面却从没跟它们比过。见 03 章决策 49。
+// 封面却从没跟它们比过。见 03 章决策 49。只有一处跟 App 不同:占位专辑名(albumIsPlaceholder)这里算没有专辑,占位名下的
+// 几首不是一张专辑;歌词管理照旧显示它。
 func entryListedAlbum(key string, e enrichEntry) string {
 	if _, _, album := splitEnrichKey(key); album != "" {
-		return album
+		return coverAlbumOrNone(album)
 	}
 	return strings.TrimSpace(e.YouTubeMusicAlbum)
 }
@@ -3047,11 +3057,8 @@ func deviceCoverUpgradePass(ctx context.Context, key, artist, title, album, bund
 	enrichDirty = true
 	enrichMu.Unlock()
 	requestEnrichSaveFor(key)
-	if e.MotionCoverURL == "" {
-		// 封面刚换了身份,之前那个结论是对着旧封面得出的——见
-		// recheckMotionCoverAgainstCurrentCover 头注。
-		recheckMotionCoverAgainstCurrentCover(ctx, key, title, album)
-	}
+	// 封面刚换了,动态封面原来的结论是对着旧封面核的:按这张重核。
+	recheckMotionCoverAgainstCurrentCover(ctx, key, title, album)
 	if enrichNotify != nil {
 		select {
 		case enrichNotify <- struct{}{}:
@@ -3061,61 +3068,49 @@ func deviceCoverUpgradePass(ctx context.Context, key, artist, title, album, bund
 	return true
 }
 
-// recheckMotionCoverAgainstCurrentCover:拿这条记录**此刻真正在用**的那张封面,重新
-// 核对一次动态封面。
-//
-// 这是全链路里唯一"校验对象跟最终展示的图保证是同一张"的入口,两个调用方:
-//
-//  1. applyDeviceCoverUpgrade —— 封面刚从别的来源换成"设备直送"那一刻。此前的结论是
-//     对着旧封面得出的,不作数。
-//  2. backfillPeripheralFields 末尾 —— fresh 这一轮的结论落不到 e 留用的那张封面上
-//     (motionCoverFreshResultAppliesTo 判假)、而这条记录又还没有任何结论时。
-//
-// 为什么非有这条路不可:那个函数给 resolveTrackEnrichment 传的 deviceCoverURL 恒为空串
-// (理由见该函数参数注释),所以 fresh.CoverURL 对设备直送封面的记录**永远**对不上,
-// fresh 算得再对也只能丢弃;没有这条补算,这类记录就永远停在"没查过"。
-//
-// **调用方必须先判 e.MotionCoverChecked**:这个函数进来就把那一位重置成 false 再查,
-// 对"查过了、这条确实没有"的记录调它 = 每轮 backfill 白发两次 HTTP,正是那一位要防的事。
-// 网络 I/O 全在锁外,跟本文件其它地方(如上面那段清晰度判据)同一纪律。
-func recheckMotionCoverAgainstCurrentCover(ctx context.Context, key, title, album string) {
+// recheckMotionCoverAgainstCurrentCover:拿这条记录此刻在用的那张封面重核一次动态封面,返回写没写。结论已经是对着这张核的
+// (motionVerdictCurrent)不动;这一轮没查成(在飞 / 请求失败)不写;核的这段时间封面又换了、条目被删了也不写,新封面另走这条路。
+// 调用方:换上设备封面的那一刻(applyDeviceCoverUpgrade);外围补全这一轮的结论落不到留用的那张封面上时(给 resolveTrackEnrichment
+// 传的 deviceCoverURL 恒为空串,设备封面的条目 fresh 永远对不上);播到这首时结论已作废(recheckPlayingMotionCover);后台补封面
+// 那一遍(coverSweepRecheckStaleMotion)。网络 I/O 全在锁外。
+func recheckMotionCoverAgainstCurrentCover(ctx context.Context, key, title, album string) bool {
 	artist, _, _ := splitEnrichKey(key)
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	enrichMu.Unlock()
-	if !ok || e.MotionCoverURL != "" {
-		return
+	if !ok || motionVerdictCurrent(e) {
+		return false
 	}
-	e.MotionCoverChecked = false
-	e.fillMotionCover(ctx, artist, title, album)
-	if !e.MotionCoverChecked {
-		// 这一轮没查成(在飞/请求失败)——不写半吊子结果,下次自然再来。
-		return
+	had := e.MotionCoverURL != ""
+	if !e.fillMotionCover(ctx, artist, title, album) {
+		return false
 	}
 	enrichMu.Lock()
 	cur, still := enrichCache[key]
 	if !still || cur.CoverURL != e.CoverURL {
-		// 这期间条目被删了,或者封面又被换过一轮(竞态)——那张新封面自会走它自己的
-		// 这条路径,不要用这一轮基于旧封面算出的结论去覆盖。
 		enrichMu.Unlock()
-		return
+		return false
 	}
 	cur.MotionCoverChecked = e.MotionCoverChecked
 	cur.MotionCoverURL = e.MotionCoverURL
 	cur.MotionPreviewURL = e.MotionPreviewURL
 	cur.MotionCoverIdentityVerified = e.MotionCoverIdentityVerified
+	cur.MotionCoverFor = e.MotionCoverFor
 	enrichCache[key] = cur
 	enrichDirty = true
 	enrichMu.Unlock()
 	requestEnrichSaveFor(key)
-	// 留一行:"这首为什么没有动态封面"是个会被反复问到的问题,而这条路径是它唯一的
-	// 自愈入口 —— 没有日志就只能靠翻缓存文件反推。
+	// 「这首为什么没有 / 为什么不动了」靠这几行查,只记挂上和摘掉,重新核过还是同一段的不记。
 	switch {
+	case had && e.MotionCoverURL == "":
+		log.Printf("motion-cover: %s no longer matches its cover, motion artwork dropped", key)
+	case had:
 	case e.MotionCoverIdentityVerified:
 		log.Printf("motion-cover: %s attached via album identity (preview frame differs from the cover)", key)
 	case e.MotionCoverURL != "":
 		log.Printf("motion-cover: %s matched its own cover, motion artwork attached", key)
 	}
+	return true
 }
 
 // backfillPeripheralFields 只补外围链接(Apple/QQ/网易云/主色),绝不动歌词/封面来源/
@@ -3234,32 +3229,21 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 	if fresh.SpotifyURL != "" {
 		e.SpotifyURL = fresh.SpotifyURL
 	}
-	// 动态封面:跟上面这几个链接同一条纪律 —— 只在这一轮真的拿到时才写,一次网络
-	// 抖动不该把已经存下来的地址抹掉。
-	//
-	// **这两行是存量条目唯一的落地点**。上面 resolveTrackEnrichment 里的 fillMotionCover 对
-	// 已有条目照样跑、照样查得到,但这个函数对已存在的条目是**逐字段挑着覆盖**的 —— 不在这里
-	// 列出来,算出来的值就在函数返回时丢掉了,整份缓存一条也补不上。
-	//
-	// 两行都挡在 motionCheckMatchesRetainedCover 之后:fresh 没能真的核对到 e 现在用的这张
-	// 封面,这一轮的结论(不管是"匹配上了"还是"核对过、没匹配上")都不作数,原样留给下一轮
-	// backfill 拿 e 真正在用的封面重新核对——不写、也不钉 checked。
-	if motionCheckMatchesRetainedCover {
-		if fresh.MotionCoverURL != "" {
-			e.MotionCoverURL = fresh.MotionCoverURL
-			e.MotionPreviewURL = fresh.MotionPreviewURL
-			e.MotionCoverIdentityVerified = fresh.MotionCoverIdentityVerified
-		}
-		// "核对过了"这一位单独同步:图像校验没通过 / 这张专辑压根没有动态封面时 MotionCoverURL
-		// 是空的,但那两种结论同样要记住,否则每轮 backfill 都会重下一次首帧再算一次指纹。
-		if fresh.MotionCoverChecked {
-			e.MotionCoverChecked = true
-		}
+	// 动态封面:fresh 对着 e 留用的这张封面核出了结论(MotionCoverChecked,没查成不置这一位)就整组换上;fresh 说没有、e 却挂着
+	// 一段时不换,留给下面的重核(fillMotionCover 会再拿那段跟这张封面比)。fresh 核的不是这张封面(motionCheckMatchesRetainedCover
+	// 为假)时一位都不写。这个函数对已有条目逐字段挑着覆盖,动态封面那几位不在这里列出来就在函数返回时丢了。
+	takeFreshMotion := motionCheckMatchesRetainedCover && fresh.MotionCoverChecked &&
+		(fresh.MotionCoverURL != "" || e.MotionCoverURL == "")
+	if takeFreshMotion {
+		e.MotionCoverURL, e.MotionPreviewURL = fresh.MotionCoverURL, fresh.MotionPreviewURL
+		e.MotionCoverChecked, e.MotionCoverIdentityVerified = true, fresh.MotionCoverIdentityVerified
+		e.MotionCoverFor = fresh.MotionCoverFor
 	}
 	// 这一轮的结论一位都没落下时,得拿这条记录自己那张封面补算一次,判据与理由见
 	// motionCoverNeedsRecheckAgainstOwnCover。真正的重算放在锁外(见函数末尾),这里只
 	// 记一个待办位 —— 网络 I/O 不进 enrichMu。
-	needsMotionRecheck := motionCoverNeedsRecheckAgainstOwnCover(motionCheckMatchesRetainedCover, e)
+	needsMotionRecheck := motionCoverNeedsRecheckAgainstOwnCover(
+		takeFreshMotion || (motionCheckMatchesRetainedCover && !fresh.MotionCoverChecked), e)
 	if fresh.NeteaseURL != "" && !neteaseResultRejected(e, fresh) {
 		e.NeteaseURL = fresh.NeteaseURL
 	}
@@ -3305,10 +3289,8 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 		default:
 		}
 	}
-	// 拿这条记录**真正在用**的那张封面重新核对一次动态封面。必须在锁外、在 saveEnrichCache
-	// 之后:它自己会重新取锁、自己落盘,并且会发两次 HTTP(取首帧 + 取封面)。
-	// 命中面很小:只有"专辑确有动画、这条却还没有结论"的记录才会真的发请求 —— 专辑没动画
-	// 或还没查过时 fillMotionCover 读本地缓存就返回了。
+	// 拿这条记录真正在用的那张封面重新核对一次动态封面。必须在锁外、在 saveEnrichCache 之后:它自己会重新取锁、自己落盘,
+	// 并且会发两次 HTTP(取首帧 + 取封面)。专辑没动画或还没查过时 fillMotionCover 读本地缓存就返回了。
 	if needsMotionRecheck {
 		recheckMotionCoverAgainstCurrentCover(ctx, key, title, album)
 	}
@@ -3520,7 +3502,8 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 			coverDuration = 0
 		}
 	}
-	coverAlbum := album
+	// 占位专辑名(「单曲发行」)按没报专辑,见 albumIsPlaceholder。
+	coverAlbum := coverAlbumOrNone(album)
 	if coverAlbum == "" {
 		coverAlbum = kasetListedAlbumFor(youTubeMusicVideoIDFrom(ctx), durationSecs, artist, title)
 	}
@@ -3656,77 +3639,81 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 	return e
 }
 
-// fillMotionCover:给这条记录补上 Apple Music 动态封面(见 motioncover.go)。
+// fillMotionCover:对着这条记录现在的封面(CoverURL)核出动态封面结论(见 motioncover.go),整组记下(recordMotionVerdict)。
+// 返回这一轮有没有定论;没有(专辑页没抓成、取图失败)时原样不动,下一轮再试。结论已经是对着这张封面核的
+// (motionVerdictCurrent)直接返回。
 //
-// 挂在 enrich 尾巴上而不是单独一条链路,是因为它跟 cover_url 是同一类东西——"这首歌的图长什么
-// 样",桌面端读同一份缓存文件。放在**最后**是因为它跟歌词检索结果毫无耦合:上面那一大段无论
-// 挑中了谁、有没有挑中,这一步该做的事一模一样。
-//
-// 三层各自兜住失败,任何一层空了就是"这首没有动态封面",不影响这条记录的其它字段:
-//   - 拿不到已校验的目录专辑 ID(不是 Apple Music 目录曲目 / 锚点还没建立)→ 不查;
-//   - 页面抓取或解析失败 → motionCoverFor 回 done=false,这一轮跳过、下一首再试;
-//   - 查到了但这张专辑没做动态封面 → Master 为空,motioncover.go 那边把"没有"记进缓存。
-func (e *enrichEntry) fillMotionCover(ctx context.Context, artist, title, album string) {
-	if e.MotionCoverChecked || e.MotionCoverURL != "" {
-		return
+// 现在认的专辑给不出动画、而这条原来挂着一段时,再拿那段的首帧跟现在这张封面比一次,还是同一张图就留着它:Apple 链接、
+// 目录锚点会换成同一张专辑的别的版本(标准版 / 加长版),那个版本不一定有动画。
+func (e *enrichEntry) fillMotionCover(ctx context.Context, artist, title, album string) bool {
+	if motionVerdictCurrent(*e) {
+		return true
 	}
-	// 专辑 ID 两条来路,按可信度排:
-	//   ① 已校验的目录锚点(App 状态里的目录曲目 ID → iTunes lookup),ID 是精确的,
-	//      但只有 Apple Music 播的目录曲目才有;
-	//   ② enrich 自己记下的 apple_music_url 里那个 ID —— 覆盖**所有播放器**(QQ / 网易云 /
-	//      Spotify 播的歌,只要引擎给它匹配上了 Apple 条目就有),但它来自文字匹配,
-	//      可能指向另一个版本的专辑(见 03 章决策 16)。
-	//
-	// ②之所以敢用,全靠下面那两道**图像校验**(首帧比对 / 专辑身份核验,并联,见
-	// decideMotionCover):错的专辑给出的首帧和官方封面,跟这条记录的封面都不会是同一张,
-	// 会被当场拦掉。
+	before := *e
+	if !e.motionVerdictFromAlbum(ctx, artist, title, album) {
+		return false
+	}
+	if e.MotionCoverURL != "" || before.MotionCoverURL == "" || before.MotionPreviewURL == "" {
+		return true
+	}
+	matched, verified := motionCoverMatchesCover(ctx, before.MotionPreviewURL, e.CoverURL)
+	switch {
+	case !verified:
+		e.MotionCoverURL, e.MotionPreviewURL = before.MotionCoverURL, before.MotionPreviewURL
+		e.MotionCoverChecked, e.MotionCoverIdentityVerified = before.MotionCoverChecked, before.MotionCoverIdentityVerified
+		e.MotionCoverFor = before.MotionCoverFor
+		return false
+	case matched:
+		e.recordMotionVerdict(before.MotionCoverURL, before.MotionPreviewURL, false)
+	}
+	return true
+}
+
+// motionVerdictFromAlbum:按这条现在认的 Apple 专辑核动态封面,返回有没有定论(同 fillMotionCover)。
+//
+// 专辑 ID 两条来路,按可信度排:① 已校验的目录锚点(App 状态里的目录曲目 ID → iTunes lookup),只有 Apple Music 播的目录
+// 曲目才有;② 这条记下的 apple_music_url 里那个 ID,覆盖所有播放器,但来自文字匹配,可能指向另一个版本的专辑(03 章决策 16)。
+// ② 敢用全靠两道图像校验(首帧比对 / 专辑身份核验,并联,见 decideMotionCover):错的专辑给出的首帧和官方封面跟这条的
+// 封面都不会是同一张。两条来路都没有专辑 ID 时整组清掉:没有可以核的东西。
+func (e *enrichEntry) motionVerdictFromAlbum(ctx context.Context, artist, title, album string) bool {
 	albumID, viaAnchor := appleCatalogAlbumIDFor(artist, title, album)
 	if !viaAnchor {
 		albumID = motionCoverAlbumIDFromAppleURL(e.AppleURL)
 	}
 	if albumID <= 0 {
-		return
+		e.clearMotionVerdict()
+		return true
 	}
 	mc, done := motionCoverFor(albumID)
 	if !done {
-		// 这一轮没查成(在飞 / 请求失败)——**不**记 checked,下一首再试。
-		return
+		return false
 	}
 	if mc.Master == "" {
-		// 这张专辑没有动态封面。也记一位:省得每轮 backfill 都再来问一次
-		// (motion 缓存那边虽然也记了,但这一位能让 motionCoverWorthBackfill 连锁都不用取)。
-		e.MotionCoverChecked = true
-		return
+		e.recordMotionVerdict("", "", false)
+		return true
 	}
-	// 这道图像校验,对来路②(文字匹配的 apple_music_url)是**唯一的身份保险丝**——
-	// 没有它,②的专辑猜错会直接变成"这首歌配了另一张专辑的动画"。
-	//
-	// matched/verified 两态:取图失败(网络抖动/CDN 限流/解码失败)跟"真的比对过、两张图
-	// 确实不是同一张"必须分开。合成一态的话,motionCoverMatchesCover 取图失败也回 false,
-	// 这里就会直接当成"没通过"永久记 MotionCoverChecked=true,把一次纯网络问题钉成"这条
-	// 记录没有动态封面"的永久结论。所以:没查成就不落 checked,交给 motionCoverWorthBackfill
-	// + peripheralBackfillWindowOpen 的既有重试预算(5 次上限)自然再试,只有**真的比对过**
-	// 才允许把结论钉死 —— 跟上面 motionCoverFor 那句"这一轮没查成就不记 checked"同一口径。
+	// 取图失败(网络抖动 / CDN 限流 / 解码失败)跟「真的比过、两张图确实不是同一张」必须分开:前者不落结论,
+	// 不然一次纯网络问题会被钉成「这条没有动态封面」。
 	frameMatched, verified := motionCoverMatchesCover(ctx, mc.PreviewFrame, e.CoverURL)
 	if !verified {
-		return
+		return false
 	}
 	// 首帧没过时才问专辑身份:首帧过了就已经放行,多问一次只是多下一张图。
 	identity := motionIdentityNotAsked
 	if !frameMatched {
 		identity = motionCoverIdentityFor(ctx, albumID, e.CoverURL)
 	}
-	decision := decideMotionCover(frameMatched, identity, viaAnchor)
-	if decision == motionDecisionPending {
-		return
+	switch decideMotionCover(frameMatched, identity, viaAnchor) {
+	case motionDecisionPending:
+		return false
+	case motionDecisionReject:
+		e.recordMotionVerdict("", "", false)
+	case motionDecisionAcceptIdentity:
+		e.recordMotionVerdict(mc.Master, mc.PreviewFrame, true)
+	default:
+		e.recordMotionVerdict(mc.Master, mc.PreviewFrame, false)
 	}
-	e.MotionCoverChecked = true
-	e.MotionCoverIdentityVerified = decision == motionDecisionAcceptIdentity
-	if decision == motionDecisionReject {
-		return
-	}
-	e.MotionCoverURL = mc.Master
-	e.MotionPreviewURL = mc.PreviewFrame
+	return true
 }
 
 // pickLyricCandidatePreferring 是 pickLyricCandidate 的"用户选定过源"版本。

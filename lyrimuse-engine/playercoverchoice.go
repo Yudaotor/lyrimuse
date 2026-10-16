@@ -194,11 +194,16 @@ func decisionCandidateCovers(key string, d *lyricsDecision) []coverCandidate {
 // 源名、它报的专辑名。先看胜出的那个源(同源只看排在最前的那条),它没有能用的再按候选顺序看别的源。三源、同专辑邻居、
 // 设备封面、播放器自带的都没给出封面时拿它兜底。见 03 章决策 36、38。
 func winnerCandidateCover(d *lyricsDecision, album string) (cover, source, coverAlbum string) {
+	return winnerCandidateCoverSkipping(d, album, nil)
+}
+
+// winnerCandidateCoverSkipping:同 winnerCandidateCover,skip 里的地址不要。
+func winnerCandidateCoverSkipping(d *lyricsDecision, album string, skip map[string]bool) (cover, source, coverAlbum string) {
 	if d == nil || d.Winner == "" {
 		return "", "", ""
 	}
 	usable := func(c lyricsDecisionCandidate) bool {
-		return c.Score > 0 && candidateCoverURLOK(c.CoverURL) && candidateCoverAlbumFits(c.Album, album)
+		return c.Score > 0 && candidateCoverURLOK(c.CoverURL) && !skip[c.CoverURL] && candidateCoverAlbumFits(c.Album, album)
 	}
 	for _, c := range d.Candidates {
 		if c.Source == d.Winner {
@@ -232,10 +237,10 @@ func coverOfAnotherAlbum(e enrichEntry, album string) bool {
 	return !candidateCoverAlbumFits(e.CoverAlbum, album)
 }
 
-// candidateCoverAlbumFits:候选报的专辑能不能当本地这首的专辑:本地没报专辑;逐字对上(albumScore 200);一个包含另一个
-// (100)且两边的版本限定词一样(「半生雪」对「半生雪 (DJ版)」不算)。纯函数。
+// candidateCoverAlbumFits:候选报的专辑能不能当本地这首的专辑:本地没报专辑(占位专辑名也算没报,见 albumIsPlaceholder);
+// 逐字对上(albumScore 200);一个包含另一个(100)且两边的版本限定词一样(「半生雪」对「半生雪 (DJ版)」不算)。纯函数。
 func candidateCoverAlbumFits(candidateAlbum, album string) bool {
-	if strings.TrimSpace(album) == "" {
+	if strings.TrimSpace(coverAlbumOrNone(album)) == "" {
 		return true
 	}
 	switch albumScore(candidateAlbum, album) {

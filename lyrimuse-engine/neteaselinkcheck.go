@@ -173,8 +173,7 @@ func staleRejectedNeteaseCover(e enrichEntry, album string) bool {
 // withoutCover:封面、主色、动态封面一起清。
 func withoutCover(e enrichEntry) enrichEntry {
 	e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor = "", "", "", ""
-	e.MotionCoverURL, e.MotionPreviewURL = "", ""
-	e.MotionCoverChecked, e.MotionCoverIdentityVerified = false, false
+	e.clearMotionVerdict()
 	return e
 }
 
