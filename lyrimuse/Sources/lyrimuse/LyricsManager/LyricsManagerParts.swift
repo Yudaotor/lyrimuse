@@ -975,6 +975,9 @@ struct LyricsManagerPreviewList: View {
     @StateObject private var position = LyricsPreviewPositionLine()
     /// 对照栏的当前句。它就是在用的那份,偏移按在用的算(`isCurrent: true`)。
     @StateObject private var comparePosition = LyricsPreviewPositionLine()
+    /// 这份预览自己的逐帧时钟,挂在所在窗口上、窗口看不见时停表(`FrameClockHost(pausesWhenOccluded:)`)。不挂的话
+    /// 逐字染色用环境里的默认时钟,它跟着主屏走,窗口被挡住、最小化了照样每秒刷新。
+    @State private var frameClock = FrameClock()
     private static let topFadeHeight: CGFloat = 24
 
     var body: some View {
@@ -1016,6 +1019,8 @@ struct LyricsManagerPreviewList: View {
                 }
             }
             .modifier(LyricsManagerPauseFollowOnScroll(follow: $follow))
+            .environment(\.frameClock, frameClock)
+            .background(FrameClockHost(clock: frameClock, pausesWhenOccluded: true).frame(width: 0, height: 0))
             .onChange(of: current) { _, _ in scrollToCurrent(proxy, animated: true) }
             .onChange(of: follow) { _, _ in scrollToCurrent(proxy, animated: true) }
             // 行换了也重新对一次位:换歌时新歌的行在预览出现之后才算好,切原文 / 译文 / 读音也换行;当前句的值可能没变,
@@ -1483,8 +1488,9 @@ private struct LyricsManagerPauseFollowOnScroll: ViewModifier {
     }
 }
 
-/// 当前句逐字染色的上面那层:跟着播放时钟每秒重画三十次,只画唱过的部分,没唱到的透出底下那层淡色。逐帧变化只在
-/// 这一层里、不进排版,预览列表不跟着每帧重新量尺寸(同歌词窗口,07 章决策 50)。画法要 `TextRenderer`,macOS 15 起才有。
+/// 当前句逐字染色的上面那层:跟着播放时钟每秒重画二十次(`refreshInterval`,预览不必跟歌词窗口一样顺),只画唱过的
+/// 部分,没唱到的透出底下那层淡色。这一层装在自己的 NSHostingView 里(`LyricsManagerKaraokeHost`):每帧换时刻只让这
+/// 一小块重新排版、提交,不牵动整扇窗的 SwiftUI 树。画法要 `TextRenderer`,macOS 15 起才有。见 11 章决策 110。
 private struct LyricsManagerKaraokeOverlay: View {
     let segments: [LyricsKaraokeSegment]
     let isPlaying: Bool
@@ -1494,22 +1500,28 @@ private struct LyricsManagerKaraokeOverlay: View {
     /// 播放位置叠的偏移;nil = 播放侧的总偏移(预览的就是在用的那份)。搜索候选按 `LyricsPreviewHighlight.offsetMs` 传。
     var offsetMs: Int? = nil
 
+    @Environment(\.frameClock) private var clock
+
     static let isSupported: Bool = {
         if #available(macOS 15.0, *) { return true }
         return false
     }()
 
+    static let refreshInterval: Double = 1.0 / 20.0
+
     var body: some View {
         if #available(macOS 15.0, *) {
             let text = segmentedText
-            FrameTimeline(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !isPlaying) { date in
-                text
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .textRenderer(LyricsManagerKaraokeRenderer(segments: segments, ms: Self.currentMs(at: date, offsetMs: offsetMs)))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.disabled)
-            }
+            LyricsManagerKaraokeHost(clock: clock, content: AnyView(
+                FrameTimeline(minimumInterval: Self.refreshInterval, paused: !isPlaying) { date in
+                    text
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .textRenderer(LyricsManagerKaraokeRenderer(segments: segments, ms: Self.currentMs(at: date, offsetMs: offsetMs)))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.disabled)
+                }
+            ))
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
@@ -1530,6 +1542,33 @@ private struct LyricsManagerKaraokeOverlay: View {
         return (coordinator.anchor?.extrapolatedPositionMs(now: date) ?? coordinator.pausedPositionMs ?? 0)
             + (offsetMs ?? coordinator.currentLyricsOffsetMs)
     }
+}
+
+/// 逐字染色那一层的独立宿主。环境不会穿过 NSHostingView,时钟要显式交进去;不接鼠标,底下那层正文照样能选字。
+/// 尺寸跟着外面给的走(`sizingOptions = []`),跟底下那层同宽、同样折行。
+private struct LyricsManagerKaraokeHost: NSViewRepresentable {
+    let clock: FrameClock
+    let content: AnyView
+
+    func makeNSView(context: Context) -> LyricsManagerKaraokeHostingView {
+        let view = LyricsManagerKaraokeHostingView(rootView: root)
+        view.sizingOptions = []
+        return view
+    }
+
+    func updateNSView(_ view: LyricsManagerKaraokeHostingView, context: Context) {
+        view.rootView = root
+    }
+
+    private var root: AnyView {
+        AnyView(content
+            .environment(\.frameClock, clock)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading))
+    }
+}
+
+private final class LyricsManagerKaraokeHostingView: NSHostingView<AnyView> {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// 逐字染色那一层里,一段字是第几段。

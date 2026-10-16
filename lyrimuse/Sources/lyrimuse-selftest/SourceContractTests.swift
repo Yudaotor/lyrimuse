@@ -4214,7 +4214,8 @@ func runSourceContractTests() {
             .components(separatedBy: "/// 逐字染色那一层里,一段字是第几段").first ?? ""
         expectEqual(previewRow.contains(".overlay(alignment: .topLeading) {")
                     && previewRow.contains("LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs,\n                                                    offsetMs: karaokeOffsetMs)")
-                    && karaokeOverlay.contains("FrameTimeline(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !isPlaying)")
+                    && karaokeOverlay.contains("FrameTimeline(minimumInterval: Self.refreshInterval, paused: !isPlaying)")
+                    && karaokeOverlay.contains("LyricsManagerKaraokeHost(clock: clock, content: AnyView(")
                     && karaokeOverlay.contains(".textRenderer(LyricsManagerKaraokeRenderer(")
                     && karaokeOverlay.contains("return (coordinator.anchor?.extrapolatedPositionMs(now: date) ?? coordinator.pausedPositionMs ?? 0)\n            + (offsetMs ?? coordinator.currentLyricsOffsetMs)"),
                     true, "歌词管理: 预览当前句的逐字染色画在 overlay 里,时间基准含歌词偏移(搜索候选传它自己的偏移)")

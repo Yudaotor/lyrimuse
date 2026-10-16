@@ -19,6 +19,8 @@ final class FrameClock {
     private var lastFrame: CFTimeInterval?
     /// display link 降到的回调频率(Hz);nil = 跟屏幕刷新率走。
     private var reducedRate: Double?
+    /// 宿主窗口看得见(`FrameClockHost(pausesWhenOccluded:)` 才会改它):看不见时有票也停表。
+    private var hostVisible = true
 
     nonisolated init() {}
 
@@ -40,8 +42,21 @@ final class FrameClock {
         let idle = active.count == 0
         // 从停着恢复时从这一刻算起:恢复它的那次更新把主线程卡住的话,下一帧晚到的那段照样算卡住。
         if idle { lastFrame = nil } else if lastFrame == nil { lastFrame = CACurrentMediaTime() }
-        link?.isPaused = idle
+        link?.isPaused = idle || !hostVisible
         if !idle { retune(active.allObjects) }
+    }
+
+    /// 宿主窗口被完全挡住 / 最小化 / 在别的桌面时停表,露出来时每张票按当下刷新一次再接着走。停着的那段不算卡顿。
+    func setHostVisible(_ visible: Bool) {
+        guard visible != hostVisible else { return }
+        hostVisible = visible
+        let running = visible && active.count > 0
+        lastFrame = running ? CACurrentMediaTime() : nil
+        if running {
+            let now = Date()
+            for ticket in active.allObjects { ticket.jump(to: now) }
+        }
+        link?.isPaused = !running
     }
 
     /// 过渡动画(换句错开、景深、滚动指示条)用的时刻:墙钟减去累计卡住的时长(07 章决策 108)。
@@ -61,6 +76,7 @@ final class FrameClock {
         let made = host.map { $0.displayLink(target: proxy, selector: selector) }
             ?? NSScreen.main?.displayLink(target: proxy, selector: selector)
         made?.add(to: .main, forMode: .common)
+        made?.isPaused = !hostVisible
         link = made
         reducedRate = nil
         retune(active.allObjects)
@@ -186,20 +202,35 @@ extension EnvironmentValues {
 }
 
 /// 把 `FrameClock` 挂到所在窗口上:display link 跟着这扇窗所在的屏幕走。零尺寸、不接鼠标。
+/// `pausesWhenOccluded`:窗口被完全挡住、最小化、在别的桌面时停表(`FrameClock.setHostVisible`);被别的窗口几乎整扇
+/// 盖住、只露一条缝时也停(`WindowCoverageMonitor`,系统的遮挡状态这时仍报可见,同歌词窗口)。默认不开:
+/// 灵动岛、悬浮这类特殊层级的窗口,系统报的遮挡状态不一定可信,停错了动画就冻住。
 struct FrameClockHost: NSViewRepresentable {
     let clock: FrameClock
+    var pausesWhenOccluded = false
 
-    func makeNSView(context: Context) -> FrameClockHostView { FrameClockHostView(clock: clock) }
+    func makeNSView(context: Context) -> FrameClockHostView {
+        FrameClockHostView(clock: clock, pausesWhenOccluded: pausesWhenOccluded)
+    }
 
     func updateNSView(_ view: FrameClockHostView, context: Context) { view.attach(clock) }
 }
 
 final class FrameClockHostView: NSView {
     private var clock: FrameClock
+    private let pausesWhenOccluded: Bool
+    private var occlusionObserver: NSObjectProtocol?
+    private var coverageMonitor: WindowCoverageMonitor?
+    private var coveredByOthers = false
 
-    init(clock: FrameClock) {
+    init(clock: FrameClock, pausesWhenOccluded: Bool = false) {
         self.clock = clock
+        self.pausesWhenOccluded = pausesWhenOccluded
         super.init(frame: .zero)
+    }
+
+    deinit {
+        if let occlusionObserver { NotificationCenter.default.removeObserver(occlusionObserver) }
     }
 
     @available(*, unavailable)
@@ -209,11 +240,37 @@ final class FrameClockHostView: NSView {
         guard newClock !== clock else { return }
         clock = newClock
         if window != nil { clock.host(on: self) }
+        reportVisibility()
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window != nil { clock.host(on: self) }
+        observeOcclusion()
+    }
+
+    private func observeOcclusion() {
+        if let occlusionObserver { NotificationCenter.default.removeObserver(occlusionObserver) }
+        occlusionObserver = nil
+        coverageMonitor?.stop()
+        coverageMonitor = nil
+        coveredByOthers = false
+        guard pausesWhenOccluded, let window else { return }
+        occlusionObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reportVisibility() }
+        }
+        coverageMonitor = WindowCoverageMonitor(window: window) { [weak self] covered in
+            self?.coveredByOthers = covered
+            self?.reportVisibility()
+        }
+        reportVisibility()
+    }
+
+    private func reportVisibility() {
+        guard pausesWhenOccluded else { return }
+        clock.setHostVisible((window?.occlusionState.contains(.visible) ?? false) && !coveredByOthers)
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
