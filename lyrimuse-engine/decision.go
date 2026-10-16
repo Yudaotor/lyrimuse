@@ -134,6 +134,9 @@ type lyricsDecisionCandidate struct {
 	SourceReportedDurationSecs float64 `json:"source_reported_duration_secs,omitempty"`
 	HasWordTiming              bool    `json:"has_word_timing,omitempty"`
 	Instrumental               bool    `json:"instrumental,omitempty"`
+	// TrackFoundNoLyrics:见 scoredLyricCandidateResult 同名字段(曲库里有这首、平台上没有歌词文本的 -1 分伪候选)。
+	// 解析决策面板据此把它跟纯音乐标记一样放进不参赛的那一组,别当成一条 -1 分的正式候选去比分。
+	TrackFoundNoLyrics bool `json:"track_found_no_lyrics,omitempty"`
 	// PlayerInstrumental:见 scoredLyricCandidateResult 同名字段。解析决策面板拿它说明「其余候选为什么都没采用」。
 	PlayerInstrumental bool `json:"player_instrumental,omitempty"`
 	// BakedTranslationLines:见 scoredLyricCandidateResult 同名字段。
@@ -231,6 +234,7 @@ func newLyricsDecision(
 			SourceReportedDurationSecs: c.SourceReportedDurationSecs,
 			HasWordTiming:              c.HasWordTiming,
 			Instrumental:               c.Instrumental,
+			TrackFoundNoLyrics:         c.TrackFoundNoLyrics,
 			PlayerInstrumental:         c.PlayerInstrumental,
 			BakedTranslationLines:      c.BakedTranslationLines,
 			ConsensusPeers:             c.ConsensusPeers,

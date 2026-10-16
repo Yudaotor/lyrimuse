@@ -595,6 +595,9 @@ final class LyricsSearchService {
 
             do {
                 try process.run()
+                // 取消落在 attach 和 run 之间时 cancel() 看到的进程还没跑、没发终止信号:起来之后再核一次,已取消就马上停,
+                // 收尾照常走 terminationHandler 的取消那一支。
+                if handle.isCancelled { process.terminate() }
             } catch {
                 // process.run() 失败(引擎二进制不存在/不可执行——比如没跑过
                 // build.sh 就直接 swift run/.build/debug 调试,或者 Contents/Resources/

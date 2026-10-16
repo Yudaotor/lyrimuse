@@ -3,7 +3,7 @@ import Foundation
 /// 「歌词管理」逐句编辑用的一份正文:按行拆成「行首时间戳 + 文字」,改一句只换那一句的文字或时间戳。
 ///
 /// 拼回去时没改的行原样不动:一个字都没改时 `joined` 跟传进来的正文逐字节相同,`LyricsBodyEdit.reassembled`
-/// 据此返回原文,脏判定和单曲偏移的内容指纹都不受影响。正文取的是编辑框那一份(`LyricsBodyEdit.body`;逐字歌词是
+/// 据此返回原文,脏判定和单曲偏移的内容指纹都不受影响。`\r\n`、`\r` 也算换行(粘贴进整段编辑框的文本),拼回去一律是 `\n`。正文取的是编辑框那一份(`LyricsBodyEdit.body`;逐字歌词是
 /// `LyricsWordTimingEdit.editableText` 摘掉署名之后的那份),元信息标签和署名行不在里面。
 public struct LyricsEditableLines: Equatable, Sendable {
     public struct Line: Equatable, Sendable {
@@ -20,6 +20,9 @@ public struct LyricsEditableLines: Equatable, Sendable {
         /// 第一个时间戳的毫秒数;没有时间戳为 nil。
         public var timeMs: Int? { LyricsEditableLines.firstStampMs(stamps) }
 
+        /// 每个时间戳的毫秒数,按写的先后(`[00:12.34][01:20.00]` 是两个);没有时间戳为空。
+        public var timesMs: [Int] { LyricsEditableLines.stampsMs(stamps) }
+
         /// 空行(段落之间的分隔):没有时间戳、文字只有空白。
         public var isBlank: Bool { stamps.isEmpty && text.trimmingCharacters(in: .whitespaces).isEmpty }
     }
@@ -27,7 +30,9 @@ public struct LyricsEditableLines: Equatable, Sendable {
     public let lines: [Line]
 
     public init(body: String) {
-        lines = body.split(separator: "\n", omittingEmptySubsequences: false).map { Self.parse(String($0)) }
+        // 按 Character 切:`\r\n` 是一个字符,只按 "\n" 切会整段连成一行。
+        lines = body.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "\n" || $0 == "\r\n" || $0 == "\r" })
+            .map { Self.parse(String($0)) }
     }
 
     public init(lines: [Line]) {
@@ -59,6 +64,33 @@ public struct LyricsEditableLines: Equatable, Sendable {
             if best == nil || distance < best!.distance { best = (index, distance) }
         }
         return best?.index
+    }
+
+    /// 这一份(译文 / 读音)的每一行挂到 `main` 的哪一句下面:main 下标 → 这一份的下标。先认第一个时间戳完全相同的;
+    /// 剩下的找差不到 `toleranceMs` 的最近一行,而且那一行离得最近的正文句也得是这一句,两句正文挨得近时不会都去认
+    /// 同一行。容差跟播放时挂译文一样(LyricsSyncEngine `nearestText`,700 毫秒):预览里看得到的译文,逐句编辑里也有格子。
+    public func pairing(to main: LyricsEditableLines, toleranceMs: Int = 700) -> [Int: Int] {
+        let mainTimes = main.lines.indices.compactMap { i in main.lines[i].timeMs.map { (index: i, ms: $0) } }
+        let ownTimes = lines.indices.compactMap { j in lines[j].timeMs.map { (index: j, ms: $0) } }
+        var out: [Int: Int] = [:]
+        var taken = Set<Int>()
+        for m in mainTimes {
+            if let exact = ownTimes.first(where: { $0.ms == m.ms && !taken.contains($0.index) }) {
+                out[m.index] = exact.index
+                taken.insert(exact.index)
+            }
+        }
+        let openMain = mainTimes.filter { out[$0.index] == nil }
+        for m in openMain {
+            let near = ownTimes.filter { !taken.contains($0.index) && abs($0.ms - m.ms) <= toleranceMs }
+                .min { abs($0.ms - m.ms) < abs($1.ms - m.ms) }
+            guard let near else { continue }
+            let closest = openMain.filter { out[$0.index] == nil }.min { abs($0.ms - near.ms) < abs($1.ms - near.ms) }
+            guard closest?.index == m.index else { continue }
+            out[m.index] = near.index
+            taken.insert(near.index)
+        }
+        return out
     }
 
     /// 跟 `base`(打开编辑时那份)比,哪几行改过或是新加的。按 `alignment(to:)` 对行,不按下标。
@@ -155,11 +187,25 @@ public struct LyricsEditableLines: Equatable, Sendable {
         return stampInnerMs(stamps[stamps.index(after: stamps.startIndex)..<close])
     }
 
-    /// `mm:ss`、`mm:ss.x`～`mm:ss.xxx`、`mm:ss:xx` 这几种写法的毫秒数;不是时间戳为 nil。
+    static func stampsMs(_ stamps: Substring) -> [Int] {
+        var out: [Int] = []
+        var rest = stamps
+        while rest.first == "[", let close = rest.firstIndex(of: "]"),
+              let ms = stampInnerMs(rest[rest.index(after: rest.startIndex)..<close]) {
+            out.append(ms)
+            rest = rest[rest.index(after: close)...]
+        }
+        return out
+    }
+
+    static func stampsMs(_ stamps: String) -> [Int] { stampsMs(Substring(stamps)) }
+
+    /// `m:ss`、`mm:ss`,秒后面可带 `.x`～`.xxx` 或 `:xx` 的毫秒数;不是时间戳为 nil。口径跟播放时读 LRC 一样
+    /// (LRCParser `tagRegex`:分钟一到两位、秒正好两位),这里认了、播放那边不认的话,这一句保存之后在播放和预览里就没了。
     private static func stampInnerMs(_ inner: Substring) -> Int? {
         let parts = inner.split(separator: ":", omittingEmptySubsequences: false)
         guard parts.count == 2 || parts.count == 3 else { return nil }
-        guard let minutes = digits(parts[0], maxCount: 3) else { return nil }
+        guard let minutes = digits(parts[0], maxCount: 2) else { return nil }
         var secondsPart = parts[1]
         var fraction: Substring = ""
         if parts.count == 3 {
@@ -168,7 +214,7 @@ public struct LyricsEditableLines: Equatable, Sendable {
             fraction = secondsPart[secondsPart.index(after: dot)...]
             secondsPart = secondsPart[..<dot]
         }
-        guard let seconds = digits(secondsPart, maxCount: 2), seconds < 60 else { return nil }
+        guard secondsPart.count == 2, let seconds = digits(secondsPart, maxCount: 2), seconds < 60 else { return nil }
         var ms = minutes * 60_000 + seconds * 1000
         if parts.count == 3 || inner.contains(".") {
             guard let value = digits(fraction, maxCount: 3) else { return nil }

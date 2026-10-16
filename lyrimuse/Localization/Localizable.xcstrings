@@ -48093,6 +48093,167 @@
           }
         }
       }
+    },
+    "无法读取这首歌的解析记录" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't read the lyrics decision for this song"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取这首歌的解析记录"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法讀取這首歌的解析紀錄"
+          }
+        }
+      }
+    },
+    "该源匹配到了这首歌，但没有歌词文本，未参与评分" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This source matched the song but has no lyrics text, so it was not scored"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该源匹配到了这首歌，但没有歌词文本，未参与评分"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "該來源比對到這首歌，但沒有歌詞文字，未參與評分"
+          }
+        }
+      }
+    },
+    "采用的不是得分最高的那条" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The applied candidate is not the highest-scoring one"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "采用的不是得分最高的那条"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "採用的不是得分最高的那條"
+          }
+        }
+      }
+    },
+    "匹配算法为「顺序优先」，或得分更高的候选版本、时长与这首歌不符" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The matching algorithm is set to Priority Order, or the higher-scoring candidates don't match this song's version or duration"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匹配算法为「顺序优先」，或得分更高的候选版本、时长与这首歌不符"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "比對演算法為「順序優先」，或得分更高的候選版本、時長與這首歌不符"
+          }
+        }
+      }
+    },
+    "因连续失败暂时跳过：%@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temporarily skipped after repeated failures: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "因连续失败暂时跳过：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "因連續失敗暫時略過：%@"
+          }
+        }
+      }
+    },
+    "已跳过" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skipped"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已跳过"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已略過"
+          }
+        }
+      }
+    },
+    "这些源连续失败，本轮暂时没有查询" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These sources failed repeatedly and were not queried this round"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这些源连续失败，本轮暂时没有查询"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這些來源連續失敗，本輪暫時沒有查詢"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

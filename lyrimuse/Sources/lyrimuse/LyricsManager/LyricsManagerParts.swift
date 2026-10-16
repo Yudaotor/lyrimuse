@@ -1598,10 +1598,17 @@ struct LyricsManagerLineEditor: View {
     var isNowPlaying = false
     @StateObject private var playback = LyricsManagerPlaybackLine()
     @State private var editingStamps: Int?
+    /// 时间戳框里正在敲的。合法就当场写回(见 body 里 `onChange(of: stampDraft)`),保存、点别句时不会漏掉还没回车的那次。
     @State private var stampDraft = ""
+    /// 打开时间戳框时那一句原来的时间戳:Esc、或停在不合法的写法上就离开时,改回它。
+    @State private var stampOriginal = ""
     @FocusState private var stampFieldFocused: Bool
     /// 回车时时间戳不合法:接下来那一下失焦不当成「点到别处」,框留着接着改。
     @State private var stampSubmitRejected = false
+    /// 从一句的时间框直接点到另一句的时间:旧框被拿掉的那一下失焦不算「点到别处」,不然新框刚开就被收起。
+    @State private var stampSwitching = false
+    /// 刚点了「还原」的那一句:还原的是新加的行时整行去掉,下面各句的下标往前挪一位,焦点和输入框跟着挪。
+    @State private var revertedLine: Int?
     /// 画成输入框的那一句。跟焦点分开记:焦点值先设、输入框随后才出现的话,焦点落不上去(离屏量过),
     /// 所以先把这一句换成输入框,下一拍再给焦点(activate)。
     @State private var activeLine: Int?
@@ -1613,15 +1620,20 @@ struct LyricsManagerLineEditor: View {
 
     private var rows: [Int] { main.lines.indices.filter { !main.lines[$0].isBlank } }
 
-    /// 正在唱的是哪一句(main 里的下标),找法同预览(LyricsPreviewText.currentRow)。
+    /// 正在唱的是哪一句(main 里的下标),找法同预览(LyricsPreviewText.currentRow)。一句写了几个时间戳(副歌重复)的,
+    /// 每个时间戳各算一次、按时间排好再找,不只看第一个。
     private var currentLine: Int? {
         guard isNowPlaying, let current = playback.current else { return nil }
-        let indices = rows
-        let found = LyricsPreviewText.currentRow(times: indices.map { main.lines[$0].timeMs },
-                                                 texts: indices.map { main.lines[$0].text },
+        let entries = rows.flatMap { index in main.lines[index].timesMs.map { (index: index, ms: $0) } }
+            .sorted { $0.ms < $1.ms }
+        let found = LyricsPreviewText.currentRow(times: entries.map(\.ms),
+                                                 texts: entries.map { main.lines[$0.index].text },
                                                  lineTimeMs: current.timeMs, lineText: current.text)
-        return found.map { indices[$0] }
+        return found.map { entries[$0].index }
     }
+
+    /// 译文 / 读音哪一行挂在哪一句下面(main 下标 → secondary 下标),见 LyricsEditableLines.pairing。
+    private var secondaryPairs: [Int: Int] { secondary.map { $0.pairing(to: main) } ?? [:] }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -1629,8 +1641,9 @@ struct LyricsManagerLineEditor: View {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     let current = currentLine
                     let changed = changedLines
+                    let pairs = secondaryPairs
                     ForEach(rows, id: \.self) { index in
-                        row(index, isCurrent: index == current, changed: changed)
+                        row(index, isCurrent: index == current, changed: changed, sIndex: pairs[index])
                             .id(index)
                     }
                 }
@@ -1647,11 +1660,25 @@ struct LyricsManagerLineEditor: View {
                 if activeLine != field.line { activeLine = field.line }
                 placePendingCaret(in: field)
             }
-            // 焦点离开时间戳输入框(点到别处):合法就照样改上,不合法当没改。
+            // 时间戳框里敲出合法的写法就当场写回编辑缓冲:直接点「保存修改」、点别句的时间都不会丢这一次。
+            .onChange(of: stampDraft) { _, draft in
+                guard let index = editingStamps, main.lines.indices.contains(index),
+                      LyricsEditableLines.isValidStamps(draft), draft != main.lines[index].stamps else { return }
+                onMainStamps(index, draft)
+            }
+            // 焦点离开时间戳输入框(点到别处):合法的已经改上了;停在不合法的写法上就当没改,改回打开时那个。
             .onChange(of: stampFieldFocused) { _, focused in
-                guard !focused, !stampSubmitRejected, let index = editingStamps else { return }
-                if LyricsEditableLines.isValidStamps(stampDraft) { onMainStamps(index, stampDraft) }
-                editingStamps = nil
+                if focused {
+                    stampSwitching = false
+                    return
+                }
+                guard !stampSwitching, !stampSubmitRejected, editingStamps != nil else { return }
+                closeStampField(keepDraft: LyricsEditableLines.isValidStamps(stampDraft))
+            }
+            .onChange(of: main.lines.count) { old, new in
+                defer { revertedLine = nil }
+                guard new == old - 1, let removed = revertedLine else { return }
+                shiftIndices(afterRemoving: removed)
             }
             .onAppear(perform: activateInitialLine)
         }
@@ -1673,15 +1700,31 @@ struct LyricsManagerLineEditor: View {
         activate(.main(index))
     }
 
-    private func secondaryIndex(for index: Int) -> Int? {
-        guard let secondary, let t = main.lines[index].timeMs else { return nil }
-        return secondary.index(matching: t)
+    /// 关掉时间戳框。不留草稿(Esc,或停在不合法的写法上)时,这一句的时间戳改回打开时那个。
+    private func closeStampField(keepDraft: Bool) {
+        if !keepDraft, let index = editingStamps, main.lines.indices.contains(index),
+           main.lines[index].stamps != stampOriginal {
+            onMainStamps(index, stampOriginal)
+        }
+        editingStamps = nil
     }
 
-    private func row(_ index: Int, isCurrent: Bool, changed: (main: Set<Int>, secondary: Set<Int>)) -> some View {
+    /// 「还原」去掉了第 `removed` 句(打开编辑之后新加的):正在编辑的那一句、焦点、时间戳框都按下标记,在它下面的往前挪一位,
+    /// 不然输入框里显示、接着改的就成了下一句。
+    private func shiftIndices(afterRemoving removed: Int) {
+        func shifted(_ index: Int) -> Int? { index == removed ? nil : (index > removed ? index - 1 : index) }
+        activeLine = activeLine.flatMap(shifted)
+        editingStamps = editingStamps.flatMap(shifted)
+        switch focus.wrappedValue {
+        case let .main(index): focus.wrappedValue = shifted(index).map(LyricsManagerLineFocus.main)
+        case let .secondary(index): focus.wrappedValue = shifted(index).map(LyricsManagerLineFocus.secondary)
+        case nil: break
+        }
+    }
+
+    private func row(_ index: Int, isCurrent: Bool, changed: (main: Set<Int>, secondary: Set<Int>), sIndex: Int?) -> some View {
         let line = main.lines[index]
         let mainChanged = changed.main.contains(index)
-        let sIndex = secondaryIndex(for: index)
         let secondaryChanged = sIndex.map { changed.secondary.contains($0) } ?? false
         let active = activeLine == index
         return HStack(alignment: .firstTextBaseline, spacing: 18) {
@@ -1697,7 +1740,12 @@ struct LyricsManagerLineEditor: View {
             }
             .frame(maxWidth: 560, alignment: .leading)
             if mainChanged || secondaryChanged {
-                Button { onRevert(index) } label: {
+                Button {
+                    // 这一句的时间戳框开着就先收起(草稿不留,还原之后是打开编辑时的那个)。
+                    if editingStamps == index { editingStamps = nil }
+                    revertedLine = index
+                    onRevert(index)
+                } label: {
                     Label(L10n.t("还原"), systemImage: "arrow.uturn.backward")
                         .font(.system(size: 11, weight: .medium))
                         .padding(.horizontal, 8)
@@ -1816,7 +1864,7 @@ struct LyricsManagerLineEditor: View {
         let next = position + delta
         guard rows.indices.contains(next) else { return .handled }
         let target = rows[next]
-        if case .secondary = field, secondaryIndex(for: target) != nil {
+        if case .secondary = field, secondaryPairs[target] != nil {
             activate(.secondary(target))
         } else {
             activate(.main(target))
@@ -1826,8 +1874,9 @@ struct LyricsManagerLineEditor: View {
 
     /// 首尾再往外走交回系统(焦点去保存条的按钮)。
     private func moveField(from field: LyricsManagerLineFocus, forward: Bool) -> KeyPress.Result {
+        let pairs = secondaryPairs
         let order = rows.flatMap { index -> [LyricsManagerLineFocus] in
-            secondaryIndex(for: index) == nil ? [.main(index)] : [.main(index), .secondary(index)]
+            pairs[index] == nil ? [.main(index)] : [.main(index), .secondary(index)]
         }
         guard let position = order.firstIndex(of: field) else { return .ignored }
         let next = position + (forward ? 1 : -1)
@@ -1862,13 +1911,18 @@ struct LyricsManagerLineEditor: View {
                         }
                         return
                     }
-                    onMainStamps(index, stampDraft)
                     editingStamps = nil
                 }
-                .onExitCommand { editingStamps = nil }
+                .onExitCommand { closeStampField(keepDraft: false) }
         } else if !line.stamps.isEmpty {
             Button {
+                // 另一句的时间框还开着:那一句停在不合法的写法上就改回原来的(合法的已经写回了),再换到这一句。
+                if editingStamps != nil {
+                    if !LyricsEditableLines.isValidStamps(stampDraft) { closeStampField(keepDraft: false) }
+                    stampSwitching = stampFieldFocused
+                }
                 stampDraft = line.stamps
+                stampOriginal = line.stamps
                 editingStamps = index
                 DispatchQueue.main.async { stampFieldFocused = true }
             } label: {

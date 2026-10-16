@@ -121,7 +121,9 @@ func runSearchLyricsCLI(args []string) {
 	// 发起搜索请求会查不到任何候选——这个 CLI 子命令是 desktop-lyrics"联网搜索候选
 	// 歌词"功能唯一的数据来源,不经过 resolveTrackEnrichment,必须单独转换一遍,不能
 	// 指望那边的修复覆盖到这里。
-	sArtist, sTitle, sAlbum := searchQueryFields(*artist, *title, *album)
+	// 歌词管理对时长变体条目(「歌名~dur2」)开面板时,歌名带着缓存键里的消歧位:交给各源的去掉它,查缓存仍按原样。
+	queryTitle := titleWithoutDurationVariant(*title)
+	sArtist, sTitle, sAlbum := searchQueryFields(*artist, queryTitle, *album)
 	// 举例(方大同《Lovers Policy》案):这条 CLI 拿到的 -duration 来自
 	// 调用方(Swift 侧「歌词管理」列表的 Summary.durationSecs),而那个值只在**这首歌
 	// 已经成功解析过一次**时才有——一首从来没成功过的歌(比如这首,「关键字」反查轮几次
@@ -205,7 +207,7 @@ func runSearchLyricsCLI(args []string) {
 
 	// 一次性 CLI 命令,没有可以取消它的交互界面,context.Background() 就够。
 	searchCtx := withManualLyricSearch(context.Background())
-	searchCtx = withSearchQueryOriginal(searchCtx, *artist, *title, *album)
+	searchCtx = withSearchQueryOriginal(searchCtx, *artist, queryTitle, *album)
 	// 用 Kaset 放过的歌,lyricfind 按缓存里存的 YouTube Music 歌曲页取(ytmusicVideoLyric),跟自动解析同一个口径。
 	enrichMu.Lock()
 	searchCtx = withCachedYouTubeMusicVideoIDLocked(searchCtx, enrichKey(*artist, *title, *album))
@@ -214,7 +216,7 @@ func runSearchLyricsCLI(args []string) {
 	// 这首在缓存里有条目时,学署名同样不拿它自己的署名给它当别名。
 	searchCtx = withLearnedAliasSelf(searchCtx, enrichKey(*artist, *title, *album))
 	// 条目里记着带编号的歌名时,跟自动解析一样交给各歌词源(见 withLyricSourceTitle);改过歌名再搜的对不上 key,不带。
-	searchCtx = withLyricSourceTitle(searchCtx, lyricSearchTitleOrStored(searchCtx, storedSearchTitle, *title), *artist, *title, *album)
+	searchCtx = withLyricSourceTitle(searchCtx, lyricSearchTitleOrStored(searchCtx, storedSearchTitle, queryTitle), *artist, queryTitle, *album)
 	_, results := scoredLyricCandidatesStreaming(searchCtx, sArtist, sTitle, sAlbum, effectiveDuration, emit)
 	// 苹果侧元数据:搜索里的 applecover goroutine 用同一组关键词查过、通常已写热
 	// appleURLCache(同 key)。这里**只读缓存**——查无此歌时它不写缓存,真去查会在

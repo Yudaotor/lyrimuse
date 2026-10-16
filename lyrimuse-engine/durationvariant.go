@@ -113,6 +113,15 @@ func variantFoldsIntoBase(variant, base enrichEntry) bool {
 
 var durationVariantSuffix = regexp.MustCompile(`~dur[0-9]+$`)
 
+// titleWithoutDurationVariant 去掉歌名末尾的「~durN」(缓存键里的时长消歧位),拿曲名本身去搜;不是变体原样返回。
+func titleWithoutDurationVariant(title string) string {
+	loc := durationVariantSuffix.FindStringIndex(title)
+	if loc == nil || loc[0] == 0 {
+		return title
+	}
+	return title[:loc[0]]
+}
+
 // durationVariantBaseKey:「歌手|歌名~durN|专辑」→「歌手|歌名|专辑」(enrichKeyDurationVariant 的反向)。不是变体返回 false。
 func durationVariantBaseKey(key string) (string, bool) {
 	artist, title, album := splitEnrichKey(key)

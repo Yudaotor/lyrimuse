@@ -35,14 +35,17 @@ public struct LyricsScoredCandidate: Sendable, Equatable {
     public let instrumental: Bool?
     /// 存档里的 `consensus_peers`。老存档没有 → 空。
     public let consensusPeers: [String]
+    /// 存档里的 `track_found_no_lyrics`。老存档没有 → nil。
+    public let trackFoundNoLyrics: Bool?
 
     public init(source: String, score: Int, terms: [LyricsScoreTermValue],
-                instrumental: Bool? = nil, consensusPeers: [String] = []) {
+                instrumental: Bool? = nil, consensusPeers: [String] = [], trackFoundNoLyrics: Bool? = nil) {
         self.source = source
         self.score = score
         self.terms = terms
         self.instrumental = instrumental
         self.consensusPeers = consensusPeers
+        self.trackFoundNoLyrics = trackFoundNoLyrics
     }
 
     /// 引擎塞的「这首本来就没有词」信号 —— 不是候选,见 `LyricsDecisionRow` 头注。
@@ -54,8 +57,15 @@ public struct LyricsScoredCandidate: Sendable, Equatable {
     /// 那个 -1 是内部手段不是评价,界面不该印它(全库 604 行 / 301 个条目)。
     public var isRejected: Bool { terms.first?.kind.hasPrefix("reject") ?? false }
 
+    /// 「曲库里有这首歌、平台上没有歌词文本」的信号(引擎塞的 -1 分伪候选),也不是候选。存档没写这个字段的老记录
+    /// 按形状认:负分、一个打分项都没有、又不是纯音乐标记(被拒的候选总带着那条 reject 项)。
+    public var isNoLyricsMarker: Bool {
+        if trackFoundNoLyrics == true { return true }
+        return score < 0 && terms.isEmpty && instrumental != true
+    }
+
     /// 真正参与比分的候选。判词和差值分解都只看这些。
-    public var isContender: Bool { !isInstrumentalMarker && !isRejected }
+    public var isContender: Bool { !isInstrumentalMarker && !isRejected && !isNoLyricsMarker }
 
     /// 分项之和。
     public var rawTermSum: Int { terms.reduce(0) { $0 + $1.points } }
@@ -132,25 +142,25 @@ public enum LyricsVerdictBuilder {
     ///
     /// 传了 winner 时**冠军排第一**:同分的两条按源名定序有可能把没戴皇冠的排在前面
     /// (实测:方大同《1234567》酷狗与 QQ 同为 1219 分,存档里的 winner 是 QQ,按源名却是
-    /// 酷狗在前)——列表第一行不是胜者,读起来像出了错。
+    /// 酷狗在前)——列表第一行不是胜者,读起来像出了错。采用的不是最高分那条(匹配算法选「顺序优先」、
+    /// 或最高分那条吃了版本 / 曲长扣分)时同样把它提到第一。
     public static func ranked(_ candidates: [LyricsScoredCandidate],
                               winner: String? = nil) -> [LyricsScoredCandidate] {
         // 同分时按 source 定序 —— 存档里的数组顺序是引擎的构造顺序,稳定,
         // 但这里再排一次必须自己保证稳定,否则同分的两条在界面上的先后会飘。
         let order = candidates.filter(\.isContender)
             .sorted { $0.score != $1.score ? $0.score > $1.score : $0.source < $1.source }
-        guard let winner, let top = order.first,
-              let idx = order.firstIndex(where: { $0.source == winner && $0.score == top.score }),
-              idx != 0
+        guard let winner, let idx = order.firstIndex(where: { $0.source == winner }), idx != 0
         else { return order }
         var moved = order
         moved.insert(moved.remove(at: idx), at: 0)
         return moved
     }
 
-    /// 谁是冠军。存档里的 `winner` **是**当时真正被采用的那一条,所以优先认它 ——
-    /// 但只在它确实是并列最高分时(真平局那 134 场里引擎挑的就是其中之一),
-    /// 否则退回分数最高的那条,保证分差不会是负数。存档里没有 `winner`、又有一条纯音乐标记时没有冠军:
+    /// 谁是冠军。存档里的 `winner` **是**当时真正被采用的那一条,只要它参赛就认它,哪怕不是最高分(顺序优先、
+    /// 最高分那条吃了扣分):皇冠得戴在详情页「选用 X」的那条上。不是最高分时判词整块不出(`build` 返回 nil),
+    /// 界面另说一句(`isOutscored`)。存档里没有 `winner` 或它不在参赛候选里时退回分数最高的那条。
+    /// 存档里没有 `winner`、又有一条纯音乐标记时没有冠军:
     /// 那一轮按纯音乐处理,一条都没采用(播放器自己说是纯音乐时,分数再高也不用),别把最高分那条说成胜者。
     ///
     /// 判词和候选表**必须**用同一个判据,所以抽成公共函数:两处各写一份迟早漂开,
@@ -162,14 +172,21 @@ public enum LyricsVerdictBuilder {
         }
         let order = ranked(candidates)
         guard let top = order.first else { return nil }
-        return order.first { $0.source == winner && $0.score == top.score } ?? top
+        return order.first { $0.source == winner } ?? top
+    }
+
+    /// 采用的那条(冠军)分数比别的参赛候选低:界面说一句「采用的不是得分最高的那条」,判词不出。
+    public static func isOutscored(among candidates: [LyricsScoredCandidate], winner: String?) -> Bool {
+        guard let champion = champion(among: candidates, winner: winner) else { return false }
+        return candidates.contains { $0.isContender && $0.source != champion.source && $0.score > champion.score }
     }
 
     public static func build(candidates: [LyricsScoredCandidate], winner: String?) -> LyricsVerdict? {
         let contenders = ranked(candidates)
         guard contenders.count >= 2,
               let champion = champion(among: candidates, winner: winner),
-              let runnerUp = contenders.first(where: { $0.source != champion.source })
+              let runnerUp = contenders.first(where: { $0.source != champion.source }),
+              champion.score >= runnerUp.score
         else { return nil }
 
         let gap = champion.score - runnerUp.score

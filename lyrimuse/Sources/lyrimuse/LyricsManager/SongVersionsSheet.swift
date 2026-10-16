@@ -27,6 +27,8 @@ struct SongVersionsSheet: View {
     @State private var pendingSplit: String?
     @State private var confirmingSplit = false
     @State private var busy = false
+    /// 第几次重读。重读里有 await,开着面板时换了一首(深链)或拆分 / 合并之后又重读,慢的那次后回来不能盖掉新的。
+    @State private var reloadGeneration = 0
 
     enum Relation: CaseIterable {
         case current, shared, own, split
@@ -975,11 +977,14 @@ struct SongVersionsSheet: View {
     /// 校正一遍:拆开之后播放那一侧要等下一拍才读到。证据、拆开记录在后台读文件;各条的正文按需从小文件补,只补这首歌的几条。
     private func reload() async {
         let key = summary.key
+        reloadGeneration += 1
+        let generation = reloadGeneration
         let (edges, splits) = await Task.detached(priority: .userInitiated) {
             let edges = FileIO.read(SongVersions.tableURL).map { SongVersions.edges(tableData: $0, key: key) } ?? []
             let splits = FileIO.read(SongVersions.userURL).map(SongVersions.splits(userData:)) ?? []
             return (edges, splits)
         }.value
+        guard !Task.isCancelled, generation == reloadGeneration else { return }
         var memberships = EnrichCacheReader.songMemberships()
         func refresh(_ keys: [String]) {
             for k in keys {

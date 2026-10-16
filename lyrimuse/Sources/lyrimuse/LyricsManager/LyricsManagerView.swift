@@ -670,8 +670,6 @@ struct LyricsManagerView: View {
         let title: String
         /// 面板里预填的专辑(给人看的那份)。
         let album: String
-        /// 缓存键里的专辑,查「当前使用」那份正文用。
-        let keyAlbum: String
         let durationSecs: Double
         var id: String { key }
     }
@@ -703,6 +701,13 @@ struct LyricsManagerView: View {
         var tint: Color { LyricsRematchRunner.tint(tone) }
     }
     @State private var showDecisionSheet = false
+    /// 「解析决策」弹窗的两槽,打开那一刻解一次(读旁路文件 + 解码),弹窗开着期间父视图重算不再重读。
+    @State private var decisionSlots: DecisionSlots?
+    private struct DecisionSlots {
+        let key: String
+        let latest: LyricsResolutionDecision?
+        let applied: LyricsResolutionDecision?
+    }
     @State private var showSongVersions = false
     /// 链接带了 `evidence=1`:这一次打开「同曲条目」就展开「匹配依据」;面板关掉就放下。
     @State private var songVersionsShowEvidence = false
@@ -861,6 +866,8 @@ struct LyricsManagerView: View {
         var albumEntries: [AlbumListEntry]?
         var retryableAllGeneration = -1
         var retryableAll: [String] = []
+        var noResponderGeneration = -1
+        var noResponderRetryable: [String] = []
         var countsGeneration = -1
         var counts: [LyricsManagerStatus: Int] = [:]
         var cleanupGeneration = -1
@@ -1073,6 +1080,17 @@ struct LyricsManagerView: View {
         return filteredCache.retryableAll
     }
 
+    /// 全库最近一轮无源应答、可自动匹配的(无源应答那一页底下那行用),同样按 summariesGeneration 只算一次。
+    private var noResponderRetryableKeys: [String] {
+        let generation = store.summariesGeneration
+        if filteredCache.noResponderGeneration != generation {
+            filteredCache.noResponderRetryable = store.summaries
+                .filter { $0.lastRoundHadNoResponder && EnrichCacheStore.isFillSweepRetryable($0) }.map(\.key)
+            filteredCache.noResponderGeneration = generation
+        }
+        return filteredCache.noResponderRetryable
+    }
+
     private var retryableVisibleKeys: [String] {
         let base = sortedFiltered
         if let cached = filteredCache.retryableVisible { return cached }
@@ -1239,6 +1257,7 @@ struct LyricsManagerView: View {
                 Task {
                     await store.clearAll()
                     selectedKeys.removeAll()
+                    dropEditorIfEntryGone()
                 }
             }
             Button(L10n.t("取消"), role: .cancel) {}
@@ -1315,6 +1334,7 @@ struct LyricsManagerView: View {
         Task {
             await store.delete(keys: victims)
             selectedKeys.subtract(victims)
+            dropEditorIfEntryGone()
         }
     }
 
@@ -1986,7 +2006,7 @@ struct LyricsManagerView: View {
         if keys.isEmpty {
             if !selectableFiltered.isEmpty {
                 Button(String(format: L10n.t("全选 %@ 首"), selectableFiltered.count.formatted())) {
-                    selectedKeys = Set(selectableFiltered.map(\.key))
+                    listSelectionChanged(Set(selectableFiltered.map(\.key)))
                 }
             }
         } else if visible.count == 1, let summary = store.summary(forKey: visible[0]) {
@@ -1999,10 +2019,12 @@ struct LyricsManagerView: View {
     /// 一首歌能做的事(右键菜单)。
     @ViewBuilder
     private func singleItemMenu(_ summary: EnrichCacheStore.Summary) -> some View {
+        // 正在编辑的这首跟详情页那两颗按钮一样点不了:换回来的词会整个重载编辑缓冲。别的歌走 select(),有没保存的改动先问。
+        let editingThis = editMode != .preview && editingKey == summary.key
         Button(L10n.t("搜索候选歌词")) { openSearch(for: summary.key) }
-            .disabled(rematchRunningKey != nil)
+            .disabled(rematchRunningKey != nil || editingThis)
         Button(L10n.t("重新自动匹配")) { startRematch(for: summary.key) }
-            .disabled(rematchBlocked)
+            .disabled(rematchBlocked || editingThis)
         if summary.hasDecision {
             Button(L10n.t("解析决策")) { openDecision(for: summary.key) }
         }
@@ -2055,12 +2077,22 @@ struct LyricsManagerView: View {
     }
 
     private func openSearchSheet(_ summary: EnrichCacheStore.Summary) {
-        searchTarget = SearchTarget(key: summary.key, artist: summary.artist, title: summary.title,
-                                    album: summary.displayAlbum, keyAlbum: summary.album, durationSecs: summary.durationSecs)
+        // 歌名去掉时长变体的 `~durN`:那是缓存键里的消歧位,拿它去各源搜什么都搜不到。写回仍按 key。
+        searchTarget = SearchTarget(key: summary.key, artist: summary.artist,
+                                    title: EnrichCacheKeys.strippingDurationVariantTitle(summary.title),
+                                    album: summary.displayAlbum, durationSecs: summary.durationSecs)
     }
 
     private func openDecision(for key: String) {
         guard select(key) else { return }
+        presentDecision(for: key)
+    }
+
+    /// 完整结构懒解码:只在打开弹窗这一刻按 key 解(见 Summary.hasDecision 注释)。两槽:latest=最近一次评估,
+    /// applied=当前歌词的出处(分槽语义见 lyrimuse-engine/decision.go;老条目只有前者,弹窗 init 里自己退化)。
+    private func presentDecision(for key: String) {
+        decisionSlots = DecisionSlots(key: key, latest: store.decodedDecision(for: key),
+                                      applied: store.decodedAppliedDecision(for: key))
         showDecisionSheet = true
     }
 
@@ -2071,7 +2103,7 @@ struct LyricsManagerView: View {
 
     private func copySongName(_ summary: EnrichCacheStore.Summary) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString("\(summary.title) - \(summary.shownArtist)", forType: .string)
+        NSPasteboard.general.setString("\(summary.shownTitle) - \(summary.shownArtist)", forType: .string)
     }
 
     private func revealLyricsFile(_ key: String) {
@@ -2183,9 +2215,11 @@ struct LyricsManagerView: View {
                     // 选中的正是上一首正在放的歌(或什么都没选)才跟着换,点了别的歌就不动;列表不滚动(见 11 章决策 64)。
                     // 正在改歌词或多选了一批时也不动:选中整个换成新歌,编辑缓冲随之重载,敲的内容没有任何提示就没了。
                     // 解析决策面板开着时也不动:它读的是选中那首。搜索候选歌词面板开着时同样不动:面板自己记着为哪首开的
-                    // (SearchTarget),背后的详情却会换成新歌,采纳之后看到的不是刚采纳的那首(见 11 章决策 86、92)。
+                    // (SearchTarget),背后的详情却会换成新歌,采纳之后看到的不是刚采纳的那首(见 11 章决策 86、92)。同曲条目面板和
+                    // 别的确认框同理:面板读的是选中那首,开着时换掉,内容当场变成另一首,「统一用这一份」会作用到新歌上。
                     let followsPlayback = selectedKeys.isEmpty || previous.map { selectedKeys == [$0] } == true
-                    guard followsPlayback, !isEditorDirty, editMode == .preview, searchTarget == nil, !showDecisionSheet else { return }
+                    guard followsPlayback, !isEditorDirty, editMode == .preview, searchTarget == nil, !showDecisionSheet,
+                          !showSongVersions, !windowFrame.hasAttachedSheet else { return }
                     focusCurrentlyPlaying(scrollProxy: scrollProxy, scroll: false)
                 }
                 // 窗口开着期间引擎一直在写缓存:占位行等它写完才能「顶替」成真实条目,补空扫描每条
@@ -2455,6 +2489,7 @@ struct LyricsManagerView: View {
             await store.delete(keys: victims)
             // 已删的 key 必须自己从选中集合里拿掉,别指望 SwiftUI 替你收拾。
             selectedKeys.subtract(victims)
+            dropEditorIfEntryGone()
             // 故意不清空 pendingDeleteKeys:弹窗的标题/按钮文案都读它的 count,在关闭动画
             // 还没走完时清掉会让按钮文字闪一下"删除 0 条"。它每次 requestDelete 都会被整体
             // 覆盖,留着上一批的内容不会被误用。
@@ -2471,10 +2506,9 @@ struct LyricsManagerView: View {
     // 不放编辑器、不放占用空间——算这批的真实体积要对 lyrics/ 目录做 4N 次 stat,而"删歌词"本来也不是为了腾空间。
     private var batchSelectionPanel: some View {
         let ordered = selectedVisibleKeys
-        let victims = Set(ordered)
-        let picked = store.summaries.filter { victims.contains($0.key) }
-        let byKey = Dictionary(picked.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
-        let pickedInOrder = ordered.compactMap { byKey[$0] }
+        // 按 key 走索引取,不对全库过滤:选中几首就查几次。
+        let pickedInOrder = ordered.compactMap { store.summary(forKey: $0) }
+        let picked = pickedInOrder
         let manual = picked.filter(\.isManualOriginal).count
         let wordTiming = picked.filter(\.hasWordTiming).count
         // 「无歌词」这颗只数**真的缺**的:确证过的纯音乐、有纯文本兜底的都不该算进去,
@@ -2839,7 +2873,8 @@ struct LyricsManagerView: View {
     // 步骤)配不上。
     private func refreshPlaceholder() {
         let playback = PlaybackCoordinator.shared
-        guard !playback.artist.isEmpty, !playback.title.isEmpty else {
+        // 只要歌名:引擎有歌名就解析,播放器不报歌手的(网易云云盘)也照样建条目。
+        guard !playback.title.isEmpty else {
             placeholderSummary = nil
             return
         }
@@ -2936,9 +2971,8 @@ struct LyricsManagerView: View {
             key = match
         }
         // 整体替换成这一条、不是追加:「定位」的语义是聚焦到这首歌。追加的话用户点完
-        // 之后 ⌘⌫ 删的还是之前选的一堆,极易误删。
-        selectedKeys = [key]
-        guard scroll else { return }
+        // 之后 ⌘⌫ 删的还是之前选的一堆,极易误删。走 select():正在改的那首有没保存的改动时先问,别直接换掉。
+        guard select(key), scroll else { return }
         centerListRow(key, scrollProxy: scrollProxy)
     }
 
@@ -3084,7 +3118,7 @@ struct LyricsManagerView: View {
     }
 
     private var unsavedEditTitle: String {
-        let title = editingKey.flatMap { store.summary(forKey: $0) }?.title ?? ""
+        let title = editingKey.flatMap { store.summary(forKey: $0) }?.shownTitle ?? ""
         return String(format: L10n.t("「%@」有未保存的修改"), title)
     }
 
@@ -3102,7 +3136,12 @@ struct LyricsManagerView: View {
     @ViewBuilder
     private func detailView(key: String, summary: EnrichCacheStore.Summary) -> some View {
         songPage(key: key, summary: summary)
-            .onAppear { loadDetail(key: key) }
+            // 详情页卸载再装回来(全选、多选之后又点回一首)时 onChange(of: key) 不触发,在这里收口:还是正在改的那首、
+            // 又有没保存的改动,缓冲原样留着;换成了别的歌,loadDetail 会把上一首的编辑状态一起收掉。
+            .onAppear {
+                if editingKey == key, isEditorDirty { return }
+                loadDetail(key: key)
+            }
             // 引擎期间改了这首(补了机翻、重新打分换了词、别处采纳了候选):用户没动过编辑缓冲就跟着换成盘上的新内容,
             // 免得看着旧的、存的时候又拿旧的比。动过就不碰,保存时再按格合并(见 saveEdits)。
             // 正文读不回来的那首不跟:每次重读都要在主线程上把整份主缓存再解一遍去碰运气,重新选中它再试。
@@ -3161,15 +3200,13 @@ struct LyricsManagerView: View {
                 let full = romaBodyEdit.reassembled(body: newBody)
                 if full != editedRoma { editedRoma = full }
             }
-            .sheet(isPresented: $showDecisionSheet) {
-                // 按钮只在 hasDecision 时出现;完整结构懒解码 —— 只在打开弹窗这一刻按 key
-                // 解(原来 rebuild 时全量急算,见 Summary.hasDecision 注释)。
-                // 两槽都解:latest=最近一次评估,applied=当前歌词的出处(分槽语义见
-                // lyrimuse-engine/decision.go;老条目只有前者,弹窗 init 里自己退化)。
-                let latest = store.decodedDecision(for: key)
-                let applied = store.decodedAppliedDecision(for: key)
-                if latest != nil || applied != nil {
-                    LyricsDecisionSheet(summary: summary, latest: latest, applied: applied)
+            .sheet(isPresented: $showDecisionSheet, onDismiss: { decisionSlots = nil }) {
+                // 按钮只在 hasDecision 时出现,两槽在 presentDecision 里解好。都解不出来(存档坏了、格式对不上)时给一页
+                // 带「完成」的说明,别弹一张空白、关不掉的面板。
+                if let slots = decisionSlots, slots.key == key, slots.latest != nil || slots.applied != nil {
+                    LyricsDecisionSheet(summary: summary, latest: slots.latest, applied: slots.applied)
+                } else {
+                    DecisionUnavailableSheet()
                 }
             }
             .sheet(isPresented: $showSongVersions, onDismiss: { songVersionsShowEvidence = false; songVersionsCompare = nil }) {
@@ -3184,9 +3221,9 @@ struct LyricsManagerView: View {
                 LyricsSearchSheet(
                     artist: target.artist, title: target.title, album: target.album, songKey: key,
                     currentSource: live?.lyricsSource,
-                    // 「当前使用」双判据要的正文指纹。store.raw 是私有的,跟另外两个入口一样走
-                    // EnrichCacheReader.lookup(store 刚 persist 过的就是这份文件),三处口径一致。
-                    currentFingerprint: EnrichCacheReader.lookup(artist: target.artist, title: target.title, album: target.keyAlbum)
+                    // 「当前使用」双判据要的正文指纹,跟另外两个入口(storedLyrics)同一个口径:条目里存着的正文,标了纯音乐也照给。
+                    // 按 key 原样取,不走 lookup:那条会按正在播放的快照、时长变体去认,同名的另一份录音在放时取到的是那一条。
+                    currentFingerprint: EnrichCacheReader.storedEntry(forKey: key)
                         .map { ManualPickLock.fingerprint(lyrics: $0.lyrics) }.flatMap { $0.isEmpty ? nil : $0 },
                     durationSecs: target.durationSecs,
                     isMarkedInstrumental: live?.isInstrumental ?? false,
@@ -3337,7 +3374,7 @@ struct LyricsManagerView: View {
             // 「解析决策」只在有存档时才出现(老条目没有)。
             if summary.hasDecision {
                 Button {
-                    showDecisionSheet = true
+                    presentDecision(for: summary.key)
                 } label: {
                     topBarLabel(L10n.t("解析决策"), icon: "list.number", iconOnly: iconOnly)
                 }
@@ -3827,6 +3864,18 @@ struct LyricsManagerView: View {
         focusedLine = nil
     }
 
+    /// 正在编辑的那首已经不在缓存里(删掉、清空):编辑状态连同缓冲一起收掉,别留一份没有主人的「未保存的修改」,
+    /// 等点别的歌时弹一个歌名为空、保存也存不进去的提示。
+    private func dropEditorIfEntryGone() {
+        guard let key = editingKey, store.summary(forKey: key) == nil else { return }
+        endEditing()
+        editingKey = nil
+        editedLyrics = loadedLyrics
+        editedTr = loadedTr
+        editedRoma = loadedRoma
+        editedWordText = loadedWordText
+    }
+
     @ViewBuilder
     private func lineEditor(_ summary: EnrichCacheStore.Summary) -> some View {
         let wordTimed = !loadedYRC.isEmpty
@@ -3888,19 +3937,25 @@ struct LyricsManagerView: View {
             return
         }
         let original = mainBase.lines[baseIndex]
-        let reverted = current.replacing(index, stamps: original.stamps, text: original.text).joined
+        let revertedMain = current.replacing(index, stamps: original.stamps, text: original.text)
+        let reverted = revertedMain.joined
         if wordTimed { editedWordBody = reverted } else { editedLyricsBody = reverted }
-        guard let time = original.timeMs else { return }
-        editedTrBody = Self.revertSecondary(editedTrBody, base: base.tr, timeMs: time)
-        editedRomaBody = Self.revertSecondary(editedRomaBody, base: base.roma, timeMs: time)
+        editedTrBody = Self.revertSecondary(editedTrBody, base: base.tr, main: revertedMain, index: index,
+                                            baseMain: mainBase, baseIndex: baseIndex)
+        editedRomaBody = Self.revertSecondary(editedRomaBody, base: base.roma, main: revertedMain, index: index,
+                                              baseMain: mainBase, baseIndex: baseIndex)
     }
 
-    private static func revertSecondary(_ body: String, base: String, timeMs: Int) -> String {
+    /// 挂在这一句下面的译文 / 读音改回打开时那一行。两边各按 `pairing` 找挂在哪一行,跟逐句格子显示的是同一行。
+    private static func revertSecondary(_ body: String, base: String, main: LyricsEditableLines, index: Int,
+                                        baseMain: LyricsEditableLines, baseIndex: Int) -> String {
         let current = LyricsEditableLines(body: body)
         let original = LyricsEditableLines(body: base)
-        guard let index = current.index(matching: timeMs), let baseIndex = original.index(matching: timeMs) else { return body }
-        let line = original.lines[baseIndex]
-        return current.replacing(index, stamps: line.stamps, text: line.text).joined
+        guard let line = current.pairing(to: main)[index], let baseLine = original.pairing(to: baseMain)[baseIndex] else {
+            return body
+        }
+        let restored = original.lines[baseLine]
+        return current.replacing(line, stamps: restored.stamps, text: restored.text).joined
     }
 
     /// 编辑区顶上那一条:左边一句说明,右边切到另一种编辑方式。逐句格子和整段文本两边同一个样子(见 11 章决策 68)。
@@ -4192,8 +4247,7 @@ struct LyricsManagerView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         } else {
-            let keys = store.summaries.filter { $0.lastRoundHadNoResponder && EnrichCacheStore.isFillSweepRetryable($0) }
-                .map(\.key)
+            let keys = noResponderRetryableKeys
             let others = keys.filter { $0 != summary.key }.count
             if others > 0 {
                 Button(String(format: L10n.plural("另有 %@ 首歌曲无源应答 · 全部自动匹配", count: others), "\(others)")) {
@@ -4319,7 +4373,8 @@ struct LyricsManagerView: View {
     /// 一轮重新匹配的收尾(详情页那颗按钮、搜索面板那颗共用):换了词就把编辑框换成盘上的新内容(编辑框此刻属于
     /// 别的歌就不碰),结论挂在详情页那一行。调用前列表要先重读过。
     private func finishRematch(key: String, line: LyricsRematch.Line) {
-        if line.tone == .changed, editingKey == key { loadDetail(key: key) }
+        // 编辑缓冲里有没保存的改动就不重载(右键菜单在编辑中已点不了,这里兜住别的入口),保存时按格合并,同 summariesGeneration 那条。
+        if line.tone == .changed, editingKey == key, !isEditorDirty { loadDetail(key: key) }
         // 歌词同步开着时同一共享组跟着这一首换了词(18 章决策 33):结论后面接一句。
         var text = LyricsRematchRunner.text(line)
         let followers = LyricsRematch.followers(of: LyricsRematch.current, key: key)
@@ -4357,6 +4412,11 @@ struct LyricsManagerView: View {
         } == true
         if manualConflictKeys.count < 2 {
             confirmManualConflict = false
+        }
+        // 编辑模式跟着「这一份缓冲是哪首」走:同一首重载了就按新内容重记逐句对比的底稿,换了别的歌就退出编辑,
+        // 免得拿上一首的句子当底稿(改动计数、「改过」标记、「还原」全会错,还原再保存会把上一首的句子写进这首)。
+        if editMode != .preview {
+            if editBase?.key == key { captureEditBase() } else { endEditing() }
         }
     }
 
@@ -4456,5 +4516,23 @@ struct InfoChip: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(tint.opacity(0.12), in: Capsule())
+    }
+}
+
+/// 「解析决策」两槽都读不出来时的那一页。
+private struct DecisionUnavailableSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 16) {
+            ContentUnavailableView(L10n.t("无法读取这首歌的解析记录"), systemImage: "list.number")
+            HStack {
+                Spacer()
+                Button(L10n.t("完成")) { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 360, height: 220)
     }
 }

@@ -601,8 +601,14 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 			t.Errorf("enrich.go 缺 %q", n)
 		}
 	}
-	if !strings.Contains(read("searchcli.go"), "searchCtx = withLyricSourceTitle(searchCtx, lyricSearchTitleOrStored(searchCtx, storedSearchTitle, *title), *artist, *title, *album)") {
+	searchCLI := read("searchcli.go")
+	if !strings.Contains(searchCLI, "searchCtx = withLyricSourceTitle(searchCtx, lyricSearchTitleOrStored(searchCtx, storedSearchTitle, queryTitle), *artist, queryTitle, *album)") {
 		t.Error("手动搜索没把条目里记下的搜索歌名交给各源")
+	}
+	// 歌词管理对时长变体条目开面板时歌名带着「~durN」:交给各源的去掉,查缓存的仍按原样。
+	if !strings.Contains(searchCLI, "queryTitle := titleWithoutDurationVariant(*title)") ||
+		!strings.Contains(searchCLI, "storedSearchTitle := enrichCache[enrichKey(*artist, *title, *album)].LyricsSearchTitle") {
+		t.Error("手动搜索没把歌名里的时长变体位去掉再交给各源,或者查缓存也换成了去掉之后的歌名")
 	}
 	for _, name := range []string{"upcoming.go", "albumprefetch.go"} {
 		if s := read(name); !strings.Contains(s, "withLyricSearchTitle(") || !strings.Contains(s, "lyricSearchTitle(t.title)") {

@@ -199,3 +199,17 @@ func TestPlanEnrichKeyMigrationFoldsSameRecordingVariant(t *testing.T) {
 		t.Errorf("曲目 id 不同不并,得到 %#v", g)
 	}
 }
+
+func TestTitleWithoutDurationVariant(t *testing.T) {
+	for _, c := range []struct{ title, want string }{
+		{"Jasmine~dur2", "Jasmine"},
+		{"Jasmine~dur12", "Jasmine"},
+		{"Jasmine", "Jasmine"},
+		{"~dur2", "~dur2"},
+		{"Song~durX", "Song~durX"},
+	} {
+		if got := titleWithoutDurationVariant(c.title); got != c.want {
+			t.Errorf("titleWithoutDurationVariant(%q) = %q, want %q", c.title, got, c.want)
+		}
+	}
+}

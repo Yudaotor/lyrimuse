@@ -119,6 +119,9 @@ type enrichEditOutcome struct {
 	trash    []string // 要把歌词文件挪进废纸篓、删掉判决旁路文件的 key(删除)
 	dropped  []string // 只删判决旁路文件的 key(清空:歌词文件由 trashAll 按目录整批处理)
 	trashAll bool     // 清空:歌词目录里认得出的歌词文件全部挪进废纸篓
+	// edited:不导出、不删文件,只改了字段的 key(标纯音乐)。跟 exports / trash 一样记改动序号,在飞的首轮解析
+	// 收尾时据此作废,不拿改动之前算好的整条盖回去。
+	edited []string
 	// followers:changed 里跟着原件一起改的手改副本,回报给 App 的改动数不算它们(界面上说的是「几首」)。
 	followers int
 	err       error
@@ -169,7 +172,7 @@ func applyEnrichEdit(req enrichEditRequest) enrichEditResult {
 		out = applyEnrichEditLocked(req)
 		if out.err == nil && out.changed > 0 {
 			enrichDirty = true
-			touched := append(append([]string{}, out.exports...), out.trash...)
+			touched := append(append(append([]string{}, out.exports...), out.trash...), out.edited...)
 			if req.Key != "" {
 				touched = append(touched, req.Key)
 			}
@@ -203,10 +206,15 @@ func applyEnrichEdit(req enrichEditRequest) enrichEditResult {
 		exportLyricsFilesFor(out.exports...)
 		nudgeEnrichPush()
 		if saveErr != nil {
-			// 内存里已经改了(常驻进程下一次保存还会再写),但这一刻没落盘:如实回给 App。
-			res.Error = saveErr.Error()
-			log.Printf("enrich edit: op=%s applied but not saved: %v", req.Op, saveErr)
-			return res
+			if enrichNotify == nil {
+				// CLI 子命令:进程一退,内存里的改动就没了,这次确实没生效。
+				res.Error = saveErr.Error()
+				log.Printf("enrich edit: op=%s applied but not saved: %v", req.Op, saveErr)
+				return res
+			}
+			// 常驻进程:内存里已经改了,下一次存盘照样写出去。这时回失败,App 说没改成、改动过后却悄悄生效,
+			// 所以按成功回,只在日志里记一笔。
+			warnf("enrich edit: op=%s applied, save deferred: %v", req.Op, saveErr)
 		}
 	}
 	res.OK = true
@@ -271,6 +279,7 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 		}
 		changed := 0
 		missing := ""
+		var edited []string
 		for _, k := range keys {
 			e, existed := enrichCache[k]
 			if !existed {
@@ -290,12 +299,14 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 			}
 			e.Instrumental = req.Value
 			enrichCache[k] = e
+			cancelInFlightEnrichLocked(k)
+			edited = append(edited, k)
 			changed++
 		}
 		if changed == 0 && missing != "" {
 			return enrichEditOutcome{err: fmt.Errorf("set_instrumental: %q is not in the cache yet", missing)}
 		}
-		return enrichEditOutcome{changed: changed}
+		return enrichEditOutcome{changed: changed, edited: edited}
 	case "set_manual_lock":
 		flipped := manualLockFlipsLocked(req.Value)
 		for _, k := range flipped {
@@ -457,6 +468,11 @@ func cancelInFlightEnrichLocked(key string) {
 // 这里把两样都收进缓存(字段先采纳,歌词文件赢),再整份导出。启动迁移水位作废:恢复进来的是更早
 // 形态的数据,下次启动让存量迁移照常全量跑。
 func adoptRestoreEdit() enrichEditOutcome {
+	// 先记一次改动序号再采纳:采纳字段、导入几千个文件要几秒,这期间收尾的首轮解析带着旧序号,不先记就核对得过,
+	// 会把刚恢复的条目盖掉。收完再记一次,把这几秒里起跑的也作废。
+	enrichMu.Lock()
+	markEnrichEditedLocked(true)
+	enrichMu.Unlock()
 	adopted := enrichRestorePath != "" && adoptEnrichRestore(enrichRestorePath)
 	// 常驻进程运行中:不清歌词临时文件,可能是另一轮导出正写到一半的(见 importLyricsFromOpts)。
 	imported := len(importLyricsFromOpts(lyricsDir(), true, false))
@@ -561,6 +577,13 @@ func processEnrichEditRequests() {
 	var names []string
 	for _, ent := range entries {
 		name := ent.Name()
+		if !ent.IsDir() && strings.HasSuffix(name, enrichEditClaimedSuffix) {
+			// 认领之后进程退了,没执行完的那条:过期后清掉。
+			if info, err := ent.Info(); err == nil && time.Since(info.ModTime()) > enrichEditStaleAfter {
+				_ = os.Remove(filepath.Join(enrichEditDir, name))
+			}
+			continue
+		}
 		if ent.IsDir() || !strings.HasSuffix(name, ".json") {
 			continue
 		}
@@ -576,14 +599,20 @@ func processEnrichEditRequests() {
 	sort.Strings(names)
 	for _, name := range names {
 		path := filepath.Join(enrichEditDir, name)
-		info, err := os.Stat(path)
+		// 先改名认领再读:App 等不到结果会删请求文件撤回,读完再删的话撤回落在读和删之间时 App 报「无响应」、
+		// 改动照样执行。改名失败就是 App 已经撤回了,这条不执行。
+		claimed := path + enrichEditClaimedSuffix
+		if err := os.Rename(path, claimed); err != nil {
+			continue
+		}
+		info, err := os.Stat(claimed)
 		if err != nil {
 			continue
 		}
-		data, err := os.ReadFile(path)
-		_ = os.Remove(path)
+		data, err := os.ReadFile(claimed)
+		_ = os.Remove(claimed)
 		if err != nil {
-			noteFileErr("read", path, err)
+			noteFileErr("read", claimed, err)
 			continue
 		}
 		id := strings.TrimSuffix(name, ".json")
@@ -603,6 +632,9 @@ func processEnrichEditRequests() {
 		writeEnrichEditResult(filepath.Join(enrichEditDir, id+".result.json"), res)
 	}
 }
+
+// enrichEditClaimedSuffix:引擎认领(改名)之后的请求文件后缀。不以 .json 结尾,下一轮扫描不会再当成待办。
+const enrichEditClaimedSuffix = ".json.claimed"
 
 // writeEnrichEditResult 原子写结果文件:App 在轮询它,不能读到半截。
 func writeEnrichEditResult(path string, res enrichEditResult) {

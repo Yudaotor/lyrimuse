@@ -386,3 +386,73 @@ func TestDeleteAlsoTrashesUntruncatedLegacyFile(t *testing.T) {
 		t.Errorf("截断前的长名字文件应一起挪走 err=%v", err)
 	}
 }
+
+// 标纯音乐(单选、多选都算):被改到的每个 key 都记改动序号、叫停在飞的首轮解析,解析收尾时不拿改动之前算好的
+// 整条盖回去,把标记冲掉。
+func TestSetInstrumentalMarksEveryKeyEdited(t *testing.T) {
+	other := enrichKey("Other", "Song", "Album")
+	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: "[00:01.00]x"}, other: {}})
+	cancelled := map[string]bool{}
+	enrichMu.Lock()
+	stamp := enrichEditStampLocked()
+	for _, k := range []string{editKey, other} {
+		enrichCancelFuncs[k] = func() { cancelled[k] = true }
+	}
+	enrichMu.Unlock()
+	t.Cleanup(func() {
+		enrichMu.Lock()
+		delete(enrichCancelFuncs, editKey)
+		delete(enrichCancelFuncs, other)
+		enrichMu.Unlock()
+	})
+	if res := applyEnrichEdit(enrichEditRequest{Op: "set_instrumental", Keys: []string{editKey, other}, Value: true}); !res.OK {
+		t.Fatalf("标纯音乐失败 res=%+v", res)
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	for _, k := range []string{editKey, other} {
+		if !enrichEditedSinceLocked(k, stamp) {
+			t.Errorf("%s 没记改动序号,在飞的首轮解析收尾时会把标记盖掉", k)
+		}
+		if !cancelled[k] {
+			t.Errorf("%s 在飞的解析没叫停", k)
+		}
+	}
+}
+
+// 请求目录:先改名认领再执行。认领之后进程退了留下的那条不再当待办执行(App 早已报了失败),过期之后清掉;
+// 正常处理完不留认领文件。
+func TestProcessEnrichEditRequestsClaimsBeforeRunning(t *testing.T) {
+	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: "[00:01.00]x"}})
+	enrichEditDir = t.TempDir()
+	write := func(name, body string, age time.Duration) {
+		path := filepath.Join(enrichEditDir, name)
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		at := time.Now().Add(-age)
+		_ = os.Chtimes(path, at, at)
+	}
+	deleteReq := `{"op":"delete","keys":["` + editKey + `"]}`
+	write("0001-left.json"+enrichEditClaimedSuffix, deleteReq, 0)
+	write("0002-old.json"+enrichEditClaimedSuffix, deleteReq, 2*enrichEditStaleAfter)
+	write("0003-ok.json", `{"op":"set_instrumental","key":"`+editKey+`","value":true}`, 0)
+
+	processEnrichEditRequests()
+
+	if e, ok := cacheEntry(t, editKey); !ok || !e.Instrumental {
+		t.Error("认领过的请求不该再执行,正常请求应生效")
+	}
+	if _, err := os.Stat(filepath.Join(enrichEditDir, "0001-left.json"+enrichEditClaimedSuffix)); err != nil {
+		t.Error("没过期的认领文件留着,过期再清")
+	}
+	if _, err := os.Stat(filepath.Join(enrichEditDir, "0002-old.json"+enrichEditClaimedSuffix)); !os.IsNotExist(err) {
+		t.Error("过期的认领文件应清掉")
+	}
+	if _, err := os.Stat(filepath.Join(enrichEditDir, "0003-ok.json"+enrichEditClaimedSuffix)); !os.IsNotExist(err) {
+		t.Error("处理完的请求不该留下认领文件")
+	}
+	if _, err := os.Stat(filepath.Join(enrichEditDir, "0003-ok.result.json")); err != nil {
+		t.Error("处理完应写结果")
+	}
+}

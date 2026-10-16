@@ -561,6 +561,7 @@
 "匹配条目：用 Last.fm 收录的写法，如「那个女孩」→「那個女孩」，查不到就原样发；专辑名同时去掉「 - Single」「 - EP」。\n原始：照播放器报告的原样发。" = "Match: Last.fm's spelling, e.g. 那个女孩 → 那個女孩, or as-is when it isn't listed. Albums also drop “ - Single” / “ - EP”.\nRaw: exactly what the player reports.";
 "匹配模式" = "Matching Mode";
 "匹配算法" = "Matching Algorithm";
+"匹配算法为「顺序优先」，或得分更高的候选版本、时长与这首歌不符" = "The matching algorithm is set to Priority Order, or the higher-scoring candidates don't match this song's version or duration";
 "单日最高" = "Busiest day";
 "单曲循环" = "Repeat One";
 "单曲收听达到 100、1,000… 次，或累计收听达到 1,000、5,000… 次时，灵动岛展开庆祝。需连接 Last.fm" = "When a song reaches 100, 1,000… plays, or your total reaches 1,000, 5,000…, the notch opens to celebrate. Requires Last.fm";
@@ -666,6 +667,7 @@
 "回到播放器" = "Switch to Player";
 "回到逐句编辑" = "Back to Line Editing";
 "因网络不可用已停止" = "Stopped: no connection";
+"因连续失败暂时跳过：%@" = "Temporarily skipped after repeated failures: %@";
 "固定" = "Fixed";
 "固定在 Dock 上方正中，不能拖动" = "Pinned centered above the Dock; can't be dragged";
 "固定在菜单栏下方正中，不能拖动" = "Pinned centered below the menu bar; can't be dragged";
@@ -934,6 +936,7 @@
 "已解锁位置" = "Position unlocked";
 "已设 %d / %d" = "%d of %d set";
 "已设置" = "Set";
+"已跳过" = "Skipped";
 "已返回候选" = "Candidate returned";
 "已连接" = "Connected";
 "已连接 Last.fm 账号" = "Connected to Last.fm Account";
@@ -1244,6 +1247,7 @@
 "无法读取该文件（需保存为 UTF-8 文本），未保存" = "Couldn't read the file (save it as UTF-8 text); not saved.";
 "无法读取这份备份" = "This backup could not be read";
 "无法读取这首歌曲的歌词内容（歌词文件缺失或损坏）。为避免覆盖磁盘上的内容，暂时无法保存修改。可通过「搜索候选歌词」重新采纳" = "Can't read this song's lyrics (the lyrics file is missing or damaged), so saving is disabled to avoid overwriting what's on disk. Use Search for Lyrics to adopt a new copy";
+"无法读取这首歌的解析记录" = "Can't read the lyrics decision for this song";
 "无法连接 Last.fm" = "Couldn't Connect to Last.fm";
 "无法连接 ListenBrainz，稍后将自动重试" = "Can't reach ListenBrainz — will retry";
 "无法连接上游源，未能查询：%@" = "Upstream unreachable, could not search: %@";
@@ -2010,6 +2014,7 @@
 "该候选原本凭逐字时间轴领先，但另一个候选的标题更吻合查询词。它很可能是其他录音（如另一场现场版）的逐字版本，时间轴精细并不代表与当前播放对齐" = "Word timing put this candidate ahead, but another candidate matches the query title better. This is likely the word-timed version of a different recording (such as another live take); fine-grained timing doesn't mean it lines up with what's playing";
 "该文件不是 Lyrimuse 的设置备份，未导入" = "That file is not a Lyrimuse settings backup — nothing was imported";
 "该歌词源不提供时长，这是同一条录音在 %@ 标注的时长" = "This lyrics source doesn't report a length; this is the length %@ reports for the same recording";
+"该源匹配到了这首歌，但没有歌词文本，未参与评分" = "This source matched the song but has no lyrics text, so it was not scored";
 "该源匹配到的专辑与本地专辑一致，版本很可能正确（最高 150）" = "The album this source matched agrees with the local album, so the version is likely right (up to 150)";
 "该源即当前使用的播放器，时间轴基于同一音频母版（+250）" = "This source is the platform you're actually playing on — its timing lines up with the exact same master (+250)";
 "该源收录了这首歌曲，但只有不带时间戳的纯文本，可在「歌词窗口」中作为静态文字阅读，无法随播放逐字 / 逐行高亮" = "This source does have the song, but only as plain text with no timing — you can read it as static text in the Lyrics Window, but it can't highlight word by word or line by line as the song plays";
@@ -2109,6 +2114,7 @@
 "这一天收听 %@ 次，听得最多的是以下歌曲" = "%@ plays that day, most played below";
 "这一天收听 %@ 次，听得最多的是以下歌曲#one" = "%@ play that day, most played below";
 "这也是你最长的一次连续" = "Your longest streak yet";
+"这些源连续失败，本轮暂时没有查询" = "These sources failed repeatedly and were not queried this round";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常是广告、播客或有声书。人工修正、标为纯音乐、校准过时间轴的记录和正在播放的歌曲不在其中；再次播放时会重新匹配。" = "These entries have no lyrics and either no artist or a duration over 20 minutes — usually ads, podcasts, or audiobooks. Manually edited, instrumental, and calibrated entries and the song now playing aren’t included. They’ll be matched again if played.";
 "这份歌词无时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮" = "These lyrics have no timing. Once adopted they only show as static text in the Lyrics Window, and won't highlight word by word or line by line as the song plays";
 "这份歌词是同一首歌另一种写法「%@」的人工修正，那边改了这边跟着改；直接改这一条就成为它自己的修正" = "These lyrics are the manual correction made on “%@”, another version of this song, and follow it when it changes. Editing this one makes it its own correction.";
@@ -2216,6 +2222,7 @@
 "酷狗音乐" = "Kugou Music";
 "酷狗音乐播放的歌曲 ID 一致" = "Same Kugou Music song ID from playback";
 "采用此候选" = "Use This Candidate";
+"采用的不是得分最高的那条" = "The applied candidate is not the highest-scoring one";
 "采纳为静态文本" = "Adopt as Static Text";
 "重启后仍无法读取。请确认 Lyrimuse 已打开；已打开时，用「−」移除后再用「+」重新添加。" = "Still can’t read after the restart. Make sure Lyrimuse is turned on; if it is, remove it with “−” and add it back with “+”.";
 "重启歌词引擎" = "Restart Lyrics Engine";

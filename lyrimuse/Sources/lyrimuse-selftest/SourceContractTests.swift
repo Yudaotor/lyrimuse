@@ -4121,10 +4121,41 @@ func runSourceContractTests() {
                         .components(separatedBy: "let lyrics = cached?.storedLyrics ?? \"\"").count - 1 == 2, true,
                     "采纳候选入口: 「当前使用」的正文指纹取 storedLyrics")
         let manager = read("LyricsManager/LyricsManagerView.swift") ?? ""
+        // 歌词管理那个入口同一个口径,按 key 原样取:lookup 会按正在播放的快照、时长变体去认,同名的另一份录音在放时取错。
+        expectEqual(manager.contains("currentFingerprint: EnrichCacheReader.storedEntry(forKey: key)"), true,
+                    "采纳候选入口: 歌词管理的「当前使用」指纹按 key 取条目里存着的正文")
+        // 编辑缓冲跟「这是哪首」绑在一起:换选中的旁路(右键菜单、「定位」、全选)先问有没有没保存的改动;删掉正在改的那首、
+        // 详情页卸载再装回来时编辑状态跟着收口,不把上一首的底稿带到下一首。
+        expectEqual(manager.contains("let editingThis = editMode != .preview && editingKey == summary.key")
+                    && manager.contains("guard select(key), scroll else { return }")
+                    && manager.contains("listSelectionChanged(Set(selectableFiltered.map(\\.key)))")
+                    && manager.contains("if editBase?.key == key { captureEditBase() } else { endEditing() }")
+                    && manager.contains("if editingKey == key, isEditorDirty { return }")
+                    && manager.contains("if line.tone == .changed, editingKey == key, !isEditorDirty { loadDetail(key: key) }")
+                    && manager.components(separatedBy: "dropEditorIfEntryGone()").count - 1 >= 4
+                    && manager.contains("!showSongVersions, !windowFrame.hasAttachedSheet"), true,
+                    "歌词管理: 右键菜单、「定位」、全选、删除、详情页重装、换歌跟随都不冲掉没保存的编辑")
+        expectEqual(manager.contains("title: EnrichCacheKeys.strippingDurationVariantTitle(summary.title)"), true,
+                    "歌词管理: 搜索候选歌词的歌名去掉时长变体位「~durN」")
+        expectEqual(sheet.contains("private var effectiveCurrentSource: String? { appliedSource ?? host.source }")
+                    && sheet.contains(".onChange(of: markedInstrumental) { _, _ in\n            storedCandidate = makeStoredCandidate()")
+                    && sheet.contains("[originalArtist, originalTitle, originalAlbum, songKey, String(durationSecs)]")
+                    && sheet.contains("String(c.lyrics.hashValue), String(current.lyrics.hashValue)"), true,
+                    "搜索候选歌词: 逐批回调读宿主的最新值、撤标后重建「当前使用」、同名另一份录音也重搜、对照缓存看时间轴")
+        expectEqual((read("LyricsManager/LyricsSearchService.swift") ?? "").contains("if handle.isCancelled { process.terminate() }"), true,
+                    "搜索候选歌词: 取消落在登记和起进程之间时,进程起来之后马上停")
+        expectEqual((read("LyricsManager/EnrichEditChannel.swift") ?? "")
+                        .contains("return await Task.detached(priority: .userInitiated) { await deliver(data) }.value"), true,
+                    "改动请求: 交出去之后不跟调用方一起取消,轮询不空转")
         expectEqual(manager.contains("if case let .only(wanted) = kindFilter, kind != wanted { return false }")
                     && manager.contains("statusFilter.matches(statusFacts(s, kind: kind))"), true,
                     "歌词管理: 歌词类型和状态胶囊跟设置页统计同一个阶梯(LyricsKind.classify)")
         let managerParts = read("LyricsManager/LyricsManagerParts.swift") ?? ""
+        expectEqual(managerParts.contains(".onChange(of: stampDraft) { _, draft in")
+                    && managerParts.contains("shiftIndices(afterRemoving: removed)")
+                    && managerParts.contains("main.lines[index].timesMs.map")
+                    && managerParts.contains("private var secondaryPairs: [Int: Int] { secondary.map { $0.pairing(to: main) } ?? [:] }"), true,
+                    "逐句编辑: 时间戳边敲边写回、还原删行后焦点跟着挪、多时间戳的行逐个认当前句、译文按配对表挂")
         expectEqual((manager + managerParts).components(separatedBy: "!summary.hasLyrics || summary.isInstrumental").count - 1, 2,
                     "歌词管理: 标了纯音乐的条目存着歌词也显示「纯音乐」(列表行、详情页标签)")
         expectEqual(manager.contains("LyricsWordTimingEdit.editableText(yrc: loadedYRC)")
@@ -4194,8 +4225,8 @@ func runSourceContractTests() {
                     && Set(LyricsManagerStatus.allCases) == [.all, .missing, .instrumental, .adjusted], true,
                     "歌词管理: 状态胶囊全都在侧栏那一行,每一档都在")
         // 逐句编辑也标出正在唱的那一句,找法同预览(11 章决策 81)。
-        expectEqual(lineEditorSource.contains("LyricsPreviewText.currentRow(times: indices.map { main.lines[$0].timeMs },")
-                    && lineEditorSource.contains("row(index, isCurrent: index == current, changed: changed)")
+        expectEqual(lineEditorSource.contains("LyricsPreviewText.currentRow(times: entries.map(\\.ms),")
+                    && lineEditorSource.contains("row(index, isCurrent: index == current, changed: changed, sIndex: pairs[index])")
                     && manager.contains("focus: $focusedLine,\n                isNowPlaying: summary.key == nowPlayingKey)"), true,
                     "歌词管理: 逐句编辑标出正在唱的那一句")
         // 换分组、换排序之后滚回选中的那一首(11 章决策 75)。
@@ -4221,7 +4252,7 @@ func runSourceContractTests() {
                     && manager.contains("@AppStorage(\"np:lyricsManagerGroupByAlbum\") private var groupByAlbum = false"), true,
                     "歌词管理: 排序和分组下次开窗照旧")
         // 搜索候选歌词、解析决策面板开着时换歌不跟随,面板的查询词和写回的条目不变(11 章决策 86)。
-        expectEqual(manager.contains("guard followsPlayback, !isEditorDirty, editMode == .preview, searchTarget == nil, !showDecisionSheet else { return }"),
+        expectEqual(manager.contains("guard followsPlayback, !isEditorDirty, editMode == .preview, searchTarget == nil, !showDecisionSheet,"),
                     true, "歌词管理: 搜索候选歌词、解析决策面板开着时换歌不跟随")
         // 审查之后那几处修法:搜索面板打开那一刻拍下查询词;多选标纯音乐一次请求;编辑中的那一行不受筛选;偏移输入走 Core 的
         // 解析(nan / inf / 1e20 直接转 Int 会崩);调偏移不再整库重建;逐句编辑一进来就有焦点,静态格子读屏能按(11 章决策 92)。

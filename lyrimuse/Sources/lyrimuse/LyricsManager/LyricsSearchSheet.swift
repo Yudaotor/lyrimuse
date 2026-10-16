@@ -484,6 +484,22 @@ struct LyricsSearchSheet: View {
     @State private var artist: String
     @State private var title: String
     @State private var album: String
+    /// 宿主给的「在用的来源 / 正文指纹 / 纯音乐标记」的最新值。load() 里逐批到达的回调捕获的是起跑那一刻的视图副本,
+    /// 读 let 属性拿到的是旧值(独立小窗搜索途中宿主刷新了来源,自动选中会落到旧来源上);这几处一律读这只盒子,
+    /// 宿主一变就由下面的 onChange 更新。
+    @State private var host: HostValues
+
+    private final class HostValues {
+        var source: String?
+        var fingerprint: String?
+        var instrumental: Bool
+
+        init(source: String?, fingerprint: String?, instrumental: Bool) {
+            self.source = source
+            self.fingerprint = fingerprint
+            self.instrumental = instrumental
+        }
+    }
 
     init(artist: String, title: String, album: String, songKey: String, currentSource: String?, currentFingerprint: String? = nil,
          durationSecs: Double, keepsOpenAfterApply: Bool = false, standaloneWindow: Bool = false,
@@ -500,6 +516,8 @@ struct LyricsSearchSheet: View {
         self.keepsOpenAfterApply = keepsOpenAfterApply
         self.standaloneWindow = standaloneWindow
         self.isMarkedInstrumental = isMarkedInstrumental
+        self._host = State(initialValue: HostValues(source: currentSource, fingerprint: currentFingerprint,
+                                                    instrumental: isMarkedInstrumental))
         self.onSetInstrumental = onSetInstrumental
         self.onAutoMatch = onAutoMatch
         self.onApply = onApply
@@ -517,14 +535,16 @@ struct LyricsSearchSheet: View {
     private var presentedAsSheet: Bool { !standaloneWindow }
 
     /// 这首歌眼下是不是标成了纯音乐:面板里切过就认切过之后的,没切过认宿主给的。
-    private var markedInstrumental: Bool { instrumentalOverride ?? isMarkedInstrumental }
+    private var markedInstrumental: Bool { instrumentalOverride ?? host.instrumental }
 
     /// 「这次搜索是为哪首歌开的」——三个原始字段拼成的标识,给下面 `.task(id:)` / `.onChange`
     /// 用。三个入口里,歌词管理(`sheet(isPresented:)`)与歌词窗口(`sheet(item:)`)在面板存活
     /// 期间它不会变;只有悬浮窗 ⚙ 的独立小窗
     /// (`LyricsQuickSearchWindow`)会在窗口开着期间换歌再点一次时把新曲目喂进来。
+    /// 缓存 key 和时长也并进来:小窗在同名同专辑的两份录音(`~durN` 变体)之间换歌时三段字段一样,不并的话不重搜、
+    /// 分数按上一首的时长算,采纳也会记到新那首名下。
     private var searchSubject: String {
-        originalArtist + "\u{1F}" + originalTitle + "\u{1F}" + originalAlbum
+        [originalArtist, originalTitle, originalAlbum, songKey, String(durationSecs)].joined(separator: "\u{1F}")
     }
 
     var body: some View {
@@ -564,17 +584,30 @@ struct LyricsSearchSheet: View {
             instrumentalOverride = nil
             autoMatchLine = nil
         }
-        .onChange(of: currentSource) { _, _ in
+        .onChange(of: currentSource) { _, value in
+            host.source = value
             appliedSource = nil
             appliedFingerprint = nil
             storedCandidate = makeStoredCandidate()
+            autoSelect()
         }
-        .onChange(of: currentFingerprint) { _, _ in
+        .onChange(of: currentFingerprint) { _, value in
+            host.fingerprint = value
             appliedSource = nil
             appliedFingerprint = nil
             storedCandidate = makeStoredCandidate()
+            autoSelect()
         }
-        .onChange(of: isMarkedInstrumental) { _, _ in instrumentalOverride = nil }
+        .onChange(of: isMarkedInstrumental) { _, value in
+            host.instrumental = value
+            instrumentalOverride = nil
+        }
+        // 标上 / 撤掉纯音乐(宿主给的或面板里切的):存着的那一版跟着重建。标着时它建不出来,撤标之后不重建的话
+        // 「当前使用」那一块一直空着,要点「重新搜索」才回来。
+        .onChange(of: markedInstrumental) { _, _ in
+            storedCandidate = makeStoredCandidate()
+            autoSelect()
+        }
         // 换看另一条候选时重新跟随播放:手动滚动只暂停当前这一条的跟随,不带到下一条。
         .onChange(of: selectedSource) { _, _ in
             revealSelection()
@@ -984,7 +1017,7 @@ struct LyricsSearchSheet: View {
     /// 缓存里这首现在存着的那一版,做成一条候选(没有分数)。条目读不全、标成纯音乐、没有正文、不知道来源时没有。
     /// 只有纯文本时按纯文本候选摆。
     private func makeStoredCandidate() -> LyricsSearchService.Candidate? {
-        guard let source = currentSource, !source.isEmpty,
+        guard let source = host.source, !source.isEmpty,
               let entry = EnrichCacheReader.storedEntry(forKey: songKey), entry.complete, !entry.instrumental
         else { return nil }
         let plainOnly = entry.lyrics.isEmpty
@@ -1231,9 +1264,9 @@ struct LyricsSearchSheet: View {
     }
 
     /// 这首歌眼下实际生效的来源:本次面板里采纳过就是刚采纳的那条,否则是打开时的快照。
-    private var effectiveCurrentSource: String? { appliedSource ?? currentSource }
+    private var effectiveCurrentSource: String? { appliedSource ?? host.source }
     /// 跟 effectiveCurrentSource 配对:采纳过就是刚采纳那条的指纹,否则是打开时调用方算的。
-    private var effectiveCurrentFingerprint: String? { appliedSource != nil ? appliedFingerprint : currentFingerprint }
+    private var effectiveCurrentFingerprint: String? { appliedSource != nil ? appliedFingerprint : host.fingerprint }
 
     private func isCurrentCandidate(_ c: LyricsSearchService.Candidate) -> Bool {
         // 标成纯音乐时这首没有在用的歌词。
@@ -1583,7 +1616,10 @@ struct LyricsSearchSheet: View {
         let currentRows = currentPreviewMemo.rows(current, scripts: LocalPlaybackSource.shared.romanizationScripts)
         guard currentRows.timed else { return nil }
         let pairs = comparisonMemo.pairs(
+            // 指纹只看词不看时间:词和行数不变、只是时间轴变了(引擎重挂时间轴、同一个源换了一条录音)时,
+            // 两份正文的哈希也要并进来,不然「时间相差」的计数和对齐还是旧的。
             key: [c.id, c.fingerprint, current.id, current.fingerprint,
+                  String(c.lyrics.hashValue), String(current.lyrics.hashValue),
                   String(rows.embeddedOffsetMs), String(currentRows.embeddedOffsetMs),
                   String(rows.plain.count), String(currentRows.plain.count)].joined(separator: "|")
         ) {
@@ -1957,11 +1993,27 @@ struct LyricsSearchSheet: View {
         .background(tint.opacity(0.12), in: Capsule())
     }
 
+    /// 用户还没自己选过时,按此刻的「当前使用」挑默认选中;每来一批候选、宿主刷新了来源时各评估一次。
+    private func autoSelect() {
+        guard !userPickedSource else { return }
+        if let current = candidates.first(where: isCurrentCandidate) {
+            selectedSource = current.id
+        } else if let stored = storedCandidate, shownCandidates.first?.id == stored.id {
+            selectedSource = stored.id
+        } else if let current = effectiveCurrentSource, candidates.contains(where: { $0.source == current }) {
+            selectedSource = current
+        } else if selectedSource == nil {
+            selectedSource = shownCandidates.first?.id
+        }
+    }
+
     private func load() async {
         searchGeneration += 1
         let generation = searchGeneration
         // 没有歌名就不搜(没在播放时打开、或者用户把歌名清空了):空歌名交给引擎只会回一串英文报错。
         guard !LyricsManagerSearch.query(title).isEmpty else {
+            // 上一轮还在跑就叫停(把歌名清空之后按回车):代号已经换了,它的结果没人要,别让它跑到兜底时限。
+            LyricsSearchService.shared.cancelRunning(for: searchOwner)
             isSearching = false
             return
         }
@@ -2015,16 +2067,7 @@ struct LyricsSearchSheet: View {
                 // 因为"还是没等到 currentSource"而重新改选)。
                 // 存着的那一版先占着选中;搜到同一份(来源和正文都一样)时换到那一条上,同来源但正文不一样
                 // (手改过)时仍停在存着的那一版。
-                guard !userPickedSource else { return }
-                if let current = update.candidates.first(where: isCurrentCandidate) {
-                    selectedSource = current.id
-                } else if let stored = storedCandidate, shownCandidates.first?.id == stored.id {
-                    selectedSource = stored.id
-                } else if let current = effectiveCurrentSource, update.candidates.contains(where: { $0.source == current }) {
-                    selectedSource = current
-                } else if selectedSource == nil {
-                    selectedSource = shownCandidates.first?.id
-                }
+                autoSelect()
             }
         } catch {
             if generation == searchGeneration { loadError = error.localizedDescription }

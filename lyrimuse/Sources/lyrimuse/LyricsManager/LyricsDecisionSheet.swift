@@ -304,8 +304,9 @@ struct LyricsDecisionSheet: View {
     // MARK: - 分析(界面与「拷贝」共用同一份)
 
     /// 界面上的一条候选:存档模型 + 映射给 Core 的分析输入。
+    /// id 是在存档候选数组里的下标:同一个源可能出现两条(被拒的候选 + 同源的纯音乐标记),按源名当 id 会重复。
     private struct Row: Identifiable {
-        var id: String { core.source }
+        let id: Int
         let model: LyricsResolutionDecision.Candidate
         let core: LyricsScoredCandidate
     }
@@ -323,12 +324,14 @@ struct LyricsDecisionSheet: View {
         let verdict: LyricsVerdict?
         /// 每条参赛候选上完全相同的项 —— 折成一行说一次。
         let shared: [LyricsScoreTermValue]
+        /// 采用的那条不是得分最高的(顺序优先、最高分那条吃了扣分):判词不出,另说一句。
+        let outscored: Bool
     }
 
     private func analysis(_ decision: LyricsResolutionDecision) -> Analysis {
         let models = decision.candidates ?? []
-        let all = models.map { c in
-            Row(model: c,
+        let all = models.enumerated().map { index, c in
+            Row(id: index, model: c,
                 core: LyricsScoredCandidate(
                     source: c.source,
                     score: c.score,
@@ -336,17 +339,19 @@ struct LyricsDecisionSheet: View {
                         LyricsScoreTermValue(kind: $0.kind, points: $0.points)
                     },
                     instrumental: c.instrumental,
-                    consensusPeers: c.consensusPeers ?? []))
+                    consensusPeers: c.consensusPeers ?? [],
+                    trackFoundNoLyrics: c.trackFoundNoLyrics))
         }
         let cores = all.map(\.core)
-        let rankedSources = LyricsVerdictBuilder.ranked(cores, winner: decision.winner).map(\.source)
-        // 按 Core 排好的次序把 Row 摆回去。用 source 查表而不是让 Core 认识 Row ——
-        // Core 不该知道 App 的解码模型长什么样。
-        let bySource = Dictionary(all.map { ($0.core.source, $0) }, uniquingKeysWith: { a, _ in a })
-        let rows = rankedSources.compactMap { bySource[$0] }
+        // 按 Core 排好的次序把 Row 摆回去:Core 不该知道 App 的解码模型长什么样,按值认回是哪一行,用过的不再认。
+        var unused = all.filter(\.core.isContender)
+        let rows = LyricsVerdictBuilder.ranked(cores, winner: decision.winner).compactMap { core -> Row? in
+            guard let i = unused.firstIndex(where: { $0.core == core }) else { return nil }
+            return unused.remove(at: i)
+        }
         let sidelined = all.filter { !$0.core.isContender }
         let championCore = LyricsVerdictBuilder.champion(among: cores, winner: decision.winner)
-        let champion = championCore.flatMap { bySource[$0.source] }
+        let champion = championCore.flatMap { c in rows.first { $0.core == c } }
         var deltas: [String: LyricsScoreDelta] = [:]
         if let championCore {
             let losers = rows.map(\.core).filter { $0.source != championCore.source }
@@ -360,7 +365,8 @@ struct LyricsDecisionSheet: View {
             champion: champion,
             deltas: deltas,
             verdict: LyricsVerdictBuilder.build(candidates: cores, winner: decision.winner),
-            shared: LyricsVerdictBuilder.sharedTerms(among: cores))
+            shared: LyricsVerdictBuilder.sharedTerms(among: cores),
+            outscored: LyricsVerdictBuilder.isOutscored(among: cores, winner: decision.winner))
     }
 
     /// 把「歌手 / 歌名 / 专辑」这类**异质**字段拼成一行:每个值带标签、用「」框住。
@@ -635,7 +641,12 @@ struct LyricsDecisionSheet: View {
         if let responded = decision.sourcesResponded, !responded.isEmpty {
             lines.append(String(format: L10n.t("本轮应答的源：%@"),
                                 responded.map { sourceDisplayName($0) }.joined(separator: "、")))
-            if let silent = silentSourcesText(responded) { lines.append("  " + silent) }
+            let skipped = decision.sourcesSkipped ?? []
+            if let silent = silentSourcesText(responded, skipped: skipped) { lines.append("  " + silent) }
+            if !skipped.isEmpty {
+                lines.append("  " + String(format: L10n.t("因连续失败暂时跳过：%@"),
+                                           skipped.map { sourceDisplayName($0) }.joined(separator: "、")))
+            }
         }
         if !a.shared.isEmpty {
             lines.append(String(format: L10n.t("所有候选都相同的项：%@"), compactTerms(a.shared)))
@@ -648,6 +659,11 @@ struct LyricsDecisionSheet: View {
             if row.core.isInstrumentalMarker {
                 lines.append(sourceDisplayName(c.source) + " · " + L10n.t("纯音乐"))
                 lines.append(L10n.t("该源标记此曲为纯音乐，未参与评分"))
+                continue
+            }
+            if row.core.isNoLyricsMarker {
+                lines.append(sourceDisplayName(c.source) + " · " + L10n.t("已匹配，无歌词"))
+                lines.append(L10n.t("该源匹配到了这首歌，但没有歌词文本，未参与评分"))
                 continue
             }
             if row.core.isRejected {
@@ -696,11 +712,16 @@ struct LyricsDecisionSheet: View {
     private func verdictSection(_ decision: LyricsResolutionDecision) -> some View {
         let a = analysis(decision)
         let rewrite = titleRewrite(decision)
-        if a.verdict != nil || rewrite != nil {
+        if a.verdict != nil || rewrite != nil || a.outscored {
             VStack(alignment: .leading, spacing: 8) {
                 if let v = a.verdict {
                     let t = verdictText(v)
                     VerdictCard(title: t.title, detail: t.detail, tint: verdictTint(v))
+                }
+                if a.outscored {
+                    VerdictCard(title: L10n.t("采用的不是得分最高的那条"),
+                                detail: L10n.t("匹配算法为「顺序优先」，或得分更高的候选版本、时长与这首歌不符"),
+                                tint: .orange)
                 }
                 if let rewrite {
                     VerdictCard(
@@ -779,8 +800,8 @@ struct LyricsDecisionSheet: View {
     /// 分母是**当前**启用的源,存档里没有记「当时启用了哪些」——所以措辞只说
     /// "当前启用的"、不说"没露面"那种像是在陈述历史事实的话,并在 tooltip 里点明。
     /// 跟列表里那个「3/9」角标是同一个取舍(见 LyricsManagerView 里那段注释)。
-    private func silentSourcesText(_ responded: [String]) -> String? {
-        let silent = silentSources(responded)
+    private func silentSourcesText(_ responded: [String], skipped: [String]) -> String? {
+        let silent = silentSources(responded, skipped: skipped)
         guard !silent.isEmpty else { return nil }
         return String(format: L10n.t("当前启用的其余歌词源未应答：%@"),
                       silent.map { sourceDisplayName($0) }.joined(separator: "、"))
@@ -788,15 +809,17 @@ struct LyricsDecisionSheet: View {
 
     /// 「几个源应答」的分母:当前启用的源,加上这一轮应答过、现在已经关掉的。跟「未应答」那一行(`silentSources`)
     /// 同一口径 —— 应答数 + 未应答数 = 分母;按全部内置源算的话,关掉几个源的用户会看到分母比两行加起来还大。
-    private func askedSourceCount(_ responded: [String]) -> Int {
-        responded.count + silentSources(responded).count
+    private func askedSourceCount(_ responded: [String], skipped: [String]) -> Int {
+        responded.count + silentSources(responded, skipped: skipped).count
     }
 
-    /// 当前启用、但这一轮没应答的源(顺序沿用用户配的源优先级)。
+    /// 当前启用、但这一轮没应答的源(顺序沿用用户配的源优先级)。因连续失败被熔断、这一轮压根没问的
+    /// (`sources_skipped`)不算,单列一行「已跳过」。
     /// 界面上它是字段表里「未应答」那一行的值,纯文本那边仍然拼成上面那句话。
-    private func silentSources(_ responded: [String]) -> [String] {
-        FeatureSettingsStore.shared.lyricsSources.map(\.rawValue)
-            .filter { !responded.contains($0) }
+    private func silentSources(_ responded: [String], skipped: [String]) -> [String] {
+        let store = FeatureSettingsStore.shared
+        return store.lyricsSourceOrder.filter { store.lyricsSources.contains($0) }.map(\.rawValue)
+            .filter { !responded.contains($0) && !skipped.contains($0) }
     }
 
     /// 分项之和被夹过时的说明。
@@ -817,9 +840,10 @@ struct LyricsDecisionSheet: View {
     private func inputsSummary(_ decision: LyricsResolutionDecision) -> String {
         var parts: [String] = []
         let responded = decision.sourcesResponded ?? []
+        let skipped = decision.sourcesSkipped ?? []
         if !responded.isEmpty {
-            parts.append(String(format: L10n.plural("%1$d/%2$d 个源应答", count: askedSourceCount(responded)),
-                                responded.count, askedSourceCount(responded)))
+            let asked = askedSourceCount(responded, skipped: skipped)
+            parts.append(String(format: L10n.plural("%1$d/%2$d 个源应答", count: asked), responded.count, asked))
         }
         if let digest = queryDigest(decision) {
             parts.append(String(format: L10n.plural("查询 %d 组", count: digest.total), digest.total))
@@ -933,7 +957,8 @@ struct LyricsDecisionSheet: View {
     private func inputsSection(_ decision: LyricsResolutionDecision) -> some View {
         let digest = queryDigest(decision)
         let responded = decision.sourcesResponded ?? []
-        let total = askedSourceCount(responded)
+        let skipped = decision.sourcesSkipped ?? []
+        let total = askedSourceCount(responded, skipped: skipped)
         let summary = inputsSummary(decision)
         VStack(alignment: .leading, spacing: 6) {
             Divider()
@@ -986,11 +1011,18 @@ struct LyricsDecisionSheet: View {
                                 inputFieldLabel(L10n.t("应答"))
                                 inputFieldValue(sourceNamesText(responded, dimmed: false))
                             }
-                            let silent = silentSources(responded)
+                            let silent = silentSources(responded, skipped: skipped)
                             if !silent.isEmpty {
                                 GridRow {
                                     inputFieldLabel(L10n.t("未应答"))
                                     inputFieldValue(sourceNamesText(silent, dimmed: true))
+                                }
+                            }
+                            if !skipped.isEmpty {
+                                GridRow {
+                                    inputFieldLabel(L10n.t("已跳过"))
+                                    inputFieldValue(sourceNamesText(skipped, dimmed: true))
+                                        .help(L10n.t("这些源连续失败，本轮暂时没有查询"))
                                 }
                             }
                         }
@@ -1207,6 +1239,7 @@ struct LyricsDecisionSheet: View {
     private func sidelinedRow(_ row: Row, showsCover: Bool) -> some View {
         let c = row.model
         let isInstrumental = row.core.isInstrumentalMarker
+        let isNoLyrics = row.core.isNoLyricsMarker
         return HStack(alignment: .top, spacing: 7) {
             // 占掉披露箭头那 10pt,让这些行的左边缘跟上面的候选对齐。
             Color.clear.frame(width: 10, height: 1)
@@ -1232,6 +1265,10 @@ struct LyricsDecisionSheet: View {
                         Label(L10n.t("纯音乐"), systemImage: "music.note.list")
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.secondary)
+                    } else if isNoLyrics {
+                        Text(L10n.t("已匹配，无歌词"))
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
                 }
@@ -1239,6 +1276,11 @@ struct LyricsDecisionSheet: View {
                     Text(c.playerInstrumental == true
                          ? L10n.t("当前播放器标记此曲为纯音乐，其余候选都不采用")
                          : L10n.t("该源标记此曲为纯音乐，未参与评分"))
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if isNoLyrics {
+                    Text(L10n.t("该源匹配到了这首歌，但没有歌词文本，未参与评分"))
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)

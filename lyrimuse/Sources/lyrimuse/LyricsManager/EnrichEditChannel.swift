@@ -42,23 +42,34 @@ enum EnrichEditChannel {
               let data = try? JSONSerialization.data(withJSONObject: body) else {
             return Result(ok: false, changed: 0, error: "invalid request")
         }
-        let path = enginePath
-        let isRunning = await Task.detached(priority: .userInitiated) { EngineServiceManager.isRunning }.value
-        if isRunning {
-            return await viaRequestDirectory(data)
-        }
-        // 子进程要阻塞一条线程等它跑完(可能到两分钟),放 GCD 上等,不占 Swift 并发池里的线程。
-        let cli = await withCheckedContinuation { (continuation: CheckedContinuation<Result, Never>) in
-            DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(returning: viaCLI(data, enginePath: path))
-            }
-        }
-        // 判断「没在跑」和执行之间后台服务刚好起来了:CLI 拿不到锁,改走请求目录。
-        if !cli.ok, cli.error == "engine is running" {
-            return await viaRequestDirectory(data)
-        }
-        return cli
+        // 交出去之后不跟调用方一起取消:请求可能已经被执行,结果得等回来;调用方任务被取消时 Task.sleep 立刻抛错,
+        // 留在原任务里等的话轮询会空转到超时。
+        return await Task.detached(priority: .userInitiated) { await deliver(data) }.value
     }
+
+    private static func deliver(_ data: Data) async -> Result {
+        let path = enginePath
+        let deadline = Date().addingTimeInterval(resultTimeout)
+        while true {
+            if EngineServiceManager.isRunning {
+                return await viaRequestDirectory(data)
+            }
+            // 子进程要阻塞一条线程等它跑完(可能到两分钟),放 GCD 上等,不占 Swift 并发池里的线程。
+            let cli = await withCheckedContinuation { (continuation: CheckedContinuation<Result, Never>) in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    continuation.resume(returning: viaCLI(data, enginePath: path))
+                }
+            }
+            guard !cli.ok, cli.error == "engine is running" else { return cli }
+            // 拿不到锁:要么判断「没在跑」之后后台服务刚好起来了(回到上面改走请求目录),要么是另一条
+            // apply-enrich-edit 还占着锁(连发了两个改动),稍等再试。别直接转去请求目录:没有常驻进程处理它,
+            // 只会空等到超时报「无响应」。
+            guard Date() < deadline else { return cli }
+            try? await Task.sleep(for: cliRetryInterval)
+        }
+    }
+
+    private static let cliRetryInterval: Duration = .milliseconds(250)
 
     /// id 以纳秒时间戳开头:引擎按文件名顺序处理,顺序即提交顺序。
     private static func makeID() -> String {

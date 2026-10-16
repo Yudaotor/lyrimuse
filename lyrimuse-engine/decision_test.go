@@ -191,3 +191,15 @@ func TestLogLyricsDecisionLine(t *testing.T) {
 		}
 	})
 }
+
+// 「曲库里有这首、平台上没有歌词文本」的伪候选在存档里带着标记:解析决策面板据此把它放进不参赛的那一组。
+func TestBuildLyricsDecisionKeepsTrackFoundNoLyrics(t *testing.T) {
+	scored := []scoredLyricCandidateResult{
+		{Source: "netease", Score: -1, TrackFoundNoLyrics: true},
+		{Source: "lrclib", Score: 83},
+	}
+	d := buildLyricsDecision("first-resolve", "a", "t", "", 0, scored, &scored[1], true)
+	if len(d.Candidates) != 2 || !d.Candidates[0].TrackFoundNoLyrics || d.Candidates[1].TrackFoundNoLyrics {
+		t.Fatalf("存档里没带上「有歌无词」标记: %+v", d.Candidates)
+	}
+}

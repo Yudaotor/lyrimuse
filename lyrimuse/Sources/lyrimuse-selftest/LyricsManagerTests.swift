@@ -126,6 +126,19 @@ func runLyricsManagerTests() {
         expectEqual(mixed.changeCount(from: base3), 2, "逐句编辑: 新加一句、改一句算两处")
         expectEqual(inserted.removing(0), base3, "逐句编辑: 去掉新加的那句就回到原样")
         expectEqual(base3.removing(7), base3, "逐句编辑: 去掉越界的下标原样返回")
+        // 时间戳口径跟播放时读 LRC 一样(LRCParser:分钟一到两位、秒正好两位):这里认了、播放不认,存了这一句就没了。
+        expectEqual(LyricsEditableLines.isValidStamps("[1:05.00]"), true, "逐句编辑: 分钟一位也认")
+        expectEqual(LyricsEditableLines.isValidStamps("[00:5.00]") || LyricsEditableLines.isValidStamps("[100:00.00]"), false,
+                    "逐句编辑: 秒不是两位、分钟三位不认")
+        expectEqual(LyricsEditableLines(body: "[00:01.00]a\r\n[00:02.00]b\r[00:03.00]c").lines.map(\.text), ["a", "b", "c"],
+                    "逐句编辑: \\r\\n、\\r 也算换行")
+        expectEqual(LyricsEditableLines(body: "[00:12.00][01:20.00]副歌").lines[0].timesMs, [12000, 80000],
+                    "逐句编辑: 一行几个时间戳都拆出来")
+        // 译文挂到哪一句:先认完全相同的,剩下的 700 毫秒内找最近的,两句正文挨得近时只挂到离得最近的那句。
+        let pairMain = LyricsEditableLines(body: "[00:01.00]a\n[00:05.00]b\n[00:05.30]c\n[00:10.00]d\n[00:20.00]e")
+        let pairTr = LyricsEditableLines(body: "[00:01.00]A\n[00:05.40]C\n[00:10.60]D\n[00:30.00]X")
+        expectEqual(pairTr.pairing(to: pairMain), [0: 0, 2: 1, 3: 2],
+                    "逐句编辑: 译文差几百毫秒也挂得上,不重复挂,对不上的不挂")
     }
 
     // ---- 时间轴偏移输入框(LyricsOffsetInput)----
@@ -1085,9 +1098,9 @@ func runLyricsManagerTests() {
             expectEqual(service.contains("let summary = Self.completionSummary(")
                             && service.contains("box.lastUpdate = raw"), true,
                         "搜索汇总契约: 每次搜索收尾(含被停掉)写一行汇总:给了候选的源、没给的原因、轮次、耗时")
-            expectEqual(sheet.contains(".onChange(of: currentSource) { _, _ in\n            appliedSource = nil"), true,
+            expectEqual(sheet.contains(".onChange(of: currentSource) { _, value in\n            host.source = value\n            appliedSource = nil"), true,
                         "当前使用契约: 宿主给的来源变了,面板记的采纳结果让位")
-            expectEqual(sheet.contains(".onChange(of: currentFingerprint) { _, _ in\n            appliedSource = nil"), true,
+            expectEqual(sheet.contains(".onChange(of: currentFingerprint) { _, value in\n            host.fingerprint = value\n            appliedSource = nil"), true,
                         "当前使用契约: 宿主给的指纹变了,面板记的采纳结果让位")
             // 选中的就是在用的那一份时,采用按钮只说明状态、点不了(11 章决策 55)。
             expectEqual(sheet.contains("if isCurrentCandidate(c) { return L10n.t(\"当前使用\") }"), true,
@@ -1325,6 +1338,22 @@ func runLyricsManagerTests() {
                     "取胜者: 有 winner 时照常认它")
         expectEqual(V.champion(among: tie, winner: nil)?.source, "kugou",
                     "取胜者: 没有 winner、也没有纯音乐标记 → 照旧退回最高分那条")
+        // 「曲库里有这首、平台上没有歌词文本」的 -1 分伪候选不参赛;老存档没这个字段,按形状认。
+        let noLyrics = LyricsScoredCandidate(source: "netease", score: -1, terms: [], trackFoundNoLyrics: true)
+        expectEqual(noLyrics.isContender, false, "参赛: 「有歌无词」标记不参赛")
+        expectEqual(LyricsScoredCandidate(source: "qq", score: -1, terms: []).isNoLyricsMarker, true,
+                    "参赛: 老存档按形状认「有歌无词」(负分、没有打分项、不是纯音乐标记)")
+        expectEqual(V.build(candidates: tie + [noLyrics], winner: "kugou"), V.build(candidates: tie, winner: "kugou"),
+                    "判词: 「有歌无词」标记不影响判词")
+        expectEqual(V.sharedTerms(among: tie + [noLyrics]), V.sharedTerms(among: tie),
+                    "共有项: 「有歌无词」标记不让共有项变空")
+        // 采用的不是最高分那条(顺序优先、最高分那条吃了扣分):皇冠戴在采用的那条上,判词不出,界面另说一句。
+        let ordered = [cand("qq", 900, [("duration", 300)]), cand("kugou", 600, [("duration", 200)])]
+        expectEqual(V.champion(among: ordered, winner: "kugou")?.source, "kugou", "取胜者: 采用的不是最高分也认它")
+        expectEqual(V.ranked(ordered, winner: "kugou").first?.source, "kugou", "排名: 采用的那条排第一")
+        expectEqual(V.build(candidates: ordered, winner: "kugou"), nil, "判词: 采用的不是最高分时不出判词")
+        expectEqual(V.isOutscored(among: ordered, winner: "kugou"), true, "采用的不是最高分: 说一句")
+        expectEqual(V.isOutscored(among: ordered, winner: "qq"), false, "采用的就是最高分: 不说")
 
         // 差在多项上 → .multiple,**什么都不说**。此前实测否掉过一版「一句话解释凭什么赢」:
         // 只有 13.2% 的对局存在单一强势维度能真的解释分差,其余硬写一句就是编。

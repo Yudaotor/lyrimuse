@@ -864,13 +864,19 @@ public enum EnrichCacheReader {
            playingSnapshotMatches(p.key, key) {
             return storedEntry(p.entry, key: p.key)
         }
-        guard let all = loadEntries(), let matched = matchedKey(key, in: all), let entry = all[matched] else { return nil }
-        return storedEntry(entry, key: matched)
+        // 待落盘条目比主缓存新(同 storedEntry(forKey:));只在待落盘里、主缓存还没有的新条目按 key 原样认。
+        let pending = freshPendingEntries()
+        guard let all = loadEntries(), let matched = matchedKey(key, in: all), let entry = all[matched] else {
+            return pending?[key].map { storedEntry($0, key: key) }
+        }
+        return storedEntry(pending?[matched] ?? entry, key: matched)
     }
 
-    /// 按缓存里的 key 原样取(外部编辑套回去之前核对用:一次编辑绑在打开时那一条上)。
+    /// 按缓存里的 key 原样取(外部编辑套回去之前核对用:一次编辑绑在打开时那一条上)。待落盘条目(整份最多攒 10 分钟
+    /// 才落盘)比主缓存新,先看它:不看的话换了歌之后拿到的是旧版本,外部编辑会误报「已发生变化」,或拿旧的译文交回去。
     public static func storedEntry(forKey key: String) -> StoredEntry? {
         if let p = freshPlayingEntry(), p.key == key { return storedEntry(p.entry, key: key) }
+        if let pending = freshPendingEntries()?[key] { return storedEntry(pending, key: key) }
         guard let entry = loadEntries()?[key] else { return nil }
         return storedEntry(entry, key: key)
     }

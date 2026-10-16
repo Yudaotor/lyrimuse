@@ -311,6 +311,16 @@ public final class EnrichCacheStore: ObservableObject {
     // 读取的目录对不上。
     private static var lyricsDir: URL { FeatureSettingsStore.shared.effectiveLyricsDir }
 
+    /// 歌词目录跟主目录(废纸篓所在)不在同一个卷上:引擎把歌词文件挪进废纸篓会失败、改成直接删
+    /// (lyrimuse-engine/enrichedit.go `trashFile`)。读不出卷信息时按同一个卷算。
+    private static var lyricsDirMissesTrash: Bool {
+        let keys: Set<URLResourceKey> = [.volumeIdentifierKey]
+        guard let dirVolume = try? lyricsDir.resourceValues(forKeys: keys).volumeIdentifier,
+              let homeVolume = try? FileManager.default.homeDirectoryForCurrentUser.resourceValues(forKeys: keys).volumeIdentifier
+        else { return false }
+        return !dirVolume.isEqual(homeVolume)
+    }
+
     private var raw = EnrichRawSnapshot()
     // true = 内存里没有可用的快照:从没读过、上次读盘失败,或被 `dropSnapshotIfIdle` 清掉了。改动交给引擎
     // 之后据此决定要不要 reload(没人在看就不读)。
@@ -1288,8 +1298,8 @@ public final class EnrichCacheStore: ObservableObject {
             : EnrichCacheKeys.deletionPlan(selected: keys, existing: Set(raw.keys))
         guard !victims.isEmpty else { return }
         // 阈值以上才先打快照:打一份要读几千个小文件、压缩十几 MB,删一条付不起;删一条也够不上"手滑毁一片",
-        // 它的兜底是引擎把文件挪进废纸篓。
-        if victims.count >= Self.autoSnapshotDeleteThreshold {
+        // 它的兜底是引擎把文件挪进废纸篓。歌词目录跟废纸篓不在一个卷上时这个兜底没有(引擎挪不过去就直接删),删一条也打。
+        if victims.count >= Self.autoSnapshotDeleteThreshold || Self.lyricsDirMissesTrash {
             guard await takeAutoSnapshot(reason: "delete") else { return }
         } else {
             lastAutoSnapshotURL = nil // 这次没打快照,下面那行日志别写成上一次的
@@ -1416,6 +1426,8 @@ struct LyricsResolutionDecision: Decodable {
     let queryAlbum: String?
     let durationSecs: Double?
     let sourcesResponded: [String]?
+    /// 这一轮因源级熔断被跳过、压根没问的源(引擎 `sources_skipped`)。面板上单列「已跳过」,不算进「未应答」。
+    let sourcesSkipped: [String]?
     let winner: String?
     let applied: Bool?
     let candidates: [Candidate]?
@@ -1477,6 +1489,8 @@ struct LyricsResolutionDecision: Decodable {
         let sourceReportedDurationSecs: Double?
         let hasWordTiming: Bool?
         let instrumental: Bool?
+        /// 曲库里有这首、平台上没有歌词文本的 -1 分伪候选(引擎 `track_found_no_lyrics`)。**老存档里没有这个字段**。
+        let trackFoundNoLyrics: Bool?
         /// 这条纯音乐标记是正在放的播放器自己给的(引擎的 `player_instrumental`):有它时其余候选都没采用。
         /// **老存档里没有这个字段**,恒为 nil。
         let playerInstrumental: Bool?
