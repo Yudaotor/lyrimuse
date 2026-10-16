@@ -178,15 +178,15 @@ struct OverlayBehaviorSettingsRows: View {
     }
 }
 
-/// ForEach 的枚举项不随配置变化,只观察外层分组不能保证内部行刷新。
-/// 每个开关小块独立观察配置,并在 body 中创建原有 Binding,把最新值传给控件。
+/// 一个行为项的小块。`@ObservedObject` 必需,观察挪到外层不行:`item.binding` 是手搓的 `Binding(get:set:)`,
+/// 外层传给 `SettingsTileGrid` / `ForEach` 的闭包不引用 `self`,外层刷新时 SwiftUI 判等相等、不会重算到这一格,
+/// 开关画着陈旧值(14 章决策 29)。同 `NotchBehaviorToggleTile`。
 @MainActor
 private struct OverlayBehaviorToggleTile: View {
     let item: OverlayBehaviorItem
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
-        let binding = item.binding
-        return SettingsToggleTile(icon: item.icon, title: item.title, help: item.help, isOn: binding)
+        SettingsToggleTile(icon: item.icon, title: item.title, help: item.help, isOn: item.binding)
     }
 }

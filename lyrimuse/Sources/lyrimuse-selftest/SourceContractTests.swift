@@ -5654,6 +5654,79 @@ func runSourceContractTests() {
         expectEqual(setAt != nil && loadAt != nil && setAt! < loadAt!, true,
                     "排字语言(契约): 加载引擎之前设好日文歌标记(加载时就按宽度断句、量宽度)")
     }
+
+    // 枚举造的开关 Binding(`item.binding` / `item.binding(for:)`,手搓的 `Binding(get:set:)`)只在造它的那段代码重跑时
+    // 才拿到新值:所在视图要自己观察设置;包着它的闭包要引用这个视图的存储属性,不引用 `self` 的闭包 SwiftUI 判等相等、
+    // 不往里重算,开关画陈旧值(14 章决策 29)。
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        let files = ((FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?.allObjects as? [URL]) ?? [])
+            .filter { $0.pathExtension == "swift" }
+            .sorted { $0.path < $1.path }
+        let hitPattern = #/isOn:\s*(?:[A-Za-z_][A-Za-z0-9_]*|\$0)\.binding(?:\(for:[^)]*\))?\s*[,)]/#
+        let commentPattern = #/(^|\s)\/\/.*$/#.anchorsMatchLineEndings()
+        let structPattern = #/(?:^|\n)[ \t]*(?:@MainActor[ \t\n]+)?(?:(?:private|fileprivate|public|internal)[ \t]+)?struct[ \t]+\w+[^{\n]*\{/#
+        let memberPattern = #/^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:private|fileprivate|public|internal)(?:\(set\))?\s+)*(?:let|var)\s+(\w+)/#
+        let controlPattern = #/(?:^|[\s;{}])(?:if|else|switch|case|for|guard|while|default)\b[^{};]*$/#
+        func matchingClose(_ chars: [Character], _ open: Int) -> Int {
+            var depth = 0
+            for i in open..<chars.count {
+                if chars[i] == "{" { depth += 1 } else if chars[i] == "}" { depth -= 1; if depth == 0 { return i } }
+            }
+            return chars.count
+        }
+        var checked = 0
+        var stale: [String] = []
+        for file in files {
+            guard let raw = try? String(contentsOf: file, encoding: .utf8), sourceBytes(raw, contain: ".binding") else { continue }
+            let code = raw.replacing(commentPattern) { $0.output.1 }
+            let chars = Array(code)
+            let structOpens = code.matches(of: structPattern).map { code.distance(from: code.startIndex, to: $0.range.upperBound) - 1 }
+            for hit in code.matches(of: hitPattern) {
+                let at = code.distance(from: code.startIndex, to: hit.range.lowerBound)
+                let line = code[..<hit.range.lowerBound].filter { $0 == "\n" }.count + 1
+                let label = "\(file.lastPathComponent):\(line)"
+                checked += 1
+                guard let open = structOpens.last(where: { $0 < at && matchingClose(chars, $0) > at }) else {
+                    stale.append("\(label) 不在 View 结构体里"); continue
+                }
+                let close = matchingClose(chars, open)
+                // 结构体顶层(深度 1)那几行:存储属性与观察声明。
+                var topLevel: [String] = []
+                var depth = 0, lineStart = open + 1
+                for i in (open + 1)..<close {
+                    if chars[i] == "\n" {
+                        if depth == 0 { topLevel.append(String(chars[lineStart..<i])) }
+                        lineStart = i + 1
+                    } else if chars[i] == "{" { depth += 1 } else if chars[i] == "}" { depth -= 1 }
+                }
+                let members = topLevel.compactMap { $0.firstMatch(of: memberPattern).map { String($0.output.1) } }
+                    .filter { $0 != "body" }
+                let observes = topLevel.contains { $0.contains("@ObservedObject") || $0.contains("@StateObject") || $0.contains("@EnvironmentObject") }
+                // 命中处外面套着的花括号:stack[0] 是结构体本身,stack[1] 是成员(body / 计算属性 / 方法),往里是闭包和 if 块。
+                var stack: [Int] = []
+                for i in open..<at {
+                    if chars[i] == "{" { stack.append(i) } else if chars[i] == "}" { _ = stack.popLast() }
+                }
+                let closures = stack.dropFirst(2).filter { brace in
+                    let before = String(chars[max(open, brace - 120)..<brace])
+                    return before.firstMatch(of: controlPattern) == nil
+                }
+                var capturesSelf = true
+                if let inner = closures.last {
+                    let body = String(chars[inner..<matchingClose(chars, inner)])
+                    capturesSelf = members.contains { name in
+                        body.firstMatch(of: try! Regex("(?:^|[^A-Za-z0-9_.])\\$?\(name)(?![A-Za-z0-9_])")) != nil
+                    }
+                }
+                if !observes { stale.append("\(label) 所在视图不观察设置") }
+                if !capturesSelf { stale.append("\(label) 包着它的闭包不引用视图的存储属性") }
+            }
+        }
+        expectEqual(checked >= 8, true, "枚举开关 Binding: 至少扫到 8 处用法(实际 \(checked)),少了说明扫描规则失效")
+        expectEqual(stale, [], "枚举开关 Binding: 所在视图自己观察设置,包着它的闭包引用视图的存储属性(或拆成每格自己观察的小块)")
+    }
 }
 
 /// 整个源文件里有没有这段文字,按 UTF-8 字节找。拿来先筛掉不相干的文件:`String.contains` 对整个文件
