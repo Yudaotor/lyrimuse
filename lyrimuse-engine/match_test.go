@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -1600,5 +1601,43 @@ func TestVersionTagsMismatchAlbumCJKLiveMarker(t *testing.T) {
 			t.Errorf("%s:versionTagsMismatch(%q,%q,%q,%q) = %v,want %v",
 				c.name, c.localTitle, c.localAlbum, c.candTitle, c.candAlbum, got, c.want)
 		}
+	}
+}
+
+// 时间轴逐行同一时刻的两条是同一份歌词的副本(QQ / 酷我常这样),互相印证不算独立信源;各自打轴的才算。
+func TestContentConsensusCopiesCountAsOneFamily(t *testing.T) {
+	texts := []string{
+		"the first line of this song", "a second line follows here", "and then a third one comes",
+		"fourth line keeps it going", "fifth line still singing", "sixth line nearly there",
+		"seventh line of the verse", "eighth line closes it out", "ninth line for the ending",
+	}
+	lrc := func(shiftMs int) string {
+		var b strings.Builder
+		for i, s := range texts {
+			ms := 10_000 + i*5_000 + shiftMs
+			fmt.Fprintf(&b, "[%02d:%02d.%02d]%s\n", ms/60000, ms/1000%60, ms%1000/10, s)
+		}
+		return b.String()
+	}
+	cands := []lyricCandidate{
+		{source: "qq", lyrics: lrc(0)},
+		{source: "kuwo", lyrics: lrc(0)},
+		{source: "netease", lyrics: lrc(400)},
+	}
+	peers := contentConsensusPeers("someone", "song", cands, 0)
+	if !reflect.DeepEqual(peers["qq"], []string{"netease"}) {
+		t.Errorf("qq 的独立印证只该有 netease(kuwo 是同一份副本),实际 %v", peers["qq"])
+	}
+	if len(peers["netease"]) != 1 {
+		t.Errorf("netease 只该拿到 1 家独立印证(qq / kuwo 是同一份),实际 %v", peers["netease"])
+	}
+	// 再来一家自己打轴的:netease 涨到 2 家。
+	cands = append(cands, lyricCandidate{source: "kugou", lyrics: lrc(-350)})
+	peers = contentConsensusPeers("someone", "song", cands, 0)
+	if len(peers["netease"]) != 2 {
+		t.Errorf("加入自己打轴的 kugou 后 netease 该有 2 家独立印证,实际 %v", peers["netease"])
+	}
+	if len(peers["kuwo"]) != 2 {
+		t.Errorf("kuwo 该看到 netease + kugou 两家(qq 是同一份),实际 %v", peers["kuwo"])
 	}
 }

@@ -115,7 +115,7 @@
     "ranked": [
       {
         "source": "qq",
-        "score": 1131,
+        "score": 981,
         "terms": [
           {
             "kind": "duration",
@@ -136,10 +136,6 @@
           {
             "kind": "titleMatch",
             "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 150
           },
           {
             "kind": "translation",
@@ -152,7 +148,7 @@
       },
       {
         "source": "kugou",
-        "score": 1131,
+        "score": 981,
         "terms": [
           {
             "kind": "duration",
@@ -173,10 +169,6 @@
           {
             "kind": "titleMatch",
             "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 150
           },
           {
             "kind": "translation",

@@ -114,7 +114,7 @@
     "ranked": [
       {
         "source": "qq",
-        "score": 1066,
+        "score": 966,
         "terms": [
           {
             "kind": "duration",
@@ -134,7 +134,7 @@
           },
           {
             "kind": "consensus",
-            "points": 250
+            "points": 150
           }
         ],
         "has_word_timing": true,
@@ -142,7 +142,7 @@
       },
       {
         "source": "kugou",
-        "score": 1066,
+        "score": 966,
         "terms": [
           {
             "kind": "duration",
@@ -162,14 +162,14 @@
           },
           {
             "kind": "consensus",
-            "points": 250
+            "points": 150
           }
         ],
         "has_word_timing": true
       },
       {
         "source": "lrclib",
-        "score": 620,
+        "score": 520,
         "terms": [
           {
             "kind": "duration",
@@ -185,7 +185,7 @@
           },
           {
             "kind": "consensus",
-            "points": 250
+            "points": 150
           }
         ]
       },

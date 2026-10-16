@@ -3783,10 +3783,11 @@ func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCan
 		return map[string][]string{} // 一条候选无从互证,省掉整批 3-gram 构建
 	}
 	type member struct {
-		source  string
-		grams   map[string]struct{}
-		last    float64
-		hasLast bool
+		source   string
+		grams    map[string]struct{}
+		last     float64
+		hasLast  bool
+		timeline []timelineLine
 	}
 	members := make([]member, 0, len(candidates))
 	// anyFits 在**全量**候选上统计,跟 corroboratedEndings 保持同一口径:一条"时长吻合
@@ -3817,7 +3818,37 @@ func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCan
 		if body := lyricConsensusBody(c.lyrics); len([]rune(body)) >= lyricConsensusMinBodyRunes {
 			grams = lyricGram3Set(body)
 		}
-		members = append(members, member{c.source, grams, last, hasLast})
+		members = append(members, member{c.source, grams, last, hasLast, displayedTimeline(c.lyrics, c.wordTimingYRC)})
+	}
+	// 两两是否一致只算一次。一致、而且显示轴是同一份的副本(timelinesIdentical)的两条并成一家:同一份歌词被几个源
+	// 原样收录(QQ / 酷我九成是这样),互相印证不是独立证据。见 09 章决策 227。
+	agrees := make([][]bool, len(members))
+	family := make([]int, len(members))
+	for i := range members {
+		agrees[i] = make([]bool, len(members))
+		family[i] = i
+	}
+	var root func(int) int
+	root = func(i int) int {
+		for family[i] != i {
+			i = family[i]
+		}
+		return i
+	}
+	for i := range members {
+		for j := i + 1; j < len(members); j++ {
+			if members[i].grams == nil || members[j].grams == nil {
+				continue
+			}
+			if gramJaccard(members[i].grams, members[j].grams) < lyricConsensusSimThreshold {
+				continue
+			}
+			agrees[i][j], agrees[j][i] = true, true
+			if lyricSourceConsensusFamily(members[i].source) == lyricSourceConsensusFamily(members[j].source) ||
+				timelinesIdentical(members[i].timeline, members[j].timeline) {
+				family[root(j)] = root(i)
+			}
+		}
 	}
 	peers := map[string][]string{}
 	for i := range members {
@@ -3825,17 +3856,13 @@ func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCan
 			continue
 		}
 		var agree []string
-		// 按**信源家族**去重,不是按源名 —— 见 lyricSourceConsensusFamily 的头注。
-		seenFamily := map[string]bool{lyricSourceConsensusFamily(members[i].source): true}
+		// 按**信源家族**去重,不是按源名 —— 见 lyricSourceConsensusFamily 的头注;时间轴是同一份副本的几条也算一家。
+		seenFamily := map[int]bool{root(i): true}
 		for j := range members {
-			if i == j || members[j].grams == nil {
+			if i == j || !agrees[i][j] {
 				continue
 			}
-			fam := lyricSourceConsensusFamily(members[j].source)
-			if seenFamily[fam] {
-				continue // 自己、或同一家供词方的第二条管道:不构成第二次独立印证
-			}
-			if gramJaccard(members[i].grams, members[j].grams) >= lyricConsensusSimThreshold {
+			if fam := root(j); !seenFamily[fam] {
 				agree = append(agree, members[j].source)
 				seenFamily[fam] = true
 			}

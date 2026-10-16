@@ -124,7 +124,7 @@
     "ranked": [
       {
         "source": "qq",
-        "score": 1260,
+        "score": 1160,
         "terms": [
           {
             "kind": "duration",
@@ -148,14 +148,14 @@
           },
           {
             "kind": "consensus",
-            "points": 250
+            "points": 150
           }
         ],
         "has_word_timing": true
       },
       {
         "source": "kugou",
-        "score": 1260,
+        "score": 1160,
         "terms": [
           {
             "kind": "duration",
@@ -179,14 +179,14 @@
           },
           {
             "kind": "consensus",
-            "points": 250
+            "points": 150
           }
         ],
         "has_word_timing": true
       },
       {
         "source": "netease",
-        "score": 1190,
+        "score": 1090,
         "terms": [
           {
             "kind": "duration",
@@ -210,7 +210,7 @@
           },
           {
             "kind": "consensus",
-            "points": 250
+            "points": 150
           }
         ],
         "has_word_timing": true

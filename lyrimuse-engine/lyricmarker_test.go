@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -36,20 +37,28 @@ func TestLastLRCTimestampSkipsMarkerLines(t *testing.T) {
 
 // 一份歌词末尾多挂一行「[Outro]」时,不能因此算「时长吻合」、让批内别的候选丢掉印证和共识分。
 func TestMarkerLineDoesNotStripPeersOfCorroboration(t *testing.T) {
-	var body strings.Builder
-	for _, l := range []struct{ ts, text string }{
-		{"00:08.44", "Are we hitting overtime"}, {"00:13.45", "Kiss me like I'm gonna die"},
-		{"00:17.93", "Yeah I might tell you over wine"}, {"00:22.96", "That something's in the way this time"},
-		{"00:27.80", "Maybe your worth is more than mine"}, {"00:32.61", "Maybe it's cause I missed my flight"},
-		{"02:47.32", "Tell me if you wanna go"}, {"02:57.18", "Ooh ooh ooh"},
-	} {
-		body.WriteString("[" + l.ts + "]" + l.text + "\n")
+	// 三家各自打的轴:时间戳各错开几百毫秒。逐行同一时刻的会被当成同一份副本、不算独立印证(contentConsensusPeers)。
+	body := func(shiftMs int) string {
+		var b strings.Builder
+		for _, l := range []struct {
+			ms   int
+			text string
+		}{
+			{8440, "Are we hitting overtime"}, {13450, "Kiss me like I'm gonna die"},
+			{17930, "Yeah I might tell you over wine"}, {22960, "That something's in the way this time"},
+			{27800, "Maybe your worth is more than mine"}, {32610, "Maybe it's cause I missed my flight"},
+			{167320, "Tell me if you wanna go"}, {177180, "Ooh ooh ooh"},
+		} {
+			ms := l.ms + shiftMs
+			fmt.Fprintf(&b, "[%02d:%02d.%02d]%s\n", ms/60000, ms/1000%60, ms%1000/10, l.text)
+		}
+		return b.String()
 	}
 	end := "[03:19.30]Yes sir\n"
 	batch := []lyricCandidate{
-		{source: "netease", lyrics: body.String() + end + "[03:52.70][Outro]\n", title: "Overtime"},
-		{source: "musixmatch", lyrics: body.String() + end, title: "Overtime", hasWordTiming: true},
-		{source: "soda", lyrics: body.String() + end, title: "Overtime"},
+		{source: "netease", lyrics: body(0) + end + "[03:52.70][Outro]\n", title: "Overtime"},
+		{source: "musixmatch", lyrics: body(250) + end, title: "Overtime", hasWordTiming: true},
+		{source: "soda", lyrics: body(-300) + end, title: "Overtime"},
 	}
 	const dur = 273
 	corro := corroboratedEndings(batch, dur)
