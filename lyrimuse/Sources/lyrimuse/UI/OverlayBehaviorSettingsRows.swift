@@ -157,29 +157,36 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
 ///
 /// 分两组小块(三列):「窗口」(各项行为开关)、「自动隐藏」(`AutoHideToggleTiles`)。宿主只知道"这里放一组
 /// 行为设置",不该知道它内部有几项(同 OverlayTypeSettingsRows)。
-///
-/// `@ObservedObject` 是**必需**的,不是照抄的样板:`item.binding` 是手搓的 `Binding(get:set:)`,
-/// 写入不经过任何能让 SwiftUI 失效的通道,而这个视图一个存储属性都没有 —— 宿主刷新时 SwiftUI 判等
-/// 相等就跳过它的 body,开关会画着陈旧值(表现与 `NotchBehaviorToggleRow` 那条一字不差)。
 @MainActor
 struct OverlayBehaviorSettingsRows: View {
-    @ObservedObject private var settings = AppSettings.shared
-
     var body: some View {
         SettingsRowGroupStack {
             // 「位置」三选一**不在这一组**:它有自己的「位置」入口,抽屉里也单独一组,见
             // `OverlayPlacementSettingsRows.swift`。这一组是 `OverlayBehaviorItem` 的各项开关 + 自动隐藏几项。
             SettingsTileGrid(title: L10n.t("窗口"), columns: 3) {
                 ForEach(OverlayBehaviorItem.allCases.filter { !$0.isAutoHide }) { item in
-                    SettingsToggleTile(icon: item.icon, title: item.title, isOn: item.binding)
+                    OverlayBehaviorToggleTile(item: item)
                 }
             }
             SettingsTileGrid(title: L10n.t("自动隐藏"), columns: 3) {
                 AutoHideToggleTiles(surface: .desktopOverlay)
                 ForEach(OverlayBehaviorItem.allCases.filter(\.isAutoHide)) { item in
-                    SettingsToggleTile(icon: item.icon, title: item.title, help: item.help, isOn: item.binding)
+                    OverlayBehaviorToggleTile(item: item)
                 }
             }
         }
+    }
+}
+
+/// ForEach 的枚举项不随配置变化,只观察外层分组不能保证内部行刷新。
+/// 每个开关小块独立观察配置,并在 body 中创建原有 Binding,把最新值传给控件。
+@MainActor
+private struct OverlayBehaviorToggleTile: View {
+    let item: OverlayBehaviorItem
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        let binding = item.binding
+        return SettingsToggleTile(icon: item.icon, title: item.title, help: item.help, isOn: binding)
     }
 }
