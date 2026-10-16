@@ -1393,8 +1393,19 @@ func coverSettled(e enrichEntry) bool {
 	return e.CoverURL != "" && e.CoverURL == e.CoverSettled
 }
 
-// settledAlbumCover:这张专辑(同歌手、专辑名繁简折叠后相同)后台补封面定下的封面,几条都定过时取 key 最小的那条;没定过
-// 返回 false。首次解析、重新解析照它取(见 finishTrackEnrichment)。
+// entryListedAlbum:这条写法所在的专辑,跟 App 歌词管理显示的同一个(LocalPlaybackSource.albumOrListed,两处一起改):写法键里的
+// 专辑,键里没有时用 Kaset 按 YouTube Music 登记判出来的(YouTubeMusicAlbum)。按专辑统一封面的几步(按判决补封面、借同专辑
+// 核实过的设备封面、给专辑定封面、解析时照定下的取)都按它认专辑,不然 Kaset 放的那几首在歌词管理里跟同专辑排在一起,
+// 封面却从没跟它们比过。见 03 章决策 49。
+func entryListedAlbum(key string, e enrichEntry) string {
+	if _, _, album := splitEnrichKey(key); album != "" {
+		return album
+	}
+	return strings.TrimSpace(e.YouTubeMusicAlbum)
+}
+
+// settledAlbumCover:这张专辑(同歌手、专辑名繁简折叠后相同,专辑按 entryListedAlbum 认)后台补封面定下的封面,几条都定过时取
+// key 最小的那条;没定过返回 false。首次解析、重新解析照它取(见 finishTrackEnrichment)。
 func settledAlbumCover(artist, album string) (enrichEntry, bool) {
 	if album == "" {
 		return enrichEntry{}, false
@@ -1407,7 +1418,8 @@ func settledAlbumCover(artist, album string) (enrichEntry, bool) {
 		if !coverSettled(e) || (bestKey != "" && key >= bestKey) {
 			continue
 		}
-		a, _, al := splitEnrichKey(key)
+		a, _, _ := splitEnrichKey(key)
+		al := entryListedAlbum(key, e)
 		if (al != album && toSimplified(al) != simpAlbum) || !artistMatches(a, artist) {
 			continue
 		}
@@ -3498,6 +3510,11 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 	if coverAlbum == "" {
 		coverAlbum = kasetListedAlbumFor(youTubeMusicVideoIDFrom(ctx), durationSecs, artist, title)
 	}
+	// 给专辑定下的封面按显示的专辑找(entryListedAlbum 那一套):播放器报的,没报时 YouTube Music 登记的;Apple 回填的是猜的,不算。
+	listedAlbum := coverAlbum
+	if listedAlbum == "" {
+		listedAlbum = strings.TrimSpace(e.YouTubeMusicAlbum)
+	}
 	if coverAlbum == "" {
 		coverAlbum = appleAlbumHintSync(ctx, coverArtist, coverTitle, coverDuration,
 			coverAlbumCorroboration(coverArtist, coverTitle, album, e.CanonicalArtist, pickLyricCandidate(scored)))
@@ -3569,7 +3586,7 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 	// 三源和同专辑邻居都没给出封面:按双语曲名拆出的那段、歌词判决里认下的歌手写法、ISRC 在 Deezer 上的那条补查(coverretry.go)。
 	fillMissingCover(ctx, &e, scored, artist, title, album, durationSecs, coverArtist, coverTitle, coverAlbum, coverDuration)
 	// 后台补封面已经给这张专辑定下了封面:照定下的那张。下面的设备封面、播放器自带的、歌词候选自带的都不再顶掉它(coverSettled)。
-	if s, ok := settledAlbumCover(lookupArtist, album); ok {
+	if s, ok := settledAlbumCover(lookupArtist, listedAlbum); ok {
 		e.CoverURL, e.CoverSource, e.CoverAlbum, e.CoverSettled = s.CoverURL, s.CoverSource, s.CoverAlbum, s.CoverURL
 	}
 	if deviceCoverURL == "" {

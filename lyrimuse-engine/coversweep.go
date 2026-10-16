@@ -26,6 +26,8 @@ import (
 // 一遍开头先不联网补一轮:没封面、存着的歌词判决里胜出的那个源自带封面且专辑逐字对上的,直接补上
 // (coverSweepFillFromDecisions,外围补全的次数、节流不管这一步)。
 //
+// 这几步按专辑认的都是歌词管理显示的专辑(entryListedAlbum:写法键里没专辑时用 YouTube Music 登记的,见 03 章决策 49)。
+//
 // 那一轮之前还有两步:同一张专辑已经有一条归属核实过的设备封面、自己的封面归属没核实的,直接换成那张
 // (coverSweepBorrowVerifiedSiblings,不联网,不等被播到);存量 QQ 封面没记专辑的,按封面地址里的专辑 mid 查回它在
 // QQ 上的专辑名记进 cover_album(coverSweepNameQQCoverAlbums,一个 mid 只查一次),那一轮就判得出它是不是另一张专辑的。
@@ -292,8 +294,8 @@ func coverSweepUpgradeCandidates(now time.Time) []string {
 // 不留新封面配旧主色,配了中继的下次外围补全会重算。返回补上 / 换上几条。
 func coverSweepFillFromDecisions() int {
 	type pending struct {
-		key, cover string
-		decision   *lyricsDecision
+		key, cover, album string
+		decision          *lyricsDecision
 	}
 	var list []pending
 	enrichMu.Lock()
@@ -301,15 +303,14 @@ func coverSweepFillFromDecisions() int {
 		if e.LyricsDecision == nil || enrichInflight[key] || enrichProvisional[key] {
 			continue
 		}
-		if _, _, album := splitEnrichKey(key); e.CoverURL == "" || coverOfAnotherAlbum(e, album) {
-			list = append(list, pending{key, e.CoverURL, e.LyricsDecision})
+		if album := entryListedAlbum(key, e); e.CoverURL == "" || coverOfAnotherAlbum(e, album) {
+			list = append(list, pending{key, e.CoverURL, album, e.LyricsDecision})
 		}
 	}
 	enrichMu.Unlock()
 	filled := 0
 	for _, p := range list {
-		_, _, album := splitEnrichKey(p.key)
-		cover, source, coverAlbum := winnerCandidateCover(withDecisionDetails(p.key, p.decision), album)
+		cover, source, coverAlbum := winnerCandidateCover(withDecisionDetails(p.key, p.decision), p.album)
 		if cover == "" || cover == p.cover {
 			continue
 		}
@@ -345,8 +346,8 @@ func coverSweepBorrowVerifiedSiblings() int {
 		if !coverSourceLendsAlbumIdentity(e.CoverSource) {
 			continue
 		}
-		artist, _, album := splitEnrichKey(key)
-		if album != "" {
+		artist, _, _ := splitEnrichKey(key)
+		if album := entryListedAlbum(key, e); album != "" {
 			simp := toSimplified(album)
 			lenders[simp] = append(lenders[simp], lender{key, artist, e})
 		}
@@ -356,7 +357,8 @@ func coverSweepBorrowVerifiedSiblings() int {
 	}
 	borrowed := 0
 	for key, e := range enrichCache {
-		artist, _, album := splitEnrichKey(key)
+		artist, _, _ := splitEnrichKey(key)
+		album := entryListedAlbum(key, e)
 		if !coverAwaitsVerifiedSibling(e, album) || enrichInflight[key] || enrichProvisional[key] {
 			continue
 		}
@@ -545,8 +547,8 @@ func coverSettleGroupsLocked() [][]coverSettleMember {
 		if e.CoverURL == "" || enrichInflight[key] || enrichProvisional[key] {
 			continue
 		}
-		artist, _, album := splitEnrichKey(key)
-		if album != "" {
+		artist, _, _ := splitEnrichKey(key)
+		if album := entryListedAlbum(key, e); album != "" {
 			simp := toSimplified(album)
 			buckets[simp] = append(buckets[simp], coverSettleMember{key, artist, album, e})
 		}
