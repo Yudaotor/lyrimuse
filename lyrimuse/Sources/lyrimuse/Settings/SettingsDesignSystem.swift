@@ -187,6 +187,7 @@ extension View {
 
 /// 把一页里所有玻璃卡片包进同一个 GlassEffectContainer——同一个容器内的玻璃元素才会在
 /// 靠近时互相融合、并共享一次材质采样(各自独立套 .glassEffect 只是 N 层互不相干的玻璃)。
+/// 别为了省渲染把整页这一层拿掉:实测拿掉后切页时合成一帧最长 173ms、GPU 146ms,留着时都在 13ms 以内(14 章决策 112)。
 struct SettingsGlassContainer<Content: View>: View {
     var spacing: CGFloat
     @ViewBuilder let content: () -> Content
@@ -485,13 +486,10 @@ extension AnyTransition {
 // 正是拿 .safeAreaInset 挂的 —— 两者一叠加,往下滚之后内容的实际位置和点击命中区域就
 // 错开了,表现是"分段选择器看得见却点不动,必须滚回顶部才点得着"。
 //
-// 所以改成 GeometryReader 只待在 .background 里**量**,ScrollView 仍然是这一层的根,
-// safe area 照常传播。量到的是 ScrollView 自己的布局宽度 —— 这个值本来就不随滚动条出现
-// 而变(变的是内容可用宽度),所以钉死内容宽度、防抖的效果一点没丢。
-private struct SettingsPageWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
+// 所以只在 ScrollView 上挂 `onGeometryChange` **量**,ScrollView 仍然是这一层的根,safe area 照常传播。
+// 量到的是 ScrollView 自己的布局宽度 —— 这个值本来就不随滚动条出现而变(变的是内容可用宽度),
+// 所以钉死内容宽度、防抖的效果一点没丢。别换回 `.background(GeometryReader)` + PreferenceKey:读偏好的那一层
+// 要在整页卡片树上逐层归并这个键,每次切页新建页面都跑一遍(「歌词显示」页实测约 23ms),见 14 章决策 112。
 
 private struct FixedWidthScrollView<Content: View>: View {
     @ViewBuilder let content: () -> Content
@@ -503,13 +501,7 @@ private struct FixedWidthScrollView<Content: View>: View {
                 // 首帧还没量到,传 nil 让内容自己撑开,别闪一帧 0 宽。
                 .frame(width: measuredWidth > 0 ? measuredWidth : nil)
         }
-        .background(
-            GeometryReader { proxy in
-                Color.clear
-                    .preference(key: SettingsPageWidthKey.self, value: proxy.size.width)
-            }
-        )
-        .onPreferenceChange(SettingsPageWidthKey.self) { measuredWidth = $0 }
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { measuredWidth = $0 }
     }
 }
 

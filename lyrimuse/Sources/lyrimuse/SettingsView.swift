@@ -728,9 +728,16 @@ struct SettingsView: View {
         rows += [.badge(SoftwareUpdateSidebarRow.title), .badge(LastfmSuggestionsSidebarRow.title),
                  .identityTitle(LastfmIdentityRow.connectTitle),
                  .identitySubtitle(LastfmIdentityRow.connectSubtitle), .identitySubtitle(LastfmIdentityRow.connectedSubtitle)]
-        return SettingsSidebarWidth.fitting(
-            rows, sizeMode: UserDefaults.standard.integer(forKey: SettingsSidebarWidth.sizeModeDefaultsKey))
+        let sizeMode = UserDefaults.standard.integer(forKey: SettingsSidebarWidth.sizeModeDefaultsKey)
+        if let memo = Self.sidebarWidthMemo, memo.rows == rows, memo.sizeMode == sizeMode { return memo.width }
+        let width = SettingsSidebarWidth.fitting(rows, sizeMode: sizeMode)
+        Self.sidebarWidthMemo = (rows, sizeMode, width)
+        return width
     }
+
+    /// 上一次量出的侧栏宽度和它的输入。切页时 body 重估、这个属性一趟要读四次,文字和档位没变就不再逐行量字
+    /// (每次切页约 5ms,见 14 章决策 112);换界面语言、换系统「侧栏图标大小」时输入变了,照常重量。
+    private static var sidebarWidthMemo: (rows: [SettingsSidebarWidth.Row], sizeMode: Int, width: CGFloat)?
 
     /// 侧栏比设计宽度宽出来的部分。
     private var sidebarExtraWidth: CGFloat { sidebarWidth - SettingsSidebarWidth.designWidth }

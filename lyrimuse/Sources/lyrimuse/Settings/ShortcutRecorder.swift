@@ -312,16 +312,24 @@ final class ShortcutRecorderButton: NSButton {
 private final class ShortcutRecorderContainerView: NSView {
     let recordButton: ShortcutRecorderButton
 
+    /// 「×」的图,各行共用一张。读屏标签挂在按钮上(跟着界面语言),图里不带。
+    private static let clearSymbol = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: nil)!
+        .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 11, weight: .regular))!
+
     init(name: KeyboardShortcuts.Name) {
         let recordButton = ShortcutRecorderButton(name: name)
         self.recordButton = recordButton
 
-        let symbol = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: L10n.t("清除快捷键"))!
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 11, weight: .regular))!
-        let clearButton = NSButton(image: symbol, target: recordButton,
-                                   action: #selector(ShortcutRecorderButton.clearShortcut))
+        // 不用 `NSButton(image:target:action:)`:它按默认的带边框样式 sizeToFit 一次,一颗约 1ms,快捷键页每次
+        // 打开要建二十颗;尺寸反正由下面的约束钉成 14×14(14 章决策 112)。
+        let clearButton = NSButton(frame: .zero)
         clearButton.isBordered = false
         clearButton.bezelStyle = .regularSquare
+        clearButton.image = Self.clearSymbol
+        clearButton.imagePosition = .imageOnly
+        clearButton.target = recordButton
+        clearButton.action = #selector(ShortcutRecorderButton.clearShortcut)
+        clearButton.setAccessibilityLabel(L10n.t("清除快捷键"))
         clearButton.contentTintColor = .tertiaryLabelColor
         clearButton.toolTip = L10n.t("清除快捷键")
         recordButton.clearButton = clearButton
