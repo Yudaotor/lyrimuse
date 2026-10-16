@@ -595,16 +595,17 @@ struct SettingsView: View {
             // 菜单/Dock 右键列表,分类上下文照样留得住,只是不再顶替窗口的身份。
             .navigationTitle(L10n.t("设置"))
             .navigationSubtitle(selectedCategoryTitle)
-            // 挂在 detail 这一侧(不是 NavigationSplitView 整体),`.navigation` 才会落到
-            // 侧栏右边那一段工具栏的最左端 —— 跟系统设置里那对键同一个位置。侧栏那边用
-            // `.toolbar(removing: .sidebarToggle)` 腾空了这一格。
-            .toolbar {
-                ToolbarItem(placement: .navigation) { historyBackButton }
-                ToolbarItem(placement: .navigation) { historyForwardButton }
-                // 这里**不需要**尾部弹性间隔。曾经加过一个 `ToolbarSpacer`,以为是
-                // macOS 26 把 `.navigation` 这一组居中了 —— 装机截图证明加了没有任何变化,
-                // 真正的原因是窗口的 `toolbarStyle`(见 SettingsWindowConfigurator)。
-            }
+        }
+        // 前进 / 后退挂在 NavigationSplitView 整体上,不挂 detail 那一侧:detail 每换一页,挂在它上面的工具栏项
+        // 都会被 SwiftUI 摘掉再插回,AppKit 跟着把整条玻璃工具栏重排一遍(每次切页约 20ms,挂在这里约 2ms,
+        // 14 章决策 112)。挂在这里 `.navigation` 照样落在侧栏右边那段工具栏的最左端(装机截图核过),
+        // 侧栏那边用 `.toolbar(removing: .sidebarToggle)` 腾空了这一格。
+        .toolbar {
+            ToolbarItem(placement: .navigation) { historyBackButton }
+            ToolbarItem(placement: .navigation) { historyForwardButton }
+            // 这里**不需要**尾部弹性间隔。曾经加过一个 `ToolbarSpacer`,以为是
+            // macOS 26 把 `.navigation` 这一组居中了 —— 装机截图证明加了没有任何变化,
+            // 真正的原因是窗口的 `toolbarStyle`(见 SettingsWindowConfigurator)。
         }
         // 宽度:NavigationSplitView 比原来的 TabView 多一列侧边栏,整体相应加宽;同样不设
         // maxWidth/固定高度,各分类继续按内容自动撑高。
