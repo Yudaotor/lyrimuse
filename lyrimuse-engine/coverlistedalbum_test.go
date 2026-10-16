@@ -24,7 +24,7 @@ func TestEntryListedAlbum(t *testing.T) {
 }
 
 // 《太陽之子》那种:Kaset 放的几首写法键里没专辑,YouTube Music 登记在这张专辑下(歌词管理也排在这张专辑里),给专辑定封面时
-// 跟写法键带专辑的几首算一组(歌手繁简写法不同也算):同一张图的原样记下,QQ 按歌名查回来的单曲封面换成定下的那张;
+// 跟写法键带专辑的几首算一组(歌手繁简写法不同也算):同一张图的 Kaset 设备封面、QQ 按歌名查回来的单曲封面都换成定下的那一份;
 // 键里没专辑、也没登记专辑的不进组。
 func TestSettleAlbumCoversIncludesListedAlbum(t *testing.T) {
 	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
@@ -39,16 +39,16 @@ func TestSettleAlbumCoversIncludesListedAlbum(t *testing.T) {
 		"周杰倫|聖誕星|":     {CoverURL: single, CoverSource: "qq", CoverAlbum: "圣诞星 (feat. 杨瑞代)", YouTubeMusicAlbum: "太陽之子"},
 		"周杰倫|單曲|":      {CoverURL: single, CoverSource: "qq", CoverAlbum: "圣诞星 (feat. 杨瑞代)"},
 	})
-	if switched, settled := coverSweepSettleAlbumCovers(context.Background()); switched != 1 || settled != 2 {
-		t.Fatalf("记下 %d 条、换了 %d 条, 要 2、1", settled, switched)
+	if switched, settled := coverSweepSettleAlbumCovers(context.Background()); switched != 2 || settled != 2 {
+		t.Fatalf("记下 %d 条、换了 %d 条, 要 2、2", settled, switched)
 	}
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
 	if e := enrichCache["周杰倫|聖誕星|"]; e.CoverURL != settleTux1 || e.CoverSource != "netease" || e.CoverAlbum != "太阳之子" || !coverSettled(e) {
 		t.Errorf("单曲封面该换成定下的那张: %+v", e)
 	}
-	if e := enrichCache["周杰倫|聖徒|"]; e.CoverURL != kaset || !coverSettled(e) {
-		t.Errorf("同一张图的原样记下: %+v", e)
+	if e := enrichCache["周杰倫|聖徒|"]; e.CoverURL != settleTux1 || !coverSettled(e) {
+		t.Errorf("同一张图的也统一成定下的那一份: %+v", e)
 	}
 	if e := enrichCache["周杰倫|單曲|"]; e.CoverURL != single || e.CoverSettled != "" {
 		t.Errorf("没专辑的不进组: %+v", e)

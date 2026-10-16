@@ -94,8 +94,9 @@ func writeSettleJPEG(t *testing.T, edge int) string {
 	return deviceArtworkURLPrefix + path
 }
 
-// Off the Wall 那种:设备封面(QQ 音乐那张)跟网易云、Apple 的不是一张图,组里有 Apple 给的 → 定 Apple 那张,设备那几首换成
-// 网易云那一份(地址、来源、专辑、主色;同档的取 key 小的),所有条目记下 CoverSettled;组里已经有 Apple 的,不再问 Apple。
+// Off the Wall 那种:设备封面(QQ 音乐那张)跟网易云、Apple 的不是一张图,组里有 Apple 给的 → 定 Apple 那张,地址不是网易云那一份
+// 的(设备那几首、同一张图的另一个网易云地址和 Apple 那份)都换成它(地址、来源、专辑、主色;同档的取 key 小的),所有条目记下
+// CoverSettled;组里已经有 Apple 的,不再问 Apple。
 func TestSettleAlbumCoversFollowsApple(t *testing.T) {
 	const album = "Off the Wall"
 	for range 10 {
@@ -115,8 +116,8 @@ func TestSettleAlbumCoversFollowsApple(t *testing.T) {
 		enrichDirty = false
 		enrichMu.Unlock()
 		switched, settled := coverSweepSettleAlbumCovers(context.Background())
-		if switched != 2 || settled != 5 {
-			t.Fatalf("记下 %d 条、换了 %d 条, 要 5、2", settled, switched)
+		if switched != 4 || settled != 5 {
+			t.Fatalf("记下 %d 条、换了 %d 条, 要 5、4", settled, switched)
 		}
 		if len(*asked) != 0 {
 			t.Errorf("组里有 Apple 给的封面,不该再问: %v", *asked)
@@ -128,9 +129,9 @@ func TestSettleAlbumCoversFollowsApple(t *testing.T) {
 				t.Errorf("%s 该换成网易云 key 小的那一份并定下: %+v", title, e)
 			}
 		}
-		for title, url := range map[string]string{"Rock With You": settleTux2, "Burn This Disco Out": settleTux1, "Working Day And Night": settleApple} {
-			if e := enrichCache["Michael Jackson|"+title+"|"+album]; e.CoverURL != url || !coverSettled(e) {
-				t.Errorf("%s 跟定下的是同一张图,原样定下: %+v", title, e)
+		for _, title := range []string{"Rock With You", "Burn This Disco Out", "Working Day And Night"} {
+			if e := enrichCache["Michael Jackson|"+title+"|"+album]; e.CoverURL != settleTux1 || e.CoverSource != "netease" || !coverSettled(e) {
+				t.Errorf("%s 跟定下的是同一张图,也统一成那一份: %+v", title, e)
 			}
 		}
 		if !enrichDirty {
@@ -170,8 +171,9 @@ func TestSettleAlbumCoversAsksAppleAndKeepsTheDeviceCover(t *testing.T) {
 	}
 }
 
-// 各首都是同一张图(网易云那份跟设备封面一样):原样定下,不问 Apple。
-func TestSettleAlbumCoversKeepsTheSamePicture(t *testing.T) {
+// 各首都是同一张图(网易云那份跟设备封面一样):不问 Apple,地址不是网易云那一份的换成它,都定下(各家版本色调、裁切不同,
+// 按图比算同一张,统一成一个地址才看着一样)。见 03 章决策 52。
+func TestSettleAlbumCoversSamePictureOneAddress(t *testing.T) {
 	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
 	asked := withSettleFakes(t, map[string]image.Image{settleLegs: settlePicture(0, false), settleTux1: settlePicture(0, false)}, nil)
 	withEnrichCache(t, map[string]enrichEntry{
@@ -179,17 +181,17 @@ func TestSettleAlbumCoversKeepsTheSamePicture(t *testing.T) {
 		"A|b|Album": {CoverURL: settleLegs, CoverSource: "device", CoverAlbum: "Album"},
 		"A|c|Album": {CoverURL: settleTux1, CoverSource: "netease", CoverAlbum: "Album"},
 	})
-	if switched, settled := coverSweepSettleAlbumCovers(context.Background()); switched != 0 || settled != 3 {
-		t.Fatalf("记下 %d 条、换了 %d 条, 要 3、0", settled, switched)
+	if switched, settled := coverSweepSettleAlbumCovers(context.Background()); switched != 1 || settled != 3 {
+		t.Fatalf("记下 %d 条、换了 %d 条, 要 3、1", settled, switched)
 	}
 	if len(*asked) != 0 {
 		t.Errorf("同一张图不用问 Apple: %v", *asked)
 	}
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
-	for key, url := range map[string]string{"A|a|Album": settleTux1, "A|b|Album": settleLegs, "A|c|Album": settleTux1} {
-		if e := enrichCache[key]; e.CoverURL != url || !coverSettled(e) {
-			t.Errorf("%s 该原样定下: %+v", key, e)
+	for _, key := range []string{"A|a|Album", "A|b|Album", "A|c|Album"} {
+		if e := enrichCache[key]; e.CoverURL != settleTux1 || !coverSettled(e) {
+			t.Errorf("%s 该统一成网易云那一份并定下: %+v", key, e)
 		}
 	}
 }
@@ -394,8 +396,8 @@ func TestSettleAlbumCoversSkipsGroupsWithUnloadablePictures(t *testing.T) {
 		"A|a|Here": {CoverURL: settleTux1, CoverSource: "netease", CoverAlbum: "Here"},
 		"A|b|Here": {CoverURL: settleLegs, CoverSource: "device", CoverAlbum: "Here"},
 	})
-	if switched, settled := coverSweepSettleAlbumCovers(context.Background()); switched != 0 || settled != 2 {
-		t.Fatalf("记下 %d 条、换了 %d 条, 要 2、0", settled, switched)
+	if switched, settled := coverSweepSettleAlbumCovers(context.Background()); switched != 1 || settled != 2 {
+		t.Fatalf("记下 %d 条、换了 %d 条, 要 2、1", settled, switched)
 	}
 	enrichMu.Lock()
 	if e := enrichCache["A|a|Gone"]; e.CoverSettled != "" {
@@ -563,32 +565,51 @@ func TestSettleAlbumCoversStopsWhenCancelled(t *testing.T) {
 	}
 }
 
-// 分组:不同歌手的同名专辑分开定,繁简写法不同的同一张专辑算一组;只有一个地址的组、没有核实过的设备封面也没定过的组不定。
+// 分组:不同歌手的同名专辑分开定,繁简写法不同的同一张专辑算一组;只有一个地址的组不定。没有核实过的设备封面、也没定过的组
+// 照样定:各首其实是同一张图就定它,不是同一张图时 Apple 目录的封面跟其中一张是同一张图就定那张,对不上的不定。见 03 章决策 52。
 func TestSettleAlbumCoversGroups(t *testing.T) {
 	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+	const (
+		other1 = "https://y.qq.com/music/photo_new/T002R800x800M000other1.jpg"
+		other2 = "https://y.qq.com/music/photo_new/T002R800x800M000other2.jpg"
+		odd    = "https://y.qq.com/music/photo_new/T002R800x800M000odd.jpg"
+	)
 	withSettleFakes(t, map[string]image.Image{settleLegs: settlePicture(0, false), settleTux1: settlePicture(0, false),
-		settleTux2: settlePicture(0, false)}, nil)
+		settleTux2: settlePicture(0, false), settleApple: settlePicture(1, false), other1: settlePicture(1, false),
+		other2: settlePicture(2, false), odd: settlePicture(3, false)},
+		func(title string) (string, string, bool) {
+			if title == "apple" {
+				return settleApple, "Picked", true
+			}
+			return "", "", true
+		})
 	withEnrichCache(t, map[string]enrichEntry{
-		"陈奕迅|a|国语精选": {CoverURL: settleLegs, CoverSource: "device", CoverAlbum: "国语精选"},
-		"陈奕迅|b|國語精選": {CoverURL: settleTux1, CoverSource: "netease", CoverAlbum: "國語精選"},
-		"别人|a|国语精选":  {CoverURL: settleTux1, CoverSource: "netease", CoverAlbum: "国语精选"},
-		"别人|b|国语精选":  {CoverURL: settleTux2, CoverSource: "netease", CoverAlbum: "国语精选"},
-		"C|a|Solo":   {CoverURL: settleLegs, CoverSource: "device", CoverAlbum: "Solo"},
-		"C|b|Solo":   {CoverURL: settleLegs, CoverSource: "device", CoverAlbum: "Solo"},
-		"D|a|Mixed":  {CoverURL: settleLegs, CoverSource: "device", CoverAlbum: "Other"},
-		"D|b|Mixed":  {CoverURL: settleTux1, CoverSource: "netease", CoverAlbum: "Mixed"},
+		"陈奕迅|a|国语精选":     {CoverURL: settleLegs, CoverSource: "device", CoverAlbum: "国语精选"},
+		"陈奕迅|b|國語精選":     {CoverURL: settleTux1, CoverSource: "netease", CoverAlbum: "國語精選"},
+		"别人|a|国语精选":      {CoverURL: settleTux1, CoverSource: "netease", CoverAlbum: "国语精选"},
+		"别人|b|国语精选":      {CoverURL: settleTux2, CoverSource: "netease", CoverAlbum: "国语精选"},
+		"C|a|Solo":       {CoverURL: settleLegs, CoverSource: "device", CoverAlbum: "Solo"},
+		"C|b|Solo":       {CoverURL: settleLegs, CoverSource: "device", CoverAlbum: "Solo"},
+		"E|apple|Picked": {CoverURL: other1, CoverSource: "qq", CoverAlbum: "Picked"},
+		"E|b|Picked":     {CoverURL: other2, CoverSource: "qq", CoverAlbum: "Picked"},
+		"F|a|Loose":      {CoverURL: other2, CoverSource: "qq", CoverAlbum: "Loose"},
+		"F|b|Loose":      {CoverURL: odd, CoverSource: "qq", CoverAlbum: "Loose"},
 	})
-	if switched, settled := coverSweepSettleAlbumCovers(context.Background()); switched != 0 || settled != 2 {
-		t.Fatalf("记下 %d 条、换了 %d 条, 要 2、0", settled, switched)
+	switched, settled := coverSweepSettleAlbumCovers(context.Background())
+	if switched != 3 || settled != 6 {
+		t.Fatalf("记下 %d 条、换了 %d 条, 要 6、3", settled, switched)
 	}
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
-	for _, key := range []string{"陈奕迅|a|国语精选", "陈奕迅|b|國語精選"} {
+	for _, key := range []string{"陈奕迅|a|国语精选", "陈奕迅|b|國語精選", "别人|a|国语精选", "别人|b|国语精选", "E|apple|Picked", "E|b|Picked"} {
 		if !coverSettled(enrichCache[key]) {
 			t.Errorf("%s 该定下", key)
 		}
 	}
-	for _, key := range []string{"别人|a|国语精选", "别人|b|国语精选", "C|a|Solo", "C|b|Solo", "D|a|Mixed", "D|b|Mixed"} {
+	if e := enrichCache["E|b|Picked"]; e.CoverURL != other1 {
+		t.Errorf("没有核实过的设备封面:跟 Apple 那张是同一张图的定下,别的换成它: %+v", e)
+	}
+	for _, key := range []string{"C|a|Solo", "C|b|Solo", "F|a|Loose", "F|b|Loose"} {
 		if enrichCache[key].CoverSettled != "" {
 			t.Errorf("%s 不该定", key)
 		}
@@ -618,12 +639,13 @@ func TestCoverSettleRank(t *testing.T) {
 // 一遍跑下来,给专辑定封面那一步排在补封面前面几步之后:换了封面的存一次盘,只记下了定下的(没换封面)也存。
 func TestRunCoverSweepSettlesAlbumCovers(t *testing.T) {
 	for _, c := range []struct {
-		name    string
-		netease image.Image
-		want    string
+		name      string
+		netease   image.Image
+		withApple bool
+		want      string
 	}{
-		{"换成 Apple 那张", settlePicture(1, false), settleTux1},
-		{"同一张图只记下", settlePicture(0, false), settleLegs},
+		{"换成 Apple 那张", settlePicture(1, false), true, settleTux1},
+		{"同一张图统一成网易云那一份", settlePicture(0, false), false, settleTux1},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
@@ -635,7 +657,7 @@ func TestRunCoverSweepSettlesAlbumCovers(t *testing.T) {
 				"A|a|Album": {CoverURL: settleLegs, CoverSource: "device", CoverAlbum: "Album", Lyrics: coverSweepLyrics},
 				"A|b|Album": {CoverURL: settleTux1, CoverSource: "netease", CoverAlbum: "Album", Lyrics: coverSweepLyrics},
 			}
-			if c.want == settleTux1 {
+			if c.withApple {
 				cache["A|c|Album"] = enrichEntry{CoverURL: settleApple, CoverSource: "apple", CoverAlbum: "Album", Lyrics: coverSweepLyrics}
 			}
 			withEnrichCache(t, cache)
@@ -810,5 +832,25 @@ func TestCoverSweepPictureIsRemembered(t *testing.T) {
 	coverSweepSettleAlbumCovers(context.Background())
 	if calls != 2 || !background {
 		t.Errorf("取了 %d 次(要 2 次,两个地址各一次),走后台出站 %v", calls, background)
+	}
+}
+
+// 都定过、地址仍不止一个的组(先前同一张图各留各的地址):再定一次,统一成网易云那一份。见 03 章决策 52。
+func TestSettleAlbumCoversReunifiesSettledGroups(t *testing.T) {
+	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+	withSettleFakes(t, map[string]image.Image{settleLegs: settlePicture(0, false), settleTux1: settlePicture(0, false)}, nil)
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|a|Album": {CoverURL: settleLegs, CoverSource: "device", CoverAlbum: "Album", CoverSettled: settleLegs},
+		"A|b|Album": {CoverURL: settleTux1, CoverSource: "netease", CoverAlbum: "Album", CoverSettled: settleTux1},
+	})
+	if switched, settled := coverSweepSettleAlbumCovers(context.Background()); switched != 1 || settled != 1 {
+		t.Fatalf("记下 %d 条、换了 %d 条, 要 1、1", settled, switched)
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	for _, key := range []string{"A|a|Album", "A|b|Album"} {
+		if e := enrichCache[key]; e.CoverURL != settleTux1 || !coverSettled(e) {
+			t.Errorf("%s 该统一成网易云那一份并定下: %+v", key, e)
+		}
 	}
 }

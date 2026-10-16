@@ -640,10 +640,11 @@ type coverSettlePlan struct {
 	by   string
 }
 
-// coverSweepSettleAlbumCovers:同一张专辑(歌手对得上、专辑名繁简折叠后相同)里有一条归属核实过的设备封面(或者之前定过)、
-// 各首的封面又不止一个地址的,给整张专辑定一张封面(coverSettlePlanFor),跟它不是同一张图的条目换成它,所有条目记下
-// CoverSettled(见 coverSettled)。一张专辑有图没取到、Apple 没问到时这一遍不定它,连着 coverSweepOfflineLimit 张都这样就停;
-// 每张专辑之前先给在解析的歌让路。返回记下几条、其中换了几条。见 03 章决策 48。
+// coverSweepSettleAlbumCovers:同一张专辑(歌手对得上、专辑名繁简折叠后相同)里各首的封面不止一个地址的,给整张专辑定一张封面
+// (coverSettlePlanFor),跟它不是同一张图的条目换成它,所有条目记下 CoverSettled(见 coverSettled)。没有核实过的设备封面、
+// 也没定过的专辑,只在各首其实是同一张图、或 Apple 目录这张专辑的封面跟其中一张是同一张图时定,别的不定(03 章决策 52)。一张专辑
+// 有图没取到、Apple 没问到时这一遍不定它,连着 coverSweepOfflineLimit 张都这样就停;每张专辑之前先给在解析的歌让路。返回记下
+// 几条、其中换了几条。见 03 章决策 48。
 func coverSweepSettleAlbumCovers(ctx context.Context) (switched, settled int) {
 	enrichMu.Lock()
 	groups := coverSettleGroupsLocked()
@@ -716,24 +717,21 @@ func coverSettleGroupsLocked() [][]coverSettleMember {
 	return groups
 }
 
-// coverSettleGroupDue:这组该定封面 —— 有一条核实过的设备封面(siblingLendsAlbumIdentity)或者之前定过,有一条还没定下,
-// 封面不止一个地址(都是同一个地址就没什么可比的)。
+// coverSettleGroupDue:这组该定封面 —— 封面不止一个地址(都是同一个地址就没什么可比的)。没有核实过的设备
+// 封面的组也定,怎么定见 coverSettlePlanFor;都定过、地址仍不止一个的(先前同一张图各留各的地址)也再定一次(03 章决策 52)。
 func coverSettleGroupDue(g []coverSettleMember) bool {
-	anchored, pending := false, false
 	urls := map[string]bool{}
 	for _, m := range g {
-		anchored = anchored || siblingLendsAlbumIdentity(m.e, m.album) || coverSettled(m.e)
-		pending = pending || !coverSettled(m.e)
 		urls[m.e.CoverURL] = true
 	}
-	return anchored && pending && len(urls) > 1
+	return len(urls) > 1
 }
 
 // coverSettlePlanFor 给一组定封面,各首的封面按图比(coverSweepPicture):
 //   - 之前定过的:照 key 最小那条定下的那张;
 //   - 都是同一张图:就是它;
 //   - 不止一张:Apple 目录这张专辑的封面(coverSettleApplePicture)跟组里哪张是同一张图就定哪张;Apple 没有这张专辑、给的是
-//     第三张图时,定 key 最小那条核实过的设备封面那张(它是补边的长方形图时不定)。
+//     第三张图时,定 key 最小那条核实过的设备封面那张(它是补边的长方形图时不定,组里没有核实过的设备封面时也不定)。
 //
 // rep 在跟定下的那张是同一张图的条目里按 coverSettleRank 挑。askedApple:这一遍问过 Apple 没有,再问之前先隔 coverSweepAppleGap。
 func coverSettlePlanFor(ctx context.Context, g []coverSettleMember, askedApple *bool) (coverSettlePlan, coverSettleOutcome) {
@@ -858,17 +856,19 @@ func coverSettleRank(e enrichEntry) int {
 	return 3
 }
 
-// coverSettleApply 按 plan 写回一组:跟定下的是同一张图的原样记下 CoverSettled,不是的换成 plan.rep 那一份(地址、来源、
-// cover_album、主色)再记下。读出来之后封面被换过、解析中、提前提交、已经定下的不动。返回记下几条、其中换了几条。
+// coverSettleApply 按 plan 写回一组:地址不是 plan.rep 那一份的(同一张图也算)换成它(地址、来源、cover_album、主色),都记下
+// CoverSettled。读出来之后封面被换过、解析中、提前提交、已经定在 plan.rep 上的不动。返回记下几条、其中换了几条。
 func coverSettleApply(g []coverSettleMember, plan coverSettlePlan) (settled, switched int) {
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
 	for _, m := range g {
 		e, ok := enrichCache[m.key]
-		if !ok || e.CoverURL != m.e.CoverURL || enrichInflight[m.key] || enrichProvisional[m.key] || coverSettled(e) {
+		if !ok || e.CoverURL != m.e.CoverURL || enrichInflight[m.key] || enrichProvisional[m.key] ||
+			(coverSettled(e) && e.CoverURL == plan.rep.CoverURL) {
 			continue
 		}
-		if !plan.pics[e.CoverURL].same(plan.ref) {
+		// 同一张图、地址不同的也换成定下的那一份:各家给同一张专辑的图版本不同(色调、裁切),按图比算同一张,排在一起仍不统一。
+		if e.CoverURL != plan.rep.CoverURL {
 			e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor =
 				plan.rep.CoverURL, plan.rep.CoverSource, plan.rep.CoverAlbum, plan.rep.AccentColor
 			switched++
