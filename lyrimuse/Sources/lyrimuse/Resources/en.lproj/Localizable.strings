@@ -299,6 +299,7 @@
 "专辑 A→Z" = "Album A→Z";
 "专辑 Z→A" = "Album Z→A";
 "专辑吻合" = "Album match";
+"专辑简介" = "Album Notes";
 "专辑：%@" = "on %@";
 "两个数字来自 Last.fm 的两个接口：行上的次数由 track.getInfo（autocorrect）按写法族求和，明细由 user.getTrackScrobbles 按精确写法逐条列出。两者不一致通常是因为某种写法只在其中一边被合并" = "The two numbers come from two Last.fm endpoints: the row sums track.getInfo (with autocorrect) over the spelling family, while the breakdown lists exact spellings via user.getTrackScrobbles. A gap usually means one spelling was merged on only one side";
 "两条独立匹配的歌词一致" = "Independently matched lyrics are identical";
@@ -1519,10 +1520,12 @@
 "歌手别名" = "Artist alias";
 "歌手前加「演唱：」，专辑前加「专辑：」。歌名和歌手写在同一行时不加。" = "Adds “by” before the artist and “on” before the album. Not added when the title and artist share a line.";
 "歌手地区分布" = "Artist Regions";
+"歌手简介" = "Artist Bio";
 "歌曲" = "Track";
 "歌曲信息" = "Song Info";
 "歌曲开始播放后将显示歌词" = "Lyrics will show once the song starts";
 "歌曲无歌词或仍在搜索时，在歌词位置显示歌名，不收起为小图标；获取歌词后立即切换为歌词。暂停时仍收起为图标，广告期间不显示" = "While a song has no lyrics or is still being searched, keep the lyrics slot with the song title instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads";
+"歌曲简介" = "Song Notes";
 "歌词" = "Lyrics";
 "歌词一致性" = "Lyrics Consistency";
 "歌词使用封面主色；无法获取时为白色" = "Lyrics use the cover's main color, or white when none is available";

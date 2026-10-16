@@ -184,6 +184,8 @@ final class MenuBarPanelController {
         window.setContent(host)
         place(size: host.fittingSize)
         installDismissWatchers(for: window)
+        // 面板开着时预取简介:歌名、歌手名、专辑名只在有简介时可点,得提前知道。与 close 里的 release 成对。
+        EditorialNotesStore.shared.retain()
         onVisibilityChange?(true)
         window.orderFrontRegardless()
         // 深链带 background=1 时不当 key:不激活的面板当了 key 照样接走键盘输入,用户在别的 App 里打的字会落进面板。
@@ -194,6 +196,7 @@ final class MenuBarPanelController {
         guard let window = panel else { return }
         MenuBarPanelDebugState.quickTarget = nil
         teardownDismissWatchers()
+        EditorialNotesStore.shared.release()
         // 收起即整树释放:下次 toggle 本来就是全新建(onAppear 快照语义还依赖这一点)。
         panel = nil
         window.orderOut(nil)
@@ -404,6 +407,9 @@ private struct MenuBarPanelView: View {
     // 长按 / 右键某个能翻面的格子之后,面板下半部分换成它自己的快捷设置;
     // nil = 正常的钮块网格。见 MenuBarPanelQuickSettings.swift。
     @State private var quickTarget: PanelQuickTarget?
+    /// 点了歌名 / 歌手名 / 专辑名之后,面板下半部分换成那一类简介(`PanelEditorialPage`);nil = 没翻到简介。
+    @State private var editorialKind: EditorialCard.Kind?
+    @ObservedObject private var editorial = EditorialNotesStore.shared
 
     init(close: @escaping () -> Void, initialQuickTarget: PanelQuickTarget? = nil) {
         self.close = close
@@ -426,7 +432,9 @@ private struct MenuBarPanelView: View {
             nowPlayingCard
             // 「正在播放」卡不参与切换 —— 它是这张面板的身份,连它一起换掉就像换了一扇窗;
             // 留着它高度落差也更小(快捷设置比两排钮块还矮一点)。
-            if let quickTarget {
+            if let card = shownEditorialCard {
+                PanelEditorialPage(card: card, back: { editorialKind = nil })
+            } else if let quickTarget {
                 PanelQuickSettings(
                     target: quickTarget,
                     action: quickAction(for: quickTarget),
@@ -443,6 +451,10 @@ private struct MenuBarPanelView: View {
             if #unavailable(macOS 26.0) { LastfmGlassGlow() }
         }
         .frame(width: 336)
+        // 换歌时简介先撤掉:翻着的简介页退回钮块网格,新歌的简介到了也不自己翻出来。
+        .onChange(of: shownEditorialCard == nil) { _, missing in
+            if missing { editorialKind = nil }
+        }
         // 快捷设置正翻在「触控栏歌词」那一格上时触控栏没了(模拟器关掉):那一格已经不在了,退回钮块网格。
         .onChange(of: playback.touchBarPresent) { _, present in
             if !present, quickTarget == .touchBar { setQuickTarget(nil) }
@@ -465,6 +477,21 @@ private struct MenuBarPanelView: View {
                 // 更新);这张面板活不过一次开合,读一次当下的状态正好。
                 mirrorInfo: LastfmMirrorStatus.current)
         }
+    }
+
+    private var shownEditorialCard: EditorialCard? {
+        editorialKind.flatMap { editorial.card($0) }
+    }
+
+    /// 点歌名 / 歌手名 / 专辑名:翻到那一类简介;再点同一类 = 翻回去。
+    private func toggleEditorial(_ kind: EditorialCard.Kind) {
+        editorialKind = editorialKind == kind ? nil : kind
+        if editorialKind != nil { setQuickTarget(nil) }
+    }
+
+    /// 歌名那一行能不能点开歌曲简介:这一行摆的确实是这首的歌名 —— 广告时是「广告中」,电台口白时是台名。
+    private var titleOpensSongNotes: Bool {
+        editorial.song != nil && !playback.isCurrentTrackAdBreak && !playback.isRadioTalkBreak
     }
 
     /// 展开 / 收起快捷设置。
@@ -655,7 +682,10 @@ private struct MenuBarPanelView: View {
             .buttonStyle(.plain)
             .help(L10n.t("打开歌词窗口"))
             VStack(alignment: .leading, spacing: 2) {
-                Text(displayTitle)
+                // 三行各自在有简介时可点(下划线 + 提亮),点了面板下半部分翻到那一类简介。
+                EditorialLinkText(text: displayTitle, available: titleOpensSongNotes,
+                                  restColor: .primary, hoverColor: .primary,
+                                  hint: EditorialCard.Kind.song.openHint) { toggleEditorial(.song) }
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
                 // 这一行只有歌手一个 Text,没有额外包装的空壳容器。
@@ -663,9 +693,10 @@ private struct MenuBarPanelView: View {
                 // 顺带清掉了只服务它的 recording 计算属性,以及只被 recording 用到的
                 // features(FeatureSettingsStore)订阅 —— 留着的话这张面板会因为任何
                 // 无关的功能开关变化白重渲染一次。
-                Text(displayArtist)
+                EditorialLinkText(text: displayArtist, available: !displayArtist.isEmpty && editorial.artist != nil,
+                                  restColor: .secondary, hoverColor: .primary,
+                                  hint: EditorialCard.Kind.artist.openHint) { toggleEditorial(.artist) }
                     .font(.system(size: 10.5))
-                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                 // 专辑行。只在真有专辑名时才渲染 —— Spotify 常常
                 // 不上报专辑,占一个空行会让卡片凭空高一截、看着像排版错了。
@@ -673,9 +704,10 @@ private struct MenuBarPanelView: View {
                 // 用 .tertiary 而不是 .secondary:标题(primary)→ 歌手(secondary)→
                 // 专辑(tertiary)三级递减,跟「最近记录」列表里专辑列的处理一致。
                 if !displayAlbum.isEmpty {
-                    Text(displayAlbum)
+                    EditorialLinkText(text: displayAlbum, available: editorial.album != nil,
+                                      restColor: Color(nsColor: .tertiaryLabelColor), hoverColor: .primary,
+                                      hint: EditorialCard.Kind.album.openHint) { toggleEditorial(.album) }
                         .font(.system(size: 10.5))
-                        .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
             }

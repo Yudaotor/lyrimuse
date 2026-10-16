@@ -8093,10 +8093,10 @@ private struct ChartsPanelView: View {
     }
 }
 
-/// 能点开简介的一段文字(完整布局的「歌手 — 专辑」、迷你尺寸的顶部文字)。有简介时:指针移上去换成手形光标、
+/// 能点开简介的一段文字(完整布局的「歌手 — 专辑」、迷你尺寸的顶部文字,菜单栏面板的歌名 / 歌手 / 专辑)。有简介时:指针移上去换成手形光标、
 /// 字色提到 `hoverColor`、加下划线,点了执行 `action`;没有简介时就是一段普通文字,不给任何「能点」的暗示。
 /// 悬停变色、下划线都是瞬时的,不加补间。
-private struct EditorialLinkText: View {
+struct EditorialLinkText: View {
     let text: String
     let available: Bool
     let restColor: Color

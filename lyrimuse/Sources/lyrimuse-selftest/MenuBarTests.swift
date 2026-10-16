@@ -1536,6 +1536,30 @@ func runMenuBarTests() {
         expectEqual(w(.translation, twoRows: false), 80, "槽宽: 单行就是主行宽")
     }
 
+    // ---- 面板头部点歌名 / 歌手名 / 专辑名翻到简介(06 章决策 51) ----
+    // 简介页画在面板里:独立浮框或 popover 是另一扇窗,点它面板就收起了。
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ rel: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(rel), encoding: .utf8)) ?? ""
+        }
+        let panel = source("lyrimuse/MenuBar/MenuBarPanel.swift")
+        let page = source("lyrimuse/MenuBar/MenuBarPanelEditorial.swift")
+        expectEqual(panel.isEmpty || page.isEmpty, false, "面板简介: 读到源码")
+        expectEqual(panel.components(separatedBy: "EditorialLinkText(text: display").count - 1, 3,
+                    "面板简介: 歌名、歌手、专辑三行都走 EditorialLinkText")
+        expectEqual(panel.contains("available: titleOpensSongNotes,")
+                    && panel.contains("editorial.song != nil && !playback.isCurrentTrackAdBreak && !playback.isRadioTalkBreak"), true,
+                    "面板简介: 广告、电台口白时歌名那一行不接")
+        expectEqual(panel.components(separatedBy: "EditorialNotesStore.shared.retain()").count - 1, 1, "面板简介: 开面板登记一次预取")
+        expectEqual(panel.components(separatedBy: "EditorialNotesStore.shared.release()").count - 1, 1, "面板简介: 收面板放掉")
+        expectEqual(panel.contains("PanelEditorialPage(card: card, back: { editorialKind = nil })")
+                    && panel.contains("if missing { editorialKind = nil }"), true,
+                    "面板简介: 翻到简介页有返回,换歌撤掉简介时退回钮块网格")
+        expectEqual(page.contains("NSPanel") || page.contains(".popover("), false,
+                    "面板简介: 简介页不另开窗口、不用 popover")
+    }
+
     // ---- 「歌词管理」那一格的背面(06 章决策 43) ----
     // 面板里不许弹确认框(另一扇窗,点它面板就收起了),要确认的在行内问;重新匹配跟歌词窗口那颗共用一份实现。
     do {
