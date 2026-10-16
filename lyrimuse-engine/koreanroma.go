@@ -145,7 +145,7 @@ func migrateLegacyKoreanRoma(ctx context.Context, scope migrationScope) int {
 	slog.Info("legacy korean romanization: done", "candidates", len(items), "regenerated", len(replaced),
 		"failed", failed, "complete", complete)
 	if complete {
-		markMigrationDone(migrationLegacyKoreanRoma, migrationLegacyKoreanRomaVersion)
+		scope.markDone(migrationLegacyKoreanRoma, migrationLegacyKoreanRomaVersion)
 	}
 	return len(replaced)
 }

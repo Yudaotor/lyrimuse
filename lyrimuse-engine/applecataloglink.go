@@ -174,7 +174,7 @@ func migrateAppleCatalogLinks(ctx context.Context, scope migrationScope, pause t
 	log.Printf("apple catalog links: %d entries match a catalog anchor, %d filled, %d replaced, %d anchors looked up, complete=%v",
 		len(candidates), filled, replaced, len(missing), complete)
 	if complete {
-		markMigrationDone(migrationAppleCatalogLinks, migrationAppleCatalogLinksVersion)
+		scope.markDone(migrationAppleCatalogLinks, migrationAppleCatalogLinksVersion)
 	}
 	return filled + replaced, complete
 }

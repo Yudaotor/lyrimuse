@@ -196,7 +196,8 @@ func TestWatermarkedMigrationsHonorRecheckScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	direct := regexp.MustCompile(`\bmigrationDone\(`)
-	gated := 0
+	background := regexp.MustCompile(`func start\w+\(ctx context\.Context\) \{\n\tscope := migrationScopeOf\(`)
+	gated, backgrounds := 0, 0
 	for _, f := range files {
 		if strings.HasSuffix(f, "_test.go") || f == "startupmigration.go" {
 			continue
@@ -209,7 +210,14 @@ func TestWatermarkedMigrationsHonorRecheckScope(t *testing.T) {
 		if direct.MatchString(src) {
 			t.Errorf("%s 直接问 migrationDone,改用 migrationScopeOf", f)
 		}
-		marks := strings.Count(src, "markMigrationDone(")
+		marks := strings.Count(src, "markMigrationDone(") + strings.Count(src, "scope.markDone(")
+		// 放后台跑的迁移(常驻进程启动后起协程)跑的途中水位可能被运行中的恢复作废,跑完要按定范围那一刻的代号记。
+		if background.MatchString(src) {
+			backgrounds++
+			if strings.Contains(src, "markMigrationDone(") || !strings.Contains(src, "scope.markDone(") {
+				t.Errorf("%s 是放后台跑的迁移,记水位要用 scope.markDone", f)
+			}
+		}
 		scopes := strings.Count(src, "migrationScopeOf(")
 		ranges := strings.Count(src, "range scope.entries()")
 		if marks != scopes || scopes != ranges {
@@ -217,8 +225,8 @@ func TestWatermarkedMigrationsHonorRecheckScope(t *testing.T) {
 		}
 		gated += marks
 	}
-	if gated == 0 {
-		t.Fatal("一道带水位的迁移都没找到,这条检查本身失效了")
+	if gated == 0 || backgrounds == 0 {
+		t.Fatalf("带水位的迁移 %d 道、放后台跑的 %d 道,这条检查本身失效了", gated, backgrounds)
 	}
 	src, err := os.ReadFile("main.go")
 	if err != nil {
@@ -226,6 +234,42 @@ func TestWatermarkedMigrationsHonorRecheckScope(t *testing.T) {
 	}
 	if !strings.Contains(string(src), "recheckMigrationsFor(keys, ") {
 		t.Error("main.go 导入 lyrics/ 那一步要让迁移补扫改写过的条目(recheckMigrationsFor),不是整体作废水位")
+	}
+}
+
+// 放后台跑的迁移定完范围之后,水位被运行中的恢复作废(adoptRestoreEdit):跑完不记水位,下次启动再全量跑。
+// 作废时水位本来是空的(后台迁移头一回跑、还没记过)也一样。没被作废照常记。
+func TestMigrationScopeMarkDoneSkipsAfterInvalidation(t *testing.T) {
+	saved, savedPath, savedEpoch := migrationState, migrationStatePath, migrationEpoch
+	t.Cleanup(func() { migrationState, migrationStatePath, migrationEpoch = saved, savedPath, savedEpoch })
+	path := filepath.Join(t.TempDir(), "migrations.json")
+	loadMigrationState(path)
+
+	s := migrationScopeOf("bg", 1)
+	if !s.all {
+		t.Fatalf("没跑过该全库扫: %+v", s)
+	}
+	invalidateMigrationState("test: restore while empty")
+	s.markDone("bg", 1)
+	if migrationDone("bg", 1) {
+		t.Error("水位为空时被作废,跑完也不该记上")
+	}
+
+	markMigrationDone("other", 1)
+	s = migrationScopeOf("bg", 1)
+	invalidateMigrationState("test: restore mid-run")
+	s.markDone("bg", 1)
+	if migrationDone("bg", 1) {
+		t.Error("跑的途中水位被作废,跑完不该记上")
+	}
+	if got := readMigrationStateForTest(t, path); got["bg"] != 0 {
+		t.Errorf("盘上也不该有它: %v", got)
+	}
+
+	s = migrationScopeOf("bg", 1)
+	s.markDone("bg", 1)
+	if !migrationDone("bg", 1) {
+		t.Error("没被作废该照常记水位")
 	}
 }
 

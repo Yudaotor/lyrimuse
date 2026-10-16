@@ -227,7 +227,7 @@ func recheckAppleSingleLinks(ctx context.Context, scope migrationScope, pause ti
 	}
 	log.Printf("apple link recheck: %d single entries checked, %d cleared, complete=%v", len(items), cleared, complete)
 	if complete {
-		markMigrationDone(migrationAppleSingleLinks, migrationAppleSingleLinksVersion)
+		scope.markDone(migrationAppleSingleLinks, migrationAppleSingleLinksVersion)
 	}
 	return cleared
 }

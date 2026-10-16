@@ -271,7 +271,7 @@ func recheckLocalLibraryLinks(ctx context.Context, scope migrationScope) int {
 	log.Printf("local library links: %d entries checked, %d cleared (netease %d, netease cover %d, qq %d, soda %d), complete=%v",
 		checked, cleared, neteaseSongs, neteaseCovers, qqSongs, sodaSongs, complete)
 	if complete {
-		markMigrationDone(migrationLocalLibraryLinks, migrationLocalLibraryLinksVersion)
+		scope.markDone(migrationLocalLibraryLinks, migrationLocalLibraryLinksVersion)
 	}
 	return cleared
 }

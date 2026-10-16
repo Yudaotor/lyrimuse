@@ -122,6 +122,6 @@ func cleanAmazonBorrowedISRCs(scope migrationScope, isrcOf map[string]string) in
 		saveEnrichCache()
 	}
 	log.Printf("amazon isrc cleanup: %d entries with isrcs checked, %d cleaned", len(targets), len(keys))
-	markMigrationDone(migrationAmazonBorrowedISRCs, migrationAmazonBorrowedISRCsVersion)
+	scope.markDone(migrationAmazonBorrowedISRCs, migrationAmazonBorrowedISRCsVersion)
 	return len(keys)
 }

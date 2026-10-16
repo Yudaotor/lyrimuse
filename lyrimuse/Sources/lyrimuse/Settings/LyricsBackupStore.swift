@@ -199,6 +199,12 @@ enum LyricsBackupStore {
         if !adopt.ok {
             logger.error("restore: engine did not adopt the restored files: \(adopt.error ?? "", privacy: .public)")
         }
+        // 常驻引擎采纳完只作废了存量迁移的水位,迁移本身只在它启动时跑:不重启的话,备份里停在旧形态的数据要一直用到
+        // 它下次启动。当场重启一次。引擎没在跑时上面走的是一次性子进程,水位同样已作废,下次启动照常全量跑(15 章决策 41)。
+        if adopt.ok, await Task.detached(priority: .userInitiated, operation: { EngineServiceManager.isRunning }).value {
+            let restarted = await EngineRestartCoordinator.shared.requestRestart()
+            logger.notice("restore: engine restarted to run startup migrations on the restored data, ok=\(restarted)")
+        }
         logger.notice("restore: +\(result.added) ~\(result.overwritten) !\(result.failed) x\(result.rejected) pins+\(result.pinsAdded) meta=\(result.metaBytes)B")
         return result
     }

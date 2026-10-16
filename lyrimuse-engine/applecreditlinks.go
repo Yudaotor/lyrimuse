@@ -207,7 +207,7 @@ func recheckAppleCreditLinks(ctx context.Context, scope migrationScope, deps app
 	log.Printf("apple credit links: %d entries checked, %d linked tracks miss a credited artist, %d replaced, complete=%v",
 		len(items), suspects, changed, complete)
 	if complete {
-		markMigrationDone(migrationAppleCreditLinks, migrationAppleCreditLinksVersion)
+		scope.markDone(migrationAppleCreditLinks, migrationAppleCreditLinksVersion)
 	}
 	return changed
 }

@@ -46,6 +46,9 @@ var (
 	// 见 recheckMigrationsFor:补扫开始前的那份水位(磁盘上已经作废,内存里留着),和这一轮要补扫的条目。
 	migrationRecheck     map[string]int
 	migrationRecheckKeys []string
+	// migrationEpoch:水位每作废一次(invalidateMigrationState / recheckMigrationsFor)加一。放后台跑的迁移开扫时
+	// 记下它,跑完时对不上就不记水位,见 migrationScope.markDone。
+	migrationEpoch int
 )
 
 const (
@@ -156,22 +159,23 @@ func migrationDone(name string, version int) bool {
 
 // migrationScope:一道带水位的迁移这一轮要扫多大范围。迁移用它代替直接问 migrationDone。
 type migrationScope struct {
-	all  bool     // 水位没到:全库
-	keys []string // 水位到了,但这几条这一轮被 lyrics/ 文件夹改写过:只补扫它们
+	all   bool     // 水位没到:全库
+	keys  []string // 水位到了,但这几条这一轮被 lyrics/ 文件夹改写过:只补扫它们
+	epoch int      // 定范围那一刻的 migrationEpoch
 }
 
 // migrationScopeOf:水位到了、没有要补扫的 → 整道跳过;水位到了、有要补扫的 → 只扫那几条;
 // 水位没到(没跑过、改了算法升了版本号、整体作废了)→ 全库。
 func migrationScopeOf(name string, version int) migrationScope {
-	if migrationDone(name, version) {
-		return migrationScope{}
-	}
 	migrationStateMu.Lock()
 	defer migrationStateMu.Unlock()
-	if migrationStatePath != "" && migrationRecheck[name] >= version {
-		return migrationScope{keys: migrationRecheckKeys}
+	if migrationStatePath != "" && migrationState[name] >= version {
+		return migrationScope{epoch: migrationEpoch}
 	}
-	return migrationScope{all: true}
+	if migrationStatePath != "" && migrationRecheck[name] >= version {
+		return migrationScope{keys: migrationRecheckKeys, epoch: migrationEpoch}
+	}
+	return migrationScope{all: true, epoch: migrationEpoch}
 }
 
 // skip:这一轮整道跳过。
@@ -190,6 +194,20 @@ func (s migrationScope) entries() map[string]enrichEntry {
 		}
 	}
 	return sub
+}
+
+// markDone:放后台跑的迁移跑完时记水位,用它而不是直接调 markMigrationDone。定范围之后水位被作废过(运行中从备份
+// 恢复,见 enrichedit.go adoptRestoreEdit)就不记:恢复进来的条目不在这一轮扫过的范围里,记上了它们就再也不会被扫,
+// 不记的代价只是下次启动再跑一遍。
+func (s migrationScope) markDone(name string, version int) {
+	migrationStateMu.Lock()
+	stale := s.epoch != migrationEpoch
+	migrationStateMu.Unlock()
+	if stale {
+		log.Printf("migration state: %s not marked done — the state was cleared while it ran, it runs again next startup", name)
+		return
+	}
+	markMigrationDone(name, version)
 }
 
 // markMigrationDone 记下水位并立刻落盘 —— 落盘失败只记一行日志:代价是下次启动多跑一遍,
@@ -223,6 +241,7 @@ func recheckMigrationsFor(keys []string, why string) {
 	if migrationStatePath == "" || len(keys) == 0 || len(migrationState)+len(migrationRecheck) == 0 {
 		return
 	}
+	migrationEpoch++
 	log.Printf("migration state: %s — startup migrations that already ran re-check only those entries this round", why)
 	if migrationRecheck == nil {
 		migrationRecheck = map[string]int{}
@@ -241,6 +260,8 @@ func invalidateMigrationState(why string) {
 	defer migrationStateMu.Unlock()
 	// 补扫一并作废,全量跑已经包含那几条。要排在下面的早退之前:补扫期间内存里的水位是空的。
 	migrationRecheck, migrationRecheckKeys = nil, nil
+	// 水位本来就是空的也要加:后台迁移头一回跑、还没记过水位时被作废,同样不能让它跑完记上。
+	migrationEpoch++
 	if migrationStatePath == "" || len(migrationState) == 0 {
 		return
 	}
