@@ -224,7 +224,7 @@ func qqClientSearchAt(ctx context.Context, base, query string) ([]qqSearchItem, 
 	}
 	req.Header.Set("Referer", "https://y.qq.com/")
 	req.Header.Set("User-Agent", qqUA)
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(qqHTTPTimeout), req)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +292,7 @@ func qqSmartboxAt(ctx context.Context, host, query string) (qqSmartboxData, erro
 	}
 	req.Header.Set("Referer", "https://y.qq.com/")
 	req.Header.Set("User-Agent", qqUA)
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(qqHTTPTimeout), req)
 	if err != nil {
 		return qqSmartboxData{}, err
 	}
@@ -469,7 +469,7 @@ func qqSingerSuggestionsAt(host, name string) ([]qqSingerSuggestion, bool) {
 	}
 	req.Header.Set("Referer", "https://y.qq.com/")
 	req.Header.Set("User-Agent", qqUA)
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(qqHTTPTimeout), req)
 	if err != nil {
 		return nil, false
 	}
@@ -1656,7 +1656,7 @@ func resolveQQLyricAt(ctx context.Context, host, mid string) (qqLyricResult, err
 	}
 	req.Header.Set("Referer", "https://y.qq.com/") // 反爬要求带 y.qq.com 来源
 	req.Header.Set("User-Agent", qqUA)
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(qqHTTPTimeout), req)
 	if err != nil {
 		return qqLyricResult{}, errQQNotReached
 	}
@@ -1794,7 +1794,7 @@ func qqMusicuPostAt(ctx context.Context, host string, raw []byte) (data json.Raw
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Cookie", "tmeLoginType=-1;")
 	req.Header.Set("User-Agent", "okhttp/3.14.9")
-	resp, err := doHTTPTracked(lyricHTTPClient(8*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(qqMusicuTimeout), req)
 	if err != nil {
 		return nil, false, err
 	}

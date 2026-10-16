@@ -254,7 +254,7 @@ func miguSearchAt(ctx context.Context, host, q string) ([]miguSearchItem, error)
 	}
 	req.Header.Set("Referer", "https://m.music.migu.cn/")
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(miguHTTPTimeout), req)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +310,7 @@ func miguFetchFile(ctx context.Context, url string, maxBytes int64) ([]byte, err
 			return err
 		}
 		req.Header.Set("User-Agent", "Mozilla/5.0")
-		resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+		resp, err := doHTTPTracked(lyricHTTPClient(miguHTTPTimeout), req)
 		if err != nil {
 			return err
 		}
@@ -569,7 +569,7 @@ func miguJadeiteSearch(ctx context.Context, q string) ([]miguSearchItem, error) 
 	req.Header.Set("sign", miguJadeiteSign(q, ts))
 	req.Header.Set("channel", "0146921")
 	req.Header.Set("User-Agent", miguJadeiteUA)
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(miguHTTPTimeout), req)
 	if err != nil {
 		return nil, err
 	}
@@ -659,7 +659,7 @@ func miguAlbumInfoAt(ctx context.Context, host, albumID string) ([]byte, error) 
 	}
 	req.Header.Set("Referer", "https://m.music.migu.cn/")
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(lyricHTTPClient(4*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(miguAlbumInfoTimeout), req)
 	if err != nil {
 		return nil, err
 	}

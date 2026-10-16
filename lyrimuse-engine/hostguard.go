@@ -39,7 +39,7 @@ import (
 //     withBackgroundOutbound 标记:后台请求只在桶里还剩超过 reserve 个令牌时才取,不预支、不排进
 //     前台的队列,所以正在播的那首永远不会排在批量请求后面;后台最多等 hostGuardBackgroundMaxWait。
 //
-// 只管 GET / HEAD,外加 guardReadOnlyPOST 认出的只读 POST(QQ 客户端网关)。上送类请求
+// 只管 GET / HEAD,外加 guardReadOnlyPOST 认出的只读 POST(几个歌词源的查询接口)。上送类请求
 // (scrobble、ListenBrainz、中继、推送、Google 翻译的 POST 表单)各自有退避,而且本地拦下一条
 // 上送,调用方分不清「没发出去」和「发出去没回执」,有的会因此把这条收听记成永不自动重试。
 //
@@ -266,12 +266,30 @@ func guardApplies(req *http.Request) bool {
 	return !guardIsLoopback(guardHost(req.URL))
 }
 
-// guardReadOnlyPOST:用 POST 发的只读查询。QQ 客户端网关(musicu.fcg)的搜索 / 详情 / 歌词全是
-// POST,它挂着的主机要能被接口熔断跳过(qqfallback.go 的备用链靠这个不白打)。
+// guardReadOnlyPOST:用 POST 发的只读查询,跟 GET 一样过这道闸(接口熔断、按主机限速、冷却)。歌词源里这几种是 POST:
+//   - QQ 客户端网关 musicu.fcg(搜索 / 详情 / 歌词)和网页的 lyric_download.fcg(qqfallback.go 的备用链靠接口熔断不白打,
+//     lyric_download 回拒绝时调的 reportEndpointRejected 也只有过闸才拦得住下一次);
+//   - 网易云的 eapi(neteasefallback.go 把 /eapi/ 路径改写成加密表单 POST);
+//   - Deezer 的 GraphQL(pipe.deezer.com/api);
+//   - YouTube Music 的 InnerTube(/youtubei/v1/,lyricfind 的全部请求)。
+//
+// 上送类 POST 不在这里,理由见文件头注。
 func guardReadOnlyPOST(req *http.Request) bool {
-	return req.Method == http.MethodPost &&
-		req.URL.Path == "/cgi-bin/musicu.fcg" &&
-		strings.HasSuffix(guardHost(req.URL), ".y.qq.com")
+	if req.Method != http.MethodPost {
+		return false
+	}
+	host, path := guardHost(req.URL), req.URL.Path
+	switch {
+	case strings.HasSuffix(host, ".y.qq.com"):
+		return path == "/cgi-bin/musicu.fcg" || path == "/qqmusic/fcgi-bin/lyric_download.fcg"
+	case host == "music.163.com" || strings.HasSuffix(host, ".music.163.com"):
+		return strings.HasPrefix(path, "/eapi/")
+	case host == "pipe.deezer.com":
+		return path == "/api"
+	case host == "music.youtube.com" || host == "www.youtube.com" || host == "youtubei.googleapis.com":
+		return strings.HasPrefix(path, "/youtubei/v1/")
+	}
+	return false
 }
 
 // admit 决定这个请求现在能不能发;不能发返回 errHostGuarded(或排队时 ctx 的错误)。
@@ -352,8 +370,6 @@ func (g *hostGuard) endpointBlockedUntil(key string) (time.Time, bool) {
 	return until, true
 }
 
-// reserve 从主机的桶里预订一个令牌,返回要等多久。等待会超过 maxWait 或 deadline 时不预订、
-// ok=false。桶可以透支成负数:那表示前面已经排了几个在等。
 // bucketLocked 取主机的桶并按流逝时间补令牌。调用方持有 g.mu。
 func (g *hostGuard) bucketLocked(host string, now time.Time) (*hostBucket, hostRate) {
 	rate := g.rateFor(host)
@@ -417,6 +433,8 @@ func (g *hostGuard) acquireAbove(ctx context.Context, host string, keep func(hos
 	}
 }
 
+// reserve 从主机的桶里预订一个令牌,返回要等多久。等待会超过 maxWait 或 deadline 时不预订、
+// ok=false。桶可以透支成负数:那表示前面已经排了几个在等。
 func (g *hostGuard) reserve(host string, deadline time.Time) (wait time.Duration, ok bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -531,7 +549,12 @@ func (g *hostGuard) noteLyricSourceThrottled(host, retryAfter string) {
 		if !p.until.IsZero() && now.Sub(p.until) > lyricSourceRetryAfterStreakWindow {
 			p.level = 0
 		}
-		d = min(ra<<min(p.level, 16), longest)
+		// 先比再移位:ra 很大时左移会溢出成负数。
+		if shift := min(p.level, 16); ra <= longest>>shift {
+			d = ra << shift
+		} else {
+			d = longest
+		}
 	}
 	p.level++
 	p.until = now.Add(d)
@@ -547,7 +570,8 @@ func retryAfterSeconds(v string) (time.Duration, bool) {
 	if err != nil || secs <= 0 {
 		return 0, false
 	}
-	return time.Duration(secs) * time.Second, true
+	// 一天以上的值都当一天:乘成纳秒之前封顶,离谱的大数才不会溢出成负数。调用方另有自己的上限。
+	return time.Duration(min(secs, 24*60*60)) * time.Second, true
 }
 
 // backgroundPausedUntil:这个主机的后台请求此刻是不是在暂停期里。

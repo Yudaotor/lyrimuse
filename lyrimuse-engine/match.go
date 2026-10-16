@@ -1149,9 +1149,9 @@ func applyWordTimingTitleOverride(results []scoredLyricCandidateResult) {
 // 专辑名核实,繁简转换只影响字符形式)。
 func normLoose(s string) string {
 	var b strings.Builder
-	// 变音折叠跟 toSimplified 同一个下沉位置、同一个理由:在这里做一次,全部源的匹配
+	// 变音折叠、全角字母数字折成半角(foldFullwidthAlnum)跟 toSimplified 同一个下沉位置、同一个理由:在这里做一次,全部源的匹配
 	// 同时受益,而不是让每个调用点各自记得处理(见 fold.go)。
-	for _, r := range foldDiacritics(strings.ToLower(toSimplified(s))) {
+	for _, r := range foldDiacritics(strings.ToLower(toSimplified(foldFullwidthAlnum(s)))) {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			b.WriteRune(r)
 		}
@@ -1184,7 +1184,7 @@ func looseContains(a, b string) bool {
 // 「々」同样先展开(foldIterationMark),跟 artistMatches 同一个口径。
 func artistCreditParts(s string) []string {
 	var parts []string
-	for _, p := range strings.FieldsFunc(strings.TrimSpace(strings.ToLower(toSimplified(normalizeArtistCreditHanAnd(foldIterationMark(s))))), isArtistCreditSep) {
+	for _, p := range strings.FieldsFunc(strings.TrimSpace(strings.ToLower(toSimplified(normalizeArtistCreditHanAnd(foldIterationMark(foldFullwidthAlnum(s)))))), isArtistCreditMatchSep) {
 		if p = strings.TrimSpace(p); p != "" {
 			parts = append(parts, p)
 		}
@@ -1307,8 +1307,18 @@ func isLatinLetter(r rune) bool {
 //
 // `×`(U+00D7)是日文、中文合作署名的常用写法(`A×B`);` x `、`+`、`with` 不收,它们出现在乐队本名里
 // (`TOMORROW X TOGETHER`、`Florence + The Machine`)。见 09 章决策 248。
+//
+// 这一份还被宽松缓存键(loosenEnrichKeyUncached)复用,而那个键跟 App 侧逐码点对拍(keyparitysweep_test.go):往这里加字符
+// 等于改缓存键,要两边一起改。只为比对「是不是同一个人」多认的分隔符放 isArtistCreditMatchSep。
 func isArtistCreditSep(r rune) bool {
 	return r == '/' || r == '、' || r == '&' || r == ',' || r == '，' || r == '×'
+}
+
+// isArtistCreditMatchSep:比对署名时拆人名用的分隔符 = isArtistCreditSep,外加全角的 `＆` `／` 和分号 `;` `；`
+// (`DAOKO＆米津玄師`、`Kanye West; Jay-Z`)。只给 artistCreditParts、parenAliasNames 这类比对用,不进缓存键;
+// 取第一位艺人(写进 scrobble 的署名)的 isArtistCreditPrimarySep 也不认它们。
+func isArtistCreditMatchSep(r rune) bool {
+	return isArtistCreditSep(r) || r == '＆' || r == '／' || r == ';' || r == '；'
 }
 
 // isArtistCreditPrimarySep 是"取第一位艺人"时的**主分隔符档**。刻意**不含 `/`** ——

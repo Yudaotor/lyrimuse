@@ -10,7 +10,6 @@ import (
 	neturl "net/url"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // ---- 酷狗各接口的备用 ----
@@ -57,20 +56,9 @@ func kugouURLAlternates(raw string) []string {
 }
 
 // kugouGet 发一个酷狗 GET 并把响应解进 v,按 kugouURLAlternates 的顺序试,第一个 200 且解得开的
-// 就停。ctx 已取消时不再试下一个。
+// 就停(tryEach)。
 func kugouGet(ctx context.Context, u string, v any) error {
-	var lastErr error = errors.New("kugou: not reached")
-	for _, alt := range kugouURLAlternates(u) {
-		err := kugouGetAt(ctx, alt, v)
-		if err == nil {
-			return nil
-		}
-		lastErr = err
-		if ctx.Err() != nil {
-			break
-		}
-	}
-	return lastErr
+	return tryEach(ctx, kugouURLAlternates(u), func(alt string) error { return kugouGetAt(ctx, alt, v) })
 }
 
 func kugouGetAt(ctx context.Context, u string, v any) error {
@@ -79,7 +67,7 @@ func kugouGetAt(ctx context.Context, u string, v any) error {
 		return err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(kugouHTTPTimeout), req)
 	if err != nil {
 		return err
 	}

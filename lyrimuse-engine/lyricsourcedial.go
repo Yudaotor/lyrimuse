@@ -70,7 +70,7 @@ func sharedLyricSourceTransport() *http.Transport { return lyricSourceTransportP
 func setSharedLyricSourceTransport(t *http.Transport) { lyricSourceTransportPtr.Store(t) }
 
 // lyricHTTPClient 是歌词源文件里造 client 的唯一入口(lyricsourcedial_test.go 用源码扫描钉着:
-// 那八个文件里不许再出现裸的 `&http.Client{`)。Timeout 语义跟原来的 `&http.Client{Timeout: d}`
+// 名单里那些文件不许再出现裸的 `&http.Client{`)。Timeout 语义跟原来的 `&http.Client{Timeout: d}`
 // 完全一样,只是多了上面那套拨号。
 func lyricHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{Timeout: timeout, Transport: sharedLyricSourceTransport()}

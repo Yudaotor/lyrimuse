@@ -200,11 +200,12 @@ func TestLyricSourceDial_IPLiteralBypassesResolution(t *testing.T) {
 	}
 }
 
-// 源码级守卫:八个歌词源文件里不许再出现裸的 `&http.Client{` —— 那样造出来的 client 走
+// 源码级守卫:下面这些歌词源文件里不许再出现裸的 `&http.Client{` —— 那样造出来的 client 走
 // DefaultTransport,没有 DoH 兜底,VPN 那种 DNS 不答的场景下这个源就又"静默消失"了。
 // musixmatch 刻意不在名单里(它走 dohHTTPClient 那套)。
 func TestLyricSourceFilesUseLyricHTTPClient(t *testing.T) {
-	files := []string{"netease.go", "qq.go", "kugou.go", "lrclib.go", "kuwo.go", "migu.go", "amllttml.go", "ytmusic.go"}
+	files := []string{"netease.go", "qq.go", "kugou.go", "lrclib.go", "kuwo.go", "migu.go", "amllttml.go", "ytmusic.go",
+		"soda.go", "sodaalbum.go", "deezer.go", "qqfallback.go", "neteasefallback.go", "kugoufallback.go"}
 	raw := regexp.MustCompile(`&http\.Client\{`)
 	seen := 0
 	for _, f := range files {

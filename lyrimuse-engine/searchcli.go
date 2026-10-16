@@ -112,6 +112,14 @@ func runSearchLyricsCLI(args []string) {
 		// nativeLyricSources 那次要修的是"手动搜索的名次跟自动决策对不上",而**加错**同样
 		// 会造成对不上,还多一层"错得理直气壮"。
 		setNativeLyricSourcesForPlayer(*player)
+		// 跟常驻引擎同一份对外限流窗口(iTunes / Last.fm / MusicBrainz 被 429 / 503 后的停手时刻,见 sharedcooldown.go):
+		// 不设的话这条子进程既看不到常驻那边刚记下的窗口、照打,自己撞上的也不留给别人。
+		setSharedCooldownPath(filepath.Join(filepath.Dir(cfgPath), clientName+"-outbound-cooldowns.json"))
+		// 常驻引擎存着的反爬暂停(Musixmatch 被拦后停 15 分钟～4 小时)只读读进来:暂停期里手动搜索照样不去碰它。
+		// 不写回 —— 存盘那份归常驻进程,两个进程各写各的会互相盖掉。
+		loadLyricSourceBlocksReadOnly(filepath.Join(filepath.Dir(cfgPath), lyricSourceBlocksFileName))
+		// AMLL 索引只读磁盘上那份,核对交给常驻引擎(见 amllIndexRefreshEnabled)。
+		amllIndexRefreshEnabled.Store(false)
 		// 搜的是正在放的这首时,播放器给的身份照常驻进程那样记下,见 notePlaybackIDsFromAppState。
 		notePlaybackIDsFromAppState(filepath.Join(filepath.Dir(cfgPath), clientName+"-playback-state.json"), time.Now(), searchAppPlaybackJudge())
 	}
@@ -123,7 +131,19 @@ func runSearchLyricsCLI(args []string) {
 	// 指望那边的修复覆盖到这里。
 	// 歌词管理对时长变体条目(「歌名~dur2」)开面板时,歌名带着缓存键里的消歧位:交给各源的去掉它,查缓存仍按原样。
 	queryTitle := titleWithoutDurationVariant(*title)
-	sArtist, sTitle, sAlbum := searchQueryFields(*artist, queryTitle, *album)
+	// 一次性 CLI 命令,没有可以取消它的交互界面,context.Background() 就够。
+	searchCtx := withManualLyricSearch(context.Background())
+	// 用 Kaset 放过的歌,lyricfind 按缓存里存的 YouTube Music 歌曲页取(ytmusicVideoLyric),跟自动解析同一个口径。
+	key := enrichKey(*artist, *title, *album)
+	enrichMu.Lock()
+	searchCtx = withCachedYouTubeMusicVideoIDLocked(searchCtx, key)
+	storedSearchTitle := enrichCache[key].LyricsSearchTitle
+	listedAlbum := enrichCache[key].YouTubeMusicAlbum
+	enrichMu.Unlock()
+	// 播放器没报专辑时拿 YouTube Music 登记的专辑去搜、去打分,跟自动解析同一个 lyricsSearchAlbum:不然同一首 Kaset 的歌
+	// 在这里的名次和专辑分会跟自动解析对不上。
+	searchAlbum, _ := lyricsSearchAlbum(searchCtx, *album, listedAlbum, *duration, *artist, queryTitle)
+	sArtist, sTitle, sAlbum := searchQueryFields(*artist, queryTitle, searchAlbum)
 	// 举例(方大同《Lovers Policy》案):这条 CLI 拿到的 -duration 来自
 	// 调用方(Swift 侧「歌词管理」列表的 Summary.durationSecs),而那个值只在**这首歌
 	// 已经成功解析过一次**时才有——一首从来没成功过的歌(比如这首,「关键字」反查轮几次
@@ -152,15 +172,26 @@ func runSearchLyricsCLI(args []string) {
 	// (fetchScoredLyricCandidatesStreaming 里是单个收集 goroutine 在发,兜底轮之间
 	// 也是顺序执行),这两个变量不需要锁。
 	round, lastDone := 1, 0
+	// 中途显示过、被判废的候选(按源记最后一次):补查轮在中途把它们并进了列表,收尾时没采用那一轮的话最终结果里没有它们,
+	// 弹窗上会先出现、最后又消失。最终那一行把这些源接回去(只接最终结果里没有的源、只接判废的,名次不变)。
+	shownRejected := map[string]scoredLyricCandidateResult{}
+	var shownRejectedOrder []string
 	emit := func(_ neteaseInfo, results []scoredLyricCandidateResult, done, total int) {
 		if done < lastDone {
 			round++
 		}
 		lastDone = done
-		// networkLooksDown 补上——之前每行 stdout 只是候选数组本身,五个源
-		// 都没查到时 desktop-lyrics 只能显示一句笼统的"都没找到",分不清是这首歌真的没有
-		// 网络歌词,还是网络整体不通导致五个源的请求全部发不出去。见 networkobs.go 的
-		// 注释,这里额外带上这个信号,让前端能区分这两种情况、给出不同的提示文案。
+		for _, r := range results {
+			if r.Score >= 0 || r.Instrumental || r.TrackFoundNoLyrics {
+				continue
+			}
+			if _, ok := shownRejected[r.Source]; !ok {
+				shownRejectedOrder = append(shownRejectedOrder, r.Source)
+			}
+			shownRejected[r.Source] = r
+		}
+		// networkLooksDown 跟候选一起带上:各源都没查到时,弹窗要分清是这首歌真的没有网络歌词,还是网络整体不通、
+		// 请求全部发不出去,两种给不同的提示文案(见 networkobs.go)。
 		update := searchLyricsUpdate{
 			Candidates:               filterEnabledLyricSources(results),
 			NetworkLooksDown:         networkLooksDown(),
@@ -199,24 +230,16 @@ func runSearchLyricsCLI(args []string) {
 	// 结果落进那几份带锁的进程内缓存(artistAliasCache / mbPrimaryNameCache /
 	// qqArtistNameCache),别名轮再调时直接命中。查到非空还会落盘,下次点搜索也省了。
 	//
-	// 用 fire-and-forget 而不是等它:预热**失败或没跑完都不该拖慢搜索**。理论上它和
-	// 别名轮那次调用可能撞上、各发一次 MusicBrainz(缓存检查不带 in-flight 去重),但预热
-	// 早了整整一轮(≥20s)、而 MB 客户端上限只有 6s,实际撞不上;真撞上了也只是被
-	// musicbrainzThrottle 串成两次、相隔 1.1s,不会放大成请求风暴。
+	// 用 fire-and-forget 而不是等它:预热**失败或没跑完都不该拖慢搜索**。它和别名轮那次调用可能撞上、各发一次
+	// MusicBrainz(缓存检查不带 in-flight 去重;首轮常常两三秒就结束,别名轮紧跟着开始):两次会被 musicbrainzThrottle
+	// 串开、相隔 1.1s,MusicBrainz 这时已经在共享窗口里停手的话两次都不发(见上面 setSharedCooldownPath),不会放大成请求风暴。
 	go retryArtistIdentities(context.Background(), sArtist)
 
-	// 一次性 CLI 命令,没有可以取消它的交互界面,context.Background() 就够。
-	searchCtx := withManualLyricSearch(context.Background())
-	searchCtx = withSearchQueryOriginal(searchCtx, *artist, queryTitle, *album)
-	// 用 Kaset 放过的歌,lyricfind 按缓存里存的 YouTube Music 歌曲页取(ytmusicVideoLyric),跟自动解析同一个口径。
-	enrichMu.Lock()
-	searchCtx = withCachedYouTubeMusicVideoIDLocked(searchCtx, enrichKey(*artist, *title, *album))
-	storedSearchTitle := enrichCache[enrichKey(*artist, *title, *album)].LyricsSearchTitle
-	enrichMu.Unlock()
+	searchCtx = withSearchQueryOriginal(searchCtx, *artist, queryTitle, searchAlbum)
 	// 这首在缓存里有条目时,学署名同样不拿它自己的署名给它当别名。
-	searchCtx = withLearnedAliasSelf(searchCtx, enrichKey(*artist, *title, *album))
+	searchCtx = withLearnedAliasSelf(searchCtx, key)
 	// 条目里记着带编号的歌名时,跟自动解析一样交给各歌词源(见 withLyricSourceTitle);改过歌名再搜的对不上 key,不带。
-	searchCtx = withLyricSourceTitle(searchCtx, lyricSearchTitleOrStored(searchCtx, storedSearchTitle, queryTitle), *artist, queryTitle, *album)
+	searchCtx = withLyricSourceTitle(searchCtx, lyricSearchTitleOrStored(searchCtx, storedSearchTitle, queryTitle), *artist, queryTitle, searchAlbum)
 	_, results := scoredLyricCandidatesStreaming(searchCtx, sArtist, sTitle, sAlbum, effectiveDuration, emit)
 	// 苹果侧元数据:搜索里的 applecover goroutine 用同一组关键词查过、通常已写热
 	// appleURLCache(同 key)。这里**只读缓存**——查无此歌时它不写缓存,真去查会在
@@ -230,6 +253,15 @@ func runSearchLyricsCLI(args []string) {
 	// 被调用过,不能让 Swift 那边一行 stdout 都收不到、误判成"进程没有任何输出"。
 	// 这一行代表"这轮搜索结束了",所以进度直接报满 —— 即便是 20 秒兜底超时提前收场,
 	// 也不该让弹窗停在 3/5 让人以为还在查(真正"还在查"由进程是否退出决定,见 Swift 侧)。
+	have := map[string]bool{}
+	for _, r := range results {
+		have[r.Source] = true
+	}
+	for _, s := range shownRejectedOrder {
+		if !have[s] {
+			results = append(results, shownRejected[s])
+		}
+	}
 	emit(neteaseInfo{}, results, enabledLyricSourceCount(), enabledLyricSourceCount())
 }
 

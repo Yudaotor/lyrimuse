@@ -125,6 +125,9 @@ func TestYTMusicCreditCachedOrFetch(t *testing.T) {
 	ytmusicCreditMu.Lock()
 	ytmusicCreditFailedAt[key] = time.Now().Add(-2 * ytmusicCreditRetryAfter)
 	ytmusicCreditMu.Unlock()
+	// InnerTube 的 POST 过出站闸(guardReadOnlyPOST):前面那几次 503 让接口熔断跳了闸,这里模拟的是过了冷却期,闸一并换新的。
+	setSharedHostGuard(newHostGuard(time.Now))
+	setSharedLyricSourceBreaker(newLyricSourceBreaker(time.Now))
 	ytmusicListedCachedOrFetch("ot0WzesOp6I", "zh-Hans")
 	waitFor(t, "重试问完", func() bool { return !pending() })
 	if c, ok := ytmusicListedCachedOrFetch("ot0WzesOp6I", "zh-Hans"); c.album != "Westside Whimsy" || !ok {

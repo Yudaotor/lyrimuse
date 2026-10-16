@@ -28,9 +28,10 @@ type coalescedCall struct {
 	body   []byte
 	shared bool // false:没有可共享的结果(出错 / 太大),等的人自己发
 	err    error
-	// leaderCanceled:发出去的那个是被**它自己的** ctx 取消 / 到期的(它所在的支线被叫停了)。只有这种失败
-	// 等的人才各自重发;源自己的超时(http.Client.Timeout,错误同样是 DeadlineExceeded)、连接失败这些
-	// 是这个源此刻的真实状态,共享给等的人 —— 各自重发只会同时再打出 N 个一模一样的请求、各等一整个超时。
+	// leaderCanceled:发出去的那个是被**它自己的** ctx 取消 / 到期的(它所在的支线被叫停了)。这种失败、以及被本地
+	// 出站闸拦下(errHostGuarded,根本没发出去)时,等的人才各自重发;源自己的超时(http.Client.Timeout,错误同样是
+	// DeadlineExceeded)、连接失败这些是这个源此刻的真实状态,共享给等的人 —— 各自重发只会同时再打出 N 个一模一样的
+	// 请求、各等一整个超时。
 	leaderCanceled bool
 }
 
@@ -80,9 +81,10 @@ func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) 
 			noteNetworkRoundOutcome(req.Context(), nil)
 			return coalescedResponse(c, req), nil
 		}
-		// 发出去的那个被它自己的 ctx 取消了、或者响应不能共享(太大):自己的 ctx 还活着就重来一遍 ——
-		// 仍走合并,几个一起重发的只发一次。
-		if c.err != nil && !c.leaderCanceled {
+		// 发出去的那个被它自己的 ctx 取消了、被本地出站闸拦下了(它可能是排不上队的后台请求,这一个是前台的,
+		// 档位不同、该按自己的档位排)、或者响应不能共享(太大):自己的 ctx 还活着就重来一遍 —— 仍走合并,
+		// 几个一起重发的只发一次。
+		if c.err != nil && !c.leaderCanceled && !errors.Is(c.err, errHostGuarded) {
 			noteNetworkRoundOutcome(req.Context(), c.err)
 			return nil, c.err
 		}

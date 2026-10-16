@@ -91,6 +91,27 @@ func TestSearchLyricsNotesPlaybackIDs(t *testing.T) {
 	}
 }
 
+// search-lyrics 是独立进程:开搜之前要接上常驻引擎的对外限流窗口、只读进反爬暂停、关掉 AMLL 索引的后台核对,
+// 专辑跟自动解析一样走 lyricsSearchAlbum。漏了哪一个都不报错,只会让手动搜索去撞常驻那边正在避开的源。
+func TestSearchLyricsSharesResidentOutboundState(t *testing.T) {
+	src, err := os.ReadFile("searchcli.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(src)
+	search := strings.Index(s, "scoredLyricCandidatesStreaming(searchCtx")
+	for _, want := range []string{
+		`setSharedCooldownPath(filepath.Join(filepath.Dir(cfgPath), clientName+"-outbound-cooldowns.json"))`,
+		"loadLyricSourceBlocksReadOnly(filepath.Join(filepath.Dir(cfgPath), lyricSourceBlocksFileName))",
+		"amllIndexRefreshEnabled.Store(false)",
+		"searchAlbum, _ := lyricsSearchAlbum(searchCtx, *album, listedAlbum, *duration, *artist, queryTitle)",
+	} {
+		if i := strings.Index(s, want); i < 0 || search < 0 || i > search {
+			t.Errorf("search-lyrics 开搜之前要有: %s", want)
+		}
+	}
+}
+
 // search-lyrics 开搜之前按缓存里存的 YouTube Music 歌曲页给 ctx 挂上 videoId,lyricfind 跟自动解析一样按它取。
 func TestSearchLyricsAttachesCachedVideoID(t *testing.T) {
 	src, err := os.ReadFile("searchcli.go")
@@ -98,7 +119,7 @@ func TestSearchLyricsAttachesCachedVideoID(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(src)
-	attach := strings.Index(s, "searchCtx = withCachedYouTubeMusicVideoIDLocked(searchCtx, enrichKey(*artist, *title, *album))")
+	attach := strings.Index(s, "searchCtx = withCachedYouTubeMusicVideoIDLocked(searchCtx, key)")
 	search := strings.Index(s, "scoredLyricCandidatesStreaming(searchCtx")
 	if attach < 0 || search < 0 || attach > search {
 		t.Error("search-lyrics 要在开搜之前按缓存给 ctx 挂上 videoId")

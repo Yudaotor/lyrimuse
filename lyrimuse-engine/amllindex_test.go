@@ -675,3 +675,19 @@ func TestReadAMLLIndexFileRejects(t *testing.T) {
 		t.Error("正常的该读进来")
 	}
 }
+
+// 关掉后台核对(手动搜索的一次性子命令)时,该核对了也只读磁盘、不起下载。
+func TestAMLLIndexRefreshDisabledSkipsBackgroundCheck(t *testing.T) {
+	amllIndexRefreshEnabled.Store(false)
+	t.Cleanup(func() { amllIndexRefreshEnabled.Store(true) })
+	s := newAMLLIndexStore(filepath.Join(t.TempDir(), "idx.json"), time.Now)
+	if idx := s.current(); idx != nil {
+		t.Fatalf("磁盘上没有索引时该是 nil: %v", idx)
+	}
+	s.mu.Lock()
+	refreshing, attempted := s.refreshing, !s.lastAttempt.IsZero()
+	s.mu.Unlock()
+	if refreshing || attempted {
+		t.Errorf("关掉之后不该起后台核对: refreshing=%v attempted=%v", refreshing, attempted)
+	}
+}

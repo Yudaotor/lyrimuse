@@ -93,7 +93,7 @@ func TestVideoTitleWiredIntoLyricsAlbumAndCover(t *testing.T) {
 	for file, needles := range map[string][]string{
 		"enrich.go": {
 			"if splitArtist, splitTitle, durationUnknown, ok := titleSplitIdentity(artist, title); ok {",
-			"splitNe, splitResults := scoredLyricCandidatesStreaming(splitCtx, splitArtist, splitTitle, album, splitDuration, onUpdate)",
+			"splitNe, splitResults := scoredLyricCandidatesStreaming(splitCtx, splitArtist, splitTitle, album, splitDuration, keepShownRoundUpdate(onUpdate, results))",
 			"if v := parseVideoTitle(artist, title); v.Kind == videoTitleMusicVideo {\n\t\tcoverArtist, coverTitle = v.Artist, v.Song\n\t\tif v.DurationUnknown {\n\t\t\tcoverDuration = 0",
 			"appleMatch := appleMusicMatchCached(ctx, coverArtist, coverTitle, coverAlbum, coverDuration)",
 			"qqCover, _, qqAlbum := qqCoverFallback(ctx, coverArtist, coverTitle, coverAlbum)",

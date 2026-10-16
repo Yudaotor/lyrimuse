@@ -12,7 +12,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // ---- 酷我逐字歌词(lrcx) ----
@@ -104,7 +103,7 @@ func kuwoFetchMobiLyricAt(ctx context.Context, base, musicID, lrcx string) ([]by
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(kuwoHTTPTimeout), req)
 	if err != nil {
 		return nil, err
 	}

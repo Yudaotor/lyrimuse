@@ -591,8 +591,9 @@ func itunesSearchCoolingDown(now time.Time) bool {
 	return now.Before(itunesSearchCooldownUntil)
 }
 
-// noteITunesSearchStatus 按一次响应的状态码更新退避窗口。非限流状态码立即清掉窗口 ——
-// 跟 lyricSourceBreaker 的 default 分支同一条规矩:拿到一次正常响应就说明限流过去了。
+// noteITunesSearchStatus 按一次响应的状态码更新退避窗口。非限流状态码不撤还没到期的窗口:窗口里 search / lookup
+// 都不发请求,这时收到的正常响应只会是窗口开始之前就在途的那几个(CN、US 两个商店常常同时在查),不说明限流过去了 ——
+// 跟 lyricSourceBreaker 留着 429 窗口同一条规矩。到期之后照常放行。
 // status 传 0 表示没拿到响应(超时 / 连不上),按 403 那一档退避:限流时这个端点也会
 // 直接拖到超时,跟 403 一样拿不到 Retry-After。
 func noteITunesSearchStatus(status int, retryAfter string, now time.Time) {
@@ -613,8 +614,10 @@ func noteITunesSearchStatus(status int, retryAfter string, now time.Time) {
 			itunesSearchCooldownUntil = until
 		}
 	default:
-		itunesSearchCooldownUntil = time.Time{}
-		itunesSearchCooldownLogged = false
+		if !now.Before(itunesSearchCooldownUntil) {
+			itunesSearchCooldownUntil = time.Time{}
+			itunesSearchCooldownLogged = false
+		}
 		return
 	}
 	if !itunesSearchCooldownLogged {

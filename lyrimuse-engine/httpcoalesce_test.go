@@ -156,6 +156,45 @@ func TestHTTPCoalesceFollowerRetriesWhenLeaderCancelled(t *testing.T) {
 	}
 }
 
+// 发出去的那个被本地出站闸拦下(比如它是排不上队的后台请求)时,等它的那个按自己的档位重发,不跟着收这个本地错误。
+func TestHTTPCoalesceFollowerRetriesWhenLeaderGuarded(t *testing.T) {
+	srv, hits := withCoalesceTestServer(t, 0)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/lyric?id=5", nil)
+	key, ok := httpCoalesceKey(req)
+	if !ok {
+		t.Fatal("测试请求应当可合并")
+	}
+	leader := &coalescedCall{done: make(chan struct{}), err: errHostRateLimited}
+	httpCoalesceMu.Lock()
+	httpCoalesceInflight[key] = leader
+	httpCoalesceMu.Unlock()
+	got := make(chan string, 1)
+	go func() {
+		b, err := coalesceGet(t, context.Background(), srv.URL+"/lyric?id=5", nil)
+		if err != nil {
+			t.Error(err)
+		}
+		got <- b
+	}()
+	// 等的那个已经挂在 leader 上(合并表里这一项还是 leader)再收尾。
+	time.Sleep(20 * time.Millisecond)
+	httpCoalesceMu.Lock()
+	delete(httpCoalesceInflight, key)
+	httpCoalesceMu.Unlock()
+	close(leader.done)
+	select {
+	case b := <-got:
+		if b != "body:id=5" {
+			t.Fatalf("等的那个应当自己重发拿到结果: %q", b)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("等的那个没有自己重发")
+	}
+	if n := atomic.LoadInt32(hits); n != 1 {
+		t.Fatalf("应当只发了自己重发的那 1 次: %d", n)
+	}
+}
+
 // 等到别人那次合并结果的请求也记进自己那一轮(withNetworkRound):它没真发请求,不记的话一轮里问成的恰好都是等结果的那几个时,
 // 这一轮会被当成一个请求都没成。
 func TestHTTPCoalesceFollowerCountsInItsNetworkRound(t *testing.T) {

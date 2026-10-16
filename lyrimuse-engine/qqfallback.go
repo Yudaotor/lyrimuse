@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 // ---- QQ 各接口的备用 ----
@@ -47,21 +46,9 @@ var (
 // errQQNotReached:这次没问成(不是「查无」)。
 var errQQNotReached = errors.New("qq: not reached")
 
-// qqTryHosts 按顺序对每个主机调 try,第一个返回 nil 的就停;全部失败返回最后一个错误。ctx 已取消
-// 时不再试下一个。try 只在没问成时返回错误,接口正常答了(包括查无)要返回 nil。
+// qqTryHosts 按顺序对每个主机调 try,语义同 tryEach。try 只在没问成时返回错误,接口正常答了(包括查无)要返回 nil。
 func qqTryHosts(ctx context.Context, hosts []string, try func(host string) error) error {
-	lastErr := errQQNotReached
-	for _, h := range hosts {
-		err := try(h)
-		if err == nil {
-			return nil
-		}
-		lastErr = err
-		if ctx.Err() != nil {
-			break
-		}
-	}
-	return lastErr
+	return tryEach(ctx, hosts, try)
 }
 
 // qqSearchComm:网关搜索要用桌面客户端这组公共参数,拿 qqCommBase(手机版)去调会回 request.code
@@ -172,7 +159,7 @@ func qqAlbumSongsWebAt(ctx context.Context, host, albumMid string) ([]qqAlbumSon
 	}
 	req.Header.Set("Referer", "https://y.qq.com/")
 	req.Header.Set("User-Agent", qqUA)
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(qqHTTPTimeout), req)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +248,7 @@ func qqAlbumNameWebAt(ctx context.Context, host, albumMid string) (string, error
 	}
 	req.Header.Set("Referer", "https://y.qq.com/")
 	req.Header.Set("User-Agent", qqUA)
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(qqHTTPTimeout), req)
 	if err != nil {
 		return "", err
 	}
@@ -390,7 +377,7 @@ func qqSongDetailWebAt(ctx context.Context, host, mid string) (qqSongDetailRow, 
 	}
 	req.Header.Set("Referer", "https://y.qq.com/")
 	req.Header.Set("User-Agent", qqUA)
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(qqHTTPTimeout), req)
 	if err != nil {
 		return qqSongDetailRow{}, false, err
 	}
@@ -443,7 +430,7 @@ func qqLyricDownloadAt(ctx context.Context, host string, songID int64) (qqQRCRes
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Referer", "https://y.qq.com/")
 	req.Header.Set("User-Agent", qqUA)
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(qqHTTPTimeout), req)
 	if err != nil {
 		return qqQRCResult{}, errQQNotReached
 	}

@@ -86,9 +86,15 @@ func writtenInCJKScript(lyrics string) bool {
 //
 // 已经有任意一个源给出罗马音或语种信号时直接放行(不需要再试)——这条要放在文字系统
 // 判断前面:找到信号就该停,不管其它候选文字系统判成什么。
+//
+// 只看能用的候选(Score >= 0):被判废的多半是别的歌(对不上歌手、语种不对),它是什么文字、带没带信号都说明不了这一首,
+// 不该为它多跑一轮全源重查,也不该因为它带着信号就不跑。
 func needsRomanizationRetry(results []scoredLyricCandidateResult) bool {
 	needsScript := false
 	for _, r := range results {
+		if r.Score < 0 {
+			continue
+		}
 		if r.LyricsRoma != "" || r.Language != "" {
 			return false
 		}
@@ -253,7 +259,7 @@ type enrichEntry struct {
 	// LyricsScore/LyricsSourcesSeen 记录"这条歌词是在什么情况下选出来的",给
 	// needsLyricsRetry 判断值不值得再搜一次用。
 	//
-	// 为什么需要:五源搜索有 20 秒总上限(lyricSearchDeadline),到点没回来的源这一轮直接
+	// 为什么需要:全源搜索有 20 秒总上限(lyricSearchDeadline),到点没回来的源这一轮直接
 	// 不参与候选;而网易云恰恰是最慢、也最可能带逐字歌词的那个。同一首歌连查两次可能一次
 	// 3 秒返回、候选里**根本没有网易云**(lrclib 以 83 分胜出),另一次跑满 20 秒、网易云
 	// 回来了 525 分带逐字 —— 选中哪个源有相当大的运气成分,而缓存又是"解析一次永久保留",
@@ -1479,7 +1485,7 @@ func allEnabledLyricSourcesResponded(scored []scoredLyricCandidateResult) bool {
 
 // rescoreDecidable 判断这一轮的结果够不够格推翻当初那次决定。
 //
-// 判据**不是**"所有启用的源都回来了":五源搜索有 20 秒总上限,**有源超时是常态**,那样这条
+// 判据**不是**"所有启用的源都回来了":全源搜索有 20 秒总上限,**有源超时是常态**,那样这条
 // 路对绝大多数条目会静默失效(日志里连着都是 `rescore deferred (source missing)`)。
 //
 // 真正要防的不是"信息不完整",而是"把手上这份好的换成更差的"。只要**当前这份歌词的来源**
@@ -2814,7 +2820,7 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		// 全空分两种,结论完全不同,不能压成同一个"不写":
 		//
 		//  · 根本没查成(断网/整轮一个请求都没发出去)—— 不写,下次再试,别把一次网络抽风钉死成"这首歌没歌词"。
-		//  · 查过了,确实没有(网络通、请求真发出去过、九个源就是一条候选都没给)—— 照常写入:App 侧判定"这一轮解析
+		//  · 查过了,确实没有(网络通、请求真发出去过、各源就是一条候选都没给)—— 照常写入:App 侧判定"这一轮解析
 		//    跑完了"的唯一依据就是条目里的 TS(见 EnrichCacheReader.EnrichCacheLyrics.resolved),不写的话悬浮歌词、
 		//    灵动岛、歌词窗口会一直停在"搜索歌词中…"。
 		//
@@ -2822,7 +2828,7 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		// UI 统一切到"暂无歌词"。这不是永久结论:needsLyricsFirstFill 会按 24h 起始的指数退避继续重试,这一轮有源因
 		// 熔断被跳过的(LyricsSourcesSkipped 非空)10 分钟就重来一次。
 		//
-		// 判据用 attempts/failures 这一对而不是"九个源全应答":20 秒截止时 8/9 源回来是常态,要求全应答等于把最常见的
+		// 判据用 attempts/failures 这一对而不是"全部源都应答":20 秒截止时差一两个源没回来是常态,要求全应答等于把最常见的
 		// 情况留在无限转圈里。边界(整轮零请求、只发了一两个请求且全挂)由 lyricsRoundConfirmsNoResult 挡掉,见它的头注。
 		if lyricsRoundConfirmsNoResult(attempts, failures) {
 			commitEnrichEntrySince(key, e, stamp)
@@ -3346,11 +3352,11 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	// 开着歌词功能时,这次网易云查询在 scoredLyricCandidates 内部,跟 qq/酷狗/Musixmatch/
 	// LRCLIB 四个源一起并发发出去 —— 别改回"本函数先同步查一遍、查完那四个才开始跑",那等于
 	// 把网易云自己最坏能到小三十秒的串行耗时原样叠加在整体等待时间最前面。只有歌词功能关掉、
-	// 根本不需要凑齐九个源时,才单独查这一次。
+	// 根本不需要凑齐各个歌词源时,才单独查这一次。
 	var ne neteaseInfo
 	var scored []scoredLyricCandidateResult
-	// 歌词:网易云/QQ音乐/酷狗/Musixmatch/LRCLIB/amll/lyricfind/酷我/咪咕 九个源全部并发查一遍,
-	// 不是查到第一个能用的就停——一首歌只在缓存未命中时解析一次,后续都直接读缓存,九个源都查一遍
+	// 歌词:lyricSourceNames 里开着的源全部并发查一遍,
+	// 不是查到第一个能用的就停——一首歌只在缓存未命中时解析一次,后续都直接读缓存,全部源都查一遍
 	// 换来更可信的结果性价比很高。取分/并发/超时兜底细节见 scoredLyricCandidates
 	// (同一份逻辑也供 desktop-lyrics 的"重新搜索候选歌词"手动纠正功能复用,搜索用的
 	// CLI 子命令见 searchcli.go)——那条手动路径故意不受下面 pickLyricCandidate 的
@@ -3992,6 +3998,8 @@ func scoredLyricCandidates(ctx context.Context, artist, title, album string, dur
 // 触发了)别名重试查询,所以手动搜索(searchcli.go)在别名重试这条冷门路径上也能看到
 // 陆续到达的候选,不会因为切换成了 alias 重试就突然掉回"等全部查完才展示"。
 func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album string, durationSecs float64, onUpdate lyricSearchUpdateFunc) (neteaseInfo, []scoredLyricCandidateResult) {
+	// 同一次解析里被总截止掐掉过的源,补缺席的轮次不再为它跑(见 deadlinemiss.go)。重入时沿用外层那一份。
+	ctx = withLyricDeadlineMisses(ctx)
 	ne, results := fetchScoredLyricCandidatesStreaming(ctx, artist, title, album, durationSecs, onUpdate)
 	// 播放器自己说这一条是纯音乐时不再换身份重搜:搜回来的词一条都不能用(lyricCandidateUsable)。手动搜索照常搜,那是用户要看候选。
 	if playerSaysInstrumental(results) && !manualLyricSearch(ctx) {
@@ -4002,14 +4010,15 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 	// 不换曲名,对一个 YouTube 频道名也查不到别名(MusicBrainz 没有、本机学不到、appleTitleSearchIdentities 要曲名
 	// 归一全等)。
 	//
-	// 做法:九个源一个能用的候选都没有(rescue)、且曲名能按第一个破折号拆成「署名 - 曲名」时
+	// 做法:全部源一个能用的候选都没有(rescue)、且曲名能按第一个破折号拆成「署名 - 曲名」时
 	// (albumHintTitleSplit,跟专辑回填共用同一条拆法,含剥尾括号的规则),把拆出来的身份
 	// **整个重入本函数**一次 —— 别名轮 / 首歌手变体轮 / 标题反查轮全套照跑,打分与合并也都按
 	// 拆出来的身份算,不会像 mergeLyricCandidateRounds 那样再按频道名重打分把候选判废。重入
 	// 救回来就直接用它那份(ne 整份采用:这就是这首歌真正的署名,CanonicalArtist 跟着变成
 	// 「Musiq Soulchild」,专辑回填的 1 档旁证也顺带有了);没救回来就当没发生过,原身份那批
 	// 结果照旧往下走别名轮。递归有界:拆出来的曲名比原曲名少一段破折号,拆到没有破折号为止。
-	// 「Song - Remastered」这类被拆错的歌名最多白查一轮、候选过不了打分,不会多出错结果。
+	// 「Song - Remastered」这类被拆错的歌名会白跑一遍重入(连同它的别名轮、变体轮、反查轮;救不回来时原身份的
+	// 补查轮照样再跑一遍),候选过不了打分,不会多出错结果。
 	// 翻唱重入那一轮不拆(coverPerformerOnly):拆出来的是曲名里别的名字,不是翻唱者。
 	if !hasUsableLyricCandidate(results) && !coverPerformerOnly(ctx) {
 		if splitArtist, splitTitle, durationUnknown, ok := titleSplitIdentity(artist, title); ok {
@@ -4020,7 +4029,9 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			if durationUnknown {
 				splitDuration = 0
 			}
-			splitNe, splitResults := scoredLyricCandidatesStreaming(splitCtx, splitArtist, splitTitle, album, splitDuration, onUpdate)
+			// 界面上原身份那批先留着(keepShownRoundUpdate):重入那一轮的源一个个应答,裸透传的话弹窗先缩成它的半截结果,
+			// 救不回来时又跳回原来那批。
+			splitNe, splitResults := scoredLyricCandidatesStreaming(splitCtx, splitArtist, splitTitle, album, splitDuration, keepShownRoundUpdate(onUpdate, results))
 			if hasUsableLyricCandidate(splitResults) {
 				log.Printf("lyrics: title-split identity fallback succeeded: original=%q - %q identity=%q - %q candidates=%d sources=%v",
 					artist, title, splitArtist, splitTitle, len(splitResults), lyricSourcesWithCandidates(splitResults))
@@ -4031,11 +4042,11 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 	// 翻唱重入:曲名写着翻唱者(「(Cover by X)」「Covered by X」)、原身份一个能用的候选都没有时,换成翻唱者
 	// 整个重入一次,只认翻唱版本身,见 coverRescue。形态同上面的拆分重入:救回来就用,没救回来当没发生过。
 	if !hasUsableLyricCandidate(results) {
-		if coverNe, coverResults, ok := coverRescue(ctx, artist, title, album, durationSecs, onUpdate); ok {
+		if coverNe, coverResults, ok := coverRescue(ctx, artist, title, album, durationSecs, keepShownRoundUpdate(onUpdate, results)); ok {
 			return coverNe, coverResults
 		}
 	}
-	// 判据是"有没有能用的候选",不是"有没有候选"。写成 `len(results) > 0` 的话:九个源都答了、但每一条都被
+	// 判据是"有没有能用的候选",不是"有没有候选"。写成 `len(results) > 0` 的话:各源都答了、但每一条都被
 	// scoreLyricCandidate 判了 -1(不是逐行时间戳、语言对不上、整份只有署名行……)时 results 非空,重试根本不触发,
 	// 最后拿一堆废候选收场 —— 而这恰恰是最该换个歌手名再试一次的情形。
 	//
@@ -4154,7 +4165,7 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 				romaTried = true
 			}
 			// 别名轮的来路按**这一位别名为什么被试**分三种,决策留痕里分得开:
-			// 救急(九源全空)/ 缺罗马音信号 / 只是某几个源没答。三者的后续处置完全不同 ——
+			// 救急(全部源都没有能用的)/ 缺罗马音信号 / 只是某几个源没答。三者的后续处置完全不同 ——
 			// 前两种全源重查、第三种只定向问 missing 那几个。
 			aliasReason := lyricQueryReasonAliasMissing
 			switch {
@@ -4186,7 +4197,10 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 					altResults = keepLyricSources(altResults, only)
 				}
 				if aliasUpdate != nil {
+					// 先报一帧 0/n 再报整轮:提前跑完的支线一次交齐,不先报 0 的话接连两支都是 n/n,弹窗那边按
+					// 「进度回跳 = 新一轮」数轮次(searchcli.go 的 emit)会少数一轮。
 					n := enabledLyricSourceCount()
+					aliasUpdate(altNe, nil, 0, n)
 					aliasUpdate(altNe, altResults, n, n)
 				}
 			} else {
@@ -4336,7 +4350,9 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			if spec != nil && spec.fetched {
 				altNe, altResults = spec.ne, spec.results
 				if titleUpdate != nil {
+					// 先报 0/n,理由同别名轮那一处。
 					n := enabledLyricSourceCount()
+					titleUpdate(altNe, nil, 0, n)
 					titleUpdate(altNe, altResults, n, n)
 				}
 			} else {
@@ -4434,6 +4450,7 @@ func hasUsableLyricCandidate(scored []scoredLyricCandidateResult) bool {
 // soda 照常算进来:它有自己的搜索(本地队列缓存拿不到 id 时的兜底,见 soda.go),别名确实
 // 会影响命中 —— 本地那条路在别名轮里查空是预期的(署名换了就不再对应同一条录音),搜索
 // 那条路则正是别名要救的场景。
+// 同一次解析里被总截止掐掉过的源也剔掉(见 deadlinemiss.go):再问一遍多半又是等满一整轮截止。
 // 这一轮因熔断冷却 / 后台暂停被跳过的源(ctx 上 lyricSourceRound 的跳过名单)也剔掉:补查轮里它照样
 // 被跳过,为它去查别名只是白打别名解析那几次请求;这一轮会因此不追平打分版本,之后整首重来。
 // 给 scoredLyricCandidatesStreaming 的别名轮当"只查这些源"的名单;顺序按 lyricSourceNames。
@@ -4454,7 +4471,7 @@ func lyricSourcesWorthRetry(ctx context.Context, scored []scoredLyricCandidateRe
 	skipped := lyricSourceRoundFrom(ctx).skippedSources()
 	var out []string
 	for _, s := range lyricSourceNames {
-		if !lyricSourceEnabled(s) || usable[s] || transport[s] != "" || slices.Contains(skipped, s) {
+		if !lyricSourceEnabled(s) || usable[s] || transport[s] != "" || slices.Contains(skipped, s) || lyricDeadlineMissed(ctx, s) {
 			continue
 		}
 		switch s {
@@ -4623,12 +4640,12 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 			chosen[r.Source] = r
 		}
 	}
-	// 重建顺序按 lyricSourceNames 的固定源序,不是两轮的到达/分数序——scoreAndSort 的
+	// 重建顺序按 lyricCandidateTieOrder(主路径构造候选的源序),不是两轮的到达/分数序——scoreAndSort 的
 	// 稳定排序约定"同分按候选构造顺序决胜,确定且可复现",合并路径要跟主路径同一套口径,
 	// 否则同一首歌走没走变体轮,同分平手时可能选出不同的源。
 	ordered := make([]string, 0, len(order))
 	inNames := map[string]bool{}
-	for _, s := range lyricSourceNames {
+	for _, s := range lyricCandidateTieOrder {
 		if _, ok := chosen[s]; ok {
 			ordered = append(ordered, s)
 			inNames[s] = true
@@ -4702,7 +4719,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 //   - total 只数用户在"歌词来源"里**开着**的源。关掉的源即便查了也不会出现在候选里
 //     (见 filterEnabledLyricSources),把它算进分母会让进度永远停在 6/7 这种数上。
 //   - 别名重试那条路径会带着同一个回调再跑一轮完整搜索,于是 done 会从头再数一遍 ——
-//     如实反映"确实又查了九个源",不假装单调递增。
+//     如实反映"确实又把各个源查了一遍",不假装单调递增。
 type lyricSearchUpdateFunc func(ne neteaseInfo, results []scoredLyricCandidateResult, done, total int)
 
 // mergedRoundUpdate 包装追加轮(别名轮 / 首歌手变体轮 / 标题反查轮)的流式回调:每次更新先与前几轮已有的
@@ -4716,8 +4733,42 @@ func mergedRoundUpdate(onUpdate lyricSearchUpdateFunc, artist, title, album stri
 	}
 }
 
-// lyricSourceNames 是全部歌词源的名字,每个源一个并发 goroutine;顺序无关紧要。
+// keepShownRoundUpdate:换了身份整个重入(拆分署名、翻唱者)那一轮的进度回调。重入那一轮按它自己的身份打分,不能像
+// mergedRoundUpdate 那样按原身份重打分(会把它的候选全判废);只把原来那批里重入这一轮还没出现的源接在后面,弹窗上
+// 原来那批不会先消失。只管显示:onUpdate 只给弹窗用,最终结果照旧由调用方决定采用哪一批。
+func keepShownRoundUpdate(onUpdate lyricSearchUpdateFunc, base []scoredLyricCandidateResult) lyricSearchUpdateFunc {
+	if onUpdate == nil || len(base) == 0 {
+		return onUpdate
+	}
+	return func(vne neteaseInfo, vres []scoredLyricCandidateResult, done, total int) {
+		have := map[string]bool{}
+		for _, r := range vres {
+			have[r.Source] = true
+		}
+		shown := append([]scoredLyricCandidateResult(nil), vres...)
+		for _, r := range base {
+			if !have[r.Source] {
+				shown = append(shown, r)
+			}
+		}
+		sort.SliceStable(shown, func(i, j int) bool { return shown[i].Score > shown[j].Score })
+		onUpdate(vne, shown, done, total)
+	}
+}
+
+// lyricSourceNames 是全部歌词源的名字,每个源一个并发 goroutine。顺序只决定「有歌没词」标记、日志和设置项里的源序;
+// 同分候选谁赢看 lyricCandidateTieOrder,不看这里。
 var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "musixmatch", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda"}
+
+// lyricCandidateTieOrder:同分候选按这个源序决胜,就是 rankLyricSourceResults 构造候选的顺序(本机几家的歌词夹在
+// 汽水和 AMLL 之间)。合并几轮结果的 mergeLyricCandidateRounds 按它重建顺序,两边才是同一个口径:不然同一首歌走没走
+// 补查轮,同分时会在 musixmatch / lrclib、applemusic / amll 之间换源。rankLyricSourceResults 里加了源、挪了顺序,这里
+// 跟着改(lyrictieorder_test.go 用源码扫描钉着两边一致)。
+var lyricCandidateTieOrder = []string{
+	"netease", "qq", "kugou", "musixmatch", "lrclib", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda",
+	kkboxLocalLyricsSource, amazonLocalLyricsSource, lxMusicLocalLyricsSource, localFileLyricsSource, spotifyLocalLyricsSource,
+	"amll",
+}
 
 // enabledLyricSourceCount 数"用户开着的歌词源"有几个。features().LyricsSources 为空
 // 表示还没配置过 = 全开(跟 filterEnabledLyricSources 同一条约定)。
@@ -5759,6 +5810,11 @@ collect:
 			earlyWatch.observe(raw["netease"].ne, scoreAndSort(), doneSources)
 		case <-deadline:
 			log.Printf("lyrics: search deadline (%s) hit for artist=%q title=%q, proceeding with %d/%d sources back", lyricSearchDeadline, artist, title, enabledDone(), totalSources)
+			for _, s := range lyricSourceNames {
+				if !doneSources[s] {
+					noteLyricDeadlineMiss(ctx, s)
+				}
+			}
 			break collect
 		case <-ctx.Done():
 			// 用户主动取消(见 enrichcancel.go)——不用等剩下的源真的把 in-flight 请求

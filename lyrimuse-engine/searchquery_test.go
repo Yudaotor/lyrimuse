@@ -38,7 +38,7 @@ func TestSearchQueryFields(t *testing.T) {
 func TestSearchQueryFieldsIsWired(t *testing.T) {
 	for file, needle := range map[string]string{
 		"enrich.go":              "artist, title, searchAlbum = searchQueryFields(artist, title, searchAlbum)",
-		"searchcli.go":           "sArtist, sTitle, sAlbum := searchQueryFields(*artist, queryTitle, *album)",
+		"searchcli.go":           "sArtist, sTitle, sAlbum := searchQueryFields(*artist, queryTitle, searchAlbum)",
 		"resynclyricscli.go":     "artist, title, album = searchQueryFields(artist, title, album)",
 		"testlyricsourcescli.go": "searchQueryFields(artist, title, album)",
 		"healthcheckcli.go":      "searchQueryFields(p.artist, p.title, p.album)",

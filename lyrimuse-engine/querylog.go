@@ -237,7 +237,7 @@ func (l *lyricQueryLog) queries() []lyricQueryRecord {
 // sortedLyricSourceOnly 把 ctx 上那份"只查这几个源"的名单(withLyricSourceOnly 挂的
 // map[string]bool)摊成**定序**切片。必须定序:map 迭代顺序是随机的,直接落进决策存档
 // 会让同一轮解析每次序列化出不同的 JSON —— 存档是给人逐条比对用的,顺序抖动等于噪音。
-// 排序基准用 lyricSourceNames(源的规范顺序,跟"歌词来源"设置项、候选构造顺序同一份),
+// 排序基准用 lyricSourceNames(源的规范顺序,跟"歌词来源"设置项同一份),
 // 不用字典序 —— 界面上列出来的顺序应当跟别处一致。
 func sortedLyricSourceOnly(ctx context.Context) []string {
 	only := lyricSourceOnlyFrom(ctx)

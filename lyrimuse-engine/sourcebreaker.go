@@ -20,13 +20,14 @@ import (
 //
 // 全部歌词源并发、20 秒总截止(lyricSearchDeadline)。某个源整个哑掉(DNS 污染、TLS 挂死、5xx)时,不熔断的话
 // 每首歌都要把它等到自己的超时。这里是「某个源连续失败就在接下来一段时间跳过它」的通用层;点状的退避另有
-// 网易云端点桶 30s 拒绝冷却、lb.go 的 429 阶梯、Musixmatch 自己换 token。
+// 网易云按端点分桶的拒绝退避(2 分钟起翻倍、封顶 15 分钟,netease.go)、lb.go 的 429 阶梯、Musixmatch 自己换 token。
 //
 // 挂在哪:各源函数把所有错误都吞成空结果、不区分"没查到"和"没查成",唯一集中的地方是 doHTTPTracked
 // (所有对外请求的统一出口),能拿到网络层错误与状态码,所以失败观察挂在那里,按请求主机归到源
 // (lyricSourceForHost);跳过决策挂在 fetchScoredLyricCandidatesStreaming 每个源 goroutine 的开头(planRound)。
 //
-// 只统计两类失败:http.Client.Do 本身返回错误(DNS/连接/TLS/超时)和 5xx;429 单独按 Retry-After 处理。
+// 只统计两类失败:http.Client.Do 本身返回错误(DNS/连接/TLS/超时)和 5xx;429 单独按 Retry-After 处理(没给时按连着被限流
+// 几次升档,见 observeWith 的 429 那一支)。
 // 拿到响应且状态码 < 500 的请求都算一次成功,当场解除冷却(档位另算,见 lyricSourceBreakerSchedule)。
 // 4xx 一律不算:那是各源自己的业务判定(网易云 body 里的 405、Musixmatch 的 401 hint=captcha 各自处理,后者由它
 // 自己调 noteBlocked,见「反爬拦截」一节)。401/402/403 也不当长期粘性冷却的理由:对没有凭据的源,那样会让它
@@ -34,16 +35,20 @@ import (
 //
 // 三条护栏(理由见 09 章决策 41):
 //   - 连续 2 次失败才开(lyricSourceBreakerTripAfter),不是 1 次:一次网络抖动不该让下一首歌
-//     少一个源。网易云一轮最多发 4 个变体,一首歌就够触发;lrclib 单请求要两首歌。
+//     少一个源。网易云一轮最多发 4 个变体,lrclib 一首歌三级查询再加一次 503 重试,一首歌都可能触发。
 //   - 启用的源全部在冷却中时谁也不跳过,照常跑一轮:让 roundLooksNetworkDown 那套
 //     "至少 3 次请求全失败 = 断网"的判定接手,别让熔断把断网状态伪装成"这首歌没歌词"。
 //   - 被跳过的源记进 lyricSourceRound(经 ctx 传给 enrich.go),落到 lyrics_sources_skipped /
 //     决策留痕的 sources_skipped;歌词为空且这一轮有源被跳过时,needsLyricsFirstFill 的补空
-//     间隔从 24 小时改成 10 分钟(只对第一次生效)。
+//     间隔缩短成 10 分钟,被跳过的源已经不在冷却时 30 秒(只对第一次生效,见 lyricsFillSkippedRetryInterval)。
 //
 // 被跳过的源在"哪些源应答了"的口径里就是没应答,接上既有的两条机制:needsLyricsRetry 会在 6 小时后重搜
-// (最多 3 次),rescoreDecidable 拒绝在当前源缺席时降级。全部状态在进程内存里,引擎重启归零;search-lyrics
-// 这类一次性 CLI 进程不会有冷却态。同一个 observe 入口顺手记下的传输层失败分类(本文件最后一节)以
+// (最多 3 次),rescoreDecidable 拒绝在当前源缺席时降级。冷却状态在进程内存里,引擎重启归零;search-lyrics
+// 这类一次性 CLI 进程从空开始,只读进常驻进程存着的反爬暂停(下面「反爬拦截」一节)。
+//
+// 冷却到期后下一轮把这个源照常问一遍(不是只放一个试探请求):跳不跳过是按轮决定的(planRound),同源并发的几个请求
+// (网易云的歌手变体)要么一起问、要么一起跳,在请求这一层只放一个会让试探那一轮丢掉别的变体。源还没好时白发的是
+// 这一轮的请求,每个冷却窗口(最长 5 分钟)一轮。同一个 observe 入口顺手记下的传输层失败分类(本文件最后一节)以
 // dns_failed / connect_failed / server_error 三个代码报给弹窗(lyricsourcefailure.go)。
 
 // lyricSourceBreakerSchedule:第 N 次达到触发阈值之后的冷却时长(N 从 0 起),超出表长封顶
@@ -100,8 +105,8 @@ type lyricSourceBlockState struct {
 
 // 暂停状态存盘:常驻进程在 run() 开头调 enableLyricSourceBlockPersistence,读回上次存的、之后每次变化都写回。
 // 别只放内存:引擎一重启就从 15 分钟那档重来,装机频繁时每次启动后的第一个请求都去撞一下,一小时能撞六次,
-// 而对方的反爬看的正是请求频率。一次性子命令、单测不开:单测进程要是读到本机真实的「被拦」记录,Musixmatch
-// 的测试会在被拦的机器上莫名其妙地失败。
+// 而对方的反爬看的正是请求频率。手动搜索的一次性子命令只读不写(loadLyricSourceBlocksReadOnly):暂停期里它也不去碰,
+// 存盘那份归常驻进程。单测都不开:单测进程要是读到本机真实的「被拦」记录,Musixmatch 的测试会在被拦的机器上莫名其妙地失败。
 const (
 	lyricSourceBlocksFileName = "lyrimuse-source-blocks.json"
 	// lyricSourceBlocksForgetAfter:暂停到期这么久还没再被拦(引擎一直没跑),读回时整条丢掉、档位从头算。
@@ -122,11 +127,23 @@ func enableLyricSourceBlockPersistence() {
 	sharedLyricSourceBreaker().loadBlocks(path)
 }
 
+// loadLyricSourceBlocksReadOnly:一次性子命令(手动搜索)读回常驻进程存着的暂停状态,自己这边的变化不写回。
+func loadLyricSourceBlocksReadOnly(path string) {
+	sharedLyricSourceBreaker().loadBlocksFrom(path, false)
+}
+
 // loadBlocks 读回 path 里的暂停状态(到期超过 lyricSourceBlocksForgetAfter 的丢掉),此后变化都写回 path。
 func (b *lyricSourceBreaker) loadBlocks(path string) {
+	b.loadBlocksFrom(path, true)
+}
+
+// loadBlocksFrom:读回 path 里的暂停状态;persist 时此后的变化都写回 path。
+func (b *lyricSourceBreaker) loadBlocksFrom(path string, persist bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.blocksPath = path
+	if persist {
+		b.blocksPath = path
+	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		noteFileErr("read", path, err)
@@ -178,6 +195,10 @@ type lyricSourceBreakerState struct {
 	// lastTrip:最近一次跳闸的时刻,只用来让 trips 随时间衰减(见 observeWith 的 default 分支)。
 	lastTrip time.Time
 	reason   string
+	// rateLimits / lastRateLimited:没带 Retry-After 的 429 连着来了几次、最近一次在什么时候。默认停的时长按它翻倍,
+	// 跟 trips 一样离上一次 lyricSourceBreakerTripsDecay 没再来才归零。
+	rateLimits      int
+	lastRateLimited time.Time
 }
 
 type lyricSourceBreaker struct {
@@ -191,7 +212,7 @@ type lyricSourceBreaker struct {
 	endpointOK map[string]map[string]time.Time
 	// blocked:被反爬拦下的源,见上面「反爬拦截」一节。
 	blocked map[string]*lyricSourceBlockState
-	// blocksPath:暂停状态存在哪;空 = 只放内存(一次性子命令、单测)。见 enableLyricSourceBlockPersistence。
+	// blocksPath:暂停状态存在哪;空 = 只放内存(一次性子命令只读、单测不读)。见 enableLyricSourceBlockPersistence。
 	blocksPath string
 }
 
@@ -407,7 +428,20 @@ func (b *lyricSourceBreaker) observeWith(host, endpoint string, err error, statu
 			st = &lyricSourceBreakerState{}
 			b.state[source] = st
 		}
-		d := parseLyricSourceRetryAfter(retryAfter)
+		d, given := lyricSourceRetryAfter(retryAfter)
+		// 对方没说要等多久:按连着被限流几次翻倍(1 → 2 → 4 → 封顶 5 分钟),不然持续限流时每 60 秒撞一次。
+		// 还在上一个限流窗口里的(同一批在途请求一起被拒)是余震,不升档。
+		if !given && !(st.until.After(now) && st.reason == lyricSourceCooldownReasonRateLimited) {
+			if st.lastRateLimited.IsZero() || now.Sub(st.lastRateLimited) >= lyricSourceBreakerTripsDecay {
+				st.rateLimits = 0
+			}
+			d = lyricSourceBreakerRetryAfterMax
+			if shift := min(st.rateLimits, 3); lyricSourceBreakerRetryAfterDefault<<shift < d {
+				d = lyricSourceBreakerRetryAfterDefault << shift
+			}
+			st.rateLimits++
+			st.lastRateLimited = now
+		}
 		// 只往后延、不往前缩:正在一段更长的冷却里(5xx / 断网升上去的档)时,一次 429 的 Retry-After
 		// 不该把它缩短成 60 秒。
 		if until := now.Add(d); until.After(st.until) {
@@ -439,8 +473,9 @@ func (b *lyricSourceBreaker) observeWith(host, endpoint string, err error, statu
 		// 档位(trips)不跟着这一次正常响应归零,要连着 lyricSourceBreakerTripsDecay 没再跳闸才归零:有的源正常应答里
 		// 本来就混着失败(lrclib 用 503 限流,404 和 200 又是它最常见的应答),一次 200/404 就清档的话阶梯永远升不上去,
 		// 冷却一过就再撞一次限流。一次正常响应只证明这会儿能通,不证明限流已经过去。封顶仍是 5 分钟。见 09 章决策 41。
-		// 还在上面留着的限流窗口里就不抹:整条 state 删掉等于把那个窗口一起撤了。
-		if (st.lastTrip.IsZero() || now.Sub(st.lastTrip) >= lyricSourceBreakerTripsDecay) && !st.until.After(now) {
+		// 还在上面留着的限流窗口里就不抹:整条 state 删掉等于把那个窗口一起撤了。限流的连续次数同理要留到衰减完。
+		recent := func(t time.Time) bool { return !t.IsZero() && now.Sub(t) < lyricSourceBreakerTripsDecay }
+		if !recent(st.lastTrip) && !recent(st.lastRateLimited) && !st.until.After(now) {
 			delete(b.state, source)
 		}
 	}
@@ -449,15 +484,21 @@ func (b *lyricSourceBreaker) observeWith(host, endpoint string, err error, statu
 // parseLyricSourceRetryAfter 只认「秒数」写法;HTTP-date 写法(RFC 7231 允许)用默认值——
 // 各源里没见过谁发日期形态的 Retry-After,不值得为它引入日期解析。
 func parseLyricSourceRetryAfter(v string) time.Duration {
+	d, _ := lyricSourceRetryAfter(v)
+	return d
+}
+
+// lyricSourceRetryAfter 同 parseLyricSourceRetryAfter,另报对方有没有给出能用的秒数(没给时返回的是默认值)。
+// 先比秒数再乘:离谱的大数乘成纳秒会溢出成负数,等于不停。
+func lyricSourceRetryAfter(v string) (time.Duration, bool) {
 	secs, err := strconv.Atoi(strings.TrimSpace(v))
 	if err != nil || secs <= 0 {
-		return lyricSourceBreakerRetryAfterDefault
+		return lyricSourceBreakerRetryAfterDefault, false
 	}
-	d := time.Duration(secs) * time.Second
-	if d > lyricSourceBreakerRetryAfterMax {
-		d = lyricSourceBreakerRetryAfterMax
+	if secs >= int(lyricSourceBreakerRetryAfterMax/time.Second) {
+		return lyricSourceBreakerRetryAfterMax, true
 	}
-	return d
+	return time.Duration(secs) * time.Second, true
 }
 
 // lyricSourceRoundPlan:这一轮该跳过的源 → 剩余冷却时长。

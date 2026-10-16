@@ -383,6 +383,13 @@ func sharedAMLLIndexStore() *amllIndexStore {
 // setSharedAMLLIndexStore 只给单测换掉进程共用的那一份。
 func setSharedAMLLIndexStore(s *amllIndexStore) { amllIndexStorePtr.Store(s) }
 
+// amllIndexRefreshEnabled:false 时只读磁盘上那份、不起后台核对。手动搜索的一次性子命令关掉它:进程几秒后就退出,
+// 起了的下载(镜像不通时最长 60 秒、最大 32MB)会被掐断白下,30 分钟的重试冷却又只在内存里,每开一次面板来一遍。
+// 核对归常驻引擎。
+var amllIndexRefreshEnabled atomic.Bool
+
+func init() { amllIndexRefreshEnabled.Store(true) }
+
 // current:手上的索引,没有时为 nil。第一次调用时从磁盘读;该核对了就起一次后台核对,不等它。
 func (s *amllIndexStore) current() *amllIndex {
 	if s.path == "" {
@@ -395,7 +402,7 @@ func (s *amllIndexStore) current() *amllIndex {
 		s.idx = readAMLLIndexFile(s.path)
 	}
 	now := s.now()
-	if !s.refreshing && s.idx.dueForCheck(now) && now.Sub(s.lastAttempt) >= amllIndexRetryCooldown {
+	if amllIndexRefreshEnabled.Load() && !s.refreshing && s.idx.dueForCheck(now) && now.Sub(s.lastAttempt) >= amllIndexRetryCooldown {
 		s.refreshing = true
 		s.lastAttempt = now
 		s.wg.Add(1)

@@ -66,7 +66,7 @@ func decodeLyricEntities(s string) string {
 }
 
 // decodeLyricSourceResultEntities 对一路源应答里**所有**歌词文本字段过一遍 decodeLyricEntities,
-// 返回副本(lyricSourceResult 是值类型,改的是拷贝)。九个源一视同仁:实体是编码层面的东西,
+// 返回副本(lyricSourceResult 是值类型,改的是拷贝)。各源一视同仁:实体是编码层面的东西,
 // 哪个源的 JSON / XML / KRC 里带着都一样该解;今天没命中的源不代表明天不会。
 //
 // 不动 matchTitle / matchArtist / matchAlbum:那是各源搜索接口给的曲目元信息,全库决策存档
@@ -102,7 +102,7 @@ func decodeLyricSourceResultEntities(r lyricSourceResult) lyricSourceResult {
 //   - 回归金标集(lyricSourceResultTap → testdata/lyricsgolden)固化的是各源**原始**应答,回放
 //     时同样走 rank、在这里解——跟生产同一条路,而不是把解过的文本当原始应答存进样本。
 //
-// 放在 rank 这一个门口而不是九个源各自的适配器里:候选、决策存档、「搜索候选歌词」弹窗的预览、
+// 放在 rank 这一个门口而不是各源自己的适配器里:候选、决策存档、「搜索候选歌词」弹窗的预览、
 // 手动采纳写进缓存的正文,全部从 rank 的产物里来,一处解完下游全干净。
 func decodeLyricSourceEntities(raw map[string]lyricSourceResult) map[string]lyricSourceResult {
 	out := make(map[string]lyricSourceResult, len(raw))

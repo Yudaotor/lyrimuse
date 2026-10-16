@@ -368,6 +368,50 @@ func TestLyricSourceBreakerRetryAfter(t *testing.T) {
 	}
 }
 
+// 没带 Retry-After 的 429 连着来:1 → 2 → 4 分钟,封顶 5 分钟;窗口里的余震不升档;中间夹一次 200 不清连续次数;
+// 离上一次 10 分钟没再来才从头算。带了 Retry-After 的照它停,不走阶梯。
+func TestLyricSourceBreakerRateLimitEscalatesWithoutRetryAfter(t *testing.T) {
+	b, clk := newTestBreaker()
+	want := []time.Duration{time.Minute, 2 * time.Minute, 4 * time.Minute, 5 * time.Minute, 5 * time.Minute}
+	for i, w := range want {
+		b.observe("lrclib.net", nil, 429, "")
+		b.observe("lrclib.net", nil, 429, "") // 同一批在途的余震
+		if d, cooling := b.coolingDown("lrclib"); !cooling || d != w {
+			t.Fatalf("第 %d 次: cooling=%v d=%s, want %s", i+1, cooling, d, w)
+		}
+		clk.advance(w + time.Second)
+		b.observe("lrclib.net", nil, 200, "") // 窗口过了答了一次 200:不清连续次数
+	}
+	clk.advance(lyricSourceBreakerTripsDecay)
+	b.observe("lrclib.net", nil, 200, "")
+	b.observe("lrclib.net", nil, 429, "")
+	if d, _ := b.coolingDown("lrclib"); d != time.Minute {
+		t.Errorf("隔了 10 分钟没再被限流,该从 1 分钟重来: %s", d)
+	}
+	b2, _ := newTestBreaker()
+	for i := 0; i < 3; i++ {
+		b2.observe("lrclib.net", nil, 429, "30")
+	}
+	if d, _ := b2.coolingDown("lrclib"); d != 30*time.Second {
+		t.Errorf("带了 Retry-After 的照它停: %s", d)
+	}
+}
+
+// 离谱的大 Retry-After 先封顶再换算,不会溢出成负数(等于不停)。
+func TestRetryAfterHugeValuesDoNotOverflow(t *testing.T) {
+	if d := parseLyricSourceRetryAfter("99999999999999"); d != lyricSourceBreakerRetryAfterMax {
+		t.Errorf("parseLyricSourceRetryAfter 大数: %s", d)
+	}
+	if d, ok := retryAfterSeconds("99999999999999"); !ok || d != 24*time.Hour {
+		t.Errorf("retryAfterSeconds 大数: %s ok=%v", d, ok)
+	}
+	g, _ := newTestGuard(hostRate{perSec: 100, burst: 100})
+	g.noteLyricSourceThrottled("lrclib.net", "99999999999999")
+	if until, paused := g.backgroundPausedUntil("lrclib.net"); !paused || !until.After(g.now()) {
+		t.Errorf("大 Retry-After 该照样暂停后台请求: paused=%v until=%s", paused, until)
+	}
+}
+
 // 启用的源全在冷却中时谁也不跳过;只有部分在冷却时跳过那些;未启用的源在不在冷却里无所谓。
 func TestLyricSourceBreakerPlanRoundNeverSkipsAllEnabled(t *testing.T) {
 	b, _ := newTestBreaker()

@@ -80,26 +80,36 @@ func TestITunesSearchBackoff(t *testing.T) {
 		}
 	})
 
-	t.Run("一次正常响应立刻清掉窗口", func(t *testing.T) {
+	// 窗口里不发请求,这时到的 200 是窗口开始前就在途的那个(另一个商店同时在查),不说明限流过去了。
+	t.Run("窗口里到的正常响应不撤窗口", func(t *testing.T) {
 		resetITunesSearchBackoff(t)
 		noteITunesSearchStatus(429, "300", base)
 		if !itunesSearchCoolingDown(base.Add(time.Second)) {
 			t.Fatal("用例前提不成立:应该先进入退避")
 		}
 		noteITunesSearchStatus(200, "", base.Add(2*time.Second))
-		if itunesSearchCoolingDown(base.Add(3 * time.Second)) {
-			t.Error("拿到 200 之后该立刻退出退避 —— 跟 lyricSourceBreaker 的 default 分支同一条规矩")
+		noteITunesSearchStatus(404, "", base.Add(3*time.Second))
+		if !itunesSearchCoolingDown(base.Add(4 * time.Second)) {
+			t.Error("同时在途的那个答了 200 / 404,不该把 429 的窗口撤掉")
+		}
+		if itunesSearchCoolingDown(base.Add(301 * time.Second)) {
+			t.Error("到期之后该放行")
 		}
 	})
 
-	// 404/500 这类既不是限流、也不代表限流结束的状态码,走的是同一条 default:
-	// 拿到了响应就说明还能通,不该留着退避窗口。
-	t.Run("其它状态码同样清窗口", func(t *testing.T) {
+	// 到期之后再来一次正常响应,窗口和「已打过日志」都清掉,下一次被限流还会再记一行。
+	t.Run("到期后的正常响应清掉状态", func(t *testing.T) {
 		resetITunesSearchBackoff(t)
 		noteITunesSearchStatus(429, "300", base)
-		noteITunesSearchStatus(404, "", base.Add(time.Second))
-		if itunesSearchCoolingDown(base.Add(2 * time.Second)) {
-			t.Error("404 也算拿到了响应,该清掉退避")
+		noteITunesSearchStatus(200, "", base.Add(301*time.Second))
+		if itunesSearchCoolingDown(base.Add(302 * time.Second)) {
+			t.Error("到期后不该还在退避")
+		}
+		itunesSearchMu.Lock()
+		logged := itunesSearchCooldownLogged
+		itunesSearchMu.Unlock()
+		if logged {
+			t.Error("到期后的正常响应该把「已打过日志」清掉")
 		}
 	})
 
@@ -168,8 +178,8 @@ func TestITunesSearchSkipsRequestWhileCoolingDown(t *testing.T) {
 		t.Fatalf("退避中又发了请求:总计 %d 次,应该仍是 1 次", n)
 	}
 
-	// 窗口清掉之后恢复。
-	noteITunesSearchStatus(200, "", time.Now())
+	// 窗口到期之后恢复(到期后的一次正常响应把状态清掉;窗口里到的不算,见 noteITunesSearchStatus)。
+	noteITunesSearchStatus(200, "", time.Now().Add(301*time.Second))
 	if got, reached := itunesSearch(ctx, "q", "cn"); len(got) != 1 || !reached {
 		t.Errorf("退出退避后该恢复正常请求(得到 %d 条, reached=%v)", len(got), reached)
 	}

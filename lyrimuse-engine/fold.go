@@ -100,3 +100,25 @@ func foldDiacritics(s string) string {
 	}
 	return b.String()
 }
+
+// foldFullwidthAlnum 把全角的拉丁字母、数字换成半角,全角空格换成普通空格:「ＬＯＶＥ １２」→「LOVE 12」。日文标签常这么写,
+// 各源曲库存的多是半角,不折的话标题、歌手逐字符比都对不上(normLoose 只转小写,全角转小写还是全角)。
+// 全角标点不动:比对时 normLoose 本来就丢标点,查询词里国内几家平台的曲名又常带全角括号,换掉反而对不上。
+func foldFullwidthAlnum(s string) string {
+	if !strings.ContainsFunc(s, isFullwidthAlnumOrSpace) {
+		return s
+	}
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\u3000':
+			return ' '
+		case isFullwidthAlnumOrSpace(r):
+			return r - 0xFEE0
+		}
+		return r
+	}, s)
+}
+
+func isFullwidthAlnumOrSpace(r rune) bool {
+	return r == '\u3000' || (r >= '０' && r <= '９') || (r >= 'Ａ' && r <= 'Ｚ') || (r >= 'ａ' && r <= 'ｚ')
+}

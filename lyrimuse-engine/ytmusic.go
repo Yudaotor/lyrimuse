@@ -229,7 +229,7 @@ func ytmusicFetchVisitorID(ctx context.Context) string {
 		return ""
 	}
 	req.Header.Set("User-Agent", ytmusicUserAgent)
-	resp, err := doHTTPTracked(lyricHTTPClient(8*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(ytmusicHomePageTimeout), req)
 	if err != nil {
 		return ""
 	}

@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// 九个歌词源的 key——跟 enrich.go 里 lyricCandidate.source/scoredLyricCandidateResult.
+// 各歌词源的 key——跟 enrich.go 里 lyricCandidate.source/scoredLyricCandidateResult.
 // Source 的取值、以及 desktop-lyrics「歌词管理」窗口 LyricsManagerView.swift 的
 // sourceDisplayName 逐字对应,这是整个项目里"歌词源"唯一的一套 id,不是这里新起的。
 const (

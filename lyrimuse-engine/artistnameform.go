@@ -10,9 +10,9 @@ import (
 // 歌手比对前把同一个名字的几种写法对齐。只给 artistMatches / artistCreditParts 和网易云认身份的 neteaseArtistMatches 用;
 // 搜索词、缓存 key、normLoose 都不经过这里。见 09 章决策 177。
 
-// artistMatchKey:artistMatches 比对前的写法 —— 「々」展开、繁转简、去变音、小写、去首尾空白。
+// artistMatchKey:artistMatches 比对前的写法 —— 全角字母数字折成半角、「々」展开、繁转简、去变音、小写、去首尾空白。
 func artistMatchKey(s string) string {
-	return strings.TrimSpace(strings.ToLower(foldDiacritics(toSimplified(foldIterationMark(s)))))
+	return strings.TrimSpace(strings.ToLower(foldDiacritics(toSimplified(foldIterationMark(foldFullwidthAlnum(s))))))
 }
 
 // artistSpacingKey:artistMatches 最后一档比的写法 —— 挨着汉字、假名、谚文的空白和「&」两边的空白去掉。同一位歌手在
@@ -75,7 +75,7 @@ func parenAliasNames(s string) string {
 	if !strings.ContainsAny(s, "(（") {
 		return ""
 	}
-	parts := strings.FieldsFunc(s, isArtistCreditSep)
+	parts := strings.FieldsFunc(s, isArtistCreditMatchSep)
 	changed := false
 	for i, p := range parts {
 		m := parenAliasPart.FindStringSubmatch(strings.TrimSpace(p))

@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 // kuwoLyric 是歌词第八个候选来源(酷我音乐,非官方接口:搜索→按元数据重新打分排序→
@@ -130,7 +129,7 @@ func kuwoSearchAt(ctx context.Context, endpoint, q string) ([]kuwoSearchItem, er
 	}
 	req.Header.Set("Referer", "https://www.kuwo.cn/")
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(kuwoHTTPTimeout), req)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +245,7 @@ func kuwoFetchLyricAt(ctx context.Context, base, musicID string) ([]kuwoLyricLin
 	}
 	req.Header.Set("Referer", base+"/")
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	resp, err := doHTTPTracked(lyricHTTPClient(kuwoHTTPTimeout), req)
 	if err != nil {
 		return nil, err
 	}

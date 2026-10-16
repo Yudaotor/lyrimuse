@@ -59,7 +59,9 @@ var (
 var errSourceNotReached = errors.New("source: not reached")
 
 // tryEach 按顺序对每个候选 i 调 try,第一个返回 nil 的就停;全部失败返回最后一个错误。ctx 已取消
-// 时不再试下一个。try 只在没问成时返回错误。
+// 时不再试下一个。try 只在没问成时返回错误。各源换主机都走它,只有两家另写:网易云(neteaseFetchBody)几台主机共用一个
+// 按路径分的限速桶,桶在退避里就整条放弃、不换主机;Musixmatch(musixmatchDo)按主机最近的成败排先后,答了(含 404、
+// 验证码)就停、只在 musixmatchHostFailed 认定没问成时才换。
 func tryEach[T any](ctx context.Context, candidates []T, try func(c T) error) error {
 	lastErr := errSourceNotReached
 	for _, c := range candidates {

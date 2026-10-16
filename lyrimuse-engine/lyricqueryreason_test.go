@@ -86,7 +86,7 @@ func TestLyricQueryLogIsWiredIntoEveryRound(t *testing.T) {
 		"lyricQueryLogFrom(ctx).record(artist, title, lyricQueryReasonFrom(ctx), lyricQueryOriginFrom(ctx), sortedLyricSourceOnly(ctx))",
 		// 五个轮次各自的标注。
 		"withLyricQueryReason(ctx, lyricQueryReasonTitleSplit)",
-		"coverRescue(ctx, artist, title, album, durationSecs, onUpdate)",
+		"coverRescue(ctx, artist, title, album, durationSecs, keepShownRoundUpdate(onUpdate, results))",
 		"if !hasUsableLyricCandidate(results) && !coverPerformerOnly(ctx) {",
 		"if !coverPerformerOnly(ctx) {",
 		"aliasReason := lyricQueryReasonAliasMissing",

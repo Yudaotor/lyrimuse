@@ -274,6 +274,22 @@ func TestNeedsRomanizationRetry(t *testing.T) {
 			true,
 		},
 		{
+			"只有判废的汉字候选_不为它重查",
+			[]scoredLyricCandidateResult{
+				{Source: "qq", Lyrics: "知你其實想找一個水泡救生嗎", Score: -1},
+				{Source: "musixmatch", Lyrics: "Oh Erica, baby Erica"},
+			},
+			false,
+		},
+		{
+			"判废候选带的语种信号不算",
+			[]scoredLyricCandidateResult{
+				{Source: "qq", Lyrics: "别的歌", Language: "yue", Score: -1},
+				{Source: "musixmatch", Lyrics: "知你其實想找一個水泡救生嗎"},
+			},
+			true,
+		},
+		{
 			"候选有歌词字段为空_不参与文字系统判断",
 			[]scoredLyricCandidateResult{
 				{Source: "qq", Lyrics: "", Score: -1},

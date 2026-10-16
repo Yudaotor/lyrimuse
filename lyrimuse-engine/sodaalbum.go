@@ -115,7 +115,7 @@ func sodaFetchAlbumPage(ctx context.Context, albumID string) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", sodaUserAgent)
-	resp, err := doHTTPTracked(&http.Client{Timeout: 10 * time.Second}, req)
+	resp, err := doHTTPTracked(lyricHTTPClient(sodaAlbumPageTimeout), req)
 	if err != nil {
 		return nil, err
 	}

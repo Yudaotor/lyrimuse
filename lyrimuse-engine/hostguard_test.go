@@ -664,6 +664,39 @@ func TestHostGuardCoversQQMusicuPost(t *testing.T) {
 	}
 }
 
+// 几个歌词源用 POST 发的查询接口都认作只读、归出站闸管;同主机别的 POST 路径和上送类不认。
+func TestGuardReadOnlyPOSTCoversLyricSourceQueries(t *testing.T) {
+	for _, tc := range []struct {
+		url  string
+		want bool
+	}{
+		{"https://u.y.qq.com/cgi-bin/musicu.fcg", true},
+		{"https://c.y.qq.com/qqmusic/fcgi-bin/lyric_download.fcg", true},
+		{"https://music.163.com/eapi/song/lyric/v1", true},
+		{"https://interface3.music.163.com/eapi/search/get", true},
+		{"https://pipe.deezer.com/api", true},
+		{"https://music.youtube.com/youtubei/v1/search?prettyPrint=false&alt=json", true},
+		{"https://youtubei.googleapis.com/youtubei/v1/browse", true},
+		{"https://music.163.com/weapi/feedback/weblog", false},
+		{"https://c.y.qq.com/report/upload", false},
+		{"https://ws.audioscrobbler.com/2.0/", false},
+	} {
+		req := mustReq(t, context.Background(), http.MethodPost, tc.url)
+		if got := guardReadOnlyPOST(req); got != tc.want {
+			t.Errorf("guardReadOnlyPOST(%s) = %v, want %v", tc.url, got, tc.want)
+		}
+	}
+	// QQ 网页歌词接口过闸之后,接口熔断对它生效:连续 5xx 之后本地拦住,不再白打。
+	g, _ := newTestGuard(hostRate{perSec: 100, burst: 100})
+	lyric := mustReq(t, context.Background(), http.MethodPost, "https://c.y.qq.com/qqmusic/fcgi-bin/lyric_download.fcg")
+	for i := 0; i < endpointTripAfter; i++ {
+		g.observe(lyric, http.StatusBadGateway, "")
+	}
+	if err := g.admit(lyric); !errors.Is(err, errHostGuarded) {
+		t.Fatalf("lyric_download 连续 5xx 该跳闸: %v", err)
+	}
+}
+
 // 一个源因本地排队已满被拦下后,同源同类请求换到别的主机也拦下,不能靠备用链绕过限速;另一类(后台 /
 // 前台)和别的源不受影响,持有期过了恢复放行。
 func TestHostGuardHoldsSourceAfterQueueFull(t *testing.T) {
