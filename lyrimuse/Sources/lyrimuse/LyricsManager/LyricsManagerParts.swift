@@ -1488,9 +1488,9 @@ private struct LyricsManagerPauseFollowOnScroll: ViewModifier {
     }
 }
 
-/// 当前句逐字染色的上面那层:跟着播放时钟每秒重画二十次(`refreshInterval`,预览不必跟歌词窗口一样顺),只画唱过的
+/// 当前句逐字染色的上面那层:跟着播放时钟每秒重画六十次(`refreshInterval`,同歌词窗口;降到 20 次软边会一步一跳),只画唱过的
 /// 部分,没唱到的透出底下那层淡色。这一层装在自己的 NSHostingView 里(`LyricsManagerKaraokeHost`):每帧换时刻只让这
-/// 一小块重新排版、提交,不牵动整扇窗的 SwiftUI 树。画法要 `TextRenderer`,macOS 15 起才有。见 11 章决策 110。
+/// 一小块重新排版、提交,不牵动整扇窗的 SwiftUI 树。画法要 `TextRenderer`,macOS 15 起才有。见 11 章决策 110、124。
 private struct LyricsManagerKaraokeOverlay: View {
     let segments: [LyricsKaraokeSegment]
     let isPlaying: Bool
@@ -1507,7 +1507,7 @@ private struct LyricsManagerKaraokeOverlay: View {
         return false
     }()
 
-    static let refreshInterval: Double = 1.0 / 20.0
+    static let refreshInterval: Double = 1.0 / 60.0
 
     var body: some View {
         if #available(macOS 15.0, *) {
