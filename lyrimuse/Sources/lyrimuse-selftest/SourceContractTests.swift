@@ -5656,15 +5656,16 @@ func runSourceContractTests() {
     }
 
     // 枚举造的开关 Binding(`item.binding` / `item.binding(for:)`,手搓的 `Binding(get:set:)`)只在造它的那段代码重跑时
-    // 才拿到新值:所在视图要自己观察设置;包着它的闭包要引用这个视图的存储属性,不引用 `self` 的闭包 SwiftUI 判等相等、
-    // 不往里重算,开关画陈旧值(14 章决策 29)。
+    // 才拿到新值:所在视图要自己观察 `AppSettings`;包着它的闭包要引用这个视图的存储属性,不引用 `self` 的闭包 SwiftUI
+    // 判等相等、不往里重算,开关画陈旧值(14 章决策 29)。先存进变量、带类型名、后面再接修饰的写法一样查;只读当前值
+    // (`.binding.wrappedValue`)的不算。
     do {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse")
         let files = ((FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?.allObjects as? [URL]) ?? [])
             .filter { $0.pathExtension == "swift" }
             .sorted { $0.path < $1.path }
-        let hitPattern = #/isOn:\s*(?:[A-Za-z_][A-Za-z0-9_]*|\$0)\.binding(?:\(for:[^)]*\))?\s*[,)]/#
+        let hitPattern = #/\.binding(?:\(for:[^)]*\)(?!\.wrappedValue)|(?![A-Za-z0-9_(.])|\.(?!wrappedValue)(?=[A-Za-z]))/#
         let commentPattern = #/(^|\s)\/\/.*$/#.anchorsMatchLineEndings()
         let structPattern = #/(?:^|\n)[ \t]*(?:@MainActor[ \t\n]+)?(?:(?:private|fileprivate|public|internal)[ \t]+)?struct[ \t]+\w+[^{\n]*\{/#
         let memberPattern = #/^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:private|fileprivate|public|internal)(?:\(set\))?\s+)*(?:let|var)\s+(\w+)/#
@@ -5703,7 +5704,10 @@ func runSourceContractTests() {
                 }
                 let members = topLevel.compactMap { $0.firstMatch(of: memberPattern).map { String($0.output.1) } }
                     .filter { $0 != "body" }
-                let observes = topLevel.contains { $0.contains("@ObservedObject") || $0.contains("@StateObject") || $0.contains("@EnvironmentObject") }
+                let observes = topLevel.contains { line in
+                    line.contains("AppSettings")
+                        && (line.contains("@ObservedObject") || line.contains("@StateObject") || line.contains("@EnvironmentObject"))
+                }
                 // 命中处外面套着的花括号:stack[0] 是结构体本身,stack[1] 是成员(body / 计算属性 / 方法),往里是闭包和 if 块。
                 var stack: [Int] = []
                 for i in open..<at {
@@ -5720,12 +5724,12 @@ func runSourceContractTests() {
                         body.firstMatch(of: try! Regex("(?:^|[^A-Za-z0-9_.])\\$?\(name)(?![A-Za-z0-9_])")) != nil
                     }
                 }
-                if !observes { stale.append("\(label) 所在视图不观察设置") }
+                if !observes { stale.append("\(label) 所在视图不观察 AppSettings") }
                 if !capturesSelf { stale.append("\(label) 包着它的闭包不引用视图的存储属性") }
             }
         }
         expectEqual(checked >= 8, true, "枚举开关 Binding: 至少扫到 8 处用法(实际 \(checked)),少了说明扫描规则失效")
-        expectEqual(stale, [], "枚举开关 Binding: 所在视图自己观察设置,包着它的闭包引用视图的存储属性(或拆成每格自己观察的小块)")
+        expectEqual(stale, [], "枚举开关 Binding: 所在视图自己观察 AppSettings,包着它的闭包引用视图的存储属性(或拆成每格自己观察的小块)")
     }
 }
 
