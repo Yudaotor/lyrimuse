@@ -125,7 +125,10 @@ func TestApplyDeviceOrPlayerCover(t *testing.T) {
 		{"小设备封面、那一串是另一张、播放器自带的是同一张:用播放器的", with(same), device,
 			enrichEntry{CoverURL: remoteOther, CoverSource: "netease"}, same, "player"},
 		{"小设备封面、那一串空着、播放器自带的是同一张:用播放器的", with(same), device, enrichEntry{}, same, "player"},
-		{"小设备封面、播放器自带的是另一张:身份优先,留设备封面", with(other), device, enrichEntry{}, device, "device"},
+		{"小设备封面、播放器自带的是另一张:用播放器的", with(other), device, enrichEntry{}, other, "player"},
+		{"小设备封面、那一串给了、播放器自带的是另一张:用播放器的", with(other), device,
+			enrichEntry{CoverURL: remoteOther, CoverSource: "netease"}, other, "player"},
+		{"设备封面够清晰、播放器自带的是另一张:身份优先,留设备封面", with(other), bigDevice, enrichEntry{}, bigDevice, "device"},
 		{"小设备封面、没有播放器封面:设备封面", context.Background(), device, enrichEntry{}, device, "device"},
 		{"设备封面够清晰:不换成播放器的", with(same), bigDevice, enrichEntry{}, bigDevice, "device"},
 	}
@@ -180,8 +183,8 @@ func TestUpgradeDeviceCoverToPlayerCover(t *testing.T) {
 	if e, ok := run(same); !ok || e.CoverURL != same || e.CoverSource != "player" || e.CoverAlbum != "丙" {
 		t.Errorf("同一张图更清晰:换成播放器的,得到 %+v", e)
 	}
-	if e, ok := run(other); ok || e.CoverURL != device || e.CoverSource != "device" {
-		t.Errorf("不是同一张图:留设备封面,得到 %+v", e)
+	if e, ok := run(other); !ok || e.CoverURL != other || e.CoverSource != "player" || e.CoverAlbum != "丙" {
+		t.Errorf("播放器给的不是同一张图:小设备封面让给它,得到 %+v", e)
 	}
 	if e, ok := run("", same); !ok || e.CoverURL != same || e.CoverSource != "player" {
 		t.Errorf("这一拍没有播放器给的、本机数据里按歌名记着同一张:换上,得到 %+v", e)
@@ -190,7 +193,38 @@ func TestUpgradeDeviceCoverToPlayerCover(t *testing.T) {
 		t.Errorf("播放器给的不是同一张、本机数据里那张是:换成本机那张,得到 %+v", e)
 	}
 	if e, ok := run("", other); ok || e.CoverSource != "device" {
-		t.Errorf("本机那张也不是同一张:留设备封面,得到 %+v", e)
+		t.Errorf("按歌名记着的本机那张不是同一张:不担保是这首,留设备封面,得到 %+v", e)
+	}
+	// 这一拍没有播放器给的:用条目上记着的 player_covers(放过它的播放器优先)。
+	runEntry := func(players []string, covers map[string]string) (enrichEntry, bool) {
+		local = nil
+		enrichMu.Lock()
+		enrichCache[key] = enrichEntry{CoverURL: device, CoverSource: "device", CoverAlbum: "丙", Lyrics: "[00:01.00]x",
+			Players: players, PlayerCovers: covers}
+		enrichInflight[key] = true
+		enrichMu.Unlock()
+		changed := upgradeSmallDeviceCover(context.Background(), key, device, "甲", "乙", "丙", 0)
+		enrichMu.Lock()
+		defer enrichMu.Unlock()
+		return enrichCache[key], changed
+	}
+	if e, ok := runEntry([]string{"b.player"}, map[string]string{"a.player": same, "b.player": other}); !ok ||
+		e.CoverURL != other || e.CoverSource != "player" {
+		t.Errorf("条目上记着的:放过它的播放器那张优先,得到 %+v", e)
+	}
+	if e, ok := runEntry(nil, map[string]string{"b.player": other}); !ok || e.CoverURL != other {
+		t.Errorf("条目上记着的:没记放过它的播放器也用,得到 %+v", e)
+	}
+	if e, ok := runEntry(nil, nil); ok || e.CoverSource != "device" {
+		t.Errorf("条目上也没记:留设备封面,得到 %+v", e)
+	}
+	enrichMu.Lock()
+	enrichCache[key] = enrichEntry{CoverURL: device, CoverSource: "device", CoverAlbum: "丙", Lyrics: "[00:01.00]x",
+		PlayerCovers: map[string]string{"b.player": other}, CoverSettled: device}
+	enrichInflight[key] = true
+	enrichMu.Unlock()
+	if upgradeSmallDeviceCover(context.Background(), key, device, "甲", "乙", "丙", 0) {
+		t.Error("专辑定下的封面(cover_settled)不换成条目上记着的")
 	}
 	// 比对期间封面已经换过了:不覆盖。
 	local = nil
@@ -241,7 +275,8 @@ func TestPlayerCoverIsWired(t *testing.T) {
 		"if e.CoverURL == \"\" || coverOfAnotherAlbum(e, album) {\n\t\tif cover, source, coverAlbum := winnerCandidateCover(e.LyricsDecision, album); cover != \"\" {",
 		"winnerCover, winnerSource, winnerAlbum = winnerCandidateCover(withDecisionDetails(key, pre.LyricsDecision), album)",
 		"if winnerCover != \"\" && winnerCover != e.CoverURL && (e.CoverURL == \"\" || coverOfAnotherAlbum(e, album)) {",
-		"if pc := playerCoverOverDevice(ctx, deviceCoverURL, existing.CoverURL); pc != \"\" {\n\t\tcover, source = pc, \"player\"",
+		"if own := playerCoverFor(ctx); smallDeviceCoverYieldsTo(deviceCoverURL, own) {\n\t\t// 小设备封面碰上播放器自带的那张:用自带的,同 applyDeviceOrPlayerCover。\n\t\tif existing.CoverURL == own {\n\t\t\treturn false\n\t\t}\n\t\tcover, source = own, \"player\"\n\t} else {",
+		"if pc := playerCoverOverDevice(ctx, deviceCoverURL, existing.CoverURL); pc != \"\" {\n\t\t\tcover, source = pc, \"player\"",
 	} {
 		if !strings.Contains(enrich, n) {
 			t.Errorf("enrich.go 缺 %q", n)

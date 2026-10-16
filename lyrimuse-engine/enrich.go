@@ -2999,18 +2999,26 @@ func deviceCoverUpgradePass(ctx context.Context, key, artist, title, album, bund
 	if !exists || provisional || existing.CoverURL == deviceCoverURL || coverSettled(existing) {
 		return false
 	}
-	// 低分辨率的设备封面不该盖掉"同一张图的高清版"。判据表见 coverquality.go 头注;这处跟首次解析那处必须同时存在,
-	// 见 applyDeviceCoverUpgrade 头注。
-	if !deviceCoverOverridesCandidate(ctx, deviceCoverURL, existing.CoverURL) {
-		return false
-	}
-	// 设备封面要顶掉现有封面时先看播放器自带的那张:跟设备封面是同一张图、更清晰就用它(见 playerCoverOverDevice)。
 	cover, source, public := deviceCoverURL, "device", ""
-	if pc := playerCoverOverDevice(ctx, deviceCoverURL, existing.CoverURL); pc != "" {
-		cover, source = pc, "player"
+	if own := playerCoverFor(ctx); smallDeviceCoverYieldsTo(deviceCoverURL, own) {
+		// 小设备封面碰上播放器自带的那张:用自带的,同 applyDeviceOrPlayerCover。
+		if existing.CoverURL == own {
+			return false
+		}
+		cover, source = own, "player"
 	} else {
-		// 顶掉的候选跟设备封面是同一张图时留下它的地址,给 App 外面用(见 devicePublicCover)。要取远程图,在锁外做。
-		public = devicePublicCover(ctx, deviceCoverURL, existing.CoverURL)
+		// 低分辨率的设备封面不该盖掉"同一张图的高清版"。判据表见 coverquality.go 头注;这处跟首次解析那处必须同时存在,
+		// 见 applyDeviceCoverUpgrade 头注。
+		if !deviceCoverOverridesCandidate(ctx, deviceCoverURL, existing.CoverURL) {
+			return false
+		}
+		// 设备封面要顶掉现有封面时先看播放器自带的那张:跟设备封面是同一张图、更清晰就用它(见 playerCoverOverDevice)。
+		if pc := playerCoverOverDevice(ctx, deviceCoverURL, existing.CoverURL); pc != "" {
+			cover, source = pc, "player"
+		} else {
+			// 顶掉的候选跟设备封面是同一张图时留下它的地址,给 App 外面用(见 devicePublicCover)。要取远程图,在锁外做。
+			public = devicePublicCover(ctx, deviceCoverURL, existing.CoverURL)
+		}
 	}
 	// 取色只为网页,没配中继就不算,理由同 resolveTrackEnrichment 里那处。
 	accent := ""

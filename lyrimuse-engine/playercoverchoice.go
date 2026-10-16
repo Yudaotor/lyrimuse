@@ -14,7 +14,8 @@ import (
 // 但往往比它交给系统的那份清晰(KKBOX 交给系统的恒为 150×150)。三处用它:
 //   - 设备封面要顶掉现有封面时,先看它是不是跟设备封面同一张图、更清晰(playerCoverOverDevice);
 //   - 网易云 / Apple / QQ / 同专辑邻居都没给出封面、设备封面也还没到时,直接用它(applyDeviceOrPlayerCover);
-//   - 存量的小设备封面换成它,本机播放器数据里按歌名记着的也算(upgradeSmallDeviceCover)。
+//   - 存量的小设备封面换成它,本机播放器数据里按歌名记着的也算(upgradeSmallDeviceCover);
+//   - 小设备封面碰上它,不比是不是同一张图,用它(smallDeviceCoverYieldsTo)。
 
 // playerCoverDisplayURL:当这首的封面用哪一档。KKBOX 记下的是 600 档(给 App 外面用),要画到歌词窗口的大卡上换成 1000 档:
 // 图床按路径里的 fit 档出图,超过原图是放大的;coverURLIntendedEdge 从「1000x1000」读得出尺寸。别家原样用。
@@ -58,6 +59,35 @@ func playerCoverOverDevice(ctx context.Context, deviceCoverURL, current string) 
 		func(device, candidate string) bool { return deviceCoverOverridesCandidate(ctx, device, candidate) })
 }
 
+// smallDeviceCoverYieldsTo:小设备封面(deviceCoverSmall)碰上播放器担保是这首的自带封面(playerCover 不空:这一拍在放的
+// 播放器给的,或条目上记着的 player_covers)时,不比是不是同一张图,用自带的那张。小设备封面是网易云、洛雪这类客户端换歌
+// 那一拍交给系统的低清图,那一拍常还挂着上一首的或占位图;自带封面是播放器按这首从本机数据里取的。按歌名记着的本机数据
+// (localPlayerCovers)、歌词判决里的候选不担保是这首,不走这条。见 03 章决策 50。读本机文件,调用方不能持着 enrichMu。
+func smallDeviceCoverYieldsTo(deviceCoverURL, playerCover string) bool {
+	return playerCover != "" && deviceCoverSmall(deviceCoverURL)
+}
+
+// entryPlayerCover:条目上记着的播放器自带封面(player_covers),放过它的播放器(players)按顺序优先,其余按 bundle id 排;
+// 没有为 ""。调用方持有 enrichMu。
+func entryPlayerCover(e enrichEntry) string {
+	for _, b := range e.Players {
+		if c := e.PlayerCovers[b]; c != "" {
+			return playerCoverDisplayURL(c)
+		}
+	}
+	bundles := make([]string, 0, len(e.PlayerCovers))
+	for b := range e.PlayerCovers {
+		bundles = append(bundles, b)
+	}
+	slices.Sort(bundles)
+	for _, b := range bundles {
+		if c := e.PlayerCovers[b]; c != "" {
+			return playerCoverDisplayURL(c)
+		}
+	}
+	return ""
+}
+
 // playerCoverOverDeviceWith 是 playerCoverOverDevice 的判定,比对由调用方给(单测不取图)。
 func playerCoverOverDeviceWith(cover, deviceCoverURL, current string, overrides func(device, candidate string) bool) string {
 	if cover == "" || cover == current || overrides(deviceCoverURL, cover) {
@@ -87,6 +117,10 @@ func applyDeviceOrPlayerCover(ctx context.Context, e *enrichEntry, deviceCoverUR
 				e.CoverURL, e.CoverSource, e.CoverAlbum = cover, "player", album
 			}
 		}
+		return
+	}
+	if pc := playerCoverFor(ctx); smallDeviceCoverYieldsTo(deviceCoverURL, pc) {
+		e.CoverURL, e.CoverSource, e.CoverAlbum = pc, "player", album
 		return
 	}
 	if !deviceCoverOverridesCandidate(ctx, deviceCoverURL, e.CoverURL) {
@@ -214,7 +248,8 @@ func candidateCoverAlbumFits(candidateAlbum, album string) bool {
 // upgradeSmallDeviceCover:存量的小设备封面(deviceCoverURL)换成同一张图的清晰版 —— 依次试 ctx 上这一拍在放的播放器给的、
 // 本机播放器数据里按歌名记着的(localPlayerCovers)、这首歌词判决里各源候选自带的(decisionCandidateCovers),头一张跟设备
 // 封面是同一张图、更清晰的就用,判据同 playerCoverOverDevice;歌词判决里的候选不担保是这首歌,补边设备图那一档也只认同一张图
-// (deviceCoverDecision 的 vouched)。前两种记成 player,候选的记成那个源。返回换没换。
+// (deviceCoverDecision 的 vouched)。前两种记成 player,候选的记成那个源。都不是同一张图时,这一拍在放的播放器给的、没有就
+// 条目上记着的 player_covers,按 smallDeviceCoverYieldsTo 换上。返回换没换。
 // trackEnrichment 换歌那一拍和后台补封面(coversweep.go)用;调用方先占上 enrichInflight,这里收工时放掉。
 func upgradeSmallDeviceCover(ctx context.Context, key, deviceCoverURL, artist, title, album string,
 	durationSecs float64) bool {
@@ -248,6 +283,20 @@ func upgradeSmallDeviceCover(ctx context.Context, key, deviceCoverURL, artist, t
 			break
 		}
 	}
+	samePicture := chosen.url != ""
+	if !samePicture {
+		enrichMu.Lock()
+		cur := enrichCache[key]
+		enrichMu.Unlock()
+		own := playerCoverFor(ctx)
+		if own == "" {
+			own = entryPlayerCover(cur)
+		}
+		// 后台补封面给专辑定下的(coverSettled)按图比过,不换。
+		if !coverSettled(cur) && smallDeviceCoverYieldsTo(deviceCoverURL, own) {
+			chosen = coverCandidate{url: own, source: "player", vouched: true}
+		}
+	}
 	if chosen.url == "" {
 		return false
 	}
@@ -271,7 +320,11 @@ func upgradeSmallDeviceCover(ctx context.Context, key, deviceCoverURL, artist, t
 		// 后台补封面那一遍攒着存(见 coversweep.go);正在播的这首照常当场存。
 		requestEnrichSaveFor(key)
 	}
-	log.Printf("cover: %q device artwork gives way to the same picture from %s: %s", key, chosen.source, cover)
+	if samePicture {
+		log.Printf("cover: %q device artwork gives way to the same picture from %s: %s", key, chosen.source, cover)
+	} else {
+		log.Printf("cover: %q small device artwork gives way to the player's own cover: %s", key, cover)
+	}
 	if enrichNotify != nil {
 		select {
 		case enrichNotify <- struct{}{}:

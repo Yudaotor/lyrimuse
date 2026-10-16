@@ -54,8 +54,9 @@ const (
 	coverSweepSaveEvery    = 10
 
 	coverUpgradeRecheckInterval = 30 * 24 * time.Hour
-	// coverUpgradeCheckRules:找清晰版的第几版找法,多了来源就加一(第 2 版加了歌词判决的各源候选,见 03 章决策 36)。
-	coverUpgradeCheckRules = 2
+	// coverUpgradeCheckRules:找清晰版的第几版找法,多了来源就加一(第 2 版加了歌词判决的各源候选,见 03 章决策 36;
+	// 第 3 版不是同一张图时换成播放器自带的,见 smallDeviceCoverYieldsTo)。
+	coverUpgradeCheckRules = 3
 	// coverMissingRetryRules:缺封面的补法第几版,多了一道补查就加一(第 1 版:双语曲名、判决里的歌手写法、Deezer,
 	// 03 章决策 37;放宽歌词候选自带的封面、去掉 feat. 署名,决策 38)。
 	coverMissingRetryRules = 1
