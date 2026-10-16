@@ -5057,17 +5057,6 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 洛雪换歌后交给系统的头一两张封面可能还是上一首的,载荷里的标题却已经是新歌,按标识认不出:跟换歌时挂着的那张字节相同、
     /// 两首的专辑名又都有且不同,就当成它还没换图。专辑相同(同一张专辑的下一首)或缺专辑名时照常采纳。见 02 章决策 132。纯函数,selftest 覆盖。
-    /// 洛雪这一把系统封面要不要退到开放 API 推的那张:没取到、载荷不是这一首、或还是上一首的旧图(`lxMusicArtworkIsPrevious`)。
-    /// 纯函数,selftest 覆盖。见 02 章决策 134。
-    public nonisolated static func lxMusicArtworkNeedsFallback(_ system: (data: Data, trackKey: String)?, expectedKey: String,
-                                                              bundleID: String?, previousData: Data?, previousAlbum: String?,
-                                                              album: String?) -> Bool {
-        guard let system else { return true }
-        return !artworkKeyMatches(system.trackKey, expectedKey)
-            || lxMusicArtworkIsPrevious(bundleID: bundleID, data: system.data, previousData: previousData,
-                                        previousAlbum: previousAlbum, album: album)
-    }
-
     public nonisolated static func lxMusicArtworkIsPrevious(bundleID: String?, data: Data?, previousData: Data?,
                                                             previousAlbum: String?, album: String?) -> Bool {
         guard bundleID == PlaybackPlayer.lxMusic.bundleIdentifier, let data, let previousData, data == previousData else {
@@ -5076,6 +5065,21 @@ public final class LocalPlaybackSource: ObservableObject {
         let before = previousAlbum?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let now = album?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return !before.isEmpty && !now.isEmpty && before.compare(now, options: [.caseInsensitive]) != .orderedSame
+    }
+
+    /// 洛雪自己给这一首的封面,取图时排在系统那份前面:先要开放 API 推来的(开着、推的是这一首时),再要引擎从它本机列表记下的
+    /// (`player_covers`),都没有或下不到时 nil。它交给系统的封面换歌后会一直停在上一张(咪咕源的封面地址它自己也加载不出来),
+    /// `lxMusicArtworkIsPrevious` 按字节跟换歌前那张比,只认得出紧挨着的那一次:App 刚启动、上一首已换成这里的封面时都认不出,
+    /// 会把上一首的图当成这首的、再交给引擎存成设备封面。见 02 章决策 136。`listed` 是这一首的 `player_covers` 里洛雪那张
+    /// (`EnrichCacheReader.playerCoverURLs` 只能在主线程读,调用方先取好)。会阻塞到下载结束,只在取图队列上调;两个闭包给 selftest 换。
+    public nonisolated static func lxMusicOwnArtwork(
+        title: String?, artist: String?, listed: URL?,
+        openAPI: (String?, String?) -> Data? = { LXMusicOpenAPI.shared.artworkData(title: $0, artist: $1) },
+        download: (URL) -> Data? = { LXMusicOpenAPI.shared.artworkData(url: $0) }
+    ) -> (data: Data, from: String)? {
+        if let data = openAPI(title, artist) { return (data, "open API") }
+        guard let listed, let data = download(listed) else { return nil }
+        return (data, "its list")
     }
 
     /// 上一轮取图时那首的专辑名(`lxMusicArtworkIsPrevious` 拿它跟这一首比)。
@@ -5103,9 +5107,12 @@ public final class LocalPlaybackSource: ObservableObject {
                 // Kaset 的系统会话里从不带图,封面是它自己报的那张(`MediaControlClient.kasetArtwork`)。每次取都按此刻认下的播放器挑:
                 // 换歌那一拍记在了别的来源名下,后面的重试照样取得到 Kaset 那张(02 章决策 91)。
                 let fromKaset = self.lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier
-                // 洛雪:系统那张取不到、不是这一首、或还是上一首的旧图时,退到开放 API 推来的封面(没开它时什么都不做)。
+                // 洛雪:先用它自己给这一首的封面,见 lxMusicOwnArtwork。
                 let lxTrack = self.lastResolvedBundleID == PlaybackPlayer.lxMusic.bundleIdentifier
-                    ? (title: self.lastSnapshot?.title, artist: self.lastSnapshot?.artist) : nil
+                    ? (title: self.lastSnapshot?.title, artist: self.lastSnapshot?.artist,
+                       listed: EnrichCacheReader.playerCoverURLs(artist: self.lastSnapshot?.artist ?? "", title: self.lastSnapshot?.title ?? "",
+                                                                 album: album ?? "")[PlaybackPlayer.lxMusic.bundleIdentifier])
+                    : nil
                 return await Self.runOffPool(Self.artworkQueue) { () -> (Data?, String?, String?) in
                     if fromKaset {
                         guard let result = MediaControlClient.kasetArtwork(forTrackKey: expectedKey) else {
@@ -5113,14 +5120,11 @@ public final class LocalPlaybackSource: ObservableObject {
                         }
                         return (result.data, result.trackKey, nil)
                     }
-                    let fetched = MediaControlClient.fetchArtworkExplained()
-                    if let lxTrack, Self.lxMusicArtworkNeedsFallback(
-                        fetched.artwork.map { ($0.data, $0.trackKey) }, expectedKey: expectedKey, bundleID: bundleID,
-                        previousData: previousData, previousAlbum: previousAlbum, album: album),
-                       let data = LXMusicOpenAPI.shared.artworkData(title: lxTrack.title, artist: lxTrack.artist) {
-                        logger.notice("artwork: using LX Music's open API cover for \(expectedKey, privacy: .public) (\(fetched.artwork == nil ? "system has none" : "system's is not this track's", privacy: .public))")
-                        return (data, expectedKey, nil)
+                    if let lxTrack, let own = Self.lxMusicOwnArtwork(title: lxTrack.title, artist: lxTrack.artist, listed: lxTrack.listed) {
+                        logger.notice("artwork: using LX Music's own cover for \(expectedKey, privacy: .public) (from \(own.from, privacy: .public))")
+                        return (own.data, expectedKey, nil)
                     }
+                    let fetched = MediaControlClient.fetchArtworkExplained()
                     guard let result = fetched.artwork else { return (nil, nil, fetched.miss) }
                     return (result.data, result.trackKey, nil)
                 }

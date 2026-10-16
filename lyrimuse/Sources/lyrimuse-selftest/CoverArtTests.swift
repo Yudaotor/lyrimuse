@@ -2023,15 +2023,19 @@ func runCoverArtTests() {
                     "洛雪换歌: 换了新图照常采纳")
         expectEqual(S.lxMusicArtworkIsPrevious(bundleID: lx, data: old, previousData: nil, previousAlbum: "a", album: "b"), false,
                     "洛雪换歌: 换歌时没挂着封面,照常采纳")
-        // 洛雪的系统封面要不要退到开放 API 推的那张。
-        func fallback(_ system: (Data, String)?, previous: Data? = nil) -> Bool {
-            S.lxMusicArtworkNeedsFallback(system.map { (data: $0.0, trackKey: $0.1) }, expectedKey: "方大同|特别的人", bundleID: lx,
-                                          previousData: previous, previousAlbum: "危险世界", album: "未来")
+        // 洛雪自己给这一首的封面:开放 API 推的 → 本机列表记下的,都没有才轮到系统那份。
+        let listedURL = URL(string: "https://d.musicapp.migu.cn/data/oss/a.webp")!
+        func lxOwn(api: Data?, listed: URL?, download: Data?) -> (data: Data, from: String)? {
+            S.lxMusicOwnArtwork(title: "特别的人", artist: "方大同", listed: listed,
+                                openAPI: { t, a in t == "特别的人" && a == "方大同" ? api : nil },
+                                download: { $0 == listedURL ? download : nil })
         }
-        expectEqual(fallback(nil), true, "洛雪封面退路: 系统没给图")
-        expectEqual(fallback((fresh, "陈粒|小半")), true, "洛雪封面退路: 系统那张不是这一首的")
-        expectEqual(fallback((old, "方大同|特别的人"), previous: old), true, "洛雪封面退路: 系统那张还是上一首的旧图")
-        expectEqual(fallback((fresh, "方大同|特别的人"), previous: old), false, "洛雪封面退路: 系统给了这一首的新图就用它")
+        expectEqual(lxOwn(api: fresh, listed: listedURL, download: old)?.from, "open API", "洛雪自带封面: 开放 API 推的排第一")
+        expectEqual(lxOwn(api: fresh, listed: listedURL, download: old)?.data, fresh, "洛雪自带封面: 用开放 API 那张的字节")
+        expectEqual(lxOwn(api: nil, listed: listedURL, download: old)?.data, old, "洛雪自带封面: 开放 API 没有时用列表里记的")
+        expectEqual(lxOwn(api: nil, listed: listedURL, download: old)?.from, "its list", "洛雪自带封面: 记下来源")
+        expectEqual(lxOwn(api: nil, listed: listedURL, download: nil) == nil, true, "洛雪自带封面: 下不到就交给系统那份")
+        expectEqual(lxOwn(api: nil, listed: nil, download: old) == nil, true, "洛雪自带封面: 列表里没记就交给系统那份")
         expectEqual(S.lxMusicArtworkIsPrevious(bundleID: PlaybackPlayer.appleMusic.bundleIdentifier, data: old, previousData: old,
                                                previousAlbum: "a", album: "b"), false,
                     "洛雪换歌: 只认洛雪,别的播放器不变")

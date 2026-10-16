@@ -1537,8 +1537,9 @@ struct LyricsManagerView: View {
 
     private func nowPlayingRow(scrollProxy: ScrollViewProxy) -> some View {
         let playback = PlaybackCoordinator.shared
+        // 播放器没往系统里报封面(洛雪放咪咕源的歌)时,用列表里这一首那条的封面。
         return LyricsManagerNowPlayingRow(
-            artwork: nowPlaying.artwork, coverURL: nil,
+            artwork: nowPlaying.artwork, coverURL: nowPlayingKey.flatMap { store.summary(forKey: $0)?.coverURL },
             title: playback.title, artist: nowPlaying.displayArtist,
             onLocate: { locateNowPlaying(scrollProxy: scrollProxy) })
     }

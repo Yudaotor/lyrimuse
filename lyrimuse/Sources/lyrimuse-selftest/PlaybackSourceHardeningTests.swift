@@ -462,9 +462,15 @@ private func wiringContracts() {
                 true, "洛雪退路: 下开放 API 推的封面记进对外请求审计日志")
     expectEqual(source.contains("if LXMusicOpenAPI.outputsToDefaultDevice(LXMusicOpenAPI.shared.currentConfig()) {\n                    beginLXMusicColdStart(signalAt: Date(), watch: true)"),
                 true, "洛雪冷恢复: 洛雪选了别的输出设备时不等默认设备")
-    expectEqual(source.contains("if let lxTrack, Self.lxMusicArtworkNeedsFallback(")
-                && source.contains("let data = LXMusicOpenAPI.shared.artworkData(title: lxTrack.title, artist: lxTrack.artist)"),
-                true, "洛雪退路: 系统封面取不到、不是这首、是旧图时用开放 API 推的封面")
+    expectEqual(sourceBytes(source, contain: "if let lxTrack, let own = Self.lxMusicOwnArtwork(title: lxTrack.title, artist: lxTrack.artist, listed: lxTrack.listed) {\n"
+                            + "                        logger.notice(\"artwork: using LX Music's own cover for \\(expectedKey, privacy: .public) (from \\(own.from, privacy: .public))\")\n"
+                            + "                        return (own.data, expectedKey, nil)\n"
+                            + "                    }\n"
+                            + "                    let fetched = MediaControlClient.fetchArtworkExplained()"),
+                true, "洛雪退路: 先用它自己给这一首的封面,取不到才取系统那份")
+    expectEqual(code("lyrimuse/LyricsManager/LyricsManagerView.swift")
+                    .contains("artwork: nowPlaying.artwork, coverURL: nowPlayingKey.flatMap { store.summary(forKey: $0)?.coverURL },"),
+                true, "歌词管理在播那一行: 系统没封面时用列表里这一首的封面")
     expectEqual(source.contains("Task.detached(priority: .utility) { LXMusicPlayLater.noteStartedPlaying(title: title, artist: artist) }"),
                 true, "稍后播放: 洛雪换到那首就从记录里划掉")
     expectEqual(code("lyrimuse/LastfmStatsSection.swift").contains("Task.detached(priority: .utility) { LXMusicPlayLater.record(track) }"),

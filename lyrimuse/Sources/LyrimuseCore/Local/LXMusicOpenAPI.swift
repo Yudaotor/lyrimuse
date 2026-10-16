@@ -378,6 +378,12 @@ public final class LXMusicOpenAPI: NSObject, URLSessionDataDelegate, @unchecked 
     public func artworkData(title: String?, artist: String?) -> Data? {
         guard let state = currentState(), Self.describes(state, title: title, artist: artist),
               let raw = state.picURL, let url = Self.httpsCover(raw) else { return nil }
+        return artworkData(url: url)
+    }
+
+    /// 下载洛雪的一张封面(开放 API 推的,或引擎从它本机列表记下的 `player_covers`);同一个地址不重下。
+    /// 下不到、不是图为 nil。会阻塞到下载结束(最多 3 秒),不要在主线程调。
+    public func artworkData(url: URL) -> Data? {
         lock.lock()
         let cached = artworkCache
         lock.unlock()
