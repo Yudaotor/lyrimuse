@@ -107,6 +107,8 @@ struct LyricsSearchSheet: View {
     // candidates / isSearching 分开存,不揉成一个「加载中 / 已加载 / 失败」三态:结果是陆续到达的(引擎按 NDJSON 逐行
     // 输出,见 LyricsSearchService.search 的 onUpdate),「还在搜」和「已经有哪些候选」是两个独立维度。
     @State private var candidates: [LyricsSearchService.Candidate] = []
+    /// candidates 每换一批加一,`duplicates` 按它缓存(见 DisplaySignatureMemo)。
+    @State private var candidatesRevision = 0
     /// 这首歌现在缓存里存着的那一版(`isStored`),打开面板就摆进「当前使用」那一块、先选中它,其他源接着搜;搜到同一份(来源和
     /// 正文都一样)就换成搜到的那条,没搜到(手改过、来源是播放器本地歌词、那个源这次没回)就一直留着。见 currentShown、11 章决策 99、100。
     @State private var storedCandidate: LyricsSearchService.Candidate?
@@ -118,6 +120,9 @@ struct LyricsSearchSheet: View {
     /// 当前使用那份的预览行,对照用(`comparison`)。
     @State private var currentPreviewMemo = PreviewRowsMemo()
     @State private var displaySignatures = DisplaySignatureMemo()
+    /// 面板所在那扇窗口(sheet 自己也是一扇窗口,跟着宿主窗口一起被挡住、最小化)看不看得见,往下传给预览
+    /// (`previewHostVisible`):看不见时当前句不跟播放走表。三个入口一样,不靠宿主各自去传。
+    @StateObject private var windowSurface = SettingsWindowSurface()
     /// 预览显示原文 / 原文 + 译文 / 原文 + 读音;选中的候选没有那一档时按原文显示,选择本身不改,换到有的候选又回来。
     /// 跟歌词管理详情页记在同一个偏好键,两边改一处另一处跟着变,下次打开照旧。
     @AppStorage(LyricsManagerDisplayMode.defaultsKey) private var displayMode: LyricsManagerDisplayMode = .translation
@@ -444,7 +449,7 @@ struct LyricsSearchSheet: View {
     // 知道进度在动。总数为 0(还没收到任何一行)时不显示,不写成 (0/0)。
     @State private var sourcesDone = 0
     @State private var sourcesTotal = 0
-    // 第几轮全源检索(引擎兜底轮每轮重扫 9 个源),给 searchProgressSuffix 的
+    // 第几轮全源检索(引擎兜底轮每轮把开着的源重扫一遍),给 searchProgressSuffix 的
     // 轮次前缀用,语义见 LyricsSearchService.SearchUpdate.round。
     @State private var searchRound = 1
     // searchGeneration:第几轮搜索。load() 有三个入口(.task 首次进入、「重新搜索」按钮、输入框 .onSubmit),
@@ -560,6 +565,8 @@ struct LyricsSearchSheet: View {
         .ignoresSafeArea()
         .frame(minWidth: Self.minimumSize.width, idealWidth: Self.defaultSize.width, maxWidth: .infinity,
                minHeight: Self.minimumSize.height, idealHeight: Self.defaultSize.height, maxHeight: .infinity)
+        .background(WindowSurfaceCapture(surface: windowSurface).frame(width: 0, height: 0))
+        .environment(\.previewHostVisible, windowSurface.isVisible)
         // 从歌词管理 / 歌词窗口弹出的这张是 sheet,AppKit 给 sheet 的默认 styleMask 里没有 .resizable,
         // 窗口边缘对拖拽完全没反应:这颗探针把标志插回去,同时把最小尺寸写进窗口(同 WindowDragHandle
         // 的路子:垫在背景层拿到底层 NSWindow)。上面的 frame 要带 maxWidth / maxHeight: .infinity,
@@ -614,13 +621,15 @@ struct LyricsSearchSheet: View {
             followPlayback = true
         }
         .task(id: searchSubject) { await load() }
-        // 关闭/采纳/Esc 任何一条退出路径都把还在跑的引擎子进程停掉 —— 不停的话
-        // 它会继续对九个源发请求直到 20 秒兜底,NDJSON 还在往已消失的视图里灌
-        // (search 内的 withTaskCancellationHandler 是第二层,取消幂等,两层谁先到都行)。
-        // 只停这个面板自己发起的那一轮,另一扇窗里的搜索、详情页在跑的自动匹配不受影响。
+        // 关闭/采纳/Esc 任何一条退出路径都把还在跑的引擎子进程停掉 —— 不停的话它会继续对各源发请求、把兜底轮跑完,
+        // NDJSON 还在往已消失的视图里灌(search 内的 withTaskCancellationHandler 是第二层,取消幂等,两层谁先到都行)。
+        // 只停这个面板自己发起的那一轮,另一扇窗里的搜索不受影响。代号先换掉:杀进程那一刻管道里剩的、已经排进主队列的
+        // 几行进度还会来,换了代号它们一进门就被丢掉,不会再起一次没人管的封面预热。
         .onDisappear {
+            searchGeneration += 1
             LyricsSearchService.shared.cancelRunning(for: searchOwner)
             coverPrewarm?.cancel()
+            coverPrewarm = nil
         }
     }
 
@@ -680,8 +689,7 @@ struct LyricsSearchSheet: View {
     // 哪栏是专辑),输入框占满剩下的宽度;栏名那一列由 Grid 对齐、宽度跟着最长的栏名走(英文的
     // Artist / Album 比中文长)。挂 help:很长的歌名 / 专辑在侧栏里装不下,悬停看全文。
     private var queryCard: some View {
-        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-        return Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 0) {
+        Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 0) {
             queryRow(L10n.t("歌名"), text: $title)
             Divider()
             queryRow(L10n.t("歌手"), text: $artist)
@@ -706,8 +714,8 @@ struct LyricsSearchSheet: View {
     }
 
     // 搜索途中也允许再点:上一轮会被 load() 里的 searchGeneration 判作废,子进程
-    // 也会被 LyricsSearchService 按同一发起方顶掉、杀掉。改了关键词却要等上一轮跑完
-    // (最长 20 秒)才能重搜,是没道理的等待。
+    // 也会被 LyricsSearchService 按同一发起方顶掉、杀掉(连点时两次起进程至少隔 1 秒,见 minRelaunchInterval)。
+    // 改了关键词却要等上一轮连兜底轮跑完才能重搜,是没道理的等待。
     private var searchActions: some View {
         HStack(spacing: 8) {
             Button { Task { await load() } } label: {
@@ -1094,7 +1102,7 @@ struct LyricsSearchSheet: View {
 
     // candidates 陆续到达、isSearching 才是"是否还没结束"的唯一依据——不能用
     // "candidates.isEmpty"反过来判断有没有搜索完:目前为止一个候选都还没到手,不代表
-    // 九个源已经查完了(可能只是跑得快的那几个还没轮到),那样会把"还在搜"误判成
+    // 全部源已经查完了(可能只是跑得快的那几个还没轮到),那样会把"还在搜"误判成
     // "查完了、真的什么都没有",提前弹出"没找到候选"的空状态提示。
     @ViewBuilder
     private var detailContent: some View {
@@ -1167,7 +1175,7 @@ struct LyricsSearchSheet: View {
             } else if instrumental {
                 // 排在"无法连接任何歌词源"之后、笼统兜底之前:这是比"真没搜到"更确定的结论——
                 // 至少一个源明确断言过"这首歌没有词"(见 instrumental 声明处注释),不是
-                // 九个源都交白卷说不出理由,不该跟那种情况共用同一句轻描淡写的"没找到"。
+                // 各源都交白卷说不出理由,不该跟那种情况共用同一句轻描淡写的"没找到"。
                 // 文案复用「重新自动匹配」toast 三分支(LyricsManagerView.swift)已经在用的
                 // 同一条 L10n key,同一个结论在两处别各写一套措辞。
                 ContentUnavailableView {
@@ -1277,23 +1285,41 @@ struct LyricsSearchSheet: View {
     }
 
     /// source → 排在它前面、跟它一样的那个源(LyricsCandidateDuplicates.firstMatches)。按显示出来的行比、时间差
-    /// 0.5 秒以内算一样,跟对照说「逐句一致」同一个标准(`displaySignature`)。候选最多十来条,每条的签名按内容
-    /// 缓存一次(要过一遍播放引擎),之后每次 body 只做比较。
+    /// 0.5 秒以内算一样,跟对照说「逐句一致」同一个标准(`displaySignature`)。每一行候选、侧栏分组都要读它,一次 body
+    /// 要读十几次:按 candidatesRevision 算一次,这一批候选没换就直接用上一次的结果。
     private var duplicates: [String: LyricsCandidateDuplicates.Match] {
-        LyricsCandidateDuplicates.firstMatches(
-            candidates.map { c in
-                let signature = displaySignatures.signature(c)
-                return (source: c.source, fingerprint: signature.fingerprint, timeline: signature.timeline)
-            },
-            toleranceMs: LyricsCandidateComparison.retimeThresholdMs)
+        displaySignatures.duplicates(of: candidates, revision: candidatesRevision)
     }
 
-    /// 每条候选按显示出来的行算的比对签名,按候选内容缓存。
+    /// 每条候选按显示出来的行算的比对签名(要过一遍播放引擎),按候选内容缓存;外加整批候选的 duplicates,按修订号缓存。
+    /// 换一批候选时签名缓存只留这一批还用得着的,面板开着跨很多首歌也不会一直涨。
     private final class DisplaySignatureMemo {
         private var cache: [String: (fingerprint: String, timeline: [[Int]])] = [:]
+        private var duplicatesRevision: Int?
+        private var duplicatesValue: [String: LyricsCandidateDuplicates.Match] = [:]
 
-        func signature(_ c: LyricsSearchService.Candidate) -> (fingerprint: String, timeline: [[Int]]) {
-            let key = "\(c.id)|\(c.title)|\(c.artist)|\(c.lyrics.hashValue)|\(c.lyricsYRC.hashValue)"
+        func duplicates(of candidates: [LyricsSearchService.Candidate], revision: Int) -> [String: LyricsCandidateDuplicates.Match] {
+            if duplicatesRevision == revision { return duplicatesValue }
+            var used = Set<String>()
+            let value = LyricsCandidateDuplicates.firstMatches(
+                candidates.map { c in
+                    let key = Self.key(c)
+                    used.insert(key)
+                    let signature = signature(c, key: key)
+                    return (source: c.source, fingerprint: signature.fingerprint, timeline: signature.timeline)
+                },
+                toleranceMs: LyricsCandidateComparison.retimeThresholdMs)
+            cache = cache.filter { used.contains($0.key) }
+            duplicatesRevision = revision
+            duplicatesValue = value
+            return value
+        }
+
+        private static func key(_ c: LyricsSearchService.Candidate) -> String {
+            "\(c.id)|\(c.title)|\(c.artist)|\(c.lyrics.hashValue)|\(c.lyricsYRC.hashValue)"
+        }
+
+        private func signature(_ c: LyricsSearchService.Candidate, key: String) -> (fingerprint: String, timeline: [[Int]]) {
             if let hit = cache[key] { return hit }
             let rows = LyricsPreviewText.rows(lyrics: c.lyrics, translation: "", title: c.title, artist: c.artist)
             let embedded = LRCParser.parseOffsetMs(c.lyrics)
@@ -2018,6 +2044,7 @@ struct LyricsSearchSheet: View {
             return
         }
         candidates = []
+        candidatesRevision &+= 1
         coverPrewarm?.cancel()
         coverPrewarm = nil
         storedCandidate = makeStoredCandidate()
@@ -2046,6 +2073,7 @@ struct LyricsSearchSheet: View {
                 guard generation == searchGeneration else { return } // 已经有更新的一轮在跑,这批结果作废
                 defer { revealSelection() }
                 candidates = update.candidates
+                candidatesRevision &+= 1
                 // 列表是懒加载的:不预热,封面要等滚到那一行才开始下。上一批的预热先停,新一批按排序从头取图,
                 // 前几张多半就是上一批正在下的,会并进同一个请求。
                 coverPrewarm?.cancel()
@@ -2094,5 +2122,24 @@ private final class LyricsSearchNowPlaying: ObservableObject {
             }
             .removeDuplicates()
             .sink { [weak self] in self?.key = $0 }
+    }
+}
+
+/// 用一个零尺寸的 NSView 拿到所在的 NSWindow 交给 `SettingsWindowSurface`(同 LyricsManagerView 的 LyricsManagerWindowCapture)。
+/// 搜索面板和歌词窗口弹出的搜索小窗用。
+struct WindowSurfaceCapture: NSViewRepresentable {
+    let surface: SettingsWindowSurface
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async {
+            if let window = view.window { surface.attach(window) }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // 推到下一拍:attach 会改 @Published 的 isVisible,不能在视图更新当中改。
+        if let window = nsView.window { DispatchQueue.main.async { surface.attach(window) } }
     }
 }

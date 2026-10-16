@@ -121,14 +121,31 @@ final class LyricsPreviewPositionLine: ObservableObject {
     private var times: [Int?] = []
     private var highlight: LyricsPreviewHighlight = .playingLine
     private var ticker: AnyCancellable?
+    private var playingWatch: AnyCancellable?
 
-    /// 换了行、换了找法、这首开始 / 不再是正在放的那首时调;不在跟时停表、清掉行号。
+    /// 换了行、换了找法、这首开始 / 不再是正在放的那首、窗口看不看得见变了时调(active 由调用方按「正在放这首、窗口看得见」给);
+    /// 不在跟时停表、清掉行号。跟着的时候只在播放器在放时走表:暂停时位置不动,不用每 0.1 秒算一遍。
     func update(times: [Int?], highlight: LyricsPreviewHighlight, active: Bool) {
         self.times = times
         self.highlight = highlight
         guard active, case .ownTimeline = highlight else {
             ticker = nil
+            playingWatch = nil
             if index != nil { index = nil }
+            return
+        }
+        recompute()
+        if playingWatch == nil {
+            playingWatch = PlaybackCoordinator.shared.$isPlayingNow.removeDuplicates()
+                .sink { [weak self] playing in self?.setTicking(playing) }
+        }
+    }
+
+    private func setTicking(_ playing: Bool) {
+        guard playing else {
+            ticker = nil
+            // 暂停的这一下 anchor / pausedPositionMs 可能还没换好(@Published 在赋值之前发):推到下一拍再对一次。
+            DispatchQueue.main.async { [weak self] in self?.recompute() }
             return
         }
         recompute()
@@ -937,6 +954,8 @@ struct LyricsManagerPreviewList: View {
     let rows: [LyricsPreviewRow]
     let mode: LyricsManagerDisplayMode
     let isNowPlaying: Bool
+    /// 宿主窗口看不看得见(歌词管理窗口、歌词窗口弹出的搜索小窗各自往下传):看不见时当前句不跟表。
+    @Environment(\.previewHostVisible) private var hostVisible
     @Binding var follow: Bool
     let canSeek: Bool
     /// 参数是这一行的时间(歌词时间轴上的,没减偏移)。
@@ -1008,6 +1027,7 @@ struct LyricsManagerPreviewList: View {
             .onChange(of: highlight) { _, _ in updatePosition() }
             .onChange(of: compareTimes) { _, _ in updatePosition() }
             .onChange(of: isNowPlaying) { _, _ in updatePosition() }
+            .onChange(of: hostVisible) { _, _ in updatePosition() }
             .onAppear {
                 updatePosition()
                 scrollToCurrent(proxy, animated: false)
@@ -1016,10 +1036,10 @@ struct LyricsManagerPreviewList: View {
     }
 
     private func updatePosition() {
-        position.update(times: rows.map(\.timeMs), highlight: highlight, active: isNowPlaying)
+        position.update(times: rows.map(\.timeMs), highlight: highlight, active: isNowPlaying && hostVisible)
         comparePosition.update(times: compareTimes,
                                highlight: .ownTimeline(embeddedOffsetMs: compareEmbeddedOffsetMs, isCurrent: true),
-                               active: isNowPlaying && compare != nil)
+                               active: isNowPlaying && hostVisible && compare != nil)
     }
 
     /// 跟随时把当前句滚到中间。还没唱到第一句(前奏,或刚换歌、播放位置还没对上)时回到顶上:当前句变成「没有」时

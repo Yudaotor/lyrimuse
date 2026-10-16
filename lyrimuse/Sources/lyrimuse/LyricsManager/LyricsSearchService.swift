@@ -24,13 +24,12 @@ private let searchLyricsHealthMarkers = ["rejected (code", "backing off", "cooli
 final class LyricsSearchService {
     static let shared = LyricsSearchService()
 
-    /// 一个发起方:一个搜索面板(歌词管理里的、悬浮窗「搜索歌词…」小窗里的各算一个)、详情页的
-    /// 「重新自动匹配」。调用方各自在 @State 里持有一个。
+    /// 一个发起方:一个搜索面板(歌词管理里的、歌词窗口弹出的小窗里的各算一个)。调用方各自在 @State 里持有一个。
     ///
     /// 在跑的子进程按发起方分开记:同一个发起方起新一轮时把自己上一轮杀掉(「重新搜索」在搜索途中也放开,
-    /// 不杀的话旧那一轮会跑满 20 秒兜底,白占九个源的网络请求,结果反正被调用方的 generation 判作废),
-    /// 但不碰别的发起方 —— 只记一个全局"当前在跑的"时,关掉一个面板会把另一扇窗里的搜索、或者正在跑的
-    /// 自动匹配一起杀掉,被杀的那边收到非零退出码、误报"搜索失败"。
+    /// 不杀的话旧那一轮会把各源的兜底轮跑完,白占网络请求,结果反正被调用方的 generation 判作废),
+    /// 但不碰别的发起方 —— 只记一个全局"当前在跑的"时,关掉一个面板会把另一扇窗里的搜索一起杀掉,
+    /// 被杀的那边收到非零退出码、误报"搜索失败"。全局另有并发上限,见 `maxConcurrentProcesses`。
     struct Owner: Hashable, Sendable {
         private let id = UUID()
         init() {}
@@ -69,11 +68,90 @@ final class LyricsSearchService {
     /// 用锁而不是 @MainActor:search() 的进程收尾在后台队列上,两边都要碰这张表。
     private let processLock = NSLock()
     private var running: [Owner: RunHandle] = [:]
+    /// 每个发起方上一次起进程的时刻(processLock 保护),见 `minRelaunchInterval`。
+    private var lastLaunch: [Owner: Date] = [:]
 
-    /// 取消这个发起方正在跑的那一轮(没有就什么都不做),别的发起方的不受影响。
+    /// 同时最多几个 search-lyrics 子进程。每个子进程都把全部歌词源问一遍,按主机的限速只在它自己进程里算,
+    /// 几扇窗口同时搜等于对各源成倍地发请求(Musixmatch 遇到并发会弹验证码)。留两个:歌词窗口弹出的小窗不用等
+    /// 歌词管理里正在跑的那一轮(一轮连兜底可能要一两分钟);再多的排队,先来先起。
+    static let maxConcurrentProcesses = 2
+    /// 同一个发起方两次起进程至少隔这么久:连点「重新搜索」时上一轮被杀,但它已经发出去的请求收不回来,
+    /// 隔开一点,不让几次点击叠成几整轮请求。
+    static let minRelaunchInterval: TimeInterval = 1
+    /// 子进程跑这么久还没退出就停掉,当作这一轮结束(已经显示的候选照旧留着)。引擎每轮有 20 秒截止,
+    /// 兜底轮叠起来也到不了这里;这是引擎卡住时的保险,不然转圈会一直转到关面板。
+    static let processTimeout: TimeInterval = 240
+
+    private let slots = ProcessSlots(limit: LyricsSearchService.maxConcurrentProcesses)
+
+    /// 子进程名额:用满了的排队,先到先得;排队时调用方的 Task 被取消就离开队列。
+    private final class ProcessSlots: @unchecked Sendable {
+        private let lock = NSLock()
+        private let limit: Int
+        private var inUse = 0
+        private var waiters: [(id: UUID, continuation: CheckedContinuation<Void, Error>)] = []
+
+        init(limit: Int) { self.limit = limit }
+
+        func acquire() async throws {
+            let id = UUID()
+            try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    lock.lock()
+                    // 取消可能先于这里落下(那时队列里还没有它,onCancel 什么都没摘到):进来先看一眼。
+                    if Task.isCancelled {
+                        lock.unlock()
+                        continuation.resume(throwing: CancellationError())
+                    } else if inUse < limit {
+                        inUse += 1
+                        lock.unlock()
+                        continuation.resume()
+                    } else {
+                        waiters.append((id, continuation))
+                        lock.unlock()
+                    }
+                }
+            } onCancel: {
+                lock.lock()
+                let waiter = waiters.firstIndex { $0.id == id }.map { waiters.remove(at: $0) }
+                lock.unlock()
+                waiter?.continuation.resume(throwing: CancellationError())
+            }
+        }
+
+        /// 还名额:有人在排队就直接交给排在最前的那个(占用数不变)。
+        func release() {
+            lock.lock()
+            guard !waiters.isEmpty else {
+                inUse -= 1
+                lock.unlock()
+                return
+            }
+            let next = waiters.removeFirst()
+            lock.unlock()
+            next.continuation.resume()
+        }
+    }
+
+    /// 这个发起方上一次起进程不到 `minRelaunchInterval`:还差多久。
+    private func relaunchDelay(for owner: Owner, now: Date) -> TimeInterval {
+        processLock.lock()
+        defer { processLock.unlock() }
+        guard let last = lastLaunch[owner] else { return 0 }
+        return max(0, Self.minRelaunchInterval - now.timeIntervalSince(last))
+    }
+
+    private func noteLaunch(for owner: Owner, at date: Date) {
+        processLock.lock()
+        lastLaunch[owner] = date
+        processLock.unlock()
+    }
+
+    /// 取消这个发起方正在跑的那一轮(没有就什么都不做),别的发起方的不受影响。面板关掉时调,顺带忘掉它的起进程时刻。
     func cancelRunning(for owner: Owner) {
         processLock.lock()
         let handle = running.removeValue(forKey: owner)
+        lastLaunch.removeValue(forKey: owner)
         processLock.unlock()
         handle?.cancel()
     }
@@ -104,8 +182,7 @@ final class LyricsSearchService {
             case "duration": return L10n.t("时长吻合")
             case "corroborated": return L10n.t("结束点获印证")
             case "wordTiming": return L10n.t("逐字时间轴")
-            // 补:这一项自就在打分里,却一直没有译名 ——
-            // 是新加的 scoretermlabel_test.go 守卫测试当场逮出来的既有漏网。
+            // 引擎每一种 kind 在这里都要有译名,scoretermlabel_test.go 守着。
             case "nativeSource": return L10n.t("与当前播放器同源")
             case "lines": return L10n.t("行数")
             case "versionTags": return L10n.t("版本不符")
@@ -124,9 +201,7 @@ final class LyricsSearchService {
             case "timelineOffset": return L10n.t("时间轴整体偏移")
             // v24:见引擎侧 lyrictimelineintrusion.go。
             case "timelineIntrusion": return L10n.t("间奏中多出一段歌词")
-            // v3新维度,与引擎 match.go 的 scoreTerm kind 一一对应。
-            // 旧 "source" case 已删:来源先验分从引擎移除后,score_terms 只来自
-            // 实时搜索(不落缓存),不存在还带着旧字段的数据,这个分支是死代码。
+            // 与引擎 match.go 的 scoreTerm kind 一一对应。引擎不再给来源先验分,没有 "source" 这一项。
             case "durationOvershoot": return L10n.t("歌词超出曲长")
             case "album": return L10n.t("专辑吻合")
             case "titleMatch": return L10n.t("标题吻合")
@@ -281,11 +356,9 @@ final class LyricsSearchService {
         }
     }
 
-    // 补上——之前 onUpdate 只传候选数组,九个源都没查到候选时,弹窗只能显示
-    // 一句笼统的"都没找到",分不清是这首歌真的没有网络歌词,还是网络整体不通导致九个源
-    // 的请求全部发不出去。networkLooksDown 由引擎侧统计"这一轮联网搜索期间发出
-    // 的请求有没有全部失败"算出来(见 networkobs.go 的 networkLooksDown()),这里原样
-    // 转发给调用方决定展示哪种空状态文案。
+    // 每一行进度。networkLooksDown 由引擎侧统计"这一轮联网搜索期间发出的请求有没有全部失败"算出来
+    // (见 networkobs.go 的 networkLooksDown()),调用方据此分清"这首歌真的没有网络歌词"和"网络整体不通",
+    // 给不同的空状态文案。
     struct SearchUpdate {
         let candidates: [Candidate]
         let networkLooksDown: Bool
@@ -379,13 +452,10 @@ final class LyricsSearchService {
     // durationSecs<=0 有专门处理,直接跳过时长匹配这档评分(不会除零/不会被误判成
     // "时长对不上"),只退化成语言/署名行过滤+逐字加分+来源优先级+行数。
     //
-    // onUpdate 每收到子进程一整行 stdout 就调用一次(不是等进程退出才调一次)——
-    // 引擎那边(searchcli.go)改成了 NDJSON:谁先查完谁先打印一行,后面每一行是
-    // 目前为止已知全部候选重新排序过的完整列表,不是只有新到的这一条(引擎侧
-    // corroboratedEndings 是跨候选互相印证的信号,后到的源可能改变已经展示出来的某条
-    // 候选的分数,所以每次都要整份重新展示,不能只追加新的那一条)。调用方(desktop-
-    // lyrics 的"搜索候选歌词"弹窗)因此能做到"谁先搜到就先展示谁,列表随后续源陆续
-    // 刷新",不用等最慢的源(或者 20 秒兜底超时)才看到任何东西。回调固定在
+    // onUpdate 按子进程 stdout 的进度行调用(NDJSON,见 searchcli.go):谁先查完谁先打印一行,每一行都是
+    // 目前为止已知全部候选重新排序过的完整列表,不是只有新到的这一条(引擎侧 corroboratedEndings 是跨候选
+    // 互相印证的信号,后到的源可能改变已经展示出来的某条候选的分数)。所以一批数据里攒了好几行时只交最后一行。
+    // 调用方(「搜索候选歌词」面板)因此能做到"谁先搜到就先展示谁,列表随后续源陆续刷新"。回调固定在
     // MainActor 上执行,调用方可以直接改 @State,不需要自己再跳线程。
     /// - owner: 发起方,见 `Owner`。
     func search(
@@ -393,15 +463,20 @@ final class LyricsSearchService {
         artist: String, title: String, album: String, durationSecs: Double = 0,
         onUpdate: @escaping @MainActor (SearchUpdate) -> Void
     ) async throws {
-        // withTaskCancellationHandler:调用方的 Task 被取消(.task 随视图消失、或
-        // searchGeneration 换代)时顺手终结子进程 —— 原来没有任何取消接线,sheet 关掉/
-        // 采纳候选后引擎子进程照跑满(九个源、20 秒兜底),NDJSON 还在往已消失的
-        // 视图里灌,全是无人消费的废工(性能审计;sheet 侧另有 onDisappear
-        // 兜底,两层都在,谁先到谁生效——取消幂等)。取消只停**这一轮**的子进程:同一发起方
-        // 紧接着起的新一轮不会被旧任务迟到的取消误杀。
+        // withTaskCancellationHandler:调用方的 Task 被取消(.task 随视图消失、或 searchGeneration 换代)时顺手终结
+        // 子进程,不让它对着已经消失的视图把各源跑完(面板侧另有 onDisappear,两层谁先到谁生效,取消幂等)。
+        // 取消只停**这一轮**的子进程:同一发起方紧接着起的新一轮不会被旧任务迟到的取消误杀。
         let handle = RunHandle()
         register(handle, for: owner)
         defer { unregister(handle, for: owner) }
+        // 连点「重新搜索」:离上一次起进程不到 minRelaunchInterval 就先等一下(上一轮已经被 register 杀掉了)。
+        let delay = relaunchDelay(for: owner, now: Date())
+        if delay > 0 { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
+        try await slots.acquire()
+        defer { slots.release() }
+        // 等名额的时候被同一发起方的新一轮顶掉了:不起进程。
+        if handle.isCancelled { throw CancellationError() }
+        noteLaunch(for: owner, at: Date())
         try await withTaskCancellationHandler {
             try await performSearch(handle: handle, artist: artist, title: title, album: album,
                                     durationSecs: durationSecs, onUpdate: onUpdate)
@@ -489,28 +564,33 @@ final class LyricsSearchService {
             // 不是一次性 readDataToEndOfFile——后者要等到 EOF 才返回,等于还是"攒到最后
             // 才读",会跟"边读边逐行展示"的目标自相矛盾),管道缓冲区就不会被灌满。
             //
-            // 用 @unchecked Sendable 包一层是因为 outBuffer/pendingUpdate 只在下面这一条
-            // 后台队列(readQueue,串行)里被写,不会有真正的并发访问——Swift 6 严格并发
-            // 检查器认不出"同一个串行队列内先后执行"这种 happens-before 关系,只能显式
-            // 声明这里的跨线程访问已经自行保证过安全。
+            // 用 @unchecked Sendable 包一层:outBuffer / lastUpdate 只在 readQueue 上写,errBuffer 只在 stderrQueue 上写,
+            // 各自串行;terminationHandler 经 readGroup.wait() 之后才读,happens-before 由 group 保证。timedOut 由超时那一下
+            // 在主队列上置位、terminationHandler 读,用 timeoutLock 护着。Swift 6 严格并发检查认不出这些先后关系,只能显式声明。
             final class Box: @unchecked Sendable {
                 var outBuffer = Data()
                 var errBuffer = Data()
-                /// 最后一行进度,收尾时写那行汇总用(只在 readQueue 上写,terminationHandler 经 readGroup.wait() 后才读)。
+                /// 最后一行进度,收尾时写那行汇总用。
                 var lastUpdate: RawSearchUpdate?
+                let timeoutLock = NSLock()
+                var timedOut = false
             }
             let box = Box()
             let startedAt = Date()
             let readQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.search-lyrics.stdout", qos: .utility)
             let readGroup = DispatchGroup()
 
-            // 按 \n 切行,每凑齐一整行就尝试解码成 RawSearchUpdate 并回调——半行(还没读到
-            // 换行符的尾巴)留在 outBuffer 里等下一批数据补全,不会被当成一行提前误判。
+            // 按 \n 切行。半行(还没读到换行符的尾巴)留在 outBuffer 里等下一批数据补全,不会被当成一行提前误判。
+            // 这一批里凑齐了好几行时只解码、只回调最后能解开的那一行:每一行都是到那时为止的完整列表,前面几行
+            // 解了也是马上被盖掉(一行带着全部候选的整份歌词,解码和指纹都不便宜)。
             func drainCompleteLines() {
+                var lines: [Data] = []
                 while let newlineRange = box.outBuffer.firstRange(of: Data([0x0A])) {
                     let lineData = box.outBuffer.subdata(in: box.outBuffer.startIndex..<newlineRange.lowerBound)
                     box.outBuffer.removeSubrange(box.outBuffer.startIndex..<newlineRange.upperBound)
-                    guard !lineData.isEmpty else { continue }
+                    if !lineData.isEmpty { lines.append(lineData) }
+                }
+                for lineData in lines.reversed() {
                     guard let raw = try? JSONDecoder().decode(RawSearchUpdate.self, from: lineData) else {
                         logger.error("search-lyrics: failed to decode a stdout line, skipping")
                         continue
@@ -530,6 +610,7 @@ final class LyricsSearchService {
                     // 走主队列而不是各起一个 MainActor Task:收尾的 continuation 也从主队列恢复(见 terminationHandler),
                     // 同一条串行队列先进先出,最后那行一定先于 search() 返回送到;各起 Task 的顺序语言层面不保证。
                     DispatchQueue.main.async { MainActor.assumeIsolated { onUpdate(update) } }
+                    break
                 }
             }
 
@@ -544,12 +625,8 @@ final class LyricsSearchService {
                 }
                 readGroup.leave()
             }
-            // stderr 必须在**独立**队列上读:readQueue 是串行的,原来这条
-            // 任务排在 stdout 的 EOF 循环后面,等于把上面那段注释自防的 64KB 管道死锁在
-            // stderr 侧原样引回 —— 当前 search-lyrics 路径的 stderr 写入量 <2KB 触发不了,
-            // 但将来任何人给搜索路径加 verbose 日志就会无声引爆。两条管道并行排空,
-            // errBuffer 只在这条队列写、terminationHandler 经 readGroup.wait() 后才读,
-            // happens-before 由 group 保证。
+            // stderr 在**独立**队列上读:跟 stdout 排在同一条串行队列上的话,它要等 stdout 读到 EOF 才开始读,
+            // stderr 写满 64KB 时上面那段说的管道死锁就出在 stderr 这一侧。两条管道并行排空。
             let stderrQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.search-lyrics.stderr", qos: .utility)
             readGroup.enter()
             stderrQueue.async {
@@ -562,20 +639,27 @@ final class LyricsSearchService {
                 // 避免极端情况下读任务还没来得及把最后一批数据处理完就被下面读到半份状态。
                 readGroup.wait()
                 // 是这边主动停的(同一发起方起了新一轮、调用方 Task 取消、面板关了):不是失败,别报「搜索失败」。
-                let cancelled = handle.isCancelled
+                // 超时是这边停的:按正常结束收尾(已经显示的候选留着),不报「搜索失败」。
+                box.timeoutLock.lock()
+                let timedOut = box.timedOut
+                box.timeoutLock.unlock()
+                let cancelled = handle.isCancelled && !timedOut
                 let status = proc.terminationStatus
-                let stderrText = String(data: box.errBuffer, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                // 按 UTF-8 容错解码:中间夹了一个坏字节也不至于整段丢掉(丢了的话下面的源健康信号一行都不记)。
+                let stderrText = String(decoding: box.errBuffer, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
                 // 每次搜索一行汇总:哪些源给了候选、没给的源报了什么原因、跑了几轮几秒。手动搜索只搜到两三个源时,
                 // 事后能查到是哪几个源没回、为什么(见 11 章决策 97)。
                 let summary = Self.completionSummary(
                     title: title, artist: artist, update: box.lastUpdate,
                     elapsed: Date().timeIntervalSince(startedAt), cancelled: cancelled, status: status)
                 logger.notice("\(summary, privacy: .public)")
-                if !cancelled {
+                if timedOut {
+                    logger.error("search-lyrics still running after \(Int(Self.processTimeout))s, stopped it")
+                } else if !cancelled {
                     if status == 0 {
                         Self.logSourceHealthSignals(box.errBuffer)
                     } else {
-                        logger.error("search-lyrics exited \(status): \(stderrText ?? "", privacy: .public)")
+                        logger.error("search-lyrics exited \(status): \(stderrText, privacy: .public)")
                     }
                 }
                 // 排在所有逐行回调后面恢复(同一条主队列,见 drainCompleteLines);文案也在主线程上取 ——
@@ -583,8 +667,8 @@ final class LyricsSearchService {
                 DispatchQueue.main.async {
                     if cancelled {
                         continuation.resume(throwing: CancellationError())
-                    } else if status != 0 {
-                        let summary = Self.failureSummary(stderrText ?? "")
+                    } else if status != 0 && !timedOut {
+                        let summary = Self.failureSummary(stderrText)
                         continuation.resume(throwing: SearchError.processFailed(
                             summary.isEmpty ? String(format: L10n.t("退出码 %@"), "\(status)") : summary))
                     } else {
@@ -598,19 +682,18 @@ final class LyricsSearchService {
                 // 取消落在 attach 和 run 之间时 cancel() 看到的进程还没跑、没发终止信号:起来之后再核一次,已取消就马上停,
                 // 收尾照常走 terminationHandler 的取消那一支。
                 if handle.isCancelled { process.terminate() }
+                // 超时保险(见 processTimeout):到点还在跑就停掉,收尾走 terminationHandler 的超时那一支。
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.processTimeout) { [weak process] in
+                    guard let process, process.isRunning else { return }
+                    box.timeoutLock.lock()
+                    box.timedOut = true
+                    box.timeoutLock.unlock()
+                    process.terminate()
+                }
             } catch {
-                // process.run() 失败(引擎二进制不存在/不可执行——比如没跑过
-                // build.sh 就直接 swift run/.build/debug 调试,或者 Contents/Resources/
-                // 引擎被误删/损坏)——实测排查坐实:早先这里只
-                // resume 了 continuation,完全没有清理上面已经派发到 readQueue 的两个
-                // 读取闭包。这两个闭包在 process.run() 之前就已经提交(为了不错过子
-                // 进程刚起来就开始写的早期输出),它们各自阻塞在 fileHandleForReading
-                // 的 availableData/readDataToEndOfFile 上等第一批数据/EOF——但 Process
-                // 从未真正 fork/exec,写端从头到尾没有任何人写过、也没有任何人关闭过,
-                // 读端永远读不到 EOF,这两个闭包会永久阻塞在 readQueue 上,且
-                // process.terminationHandler 因为进程从未启动/终止而永远不会被调用,
-                // 没有任何地方能发现或清理这个卡死状态——每次重试都会再泄漏一次。显式
-                // 关闭两个管道的写端,让阻塞中的读取立刻观察到 EOF、正常退出循环。
+                // process.run() 失败(引擎二进制不存在 / 不可执行):上面两个读取闭包已经派出去、各自阻塞在读端等数据或 EOF,
+                // 进程从没起来,写端也就没人关,它们会永远卡着,terminationHandler 也永远不会来。关掉两个管道的写端,
+                // 让读取立刻读到 EOF 退出。
                 stdoutPipe.fileHandleForWriting.closeFile()
                 stderrPipe.fileHandleForWriting.closeFile()
                 continuation.resume(throwing: SearchError.processFailed(error.localizedDescription))
@@ -715,7 +798,8 @@ extension LyricsSearchService {
     /// 只在**退出码 0** 那条路径上调它。非 0 时 terminationHandler 已经把整段 stderr
     /// 原样打进 `logger.error` 了,再捞一遍就是重复。
     fileprivate static func logSourceHealthSignals(_ stderr: Data) {
-        guard !stderr.isEmpty, let text = String(data: stderr, encoding: .utf8) else { return }
+        guard !stderr.isEmpty else { return }
+        let text = String(decoding: stderr, as: UTF8.self)
         let hits = text.split(separator: "\n").filter { line in
             searchLyricsHealthMarkers.contains { line.contains($0) }
         }

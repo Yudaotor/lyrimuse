@@ -1,52 +1,33 @@
 import SwiftUI
 import LyrimuseCore
 
-// 悬浮窗 ⚙ 快捷菜单「搜索歌词…」的独立宿主——"点击只弹出搜索
-// 歌词页面,不需要把歌词窗口也拉起"。所以这**不是**复用 LyricsWindowView 那条
-// `.sheet(item:)`(那条必须先有一扇开着的歌词窗口才挂得上去),而是自己单独一扇
-// `Window(id: "lyrics-quick-search")`(见 App.swift),`LyricsSearchSheet` 直接是这扇窗口
-// 的根内容,不再套一层 .sheet()——`LyricsSearchSheet` 内部「关闭」按钮走的
-// `@Environment(\.dismiss)`,在 `Window`/`WindowGroup` 场景里一样能把这扇窗口整个关掉
-// (SwiftUI 对场景根内容的 dismiss() 就是"关闭这扇窗",不是只对 sheet/popover 有效),不需要
-// 额外接一层判断。
+// 悬浮窗 ⚙ 快捷菜单「搜索歌词…」的独立宿主:只弹出搜索歌词面板,不把歌词窗口也拉起来。所以不复用 LyricsWindowView 那条
+// `.sheet(item:)`(那条要先有一扇开着的歌词窗口),而是单独一扇 `Window(id: "lyrics-quick-search")`(见 App.swift),
+// `LyricsSearchSheet` 直接是它的根内容。面板里「关闭」走的 `@Environment(\.dismiss)` 在场景根内容上就是关掉这扇窗口。
 //
-// 这扇窗口**采纳后不关**(`keepsOpenAfterApply: true`,三个入口里只有它这么传)。
-// 它是"边听边换词"的入口:换一个源听两句不对再换,原来得关窗→重开→再等九个源重搜一遍
-// (最坏 20 秒);现在同一批候选留在原地,点即切,「当前使用」徽标跟着挪,标题栏给一条
-// "已采用 X 的歌词"的回声。另外两个入口(歌词管理的编辑器模态、歌词窗口的 sheet)维持关窗:
-// 前者留着会挡住刚回填的编辑器,后者关了才看得到背后的歌词。引擎重启照旧每次采纳排一次
-// (`scheduleEngineRestart` 已合并:在飞最多一个、补一次),**刻意不**延后到关窗那一刻 ——
-// 重启存在的理由正是引擎内存里还留着旧条目、它下一次落盘会把 App 刚写的盖回去。
+// 这扇窗口**采纳后不关**(`keepsOpenAfterApply: true`,三个入口里只有它这么传):它是"边听边换词"的入口,同一批候选
+// 留在原地,点即切,「当前使用」徽标跟着挪,标题栏给一条"已采用 X 的歌词"的回声。另外两个入口(歌词管理的编辑器模态、
+// 歌词窗口的 sheet)采纳后关窗:前者留着会挡住刚回填的编辑器,后者关了才看得到背后的歌词。引擎重启每次采纳照旧排一次
+// (`scheduleEngineRestart` 已合并:在飞最多一个、补一次),不延后到关窗:引擎内存里还留着旧条目,它下一次落盘会把 App
+// 刚写的盖回去。
 //
-// 曲目快照逻辑跟 `LyricsWindowView.openLyricsSearch()` 是同一套算法(resolvedKey 精确→
-// 宽松两级,缺条目退 normalizedKey),没有抽成公用类型共享——那边多一层"sheet(item:) 的
-// 身份即快照、弹窗期间换歌不串"的要求,这边窗口本来就是"每次点『搜索歌词…』都现查一次、
-// 开着期间盯着看不跟着换歌重算",两处生命周期不一样,硬凑一个共享类型只会让"谁负责什么"
-// 变得含糊。
+// 曲目快照跟 `LyricsWindowView.openLyricsSearch()` 同一套算法(resolvedKey 精确→宽松两级,缺条目退 normalizedKey),没有抽成
+// 共用类型:那边"sheet(item:) 的身份即快照、弹窗期间换歌不串",这边窗口开着期间不跟着换歌,两处生命周期不一样。
 //
-// 上一段"每次新建都现查一次"这半句本身是错的:`Window(id:)` 这扇窗口只要没被真的关掉(只是
-// 切到后台/被别的窗口挡住),再点一次「搜索歌词…」只是把已经存在的视图实例带到前台,
-// `.task` 只在这个视图**首次挂载**时跑一遍,不会跟着"又点了一次按钮"重跑,`context` 停留
-// 在第一次打开时查到的那首歌。修法见 `AppActions.quickSearchRefreshRequests`——每次调用
-// `openLyricsQuickSearch` 都往那个 subject send 一下,这里额外 `.onReceive` 它、收到就
-// 重新 `loadContext()`,跟 `.task` 各管一段("窗口还没建出来"用 `.task`,"窗口已经开着"用
-// `.onReceive`),合起来才是真正的"每次点这个按钮都现查一次"。
-// 上一条修法还留了一个问题:`.onReceive` 只替换了 `context`,而 SwiftUI 里
-// `if let context { LyricsSearchSheet(...) }` 从 Optional(A) 换成 Optional(B) 保持**同一个视图
-// 身份**——面板里的查询词 @State 与首次挂载才跑的 `.task` 都不会重置,屏幕上还是上一首的查询词
-// 和候选,而下面 onApply 闭包捕获的已是新 `context.key`:采纳会把上一首的歌词写进当前这首的
-// 条目。修在 `LyricsSearchSheet` 内部(按原始字段 `.task(id:)` 重搜 + `.onChange` 重置查询词),
-// **刻意不**在这里加 `.id(context.key)` 整棵重建——探针实测重建时新面板的搜索会被旧面板迟到的
-// 取消杀掉,详见那边 `.task(id:)` 上方的注释。
-// 不像 LyricsWindowView 那边特意 `Task.detached` 到背景线程读 EnrichCacheReader(那扇
-// 窗口有 60fps 的逐字填色,主线程哪怕短暂卡顿都会被看见)——这扇窗口只在打开这一瞬间读一次
-// 缓存,直接在 MainActor 上做,没有必要为这一次性读多绕一层线程切换。
+// 每次点「搜索歌词…」都按正在放的那首现查一次:窗口还没建出来时由 `.task` 查;已经开着(只是在后台 / 被挡住)时再点,
+// `Window(id:)` 只是把已有的视图带到前台、`.task` 不会重跑,由 `.onReceive(AppActions.quickSearchRefreshRequests)` 重查。
+// 换了曲目时 `if let context { LyricsSearchSheet(...) }` 保持同一个视图身份,查询词和候选的重置在 `LyricsSearchSheet` 内部
+// (按原始字段 `.task(id:)` 重搜 + `.onChange` 重置查询词);不在这里 `.id(context.key)` 整棵重建 —— 重建时新面板的搜索会被
+// 旧面板迟到的取消杀掉,见那边 `.task(id:)` 上方的注释。缓存只在打开那一下读一次,直接在 MainActor 上读。
+//
+// 窗口看不见时(`windowSurface`,同歌词管理窗口)下面那条查缓存文件修改时间的定时停;面板里预览的停表由面板自己按所在窗口管。
 struct LyricsQuickSearchWindow: View {
     @State private var context: Context?
     /// 上一次重算「当前使用」时缓存文件的修改时间,见下面那条定时器。
     @State private var markedCacheMTime: Date?
     // 切换界面语言时重算 body,窗口标题(.navigationTitle)跟着换。经 AppLanguageObserver 窄代理,不整对象订阅 AppSettings。
     @ObservedObject private var languageSettings = AppLanguageObserver.shared
+    @StateObject private var windowSurface = SettingsWindowSurface()
 
     private struct Context {
         let artist: String
@@ -127,6 +108,7 @@ struct LyricsQuickSearchWindow: View {
         // 标题栏透明、内容铺到顶是场景的 .windowStyle(.hiddenTitleBar)(App.swift);这里再挂一条空工具栏,把标题栏
         // 撑到 52pt,红绿灯才落进搜索面板侧栏的圆角里(面板那一侧见 LyricsSearchSheet.standaloneWindow)。
         .background(EmptyUnifiedToolbar())
+        .background(WindowSurfaceCapture(surface: windowSurface).frame(width: 0, height: 0))
         .task { loadContext() }
         // 窗口没被真关掉(只是切到后台/被挡住)时再点一次「搜索歌词…」,.task 不会重跑——
         // 见 AppActions.quickSearchRefreshRequests 的注释,这里补上"每次点击都重新现查一次"
@@ -137,15 +119,23 @@ struct LyricsQuickSearchWindow: View {
         .onReceive(PlaybackCoordinator.shared.$allLines.dropFirst()) { _ in refreshCurrentMarker() }
         // 后台换了来源、正文一字不差(两个源给的是同一份)时,播放侧的歌词行不变、上面那条不触发,「当前使用」会一直
         // 认着旧来源 —— 打开面板那一刻引擎刚先用了一个源、随后换成另一个,就会一条都标不上。缓存文件一变就重算一次,
-        // 每拍只是一次 stat。见 11 章决策 97。
-        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
-            let mtime = EnrichCacheReader.fileModificationDate
-            guard mtime != markedCacheMTime else { return }
-            markedCacheMTime = mtime
-            refreshCurrentMarker()
+        // 每 2 秒一次 stat,只在窗口看得见时跑;重新看得见时先查一次。见 11 章决策 97。
+        .task(id: windowSurface.isVisible) {
+            guard windowSurface.isVisible else { return }
+            while !Task.isCancelled {
+                checkCacheFileChanged()
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
         }
         // 窗口标题跟着界面语言走:App.swift 里 Window 的标题只在构造场景时求值一次(同欢迎页)。
         .navigationTitle(L10n.t("搜索歌词…"))
+    }
+
+    private func checkCacheFileChanged() {
+        let mtime = EnrichCacheReader.fileModificationDate
+        guard mtime != markedCacheMTime else { return }
+        markedCacheMTime = mtime
+        refreshCurrentMarker()
     }
 
     /// 正在放的还是面板里这首时,按缓存现状重算「当前使用」要的来源、正文指纹和纯音乐标记。换了歌就不动:
@@ -190,3 +180,4 @@ struct LyricsQuickSearchWindow: View {
             isInstrumental: cached?.instrumental ?? false)
     }
 }
+
