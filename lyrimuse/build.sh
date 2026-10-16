@@ -37,7 +37,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")" # lyrimuse/
 
-# 这次请求的时刻、是不是一次不带参数的普通装机:排队合并要用(见下面拍源码快照之前那段),必须在排队之前记。
+APP_NAME="Lyrimuse"
+
+# 这次请求的时刻、是不是一次不带参数的普通装机:排队合并要用(见下面 coalesce_if_installed),必须在排队之前记。
 BUILD_REQUESTED_AT="$(/usr/bin/python3 -c 'import time; print("%.3f" % time.time())')"
 PLAIN_INSTALL=1
 if [ "$#" -gt 0 ]; then PLAIN_INSTALL=0; fi
@@ -56,8 +58,33 @@ LAST_INSTALL="$PWD/.build/build.sh.last-install"
 # 剥符号之前存下的 dSYM(见下面合并 Swift 切片之后那段)。在工作树里,不在源码快照里。
 DSYM_ROOT="$PWD/.build/dsym"
 mkdir -p "$PWD/.build"
+
+# 排队合并:上一次普通装机的源码快照如果拍在这次请求之后,这次请求之前写好的改动它都编进去了;那个包还在
+# /Applications(inode 没变)、App 也在跑,就直接用它,打一行「不再编」和正在跑的 pid、退出 0。排队时每轮都看
+# (排在前面的那次一装好就走,不用等抢到锁),拿到锁之后再看一次。只认两边都是普通装机;LYRIMUSE_BUILD_NO_COALESCE=1 关掉。
+# 记录在下一次装机开编时不删:换包之后 inode 对不上,旧记录自然不再算数;中途失败没换包,旧记录说的仍是正在跑的那一版。
+coalesce_if_installed() {
+  if [ "$PLAIN_INSTALL" != 1 ] || [ -n "${LYRIMUSE_BUILD_NO_COALESCE:-}" ] || [ ! -f "$LAST_INSTALL" ]; then
+    return 0
+  fi
+  local app="/Applications/${APP_NAME}.app" last_snapshot_at last_pid last_bundle_ino current_bundle_ino running_pid
+  last_snapshot_at="$(sed -n 's/^snapshot_at=//p' "$LAST_INSTALL" 2>/dev/null || true)"
+  last_pid="$(sed -n 's/^pid=//p' "$LAST_INSTALL" 2>/dev/null || true)"
+  last_bundle_ino="$(sed -n 's/^bundle_ino=//p' "$LAST_INSTALL" 2>/dev/null || true)"
+  current_bundle_ino="$(stat -f %i "$app" 2>/dev/null || true)"
+  running_pid="$(pgrep -f "$app/Contents/MacOS/lyrimuse" 2>/dev/null | tr '\n' ' ' || true)"
+  if [ -n "$last_snapshot_at" ] && [ -n "$running_pid" ] && [ -n "$last_bundle_ino" ] \
+      && [ "$last_bundle_ino" = "$current_bundle_ino" ] \
+      && awk -v a="$last_snapshot_at" -v b="$BUILD_REQUESTED_AT" 'BEGIN { exit !(a > b) }'; then
+    echo "==> 不再编:排队期间 build.sh(pid ${last_pid:-?})已经装好一版,它的源码快照拍在这次请求之后,这次请求之前写好的改动都在里面"
+    echo "==> 正在跑的 $APP_NAME 就是那一版,pid ${running_pid% }"
+    exit 0
+  fi
+}
+
 build_lock_waited=0
 while ! mkdir "$BUILD_LOCK" 2>/dev/null; do
+  coalesce_if_installed
   holder="$(cat "$BUILD_LOCK/pid" 2>/dev/null || true)"
   stale=0
   if [ -n "$holder" ]; then
@@ -175,7 +202,6 @@ merge_slices() {
   if [ "$#" -eq 1 ]; then cp "$1" "$out"; else lipo -create "$@" -output "$out"; fi
 }
 
-APP_NAME="Lyrimuse"
 # bundle id(同时是 App 自己那个 LaunchAgent 的 label)与引擎的 job label。三个名字跟
 # LyrimuseCore/Util/LyrimuseIdentity.swift 里那一套逐字一致。
 LABEL="me.yudaotor.lyrimuse"
@@ -279,23 +305,7 @@ cleanup_build() {
 }
 trap cleanup_build EXIT
 
-# 排队合并:几个会话排着队装机时,排在后面的多半不用再编。上一次装机的源码快照如果拍在这次请求之后,这次请求
-# 之前写好的改动它都编进去了;那个包还在 /Applications、App 也在跑,就直接用它,不再编一遍。只认两边都是不带参数的
-# 普通装机;往下真开编之前先删掉记录,中途失败就不会留下记录,后面排队的照常自己编。LYRIMUSE_BUILD_NO_COALESCE=1 关掉。
-if [ "$PLAIN_INSTALL" = 1 ] && [ -z "${LYRIMUSE_BUILD_NO_COALESCE:-}" ] && [ -f "$LAST_INSTALL" ]; then
-  last_snapshot_at="$(sed -n 's/^snapshot_at=//p' "$LAST_INSTALL")"
-  last_pid="$(sed -n 's/^pid=//p' "$LAST_INSTALL")"
-  last_bundle_ino="$(sed -n 's/^bundle_ino=//p' "$LAST_INSTALL")"
-  current_bundle_ino="$(stat -f %i "$FINAL_APP_DIR" 2>/dev/null || true)"
-  running_pid="$(pgrep -f "$FINAL_APP_DIR/Contents/MacOS/lyrimuse" 2>/dev/null | tr '\n' ' ' || true)"
-  if [ -n "$last_snapshot_at" ] && [ -n "$running_pid" ] && [ "$last_bundle_ino" = "$current_bundle_ino" ] \
-      && awk -v a="$last_snapshot_at" -v b="$BUILD_REQUESTED_AT" 'BEGIN { exit !(a > b) }'; then
-    echo "==> 不再编:排队期间 build.sh(pid ${last_pid:-?})已经装好一版,它的源码快照拍在这次请求之后,这次请求之前写好的改动都在里面"
-    echo "==> 正在跑的 $APP_NAME 就是那一版,pid ${running_pid% }"
-    exit 0
-  fi
-fi
-rm -f "$LAST_INSTALL"
+coalesce_if_installed
 
 # 编译读的是 .build/source-snapshot 里的源码副本,不是工作树。多个会话共用这棵工作树,一次构建
 # 要十几分钟,期间别的会话写源码会被编进这次构建(半截改动,或者 App 和引擎取到不同时刻的源码)。
@@ -1137,7 +1147,7 @@ if [ -f "$ENGINE_PLIST" ]; then
   fi
 fi
 
-# 普通装机全部成功(App 起来了、要等的引擎也起来了)才记下来,给排队在后面的合并用,见拍源码快照之前那段。
+# 普通装机全部成功(App 起来了、要等的引擎也起来了)才记下来,给排队在后面的合并用,见 coalesce_if_installed。
 if [ "$PLAIN_INSTALL" = 1 ] && [ -n "$SNAPSHOT_AT" ] && { [ ! -f "$ENGINE_PLIST" ] || [ -n "${cpid:-}" ]; }; then
   printf 'snapshot_at=%s\npid=%s\nbundle_ino=%s\n' "$SNAPSHOT_AT" "$$" "$(stat -f %i "$FINAL_APP_DIR")" > "$LAST_INSTALL.$$"
   mv "$LAST_INSTALL.$$" "$LAST_INSTALL"

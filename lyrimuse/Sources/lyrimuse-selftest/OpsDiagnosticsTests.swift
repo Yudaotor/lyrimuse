@@ -1409,8 +1409,9 @@ func runOpsDiagnosticsTests() {
     // ---- build.sh 只编装进包的产品、排队合并 ----
     //
     // release 的 swift build 不带 --product 会把 lyrimuse-selftest 也整模块编一遍,包里用不到它。
-    // 排队合并的次序不能乱:请求时刻在排队之前记;先判能不能复用、再删记录,都在拍快照之前;记录只在装完、
-    // 等过引擎之后写。乱了就会把一次失败的、或者没包含这次请求之前写好的改动的装机当成这次的(15 章决策 17)。
+    // 排队合并的次序不能乱:请求时刻在排队之前记;排队的每一轮和拿到锁之后、拍快照之前都判一次能不能复用;记录只在
+    // 装完、等过引擎之后写,开编时不删,靠 inode 判它还算不算数。乱了就会把一次失败的、或者没包含这次请求之前写好的
+    // 改动的装机当成这次的,或者让已经被装好的请求白等一整轮编译(15 章决策 17、35)。
     do {
         let buildScript = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // lyrimuse-selftest
@@ -1427,19 +1428,24 @@ func runOpsDiagnosticsTests() {
             let bareBuilds = codeLines.filter { $0.hasPrefix("swift build -c release") && !$0.contains("--product") }
             expectEqual(bareBuilds, [], "构建产品: release 的 swift build 都要带 --product(不带会连 selftest 一起编)")
             if let requested = code.range(of: "BUILD_REQUESTED_AT="),
-               let queue = code.range(of: "while ! mkdir \"$BUILD_LOCK\""),
-               let reuse = code.range(of: "BEGIN { exit !(a > b) }"),
-               let drop = code.range(of: "rm -f \"$LAST_INSTALL\""),
+               let check = code.range(of: "coalesce_if_installed() {"),
+               let queue = code.range(of: "while ! mkdir \"$BUILD_LOCK\" 2>/dev/null; do\ncoalesce_if_installed\n"),
                let snapshot = code.range(of: "SNAPSHOT_AT=\"$("),
                let engine = code.range(of: "ENGINE_PLIST="),
                let record = code.range(of: "mv \"$LAST_INSTALL.$$\" \"$LAST_INSTALL\"") {
                 expectEqual(requested.lowerBound < queue.lowerBound, true, "排队合并: 请求时刻要在排队之前记")
-                expectEqual(reuse.lowerBound < drop.lowerBound && drop.lowerBound < snapshot.lowerBound, true,
-                            "排队合并: 先判能不能复用、再删记录,都排在拍快照之前")
+                expectEqual(check.lowerBound < queue.lowerBound, true, "排队合并: 判定函数要在排队之前定义")
+                let afterLock = code[queue.upperBound..<snapshot.lowerBound]
+                expectEqual(afterLock.split(separator: "\n").contains("coalesce_if_installed"), true,
+                            "排队合并: 拿到锁之后、拍快照之前再判一次")
                 expectEqual(engine.lowerBound < record.lowerBound, true, "排队合并: 记录只在装完、等过引擎之后写")
             } else {
-                expectEqual(true, false, "排队合并: 找不到请求时刻 / 排队 / 判定 / 删记录 / 快照时刻 / 写记录那几行(改写法了?)")
+                expectEqual(true, false, "排队合并: 找不到请求时刻 / 判定函数 / 排队时的判定 / 快照时刻 / 写记录那几行(改写法了?)")
             }
+            expectEqual(code.contains("rm -f \"$LAST_INSTALL\""), false,
+                        "排队合并: 开编时不删记录(删了的话排队的人等不到上一版的记录)")
+            expectEqual(code.contains("[ \"$last_bundle_ino\" = \"$current_bundle_ino\" ]"), true,
+                        "排队合并: 记录要跟 /Applications 里那个包的 inode 对上才算数")
             expectEqual(code.contains("awk -v a=\"$last_snapshot_at\" -v b=\"$BUILD_REQUESTED_AT\""), true,
                         "排队合并: 比的是上一次的快照时刻(a)晚于这次的请求时刻(b)")
         } else {
