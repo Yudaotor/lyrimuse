@@ -6,8 +6,9 @@ import Foundation
 ///     settings/<路径>[/<分段>]      设置窗口翻到那一页(路径表见 `SettingsDeepLink`,分段见 `SettingsDeepLink.section(in:)`)
 ///     settings/software-update?check=1    软件更新页并顺手检查一次
 ///     lyrics-manager                歌词管理
-///     lyrics-manager/song-versions[?key=<写法键>][&evidence=1]   歌词管理 + 那一条的「同曲条目」面板(没带 key 是详情页正显示的那条;
-///                                   evidence=1 打开就展开概况里的「匹配依据」)
+///     lyrics-manager/song-versions[?key=<写法键>][&evidence=1][&compare=<写法键>]   歌词管理 + 那一条的「同曲条目」面板(没带 key 是
+///                                   详情页正显示的那条;evidence=1 打开就展开概况里的「匹配依据」;compare 打开就选中这一条、显示它跟
+///                                   当前条目的对照)
 ///     lyrics-window                 歌词窗口
 ///     lyrics-window/search          歌词窗口 + 搜索候选歌词面板
 ///     lyrics-search                 「搜索歌词…」小窗(当前这首)
@@ -32,8 +33,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
     case settings(path: String, checkForUpdates: Bool)
     case lyricsManager
     /// `key`:写法键(`EnrichCacheKeys.normalizedKey` 那种「歌手|歌名|专辑」);nil = 详情页正显示的那一条。`showEvidence`:
-    /// 面板打开就展开概况里的「匹配依据」。
-    case lyricsManagerSongVersions(key: String?, showEvidence: Bool)
+    /// 面板打开就展开概况里的「匹配依据」。`compare`:面板打开就选中这一条写法,显示它跟当前条目的对照。
+    case lyricsManagerSongVersions(key: String?, showEvidence: Bool, compare: String? = nil)
     case lyricsWindow
     case lyricsWindowSearch
     case lyricsSearch
@@ -99,7 +100,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             self = .lyricsManager
         case ("lyrics-manager", "/song-versions"):
             self = .lyricsManagerSongVersions(key: value("key").flatMap { $0.isEmpty ? nil : $0 },
-                                              showEvidence: value("evidence").flatMap(Self.parseBool) ?? false)
+                                              showEvidence: value("evidence").flatMap(Self.parseBool) ?? false,
+                                              compare: value("compare").flatMap { $0.isEmpty ? nil : $0 })
         case ("lyrics-window", ""), ("lyrics-window", "/"):
             self = .lyricsWindow
         case ("lyrics-window", "/search"):
@@ -185,12 +187,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             if check { components.queryItems = [URLQueryItem(name: "check", value: "1")] }
         case .lyricsManager:
             components.host = "lyrics-manager"
-        case let .lyricsManagerSongVersions(key, showEvidence):
+        case let .lyricsManagerSongVersions(key, showEvidence, compare):
             components.host = "lyrics-manager"
             components.path = "/song-versions"
             var items: [URLQueryItem] = []
             if let key { items.append(URLQueryItem(name: "key", value: key)) }
             if showEvidence { items.append(URLQueryItem(name: "evidence", value: "1")) }
+            if let compare { items.append(URLQueryItem(name: "compare", value: compare)) }
             if !items.isEmpty { components.queryItems = items }
         case .lyricsWindow:
             components.host = "lyrics-window"

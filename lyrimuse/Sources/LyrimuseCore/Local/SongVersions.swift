@@ -202,50 +202,132 @@ extension SongVersions {
         }
     }
 
-    /// 一份歌词里会显示出来的行:去掉开头的抬头(「歌名 - 歌手」)、署名和声明这类行,跟歌词窗口同一套过滤
-    /// (LyricsSyncEngine.creditLineDropDecisions;title / artist 是这条写法的歌名、歌手,aliases 是同曲条目里别的写法的,都拿来
-    /// 认抬头),再去掉空行。wordTimed 时 text 是逐字歌词,先摊成每行「行首时间 + 这一行的字」(LyricsWordTimingEdit.editableText)
-    /// 再过滤。
-    public static func displayedLines(_ text: String, title: String, artist: String, aliases: [LRCParser.HeaderIdentity] = [],
-                                      wordTimed: Bool = false) -> [LyricLine] {
-        let lrc = wordTimed ? LyricsWordTimingEdit.editableText(yrc: text) : text
-        let parsed = LRCParser.parse(lrc)
-        let texts = parsed.map(\.text)
-        var tags = LRCParser.headerTags(text)
-        tags.aliases = aliases
-        let drop = LyricsSyncEngine.creditLineDropDecisions(
-            texts, trackTitle: title, trackArtist: artist, tags: tags,
-            speakerExemptions: LyricDuet.speakers(in: texts))
-        return zip(parsed, drop).compactMap { line, dropped in
-            dropped || line.text.trimmingCharacters(in: .whitespaces).isEmpty ? nil : line
+    /// 一条写法在歌词窗口里显示的行(文字和行首时间)。走播放引擎同一条路(`LyricsSyncEngine.load` → `allLines`),跟歌词窗口
+    /// 一致:抬头、署名、声明不显示,演唱者标注(`周杰伦：` `v1：`)剥掉、独占一行的整行不算,同一时间的几行拼成一行;空行不算。
+    /// 时间是实际生效的(减去歌词自带的 `[offset:]`),按 0.01 秒取整:对比表只显示到这一位,逐字歌词的行首是毫秒,差几毫秒
+    /// 看不出来。title / artist 是这条写法的歌名、歌手,aliases 是同曲条目里别的写法的,都拿来认抬头。
+    public struct Shown: Equatable {
+        /// 只交整行歌词时显示的行。
+        public let lines: [LyricLine]
+        /// 带上逐字歌词时显示的行;没有逐字歌词、或者引擎嫌逐字行太少退回整行时为空。
+        public let words: [LyricLine]
+
+        public init(lines: [LyricLine], words: [LyricLine]) {
+            self.lines = lines
+            self.words = words
         }
+
+        /// 参与比对的那一份:整行的,整行一句都没有时用逐字的。
+        public var text: [LyricLine] { lines.isEmpty ? words : lines }
     }
 
-    /// 两份歌词(displayedLines 过滤过的行)逐句对照:按句子的先后一一对齐,文字不同或一边没有的那一行标 differs。shiftMs 是
-    /// 文字相同的那些行里 other 比 current 晚多少毫秒的中位数,没有文字相同的行时为 nil。
-    public struct LyricDiff: Equatable {
-        public struct Row: Equatable {
-            public let current: LyricLine?
-            public let other: LyricLine?
-            public let differs: Bool
+    public static func displayed(lyrics: String, yrc: String, title: String, artist: String,
+                                 aliases: [LRCParser.HeaderIdentity] = []) -> Shown {
+        let embedded = LRCParser.parseOffsetMs(lyrics)
+        let offsetMs = embedded != 0 ? embedded : LRCParser.parseOffsetMs(yrc)
+        func lines(yrc: String) -> [LyricLine] {
+            let engine = LyricsSyncEngine()
+            engine.load(lyrics: lyrics, lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, trackTitle: title, trackArtist: artist,
+                        headerAliases: aliases, romanizationScripts: [])
+            let all = engine.allLines(idPrefix: "")
+            if !yrc.isEmpty, all.first?.line.words == nil { return [] }
+            return all.compactMap { row in
+                let text = row.line.plainText ?? ""
+                guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+                return LyricLine(timeMs: (row.timeMs - offsetMs) / 10 * 10, text: text)
+            }
         }
-        public let rows: [Row]
-        public let differentLines: Int
+        return Shown(lines: lines(yrc: ""), words: yrc.isEmpty ? [] : lines(yrc: yrc))
+    }
+
+    /// 所选条目的歌词跟当前条目比的结论(18 章决策 73)。
+    public enum LyricsMatch: Equatable, Sendable {
+        /// 显示出来的字和行时间都一样(整行、逐字两份都比;逐字里每个字的时间不比)。
+        case identical
+        /// 词一样:按字对齐没有对不上的字、也没有只一边有的句子(`LyricsCandidateComparison`)。标点、空格、大小写、繁简
+        /// 写法、分行不同都算词一样;时间差不算进来,在对比小结和那一行的时间上另说。
+        case sameText
+        case different
+    }
+
+    /// 逐行对比的一块:两边各是连续的几句(一边一句、另一边几句就是分行不同);只有一边有的那块,另一边是空的。
+    public struct LyricBlock: Equatable {
+        public enum Kind: Equatable, Sendable {
+            case same, resegmented, changed, onlyCurrent, onlyOther
+        }
+
+        public let kind: Kind
+        public let current: [LyricLine]
+        public let other: [LyricLine]
+        /// 跟 current / other 一一对应:那一句里对不上的字(按 `Character` 下标)。
+        public let currentMarks: [Set<Int>]
+        public let otherMarks: [Set<Int>]
+        /// 块开头那句所选条目比当前条目晚多少毫秒,差超过 `LyricsCandidateComparison.retimeThresholdMs` 才有。
+        public let deltaMs: Int?
+
+        /// 有字对不上,或者只有一边有。
+        public var differs: Bool { kind == .changed || kind == .onlyCurrent || kind == .onlyOther }
+    }
+
+    public struct LyricComparison: Equatable {
+        public let match: LyricsMatch
+        public let blocks: [LyricBlock]
+        public let summary: LyricsCandidateComparison.Summary
+        /// 字全对得上的那些块里,所选条目比当前条目晚多少毫秒的中位数;没有这样的块时为 nil。
         public let shiftMs: Int?
+
+        /// 只有所选条目有的句数。
+        public var extraLines: Int { blocks.filter { $0.kind == .onlyOther }.count }
+        /// 只有当前条目有的句数。
+        public var missingLines: Int { blocks.filter { $0.kind == .onlyCurrent }.count }
     }
 
-    public static func lyricDiff(current a: [LyricLine], other b: [LyricLine]) -> LyricDiff {
-        var rows: [LyricDiff.Row] = []
+    /// 所选条目(other)的歌词跟当前条目比:按字对齐(`LyricsCandidateComparison.align`,跟「搜索候选歌词」的对照同一套),
+    /// 各家分行不同、繁简写法不同、标点空格不同都不算改了字。当前条目放在 candidate 那一边:它一句一块,所选条目同一块的
+    /// 几句并进这一块。
+    public static func compareLyrics(current: Shown, other: Shown) -> LyricComparison {
+        let a = current.text, b = other.text
+        func lines(_ shown: [LyricLine]) -> [LyricsCandidateComparison.Line] {
+            shown.map { LyricsCandidateComparison.Line(timeMs: $0.timeMs, text: $0.text) }
+        }
+        let pairs = LyricsCandidateComparison.align(candidate: lines(a), current: lines(b))
+        var blocks: [LyricBlock] = []
         var shifts: [Int] = []
-        for i in 0..<max(a.count, b.count) {
-            let x = i < a.count ? a[i] : nil, y = i < b.count ? b[i] : nil
-            let same = x != nil && y != nil
-                && x!.text.trimmingCharacters(in: .whitespaces) == y!.text.trimmingCharacters(in: .whitespaces)
-            if same { shifts.append(y!.timeMs - x!.timeMs) }
-            rows.append(LyricDiff.Row(current: x, other: y, differs: !same))
+        for pair in pairs {
+            if pair.continuation, let last = blocks.last, let i = pair.candidate {
+                blocks[blocks.count - 1] = LyricBlock(kind: last.kind, current: last.current + [a[i]], other: last.other,
+                                                       currentMarks: last.currentMarks + [pair.candidateMarks],
+                                                       otherMarks: last.otherMarks, deltaMs: last.deltaMs)
+                continue
+            }
+            let kind: LyricBlock.Kind
+            switch pair.kind {
+            case .same: kind = .same
+            case .resegmented: kind = .resegmented
+            case .changed: kind = .changed
+            case .onlyCandidate: kind = .onlyCurrent
+            case .onlyCurrent: kind = .onlyOther
+            }
+            let mine = pair.candidate.map { [a[$0]] } ?? []
+            let theirs = pair.current.map { b[$0] }
+            if kind == .same || kind == .resegmented, let x = mine.first, let y = theirs.first {
+                shifts.append(y.timeMs - x.timeMs)
+            }
+            blocks.append(LyricBlock(kind: kind, current: mine, other: theirs,
+                                     currentMarks: pair.candidate == nil ? [] : [pair.candidateMarks],
+                                     otherMarks: pair.currentMarks, deltaMs: pair.deltaMs.map { -$0 }))
         }
         shifts.sort()
-        return LyricDiff(rows: rows, differentLines: rows.filter(\.differs).count,
-                         shiftMs: shifts.isEmpty ? nil : shifts[shifts.count / 2])
+        let summary = LyricsCandidateComparison.summary(pairs)
+        let match: LyricsMatch
+        if a.isEmpty || b.isEmpty {
+            match = .different
+        } else if current == other {
+            match = .identical
+        } else {
+            match = summary.changed == 0 && summary.onlyCandidate == 0 && summary.onlyCurrent == 0 ? .sameText : .different
+        }
+        return LyricComparison(match: match, blocks: blocks, summary: summary,
+                               shiftMs: shifts.isEmpty ? nil : shifts[shifts.count / 2])
     }
 }

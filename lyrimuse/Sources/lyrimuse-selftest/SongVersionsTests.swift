@@ -122,39 +122,103 @@ func runSongVersionsTests() {
         expectEqual(V.reportedNames(entry: [:]).isEmpty, true, "原始写法: 没有就是空")
     }
 
-    // ---- 歌词逐句对照:按先后对齐、空行不算,标出文字不同的行,时间差取文字相同那些行的中位数 ----
+    // ---- 显示的行:走播放引擎,跟歌词窗口一样(抬头、署名、演唱者标注不算,时间减自带 offset、按 0.01 秒取整) ----
     do {
-        let a = "[00:01.00]一\n[00:02.00]\n[00:03.00]二\n[00:05.00]三\n"
-        let b = "[00:01.50]一\n[00:03.50]二改\n[00:05.50]三\n[00:07.00]四\n"
-        func shown(_ text: String) -> [LyricLine] { V.displayedLines(text, title: "", artist: "") }
-        let d = V.lyricDiff(current: shown(a), other: shown(b))
-        expectEqual(d.rows.map(\.differs), [false, true, false, true], "逐句对照: 空行不算,改了的、多出来的标出来")
-        expectEqual(d.differentLines, 2, "逐句对照: 不同的行数")
-        expectEqual(d.shiftMs, 500, "逐句对照: 文字相同那些行晚多少")
-        expectEqual(d.rows.last?.current == nil && d.rows.last?.other?.text == "四", true, "逐句对照: 一边没有的那行")
-        expectEqual(V.lyricDiff(current: shown(a), other: shown(a)).differentLines, 0, "逐句对照: 一样的没有不同")
-        expectEqual(V.lyricDiff(current: shown("[00:01.00]甲\n"), other: shown("[00:02.00]乙\n")).shiftMs == nil, true, "逐句对照: 没有相同的行就不算时间差")
+        func shown(_ lrc: String, yrc: String = "", title: String = "", artist: String = "",
+                   aliases: [LRCParser.HeaderIdentity] = []) -> V.Shown {
+            V.displayed(lyrics: lrc, yrc: yrc, title: title, artist: artist, aliases: aliases)
+        }
         // 抬头、署名不显示,也不参与比对:两边写法不同(「作词：」对「词：」、抬头多一段英文名)照样算一样。
         let x = "[00:00.10]偷笑 - 方大同\n[00:00.20]作词：方大同\n[00:00.30]作曲：方大同\n[00:12.00]第一句歌词在这里\n[00:18.00]第二句歌词在这里\n"
         let y = "[00:00.00]偷笑 - 方大同 (Khalil Fong)\n[00:00.78]词：方大同\n[00:01.57]曲：方大同\n[00:12.00]第一句歌词在这里\n[00:18.00]第二句歌词在这里\n"
-        let sx = V.displayedLines(x, title: "偷笑", artist: "方大同"), sy = V.displayedLines(y, title: "偷笑", artist: "Khalil Fong")
-        expectEqual(sx.map(\.text), ["第一句歌词在这里", "第二句歌词在这里"], "逐句对照: 抬头、署名不算")
-        expectEqual(sx == sy && V.lyricDiff(current: sx, other: sy).differentLines == 0, true, "逐句对照: 只差抬头、署名的两份算一样")
+        let sx = shown(x, title: "偷笑", artist: "方大同"), sy = shown(y, title: "偷笑", artist: "Khalil Fong")
+        expectEqual(sx.lines.map(\.text), ["第一句歌词在这里", "第二句歌词在这里"], "显示的行: 抬头、署名不算")
+        expectEqual(sx == sy && V.compareLyrics(current: sx, other: sy).match == .identical, true, "显示的行: 只差抬头、署名的两份完全一致")
         // 抬头写的是同曲条目里另一个条目的歌名、歌手(播放器报英文名,歌词抬头写中文名):带上别的条目的写法才认得出。
         let poet = "[00:06.00]诗人的情人 - 方大同\n[00:09.92]缠绵是首诗\n[00:13.42]很容易迷失\n"
-        expectEqual(V.displayedLines(poet, title: "The Poet's Lover", artist: "Khalil Fong").first?.text, "诗人的情人 - 方大同",
-                    "逐句对照: 只认这条自己的歌名歌手时,中文抬头认不出")
-        expectEqual(V.displayedLines(poet, title: "The Poet's Lover", artist: "Khalil Fong",
-                                     aliases: [LRCParser.HeaderIdentity(title: "诗人的情人", artist: "方大同")]).map(\.text),
-                    ["缠绵是首诗", "很容易迷失"], "逐句对照: 同曲条目里别的写法的歌名歌手也认抬头")
-        expectEqual(V.displayedLines(poet, title: "The Poet's Lover", artist: "Khalil Fong",
-                                     aliases: [LRCParser.HeaderIdentity(title: "缠绵是首诗", artist: "方大同")]).count, 3,
-                    "逐句对照: 别的写法也要歌名歌手两段都对上才删")
+        expectEqual(shown(poet, title: "The Poet's Lover", artist: "Khalil Fong").lines.first?.text, "诗人的情人 - 方大同",
+                    "显示的行: 只认这条自己的歌名歌手时,中文抬头认不出")
+        expectEqual(shown(poet, title: "The Poet's Lover", artist: "Khalil Fong",
+                          aliases: [LRCParser.HeaderIdentity(title: "诗人的情人", artist: "方大同")]).lines.map(\.text),
+                    ["缠绵是首诗", "很容易迷失"], "显示的行: 同曲条目里别的写法的歌名歌手也认抬头")
+        expectEqual(shown(poet, title: "The Poet's Lover", artist: "Khalil Fong",
+                          aliases: [LRCParser.HeaderIdentity(title: "缠绵是首诗", artist: "方大同")]).lines.count, 3,
+                    "显示的行: 别的写法也要歌名歌手两段都对上才删")
         func entry(_ json: String) -> EnrichCacheEntry { try! JSONDecoder().decode(EnrichCacheEntry.self, from: Data(json.utf8)) }
         let all = ["Khalil Fong|The Poet's Lover|This Love": entry(#"{"song":"s_1"}"#), "方大同|诗人的情人|爱爱爱": entry(#"{"song":"s_1"}"#),
                    "方大同|诗人的情人|愛愛愛": entry(#"{"song":"s_1"}"#), "别人|别的歌|": entry(#"{"song":"s_2"}"#)]
         expectEqual(EnrichCacheReader.headerAliases(song: "s_1", ownKey: "Khalil Fong|The Poet's Lover|This Love", in: all),
-                    [LRCParser.HeaderIdentity(title: "诗人的情人", artist: "方大同")], "逐句对照: 同曲条目的歌名歌手按写法键取、不含自己、去重")
+                    [LRCParser.HeaderIdentity(title: "诗人的情人", artist: "方大同")], "显示的行: 同曲条目的歌名歌手按写法键取、不含自己、去重")
+        // 演唱者标注跟歌词窗口一样:行首的剥掉,独占一行的整行不算。
+        let duet = "[00:16.02]周杰伦：\n[00:17.34]驯鹿的响铃 和雪花的相遇\n[00:20.93]杨瑞代：当作是我对你离开描绘的旋律\n"
+            + "[00:24.47]周杰伦：柴火写了序 暖和童话的过去\n[00:33.37]杨瑞代：该不会是我的卡片（我的卡片）\n"
+        expectEqual(shown(duet).lines.map(\.text),
+                    ["驯鹿的响铃 和雪花的相遇", "当作是我对你离开描绘的旋律", "柴火写了序 暖和童话的过去", "该不会是我的卡片（我的卡片）"],
+                    "显示的行: 演唱者标注剥掉,独占一行的不算")
+        expectEqual(shown("[offset:500]\n[00:10.00]一句歌词\n[00:12.00]又一句歌词\n").lines.map(\.timeMs), [9500, 11500],
+                    "显示的行: 时间减去自带的 offset")
+        let lrc = "[00:18.70]Your butt is mine\n[00:20.85]Gonna tell you right\n"
+        let yrc = "[18709,2000](18709,1000,0)Your (19709,500,0)butt (20209,300,0)is (20509,200,0)mine\n"
+            + "[20853,2000](20853,500,0)Gonna (21353,500,0)tell (21853,500,0)you (22353,500,0)right\n"
+        let worded = shown(lrc, yrc: yrc)
+        expectEqual(worded.words.map(\.timeMs), [18700, 20850], "显示的行: 逐字的行首按 0.01 秒取整")
+        expectEqual(worded.words.map(\.text) == worded.lines.map(\.text) && shown(lrc).words.isEmpty, true,
+                    "显示的行: 逐字那份是引擎用逐字时显示的行,没有逐字歌词时为空")
+        let fewWords = shown("[00:01.00]一\n[00:02.00]二\n[00:03.00]三\n[00:04.00]四\n[00:05.00]五\n", yrc: "[1000,500](1000,500,0)一\n")
+        expectEqual(fewWords.words.isEmpty && fewWords.lines.count == 5, true, "显示的行: 逐字行太少、引擎退回整行时逐字那份为空")
+        expectEqual(V.Shown(lines: [], words: worded.words).text, worded.words, "显示的行: 整行一句都没有时拿逐字的比")
+    }
+
+    // ---- 逐行对比:按字对齐,分行、繁简、标点空格、演唱者标注都不算词不一样;时间差不算进结论,块上另记 ----
+    do {
+        func shown(_ lrc: String, yrc: String = "") -> V.Shown { V.displayed(lyrics: lrc, yrc: yrc, title: "", artist: "") }
+        let a = "[00:01.00]一句歌词\n[00:03.00]二句歌词\n[00:05.00]三句歌词\n"
+        let same = V.compareLyrics(current: shown(a), other: shown(a))
+        expectEqual(same.match, .identical, "逐行对比: 一样的完全一致")
+        expectEqual(same.blocks.map(\.kind), [.same, .same, .same], "逐行对比: 一句一块")
+        // 一份每句带演唱者标注、多一行独占的标注,句中多空格、括号全角,时间早零点一几秒。
+        let plain = "[00:17.50]驯鹿的响铃和雪花的相遇\n[00:21.00]当作是我对你离开描绘的旋律\n[00:24.55]柴火写了序暖和童话的过去\n"
+            + "[00:33.50]该不会是我的卡片 (我的卡片)\n"
+        let labeled = "[00:16.02]周杰伦：\n[00:17.34]驯鹿的响铃 和雪花的相遇\n[00:20.93]杨瑞代：当作是我对你离开描绘的旋律\n"
+            + "[00:24.47]周杰伦：柴火写了序 暖和童话的过去\n[00:33.37]杨瑞代：该不会是我的卡片（我的卡片）\n"
+        let labels = V.compareLyrics(current: shown(plain), other: shown(labeled))
+        expectEqual(labels.match, .sameText, "逐行对比: 只差演唱者标注、空格、全半角的算文字一致")
+        expectEqual(labels.blocks.map(\.kind), [.same, .same, .same, .same], "逐行对比: 标注那行不占一块,四块都对得上")
+        expectEqual(labels.shiftMs, -80, "逐行对比: 字全对得上的块里所选条目早多少,取中位数")
+        // 一份繁体、三句并成一句、句首带 `v1：`,时间早不到 0.5 秒。
+        let short = "[00:29.23]车子缓缓的开\n[00:30.98]你慢慢走来\n[00:32.63]我竟然看着你发呆\n"
+            + "[00:35.78]你尴尬Say个Hi\n[00:37.38]没位坐下来\n[00:39.08]我想叫旁边的离开\n"
+        let merged = "[00:28.79]v1：車子緩緩的開 你慢慢走來 我竟然看著你發呆\n[00:35.30]v1：你尷尬 say 個 hi 沒位坐下來 我想叫旁邊的離開\n"
+        let reseg = V.compareLyrics(current: shown(short), other: shown(merged))
+        expectEqual(reseg.match, .sameText, "逐行对比: 分行不同、繁简不同、大小写不同的算文字一致")
+        expectEqual(reseg.blocks.map { [$0.current.count, $0.other.count] }, [[3, 1], [3, 1]], "逐行对比: 三句对一句并成一块")
+        expectEqual(reseg.blocks.map(\.kind), [.resegmented, .resegmented], "逐行对比: 分行不同不算改了字")
+        expectEqual(reseg.summary.scriptVariants, 2, "逐行对比: 繁简写法不同的块记下来")
+        expectEqual(reseg.blocks.allSatisfy { $0.deltaMs == nil } && reseg.shiftMs == -440, true, "逐行对比: 差不到 0.5 秒的块不记时间差")
+        // 只差时间:结论照样文字一致,差超过 0.5 秒的那块记下所选条目晚多少。
+        let late = V.compareLyrics(current: shown(a), other: shown("[00:02.00]一句歌词\n[00:03.00]二句歌词\n[00:05.00]三句歌词\n"))
+        expectEqual(late.match, .sameText, "逐行对比: 只差时间的算文字一致")
+        expectEqual(late.blocks.map(\.deltaMs), [1000, nil, nil], "逐行对比: 时间差超过 0.5 秒的块记下所选条目晚多少")
+        expectEqual(late.blocks.contains(where: \.differs), false, "逐行对比: 时间差不标成词不一样")
+        // 改了字:只标那个字,两边都标。
+        let changed = V.compareLyrics(current: shown(a), other: shown("[00:01.00]一句歌词\n[00:03.00]二句改词\n[00:05.00]三句歌词\n"))
+        expectEqual(changed.match, .different, "逐行对比: 改了字的存在差异")
+        expectEqual(changed.blocks.map(\.differs), [false, true, false], "逐行对比: 改了字的那块标出来")
+        expectEqual(changed.blocks[1].currentMarks == [[2]] && changed.blocks[1].otherMarks == [[2]], true, "逐行对比: 只标改了的字")
+        // 多一句、少一句。
+        let longer = a + "[00:07.00]尾声呢喃\n"
+        let extra = V.compareLyrics(current: shown(a), other: shown(longer))
+        expectEqual(extra.match == .different && extra.extraLines == 1 && extra.missingLines == 0, true, "逐行对比: 只所选条目有的句子算多出来的")
+        expectEqual(extra.blocks.last.map { $0.current.isEmpty && $0.other.map(\.text) == ["尾声呢喃"] && $0.differs }, true,
+                    "逐行对比: 多出来的那句左边空着")
+        let missing = V.compareLyrics(current: shown(longer), other: shown(a))
+        expectEqual(missing.missingLines == 1 && missing.extraLines == 0, true, "逐行对比: 只当前条目有的句子算少的")
+        // 整行一样、只有一份带逐字:不算完全一致。
+        let lrc = "[00:18.70]Your butt is mine\n[00:20.85]Gonna tell you right\n"
+        let yrc = "[18709,2000](18709,1000,0)Your (19709,500,0)butt (20209,300,0)is (20509,200,0)mine\n"
+            + "[20853,2000](20853,500,0)Gonna (21353,500,0)tell (21853,500,0)you (22353,500,0)right\n"
+        expectEqual(V.compareLyrics(current: shown(lrc, yrc: yrc), other: shown(lrc)).match, .sameText, "逐行对比: 只差逐字的算文字一致")
+        expectEqual(V.compareLyrics(current: shown(a), other: shown("")).match, .different, "逐行对比: 一边没有显示的行时不算一致")
     }
 
     // ---- 两个文件:实体表按含这条写法的那首取证据,用户判断文件取拆开记录;缺了坏了都是空 ----
@@ -261,15 +325,27 @@ func runSongVersionsTests() {
                     && sourceBytes(sheet, contain: "case .shared: return L10n.t(\"歌词同步\")")
                     && sourceBytes(sheet, contain: "case .own: return L10n.t(\"独立匹配\")")
                     && sourceBytes(sheet, contain: "case .split: return L10n.t(\"已拆分\")")
-                    && sourceBytes(sheet, contain: "let diff = SongVersions.lyricDiff(current: c.shownLines, other: v.shownLines)")
-                    && sourceBytes(sheet, contain: "&& shownLines == current.shownLines && shownWords == current.shownWords")
+                    && sourceBytes(sheet, contain: "let shown = SongVersions.displayed(lyrics: facts.lyrics, yrc: facts.yrc, title: s.title, artist: s.artist, aliases: aliases)")
+                    && sourceBytes(sheet, contain: "let comparison = current.map { SongVersions.compareLyrics(current: $0.shown, other: shown) }")
+                    && sourceBytes(sheet, contain: "if v.lyricsKnown, current.lyricsKnown, v.match != .identical, !v.lyrics.isEmpty, !current.lyrics.isEmpty {")
+                    && sourceBytes(sheet, contain: "let same = identical + sameText")
+                    && sourceBytes(sheet, contain: "case .sameText: return L10n.t(\"文字一致\")")
                     && sourceBytes(playback, contain: "headerAliases: EnrichCacheReader.headerAliases(")
                     && sourceBytes(sheet, contain: "playerIcons(v, size: 22)") && sourceBytes(sheet, contain: "playerIcons(v, size: 18)")
                     && sourceBytes(sheet, contain: "players.insert(bundle, at: 0)")
                     && sourceBytes(sheet, contain: "if let playing = Self.nowPlayingKey, versions.contains(where: { $0.key == playing }) { return playing }")
                     && sourceBytes(sheet, contain: "return versions.first { $0.relation == .current }?.key ?? versions.first?.key")
                     && sourceBytes(manager, contain: "Text(String(format: L10n.t(\"播放器原始写法：%@\"), SongVersionsSheet.reportedLine(first)))"), true,
-                    "其他写法(契约): 收录的播放器、三种关系、逐句对照接上")
+                    "其他写法(契约): 收录的播放器、三种关系、逐行对比接上,文字一致算一致")
+        // 逐项对照:一边缺这一项不算不一样、不标红;原始写法不比;本机没放过的写法播放来源写「未播放过」(18 章决策 74)。
+        expectEqual(sourceBytes(sheet, contain: "var differs: Bool { compared && !currentMissing && !otherMissing && current != other }")
+                    && sourceBytes(sheet, contain: "let differing = rows.filter(\\.differs).count")
+                    && sourceBytes(sheet, contain: "currentMissing: c.players.isEmpty, otherMissing: v.players.isEmpty")
+                    && sourceBytes(sheet, contain: "currentMissing: c.durationSecs == nil, otherMissing: v.durationSecs == nil")
+                    && sourceBytes(sheet, contain: "other: reportedText(v), compared: false)")
+                    && sourceBytes(sheet, contain: "var neverPlayed: Bool { players.isEmpty && durationSecs == nil }")
+                    && sourceBytes(sheet, contain: "return v.neverPlayed ? L10n.t(\"未播放过\") : L10n.t(\"未记录\")"), true,
+                    "其他写法(契约): 逐项对照缺的一边不算不一样,原始写法不比,没放过的写「未播放过」")
         let rematchEngine = read(engine, "lyricsrematch.go")
         expectEqual(sourceBytes(manager, contain: "let followers = LyricsRematch.followers(of: LyricsRematch.current, key: key)")
                     && sourceBytes(rematchEngine, contain: "Followers int `json:\"followers,omitempty\"`"), true,
@@ -290,16 +366,16 @@ func runSongVersionsTests() {
                     && sourceBytes(sheet, contain: "overviewCard(L10n.t(\"同步策略\"), syncOverview(others))")
                     && sourceBytes(sheet, contain: "if !EnrichCacheReader.sharesEntityLyrics {"), true,
                     "其他写法(契约): 概况两张卡跟对照页同名、说的是其他全部条目,关了歌词同步时同步策略写已关闭")
-        expectEqual(sourceBytes(sheet, contain: "return v.sameLyrics ? .green : .red")
+        expectEqual(sourceBytes(sheet, contain: "return v.match == .different ? .red : .green")
                     && sourceBytes(sheet, contain: "case .shared: return .green\n        case .own: return .red\n        case .split: return .secondary")
                     && sourceBytes(sheet, contain: "let relation: Relation = own == 0 ? .shared : .own")
                     && !sourceBytes(sheet, contain: "Color.orange.opacity(0.12)") && !sourceBytes(sheet, contain: ".purple"), true,
                     "其他写法(契约): 状态色一套(绿一样 / 同步、红不一样 / 不同步、灰比不了 / 已拆分),有独立匹配时同步策略数不跟的那几条")
-        expectEqual(sourceBytes(sheet, contain: "return v.sameLyrics ? \"checkmark.circle.fill\" : \"xmark.circle.fill\"")
+        expectEqual(sourceBytes(sheet, contain: "case .identical: return \"checkmark.circle.fill\"\n        case .sameText: return \"equal.circle.fill\"\n        case .different: return \"xmark.circle.fill\"")
                     && sourceBytes(sheet, contain: "case .shared: return \"checkmark.circle.fill\"\n        case .own: return \"xmark.circle.fill\"")
                     && sourceBytes(sheet, contain: "statusDot(lyricsSymbol(v), lyricsColor(v), size: 11, label: lyricsVerdict(v))")
                     && sourceBytes(sheet, contain: "statusDot(lyricsSymbol(v), lyricsColor(v), size: 10, label: nil)")
                     && !sourceBytes(sheet, contain: "Circle().fill("), true,
-                    "其他写法(契约): 列表、一览表的状态点带形状(勾 / 叉 / 横杠),不只靠颜色")
+                    "其他写法(契约): 列表、一览表的状态点带形状(勾 / 等号 / 叉 / 横杠),不只靠颜色")
     }
 }

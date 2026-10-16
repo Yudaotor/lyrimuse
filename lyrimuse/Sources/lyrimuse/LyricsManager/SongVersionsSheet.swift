@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 歌词管理详情页「同曲条目」(18 章决策 28、38、44)。左边是这首歌的全部写法,按当前条目 / 歌词同步 / 独立匹配 / 已拆分
 /// 分组,每条两个圆点:现在的歌词跟当前这条一样吗、以后怎么处理。右边是选中那条跟当前这条的对照:两张结论卡,逐项对照(不一样
-/// 的标橙),歌词不一样时多一块逐句对照,认成同一首的依据,拆开 / 恢复合并;选中当前这条时是这首歌的概况(18 章决策 43、61)。拆开、恢复合并都交给引擎(EnrichCacheStore.splitSong /
+/// 的标红),歌词不是完全一致时多一块逐行对比,认成同一首的依据,拆开 / 恢复合并;选中当前这条时是这首歌的概况(18 章决策 43、61)。拆开、恢复合并都交给引擎(EnrichCacheStore.splitSong /
 /// unsplitSong),列表数据见 SongVersions。
 struct SongVersionsSheet: View {
     let summary: EnrichCacheStore.Summary
@@ -12,6 +12,8 @@ struct SongVersionsSheet: View {
     let onOpen: (String) -> Void
     /// 打开就展开概况里的「匹配依据」(深链带 `evidence=1`)。开着时链接换了一首也照样展开。
     var showEvidence = false
+    /// 打开就选中这一条写法、显示它跟当前条目的对照(深链带 `compare=<写法键>`);不在这首歌里时照常选。
+    var compareKey: String?
 
     @ObservedObject private var store = EnrichCacheStore.shared
     @Environment(\.dismiss) private var dismiss
@@ -44,18 +46,22 @@ struct SongVersionsSheet: View {
         let features: [String]
         let lyrics: String
         let yrc: String
-        /// 会显示出来的行(SongVersions.displayedLines,不含抬头、署名):整行一份、逐字一份。比对、判一致都只看它们。
-        let shownLines: [LyricLine]
-        let shownWords: [LyricLine]
+        /// 歌词窗口里显示的行(SongVersions.displayed:不含抬头、署名、演唱者标注):整行一份、逐字一份。比对、判一致都只看它们。
+        let shown: SongVersions.Shown
         /// 正文读得回来(读不回来时歌词按不知道算,不拿来比)。
         let lyricsKnown: Bool
-        /// 显示出来的歌词(整行加逐字的文字和行时间)跟当前条目完全一致。
-        let sameLyrics: Bool
+        /// 跟当前条目的歌词比;当前条目自己没有。
+        let comparison: SongVersions.LyricComparison?
         /// 已拆开那条恢复合并时交给引擎的写法。
         let mergeKeys: [String]
         /// 各播放器原样报的写法(跟写法键不一样时才有)。
         let reported: [SongVersions.ReportedName]
         var id: String { key }
+        /// 跟当前条目比的结论;当前条目自己算完全一致。
+        var match: SongVersions.LyricsMatch { comparison?.match ?? .identical }
+        /// 本机没放过这条写法:没记下播放器,也没有播放器报的时长。待播队列里提前解析、同专辑预取建的条目是这样,
+        /// 引擎只在真放到这条时才记这两样。
+        var neverPlayed: Bool { players.isEmpty && durationSecs == nil }
     }
 
     var body: some View {
@@ -94,6 +100,7 @@ struct SongVersionsSheet: View {
         // 拆开、恢复合并之后歌词管理会重读一遍(summariesGeneration 变),跟着重算;开着时链接换了一首(summary 变)也重算。
         .task(id: "\(summary.key)#\(store.summariesGeneration)") { await reload() }
         .onChange(of: "\(summary.key)#\(showEvidence)", initial: true) { _, _ in if showEvidence { evidenceExpanded = true } }
+        .onChange(of: "\(summary.key)#\(compareKey ?? "")", initial: true) { _, _ in if let compareKey { selected = compareKey } }
         // 要拆的那条经 presenting 交给按钮:关确认框时会先把开关置回去,按钮里再读 @State 可能已经晚了。
         .alert(splitTitle, isPresented: $confirmingSplit, presenting: pendingSplit) { key in
             Button(L10n.t("拆分"), role: .destructive) {
@@ -229,7 +236,7 @@ struct SongVersionsSheet: View {
                     }
                     .fixedSize(horizontal: false, vertical: true)
                     compareTable(current, v)
-                    if v.lyricsKnown, current.lyricsKnown, !v.sameLyrics, !v.lyrics.isEmpty, !current.lyrics.isEmpty {
+                    if v.lyricsKnown, current.lyricsKnown, v.match != .identical, !v.lyrics.isEmpty, !current.lyrics.isEmpty {
                         lyricDiffSection(current, v)
                     }
                     if v.relation != .split { evidenceSection(v) }
@@ -282,19 +289,27 @@ struct SongVersionsSheet: View {
         }
     }
 
-    /// 其他条目(已拆分的不算)的歌词跟当前条目比:有差异的先说,其次是比不了的(没有歌词、正文读不回来),全都一样才是全部一致。
+    /// 其他条目(已拆分的不算)的歌词跟当前条目比:有差异的先说,其次是比不了的(没有歌词、正文读不回来),全都完全一致或文字
+    /// 一致才是全部一致。
     private func lyricsOverview(_ c: Version, _ inSong: [Version]) -> Verdict {
         if !c.lyricsKnown { return Verdict(title: L10n.t("歌词无法读取"), symbol: "questionmark", color: .secondary) }
         if c.lyrics.isEmpty { return Verdict(title: L10n.t("当前条目无歌词"), symbol: "questionmark", color: .secondary) }
         if inSong.isEmpty { return Verdict(title: L10n.t("仅当前条目"), symbol: "questionmark", color: .secondary) }
         let compared = inSong.filter { $0.lyricsKnown && !$0.lyrics.isEmpty }
-        let same = compared.filter(\.sameLyrics).count
+        let identical = compared.filter { $0.match == .identical }.count
+        let sameText = compared.filter { $0.match == .sameText }.count
+        let same = identical + sameText
         let differ = compared.count - same
         let empty = inSong.filter { $0.lyricsKnown && $0.lyrics.isEmpty }.count
         let unreadable = inSong.count - compared.count - empty
         if same == inSong.count {
-            return Verdict(title: L10n.t("全部一致"), symbol: "checkmark", color: .green,
-                           detail: String(format: L10n.plural("其他 %d 个条目的歌词与当前条目完全一致", count: same), same))
+            let detail = sameText == 0
+                ? String(format: L10n.plural("其他 %d 个条目的歌词与当前条目完全一致", count: identical), identical)
+                : identical == 0
+                ? String(format: L10n.plural("其他 %d 个条目的歌词与当前条目文字一致", count: sameText), sameText)
+                : [String(format: L10n.t("%d 个完全一致"), identical), String(format: L10n.t("%d 个文字一致"), sameText)]
+                .joined(separator: " · ")
+            return Verdict(title: L10n.t("全部一致"), symbol: "checkmark", color: .green, detail: detail)
         }
         if differ == inSong.count {
             return Verdict(title: String(format: L10n.plural("%d 个条目存在差异", count: differ), differ),
@@ -302,7 +317,8 @@ struct SongVersionsSheet: View {
                            detail: String(format: L10n.plural("其他 %d 个条目的歌词与当前条目不同，选择后可逐行对比", count: differ), differ))
         }
         var parts: [String] = []
-        if same > 0 { parts.append(String(format: L10n.t("%d 个完全一致"), same)) }
+        if identical > 0 { parts.append(String(format: L10n.t("%d 个完全一致"), identical)) }
+        if sameText > 0 { parts.append(String(format: L10n.t("%d 个文字一致"), sameText)) }
         if differ > 0 { parts.append(String(format: L10n.t("%d 个存在差异"), differ)) }
         if empty > 0 { parts.append(String(format: L10n.t("%d 个无歌词"), empty)) }
         if unreadable > 0 { parts.append(String(format: L10n.t("%d 个无法读取"), unreadable)) }
@@ -496,7 +512,7 @@ struct SongVersionsSheet: View {
 
     private func lyricsCard(_ v: Version) -> some View {
         card(L10n.t("歌词一致性")) {
-            Label(lyricsVerdict(v), systemImage: !v.lyricsKnown || v.lyrics.isEmpty ? "questionmark" : v.sameLyrics ? "checkmark" : "notequal")
+            Label(lyricsVerdict(v), systemImage: lyricsCardSymbol(v))
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(lyricsColor(v))
             Text([sourceText(v), featuresText(v)].filter { !$0.isEmpty }.joined(separator: " · "))
@@ -518,22 +534,38 @@ struct SongVersionsSheet: View {
         }
     }
 
+    /// 逐项对照的一行。不一样才标红、算进「存在差异」:原始写法本来就各不相同,不比;一边缺这一项(没专辑、没记播放器、
+    /// 没报时长、没歌词来源)时缺的那边用最淡的字,也不算不一样。
+    private struct CompareRow {
+        let label: String
+        let current: String
+        let other: String
+        var compared = true
+        var currentMissing = false
+        var otherMissing = false
+
+        var differs: Bool { compared && !currentMissing && !otherMissing && current != other }
+    }
+
     private func compareTable(_ c: Version, _ v: Version) -> some View {
-        let rows: [(String, String, String)] = [
-            (L10n.t("曲名"), c.title, v.title),
-            (L10n.t("艺人"), c.artist, v.artist),
-            (L10n.t("专辑"), c.album, v.album),
-            (L10n.t("播放来源"), playersText(c), playersText(v)),
-            (L10n.t("时长"), durationText(c), durationText(v)),
-            (L10n.t("歌词来源"), sourceText(c), sourceText(v)),
-            (L10n.t("歌词格式"), featuresText(c), featuresText(v)),
+        var rows = [
+            CompareRow(label: L10n.t("曲名"), current: c.title, other: v.title),
+            CompareRow(label: L10n.t("艺人"), current: c.artist, other: v.artist),
+            CompareRow(label: L10n.t("专辑"), current: c.album, other: v.album,
+                       currentMissing: c.album.isEmpty, otherMissing: v.album.isEmpty),
+            CompareRow(label: L10n.t("播放来源"), current: playersText(c), other: playersText(v),
+                       currentMissing: c.players.isEmpty, otherMissing: v.players.isEmpty),
+            CompareRow(label: L10n.t("时长"), current: durationText(c), other: durationText(v),
+                       currentMissing: c.durationSecs == nil, otherMissing: v.durationSecs == nil),
+            CompareRow(label: L10n.t("歌词来源"), current: sourceText(c), other: sourceText(v),
+                       currentMissing: c.source.isEmpty, otherMissing: v.source.isEmpty),
+            CompareRow(label: L10n.t("歌词格式"), current: featuresText(c), other: featuresText(v)),
         ]
-        let differing = rows.filter { $0.1 != $0.2 }.count
-        // 原始写法本来就各不相同,不算进「存在差异」那一项、不标橙,放在专辑后面。
-        var shown = rows
+        // 原始写法放在专辑后面。
         if !c.reported.isEmpty || !v.reported.isEmpty {
-            shown.insert((L10n.t("原始写法"), reportedText(c), reportedText(v)), at: 3)
+            rows.insert(CompareRow(label: L10n.t("原始写法"), current: reportedText(c), other: reportedText(v), compared: false), at: 3)
         }
+        let differing = rows.filter(\.differs).count
         return VStack(alignment: .leading, spacing: 6) {
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
                 GridRow {
@@ -543,14 +575,12 @@ struct SongVersionsSheet: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                ForEach(Array(shown.enumerated()), id: \.offset) { _, row in
-                    let same = row.1 == row.2
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     GridRow {
-                        Text(row.0).font(.caption).foregroundStyle(.secondary)
-                        Text(row.1).foregroundStyle(same ? Color.secondary : Color.primary)
-                        Text(row.2)
-                            .fontWeight(same ? .regular : .medium)
-                            .foregroundStyle(same ? Color.secondary : Color.red)
+                        Text(row.label).font(.caption).foregroundStyle(.secondary)
+                        compareValue(row.current, missing: row.currentMissing, color: row.differs ? .primary : .secondary)
+                        compareValue(row.other, missing: row.otherMissing, color: row.differs ? .red : .secondary)
+                            .fontWeight(row.differs ? .medium : .regular)
                     }
                 }
             }
@@ -564,22 +594,30 @@ struct SongVersionsSheet: View {
         }
     }
 
+    /// 逐行对比:按块排(`SongVersions.compareLyrics`),左边当前条目、右边所选条目各是这一块的几句;所选条目这一块有字对不上、
+    /// 或者只有一边有时右边整格标红,对不上的字两边都标红;块开头那句时间差超过 0.5 秒时右边那个时间标红。
+    /// 逐项对照的一格:缺的用最淡的字,空的写一道短横。
+    private func compareValue(_ text: String, missing: Bool, color: Color) -> some View {
+        Text(text.isEmpty ? "—" : text)
+            .foregroundStyle(missing ? AnyShapeStyle(HierarchicalShapeStyle.tertiary) : AnyShapeStyle(color))
+    }
+
     private func lyricDiffSection(_ c: Version, _ v: Version) -> some View {
-        let diff = SongVersions.lyricDiff(current: c.shownLines, other: v.shownLines)
+        let blocks = v.comparison?.blocks ?? []
         return DisclosureGroup(isExpanded: $diffExpanded) {
             VStack(alignment: .leading, spacing: 6) {
                 VStack(spacing: 0) {
-                    ForEach(Array(diff.rows.enumerated()), id: \.offset) { index, row in
+                    ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
                         if index > 0 { Divider().opacity(0.5) }
                         HStack(alignment: .top, spacing: 0) {
-                            diffCell(row.current, highlight: false)
+                            diffCell(block.current, marks: block.currentMarks, highlight: false, retimed: false)
                             Divider()
-                            diffCell(row.other, highlight: row.differs)
+                            diffCell(block.other, marks: block.otherMarks, highlight: block.differs, retimed: block.deltaMs != nil)
                         }
                     }
                 }
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.primary.opacity(0.1)))
-                Text(diffSummary(diff, c, v))
+                Text(diffSummary(c, v))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -603,17 +641,13 @@ struct SongVersionsSheet: View {
         .buttonStyle(.glassListRow)
     }
 
-    private func diffCell(_ line: LyricLine?, highlight: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(line.map { Self.timestamp($0.timeMs) } ?? "")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.tertiary)
-                .frame(width: 56, alignment: .leading)
-            Text(line?.text ?? "—")
-                .font(.callout)
-                .foregroundStyle(line == nil ? HierarchicalShapeStyle.tertiary : HierarchicalShapeStyle.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+    /// 对比表的一格:这一块里这一边的几句,一句一行带时间;一句都没有时一道短横。
+    private func diffCell(_ lines: [LyricLine], marks: [Set<Int>], highlight: Bool, retimed: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if lines.isEmpty { diffLine(nil, marks: [], retimed: false) }
+            ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                diffLine(line, marks: index < marks.count ? marks[index] : [], retimed: retimed && index == 0)
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -621,20 +655,59 @@ struct SongVersionsSheet: View {
         .background(highlight ? Color.red.opacity(0.12) : Color.clear)
     }
 
-    private func diffSummary(_ diff: SongVersions.LyricDiff, _ c: Version, _ v: Version) -> String {
+    private func diffLine(_ line: LyricLine?, marks: Set<Int>, retimed: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(line.map { Self.timestamp($0.timeMs) } ?? "")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(retimed ? AnyShapeStyle(Color.red) : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
+                .frame(width: 56, alignment: .leading)
+            Text(line.map { Self.marked($0.text, marks: marks) } ?? AttributedString("—"))
+                .font(.callout)
+                .foregroundStyle(line == nil ? HierarchicalShapeStyle.tertiary : HierarchicalShapeStyle.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// 对不上的字(按 `Character` 下标)标红,其余用调用方的颜色。
+    static func marked(_ text: String, marks: Set<Int>) -> AttributedString {
+        var out = AttributedString()
+        for (offset, character) in text.enumerated() {
+            var piece = AttributedString(String(character))
+            if marks.contains(offset) { piece.foregroundColor = .red }
+            out += piece
+        }
+        return out
+    }
+
+    /// 对比表下面一句:先说词的差别(改了字、多几句、少几句),再说时间,最后说只是写法不同的(分行、繁简)。这些都没有时
+    /// 说差在哪:标点空格这类写法、行时间的小出入,或者只有逐字时间轴。
+    private func diffSummary(_ c: Version, _ v: Version) -> String {
+        guard let comparison = v.comparison else { return "" }
+        let s = comparison.summary
         var parts: [String] = []
-        if let shift = diff.shiftMs, abs(shift) >= 100 {
+        if s.changed > 0 { parts.append(String(format: L10n.plural("%@ 处文字不同", count: s.changed), "\(s.changed)")) }
+        if comparison.extraLines > 0 {
+            parts.append(String(format: L10n.plural("多 %@ 句", count: comparison.extraLines), "\(comparison.extraLines)"))
+        }
+        if comparison.missingLines > 0 {
+            parts.append(String(format: L10n.plural("少 %@ 句", count: comparison.missingLines), "\(comparison.missingLines)"))
+        }
+        if s.retimed > 0 {
+            parts.append(String(format: L10n.plural("%@ 处时间相差超过 0.5 秒", count: s.retimed), "\(s.retimed)"))
+        }
+        if let shift = comparison.shiftMs, abs(shift) >= 100 {
             let seconds = String(format: "%.1f", Double(abs(shift)) / 1000)
             parts.append(String(format: L10n.t(shift > 0 ? "整体延后 %@ 秒" : "整体提前 %@ 秒"), seconds))
         }
-        if diff.differentLines > 0 {
-            parts.append(String(format: L10n.t("%d 行文本不同"), diff.differentLines))
-        }
-        if !c.yrc.isEmpty, v.yrc.isEmpty {
-            parts.append(L10n.t("所选条目无逐字时间轴"))
-        }
+        if s.resegmented > 0 { parts.append(L10n.t("分行不同")) }
+        if s.scriptVariants > 0 { parts.append(L10n.t("繁简写法不同")) }
+        if !c.shown.words.isEmpty, v.shown.words.isEmpty { parts.append(L10n.t("所选条目无逐字时间轴")) }
         if parts.isEmpty {
-            parts.append(L10n.t("文本与行时间一致，仅逐字时间轴不同"))
+            let a = c.shown.text, b = v.shown.text
+            parts.append(a.map(\.text) != b.map(\.text) ? L10n.t("标点、空格写法不同")
+                : a.map(\.timeMs) != b.map(\.timeMs) ? L10n.t("行时间略有出入")
+                : L10n.t("文本与行时间一致，仅逐字时间轴不同"))
         }
         return parts.joined(separator: L10n.t("；"))
     }
@@ -720,22 +793,40 @@ struct SongVersionsSheet: View {
     private func lyricsVerdict(_ v: Version) -> String {
         if !v.lyricsKnown { return L10n.t("歌词无法读取") }
         if v.lyrics.isEmpty { return L10n.t("无歌词") }
-        return v.sameLyrics ? L10n.t("完全一致") : L10n.t("存在差异")
+        switch v.match {
+        case .identical: return L10n.t("完全一致")
+        case .sameText: return L10n.t("文字一致")
+        case .different: return L10n.t("存在差异")
+        }
     }
 
     /// 整张面板只用一套状态色:绿 = 跟当前条目一样 / 同步,红 = 不一样 / 不同步,灰 = 比不了或不适用(没歌词、读不到、
     /// 已拆分、同步关着);蓝只标哪一条是当前条目,不表示状态(18 章决策 62)。逐项对照、逐行对比里不一样的也标红。
     private func lyricsColor(_ v: Version) -> Color {
         if !v.lyricsKnown || v.lyrics.isEmpty { return .secondary }
-        return v.sameLyrics ? .green : .red
+        return v.match == .different ? .red : .green
     }
 
+    /// 文字一致用等号,跟完全一致的勾分得开。
     private func lyricsSymbol(_ v: Version) -> String {
         if !v.lyricsKnown || v.lyrics.isEmpty { return "minus.circle.fill" }
-        return v.sameLyrics ? "checkmark.circle.fill" : "xmark.circle.fill"
+        switch v.match {
+        case .identical: return "checkmark.circle.fill"
+        case .sameText: return "equal.circle.fill"
+        case .different: return "xmark.circle.fill"
+        }
     }
 
-    /// 列表、一览表里的状态点:勾 = 一样 / 同步,叉 = 不一样 / 不同步,横杠 = 比不了或不适用。形状本身分得开,不只靠颜色
+    private func lyricsCardSymbol(_ v: Version) -> String {
+        if !v.lyricsKnown || v.lyrics.isEmpty { return "questionmark" }
+        switch v.match {
+        case .identical: return "checkmark"
+        case .sameText: return "equal"
+        case .different: return "notequal"
+        }
+    }
+
+    /// 列表、一览表里的状态点:勾 = 一样 / 同步,等号 = 文字一致,叉 = 不一样 / 不同步,横杠 = 比不了或不适用。形状本身分得开,不只靠颜色
     /// (红绿色弱也认得出)。label 为 nil 时旁边已经有文字,读屏跳过它。
     @ViewBuilder
     private func statusDot(_ symbol: String, _ color: Color, size: CGFloat, label: String?) -> some View {
@@ -780,7 +871,7 @@ struct SongVersionsSheet: View {
     private func reportedText(_ v: Version) -> String { v.reported.map(Self.reportedLine).joined(separator: "\n") }
 
     private func playersText(_ v: Version) -> String {
-        guard !v.players.isEmpty else { return L10n.t("未记录") }
+        guard !v.players.isEmpty else { return v.neverPlayed ? L10n.t("未播放过") : L10n.t("未记录") }
         let names = v.players.map(playerName).joined(separator: " · ")
         return v.playersInferred ? String(format: L10n.t("%@（推断）"), names) : names
     }
@@ -934,15 +1025,8 @@ struct SongVersionsSheet: View {
         }
         if s.hasTranslation { features.append(L10n.t("译文")) }
         if s.hasRomanization { features.append(L10n.t("读音")) }
-        let shownLines = SongVersions.displayedLines(facts.lyrics, title: s.title, artist: s.artist, aliases: aliases)
-        let shownWords = SongVersions.displayedLines(facts.yrc, title: s.title, artist: s.artist, aliases: aliases, wordTimed: true)
-        let same: Bool
-        if let current {
-            same = facts.complete && current.lyricsKnown && !shownLines.isEmpty
-                && shownLines == current.shownLines && shownWords == current.shownWords
-        } else {
-            same = true
-        }
+        let shown = SongVersions.displayed(lyrics: facts.lyrics, yrc: facts.yrc, title: s.title, artist: s.artist, aliases: aliases)
+        let comparison = current.map { SongVersions.compareLyrics(current: $0.shown, other: shown) }
         // 正在放的就是这条时,当前这个播放器排最前(引擎按第一次放的先后记)。
         var players = facts.players
         if let bundle = PlaybackCoordinator.shared.resolvedPlayerBundleID, Self.nowPlayingKey == key {
@@ -952,8 +1036,8 @@ struct SongVersionsSheet: View {
         return Version(key: key, relation: relation, title: s.shownTitle, artist: s.shownArtist, album: s.displayAlbum,
                        players: players, playersInferred: facts.playersInferred, durationSecs: facts.durationSecs,
                        source: s.lyricsSource, score: facts.score, features: features,
-                       lyrics: facts.lyrics, yrc: facts.yrc, shownLines: shownLines, shownWords: shownWords,
-                       lyricsKnown: facts.complete, sameLyrics: same, mergeKeys: mergeKeys, reported: s.reportedNames)
+                       lyrics: facts.lyrics, yrc: facts.yrc, shown: shown,
+                       lyricsKnown: facts.complete, comparison: comparison, mergeKeys: mergeKeys, reported: s.reportedNames)
     }
 
     static func evidenceLabel(_ kind: String) -> String {

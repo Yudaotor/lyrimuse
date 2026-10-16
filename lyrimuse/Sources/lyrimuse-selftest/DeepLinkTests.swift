@@ -29,6 +29,10 @@ func runDeepLinkTests() {
                     "深链: 同曲条目面板带 evidence=1 展开匹配依据")
         expectEqual(link("lyrimuse://lyrics-manager/song-versions?evidence=0"), .lyricsManagerSongVersions(key: nil, showEvidence: false),
                     "深链: evidence=0 不展开")
+        expectEqual(link("lyrimuse://lyrics-manager/song-versions?key=a%7Cb%7C&compare=a%7Cb%7Cc"),
+                    .lyricsManagerSongVersions(key: "a|b|", showEvidence: false, compare: "a|b|c"), "深链: 同曲条目面板带 compare 选中那一条的对照")
+        expectEqual(link("lyrimuse://lyrics-manager/song-versions?compare="), .lyricsManagerSongVersions(key: nil, showEvidence: false),
+                    "深链: 空的 compare 当没带")
         expectEqual(link("lyrimuse://lyrics-search"), .lyricsSearch, "深链: 搜索歌词小窗")
         expectEqual(link("lyrimuse://lyrics-window/search"), .lyricsWindowSearch, "深链: 歌词窗口搜索面板")
         expectEqual(link("lyrimuse://menubar-panel"), .menuBarPanel(quick: nil), "深链: 菜单栏面板")
@@ -229,6 +233,7 @@ func runDeepLinkTests() {
             .lyricsManagerSongVersions(key: "方大同|为妳写的歌|橙月", showEvidence: false),
             .lyricsManagerSongVersions(key: "daniel caesar & mustafa|never enough|toronto 2014", showEvidence: false),
             .lyricsManagerSongVersions(key: "方大同|为妳写的歌|橙月", showEvidence: true), .lyricsManagerSongVersions(key: nil, showEvidence: true),
+            .lyricsManagerSongVersions(key: "周杰伦|那天下雨了|太阳之子", showEvidence: false, compare: "周杰倫|那天下雨了|"),
             .lyricsWindow, .lyricsWindowSearch, .lyricsSearch,
             .menuBarPanel(quick: nil), .menuBarPanel(quick: "overlay"), .menuBarMenu, .onboarding, .lastfmAuthCallback,
             .action(.toggleOverlay, on: true, stepSeconds: nil), .action(.lyricsAdvanceHotkey, on: nil, stepSeconds: 0.5),
@@ -294,7 +299,7 @@ func runDeepLinkTests() {
         let router = source("lyrimuse/Settings/DeepLinkRouter.swift")
         let statusItem = source("lyrimuse/MenuBar/MenuBarStatusItem.swift")
         let manager = source("lyrimuse/LyricsManager/LyricsManagerView.swift")
-        expectEqual(router.contains("case let .lyricsManagerSongVersions(key, showEvidence):\n            AppActions.shared.openLyricsManager?()\n            AppActions.shared.requestSongVersions(key: key, showEvidence: showEvidence)")
+        expectEqual(router.contains("case let .lyricsManagerSongVersions(key, showEvidence, compare):\n            AppActions.shared.openLyricsManager?()\n            AppActions.shared.requestSongVersions(key: key, showEvidence: showEvidence, compare: compare)")
                     && manager.contains(".onReceive(AppActions.shared.songVersionsRequests) { if !pendingAutoFocus { consumeSongVersionsRequest() } }")
                     && manager.contains("guard pendingAutoFocus else {\n                    consumeSongVersionsRequest()")
                     && manager.contains("DispatchQueue.main.async { windowFrame.focusList() }\n                // 链接带的条目排在自动定位之后")
@@ -303,11 +308,12 @@ func runDeepLinkTests() {
                     && manager.contains("store.songMembership(forKey: key) != nil, select(key) else { return }"), true,
                     "深链接线: 同曲条目面板在开窗那一轮读完缓存、自动定位之后才取,条件同「⋯」里那一项,有没保存的修改先问,开着别的面板不动,信箱只认 60 秒内的请求")
         let sheet = source("lyrimuse/LyricsManager/SongVersionsSheet.swift")
-        expectEqual(manager.contains("songVersionsShowEvidence = request.showEvidence\n        showSongVersions = true")
-                    && manager.contains(".sheet(isPresented: $showSongVersions, onDismiss: { songVersionsShowEvidence = false }) {")
-                    && manager.contains("onOpen: { other in _ = select(other) }, showEvidence: songVersionsShowEvidence)")
-                    && sheet.contains(".onChange(of: \"\\(summary.key)#\\(showEvidence)\", initial: true) { _, _ in if showEvidence { evidenceExpanded = true } }"), true,
-                    "深链接线: evidence=1 打开同曲条目就展开匹配依据,开着时换一首也展开;面板关掉后手点打开照旧收着")
+        expectEqual(manager.contains("songVersionsShowEvidence = request.showEvidence\n        songVersionsCompare = request.compare\n        showSongVersions = true")
+                    && manager.contains(".sheet(isPresented: $showSongVersions, onDismiss: { songVersionsShowEvidence = false; songVersionsCompare = nil }) {")
+                    && manager.contains("onOpen: { other in _ = select(other) }, showEvidence: songVersionsShowEvidence,\n                                  compareKey: songVersionsCompare)")
+                    && sheet.contains(".onChange(of: \"\\(summary.key)#\\(showEvidence)\", initial: true) { _, _ in if showEvidence { evidenceExpanded = true } }")
+                    && sheet.contains(".onChange(of: \"\\(summary.key)#\\(compareKey ?? \"\")\", initial: true) { _, _ in if let compareKey { selected = compareKey } }"), true,
+                    "深链接线: evidence=1 打开同曲条目就展开匹配依据、compare 选中那一条的对照,开着时换一首也照办;面板关掉后手点打开照旧")
         expectEqual(statusItem.contains("if quick != nil, panelIsOpen { panelController.close() }"), true,
                     "深链接线: 面板带 quick 时开着也不关,翻到那一格")
         expectEqual(router.contains("guard let success else {") && router.contains("NSWorkspace.shared.open(url)"), true,

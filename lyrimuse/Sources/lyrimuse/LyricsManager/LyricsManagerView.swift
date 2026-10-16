@@ -706,6 +706,8 @@ struct LyricsManagerView: View {
     @State private var showSongVersions = false
     /// 链接带了 `evidence=1`:这一次打开「同曲条目」就展开「匹配依据」;面板关掉就放下。
     @State private var songVersionsShowEvidence = false
+    /// 链接带了 `compare=<写法键>`:这一次打开「同曲条目」就选中那一条的对照;面板关掉就放下。
+    @State private var songVersionsCompare: String?
     // 这首歌内容不同的几份手改原件(两份以上才有提示,见 manualConflictRow);载入详情时算。
     @State private var manualConflictKeys: [String] = []
     @State private var confirmManualConflict = false
@@ -3169,8 +3171,9 @@ struct LyricsManagerView: View {
                     LyricsDecisionSheet(summary: summary, latest: latest, applied: applied)
                 }
             }
-            .sheet(isPresented: $showSongVersions, onDismiss: { songVersionsShowEvidence = false }) {
-                SongVersionsSheet(summary: summary, onOpen: { other in _ = select(other) }, showEvidence: songVersionsShowEvidence)
+            .sheet(isPresented: $showSongVersions, onDismiss: { songVersionsShowEvidence = false; songVersionsCompare = nil }) {
+                SongVersionsSheet(summary: summary, onOpen: { other in _ = select(other) }, showEvidence: songVersionsShowEvidence,
+                                  compareKey: songVersionsCompare)
             }
             .sheet(item: $searchTarget) { target in
                 // 采纳候选直接保存,不需要再手动点"保存修改"——避免让人误以为选了就已经
@@ -3550,6 +3553,7 @@ struct LyricsManagerView: View {
               Date().timeIntervalSince(request.at) < 60, let key = request.key ?? singleSelectedKey,
               store.summary(forKey: key) != nil, store.songMembership(forKey: key) != nil, select(key) else { return }
         songVersionsShowEvidence = request.showEvidence
+        songVersionsCompare = request.compare
         showSongVersions = true
     }
 

@@ -51,14 +51,14 @@ final class AppActions {
         lyricsWindowSearchRequests.send()
     }
 
-    /// 歌词管理里弹「同曲条目」面板(`lyrimuse://lyrics-manager/song-versions[?key=…][&evidence=1]`)。同上两条路:信箱管窗口刚建出来
-    /// (LyricsManagerView 读完缓存、自动定位过正在放的那首之后取),subject 管已经开着。信箱记着请求时刻,只认 60 秒以内的:
-    /// 窗口没开出来时请求一直留着,下次开窗会冒出这个面板。都走 `requestSongVersions(key:showEvidence:)`。
-    var pendingSongVersions: (key: String?, showEvidence: Bool, at: Date)?
+    /// 歌词管理里弹「同曲条目」面板(`lyrimuse://lyrics-manager/song-versions[?key=…][&evidence=1][&compare=…]`)。同上两条路:信箱管
+    /// 窗口刚建出来(LyricsManagerView 读完缓存、自动定位过正在放的那首之后取),subject 管已经开着。信箱记着请求时刻,只认 60 秒
+    /// 以内的:窗口没开出来时请求一直留着,下次开窗会冒出这个面板。都走 `requestSongVersions(key:showEvidence:compare:)`。
+    var pendingSongVersions: (key: String?, showEvidence: Bool, compare: String?, at: Date)?
     let songVersionsRequests = PassthroughSubject<Void, Never>()
 
-    func requestSongVersions(key: String?, showEvidence: Bool) {
-        pendingSongVersions = (key, showEvidence, Date())
+    func requestSongVersions(key: String?, showEvidence: Bool, compare: String? = nil) {
+        pendingSongVersions = (key, showEvidence, compare, Date())
         songVersionsRequests.send()
     }
 

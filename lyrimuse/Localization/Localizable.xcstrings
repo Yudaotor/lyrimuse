@@ -44725,6 +44725,23 @@
         }
       }
     },
+    "未播放过" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Never played"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未播放過"
+          }
+        }
+      }
+    },
     "参考" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -44987,6 +45004,35 @@
         }
       }
     },
+    "其他 %d 个条目的歌词与当前条目文字一致" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d other entry has the same lyric wording as the current entry"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d other entries have the same lyric wording as the current entry"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他 %d 個條目的歌詞與目前條目文字一致"
+          }
+        }
+      }
+    },
     "%d 个条目存在差异" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -45087,6 +45133,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%d 個完全一致"
+          }
+        }
+      }
+    },
+    "%d 个文字一致" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d same wording"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 個文字一致"
           }
         }
       }
@@ -45773,23 +45836,6 @@
         }
       }
     },
-    "%d 行文本不同" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d lines differ"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d 行文字不同"
-          }
-        }
-      }
-    },
     "所选条目无逐字时间轴" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -45803,6 +45849,57 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "所選條目無逐字時間軸"
+          }
+        }
+      }
+    },
+    "分行不同" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "split into lines differently"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分行不同"
+          }
+        }
+      }
+    },
+    "标点、空格写法不同" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "punctuation and spacing differ"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "標點、空格寫法不同"
+          }
+        }
+      }
+    },
+    "行时间略有出入" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "line timing differs slightly"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "行時間略有出入"
           }
         }
       }
@@ -45922,6 +46019,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "完全一致"
+          }
+        }
+      }
+    },
+    "文字一致" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same Wording"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字一致"
           }
         }
       }

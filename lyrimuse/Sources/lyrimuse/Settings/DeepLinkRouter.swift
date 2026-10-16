@@ -28,9 +28,9 @@ enum DeepLinkRouter {
             openSettings(path: path, checkForUpdates: checkForUpdates)
         case .lyricsManager:
             AppActions.shared.openLyricsManager?()
-        case let .lyricsManagerSongVersions(key, showEvidence):
+        case let .lyricsManagerSongVersions(key, showEvidence, compare):
             AppActions.shared.openLyricsManager?()
-            AppActions.shared.requestSongVersions(key: key, showEvidence: showEvidence)
+            AppActions.shared.requestSongVersions(key: key, showEvidence: showEvidence, compare: compare)
         case .lyricsWindow:
             AppActions.shared.openLyricsWindow?()
         case .lyricsWindowSearch:
