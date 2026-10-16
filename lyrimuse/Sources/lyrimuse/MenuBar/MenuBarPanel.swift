@@ -217,6 +217,11 @@ final class MenuBarPanelController {
             panelLogger.debug("panel placed: \(Int(frame.width), privacy: .public)x\(Int(frame.height), privacy: .public)")
             window.setFrame(frame, display: true)
         }
+        // 玻璃底(`NSGlassEffectView`)按内容的固有尺寸自己先长 / 缩一次,窗口改尺寸时又按自动缩放再改一次,高度差算了两遍:
+        // 内容视图比窗口高(内容往上顶出去)或矮(内容沉到底)。每次摆完都把它对齐到窗口。见 06 章决策 52。
+        if let content = window.contentView, content.frame.size != frame.size {
+            content.frame = NSRect(origin: .zero, size: frame.size)
+        }
     }
 
     /// 状态栏按钮在屏幕上的矩形。
