@@ -2467,8 +2467,6 @@ private struct AppearanceSettingsTab: View {
                 case .touchBar: EmptyView()
                 // 歌词窗口是一扇按需打开的真窗口,不做编辑台也不钉预览:要看效果就把那扇窗开着调。
                 case .lyricsWindow: EmptyView()
-                // 网页歌词没有预览:要看效果就在浏览器里打开链接。
-                case .webLyrics: EmptyView()
                 }
             }
             .animation(.easeOut(duration: 0.18), value: sectionRaw)
@@ -2523,7 +2521,7 @@ private struct AppearanceSettingsTab: View {
     /// `PanelQuickTarget.touchBar`)。分段取值在 `SettingsSearchCatalog.touchBarSectionValue`,
     /// 目录那边同样单列一个构造器。
     private enum Section: String, CaseIterable, Identifiable {
-        case overlay, notch, menuBar, touchBar, lyricsWindow, webLyrics
+        case overlay, notch, menuBar, touchBar, lyricsWindow
         var id: Self { self }
         var title: String {
             switch self {
@@ -2532,7 +2530,6 @@ private struct AppearanceSettingsTab: View {
             case .menuBar: return L10n.t("菜单栏")
             case .touchBar: return L10n.t("触控栏")
             case .lyricsWindow: return L10n.t("歌词窗口")
-            case .webLyrics: return L10n.t("网页歌词")
             }
         }
     }
@@ -2584,6 +2581,8 @@ private struct AppearanceSettingsTab: View {
                     isOn: Binding(
                         get: { settings.classicOverlayEnabled },
                         set: { LyricsOverlayWindowController.shared.setVisible($0) }))
+                // OBS 输出用的就是上面这一套样式,开关和链接挂在这一段(19 章决策 12)。
+                WebLyricsObsCard()
                 // 配置项**不跟开关联动**:关着也能调。把它藏起来只是让"先开、调完、再关"变成必须的
                 // 操作顺序,并不能阻止什么;而想先配好再打开的人会以为这个形态没有可调项。
                 //
@@ -2697,6 +2696,8 @@ private struct AppearanceSettingsTab: View {
                         .buttonBorderShape(.capsule)
                     }
                 }
+                // 网页显示的就是歌词窗口的完整布局、用的是这一套样式,开关和链接挂在这一段(19 章决策 12)。
+                WebLyricsScreenCard()
                 // 配置分**两套**:上面预览那个「完整 / 迷你」切到哪个,下面就配哪个。
                 //
                 // 两种尺寸是两种用法 —— 完整多半是摊开来看的、跟随封面好看;迷你常年钉在角落当挂件,
@@ -2726,17 +2727,6 @@ private struct AppearanceSettingsTab: View {
                         lyricsWindowResetRow
                     }
                 }
-            }
-            .background { LastfmGlassGlow() }
-        case .webLyrics:
-            // 网页本身没有样式设置:副屏照歌词窗口画、OBS 照悬浮歌词画(19 章)。卡片不跟总开关联动,关着也能先看链接。
-            VStack(spacing: 14) {
-                modeToggleCard(
-                    icon: "safari",
-                    title: L10n.t(SettingsSearchCatalog.webLyricsToggleTitleKey),
-                    subtitle: L10n.t("在浏览器中显示歌词：手机、平板与歌词窗口一致，OBS 浏览器源与悬浮歌词一致"),
-                    isOn: $settings.webLyricsEnabled)
-                WebLyricsSettingsCard()
             }
             .background { LastfmGlassGlow() }
         }

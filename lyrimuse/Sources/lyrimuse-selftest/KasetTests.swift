@@ -832,7 +832,7 @@ func runKasetTests() {
                     "Kaset 契约: 顶替系统那边时播放控制直接发给它")
         expectEqual(src("lyrimuse/LastfmStatsSection.swift").contains(
             #"if let url = links?.kaset, Self.isInstalled(.kaset) {"#), true, "Kaset 契约: 榜单右键「在 Kaset 中播放」只在装了 Kaset 时出")
-        expectEqual(src("lyrimuse/UI/LyricsWindowView.swift").contains(#"L10n.t("YouTube Music 歌曲页")"#), true,
+        expectEqual(src("lyrimuse/UI/LyricsMoreMenuModel.swift").contains(#"L10n.t("YouTube Music 歌曲页")"#), true,
                     "Kaset 契约: 歌词窗口「⋯」给 YouTube Music 歌曲页")
         let source = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
         expectEqual(source.contains("if isPlayingNow || lastSnapshot?.isWaitingToPlay == true { return PollInterval.playing }"), true,

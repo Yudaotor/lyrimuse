@@ -98,6 +98,7 @@ enum ConfigPortability {
         "np:listenMilestoneLedger",
         // 网页歌词局域网链接的密钥:换一台机器就该是另一把,也不该随备份、镜像、诊断带出去。
         "np:webLyricsToken",
+        "np:obsLyricsToken",
         "np:overlayStyle",
         "np:overlayPositionTop",
         "np:overlayPositionOrigin",

@@ -42,7 +42,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Hidden from screenshots and screen sharing](#feature-hide-in-screenshots) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Screenshots |
 | [Hide or shrink when paused](#feature-hide-when-paused) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide When Paused |
 | [Floating lyrics step aside in full screen](#feature-overlay-hide-in-full-screen) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Full Screen |
-| [Web lyrics: a phone or tablet as a second screen, or an OBS browser source](#feature-web-lyrics) | Settings › Lyrics Display › Web Lyrics › Web Lyrics |
+| [Web lyrics: a phone or tablet as a second screen, or an OBS browser source](#feature-web-lyrics) | Settings › Lyrics Display › Lyrics Window › Web Lyrics |
 | [YouTube Music and Spotify Web in your browser](#feature-web-players) | Settings › Player › Web |
 | [Skip YouTube Music ads automatically](#feature-skip-youtube-ads) | Settings › Player › Web › Skip YouTube Music Ads Automatically |
 | [Start and quit together with your player](#feature-player-linkage) | Settings › Player › Linkage › Launch When Lyrimuse Opens |
@@ -441,11 +441,12 @@ When a song reaches its 100th, 1,000th or 10,000th play, or your Last.fm total p
 
 ### Web lyrics: a phone or tablet as a second screen, or an OBS browser source
 
-Lyrics in a browser. Phones and tablets show exactly what the lyrics window shows; the OBS version has a transparent background and the same fonts and colors as the floating lyrics. Nothing is exposed to the network until you turn on "Allow Devices on Your Local Network"; then devices on the same Wi-Fi can scan a QR code to open it, and the link carries a random key.
+Lyrics in a web browser. Web Lyrics shows exactly what the lyrics window shows; OBS Output has a transparent background and the same fonts and colors as the floating lyrics. Each has its own port and local network setting. Both are available only on this Mac until you turn on "Allow Local Network Access"; then devices on the same network can scan a QR code to connect, using a link with an access key.
 
 - Off by default
-- Settings: Lyrics Display › Web Lyrics › Web Lyrics
-- Settings: Lyrics Display › Web Lyrics › Allow Devices on Your Local Network
+- Settings: Lyrics Display › Lyrics Window › Web Lyrics
+- Settings: Lyrics Display › Lyrics Window › Other Devices › Allow Local Network Access
+- Settings: Lyrics Display › Floating Lyrics › OBS Output
 
 <a id="section-players"></a>
 
@@ -724,7 +725,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 252 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 263 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -787,10 +788,21 @@ Every setting in the Settings window, by where it lives: 252 in all. Type a name
 ### Lyrics Display › Floating Lyrics
 
 - **Desktop Floating Lyrics**
+- **OBS Output**: Overlay the lyrics on your stream as a browser source. Recommended size: 1920 × 1080
+- **Browser Source URL**
+- **Other Devices**
 - **Width**
 - **Position**
 - **Screen**
 - **Reset to Defaults**: Content, layout, behavior, position and width are left alone
+
+### Lyrics Display › Floating Lyrics › Other Devices
+
+- **Allow Local Network Access**: Devices on the same network can connect with a link that includes an access key
+- **Access Link**
+- **Fallback Link (IP Address)**
+- **Reset Access Key**: Links you've already shared will stop working
+- **Port**: After changing it, update the URL in OBS
 
 ### Lyrics Display › Floating Lyrics › Theme
 
@@ -924,15 +936,6 @@ Every setting in the Settings window, by where it lives: 252 in all. Type a name
 - **Show Controls on Hover**: Hover over the menu bar lyrics to turn them into Previous / Play-Pause / Next; move away and the lyrics return. Doesn't take over once the lyrics shrink back to the icon after pausing, or when the slot is too narrow for three buttons. Clicking outside the three buttons still opens the panel.
 - **Show Title When No Lyrics**: While a song has no lyrics or is still being searched, keep the lyrics slot with the song title instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads
 
-### Lyrics Display › Web Lyrics
-
-- **Web Lyrics**: Show lyrics in a browser: on phones and tablets they match the Lyrics Window, as an OBS browser source they match the Floating Lyrics.
-- **Allow Devices on Your Local Network**: Phones and tablets on the same Wi-Fi can open it by scanning the QR code. The link includes a random key.
-- **Second Screen**
-- **Let Devices on Your Local Network Control Playback**: Tap the buttons on a phone or tablet to pause or skip, or tap a lyric to jump to it
-- **OBS Browser Source**
-- **Phones & Tablets**
-
 ### Lyrics Display › Touch Bar
 
 - **Touch Bar Lyrics**
@@ -969,7 +972,19 @@ Every setting in the Settings window, by where it lives: 252 in all. Type a name
 ### Lyrics Display › Lyrics Window
 
 - **Lyrics Window**
+- **Web Lyrics**: Show the Lyrics Window in a web browser
+- **Local Address**
+- **Other Devices**
 - **Reset to Defaults**
+
+### Lyrics Display › Lyrics Window › Other Devices
+
+- **Allow Local Network Access**: Devices on the same network can connect with a link that includes an access key
+- **Allow Remote Control**: Control playback and jump to lyrics from other devices
+- **Access Link**
+- **Fallback Link (IP Address)**
+- **Reset Access Key**: Links you've already shared will stop working
+- **Port**: After changing it, scan the QR code again to reconnect
 
 ### Lyrics Display › Lyrics Window › Background
 

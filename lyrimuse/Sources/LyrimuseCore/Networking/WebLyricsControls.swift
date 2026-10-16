@@ -1,20 +1,53 @@
 import CoreGraphics
 import Foundation
 
-/// 副屏网页发回来的一次点按:`{"tap":[u,v]}`,画面上的相对位置(0…1,左上为原点)。见 19 章决策 4。
-public enum WebLyricsTap {
-    public static func parse(_ payload: Data) -> CGPoint? {
+/// 副屏网页发回来的一次指针事件:`{"ptr":["d",u,v]}`,阶段是按下 `d` / 移动 `m` / 抬起 `u` / 取消 `c`,位置是画面上的
+/// 相对位置(左上为原点)。拖到画面外面的位置夹回 0…1;离得太远或不是数就不认。见 19 章决策 4。
+public struct WebLyricsPointer: Equatable, Sendable {
+    public enum Phase: String, Sendable { case down = "d", move = "m", up = "u", cancel = "c" }
+
+    public let phase: Phase
+    public let point: CGPoint
+
+    public init(phase: Phase, point: CGPoint) {
+        self.phase = phase
+        self.point = point
+    }
+
+    public static func parse(_ payload: Data) -> WebLyricsPointer? {
         guard payload.count <= 256,
               let object = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
-              let pair = object["tap"] as? [NSNumber], pair.count == 2 else { return nil }
-        let u = pair[0].doubleValue, v = pair[1].doubleValue
-        guard u.isFinite, v.isFinite, (0...1).contains(u), (0...1).contains(v) else { return nil }
-        return CGPoint(x: u, y: v)
+              let triple = object["ptr"] as? [Any], triple.count == 3,
+              let tag = triple[0] as? String, let phase = Phase(rawValue: tag),
+              let u = (triple[1] as? NSNumber)?.doubleValue, let v = (triple[2] as? NSNumber)?.doubleValue,
+              u.isFinite, v.isFinite, (-0.5...1.5).contains(u), (-0.5...1.5).contains(v) else { return nil }
+        return WebLyricsPointer(phase: phase, point: CGPoint(x: min(max(u, 0), 1), y: min(max(v, 0), 1)))
     }
 
     /// 本机打开的副屏一律能点;别的设备要「允许局域网设备控制播放」开着。
     public static func permits(remoteIsLoopback: Bool, lanControlEnabled: Bool) -> Bool {
         remoteIsLoopback || lanControlEnabled
+    }
+}
+
+/// 副屏网页发回来的一次滚轮 / 触控板滚动:`{"whl":[u,v,dy]}`,位置同 `WebLyricsPointer`,`dy` 是按画面高度算的
+/// 相对滚动量(往下滚为正)。一次最多算两屏。
+public struct WebLyricsWheel: Equatable, Sendable {
+    public let point: CGPoint
+    public let dy: Double
+
+    public init(point: CGPoint, dy: Double) {
+        self.point = point
+        self.dy = dy
+    }
+
+    public static func parse(_ payload: Data) -> WebLyricsWheel? {
+        guard payload.count <= 256,
+              let object = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
+              let triple = object["whl"] as? [NSNumber], triple.count == 3 else { return nil }
+        let u = triple[0].doubleValue, v = triple[1].doubleValue, dy = triple[2].doubleValue
+        guard u.isFinite, v.isFinite, dy.isFinite, (0...1).contains(u), (0...1).contains(v) else { return nil }
+        return WebLyricsWheel(point: CGPoint(x: u, y: v), dy: min(max(dy, -2), 2))
     }
 }
 

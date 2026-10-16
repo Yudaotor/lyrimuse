@@ -3,8 +3,9 @@ import Combine
 import LyrimuseCore
 import SwiftUI
 
-/// 网页歌词 OBS 那条的数据源(19 章):样式照悬浮歌词(字体、字号、粗细、已唱 / 未唱色、描边、背景卡、读音 / 译文开关,
-/// 颜色规则同 `OverlayPlayback`),歌词是播放协调器那份整首歌词,位置扣掉设备延迟(见 `WebLyricsObsPayload.obsTimelineMs`)。
+/// 网页歌词 OBS 那条的数据源(19 章):样式照悬浮歌词(字体、字号、四行字重、已唱 / 未唱色、描边、背景卡、读音 / 译文 /
+/// 下一句开关、卡拉OK、对齐方式、换行或滚动、行距、宽度、暂停时隐藏、换句动画,颜色规则同 `OverlayPlayback`),歌词按悬浮歌词断好的整首
+/// (长句拆分 / 短句合并之后;断句跟着悬浮歌词的字号和宽度变,所以悬浮歌词那一面换句时也重组一次,内容没变不重发),位置扣掉设备延迟(见 `WebLyricsObsPayload.obsTimelineMs`)。
 /// 没有网页连着时不订阅任何东西。
 @MainActor
 final class WebLyricsObsFeed {
@@ -53,10 +54,21 @@ final class WebLyricsObsFeed {
             s.$overlayFontWeight.map { _ in () }.eraseToAnyPublisher(),
             s.$overlayShowRomanization.map { _ in () }.eraseToAnyPublisher(),
             s.$overlayShowTranslation.map { _ in () }.eraseToAnyPublisher(),
+            s.$showNextLinePreview.map { _ in () }.eraseToAnyPublisher(),
+            s.$overlayLyricsKaraoke.map { _ in () }.eraseToAnyPublisher(),
+            s.$overlayDuetAlignmentOverride.map { _ in () }.eraseToAnyPublisher(),
+            s.$overlayLineOverflow.map { _ in () }.eraseToAnyPublisher(),
+            s.$overlayRomanizationSpacing.map { _ in () }.eraseToAnyPublisher(),
+            s.$overlayTranslationSpacing.map { _ in () }.eraseToAnyPublisher(),
+            s.$overlayNextLineSpacing.map { _ in () }.eraseToAnyPublisher(),
+            s.$overlayWidth.map { _ in () }.eraseToAnyPublisher(),
+            s.$hideWhenNotPlaying.map { _ in () }.eraseToAnyPublisher(),
+            s.$overlayLineChangeAnimation.map { _ in () }.eraseToAnyPublisher(),
         ]
         let trackInputs: [AnyPublisher<Void, Never>] = [
             p.$allLines.map { _ in () }.eraseToAnyPublisher(),
             p.$lyricsGapMarkers.map { _ in () }.eraseToAnyPublisher(),
+            p.$overlayLyrics.map(\.lineIndex).removeDuplicates().map { _ in () }.eraseToAnyPublisher(),
         ]
         let positionInputs: [AnyPublisher<Void, Never>] = [
             p.$anchor.map { _ in () }.eraseToAnyPublisher(),
@@ -121,17 +133,24 @@ final class WebLyricsObsFeed {
         let sung = (s.followsCoverArt ? p.artworkAccentColor : nil) ?? s.foregroundColor
         let unsung = (s.karaokeUnsungFollowsCoverArt ? p.artworkAccentColor?.opacity(WordKaraokeGradient.dimOpacity) : nil)
             ?? s.karaokeUnsungColor
+        let duet = WebLyricsObsPayload.duetInsets(overlayWidth: s.overlayWidth, fontSize: s.fontSize)
         return WebLyricsObsPayload.style(.init(
-            fontFamily: s.fontFamilyName, fontSize: s.fontSize, weight: WebLyricsObsPayload.cssWeight(s.overlayFontWeight),
+            fontFamily: s.fontFamilyName, fontSize: s.fontSize, weights: WebLyricsObsPayload.cssWeights(s.overlayFontWeight),
             sung: css(sung), unsung: css(unsung),
             stroke: s.textStrokeEnabled ? css(s.textStrokeColor) : nil,
             card: s.backgroundIsVisible ? css(s.backgroundColor) : nil,
-            showRomanization: s.overlayShowRomanization, showTranslation: s.overlayShowTranslation))
+            showRomanization: s.overlayShowRomanization, showTranslation: s.overlayShowTranslation,
+            showNextLine: s.showNextLinePreview, karaoke: s.overlayLyricsKaraoke,
+            alignment: s.overlayDuetAlignmentOverride, overflow: s.overlayLineOverflow,
+            spacing: s.overlayRowSpacing, width: s.overlayWidth, hideWhenPaused: s.hideWhenNotPlaying,
+            lineChangeAnimation: s.overlayLineChangeAnimation, duetStageInset: duet.stage, duetCenterInset: duet.center))
     }
 
     private static func makeTrack() -> String {
         let p = PlaybackCoordinator.shared
-        return WebLyricsObsPayload.track(id: p.title + "\u{1F}" + p.artist, lines: p.allLines, gaps: p.lyricsGapMarkers)
+        let segmented = LocalPlaybackSource.shared.overlayWindowLines()
+        return WebLyricsObsPayload.track(id: p.title + "\u{1F}" + p.artist, lines: segmented.isEmpty ? p.allLines : segmented,
+                                         gaps: p.lyricsGapMarkers)
     }
 
     private static func makePosition() -> String {

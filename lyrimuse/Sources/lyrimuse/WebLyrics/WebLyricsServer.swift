@@ -5,17 +5,29 @@ import Network
 import OSLog
 import SystemConfiguration
 
-/// 网页歌词的本地服务(19 章):`GET /` 给网页,`/ws` 升级成 WebSocket,副屏推画面帧、OBS 推歌词数据。
+/// 网页歌词、OBS 输出的本地服务(19 章),两个各自一个实例、各占一个端口:`GET /` 给页面,`/ws` 升级成 WebSocket,
+/// 网页那个推画面帧、OBS 那个推歌词数据。
 ///
-/// 开关在「歌词显示 › 网页歌词」:关着不监听。「允许局域网设备访问」关着时只绑 127.0.0.1,别的设备连不上、
-/// 也不经过系统防火墙;开着时绑所有网卡,别的设备的请求要带链接里的密钥。端口固定,被占用就报错,不换端口:
-/// OBS 里填好的地址要一直有效。
+/// 两个各管各的:开关、「允许局域网设备访问」、密钥、端口都分开存(网页在「歌词显示 › 歌词窗口」,OBS 在
+/// 「歌词显示 › 悬浮歌词」)。局域网关着时只绑 127.0.0.1,别的设备连不上、也不经过系统防火墙;开着时绑所有网卡,
+/// 别的设备的请求要带链接里的密钥。端口被占用就报错,不自动换:OBS 里填好的地址、手机上存的链接要一直有效;
+/// 两个端口相同时都不监听。换了密钥就断开别的设备的连接。
 @MainActor
 final class WebLyricsServer: ObservableObject {
-    static let shared = WebLyricsServer()
-    static let port: UInt16 = 3939
+    enum Channel {
+        case screen
+        case obs
+    }
+
+    static let screen = WebLyricsServer(channel: .screen)
+    static let obs = WebLyricsServer(channel: .obs)
     /// 同时连着的连接上限(含还没升级的普通请求)。
     static let maxConnections = 8
+
+    static func startAll() {
+        screen.start()
+        obs.start()
+    }
 
     enum State: Equatable {
         case off
@@ -24,59 +36,118 @@ final class WebLyricsServer: ObservableObject {
         case failed(String)
     }
 
+    let channel: Channel
     @Published private(set) var state: State = .off
-    /// 此刻连着的网页(副屏 + OBS)。
+    /// 此刻连着的页面。
     @Published private(set) var viewerCount = 0
 
     let screens = WebLyricsScreenHub()
-    let obs = WebLyricsObsFeed()
+    let obsFeed = WebLyricsObsFeed()
 
     private var listener: NWListener?
     private var listenerLAN = false
+    private var listenerPort = 0
     private var connections: [ObjectIdentifier: WebLyricsConnection] = [:]
     private var subs: [AnyCancellable] = []
     private var started = false
     private let log = Logger(subsystem: "me.yudaotor.lyrimuse", category: "web-lyrics")
 
-    private init() {}
+    private init(channel: Channel) {
+        self.channel = channel
+    }
+
+    // MARK: - 这一个的设置
+
+    var port: Int {
+        let s = AppSettings.shared
+        return channel == .screen ? s.webLyricsPort : s.obsLyricsPort
+    }
+
+    var token: String {
+        let s = AppSettings.shared
+        return channel == .screen ? s.webLyricsToken : s.obsLyricsToken
+    }
+
+    var allowsLAN: Bool {
+        let s = AppSettings.shared
+        return channel == .screen ? s.webLyricsAllowLAN : s.obsLyricsAllowLAN
+    }
+
+    /// 另一个服务此刻占着的端口(开着才算)。
+    private static func otherPort(of channel: Channel) -> Int? {
+        let s = AppSettings.shared
+        switch channel {
+        case .screen: return s.obsLyricsEnabled ? s.obsLyricsPort : nil
+        case .obs: return s.webLyricsEnabled ? s.webLyricsPort : nil
+        }
+    }
 
     func start() {
         guard !started else { return }
         started = true
         let s = AppSettings.shared
+        let enabled = channel == .screen ? s.$webLyricsEnabled : s.$obsLyricsEnabled
+        let lan = channel == .screen ? s.$webLyricsAllowLAN : s.$obsLyricsAllowLAN
+        let port = channel == .screen ? s.$webLyricsPort : s.$obsLyricsPort
+        let token = channel == .screen ? s.$webLyricsToken : s.$obsLyricsToken
+        // 另一个的开关和端口也要听:两边端口撞了时谁都不监听,改开之后接着起来。
+        let other = channel == .screen
+            ? Publishers.CombineLatest(s.$obsLyricsEnabled, s.$obsLyricsPort).eraseToAnyPublisher()
+            : Publishers.CombineLatest(s.$webLyricsEnabled, s.$webLyricsPort).eraseToAnyPublisher()
         subs = [
-            Publishers.CombineLatest(s.$webLyricsEnabled, s.$webLyricsAllowLAN)
-                .removeDuplicates { $0 == $1 }
-                .sink { [weak self] enabled, lan in self?.reconcile(enabled: enabled, lan: lan) },
+            Publishers.CombineLatest4(enabled, lan, port, other)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] enabled, lan, port, _ in self?.reconcile(enabled: enabled, lan: lan, port: port) },
+            token.dropFirst().removeDuplicates()
+                .sink { [weak self] _ in self?.dropRemoteConnections() },
         ]
     }
 
-    /// 手机、平板打开的地址:优先用本机的局域网 IPv4(安卓浏览器不一定认 `.local`)。没有局域网时为 nil。
-    static func lanURL(token: String) -> URL? {
-        guard let ip = LocalNetworkAddress.primaryIPv4() else { return nil }
-        return URL(string: "http://\(ip):\(port)/?k=\(token)")
+    // MARK: - 链接
+
+    /// 这台 Mac 自己打开的地址(回环不要密钥)。
+    var localURL: URL { WebLyricsLinks.url(host: "localhost", port: port)! }
+
+    /// 铺一层棋盘格底,OBS 页在普通浏览器里也看得见效果。
+    var previewURL: URL { WebLyricsLinks.url(host: "localhost", port: port, preview: true)! }
+
+    /// 别的设备打开的地址。`.local` 那条换了 IP 也一直有效,二维码用它;IP 那条给认不了 `.local` 的设备
+    /// (安卓浏览器不一定认,有的公共 Wi-Fi 拦局域网广播)。拿不到名字 / 没有局域网时为 nil。
+    var lanHostURL: URL? {
+        guard let name = LocalNetworkAddress.localHostNames().first else { return nil }
+        return WebLyricsLinks.url(host: name, port: port, token: token)
     }
 
-    /// 这台 Mac 自己打开副屏的地址(回环不要密钥)。
-    static var screenURL: URL { URL(string: "http://localhost:\(port)/")! }
-
-    static var obsURL: URL { URL(string: "http://localhost:\(port)/?obs=1")! }
+    var lanIPURL: URL? {
+        guard let ip = LocalNetworkAddress.primaryIPv4() else { return nil }
+        return WebLyricsLinks.url(host: ip, port: port, token: token)
+    }
 
     // MARK: - 监听
 
-    private func reconcile(enabled: Bool, lan: Bool) {
+    private func reconcile(enabled: Bool, lan: Bool, port: Int) {
         guard enabled else {
             stopListening()
             state = .off
             return
         }
-        if listener != nil, listenerLAN == lan, case .running = state { return }
+        if Self.otherPort(of: channel) == port {
+            stopListening()
+            state = .portInUse
+            return
+        }
+        if listener != nil, listenerLAN == lan, listenerPort == port, case .running = state { return }
         stopListening()
-        startListening(lan: lan)
+        startListening(lan: lan, portNumber: port)
     }
 
-    private func startListening(lan: Bool) {
-        guard let port = NWEndpoint.Port(rawValue: Self.port) else { return }
+    /// 密钥换了:别的设备的连接全部断开(它们手里是旧链接,重连会被拦下);本机的不受影响。
+    private func dropRemoteConnections() {
+        for connection in Array(connections.values) where !connection.isLoopback { connection.close() }
+    }
+
+    private func startListening(lan: Bool, portNumber: Int) {
+        guard let port = NWEndpoint.Port(rawValue: UInt16(clamping: portNumber)) else { return }
         let params = NWParameters.tcp
         params.allowLocalEndpointReuse = true
         let made: NWListener
@@ -94,13 +165,14 @@ final class WebLyricsServer: ObservableObject {
         }
         listener = made
         listenerLAN = lan
+        listenerPort = portNumber
         made.stateUpdateHandler = { [weak self, weak made] newState in
             MainActor.assumeIsolated {
                 guard let self, let made, self.listener === made else { return }
                 switch newState {
                 case .ready:
                     self.state = .running(lan: lan)
-                    self.log.info("listening on \(Self.port, privacy: .public) lan=\(lan, privacy: .public)")
+                    self.log.info("listening on \(portNumber, privacy: .public) lan=\(lan, privacy: .public) obs=\(self.channel == .obs, privacy: .public)")
                 case .failed(let error):
                     if case .posix(let code) = error, code == .EADDRINUSE {
                         self.state = .portInUse
@@ -143,7 +215,7 @@ final class WebLyricsServer: ObservableObject {
     func connectionClosed(_ connection: WebLyricsConnection) {
         guard connections.removeValue(forKey: ObjectIdentifier(connection)) != nil else { return }
         screens.remove(connection)
-        obs.remove(connection)
+        obsFeed.remove(connection)
         updateViewerCount()
     }
 
@@ -162,7 +234,6 @@ final class WebLyricsServer: ObservableObject {
             connection.respondAndClose(WebLyricsHTTP.response(status: 403, reason: "Forbidden"))
             return
         }
-        let token = AppSettings.shared.webLyricsToken
         guard WebLyricsAccess.permits(remoteIsLoopback: connection.isLoopback, lanEnabled: listenerLAN,
                                       token: token, query: request.query) else {
             connection.respondAndClose(WebLyricsHTTP.response(
@@ -170,10 +241,9 @@ final class WebLyricsServer: ObservableObject {
                 body: Data(WebLyricsPages.messagePage(L10n.t("链接无效或已失效")).utf8)))
             return
         }
-        let wantsObs = request.query["obs"] == "1"
         switch request.path {
         case "/":
-            let page = wantsObs ? WebLyricsPages.obsPage() : WebLyricsPages.screenPage()
+            let page = channel == .obs ? WebLyricsPages.obsPage() : WebLyricsPages.screenPage()
             connection.respondAndClose(WebLyricsHTTP.response(
                 status: 200, reason: "OK", contentType: "text/html; charset=utf-8", body: Data(page.utf8),
                 extraHeaders: [("Content-Security-Policy",
@@ -184,14 +254,15 @@ final class WebLyricsServer: ObservableObject {
                 return
             }
             connection.upgrade(key: key)
-            if wantsObs {
+            if channel == .obs {
                 connection.role = .obs
-                obs.add(connection)
+                obsFeed.add(connection)
             } else {
                 let viewport = WebLyricsViewport(query: request.query)
                 connection.role = .screen(viewport)
                 screens.add(connection, viewport: viewport)
             }
+            connection.sendText(WebLyricsPages.helloMessage())
             updateViewerCount()
         case "/favicon.ico":
             connection.respondAndClose(WebLyricsHTTP.response(status: 204, reason: "No Content"))
@@ -297,7 +368,7 @@ final class WebLyricsConnection {
                     case WebSocketFrame.Opcode.ping.rawValue:
                         nw.send(content: WebSocketFrame.encode(frame.payload, opcode: .pong), completion: .contentProcessed { _ in })
                     case WebSocketFrame.Opcode.text.rawValue:
-                        if case .screen = role { server?.screens.tap(self, payload: frame.payload) }
+                        if case .screen = role { server?.screens.pointer(self, payload: frame.payload) }
                     default:
                         break
                     }
@@ -317,10 +388,11 @@ final class WebLyricsConnection {
         nw.send(content: WebLyricsHTTP.upgradeResponse(key: key), completion: .contentProcessed { _ in })
     }
 
-    func sendFrame(_ jpeg: Data) {
+    /// `frame` 已经是包好的 WebSocket 帧(`WebLyricsFrameSource` 在出帧线程上包的),这里不再编码。
+    func sendEncodedFrame(_ frame: Data) {
         guard !closed, !frameInFlight else { return }
         frameInFlight = true
-        nw.send(content: WebSocketFrame.encode(jpeg, opcode: .binary), completion: .contentProcessed { [weak self] error in
+        nw.send(content: frame, completion: .contentProcessed { [weak self] error in
             MainActor.assumeIsolated {
                 self?.frameInFlight = false
                 if error != nil { self?.close() }

@@ -344,8 +344,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NowPlayingNotifier.shared.start()
         // Discord「正在听」(默认关,设置 › Discord)。
         DiscordPresenceController.shared.start()
-        // 网页歌词的本地服务(默认关,设置 › 歌词显示 › 网页歌词)。
-        WebLyricsServer.shared.start()
+        // 网页歌词、OBS 输出的本地服务(默认关,设置 › 歌词显示 › 歌词窗口 / 悬浮歌词)。
+        WebLyricsServer.startAll()
         // 捕获 openSettings/openWindow 这两个环境 action 的隐藏锚点窗口(见该文件注释)。
         MenuBarSceneActions.install()
 

@@ -125,10 +125,6 @@ public enum SettingsSearchCatalog {
     public static let touchBarToggleTitleKey = "触控栏歌词"
     /// 「快捷键」页「展开/收起触控栏歌词」那一行的标题。那一行只在有触控栏时出现,没有触控栏时设置搜索不收这一条。
     public static let touchBarHotkeyTitleKey = "展开/收起触控栏歌词"
-    /// 「歌词显示」页「网页歌词」那一段的分段取值(`AppearanceSettingsTab.Section.webLyrics`),同触控栏不是一个 `LyricsSurface`。
-    public static let webLyricsSectionValue = "webLyrics"
-    /// 那一段总开关的标题。
-    public static let webLyricsToggleTitleKey = "网页歌词"
 
     /// 面包屑里不是 L10n 键的品牌名(AccountDestination.title 对这几个直接返回字面量)。守卫核
     /// 键是否在 catalog 里时跳过它们。
@@ -206,15 +202,6 @@ public enum SettingsSearchCatalog {
                             sectionValue: touchBarSectionValue,
                             titleKey: title, subtitleKey: sub, keywords: kw,
                             pathKeys: ["歌词显示", "触控栏"] + (group.map { [$0] } ?? []))
-    }
-
-    /// 「歌词显示 › 网页歌词」那一段(19 章)。没有编辑台和抽屉,`drawer` 留空。
-    private static func webLyrics(_ title: String, sub: String? = nil, kw: [String] = []) -> SettingsSearchEntry {
-        SettingsSearchEntry(destination: .tab("appearance"),
-                            sectionKey: LyricsSurface.appearanceSectionStorageKey,
-                            sectionValue: webLyricsSectionValue,
-                            titleKey: title, subtitleKey: sub, keywords: kw,
-                            pathKeys: ["歌词显示", "网页歌词"])
     }
 
     private static func shortcut(_ title: String, sub: String? = nil, kw: [String] = []) -> SettingsSearchEntry {
@@ -303,6 +290,19 @@ public enum SettingsSearchCatalog {
 
         // ---- 歌词显示 › 悬浮歌词 ----
         surface(.overlay, "桌面悬浮歌词", kw: ["开关", "悬浮窗", "总开关"], inDrawer: false),
+        // 「OBS 输出」那张卡和它的「连接设置…」浮层(19 章),不在抽屉里。
+        surface(.overlay, "OBS 输出", sub: "作为浏览器源叠加到直播画面，建议尺寸 1920 × 1080",
+                kw: ["OBS", "直播", "推流", "浏览器源", "录屏", "开关"], inDrawer: false),
+        surface(.overlay, "浏览器源地址", kw: ["OBS", "链接", "预览", "直播", "localhost"], inDrawer: false),
+        surface(.overlay, "其他设备", kw: ["OBS", "推流", "另一台电脑", "双机", "直播", "连接设置"], inDrawer: false),
+        surface(.overlay, "允许局域网访问", sub: "同一网络中的设备可通过带密钥的链接访问",
+                kw: ["局域网", "LAN", "OBS"], group: "其他设备", inDrawer: false),
+        surface(.overlay, "访问链接", kw: ["OBS", ".local", "拷贝", "链接"], group: "其他设备", inDrawer: false),
+        surface(.overlay, "备用链接（IP 地址）", kw: ["IP", "OBS"], group: "其他设备", inDrawer: false),
+        surface(.overlay, "重置访问密钥", sub: "已分享的链接将失效", kw: ["密钥", "重新生成", "OBS"],
+                group: "其他设备", inDrawer: false),
+        surface(.overlay, "端口", sub: "更改后需同步修改 OBS 中的地址", kw: ["port", "3940", "占用", "OBS"],
+                group: "其他设备", inDrawer: false),
         surface(.overlay, "配色主题", kw: ["预设", "默认", "墨字白边", "卡拉OK", "夜幕卡片", "磨砂玻璃", "纸白卡片", "霓虹"], group: "主题"),
         surface(.overlay, "我的配色主题", kw: ["自存", "保存主题", "改名", "覆盖"], group: "主题"),
         surface(.overlay, "字体", kw: ["字体族", "font"], group: "字形"),
@@ -391,16 +391,6 @@ public enum SettingsSearchCatalog {
         surface(.menuBar, "无歌词时显示歌名", kw: ["歌名", "兜底", "没有歌词"], group: "行为"),
         surface(.menuBar, "恢复默认", sub: "不含宽度和总开关", kw: ["重置"]),
 
-        // ---- 歌词显示 › 网页歌词 ----
-        webLyrics(webLyricsToggleTitleKey, sub: "在浏览器中显示歌词：手机、平板与歌词窗口一致，OBS 浏览器源与悬浮歌词一致",
-                  kw: ["网页", "浏览器", "副屏", "手机", "平板", "iPad", "OBS", "直播", "web", "开关"]),
-        webLyrics("允许局域网设备访问", sub: "同一 Wi-Fi 下的手机、平板扫描二维码即可打开，链接带有随机密钥",
-                  kw: ["局域网", "手机", "平板", "二维码", "Wi-Fi", "LAN"]),
-        webLyrics("副屏画面", kw: ["副屏", "浏览器", "打开", "预览", "localhost"]),
-        webLyrics("允许局域网设备控制播放", sub: "在手机、平板上点按钮暂停、切歌，点歌词跳到那一句",
-                  kw: ["控制", "遥控", "播放", "暂停", "切歌", "按钮", "手机", "平板"]),
-        webLyrics("OBS 浏览器源", kw: ["OBS", "直播", "浏览器源", "推流", "链接"]),
-        webLyrics("手机、平板", kw: ["手机", "平板", "iPad", "副屏", "二维码", "链接"]),
 
         // ---- 歌词显示 › 触控栏 ----
         touchBar(touchBarToggleTitleKey, kw: ["Touch Bar", "触控栏", "功能栏", "Control Strip", "开关"]),
@@ -430,6 +420,19 @@ public enum SettingsSearchCatalog {
         // ---- 歌词显示 › 歌词窗口 ----
         // 预览下面那张卡「歌词窗口 [打开]」。搜「打开歌词窗口」另有快捷键那一条,各跳各的。
         lyricsWindow("歌词窗口", kw: ["打开", "打开歌词窗口", "窗口"]),
+        // 「网页歌词」那张卡和它的「连接设置…」浮层(19 章)。
+        lyricsWindow("网页歌词", sub: "在浏览器中显示歌词窗口",
+                     kw: ["网页", "浏览器", "副屏", "手机", "平板", "iPad", "web", "开关"]),
+        lyricsWindow("本机地址", kw: ["网页", "浏览器", "打开", "localhost"]),
+        lyricsWindow("其他设备", kw: ["手机", "平板", "iPad", "副屏", "二维码", "链接", ".local", "连接设置"]),
+        lyricsWindow("允许局域网访问", sub: "同一网络中的设备可通过带密钥的链接访问",
+                     kw: ["局域网", "Wi-Fi", "LAN", "二维码", "手机", "平板"], group: "其他设备"),
+        lyricsWindow("允许远程控制", sub: "可在其他设备上控制播放、跳转歌词",
+                     kw: ["控制", "遥控", "播放", "暂停", "切歌", "按钮", "手机"], group: "其他设备"),
+        lyricsWindow("访问链接", kw: ["二维码", "网页", ".local", "拷贝", "链接"], group: "其他设备"),
+        lyricsWindow("备用链接（IP 地址）", kw: ["IP", "安卓", "Android", "打不开"], group: "其他设备"),
+        lyricsWindow("重置访问密钥", sub: "已分享的链接将失效", kw: ["密钥", "重新生成", "失效", "安全", "链接"], group: "其他设备"),
+        lyricsWindow("端口", sub: "更改后需重新扫码连接", kw: ["port", "3939", "占用", "网页"], group: "其他设备"),
         lyricsWindow("背景", sub: "歌词窗口的背景：跟随封面／纯色／渐变／毛玻璃",
                      kw: ["背景", "跟随封面", "纯色", "渐变", "颜色", "不透明度", "透明"],
                      group: "背景"),

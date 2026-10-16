@@ -3038,6 +3038,15 @@ public final class LyricsSyncEngine {
         return (surfaceBreaks[surface]?.segments ?? []).indices.compactMap { segmentLine(surface, $0) }
     }
 
+    /// 一个展示面断好的全部段,带每段的开始时刻(歌词时间轴,同 `allLines` 的 `timeMs`)。网页歌词 OBS 那条照悬浮歌词断句用。
+    public func surfaceWindowLines(_ surface: LineBreakSurface, idPrefix: String) -> [LyricsWindowLine] {
+        extendSegments(surface, coveringMs: nil)
+        guard let starts = surfaceBreaks[surface]?.starts else { return [] }
+        return starts.indices.compactMap { k in
+            segmentLine(surface, k).map { LyricsWindowLine(id: "\(idPrefix)-s\(k)", timeMs: starts[k], line: $0) }
+        }
+    }
+
     /// 一个展示面整首里最宽的一行:每一段的主行,和这个面显示的下一句 / 译文 / 罗马音那一行,按它的预算量,
     /// 取最宽的。没开重新断句、那个面没报宽度、没有歌词时为 nil。菜单栏自适应宽度拿它给整首定一个槽宽。
     /// 只用断句时的那份文字、译文、罗马音量,不建显示行(建显示行要算读音和逐词分组)。

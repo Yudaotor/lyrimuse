@@ -1114,9 +1114,9 @@
             "zh-Hant": "網頁歌詞：手機、平板當副螢幕，或作為 OBS 瀏覽器來源"
           },
           "desc": {
-            "zh-Hans": "在浏览器里看歌词。手机、平板上显示的就是歌词窗口的画面；OBS 那条背景透明，字体和颜色跟悬浮歌词一样。只用这台 Mac 时不对网络开放；打开「允许局域网设备访问」后，同一 Wi-Fi 下的设备扫码即可打开，链接带有随机密钥。",
-            "en": "Lyrics in a browser. Phones and tablets show exactly what the lyrics window shows; the OBS version has a transparent background and the same fonts and colors as the floating lyrics. Nothing is exposed to the network until you turn on \"Allow Devices on Your Local Network\"; then devices on the same Wi-Fi can scan a QR code to open it, and the link carries a random key.",
-            "zh-Hant": "在瀏覽器裡看歌詞。手機、平板上顯示的就是歌詞視窗的畫面；OBS 那條背景透明，字體和顏色跟浮動歌詞一樣。只用這台 Mac 時不對網路開放；打開「允許區域網路裝置存取」後，同一 Wi-Fi 下的裝置掃描 QR Code 即可開啟，連結帶有隨機金鑰。"
+            "zh-Hans": "在浏览器中显示歌词。网页歌词显示的是歌词窗口的画面；OBS 输出背景透明，字体和颜色与悬浮歌词一致。两者各自设置端口与局域网访问；默认只对本机开放，开启「允许局域网访问」后，同一网络中的设备可扫码打开，链接带有访问密钥。",
+            "en": "Lyrics in a web browser. Web Lyrics shows exactly what the lyrics window shows; OBS Output has a transparent background and the same fonts and colors as the floating lyrics. Each has its own port and local network setting. Both are available only on this Mac until you turn on \"Allow Local Network Access\"; then devices on the same network can scan a QR code to connect, using a link with an access key.",
+            "zh-Hant": "在瀏覽器中顯示歌詞。網頁歌詞顯示的是歌詞視窗的畫面；OBS 輸出背景透明，字體和顏色與浮動歌詞一致。兩者各自設定連接埠與區域網路存取；預設只對本機開放，開啟「允許區域網路存取」後，同一網路中的裝置可掃描 QR Code 開啟，連結帶有存取金鑰。"
           },
           "default": "off",
           "check": {
@@ -1125,13 +1125,19 @@
           "settings": [
             [
               "歌词显示",
-              "网页歌词",
+              "歌词窗口",
               "网页歌词"
             ],
             [
               "歌词显示",
-              "网页歌词",
-              "允许局域网设备访问"
+              "歌词窗口",
+              "其他设备",
+              "允许局域网访问"
+            ],
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "OBS 输出"
             ]
           ]
         }

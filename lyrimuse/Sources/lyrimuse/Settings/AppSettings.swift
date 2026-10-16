@@ -221,6 +221,12 @@ final class AppSettings: ObservableObject {
         static let webLyricsAllowLAN = "np:webLyricsAllowLAN"
         static let webLyricsAllowLANControl = "np:webLyricsAllowLANControl"
         static let webLyricsToken = "np:webLyricsToken"
+        static let webLyricsPort = "np:webLyricsPort"
+        // OBS 输出(WebLyricsServer.obs,19 章):跟网页歌词各管各的开关、局域网、密钥、端口。
+        static let obsLyricsEnabled = "np:obsLyricsEnabled"
+        static let obsLyricsAllowLAN = "np:obsLyricsAllowLAN"
+        static let obsLyricsToken = "np:obsLyricsToken"
+        static let obsLyricsPort = "np:obsLyricsPort"
         static let discordBadge = "np:discordBadge"
         static let discordButtonListen = "np:discordButtonListen"
         static let discordButtonGetLyrimuse = "np:discordButtonGetLyrimuse"
@@ -793,8 +799,38 @@ final class AppSettings: ObservableObject {
     @Published var webLyricsAllowLANControl: Bool {
         didSet { defaults.set(webLyricsAllowLANControl, forKey: Keys.webLyricsAllowLANControl) }
     }
-    /// 局域网链接里的密钥,第一次用到时生成,之后不变(手机上存的书签一直有效)。本机专属,不进配置备份。
+    /// 局域网链接里的密钥,第一次用到时生成,之后不变(手机上存的书签一直有效),只在点「重新生成链接」时换。本机专属,不进配置备份。
     @Published private(set) var webLyricsToken: String
+    /// 本地服务的端口(`WebLyricsPort`)。
+    @Published var webLyricsPort: Int {
+        didSet { defaults.set(webLyricsPort, forKey: Keys.webLyricsPort) }
+    }
+
+    /// 换一把新密钥:旧的局域网链接立刻失效,连着的别的设备由 `WebLyricsServer` 断开。
+    func regenerateWebLyricsToken() {
+        let token = WebLyricsAccess.makeToken()
+        defaults.set(token, forKey: Keys.webLyricsToken)
+        webLyricsToken = token
+    }
+    /// OBS 输出(`WebLyricsServer.obs`):在「歌词显示 › 悬浮歌词」那张卡里开。默认关。
+    @Published var obsLyricsEnabled: Bool {
+        didSet { defaults.set(obsLyricsEnabled, forKey: Keys.obsLyricsEnabled) }
+    }
+    /// 别的电脑上的 OBS 能不能打开。关着时只绑 127.0.0.1。
+    @Published var obsLyricsAllowLAN: Bool {
+        didSet { defaults.set(obsLyricsAllowLAN, forKey: Keys.obsLyricsAllowLAN) }
+    }
+    /// OBS 局域网链接里的密钥,同 `webLyricsToken` 但另一把。本机专属,不进配置备份。
+    @Published private(set) var obsLyricsToken: String
+    @Published var obsLyricsPort: Int {
+        didSet { defaults.set(obsLyricsPort, forKey: Keys.obsLyricsPort) }
+    }
+
+    func regenerateObsLyricsToken() {
+        let token = WebLyricsAccess.makeToken()
+        defaults.set(token, forKey: Keys.obsLyricsToken)
+        obsLyricsToken = token
+    }
     /// Discord「正在听」(`DiscordPresenceController`)。默认关。
     @Published var discordPresenceEnabled: Bool {
         didSet { defaults.set(discordPresenceEnabled, forKey: Keys.discordPresenceEnabled) }
@@ -2108,6 +2144,20 @@ final class AppSettings: ObservableObject {
         webLyricsEnabled = (defaults.object(forKey: Keys.webLyricsEnabled) as? Bool) ?? false
         webLyricsAllowLAN = (defaults.object(forKey: Keys.webLyricsAllowLAN) as? Bool) ?? false
         webLyricsAllowLANControl = (defaults.object(forKey: Keys.webLyricsAllowLANControl) as? Bool) ?? false
+        webLyricsPort = WebLyricsPort.clamped((defaults.object(forKey: Keys.webLyricsPort) as? Int) ?? WebLyricsPort.standard)
+        // 拆开之前 OBS 跟着网页歌词的总开关走:没存过时取那个开关,升级上来的用法不变。
+        obsLyricsEnabled = (defaults.object(forKey: Keys.obsLyricsEnabled) as? Bool)
+            ?? (defaults.object(forKey: Keys.webLyricsEnabled) as? Bool) ?? false
+        obsLyricsAllowLAN = (defaults.object(forKey: Keys.obsLyricsAllowLAN) as? Bool) ?? false
+        obsLyricsPort = WebLyricsPort.clamped((defaults.object(forKey: Keys.obsLyricsPort) as? Int) ?? WebLyricsPort.obsStandard,
+                                              fallback: WebLyricsPort.obsStandard)
+        if let token = defaults.string(forKey: Keys.obsLyricsToken), !token.isEmpty {
+            obsLyricsToken = token
+        } else {
+            let token = WebLyricsAccess.makeToken()
+            defaults.set(token, forKey: Keys.obsLyricsToken)
+            obsLyricsToken = token
+        }
         if let token = defaults.string(forKey: Keys.webLyricsToken), !token.isEmpty {
             webLyricsToken = token
         } else {

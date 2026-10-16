@@ -221,6 +221,40 @@ public enum WebLyricsAccess {
     }
 }
 
+/// 本地服务的端口:网页默认 3939、OBS 默认 3940,各自可在设置里改成 1024…65535 之间的别的值,两个不能相同。
+/// 被占用时只报错、不自动换(OBS 里填好的地址、手机上存的链接要一直有效)。
+public enum WebLyricsPort {
+    public static let standard = 3939
+    public static let obsStandard = 3940
+    public static let range = 1024...65535
+
+    /// 输入框里的文字 → 端口;不是这个范围里的整数时为 nil。
+    public static func parse(_ text: String) -> Int? {
+        guard let value = Int(text.trimmingCharacters(in: .whitespaces)), range.contains(value) else { return nil }
+        return value
+    }
+
+    /// 存着的值夹回范围,读坏了按默认。
+    public static func clamped(_ value: Int, fallback: Int = standard) -> Int { range.contains(value) ? value : fallback }
+}
+
+/// 网页歌词、OBS 两个服务的链接。`host` 是 `localhost`、局域网 IP 或 `<本地主机名>.local`;本机回环不带密钥,别的设备带。
+/// 两个服务各占一个端口,根路径就是各自的页面,不靠查询串区分。
+public enum WebLyricsLinks {
+    public static func url(host: String, port: Int, token: String? = nil, preview: Bool = false) -> URL? {
+        var items: [URLQueryItem] = []
+        if preview { items.append(URLQueryItem(name: "preview", value: "1")) }
+        if let token { items.append(URLQueryItem(name: "k", value: token)) }
+        var parts = URLComponents()
+        parts.scheme = "http"
+        parts.host = host
+        parts.port = port
+        parts.path = "/"
+        parts.queryItems = items.isEmpty ? nil : items
+        return parts.url
+    }
+}
+
 /// 副屏画面的尺寸:网页报上来的视口(点)和像素倍数,夹进能画、能推的范围。
 public struct WebLyricsViewport: Hashable, Sendable {
     public let width: Int

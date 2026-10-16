@@ -2292,7 +2292,7 @@ func runPlaybackPositionTests() {
         let probeSrc = src("LyrimuseCore/Local/BrowserPositionProbe.swift")
         let coordinatorSrc = src("lyrimuse/PlaybackCoordinator.swift")
         let panelSrc = src("lyrimuse/MenuBar/MenuBarPanel.swift")
-        let windowSrc = src("lyrimuse/UI/LyricsWindowView.swift")
+        let menuModelSrc = src("lyrimuse/UI/LyricsMoreMenuModel.swift")
         expectEqual(probeSrc.contains("set active tab index of window wi to ti")
                     && probeSrc.contains("set current tab of window wi to tab ti of window wi"), true,
                     "来源角标(契约): 翻标签页的两种方言(Chromium active tab index / Safari current tab)都在")
@@ -2300,7 +2300,7 @@ func runPlaybackPositionTests() {
                     && coordinatorSrc.contains("self?.openResolvedPlayerApp()"), true,
                     "来源角标(契约): 网页平台先翻标签页,翻不到退回整 App 激活")
         expectEqual(panelSrc.contains("openResolvedPlayer()")
-                    && windowSrc.contains("openResolvedPlayer()"), true,
+                    && menuModelSrc.contains("openResolvedPlayer()"), true,
                     "来源角标(契约): 菜单栏角标与歌词窗口「在 XX 中显示」都走统一入口")
         // Safari 上报 com.apple.WebKit.GPU:翻标签页和整 App 激活两条路都得先折回宿主,
         // 漏任一处,点 Safari 里的 YouTube Music 角标就毫无反应。

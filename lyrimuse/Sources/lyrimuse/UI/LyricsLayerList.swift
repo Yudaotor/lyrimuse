@@ -596,6 +596,30 @@ final class LyricsLayerListView: NSView {
                 setDepth(footer.layer, opacity: opacity, blur: blur, opacityCurve: curve, blurCurve: curve)
             }
         }
+        updateDetachedRowVisibility()
+    }
+
+    /// 整首的行都在树里,离屏渲染每帧要把每一行(连同景深模糊)走一遍:离当前视口一屏以外的行藏起来,
+    /// 换句滚动的那一屏余量照样画得到。挂在窗口上时不藏。
+    private func updateDetachedRowVisibility() {
+        guard rendersDetached else { return }
+        let viewport = bounds.height
+        for (i, r) in rows.enumerated() {
+            let top = rowY.indices.contains(i) ? rowY[i] : 0
+            r.layer.isHidden = top + r.size.height < scrollY - viewport || top > scrollY + 2 * viewport
+        }
+    }
+
+    /// 不挂窗口时手指拖动歌词(网页歌词副屏):跟滚轮一样直接挪滚动位置,下一次换句照常滚回当前行。
+    func scroll(by dy: CGFloat) {
+        let maxY = max(0, document.frame.height - scrollView.contentView.bounds.height)
+        scrollTo(min(max(scrollY + dy, 0), maxY))
+        updateDetachedRowVisibility()
+    }
+
+    /// 不挂窗口时滚动指示条跟副屏的「闲置隐藏」走(挂在窗口上时用 `bindChromeFade`)。
+    func setIndicatorVisible(_ visible: Bool) {
+        fadeIndicator(visible: visible)
     }
 
     private enum DepthCurve { case instant, line, hover }

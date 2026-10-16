@@ -1448,7 +1448,9 @@ func runCreditLineTests() {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let windowView = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"), encoding: .utf8)) ?? ""
         let idleView = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/UI/IdleStandbyView.swift"), encoding: .utf8)) ?? ""
-        expectEqual(windowView.contains("? MusicCatalogSearch.albumPage(") && windowView.contains("album: playback.album,"), true,
+        let menuModel = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/UI/LyricsMoreMenuModel.swift"),
+                                     encoding: .utf8)) ?? ""
+        expectEqual(menuModel.contains("? MusicCatalogSearch.albumPage(") && windowView.contains("album: playback.album,"), true,
                     "前往专辑: 先用缓存里的曲目链接,当前这首带上专辑名")
         expectEqual(idleView.components(separatedBy: "onOpenAlbum(lastTitle, lastArtist, lastAlbum)").count - 1, 2,
                     "前往专辑: 停播页上次那首的两颗按钮都带上专辑名")

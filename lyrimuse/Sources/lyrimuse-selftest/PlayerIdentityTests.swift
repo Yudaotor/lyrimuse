@@ -924,7 +924,7 @@ func runPlayerIdentityTests() {
             case adSharesTrackIdentity = "广告跟正片共用一首的身份(LocalPlaybackSource.adSharesTrackIdentity)"
             case systemNeverHasArtwork = "系统会话里从来没有封面(CoverArtReplacementGate.systemNeverHasArtwork)"
             case spatialAudioOffset = "叠加空间音频版的歌词偏移(LocalPlaybackSource.spatialAudioOffsetMs)"
-            case catalogMenuRows = "歌词窗口「⋯」菜单里本平台的目录入口(App 侧 LyricsWindowView.platformMenuRows)"
+            case catalogMenuRows = "歌词窗口「⋯」菜单里本平台的目录入口(App 侧 LyricsMoreMenuModel.platformRows)"
         }
         let table: [PlaybackPlayer: (songLink: PlatformLinks.Platform?, on: Set<On>)] = [
             .appleMusic: (.appleMusic, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
@@ -1068,8 +1068,9 @@ func runPlayerIdentityTests() {
                     "决定表(源码): snapshotWhileChannelBroken 的 switch(连同 default 问的那一家)就是表里「\(On.channelFallback.rawValue)」那几家")
         expectEqual(named(body("static func canResume(_ player: PlaybackPlayer) -> Bool {", in: idle)), players(.resume),
                     "决定表(源码): IdlePlaybackActions.canResume 点名的就是表里「\(On.resume.rawValue)」那几家")
-        expectEqual(named(body("private var platformMenuRows: [PlatformMenuRow] {", in: window)), players(.catalogMenuRows),
-                    "决定表(源码): LyricsWindowView.platformMenuRows 点名的就是表里「\(On.catalogMenuRows.rawValue)」那几家")
+        expectEqual(named(body("var platformRows: [PlatformRow] {", in: code("lyrimuse/UI/LyricsMoreMenuModel.swift"))),
+                    players(.catalogMenuRows),
+                    "决定表(源码): LyricsMoreMenuModel.platformRows 点名的就是表里「\(On.catalogMenuRows.rawValue)」那几家")
     }
 
     // ---- 播放器多选:Set<PlaybackPlayer>.soleExplicitPlayer ----

@@ -293,6 +293,79 @@
       "dest" : "tab:appearance",
       "path" : [
         "歌词显示",
+        "悬浮歌词"
+      ],
+      "subtitle" : "作为浏览器源叠加到直播画面，建议尺寸 1920 × 1080",
+      "title" : "OBS 输出"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词"
+      ],
+      "title" : "浏览器源地址"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词"
+      ],
+      "title" : "其他设备"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "其他设备"
+      ],
+      "subtitle" : "同一网络中的设备可通过带密钥的链接访问",
+      "title" : "允许局域网访问"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "其他设备"
+      ],
+      "title" : "访问链接"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "其他设备"
+      ],
+      "title" : "备用链接（IP 地址）"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "其他设备"
+      ],
+      "subtitle" : "已分享的链接将失效",
+      "title" : "重置访问密钥"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "其他设备"
+      ],
+      "subtitle" : "更改后需同步修改 OBS 中的地址",
+      "title" : "端口"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
         "悬浮歌词",
         "主题"
       ],
@@ -1020,57 +1093,6 @@
       "dest" : "tab:appearance",
       "path" : [
         "歌词显示",
-        "网页歌词"
-      ],
-      "subtitle" : "在浏览器中显示歌词：手机、平板与歌词窗口一致，OBS 浏览器源与悬浮歌词一致",
-      "title" : "网页歌词"
-    },
-    {
-      "dest" : "tab:appearance",
-      "path" : [
-        "歌词显示",
-        "网页歌词"
-      ],
-      "subtitle" : "同一 Wi-Fi 下的手机、平板扫描二维码即可打开，链接带有随机密钥",
-      "title" : "允许局域网设备访问"
-    },
-    {
-      "dest" : "tab:appearance",
-      "path" : [
-        "歌词显示",
-        "网页歌词"
-      ],
-      "title" : "副屏画面"
-    },
-    {
-      "dest" : "tab:appearance",
-      "path" : [
-        "歌词显示",
-        "网页歌词"
-      ],
-      "subtitle" : "在手机、平板上点按钮暂停、切歌，点歌词跳到那一句",
-      "title" : "允许局域网设备控制播放"
-    },
-    {
-      "dest" : "tab:appearance",
-      "path" : [
-        "歌词显示",
-        "网页歌词"
-      ],
-      "title" : "OBS 浏览器源"
-    },
-    {
-      "dest" : "tab:appearance",
-      "path" : [
-        "歌词显示",
-        "网页歌词"
-      ],
-      "title" : "手机、平板"
-    },
-    {
-      "dest" : "tab:appearance",
-      "path" : [
-        "歌词显示",
         "触控栏"
       ],
       "title" : "触控栏歌词"
@@ -1241,6 +1263,89 @@
         "歌词窗口"
       ],
       "title" : "歌词窗口"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口"
+      ],
+      "subtitle" : "在浏览器中显示歌词窗口",
+      "title" : "网页歌词"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口"
+      ],
+      "title" : "本机地址"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口"
+      ],
+      "title" : "其他设备"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "其他设备"
+      ],
+      "subtitle" : "同一网络中的设备可通过带密钥的链接访问",
+      "title" : "允许局域网访问"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "其他设备"
+      ],
+      "subtitle" : "可在其他设备上控制播放、跳转歌词",
+      "title" : "允许远程控制"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "其他设备"
+      ],
+      "title" : "访问链接"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "其他设备"
+      ],
+      "title" : "备用链接（IP 地址）"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "其他设备"
+      ],
+      "subtitle" : "已分享的链接将失效",
+      "title" : "重置访问密钥"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "其他设备"
+      ],
+      "subtitle" : "更改后需重新扫码连接",
+      "title" : "端口"
     },
     {
       "dest" : "tab:appearance",

@@ -1587,30 +1587,10 @@ struct LyricsWindowView: View {
     /// 「搜索歌词…」的上下文:菜单点击瞬间把 曲目字段+写回 key+当前来源
     /// 一次性快照下来 —— sheet 打开期间歌可能换,搜索和写回都要钉在点击那一刻的曲目上。
     @State private var lyricsSearchContext: LyricsSearchContext?
-    /// 「添加到资料库」行的即时状态:此前点完静默关面板,成功/本来就在库/
-    /// 失败三种结局全都看不出差别(实测"点了没反应"那次就是歌 7 月已在库、duplicate
-    /// 静默 no-op)。现在开菜单时异步查一次"已在库?",点击后行内走 添加中→已添加/失败,
-    /// 全程不关菜单。
-    private enum LibraryAddState: Equatable {
-        case idle, alreadyInLibrary, adding, added, failed, removing, removeFailed
-    }
-    @State private var libraryAddState: LibraryAddState = .idle
-    /// 「减少推荐」是否已生效(同上一批的反馈缺口):开菜单时读回 disliked,行上带勾;
-    /// 点击在 减少/撤销 之间切换 —— AM 自己的菜单也是勾选态可再点撤销。
-    @State private var suggestLessApplied = false
-    /// 菜单状态代际:每次 刷新(开菜单/菜单开着换曲) +1。异步任务(回查/添加)落地前
-    /// 核对自己出发时的代际,不同代际=过期结果直接丢弃 —— 防止上一首歌的在途结果
-    /// 贴到新曲的菜单上(审阅抓的跨曲竞态)。
-    @State private var moreMenuStateGeneration = 0
-    /// 这首歌在各平台的跳转目标。零网络,全是引擎早就存进 enrich 缓存的
-    /// 字段;开菜单/换曲时后台读一次(首次要解析整份缓存 JSON,不能在主线程)。
-    @State private var platformLinks: PlatformLinks?
-    /// 本次菜单会话内用户是否已手动切过「减少推荐」:切过之后,后到的回查结果不许再
-    /// 覆盖它(回查读的是开菜单那一刻的旧值,覆盖=抹掉用户刚点的勾)。
-    @State private var suggestLessUserToggled = false
-    /// 「减少推荐」写操作串行链:快速连点时两个 detached task 之间本无顺序保证,
-    /// 后点的先执行会让终态与 UI 相反 —— 每次写先 await 上一次,保证按点击序生效。
-    @State private var suggestLessSerialTask: Task<Void, Never>?
+    /// 「…」菜单里直接执行的那几行(资料库、减少推荐、平台页、在播放器中显示)的状态与动作,跟网页歌词副屏共用一份实现。
+    @StateObject private var moreMenu = LyricsMoreMenuModel()
+    /// 「显示简介」面板「网页」那一行用的各平台链接,面板打开时读一次。
+    @State private var infoPlatformLinks: PlatformLinks?
     /// 音频输出面板(AirPlay 键)开着没有。设备列表与「外接输出中」(键染红)归 `AudioOutputMonitor`。
     @State private var showsOutputMenu = false
     @Environment(\.colorScheme) private var colorScheme
@@ -3748,24 +3728,10 @@ struct LyricsWindowView: View {
             if isAM {
                 addToLibraryRow
                 MoreMenuRow(
-                    title: L10n.t(suggestLessApplied ? "已减少推荐" : "减少推荐"),
-                    trailingSystemImage: suggestLessApplied ? "checkmark" : nil
+                    title: L10n.t(moreMenu.suggestLessApplied ? "已减少推荐" : "减少推荐"),
+                    trailingSystemImage: moreMenu.suggestLessApplied ? "checkmark" : nil
                 ) {
-                    // 不关菜单:勾的出现/消失就是反馈。乐观更新,AppleScript 那头失败
-                    // 也只是勾跟真实状态短暂不一致,下次开菜单会读回纠正。
-                    suggestLessUserToggled = true
-                    let newValue = !suggestLessApplied
-                    suggestLessApplied = newValue
-                    // 串行链:连点两下(减少→撤销)若各自独立 detached,执行序没保证,
-                    // 可能 false 先落、true 后落,终态与 UI 相反。
-                    let previous = suggestLessSerialTask
-                    // 带上点下去那一刻的歌名:排队 / 等授权期间换了歌,就不去改下一首的「减少推荐」。
-                    let expectedTitle = playback.title
-                    suggestLessSerialTask = Task.detached(priority: .userInitiated) {
-                        await previous?.value
-                        guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) else { return }
-                        MusicPlaybackController.setDisliked(newValue, expectedName: expectedTitle)
-                    }
+                    moreMenu.toggleSuggestLess(expectedTitle: playback.title)
                 }
                 menuDivider
                 MoreMenuRow(title: L10n.t("前往专辑")) {
@@ -3787,11 +3753,12 @@ struct LyricsWindowView: View {
             // associated-domains 授权(y.qq.com 不会被 App 接走),它注册的 qqmusicmac://
             // 命令表只有 playsong/downloadsong、没有"打开这一页"的语义(而 playsong 会把
             // 正在放的这首从头重播,不是我们要的)。详见 PlatformLinks 的头注。
-            if !platformMenuRows.isEmpty {
-                ForEach(platformMenuRows) { row in
+            let platformRows = moreMenu.platformRows
+            if !platformRows.isEmpty {
+                ForEach(platformRows) { row in
                     // 落到浏览器的行标题带 ↗、进 App 的深链(KKBOX)不带:↗ 是如实告知落点,按链接本身判,
                     // 别写成每行都拼(07 章决策 110)。QQ 音乐这几页为什么进不了客户端见 PlatformLinks 头注。
-                    MoreMenuRow(title: PlatformLinks.opensInBrowser(row.url) ? row.title + " ↗" : row.title) {
+                    MoreMenuRow(title: LyricsMoreMenuModel.title(of: row)) {
                         closeMoreMenu()
                         NSWorkspace.shared.open(row.url)
                     }
@@ -3805,16 +3772,7 @@ struct LyricsWindowView: View {
             // 网页平台翻到正在放歌的那枚标签页。
             MoreMenuRow(title: String(format: L10n.t("在 %@ 中显示"), playerName ?? L10n.t("播放器"))) {
                 closeMoreMenu()
-                if isAM {
-                    runAppleMusicMenuAction { MusicPlaybackController.revealCurrentTrack() }
-                } else if PlaybackCoordinator.shared.resolvedPlayerBundleID == PlaybackPlayer.spotify.bundleIdentifier {
-                    SpotifyReveal.revealCurrentTrack { PlaybackCoordinator.shared.openResolvedPlayerApp() }
-                } else if PlaybackCoordinator.shared.resolvedPlayerBundleID == PlaybackPlayer.kkbox.bundleIdentifier,
-                          let song = platformLinks?.kkboxSong {
-                    NSWorkspace.shared.open(song)
-                } else {
-                    PlaybackCoordinator.shared.openResolvedPlayer()
-                }
+                moreMenu.revealInPlayer()
             }
             menuDivider
             MoreMenuRow(title: L10n.t("显示简介")) {
@@ -3862,61 +3820,17 @@ struct LyricsWindowView: View {
         .lyricsWindowFloatingPanelBackground()
         .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
         .onAppear {
-            refreshMoreMenuTrackState()
+            moreMenu.refresh(title: playback.title, artist: playback.artist, album: playback.album)
             EditorialNotesStore.shared.refreshCurrent()
         }
         // 菜单开着期间换曲(自然播完/手动切):两个状态行描述的是曲目,必须跟着重刷,
         // 否则勾和「已在资料库」还挂着上一首的状态、点撤销会打在新曲上(审阅 D2)。
-        .onChange(of: moreMenuTrackIdentity) { _ in refreshMoreMenuTrackState() }
+        .onChange(of: moreMenuTrackIdentity) { _ in
+            moreMenu.refresh(title: playback.title, artist: playback.artist, album: playback.album)
+        }
     }
 
     /// 菜单状态行绑定的曲目身份(标题|歌手|专辑拼串,只用于变更检测)。
-    private struct PlatformMenuRow: Identifiable {
-        let id: String
-        let title: String
-        let url: URL
-    }
-
-    /// 当前播放器那一个平台的目录入口。AM 走它自己那套(前往专辑/前往艺人,经 iTunes
-    /// Search),所以这里只管非 AM;酷狗没有任何已存的链接,自然是空数组。
-    private var platformMenuRows: [PlatformMenuRow] {
-        guard !isAppleMusicPlayer, let links = platformLinks else { return [] }
-        let bundleID = PlaybackCoordinator.shared.resolvedPlayerBundleID
-        var out: [PlatformMenuRow] = []
-        if bundleID == PlaybackPlayer.qqMusic.bundleIdentifier {
-            if let u = links.qqSong { out.append(.init(id: "qq-song", title: L10n.t("QQ 音乐歌曲页"), url: u)) }
-            if let u = links.qqAlbum { out.append(.init(id: "qq-album", title: L10n.t("QQ 音乐专辑页"), url: u)) }
-            if let u = links.qqArtist { out.append(.init(id: "qq-artist", title: L10n.t("QQ 音乐歌手页"), url: u)) }
-        } else if bundleID == PlaybackPlayer.netease.bundleIdentifier {
-            // 网易云只给歌曲页:它的专辑页、歌手页不登录看不到内容(07 章决策 107)。
-            if let u = links.neteaseSong { out.append(.init(id: "ne-song", title: L10n.t("网易云音乐歌曲页"), url: u)) }
-        } else if bundleID == PlaybackPlayer.soda.bundleIdentifier {
-            if let u = links.sodaSong { out.append(.init(id: "soda-song", title: L10n.t("汽水音乐歌曲页"), url: u)) }
-            if let u = links.sodaAlbum { out.append(.init(id: "soda-album", title: L10n.t("汽水音乐专辑页"), url: u)) }
-            if let u = links.sodaArtist { out.append(.init(id: "soda-artist", title: L10n.t("汽水音乐歌手页"), url: u)) }
-        } else if bundleID == PlaybackPlayer.kkbox.bundleIdentifier {
-            // KKBOX 的是进 App 的深链(见 PlatformLinks.kkboxAlbumAppURL),文案跟上面几条浏览器页不同。这首歌本身走菜单里
-            // 「在 KKBOX 中显示」那一行(有歌曲深链时打开它),别在这里再加一行同名的。
-            if let u = links.kkboxAlbum { out.append(.init(id: "kkbox-album", title: L10n.t("在 KKBOX 中显示专辑"), url: u)) }
-            if let u = links.kkboxArtist { out.append(.init(id: "kkbox-artist", title: L10n.t("在 KKBOX 中显示歌手"), url: u)) }
-        } else if bundleID == PlaybackPlayer.spotify.bundleIdentifier {
-            // 浏览器里的网页;在 Spotify 客户端里跳到这首的是下面「在 Spotify 中显示」那条。
-            if let u = links.spotifySong { out.append(.init(id: "spotify-song", title: L10n.t("Spotify 歌曲页"), url: u)) }
-            if let u = links.spotifyAlbum { out.append(.init(id: "spotify-album", title: L10n.t("Spotify 专辑页"), url: u)) }
-            if let u = links.spotifyArtist { out.append(.init(id: "spotify-artist", title: L10n.t("Spotify 歌手页"), url: u)) }
-        } else if bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier {
-            if let u = links.amazonSong { out.append(.init(id: "amazon-song", title: L10n.t("Amazon Music 歌曲页"), url: u)) }
-            if let u = links.amazonAlbum { out.append(.init(id: "amazon-album", title: L10n.t("Amazon Music 专辑页"), url: u)) }
-            if let u = links.amazonArtist { out.append(.init(id: "amazon-artist", title: L10n.t("Amazon Music 歌手页"), url: u)) }
-        } else if bundleID == PlaybackPlayer.kaset.bundleIdentifier {
-            // 落到浏览器的网页,不是 Kaset 自己的深链(那条一打开就开始放,见 PlatformLinks.youtubeMusicSong)。
-            if let u = links.youtubeMusicSong { out.append(.init(id: "ytm-song", title: L10n.t("YouTube Music 歌曲页"), url: u)) }
-            if let u = links.youtubeMusicAlbum { out.append(.init(id: "ytm-album", title: L10n.t("YouTube Music 专辑页"), url: u)) }
-            if let u = links.youtubeMusicArtist { out.append(.init(id: "ytm-artist", title: L10n.t("YouTube Music 歌手页"), url: u)) }
-        }
-        return out
-    }
-
     private var moreMenuTrackIdentity: String {
         "\(playback.title)|\(playback.artist)|\(playback.album)"
     }
@@ -3925,15 +3839,15 @@ struct LyricsWindowView: View {
     /// 已在库=删除(AM 自己的「⋯」菜单就是这么切的),添加中/删除中/已添加 不可点,
     /// 两种失败态可点重试。删除成功后回 .idle —— 行自己翻回「添加到资料库」就是反馈。
     @ViewBuilder private var addToLibraryRow: some View {
-        switch libraryAddState {
+        switch moreMenu.libraryAddState {
         case .idle:
-            MoreMenuRow(title: L10n.t("添加到资料库")) { addCurrentTrackToLibraryFromMenu() }
+            MoreMenuRow(title: L10n.t("添加到资料库")) { moreMenu.addToLibrary() }
         case .failed:
             MoreMenuRow(title: L10n.t("添加失败"), trailingSystemImage: "arrow.clockwise") {
-                addCurrentTrackToLibraryFromMenu()
+                moreMenu.addToLibrary()
             }
         case .alreadyInLibrary:
-            MoreMenuRow(title: L10n.t("从资料库删除")) { removeCurrentTrackFromLibraryFromMenu() }
+            MoreMenuRow(title: L10n.t("从资料库删除")) { moreMenu.removeFromLibrary(expectedTitle: playback.title) }
         case .adding:
             MoreMenuRow(title: L10n.t("添加中…"), enabled: false) {}
         case .added:
@@ -3942,85 +3856,7 @@ struct LyricsWindowView: View {
             MoreMenuRow(title: L10n.t("删除中…"), enabled: false) {}
         case .removeFailed:
             MoreMenuRow(title: L10n.t("删除失败"), trailingSystemImage: "arrow.clockwise") {
-                removeCurrentTrackFromLibraryFromMenu()
-            }
-        }
-    }
-
-    /// 把 AM 两个状态行刷新到真实值(开菜单时 + 菜单开着换曲时;只读查询,不触发授权
-    /// 弹窗 —— 弹窗只该出现在用户显式点动作的时候)。代际 +1 让所有在途异步结果作废。
-    private func refreshMoreMenuTrackState() {
-        moreMenuStateGeneration += 1
-        let generation = moreMenuStateGeneration
-        libraryAddState = .idle
-        suggestLessApplied = false
-        suggestLessUserToggled = false
-        // 平台链接的加载必须放在下面那道 `isAppleMusicPlayer` 早退**之前** ——
-        // 非 AM 播放器(QQ/网易云)正是要用它的那一档,放在早退之后等于永远不加载。
-        // 在主线程直接读:EnrichCacheReader 只许在主线程用(静态缓存没有锁,后台线程调它就是跟轮询并发
-        // 改同一批字典),缓存已加载时这次读取是 µs 级。
-        let linkArtist = playback.artist, linkTitle = playback.title, linkAlbum = playback.album
-        platformLinks = linkTitle.isEmpty ? nil
-            : EnrichCacheReader.platformLinks(artist: linkArtist, title: linkTitle, album: linkAlbum)
-        guard isAppleMusicPlayer else { return }
-        Task.detached(priority: .userInitiated) {
-            guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: false) else { return }
-            let inLibrary = MusicPlaybackController.currentTrackIsInLibrary()
-            let disliked = MusicPlaybackController.currentTrackDisliked()
-            await MainActor.run {
-                // 换曲/重开菜单后这批结果已经是别的歌的,直接丢弃
-                guard generation == moreMenuStateGeneration else { return }
-                // 查询期间用户可能已点了"添加"(adding/added),别把进行中的状态盖掉
-                if inLibrary == true, libraryAddState == .idle { libraryAddState = .alreadyInLibrary }
-                // 同理:用户已手动切过勾,后到的旧值不许再覆盖(审阅 D1)
-                if let disliked, !suggestLessUserToggled { suggestLessApplied = disliked }
-            }
-        }
-    }
-
-    /// 点「添加到资料库」:添加中→已添加/失败,不关菜单。成功与否**不信 duplicate 的
-    /// 返回值** —— 它对"已在库静默 no-op"也报 ok,事后重新读回
-    /// 资料库才算数;读回本身失败(nil)时才退回信命令返回值。
-    private func addCurrentTrackToLibraryFromMenu() {
-        libraryAddState = .adding
-        let generation = moreMenuStateGeneration
-        Task.detached(priority: .userInitiated) {
-            guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) else {
-                await MainActor.run {
-                    if generation == moreMenuStateGeneration { libraryAddState = .failed }
-                }
-                return
-            }
-            let commandOK = MusicPlaybackController.addCurrentTrackToLibrary()
-            let verified = MusicPlaybackController.currentTrackIsInLibrary()
-            await MainActor.run {
-                // 关菜单→换曲→重开 后落地的旧结局不能贴到新曲的行上(审阅 D2c)
-                guard generation == moreMenuStateGeneration else { return }
-                libraryAddState = (verified ?? commandOK) ? .added : .failed
-            }
-        }
-    }
-
-    /// 点「从资料库删除」:删除中→回 idle(行翻回「添加到资料库」即反馈)/删除失败。
-    /// 与添加同款纪律:成败不信命令返回值,事后读回资料库(目标=不在库)才算数。
-    private func removeCurrentTrackFromLibraryFromMenu() {
-        libraryAddState = .removing
-        let generation = moreMenuStateGeneration
-        // 删除不可撤销:等授权弹窗期间换了歌,删掉的就是下一首。脚本里按这个歌名再核一次。
-        let expectedTitle = playback.title
-        Task.detached(priority: .userInitiated) {
-            guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) else {
-                await MainActor.run {
-                    if generation == moreMenuStateGeneration { libraryAddState = .removeFailed }
-                }
-                return
-            }
-            let commandOK = MusicPlaybackController.removeCurrentTrackFromLibrary(expectedName: expectedTitle)
-            let verified = MusicPlaybackController.currentTrackIsInLibrary()
-            await MainActor.run {
-                guard generation == moreMenuStateGeneration else { return }
-                let gone = verified.map { !$0 } ?? commandOK
-                libraryAddState = gone ? .idle : .removeFailed
+                moreMenu.removeFromLibrary(expectedTitle: playback.title)
             }
         }
     }
@@ -4033,63 +3869,15 @@ struct LyricsWindowView: View {
         withAnimation(.easeOut(duration: 0.12)) { showsMoreMenu = false }
     }
 
-    /// Apple Music 专属菜单动作的统一外壳:权限确认 + 后台线程执行(AppleScript 会阻塞,
-    /// 不能在主线程跑)。失败静默 —— 与 toggleFavorited 的宽松约定一致,这些都不是核心
-    /// 路径,权限被拒时 checkAppleMusicSafely 自己会弹一次系统授权框。
-    private func runAppleMusicMenuAction(_ action: @escaping @Sendable () -> Void) {
-        Task.detached(priority: .userInitiated) {
-            guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) else { return }
-            action()
-        }
-    }
-
-    /// 前往专辑/前往艺人:iTunes Search API 按 歌名+歌手+系统店面 解析目录链接,经
-    /// music:// scheme 让 Music.app 原生跳页(机制与踩坑见 MusicCatalogSearch 注释)。
-    ///
-    /// Music.app 没在跑时,必须先 `ensureMusicAppRunning()` 等它真正启动完再发
-    /// music:// URL——直接对着一个还没起来的 Music.app 发深链会被冷启动流程吞掉,
-    /// 用户看到的是"打开了 Music.app,但没跳到点的这个页面"(见
-    /// MusicAutomationPermission.ensureMusicAppRunning 注释)。
-    /// 目录页跳转的去处:专辑 / 艺人 / 曲目(停播页「最近听过」行点击要的是曲目页)。
-    private enum CatalogTarget { case album, artist, track }
-
+    /// 前往专辑/前往艺人(实现在 `LyricsMoreMenuModel.openCatalogPage`)。
     private func openCatalogPage(album: Bool) {
         openCatalogPage(title: playback.title, artist: playback.artist, album: playback.album,
                         target: album ? .album : .artist)
     }
 
-    /// 任意 (歌名, 歌手) 的目录页跳转 —— 停播页那几块要跳的不是「当前播放」而是历史行,
-    /// 所以曲目字段必须由调用方传进来,不能像上面那样从 playback 现读(停播时它是空的)。
-    ///
-    /// 专辑页先用缓存里这首的 Apple Music 链接(引擎按目录锚点 / 时长核对过的那一条)换算,不联网;
-    /// 缓存里没有(调用方没给专辑名、这首没解析出 Apple Music 链接)才按歌名搜。艺人页、曲目页照旧搜。
-    private func openCatalogPage(title: String, artist: String, album: String = "", target: CatalogTarget) {
-        guard !title.isEmpty || !artist.isEmpty else { return }
-        // EnrichCacheReader 是 @MainActor 的,在起后台任务之前读。
-        let cachedAlbumPage = target == .album
-            ? MusicCatalogSearch.albumPage(
-                fromTrackURL: EnrichCacheReader.platformLinks(artist: artist, title: title, album: album)?.appleMusic?.absoluteString)
-            : nil
-        Task.detached(priority: .userInitiated) {
-            var url = cachedAlbumPage
-            if url == nil {
-                let storefront = Locale.current.region?.identifier.lowercased() ?? "us"
-                guard let item = await MusicCatalogSearch.resolve(
-                    title: title, artist: artist, storefront: storefront) else { return }
-                let https: String?
-                switch target {
-                case .album: https = item.collectionViewUrl ?? item.trackViewUrl
-                case .artist: https = item.artistViewUrl
-                case .track: https = item.trackViewUrl ?? item.collectionViewUrl
-                }
-                url = MusicCatalogSearch.musicSchemeURL(https)
-            }
-            guard let url else { return }
-            // Music.app 没在跑时直接 open(music://…) 会被 LaunchServices 吞掉(冷启动走到
-            // 能接 Apple Event 之前 URL 就丢了),表现成「App 打开了但停在上次退出的页面」。
-            await MusicAutomationPermission.ensureMusicAppRunning()
-            await MainActor.run { NSWorkspace.shared.open(url) }
-        }
+    private func openCatalogPage(title: String, artist: String, album: String = "",
+                                 target: LyricsMoreMenuModel.CatalogTarget) {
+        LyricsMoreMenuModel.openCatalogPage(title: title, artist: artist, album: album, target: target)
     }
 
     /// 歌曲简介 / 专辑简介 / 歌手简介面板。正文由 `EditorialNotesStore` 在换歌时预取好,没有就不打开。
@@ -4116,7 +3904,7 @@ struct LyricsWindowView: View {
         // 只许在主线程用),缓存已加载时是 µs 级。
         let artist = playback.artist, title = playback.title, album = playback.album
         infoLyricsSource = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
-        platformLinks = EnrichCacheReader.platformLinks(artist: artist, title: title, album: album)
+        infoPlatformLinks = EnrichCacheReader.platformLinks(artist: artist, title: title, album: album)
     }
 
     /// 「搜索歌词…」:点击瞬间快照曲目字段、后台解析 写回 key + 当前来源,齐了再弹面板。
@@ -4398,7 +4186,7 @@ struct LyricsWindowView: View {
             // Music 没存链接、网易云版权下架的周杰伦、QQ 只有搜索兜底)整行不出现,不拿别的平台
             // 顶上。判定是纯函数 PlatformLinks.songLink(forPlayerBundleID:webPlatformID:),
             // selftest 钉住。
-            if let links = platformLinks,
+            if let links = infoPlatformLinks,
                let link = links.songLink(forPlayerBundleID: PlaybackCoordinator.shared.resolvedPlayerBundleID,
                                          webPlatformID: PlaybackCoordinator.shared.resolvedWebPlatformID) {
                 InfoPanelLinksRow(name: Self.platformDisplayName(link.platform), url: link.url,
@@ -4426,7 +4214,7 @@ struct LyricsWindowView: View {
 
     /// 「网页」行上平台的人话名。三个中文键早就在 Localizable 里(菜单那几项也在用);Spotify 是
     /// 品牌名,各语言写法一样,不过 L10n(跟 BrowserMusicPlatform.displayName 同一口径)。
-    private static func platformDisplayName(_ platform: PlatformLinks.Platform) -> String {
+    static func platformDisplayName(_ platform: PlatformLinks.Platform) -> String {
         switch platform {
         case .appleMusic: return L10n.t("Apple Music")
         case .qqMusic: return L10n.t("QQ 音乐")
@@ -8051,45 +7839,9 @@ private struct ChartsPanelView: View {
         .help(L10n.t("在 Apple Music 中打开"))
     }
 
-    /// 与 openCatalogPage 同一条跳转管线:iTunes Search 解析 → music:// 原生跳页。
+    /// 跳转在 `LyricsMoreMenuModel.openChartEntry`(网页歌词副屏的「你的常听」同一份)。
     private func open(_ entry: LastfmStatsService.ChartEntry) {
-        let kind = kind
-        Task.detached(priority: .userInitiated) {
-            let storefront = Locale.current.region?.identifier.lowercased() ?? "us"
-            let title: String
-            let artist: String
-            switch kind {
-            case .tracks, .albums:
-                title = entry.name
-                artist = entry.detail
-            case .artists:
-                // 传 artist 而不是 title:搜索 term 拼出来一样,但 pickBest 的"只歌手匹配"
-                // 分支才会激活,优先挑该歌手演唱的歌再取 artistViewUrl —— 传 title 的话
-                // 两个优选分支全死路、退化成拿第一条,恰好以歌手名为歌名的别人的歌会把
-                // 跳转带偏(审阅)。
-                title = ""
-                artist = entry.name
-            }
-            // 查不到 / 没有对应页面时响一声:点了之后什么都不发生,分不清是没找到还是还在找。
-            guard let item = await MusicCatalogSearch.resolve(
-                title: title, artist: artist, storefront: storefront) else {
-                await MainActor.run { NSSound.beep() }
-                return
-            }
-            let https: String?
-            switch kind {
-            case .tracks: https = item.trackViewUrl
-            case .albums: https = item.collectionViewUrl ?? item.trackViewUrl
-            case .artists: https = item.artistViewUrl
-            }
-            guard let url = MusicCatalogSearch.musicSchemeURL(https) else {
-                await MainActor.run { NSSound.beep() }
-                return
-            }
-            // Music.app 没在跑时先等它真正启动完,理由见 openCatalogPage 同一处注释。
-            await MusicAutomationPermission.ensureMusicAppRunning()
-            await MainActor.run { NSWorkspace.shared.open(url) }
-        }
+        LyricsMoreMenuModel.openChartEntry(entry, kind: kind)
     }
 }
 

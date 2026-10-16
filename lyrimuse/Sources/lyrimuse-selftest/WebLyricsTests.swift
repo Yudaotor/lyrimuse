@@ -114,14 +114,24 @@ func runWebLyricsTests() {
 
     // ---- 副屏点按 ----
     do {
-        expectEqual(WebLyricsTap.parse(Data(#"{"tap":[0.25,0.75]}"#.utf8)), CGPoint(x: 0.25, y: 0.75), "网页歌词: 点按位置原样读出")
-        expectEqual(WebLyricsTap.parse(Data(#"{"tap":[1.2,0.5]}"#.utf8)), nil, "网页歌词: 点按位置超出画面不认")
-        expectEqual(WebLyricsTap.parse(Data(#"{"tap":[0.5]}"#.utf8)), nil, "网页歌词: 点按位置缺一维不认")
-        expectEqual(WebLyricsTap.parse(Data("tap".utf8)), nil, "网页歌词: 不是 JSON 不认")
-        expectEqual(WebLyricsTap.permits(remoteIsLoopback: true, lanControlEnabled: false), true, "网页歌词: 本机副屏一律能点")
-        expectEqual(WebLyricsTap.permits(remoteIsLoopback: false, lanControlEnabled: false), false,
+        expectEqual(WebLyricsPointer.parse(Data(#"{"ptr":["d",0.25,0.75]}"#.utf8)),
+                    WebLyricsPointer(phase: .down, point: CGPoint(x: 0.25, y: 0.75)), "网页歌词: 按下位置原样读出")
+        expectEqual(WebLyricsPointer.parse(Data(#"{"ptr":["m",1.2,-0.1]}"#.utf8)),
+                    WebLyricsPointer(phase: .move, point: CGPoint(x: 1, y: 0)), "网页歌词: 拖出画面的位置夹回 0…1")
+        expectEqual(WebLyricsPointer.parse(Data(#"{"ptr":["u",3,0.5]}"#.utf8)), nil, "网页歌词: 离画面太远不认")
+        expectEqual(WebLyricsPointer.parse(Data(#"{"ptr":["x",0.5,0.5]}"#.utf8)), nil, "网页歌词: 不认识的阶段不认")
+        expectEqual(WebLyricsPointer.parse(Data(#"{"ptr":["d",0.5]}"#.utf8)), nil, "网页歌词: 缺一维不认")
+        expectEqual(WebLyricsPointer.parse(Data("ptr".utf8)), nil, "网页歌词: 不是 JSON 不认")
+        expectEqual(WebLyricsPointer.parse(Data(#"{"ptr":["c",0,1]}"#.utf8))?.phase, .cancel, "网页歌词: 取消")
+        expectEqual(WebLyricsWheel.parse(Data(#"{"whl":[0.5,0.25,0.1]}"#.utf8)),
+                    WebLyricsWheel(point: CGPoint(x: 0.5, y: 0.25), dy: 0.1), "网页歌词: 滚轮位置和滚动量原样读出")
+        expectEqual(WebLyricsWheel.parse(Data(#"{"whl":[0.5,0.5,9]}"#.utf8))?.dy, 2, "网页歌词: 一次滚动最多算两屏")
+        expectEqual(WebLyricsWheel.parse(Data(#"{"whl":[1.5,0.5,0.1]}"#.utf8)), nil, "网页歌词: 滚轮在画面外不认")
+        expectEqual(WebLyricsPointer.parse(Data(#"{"whl":[0.5,0.5,0.1]}"#.utf8)), nil, "网页歌词: 滚轮消息不当指针事件")
+        expectEqual(WebLyricsPointer.permits(remoteIsLoopback: true, lanControlEnabled: false), true, "网页歌词: 本机副屏一律能点")
+        expectEqual(WebLyricsPointer.permits(remoteIsLoopback: false, lanControlEnabled: false), false,
                     "网页歌词: 别的设备默认不能控制播放")
-        expectEqual(WebLyricsTap.permits(remoteIsLoopback: false, lanControlEnabled: true), true, "网页歌词: 开了控制开关别的设备能点")
+        expectEqual(WebLyricsPointer.permits(remoteIsLoopback: false, lanControlEnabled: true), true, "网页歌词: 开了控制开关别的设备能点")
 
         // 平板 1180 宽:封面边长 0.279W ≈ 329
         let layout = WebLyricsControlsLayout(width: 329, rowTop: 500, rowHeight: 32, skipGlyphWidth: 24)
@@ -142,6 +152,25 @@ func runWebLyricsTests() {
         expectEqual(between == .previous || between == .playPause, true, "网页歌词: 两键之间只归一颗")
     }
 
+    // ---- 端口与链接 ----
+    do {
+        expectEqual(WebLyricsPort.parse(" 8080 "), 8080, "网页歌词: 端口输入去掉空格")
+        expectEqual(WebLyricsPort.parse("80"), nil, "网页歌词: 1024 以下的端口不收")
+        expectEqual(WebLyricsPort.parse("65536"), nil, "网页歌词: 超出 65535 不收")
+        expectEqual(WebLyricsPort.parse("abc"), nil, "网页歌词: 不是数字不收")
+        expectEqual(WebLyricsPort.clamped(70_000), WebLyricsPort.standard, "网页歌词: 存坏了的端口按默认")
+        expectEqual(WebLyricsLinks.url(host: "localhost", port: 3939)?.absoluteString, "http://localhost:3939/", "网页歌词: 本机链接不带密钥")
+        expectEqual(WebLyricsLinks.url(host: "localhost", port: 3940, preview: true)?.absoluteString,
+                    "http://localhost:3940/?preview=1", "网页歌词: OBS 预览链接")
+        expectEqual(WebLyricsLinks.url(host: "Studio-Mac.local", port: 3940, token: "ab12")?.absoluteString,
+                    "http://Studio-Mac.local:3940/?k=ab12", "网页歌词: 别的电脑上 OBS 用的链接带密钥")
+        expectEqual(WebLyricsPort.clamped(80, fallback: WebLyricsPort.obsStandard), WebLyricsPort.obsStandard,
+                    "网页歌词: OBS 端口存坏了按 OBS 的默认")
+        expectEqual(WebLyricsPort.standard == WebLyricsPort.obsStandard, false, "网页歌词: 网页、OBS 默认端口不同")
+        expectEqual(WebLyricsAccess.hostAllowed("studio-mac.local:3939", localNames: ["Studio-Mac.local"]), true,
+                    "网页歌词: .local 名字不分大小写")
+    }
+
     // ---- OBS 消息 ----
     do {
         expectEqual(WebLyricsObsPayload.obsTimelineMs(timelineMs: 10_000, bundleID: "com.apple.Music", playerOffsets: [:], globalOffsetMs: 180),
@@ -154,6 +183,25 @@ func runWebLyricsTests() {
         expectEqual(WebLyricsObsPayload.cssColor(red: 1, green: 0.5, blue: 0, alpha: 0.35), "rgba(255,128,0,0.35)", "网页歌词: CSS 颜色")
         expectEqual(WebLyricsObsPayload.cssColor(red: 2, green: -1, blue: 0, alpha: 3), "rgba(255,0,0,1.0)", "网页歌词: CSS 颜色夹值")
         expectEqual(OverlayFontWeight.allCases.map(WebLyricsObsPayload.cssWeight), [300, 400, 500, 600, 700, 800], "网页歌词: 字重映射")
+        expectEqual(WebLyricsObsPayload.cssWeights(.semibold), [600, 400, 300, 400], "网页歌词: 读音 / 译文 / 下一句的字重照悬浮歌词的档位差")
+        let styleJSON = WebLyricsObsPayload.style(.init(
+            fontFamily: "", fontSize: 31, weights: [600, 400, 300, 400], sung: "rgba(0,0,0,1.0)", unsung: "rgba(0,0,0,0.55)",
+            stroke: nil, card: nil, showRomanization: true, showTranslation: false, showNextLine: true, karaoke: true,
+            alignment: .leading, overflow: .scroll, spacing: .init(romanization: 4, translation: 6, nextLine: 99),
+            width: 640, hideWhenPaused: true, lineChangeAnimation: true, duetStageInset: 76, duetCenterInset: 84))
+        let styleObject = (try? JSONSerialization.jsonObject(with: Data(styleJSON.utf8))) as? [String: Any]
+        expectEqual(styleObject?["next"] as? Bool, true, "网页歌词: style 带下一句开关")
+        expectEqual(styleObject?["align"] as? String, "leading", "网页歌词: style 带对齐方式")
+        expectEqual(styleObject?["overflow"] as? String, "scroll", "网页歌词: style 带换行或滚动")
+        expectEqual(styleObject?["width"] as? Double, 640, "网页歌词: style 带悬浮歌词宽度")
+        expectEqual(styleObject?["hidePaused"] as? Bool, true, "网页歌词: style 带暂停时隐藏")
+        expectEqual(styleObject?["anim"] as? Bool, true, "网页歌词: style 带换句动画")
+        let duet = WebLyricsObsPayload.duetInsets(overlayWidth: 640, fontSize: 31)
+        expectEqual(duet.stage, Double(OverlayCardGeometry.duetStageInset(availableWidth: 600, fontSize: 31)),
+                    "网页歌词: 对唱舞台缩进同悬浮歌词(可用宽度 = 宽度 − 40)")
+        expectEqual(duet.center, Double(LyricDuetLayout.insets(for: .leading, availableWidth: 600, fontSize: 31).trailing),
+                    "网页歌词: 合唱两侧留白同悬浮歌词")
+        expectEqual(styleObject?["spacing"] as? [Double], [4, 6, OverlayRowSpacing.range.upperBound], "网页歌词: style 行距夹回范围")
 
         let withWords = LyricsSyncEngine()
         _ = withWords.load(lyrics: "[00:01.00]あい\n[00:05.00]うえ", lyricsTr: "[00:01.00]啊\n[00:05.00]呜", lyricsRoma: "",
@@ -168,6 +216,12 @@ func runWebLyricsTests() {
         expectEqual((encoded.first?["w"] as? [[Any]])?.count, 2, "网页歌词: 逐字每个字一项")
         expectEqual((encoded.first?["w"] as? [[Any]])?.first?.count, 3, "网页歌词: 逐字是 [起点, 时长, 字]")
         expectEqual(encoded.first?["tr"] as? String, "啊", "网页歌词: 译文")
+        expectEqual(encoded.first?["s"] == nil, true, "网页歌词: 没有对唱声部的行省略 s")
+        let groups = encoded.first?["g"] as? [[Any]]
+        expectEqual(groups?.compactMap { $0.first as? Int }.reduce(0, +), (encoded.first?["w"] as? [[Any]])?.count,
+                    "网页歌词: 日文逐词读音按顺序覆盖整行的字")
+        let segmented = withWords.surfaceWindowLines(.overlay, idPrefix: "t")
+        expectEqual(segmented.map(\.timeMs), [1_000, 5_000], "网页歌词: 悬浮歌词断好的段带开始时刻(没开拆分时一行一段)")
         expectEqual(object?["gaps"] is [Any], true, "网页歌词: 带间奏列表")
         let lineLevel = LyricsSyncEngine()
         _ = lineLevel.load(lyrics: "[00:01.00]整行歌词", lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
@@ -226,23 +280,59 @@ func runWebLyricsTests() {
                     "网页歌词: 每个请求都过访问控制")
         expectEqual(sourceBytes(server, contain: "WebLyricsAccess.hostAllowed(request.headers[\"host\"]"), true,
                     "网页歌词: 每个请求都核 Host 头")
-        expectEqual(sourceBytes(app("AppDelegate.swift"), contain: "WebLyricsServer.shared.start()"), true, "网页歌词: 启动时接上服务")
+        expectEqual(sourceBytes(app("AppDelegate.swift"), contain: "WebLyricsServer.startAll()"), true, "网页歌词: 启动时接上两个服务")
         let pages = app("WebLyrics/WebLyricsPages.swift")
+        expectEqual(sourceBytes(pages, contain: "get('preview') === '1') document.body.classList.add('preview');"), true,
+                    "网页歌词: OBS 页带 preview=1 时铺棋盘格底")
+        expectEqual(sourceBytes(server, contain: "token.dropFirst().removeDuplicates()"), true,
+                    "网页歌词: 换了密钥就断开别的设备")
+        expectEqual(sourceBytes(server, contain: "Publishers.CombineLatest4(enabled, lan, port, other)"), true,
+                    "网页歌词: 改端口重新监听,另一个的端口变了也重新核")
+        expectEqual(sourceBytes(server, contain: "if Self.otherPort(of: channel) == port {"), true,
+                    "网页歌词: 两个服务端口相同时都不监听")
+        expectEqual(sourceBytes(server, contain: "let page = channel == .obs ? WebLyricsPages.obsPage() : WebLyricsPages.screenPage()"), true,
+                    "网页歌词: 网页、OBS 各占一个端口,根路径就是各自的页面")
+        expectEqual(sourceBytes(pages, contain: "--sung:var(--sung-reading)"), true,
+                    "网页歌词: 逐词读音的已唱色走单独的变量(写成引用自己的 --sung 会整段失效、读音看不见)")
         expectEqual(sourceBytes(pages, contain: "setInterval(() => { if (performance.now() - lastTick > 50) tick(); }, 33);"), true,
                     "网页歌词: OBS 页 rAF 停了由定时器接着刷(OBS 失焦时 rAF 会停)")
+        expectEqual(sourceBytes(pages, contain: "<feGaussianBlur id=\"lmBlur\" in=\"SourceAlpha\""), true,
+                    "网页歌词: OBS 页描边照悬浮歌词用模糊剪影")
+        expectEqual(sourceBytes(pages, contain: "html += '<div class=\"row dots\"><i></i><i></i><i></i></div>';"), true,
+                    "网页歌词: OBS 页前奏 / 间奏画「•••」")
         expectEqual(sourceBytes(pages, contain: "https://") || sourceBytes(pages, contain: "http://"), false,
                     "网页歌词: 网页不连外部地址")
         let gapDots = app("UI/LyricsGapDots.swift")
         expectEqual(sourceBytes(gapDots, contain: "guard c.running, window != nil || rendersDetached else { return }"), true,
                     "网页歌词: 间奏点离屏时也装动画")
         let pagesSource = app("WebLyrics/WebLyricsPages.swift")
-        expectEqual(sourceBytes(pagesSource, contain: "ws.send(JSON.stringify({ tap: [u, v] }));"), true, "网页歌词: 副屏点画面发回相对位置")
+        expectEqual(sourceBytes(pagesSource, contain: "ws.send(JSON.stringify({ ptr: [phase,"), true, "网页歌词: 副屏把按下、拖动、抬起发回 App")
+        expectEqual(sourceBytes(pagesSource, contain: "if (downLink && linkAt(u, v) === downLink) window.open(downLink, '_blank', 'noopener');"),
+                    true, "网页歌词: 平台页在手指抬起那一刻由网页自己打开(等 App 回话再开会被浏览器拦掉)")
+        expectEqual(sourceBytes(app("UI/LyricsWindowView.swift"), contain: "@StateObject private var moreMenu = LyricsMoreMenuModel()"),
+                    true, "网页歌词: 歌词窗口「…」菜单的直接动作跟副屏共用 LyricsMoreMenuModel")
+        expectEqual(sourceBytes(pagesSource, contain: "touch-action: none;"), true, "网页歌词: 副屏画布自己接拖动,浏览器不拿去滚页面、缩放")
         expectEqual(sourceBytes(app("WebLyrics/WebLyricsServer.swift"),
-                                contain: "if case .screen = role { server?.screens.tap(self, payload: frame.payload) }"), true,
+                                contain: "if case .screen = role { server?.screens.pointer(self, payload: frame.payload) }"), true,
                     "网页歌词: 只有副屏连接的文本帧当点按")
         expectEqual(sourceBytes(app("WebLyrics/WebLyricsScreen.swift"),
                                 contain: "lanControlEnabled: AppSettings.shared.webLyricsAllowLANControl"), true,
                     "网页歌词: 点按过控制开关")
+        let screenSource = app("WebLyrics/WebLyricsScreen.swift")
+        expectEqual(sourceBytes(screenSource, contain: "timer = DispatchSource.makeTimerSource(queue: queue)"), true,
+                    "网页歌词: 副屏出帧在自己的队列上按节拍画,不挂在主线程定时器上")
+        expectEqual(sourceBytes(screenSource, contain: "private let titleLayer = CATextLayer()"), false,
+                    "网页歌词: 歌名不用 CATextLayer(截断过长的一行时整行错位)")
+        expectEqual(sourceBytes(app("WebLyrics/WebLyricsServer.swift"), contain: "connection.sendText(WebLyricsPages.helloMessage())"), true,
+                    "网页歌词: 连上后先告诉网页这一版的 revision,旧网页自己刷新")
+        expectEqual(sourceBytes(pagesSource, contain: "if (m.type === 'hello') checkRevision(m.rev);"), true,
+                    "网页歌词: 副屏网页认 hello")
+        expectEqual(sourceBytes(pagesSource, contain: "else if (m.type === 'hello') checkRevision(m.rev);"), true,
+                    "网页歌词: OBS 网页认 hello")
+        expectEqual(sourceBytes(pagesSource, contain: "setInterval(() => { if (performance.now() - lastFrame > 50) present(); }, 16);"), true,
+                    "网页歌词: 副屏 rAF 不来时由定时器接着放(从别的 App 打开的浏览器小窗里 rAF 可能一直不来)")
+        expectEqual(sourceBytes(pagesSource, contain: "queue[i].t + offset + DELAY <= now"), true,
+                    "网页歌词: 副屏网页按画帧时刻匀速放")
         expectEqual(sourceBytes(app("WebLyrics/WebLyricsScreen.swift"), contain: "coverHost.frame ="), false,
                     "网页歌词: 封面卡带缩放变换,不能设 frame(会按缩放反算 bounds,继续播放时封面变大)")
         expectEqual(sourceBytes(app("UI/LyricsLayerList.swift"), contain: "r.layer.shouldRasterize = d != 0"), true,

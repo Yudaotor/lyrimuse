@@ -594,11 +594,11 @@ func runSourceContractTests() {
         } else {
             expectEqual(true, false, "Spotify 接线: 读不到 lyrimuse/SpotifyReveal.swift(路径挪了?)")
         }
-        if let lwv = code(app.appendingPathComponent("UI/LyricsWindowView.swift")) {
+        if let lwv = code(app.appendingPathComponent("UI/LyricsMoreMenuModel.swift")) {
             expectEqual(lwv.contains("SpotifyReveal.revealCurrentTrack"), true,
-                        "Spotify 深链: 歌词窗「在 %@ 中显示」那行要给 Spotify 原生分一支走 SpotifyReveal")
+                        "Spotify 深链: 歌词窗「在 %@ 中显示」那行(LyricsMoreMenuModel.revealInPlayer)要给 Spotify 原生分一支走 SpotifyReveal")
         } else {
-            expectEqual(true, false, "Spotify 接线: 读不到 lyrimuse/UI/LyricsWindowView.swift(路径挪了?)")
+            expectEqual(true, false, "Spotify 接线: 读不到 lyrimuse/UI/LyricsMoreMenuModel.swift(路径挪了?)")
         }
         if let pc = code(app.appendingPathComponent("PlaybackCoordinator.swift")) {
             expectEqual(pc.contains("s.$spotifyArtworkURL"), true, "Spotify 封面: PlaybackCoordinator 要订阅 $spotifyArtworkURL")

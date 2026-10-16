@@ -279,7 +279,7 @@ func runDeepLinkTests() {
         let declared: [String: Bool] = [
             "lyrics": settingsView.contains("case fetch, translation, display, manage"),
             "player": settingsView.contains("case players, linkage, permissions"),
-            "appearance": settingsView.contains("case overlay, notch, menuBar, touchBar, lyricsWindow, webLyrics"),
+            "appearance": settingsView.contains("case overlay, notch, menuBar, touchBar, lyricsWindow\n"),
             "account/lastfm": accounts.contains("case stats, chart, onThisDay") && accounts.contains("        case settings\n"),
             "account/discord": accounts.contains("case display, buttons, privacy"),
         ]

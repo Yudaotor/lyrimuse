@@ -288,6 +288,11 @@ public final class LocalPlaybackSource: ObservableObject {
         if width != menuBarSongRowWidth { menuBarSongRowWidth = width }
     }
 
+    /// 按悬浮歌词断好的整首歌词(长句拆分 / 短句合并之后),每段带开始时刻。网页歌词 OBS 那条用。
+    public func overlayWindowLines() -> [LyricsWindowLine] {
+        syncEngine.surfaceWindowLines(.overlay, idPrefix: currentOffsetKey)
+    }
+
     private func publishSurfaceLyrics(atRawMs pos: Int) {
         let overlay = syncEngine.surfaceTick(.overlay, atMs: pos, trackEndMs: currentDurationMs)
         let notch = syncEngine.surfaceTick(.notch, atMs: pos, trackEndMs: currentDurationMs)
