@@ -20,8 +20,9 @@ final class WebLyricsObsFeed {
     private var lastPosition = ""
 
     func add(_ connection: WebLyricsConnection) {
-        clients[ObjectIdentifier(connection)] = connection
+        // 先订阅再登记:订阅当场就把三样广播一遍,登记在前的话这条连接会收到两份(下面再补发一遍)
         if subs.isEmpty { subscribe() }
+        clients[ObjectIdentifier(connection)] = connection
         for message in [lastStyle, lastTrack, lastPosition] where !message.isEmpty { connection.sendText(message) }
     }
 

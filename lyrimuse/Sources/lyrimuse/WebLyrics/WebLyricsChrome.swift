@@ -260,6 +260,8 @@ final class WebLyricsChromeLayer: CALayer {
         var panelScroll: CGFloat
         /// 系统强调色(链接、分段控件选中那一格)。
         var accent: NSColor
+        /// 右下一排往上抬多少(手机那种排法给底部的播放条让位)。
+        var bottomInset: CGFloat
         var size: CGSize
         var scale: CGFloat
     }
@@ -432,7 +434,7 @@ final class WebLyricsChromeLayer: CALayer {
     /// 左边隔 8.5 是 36 圆的翻译钮(译文正在显示时是白圆 + 深色字形)。播放记录那一格、歌词操作胶囊不画。
     private func layoutBottomRow(_ s: State, rim: NSColor, iconColor: NSColor) {
         bottomGroup.frame = CGRect(origin: .zero, size: s.size)
-        let y = s.size.height - 11 - 36
+        let y = s.size.height - 11 - 36 - s.bottomInset
         var right = s.size.width - 10
         lyricsCapsule.isHidden = !s.showsLyricsToggle
         lyricsSlot.isHidden = !s.showsLyricsToggle
@@ -472,7 +474,7 @@ final class WebLyricsChromeLayer: CALayer {
 
     /// 两个菜单同一种底:圆角 18、发丝边、投影;有封面背景时强制深色。内边距 6、行间 2;行是 14pt 字、
     /// 左右 10 上下 7,行尾小图标 11pt 半粗(`MoreMenuRow`),不可点的行压暗到 0.55;分隔线左右缩 6、上下各 2
-    /// (`menuDivider`)。翻译菜单右缘对齐翻译钮、悬在它上方 8;「…」菜单从「…」右缘往右长出、悬在上方 8,最少 200 宽,
+    /// (`menuDivider`)。翻译菜单右缘对齐翻译钮、悬在它上方 8;「…」菜单按 `panelFrame` 摆,最少 200 宽,
     /// 末行「歌词时间轴」(`lyricsOffsetRow`:左右 10 上下 5,± 与重置钮 24×22 圆角 6)。
     private func layoutPanel(_ s: State) {
         for l in panelItems { l.removeFromSuperlayer() }
@@ -559,6 +561,13 @@ final class WebLyricsChromeLayer: CALayer {
         if s.offsetMs != 0 { buttons.append(("arrow.counterclockwise", .offsetReset)) }
         buttons += [("minus", .offsetMinus), ("plus", .offsetPlus)]
         let buttonsWidth = CGFloat(buttons.count) * 24 + CGFloat(buttons.count - 1) * 4
+        // 菜单宽度按出现「重置」、数值最长时留足:偏移一变菜单就变宽的话,右锚定的 ± 跟着右移,连点「＋」第二下落到别处
+        // (同歌词窗口 `lyricsOffsetRow`)。
+        let widestValue = [10_250, -10_250].map { ms in
+            ceil((AppSettings.signedSeconds(ms: ms) + "s" as NSString)
+                .size(withAttributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)]).width)
+        }.max() ?? 0
+        let widestButtons: CGFloat = 3 * 24 + 2 * 4
         let offsetInner = max(22, rowHeight - 14)
         var placed: [Placed] = []
         var width: CGFloat = 200
@@ -577,13 +586,13 @@ final class WebLyricsChromeLayer: CALayer {
             case .divider:
                 placed.append(Placed(item: entry, text: nil, icon: nil, height: 5))
             case .offset:
-                let labelWidth = (label?.size.width ?? 0) + (value.map { 4 + $0.size.width } ?? 0)
-                width = max(width, 6 + 10 + labelWidth + 4 + 16 + 4 + buttonsWidth + 10 + 6)
+                let labelWidth = (label?.size.width ?? 0) + 4 + max(value?.size.width ?? 0, widestValue)
+                width = max(width, 6 + 10 + labelWidth + 4 + 16 + 4 + widestButtons + 10 + 6)
                 placed.append(Placed(item: entry, text: nil, icon: nil, height: offsetInner + 10))
             }
         }
         let height = 12 + placed.map(\.height).reduce(0, +) + CGFloat(max(0, placed.count - 1)) * 2
-        panel.frame = CGRect(x: anchor.maxX, y: anchor.minY - 8 - height, width: width, height: height)
+        panel.frame = panelFrame(width: width, height: height, anchor: anchor, in: s.size)
         var top: CGFloat = 6
         for p in placed {
             switch p.item {
@@ -635,10 +644,14 @@ final class WebLyricsChromeLayer: CALayer {
     }
 
 
-    /// 「…」菜单弹出的面板都从「…」右缘往右长出、悬在它上方 8;顶不下时贴着画面上沿,右边超出画面时往左挪回来。
+    /// 「…」菜单和它弹出的面板:从「…」右缘往右长出、悬在它上方 8;上方放不下就挂在它下方 8(竖排时「…」在画面顶上
+    /// 那一块),上下都放不下时贴着画面上沿;右边超出画面时往左挪回来。
     private func panelFrame(width: CGFloat, height: CGFloat, anchor: CGRect, in size: CGSize) -> CGRect {
-        let x = min(anchor.maxX, size.width - 8 - width)
-        return CGRect(x: max(8, x), y: max(8, anchor.minY - 8 - height), width: width, height: height)
+        let x = max(8, min(anchor.maxX, size.width - 8 - width))
+        let above = anchor.minY - 8 - height
+        let below = anchor.maxY + 8
+        let y = above >= 8 ? above : (below + height <= size.height - 8 ? below : 8)
+        return CGRect(x: x, y: y, width: width, height: height)
     }
 
     /// 「显示简介」(`trackInfoPanel`):内边距 12、行间 6,宽 240…360;标签 12pt、52 宽,值 13pt 中粗、放不下折行;

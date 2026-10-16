@@ -32,11 +32,15 @@ enum DebugDeepLinks {
         case .state: writeState()
         case .checkpoint: checkpoint()
         case .restore: restore()
-        case let .simulate(title, artist, album, duration, position, playing):
+        case let .simulate(title, artist, album, duration, position, playing, ad):
             PlaybackSimulation.begin(PlaybackSimulation(
-                title: title, artist: artist, album: album, duration: duration, position: position, playing: playing))
+                title: title, artist: artist, album: album, duration: duration, position: position, playing: playing, ad: ad))
             LocalPlaybackSource.shared.simulationChanged()
-            logger.notice("debug simulate on")
+            logger.notice("debug simulate on ad=\(ad, privacy: .public)")
+        case .simulateIdle:
+            PlaybackSimulation.begin(.nothingPlaying())
+            LocalPlaybackSource.shared.simulationChanged()
+            logger.notice("debug simulate idle")
         case .simulateOff:
             endSimulation()
         case .toggleFavorite:
@@ -104,7 +108,7 @@ enum DebugDeepLinks {
             "checkpoint": checkpointSaved != nil,
             "simulation": PlaybackSimulation.current.map { sim -> Any in
                 ["title": sim.title, "artist": sim.artist, "positionSecs": sim.elapsed(at: Date()),
-                 "playing": sim.isPlaying(at: Date())]
+                 "playing": sim.isPlaying(at: Date()), "ad": sim.ad, "idle": sim.idle]
             } ?? NSNull(),
         ]
     }

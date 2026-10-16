@@ -157,6 +157,10 @@ func runDeepLinkTests() {
                     .debug(.simulate(title: "x", artist: "", album: "", duration: nil, position: 0, playing: false)),
                     "模拟播放: 位置、时长写坏了按没给")
         expectEqual(link("lyrimuse://debug/simulate?off=1"), .debug(.simulateOff), "模拟播放: 结束")
+        expectEqual(link("lyrimuse://debug/simulate?idle=1"), .debug(.simulateIdle), "模拟播放: 什么都没在放(不用带歌名)")
+        expectEqual(link("lyrimuse://debug/simulate?title=x&ad=1"),
+                    .debug(.simulate(title: "x", artist: "", album: "", duration: nil, position: 0, playing: true, ad: true)),
+                    "模拟播放: 这一首按广告报")
         expectEqual(link("lyrimuse://action/play-mode?mode=Repeat-All"), .setPlayMode(.repeatAll), "播放模式: 取值不分大小写")
         expectEqual(link("lyrimuse://action/play-mode?mode=loop") == nil && link("lyrimuse://action/play-mode") == nil, true,
                     "播放模式: 认不出的取值、没带取值都认不出")
@@ -188,7 +192,13 @@ func runDeepLinkTests() {
         expectEqual(sim.elapsed(at: t0.addingTimeInterval(1)), 9, "模拟播放: 位置随时间走")
         expectEqual(sim.elapsed(at: t0.addingTimeInterval(5)), 10, "模拟播放: 放到头停在时长上")
         expectEqual(sim.isPlaying(at: t0.addingTimeInterval(5)), false, "模拟播放: 放到头算停了")
-        expectEqual(sim.snapshot(at: t0).bundleIdentifier, PlaybackSimulation.bundleIdentifier, "模拟播放: 快照带模拟的 bundle id")
+        expectEqual(sim.snapshot(at: t0)?.bundleIdentifier, PlaybackSimulation.bundleIdentifier, "模拟播放: 快照带模拟的 bundle id")
+        expectEqual(sim.snapshot(at: t0)?.isAd == nil
+                        && PlaybackSimulation(title: "a", artist: "", album: "", duration: 30, position: 0, playing: true, ad: true)
+                            .snapshot(at: t0)?.isAd == true, true,
+                    "模拟播放: ad=1 时快照带 isAd(走播放器报广告那一路),平时不带")
+        expectEqual(PlaybackSimulation.nothingPlaying(anchoredAt: t0).snapshot(at: t0) == nil, true,
+                    "模拟播放: 什么都没在放时交空快照(同播放器撤掉正在播放)")
         expectEqual(PlaybackPlayer.builtin(forBundleID: PlaybackSimulation.bundleIdentifier) == nil, true,
                     "模拟播放: bundle id 不是任何内置播放器,按播放器分的规则不认它")
         expectEqual(PlaybackSimulation.togglePlaying(now: t0), false, "模拟播放: 没在模拟时不接管播放 / 暂停")
@@ -243,6 +253,8 @@ func runDeepLinkTests() {
             .debug(.state), .debug(.checkpoint), .debug(.restore), .debug(.snapshot(window: "panel")),
             .debug(.simulate(title: "Orange Moon", artist: "Khalil", album: "", duration: 280, position: 12.5, playing: false)),
             .debug(.simulate(title: "x", artist: "y", album: "z", duration: nil, position: 0, playing: true)), .debug(.simulateOff),
+            .debug(.simulate(title: "x", artist: "", album: "", duration: 30, position: 0, playing: true, ad: true)),
+            .debug(.simulateIdle),
             .debug(.toggleFavorite), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
             .setPlayMode(.list), .setPlayMode(.shuffle), .setPlayMode(.repeatAll), .setPlayMode(.repeatOne),
         ] + LyrimuseAction.allCases.map { .action($0, on: nil, stepSeconds: nil) }

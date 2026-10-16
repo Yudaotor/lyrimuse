@@ -24,16 +24,28 @@ public struct PlaybackSimulation: Equatable, Sendable {
     public var position: Double
     public var playing: Bool
     public var anchoredAt: Date
+    /// 这一首是广告:快照带 `isAd`,走播放器自己报广告的那一路判定。
+    public var ad: Bool
+    /// 什么都没在放:每拍交空快照,走播放器撤掉正在播放的那一路(停播页)。
+    public var idle: Bool
 
     public init(title: String, artist: String, album: String, duration: Double?, position: Double, playing: Bool,
-                anchoredAt: Date = Date()) {
+                ad: Bool = false, idle: Bool = false, anchoredAt: Date = Date()) {
         self.title = title
         self.artist = artist
         self.album = album
         self.duration = duration
         self.position = max(0, position)
         self.playing = playing
+        self.ad = ad
+        self.idle = idle
         self.anchoredAt = anchoredAt
+    }
+
+    /// 「什么都没在放」那一份。
+    public static func nothingPlaying(anchoredAt: Date = Date()) -> PlaybackSimulation {
+        PlaybackSimulation(title: "", artist: "", album: "", duration: nil, position: 0, playing: false, idle: true,
+                           anchoredAt: anchoredAt)
     }
 
     /// 此刻的位置(秒),放到头停在时长上。
@@ -49,10 +61,15 @@ public struct PlaybackSimulation: Equatable, Sendable {
         return position + now.timeIntervalSince(anchoredAt) < duration
     }
 
-    public func snapshot(at now: Date) -> MediaControlSnapshot {
-        .forReplay(title: title, artist: artist, album: album, duration: duration, elapsedTime: elapsed(at: now),
-                   playing: isPlaying(at: now), playbackRate: 1, bundleIdentifier: Self.bundleIdentifier,
-                   anchorElapsedTime: nil, capturedAt: now)
+    /// `idle` 时是 nil(同播放器撤掉了正在播放)。
+    public func snapshot(at now: Date) -> MediaControlSnapshot? {
+        guard !idle else { return nil }
+        var snapshot = MediaControlSnapshot.forReplay(
+            title: title, artist: artist, album: album, duration: duration, elapsedTime: elapsed(at: now),
+            playing: isPlaying(at: now), playbackRate: 1, bundleIdentifier: Self.bundleIdentifier,
+            anchorElapsedTime: nil, capturedAt: now)
+        if ad { snapshot.isAd = true }
+        return snapshot
     }
 
     /// 从此刻的位置重新起算(暂停 / 继续、跳转都先落到这里,位置不跳)。

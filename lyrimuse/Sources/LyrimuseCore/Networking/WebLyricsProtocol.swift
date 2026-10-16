@@ -292,6 +292,15 @@ public struct WebLyricsViewport: Hashable, Sendable {
         let dpr = number("dpr") ?? 2
         self.init(width: w, height: h, scale: dpr)
     }
-    /// 宽度够才摆左栏(封面卡 + 曲目信息),同歌词窗口完整布局的 640pt 断点。
+    /// 宽度够才摆完整的播放器(左栏或竖放时顶上那一块),同歌词窗口完整布局的 640pt 断点。
     public var showsPlayerPane: Bool { width >= 640 }
+
+    /// 画面怎么排。`columns`:照歌词窗口左右两栏;`stacked`:够宽但竖着(平板竖放),播放器在上、整宽歌词在下;
+    /// `compact`:窄于 640(手机),顶上一行小封面 + 歌名,整宽歌词,进度和播放键在底部、跟着控件闲置收起。见 19 章决策 18。
+    public enum Arrangement: Equatable, Sendable { case columns, stacked, compact }
+
+    public var arrangement: Arrangement {
+        guard showsPlayerPane else { return .compact }
+        return height > width ? .stacked : .columns
+    }
 }

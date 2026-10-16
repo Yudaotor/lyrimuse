@@ -124,7 +124,8 @@ final class WebLyricsScreenRenderer {
     private enum Drag {
         case none, dismissMenu, progress, volume
         case control(WebLyricsControl)
-        case lyrics(startY: CGFloat, lastY: CGFloat, moved: Bool)
+        /// `seeks`:按下时控件露着,没拖动就跳到那一句;控件收着时这一下只唤出控件,照样能拖着滚。
+        case lyrics(startY: CGFloat, lastY: CGFloat, moved: Bool, seeks: Bool)
         /// 简介正文拖着滚。
         case panelScroll(lastY: CGFloat)
     }
@@ -195,8 +196,9 @@ final class WebLyricsScreenRenderer {
             wrapper.addSublayer(l)
         }
         wrapper.addSublayer(dimLayer)
-        wrapper.addSublayer(pane)
+        // 左栏叠在歌词上面:手机那种排法里底部播放条压着歌词列表的下半截(连滚动指示条)。
         if let l = list.layer { wrapper.addSublayer(l) }
+        wrapper.addSublayer(pane)
         wrapper.addSublayer(emptyState)
         chrome.frame = bounds
         wrapper.addSublayer(chrome)
@@ -269,18 +271,18 @@ final class WebLyricsScreenRenderer {
         switch event.phase {
         case .down:
             drag = target(at: p, chromeShown: chromeShown)
-            if case .progress = drag { scrubFraction = pane.progressFraction(atX: p.x - pane.frame.minX) }
+            if case .progress = drag { scrubFraction = pane.progressFraction(atX: p.x - paneRect.minX) }
             if case .volume = drag, let v = chrome.volume(at: p, requireHit: false) { PlaybackCoordinator.shared.setVolume(v) }
         case .move:
             switch drag {
             case .progress:
-                scrubFraction = pane.progressFraction(atX: p.x - pane.frame.minX)
+                scrubFraction = pane.progressFraction(atX: p.x - paneRect.minX)
             case .volume:
                 if let v = chrome.volume(at: p, requireHit: false) { PlaybackCoordinator.shared.setVolume(v) }
-            case let .lyrics(startY, lastY, moved):
+            case let .lyrics(startY, lastY, moved, seeks):
                 let scrolling = moved || abs(p.y - startY) > 6
                 if scrolling { list.scroll(by: lastY - p.y) }
-                drag = .lyrics(startY: startY, lastY: scrolling ? p.y : lastY, moved: scrolling)
+                drag = .lyrics(startY: startY, lastY: scrolling ? p.y : lastY, moved: scrolling, seeks: seeks)
             case let .panelScroll(lastY):
                 let limit = chrome.scrollArea?.maxScroll ?? 0
                 panelScroll = min(max(panelScroll + lastY - p.y, 0), limit)
@@ -299,8 +301,8 @@ final class WebLyricsScreenRenderer {
                     PlaybackCoordinator.shared.seek(toMs: Int(f * Double(currentDurationMs())))
                 }
                 scrubFraction = nil
-            case let .lyrics(_, _, moved):
-                if !moved { seekToLine(at: p) }
+            case let .lyrics(_, _, moved, seeks):
+                if !moved, seeks { seekToLine(at: p) }
             case .dismissMenu:
                 menu = .none
             default:
@@ -323,7 +325,7 @@ final class WebLyricsScreenRenderer {
         chromeIdle.lastActivity = Date()
         if let area = chrome.scrollArea, area.rect.contains(p) {
             panelScroll = min(max(panelScroll + dy, 0), area.maxScroll)
-        } else if !list.isHidden, lyricsPaneVisible, list.frame.contains(p), !chrome.menuContains(p) {
+        } else if !list.isHidden, lyricsPaneVisible, listFrame.contains(p), !chrome.menuContains(p) {
             list.scroll(by: dy)
         } else {
             return
@@ -333,7 +335,7 @@ final class WebLyricsScreenRenderer {
         frames?.renderNow()
     }
 
-    private var lyricsPaneVisible: Bool { !lyricsHidden || !viewport.showsPlayerPane }
+    private var lyricsPaneVisible: Bool { !lyricsHidden || arrangement == .compact }
 
     private func target(at p: CGPoint, chromeShown: Bool) -> Drag {
         if menu != .none {
@@ -344,21 +346,25 @@ final class WebLyricsScreenRenderer {
         }
         if let c = hitControl(at: p, chromeShown: chromeShown) { return .control(c) }
         if chromeShown, chrome.volume(at: p, requireHit: true) != nil { return .volume }
-        if !pane.isHidden, pane.frame.contains(p),
-           pane.progressHitFrame.contains(CGPoint(x: p.x - pane.frame.minX, y: p.y - pane.frame.minY)),
+        if !pane.isHidden, paneRect.contains(p), pane.transportInteractive,
+           pane.progressHitFrame.contains(CGPoint(x: p.x - paneRect.minX, y: p.y - paneRect.minY)),
            PlaybackCoordinator.shared.acceptsSeek, currentDurationMs() > 0 {
             return .progress
         }
-        if !list.isHidden, lyricsPaneVisible, list.frame.contains(p) { return .lyrics(startY: p.y, lastY: p.y, moved: false) }
+        if !pane.isHidden, pane.transportAbsorbs(CGPoint(x: p.x - paneRect.minX, y: p.y - paneRect.minY)) { return .none }
+        if !list.isHidden, lyricsPaneVisible, listFrame.contains(p) {
+            return .lyrics(startY: p.y, lastY: p.y, moved: false, seeks: chromeShown)
+        }
         return .none
     }
 
     private func hitControl(at p: CGPoint, chromeShown: Bool) -> WebLyricsControl? {
         if menu != .none { return chrome.menuContains(p) ? chrome.control(at: p) : nil }
         if chromeShown, let c = chrome.control(at: p) { return c }
-        guard !pane.isHidden, pane.frame.contains(p) else { return nil }
-        let local = CGPoint(x: p.x - pane.frame.minX, y: p.y - pane.frame.minY)
+        guard !pane.isHidden, paneRect.contains(p) else { return nil }
+        let local = CGPoint(x: p.x - paneRect.minX, y: p.y - paneRect.minY)
         if let c = pane.sideControl(at: local) { return c }
+        guard pane.transportInteractive else { return nil }
         return pane.button(at: local).map { .transport($0) }
     }
 
@@ -428,8 +434,8 @@ final class WebLyricsScreenRenderer {
     }
 
     private func seekToLine(at p: CGPoint) {
-        guard !list.isHidden, list.frame.contains(p),
-              let index = list.lineIndex(at: NSPoint(x: p.x - list.frame.minX, y: p.y - list.frame.minY)),
+        guard !list.isHidden, listFrame.contains(p),
+              let index = list.lineIndex(at: NSPoint(x: p.x - listFrame.minX, y: p.y - listFrame.minY)),
               playback.allLines.indices.contains(index) else { return }
         // 减去当前歌词偏移,同歌词窗口的 onTapLine
         PlaybackCoordinator.shared.seek(
@@ -464,19 +470,65 @@ final class WebLyricsScreenRenderer {
 
     private var width: CGFloat { CGFloat(viewport.width) }
     private var height: CGFloat { CGFloat(viewport.height) }
-    private var coverWidth: CGFloat { min(width * 0.279, 460) }
-    private var listX: CGFloat { viewport.showsPlayerPane ? width * 0.111 + coverWidth : 0 }
-    private var listLeading: CGFloat {
-        viewport.showsPlayerPane ? max(24, width * 0.515 - (width * 0.111 + coverWidth)) : 44
+    /// 封面边长照歌词窗口按宽度算,另按高度封顶:左栏整组约「封面 + 160」高、居中后再上挪 `paneVerticalOffset`,
+    /// 又宽又矮的画面(手机横放)只按宽度算会把封面上缘挤出画面。歌词窗口有最小高度,碰不到。
+    private var coverWidth: CGFloat { max(80, min(width * 0.279, 460, height - 216)) }
+    private var arrangement: WebLyricsViewport.Arrangement { viewport.arrangement }
+    /// 平板竖放时:左右边距、顶上那一块的上缘和高(= 封面边长),歌词从它下面 24 开始。
+    private var stackedSide: CGFloat { max(24, (width * 0.06).rounded()) }
+    private var stackedCover: CGFloat { min(width * 0.28, 280).rounded() }
+    private static let stackedTop: CGFloat = 64
+    private var listX: CGFloat { width * 0.111 + coverWidth }
+    /// 左栏在画面里的框(左上为原点,y 向下,同指针坐标);设给图层时经 `wrapperFrame` 翻一次。
+    private var paneRect: CGRect = .zero
+    /// 指针坐标(y 向下)的框换成外层画布上的 frame:外层整幅上下翻过一次(Metal 纹理原点在左下),直接挂在它下面的图层
+    /// 和视图 y 向上。占满整高的框翻不翻都一样,竖排时顶上那一块、下面的歌词不翻就上下颠倒。
+    private func wrapperFrame(_ r: CGRect) -> CGRect {
+        CGRect(x: r.minX, y: height - r.maxY, width: r.width, height: r.height)
     }
-    private var listTrailing: CGFloat { max(32, width * 0.06) }
+    /// 歌词列表(和空状态)占的那一块(y 向下):左右两栏时是右栏;竖排、手机时在顶上那一块下面、占满整宽。
+    private var listFrame: CGRect {
+        switch arrangement {
+        case .columns:
+            return CGRect(x: listX, y: 0, width: width - listX, height: height)
+        case .stacked:
+            let top = Self.stackedTop + stackedCover + 24
+            return CGRect(x: 0, y: top, width: width, height: height - top)
+        case .compact:
+            let top = WebLyricsPlayerPane.compactHeaderBottom + 12
+            return CGRect(x: 0, y: top, width: width, height: height - top)
+        }
+    }
+    private var listLeading: CGFloat {
+        switch arrangement {
+        case .columns: return max(24, width * 0.515 - (width * 0.111 + coverWidth))
+        case .stacked: return stackedSide
+        case .compact: return WebLyricsPlayerPane.compactSide
+        }
+    }
+    private var listTrailing: CGFloat {
+        switch arrangement {
+        case .columns: return max(32, width * 0.06)
+        case .stacked: return stackedSide
+        case .compact: return WebLyricsPlayerPane.compactSide
+        }
+    }
+    /// 字号按歌词那一栏的宽算;竖排、手机时那一栏是整宽,扣掉左右边距再算,不然平板竖放时字比横放还大一圈。
     private var fontSize: CGFloat {
-        LyricsWindowTypography.listFontSize(columnWidth: width - listX, viewportHeight: height)
+        let column = arrangement == .columns ? width - listX : width - listLeading - listTrailing
+        return LyricsWindowTypography.listFontSize(columnWidth: column, viewportHeight: height)
+    }
+    private var paneStyle: WebLyricsPlayerPane.Style {
+        switch arrangement {
+        case .columns: return .column
+        case .stacked: return lyricsPaneVisible ? .row : .column
+        case .compact: return .compact
+        }
     }
 
     private func layoutComponents() {
-        list.frame = CGRect(x: listX, y: 0, width: width - listX, height: height)
-        emptyState.frame = CGRect(x: listX, y: 0, width: width - listX, height: height)
+        list.frame = wrapperFrame(listFrame)
+        emptyState.frame = wrapperFrame(listFrame)
     }
 
     // MARK: - 每一拍
@@ -541,6 +593,7 @@ final class WebLyricsScreenRenderer {
         if chromeVisible != chromeShown {
             chromeShown = chromeVisible
             chrome.setChromeVisible(chromeVisible, animated: true)
+            pane.setTransportVisible(chromeVisible, animated: true)
             list.setIndicatorVisible(chromeVisible)
             fastUntil = now + Self.transitionHold
         }
@@ -632,12 +685,11 @@ final class WebLyricsScreenRenderer {
         list.isHidden = !showsList
         emptyState.isHidden = showsList
         if !showsList {
-            emptyState.frame = isIdle ? CGRect(x: 0, y: 0, width: width, height: height)
-                : CGRect(x: listX, y: 0, width: width - listX, height: height)
+            emptyState.frame = isIdle ? CGRect(x: 0, y: 0, width: width, height: height) : wrapperFrame(listFrame)
             emptyState.show(icon: state.icon, text: Self.emptyText(state), onArtwork: onArtwork,
                             color: onArtwork ? NSColor.white.withAlphaComponent(0.75) : secondary)
         }
-        pane.isHidden = isIdle || !viewport.showsPlayerPane
+        pane.isHidden = isIdle
         if isIdle || (menu != .none && menu != .translation && pane.isHidden) { menu = .none }
         if case let .editorial(kind) = menu, EditorialNotesStore.shared.card(kind) == nil { menu = .none }
         placePane()
@@ -655,6 +707,7 @@ final class WebLyricsScreenRenderer {
         refreshCount()
         if !pane.isHidden {
             pane.apply(.init(
+                style: paneStyle,
                 artwork: (playback.highResArtworkImage ?? playback.artworkImage)?.cgImage(forProposedRect: nil, context: nil, hints: nil),
                 title: playback.isCurrentTrackAdBreak ? L10n.t("广告中") : playback.displayTitle,
                 artistAlbum: playback.isCurrentTrackAdBreak ? "" : Self.artistAlbum(playback.displayArtist, playback.displayAlbum),
@@ -689,22 +742,23 @@ final class WebLyricsScreenRenderer {
         let primary = onArtwork ? NSColor.white : resolved(.primary)
         chrome.apply(.init(
             onArtwork: onArtwork, primary: primary, darkPanels: onArtwork || isDarkAppearance,
-            volume: isIdle ? nil : PlaybackCoordinator.shared.soundVolume,
+            volume: isIdle || arrangement == .compact ? nil : PlaybackCoordinator.shared.soundVolume,
             showsTranslationButton: !isIdle && playback.hasLyricsContent && (hasTranslation || hasRomanization)
                 && lyricsPaneVisible,
             translationActive: playback.showTranslation && hasTranslation,
-            showsLyricsToggle: !isIdle && viewport.showsPlayerPane,
+            showsLyricsToggle: !isIdle && arrangement != .compact,
             lyricsShown: !lyricsHidden,
             menu: menu, hasTranslation: hasTranslation, hasRomanization: hasRomanization,
             showTranslation: playback.showTranslation, showRomanization: playback.showRomanization,
             offsetMs: PlaybackCoordinator.shared.trackLyricsOffsetMs,
-            moreAnchor: pane.isHidden ? nil : pane.moreButtonFrame.offsetBy(dx: paneX ?? 0, dy: 0),
+            moreAnchor: pane.isHidden ? nil : pane.moreButtonFrame.offsetBy(dx: paneRect.minX, dy: paneRect.minY),
             moreItems: menu == .more ? moreItems() : [],
             infoRows: menu == .info ? infoRows() : [],
             editorialCard: { if case let .editorial(kind) = menu { return EditorialNotesStore.shared.card(kind) }; return nil }(),
             charts: menu == .charts ? chartsState() : nil,
             panelScroll: panelScroll,
             accent: resolved(.accentColor),
+            bottomInset: arrangement == .compact && !pane.isHidden ? max(0, height - pane.transportFrame.minY) : 0,
             size: CGSize(width: width, height: height),
             scale: CGFloat(viewport.pixelWidth) / width))
         sendLinks()
@@ -712,7 +766,7 @@ final class WebLyricsScreenRenderer {
 
         if showsList {
             let fs = fontSize
-            let columnWidth = width - listX
+            let columnWidth = listFrame.width
             let style = LyricsLayerRowStyle(
                 fontSize: fs, romaFontSize: fs * 0.54, translationFontSize: fs * 0.57,
                 fontFamily: playback.lyricsFontFamily, textColor: text, secondaryColor: secondary,
@@ -872,10 +926,29 @@ final class WebLyricsScreenRenderer {
         onText?(text)
     }
 
-    /// 左栏左缘:显示歌词时 0.111W;隐藏歌词时封面挪到正中,沿 `.smooth(duration: 0.35)` 那条弹簧过去(同歌词窗口)。
+    /// 左右两栏:左缘显示歌词时 0.111W;隐藏歌词时封面挪到正中,沿 `.smooth(duration: 0.35)` 那条弹簧过去(同歌词窗口)。
+    /// 平板竖放:顶上那一块;隐藏歌词时换成歌词窗口那种封面在上的一列,摆在正中、封面放大。手机:铺满整幅。
     private func placePane() {
+        switch arrangement {
+        case .columns:
+            break
+        case .stacked:
+            let side = min(width * 0.6, height - 216, 520).rounded()
+            paneRect = lyricsPaneVisible
+                ? CGRect(x: stackedSide, y: Self.stackedTop, width: width - stackedSide * 2, height: stackedCover)
+                : CGRect(x: ((width - side) / 2).rounded(), y: 0, width: side, height: height)
+            pane.frame = wrapperFrame(paneRect)
+            paneX = paneRect.minX
+            return
+        case .compact:
+            paneRect = CGRect(x: 0, y: 0, width: width, height: height)
+            pane.frame = paneRect
+            paneX = 0
+            return
+        }
         let target = lyricsPaneVisible ? width * 0.111 : (width - coverWidth) / 2
         let frame = CGRect(x: target, y: 0, width: coverWidth, height: height)
+        paneRect = frame
         defer { paneX = target }
         guard let from = paneX, from != target else {
             pane.frame = frame
@@ -1142,9 +1215,24 @@ final class WebLyricsFrameSource: @unchecked Sendable {
 /// 字号见 `WebLyricsControlsLayout`,不透明度照歌词窗口(播放 0.85、上 / 下一首 0.72、随机 / 循环熄灭 0.55,
 /// 控制被拦下时主三键再乘 `withheldControlOpacity`),按下缩到 0.8 再弹回(同 `TransportButtonStyle`)。
 /// 整组跟歌词窗口一样垂直居中。暂停时封面缩到 0.732,弹簧 0.5s / 阻尼 0.72。
+///
+/// 竖着的画面另有两种排法(`Style`,见 `WebLyricsViewport.Arrangement`):平板竖放时封面在左、信息在右的一块;
+/// 手机上顶上一行小封面 + 歌名,进度和播放键是底部一块圆角底,跟着控件闲置收起。
 @MainActor
 final class WebLyricsPlayerPane: CALayer {
+    /// `column` 歌词窗口左栏(封面在上);`row` 封面在左、歌名 / 进度 / 播放键在右;`compact` 顶上一行 + 底部播放条。
+    enum Style: Equatable { case column, row, compact }
+
+    /// 手机那种排法顶上那一行:左右边距、上缘、小封面边长;歌词从 `compactHeaderBottom` 往下 12 开始。
+    static let compactSide: CGFloat = 24
+    static let compactTop: CGFloat = 16
+    static let compactCover: CGFloat = 44
+    static var compactHeaderBottom: CGFloat { compactTop + compactCover }
+    /// 底部播放条离画面下缘、左右缘的距离。
+    static let compactBarMargin: CGFloat = 12
+
     struct Content {
+        var style: Style
         var artwork: CGImage?
         var title: String
         var artistAlbum: String
@@ -1162,6 +1250,11 @@ final class WebLyricsPlayerPane: CALayer {
         /// 时间行正中的「收听次数」,nil 不画。
         var countText: String?
         var onArtwork: Bool
+
+        /// 前景色是深色(浅色外观、没有封面背景),底部播放条的底跟着取浅色。
+        var isDarkPrimary: Bool {
+            (primary.usingColorSpace(.sRGB)?.brightnessComponent ?? 1) < 0.5
+        }
     }
 
     struct Controls {
@@ -1193,11 +1286,23 @@ final class WebLyricsPlayerPane: CALayer {
     private let barFill = CALayer()
     private let elapsedLayer = CATextLayer()
     private let durationLayer = CATextLayer()
+    /// 两个时间各占的那一格(14 高),字在格子里竖直居中。
+    private var elapsedSlot = CGRect.zero
+    private var durationSlot = CGRect.zero
     private let glyphs: [WebLyricsControlsLayout.Button: CALayer] = Dictionary(
         uniqueKeysWithValues: WebLyricsControlsLayout.Button.allCases.map { ($0, CALayer()) })
     private let shuffleFill = CALayer()
     private let repeatFill = CALayer()
     private var controlsLayout: WebLyricsControlsLayout?
+    /// 播放控制那一排的左缘(左栏坐标);`controlsLayout` 的格子从 0 起算。
+    private var controlsX: CGFloat = 0
+    /// 进度、时间、播放控制这一组;手机那种排法里整组跟着控件闲置淡出,别的排法一直露着。
+    private let transportGroup = CALayer()
+    /// 手机那种排法里底部播放条的圆角底。
+    private let transportPanel = CALayer()
+    /// 底部播放条的框(左栏坐标),只在 `compact` 时有意义。
+    private(set) var transportFrame: CGRect = .zero
+    private var transportShown = true
     private var content: Content?
     private var playingShown: Bool?
     private var artworkShown: CGImage?
@@ -1219,22 +1324,27 @@ final class WebLyricsPlayerPane: CALayer {
         coverHost.shadowOffset = CGSize(width: 0, height: 12)
         addSublayer(coverHost)
         for l in [titleLayer, artistLayer] { addSublayer(l) }
-        for l in [favoriteCircle, favoriteGlyph, moreCircle, moreGlyph, countLayer] { addSublayer(l) }
-        WebLyricsDraw.noActions([favoriteCircle, favoriteGlyph, moreCircle, moreGlyph, countLayer])
+        for l in [favoriteCircle, favoriteGlyph, moreCircle, moreGlyph] { addSublayer(l) }
+        WebLyricsDraw.noActions([favoriteCircle, favoriteGlyph, moreCircle, moreGlyph, countLayer, transportGroup,
+                                 transportPanel])
+        addSublayer(transportGroup)
+        transportPanel.cornerCurve = .continuous
+        transportGroup.addSublayer(transportPanel)
+        transportGroup.addSublayer(countLayer)
         for t in [elapsedLayer, durationLayer] {
             t.truncationMode = .end
             t.isWrapped = false
-            addSublayer(t)
+            transportGroup.addSublayer(t)
         }
         durationLayer.alignmentMode = .right
         barTrack.cornerRadius = 3
         barFill.cornerRadius = 3
-        addSublayer(barTrack)
-        addSublayer(barFill)
+        transportGroup.addSublayer(barTrack)
+        transportGroup.addSublayer(barFill)
         for l in [shuffleFill, repeatFill] + Array(glyphs.values) {
             l.actions = ["position": NSNull(), "bounds": NSNull(), "contents": NSNull(), "opacity": NSNull(),
                          "hidden": NSNull(), "backgroundColor": NSNull(), "cornerRadius": NSNull()]
-            addSublayer(l)
+            transportGroup.addSublayer(l)
         }
     }
 
@@ -1245,19 +1355,85 @@ final class WebLyricsPlayerPane: CALayer {
 
     func apply(_ next: Content) {
         content = next
-        let w = bounds.width
         let scale = contentsScaleForText
+        transportGroup.frame = bounds
+        transportPanel.isHidden = next.style != .compact
+        switch next.style {
+        case .column: layoutColumn(next, scale: scale)
+        case .row: layoutRow(next, scale: scale)
+        case .compact: layoutCompact(next, scale: scale)
+        }
+        applyTransportOpacity(animated: false)
+    }
+
+    /// 歌词窗口左栏:封面在上,下面歌名、进度、播放键,整组竖直居中。
+    private func layoutColumn(_ next: Content, scale: CGFloat) {
+        let w = bounds.width
         let play = min(33, max(17, w * 0.079))
         let controlsHeight = (play * 1.21).rounded()
         let total = w + 19 + 41 + 19 + 6 + 5 + 13 + 17 + controlsHeight
         let top = ((next.height - total) / 2 - next.verticalOffset).rounded()
+        placeCover(next, side: w, origin: CGPoint(x: 0, y: top), small: false)
+        var y = top + w + 19
+        layoutTitleRow(next, x: 0, rowTop: y, width: w, scale: scale)
+        y += 22 - 3 + 22 + 19
+        y = layoutProgress(next, x: 0, barTop: y, width: w, scale: scale)
+        layoutControls(next, x: 0, width: w, rowTop: y + 13 + 17, rowHeight: controlsHeight, scale: scale)
+    }
 
+    /// 平板竖放时顶上那一块:封面占满这一块的高,右边隔 24 是歌名、进度、播放键,在封面高度里竖直居中。
+    private func layoutRow(_ next: Content, scale: CGFloat) {
+        let side = bounds.height
+        placeCover(next, side: side, origin: .zero, small: false)
+        let x = side + 24
+        let w = bounds.width - x
+        let play = min(33, max(17, w * 0.079))
+        let controlsHeight = (play * 1.21).rounded()
+        let total = 41 + 18 + 6 + 5 + 13 + 16 + controlsHeight
+        var y = ((side - total) / 2).rounded()
+        layoutTitleRow(next, x: x, rowTop: y, width: w, scale: scale)
+        y += 41 + 18
+        y = layoutProgress(next, x: x, barTop: y, width: w, scale: scale)
+        layoutControls(next, x: x, width: w, rowTop: y + 13 + 16, rowHeight: controlsHeight, scale: scale)
+    }
+
+    /// 手机:顶上一行小封面 + 歌名(两行跟封面竖直居中);底部一块圆角底装进度、时间、播放键,左右、下缘各留 12,
+    /// 里面左右 14。
+    private func layoutCompact(_ next: Content, scale: CGFloat) {
+        let side = Self.compactSide, top = Self.compactTop, c = Self.compactCover, margin = Self.compactBarMargin
+        placeCover(next, side: c, origin: CGPoint(x: side, y: top), small: true)
+        let x = side + c + 12
+        layoutTitleRow(next, x: x, rowTop: (top + (c - 41) / 2).rounded(), width: bounds.width - side - x, scale: scale)
+        let panelWidth = bounds.width - margin * 2
+        let inner = panelWidth - 28
+        let play = min(33, max(17, inner * 0.079))
+        let controlsHeight = (play * 1.21).rounded()
+        let panelHeight = 14 + 6 + 5 + 13 + 10 + controlsHeight + 10
+        transportFrame = CGRect(x: margin, y: bounds.height - margin - panelHeight, width: panelWidth, height: panelHeight)
+        transportPanel.frame = transportFrame
+        transportPanel.cornerRadius = 20
+        let panelFill: NSColor = next.onArtwork ? NSColor.black.withAlphaComponent(0.5)
+            : next.isDarkPrimary ? NSColor(white: 0.97, alpha: 0.92) : NSColor(white: 0.13, alpha: 0.92)
+        transportPanel.backgroundColor = panelFill.cgColor
+        transportPanel.borderWidth = 0.5
+        transportPanel.borderColor = (next.onArtwork ? NSColor.white.withAlphaComponent(0.16)
+                                                     : next.primary.withAlphaComponent(0.12)).cgColor
+        let timeTop = layoutProgress(next, x: margin + 14, barTop: transportFrame.minY + 14, width: inner, scale: scale)
+        layoutControls(next, x: margin + 14, width: inner, rowTop: timeTop + 13 + 10, rowHeight: controlsHeight, scale: scale)
+    }
+
+    /// 封面卡、换封面淡入、暂停缩小。`small`(手机顶上那一格)圆角和投影按小尺寸收,也不随暂停缩放。
+    private func placeCover(_ next: Content, side: CGFloat, origin: CGPoint, small: Bool) {
         // 封面卡带着暂停时的缩小变换,只能设 bounds + position:设 frame 会按当前缩放反算 bounds,
         // 暂停时设一次,继续播放缩放回到 1 时封面就大了 1/0.732 倍。
-        coverHost.bounds = CGRect(x: 0, y: 0, width: w, height: w)
-        coverHost.position = CGPoint(x: w / 2, y: top + w / 2)
+        let radius: CGFloat = small ? 6 : 12
+        coverHost.bounds = CGRect(x: 0, y: 0, width: side, height: side)
+        coverHost.position = CGPoint(x: origin.x + side / 2, y: origin.y + side / 2)
         cover.frame = coverHost.bounds
-        coverHost.shadowPath = CGPath(roundedRect: coverHost.bounds, cornerWidth: 12, cornerHeight: 12, transform: nil)
+        cover.cornerRadius = radius
+        coverHost.shadowRadius = small ? 6 : 26
+        coverHost.shadowOffset = CGSize(width: 0, height: small ? 3 : 12)
+        coverHost.shadowPath = CGPath(roundedRect: coverHost.bounds, cornerWidth: radius, cornerHeight: radius, transform: nil)
         coverHost.shadowOpacity = next.shadowOpacity
         if next.artwork !== artworkShown {
             artworkShown = next.artwork
@@ -1267,8 +1443,10 @@ final class WebLyricsPlayerPane: CALayer {
             cover.contents = next.artwork
             cover.backgroundColor = next.artwork == nil ? next.primary.withAlphaComponent(0.1).cgColor : nil
         }
-        if next.isPlaying != playingShown {
-            let target = CATransform3DMakeScale(next.isPlaying ? 1 : 0.732, next.isPlaying ? 1 : 0.732, 1)
+        // `playingShown` 记的是封面此刻是不是原大(小封面不随暂停缩)。
+        let fullSize = next.isPlaying || small
+        if fullSize != playingShown {
+            let target = CATransform3DMakeScale(fullSize ? 1 : 0.732, fullSize ? 1 : 0.732, 1)
             if playingShown != nil {
                 let spring = CASpringAnimation(keyPath: "transform")
                 spring.mass = 1
@@ -1280,45 +1458,73 @@ final class WebLyricsPlayerPane: CALayer {
                 coverHost.add(spring, forKey: "scale")
             }
             coverHost.transform = target
-            playingShown = next.isPlaying
+            playingShown = fullSize
         }
+    }
 
-        var y = top + w + 19
-        layoutTitleRow(next, rowTop: y, width: w, scale: scale)
-        y += 22 - 3 + 22 + 19
-        barTrack.frame = CGRect(x: 0, y: y, width: w, height: 6)
+    /// 进度条(6 高)与下面隔 5 的时间行(两个时间 + 正中的收听次数),返回时间行的上缘。
+    private func layoutProgress(_ next: Content, x: CGFloat, barTop y: CGFloat, width w: CGFloat, scale: CGFloat) -> CGFloat {
+        barTrack.frame = CGRect(x: x, y: y, width: w, height: 6)
         barTrack.backgroundColor = next.primary.withAlphaComponent(0.25).cgColor
         barFill.backgroundColor = next.barFill.cgColor
-        y += 6 + 5
-        elapsedLayer.frame = CGRect(x: 0, y: y, width: w / 2, height: 14)
-        durationLayer.frame = CGRect(x: w / 2, y: y, width: w / 2, height: 14)
+        let timeTop = y + 6 + 5
+        elapsedSlot = CGRect(x: x, y: timeTop, width: w / 2, height: 14)
+        durationSlot = CGRect(x: x + w / 2, y: timeTop, width: w / 2, height: 14)
+        elapsedLayer.frame = Self.timeFrame(in: elapsedSlot)
+        durationLayer.frame = Self.timeFrame(in: durationSlot)
         countLayer.isHidden = next.countText == nil
         if let text = next.countText {
             WebLyricsDraw.place(countLayer, WebLyricsDraw.text(text, font: .monospacedDigitSystemFont(ofSize: 11, weight: .medium),
                                                                 color: next.timeColor, scale: scale),
-                                center: CGPoint(x: w / 2, y: elapsedLayer.frame.midY), scale: scale)
+                                center: CGPoint(x: x + w / 2, y: elapsedSlot.midY), scale: scale)
         }
-        y += 13 + 17
-        layoutControls(next, width: w, rowTop: y, rowHeight: controlsHeight, scale: scale)
+        return timeTop
+    }
+
+    /// 手机那种排法里,底部播放条跟着控件闲置淡入淡出(时长同 `LyricsWindowChromeIdle`);别的排法一直露着。
+    func setTransportVisible(_ visible: Bool, animated: Bool) {
+        transportShown = visible
+        applyTransportOpacity(animated: animated)
+    }
+
+    /// 底部播放条收着时,点在那里只唤出控件,不算按到键、不拖进度。
+    var transportInteractive: Bool { content?.style != .compact || transportShown }
+
+    /// 底部播放条露着时,点在圆角底的空白处也归它(不往下落到歌词上跳句)。
+    func transportAbsorbs(_ point: CGPoint) -> Bool {
+        content?.style == .compact && transportShown && transportFrame.contains(point)
+    }
+
+    private func applyTransportOpacity(animated: Bool) {
+        let target: Float = transportInteractive ? 1 : 0
+        let from = transportGroup.presentation()?.opacity ?? transportGroup.opacity
+        transportGroup.opacity = target
+        guard animated, from != target else { return }
+        let a = CABasicAnimation(keyPath: "opacity")
+        a.fromValue = from
+        a.toValue = target
+        a.duration = target == 1 ? LyricsWindowChromeIdle.fadeInSeconds : LyricsWindowChromeIdle.fadeOutSeconds
+        a.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        transportGroup.add(a, forKey: "lyrimuse.web-transport-fade")
     }
 
     /// 标题行(同 `trackInfoRow`):左边歌名、歌手两行跑马灯(各 22 高、叠 −3,左端渐隐 24、右端 32),右边 26 的圆钮
     /// 星、「…」间隔 8,跟两行字整体竖直居中;字和圆钮之间至少 12 + 8 + 12。圆底有封面背景时白 0.16、否则前景色 0.08,
     /// 字形 14pt 半粗、前景色 0.9。
-    private func layoutTitleRow(_ next: Content, rowTop y: CGFloat, width w: CGFloat, scale: CGFloat) {
+    private func layoutTitleRow(_ next: Content, x: CGFloat, rowTop y: CGFloat, width w: CGFloat, scale: CGFloat) {
         let buttons: CGFloat = next.favorited == nil ? 26 : 26 + 8 + 26
         let textWidth = max(40, w - buttons - 32)
         let animating = !next.controls.reduceMotion
         titleLayer.show(next.title, font: .systemFont(ofSize: 17, weight: .semibold), color: next.primary,
-                        frame: CGRect(x: 0, y: y, width: textWidth, height: 22), scale: scale,
+                        frame: CGRect(x: x, y: y, width: textWidth, height: 22), scale: scale,
                         leadingFade: 24, trailingFade: 32, animating: animating)
         artistLayer.show(next.artistAlbum, font: .systemFont(ofSize: 15.5), color: next.secondary,
-                         frame: CGRect(x: 0, y: y + 19, width: textWidth, height: 22), scale: scale,
+                         frame: CGRect(x: x, y: y + 19, width: textWidth, height: 22), scale: scale,
                          leadingFade: 24, trailingFade: 32, animating: animating)
         let centerY = y + 41 / 2
         let fill = (next.onArtwork ? NSColor.white.withAlphaComponent(0.16) : next.primary.withAlphaComponent(0.08)).cgColor
         let ink = next.primary.withAlphaComponent(0.9)
-        moreButtonFrame = CGRect(x: w - 26, y: centerY - 13, width: 26, height: 26)
+        moreButtonFrame = CGRect(x: x + w - 26, y: centerY - 13, width: 26, height: 26)
         circle(moreCircle, moreGlyph, frame: moreButtonFrame, fill: fill,
                glyph: WebLyricsDraw.symbol("ellipsis", size: 14, weight: .semibold, color: ink, scale: scale), scale: scale)
         favoriteCircle.isHidden = next.favorited == nil
@@ -1369,7 +1575,8 @@ final class WebLyricsPlayerPane: CALayer {
 
     /// 点中哪颗键(左栏坐标,y 向下)。没画出来的随机 / 循环不算。
     func button(at point: CGPoint) -> WebLyricsControlsLayout.Button? {
-        guard let controlsLayout, let content, let b = controlsLayout.button(at: point) else { return nil }
+        guard let controlsLayout, let content,
+              let b = controlsLayout.button(at: CGPoint(x: point.x - controlsX, y: point.y)) else { return nil }
         switch b {
         case .shuffle: return content.controls.shuffleShown ? b : nil
         case .repeatMode: return content.controls.repeatShown ? b : nil
@@ -1392,8 +1599,10 @@ final class WebLyricsPlayerPane: CALayer {
         for l in layers.compactMap({ $0 }) { l.add(pulse, forKey: "press") }
     }
 
-    private func layoutControls(_ next: Content, width w: CGFloat, rowTop: CGFloat, rowHeight: CGFloat, scale: CGFloat) {
+    private func layoutControls(_ next: Content, x: CGFloat, width w: CGFloat, rowTop: CGFloat, rowHeight: CGFloat,
+                                scale: CGFloat) {
         let c = next.controls
+        controlsX = x
         let skipFont = WebLyricsControlsLayout(width: w, rowTop: rowTop, rowHeight: rowHeight, skipGlyphWidth: 0).skipFontSize
         let skipWidth = Self.glyph("backward.fill", size: skipFont, color: next.primary, scale: scale)?.size.width ?? skipFont
         let layout = WebLyricsControlsLayout(width: w, rowTop: rowTop, rowHeight: rowHeight, skipGlyphWidth: skipWidth)
@@ -1413,7 +1622,7 @@ final class WebLyricsPlayerPane: CALayer {
             layer.contents = g.image
             layer.contentsScale = scale
             layer.bounds = CGRect(origin: .zero, size: g.size)
-            layer.position = CGPoint(x: cell.midX, y: cell.midY)
+            layer.position = CGPoint(x: x + cell.midX, y: cell.midY)
             layer.opacity = opacity
         }
         // 点亮态的胶囊底:字形四周内衬横 3、竖 4(同 modeToggleButton)。
@@ -1461,10 +1670,9 @@ final class WebLyricsPlayerPane: CALayer {
         let fraction = durationMs > 0 ? min(1, max(0, Double(positionMs) / Double(durationMs))) : 0
         let track = barTrack.frame
         barFill.frame = CGRect(x: track.minX, y: track.minY, width: track.width * fraction, height: track.height)
-        let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         let scale = contentsScaleForText
-        setText(elapsedLayer, Self.format(positionMs), font: font, color: content.timeColor, frame: elapsedLayer.frame, scale: scale)
-        setText(durationLayer, Self.format(durationMs), font: font, color: content.timeColor, frame: durationLayer.frame, scale: scale)
+        setText(elapsedLayer, Self.format(positionMs), color: content.timeColor, slot: elapsedSlot, scale: scale)
+        setText(durationLayer, Self.format(durationMs), color: content.timeColor, slot: durationSlot, scale: scale)
     }
 
     private var contentsScaleForText: CGFloat {
@@ -1476,13 +1684,21 @@ final class WebLyricsPlayerPane: CALayer {
         return 2
     }
 
-    private func setText(_ layer: CATextLayer, _ text: String, font: NSFont, color: NSColor, frame: CGRect, scale: CGFloat) {
-        let string = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: color])
+    private func setText(_ layer: CATextLayer, _ text: String, color: NSColor, slot: CGRect, scale: CGFloat) {
+        let string = NSAttributedString(string: text, attributes: [.font: Self.timeFont, .foregroundColor: color])
         if (layer.string as? NSAttributedString) != string { layer.string = string }
-        let lineHeight = ceil(font.ascender - font.descender + font.leading)
-        let inset = max(0, (frame.height - lineHeight) / 2).rounded()
-        layer.frame = CGRect(x: frame.minX, y: frame.minY + inset, width: frame.width, height: frame.height - inset)
+        layer.frame = Self.timeFrame(in: slot)
         layer.contentsScale = scale
+    }
+
+    private static var timeFont: NSFont { .monospacedDigitSystemFont(ofSize: 11, weight: .regular) }
+
+    /// 时间字在格子里竖直居中后的 frame。只从格子算,别拿图层自己的 frame 当基准(19 章决策 14)。
+    private static func timeFrame(in slot: CGRect) -> CGRect {
+        let font = timeFont
+        let lineHeight = ceil(font.ascender - font.descender + font.leading)
+        let inset = max(0, (slot.height - lineHeight) / 2).rounded()
+        return CGRect(x: slot.minX, y: slot.minY + inset, width: slot.width, height: slot.height - inset)
     }
 
     static func format(_ ms: Int) -> String {

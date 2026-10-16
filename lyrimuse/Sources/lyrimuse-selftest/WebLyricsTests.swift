@@ -96,6 +96,14 @@ func runWebLyricsTests() {
         expectEqual(phone.showsPlayerPane, false, "网页歌词: 窄于 640 不摆左栏(同歌词窗口)")
         let tablet = WebLyricsViewport(query: ["w": "1180", "h": "820", "dpr": "2"])
         expectEqual(tablet.showsPlayerPane, true, "网页歌词: 平板横屏摆左栏")
+        func arrangement(_ w: Int, _ h: Int) -> WebLyricsViewport.Arrangement { WebLyricsViewport(width: w, height: h, scale: 2).arrangement }
+        expectEqual([arrangement(1180, 820), arrangement(1512, 900), arrangement(844, 390)], [.columns, .columns, .columns],
+                    "网页歌词: 够宽又横着的照歌词窗口左右两栏(手机横放也是)")
+        expectEqual([arrangement(820, 1180), arrangement(744, 1133), arrangement(1024, 1366)], [.stacked, .stacked, .stacked],
+                    "网页歌词: 够宽但竖着(平板竖放)播放器在上、歌词在下")
+        expectEqual([arrangement(390, 844), arrangement(430, 932), arrangement(600, 400)], [.compact, .compact, .compact],
+                    "网页歌词: 窄于 640 是手机那种排法(顶上一行歌名、底部播放条)")
+        expectEqual(arrangement(640, 640), .columns, "网页歌词: 正方形按横着算(高大于宽才算竖)")
         let laptop = WebLyricsViewport(query: ["w": "1512", "h": "900", "dpr": "2"])
         expectEqual([laptop.pixelWidth, laptop.pixelHeight], [3024, 1800], "网页歌词: 笔记本全屏浏览器照样 2x")
         let big = WebLyricsViewport(width: 2560, height: 1440, scale: 3)
@@ -346,6 +354,35 @@ func runWebLyricsTests() {
                     "网页歌词: 副屏网页按画帧时刻匀速放")
         expectEqual(sourceBytes(app("WebLyrics/WebLyricsScreen.swift"), contain: "coverHost.frame ="), false,
                     "网页歌词: 封面卡带缩放变换,不能设 frame(会按缩放反算 bounds,继续播放时封面变大)")
+        expectEqual(sourceBytes(app("WebLyrics/WebLyricsScreen.swift"), contain: "layer.frame = Self.timeFrame(in: slot)")
+                        && sourceBytes(app("WebLyrics/WebLyricsScreen.swift"), contain: "elapsedLayer.frame = Self.timeFrame(in: elapsedSlot)")
+                        && !sourceBytes(app("WebLyrics/WebLyricsScreen.swift"), contain: "frame: elapsedLayer.frame"), true,
+                    "网页歌词: 进度时间布局和更新都从固定格子算位置(拿图层自己的 frame 当基准,重排时两个时间上下跳)")
+        expectEqual(sourceBytes(app("WebLyrics/WebLyricsChrome.swift"), contain: "4 + max(value?.size.width ?? 0, widestValue)")
+                        && sourceBytes(app("WebLyrics/WebLyricsChrome.swift"), contain: "4 + widestButtons + 10 + 6)"), true,
+                    "网页歌词: 「…」菜单宽度按出现「重置」、数值最长时留足(偏移一变就变宽的话 ± 跟着右移,连点「＋」落空)")
+        expectEqual(sourceBytes(app("WebLyrics/WebLyricsObsFeed.swift"),
+                                contain: "if subs.isEmpty { subscribe() }\n        clients[ObjectIdentifier(connection)] = connection"), true,
+                    "网页歌词: OBS 第一条连接先订阅再登记(登记在前会把样式、整首歌词、位置各收两份)")
+        expectEqual(sourceBytes(app("WebLyrics/WebLyricsScreen.swift"), contain: "moved: false, seeks: chromeShown)")
+                        && sourceBytes(app("WebLyrics/WebLyricsScreen.swift"), contain: "if !moved, seeks { seekToLine(at: p) }"), true,
+                    "网页歌词: 控件收着时点歌词只唤出控件、不跳转(触屏上本想点一下叫出控件,会把歌跳走)")
+        expectEqual(sourceBytes(app("WebLyrics/WebLyricsScreen.swift"),
+                                contain: "private var coverWidth: CGFloat { max(80, min(width * 0.279, 460, height - 216)) }"), true,
+                    "网页歌词: 封面边长另按高度封顶(手机横放时左栏整组放不下,封面上缘出画)")
+        let chromeSource = app("WebLyrics/WebLyricsChrome.swift")
+        expectEqual(chromeSource.components(separatedBy: "panel.frame = panelFrame(width: width, height: height, anchor: anchor, in: s.size)").count - 1,
+                    4, "网页歌词: 「…」菜单和三种面板都按 panelFrame 摆(竖排时「…」在顶上,上方放不下要挂到下方、右边要收回画面)")
+        expectEqual(sourceBytes(chromeSource, contain: "let y = above >= 8 ? above : (below + height <= size.height - 8 ? below : 8)"), true,
+                    "网页歌词: 面板上方放不下时挂在「…」下方")
+        let paneSource = app("WebLyrics/WebLyricsScreen.swift")
+        expectEqual(sourceBytes(paneSource, contain: "guard pane.transportInteractive else { return nil }")
+                        && sourceBytes(paneSource, contain: "pane.transportAbsorbs(CGPoint(x: p.x - paneRect.minX, y: p.y - paneRect.minY))")
+                        && sourceBytes(paneSource, contain: "pane.setTransportVisible(chromeVisible, animated: true)"), true,
+                    "网页歌词: 手机底部播放条跟着控件闲置收起;收着时点那里只唤出控件,露着时点空白处不落到歌词上跳句")
+        expectEqual(sourceBytes(paneSource, contain: "list.frame = wrapperFrame(listFrame)")
+                        && sourceBytes(paneSource, contain: "pane.frame = wrapperFrame(paneRect)"), true,
+                    "网页歌词: 竖排时设给外层画布的 frame 要上下翻一次(外层 y 向上),命中仍按 y 向下的框")
         expectEqual(sourceBytes(app("UI/LyricsLayerList.swift"), contain: "r.layer.shouldRasterize = d != 0"), true,
                     "网页歌词: 离屏时不在唱的行缓存成位图(每个逐字遮罩都是主线程上的一趟绘制)")
         expectEqual(sourceBytes(app("UI/LyricsLayerList.swift"), contain: "v.rendersDetached = rendersDetached"), true,
