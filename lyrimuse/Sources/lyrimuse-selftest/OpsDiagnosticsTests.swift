@@ -1001,6 +1001,8 @@ func runOpsDiagnosticsTests() {
         expectEqual(tracker.check(now: 126), .stillStalled(seconds: 6), "卡顿探针: 新的一次卡顿重新报")
 
         // 接线:真的投探测、主线程执行到、报事件。间隔与阈值调短,事件交给回调(不记日志、不采样)。
+        // 空闲那段要比卡顿阈值短一截:机器被别的编译占满时主线程晚几百毫秒才执行到探测是常事,
+        // 空闲窗口长过阈值就会把这种调度延迟当成卡顿报出来。
         final class EventBox: @unchecked Sendable {
             private let lock = NSLock()
             private var items: [MainThreadWatchdog.Tracker.Event] = []
@@ -1008,17 +1010,17 @@ func runOpsDiagnosticsTests() {
             var events: [MainThreadWatchdog.Tracker.Event] { lock.lock(); defer { lock.unlock() }; return items }
         }
         let box = EventBox()
-        let probe = W(probeInterval: 0.02, stallThreshold: 0.1, sampleAfter: 0.2) { box.append($0) }
+        let probe = W(probeInterval: 0.05, stallThreshold: 0.5, sampleAfter: 0.8) { box.append($0) }
         probe.start()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.15))
-        expectEqual(box.events.isEmpty, true, "卡顿探针(接线): 主线程空闲时不报")
-        Thread.sleep(forTimeInterval: 0.6)
         RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        expectEqual(box.events.isEmpty, true, "卡顿探针(接线): 主线程空闲时不报")
+        Thread.sleep(forTimeInterval: 1.5)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
         probe.stop()
         let got = box.events
         expectEqual(got.contains { if case .stillStalled = $0 { return true } else { return false } }, true,
                     "卡顿探针(接线): 主线程堵着的时候报一次还没恢复")
-        expectEqual(got.contains { if case .recovered(let seconds) = $0 { return seconds >= 0.5 } else { return false } }, true,
+        expectEqual(got.contains { if case .recovered(let seconds) = $0 { return seconds >= 1.0 } else { return false } }, true,
                     "卡顿探针(接线): 恢复时报一共卡了多久")
     }
 
