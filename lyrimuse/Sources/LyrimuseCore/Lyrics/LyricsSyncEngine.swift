@@ -1030,6 +1030,91 @@ public final class LyricsSyncEngine {
         return sawNonWhitespace
     }
 
+    /// 段落标记:整行被一对括号包住,括号里是段落名(`LyricDuet.sectionWords`)加可选编号,冒号后面可以跟演唱者
+    /// (「[Verse 1]」「(Chorus)」「[Pre-Chorus]」「[Verse 1: 演唱者]」)。不是唱的内容,在哪一行都删。
+    /// 括号里还有别的词的不认:那是唱出来的括号句。见 08 章决策 52。
+    public static func matchesSectionMarkerLine(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespaces)
+        let pairs: [Character: Character] = ["[": "]", "(": ")", "（": "）", "【": "】"]
+        guard t.count >= 3, let open = t.first, let close = pairs[open], t.last == close else { return false }
+        let inner = t.dropFirst().dropLast()
+        guard !inner.contains(where: { pairs.keys.contains($0) || pairs.values.contains($0) }) else { return false }
+        let name = inner.split(whereSeparator: { $0 == ":" || $0 == "：" }).first.map(String.init) ?? ""
+        return LyricDuet.sectionWords.contains(name.lowercased().filter { $0.isLetter })
+    }
+
+    /// 结束标记:整行去掉首尾的标点、符号、空白之后只剩「end」或「the end」(「END」「The end~」「——END——」「（end）」)。
+    /// strippingCreditLines 只从最后一行往上认,歌词中间唱的「The end」不动。见 08 章决策 52。
+    public static func matchesEndMarkerLine(_ text: String) -> Bool {
+        let core = text.trimmingCharacters(in: symbolOnlyIgnorable).lowercased()
+            .split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        return core == "end" || core == "the end"
+    }
+
+    /// 结束标记跟上一句歌词的起点至少隔这么久才删:标记放在唱完之后,紧跟上一句的「The end」是念白的最后一句。
+    /// 量法见 08 章决策 52。
+    static let endMarkerMinGapMs = 2000
+
+    /// 只有演唱者名 + 冒号、冒号后什么都没有的一行(「歌手名：」「甲/乙：」)。对唱标记认够了的歌,
+    /// 这种行由 LyricDuet 剥空丢掉;整首标记太少、对唱的整份闸门没打开时,它会原样显示成一行人名。名字按「/ & 、 , +」
+    /// 拆开,每一段都得是这首歌的演唱者(`performerKeys`)才删:冒号收尾的行也可能是歌词里的停顿,下一行接着唱。
+    /// 见 08 章决策 52。
+    static func matchesLonePerformerLabel(_ text: String, performers: Set<String>) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespaces)
+        guard !performers.isEmpty, let last = t.last, last == "：" || last == ":" else { return false }
+        let body = t.dropLast()
+        guard !body.contains(where: { $0 == "：" || $0 == ":" }) else { return false }
+        let parts = body.components(separatedBy: CharacterSet(charactersIn: "/／&＆、,，+＋"))
+            .map { performerKey($0) }.filter { !$0.isEmpty }
+        return !parts.isEmpty && parts.allSatisfy(performers.contains)
+    }
+
+    /// 比演唱者名用的归一形式:只留字母数字、转小写(空格、点号、大小写写法不同的同一个名字比得上)。
+    private static func performerKey<S: StringProtocol>(_ s: S) -> String {
+        s.lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    /// 这首歌的演唱者:播放器报的、歌词 [ar:] 标签里的、同曲别的写法里的歌手,按「& / 、 , ; | feat.」拆成单人,
+    /// 各取原样、去括号和简繁孪生的归一形式。
+    private static func performerKeys(trackArtist: String, tags: LRCParser.HeaderTags) -> Set<String> {
+        var out = Set<String>()
+        let separators = CharacterSet(charactersIn: "&＆/／、,，;；|")
+        for artist in [trackArtist, tags.artist] + tags.aliases.map(\.artist) where !artist.isEmpty {
+            let flattened = artist.replacingOccurrences(of: "feat.", with: "/", options: .caseInsensitive)
+            for raw in [artist] + flattened.components(separatedBy: separators) {
+                for form in [raw, stripBracketsForHeaderMatch(raw), HanScript.sibling(raw) ?? ""] {
+                    let key = performerKey(form)
+                    if !key.isEmpty { out.insert(key) }
+                }
+            }
+        }
+        return out
+    }
+
+    /// 0 秒处只写歌名、不带歌手的第一行(「歌名」「《歌名》」「歌名（版本）」)。三个条件同时成立才算:
+    /// 是第一行、从 0 秒开始(调用方判)、后面不再出现同样的一行。只看「等于歌名」不行,很多歌第一句唱的就是歌名
+    /// (见 looksLikeHeaderLine 的注释):第一句等于歌名、不在 0 秒、后面也不再唱的真歌词不少;开口就在 0 秒唱歌名的
+    /// 歌,后面都会再唱。歌名写法同抬头规则(headerTitleForms,含 [ti:] 和同曲别的写法),
+    /// 整行被一对括号或书名号包住的先剥掉那一层。见 08 章决策 52。
+    static func looksLikeTitleOnlyHeaderLine(_ texts: [String], trackTitle: String, trackArtist: String,
+                                             tags: LRCParser.HeaderTags) -> Bool {
+        guard let first = texts.first, texts.count > 1 else { return false }
+        func norm(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber } }
+        let titles = Set(headerIdentities(trackTitle: trackTitle, trackArtist: trackArtist, tags: tags)
+            .flatMap { headerTitleForms($0.title) }.map(norm)).subtracting([""])
+        let pairs: [Character: Character] = ["《": "》", "(": ")", "（": "）", "[": "]", "【": "】"]
+        func forms(_ s: String) -> Set<String> {
+            var t = s.trimmingCharacters(in: .whitespaces)
+            if t.count >= 2, let open = t.first, let close = pairs[open], t.last == close {
+                t = String(t.dropFirst().dropLast())
+            }
+            return Set([t, stripBracketsForHeaderMatch(t)].map(norm)).subtracting([""])
+        }
+        let firstForms = forms(first)
+        guard !firstForms.isDisjoint(with: titles) else { return false }
+        return !texts.dropFirst().contains { !forms($0).isDisjoint(with: firstForms) }
+    }
+
     /// 厂牌/平台的宣传出品语,没有冒号:「网易云音乐特别企划“星辰集”出品」。别的规则都要求冒号,这种完整的一句话
     /// 够不着,跟 LyricNotices.matchesBody / matchesDateStampLine 同属"无冒号、靠形状锚定"那一档。
     ///
@@ -1340,14 +1425,16 @@ public final class LyricsSyncEngine {
     ///
     /// 整份闸门(≥2 行、过半…)是这套规则的一半,只测单行匹配函数测不到它;而从 `allLines()` 的输出反推"哪行被删了"会被另外
     /// 两件事污染:对唱标记会被 LyricDuet 从正文里剥掉、一行多时间戳会被展开成多行,两者都让"文本对不上"却不是过滤造成的。
-    /// 直接曝光这一层,语料统计和单测都拿它当唯一判据。
+    /// 直接曝光这一层,语料统计和单测都拿它当唯一判据。`startsMs` 是每行的起始时刻(load 传解析出来的时间戳),
+    /// 只有「0 秒处只写歌名的抬头」那条要看,不传时那条不生效。
     public static func creditLineDropDecisions(
         _ texts: [String], trackTitle: String = "", trackArtist: String = "",
-        tags: LRCParser.HeaderTags = LRCParser.HeaderTags(), speakerExemptions: Set<String> = []
+        tags: LRCParser.HeaderTags = LRCParser.HeaderTags(), speakerExemptions: Set<String> = [],
+        startsMs: [Int]? = nil
     ) -> [Bool] {
         strippingCreditLines(
             texts, trackTitle: trackTitle, trackArtist: trackArtist, tags: tags,
-            speakerExemptions: speakerExemptions)
+            speakerExemptions: speakerExemptions, startsMs: startsMs)
     }
 
     /// 过滤掉署名/职员表行。关键词表逐行生效(它枚举的都是明确的角色名,误判空间很小);
@@ -1355,7 +1442,8 @@ public final class LyricsSyncEngine {
     // 模块内可见:预生成罗马音(LyricsRomanization.romanizeLRC)要按同一套规则认署名行。
     static func strippingCreditLines(
         _ texts: [String], trackTitle: String = "", trackArtist: String = "",
-        tags: LRCParser.HeaderTags = LRCParser.HeaderTags(), speakerExemptions: Set<String> = []
+        tags: LRCParser.HeaderTags = LRCParser.HeaderTags(), speakerExemptions: Set<String> = [],
+        startsMs: [Int]? = nil
     ) -> [Bool] {
         let texts = texts.map(creditProbeText)
         let useStructural = shouldApplyStructuralCreditFilter(texts, exemptions: speakerExemptions)
@@ -1365,6 +1453,16 @@ public final class LyricsSyncEngine {
         // 免词表的「标签 + 名字串」形状:同样整份 ≥2 行才认(理由见 matchesNameListCreditShape)。
         let nameListHits = texts.filter(matchesNameListCreditShape).count
         let useNameListShape = nameListHits >= 2
+        let performers = performerKeys(trackArtist: trackArtist, tags: tags)
+        // 0 秒处只写歌名的第一行,见 looksLikeTitleOnlyHeaderLine。
+        let titleOnlyHeader = startsMs?.first == 0
+            && looksLikeTitleOnlyHeaderLine(texts, trackTitle: trackTitle, trackArtist: trackArtist, tags: tags)
+        // 认抬头之前先剥掉已认出的演唱者标签:演唱者标注(LyricSpeakerTags)也会落在抬头那一行上
+        // (「v1：歌名 - 歌手」),带着标签认不出抬头。见 08 章决策 52。
+        func headerProbe(_ text: String) -> String {
+            guard let (label, rest, _) = LyricDuet.splitLabel(text), speakerExemptions.contains(label) else { return text }
+            return rest
+        }
         var base = texts.enumerated().map { i, text -> Bool in
             // 演唱者标签行一律放行。放在所有规则**最前面**,而不是只补进
             // 结构化那一条:人名标签同时够得着好几条规则,逐条打补丁迟早漏。
@@ -1372,6 +1470,8 @@ public final class LyricsSyncEngine {
             // 独占一行的标记(`周杰伦：` 后面什么都没有)也走这里保留下来 —— 它确实不该
             // 显示,但该由 LyricDuet 按"剥完为空"丢掉,不是由署名过滤删:两者判据不同,
             // 让署名过滤兼这个职,等于把"这行是不是署名"和"这行有没有正文"混成一件事。
+            // 对唱闸门没打开、这里没放行的独占一行人名,名字对得上演唱者时由下面的 matchesLonePerformerLabel 删
+            // (译文按时间戳跟着丢);开头剥掉演唱者标签后是抬头的,由下面从上往下认抬头那一段删(见 headerProbe)。
             if let (label, _, _) = LyricDuet.splitLabel(text), speakerExemptions.contains(label) {
                 return false
             }
@@ -1414,8 +1514,13 @@ public final class LyricsSyncEngine {
             if matchesAntiPiracySloganLine(text) { return true }
             // 整行只有符号(单独一行 `-` 之类),见 isSymbolOnlyLine。
             if isSymbolOnlyLine(text) { return true }
+            // 段落标记(「[Verse 1]」「(Chorus)」),见 matchesSectionMarkerLine。
+            if matchesSectionMarkerLine(text) { return true }
+            // 只有演唱者名 + 冒号的一行(「歌手名：」),见 matchesLonePerformerLabel。
+            if matchesLonePerformerLabel(text, performers: performers) { return true }
             // 抬头只在第一行认 —— 别的位置出现同样的字样多半是真歌词。
-            if i == 0, looksLikeHeaderLine(text, trackTitle: trackTitle, trackArtist: trackArtist, tags: tags) {
+            if i == 0, titleOnlyHeader
+                || looksLikeHeaderLine(text, trackTitle: trackTitle, trackArtist: trackArtist, tags: tags) {
                 return true
             }
             return useStructural && matchesStructuralCreditPattern(text, exemptions: speakerExemptions)
@@ -1434,8 +1539,11 @@ public final class LyricsSyncEngine {
         // 进了正文再出现同样字样的多半是真歌词。
         for i in texts.indices {
             if base[i] { continue }
+            let probe = headerProbe(texts[i])
             guard looksLikeHeaderLine(texts[i], trackTitle: trackTitle, trackArtist: trackArtist, tags: tags)
                 || looksLikeLabeledHeaderLine(texts[i], trackTitle: trackTitle, trackArtist: trackArtist, tags: tags)
+                || (probe != texts[i]
+                    && looksLikeHeaderLine(probe, trackTitle: trackTitle, trackArtist: trackArtist, tags: tags))
             else { break }
             base[i] = true
         }
@@ -1455,6 +1563,18 @@ public final class LyricsSyncEngine {
             guard matchesStructuralCreditPattern(texts[i], exemptions: speakerExemptions) else { continue }
             drop[i] = true
         }
+        // 结尾的结束标记(「END」「The end~」),见 matchesEndMarkerLine。从最后一行往上,跳过已经判掉的行(结尾那段署名),
+        // 碰到第一句别的就停:只认结尾,歌词中间唱的「The end」不动。给了起始时刻时,跟上一句没判掉的歌词起点隔不到
+        // endMarkerMinGapMs 的不删(念出来的「The end」)。
+        for i in drop.indices.reversed() where !drop[i] {
+            guard matchesEndMarkerLine(texts[i]) else { break }
+            if let starts = startsMs, starts.count == texts.count,
+               let prev = drop.indices[..<i].last(where: { !drop[$0] }),
+               starts[i] - starts[prev] < endMarkerMinGapMs {
+                break
+            }
+            drop[i] = true
+        }
         // 兜底闸门:展示过滤永远不把整份删空。全部行都被判成署名,说明判据碰上了没预料到的写法,这时整片空白比多显示
         // 几行职员表糟得多。跟引擎侧 isCreditOnlyLRC 的整份拒收是两回事:那边拒了还有别的源或纯音乐标记兜底,这边删空了
         // 就真的什么都没有。这道闸不管靠哪条规则判的都生效;整首只有职员表的候选该由引擎侧拒收,别为它削弱这道闸
@@ -1464,7 +1584,8 @@ public final class LyricsSyncEngine {
             // 带标签删空时按不带标签重判,见 08 章决策 38。texts 已归一化过,creditProbeText 再套一次不变。
             if tags != LRCParser.HeaderTags() {
                 return strippingCreditLines(
-                    texts, trackTitle: trackTitle, trackArtist: trackArtist, speakerExemptions: speakerExemptions)
+                    texts, trackTitle: trackTitle, trackArtist: trackArtist, speakerExemptions: speakerExemptions,
+                    startsMs: startsMs)
             }
             return texts.map { _ in false }
         }
@@ -1555,7 +1676,7 @@ public final class LyricsSyncEngine {
         lrcHeaderTags.aliases = headerAliases
         let baseDrop = Self.strippingCreditLines(
             baseTexts, trackTitle: trackTitle, trackArtist: trackArtist, tags: lrcHeaderTags,
-            speakerExemptions: baseSpeakers)
+            speakerExemptions: baseSpeakers, startsMs: parsedBase.map(\.timeMs))
         let filteredBase = zip(parsedBase, baseDrop).compactMap { $0.1 ? nil : $0.0 }
         // 被判成署名的那些**时间戳**。译文/罗马音跟着它走,见下面 romaLines/trLines 的注释。
         var creditTimesMs = Set(zip(parsedBase, baseDrop).compactMap { $0.1 ? $0.0.timeMs : nil })
@@ -1570,7 +1691,7 @@ public final class LyricsSyncEngine {
             allSpeakers.formUnion(wordSpeakers)
             let drop = Self.strippingCreditLines(
                 texts, trackTitle: trackTitle, trackArtist: trackArtist, tags: lrcHeaderTags,
-                speakerExemptions: wordSpeakers)
+                speakerExemptions: wordSpeakers, startsMs: yrc.map(\.timeMs))
             candidateWords = zip(yrc, drop).compactMap { $0.1 ? nil : $0.0 }
             creditTimesMs.formUnion(zip(yrc, drop).compactMap { $0.1 ? $0.0.timeMs : nil })
             creditTexts += zip(texts, drop).compactMap { $0.1 ? $0.0 : nil }

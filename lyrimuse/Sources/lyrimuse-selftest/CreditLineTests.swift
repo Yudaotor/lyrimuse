@@ -1264,6 +1264,9 @@ func runCreditLineTests() {
             // 靠"标签至少两个汉字"这道护栏救回来。一并钉住。
             ("方：开个玩笑", 2), ("宏：盖世英雄到来", 2), ("王：Oh yeah", 2),
             ("华：喔 喔", 1), ("张：回到拉萨", 1),
+            // 首尾漏网那次扫描里核过上下文的真歌词:括号里不是段落名、冒号收尾接着唱、句末带冒号。
+            ("(Drop out them horns)", 2), ("我的心愿：", 1), ("Seventeen steps to a spring:", 1),
+            ("And this is the melody:", 1),
         ]
         for (line, seen) in mustKeep {
             expectEqual(verdict(line), false, "语料回归(必须留下, 语料 \(seen) 次): \(line)")
@@ -1343,6 +1346,11 @@ func runCreditLineTests() {
             ("Songs Title：teach me", "元数据"),
             ("TWV451500005", "ISRC 编码,不带词"),
             ("TW-EW7-20-01006", "ISRC 编码,不带词、连字符分段"),
+            ("[Verse 1]", "段落标记"),
+            ("（chorus）", "段落标记"),
+            ("[Verse 1: Conway the Machine]", "段落标记"),
+            ("END", "结束标记(在最后一行)"),
+            ("——END——", "结束标记(在最后一行)"),
         ]
         for (line, family) in mustDrop {
             expectEqual(verdict(line), true, "语料回归(必须删掉, \(family)): \(line)")
@@ -1444,6 +1452,113 @@ func runCreditLineTests() {
                     "前往专辑: 先用缓存里的曲目链接,当前这首带上专辑名")
         expectEqual(idleView.components(separatedBy: "onOpenAlbum(lastTitle, lastArtist, lastAlbum)").count - 1, 2,
                     "前往专辑: 停播页上次那首的两颗按钮都带上专辑名")
+    }
+
+    // ---- 首尾漏网:段落标记 / 结尾的结束标记 / 0 秒处只写歌名的抬头 / 单独一行的演唱者名 / 带演唱者标签的抬头 ----
+    //
+    // 正例取自本机缓存的全库扫描;反例是同一次扫描里核过上下文、确认是真歌词的行(见 08 章决策 52)。
+    do {
+        let E = LyricsSyncEngine.self
+        // 段落标记:整行一对括号,里面是段落名 + 可选编号,冒号后可以跟演唱者
+        for line in ["[Verse 1]", "[Chorus]", "[Chorus:]", "[Pre-Chorus]", "（Bridge）", "（chorus）", "(Verse 1)",
+                     "[Intro]", "[Outro]", "[Verse 1: Conway the Machine]"] {
+            expectEqual(E.matchesSectionMarkerLine(line), true, "段落标记: \(line)")
+        }
+        for line in ["(Drop out them horns)", "(Chorus girls in a line)", "[Verse 1] I walked alone", "Verse 1",
+                     "(Bridge over troubled water)", "[Chorus x2]", "[]"] {
+            expectEqual(E.matchesSectionMarkerLine(line), false, "段落标记: 括号里不只是段落名的不认: \(line)")
+        }
+        expectEqual(E.creditLineDropDecisions(["[Verse 1]", "Miss you so", "[Chorus]", "Oh I miss you so"]),
+                    [true, false, true, false], "段落标记: 在哪一行都删,唱的行不动")
+
+        // 结束标记:只从最后一行往上认
+        for line in ["END", "End", "end", "The end", "The end~", "——END——", "-----end-----", "~~End~~", "（end）",
+                     "——=END=——", ".end", "end....."] {
+            expectEqual(E.matchesEndMarkerLine(line), true, "结束标记: \(line)")
+        }
+        for line in ["The end of the road", "Weekend", "End of the line", "the end, the end", "Ending"] {
+            expectEqual(E.matchesEndMarkerLine(line), false, "结束标记: 句子里的 end 不认: \(line)")
+        }
+        expectEqual(E.creditLineDropDecisions(["Crazy for you", "because I'm too crazy for you", "END"]),
+                    [false, false, true], "结束标记: 最后一行删")
+        expectEqual(E.creditLineDropDecisions(["la la la", "The end", "back to the start", "END"]),
+                    [false, false, false, true], "结束标记: 只认结尾,歌词中间唱的「The end」不动")
+        expectEqual(E.creditLineDropDecisions(["Baby'baby'yeah", "The end", "制作人：甲", "混音：乙"]),
+                    [false, true, true, true], "结束标记: 后面跟着结尾那段署名也认")
+        expectEqual(E.creditLineDropDecisions(["Crazy for you", "END"], startsMs: [180000, 197430]),
+                    [false, true], "结束标记: 唱完隔了十几秒的标记删")
+        expectEqual(E.creditLineDropDecisions(["I love you guys", "I love you", "The end"], startsMs: [378690, 380920, 381730]),
+                    [false, false, false], "结束标记: 紧跟上一句念出来的「The end」不删")
+        expectEqual(E.creditLineDropDecisions(["All my apples", "制作人：甲", "-end-"], startsMs: [195280, 196000, 197470]),
+                    [false, true, true], "结束标记: 间隔从上一句没判掉的歌词算,中间的署名不算")
+
+        // 0 秒处只写歌名的抬头:第一行、0 秒、后面不再出现,三个条件同时成立
+        func titleOnly(_ doc: [String], _ starts: [Int], title: String, artist: String) -> [Bool] {
+            E.creditLineDropDecisions(doc, trackTitle: title, trackArtist: artist, startsMs: starts)
+        }
+        expectEqual(titleOnly(["完美新世界", "是你一束光", "照亮了我"], [0, 43740, 47000], title: "完美新世界", artist: "林俊杰"),
+                    [true, false, false], "只写歌名的抬头: 0 秒处、后面不再出现的第一行删")
+        expectEqual(titleOnly(["《Right Here Waiting 》", "Oceans apart day after day"], [0, 45450],
+                              title: "Right Here Waiting", artist: "Richard Marx"),
+                    [true, false], "只写歌名的抬头: 书名号包着的也认")
+        expectEqual(titleOnly(["土坡上的狗尾草（DJ 阿卓版）", "土坡上狗尾巴草摇啊"], [0, 2040],
+                              title: "土坡上的狗尾草 (DJ阿卓版伴奏)", artist: "卢润泽"),
+                    [true, false], "只写歌名的抬头: 版本注记跟歌名不一样,去括号后相等也认")
+        expectEqual(titleOnly(["So long, London (So long, London)", "Saw you at the station",
+                               "So long, London (So long, London)"], [0, 3160, 9000],
+                              title: "So Long, London", artist: "Taylor Swift"),
+                    [false, false, false], "只写歌名的抬头: 开口就唱、后面再唱的不当抬头")
+        expectEqual(titleOnly(["She's electric", "She's in a family full of eccentrics"], [23130, 26290],
+                              title: "She's Electric", artist: "Oasis"),
+                    [false, false], "只写歌名的抬头: 不在 0 秒的第一句歌名不动")
+        expectEqual(E.creditLineDropDecisions(["完美新世界", "是你一束光"], trackTitle: "完美新世界", trackArtist: "林俊杰"),
+                    [false, false], "只写歌名的抬头: 没给起始时刻时不生效")
+        do {
+            let engine = LyricsSyncEngine()
+            engine.load(lyrics: "[00:00.00]黑白电影\n[00:29.35]把这段爱情故事 拍成电影\n[00:33.10]回忆在银幕上流转\n",
+                        lyricsTr: "", lyricsRoma: "", lyricsYRC: "", trackTitle: "黑白电影", trackArtist: "周扬")
+            expectEqual(engine.allLines(idPrefix: "t").map { $0.line.plainText ?? "" },
+                        ["把这段爱情故事 拍成电影", "回忆在银幕上流转"], "只写歌名的抬头(端到端): 0 秒那行不显示")
+        }
+        expectEqual(LyricsPreviewText.forPreview("[00:00.00]黑白电影\n[00:29.35]把这段爱情故事 拍成电影",
+                                                 title: "黑白电影", artist: "周扬"),
+                    "[00:29.35]把这段爱情故事 拍成电影", "只写歌名的抬头: 歌词管理的正文预览同一套判定")
+        expectEqual(LRCParser.firstTimestampMs("[01:02.5]x"), 62500, "行首时间戳: 一位小数按 500ms")
+        expectEqual(LRCParser.firstTimestampMs("没有时间戳"), nil, "行首时间戳: 没有时间戳为 nil")
+
+        // 只有演唱者名 + 冒号的一行:名字(按 / & 、 , + 拆开的每一段)都得是这首歌的演唱者
+        expectEqual(E.creditLineDropDecisions(["Joji：", "Walking in the city", "Higher than a kite"],
+                                              trackArtist: "88rising & Joji & GENERATIONS from EXILE TRIBE"),
+                    [true, false, false], "单独一行的演唱者名: 名字对得上这首歌的演唱者就删")
+        expectEqual(E.creditLineDropDecisions(["Bbno$/Yung Gravy：", "Woah woah"], trackArtist: "Baby Gravy & Yung Gravy & bbno$"),
+                    [true, false], "单独一行的演唱者名: 几个人用 / 连起来,每个都是演唱者")
+        expectEqual(E.creditLineDropDecisions(["李佳隆： ", "赶路的蝴蝶"], trackArtist: "step.jad依加 & 李佳隆"),
+                    [true, false], "单独一行的演唱者名: 冒号后带空白也认")
+        expectEqual(E.creditLineDropDecisions(["Sam Smith：", "I don't wanna be alone tonight"],
+                                              tags: LRCParser.HeaderTags(artist: "Sam Smith & Normani")),
+                    [true, false], "单独一行的演唱者名: 歌词 [ar:] 标签里的歌手也算")
+        expectEqual(E.creditLineDropDecisions(["Teddy Riley：", "I've been watching you"], trackArtist: "Michael Jackson"),
+                    [false, false], "单独一行的演唱者名: 名字对不上演唱者的不动")
+        expectEqual(E.creditLineDropDecisions(["是否听见 我的心愿", "我的心愿：", "「我们心里面 一直是晴天」"], trackArtist: "吳青峰"),
+                    [false, false, false], "单独一行的演唱者名: 冒号收尾的歌词停顿不动")
+        expectEqual(E.creditLineDropDecisions(["Joji: walking alone", "Higher"], trackArtist: "Joji"),
+                    [false, false], "单独一行的演唱者名: 冒号后还有字的不归这条管")
+
+        // 演唱者标注落在抬头那一行上:剥掉已认出的标签再认抬头,只在开头认
+        let tagged = ["v1：Love Never Felt So Good - Michael Jackson", "v2：Baby, love never felt so good",
+                      "v2：And I doubt if it ever could", "v1：Not like you hold me"]
+        expectEqual(E.creditLineDropDecisions(tagged, trackTitle: "Love Never Felt So Good", trackArtist: "Michael Jackson",
+                                              speakerExemptions: ["v1", "v2"]),
+                    [true, false, false, false], "带演唱者标签的抬头: 第一行剥掉标签后是抬头就删")
+        expectEqual(E.creditLineDropDecisions(["v1：Baby, love never felt so good", "v2：Love Never Felt So Good - Michael Jackson"],
+                                              trackTitle: "Love Never Felt So Good", trackArtist: "Michael Jackson",
+                                              speakerExemptions: ["v1", "v2"]),
+                    [false, false], "带演唱者标签的抬头: 不在开头的照旧放行")
+        expectEqual(E.creditLineDropDecisions(["作词：甲", "v1：Love Never Felt So Good - Michael Jackson",
+                                               "v2：Baby, love never felt so good", "v1：Not like you hold me"],
+                                              trackTitle: "Love Never Felt So Good", trackArtist: "Michael Jackson",
+                                              speakerExemptions: ["v1", "v2"]),
+                    [true, true, false, false], "带演唱者标签的抬头: 排在开头那段署名后面也认")
     }
 
     // ---- 歌词末尾「创作者：…」的名单(LyricSongwriters) ----

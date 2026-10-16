@@ -129,6 +129,11 @@ public enum LRCParser {
         scan(text).filter { !$0.text.isEmpty }
     }
 
+    /// 一行(带时间戳的原样)里第一个时间戳的毫秒数,没有时间戳为 nil。跟 parse 同一个正则、同一种小数归一。
+    public static func firstTimestampMs(_ line: String) -> Int? {
+        scan(line).first?.timeMs
+    }
+
     /// 只有时间戳、没有文字的行(`[01:23.45]` 独占一行)的时间,升序。打轴的人用它标「上一句到这儿
     /// 唱完」—— 后面往往是一段间奏。`parse(_:)` 把这种行丢掉(它不是一句歌词),行级歌词要知道一句
     /// 唱到几点就只能从这里拿(见 LyricsSyncEngine.gapLineEndMs)。

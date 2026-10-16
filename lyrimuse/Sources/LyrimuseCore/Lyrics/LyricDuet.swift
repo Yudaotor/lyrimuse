@@ -189,8 +189,9 @@ public enum LyricDuet {
     private static let maxNameLabelCount = 40
     private static let maxNameLabelWords = 4
 
-    /// 段落名。单独一行的「Verse 1:」「Pre-Chorus:」不是人。
-    private static let sectionWords: Set<String> = [
+    /// 段落名。单独一行的「Verse 1:」「Pre-Chorus:」不是人;署名过滤认整行段落标记
+    /// (`LyricsSyncEngine.matchesSectionMarkerLine`)也用这一张。
+    static let sectionWords: Set<String> = [
         "verse", "chorus", "prechorus", "postchorus", "bridge", "hook",
         "intro", "outro", "refrain", "interlude", "breakdown", "instrumental",
         "spoken", "rap", "part", "skit", "coda", "drop",

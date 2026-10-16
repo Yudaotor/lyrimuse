@@ -73,12 +73,15 @@ public enum LyricsPreviewText {
             lines.append(Line(raw: trimmed, body: body, isBlank: false))
         }
 
-        let bodies = lines.filter { !$0.isBlank && !$0.body.isEmpty }.map(\.body)
+        let bodyLines = lines.filter { !$0.isBlank && !$0.body.isEmpty }
+        let bodies = bodyLines.map(\.body)
         var drop: [Bool] = Array(repeating: false, count: bodies.count)
         if !bodies.isEmpty {
+            // 起始时刻只有「0 秒处只写歌名的抬头」那条要看;纯文本候选没有时间戳,记成 -1,那条不生效。
             drop = LyricsSyncEngine.creditLineDropDecisions(
                 bodies, trackTitle: title, trackArtist: artist,
-                speakerExemptions: LyricDuet.speakers(in: bodies))
+                speakerExemptions: LyricDuet.speakers(in: bodies),
+                startsMs: bodyLines.map { LRCParser.firstTimestampMs($0.raw) ?? -1 })
         }
 
         var out: [ClassifiedLine] = []

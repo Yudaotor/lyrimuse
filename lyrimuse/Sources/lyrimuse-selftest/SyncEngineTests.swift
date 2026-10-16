@@ -281,7 +281,7 @@ func runSyncEngineTests() {
             + "[73890,1300](73890,1300,0)Too low to get under\n"
             + "[75160,600](75160,600,0)Yeah yeah\n"
             + "[75780,3000](75780,1000,0)You're stuck, (76780,1000,0)in the middle (77780,1000,0)of it all\n"
-            + "[80000,2000](80000,2000,0)end\n"
+            + "[80000,2000](80000,2000,0)yes\n"
         let engine = LyricsSyncEngine()
         engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, lineBreaks: .all)
         engine.setLayoutBudget(budget(400), for: .overlay)
@@ -336,7 +336,7 @@ func runSyncEngineTests() {
 
         // 只有逐行时间的歌:放不下也拆,每段几点开唱按它前面文字的宽度估。
         let lrcEngine = LyricsSyncEngine()
-        lrcEngine.load(lyrics: "[00:10.00]It's a very long line that does not fit\n[00:14.00]ok\n[00:20.00]end\n",
+        lrcEngine.load(lyrics: "[00:10.00]It's a very long line that does not fit\n[00:14.00]ok\n[00:20.00]yes\n",
                        lyricsTr: "", lyricsRoma: "", lyricsYRC: "", lineBreaks: .all)
         lrcEngine.setLayoutBudget(budget(150), for: .overlay)
         let lrcFirst = lrcEngine.surfaceTick(.overlay, atMs: 10100)
@@ -457,7 +457,7 @@ func runSyncEngineTests() {
 
         // 主行一个字切不开、译文放不下:主行整句一段,译文截断到放得下。
         let oneChar = LyricsSyncEngine()
-        oneChar.load(lyrics: "[00:01.00]5\n[00:05.00]end\n", lyricsTr: "[00:01.00]这是一句特别特别长的译文\n",
+        oneChar.load(lyrics: "[00:01.00]5\n[00:05.00]yes\n", lyricsTr: "[00:01.00]这是一句特别特别长的译文\n",
                      lyricsRoma: "", lyricsYRC: "", lineBreaks: .all)
         oneChar.setLayoutBudget(LineLayoutBudget(
             key: "one", main: .init(maxWidth: 60, measure: measure),

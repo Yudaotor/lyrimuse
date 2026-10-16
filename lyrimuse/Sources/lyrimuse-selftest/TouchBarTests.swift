@@ -427,7 +427,7 @@ func runTouchBarTests() {
             + "[73890,1300](73890,1300,0)Too low to get under\n"
             + "[75160,600](75160,600,0)Yeah yeah\n"
             + "[75780,3000](75780,1000,0)You're stuck, (76780,1000,0)in the middle (77780,1000,0)of it all\n"
-            + "[80000,2000](80000,2000,0)end\n"
+            + "[80000,2000](80000,2000,0)yes\n"
         let engine = LyricsSyncEngine()
         engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, lineBreaks: .all)
         expectEqual(engine.surfaceTick(.touchBar, atMs: 76000).line?.plainText, "You're stuck, in the middle of it all",
