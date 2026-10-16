@@ -1768,10 +1768,9 @@ private struct DisplayModeThumbnail: View {
 
     let kind: Kind
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 示意图里的歌词条来回动(14 章决策 109):桌面歌词、触控栏那条从左往右染色,灵动岛那条一伸一缩,菜单栏那条左右滚。
-    /// 只动缩放和位移;减弱动态效果时停在染满的样子。
-    @State private var playing = false
+    /// 往复交给 Core Animation(`LayerLoop`),窗口看不见时停;减弱动态效果时停在染满的样子。
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let width: CGFloat = 56
     private static let height: CGFloat = 36
@@ -1794,18 +1793,15 @@ private struct DisplayModeThumbnail: View {
         .overlay(Self.shape.strokeBorder(Color.primary.opacity(0.18), lineWidth: 1))
         // 纯装饰:位置信息已经由同一行的标题和副标题说清楚了,不让旁白再念一遍图形。
         .accessibilityHidden(true)
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { playing = true }
-        }
     }
 
     /// 正在唱的那一条:淡底上一条强调色从左往右染过去。
     private func singingLine(width: CGFloat, height: CGFloat) -> some View {
         ZStack(alignment: .leading) {
             Capsule().fill(Color.accentColor.opacity(0.3))
-            Capsule().fill(Color.accentColor)
-                .scaleEffect(x: playing || reduceMotion ? 1 : 0.2, anchor: .leading)
+            LayerLoop(motion: .stretch(from: 0.2), animating: !reduceMotion) {
+                Capsule().fill(Color.accentColor)
+            }
         }
         .frame(width: width, height: height)
     }
@@ -1828,11 +1824,11 @@ private struct DisplayModeThumbnail: View {
                 UnevenRoundedRectangle(bottomLeadingRadius: 2, bottomTrailingRadius: 2, style: .continuous)
                     .fill(Color.primary.opacity(0.85))
                     .frame(width: 18, height: Self.menuBarHeight + 2)
-                Capsule()
-                    .fill(Color.accentColor)
-                    .frame(width: 15, height: 4)
-                    .scaleEffect(x: playing ? 1 : 0.55, anchor: .leading)
-                    .padding(.top, 1)
+                LayerLoop(motion: .stretch(from: 0.55), animating: !reduceMotion) {
+                    Capsule().fill(Color.accentColor)
+                }
+                .frame(width: 15, height: 4)
+                .padding(.top, 1)
             }
             .frame(width: Self.width, alignment: .center)
         case .menuBar:
@@ -1840,11 +1836,11 @@ private struct DisplayModeThumbnail: View {
             // 唯一的区别,所以刻意压到最右、和右边框只留 3pt。
             HStack(spacing: 0) {
                 Spacer(minLength: 0)
-                Capsule()
-                    .fill(Color.accentColor)
-                    .frame(width: 20, height: 3)
-                    .offset(x: playing ? 0 : -5)
-                    .padding(.trailing, 3)
+                LayerLoop(motion: .slide(from: -5), animating: !reduceMotion) {
+                    Capsule().fill(Color.accentColor)
+                }
+                .frame(width: 20, height: 3)
+                .padding(.trailing, 3)
             }
             .frame(width: Self.width, height: Self.menuBarHeight, alignment: .trailing)
         case .touchBar:

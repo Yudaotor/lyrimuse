@@ -2335,6 +2335,31 @@ func runSourceContractTests() {
         }
     }
 
+    // ---- 引导页的装饰动画不走 SwiftUI repeatForever ----
+    //
+    // `repeatForever` 是主线程逐帧推进的,窗口被挡住、最小化也照跑(显示方式页四张示意图实测屏幕外的窗口里
+    // 仍占约 1.3% CPU);来回动的示意交给 Core Animation(`LayerLoop`),它自己按窗口可见性停。见 14 章决策 109。
+    do {
+        let appSources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        var offenders: [String] = []
+        for rel in ["OnboardingView.swift", "UI/OnboardingIntroView.swift"] {
+            guard let text = try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8) else {
+                expectEqual(true, false, "引导页动画: 读不到 \(rel)(路径挪了?)")
+                continue
+            }
+            for (index, raw) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+                let line = raw.trimmingCharacters(in: .whitespaces)
+                if !line.hasPrefix("//"), line.contains(".repeatForever(") { offenders.append("\(rel):\(index + 1)") }
+            }
+            if rel == "OnboardingView.swift" {
+                expectEqual(text.contains("LayerLoop(motion:"), true, "引导页动画: 显示方式示意图的往复走 LayerLoop")
+            }
+        }
+        expectEqual(offenders, [], "引导页动画: 别用 SwiftUI .repeatForever 做常驻循环,改 LayerLoop(Core Animation)")
+    }
+
     // ---- 引导页与设置页的"同一件事只有一份实现"----
     //
     // 这一轮做了三件事:引导页播放器从单选改多选、加一格 YouTube Music、后面新增「配对浏览器」
