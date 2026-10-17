@@ -1452,7 +1452,6 @@
     },
     {
       "dest" : "tab:appearance",
-      "lyricsWindowMini" : true,
       "path" : [
         "歌词显示",
         "歌词窗口",
@@ -1491,7 +1490,6 @@
     },
     {
       "dest" : "tab:appearance",
-      "lyricsWindowMini" : true,
       "path" : [
         "歌词显示",
         "歌词窗口",
@@ -1501,13 +1499,23 @@
     },
     {
       "dest" : "tab:appearance",
-      "lyricsWindowMini" : true,
       "path" : [
         "歌词显示",
         "歌词窗口",
         "文字"
       ],
       "title" : "已唱颜色"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : false,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "布局"
+      ],
+      "subtitle" : "完整尺寸歌词的对齐；「自动」按对唱声部对齐",
+      "title" : "对齐方式"
     },
     {
       "dest" : "tab:appearance",

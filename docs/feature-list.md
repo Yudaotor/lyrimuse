@@ -725,7 +725,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 263 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 264 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -996,17 +996,18 @@ Every setting in the Settings window, by where it lives: 263 in all. Type a name
 ### Lyrics Display › Lyrics Window › Text
 
 - **Font Size** (mini size only): Ceiling for the mini size's lyrics font size
-- **Karaoke Effect** (mini size only)
+- **Karaoke Effect**
 - **Text Color**: The lyrics window's text color. Auto switches between light and dark based on the background's brightness.
 - **Custom Color**
 - **Font**: Lyrics font for the lyrics window (main text, translation, romanization)
-- **Weight** (mini size only)
-- **Sung Color** (mini size only)
+- **Weight**
+- **Sung Color**
 
 ### Lyrics Display › Lyrics Window › Layout
 
 - **Long Lines** (mini size only): Whether long lines wrap or scroll in the mini size
 - **Lyrics Layout** (mini size only): One Line: only the current line. Two Lines: the current line and the next one. Multi-Line: a scrolling page of lyrics, like the full size.
+- **Alignment** (full size only): Lyrics alignment in the full size; Automatic follows the duet parts
 
 ### Lyrics Display › Lyrics Window › Behavior
 

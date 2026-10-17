@@ -187,10 +187,15 @@ struct LyricsLayerRowStyle: Equatable, @unchecked Sendable {
     var reduceMotion: Bool
     var duetInsetUnit: CGFloat
     var scale: CGFloat
-    /// 正文的粗细,读音 / 译文按 `OverlayFontWeight.lyricsWindow*Steps` 跟着细(迷你「多行」可调,完整尺寸恒加粗)。
+    /// 正文的粗细,读音 / 译文按 `OverlayFontWeight.lyricsWindow*Steps` 跟着细(完整、迷你各有一颗「粗细」)。
     var weight: OverlayFontWeight = .bold
-    /// 当前行唱过那一端的颜色(迷你的「已唱颜色」),nil = 跟 `textColor`。
+    /// 当前行唱过那一端的颜色(「已唱颜色」),nil = 跟 `textColor`。
     var fillColor: NSColor? = nil
+    /// 完整尺寸「对齐方式」选了左 / 中 / 右:所有行、间奏点、末尾创作者一律按它排,不给对唱留白;nil = 自动。
+    var forcedSide: LyricDuet.Side? = nil
+
+    /// 不分声部的那几样(间奏点、末尾创作者)靠哪一侧。
+    var listSide: LyricDuet.Side { forcedSide ?? (centered ? .center : .leading) }
 
     /// 背景人声的字号(正文的倍数)和整行透明度,同 SwiftUI 版 `LyricsLineRow`。
     static let backgroundScale: CGFloat = 0.61
@@ -399,8 +404,8 @@ extension LyricsLayerRowPlan {
     /// 一句歌词排成一行。`width` 是这一列的宽(对唱留白在里面扣)。
     static func line(index: Int, line: SyncedLyricLine, width: CGFloat, style: LyricsLayerRowStyle,
                      ink: LyricsLayerRowInk, silhouettes: LyricsLayerListText.Silhouettes) -> LyricsLayerRowPlan {
-        let side = line.side ?? (style.centered ? .center : .leading)
-        let insets = duetInsets(line.side, unit: style.duetInsetUnit)
+        let side = style.forcedSide ?? line.side ?? (style.centered ? .center : .leading)
+        let insets = duetInsets(style.forcedSide == nil ? line.side : nil, unit: style.duetInsetUnit)
         let blockX = insets.leading
         let blockW = max(1, width - insets.leading - insets.trailing)
         var elements: [Element] = []
@@ -462,7 +467,8 @@ extension LyricsLayerRowPlan {
             string: list,
             attributes: LyricTypesetting.attributes([.font: ink.footerNames, .foregroundColor: color], for: list, translation: false)))
         let masked = !LyricsLayerListText.hasColorGlyphs(text)
-        guard let para = LyricsLayerListText.paragraph(text, width: width, alignment: .left, mask: masked, scale: style.scale)
+        guard let para = LyricsLayerListText.paragraph(text, width: width, alignment: textAlignment(style.listSide),
+                                                       mask: masked, scale: style.scale)
         else { return nil }
         return LyricsLayerRowPlan(kind: .footer, size: CGSize(width: width, height: para.height), elements: [], background: [],
                                   pictures: placed((para, masked ? ink.text : nil), x: 0, y: 0),

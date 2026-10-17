@@ -153,8 +153,8 @@ public enum LyricsWindowMiniToggle {
 
 /// 迷你「单行 / 双行」那套显示哪几句。
 public enum MiniLyricsSelection {
-    /// 迷你尺寸画的那份行。「卡拉OK效果」(`np:lyricsWindowMiniLyricsKaraoke`)关着时每行压成整行(`SyncedLyricLine.lineLevel`,
-    /// 去掉逐字和逐词读音),id、时间、译文、读音不变;开着原样返回。完整尺寸始终逐字,不经这里(见 07 章决策 116)。
+    /// 歌词窗口画的那份行。「卡拉OK效果」(迷你 `np:lyricsWindowMiniLyricsKaraoke`、完整 `np:lyricsWindowLyricsKaraoke`)关着时
+    /// 每行压成整行(`SyncedLyricLine.lineLevel`,去掉逐字和逐词读音),id、时间、译文、读音不变;开着原样返回(见 07 章决策 116)。
     public static func lines(_ lines: [LyricsWindowLine], karaoke: Bool) -> [LyricsWindowLine] {
         karaoke ? lines : lines.map { LyricsWindowLine(id: $0.id, timeMs: $0.timeMs, line: $0.line.lineLevel) }
     }

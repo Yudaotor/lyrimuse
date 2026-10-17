@@ -40,6 +40,12 @@ final class WindowPlayback: ObservableObject {
     @Published private(set) var miniFontWeight: OverlayFontWeight = .bold
     @Published private(set) var miniKaraokeFill: LyricsWindowKaraokeFill = .text
     @Published private(set) var miniKaraokeFillColor = AppSettings.defaultLyricsWindowMiniKaraokeFillColorFallback
+    /// 完整尺寸那一套:画的那份行(「卡拉OK效果」关着时压成整行)、粗细、已唱颜色、对齐(07 章决策 161)。
+    @Published private(set) var fullLines: [LyricsWindowLine] = []
+    @Published private(set) var fullFontWeight: OverlayFontWeight = .bold
+    @Published private(set) var fullKaraokeFill: LyricsWindowKaraokeFill = .text
+    @Published private(set) var fullKaraokeFillColor = AppSettings.defaultLyricsWindowMiniKaraokeFillColorFallback
+    @Published private(set) var fullAlignment: LyricsRestingAlignment = .automatic
     /// 封面均值色(十六进制,高清替代那份优先),「已唱颜色 › 跟随封面」用。
     @Published private(set) var coverAverageHex: String?
     @Published private(set) var lyricsGapMarkers: [LyricsGapMarker] = []
@@ -149,6 +155,16 @@ final class WindowPlayback: ObservableObject {
                 self?.miniKaraokeFillColor = Color(
                     hexWithAlpha: hex, fallback: AppSettings.defaultLyricsWindowMiniKaraokeFillColorFallback)
             },
+            Publishers.CombineLatest(p.$allLines.removeDuplicates(), s.$lyricsWindowLyricsKaraoke.removeDuplicates())
+                .map { MiniLyricsSelection.lines($0, karaoke: $1) }
+                .sink { [weak self] in self?.fullLines = $0 },
+            s.$lyricsWindowFontWeight.removeDuplicates().sink { [weak self] in self?.fullFontWeight = $0 },
+            s.$lyricsWindowKaraokeFill.removeDuplicates().sink { [weak self] in self?.fullKaraokeFill = $0 },
+            s.$lyricsWindowKaraokeFillColorHex.removeDuplicates().sink { [weak self] hex in
+                self?.fullKaraokeFillColor = Color(
+                    hexWithAlpha: hex, fallback: AppSettings.defaultLyricsWindowMiniKaraokeFillColorFallback)
+            },
+            s.$lyricsWindowLyricsAlignment.removeDuplicates().sink { [weak self] in self?.fullAlignment = $0 },
             Publishers.CombineLatest(LocalPlaybackSource.shared.$artworkAverageHex, p.$highResAverageHex)
                 .map { system, highRes in highRes ?? system }
                 .removeDuplicates()
@@ -1931,15 +1947,25 @@ struct LyricsWindowView: View {
     /// 身份的播放器,allLines 已经是正片的)。台名、「口白」这类口白专用的显示仍按 isRadioTalkBreak。
     private var lyricsOnHold: Bool { playback.isRadioTalkBreak || playback.isCurrentTrackAdBreak }
 
-    /// 歌词区画的那份行:迷你尺寸是 `miniLines`(「卡拉OK效果」关着时压成整行),完整尺寸是 `allLines`。两份的行数、id、
-    /// 时间一样,只按下标 / id / 时间取的地方用哪份都行;要画逐字的地方必须取这一份(见 07 章决策 116)。
-    private var lyricLines: [LyricsWindowLine] { showsMiniLayout ? playback.miniLines : playback.allLines }
+    /// 歌词区画的那份行:迷你尺寸是 `miniLines`、完整尺寸是 `fullLines`(各按自己那颗「卡拉OK效果」,关着时压成整行)。
+    /// 跟 `allLines` 的行数、id、时间一样,只按下标 / id / 时间取的地方用哪份都行;要画逐字的地方必须取这一份(见 07 章决策 116)。
+    private var lyricLines: [LyricsWindowLine] { showsMiniLayout ? playback.miniLines : playback.fullLines }
 
-    /// 迷你逐字填色时已唱那一端的颜色,nil = 跟文字颜色(`LyricsWindowKaraokeFill`,07 章决策 117)。
-    private var miniKaraokeFillColor: Color? {
-        switch playback.miniKaraokeFill {
+    /// 歌词正文的粗细,按此刻的尺寸取那一套(07 章决策 117)。
+    private var lyricFontWeight: OverlayFontWeight { showsMiniLayout ? playback.miniFontWeight : playback.fullFontWeight }
+
+    /// 完整尺寸「对齐方式」选了左 / 中 / 右时所有行按它排;「自动」和迷你是 nil(有对唱标记的按声部,其余照宿主)。
+    private var lyricForcedSide: LyricDuet.Side? { showsMiniLayout ? nil : playback.fullAlignment.forcedDuetSide }
+
+    /// 列表里不分声部的那几样(间奏点、末尾创作者)靠哪一侧:选了对齐方式就跟它,否则迷你「多行」居中、完整靠左。
+    private func listSide(centered: Bool) -> LyricDuet.Side { lyricForcedSide ?? (centered ? .center : .leading) }
+
+    /// 逐字填色时已唱那一端的颜色,按此刻的尺寸取那一套,nil = 跟文字颜色(`LyricsWindowKaraokeFill`,07 章决策 117)。
+    private var karaokeFillColor: Color? {
+        let mode = showsMiniLayout ? playback.miniKaraokeFill : playback.fullKaraokeFill
+        switch mode {
         case .text: return nil
-        case .custom: return playback.miniKaraokeFillColor
+        case .custom: return showsMiniLayout ? playback.miniKaraokeFillColor : playback.fullKaraokeFillColor
         case .artwork:
             guard let hex = playback.coverAverageHex, let ns = NSColor(hexStringWithAlpha: hex) else { return nil }
             // 封面是中性色(纯灰、纯白、近黑)时退回系统强调色(07 章决策 127)。
@@ -2299,7 +2325,7 @@ struct LyricsWindowView: View {
                 weight: playback.miniFontWeight,
                 color: miniPrimaryColor,
                 secondaryColor: miniSecondaryColor,
-                fill: miniKaraokeFillColor,
+                fill: karaokeFillColor,
                 showRomanization: playback.showRomanization,
                 showTranslation: playback.showTranslation,
                 lineOverflow: playback.miniLineOverflow,
@@ -3250,7 +3276,7 @@ struct LyricsWindowView: View {
                 // 却会让带动画的 scrollTo 卡 —— 目标行没渲染过就没有尺寸,滚动动画得一边
                 // 跑一边现算行高,表现就是换行时一顿一顿。全部一次性布好之后,滚动只是
                 // 平移已经量好的内容。
-                VStack(alignment: centered ? .center : .leading, spacing: lyricLineSpacing) {
+                VStack(alignment: listSide(centered: centered).horizontalAlignment, spacing: lyricLineSpacing) {
                     // 前奏的「•••」放在第一行之前(间奏点数据见 gapMarker/gapDotsRow)。
                     if let intro = gapMarker(-1), let firstID = playback.allLines.first?.id {
                         gapDotsRow(intro, id: "\(firstID)-intro", centered: centered)
@@ -3325,8 +3351,9 @@ struct LyricsWindowView: View {
                             },
                             stagger: lineStagger,
                             staggers: staggerAnchor.map { abs(index - $0) <= staggerReach } ?? true,
-                            weight: showsMiniLayout ? playback.miniFontWeight : .bold,
-                            fill: showsMiniLayout ? miniKaraokeFillColor : nil
+                            weight: lyricFontWeight,
+                            fill: karaokeFillColor,
+                            forcedSide: lyricForcedSide
                         )
                         .equatable()
                         .id(item.id)
@@ -3343,6 +3370,7 @@ struct LyricsWindowView: View {
                             fontSize: lyricFontSize,
                             fontFamily: activeFontFamily,
                             textColor: rowTextColor,
+                            side: listSide(centered: centered),
                             reduceMotion: reduceMotion,
                             suspendsBlur: windowController.isLiveResizing
                         )
@@ -3443,8 +3471,8 @@ struct LyricsWindowView: View {
                              showRomanization: playback.showRomanization, showTranslation: playback.showTranslation,
                              centered: centered, wordRise: wordRise, reduceMotion: reduceMotion,
                              duetInsetUnit: duetInsetUnit, scale: displayScale,
-                             weight: showsMiniLayout ? playback.miniFontWeight : .bold,
-                             fillColor: showsMiniLayout ? miniKaraokeFillColor.map { NSColor($0) } : nil),
+                             weight: lyricFontWeight,
+                             fillColor: karaokeFillColor.map { NSColor($0) }, forcedSide: lyricForcedSide),
                 lineSpacing: lyricLineSpacing, showsScrollIndicator: !centered, leading: leading, trailing: trailing,
                 onArtwork: hasArtworkBackground, suspendsBlur: windowController.isLiveResizing,
                 currentLineIndex: playback.currentLineIndex, scrollLineIndex: playback.scrollLineIndex,
@@ -4674,7 +4702,7 @@ struct LyricsWindowView: View {
             // 出现只淡入(Apple 出现时没有放大那一下),收起时缩小淡出。
             .transition(.asymmetric(
                 insertion: .opacity,
-                removal: .opacity.combined(with: .scale(scale: 0.4, anchor: centered ? .center : .leading))))
+                removal: .opacity.combined(with: .scale(scale: 0.4, anchor: listSide(centered: centered).unitPoint))))
         }
     }
 
@@ -5040,9 +5068,11 @@ private struct LyricsLineRow: View, Equatable {
     /// 离滚动锚够近、换句时跟着错开(07 章决策 109)。离得远的行挂 `LyricsLineStaggerModel.inert`:换句那一下不跟着重算,
     /// 错开期间不逐帧刷新。
     var staggers: Bool = true
-    /// 正文的粗细、当前行唱过那一端的颜色:迷你「多行」才传,完整尺寸恒加粗、跟文字颜色(07 章决策 117)。
+    /// 正文的粗细、当前行唱过那一端的颜色,按此刻的尺寸取那一套(07 章决策 117)。
     var weight: OverlayFontWeight = .bold
     var fill: Color? = nil
+    /// 完整尺寸「对齐方式」选了左 / 中 / 右:所有行一律按它排、不给对唱留白;nil = 自动。
+    var forcedSide: LyricDuet.Side? = nil
 
     static func == (a: LyricsLineRow, b: LyricsLineRow) -> Bool {
         // item 比整行而不只比 id:id 只保证同一首、同一份歌词正文,译文 / 罗马音 / 逐字是后补进来的,
@@ -5074,6 +5104,7 @@ private struct LyricsLineRow: View, Equatable {
             && a.secondaryColor == b.secondaryColor
             && a.weight == b.weight
             && a.fill == b.fill
+            && a.forcedSide == b.forcedSide
             && a.showRomanization == b.showRomanization
             && a.showTranslation == b.showTranslation
             && a.reduceMotion == b.reduceMotion
@@ -5094,7 +5125,7 @@ private struct LyricsLineRow: View, Equatable {
     /// 对唱歌词的左右分栏(见 LyricDuet)。
     ///
     /// nil = 这首歌没有演唱者标记(绝大多数歌),按宿主的排版走 —— 完整布局左对齐,迷你「多行」居中。
-    private var side: LyricDuet.Side { item.line.side ?? (centered ? .center : .leading) }
+    private var side: LyricDuet.Side { forcedSide ?? item.line.side ?? (centered ? .center : .leading) }
 
     private var alignment: Alignment {
         switch side {
@@ -5123,7 +5154,7 @@ private struct LyricsLineRow: View, Equatable {
     /// 这里用 `item.line.side` 而不是上面那个 `side` —— 后者已经把 nil 兜底成
     /// `.leading` 了,拿它算留白会让**每一首普通歌**的每一行都凭空缩进右边。
     private var duetInsets: (leading: CGFloat, trailing: CGFloat) {
-        guard let s = item.line.side else { return (0, 0) }
+        guard forcedSide == nil, let s = item.line.side else { return (0, 0) }
         switch s {
         case .leading: return (0, duetInsetUnit)
         case .trailing: return (duetInsetUnit, 0)
@@ -5299,6 +5330,8 @@ private struct LyricsSongwritersFooter: View, Equatable {
     let fontSize: CGFloat
     let fontFamily: String
     let textColor: Color
+    /// 跟「对齐方式」走,自动时靠左。
+    var side: LyricDuet.Side = .leading
     let reduceMotion: Bool
     let suspendsBlur: Bool
 
@@ -5311,7 +5344,8 @@ private struct LyricsSongwritersFooter: View, Equatable {
         return Text(label + value)
             .foregroundStyle(textColor)
             .lyricTypesetting(list)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .multilineTextAlignment(side.textAlignment)
+            .frame(maxWidth: .infinity, alignment: Alignment(horizontal: side.horizontalAlignment, vertical: .center))
             .modifier(RowDepth(inputs: .init(
                 opacity: LyricsWindowDepth.opacity(distance: distance),
                 blur: (reduceMotion || suspendsBlur) ? 0 : LyricsWindowDepth.blurRadius(distance: distance, fontSize: fontSize),
@@ -7891,6 +7925,33 @@ struct EditorialLinkText: View {
         } else if !wants, cursorPushed {
             NSCursor.pop()
             cursorPushed = false
+        }
+    }
+}
+
+/// 声部 / 对齐方式落到 SwiftUI 的对齐值,列表里不分声部的那几样(间奏点、末尾创作者)用。
+private extension LyricDuet.Side {
+    var horizontalAlignment: HorizontalAlignment {
+        switch self {
+        case .leading: return .leading
+        case .center: return .center
+        case .trailing: return .trailing
+        }
+    }
+
+    var textAlignment: TextAlignment {
+        switch self {
+        case .leading: return .leading
+        case .center: return .center
+        case .trailing: return .trailing
+        }
+    }
+
+    var unitPoint: UnitPoint {
+        switch self {
+        case .leading: return .leading
+        case .center: return .center
+        case .trailing: return .trailing
         }
     }
 }

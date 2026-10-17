@@ -109,14 +109,14 @@ public enum SettingsSearchCatalog {
     /// 「歌词显示」页第四段「歌词窗口」的分段取值(`AppearanceSettingsTab.Section.lyricsWindow`)。
     /// 前三段的取值来自 `LyricsSurface`,这一段没有对应的形态,所以单独在这里定义一份。
     public static let lyricsWindowSectionValue = "lyricsWindow"
-    /// 「歌词窗口」那一段只在迷你预览下才有的行(按标题):完整尺寸那一套外观行不传字号、粗细、卡拉OK、已唱颜色、
-    /// 长句处理、歌词布局这些绑定,「布局」「行为」「顶部信息」三组也只在迷你装配。设置页加了这类行要来这里登记。
+    /// 「歌词窗口」那一段只在迷你预览下才有的行(按标题):完整尺寸那一套外观行不传字号、长句处理、歌词布局这些绑定,
+    /// 「行为」「顶部信息」两组也只在迷你装配。设置页加了这类行要来这里登记。
     public static let lyricsWindowMiniOnlyTitles: Set<String> = [
-        "字号", "粗细", "卡拉OK效果", "已唱颜色", "歌词布局", "长句处理", "悬浮淡化", "淡化时点按穿透", "暂停时隐藏",
+        "字号", "歌词布局", "长句处理", "悬浮淡化", "淡化时点按穿透", "暂停时隐藏",
         "全屏时隐藏", "歌名", "歌手", "专辑", "封面", "时间", "宽度", "高度",
     ]
-    /// 只在完整预览下才有的行:「封面」那一组。
-    public static let lyricsWindowFullOnlyTitles: Set<String> = ["动态封面", "动态封面缓存"]
+    /// 只在完整预览下才有的行:「封面」那一组、「布局」里的对齐方式。
+    public static let lyricsWindowFullOnlyTitles: Set<String> = ["动态封面", "动态封面缓存", "对齐方式"]
 
     /// 「歌词显示」页「触控栏」那一段的分段取值(`AppearanceSettingsTab.Section.touchBar`)。跟歌词窗口一样
     /// 不是一个 `LyricsSurface`(见 `touchBar(_:sub:kw:)`),单独定义一份。
@@ -454,15 +454,18 @@ public enum SettingsSearchCatalog {
         // 跟悬浮歌词、灵动岛那两条同名、不同段,各自跳到自己那一段。
         lyricsWindow("暂停时隐藏", kw: ["自动隐藏", "暂停", "没在播放", "迷你"], group: "行为"),
         lyricsWindow("全屏时隐藏", kw: ["全屏", "隐藏", "自动隐藏", "遮挡", "看视频", "fullscreen", "迷你"], group: "行为"),
-        lyricsWindow("卡拉OK效果", kw: ["逐字", "染色", "karaoke", "迷你"], group: "文字"),
+        lyricsWindow("卡拉OK效果", kw: ["逐字", "染色", "karaoke", "迷你", "完整"], group: "文字"),
         // 跟悬浮歌词那条「字体」同名、不同段:搜「字体」会同时列出两处,各自跳到自己那一段。
         lyricsWindow("文字颜色", sub: "歌词窗口的文字颜色；「自动」根据背景亮度在浅色与深色之间切换",
                      kw: ["颜色", "字体颜色", "文字", "浅色", "深色", "自定义", "自动"], group: "文字"),
         lyricsWindow("指定颜色", kw: ["文字颜色", "自定义", "颜色"], group: "文字"),
         lyricsWindow("字体", sub: "歌词窗口的歌词字体（正文、译文、读音）",
                      kw: ["字体", "字型", "font", "歌词窗口"], group: "文字"),
-        lyricsWindow("粗细", kw: ["字重", "weight", "迷你"], group: "文字"),
-        lyricsWindow("已唱颜色", kw: ["卡拉OK", "填色", "逐字", "跟随封面", "颜色", "迷你"], group: "文字"),
+        lyricsWindow("粗细", kw: ["字重", "weight", "迷你", "完整"], group: "文字"),
+        lyricsWindow("已唱颜色", kw: ["卡拉OK", "填色", "逐字", "跟随封面", "颜色", "迷你", "完整"], group: "文字"),
+        // 跟灵动岛、菜单栏、触控栏那几条同名、不同段,各自跳到自己那一段。
+        lyricsWindow("对齐方式", sub: "完整尺寸歌词的对齐；「自动」按对唱声部对齐",
+                     kw: ["对齐", "左对齐", "居中", "右对齐", "靠左", "靠右", "对唱", "alignment"], group: "布局"),
         lyricsWindow("读音", kw: ["罗马音", "罗马字", "注音", "拼音", "粤拼", "发音", "显示读音"], group: "内容"),
         lyricsWindow("译文", kw: ["翻译", "显示译文"], group: "内容"),
         lyricsWindow("歌名", sub: "迷你尺寸顶部显示歌名／歌手／专辑",

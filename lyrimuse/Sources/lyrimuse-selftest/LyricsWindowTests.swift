@@ -756,8 +756,8 @@ func runLyricsWindowTests() {
         let appSettings = source("lyrimuse/Settings/AppSettings.swift")
         expectEqual(sourceBytes(window, contain: "Publishers.CombineLatest(p.$allLines.removeDuplicates(), s.$lyricsWindowMiniLyricsKaraoke.removeDuplicates())\n                .map { MiniLyricsSelection.lines($0, karaoke: $1) }"),
                     true, "迷你卡拉OK接线: 窗口模型按开关算迷你那份行")
-        expectEqual(sourceBytes(window, contain: "private var lyricLines: [LyricsWindowLine] { showsMiniLayout ? playback.miniLines : playback.allLines }"),
-                    true, "迷你卡拉OK接线: 迷你取 miniLines、完整取 allLines")
+        expectEqual(sourceBytes(window, contain: "private var lyricLines: [LyricsWindowLine] { showsMiniLayout ? playback.miniLines : playback.fullLines }"),
+                    true, "迷你卡拉OK接线: 迷你取 miniLines、完整取 fullLines")
         expectEqual(window.components(separatedBy: "let lines = lyricLines\n").count - 1, 2, "迷你卡拉OK接线: 当前句、下一句都从 lyricLines 取")
         expectEqual(sourceBytes(window, contain: "ForEach(Array(lyricLines.enumerated()), id: \\.element.id)")
                     && sourceBytes(window, contain: "lines: lyricLines,"), true,
@@ -766,8 +766,8 @@ func runLyricsWindowTests() {
                     "迷你卡拉OK接线: 列表不直接画 allLines")
         expectEqual(sourceBytes(appSettings, contain: "lyricsWindowMiniLyricsKaraoke = (defaults.object(forKey: Keys.lyricsWindowMiniLyricsKaraoke) as? Bool) ?? true"),
                     true, "迷你卡拉OK: 没存过时默认开")
-        expectEqual(sourceBytes(settingsView, contain: "miniKaraoke: $settings.lyricsWindowMiniLyricsKaraoke")
-                    && sourceBytes(settingsView, contain: "SettingsToggleTile(icon: \"sparkles\", title: L10n.t(\"卡拉OK效果\"), isOn: miniKaraoke)"), true,
+        expectEqual(sourceBytes(settingsView, contain: "karaoke: $settings.lyricsWindowMiniLyricsKaraoke")
+                    && sourceBytes(settingsView, contain: "SettingsToggleTile(icon: \"sparkles\", title: L10n.t(\"卡拉OK效果\"), isOn: karaoke)"), true,
                     "迷你卡拉OK: 「文字」浮层摆这颗开关")
         expectEqual(sourceBytes(settingsView, contain: "s.lyricsWindowMiniLyricsKaraoke = true"), true, "迷你卡拉OK: 「重置」恢复成开")
         let hits = SettingsSearchMatcher.ranked(SettingsSearchCatalog.entries, query: "卡拉OK效果", title: { $0.titleKey },
@@ -848,17 +848,22 @@ func runLyricsWindowTests() {
         expectEqual(!reel.isEmpty && !reel.contains("weight: .bold") && !reel.contains("weight: .medium")
                     && !reel.contains("weight: .semibold"), true, "迷你粗细接线: reel 里没有写死的字重")
         expectEqual(sourceBytes(window, contain: "weight: playback.miniFontWeight,\n"), true, "迷你粗细接线: reel 拿迷你那一档")
-        expectEqual(window.components(separatedBy: "weight: showsMiniLayout ? playback.miniFontWeight : .bold").count - 1, 2,
-                    "迷你粗细接线: 多行的 SwiftUI 列表和图层版列表都按迷你那一档画,完整尺寸恒加粗")
+        expectEqual(window.components(separatedBy: "weight: lyricFontWeight").count - 1 == 2
+                    && sourceBytes(window, contain: "private var lyricFontWeight: OverlayFontWeight { showsMiniLayout ? playback.miniFontWeight : playback.fullFontWeight }"),
+                    true, "迷你粗细接线: 多行的 SwiftUI 列表和图层版列表都按此刻尺寸那一档画")
         expectEqual(sourceBytes(window, contain: "fontFamily: fontFamily,\n            weight: weight))"), true,
                     "迷你粗细接线: 逐字行的排版缓存键带上粗细")
         expectEqual(sourceBytes(layerRows, contain: "main = style.font(style.fontSize, style.weight)"), true,
                     "迷你粗细接线: 图层版列表的正文按 style.weight")
         expectEqual(sourceBytes(window, contain: "if let fill, !forceFilled {"), true, "已唱颜色接线: 非当前行不用填色颜色")
         expectEqual(sourceBytes(window, contain: "fillColor: NSColor(fill ?? color),"), true, "已唱颜色接线: 滚动档当前行按填色颜色")
-        expectEqual(sourceBytes(window, contain: "fill: showsMiniLayout ? miniKaraokeFillColor : nil")
-                    && sourceBytes(window, contain: "fillColor: showsMiniLayout ? miniKaraokeFillColor.map { NSColor($0) } : nil"),
-                    true, "已唱颜色接线: 多行两份列表只在迷你时带填色颜色")
+        expectEqual(sourceBytes(window, contain: "fill: karaokeFillColor,\n                            forcedSide: lyricForcedSide")
+                    && sourceBytes(window, contain: "fillColor: karaokeFillColor.map { NSColor($0) }, forcedSide: lyricForcedSide)")
+                    && sourceBytes(window, contain: "fill: karaokeFillColor,\n                showRomanization"),
+                    true, "已唱颜色接线: reel 和两份列表都带此刻尺寸那一套的填色颜色")
+        expectEqual(sourceBytes(window, contain: "let mode = showsMiniLayout ? playback.miniKaraokeFill : playback.fullKaraokeFill")
+                    && sourceBytes(window, contain: "case .custom: return showsMiniLayout ? playback.miniKaraokeFillColor : playback.fullKaraokeFillColor"),
+                    true, "已唱颜色接线: 档位和自定义色都按此刻的尺寸取")
         expectEqual(layerRows.components(separatedBy: "e.setActive(true)").count - 1, 3,
                     "已唱颜色接线: 图层版当前行(在播 / 停着 / 定格)换上已唱色")
         expectEqual(layerRows.components(separatedBy: "e.setActive(false)").count - 1, 1, "已唱颜色接线: 图层版非当前行换回文字颜色")
@@ -879,7 +884,7 @@ func runLyricsWindowTests() {
                     "已唱颜色: 没存过时跟随文字颜色")
         expectEqual(sourceBytes(settingsView, contain: "fontWeight: $settings.lyricsWindowMiniFontWeight,")
                     && sourceBytes(settingsView, contain: "karaokeFill: $settings.lyricsWindowMiniKaraokeFill,"), true,
-                    "迷你粗细 / 已唱颜色: 设置页只在迷你那一套传这两颗")
+                    "迷你粗细 / 已唱颜色: 设置页迷你那一套绑迷你的两颗")
         expectEqual(sourceBytes(settingsView, contain: "s.lyricsWindowMiniFontWeight = .bold\n            s.lyricsWindowMiniKaraokeFill = .text\n"),
                     true, "迷你粗细 / 已唱颜色: 「重置」恢复默认")
         expectEqual(sourceBytes(hotkeys, contain: ".openLyricsWindowHotkey, .toggleLyricsWindowMiniHotkey,")
@@ -910,9 +915,9 @@ func runLyricsWindowTests() {
                                 + "                    lyricsWindowToolbarButton(.behavior)\n                } else {\n"
                                 + "                    lyricsWindowToolbarGhost(.content)\n"),
                     true, "设置分组: 第一行第三格迷你是行为、完整留隐形占位")
-        expectEqual(sourceBytes(settingsView, contain: "lyricsWindowToolbarButton(.content)\n                if lyricsWindowPreviewShowsMini {\n"
-                                + "                    lyricsWindowToolbarButton(.layout)\n                    lyricsWindowToolbarButton(.info)"),
-                    true, "设置分组: 迷你第二行是内容、布局、顶部信息")
+        expectEqual(sourceBytes(settingsView, contain: "lyricsWindowToolbarButton(.content)\n                lyricsWindowToolbarButton(.layout)\n"
+                                + "                lyricsWindowToolbarButton(.info)\n"),
+                    true, "设置分组: 第二行是内容、布局、顶部信息 / 封面")
         expectEqual(sourceBytes(settingsView, contain: "SettingsGroupCard(title: L10n.t(\"背景\")) { lyricsWindowAppearanceRows(.background) }\n"
                                 + "                    SettingsGroupCard(title: L10n.t(\"文字\")) { lyricsWindowAppearanceRows(.text) }\n"),
                     true, "设置分组: 抽屉按背景、文字分组,跟工具栏同名")
@@ -943,6 +948,64 @@ func runLyricsWindowTests() {
                     Array(repeating: Optional("文字"), count: 7), "设置分组: 搜索里文字那几样归「文字」")
         expectEqual(["歌词布局", "长句处理"].map(group), [Optional("布局"), Optional("布局")], "设置分组: 搜索里歌词布局、长句处理归「布局」")
         expectEqual(group("悬浮淡化"), Optional("行为"), "设置分组: 搜索里悬浮淡化归「行为」")
+        expectEqual(group("对齐方式"), Optional("布局"), "设置分组: 搜索里对齐方式归「布局」")
+    }
+
+    // MARK: - 完整尺寸的卡拉OK效果、粗细、已唱颜色、对齐方式(07 章决策 161)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ path: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let window = source("lyrimuse/UI/LyricsWindowView.swift")
+        let layerRows = source("lyrimuse/UI/LyricsLayerListRow.swift")
+        let layerList = source("lyrimuse/UI/LyricsLayerList.swift")
+        let settingsView = source("lyrimuse/SettingsView.swift")
+        let appSettings = source("lyrimuse/Settings/AppSettings.swift")
+        expectEqual(sourceBytes(window, contain: "Publishers.CombineLatest(p.$allLines.removeDuplicates(), s.$lyricsWindowLyricsKaraoke.removeDuplicates())\n                .map { MiniLyricsSelection.lines($0, karaoke: $1) }\n                .sink { [weak self] in self?.fullLines = $0 }"),
+                    true, "完整卡拉OK接线: 窗口模型按完整尺寸那颗开关算 fullLines")
+        expectEqual(sourceBytes(window, contain: "s.$lyricsWindowFontWeight.removeDuplicates().sink { [weak self] in self?.fullFontWeight = $0 }")
+                    && sourceBytes(window, contain: "s.$lyricsWindowKaraokeFill.removeDuplicates().sink { [weak self] in self?.fullKaraokeFill = $0 }")
+                    && sourceBytes(window, contain: "s.$lyricsWindowLyricsAlignment.removeDuplicates().sink { [weak self] in self?.fullAlignment = $0 }"),
+                    true, "完整尺寸接线: 粗细、已唱颜色、对齐都订阅完整尺寸那一套")
+        // 对齐:「自动」和迷你不强制,左 / 中 / 右时所有行按它排、不给对唱留白,间奏点和末尾创作者跟着走。
+        expectEqual(sourceBytes(window, contain: "private var lyricForcedSide: LyricDuet.Side? { showsMiniLayout ? nil : playback.fullAlignment.forcedDuetSide }")
+                    && sourceBytes(appSettings, contain: "case .automatic: return nil\n        case .leading: return .leading\n        case .center: return .center\n        case .trailing: return .trailing"),
+                    true, "完整对齐: 只在完整尺寸强制,自动 = 不强制")
+        expectEqual(sourceBytes(window, contain: "private var side: LyricDuet.Side { forcedSide ?? item.line.side ?? (centered ? .center : .leading) }")
+                    && sourceBytes(window, contain: "guard forcedSide == nil, let s = item.line.side else { return (0, 0) }")
+                    && sourceBytes(window, contain: "&& a.forcedSide == b.forcedSide"),
+                    true, "完整对齐(SwiftUI 版): 行按强制方向排、不给对唱留白、参与比较")
+        expectEqual(sourceBytes(window, contain: "VStack(alignment: listSide(centered: centered).horizontalAlignment")
+                    && sourceBytes(window, contain: "anchor: listSide(centered: centered).unitPoint")
+                    && sourceBytes(window, contain: "side: listSide(centered: centered),"),
+                    true, "完整对齐(SwiftUI 版): 间奏点和末尾创作者跟着对齐")
+        expectEqual(sourceBytes(layerRows, contain: "let side = style.forcedSide ?? line.side ?? (style.centered ? .center : .leading)")
+                    && sourceBytes(layerRows, contain: "duetInsets(style.forcedSide == nil ? line.side : nil, unit: style.duetInsetUnit)")
+                    && sourceBytes(layerRows, contain: "alignment: textAlignment(style.listSide)")
+                    && sourceBytes(layerList, contain: "switch s.style.listSide {")
+                    && sourceBytes(layerList, contain: "fadeOut(old, side: s.style.listSide)"),
+                    true, "完整对齐(图层版): 行、末尾创作者、间奏点都按强制方向")
+        // 默认值就是加这几项之前完整尺寸的画法,「重置」恢复成它。
+        expectEqual(sourceBytes(appSettings, contain: "lyricsWindowLyricsKaraoke = (defaults.object(forKey: Keys.lyricsWindowLyricsKaraoke) as? Bool) ?? true")
+                    && sourceBytes(appSettings, contain: "lyricsWindowFontWeight = defaults.string(forKey: Keys.lyricsWindowFontWeight)\n            .flatMap(OverlayFontWeight.init(rawValue:)) ?? .bold")
+                    && sourceBytes(appSettings, contain: "lyricsWindowKaraokeFill = defaults.string(forKey: Keys.lyricsWindowKaraokeFill)\n            .flatMap(LyricsWindowKaraokeFill.init(rawValue:)) ?? .text")
+                    && sourceBytes(appSettings, contain: ".flatMap(LyricsRestingAlignment.init(rawValue:)) ?? .automatic"),
+                    true, "完整尺寸: 没存过时卡拉OK开、加粗、跟随文字颜色、自动对齐")
+        expectEqual(sourceBytes(settingsView, contain: "s.lyricsWindowFontFamily = \"\"\n            s.lyricsWindowLyricsKaraoke = true\n"
+                                + "            s.lyricsWindowFontWeight = .bold\n            s.lyricsWindowKaraokeFill = .text\n"
+                                + "            s.lyricsWindowKaraokeFillColorHex = AppSettings.defaultLyricsWindowMiniKaraokeFillColorHex\n"
+                                + "            s.lyricsWindowLyricsAlignment = .automatic\n"),
+                    true, "完整尺寸: 「重置」恢复这几项")
+        expectEqual(sourceBytes(settingsView, contain: "karaoke: $settings.lyricsWindowLyricsKaraoke,\n                fontWeight: $settings.lyricsWindowFontWeight,\n"
+                                + "                karaokeFill: $settings.lyricsWindowKaraokeFill,")
+                    && sourceBytes(settingsView, contain: "alignment: $settings.lyricsWindowLyricsAlignment)")
+                    && sourceBytes(settingsView, contain: "LyricsAlignmentSegmentedControl(selection: alignment, options: LyricsRestingAlignment.notchOptions)"),
+                    true, "完整尺寸: 设置页绑完整那一套,对齐四档含自动")
+        let hits = SettingsSearchMatcher.ranked(SettingsSearchCatalog.entries, query: "对齐方式", title: { $0.titleKey },
+                                                secondary: { $0.keywords + $0.pathKeys })
+        expectEqual(hits.contains { $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue && $0.lyricsWindowMini == false },
+                    true, "完整对齐: 设置搜索搜得到,命中时预览切到完整尺寸")
     }
 
     // MARK: - 记的那块屏不在时借屏、回来时送回去

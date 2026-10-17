@@ -48599,6 +48599,40 @@
           }
         }
       }
+    },
+    "「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic follows the duet parts: each singer's lines sit on their side, choruses are centered, and lines without duet info stay left"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「自動」按對唱聲部對齊：各聲部靠向各自一側，合唱置中，無對唱資訊時靠左"
+          }
+        }
+      }
+    },
+    "完整尺寸歌词的对齐；「自动」按对唱声部对齐" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrics alignment in the full size; Automatic follows the duet parts"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完整尺寸歌詞的對齊；「自動」按對唱聲部對齊"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

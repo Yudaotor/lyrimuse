@@ -503,7 +503,12 @@ final class LyricsLayerListView: NSView {
         let dot = s.style.fontSize * 0.32, spacing = s.style.fontSize * 0.23
         let w = CGFloat(GapDotsCurve.dotCount) * dot + CGFloat(GapDotsCurve.dotCount - 1) * spacing
         let column = max(1, bounds.width - s.leading - s.trailing)
-        let x = s.style.centered ? s.leading + (column - w) / 2 : s.leading
+        let x: CGFloat
+        switch s.style.listSide {
+        case .leading: x = s.leading
+        case .center: x = s.leading + (column - w) / 2
+        case .trailing: x = s.leading + column - w
+        }
         return CGRect(x: x, y: gapY + (s.style.fontSize * 0.5 - dot) / 2, width: w, height: dot)
     }
 
@@ -513,7 +518,7 @@ final class LyricsLayerListView: NSView {
         if let current = gapView, current.index == want?.0 { return }
         if let old = gapView?.view {
             gapView = nil
-            fadeOut(old, centered: s.style.centered)
+            fadeOut(old, side: s.style.listSide)
         }
         guard let (index, marker) = want else { return }
         let v = GapDotsNSView()
@@ -534,7 +539,7 @@ final class LyricsLayerListView: NSView {
         }
     }
 
-    private func fadeOut(_ v: GapDotsNSView, centered: Bool) {
+    private func fadeOut(_ v: GapDotsNSView, side: LyricDuet.Side) {
         guard let l = v.layer, spec?.style.reduceMotion == false else {
             v.removeFromSuperview()
             return
@@ -546,7 +551,13 @@ final class LyricsLayerListView: NSView {
         fade.toValue = 0
         let shrink = CABasicAnimation(keyPath: "transform")
         let scale = CATransform3DMakeScale(0.4, 0.4, 1)
-        let ax = centered ? v.bounds.width / 2 : 0, ay = v.bounds.height / 2
+        let ax: CGFloat
+        switch side {
+        case .leading: ax = 0
+        case .center: ax = v.bounds.width / 2
+        case .trailing: ax = v.bounds.width
+        }
+        let ay = v.bounds.height / 2
         shrink.toValue = NSValue(caTransform3D: CATransform3DConcat(CATransform3DConcat(
             CATransform3DMakeTranslation(-ax, -ay, 0), scale), CATransform3DMakeTranslation(ax, ay, 0)))
         for a in [fade, shrink] {

@@ -127,7 +127,7 @@ enum MenuBarLyricsIconPosition: String, Codable, Hashable, CaseIterable {
 //     `MarqueeText`),文字比容器宽,同样没有空位 —— 这一条没法靠设置项显隐规避(同一首歌
 //     里长短句混着),只能在 help 文案里说明。
 enum LyricsRestingAlignment: String, Codable, Hashable, CaseIterable {
-    /// 按对唱声部自动(目前只有灵动岛提供),见上面那段。
+    /// 按对唱声部自动(灵动岛、触控栏、歌词窗口完整尺寸提供),见上面那段。
     case automatic
     case leading
     case center
@@ -144,6 +144,16 @@ extension LyricsRestingAlignment {
     /// 把「自动」按这一句的声部落成一个确定的方向;非自动原样返回。**永远返回非 automatic**,
     /// 三个消费点(主行 / 副行 / 展开态「下一句」)要的是一个确定的方向。
     /// 兜底 `.leading` 的理由见类型头注。
+    /// 歌词窗口完整尺寸用:左 / 中 / 右三档所有行一律按它排,「自动」是 nil(有对唱标记的按声部,其余照宿主的兜底)。
+    var forcedDuetSide: LyricDuet.Side? {
+        switch self {
+        case .automatic: return nil
+        case .leading: return .leading
+        case .center: return .center
+        case .trailing: return .trailing
+        }
+    }
+
     func resolved(duetSide: LyricDuet.Side?) -> LyricsRestingAlignment {
         guard self == .automatic else { return self }
         switch duetSide {
@@ -360,6 +370,11 @@ final class AppSettings: ObservableObject {
         static let lyricsWindowBackgroundColorEndHex = "np:lyricsWindowBackgroundColorEndHex"
         static let lyricsWindowGradientDirection = "np:lyricsWindowGradientDirection"
         static let lyricsWindowFontFamily = "np:lyricsWindowFontFamily"
+        static let lyricsWindowLyricsKaraoke = "np:lyricsWindowLyricsKaraoke"
+        static let lyricsWindowFontWeight = "np:lyricsWindowFontWeight"
+        static let lyricsWindowKaraokeFill = "np:lyricsWindowKaraokeFill"
+        static let lyricsWindowKaraokeFillColorHex = "np:lyricsWindowKaraokeFillColorHex"
+        static let lyricsWindowLyricsAlignment = "np:lyricsWindowLyricsAlignment"
         static let lyricsWindowMiniHeaderFields = "np:lyricsWindowMiniHeaderFields"
         static let lyricsWindowMiniShowsTime = "np:lyricsWindowMiniShowsTime"
         static let lyricsWindowMiniShowsCover = "np:lyricsWindowMiniShowsCover"
@@ -611,7 +626,7 @@ final class AppSettings: ObservableObject {
     ///
     /// 按形态各一颗(悬浮歌词 →「文字」浮层,灵动岛 →「歌词行」浮层,菜单栏 → 既有的
     /// `menuBarLyricsKaraoke`):卡拉OK是某个面怎么画的问题,跟繁简 / 罗马音那类改歌词内容本身的
-    /// 设置不是一类,所以不做成引擎层的全局开关。歌词窗口完整尺寸**始终**逐字、不给开关,迷你尺寸是
+    /// 设置不是一类,所以不做成引擎层的全局开关。歌词窗口完整 / 迷你尺寸各一颗:`lyricsWindowLyricsKaraoke` /
     /// `lyricsWindowMiniLyricsKaraoke`。
     ///
     /// didSet 只写 UserDefaults;生效靠各展示面的 playback 模型订阅这个 @Published 重新压行,
@@ -1429,6 +1444,31 @@ final class AppSettings: ObservableObject {
     @Published var lyricsWindowFontFamily: String {
         didSet { defaults.set(lyricsWindowFontFamily, forKey: Keys.lyricsWindowFontFamily) }
     }
+    /// 完整尺寸的「卡拉OK效果」「粗细」「已唱颜色」,跟迷你那三项同名同结构、各存各的(07 章决策 161)。卡拉OK关着时完整尺寸
+    /// 那份歌词压成整行高亮(`MiniLyricsSelection.lines`),生效靠歌词窗口的 `WindowPlayback.fullLines` 订阅它重新压行。
+    @Published var lyricsWindowLyricsKaraoke: Bool {
+        didSet { defaults.set(lyricsWindowLyricsKaraoke, forKey: Keys.lyricsWindowLyricsKaraoke) }
+    }
+    @Published var lyricsWindowFontWeight: OverlayFontWeight {
+        didSet { defaults.set(lyricsWindowFontWeight.rawValue, forKey: Keys.lyricsWindowFontWeight) }
+    }
+    @Published var lyricsWindowKaraokeFill: LyricsWindowKaraokeFill {
+        didSet { defaults.set(lyricsWindowKaraokeFill.rawValue, forKey: Keys.lyricsWindowKaraokeFill) }
+    }
+    /// 「已唱颜色 › 自定义颜色」那一色(`custom` 档才读),默认同迷你那一色。
+    @Published var lyricsWindowKaraokeFillColorHex: String {
+        didSet {
+            defaults.set(lyricsWindowKaraokeFillColorHex, forKey: Keys.lyricsWindowKaraokeFillColorHex)
+            lyricsWindowKaraokeFillColor = Color(hexWithAlpha: lyricsWindowKaraokeFillColorHex,
+                                                 fallback: Self.defaultLyricsWindowMiniKaraokeFillColorFallback)
+        }
+    }
+    private(set) var lyricsWindowKaraokeFillColor: Color = AppSettings.defaultLyricsWindowMiniKaraokeFillColorFallback
+    /// 完整尺寸歌词的对齐方式。「自动」= 有对唱标记的行按声部、其余靠左;左 / 中 / 右三档所有行一律按它排,不再按声部
+    /// 分左右(`LyricsRestingAlignment.forcedDuetSide`)。迷你尺寸没有这一项。
+    @Published var lyricsWindowLyricsAlignment: LyricsRestingAlignment {
+        didSet { defaults.set(lyricsWindowLyricsAlignment.rawValue, forKey: Keys.lyricsWindowLyricsAlignment) }
+    }
     // MARK: 迷你尺寸自己那一套外观
     //
     // 跟上面完整尺寸那组**同名同结构、各存各的**。两种尺寸是两种用法:完整尺寸多半是摊开来看的,
@@ -1507,12 +1547,12 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(lyricsWindowMiniLyricsLayout.rawValue, forKey: Keys.lyricsWindowMiniLyricsLayout) }
     }
     /// 迷你尺寸的「卡拉OK效果」:关掉时迷你那份歌词压成整行高亮(`MiniLyricsSelection.lines`),单行 / 双行 / 多行一样;
-    /// 完整尺寸始终逐字,没有这一项(见 07 章决策 116)。生效靠歌词窗口的 `WindowPlayback.miniLines` 订阅它重新压行。
+    /// 完整尺寸另有一颗 `lyricsWindowLyricsKaraoke`(见 07 章决策 116)。生效靠歌词窗口的 `WindowPlayback.miniLines` 订阅它重新压行。
     @Published var lyricsWindowMiniLyricsKaraoke: Bool {
         didSet { defaults.set(lyricsWindowMiniLyricsKaraoke, forKey: Keys.lyricsWindowMiniLyricsKaraoke) }
     }
-    /// 迷你尺寸歌词的粗细:选的是正文那一档,读音 / 译文按 `OverlayFontWeight.lyricsWindow*Steps` 跟着细;完整尺寸恒加粗,
-    /// 没有这一项(见 07 章决策 117)。
+    /// 迷你尺寸歌词的粗细:选的是正文那一档,读音 / 译文按 `OverlayFontWeight.lyricsWindow*Steps` 跟着细;完整尺寸另有一颗
+    /// `lyricsWindowFontWeight`(见 07 章决策 117)。
     @Published var lyricsWindowMiniFontWeight: OverlayFontWeight {
         didSet { defaults.set(lyricsWindowMiniFontWeight.rawValue, forKey: Keys.lyricsWindowMiniFontWeight) }
     }
@@ -2379,6 +2419,19 @@ final class AppSettings: ObservableObject {
         lyricsWindowGradientDirection = defaults.string(forKey: Keys.lyricsWindowGradientDirection)
             .flatMap(LyricsWindowGradientDirection.init(rawValue:)) ?? .vertical
         lyricsWindowFontFamily = defaults.string(forKey: Keys.lyricsWindowFontFamily) ?? ""
+        // 默认开、加粗、跟随文字颜色、自动对齐:加这几项之前完整尺寸就是这样画的,升级上来的人不变。
+        lyricsWindowLyricsKaraoke = (defaults.object(forKey: Keys.lyricsWindowLyricsKaraoke) as? Bool) ?? true
+        lyricsWindowFontWeight = defaults.string(forKey: Keys.lyricsWindowFontWeight)
+            .flatMap(OverlayFontWeight.init(rawValue:)) ?? .bold
+        lyricsWindowKaraokeFill = defaults.string(forKey: Keys.lyricsWindowKaraokeFill)
+            .flatMap(LyricsWindowKaraokeFill.init(rawValue:)) ?? .text
+        let fullFillHex = defaults.string(forKey: Keys.lyricsWindowKaraokeFillColorHex)
+            ?? Self.defaultLyricsWindowMiniKaraokeFillColorHex
+        lyricsWindowKaraokeFillColorHex = fullFillHex
+        lyricsWindowKaraokeFillColor = Color(hexWithAlpha: fullFillHex,
+                                             fallback: Self.defaultLyricsWindowMiniKaraokeFillColorFallback)
+        lyricsWindowLyricsAlignment = defaults.string(forKey: Keys.lyricsWindowLyricsAlignment)
+            .flatMap(LyricsRestingAlignment.init(rawValue:)) ?? .automatic
         // 没存过(全新安装 / 老用户升级)才落默认档。不能用 `integer(forKey:)` 直接取 ——
         // 它对"没存过"和"存了 0(一样都不显示)"返回同一个 0,后者是合法选择,会被悄悄改回默认。
         lyricsWindowMiniHeaderFields = (defaults.object(forKey: Keys.lyricsWindowMiniHeaderFields) as? Int)

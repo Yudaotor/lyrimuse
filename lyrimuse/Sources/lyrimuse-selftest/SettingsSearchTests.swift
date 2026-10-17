@@ -372,23 +372,24 @@ func runSettingsSearchTests() {
     let miniBlocks = [
         block(from: "    private var lyricsWindowMiniHeaderRows: some View {", to: "\n    }\n"),
         block(from: "    private var lyricsWindowMiniHeaderSizeRows: some View {", to: "\n    }\n"),
-        block(from: "        case .layout:\n            if let miniLyricsLayout {", to: "    /// 迷你顶部那一行的某一样勾没勾。"),
+        block(from: "        case .layout:\n            if let miniLyricsLayout {", to: "            if let alignment {"),
         block(from: "    private var lyricsWindowBehaviorRows: some View {", to: "\n    }\n"),
     ]
     let fullBlocks = [
         block(from: "    private var lyricsWindowCoverRows: some View {", to: "\n    }\n"),
         block(from: "private struct MotionCoverCacheRow: View {", to: "\n}\n"),
+        block(from: "    private func lyricsWindowAlignmentRows(", to: "\n    }\n"),
     ]
     expectEqual(miniBlocks.allSatisfy { !$0.isEmpty } && fullBlocks.allSatisfy { !$0.isEmpty }, true,
                 "歌词窗口尺寸(契约): 认得出设置页里只在一种尺寸下才画的几组(认不出 = 改名了,先改这里)")
     let miniBlockTitles = miniBlocks.reduce(into: Set<String>()) { $0.formUnion(rowTitles($1)) }
     let fullBlockTitles = fullBlocks.reduce(into: Set<String>()) { $0.formUnion(rowTitles($1)) }
     expectEqual(miniBlockTitles.isEmpty || fullBlockTitles.isEmpty, false, "歌词窗口尺寸(契约): 那几组里扫得到行标题")
-    expectEqual(miniBlockTitles.subtracting(miniOnly).sorted(), [], "歌词窗口尺寸: 顶部信息、布局、行为三组的行都登记为只有迷你")
-    expectEqual(fullBlockTitles.subtracting(fullOnly).sorted(), [], "歌词窗口尺寸: 封面那一组的行都登记为只有完整")
-    // 文字那一组里迷你独有的四行,靠完整尺寸那一支不传它们的绑定:真要让完整尺寸也有,名单得跟着改。
+    expectEqual(miniBlockTitles.subtracting(miniOnly).sorted(), [], "歌词窗口尺寸: 顶部信息、迷你布局、行为三组的行都登记为只有迷你")
+    expectEqual(fullBlockTitles.subtracting(fullOnly).sorted(), [], "歌词窗口尺寸: 封面那一组和对齐方式都登记为只有完整")
+    // 迷你独有的字号、长句处理、歌词布局,靠完整尺寸那一支不传它们的绑定:真要让完整尺寸也有,名单得跟着改。
     let fullBranch = block(from: "        } else {\n            lyricsWindowAppearanceRowsImpl(", to: "\n        }\n")
-    expectEqual(!fullBranch.isEmpty && ["fontSize:", "fontWeight:", "miniKaraoke:", "karaokeFill:", "lineOverflow:", "miniLyricsLayout:"]
+    expectEqual(!fullBranch.isEmpty && ["fontSize:", "lineOverflow:", "miniLyricsLayout:"]
                     .allSatisfy { !fullBranch.contains($0) }, true,
                 "歌词窗口尺寸: 完整尺寸那一支外观行不传迷你独有的那几样绑定")
     // 跳转那一段:写完分段键、翻面板之前,把预览切到这一行所在的尺寸。
