@@ -76,7 +76,9 @@ step "Localizable.xcstrings 能解析"
 # go vet 和 deadcode(不得比 deadcode-baseline.txt 多出新的)跟 go test 互不依赖:改了引擎时在 go test 之前放到后台跑,
 # 后面到它那一步再等结果。
 engine_static_checks() {
-  (cd lyrimuse-engine && GOTOOLCHAIN=go1.24.4 go vet ./... && GOTOOLCHAIN=go1.24.4 go vet -tags devtools ./...) || return 1
+  # -trimpath 跟 go-test-shards.py 一样:各校验目录共用 go 的编译缓存。
+  (cd lyrimuse-engine && GOTOOLCHAIN=go1.24.4 go vet -trimpath ./... \
+    && GOTOOLCHAIN=go1.24.4 go vet -trimpath -tags devtools ./...) || return 1
   local dc_now dc_base added rc=0
   dc_now="$(mktemp)"
   dc_base="$(mktemp)"

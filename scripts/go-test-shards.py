@@ -63,7 +63,9 @@ def main(argv):
     durations_path = os.path.join(work, 'durations.json')
 
     t0 = time.time()
-    built = subprocess.run(['go', 'test', '-c', '-tags', 'devtools', '-o', binary, '.'], cwd=engine)
+    # -trimpath:编出来的东西不带源码所在目录,同一份引擎在主工作树、各校验目录、build.sh 的源码快照里编,
+    # go 的编译缓存共用一份(不带它时每个目录各存一份,换目录还得整包重编)。
+    built = subprocess.run(['go', 'test', '-c', '-trimpath', '-tags', 'devtools', '-o', binary, '.'], cwd=engine)
     if built.returncode != 0:
         return built.returncode
     t1 = time.time()

@@ -440,8 +440,9 @@ for arch in $ARCHES; do
   # go1.24.4 若非本机版本会触发工具链下载而失败——port 传 local 用它自带的 go
   # (依赖声明保证 ≥1.24)。默认仍是 go1.24.4(系统 1.21 产物缺 LC_UUID,AMFI 拒签)。
   # -s -w:不带符号表和 DWARF(约 4.7 MB);pclntab 还在,panic 栈照样有函数名和行号。见 15 章决策 33。
+  # -trimpath:不带源码快照的本机路径(panic 栈写模块路径),跟提交校验、各工作树共用 go 的编译缓存。
   (cd ../lyrimuse-engine && GOTOOLCHAIN="${LYRIMUSE_GOTOOLCHAIN:-go1.24.4}" GOOS=darwin GOARCH="$goarch" \
-    go build -ldflags "-s -w -X main.clientVersion=$APP_VERSION" -o "$out" .)
+    go build -trimpath -ldflags "-s -w -X main.clientVersion=$APP_VERSION" -o "$out" .)
   ENGINE_SLICES+=("$out")
 done
 merge_slices "$FAT_DIR/$ENGINE_NAME" "${ENGINE_SLICES[@]}"
