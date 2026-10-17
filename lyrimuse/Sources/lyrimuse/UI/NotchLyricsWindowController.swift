@@ -1052,8 +1052,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 位置从不持久化,每次都按当前屏幕居中算。`animate: false`:平滑过渡由卡片那条弹簧负责,NSWindow 再动画会跟它打架。
     private func applyBehaviorSettings(hide: Bool, captureHidden: Bool, contentWidth: CGFloat, expandedContentWidth: CGFloat) {
         if hideWhenNotPlaying != hide { hideWhenNotPlaying = hide }
-        let sharing: NSWindow.SharingType = captureHidden ? .none : .readWrite
-        if window?.sharingType != sharing { window?.sharingType = sharing }
+        // sharingType 每次直接写、不判等:运行中这扇窗读回来的值不可靠(实测设成 .readWrite 后读回 0 = .none),判等会把
+        // 「改成 .none」当成没变跳过,截屏时隐藏就不生效。
+        window?.sharingType = captureHidden ? .none : .readWrite
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
         recomputeGeometry(animate: false, contentWidth: contentWidth, expandedContentWidth: expandedContentWidth)
     }
@@ -1313,8 +1314,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         let visible = notchEnabled ?? settings.notchOverlayEnabled
         if isVisible != visible { isVisible = visible }
         if hideWhenNotPlaying != settings.notchHideWhenNotPlaying { hideWhenNotPlaying = settings.notchHideWhenNotPlaying }
-        let sharing: NSWindow.SharingType = settings.notchHideDuringScreenCapture ? .none : .readWrite
-        if window?.sharingType != sharing { window?.sharingType = sharing }
+        // sharingType 直接写、不判等,理由见 applyBehaviorSettings。
+        window?.sharingType = settings.notchHideDuringScreenCapture ? .none : .readWrite
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
         recomputeGeometry(animate: false)
         refreshFullScreenCover()

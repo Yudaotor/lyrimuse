@@ -598,6 +598,9 @@ func runNotchTests() {
             expectEqual(controller.contains("if hideWhenNotPlaying != hide { hideWhenNotPlaying = hide }")
                         && controller.contains("recomputeGeometry(animate: false, contentWidth: contentWidth, expandedContentWidth: expandedContentWidth)"), true,
                         "灵动岛接线: 自动隐藏 / 宽度变了按 sink 收到的新值用,不回读 AppSettings")
+            expectEqual(!controller.contains("window?.sharingType != ")
+                        && controller.contains("window?.sharingType = captureHidden ? .none : .readWrite"), true,
+                        "灵动岛接线: 截屏时隐藏直接写 sharingType、不判等(运行中读回来的值不可靠,判等会跳过改成 .none)")
             let autoHide = src("AutoHideSettingsRows.swift"), mirrorSrc = src("NotchMirrorManager.swift")
             expectEqual(!stage.contains("NotchLyricsWindowController.shared.") && !autoHide.contains("NotchLyricsWindowController.shared.")
                         && !mirrorSrc.contains("settings.$notchHideWhenNotPlaying"), true,
