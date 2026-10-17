@@ -56,7 +56,7 @@ func backfillBackgroundVocals(key, artist, title, album string, durationSecs flo
 	if !ok || !needsBackgroundVocalsBackfill(e) {
 		return
 	}
-	ctx, cancel := context.WithTimeout(withBackgroundOutbound(context.Background()), bgBackfillTimeout)
+	ctx, cancel := withCancelAfter(withBackgroundOutbound(context.Background()), bgBackfillTimeout)
 	defer cancel()
 	appleID, spotifyID := playbackTrackIDsFor(artist, title, album)
 	if spotifyID == "" {

@@ -4789,6 +4789,7 @@ type lyricSourceResult struct {
 	ne                      neteaseInfo
 	lyr, yrc, tr, roma      string // roma:源自带罗马音(逐行 LRC),目前只有 qq 走这里(网易云的在 ne.Roma)
 	bg                      string // 背景人声轨(YRC 语法,形状见 amllResult.bg)。只有 applemusic 走这里,amll 的在 amll.bg。
+	trLang                  string // tr 的语言,源自己标了才有。只有 applemusic 走这里(applemusicResult.trLang),amll 的在 amll.trLang。
 	matchTitle, matchArtist string
 	matchAlbum, matchCover  string
 	srcDur                  float64 // 源自己声明的曲长(秒),0=没给。见 lyricCandidate.sourceReportedDurationSecs
@@ -4883,6 +4884,10 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	am := raw["applemusic"]
 	amLyr, amYRC, amTr, amRoma, amTitle, amArtist, amAlbum, amCover, amDur, amPlainOnly := am.lyr, am.yrc, am.tr, am.roma, am.matchTitle, am.matchArtist, am.matchAlbum, am.matchCover, am.srcDur, am.plainOnly
 	amBG := am.bg
+	amTrLang := am.trLang
+	if amTrLang == "" {
+		amTrLang = features().LyricsTranslationLanguage
+	}
 	soda := raw["soda"]
 	kk := raw[kkboxLocalLyricsSource]
 	spl := raw[spotifyLocalLyricsSource]
@@ -4962,7 +4967,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// 逐行 LRC + 可选的逐字轨(MRC,migumrc.go)+ 可选的中文译文(trcUrl,外语歌才有),没有罗马音;
 		// 封面用搜索结果自带的 imgItems(见 migu.go 头注)。译文固定中文、标 "zh",可用性同网易云/QQ/酷狗
 		// 走 usableValueAdd,逐字同样走 usableYRC / usableWordTiming。
-		// 没有时长字段,sourceReportedDurationSecs 留 0(= 该项不参与打分,同 amll)。
+		// 搜索结果没有时长字段,sourceReportedDurationSecs 用文件大小估的(miguSearchItem.durationSecs),估不出时为 0。
 		// plainOnly 直通打分层那道恒 -1 的闸,口径同 deezer/lrclib 的纯文本回退。
 		miguUsableTr, _ := usableValueAdd(miguLyr, miguTr, "zh", "", features().LyricsTranslationLanguage)
 		candidates = append(candidates, lyricCandidate{source: "migu", lyrics: miguLyr, wordTimingYRC: usableYRC(miguLyr, miguYRC), hasWordTiming: usableWordTiming(miguLyr, miguYRC), hasUsableTranslation: miguUsableTr, sourceReportedDurationSecs: miguDur, title: miguTitle, artist: miguArtist, album: miguAlbum, cover: miguCover, plainTextOnly: miguPlainOnly})
@@ -4981,7 +4986,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// durationInMillis(见 applemusic.go 头注)。逐字的可用性判定走跟 amll 完全一样的
 		// usableYRC/usableWordTiming —— 两边都是同一套 TTML 解析出来的,没理由用两套判据。
 		// plainOnly 直通打分层那道恒 -1 的闸,口径同 deezer/lrclib 的纯文本回退。
-		amUsableTr, amUsableRoma := usableValueAdd(amLyr, amTr, features().LyricsTranslationLanguage, amRoma, features().LyricsTranslationLanguage)
+		amUsableTr, amUsableRoma := usableValueAdd(amLyr, amTr, amTrLang, amRoma, features().LyricsTranslationLanguage)
 		candidates = append(candidates, lyricCandidate{
 			source: "applemusic", lyrics: amLyr,
 			wordTimingYRC: usableYRC(amLyr, amYRC), hasWordTiming: usableWordTiming(amLyr, amYRC),
@@ -5166,8 +5171,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// 下面 switch 里各源赋完 r.LyricsTr/r.LyricsRoma 之后统一搬,见循环末尾。
 		switch c.source {
 		case "netease":
-			// 翻译/罗马音网易云固定给中文;酷狗至今只接了逐字、不接翻译/罗马音(QQ 那一半已经
-			// 补回,见下面 case "qq")。"固定中文"这件事必须记下来:目标语言不是中文时,这份译文
+			// 翻译/罗马音网易云固定给中文(QQ、酷狗同样,见下面各自的 case)。"固定中文"这件事必须记下来:目标语言不是中文时,这份译文
 			// 用不上,得让机翻接手(见 needsTranslationBackfill)。
 			//
 			// 译文赋值前必须过 c.hasUsableTranslation 这道闸(罗马音走更宽的 usableRomaForResult,
@@ -5224,11 +5228,11 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			r.LyricsBG = amll.bg
 			r.Songwriters = amll.songwriters
 		case "applemusic":
-			// 官方译文(<translations type="subtitle">)与官方音译(<transliterations>)。Apple 按请求的语言给译文
-			// (applemusicLyricsQuery),判定"能不能用"时 trLang 传的就是目标语言本身。
+			// 官方译文(<translations type="subtitle">)与官方音译(<transliterations>)。语言按译文块的 xml:lang,
+			// 没标时按目标语言(网络那条按请求的语言给,applemusicLyricsQuery)。
 			if c.hasUsableTranslation {
 				r.LyricsTr = amTr
-				r.LyricsTrLang = features().LyricsTranslationLanguage
+				r.LyricsTrLang = amTrLang
 			}
 			if usableRomaForResult(c.lyrics, amRoma) {
 				r.LyricsRoma = amRoma
@@ -5559,10 +5563,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		qqMeta := qqSongMetaCachedOnly(qqMid)
 		qqLang := qqCanonicalLanguage(qqMeta.language)
 		qqNoVocals := qqMeta.id != 0 && qqMeta.language == qqLanguagePureMusic
-		// trackFoundNoLyrics 还要再过一道 `yrc == ""`:整行接口空、逐字(QRC)接口却拿到了词
-		// 的话,平台**是有歌词的**,只是这两条接口不同步 —— 那时报"平台没有歌词"是错的。
-		// 两套接口完全独立(见 qq.go 顶部注释),不假设它们一定同进同出。交出了纯文本时同样不报。
-		resultsCh <- lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental, noVocals: qqNoVocals, trackFoundNoLyrics: qqNoLyrics && yrc == "" && !qqPlainOnly, identityFromLocalClient: match.fromLocalLibrary, plainOnly: qqPlainOnly, trackIDs: qqTrackIDs(qqMid)}
+		resultsCh <- lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental, noVocals: qqNoVocals, trackFoundNoLyrics: qqTrackFoundNoLyrics(qqNoLyrics, lyr, yrc), identityFromLocalClient: match.fromLocalLibrary, plainOnly: qqPlainOnly, trackIDs: qqTrackIDs(qqMid)}
 	}()
 	go func() {
 		// 等两个 ID 都到齐再查。两个 goroutine 都是无条件启动的(源关掉 / 冷却中时
@@ -5693,7 +5694,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		r := applemusicLyric(ctx, artist, srcTitle, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))
 		// 正在用 Apple Music 放、它自己没给这一条的歌词时,问一次这条录音有没有人声(播放器自己的信号,见 playerInstrumentalSource)。
 		appleNoVocals := forPlaying && r.lyrics == "" && appleID != "" && playingPlayer() == playerAppleMusic && applemusicCatalogNoVocals(ctx, appleID)
-		resultsCh <- lyricSourceResult{noVocals: appleNoVocals, source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, roma: r.roma, bg: r.bg, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient || r.fromPlayerCatalogID || appleNoVocals}
+		resultsCh <- lyricSourceResult{noVocals: appleNoVocals, source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, trLang: r.trLang, roma: r.roma, bg: r.bg, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient || r.fromPlayerCatalogID || appleNoVocals}
 	}()
 	go func() {
 		if skipSource("soda") {

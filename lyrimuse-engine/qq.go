@@ -2102,6 +2102,12 @@ func qqPlainLyric(line qqLyricResult, qrc qqQRCResult) string {
 	return qrc.plain
 }
 
+// qqTrackFoundNoLyrics:QQ 这一路能不能报「平台上有这首、没有歌词」。整行接口说没有(lineNoLyrics)之外,最后交出去的
+// 整行(含逐字接口压出来的、纯文本)和逐字都得是空的:两套接口互不同步,逐字那边拿到了词就是有歌词。
+func qqTrackFoundNoLyrics(lineNoLyrics bool, lyr, yrc string) bool {
+	return lineNoLyrics && lyr == "" && yrc == ""
+}
+
 // qqQRCLyric 是 qqLyric 的逐字版本 —— 独立发起、独立判定成败,不影响 qqLyric(mid) 现有的整行歌词路径。先问网关 GetPlayLyricInfo,
 // 网关没问成时问网页接口 lyric_download.fcg(qqLyricDownload);拿不到就返回零值,不重试(下次 enrich 短 TTL 到期或进程重启自然再试)。
 //

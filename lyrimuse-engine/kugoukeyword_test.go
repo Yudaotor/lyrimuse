@@ -62,6 +62,8 @@ func TestResolveKugouLyricKeywordFallback(t *testing.T) {
 				}
 				return http.StatusOK, `{"status":200,"content":"` + kgTestKRCContent(t, "[ar:arkady sevidov]\n[1580,1000]<0,1000,0>纯音乐，请欣赏") + `"}`
 			}, 283, 1, true, "U87", 283},
+		{"第一条候选缺 accesskey", func() (int, string) { return http.StatusOK, kgSearchHit },
+			func() (int, string) { return http.StatusOK, `{"status":200,"candidates":[{"id":"1"}]}` }, nil, 283, 1, true, "U87", 283},
 		{"搜歌挑不出", func() (int, string) { return http.StatusOK, noPick }, nil, nil, 283, 1, true, "", 283},
 		{"本地时长未知不查", func() (int, string) { return http.StatusOK, noPick }, nil, nil, 0, 0, false, "", 0},
 		{"查候选没问成不查", func() (int, string) { return http.StatusOK, kgSearchHit },

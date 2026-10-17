@@ -15,11 +15,11 @@ func miguItemFromJSON(t *testing.T, raw string) miguSearchItem {
 }
 
 // 咪咕 LRC 顶部四行元数据(实测形状):前两行没有冒号,只有这里能剥;作词/作曲
-// 两行跟别的源一样留给下游署名处理。CRLF 归一化、空正文行剥掉、正文不受影响。
+// 两行跟别的源一样留给下游署名处理。CRLF 归一化、只有时间戳的行留着(标上一句唱完)、空行剥掉、正文不受影响。
 func TestMiguStripMetaLines(t *testing.T) {
 	in := "[00:01.00]歌曲名 稻香\r\n[00:02.00]歌手名 周杰伦\r\n[00:03.00]作词：周杰伦\r\n[00:04.00]作曲：周杰伦\r\n" +
 		"[00:31.17]对这个世界如果你有太多的抱怨\r\n[00:34.46]   \r\n[00:37.46]为什么人要这么的脆弱堕落\r\n"
-	want := "[00:03.00]作词：周杰伦\n[00:04.00]作曲：周杰伦\n[00:31.17]对这个世界如果你有太多的抱怨\n[00:37.46]为什么人要这么的脆弱堕落\n"
+	want := "[00:03.00]作词：周杰伦\n[00:04.00]作曲：周杰伦\n[00:31.17]对这个世界如果你有太多的抱怨\n[00:34.46]\n[00:37.46]为什么人要这么的脆弱堕落\n"
 	if got := miguStripMetaLines(in); got != want {
 		t.Fatalf("剥头结果不对:\n got=%q\nwant=%q", got, want)
 	}
@@ -33,7 +33,7 @@ func TestMiguStripMetaLines(t *testing.T) {
 		t.Fatalf("带冒号的元数据行没剥干净:\n got=%q\nwant=%q", got, want2)
 	}
 	// 纯文本版本开头的水印行剥掉;正文里恰好含这几个字的行不受影响。
-	in3 := "@migu music@\r\n@migu music@\r\nHit the Wall - Gracie Abrams\r\nI heard @migu music@ once\r\n"
+	in3 := "@migu music@\r\n@migu music@\r\n\r\nHit the Wall - Gracie Abrams\r\nI heard @migu music@ once\r\n"
 	want3 := "Hit the Wall - Gracie Abrams\nI heard @migu music@ once\n"
 	if got := miguStripMetaLines(in3); got != want3 {
 		t.Fatalf("水印行没剥干净:\n got=%q\nwant=%q", got, want3)

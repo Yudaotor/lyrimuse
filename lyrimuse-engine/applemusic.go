@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -71,6 +72,8 @@ import (
 // 是两个端点、同一种文档结构,差别只在 <span> 有没有再分词。
 type applemusicResult struct {
 	lyrics, yrc, tr, title, artist, album string
+	// trLang:tr 的语言(amllResult.trLang),TTML 没标时为空。
+	trLang string
 	// roma:官方音译(<transliterations>,日文 ja-Latn 等)拼成的逐行 LRC,没有时为空。
 	roma string
 	// bg:背景人声轨(YRC 语法,形状见 amllResult.bg),没有时为空。
@@ -1029,7 +1032,7 @@ func applemusicLyricsLocale(target string) (lyrics, script string) {
 //     Apple 对此回 404 + code 40403 "No related resources",而不是 401;
 //     没带 user token 时也是同一个 404,所以调用方必须先自己确认 token 在手,
 //     不能靠状态码区分这两件事。
-//   - ("", err)             真失败(网络/令牌被拒)
+//   - ("", err)             真失败(网络/令牌被拒)。令牌被拒(401 / 403)的 err 是 errApplemusicAuthRejected。
 func applemusicFetchTTML(ctx context.Context, storefront, songID, kind, devToken, userToken string) (string, error) {
 	path := neturl.PathEscape(storefront) + "/songs/" + neturl.PathEscape(songID) + "/" + kind +
 		applemusicLyricsQuery(features().LyricsTranslationLanguage)
@@ -1061,9 +1064,9 @@ func applemusicFetchTTML(ctx context.Context, storefront, songID, kind, devToken
 			if rejected {
 				applemusicSetLastFailureReason(lyricFailureReasonAppleMusicTokenRejected)
 				applemusicMarkTokenRejected(userToken)
-				return "", fmt.Errorf("media-user-token rejected (status %d)", status)
+				return "", fmt.Errorf("media-user-token rejected (status %d): %w", status, errApplemusicAuthRejected)
 			}
-			return "", fmt.Errorf("developer token rejected (status %d)", status)
+			return "", fmt.Errorf("developer token rejected (status %d): %w", status, errApplemusicAuthRejected)
 		default:
 			return "", fmt.Errorf("status %d", status)
 		}
@@ -1095,7 +1098,7 @@ func applemusicParseTTML(ttml string) (amllResult, bool) {
 	if r.tr == "" {
 		// Apple 把译文放在 <iTunesMetadata><translations> 里,parseAMLLTTML 认的是 AMLL 那套
 		// ttm:role="x-translation" 形状,看不到它。见 applemusicSubtitleTranslation。
-		r.tr = applemusicSubtitleTranslation(ttml)
+		r.tr, r.trLang = applemusicSubtitleTranslation(ttml)
 	}
 	if r.roma == "" {
 		r.roma = applemusicTransliteration(ttml)
@@ -1106,7 +1109,8 @@ func applemusicParseTTML(ttml string) (amllResult, bool) {
 
 var (
 	// <translation type="subtitle" xml:lang="zh-Hans">…</translation>
-	amSubtitleBlockRe = regexp.MustCompile(`(?s)<translation\b[^>]*\btype="subtitle"[^>]*>(.*?)</translation>`)
+	amSubtitleBlockRe = regexp.MustCompile(`(?s)<translation\b([^>]*\btype="subtitle"[^>]*)>(.*?)</translation>`)
+	amAttrLangRe      = regexp.MustCompile(`\bxml:lang="([^"]*)"`)
 	// <transliteration xml:lang="ja-Latn">…</transliteration>
 	amTransliterationBlockRe = regexp.MustCompile(`(?s)<transliteration\b[^>]*>(.*?)</transliteration>`)
 	// <text for="L12">…</text>
@@ -1133,12 +1137,23 @@ var (
 // **key 对不上的行直接丢,不按顺序硬凑**。Apple 自己的数据偶尔就是错位的:抽样里多数带真翻译的歌
 // key 完全对齐,但也有一首译文用的是另一套编号、跟正文交集为零,而且行数也不等。那种情况下按顺序
 // 对齐必然错位 —— 错位的译文比没有译文糟,所以宁可整首不给。
-func applemusicSubtitleTranslation(ttml string) string {
+//
+// 第二个返回值是译文块 xml:lang 的语言(amllTrLangTag 的写法),没标时为空。Music.app 本地缓存那份是按它自己的
+// 界面语言要的,不一定是设置里的目标语言,别把它当目标语言。
+func applemusicSubtitleTranslation(ttml string) (string, string) {
 	block := amSubtitleBlockRe.FindStringSubmatch(ttml)
 	if block == nil {
-		return ""
+		return "", ""
 	}
-	return applemusicKeyedLRC(ttml, block[1])
+	tr := applemusicKeyedLRC(ttml, block[2])
+	if tr == "" {
+		return "", ""
+	}
+	lang := ""
+	if m := amAttrLangRe.FindStringSubmatch(block[1]); m != nil {
+		lang = amllTrLangTag(m[1])
+	}
+	return tr, lang
 }
 
 // applemusicTransliteration 取 Apple 的官方音译(<transliterations>,日文 ja-Latn、韩文 ko-Latn
@@ -1236,7 +1251,7 @@ func resolveApplemusicLyric(ctx context.Context, artist, title, album string, du
 		}
 		timed, p, fatal := applemusicFetchCandidates(ctx, storefront, candidates, tried, devToken, userToken, sameRecording, durationSecs)
 		if fatal {
-			return applemusicResult{}, true
+			return plain, true
 		}
 		if plain.empty() {
 			plain = p
@@ -1290,9 +1305,13 @@ func applemusicNameCandidates(ctx context.Context, storefront, artist, title, al
 	return nil
 }
 
+// errApplemusicAuthRejected:取词被 401 / 403 拒了(令牌问题),这一轮别的候选再试也是一样。
+var errApplemusicAuthRejected = errors.New("apple music auth rejected")
+
 // applemusicFetchCandidates 按顺序给候选取词,取到第一份带时间轴的就停(timed)。只有纯文本的候选记下第一份
 // (plain,plainOnly,分数恒 -1,只有用户手点才采用),所有候选都没有带时间轴的才有用。tried 记着取过的曲目 id,
-// 取过的不再取。fatal:令牌被拒之类,继续试别的候选也是白试。
+// 取过的不再取。fatal:令牌被拒(errApplemusicAuthRejected),继续试别的候选也是白试;别的错(5xx、超时、限流)只停这一组,
+// 已有的逐行 / 纯文本照样交出去,下一组照试。
 //
 // sameRecording:这一组都是同一条录音(按 ISRC 直取、挂在不同专辑下的几个条目),歌词却按条目给,有的只有逐行、有的带逐字。
 // 这时取到只有逐行的先记着、接着试组里后面的,带逐字、自报时长又跟本地 durationSecs 差在 isrcDurationToleranceSecs 以内的
@@ -1313,15 +1332,15 @@ func applemusicFetchCandidates(ctx context.Context, storefront string, candidate
 		// 只有纯文本的歌这里回的是同一份不带时间的 TTML(见 09 章决策 142)。这个端点没有时才问 /lyrics。
 		// 为找逐字多问的这一次出错(限流、令牌被拒)时,手上那份逐行的照样交出去。
 		ttml, err := applemusicFetchTTML(ctx, storefront, id, "syllable-lyrics", devToken, userToken)
+		if err == nil && ttml == "" {
+			ttml, err = applemusicFetchTTML(ctx, storefront, id, "lyrics", devToken, userToken)
+		}
 		if err != nil {
 			noteLyricSubFetchFailure(ctx)
-			return lineTimed, applemusicResult{}, lineTimed.empty()
-		}
-		if ttml == "" {
-			if ttml, err = applemusicFetchTTML(ctx, storefront, id, "lyrics", devToken, userToken); err != nil {
-				noteLyricSubFetchFailure(ctx)
+			if errors.Is(err, errApplemusicAuthRejected) {
 				return lineTimed, applemusicResult{}, lineTimed.empty()
 			}
+			return lineTimed, plain, false
 		}
 		p, ok := applemusicParseTTML(ttml)
 		if ok && isTimedLRC(p.lrc) {
@@ -1476,7 +1495,7 @@ func applemusicResultFrom(s applemusicSong, p amllResult, plainOnly bool) applem
 		yrc = withSpatialAudioTag(yrc, p.spatialOffsetSecs, stereoSecs)
 	}
 	return applemusicResult{
-		lyrics: lyrics, yrc: yrc, tr: p.tr, roma: p.roma, bg: p.bg, songwriters: p.songwriters,
+		lyrics: lyrics, yrc: yrc, tr: p.tr, trLang: p.trLang, roma: p.roma, bg: p.bg, songwriters: p.songwriters,
 		title: s.Attributes.Name, artist: s.Attributes.ArtistName, album: s.Attributes.AlbumName,
 		cover: s.cover(), durationSecs: float64(s.Attributes.DurationInMillis) / 1000,
 		isrc: s.Attributes.Isrc, plainOnly: plainOnly, songID: s.ID,

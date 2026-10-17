@@ -335,15 +335,15 @@ func miguFetchFile(ctx context.Context, url string, maxBytes int64) ([]byte, err
 // 另起一套口径。
 var miguMetaLineRe = regexp.MustCompile(`^(歌曲名|歌手名)(\s|[:：]|$)|^@migu music@$`)
 
-// miguStripMetaLines 把 CRLF 归一成 LF,剥掉元数据行和去掉时间戳后为空的行。纯函数,
-// 便于单测。
+// miguStripMetaLines 把 CRLF 归一成 LF,剥掉元数据行和空行。只有时间戳的行留着:它标的是上一句在哪儿唱完
+// (间奏从这里起),跟别的源一样交给下游。纯函数,便于单测。
 func miguStripMetaLines(lrc string) string {
 	lrc = strings.ReplaceAll(lrc, "\r\n", "\n")
 	lrc = strings.ReplaceAll(lrc, "\r", "\n")
 	var b strings.Builder
 	for _, line := range strings.Split(lrc, "\n") {
 		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(line, ""))
-		if text == "" || miguMetaLineRe.MatchString(text) {
+		if text == "" && !lrcTimestampRe.MatchString(line) || miguMetaLineRe.MatchString(text) {
 			continue
 		}
 		b.WriteString(strings.TrimRight(line, " \t"))

@@ -231,19 +231,19 @@ func resolveMusixmatchLyric(ctx context.Context, artist, title string, durationS
 	// track.get / track.search 流程。
 	ids := musixmatchPlaybackIDsFrom(ctx)
 	ids.isrc = isrc
-	if m, ok := musixmatchMacroByID(ctx, ids, artist, title, durationSecs); ok {
+	m, ok, rejectedTrackID := musixmatchMacroByID(ctx, ids, artist, title, durationSecs)
+	if ok {
 		return musixmatchFinishMacro(ctx, m, trLang)
 	}
 	var match musixmatchTrackMatch
-	var ok bool
 	if isrc != "" {
 		match, ok = musixmatchTrackByISRC(ctx, isrc)
 		// 时长闸,同 deezer.go 里那段:ISRC 也可能是垃圾值("ZZZZZ9999999" 实测在两个源上
 		// 都查得到一首不相干的歌)。 这道闸在这个源上目前基本不生效 —— track.get 回的
 		// track_length 实测是 0,而 sourceDurationFits 对"任一边不知道时长"一律放行。
 		// 留着是因为它零成本、且那天字段有值了就自动生效;真正兜底的是上层统一的
-		// scoreLyricCandidate(歌词正文对不上自然被比下去)。
-		if ok && !sourceDurationFits(durationSecs, match.durationSecs) {
+		// scoreLyricCandidate(歌词正文对不上自然被比下去)。上面 macro 按字幕曲长拒过的同一条照样拒。
+		if ok && (!sourceDurationFits(durationSecs, match.durationSecs) || (rejectedTrackID != 0 && match.trackID == rejectedTrackID)) {
 			ok = false
 		}
 	}

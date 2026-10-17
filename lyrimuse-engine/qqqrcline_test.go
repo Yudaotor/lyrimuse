@@ -205,3 +205,29 @@ func TestQQLyricDownloadAnswerIsFinal(t *testing.T) {
 		t.Error("网关答了就不该再问 lyric_download")
 	}
 }
+
+// 整行接口说没有词,逐字接口却给了不带逐字的整行 LRC / 纯文本 / 逐字:都不能报「平台没有歌词」。
+func TestQQTrackFoundNoLyrics(t *testing.T) {
+	line := qqLyricResult{trackFoundNoLyrics: true}
+	for _, c := range []struct {
+		name string
+		qrc  qqQRCResult
+		want bool
+	}{
+		{"两边都没有", qqQRCResult{}, true},
+		{"逐字接口给了整行 LRC", qqQRCResult{line: qqTestQRCLine}, false},
+		{"逐字接口给了纯文本", qqQRCResult{plain: "a\nb"}, false},
+		{"逐字接口给了逐字", qqQRCResult{yrc: "[1000,500](1000,500,0)a"}, false},
+	} {
+		lyr := qqLineLyric(line, c.qrc)
+		if lyr == "" {
+			lyr = qqPlainLyric(line, c.qrc)
+		}
+		if got := qqTrackFoundNoLyrics(line.trackFoundNoLyrics, lyr, c.qrc.yrc); got != c.want {
+			t.Errorf("%s: %v,期望 %v", c.name, got, c.want)
+		}
+	}
+	if qqTrackFoundNoLyrics(false, "", "") {
+		t.Error("整行接口没说没有,不报")
+	}
+}

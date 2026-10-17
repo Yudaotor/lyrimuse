@@ -268,3 +268,31 @@ func TestMusixmatchRichsyncIsLineLevel(t *testing.T) {
 		t.Error("不到 5 行有字的不判")
 	}
 }
+
+// 只有 ISRC:macro 按字幕曲长拒掉的那一条,track.get 按同一个 ISRC 拿回来时照样拒(它回的 track_length 是 0,
+// 时长闸放行);拿回的是另一条时照常取词。
+func TestResolveMusixmatchISRCKeepsMacroDurationReject(t *testing.T) {
+	for _, c := range []struct {
+		trackID  int
+		wantSubs int
+	}{{42, 0}, {43, 1}} {
+		f := withMxmFake(t, func(action string, r *http.Request) string {
+			switch action {
+			case "macro.subtitles.get":
+				if r.URL.Query().Get("track_isrc") != "" {
+					return mxmMacroFixture(t, "魔女と僕", "back number", 258, 0, 200)
+				}
+				return mxmEmpty404
+			case "track.get":
+				b, _ := json.Marshal(map[string]any{"message": map[string]any{"header": map[string]any{"status_code": 200}, "body": map[string]any{"track": map[string]any{
+					"track_id": c.trackID, "track_name": "魔女と僕", "artist_name": "back number", "has_subtitles": 1, "track_length": 0}}}})
+				return string(b)
+			}
+			return mxmEmpty404
+		})
+		resolveMusixmatchLyric(context.Background(), "back number", "魔女と僕", 243, "", "JPU901300001")
+		if got := len(f.called("track.subtitle.get")); got != c.wantSubs {
+			t.Errorf("track.get 拿回 %d:取字幕 %d 次,期望 %d(%v)", c.trackID, got, c.wantSubs, f.calls)
+		}
+	}
+}

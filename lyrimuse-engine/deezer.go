@@ -119,6 +119,8 @@ const (
 	// deezerJWTRenewMargin:提前这么久就当它过期,免得卡在边界上换票。票只有 6 分钟,提前量别写成分钟级 ——
 	// 5 分钟的提前量等于每张票只用 1 分钟,几乎每首歌都要多换一次票。
 	deezerJWTRenewMargin = 30 * time.Second
+	// deezerJWTFetchCooldown:换票没换到之后,隔多久再去换。auth 端点不答时,每首歌、每个请求各去换一次只会多等。
+	deezerJWTFetchCooldown = time.Minute
 )
 
 // deezerLyricsQuery 是取词用的 GraphQL 查询。只要这一路真正用得上的字段:逐行与译文
@@ -154,12 +156,14 @@ var (
 	deezerMu    sync.Mutex
 	deezerCache = map[string]deezerResult{}
 
-	// deezerJWTMu 保护下面两个值本身;deezerJWTFetchMu 是单飞锁,同一时刻只允许一个
+	// deezerJWTMu 保护下面三个值本身;deezerJWTFetchMu 是单飞锁,同一时刻只允许一个
 	// goroutine 真的去换票。理由跟 musixmatch.go 的 musixmatchTokenFetchMu 一样:相册预取一次能触发
 	// 十几首歌并发解析,各自"没有就自己去拿一个"会同时打十几个请求。
-	deezerJWTMu       sync.Mutex
-	deezerJWT         string
-	deezerJWTExpires  time.Time
+	deezerJWTMu      sync.Mutex
+	deezerJWT        string
+	deezerJWTExpires time.Time
+	// deezerJWTFailedAt:上次换票没换到的时刻(调用方取消的不算),deezerJWTFetchCooldown 内不再去换。
+	deezerJWTFailedAt time.Time
 	deezerJWTFetchMu  sync.Mutex
 	deezerLastFailMu  sync.Mutex
 	deezerLastFailure string
@@ -400,12 +404,21 @@ func deezerEnsureJWT(ctx context.Context) string {
 	defer deezerJWTFetchMu.Unlock()
 	deezerJWTMu.Lock()
 	tok, exp = deezerJWT, deezerJWTExpires
+	failedAt := deezerJWTFailedAt
 	deezerJWTMu.Unlock()
 	if tok != "" && now.Before(exp) {
 		return tok
 	}
+	if !failedAt.IsZero() && time.Since(failedAt) < deezerJWTFetchCooldown {
+		return ""
+	}
 	tok = deezerFetchJWT(ctx)
 	if tok == "" {
+		if ctx.Err() == nil {
+			deezerJWTMu.Lock()
+			deezerJWTFailedAt = time.Now()
+			deezerJWTMu.Unlock()
+		}
 		return ""
 	}
 	exp = deezerJWTExpiry(tok)
@@ -415,14 +428,14 @@ func deezerEnsureJWT(ctx context.Context) string {
 		exp = exp.Add(-deezerJWTRenewMargin)
 	}
 	deezerJWTMu.Lock()
-	deezerJWT, deezerJWTExpires = tok, exp
+	deezerJWT, deezerJWTExpires, deezerJWTFailedAt = tok, exp, time.Time{}
 	deezerJWTMu.Unlock()
 	return tok
 }
 
 func deezerClearJWT() {
 	deezerJWTMu.Lock()
-	deezerJWT, deezerJWTExpires = "", time.Time{}
+	deezerJWT, deezerJWTExpires, deezerJWTFailedAt = "", time.Time{}, time.Time{}
 	deezerJWTMu.Unlock()
 }
 

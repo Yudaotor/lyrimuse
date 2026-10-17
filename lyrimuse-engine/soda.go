@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -403,6 +404,7 @@ func sodaFetchSeoTrackAt(ctx context.Context, host, trackID string) (res sodaRes
 }
 
 // sodaGetSeoTrackAt 取一个主机上 seo_track 的应答体;取歌词(sodaFetchSeoTrackAt)和问曲目信息(sodatrackmeta.go)共用。
+// 200 但应答体不是 JSON(风控页之类)按这个接口被拒记一次(reportEndpointRejected):查无此曲照样回 JSON。
 func sodaGetSeoTrackAt(ctx context.Context, host, trackID string) ([]byte, error) {
 	params := neturl.Values{}
 	params.Set("track_id", trackID)
@@ -422,7 +424,16 @@ func sodaGetSeoTrackAt(ctx context.Context, host, trackID string) ([]byte, error
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes))
+	if err != nil {
+		return nil, err
+	}
+	if !json.Valid(raw) {
+		reportEndpointRejected(req.URL)
+		return nil, errors.New("answered 200 without JSON")
+	}
+	reportEndpointAccepted(req.URL)
+	return raw, nil
 }
 
 // sodaParseSeoTrack 把响应归一化成候选,并分出这一路的**三种结局**。纯函数,单测直接喂结构体。

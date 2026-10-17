@@ -705,8 +705,11 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 		var probe struct {
 			Code int `json:"code"`
 		}
-		// code 缺省(有些端点不带这个字段)时是 0,不当作错误。
-		if err := json.Unmarshal(body, &probe); err == nil && probe.Code != 0 && probe.Code != 200 {
+		// code 缺省(有些端点不带这个字段)时是 0,不当作错误。应答体解不开(风控页之类)不算这个桶答了。
+		if err := json.Unmarshal(body, &probe); err != nil {
+			return err
+		}
+		if probe.Code != 0 && probe.Code != 200 {
 			// body 拒绝一律记日志 + 退避这个端点桶(neteaseReportBlocked),
 			// 不只在 code==405 时才留痕——退避这层不需要先搞懂拒绝码具体是什么意思,
 			// 任何非 0/200 都当"这个桶该歇一歇"处理,宁可偶尔多等一次没必要的退避,
@@ -736,7 +739,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	// 这里**故意不走 searchTitleVariants**,是唯一一个不走的源 —— 别把它"顺手统一"过去。
 	// 那个函数里的"版本限定词 → 原样标题优先"守卫是给 kugou/QQ/Musixmatch 准备的,因为
 	// 那三个源是**取第一条通过校验的候选就收工**,搜索词一偏就直接定死在错版本上。而下面
-	// 的 pick() 是**扫完 10 条结果再排序挑**(精确同名 exactCands 优先于宽松 looseCands,
+	// 的 pick() 是**扫完整页结果(limit=30)再排序挑**(精确同名 exactCands 优先于宽松 looseCands,
 	// 再按专辑分),版本选择由排序负责,不依赖搜索词的写法。
 	//
 	// 改成"版本限定词原样优先"不会让网易云拿到的候选变好,只会白打最多 2 次请求,而网易云恰恰是各源里
@@ -1204,7 +1207,10 @@ func neteaseAlbumIDByName(ctx context.Context, artist, album string) (int64, boo
 		var probe struct {
 			Code int `json:"code"`
 		}
-		if err := json.Unmarshal(body, &probe); err == nil && probe.Code != 0 && probe.Code != 200 {
+		if json.Unmarshal(body, &probe) != nil {
+			return 0, false, false
+		}
+		if probe.Code != 0 && probe.Code != 200 {
 			// 限流/拒绝,不是"零张专辑"。跟 resolveNeteaseInfo 的 get 同一份处理:
 			// 记日志 + 指数退避这个端点桶,405 时额外记具体原因(见那边注释)。
 			cooldown, streak := neteaseReportRejected(u)
@@ -1476,7 +1482,10 @@ func neteaseSongSearch(ctx context.Context, searchType, limit int, q string) (so
 		var probe struct {
 			Code int `json:"code"`
 		}
-		if err := json.Unmarshal(body, &probe); err == nil && probe.Code != 0 && probe.Code != 200 {
+		if json.Unmarshal(body, &probe) != nil {
+			return nil, false
+		}
+		if probe.Code != 0 && probe.Code != 200 {
 			cooldown, streak := neteaseReportRejected(u)
 			log.Printf("netease: %s rejected (code %d), backing off %s (bucket rejected %d times in a row)",
 				neteaseEndpointBucket(u), probe.Code, cooldown, streak)

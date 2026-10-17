@@ -287,3 +287,31 @@ func TestResolveDeezerPlainWhenNoSyncedCandidate(t *testing.T) {
 		t.Errorf("没有同步歌词时只该取分数最高那一条, got %d", n)
 	}
 }
+
+// 换票没换到之后 deezerJWTFetchCooldown 内不再去换;过了冷却再换。
+func TestDeezerJWTFailureCooldown(t *testing.T) {
+	ok := false
+	f := withDeezerFake(t, func(c dzCall) (int, string) {
+		if !ok {
+			return http.StatusServiceUnavailable, ""
+		}
+		return http.StatusOK, fmt.Sprintf(`{"jwt":%q}`, dzFakeJWT(time.Now().Add(6*time.Minute)))
+	})
+	auth := func() int {
+		return f.count(func(c dzCall) bool { return strings.HasPrefix(c.target, "https://auth.deezer.com/") })
+	}
+	ctx := context.Background()
+	if deezerEnsureJWT(ctx) != "" || deezerEnsureJWT(ctx) != "" {
+		t.Fatal("换不到票应返回空")
+	}
+	if got := auth(); got != 1 {
+		t.Fatalf("冷却期内不该再去换,换了 %d 次", got)
+	}
+	ok = true
+	deezerJWTMu.Lock()
+	deezerJWTFailedAt = time.Now().Add(-deezerJWTFetchCooldown)
+	deezerJWTMu.Unlock()
+	if deezerEnsureJWT(ctx) == "" || auth() != 2 {
+		t.Fatalf("过了冷却应再换一次并拿到,换了 %d 次", auth())
+	}
+}

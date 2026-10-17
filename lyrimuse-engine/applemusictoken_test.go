@@ -133,3 +133,39 @@ func TestApplemusicFetchClearsFailureReason(t *testing.T) {
 		t.Fatalf("正常答了应撤掉失败原因,还是 %q", got)
 	}
 }
+
+// 取词出 5xx 只停这一组,下一组(按名字搜的)照试;401 / 403 是令牌的事,整轮停。
+func TestApplemusicFetchErrorStopsGroupNotRound(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		status    int
+		wantLyric bool
+	}{{"5xx", http.StatusInternalServerError, true}, {"令牌被拒", http.StatusUnauthorized, false}} {
+		t.Run(c.name, func(t *testing.T) {
+			withApplemusicCreds(t, "cn")
+			withEmptyApplemusicCache(t)
+			rec := &amTestRecorder{}
+			withLRCLIBFake(t, func(r *http.Request) (int, http.Header, string) {
+				rec.add(r)
+				switch {
+				case amTestIsCatalogLookup(r):
+					return http.StatusOK, nil, amTestSongBody(amTestSong(amTestCatalogID, "I Am", "James Arthur", "Back from the Edge", 200000, true))
+				case strings.Contains(r.URL.Path, "/songs/"+amTestCatalogID+"/"):
+					return c.status, nil, ""
+				case strings.HasSuffix(r.URL.Path, "/v1/catalog/cn/search"):
+					return http.StatusOK, nil, amTestSearchBody(amTestSong("2", "I Am", "James Arthur", "Back from the Edge", 200000, true))
+				case strings.HasSuffix(r.URL.Path, "/songs/2/syllable-lyrics"):
+					return http.StatusOK, nil, amTestLyricsBody(amTestLineTTML)
+				}
+				return http.StatusNotFound, nil, ""
+			})
+			r := resolveApplemusicLyric(qqRoundCtx(), "James Arthur", "I Am", "Back from the Edge", 200, amTestCatalogID, "")
+			if got := isTimedLRC(r.lyrics); got != c.wantLyric {
+				t.Fatalf("拿到带时间轴的 = %v,期望 %v: %+v", got, c.wantLyric, r)
+			}
+			if n := rec.count("/v1/catalog/cn/search"); (n > 0) != c.wantLyric {
+				t.Errorf("按名字搜了 %d 次", n)
+			}
+		})
+	}
+}

@@ -175,7 +175,10 @@ func musixmatchIDDurationFits(localSecs, sourceSecs float64) bool {
 }
 
 // musixmatchMacroByID 按录音级身份取。ids 里一个都没有就不发请求。
-func musixmatchMacroByID(ctx context.Context, ids musixmatchTrackIDs, artist, title string, durationSecs float64) (musixmatchMacro, bool) {
+//
+// rejectedTrackID:认出了曲目、但它的字幕曲长跟本地时长对不上而没收下时,那条曲目的 id;别的情况为 0。
+// 调用方再按 ISRC 走 track.get 时拿到同一条要照样拒:那个接口回的 track_length 是 0,时长闸放行。
+func musixmatchMacroByID(ctx context.Context, ids musixmatchTrackIDs, artist, title string, durationSecs float64) (m musixmatchMacro, ok bool, rejectedTrackID int64) {
 	// Spotify 在前:缓存里的 Apple ID 是按歌名在 iTunes 搜出来的,Spotify 的是播放时客户端给的。
 	p := neturl.Values{}
 	switch {
@@ -186,13 +189,19 @@ func musixmatchMacroByID(ctx context.Context, ids musixmatchTrackIDs, artist, ti
 	case ids.isrc != "":
 		p.Set("track_isrc", ids.isrc)
 	default:
-		return musixmatchMacro{}, false
+		return musixmatchMacro{}, false, 0
 	}
-	m, ok := musixmatchMacroGet(ctx, p)
-	if !ok || m.lrc == "" || !musixmatchIDDurationFits(durationSecs, m.subLength) {
-		return musixmatchMacro{}, false
+	m, ok = musixmatchMacroGet(ctx, p)
+	if !ok || m.lrc == "" {
+		return musixmatchMacro{}, false, 0
 	}
-	return m, true
+	if !musixmatchIDDurationFits(durationSecs, m.subLength) {
+		if durationSecs > 0 && m.subLength > 0 {
+			rejectedTrackID = m.match.trackID
+		}
+		return musixmatchMacro{}, false, rejectedTrackID
+	}
+	return m, true, 0
 }
 
 // musixmatchMacroByName 按歌名 + 歌手 + 时长取,返回的曲目过跟 track.search 那条同一道名称闸。

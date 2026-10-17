@@ -80,7 +80,7 @@ type amllResult struct {
 	// matchTitle / matchArtist / matchAlbum:按 ISRC / 歌名在索引里找到时,索引里这一份的歌名 / 歌手 / 专辑(候选拿它们
 	// 去打分);按 ID 取到的为空。
 	matchTitle, matchArtist, matchAlbum string
-	// hasDuet:这份 TTML 里出现了两个及以上的非 group 演唱者。只用于日志,选源不看它。
+	// hasDuet:这份 TTML 里出现了两个及以上的非 group 演唱者。只进金标集样本(lyricsgolden_test.go),选源不看它。
 	hasDuet bool
 	// spatialOffsetSecs:Apple TTML 给空间音频版的歌词偏移(秒),没有时为 0。只有 applemusicParseTTML 填,
 	// 见 applemusicspatial.go。

@@ -433,12 +433,12 @@ func kugouLyricForSong(ctx context.Context, artist, title string, durationSecs f
 	if len(kr.Candidates) == 0 {
 		return kugouKeywordLyric(ctx, artist, title, durationSecs, chosen)
 	}
+	// 第一条候选缺 id / accesskey 取不了词,或者答了却没有能用的整行(多半是酷狗给没词的歌挂的那条占位,「The Seasons
+	// Op. 37b: June - Barcarole」正文只有「纯音乐,请欣赏」)时,跟候选为空一样再不带 hash 查一次。
 	c := kr.Candidates[0]
 	if c.ID == "" || c.AccessKey == "" {
-		return kugouResult{}
+		return kugouKeywordLyric(ctx, artist, title, durationSecs, chosen)
 	}
-	// 第一条候选答了却没有能用的整行时,多半是酷狗给没词的歌挂的那条占位(「The Seasons Op. 37b: June - Barcarole」,
-	// 正文只有「纯音乐,请欣赏」),跟候选为空一样再不带 hash 查一次。
 	got, ok, answered := kugouFetchLyric(ctx, c.ID, c.AccessKey)
 	if !ok {
 		if answered {

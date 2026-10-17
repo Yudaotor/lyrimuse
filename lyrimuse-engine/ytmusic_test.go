@@ -140,6 +140,20 @@ func TestYtmusicPickSearchItem(t *testing.T) {
 	if !ok || got.durationSecs != 270 {
 		t.Errorf("时长未知时应退回第一个过门的候选,实际 %+v", got)
 	}
+
+	// ATV 顶掉非 ATV 之后,后面的 ATV 跟顶上来的那条比时长,不跟被顶掉的非 ATV 比。
+	plain := atv("Anti-Hero", "Taylor Swift", "", 200)
+	plain.isATV = false
+	got, ok = ytmusicPickSearchItem([]ytmusicParsedSearchItem{plain, atv("Anti-Hero", "Taylor Swift", "", 240), atv("Anti-Hero", "Taylor Swift", "", 205)}, "Taylor Swift", "Anti-Hero", "", 200)
+	if !ok || got.durationSecs != 205 || !got.isATV {
+		t.Errorf("两条 ATV 里应挑时长更近的 205s,实际 %+v", got)
+	}
+
+	// 时长差出容差的 ATV 不能顶掉时长对得上的非 ATV。
+	got, ok = ytmusicPickSearchItem([]ytmusicParsedSearchItem{plain, atv("Anti-Hero", "Taylor Swift", "", 400)}, "Taylor Swift", "Anti-Hero", "", 200)
+	if !ok || got.isATV {
+		t.Errorf("400s 的 ATV 超出时长容差,不该顶掉 200s 那条,实际 %+v", got)
+	}
 }
 
 func TestYtmusicExtractSearchItems(t *testing.T) {

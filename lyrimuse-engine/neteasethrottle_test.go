@@ -377,3 +377,43 @@ func TestNeteaseAlbumNotFoundIsNotRejection(t *testing.T) {
 		t.Error("没有这张专辑不该退避")
 	}
 }
+
+// 回 200 却解不开(风控页之类)不算这个桶答了:连撞计数不清、不记成功过。
+func TestNeteaseNonJSONIsNotSuccess(t *testing.T) {
+	withCleanNeteaseBackoff(t)
+	neteaseRateMu.Lock()
+	savedSuccess := neteaseAnySuccess
+	neteaseAnySuccess = false
+	neteaseRateMu.Unlock()
+	t.Cleanup(func() {
+		neteaseRateMu.Lock()
+		neteaseAnySuccess = savedSuccess
+		neteaseRateMu.Unlock()
+	})
+	withLRCLIBFake(t, func(r *http.Request) (int, http.Header, string) { return http.StatusOK, nil, "<html>verify</html>" })
+	if _, ok := neteaseSongSearch(qqRoundCtx(), 1, 10, "a"); ok {
+		t.Fatal("解不开不算问成")
+	}
+	neteaseRateMu.Lock()
+	success := neteaseAnySuccess
+	neteaseRateMu.Unlock()
+	if success {
+		t.Fatal("解不开不该记成功过")
+	}
+	if _, ok := neteaseAlbumIDByName(qqRoundCtx(), "Artist", "Album"); ok {
+		t.Fatal("专辑搜索解不开不算问成")
+	}
+	neteaseRateMu.Lock()
+	success = neteaseAnySuccess
+	neteaseRateMu.Unlock()
+	if success {
+		t.Fatal("专辑搜索解不开不该记成功过")
+	}
+	info := resolveNeteaseInfo(qqRoundCtx(), "Artist", "Song", "", 200)
+	neteaseRateMu.Lock()
+	success = neteaseAnySuccess
+	neteaseRateMu.Unlock()
+	if success || info.SongID != 0 {
+		t.Fatalf("搜索应答解不开不该记成功过: %v %+v", success, info.SongID)
+	}
+}

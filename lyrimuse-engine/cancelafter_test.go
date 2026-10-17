@@ -28,10 +28,10 @@ func TestWithCancelAfter(t *testing.T) {
 	}
 }
 
-// 打歌词源的请求设时间预算不用 context.WithTimeout(见 withCancelAfter)。本地查询(sqlite3 / plutil 子进程)不算。
+// 打歌词源的请求(含后台补背景人声、补演唱者)设时间预算不用 context.WithTimeout(见 withCancelAfter)。本地查询(sqlite3 / plutil 子进程)不算。
 func TestLyricSourceBudgetsUseCancelAfter(t *testing.T) {
 	files, _ := filepath.Glob("*.go")
-	prefixes := []string{"qq", "netease", "kugou", "kuwo", "migu", "soda", "deezer", "musixmatch", "ytmusic", "lrclib", "applemusic", "amll"}
+	prefixes := []string{"qq", "netease", "kugou", "kuwo", "migu", "soda", "deezer", "musixmatch", "ytmusic", "lrclib", "applemusic", "amll", "speakersbackfill", "bgbackfill"}
 	for _, f := range files {
 		if strings.HasSuffix(f, "_test.go") {
 			continue

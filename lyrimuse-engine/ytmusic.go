@@ -106,7 +106,7 @@ var (
 	// 会发一个,拿到之后后面的请求都带上(ytmusicNoteVisitorData);查首页时顺带拿到的也存在这里。
 	ytmusicVisitorID string
 	// ytmusicRegionCheckedAt / ytmusicRegionBlocked:上次查首页(ytmusicCheckRegion)的时间和结论 —— 首页是不是
-	// 「YouTube Music 在这个地区不可用」的提示页。没问成、调用方自己取消的不算查过。
+	// 「YouTube Music 在这个地区不可用」的提示页。没问成也算查过,调用方自己取消的不算;搜索挑中了歌就撤掉(ytmusicNoteSearchWorks)。
 	ytmusicRegionCheckedAt time.Time
 	ytmusicRegionBlocked   bool
 
@@ -515,18 +515,16 @@ func ytmusicPickSearchItem(items []ytmusicParsedSearchItem, artist, title, album
 		if bestATV && !it.isATV {
 			continue
 		}
-		promote := it.isATV && !bestATV
-		if !promote && durationSecs > 0 && it.durationSecs > 0 {
-			diff := mathAbs(it.durationSecs-durationSecs) / durationSecs
+		diff := -1.0
+		if durationSecs > 0 && it.durationSecs > 0 {
+			diff = mathAbs(it.durationSecs-durationSecs) / durationSecs
 			if diff > ytmusicSearchDurationTolerance {
 				continue
 			}
-			if bestDiff < 0 || diff < bestDiff {
-				promote, bestDiff = true, diff
-			}
 		}
-		if promote {
-			best, bestATV = it, it.isATV
+		// 真录音室曲目顶掉别的,同一档里时长更贴近的胜出;bestDiff 跟着换上来的那条走。
+		if (it.isATV && !bestATV) || (diff >= 0 && (bestDiff < 0 || diff < bestDiff)) {
+			best, bestATV, bestDiff = it, it.isATV, diff
 		}
 	}
 	return best, found
