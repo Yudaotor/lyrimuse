@@ -7014,6 +7014,9 @@ private struct ShortcutsSettingsTab: View {
     @ObservedObject private var touchBar = TouchBarAvailability.shared
     /// 任意一个快捷键改了就 +1,让卡头的「已设 N / M」重算。快捷键库每次改都发这条通知(名字是库里定死的)。
     @State private var shortcutsRevision = 0
+    /// 「链接」卡展开没有。用 @State:每次打开设置都是收起的,同各段的「全部设置」抽屉。
+    @State private var linksExpanded = false
+    @Environment(\.settingsSearchHighlightedTitles) private var highlightedTitles
 
     var body: some View {
         // "至少需要搭配 ⌘/⌥/⌃ 中一个"这条限制对本页每一个录制框都成立,所以写在页面说明里
@@ -7106,29 +7109,82 @@ private struct ShortcutsSettingsTab: View {
     }
 
     /// 「链接」卡:打开类的 `lyrimuse://` 链接,每行可拷贝;动作类的在上面各格悬停时拷贝。设置页链接还能带页面和分段
-    /// (`lyrimuse://settings/lyrics/manage`),不一一列出。见 14 章决策 94。
+    /// (`lyrimuse://settings/lyrics/manage`),不一一列出。见 14 章决策 94。平时收起,点卡头展开;设置搜索点名「链接」时
+    /// 自己展开(被点名的就是卡头那一行,收着也看得见,展开是为了让人接着看下面的链接)。
     private var linksCard: some View {
-        let links: [(icon: String, title: String, link: LyrimuseDeepLink)] = [
-            ("gearshape", L10n.t("打开设置"), .settings(path: "", checkForUpdates: false)),
-            ("list.bullet.rectangle", L10n.t("打开歌词管理"), .lyricsManager),
-            ("text.quote", L10n.t("打开歌词窗口"), .lyricsWindow),
-            ("magnifyingglass", L10n.t("搜索歌词"), .lyricsSearch),
-            ("menubar.rectangle", L10n.t("打开菜单栏面板"), .menuBarPanel(quick: nil)),
-            ("hand.wave", L10n.t("打开引导"), .onboarding),
-            ("doc.on.doc", L10n.t("拷贝当前歌词"), .copyLyric(includeTranslation: false)),
+        // 带参数的几条显示一条示例,可选值写在行尾「?」里;x-callback 那条给的是不带 x-success 的写法,快捷指令的
+        // 「打开 X-Callback URL」会自己补上回传地址。
+        let links: [(icon: String, title: String, link: LyrimuseDeepLink, help: String?)] = [
+            ("gearshape", L10n.t("打开设置"), .settings(path: "", checkForUpdates: false), nil),
+            ("list.bullet.rectangle", L10n.t("打开歌词管理"), .lyricsManager, nil),
+            ("text.quote", L10n.t("打开歌词窗口"), .lyricsWindow, nil),
+            ("magnifyingglass", L10n.t("搜索歌词"), .lyricsSearch, nil),
+            ("menubar.rectangle", L10n.t("打开菜单栏面板"), .menuBarPanel(quick: nil), nil),
+            ("hand.wave", L10n.t("打开引导"), .onboarding, nil),
+            ("arrow.down.circle", L10n.t("检查更新"), .settings(path: "/software-update", checkForUpdates: true), nil),
+            ("doc.on.doc", L10n.t("拷贝当前歌词"), .copyLyric(includeTranslation: false), nil),
+            ("doc.on.clipboard", L10n.t("拷贝当前歌词（含译文）"), .copyLyric(includeTranslation: true), nil),
+            ("arrowshape.turn.up.backward", L10n.t("获取正在播放"), .nowPlayingCallback(success: nil),
+             L10n.t("在快捷指令中用「打开 X-Callback URL」打开，歌名、歌手、专辑和当前这句会作为参数传回")),
+            ("shuffle", L10n.t("设置播放模式"), .setPlayMode(.shuffle),
+             L10n.t("mode 可选 list、shuffle、repeat-all、repeat-one")),
+            ("rectangle.3.group", L10n.t("指定显示哪些歌词"), .setSurfaces(overlay: true, notch: false, menuBar: true),
+             L10n.t("overlay、notch、menubar 填 1 显示、填 0 隐藏，只带要改的那几个")),
+            ("timer", L10n.t("设定歌词偏移"), .setLyricsOffset(ms: -300),
+             L10n.t("ms 为毫秒，正数提前、负数延后，±10000 以内")),
         ]
         return SettingsCard(cornerRadius: 18) {
-            SettingsCardHeader(title: L10n.t("链接"),
-                               subtitle: L10n.t("可在快捷指令、Raycast、Alfred 等工具中打开；指针移到上方的快捷键上，可拷贝对应动作的链接"))
-            ForEach(Array(links.enumerated()), id: \.offset) { index, item in
-                if index > 0 { CardDivider() }
-                if let url = item.link.url(scheme: LyrimuseIdentity.urlScheme) {
-                    SettingsRow(icon: item.icon, title: item.title, subtitle: url.absoluteString) {
-                        CopyLinkButton(url: url)
+            linksHeader
+            if linksExpanded {
+                ForEach(Array(links.enumerated()), id: \.offset) { index, item in
+                    CardDivider()
+                    if let url = item.link.url(scheme: LyrimuseIdentity.urlScheme) {
+                        SettingsRow(icon: item.icon, title: item.title, subtitle: url.absoluteString, help: item.help) {
+                            CopyLinkButton(url: url)
+                        }
                     }
                 }
             }
         }
+        // onAppear 管「从别的页搜过来、这张卡刚建出来」,onChange 管「卡已经在屏、信号后到」。
+        .onAppear { expandLinksForSearch(highlightedTitles) }
+        .onChange(of: highlightedTitles) { _, titles in expandLinksForSearch(titles) }
+    }
+
+    private func expandLinksForSearch(_ titles: Set<String>) {
+        guard !linksExpanded, titles.contains(L10n.t("链接")) else { return }
+        withAnimation(.settingsCardReveal) { linksExpanded = true }
+    }
+
+    /// 「链接」卡头:整行可点,三角形跟着转,同「全部设置」抽屉那一行(`OverlayAllSettingsDrawer.disclosureHeader`)。
+    private var linksHeader: some View {
+        Button {
+            withAnimation(.settingsCardReveal) { linksExpanded.toggle() }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: SettingsRowMetrics.iconTextSpacing) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(linksExpanded ? 90 : 0))
+                    .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("链接"))
+                        .font(.system(size: 13))
+                    Text(L10n.t("可在快捷指令、Raycast、Alfred 等工具中打开；指针移到上方的快捷键上，可拷贝对应动作的链接"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+            .padding(.vertical, SettingsRowMetrics.verticalPadding)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.glassRow)
+        .settingsSearchHighlight(title: L10n.t("链接"))
+        .accessibilityLabel(L10n.t("链接"))
+        .accessibilityValue(linksExpanded ? L10n.t("已展开") : L10n.t("已折叠"))
     }
 }
 

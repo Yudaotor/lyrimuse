@@ -46932,6 +46932,213 @@
         }
       }
     },
+    "拷贝当前歌词（含译文）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Current Lyric with Translation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷贝当前歌词（含译文）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷貝目前歌詞（含譯文）"
+          }
+        }
+      }
+    },
+    "获取正在播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get Now Playing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "获取正在播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取得正在播放"
+          }
+        }
+      }
+    },
+    "在快捷指令中用「打开 X-Callback URL」打开，歌名、歌手、专辑和当前这句会作为参数传回" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open it with “Open X-Callback URL” in Shortcuts. The title, artist, album and current line come back as parameters"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在快捷指令中用「打开 X-Callback URL」打开，歌名、歌手、专辑和当前这句会作为参数传回"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在「捷徑」中用「打開 X-Callback URL」開啟，歌名、歌手、專輯和目前這句會作為參數傳回"
+          }
+        }
+      }
+    },
+    "设置播放模式" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set Playback Mode"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置播放模式"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定播放模式"
+          }
+        }
+      }
+    },
+    "mode 可选 list、shuffle、repeat-all、repeat-one" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mode can be list, shuffle, repeat-all or repeat-one"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mode 可选 list、shuffle、repeat-all、repeat-one"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mode 可選 list、shuffle、repeat-all、repeat-one"
+          }
+        }
+      }
+    },
+    "指定显示哪些歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Which Lyrics Show"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "指定显示哪些歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "指定顯示哪些歌詞"
+          }
+        }
+      }
+    },
+    "overlay、notch、menubar 填 1 显示、填 0 隐藏，只带要改的那几个" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set overlay, notch or menubar to 1 to show or 0 to hide. Include only the ones to change"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "overlay、notch、menubar 填 1 显示、填 0 隐藏，只带要改的那几个"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "overlay、notch、menubar 填 1 顯示、填 0 隱藏，只帶要改的那幾個"
+          }
+        }
+      }
+    },
+    "设定歌词偏移" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set Lyrics Offset"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设定歌词偏移"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定歌詞偏移"
+          }
+        }
+      }
+    },
+    "ms 为毫秒，正数提前、负数延后，±10000 以内" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ms is in milliseconds: positive moves lyrics earlier, negative later, within ±10000"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ms 为毫秒，正数提前、负数延后，±10000 以内"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ms 為毫秒，正數提前、負數延後，±10000 以內"
+          }
+        }
+      }
+    },
     "已拷贝当前歌词" : {
       "extractionState" : "manual",
       "localizations" : {

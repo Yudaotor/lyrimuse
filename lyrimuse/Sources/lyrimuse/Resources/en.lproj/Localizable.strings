@@ -211,6 +211,9 @@
 "https://sctapi.ftqq.com/你的SendKey.send" = "https://sctapi.ftqq.com/YourSendKey.send";
 "iCloud 备份" = "iCloud Backup";
 "macOS 自带的音乐 App" = "The music app built into macOS";
+"mode 可选 list、shuffle、repeat-all、repeat-one" = "mode can be list, shuffle, repeat-all or repeat-one";
+"ms 为毫秒，正数提前、负数延后，±10000 以内" = "ms is in milliseconds: positive moves lyrics earlier, negative later, within ±10000";
+"overlay、notch、menubar 填 1 显示、填 0 隐藏，只带要改的那几个" = "Set overlay, notch or menubar to 1 to show or 0 to hide. Include only the ones to change";
 "—《%1$@》%2$@" = "— “%1$@” %2$@";
 "⌘S 保存 · Esc 放弃" = "⌘S Save · Esc Discard";
 "⌘S 保存 · Esc 放弃 · ↑↓ 换句" = "⌘S Save · Esc Discard · ↑↓ Next line";
@@ -716,6 +719,7 @@
 "在功能栏中显示 Lyrimuse 图标，轻点展开歌词" = "Adds a Lyrimuse button to the Control Strip; tap it to show lyrics";
 "在后台下载，退出 Lyrimuse 时安装" = "Downloads in the background and installs when you quit Lyrimuse";
 "在外部编辑器中编辑歌词" = "Edit Lyrics in External Editor";
+"在快捷指令中用「打开 X-Callback URL」打开，歌名、歌手、专辑和当前这句会作为参数传回" = "Open it with “Open X-Callback URL” in Shortcuts. The title, artist, album and current line come back as parameters";
 "在播放器中播放任意歌曲，歌词将自动显示" = "Play something in your player and lyrics will appear here";
 "在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱颜色」，其余使用「未唱颜色」。仅在显示歌词时出现。" = "Puts a menu bar icon at the far left or right of the lyrics slot; its color fills from the bottom up to show playback progress — the filled part in Sung Color, the rest in Unsung Color. Only appears while lyrics are showing.";
 "在洛雪的设置里打开开放 API 后可调音量" = "Turn on Open API in LX Music settings to adjust its volume";
@@ -1115,11 +1119,13 @@
 "拷贝" = "Copy";
 "拷贝名称" = "Copy Name";
 "拷贝当前歌词" = "Copy Current Lyric";
+"拷贝当前歌词（含译文）" = "Copy Current Lyric with Translation";
 "拷贝歌名与歌手" = "Copy Title and Artist";
 "拷贝邮箱地址" = "Copy Email Address";
 "拷贝链接" = "Copy Link";
 "拼音" = "Pinyin";
 "拼音，如 你好 → nǐ hǎo" = "Pinyin, e.g. 你好 → nǐ hǎo";
+"指定显示哪些歌词" = "Choose Which Lyrics Show";
 "指定颜色" = "Custom Color";
 "指针移到菜单栏歌词上时显示「上一曲 / 播放暂停 / 下一曲」三个按钮，移开后恢复。暂停后歌词收起为图标，或区域过窄放不下三个按钮时不显示。点按按钮以外的区域仍会打开面板。" = "Hover over the menu bar lyrics to turn them into Previous / Play-Pause / Next; move away and the lyrics return. Doesn't take over once the lyrics shrink back to the icon after pausing, or when the slot is too narrow for three buttons. Clicking outside the three buttons still opens the panel.";
 "按 %@ 秒校验" = "Validated against %@s";
@@ -1975,6 +1981,7 @@
 "获取" = "Sources";
 "获取 Lyrimuse" = "Get Lyrimuse";
 "获取 Token →" = "Get a token →";
+"获取正在播放" = "Get Now Playing";
 "菜单栏" = "Menu Bar";
 "菜单栏与 Dock" = "Menu Bar & Dock";
 "菜单栏图标" = "Menu Bar Icon";
@@ -2011,12 +2018,14 @@
 "触控栏歌词" = "Touch Bar Lyrics";
 "触控栏歌词仅适用于配备触控栏的 MacBook Pro" = "Touch Bar Lyrics works only on MacBook Pro models with a Touch Bar";
 "设备控制和数据访问" = "Device Control and Data Access";
+"设定歌词偏移" = "Set Lyrics Offset";
 "设置" = "Settings";
 "设置…" = "Settings…";
 "设置、歌词窗口、歌词管理与菜单栏面板的配色" = "Colors of Settings, the Lyrics Window, Lyrics Manager and the menu bar panel";
 "设置已保存；歌词库写入失败，可再次点按「更新备份」" = "Settings saved, but the lyrics library couldn’t be written. Click Update Backup to try again";
 "设置已导出；歌词库写入失败，仅导出了设置文件" = "Settings exported; writing the lyrics library failed, so only the settings file was written";
 "设置已导出；歌词库打包失败，仅导出了设置文件" = "Settings exported; the lyrics library could not be packaged this time, so only the settings file was written";
+"设置播放模式" = "Set Playback Mode";
 "设置文件" = "Settings File";
 "访问令牌" = "Access Token";
 "访问令牌无效，同步服务拒绝了推送" = "The sync server rejected the access token";
