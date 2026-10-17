@@ -15,6 +15,11 @@ if [ ! -d lyrimuse ] || [ ! -d lyrimuse-engine ]; then
   exit 2
 fi
 
+# 全机重活闸(heavy-gate.sh):整套检查跟 build.sh 的编译共用,同一台机器同时最多两份,有装机在等时让它先。
+. "$(dirname "$0")/heavy-gate.sh"
+trap heavy_gate_release EXIT
+heavy_gate_acquire "提交校验 $(basename "$(pwd)")" check
+
 engine_changed=1
 if [ -n "${PRIVATE_COMMIT_CHANGED:-}" ] && [ -f "$PRIVATE_COMMIT_CHANGED" ]; then
   if ! /usr/bin/grep -q '^lyrimuse-engine/' "$PRIVATE_COMMIT_CHANGED"; then
@@ -109,7 +114,7 @@ if [ "$engine_changed" = 1 ]; then
   echo "==> deadcode(不得比 deadcode-baseline.txt 多出新的)"
   dc_now="$(mktemp)"
   dc_base="$(mktemp)"
-  trap 'rm -f "$dc_now" "$dc_base"' EXIT
+  trap 'rm -f "$dc_now" "$dc_base"; heavy_gate_release' EXIT
   (cd lyrimuse-engine && GOTOOLCHAIN=go1.24.4 go run golang.org/x/tools/cmd/deadcode@v0.30.0 -test ./...) \
     | sed 's/.*unreachable func: //' | sort -u > "$dc_now"
   /usr/bin/grep -vE '^\s*(#|$)' lyrimuse-engine/deadcode-baseline.txt | sort -u > "$dc_base"

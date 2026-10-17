@@ -98,7 +98,15 @@ while ! mkdir "$BUILD_LOCK" 2>/dev/null; do
   sleep 2
 done
 echo $$ > "$BUILD_LOCK/pid"
-release_build_lock() { rm -rf "$BUILD_LOCK"; }
+# 全机重活闸(../scripts/heavy-gate.sh):下面编译那一段跟提交校验共用,同一台机器同时最多两份。只拿到 lyrimuse/
+# 这一层的源码树(没有 ../scripts)时不设闸。
+if [ -f ../scripts/heavy-gate.sh ]; then
+  . ../scripts/heavy-gate.sh
+else
+  heavy_gate_acquire() { :; }
+  heavy_gate_release() { :; }
+fi
+release_build_lock() { heavy_gate_release; rm -rf "$BUILD_LOCK"; }
 trap release_build_lock EXIT
 
 NO_RESTART=0
@@ -324,6 +332,7 @@ if [ -z "${LYRIMUSE_NO_SOURCE_SNAPSHOT:-}" ] && [ -z "${LYRIMUSE_SPM_SCRATCH_PAT
   cd "$SNAPSHOT_ROOT/lyrimuse"
 fi
 
+heavy_gate_acquire "build.sh${DEST:+ --dest}" install
 echo "==> building (release) [$ARCHES]"
 # 每个架构单独编一次再 lipo 合并,而不是 `swift build --arch arm64 --arch x86_64` 一步
 # 出 universal —— 后者要走 xcbuild
@@ -432,6 +441,8 @@ for arch in $ARCHES; do
 done
 merge_slices "$FAT_DIR/$ENGINE_NAME" "${ENGINE_SLICES[@]}"
 
+# 编译到这里就完了,后面组装、签名、重启都轻,把全机重活闸让给排队的人。
+heavy_gate_release
 echo "==> assembling .app bundle"
 # CFBundleIdentifier 这次(改名 Lyrimuse)跟上面的 $LABEL 统一成同一个
 # 字符串——早先(打包成 .app 那次)故意让两者不同,是因为 CFBundleIdentifier
