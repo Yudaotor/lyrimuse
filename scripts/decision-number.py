@@ -5,11 +5,12 @@
     python3 scripts/decision-number.py append <章> <正文文件|-> [--fill <文件…>]   # 记一条新决策,打印分到的号
     python3 scripts/decision-number.py check [文件…]              # 核对指针(不带参数 = 全仓)
     python3 scripts/decision-number.py show <章> <号…>            # 打印这几条决策的正文
-    python3 scripts/decision-number.py which <章> <行号>          # 文档这一行属于哪条决策
+    python3 scripts/decision-number.py which <章> <行号>          # 决策文件这一行属于哪条决策
 
 # append
 
-<章> 写章号(`07`)或文件路径。正文从 `**标题**` 开始写,不带编号;脚本在锁里读该章「设计决策与
+<章> 写章号(`07`)或文件路径。每章的决策在 `docs/features/decisions/NN-章名.md`(章文档只留现状规格;
+还没拆出来的章仍在章文档里)。正文从 `**标题**` 开始写,不带编号;脚本在锁里读该章「设计决策与
 已知坑」一节当前的最大号,用最大号 + 1 接在这一节末尾,原子写回,最后打印 `07 章决策 88`。
 
 几个会话同时往同一章记决策时,「写之前现查最大号」挡不住撞号:查完到写入之间别的会话已经
@@ -64,6 +65,8 @@ import sys
 SELF = os.path.abspath(__file__)
 ROOT = os.path.dirname(os.path.dirname(SELF))
 DOCS = os.path.join(ROOT, 'docs', 'features')
+# 每章的「设计决策与已知坑」在这里单独一个文件(decisions/NN-章名.md),章文档本身只留现状规格。
+DECISIONS = os.path.join(DOCS, 'decisions')
 LOCK = os.path.join(DOCS, '.decision-number.lock')
 SECTION = re.compile(r'^## 设计决策与已知坑[ \t]*$', re.M)
 NEXT_SECTION = re.compile(r'^## ', re.M)
@@ -88,6 +91,17 @@ def chapter_file(chapter):
         if name.startswith(chapter.zfill(2) + '-') and name.endswith('.md'):
             return os.path.join(DOCS, name)
     return None
+
+
+def decisions_file(chapter):
+    """第 chapter 章的决策日志:decisions/NN-*.md;没有单独拆出来的章是章文档本身。chapter 写章号或任一边的文件路径。"""
+    if os.path.isfile(chapter):
+        chapter = os.path.basename(chapter)[:2]
+    if os.path.isdir(DECISIONS):
+        for name in sorted(os.listdir(DECISIONS)):
+            if name.startswith(chapter.zfill(2) + '-') and name.endswith('.md'):
+                return os.path.join(DECISIONS, name)
+    return chapter_file(chapter)
 
 
 def section_bounds(text):
@@ -158,7 +172,7 @@ def fill_placeholders(text, chapter, num):
 
 
 def append(chapter, body_src, fill=()):
-    path = chapter_file(chapter)
+    path = decisions_file(chapter)
     if not path:
         sys.exit(f'找不到第 {chapter} 章的文档')
     chap = os.path.basename(path)[:2]
@@ -191,7 +205,7 @@ def append(chapter, body_src, fill=()):
 
 def load_section(chapter):
     """(章号, 全文, 决策一节的边界);找不到章或这一节就退出。"""
-    path = chapter_file(chapter)
+    path = decisions_file(chapter)
     if not path:
         sys.exit(f'找不到第 {chapter} 章的文档')
     text = open(path, encoding='utf-8').read()
@@ -262,7 +276,7 @@ def check(args):
             for m in REF.finditer(line):
                 chapter = m.group(1)
                 if chapter not in cache:
-                    f = chapter_file(chapter)
+                    f = decisions_file(chapter)
                     cache[chapter] = numbers(f) if f else None
                 nums = cache[chapter]
                 for n in [m.group(2)] + re.findall(r'\d{1,3}', m.group(3)):
