@@ -1274,6 +1274,7 @@ func resolveApplemusicLyric(ctx context.Context, artist, title, album string, du
 func applemusicNameCandidates(ctx context.Context, storefront, artist, title, album string, durationSecs float64, devToken string) []applemusicSong {
 	songs, err := applemusicSearch(ctx, storefront, "", artist, title, devToken)
 	if err != nil {
+		noteLyricSubFetchFailure(ctx)
 		return nil
 	}
 	if candidates := applemusicRankCandidates(songs, artist, title, album, durationSecs); len(candidates) > 0 {
@@ -1313,10 +1314,12 @@ func applemusicFetchCandidates(ctx context.Context, storefront string, candidate
 		// 为找逐字多问的这一次出错(限流、令牌被拒)时,手上那份逐行的照样交出去。
 		ttml, err := applemusicFetchTTML(ctx, storefront, id, "syllable-lyrics", devToken, userToken)
 		if err != nil {
+			noteLyricSubFetchFailure(ctx)
 			return lineTimed, applemusicResult{}, lineTimed.empty()
 		}
 		if ttml == "" {
 			if ttml, err = applemusicFetchTTML(ctx, storefront, id, "lyrics", devToken, userToken); err != nil {
+				noteLyricSubFetchFailure(ctx)
 				return lineTimed, applemusicResult{}, lineTimed.empty()
 			}
 		}
@@ -1347,6 +1350,9 @@ func applemusicFetchCandidates(ctx context.Context, storefront string, candidate
 func applemusicSongByID(ctx context.Context, storefront, id, devToken string) []applemusicSong {
 	raw, status, err := applemusicAPIGet(ctx, neturl.PathEscape(storefront)+"/songs/"+neturl.PathEscape(id), devToken, "")
 	if err != nil || status != http.StatusOK {
+		if err != nil || status != http.StatusNotFound {
+			noteLyricSubFetchFailure(ctx)
+		}
 		return nil
 	}
 	var out struct {
@@ -1369,6 +1375,9 @@ func applemusicSongsByISRC(ctx context.Context, storefront, isrc, devToken strin
 	path := neturl.PathEscape(storefront) + "/songs?filter[isrc]=" + neturl.QueryEscape(isrc)
 	raw, status, err := applemusicAPIGet(ctx, path, devToken, "")
 	if err != nil || status != http.StatusOK {
+		if err != nil || status != http.StatusNotFound {
+			noteLyricSubFetchFailure(ctx)
+		}
 		return nil
 	}
 	var out struct {
@@ -1504,10 +1513,12 @@ func applemusicLyric(ctx context.Context, artist, title, album string, durationS
 		return r
 	}
 
+	ctx, sub := withLyricSubFetch(ctx)
 	r := resolveApplemusicLyric(ctx, artist, title, album, durationSecs, catalogID, isrc)
 	// 按名字搜到的碰巧也是这一条同样算:身份由目录 id 定,不看是哪条路取到的。
 	r.fromPlayerCatalogID = catalogID != "" && r.songID == catalogID
-	if !r.empty() {
+	// 纯文本是在哪一步没问成时退下来的就不缓存,不然带时间轴的那一版这个进程里再也取不到(见 lyricsubfetch.go)。
+	if !r.empty() && (!r.plainOnly || sub.complete(ctx)) {
 		applemusicMu.Lock()
 		applemusicCache[key] = r
 		applemusicMu.Unlock()

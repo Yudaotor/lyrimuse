@@ -236,6 +236,7 @@ func sodaLyricByID(ctx context.Context, trackID, artist, title string) (sodaResu
 	}
 	sodaMu.Unlock()
 
+	ctx, sub := withLyricSubFetch(ctx)
 	r, noLyrics, broken, err := sodaFetchSeoTrack(ctx, trackID)
 	if err != nil {
 		// 传输层的失败(DNS / 连不上 / 5xx)由 sourcebreaker 按主机记,这里不重复登记 ——
@@ -253,9 +254,11 @@ func sodaLyricByID(ctx context.Context, trackID, artist, title string) (sodaResu
 	if r.empty() {
 		return r, noLyrics
 	}
-	sodaMu.Lock()
-	sodaCache[trackID] = r
-	sodaMu.Unlock()
+	if sub.complete(ctx) {
+		sodaMu.Lock()
+		sodaCache[trackID] = r
+		sodaMu.Unlock()
+	}
 	return r, false
 }
 
@@ -271,6 +274,8 @@ func sodaFetchSeoTrack(ctx context.Context, trackID string) (res sodaResult, tra
 		return res, trackFoundNoLyrics, broken, err
 	}
 	if r, noLyrics, ok := sodaFetchSharePage(ctx, trackID); ok {
+		// 分享页不带译文:这一份不进缓存,seo_track 好了之后再取一次带译文的(见 lyricsubfetch.go)。
+		noteLyricSubFetchFailure(ctx)
 		if broken {
 			log.Printf("soda: seo_track for id %s answered without a track id; used the share page", trackID)
 		} else {

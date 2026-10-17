@@ -388,6 +388,7 @@ func resolveKuwoLyric(ctx context.Context, artist, title, album string, duration
 		it  kuwoSearchItem
 	}
 	fetchedByRank := make([]*fetched, len(candidates))
+	failedByRank := make([]bool, len(candidates))
 	var wg sync.WaitGroup
 	for i, c := range candidates {
 		wg.Add(1)
@@ -398,7 +399,11 @@ func resolveKuwoLyric(ctx context.Context, artist, title, album string, duration
 				return
 			}
 			lines, err := kuwoFetchLyric(ctx, musicID)
-			if err != nil || len(lines) == 0 {
+			if err != nil {
+				failedByRank[rank] = true
+				return
+			}
+			if len(lines) == 0 {
 				return // lrclist 为空(纯音乐/伴奏/无歌词)——丢弃,见文件头注
 			}
 			lrc := kuwoBuildLRC(lines)
@@ -413,8 +418,12 @@ func resolveKuwoLyric(ctx context.Context, artist, title, album string, duration
 	// 按分数名次(rank 从 0 开始,分数已从高到低排过)挑第一个真的拿到同步歌词的,
 	// 不是"谁先拉完网络请求"——并发只是为了不串行等 5 次网络往返,采纳顺序仍然由
 	// 打分结果决定。
-	for _, f := range fetchedByRank {
+	for rank, f := range fetchedByRank {
 		if f == nil {
+			// 名次更靠前的那条取词没问成、退到后面一条:这一份不进缓存,下次再问前面那条(见 lyricsubfetch.go)。
+			if failedByRank[rank] {
+				noteLyricSubFetchFailure(ctx)
+			}
 			continue
 		}
 		return kuwoResult{

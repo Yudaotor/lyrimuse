@@ -61,6 +61,9 @@ func kugouGet(ctx context.Context, u string, v any) error {
 	return tryEach(ctx, kugouURLAlternates(u), func(alt string) error { return kugouGetAt(ctx, alt, v) })
 }
 
+// errKugouNotFound:接口答了 404(没有这一条)。是「问成了、没有」,调用方别把它记成没问成。
+var errKugouNotFound = errors.New("kugou: not found")
+
 func kugouGetAt(ctx context.Context, u string, v any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -72,6 +75,9 @@ func kugouGetAt(ctx context.Context, u string, v any) error {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("status %d: %w", resp.StatusCode, errKugouNotFound)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("status %d", resp.StatusCode)
 	}

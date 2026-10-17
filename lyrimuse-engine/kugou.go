@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
@@ -374,6 +375,8 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 	for _, q := range searchTitleVariants(title) {
 		songs, ok := kugouSearchSongs(ctx, artist+" "+q)
 		if !ok {
+			// 前面的搜索词没问成、用后面的挑中:这一份不进缓存,下次再按前面的搜(见 lyricsubfetch.go)。
+			noteLyricSubFetchFailure(ctx)
 			continue
 		}
 		searched = true
@@ -774,6 +777,7 @@ func kugouLocalCoverURL(ctx context.Context, artist, title, hash string) string 
 	for _, q := range searchTitleVariants(title) {
 		songs, ok := kugouSearchSongs(ctx, artist+" "+q)
 		if !ok {
+			noteLyricSubFetchFailure(ctx)
 			continue
 		}
 		if s := kugouSongByHash(songs, hash); s != nil {
@@ -833,7 +837,14 @@ func kugouAlbumCoverURL(ctx context.Context, albumID string) string {
 		} `json:"data"`
 	}
 	u := "http://mobilecdn.kugou.com/api/v3/album/info?albumid=" + neturl.QueryEscape(albumID)
-	if err := kugouGet(ctx, u, &out); err != nil || out.Data.ImgURL == "" {
+	if err := kugouGet(ctx, u, &out); err != nil {
+		// 没问成:没封面的这一份不进缓存,不然这首在候选弹窗里一直没封面(见 lyricsubfetch.go)。404 是没有这张专辑。
+		if !errors.Is(err, errKugouNotFound) {
+			noteLyricSubFetchFailure(ctx)
+		}
+		return ""
+	}
+	if out.Data.ImgURL == "" {
 		return ""
 	}
 	return kugouCoverFromTemplate(out.Data.ImgURL)

@@ -763,6 +763,8 @@ func ytmusicFetchTimedLyrics(ctx context.Context, browseID string) (string, stri
 	body["browseId"] = browseID
 	raw, err := ytmusicPost(ctx, "browse", body, ytmusicCachedVisitorID())
 	if err != nil || len(raw) == 0 {
+		// 没问成(ytmusicPost 所有主机都失败时返回空):接着取到的纯文本不进缓存,下次再问带时间戳的(见 lyricsubfetch.go)。
+		noteLyricSubFetchFailure(ctx)
 		return "", ""
 	}
 	lines, source := ytmusicParseTimedLyrics(raw)
@@ -836,8 +838,9 @@ func ytmusicLyric(ctx context.Context, artist, title, album string, durationSecs
 	}
 	ytmusicMu.Unlock()
 
+	ctx, sub := withLyricSubFetch(ctx)
 	r := resolveYTMusicLyric(ctx, artist, title, album, durationSecs)
-	if r.lyrics != "" {
+	if r.lyrics != "" && sub.complete(ctx) {
 		ytmusicMu.Lock()
 		ytmusicCache[key] = r
 		ytmusicMu.Unlock()
@@ -862,6 +865,7 @@ func ytmusicVideoLyric(ctx context.Context, videoID, hl string) ytmusicResult {
 		return v
 	}
 	ytmusicMu.Unlock()
+	ctx, sub := withLyricSubFetch(ctx)
 	body := ytmusicContext(ytmusicWebClientName, ytmusicWebClientVersion())
 	if hl != "" {
 		if c, ok := body["context"].(map[string]any)["client"].(map[string]any); ok {
@@ -886,9 +890,11 @@ func ytmusicVideoLyric(ctx context.Context, videoID, hl string) ytmusicResult {
 		lyrics: lyrics, plainOnly: plainOnly, fromLocalClient: true,
 		title: credit.title, artist: credit.artist, album: credit.album, durationSecs: credit.durationSecs, cover: credit.cover,
 	}
-	ytmusicMu.Lock()
-	ytmusicCache[key] = r
-	ytmusicMu.Unlock()
+	if sub.complete(ctx) {
+		ytmusicMu.Lock()
+		ytmusicCache[key] = r
+		ytmusicMu.Unlock()
+	}
 	return r
 }
 

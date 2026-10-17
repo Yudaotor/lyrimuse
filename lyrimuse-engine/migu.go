@@ -444,7 +444,10 @@ func resolveMiguLyric(ctx context.Context, artist, title, album string, duration
 		candidates = candidates[:miguMaxCandidatesToFetch]
 	}
 
-	type fetched struct{ lrc, plain string }
+	type fetched struct {
+		lrc, plain string
+		failed     bool
+	}
 	fetchedByRank := make([]fetched, len(candidates))
 	var wg sync.WaitGroup
 	for i, c := range candidates {
@@ -453,6 +456,7 @@ func resolveMiguLyric(ctx context.Context, artist, title, album string, duration
 			defer wg.Done()
 			lrc, err := miguFetchLRC(ctx, item.LyricURL)
 			if err != nil {
+				fetchedByRank[rank].failed = true
 				return
 			}
 			if isTimedLRC(lrc) {
@@ -474,7 +478,11 @@ func resolveMiguLyric(ctx context.Context, artist, title, album string, duration
 			cover: cover, plainOnly: plainOnly, durationSecs: it.durationSecs(),
 		}
 	}
+	// 名次更靠前的那条取词没问成、退到后面一条(或纯文本)时,这一份不进缓存,下次再问前面那条(见 lyricsubfetch.go)。
 	for rank, f := range fetchedByRank {
+		if f.failed {
+			noteLyricSubFetchFailure(ctx)
+		}
 		if f.lrc == "" {
 			continue
 		}

@@ -834,6 +834,9 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	for _, q := range queries {
 		songs, err := neteaseSearchSongs(get, q)
 		if err != nil {
+			// 这条查询词没问成(多半是带专辑名、最可能命中对的版本的那条),后面的查询词挑中别的版本时这一份不进缓存
+			// (见 lyricsubfetch.go)。
+			noteLyricSubFetchFailure(ctx)
 			continue
 		}
 		allSongs = append(allSongs, songs...)

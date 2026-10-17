@@ -198,8 +198,9 @@ func deezerLyric(ctx context.Context, artist, title, album string, durationSecs 
 	}
 	deezerMu.Unlock()
 
+	ctx, sub := withLyricSubFetch(ctx)
 	r := resolveDeezerLyric(ctx, artist, title, album, durationSecs, isrc)
-	if !r.empty() {
+	if !r.empty() && sub.complete(ctx) {
 		deezerMu.Lock()
 		deezerCache[key] = r
 		deezerMu.Unlock()
@@ -950,9 +951,11 @@ func resolveDeezerLyric(ctx context.Context, artist, title, album string, durati
 	candidates = fetch
 
 	got := make([]deezerLyricsPayload, len(candidates))
+	failed := make([]bool, len(candidates))
 	fetchAt := func(rank int) {
 		p, err := deezerFetchLyrics(ctx, strconv.FormatInt(candidates[rank].track.ID, 10))
 		if err != nil {
+			failed[rank] = true
 			return
 		}
 		if !isTimedLRC(p.lrc) {
@@ -988,7 +991,11 @@ func resolveDeezerLyric(ctx context.Context, artist, title, album string, durati
 			cover: t.cover(), durationSecs: float64(t.Duration), plainOnly: plainOnly, isrc: t.ISRC,
 		}
 	}
+	// 名次更靠前的那条取词没问成、退到后面一条(或纯文本)时,这一份不进缓存,下次再问前面那条(见 lyricsubfetch.go)。
 	for rank, f := range got {
+		if failed[rank] {
+			noteLyricSubFetchFailure(ctx)
+		}
 		if f.lrc != "" {
 			r := build(rank, f.lrc, false)
 			r.yrc, r.tr, r.songwriters = f.yrc, f.tr, f.songwriters

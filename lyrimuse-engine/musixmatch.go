@@ -1166,7 +1166,9 @@ func musixmatchSubtitleLRC(ctx context.Context, trackID int64) string {
 		"track_id":        {strconv.FormatInt(trackID, 10)},
 		"subtitle_format": {"lrc"},
 	})
+	// 说有字幕却没问成(超时、5xx、读一半断了、拒绝码):退回去的纯文本结果不进缓存,下次再问字幕(见 lyricsubfetch.go)。
 	if err != nil {
+		noteLyricSubFetchFailure(ctx)
 		return ""
 	}
 	var out struct {
@@ -1181,7 +1183,11 @@ func musixmatchSubtitleLRC(ctx context.Context, trackID int64) string {
 			} `json:"body"`
 		} `json:"message"`
 	}
-	if json.Unmarshal(body, &out) != nil || out.Message.Header.StatusCode != 200 {
+	if json.Unmarshal(body, &out) != nil || musixmatchSubStatusFailed(out.Message.Header.StatusCode) {
+		noteLyricSubFetchFailure(ctx)
+		return ""
+	}
+	if out.Message.Header.StatusCode != 200 {
 		return ""
 	}
 	lrc := out.Message.Body.Subtitle.SubtitleBody
