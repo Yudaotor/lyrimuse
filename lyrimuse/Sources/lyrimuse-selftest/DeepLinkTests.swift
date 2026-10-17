@@ -334,6 +334,29 @@ func runDeepLinkTests() {
         }
     }
 
+    // ---- 对外文档 docs/url-scheme(.zh-CN).md:每个动作、播放模式、设置页和分段都写到 ----
+    do {
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let names = LyrimuseAction.allCases.map(\.linkName) + LyrimuseDeepLink.extraActionNames
+        let modes = LyrimuseDeepLink.playModeNames.keys.sorted()
+        let pages = SettingsDeepLink.tabNames.map { "/" + $0 } + SettingsDeepLink.Account.allCases.map { "/account/" + $0.rawValue }
+            + ["/software-update", "/lastfm-suggestions", "/labs"]
+        // 分段别名(web-lyrics、obs 跳到同页的另一个分段)不写进对外文档。
+        let sections = SettingsDeepLink.sectionTable.values.flatMap { $0.values.keys }
+            .filter { !["web-lyrics", "obs"].contains($0) }.map { "/" + $0 }
+        for file in ["docs/url-scheme.md", "docs/url-scheme.zh-CN.md"] {
+            let doc = (try? String(contentsOf: repo.appendingPathComponent(file), encoding: .utf8)) ?? ""
+            expectEqual(doc.isEmpty, false, "对外文档: \(file) 在")
+            let missing = names.filter { !doc.contains("`\($0)`") && !doc.contains("action/\($0)") }
+                + (modes + pages + Set(sections).sorted()).filter { !doc.contains("`\($0)`") }
+            expectEqual(missing, [], "对外文档: \(file) 写到了每个动作、播放模式、设置页和分段")
+        }
+        expectEqual(LyrimuseDeepLink.referenceURL(language: "zh-hant").lastPathComponent, "url-scheme.zh-CN.md",
+                    "对外文档: 中文界面开中文那份")
+        expectEqual(LyrimuseDeepLink.referenceURL(language: "en").lastPathComponent, "url-scheme.md", "对外文档: 英文界面开英文那份")
+    }
+
     // ---- App 侧接线:只有一处分派,认不出的不落进授权回调 ----
     do {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()

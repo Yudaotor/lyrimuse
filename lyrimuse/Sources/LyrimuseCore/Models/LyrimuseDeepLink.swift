@@ -27,8 +27,15 @@ import Foundation
 /// 开窗类的链接(settings、lyrics-manager、lyrics-window、lyrics-search、onboarding、action/open-*)可以再带
 /// `background=1`:窗口摆出来,但不激活 App、不抢键盘焦点(`wantsBackground(_:)`)。
 /// host 和路径大小写不敏感;scheme 由调用方给(正式 `lyrimuse`,Dev `lyrimuse-dev`,`LyrimuseIdentity.urlScheme`)。
-/// 改名、删除任何一条都要先看对外说过没有(CHANGELOG、README、支持回复),说过的保持能用。
+/// 改名、删除任何一条都要先看对外说过没有(CHANGELOG、README、支持回复),说过的保持能用。对外开放的链接都写在
+/// docs/url-scheme.md 与 docs/url-scheme.zh-CN.md,加、改一条两份一起改(selftest deep-links 组对着动作、设置页和分段查)。
 public enum LyrimuseDeepLink: Equatable, Sendable {
+    /// 对外文档在 GitHub 上的地址,按界面语言挑一份;`language` 同 `LegalNoticeLinks.usageNoticeURL(language:)`。
+    public static func referenceURL(language: String) -> URL {
+        let file = language.lowercased().hasPrefix("zh") ? "url-scheme.zh-CN.md" : "url-scheme.md"
+        return URL(string: LegalNoticeLinks.repo + "/blob/main/docs/" + file)!
+    }
+
     case settings(path: String, checkForUpdates: Bool)
     case lyricsManager
     /// `key`:写法键(`EnrichCacheKeys.normalizedKey` 那种「歌手|歌名|专辑」);nil = 详情页正显示的那一条。`showEvidence`:

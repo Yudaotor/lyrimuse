@@ -204,10 +204,11 @@ public enum SettingsSearchCatalog {
                             pathKeys: ["歌词显示", "触控栏"] + (group.map { [$0] } ?? []))
     }
 
-    /// 「快捷键」页:「链接」卡、各个动作(格子、顺序、标题、关键词都取 `LyrimuseAction`)、「歌词时间轴」卡底下的「步长」。
+    /// 「快捷键」页:「深度链接」卡、各个动作(格子、顺序、标题、关键词都取 `LyrimuseAction`)、「歌词时间轴」卡底下的「步长」。
     private static var shortcutEntries: [SettingsSearchEntry] {
-        var entries = [shortcut("链接", sub: "可在快捷指令、Raycast、Alfred 等工具中打开；指针移到上方的快捷键上，可拷贝对应动作的链接",
-                                kw: ["深链", "URL", "lyrimuse://", "Raycast", "Alfred", "Stream Deck", "自动化", "拷贝链接"])]
+        var entries = [shortcut("深度链接", sub: "可在快捷指令、Raycast、Alfred 等工具中打开；指针移到上方的快捷键上，可拷贝对应动作的链接",
+                                kw: ["深链", "URL", "URL Scheme", "x-callback", "文档", "lyrimuse://", "Raycast", "Alfred", "Stream Deck",
+                                     "自动化", "拷贝链接"])]
         for (group, actions) in LyrimuseAction.shortcutLayout {
             entries += actions.map { shortcut($0.titleKey, kw: $0.searchKeywords) }
             if group == .timing {

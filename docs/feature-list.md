@@ -1040,7 +1040,7 @@ Every setting in the Settings window, by where it lives: 266 in all. Type a name
 
 ### Keyboard Shortcuts
 
-- **Link**: Open these from Shortcuts, Raycast, Alfred and similar tools. Hover over a shortcut above to copy the link for that action.
+- **Deep Links**: Open these from Shortcuts, Raycast, Alfred and similar tools. Hover over a shortcut above to copy the link for that action.
 - **Show/Hide Floating Lyrics**
 - **Show/Hide Notch Lyrics**
 - **Show/Hide Menu Bar Lyrics**

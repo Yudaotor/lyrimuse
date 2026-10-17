@@ -777,6 +777,7 @@
 "完成，开始 Scrobble" = "Done — Start Scrobbling";
 "完整尺寸" = "Full Size";
 "完整尺寸歌词的对齐；「自动」按对唱声部对齐" = "Lyrics alignment in the full size; Automatic follows the duet parts";
+"完整说明" = "Full Reference";
 "定位" = "Locate";
 "实验室" = "Labs";
 "宽度" = "Width";
@@ -1078,6 +1079,7 @@
 "所有候选都相同的项：%@" = "Terms identical on every candidate: %@";
 "所有已启用的歌词源请求均失败，可能是网络连接问题，并不代表这首歌曲没有歌词。检查网络后可点按下方的「重试」" = "None of the enabled lyrics sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below";
 "所有歌词源均无法连接" = "None of the lyrics sources could be reached";
+"所有链接、参数和设置页路径" = "Every link, parameter and settings path";
 "所选条目" = "Selected Entry";
 "所选条目无逐字时间轴" = "The selected entry has no word timing";
 "手动调整" = "Manually Adjusted";
@@ -1719,6 +1721,7 @@
 "浮在所有窗口之上" = "Floats above all windows";
 "淡化时点按会落到下面的窗口；按住 ⌥ 恢复不透明，就能操作" = "While faded, clicks go to the window underneath. Hold ⌥ to make it opaque again and use it";
 "淡化时点按穿透" = "Click Through While Faded";
+"深度链接" = "Deep Links";
 "深色" = "Dark";
 "深色卡片" = "Dark Card";
 "深色渐变" = "Dark Gradient";

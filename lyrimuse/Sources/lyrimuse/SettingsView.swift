@@ -7108,8 +7108,9 @@ private struct ShortcutsSettingsTab: View {
         }
     }
 
-    /// 「链接」卡:打开类的 `lyrimuse://` 链接,每行可拷贝;动作类的在上面各格悬停时拷贝。设置页链接还能带页面和分段
-    /// (`lyrimuse://settings/lyrics/manage`),不一一列出。见 14 章决策 94。平时收起,点卡头展开;设置搜索点名「链接」时
+    /// 「深度链接」卡:打开类的 `lyrimuse://` 链接,每行可拷贝;动作类的在上面各格悬停时拷贝。设置页链接还能带页面和分段
+    /// (`lyrimuse://settings/lyrics/manage`),不一一列出,最后一行开对外文档 docs/url-scheme(.zh-CN).md。见 14 章决策 94、121。
+    /// 平时收起,点卡头展开;设置搜索点名「深度链接」时
     /// 自己展开(被点名的就是卡头那一行,收着也看得见,展开是为了让人接着看下面的链接)。
     private var linksCard: some View {
         // 带参数的几条显示一条示例,可选值写在行尾「?」里;x-callback 那条给的是不带 x-success 的写法,快捷指令的
@@ -7144,6 +7145,21 @@ private struct ShortcutsSettingsTab: View {
                         }
                     }
                 }
+                CardDivider()
+                SettingsRow(icon: "book", title: L10n.t("完整说明"), subtitle: L10n.t("所有链接、参数和设置页路径")) {
+                    Button {
+                        NSWorkspace.shared.open(LyrimuseDeepLink.referenceURL(language: L10n.current))
+                    } label: {
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .frame(width: 16, height: 16)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.glassIcon())
+                    .foregroundStyle(.secondary)
+                    .help(L10n.t("在浏览器中打开"))
+                    .accessibilityLabel(L10n.t("在浏览器中打开"))
+                }
             }
         }
         // onAppear 管「从别的页搜过来、这张卡刚建出来」,onChange 管「卡已经在屏、信号后到」。
@@ -7152,11 +7168,11 @@ private struct ShortcutsSettingsTab: View {
     }
 
     private func expandLinksForSearch(_ titles: Set<String>) {
-        guard !linksExpanded, titles.contains(L10n.t("链接")) else { return }
+        guard !linksExpanded, titles.contains(L10n.t("深度链接")) else { return }
         withAnimation(.settingsCardReveal) { linksExpanded = true }
     }
 
-    /// 「链接」卡头:整行可点,三角形跟着转,同「全部设置」抽屉那一行(`OverlayAllSettingsDrawer.disclosureHeader`)。
+    /// 「深度链接」卡头:整行可点,三角形跟着转,同「全部设置」抽屉那一行(`OverlayAllSettingsDrawer.disclosureHeader`)。
     private var linksHeader: some View {
         Button {
             withAnimation(.settingsCardReveal) { linksExpanded.toggle() }
@@ -7168,7 +7184,7 @@ private struct ShortcutsSettingsTab: View {
                     .rotationEffect(.degrees(linksExpanded ? 90 : 0))
                     .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("链接"))
+                    Text(L10n.t("深度链接"))
                         .font(.system(size: 13))
                     Text(L10n.t("可在快捷指令、Raycast、Alfred 等工具中打开；指针移到上方的快捷键上，可拷贝对应动作的链接"))
                         .font(.system(size: 11))
@@ -7182,8 +7198,8 @@ private struct ShortcutsSettingsTab: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.glassRow)
-        .settingsSearchHighlight(title: L10n.t("链接"))
-        .accessibilityLabel(L10n.t("链接"))
+        .settingsSearchHighlight(title: L10n.t("深度链接"))
+        .accessibilityLabel(L10n.t("深度链接"))
         .accessibilityValue(linksExpanded ? L10n.t("已展开") : L10n.t("已折叠"))
     }
 }

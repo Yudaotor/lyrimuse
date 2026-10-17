@@ -90,7 +90,7 @@ brew install --cask lyrimuse
 
 ### Everyday details
 - **Simplified Chinese, Traditional Chinese and English**, and switching takes effect right away, no restart.
-- **Keyboard shortcuts** for every action. None are set out of the box, so you pick the keys.
+- **Keyboard shortcuts** for every action. None are set out of the box, so you pick the keys. Every action also has a `lyrimuse://` link you can call from Shortcuts, Raycast or Alfred ([URL Scheme](docs/url-scheme.md)).
 - **Search in Settings.** Type in the sidebar and it scrolls to the matching row and highlights it, opening a collapsed group if it needs to.
 - **Updates itself.** It checks on its own, or when you ask from the menu bar. Updates install from the Software Update page in Settings, with the release notes and progress right there, and you can opt in to beta builds.
 - **Start together with your players**, set per player and in either direction: open them when Lyrimuse opens, open Lyrimuse when they open, and if you like, quit Lyrimuse once all the players it follows have quit.

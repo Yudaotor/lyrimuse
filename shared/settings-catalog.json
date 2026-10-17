@@ -1650,7 +1650,7 @@
         "快捷键"
       ],
       "subtitle" : "可在快捷指令、Raycast、Alfred 等工具中打开；指针移到上方的快捷键上，可拷贝对应动作的链接",
-      "title" : "链接"
+      "title" : "深度链接"
     },
     {
       "dest" : "tab:shortcuts",
