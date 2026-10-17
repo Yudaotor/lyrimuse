@@ -154,9 +154,19 @@ public enum LyricsWindowMiniToggle {
 /// 迷你「单行 / 双行」那套显示哪几句。
 public enum MiniLyricsSelection {
     /// 歌词窗口画的那份行。「卡拉OK效果」(迷你 `np:lyricsWindowMiniLyricsKaraoke`、完整 `np:lyricsWindowLyricsKaraoke`)关着时
-    /// 每行压成整行(`SyncedLyricLine.lineLevel`,去掉逐字和逐词读音),id、时间、译文、读音不变;开着原样返回(见 07 章决策 116)。
+    /// 每行压成整行(去掉逐字和逐词读音,背景人声留着),id、时间、译文、读音不变;开着原样返回(见 07 章决策 116)。
     public static func lines(_ lines: [LyricsWindowLine], karaoke: Bool) -> [LyricsWindowLine] {
-        karaoke ? lines : lines.map { LyricsWindowLine(id: $0.id, timeMs: $0.timeMs, line: $0.line.lineLevel) }
+        karaoke ? lines : lines.map { LyricsWindowLine(id: $0.id, timeMs: $0.timeMs, line: lineLevelKeepingBackground($0.line)) }
+    }
+
+    /// 压成整行,但背景人声留着:歌词窗口完整尺寸照样显示它,整行形态下整句静态画(07 章决策 163)。
+    /// `lineLevel` 本身不带背景人声,别的展示面不画它。
+    public static func lineLevelKeepingBackground(_ line: SyncedLyricLine) -> SyncedLyricLine {
+        let flat = line.lineLevel
+        guard let background = line.backgroundWords, flat.backgroundWords == nil else { return flat }
+        return SyncedLyricLine(romanization: flat.romanization, translation: flat.translation, mainText: flat.mainText,
+                               words: nil, wordGroups: nil, side: flat.side, plainText: flat.plainText,
+                               backgroundWords: background)
     }
 
     /// 当前行:引擎给的下标有效才有。

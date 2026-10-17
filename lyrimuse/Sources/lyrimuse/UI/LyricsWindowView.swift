@@ -4941,23 +4941,27 @@ struct LyricsWindowView: View {
     /// "当前行"高亮,反而误导用户以为它在跟播放联动。
     @ViewBuilder
     private func plainLyricsFallback(leading: CGFloat, trailing: CGFloat) -> some View {
+        // 字体、粗细、文字颜色、对齐跟这一尺寸的设置走;粗细比正文细几档,默认档就是一直以来的常规字重。
+        let side = lyricForcedSide ?? .leading
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: side.horizontalAlignment, spacing: 18) {
                 Label(L10n.t("此歌词无时间戳，无法随播放高亮或自动滚动"), systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(hasArtworkBackground ? .white.opacity(0.75) : Color.orange)
                 Text(playback.currentTrackPlainLyrics)
-                    .font(.system(size: lyricFontSize * 0.62))
+                    .font(.overlayFont(familyName: activeFontFamily, size: lyricFontSize * 0.62,
+                                       weight: lyricFontWeight.lighter(by: OverlayFontWeight.lyricsWindowPlainLyricsSteps)))
                     .lyricTypesetting(playback.currentTrackPlainLyrics)
                     .lineSpacing(lyricFontSize * 0.32)
-                    .foregroundStyle(hasArtworkBackground ? .white.opacity(0.92) : Color.primary)
+                    .multilineTextAlignment(side.textAlignment)
+                    .foregroundStyle(lyricTextColor.opacity(hasArtworkBackground ? 0.92 : 1))
                     .textSelection(.enabled)
             }
             .padding(.top, 40)
             .padding(.bottom, 60)
             .padding(.leading, leading)
             .padding(.trailing, trailing)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: Alignment(horizontal: side.horizontalAlignment, vertical: .center))
         }
         .scrollIndicators(.hidden)
     }
@@ -5200,8 +5204,15 @@ private struct LyricsLineRow: View, Equatable {
         VStack(alignment: alignment.horizontal, spacing: 6) {
             mainText
             // 背景人声紧贴正文下面,比正文小、淡,自己按时间逐字填色,不上浮。所有行都显示(跟译文一样),
-            // 只在当前行才显示的话,换行时行高一变整列会跳。
-            if let bgWords = backgroundDisplayWords {
+            // 只在当前行才显示的话,换行时行高一变整列会跳。整行形态(「卡拉OK效果」关着)整句静态画,同正文。
+            if let bgWords = backgroundDisplayWords, item.line.words == nil {
+                let bgText = bgWords.map(\.text).joined()
+                Text(bgText)
+                    .font(.overlayFont(familyName: fontFamily, size: fontSize * Self.backgroundVocalsScale, weight: weight))
+                    .foregroundStyle(textColor)
+                    .lyricTypesetting(bgText)
+                    .opacity(Self.backgroundVocalsOpacity)
+            } else if let bgWords = backgroundDisplayWords {
                 KaraokeLineText(
                     words: bgWords,
                     groups: nil,
@@ -5215,7 +5226,8 @@ private struct LyricsLineRow: View, Equatable {
                     reduceMotion: reduceMotion,
                     displayScale: displayScale,
                     rowAlignment: rowAlignment,
-                    rises: false
+                    rises: false,
+                    weight: weight
                 )
                 .opacity(Self.backgroundVocalsOpacity)
             }

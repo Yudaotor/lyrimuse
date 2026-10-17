@@ -428,7 +428,16 @@ extension LyricsLayerRowPlan {
             textFrame = CGRect(x: blockX, y: y, width: blockW, height: para.text.height)
             y += para.text.height
         }
-        if style.wordRise, let bg = backgroundDisplayWords(line.backgroundWords) {
+        if style.wordRise, let bg = backgroundDisplayWords(line.backgroundWords), line.words == nil {
+            // 整行形态(「卡拉OK效果」关着):背景人声整句静态画,同正文那一行;淡的那一层直接压进颜色。
+            y += LyricsLayerRowStyle.blockSpacing
+            let faded = ink.text.copy(alpha: ink.text.alpha * CGFloat(LyricsLayerRowStyle.backgroundOpacity)) ?? ink.text
+            if let para = paragraph(bg.map(\.text).joined(), font: ink.background, color: faded, translation: false,
+                                    width: blockW, side: side, scale: style.scale) {
+                pictures += placed(para, x: blockX, y: y)
+                y += para.text.height
+            }
+        } else if style.wordRise, let bg = backgroundDisplayWords(line.backgroundWords) {
             y += LyricsLayerRowStyle.blockSpacing
             let block = wordBlock(words: bg, groups: nil, font: ink.background, romaFont: ink.roma, color: ink.text,
                                   activeColor: ink.text, rises: false, origin: CGPoint(x: blockX, y: y), width: blockW, side: side, style: style,

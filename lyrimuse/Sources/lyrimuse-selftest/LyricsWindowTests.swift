@@ -746,6 +746,16 @@ func runLyricsWindowTests() {
         plain.load(lyrics: "[00:01.00]说好的\n[00:03.00]幸福呢\n", lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         let lineOnly = plain.allLines(idPrefix: "p")
         expectEqual(M.lines(lineOnly, karaoke: false), lineOnly, "迷你卡拉OK: 本来就没有逐字数据的行原样")
+        // 背景人声:压成整行时留着(完整尺寸照样显示,整行形态下静态画),逐字照样去掉(07 章决策 163)。
+        let bg = [SyncedLyricWord(text: "(oh ", startMs: 1200, durationMs: 300), SyncedLyricWord(text: "yeah)", startMs: 1500, durationMs: 300)]
+        let withBG = SyncedLyricLine(romanization: nil, translation: nil, mainText: nil,
+                                     words: [SyncedLyricWord(text: "Hold me", startMs: 1000, durationMs: 800)], wordGroups: nil,
+                                     side: nil, plainText: "Hold me", backgroundWords: bg)
+        let keptBG = M.lineLevelKeepingBackground(withBG)
+        expectEqual(keptBG.words == nil && keptBG.backgroundWords == bg && keptBG.plainText == "Hold me", true,
+                    "卡拉OK关着: 逐字去掉、背景人声留着")
+        expectEqual(withBG.lineLevel.backgroundWords == nil, true, "卡拉OK关着: lineLevel 本身仍不带背景人声(别的展示面不画)")
+        expectEqual(M.lineLevelKeepingBackground(keptBG), keptBG, "卡拉OK关着: 已经是整行的再压一次原样")
 
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         func source(_ path: String) -> String {
@@ -847,7 +857,7 @@ func runLyricsWindowTests() {
         expectEqual(!reel.isEmpty && !reel.contains("weight: .bold") && !reel.contains("weight: .medium")
                     && !reel.contains("weight: .semibold"), true, "迷你粗细接线: reel 里没有写死的字重")
         expectEqual(sourceBytes(window, contain: "weight: playback.miniFontWeight,\n"), true, "迷你粗细接线: reel 拿迷你那一档")
-        expectEqual(window.components(separatedBy: "weight: lyricFontWeight").count - 1 == 2
+        expectEqual(window.components(separatedBy: "weight: lyricFontWeight,").count - 1 == 2
                     && sourceBytes(window, contain: "private var lyricFontWeight: OverlayFontWeight { showsMiniLayout ? playback.miniFontWeight : playback.fullFontWeight }"),
                     true, "迷你粗细接线: 多行的 SwiftUI 列表和图层版列表都按此刻尺寸那一档画")
         expectEqual(sourceBytes(window, contain: "fontFamily: fontFamily,\n            weight: weight))"), true,
@@ -966,6 +976,31 @@ func runLyricsWindowTests() {
         expectEqual(["歌词布局", "长句处理"].map(group), [Optional("布局"), Optional("布局")], "设置分组: 搜索里歌词布局、长句处理归「布局」")
         expectEqual(group("悬浮淡化"), Optional("行为"), "设置分组: 搜索里悬浮淡化归「行为」")
         expectEqual(group("对齐方式"), Optional("布局"), "设置分组: 搜索里对齐方式归「布局」")
+    }
+
+    // MARK: - 整行形态下的背景人声、纯文本歌词跟样式设置走(07 章决策 163)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ path: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let window = source("lyrimuse/UI/LyricsWindowView.swift")
+        let layerRows = source("lyrimuse/UI/LyricsLayerListRow.swift")
+        expectEqual(sourceBytes(window, contain: "if let bgWords = backgroundDisplayWords, item.line.words == nil {")
+                    && sourceBytes(layerRows, contain: "let bg = backgroundDisplayWords(line.backgroundWords), line.words == nil {"),
+                    true, "背景人声: 两版列表在整行形态下都画背景人声(静态)")
+        expectEqual(sourceBytes(window, contain: "rises: false,\n                    weight: weight\n"), true,
+                    "背景人声: SwiftUI 版逐字的背景人声也跟「粗细」走")
+        expectEqual(OverlayFontWeight.bold.lighter(by: OverlayFontWeight.lyricsWindowPlainLyricsSteps), .regular,
+                    "纯文本歌词: 默认粗细推出来是一直以来的常规字重")
+        let plain = window.components(separatedBy: "private func plainLyricsFallback(").dropFirst().first?
+            .components(separatedBy: "private var emptyState: some View").first ?? ""
+        expectEqual(!plain.isEmpty && plain.contains("familyName: activeFontFamily")
+                    && plain.contains("lyricFontWeight.lighter(by: OverlayFontWeight.lyricsWindowPlainLyricsSteps)")
+                    && plain.contains("lyricTextColor.opacity(") && plain.contains(".multilineTextAlignment(side.textAlignment)")
+                    && plain.contains("let side = lyricForcedSide ?? .leading")
+                    && plain.contains("Text(playback.currentTrackPlainLyrics)\n                    .font(.overlayFont("),
+                    true, "纯文本歌词: 字体、粗细、文字颜色、对齐跟这一尺寸的设置走")
     }
 
     // MARK: - 完整尺寸的卡拉OK效果、粗细、已唱颜色、对齐方式(07 章决策 161)

@@ -292,19 +292,12 @@ public enum WebLyricsPort {
     public static func clamped(_ value: Int, fallback: Int = standard) -> Int { range.contains(value) ? value : fallback }
 }
 
-/// 设置卡上「其他设备」那一行的状态。不带密钥:链接和二维码只在「连接设置」浮层里(19 章决策 17)。
-public enum WebLyricsLANStatus: Equatable, Sendable {
-    case off
-    case lanOff
-    case noNetwork
-    /// `<名字>:<端口>`,和从别的设备连进来的页面数(这台 Mac 自己开的不算)。
-    case reachable(address: String, remoteViewers: Int)
-
-    public static func make(enabled: Bool, allowLAN: Bool, link: URL?, remoteViewers: Int) -> Self {
-        guard enabled else { return .off }
-        guard allowLAN else { return .lanOff }
-        guard let link, let name = link.host else { return .noNetwork }
-        return .reachable(address: link.port.map { "\(name):\($0)" } ?? name, remoteViewers: max(0, remoteViewers))
+/// 局域网链接那几行显示的地址:`<名字>:<端口>`,不带密钥(设置页常驻在屏幕上,直播、录屏会拍进去;拷贝按钮拷的才是
+/// 带密钥的完整链接,19 章决策 17、21)。
+public enum WebLyricsLANAddress {
+    public static func text(of link: URL) -> String? {
+        guard let name = link.host else { return nil }
+        return link.port.map { "\(name):\($0)" } ?? name
     }
 }
 

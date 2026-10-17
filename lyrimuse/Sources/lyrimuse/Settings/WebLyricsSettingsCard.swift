@@ -109,23 +109,13 @@ extension WebLyricsServer {
     }
 }
 
-/// 局域网链接那几行显示的地址(状态判断在 Core `WebLyricsLANStatus`)。
+/// 局域网链接那几行显示的地址(Core `WebLyricsLANAddress`),有别的设备连着时加「已连接 N 台设备」(这台 Mac 自己开的不算)。
 enum WebLyricsLANSummary {
     @MainActor
-    static func text(enabled: Bool, allowLAN: Bool, host: URL?, remoteViewers: Int) -> String {
-        switch WebLyricsLANStatus.make(enabled: enabled, allowLAN: allowLAN, link: host, remoteViewers: remoteViewers) {
-        case .off: return L10n.t("未开启")
-        case .lanOff: return L10n.t("局域网访问已关闭")
-        case .noNetwork: return L10n.t("未连接局域网")
-        case let .reachable(address, 0): return address
-        case let .reachable(address, count): return String(format: L10n.t("%@ · 已连接 %lld 台设备"), address, count)
-        }
-    }
-
-    /// 链接行显示的地址:名字(或 IP)加端口,不带密钥;拷贝按钮拷的才是带密钥的完整链接。
-    @MainActor
     static func address(_ link: URL, remoteViewers: Int = 0) -> String {
-        text(enabled: true, allowLAN: true, host: link, remoteViewers: remoteViewers)
+        let address = WebLyricsLANAddress.text(of: link) ?? ""
+        guard remoteViewers > 0 else { return address }
+        return String(format: L10n.t("%@ · 已连接 %lld 台设备"), address, remoteViewers)
     }
 }
 

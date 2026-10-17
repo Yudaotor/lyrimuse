@@ -59,19 +59,13 @@ func runWebLyricsTests() {
         expectEqual(WebSocketFrame.decode(huge), .invalid, "网页歌词: 客户端大帧算坏连接")
     }
 
-    // ---- 设置卡「其他设备」那一行 ----
+    // ---- 局域网链接那几行显示的地址 ----
     do {
         let link = WebLyricsLinks.url(host: "DJ-Mac.local", port: 3940, token: "abc")
-        expectEqual(WebLyricsLANStatus.make(enabled: false, allowLAN: true, link: link, remoteViewers: 2), .off,
-                    "网页歌词: 开关关着时不列地址")
-        expectEqual(WebLyricsLANStatus.make(enabled: true, allowLAN: false, link: link, remoteViewers: 0), .lanOff,
-                    "网页歌词: 局域网访问关着")
-        expectEqual(WebLyricsLANStatus.make(enabled: true, allowLAN: true, link: nil, remoteViewers: 0), .noNetwork,
-                    "网页歌词: 没有局域网")
-        expectEqual(WebLyricsLANStatus.make(enabled: true, allowLAN: true, link: link, remoteViewers: 0),
-                    .reachable(address: "DJ-Mac.local:3940", remoteViewers: 0), "网页歌词: 只写名字和端口,不带密钥")
-        expectEqual(WebLyricsLANStatus.make(enabled: true, allowLAN: true, link: link, remoteViewers: 2),
-                    .reachable(address: "DJ-Mac.local:3940", remoteViewers: 2), "网页歌词: 带上别的设备连进来的页面数")
+        expectEqual(link.flatMap(WebLyricsLANAddress.text(of:)), "DJ-Mac.local:3940", "网页歌词: 只写名字和端口,不带密钥")
+        let ip = WebLyricsLinks.url(host: "192.168.1.8", port: 3939, token: "abc")
+        expectEqual(ip.flatMap(WebLyricsLANAddress.text(of:)), "192.168.1.8:3939", "网页歌词: IP 链接同样只写地址和端口")
+        expectEqual(WebLyricsLANAddress.text(of: URL(string: "mailto:x")!), nil, "网页歌词: 没有主机名的链接不出地址")
     }
 
     // ---- 谁能打开 ----

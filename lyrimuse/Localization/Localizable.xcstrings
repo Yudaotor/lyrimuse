@@ -48013,29 +48013,6 @@
         }
       }
     },
-    "局域网访问已关闭" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Local network access is off"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "局域网访问已关闭"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "區域網路存取已關閉"
-          }
-        }
-      }
-    },
     "允许局域网访问" : {
       "extractionState" : "manual",
       "localizations" : {

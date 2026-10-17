@@ -92,4 +92,6 @@ public enum OverlayFontWeight: String, CaseIterable, Sendable {
     /// selftest 钉着"默认档 bold 推出 medium / semibold"。
     public static let lyricsWindowRomanizationSteps = 2
     public static let lyricsWindowTranslationSteps = 1
+    /// 歌词窗口里没有时间轴的纯文本歌词比正文细几档:正文默认 bold、纯文本一直是 regular,差 3 档(默认档推出来不变)。
+    public static let lyricsWindowPlainLyricsSteps = 3
 }
