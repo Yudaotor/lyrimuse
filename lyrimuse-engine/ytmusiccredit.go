@@ -239,7 +239,7 @@ func ytmusicListedCachedOrFetch(videoID, hl string) (ytmusicCredit, bool) {
 	}
 	ytmusicCreditPending[key] = true
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), ytmusicCreditFetchTimeout)
+		ctx, cancel := withCancelAfter(context.Background(), ytmusicCreditFetchTimeout)
 		defer cancel()
 		ytmusicListedTrack(ctx, videoID, hl)
 		ytmusicCreditMu.Lock()

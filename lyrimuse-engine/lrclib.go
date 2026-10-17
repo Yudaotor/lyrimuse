@@ -17,8 +17,8 @@ import (
 
 // lrclibLyric 是网易云/QQ 音乐都没能给出逐行歌词时的第三档兜底。LRCLIB(lrclib.net)
 // 是免费、无需 key 的开源逐行 LRC 歌词库，对网易云/QQ 音乐这类中文平台曲库覆盖偏弱的
-// 欧美/R&B 等曲目往往有收录。只缓存"拿到有效逐行歌词"或"确认是纯音乐"的结果，跟
-// qqLyric 的缓存策略一致(单纯的查无此歌/网络失败不缓存,留给下次 enrich 重试)。
+// 欧美/R&B 等曲目往往有收录。"拿到时长对得上的逐行歌词"或"确认是纯音乐"的结果照缓存;纯文本、时长对不上的
+// 兜底只在这次的请求都问成了(没有 5xx / 429 / 连不上)时才缓存,查无此歌不缓存,留给下次 enrich 重试。
 // lrclibResult.title/artist/album 是 LRCLIB 收录的这首歌的 trackName/artistName/
 // albumName——纯粹给"搜索候选歌词"弹窗展示用,不参与任何匹配/打分逻辑,取自 /api/get
 // 响应本身(本来就已经查到,只是原来只挑了 syncedLyrics 就把其余字段丢了)。LRCLIB 的
@@ -69,8 +69,11 @@ func lrclibLyric(ctx context.Context, artist, title, album string, durationSecs 
 	}
 	lrclibMu.Unlock()
 
+	ctx, sub := withLyricSubFetch(ctx)
 	r := resolveLRCLIBLyricForms(ctx, artist, title, album, durationSecs)
-	if r.lyrics != "" || r.instrumental {
+	// 兜底结果是在有请求没问成时退下来的就不缓存:search 那一级被 503 打掉、只剩 get 的纯文本时,缓存下来之后的
+	// 升级重试就再也不问 search 了。
+	if (r.lyrics != "" || r.instrumental) && (lrclibResultRank(r, durationSecs) == lrclibRankSettled || sub.complete(ctx)) {
 		lrclibMu.Lock()
 		lrclibCache[key] = r
 		lrclibMu.Unlock()
@@ -175,10 +178,17 @@ func resolveLRCLIBLyric(ctx context.Context, artist, title, album string, durati
 // lrclibRequest 是三级共用的请求执行 + JSON 解码,out 传指针。
 //
 // 服务端同时只处理有限个请求,排不上队就回 503(ServerOverloaded + Retry-After: 1),不是在限我们的流:按
-// Retry-After 等一下再发一次(lrclibOverloadWait),只重试这一次。见 09 章决策 137。
+// Retry-After 等一下再发一次(lrclibOverloadWait),只重试这一次;429 带同样短的 Retry-After 时一样。第一次挂
+// withLyricSourceRetryPending,一次过载应答加它的重试只算熔断的一次失败。见 09 章决策 137、272。
+//
+// 没问成(连不上、5xx、429、重试放弃)记一次 noteLyricSubFetchFailure;404(没收录)和别的 4xx 是问成了。
 func lrclibRequest(ctx context.Context, url string, timeout time.Duration, out any) bool {
 	for attempt := 0; ; attempt++ {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		reqCtx := ctx
+		if attempt == 0 {
+			reqCtx = withLyricSourceRetryPending(ctx)
+		}
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, nil)
 		if err != nil {
 			return false
 		}
@@ -186,22 +196,49 @@ func lrclibRequest(ctx context.Context, url string, timeout time.Duration, out a
 		req.Header.Set("User-Agent", clientName+"/"+clientVersion+" (+https://github.com/Yudaotor/desktop-lyrics-suite)")
 		resp, err := doHTTPTracked(lyricHTTPClient(timeout), req)
 		if err != nil {
+			noteLyricSubFetchFailure(ctx)
 			return false
 		}
 		if resp.StatusCode == http.StatusOK {
 			ok := json.NewDecoder(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes)).Decode(out) == nil
 			resp.Body.Close()
+			if !ok {
+				noteLyricSubFetchFailure(ctx)
+			}
 			return ok
 		}
+		failed := resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests
 		wait, retry := lrclibOverloadWait(resp.StatusCode, resp.Header.Get("Retry-After"))
 		resp.Body.Close()
-		if !retry || attempt > 0 {
+		if retry && attempt == 0 {
+			wait, retry = lrclibRetryWait(ctx, req.URL.Host, wait)
+		}
+		if !retry || attempt > 0 || !lrclibOverloadPause(ctx, wait) {
+			if failed {
+				noteLyricSubFetchFailure(ctx)
+			}
 			return false // 404(未收录)或其它错误放弃;下次 enrich 短 TTL 到期自然再试
 		}
-		if !lrclibOverloadPause(ctx, wait) {
-			return false
-		}
 	}
+}
+
+// lrclibRetryWait:重发前等多久。后台请求还要等本地的后台暂停结束(第一次 503 / 429 刚把它暂停了,见
+// noteLyricSourceThrottled),不然重发那次在出站闸就被拦下、这一轮记成跳过;暂停还要超过 lyricSourceShortRetryMax
+// 时不重发(ok = false)。
+func lrclibRetryWait(ctx context.Context, host string, wait time.Duration) (time.Duration, bool) {
+	if outboundLaneOf(ctx) != laneBackground {
+		return wait, true
+	}
+	g := sharedHostGuard()
+	until, paused := g.backgroundPausedUntil(host)
+	if !paused {
+		return wait, true
+	}
+	left := until.Sub(g.now()) + 10*time.Millisecond
+	if left > lyricSourceShortRetryMax {
+		return 0, false
+	}
+	return max(wait, left), true
 }
 
 // lrclibOverloadPause 等 d,ctx 先结束就返回 false。可换,只为单测;生产路径永远是这个实现。
@@ -214,16 +251,14 @@ var lrclibOverloadPause = func(ctx context.Context, d time.Duration) bool {
 	}
 }
 
-// lrclibOverloadRetryMax:503 的 Retry-After 不超过这么久才等着重试,更久的当这一次没问成。
-const lrclibOverloadRetryMax = 2 * time.Second
-
-// lrclibOverloadWait:这次应答要不要等一下再发一次、等多久。只认 503 + 秒数写法、不超过 lrclibOverloadRetryMax 的 Retry-After。
+// lrclibOverloadWait:这次应答要不要等一下再发一次、等多久。只认 503 / 429 + 秒数写法、不超过 lyricSourceShortRetryMax
+// 的 Retry-After。
 func lrclibOverloadWait(status int, retryAfter string) (time.Duration, bool) {
-	if status != http.StatusServiceUnavailable {
+	if status != http.StatusServiceUnavailable && status != http.StatusTooManyRequests {
 		return 0, false
 	}
 	d, ok := retryAfterSeconds(retryAfter)
-	if !ok || d > lrclibOverloadRetryMax {
+	if !ok || d > lyricSourceShortRetryMax {
 		return 0, false
 	}
 	return d, true

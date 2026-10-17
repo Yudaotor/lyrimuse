@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -78,10 +79,10 @@ func TestQQFallbackCandidatesAsksAliasOnlyWhenNeeded(t *testing.T) {
 
 // 联想:手工别名表优先;纯中文名不查;跟原名一样的不算。
 func TestQQArtistAlias(t *testing.T) {
-	if got := qqArtistAlias("Wanting"); got != knownArtistAlias("Wanting") || got == "" {
+	if got := qqArtistAlias(context.Background(), "Wanting"); got != knownArtistAlias("Wanting") || got == "" {
 		t.Errorf("手工别名表里有就用表里的: %q", got)
 	}
-	if got := qqArtistAlias("周杰伦"); got != "" {
+	if got := qqArtistAlias(context.Background(), "周杰伦"); got != "" {
 		t.Errorf("纯中文名不查: %q", got)
 	}
 }
@@ -131,5 +132,19 @@ func TestResolveQQMusicMatchSearchesWithoutDashTail(t *testing.T) {
 	m := resolveQQMusicMatch(qqRoundCtx(), "五月天", "什么歌 - 电影<捉妖记2>主题曲", "什么歌", 237)
 	if qqMidFromURL(m.url) != "mw" {
 		t.Fatalf("去掉尾段再搜该挑出来: %+v", m)
+	}
+}
+
+// 歌手联想跟着这一轮搜索的 ctx 走:搜索被叫停时不再去问。
+func TestQQArtistAliasFollowsRoundContext(t *testing.T) {
+	var hits int
+	withLRCLIBFake(t, func(r *http.Request) (int, http.Header, string) {
+		hits++
+		return http.StatusOK, nil, `{"code":0,"data":{"singer":{"itemlist":[{"name":"某人"}]}}}`
+	})
+	ctx, cancel := context.WithCancel(qqRoundCtx())
+	cancel()
+	if got := qqArtistAlias(ctx, "Somebody Unlisted"); got != "" || hits != 0 {
+		t.Fatalf("搜索已叫停:不该再问联想,got %q hits=%d", got, hits)
 	}
 }

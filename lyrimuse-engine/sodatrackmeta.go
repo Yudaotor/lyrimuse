@@ -195,7 +195,7 @@ func sodaTrackMetaWorker() {
 		sodaTrackMetaPending = sodaTrackMetaPending[1:]
 		sodaTrackMetaMu.Unlock()
 
-		ctx, cancel := context.WithTimeout(withBackgroundOutbound(context.Background()), sodaTrackMetaTimeout)
+		ctx, cancel := withCancelAfter(withBackgroundOutbound(context.Background()), sodaTrackMetaTimeout)
 		m, err := sodaTrackMetaFetch(ctx, id)
 		cancel()
 		sodaTrackMetaMu.Lock()

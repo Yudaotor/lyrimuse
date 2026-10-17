@@ -133,7 +133,8 @@ func TestLRCLIBOverloadWait(t *testing.T) {
 		ok     bool
 	}{
 		{503, "1", time.Second, true}, {503, " 2 ", 2 * time.Second, true}, {503, "3", 0, false},
-		{503, "", 0, false}, {503, "Wed, 21 Oct 2026 07:28:00 GMT", 0, false}, {429, "1", 0, false}, {500, "1", 0, false},
+		{503, "", 0, false}, {503, "Wed, 21 Oct 2026 07:28:00 GMT", 0, false}, {429, "1", time.Second, true}, {429, "3", 0, false},
+		{429, "", 0, false}, {500, "1", 0, false},
 	} {
 		if got, ok := lrclibOverloadWait(c.status, c.ra); got != c.want || ok != c.ok {
 			t.Errorf("lrclibOverloadWait(%d, %q) = %v, %v; want %v, %v", c.status, c.ra, got, ok, c.want, c.ok)

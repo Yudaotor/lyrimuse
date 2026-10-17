@@ -331,7 +331,7 @@ func appleMusicRecordingByISRC(ctx context.Context, isrc, storefront string, dur
 	raw, status, err := applemusicAPIGet(ctx, path, devToken, "")
 	if err == nil && (status == http.StatusUnauthorized || status == http.StatusForbidden) {
 		// developer token 失效(Apple 换了 bundle 里那张票),作废重取一次,同 applemusicSearch。
-		applemusicClearDevToken()
+		applemusicClearDevToken(devToken)
 		if newTok := applemusicEnsureDeveloperToken(ctx); newTok != "" && newTok != devToken {
 			raw, status, err = applemusicAPIGet(ctx, path, newTok, "")
 		}

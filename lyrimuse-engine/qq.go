@@ -446,10 +446,10 @@ type qqSingerSuggestion struct {
 // 和"网络/状态码/解码失败"(false,这次没查到任何结论,不代表"确认没有")——调用方各自
 // 需要不同的处理:qqSingerAvatar 只在 ok=false 时报"暂时故障"，qqArtistCanonicalName
 // 的缓存包装同理只在 ok=false 时不落盘负缓存。
-func qqSingerSuggestions(name string) ([]qqSingerSuggestion, bool) {
+func qqSingerSuggestions(ctx context.Context, name string) ([]qqSingerSuggestion, bool) {
 	var items []qqSingerSuggestion
-	err := qqTryHosts(context.Background(), qqWebHosts, func(host string) error {
-		got, ok := qqSingerSuggestionsAt(host, name)
+	err := qqTryHosts(ctx, qqWebHosts, func(host string) error {
+		got, ok := qqSingerSuggestionsAt(ctx, host, name)
 		if !ok {
 			return errQQNotReached
 		}
@@ -461,9 +461,9 @@ func qqSingerSuggestions(name string) ([]qqSingerSuggestion, bool) {
 
 // qqSingerSuggestionsAt 只换 smartbox 的主机,不退到客户端网关的歌手搜索:qqArtistCanonicalName
 // 只信第一条建议、结论还会落盘,换一套排序不同的搜索当兜底,第一条可能就换了人。
-func qqSingerSuggestionsAt(host, name string) ([]qqSingerSuggestion, bool) {
+func qqSingerSuggestionsAt(ctx context.Context, host, name string) ([]qqSingerSuggestion, bool) {
 	u := "https://" + host + "/splcloud/fcgi-bin/smartbox_new.fcg?_=1&cv=4747474&ct=24&format=json&is_xml=0&key=" + neturl.QueryEscape(name)
-	req, err := http.NewRequest(http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, false
 	}
@@ -504,7 +504,7 @@ func qqSingerSuggestionsAt(host, name string) ([]qqSingerSuggestion, bool) {
 }
 
 func qqSingerAvatar(name string) (string, bool) {
-	items, ok := qqSingerSuggestions(name)
+	items, ok := qqSingerSuggestions(context.Background(), name)
 	if !ok {
 		return "", false
 	}
@@ -544,7 +544,7 @@ func qqSingerAvatar(name string) (string, bool) {
 // 退回调用方的下一级信号(resolveGenericArtistCanonicalName 里的手工表),查错答案却会被当成确定结果写进展示字段。已知撞不上的
 // ("wanting"、"hikaru utada")留在 artistAliasTable 里。
 func qqArtistCanonicalName(rawArtist string) string {
-	items, ok := qqSingerSuggestions(rawArtist)
+	items, ok := qqSingerSuggestions(context.Background(), rawArtist)
 	if !ok || len(items) == 0 {
 		return ""
 	}
@@ -879,13 +879,13 @@ func qqCollectCandidates(items []qqSearchItem, artist, title string, strict bool
 }
 
 // qqGateCandidates 按身份闸挑候选:先严格档、再宽松档(见 qqArtistOK),两档都一条没放行时走 qqFallbackCandidates。
-func qqGateCandidates(items []qqSearchItem, artist, title, album string, durationSecs float64) []qqCand {
+func qqGateCandidates(ctx context.Context, items []qqSearchItem, artist, title, album string, durationSecs float64) []qqCand {
 	cands := qqCollectCandidates(items, artist, title, true)
 	if len(cands) == 0 {
 		cands = qqCollectCandidates(items, artist, title, false) // artistMatches 太严格(跨平台歌手名写法不同)时放宽成 looseContains,但仍要求歌手名沾边
 	}
 	if len(cands) == 0 {
-		cands = qqFallbackCandidates(items, artist, title, album, durationSecs, func() string { return qqArtistAlias(artist) })
+		cands = qqFallbackCandidates(items, artist, title, album, durationSecs, func() string { return qqArtistAlias(ctx, artist) })
 	}
 	return cands
 }
@@ -997,7 +997,8 @@ var (
 // qqArtistAlias 是这位歌手在 QQ 上的另一个署名,只给 qqFallbackCandidates ② 过歌手闸用,不进展示。手工别名表
 // (knownArtistAlias)里有就用表里的;否则用 QQ 歌手联想的第一个名字(联想会认错人,所以 ② 还要卡时长)。纯中文名
 // 不查:QQ 上就是这个写法,繁简体差异歌手闸自己认。跟原名规整后相同的不算。按歌手名缓存在进程里,联想没问成不缓存。
-func qqArtistAlias(artist string) string {
+// ctx 是这一轮歌词搜索的:停止搜索、切歌时联想跟着停,后台补搜的请求也按后台档排队。
+func qqArtistAlias(ctx context.Context, artist string) string {
 	artist = strings.TrimSpace(artist)
 	if artist == "" || (containsHan(artist) && !containsKana(artist)) {
 		return ""
@@ -1011,7 +1012,7 @@ func qqArtistAlias(artist string) string {
 		return v
 	}
 	qqArtistAliasMu.Unlock()
-	items, ok := qqSingerSuggestions(artist)
+	items, ok := qqSingerSuggestions(ctx, artist)
 	if !ok {
 		return ""
 	}
@@ -1174,14 +1175,14 @@ func resolveQQMusicMatch(ctx context.Context, artist, title, album string, durat
 	if lyricSearchItemsTap != nil {
 		lyricSearchItemsTap("qq", artist, title, album, durationSecs, items)
 	}
-	cands := qqGateCandidates(items, artist, title, album, durationSecs)
+	cands := qqGateCandidates(ctx, items, artist, title, album, durationSecs)
 	if len(cands) == 0 {
 		// 本地歌名带「 - 宣传语」时 QQ 的搜索常被尾段带偏(只回这位歌手的热门歌),去掉尾段再搜一次。
 		if head := dashTailHead(title); head != "" {
 			more, degraded := qqSearchSongs(ctx, qqSearchQueries(artist, head), head)
 			titleDegraded = titleDegraded || degraded
 			items = qqMergeSearchItems(items, more)
-			cands = qqGateCandidates(items, artist, title, album, durationSecs)
+			cands = qqGateCandidates(ctx, items, artist, title, album, durationSecs)
 		}
 	}
 	if len(cands) == 0 {
@@ -1468,7 +1469,7 @@ func resolveQQMatchViaAlbum(ctx context.Context, artist, title, album string) (m
 	// 整条路线一个总预算:最坏形态(每个查询变体都撞 6s 超时 + musicu 8s)会把 qq
 	// goroutine 拖到 ~26s,连锁让 amll 源(阻塞等 qqID)一起缺席 20s 截止。正常网络下
 	// 每次请求几十 ms,10s 预算只裁撑满超时的病态路径,不裁正常路径。
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := withCancelAfter(ctx, 10*time.Second)
 	defer cancel()
 	// 查询变体从"信息最全"到"最剥"排——跟 searchTitleVariants 同一哲学:先带原样(剥括号),
 	// 不行再剥身份外的词。每个变体一次请求,第一个产出**过闸专辑**的变体胜出。
@@ -1835,7 +1836,7 @@ func qqEnsureSession(ctx context.Context) qqSessionInfo {
 	if !qqSessionFailedAt.IsZero() && now.Sub(qqSessionFailedAt) < qqSessionRetryAfter {
 		return qqSessionVal // 上一个(可能已过期的)照旧用着,没有就是零值
 	}
-	sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), qqSessionTimeout)
+	sctx, cancel := withCancelAfter(context.WithoutCancel(ctx), qqSessionTimeout)
 	defer cancel()
 	data, err := qqSessionFetch(sctx)
 	if err != nil {

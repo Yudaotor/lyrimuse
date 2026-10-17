@@ -89,7 +89,7 @@ func ytmusicTranslationsFor(ctx context.Context, lyrics, target string) map[stri
 	if browseID == "" {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(ctx, ytmusicTranslationTimeout)
+	ctx, cancel := withCancelAfter(ctx, ytmusicTranslationTimeout)
 	defer cancel()
 	got := ytmusicFetchTranslations(ctx, browseID, target)
 	if len(got) != len(lines) {

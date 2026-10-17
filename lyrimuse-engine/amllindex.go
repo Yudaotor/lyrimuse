@@ -434,7 +434,7 @@ func (s *amllIndexStore) check(cur *amllIndex) *amllIndex {
 			cur = disk
 		}
 	}
-	ctx, cancel := context.WithTimeout(withBackgroundOutbound(context.Background()), amllIndexDownloadTimeout)
+	ctx, cancel := withCancelAfter(withBackgroundOutbound(context.Background()), amllIndexDownloadTimeout)
 	defer cancel()
 	next, changed, err := fetchAMLLIndex(ctx, cur, now)
 	if err != nil {

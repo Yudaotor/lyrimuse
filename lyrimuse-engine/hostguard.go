@@ -329,16 +329,12 @@ func (g *hostGuard) admit(req *http.Request) error {
 	if source != "" && lane == laneBackground {
 		if until, paused := g.backgroundPausedUntil(host); paused {
 			g.logHeld(host, "background requests paused after "+source+" rate-limited us, until "+logClock(until))
-			if round != nil {
-				round.markSkipped(source)
-			}
+			round.markSkippedBecause(source, lyricSourceSkipReasonPaused)
 			return errHostGuarded
 		}
 	}
 	if source != "" && g.sourceHeldNow(source, lane) {
-		if round != nil {
-			round.markSkipped(source)
-		}
+		round.markSkippedBecause(source, lyricSourceSkipReasonQueued)
 		return errHostRateLimited
 	}
 	if err := g.acquire(ctx, host); err != nil {
@@ -346,9 +342,7 @@ func (g *hostGuard) admit(req *http.Request) error {
 			g.logHeld(host, "local rate limit queue is full")
 			if source != "" {
 				g.holdSource(source, lane)
-				if round != nil {
-					round.markSkipped(source)
-				}
+				round.markSkippedBecause(source, lyricSourceSkipReasonQueued)
 			}
 		}
 		return err

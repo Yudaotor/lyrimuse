@@ -74,6 +74,37 @@ const (
 	lyricSourceEndpointHealthyWindow = time.Minute
 )
 
+// 不在熔断里、请求却没发出去的两种跳过(lyricSourceRound.skipReason)。paused:对方 503 / 429 之后后台请求暂停中;
+// queued:本地限速排不上队,跟这个源好不好无关,近况统计不算它这一轮。
+const (
+	lyricSourceSkipReasonPaused = "paused"
+	lyricSourceSkipReasonQueued = "queued"
+)
+
+// lyricSourceShortRetryMax:503 / 429 的 Retry-After 不超过这么久时,对方是在说「等一下再来」,不是这个源坏了:
+// 调用方等一下重发那一次(withLyricSourceRetryPending),冷却也不整轮跳过它(planRound)。见 09 章决策 272。
+const lyricSourceShortRetryMax = 2 * time.Second
+
+type lyricSourceRetryPendingKey struct{}
+
+// withLyricSourceRetryPending:这次请求回 503 / 429 且 Retry-After 不超过 lyricSourceShortRetryMax 时,调用方会等一下
+// 再发一次。这一次不计入熔断,重发那次照常计:一次过载应答加它的重试只算一次失败,不会单独凑够跳闸的两次。
+func withLyricSourceRetryPending(ctx context.Context) context.Context {
+	return context.WithValue(ctx, lyricSourceRetryPendingKey{}, true)
+}
+
+// lyricSourceRetryForgiven:这次应答是不是 withLyricSourceRetryPending 说好了要重发的那种。
+func lyricSourceRetryForgiven(ctx context.Context, status int, retryAfter string) bool {
+	if pending, _ := ctx.Value(lyricSourceRetryPendingKey{}).(bool); !pending {
+		return false
+	}
+	if status != http.StatusServiceUnavailable && status != http.StatusTooManyRequests {
+		return false
+	}
+	d, ok := retryAfterSeconds(retryAfter)
+	return ok && d <= lyricSourceShortRetryMax
+}
+
 const (
 	lyricSourceCooldownReasonNetwork     = "network"
 	lyricSourceCooldownReasonServerError = "http_5xx"
@@ -520,7 +551,9 @@ func (b *lyricSourceBreaker) planRound(sources []string, enabled func(string) bo
 			enabledTotal++
 		}
 		var left time.Duration
-		if st := b.state[s]; st != nil && st.until.After(now) {
+		// 只剩 lyricSourceShortRetryMax 以内的限流窗口不整轮跳过:一轮最长要跑 20 秒,对方只让等 1 秒。
+		if st := b.state[s]; st != nil && st.until.After(now) &&
+			!(st.reason == lyricSourceCooldownReasonRateLimited && st.until.Sub(now) <= lyricSourceShortRetryMax) {
 			left = st.until.Sub(now)
 		}
 		if d, ok := b.blockedForLocked(s, now); ok && d > left {
@@ -603,6 +636,9 @@ func (b *lyricSourceBreaker) coolingDown(source string) (time.Duration, bool) {
 type lyricSourceRound struct {
 	mu      sync.Mutex
 	skipped map[string]bool
+	// skipReason:跳过的那一刻记下的原因(lyricSourceCooldownReason* / lyricSourceSkipReasonPaused / Queued),
+	// 只给各源近况统计用。事后再问熔断器的话,后台暂停和本地排队那几次问不出原因。
+	skipReason map[string]string
 	// reached:这一轮拿到过正常应答(状态码 < 500 且不是 429,404 也算)的源,由 doHTTPTracked 记。
 	// 一个都没有 = 这一轮没连上任何歌词源(断网、DNS 抽风、全被熔断),结论不作数,见 reachedAny。
 	reached map[string]bool
@@ -614,7 +650,8 @@ type lyricSourceRound struct {
 type lyricSourceRoundKey struct{}
 
 func withLyricSourceRound(ctx context.Context) (context.Context, *lyricSourceRound) {
-	r := &lyricSourceRound{skipped: map[string]bool{}, reached: map[string]bool{}, parent: lyricSourceRoundFrom(ctx)}
+	r := &lyricSourceRound{skipped: map[string]bool{}, skipReason: map[string]string{}, reached: map[string]bool{},
+		parent: lyricSourceRoundFrom(ctx)}
 	return context.WithValue(ctx, lyricSourceRoundKey{}, r), r
 }
 
@@ -656,12 +693,37 @@ func lyricSourceOnlyFrom(ctx context.Context) map[string]bool {
 
 // markSkipped / skippedSources 对 nil 接收者都是安全的空操作(CLI 路径没有 round)。
 func (r *lyricSourceRound) markSkipped(source string) {
+	r.markSkippedBecause(source, "")
+}
+
+// markSkippedBecause 同 markSkipped,顺带记下原因;同一轮里先记下的原因不被后来的空原因盖掉。
+func (r *lyricSourceRound) markSkippedBecause(source, reason string) {
 	if r == nil {
 		return
 	}
 	r.mu.Lock()
 	r.skipped[source] = true
+	if reason != "" && r.skipReason[source] == "" {
+		r.skipReason[source] = reason
+	}
 	r.mu.Unlock()
+}
+
+// statsSkips:给各源近况统计的「这一轮没问到」名单,源 → 跳过原因(说不出时为空)。这一轮拿到过它正常应答的
+// 不算:别名轮、补查那几次被跳过时,原名那一轮其实问过它了,整轮记成没问会把跳过率算高(见 09 章决策 272)。
+func (r *lyricSourceRound) statsSkips() map[string]string {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := map[string]string{}
+	for s := range r.skipped {
+		if !r.reached[s] {
+			out[s] = r.skipReason[s]
+		}
+	}
+	return out
 }
 
 // markReached / reachedAny 同样对 nil 接收者安全。

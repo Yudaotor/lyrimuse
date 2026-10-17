@@ -57,6 +57,9 @@ type lyricsDecision struct {
 	// 这一轮因源级熔断被**跳过**(压根没发请求)的源,见 sourcebreaker.go——跟"超时没露面"
 	// 又是另一回事:这是我们主动不问它。由三处写缓存点在 buildLyricsDecision 之后填。
 	SourcesSkipped []string `json:"sources_skipped,omitempty"`
+	// statsSkips:给各源近况统计的本轮没问到名单(lyricSourceRound.statsSkips),不落盘。nil = 这份决策不是从一轮
+	// 现查里来的,统计退回按 SourcesSkipped 算。
+	statsSkips map[string]string
 	// 胜者的源名;空 = 这一轮没选出任何可用候选。
 	Winner string `json:"winner,omitempty"`
 	// 这次评估的结果有没有真的落到 Lyrics 字段上。upgrade/rescore 评估完维持现状时是

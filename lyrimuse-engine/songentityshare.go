@@ -469,9 +469,10 @@ func shareManualEditLocked(key string, now time.Time) []string {
 // songShareRound:共享组这一轮的检索:搜的名字、时长、打过分的全部候选,连没连上歌词源、跳过了哪些源、问过的查询词。
 type songShareRound struct {
 	shareEvalRound
-	reached bool
-	skipped []string
-	queries []lyricQueryRecord
+	reached    bool
+	skipped    []string
+	statsSkips map[string]string
+	queries    []lyricQueryRecord
 }
 
 // complete:这一轮没有源被跳过(熔断冷却、后台暂停),结论按完整信息得出。
@@ -495,6 +496,7 @@ var searchShareRound = func(ctx context.Context, key, artist, title, album strin
 		shareEvalRound: shareEvalRound{Key: key, Artist: artist, Title: title, Album: searchAlbum, Duration: dur, Scored: scored},
 		reached:        round.reachedAny(),
 		skipped:        round.skippedSources(),
+		statsSkips:     round.statsSkips(),
 		queries:        queries.queries(),
 	}
 }
@@ -615,7 +617,7 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 			roma = generatedRomaFor(top.Lyrics, "", entrySongLanguage(top.Lyrics, round.Scored))
 		}
 		d = buildLyricsDecision(lyricsDecisionPathSongEntityShare, round.Artist, round.Title, round.Album, round.Duration, round.Scored, top, true)
-		d.SourcesSkipped, d.QueriesTried = round.skipped, round.queries
+		d.SourcesSkipped, d.statsSkips, d.QueriesTried = round.skipped, round.statsSkips, round.queries
 		traceLyricsDecision(round.Key, d)
 	}
 	// 组里钉着、手改或采纳的写法进不了这一轮(shareEvalGroups),开搜之后才钉住的、组里现在有手改或采纳的(开搜之前就改了的

@@ -339,7 +339,7 @@ func TestQQSingerSuggestionsOnlySwitchesHosts(t *testing.T) {
 		}
 		return http.StatusNotFound, ""
 	})
-	items, ok := qqSingerSuggestions("Jay Chou")
+	items, ok := qqSingerSuggestions(context.Background(), "Jay Chou")
 	if !ok || len(items) != 1 || items[0].Name != "周杰伦" {
 		t.Fatalf("该从备用主机拿到: %+v %v", items, ok)
 	}
@@ -350,7 +350,7 @@ func TestQQSingerSuggestionsOnlySwitchesHosts(t *testing.T) {
 		}
 		return http.StatusOK, musicuOK(`{}`)
 	})
-	if _, ok := qqSingerSuggestions("Jay Chou"); ok {
+	if _, ok := qqSingerSuggestions(context.Background(), "Jay Chou"); ok {
 		t.Fatal("几个主机都挂了该报没问成")
 	}
 	if f.count("u.y.qq.com/musicu:DoSearchForQQMusicDesktop") != 0 {

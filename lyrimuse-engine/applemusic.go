@@ -261,9 +261,22 @@ func applemusicLoadUserToken() (string, string) {
 //
 // 记下是为了下次不用再问。拿不到就返回空串,由调用方判失败,**绝不退回某个默认区**。
 func applemusicEnsureStorefront(ctx context.Context, userToken, devToken string) string {
+	for attempt := 0; attempt < 2; attempt++ {
+		sf, fresh := applemusicFetchStorefront(ctx, userToken, devToken)
+		if fresh == "" {
+			return sf
+		}
+		devToken = fresh
+	}
+	return ""
+}
+
+// applemusicFetchStorefront 问一次账号所在区。fresh 非空:带 user token 被拒,但毛病出在 developer token 上
+// (applemusicAfterUserAuthFailure),换这张票再问一次。
+func applemusicFetchStorefront(ctx context.Context, userToken, devToken string) (sf, fresh string) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, applemusicMeStorefrontURL, nil)
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	req.Header.Set("Authorization", "Bearer "+devToken)
 	req.Header.Set("Media-User-Token", userToken)
@@ -271,22 +284,25 @@ func applemusicEnsureStorefront(ctx context.Context, userToken, devToken string)
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	resp, err := doHTTPTracked(lyricHTTPClient(applemusicHTTPTimeout), req)
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	switch resp.StatusCode {
 	case http.StatusOK:
 	case http.StatusUnauthorized, http.StatusForbidden:
-		// 带着 user token 还被拒 = 令牌过期或被吊销,跟取词端点同一个判定。
-		applemusicSetLastFailureReason(lyricFailureReasonAppleMusicTokenRejected)
-		applemusicMarkTokenRejected(userToken)
-		return ""
+		// 带着 user token 被拒:排除了 developer token 的问题才算令牌过期或被吊销,跟取词端点同一个判定。
+		fresh, rejected := applemusicAfterUserAuthFailure(ctx, devToken)
+		if rejected {
+			applemusicSetLastFailureReason(lyricFailureReasonAppleMusicTokenRejected)
+			applemusicMarkTokenRejected(userToken)
+		}
+		return "", fresh
 	default:
-		return ""
+		return "", ""
 	}
 	var out struct {
 		Data []struct {
@@ -294,14 +310,14 @@ func applemusicEnsureStorefront(ctx context.Context, userToken, devToken string)
 		} `json:"data"`
 	}
 	if json.Unmarshal(raw, &out) != nil || len(out.Data) == 0 {
-		return ""
+		return "", ""
 	}
-	sf := strings.ToLower(strings.TrimSpace(out.Data[0].ID))
-	if sf == "" {
-		return ""
+	id := strings.ToLower(strings.TrimSpace(out.Data[0].ID))
+	if id == "" {
+		return "", ""
 	}
-	applemusicNoteStorefront(userToken, sf)
-	return sf
+	applemusicNoteStorefront(userToken, id)
+	return id, ""
 }
 
 // applemusicUpdateStatus 改这边的状态文件。只在 userToken 还是令牌文件里那一份时记:用户已经重连、换了新令牌,
@@ -596,6 +612,25 @@ func applemusicDevTokenWorks(ctx context.Context, devToken string) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
+// applemusicAfterUserAuthFailure:带 user token 的请求被 401 / 403 之后,先排除 developer token 的问题再下结论。
+// used 是这次请求带的 developer token。返回 fresh 非空 = 换这张票再发一次;userRejected = 确是 user token 失效。
+//
+// 别一见 401 就记 user token 被拒:一轮里搜索途中换过票(applemusicSearch),取词还带着旧票就会 401,记下被拒之后
+// App 一直显示「需要重新连接」,直到用户重新登录。见 09 章决策 272。
+func applemusicAfterUserAuthFailure(ctx context.Context, used string) (fresh string, userRejected bool) {
+	if cur := applemusicCachedDevToken(); cur != "" && cur != used {
+		return cur, false
+	}
+	if applemusicDevTokenWorks(ctx, used) {
+		return "", true
+	}
+	applemusicClearDevToken(used)
+	if tok := applemusicEnsureDeveloperToken(ctx); tok != "" && tok != used {
+		return tok, false
+	}
+	return "", false
+}
+
 // applemusicEnsureDeveloperToken 拿(并缓存)developer token。内存 → 磁盘 → 网络,
 // 单飞锁保证同一时刻只有一个 goroutine 真的去抓 bundle。
 func applemusicEnsureDeveloperToken(ctx context.Context) string {
@@ -648,9 +683,14 @@ func applemusicCachedDevToken() string {
 	return applemusicDevToken
 }
 
-// applemusicClearDevToken 在 401 时把当前 token 作废,下一次 ensure 会重新抓。
-func applemusicClearDevToken() {
+// applemusicClearDevToken 在 401 时把被拒的那张 token 作废,下一次 ensure 会重新抓。当前的已经不是 rejected
+// (别的请求刚换过)时什么都不做:晚回来的 401 别把刚换好的新票连同磁盘文件一起删掉。
+func applemusicClearDevToken(rejected string) {
 	applemusicDevTokenMu.Lock()
+	if applemusicDevToken != rejected {
+		applemusicDevTokenMu.Unlock()
+		return
+	}
 	applemusicDevToken = ""
 	applemusicDevTokenExpires = time.Time{}
 	applemusicDevTokenMu.Unlock()
@@ -768,7 +808,7 @@ func applemusicSearch(ctx context.Context, storefront, lang, artist, title, devT
 	}
 	if status == http.StatusUnauthorized || status == http.StatusForbidden {
 		// developer token 失效(Apple 轮换了 bundle 里的那张票),作废重来一次。
-		applemusicClearDevToken()
+		applemusicClearDevToken(devToken)
 		newTok := applemusicEnsureDeveloperToken(ctx)
 		if newTok == "" || newTok == devToken {
 			return nil, fmt.Errorf("developer token rejected (status %d)", status)
@@ -993,22 +1033,41 @@ func applemusicLyricsLocale(target string) (lyrics, script string) {
 func applemusicFetchTTML(ctx context.Context, storefront, songID, kind, devToken, userToken string) (string, error) {
 	path := neturl.PathEscape(storefront) + "/songs/" + neturl.PathEscape(songID) + "/" + kind +
 		applemusicLyricsQuery(features().LyricsTranslationLanguage)
-	raw, status, err := applemusicAPIGet(ctx, path, devToken, userToken)
-	if err != nil {
-		return "", err
-	}
-	switch status {
-	case http.StatusOK:
-	case http.StatusNotFound:
-		// 这首歌没有这一种歌词。正常结果。
-		return "", nil
-	case http.StatusUnauthorized, http.StatusForbidden:
-		// 带着 user token 还被拒 —— 令牌过期(6 个月硬上限)或被吊销,要用户重连。
-		applemusicSetLastFailureReason(lyricFailureReasonAppleMusicTokenRejected)
-		applemusicMarkTokenRejected(userToken)
-		return "", fmt.Errorf("media-user-token rejected (status %d)", status)
-	default:
-		return "", fmt.Errorf("status %d", status)
+	var raw []byte
+	for attempt := 0; ; attempt++ {
+		var status int
+		var err error
+		raw, status, err = applemusicAPIGet(ctx, path, devToken, userToken)
+		if err != nil {
+			return "", err
+		}
+		if status == http.StatusOK || status == http.StatusNotFound {
+			// 带着 user token 正常答了:账号连着、两张票都能用,撤掉早先记下的失败原因(没连账号、拿不到票、令牌被拒),
+			// 不然它留到进程重启,别名补查一直跳过这个源。见 09 章决策 272。
+			applemusicSetLastFailureReason("")
+		}
+		switch status {
+		case http.StatusOK:
+		case http.StatusNotFound:
+			// 这首歌没有这一种歌词。正常结果。
+			return "", nil
+		case http.StatusUnauthorized, http.StatusForbidden:
+			// 带着 user token 被拒:排除了 developer token 的问题才算令牌过期(6 个月硬上限)或被吊销,要用户重连。
+			fresh, rejected := applemusicAfterUserAuthFailure(ctx, devToken)
+			if fresh != "" && attempt == 0 {
+				devToken = fresh
+				continue
+			}
+			if rejected {
+				applemusicSetLastFailureReason(lyricFailureReasonAppleMusicTokenRejected)
+				applemusicMarkTokenRejected(userToken)
+				return "", fmt.Errorf("media-user-token rejected (status %d)", status)
+			}
+			return "", fmt.Errorf("developer token rejected (status %d)", status)
+		default:
+			return "", fmt.Errorf("status %d", status)
+		}
+		break
 	}
 	var out applemusicLyricsPayload
 	if err := json.Unmarshal(raw, &out); err != nil {
@@ -1171,6 +1230,10 @@ func resolveApplemusicLyric(ctx context.Context, artist, title, album string, du
 	// try 给一组候选取词:取到带时间轴的、或者令牌被拒(整路放弃)时 done。纯文本只记第一份。sameRecording:这一组是按 ISRC 直取的
 	// 同一条录音,组里逐字的比逐行的好(applemusicFetchCandidates)。
 	try := func(candidates []applemusicSong, sameRecording bool) (r applemusicResult, done bool) {
+		// 搜索途中可能换过票(applemusicSearch 遇 401 重抓),取词用当前那张。
+		if cur := applemusicCachedDevToken(); cur != "" {
+			devToken = cur
+		}
 		timed, p, fatal := applemusicFetchCandidates(ctx, storefront, candidates, tried, devToken, userToken, sameRecording, durationSecs)
 		if fatal {
 			return applemusicResult{}, true

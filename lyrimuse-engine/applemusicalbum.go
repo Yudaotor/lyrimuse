@@ -89,7 +89,7 @@ func appleCatalogAlbumTracks(title, album string) []albumTrack {
 	}
 	appleAlbumMu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := withCancelAfter(context.Background(), 15*time.Second)
 	defer cancel()
 	var ids []int64
 	for _, sf := range appleAlbumExpandStorefronts {

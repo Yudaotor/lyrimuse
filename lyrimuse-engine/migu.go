@@ -628,7 +628,7 @@ func miguAlbumCover(ctx context.Context, albumID string) string {
 	}
 	miguAlbumCoverMu.Unlock()
 
-	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	ctx, cancel := withCancelAfter(ctx, 4*time.Second)
 	defer cancel()
 	var body []byte
 	_ = tryEach(ctx, miguAlbumHosts, func(host string) error {

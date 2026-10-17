@@ -441,3 +441,21 @@ func TestYtmusicWebClientVersionFormat(t *testing.T) {
 		t.Errorf("客户端版本号格式不对: %q", v)
 	}
 }
+
+// 搜索挑中了歌:撤掉早先的地区限制结论(换了网络之后搜索一直有结果、不再查首页)。别的失败原因不动。
+func TestYtmusicNoteSearchWorksClearsRegion(t *testing.T) {
+	resetYtmusicRegionState(t)
+	ytmusicSetLastFailureReason(lyricFailureReasonLyricFindRegionRestricted)
+	ytmusicVisitorMu.Lock()
+	ytmusicRegionBlocked, ytmusicRegionCheckedAt = true, time.Now().Add(-2*ytmusicRegionRecheck)
+	ytmusicVisitorMu.Unlock()
+	ytmusicNoteSearchWorks()
+	if ytmusicLastFailureReasonNow() != "" || ytmusicRegionBlockedNow(time.Now()) {
+		t.Fatalf("地区限制结论应撤掉: reason=%q", ytmusicLastFailureReasonNow())
+	}
+	ytmusicSetLastFailureReason("other_reason")
+	ytmusicNoteSearchWorks()
+	if got := ytmusicLastFailureReasonNow(); got != "other_reason" {
+		t.Fatalf("别的原因不该被抹掉: %q", got)
+	}
+}

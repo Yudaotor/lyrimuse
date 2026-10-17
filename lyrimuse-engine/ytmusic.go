@@ -914,6 +914,7 @@ func resolveYTMusicLyric(ctx context.Context, artist, title, album string, durat
 	if !ok {
 		return ytmusicResult{}
 	}
+	ytmusicNoteSearchWorks()
 	browseID := ytmusicFetchLyricsBrowseID(ctx, item.videoID)
 	if browseID == "" {
 		return ytmusicResult{}
@@ -923,6 +924,18 @@ func resolveYTMusicLyric(ctx context.Context, artist, title, album string, durat
 		return ytmusicResult{}
 	}
 	return ytmusicResult{lyrics: lyrics, plainOnly: plainOnly, title: item.title, artist: item.artist, album: item.album, durationSecs: item.durationSecs, cover: item.cover}
+}
+
+// ytmusicNoteSearchWorks:搜索挑中了歌,说明这会儿不在受限地区,撤掉早先记下的地区限制结论。只在搜不到时才查首页
+// (ytmusicCheckRegion),换了网络之后搜索一直有结果,不在这里撤的话那条结论就留到进程重启:别名补查一直跳过
+// lyricfind,测试按钮也一直报「地区受限」。见 09 章决策 272。
+func ytmusicNoteSearchWorks() {
+	if ytmusicLastFailureReasonNow() == lyricFailureReasonLyricFindRegionRestricted {
+		ytmusicSetLastFailureReason("")
+	}
+	ytmusicVisitorMu.Lock()
+	ytmusicRegionBlocked = false
+	ytmusicVisitorMu.Unlock()
 }
 
 // ytmusicLyricsOf:browseId 那一页的歌词。先切到 Android 客户端身份取带时间戳的逐行歌词,没有时用 Web 身份再 browse 一次

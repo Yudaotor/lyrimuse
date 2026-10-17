@@ -2029,6 +2029,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	e.LyricsDecision = buildLyricsDecision(
 		path, artist, title, searchAlbum, durationSecs, scored, picked, upgraded, opts.logAttrs()...)
 	e.LyricsDecision.SourcesSkipped = roundSkipped
+	e.LyricsDecision.statsSkips = round.statsSkips()
 	e.LyricsDecision.QueriesTried = queries.queries()
 	traceLyricsDecision(key, e.LyricsDecision)
 	// 换上了新的、或胜者就是现存这份(分数没严格更高所以没"升级",但等于再次确认了当前
@@ -2432,6 +2433,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 			opts.decisionPath(lyricsDecisionPathRescore), artist, title, searchAlbum, durationSecs, scored, picked,
 			picked != nil && !keep && (picked.Lyrics != e.Lyrics || gainsWordTiming(e, picked)))
 		e.LyricsDecision.SourcesSkipped = skipped
+		e.LyricsDecision.statsSkips = round.statsSkips()
 		e.LyricsDecision.QueriesTried = queries.queries()
 		traceLyricsDecision(key, e.LyricsDecision)
 		// rescore 可判且有胜者:无论内容换没换,这一轮之后当前歌词就是 picked 那份
@@ -5466,7 +5468,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		case lyricSourceSkipDisabled:
 			return true
 		case lyricSourceSkipCooling:
-			round.markSkipped(source)
+			round.markSkippedBecause(source, sharedLyricSourceBreaker().cooldownReason(source))
 			log.Printf("lyrics: source %s skipped this round, cooling down for another %s", source, breakerPlan[source].Round(time.Second))
 			return true
 		}
@@ -5604,7 +5606,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 				resultsCh <- kugouSourceResult(r)
 				return
 			}
-			round.markSkipped("kugou")
+			round.markSkippedBecause("kugou", sharedLyricSourceBreaker().cooldownReason("kugou"))
 			log.Printf("lyrics: source kugou skipped this round, cooling down for another %s", breakerPlan["kugou"].Round(time.Second))
 			resultsCh <- lyricSourceResult{source: "kugou"}
 			return

@@ -219,7 +219,7 @@ func sodaPreviewFor(artist, title, album string, mrDuration float64, onSearchFou
 	}
 	sodaPreviewMu.Unlock()
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), sodaPreviewSearchTimeout)
+		ctx, cancel := withCancelAfter(context.Background(), sodaPreviewSearchTimeout)
 		defer cancel()
 		p, ok := sodaPreviewSearchFn(ctx, artist, title, album, mrDuration)
 		if ok {

@@ -154,10 +154,11 @@ const (
 
 // neteaseEndpointBucket 把请求 URL 归到"网易云按端点分桶限流"的那个桶——只取路径,
 // query string 里 type=1/type=10 这类参数不影响服务端按哪个桶计数(实测同一路径下不同 query
-// 一起被限、不同路径各自独立限流)。
+// 一起被限、不同路径各自独立限流)。路径里的资源 ID 抹掉(normalizeAuditPath,跟出站闸同一个口径):
+// /api/album/123 和 /api/album/456 是同一个接口,按 ID 分桶的话被拒的专辑各退各的,预取下一张照样撞上去。
 func neteaseEndpointBucket(rawURL string) string {
 	if u, err := neturl.Parse(rawURL); err == nil && u.Path != "" {
-		return u.Path
+		return normalizeAuditPath(u.Path)
 	}
 	return rawURL
 }
@@ -185,9 +186,17 @@ func neteaseReportBlocked(rawURL string, cooldown time.Duration) {
 // 拆成两层而不是直接把指数逻辑塞进 neteaseReportBlocked:后者是"退避到某个时刻"这个
 // 纯粹的原语,neteasethrottle_test.go 拿它构造精确的退避场景(毫秒级),指数逻辑混进去
 // 就没法再构造了。
+//
+// 桶还在退避期里时,这次拒绝是退避之前就发出去的请求回来了(或者合并请求的几个调用方拿到同一份应答):不升档、
+// 不续期,只交回剩下的时长,同熔断器「冷却期内的余震」那条规矩(sourcebreaker.go)。见 09 章决策 272。
 func neteaseReportRejected(rawURL string) (time.Duration, int) {
 	bucket := neteaseEndpointBucket(rawURL)
 	neteaseRateMu.Lock()
+	if until, ok := neteaseCooldownUntil[bucket]; ok && time.Now().Before(until) {
+		streak := neteaseBlockStreak[bucket]
+		neteaseRateMu.Unlock()
+		return time.Until(until), streak
+	}
 	neteaseBlockStreak[bucket]++
 	streak := neteaseBlockStreak[bucket]
 	neteaseRateMu.Unlock()
@@ -1109,7 +1118,11 @@ func neteaseAlbumTracks(ctx context.Context, albumID int64) ([]albumTrack, bool)
 		if json.Unmarshal(body, &payload) != nil {
 			return false
 		}
-		// code 非 200/0 一律当失败(-462 就走这里),别把限流解成"零首歌"。
+		// 404 = 没有这张专辑(05 章实测),问成了、不退避。
+		if payload.Code == 404 {
+			return true
+		}
+		// 其余 code 非 200/0 一律当失败(-462 就走这里),别把限流解成"零首歌"。
 		if payload.Code != 0 && payload.Code != 200 {
 			cooldown, streak := neteaseReportRejected(u)
 			log.Printf("netease: %s rejected (code %d), backing off %s (bucket rejected %d times in a row)",

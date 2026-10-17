@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
 	"time"
 )
@@ -230,6 +231,7 @@ func TestNeteaseBlockBackoff(t *testing.T) {
 		reset()
 		const u = "https://music.163.com/api/search/get/web?type=1&s=a"
 		d1, s1 := neteaseReportRejected(u)
+		expireNeteaseBucket(u)
 		d2, s2 := neteaseReportRejected(u)
 		if s1 != 1 || s2 != 2 {
 			t.Fatalf("连撞计数 = %d,%d, want 1,2", s1, s2)
@@ -303,5 +305,75 @@ func TestNeteaseSearchEndpointOrder(t *testing.T) {
 	}
 	if neteaseEndpointBucket(neteaseSearchEndpointPrimary) == neteaseEndpointBucket(neteaseSearchEndpointFallback) {
 		t.Error("主备两个端点必须落在不同的限流桶,否则兜底那一跳形同虚设")
+	}
+}
+
+// expireNeteaseBucket 把 u 所在桶的退避期挪到过去(模拟退避已经到期)。
+func expireNeteaseBucket(u string) {
+	neteaseRateMu.Lock()
+	neteaseCooldownUntil[neteaseEndpointBucket(u)] = time.Now().Add(-time.Second)
+	neteaseRateMu.Unlock()
+}
+
+// withCleanNeteaseBackoff:清空网易云的退避状态,测试结束还原。
+func withCleanNeteaseBackoff(t *testing.T) {
+	t.Helper()
+	neteaseRateMu.Lock()
+	savedCooldown, savedStreak := neteaseCooldownUntil, neteaseBlockStreak
+	neteaseCooldownUntil, neteaseBlockStreak = map[string]time.Time{}, map[string]int{}
+	neteaseRateMu.Unlock()
+	t.Cleanup(func() {
+		neteaseRateMu.Lock()
+		neteaseCooldownUntil, neteaseBlockStreak = savedCooldown, savedStreak
+		neteaseRateMu.Unlock()
+	})
+}
+
+// 退避期内又回来的拒绝(之前在飞的请求、合并请求的几个调用方)不升档、不续期。
+func TestNeteaseRejectedDuringBackoffIsAftershock(t *testing.T) {
+	withCleanNeteaseBackoff(t)
+	const u = "https://music.163.com/api/search/get?type=1&s=a"
+	d1, s1 := neteaseReportRejected(u)
+	neteaseRateMu.Lock()
+	until := neteaseCooldownUntil[neteaseEndpointBucket(u)]
+	neteaseRateMu.Unlock()
+	d2, s2 := neteaseReportRejected(u)
+	neteaseRateMu.Lock()
+	after := neteaseCooldownUntil[neteaseEndpointBucket(u)]
+	neteaseRateMu.Unlock()
+	if s1 != 1 || s2 != 1 || d2 > d1 || !after.Equal(until) {
+		t.Fatalf("余震不该升档或续期: (%v,%d) → (%v,%d), until %v → %v", d1, s1, d2, s2, until, after)
+	}
+}
+
+// 专辑接口按接口分桶,不按专辑 ID:一张被拒,别的专辑也一起退避。
+func TestNeteaseBucketIgnoresResourceID(t *testing.T) {
+	a := neteaseEndpointBucket("https://music.163.com/api/album/123456")
+	b := neteaseEndpointBucket("https://music.163.com/api/album/987")
+	if a != b {
+		t.Fatalf("同一个接口不同专辑应同一个桶: %q vs %q", a, b)
+	}
+	if neteaseEndpointBucket("https://music.163.com/api/search/get") == neteaseEndpointBucket("https://music.163.com/api/search/get/web") {
+		t.Fatal("两条搜索路径仍是两个桶")
+	}
+}
+
+// 专辑接口回 code 404(没有这张专辑):问成了,不再换下一个端点,也不退避。
+func TestNeteaseAlbumNotFoundIsNotRejection(t *testing.T) {
+	withCleanNeteaseBackoff(t)
+	f := withLRCLIBFake(t, func(r *http.Request) (int, http.Header, string) {
+		return http.StatusOK, nil, `{"code":404}`
+	})
+	if tracks, ok := neteaseAlbumTracks(qqRoundCtx(), 123456); ok || len(tracks) != 0 {
+		t.Fatalf("没有这张专辑: %v %v", tracks, ok)
+	}
+	if n := len(f.requests()); n != 1 {
+		t.Errorf("问成了就不该再换端点,发了 %d 次", n)
+	}
+	neteaseRateMu.Lock()
+	n := len(neteaseCooldownUntil)
+	neteaseRateMu.Unlock()
+	if n != 0 {
+		t.Error("没有这张专辑不该退避")
 	}
 }

@@ -460,7 +460,7 @@ func appleCatalogSongsByID(ctx context.Context, storefront string, ids []string)
 	raw, status, err := applemusicAPIGet(ctx, path, devToken, "")
 	if err == nil && (status == http.StatusUnauthorized || status == http.StatusForbidden) {
 		// developer token 失效,作废重取一次,同 appleMusicRecordingByISRC。
-		applemusicClearDevToken()
+		applemusicClearDevToken(devToken)
 		if newTok := applemusicEnsureDeveloperToken(ctx); newTok != "" && newTok != devToken {
 			raw, status, err = applemusicAPIGet(ctx, path, newTok, "")
 		}

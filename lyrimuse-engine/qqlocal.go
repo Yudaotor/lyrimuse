@@ -499,7 +499,7 @@ func qqAlbumTracks(artist, title, album string) ([]albumTrack, bool) {
 	if mid == "" {
 		return nil, false
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := withCancelAfter(context.Background(), 10*time.Second)
 	defer cancel()
 	songs, err := qqAlbumSongs(ctx, mid)
 	if err != nil || len(songs) == 0 {

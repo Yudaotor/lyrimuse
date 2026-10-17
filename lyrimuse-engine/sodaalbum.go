@@ -49,7 +49,7 @@ func sodaAlbumTracks(artist, title, album string) ([]albumTrack, bool) {
 	}
 	sodaAlbumMu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := withCancelAfter(context.Background(), 10*time.Second)
 	defer cancel()
 	page, err := sodaFetchAlbumPage(ctx, albumID)
 	if err != nil {

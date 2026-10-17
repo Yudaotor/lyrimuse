@@ -134,7 +134,9 @@ func doHTTPTrackedOnce(cli *http.Client, req *http.Request) (*http.Response, err
 		sharedLyricSourceBreaker().observeTraced(req.URL.Host, guardEndpointKey(req.URL), err, 0, "", tr)
 		return resp, err
 	}
-	sharedLyricSourceBreaker().observeTraced(req.URL.Host, guardEndpointKey(req.URL), nil, resp.StatusCode, resp.Header.Get("Retry-After"), tr)
+	if !lyricSourceRetryForgiven(req.Context(), resp.StatusCode, resp.Header.Get("Retry-After")) {
+		sharedLyricSourceBreaker().observeTraced(req.URL.Host, guardEndpointKey(req.URL), nil, resp.StatusCode, resp.Header.Get("Retry-After"), tr)
+	}
 	sharedHostGuard().observe(req, resp.StatusCode, resp.Header.Get("Retry-After"))
 	if resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
 		if src := lyricSourceForHost(req.URL.Host); src != "" {

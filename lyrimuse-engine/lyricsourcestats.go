@@ -316,10 +316,26 @@ func lyricSourceOutcomeFromDecision(d *lyricsDecision, enabled, eligible func(st
 		cjk:        containsCJKScript(d.QueryArtist) || containsCJKScript(d.QueryTitle),
 		artist:     lyricSourceArtistHash(d.QueryArtist),
 	}
-	for _, s := range d.SourcesSkipped {
-		o.skipped[s] = true
-		if skipReason != nil {
-			o.skipReason[s] = skipReason(s)
+	// 本地排队排不上的那几次没问它,也跟它好不好无关:这一轮不算它的(既不算问了,也不算跳过)。
+	queued := map[string]bool{}
+	if d.statsSkips != nil {
+		for s, reason := range d.statsSkips {
+			if reason == lyricSourceSkipReasonQueued {
+				queued[s] = true
+				continue
+			}
+			o.skipped[s] = true
+			if reason == "" && skipReason != nil {
+				reason = skipReason(s)
+			}
+			o.skipReason[s] = reason
+		}
+	} else {
+		for _, s := range d.SourcesSkipped {
+			o.skipped[s] = true
+			if skipReason != nil {
+				o.skipReason[s] = skipReason(s)
+			}
 		}
 	}
 	for _, s := range d.SourcesResponded {
@@ -332,7 +348,7 @@ func lyricSourceOutcomeFromDecision(d *lyricsDecision, enabled, eligible func(st
 		}
 	}
 	for _, s := range lyricSourceNames {
-		if isPlayerLocalLyricSource(s) || !enabled(s) || !eligible(s) {
+		if isPlayerLocalLyricSource(s) || !enabled(s) || !eligible(s) || queued[s] {
 			continue
 		}
 		o.enabled = append(o.enabled, s)

@@ -454,7 +454,7 @@ func kugouAlbumTracks(artist, title, album string) ([]albumTrack, bool) {
 	if !isHexString(hash) {
 		return nil, false
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := withCancelAfter(context.Background(), 10*time.Second)
 	defer cancel()
 	albumID := kugouAlbumIDByHash(ctx, hash)
 	if albumID == "" {
