@@ -2769,21 +2769,20 @@ private struct AppearanceSettingsTab: View {
     /// 只管当前尺寸),动作本体是 `LyricsWindowStyleDefaults.restoreDefaults(mini:)`,作用范围那句
     /// 见 `lyricsWindowResetScope`。
     ///
-    /// 第一行是「背景」「文字」,第三格迷你是「行为」、完整是一格隐藏占位;
-    /// 第二行是「内容」(两种尺寸共用一份)、「布局」,第三格迷你是「顶部信息」、完整是「封面」;
+    /// 按钮按抽屉的顺序从上往下、从左往右排满,中间不留空:迷你是「背景 · 文字 · 行为」「内容 · 布局 · 顶部信息」,
+    /// 完整是「背景 · 文字 · 内容」「布局 · 封面」,完整第二行末尾那一格是隐藏占位;
     /// 隐藏占位 + `EditorToolbarResetReserve`
-    /// 让它跟第一行的胶囊同宽(按钮宽度是一行之内平分出来的,理由同 `MenuBarEditorStage.toolbarRow2`)。
+    /// 让第二行的胶囊跟第一行同宽(按钮宽度是一行之内平分出来的,理由同 `MenuBarEditorStage.toolbarRow2`)。
     private var lyricsWindowToolbar: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // 第一行:背景 · 文字 · 行为(只有迷你有),第二行管窗口里摆什么(内容 · 布局 · 顶部信息 / 封面);第一行的空位用隐形占位撑住,
-            // 两行三列对齐。分组跟「全部设置」抽屉的卡、设置搜索的分组同名(07 章决策 119)。
+            // 顺序同「全部设置」抽屉的卡,分组跟抽屉、设置搜索同名(07 章决策 119);两行三列对齐,空位只留在最后。
             HStack(spacing: 8) {
                 lyricsWindowToolbarButton(.background)
                 lyricsWindowToolbarButton(.text)
                 if lyricsWindowPreviewShowsMini {
                     lyricsWindowToolbarButton(.behavior)
                 } else {
-                    lyricsWindowToolbarGhost(.content)
+                    lyricsWindowToolbarButton(.content)
                 }
                 Spacer(minLength: 8)
                 EditorToolbarResetMenu(scope: lyricsWindowResetScope) {
@@ -2792,9 +2791,15 @@ private struct AppearanceSettingsTab: View {
             }
             .overlay(alignment: .top) { lyricsWindowProbeAnchor(lyricsWindowRow1Probe) }
             HStack(spacing: 8) {
-                lyricsWindowToolbarButton(.content)
-                lyricsWindowToolbarButton(.layout)
-                lyricsWindowToolbarButton(.info)
+                if lyricsWindowPreviewShowsMini {
+                    lyricsWindowToolbarButton(.content)
+                    lyricsWindowToolbarButton(.layout)
+                    lyricsWindowToolbarButton(.info)
+                } else {
+                    lyricsWindowToolbarButton(.layout)
+                    lyricsWindowToolbarButton(.info)
+                    lyricsWindowToolbarGhost(.content)
+                }
                 Spacer(minLength: 8)
                 EditorToolbarResetReserve()
             }
@@ -2891,7 +2896,8 @@ private struct AppearanceSettingsTab: View {
     /// 不让系统翻下来(同另外几段编辑台,04 章决策 34、61)。
     private func lyricsWindowToolbarButton(_ item: LyricsWindowToolbarItem) -> some View {
         Button {
-            let firstRow: [LyricsWindowToolbarItem] = [.background, .text, .behavior]
+            let firstRow: [LyricsWindowToolbarItem] = lyricsWindowPreviewShowsMini
+                ? [.background, .text, .behavior] : [.background, .text, .content]
             let probe = firstRow.contains(item) ? lyricsWindowRow1Probe : lyricsWindowRow2Probe
             lyricsWindowPopoverMaxHeight = probe.popoverHeightLimit()
             lyricsWindowPopover = item

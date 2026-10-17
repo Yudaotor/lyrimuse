@@ -913,11 +913,16 @@ func runLyricsWindowTests() {
                     true, "设置分组: 工具栏第一行是背景、文字")
         expectEqual(sourceBytes(settingsView, contain: "lyricsWindowToolbarButton(.text)\n                if lyricsWindowPreviewShowsMini {\n"
                                 + "                    lyricsWindowToolbarButton(.behavior)\n                } else {\n"
+                                + "                    lyricsWindowToolbarButton(.content)\n"),
+                    true, "设置分组: 第一行第三格迷你是行为、完整是内容")
+        expectEqual(sourceBytes(settingsView, contain: "                if lyricsWindowPreviewShowsMini {\n"
+                                + "                    lyricsWindowToolbarButton(.content)\n                    lyricsWindowToolbarButton(.layout)\n"
+                                + "                    lyricsWindowToolbarButton(.info)\n                } else {\n"
+                                + "                    lyricsWindowToolbarButton(.layout)\n                    lyricsWindowToolbarButton(.info)\n"
                                 + "                    lyricsWindowToolbarGhost(.content)\n"),
-                    true, "设置分组: 第一行第三格迷你是行为、完整留隐形占位")
-        expectEqual(sourceBytes(settingsView, contain: "lyricsWindowToolbarButton(.content)\n                lyricsWindowToolbarButton(.layout)\n"
-                                + "                lyricsWindowToolbarButton(.info)\n"),
-                    true, "设置分组: 第二行是内容、布局、顶部信息 / 封面")
+                    true, "设置分组: 第二行迷你是内容、布局、顶部信息,完整是布局、封面,空位只在最后")
+        expectEqual(sourceBytes(settingsView, contain: "? [.background, .text, .behavior] : [.background, .text, .content]"),
+                    true, "设置分组: 完整尺寸的内容在第一行,浮层按第一行量高度")
         expectEqual(sourceBytes(settingsView, contain: "SettingsGroupCard(title: L10n.t(\"背景\")) { lyricsWindowAppearanceRows(.background) }\n"
                                 + "                    SettingsGroupCard(title: L10n.t(\"文字\")) { lyricsWindowAppearanceRows(.text) }\n"),
                     true, "设置分组: 抽屉按背景、文字分组,跟工具栏同名")
