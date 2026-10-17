@@ -892,36 +892,36 @@
         }
       }
     },
-    "仅恢复迷你尺寸的设置，完整尺寸和窗口大小保持不变" : {
+    "仅恢复迷你尺寸的设置，完整尺寸、网页歌词和窗口大小保持不变" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Resets only the Mini Size settings; the Full Size and the window's dimensions stay as they are"
+            "value" : "Resets only the Mini Size settings; the Full Size, Web Lyrics and the window's dimensions stay as they are"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "僅恢復迷你尺寸的設定，完整尺寸和視窗大小保持不變"
+            "value" : "僅恢復迷你尺寸的設定，完整尺寸、網頁歌詞和視窗大小保持不變"
           }
         }
       }
     },
-    "仅恢复完整尺寸的设置，迷你尺寸和窗口大小保持不变" : {
+    "仅恢复完整尺寸的设置，迷你尺寸、网页歌词和窗口大小保持不变" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Resets only the Full Size settings; the Mini Size and the window's dimensions stay as they are"
+            "value" : "Resets only the Full Size settings; the Mini Size, Web Lyrics and the window's dimensions stay as they are"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "僅恢復完整尺寸的設定，迷你尺寸和視窗大小保持不變"
+            "value" : "僅恢復完整尺寸的設定，迷你尺寸、網頁歌詞和視窗大小保持不變"
           }
         }
       }
@@ -47737,29 +47737,6 @@
         }
       }
     },
-    "其他设备" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Other Devices"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "其他设备"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "其他裝置"
-          }
-        }
-      }
-    },
     "局域网访问已关闭" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -48262,52 +48239,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "存取連結"
-          }
-        }
-      }
-    },
-    "连接设置…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connection Settings…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连接设置…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連線設定…"
-          }
-        }
-      }
-    },
-    "连接设置" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connection Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连接设置"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連線設定"
           }
         }
       }

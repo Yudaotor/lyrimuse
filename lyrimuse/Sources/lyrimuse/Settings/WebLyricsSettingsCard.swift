@@ -4,61 +4,52 @@ import CoreImage.CIFilterBuiltins
 import LyrimuseCore
 import SwiftUI
 
-/// 「歌词显示 › 歌词窗口」最下面那张「网页歌词」卡:开关、本机地址、其他设备;局域网访问、远程控制、二维码、
-/// 备用链接、端口、重置访问密钥收在「连接设置…」浮层里。样式就是上面歌词窗口那一套。见 19 章。
-struct WebLyricsScreenCard: View {
+/// 「歌词显示 › 歌词窗口」的「网页歌词」那一组:编辑台工具栏「网页歌词」浮层和「全部设置」抽屉的「网页歌词」组都调它
+/// (同另外几组,一份视图两个宿主;排法同悬浮歌词的 `OverlayObsSettingsRows`)。样式就是歌词窗口完整尺寸那一套。见 19 章。
+struct LyricsWindowWebSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var server = WebLyricsServer.screen
     @State private var links = WebLyricsLANLinks()
-    @State private var showsConnection = false
 
     var body: some View {
-        SettingsCard(cornerRadius: 18) {
-            SettingsRow(icon: "globe", title: L10n.t("网页歌词"),
-                        subtitle: L10n.t("在浏览器中显示歌词窗口")) {
-                Toggle("", isOn: $settings.webLyricsEnabled)
+        SettingsRowGroupStack {
+            SettingsRowGroup {
+                SettingsRow(icon: "globe", title: L10n.t("网页歌词"),
+                            subtitle: L10n.t("在浏览器中显示歌词窗口")) {
+                    Toggle("", isOn: $settings.webLyricsEnabled)
+                }
+                CardDivider()
+                SettingsRow(icon: "safari", title: L10n.t("本机地址"), subtitle: server.localURL.absoluteString) {
+                    WebLyricsOpenButton(title: L10n.t("在浏览器中打开"), url: server.localURL, enabled: server.isRunning)
+                }
+                WebLyricsProblemRow(server: server)
             }
-            CardDivider()
-            SettingsRow(icon: "safari", title: L10n.t("本机地址"), subtitle: server.localURL.absoluteString) {
-                WebLyricsOpenButton(title: L10n.t("在浏览器中打开"), url: server.localURL, enabled: server.isRunning)
-            }
-            CardDivider()
-            SettingsRow(icon: "ipad.and.iphone", title: L10n.t("其他设备"),
-                        subtitle: WebLyricsLANSummary.text(enabled: settings.webLyricsEnabled,
-                                                           allowLAN: settings.webLyricsAllowLAN, host: links.host,
-                                                           remoteViewers: server.remoteViewerCount)) {
-                WebLyricsPanelButton(isPresented: $showsConnection) {
-                    SettingsPopoverShell(title: L10n.t("连接设置"), width: 400) { connectionRows }
+            SettingsRowGroup(title: L10n.t("局域网")) {
+                SettingsRow(icon: "wifi", title: L10n.t("允许局域网访问"),
+                            subtitle: L10n.t("同一网络中的设备可通过带密钥的链接访问")) {
+                    Toggle("", isOn: $settings.webLyricsAllowLAN)
+                }
+                if settings.webLyricsAllowLAN {
+                    CardDivider()
+                    SettingsRow(icon: "playpause", title: L10n.t("允许远程控制"),
+                                subtitle: L10n.t("可在其他设备上控制播放、跳转歌词")) {
+                        Toggle("", isOn: $settings.webLyricsAllowLANControl)
+                    }
+                    WebLyricsLANLinkRows(links: links, remoteViewers: server.remoteViewerCount, qrCaption: L10n.t("使用相机扫描二维码"))
+                    CardDivider()
+                    WebLyricsRegenerateRow { settings.regenerateWebLyricsToken() }
                 }
             }
-            WebLyricsProblemRow(server: server)
+            SettingsRowGroup(title: L10n.t("高级")) {
+                WebLyricsPortRow(value: $settings.webLyricsPort, otherPort: settings.obsLyricsPort,
+                                 duplicateMessage: L10n.t("该端口已被 OBS 输出使用"), note: L10n.t("更改后需重新扫码连接"))
+            }
         }
         .onAppear { links.refresh(server) }
         .onChange(of: settings.webLyricsAllowLAN) { _, _ in links.refresh(server) }
         .onChange(of: settings.webLyricsToken) { _, _ in links.refresh(server) }
         .onChange(of: settings.webLyricsPort) { _, _ in links.refresh(server) }
         .onChange(of: server.state) { _, _ in links.refresh(server) }
-    }
-
-    @ViewBuilder private var connectionRows: some View {
-        SettingsCardHeader(title: L10n.t("局域网"))
-        SettingsRow(icon: "wifi", title: L10n.t("允许局域网访问"),
-                    subtitle: L10n.t("同一网络中的设备可通过带密钥的链接访问")) {
-            Toggle("", isOn: $settings.webLyricsAllowLAN)
-        }
-        if settings.webLyricsAllowLAN {
-            CardDivider()
-            SettingsRow(icon: "playpause", title: L10n.t("允许远程控制"),
-                        subtitle: L10n.t("可在其他设备上控制播放、跳转歌词")) {
-                Toggle("", isOn: $settings.webLyricsAllowLANControl)
-            }
-            WebLyricsLANLinkRows(links: links, remoteViewers: server.remoteViewerCount, qrCaption: L10n.t("使用相机扫描二维码"))
-            CardDivider()
-            WebLyricsRegenerateRow { settings.regenerateWebLyricsToken() }
-        }
-        SettingsCardHeader(title: L10n.t("高级"))
-        WebLyricsPortRow(value: $settings.webLyricsPort, otherPort: settings.obsLyricsPort,
-                         duplicateMessage: L10n.t("该端口已被 OBS 输出使用"), note: L10n.t("更改后需重新扫码连接"))
     }
 }
 
@@ -109,7 +100,7 @@ struct OverlayObsSettingsRows: View {
     }
 }
 
-// MARK: - 网页歌词卡和 OBS 那一组共用的零件(各自的设置分开存,只是长得一样)
+// MARK: - 网页歌词和 OBS 两组共用的零件(各自的设置分开存,只是长得一样)
 
 extension WebLyricsServer {
     var isRunning: Bool {
@@ -118,7 +109,7 @@ extension WebLyricsServer {
     }
 }
 
-/// 卡上「其他设备」那一行的副标题(状态判断在 Core `WebLyricsLANStatus`)。
+/// 局域网链接那几行显示的地址(状态判断在 Core `WebLyricsLANStatus`)。
 enum WebLyricsLANSummary {
     @MainActor
     static func text(enabled: Bool, allowLAN: Bool, host: URL?, remoteViewers: Int) -> String {
@@ -319,20 +310,6 @@ private struct WebLyricsOpenButton: View {
         .settingsGlassButtons()
         .buttonBorderShape(.capsule)
         .disabled(!enabled)
-    }
-}
-
-/// 「连接设置…」按钮,点了弹出浮层。
-private struct WebLyricsPanelButton<Panel: View>: View {
-    @Binding var isPresented: Bool
-    @ViewBuilder let panel: () -> Panel
-
-    var body: some View {
-        Button(L10n.t("连接设置…")) { isPresented = true }
-            .controlSize(.small)
-            .settingsGlassButtons()
-            .buttonBorderShape(.capsule)
-            .popover(isPresented: $isPresented, arrowEdge: .bottom) { panel() }
     }
 }
 

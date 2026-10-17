@@ -445,7 +445,7 @@ Lyrics in a web browser. Web Lyrics shows exactly what the lyrics window shows; 
 
 - Off by default
 - Settings: Lyrics Display › Lyrics Window › Web Lyrics
-- Settings: Lyrics Display › Lyrics Window › Connection Settings › Allow Local Network Access
+- Settings: Lyrics Display › Lyrics Window › Web Lyrics › Allow Local Network Access
 - Settings: Lyrics Display › Floating Lyrics › OBS › OBS Output
 
 <a id="section-players"></a>
@@ -728,7 +728,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 267 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 266 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -976,12 +976,11 @@ Every setting in the Settings window, by where it lives: 267 in all. Type a name
 
 - **Lyrics Window**
 - **Web Lyrics**: Show the Lyrics Window in a web browser
-- **Local Address**
-- **Other Devices**
 - **Reset to Defaults**
 
-### Lyrics Display › Lyrics Window › Connection Settings
+### Lyrics Display › Lyrics Window › Web Lyrics
 
+- **Local Address**
 - **Allow Local Network Access**: Devices on the same network can connect with a link that includes an access key
 - **Allow Remote Control**: Control playback and jump to lyrics from other devices
 - **Access Link**

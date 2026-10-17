@@ -913,11 +913,26 @@ func runLyricsWindowTests() {
                                 + "                    lyricsWindowToolbarButton(.content)\n"),
                     true, "设置分组: 第一行第三格迷你是行为、完整是内容")
         expectEqual(sourceBytes(settingsView, contain: "                if lyricsWindowPreviewShowsMini {\n"
-                                + "                    lyricsWindowToolbarButton(.content)\n                    lyricsWindowToolbarButton(.layout)\n"
-                                + "                    lyricsWindowToolbarButton(.info)\n                } else {\n"
-                                + "                    lyricsWindowToolbarButton(.layout)\n                    lyricsWindowToolbarButton(.info)\n"
-                                + "                    lyricsWindowToolbarGhost(.content)\n"),
-                    true, "设置分组: 第二行迷你是内容、布局、顶部信息,完整是布局、封面,空位只在最后")
+                                + "                    lyricsWindowToolbarButton(.content)\n                }\n"
+                                + "                lyricsWindowToolbarButton(.layout)\n                lyricsWindowToolbarButton(.info)\n"
+                                + "                lyricsWindowToolbarButton(.web)\n"),
+                    true, "设置分组: 第二行迷你是内容、布局、顶部信息、网页歌词,完整是布局、封面、网页歌词")
+        // 网页歌词那一组(19 章):工具栏浮层和抽屉同一份行,抽屉里排在最后,原来那张单独的卡不要了。
+        let webCard = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/Settings/WebLyricsSettingsCard.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(settingsView, contain: "SettingsGroupCard(title: L10n.t(\"网页歌词\")) { LyricsWindowWebSettingsRows() }\n"
+                                + "                    SettingsCard(cornerRadius: 18) {\n                        lyricsWindowResetRow")
+                    && sourceBytes(settingsView, contain: "SettingsPopoverShell(title: L10n.t(\"网页歌词\"), width: 460) {\n"
+                                   + "                LyricsWindowWebSettingsRows()")
+                    && !settingsView.contains("WebLyricsScreenCard()") && !webCard.contains("struct WebLyricsScreenCard"),
+                    true, "网页歌词: 工具栏浮层和抽屉最后一组同一份行,没有单独的卡")
+        expectEqual(sourceBytes(settingsView, contain: "private static var outsideTitleKeys: [String] { [\"歌词窗口\"] }"), true,
+                    "网页歌词: 搜到网页歌词那几行会展开抽屉")
+        let webHits = SettingsSearchCatalog.entries.filter {
+            $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue
+                && ["本机地址", "允许局域网访问", "端口"].contains($0.titleKey)
+        }
+        expectEqual(webHits.count == 3 && webHits.allSatisfy { $0.pathKeys.last == "网页歌词" && $0.lyricsWindowMini == nil }, true,
+                    "网页歌词: 搜索里那几行归「网页歌词」组,两种尺寸都有")
         expectEqual(sourceBytes(settingsView, contain: "? [.background, .text, .behavior] : [.background, .text, .content]"),
                     true, "设置分组: 完整尺寸的内容在第一行,浮层按第一行量高度")
         expectEqual(sourceBytes(settingsView, contain: "SettingsGroupCard(title: L10n.t(\"背景\")) { lyricsWindowAppearanceRows(.background) }\n"

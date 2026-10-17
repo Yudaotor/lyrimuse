@@ -2724,12 +2724,12 @@ private struct AppearanceSettingsTab: View {
                     } else {
                         SettingsGroupCard(title: L10n.t("封面")) { lyricsWindowCoverRows }
                     }
+                    // 网页显示的就是歌词窗口的完整布局、用的是这一套样式(19 章决策 12)。两种尺寸都有这一组。
+                    SettingsGroupCard(title: L10n.t("网页歌词")) { LyricsWindowWebSettingsRows() }
                     SettingsCard(cornerRadius: 18) {
                         lyricsWindowResetRow
                     }
                 }
-                // 网页显示的就是歌词窗口的完整布局、用的是这一套样式,开关和链接挂在这一段最下面(19 章决策 12)。
-                WebLyricsScreenCard()
             }
             .background { LastfmGlassGlow() }
         }
@@ -2741,8 +2741,8 @@ private struct AppearanceSettingsTab: View {
     /// 那句读起来像"把窗口大小恢复默认"。窗口的大小和位置本来就不归这颗按钮管,也写明。
     private var lyricsWindowResetScope: String {
         lyricsWindowPreviewShowsMini
-            ? L10n.t("仅恢复迷你尺寸的设置，完整尺寸和窗口大小保持不变")
-            : L10n.t("仅恢复完整尺寸的设置，迷你尺寸和窗口大小保持不变")
+            ? L10n.t("仅恢复迷你尺寸的设置，完整尺寸、网页歌词和窗口大小保持不变")
+            : L10n.t("仅恢复完整尺寸的设置，迷你尺寸、网页歌词和窗口大小保持不变")
     }
 
     /// 抽屉里的「恢复默认」:动作跟工具栏「重置 ▾」是同一个函数,标题 / 副标题也同一份。
@@ -2769,10 +2769,10 @@ private struct AppearanceSettingsTab: View {
     /// 只管当前尺寸),动作本体是 `LyricsWindowStyleDefaults.restoreDefaults(mini:)`,作用范围那句
     /// 见 `lyricsWindowResetScope`。
     ///
-    /// 按钮按抽屉的顺序从上往下、从左往右排满,中间不留空:迷你是「背景 · 文字 · 行为」「内容 · 布局 · 顶部信息」,
-    /// 完整是「背景 · 文字 · 内容」「布局 · 封面」,完整第二行末尾那一格是隐藏占位;
-    /// 隐藏占位 + `EditorToolbarResetReserve`
-    /// 让第二行的胶囊跟第一行同宽(按钮宽度是一行之内平分出来的,理由同 `MenuBarEditorStage.toolbarRow2`)。
+    /// 按钮按抽屉的顺序从上往下、从左往右排满,中间不留空:迷你是「背景 · 文字 · 行为」「内容 · 布局 · 顶部信息 · 网页歌词」,
+    /// 完整是「背景 · 文字 · 内容」「布局 · 封面 · 网页歌词」。完整第二行末尾的 `EditorToolbarResetReserve` 让它跟第一行
+    /// 逐列对齐(按钮宽度是一行之内平分出来的,理由同 `MenuBarEditorStage.toolbarRow2`);迷你第二行四颗、本来对不成列,
+    /// 不放占位,同悬浮歌词第二行(19 章决策 19)。
     private var lyricsWindowToolbar: some View {
         VStack(alignment: .leading, spacing: 10) {
             // 顺序同「全部设置」抽屉的卡,分组跟抽屉、设置搜索同名(07 章决策 119);两行三列对齐,空位只留在最后。
@@ -2793,15 +2793,14 @@ private struct AppearanceSettingsTab: View {
             HStack(spacing: 8) {
                 if lyricsWindowPreviewShowsMini {
                     lyricsWindowToolbarButton(.content)
-                    lyricsWindowToolbarButton(.layout)
-                    lyricsWindowToolbarButton(.info)
-                } else {
-                    lyricsWindowToolbarButton(.layout)
-                    lyricsWindowToolbarButton(.info)
-                    lyricsWindowToolbarGhost(.content)
                 }
+                lyricsWindowToolbarButton(.layout)
+                lyricsWindowToolbarButton(.info)
+                lyricsWindowToolbarButton(.web)
                 Spacer(minLength: 8)
-                EditorToolbarResetReserve()
+                if !lyricsWindowPreviewShowsMini {
+                    EditorToolbarResetReserve()
+                }
             }
             .overlay(alignment: .top) { lyricsWindowProbeAnchor(lyricsWindowRow2Probe) }
         }
@@ -2889,6 +2888,11 @@ private struct AppearanceSettingsTab: View {
                 summary: SettingsToggleSummary.text([
                     (title: L10n.t("动态封面"), isOn: settings.motionCoverEnabled),
                 ]))
+        case .web:
+            // 摘要报开没开,同悬浮歌词「OBS」那颗。
+            return EditorToolbarButtonLabel(
+                icon: "globe", title: L10n.t("网页歌词"),
+                summary: settings.webLyricsEnabled ? L10n.t("已开启") : L10n.t("未开启"))
         }
     }
 
@@ -2913,14 +2917,6 @@ private struct AppearanceSettingsTab: View {
             lyricsWindowPopoverContent(item)
                 .environment(\.settingsPopoverMaxHeight, lyricsWindowPopoverMaxHeight)
         }
-    }
-
-    /// 第二行的对齐占位:同一份 label、同一套按钮样式,所以同宽;不挂浮层、不画、不进无障碍树。
-    private func lyricsWindowToolbarGhost(_ item: LyricsWindowToolbarItem) -> some View {
-        Button {} label: { lyricsWindowToolbarLabel(item) }
-            .editorToolbarButtonStyle()
-            .hidden()
-            .accessibilityHidden(true)
     }
 
     /// 浮层宽度按内容估、宁宽勿窄(`SettingsPopoverShell.width` 那条:窄了尾部控件 fixedSize
@@ -2957,6 +2953,10 @@ private struct AppearanceSettingsTab: View {
                 SettingsPopoverShell(title: L10n.t("封面"), width: 420) {
                     VStack(spacing: 0) { lyricsWindowCoverRows }
                 }
+            }
+        case .web:
+            SettingsPopoverShell(title: L10n.t("网页歌词"), width: 460) {
+                LyricsWindowWebSettingsRows()
             }
         }
     }
@@ -4158,6 +4158,7 @@ enum LyricsWindowToolbarItem: Equatable {
     case content
     case layout
     case info
+    case web
 }
 
 /// 「歌词显示 → 歌词窗口」那一段的「全部设置」抽屉。外壳照另外三个抽屉(`OverlayAllSettingsDrawer` /
@@ -4192,10 +4193,8 @@ struct LyricsWindowAllSettingsDrawer<Content: View>: View {
         .onChange(of: highlightedTitles) { _, _ in expandForSearchIfNeeded() }
     }
 
-    /// 这一段里不在抽屉中的行(「歌词窗口」卡、「网页歌词」卡和它的「连接设置」浮层):点名的只有它们时不展开,
-    /// 否则排在抽屉后面的网页歌词卡会被推到一屏以外。要跟 `SettingsSearchCatalog` 里歌词窗口那几条卡片条目同步。
-    private static var outsideTitleKeys: [String] { ["歌词窗口", "网页歌词", "本机地址", "其他设备", "允许局域网访问", "允许远程控制",
-                                                     "访问链接", "备用链接（IP 地址）", "重置访问密钥", "端口"] }
+    /// 这一段里不在抽屉中的行(「歌词窗口」卡):点名的只有它时不展开。要跟 `SettingsSearchCatalog` 里歌词窗口那条卡片条目同步。
+    private static var outsideTitleKeys: [String] { ["歌词窗口"] }
 
     private func expandForSearchIfNeeded() {
         let outside = Set(Self.outsideTitleKeys.map { L10n.t($0) })
