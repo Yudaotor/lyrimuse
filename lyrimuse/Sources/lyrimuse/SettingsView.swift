@@ -3444,11 +3444,6 @@ private struct AppearanceSettingsTab: View {
     // 「灵动岛歌词」那张配置卡(风格 / 宽度 / 显示在哪块屏幕)在 NotchEditorStage.swift ——
     // 前两项在编辑台工具栏的两个浮层和舞台里那条宽度调整条,屏幕那一项在「屏幕」浮层。别在
     // 这里重新长出一张同名的卡:那一段只有编辑台一个宿主,多一份实现就多一处会漂的地方。
-    //
-    // `NotchLyricsWindowController.shared.applyContentWidthSetting()` / `.applyScreenSetting()`
-    // 不能裸调,那违反这个类的 `.shared` 不变量(读一下就 init 出整扇窗;见
-    // docs/features/05-notch.md 设计决策第 1 条)。调用点都要带 `if settings.notchOverlayEnabled`
-    // 守卫。
 
     // 「菜单栏歌词」的配置项在 UI/MenuBarEditorStage.swift —— 编辑台工具栏四个浮层(布局 / 配色 / 字体 /
     // 行为),最大宽度在预览框里那条常驻宽度条,「全部设置」抽屉(MenuBarAllSettingsDrawer)兜底。别在这里

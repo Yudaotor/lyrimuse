@@ -93,9 +93,8 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
     /// ② 两个编辑台工具栏按钮上那句摘要(`OverlayEditorStage.behaviorSummary` /
     /// `NotchEditorStage.behaviorSummary`)为了拼串会读 `wrappedValue`。
     ///
-    /// 顺序必须是**先写 AppSettings、再调控制器**,不能只调控制器:副屏镜像走的是
-    /// `AppSettings.$notchHide*` 的 Combine 广播(`NotchMirrorManager`),跳过写入会让副屏
-    /// 静默不同步。
+    /// 悬浮歌词那两项顺序必须是**先写 AppSettings、再调控制器**(真值在 AppSettings,控制器只是镜像)。灵动岛那两项只写设置:
+    /// 每个灵动岛实例(含镜像副本)自己订阅 `$notchHide*`(`NotchLyricsWindowController` init),这里不碰它的 `.shared`。
     ///
     /// 跳过被守卫拦下的那一次调用是**安全**的:两个控制器在 `setVisible` 真把窗口打开时都会
     /// 重新应用一遍这两个值(悬浮歌词见 `LyricsOverlayWindowController.setVisible`,灵动岛同理),
@@ -123,27 +122,15 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
                     }
                 })
         case (.notch, .duringScreenCapture):
-            return Binding(
-                get: { settings.notchHideDuringScreenCapture },
-                set: { newValue in
-                    settings.notchHideDuringScreenCapture = newValue
-                    if settings.notchOverlayEnabled {
-                        NotchLyricsWindowController.shared.setHiddenFromCapture(newValue)
-                    }
-                })
+            return Binding(get: { settings.notchHideDuringScreenCapture },
+                           set: { settings.notchHideDuringScreenCapture = $0 })
         // 开着这一项,灵动岛暂停后是整个 orderOut,**看不到"歌词行卷回顶行"那段收起动画**
         // (窗口都没了)。关掉才看得到。这是设置本身的语义,不写进 UI —— 用户试一下就知道。
         // 同一个「行为」入口里还有一项「暂停时收起」,两者都以"暂停"起头但不是一回事:那个是
         // 收起、这个是整扇窗消失,而这一项开着会盖住那个的效果。
         case (.notch, .whenNotPlaying):
-            return Binding(
-                get: { settings.notchHideWhenNotPlaying },
-                set: { newValue in
-                    settings.notchHideWhenNotPlaying = newValue
-                    if settings.notchOverlayEnabled {
-                        NotchLyricsWindowController.shared.setHideWhenNotPlaying(newValue)
-                    }
-                })
+            return Binding(get: { settings.notchHideWhenNotPlaying },
+                           set: { settings.notchHideWhenNotPlaying = $0 })
         // 无歌词这一项只写设置:每个窗口实例(含灵动岛镜像副本)自己订阅这个值,不经这里调控制器。
         case (.desktopOverlay, .whenNoLyrics):
             return Binding(get: { settings.hideWhenNoLyrics }, set: { settings.hideWhenNoLyrics = $0 })

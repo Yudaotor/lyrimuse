@@ -3,24 +3,12 @@ import SwiftUI
 
 // 真窗口里装 NotchLyricsView 的那一层壳。
 //
-// 之前没有这一层:窗口本身随收起/稳态/展开三种形态反复 setFrame,卡片永远
-// 等于窗口。改成"窗口常驻最大尺寸,卡片在里面自己变大变小"之后,多出来的这一层负责
-// 两件事:把卡片钉成当前该有的尺寸、贴顶居中摆好,以及给尺寸变化配一条弹簧动画。
+// 窗口常驻最大尺寸(展开宽 × 展开高,见控制器 recomputeGeometry),卡片在里面自己变大变小:这一层把卡片钉成当前该有的尺寸、
+// 贴顶居中摆好,并给尺寸变化配弹簧动画(形态切换不走 NSWindow.setFrame)。
 //
-// 这么改的收益:
-// 1. **开合是真的动画**。NSWindow.setFrame(animate:) 那条路要么瞬间跳变(现状),要么
-//    用 AppKit 自己那条时长固定、曲线不可换的过渡;放进 SwiftUI 之后可以用弹簧,而且
-//    仍然跟手(interactiveSpring 的响应时间比一次 hover 停顿短得多)。
-// 2. **投影终于画得出来**。hover 时那圈 .shadow 以前被窗口边界硬裁掉了——窗口紧贴卡片
-//    外沿,阴影没有地方可画。现在窗口比卡片大一圈,阴影落在透明区里。
-// 3. 不必再在每次形态切换时手动同步 NSHostingView 的 frame(那是 setFrame 那条路留下的
-//    补丁,见 NotchLyricsWindowController.hostingView 上的注释)。
-//
-// 这一层多出来的那片透明区域**绝对不能**加任何 background/contentShape:窗口 level 是
-// .screenSaver(在系统菜单栏之上),透明区正压着菜单栏那一条。实测(拿同样
-// flag 的探针窗口盖住一个普通窗口再投一次点击)确认:纯透明区域的点击会穿透到下面的窗口;
-// 但只要给它加一层哪怕完全透明的 Color.clear.contentShape(Rectangle()),点击就会被这个
-// 窗口吞掉 —— 那意味着用户点不动被盖住的那一段菜单栏。这是这次重构唯一的真风险点。
+// 卡片以外的透明区域**绝对不能**加任何 background/contentShape:窗口 level 是 .screenSaver(在系统菜单栏之上),透明区正压着
+// 菜单栏和用户的窗口。纯透明区域的点击会穿透到下面;哪怕加一层完全透明的 Color.clear.contentShape(Rectangle()),点击就会被
+// 这扇窗吞掉,用户点不动被盖住的那一段菜单栏(拿同样 flag 的探针窗口实测过)。
 struct NotchWindowRoot: View {
     /// 「暂停/无播放时隐藏」的退场动画:整卡以刘海中心为锚 scale→0 并透明,
     /// 缩进刘海里。 别做成"先播收起弹簧再走"——不要经过暂停收起态,直接从
@@ -91,29 +79,11 @@ struct NotchWindowRoot: View {
     /// 上一次 body 见到的「有没有掉出来的歌名」,只给 cardAnimation 认「歌名条刚收回去」用(同 `wasExpanded`)。
     @State private var wasDropping = false
 
-    /// 卡片宽度:收起态(没在播放)缩到「刘海 + 左右各一小段耳朵」。
-    ///
-    /// 此前恒定不缩,理由是"耳朵里有三个控制按钮,宽度一缩没地方放"。设计
-    /// 评审把三键挪进展开卡、右耳只剩一枚播放键之后,这条理由不复存在 —— 收起态那条
-    /// 全宽黑带的宽度全是死空间("左右各自保留一点空间即可")。耳宽取
-    /// NotchMetrics.collapsedEarWidth(左耳只放音浪,右耳只放小封面 —— 同日再收窄成
-    /// iPhone 灵动岛式极简,见 NotchLyricsView.topRow 的收起分支),
-    /// +20 对应 topRow 的水平 padding;min 兜底"刘海比用户设的内容宽度还宽"的怪配置。
-    /// 稳态是全宽(`steadyCardWidth`):歌词行需要空间。宽度变化跟高度同一条弹簧(cardAnimation)。
-    ///
-    /// **展开态自可以比稳态更宽**(`expandedCardWidth`,「把展开状态变为可以
-    /// 更宽 …… 下限就是正常状态的宽度,上限就是悬浮展开时候的宽度」):hover 时卡片横向也撑开,
-    /// 两只耳朵和歌词行都跟着宽(`NotchLyricsView` 按 `proxy.size.width` 反推耳宽,不用改)。
-    /// 命中形状(下面的 `contentShape`)跟着卡片矩形走,所以**触发**展开的区域仍是稳态卡片,而
-    /// 展开后光标停在多撑出来的那两截上仍算在卡片上、维持展开 —— 展开卡片包含稳态卡片,不会
-    /// 出现"进了又出"的抖动。窗口本身常驻展开宽(控制器 recomputeGeometry)。
-    private var cardWidth: CGFloat {
-        if controller.isCollapsed {
-            return min(controller.steadyCardWidth,
-                       controller.notchWidth + 2 * NotchMetrics.collapsedEarWidth + 20)
-        }
-        return controller.isExpanded ? controller.expandedCardWidth : controller.steadyCardWidth
-    }
+    /// 卡片宽度,公式在 `NotchChromeSource.cardWidth`(控制器算卡片在屏幕上的矩形也读它):收起态缩到「刘海 + 左右各一小段耳朵」
+    /// (`collapsedEarWidth`,+20 对应 topRow 的水平 padding,min 兜底刘海比内容宽度还宽的配置);稳态全宽(歌词行需要空间);
+    /// 展开态取展开宽(`expandedCardWidth`,≥ 稳态宽)。宽度变化跟高度同一条弹簧(cardAnimation)。
+    /// 命中判定跟着当前卡片矩形走:**触发**展开的是稳态卡片,展开后光标停在多撑出来的两截上仍算在卡片上,不会"进了又出"。
+    private var cardWidth: CGFloat { controller.cardWidth }
 
     /// 卡片当前高度。收起态只留顶行那一条,稳态多一行歌词(用户关掉「显示歌词」时也不留),
     /// 展开再多一块。

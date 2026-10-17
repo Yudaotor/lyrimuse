@@ -591,9 +591,22 @@ func runNotchTests() {
             let view = src("NotchLyricsView.swift")
             expectEqual(src("NotchLyricsWindow.swift").contains("becomesKeyOnlyIfNeeded = true"), true,
                         "灵动岛接线: 点按钮不抢键盘焦点")
-            expectEqual(stage.contains("controller.setHideWhenNotPlaying(settings.notchHideWhenNotPlaying)")
-                        && stage.contains("controller.applyScreenSetting()"), true,
-                        "灵动岛接线: 恢复默认后主实例按新值同步屏幕与自动隐藏")
+            expectEqual(controller.contains("AppSettings.shared.$notchHideWhenNotPlaying, AppSettings.shared.$notchHideDuringScreenCapture,\n            AppSettings.shared.$notchContentWidth, AppSettings.shared.$notchExpandedContentWidth\n        )\n        .dropFirst()\n        .sink { [weak self] hide, captureHidden, width, expandedWidth in")
+                        && controller.contains("if pinnedScreenID == nil {\n            AppSettings.shared.$notchScreenID")
+                        && controller.contains(".receive(on: DispatchQueue.main)\n                .sink { [weak self] _ in self?.applyScreenSetting() }"), true,
+                        "灵动岛接线: 自动隐藏两个开关、一对宽度由每个实例自己订阅(取 sink 参数),主实例另订屏幕(下一拍再读设置)")
+            expectEqual(controller.contains("if hideWhenNotPlaying != hide { hideWhenNotPlaying = hide }")
+                        && controller.contains("recomputeGeometry(animate: false, contentWidth: contentWidth, expandedContentWidth: expandedContentWidth)"), true,
+                        "灵动岛接线: 自动隐藏 / 宽度变了按 sink 收到的新值用,不回读 AppSettings")
+            let autoHide = src("AutoHideSettingsRows.swift"), mirrorSrc = src("NotchMirrorManager.swift")
+            expectEqual(!stage.contains("NotchLyricsWindowController.shared.") && !autoHide.contains("NotchLyricsWindowController.shared.")
+                        && !mirrorSrc.contains("settings.$notchHideWhenNotPlaying"), true,
+                        "灵动岛接线: 恢复默认、宽度、屏幕、自动隐藏这些写入口只写设置,不再手动同步主实例;镜像管理器不另订一份")
+            // 订阅统一存进一个集合,teardown 一行清掉;不再单独开 AnyCancellable 字段(漏配一行清理就泄漏)。
+            expectEqual(!controller.contains(": AnyCancellable?")
+                        && controller.components(separatedBy: "\n        .store(in: &subscriptions)").count - 1 >= 28
+                        && controller.contains("subscriptions.removeAll()"), true,
+                        "灵动岛接线: 订阅都存进 subscriptions,teardown 统一清掉")
             expectEqual(controller.contains("return ScreenIdentity.notched ?? NSScreen.screens.first"), true,
                         "灵动岛接线: 没有刘海时固定主屏,不跟着键盘焦点跳")
             expectEqual(controller.contains("var hideWhenNotPlaying: Bool = AppSettings.shared.notchHideWhenNotPlaying"), true,
@@ -1142,10 +1155,14 @@ func runNotchTests() {
             let centerSrc = src("ListenMilestoneCenter.swift")
             expectEqual(ctrlSrc.contains("let next = hoverExpanded || alertHold || milestoneHold")
                         && ctrlSrc.contains("ListenMilestoneCenter.shared.$current.removeDuplicates().sink")
-                        && ctrlSrc.contains("milestoneObserver?.cancel()"), true,
+                        && ctrlSrc.contains("subscriptions.removeAll()"), true,
                         "里程碑契约: 控制器镜像报喜、撑开卡片,收尾取消订阅")
-            expectEqual(ctrlSrc.contains("geo.notchHeight + NotchMetrics.milestonePanelHeight))"), true,
-                        "里程碑契约: 窗口高度兜得住报喜卡片")
+            expectEqual(ctrlSrc.contains("geo.notchHeight + NotchMetrics.milestonePanelHeight + NotchMetrics.milestoneConfettiReach))"), true,
+                        "里程碑契约: 窗口高度兜得住报喜卡片和它下沿落出去的碎屑")
+            let confettiSrc = src("NotchMilestonePanel.swift")
+            expectEqual(confettiSrc.contains("dy: .random(in: NotchMetrics.milestoneConfettiDrop)")
+                        && confettiSrc.contains("dx: .random(in: max(-60, -x)...min(60, max(0, cardWidth - size - x)))"), true,
+                        "里程碑契约: 碎屑落多远跟窗口留的地方同一个常量,横向落点不出卡片")
             expectEqual(v.contains("if milestone != nil { return contentTopInset + NotchMetrics.milestonePanelHeight }"), true,
                         "里程碑契约: 报喜时卡片高度换成报喜面板那一档")
             expectEqual(stageSrc.contains("var milestone: ListenMilestone? { nil }"), true, "里程碑契约: 预览不报里程碑")
@@ -1169,7 +1186,7 @@ func runNotchTests() {
             expectEqual(stageSrc.contains("var trackDrop: NotchTrackDrop? { nil }"), true, "换歌翻牌契约: 预览不掉歌名")
             expectEqual(ctrlSrc.contains("&& AppSettings.shared.notchShowsTrackDrop")
                         && ctrlSrc.contains("!isCollapsed && !isExpanded && milestone == nil && !alertHold")
-                        && ctrlSrc.contains("trackDropObserver?.cancel()"), true,
+                        && ctrlSrc.contains("subscriptions.removeAll()"), true,
                         "换歌翻牌契约: 开关开着、卡片看得见、不在收起 / 展开 / 报喜 / 提醒里才掉,收尾取消订阅")
             expectEqual(v.contains("NotchCardLayerActive(active: !expanded && shownTrackDrop == nil"), true,
                         "换歌翻牌契约: 开着歌词行时歌名盖上来,稳态那份歌词行让开")
@@ -1227,7 +1244,7 @@ func runNotchTests() {
                         && ctrlSrc.contains("revealGate.decided(key: key, wantsDrop: wantsDrop, now: now)")
                         && ctrlSrc.contains("if revealedTrackKey != reveal.key { revealedTrackKey = reveal.key }")
                         && ctrlSrc.contains("func revealsTrack(_ key: String) -> Bool { revealedTrackKey == key }")
-                        && ctrlSrc.contains("artworkArrivalObserver?.cancel()"), true,
+                        && ctrlSrc.contains("subscriptions.removeAll()"), true,
                         "换歌翻牌契约: 揭晓接线(歌名一变当封面没到、封面到了、去抖后的判定),收尾取消订阅")
             expectEqual(stageSrc.contains("func revealsTrack(_ key: String) -> Bool { true }"), true,
                         "换歌翻牌契约: 预览不等揭晓")
@@ -1426,8 +1443,11 @@ func runNotchTests() {
                     "广告态契约: 只有真窗口替门槛轮询登记,编辑台预览不传")
         expectEqual(view.contains(".onDisappear { playback.syncAdSkipGate(adBreak: false) }"), true,
                     "广告态契约: 窗口没了要撤掉需求,不然灵动岛关了轮询还在跑")
-        expectEqual(view.contains("YouTubeMusicAdSkipCenter.shared.setNotchDemand(ObjectIdentifier(self), active: adBreak)"), true,
+        expectEqual(view.contains("YouTubeMusicAdSkipCenter.shared.setNotchDemand(adSkipDemandID, active: adBreak)"), true,
                     "广告态契约: 灵动岛只是登记需求,轮询在 center")
+        expectEqual(view.contains("private let adSkipDemandID = UUID()") && view.contains("let id = adSkipDemandID")
+                    && !view.contains("setNotchDemand(ObjectIdentifier"), true,
+                    "广告态契约: 需求按实例自带的 UUID 登记 / 注销,不按对象地址(deinit 异步注销时地址可能已被新实例复用)")
         // 轮询只在「广告中」且有人要结果时跑:自动跳过开着,或至少一扇真灵动岛在广告态。
         expectEqual(center.contains("let wanted = adBreak && (autoSkipEnabled || !notchDemand.isEmpty)"), true,
                     "广告态契约: 灵动岛关着、自动跳过也关着时一次 AppleEvent 都不发")
@@ -1655,6 +1675,17 @@ func runNotchTests() {
         expectEqual(secondAt(fast, fastTick.start.addingTimeInterval(-0.002)), 1, "秒表节拍: 2 倍速跳秒前一刻还在 1s")
         expectEqual(secondAt(fast, fastTick.start.addingTimeInterval(0.002)), 2, "秒表节拍: 2 倍速跳秒后一刻到 2s")
 
+        // 倒计时:显示 (总长 − 位置) / 1000 向下取整,跳在位置 ≡ 总长 (mod 1000) 上。
+        func remainingAt(_ a: ProgressAnchor, _ total: Int, _ date: Date) -> Int { (total - a.extrapolatedPositionMs(now: date)) / 1000 }
+        let down = C.tick(for: a, epoch: epoch, countdownFromMs: 215_500)
+        expectEqual(abs(down.start.timeIntervalSince(t0) - 0.266) < 1e-6, true, "倒计时节拍: 总长 215.5s、位置 1.234s → 第一次跳在位置 1.5s(差 0.266s)")
+        expectEqual(remainingAt(a, 215_500, down.start.addingTimeInterval(-0.002)), 214, "倒计时节拍: 跳秒前一刻还剩 214s")
+        expectEqual(remainingAt(a, 215_500, down.start.addingTimeInterval(0.002)), 213, "倒计时节拍: 跳秒后一刻还剩 213s")
+        expectEqual(remainingAt(a, 215_500, down.start.addingTimeInterval(1.002)), 212, "倒计时节拍: 下一拍还剩 212s")
+        expectEqual(C.tick(for: a, epoch: epoch, countdownFromMs: 215_000), tick, "倒计时节拍: 总长是整秒时跟正计时同相")
+        expectEqual(C.msSinceBoundary(positionMs: 300, countdownFromMs: 215_500), 800, "倒计时节拍: 位置还没到总长的零头时往回绕一秒")
+        expectEqual(C.msSinceBoundary(positionMs: 1234, countdownFromMs: nil), 234, "正计时: 走过整秒的毫秒数")
+
         let onBoundary = C.tick(for: anchor(3000), epoch: epoch)
         expectEqual(abs(onBoundary.start.timeIntervalSince(t0) - 1) < 1e-6, true, "秒表节拍: 正好在整秒上时下一拍排在 1s 之后")
         expectEqual(C.tick(for: anchor(1234, rate: 0), epoch: epoch), C.Tick(start: epoch, interval: 1),
@@ -1875,7 +1906,7 @@ func runNotchTests() {
         expectEqual(controller.contains("let shows = NotchVisibility.showsLyrics(setting: showsLyricsSetting,\n                                                collapsedForNoLyrics: lyricsCollapsedForNoLyrics)")
                     && controller.components(separatedBy: "applyShowsLyrics()").count - 1 == 3, true,
                     "无歌词收起契约: 卡片读的 showsLyrics 由 Core 合成,「显示歌词」开关和无歌词两路变化都重算")
-        expectEqual(controller.contains("noLyricsObserver?.cancel()"), true, "无歌词收起契约: 副本 teardown 摘掉订阅")
+        expectEqual(controller.contains("subscriptions.removeAll()"), true, "无歌词收起契约: 副本 teardown 摘掉订阅")
         let overlayController = read("LyricsOverlayWindowController.swift")
         expectEqual(overlayController.contains("AppSettings.shared.$hideWhenNoLyrics\n            .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)")
                     && overlayController.contains("let shouldShow = OverlayVisibility.shouldShow(isVisible: isVisible, hiddenForNoLyrics: hiddenForNoLyrics,"), true,
@@ -1888,7 +1919,7 @@ func runNotchTests() {
                     "全屏契约: 全屏一律整卡隐藏,判据走 Core")
         expectEqual(controller.contains("safeAreaInsets.top ?? 0) > 0") || controller.contains("lyricsOffByFullScreen"), false,
                     "全屏契约: 不再按有没有刘海区别对待(刘海屏也整卡隐藏,不是只收歌词行)")
-        expectEqual(controller.contains("fullScreenObserver?.cancel()"), true, "全屏契约: teardown 摘掉订阅")
+        expectEqual(controller.contains("subscriptions.removeAll()"), true, "全屏契约: teardown 摘掉订阅")
         expectEqual(view.contains("isPlaying: playback.isPlayingNow && surfaceVisible"), true,
                     "可见性契约: 顶行音浪看不见时按暂停处理")
         expectEqual(view.contains("if let anchor = playback.anchor, surfaceVisible {"), true,
@@ -1927,8 +1958,20 @@ func runNotchTests() {
                     "快捷操作契约: 点亮样式同随机 / 循环键(字形全亮 + 0.16 淡底)")
         expectEqual(view.contains("p.$isFavorited.removeDuplicates().sink { [weak self] in self?.isFavorited = $0 }"), true,
                     "快捷操作契约: 灵动岛镜像协调器的 isFavorited")
-        expectEqual(controller.contains("if opening, expandedShowsQuickActions, !isAdBreakNow {\n            PlaybackCoordinator.shared.refreshFavorited()"), true,
+        expectEqual(controller.contains("if hoverOpening, expandedShowsQuickActions, !isAdBreakNow {\n            PlaybackCoordinator.shared.refreshFavorited()"), true,
                     "快捷操作契约: 展开时回读一次喜欢状态")
+        expectEqual(controller.contains("let hoverOpening = opening && hoverExpanded && !alertHold && !milestoneHold")
+                    && controller.contains("if hoverOpening, expandedShowsControls,"), true,
+                    "展开回读契约: 只在指针悬停展开时回读播放模式 / 喜欢,提醒、报喜撑开时不读")
+        // 卡片宽度只有协议扩展一份公式,真窗口和控制器算屏幕矩形都读它。
+        expectEqual(root.contains("private var cardWidth: CGFloat { controller.cardWidth }")
+                    && view.contains("return min(steadyCardWidth, notchWidth + 2 * NotchMetrics.collapsedEarWidth + 20)")
+                    && controller.contains("return NSRect(x: window.frame.midX - cardWidth / 2"), true,
+                    "卡片宽度契约: 收起态宽度只有 NotchChromeSource.cardWidth 一份,光标判定用的屏幕矩形也读它")
+        // 歌词行高度那条订阅按副行的 sink 参数算展开区要不要留「下一句」。
+        expectEqual(controller.contains(".removeDuplicates { $0.height == $1.height }")
+                    && controller.contains("self.recomputeGeometry(animate: false, expandedShowsNextLine: LyricSecondaryLine.expandedNextLinePreviewVisible(\n                userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: row.secondary))"), true,
+                    "willSet 契约: 改副行时重算窗口高度用新副行判「下一句」那一行,不回退去读 AppSettings 里的旧值")
 
         // 主行取句的规则只有 Core 一份。
         expectEqual(view.contains("secondary.displayedLine(compactLine: compact, currentLine: current)"), true,
@@ -1943,7 +1986,12 @@ func runNotchTests() {
                     "间奏三点契约: 只有够格的间奏才换成「•••」")
         expectEqual(view.contains("playback.secondaryLine.gapDotsWindow(raw, compactPlaceholder: playback.compactShowsPlaceholder)"), true,
                     "间奏三点契约: 三点窗口走 Core 的 gapDotsWindow")
-        expectEqual(view.contains("NotchClockPhase.tick(for: anchor, epoch: clockEpoch)"), true,
+        expectEqual(view.contains("NotchClockPhase.tick(for: anchor, epoch: clockEpoch, countdownFromMs: countdownFromMs)")
+                    && view.contains("for: anchor, countdownFromMs: module == .remaining ? playback.currentDurationMs : nil)")
+                    && view.contains("NotchTimeFormat.clockSchedule(for: anchor, countdownFromMs: total)")
+                    && view.contains("positionMs: Double(clock.positionMs), countdownFromMs: clock.durationMs)"), true,
+                    "秒表契约: 剩余时长、广告还剩按倒计时的边界跳秒")
+        expectEqual(view.contains("NotchClockPhase.tick(for: anchor, epoch: clockEpoch"), true,
                     "秒表契约: App 侧的 schedule 由 Core 的 NotchClockPhase 算")
     }
 

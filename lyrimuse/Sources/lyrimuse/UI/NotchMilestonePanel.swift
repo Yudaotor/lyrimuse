@@ -127,12 +127,15 @@ struct NotchMilestoneConfetti: View {
         falling = false
         let span = max(1, cardWidth - 60)
         pieces = (0..<18).map { i in
-            Piece(id: round * 100 + i,
-                  x: 30 + CGFloat.random(in: 0...span),
-                  dx: .random(in: -60...60),
-                  dy: .random(in: 30...85),
+            let x = 30 + CGFloat.random(in: 0...span)
+            let size = CGFloat.random(in: 4...6)
+            // 横向落点不出卡片:窗口跟展开卡一样宽,出去的那截会被窗口边界切掉。
+            return Piece(id: round * 100 + i,
+                  x: x,
+                  dx: .random(in: max(-60, -x)...min(60, max(0, cardWidth - size - x))),
+                  dy: .random(in: NotchMetrics.milestoneConfettiDrop),
                   rotation: .random(in: -270...270),
-                  size: .random(in: 4...6),
+                  size: size,
                   color: Self.colors[i % Self.colors.count],
                   delay: .random(in: 0...0.25))
         }

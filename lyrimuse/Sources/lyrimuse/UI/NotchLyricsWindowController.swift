@@ -76,17 +76,17 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 「全屏时隐藏」(`NotchVisibility.fullScreenHides`)的结论,由 `applyFullScreenCover` 写入,进
     /// updateActualVisibility 的判据。主实例和镜像副本各看自己那块屏,别的屏全屏不算。
     private var coveredByFullScreen = false
-    /// 「纯音乐/无歌词时收起歌词行」开着、这首没有歌词(`NoLyricsAutoHide.hides`),由 noLyricsObserver 写入,
+    /// 「纯音乐/无歌词时收起歌词行」开着、这首没有歌词(`NoLyricsAutoHide.hides`),由 init 里 `$notchCollapseLyricsWhenNoLyrics` 那条订阅写入,
     /// 跟 `showsLyricsSetting` 一起算出 `showsLyrics`。每个实例(含镜像副本)各自订阅。
     private var lyricsCollapsedForNoLyrics = false
-    /// 当前有没有在播放。由 isPlayingObserver 写入,值取 sink 的**参数**——不能回头去读
+    /// 当前有没有在播放。由 init 里 `$isPlayingSmoothed` 那条订阅写入,值取 sink 的**参数**——不能回头去读
     /// PlaybackCoordinator 的存储属性,@Published 在 willSet 时机发布,那一刻读到的还是
-    /// 旧值(见下面 isPlayingObserver 处的注释)。
+    /// 旧值(见 init 里那条订阅处的注释)。
     ///
     /// 单独存一份而不是每次现读,是为了让下面的 isCollapsed 能写成计算属性。
     @Published private(set) var isPlayingNow: Bool = false
 
-    // 收起态:卡片只留顶行那一条高度,宽度收到两只耳朵(算法在 NotchWindowRoot.cardWidth 的收起分支),
+    // 收起态:卡片只留顶行那一条高度,宽度收到两只耳朵(算法在 NotchChromeSource.cardWidth 的收起分支),
     // 歌词行与展开区不渲染;hover 照样能展开出完整内容(含播放键)。
     // 三个开关各自的作用:collapsesWhenPaused 关掉就不收;hideWhenNotPlaying 开着时暂停直接缩进刘海
     // (isVanished)、不经过收起态;广告插播(isAdBreakNow)同样收起。
@@ -205,7 +205,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         max(fallbackNotchHeight, screen.frame.maxY - screen.visibleFrame.maxY)
     }
     /// 歌词行的实际高度(`AppSettings.notchEffectiveLyricRowHeight`)。窗口总高度 = 刘海高(或兜底高度)+ 它 + 展开区上限,
-    /// 视图那边按同一个值排版。由 `lyricRowHeightObserver` 用 sink 参数值算好写进来(@Published 是 willSet 时机,
+    /// 视图那边按同一个值排版。由 init 里歌词行高度那条订阅用 sink 参数值算好写进来(@Published 是 willSet 时机,
     /// 回读 AppSettings 拿到的是旧值),再重算几何。
     @Published private(set) var lyricRowHeight: CGFloat = AppSettings.shared.notchEffectiveLyricRowHeight
     // 宽度是固定值,不随当前歌词文字宽度动态变化。默认值和用户可调的设置项都在 AppSettings.notchContentWidth
@@ -221,8 +221,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 时宽度滑杆的下界照样很宽,调不小。
     ///
     /// 改了这个函数就等于改了滑杆的下界,而下界一变,**必须有人在它的任一入参变化时重算
-    /// 几何**。承担这件事的是 init 里那**四条**订阅:`leftEarObserver` / `rightEarObserver` /
-    /// `showsEqualizerObserver` / `equalizerEarObserver`。**以后再往这个函数加一个入参,就得同时加第五条订阅** ——
+    /// 几何**。承担这件事的是 init 里那**四条**订阅:`$notchLeftEar` / `$notchRightEar` /
+    /// `$notchShowsEqualizer` / `$notchEqualizerEar`。**以后再往这个函数加一个入参,就得同时加第五条订阅** ——
     /// 漏了的表现不是崩,是"改完设置卡片宽度纹丝不动,直到下次拖宽度滑杆才追上",很难往
     /// 订阅上想。四条都把 sink 的**参数值**显式传给 `recomputeGeometry`,不让下游回读
     /// `AppSettings`:@Published 是 willSet 时机派发,此刻回读拿到的是旧值。
@@ -285,27 +285,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             trackInfoHeight: trackInfoHeight)
     }
 
-    private var isPlayingObserver: AnyCancellable?
-    private var adBreakObserver: AnyCancellable?
-    private var lyricPresenceObserver: AnyCancellable?
-    private var durationObserver: AnyCancellable?
-    private var showLyricsObserver: AnyCancellable?
-    private var collapsesWhenPausedObserver: AnyCancellable?
-    private var showsEqualizerObserver: AnyCancellable?
-    private var equalizerEarObserver: AnyCancellable?
-    private var expandedShowsNextLineObserver: AnyCancellable?
-    private var expandedShowsControlsObserver: AnyCancellable?
-    private var expandedTrackInfoShowsArtworkObserver: AnyCancellable?
-    private var expandedTrackInfoShowsTitleObserver: AnyCancellable?
-    private var expandedTrackInfoShowsArtistObserver: AnyCancellable?
-    private var expandedTrackInfoShowsAlbumObserver: AnyCancellable?
-    private var expandedShowsQuickActionsObserver: AnyCancellable?
-    private var lyricRowHeightObserver: AnyCancellable?
-    private var leftEarObserver: AnyCancellable?
-    private var rightEarObserver: AnyCancellable?
-    private var trackPresenceObserver: AnyCancellable?
-    private var milestoneObserver: AnyCancellable?
-    private var trackDropObserver: AnyCancellable?
+    /// init 里建的全部 Combine 订阅;`teardown` 一次清掉,新加订阅一律 `.store(in: &subscriptions)`,别再单独开字段。
+    private var subscriptions = Set<AnyCancellable>()
     /// 掉不掉歌名的判定,记着上一首(`NotchTrackDropTracker`);刚建出来时还没判过,第一首不掉。
     private var trackDropTracker = NotchTrackDropTracker()
     private var trackDropGeneration = 0
@@ -317,15 +298,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var revealWaitTask: Task<Void, Never>?
     /// 判成要掉、正等着封面的那一首;揭晓时掉它。
     private var pendingDrop: (title: String, artist: String, since: Date)?
-    private var trackIdentityObserver: AnyCancellable?
-    private var artworkArrivalObserver: AnyCancellable?
-    /// 灵动岛这一面的歌词行出现了要显示的一句(见 `lyricsLineAppeared`)。
-    private var lyricsLineObserver: AnyCancellable?
     /// 掉歌名的判定日志:换了一首、判成要掉时写一行(掉了,或卡片此刻不显示没掉)。
     private static let trackDropLog = Logger(subsystem: "me.yudaotor.lyrimuse", category: "notch-track-drop")
-    private var unknownPlayerAlertObserver: AnyCancellable?
-    private var fullScreenObserver: AnyCancellable?
-    private var noLyricsObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
     private var occlusionObserver: NSObjectProtocol?
     // recomputeGeometry 里要把 hostingView 的 frame 也显式设一遍,别只信 autoresizingMask:那条隐式路径下
@@ -414,25 +388,27 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // isPlayingNow 这个存储属性——@Published 的 willSet 在真正写入新值*之前*就
         // 已经发布,这个时间点读存储属性拿到的是上一次的旧值,细节见
         // LyricsOverlayWindowController.swift 同一处注释,不重复展开。
-        isPlayingObserver = PlaybackCoordinator.shared.$isPlayingSmoothed.sink { [weak self] isPlaying in
+        PlaybackCoordinator.shared.$isPlayingSmoothed.sink { [weak self] isPlaying in
             // 收缩与否(isCollapsed)是从这个属性算出来的计算属性,写进来就等于生效,
             // 不用触发几何重算。同一个坑同一个修法:存的必须是 sink 参数里的
             // isPlaying,不能回头读 PlaybackCoordinator 的存储属性(那一刻还是旧值)。
             self?.isPlayingNow = isPlaying
             self?.updateActualVisibility(isPlayingNow: isPlaying)
         }
+        .store(in: &subscriptions)
 
         // 广告插播 → 收起(isCollapsed 的第三个输入)。同一个 willSet 坑同一个修法:
         // 存 sink 参数值,绝不回头读 PlaybackCoordinator 的存储属性。写入 @Published
         // 即生效,几何不用重算(窗口常驻最大尺寸,收起只是内容层的事,同 isPlayingNow)。
-        adBreakObserver = PlaybackCoordinator.shared.$isCurrentTrackAdBreak.sink { [weak self] isAd in
+        PlaybackCoordinator.shared.$isCurrentTrackAdBreak.sink { [weak self] isAd in
             self?.isAdBreakNow = isAd
         }
+        .store(in: &subscriptions)
 
         // 有没有曲目(没曲目时歌词行不该全空还占着高度)。三个输入必须**同时**拿到才能算,所以用
         // CombineLatest3 而不是三个独立 sink —— 独立 sink 里只能拿到自己那一个参数,另外两个得回头读
         // 存储属性,那正是 @Published willSet 旧值坑。
-        trackPresenceObserver = Publishers.CombineLatest3(
+        Publishers.CombineLatest3(
             PlaybackCoordinator.shared.$title,
             PlaybackCoordinator.shared.$artist,
             PlaybackCoordinator.shared.$isCurrentTrackAdBreak
@@ -446,16 +422,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 self.setAlertHold(true)
             }
         }
+        .store(in: &subscriptions)
 
         // 收听里程碑:报喜期间卡片自己撑开,面板换成报喜那一块。每个实例(含「所有屏幕」的副本)各自订阅同一个单例;
         // 是控制器订阅它,它不碰 `.shared`。存 sink 参数值,理由同下。
-        milestoneObserver = ListenMilestoneCenter.shared.$current.removeDuplicates().sink { [weak self] next in
+        ListenMilestoneCenter.shared.$current.removeDuplicates().sink { [weak self] next in
             self?.setMilestone(next)
         }
+        .store(in: &subscriptions)
 
         // 换歌翻牌的「掉歌名」:歌名 / 歌手 / 广告 / 在不在等开播去抖 300ms(常常一前一后到)再判。存 sink 参数值,理由同上。
         // 去抖挂主队列、别挂 RunLoop.main:菜单栏菜单开着时主线程在事件跟踪模式里转,RunLoop.main 的计时器要等菜单关了才走(见 05 章决策 67)。
-        trackDropObserver = Publishers.CombineLatest4(
+        Publishers.CombineLatest4(
             PlaybackCoordinator.shared.$title,
             PlaybackCoordinator.shared.$artist,
             PlaybackCoordinator.shared.$isCurrentTrackAdBreak,
@@ -465,42 +443,48 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         .sink { [weak self] title, artist, isAd, isWaiting in
             self?.trackChanged(title: title, artist: artist, isAdBreak: isAd, isWaitingToPlay: isWaiting)
         }
+        .store(in: &subscriptions)
 
         // 换歌翻牌的揭晓:歌名或歌手一变(不去抖)就当这首的封面还没到;之后协调器发一张新的系统封面(每次赋值都发一张新图,
         // 定案没有封面时发 nil),或者高清替代到了,就是到了。
-        trackIdentityObserver = Publishers.CombineLatest(PlaybackCoordinator.shared.$title, PlaybackCoordinator.shared.$artist)
+        Publishers.CombineLatest(PlaybackCoordinator.shared.$title, PlaybackCoordinator.shared.$artist)
             .removeDuplicates { $0 == $1 }
             .dropFirst()
             .sink { [weak self] _ in self?.trackIdentityChanged() }
-        artworkArrivalObserver = Publishers.Merge(
+        .store(in: &subscriptions)
+        Publishers.Merge(
             PlaybackCoordinator.shared.$artworkImage.dropFirst().map { _ in () },
             PlaybackCoordinator.shared.$highResArtworkImage.dropFirst().compactMap { $0 }.map { _ in () }
         )
         .sink { [weak self] in self?.artworkArrived() }
-        lyricsLineObserver = PlaybackCoordinator.shared.$notchLyrics
+        .store(in: &subscriptions)
+        PlaybackCoordinator.shared.$notchLyrics
             .map { $0.compactLine != nil }
             .removeDuplicates()
             .sink { [weak self] showing in
                 if showing { self?.lyricsLineAppeared() }
             }
+        .store(in: &subscriptions)
 
         // 「发现新播放器」的主动提醒(NotchUnknownPlayerPrompt):提醒期间卡片自己撑开、隐藏着的
         // 窗口叫回来,到点收回。同一个 willSet 坑同一个修法:存 sink 参数值。每个实例(含「所有屏幕」的副本)
         // 各自订阅同一个单例,所以每块屏的灵动岛同时提醒,不用经 NotchMirrorManager 转发。
         // 是控制器订阅提示,不是提示引用控制器 —— 后者会碰 `.shared`,见文件头那条不变量。
-        unknownPlayerAlertObserver = NotchUnknownPlayerPrompt.shared.$isAlerting.removeDuplicates().sink { [weak self] alerting in
+        NotchUnknownPlayerPrompt.shared.$isAlerting.removeDuplicates().sink { [weak self] alerting in
             self?.setAlertHold(alerting)
         }
+        .store(in: &subscriptions)
 
         // 「全屏时隐藏」:开关和全屏表两个输入同时从参数拿(同一个 willSet 坑)。每个实例各自订阅,
         // 镜像副本不经 NotchMirrorManager 转发。
-        fullScreenObserver = AppSettings.shared.$notchHideInFullScreen
+        AppSettings.shared.$notchHideInFullScreen
             .combineLatest(FullScreenSpaceMonitor.shared.$fullScreenDisplays)
             .sink { [weak self] enabled, displays in
                 self?.applyFullScreenCover(enabled: enabled, displays: displays)
             }
+        .store(in: &subscriptions)
         // 「纯音乐/无歌词时收起歌词行」:开关和「这首有没有歌词」同时从参数拿(同一个 willSet 坑)。
-        noLyricsObserver = AppSettings.shared.$notchCollapseLyricsWhenNoLyrics
+        AppSettings.shared.$notchCollapseLyricsWhenNoLyrics
             .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)
             .map { NoLyricsAutoHide.hides(enabled: $0, lacksLyrics: $1) }
             .removeDuplicates()
@@ -509,31 +493,36 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 lyricsCollapsedForNoLyrics = collapse
                 applyShowsLyrics()
             }
+        .store(in: &subscriptions)
 
         // 展开区的两个"要不要留高度"标志(没歌词时展开卡不该留一大片空白)。
         // 刻意订阅**曲目级**信号而不是"此刻有没有下一句"——理由见
         // NotchMetrics.expandedExtraHeight 的注释(后者会让最后一句唱完时卡片抽动)。
         // 同一个 willSet 坑同一个修法:存 sink 参数值。写入 @Published 即生效,窗口尺寸
         // 不用重算(窗口恒为最大形态,卡片高度是内容层的事)。
-        lyricPresenceObserver = PlaybackCoordinator.shared.$hasLyricsContent.sink { [weak self] has in
+        PlaybackCoordinator.shared.$hasLyricsContent.sink { [weak self] has in
             self?.expandedShowsLyricPreview = has
         }
-        durationObserver = PlaybackCoordinator.shared.$currentDurationMs.sink { [weak self] ms in
+        .store(in: &subscriptions)
+        PlaybackCoordinator.shared.$currentDurationMs.sink { [weak self] ms in
             self?.expandedShowsScrubber = (ms ?? 0) > 0
         }
+        .store(in: &subscriptions)
         // 「显示歌词」开关。同上:存 sink 参数值(@Published 是 willSet 时机,回读拿到旧值);
         // 只改卡片内容和高度,窗口尺寸不用重算(窗口恒为最大形态)。
-        showLyricsObserver = AppSettings.shared.$notchShowLyrics.removeDuplicates().sink { [weak self] show in
+        AppSettings.shared.$notchShowLyrics.removeDuplicates().sink { [weak self] show in
             guard let self else { return }
             showsLyricsSetting = show
             applyShowsLyrics()
         }
+        .store(in: &subscriptions)
         // 「暂停时缩到最小」开关。同一个 willSet 坑同一个修法:存 sink 参数值。写入
         // @Published 即生效——isCollapsed 是计算属性,靠这次 objectWillChange 让依赖它的
         // 视图重新读到新值,不需要额外重算几何(窗口恒为最大形态,收缩只是内容层的事)。
-        collapsesWhenPausedObserver = AppSettings.shared.$notchCollapsesWhenPaused.removeDuplicates().sink { [weak self] collapses in
+        AppSettings.shared.$notchCollapsesWhenPaused.removeDuplicates().sink { [weak self] collapses in
             self?.collapsesWhenPaused = collapses
         }
+        .store(in: &subscriptions)
         // 左右耳配置。**必须重算几何**:卡片宽度的下限是这两项的函数(见 minEarWidth),
         // 换一个模块就可能把卡片顶宽(配成控制键)或者放开(配成不显示)。漏了这两条订阅的表现是
         // "选了播放控制、三个键被裁掉半个,直到下次拖宽度才恢复"。
@@ -541,22 +530,26 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 两条都把 sink 的**参数值**显式传下去,不让下游回读 AppSettings:@Published 是
         // willSet 时机派发,此刻存储属性还是旧值(同一个坑见 NotchMirrorManager.start())。
         // 每次只有一只耳朵在变,另一只回读是安全的。
-        leftEarObserver = AppSettings.shared.$notchLeftEar.removeDuplicates().sink { [weak self] module in
+        AppSettings.shared.$notchLeftEar.removeDuplicates().sink { [weak self] module in
             self?.recomputeGeometry(animate: false, leftEar: module)
         }
-        rightEarObserver = AppSettings.shared.$notchRightEar.removeDuplicates().sink { [weak self] module in
+        .store(in: &subscriptions)
+        AppSettings.shared.$notchRightEar.removeDuplicates().sink { [weak self] module in
             self?.recomputeGeometry(animate: false, rightEar: module)
         }
+        .store(in: &subscriptions)
         // 音浪开关/贴哪只耳朵:同一个 willSet 坑同一个修法——存 sink 参数值、
         // 并且必须重算几何(下限公式 minEarWidth 依赖这两个值,见那边的注释)。
-        showsEqualizerObserver = AppSettings.shared.$notchShowsEqualizer.removeDuplicates().sink { [weak self] shows in
+        AppSettings.shared.$notchShowsEqualizer.removeDuplicates().sink { [weak self] shows in
             self?.showsEqualizer = shows
             self?.recomputeGeometry(animate: false, showsEqualizer: shows)
         }
-        equalizerEarObserver = AppSettings.shared.$notchEqualizerEar.removeDuplicates().sink { [weak self] ear in
+        .store(in: &subscriptions)
+        AppSettings.shared.$notchEqualizerEar.removeDuplicates().sink { [weak self] ear in
             self?.equalizerEar = ear
             self?.recomputeGeometry(animate: false, equalizerEar: ear)
         }
+        .store(in: &subscriptions)
 
         // 展开态那一组:同一个 willSet 坑同一个修法——存 sink 参数值、并且
         // 必须重算几何(展开区高度公式 expandedExtraHeight 依赖这几个值,见那边的注释)。
@@ -569,7 +562,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 「下一句歌词预览」最终画不画 = 用户开关 && 没被歌词行「副行」顶掉(副行选「下一句」
         // 时展开区再画一行同一句是重复)。判据只有 Core 那一份 `LyricSecondaryLine.expandedNextLinePreviewVisible`,
         // 设置页替身 `NotchPreviewChrome` 调的也是它;两个输入任一变化都要重算展开区高度上限。
-        expandedShowsNextLineObserver = Publishers.CombineLatest(
+        Publishers.CombineLatest(
             AppSettings.shared.$notchExpandedShowsNextLine, AppSettings.shared.$notchSecondaryLine
         )
         .map { LyricSecondaryLine.expandedNextLinePreviewVisible(userToggle: $0, secondary: $1) }
@@ -578,50 +571,86 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             self?.expandedShowsNextLine = shows
             self?.recomputeGeometry(animate: false, expandedShowsNextLine: shows)
         }
-        expandedShowsControlsObserver = AppSettings.shared.$notchExpandedShowsControls.removeDuplicates().sink { [weak self] shows in
+        .store(in: &subscriptions)
+        AppSettings.shared.$notchExpandedShowsControls.removeDuplicates().sink { [weak self] shows in
             self?.expandedShowsControls = shows
             self?.recomputeGeometry(animate: false, expandedShowsControls: shows)
         }
-        expandedTrackInfoShowsArtworkObserver = AppSettings.shared.$notchExpandedShowsArtwork.removeDuplicates().sink { [weak self] shows in
+        .store(in: &subscriptions)
+        AppSettings.shared.$notchExpandedShowsArtwork.removeDuplicates().sink { [weak self] shows in
             self?.expandedTrackInfoShowsArtwork = shows
             self?.recomputeGeometry(animate: false, expandedTrackInfoShowsArtwork: shows)
         }
-        expandedTrackInfoShowsTitleObserver = AppSettings.shared.$notchExpandedShowsTrackTitle.removeDuplicates().sink { [weak self] shows in
+        .store(in: &subscriptions)
+        AppSettings.shared.$notchExpandedShowsTrackTitle.removeDuplicates().sink { [weak self] shows in
             self?.expandedTrackInfoShowsTitle = shows
             self?.recomputeGeometry(animate: false, expandedTrackInfoShowsTitle: shows)
         }
-        expandedTrackInfoShowsArtistObserver = AppSettings.shared.$notchExpandedShowsArtist.removeDuplicates().sink { [weak self] shows in
+        .store(in: &subscriptions)
+        AppSettings.shared.$notchExpandedShowsArtist.removeDuplicates().sink { [weak self] shows in
             self?.expandedTrackInfoShowsArtist = shows
             self?.recomputeGeometry(animate: false, expandedTrackInfoShowsArtist: shows)
         }
-        expandedTrackInfoShowsAlbumObserver = AppSettings.shared.$notchExpandedShowsAlbum.removeDuplicates().sink { [weak self] shows in
+        .store(in: &subscriptions)
+        AppSettings.shared.$notchExpandedShowsAlbum.removeDuplicates().sink { [weak self] shows in
             self?.expandedTrackInfoShowsAlbum = shows
             self?.recomputeGeometry(animate: false, expandedTrackInfoShowsAlbum: shows)
         }
-        expandedShowsQuickActionsObserver = AppSettings.shared.$notchExpandedShowsQuickActions.removeDuplicates().sink { [weak self] shows in
+        .store(in: &subscriptions)
+        AppSettings.shared.$notchExpandedShowsQuickActions.removeDuplicates().sink { [weak self] shows in
             self?.expandedShowsQuickActions = shows
             self?.recomputeGeometry(animate: false, expandedShowsQuickActions: shows)
         }
+        .store(in: &subscriptions)
         // 歌词行高度:设定值、字号、副行三项合成实际高度(设定值夹到装得下当前文字为止)。窗口高度跟着它,
         // 必须重算几何;三个值都取 sink 参数(同一个 willSet 坑),先写镜像,recomputeGeometry 再读镜像。
-        lyricRowHeightObserver = Publishers.CombineLatest3(
+        // 副行同时决定展开区留不留「下一句」那一行,也按 sink 参数传进去:不传的话 recomputeGeometry 回退去读
+        // AppSettings 里还没改完的旧副行。
+        Publishers.CombineLatest3(
             AppSettings.shared.$notchLyricRowHeight, AppSettings.shared.$notchFontSize, AppSettings.shared.$notchSecondaryLine
         )
         .map { setting, fontSize, secondary in
-            NotchLyricRowMetrics.effectiveRowHeight(
-                setting: CGFloat(setting), fontSize: CGFloat(fontSize), twoLines: secondary.showsSecondaryRow)
+            (height: NotchLyricRowMetrics.effectiveRowHeight(
+                setting: CGFloat(setting), fontSize: CGFloat(fontSize), twoLines: secondary.showsSecondaryRow),
+             secondary: secondary)
         }
-        .removeDuplicates()
-        .sink { [weak self] height in
+        .removeDuplicates { $0.height == $1.height }
+        .sink { [weak self] row in
             guard let self else { return }
-            if self.lyricRowHeight != height { self.lyricRowHeight = height }
-            self.recomputeGeometry(animate: false)
+            if self.lyricRowHeight != row.height { self.lyricRowHeight = row.height }
+            self.recomputeGeometry(animate: false, expandedShowsNextLine: LyricSecondaryLine.expandedNextLinePreviewVisible(
+                userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: row.secondary))
         }
-        editorialDemandObserver = $isVisible
+        .store(in: &subscriptions)
+        $isVisible
             .combineLatest($expandedTrackInfoShowsAlbum, $expandedTrackInfoShowsArtist, $expandedTrackInfoShowsTitle)
             .map { visible, album, artist, title in visible && (album || artist || title) }
             .removeDuplicates()
             .sink { [weak self] wants in self?.setEditorialDemand(wants) }
+        .store(in: &subscriptions)
+
+        // 两个自动隐藏开关、一对宽度:每个实例(主实例与镜像副本)自己订阅,设置的写入口只写 AppSettings、不碰控制器。
+        // 值取 sink 参数(willSet 时机回读 AppSettings 是旧值);开窗那一刻的同步在 setVisible / syncStateFromSettings。
+        Publishers.CombineLatest4(
+            AppSettings.shared.$notchHideWhenNotPlaying, AppSettings.shared.$notchHideDuringScreenCapture,
+            AppSettings.shared.$notchContentWidth, AppSettings.shared.$notchExpandedContentWidth
+        )
+        .dropFirst()
+        .sink { [weak self] hide, captureHidden, width, expandedWidth in
+            self?.applyBehaviorSettings(hide: hide, captureHidden: captureHidden,
+                                        contentWidth: CGFloat(width), expandedContentWidth: CGFloat(expandedWidth))
+        }
+        .store(in: &subscriptions)
+        // 主实例贴哪块屏(副本钉死在自己那块屏上,不看它)。目标屏由 resolvedScreen 现读设置,willSet 里读到的是旧值,
+        // 所以放到主队列下一拍再算。
+        if pinnedScreenID == nil {
+            AppSettings.shared.$notchScreenID
+                .dropFirst()
+                .removeDuplicates()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in self?.applyScreenSetting() }
+                .store(in: &subscriptions)
+        }
 
         // 宽度固定,recomputeGeometry 的结果跟 currentLine 没有关系,不需要额外订阅 currentLine 来触发重算。
     }
@@ -650,15 +679,13 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 卡片此刻在屏幕上的矩形:卡片从窗口顶边垂下来、水平居中。
     private var cardScreenFrame: NSRect? {
         guard let window else { return nil }
-        let width = isExpanded ? expandedCardWidth : steadyCardWidth
-        return NSRect(x: window.frame.midX - width / 2, y: window.frame.maxY - cardHeight,
-                      width: width, height: cardHeight)
+        return NSRect(x: window.frame.midX - cardWidth / 2, y: window.frame.maxY - cardHeight,
+                      width: cardWidth, height: cardHeight)
     }
 
     /// 灵动岛开着且头部画歌名、歌手名或专辑名时,向 `EditorialNotesStore` 登记要预取(入口只在有简介时可点,
     /// 得提前知道)。
     private var holdsEditorialDemand = false
-    private var editorialDemandObserver: AnyCancellable?
 
     private func setEditorialDemand(_ wants: Bool) {
         guard wants != holdsEditorialDemand else { return }
@@ -818,16 +845,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         }
         let next = hoverExpanded || alertHold || milestoneHold
         let opening = next && !isExpanded
+        // 回读播放模式、「喜欢」只在指针悬停展开时做:提醒、报喜撑开卡片时那几颗键被盖着,而且每块屏的副本会同时撑开。
+        let hoverOpening = opening && hoverExpanded && !alertHold && !milestoneHold
         if next != isExpanded { isExpanded = next }
         // 展开区的随机 / 循环键(只给随机、循环此刻都能切的播放器)跟播放器对一次表:用户可能在那边自己改过模式,
         // 没有事件通知得到。只在两颗键会出现时读,别的播放器不为这次悬停起脚本子进程。
-        if opening, expandedShowsControls,
+        if hoverOpening, expandedShowsControls,
            PlaybackCoordinator.shared.playbackModeOptions.contains(.shuffle),
            PlaybackCoordinator.shared.playbackModeOptions.canRepeat {
             PlaybackCoordinator.shared.refreshPlaybackMode()
         }
         // 头部那颗「喜欢」同理:用户可能在播放器里自己点过。没有「喜欢」的播放器 refreshFavorited 不起子进程。
-        if opening, expandedShowsQuickActions, !isAdBreakNow {
+        if hoverOpening, expandedShowsQuickActions, !isAdBreakNow {
             PlaybackCoordinator.shared.refreshFavorited()
         }
         if next {
@@ -858,7 +887,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         refreshExpanded()
     }
 
-    /// 换歌翻牌的「掉歌名」(`trackDropObserver` 去抖后调):换了一首(判法见 `NotchTrackDropTracker`:不是这个实例看到的
+    /// 换歌翻牌的「掉歌名」(init 里换歌翻牌那条订阅去抖后调):换了一首(判法见 `NotchTrackDropTracker`:不是这个实例看到的
     /// 第一首、不是广告,声音还没走起来时先不判),「换歌时显示歌名」开着,卡片此刻放得下(`trackDropFits`),就判成要掉。
     /// 什么时候真掉由 `NotchTrackRevealGate` 定:这首的封面到了才揭晓,歌名掉下来和耳朵里的封面翻过来同一拍,
     /// 封面最多等 `NotchTrackRevealGate.artworkWait`;判成不掉当场揭晓。
@@ -957,7 +986,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             rate: anchor?.rate ?? 0)
     }
 
-    /// 歌词行出现了要显示的一句(`lyricsLineObserver`):开着歌词行、歌名条正盖在上面就收掉。揭晓时已按第一句的时间算好
+    /// 歌词行出现了要显示的一句(init 里 `$notchLyrics` 那条订阅):开着歌词行、歌名条正盖在上面就收掉。揭晓时已按第一句的时间算好
     /// 停多久,这里接住算不准的情形:歌词晚到、拖了进度(见 05 章决策 72)。
     private func lyricsLineAppeared() {
         guard showsLyrics, let shown = trackDrop else { return }
@@ -983,13 +1012,13 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         pendingDrop = nil
     }
 
-    /// 歌名或歌手变了(不去抖,见 `trackIdentityObserver`):这首的封面还没到,还在等的那次判定作废。
+    /// 歌名或歌手变了(不去抖,见 init 里 `$title` / `$artist` 那条订阅):这首的封面还没到,还在等的那次判定作废。
     private func trackIdentityChanged() {
         revealGate.trackChanged()
         stopRevealWait()
     }
 
-    /// 封面到了(见 `artworkArrivalObserver`):正等着封面的那次判定这一拍揭晓。
+    /// 封面到了(见 init 里封面到货那条订阅):正等着封面的那次判定这一拍揭晓。
     private func artworkArrived() {
         guard let reveal = revealGate.artworkArrived() else { return }
         applyReveal(reveal)
@@ -1019,16 +1048,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
     }
 
-    // 设置里"灵动岛宽度"滑块调用——跟经典悬浮窗的 setWidth(_:) 不是同一套实现:那个
-    // 需要"保持窗口中心点不变"的增量调整,因为经典悬浮窗的位置是用户拖拽/持久化的,直接
-    // 重设宽度容易把窗口推出屏幕外。灵动岛完全不是这么回事:它的位置从来不是持久化的,
-    // 每次都是 recomputeGeometry 里用当前屏幕的 geo.centerX 重新居中算出来的,所以这里
-    // 直接把完整的几何计算(位置+尺寸)重新走一遍就行,不用另外单独维护一份"保持居中"
-    // 的增量逻辑。
-    func applyContentWidthSetting() {
-        // animate: false —— 平滑过渡现在由卡片那条弹簧负责(窗口只是个更大的透明容器,
-        // 它自己怎么变没人看得见)。让 NSWindow 也动画反而会跟卡片的弹簧打架。
-        recomputeGeometry(animate: false)
+    /// 自动隐藏两个开关、一对宽度变了(init 里那条订阅,参数是 sink 收到的新值)。宽度变化把几何整个重算一遍:灵动岛的
+    /// 位置从不持久化,每次都按当前屏幕居中算。`animate: false`:平滑过渡由卡片那条弹簧负责,NSWindow 再动画会跟它打架。
+    private func applyBehaviorSettings(hide: Bool, captureHidden: Bool, contentWidth: CGFloat, expandedContentWidth: CGFloat) {
+        if hideWhenNotPlaying != hide { hideWhenNotPlaying = hide }
+        let sharing: NSWindow.SharingType = captureHidden ? .none : .readWrite
+        if window?.sharingType != sharing { window?.sharingType = sharing }
+        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
+        recomputeGeometry(animate: false, contentWidth: contentWidth, expandedContentWidth: expandedContentWidth)
     }
 
     /// 上一次实际执行的显隐动作,updateActualVisibility 的判等守卫用。nil = 还没执行过。
@@ -1239,13 +1266,13 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         return ScreenIdentity.notched ?? NSScreen.screens.first
     }
 
-    // 设置页改完"显示于"后调这个立刻生效(跟 applyContentWidthSetting 同一个模式)。
-    func applyScreenSetting() {
+    /// 主实例的 `notchScreenID` 变了(init 里那条订阅,主队列下一拍):挪到新屏,按新屏重判全屏遮挡。
+    private func applyScreenSetting() {
         recomputeGeometry(animate: false)
         refreshFullScreenCover()
     }
 
-    /// 窗口换了屏(设置里改屏幕、插拔显示器)时按现值重判一次;开关或全屏表变化走 `fullScreenObserver`。
+    /// 窗口换了屏(设置里改屏幕、插拔显示器)时按现值重判一次;开关或全屏表变化走 init 里全屏那条订阅。
     /// 这几个时机开关不在变化中,读存储值是稳定的。
     private func refreshFullScreenCover() {
         applyFullScreenCover(enabled: AppSettings.shared.notchHideInFullScreen,
@@ -1276,31 +1303,20 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         return Self.targetScreen()
     }
 
-    /// 把当前偏好重新应用一遍。副本没有自己的设置入口(设置页那些控件只调 `.shared`),
-    /// 所以偏好变化时由 NotchMirrorManager 挨个调这个方法把它们同步过来。
+    /// 副本建出来、或「灵动岛歌词」总开关翻转时,由 NotchMirrorManager 调:按当前偏好整体同步一遍。之后自动隐藏、宽度的变化
+    /// 由每个实例自己的订阅接着(init)。
     ///
-    /// 三个参数是给**设置变化的 sink** 用的:@Published 在 willSet 时机发布,sink 里
-    /// 回读 AppSettings 存储属性拿到的是**旧值**(本文件 isPlayingObserver 处同款坑,表现是拖宽度滑杆时
-    /// 镜像恒滞后一档、隐藏开关同步到翻转前的状态)。触发源不在变化中的字段传 nil 回读即可(屏幕插拔/
-    /// 开关翻转这些时机,其余设置的存储值是稳定的)。各写入点判等,值没变不广播 objectWillChange。
-    func syncStateFromSettings(
-        notchEnabled: Bool? = nil,
-        hideWhenNotPlaying hide: Bool? = nil,
-        hideDuringCapture: Bool? = nil,
-        contentWidth: CGFloat? = nil,
-        expandedContentWidth: CGFloat? = nil
-    ) {
+    /// `notchEnabled` 是给总开关那条 sink 用的:@Published 在 willSet 时机发布,sink 里回读 AppSettings 拿到的是**旧值**。
+    /// 屏幕插拔这类时机传 nil 回读即可。各写入点判等,值没变不广播 objectWillChange。
+    func syncStateFromSettings(notchEnabled: Bool? = nil) {
         let settings = AppSettings.shared
         let visible = notchEnabled ?? settings.notchOverlayEnabled
         if isVisible != visible { isVisible = visible }
-        let hideValue = hide ?? settings.notchHideWhenNotPlaying
-        if hideWhenNotPlaying != hideValue { hideWhenNotPlaying = hideValue }
-        let captureHidden = hideDuringCapture ?? settings.notchHideDuringScreenCapture
-        let sharing: NSWindow.SharingType = captureHidden ? .none : .readWrite
+        if hideWhenNotPlaying != settings.notchHideWhenNotPlaying { hideWhenNotPlaying = settings.notchHideWhenNotPlaying }
+        let sharing: NSWindow.SharingType = settings.notchHideDuringScreenCapture ? .none : .readWrite
         if window?.sharingType != sharing { window?.sharingType = sharing }
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
-        recomputeGeometry(animate: false, contentWidth: contentWidth,
-                          expandedContentWidth: expandedContentWidth)
+        recomputeGeometry(animate: false)
         refreshFullScreenCover()
     }
 
@@ -1318,67 +1334,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         cancelPendingHide()
         window?.orderOut(nil)
         releaseCardCursor()
-        isPlayingObserver?.cancel()
-        isPlayingObserver = nil
-        adBreakObserver?.cancel()
-        adBreakObserver = nil
-        lyricPresenceObserver?.cancel()
-        lyricPresenceObserver = nil
-        durationObserver?.cancel()
-        durationObserver = nil
-        showLyricsObserver?.cancel()
-        showLyricsObserver = nil
-        leftEarObserver?.cancel()
-        leftEarObserver = nil
-        rightEarObserver?.cancel()
-        rightEarObserver = nil
-        showsEqualizerObserver?.cancel()
-        showsEqualizerObserver = nil
-        equalizerEarObserver?.cancel()
-        equalizerEarObserver = nil
-        collapsesWhenPausedObserver?.cancel()
-        collapsesWhenPausedObserver = nil
-        expandedShowsNextLineObserver?.cancel()
-        expandedShowsNextLineObserver = nil
-        expandedShowsControlsObserver?.cancel()
-        expandedShowsControlsObserver = nil
-        expandedTrackInfoShowsArtworkObserver?.cancel()
-        expandedTrackInfoShowsArtworkObserver = nil
-        expandedTrackInfoShowsTitleObserver?.cancel()
-        expandedTrackInfoShowsTitleObserver = nil
-        expandedTrackInfoShowsArtistObserver?.cancel()
-        expandedTrackInfoShowsArtistObserver = nil
-        expandedTrackInfoShowsAlbumObserver?.cancel()
-        expandedTrackInfoShowsAlbumObserver = nil
-        editorialDemandObserver?.cancel()
-        editorialDemandObserver = nil
+        subscriptions.removeAll()
         setEditorialDemand(false)
         NotchEditorialPanel.shared.close(ifOwner: window)
-        expandedShowsQuickActionsObserver?.cancel()
-        expandedShowsQuickActionsObserver = nil
-        lyricRowHeightObserver?.cancel()
-        lyricRowHeightObserver = nil
-        trackPresenceObserver?.cancel()
-        trackPresenceObserver = nil
-        milestoneObserver?.cancel()
-        milestoneObserver = nil
-        trackDropObserver?.cancel()
-        trackDropObserver = nil
-        trackIdentityObserver?.cancel()
-        trackIdentityObserver = nil
-        artworkArrivalObserver?.cancel()
-        artworkArrivalObserver = nil
-        lyricsLineObserver?.cancel()
-        lyricsLineObserver = nil
         revealGate.cancel()
         stopRevealWait()
         clearTrackDrop()
-        unknownPlayerAlertObserver?.cancel()
-        unknownPlayerAlertObserver = nil
-        fullScreenObserver?.cancel()
-        fullScreenObserver = nil
-        noLyricsObserver?.cancel()
-        noLyricsObserver = nil
         if let screenParamsObserver {
             NotificationCenter.default.removeObserver(screenParamsObserver)
             self.screenParamsObserver = nil
@@ -1453,7 +1414,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         //
         // 窗口跟卡片严丝合缝,所以卡片不带投影:阴影会被窗口的矩形边界硬裁,在底部两个圆角外侧留下
         // 直角残影。**要加投影就得同时给窗口加一圈余量**,两件事绑在一起,别只做一半。
-        // 收听里程碑的报喜卡片(顶行 + milestonePanelHeight)在展开区很矮的配置下可能比展开态还高,取两者大的。
+        // 收听里程碑的报喜卡片(顶行 + milestonePanelHeight)加上它下沿落出去的碎屑(`milestoneConfettiReach`)在展开区很矮的配置下
+        // 可能比展开态还高,取两者大的;多出来的是透明区,点击穿透。
         let size = NSSize(
             width: expandedCardWidth,
             height: max(geo.notchHeight + lyricRowHeight + self.expandedExtraHeight(
@@ -1464,7 +1426,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 expandedTrackInfoShowsArtist: expandedTrackInfoShowsArtist,
                 expandedTrackInfoShowsAlbum: expandedTrackInfoShowsAlbum,
                 expandedShowsQuickActions: expandedShowsQuickActions),
-                        geo.notchHeight + NotchMetrics.milestonePanelHeight))
+                        geo.notchHeight + NotchMetrics.milestonePanelHeight + NotchMetrics.milestoneConfettiReach))
         // 必须先取成整点,规则跟 AppKit 自己对窗口 frame 做的一致(实测:原点向下取整、宽高
         // 向上取整)。刘海高度 `safeAreaInsets.top` 在部分机型 / 缩放档下带小数(如 33.5),
         // 不取整的话:① 下面的判等永远不等(window.frame 已被取整),每次调用都白做一次同步

@@ -444,7 +444,7 @@ struct PanelQuickSettings: View {
             notchWidthRow
             // 「显示歌词」(搬进这块面板)。绑定直接写 AppSettings 就够,
             // 不用像宽度那样再喊一次控制器:`NotchLyricsWindowController` 自己订阅着
-            // `$notchShowLyrics`(见那边的 showLyricsObserver),值一变卡片就重排。
+            // `$notchShowLyrics`(见那边 init 里那条订阅),值一变卡片就重排。
             //
             // 位置刻意紧挨着下面的「对齐方式」,跟设置页同序:那两项都是"歌词行自己的事",
             // 而上面的风格/宽度说的是整张卡。

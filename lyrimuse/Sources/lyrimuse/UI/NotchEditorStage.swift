@@ -238,7 +238,7 @@ struct NotchEditorStage: View {
     /// 这是**性能必需**,不是锦上添花 —— 同 OverlayEditorStage.draggingWidth 那条(用户
     /// 报过"拖动这个宽度条的时候卡顿,不流畅")。直接写 `settings.notchContentWidth` 的话,
     /// 每一格都要 ①`@Published` 广播一遍(整页 + 菜单栏快捷面板 + 真灵动岛窗口跟着重渲染)、
-    /// ②写一次 UserDefaults、③`applyContentWidthSetting()` 走一遍全量几何 + NSWindow.setFrame。
+    /// ②写一次 UserDefaults、③真窗口重算一遍全量几何 + NSWindow.setFrame。
     /// 而编辑台里跑的是**真** NotchLyricsView(跑马灯、逐字填色、封面模糊背景都在里面)。
     ///
     /// 现在拖动中只动这两个 @State:只有编辑台自己重画,不写盘、不广播全局、不碰真窗口;
@@ -289,7 +289,7 @@ struct NotchEditorStage: View {
     ///
     /// 现算的前提是调用点会跟着耳朵配置重新求值:编辑台和菜单栏快捷面板都 `@ObservedObject`
     /// 了 `AppSettings`,改模块会重画;真窗口那一侧靠
-    /// `NotchLyricsWindowController` 的 `leftEarObserver` / `rightEarObserver`。
+    /// `NotchLyricsWindowController` 里订阅 `$notchLeftEar` / `$notchRightEar` 的那两条。
     ///
     /// 三条护栏一条都不能少:
     ///   ① 下界**向上**取整到 `widthStep` 的倍数。否则 `snap` 的"先夹后量化"可能把值量化到
@@ -348,26 +348,19 @@ struct NotchEditorStage: View {
     ///      第一次派发时另一个值还是旧的 —— 先抬展开再抬稳态,中间那一帧仍满足不变量(读侧还有
     ///      一层 max 兜着,这里只是不制造一帧"展开 < 稳态"的落盘状态)。相等守卫一个都不能少:
     ///      `@Published` 等值赋值照样广播 objectWillChange,didSet 还会多写一次 UserDefaults。
-    ///   ③ 带 `notchOverlayEnabled` 守卫再通知真窗口:`NotchLyricsWindowController.shared` 是
-    ///      `static let`,读一下就建整扇窗,灵动岛关着的用户碰一下滑杆不该凭空多一套(守卫跳过
-    ///      之后由 `setVisible(_:)` 的 visible 分支在重新打开时补一次 recomputeGeometry)。
+    ///   ③ 只写设置:每个灵动岛实例自己订阅这一对宽度(`NotchLyricsWindowController` init),这里不碰它的 `.shared`。
     /// 传 nil 的那个值原样保留(只归一,不改)。
     static func commitWidths(steady: Double? = nil, expanded: Double? = nil) {
         let settings = AppSettings.shared
         let next = NotchWidthBounds.normalized(
             steady: steady ?? settings.notchContentWidth,
             expanded: expanded ?? settings.notchExpandedContentWidth)
-        var changed = false
         if next.expanded != settings.notchExpandedContentWidth {
             settings.notchExpandedContentWidth = next.expanded
-            changed = true
         }
         if next.steady != settings.notchContentWidth {
             settings.notchContentWidth = next.steady
-            changed = true
         }
-        guard changed, settings.notchOverlayEnabled else { return }
-        NotchLyricsWindowController.shared.applyContentWidthSetting()
     }
 
     /// 宽度调整条的步长(pt)。
@@ -1655,15 +1648,6 @@ enum NotchStyleDefaults {
         settings.notchHideInFullScreen = AppSettings.defaultNotchHideInFullScreen
         settings.notchListenMilestones = AppSettings.defaultNotchListenMilestones
         settings.notchShowsTrackDrop = AppSettings.defaultNotchShowsTrackDrop
-        // 屏幕和两个自动隐藏开关,主实例不订阅(只有设置行 / 「屏幕」浮层那几处会调过去,镜像副本才订阅),
-        // 只写设置的话主灵动岛停在旧屏、照旧按旧开关隐藏,副本却按新值变了。跟那几处同一个守卫:
-        // 灵动岛关着就别碰 `.shared`(读一下就会建窗口),再打开时 setVisible 会按设置补齐。
-        if settings.notchOverlayEnabled {
-            let controller = NotchLyricsWindowController.shared
-            controller.setHiddenFromCapture(settings.notchHideDuringScreenCapture)
-            controller.setHideWhenNotPlaying(settings.notchHideWhenNotPlaying)
-            controller.applyScreenSetting()
-        }
     }
 }
 
@@ -1858,8 +1842,7 @@ struct NotchScreenSettingsRows: View {
         }
     }
 
-    /// `if settings.notchOverlayEnabled` 守卫不能省 —— 理由同
-    /// `NotchEditorStage.commitWidths` 那条(`.shared` 是 `static let`,读一下就建整扇窗)。
+    /// 只写设置:主灵动岛自己订阅 `notchScreenID`(`NotchLyricsWindowController` init),这里不碰它的 `.shared`。
     private func apply(_ tag: String) {
         let allScreens = (tag == Self.allScreensTag)
         var changed = false
@@ -1873,9 +1856,6 @@ struct NotchScreenSettingsRows: View {
             changed = true
         }
         guard changed else { return }
-        if settings.notchOverlayEnabled {
-            NotchLyricsWindowController.shared.applyScreenSetting()
-        }
         onScreenChange()
     }
 }

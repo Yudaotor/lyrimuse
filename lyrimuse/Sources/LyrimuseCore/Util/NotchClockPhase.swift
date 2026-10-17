@@ -2,7 +2,8 @@ import Foundation
 
 /// 灵动岛时间类模块(耳朵里的「已播放 / 剩余」、广告倒计时)那条秒表的节拍。
 ///
-/// 相位对齐到**曲目位置正好走到整秒**的那个墙钟时刻,步长按倍速取 `1/rate`。不能钉在墙钟整秒上:
+/// 相位对齐到**显示的秒数正好要变**的那个墙钟时刻,步长按倍速取 `1/rate`。正计时(已播放)变在位置的整秒上;
+/// 倒计时(剩余、广告还剩)显示 `(总长 − 位置) / 1000` 向下取整,变在位置 ≡ 总长 (mod 1000) 上,调用方传 `countdownFromMs`。不能钉在墙钟整秒上:
 /// 曲目位置的整秒边界跟墙钟整秒之间差一个由锚点定死的常量相位,钉墙钟的话耳朵里的时间可能整首歌都比
 /// 正下方那条迷你进度条(30Hz,同一份 `mmss`)慢 1 秒。
 ///
@@ -22,13 +23,20 @@ public enum NotchClockPhase {
     }
 
     /// 速率非正(暂停 / 未知)时位置不前进、相位无意义,钉在 `epoch` 上按 1 秒走。
-    public static func tick(for anchor: ProgressAnchor, epoch: Date) -> Tick {
+    public static func tick(for anchor: ProgressAnchor, epoch: Date, countdownFromMs total: Int? = nil) -> Tick {
         guard anchor.rate > 0 else { return Tick(start: epoch, interval: 1) }
         let ref = anchor.fetchedAt
         let posAtRef = Double(anchor.extrapolatedPositionMs(now: ref))
-        let msToBoundary = 1000 - posAtRef.truncatingRemainder(dividingBy: 1000)
+        let msToBoundary = 1000 - msSinceBoundary(positionMs: posAtRef, countdownFromMs: total)
         return Tick(start: ref.addingTimeInterval(msToBoundary / 1000 / anchor.rate),
                     interval: 1 / anchor.rate)
+    }
+
+    /// 位置走过上一个跳秒边界多少毫秒(0..<1000)。`countdownFromMs` 为 nil 是正计时,给总长是倒计时。
+    public static func msSinceBoundary(positionMs: Double, countdownFromMs total: Int?) -> Double {
+        let phase = Double((total ?? 0) % 1000)
+        let r = (positionMs - phase).truncatingRemainder(dividingBy: 1000)
+        return r < 0 ? r + 1000 : r
     }
 
     /// `m:ss`,负数按 0。耳朵、广告倒计时、迷你进度条的时间行共用这一份。

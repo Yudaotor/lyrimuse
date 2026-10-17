@@ -1192,7 +1192,7 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(notchHideWhenNotPlaying, forKey: Keys.notchHideWhenNotPlaying) }
     }
     /// 灵动岛所在屏幕的当前 Space 是全屏 App 时收起歌词行(无刘海屏整卡隐藏)。只管灵动岛;生效不经设置页调控制器,
-    /// 每个灵动岛实例(含镜像副本)自己订阅这个值(`NotchLyricsWindowController.fullScreenObserver`)。
+    /// 每个灵动岛实例(含镜像副本)自己订阅这个值(`NotchLyricsWindowController` init 里那条订阅)。
     @Published var notchHideInFullScreen: Bool {
         didSet { defaults.set(notchHideInFullScreen, forKey: Keys.notchHideInFullScreen) }
     }
@@ -1865,19 +1865,16 @@ final class AppSettings: ObservableObject {
     @Published var overlayWidth: Double {
         didSet { defaults.set(overlayWidth, forKey: Keys.overlayWidth) }
     }
-    // 灵动岛歌词的固定宽度(pt)——同一个模式:只在 didSet 里持久化,不在这个 model 层
-    // 直接碰 NSWindow,实时应用交给 SettingsView 的 Binding.set 显式调
-    // NotchLyricsWindowController.shared.applyContentWidthSetting()。灵动岛宽度不跟着
-    // 歌词内容变化,保持固定。
+    // 灵动岛歌词的固定宽度(pt):只在 didSet 里持久化,不在这个 model 层碰 NSWindow;每个灵动岛实例自己订阅它
+    // (`NotchLyricsWindowController` init)。灵动岛宽度不跟着歌词内容变化,保持固定。
     @Published var notchContentWidth: Double {
         didSet { defaults.set(notchContentWidth, forKey: Keys.notchContentWidth) }
     }
     // 灵动岛 hover 展开后卡片撑到的宽度(pt)。跟 `notchContentWidth` 是一对:那个是
     // 稳态(下限),这个是展开态(上限),不变量「展开 ≥ 稳态」由 `NotchWidthBounds` 在读写两侧
     // 兜住 —— 这里**不**在 didSet 里互相夹(@Published 的 willSet 时机回读另一个值是旧值,夹出来
-    // 的结果不可信;而且两个值一起写时先后顺序会互相打架)。默认跟稳态默认同为 360:老用户
-    // hover 时一个像素都不多长。同一个模式:只持久化,实时应用由写入口显式调
-    // NotchLyricsWindowController.shared.applyContentWidthSetting()。
+    // 的结果不可信;而且两个值一起写时先后顺序会互相打架)。同一个模式:只持久化,
+    // 每个灵动岛实例自己订阅。
     @Published var notchExpandedContentWidth: Double {
         didSet { defaults.set(notchExpandedContentWidth, forKey: Keys.notchExpandedContentWidth) }
     }

@@ -2,21 +2,14 @@ import CoreGraphics
 
 /// 灵动岛 hover 展开区的高度算术。
 ///
-/// 为什么单独放在 LyrimuseCore 而不是跟 `NotchMetrics` 的其它常量待在一起:那个类型在
-/// App target 里(要用 SwiftUI 的东西),而 selftest 只依赖 LyrimuseCore。这几个数值是
-/// 核心契约(尤其"三样齐必须仍然等于 76"这条),值得被断言钉住,所以把**纯
-/// 算术**这一小块下沉过来。`NotchMetrics` 只是转发到这里 —— 只有一份实现,不存在两处漂移。
+/// 放在 LyrimuseCore 而不跟 `NotchMetrics` 的其它常量待在一起:那个类型在 App target 里(要用 SwiftUI),
+/// 而 selftest 只依赖 LyrimuseCore,这几个数值要被断言钉住。`NotchMetrics` 只转发到这里,只有一份实现。
 public enum NotchExpandedMetrics {
     /// 播放控制那一段:三键 22 + 底边距 10 + 3pt 余量。
     /// `alignment: .top` 下这一段不够高会直接把最下面那排三键裁掉。
     ///
-    /// **不再是"恒有"**(之前是):这排键从右耳搬进展开卡以来
-    /// 一直无条件显示,后来加了"控制键是否展示"这个开关,于是它从 `height(...)`
-    /// 里**永远加一次**的常量,变成第三个 `if 开关 { h += controlsBlock }` 分支——性质
-    /// 是**用户设置**,跟下一句预览/迷你进度条那两个"曲目级数据信号"不是一回事,更接近
-    /// `trackInfoHeight` 那一类(设置一变会触发 `NotchLyricsWindowController` 重算几何,
-    /// 不需要按"最坏情况"钉死,`maxHeight` 的 `hasControlsPossible` 直接传当前设置值
-    /// 而不是恒 true)。
+    /// 由用户开关 `notchExpandedShowsControls` 决定有没有(`height` 的 `hasControls`),跟下一句预览 / 迷你进度条那两个
+    /// 曲目级数据信号不是一类:设置一变控制器就重算几何,`maxHeight` 的 `hasControlsPossible` 直接传当前设置值。
     public static let controlsBlock: CGFloat = 35
     /// 下一句歌词预览:行高 13 + 间距 4。
     public static let lyricPreviewBlock: CGFloat = 17
@@ -25,13 +18,8 @@ public enum NotchExpandedMetrics {
 
     /// 展开区**此刻**该有多高 —— 按里面真正会渲染的东西算。
     ///
-    /// 现象是「没有歌词的时候这块太大、很多空的地方」。展开区原来恒高 76 且
-    /// `alignment: .top`,而三样内容里有两样是条件渲染的:下一句歌词预览(没歌词就没有)、
-    /// 迷你进度条(没时长就没有,见 NotchScrubber 的两个分支)。两样都缺时里面只剩一排三键,
-    /// 剩下 41pt 全是底部的空白 —— 正是对拍里那一大片。
-    ///
-    /// 三样齐 = 35+17+24 = 76,**跟改动前逐字相等**,所以有歌词有时长且播放控制键开着时
-    /// 布局一点没动。
+    /// 下一句歌词预览(没歌词就没有)、迷你进度条(没时长就没有,见 NotchScrubber 的两个分支)、播放控制三样按段累加;
+    /// 三样齐 = 35+17+24 = 76。
     ///
     /// `hasLyricPreview`/`hasScrubber` 两个入参刻意是**曲目级**信号(这首歌有没有歌词 /
     /// 有没有时长),不是"下一句此刻是不是空的"。用后者会让最后一句唱完时卡片突然矮 17pt、
@@ -149,21 +137,12 @@ public enum NotchExpandedMetrics {
     /// 设置页那条预览的容器也按它定高 —— 两处都不能跟着曲目内容变,否则窗口/整页会被
     /// 顶一下。
     ///
-    /// 40 → 72 → 76:展开区从「预览 + 进度条」加了一排完整三键(设计评审把
-    /// 控制从右耳挪进展开卡),按 预览13 + 间距4 + 进度条槽6+3+时间行11 + 间距4 + 三键22 +
-    /// 底边距10 累出来的;进度条布局槽后来钉成恒定 6pt(悬停变粗不再推邻居)多占了 3pt,
-    /// 一并加上余量——默认参数下这个函数返回值仍是 76,逐字延续那笔账。
+    /// 默认参数下返回 76(预览 13 + 间距 4 + 进度条槽 6+3 + 时间行 11 + 间距 4 + 三键 22 + 底边距 10 + 余量 3)。
     ///
-    /// 之前这是一个写死常量,因为两个输入(`hasLyricPreview`/`hasScrubber`)
-    /// 都是"每首歌都可能不一样、但不会主动触发重算窗口"的曲目级数据,只能按"两样都在"的
-    /// 最坏情况钉死,否则换到内容更多的歌时卡片会被窗口边界硬裁。
-    ///
-    /// 现在多了两个**用户设置**维度,处理方式不同:
-    ///   - `hasLyricPreviewPossible`(= `notchExpandedShowsNextLine` 这个开关):设置一变
-    ///     会触发 `NotchLyricsWindowController` 重算几何(见该文件的订阅),不存在"改完
-    ///     设置卡片却来不及长高"的风险,所以**不必**按最坏情况钉死——关掉之后窗口可以
-    ///     真的省下 `lyricPreviewBlock` 这 17pt。`hasScrubber` 没有对应的开关(进度条纯
-    ///     由曲目时长决定),所以仍然按"恒有"处理,不接受这里的参数。
+    /// 曲目级数据(`hasScrubber`:有没有时长)每首歌都可能不一样、却不会主动触发重算窗口,只能按"有"钉死,否则换到内容更多的歌时
+    /// 卡片会被窗口边界硬裁。用户设置维度一变控制器就重算几何,直接传当前值:
+    ///   - `hasLyricPreviewPossible`(= `notchExpandedShowsNextLine` 开关且没被副行顶掉):关掉之后窗口省下
+    ///     `lyricPreviewBlock` 这 17pt。
     ///   - `hasControlsPossible`(= `notchExpandedShowsControls` 这个开关):
     ///     同 `hasLyricPreviewPossible` 一个道理——设置驱动、设置一变就会重算,直接传
     ///     当前设置值即可,不用按"恒有"钉死。

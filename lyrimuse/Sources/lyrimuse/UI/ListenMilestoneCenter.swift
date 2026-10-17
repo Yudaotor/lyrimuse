@@ -8,7 +8,7 @@ import LyrimuseCore
 /// 算进去),累计用引擎每 15 秒落盘的总数(`overview.total`,+1 = 正在放的这一次)。没连 Last.fm 不报。
 /// 报不报还要过 `ListenMilestoneLedger` 那几道:一档只报一次、单曲每天最多两次、跨过太久的累计档不补。
 ///
-/// 只由灵动岛控制器订阅(`NotchLyricsWindowController.milestoneObserver`),灵动岛没开过就不会被建出来;
+/// 只由灵动岛控制器订阅(`NotchLyricsWindowController` init 里那条订阅),灵动岛没开过就不会被建出来;
 /// 自己不引用控制器的单例(一读就会建出窗口)。
 @MainActor
 final class ListenMilestoneCenter: ObservableObject {

@@ -34,7 +34,7 @@ final class YouTubeMusicAdSkipCenter: ObservableObject {
     private var adBreak = false
     private var title = ""
     private var autoSkipEnabled = false
-    private var notchDemand: Set<ObjectIdentifier> = []
+    private var notchDemand: Set<UUID> = []
 
     /// 正在轮询的是哪一条广告(按标题认)。nil = 没在轮询。
     private var gatedAdTitle: String?
@@ -68,7 +68,7 @@ final class YouTubeMusicAdSkipCenter: ObservableObject {
 
     /// 灵动岛窗口登记 / 撤销「我在广告态、要看门槛结果」。由视图按 `controller.isAdBreakNow` 驱动,
     /// 持有方销毁时撤销(`NotchPlayback.deinit`)。
-    func setNotchDemand(_ id: ObjectIdentifier, active: Bool) {
+    func setNotchDemand(_ id: UUID, active: Bool) {
         let changed = active ? notchDemand.insert(id).inserted : notchDemand.remove(id) != nil
         if changed { reconcile() }
     }

@@ -179,8 +179,12 @@ private final class NotchPlayback: ObservableObject {
     /// `$isCurrentTrackAdBreak` 订阅上**。`NotchPlayback` 在编辑台预览里照样订阅真的 `PlaybackCoordinator`,挂在订阅上
     /// 的话,设置页只要开着,那块编辑台预览就会替轮询登记需求、跟着真广告对用户的浏览器发 AppleScript。
     func syncAdSkipGate(adBreak: Bool) {
-        YouTubeMusicAdSkipCenter.shared.setNotchDemand(ObjectIdentifier(self), active: adBreak)
+        YouTubeMusicAdSkipCenter.shared.setNotchDemand(adSkipDemandID, active: adBreak)
     }
+
+    /// 向门槛轮询登记需求用的 id。不用 `ObjectIdentifier(self)`:deinit 里的注销是异步排队的,那之前新建的实例可能复用同一个地址,
+    /// 注销会把新实例的需求一起撤掉。
+    private let adSkipDemandID = UUID()
 
     /// 去按 YT Music 页面自己的「跳过广告」键。每种结果的横幅见 `YouTubeMusicAdSkipCenter.reportManualOutcome`;
     /// 同一时刻只跑一份由那边的 `skipInFlight` 管。
@@ -211,7 +215,7 @@ private final class NotchPlayback: ObservableObject {
     }
 
     deinit {
-        let id = ObjectIdentifier(self)
+        let id = adSkipDemandID
         Task { @MainActor in YouTubeMusicAdSkipCenter.shared.setNotchDemand(id, active: false) }
     }
 
@@ -573,6 +577,9 @@ enum NotchMetrics {
     static var idleExpandedPanelHeight: CGFloat { NotchExpandedMetrics.idlePanelHeight }
     /// 收听里程碑报喜面板(`NotchMilestonePanel`)的高度:报喜时卡片 = 顶行 + 这一块。窗口高度也按它兜底。
     static let milestonePanelHeight: CGFloat = 76
+    /// 报喜碎屑从卡片下沿往下落的距离;窗口在报喜卡片下面至少留出 `milestoneConfettiReach`(最远落点 + 最大一片的边长)。
+    static let milestoneConfettiDrop: ClosedRange<CGFloat> = 30...85
+    static var milestoneConfettiReach: CGFloat { milestoneConfettiDrop.upperBound + 6 }
     /// 换歌翻牌:关着歌词行时,卡片为掉出来的那条歌名多长的高度(`NotchTrackDropStrip`)。
     static let trackDropHeight: CGFloat = 26
 
@@ -805,6 +812,15 @@ extension NotchChromeSource {
     var cardOutline: NotchCardOutline {
         NotchCardOutline(notchHeight: contentTopInset, collapsedHeight: cardHeight(expanded: false),
                          expandedHeight: cardHeight(expanded: true), isExpanded: isExpanded)
+    }
+
+    /// 卡片当前宽度,全仓唯一一份公式:真窗口(NotchWindowRoot)画卡片、控制器算卡片在屏幕上的矩形(`cardScreenFrame`)都读它。
+    /// 收起态收到两只耳朵,展开态取展开宽。
+    var cardWidth: CGFloat {
+        if isCollapsed {
+            return min(steadyCardWidth, notchWidth + 2 * NotchMetrics.collapsedEarWidth + 20)
+        }
+        return isExpanded ? expandedCardWidth : steadyCardWidth
     }
 
     /// 卡片当前高度,全仓唯一一份公式:真窗口(NotchWindowRoot)和设置页编辑台(NotchEditorStage)都读它。两处各写一份必然漂,
@@ -1281,7 +1297,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             earControls(alignment: alignment)
         case .elapsed, .remaining:
             if let anchor = playback.anchor, surfaceVisible {
-                TimelineView(NotchTimeFormat.clockSchedule(for: anchor)) { _ in
+                TimelineView(NotchTimeFormat.clockSchedule(
+                    for: anchor, countdownFromMs: module == .remaining ? playback.currentDurationMs : nil)) { _ in
                     earText(clockText(module), module: module, alignment: alignment)
                 }
             } else {
@@ -1780,8 +1797,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             switch playback.adCountdown {
             case .own(let clock):
                 if active {
-                    TimelineView(.periodic(from: clock.capturedAt.addingTimeInterval(-Double(clock.positionMs % 1000) / 1000),
-                                           by: 1)) { _ in
+                    TimelineView(.periodic(from: clock.capturedAt.addingTimeInterval(-NotchClockPhase.msSinceBoundary(
+                        positionMs: Double(clock.positionMs), countdownFromMs: clock.durationMs) / 1000), by: 1)) { _ in
                         Text(adRemainingText(total: clock.durationMs, position: clock.positionMs(now: Date())))
                     }
                 } else {
@@ -1792,7 +1809,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             case .track:
                 if let total = playback.currentDurationMs, total > 0 {
                     if let anchor = playback.anchor, active {
-                        TimelineView(NotchTimeFormat.clockSchedule(for: anchor)) { _ in
+                        TimelineView(NotchTimeFormat.clockSchedule(for: anchor, countdownFromMs: total)) { _ in
                             Text(adRemainingText(total: total, position: anchor.extrapolatedPositionMs(now: Date())))
                         }
                     } else if let position = playback.anchor?.extrapolatedPositionMs(now: Date()) ?? playback.pausedPositionMs {
@@ -3203,8 +3220,9 @@ enum NotchTimeFormat {
 
     /// 时间类耳朵模块那条秒表的时刻表。相位算术在 Core(`NotchClockPhase.tick`,selftest 覆盖),
     /// 这里只把结果包成 SwiftUI 的 schedule。
-    static func clockSchedule(for anchor: ProgressAnchor) -> PeriodicTimelineSchedule {
-        let tick = NotchClockPhase.tick(for: anchor, epoch: clockEpoch)
+    /// 显示的是剩余(倒计时)时传 `countdownFromMs` = 总长,跳秒边界跟正计时不同(见 `NotchClockPhase`)。
+    static func clockSchedule(for anchor: ProgressAnchor, countdownFromMs: Int? = nil) -> PeriodicTimelineSchedule {
+        let tick = NotchClockPhase.tick(for: anchor, epoch: clockEpoch, countdownFromMs: countdownFromMs)
         return .periodic(from: tick.start, by: tick.interval)
     }
 
