@@ -29,6 +29,25 @@ struct SongVersionsSheet: View {
     @State private var busy = false
     /// 第几次重读。重读里有 await,开着面板时换了一首(深链)或拆分 / 合并之后又重读,慢的那次后回来不能盖掉新的。
     @State private var reloadGeneration = 0
+    /// 左边那列的宽度(存下来的那份;面板窄时实际画多宽见 `SongVersionsListWidth.shown`)。
+    @State private var listWidth: Double = SongVersionsSheet.storedListWidth
+    @State private var listDragStart: Double?
+
+    private static let listWidthKey = "np:songVersionsListWidth"
+
+    private static var storedListWidth: Double {
+        let value = UserDefaults.standard.double(forKey: listWidthKey)
+        return value > 0 ? SongVersionsListWidth.clamped(value) : SongVersionsListWidth.standard
+    }
+
+    /// 面板最窄多宽:左边那列加右边对照的下限,不小于 760。左列拖宽时面板跟着撑开,不用先去拖面板边。
+    private var minPanelWidth: CGFloat {
+        max(760, CGFloat(SongVersionsListWidth.clamped(listWidth) + SongVersionsListWidth.detailMinimum))
+    }
+
+    private func persistListWidth() {
+        UserDefaults.standard.set(listWidth, forKey: Self.listWidthKey)
+    }
 
     enum Relation: CaseIterable {
         case current, shared, own, split
@@ -85,20 +104,44 @@ struct SongVersionsSheet: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                HStack(spacing: 0) {
-                    versionList.frame(width: 270)
-                    Divider()
-                    ScrollView {
-                        detail
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(18)
+                GeometryReader { geometry in
+                    let shownListWidth = CGFloat(SongVersionsListWidth.shown(stored: listWidth,
+                                                                             panelWidth: Double(geometry.size.width)))
+                    HStack(spacing: 0) {
+                        versionList
+                            .frame(width: shownListWidth)
+                            // 拖柄同歌词管理侧栏那一条:拖动改宽度,双击回默认,松手记下。
+                            .overlay(alignment: .trailing) {
+                                LyricsManagerSidebarHandle(
+                                    onDrag: { dx in
+                                        if listDragStart == nil { listDragStart = Double(shownListWidth) }
+                                        guard let start = listDragStart else { return }
+                                        listWidth = SongVersionsListWidth.clamped(start + Double(dx))
+                                    },
+                                    onDragEnd: {
+                                        listDragStart = nil
+                                        persistListWidth()
+                                    },
+                                    onDoubleClick: {
+                                        listWidth = SongVersionsListWidth.standard
+                                        persistListWidth()
+                                    })
+                                .offset(x: 6)
+                            }
+                            .zIndex(1)
+                        Divider()
+                        ScrollView {
+                            detail
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(18)
+                        }
                     }
                 }
             }
         }
-        .frame(minWidth: 760, idealWidth: 900, maxWidth: .infinity,
+        .frame(minWidth: minPanelWidth, idealWidth: 900, maxWidth: .infinity,
                minHeight: 480, idealHeight: 620, maxHeight: .infinity)
-        .background(WindowResizeEnabler(minWidth: 760, minHeight: 480))
+        .background(WindowResizeEnabler(minWidth: minPanelWidth, minHeight: 480))
         // 拆开、恢复合并之后歌词管理会重读一遍(summariesGeneration 变),跟着重算;开着时链接换了一首(summary 变)也重算。
         .task(id: "\(summary.key)#\(store.summariesGeneration)") { await reload() }
         .onChange(of: "\(summary.key)#\(showEvidence)", initial: true) { _, _ in if showEvidence { evidenceExpanded = true } }

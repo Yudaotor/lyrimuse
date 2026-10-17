@@ -60,7 +60,7 @@ struct WindowResizeEnabler: NSViewRepresentable {
             }
         }
 
-        private func apply(to window: NSWindow) {
+        func apply(to window: NSWindow) {
             window.styleMask.insert(.resizable)
             guard minSize.width > 0, minSize.height > 0 else { return }
             window.contentMinSize = minSize
@@ -84,9 +84,8 @@ struct WindowResizeEnabler: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {
         guard let probe = nsView as? Probe else { return }
         probe.minSize = NSSize(width: minWidth, height: minHeight)
-        if let window = probe.window {
-            window.contentMinSize = probe.minSize
-        }
+        // 下限变大(同曲条目拖宽左栏)时窗口跟着撑开,同刚弹出时比下限小的那一支。
+        if let window = probe.window { probe.apply(to: window) }
     }
 }
 

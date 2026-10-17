@@ -82,3 +82,22 @@ public enum LyricsManagerSidebarWidth {
         return max(minimum, min(clamped(stored), room))
     }
 }
+
+/// 「同曲条目」面板左边那列条目的宽度:右缘拖柄拖、松手记下,双击回到 `standard`;面板窄时右边的对照至少留 `detailMinimum`。
+public enum SongVersionsListWidth {
+    public static let minimum = 240.0
+    public static let maximum = 600.0
+    public static let standard = 320.0
+    public static let detailMinimum = 440.0
+
+    /// 拖动中、存盘前夹进范围;不是有限数时回到 `standard`。
+    public static func clamped(_ width: Double) -> Double {
+        guard width.isFinite else { return standard }
+        return min(max(width, minimum), maximum)
+    }
+
+    /// 存下来的宽度在这么宽的面板里实际画多宽。
+    public static func shown(stored: Double, panelWidth: Double) -> Double {
+        max(minimum, min(clamped(stored), panelWidth - detailMinimum))
+    }
+}

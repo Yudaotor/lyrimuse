@@ -72,6 +72,14 @@ func runLyricsManagerTests() {
         expectEqual(W.shown(stored: 600, windowWidth: 1000, inset: 10), 510, "侧栏宽度: 窗口窄时给右边留出最小宽度")
         expectEqual(W.shown(stored: 600, windowWidth: 800, inset: 10), W.minimum, "侧栏宽度: 再窄也不小于下限")
 
+        typealias V = SongVersionsListWidth
+        expectEqual([V.clamped(100), V.clamped(900), V.clamped(.infinity)], [V.minimum, V.maximum, V.standard],
+                    "同曲条目列宽: 夹进上下限,坏值回到默认")
+        expectEqual(V.shown(stored: V.standard, panelWidth: 760), V.standard, "同曲条目列宽: 面板最小宽时默认宽照样放得下")
+        expectEqual(V.shown(stored: 500, panelWidth: 1200), 500, "同曲条目列宽: 面板够宽就照存的画")
+        expectEqual(V.shown(stored: 500, panelWidth: 800), 360, "同曲条目列宽: 面板窄时给右边对照留出最小宽度")
+        expectEqual(V.shown(stored: 500, panelWidth: 600), V.minimum, "同曲条目列宽: 再窄也不小于下限")
+
         typealias Q = LyricsManagerSearch
         expectEqual(Q.relevance(query: "you", title: "you are not alone", artists: ["michael jackson"], album: "history"), 0,
                     "相关度: 歌名开头命中最靠前")

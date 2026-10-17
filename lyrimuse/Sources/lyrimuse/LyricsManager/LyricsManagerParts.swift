@@ -713,6 +713,7 @@ struct LyricsManagerSidebarHandle: View {
     @State private var hovering = false
     @State private var dragging = false
     @State private var pushedCursor = false
+    @State private var dragStartScreenX: CGFloat?
 
     var body: some View {
         Capsule()
@@ -728,15 +729,21 @@ struct LyricsManagerSidebarHandle: View {
                 if !inside, !dragging, pushedCursor { NSCursor.pop(); pushedCursor = false }
             }
             .onDisappear { if pushedCursor { NSCursor.pop(); pushedCursor = false } }
-            // 位移在全局坐标里算:拖柄本身跟着宽度移动,按它自己的坐标算会把移动量吃掉一截。
+            // 位移按屏幕坐标算:拖柄跟着宽度移动,窗口也可能随最小宽度变大、居中左移,
+            // 按拖柄或窗口的坐标算都会把位移算多或算少。
             .gesture(
                 DragGesture(minimumDistance: 1, coordinateSpace: .global)
                     .onChanged { value in
                         dragging = true
-                        onDrag(value.location.x - value.startLocation.x)
+                        let screenX = NSEvent.mouseLocation.x
+                        if dragStartScreenX == nil {
+                            dragStartScreenX = screenX - (value.location.x - value.startLocation.x)
+                        }
+                        onDrag(screenX - (dragStartScreenX ?? screenX))
                     }
                     .onEnded { _ in
                         dragging = false
+                        dragStartScreenX = nil
                         onDragEnd()
                         if !hovering, pushedCursor { NSCursor.pop(); pushedCursor = false }
                     }
