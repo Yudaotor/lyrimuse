@@ -142,7 +142,55 @@ enum LyrimuseActionRunner {
             if next != settings.fontSize { settings.fontSize = next }
             GlobalHotkeys.flashHint(icon: larger ? "textformat.size.larger" : "textformat.size.smaller",
                                     text: String(format: L10n.t("字号 %@pt"), "\(Int(next))"))
+        // 一键收起悬浮歌词、灵动岛、菜单栏歌词(开会、共享屏幕),再按一下照收起前的样子恢复。
+        case .toggleAllLyricsHotkey:
+            toggleAllLyrics(on: on)
+        // 先读这一首此刻的状态再写,界面都没开时也不会按反;按下去看不到星,做了什么都回声。
+        case .toggleFavoriteHotkey:
+            PlaybackCoordinator.shared.toggleFavoritedFromShortcut(on: on) { result in
+                switch result {
+                case .liked: GlobalHotkeys.flashHint(icon: "heart.fill", text: L10n.t("已喜欢"))
+                case .unliked: GlobalHotkeys.flashHint(icon: "heart", text: L10n.t("已取消喜欢"))
+                case .notPlaying: GlobalHotkeys.flashHint(icon: "heart.slash", text: L10n.t("未在播放"))
+                case .unsupported: GlobalHotkeys.flashHint(icon: "heart.slash", text: L10n.t("当前播放器不支持喜欢"))
+                case .needsPermission:
+                    GlobalHotkeys.flashHint(icon: "heart.slash", text: L10n.t("需要在系统设置中允许控制 Apple Music"))
+                }
+            }
+        case .openPlayerHotkey:
+            IdlePlaybackActions.openPlayerApp(IdlePlaybackActions.player)
         }
+    }
+
+    /// 「隐藏/恢复全部歌词」收起前开着哪几个面。存在偏好里,重启之后也恢复得回来;键不带 `np:`,不随配置导出。
+    static let hiddenSurfacesKey = "hotkey:hiddenLyricsSurfaces"
+
+    /// 有面开着就全收起、记下是哪几个;都关着就按记下的打开,没记下就说一句。`on` = 要不要显示(0 收起、1 恢复)。
+    /// 开关都走各自的唯一入口(同单独那几个快捷键),碰悬浮歌词的 `.shared` 前先看它开没开(见 `perform` 头上那段)。
+    private static func toggleAllLyrics(on: Bool?) {
+        let settings = AppSettings.shared
+        let shown = [("overlay", settings.classicOverlayEnabled), ("notch", settings.notchOverlayEnabled),
+                     ("menuBar", settings.showLyricsInMenuBar)].filter(\.1).map(\.0)
+        let defaults = UserDefaults.standard
+        if on.map({ !$0 }) ?? !shown.isEmpty {
+            guard !shown.isEmpty else { return }
+            defaults.set(shown, forKey: hiddenSurfacesKey)
+            if shown.contains("overlay") { LyricsOverlayWindowController.shared.setVisible(false) }
+            if shown.contains("notch") { NotchLyricsWindowController.shared.setVisible(false) }
+            if shown.contains("menuBar") { settings.showLyricsInMenuBar = false }
+            GlobalHotkeys.flashHint(icon: "eye.slash", text: L10n.t("已隐藏全部歌词"))
+            return
+        }
+        let saved = defaults.stringArray(forKey: hiddenSurfacesKey) ?? []
+        guard !saved.isEmpty else {
+            if shown.isEmpty { GlobalHotkeys.flashHint(icon: "eye.slash", text: L10n.t("没有可恢复的歌词")) }
+            return
+        }
+        defaults.removeObject(forKey: hiddenSurfacesKey)
+        if saved.contains("overlay") { LyricsOverlayWindowController.shared.setVisible(true) }
+        if saved.contains("notch") { NotchLyricsWindowController.shared.setVisible(true) }
+        if saved.contains("menuBar") { settings.showLyricsInMenuBar = true }
+        GlobalHotkeys.flashHint(icon: "eye", text: L10n.t("已恢复歌词显示"))
     }
 
     /// 这首歌的歌词时间轴直接设成 `ms`(`lyrimuse://action/lyrics-offset`)。按跟当前值的差走同一个 nudge,

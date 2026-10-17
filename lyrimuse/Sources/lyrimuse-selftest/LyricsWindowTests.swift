@@ -842,7 +842,6 @@ func runLyricsWindowTests() {
         let layerRows = source("lyrimuse/UI/LyricsLayerListRow.swift")
         let settingsView = source("lyrimuse/SettingsView.swift")
         let appSettings = source("lyrimuse/Settings/AppSettings.swift")
-        let hotkeys = source("lyrimuse/Settings/GlobalHotkeys.swift")
         let reel = window.components(separatedBy: "private struct MiniLyricsReel: View, Equatable {").dropFirst().first?
             .components(separatedBy: "private struct MiniReelRowBox: Layout {").first ?? ""
         expectEqual(!reel.isEmpty && !reel.contains("weight: .bold") && !reel.contains("weight: .medium")
@@ -887,13 +886,11 @@ func runLyricsWindowTests() {
                     "迷你粗细 / 已唱颜色: 设置页迷你那一套绑迷你的两颗")
         expectEqual(sourceBytes(settingsView, contain: "s.lyricsWindowMiniFontWeight = .bold\n            s.lyricsWindowMiniKaraokeFill = .text\n"),
                     true, "迷你粗细 / 已唱颜色: 「重置」恢复默认")
-        expectEqual(sourceBytes(hotkeys, contain: ".openLyricsWindowHotkey, .toggleLyricsWindowMiniHotkey,")
-                    && sourceBytes(hotkeys, contain: "case .toggleLyricsWindowMiniHotkey: return L10n.t(\"切换迷你 / 完整尺寸\")")
+        expectEqual(LyrimuseAction.toggleLyricsWindowMiniHotkey.titleKey == "切换迷你 / 完整尺寸"
+                    && LyrimuseAction.shortcutLayout.first { $0.group == .window }?.actions.contains(.toggleLyricsWindowMiniHotkey) == true
                     && sourceBytes(source("lyrimuse/Settings/LyrimuseActionRunner.swift"),
                                    contain: "let mini = on ?? LyricsWindowMiniToggle.targetIsMini("),
-                    true, "切换迷你快捷键: 登记进撞键清单、有标题、按开没开切形态")
-        expectEqual(sourceBytes(settingsView, contain: "ShortcutRecorderControl(name: .toggleLyricsWindowMiniHotkey)"), true,
-                    "切换迷你快捷键: 快捷键页有这一行")
+                    true, "切换迷你快捷键: 摆在「打开窗口」卡、有标题、按开没开切形态")
         func hits(_ q: String) -> [SettingsSearchEntry] {
             SettingsSearchMatcher.ranked(SettingsSearchCatalog.entries, query: q, title: { $0.titleKey },
                                          secondary: { $0.keywords + $0.pathKeys })

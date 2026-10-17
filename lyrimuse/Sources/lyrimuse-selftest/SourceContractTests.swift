@@ -5120,7 +5120,7 @@ func runSourceContractTests() {
                         && statusMenu.contains("on: settings.overlayShowTranslation || settings.showTranslation,"), true,
                     "右键菜单: 搜索歌词、译文 / 读音跟同名快捷键同一个动作,两处有一处开着就打勾")
         expectEqual(statusMenu.contains("action: #selector(toggleTouchBarLyrics)))")
-                        && statusMenu.contains("item.setShortcut(KeyboardShortcuts.getShortcut(for: shortcut))"), true,
+                        && statusMenu.contains("item.setShortcut(KeyboardShortcuts.getShortcut(for: KeyboardShortcuts.Name(shortcut)))"), true,
                     "右键菜单: 显示用户录的快捷键;触控栏那一项翻的是总开关,不挂展开 / 收起的快捷键")
         expectEqual(statusMenu.contains("if let update = SparkleUpdaterManager.shared.availableUpdate {")
                         && statusMenu.contains("selector: #selector(openSoftwareUpdate)")

@@ -1097,15 +1097,13 @@ func runTouchBarTests() {
     // 收起走 ✕ 那个入口;设置页那一行和设置搜索那一条只在有触控栏时出现;灵动岛提示条画得出自画的触控栏图标。漏一处都不报错:
     // 要么撞键查不出、提示里露出内部标识符,要么按下去翻成了总开关,要么没有触控栏的 Mac 上冒出一行录了没用的键。
     do {
-        let hotkeys = code(appDir.appendingPathComponent("Settings/GlobalHotkeys.swift")) ?? ""
         let controller = code(appDir.appendingPathComponent("TouchBar/TouchBarLyricsController.swift")) ?? ""
         let settingsView = code(appDir.appendingPathComponent("SettingsView.swift")) ?? ""
         let search = code(appDir.appendingPathComponent("Settings/SettingsSearch.swift")) ?? ""
         let notchHint = code(appDir.appendingPathComponent("UI/NotchTransientCenter.swift")) ?? ""
-        expectEqual(hotkeys.contains("static let toggleTouchBarLyricsHotkey = Self(\"toggleTouchBarLyricsHotkey\")")
-                        && hotkeys.contains(".toggleMenuBarLyricsHotkey, .toggleTouchBarLyricsHotkey,")
-                        && hotkeys.contains("case .toggleTouchBarLyricsHotkey: return L10n.t(\"展开/收起触控栏歌词\")"), true,
-                    "触控栏快捷键: 登记进撞键检查,标题跟设置页那一行一致")
+        expectEqual(LyrimuseAction.toggleTouchBarLyricsHotkey.titleKey == SettingsSearchCatalog.touchBarHotkeyTitleKey
+                        && LyrimuseAction.toggleTouchBarLyricsHotkey.iconName == "lyrimuse.touchbar", true,
+                    "触控栏快捷键: 标题跟设置搜索那一条同一份,图标是自画的触控栏")
         let actions = code(appDir.appendingPathComponent("Settings/LyrimuseActionRunner.swift")) ?? ""
         expectEqual(actions.contains("switch TouchBarLyricsController.shared.toggleFromHotkey() {")
                         && actions.contains("case .noTouchBar: text = L10n.t(\"未检测到触控栏\")")
@@ -1122,10 +1120,7 @@ func runTouchBarTests() {
                         && controller.contains("private func collapseBar() {\n        if TouchBarPrivateAPI.supportsHidingControlStrip {\n"
                                                + "            TouchBarPrivateAPI.minimizeSystemModal(bar)"), true,
                     "触控栏快捷键: 关着就打开开关(订阅当场展开),收着就展开,看得见就照 ✕ 收起")
-        expectEqual(settingsView.contains("if touchBar.isPresent {\n"
-                                          + "            cells.append(AnyView(HotkeyCell(icon: SurfaceGlyph.touchBar.rawValue, title: L10n.t(\"展开/收起触控栏歌词\"), action: .toggleTouchBarLyricsHotkey) {\n"
-                                          + "                ShortcutRecorderControl(name: .toggleTouchBarLyricsHotkey)")
-                    && settingsView.contains("+ (touchBar.isPresent ? [.toggleTouchBarLyricsHotkey] : [])"), true,
+        expectEqual(settingsView.contains("return actions.filter { $0 != .toggleTouchBarLyricsHotkey || touchBar.isPresent }"), true,
                     "触控栏快捷键: 设置页那一行只在有触控栏时出现")
         expectEqual(search.contains("$0.entry.titleKey != SettingsSearchCatalog.touchBarHotkeyTitleKey)"), true,
                     "触控栏快捷键: 没有触控栏时设置搜索不收这一条")

@@ -2,89 +2,22 @@ import AppKit
 import KeyboardShortcuts
 import LyrimuseCore
 
-// A 组(显示/隐藏悬浮歌词、锁定/解锁位置、打开歌词管理、打开设置)复用已有能力,纯接线;
-// B 组(播放/暂停、上下一首)是这个软件第一次拥有"控制播放"能力,靠 MusicPlaybackController
-// 发 AppleScript 指令,复用已经拿到的自动化权限(见 MusicAutomationPermission)。
+// 每个动作见 Core `LyrimuseAction`:快捷键的内部名就是它的 rawValue(存在用户偏好里,不能改),名字、图标、在快捷键页的
+// 哪张卡也在那边,这里只把它们接到 KeyboardShortcuts 上。
 //
-// 默认不预置任何按键组合——KeyboardShortcuts.Recorder 不预注册默认值时本来就是空的
-// "点按录制"状态,下面这 20 个快捷键全部必须用户自己在设置里主动录制才会生效,不会有
-// 按键在用户不知情下被这个 App 抢占。
+// 默认不预置任何按键组合 —— 录制框不预注册默认值时就是空的「点按录制」状态,所有快捷键都要用户自己在设置里录了
+// 才生效,不会有按键在用户不知情下被这个 App 抢占。
 extension KeyboardShortcuts.Name {
-    static let toggleOverlay = Self("toggleOverlay")
-    static let toggleLockPosition = Self("toggleLockPosition")
-    static let openLyricsManagerHotkey = Self("openLyricsManagerHotkey")
-    static let openLyricsWindowHotkey = Self("openLyricsWindowHotkey")
-    static let toggleLyricsWindowMiniHotkey = Self("toggleLyricsWindowMiniHotkey")
-    static let openSettingsHotkey = Self("openSettingsHotkey")
-    static let playPauseHotkey = Self("playPauseHotkey")
-    static let nextTrackHotkey = Self("nextTrackHotkey")
-    static let previousTrackHotkey = Self("previousTrackHotkey")
-    static let lyricsAdvanceHotkey = Self("lyricsAdvanceHotkey")
-    static let lyricsDelayHotkey = Self("lyricsDelayHotkey")
-    // 加的六个。挑选判据是「别的 App 占着焦点时你还想按」—— 只在某扇窗已经
-    // 在前台时才有意义的动作(随机/循环、置顶、全屏)刻意不给全局键,那是本地键该管的。
-    static let lyricsQuickSearchHotkey = Self("lyricsQuickSearchHotkey")
-    static let toggleTranslationHotkey = Self("toggleTranslationHotkey")
-    static let toggleRomanizationHotkey = Self("toggleRomanizationHotkey")
-    static let toggleNotchOverlayHotkey = Self("toggleNotchOverlayHotkey")
-    static let toggleMenuBarLyricsHotkey = Self("toggleMenuBarLyricsHotkey")
-    static let lyricsOffsetResetHotkey = Self("lyricsOffsetResetHotkey")
-    static let overlayFontLargerHotkey = Self("overlayFontLargerHotkey")
-    static let overlayFontSmallerHotkey = Self("overlayFontSmallerHotkey")
-    // 设置页那一行只在这台 Mac 此刻有触控栏时出现(17 章决策 40)。
-    static let toggleTouchBarLyricsHotkey = Self("toggleTouchBarLyricsHotkey")
+    init(_ action: LyrimuseAction) {
+        self.init(action.rawValue)
+    }
 
-    /// 全部全局快捷键。撞键检查(见 ShortcutConflict)要遍历它——`KeyboardShortcuts.Name`
-    /// 是个 struct 不是 enum,拿不到自动的 allCases,只能手工维护。
-    ///
-    /// 新增快捷键时**必须**同时加进这里和下面的 `title(for:)`,否则:漏了这里 =
-    /// 新键跟别人撞了不会被发现;漏了 title = 撞键提示里显示成一个原始标识符。
-    ///
-    /// **这两条没有自动化测试兜底**,只能靠这段注释 + 下面 `registerAll()` 末尾那条
-    /// debug 断言(它只能查出"登记了但没写标题",查不出"压根没登记")。原因:
-    /// lyrimuse-selftest 只依赖 LyrimuseCore(见 Package.swift),而这个文件在 app target
-    /// 里、还要 import KeyboardShortcuts,selftest 够不着;而 `KeyboardShortcuts.Name`
-    /// 是 struct 不是 enum,也没有办法在运行时反射出"一共声明了几个"来跟这份清单对账。
-    static let allLyrimuseNames: [Self] = [
-        .toggleOverlay, .toggleLockPosition, .openLyricsManagerHotkey,
-        .openLyricsWindowHotkey, .toggleLyricsWindowMiniHotkey, .openSettingsHotkey, .playPauseHotkey,
-        .nextTrackHotkey, .previousTrackHotkey, .lyricsAdvanceHotkey, .lyricsDelayHotkey,
-        .lyricsQuickSearchHotkey, .toggleTranslationHotkey, .toggleRomanizationHotkey,
-        .toggleNotchOverlayHotkey, .toggleMenuBarLyricsHotkey, .toggleTouchBarLyricsHotkey, .lyricsOffsetResetHotkey,
-        .overlayFontLargerHotkey, .overlayFontSmallerHotkey,
-    ]
+    /// 全部全局快捷键,撞键检查(ShortcutConflict)遍历它。
+    static let allLyrimuseNames: [Self] = LyrimuseAction.allCases.map { Self($0) }
 
-    /// 给用户看的动作名。撞键提示要说"这个组合已经给了『歌词提前』",光报
-    /// `lyricsAdvanceHotkey` 这种内部标识符等于没说。
-    ///
-    /// 文案必须跟 `SettingsView` 里那三张快捷键卡的 `SettingsRow(title:)` 一字不差 ——
-    /// 提示里说的名字跟他在设置页看到的对不上,就得自己去猜是哪一行。
-    /// (没有做成"从设置页反查"是因为那边的标题跟图标/副标题写在一起、还分三张卡,
-    /// 抽出来要动 10 行 UI;这里只登记名字,由上面那条 selftest 保证不漏。)
+    /// 撞键提示里给用户看的动作名,跟快捷键页那一格同一份(`LyrimuseAction.titleKey`)。
     static func title(for name: Self) -> String {
-        switch name {
-        case .toggleOverlay: return L10n.t("显示/隐藏悬浮歌词")
-        case .toggleLockPosition: return L10n.t("锁定/解锁位置")
-        case .openLyricsManagerHotkey: return L10n.t("打开歌词管理")
-        case .openLyricsWindowHotkey: return L10n.t("打开歌词窗口")
-        case .toggleLyricsWindowMiniHotkey: return L10n.t("切换迷你 / 完整尺寸")
-        case .openSettingsHotkey: return L10n.t("打开设置")
-        case .playPauseHotkey: return L10n.t("播放/暂停")
-        case .nextTrackHotkey: return L10n.t("下一首")
-        case .previousTrackHotkey: return L10n.t("上一首")
-        case .lyricsAdvanceHotkey: return L10n.t("歌词提前")
-        case .lyricsDelayHotkey: return L10n.t("歌词延后")
-        case .lyricsQuickSearchHotkey: return L10n.t("搜索歌词")
-        case .toggleTranslationHotkey: return L10n.t("显示/隐藏译文")
-        case .toggleRomanizationHotkey: return L10n.t("显示/隐藏读音")
-        case .toggleNotchOverlayHotkey: return L10n.t("显示/隐藏灵动岛歌词")
-        case .toggleMenuBarLyricsHotkey: return L10n.t("显示/隐藏菜单栏歌词")
-        case .toggleTouchBarLyricsHotkey: return L10n.t("展开/收起触控栏歌词")
-        case .lyricsOffsetResetHotkey: return L10n.t("歌词偏移归零")
-        case .overlayFontLargerHotkey: return L10n.t("放大悬浮歌词字号")
-        case .overlayFontSmallerHotkey: return L10n.t("缩小悬浮歌词字号")
-        default: return name.rawValue
-        }
+        LyrimuseAction(rawValue: name.rawValue).map { L10n.t($0.titleKey) } ?? name.rawValue
     }
 }
 
@@ -99,15 +32,7 @@ enum GlobalHotkeys {
             }
         }
 
-        // 见 allLyrimuseNames 注释:登记了名字却忘了写标题时,撞键提示会把内部标识符
-        // 端给用户。这里只能查出这一半(另一半"压根没登记"没有办法自动发现)。
         pauseWhileMenuTracking()
-        #if DEBUG
-        for name in KeyboardShortcuts.Name.allLyrimuseNames {
-            assert(KeyboardShortcuts.Name.title(for: name) != name.rawValue,
-                   "快捷键 \(name.rawValue) 没有在 KeyboardShortcuts.Name.title(for:) 里登记显示名")
-        }
-        #endif
     }
 
     private static var menuTrackingObservers: [NSObjectProtocol] = []

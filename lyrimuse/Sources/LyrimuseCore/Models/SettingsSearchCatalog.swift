@@ -124,7 +124,7 @@ public enum SettingsSearchCatalog {
     /// 那一段总开关的标题。没有触控栏的 Mac 上设置搜索只留这一条(落到「这台 Mac 没有触控栏」那张说明卡)。
     public static let touchBarToggleTitleKey = "触控栏歌词"
     /// 「快捷键」页「展开/收起触控栏歌词」那一行的标题。那一行只在有触控栏时出现,没有触控栏时设置搜索不收这一条。
-    public static let touchBarHotkeyTitleKey = "展开/收起触控栏歌词"
+    public static let touchBarHotkeyTitleKey = LyrimuseAction.toggleTouchBarLyricsHotkey.titleKey
 
     /// 面包屑里不是 L10n 键的品牌名(AccountDestination.title 对这几个直接返回字面量)。守卫核
     /// 键是否在 catalog 里时跳过它们。
@@ -202,6 +202,19 @@ public enum SettingsSearchCatalog {
                             sectionValue: touchBarSectionValue,
                             titleKey: title, subtitleKey: sub, keywords: kw,
                             pathKeys: ["歌词显示", "触控栏"] + (group.map { [$0] } ?? []))
+    }
+
+    /// 「快捷键」页:「链接」卡、各个动作(格子、顺序、标题、关键词都取 `LyrimuseAction`)、「歌词时间轴」卡底下的「步长」。
+    private static var shortcutEntries: [SettingsSearchEntry] {
+        var entries = [shortcut("链接", sub: "可在快捷指令、Raycast、Alfred 等工具中打开；指针移到上方的快捷键上，可拷贝对应动作的链接",
+                                kw: ["深链", "URL", "lyrimuse://", "Raycast", "Alfred", "Stream Deck", "自动化", "拷贝链接"])]
+        for (group, actions) in LyrimuseAction.shortcutLayout {
+            entries += actions.map { shortcut($0.titleKey, kw: $0.searchKeywords) }
+            if group == .timing {
+                entries.append(shortcut("步长", sub: "每按一次调整的幅度", kw: ["偏移", "幅度"]))
+            }
+        }
+        return entries
     }
 
     private static func shortcut(_ title: String, sub: String? = nil, kw: [String] = []) -> SettingsSearchEntry {
@@ -488,30 +501,8 @@ public enum SettingsSearchCatalog {
         lyricsWindow("动态封面缓存", sub: "已下载的动态封面占用的磁盘空间；清除后再次显示时会重新下载",
                      kw: ["缓存", "磁盘", "空间", "占用", "清除", "清理", "存储", "动态封面"], group: "封面"),
 
-        // ---- 快捷键 ----
-        shortcut("链接", sub: "可在快捷指令、Raycast、Alfred 等工具中打开；指针移到上方的快捷键上，可拷贝对应动作的链接",
-                 kw: ["深链", "URL", "lyrimuse://", "Raycast", "Alfred", "Stream Deck", "自动化", "拷贝链接"]),
-        shortcut("显示/隐藏悬浮歌词", kw: ["悬浮歌词", "开关"]),
-        shortcut("显示/隐藏灵动岛歌词", kw: ["灵动岛", "开关"]),
-        shortcut("显示/隐藏菜单栏歌词", kw: ["菜单栏", "开关"]),
-        shortcut(touchBarHotkeyTitleKey, kw: ["触控栏", "Touch Bar", "功能栏", "展开", "收起", "开关"]),
-        shortcut("锁定/解锁位置", kw: ["锁定", "位置"]),
-        shortcut("显示/隐藏译文", kw: ["译文", "翻译"]),
-        shortcut("显示/隐藏读音", kw: ["罗马音", "发音", "拼音", "粤拼"]),
-        shortcut("放大悬浮歌词字号", kw: ["字号", "字体大小", "放大", "font size"]),
-        shortcut("缩小悬浮歌词字号", kw: ["字号", "字体大小", "缩小", "font size"]),
-        shortcut("打开歌词管理", kw: ["歌词管理", "窗口"]),
-        shortcut("打开歌词窗口", kw: ["歌词窗口", "窗口"]),
-        shortcut("切换迷你 / 完整尺寸", kw: ["歌词窗口", "迷你", "完整尺寸"]),
-        shortcut("搜索歌词", kw: ["手动搜索", "换歌词"]),
-        shortcut("打开设置", kw: ["设置窗口"]),
-        shortcut("歌词提前", kw: ["偏移", "时间轴", "校准"]),
-        shortcut("歌词延后", kw: ["偏移", "时间轴", "校准"]),
-        shortcut("歌词偏移归零", kw: ["偏移", "重置", "时间轴"]),
-        shortcut("步长", sub: "每按一次调整的幅度", kw: ["偏移", "幅度"]),
-        shortcut("播放/暂停", kw: ["播放控制"]),
-        shortcut("下一首", kw: ["播放控制", "切歌"]),
-        shortcut("上一首", kw: ["播放控制", "切歌"]),
+        // ---- 快捷键 ----(按 LyrimuseAction.shortcutLayout 生成,见 shortcutEntries)
+    ] + shortcutEntries + [
 
         // ---- 通用 ----
         general("菜单栏图标", kw: ["图标", "状态栏", "12 款"], group: "菜单栏与 Dock"),

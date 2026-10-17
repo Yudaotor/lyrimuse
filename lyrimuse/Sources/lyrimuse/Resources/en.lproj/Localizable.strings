@@ -671,6 +671,7 @@
 "唯一的差异在于「%@」一项。" = "The only difference is on “%@”.";
 "唯一的差异是胜者在「%1$@」一项多 %2$d 分。" = "The only difference: the winner scored %2$d more on “%1$@”.";
 "喜欢" = "Favorite";
+"喜欢/取消喜欢" = "Favorite/Remove Favorite";
 "回到播放器" = "Switch to Player";
 "回到逐句编辑" = "Back to Line Editing";
 "因网络不可用已停止" = "Stopped: no connection";
@@ -871,9 +872,11 @@
 "已匹配曲目 · 无歌词文本" = "Track matched · no lyrics text";
 "已匹配，无歌词" = "Matched, no lyrics";
 "已匹配：%@" = "Matched: %@";
+"已取消喜欢" = "Favorite removed";
 "已取消纯音乐标记" = "Instrumental mark removed";
 "已启用的歌词源均未找到可用的候选" = "No Lyrics from Any Source";
 "已唱颜色" = "Sung Color";
+"已喜欢" = "Favorited";
 "已在 Last.fm 上喜欢" = "Loved on Last.fm";
 "已在「%@」中打开。保存后自动应用：带时间戳的内容存为同步歌词，不带时间戳的存为纯文本" = "Opened in %@. Save when you're done: lines with timestamps become synced lyrics, text without them is saved as plain text.";
 "已在「%@」中打开。逐字歌词仅修改文字，请勿改动每行开头的时间，保存后自动应用" = "Opened in %@. For word-timed lyrics, change only the words and keep the time at the start of each line; saving applies the changes.";
@@ -898,6 +901,7 @@
 "已开启" = "Enabled";
 "已恢复 %d 个歌词文件（新增 %d、覆盖 %d）" = "Restored %d lyrics files (%d added, %d overwritten)";
 "已恢复 %d 个歌词文件（新增 %d、覆盖 %d）#one" = "Restored %d lyrics file (%d added, %d overwritten)";
+"已恢复歌词显示" = "Lyrics restored";
 "已手动停止" = "Stopped manually";
 "已打开" = "On";
 "已找到 %@ 首" = "%@ found so far";
@@ -974,6 +978,7 @@
 "已锁定之前手动选定的 %@ 首歌曲；此后选定的歌曲将直接锁定" = "Locked %@ songs you had picked manually; from now on, picks are locked right away";
 "已锁定之前手动选定的 %@ 首歌曲；此后选定的歌曲将直接锁定#one" = "Locked %@ song you had picked manually; from now on, picks are locked right away";
 "已锁定位置" = "Position locked";
+"已隐藏全部歌词" = "All lyrics hidden";
 "已隐藏灵动岛歌词" = "Notch lyrics hidden";
 "已隐藏菜单栏歌词" = "Menu bar lyrics hidden";
 "已隐藏译文" = "Translation hidden";
@@ -1019,6 +1024,7 @@
 "当前使用" = "In use";
 "当前动态" = "Activity";
 "当前启用的其余歌词源未应答：%@" = "Other enabled sources did not respond: %@";
+"当前播放器不支持喜欢" = "This player doesn’t support favorites";
 "当前播放器标记此曲为纯音乐，其余候选都不采用" = "Your player marks this track as instrumental, so no candidate was used";
 "当前播放的是 DJ Mix 专辑中的一段（歌名带 [Mixed]、专辑带 (DJ Mix)）。这类曲目截取自整场演出，前后带有过渡，长度与原版不同，原版歌词的时间轴无法对齐，且没有歌词源收录混音版的时间轴" = "You’re playing one segment of a DJ Mix album (the track is tagged [Mixed], the album (DJ Mix)) — it’s cut out of a full set, with transitions on either side and a length that doesn’t match the original, so the original lyrics’ timeline can’t line up. And no source carries a timeline for the mixed version.";
 "当前播放的是伴奏版（歌名或专辑标着伴奏 / 纯音乐 / Instrumental），没有人声，人声版歌词不采用，按纯音乐显示" = "This is an instrumental version (its title or album says Instrumental), so it has no vocals; vocal lyrics are not used and it is shown as instrumental";
@@ -1689,6 +1695,7 @@
 "汽水音乐歌曲 ID 一致" = "Same Soda Music song ID";
 "汽水音乐歌曲页" = "Soda Music song page";
 "汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更），并非这首歌曲没有歌词，通常会在后续版本中修复" = "Soda Music's lyrics endpoint returned something unrecognizable (the API may have changed) — this does not mean the song has no lyrics; an app update usually fixes it";
+"没有可恢复的歌词" = "No hidden lyrics to restore";
 "没有译文时自动翻译" = "Translate When None Is Provided";
 "沿用同一首歌另一种写法「%@」的校正，在这里调整后记在这一条上" = "Uses the timing correction from “%@”, another version of this song. Adjusting it here saves it to this version.";
 "沿用同一首歌的人工修正" = "Uses the manual correction from another version of this song";
@@ -2292,6 +2299,7 @@
 "随机播放" = "Shuffle";
 "随演唱进度将已演唱部分显示为系统强调色。仅在歌曲有逐字时间轴时生效；打开菜单反白期间暂停着色" = "Tints the sung portion with the system accent color, following the vocal timing. Only takes effect when this track has word-level timing; fill pauses while the menu is open and highlighted";
 "隐私" = "Privacy";
+"隐藏/恢复全部歌词" = "Hide/Restore All Lyrics";
 "隐藏…" = "Hide…";
 "隐藏功能栏" = "Hide Control Strip";
 "隐藏歌词" = "Hide Lyrics";
@@ -2301,6 +2309,7 @@
 "需要 Discord 桌面版" = "Requires the Discord desktop app";
 "需要先完成配置" = "Setup Required";
 "需要先配置「%@」（%@）" = "Set up “%@” first — %@";
+"需要在系统设置中允许控制 Apple Music" = "Allow control of Apple Music in System Settings";
 "需要处理" = "Needs attention";
 "霓虹" = "Neon";
 "静音" = "Mute";

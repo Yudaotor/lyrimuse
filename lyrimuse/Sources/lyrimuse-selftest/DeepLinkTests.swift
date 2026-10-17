@@ -86,11 +86,25 @@ func runDeepLinkTests() {
         // rawValue 必须就是快捷键名:对不上的话快捷键注册到一个用户从没录过的名字上,按了没反应。
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let hotkeys = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/Settings/GlobalHotkeys.swift"), encoding: .utf8)) ?? ""
-        for action in LyrimuseAction.allCases {
-            expectEqual(hotkeys.contains("= Self(\"\(action.rawValue)\")"), true, "动作: \(action.rawValue) 是一个登记过的快捷键名")
-        }
-        expectEqual(hotkeys.components(separatedBy: "= Self(\"").count - 1, LyrimuseAction.allCases.count,
-                    "动作: 快捷键和动作一样多(新加快捷键要同时加进 LyrimuseAction)")
+        expectEqual(sourceBytes(hotkeys, contain: "static let allLyrimuseNames: [Self] = LyrimuseAction.allCases.map { Self($0) }")
+                    && sourceBytes(hotkeys, contain: "init(_ action: LyrimuseAction) {\n        self.init(action.rawValue)"), true,
+                    "动作: 快捷键名单和名字从 LyrimuseAction 派生")
+        expectEqual(hotkeys.contains("= Self(\""), false, "动作: App 里不再逐个声明快捷键名(名单只有 LyrimuseAction 一份)")
+        // 快捷键页的格子、撞键提示、设置搜索都按 LyrimuseAction 的排布和名字来:漏摆一格就是录不了,名字重了撞键提示分不清。
+        let laidOut = LyrimuseAction.shortcutLayout.flatMap(\.actions)
+        expectEqual(laidOut.count == LyrimuseAction.allCases.count && Set(laidOut) == Set(LyrimuseAction.allCases), true,
+                    "快捷键页: 每个动作正好摆一格")
+        expectEqual(LyrimuseAction.shortcutLayout.map(\.group), LyrimuseAction.ShortcutGroup.allCases, "快捷键页: 四张卡各一次、顺序同枚举")
+        expectEqual(Set(LyrimuseAction.allCases.map(\.titleKey)).count, LyrimuseAction.allCases.count, "快捷键页: 名字不重复")
+        expectEqual(LyrimuseAction.allCases.filter { $0.iconName.isEmpty || $0.searchKeywords.isEmpty }, [],
+                    "快捷键页: 每个动作都有图标和搜索关键词")
+        expectEqual(LyrimuseAction.allCases.filter { action in
+                        !SettingsSearchCatalog.entries.contains { $0.titleKey == action.titleKey && $0.destination == .tab("shortcuts") }
+                    }, [], "快捷键页: 每个动作在设置搜索里都有一条,落在「快捷键」页")
+        expectEqual(link("lyrimuse://action/toggle-all-lyrics?on=0"), .action(.toggleAllLyricsHotkey, on: false, stepSeconds: nil),
+                    "动作: 隐藏 / 恢复全部歌词带目标状态")
+        expectEqual(link("lyrimuse://action/toggle-favorite?on=1"), .action(.toggleFavoriteHotkey, on: true, stepSeconds: nil),
+                    "动作: 喜欢带目标状态")
         expectEqual(hotkeys.contains("KeyboardShortcuts.onKeyUp(for: KeyboardShortcuts.Name(action.rawValue)) {\n                LyrimuseActionRunner.perform(action)")
                     && hotkeys.components(separatedBy: "KeyboardShortcuts.onKeyUp(for:").count - 1 == 1, true,
                     "动作: 快捷键只经 LyrimuseActionRunner 执行,跟深链同一份逻辑")
@@ -108,7 +122,8 @@ func runDeepLinkTests() {
     do {
         expectEqual(link("lyrimuse://action/copy-lyric"), .copyLyric(includeTranslation: false), "拷贝歌词: 默认只拷原文")
         expectEqual(link("lyrimuse://action/copy-lyric?translation=1"), .copyLyric(includeTranslation: true), "拷贝歌词: 连译文")
-        expectEqual(link("lyrimuse://action/open-player"), .openPlayer, "回到播放器")
+        expectEqual(link("lyrimuse://action/open-player"), .action(.openPlayerHotkey, on: nil, stepSeconds: nil),
+                    "回到播放器: 链接写法不变,并进了快捷键动作")
         expectEqual(link("lyrimuse://action/surfaces?overlay=0&menubar=1"), .setSurfaces(overlay: false, notch: nil, menuBar: true),
                     "展示面: 只动带了的那几个")
         expectEqual(link("lyrimuse://action/surfaces") == nil && link("lyrimuse://action/surfaces?overlay=maybe") == nil, true,
@@ -264,7 +279,7 @@ func runDeepLinkTests() {
             .lyricsWindow, .lyricsWindowSearch, .lyricsSearch,
             .menuBarPanel(quick: nil), .menuBarPanel(quick: "overlay"), .menuBarMenu, .onboarding, .lastfmAuthCallback,
             .action(.toggleOverlay, on: true, stepSeconds: nil), .action(.lyricsAdvanceHotkey, on: nil, stepSeconds: 0.5),
-            .copyLyric(includeTranslation: true), .copyLyric(includeTranslation: false), .openPlayer,
+            .copyLyric(includeTranslation: true), .copyLyric(includeTranslation: false),
             .setSurfaces(overlay: true, notch: false, menuBar: nil), .setLyricsOffset(ms: -300),
             .nowPlayingCallback(success: URL(string: "shortcuts://x-callback-url/ic-success")),
             .debug(.state), .debug(.checkpoint), .debug(.restore), .debug(.snapshot(window: "panel")),

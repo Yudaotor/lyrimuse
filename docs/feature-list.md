@@ -503,12 +503,13 @@ Apple Music, Spotify and Kaset need Automation permission to read what is playin
 
 ### Playback controls and seeking
 
-Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them, and NetEase Cloud Music, Kugou Music, Soda Music and LX Music have like, with LX Music volume too once Open API is on in its settings. Play, pause and skipping can have global shortcuts. While something like a browser video holds Now Playing, play, pause and skipping for QQ Music and NetEase Cloud Music go through their own menus, and seeking isn't available.
+Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them, and NetEase Cloud Music, Kugou Music, Soda Music and LX Music have like, with LX Music volume too once Open API is on in its settings. Play, pause, skipping and like can have global shortcuts. While something like a browser video holds Now Playing, play, pause and skipping for QQ Music and NetEase Cloud Music go through their own menus, and seeking isn't available.
 
 - Settings: Lyrics Display › Notch › Expanded State › Show Playback Controls
 - Settings: Keyboard Shortcuts › Play/Pause
 - Settings: Keyboard Shortcuts › Next Track
 - Settings: Keyboard Shortcuts › Previous Track
+- Settings: Keyboard Shortcuts › Favorite/Remove Favorite
 
 <a id="feature-song-pages"></a>
 
@@ -636,9 +637,11 @@ Settings, the Lyrics Window, Lyrics Manager and the menu bar panel can stay ligh
 
 ### Global keyboard shortcuts
 
-Showing or hiding each kind of lyrics, opening the lyrics window and Lyrics Manager, searching, timing and playback can all have shortcuts. None are assigned by default.
+Showing or hiding each kind of lyrics (or all of them at once, for meetings and screen sharing), opening the lyrics window and Lyrics Manager, searching, timing, playback, like and switching to the player can all have shortcuts. None are assigned by default.
 
 - Settings: Keyboard Shortcuts › Open Settings
+- Settings: Keyboard Shortcuts › Hide/Restore All Lyrics
+- Settings: Keyboard Shortcuts › Switch to Player
 
 <a id="feature-settings-search"></a>
 
@@ -725,7 +728,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 264 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 267 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1043,6 +1046,7 @@ Every setting in the Settings window, by where it lives: 264 in all. Type a name
 - **Show/Hide Notch Lyrics**
 - **Show/Hide Menu Bar Lyrics**
 - **Expand/Collapse Touch Bar Lyrics**
+- **Hide/Restore All Lyrics**
 - **Lock/Unlock Position**
 - **Show/Hide Translation**
 - **Show/Hide Romanization**
@@ -1053,6 +1057,7 @@ Every setting in the Settings window, by where it lives: 264 in all. Type a name
 - **Switch Mini / Full Size**
 - **Search Lyrics**
 - **Open Settings**
+- **Switch to Player**
 - **Advance Lyrics**
 - **Delay Lyrics**
 - **Reset Lyrics Offset**
@@ -1060,6 +1065,7 @@ Every setting in the Settings window, by where it lives: 264 in all. Type a name
 - **Play/Pause**
 - **Next Track**
 - **Previous Track**
+- **Favorite/Remove Favorite**
 
 ### General › Menu Bar & Dock
 

@@ -17,7 +17,6 @@ import Foundation
 ///     onboarding                    欢迎引导
 ///     action/<名字>[?on=1|0][&step=<秒>]   执行一个动作(= 全局快捷键那一套,见 `LyrimuseAction`)
 ///     action/copy-lyric[?translation=1]    把当前这句歌词(可连译文)放进剪贴板
-///     action/open-player            把 Lyrimuse 正在读的播放器带到前台
 ///     action/surfaces?overlay=1&notch=0&menubar=1   一次设好几个展示面(只带要改的那几个)
 ///     action/lyrics-offset?ms=-300  这首歌的歌词时间轴直接设成某个值(±10 秒以内)
 ///     action/play-mode?mode=shuffle 播放模式设成 list / shuffle / repeat-all / repeat-one(同歌词窗口那两颗键;播放器够不到的档位落到 list)
@@ -46,7 +45,6 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
     /// 延后的步长(只有 `acceptsStep` 的收,超出 0…`maxStepSeconds` 当没带)。
     case action(LyrimuseAction, on: Bool?, stepSeconds: Double?)
     case copyLyric(includeTranslation: Bool)
-    case openPlayer
     /// nil = 这一个不动。三个都是 nil 的链接认不出(返回 nil)。
     case setSurfaces(overlay: Bool?, notch: Bool?, menuBar: Bool?)
     /// 这首歌自己的那一份偏移(毫秒),在 ±`maxLyricsOffsetMs` 以内。
@@ -86,7 +84,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
     }
 
     /// `action/` 下不对应快捷键的那几个名字(跟 `LyrimuseAction.linkName` 不能重名,selftest 核对)。
-    public static let extraActionNames = ["copy-lyric", "open-player", "surfaces", "lyrics-offset", "play-mode"]
+    public static let extraActionNames = ["copy-lyric", "surfaces", "lyrics-offset", "play-mode"]
     /// `action/play-mode?mode=` 的取值。
     public static let playModeNames: [String: MusicPlaybackController.MusicPlaybackMode] = [
         "list": .list, "shuffle": .shuffle, "repeat-all": .repeatAll, "repeat-one": .repeatOne,
@@ -124,8 +122,6 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             self = .onboarding
         case ("action", "/copy-lyric"):
             self = .copyLyric(includeTranslation: value("translation").flatMap(Self.parseBool) ?? false)
-        case ("action", "/open-player"):
-            self = .openPlayer
         case ("action", "/surfaces"):
             let overlay = value("overlay").flatMap(Self.parseBool)
             let notch = value("notch").flatMap(Self.parseBool)
@@ -233,9 +229,6 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             components.host = "action"
             components.path = "/copy-lyric"
             if includeTranslation { components.queryItems = [URLQueryItem(name: "translation", value: "1")] }
-        case .openPlayer:
-            components.host = "action"
-            components.path = "/open-player"
         case let .setSurfaces(overlay, notch, menuBar):
             components.host = "action"
             components.path = "/surfaces"

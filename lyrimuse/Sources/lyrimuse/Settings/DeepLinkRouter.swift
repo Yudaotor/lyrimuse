@@ -49,8 +49,6 @@ enum DeepLinkRouter {
             LyrimuseActionRunner.perform(action, on: on, stepMs: stepSeconds.map { Int(($0 * 1000).rounded()) })
         case let .copyLyric(includeTranslation):
             copyCurrentLyric(includeTranslation: includeTranslation)
-        case .openPlayer:
-            IdlePlaybackActions.openPlayerApp(IdlePlaybackActions.player)
         case let .setSurfaces(overlay, notch, menuBar):
             // 逐个走开关动作(跟快捷键同一份逻辑);只动带了的那几个。
             if let overlay { LyrimuseActionRunner.perform(.toggleOverlay, on: overlay) }

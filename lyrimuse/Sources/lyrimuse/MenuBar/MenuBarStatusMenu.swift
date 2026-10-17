@@ -212,14 +212,14 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
 
     /// `shortcut`:用户录了这个全局快捷键就显示在右侧,没录就空着。
     private func action(_ title: String, symbol: String, selector: Selector,
-                        shortcut: KeyboardShortcuts.Name? = nil) -> NSMenuItem {
+                        shortcut: LyrimuseAction? = nil) -> NSMenuItem {
         let item = makeItem(title, symbol: symbol, selector: selector)
-        if let shortcut { item.setShortcut(KeyboardShortcuts.getShortcut(for: shortcut)) }
+        if let shortcut { item.setShortcut(KeyboardShortcuts.getShortcut(for: KeyboardShortcuts.Name(shortcut))) }
         return item
     }
 
     private func toggle(_ title: String, symbol: String, on: Bool, action: Selector,
-                        shortcut: KeyboardShortcuts.Name? = nil) -> NSMenuItem {
+                        shortcut: LyrimuseAction? = nil) -> NSMenuItem {
         let item = self.action(title, symbol: symbol, selector: action, shortcut: shortcut)
         item.state = on ? .on : .off
         return item

@@ -1692,6 +1692,13 @@
       "path" : [
         "快捷键"
       ],
+      "title" : "隐藏/恢复全部歌词"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
       "title" : "锁定/解锁位置"
     },
     {
@@ -1762,6 +1769,13 @@
       "path" : [
         "快捷键"
       ],
+      "title" : "回到播放器"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
       "title" : "歌词提前"
     },
     {
@@ -1806,6 +1820,13 @@
         "快捷键"
       ],
       "title" : "上一首"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "喜欢/取消喜欢"
     },
     {
       "dest" : "tab:general",

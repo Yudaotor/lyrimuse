@@ -947,6 +947,41 @@ final class PlaybackCoordinator: ObservableObject {
         }
     }
 
+    enum ShortcutFavoriteResult { case liked, unliked, notPlaying, unsupported, needsPermission }
+
+    /// 全局快捷键 / `action/toggle-favorite` 的「喜欢」。界面都没开时 `isFavorited` 可能是上一首的、或者还没读过,照它取反会
+    /// 按反:内置播放器先读一次这一首此刻的状态,`on` 给了就设成它,没给就取反。写入交给 `toggleFavorited`(乐观更新、
+    /// 刚换歌时等标题、写不成回读都在那边)。网页版没有同步读法,照界面那份取反。
+    func toggleFavoritedFromShortcut(on: Bool?, done: @escaping @MainActor @Sendable (ShortcutFavoriteResult) -> Void) {
+        guard !title.isEmpty else { return done(.notPlaying) }
+        if favoritePlayer == nil, youtubeMusicWebTarget != nil {
+            let now = isFavorited ?? false
+            let target = on ?? !now
+            if target != now { toggleFavorited() }
+            return done(target ? .liked : .unliked)
+        }
+        guard let player = favoritePlayer, !favoriteBlockedForTrack else { return done(.unsupported) }
+        let trackKey = currentTrackKey
+        Task.detached(priority: .userInitiated) {
+            if player == .appleMusic, await !MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) {
+                await MainActor.run { done(.needsPermission) }
+                return
+            }
+            let current = MusicPlaybackController.favoritedState(for: player)
+            await MainActor.run { [weak self] in
+                guard let self, self.currentTrackKey == trackKey else { return }
+                if let current, current != self.isFavorited {
+                    self.isFavorited = current
+                    self.favoritedActionSeq &+= 1
+                }
+                let now = self.isFavorited ?? false
+                let target = on ?? !now
+                if target != now { self.toggleFavorited() }
+                done(target ? .liked : .unliked)
+            }
+        }
+    }
+
     // 应用启动时调一次即可——只有一个数据源,不需要再区分"切换模式",started 只是防手滑
     // 重复调用重新订阅一遍。
     func start() {
