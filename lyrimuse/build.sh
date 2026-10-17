@@ -45,8 +45,13 @@ done
 # 同一时刻只跑一个 build.sh。多个会话共用这棵工作树,每次都会装进 /Applications 并重启 App;两次同时跑
 # 会互相拆掉对方的暂存包、或者重启到对方装了一半的版本。后到的一次在这里原地排队,会话之间不用互相询问
 # 「能不能装 / 装好没有」。mkdir 是原子的;锁里记着持有者 pid,持有者已经不在了(被 SIGKILL,EXIT trap
-# 没跑)就接管。
+# 没跑)就接管。锁放在全机共用的 ~/Library/Caches 下,不放工作树的 .build:同一个仓库另开的工作树(git worktree)
+# 各有自己的 .build,锁跟着工作树走的话两边能同时装机。包管理器构建(设了 LYRIMUSE_SPM_SCRATCH_PATH)、
+# 建不了那个目录时仍放 .build。
 BUILD_LOCK="$PWD/.build/build.sh.lock"
+if [ -z "${LYRIMUSE_SPM_SCRATCH_PATH:-}" ] && mkdir -p "$HOME/Library/Caches" 2>/dev/null; then
+  BUILD_LOCK="$HOME/Library/Caches/lyrimuse-build.sh.lock"
+fi
 # 上一次全部成功的普通装机:源码快照拍下的时刻、装进 /Applications 的那个包(inode)。排队合并用。
 LAST_INSTALL="$PWD/.build/build.sh.last-install"
 # 剥符号之前存下的 dSYM(见下面合并 Swift 切片之后那段)。在工作树里,不在源码快照里。
