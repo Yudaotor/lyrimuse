@@ -19,15 +19,16 @@ struct WebLyricsScreenCard: View {
                 Toggle("", isOn: $settings.webLyricsEnabled)
             }
             CardDivider()
-            SettingsRow(icon: "macwindow", title: L10n.t("本机地址"), subtitle: server.localURL.absoluteString) {
+            SettingsRow(icon: "safari", title: L10n.t("本机地址"), subtitle: server.localURL.absoluteString) {
                 WebLyricsOpenButton(title: L10n.t("在浏览器中打开"), url: server.localURL, enabled: server.isRunning)
             }
             CardDivider()
             SettingsRow(icon: "ipad.and.iphone", title: L10n.t("其他设备"),
-                        subtitle: settings.webLyricsAllowLAN ? (links.host?.absoluteString ?? L10n.t("未连接局域网"))
-                                                              : L10n.t("局域网访问已关闭")) {
+                        subtitle: WebLyricsLANSummary.text(enabled: settings.webLyricsEnabled,
+                                                           allowLAN: settings.webLyricsAllowLAN, host: links.host,
+                                                           remoteViewers: server.remoteViewerCount)) {
                 WebLyricsPanelButton(isPresented: $showsConnection) {
-                    SettingsPopoverShell(title: L10n.t("其他设备"), width: 400) { connectionRows }
+                    SettingsPopoverShell(title: L10n.t("连接设置"), width: 400) { connectionRows }
                 }
             }
             WebLyricsProblemRow(server: server)
@@ -40,6 +41,7 @@ struct WebLyricsScreenCard: View {
     }
 
     @ViewBuilder private var connectionRows: some View {
+        SettingsCardHeader(title: L10n.t("局域网"))
         SettingsRow(icon: "wifi", title: L10n.t("允许局域网访问"),
                     subtitle: L10n.t("同一网络中的设备可通过带密钥的链接访问")) {
             Toggle("", isOn: $settings.webLyricsAllowLAN)
@@ -50,46 +52,54 @@ struct WebLyricsScreenCard: View {
                         subtitle: L10n.t("可在其他设备上控制播放、跳转歌词")) {
                 Toggle("", isOn: $settings.webLyricsAllowLANControl)
             }
-            WebLyricsLANLinkRows(links: links, qrCaption: L10n.t("使用相机扫描二维码"))
+            WebLyricsLANLinkRows(links: links, remoteViewers: server.remoteViewerCount, qrCaption: L10n.t("使用相机扫描二维码"))
             CardDivider()
             WebLyricsRegenerateRow { settings.regenerateWebLyricsToken() }
         }
-        CardDivider()
+        SettingsCardHeader(title: L10n.t("高级"))
         WebLyricsPortRow(value: $settings.webLyricsPort, otherPort: settings.obsLyricsPort,
                          duplicateMessage: L10n.t("该端口已被 OBS 输出使用"), note: L10n.t("更改后需重新扫码连接"))
     }
 }
 
-/// 「歌词显示 › 悬浮歌词」最下面那张「OBS 输出」卡:开关、浏览器源地址(预览、拷贝)、其他设备;
-/// 局域网访问、备用链接、端口、重置访问密钥收在「连接设置…」浮层里。样式就是上面悬浮歌词那一套。见 19 章。
-struct WebLyricsObsCard: View {
+/// 「歌词显示 › 悬浮歌词」的「OBS」那一组:编辑台工具栏「OBS」浮层和「全部设置」抽屉的「OBS」组都调它
+/// (同另外几组,一份视图两个宿主)。样式就是悬浮歌词那一套。见 19 章。
+struct OverlayObsSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var server = WebLyricsServer.obs
     @State private var links = WebLyricsLANLinks()
-    @State private var showsConnection = false
 
     var body: some View {
-        SettingsCard(cornerRadius: 18) {
-            SettingsRow(icon: "video", title: L10n.t("OBS 输出"),
-                        subtitle: L10n.t("作为浏览器源叠加到直播画面，建议尺寸 1920 × 1080")) {
-                Toggle("", isOn: $settings.obsLyricsEnabled)
+        SettingsRowGroupStack {
+            SettingsRowGroup {
+                SettingsRow(icon: "video", title: L10n.t("OBS 输出"),
+                            subtitle: L10n.t("作为浏览器源叠加到直播画面，宽高设为 OBS 画布尺寸")) {
+                    Toggle("", isOn: $settings.obsLyricsEnabled)
+                }
+                CardDivider()
+                SettingsRow(icon: "link", title: L10n.t("浏览器源地址"), subtitle: server.localURL.absoluteString) {
+                    HStack(spacing: 8) {
+                        WebLyricsOpenButton(title: L10n.t("预览"), url: server.previewURL, enabled: server.isRunning)
+                        CopyLinkButton(url: server.localURL)
+                    }
+                }
+                WebLyricsProblemRow(server: server)
             }
-            CardDivider()
-            SettingsRow(icon: "link", title: L10n.t("浏览器源地址"), subtitle: server.localURL.absoluteString) {
-                HStack(spacing: 8) {
-                    WebLyricsOpenButton(title: L10n.t("预览"), url: server.previewURL, enabled: server.isRunning)
-                    CopyLinkButton(url: server.localURL)
+            SettingsRowGroup(title: L10n.t("局域网")) {
+                SettingsRow(icon: "wifi", title: L10n.t("允许局域网访问"),
+                            subtitle: L10n.t("同一网络中的设备可通过带密钥的链接访问")) {
+                    Toggle("", isOn: $settings.obsLyricsAllowLAN)
+                }
+                if settings.obsLyricsAllowLAN {
+                    WebLyricsLANLinkRows(links: links, remoteViewers: server.remoteViewerCount, qrCaption: nil)
+                    CardDivider()
+                    WebLyricsRegenerateRow { settings.regenerateObsLyricsToken() }
                 }
             }
-            CardDivider()
-            SettingsRow(icon: "desktopcomputer", title: L10n.t("其他设备"),
-                        subtitle: settings.obsLyricsAllowLAN ? (links.host?.absoluteString ?? L10n.t("未连接局域网"))
-                                                             : L10n.t("局域网访问已关闭")) {
-                WebLyricsPanelButton(isPresented: $showsConnection) {
-                    SettingsPopoverShell(title: L10n.t("其他设备"), width: 400) { connectionRows }
-                }
+            SettingsRowGroup(title: L10n.t("高级")) {
+                WebLyricsPortRow(value: $settings.obsLyricsPort, otherPort: settings.webLyricsPort,
+                                 duplicateMessage: L10n.t("该端口已被网页歌词使用"), note: L10n.t("更改后需同步修改 OBS 中的地址"))
             }
-            WebLyricsProblemRow(server: server)
         }
         .onAppear { links.refresh(server) }
         .onChange(of: settings.obsLyricsAllowLAN) { _, _ in links.refresh(server) }
@@ -97,29 +107,34 @@ struct WebLyricsObsCard: View {
         .onChange(of: settings.obsLyricsPort) { _, _ in links.refresh(server) }
         .onChange(of: server.state) { _, _ in links.refresh(server) }
     }
-
-    @ViewBuilder private var connectionRows: some View {
-        SettingsRow(icon: "wifi", title: L10n.t("允许局域网访问"),
-                    subtitle: L10n.t("同一网络中的设备可通过带密钥的链接访问")) {
-            Toggle("", isOn: $settings.obsLyricsAllowLAN)
-        }
-        if settings.obsLyricsAllowLAN {
-            WebLyricsLANLinkRows(links: links, qrCaption: nil)
-            CardDivider()
-            WebLyricsRegenerateRow { settings.regenerateObsLyricsToken() }
-        }
-        CardDivider()
-        WebLyricsPortRow(value: $settings.obsLyricsPort, otherPort: settings.webLyricsPort,
-                         duplicateMessage: L10n.t("该端口已被网页歌词使用"), note: L10n.t("更改后需同步修改 OBS 中的地址"))
-    }
 }
 
-// MARK: - 两张卡共用的零件(各自的设置分开存,只是长得一样)
+// MARK: - 网页歌词卡和 OBS 那一组共用的零件(各自的设置分开存,只是长得一样)
 
 extension WebLyricsServer {
     var isRunning: Bool {
         if case .running = state { return true }
         return false
+    }
+}
+
+/// 卡上「其他设备」那一行的副标题(状态判断在 Core `WebLyricsLANStatus`)。
+enum WebLyricsLANSummary {
+    @MainActor
+    static func text(enabled: Bool, allowLAN: Bool, host: URL?, remoteViewers: Int) -> String {
+        switch WebLyricsLANStatus.make(enabled: enabled, allowLAN: allowLAN, link: host, remoteViewers: remoteViewers) {
+        case .off: return L10n.t("未开启")
+        case .lanOff: return L10n.t("局域网访问已关闭")
+        case .noNetwork: return L10n.t("未连接局域网")
+        case let .reachable(address, 0): return address
+        case let .reachable(address, count): return String(format: L10n.t("%@ · 已连接 %lld 台设备"), address, count)
+        }
+    }
+
+    /// 链接行显示的地址:名字(或 IP)加端口,不带密钥;拷贝按钮拷的才是带密钥的完整链接。
+    @MainActor
+    static func address(_ link: URL, remoteViewers: Int = 0) -> String {
+        text(enabled: true, allowLAN: true, host: link, remoteViewers: remoteViewers)
     }
 }
 
@@ -146,14 +161,18 @@ struct WebLyricsLANLinks {
     }
 }
 
-/// 局域网链接那几行:访问链接(可带二维码)和备用链接(IP 地址)。
+/// 局域网链接那几行:访问链接(可带二维码)和备用链接(IP 地址)。行上只显示地址不带密钥(OBS 那一组在「全部设置」里
+/// 常驻显示,直播、录屏时会拍进画面),访问链接那一行后面带上别的设备连进来几个页面。
 private struct WebLyricsLANLinkRows: View {
     let links: WebLyricsLANLinks
+    let remoteViewers: Int
     let qrCaption: String?
 
     var body: some View {
         CardDivider()
-        SettingsRow(icon: "link", title: L10n.t("访问链接"), subtitle: links.host?.absoluteString ?? L10n.t("未连接局域网")) {
+        SettingsRow(icon: "link", title: L10n.t("访问链接"),
+                    subtitle: links.host.map { WebLyricsLANSummary.address($0, remoteViewers: remoteViewers) }
+                        ?? L10n.t("未连接局域网")) {
             if let host = links.host { CopyLinkButton(url: host) }
         }
         if let qrCaption, let host = links.host, let qr = WebLyricsQRCode.image(for: host.absoluteString) {
@@ -173,7 +192,7 @@ private struct WebLyricsLANLinkRows: View {
         }
         if let ip = links.ip {
             CardDivider()
-            SettingsRow(icon: "network", title: L10n.t("备用链接（IP 地址）"), subtitle: ip.absoluteString) {
+            SettingsRow(icon: "network", title: L10n.t("备用链接（IP 地址）"), subtitle: WebLyricsLANSummary.address(ip)) {
                 CopyLinkButton(url: ip)
             }
         }

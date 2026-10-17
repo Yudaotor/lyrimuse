@@ -40,6 +40,8 @@ final class WebLyricsServer: ObservableObject {
     @Published private(set) var state: State = .off
     /// 此刻连着的页面。
     @Published private(set) var viewerCount = 0
+    /// 其中从别的设备连进来的(不算这台 Mac 自己开的)。
+    @Published private(set) var remoteViewerCount = 0
 
     let screens = WebLyricsScreenHub()
     let obsFeed = WebLyricsObsFeed()
@@ -221,6 +223,7 @@ final class WebLyricsServer: ObservableObject {
 
     private func updateViewerCount() {
         viewerCount = connections.values.filter(\.isViewer).count
+        remoteViewerCount = connections.values.filter { $0.isViewer && !$0.isLoopback }.count
     }
 
     // MARK: - 请求

@@ -79,6 +79,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case toggleFavorite
         /// 把播放器音量设成 0…100,跟拖歌词窗口的音量条走同一条路(`debug/volume?percent=`)。
         case volume(percent: Int)
+        /// 设置窗口里搜这个词、打开第一条结果:翻页、切分段、展开抽屉,把那一行高亮并滚进可见区
+        /// (`debug/settings-search?q=`)。设置窗口要先开着。
+        case settingsSearch(query: String)
     }
 
     /// `action/` 下不对应快捷键的那几个名字(跟 `LyrimuseAction.linkName` 不能重名,selftest 核对)。
@@ -175,6 +178,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/volume"):
             guard let percent = value("percent").flatMap(Int.init), (0...100).contains(percent) else { return nil }
             self = .debug(.volume(percent: percent))
+        case ("debug", "/settings-search"):
+            guard let query = value("q")?.trimmingCharacters(in: .whitespaces), !query.isEmpty else { return nil }
+            self = .debug(.settingsSearch(query: query))
         case ("lastfm-auth-callback", _):
             self = .lastfmAuthCallback
         default:
@@ -275,6 +281,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .volume(percent):
                 components.path = "/volume"
                 components.queryItems = [URLQueryItem(name: "percent", value: String(percent))]
+            case let .settingsSearch(query):
+                components.path = "/settings-search"
+                components.queryItems = [URLQueryItem(name: "q", value: query)]
             }
         case .lastfmAuthCallback:
             components.host = "lastfm-auth-callback"

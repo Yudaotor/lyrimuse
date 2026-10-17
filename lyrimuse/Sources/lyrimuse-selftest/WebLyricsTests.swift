@@ -59,6 +59,21 @@ func runWebLyricsTests() {
         expectEqual(WebSocketFrame.decode(huge), .invalid, "网页歌词: 客户端大帧算坏连接")
     }
 
+    // ---- 设置卡「其他设备」那一行 ----
+    do {
+        let link = WebLyricsLinks.url(host: "DJ-Mac.local", port: 3940, token: "abc")
+        expectEqual(WebLyricsLANStatus.make(enabled: false, allowLAN: true, link: link, remoteViewers: 2), .off,
+                    "网页歌词: 开关关着时不列地址")
+        expectEqual(WebLyricsLANStatus.make(enabled: true, allowLAN: false, link: link, remoteViewers: 0), .lanOff,
+                    "网页歌词: 局域网访问关着")
+        expectEqual(WebLyricsLANStatus.make(enabled: true, allowLAN: true, link: nil, remoteViewers: 0), .noNetwork,
+                    "网页歌词: 没有局域网")
+        expectEqual(WebLyricsLANStatus.make(enabled: true, allowLAN: true, link: link, remoteViewers: 0),
+                    .reachable(address: "DJ-Mac.local:3940", remoteViewers: 0), "网页歌词: 只写名字和端口,不带密钥")
+        expectEqual(WebLyricsLANStatus.make(enabled: true, allowLAN: true, link: link, remoteViewers: 2),
+                    .reachable(address: "DJ-Mac.local:3940", remoteViewers: 2), "网页歌词: 带上别的设备连进来的页面数")
+    }
+
     // ---- 谁能打开 ----
     do {
         let token = WebLyricsAccess.makeToken()

@@ -238,6 +238,22 @@ public enum WebLyricsPort {
     public static func clamped(_ value: Int, fallback: Int = standard) -> Int { range.contains(value) ? value : fallback }
 }
 
+/// 设置卡上「其他设备」那一行的状态。不带密钥:链接和二维码只在「连接设置」浮层里(19 章决策 17)。
+public enum WebLyricsLANStatus: Equatable, Sendable {
+    case off
+    case lanOff
+    case noNetwork
+    /// `<名字>:<端口>`,和从别的设备连进来的页面数(这台 Mac 自己开的不算)。
+    case reachable(address: String, remoteViewers: Int)
+
+    public static func make(enabled: Bool, allowLAN: Bool, link: URL?, remoteViewers: Int) -> Self {
+        guard enabled else { return .off }
+        guard allowLAN else { return .lanOff }
+        guard let link, let name = link.host else { return .noNetwork }
+        return .reachable(address: link.port.map { "\(name):\($0)" } ?? name, remoteViewers: max(0, remoteViewers))
+    }
+}
+
 /// 网页歌词、OBS 两个服务的链接。`host` 是 `localhost`、局域网 IP 或 `<本地主机名>.local`;本机回环不带密钥,别的设备带。
 /// 两个服务各占一个端口,根路径就是各自的页面,不靠查询串区分。
 public enum WebLyricsLinks {

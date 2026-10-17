@@ -15,6 +15,8 @@ enum DebugDeepLinks {
     private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "deep-link")
 
     static var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
+    /// `debug/settings-search` 的搜索词,设置窗口收到后按搜索结果的第一条跳过去。
+    static let settingsSearchNotification = Notification.Name("lyrimuse.debug.settingsSearch")
 
     static var outputDir: URL {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
@@ -49,6 +51,9 @@ enum DebugDeepLinks {
         case let .volume(percent):
             PlaybackCoordinator.shared.setVolume(percent)
             logger.notice("debug volume \(percent, privacy: .public)")
+        case let .settingsSearch(query):
+            NotificationCenter.default.post(name: settingsSearchNotification, object: query)
+            logger.notice("debug settings search \(query, privacy: .public)")
         }
     }
 

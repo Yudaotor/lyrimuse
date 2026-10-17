@@ -40104,25 +40104,25 @@
         }
       }
     },
-    "不含内容、排版、行为、位置和宽度" : {
+    "不含内容、排版、行为、位置、OBS 和宽度" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Content, layout, behavior, position and width are left alone"
+            "value" : "Content, layout, behavior, position, OBS and width are left alone"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "不含内容、排版、行为、位置和宽度"
+            "value" : "不含内容、排版、行为、位置、OBS 和宽度"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "不含內容、排版、行為、位置和寬度"
+            "value" : "不含內容、排版、行為、位置、OBS 和寬度"
           }
         }
       }
@@ -47893,6 +47893,29 @@
         }
       }
     },
+    "OBS" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OBS"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OBS"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OBS"
+          }
+        }
+      }
+    },
     "OBS 输出" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -47916,25 +47939,25 @@
         }
       }
     },
-    "作为浏览器源叠加到直播画面，建议尺寸 1920 × 1080" : {
+    "作为浏览器源叠加到直播画面，宽高设为 OBS 画布尺寸" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Overlay the lyrics on your stream as a browser source. Recommended size: 1920 × 1080"
+            "value" : "Overlay the lyrics on your stream as a browser source. Set its width and height to your OBS canvas size"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "作为浏览器源叠加到直播画面，建议尺寸 1920 × 1080"
+            "value" : "作为浏览器源叠加到直播画面，宽高设为 OBS 画布尺寸"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "作為瀏覽器來源疊加到直播畫面，建議尺寸 1920 × 1080"
+            "value" : "作為瀏覽器來源疊加到直播畫面，寬高設為 OBS 畫布尺寸"
           }
         }
       }
@@ -48004,6 +48027,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "連線設定…"
+          }
+        }
+      }
+    },
+    "连接设置" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connection Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连接设置"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連線設定"
+          }
+        }
+      }
+    },
+    "局域网" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local Network"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "局域网"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "區域網路"
+          }
+        }
+      }
+    },
+    "高级" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Advanced"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高级"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "進階"
+          }
+        }
+      }
+    },
+    "%@ · 已连接 %lld 台设备" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · Devices connected: %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · 已连接 %lld 台设备"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · 已連線 %lld 台裝置"
           }
         }
       }

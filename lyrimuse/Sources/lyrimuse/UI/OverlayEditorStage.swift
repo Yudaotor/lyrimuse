@@ -450,7 +450,7 @@ struct OverlayEditorStage: View {
             )
             Spacer(minLength: 8)
             // 作用范围那句跟抽屉里那份(`OverlayAllSettingsDrawer.resetRow` 头注)**两个入口必须一字不差**。
-            EditorToolbarResetMenu(scope: L10n.t("不含内容、排版、行为、位置和宽度")) {
+            EditorToolbarResetMenu(scope: L10n.t("不含内容、排版、行为、位置、OBS 和宽度")) {
                 OverlayStyleDefaults.restoreTextAndColors()
             }
         }
@@ -458,7 +458,7 @@ struct OverlayEditorStage: View {
         .padding(.horizontal, 2)
     }
 
-    /// 工具栏第二行:「内容」「排版」「行为」「位置」。
+    /// 工具栏第二行:「内容」「排版」「行为」「位置」「OBS」。
     ///
     /// 「你帮我和灵动岛设置页一样处理,放到上面的小按钮里面,点了出现下拉框」——
     /// 在此之前这三项(锁定位置 / 长按拖动 / 悬浮淡化)加上并进来的两行自动隐藏是编辑台
@@ -508,9 +508,15 @@ struct OverlayEditorStage: View {
                 summary: OverlayPlacementSegmentedControl.label(for: settings.overlayPlacementMode),
                 target: .placement
             )
-            Spacer(minLength: 8)
-            // 跟第一行「重置 ▾」等宽的隐藏占位:两行的弹性预算一样,三颗入口才逐列对齐。
-            EditorToolbarResetReserve()
+            // 「OBS」:把悬浮歌词作为浏览器源输出给 OBS(19 章)。摘要报开没开。
+            toolbarButton(
+                icon: "video",
+                title: L10n.t("OBS"),
+                summary: settings.obsLyricsEnabled ? L10n.t("已开启") : L10n.t("未开启"),
+                target: .obs
+            )
+            // 不放跟第一行「重置 ▾」等宽的隐藏占位(另外几个编辑台有):这一行五颗、第一行三颗,本来就对不成列,
+            // 那块占位只会把五颗的摘要一起压成「…」。
         }
         .font(.system(size: 12))
         .padding(.horizontal, 2)
@@ -573,7 +579,7 @@ struct OverlayEditorStage: View {
     private static func rowOffsetAboveStage(_ target: StagePopover) -> CGFloat {
         switch target {
         case .theme, .type, .color: return (toolbarHeight + toolbarSpacing) * 2
-        case .content, .layout, .behavior, .placement: return toolbarHeight + toolbarSpacing
+        case .content, .layout, .behavior, .placement, .obs: return toolbarHeight + toolbarSpacing
         }
     }
 
@@ -594,6 +600,7 @@ struct OverlayEditorStage: View {
         case layout
         case behavior
         case placement
+        case obs
 
         var title: String {
             switch self {
@@ -604,6 +611,7 @@ struct OverlayEditorStage: View {
             case .layout: return L10n.t("排版")
             case .behavior: return L10n.t("行为")
             case .placement: return L10n.t("位置")
+            case .obs: return L10n.t("OBS")
             }
         }
 
@@ -617,6 +625,8 @@ struct OverlayEditorStage: View {
             case .color: return 560
             case .layout: return 540
             case .content, .placement: return 420
+            // 「OBS」浏览器源地址那一行要放下地址和「预览」「拷贝」两颗按钮。
+            case .obs: return 460
             // 「行为」三列开关小块,最长的「纯音乐/无歌词时隐藏」+ ⓘ + 开关要 230 左右一格。
             case .behavior: return 740
             }
@@ -650,6 +660,7 @@ struct OverlayEditorStage: View {
         case .layout: OverlayLayoutSettingsRows()
         case .behavior: OverlayBehaviorSettingsRows()
         case .placement: OverlayPlacementSettingsRows()
+        case .obs: OverlayObsSettingsRows()
         }
     }
 

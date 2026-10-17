@@ -11,12 +11,13 @@ import SwiftUI
 // 才能开这个形态";它留在编辑台正下方那张 modeToggleCard 里常驻可见。
 //
 // 抽屉里的每一组都是**别处那份组件**,这里只有外壳;**分组、顺序、标题跟工具栏各个入口一一
-// 对应**(主题 → 字形 → 颜色 → 内容 → 排版(含宽度)→ 行为 → 位置 → 恢复默认),展开后一组一张卡。别给抽屉另起一套分组名:
+// 对应**(主题 → 字形 → 颜色 → 内容 → 排版(含宽度)→ 行为 → 位置 → OBS → 恢复默认),展开后一组一张卡。别给抽屉另起一套分组名:
 // 用户是按工具栏的记忆到抽屉里找的,对不上名就会落空:
 //   - 主题 / 字形 / 颜色 / 内容 / 排版 → OverlayStyleSettingsRows.swift(跟工具栏那几个浮层同一份)。
 //     「跟随封面」在「主题」组,理由见 OverlayThemeSettingsRows 头注
 //   - 行为 → OverlayBehaviorSettingsRows.swift(行为项 + 自动隐藏几项,跟工具栏「行为」浮层同一份视图)
 //   - 位置 → OverlayPlacementSettingsRows.swift
+//   - OBS → Settings/WebLyricsSettingsCard.swift 的 OverlayObsSettingsRows(把这一套样式输出给 OBS,19 章)
 //   - 恢复 → OverlayStyleDefaults.restoreTextAndColors()(跟工具栏「重置 ▾」同一个动作)
 // 「宽度」那根滑杆写在本文件里,放在「排版」卡最后、自己一个框 ——
 // 它跟编辑台里那条宽度调整条是同一个值的两个入口:
@@ -62,6 +63,7 @@ struct OverlayAllSettingsDrawer: View {
                 SettingsGroupCard(title: L10n.t("行为")) { OverlayBehaviorSettingsRows() }
                 // 排在「行为」之后 = 工具栏第二行的顺序(排版 / 行为 / 位置)。
                 SettingsGroupCard(title: L10n.t("位置")) { OverlayPlacementSettingsRows() }
+                SettingsGroupCard(title: L10n.t("OBS")) { OverlayObsSettingsRows() }
                 resetRow
             }
         }
@@ -135,7 +137,7 @@ struct OverlayAllSettingsDrawer: View {
     /// 抽屉头右侧那串组名,顺序跟 body 里各组卡的顺序一致(改了分组两处一起改)。
     private static var groupNames: String {
         [L10n.t("主题"), L10n.t("字形"), L10n.t("颜色"), L10n.t("内容"), L10n.t("排版"),
-         L10n.t("行为"), L10n.t("位置")].joined(separator: " · ")
+         L10n.t("行为"), L10n.t("位置"), L10n.t("OBS")].joined(separator: " · ")
     }
 
     // MARK: - 宽度与恢复
@@ -186,7 +188,7 @@ struct OverlayAllSettingsDrawer: View {
     /// 其中一处补上,表现为"从菜单点恢复和从抽屉点恢复,恢复出来的样子不一样"。
     ///
     /// 副标题是这颗按钮的**作用范围声明**,不是装饰:它只恢复主题、字形、颜色几组,「内容」「排版」
-    /// 「行为」「位置」几个浮层里的项和宽度一个都不碰,副标题把没覆盖的念出来,跟菜单栏那颗同一个
+    /// 「行为」「位置」「OBS」几个浮层里的项和宽度一个都不碰,副标题把没覆盖的念出来,跟菜单栏那颗同一个
     /// 句式(见 MenuBarStyleDefaults 头注)。排版和行为该不该纳入是产品取舍。
     /// 抽屉展开后单独一张卡,挂在各组卡最后。
     private var resetRow: some View {
@@ -194,7 +196,7 @@ struct OverlayAllSettingsDrawer: View {
             SettingsRow(
                 icon: "arrow.uturn.backward",
                 title: L10n.t("恢复默认"),
-                subtitle: L10n.t("不含内容、排版、行为、位置和宽度")
+                subtitle: L10n.t("不含内容、排版、行为、位置、OBS 和宽度")
             ) {
                 Button(L10n.t("恢复")) { OverlayStyleDefaults.restoreTextAndColors() }
                     .buttonBorderShape(.capsule)

@@ -626,6 +626,11 @@ struct SettingsView: View {
         // 设置搜索的两路信号只在这扇窗口的子树里有值;别处复用行组件拿到的是默认值,不受影响。
         .environment(\.settingsSearchHighlightedTitles, searchRouter.highlightedTitles)
         .environment(\.settingsSearchPendingDrawer, searchRouter.pendingDrawer)
+        // 本机验证用的 `debug/settings-search?q=`:同在搜索框里搜这个词、点第一条结果(DebugDeepLinks)。
+        .onReceive(NotificationCenter.default.publisher(for: DebugDeepLinks.settingsSearchNotification)) { note in
+            guard let query = note.object as? String, let hit = SettingsSearchIndex.shared.search(query).first else { return }
+            openSettingsSearchHit(hit)
+        }
         .environment(\.previewHostVisible, windowSurface.isVisible)
         // 播放器页那张引擎状态卡直接用它发布的状态,不再自己每 2 秒起一次 launchctl。
         .environmentObject(playerHealth)
@@ -2581,8 +2586,6 @@ private struct AppearanceSettingsTab: View {
                     isOn: Binding(
                         get: { settings.classicOverlayEnabled },
                         set: { LyricsOverlayWindowController.shared.setVisible($0) }))
-                // OBS 输出用的就是上面这一套样式,开关和链接挂在这一段(19 章决策 12)。
-                WebLyricsObsCard()
                 // 配置项**不跟开关联动**:关着也能调。把它藏起来只是让"先开、调完、再关"变成必须的
                 // 操作顺序,并不能阻止什么;而想先配好再打开的人会以为这个形态没有可调项。
                 //
@@ -2696,8 +2699,6 @@ private struct AppearanceSettingsTab: View {
                         .buttonBorderShape(.capsule)
                     }
                 }
-                // 网页显示的就是歌词窗口的完整布局、用的是这一套样式,开关和链接挂在这一段(19 章决策 12)。
-                WebLyricsScreenCard()
                 // 配置分**两套**:上面预览那个「完整 / 迷你」切到哪个,下面就配哪个。
                 //
                 // 两种尺寸是两种用法 —— 完整多半是摊开来看的、跟随封面好看;迷你常年钉在角落当挂件,
@@ -2727,6 +2728,8 @@ private struct AppearanceSettingsTab: View {
                         lyricsWindowResetRow
                     }
                 }
+                // 网页显示的就是歌词窗口的完整布局、用的是这一套样式,开关和链接挂在这一段最下面(19 章决策 12)。
+                WebLyricsScreenCard()
             }
             .background { LastfmGlassGlow() }
         }
@@ -4188,8 +4191,14 @@ struct LyricsWindowAllSettingsDrawer<Content: View>: View {
         .onChange(of: highlightedTitles) { _, _ in expandForSearchIfNeeded() }
     }
 
+    /// 这一段里不在抽屉中的行(「歌词窗口」卡、「网页歌词」卡和它的「连接设置」浮层):点名的只有它们时不展开,
+    /// 否则排在抽屉后面的网页歌词卡会被推到一屏以外。要跟 `SettingsSearchCatalog` 里歌词窗口那几条卡片条目同步。
+    private static var outsideTitleKeys: [String] { ["歌词窗口", "网页歌词", "本机地址", "其他设备", "允许局域网访问", "允许远程控制",
+                                                     "访问链接", "备用链接（IP 地址）", "重置访问密钥", "端口"] }
+
     private func expandForSearchIfNeeded() {
-        guard !highlightedTitles.isEmpty, !isExpanded else { return }
+        let outside = Set(Self.outsideTitleKeys.map { L10n.t($0) })
+        guard !highlightedTitles.subtracting(outside).isEmpty, !isExpanded else { return }
         withAnimation(.settingsCardReveal) { isExpanded = true }
     }
 

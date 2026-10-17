@@ -445,8 +445,8 @@ Lyrics in a web browser. Web Lyrics shows exactly what the lyrics window shows; 
 
 - Off by default
 - Settings: Lyrics Display › Lyrics Window › Web Lyrics
-- Settings: Lyrics Display › Lyrics Window › Other Devices › Allow Local Network Access
-- Settings: Lyrics Display › Floating Lyrics › OBS Output
+- Settings: Lyrics Display › Lyrics Window › Connection Settings › Allow Local Network Access
+- Settings: Lyrics Display › Floating Lyrics › OBS › OBS Output
 
 <a id="section-players"></a>
 
@@ -788,16 +788,16 @@ Every setting in the Settings window, by where it lives: 264 in all. Type a name
 ### Lyrics Display › Floating Lyrics
 
 - **Desktop Floating Lyrics**
-- **OBS Output**: Overlay the lyrics on your stream as a browser source. Recommended size: 1920 × 1080
-- **Browser Source URL**
-- **Other Devices**
+- **OBS**
 - **Width**
 - **Position**
 - **Screen**
-- **Reset to Defaults**: Content, layout, behavior, position and width are left alone
+- **Reset to Defaults**: Content, layout, behavior, position, OBS and width are left alone
 
-### Lyrics Display › Floating Lyrics › Other Devices
+### Lyrics Display › Floating Lyrics › OBS
 
+- **OBS Output**: Overlay the lyrics on your stream as a browser source. Set its width and height to your OBS canvas size
+- **Browser Source URL**
 - **Allow Local Network Access**: Devices on the same network can connect with a link that includes an access key
 - **Access Link**
 - **Fallback Link (IP Address)**
@@ -977,7 +977,7 @@ Every setting in the Settings window, by where it lives: 264 in all. Type a name
 - **Other Devices**
 - **Reset to Defaults**
 
-### Lyrics Display › Lyrics Window › Other Devices
+### Lyrics Display › Lyrics Window › Connection Settings
 
 - **Allow Local Network Access**: Devices on the same network can connect with a link that includes an access key
 - **Allow Remote Control**: Control playback and jump to lyrics from other devices

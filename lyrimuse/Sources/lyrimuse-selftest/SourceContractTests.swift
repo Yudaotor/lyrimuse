@@ -3548,17 +3548,17 @@ func runSourceContractTests() {
                     "抽屉镜像(触控栏): 浮层里的行视图抽屉都要装配")
     }
 
-    // ---- 三个编辑台工具栏第二行的对齐占位 ----
+    // ---- 编辑台工具栏第二行的对齐占位(灵动岛、菜单栏) ----
     //
     // 按钮宽度是**一行之内平分**出来的,第一行末尾那颗「重置 ▾」占掉的一截就是两行错位的全部原因
     // (机制、代价与离屏实测见 `EditorToolbarResetReserve` 头注)。占位漏掉既不报错也不影响功能,
     // 只会让两行按钮重新错开一截 —— 正是那种下次重排工具栏时会被顺手删掉、且没人看得出来的东西。
+    // 悬浮歌词不在这里:它第二行五颗、第一行三颗,本来对不成列,放了占位只会把五颗的摘要一起压成「…」(19 章决策 19)。
     do {
         let sourcesDir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let stages = [
-            ("悬浮歌词", "lyrimuse/UI/OverlayEditorStage.swift"),
             ("灵动岛", "lyrimuse/UI/NotchEditorStage.swift"),
             ("菜单栏", "lyrimuse/UI/MenuBarEditorStage.swift"),
         ]
@@ -3576,7 +3576,7 @@ func runSourceContractTests() {
                 menuBarGhosts = text.components(separatedBy: "toolbarGhostButton(icon: \"").count - 1
             }
         }
-        expectEqual(unreadable, [], "工具栏对齐闸: 三段编辑台的文件都读得到(读不到 = 路径挪了)")
+        expectEqual(unreadable, [], "工具栏对齐闸: 两段编辑台的文件都读得到(读不到 = 路径挪了)")
         expectEqual(missing, [],
                     "工具栏对齐闸: 工具栏第二行末尾要有 EditorToolbarResetReserve(),否则这一行整体比第一行宽出「重置 ▾」那一截")
         // 菜单栏第二行只有「行为」一颗,还要靠两份 ghost 补上第一行「配色」「字体」的位置,
