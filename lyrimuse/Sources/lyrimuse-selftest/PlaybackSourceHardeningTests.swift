@@ -308,12 +308,12 @@ private func wiringContracts() {
 
     let client = code("LyrimuseCore/Local/MediaControlClient.swift")
     let focus = body("private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {", in: client)
-    let stateUpdate = "lastAcceptedDirectQueryPlayer = nextFocusFallbackPlayer("
-    expectEqual(before("playerContentNotMusic(bundleID: player.bundleIdentifier, snapshot: s)", stateUpdate, in: focus), true,
+    let stateUpdate = "lastAcceptedDirectQueryTarget = nextFocusFallbackTarget("
+    expectEqual(before("playerContentNotMusic(bundleID: target.bundleID, snapshot: s)", stateUpdate, in: focus), true,
                 "焦点回退: 回退问到的无歌手非音乐内容先挡下,再动回退开关")
-    expectEqual(before("trustedPlaybackRejected(bundleID: player.bundleIdentifier, snapshot: s)", stateUpdate, in: focus), true,
+    expectEqual(before("trustedPlaybackRejected(bundleID: target.bundleID, snapshot: s)", stateUpdate, in: focus), true,
                 "焦点回退: 信任播放器的非歌曲内容先挡下,再动回退开关")
-    if let r = focus.range(of: "trustedPlaybackRejected(bundleID: player.bundleIdentifier, snapshot: s)") {
+    if let r = focus.range(of: "trustedPlaybackRejected(bundleID: target.bundleID, snapshot: s)") {
         expectEqual(focus[r.upperBound...].prefix(120).contains("setSnapshotFailure(.notASong)"), true,
                     "焦点回退: 信任播放器挡下时记成「不是歌」")
     }

@@ -820,7 +820,7 @@ func runKasetTests() {
         expectEqual(playbackSource.contains("            @MainActor func attempt() async -> (data: Data?, payloadKey: String?, miss: String?) {")
                     && playbackSource.contains("                let fromKaset = self.lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier\n                // 洛雪:"),
                     true, "Kaset 契约: 封面每次取都按此刻认下的播放器挑")
-        expectEqual(client.contains("if snapshot == nil, player != .kaset,\n           let probed = NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: player.bundleIdentifier) {"), true,
+        expectEqual(client.contains("if snapshot == nil, target.player != .kaset,\n           let probed = NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: target.bundleID) {"), true,
                     "Kaset 契约: 焦点回退不拿系统按 bundle id 存的那份(换歌后常停在上一首)")
         expectEqual(client.contains("return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(fetchAutoDetectedSnapshot()), wanted: true))"), true,
                     "Kaset 契约: 自动识别时系统那边没在放就问它")

@@ -281,7 +281,7 @@ func runPlayerIdentityTests() {
                                            + "                                                       kasetWasPlaying: kasetWasPlaying, qqWasPaused: qqWasPaused) else { return }"),
                         true, "控制分派(契约): 没发出去时不乐观翻转播放状态、不挪屏上进度")
             expectEqual(client.contains("fallbackViaAppleScript = viaAppleScript")
-                        && client.contains("let scriptTarget = fallbackActive && fallbackViaAppleScript ? lastAcceptedDirectQueryPlayer : channelFallbackPlayer"), true,
+                        && client.contains("let scriptTarget = fallbackActive && fallbackViaAppleScript ? lastAcceptedDirectQueryTarget?.player : channelFallbackPlayer"), true,
                         "控制分派(契约): 只有经 AppleScript 问到的播放器(焦点回退 / 通道坏了时直问)才改发 AppleScript")
             expectEqual(adProbe.contains("if Self.notFoundSuppresses(notedKey: notFoundKey, notedAt: notFoundAt, key: key, now: Date())")
                         && adProbe.contains("if reading == nil, notFound {"), true,

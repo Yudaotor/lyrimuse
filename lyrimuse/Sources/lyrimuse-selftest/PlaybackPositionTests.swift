@@ -2700,6 +2700,35 @@ func runPlaybackPositionTests() {
                                               fallbackSucceeded: nil), .appleMusic,
                     "回退开关: 同上,反向也钉一条")
 
+        // 「其他 App」里信任的播放器也能当回退目标:探针按 bundle id 问,不挑播放器。浏览器不算。
+        typealias T = M.FocusFallbackTarget
+        let fake = "org.Petrichor"
+        let trustedMap = [fake: "Petrichor", "com.apple.Safari": "Safari", "company.thebrowser.Browser": "Arc"]
+        expectEqual(M.focusFallbackTarget(forBundleID: fake, trusted: trustedMap), T(bundleID: fake, player: nil),
+                    "信任播放器回退: 信任过的非内置播放器能直接问")
+        expectEqual(M.focusFallbackTarget(forBundleID: fake, trusted: [:]), nil,
+                    "信任播放器回退: 没信任过的不问")
+        expectEqual(M.focusFallbackTarget(forBundleID: "com.apple.Safari", trusted: trustedMap), nil,
+                    "信任播放器回退: 浏览器不算 —— 抢焦点的视频常常就在它自己里")
+        expectEqual(M.focusFallbackTarget(forBundleID: "company.thebrowser.Browser", trusted: trustedMap), nil,
+                    "信任播放器回退: 不在默认名单里、但认得出引擎族的浏览器同样不算")
+        expectEqual(M.focusFallbackTarget(forBundleID: "com.apple.WebKit.GPU", trusted: trustedMap), nil,
+                    "信任播放器回退: Safari 的媒体代理进程跟 Safari 一样不算")
+        expectEqual(M.focusFallbackTarget(forBundleID: am, trusted: [:]), T(bundleID: am, player: .appleMusic),
+                    "信任播放器回退: 内置播放器照旧带上枚举,有 AppleScript 字典的先问它自己")
+        expectEqual(M.nextFocusFallbackTarget(current: nil, acceptedBundleID: fake, trusted: trustedMap,
+                                              fallbackSucceeded: nil), T(bundleID: fake, player: nil),
+                    "信任播放器回退: 正常路径接受了它的快照,开关打开")
+        expectEqual(M.nextFocusFallbackTarget(current: T(bundleID: fake, player: nil), acceptedBundleID: "com.apple.Safari",
+                                              trusted: trustedMap, fallbackSucceeded: nil), nil,
+                    "信任播放器回退: 换到浏览器就关掉")
+        expectEqual(M.nextFocusFallbackTarget(current: T(bundleID: fake, player: nil), acceptedBundleID: nil, trusted: [:],
+                                              fallbackSucceeded: true), T(bundleID: fake, player: nil),
+                    "信任播放器回退: 回退问到了就保持")
+        expectEqual(M.nextFocusFallbackTarget(current: T(bundleID: fake, player: nil), acceptedBundleID: nil, trusted: [:],
+                                              fallbackSucceeded: false, consecutiveFailures: M.fallbackRetryLimit), nil,
+                    "信任播放器回退: 连着问不到到上限就关,跟内置的一样收敛")
+
         // ---- 单拍 nil 不清状态 ----
         //
         // 改动前一拍 nil 就 clearIfWasPlaying(),把 title/allLines/封面/lastKey 全清掉。
