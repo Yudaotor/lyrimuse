@@ -180,21 +180,35 @@ struct GlassInfoButton: View {
 /// 时悬停什么都不出(见 14 章「选择播放器」改版那条下的小条)。时序同 `QuickHelpLabel`。
 ///
 /// text 为 nil 时不弹。悬停和气泡始终挂着:按 text 有无换成两套视图的话,text 一变控件就被当成新视图重建。
+///
+/// 不能只信 onHover:App 不在前台时收不到鼠标移动,「离开」偶尔会丢(指针擦过控件停在旁边,气泡照弹、一直挂着)。
+/// 到点先按锚点在屏幕上的位置核对指针还在不在,弹出后每 0.25 秒再核对一次,不在就收。见 14 章决策 118。
 private struct HoverNote: ViewModifier {
     let text: String?
     /// 鼠标停够了、还没移开。弹不弹每次刷新时按当下的 text 算,别在计时到点那一刻定:计时期间点一下卡片会改它的
     /// 状态,说明可能随之变成没有,到点时手里那份 text 已经过期。
     @State private var hovering = false
     @State private var hoverTask: Task<Void, Never>?
+    @State private var anchor = HoverAnchor()
 
     func body(content: Content) -> some View {
         content
+            .background(HoverAnchorView(anchor: anchor))
             .onHover { inside in
                 hoverTask?.cancel()
                 hoverTask = Task {
                     try? await Task.sleep(for: HoverPopoverTiming.delay(entering: inside))
                     guard !Task.isCancelled else { return }
+                    guard !inside || anchor.containsMouse else { return }
                     hovering = inside
+                    while inside {
+                        try? await Task.sleep(for: .milliseconds(250))
+                        guard !Task.isCancelled else { return }
+                        if !anchor.containsMouse {
+                            hovering = false
+                            return
+                        }
+                    }
                 }
             }
             .popover(isPresented: Binding(get: { hovering && text != nil }, set: { if !$0 { hovering = false } }),
@@ -206,6 +220,36 @@ private struct HoverNote: ViewModifier {
                     .frame(maxWidth: 260, alignment: .leading)
             }
             .onDisappear { hoverTask?.cancel() }
+    }
+}
+
+/// `HoverNote` 的锚点在屏幕上的位置:背景里垫一个空 NSView,要用时按它换算。
+@MainActor
+private final class HoverAnchor {
+    weak var view: NSView?
+
+    var containsMouse: Bool {
+        guard let view, let window = view.window else { return false }
+        return window.convertToScreen(view.convert(view.bounds, to: nil)).contains(NSEvent.mouseLocation)
+    }
+}
+
+private struct HoverAnchorView: NSViewRepresentable {
+    let anchor: HoverAnchor
+
+    /// 只量位置,不接点击:垫在按钮背后,接了会把点按截走。
+    final class PassThroughView: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = PassThroughView()
+        anchor.view = view
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        anchor.view = nsView
     }
 }
 

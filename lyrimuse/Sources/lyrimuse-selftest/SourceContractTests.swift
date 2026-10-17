@@ -2629,6 +2629,19 @@ func runSourceContractTests() {
             expectEqual(true, false, "网页版悬停介绍: 读不到 PlayerChoiceCard.swift / SettingsView.swift(路径挪了?)")
         }
 
+        // 悬停说明不能只信 onHover(App 不在前台时「离开」会丢):到点核对指针还在锚点里、弹出后轮询,
+        // 量位置的 NSView 不接点击(垫在按钮背后)。
+        if let help = read("HelpButton.swift") {
+            expectEqual(help.contains("guard !inside || anchor.containsMouse else { return }")
+                        && help.contains("if !anchor.containsMouse {")
+                        && help.contains(".background(HoverAnchorView(anchor: anchor))"), true,
+                        "悬停说明: HoverNote 要按锚点位置核对指针(到点一次、弹出后轮询)")
+            expectEqual(help.contains("override func hitTest(_ point: NSPoint) -> NSView? { nil }"), true,
+                        "悬停说明: 量位置的 NSView 不能接点击")
+        } else {
+            expectEqual(true, false, "悬停说明: 读不到 HelpButton.swift(路径挪了?)")
+        }
+
         // ⑤ **引导页只允许"一次点击取消一个配对",不准批量删**(真出过事)。
         //
         // `toggleYouTubeMusic` 一旦在取消勾选时 `for bundleID in pairedBrowsers { unpair }`
