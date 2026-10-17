@@ -463,7 +463,8 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 0 锚点的那一行里也有 `playing:true`,`posResumeSignalAt` 会被它刷新成跟锚点同时,见 qqLateZeroAnchorLead。
     private var posResumeEpisodeAt: Date?
     /// 洛雪冷启动(见 lxMusicColdStartPosition):在放信号(哪个播放器发的都记)到时默认输出设备没在转。`signalAnchor` 是那一刻快照里的锚点,
-    /// `audioAt` 是设备转起来的时刻(后台盯着记)。用过一次、暂停或等过点就清掉。
+    /// `audioAt` 是设备转起来的时刻(后台盯着记)。用过一次、暂停、等过点、洛雪这一拍走开放 API、设备转起来超过
+    /// `lxMusicColdStartMaxAgeSecs` 都清掉。
     private var lxColdStart: (signalAt: Date, signalAnchor: Double?, audioAt: Date?)?
     private var lxColdStartWatch: Task<Void, Never>?
     /// 洛雪中途改速度(见 lxMusicRateCorrected):这一拍按哪次改速度修正过读数,`lxRateAnchoredChange` 是已经按它重锚过的那次。
@@ -748,11 +749,17 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 就等它转起来,那一刻才是真起点:位置 = 那之后发的锚点 + 设备转起来至今。`signalAnchor` 是在放信号那一刻快照里的锚点,
     /// 锚点还是它时(新的那份还没到)不算。设备在转(别的 App 在出声,或者暂停没多久、音频输出还开着)时几乎当场出声,不管。
     /// 见 02 章决策 129。纯函数,selftest 直接覆盖。
+    /// 设备转起来超过 `lxMusicColdStartMaxAgeSecs` 还没用上的不算:那时的新锚点早该到了,留到后面(拖动、别的播放器开播后
+    /// 才放洛雪)按很久以前的转起来时刻算,整首会错开那么多秒。
     public nonisolated static func lxMusicColdStartPosition(anchorElapsed: Double?, signalAnchor: Double?, audioAt: Date?,
                                                             rate: Double, now: Date) -> Double? {
-        guard let anchorElapsed, let audioAt, anchorElapsed != signalAnchor else { return nil }
+        guard let anchorElapsed, let audioAt, anchorElapsed != signalAnchor,
+              now.timeIntervalSince(audioAt) <= lxMusicColdStartMaxAgeSecs else { return nil }
         return anchorElapsed + max(0, now.timeIntervalSince(audioAt)) * rate
     }
+
+    /// 见 lxMusicColdStartPosition。设备转起来之后正常一两拍内就用上(转起来那一刻当场补查一次)。
+    public nonisolated static let lxMusicColdStartMaxAgeSecs: TimeInterval = 5
 
     /// 洛雪播放中途改速度:它只改音频元素、不重报会话,系统那份速度和锚点都还是旧的。`setting` 是它配置里的速度和改的时刻
     /// (见 `LXMusicPlaybackRate`)。在放、两份速度不一样时,读数从改的那一刻起换成新速度。它暂停、恢复、跳转、换歌时按新速度
@@ -2746,6 +2753,14 @@ public final class LocalPlaybackSource: ObservableObject {
         lxColdStart = nil
     }
 
+    /// 设备早就转起来了却一直没用上(新锚点跟在放信号那一刻的一样、读数走了开放 API、在放的根本不是洛雪):丢掉,
+    /// 下一次冷恢复重新记。
+    private func dropStaleLXMusicColdStart(now: Date) {
+        guard let audioAt = lxColdStart?.audioAt, now.timeIntervalSince(audioAt) > Self.lxMusicColdStartMaxAgeSecs else { return }
+        logger.notice("lx cold start: output device started \(now.timeIntervalSince(audioAt), format: .fixed(precision: 1))s ago and no new anchor used it, dropping")
+        clearLXMusicColdStart()
+    }
+
     /// 回放:一条「恢复播放」信号到达(线上是 handlePlayerInfoChanged 的 resumeSignal)。
     public func replayResumeSignal(at date: Date) {
         posStateSignalAt = date
@@ -2963,6 +2978,7 @@ public final class LocalPlaybackSource: ObservableObject {
             if posResumeEpisodeAt == nil { posResumeEpisodeAt = posResumeSignalAt }
             // 不看上一份是不是洛雪:打开洛雪点歌时 App 记着的还是别的播放器。只在洛雪的读数上用,见调用处。洛雪在它设置里
             // 选了别的输出设备时不等默认设备:那台可能一直闲着,等满 3 秒歌词就定住 3 秒(见 02 章决策 134)。
+            dropStaleLXMusicColdStart(now: Date())
             if lxColdStart == nil, ProcessAudioOutput.defaultOutputDeviceIsRunning() == false {
                 if LXMusicOpenAPI.outputsToDefaultDevice(LXMusicOpenAPI.shared.currentConfig()) {
                     beginLXMusicColdStart(signalAt: Date(), watch: true)
@@ -4091,6 +4107,8 @@ public final class LocalPlaybackSource: ObservableObject {
         let apiState = env.lxMusicOpenAPI(isLXMusic)
         let viaAPI = Self.lxMusicOpenAPISnapshot(reading, state: apiState, now: now)
         noteLXMusicOpenAPI(using: viaAPI != nil, isLXMusic: isLXMusic, state: apiState, title: reading.title)
+        // 开放 API 这一路不靠系统锚点,冷启动等设备用不上(见 lxMusicOpenAPISnapshot);留着会被之后系统那份的锚点按旧时刻用掉。
+        if viaAPI != nil { clearLXMusicColdStart() } else { dropStaleLXMusicColdStart(now: now) }
         let rateSetting = viaAPI == nil && isLXMusic && reading.playing == true ? env.lxMusicPlaybackRate() : nil
         let snapshot = viaAPI ?? Self.lxMusicRateCorrected(reading, setting: rateSetting, now: now)
         lxRateChange = viaAPI == nil && snapshot.playbackRate != reading.playbackRate ? rateSetting?.changedAt : nil

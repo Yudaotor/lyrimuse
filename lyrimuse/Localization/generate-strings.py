@@ -50,6 +50,18 @@ INFO_PLIST_KEYS = {
 # 后缀跟 L10n.swift、selftest 本地化守卫、scripts/check_strings_parity.py 三处必须一致。
 PLURAL_ONE_SUFFIX = "#one"
 FORMAT_SPEC = re.compile(r"%(?:\d+\$)?[-+ 0#]*\d*(?:\.\d+)?(?:ll|l|h)?[@dDiuUxXoOfeEgGcCsSpaA%]")
+# 跨语言格式参数:各语言的值(含 plural 的 one / other)要跟键(简体原文)用同一组参数 —— 第几个参数、什么类型。
+# 调用方按键的参数表传值、String(format:) 却按译文里的格式符取:译文把 %d 写成 %@ 会把整数当对象指针解引用(崩溃),
+# 少写、多写或类型写错会错位、读到垃圾。%% 是字面百分号,不算参数。不认空格标志(`% d`):译文里「25% of」这种
+# 字面百分号会被它当成参数。长度修饰(%d / %ld / %lld)只影响取多宽,同属整数,不区分。
+# 同一份规则在 scripts/check_strings_parity.py(导入本函数)和 selftest 本地化守卫(Swift 实现)里各跑一遍。
+ARG_SPEC = re.compile(r"%(?:(\d+)\$)?[-+0#]*\d*(?:\.\d+)?(?:hh|ll|h|l|q|z|t|j)?([@dDiuUxXoOfeEgGcCsSpaA%])")
+ARG_KIND = {"@": "对象"}
+ARG_KIND.update({c: "整数" for c in "dDiuUxXoO"})
+ARG_KIND.update({c: "浮点" for c in "feEgGaA"})
+ARG_KIND.update({c: "字符" for c in "cC"})
+ARG_KIND.update({c: "C 字符串" for c in "sS"})
+ARG_KIND["p"] = "指针"
 
 INFO_PLIST_HEADER = """\
 /* 由 Localization/Localizable.xcstrings 生成(键表见 generate-strings.py 的 INFO_PLIST_KEYS)—— 不要手改这个文件。 */
@@ -201,6 +213,54 @@ def plural_problems(strings, source_lang):
     return out
 
 
+def arg_signature(s):
+    """格式串的参数表 {第几个参数: 类型}。不带序号的格式符按出现次序编号。同一个序号写成两种类型时返回 None。"""
+    sig, nxt = {}, 1
+    for m in ARG_SPEC.finditer(s):
+        pos, conv = m.group(1), m.group(2)
+        if conv == "%":
+            continue
+        if pos:
+            idx = int(pos)
+        else:
+            idx, nxt = nxt, nxt + 1
+        kind = ARG_KIND[conv]
+        if sig.get(idx, kind) != kind:
+            return None
+        sig[idx] = kind
+    return sig
+
+
+def describe_signature(sig):
+    if sig is None:
+        return "同一个参数写了两种类型"
+    if not sig:
+        return "无参数"
+    return "、".join(f"第 {i} 个{sig[i]}" for i in sorted(sig))
+
+
+def format_arg_problems(strings, source_lang):
+    """各语言值的参数表跟键不一样的地方。源语言的值就是键(另有一道检查),不比。"""
+    out = []
+    for key, entry in strings.items():
+        want = arg_signature(key)
+        for lang, loc in sorted(((entry or {}).get("localizations") or {}).items()):
+            if lang == source_lang:
+                continue
+            plural = ((loc or {}).get("variations") or {}).get("plural")
+            if plural is None:
+                values = [("", unit_value(loc))]
+            else:
+                values = [(f" {form}", unit_value(plural.get(form))) for form in ("one", "other")]
+            for form, value in values:
+                if value is None:
+                    continue
+                got = arg_signature(value)
+                if want is None or got != want:
+                    out.append(f"{key[:60]}:{lang}{form} 是「{describe_signature(got)}」,键是「{describe_signature(want)}」")
+    return out
+
+
 def escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
 
@@ -241,6 +301,15 @@ def main() -> int:
         print(f"\u2717 plural 变体有 {len(problems)} 处写得不对:", file=sys.stderr)
         for p in problems[:20]:
             print(f"    {p}", file=sys.stderr)
+        return 1
+    arg_problems = format_arg_problems(strings, catalog["sourceLanguage"])
+    if arg_problems:
+        print(f"✗ {len(arg_problems)} 处译文的格式参数跟键对不上(String(format:) 按译文取参数,类型错会崩溃或乱码):",
+              file=sys.stderr)
+        for p in arg_problems[:20]:
+            print(f"    {p}", file=sys.stderr)
+        if len(arg_problems) > 20:
+            print(f"    …还有 {len(arg_problems) - 20} 处", file=sys.stderr)
         return 1
     for lang, lproj in TARGETS.items():
         lines = [HEADER]

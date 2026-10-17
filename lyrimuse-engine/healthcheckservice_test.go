@@ -77,7 +77,7 @@ func TestFolderAccessHealthItem(t *testing.T) {
 		{path: okDir},
 		{path: filepath.Join(dir, "missing")},
 		{path: readOnly},
-		{path: "/"},
+		{path: "/", shared: true},
 		{path: plist, launchdPlist: true},
 	}, uid, "someone")
 	if all.Status != healthFail {
@@ -89,10 +89,15 @@ func TestFolderAccessHealthItem(t *testing.T) {
 		"其他用户也可写(666)",
 		"sudo chown -R 'someone':staff '" + readOnly + "' && chmod u+rwX '" + readOnly + "'",
 		"chmod 644 '" + plist + "'",
+		// 共用目录只改它本身,不递归改里面别的程序的文件。
+		"sudo chown 'someone':staff '/' && chmod u+rwx '/'",
 	} {
 		if !strings.Contains(all.Detail, want) {
 			t.Errorf("detail %q misses %q", all.Detail, want)
 		}
+	}
+	if strings.Contains(all.Detail, "chown -R 'someone':staff '/'") {
+		t.Errorf("a shared folder must not get a recursive chown: %q", all.Detail)
 	}
 	if strings.Contains(all.Detail, okDir+" ") || strings.Contains(all.Detail, "missing") {
 		t.Errorf("a writable or missing location must not be reported: %q", all.Detail)
@@ -101,5 +106,33 @@ func TestFolderAccessHealthItem(t *testing.T) {
 	// 同一份 plist 不当 launchd plist 查时,666 不算问题。
 	if item := folderAccessHealthItem([]homeFolderTarget{{path: okDir}, {path: plist}}, uid, "someone"); item.Status != healthOK {
 		t.Errorf("writable locations owned by the user must pass, got %s %q", item.Status, item.Detail)
+	}
+}
+
+// 共用目录(配置目录的上一层、LaunchAgents、日志目录)标成 shared,Lyrimuse 自己的目录和文件不标。
+func TestHomeFolderTargetsMarkSharedFolders(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("LYRIMUSE_CONFIG_DIR", "")
+	t.Setenv("LYRIMUSE_LOG_FILE", "")
+	shared := map[string]bool{}
+	for _, target := range homeFolderTargets() {
+		shared[target.path] = target.shared
+	}
+	want := map[string]bool{
+		filepath.Join(home, ".config"):                                           true,
+		filepath.Join(home, ".config", clientName):                               false,
+		filepath.Join(home, "Library/LaunchAgents"):                              true,
+		filepath.Join(home, "Library/Logs"):                                      true,
+		filepath.Join(home, "Library/Logs", clientName+".log"):                   false,
+		filepath.Join(home, "Library/LaunchAgents", engineLaunchdLabel+".plist"): false,
+	}
+	if len(shared) != len(want) {
+		t.Fatalf("targets = %v, want %v", shared, want)
+	}
+	for path, isShared := range want {
+		if got, ok := shared[path]; !ok || got != isShared {
+			t.Errorf("%s: shared=%v (present %v), want %v", path, got, ok, isShared)
+		}
 	}
 }

@@ -18,20 +18,27 @@ public enum HomeFolderAccess {
         public let path: String
         /// 是 launchd 读的 plist:除了归自己、写得进,还不许组和其他用户可写。
         public let isLaunchdPlist: Bool
+        /// 整棵都归 Lyrimuse(配置目录):修复命令连里面一起改。`~/.config`、`~/Library/Logs`、`~/Library/LaunchAgents`
+        /// 这类别的程序也在用的只改这一层,不 `-R` 动别人的文件。
+        public let ownsTree: Bool
 
-        public init(path: String, isLaunchdPlist: Bool = false) {
+        public init(path: String, isLaunchdPlist: Bool = false, ownsTree: Bool = false) {
             self.path = path
             self.isLaunchdPlist = isLaunchdPlist
+            self.ownsTree = ownsTree
         }
     }
 
     public struct Finding: Equatable, Sendable {
         public let path: String
         public let problem: Problem
+        /// 见 `Target.ownsTree`。
+        public let ownsTree: Bool
 
-        public init(path: String, problem: Problem) {
+        public init(path: String, problem: Problem, ownsTree: Bool = false) {
             self.path = path
             self.problem = problem
+            self.ownsTree = ownsTree
         }
     }
 
@@ -39,7 +46,7 @@ public enum HomeFolderAccess {
     public static var targets: [Target] {
         [
             Target(path: LyrimusePaths.configDir.deletingLastPathComponent().path),
-            Target(path: LyrimusePaths.configDir.path),
+            Target(path: LyrimusePaths.configDir.path, ownsTree: true),
             Target(path: LyrimusePaths.launchAgentsDir.path),
             Target(path: LogFiles.engine.deletingLastPathComponent().path),
             Target(path: LogFiles.engine.path),
@@ -71,18 +78,20 @@ public enum HomeFolderAccess {
                 ownerID: ownerID, ownerName: attrs[.ownerAccountName] as? String, mode: mode,
                 isWritable: fm.isWritableFile(atPath: target.path), currentUID: currentUID,
                 isLaunchdPlist: target.isLaunchdPlist)
-            return problem.map { Finding(path: target.path, problem: $0) }
+            return problem.map { Finding(path: target.path, problem: $0, ownsTree: target.ownsTree) }
         }
     }
 
-    /// 修好这些问题的终端命令,一处一行,给设置页「复制修复命令」用。归别人或写不进的整棵改回当前用户、补上自己的读写;
-    /// 只是别人也能写的 plist 收回成 644。命令在 zsh 和 bash 里粘贴即可运行(不含 `#` 和 `!`)。
+    /// 修好这些问题的终端命令,一处一行,给设置页「复制修复命令」用。归别人或写不进的改回当前用户、补上自己的读写:Lyrimuse
+    /// 自己的目录整棵改(`ownsTree`,`chown` 和 `chmod` 都带 `-R`),别的程序共用的目录和单个文件只改这一处;只是别人也能写的
+    /// plist 收回成 644。命令在 zsh 和 bash 里粘贴即可运行(不含 `#` 和 `!`)。
     public static func fixCommand(for findings: [Finding], userName: String = NSUserName()) -> String {
         findings.map { finding in
             let path = shellQuoted(finding.path)
             switch finding.problem {
             case .ownedBy, .notWritable:
-                return "sudo chown -R \(shellQuoted(userName)):staff \(path) && chmod u+rwX \(path)"
+                let r = finding.ownsTree ? "-R " : ""
+                return "sudo chown \(r)\(shellQuoted(userName)):staff \(path) && chmod \(r)u+rwX \(path)"
             case .writableByOthers:
                 return "chmod 644 \(path)"
             }

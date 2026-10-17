@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# 重建桌面歌词悬浮窗 App，打包成正经的 .app 装进 bin/ 里(——之前是裸
-# 可执行文件靠 NSApp.setActivationPolicy(.accessory) 表现成菜单栏应用，现象是想要
-# 能从 Dock/Finder 双击启动，改成打包成真正的 .app bundle；LSUIElement 仍然让它运行期间
-# 不占 Dock/Cmd-Tab，只是现在多了一个可以拖进 Dock 当启动器用的图标)。这是用户随时可能
+# 重建桌面歌词悬浮窗 App，打包成 .app 装进 /Applications。LSUIElement 让它运行期间不占 Dock/Cmd-Tab，
+# 图标可以从 Finder 双击启动、拖进 Dock 当启动器用。这是用户随时可能
 # 主动 Cmd-Q 退出的前台 GUI 工具，不是 KeepAlive 常驻服务——"重启"这一步只是"如果当前有
 # 实例在跑就杀掉旧的、拉起新构建的"，不碰开机启动的 LaunchAgent 配置(那是用户在 App 菜单
 # 里自己控制的开关，见 Settings/LoginItemManager.swift)。
@@ -14,25 +12,21 @@
 #   ./build.sh --dest <路径>  组装到指定路径而不是 /Applications(隐含 --no-restart),
 #                             供 package.sh 一次跑出两种架构的包
 #
-# 这里改过两轮,最终定成"分开发两份",过程值得记下来免得又绕回去:
+# 发布包分成两份(打包见 package.sh),两个方向都别退回去:
+#   - 只发 arm64:cask 只写 `depends_on macos: :sonoma`、appcast 只写 minimumSystemVersion,两个都不管架构,
+#     Intel Mac 上装得上、打开直接失败。
+#   - 只发 universal:包里一旦含 x86_64 代码,macOS 27 会弹"需要更新 App —— 此版本包含的一个组件无法在下个
+#     主要版本 macOS 28 中打开"(macOS 28 移除 Rosetta)。这条告警会打在**多数用户**(Apple Silicon)脸上,而
+#     App 本身没有问题 —— 对一个开源项目来说,看着像已废弃比少支持一批老机器更伤。
 #
-# 起因是发现 v1.0.0~v1.2.0 发出去的全是 arm64-only —— 发布包在本机手动打,而这里当时默认
-# 只编本机架构,cask 只写 `depends_on macos: :sonoma`、appcast 只写 minimumSystemVersion,
-# 两个都不管架构,Intel Mac 上装得上、打开直接失败。于是先把默认改成了 universal。
-#
-# 但随后在这台 macOS 27 上实测到:包里一旦含 x86_64 代码,系统会弹"需要更新 App —— 此版本
-# 包含的一个组件无法在下个主要版本 macOS 28 中打开"(macOS 28 移除 Rosetta)。这条告警会打在
-# **多数用户**(Apple Silicon)脸上,而 App 本身一点问题都没有 —— 对一个开源项目来说,看着
-# 像已废弃比少支持一批老机器更伤。
-#
-# 所以最终形态(打包见 package.sh):
+# 现在的形态:
 #   - 主包 arm64-only:彻底不含 x86_64,不会触发那条告警,下载体积也小一半
 #   - Intel 兼容包 universal:单独一份资产,只引导 Intel 用户下
 #   - appcast 里主包那条 item 带子元素 <sparkle:hardwareRequirements>arm64</...> —— Sparkle 在 Intel 客户端
 #     上会判定该条不适用而跳过(见 SPUAppcastItemStateResolver.isArm64HardwareRequirementOK,
 #     它自己的注释就写着 "macOS 27+ will no longer support Intel Macs"),只会说"已是最新",
 #     不会给 Intel 用户推一个跑不起来的包
-# 默认因此回到"本机架构";两种包由 package.sh 显式各要一次,不依赖谁记得传参数。
+# 默认只编本机架构;两种包由 package.sh 显式各要一次,不依赖谁记得传参数。
 set -euo pipefail
 
 cd "$(dirname "$0")" # lyrimuse/
@@ -216,15 +210,10 @@ LOG_FILE="$HOME/Library/Logs/lyrimuse.log"
 # scripts/build-version.sh 另算成四段纯数字(原因见那个脚本头注)。CI(release.yml)在真正打 tag 触发时会
 # 传入 LYRIMUSE_VERSION 环境变量(从 tag 解析出的真实版本号);本地手动跑不设这个变量。
 #
-# 之前这里的默认值硬编码成 "1.0.0"——本地构建本来就不是要发布的正式
-# 版本,当时觉得不需要精确。实测坐实这个假设是错的:这台机器上唯一会用到的构建方式
-# 就是本地 `./build.sh`(见 repo CLAUDE.md),诊断导出的「App version」这一行因此
-# 永远报 1.0.0,即便实际代码已经是 v1.4.0 之后好几轮迭代——同一份诊断报告里引擎
-# 侧日志正确打出 `lyrimuse 1.4.0 starting`,App 侧却报 1.0.0,两个版本号当场打架,
-# 排查时反而添乱。改成取最近一个 git tag(去掉 v 前缀)当默认值——不追新 commit 也
-# 不带 hash 后缀,保持"干净三段数字"这条硬约束,但至少不会常年停在一个早就过时的
-# 占位值上;真拿不到 tag(比如浅克隆、不是 git 仓库)才退到 0.0.0 这个一眼假的占位值,
-# 不会看着像一个正常但过时的版本号。
+# 默认值别硬编码成一个固定版本号:日常用的就是本地 `./build.sh`(见 repo CLAUDE.md),写死的值会让诊断导出的
+# 「App version」常年停在它上面,跟同一份报告里引擎侧日志打出的真实版本当场打架。所以默认取最近一个 git tag
+# (去掉 v 前缀)—— 不追新 commit、不带 hash 后缀,保持"干净三段数字"这条硬约束;真拿不到 tag(比如浅克隆、
+# 不是 git 仓库)才退到 0.0.0 这个一眼假的占位值,不会看着像一个正常但过时的版本号。
 APP_VERSION="${LYRIMUSE_VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)}"
 [ -z "$APP_VERSION" ] && APP_VERSION="0.0.0"
 # CFBundleVersion(Sparkle 比大小用的构建号)由 scripts/build-version.sh 从展示版本算出 —— 映射只有那一份,
@@ -390,7 +379,13 @@ merge_slices "$FAT_DIR/lyrics-romanize" "${ROMANIZE_SLICES[@]}"
 # dSYM,放 $DSYM_ROOT/<架构>/(整目录覆盖,只留最近一次),崩溃报告里的地址拿它用 atos 还原;dSYM 必须在 strip 之前
 # 生成,剥完就没有调试映射了。去签名再剥:链接器盖的签名会让 strip 每个文件打一句警告,三个文件后面都会重签。
 # 别对 dylib 用不带参数的 strip:那会剥掉导出符号。见 15 章决策 33。
-DSYM_DIR="$DSYM_ROOT/${ARCHES// /-}"
+# --dest(package.sh 打包)放 $DSYM_ROOT/dest/<架构>/:跟装进 /Applications 那份分开,打一次包不会把正在用的那份
+# App 对应的 dSYM 盖掉。
+if [ -n "$DEST" ]; then
+  DSYM_DIR="$DSYM_ROOT/dest/${ARCHES// /-}"
+else
+  DSYM_DIR="$DSYM_ROOT/${ARCHES// /-}"
+fi
 rm -rf "$DSYM_DIR"
 mkdir -p "$DSYM_DIR"
 for bin in "$FAT_DIR/lyrimuse" "$FAT_DIR/lyrics-translate" "$FAT_DIR/lyrics-romanize"; do
@@ -415,20 +410,13 @@ for arch in $ARCHES; do
     x86_64) goarch=amd64 ;;
     *) echo "!! 不认识的架构:$arch" >&2; exit 2 ;;
   esac
-  # 这里**不能**再加 "$PWD/" 前缀。下一行进了子 shell(`cd ../lyrimuse-engine`),
-  # 所以 -o 的落点必须是绝对路径 —— 当 FAT_DIR 还是相对的 ".build/fat" 时,靠 "$PWD/"
-  # 补齐正是必需的。把 FAT_DIR 改成 `mktemp -d`(绝对路径,理由见它声明处)
-  # 之后,这个前缀就变成了拼接错误:"$PWD" + "/var/folders/…" 造出
-  # `lyrimuse/var/folders/…/lyrimuse-engine-arm64`,每次构建往仓库里丢一份产物 —— 提交前
-  # 发现时已经攒了 330MB、183 个未跟踪条目里就有它。FAT_DIR 现在自己就是绝对路径,直接用。
+  # 下一行进了子 shell(`cd ../lyrimuse-engine`),所以 -o 的落点必须是绝对路径。FAT_DIR 是 `mktemp -d`
+  # 给的绝对路径(理由见它声明处),直接用;别再加 "$PWD/" 前缀:"$PWD" + "/var/folders/…" 会造出
+  # `lyrimuse/var/folders/…/lyrimuse-engine-arm64`,每次构建往仓库里丢一份几十 MB 的产物。
   out="$FAT_DIR/$ENGINE_NAME-$arch"
   # -ldflags -X:把版本号注入引擎,让它跟 App 的 CFBundleShortVersionString
-  # **同源**($APP_VERSION 就是上面写进 Info.plist 的那个值)。
-  #
-  # 在此之前引擎的版本号是 main.go 里一个手写字面量,靠人在
-  # 发版时记得改那一行来跟 App 对齐——v1.3.0 漏过一次,v1.5.0 又漏一次(用户装了
-  # 1.5.0 的 dmg,设置页报「App 1.5.0 · 采集服务 1.4.0」)。注入之后这两个版本号
-  # 由构造保证一致,不再依赖任何人的记性。
+  # **同源**($APP_VERSION 就是上面写进 Info.plist 的那个值),两个版本号由构造保证一致。别改回 main.go 里
+  # 手写字面量:那要靠人在发版时记得改,漏一次设置页就报「App 1.5.0 · 采集服务 1.4.0」这种对不上的版本。
   #
   # 注入的目标必须是 **var**(main.go 里 clientVersion 就是 var,那里有详细注释)。
   # -X 对 const **静默失败**:构建照样成功、不报错,值原封不动——所以这条注入
@@ -819,19 +807,18 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
          本地通知不需要任何其它 Info.plist 键,也不需要 entitlements。 -->
     <key>NSUserNotificationAlertStyle</key>
     <string>alert</string>
-    <!-- 2026-07-23 实测坐实：这个 key 缺失时,OnboardingView 第一步"请求权限"按钮
-         调 MusicAutomationPermission.check(askIfNeeded: true)在全新安装的机器上
+    <!-- 这个 key 缺失时,OnboardingView 第一步"请求权限"按钮调
+         MusicAutomationPermission.check(askIfNeeded: true),在全新安装的机器上
          (TCC 数据库对这个 App 完全没有历史记录)系统直接静默拒绝弹出授权对话框、
-         点了没反应——这台开发机上一直正常是因为本机 TCC 数据库里早就攒下了这个
-         App 改名前后各个身份的历史授权记录，把"首次全新请求"这条路径的真实缺陷
-         盖住了，只有在没有任何历史记录的全新机器上才会暴露。Apple 官方要求任何
+         点了没反应。TCC 里攒着历史授权记录的机器上看不出这个缺陷,只有全新机器上
+         才会暴露,所以别因为"本机没它也正常"就删掉。Apple 官方要求任何
          要发 Apple Event 控制别的 App 的进程,必须在 Info.plist 里声明这个 key
          说明用途。这里是英文原文,没有对应语言包时系统弹窗显示它;各语言的译文在
          <语言包>/InfoPlist.strings,由 Localization/generate-strings.py 从 catalog 生成。
          改这句要连 catalog 里那一条的英文一起改,selftest 本地化守卫对着查。 -->
     <key>NSAppleEventsUsageDescription</key>
     <string>Lyrimuse needs to send Apple Events to media players and browsers to read the currently playing track and show synced lyrics.</string>
-    <!-- 2026-07-29 新增:给"连接 Last.fm 账号"这一步的浏览器授权做自动回跳用
+    <!-- 给"连接 Last.fm 账号"这一步的浏览器授权做自动回跳用
          (见 LastfmAuthFlow.authorizeURL 的 cb= 参数 + AppDelegate 的 GetURL 事件
          处理)——注册这个 scheme 之后,授权页跳转到 lyrimuse://lastfm-auth-callback
          会被系统路由回这个 App,不需要用户自己回来点"我已完成授权,继续"。 -->
@@ -853,7 +840,7 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>SUEnableAutomaticChecks</key>
     <true/>
     <!-- "自动检查更新"开着才有意义的下一档:自动下载并安装,不用每次弹窗等用户点"安装"。
-         2026-08-31 用户要求默认开启。这两个键都只是**默认值**——跟 SUEnableAutomaticChecks
+         默认开启。这两个键都只是**默认值**——跟 SUEnableAutomaticChecks
          同一个道理,用户在设置页手动改过之后,Sparkle 自己持久化在 UserDefaults 里的那份
          (SUAutomaticallyUpdate)说了算,不会被这里的默认值覆盖回去,见
          SparkleUpdaterManager.swift 的注释。 -->

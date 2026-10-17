@@ -562,7 +562,7 @@ func TestListenLogRewritePreservesRawLines(t *testing.T) {
 func TestMarkQuarantinedCheckedReportsWriteFailure(t *testing.T) {
 	useMirrorFiles(t)
 	setListenLogPath(t.TempDir()) // 路径是个目录:追加必然失败
-	if err := markQuarantinedChecked(1790000000); err == nil {
+	if err := markQuarantinedChecked(1790000000, "me"); err == nil {
 		t.Fatal("写不进去应当报错")
 	}
 	if err := markBackfilledChecked(1790000000); err == nil {

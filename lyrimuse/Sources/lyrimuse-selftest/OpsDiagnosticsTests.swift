@@ -189,6 +189,26 @@ func runOpsDiagnosticsTests() {
         let notDict = P.sanitizedConfig(["x"])
         expectEqual(notDict.droppedRelay == false && (notDict.config as? [String]) == ["x"], true,
                     "导入净化: config 段不是字典的原样返回")
+
+        // isConfigBundle:认不出是设置备份的 JSON 不写、不重启。
+        expectEqual(P.isConfigBundle(["version": 3, "appSettings": [String: Any]()]), true, "设置备份: 只有 appSettings 也算")
+        expectEqual(P.isConfigBundle(["config": ["lastfm_username": "a"]]), true, "设置备份: 有 config 段")
+        expectEqual(P.isConfigBundle(["features": ["lyrics_dir": "/x"]]), true, "设置备份: 有 features 段")
+        expectEqual(P.isConfigBundle([:]), false, "设置备份: 空对象不算")
+        expectEqual(P.isConfigBundle(["name": "package", "dependencies": ["a": "1"]]), false,
+                    "设置备份: 别的 JSON 对象(一段都认不出)不算")
+        expectEqual(P.isConfigBundle(["config": ["x"], "appSettings": "y"]), false, "设置备份: 几段都不是字典不算")
+        let portability = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/Settings/ConfigPortability.swift"),
+            encoding: .utf8)) ?? ""
+        let prompt = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/Settings/ICloudConfigImportPrompt.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(portability.contains("guard ImportPolicy.isConfigBundle(bundle) else {"), true,
+                    "设置备份(契约): importData 认不出就返回 false")
+        expectEqual(prompt.contains("guard await ConfigPortability.importData(data) else {")
+                    && prompt.contains("let failed = ConfigPortability.lastImportFailures"), true,
+                    "设置备份(契约): iCloud 首启导入看结果,失败不重启、部分失败先说再重启")
     }
 
     // ---- writeSecurely(含凭据的文件必须落成 0600) ----

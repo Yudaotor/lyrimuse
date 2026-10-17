@@ -118,18 +118,33 @@ func (e enrichEntry) confidentISRC() string {
 	return best
 }
 
-// recordISRCs 把 add 并进条目:号照 mergeRecordingISRCs 的规矩进 isrcs,级别记进 isrc_levels(同一个号取更高的;封顶
-// 挤掉的号不记)。isrc_levels 换一份新的写,不改原来那份(快照可能还拿着它)。
+// recordISRCs 把 add 并进条目:号照 mergeRecordingISRCs 的规矩进 isrcs,级别记进 isrc_levels(同一个号取更高的)。
+// 满了以后新来的号级别比已记的最低那个高,就挤掉那一个(evictForHigherISRCs);挤不掉的号不记。isrc_levels 换一份新的写,
+// 不改原来那份(快照可能还拿着它)。
 func recordISRCs(e *enrichEntry, add []recordedISRC) {
 	codes := make([]string, len(add))
 	for i, a := range add {
 		codes[i] = a.code
 	}
-	e.ISRCs = mergeRecordingISRCs(e.ISRCs, codes)
+	isrcs, evicted := evictForHigherISRCs(mergeRecordingISRCs(e.ISRCs, codes), e.ISRCLevels, add)
+	e.ISRCs = isrcs
 	var levels map[string]string
+	if len(evicted) > 0 {
+		levels = maps.Clone(e.ISRCLevels)
+		for _, c := range evicted {
+			delete(levels, c)
+		}
+		if levels == nil {
+			levels = map[string]string{}
+		}
+	}
 	for _, a := range add {
 		c := normalizeISRC(a.code)
-		if c == "" || isrcLevelRank[a.level] <= isrcLevelRank[e.ISRCLevels[c]] || !slices.Contains(e.ISRCs, c) {
+		have := e.ISRCLevels[c]
+		if levels != nil {
+			have = levels[c]
+		}
+		if c == "" || isrcLevelRank[a.level] <= isrcLevelRank[have] || !slices.Contains(e.ISRCs, c) {
 			continue
 		}
 		if levels == nil {
@@ -141,8 +156,45 @@ func recordISRCs(e *enrichEntry, add []recordedISRC) {
 		levels[c] = a.level
 	}
 	if levels != nil {
+		if len(levels) == 0 {
+			levels = nil
+		}
 		e.ISRCLevels = levels
 	}
+}
+
+// evictForHigherISRCs:isrcs 已经记满、add 里还有没进去的号时,按 add 的顺序,一个号的级别比 isrcs 里级别最低的那个高
+// (播放器报的 > 核对过的 > 检索配的 > 没记级别的存量),就挤掉那一个、把它接在末尾;最低的有几个时挤最后进来的那个。
+// 只在有新号进来时挤,存量不回头重排。返回新的列表和挤掉的号。
+func evictForHigherISRCs(isrcs []string, levels map[string]string, add []recordedISRC) ([]string, []string) {
+	incoming := map[string]int{}
+	for _, a := range add {
+		if c := normalizeISRC(a.code); c != "" && isrcLevelRank[a.level] > incoming[c] {
+			incoming[c] = isrcLevelRank[a.level]
+		}
+	}
+	rank := func(c string) int {
+		return max(isrcLevelRank[levels[normalizeISRC(c)]], incoming[normalizeISRC(c)])
+	}
+	var evicted []string
+	for _, a := range add {
+		c := normalizeISRC(a.code)
+		if c == "" || slices.Contains(isrcs, c) || len(isrcs) < recordingISRCMax {
+			continue
+		}
+		victim := -1
+		for i, have := range isrcs {
+			if victim < 0 || rank(have) <= rank(isrcs[victim]) {
+				victim = i
+			}
+		}
+		if victim < 0 || isrcLevelRank[a.level] <= rank(isrcs[victim]) {
+			continue
+		}
+		evicted = append(evicted, normalizeISRC(isrcs[victim]))
+		isrcs = append(slices.Delete(slices.Clone(isrcs), victim, victim+1), c)
+	}
+	return isrcs, evicted
 }
 
 // mergeEntryISRCs:把 src 的号连同级别并进 dst(外围补全、合并条目用)。
@@ -175,7 +227,7 @@ func removeISRCs(e *enrichEntry, drop func(code string) bool) {
 	e.ISRCLevels = levels
 }
 
-// mergeRecordingISRCs:已有的在前,新的接在后面,去重,最多 recordingISRCMax 个。
+// mergeRecordingISRCs:已有的在前,新的接在后面,去重,最多 recordingISRCMax 个(满了按级别挤换在 recordISRCs 里做)。
 func mergeRecordingISRCs(have, add []string) []string {
 	out := slices.Clone(have)
 	for _, raw := range add {
@@ -436,15 +488,20 @@ func appleCatalogSongsFrom(raw []byte) (map[string]appleCatalogSong, bool) {
 	return out, true
 }
 
-// isrcSweepDeps:补号的几处来路和两批 Apple 请求之间的间隔,单测换成假的。
+// isrcSweepDeps:补号的几处来路、两批 Apple 请求之间的间隔,单测换成假的。一批没问成等 backoff 再问同一批,同一个商店连续
+// tries 次没问成就不再问它(0 当 1 次)。
 type isrcSweepDeps struct {
 	spotify func(trackIDs []string) map[string]string
 	amazon  func(asin string) string
 	apple   func(ctx context.Context, storefront string, ids []string) (map[string]appleCatalogSong, bool)
 	pace    time.Duration
+	backoff time.Duration
+	tries   int
 }
 
-var isrcSweepLiveDeps = isrcSweepDeps{spotify: spotifyLocalISRCs, amazon: amazonISRCForASIN, apple: appleCatalogSongsByID, pace: isrcSweepPace}
+// isrcSweepLiveDeps:启动后那一轮补扫用。正在放的那首当场补号只问一次(runPlaybackISRCJob),没问成隔 isrcPlaybackRetry 再试。
+var isrcSweepLiveDeps = isrcSweepDeps{spotify: spotifyLocalISRCs, amazon: amazonISRCForASIN, apple: appleCatalogSongsByID, pace: isrcSweepPace,
+	backoff: catalogSweepBackoff, tries: catalogSweepMaxFailures}
 
 // isrcSweepOutcome:一条做完的样子。isrcs 是取回的号(带级别),done 是做完的几支记号。settled 为 false:要问 Apple 的那一批
 // 没问成(网络、令牌)或没轮到,整条不写回、下次再来。
@@ -455,8 +512,9 @@ type isrcSweepOutcome struct {
 }
 
 // runISRCSweepJobs:把几条要补的做完。本机缓存那两支直接读;Apple 那一支按商店分批问(后台请求:只用主机限速里富余的额度,不跟
-// 正在播的那首排队,见 hostguard.go 第 3 道),两批之间隔 deps.pace,ctx 取消就停。返回每条的结果(按 key)和问了 Apple 几次。
-// 要读别的 App 的本机缓存、要联网,不能持着 enrichMu 调。
+// 正在播的那首排队,见 hostguard.go 第 3 道),两批之间隔 deps.pace,ctx 取消就停。一批没问成等 deps.backoff 再问同一批,同一个
+// 商店连续 deps.tries 次没问成就不再问这个商店(断网、token 失效、一直被限流,同目录名字补扫),剩下的留给下一次。
+// 返回每条的结果(按 key)和问了 Apple 几次。要读别的 App 的本机缓存、要联网,不能持着 enrichMu 调。
 func runISRCSweepJobs(ctx context.Context, jobs []isrcSweepJob, deps isrcSweepDeps) (map[string]*isrcSweepOutcome, int) {
 	out := make(map[string]*isrcSweepOutcome, len(jobs))
 	var spotifyIDs []string
@@ -498,11 +556,16 @@ func runISRCSweepJobs(ctx context.Context, jobs []isrcSweepJob, deps isrcSweepDe
 	requests := 0
 	for _, sf := range storefronts {
 		group := byStorefront[sf]
-		for start := 0; start < len(group); start += isrcSweepBatch {
+		failures := 0
+		for start := 0; start < len(group); {
 			if requests > 0 {
+				wait := deps.pace
+				if failures > 0 {
+					wait = deps.backoff
+				}
 				select {
 				case <-ctx.Done():
-				case <-time.After(deps.pace):
+				case <-time.After(wait):
 				}
 			}
 			if ctx.Err() != nil {
@@ -516,8 +579,14 @@ func runISRCSweepJobs(ctx context.Context, jobs []isrcSweepJob, deps isrcSweepDe
 			songs, ok := deps.apple(withBackgroundOutbound(ctx), sf, ids)
 			requests++
 			if !ok {
+				if failures++; failures >= max(deps.tries, 1) {
+					log.Printf("isrc sweep: apple %s failed %d times in a row, leaving %d entries for the next run", sf, failures, len(group)-start)
+					break
+				}
 				continue
 			}
+			failures = 0
+			start += len(batch)
 			for _, job := range batch {
 				o := out[job.key]
 				song, has := songs[job.appleID]
@@ -626,7 +695,11 @@ func playbackISRCJobLocked(key string, e enrichEntry, bundleID, anchorLink strin
 }
 
 // runPlaybackISRCJob:在后台把 playbackISRCJobLocked 起的那一轮做完、写回。
-func runPlaybackISRCJob(job isrcSweepJob) { runPlaybackISRCJobWith(job, isrcSweepLiveDeps) }
+func runPlaybackISRCJob(job isrcSweepJob) {
+	deps := isrcSweepLiveDeps
+	deps.tries = 1
+	runPlaybackISRCJobWith(job, deps)
+}
 
 // runPlaybackISRCJobWith 同 runPlaybackISRCJob,取号的几支由 deps 给(单测换成不联网的)。写回走带 key 的存盘
 // (requestEnrichSaveFor):这一条当场进单条快照和待落盘小文件,App 和一次性子命令不用等整份落盘就读得到这个号。

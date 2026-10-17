@@ -369,8 +369,21 @@ private struct ReleaseNotesView: View {
 }
 
 enum ReleaseNotesRenderer {
+    /// 解过的说明按原文留着,进页面、视图重建都不再在主线程上重解一遍 HTML。页面上同时只有一两份说明,留最近几份就够。
+    @MainActor private static var cache: [(html: String, rendered: AttributedString?)] = []
+    private static let cacheLimit = 4
+
     @MainActor
     static func render(html: String) -> AttributedString? {
+        if let hit = cache.first(where: { $0.html == html }) { return hit.rendered }
+        let rendered = parse(html: html)
+        cache.append((html, rendered))
+        if cache.count > cacheLimit { cache.removeFirst() }
+        return rendered
+    }
+
+    @MainActor
+    private static func parse(html: String) -> AttributedString? {
         guard let data = html.data(using: .utf8) else { return nil }
         let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
             .documentType: NSAttributedString.DocumentType.html,

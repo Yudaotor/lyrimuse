@@ -79,6 +79,9 @@ type listenLogLine struct {
 	// 凭据判死那个窗口现在由 recordFailedMirror 兜住了:判死时照样留痕,
 	// 用户重新授权后能靠回填补回来,不必再接受「漏补一条」这个代价。
 	M int `json:"m,omitempty"`
+	// U:只在 "q" 行上写,是发出那次提交的 Last.fm 账号(lastfmScrobbler.user)。隔离核对只拿同一个账号去查、去重交
+	// (reconcileQuarantined);没有这个字段的老隔离行不知道属于哪个账号,不核对。
+	U string `json:"u,omitempty"`
 }
 
 const listenLogSchemaVersion = 1

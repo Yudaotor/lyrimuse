@@ -286,8 +286,7 @@ public enum EngineServiceManager {
         // 还是不行:launchd 给这个 job 缓存了上一次运行遗留的 LWCR(Lightweight Code
         // Requirement) codesigning 约束，绑定的是旧二进制的 cdhash；每次重新打包都是新的
         // ad-hoc 签名，cdhash 必然变化，bootstrap/kickstart 本身不会刷新这个约束——跟
-        // lyrimuse-engine/build.sh、lyrimuse/build.sh 里同款自愈逻辑一致，这里复用同一套
-        // 重试思路，不重新发明。
+        // lyrimuse/build.sh 里同款自愈逻辑一致，这里复用同一套重试思路，不重新发明。
         run("/bin/launchctl", ["bootout", "gui/\(getuid())", plistURL.path])
         bootstrap()
         _ = waitUntilRunning()

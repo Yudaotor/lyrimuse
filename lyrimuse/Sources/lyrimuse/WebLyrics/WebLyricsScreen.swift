@@ -34,13 +34,17 @@ final class WebLyricsScreenHub {
             }
         }
         viewers[ObjectIdentifier(connection)] = (connection, viewport, true)
+        refreshBacklog(viewport)
         renderers[viewport]?.requestFrame()
         refreshVisibility(viewport)
     }
 
     func remove(_ connection: WebLyricsConnection) {
         guard let entry = viewers.removeValue(forKey: ObjectIdentifier(connection)) else { return }
-        guard !viewers.values.contains(where: { $0.viewport == entry.viewport }) else { return }
+        guard !viewers.values.contains(where: { $0.viewport == entry.viewport }) else {
+            refreshBacklog(entry.viewport)
+            return
+        }
         renderers.removeValue(forKey: entry.viewport)?.stop()
         order.removeAll { $0 == entry.viewport }
     }
@@ -77,6 +81,19 @@ final class WebLyricsScreenHub {
     /// `frame` 是出帧线程上已经包好的 WebSocket 帧,几个网页共用同一份,主线程这里只交给连接发出去。
     private func broadcast(_ frame: Data, for viewport: WebLyricsViewport) {
         for entry in viewers.values where entry.viewport == viewport { entry.connection.sendEncodedFrame(frame) }
+        refreshBacklog(viewport)
+    }
+
+    /// 某条连接上一帧发完了。
+    func frameSent(_ connection: WebLyricsConnection) {
+        guard let entry = viewers[ObjectIdentifier(connection)] else { return }
+        refreshBacklog(entry.viewport)
+    }
+
+    /// 这一尺寸的网页全都还有上一帧没发完时,出帧线程先不画:画出来也是每条连接都丢,白画白编。
+    private func refreshBacklog(_ viewport: WebLyricsViewport) {
+        let entries = viewers.values.filter { $0.viewport == viewport }
+        renderers[viewport]?.setSendBacklogged(!entries.isEmpty && entries.allSatisfy { $0.connection.isFrameInFlight })
     }
 }
 
@@ -162,6 +179,7 @@ final class WebLyricsScreenRenderer {
     /// 上一次搭模型时画的是不是停播;还没搭过是 nil(一连上就是停播的照直画)。
     private var shownIdle: Bool?
     private var frames: WebLyricsFrameSource?
+    private var sendBacklogged = false
     private var timer: Timer?
     /// 这一尺寸的网页里有没有看得见的。全看不见时出帧和主线程节拍都按暂停那一档,不停到 0:浏览器把明明摆在屏上的
     /// 小窗报成不可见时(同 rAF 不来的那种窗口),画面只是变慢、不会定住。见 19 章决策 13。
@@ -251,6 +269,13 @@ final class WebLyricsScreenRenderer {
         guard visible != viewersVisible else { return }
         viewersVisible = visible
         if visible { requestFrame() } else { commit() }
+    }
+
+    /// 这一尺寸的网页全都还有上一帧没发完(慢网):出帧线程跳过这几拍,有一条发完了再接着画。
+    func setSendBacklogged(_ backlogged: Bool) {
+        guard backlogged != sendBacklogged else { return }
+        sendBacklogged = backlogged
+        frames?.setSendBacklogged(backlogged)
     }
 
     /// 新网页连上来时立刻出一帧,不等下一拍。
@@ -1074,6 +1099,8 @@ final class WebLyricsFrameSource: @unchecked Sendable {
     private var frameCost: CFTimeInterval = 0
     private var reduced = false
     private var stopped = false
+    /// 这一尺寸的网页全都还有上一帧没发完(主线程报):这时画了也发不出去,跳过这一拍。
+    private var sendBacklogged = false
 
     /// 在主线程上建:`root` 是整幅画面的根图层,之后只读它的渲染树。
     @MainActor
@@ -1130,6 +1157,10 @@ final class WebLyricsFrameSource: @unchecked Sendable {
         }
     }
 
+    func setSendBacklogged(_ backlogged: Bool) {
+        queue.async { self.sendBacklogged = backlogged }
+    }
+
     /// 主线程刚提交了要立刻看到的变化(新网页连上、点了按钮):不等下一拍,马上补画一帧。
     func renderNow() {
         queue.async { self.tick() }
@@ -1151,7 +1182,7 @@ final class WebLyricsFrameSource: @unchecked Sendable {
     }
 
     private func tick() {
-        guard !stopped, framesInFlight < Self.maxFramesInFlight,
+        guard !stopped, !sendBacklogged, framesInFlight < Self.maxFramesInFlight,
               let texture = CVMetalTextureGetTexture(slots[nextSlot].texture) else { return }
         let started = CACurrentMediaTime()
         let pixelBuffer = slots[nextSlot].buffer

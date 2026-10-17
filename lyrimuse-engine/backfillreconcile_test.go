@@ -107,8 +107,14 @@ func reconcileEnv(t *testing.T, onServer map[int64]bool) (*backfillRunEnv, *[]in
 	return env, &looked
 }
 
+// quarantineAt 记一条当前测试账号("me")下的隔离。
 func quarantineAt(uts int64, at time.Time) {
-	_ = appendListenLogLine(listenLogLine{T: "q", V: listenLogSchemaVersion, UTS: uts, AT: at.Unix()})
+	quarantineAtAs(uts, at, "me")
+}
+
+// quarantineAtAs 记一条指定账号下的隔离;account 为空就是老版本写下的、不记账号的隔离行。
+func quarantineAtAs(uts int64, at time.Time, account string) {
+	_ = appendListenLogLine(listenLogLine{T: "q", V: listenLogSchemaVersion, UTS: uts, AT: at.Unix(), U: account})
 }
 
 // 补交不碰隔离条目:空跑不列、真跑不交,也不去 Last.fm 查(交给常驻进程核对)。
@@ -182,12 +188,81 @@ func TestReconcileQuarantinedQueuesMissingListensForResend(t *testing.T) {
 	n := processLfmRetry(context.Background(), time.Now(), "me", func(_ context.Context, it lfmRetryItem) error {
 		sent = append(sent, it.Timestamp)
 		return nil
-	}, defaultLfmRetryHooks())
+	}, defaultLfmRetryHooks("me"))
 	if n != 1 || fmt.Sprint(sent) != fmt.Sprint(uts[1:2]) {
 		t.Fatalf("解除隔离的那条应在重发里交上去: n=%d sent=%v", n, sent)
 	}
 	if receiptMarks()[uts[1]] != "s" || len(loadLfmRetryLocked()) != 0 {
 		t.Errorf("交上去后应记回执、移出队列")
+	}
+}
+
+// 隔离行记的账号不是当前账号(换过账号),或者是不记账号的老隔离行:不拿当前账号去查、也不重交,一直隔离着。
+// 账号名不分大小写。
+func TestReconcileQuarantinedSkipsOtherAccounts(t *testing.T) {
+	env, looked := reconcileEnv(t, map[int64]bool{})
+	withLfmRetryFile(t)
+	uts := seedListens(3)
+	old := time.Now().Add(-time.Hour)
+	quarantineAtAs(uts[0], old, "someone-else")
+	quarantineAtAs(uts[1], old, "")
+	quarantineAtAs(uts[2], old, "ME")
+
+	recovered, released := reconcileQuarantined(context.Background(), env.s, time.Now())
+
+	if recovered != 0 || released != 1 {
+		t.Fatalf("只该核对当前账号那条: recovered=%d released=%d", recovered, released)
+	}
+	if fmt.Sprint(*looked) != fmt.Sprint(uts[2:]) {
+		t.Errorf("只该查当前账号的 %v,实际 %v", uts[2:], *looked)
+	}
+	queue := loadLfmRetryLocked()
+	if len(queue) != 1 || queue[0].Timestamp != uts[2] || queue[0].User != "me" {
+		t.Fatalf("只有当前账号那条该排进重发队列: %+v", queue)
+	}
+	q := quarantinedBackfillListens(time.Now())
+	if len(q) != 2 || q[0].line.UTS != uts[0] || q[1].line.UTS != uts[1] {
+		t.Errorf("别的账号和不记账号的应仍隔离着: %+v", q)
+	}
+	if pendingCount() != 0 {
+		t.Errorf("还隔离着的不该出现在补交清单里")
+	}
+
+	// 当前账号为空(没配用户名)时一条都不查。
+	env.s.user = ""
+	quarantineAtAs(uts[2], old, "")
+	*looked = nil
+	if recovered, released := reconcileQuarantined(context.Background(), env.s, time.Now()); recovered != 0 || released != 0 || len(*looked) != 0 {
+		t.Errorf("没有账号时不该核对: recovered=%d released=%d looked=%v", recovered, released, *looked)
+	}
+}
+
+// 隔离行记下发出那次提交的账号:活路径失败留痕、补交整批隔离、重发隔离三处。
+func TestQuarantineLinesRecordAccount(t *testing.T) {
+	env := setUpBackfillRun(t, func(ts []string) (string, error) {
+		return "", &net.OpError{Op: "read", Net: "tcp", Err: errors.New("i/o timeout")}
+	})
+	withLfmRetryFile(t)
+	env.s.user = "me"
+	uts := seedListens(1)
+	if out := runBackfill(context.Background(), env.s, false); out.Quarantined != 1 {
+		t.Fatalf("补交应整批隔离: %+v", out)
+	}
+	live := time.Now().Add(-2 * time.Hour).Unix()
+	recordFailedMirror(fmt.Errorf("post: %w", context.DeadlineExceeded), "live-user", "A", "T", "", live, 200)
+	retried := time.Now().Add(-3 * time.Hour).Unix()
+	appendListen("A", "R", "", retried, 200)
+	enqueueLastfmRetry(lfmRetryItem{User: "retry-user", Timestamp: retried, Artist: "A", Title: "R"})
+	processLfmRetry(context.Background(), time.Now(), "retry-user", func(context.Context, lfmRetryItem) error {
+		return &net.OpError{Op: "read", Net: "tcp", Err: errors.New("i/o timeout")}
+	}, defaultLfmRetryHooks("retry-user"))
+
+	f := foldListenLog(readListenLog())
+	want := map[int64]string{uts[0]: "me", live: "live-user", retried: "retry-user"}
+	for ts, account := range want {
+		if _, q := f.quarantined[ts]; !q || f.quarantinedBy[ts] != account {
+			t.Errorf("%d 应隔离在 %q 名下,got quarantined=%v account=%q", ts, account, q, f.quarantinedBy[ts])
+		}
 	}
 }
 

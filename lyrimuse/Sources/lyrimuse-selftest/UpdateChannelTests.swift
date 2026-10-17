@@ -124,6 +124,16 @@ func runUpdateChannelTests() {
             expectEqual(newest != nil, true, "真网: 挑得出版本最高的 Release(\(newest?.tag ?? "-"))")
         }
     }
+
+    // ---- 发版说明按原文缓存(契约) ----
+    do {
+        let page = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/Settings/SoftwareUpdatePage.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(page.contains("if let hit = cache.first(where: { $0.html == html }) { return hit.rendered }")
+                    && page.contains("private static func parse(html: String) -> AttributedString?"), true,
+                    "发版说明(契约): 同一份 HTML 只在主线程上解一次")
+    }
 }
 
 /// 并发跑脚本时各自写自己那一格,互不重叠。

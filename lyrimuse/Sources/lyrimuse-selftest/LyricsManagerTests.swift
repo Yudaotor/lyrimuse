@@ -1989,4 +1989,114 @@ func runLyricsManagerTests() {
         expectEqual(view.contains("await store.reload(onlyIfChanged: true)\n        guard generation == rematchGeneration else { return }\n        finishRematch(key: key, line: line)"),
                     true, "重新匹配: 「正在重新匹配」撑到列表重读完再清,中间不空一下、按钮不提前解禁")
     }
+
+    // ---- 保存修改前按盘上现状核对(LyricsEditConflict) ----
+    do {
+        typealias X = LyricsEditConflict
+        let word = "[1000,2000](1000,1000,0)第(2000,1000,0)一"
+        let loaded = X.Cells(lyrics: "[00:01.00]第一", yrc: word, tr: "[00:01.00]one", roma: "")
+        expectEqual(X.conflicts(loaded: loaded, disk: loaded, edits: X.Edits(main: true, tr: true, roma: true)), false,
+                    "保存核对: 盘上没变,改了哪几格都照存")
+        var newTr = loaded
+        newTr.tr = "[00:01.00]first"
+        expectEqual(X.conflicts(loaded: loaded, disk: newTr, edits: X.Edits(main: true)), false,
+                    "保存核对: 只改正文、引擎换了译文:没动的译文交盘上的新值,照存")
+        expectEqual(X.conflicts(loaded: loaded, disk: newTr, edits: X.Edits(tr: true)), true,
+                    "保存核对: 改过的译文盘上也变了,不存")
+        var newRoma = loaded
+        newRoma.roma = "[00:01.00]di yi"
+        expectEqual(X.conflicts(loaded: loaded, disk: newRoma, edits: X.Edits(roma: true)), true,
+                    "保存核对: 改过的读音盘上也变了,不存")
+        var newLyrics = loaded
+        newLyrics.lyrics = "[00:01.00]第壹"
+        expectEqual(X.conflicts(loaded: loaded, disk: newLyrics, edits: X.Edits(main: true)), true,
+                    "保存核对: 改正文时盘上正文已被换掉,不存")
+        expectEqual(X.conflicts(loaded: loaded, disk: newLyrics, edits: X.Edits(tr: true)), true,
+                    "保存核对: 只改了译文、盘上正文已被换掉:译文按句对着旧正文,不存")
+        var newWord = loaded
+        newWord.yrc = "[1000,2000](1000,500,0)第(1500,1500,0)一"
+        expectEqual(X.conflicts(loaded: loaded, disk: newWord, edits: X.Edits(main: true)), true,
+                    "保存核对: 改逐字时盘上逐字已被换掉,不存(逐字和整行不来自同一份)")
+        var gainedWord = X.Cells(lyrics: loaded.lyrics, yrc: "", tr: loaded.tr)
+        expectEqual(X.conflicts(loaded: gainedWord, disk: loaded, edits: X.Edits(main: true)), true,
+                    "保存核对: 改整行歌词时盘上补上了逐字,不存")
+        gainedWord.yrc = "[ti:x]"
+        expectEqual(X.conflicts(loaded: gainedWord, disk: X.Cells(lyrics: loaded.lyrics, yrc: "[ar:y]", tr: loaded.tr),
+                                edits: X.Edits(main: true)), false,
+                    "保存核对: 没有能摊开的逐字行的那份 yrc 变了不算")
+        expectEqual(X.conflicts(loaded: loaded, disk: X.Cells(), edits: X.Edits()), false, "保存核对: 什么都没改不算冲突")
+
+        let appDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        let view = (try? String(contentsOf: appDir.appendingPathComponent("LyricsManager/LyricsManagerView.swift"),
+                                encoding: .utf8)) ?? ""
+        let store = (try? String(contentsOf: appDir.appendingPathComponent("LyricsManager/EnrichCacheStore.swift"),
+                                 encoding: .utf8)) ?? ""
+        if let start = view.range(of: "private func saveEdits(key: String"),
+           let end = view.range(of: "guard await store.saveEdit(key: key", range: start.upperBound..<view.endIndex) {
+            let body = String(view[start.upperBound..<end.lowerBound])
+            let reload = body.range(of: "await store.reloadIfStale()")
+            let read = body.range(of: "let disk = store.detail(for: key)")
+            expectEqual(reload != nil && read != nil && reload!.lowerBound < read!.lowerBound, true,
+                        "保存核对: saveEdits 先按盘上现状重读、再取盘上那份")
+            expectEqual(body.contains("LyricsEditConflict.conflicts(") && body.contains("store.reportEditConflict()"), true,
+                        "保存核对: saveEdits 冲突时不交给引擎,亮红字")
+        } else {
+            expectEqual(false, true, "保存核对: 找不到 saveEdits")
+        }
+        expectEqual(store.contains("|| Self.fileFingerprint(PlayingEntrySnapshot.url) != loadedOverlayFingerprints.playing")
+                    && store.contains("|| Self.fileFingerprint(EnrichPendingEntries.url) != loadedOverlayFingerprints.pending")
+                    && store.contains("loadedOverlayFingerprints = (box.pendingFingerprint, box.playingFingerprint)"), true,
+                    "保存核对: reloadIfStale 连单条快照、待落盘条目一起看(轮询那条不为已在列表里的正在放那首重读)")
+
+        // 正文补不回来时回主缓存:主缓存里没有这一条也当补不回来(不拿空正文当完整条目),一次记下这一版里所有精简的条目。
+        if let start = store.range(of: "private func hydrate(_ key: String"),
+           let end = store.range(of: "raw[key] = EnrichCacheSlim.restoreBodies(entry, from: fromMain)",
+                                 range: start.upperBound..<store.endIndex) {
+            let body = String(store[start.upperBound..<end.lowerBound])
+            expectEqual(body.contains("guard let fromMain = obj[key], !EnrichCacheSlim.isSlim(fromMain) else {"), true,
+                        "正文回退: 主缓存里没有这一条、或也是精简的,都返回补不回来")
+            expectEqual(body.contains("leanInMainCache = (mainFingerprint, Set(obj.lazy.filter { EnrichCacheSlim.isSlim($0.value) }.map(\\.key)))"),
+                        true, "正文回退: 解过一遍就记下这一版主缓存里全部精简的条目,别的几条不再各解一遍")
+        } else {
+            expectEqual(false, true, "正文回退: 找不到 hydrate")
+        }
+        expectEqual(store.contains("Self.digestWriteQueue.async {") && !store.contains("Task.detached(priority: .utility) {\n            if let digest"),
+                    true, "歌词库摘要: 写盘排在同一条串行队列上,后写的不会被先发起的旧值盖掉")
+        let quick = (try? String(contentsOf: appDir.appendingPathComponent("LyricsManager/LyricsQuickSearchWindow.swift"),
+                                 encoding: .utf8)) ?? ""
+        expectEqual(quick.contains("trLang: candidate.lyricsTrLang)\n                    }\n                    PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()")
+                    || !store.contains("        PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()\n        // 上面读过盘的话"), false,
+                    "搜索歌词小窗: 采纳后不再自己重读当前歌词(commit 收尾时已经做了)")
+
+        // 外部编辑器:打开它的编辑器退出、没有还没套用的修改就结束会话,会话都结束了停掉每秒那一拍。
+        let editor = (try? String(contentsOf: appDir.appendingPathComponent("LyricsManager/LyricsExternalEditor.swift"),
+                                  encoding: .utf8)) ?? ""
+        if let start = editor.range(of: "private func endSessionsWhoseEditorQuit()"),
+           let end = editor.range(of: "private static func processEnded", range: start.upperBound..<editor.endIndex) {
+            let body = String(editor[start.upperBound..<end.lowerBound])
+            expectEqual(body.contains("!session.applying, !session.awaitingRebase")
+                        && body.contains("stamp == session.seen")
+                        && body.contains("timer?.invalidate()"), true,
+                        "外部编辑: 编辑器退出、没有在存 / 等读取器 / 还没看过的修改才结束会话;都结束了停计时器")
+        } else {
+            expectEqual(false, true, "外部编辑: 找不到 endSessionsWhoseEditorQuit")
+        }
+        expectEqual(editor.contains("for key in Array(sessions.keys) { check(key) }\n        endSessionsWhoseEditorQuit()")
+                    && editor.contains("if let pid { LyricsExternalEditor.shared.sessions[key]?.editorPID = pid }"), true,
+                    "外部编辑: 每拍先看文件、再收结束的会话;编辑器进程号在打开成功后记下")
+
+        // 改动请求 id:时间戳只增不减,时钟往回调时连发的改动顺序不颠倒。
+        let channel = (try? String(contentsOf: appDir.appendingPathComponent("LyricsManager/EnrichEditChannel.swift"),
+                                   encoding: .utf8)) ?? ""
+        expectEqual(channel.contains("last = max(now, last &+ 1)") && channel.contains("OSAllocatedUnfairLock(initialState: UInt64(0))"),
+                    true, "改动通道: 请求 id 的时间戳单调递增")
+
+        // 动态封面:盘上那份判不出(视频自己坏了)这一次运行里记着,不每次刷新都重解帧。
+        let motion = (try? String(contentsOf: appDir.appendingPathComponent("MotionCoverStore.swift"), encoding: .utf8)) ?? ""
+        expectEqual(motion.contains("if cachedUndecidable.contains(broken) { return nil }")
+                    && motion.contains("cachedUndecidable.insert(broken)")
+                    && motion.contains("[.systemFileNumber]"), true,
+                    "动态封面: 盘上那份判不出按 (资源, 文件编号) 记住,不按会被 touch 改掉的修改时间")
+    }
 }

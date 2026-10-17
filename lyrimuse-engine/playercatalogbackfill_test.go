@@ -240,6 +240,7 @@ func TestBackfillNeteasePlayerSongsFromHistory(t *testing.T) {
 			neteaseTestTrack("102", "同名", "乙", "专辑B", 180000),
 			neteaseTestTrack("103", "同名", "乙", "专辑C", 181000),
 			neteaseTestTrack("104", "有 id", "丙", "专辑D", 150000),
+			neteaseTestTrack("106", "现场", "庚", "演唱会", 200000),
 			`{"id":"105","name":"无专辑","artists":[{"id":"1","name":"己"}],"album":{"id":0,"name":""},"duration":120000}`,
 		})
 	old := neteaseLocalDBOverride
@@ -259,6 +260,7 @@ func TestBackfillNeteasePlayerSongsFromHistory(t *testing.T) {
 		"丁|只在曲库|专辑E":              {Players: ne, DurationSecs: 100},
 		"甲|第一首|专辑A ~ 别家":          {Players: []string{appleMusicBundleID}, DurationSecs: 200},
 		"甲|第一首|专辑A ~ 长":           {Players: ne, DurationSecs: 300},
+		"庚|现场|录音室专辑":              {Players: ne, DurationSecs: 211},
 	})
 	if n := backfillNeteasePlayerSongsFromHistory(context.Background()); n != 4 {
 		t.Errorf("补了 %d 条", n)
@@ -279,7 +281,7 @@ func TestBackfillNeteasePlayerSongsFromHistory(t *testing.T) {
 	if e := enrichCache["丙|有 id|专辑D ~ 已有"]; e.PlayerAlbumIDs[neteaseMusicBundleID] != "77" {
 		t.Errorf("已有的不动: %v", e.PlayerAlbumIDs)
 	}
-	for _, k := range []string{"乙|同名|专辑B", "丁|只在曲库|专辑E", "甲|第一首|专辑A ~ 别家", "甲|第一首|专辑A ~ 长"} {
+	for _, k := range []string{"乙|同名|专辑B", "丁|只在曲库|专辑E", "甲|第一首|专辑A ~ 别家", "甲|第一首|专辑A ~ 长", "庚|现场|录音室专辑"} {
 		if e := enrichCache[k]; e.PlayerSongIDs != nil || e.PlayerAlbumIDs != nil {
 			t.Errorf("%s 不该补: %v %v", k, e.PlayerSongIDs, e.PlayerAlbumIDs)
 		}

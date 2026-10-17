@@ -100,6 +100,23 @@ func TestLyricsFillSweepRetriesSameKeyWhenOffline(t *testing.T) {
 	}
 }
 
+// 轮到时已经不需要搜的(跳过,没发请求)不占间隔:跳过之后直接轮下一条,只在真搜过之后才等。
+func TestLyricsFillSweepSkippedKeyDoesNotWait(t *testing.T) {
+	calls, waits := stubLyricsFillSweep(t, func(_ context.Context, key string) lyricsSweepOutcome {
+		return lyricsSweepOutcome{skipped: key != "c"}
+	})
+	st := runLyricsFillSweepKeys(context.Background(), []string{"a", "b", "c", "d"}, false, lyricsFillSweepGap, lyricsFillStatus{Running: true, Total: 4})
+	if strings.Join(*calls, ",") != "a,b,c,d" {
+		t.Fatalf("每条都该轮到: %v", *calls)
+	}
+	if len(*waits) != 1 || (*waits)[0] != lyricsFillSweepGap {
+		t.Fatalf("只在真搜过的 c 之后等一次间隔: %v", *waits)
+	}
+	if st.Done != 4 || st.Skipped != 3 {
+		t.Fatalf("跳过的照样算进度: %+v", st)
+	}
+}
+
 // 一直连不上:连续 lyricsFillSweepOfflineLimit 次之后停下、标 Offline,不把剩下的烧掉。
 func TestLyricsFillSweepStopsWhenOfflineTooLong(t *testing.T) {
 	calls, _ := stubLyricsFillSweep(t, func(context.Context, string) lyricsSweepOutcome {

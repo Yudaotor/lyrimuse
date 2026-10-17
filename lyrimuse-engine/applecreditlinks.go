@@ -152,7 +152,7 @@ func startAppleCreditLinkRecheck(ctx context.Context) {
 }
 
 // recheckAppleCreditLinks 是重核的本体,返回换了几条。查询都在锁外(planAppleCreditLinks);写回时链接还是当初查的那一个
-// 才改(期间被外围补全、目录锚点换过的不动)。
+// 才改(期间被外围补全、目录锚点换过的不动)。换过的几条走待落盘小文件(saveEnrichPendingBatch),不整份重写。
 func recheckAppleCreditLinks(ctx context.Context, scope migrationScope, deps appleCreditLinkDeps, pause time.Duration) int {
 	enrichMu.Lock()
 	withLinks := map[string]enrichEntry{}
@@ -173,7 +173,7 @@ func recheckAppleCreditLinks(ctx context.Context, scope migrationScope, deps app
 		return 0
 	}
 
-	changed := 0
+	var changed []string
 	enrichMu.Lock()
 	for _, c := range changes {
 		e, ok := enrichCache[c.item.key]
@@ -193,23 +193,24 @@ func recheckAppleCreditLinks(ctx context.Context, scope migrationScope, deps app
 			e.ISRCLookup = isrcLookupWith(e, isrcApplePart(e))
 		}
 		enrichCache[c.item.key] = e
-		changed++
+		noteEnrichPendingLocked(c.item.key)
+		changed = append(changed, c.item.key)
 		log.Printf("apple credit links: %q linked a track credited to %q, replacing it with %s (isrc dropped %q, added %q)",
 			c.item.key, c.oldArtist, c.newURL, c.dropISRC, c.addISRC)
 	}
-	if changed > 0 {
+	if len(changed) > 0 {
 		enrichDirty = true
 	}
 	enrichMu.Unlock()
-	if changed > 0 {
-		saveEnrichCache()
+	if len(changed) > 0 {
+		saveEnrichPendingBatch(changed)
 	}
 	log.Printf("apple credit links: %d entries checked, %d linked tracks miss a credited artist, %d replaced, complete=%v",
-		len(items), suspects, changed, complete)
+		len(items), suspects, len(changed), complete)
 	if complete {
 		scope.markDone(migrationAppleCreditLinks, migrationAppleCreditLinksVersion)
 	}
-	return changed
+	return len(changed)
 }
 
 // planAppleCreditLinks:items 里哪几条要换、换成什么(只联网,不碰缓存)。suspects:链接那一轨当不了歌曲页、搜过的条数;

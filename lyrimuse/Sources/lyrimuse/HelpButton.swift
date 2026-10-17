@@ -41,6 +41,20 @@ struct HelpButton: View {
     }
 }
 
+/// 悬停弹说明的三处(QuickHelpLabel、GlassInfoButton、HoverNote)共用的时序。
+enum HoverPopoverTiming {
+    /// 悬停多久才弹。系统 tooltip 没设过 NSInitialToolTipDelay 时实际观感约 2 秒,
+    /// 这里取它的 1/4。
+    static let hoverDelay: Duration = .milliseconds(500)
+    /// 鼠标移出后延这么久才收。不是手感修饰,是防抖:popover 弹出的一瞬间如果它盖住了
+    /// 锚点,底下这个视图会立刻收到 onHover(false) —— 不缓冲一下就会"弹出即消失",
+    /// 而且紧接着鼠标又在锚点上,循环闪烁。
+    static let closeGrace: Duration = .milliseconds(150)
+
+    /// 鼠标进来 / 出去之后等多久再弹 / 收。
+    static func delay(entering: Bool) -> Duration { entering ? hoverDelay : closeGrace }
+}
+
 /// 「一段文字 + 一个 ?」一组,**悬停(短延迟)或点问号**都能弹出说明。
 ///
 /// 跟上面 HelpButton 的分工:那个只认点击,用在设置页里"需要时才展开"的长说明上;
@@ -55,14 +69,6 @@ struct HelpButton: View {
 struct QuickHelpLabel<Content: View>: View {
     let text: String
     @ViewBuilder let content: () -> Content
-
-    /// 悬停多久才弹。系统 tooltip 没设过 NSInitialToolTipDelay 时实际观感约 2 秒,
-    /// 这里取它的 1/4。
-    private static var hoverDelay: Duration { .milliseconds(500) }
-    /// 鼠标移出后延这么久才收。不是手感修饰,是防抖:popover 弹出的一瞬间如果它盖住了
-    /// 锚点,底下这个视图会立刻收到 onHover(false) —— 不缓冲一下就会"弹出即消失",
-    /// 而且紧接着鼠标又在锚点上,循环闪烁。
-    private static var closeGrace: Duration { .milliseconds(150) }
 
     @State private var isPresented = false
     /// 这次是点开的(而不是悬停出来的)。点开的要一直留着,等用户点别处才收 ——
@@ -89,7 +95,7 @@ struct QuickHelpLabel<Content: View>: View {
         .onHover { inside in
             hoverTask?.cancel()
             hoverTask = Task {
-                try? await Task.sleep(for: inside ? Self.hoverDelay : Self.closeGrace)
+                try? await Task.sleep(for: HoverPopoverTiming.delay(entering: inside))
                 guard !Task.isCancelled else { return }
                 if inside {
                     isPresented = true
@@ -145,7 +151,7 @@ struct GlassInfoButton: View {
         .onHover { inside in
             hoverTask?.cancel()
             hoverTask = Task {
-                try? await Task.sleep(for: .milliseconds(inside ? 500 : 150))
+                try? await Task.sleep(for: HoverPopoverTiming.delay(entering: inside))
                 guard !Task.isCancelled else { return }
                 if inside {
                     isPresented = true
@@ -186,7 +192,7 @@ private struct HoverNote: ViewModifier {
             .onHover { inside in
                 hoverTask?.cancel()
                 hoverTask = Task {
-                    try? await Task.sleep(for: inside ? .milliseconds(500) : .milliseconds(150))
+                    try? await Task.sleep(for: HoverPopoverTiming.delay(entering: inside))
                     guard !Task.isCancelled else { return }
                     hovering = inside
                 }

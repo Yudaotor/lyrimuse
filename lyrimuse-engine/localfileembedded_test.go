@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"os"
 	"path/filepath"
@@ -227,6 +228,59 @@ func TestEmbeddedLyricsMP4(t *testing.T) {
 		atom("ilst", atom("\xa9lyr", atom("data", []byte{0, 0, 0, 1, 0, 0, 0, 0}, []byte("喜歡那深夜的安靜\r和我約定")))))))
 	if got, ok := localFileEmbeddedLyrics(writeTemp(t, "b.m4a", plain)); !ok || got != "喜歡那深夜的安靜\r和我約定" {
 		t.Errorf("M4A 的 ©lyr 只有不带时间的歌词时交它(当纯文本):得到 %q, ok=%v", got, ok)
+	}
+}
+
+// 原子头里的长度是坏的(32 位长度 0、64 位长度比头还短或超出 int64)时不能让引擎崩:这条在轮询主循环里同步跑,没有 recover。
+func TestEmbeddedLyricsMP4BadAtomSizes(t *testing.T) {
+	be32 := func(n uint32) []byte { return binary.BigEndian.AppendUint32(nil, n) }
+	be64 := func(n uint64) []byte { return binary.BigEndian.AppendUint64(nil, n) }
+	atom := func(kind string, body ...[]byte) []byte {
+		var b []byte
+		for _, x := range body {
+			b = append(b, x...)
+		}
+		return append(append(be32(uint32(8+len(b))), kind...), b...)
+	}
+	ilst := atom("udta", atom("meta", []byte{0, 0, 0, 0},
+		atom("ilst", atom("\xa9lyr", atom("data", []byte{0, 0, 0, 1, 0, 0, 0, 0}, []byte(embeddedLRC))))))
+	ftyp := atom("ftyp", []byte("M4A \x00\x00\x00\x00"))
+	cases := []struct {
+		name string
+		data []byte
+	}{
+		{"moov 64 位长度 8(比头还短)", append(append(append([]byte{}, ftyp...), append(be32(1), "moov"...)...), be64(8)...)},
+		{"moov 64 位长度 0", append(append(append([]byte{}, ftyp...), append(be32(1), "moov"...)...), be64(0)...)},
+		{"moov 64 位长度超出 int64", append(append(append([]byte{}, ftyp...), append(be32(1), "moov"...)...), be64(1<<63|16)...)},
+		{"moov 64 位长度全 1", append(append(append([]byte{}, ftyp...), append(be32(1), "moov"...)...), be64(^uint64(0))...)},
+		{"mdat 64 位长度比头还短", append(append(append([]byte{}, ftyp...), append(be32(1), "mdat"...)...), be64(9)...)},
+		{"mdat 64 位长度超出 int64", append(append(append([]byte{}, ftyp...), append(be32(1), "mdat"...)...), be64(^uint64(0)-3)...)},
+		{"顶层原子 32 位长度 4", append(append([]byte{}, ftyp...), append(be32(4), "free"...)...)},
+		{"moov 超过上限", append(append([]byte{}, ftyp...), append(be32(localFileEmbeddedMaxTagBytes+9), "moov"...)...)},
+		{"moov 64 位长度超过上限", append(append(append([]byte{}, ftyp...), append(be32(1), "moov"...)...), be64(localFileEmbeddedMaxTagBytes+17)...)},
+		{"moov 只有头", append(append([]byte{}, ftyp...), append(be32(8+64), "moov"...)...)},
+	}
+	for _, c := range cases {
+		if got, ok := localFileEmbeddedLyrics(writeTemp(t, "bad.m4a", c.data)); ok {
+			t.Errorf("%s:坏文件不该读出歌词,得到 %q", c.name, got)
+		}
+	}
+	for _, n := range []uint64{0, 8, 15, 1 << 63, ^uint64(0)} {
+		h := append(append(be32(1), "moov"...), be64(n)...)
+		if _, size, err := mp4AtomHeader(bytes.NewReader(h)); err == nil {
+			t.Errorf("64 位长度 %d 应当报错,得到长度 %d", n, size)
+		}
+	}
+
+	// 32 位长度 0 = 一直到文件末尾:照样读得出,长度按实际剩下的算。
+	toEOF := append(append(append([]byte{}, ftyp...), append(be32(0), "moov"...)...), ilst...)
+	if got, ok := localFileEmbeddedLyrics(writeTemp(t, "eof.m4a", toEOF)); !ok || got != embeddedLRC {
+		t.Errorf("moov 长度 0(到文件末尾):得到 %q, ok=%v", got, ok)
+	}
+	// 64 位长度写对的照样读得出。
+	ext := append(append(append(append([]byte{}, ftyp...), append(be32(1), "moov"...)...), be64(uint64(16+len(ilst)))...), ilst...)
+	if got, ok := localFileEmbeddedLyrics(writeTemp(t, "ext.m4a", ext)); !ok || got != embeddedLRC {
+		t.Errorf("moov 64 位长度:得到 %q, ok=%v", got, ok)
 	}
 }
 

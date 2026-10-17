@@ -26,6 +26,7 @@ func withCoverSweepFakes(t *testing.T, rounds [][2]int32, onBackfill func(key st
 	t.Helper()
 	savedBackfill, savedRound, savedWait, savedSave := coverSweepBackfill, coverSweepNetworkRound, coverSweepWait, coverSweepSave
 	savedQQAlbumName, savedCoverImage, savedAppleCover := coverSweepQQAlbumName, coverSweepCoverImage, coverSweepAppleCover
+	savedAppleAnswered := coverSweepAppleAnswered
 	coverPictureMu.Lock()
 	savedPictures := coverPictureMemo
 	coverPictureMemo = map[string]coverPicture{}
@@ -37,6 +38,7 @@ func withCoverSweepFakes(t *testing.T, rounds [][2]int32, onBackfill func(key st
 	t.Cleanup(func() {
 		coverSweepBackfill, coverSweepNetworkRound, coverSweepWait, coverSweepSave = savedBackfill, savedRound, savedWait, savedSave
 		coverSweepQQAlbumName, coverSweepCoverImage, coverSweepAppleCover = savedQQAlbumName, savedCoverImage, savedAppleCover
+		coverSweepAppleAnswered = savedAppleAnswered
 		coverPictureMu.Lock()
 		coverPictureMemo = savedPictures
 		coverPictureMu.Unlock()
@@ -51,6 +53,7 @@ func withCoverSweepFakes(t *testing.T, rounds [][2]int32, onBackfill func(key st
 	coverSweepQQAlbumName = func(context.Context, string) (string, error) { return "", nil }
 	coverSweepCoverImage = func(context.Context, string) image.Image { return nil }
 	coverSweepAppleCover = func(context.Context, string, string, string, float64) (string, string, bool) { return "", "", true }
+	coverSweepAppleAnswered = func(string, string, string) bool { return false }
 	coverSweepBackfill = func(ctx context.Context, key, artist, title, album string, dur float64) {
 		calls = append(calls, coverSweepCall{key, artist, title, album, dur, isBackgroundOutbound(ctx), coverSweepSaveDeferred(ctx)})
 		if onBackfill != nil {
@@ -831,5 +834,20 @@ func TestCoverSweepBorrowsAlbumSiblingsAfterDecisions(t *testing.T) {
 	dec, sib := strings.Index(src, "if n := coverSweepFillFromDecisions(); n > 0 {"), strings.Index(src, "if n := coverSweepBorrowAlbumSiblings(); n > 0 {")
 	if dec < 0 || sib < 0 || sib < dec {
 		t.Errorf("一遍里先从歌词判决补,再借同专辑的: %d %d", dec, sib)
+	}
+}
+
+// 核小设备封面那一条:量设备封面大不大(读本机文件)不持 enrichMu。
+func TestCoverSweepUpgradeOneMeasuresOutsideLock(t *testing.T) {
+	src := string(mustRead(t, "coversweep.go"))
+	start := strings.Index(src, "func coverSweepUpgradeOne(")
+	if start < 0 {
+		t.Fatal("找不到 coverSweepUpgradeOne")
+	}
+	body := src[start:]
+	body = body[:strings.Index(body, "\n}\n")]
+	if !strings.Contains(body, "\tenrichMu.Unlock()\n\tif !ok || !deviceCoverSmall(e.CoverURL) {") ||
+		strings.Count(body, "deviceCoverSmall(") != 1 {
+		t.Error("deviceCoverSmall 要在放掉 enrichMu 之后量")
 	}
 }

@@ -38466,6 +38466,23 @@
         }
       }
     },
+    "这首歌曲的歌词在编辑期间已更新，本次修改未保存；修改内容仍保留在编辑框中，放弃修改后重新编辑将打开最新版本" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This song's lyrics were updated while you were editing, so your changes weren't saved. They're still in the editor; discard them and edit again to open the latest version."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首歌曲的歌詞在編輯期間已更新，本次修改未儲存；修改內容仍保留在編輯框中，放棄修改後重新編輯將開啟最新版本"
+          }
+        }
+      }
+    },
     "无可保存的更改" : {
       "extractionState" : "manual",
       "localizations" : {

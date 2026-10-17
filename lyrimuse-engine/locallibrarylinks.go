@@ -145,12 +145,18 @@ func sodaTrackIDFromURL(u string) string {
 }
 
 // clearStaleLocalLibraryLinks 清掉判定不认的那几组。清了网易云或 QQ 链接时外围补全计数归零,needsPeripheralBackfill
-// 才会把空链接算作缺。播放器封面换整张表、不原地改:表跟落盘那份快照共用(同 applyPlayerCoverLocked)。
+// 才会把空链接算作缺。播放器封面换整张表、不原地改:表跟落盘那份快照共用(同 applyPlayerCoverLocked)。正在用的封面就是清掉的
+// 那张播放器封面(cover_source=player)时封面一族一起清、补全计数归零:留着的话它还会借给同专辑别的曲目(albumSiblingLends 认
+// player);专辑定下的(coverSettled)不动。
 func clearStaleLocalLibraryLinks(e enrichEntry, v localLibraryLinkVerdict) enrichEntry {
 	if v.neteaseSong {
 		e.NeteaseURL = ""
 	}
 	if v.neteaseCover {
+		if staleLocalPlayerCoverInUse(e, e.PlayerCovers[neteaseMusicBundleID]) {
+			e = withoutCover(e)
+			e.PeripheralRetryCount = 0
+		}
 		var covers map[string]string
 		for k, c := range e.PlayerCovers {
 			if k == neteaseMusicBundleID {
@@ -173,6 +179,40 @@ func clearStaleLocalLibraryLinks(e enrichEntry, v localLibraryLinkVerdict) enric
 		e.PeripheralRetryCount = 0
 	}
 	return e
+}
+
+// staleLocalPlayerCoverInUse:这条正在用的封面是播放器封面 cover(按 playerCoverDisplayURL 换过档的),不是专辑定下的。纯函数。
+func staleLocalPlayerCoverInUse(e enrichEntry, cover string) bool {
+	return cover != "" && e.CoverSource == "player" && e.CoverURL == playerCoverDisplayURL(cover) && !coverSettled(e)
+}
+
+// clearBorrowedStaleLocalPlayerCoversLocked:同专辑(歌词管理显示的专辑繁简折叠后相同)借了那几张清掉的播放器封面的条目
+// (cover_source=player,自己的播放器封面里没有这张,不是专辑定下的),封面一族一起清、补全计数归零。stale 是专辑 → 清掉的封面
+// 显示地址。返回清了哪几条。调用方持有 enrichMu。
+func clearBorrowedStaleLocalPlayerCoversLocked(stale map[string]map[string]bool) []string {
+	var cleared []string
+	for k, e := range enrichCache {
+		album := entryListedAlbum(k, e)
+		if album == "" || e.CoverSource != "player" || coverSettled(e) || enrichInflight[k] || enrichProvisional[k] ||
+			!stale[toSimplified(album)][e.CoverURL] {
+			continue
+		}
+		own := false
+		for _, c := range e.PlayerCovers {
+			if playerCoverDisplayURL(c) == e.CoverURL {
+				own = true
+				break
+			}
+		}
+		if own {
+			continue
+		}
+		e = withoutCover(e)
+		e.PeripheralRetryCount = 0
+		enrichCache[k] = e
+		cleared = append(cleared, k)
+	}
+	return cleared
 }
 
 // localLibraryReadable:刷新过一次之后,这一家拿得出能判的索引吗。没装(没有路径、文件不在)算拿得出,本来就没有要判
@@ -224,7 +264,8 @@ func startLocalLibraryLinkRecheck(ctx context.Context) {
 	}()
 }
 
-// recheckLocalLibraryLinks 是重核的本体,返回清掉了几条。读本机数据在锁外;判和清在同一段 enrichMu 里,中间不放锁。
+// recheckLocalLibraryLinks 是重核的本体,返回清掉了几条。读本机数据在锁外;判和清在同一段 enrichMu 里,中间不放锁。清过的几条
+// 走待落盘小文件(saveEnrichPendingBatch),不整份重写。
 func recheckLocalLibraryLinks(ctx context.Context, scope migrationScope) int {
 	var idx localLibraryIndexes
 	var neteaseOK, qqOK, sodaOK bool
@@ -236,8 +277,10 @@ func recheckLocalLibraryLinks(ctx context.Context, scope migrationScope) int {
 	}
 	complete := neteaseOK && qqOK && sodaOK
 
-	checked, cleared := 0, 0
+	checked := 0
+	var cleared []string
 	var neteaseSongs, neteaseCovers, qqSongs, sodaSongs int
+	staleCovers := map[string]map[string]bool{}
 	enrichMu.Lock()
 	for k, e := range scope.entries() {
 		checked++
@@ -246,8 +289,18 @@ func recheckLocalLibraryLinks(ctx context.Context, scope migrationScope) int {
 			continue
 		}
 		log.Printf("local library links: %q recorded another version (%s), clearing it", k, strings.Join(v.notes, "; "))
+		if old := e.PlayerCovers[neteaseMusicBundleID]; v.neteaseCover && staleLocalPlayerCoverInUse(e, old) {
+			if album := entryListedAlbum(k, e); album != "" {
+				simp := toSimplified(album)
+				if staleCovers[simp] == nil {
+					staleCovers[simp] = map[string]bool{}
+				}
+				staleCovers[simp][playerCoverDisplayURL(old)] = true
+			}
+		}
 		enrichCache[k] = clearStaleLocalLibraryLinks(e, v)
-		cleared++
+		noteEnrichPendingLocked(k)
+		cleared = append(cleared, k)
 		if v.neteaseSong {
 			neteaseSongs++
 		}
@@ -261,17 +314,24 @@ func recheckLocalLibraryLinks(ctx context.Context, scope migrationScope) int {
 			sodaSongs++
 		}
 	}
-	if cleared > 0 {
+	if borrowed := clearBorrowedStaleLocalPlayerCoversLocked(staleCovers); len(borrowed) > 0 {
+		log.Printf("local library links: cleared the borrowed copies of the stale player covers: %q", borrowed)
+		for _, k := range borrowed {
+			noteEnrichPendingLocked(k)
+		}
+		cleared = append(cleared, borrowed...)
+	}
+	if len(cleared) > 0 {
 		enrichDirty = true
 	}
 	enrichMu.Unlock()
-	if cleared > 0 {
-		saveEnrichCache()
+	if len(cleared) > 0 {
+		saveEnrichPendingBatch(cleared)
 	}
 	log.Printf("local library links: %d entries checked, %d cleared (netease %d, netease cover %d, qq %d, soda %d), complete=%v",
-		checked, cleared, neteaseSongs, neteaseCovers, qqSongs, sodaSongs, complete)
+		checked, len(cleared), neteaseSongs, neteaseCovers, qqSongs, sodaSongs, complete)
 	if complete {
 		scope.markDone(migrationLocalLibraryLinks, migrationLocalLibraryLinksVersion)
 	}
-	return cleared
+	return len(cleared)
 }

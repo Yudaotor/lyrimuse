@@ -273,10 +273,8 @@ func resolveManualConflictEdit(key string, now time.Time) enrichEditOutcome {
 		if err := backupManualOriginalsLocked(songShareManualBackupDir(now), others); err != nil {
 			return enrichEditOutcome{err: fmt.Errorf("resolve_manual_conflict: back up: %w", err)}
 		}
-		for _, k := range others {
-			if _, err := writeSongSharePre(k, enrichCache[k], fp, now); err != nil {
-				return enrichEditOutcome{err: fmt.Errorf("resolve_manual_conflict: %w", err)}
-			}
+		if err := writeSongSharePresLocked(others, fp, now); err != nil {
+			return enrichEditOutcome{err: fmt.Errorf("resolve_manual_conflict: %w", err)}
 		}
 	}
 	changed := slices.Clone(others)
@@ -297,6 +295,40 @@ func resolveManualConflictEdit(key string, now time.Time) enrichEditOutcome {
 	slog.Info("song entities: resolved manual lyrics conflict", "song", src.Song, "kept", key, "replaced", len(others),
 		"synced", len(more))
 	return enrichEditOutcome{changed: len(changed), exports: changed}
+}
+
+// writeSongSharePresLocked:keys 逐条按 writeSongSharePre 留底(条目取 enrichCache 里这一刻的),有一条写不成就把这一次已经
+// 写了的撤回(新建的删掉,已有的 synced 改回原来的)、报错:要么都写成,要么留底跟没调过一样,不留 synced 对着没写进去的
+// 歌词的。调用方持 enrichMu。
+func writeSongSharePresLocked(keys []string, synced string, now time.Time) error {
+	type written struct {
+		key, prev string
+		created   bool
+	}
+	var done []written
+	for _, k := range keys {
+		prev := ""
+		if p, err := readSongSharePre(songSharePrePath(k)); err == nil {
+			prev = p.Synced
+		}
+		created, err := writeSongSharePre(k, enrichCache[k], synced, now)
+		if err == nil {
+			done = append(done, written{key: k, prev: prev, created: created})
+			continue
+		}
+		for _, w := range done {
+			path := songSharePrePath(w.key)
+			if w.created {
+				noteFileErr("remove", path, os.Remove(path))
+				continue
+			}
+			if _, uerr := writeSongSharePre(w.key, enrichCache[w.key], w.prev, now); uerr != nil {
+				slog.Error("song entities: undo a sync backup", "key", w.key, "err", uerr)
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 // songShareManualBackupDir:统一手改时被替换的原件存在这里(跟 songShareBackupDir 同级)。

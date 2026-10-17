@@ -161,8 +161,8 @@ final class TouchBarMorePageBar {
         progressTimer = nil
         guard active else { return }
         refreshProgress()
-        let timer = Timer(timeInterval: Self.progressTickSeconds, repeats: true) { _ in
-            MainActor.assumeIsolated { [weak self] in self?.refreshProgress() }
+        let timer = Timer(timeInterval: Self.progressTickSeconds, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshProgress() }
         }
         RunLoop.main.add(timer, forMode: .common)
         progressTimer = timer

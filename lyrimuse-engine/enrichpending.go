@@ -142,12 +142,17 @@ func writeEnrichPending() {
 		}
 		return
 	}
-	// 候选明细给 App 没用,跟主缓存落盘时一样拆掉(明细由整份写盘写进旁路文件)。
+	// 候选明细给 App 没用,跟主缓存落盘时一样拆掉,明细同样先写进旁路文件、再写小文件:引擎没等到整份落盘就没了的话,
+	// 启动时叠回内存的是拆过的这一份(applyEnrichPendingAtLoad),「解析决策」要的候选明细只能从旁路文件里找回来。
+	// 内存里的条目不动(还带着明细),整份落盘时照常再拆一次。
+	var sidecars []decisionSidecarJob
 	for k, e := range entries {
-		if stripped, _, split := splitDecisionDetails(k, e); split {
+		if stripped, job, split := splitDecisionDetails(k, e); split {
 			entries[k] = stripped
+			sidecars = append(sidecars, job)
 		}
 	}
+	writeDecisionSidecars(sidecars)
 	b, err := json.Marshal(enrichPendingFile{Entries: entries})
 	if err == nil {
 		err = writeFileAtomic(path, b)

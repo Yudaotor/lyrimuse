@@ -52,7 +52,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
     /// 这首歌自己的那一份偏移(毫秒),在 ±`maxLyricsOffsetMs` 以内。
     case setLyricsOffset(ms: Int)
     case setPlayMode(MusicPlaybackController.MusicPlaybackMode)
-    /// x-callback-url:`success` 只收本机 App 的地址(`isCallbackTarget`),网页拿不到正在听什么。
+    /// x-callback-url:`success` 不收网页、文件、脚本的地址(`isCallbackCandidate`);回传前再看本机由谁来开,
+    /// 浏览器开的不回(`isCallbackTarget(_:handler:browsers:)`),网页拿不到正在听什么。
     case nowPlayingCallback(success: URL?)
     case debug(DebugCommand)
     case lastfmAuthCallback
@@ -139,7 +140,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             self = .setPlayMode(mode)
         case ("x-callback-url", "/now-playing"):
             self = .nowPlayingCallback(success: value("x-success").flatMap(URL.init(string:)).flatMap {
-                Self.isCallbackTarget($0) ? $0 : nil
+                Self.isCallbackCandidate($0) ? $0 : nil
             })
         case ("action", _):
             let name = trimmedPath.hasPrefix("/") ? String(trimmedPath.dropFirst()) : trimmedPath
@@ -298,12 +299,25 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         return items.first { $0.name.lowercased() == "background" }?.value.flatMap(parseBool) ?? false
     }
 
-    /// x-callback 的回传地址只收本机 App 的 scheme:网页(http / https)、本地文件和脚本类 scheme 一律不回传 ——
-    /// 任何网页都能拉起 `lyrimuse://`,不挡的话网页就能读到用户正在听什么。
-    public static func isCallbackTarget(_ url: URL) -> Bool {
+    /// x-callback 的回传地址先按 scheme 挡掉网页、文件、脚本这几类(解析时用):任何网页都能拉起 `lyrimuse://`,回传给
+    /// 网页,网页就能读到用户正在听什么。过了这一步还要看本机由谁来开(`isCallbackTarget(_:handler:browsers:)`)。
+    public static func isCallbackCandidate(_ url: URL) -> Bool {
         guard let scheme = url.scheme?.lowercased(), !scheme.isEmpty else { return false }
-        return !["http", "https", "file", "ftp", "javascript", "data", "about", "blob"].contains(scheme)
+        return !nonCallbackSchemes.contains(scheme)
     }
+
+    /// 回传前的最后一道:这个地址本机得有 App 来开(`handler`),而且那个 App 不是浏览器(`browsers` = 能开 http / https
+    /// 的那些 App)。浏览器自己的私有 scheme(`x-safari-https` 之类)会被它转成网页打开,按开它的 App 判,不按名单判:
+    /// 用户装的自动化工具不用一个个登记。
+    public static func isCallbackTarget(_ url: URL, handler: URL?, browsers: Set<URL>) -> Bool {
+        guard isCallbackCandidate(url), let handler else { return false }
+        return !browsers.contains(handler.standardizedFileURL)
+    }
+
+    /// 回传地址不收的 scheme:网页、文件、脚本,和 `lyrimuse` 自己(回传给自己会再触发一次)。
+    static let nonCallbackSchemes: Set<String> = [
+        "http", "https", "file", "ftp", "javascript", "data", "about", "blob", "lyrimuse",
+    ]
 
     /// 回传时附在 `x-success` 后面的参数(歌名 / 歌手 / 专辑 / 当前这句 / 播放器 / 在不在放)。保留 `x-success` 自带的参数。
     public static func callbackURL(_ base: URL, title: String, artist: String, album: String, lyric: String,

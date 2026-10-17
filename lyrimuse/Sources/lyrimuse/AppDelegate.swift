@@ -516,7 +516,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 用户刚打完字就立刻 Cmd+Q 的话,防抖计时器根本没机会触发,那次编辑会随着进程退出彻底丢失;SwiftUI 的
     // .onDisappear 也不保证在进程被终止时对每个视图都执行一遍。所以真正退出前先同步检查 ConfigStore 是否还有
     // 没保存的改动(isDirty):没有就直接放行,不拖慢正常退出;有就用 .terminateLater 暂缓退出,异步存盘
-    // (顺带重启引擎)完成后再 reply(toApplicationShouldTerminate:) 放行——不管存盘成功与否都放行,避免磁盘
+    // 完成后再 reply(toApplicationShouldTerminate:) 放行——不管存盘成功与否都放行,避免磁盘
     // 写入异常时把 Cmd+Q 卡死。
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // 退出原因日志:所有退出路径的汇合点,在这里打、只打一次。原因由 AppExit.request

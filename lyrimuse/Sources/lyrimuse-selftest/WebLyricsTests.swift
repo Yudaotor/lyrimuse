@@ -101,6 +101,29 @@ func runWebLyricsTests() {
         for host in denied {
             expectEqual(WebLyricsAccess.hostAllowed(host, localNames: names), false, "网页歌词: Host \(host ?? "nil") 挡住")
         }
+
+        // Origin:没带的放行(地址栏、OBS 浏览器源、命令行),带了就要跟 Host 同源。
+        let sameOrigin: [(String?, String)] = [
+            (nil, "localhost:3939"), ("", "localhost:3939"),
+            ("http://localhost:3939", "localhost:3939"), ("http://LOCALHOST:3939", "localhost:3939"),
+            ("http://127.0.0.1:3940", "127.0.0.1:3940"), ("http://[::1]:3939", "[::1]:3939"),
+            ("http://dj-mac.local:3939", "DJ-Mac.local:3939"), ("http://192.168.31.24", "192.168.31.24"),
+            ("http://192.168.31.24:80", "192.168.31.24"),
+        ]
+        for (origin, host) in sameOrigin {
+            expectEqual(WebLyricsAccess.originAllowed(origin, host: host), true, "网页歌词: Origin \(origin ?? "nil") → Host \(host) 放行")
+        }
+        let crossOrigin: [(String?, String?)] = [
+            ("https://evil.example", "localhost:3939"), ("http://evil.example:3939", "localhost:3939"),
+            ("http://localhost:3940", "localhost:3939"), ("http://127.0.0.1:3939", "localhost:3939"),
+            ("http://localhost", "localhost:3939"), ("null", "localhost:3939"), ("file://", "localhost:3939"),
+            ("http://localhost:3939/x", "localhost:3939"), ("http://localhost:99999", "localhost:3939"),
+            ("http://localhost:3939", nil), ("http://[::1]:3939", "localhost:3939"), ("chrome-extension://abc", "localhost:3939"),
+        ]
+        for (origin, host) in crossOrigin {
+            expectEqual(WebLyricsAccess.originAllowed(origin, host: host), false,
+                        "网页歌词: Origin \(origin ?? "nil") → Host \(host ?? "nil") 挡住")
+        }
     }
 
     // ---- 副屏尺寸 ----
@@ -133,6 +156,14 @@ func runWebLyricsTests() {
         expectEqual([fallback.width, fallback.height, fallback.pixelWidth], [1180, 820, 1770], "网页歌词: 认不出的取默认,小数倍数原样用")
         let junk = WebLyricsViewport(query: ["dpr": "nan"])
         expectEqual(junk.scale, 2, "网页歌词: 倍数认不出按 2x")
+        // 查询串是外部输入:超出 Int 的数先夹再转,不能崩。
+        let huge = WebLyricsViewport(query: ["w": "1e300", "h": "-1e300", "dpr": "1e300"])
+        expectEqual([huge.width, huge.height], [WebLyricsViewport.pointRange.upperBound, WebLyricsViewport.pointRange.lowerBound],
+                    "网页歌词: 极大极小的宽高夹进范围")
+        expectEqual(huge.pixelWidth * huge.pixelHeight <= WebLyricsViewport.maxPixels, true, "网页歌词: 极大倍数也压在像素上限内")
+        let overflow = WebLyricsViewport(query: ["w": "9223372036854775807", "h": "1e400"])
+        expectEqual([overflow.width, overflow.height], [WebLyricsViewport.pointRange.upperBound, 820],
+                    "网页歌词: 刚好溢出 Int 的宽夹到上限,inf 按默认")
     }
 
     // ---- 副屏点按 ----
@@ -307,6 +338,15 @@ func runWebLyricsTests() {
                     "网页歌词: 每个请求都过访问控制")
         expectEqual(sourceBytes(server, contain: "WebLyricsAccess.hostAllowed(request.headers[\"host\"]"), true,
                     "网页歌词: 每个请求都核 Host 头")
+        expectEqual(sourceBytes(server, contain: "WebLyricsAccess.originAllowed(request.headers[\"origin\"], host: request.headers[\"host\"])"),
+                    true, "网页歌词: 每个请求都核 Origin 与 Host 同源(挡别的网页连本机回环)")
+        expectEqual(sourceBytes(server, contain: "frame-ancestors 'none'"), true, "网页歌词: 页面不让别的网页嵌进 iframe")
+        expectEqual(sourceBytes(server, contain: "guard let self, !self.requestReceived else { return }"), true,
+                    "网页歌词: 连上后迟迟不发请求头的连接到点断开,不占名额")
+        expectEqual(sourceBytes(server, contain: "if idle >= Self.sendStallTimeout {"), true,
+                    "网页歌词: 发出去的东西长时间没被收走就断开")
+        expectEqual(sourceBytes(app("WebLyrics/WebLyricsScreen.swift"), contain: "guard !stopped, !sendBacklogged, framesInFlight"), true,
+                    "网页歌词: 这一尺寸的网页全都没发完上一帧时出帧线程跳拍")
         expectEqual(sourceBytes(app("AppDelegate.swift"), contain: "WebLyricsServer.startAll()"), true, "网页歌词: 启动时接上两个服务")
         let pages = app("WebLyrics/WebLyricsPages.swift")
         expectEqual(sourceBytes(pages, contain: "get('preview') === '1') document.body.classList.add('preview');"), true,
@@ -327,8 +367,20 @@ func runWebLyricsTests() {
                     "网页歌词: OBS 页描边照悬浮歌词用模糊剪影")
         expectEqual(sourceBytes(pages, contain: "html += '<div class=\"row dots\"><i></i><i></i><i></i></div>';"), true,
                     "网页歌词: OBS 页前奏 / 间奏画「•••」")
-        expectEqual(sourceBytes(pages, contain: "https://") || sourceBytes(pages, contain: "http://"), false,
-                    "网页歌词: 网页不连外部地址")
+        // 不连外部地址:任何「scheme://」(http、https、ws、wss…)、引号 / 括号 / 等号后面的协议相对地址(`src="//cdn…"`、
+        // `url(//…)`)、外链样式表都不许有。连回 App 的 WebSocket 由 location 推出来,不写地址。
+        let externalRefs = [#"[A-Za-z][A-Za-z0-9+.\-]*://"#, #"["'(=]\s*//[A-Za-z0-9]"#, #"@import|<link\b"#]
+            .map { try! NSRegularExpression(pattern: $0) }
+        func referencesExternal(_ text: String) -> Bool {
+            externalRefs.contains { $0.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil }
+        }
+        for sample in ["<script src=\"https://cdn.example/x.js\">", "new WebSocket('wss://evil.example/ws')",
+                       "<img src=\"//cdn.example/a.png\">", "background: url(//cdn.example/a.png)", "@import 'x.css';"] {
+            expectEqual(referencesExternal(sample), true, "网页歌词: 外部地址扫描认得 \(sample)")
+        }
+        expectEqual(referencesExternal("url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'; // 跟着页面走"), false,
+                    "网页歌词: 由 location 推出协议、行尾注释不算外部地址")
+        expectEqual(referencesExternal(pages), false, "网页歌词: 网页不连外部地址")
         let gapDots = app("UI/LyricsGapDots.swift")
         expectEqual(sourceBytes(gapDots, contain: "guard c.running, window != nil || rendersDetached else { return }"), true,
                     "网页歌词: 间奏点离屏时也装动画")

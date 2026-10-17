@@ -157,8 +157,11 @@ func requestSodaTrackMeta(ids []string) {
 		if _, ok := sodaTrackMetaCache[id]; ok || sodaTrackMetaQueued[id] {
 			continue
 		}
-		if at, ok := sodaTrackMetaFailed[id]; ok && now.Sub(at) < sodaTrackMetaRetryAfter {
-			continue
+		if at, ok := sodaTrackMetaFailed[id]; ok {
+			if now.Sub(at) < sodaTrackMetaRetryAfter {
+				continue
+			}
+			delete(sodaTrackMetaFailed, id)
 		}
 		sodaTrackMetaQueued[id] = true
 		sodaTrackMetaPending = append(sodaTrackMetaPending, id)
@@ -202,6 +205,7 @@ func sodaTrackMetaWorker() {
 			sodaTrackMetaFailed[id] = time.Now()
 		} else {
 			failures = 0
+			delete(sodaTrackMetaFailed, id)
 			m.At = time.Now().Unix()
 			sodaTrackMetaCache[id] = m
 			pruneSodaTrackMetaLocked()

@@ -76,6 +76,40 @@ func TestRelayShouldPushWaitsForCoverOnTrackChange(t *testing.T) {
 	}
 }
 
+// 同一首反复暂停、继续:每一次从暂停到在放都先等 relayResumeSettle,不只第一次(02 章决策 119)。
+func TestRelayShouldPushSettlesEveryResume(t *testing.T) {
+	now := time.Now()
+	p := &poller{relayLastState: "macpause|B|x|y|c", relayLastAt: now.Add(-time.Minute), relayStateSince: now.Add(-time.Minute)}
+	cover := map[string]any{"artwork": "https://c/1.jpg"}
+	for round := 0; round < 3; round++ {
+		if _, ok := p.relayShouldPush(now, "mac|B|x|y|c", cover, false); ok {
+			t.Fatalf("第 %d 次继续:先等 relayResumeSettle", round+1)
+		}
+		now = now.Add(relayResumeSettle)
+		reason, ok := p.relayShouldPush(now, "mac|B|x|y|c", cover, false)
+		if !ok || reason != "change" {
+			t.Fatalf("第 %d 次继续:等够了就推: %q %v", round+1, reason, ok)
+		}
+		p.applyRelayResult(relayPushResult{key: "mac|B|x|y|c", reason: reason, at: now})
+		now = now.Add(time.Minute)
+		if _, ok := p.relayShouldPush(now, "macpause|B|x|y|c", cover, false); !ok {
+			t.Fatalf("第 %d 次暂停应立刻推", round+1)
+		}
+		p.applyRelayResult(relayPushResult{key: "macpause|B|x|y|c", reason: "change", at: now})
+		now = now.Add(time.Minute)
+	}
+	// 在飞期间不推,也不把等待记录作废。
+	p.relayInflight = true
+	p.relayShouldPush(now, "mac|B|x|y|c", cover, false)
+	if _, ok := p.relayShouldPush(now.Add(relayResumeSettle), "mac|B|x|y|c", cover, false); ok {
+		t.Fatal("在飞期间不推")
+	}
+	p.relayInflight = false
+	if _, ok := p.relayShouldPush(now.Add(relayResumeSettle), "mac|B|x|y|c", cover, false); !ok {
+		t.Fatal("在飞的回来了,已经等够的照推")
+	}
+}
+
 // 暂停着开播另一首:先报上一首在放、紧接着换了歌名,上一首不被推成在放(02 章决策 119)。
 func TestRelayShouldPushSettlesResumeBeforeTrackChange(t *testing.T) {
 	now := time.Now()

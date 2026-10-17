@@ -1544,9 +1544,14 @@ final class LastfmStatsService: ObservableObject {
             let totalPages = Int(dig(first, "recenttracks", "@attr", "totalPages") as? String ?? "") ?? 1
             if totalPages > 1 {
                 for page in 2...min(totalPages, onThisDayMaxPages) {
+                    // 后面几页有一页没取到就整次算失败(那一格有「重试」):拿缺页的部分结果排出来的前几首不准,
+                    // 记成取到了的话过去那一天不会再重取。
                     guard let more = await request(method: "user.getrecenttracks", cred: cred,
                                                    extra: base.merging(["page": String(page)]) { _, new in new })
-                    else { break }
+                    else {
+                        if epoch == accountEpoch { dayListens[dayKey] = .failed }
+                        return
+                    }
                     guard epoch == accountEpoch else { return }
                     rows.append(contentsOf: parseRecent(more).filter { $0.date != nil })
                 }
@@ -2260,23 +2265,14 @@ final class LastfmStatsService: ObservableObject {
             }
         }
         logger.notice("local aliases: \(tables.artists.count, privacy: .public) artist + \(tables.titles.values.reduce(0) { $0 + $1.count }, privacy: .public) title + \(tables.entities.count, privacy: .public) song-entity alias(es) + \(tables.withdrawals.count, privacy: .public) alias withdrawal(s) + \(tables.rewrites.count, privacy: .public) scrobble-rewrite alias(es) inferred from local caches")
-        // 推出来的每一条都记进日志(表变了才记,不是每拍):这张表没有界面,排查"为什么并了/没并"只能靠它。
-        // os_log 对 public 字串约 1 KB 截断,分块记。
-        let artistItems = tables.artists.sorted { $0.key < $1.key }.map { "\($0.key)→\($0.value)" }
-        let titleItems = tables.titles.sorted { $0.key < $1.key }
-            .flatMap { a, m in m.sorted { $0.key < $1.key }.map { "\(a)|\($0.key)→\($0.value)" } }
-        let entityItems = tables.entities.sorted { $0.key < $1.key }.map { "\($0.key)→\($0.value)" }
-        let withdrawalItems = tables.withdrawals.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value.family)→\($0.value.key)" }
-        let rewriteItems = tables.rewrites.sorted { $0.key < $1.key }.map { "\($0.key)→\($0.value)" }
-        for (label, items) in [("artists", artistItems), ("titles", titleItems), ("song entities", entityItems),
-                               ("withdrawals", withdrawalItems), ("scrobble rewrites", rewriteItems)] {
-            var start = 0
-            while start < items.count {
-                let chunk = items[start..<min(start + 12, items.count)].joined(separator: "; ")
-                logger.notice("local aliases · \(label, privacy: .public) [\(start, privacy: .public)+]: \(chunk, privacy: .public)")
-                start += 12
-            }
+        // 只记每张表这次变了几条,不记条目本身:条目是歌名、歌手,诊断包带着 App 日志(LogRedactor 只脱敏凭据),
+        // 收听记录不进日志。
+        func changedCount<V: Equatable>(_ a: [String: V], _ b: [String: V]) -> Int {
+            Set(a.keys).union(b.keys).filter { a[$0] != b[$0] }.count
         }
+        let titleChanges = Set(old.titles.keys).union(tables.titles.keys)
+            .reduce(0) { $0 + changedCount(old.titles[$1] ?? [:], tables.titles[$1] ?? [:]) }
+        logger.notice("local aliases changed: \(changedCount(old.artists, tables.artists), privacy: .public) artist, \(titleChanges, privacy: .public) title, \(changedCount(old.entities, tables.entities), privacy: .public) song-entity, \(changedCount(old.withdrawals, tables.withdrawals), privacy: .public) withdrawal, \(changedCount(old.rewrites, tables.rewrites), privacy: .public) scrobble-rewrite")
         remergeCharts()
         // 右键链接查不到时按歌手别名再查一次,别名表一变就重算(它自己按输入早退)。
         refreshChartAppLinks()

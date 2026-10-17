@@ -209,3 +209,40 @@ func TestLateDeviceCoverTakesTheArtworkThatArrivedLater(t *testing.T) {
 		t.Fatalf("封面到了:收尾取到, 得到 %q", url)
 	}
 }
+
+// 挂上之后 App 换成了同歌手同歌名的另一首(别的专辑、重新起播,play_seq 变了):它的封面不当这一首的取;挂上时 App 还没报这一首的
+// 照旧不核起播。
+func TestLateDeviceCoverSkipsAnotherPlayOfTheSameTitle(t *testing.T) {
+	savedDir := deviceArtworkDir
+	t.Cleanup(func() { deviceArtworkDir = savedDir })
+	deviceArtworkDir = t.TempDir()
+	dir := t.TempDir()
+	statePath, artPath := filepath.Join(dir, "state.json"), filepath.Join(dir, "artwork")
+	setAppPlaybackArtworkSource(newAppStateReader(statePath), artPath)
+	t.Cleanup(func() { setAppPlaybackArtworkSource(nil, "") })
+	rec := appSourceRec(os.Getpid(), 4, 1, "Song", time.Now())
+	writeAppStateFile(t, statePath, rec)
+	late := withLateDeviceCover(context.Background(), "com.apple.Music", "Singer", "Song")
+	unknown := withLateDeviceCover(context.Background(), "com.apple.Music", "Singer", "Not Yet")
+
+	art := makeTestJPEG(t, 150, 150)
+	if err := os.WriteFile(artPath, art, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(art)
+	next := appSourceRec(os.Getpid(), 5, 1, "Song", time.Now())
+	next.Seq = 2
+	next.Track.Album, next.Track.Raw.Album = "Live", "Live"
+	next.Artwork = &appStateArtwork{SHA256: hex.EncodeToString(sum[:]), Mime: "image/jpeg", Bytes: len(art), PlaySeq: 5}
+	writeAppStateFile(t, statePath, next)
+	if url := lateDeviceCover(late, "Singer", "Song"); url != "" {
+		t.Fatalf("换成了另一次起播:不取, 得到 %q", url)
+	}
+
+	next.Seq = 3
+	next.Track.Title, next.Track.Raw.Title = "Not Yet", "Not Yet"
+	writeAppStateFile(t, statePath, next)
+	if url := lateDeviceCover(unknown, "Singer", "Not Yet"); !strings.HasPrefix(url, "file://") {
+		t.Fatalf("挂上时 App 还没报这一首:不核起播, 得到 %q", url)
+	}
+}

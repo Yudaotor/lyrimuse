@@ -122,12 +122,12 @@ func backfillPlayerAlbumIDsFromClientCache() int {
 }
 
 // backfillNeteasePlayerSongsFromHistory:在网易云上放过的条目,按客户端的播放历史(historyTracks,客户端自己放过的歌)认出放的
-// 是哪一首:还没有播放器歌曲 id 的按歌名歌手(报过原样写法的按它)与时长认(neteaseHistoryPick),记下歌曲 id 与专辑 id;有歌曲 id、
-// 没专辑 id 的按 id 补专辑。本机曲库(dbTrack)是「见过的歌」,不用(18 章决策 42)。返回补了几条。
+// 是哪一首:还没有播放器歌曲 id 的按歌名歌手(报过原样写法的按它)与时长认(neteaseHistoryPick),记下歌曲 id 与专辑 id;认出的那首
+// 是另一张专辑的、本机曲库重核又不认它(localLibraryLinkStale,同 locallibrarylinks.go)的不记;有歌曲 id、没专辑 id 的按 id 补专辑。本机曲库(dbTrack)是「见过的歌」,不用(18 章决策 42)。返回补了几条。
 func backfillNeteasePlayerSongsFromHistory(ctx context.Context) int {
 	type want struct {
-		key, artist, title, songID string
-		dur                        float64
+		key, artist, title, album, songID string
+		dur                               float64
 	}
 	enrichMu.Lock()
 	var wants []want
@@ -139,11 +139,14 @@ func backfillNeteasePlayerSongsFromHistory(ctx context.Context) int {
 		if sid != "" && e.PlayerAlbumIDs[neteaseMusicBundleID] != "" {
 			continue
 		}
-		artist, title, _ := splitEnrichKey(k)
+		artist, title, album := splitEnrichKey(k)
 		if r, ok := e.Reported[neteaseMusicBundleID]; ok && r.Title != "" {
 			artist, title = r.Artist, r.Title
+			if r.Album != "" {
+				album = r.Album
+			}
 		}
-		wants = append(wants, want{k, artist, title, sid, e.DurationSecs})
+		wants = append(wants, want{k, artist, title, album, sid, e.DurationSecs})
 	}
 	enrichMu.Unlock()
 	path := neteaseLocalDBPath()
@@ -173,6 +176,7 @@ func backfillNeteasePlayerSongsFromHistory(ctx context.Context) int {
 		h, ok := byID[w.songID]
 		if w.songID == "" {
 			h, ok = neteaseHistoryPick(byName, w.artist, w.title, w.dur)
+			ok = ok && !localLibraryLinkStale(w.album, h.Album.Name, w.dur, h.Duration/1000)
 		}
 		if !ok {
 			continue

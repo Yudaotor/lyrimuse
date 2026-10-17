@@ -1836,6 +1836,10 @@ func runPlaybackPositionTests() {
         expectEqual(cold(28.83, 28.83, t0.addingTimeInterval(0.6)), nil, "洛雪冷启动: 锚点还是在放信号那一刻的(新的没到)不算")
         expectEqual(cold(28.13, 28.83, nil), nil, "洛雪冷启动: 设备还没转起来不算")
         expectEqual(cold(0, 122.0, t0.addingTimeInterval(1.2)).map { near4($0, 0) }, true, "洛雪冷启动: 转起来的时刻比这一拍还晚,从锚点起")
+        expectEqual(cold(60, 28.83, t0.addingTimeInterval(1 - LocalPlaybackSource.lxMusicColdStartMaxAgeSecs - 0.1)), nil,
+                    "洛雪冷启动: 设备转起来太久还没用上的不算(不按很久以前的时刻把整首推后)")
+        expectEqual(cold(60, 28.83, t0.addingTimeInterval(1 - LocalPlaybackSource.lxMusicColdStartMaxAgeSecs + 0.1)).map { near4($0, 64.9) },
+                    true, "洛雪冷启动: 限龄之内照算")
         // 洛雪播放中途改速度:系统那份还是旧速度,读数从改的那一刻起换成配置里的新速度。
         func lxReading(_ elapsed: Double, rate: Double = 1, playing: Bool = true, bundle: String = lx) -> MediaControlSnapshot {
             .forReplay(title: "特别的人", artist: "方大同", duration: 259, elapsedTime: elapsed, playing: playing,

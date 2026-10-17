@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 // 回归测试:之前这里是"按 lyricsFileSuffixes 顺序首次命中就 break",而 ".lrc"
 // 是 ".tr.lrc"/".roma.lrc" 的真后缀 —— "X.tr.lrc" 被判成主歌词、base 截成 "X.tr",
@@ -38,5 +43,49 @@ func TestLyricsFileVariantsShareOneGroup(t *testing.T) {
 		if trimmed := name[:len(name)-len(got)]; trimmed != base {
 			t.Errorf("%q 去掉后缀后是 %q, want %q", name, trimmed, base)
 		}
+	}
+}
+
+// 老文件头部写的是播放器原样的歌名(带结尾说明括号),条目是按旧规则(去掉括号)建的:导入落到旧规则那条上,
+// 不另建一条。旧规则那条已经是另一种带括号写法的,不借,照旧按完整歌名建。
+func TestImportFallsBackToLegacyKeyForBracketedHeader(t *testing.T) {
+	legacy := "陈奕迅|不散的筵席|专辑"
+	full := "陈奕迅|不散的筵席（I Miss You）|专辑"
+	for _, c := range []struct {
+		name     string
+		reported map[string]reportedName
+		wantKey  string
+	}{
+		{"旧规则那条没被占", nil, legacy},
+		{"旧规则那条是另一种写法的", map[string]reportedName{"x": {Title: "不散的筵席（Other）"}}, full},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir := withExportFixture(t, map[string]enrichEntry{legacy: {Lyrics: "[00:01.00]原文", LyricsSource: "netease", Reported: c.reported}})
+			exportLyricsFiles()
+			path := filepath.Join(dir, sanitizeLyricsFilename(legacy)+".lrc")
+			orig, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			old := strings.Replace(string(orig), "不散的筵席]", "不散的筵席（I Miss You）]", 1)
+			old = strings.Replace(old, "原文", "改过", 1)
+			if old == string(orig) || !strings.Contains(old, "（I Miss You）") {
+				t.Fatalf("前提:头部里的歌名没换掉: %q", orig)
+			}
+			if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			importLyricsFrom(dir, false)
+			enrichMu.Lock()
+			got, ok := enrichCache[c.wantKey]
+			_, fullExists := enrichCache[full]
+			enrichMu.Unlock()
+			if !ok || got.Lyrics != "[00:01.00]改过" {
+				t.Fatalf("手改应落在 %q 上: ok=%v %q", c.wantKey, ok, got.Lyrics)
+			}
+			if c.wantKey == legacy && fullExists {
+				t.Error("不该按完整歌名另建一条")
+			}
+		})
 	}
 }

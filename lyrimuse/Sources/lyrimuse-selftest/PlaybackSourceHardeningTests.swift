@@ -479,6 +479,22 @@ private func wiringContracts() {
                 true, "稍后播放: 从收听统计加进洛雪稍后播放时记下来")
     expectEqual(code("LyrimuseCore/Local/LXMusicFavoriteControl.swift").contains("guard let now = currentTrack() else { return nil }"),
                 true, "洛雪退路: 收藏按开放 API 顶上来的那首认")
+    expectEqual(code("LyrimuseCore/Local/LXMusicFavoriteControl.swift")
+                    .contains("guard let result = ProcessRunner.run(\"/usr/bin/sqlite3\", [\"file:\\(databasePath)?mode=ro\", query], timeout: queryTimeout),"),
+                true, "洛雪收藏: 读本地库走带超时的 ProcessRunner")
+    let lxAPI = code("LyrimuseCore/Local/LXMusicOpenAPI.swift")
+    expectEqual(lxAPI.contains("if wasConnected { handler?(.playback) }"), true,
+                "洛雪开放 API: 连不上的那几次不当播放状态变化(没开洛雪时每 3 秒一次假信号)")
+    expectEqual(lxAPI.contains("if buffer.count > Self.maxLineBytes {"), true, "洛雪开放 API: 推送流一行攒太长就丢掉")
+    expectEqual(source.contains("if viaAPI != nil { clearLXMusicColdStart() } else { dropStaleLXMusicColdStart(now: now) }"), true,
+                "洛雪冷启动: 走开放 API 的那拍清掉、设备转起来太久没用上的丢掉")
+    expectEqual(code("LyrimuseCore/Local/QQSpokenAudio.swift").contains("if failedAt.count >= Self.cacheLimit {"), true,
+                "QQ 有声节目: 没问成的记录有上限")
+    let enrich = code("LyrimuseCore/Local/EnrichCacheReader.swift")
+    expectEqual(enrich.contains("return (songIndex(in: all)[song] ?? []).compactMap { all[$0] }"), true,
+                "缓存读取: 同曲各写法走按内容代号记住的索引,不每拍整表筛")
+    expectEqual(enrich.contains("let index = groupIndex(all) { memoizedLegacyLooseKey($0) }"), true,
+                "缓存读取: 旧规则宽松索引按记住的宽松键重建")
     expectEqual(code("LyrimuseCore/Local/MusicPlaybackController.swift").contains("if !LXMusicOpenAPI.shared.sendDirect(mediaControlCommand, arguments: arguments) {"),
                 true, "洛雪退路: 直接控制按开放 API → 链接的顺序发")
     expectEqual(fetchArtwork.contains("self.scheduleArtworkStaleTimeout(forKey: expectedKey)\n"), false,

@@ -148,3 +148,43 @@ func TestApplyEnrichPendingAtLoad(t *testing.T) {
 		t.Fatalf("小文件比主缓存新,该叠回并记成待落盘: a=%q c=%q dirty=%v pending=%d", got, c, dirty, pending)
 	}
 }
+
+// 小文件里的条目拆掉了候选明细:明细先写进旁路文件。引擎没等到整份落盘就没了,启动时叠回的是拆过的那一份,
+// 「解析决策」照样能按指纹从旁路文件里把候选找回来。内存里的条目不动,还带着明细。
+func TestEnrichPendingWritesDecisionSidecar(t *testing.T) {
+	d := fullDecision("first", 1700000000, "netease")
+	withEnrichPendingCache(t, map[string]enrichEntry{"a|1|x": {Lyrics: "A", LyricsDecision: d, LyricsDecisionApplied: d}})
+	noteEnrichPending("a|1|x", false)
+	f := readEnrichPendingFile(t, time.Second)
+	got := f.Entries["a|1|x"].LyricsDecision
+	if got == nil || hasDecisionDetails(got) || !got.DetailsExternal {
+		t.Fatalf("小文件里应是拆过明细的判决: %+v", got)
+	}
+	back := withDecisionDetails("a|1|x", got)
+	if !hasDecisionDetails(back) || len(back.Candidates) != 2 || back.Candidates[0].Source != "netease" {
+		t.Fatalf("应能从旁路文件找回候选明细: %+v", back)
+	}
+	enrichMu.Lock()
+	mem := enrichCache["a|1|x"].LyricsDecision
+	enrichMu.Unlock()
+	if !hasDecisionDetails(mem) {
+		t.Error("内存里的条目不该被拆")
+	}
+}
+
+// 主缓存还没有(新装后头一次整份落盘之前就退出了):启动时待落盘小文件照样叠回内存。
+func TestLoadEnrichCacheWithoutMainFileAppliesPending(t *testing.T) {
+	withEnrichPendingCache(t, map[string]enrichEntry{})
+	cachePath := enrichPath
+	b, _ := json.Marshal(enrichPendingFile{Entries: map[string]enrichEntry{"a|1|x": {Lyrics: "A"}}})
+	if err := os.WriteFile(enrichPendingPath(), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loadEnrichCache(cachePath)
+	enrichMu.Lock()
+	got, dirty, pending := enrichCache["a|1|x"].Lyrics, enrichDirty, len(enrichPendingKeys)
+	enrichMu.Unlock()
+	if got != "A" || !dirty || pending != 1 {
+		t.Fatalf("主缓存不在时小文件该叠回: a=%q dirty=%v pending=%d", got, dirty, pending)
+	}
+}

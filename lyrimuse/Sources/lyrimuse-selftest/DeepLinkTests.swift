@@ -120,15 +120,28 @@ func runDeepLinkTests() {
         expectEqual(Set(LyrimuseDeepLink.extraActionNames).isDisjoint(with: LyrimuseAction.allCases.map(\.linkName)), true,
                     "action/ 下的额外名字跟快捷键动作不重名")
 
-        // x-callback:本机 App 的回传地址收,网页 / 文件 / 脚本的不收(网页拿不到正在听什么)。
+        // x-callback:网页 / 文件 / 脚本的回传地址解析时就不收;别的 scheme 回传前看本机由谁来开,浏览器开的不回。
         let local = URL(string: "shortcuts://x-callback-url/ic-success?id=abc")!
         expectEqual(link("lyrimuse://x-callback-url/now-playing?x-success=\(local.absoluteString.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!)"),
                     .nowPlayingCallback(success: local), "回传: 本机 App 的地址收")
-        for bad in ["https://evil.example/steal", "http://x", "file:///tmp/x", "javascript:alert(1)"] {
+        for bad in ["https://evil.example/steal", "HTTP://x", "file:///tmp/x", "javascript:alert(1)", "data:text/html,x",
+                    "lyrimuse://x-callback-url/now-playing"] {
             let encoded = bad.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
             expectEqual(link("lyrimuse://x-callback-url/now-playing?x-success=\(encoded)"), .nowPlayingCallback(success: nil),
-                        "回传: 不回给 \(bad)")
+                        "回传: 解析时不收 \(bad)")
         }
+        let shortcutsApp = URL(fileURLWithPath: "/System/Applications/Shortcuts.app")
+        let safari = URL(fileURLWithPath: "/Applications/Safari.app")
+        let browsers: Set<URL> = [safari, URL(fileURLWithPath: "/Applications/Google Chrome.app")]
+        expectEqual(LyrimuseDeepLink.isCallbackTarget(local, handler: shortcutsApp, browsers: browsers), true,
+                    "回传: 本机非浏览器 App 开的地址回传(不用登记名单)")
+        expectEqual(LyrimuseDeepLink.isCallbackTarget(URL(string: "x-safari-https://evil.example")!, handler: safari,
+                                                      browsers: browsers), false,
+                    "回传: 浏览器自己的 scheme 不回(会被转成网页打开)")
+        expectEqual(LyrimuseDeepLink.isCallbackTarget(URL(string: "someapp://forward?u=x")!, handler: nil, browsers: browsers),
+                    false, "回传: 本机没有 App 开得了的不回")
+        expectEqual(LyrimuseDeepLink.isCallbackTarget(URL(string: "https://evil.example")!, handler: shortcutsApp,
+                                                      browsers: []), false, "回传: 网页地址就算有人开也不回")
         let reply = LyrimuseDeepLink.callbackURL(local, title: "爱爱爱", artist: "方大同", album: "", lyric: "I watched Godfather",
                                                  player: "Apple Music", playing: true)
         let items = reply.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems } ?? []

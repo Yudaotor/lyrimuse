@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
-	"net/http"
 	neturl "net/url"
 	"os"
 	"sort"
@@ -98,7 +96,8 @@ func mbRecordingsDue(entries map[string]enrichEntry, have map[string]mbISRCRecor
 	return out
 }
 
-// lookupMBRecording 问一个号,排 musicbrainzThrottle。MusicBrainz 没有这个号(404)也算问成;被限速、网络不通、ctx 取消
+// lookupMBRecording 问一个号,排 musicbrainzThrottle。MusicBrainz 明确说没有(404,或者这个号它不收的 400,mbDefinitiveMiss)
+// 也算问成:重问也不会变,当失败的话连续几次就停、下一轮又从这个号问起,后面的号永远轮不到。被限速、网络不通、ctx 取消
 // 时 ok 为 false。
 func lookupMBRecording(ctx context.Context, code string) (mbISRCRecord, bool) {
 	if err := musicbrainzThrottle(ctx); err != nil {
@@ -110,12 +109,12 @@ func lookupMBRecording(ctx context.Context, code string) (mbISRCRecord, bool) {
 		} `json:"recordings"`
 	}
 	url := "https://musicbrainz.org/ws/2/isrc/" + neturl.PathEscape(code) + "?inc=isrcs&fmt=json"
-	if err := mbGetJSON(ctx, url, &resp); err != nil {
-		var st *mbStatusError
-		if errors.As(err, &st) && st.status == http.StatusNotFound {
-			return mbISRCRecord{}, true
-		}
-		return mbISRCRecord{}, false
+	body, err := mbFetchBody(ctx, url)
+	if err == nil {
+		err = json.Unmarshal(body, &resp)
+	}
+	if err != nil {
+		return mbISRCRecord{}, mbDefinitiveMiss(err)
 	}
 	rec := mbISRCRecord{Recordings: len(resp.Recordings)}
 	if len(resp.Recordings) == 1 {

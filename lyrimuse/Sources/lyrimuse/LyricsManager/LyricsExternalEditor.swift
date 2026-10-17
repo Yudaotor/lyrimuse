@@ -9,7 +9,8 @@ private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: 
 /// 不打开歌词目录里引擎导出的那份 .lrc:引擎随时会按缓存重写、删掉它,改它要到下次启动才导回缓存。这里给这首在
 /// `lyrimuse-lyrics-editing/` 下写一份 .txt 工作副本,用打开纯文本的默认应用打开,每秒看一眼它变没变;编辑器存盘后
 /// 按 `LyricsExternalEdit.decide` 套回去,经改动通道交给引擎存(同歌词管理「保存修改」)。一次编辑绑在打开时那首的
-/// 缓存 key 上,换了歌照样存回那一首。会话只在内存里,App 退出就结束。
+/// 缓存 key 上,换了歌照样存回那一首。会话只在内存里,App 退出、或打开它的编辑器退出且没有还没套用的修改时结束;
+/// 会话都结束了就不再每秒看。
 @MainActor
 final class LyricsExternalEditor {
     static let shared = LyricsExternalEditor()
@@ -39,6 +40,8 @@ final class LyricsExternalEditor {
         /// 刚交给引擎存了、读取器还没解到那一版:先不比对,解到了再把 base 换成存下来的那份。
         var awaitingRebase = false
         var applying = false
+        /// 打开工作副本的那个编辑器进程;它退出了、文件也没有还没套用的修改,这次编辑就结束(见 endSessionsWhoseEditorQuit)。
+        var editorPID: pid_t?
     }
 
     private var sessions: [String: Session] = [:]
@@ -87,7 +90,7 @@ final class LyricsExternalEditor {
                 session.awaitingRebase = false
                 sessions[key] = session
             }
-            launch(session.url, title: title, mode: LyricsExternalEdit.mode(of: session.base), setAside: setAside)
+            launch(session.url, key: key, title: title, mode: LyricsExternalEdit.mode(of: session.base), setAside: setAside)
             return
         }
 
@@ -111,12 +114,12 @@ final class LyricsExternalEditor {
         sessions[key] = Session(key: key, artist: artist, title: title, album: album, url: url,
                                 base: content, reference: fresh, seen: Self.stamp(url))
         startTimer()
-        launch(url, title: title, mode: LyricsExternalEdit.mode(of: content), setAside: setAside)
+        launch(url, key: key, title: title, mode: LyricsExternalEdit.mode(of: content), setAside: setAside)
     }
 
     // MARK: - 打开编辑器
 
-    private func launch(_ url: URL, title: String, mode: LyricsExternalEdit.Mode, setAside: String?) {
+    private func launch(_ url: URL, key: String, title: String, mode: LyricsExternalEdit.Mode, setAside: String?) {
         guard let app = NSWorkspace.shared.urlForApplication(toOpen: url) else {
             notes.post(.failure, title: title, text: L10n.t("未找到可打开文本文件的应用"))
             return
@@ -124,8 +127,9 @@ final class LyricsExternalEditor {
         let appName = FileManager.default.displayName(atPath: app.path)
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
-        NSWorkspace.shared.open([url], withApplicationAt: app, configuration: configuration) { _, error in
+        NSWorkspace.shared.open([url], withApplicationAt: app, configuration: configuration) { running, error in
             let failure = error?.localizedDescription
+            let pid = running?.processIdentifier
             Task { @MainActor in
                 let notes = LyricsWindowActionNotes.shared
                 if let failure {
@@ -133,6 +137,7 @@ final class LyricsExternalEditor {
                     notes.post(.failure, title: title, text: String(format: L10n.t("无法打开「%1$@」：%2$@"), appName, failure))
                     return
                 }
+                if let pid { LyricsExternalEditor.shared.sessions[key]?.editorPID = pid }
                 var lines: [String]
                 switch mode {
                 case .wordTimed:
@@ -163,6 +168,25 @@ final class LyricsExternalEditor {
 
     private func tick() {
         for key in Array(sessions.keys) { check(key) }
+        endSessionsWhoseEditorQuit()
+    }
+
+    /// 打开工作副本的编辑器退出了、文件里也没有还没套用的修改(上面那一拍已经看过、没在等存或等读取器):这次编辑结束,
+    /// 不再盯这份文件;会话都结束了就停掉计时器。再要改从歌词窗口重新打开(盘上那份按指纹判断,见 open)。
+    private func endSessionsWhoseEditorQuit() {
+        for (key, session) in sessions {
+            guard let pid = session.editorPID, Self.processEnded(pid),
+                  !session.applying, !session.awaitingRebase,
+                  let stamp = Self.stamp(session.url), stamp == session.seen else { continue }
+            sessions[key] = nil
+        }
+        guard sessions.isEmpty else { return }
+        timer?.invalidate()
+        timer = nil
+    }
+
+    private static func processEnded(_ pid: pid_t) -> Bool {
+        NSRunningApplication(processIdentifier: pid)?.isTerminated ?? true
     }
 
     private func check(_ key: String) {

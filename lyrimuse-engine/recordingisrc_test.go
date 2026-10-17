@@ -77,16 +77,18 @@ func TestRecordingISRCsFromScoredTitleProof(t *testing.T) {
 	}
 }
 
-// 级别:同一个号取更高的;封顶挤掉的号不记;不改原来那份 isrc_levels;拿掉号时级别一起拿掉。
+// 级别:同一个号取更高的;满了以后级别更高的号挤掉最低的那个,挤不掉的不记;不改原来那份 isrc_levels;拿掉号时级别一起拿掉。
 func TestRecordISRCLevels(t *testing.T) {
 	shared := map[string]string{"HKA351501001": isrcLevelSearched}
 	e := enrichEntry{ISRCs: []string{"HKA351501001"}, ISRCLevels: shared}
 	recordISRCs(&e, []recordedISRC{{"hka351501001", isrcLevelPlayer}, {"HKC382400008", isrcLevelVerified}, {"HKI490667205", ""},
 		{"HKI490867102", isrcLevelSearched}, {"HKI490867406", isrcLevelPlayer}})
-	if want := []string{"HKA351501001", "HKC382400008", "HKI490667205", "HKI490867102"}; !reflect.DeepEqual(e.ISRCs, want) {
+	// 第五个号是播放器报的:挤掉没记级别的 HKI490667205,接在末尾。
+	if want := []string{"HKA351501001", "HKC382400008", "HKI490867102", "HKI490867406"}; !reflect.DeepEqual(e.ISRCs, want) {
 		t.Errorf("isrcs = %v, want %v", e.ISRCs, want)
 	}
-	want := map[string]string{"HKA351501001": isrcLevelPlayer, "HKC382400008": isrcLevelVerified, "HKI490867102": isrcLevelSearched}
+	want := map[string]string{"HKA351501001": isrcLevelPlayer, "HKC382400008": isrcLevelVerified, "HKI490867102": isrcLevelSearched,
+		"HKI490867406": isrcLevelPlayer}
 	if !reflect.DeepEqual(e.ISRCLevels, want) {
 		t.Errorf("isrc_levels = %v, want %v", e.ISRCLevels, want)
 	}
@@ -102,7 +104,7 @@ func TestRecordISRCLevels(t *testing.T) {
 	if !reflect.DeepEqual(dst.ISRCs, e.ISRCs) || !reflect.DeepEqual(dst.ISRCLevels, e.ISRCLevels) {
 		t.Errorf("合并条目连同级别并过来: %+v", dst)
 	}
-	removeISRCs(&e, func(c string) bool { return c == "HKA351501001" || c == "HKI490667205" })
+	removeISRCs(&e, func(c string) bool { return c == "HKA351501001" || c == "HKI490867406" })
 	if want := map[string]string{"HKC382400008": isrcLevelVerified, "HKI490867102": isrcLevelSearched}; !reflect.DeepEqual(e.ISRCLevels, want) ||
 		len(e.ISRCs) != 2 {
 		t.Errorf("拿掉号时级别一起拿掉: %+v", e)
@@ -132,6 +134,35 @@ func TestAppleSweepISRCLevel(t *testing.T) {
 	}
 	if got := appleSweepISRCLevel("Sam Smith|Like I Can|In The Lonely Hour", solo, 167.065); got != isrcLevelVerified {
 		t.Errorf("没点名合作者、版本词对得上:verified,实得 %s", got)
+	}
+}
+
+// 满了以后:级别不比最低的高就进不来;高的挤掉最低的(最低的有几个挤最后进来的);同一次里先进来的号也按它带的级别算。
+func TestRecordISRCEviction(t *testing.T) {
+	full := func() enrichEntry {
+		return enrichEntry{ISRCs: []string{"USAAA0000001", "USAAA0000002", "USAAA0000003", "USAAA0000004"},
+			ISRCLevels: map[string]string{"USAAA0000001": isrcLevelPlayer, "USAAA0000002": isrcLevelSearched,
+				"USAAA0000003": isrcLevelVerified, "USAAA0000004": isrcLevelSearched}}
+	}
+	e := full()
+	recordISRCs(&e, []recordedISRC{{"USAAA0000005", isrcLevelSearched}, {"USAAA0000006", ""}})
+	if !reflect.DeepEqual(e.ISRCs, full().ISRCs) || !reflect.DeepEqual(e.ISRCLevels, full().ISRCLevels) {
+		t.Errorf("级别不比最低的高,进不来: %+v", e)
+	}
+	e = full()
+	recordISRCs(&e, []recordedISRC{{"USAAA0000005", isrcLevelVerified}})
+	if want := []string{"USAAA0000001", "USAAA0000002", "USAAA0000003", "USAAA0000005"}; !reflect.DeepEqual(e.ISRCs, want) ||
+		e.ISRCLevels["USAAA0000004"] != "" || e.ISRCLevels["USAAA0000005"] != isrcLevelVerified {
+		t.Errorf("核对过的号挤掉最后进来的检索配的号: %+v", e)
+	}
+	e = full()
+	recordISRCs(&e, []recordedISRC{{"USAAA0000005", isrcLevelPlayer}, {"USAAA0000006", isrcLevelPlayer}, {"USAAA0000007", isrcLevelPlayer}})
+	if want := []string{"USAAA0000001", "USAAA0000005", "USAAA0000006", "USAAA0000007"}; !reflect.DeepEqual(e.ISRCs, want) {
+		t.Errorf("一次来三个播放器报的号,依次挤掉两个检索配的、一个核对过的: %v", e.ISRCs)
+	}
+	if want := map[string]string{"USAAA0000001": isrcLevelPlayer, "USAAA0000005": isrcLevelPlayer, "USAAA0000006": isrcLevelPlayer,
+		"USAAA0000007": isrcLevelPlayer}; !reflect.DeepEqual(e.ISRCLevels, want) {
+		t.Errorf("挤掉的号级别一起拿掉: %v", e.ISRCLevels)
 	}
 }
 
@@ -487,8 +518,8 @@ func TestRecordingISRCWiring(t *testing.T) {
 	if !strings.Contains(sweep, "enrichMu.Unlock()\n\t// 锚点在 appleCatalogMu 后面,放开 enrichMu 再核对。\n\tjobs = isrcResolveAnchors(jobs, appleCatalogLinkFor)") {
 		t.Error("补扫在放开 enrichMu 之后才核对锚点(appleCatalogMu 要先于 enrichMu 取)")
 	}
-	if !strings.Contains(enrich, "if job, ok := playbackISRCJobLocked(key, e, bundleID, anchorLink, time.Now()); ok {\n\t\t\tgo runPlaybackISRCJob(job)") {
-		t.Error("缓存命中那一支当场补播放器给的号(锚点在取 enrichMu 之前算好)")
+	if !strings.Contains(enrich, "if !enrichInflight[key] {\n\t\t\tif job, ok := playbackISRCJobLocked(key, e, bundleID, anchorLink, time.Now()); ok {\n\t\t\t\tgo runPlaybackISRCJob(job)") {
+		t.Error("缓存命中那一支当场补播放器给的号(锚点在取 enrichMu 之前算好);这条还有后台解析在跑时先不起,免得被那次整条提交盖掉")
 	}
 	if !strings.Contains(read("../lyrimuse/Sources/LyrimuseCore/Local/EnrichCacheReader.swift"), "        case isrcs\n") {
 		t.Error("App 解码 isrcs(EnrichCacheReader.swift 的 CodingKeys)")

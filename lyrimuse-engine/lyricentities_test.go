@@ -24,8 +24,10 @@ func TestDecodeLyricEntities(t *testing.T) {
 		{"不认识的实体名原样保留", "R&B; and &foo; and &x1;", "R&B; and &foo; and &x1;"},
 		{"控制字符不换(&#10; 会拆行)", "line one&#10;line two &#9;tab", "line one&#10;line two &#9;tab"},
 		{"nbsp 换成普通空格而不是 U+00A0", "Whoa&nbsp;? and&#160;this&#xa0;too", "Whoa ? and this too"},
-		// 只解一层
-		{"双重转义只解一层", "they&amp;apos;re", "they&apos;re"},
+		// 解到不再变为止
+		{"双重转义解到底", "they&amp;apos;re", "they're"},
+		{"三层转义也解到底", "a &amp;amp;amp; b", "a & b"},
+		{"解到底之后是控制字符的那一层留着", "x&amp;#10;y", "x&#10;y"},
 		{"孤立的 & 原样", "rock & roll & more &", "rock & roll & more &"},
 		{"实体名过长不匹配", "&" + "abcdefghijklmnopqrstuvwxyzabcdefghij;", "&abcdefghijklmnopqrstuvwxyzabcdefghij;"},
 	}
@@ -39,11 +41,16 @@ func TestDecodeLyricEntities(t *testing.T) {
 }
 
 // decodeLyricEntities 对已经解过的文本必须是空操作——migrateLyricEntities 每次启动都跑,
-// 靠这条保证"跑一次和跑十次一样"(除了刻意只解一层的双重转义,那不是干净文本)。
+// 靠这条保证"跑一次和跑十次一样",多重转义的也一样(水位被作废、全库重跑时正文不再变)。
 func TestDecodeLyricEntitiesIdempotentOnCleanText(t *testing.T) {
-	clean := decodeLyricEntities("[00:32.64]Don&apos;t sleep &apos;til the sunrise &amp; Carvin &quot;Ransum&quot;")
-	if again := decodeLyricEntities(clean); again != clean {
-		t.Errorf("second pass changed clean text: %q -> %q", clean, again)
+	for _, in := range []string{
+		"[00:32.64]Don&apos;t sleep &apos;til the sunrise &amp; Carvin &quot;Ransum&quot;",
+		"[00:01.00]they&amp;apos;re &amp;amp;amp; R&B; x&amp;#10;y",
+	} {
+		clean := decodeLyricEntities(in)
+		if again := decodeLyricEntities(clean); again != clean {
+			t.Errorf("second pass changed decoded text: %q -> %q", clean, again)
+		}
 	}
 }
 

@@ -370,7 +370,9 @@ func main() {
 	startupStep("migratePlayersFromAppleAnchors", migratePlayersFromAppleAnchors)
 	// 存量没有时长的条目从收听记录补(见 enrich.go migrateListenDurations),同样排在 refreshEnrichIndex 之前。
 	startupStep("migrateListenDurations", func() {
-		migrateListenDurations(readListenLogAt(filepath.Join(filepath.Dir(*cfgPath), clientName+"-listens.jsonl")))
+		migrateListenDurations(func() []listenLogLine {
+			return readListenLogAt(filepath.Join(filepath.Dir(*cfgPath), clientName+"-listens.jsonl"))
+		})
 	})
 	// 存量「用户选定的源」→「手动选定」留痕(见 manualpickmigrate.go)。
 	// 必须排在上面三步**之后**:import / YRC 空白清洗 / 时间轴重挂都会重写 Lyrics 和

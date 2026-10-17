@@ -9,6 +9,8 @@
 #   Lyrimuse-v<版本>-macos-intel.zip.sha256
 #   Lyrimuse-v<版本>-macos-intel.tar.xz
 #   Lyrimuse-v<版本>-macos-intel.dmg
+#   Lyrimuse-v<版本>-macos-dSYM.zip       两份包里三个 Swift 可执行文件的 dSYM,还原用户崩溃报告用
+#   Lyrimuse-v<版本>-macos-intel-dSYM.zip
 #
 # 用法:
 #   LYRIMUSE_VERSION=1.2.1 ./package.sh
@@ -148,7 +150,7 @@ for v in "${VARIANTS[@]}"; do
   sdk_field="$(vtool -show-build "$app/Contents/MacOS/lyrimuse" | awk '/^ *sdk /{print $2; exit}')"
   sdk_major="${sdk_field%%.*}"
   case "$sdk_major" in
-    ''|*[!0-9]*) echo "!! $label 读不出 sdk 字段(拿到「$sdk_field」),拒绝打包" >&2; exit 1 ;;
+    ''|*[!0-9]*) echo "!! $label 读不出 sdk 字段(拿到「${sdk_field}」),拒绝打包" >&2; exit 1 ;;
   esac
   if [ "$sdk_major" -lt 26 ]; then
     echo "!! $label 的 sdk 字段是 $sdk_field(<26)——这样发出去在 macOS 26+ 上没有液态玻璃,拒绝打包" >&2
@@ -168,7 +170,7 @@ for v in "${VARIANTS[@]}"; do
       *"certificate root"*) ;;
       *)
         if [ "${LYRIMUSE_REQUIRE_STABLE_SIGNATURE:-}" = 1 ]; then
-          echo "!! $label ${signed#"$STAGE"/} 的签名要求不是固定证书(拿到「$req」),拒绝打包" >&2
+          echo "!! $label ${signed#"$STAGE"/} 的签名要求不是固定证书(拿到「${req}」),拒绝打包" >&2
           exit 1
         fi
         echo "    ⚠ ${signed#"$STAGE"/} 是 ad-hoc 签名:用户更新后系统授权会失效(发布构建会在这里失败)" >&2
@@ -185,9 +187,56 @@ human_size() {
   /usr/bin/python3 -c "import sys;n=int(sys.argv[1]);print(f'{n/1048576:.2f} MB' if n>=1048576 else (f'{n/1024:.1f} KB' if n>=1024 else f'{n} B'))" "$(stat -f %z "$1")"
 }
 
+# verify_archive <label> <归档> <期望架构集>:把刚打好的归档解到临时目录,对解出来的那份重新验一遍签名、主执行文件
+# 架构和旧名 collector 符号链接。上面的闸验的是打包前的 .app,归档这一步把符号链接拆成实体或丢了文件时,解出来的
+# 包签名封不上、Sparkle 装上就打不开 —— 这一步之后再没有别的闸。按扩展名选解包方式:.tar.xz 用 /usr/bin/tar
+# (Sparkle 解包用的也是它),.zip 用 ditto(Homebrew cask 装的是它)。
+verify_archive() {
+  local label="$1" archive="$2" want="$3" out a archs
+  out="$(mktemp -d "$STAGE/verify.XXXXXX")"
+  case "$archive" in
+    *.tar.xz) /usr/bin/tar -xJf "$archive" -C "$out" ;;
+    *.zip) ditto -x -k "$archive" "$out" ;;
+    *) echo "!! verify_archive 不认识的归档格式:$archive" >&2; return 1 ;;
+  esac
+  if [ ! -d "$out/Lyrimuse.app" ]; then
+    echo "!! $label $(basename "$archive") 解开后没有 Lyrimuse.app" >&2; return 1
+  fi
+  if ! codesign -v --deep --strict "$out/Lyrimuse.app"; then
+    echo "!! $label $(basename "$archive") 解开后签名校验不过" >&2; return 1
+  fi
+  archs="$(lipo -archs "$out/Lyrimuse.app/Contents/MacOS/lyrimuse" 2>/dev/null || true)"
+  for a in $want; do
+    case " $archs " in *" $a "*) ;; *) echo "!! $label $(basename "$archive") 解开后主执行文件缺 $a(拿到「${archs}」)" >&2; return 1 ;; esac
+  done
+  if [ ! -L "$out/Lyrimuse.app/Contents/Resources/collector" ]; then
+    echo "!! $label $(basename "$archive") 解开后 Resources/collector 不是符号链接" >&2; return 1
+  fi
+  rm -rf "$out"
+}
+
+# pack_dsyms <label> <app> <期望架构集> <输出 zip>:build.sh --dest 剥符号前存下的 dSYM(.build/dsym/dest/<架构>/)打成
+# 一个 zip。用户发来的崩溃报告要靠同一次构建的 dSYM 还原,事后重编出来的 UUID 对不上;所以先核对 dSYM 跟包里那三个
+# 可执行文件逐个架构 UUID 一致,对不上就不出包。见 15 章决策 33、42。
+pack_dsyms() {
+  local label="$1" app="$2" want="$3" out="$4"
+  local dir="$ROOT/.build/dsym/dest/${want// /-}" rel bin_uuids dsym_uuids
+  for rel in MacOS/lyrimuse Resources/lyrics-translate Resources/lyrics-romanize; do
+    bin_uuids="$(dwarfdump --uuid "$app/Contents/$rel" | awk '{print $2, $3}' | sort)"
+    dsym_uuids="$(dwarfdump --uuid "$dir/$(basename "$rel").dSYM" 2>/dev/null | awk '{print $2, $3}' | sort)"
+    if [ -z "$bin_uuids" ] || [ "$bin_uuids" != "$dsym_uuids" ]; then
+      echo "!! $label $(basename "$rel") 的 dSYM 跟包里的可执行文件 UUID 对不上(dSYM 目录 $dir)" >&2
+      return 1
+    fi
+  done
+  ditto -c -k --keepParent "$dir" "$out"
+}
+
 echo "==> packaging"
 for v in "${VARIANTS[@]}"; do
   suffix="${v%%|*}"
+  rest="${v#*|}"; want="${rest##*|}"
+  label="${suffix:-(主包)}"
   app="$STAGE/${suffix:-primary}/Lyrimuse.app"
   base="Lyrimuse-v$VERSION-macos$suffix"
 
@@ -206,6 +255,9 @@ for v in "${VARIANTS[@]}"; do
   # 不出 .sha256:Sparkle 验的是 EdDSA 签名,没有别的消费者。见 15 章决策 34。
   /usr/bin/tar --no-mac-metadata --options xz:compression-level=9 \
     -cJf "$DIST/$base.tar.xz" -C "$(dirname "$app")" Lyrimuse.app
+  verify_archive "$label" "$DIST/$base.zip" "$want"
+  verify_archive "$label" "$DIST/$base.tar.xz" "$want"
+  pack_dsyms "$label" "$app" "$want" "$DIST/$base-dSYM.zip"
 
   # dmg:优先用 dmgbuild 出"带背景图、图标摆好位置"的窗口,拿不到 dmgbuild 就退回
   # 纯 hdiutil。
@@ -254,6 +306,7 @@ for v in "${VARIANTS[@]}"; do
   printf "    %-40s %s\n" "$base.zip.sha256" "$(human_size "$DIST/$base.zip.sha256")"
   printf "    %-40s %s\n" "$base.tar.xz" "$(human_size "$DIST/$base.tar.xz")"
   printf "    %-40s %s\n" "$base.dmg" "$(human_size "$DIST/$base.dmg")"
+  printf "    %-40s %s\n" "$base-dSYM.zip" "$(human_size "$DIST/$base-dSYM.zip")"
 done
 
 echo

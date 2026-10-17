@@ -71,11 +71,18 @@ enum EnrichEditChannel {
 
     private static let cliRetryInterval: Duration = .milliseconds(250)
 
-    /// id 以纳秒时间戳开头:引擎按文件名顺序处理,顺序即提交顺序。
+    /// id 以纳秒时间戳开头:引擎按文件名顺序处理,顺序即提交顺序。时间戳只增不减(比上一个至少大 1):
+    /// 系统时钟往回调的那一下连发几个改动,顺序也不会颠倒。
     private static func makeID() -> String {
-        let nanos = UInt64(Date().timeIntervalSince1970 * 1_000_000_000)
+        let now = UInt64(max(0, Date().timeIntervalSince1970) * 1_000_000_000)
+        let nanos = lastIDNanos.withLock { last -> UInt64 in
+            last = max(now, last &+ 1)
+            return last
+        }
         return String(format: "%020llu-%@", nanos, String(UUID().uuidString.prefix(8)))
     }
+
+    private static let lastIDNanos = OSAllocatedUnfairLock(initialState: UInt64(0))
 
     /// 等结果用 Task.sleep 而不是 Thread.sleep:一次改动最长要等两分钟,不能一直占着并发池里的线程。
     private static func viaRequestDirectory(_ data: Data) async -> Result {

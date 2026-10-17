@@ -101,11 +101,19 @@ enum DeepLinkRouter {
         GlobalHotkeys.flashHint(icon: "doc.on.doc", text: L10n.t("已拷贝当前歌词"))
     }
 
-    /// x-callback-url 回传。没在放时照样回传(各项空、`playing=0`),调用方按 `playing` 判断;没给本机 App 的回传地址时
-    /// 什么都不做(`LyrimuseDeepLink` 已经把网页地址挡在外面)。
+    /// x-callback-url 回传。没在放时照样回传(各项空、`playing=0`),调用方按 `playing` 判断;没给回传地址、本机没有
+    /// App 开得了它、或开它的是浏览器时什么都不做(网页、文件、脚本的地址 `LyrimuseDeepLink` 解析时已经挡在外面)。
     private static func replyNowPlaying(to success: URL?) {
         guard let success else {
             logger.notice("now-playing callback without a local x-success target")
+            return
+        }
+        let workspace = NSWorkspace.shared
+        let browsers = Set(["https://example.com", "http://example.com"].compactMap(URL.init(string:))
+            .flatMap { workspace.urlsForApplications(toOpen: $0) }.map(\.standardizedFileURL))
+        guard LyrimuseDeepLink.isCallbackTarget(success, handler: workspace.urlForApplication(toOpen: success),
+                                                browsers: browsers) else {
+            logger.notice("now-playing callback target is not opened by a local non-browser app: \(success.scheme ?? "", privacy: .public)")
             return
         }
         let p = PlaybackCoordinator.shared

@@ -386,9 +386,11 @@ func TestSettleAlbumCoversSkipsSettledAlbums(t *testing.T) {
 	}
 }
 
-// 组里有一张图取不到:这一遍不定这一组,别的组照定;连着 coverSweepOfflineLimit 组都这样就停,中间有一组定成了就重新数。
+// 组里有一张图取不到:这一遍不定这一组,别的组照定;为它发的请求全失败的连着 coverSweepOfflineLimit 组就停,中间有一组定成了
+// 就重新数;取图有回话(解不开、纯色)或一个请求都没发(本机文件没了)的不数,整遍跑完。
 func TestSettleAlbumCoversSkipsGroupsWithUnloadablePictures(t *testing.T) {
 	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+	coverSweepNetworkRound = withNetworkRound
 	withSettleFakes(t, map[string]image.Image{settleLegs: settlePicture(0, false), settleTux1: settlePicture(0, false)}, nil)
 	withEnrichCache(t, map[string]enrichEntry{
 		"A|a|Gone": {CoverURL: "https://p1.music.126.net/gone.jpg", CoverSource: "netease", CoverAlbum: "Gone"},
@@ -405,7 +407,8 @@ func TestSettleAlbumCoversSkipsGroupsWithUnloadablePictures(t *testing.T) {
 	}
 	enrichMu.Unlock()
 
-	// albums 里 g、i 开头的那组取不到图,别的取得到;按 key 排着一组组来。
+	// albums 里 g、i 开头的那组取不到图(按 gone 报这一次请求怎样,nil 是没发请求),别的取得到;按 key 排着一组组来。
+	gone := func(ctx context.Context) { noteNetworkRoundOutcome(ctx, fmt.Errorf("dial tcp: no route to host")) }
 	run := func(albums []string) (tried, settled int) {
 		cache := map[string]enrichEntry{}
 		for i, album := range albums {
@@ -417,9 +420,12 @@ func TestSettleAlbumCoversSkipsGroupsWithUnloadablePictures(t *testing.T) {
 			cache["A|b|"+album] = enrichEntry{CoverURL: settleLegs, CoverSource: "device", CoverAlbum: album}
 		}
 		withEnrichCache(t, cache)
-		coverSweepCoverImage = func(_ context.Context, url string) image.Image {
+		coverSweepCoverImage = func(ctx context.Context, url string) image.Image {
 			if strings.Contains(url, "/gone") {
 				tried++
+				if gone != nil {
+					gone(ctx)
+				}
 				return nil
 			}
 			return settlePicture(0, false)
@@ -446,6 +452,19 @@ func TestSettleAlbumCoversSkipsGroupsWithUnloadablePictures(t *testing.T) {
 	}
 	if _, settled := run(append(albums, "zz")); settled != 4 {
 		t.Errorf("中间那组定成了就重新数,后面的照定: 记下 %d 条, 要 4", settled)
+	}
+	albums = nil
+	for i := range coverSweepOfflineLimit + 2 {
+		albums = append(albums, fmt.Sprintf("g%d", i))
+	}
+	for name, report := range map[string]func(context.Context){
+		"answered":   func(ctx context.Context) { noteNetworkRoundOutcome(ctx, nil) },
+		"no request": nil,
+	} {
+		gone = report
+		if tried, settled := run(append(albums, "zz")); settled != 2 || tried != coverSweepOfflineLimit+2 {
+			t.Errorf("%s: 不算没问成,整遍跑完: 记下 %d 条、试了 %d 组", name, settled, tried)
+		}
 	}
 }
 
@@ -868,5 +887,102 @@ func TestMiguJPEGCover(t *testing.T) {
 	}
 	if !strings.Contains(string(mustRead(t, "color.go")), "\t} else {\n\t\tsmall = miguJPEGCover(small)\n\t}") {
 		t.Error("loadCoverImage 要接上 miguJPEGCover")
+	}
+}
+
+// 专辑名一样、播放器登记的专辑 id 不一样(「Greatest Hits」这类):不定封面,先前定下的放开(只清 CoverSettled,封面不动);
+// 只有一边有 id、或 id 一样的照常定。
+func TestSettleAlbumCoversSkipsSameNamedDifferentAlbums(t *testing.T) {
+	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+	withSettleFakes(t, map[string]image.Image{
+		settleTux1: settlePicture(1, false), settleTux2: settlePicture(1, false),
+	}, nil)
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|a|Greatest Hits": {CoverURL: settleTux1, CoverSource: "netease", SpotifyAlbumID: "sp1", CoverSettled: settleTux1},
+		"A|b|Greatest Hits": {CoverURL: settleTux2, CoverSource: "netease", SpotifyAlbumID: "sp2"},
+		"A|c|Greatest Hits": {CoverURL: settleTux2, CoverSource: "netease", SodaAlbumID: "s1", CoverSettled: settleTux2},
+	})
+	if switched, settled := coverSweepSettleAlbumCovers(context.Background()); switched != 0 || settled != 0 {
+		t.Fatalf("同名不同专辑不该定: settled=%d switched=%d", settled, switched)
+	}
+	enrichMu.Lock()
+	for key, want := range map[string]string{"A|a|Greatest Hits": settleTux1, "A|b|Greatest Hits": settleTux2, "A|c|Greatest Hits": settleTux2} {
+		if e := enrichCache[key]; e.CoverURL != want || e.CoverSettled != "" {
+			t.Errorf("%s 封面不动、定下的放开: %+v", key, e)
+		}
+	}
+	enrichMu.Unlock()
+
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|a|Greatest Hits": {CoverURL: settleTux1, CoverSource: "netease", SpotifyAlbumID: "sp1", KKBOXAlbumID: "k1"},
+		"A|b|Greatest Hits": {CoverURL: settleTux2, CoverSource: "netease", SpotifyAlbumID: "sp1"},
+		"A|c|Greatest Hits": {CoverURL: settleTux2, CoverSource: "netease", QQAlbumMid: "other"},
+	})
+	if _, settled := coverSweepSettleAlbumCovers(context.Background()); settled != 3 {
+		t.Fatalf("id 对得上、只有一边有 id、QQ mid 不同的照常定: settled=%d", settled)
+	}
+}
+
+func TestCoverSettleAlbumsDiffer(t *testing.T) {
+	m := func(e enrichEntry) coverSettleMember { return coverSettleMember{e: e} }
+	for name, c := range map[string]struct {
+		g    []coverSettleMember
+		want bool
+	}{
+		"amazon":        {[]coverSettleMember{m(enrichEntry{AmazonAlbumASIN: "B1"}), m(enrichEntry{AmazonAlbumASIN: "B2"})}, true},
+		"youtube music": {[]coverSettleMember{m(enrichEntry{YouTubeMusicAlbumID: "MPREb_1"}), m(enrichEntry{}), m(enrichEntry{YouTubeMusicAlbumID: "MPREb_2"})}, true},
+		"same id":       {[]coverSettleMember{m(enrichEntry{SodaAlbumID: "1"}), m(enrichEntry{SodaAlbumID: " 1 "})}, false},
+		"other players": {[]coverSettleMember{m(enrichEntry{SodaAlbumID: "1"}), m(enrichEntry{KKBOXAlbumID: "2"})}, false},
+		"text matched":  {[]coverSettleMember{m(enrichEntry{QQAlbumMid: "x", AppleURL: "a"}), m(enrichEntry{QQAlbumMid: "y", AppleURL: "b"})}, false},
+	} {
+		if got := coverSettleAlbumsDiffer(c.g); got != c.want {
+			t.Errorf("%s: coverSettleAlbumsDiffer = %v, want %v", name, got, c.want)
+		}
+	}
+}
+
+// 问 Apple 只读本地(命中缓存、在负缓存窗口里)的那一首不先等 coverSweepAppleGap,也不算问过:头一首真要发请求的不用为它等,
+// 之后真要发请求的照等。
+func TestSettleAlbumCoversSkipsAppleGapForLocalAnswers(t *testing.T) {
+	_, waits := withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+	asked := withSettleFakes(t, map[string]image.Image{
+		settleLegs: settlePicture(0, false), settleTux1: settlePicture(1, false),
+	}, nil)
+	coverSweepAppleAnswered = func(_, title, _ string) bool { return title == "a" || title == "b" }
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|a|One": {CoverURL: settleTux1, CoverSource: "netease", CoverAlbum: "One"},
+		"A|b|One": {CoverURL: settleLegs, CoverSource: "device", CoverAlbum: "One"},
+		"A|c|Two": {CoverURL: settleTux1, CoverSource: "netease", CoverAlbum: "Two"},
+		"A|d|Two": {CoverURL: settleLegs, CoverSource: "device", CoverAlbum: "Two"},
+	})
+	coverSweepSettleAlbumCovers(context.Background())
+	if len(*asked) != 4 {
+		t.Fatalf("两组各问两首: %v", *asked)
+	}
+	if len(*waits) != 1 || (*waits)[0] != coverSweepAppleGap {
+		t.Errorf("只在真要发请求、之前又发过的那一首之前等: %v", *waits)
+	}
+}
+
+// 纯色图(指纹为 0)按地址记着,再比不再取;没取到的不记。
+func TestCoverSweepPictureMemoizesBlankPictures(t *testing.T) {
+	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+	fetched := map[string]int{}
+	blank := image.NewRGBA(image.Rect(0, 0, 32, 32))
+	coverSweepCoverImage = func(_ context.Context, url string) image.Image {
+		fetched[url]++
+		if url == "blank" {
+			return blank
+		}
+		return nil
+	}
+	for range 2 {
+		if p := coverSweepPicture(context.Background(), "blank"); p.fp != 0 {
+			t.Fatalf("纯色图指纹为 0: %+v", p)
+		}
+		coverSweepPicture(context.Background(), "gone")
+	}
+	if fetched["blank"] != 1 || fetched["gone"] != 2 {
+		t.Errorf("纯色图只取一次、没取到的每次都取: %v", fetched)
 	}
 }

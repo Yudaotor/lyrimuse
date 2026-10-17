@@ -233,7 +233,8 @@ final class WebLyricsServer: ObservableObject {
             connection.respondAndClose(WebLyricsHTTP.response(status: 405, reason: "Method Not Allowed"))
             return
         }
-        guard WebLyricsAccess.hostAllowed(request.headers["host"], localNames: LocalNetworkAddress.localHostNames()) else {
+        guard WebLyricsAccess.hostAllowed(request.headers["host"], localNames: LocalNetworkAddress.localHostNames()),
+              WebLyricsAccess.originAllowed(request.headers["origin"], host: request.headers["host"]) else {
             connection.respondAndClose(WebLyricsHTTP.response(status: 403, reason: "Forbidden"))
             return
         }
@@ -250,7 +251,7 @@ final class WebLyricsServer: ObservableObject {
             connection.respondAndClose(WebLyricsHTTP.response(
                 status: 200, reason: "OK", contentType: "text/html; charset=utf-8", body: Data(page.utf8),
                 extraHeaders: [("Content-Security-Policy",
-                                "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src blob: data:; connect-src 'self' ws: wss:")]))
+                                "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src blob: data:; connect-src 'self' ws: wss:; frame-ancestors 'none'")]))
         case "/ws":
             guard request.isWebSocketUpgrade, let key = request.headers["sec-websocket-key"] else {
                 connection.respondAndClose(WebLyricsHTTP.response(status: 400, reason: "Bad Request"))
@@ -291,6 +292,17 @@ final class WebLyricsConnection {
     private var closed = false
     /// 上一帧画面还没发完时新帧直接丢:网络慢的设备只会掉帧,不会越积越多、越来越迟。
     private var frameInFlight = false
+    /// 连上之后这么久还没收完请求头就断开;发出去的东西这么久都没交给协议栈(对方不收)也断开。
+    /// 名额只有 `WebLyricsServer.maxConnections` 个,不能被只连不发、只连不收的连接一直占着。
+    static let requestTimeout: TimeInterval = 10
+    static let sendStallTimeout: TimeInterval = 10
+    private var requestReceived = false
+    /// 还没交给协议栈的发送数,和最近一次有发送完成(或从空闲开始排队)的时刻。
+    private var pendingSends = 0
+    private var sendProgressAt: TimeInterval = 0
+    private var stallCheckScheduled = false
+
+    private enum AfterSend { case nothing, close, frameDone }
 
     init(nw: NWConnection, server: WebLyricsServer) {
         self.nw = nw
@@ -323,6 +335,12 @@ final class WebLyricsConnection {
         }
         nw.start(queue: .main)
         receive()
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.requestTimeout) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, !self.requestReceived else { return }
+                self.close()
+            }
+        }
     }
 
     private func receive() {
@@ -350,6 +368,7 @@ final class WebLyricsConnection {
             case .invalid:
                 respondAndClose(WebLyricsHTTP.response(status: 400, reason: "Bad Request"))
             case let .request(request, consumed):
+                requestReceived = true
                 buffer.removeFirst(consumed)
                 server?.handle(request, on: self)
             }
@@ -364,12 +383,10 @@ final class WebLyricsConnection {
                     buffer.removeFirst(frame.consumed)
                     switch frame.opcode {
                     case WebSocketFrame.Opcode.close.rawValue:
-                        nw.send(content: WebSocketFrame.encode(Data(), opcode: .close), completion: .contentProcessed { [weak self] _ in
-                            MainActor.assumeIsolated { self?.close() }
-                        })
+                        send(WebSocketFrame.encode(Data(), opcode: .close), then: .close)
                         return
                     case WebSocketFrame.Opcode.ping.rawValue:
-                        nw.send(content: WebSocketFrame.encode(frame.payload, opcode: .pong), completion: .contentProcessed { _ in })
+                        send(WebSocketFrame.encode(frame.payload, opcode: .pong))
                     case WebSocketFrame.Opcode.text.rawValue:
                         if case .screen = role { server?.screens.message(self, payload: frame.payload) }
                     default:
@@ -382,30 +399,70 @@ final class WebLyricsConnection {
 
     func respondAndClose(_ data: Data) {
         guard !closed else { return }
-        nw.send(content: data, completion: .contentProcessed { [weak self] _ in
-            MainActor.assumeIsolated { self?.close() }
-        })
+        send(data, then: .close)
     }
 
     func upgrade(key: String) {
-        nw.send(content: WebLyricsHTTP.upgradeResponse(key: key), completion: .contentProcessed { _ in })
+        guard !closed else { return }
+        send(WebLyricsHTTP.upgradeResponse(key: key))
     }
+
+    /// 上一帧还没发完:出帧那一侧据此跳过这条连接。
+    var isFrameInFlight: Bool { frameInFlight }
 
     /// `frame` 已经是包好的 WebSocket 帧(`WebLyricsFrameSource` 在出帧线程上包的),这里不再编码。
     func sendEncodedFrame(_ frame: Data) {
         guard !closed, !frameInFlight else { return }
         frameInFlight = true
-        nw.send(content: frame, completion: .contentProcessed { [weak self] error in
-            MainActor.assumeIsolated {
-                self?.frameInFlight = false
-                if error != nil { self?.close() }
-            }
-        })
+        send(frame, then: .frameDone)
     }
 
     func sendText(_ text: String) {
         guard !closed else { return }
-        nw.send(content: WebSocketFrame.encode(Data(text.utf8), opcode: .text), completion: .contentProcessed { _ in })
+        send(WebSocketFrame.encode(Data(text.utf8), opcode: .text))
+    }
+
+    private func send(_ data: Data, then after: AfterSend = .nothing) {
+        if pendingSends == 0 { sendProgressAt = ProcessInfo.processInfo.systemUptime }
+        pendingSends += 1
+        scheduleStallCheck(after: Self.sendStallTimeout)
+        nw.send(content: data, completion: .contentProcessed { [weak self] error in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.pendingSends -= 1
+                self.sendProgressAt = ProcessInfo.processInfo.systemUptime
+                switch after {
+                case .nothing: break
+                case .close: self.close()
+                case .frameDone:
+                    self.frameInFlight = false
+                    if error != nil {
+                        self.close()
+                    } else {
+                        self.server?.screens.frameSent(self)
+                    }
+                }
+            }
+        })
+    }
+
+    /// 同一时刻最多挂一个检查:到点时还有没发完的、且这段时间一次都没发完过,就当对方不收了。
+    private func scheduleStallCheck(after delay: TimeInterval) {
+        guard !stallCheckScheduled else { return }
+        stallCheckScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.stallCheckScheduled = false
+                guard !self.closed, self.pendingSends > 0 else { return }
+                let idle = ProcessInfo.processInfo.systemUptime - self.sendProgressAt
+                if idle >= Self.sendStallTimeout {
+                    self.close()
+                } else {
+                    self.scheduleStallCheck(after: Self.sendStallTimeout - idle)
+                }
+            }
+        }
     }
 
     func close() {

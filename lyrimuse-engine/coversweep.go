@@ -98,6 +98,8 @@ var (
 		m, reached := appleMusicMatchCachedReached(ctx, artist, title, album, durationSecs)
 		return m.cover, m.album, reached
 	}
+	// coverSweepAppleAnswered:问 Apple 这一首会不会只读本地(命中缓存、在负缓存窗口里),是的话不用先隔 coverSweepAppleGap。
+	coverSweepAppleAnswered = appleMusicMatchAnsweredLocally
 
 	coverPictureMu   sync.Mutex
 	coverPictureMemo = map[string]coverPicture{}
@@ -139,15 +141,20 @@ func startCoverSweeper(ctx context.Context) {
 const coverSweepMotionGap = time.Second
 
 // coverSweepMotionPass:重核动态封面那一遍的结果。rechecked:写下了新结论的条数;dropped:其中摘掉动态封面的;offline:连着
-// coverSweepOfflineLimit 条要取图的都没查成,提前停下了。
+// coverSweepOfflineLimit 条没写下结论、经这一条发出去的请求又全失败了,提前停下了。
 type coverSweepMotionPass struct {
 	rechecked, dropped int
 	offline            bool
 }
 
 // coverSweepRecheckStaleMotion:动态封面结论作废的条目(motionVerdictStale:封面后来换过,或结论早于记下对照封面)按现在的封面
-// 逐条重核(recheckMotionCoverAgainstCurrentCover),排在补封面那几步之后,核的是这一遍换完的封面。专辑没有动态封面的只读本地缓存;
-// 要取图的两条之间隔 coverSweepMotionGap,每条之前先给在解析的歌让路。见 03 章决策 53。
+// 逐条重核(recheckMotionCoverAgainstCurrentCover),排在补封面那几步之后,核的是这一遍换完的封面。专辑已知没有动态封面、原来那段
+// 也不用再比的,只读本地缓存;专辑页没查过的要抓一次页面,有动画要比的要取图。
+//
+// 离线只看这一条自己的请求(coverSweepNetworkRound):没写下结论、发出去的又全失败了才算一条没查成,连着 coverSweepOfflineLimit
+// 条就停。图取到了却比不成(404、解不开的图、设备封面文件没了)、一个请求都没发的,都不算 —— 那是这一条自己的问题,算进去会把
+// 整遍判成离线、十分钟后又整遍重来。要取图(专辑已知有动画,或这一条确实发了请求)的两条之间隔 coverSweepMotionGap,每条之前先给
+// 在解析的歌让路。见 03 章决策 53。
 func coverSweepRecheckStaleMotion(ctx context.Context) coverSweepMotionPass {
 	type stale struct {
 		key, title, album string
@@ -174,7 +181,11 @@ func coverSweepRecheckStaleMotion(ctx context.Context) coverSweepMotionPass {
 		if ctx.Err() != nil {
 			break
 		}
-		if coverSweepRecheckMotion(ctx, s.key, s.title, s.album) {
+		rctx, round := coverSweepNetworkRound(ctx)
+		wrote := coverSweepRecheckMotion(rctx, s.key, s.title, s.album)
+		attempts, failures := round()
+		switch {
+		case wrote:
 			pass.rechecked++
 			misses = 0
 			enrichMu.Lock()
@@ -186,13 +197,17 @@ func coverSweepRecheckStaleMotion(ctx context.Context) coverSweepMotionPass {
 				coverSweepSave()
 				unsaved = 0
 			}
-		} else if s.images {
+		case attempts > 0 && failures == attempts:
 			if misses++; misses >= coverSweepOfflineLimit {
 				pass.offline = true
-				break
 			}
+		case attempts > 0:
+			misses = 0
 		}
-		if s.images {
+		if pass.offline {
+			break
+		}
+		if s.images || attempts > 0 {
 			coverSweepWait(ctx, coverSweepMotionGap)
 		}
 	}
@@ -667,7 +682,8 @@ func (p coverPicture) same(q coverPicture) bool {
 	return p.fp != 0 && q.fp != 0 && coverFingerprintDistance(p.fp, q.fp) <= coverFingerprintMaxDistance
 }
 
-// coverSweepPicture 取一张封面的 coverPicture,取到的按地址记着(设备封面的文件名就是内容的哈希,远程图地址不变图就不变)。
+// coverSweepPicture 取一张封面的 coverPicture,取到的按地址记着(设备封面的文件名就是内容的哈希,远程图地址不变图就不变),
+// 纯色图(fp 为 0)也记:再取一次还是它。没取到、解不开的不记。
 func coverSweepPicture(ctx context.Context, url string) coverPicture {
 	coverPictureMu.Lock()
 	p, ok := coverPictureMemo[url]
@@ -680,9 +696,6 @@ func coverSweepPicture(ctx context.Context, url string) coverPicture {
 		return coverPicture{}
 	}
 	p = coverPicture{coverFingerprint(img), coverContentLetterboxed(img)}
-	if p.fp == 0 {
-		return p
-	}
 	coverPictureMu.Lock()
 	if len(coverPictureMemo) >= coverPictureMemoMax {
 		coverPictureMemo = map[string]coverPicture{}
@@ -720,20 +733,34 @@ type coverSettlePlan struct {
 // coverSweepSettleAlbumCovers:同一张专辑(歌手对得上、专辑名繁简折叠后相同)里各首的封面不止一个地址的,给整张专辑定一张封面
 // (coverSettlePlanFor),跟它不是同一张图的条目换成它,所有条目记下 CoverSettled(见 coverSettled)。没有核实过的设备封面、
 // 也没定过的专辑,只在各首其实是同一张图、或 Apple 目录这张专辑的封面跟其中一张是同一张图时定,别的不定(03 章决策 52)。一张专辑
-// 有图没取到、Apple 没问到时这一遍不定它,连着 coverSweepOfflineLimit 张都这样就停;每张专辑之前先给在解析的歌让路。返回记下
-// 几条、其中换了几条。见 03 章决策 48。
+// 有图没取到、Apple 没问到时这一遍不定它;为这张专辑发出去的请求(coverSweepNetworkRound,只数这一张的)又全失败了才算没问成,
+// 连着 coverSweepOfflineLimit 张都这样就停。图有回话却比不了(纯色、解不开)、一个请求都没发(本机文件没了)的只是这张专辑自己
+// 定不了,不数进去:不然排在前面的几张坏图每一遍都让这一步停在同一处。每张专辑之前先给在解析的歌让路。返回记下几条、其中换了
+// 几条。见 03 章决策 48。
+//
+// 专辑名一样、播放器登记的专辑 id 却不一样的一组(coverSettleAlbumsDiffer,「Greatest Hits」这类)不是一张专辑:不定,先前定下的
+// 放开(只清 CoverSettled,封面不动),之后设备封面、外围补全照常能换。
 func coverSweepSettleAlbumCovers(ctx context.Context) (switched, settled int) {
 	enrichMu.Lock()
-	groups := coverSettleGroupsLocked()
+	groups, mixed := coverSettleGroupsLocked()
+	released := coverSettleReleaseLocked(mixed)
 	enrichMu.Unlock()
+	if released > 0 {
+		slog.Info("cover sweep: released settled covers of same-named different albums", "entries", released)
+		coverSweepSave()
+	}
 	unreached, askedApple := 0, false
 	for _, g := range groups {
 		coverSweepYield(ctx)
 		if ctx.Err() != nil {
 			break
 		}
-		plan, outcome := coverSettlePlanFor(ctx, g, &askedApple)
+		gctx, round := coverSweepNetworkRound(ctx)
+		plan, outcome := coverSettlePlanFor(gctx, g, &askedApple)
 		if outcome == coverSettleUnreached {
+			if attempts, failures := round(); attempts == 0 || failures < attempts {
+				continue
+			}
 			if unreached++; unreached >= coverSweepOfflineLimit {
 				slog.Warn("cover sweep: album covers could not be compared, stopping", "streak", unreached, "key", g[0].key)
 				break
@@ -755,8 +782,9 @@ func coverSweepSettleAlbumCovers(ctx context.Context) (switched, settled int) {
 }
 
 // coverSettleGroupsLocked 把有封面的条目按专辑分组(专辑名繁简折叠后相同、歌手对得上),挑出该定封面的那些组
-// (coverSettleGroupDue),组内、组间都按 key 排。解析中、提前提交的条目不进组。调用方持有 enrichMu。
-func coverSettleGroupsLocked() [][]coverSettleMember {
+// (coverSettleGroupDue),组内、组间都按 key 排;mixed 是同名不同专辑的那些组(coverSettleAlbumsDiffer),不进 groups。解析中、
+// 提前提交的条目不进组。调用方持有 enrichMu。
+func coverSettleGroupsLocked() (groups, mixed [][]coverSettleMember) {
 	buckets := map[string][]coverSettleMember{}
 	for key, e := range enrichCache {
 		if e.CoverURL == "" || enrichInflight[key] || enrichProvisional[key] {
@@ -768,7 +796,6 @@ func coverSettleGroupsLocked() [][]coverSettleMember {
 			buckets[simp] = append(buckets[simp], coverSettleMember{key, artist, album, e})
 		}
 	}
-	var groups [][]coverSettleMember
 	for _, ms := range buckets {
 		sort.Slice(ms, func(i, j int) bool { return ms[i].key < ms[j].key })
 		var byArtist [][]coverSettleMember
@@ -785,13 +812,56 @@ func coverSettleGroupsLocked() [][]coverSettleMember {
 			}
 		}
 		for _, g := range byArtist {
-			if coverSettleGroupDue(g) {
+			switch {
+			case coverSettleAlbumsDiffer(g):
+				mixed = append(mixed, g)
+			case coverSettleGroupDue(g):
 				groups = append(groups, g)
 			}
 		}
 	}
 	sort.Slice(groups, func(i, j int) bool { return groups[i][0].key < groups[j][0].key })
-	return groups
+	return groups, mixed
+}
+
+// coverSettleAlbumsDiffer:组里有两条在同一家登记的专辑 id 不一样 —— 汽水、KKBOX、Amazon Music、Spotify 本机数据里给这首记的,
+// Kaset 按 YouTube Music 判的(都不是按文字搜出来的;QQ 专辑 mid、Apple 链接是,不看)。专辑名一样、其实是两张专辑,或同一张的
+// 两个版本,封面不该统一。拿不出 id 的不算不一样。纯函数。
+func coverSettleAlbumsDiffer(g []coverSettleMember) bool {
+	seen := map[int]string{}
+	for _, m := range g {
+		for i, id := range []string{m.e.SodaAlbumID, m.e.KKBOXAlbumID, m.e.AmazonAlbumASIN, m.e.SpotifyAlbumID, m.e.YouTubeMusicAlbumID} {
+			if id = strings.TrimSpace(id); id == "" {
+				continue
+			}
+			if prev, ok := seen[i]; ok && prev != id {
+				return true
+			}
+			seen[i] = id
+		}
+	}
+	return false
+}
+
+// coverSettleReleaseLocked 把这几组里定下的条目放开(清 CoverSettled,封面不动),返回放开几条。解析中、提前提交的不动。调用方持有
+// enrichMu。
+func coverSettleReleaseLocked(groups [][]coverSettleMember) int {
+	released := 0
+	for _, g := range groups {
+		for _, m := range g {
+			e, ok := enrichCache[m.key]
+			if !ok || e.CoverSettled == "" || enrichInflight[m.key] || enrichProvisional[m.key] {
+				continue
+			}
+			e.CoverSettled = ""
+			enrichCache[m.key] = e
+			released++
+		}
+	}
+	if released > 0 {
+		enrichDirty = true
+	}
+	return released
 }
 
 // coverSettleGroupDue:这组该定封面 —— 封面不止一个地址(都是同一个地址就没什么可比的)。没有核实过的设备
@@ -887,7 +957,8 @@ func coverSettleFallback(g []coverSettleMember, pics map[string]coverPicture, ap
 
 // coverSettleApplePicture:Apple 目录给这张专辑的封面的图。组里有 Apple 给的、专辑对得上的封面就用它,不再问;否则按 key 顺序
 // 拿头 coverSettleAppleTries 首去问(coverSweepAppleCover),专辑对得上(candidateCoverAlbumFits)的才算。Apple 没有这张专辑
-// 返回 fp 为 0 的图;没问到、图没取到返回 false。
+// 返回 fp 为 0 的图;没问到、图没取到返回 false。只读本地就答得出的(coverSweepAppleAnswered)不先等 coverSweepAppleGap,
+// 也不算问过。
 func coverSettleApplePicture(ctx context.Context, g []coverSettleMember, pics map[string]coverPicture, asked *bool) (coverPicture, bool) {
 	for _, m := range g {
 		if m.e.CoverSource == "apple" && candidateCoverAlbumFits(m.e.CoverAlbum, m.album) {
@@ -898,14 +969,16 @@ func coverSettleApplePicture(ctx context.Context, g []coverSettleMember, pics ma
 		if i == coverSettleAppleTries {
 			break
 		}
-		if *asked {
-			coverSweepWait(ctx, coverSweepAppleGap)
+		_, title, _ := splitEnrichKey(m.key)
+		if !coverSweepAppleAnswered(m.artist, title, m.album) {
+			if *asked {
+				coverSweepWait(ctx, coverSweepAppleGap)
+			}
+			*asked = true
 		}
-		*asked = true
 		if ctx.Err() != nil {
 			return coverPicture{}, false
 		}
-		_, title, _ := splitEnrichKey(m.key)
 		cover, coverAlbum, reached := coverSweepAppleCover(withBackgroundOutbound(ctx), m.artist, title, m.album, m.e.DurationSecs)
 		if !reached {
 			return coverPicture{}, false
@@ -998,13 +1071,20 @@ const (
 	coverSweepOffline                           // 一个请求都没成功
 )
 
-// coverSweepUpgradeOne 核一条小设备封面。进门再核一遍资格。
+// coverSweepUpgradeOne 核一条小设备封面。进门再核一遍资格;设备封面大不大要读本机文件,在锁外量,量完再核一遍封面没换。
 func coverSweepUpgradeOne(ctx context.Context, key string) coverSweepOutcome {
 	artist, title, album := splitEnrichKey(key)
 	now := time.Now()
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
-	if !ok || !coverSweepUpgradeEligibleLocked(key, e, now) || !deviceCoverSmall(e.CoverURL) {
+	enrichMu.Unlock()
+	if !ok || !deviceCoverSmall(e.CoverURL) {
+		return coverSweepSkipped
+	}
+	measured := e.CoverURL
+	enrichMu.Lock()
+	e, ok = enrichCache[key]
+	if !ok || e.CoverURL != measured || !coverSweepUpgradeEligibleLocked(key, e, now) {
 		enrichMu.Unlock()
 		return coverSweepSkipped
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
 	"unicode/utf16"
@@ -238,6 +239,14 @@ func mp4EmbeddedLyrics(f io.ReadSeeker) (string, bool) {
 			return "", false
 		}
 		if kind == "moov" {
+			if size < 0 {
+				// 长度 0:moov 一直到文件末尾,读到末尾为止,同样不超过上限。
+				body, err := io.ReadAll(io.LimitReader(f, localFileEmbeddedMaxTagBytes+1))
+				if err != nil || len(body) > localFileEmbeddedMaxTagBytes {
+					return "", false
+				}
+				return lyricsFromMP4Moov(body)
+			}
 			if size > localFileEmbeddedMaxTagBytes {
 				return "", false
 			}
@@ -257,6 +266,7 @@ func mp4EmbeddedLyrics(f io.ReadSeeker) (string, bool) {
 }
 
 // mp4AtomHeader:读一个原子头,交回类型和正文长度(去掉头);64 位长度也认,长度 0(到文件末尾)交回 -1。
+// 头里写的长度比头本身还短、或 64 位长度超出 int64 的,当坏文件报错 —— 交回的长度只会是 -1 或非负数。
 func mp4AtomHeader(r io.Reader) (string, int64, error) {
 	h := make([]byte, 8)
 	if _, err := io.ReadFull(r, h); err != nil {
@@ -272,7 +282,11 @@ func mp4AtomHeader(r io.Reader) (string, int64, error) {
 		if _, err := io.ReadFull(r, ext); err != nil {
 			return "", 0, err
 		}
-		return kind, int64(binary.BigEndian.Uint64(ext)) - 16, nil
+		n := binary.BigEndian.Uint64(ext)
+		if n < 16 || n > math.MaxInt64 {
+			return "", 0, fmt.Errorf("mp4 atom %q has bad 64-bit size %d", kind, n)
+		}
+		return kind, int64(n) - 16, nil
 	}
 	if size < 8 {
 		return "", 0, fmt.Errorf("mp4 atom %q too short", kind)

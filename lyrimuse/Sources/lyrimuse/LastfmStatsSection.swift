@@ -134,47 +134,41 @@ struct LastfmStatsSection: View {
         // baselineTTL 同为 2 分钟,正好放行),recent 重新赋值触发重渲染,"6 小时前"
         // 这些相对时间跟着重算。
         //
-        // 用 .task 而不是 .onReceive(Timer.publish(...)):后者的 publisher 内联在
+        // 用 settingsPolling 而不是 .onReceive(Timer.publish(...)):后者的 publisher 内联在
         // body 里,每次重渲染都是新实例,SwiftUI 会掐掉旧订阅重新订阅,倒计时清零 ——
-        // 而本视图订阅着 PlaybackCoordinator,放歌时歌词每推进一句就重渲染一次,
-        // 120 秒永远数不满,定时刷新恰恰在放歌时(最需要活数据时)静默失效
-        // 。.task 的生命周期跟视图在场与否走,不受重渲染影响,
-        // 视图移出层级自动取消。
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 120_000_000_000)
-                guard !Task.isCancelled else { break }
-                // 「那年今日」也在这里过一遍,专为**跨零点**:它只在 .onAppear 里拉过
-                // 一次,而设置窗口开着不动时 .onAppear 不会再触发 —— 页面开到第二天
-                // 就会一直挂着昨天那份。放在 recentPage 那道
-                // guard 前面:翻到第二页看历史跟这张卡没有关系,不该把它一起冻住。
-                //
-                // 平时的开销是一次字典查找:服务侧同时判 TTL 和日历天,没跨天就直接
-                // 早退,不会每 2 分钟真发一轮请求(那是三年 ×最多三页的量)。
-                stats.refreshOnThisDay()
-                // 本机封面兜底表:enrich 缓存自己变了(引擎解析出封面 / 同专辑
-                // 预取)不伴随任何 Last.fm 响应,得单独在这里过一遍,否则那些行会一直
-                // 灰着(见 refreshLocalCoversIfCacheChanged)。mtime 没变就是一次 stat。
-                stats.refreshLocalCoversIfCacheChanged()
-                // **这里原来有一道 `guard stats.recentPage == 1 else { continue }`,
-                // 删掉了。** 原注释的理由是"只自动刷第一页:后面几页是历史,内容
-                // 不会变,重拉一遍纯属打扰(正看着的那一屏被替换掉)"。那句话对**最近记录那
-                // 一列**成立,但它把整条 `refreshBaseline` 一起早退了 —— 而那一次调用同时还
-                // 刷着上面三个数字(今天/近 7 天/总 scrobble),那三个跟页码毫无关系。后果是
-                // 用户翻到第 2 页之后停在那儿,这整张卡(含三个数字)就**再也不会自动更新**,
-                // 而回到第 1 页只发生在 `RecentListensPanel.onDisappear`(卡片离开视图层级时)。
-                // 现象正是这个:「一直停留在十几小时之前,直到我手动点击刷新
-                // 才去刷新」—— 手动那颗按钮走 `refreshBaseline(force: true)`,直接绕过了这道
-                // guard,所以只有它有效。
-                //
-                // 现在无条件调。`refreshBaseline` 内部请求的本来就是**当前这一页**
-                // (`let requestedPage = recentPage`),所以不会把人从第 5 页弹回第 1 页;
-                // 代价是停在历史页时那一屏可能被"当前真实的第 5 页"替换掉 —— 而那只会在
-                // **确实有新打卡、页边界移动了**的时候发生,那种时候显示移动后的内容比继续
-                // 端着一份陈快照更接近事实。用"永远不会静默冻住"换"历史页可能被原地刷新",
-                // 这个取舍是有意的,别再把 guard 加回来。
-                stats.refreshBaseline()
-            }
+        // 这页重渲染一频繁 120 秒就永远数不满。settingsPolling 的循环跟视图在场与否走,不受重渲染影响;
+        // 设置窗口看不见时整个停掉,重新看得见时先补一次(onAppear 已经刷过,首次不重复跑)。
+        .settingsPolling(every: 120) {
+            // 「那年今日」也在这里过一遍,专为**跨零点**:它只在 .onAppear 里拉过
+            // 一次,而设置窗口开着不动时 .onAppear 不会再触发 —— 页面开到第二天
+            // 就会一直挂着昨天那份。放在 recentPage 那道
+            // guard 前面:翻到第二页看历史跟这张卡没有关系,不该把它一起冻住。
+            //
+            // 平时的开销是一次字典查找:服务侧同时判 TTL 和日历天,没跨天就直接
+            // 早退,不会每 2 分钟真发一轮请求(那是三年 ×最多三页的量)。
+            stats.refreshOnThisDay()
+            // 本机封面兜底表:enrich 缓存自己变了(引擎解析出封面 / 同专辑
+            // 预取)不伴随任何 Last.fm 响应,得单独在这里过一遍,否则那些行会一直
+            // 灰着(见 refreshLocalCoversIfCacheChanged)。mtime 没变就是一次 stat。
+            stats.refreshLocalCoversIfCacheChanged()
+            // **这里原来有一道 `guard stats.recentPage == 1 else { continue }`,
+            // 删掉了。** 原注释的理由是"只自动刷第一页:后面几页是历史,内容
+            // 不会变,重拉一遍纯属打扰(正看着的那一屏被替换掉)"。那句话对**最近记录那
+            // 一列**成立,但它把整条 `refreshBaseline` 一起早退了 —— 而那一次调用同时还
+            // 刷着上面三个数字(今天/近 7 天/总 scrobble),那三个跟页码毫无关系。后果是
+            // 用户翻到第 2 页之后停在那儿,这整张卡(含三个数字)就**再也不会自动更新**,
+            // 而回到第 1 页只发生在 `RecentListensPanel.onDisappear`(卡片离开视图层级时)。
+            // 现象正是这个:「一直停留在十几小时之前,直到我手动点击刷新
+            // 才去刷新」—— 手动那颗按钮走 `refreshBaseline(force: true)`,直接绕过了这道
+            // guard,所以只有它有效。
+            //
+            // 现在无条件调。`refreshBaseline` 内部请求的本来就是**当前这一页**
+            // (`let requestedPage = recentPage`),所以不会把人从第 5 页弹回第 1 页;
+            // 代价是停在历史页时那一屏可能被"当前真实的第 5 页"替换掉 —— 而那只会在
+            // **确实有新打卡、页边界移动了**的时候发生,那种时候显示移动后的内容比继续
+            // 端着一份陈快照更接近事实。用"永远不会静默冻住"换"历史页可能被原地刷新",
+            // 这个取舍是有意的,别再把 guard 加回来。
+            stats.refreshBaseline()
         }
     }
 
@@ -1707,18 +1701,14 @@ private struct LiveScrobbleRow: View {
         }
         // 远端会话(在别的设备上放)时,这一行的唯一数据来源就是轮询:父视图那轮 2 分钟
         // 对一首三四分钟的歌太慢,整首歌可能只露一次面。这里在远端会话看着还活着时加密到
-        // 45 秒;本机在放不发请求(那边由 poller 实时驱动,不需要轮询)。
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 45_000_000_000)
-                guard !Task.isCancelled else { break }
-                // 跟父视图那条 2 分钟轮询同一条守卫:翻到历史页时别把用户正看的那屏
-                // 换掉(强刷会无视 TTL,原来这两条路径都漏了这个判断)。
-                // feed 活着时也不发:远端会话正是引擎 15 s 一拍在盯的东西,这里再拉是重复。
-                guard stats.recentPage == 1, !playback.isPlayingNow, remoteSessionLikelyActive,
-                      !stats.feedIsFresh else { continue }
-                stats.refreshBaseline(force: true)
-            }
+        // 45 秒;本机在放不发请求(那边由 poller 实时驱动,不需要轮询)。设置窗口看不见时停掉(settingsPolling)。
+        .settingsPolling(every: 45) {
+            // 跟父视图那条 2 分钟轮询同一条守卫:翻到历史页时别把用户正看的那屏
+            // 换掉(强刷会无视 TTL,原来这两条路径都漏了这个判断)。
+            // feed 活着时也不发:远端会话正是引擎 15 s 一拍在盯的东西,这里再拉是重复。
+            guard stats.recentPage == 1, !playback.isPlayingNow, remoteSessionLikelyActive,
+                  !stats.feedIsFresh else { return }
+            stats.refreshBaseline(force: true)
         }
         .onDisappear { pendingForceRefresh?.cancel() }
     }

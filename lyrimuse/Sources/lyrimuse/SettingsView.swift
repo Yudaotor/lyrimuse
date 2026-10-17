@@ -6480,8 +6480,8 @@ private struct GeneralSettingsTab: View {
 
     /// 「备份与迁移」卡头那颗菜单(卡级动作上提到卡头,同「歌词来源」卡头那颗「测试」)。
     ///
-    /// 别加回「只保留最近 N 份」这类手动清理项:它是给"每存一次就新增一对文件、永不删旧"这个缺陷贴的创可贴,
-    /// 正确的修法是写入时自动只留最近几份(见「存到 iCloud」那个 alert 里的说明)。
+    /// 不放「只保留最近 N 份」这类清理项:备份不做任何清理、想攒几份就几份,写入时也不清(见 ICloudConfigStore.write
+    /// 下面那段);真要省空间,用这里的「打开备份文件夹」自己删。
     ///
     /// 「打开备份文件夹」必须写清是**哪个**文件夹:「关于」里「配置文件夹」那行也是在访达中显示,
     /// 两处都没有二次确认,用户把打开的活配置目录当成备份去拷 / 删,丢的是正在用的配置。
@@ -6742,7 +6742,7 @@ private struct GeneralSettingsTab: View {
                 if let data = pendingImportData {
                     Task { @MainActor in
                         // `importData` 的返回值**必须检查**:它是 `async -> Bool`,顶层 JSON
-                        // 解析失败时 return false(ConfigPortability.swift:254)。丢掉返回值再无条件
+                        // 解析失败、或认不出是设置备份(ImportPolicy.isConfigBundle)时 return false。丢掉返回值再无条件
                         // restartApp() 的话,用户选错一个 .json(面板只过滤扩展名、不校验是不是我们的
                         // 导出包)的结果就是 **App 退出重启、设置一个字没改、界面上零提示**,唯一能
                         // 得出的结论是"导入把我的设置弄坏了"。

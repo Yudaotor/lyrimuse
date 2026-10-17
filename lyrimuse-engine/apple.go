@@ -124,7 +124,7 @@ func hiResArtwork(url string) string {
 // 结果——url 给"App 跳转链接"用,cover 给封面(主封面兜底 + 搜索候选歌词的通用封面
 // 兜底)用,不管哪个调用方先查到,其它调用方都直接命中缓存,不会重复发两遍 iTunes 请求。
 // appleMusicMatchCachedOnly 只读缓存、绝不发请求。appleMusicMatchCached 只在查到
-// (url 非空)时写缓存,所以"iTunes 没这首歌"的情形每次调用都会完整重跑一轮多商店搜索;
+// (url 非空,或问成了、只有封面)时写缓存,所以"iTunes 没这首歌"的情形每次调用都会完整重跑一轮多商店搜索;
 // 用在"有就带上"的纯透传字段上会把 search-lyrics 的收尾白白挂住几秒(审阅)。
 func appleMusicMatchCachedOnly(artist, title, album string) appleMusicMatch {
 	if title == "" {
@@ -135,6 +135,18 @@ func appleMusicMatchCachedOnly(artist, title, album string) appleMusicMatch {
 	return appleURLCache[artist+"|"+title+"|"+album]
 }
 
+// appleMusicMatchAnsweredLocally:appleMusicMatchCachedReached 问这一首会不会只读本地 —— 没歌名、命中缓存、在负缓存窗口里。
+func appleMusicMatchAnsweredLocally(artist, title, album string) bool {
+	if title == "" {
+		return true
+	}
+	key := artist + "|" + title + "|" + album
+	appleURLMu.Lock()
+	_, ok := appleURLCache[key]
+	appleURLMu.Unlock()
+	return ok || appleMatchInMissWindow(key, time.Now())
+}
+
 // durationSecs:本地这首的时长,未知传 0。只在单曲专辑名只是曲名、署名对不上时用来认同一份录音(appleSameSingleByAnotherName)。
 func appleMusicMatchCached(ctx context.Context, artist, title, album string, durationSecs float64) appleMusicMatch {
 	m, _ := appleMusicMatchCachedReached(ctx, artist, title, album, durationSecs)
@@ -142,7 +154,8 @@ func appleMusicMatchCached(ctx context.Context, artist, title, album string, dur
 }
 
 // appleMusicMatchCachedReached 同 appleMusicMatchCached,另外回答这次问到 Apple 没有:命中缓存、在负缓存的窗口里都算问到了。
-// 没问到时的空结果不说明 Apple 没有这首。
+// 没问到时的空结果不说明 Apple 没有这首。只给了封面、没有歌曲链接的(按专辑定位到了专辑、曲目表里没认出这一首)问成了也记进缓存:
+// 记成「查空」的话负缓存窗口里再问就连封面也没有了,窗口一过又整轮重问。
 func appleMusicMatchCachedReached(ctx context.Context, artist, title, album string, durationSecs float64) (appleMusicMatch, bool) {
 	if title == "" {
 		return appleMusicMatch{}, true
@@ -161,7 +174,7 @@ func appleMusicMatchCachedReached(ctx context.Context, artist, title, album stri
 	}
 
 	m, reached := resolveAppleMusicMatch(ctx, artist, title, album, durationSecs)
-	if m.url != "" {
+	if m.url != "" || (m.cover != "" && reached) {
 		appleURLMu.Lock()
 		appleURLCache[key] = m
 		delete(appleURLMissUntil, key) // 查到了就把负缓存清掉

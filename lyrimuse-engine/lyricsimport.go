@@ -305,10 +305,18 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 		if !parsed.ok {
 			continue // 整组都缺头(老版本文件),跳过,沿用 JSON 里的旧值
 		}
-		// 头部标签是导出时按**当时的** key 写进去的,老文件里可能还带着归一化之前的歌名
-		// (`不散的筵席（I Miss You）`)。这里同样走 enrichKey,老文件才不会把一条已经归并
-		// 好的记录又拆回两条。
+		// 头部标签是导出时按**当时的** key 写进去的:老文件里可能是播放器原样的歌名(`不散的筵席（I Miss You）`),
+		// 条目却是按旧规则(歌名去掉结尾说明括号)建的。key 按 enrichKey 算,缓存里没有这条时退到旧规则那条 ——
+		// 跟播放时查缓存同一个兜底(canonicalEnrichKey 的第一步):旧规则那条已经是另一种带括号写法的不借。
+		// 不这样的话老文件会把一条已经归并好的记录又拆成两条。
 		key := enrichKey(parsed.artist, parsed.title, parsed.album)
+		if _, ok := enrichCache[key]; !ok {
+			if legacy := legacyOfEnrichKey(key); legacy != key {
+				if le, ok := enrichCache[legacy]; ok && !enrichLegacyClaimedByOther(le, parsed.title) {
+					key = legacy
+				}
+			}
+		}
 		if groupUnchanged && !restoreAll && !restoreKeys[key] {
 			continue
 		}

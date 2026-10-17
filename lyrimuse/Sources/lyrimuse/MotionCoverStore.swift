@@ -52,6 +52,10 @@ final class MotionCoverStore {
     private var referenceRejected: Set<String> = []
     /// 终审过了的 (key, 参照图) 组合:盘上那份再跟同一张参照图比时不再解帧。
     private var referencePassed: Set<String> = []
+    /// 盘上那份读不出时长、解不出帧(`undecidable`,视频自己坏了,换张参照图也救不回来)的 (key, 文件编号):
+    /// 这一次运行里不再对它解帧。带上文件编号(不是修改时间,`touch` 每次访问都改它):文件被清掉、重新下了一份
+    /// 就是新组合。不落盘,同 `failed`。
+    private var cachedUndecidable: Set<String> = []
 
     private var directory: URL { LyrimusePaths.configFile("motion-covers") }
 
@@ -129,6 +133,8 @@ final class MotionCoverStore {
         let pair = Self.rejectionKey(key, reference)
         if referencePassed.contains(pair) { return file }
         if referenceRejected.contains(pair) { return nil }
+        let broken = Self.undecidableKey(key, file)
+        if cachedUndecidable.contains(broken) { return nil }
         switch await Self.verifyMatchesReference(file, reference: reference) {
         case .pass:
             referencePassed.insert(pair)
@@ -137,8 +143,14 @@ final class MotionCoverStore {
             referenceRejected.insert(pair)
             return nil
         case .undecidable:
+            cachedUndecidable.insert(broken)
             return nil
         }
+    }
+
+    private nonisolated static func undecidableKey(_ key: String, _ file: URL) -> String {
+        let inode = ((try? FileManager.default.attributesOfItem(atPath: file.path))?[.systemFileNumber] as? NSNumber)?.uint64Value
+        return "\(key)|\(inode ?? 0)"
     }
 
     /// `failed` / `referenceRejected` 两张表的键各自独立:前者按资源,后者按 (资源, 参照图)。

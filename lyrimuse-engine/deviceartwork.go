@@ -60,22 +60,45 @@ func deviceCoverURLIfFresh(ctx context.Context, isNewTrack bool, bundleID, artis
 // lateDeviceCoverKey:首次解析开头没取到设备封面时挂在 ctx 上的这一首(见 withLateDeviceCover)。
 type lateDeviceCoverKey struct{}
 
-type lateDeviceCoverTrack struct{ bundleID, artist, title string }
+// lateDeviceCoverTrack:挂上时的这一首;known 时 pid / playSeq 是 App 那时报的这一次起播(appPlaybackTrackPlay)。
+type lateDeviceCoverTrack struct {
+	bundleID, artist, title string
+	pid                     int
+	playSeq                 int64
+	known                   bool
+}
 
 // withLateDeviceCover:首次解析开头没取到设备封面时挂上这一首,收尾挑封面那一步(finishTrackEnrichment)再取一次。
 // 播放器常常先报曲目、几百毫秒后才报封面,开头那一次取早了;收尾时离换歌已经几秒到二十几秒。见 03 章决策 44。
+// 顺带记下 App 这时报的是哪一次起播:收尾时换成了同歌手同歌名的另一首(别的专辑、重新起播)就不取。
 func withLateDeviceCover(ctx context.Context, bundleID, artist, title string) context.Context {
-	return context.WithValue(ctx, lateDeviceCoverKey{}, lateDeviceCoverTrack{bundleID, artist, title})
+	t := lateDeviceCoverTrack{bundleID: bundleID, artist: artist, title: title}
+	t.pid, t.playSeq, t.known = appPlaybackTrackPlay(bundleID, artist, title)
+	return context.WithValue(ctx, lateDeviceCoverKey{}, t)
 }
 
-// lateDeviceCover:ctx 上挂着的就是 artist / title 这一首时,再取一次它的设备封面;没挂、挂的是别的歌、或 App 现在报的
-// 已经不是这一首,返回空。比对 artist / title 是因为同一个 ctx 可能被拿去解析别的写法。
+// lateDeviceCover:ctx 上挂着的就是 artist / title 这一首时,再取一次它的设备封面;没挂、挂的是别的歌、App 现在报的
+// 已经不是这一首、或已经不是挂上时那一次起播,返回空。比对 artist / title 是因为同一个 ctx 可能被拿去解析别的写法。
+// 取图前后各核一次起播:play_seq 只增不减,取到的图属于取完时那一次起播之前的话,取完那一次核得出来。
 func lateDeviceCover(ctx context.Context, artist, title string) string {
 	t, ok := ctx.Value(lateDeviceCoverKey{}).(lateDeviceCoverTrack)
-	if !ok || t.artist != artist || t.title != title {
+	if !ok || t.artist != artist || t.title != title || !t.samePlay() {
 		return ""
 	}
-	return deviceCoverURLIfFresh(ctx, true, t.bundleID, t.artist, t.title)
+	url := deviceCoverURLIfFresh(ctx, true, t.bundleID, t.artist, t.title)
+	if url == "" || !t.samePlay() {
+		return ""
+	}
+	return url
+}
+
+// samePlay:App 此刻报的还是挂上时那一次起播。挂上时没认出是哪一次(App 状态还没跟上)的不核。
+func (t lateDeviceCoverTrack) samePlay() bool {
+	if !t.known {
+		return true
+	}
+	pid, seq, ok := appPlaybackTrackPlay(t.bundleID, t.artist, t.title)
+	return ok && pid == t.pid && seq == t.playSeq
 }
 
 // videoFrameURLIfFresh:App 交来的这一首的视频帧落盘,返回 file:// 地址;没有、或者落不了盘返回空串。见 03 章决策 39。

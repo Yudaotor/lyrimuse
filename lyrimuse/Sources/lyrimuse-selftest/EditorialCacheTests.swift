@@ -46,6 +46,9 @@ func runEditorialCacheTests() {
             return
         }
         expectEqual(c.dirty, false, "简介落盘: 写完不再脏")
+        c.markDirty()
+        expectEqual(c.dirty, true, "简介落盘: 写盘失败可以重标脏")
+        expectEqual(c.takeSnapshot(now: t0)?.encoded() != nil, true, "简介落盘: 重标脏后下一次照样整份取快照、编码")
         expectEqual(c.count, 2, "简介落盘: 写盘时去掉过期的")
         expectEqual(C.write(data, to: url), true, "简介落盘: 写盘(目录不在要建)")
         let back = C(C.read(url, now: t0))
@@ -95,6 +98,10 @@ func runEditorialCacheTests() {
         }
         expectEqual(disk.contains("\"\\(L10n.current)|\\(namespace)|\\(key)\""), true, "简介落盘: 落盘的键带界面语言")
         expectEqual(store.contains("        EditorialDisk.load()\n"), true, "简介落盘: 简介开始用时读盘")
+        expectEqual(disk.contains("guard let snapshot = cache.takeSnapshot() else { return }"), true, "简介落盘: 主线程只取快照")
+        expectEqual(disk.contains("let ok = snapshot.encoded().map { EditorialNotesDiskCache.write($0, to: url) } ?? false"), true,
+                    "简介落盘: 整份编码在写盘队列上做")
+        expectEqual(disk.contains("guard merged else {"), true, "简介落盘: 盘上那份没并进来时不写,免得盖掉旧文件")
     }
 }
 

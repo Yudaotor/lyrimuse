@@ -13,7 +13,8 @@ public final class QQSpokenAudio: @unchecked Sendable {
     private var inFlight: Set<String> = []
     private var failedAt: [String: Date] = [:]
 
-    /// 记住的结论最多这么多条,满了整个清掉(一首歌的 mid 一会儿再问一次的代价很小)。
+    /// 记住的结论最多这么多条,满了整个清掉(一首歌的 mid 一会儿再问一次的代价很小)。没问成的记录同一个上限:满了先丢过了
+    /// 重试期的,还满就整个清掉。
     static let cacheLimit = 500
     /// 没问成之后多久再问。
     static let retryAfterFailureSecs: TimeInterval = 30
@@ -49,7 +50,12 @@ public final class QQSpokenAudio: @unchecked Sendable {
                 known[mid] = verdict
                 failedAt[mid] = nil
             } else {
-                failedAt[mid] = Date()
+                let failed = Date()
+                if failedAt.count >= Self.cacheLimit {
+                    failedAt = failedAt.filter { failed.timeIntervalSince($0.value) < Self.retryAfterFailureSecs }
+                    if failedAt.count >= Self.cacheLimit { failedAt.removeAll() }
+                }
+                failedAt[mid] = failed
             }
             lock.unlock()
             if let verdict { completion(verdict) }

@@ -73,7 +73,7 @@ func TestNeteaseLinkMismatch(t *testing.T) {
 func TestClearWrongNeteaseLink(t *testing.T) {
 	link := "https://music.163.com/song?id=512359198"
 	e := clearWrongNeteaseLink(enrichEntry{NeteaseURL: link, PeripheralRetryCount: 5, CoverURL: "c", CoverSource: "netease",
-		CoverAlbum: "BOOTLEG", AccentColor: "#fff", MotionCoverURL: "m", MotionCoverChecked: true}, "Uchiagehanabi - Single")
+		CoverAlbum: "BOOTLEG", AccentColor: "#fff", MotionCoverURL: "m", MotionCoverChecked: true}, "Uchiagehanabi - Single", false)
 	if e.NeteaseURL != "" || e.NeteaseRejected != "512359198" || e.PeripheralRetryCount != 0 {
 		t.Errorf("清链接、记下 id、补全计数归零: %+v", e)
 	}
@@ -90,13 +90,25 @@ func TestClearWrongNeteaseLink(t *testing.T) {
 		{"只有一个词相同,清", "Grandes Exitos", "30 Exitos Inolvidables", false},
 		{"本地没报专辑,清", "Red", "", false},
 	} {
-		e := clearWrongNeteaseLink(enrichEntry{NeteaseURL: link, CoverURL: "c", CoverSource: "netease", CoverAlbum: c.coverAlbum}, c.album)
+		e := clearWrongNeteaseLink(enrichEntry{NeteaseURL: link, CoverURL: "c", CoverSource: "netease", CoverAlbum: c.coverAlbum}, c.album, false)
 		if kept := e.CoverURL == "c"; kept != c.kept {
 			t.Errorf("%s: 封面专辑 %q、本地专辑 %q,封面留着 = %v", c.why, c.coverAlbum, c.album, kept)
 		}
 	}
-	if e := clearWrongNeteaseLink(enrichEntry{NeteaseURL: link, CoverURL: "c", CoverSource: "device", CoverAlbum: "X"}, "Y"); e.CoverURL != "c" {
+	if e := clearWrongNeteaseLink(enrichEntry{NeteaseURL: link, CoverURL: "c", CoverSource: "device", CoverAlbum: "X"}, "Y", false); e.CoverURL != "c" {
 		t.Errorf("别的来源的封面不动: %+v", e)
+	}
+	if e := clearWrongNeteaseLink(enrichEntry{NeteaseURL: link, CoverURL: "c", CoverSource: "netease", CoverAlbum: "X", CoverSettled: "c"}, "Y", false); e.CoverURL != "c" || e.NeteaseURL != "" {
+		t.Errorf("专辑定下的封面不清,链接照清: %+v", e)
+	}
+	if e := clearWrongNeteaseLink(enrichEntry{NeteaseURL: link, CoverURL: "c", CoverSource: "netease", CoverAlbum: "X"}, "Y", true); e.CoverURL != "c" {
+		t.Errorf("同专辑别的曲目也在用的封面不清: %+v", e)
+	}
+	if staleRejectedNeteaseCover(enrichEntry{NeteaseRejected: "1", CoverURL: "c", CoverSource: "netease", CoverAlbum: "X", CoverSettled: "c"}, "Y") {
+		t.Error("专辑定下的封面不算判错留下的")
+	}
+	if e := withoutCover(enrichEntry{CoverURL: "c", CoverSettled: "c"}); e.CoverSettled != "" {
+		t.Errorf("清封面时定下的记录一起清: %+v", e)
 	}
 	if staleRejectedNeteaseCover(enrichEntry{NeteaseURL: link, NeteaseRejected: "1", CoverSource: "netease", CoverAlbum: "X"}, "Y") {
 		t.Error("还挂着网易云链接的归链接重核,不算判错留下的封面")
@@ -229,6 +241,53 @@ func TestRecheckNeteaseLinksLeftoverCoverSaves(t *testing.T) {
 	enrichMu.Unlock()
 	if !dirty || cover != "" {
 		t.Errorf("清了留下的封面:置脏 = %v、封面 = %q", dirty, cover)
+	}
+	if err := enrichSavesDeferred(cachePath); err != nil {
+		t.Error(err)
+	}
+}
+
+// 定下的、同专辑别的曲目也在用的网易云封面不跟着链接清;封面按歌词管理显示的专辑判(Kaset 那条写法键里没专辑);解析中的不动。
+func TestRecheckNeteaseLinksKeepsAlbumCovers(t *testing.T) {
+	cachePath := withDeferredEnrichSaves(t)
+	link := func(id string) string { return "https://music.163.com/song?id=" + id }
+	withEnrichCache(t, map[string]enrichEntry{
+		"KOBUKURO|桜 - Sakura|定下": {NeteaseURL: link("2"), DurationSecs: 389, CoverURL: "settled", CoverSource: "netease",
+			CoverAlbum: "Jazz", CoverSettled: "settled"},
+		"KOBUKURO|桜 - Sakura|借来":    {NeteaseURL: link("2"), DurationSecs: 389, CoverURL: "lent", CoverSource: "netease", CoverAlbum: "Jazz"},
+		"KOBUKURO|別の歌|借来":           {CoverURL: "lent", CoverSource: "netease", CoverAlbum: "借来"},
+		"KOBUKURO|桜 - Sakura|Kaset": {NeteaseURL: link("2"), DurationSecs: 389, CoverURL: "k", CoverSource: "netease", CoverAlbum: "Jazz"},
+		"KOBUKURO|桜 - Sakura|": {NeteaseURL: link("2"), DurationSecs: 389, CoverURL: "y", CoverSource: "netease", CoverAlbum: "桜",
+			YouTubeMusicAlbum: "桜"},
+		"KOBUKURO|桜 - Sakura|在解析": {NeteaseURL: link("2"), DurationSecs: 389, CoverURL: "i", CoverSource: "netease", CoverAlbum: "Jazz"},
+		"判错过|歌|借来":                {NeteaseRejected: "9", CoverURL: "lent", CoverSource: "netease", CoverAlbum: "X"},
+		"判错过|歌|定下":                {NeteaseRejected: "9", CoverURL: "s2", CoverSource: "netease", CoverAlbum: "X", CoverSettled: "s2"},
+	})
+	enrichMu.Lock()
+	savedInflight := enrichInflight
+	enrichInflight = map[string]bool{"KOBUKURO|桜 - Sakura|在解析": true}
+	enrichMu.Unlock()
+	t.Cleanup(func() {
+		enrichMu.Lock()
+		enrichInflight = savedInflight
+		enrichMu.Unlock()
+	})
+	registry := map[string]neteaseCatalogName{"2": {Name: "桜 (Instrumental)", Artists: []string{"Kaoru Sakuma"}, DurationSecs: 327.8}}
+	if n := recheckNeteaseLinks(registry, nil); n != 4 {
+		t.Fatalf("清掉 %d 条链接,want 4(解析中的不动)", n)
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	for k, want := range map[string]string{
+		"KOBUKURO|桜 - Sakura|定下": "settled", "KOBUKURO|桜 - Sakura|借来": "lent", "KOBUKURO|桜 - Sakura|Kaset": "",
+		"KOBUKURO|桜 - Sakura|": "y", "判错过|歌|借来": "lent", "判错过|歌|定下": "s2",
+	} {
+		if e := enrichCache[k]; e.CoverURL != want {
+			t.Errorf("%s: 封面 %q, want %q", k, e.CoverURL, want)
+		}
+	}
+	if e := enrichCache["KOBUKURO|桜 - Sakura|在解析"]; e.NeteaseURL == "" || e.CoverURL != "i" {
+		t.Errorf("解析中的这一轮不动: %+v", e)
 	}
 	if err := enrichSavesDeferred(cachePath); err != nil {
 		t.Error(err)

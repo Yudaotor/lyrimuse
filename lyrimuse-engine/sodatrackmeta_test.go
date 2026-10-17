@@ -332,3 +332,33 @@ func TestSodaTrackMetaWiring(t *testing.T) {
 		t.Error("main 载入缓存文件")
 	}
 }
+
+// 没问到的记录:过了重问的时限再排时删掉,问到了也删掉,不越攒越多。
+func TestSodaTrackMetaFailedRecordsArePruned(t *testing.T) {
+	withSodaTrackMeta(t, nil, func(context.Context, string) (sodaTrackMeta, error) {
+		return testSodaMeta("惯坏", []string{"泳儿"}, "私人珍藏", 246987), nil
+	}, true)
+	sodaTrackMetaMu.Lock()
+	sodaTrackMetaFailed["old"] = time.Now().Add(-sodaTrackMetaRetryAfter - time.Minute)
+	sodaTrackMetaFailed["fresh"] = time.Now()
+	sodaTrackMetaMu.Unlock()
+	requestSodaTrackMeta([]string{"old", "fresh"})
+	sodaTrackMetaMu.Lock()
+	_, oldKept := sodaTrackMetaFailed["old"]
+	_, freshKept := sodaTrackMetaFailed["fresh"]
+	pending := slices.Clone(sodaTrackMetaPending)
+	sodaTrackMetaMu.Unlock()
+	if oldKept || !freshKept || !slices.Equal(pending, []string{"old"}) {
+		t.Fatalf("过期的删掉重排、刚失败的留着不排: old=%v fresh=%v pending=%v", oldKept, freshKept, pending)
+	}
+	sodaTrackMetaMu.Lock()
+	sodaTrackMetaFailed["old"] = time.Now().Add(-time.Hour)
+	sodaTrackMetaMu.Unlock()
+	sodaTrackMetaWorker()
+	sodaTrackMetaMu.Lock()
+	_, oldKept = sodaTrackMetaFailed["old"]
+	sodaTrackMetaMu.Unlock()
+	if oldKept {
+		t.Error("问到了就删掉没问到的记录")
+	}
+}

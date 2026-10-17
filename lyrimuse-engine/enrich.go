@@ -939,8 +939,12 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			enrichDirty = true
 		}
 		// 播放器给的 ISRC 当场补:本机缓存那两支、Apple Music 播放时报的目录锚点(见 playbackISRCJobLocked)。
-		if job, ok := playbackISRCJobLocked(key, e, bundleID, anchorLink, time.Now()); ok {
-			go runPlaybackISRCJob(job)
+		// 这条还有后台解析在跑(首次解析先上屏、最终那次提交还没回来)时先不起:那次提交整条覆盖,期间补上的号会被盖掉,
+		// 而起过一次的这组 id 要隔 isrcPlaybackRetry 才再试。等解析回来,下一拍再起。
+		if !enrichInflight[key] {
+			if job, ok := playbackISRCJobLocked(key, e, bundleID, anchorLink, time.Now()); ok {
+				go runPlaybackISRCJob(job)
+			}
 		}
 		// 用户校准过这首歌的歌词时间轴吗(自己钉着,或者在读穿同一首歌的一份校准,见 lyricsCalibratedLocked)—— 两条
 		// "自动重选歌词源"的路径共用这一次判定(见 lyricspins.go)。放在这里而不是各自函数里面:那两个判定要保持纯函数,
@@ -3208,8 +3212,11 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 	// 存量 QQ 封面提档:早期拼的 QQ 封面 URL 写死 300x300,而同一个 mid 换个路径段就能拿到
 	// 800(见 qqCoverAtEdge)。这是**同一张图的另一档**、不是换封面 —— 所以刻意放在
 	// coverSwapAllowed 之外,也不动 CoverSource/CoverAlbum/AccentColor(主色从缩略图算,
-	// 跟档位无关)。纯字符串换算,不发任何请求。
-	e.CoverURL = qqCoverAtEdge(e.CoverURL, qqCoverMaxEdge)
+	// 跟档位无关)。纯字符串换算,不发任何请求。专辑定下的(coverSettled)不提档:地址一换定下的记录就作废,下一遍后台补封面
+	// 又把它换回同组定下的那一份,来回翻。
+	if !coverSettled(e) {
+		e.CoverURL = qqCoverAtEdge(e.CoverURL, qqCoverMaxEdge)
+	}
 	if fresh.AppleURL != "" {
 		e.AppleURL = fresh.AppleURL
 	}
@@ -5826,7 +5833,10 @@ func loadEnrichCache(path string) {
 		if !os.IsNotExist(err) {
 			refuseEnrichSavesThisRun()
 			slog.Error("load enrich cache failed — running without saving, existing file left untouched", "err", err)
+			return
 		}
+		// 主缓存还没有(新装后头一次整份落盘之前):上一次退出前写下的待落盘小文件照样叠回来,不然那批改动就丢了。
+		applyEnrichPendingAtLoad(path)
 		return
 	}
 	var m map[string]enrichEntry
@@ -6182,13 +6192,14 @@ func migratePlayersFromAppleAnchors() {
 
 // migrateListenDurations:没有时长的条目从收听记录里补播放器当时报的时长(18 章决策 42)。只认 key 对得上、记了时长的收听;
 // 几次收听的时长互相差过 durationMismatch 的不补(说不准是哪一段录音)。运行期 trackEnrichment 放到时自己补,存量只补一次。
-func migrateListenDurations(listens []listenLogLine) {
+// readListens 给出收听记录:水位到了整道跳过时不调它(收听日志是整份读,可能几 MB)。
+func migrateListenDurations(readListens func() []listenLogLine) {
 	scope := migrationScopeOf(migrationListenDurations, migrationListenDurationsVersion)
 	if scope.skip() {
 		return
 	}
 	durs := map[string][]float64{}
-	for _, l := range listens {
+	for _, l := range readListens() {
 		if l.T == "l" && l.DUR > 0 && l.TI != "" {
 			k := enrichKey(l.AR, l.TI, l.AL)
 			durs[k] = append(durs[k], l.DUR)

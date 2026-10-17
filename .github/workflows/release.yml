@@ -379,6 +379,7 @@ jobs:
           prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
           # The unsuffixed assets are arm64-only; -intel is universal. Each ships as a .tar.xz (the
           # Sparkle update), a zip (Homebrew cask, hashed by its .sha256) and a dmg for manual downloads.
+          # The -dSYM zips symbolicate crash reports from exactly this build (package.sh checks the UUIDs).
           files: |
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}.tar.xz
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}.zip
@@ -388,6 +389,8 @@ jobs:
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.zip
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.zip.sha256
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.dmg
+            lyrimuse/dist/${{ steps.version.outputs.asset_base }}-dSYM.zip
+            lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel-dSYM.zip
             appcast.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -408,6 +411,7 @@ jobs:
           fi
           for f in "lyrimuse/dist/$BASE.tar.xz" "lyrimuse/dist/$BASE.zip" "lyrimuse/dist/$BASE.zip.sha256" "lyrimuse/dist/$BASE.dmg" \
                    "lyrimuse/dist/$BASE-intel.tar.xz" "lyrimuse/dist/$BASE-intel.zip" "lyrimuse/dist/$BASE-intel.zip.sha256" "lyrimuse/dist/$BASE-intel.dmg" \
+                   "lyrimuse/dist/$BASE-dSYM.zip" "lyrimuse/dist/$BASE-intel-dSYM.zip" \
                    appcast.xml; do
             name="$(basename "$f")"
             want="$(stat -f%z "$f")"

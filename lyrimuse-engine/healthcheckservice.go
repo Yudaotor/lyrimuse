@@ -107,20 +107,23 @@ type homeFolderTarget struct {
 	path string
 	// launchdPlist:除了归自己、写得进,还不许组和其他用户可写,launchd 拒收这样的 plist。
 	launchdPlist bool
+	// shared:别的程序也往里放东西的共用目录(~/.config、~/Library/LaunchAgents、~/Library/Logs)。修法只改这个目录
+	// 本身的属主和权限,不递归 —— 里面别的程序的文件不归 Lyrimuse 管。
+	shared bool
 }
 
 // homeFolderTargets 是常驻服务要写的几处位置,跟 Swift 侧 HomeFolderAccess.targets 同一份清单。
 func homeFolderTargets() []homeFolderTarget {
 	var targets []homeFolderTarget
 	if dir := configDir(); dir != "" {
-		targets = append(targets, homeFolderTarget{path: filepath.Dir(dir)}, homeFolderTarget{path: dir})
+		targets = append(targets, homeFolderTarget{path: filepath.Dir(dir), shared: true}, homeFolderTarget{path: dir})
 	}
 	home, homeErr := os.UserHomeDir()
 	if homeErr == nil {
-		targets = append(targets, homeFolderTarget{path: filepath.Join(home, "Library/LaunchAgents")})
+		targets = append(targets, homeFolderTarget{path: filepath.Join(home, "Library/LaunchAgents"), shared: true})
 	}
 	if logPath := logFilePath(); logPath != "" {
-		targets = append(targets, homeFolderTarget{path: filepath.Dir(logPath)}, homeFolderTarget{path: logPath})
+		targets = append(targets, homeFolderTarget{path: filepath.Dir(logPath), shared: true}, homeFolderTarget{path: logPath})
 	}
 	if homeErr == nil {
 		targets = append(targets, homeFolderTarget{
@@ -164,9 +167,12 @@ func folderAccessHealthItem(targets []homeFolderTarget, uid int, userName string
 		}
 		problems = append(problems, t.path+" "+problem)
 		quoted := "'" + strings.ReplaceAll(t.path, "'", `'\''`) + "'"
-		if strings.HasPrefix(problem, "其他用户也可写") {
+		switch {
+		case strings.HasPrefix(problem, "其他用户也可写"):
 			fixes = append(fixes, "chmod 644 "+quoted)
-		} else {
+		case t.shared:
+			fixes = append(fixes, fmt.Sprintf("sudo chown '%s':staff %s && chmod u+rwx %s", userName, quoted, quoted))
+		default:
 			fixes = append(fixes, fmt.Sprintf("sudo chown -R '%s':staff %s && chmod u+rwX %s", userName, quoted, quoted))
 		}
 	}

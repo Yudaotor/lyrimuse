@@ -466,8 +466,7 @@ enum DiagnosticsExporter {
         }
         let home = fm.homeDirectoryForCurrentUser.path
         for (name, text) in files {
-            try? LogRedactor.redactHomePath(text, home: home)
-                .write(to: staging.appendingPathComponent(name), atomically: true, encoding: .utf8)
+            FileIO.write(LogRedactor.redactHomePath(text, home: home), to: staging.appendingPathComponent(name))
         }
         zipDirectory(staging, to: destination)
     }

@@ -513,3 +513,41 @@ func TestAmazonCachedASINPicksTheVersionByAlbum(t *testing.T) {
 		t.Errorf("队列没记专辑时照用队列的: %q", got)
 	}
 }
+
+// 借词结论按库目录指纹记下:两个库目录里的文件没变就交记下的结论(不再整库扫),Hammer Cache 有了新文件就重扫。
+func TestAmazonLyricsBorrowedMemoByDirStamp(t *testing.T) {
+	_, hammer := useTempAmazonData(t)
+	amazonBorrowedMemoMu.Lock()
+	clear(amazonBorrowedMemo)
+	amazonBorrowedMemoMu.Unlock()
+	lyrics := strings.Replace(amazonTestLyricsJSON, "B0TESTAAA2", "B0TESTAI01", 1)
+	testWriteLog(t, filepath.Join(hammer, "000012.log"), [][]testLDBEntry{{
+		{key: "B0TESTAI01-ATVPDKIKX0DER", seq: 30, value: lyrics},
+	}})
+	lrc, _, ok := amazonLyricsForASIN("B0TESTAI01")
+	if !ok {
+		t.Fatal("测试库里应有 B0TESTAI01 的词")
+	}
+	meta := amazonCatalogTrack{Title: "Ai!"}
+	first := amazonLyricsBorrowedBy("B0TESTAI01", meta, lrc)
+
+	amazonBorrowedMemoMu.Lock()
+	if len(amazonBorrowedMemo) != 1 {
+		amazonBorrowedMemoMu.Unlock()
+		t.Fatalf("应记下一条结论,got %d", len(amazonBorrowedMemo))
+	}
+	for k, v := range amazonBorrowedMemo {
+		v.other = "memo"
+		amazonBorrowedMemo[k] = v
+	}
+	amazonBorrowedMemoMu.Unlock()
+	if got := amazonLyricsBorrowedBy("B0TESTAI01", meta, lrc); got != "memo" {
+		t.Errorf("库目录没变应交记下的结论,got %q", got)
+	}
+	testWriteLog(t, filepath.Join(hammer, "000013.log"), [][]testLDBEntry{{
+		{key: "B0TESTZZZ9-ATVPDKIKX0DER", seq: 31, value: "{}"},
+	}})
+	if got := amazonLyricsBorrowedBy("B0TESTAI01", meta, lrc); got != first {
+		t.Errorf("Hammer Cache 变了应重扫,got %q want %q", got, first)
+	}
+}

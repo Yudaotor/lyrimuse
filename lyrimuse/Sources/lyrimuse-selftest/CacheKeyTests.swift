@@ -702,6 +702,7 @@ func runCacheKeyTests() {
         let plain = entry("{}")
         let claimed = entry(#"{"reported":{"x":{"title":"Song (#6)"}}}"#)
         let better = entry(#"{"lyrics":"[00:01.00]x","lyrics_score":900}"#)
+        let claimedBetter = entry(#"{"lyrics":"[00:01.00]x","lyrics_score":900,"reported":{"x":{"title":"Song (#6)"}}}"#)
         let cases: [(String, [String: EnrichCacheEntry], String, String?)] = [
             ("带译名的写法用旧条目", ["A|不散的筵席|B": plain], "A|不散的筵席（I Miss You）|B", "A|不散的筵席|B"),
             ("旧条目是另一种写法的", ["A|Song|B": claimed], "A|Song (#11)|B", nil),
@@ -710,6 +711,8 @@ func runCacheKeyTests() {
             ("大小写照旧宽松", ["A|song|B": plain], "A|Song|B", "A|song|B"),
             ("别的专辑不借", ["A|不散的筵席|C": plain], "A|不散的筵席（I Miss You）|B", nil),
             ("旧规则那条精确在就用它,不挑只差大小写的", ["A|Song|B": plain, "A|song|B": better], "A|Song (I Miss You)|B", "A|Song|B"),
+            ("旧规则那组的代表被占着时用组里没被占的(同引擎先筛再挑)", ["A|song|B": claimedBetter, "A|SONG|B": plain],
+             "A|Song (#11)|B", "A|SONG|B"),
         ]
         for (name, all, query, want) in cases {
             let loose = EnrichCacheReader.groupIndex(all) { EnrichCacheKeys.looseKey($0) }

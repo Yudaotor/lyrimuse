@@ -45,7 +45,7 @@ func TestPendingBackfill_ExcludesSubmittedAndQuarantined(t *testing.T) {
 	appendListen("B", "already-submitted", "al", fresh+1, 200)
 	appendListen("C", "quarantined", "al", fresh+2, 200)
 	markBackfilled(fresh + 1)
-	markQuarantined(fresh + 2)
+	markQuarantined(fresh+2, "me")
 
 	pending, tooOld := pendingBackfillListens(now)
 	if tooOld != 0 {

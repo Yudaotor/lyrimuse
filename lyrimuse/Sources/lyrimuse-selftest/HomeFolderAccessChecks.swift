@@ -52,16 +52,29 @@ func homeFolderAccessChecks() {
     // 修复命令:一处一行,路径单引号包住(含单引号也安全)。
     let command = A.fixCommand(for: [
         .init(path: "/Users/a/.config", problem: .ownedBy("root")),
-        .init(path: "/Users/a/it's", problem: .notWritable),
+        .init(path: "/Users/a/it's", problem: .notWritable, ownsTree: true),
         .init(path: "/Users/a/Library/LaunchAgents/x.plist", problem: .writableByOthers(mode: 0o666)),
     ], userName: "a")
     expectEqual(command.components(separatedBy: "\n"), [
-        "sudo chown -R 'a':staff '/Users/a/.config' && chmod u+rwX '/Users/a/.config'",
-        "sudo chown -R 'a':staff '/Users/a/it'\\''s' && chmod u+rwX '/Users/a/it'\\''s'",
+        "sudo chown 'a':staff '/Users/a/.config' && chmod u+rwX '/Users/a/.config'",
+        "sudo chown -R 'a':staff '/Users/a/it'\\''s' && chmod -R u+rwX '/Users/a/it'\\''s'",
         "chmod 644 '/Users/a/Library/LaunchAgents/x.plist'",
-    ], "文件夹权限: 修复命令逐行、路径加引号")
-    expectEqual(command.contains("#") || command.contains("!"), false,
-                "文件夹权限: 修复命令不含 # 和 !(交互式 zsh 粘贴会出错)")
+    ], "文件夹权限: 修复命令逐行、路径加引号;只有 Lyrimuse 自己的目录整棵改,共用目录只改这一层")
+    expectEqual(A.targets.filter(\.ownsTree).map(\.path), [LyrimusePaths.configDir.path],
+                "文件夹权限: 只有配置目录算 Lyrimuse 整棵自己的(~/.config、~/Library/Logs、LaunchAgents 不 -R)")
+    // # 和 ! 只能出现在单引号包住的路径里:交互式 zsh 粘贴时,引号外的 ! 会触发历史展开,词首的 # 在没开
+    // interactive_comments 时报错。路径本身带这两个字符时也得成立,所以拿带它们的路径生成一遍,去掉引号里的部分再查。
+    let tricky = A.fixCommand(for: [
+        .init(path: "/Users/a/#tag!", problem: .ownedBy("root")),
+        .init(path: "/Users/a/it's!", problem: .notWritable),
+        .init(path: "/Users/a/Library/LaunchAgents/x#!.plist", problem: .writableByOthers(mode: 0o666)),
+    ], userName: "a")
+    let outsideQuotes = tricky.replacingOccurrences(of: "\\'", with: "")
+        .replacingOccurrences(of: "'[^']*'", with: "", options: .regularExpression)
+    expectEqual(outsideQuotes.contains("#") || outsideQuotes.contains("!"), false,
+                "文件夹权限: 修复命令里的 # 和 ! 只出现在单引号包住的路径里(交互式 zsh 粘贴会出错)")
+    expectEqual(tricky.contains("'/Users/a/#tag!'") && tricky.contains("'/Users/a/it'\\''s!'"), true,
+                "文件夹权限: 带 # ! ' 的路径原样包在单引号里")
 
     // 诊断报告那几行与显示路径。
     expectEqual(A.diagnosticLines(for: [], checkedCount: 6), ["Folder access: ok (6 locations checked)"],

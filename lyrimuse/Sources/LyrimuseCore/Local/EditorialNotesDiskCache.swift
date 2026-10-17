@@ -78,8 +78,17 @@ public final class EditorialNotesDiskCache {
         dirty = true
     }
 
+    /// 要写盘的那一份:在用它的线程上取(`takeSnapshot`),整份 JSON 编码(`encoded()`,上限 2 万条)放到写盘的队列上做。
+    public struct Snapshot: Sendable {
+        let entries: [String: Entry]
+
+        public func encoded() -> Data? {
+            try? JSONEncoder().encode(File(version: EditorialNotesDiskCache.version, entries: entries))
+        }
+    }
+
     /// 要写盘的内容:去掉过期的,超过上限时丢最早取到的。没改过返回 nil。
-    public func snapshotForSave(now: Date = Date()) -> Data? {
+    public func takeSnapshot(now: Date = Date()) -> Snapshot? {
         guard dirty else { return nil }
         var kept = entries.filter { !$0.value.expired(now) }
         if kept.count > Self.maxEntries {
@@ -88,8 +97,14 @@ public final class EditorialNotesDiskCache {
         }
         entries = kept
         dirty = false
-        return try? JSONEncoder().encode(File(version: Self.version, entries: kept))
+        return Snapshot(entries: kept)
     }
+
+    /// `takeSnapshot` 之后马上编码(测试和不在意主线程的调用方用)。
+    public func snapshotForSave(now: Date = Date()) -> Data? { takeSnapshot(now: now)?.encoded() }
+
+    /// 写盘没成:下一次存盘照样整份写(取快照时已经清了脏标记)。
+    public func markDirty() { dirty = true }
 
     /// 原子写盘(先写临时文件再换名),目录不在就建。失败由 `FileIO` 记一次、返回 false。
     @discardableResult

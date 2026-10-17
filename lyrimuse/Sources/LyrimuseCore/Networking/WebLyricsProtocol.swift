@@ -171,7 +171,8 @@ public enum WebSocketFrame {
 }
 
 /// 谁能打开:本机回环一律放行;别的设备要「局域网设备也能打开」开着、链接里带对的密钥。
-/// 另外只认按 IP、`localhost` 或本机 `.local` 名访问的请求,挡住借 DNS 重绑定从恶意网页读歌词。
+/// 另外只认按 IP、`localhost` 或本机 `.local` 名访问的请求,挡住借 DNS 重绑定从恶意网页读歌词;带了 `Origin` 的
+/// 要跟 `Host` 同源,挡住别的网页直接连本机回环。
 public enum WebLyricsAccess {
     public static func permits(remoteIsLoopback: Bool, lanEnabled: Bool, token: String, query: [String: String]) -> Bool {
         if remoteIsLoopback { return true }
@@ -195,6 +196,59 @@ public enum WebLyricsAccess {
         if value == "localhost" { return true }
         if isIPv4(value) { return true }
         return localNames.contains { $0.lowercased() == value }
+    }
+
+    /// `Origin` 头要跟 `Host` 同源:浏览器里发起的 WebSocket 升级一律带 `Origin`,跨源的 `fetch` 也带。本机回环不要密钥,
+    /// 不核这一条的话,用户正开着的任意网页都能 `new WebSocket("ws://localhost:3939/ws")` 读在听什么、发指针事件。
+    /// 没带 `Origin` 的放行:地址栏打开、OBS 浏览器源打开页面、命令行工具,都不带它。`null`(沙盒 iframe、本地文件)不认。
+    /// 比较主机名(不分大小写)和端口(没写时按 scheme 的默认端口),scheme 只认 http / https。
+    public static func originAllowed(_ origin: String?, host: String?) -> Bool {
+        guard let origin = origin?.trimmingCharacters(in: .whitespaces), !origin.isEmpty else { return true }
+        guard let host, let target = authority(host, defaultPort: 80) else { return false }
+        let lowered = origin.lowercased()
+        let defaultPort: Int
+        let rest: Substring
+        if lowered.hasPrefix("http://") {
+            defaultPort = 80
+            rest = lowered.dropFirst("http://".count)
+        } else if lowered.hasPrefix("https://") {
+            defaultPort = 443
+            rest = lowered.dropFirst("https://".count)
+        } else {
+            return false
+        }
+        guard !rest.contains("/"), let source = authority(String(rest), defaultPort: defaultPort) else { return false }
+        return source == target
+    }
+
+    /// `主机名[:端口]` / `[IPv6][:端口]` → 小写主机名(IPv6 去掉方括号)和端口。端口写了但不是 1…65535 的整数时为 nil。
+    static func authority(_ value: String, defaultPort: Int) -> Authority? {
+        let text = value.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !text.isEmpty else { return nil }
+        var name = text
+        var portText: Substring?
+        if text.hasPrefix("[") {
+            guard let close = text.firstIndex(of: "]") else { return nil }
+            name = String(text[text.index(after: text.startIndex)..<close])
+            let tail = text[text.index(after: close)...]
+            if !tail.isEmpty {
+                guard tail.hasPrefix(":") else { return nil }
+                portText = tail.dropFirst()
+            }
+        } else if let colon = text.lastIndex(of: ":") {
+            name = String(text[..<colon])
+            portText = text[text.index(after: colon)...]
+        }
+        guard !name.isEmpty else { return nil }
+        guard let portText else { return Authority(host: name, port: defaultPort) }
+        guard !portText.isEmpty, portText.count <= 5, portText.allSatisfy({ ("0"..."9").contains($0) }),
+              let port = Int(portText), (1...65535).contains(port) else { return nil }
+        return Authority(host: name, port: port)
+    }
+
+    struct Authority: Equatable {
+        let host: String
+        let port: Int
     }
 
     static func isIPv4(_ s: String) -> Bool {
@@ -300,11 +354,15 @@ public struct WebLyricsViewport: Hashable, Sendable {
         pixelHeight = Int(Double(h) * s / 2) * 2
     }
 
-    /// 网页连上来时带的 `w` / `h` / `dpr`;缺了或认不出就按 1180×820@2x。
+    /// 网页连上来时带的 `w` / `h` / `dpr`;缺了或认不出就按 1180×820@2x。宽高先在 Double 上夹进点数范围再转 Int:
+    /// 查询串是外部输入,`w=1e300` 这种直接转 Int 会让进程崩掉。
     public init(query: [String: String]) {
         func number(_ key: String) -> Double? { query[key].flatMap { Double($0) }.flatMap { $0.isFinite ? $0 : nil } }
-        let w = number("w").map { Int($0.rounded()) } ?? 1180
-        let h = number("h").map { Int($0.rounded()) } ?? 820
+        func points(_ key: String) -> Int? {
+            number(key).map { Int(min(max($0.rounded(), Double(Self.pointRange.lowerBound)), Double(Self.pointRange.upperBound))) }
+        }
+        let w = points("w") ?? 1180
+        let h = points("h") ?? 820
         let dpr = number("dpr") ?? 2
         self.init(width: w, height: h, scale: dpr)
     }

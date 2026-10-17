@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -270,6 +271,29 @@ func TestMigrationScopeMarkDoneSkipsAfterInvalidation(t *testing.T) {
 	s.markDone("bg", 1)
 	if !migrationDone("bg", 1) {
 		t.Error("没被作废该照常记水位")
+	}
+}
+
+// 跑完记水位和运行中的作废同时发生:不论谁先谁后,作废之后都不该留着这道迁移的水位(核对和写入在同一把锁里)。
+func TestMigrationScopeMarkDoneRacesInvalidation(t *testing.T) {
+	saved, savedPath, savedEpoch := migrationState, migrationStatePath, migrationEpoch
+	t.Cleanup(func() { migrationState, migrationStatePath, migrationEpoch = saved, savedPath, savedEpoch })
+	path := filepath.Join(t.TempDir(), "migrations.json")
+	loadMigrationState(path)
+	for i := 0; i < 300; i++ {
+		markMigrationDone("other", i+1)
+		s := migrationScopeOf("bg", 1)
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { defer wg.Done(); s.markDone("bg", 1) }()
+		go func() { defer wg.Done(); invalidateMigrationState("test: restore mid-run") }()
+		wg.Wait()
+		if migrationDone("bg", 1) {
+			t.Fatalf("第 %d 轮:作废之后水位又被写了回去", i)
+		}
+	}
+	if got := readMigrationStateForTest(t, path); got["bg"] != 0 {
+		t.Errorf("盘上也不该有它: %v", got)
 	}
 }
 

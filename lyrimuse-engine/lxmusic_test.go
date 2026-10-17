@@ -212,6 +212,55 @@ func TestLXMusicLocalLyricsFor(t *testing.T) {
 	}
 }
 
+// 数据目录路径里带 #、?、%、空格:拼成 sqlite 的 URI 时要转义,不然打开的是别的文件(读不出列表)。
+func TestLXMusicSQLPathWithURIChars(t *testing.T) {
+	withLXMusicData(t, lxTestList, nil, "temp", 2, "")
+	odd := filepath.Join(t.TempDir(), "a #1?b%20c")
+	if err := os.Rename(lxMusicDataDirOverride, odd); err != nil {
+		t.Fatal(err)
+	}
+	lxMusicDataDirOverride = odd
+	tracks, err := lxMusicList(context.Background(), "temp")
+	if err != nil || len(tracks) != 4 || tracks[0].Name != "小半" {
+		t.Fatalf("路径带 URI 字符时应照常读出列表: %+v err=%v", tracks, err)
+	}
+}
+
+// 洛雪一直没这首的词:没有的结论接连落空就越记越久(5s、10s、20s…封顶一分钟),有了词照旧记半分钟。
+func TestLXMusicLyricsMissingBacksOff(t *testing.T) {
+	for misses, want := range map[int]time.Duration{0: 5 * time.Second, 1: 5 * time.Second, 2: 10 * time.Second,
+		3: 20 * time.Second, 4: 40 * time.Second, 5: time.Minute, 50: time.Minute} {
+		if got := lxMusicLyricsMissingTTLFor(misses); got != want {
+			t.Errorf("第 %d 次落空记 %v,want %v", misses, got, want)
+		}
+	}
+	withLXMusicData(t, lxTestList, nil, "temp", 2, "")
+	key := "陈粒\x00小半"
+	memo := func() lxMusicLyricsAvail {
+		lxMusicLyricsAvailMu.Lock()
+		defer lxMusicLyricsAvailMu.Unlock()
+		return lxMusicLyricsAvailMemo[key]
+	}
+	expire := func() {
+		lxMusicLyricsAvailMu.Lock()
+		m := lxMusicLyricsAvailMemo[key]
+		m.until = time.Now().Add(-time.Second)
+		lxMusicLyricsAvailMemo[key] = m
+		lxMusicLyricsAvailMu.Unlock()
+	}
+	for i := 1; i <= 4; i++ {
+		before := time.Now()
+		if lxMusicLyricsAvailable(lxMusicBundleID, "陈粒", "小半", 297) {
+			t.Fatal("洛雪没存这首的词")
+		}
+		m := memo()
+		if m.misses != i || m.until.Before(before.Add(lxMusicLyricsMissingTTLFor(i))) {
+			t.Fatalf("第 %d 次落空: misses=%d until 距今 %v", i, m.misses, time.Until(m.until))
+		}
+		expire()
+	}
+}
+
 func TestLXMusicLyricsAvailableAndRecheck(t *testing.T) {
 	lyrics := []lxTestLyric{{"kw_3", "raw", "lyric", "[00:01.00]第一句"}}
 	withLXMusicData(t, lxTestList, lyrics, "temp", 2, "")

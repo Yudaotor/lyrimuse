@@ -34,7 +34,7 @@
 只看注释:整行注释(以 // /// # * /* 开头)、行尾注释(`code // …`、`code /* … */`,Python 与 shell 是
 `code # …`)和 Python 的文档字符串(模块 / 类 / 函数开头那一段,按语法树认)。行尾注释先去掉字符串和
 rune 字面量(含跨行的三引号字符串、Go / JS 反引号字符串、Swift 原始字符串和 shell 的 heredoc),再取
-注释标记之后的部分,所以字符串里的同样文字不算;shell 的 # 只在词首才算注释(`$#`、`${#x}` 不算)。
+注释标记之后的部分;shell heredoc 正文里的 XML 注释 `<!-- … -->`(build.sh 写 Info.plist 用)也算注释,所以字符串里的同样文字不算;shell 的 # 只在词首才算注释(`$#`、`${#x}` 不算)。
 别的字符串字面量一律不扫 —— 误报的代价比漏报大,规则宁可窄。不可见字符那一条例外:扫整行,字符串和
 rune 字面量里的同样算(这类字符最常藏在那里);允许的空白只有普通空格、tab、回车。命中任何一条即
 非零退出并打印 `file:line`。
@@ -230,15 +230,33 @@ def _py_comments(lines):
 
 
 def _sh_comments(lines):
-    """shell 的行尾注释 {行号: 注释正文}。# 在词首才算注释;引号跨行、heredoc 正文都带状态跳过。"""
+    """shell 的行尾注释 {行号: 注释正文}。# 在词首才算注释;引号跨行带状态跳过。heredoc 正文不按 shell 切,
+    只取里面的 XML 注释 <!-- … -->(跨行带状态):build.sh 用 heredoc 写 Info.plist,那里的注释同样是给读代码的人看的。"""
     out = {}
     quote = None
     heredoc = None
+    xml = False
     for no, line in enumerate(lines, 1):
         if heredoc is not None:
             word, dash = heredoc
             if (line.lstrip('\t') if dash else line) == word:
-                heredoc = None
+                heredoc, xml = None, False
+                continue
+            body, rest = [], line
+            while True:
+                if xml:
+                    end = rest.find('-->')
+                    body.append(rest if end < 0 else rest[:end])
+                    if end < 0:
+                        break
+                    xml, rest = False, rest[end + 3:]
+                else:
+                    start = rest.find('<!--')
+                    if start < 0:
+                        break
+                    xml, rest = True, rest[start + 4:]
+            if body:
+                out[no] = ' '.join(body)
             continue
         i, code, n = 0, False, len(line)
         if quote is not None:
@@ -291,6 +309,8 @@ TRAILING_SAMPLES = [
     ('.py', u's = "# 不是"  # 是\nt = """\n# 不是\n"""  # 是\n', {1: u' 是', 4: u' 是'}),
     ('.sh', u'n=${#arr[@]} # 是\necho "$#"\ncat <<EOF\nx # 不是\nEOF\nk=1#不是\nv="a\n# 不是" # 是\n',
      {1: u' 是', 8: u' 是'}),
+    ('.sh', u'cat > p <<P\n<a/> <!-- 是 --> <b/>\n<!-- 是\n  也是 -->\n<c>不是</c>\nP\n<!-- 不是 -->\n',
+     {2: u' 是 ', 3: u' 是', 4: u'  也是 '}),
 ]
 
 

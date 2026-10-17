@@ -247,3 +247,35 @@ func TestLiveAppSodaPreviewPendingWhileSearchInflight(t *testing.T) {
 		t.Fatalf("搜索在途、报 45 秒: known=%v pending=%v", known, pending)
 	}
 }
+
+// 本来就 30 秒的歌、本机查不到曲目信息:试听段搜索答回来的同名曲目整首就是 30 秒,不再当成可能是试听段;身份闸没过的、整首对不上的不算。
+func TestSodaPreviewPendingEndsWithSearchedFullLength(t *testing.T) {
+	resetSodaPreviewSearch(t, nil)
+	sodaPreviewMu.Lock()
+	saved := sodaSearchFullLengths
+	sodaSearchFullLengths = map[string][]int64{}
+	sodaPreviewMu.Unlock()
+	t.Cleanup(func() {
+		sodaPreviewMu.Lock()
+		sodaSearchFullLengths = saved
+		sodaPreviewMu.Unlock()
+	})
+	const artist, title, album = "测试歌手甲", "片头曲", "测试专辑"
+	if !sodaPreviewLookupPending(artist, title, album, 30) {
+		t.Fatal("用例前提:本机查不到,报 30 秒算待定")
+	}
+	noteSodaSearchFullLengths([]sodaSearchItem{
+		{Name: title, Artist: "别人", Album: album, Duration: 30},
+		{Name: title, Artist: artist, Album: album, Duration: 200},
+	}, artist, title, album)
+	if !sodaPreviewLookupPending(artist, title, album, 30) {
+		t.Error("歌手对不上的、整首 200 秒的都不说明这首就 30 秒")
+	}
+	noteSodaSearchFullLengths([]sodaSearchItem{{Name: title, Artist: artist, Album: album, Duration: 30.4}}, artist, title, album)
+	if sodaPreviewLookupPending(artist, title, album, 30) {
+		t.Error("搜到这首整首就 30 秒:不再待定")
+	}
+	if !sodaPreviewLookupPending(artist, title, album, 60) {
+		t.Error("报 60 秒跟整首 30 秒对不上,照旧待定")
+	}
+}

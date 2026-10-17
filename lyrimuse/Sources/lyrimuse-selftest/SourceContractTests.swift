@@ -247,6 +247,52 @@ func runSourceContractTests() {
             diff(catalog.hant, hantGen, "zh-hant")
             diff(catalog.en, enGen, "en")
 
+            // 格式参数:各语言的值(含单数变体「键#one」)要跟键用同一组参数 —— 第几个参数、什么类型。调用方按键的参数表
+            // 传值,String(format:) 却按译文里的格式符取:译文把 %d 写成 %@ 会把整数当对象指针解引用(崩溃)。规则跟
+            // generate-strings.py 的 format_arg_problems 同一套:%% 不算参数,不认空格标志,长度修饰同属整数。
+            func argSignature(_ s: String) -> [Int: String]? {
+                let spec = #/%(?:(\d+)\$)?[-+0#]*\d*(?:\.\d+)?(?:hh|ll|h|l|q|z|t|j)?([@dDiuUxXoOfeEgGcCsSpaA%])/#
+                var kinds: [Character: String] = ["@": "object", "p": "pointer"]
+                for c in "dDiuUxXoO" { kinds[c] = "int" }
+                for c in "feEgGaA" { kinds[c] = "float" }
+                for c in "cC" { kinds[c] = "char" }
+                for c in "sS" { kinds[c] = "cstring" }
+                var sig: [Int: String] = [:]
+                var next = 1
+                for m in s.matches(of: spec) {
+                    guard let conv = m.2.first, conv != "%", let kind = kinds[conv] else { continue }
+                    let index: Int
+                    if let pos = m.1 {
+                        index = Int(pos) ?? 0
+                    } else {
+                        index = next
+                        next += 1
+                    }
+                    if let existing = sig[index], existing != kind { return nil }
+                    sig[index] = kind
+                }
+                return sig
+            }
+            expectEqual(argSignature("%d 首") == argSignature("%@ songs"), false, "本地化: 格式参数比对认得 %d 写成 %@")
+            expectEqual(argSignature("%d 首") == argSignature("songs"), false, "本地化: 格式参数比对认得少写参数")
+            expectEqual(argSignature("%1$@ 的 %2$d") == argSignature("%2$d of %1$@"), true, "本地化: 带序号的参数换序不算不一致")
+            expectEqual(argSignature("%d%%") == argSignature("%lld%%"), true, "本地化: 长度修饰同属整数,%% 不算参数")
+            expectEqual(argSignature("相差 25% 以上") == argSignature("more than 25% of"), true, "本地化: 字面百分号不算参数")
+            expectEqual(argSignature("%1$@ %1$d") == nil, true, "本地化: 同一序号两种类型判为不合法")
+            func argMismatches(_ table: [String: String], _ tag: String) -> [String] {
+                catalog.zh.keys.flatMap { key -> [String] in
+                    let want = argSignature(key)
+                    return [key, key + "#one"].compactMap { k in
+                        guard let value = table[k] else { return nil }
+                        return want == nil || argSignature(value) != want ? "\(tag) \(k.prefix(60))" : nil
+                    }
+                }.sorted()
+            }
+            expectEqual(catalog.zh.keys.filter { !(argSignature($0) ?? [:]).isEmpty }.isEmpty, false,
+                        "本地化: catalog 里有带格式参数的键(格式参数比对没跑空)")
+            expectEqual(argMismatches(catalog.en, "en") + argMismatches(catalog.hant, "zh-Hant"), [],
+                        "本地化: 译文的格式参数跟键对不上(String(format:) 按译文取参数,类型错会崩溃或乱码)")
+
             // Info.plist 的用途说明:各语言包的 InfoPlist.strings 由 generate-strings.py 按 INFO_PLIST_KEYS 生成,
             // 简体那份的值就是 catalog 键,另两份是那一条的译文。英文原文另写在 build.sh 的 Info.plist 里
             // (没有对应语言包时系统用它),必须跟 catalog 的英文一致。
@@ -3596,8 +3642,17 @@ func runSourceContractTests() {
         let appSources = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse")
+        // SwiftUI 的修饰符 / 容器 / 按钮样式(`.glass` 与带参数的 `.glass(.clear)` 两种写法),加上 AppKit 的 NSGlassEffectView
+        // 一族。自家的 `.glassIcon()` / `.glassListRow` 样式名不含这些片段,不会误中。
         let glassAPIs = ["glassEffect(", "glassEffectID(", "glassEffectTransition(", "glassEffectUnion(",
-                         "GlassEffectContainer(", ".glassProminent", "buttonStyle(.glass)"]
+                         "GlassEffectContainer(", ".glassProminent", "buttonStyle(.glass)", "buttonStyle(.glass(",
+                         "NSGlassEffectView", "NSGlassEffectContainerView"]
+        for sample in [".buttonStyle(.glass(.clear))", "let host = NSGlassEffectView()", "NSGlassEffectContainerView(frame: .zero)"] {
+            expectEqual(glassAPIs.contains(where: { sample.contains($0) }), true, "玻璃门控: 扫描清单认得 \(sample)")
+        }
+        for sample in [".buttonStyle(.glassIcon())", ".buttonStyle(.glassListRow)"] {
+            expectEqual(glassAPIs.contains(where: { sample.contains($0) }), false, "玻璃门控: 自家样式 \(sample) 不算玻璃 API")
+        }
         let allowed: Set<String> = ["Settings/SettingsDesignSystem.swift", "UI/LyricsOverlayView.swift"]
         var offenders: [String] = []
         var filesUsingGlass: Set<String> = []

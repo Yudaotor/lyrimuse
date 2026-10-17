@@ -288,6 +288,23 @@ func appPlaybackVideoFrame(bundleID, artist, title string) (data []byte, mimeTyp
 	return data, mimeType, true
 }
 
+// appPlaybackTrackPlay:App 此刻报的这一首(播放器、歌手、歌名都对得上)是哪一次起播(app_pid、play_seq)。App 状态不可用、
+// 报的不是这一首时 ok 为假。
+func appPlaybackTrackPlay(bundleID, artist, title string) (pid int, playSeq int64, ok bool) {
+	appPlaybackArtworkMu.Lock()
+	r := appPlaybackArtworkReader
+	appPlaybackArtworkMu.Unlock()
+	if r == nil {
+		return 0, 0, false
+	}
+	rec, avail := r.read(time.Now())
+	if avail != appStateAvailable || !rec.hasTrack() || rec.Player != bundleID || rec.Track.Artist != artist ||
+		rec.Track.Title != title {
+		return 0, 0, false
+	}
+	return rec.AppPID, rec.Track.PlaySeq, true
+}
+
 // appPlaybackArtworkOfKind:App 交来的这一首的图和它的 kind,不分封面还是视频帧。
 func appPlaybackArtworkOfKind(bundleID, artist, title string) (data []byte, mimeType, kind string, ok bool) {
 	appPlaybackArtworkMu.Lock()

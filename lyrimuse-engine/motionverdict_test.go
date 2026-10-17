@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -253,12 +254,44 @@ func TestCoverSweepRecheckStaleMotion(t *testing.T) {
 	}
 	setUpEnrichEditTest(t, entries)
 	calls = nil
-	coverSweepRecheckMotion = func(_ context.Context, key, _, _ string) bool {
+	coverSweepRecheckMotion = func(ctx context.Context, key, _, _ string) bool {
 		calls = append(calls, key)
+		noteNetworkRoundOutcome(ctx, errors.New("dial tcp: no route to host"))
 		return false
 	}
 	if pass := coverSweepRecheckStaleMotion(context.Background()); !pass.offline || len(calls) != coverSweepOfflineLimit {
-		t.Fatalf("要取图的连着 %d 条没查成就停: %+v calls=%d", coverSweepOfflineLimit, pass, len(calls))
+		t.Fatalf("请求全失败的连着 %d 条就停: %+v calls=%d", coverSweepOfflineLimit, pass, len(calls))
+	}
+
+	// 取图有回话、只是比不成(404、解不开),或一个请求都没发(设备封面文件没了):都不算离线,整遍跑完。
+	for name, sent := range map[string]bool{"answered": true, "no request": false} {
+		calls = nil
+		coverSweepRecheckMotion = func(ctx context.Context, key, _, _ string) bool {
+			calls = append(calls, key)
+			if sent {
+				noteNetworkRoundOutcome(ctx, nil)
+			}
+			return false
+		}
+		if pass := coverSweepRecheckStaleMotion(context.Background()); pass.offline || len(calls) != len(entries) {
+			t.Fatalf("%s: 不算离线,%d 条都核: %+v calls=%d", name, len(entries), pass, len(calls))
+		}
+	}
+
+	// 只数这一条的请求:别处成功的请求不把它记成查成,失败的那几条中间夹一条有回话的就重新数。
+	calls = nil
+	coverSweepRecheckMotion = func(ctx context.Context, key, _, _ string) bool {
+		calls = append(calls, key)
+		noteNetworkRoundOutcome(context.Background(), nil)
+		if key == "E3|e|x" {
+			noteNetworkRoundOutcome(ctx, nil)
+		} else {
+			noteNetworkRoundOutcome(ctx, errors.New("timeout"))
+		}
+		return false
+	}
+	if pass := coverSweepRecheckStaleMotion(context.Background()); pass.offline || len(calls) != len(entries) {
+		t.Fatalf("中间有一条查成就重新数: %+v calls=%d", pass, len(calls))
 	}
 }
 

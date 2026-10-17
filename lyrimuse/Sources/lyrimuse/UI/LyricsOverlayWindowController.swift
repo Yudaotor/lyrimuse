@@ -457,6 +457,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 稳定了 `activeScreenSettleDelay` 之后才搬。按「窗口不在焦点屏上」去判的话,用户把歌词拖到另一块屏,下一秒就会
     /// 被拽回焦点屏。见 04 章决策 63。
     private var followsActiveScreen = false
+    /// 不算「全屏时隐藏」的话窗口该不该摆着(`updateActualVisibility` 写入)。跟随焦点屏只在它为真时盯着:手动关掉、
+    /// 暂停时隐藏、无歌词隐藏时不用每秒列一遍全部窗口;只因全屏藏着时照盯,焦点换到别的屏就搬过去、在那块屏上摆出来。
+    private var shownApartFromFullScreen = false
     private var followsActiveScreenObserver: AnyCancellable?
     private var activeAppObserver: NSObjectProtocol?
     private var activeScreenTimer: Timer?
@@ -753,7 +756,11 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         let shouldShow = OverlayVisibility.shouldShow(isVisible: isVisible, hiddenForNoLyrics: hiddenForNoLyrics,
                                                       coveredByFullScreen: coveredByFullScreen,
                                                       hideWhenNotPlaying: hideWhenNotPlaying, isPlaying: isPlayingNow)
+        shownApartFromFullScreen = OverlayVisibility.shouldShow(isVisible: isVisible, hiddenForNoLyrics: hiddenForNoLyrics,
+                                                                coveredByFullScreen: false,
+                                                                hideWhenNotPlaying: hideWhenNotPlaying, isPlaying: isPlayingNow)
         if shouldShow { window?.orderFront(nil) } else { window?.orderOut(nil) }
+        syncActiveScreenTracking()
         refreshSurfaceVisible()
         // 兜底:万一上屏之后系统没发遮挡变化通知,这里过一小会儿再核一次,别让填色停在「看不见」。
         if shouldShow {
@@ -1858,17 +1865,25 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
 
     private func setFollowsActiveScreen(_ on: Bool) {
         followsActiveScreen = on
+        followedScreenID = nil
+        pendingActiveScreen = nil
+        // 跟随模式下锚点就是窗口此刻在哪儿,借屏那套不再适用。
+        if on { isBorrowingScreen = false }
+        syncActiveScreenTracking()
+    }
+
+    /// 跟随开着、窗口该摆着(不算全屏时隐藏)时才盯焦点屏;开始盯的这一刻当场跟一次。
+    private func syncActiveScreenTracking() {
+        let wanted = followsActiveScreen && shownApartFromFullScreen
+        guard wanted != (activeScreenTimer != nil) else { return }
         activeScreenTimer?.invalidate()
         activeScreenTimer = nil
         if let activeAppObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(activeAppObserver)
             self.activeAppObserver = nil
         }
-        followedScreenID = nil
         pendingActiveScreen = nil
-        guard on else { return }
-        // 跟随模式下锚点就是窗口此刻在哪儿,借屏那套不再适用。
-        isBorrowingScreen = false
+        guard wanted else { return }
         activeAppObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -1949,6 +1964,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         dragReleaseAnchor = nil
         window.setFrameOrigin(frame.origin)
         recomputeControlsBelowCard()
+        // 藏着(orderOut)的窗口换了屏不一定收到 didChangeScreen:因全屏藏着时搬到了别的屏,这里当场重判,不然一直藏着。
+        refreshFullScreenCover()
     }
 
     private func scheduleSavePosition(_ source: PositionSaveSource) {

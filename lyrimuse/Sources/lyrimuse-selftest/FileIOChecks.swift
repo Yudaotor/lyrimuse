@@ -53,7 +53,8 @@ func fileIOChecks() {
 
     // ---- 守卫:App 和 Core 里不许对文件读写写裸 try? ----
     // 读文件、写文件、建目录、搬 / 拷 / 换文件都要走 FileIO(或自己 do/catch 记日志),失败才留得下痕迹。
-    // 删文件不在此列:清理临时文件失败不影响功能。按行扫,整行注释跳过。
+    // 删文件不在此列:清理临时文件失败不影响功能。按语句扫:含 try? 的那一行,连同括号没配平的续行和以 `.` 开头的
+    // 链式续行(`try? x\n    .write(to:`)拼成一句再比,换行拆开的写法也认;整行注释跳过。
     let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     let banned = [
         #"try\?[^\n]*\.write\(to(File)?:"#,
@@ -62,22 +63,52 @@ func fileIOChecks() {
         #"try\?[^\n]*\b(copyItem|replaceItem(At)?)\("#,
         #"try\?\s*(Data|String)\(contentsOf:"#,
     ].map { try! NSRegularExpression(pattern: $0) }
+    /// lines[start] 起的一句:括号没配平就接着拼下一行,下一行以 `.` 开头(链式调用)也拼上,最多看 6 行。
+    func statement(_ lines: [String], from start: Int) -> String {
+        var text = lines[start]
+        var depth = text.filter { $0 == "(" }.count - text.filter { $0 == ")" }.count
+        var next = start + 1
+        while next < lines.count, next - start <= 6 {
+            let following = lines[next].trimmingCharacters(in: .whitespaces)
+            guard depth > 0 || following.hasPrefix(".") else { break }
+            text += " " + following
+            depth += following.filter { $0 == "(" }.count - following.filter { $0 == ")" }.count
+            next += 1
+        }
+        return text
+    }
+    func isBanned(_ code: String) -> Bool {
+        let range = NSRange(code.startIndex..., in: code)
+        return banned.contains(where: { $0.firstMatch(in: code, range: range) != nil })
+    }
+    // 扫描规则自己的样例:换行拆开的链式写法要认得,同一行里 try? 之后没有文件写入的不算。
+    expectEqual(isBanned(statement(["try? text", "    .write(to: url, atomically: true, encoding: .utf8)"], from: 0)), true,
+                "文件读写走 FileIO: 换行拆开的 try? … .write(to:) 也认")
+    expectEqual(isBanned(statement(["try? FileManager.default", "    .createDirectory(at: url, withIntermediateDirectories: true)"], from: 0)),
+                true, "文件读写走 FileIO: 链式换行的 createDirectory 也认")
+    expectEqual(isBanned(statement(["let x = try? decoder.decode(T.self, from: data)", "file.write(to: url)"], from: 0)), false,
+                "文件读写走 FileIO: 下一句不是续行,不拼进来")
     var offenders: [String] = []
+    var scannedFiles: [String: Int] = [:]
     for target in ["LyrimuseCore", "lyrimuse"] {
         let root = sources.appendingPathComponent(target)
         guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { continue }
         for case let url as URL in walker where url.pathExtension == "swift" && url.lastPathComponent != "FileIO.swift" {
-            guard let text = try? String(contentsOf: url, encoding: .utf8), sourceBytes(text, contain: "try?") else { continue }
-            for (index, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
-                let code = String(line)
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            scannedFiles[target, default: 0] += 1
+            guard sourceBytes(text, contain: "try?") else { continue }
+            let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+            for (index, code) in lines.enumerated() {
                 guard code.contains("try?"), !code.trimmingCharacters(in: .whitespaces).hasPrefix("//") else { continue }
-                let range = NSRange(code.startIndex..., in: code)
-                if banned.contains(where: { $0.firstMatch(in: code, range: range) != nil }) {
+                if isBanned(statement(lines, from: index)) {
                     offenders.append("\(target)/\(url.path.replacingOccurrences(of: root.path + "/", with: "")):\(index + 1)")
                 }
             }
         }
     }
+    // 目录读不到、或者文件一个都没读出来时,下面那条「没有违规」是空跑出来的绿。
+    expectEqual((scannedFiles["LyrimuseCore"] ?? 0) > 20 && (scannedFiles["lyrimuse"] ?? 0) > 50, true,
+                "文件读写走 FileIO: 两个 target 都扫到了源文件(LyrimuseCore \(scannedFiles["LyrimuseCore"] ?? 0) 个、lyrimuse \(scannedFiles["lyrimuse"] ?? 0) 个)")
     expectEqual(offenders, [], "文件读写走 FileIO: 这些地方对文件读写写了裸 try?,失败会完全无声")
 }
 

@@ -2964,4 +2964,33 @@ func runLastfmTests() {
                         .contains(".publisher(for: NSApplication.didBecomeActiveNotification)"), true,
                     "Spotify 连接(契约): 回到 App 时重查")
     }
+
+    // ---- 别名表日志不带歌名歌手(契约) ----
+    do {
+        let stats = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(stats.contains("local aliases changed: \\(changedCount(old.artists, tables.artists), privacy: .public) artist"),
+                    true, "别名表日志(契约): 只记每张表变了几条")
+        expectEqual(stats.contains("local aliases · ") || stats.contains("\\($0.key)→\\($0.value)"), false,
+                    "别名表日志(契约): 不再把整张表的条目(歌名、歌手)打进日志")
+        // 统计页两条定时刷新走 settingsPolling:设置窗口看不见时整个停掉,不再每 2 分钟 / 45 秒照样发 Last.fm 请求。
+        let section = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/LastfmStatsSection.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(section.contains(".settingsPolling(every: 120) {") && section.contains(".settingsPolling(every: 45) {")
+                    && !section.contains("Task.sleep(nanoseconds: 120_000_000_000)")
+                    && !section.contains("Task.sleep(nanoseconds: 45_000_000_000)"), true,
+                    "统计页轮询(契约): 两条定时刷新按设置窗口可见性启停")
+        // 热力图点开的那一天:后面几页有一页没取到就记失败,不拿部分结果当取到了(过去那一天取到过就不再重取)。
+        if let start = stats.range(of: "func loadDayListens(_ dayKey: String"),
+           let end = stats.range(of: "let top = Array(Self.rankDayTracks(rows)", range: start.upperBound..<stats.endIndex) {
+            let body = String(stats[start.upperBound..<end.lowerBound])
+            expectEqual(body.contains("else { break }"), false, "这一天(契约): 缺页不再 break 后照常存成取到了")
+            expectEqual(body.contains("if epoch == accountEpoch { dayListens[dayKey] = .failed }\n                        return"),
+                        true, "这一天(契约): 缺页记失败")
+        } else {
+            expectEqual(false, true, "这一天(契约): 找不到 loadDayListens")
+        }
+    }
 }

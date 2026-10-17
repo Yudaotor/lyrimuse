@@ -15,6 +15,8 @@ public enum LXMusicFavoriteControl {
     /// 按完等本地库确认:最多等这么久、隔这么久看一次。
     static let confirmWait: TimeInterval = 3
     static let confirmPollInterval: TimeInterval = 0.1
+    /// 读一次本地库最多等这么久(按完确认那步一次最多读 30 次,库被锁、磁盘卡住时不能一直挂着)。
+    static let queryTimeout: TimeInterval = 2
 
     public static var databasePath: String {
         FileManager.default.homeDirectoryForCurrentUser
@@ -41,22 +43,14 @@ public enum LXMusicFavoriteControl {
         return (name, api.singer ?? "")
     }
 
-    /// 收藏列表里有没有这一首;库不在、读不动返回 nil。会阻塞到子进程结束。selftest 覆盖。
+    /// 收藏列表里有没有这一首;库不在、读不动、超过 `queryTimeout` 返回 nil。会阻塞到子进程结束或超时。selftest 覆盖。
     public static func isCollected(title: String, artist: String, databasePath: String) -> Bool? {
         guard FileManager.default.fileExists(atPath: databasePath) else { return nil }
         let query = "SELECT count(*) FROM my_list_music_info WHERE listId = 'love' AND name = \(sqlString(title)) "
             + "AND singer = \(sqlString(artist))"
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
-        process.arguments = ["file:\(databasePath)?mode=ro", query]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-        do { try process.run() } catch { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard process.terminationStatus == 0, let count = Int(text) else { return nil }
+        guard let result = ProcessRunner.run("/usr/bin/sqlite3", ["file:\(databasePath)?mode=ro", query], timeout: queryTimeout),
+              result.succeeded,
+              let count = Int(result.stdoutText.trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
         return count > 0
     }
 

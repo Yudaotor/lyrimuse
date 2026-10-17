@@ -39,6 +39,8 @@ func setUpSongShareTest(t *testing.T, entries map[string]enrichEntry, on bool, p
 	t.Cleanup(func() { lyricsPinsPath, enrichInflight = savedPins, savedInflight })
 	lyricsPinsPath = path
 	enrichInflight = map[string]bool{}
+	// 别的测试留下的马上重建请求会让同步一轮在第一组之前就停(songShareRebuildPending)。
+	drainSongEntityRebuild()
 	return dir
 }
 

@@ -184,13 +184,16 @@ type listenLogFold struct {
 	submitted map[int64]bool // 有 "s" 回执,或记录时就镜像过(M=1)
 	// 还隔离着的 → 那一行隔离的写盘时刻。"q" 记上,之后的 "r"(核对过 Last.fm 上确实没有)解除。
 	quarantined map[int64]int64
+	// 还隔离着的 → 隔离那一行记的账号("q" 行的 U;老版本写的行没有,为空)。
+	quarantinedBy map[int64]string
 }
 
 func foldListenLog(lines []listenLogLine) listenLogFold {
 	f := listenLogFold{
-		listens:     make(map[int64]listenLogLine, len(lines)),
-		submitted:   make(map[int64]bool, len(lines)),
-		quarantined: map[int64]int64{},
+		listens:       make(map[int64]listenLogLine, len(lines)),
+		submitted:     make(map[int64]bool, len(lines)),
+		quarantined:   map[int64]int64{},
+		quarantinedBy: map[int64]string{},
 	}
 	for _, l := range lines {
 		if l.UTS <= 0 {
@@ -209,8 +212,10 @@ func foldListenLog(lines []listenLogLine) listenLogFold {
 			f.submitted[l.UTS] = true
 		case "q":
 			f.quarantined[l.UTS] = l.AT
+			f.quarantinedBy[l.UTS] = l.U
 		case "r":
 			delete(f.quarantined, l.UTS)
+			delete(f.quarantinedBy, l.UTS)
 		}
 	}
 	return f
@@ -433,15 +438,17 @@ func truncateForLog(b []byte) string {
 //
 // 所以选后者。补交不交这些条目;常驻进程的重发循环等隔离够久后按时间戳去 user.getRecentTracks 核对,那边已经有就
 // 补记回执,确认没有才解除、排进重发队列(reconcileQuarantined)。
-func markQuarantined(uts int64) {
-	_ = markQuarantinedChecked(uts)
+//
+// user 是发出这次提交的 Last.fm 账号,记在隔离行上:核对只拿同一个账号去查、去重交,换过账号就一直隔离着。
+func markQuarantined(uts int64, user string) {
+	_ = markQuarantinedChecked(uts, user)
 }
 
 // markQuarantinedChecked 同 markQuarantined,交回写盘错误。隔离行写不进去,这一条在收听日志里就还是「待补」,
 // 下次补提交会把一条可能已经落库的收听再交一遍 —— 补提交据此停手,同 markBackfilledChecked。
-func markQuarantinedChecked(uts int64) error {
+func markQuarantinedChecked(uts int64, user string) error {
 	return appendListenLogLine(listenLogLine{
-		T: "q", V: listenLogSchemaVersion, UTS: uts, AT: time.Now().Unix(),
+		T: "q", V: listenLogSchemaVersion, UTS: uts, AT: time.Now().Unix(), U: user,
 	})
 }
 
@@ -546,7 +553,7 @@ func runBackfill(ctx context.Context, s *lastfmScrobbler, dryRun bool) backfillO
 			// 状态未知(网络错误/超时/服务端说自己暂时不可用/回执畸形)→ 可能已落库,
 			// 重发是最大的自造重复源,整批进隔离。
 			for _, it := range batch {
-				markQuarantined(it.UTS)
+				markQuarantined(it.UTS, s.user)
 				out.Quarantined++
 			}
 			out.AbortedReason = err.Error()
@@ -571,7 +578,7 @@ func runBackfill(ctx context.Context, s *lastfmScrobbler, dryRun bool) backfillO
 				log.Printf("backfill: ignored by server: %s - %s (%s)", it.AR, it.TI, res.ignored[it.UTS])
 			default:
 				// 请求成功了,但这条的回执没回来 —— join 不上就当状态未知。
-				if err := markQuarantinedChecked(it.UTS); err != nil {
+				if err := markQuarantinedChecked(it.UTS, s.user); err != nil {
 					out.AbortedReason = "listen log write failed: " + err.Error()
 					warnf("backfill: aborted, quarantine mark could not be written: %v", err)
 					return out

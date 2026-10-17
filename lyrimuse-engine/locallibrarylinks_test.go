@@ -211,3 +211,45 @@ func TestRecheckLocalLibraryLinksCountsMissingLibrariesAsRead(t *testing.T) {
 		t.Error("没装的那家算读过,应记水位")
 	}
 }
+
+// 清掉的网易云播放器封面正在当封面用(cover_source=player):封面一族一起清、补全计数归零,同专辑借了它的也清;定下的、
+// 封面是别的来源的、自己播放器封面里就有这张的不动。
+func TestRecheckLocalLibraryLinksClearsStalePlayerCoverInUse(t *testing.T) {
+	withTempMigrationState(t)
+	setupLocalLibraryLinkLibraries(t)
+	const (
+		pic      = "https://p4.music.126.net/a/1.jpg"
+		root     = "林俊杰|背对背拥抱|100天"
+		borrower = "林俊杰|江南|100天"
+		ownCopy  = "林俊杰|一千年以后|100天"
+		settled  = "林俊杰|背对背拥抱|100天 (Live)"
+		other    = "林俊杰|背对背拥抱|100天 (Remix)"
+	)
+	stalePlayer := func(source, settledURL string) enrichEntry {
+		return enrichEntry{DurationSecs: 234.919, CoverURL: pic, CoverSource: source, CoverSettled: settledURL,
+			PlayerCovers: map[string]string{neteaseMusicBundleID: pic}, PeripheralRetryCount: peripheralBackfillMaxAttempts}
+	}
+	withEnrichCache(t, map[string]enrichEntry{
+		root:     stalePlayer("player", ""),
+		borrower: {CoverURL: pic, CoverSource: "player", PeripheralRetryCount: peripheralBackfillMaxAttempts},
+		ownCopy:  {CoverURL: pic, CoverSource: "player", PlayerCovers: map[string]string{"com.apple.Music": pic}},
+		settled:  stalePlayer("player", pic),
+		other:    stalePlayer("netease", ""),
+	})
+	recheckLocalLibraryLinks(context.Background(), migrationScopeOf(migrationLocalLibraryLinks, migrationLocalLibraryLinksVersion))
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	for _, k := range []string{root, borrower} {
+		if e := enrichCache[k]; e.CoverURL != "" || e.CoverSource != "" || e.PeripheralRetryCount != 0 {
+			t.Errorf("%s: 在用的错版播放器封面一起清、补全计数归零: %+v", k, e)
+		}
+	}
+	if e := enrichCache[root]; e.PlayerCovers != nil {
+		t.Errorf("播放器封面照清: %+v", e)
+	}
+	for _, k := range []string{ownCopy, settled, other} {
+		if e := enrichCache[k]; e.CoverURL != pic {
+			t.Errorf("%s: 封面不动: %+v", k, e)
+		}
+	}
+}

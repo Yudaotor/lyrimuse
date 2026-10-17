@@ -520,7 +520,7 @@ func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp in
 		}
 		return err
 	}, func(err error) {
-		recordFailedMirror(err, rawArtist, title, album, timestamp, durationSecs)
+		recordFailedMirror(err, lfm.user, rawArtist, title, album, timestamp, durationSecs)
 		enqueueLastfmRetryIfSafe(err, lfmRetryItem{User: lfm.user, Timestamp: timestamp, Artist: artist, Title: title, Album: album,
 			Duration: durationSecs, NotAudio: notAudio})
 	})
@@ -554,7 +554,9 @@ func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp in
 // 留痕待补的情形,一律 return 等于把这个函数要修的洞换个门又开一个 —— 一次限流就让这
 // 首歌在 Last.fm、listens.jsonl 两边同时没有。分档判据用 mayHaveStored(),口径跟
 // runBackfill 头注释里已经定过的一致,不另立一套。
-func recordFailedMirror(err error, rawArtist, title, album string, timestamp int64, durationSecs float64) {
+//
+// user 是这次提交用的 Last.fm 账号,记在隔离行上(markQuarantined)。
+func recordFailedMirror(err error, user, rawArtist, title, album string, timestamp int64, durationSecs float64) {
 	var ignored *lastfmIgnoredError
 	if errors.As(err, &ignored) {
 		return // 服务端看过内容并拒收,补提交没有意义
@@ -565,12 +567,12 @@ func recordFailedMirror(err error, rawArtist, title, album string, timestamp int
 	var apiErr *lastfmAPIError
 	if errors.As(err, &apiErr) {
 		if apiErr.mayHaveStored() {
-			markQuarantined(timestamp)
+			markQuarantined(timestamp, user)
 		}
 		return // 其余应用层错误:服务端明确表过态、确定没落库,回填可以放心补
 	}
 	if !provablyNeverSent(err) {
-		markQuarantined(timestamp)
+		markQuarantined(timestamp, user)
 	}
 }
 
@@ -594,7 +596,7 @@ func (p *poller) mirrorScrobbleSync(ctx context.Context, artist, title, album st
 		// 退出兜底的时限在轮到这一条之前就用完了(前面几条同步提交、LB 提交慢):请求根本不会发出去,
 		// 按「确定没发」留痕、排进重发队列,别让下面那次注定失败的调用把它当成「不确定」隔离掉。
 		notSent := errors.Join(errLastfmNotSent, ctx.Err())
-		recordFailedMirror(notSent, rawArtist, title, album, timestamp, durationSecs)
+		recordFailedMirror(notSent, p.lfm.user, rawArtist, title, album, timestamp, durationSecs)
 		enqueueLastfmRetryIfSafe(notSent, lfmRetryItem{User: p.lfm.user, Timestamp: timestamp, Artist: artist, Title: title, Album: album,
 			Duration: durationSecs, NotAudio: notAudio})
 		return
@@ -603,7 +605,7 @@ func (p *poller) mirrorScrobbleSync(ctx context.Context, artist, title, album st
 		// 同 mirrorAsync 的入口:不发请求,但这一条确定没写进去,该留痕 —— 退出路径尤其
 		// 不能漏,进程正要结束,没有"下一拍"能补。
 		deadErr := &lastfmAPIError{Code: 9, Message: "mirror disabled (credentials judged dead)", Method: "track.scrobble"}
-		recordFailedMirror(deadErr, rawArtist, title, album, timestamp, durationSecs)
+		recordFailedMirror(deadErr, p.lfm.user, rawArtist, title, album, timestamp, durationSecs)
 		enqueueLastfmRetryIfSafe(deadErr, lfmRetryItem{User: p.lfm.user, Timestamp: timestamp, Artist: artist, Title: title, Album: album,
 			Duration: durationSecs, NotAudio: notAudio})
 		return
@@ -612,7 +614,7 @@ func (p *poller) mirrorScrobbleSync(ctx context.Context, artist, title, album st
 		warnf("lastfm mirror scrobble (final flush) failed: %v", err)
 		// 退出路径同样要留痕 —— 而且这里比活路径更需要:进程正在退出,没有"下一拍"
 		// 可言。这条是同步调用,本来就在主 goroutine 上,不涉及上面那条并发约束。
-		recordFailedMirror(err, rawArtist, title, album, timestamp, durationSecs)
+		recordFailedMirror(err, p.lfm.user, rawArtist, title, album, timestamp, durationSecs)
 		enqueueLastfmRetryIfSafe(err, lfmRetryItem{User: p.lfm.user, Timestamp: timestamp, Artist: artist, Title: title, Album: album,
 			Duration: durationSecs, NotAudio: notAudio})
 	}
@@ -670,7 +672,7 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 		key += "|c"
 	}
 	reason, ok := p.relayShouldPush(now, key, payload, reanchored)
-	if !ok || p.relayInflight {
+	if !ok {
 		return
 	}
 	// 推送放后台:中继一次往返中位约 0.9 秒、偶尔 6 秒超时,同步做会让主循环在换歌那一刻停住
@@ -766,6 +768,11 @@ func (p *poller) relayShouldPush(now time.Time, key string, payload map[string]a
 	if !p.relayFailAt.IsZero() && now.Sub(p.relayFailAt) < p.relayBackoff {
 		return "", false
 	}
+	if p.relayInflight {
+		return "", false
+	}
+	// 这一拍真要推了:等过的那条作废。同一首下次再从暂停到在放、或再等封面,重新从头等。
+	p.relayDeferKey, p.relayDeferSince = "", time.Time{}
 	return reason, true
 }
 
@@ -1227,7 +1234,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		// 优先读播放器自己的队列,读不到才退回"同一张专辑里的其它曲目"——两层的理由见
 		// upcoming.go 头注。
 		// 广告不预取:它的「专辑」不是专辑、队列里也找不到它,读一遍队列只会白等重试再退回同专辑预取。
-		if features().AlbumPrefetch && (p.sess == nil || !p.sess.isAd) && !p.sess.isSpoken && !waiting &&
+		if features().AlbumPrefetch && !p.sess.isAd && !p.sess.isSpoken && !waiting &&
 			!isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
 			prefetchUpcoming(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration)
 		}

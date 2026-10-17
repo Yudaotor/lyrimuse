@@ -9,12 +9,17 @@ import (
 	"net/http"
 	neturl "net/url"
 	"sort"
+	"strings"
 	"time"
 )
 
 // 隔离条目的核对:常驻进程的重发循环每轮先跑一次(startLfmRetryLoop),按时间戳逐条去 Last.fm 查隔离够久的收听
 // (「发出去了但不知道结果」)。那边已经有 → 补记回执 "s";确认没有 → 排进重发队列、写 "r" 解除隔离,紧接着的那一轮
 // 重发把它交上去。补交命令不碰隔离条目,只补没连 Last.fm 时记下的收听。见 12 章决策 69。
+//
+// 只核对隔离行记的账号(listenLogLine.U)就是当前账号的:查的是当前账号的 user.getRecentTracks,重交也交到当前账号,
+// 换过账号的旧收听在新账号上当然「查不到」,放出来就成了往新账号里写一条删不掉的别人的收听。所以换过账号的、
+// 以及老版本写下的不记账号的隔离行一律不核对,一直隔离着,过了回溯窗口自然不再算 —— 少补几条,不往别的账号里写。
 
 // backfillReleaseAfter:隔离不到这么久的不查。刚落库的 scrobble 要过几分钟才出现在 user.getRecentTracks 里,
 // 查早了会把已经落库的当成没有、再交一遍。
@@ -23,10 +28,11 @@ const backfillReleaseAfter = 15 * time.Minute
 // backfillLookupPause:逐条查之间的间隔(Last.fm 条款不许持续每秒多次调用)。变量只为单测能调成 0。
 var backfillLookupPause = time.Second
 
-// quarantinedListen 是一条还隔离着的收听;quarantinedAt 是隔离那一行的写盘时刻。
+// quarantinedListen 是一条还隔离着的收听;quarantinedAt 是隔离那一行的写盘时刻,account 是那一行记的账号(老行为空)。
 type quarantinedListen struct {
 	line          listenLogLine
 	quarantinedAt int64
+	account       string
 }
 
 // quarantinedBackfillListens:还隔离着、没有回执、在回溯窗口内、按当前开关仍算一次收听的,按 uts 升序。
@@ -39,7 +45,7 @@ func quarantinedBackfillListens(now time.Time) []quarantinedListen {
 		if !ok || f.submitted[uts] || uts < cutoff || tooShortToScrobble(l.DUR) {
 			continue
 		}
-		out = append(out, quarantinedListen{line: l, quarantinedAt: at})
+		out = append(out, quarantinedListen{line: l, quarantinedAt: at, account: f.quarantinedBy[uts]})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].line.UTS < out[j].line.UTS })
 	return out
@@ -60,16 +66,21 @@ func markReleasedChecked(uts int64) error {
 // 同一个 goroutine 里、排在这之后跑,看到的已经是写过 "r" 的日志。
 func reconcileQuarantined(ctx context.Context, s *lastfmScrobbler, now time.Time) (recovered, released int) {
 	var due []quarantinedListen
+	otherAccount := 0
 	for _, q := range quarantinedBackfillListens(now) {
-		if now.Unix()-q.quarantinedAt >= int64(backfillReleaseAfter/time.Second) {
-			due = append(due, q)
+		if now.Unix()-q.quarantinedAt < int64(backfillReleaseAfter/time.Second) {
+			continue
 		}
+		if s.user == "" || !strings.EqualFold(q.account, s.user) {
+			otherAccount++
+			continue
+		}
+		due = append(due, q)
+	}
+	if otherAccount > 0 {
+		log.Printf("lastfm retry: %d quarantined listen(s) left unchecked: not quarantined under the current Last.fm account", otherAccount)
 	}
 	if len(due) == 0 {
-		return 0, 0
-	}
-	if s.user == "" {
-		log.Printf("lastfm retry: %d quarantined listen(s) left unchecked: no Last.fm username", len(due))
 		return 0, 0
 	}
 	log.Printf("lastfm retry: checking %d quarantined listen(s) against Last.fm", len(due))

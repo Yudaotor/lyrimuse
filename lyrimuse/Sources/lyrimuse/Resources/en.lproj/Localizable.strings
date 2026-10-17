@@ -2156,6 +2156,7 @@
 "这首歌曲时长 %@" = "This song is %@";
 "这首歌曲正在搜索，或「自动匹配缺失歌词」/「重新匹配整个歌词库」正在进行，请稍后重试" = "This song is being searched right now, or “Auto-Match Missing Lyrics” / “Re-Match Whole Library” is running — try again later";
 "这首歌曲现在使用的歌词，从本机缓存读取，未参与本轮评分。搜索结果中出现同一份时换成那一条" = "The lyrics this song uses now, read from the local cache and not scored in this search. Replaced by the same lyrics once a search result returns them";
+"这首歌曲的歌词在编辑期间已更新，本次修改未保存；修改内容仍保留在编辑框中，放弃修改后重新编辑将打开最新版本" = "This song's lyrics were updated while you were editing, so your changes weren't saved. They're still in the editor; discard them and edit again to open the latest version.";
 "这首歌曲的歌词经过手动修改或选定，更换后将被覆盖。" = "You edited or picked these lyrics by hand; new ones would replace them.";
 "这首歌曲的语言未在设置的「标注读音的语言」中开启" = "This song’s language is turned off in Settings › Romanization Languages";
 "这首歌曲调整过歌词时间轴（%@），更换歌词后该校准可能失效。" = "You've adjusted this song's lyrics timing (%@); with new lyrics that adjustment may no longer fit.";

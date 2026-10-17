@@ -185,7 +185,8 @@ type lfmRetryHooks struct {
 	logged func() (map[int64]bool, bool)
 }
 
-func defaultLfmRetryHooks() lfmRetryHooks {
+// user 是这一轮重发用的账号,隔离时记在隔离行上(markQuarantined)。
+func defaultLfmRetryHooks(user string) lfmRetryHooks {
 	return lfmRetryHooks{
 		handled: func() map[int64]bool {
 			f := foldListenLog(readListenLog())
@@ -199,7 +200,7 @@ func defaultLfmRetryHooks() lfmRetryHooks {
 			return out
 		},
 		submitted:  markBackfilledChecked,
-		quarantine: markQuarantined,
+		quarantine: func(ts int64) { markQuarantined(ts, user) },
 		logged: func() (map[int64]bool, bool) {
 			listenLogMu.Lock()
 			inUse := listenLogPath != ""
@@ -334,7 +335,7 @@ func startLfmRetryLoop(ctx context.Context) {
 				err := s.scrobble(withCatalogDurationUnknown(rctx, it.NotAudio), it.Artist, it.Title, it.Album, it.Timestamp, it.Duration)
 				disableLastfmOnFatal(s, err, time.Now())
 				return err
-			}, defaultLfmRetryHooks()) > 0 {
+			}, defaultLfmRetryHooks(s.user)) > 0 {
 				requestLastfmFeedRefresh(5 * time.Second)
 			}
 		}

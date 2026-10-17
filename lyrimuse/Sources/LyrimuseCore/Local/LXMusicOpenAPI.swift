@@ -66,6 +66,8 @@ public final class LXMusicOpenAPI: NSObject, URLSessionDataDelegate, @unchecked 
     public static let resyncSecs: TimeInterval = 0.1
     /// 订阅断了、或者连不上时,隔这么久再试。
     public static let retrySecs: TimeInterval = 3
+    /// 推送流里一行最多攒这么多字节,还没等到换行就当流坏了、丢掉重来(订阅的字段都很短,见 `subscribedFields`)。
+    public static let maxLineBytes = 1 << 20
     /// 订阅时要的字段。
     public static let subscribedFields = "status,name,singer,albumName,duration,picUrl,progress,playbackRate,collect,volume,lyricLineText"
 
@@ -507,21 +509,31 @@ public final class LXMusicOpenAPI: NSObject, URLSessionDataDelegate, @unchecked 
                 if state.collect != before.collect || state.volume != before.volume { changes.insert(.controls) }
             }
         }
+        if buffer.count > Self.maxLineBytes {
+            logger.notice("lx open api: \(self.buffer.count) bytes without a line break, dropping them")
+            buffer = Data()
+            pendingEvent = nil
+        }
         let handler = onChange
         lock.unlock()
         for change in changes { handler?(change) }
     }
 
+    /// 连上过的订阅断了才算一次播放状态变化(推来的状态整个作废);洛雪没开、端口连不上时每 `retrySecs` 失败一次,
+    /// 什么都没变过,不发。
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         lock.lock()
         let mine = task == self.task
+        let wasConnected = mine && connected
         if mine {
-            logger.notice("lx open api: subscription ended (\(error?.localizedDescription ?? "closed", privacy: .public))")
+            if wasConnected {
+                logger.notice("lx open api: subscription ended (\(error?.localizedDescription ?? "closed", privacy: .public))")
+            }
             resetLocked()
         }
         let handler = onChange
         lock.unlock()
-        if mine { handler?(.playback) }
+        if wasConnected { handler?(.playback) }
     }
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -80,14 +81,16 @@ func TestMigrateListenDurations(t *testing.T) {
 		"D|Wind|Four": {},
 		"E|Rain|Five": {},
 	})
-	migrateListenDurations([]listenLogLine{
-		{T: "l", AR: "A", TI: "Song", AL: "One", DUR: 200},
-		{T: "l", AR: "A", TI: "Song", AL: "One", DUR: 201.5},
-		{T: "l", AR: "B", TI: "Tune", AL: "Two", DUR: 200},
-		{T: "l", AR: "B", TI: "Tune", AL: "Two", DUR: 260},
-		{T: "l", AR: "C", TI: "Air", AL: "Three", DUR: 300},
-		{T: "s", AR: "D", TI: "Wind", AL: "Four", DUR: 150},
-		{T: "l", AR: "E", TI: "Rain", AL: "Five", DUR: 0},
+	migrateListenDurations(func() []listenLogLine {
+		return []listenLogLine{
+			{T: "l", AR: "A", TI: "Song", AL: "One", DUR: 200},
+			{T: "l", AR: "A", TI: "Song", AL: "One", DUR: 201.5},
+			{T: "l", AR: "B", TI: "Tune", AL: "Two", DUR: 200},
+			{T: "l", AR: "B", TI: "Tune", AL: "Two", DUR: 260},
+			{T: "l", AR: "C", TI: "Air", AL: "Three", DUR: 300},
+			{T: "s", AR: "D", TI: "Wind", AL: "Four", DUR: 150},
+			{T: "l", AR: "E", TI: "Rain", AL: "Five", DUR: 0},
+		}
 	})
 	enrichMu.Lock()
 	got := map[string]float64{}
@@ -406,4 +409,16 @@ func TestReportedNameWiring(t *testing.T) {
 	if got := mergePeripheralInto(winner, loser); got.Reported[qqMusicBundleID].Title != "偷笑 (Live)" {
 		t.Errorf("胜者有的不动: %v", got.Reported)
 	}
+}
+
+// 水位到了整道跳过:收听日志都不读。
+func TestMigrateListenDurationsSkipsReadingWhenDone(t *testing.T) {
+	saved, savedPath, savedEpoch := migrationState, migrationStatePath, migrationEpoch
+	t.Cleanup(func() { migrationState, migrationStatePath, migrationEpoch = saved, savedPath, savedEpoch })
+	loadMigrationState(filepath.Join(t.TempDir(), "migrations.json"))
+	markMigrationDone(migrationListenDurations, migrationListenDurationsVersion)
+	migrateListenDurations(func() []listenLogLine {
+		t.Fatal("水位到了不该读收听日志")
+		return nil
+	})
 }

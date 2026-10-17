@@ -81,7 +81,13 @@ enum ICloudConfigImportPrompt {
                 continuation()
                 return
             }
-            await ConfigPortability.importData(data)
+            // 认不出、解不开:什么都没写,说一声、不重启,照常往下走引导(同设置页导入)。歌词和备份目录也不动,
+            // 配置都没写进去,单独铺歌词 / 改备份目录只会留下半吊子状态。
+            guard await ConfigPortability.importData(data) else {
+                showNotice(L10n.t("导入失败：该文件不是 Lyrimuse 的设置备份，或已损坏。当前设置未更改"))
+                continuation()
+                return
+            }
             // 必须排在 importData 之后:歌词落点是 features.lyricsDir,而那个文件是
             // importData 刚写的(见 LyricsBackupStore.restore 的注释)。
             if let lyricsData {
@@ -90,7 +96,22 @@ enum ICloudConfigImportPrompt {
             // 探测范围比写入范围大 —— 这份很可能来自 Dropbox 之类而不是 iCloud。
             // 不对齐的话,用户之后点"更新备份"会写去 iCloud,备份就分裂成两半了。
             ICloudConfigStore.adoptFolder(snapshot.folderURL)
+            // 有一份没写成(盘满、没有写权限):先说清是哪部分再重启,写成的那几份要重启才生效。
+            let failed = ConfigPortability.lastImportFailures
+            if !failed.isEmpty {
+                showNotice(String(format: L10n.t("部分设置未能写入（%@），其余已导入。可再次导入，或检查配置文件夹的写入权限"),
+                                  failed.joined(separator: ", ")))
+            }
             ConfigPortability.restartApp()
         }
+    }
+
+    @MainActor
+    private static func showNotice(_ text: String) {
+        let alert = NSAlert()
+        alert.messageText = text
+        alert.addButton(withTitle: L10n.t("好"))
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 }

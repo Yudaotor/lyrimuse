@@ -32,17 +32,35 @@ import (
 //     (以及 `&#160;` 等一切解成 U+00A0 的)换成**普通空格**而不是 NBSP——它在源里就是编辑器塞的
 //     一个空格,留 NBSP 只会让换行 / 跑马灯 / 指纹归一化多一种空白要认。
 //
-// 只解**一层**:`&amp;apos;` 解成 `&apos;` 就停(正则匹配完 `&amp;` 之后从它后面继续扫,不回头)。
-// 幂等性靠调用方保证——每份文本只在一个门口解一次,见 decodeLyricSourceEntities / migrateLyricEntities
-// (后者带水位闸,只跑一遍;lyrics/ 文件夹导入改写了哪几条,就在那几条上补扫一遍,那是新进来的外来数据)。
+// **解到不再变为止**:`&amp;apos;` 先解成 `&apos;`、再解成 `'`。这样同一段文本解几遍结果都一样(幂等),
+// 不靠调用方保证只解一次:恢复备份、切换歌词目录会作废迁移水位、让 migrateLyricEntities 全库重跑,而从 lyrics/
+// 文件导回来的正文分不出解没解过(有的导出时已经解过,更老的没解过),只解一层的话每重跑一次就多解一层。
+// 代价:正文里本来就写着实体文字的(歌词里写 `&lt;3`)也会被解成字符,歌词里几乎碰不到。源头多重转义的
+// (`&amp;apos;`)解到底正是想要的 `'`。
 var lyricEntityRe = regexp.MustCompile(`&(?:#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});`)
 
 // decodeLyricEntities 把一段歌词文本里的字符实体还原成字符。没有 `&` 的文本零分配直接返回
 // (全库 99.7% 的歌词走这条早退)。
 func decodeLyricEntities(s string) string {
-	if !strings.Contains(s, "&") {
-		return s
+	// 每一轮至少把一个实体换成更短的字符,轮数有上限只是保险。
+	for range lyricEntityMaxRounds {
+		if !strings.Contains(s, "&") {
+			return s
+		}
+		next := decodeLyricEntitiesOnce(s)
+		if next == s {
+			return s
+		}
+		s = next
 	}
+	return s
+}
+
+// lyricEntityMaxRounds:decodeLyricEntities 最多解几轮。真实数据里最多见过两层。
+const lyricEntityMaxRounds = 8
+
+// decodeLyricEntitiesOnce:把每个实体解一层(正则匹配完 `&amp;` 之后从它后面继续扫,不回头)。
+func decodeLyricEntitiesOnce(s string) string {
 	return lyricEntityRe.ReplaceAllStringFunc(s, func(m string) string {
 		u := html.UnescapeString(m)
 		if u == m {
@@ -98,7 +116,7 @@ func decodeLyricSourceResultEntities(r lyricSourceResult) lyricSourceResult {
 // decodeLyricSourceEntities 是 rankLyricSourceResults 的第一步:把这一轮各源原始应答里的歌词
 // 文本全部解一遍,返回**新** map、不改调用方那份。两个理由:
 //   - fetchScoredLyricCandidatesStreaming 每来一个源就拿**同一份** raw 全量重跑一次 rank,原地
-//     改的话同一段文本会被解好几遍(`&amp;apos;` 第二遍就变成 `'`,不再是"只解一层");
+//     改的话每一轮都在改调用方手里那份;
 //   - 回归金标集(lyricSourceResultTap → testdata/lyricsgolden)固化的是各源**原始**应答,回放
 //     时同样走 rank、在这里解——跟生产同一条路,而不是把解过的文本当原始应答存进样本。
 //
@@ -120,7 +138,8 @@ func decodeLyricSourceEntities(raw map[string]lyricSourceResult) map[string]lyri
 // 调用时机(main.go):importLyricsFromFiles 之后(lyrics/ 文件夹赢完,改的才是权威内容)、
 // exportLyricsFiles 之前(修完由 export 把干净的正文写回导出文件);也必须在
 // migrateManualPickMarks 之前(那一步按最终正文算指纹)。形态照抄 migrateYRCWhitespaceTokens。
-// 带水位闸,只跑一遍(见 migrationLyricEntities):「幂等」对多层转义不成立,每跑一次就再解一层。
+// 带水位闸(见 migrationLyricEntities):解码是幂等的,水位只是省掉每次启动全库扫一遍;水位被作废后全库重跑,
+// 解过的正文不会再变。
 //
 // 不跳过 manual_lyrics:跟 migrateYRCWhitespaceTokens 同一口径——这是无损的格式规范化(词一个
 // 不变,只是把编码还原),不是自愈路径换内容;用户锁住的正是那份词,`they&apos;re` 显示成

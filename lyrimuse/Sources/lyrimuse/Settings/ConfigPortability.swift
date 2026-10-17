@@ -326,6 +326,10 @@ enum ConfigPortability {
             logger.error("importData: top-level JSON parse failed — not a valid export file")
             return false
         }
+        guard ImportPolicy.isConfigBundle(bundle) else {
+            logger.error("importData: no config / features / appSettings section — not a Lyrimuse export file")
+            return false
+        }
 
         // 见 exportFormatVersion 的注释:只记录、不拒绝。格式向后兼容,更高版本的包里多出来
         // 的字段这一版认不出、会被忽略,但已知字段照样能用 —— 直接拒掉反而让"新机器导给
@@ -343,7 +347,7 @@ enum ConfigPortability {
             logger.error("importData: createDirectory(\(configDir.path, privacy: .public)) failed — \(String(describing: error), privacy: .public)")
         }
 
-        if let configObj = bundle["config"] {
+        if let configObj = bundle["config"] as? [String: Any] {
             let sanitized = sanitizeImportedConfig(configObj)
             if let configData = try? JSONSerialization.data(withJSONObject: sanitized, options: [.prettyPrinted]) {
                 do {
@@ -361,9 +365,9 @@ enum ConfigPortability {
                 logger.error("importData: re-serializing 'config' from the import bundle failed")
             }
         } else {
-            logger.notice("importData: import bundle has no 'config' section")
+            logger.notice("importData: import bundle has no usable 'config' section")
         }
-        if let importedFeatures = bundle["features"] {
+        if let importedFeatures = bundle["features"] as? [String: Any] {
             // 系统语言换成本机的再写盘:引擎看到文件变了就热重读,读到别的机器的语言会按它清机翻。
             let featuresObj = SystemLanguage.localizingForImport(importedFeatures, local: SystemLanguage.current())
             if let featuresData = try? JSONSerialization.data(withJSONObject: featuresObj, options: [.prettyPrinted]) {
@@ -380,7 +384,7 @@ enum ConfigPortability {
                 logger.error("importData: re-serializing 'features' from the import bundle failed")
             }
         } else {
-            logger.notice("importData: import bundle has no 'features' section")
+            logger.notice("importData: import bundle has no usable 'features' section")
         }
         if let appSettings = bundle["appSettings"] as? [String: Any] {
             let applied = applyAppSettings(appSettings)

@@ -307,8 +307,8 @@ public final class EnrichCacheStore: ObservableObject {
     private static let cacheURL = LyrimusePaths.configFile("lyrimuse-enrich-cache.json")
     // 读 FeatureSettingsStore 的计算属性,而不是编译期定死的 static let——用户可在
     // "歌词"设置分类里自定义文件夹位置,这里必须跟引擎那边(main.go 读
-    // features.LyricsDir)认的是同一个位置,否则存/删歌词文件的目录跟引擎实际
-    // 读取的目录对不上。
+    // features.LyricsDir)认的是同一个位置,否则列歌词文件的修改时间、找导出的文件、
+    // 判断废纸篓在不在同一个卷上时看的都是别的目录。
     private static var lyricsDir: URL { FeatureSettingsStore.shared.effectiveLyricsDir }
 
     /// 歌词目录跟主目录(废纸篓所在)不在同一个卷上:引擎把歌词文件挪进废纸篓会失败、改成直接删
@@ -347,7 +347,8 @@ public final class EnrichCacheStore: ObservableObject {
         guard libraryDigest != digest else { return }
         libraryDigest = digest
         let url = Self.digestURL
-        Task.detached(priority: .utility) {
+        // 排在同一条串行队列上按调用顺序写:各起一个后台任务的话,先发起的可能后写完,盘上留下的是旧的那份。
+        Self.digestWriteQueue.async {
             if let digest, let data = try? JSONEncoder().encode(digest) {
                 FileIO.write(data, to: url)
             } else {
@@ -355,6 +356,8 @@ public final class EnrichCacheStore: ObservableObject {
             }
         }
     }
+
+    private static let digestWriteQueue = DispatchQueue(label: "lyrimuse.library-digest-write", qos: .utility)
 
     // 缓存文件设计上永久不清理("解析一次永久保留"),攒到几百条、几 MB 后
     // JSONSerialization 解析整份文件要 30ms 以上——若直接在 MainActor 上同步做,开窗/点
@@ -368,6 +371,8 @@ public final class EnrichCacheStore: ObservableObject {
     /// 门控里看过的那一版单条快照 / 待落盘条目(`overlayChanged`),同一版只看一次。
     private var lastSeenSnapshotFingerprint: FileFingerprint?
     private var lastSeenPendingFingerprint: FileFingerprint?
+    /// 这份快照读进来时叠上去的待落盘条目、单条快照各是哪一版(见 reloadIfStale)。
+    private var loadedOverlayFingerprints: (pending: FileFingerprint?, playing: FileFingerprint?) = (nil, nil)
 
     struct FileFingerprint: Equatable, Codable {
         var mtime: Date
@@ -380,8 +385,8 @@ public final class EnrichCacheStore: ObservableObject {
         return FileFingerprint(mtime: mtime, size: (attrs[.size] as? NSNumber)?.int64Value ?? 0)
     }
 
-    /// 在飞的那次 reload。两个窗口(设置页「歌词库统计」、歌词管理)各有一条 2 秒轮询,扫库跑着的时候
-    /// 它们会在同一拍上各调一次 reload —— 同一份大文件解析两遍,还互相抢内存带宽,并发的第二次实测要慢好几倍。
+    /// 在飞的那次 reload。设置页「歌词库」卡和歌词管理各自轮询、App 激活时也各调一次,扫库跑着的时候
+    /// 它们可能在同一拍上各调一次 reload —— 同一份大文件解析两遍,还互相抢内存带宽,并发的第二次实测要慢好几倍。
     private var inFlightReload: Task<Void, Never>?
 
     /// 合并判据必须看「**正在跑**」,不能看「上次跑完的时间戳」。按 `lastReloadFinishedAt` 那种写法
@@ -439,6 +444,8 @@ public final class EnrichCacheStore: ObservableObject {
             var raw: EnrichRawSnapshot?
             var bundle: SummariesBundle?
             var fingerprint: FileFingerprint?
+            var pendingFingerprint: FileFingerprint?
+            var playingFingerprint: FileFingerprint?
             var digest: LibraryDigest?
             var parseFailed = false
             // 基线埋点(临时,见 LyricsManagerBaseline)——分段耗时在 detached 闭包里量,
@@ -468,8 +475,10 @@ public final class EnrichCacheStore: ObservableObject {
             // 比整份新的待落盘条目、单条快照叠上去(见 EnrichPendingEntries / PlayingEntrySnapshot):整份最多攒 10 分钟才落盘。
             // 两份都新时先叠旧的那份,同一条以后写的为准。
             let cacheMTime = box.fingerprint?.mtime
-            let pendingMTime = Self.fileFingerprint(EnrichPendingEntries.url)?.mtime
-            let playingMTime = Self.fileFingerprint(PlayingEntrySnapshot.url)?.mtime
+            box.pendingFingerprint = Self.fileFingerprint(EnrichPendingEntries.url)
+            box.playingFingerprint = Self.fileFingerprint(PlayingEntrySnapshot.url)
+            let pendingMTime = box.pendingFingerprint?.mtime
+            let playingMTime = box.playingFingerprint?.mtime
             let pending = PlayingEntrySnapshot.supersedes(snapshotMTime: pendingMTime, cacheMTime: cacheMTime)
                 ? EnrichPendingEntries.read() : nil
             let playing = PlayingEntrySnapshot.supersedes(snapshotMTime: playingMTime, cacheMTime: cacheMTime)
@@ -495,6 +504,7 @@ public final class EnrichCacheStore: ObservableObject {
         if let snapshot = box.raw, let bundle = box.bundle {
             raw = snapshot
             lastLoadedFingerprint = box.fingerprint
+            loadedOverlayFingerprints = (box.pendingFingerprint, box.playingFingerprint)
             isReleased = false
             if loadError != nil { loadError = nil }
             applySummaries(bundle)
@@ -514,6 +524,23 @@ public final class EnrichCacheStore: ObservableObject {
             applySummaries(SummariesBundle(summaries: [], albumDisplayMap: [:], distinctArtists: [], distinctAlbums: []))
             setLibraryDigest(nil)
         }
+    }
+
+    /// 「保存修改」核对之前调:整份缓存、待落盘条目、单条快照里有一份跟这份快照读进来时不一样就整份重读,拿盘上此刻的
+    /// 内容去核对、去补没改的几格(LyricsEditConflict)。轮询那条 `reload(onlyIfChanged: true)` 不为单条快照里已在列表里的
+    /// 那首整份重读,编辑的又常是正在放的这首,靠它会拿着旧快照去比。
+    public func reloadIfStale() async {
+        let stale = isReleased
+            || Self.fileFingerprint(Self.cacheURL) != lastLoadedFingerprint
+            || Self.fileFingerprint(EnrichPendingEntries.url) != loadedOverlayFingerprints.pending
+            || Self.fileFingerprint(PlayingEntrySnapshot.url) != loadedOverlayFingerprints.playing
+        guard stale else { return }
+        await reload()
+    }
+
+    /// 保存前发现用户改过的那几格盘上也变了(LyricsEditConflict),没交给引擎:跟写入失败同一条红字,编辑缓冲原样留着。
+    public func reportEditConflict() {
+        editError = L10n.t("这首歌曲的歌词在编辑期间已更新，本次修改未保存；修改内容仍保留在编辑框中，放弃修改后重新编辑将打开最新版本")
     }
 
     /// 整份缓存没变时还要重读的两种情况:待落盘条目比整份新、又换了一版(预取、补空扫描刚改过,整份最多攒 10 分钟);
@@ -605,8 +632,7 @@ public final class EnrichCacheStore: ObservableObject {
         var songVersionCounts: [String: Int] = [:]
     }
 
-    /// 把一份构建结果发布出去。跟 buildSummaries 拆开:构建是纯函数(reload 时在后台跑,
-    /// 保存/删除时在主线程同步跑 —— 预计算归一化键之后单次只剩字典取值+元组排序,几 ms),
+    /// 把一份构建结果发布出去。跟 buildSummaries 拆开:构建是纯函数,在 reload 的后台任务里跑;
     /// 发布必须在 MainActor。
     private func applySummaries(_ bundle: SummariesBundle) {
         summaries = bundle.summaries
@@ -761,15 +787,23 @@ public final class EnrichCacheStore: ObservableObject {
             loadError = L10n.t("读取本地记录文件失败")
             return false
         }
-        // 主缓存里这一条也是精简的(新版引擎就这么写):正文只在那个读不到的小文件里,补不回来。
-        // 如实返回 false,别让调用方拿缺正文的条目当完整的用。
-        if let fromMain = obj[key], EnrichCacheSlim.isSlim(fromMain) {
-            logger.notice("hydrate: main cache entry is lean too, lyrics body unavailable")
-            if leanInMainCache.fingerprint != mainFingerprint { leanInMainCache = (mainFingerprint, []) }
-            leanInMainCache.keys.insert(key)
+        // 这一版主缓存里所有精简的条目一次记下(解的这段时间主缓存没被换掉才记):同一首歌的几条、别的几首正文小文件
+        // 也缺的,不用各自再解一遍整份。
+        if mainFingerprint != nil, Self.fileFingerprint(Self.cacheURL) == mainFingerprint {
+            leanInMainCache = (mainFingerprint, Set(obj.lazy.filter { EnrichCacheSlim.isSlim($0.value) }.map(\.key)))
+        }
+        // 主缓存里这一条也是精简的(新版引擎就这么写),或者主缓存里根本没有这一条(只在待落盘条目 / 单条快照里):
+        // 正文只在那个读不到的小文件里,补不回来。如实返回 false,别让调用方拿缺正文的条目当完整的用 ——
+        // 拿空正文去填编辑框再存回去,会把歌词、译文、罗马音一起清掉。
+        guard let fromMain = obj[key], !EnrichCacheSlim.isSlim(fromMain) else {
+            logger.notice("hydrate: main cache entry is lean too or missing, lyrics body unavailable")
+            if mainFingerprint != nil {
+                if leanInMainCache.fingerprint != mainFingerprint { leanInMainCache = (mainFingerprint, []) }
+                leanInMainCache.keys.insert(key)
+            }
             return false
         }
-        raw[key] = EnrichCacheSlim.restoreBodies(entry, from: obj[key])
+        raw[key] = EnrichCacheSlim.restoreBodies(entry, from: fromMain)
         return true
     }
 

@@ -426,10 +426,70 @@ const amazonBorrowedLyricsMinDurationDiffSecs = 3.0
 // (《爱爱爱》,213s)的词。歌词本身没有歌名字段,只能这样认。同一首歌的不同剪辑(Radio Edit 之类)歌名去括号后一样,不算。
 //
 // 两首都会被认成借来的:分不出正文原本是谁的,只撤同源加权,不丢候选,原主那首靠跨源共识照样能赢。
+//
+// 要整库扫一遍 Hammer Cache,结论按这首(ASIN、歌名、时长)+ 正文记下,Hammer Cache 和曲目目录两个库目录里的文件
+// (名字、大小、修改时间)都没变就不再扫(amazonBorrowedMemo):一首歌的首次解析、先上屏、升级重试、手动搜索都会问到同一首。
 func amazonLyricsBorrowedBy(asin string, meta amazonCatalogTrack, lrc string) string {
+	dir := amazonHammerCacheDir()
+	memoKey := strings.Join([]string{dir, asin, meta.Title, strconv.FormatFloat(meta.durationSecs(), 'f', -1, 64), lrc}, "\x00")
+	stamp := ldbDirStamp(dir)
+	if stamp != "" {
+		stamp += "\x00" + ldbDirStamp(amazonLocalStorageDir())
+	}
+	if stamp != "" {
+		amazonBorrowedMemoMu.Lock()
+		m, ok := amazonBorrowedMemo[memoKey]
+		amazonBorrowedMemoMu.Unlock()
+		if ok && m.stamp == stamp {
+			return m.other
+		}
+	}
+	other := amazonLyricsBorrowedByScan(dir, asin, meta, lrc)
+	if stamp != "" {
+		amazonBorrowedMemoMu.Lock()
+		if _, had := amazonBorrowedMemo[memoKey]; !had && len(amazonBorrowedMemo) >= amazonBorrowedMemoMax {
+			clear(amazonBorrowedMemo)
+		}
+		amazonBorrowedMemo[memoKey] = amazonBorrowedVerdict{stamp: stamp, other: other}
+		amazonBorrowedMemoMu.Unlock()
+	}
+	return other
+}
+
+// amazonBorrowedMemoMax:借词结论最多记几首。
+const amazonBorrowedMemoMax = 32
+
+type amazonBorrowedVerdict struct {
+	stamp, other string
+}
+
+var (
+	amazonBorrowedMemoMu sync.Mutex
+	amazonBorrowedMemo   = map[string]amazonBorrowedVerdict{}
+)
+
+// ldbDirStamp:LevelDB 目录里各文件的名字、大小、修改时间拼成的指纹,库有写入就会变;读不了目录为 ""。
+func ldbDirStamp(dir string) string {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, e := range ents {
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(&b, "%s|%d|%d\n", e.Name(), info.Size(), info.ModTime().UnixNano())
+	}
+	return b.String()
+}
+
+// amazonLyricsBorrowedByScan:amazonLyricsBorrowedBy 真去扫库的那一步。
+func amazonLyricsBorrowedByScan(dir, asin string, meta amazonCatalogTrack, lrc string) string {
 	prefix := asin + "-"
 	var others []string
-	for k, v := range ldbScan(amazonHammerCacheDir(), func([]byte) bool { return true }) {
+	for k, v := range ldbScan(dir, func([]byte) bool { return true }) {
 		other, _, found := strings.Cut(k, "-")
 		if v.deleted || !found || strings.HasPrefix(k, prefix) || slices.Contains(others, other) {
 			continue

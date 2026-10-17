@@ -152,12 +152,15 @@ func neteaseLinkMismatch(title, album string, durationSecs float64, isrcs, names
 }
 
 // clearWrongNeteaseLink 清掉配错的网易云链接、记下那个 id。封面也来自网易云的是同一次匹配给的:本地没报专辑、或者封面专辑
-// 不能当本地这张(candidateCoverAlbumFits)时一起清。外围补全计数归零:下次播到时空链接算缺,按现在的规则重新匹配。
-func clearWrongNeteaseLink(e enrichEntry, album string) enrichEntry {
+// 不能当本地这张(candidateCoverAlbumFits)时一起清。album 是歌词管理显示的专辑(entryListedAlbum)。专辑定下的(coverSettled)、
+// 同一张专辑别的曲目也在用的(albumShared,借来或统一过的)不是这次匹配给的,不清:清了下一遍后台补封面又借回来。外围补全计数
+// 归零:下次播到时空链接算缺,按现在的规则重新匹配。
+func clearWrongNeteaseLink(e enrichEntry, album string, albumShared bool) enrichEntry {
 	e.NeteaseRejected = neteaseSongIDFromURL(e.NeteaseURL)
 	e.NeteaseURL = ""
 	e.PeripheralRetryCount = 0
-	if e.CoverSource == "netease" && (strings.TrimSpace(album) == "" || !candidateCoverAlbumFits(e.CoverAlbum, album)) {
+	if e.CoverSource == "netease" && !coverSettled(e) && !albumShared &&
+		(strings.TrimSpace(album) == "" || !candidateCoverAlbumFits(e.CoverAlbum, album)) {
 		e = withoutCover(e)
 	}
 	return e
@@ -165,16 +168,25 @@ func clearWrongNeteaseLink(e enrichEntry, album string) enrichEntry {
 
 // staleRejectedNeteaseCover:判错过、现在没有网易云链接的条目还留着一张网易云封面,封面专辑又不能当本地这张。本地没报专辑时
 // candidateCoverAlbumFits 什么专辑都算对得上,这里也就不清:外围补全拿歌词判决里的候选封面兜底用的是同一个判据
-// (winnerCandidateCover),判据不一样就会清了又补。
+// (winnerCandidateCover),判据不一样就会清了又补。专辑定下的不算(同 clearWrongNeteaseLink)。
 func staleRejectedNeteaseCover(e enrichEntry, album string) bool {
-	return e.NeteaseURL == "" && e.NeteaseRejected != "" && e.CoverSource == "netease" && !candidateCoverAlbumFits(e.CoverAlbum, album)
+	return e.NeteaseURL == "" && e.NeteaseRejected != "" && e.CoverSource == "netease" && !coverSettled(e) &&
+		!candidateCoverAlbumFits(e.CoverAlbum, album)
 }
 
-// withoutCover:封面、主色、动态封面一起清。
+// withoutCover:封面、主色、动态封面、专辑定下的记录一起清。
 func withoutCover(e enrichEntry) enrichEntry {
-	e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor = "", "", "", ""
+	e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor, e.CoverSettled = "", "", "", "", ""
 	e.clearMotionVerdict()
 	return e
+}
+
+// neteaseAlbumCoverKey:同一张专辑(歌词管理显示的专辑繁简折叠后相同)的同一个封面地址。没专辑、没封面的给空串。
+func neteaseAlbumCoverKey(album, cover string) string {
+	if album == "" || cover == "" {
+		return ""
+	}
+	return toSimplified(album) + "\x00" + cover
 }
 
 // neteaseResultRejected:这一轮网易云给的结果是不是这一条判错过的那首(链接、封面都不收)。
@@ -183,21 +195,35 @@ func neteaseResultRejected(e, fresh enrichEntry) bool {
 }
 
 // recheckNeteaseLinks 拿补扫存下的网易云登记信息重核全部网易云链接,返回清掉了几条链接。判定在锁外;写回时链接还是当初核的
-// 那一个才改。判错过的条目留下的网易云封面(staleRejectedNeteaseCover)在取快照时顺手清掉,外围补全计数不动。
+// 那一个才改。判错过的条目留下的网易云封面(staleRejectedNeteaseCover)在取快照时顺手清掉,外围补全计数不动。封面按歌词管理显示的
+// 专辑判(entryListedAlbum,Kaset 放的歌写法键里没专辑);同专辑别的曲目也在用的那张不清(见 clearWrongNeteaseLink)。解析中、
+// 提前提交的条目这一轮不动。
 func recheckNeteaseLinks(registry map[string]neteaseCatalogName, apple map[string]appleCatalogNames) int {
 	enrichMu.Lock()
 	linked := map[string]enrichEntry{}
-	var staleCovers []string
+	stale := map[string]bool{}
 	for k, e := range enrichCache {
+		if enrichInflight[k] || enrichProvisional[k] {
+			continue
+		}
 		if e.NeteaseURL != "" {
 			linked[k] = e
 			continue
 		}
-		if _, _, album := splitEnrichKey(k); staleRejectedNeteaseCover(e, album) {
-			enrichCache[k] = withoutCover(e)
-			noteEnrichPendingLocked(k)
-			staleCovers = append(staleCovers, k)
+		if staleRejectedNeteaseCover(e, entryListedAlbum(k, e)) {
+			stale[k] = true
 		}
+	}
+	shared := neteaseAlbumCoverUsersLocked(stale)
+	var staleCovers []string
+	for k := range stale {
+		e := enrichCache[k]
+		if shared[neteaseAlbumCoverKey(entryListedAlbum(k, e), e.CoverURL)] {
+			continue
+		}
+		enrichCache[k] = withoutCover(e)
+		noteEnrichPendingLocked(k)
+		staleCovers = append(staleCovers, k)
 	}
 	if len(staleCovers) > 0 {
 		enrichDirty = true
@@ -212,7 +238,7 @@ func recheckNeteaseLinks(registry map[string]neteaseCatalogName, apple map[strin
 		id := neteaseSongIDFromURL(e.NeteaseURL)
 		owners[id] = append(owners[id], neteaseLinkOwner{key: k, title: enrichKeyDurationVariantRe.ReplaceAllString(title, ""), isrcs: e.ISRCs})
 	}
-	type wrongLink struct{ key, url, album string }
+	type wrongLink struct{ key, url string }
 	var wrong []wrongLink
 	checked := 0
 	for k, e := range linked {
@@ -242,17 +268,23 @@ func recheckNeteaseLinks(registry map[string]neteaseCatalogName, apple map[strin
 		}
 		if why := neteaseLinkMismatch(title, album, secs, e.ISRCs, names, rec, others); why != "" {
 			log.Printf("netease link recheck: %q links to %q by %s (%s), clearing it", k, rec.Name, strings.Join(rec.Artists, " / "), why)
-			wrong = append(wrong, wrongLink{k, e.NeteaseURL, album})
+			wrong = append(wrong, wrongLink{k, e.NeteaseURL})
 		}
 	}
 	var changed []string
 	enrichMu.Lock()
+	excluded := map[string]bool{}
+	for _, w := range wrong {
+		excluded[w.key] = true
+	}
+	shared = neteaseAlbumCoverUsersLocked(excluded)
 	for _, w := range wrong {
 		e, ok := enrichCache[w.key]
-		if !ok || e.NeteaseURL != w.url {
+		if !ok || e.NeteaseURL != w.url || enrichInflight[w.key] || enrichProvisional[w.key] {
 			continue
 		}
-		enrichCache[w.key] = clearWrongNeteaseLink(e, w.album)
+		album := entryListedAlbum(w.key, e)
+		enrichCache[w.key] = clearWrongNeteaseLink(e, album, shared[neteaseAlbumCoverKey(album, e.CoverURL)])
 		noteEnrichPendingLocked(w.key)
 		changed = append(changed, w.key)
 	}
@@ -265,4 +297,18 @@ func recheckNeteaseLinks(registry map[string]neteaseCatalogName, apple map[strin
 	}
 	log.Printf("netease link recheck: %d entries checked, %d links cleared, %d leftover covers cleared", checked, len(changed), len(staleCovers))
 	return len(changed)
+}
+
+// neteaseAlbumCoverUsersLocked:除了 excluded 里的,还有条目在用的「专辑 + 封面地址」(neteaseAlbumCoverKey)。调用方持有 enrichMu。
+func neteaseAlbumCoverUsersLocked(excluded map[string]bool) map[string]bool {
+	used := map[string]bool{}
+	for k, e := range enrichCache {
+		if excluded[k] {
+			continue
+		}
+		if key := neteaseAlbumCoverKey(entryListedAlbum(k, e), e.CoverURL); key != "" {
+			used[key] = true
+		}
+	}
+	return used
 }

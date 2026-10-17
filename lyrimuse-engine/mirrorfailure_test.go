@@ -96,7 +96,7 @@ func TestRecordFailedMirrorRouting(t *testing.T) {
 		uts := time.Now().Add(-time.Hour).Unix()
 		recordFailedMirror(
 			fmt.Errorf("post: %w", &net.DNSError{Err: "no such host"}),
-			"周杰倫", "七里香", "七里香", uts, 300)
+			"me", "周杰倫", "七里香", "七里香", uts, 300)
 
 		l, q := countByType(t)
 		if l != 1 || q != 0 {
@@ -122,7 +122,7 @@ func TestRecordFailedMirrorRouting(t *testing.T) {
 		uts := time.Now().Add(-time.Hour).Unix()
 		recordFailedMirror(
 			fmt.Errorf("post: %w", context.DeadlineExceeded),
-			"周杰倫", "七里香", "七里香", uts, 300)
+			"me", "周杰倫", "七里香", "七里香", uts, 300)
 
 		l, q := countByType(t)
 		if l != 1 || q != 1 {
@@ -144,7 +144,7 @@ func TestRecordFailedMirrorRouting(t *testing.T) {
 		// 换多少次也还是这首歌,重发必然同样被拒。
 		recordFailedMirror(
 			&lastfmIgnoredError{Method: "track.scrobble", Reason: "1 Artist was ignored"},
-			"群星", "这样吧", "烧的时尚", time.Now().Unix(), 200)
+			"me", "群星", "这样吧", "烧的时尚", time.Now().Unix(), 200)
 
 		if l, q := countByType(t); l != 0 || q != 0 {
 			t.Fatalf("内容被拒收不该留痕, got l=%d q=%d", l, q)
@@ -173,7 +173,7 @@ func TestRecordFailedMirrorRouting(t *testing.T) {
 
 			recordFailedMirror(
 				&lastfmAPIError{Code: c.code, Message: "x", Method: "track.scrobble"},
-				"周杰倫", "七里香", "七里香", time.Now().Add(-time.Hour).Unix(), 300)
+				"me", "周杰倫", "七里香", "七里香", time.Now().Add(-time.Hour).Unix(), 300)
 			l, q := countByType(t)
 			listenLogPath = saved
 

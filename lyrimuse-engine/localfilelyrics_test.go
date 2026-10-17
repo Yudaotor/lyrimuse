@@ -3,7 +3,9 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestLocalFileLyricsName(t *testing.T) {
@@ -97,5 +99,47 @@ func TestLocalFileLyricsWorthRecheck(t *testing.T) {
 	seen := enrichEntry{LyricsSource: "qq", LyricsSourcesSeen: []string{localFileLyricsSource}}
 	if localFileLyricsWorthRecheck(seen, reampBundleID, false, true, true) {
 		t.Error("已经带着这份比过的不重来")
+	}
+}
+
+// 文件标签里的歌词按路径记结论:修改时间和大小都没变就不再整块读标签,变了就重读。
+func TestLocalFileEmbeddedLyricsMemoByModTimeAndSize(t *testing.T) {
+	dir := t.TempDir()
+	audio := filepath.Join(dir, "Song.mp3")
+	tagWith := func(line string) []byte {
+		return append(id3Tag(3, id3Frame(3, "USLT", usltBody(3, []byte(line)))), 0xFF, 0xFB)
+	}
+	stamp := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	write := func(data []byte, mod time.Time) {
+		t.Helper()
+		if err := os.WriteFile(audio, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(audio, mod, mod); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(tagWith("[00:01.00]first line"), stamp)
+	if got, ok := localFileEmbeddedLyricsMemo(audio); !ok || !strings.Contains(got, "first line") {
+		t.Fatalf("应读出标签里的歌词:%q ok=%v", got, ok)
+	}
+	// 同样长、同样的修改时间:当没变过,交记下的结论(没去读文件)。
+	write(tagWith("[00:01.00]other line"), stamp)
+	if got, _ := localFileEmbeddedLyricsMemo(audio); !strings.Contains(got, "first line") {
+		t.Errorf("修改时间和大小没变应交记下的结论:%q", got)
+	}
+	write(tagWith("[00:01.00]other line"), stamp.Add(time.Second))
+	if got, _ := localFileEmbeddedLyricsMemo(audio); !strings.Contains(got, "other line") {
+		t.Errorf("修改时间变了应重读:%q", got)
+	}
+	write(tagWith("[00:01.00]longer other line"), stamp.Add(time.Second))
+	if got, _ := localFileEmbeddedLyricsMemo(audio); !strings.Contains(got, "longer other line") {
+		t.Errorf("大小变了应重读:%q", got)
+	}
+	if err := os.Remove(audio); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := localFileEmbeddedLyricsMemo(audio); ok {
+		t.Error("文件没了不该再交记下的结论")
 	}
 }

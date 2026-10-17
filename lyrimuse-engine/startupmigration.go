@@ -82,9 +82,8 @@ const (
 	// 改 neteaseCoverQuery 的写法就 +1。
 	migrationNeteaseCoverURLs        = "netease_cover_urls"
 	migrationNeteaseCoverURLsVersion = 1
-	// migrationLyricEntities:存量歌词正文的字符实体解一层(lyricentities.go)。新抓取的在 rank 那道门口解,
-	// 运行期不再产生;没有水位的话每次启动都再解一层,`&amp;amp;apos;` 两次启动就变成 `'`,正文每变一次
-	// App 按内容指纹存的单曲偏移就失效一次。
+	// migrationLyricEntities:存量歌词正文的字符实体解到底(lyricentities.go)。新抓取的在 rank 那道门口解,
+	// 运行期不再产生;解码是幂等的,水位只为省掉每次启动全库扫一遍。
 	migrationLyricEntities        = "lyric_entities"
 	migrationLyricEntitiesVersion = 1
 	// migrationLyricLineEndings:存量歌词的换行统一成 LF、去掉开头的 BOM(lyriclineendings.go)。新抓取的在 rank
@@ -198,16 +197,15 @@ func (s migrationScope) entries() map[string]enrichEntry {
 
 // markDone:放后台跑的迁移跑完时记水位,用它而不是直接调 markMigrationDone。定范围之后水位被作废过(运行中从备份
 // 恢复,见 enrichedit.go adoptRestoreEdit)就不记:恢复进来的条目不在这一轮扫过的范围里,记上了它们就再也不会被扫,
-// 不记的代价只是下次启动再跑一遍。
+// 不记的代价只是下次启动再跑一遍。核对和记水位在同一把锁里:中间放锁的话,恰好落在两步之间的作废会被这次写回。
 func (s migrationScope) markDone(name string, version int) {
 	migrationStateMu.Lock()
-	stale := s.epoch != migrationEpoch
-	migrationStateMu.Unlock()
-	if stale {
+	defer migrationStateMu.Unlock()
+	if s.epoch != migrationEpoch {
 		log.Printf("migration state: %s not marked done — the state was cleared while it ran, it runs again next startup", name)
 		return
 	}
-	markMigrationDone(name, version)
+	markMigrationDoneLocked(name, version)
 }
 
 // markMigrationDone 记下水位并立刻落盘 —— 落盘失败只记一行日志:代价是下次启动多跑一遍,
@@ -215,6 +213,11 @@ func (s migrationScope) markDone(name string, version int) {
 func markMigrationDone(name string, version int) {
 	migrationStateMu.Lock()
 	defer migrationStateMu.Unlock()
+	markMigrationDoneLocked(name, version)
+}
+
+// markMigrationDoneLocked:同 markMigrationDone,调用方持 migrationStateMu。
+func markMigrationDoneLocked(name string, version int) {
 	if migrationStatePath == "" {
 		return
 	}
@@ -270,12 +273,14 @@ func invalidateMigrationState(why string) {
 	saveMigrationStateLocked()
 }
 
+// saveMigrationStateLocked:整份写临时文件再改名(writeFileAtomic),写到一半被杀不会留下半份 —— 半份解不出来就是
+// 全部重跑,白白多扫一遍全库。
 func saveMigrationStateLocked() {
 	data, err := json.Marshal(migrationState)
 	if err != nil {
 		return
 	}
-	if err := os.WriteFile(migrationStatePath, data, 0o644); err != nil {
+	if err := writeFileAtomic(migrationStatePath, data); err != nil {
 		warnf("migration state: save failed (%v) — next startup will re-run the migrations", err)
 	}
 }

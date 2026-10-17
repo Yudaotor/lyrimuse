@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // QQ 音乐图床的尺寸档在路径里,`qqCoverAtEdge` 负责换那一段。这里钉住三件事:
 // ①专辑封面(T002)/歌手头像(T001)两种前缀都认;②不是 QQ 图床的一个字都不许改
@@ -95,5 +98,18 @@ func TestQQAlbumCoverURL(t *testing.T) {
 	}
 	if got := qqAlbumCoverURL(""); got != "" {
 		t.Errorf("空 mid 应该给空串,得到 %q", got)
+	}
+}
+
+// 外围补全给存量 QQ 封面提档时跳过专辑定下的:地址一换 cover_settled 就作废,后台补封面又换回同组那一份,来回翻。
+func TestPeripheralQQCoverUpgradeSkipsSettledCovers(t *testing.T) {
+	src := string(mustRead(t, "enrich.go"))
+	start := strings.Index(src, "func backfillPeripheralFields(")
+	if start < 0 {
+		t.Fatal("找不到 backfillPeripheralFields")
+	}
+	body := src[start:]
+	if !strings.Contains(body, "\tif !coverSettled(e) {\n\t\te.CoverURL = qqCoverAtEdge(e.CoverURL, qqCoverMaxEdge)\n\t}\n") {
+		t.Error("QQ 封面提档要跳过专辑定下的封面")
 	}
 }

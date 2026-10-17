@@ -57,4 +57,10 @@ public enum ImportPolicy {
         config["state_relay_token"] = ""
         return (config, true)
     }
+
+    /// 这是不是一份设置备份:顶层至少有一段 `config` / `features` / `appSettings` 是字典(导出时 `appSettings` 总在)。
+    /// 选错了文件、别的 App 导出的 JSON 一段都认不出,导入就什么都不写,调用方据此报错、不重启。
+    public static func isConfigBundle(_ bundle: [String: Any]) -> Bool {
+        ["config", "features", "appSettings"].contains { bundle[$0] is [String: Any] }
+    }
 }

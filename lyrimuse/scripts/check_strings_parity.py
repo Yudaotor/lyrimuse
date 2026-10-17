@@ -11,6 +11,8 @@
 2. 源码 → 表:源码里每个 `L10n.t("字面量")` 都在表里登记过。第 1 道查不出两边一起漏的词条(两份表都没有,
    key 集合照样"完全一致"),得靠这一道。
 
+另查 catalog 里各语言值的格式参数跟键一致(规则在 generate-strings.py 的 format_arg_problems,这里导入它)。
+
 反方向(表里有、源码没直接引用)刻意不查:那些 key 大多是经变量、String(format:) 或别处的 API 用掉的,还有改过
 文案后留下的旧 key —— 报出来几十条噪声,会把真正致命的第 2 道淹掉。多一条死 key 只是浪费几十字节,少一条翻译是
 用户能看见的 bug,两者不对等。
@@ -28,10 +30,12 @@ FILES = {
 }
 # "key" = "value";  key/value 里都可能有转义引号,所以要感知反斜杠转义。
 ENTRY = re.compile(r'^\s*"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)"\s*;', re.M)
-# L10n.t("字面量") —— 跟 ENTRY 用同一套转义感知,提取出来的形态才跟表里的 key 可比。
+# L10n.t("字面量") / L10n.plural("字面量", …) —— 跟 ENTRY 用同一套转义感知,提取出来的形态才跟表里的 key 可比。
 # 参数不是字面量的写法(L10n.t(someVar))匹配不上,自然跳过:那种的 key 只有运行时才知道,
-# 静态查不了。\s* 让跨行写法也能命中。
-CALL = re.compile(r'L10n\.(?:t|plural)\(\s*"((?:[^"\\]|\\.)*)"')
+# 静态查不了。字面量后面要紧跟 `)`(t)或 `,`(plural):`L10n.t("前缀" + name)` 的键是运行时拼出来的,
+# 只取前半截去比会报一条修不掉的红。\s* 让跨行写法也能命中。两条正则跟 selftest 本地化守卫
+# (Sources/lyrimuse-selftest/SourceContractTests.swift 的 callPattern / pluralPattern)逐字同款,改一边要改另一边。
+CALL = re.compile(r'L10n\.t\(\s*"((?:[^"\\]|\\.)*)"\s*\)|L10n\.plural\(\s*"((?:[^"\\]|\\.)*)"\s*,')
 # 单数变体的派生键(见 Localization/generate-strings.py 的 PLURAL_ONE_SUFFIX):只出现在写了 plural 变体的那种语言里,
 # 对拍 key 集时不算,另查它的本键在同一张表里。
 PLURAL_ONE_SUFFIX = "#one"
@@ -44,8 +48,8 @@ def keys_of(path):
 def source_literals():
     """源码里所有 L10n.t 的字面量 → {串: 第一处出现的位置}(位置用来报错时指路)。
 
-    只扫 `Sources/lyrimuse`,跟 selftest 里那条同款守卫同一个范围(见 `Sources/lyrimuse-selftest/main.swift` 里
-    「源码里每一个 L10n.t 都必须在 catalog 里」那一段的注释):全部调用点都在这个 target;LyrimuseCore 是纯逻辑库、
+    只扫 `Sources/lyrimuse`,跟 selftest 里那条同款守卫同一个范围(见 `Sources/lyrimuse-selftest/SourceContractTests.swift`
+    里「源码里每一个 L10n.t」那一段的注释):全部调用点都在这个 target;LyrimuseCore 是纯逻辑库、
     不碰 UI 文案。也不能扫整个 `Sources/`:这是纯文本扫描、不区分代码和注释,selftest 的注释里为了说明那条守卫
     整句写着一次调用,会永久报一条修不掉的红(点名一个叫「字面量」的键),一个只能靠无视来应付的检查比没有更糟。
     """
@@ -54,7 +58,7 @@ def source_literals():
         text = path.read_text(encoding="utf-8", errors="replace")
         for m in CALL.finditer(text):
             found.setdefault(
-                m.group(1),
+                m.group(1) if m.group(1) is not None else m.group(2),
                 f"{path.relative_to(ROOT)}:{text.count(chr(10), 0, m.start()) + 1}",
             )
     return found
@@ -115,6 +119,20 @@ def main():
             print(f"\n\u2717 catalog 里 {len(lacking)} 个键缺 {lang} 翻译(新加文案必须三语齐全,繁体规范见 Localization/zh-Hant-STYLE.md):")
             for k in lacking[:20]:
                 print(f"    {k[:80]}")
+
+    # 格式参数:各语言值的参数表(第几个参数、什么类型)要跟键一样。规则只写在 generate-strings.py 一处,这里导入它。
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("generate_strings", ROOT / "Localization/generate-strings.py")
+    generate_strings = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generate_strings)
+    arg_problems = generate_strings.format_arg_problems(catalog.get("strings") or {}, catalog.get("sourceLanguage"))
+    if arg_problems:
+        ok = False
+        print(f"\n✗ {len(arg_problems)} 处译文的格式参数跟键对不上 —— String(format:) 按译文取参数,类型错会崩溃或乱码:")
+        for p in arg_problems[:20]:
+            print(f"    {p}")
+        if len(arg_problems) > 20:
+            print(f"    …还有 {len(arg_problems) - 20} 处")
 
     # zh-hant 是跟 zh-hans 同一次生成的,key 集必须逐个相同;不同 = 有人手改了生成物。
     hant_mismatch = sorted(tables["zh-hant"] ^ tables["zh-hans"])

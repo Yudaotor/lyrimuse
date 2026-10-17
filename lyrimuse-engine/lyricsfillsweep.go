@@ -574,7 +574,11 @@ func runSweepKeys(ctx context.Context, keys []string, full, retry bool, gap time
 		}
 		writeLyricsFillStatus(status)
 		i++
+		// 跳过的那条没发请求,不用为它等间隔,直接轮下一条。
 		wait = gap
+		if out.skipped {
+			wait = 0
+		}
 	}
 	return status
 }

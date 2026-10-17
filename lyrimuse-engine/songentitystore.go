@@ -137,8 +137,12 @@ func startSongEntityShadow(ctx context.Context) {
 			continue
 		case <-evidenceAt:
 			evidenceAt = nil
-			if features().SongEntityShadow {
-				rebuildSongEntityTableForEvidence(time.Now())
+			if !features().SongEntityShadow {
+				continue
+			}
+			// 每次建表之后都按开关同步一轮(建出来的组可能变了);开关关着时这里不做恢复,交给每分钟看开关那一步。
+			if b := rebuildSongEntityTableForEvidence(time.Now()); b != nil && songEntitySharing() {
+				sharing = songEntityShareStep(ctx, b)
 			}
 			continue
 		case <-songEntityCacheSaved:
@@ -237,13 +241,21 @@ func rebuildSongEntityTableWith(now time.Time, compare bool) *songEntityBuild {
 		saveSongEntityIDs(keys)
 		slog.Info("song entities: wrote song ids", "variants", len(keys))
 	}
+	// 实体表写不成时这次建出来的状态照样留给增量重算,实体表攒着等下一次写(flushSongEntityTable、下一次全量建表拿它当种子):
+	// 不留的话增量重算到下一次全量建表(最长 24 小时)之前都不做。这次不出报告、不同步。
+	keep := func() {
+		songEntityTableUnsaved = table
+		songEntityLive, songEntityLivePath = st, songEntityTablePath()
+	}
 	data, err := json.Marshal(table)
 	if err != nil {
 		slog.Error("song entities: encode table", "err", err)
+		keep()
 		return nil
 	}
 	if err := writeFileAtomic(songEntityTablePath(), data); err != nil {
 		slog.Error("song entities: write table", "err", err)
+		keep()
 		return nil
 	}
 	var report bytes.Buffer

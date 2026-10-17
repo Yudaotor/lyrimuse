@@ -95,7 +95,7 @@ struct LyricsQuickSearchWindow: View {
                             source: candidate.source, markManual: AppSettings.shared.manualPickLocksLyrics,
                             sourceChoice: "", fromManualPick: true, bg: candidate.lyricsBG, trLang: candidate.lyricsTrLang)
                     }
-                    PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
+                    // 正在放的那首重读歌词由 EnrichCacheStore.commit 收尾时做,这里不再调一次。
                     return saved
                 }
             } else {

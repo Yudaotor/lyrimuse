@@ -802,6 +802,8 @@ func runTouchBarTests() {
         // 进度(决策 47):这一页显示着才跟播放位置走;拖着时不盖滑杆,松手一会儿才跳一次;不接受跳转的播放器只显示不能拖;
         // 位置不叠歌词偏移。
         let moreBar = code(appDir.appendingPathComponent("TouchBar/TouchBarMorePageBar.swift")) ?? ""
+        expectEqual(moreBar.contains("repeats: true) { [weak self] _ in\n            MainActor.assumeIsolated { self?.refreshProgress() }"), true,
+                    "触控栏更多页: 进度定时器弱引用写在定时器闭包上,不被定时器强持有")
         expectEqual(moreBar.contains("progressItem.slider.isEnabled = p.acceptsSeek")
                         && moreBar.contains("let position = p.anchor?.extrapolatedPositionMs(now: Date()) ?? p.pausedPositionMs ?? 0")
                         && moreBar.contains("Date().timeIntervalSince(lastProgressDrag) > 1.5")

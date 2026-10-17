@@ -35,8 +35,8 @@ func TestDecodeLyricEntitiesKeepsInvalidCodePoints(t *testing.T) {
 	}
 }
 
-// 实体迁移只跑一遍:多层转义第二次启动不再往下解。
-func TestMigrateLyricEntitiesRunsOnce(t *testing.T) {
+// 实体迁移第一遍就把多层转义解到底;水位作废(恢复备份、切换歌词目录)之后全库重跑,解过的正文不再变。
+func TestMigrateLyricEntitiesStableAcrossInvalidation(t *testing.T) {
 	withTempMigrationState(t)
 	withTempDecisionCache(t)
 	enrichMu.Lock()
@@ -44,17 +44,13 @@ func TestMigrateLyricEntitiesRunsOnce(t *testing.T) {
 	enrichCache["a|t|b"] = enrichEntry{Lyrics: "[00:01.00]they&amp;apos;re"}
 	enrichMu.Unlock()
 	migrateLyricEntities()
-	if got := enrichCache["a|t|b"].Lyrics; got != "[00:01.00]they&apos;re" {
-		t.Fatalf("第一遍只解一层: %q", got)
-	}
-	migrateLyricEntities()
-	if got := enrichCache["a|t|b"].Lyrics; got != "[00:01.00]they&apos;re" {
-		t.Fatalf("有水位之后不再解第二层: %q", got)
+	if got := enrichCache["a|t|b"].Lyrics; got != "[00:01.00]they're" {
+		t.Fatalf("第一遍解到底: %q", got)
 	}
 	invalidateMigrationState("test")
 	migrateLyricEntities()
 	if got := enrichCache["a|t|b"].Lyrics; got != "[00:01.00]they're" {
-		t.Fatalf("水位作废之后照常再跑: %q", got)
+		t.Fatalf("水位作废之后重跑,正文不再变: %q", got)
 	}
 }
 

@@ -109,6 +109,11 @@ jobs:
         # 就抓到了 3 对重复 key。
         run: python3 lyrimuse/scripts/check_strings_parity.py
 
+      - name: 注释卫生
+        # 注释里不许有日期戳、人物归因、临时状态这类过程性内容,源码里不许有不可见字符(规则见脚本开头)。
+        # 本地提交前的 scripts/commit-checks.sh 也跑它;放在这里,外部 PR 同样要过。
+        run: python3 scripts/check-comment-hygiene.py
+
       - name: 第三方许可声明覆盖
         # Package.resolved 里每个 SPM 包、build.sh 里 brew install 进包的东西、go.mod 的 require，
         # 都必须在 THIRD_PARTY_LICENSES 里出现一次。忘补声明在这里红，不是发出去之后才被人指出来。

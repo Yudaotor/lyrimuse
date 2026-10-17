@@ -3283,8 +3283,8 @@ struct LyricsManagerView: View {
                     // 采纳的候选歌词内容跟原来不一样,offset 的 key(内容指纹)也跟着变——输入框要显示"新内容对应的
                     // 偏移值"。按盘上刚落下的那份重载(不再算未保存);这期间切到了别的歌就不动。
                     if editingKey == key { loadDetail(key: key) }
-                    // 补上——采纳候选之前点了就直接关闭弹窗,真正的保存+重启
-                    // 引擎在后台异步跑,用户看不到任何进度,失败时只能在下面
+                    // 补上——采纳候选之前点了就直接关闭弹窗,真正的保存(交给
+                    // 引擎)在后台异步跑,用户看不到任何进度,失败时只能在下面
                     // store.lastError 那行小字里发现。复用"保存修改"同一个反馈机制:
                     // 成功就闪一下"已保存",失败不闪(已经有 lastError 的红字提示,不需要
                     // 叠加两套反馈互相矛盾)。
@@ -4096,8 +4096,19 @@ struct LyricsManagerView: View {
     private func saveEdits(key: String, summary: EnrichCacheStore.Summary) async -> Bool {
         // 用户没动的那几格交**盘上此刻**的值,不交编辑缓冲里的:编辑缓冲是打开这一页时载入的,这期间
         // 引擎可能补了机翻、重新打分换了更好的词;三格原样交回去会把那些新内容盖掉(连同译文记录)。
+        // 列表快照闲时最多旧一轮轮询,先按盘上现状重读;用户改过的那几格盘上也变了就不存(LyricsEditConflict)。
+        await store.reloadIfStale()
         let disk = store.detail(for: key)
         guard disk.complete, editingKey == key else { return false }
+        let edits = LyricsEditConflict.Edits(main: editedLyrics != loadedLyrics || editedWordText != loadedWordText,
+                                             tr: editedTr != loadedTr, roma: editedRoma != loadedRoma)
+        guard !LyricsEditConflict.conflicts(
+            loaded: LyricsEditConflict.Cells(lyrics: loadedLyrics, yrc: loadedYRC, tr: loadedTr, roma: loadedRoma),
+            disk: LyricsEditConflict.Cells(lyrics: disk.lyrics, yrc: disk.yrc, tr: disk.tr, roma: disk.roma),
+            edits: edits) else {
+            store.reportEditConflict()
+            return false
+        }
         var lyrics = editedLyrics != loadedLyrics ? editedLyrics : disk.lyrics
         let tr = editedTr != loadedTr ? editedTr : disk.tr
         let roma = editedRoma != loadedRoma ? editedRoma : disk.roma

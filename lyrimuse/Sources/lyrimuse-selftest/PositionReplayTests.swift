@@ -121,6 +121,7 @@ func runPositionReplayTests() {
     replayKugouLateStartAnchor()
     replayLXMusicLateStartLeadHolds()
     replayLXMusicColdResume()
+    replayLXMusicColdResumeStale()
     replayLXMusicRateChange()
     replayLXMusicOpenAPIClock()
     replayKKBOXFollowsRepublishedAnchor()
@@ -659,6 +660,31 @@ private func replayLXMusicColdResume() {
         expectEqual(near(rig.shown(at: at(150.3)), 70.2, 0.02), true,
                     "回放·洛雪 冷恢复后再暂停、恢复: 偏置随暂停作废(\(fmt(rig.shown(at: at(150.3)))),想要 70.200)")
     }
+}
+
+/// 洛雪冷恢复记下了,设备 101.0 转起来,新锚点却跟在放信号那一刻的一样(用不上);半分钟后拖到 60 秒:跟新锚点走,
+/// 不按 101.0 那个转起来的时刻再补 30 秒。
+@MainActor
+private func replayLXMusicColdResumeStale() {
+    func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
+    let lx = PlaybackPlayer.lxMusic.bundleIdentifier
+    let rig = ReplayRig("lx-cold-resume-stale")
+    defer { rig.tearDown() }
+    rig.tick(mediaControl(lx, "特别的人", anchor: 20, elapsed: 20, duration: 259), at: at(0))
+    rig.tick(mediaControl(lx, "特别的人", anchor: 20, elapsed: 28, duration: 259), at: at(8))
+    rig.source.replayPlayerStateEvent(at: at(8.9), freeze: true)
+    rig.tick(mediaControl(lx, "特别的人", anchor: 28.95, elapsed: 28.95, duration: 259, playing: false), at: at(9))
+    rig.source.replayResumeSignal(at: at(100))
+    rig.source.replayLXMusicColdStartSignal(at: at(100))
+    rig.tick(mediaControl(lx, "特别的人", anchor: 28.95, elapsed: 29.25, duration: 259), at: at(100.3))
+    rig.source.replayLXMusicAudioStarted(at: at(101.0))
+    for t in stride(from: 101.05, through: 131.05, by: 2) {
+        rig.tick(mediaControl(lx, "特别的人", anchor: 28.95, elapsed: 28.95 + t - 100.3, duration: 259), at: at(t))
+    }
+    rig.tick(mediaControl(lx, "特别的人", anchor: 60, elapsed: 60, duration: 259), at: at(131.5))
+    rig.tick(mediaControl(lx, "特别的人", anchor: 60, elapsed: 62, duration: 259), at: at(133.5))
+    expectEqual(near(rig.shown(at: at(133.5)), 62, 0.1), true,
+                "回放·洛雪 冷恢复没用上、半分钟后拖动: 跟新锚点走,不按很久以前的转起来时刻补(\(fmt(rig.shown(at: at(133.5)))),想要 62.000)")
 }
 
 /// 洛雪 10.5 秒时从 1 倍改成 1.25 倍:系统那份速度和锚点不变(20 秒处、1 倍),配置 0.3 秒后写盘。下一拍从改的那一刻起按 1.25 倍走,

@@ -248,14 +248,47 @@ func sodaPreviewSearchKey(artist, title, album string) string {
 	return normLoose(artist) + "|" + normLoose(title) + "|" + normLoose(album)
 }
 
-// sodaSearchPreview 按曲名搜一次,在过了身份闸、preview 又对得上播放器时长的候选里挑一条。
+// sodaSearchPreview 按曲名搜一次,在过了身份闸、preview 又对得上播放器时长的候选里挑一条。过了身份闸的候选的整首时长顺手记进
+// sodaSearchFullLengths。
 func sodaSearchPreview(ctx context.Context, artist, title, album string, mrDuration float64) (sodaPreview, bool) {
 	items, err := sodaSearch(ctx, artist, title)
 	if err != nil {
 		slog.Info("soda preview: search failed", "artist", artist, "title", title, "err", err)
 		return sodaPreview{}, false
 	}
+	noteSodaSearchFullLengths(items, artist, title, album)
 	return sodaPickPreview(items, artist, title, album, mrDuration)
+}
+
+// sodaSearchFullLengths:搜索答回来、过了身份闸(同 sodaPickPreview)的同歌手同歌名曲目的整首时长(毫秒),按
+// sodaFullLengthKey 记。本来就 30 / 60 秒的歌(片头、间奏)在本机的队列缓存、音频缓存库里都查不到曲目信息时,靠它认出
+// 报的就是整首(sodaFullLengthKnown),不然一直当成可能是试听段,歌词不解析、收听不记。满 sodaSearchFullLengthsMax 条清空重记。
+var sodaSearchFullLengths = map[string][]int64{}
+
+const sodaSearchFullLengthsMax = 512
+
+func sodaFullLengthKey(artist, title string) string {
+	return normLoose(artist) + "|" + normLoose(title)
+}
+
+func noteSodaSearchFullLengths(items []sodaSearchItem, artist, title, album string) {
+	var fulls []int64
+	for _, it := range items {
+		if it.Duration <= 0 || !lyricTitleAccepted(it.Name, title) || !lyricSourceArtistMatches(it.Artist, artist) ||
+			versionTagsMismatch(title, album, it.Name, it.Album) {
+			continue
+		}
+		fulls = append(fulls, int64(it.Duration*1000))
+	}
+	if len(fulls) == 0 {
+		return
+	}
+	sodaPreviewMu.Lock()
+	if len(sodaSearchFullLengths) >= sodaSearchFullLengthsMax {
+		sodaSearchFullLengths = map[string][]int64{}
+	}
+	sodaSearchFullLengths[sodaFullLengthKey(artist, title)] = fulls
+	sodaPreviewMu.Unlock()
 }
 
 // sodaPickPreview 纯函数,测试直接覆盖。身份闸与歌词那条路同一套(lyricTitleAccepted /
@@ -392,8 +425,8 @@ func sodaPreviewTypicalLength(mrDuration float64) bool {
 	return math.Abs(mrDuration-30) <= sodaPreviewDurationTolerance || math.Abs(mrDuration-60) <= sodaPreviewDurationTolerance
 }
 
-// sodaFullLengthKnown:本机的队列缓存或音频缓存库(曲目信息已经问到的)里有这首,整首时长跟报的对得上 —— 这首本来就这么长,
-// 不是试听。
+// sodaFullLengthKnown:本机的队列缓存或音频缓存库(曲目信息已经问到的)里有这首、或者试听段搜索答回来的同名曲目
+// (sodaSearchFullLengths)里有,整首时长跟报的对得上 —— 这首本来就这么长,不是试听。
 func sodaFullLengthKnown(artist, title string, mrDuration float64) bool {
 	fits := func(fullMs int64) bool {
 		return fullMs > 0 && math.Abs(float64(fullMs)/1000-mrDuration) <= sodaPreviewMinGap
@@ -418,6 +451,14 @@ func sodaFullLengthKnown(artist, title string, mrDuration float64) bool {
 	}
 	for _, t := range sodaPreloadIndex() {
 		if loosenEnrichKey(t.upcoming.artist+"|"+t.upcoming.title) == want && fits(t.fullMs) {
+			return true
+		}
+	}
+	sodaPreviewMu.Lock()
+	searched := sodaSearchFullLengths[sodaFullLengthKey(artist, title)]
+	sodaPreviewMu.Unlock()
+	for _, ms := range searched {
+		if fits(ms) {
 			return true
 		}
 	}

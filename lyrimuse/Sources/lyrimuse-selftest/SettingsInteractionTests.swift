@@ -750,4 +750,14 @@ private func runPermissionGuideContracts() {
                 "权限说明(契约): 引导页与锁说明用同一份步骤文案")
     expectEqual([ax, fda, onboarding, lockHelp, settings].contains { $0.contains("取消勾选后重新勾选") }, false,
                 "权限说明(契约): 失效的授权关了再开不管用,别再这么教")
+
+    // ---- 悬停弹说明的三处共用一份时序 ----
+    do {
+        let help = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/HelpButton.swift"), encoding: .utf8)) ?? ""
+        expectEqual(help.components(separatedBy: "HoverPopoverTiming.delay(entering: inside)").count - 1, 3,
+                    "悬停说明(契约): QuickHelpLabel、GlassInfoButton、HoverNote 都走 HoverPopoverTiming")
+        expectEqual(help.components(separatedBy: ".milliseconds(500)").count - 1, 1,
+                    "悬停说明(契约): 弹出延时只写在 HoverPopoverTiming 一处")
+    }
 }

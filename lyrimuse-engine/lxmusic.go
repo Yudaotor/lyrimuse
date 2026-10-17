@@ -158,7 +158,9 @@ func lxMusicSQL(ctx context.Context, query string, out any) error {
 	if _, err := os.Stat(db); err != nil {
 		return err
 	}
-	raw, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", "file:"+db+"?mode=ro", query).Output()
+	// net/url 组 URI:路径里的 #、?、%、空格要转义,不然 sqlite 按 URI 拆开,打开的是别的文件(同 queryQQLocalSongs)。
+	uri := (&neturl.URL{Scheme: "file", Path: db, RawQuery: "mode=ro"}).String()
+	raw, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", uri, query).Output()
 	if err != nil {
 		return err
 	}
@@ -601,13 +603,27 @@ func lxMusicOpenAPILyrics(ctx context.Context, artist, title string) (lxMusicLyr
 }
 
 const (
-	lxMusicLyricsFoundTTL   = 30 * time.Second
-	lxMusicLyricsMissingTTL = 5 * time.Second
+	lxMusicLyricsFoundTTL      = 30 * time.Second
+	lxMusicLyricsMissingTTL    = 5 * time.Second
+	lxMusicLyricsMissingMaxTTL = time.Minute
 )
 
+// lxMusicLyricsAvail:一首的结论记到什么时候;misses 是同一首接连几次查到没有。
 type lxMusicLyricsAvail struct {
-	until time.Time
-	ok    bool
+	until  time.Time
+	ok     bool
+	misses int
+}
+
+// lxMusicLyricsMissingTTLFor:接连第 misses 次查到没有,这次的结论记多久。从几秒起步(洛雪开播后才去拉词,刚开播时
+// 要尽快发现),每多落空一次翻一倍,封顶一分钟 —— 这首洛雪一直没词时,每一拍都要起几个 sqlite3 子进程、
+// 开了开放 API 还要再问三次,不能每几秒就来一遍。
+func lxMusicLyricsMissingTTLFor(misses int) time.Duration {
+	ttl := lxMusicLyricsMissingTTL
+	for i := 1; i < misses && ttl < lxMusicLyricsMissingMaxTTL; i++ {
+		ttl *= 2
+	}
+	return min(ttl, lxMusicLyricsMissingMaxTTL)
 }
 
 var (
@@ -616,7 +632,7 @@ var (
 )
 
 // lxMusicLyricsAvailable:正用洛雪放的这首,它本地现在有没有词(见 lxMusicLyricsWorthRecheck)。洛雪开播时才去拉词,
-// 首次解析常常先跑完,所以没有的结论只记几秒、有的记半分钟。
+// 首次解析常常先跑完,所以没有的结论先只记几秒、接连落空就越记越久(lxMusicLyricsMissingTTLFor),有的记半分钟。
 func lxMusicLyricsAvailable(bundleID, artist, title string, durationSecs float64) bool {
 	if bundleID != lxMusicBundleID {
 		return false
@@ -624,9 +640,10 @@ func lxMusicLyricsAvailable(bundleID, artist, title string, durationSecs float64
 	key := artist + "\x00" + title
 	now := time.Now()
 	lxMusicLyricsAvailMu.Lock()
-	if m, ok := lxMusicLyricsAvailMemo[key]; ok && now.Before(m.until) {
+	prev, seen := lxMusicLyricsAvailMemo[key]
+	if seen && now.Before(prev.until) {
 		lxMusicLyricsAvailMu.Unlock()
-		return m.ok
+		return prev.ok
 	}
 	lxMusicLyricsAvailMu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -638,9 +655,13 @@ func lxMusicLyricsAvailable(bundleID, artist, title string, durationSecs float64
 	if !ok {
 		_, _, ok = lxMusicOpenAPILyrics(ctx, artist, title)
 	}
-	ttl := lxMusicLyricsMissingTTL
-	if ok {
-		ttl = lxMusicLyricsFoundTTL
+	ttl, misses := lxMusicLyricsFoundTTL, 0
+	if !ok {
+		misses = 1
+		if seen && !prev.ok {
+			misses = prev.misses + 1
+		}
+		ttl = lxMusicLyricsMissingTTLFor(misses)
 	}
 	lxMusicLyricsAvailMu.Lock()
 	for k, m := range lxMusicLyricsAvailMemo {
@@ -648,7 +669,7 @@ func lxMusicLyricsAvailable(bundleID, artist, title string, durationSecs float64
 			delete(lxMusicLyricsAvailMemo, k)
 		}
 	}
-	lxMusicLyricsAvailMemo[key] = lxMusicLyricsAvail{until: now.Add(ttl), ok: ok}
+	lxMusicLyricsAvailMemo[key] = lxMusicLyricsAvail{until: now.Add(ttl), ok: ok, misses: misses}
 	lxMusicLyricsAvailMu.Unlock()
 	return ok
 }
