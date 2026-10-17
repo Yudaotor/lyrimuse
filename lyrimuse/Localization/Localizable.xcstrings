@@ -36545,6 +36545,40 @@
         }
       }
     },
+    "谷歌旗下的流媒体音乐网站，网址 music.youtube.com" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Google's music streaming site at music.youtube.com"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Google 旗下的串流音樂網站，網址 music.youtube.com"
+          }
+        }
+      }
+    },
+    "Spotify 的网页播放器，网址 open.spotify.com" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify's web player at open.spotify.com"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify 的網頁播放器，網址 open.spotify.com"
+          }
+        }
+      }
+    },
     "触控栏歌词" : {
       "extractionState" : "manual",
       "localizations" : {

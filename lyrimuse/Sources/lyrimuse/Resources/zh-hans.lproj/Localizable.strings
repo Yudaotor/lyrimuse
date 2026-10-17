@@ -168,6 +168,7 @@
 "Spotify 歌手页" = "Spotify 歌手页";
 "Spotify 歌曲页" = "Spotify 歌曲页";
 "Spotify 的每首歌曲会被记录两次" = "Spotify 的每首歌曲会被记录两次";
+"Spotify 的网页播放器，网址 open.spotify.com" = "Spotify 的网页播放器，网址 open.spotify.com";
 "Telegram 群组" = "Telegram 群组";
 "Token 无效，请重新拷贝" = "Token 无效，请重新拷贝";
 "Webhook 地址" = "Webhook 地址";
@@ -2000,6 +2001,7 @@
 "调整" = "调整";
 "调整宽度" = "调整宽度";
 "调整颜色后，此处将出现「自定义」，点按即可保存为主题" = "调整颜色后，此处将出现「自定义」，点按即可保存为主题";
+"谷歌旗下的流媒体音乐网站，网址 music.youtube.com" = "谷歌旗下的流媒体音乐网站，网址 music.youtube.com";
 "账号 Token" = "账号 Token";
 "账号信息" = "账号信息";
 "资料卡「正在收听 ××」里的 ××。iOS 和网页版的 Discord 不认这一项，仍显示播放器名。\n选歌名或歌手时，用户名下方不能再选「播放器」。" = "资料卡「正在收听 ××」里的 ××。iOS 和网页版的 Discord 不认这一项，仍显示播放器名。\n选歌名或歌手时，用户名下方不能再选「播放器」。";

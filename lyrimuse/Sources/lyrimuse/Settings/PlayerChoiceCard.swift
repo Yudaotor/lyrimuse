@@ -88,6 +88,16 @@ struct PlayerChoiceCard: View {
         case .auto: return nil
         }
     }
+
+    /// 设置页「网页版」平台格悬停时的那一句,按 `BrowserPositionProbe.supportedPlatforms` 的 id 认:说它是哪个网站。
+    /// 漏了不会编译报错、只是悬停不弹,新加平台在这里补一句(selftest 守着)。
+    static func about(webPlatform platformID: String) -> String? {
+        switch platformID {
+        case "youtubeMusic": return L10n.t("谷歌旗下的流媒体音乐网站，网址 music.youtube.com")
+        case "spotifyWeb": return L10n.t("Spotify 的网页播放器，网址 open.spotify.com")
+        default: return nil
+        }
+    }
 }
 
 /// 一个播放器的图标,**不带卡片外壳**——三级兜底的取图逻辑本体在这里,`PlayerChoiceCard`

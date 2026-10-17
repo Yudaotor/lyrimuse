@@ -2599,6 +2599,7 @@ func runSourceContractTests() {
         // 代码且完全合理(Spotify **桌面版**那张播放器卡复用同一张 PNG,`AppIconResolver` 的
         // 注释写着"不用再拷一份")。真正该守的不是"资源名只出现一次",而是"把 platformID 翻成
         // 图标的那张表只有一处",所以改成扫 `case "youtubeMusic"` 这个映射形态。
+        // 返回文案的那种 case 行(带 `L10n.t(`)不算:平台 → 悬停介绍(`PlayerChoiceCard.about(webPlatform:)`)是另一张表。
         var platformTables: [String] = []
         if let walker = FileManager.default.enumerator(atPath: appSources.path) {
             for case let rel as String in walker where rel.hasSuffix(".swift") {
@@ -2606,13 +2607,27 @@ func runSourceContractTests() {
                 let hit = text.split(separator: "\n", omittingEmptySubsequences: false).contains { raw in
                     let line = String(raw).trimmingCharacters(in: .whitespaces)
                     return !line.hasPrefix("//") && !line.hasPrefix("///")
-                        && line.contains("case \"youtubeMusic\"")
+                        && line.contains("case \"youtubeMusic\"") && !line.contains("L10n.t(")
                 }
                 if hit { platformTables.append(rel) }
             }
         }
         expectEqual(platformTables.sorted(), ["Settings/WebPlatformIcon.swift"],
                     "引导页一份实现: platformID → 图标那张查表只该有一份(在 WebPlatformIcon.swift)")
+
+        // 同一份 id 的另一张表:网页版平台格的悬停介绍。按 id 分 case,漏了不会编译报错、只是悬停不弹,所以每个支持的
+        // 平台都要有一句;设置页那格要挂上(只挂图标和名字那块,头像的详情气泡开着时不弹)。
+        if let card = read("Settings/PlayerChoiceCard.swift"), let settings = read("SettingsView.swift") {
+            for platform in BrowserPositionProbe.supportedPlatforms {
+                expectEqual(card.contains("case \"\(platform.id)\": return L10n.t(\""), true,
+                            "网页版悬停介绍: \(platform.id) 少了一句(PlayerChoiceCard.about(webPlatform:))")
+            }
+            expectEqual(settings.contains("let about = PlayerChoiceCard.about(webPlatform: platform.id)")
+                        && settings.contains(".hoverNote(expandedBrowserPlatformID == platform.id ? nil : about)"), true,
+                        "网页版悬停介绍: 设置页的平台格(browserPlatformCard)没挂上介绍")
+        } else {
+            expectEqual(true, false, "网页版悬停介绍: 读不到 PlayerChoiceCard.swift / SettingsView.swift(路径挪了?)")
+        }
 
         // ⑤ **引导页只允许"一次点击取消一个配对",不准批量删**(真出过事)。
         //

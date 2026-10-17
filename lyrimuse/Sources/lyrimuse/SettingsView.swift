@@ -5442,6 +5442,7 @@ private struct PlayerSettingsTab: View {
             .filter { BrowserAutomationPermission.isInstalled(bundleID: $0) }
             .sorted()
         let addable = addablePlatformBrowsers(platformID: platform.id)
+        let about = PlayerChoiceCard.about(webPlatform: platform.id)
         return VStack(spacing: 6) {
             CompactTileLabel(title: platform.displayName, dimmed: pairedBundleIDs.isEmpty) {
                 if let icon = WebPlatformIcon.image(platform.id) {
@@ -5450,6 +5451,13 @@ private struct PlayerSettingsTab: View {
                         .frame(width: 26, height: 26)
                 }
             }
+            // 悬停说明只挂图标和名字这一块、不挂整格:下面的头像和「+」有各自的提示,整格都挂会同时弹两个;
+            // 头像的详情气泡开着时也不弹。见 14 章决策 116。
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
+            .accessibilityValue(about ?? "")
+            .hoverNote(expandedBrowserPlatformID == platform.id ? nil : about)
             // 头像并排展示、不重叠 —— 负间距的"头像堆叠"看不出到底配了几个。
             HStack(spacing: 5) {
                 ForEach(pairedBundleIDs, id: \.self) { bundleID in

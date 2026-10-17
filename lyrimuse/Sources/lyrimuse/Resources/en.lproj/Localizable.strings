@@ -193,6 +193,7 @@
 "Spotify 歌手页" = "Spotify artist page";
 "Spotify 歌曲页" = "Spotify song page";
 "Spotify 的每首歌曲会被记录两次" = "Each Spotify song is scrobbled twice";
+"Spotify 的网页播放器，网址 open.spotify.com" = "Spotify's web player at open.spotify.com";
 "Telegram 群组" = "Telegram Group";
 "Token 无效，请重新拷贝" = "Invalid token — copy it again";
 "Webhook 地址" = "Webhook URL";
@@ -2081,6 +2082,7 @@
 "调整" = "Adjust";
 "调整宽度" = "Adjust Width";
 "调整颜色后，此处将出现「自定义」，点按即可保存为主题" = "After you change any colors, a Custom card appears here. Click it to save them as a theme.";
+"谷歌旗下的流媒体音乐网站，网址 music.youtube.com" = "Google's music streaming site at music.youtube.com";
 "账号 Token" = "Account Token";
 "账号信息" = "Account Info";
 "资料卡「正在收听 ××」里的 ××。iOS 和网页版的 Discord 不认这一项，仍显示播放器名。\n选歌名或歌手时，用户名下方不能再选「播放器」。" = "The “××” in “Listening to ××” on your profile. Discord on iOS and the web ignores this and keeps showing the player.\nWith Title or Artist here, “Shown Under Your Name” can't show the player.";
