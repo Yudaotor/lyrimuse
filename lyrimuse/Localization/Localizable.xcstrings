@@ -1346,25 +1346,25 @@
         }
       }
     },
-    "展开时在曲目信息右侧显示四个按钮：搜索歌词、显示歌词、设置、关闭灵动岛歌词。" : {
+    "展开时在曲目信息右侧显示喜欢、搜索歌词、设置等按钮" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "When expanded, shows four buttons to the right of the track info: search lyrics, show lyrics, settings, and turn off notch lyrics."
+            "value" : "When expanded, shows buttons such as Favorite, Search Lyrics, and Settings to the right of the track info"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "展开时在曲目信息右侧显示四个按钮：搜索歌词、显示歌词、设置、关闭灵动岛歌词。"
+            "value" : "展开时在曲目信息右侧显示喜欢、搜索歌词、设置等按钮"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "展開時在曲目資訊右側顯示四個按鈕：搜尋歌詞、顯示歌詞、設定、關閉動態島歌詞。"
+            "value" : "展開時在曲目資訊右側顯示喜歡、搜尋歌詞、設定等按鈕"
           }
         }
       }

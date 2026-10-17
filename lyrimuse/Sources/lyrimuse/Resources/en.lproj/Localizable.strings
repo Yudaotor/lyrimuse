@@ -837,7 +837,7 @@
 "展开圆角" = "Expanded Corners";
 "展开宽度" = "Expanded Width";
 "展开态" = "Expanded State";
-"展开时在曲目信息右侧显示四个按钮：搜索歌词、显示歌词、设置、关闭灵动岛歌词。" = "When expanded, shows four buttons to the right of the track info: search lyrics, show lyrics, settings, and turn off notch lyrics.";
+"展开时在曲目信息右侧显示喜欢、搜索歌词、设置等按钮" = "When expanded, shows buttons such as Favorite, Search Lyrics, and Settings to the right of the track info";
 "展开时在歌词行上方显示曲目信息，四项可分别开关；全部关闭时不占用空间。" = "When expanded, shows a track-info block above the lyric row. The four items are independent; turn them all off and the block takes no space.";
 "展开时在进度条上方显示下一句要唱的歌词。" = "Shows the next lyric line above the progress bar when expanded.";
 "展开时隐藏功能栏" = "Hide Control Strip While Expanded";

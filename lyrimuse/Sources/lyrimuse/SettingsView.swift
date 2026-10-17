@@ -3557,7 +3557,7 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         case .trackDrop:
             return L10n.t("切歌时新歌名从刘海下方滑出，数秒后收回")
         case .expandedShowsQuickActions:
-            return L10n.t("展开时在曲目信息右侧显示四个按钮：搜索歌词、显示歌词、设置、关闭灵动岛歌词。")
+            return L10n.t("展开时在曲目信息右侧显示喜欢、搜索歌词、设置等按钮")
         default: return nil
         }
     }

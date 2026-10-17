@@ -1916,6 +1916,20 @@ func runNotchTests() {
         expectEqual(view.contains("AppActions.shared.requestSettings(.account(.lastfm))"), true,
                     "快捷操作契约: Last.fm 键翻到设置 › Last.fm 详情页")
 
+        // 快捷操作:喜欢那颗只在播放器有「喜欢」、不在广告里时画,排最左(出现 / 消失时别的键不挪),展开时回读状态。
+        let favoriteAt = view.range(of: "if let favorited = playback.isFavorited, !controller.isAdBreakNow {\n                    quickActionButton(favorited ? \"heart.fill\" : \"heart\", key: \"favorite\",")?.lowerBound
+        let searchAt = view.range(of: "quickActionButton(\"magnifyingglass\", label: L10n.t(\"搜索歌词…\"))")?.lowerBound
+        expectEqual(favoriteAt != nil, true, "快捷操作契约: 喜欢键只在 isFavorited 非 nil、不在广告里时画,气泡认固定的 key")
+        expectEqual(favoriteAt.flatMap { f in searchAt.map { f < $0 } }, true, "快捷操作契约: 喜欢键排在搜索歌词前面(最左)")
+        expectEqual(view.contains("label: favorited ? L10n.t(\"取消喜欢\") : L10n.t(\"喜欢\"), lit: favorited) {\n                        PlaybackCoordinator.shared.toggleFavorited()"), true,
+                    "快捷操作契约: 喜欢键走 toggleFavorited,已喜欢时点亮")
+        expectEqual(view.contains("glyphOpacity: lit ? 1 : (dimmed ? 0.4 : 0.75),\n                               restingLevel: lit ? 0.16 : 0"), true,
+                    "快捷操作契约: 点亮样式同随机 / 循环键(字形全亮 + 0.16 淡底)")
+        expectEqual(view.contains("p.$isFavorited.removeDuplicates().sink { [weak self] in self?.isFavorited = $0 }"), true,
+                    "快捷操作契约: 灵动岛镜像协调器的 isFavorited")
+        expectEqual(controller.contains("if opening, expandedShowsQuickActions, !isAdBreakNow {\n            PlaybackCoordinator.shared.refreshFavorited()"), true,
+                    "快捷操作契约: 展开时回读一次喜欢状态")
+
         // 主行取句的规则只有 Core 一份。
         expectEqual(view.contains("secondary.displayedLine(compactLine: compact, currentLine: current)"), true,
                     "主行取句契约: 灵动岛调 Core 的 displayedLine")

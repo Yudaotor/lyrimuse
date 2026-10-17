@@ -235,6 +235,8 @@ private final class NotchPlayback: ObservableObject {
     @Published private(set) var playbackModeAllowsRepeatOne = false
     /// 循环键走不走「列表循环」那一档(QQ 音乐没有,两态:关 ↔ 单曲循环)。
     @Published private(set) var playbackModeAllowsRepeatAll = false
+    /// 头部快捷操作那颗「喜欢」读的状态(`PlaybackCoordinator.isFavorited`);nil = 这个播放器没有「喜欢」,那颗键不画。
+    @Published private(set) var isFavorited: Bool?
     private var subs: [AnyCancellable] = []
 
     init() {
@@ -300,6 +302,7 @@ private final class NotchPlayback: ObservableObject {
                 .sink { [weak self] in self?.playbackModeAllowsRepeatOne = $0 },
             p.$playbackModeOptions.map { $0.contains(.repeatAll) }.removeDuplicates()
                 .sink { [weak self] in self?.playbackModeAllowsRepeatAll = $0 },
+            p.$isFavorited.removeDuplicates().sink { [weak self] in self?.isFavorited = $0 },
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
@@ -2298,16 +2301,20 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// 头部右侧那排「快捷操作」:搜索歌词、显示 / 隐藏歌词、Last.fm、设置、关闭灵动岛。
+    /// 头部右侧那排「快捷操作」:喜欢、搜索歌词、显示 / 隐藏歌词、Last.fm、设置、关闭灵动岛。
     ///
     /// 排法照悬浮歌词那排控制胶囊(`LyricsOverlayView.playbackControls`):**对这首歌的操作 │ 窗口级
-    /// 操作**,中间一条细竖线分组,✕ 放最右最边上 —— 搜索歌词 · 显示歌词 │ Last.fm · 设置 · 关闭
-    /// (Last.fm 那颗只在连着账号时出现)。每颗都是
+    /// 操作**,中间一条细竖线分组,✕ 放最右最边上 —— 喜欢 · 搜索歌词 · 显示歌词 │ Last.fm · 设置 · 关闭
+    /// (喜欢只在播放器有「喜欢」时出现,Last.fm 只在连着账号时出现)。每颗都是
     /// 22pt 命中格(跟下面播放控制三键同一档,`NotchExpandedMetrics.trackInfoActionsHeight`),
     /// 字形 11pt,颜色跟卡上其它图标一样走 `accentOrWhite`、压到七成五 —— 这排是"手边的入口",
     /// 不该比歌名重。
     ///
     /// 各颗键的语义:
+    ///   * 喜欢 → `PlaybackCoordinator.toggleFavorited()`,跟悬浮歌词那颗心、歌词窗口那颗星同一条路。`isFavorited` 为 nil
+    ///     (这个播放器没有「喜欢」或没拿到权限)和广告期间不画。排在最左:这排键贴右对齐,它出现 / 消失时别的键不挪。
+    ///     已喜欢画实心、全亮、带淡底,同随机 / 循环键点亮。展开时回读一次状态(`NotchLyricsWindowController.refreshExpanded`)。
+    ///     见 05 章决策 79。
     ///   * 搜索歌词 → `AppActions.openLyricsQuickSearch`,跟悬浮歌词 ⚙ 菜单的「搜索歌词…」同一扇小窗。
     ///     头部本来就要求 `hasTrack`,所以不用像那边一样再按"有没有歌"决定显隐。广告期间四颗照常画、照常可点
     ///     (头部此时只剩这一排,见 `trackInfoShowsTrackFields`)。
@@ -2328,6 +2335,12 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     private var trackInfoQuickActions: some View {
         if controller.expandedShowsQuickActions {
             HStack(spacing: 2) {
+                if let favorited = playback.isFavorited, !controller.isAdBreakNow {
+                    quickActionButton(favorited ? "heart.fill" : "heart", key: "favorite",
+                                      label: favorited ? L10n.t("取消喜欢") : L10n.t("喜欢"), lit: favorited) {
+                        PlaybackCoordinator.shared.toggleFavorited()
+                    }
+                }
                 quickActionButton("magnifyingglass", label: L10n.t("搜索歌词…")) {
                     AppActions.shared.openLyricsQuickSearch?()
                 }
@@ -2454,29 +2467,34 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     ///
     /// `.help(label)` 撤掉了:系统 tooltip 在这扇窗上一次都没弹过,理由与替代方案见
     /// `QuickActionTooltipOverlay` 的头注。
-    private func quickActionButton(_ systemName: String, label: String, dimmed: Bool = false,
-                                   action: @escaping () -> Void) -> some View {
-        NotchIconButton(systemName: systemName, glyphSize: 11, hitSize: NotchMetrics.trackInfoActionsHeight,
-                        tint: accentOrWhite, glyphOpacity: dimmed ? 0.4 : 0.75, action: action)
+    ///
+    /// `key` 是气泡认这颗键用的名字,字形会随状态换的键(喜欢:心 / 实心)要给一个固定的,不然点完气泡对不上它。
+    /// `lit`:点亮样式(字形全亮 + 淡底),同随机 / 循环键。
+    private func quickActionButton(_ systemName: String, key: String? = nil, label: String, dimmed: Bool = false,
+                                   lit: Bool = false, action: @escaping () -> Void) -> some View {
+        let hintKey = key ?? systemName
+        return NotchIconButton(systemName: systemName, glyphSize: 11, hitSize: NotchMetrics.trackInfoActionsHeight,
+                               tint: accentOrWhite, glyphOpacity: lit ? 1 : (dimmed ? 0.4 : 0.75),
+                               restingLevel: lit ? 0.16 : 0, action: action)
             // 指针进出这颗键。离开时**只在"记着的还是自己"时**才清 —— 相邻两颗键的 enter/exit
             // 到达顺序没有保证,少了这道守卫会出现 B 刚记上就被 A 那条迟到的 exit 抹掉。
             .onHover { inside in
                 if inside {
-                    hoveredQuickAction = QuickActionHint(key: systemName, text: label)
-                } else if hoveredQuickAction?.key == systemName {
+                    hoveredQuickAction = QuickActionHint(key: hintKey, text: label)
+                } else if hoveredQuickAction?.key == hintKey {
                     hoveredQuickAction = nil
                 }
             }
             // 「显示 / 隐藏歌词」那颗点完 `label` 就变,但指针没动、`onHover` 不会再来一次 —— 不同步
             // 的话气泡会停在点之前那句,而这颗键的状态本来就靠这句提示交代(05 章决策 28)。
             .onChange(of: label) { _, newLabel in
-                if hoveredQuickAction?.key == systemName {
-                    hoveredQuickAction = QuickActionHint(key: systemName, text: newLabel)
+                if hoveredQuickAction?.key == hintKey {
+                    hoveredQuickAction = QuickActionHint(key: hintKey, text: newLabel)
                 }
             }
             // 把自己的位置报给上面那层,气泡靠它对准这颗键 —— 几何交给 SwiftUI 算,不在别处照着
             // 「22 + spacing 2 + 分隔线」再手写一份坐标(那种两处各算一份的数迟早会漂)。
-            .anchorPreference(key: QuickActionAnchorKey.self, value: .bounds) { [systemName: $0] }
+            .anchorPreference(key: QuickActionAnchorKey.self, value: .bounds) { [hintKey: $0] }
             .accessibilityLabel(label)
     }
 

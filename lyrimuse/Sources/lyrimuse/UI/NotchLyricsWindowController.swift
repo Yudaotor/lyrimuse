@@ -826,6 +826,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
            PlaybackCoordinator.shared.playbackModeOptions.canRepeat {
             PlaybackCoordinator.shared.refreshPlaybackMode()
         }
+        // 头部那颗「喜欢」同理:用户可能在播放器里自己点过。没有「喜欢」的播放器 refreshFavorited 不起子进程。
+        if opening, expandedShowsQuickActions, !isAdBreakNow {
+            PlaybackCoordinator.shared.refreshFavorited()
+        }
         if next {
             // 展开头部本来就有歌名,掉出来的那条收掉。
             clearTrackDrop()
