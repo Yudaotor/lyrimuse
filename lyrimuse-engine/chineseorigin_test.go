@@ -142,32 +142,61 @@ func TestAppleStorefrontScanAsksOtherChineseStorefrontsOnlyWhenCNLacksTheAlbum(t
 	}
 }
 
-// 标题缓存版本 1 的空结论(在更少的商店里得出的)读入时丢掉、查到的曲名留着,下次存盘写成当前版本。
-func TestAppleStorefrontTitleCacheMigratesV1(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "title-cache.json")
-	data, _ := json.Marshal(appleStorefrontTitleFile{Version: 1, Entries: map[string]string{
-		"khalil fong|some album|black hole":           "",
-		"mrs green apple|kusushiki  single|kusushiki": "クスシキ",
-	}})
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	savedCache, savedPath, savedDirty := appleStorefrontTitleCache, appleStorefrontTitlePath, appleStorefrontTitleDirty
-	t.Cleanup(func() {
-		appleStorefrontTitleCache, appleStorefrontTitlePath, appleStorefrontTitleDirty = savedCache, savedPath, savedDirty
-	})
-	loadAppleStorefrontTitleCache(path)
-	if _, ok := appleStorefrontTitleCache["khalil fong|some album|black hole"]; ok {
-		t.Error("版本 1 的空结论该丢掉")
-	}
-	if got := appleStorefrontTitleCache["mrs green apple|kusushiki  single|kusushiki"]; got != "クスシキ" {
-		t.Errorf("查到的曲名该留着, got %q", got)
-	}
-	saveAppleStorefrontTitleCache()
-	var f appleStorefrontTitleFile
-	raw, _ := os.ReadFile(path)
-	if json.Unmarshal(raw, &f) != nil || f.Version != appleStorefrontTitleCacheVersion || len(f.Entries) != 1 {
-		t.Errorf("存盘该写成当前版本、只剩查到的那条: %+v", f)
+// 标题缓存旧版本读入:查到的曲名挪进 Legacy 等复核、照常读得到;版本 2 的空结论留着,版本 1 的空结论(在更少的商店里得出的)丢掉;
+// 署名缓存不动。下次存盘写成当前版本,Legacy 一起写。
+func TestAppleStorefrontTitleCacheMigratesOldVersions(t *testing.T) {
+	mga := normLoose("Mrs. GREEN APPLE") + "|" + normLoose("KUSUSHIKI - Single")
+	found := mga + "|" + normLoose("KUSUSHIKI")
+	for _, c := range []struct {
+		version   int
+		wantEmpty bool
+	}{{1, false}, {2, true}} {
+		path := filepath.Join(t.TempDir(), "title-cache.json")
+		data, _ := json.Marshal(appleStorefrontTitleFile{Version: c.version, Entries: map[string]string{
+			"khalil fong|some album|black hole": "",
+			found:                               "クスシキ",
+		}})
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		savedCache, savedLegacy, savedPath, savedDirty := appleStorefrontTitleCache, appleStorefrontTitleLegacy, appleStorefrontTitlePath, appleStorefrontTitleDirty
+		appleStorefrontArtistMu.Lock()
+		savedNames := appleStorefrontArtistCache
+		appleStorefrontArtistCache = map[string][]string{mga: {"ミセス"}}
+		appleStorefrontArtistMu.Unlock()
+		loadAppleStorefrontTitleCache(path)
+		if _, ok := appleStorefrontTitleCache[found]; ok {
+			t.Errorf("v%d:查到的曲名该挪出正式结论", c.version)
+		}
+		if got := appleStorefrontTitleLegacy[found]; got != "クスシキ" {
+			t.Errorf("v%d:查到的曲名该进 Legacy, got %q", c.version, got)
+		}
+		if got, ok := appleStorefrontCachedTitle("Mrs. GREEN APPLE", "KUSUSHIKI - Single", "KUSUSHIKI"); !ok || got != "クスシキ" {
+			t.Errorf("v%d:只读缓存的人照常读得到, got %q %v", c.version, got, ok)
+		}
+		if _, ok := appleStorefrontTitleCache["khalil fong|some album|black hole"]; ok != c.wantEmpty {
+			t.Errorf("v%d:空结论留着 = %v,期望 %v", c.version, ok, c.wantEmpty)
+		}
+		appleStorefrontArtistMu.Lock()
+		names := appleStorefrontArtistCache[mga]
+		appleStorefrontArtistMu.Unlock()
+		if len(names) != 1 {
+			t.Errorf("v%d:署名缓存不该动: %v", c.version, names)
+		}
+		saveAppleStorefrontTitleCache()
+		var f appleStorefrontTitleFile
+		raw, _ := os.ReadFile(path)
+		wantLen := 0
+		if c.wantEmpty {
+			wantLen = 1
+		}
+		if json.Unmarshal(raw, &f) != nil || f.Version != appleStorefrontTitleCacheVersion || len(f.Entries) != wantLen || f.Legacy[found] != "クスシキ" {
+			t.Errorf("v%d:存盘该写成当前版本、正式结论剩 %d 条、Legacy 带上: %+v", c.version, wantLen, f)
+		}
+		appleStorefrontTitleCache, appleStorefrontTitleLegacy, appleStorefrontTitlePath, appleStorefrontTitleDirty = savedCache, savedLegacy, savedPath, savedDirty
+		appleStorefrontArtistMu.Lock()
+		appleStorefrontArtistCache = savedNames
+		appleStorefrontArtistMu.Unlock()
 	}
 }
 

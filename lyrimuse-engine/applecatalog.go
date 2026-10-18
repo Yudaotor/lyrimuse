@@ -688,17 +688,35 @@ func saveAppleStorefrontArtistCache() {
 var (
 	appleStorefrontTitleMu    sync.Mutex
 	appleStorefrontTitleCache = map[string]string{}
-	appleStorefrontTitlePath  string // 空 = 只用内存不持久化(单测/一次性子命令)
-	appleStorefrontTitleDirty bool
+	// appleStorefrontTitleLegacy:版本 3 之前查到的曲名,还没按反证复核过。照常给人读(appleStorefrontCachedTitle),区服遍历
+	// 再跑到这首时复核:这次又挑到它、被反证挡下才换掉,别的情况原样转进 appleStorefrontTitleCache。
+	appleStorefrontTitleLegacy = map[string]string{}
+	appleStorefrontTitlePath   string // 空 = 只用内存不持久化(单测/一次性子命令)
+	appleStorefrontTitleDirty  bool
 )
 
 // 版本 2:华语歌的区服遍历在 CN 定位不到专辑时接着问 TW / HK(appleStorefrontIdentitiesAndTitle)。版本 1 的空结论是在更少的
-// 商店里得出的,读入时丢掉、用到时重查;查到的曲名照旧有效。
-const appleStorefrontTitleCacheVersion = 2
+// 商店里得出的,读入时丢掉、用到时重查。
+// 版本 3:按时长挑的曲目有反证时不用(appleStorefrontPickContradiction / appleStorefrontPickShadowed)。版本 2 查到的曲名
+// 没过这一关,读入时挪进 Legacy 等复核(appleStorefrontTitleLegacy);空结论照旧有效:新规则只会少用曲名。
+const appleStorefrontTitleCacheVersion = 3
 
 type appleStorefrontTitleFile struct {
 	Version int               `json:"version"`
 	Entries map[string]string `json:"entries"`
+	Legacy  map[string]string `json:"legacy,omitempty"`
+}
+
+// splitStorefrontTitleConclusions 把 entries 里查到了曲名的条目挪出来返回,entries 只剩空结论。纯函数(就地改 entries)。
+func splitStorefrontTitleConclusions(entries map[string]string) map[string]string {
+	out := map[string]string{}
+	for k, v := range entries {
+		if v != "" {
+			out[k] = v
+			delete(entries, k)
+		}
+	}
+	return out
 }
 
 func loadAppleStorefrontTitleCache(path string) {
@@ -713,20 +731,29 @@ func loadAppleStorefrontTitleCache(path string) {
 		return
 	}
 	migrated := false
+	legacy := f.Legacy
 	switch f.Version {
 	case appleStorefrontTitleCacheVersion:
-	case 1:
-		for k, v := range f.Entries {
-			if v == "" {
-				delete(f.Entries, k)
+	case 1, 2:
+		if f.Version == 1 {
+			for k, v := range f.Entries {
+				if v == "" {
+					delete(f.Entries, k)
+				}
 			}
 		}
+		legacy = splitStorefrontTitleConclusions(f.Entries)
+		log.Printf("cache: %d storefront title conclusions from %s await re-checking", len(legacy), path)
 		migrated = true
 	default:
 		return
 	}
+	if legacy == nil {
+		legacy = map[string]string{}
+	}
 	appleStorefrontTitleMu.Lock()
 	appleStorefrontTitleCache = f.Entries
+	appleStorefrontTitleLegacy = legacy
 	if migrated {
 		appleStorefrontTitleDirty = true
 	}
@@ -746,7 +773,11 @@ func saveAppleStorefrontTitleCache() {
 	for k, v := range appleStorefrontTitleCache {
 		entries[k] = v
 	}
-	data, err := json.Marshal(appleStorefrontTitleFile{Version: appleStorefrontTitleCacheVersion, Entries: entries})
+	legacy := make(map[string]string, len(appleStorefrontTitleLegacy))
+	for k, v := range appleStorefrontTitleLegacy {
+		legacy[k] = v
+	}
+	data, err := json.Marshal(appleStorefrontTitleFile{Version: appleStorefrontTitleCacheVersion, Entries: entries, Legacy: legacy})
 	appleStorefrontTitleDirty = false
 	path := appleStorefrontTitlePath
 	appleStorefrontTitleMu.Unlock()
@@ -792,9 +823,13 @@ func appleStorefrontCachedTitle(artist, album, title string) (string, bool) {
 	if album == "" {
 		return "", false
 	}
+	key := normLoose(artist) + "|" + normLoose(album) + "|" + normLoose(title)
 	appleStorefrontTitleMu.Lock()
 	defer appleStorefrontTitleMu.Unlock()
-	t, ok := appleStorefrontTitleCache[normLoose(artist)+"|"+normLoose(album)+"|"+normLoose(title)]
+	if t, ok := appleStorefrontTitleCache[key]; ok {
+		return t, true
+	}
+	t, ok := appleStorefrontTitleLegacy[key]
 	return t, ok
 }
 
@@ -835,7 +870,9 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 	appleStorefrontArtistMu.Unlock()
 	appleStorefrontTitleMu.Lock()
 	cachedTitle, titleOK := appleStorefrontTitleCache[titleKey]
+	legacyTitle, legacyOK := appleStorefrontTitleLegacy[titleKey]
 	appleStorefrontTitleMu.Unlock()
+	legacyOK = legacyOK && !titleOK
 	// **两样都命中**才能直接回。只有署名缓存(之前存下的,或同专辑另一首歌留下的)
 	// 是不够的 —— 这一首的曲名还没查过,直接回等于把死结原样留着。
 	if namesOK && titleOK {
@@ -852,6 +889,12 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 	complete = true // 每个商店都问成了(搜索真的答了、定位到的专辑真的取到了曲目表)
 	stores, chineseFallback := appleStorefrontScanStorefronts(append([]string{artist, title, album}, lyricSamples...)...)
 	chineseLocated := false
+	// localDurations:本机同一张专辑听过的歌的时长,给按时长挑的曲目找反证用(appleStorefrontAlbumMismatch);用到时才取。
+	var localDurations []float64
+	localDurationsLoaded := false
+	var hits []storefrontHit
+	// rejectedTitles / rejectedArtists:这一轮因反证没用的曲名、因专辑对不上没收的署名(都按 normLoose),复核旧结论用。
+	rejectedTitles, rejectedArtists := map[string]bool{}, map[string]bool{}
 	for _, country := range stores {
 		if chineseFallback[country] && chineseLocated {
 			continue
@@ -870,28 +913,47 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 		if bestID == 0 {
 			continue
 		}
-		if appleChineseStorefront(country) {
-			chineseLocated = true
+		markLocated := func() {
+			if appleChineseStorefront(country) {
+				chineseLocated = true
+			}
 		}
 		tracks := itunesLookupTracks(ctx, bestID, country)
 		if len(tracks) == 0 {
+			markLocated()
 			complete = false // 定位到了专辑却没取到曲目表:lookup 没问成
 			continue
 		}
 		probed = true
 		hit := appleStorefrontPickTrack(title, durationSecs, tracks)
 		if hit == nil {
+			markLocated()
 			log.Printf("lyrics: storefront %s: album %q matched %q by name only, none of its %d tracks is %q (%.0fs) — treated as a different album", country, album, artist, len(tracks), title, durationSecs)
 			continue
 		}
-		// 规范曲名必须在下面那道**署名去重之前**取。本地署名本来就对时(日文歌最常见的形状 ——
-		// 「Mrs. GREEN APPLE」在哪个商店都这么写),`seen[n]` 那条 continue 会把整条 hit 跳过,
-		// 曲名跟着一起丢。
-		// 取第一个与本地写法不同的:商店按 appleStorefrontsFor 的顺序问,原产地排在基线 CN/US
-		// 之后,而真正"换了文字系统"的写法只会出现在原产地那一份。
-		if canonicalTitle == "" && hit.TrackName != "" && normLoose(hit.TrackName) != normLoose(title) {
-			canonicalTitle = hit.TrackName
+		h := storefrontHit{country: country, hit: *hit, tracks: tracks, cross: normLoose(hit.TrackName) != normLoose(title), titleOK: hit.TrackName != ""}
+		if h.cross {
+			// 按时长挑的:有反证就不用。专辑对不上的不算定位到了专辑(后面的中文区商店照问)、署名也不收;版本对不上的只不用曲名。
+			if !localDurationsLoaded {
+				localDurations, localDurationsLoaded = localAlbumTrackDurations(artist, album), true
+			}
+			switch appleStorefrontPickContradiction(title, album, *hit, tracks, localDurations) {
+			case "album":
+				rejectedTitles[normLoose(hit.TrackName)] = true
+				rejectedArtists[normLoose(hit.ArtistName)] = true
+				log.Printf("lyrics: storefront %s: %q by %q picked for %q (%.0fs) by duration only, but %d local tracks of %q mostly have no counterpart in %q; treated as a different album", country, hit.TrackName, hit.ArtistName, title, durationSecs, len(localDurations), album, hit.CollectionName)
+				continue
+			case "version":
+				log.Printf("lyrics: storefront %s: %q (%q) picked for %q (%q) by duration only is another version; title not used", country, hit.TrackName, hit.CollectionName, title, album)
+				h.titleOK = false
+				rejectedTitles[normLoose(hit.TrackName)] = true
+			default:
+				markLocated()
+			}
+		} else {
+			markLocated()
 		}
+		hits = append(hits, h)
 		n := normLoose(hit.ArtistName)
 		if hit.ArtistName == "" || n == "" || seen[n] {
 			continue
@@ -903,6 +965,32 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 		}
 		seen[n] = true
 		out = append(out, hit.ArtistName)
+	}
+
+	// 规范曲名:按商店顺序取第一个跟本地写法不同、能用的。商店按 appleStorefrontsFor 的顺序问,原产地排在基线 CN/US 之后,
+	// 而真正"换了文字系统"的写法只会出现在原产地那一份。要在署名去重之前收齐:本地署名本来就对时(「Mrs. GREEN APPLE」
+	// 在哪个商店都这么写),署名那段的 continue 会跳过整条 hit。
+	for _, h := range hits {
+		if !h.cross || !h.titleOK {
+			continue
+		}
+		if appleStorefrontPickShadowed(title, h, hits) {
+			rejectedTitles[normLoose(h.hit.TrackName)] = true
+			log.Printf("lyrics: storefront %s: %q (%.0fs) picked for %q by duration only is another track of the album where %q was found by name; title not used", h.country, h.hit.TrackName, h.hit.TrackTimeMillis/1000, title, title)
+			continue
+		}
+		canonicalTitle = h.hit.TrackName
+		break
+	}
+	// 复核旧结论:旧曲名这一轮又挑到了、被反证挡下才换成这一轮的结论;别的情况(这一轮没挑到它、店面曲库变了、没问日区)
+	// 原样留着,署名也只去掉这一轮被专辑反证挡下的那几位。
+	if legacyOK {
+		if !rejectedTitles[normLoose(legacyTitle)] {
+			canonicalTitle = legacyTitle
+		}
+		if namesOK {
+			out = mergeStorefrontNames(cachedNames, out, rejectedArtists)
+		}
 	}
 
 	appleStorefrontArtistMu.Lock()
@@ -919,10 +1007,12 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 	// 规范曲名的结论要么是查到了一个(canonicalTitle 非空),要么是每个商店都问成了、确实都跟本地写法一样。
 	// 原产地商店(排在 CN / US 之后)被限流没问成时,空串不能记:那会把「本地写法就是规范的」永久落盘,
 	// 标题反查对这首歌从此失效(日文歌最常见的形状)。
-	if probed && (canonicalTitle != "" || complete) {
+	// 复核旧结论时,定位到过专辑或每个商店都问成了就落定;都没问成就留着下次再复核。
+	if (probed && (canonicalTitle != "" || complete)) || (legacyOK && complete) {
 		// 空串也记(含义:查过了,本地写法就是规范的),理由见 appleStorefrontTitleCache 头注。
 		appleStorefrontTitleMu.Lock()
 		appleStorefrontTitleCache[titleKey] = canonicalTitle
+		delete(appleStorefrontTitleLegacy, titleKey)
 		appleStorefrontTitleDirty = true
 		appleStorefrontTitleMu.Unlock()
 		saveAppleStorefrontTitleCache()
