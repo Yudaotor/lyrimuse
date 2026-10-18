@@ -205,7 +205,6 @@ func runSettingsSearchTests() {
         "上一轮扫描尚未完成，稍后将自动继续",
         "网络不可用，已暂停，稍后将自动继续",
         "需要 Discord 桌面版", "请打开 Discord", "Discord 尚未就绪",   // Discord 页的引导行(没装 / 没开 / 连不上时才有)
-        "完整说明",                                                   // 快捷键 › 深度链接卡最后一行(收起时看不到,搜卡头即可,卡头关键词带「文档」)
     ]
     let scannedFiles = [
         "SettingsView.swift", "AccountLinkingTab.swift",

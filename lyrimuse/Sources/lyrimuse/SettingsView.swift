@@ -7108,12 +7108,13 @@ private struct ShortcutsSettingsTab: View {
         }
     }
 
-    /// 「深度链接」卡:打开类的 `lyrimuse://` 链接,每行可拷贝;动作类的在上面各格悬停时拷贝。设置页链接还能带页面和分段
-    /// (`lyrimuse://settings/lyrics/manage`),不一一列出,最后一行开对外文档 docs/url-scheme(.zh-CN).md。见 14 章决策 94、121。
+    /// 「深度链接」卡:打开类的 `lyrimuse://` 链接,跟上面几张卡同一套两列格子,每格行尾拷贝(链接本身在拷贝按钮的悬停
+    /// 提示里);动作类的在上面各格悬停时拷贝。设置页链接还能带页面和分段(`lyrimuse://settings/lyrics/manage`),不一一
+    /// 列出,最后一格开对外文档 docs/url-scheme(.zh-CN).md。见 14 章决策 94、121、123。
     /// 平时收起,点卡头展开;设置搜索点名「深度链接」时
     /// 自己展开(被点名的就是卡头那一行,收着也看得见,展开是为了让人接着看下面的链接)。
     private var linksCard: some View {
-        // 带参数的几条显示一条示例,可选值写在行尾「?」里;x-callback 那条给的是不带 x-success 的写法,快捷指令的
+        // 带参数的几条拷贝的是一条示例,可选值写在名字后的「?」里;x-callback 那条给的是不带 x-success 的写法,快捷指令的
         // 「打开 X-Callback URL」会自己补上回传地址。
         let links: [(icon: String, title: String, link: LyrimuseDeepLink, help: String?)] = [
             ("gearshape", L10n.t("打开设置"), .settings(path: "", checkForUpdates: false), nil),
@@ -7134,37 +7135,39 @@ private struct ShortcutsSettingsTab: View {
             ("timer", L10n.t("设定歌词偏移"), .setLyricsOffset(ms: -300),
              L10n.t("ms 为毫秒，正数提前、负数延后，±10000 以内")),
         ]
+        let cells = links.compactMap { item in
+            item.link.url(scheme: LyrimuseIdentity.urlScheme).map { url in
+                AnyView(HotkeyCell(icon: item.icon, title: item.title, help: item.help) { CopyLinkButton(url: url) })
+            }
+        } + [AnyView(HotkeyCell(icon: "book", title: L10n.t("完整说明"), help: L10n.t("所有链接、参数和设置页路径")) {
+            referenceButton
+        })]
         return SettingsCard(cornerRadius: 18) {
             linksHeader
             if linksExpanded {
-                ForEach(Array(links.enumerated()), id: \.offset) { index, item in
-                    CardDivider()
-                    if let url = item.link.url(scheme: LyrimuseIdentity.urlScheme) {
-                        SettingsRow(icon: item.icon, title: item.title, subtitle: url.absoluteString, help: item.help) {
-                            CopyLinkButton(url: url)
-                        }
-                    }
-                }
-                CardDivider()
-                SettingsRow(icon: "book", title: L10n.t("完整说明"), subtitle: L10n.t("所有链接、参数和设置页路径")) {
-                    Button {
-                        NSWorkspace.shared.open(LyrimuseDeepLink.referenceURL(language: L10n.current))
-                    } label: {
-                        Image(systemName: "arrow.up.right")
-                            .font(.system(size: 11, weight: .semibold))
-                            .frame(width: 16, height: 16)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.glassIcon())
-                    .foregroundStyle(.secondary)
-                    .help(L10n.t("在浏览器中打开"))
-                    .accessibilityLabel(L10n.t("在浏览器中打开"))
-                }
+                Divider()
+                HotkeyGrid(cells: cells)
             }
         }
         // onAppear 管「从别的页搜过来、这张卡刚建出来」,onChange 管「卡已经在屏、信号后到」。
         .onAppear { expandLinksForSearch(highlightedTitles) }
         .onChange(of: highlightedTitles) { _, titles in expandLinksForSearch(titles) }
+    }
+
+    /// 「完整说明」那一格的打开按钮:按界面语言开 GitHub 上的对外文档。
+    private var referenceButton: some View {
+        Button {
+            NSWorkspace.shared.open(LyrimuseDeepLink.referenceURL(language: L10n.current))
+        } label: {
+            Image(systemName: "arrow.up.right")
+                .font(.system(size: 11, weight: .semibold))
+                .frame(width: 16, height: 16)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.glassIcon())
+        .foregroundStyle(.secondary)
+        .help(L10n.t("在浏览器中打开"))
+        .accessibilityLabel(L10n.t("在浏览器中打开"))
     }
 
     private func expandLinksForSearch(_ titles: Set<String>) {
@@ -7204,20 +7207,24 @@ private struct ShortcutsSettingsTab: View {
     }
 }
 
-/// 快捷键页一格:图标 + 名字 + 录制框,一行。名字放不下先缩一点字号,再不行截断(悬停看全名)。
+/// 快捷键页一格:图标 + 名字(+ ?)+ 尾部控件(录制框,或深度链接卡的拷贝 / 打开按钮),一行。名字放不下先缩一点
+/// 字号,再不行截断(悬停看全名)。
 /// 自绘的格子不会自动挂设置搜索高亮(只有 SettingsRow / SettingsCardHeader 会),这里手挂。
 private struct HotkeyCell<Recorder: View>: View {
     let icon: String
     let title: String
     /// 这一格的动作;给了就在指针悬停时把行首图标换成「拷贝链接」(`lyrimuse://action/…`,14 章决策 94)。
     let action: LyrimuseAction?
+    let help: String?
     @ViewBuilder let recorder: () -> Recorder
     @State private var hovering = false
 
-    init(icon: String, title: String, action: LyrimuseAction? = nil, @ViewBuilder recorder: @escaping () -> Recorder) {
+    init(icon: String, title: String, action: LyrimuseAction? = nil, help: String? = nil,
+         @ViewBuilder recorder: @escaping () -> Recorder) {
         self.icon = icon
         self.title = title
         self.action = action
+        self.help = help
         self.recorder = recorder
     }
 
@@ -7243,6 +7250,7 @@ private struct HotkeyCell<Recorder: View>: View {
                 .minimumScaleFactor(0.8)
                 .truncationMode(.tail)
                 .help(title)
+            if let help { HelpButton(text: help) }
             Spacer(minLength: 6)
             recorder()
         }
