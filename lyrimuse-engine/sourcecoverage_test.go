@@ -28,6 +28,7 @@ func TestEveryLyricSourceHasAHostMapping(t *testing.T) {
 		"migu":       {"pd.musicapp.migu.cn", "d.musicapp.migu.cn"},
 		"deezer":     {"api.deezer.com", "pipe.deezer.com", "auth.deezer.com"},
 		"applemusic": {"amp-api.music.apple.com"},
+		"vibe":       {"apis.naver.com"},
 		"soda":       {sodaSeoTrackHost, sodaSearchHost},
 	}
 	for _, source := range lyricSourceNames {

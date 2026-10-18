@@ -62,6 +62,12 @@ public enum CoverThumbnailFetch {
         if isHost(host, "googleusercontent.com") {
             return replacingPath(url, comps, path, pattern: #"=[A-Za-z0-9-]+$"#) { _ in "=s\(maxPixel)" } ?? url
         }
+        if host == "musicmeta-phinf.pstatic.net" {
+            // VIBE 的专辑图:不带参数是原图,`type=r<边长>Fll` 只认这几档(r150 / r600 是 404)。
+            let edge = snap(maxPixel, to: [240, 300, 480, 720])
+            comps.percentEncodedQuery = "type=r\(edge)Fll"
+            return comps.url ?? url
+        }
         if isHost(host, "dzcdn.net") {
             return replacingPath(url, comps, path, pattern: #"^(/images/cover/[0-9a-f]+/)\d+x\d+-"#) { m in
                 "\(m[1])\(maxPixel)x\(maxPixel)-"

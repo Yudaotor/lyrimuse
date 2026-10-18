@@ -1942,6 +1942,9 @@ func runCoverArtTests() {
         expectEqual(t("https://cdn-images.dzcdn.net/images/cover/42b95263fc55a7b8095b6805149226c4/1800x1800-000000-80-0-0.jpg"),
                     "https://cdn-images.dzcdn.net/images/cover/42b95263fc55a7b8095b6805149226c4/256x256-000000-80-0-0.jpg",
                     "缩略图下载: Deezer 原图换 256")
+        expectEqual(t("https://musicmeta-phinf.pstatic.net/album/002/923/2923941.jpg"),
+                    "https://musicmeta-phinf.pstatic.net/album/002/923/2923941.jpg?type=r300Fll",
+                    "缩略图下载: VIBE 原图换 r300Fll(只有 240 / 300 / 480 / 720 几档)")
         // 形状对不上一个字都不改:改错是 404、整张封面消失
         for s in ["https://d.musicapp.migu.cn/data/oss/resource/00/60/ig/9cf9564aff9544f4983d16b25e85d250.webp",
                   "https://evilmusic.126.net/a.jpg?x=1",

@@ -67,6 +67,9 @@ const (
 	// 引擎用的 seo_track 端点,无签名、无 Cookie、无需登录。正文格式与酷狗 KRC 同构,
 	// 逐字归一化直接复用 krcToLRC / krcToYRC。
 	lyricSourceSoda = "soda"
+	// Naver VIBE(加,见 vibe.go 头注)。韩国曲库,全球的歌也收;逐行 + 外语歌的韩文译文,没有逐字。补的是韩文歌:
+	// 没连 Apple Music 时,前面这些源里韩国独立歌常常只有 Deezer 一份逐行。
+	lyricSourceVibe = "vibe"
 )
 
 const (
@@ -97,7 +100,7 @@ const (
 var lyricsSourceDefaultOrder = []string{
 	lyricSourceKugou, lyricSourceNetease, lyricSourceQQ, lyricSourceMusixmatch, lyricSourceLRCLIB,
 	lyricSourceAMLL, lyricSourceLyricFind, lyricSourceKuwo, lyricSourceMigu, lyricSourceDeezer,
-	lyricSourceAppleMusic, lyricSourceSoda,
+	lyricSourceAppleMusic, lyricSourceSoda, lyricSourceVibe,
 }
 
 // featureFlagsFile 是 App「设置」写的共享文件 lyrimuse-features.json(FeatureSettingsStore)在这边的形状,引擎

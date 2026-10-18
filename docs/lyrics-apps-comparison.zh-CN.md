@@ -29,7 +29,7 @@
 | 最低 macOS | 14（Sonoma） | 10.11 | 15（Sequoia） |
 | 支持的播放器 | Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗、汽水音乐、洛雪音乐、KKBOX、Amazon Music、Kaset（YouTube Music）、reAMP——可任意组合 | Apple Music、Spotify、Vox、Audirvana、Swinsian（经其 MusicPlayer 组件） | Spotify、Apple Music |
 | 浏览器网页播放器 | YouTube Music 与 Spotify 网页版，跟随页面自身进度同步 | — | — |
-| 自动查证的歌词源 | 网易云、QQ 音乐、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、汽水音乐、Apple Music（官方源，需连账号） | 多个（经其 LyricsKit 组件） | 3 个：Spotify、LRCLIB、网易云 |
+| 自动查证的歌词源 | 网易云、QQ 音乐、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、汽水音乐、VIBE、Apple Music（官方源，需连账号） | 多个（经其 LyricsKit 组件） | 3 个：Spotify、LRCLIB、网易云 |
 | 匹配选择 | 所有源的全部候选统一打分（歌名/歌手/专辑/上报时长吻合度 + 逐字时间轴等质量信号）；每首歌都有决策面板，列出各候选得分与胜出原因；手动选定的歌词会被锁定、绝不被自动覆盖 | — | — |
 | 逐字同步 | 是，跨源支持（含 Apple Music 官方逐字、人工整理的 AMLL 逐字库） | 经 LRCX 逐字时间标签，取决于源是否提供 | — |
 | 翻译 | 优先源自带的社区翻译，否则设备端 Apple 翻译（17 种目标语言）+ 在线兜底 | 显示源自带的翻译 | Apple 设备端翻译，可以按歌设定原文语言 |

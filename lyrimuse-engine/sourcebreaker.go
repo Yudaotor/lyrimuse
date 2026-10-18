@@ -389,6 +389,10 @@ func lyricSourceForHost(host string) string {
 		// 堆服务,跟歌词无关的故障会连带停掉这个源。分享页的 music.douyin.com 同理不进来(见 soda.go
 		// sodaSharePageURL)。
 		return "soda"
+	case h == "apis.naver.com":
+		// VIBE 的搜索和取词都在这个主机的 /vibeWeb/ 下(vibe.go)。全仓只有这一源请求它;封面图在 musicmeta-phinf.pstatic.net,
+		// 跟歌词无关,不进来。
+		return "vibe"
 	}
 	return ""
 }

@@ -280,6 +280,8 @@ func sourceColor(_ source: String) -> Color {
     // 汽水音乐(见 lyrimuse-engine/soda.go 头注)。品牌色是青绿一系,可 .teal / .cyan / .mint 都被占了(.cyan 是酷狗),
     // 系统色里没有空位,取黄绿之间那段没人用的色相。
     case "soda": return Color(hue: 0.25, saturation: 0.7, brightness: 0.72)
+    // Naver VIBE(见 lyrimuse-engine/vibe.go 头注)。系统色都被占了,取比 .purple(LRCLIB)更暗、比 .pink(LyricFind)更紫的梅紫。
+    case "vibe": return Color(hue: 0.88, saturation: 0.6, brightness: 0.65)
     // KKBOX 本地歌词(不是歌词源:用 KKBOX 放歌时读它自己缓存里的那份,见 lyrimuse-engine/kkboxlyrics.go 头注)。
     // 品牌色是青蓝一系,.cyan / .teal / .blue 都被占了,取最后一个未占用色 .yellow。
     case "kkbox": return .yellow
@@ -330,6 +332,8 @@ func sourceDisplayName(_ source: String) -> String {
     case "applemusic": return "Apple Music"
     // 汽水音乐——官方中文名,跟网易云/QQ/酷狗同一档写法。
     case "soda": return L10n.t("汽水音乐")
+    // VIBE——Naver 的音乐服务,品牌名,中文界面里也写 VIBE,保留原名。
+    case "vibe": return "VIBE"
     // KKBOX 本地歌词——品牌名,中文界面里也写 KKBOX,保留原名。不在 LyricsSource 里(设置里没有它的开关),
     // 只在这份词确实来自 KKBOX 时显示出来。
     case "kkbox": return "KKBOX"

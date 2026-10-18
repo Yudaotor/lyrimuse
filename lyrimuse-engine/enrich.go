@@ -4774,14 +4774,14 @@ func keepShownRoundUpdate(onUpdate lyricSearchUpdateFunc, base []scoredLyricCand
 
 // lyricSourceNames 是全部歌词源的名字,每个源一个并发 goroutine。顺序只决定「有歌没词」标记、日志和设置项里的源序;
 // 同分候选谁赢看 lyricCandidateTieOrder,不看这里。
-var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "musixmatch", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda"}
+var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "musixmatch", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe"}
 
 // lyricCandidateTieOrder:同分候选按这个源序决胜,就是 rankLyricSourceResults 构造候选的顺序(本机几家的歌词夹在
 // 汽水和 AMLL 之间)。合并几轮结果的 mergeLyricCandidateRounds 按它重建顺序,两边才是同一个口径:不然同一首歌走没走
 // 补查轮,同分时会在 musixmatch / lrclib、applemusic / amll 之间换源。rankLyricSourceResults 里加了源、挪了顺序,这里
 // 跟着改(lyrictieorder_test.go 用源码扫描钉着两边一致)。
 var lyricCandidateTieOrder = []string{
-	"netease", "qq", "kugou", "musixmatch", "lrclib", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda",
+	"netease", "qq", "kugou", "musixmatch", "lrclib", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda", "vibe",
 	kkboxLocalLyricsSource, amazonLocalLyricsSource, lxMusicLocalLyricsSource, localFileLyricsSource, spotifyLocalLyricsSource,
 	"amll",
 }
@@ -4909,6 +4909,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		amTrLang = features().LyricsTranslationLanguage
 	}
 	soda := raw["soda"]
+	vibe := raw["vibe"]
 	kk := raw[kkboxLocalLyricsSource]
 	spl := raw[spotifyLocalLyricsSource]
 	amz := raw[amazonLocalLyricsSource]
@@ -5033,6 +5034,14 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			cover:                   sodaCover,
 			identityFromLocalClient: soda.identityFromLocalClient,
 		})
+	}
+	if vibe.lyr != "" {
+		// 逐行 + 外语歌的韩文译文(标 "ko",译文语言设成韩文时才用得上),没有逐字和罗马音;封面是搜索结果自带的专辑图原图,
+		// 时长是搜索结果自报的 playTime(见 vibe.go 头注)。plainOnly 直通打分层那道恒 -1 的闸,口径同 deezer / lrclib。
+		vibeUsableTr, _ := usableValueAdd(vibe.lyr, vibe.tr, vibeTranslationLang, "", features().LyricsTranslationLanguage)
+		candidates = append(candidates, lyricCandidate{source: "vibe", lyrics: vibe.lyr, hasUsableTranslation: vibeUsableTr,
+			sourceReportedDurationSecs: vibe.srcDur, title: vibe.matchTitle, artist: vibe.matchArtist, album: vibe.matchAlbum,
+			cover: vibe.matchCover, plainTextOnly: vibe.plainOnly})
 	}
 	if kk.lyr != "" {
 		// KKBOX 本地歌词(用 KKBOX 放歌时读它自己缓存里的那份,逐行,见 kkboxlyrics.go)。只精确到整秒的那类不置
@@ -5301,6 +5310,12 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			if c.hasUsableTranslation {
 				r.LyricsTr = miguTr
 				r.LyricsTrLang = "zh"
+			}
+		case "vibe":
+			// VIBE 只有韩文译文,可用性由候选装配时的 usableValueAdd 把关。
+			if c.hasUsableTranslation {
+				r.LyricsTr = vibe.tr
+				r.LyricsTrLang = vibeTranslationLang
 			}
 		case lxMusicLocalLyricsSource:
 			// 洛雪存下的是平台原版的译文 / 音译轨(国内平台的译文固定中文),口径同 qq。
@@ -5726,6 +5741,15 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// 曲目 id 来自汽水客户端的播放队列缓存时,同一份缓存里的 vocal==2 就是这一条没有人声(见 sodalocal.go)。
 		noVocals := r.fromLocalClient && sodaLocalInstrumental(artist, srcTitle, album, durationSecs)
 		resultsCh <- lyricSourceResult{source: "soda", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, trackFoundNoLyrics: noLyrics, noVocals: noVocals, identityFromLocalClient: r.fromLocalClient}
+	}()
+	go func() {
+		if skipSource("vibe") {
+			resultsCh <- lyricSourceResult{source: "vibe"}
+			return
+		}
+		// 独立检索(不等任何其它源的 ID),同 kuwo / migu / deezer。只有纯文本时 plainOnly=true。
+		r := vibeLyric(ctx, artist, srcTitle, album, durationSecs)
+		resultsCh <- lyricSourceResult{source: "vibe", lyr: r.lyrics, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
 	}()
 
 	// raw:目前为止到手的各源原始应答,按源名存。打分/排序全部下放给

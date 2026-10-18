@@ -32,7 +32,7 @@ of the actively maintained open-source options:
 | Minimum macOS | 14 (Sonoma) | 10.11 | 15 (Sequoia) |
 | Players | Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, Kaset (YouTube Music), reAMP — any combination | Apple Music, Spotify, Vox, Audirvana, Swinsian (via its MusicPlayer library) | Spotify, Apple Music |
 | Web players in a browser | YouTube Music & Spotify Web, synced to the page's own progress | — | — |
-| Lyric sources checked automatically | NetEase, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, Apple Music (official, opt-in) | multiple, via its LyricsKit library | 3: Spotify, LRCLIB, NetEase |
+| Lyric sources checked automatically | NetEase, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Apple Music (official, opt-in) | multiple, via its LyricsKit library | 3: Spotify, LRCLIB, NetEase |
 | Match selection | every candidate from every source scored on one scale (title / artist / album / reported-duration fit + quality signals like word-level timing); a per-track decision panel shows each candidate's score and why the winner won; manual picks are locked and never overridden | — | — |
 | Word-by-word sync | yes, across sources (incl. Apple Music's official timing and the hand-curated AMLL database) | via LRCX word time tags, when the source provides them | — |
 | Translation | source community translation when available, else on-device Apple translation (17 target languages) with online fallback | displays source-provided translations | Apple on-device translation, with a per-song source language |

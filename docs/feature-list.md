@@ -63,9 +63,9 @@ These features stay off after you install. Turn them on in Settings first (some 
 
 <a id="feature-lyric-sources"></a>
 
-### Twelve lyric sources, searched for you
+### Thirteen lyric sources, searched for you
 
-NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music and Apple Music. Each source can be turned off, reordered, or tested to see whether it is reachable right now.
+NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE and Apple Music. Each source can be turned off, reordered, or tested to see whether it is reachable right now.
 
 - On by default
 - Settings: Lyrics › Sources › Lyrics Sources

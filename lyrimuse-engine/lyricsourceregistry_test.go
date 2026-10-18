@@ -21,7 +21,7 @@ func allLyricSourceConstants() []string {
 		lyricSourceNetease, lyricSourceQQ, lyricSourceKugou,
 		lyricSourceMusixmatch, lyricSourceLRCLIB, lyricSourceAMLL, lyricSourceLyricFind,
 		lyricSourceKuwo, lyricSourceMigu, lyricSourceDeezer, lyricSourceAppleMusic,
-		lyricSourceSoda,
+		lyricSourceSoda, lyricSourceVibe,
 	}
 }
 
@@ -245,7 +245,7 @@ func TestSwiftSourceDisplayNameCoversAllSources(t *testing.T) {
 // 不是"某句文案里的数字过期了")。现在这两句改成不带数字的「启用的歌词源……」(用户关掉几个源时
 // 写全部源数本来就不对),没有数字就没有可过期的;这里守的是以后谁再把数字写回来时它得对。
 func TestSwiftSearchEmptyStateCountMatchesSourceCount(t *testing.T) {
-	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十", 11: "十一", 12: "十二"}
+	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十", 11: "十一", 12: "十二", 13: "十三"}
 	n := len(allLyricSourceConstants())
 	digit, ok := chineseDigits[n]
 	if !ok {
@@ -272,8 +272,8 @@ func TestSwiftSearchEmptyStateCountMatchesSourceCount(t *testing.T) {
 // 「%d/8」(表现是界面上「歌词源数量还是 8」)。这里把**带具体数字的现状描述**钉死;其它地方从此
 // 一律写"全部源 / 各源",不带数字(带日期的历史记录除外),新加源时就不会再有第二批漏网。
 func TestDocsSourceCountMatchesSourceCount(t *testing.T) {
-	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十", 11: "十一", 12: "十二"}
-	englishWords := map[int]string{5: "Five", 6: "Six", 7: "Seven", 8: "Eight", 9: "Nine", 10: "Ten", 11: "Eleven", 12: "Twelve"}
+	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十", 11: "十一", 12: "十二", 13: "十三"}
+	englishWords := map[int]string{5: "Five", 6: "Six", 7: "Seven", 8: "Eight", 9: "Nine", 10: "Ten", 11: "Eleven", 12: "Twelve", 13: "Thirteen"}
 	n := len(allLyricSourceConstants())
 	zh, okZh := chineseDigits[n]
 	en, okEn := englishWords[n]

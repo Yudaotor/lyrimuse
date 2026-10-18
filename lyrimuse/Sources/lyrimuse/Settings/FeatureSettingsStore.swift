@@ -5,7 +5,7 @@ import SwiftUI
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "feature-settings")
 
-// 十二个歌词源——rawValue 必须跟 lyrimuse-engine/features.go 的 lyricSourceXxx 常量逐字对应,
+// 十三个歌词源——rawValue 必须跟 lyrimuse-engine/features.go 的 lyricSourceXxx 常量逐字对应,
 // 这是两侧通过共享 json 文件交换的字符串。displayName/color 直接委托给
 // LyricsManagerView.swift 已有的 sourceDisplayName/sourceColor(那两个函数也在给
 // "歌词管理"窗口的来源筛选/列表用),不重复维护第二份名字/颜色映射。
@@ -24,7 +24,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "featur
 // deezer 跟 lyricfind 数据同源(都是 LyricFind 供词),但两条管道各走各的接口:接它既是
 // 给那家版权方补条后路,也因为 Deezer 的法语曲库覆盖更好,见 lyrimuse-engine/deezer.go 头注。
 public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable {
-    case kugou, netease, qq, musixmatch, lrclib, amll, lyricfind, kuwo, migu, deezer, applemusic, soda
+    case kugou, netease, qq, musixmatch, lrclib, amll, lyricfind, kuwo, migu, deezer, applemusic, soda, vibe
     public var id: Self { self }
     public var displayName: String { sourceDisplayName(rawValue) }
     public var color: Color { sourceColor(rawValue) }
@@ -272,6 +272,7 @@ struct FeatureFlagsFile: Codable, Equatable {
     var deezerLyrics: Bool?
     var appleMusicLyrics: Bool?
     var sodaLyrics: Bool?
+    var vibeLyrics: Bool?
     var lyricsSourceMode: String?
     var lyricsSourceOrder: [String]?
     var lyricsDir: String?
@@ -341,6 +342,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case deezerLyrics = "deezer_lyrics"
         case appleMusicLyrics = "applemusic_lyrics"
         case sodaLyrics = "soda_lyrics"
+        case vibeLyrics = "vibe_lyrics"
         case lyricsSourceMode = "lyrics_source_mode"
         case lyricsSourceOrder = "lyrics_source_order"
         case lyricsDir = "lyrics_dir"
@@ -633,6 +635,8 @@ public final class FeatureSettingsStore: ObservableObject {
             appleMusicLyrics: lyricsSources.contains(.applemusic),
             // 同上,soda 的迁移标记独立生效一次。不写它,引擎会一直把这个源补回来。
             sodaLyrics: lyricsSources.contains(.soda),
+            // 同上,vibe 的迁移标记独立生效一次。
+            vibeLyrics: lyricsSources.contains(.vibe),
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
@@ -879,6 +883,10 @@ public final class FeatureSettingsStore: ObservableObject {
             if f.sodaLyrics == nil {
                 // 同上,见 FeatureFlagsFile.sodaLyrics。
                 enabled.insert(.soda)
+            }
+            if f.vibeLyrics == nil {
+                // 同上,见 FeatureFlagsFile.vibeLyrics。
+                enabled.insert(.vibe)
             }
         }
         lyricsSources = enabled
