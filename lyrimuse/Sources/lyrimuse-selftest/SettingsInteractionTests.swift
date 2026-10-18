@@ -35,6 +35,20 @@ func runSettingsInteractionTests() {
         }
         expectEqual(sample("auth.json"), info("auth", 401), "网页推送状态: 读得懂共用样例(令牌被拒)")
         expectEqual(sample("network.json"), info("network"), "网页推送状态: 读得懂共用样例(连不上,没有状态码)")
+        // 媒体信息通道坏了时谁受影响:只勾了通道坏了也读得到的那几家才不弹通知。
+        typealias MC = MediaControlClient
+        expectEqual(MC.channelOutageAffects(selected: [.appleMusic]), false, "媒体通道: 只勾 Apple Music 不受影响")
+        expectEqual(MC.channelOutageAffects(selected: [.appleMusic, .spotify, .kaset]), false, "媒体通道: 只勾有替代路径的几家不受影响")
+        expectEqual(MC.channelOutageAffects(selected: [.auto]), true, "媒体通道: 自动识别算受影响")
+        expectEqual(MC.channelOutageAffects(selected: [.appleMusic, .qqMusic]), true, "媒体通道: 勾了没有替代路径的就受影响")
+        // ListenBrainz 令牌被拒的状态文件,同一套做法(引擎 lbstatus.go)。
+        typealias LB = ListenBrainzSubmitStatus
+        let lbSample = (try? Data(contentsOf: samples.deletingLastPathComponent().appendingPathComponent("lb-status/auth.json"))).flatMap(LB.parse)
+        expectEqual(lbSample, LB.Info(schema: 1, kind: "auth", status: 401, since: 1_800_000_000), "ListenBrainz 令牌状态: 读得懂共用样例")
+        expectEqual(LB.parse(Data(#"{"schema":2,"kind":"auth","status":401,"since":1}"#.utf8)) == nil, true,
+                    "ListenBrainz 令牌状态: 版本不认识当作没有")
+        expectEqual(LB.parse(Data(#"{"schema":1,"kind":"other","status":500,"since":1}"#.utf8)) == nil, true,
+                    "ListenBrainz 令牌状态: 不是令牌被拒当作没有")
     }
 
     // ---- ReorderDrag----

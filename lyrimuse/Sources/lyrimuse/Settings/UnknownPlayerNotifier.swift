@@ -336,6 +336,28 @@ extension UnknownPlayerNotifier: UNUserNotificationCenterDelegate {
             }
             return
         }
+        // 媒体信息通道不可用:点正文打开「播放器」那页(卡下面写着哪几个还读得到)。
+        if category == MediaChannelNotifier.categoryID {
+            if response.actionIdentifier == UNNotificationDefaultActionIdentifier {
+                await MainActor.run {
+                    AppActions.shared.requestSettings(.tab(.player))
+                    NSApp.activate(ignoringOtherApps: true)
+                    AppActions.shared.openSettings?()
+                }
+            }
+            return
+        }
+        // ListenBrainz 令牌被拒:点正文打开设置里的 ListenBrainz 账号页(令牌在那张卡里换)。
+        if category == ListenBrainzAuthNotifier.categoryID {
+            if response.actionIdentifier == UNNotificationDefaultActionIdentifier {
+                await MainActor.run {
+                    AppActions.shared.requestSettings(.account(.listenBrainz))
+                    NSApp.activate(ignoringOtherApps: true)
+                    AppActions.shared.openSettings?()
+                }
+            }
+            return
+        }
         let info = response.notification.request.content.userInfo
         guard let bundleID = info[Self.bundleIDKey] as? String, !bundleID.isEmpty else { return }
         switch response.actionIdentifier {

@@ -68,6 +68,8 @@ const (
 	motionCoverUnrecognizedBackoff = 6 * time.Hour
 	// motionCoverParserName:parserdrift.go 里这条路径的名字。
 	motionCoverParserName = "apple-album-page"
+	// motionCoverUnavailableStreakMax:连续这么多张专辑都取不到页面(404 / 410 / 重定向绕圈)就不再记「没有」,见 motionCoverFor。
+	motionCoverUnavailableStreakMax = 5
 )
 
 // motionCover:一张专辑的动态封面资源。空 Master + Checked=true 表示"查过了,这张没有"。
@@ -107,6 +109,8 @@ var (
 	motionCoverInflight = map[int64]bool{}
 	// motionCoverUnrecognizedUntil:专辑页认不出的专辑,到这个时刻之前不再抓。受 motionCoverMu 保护。
 	motionCoverUnrecognizedUntil = map[int64]time.Time{}
+	// motionCoverUnavailableStreak:连续取不到页面的专辑数,认出一页就清零。受 motionCoverMu 保护。
+	motionCoverUnavailableStreak int
 )
 
 // loadMotionCoverCache / saveMotionCoverCache:整份 map 序列化 + 临时文件原子改名,跟
@@ -184,7 +188,21 @@ func motionCoverFor(collectionID int64) (motionCover, bool) {
 	var mc motionCover
 	switch {
 	case errors.Is(err, errAlbumPageUnavailable):
-		// 这张专辑没有取得到的页面:跟「查过了、没有动态封面」一样记下来,不再每首歌重抓一遍。
+		// 这张专辑没有取得到的页面:跟「查过了、没有动态封面」一样记下来,不再每首歌重抓一遍。但一连好几张都这样,
+		// 更像专辑页的地址改了(店面、slug 都是写死的),不是这些专辑都没有:照认不出处理(计数、退避),不把「没有」
+		// 写进缓存 —— 写进去就永久生效,每张新专辑都会被钉成没有动态封面。
+		motionCoverMu.Lock()
+		motionCoverUnavailableStreak++
+		streak := motionCoverUnavailableStreak
+		motionCoverMu.Unlock()
+		if streak >= motionCoverUnavailableStreakMax {
+			noteParserUnrecognized(motionCoverParserName, fmt.Sprintf("album pages unavailable for %d albums in a row", streak))
+			log.Printf("motion-cover: album %d has no fetchable page (%d in a row); retry after %s", collectionID, streak, motionCoverUnrecognizedBackoff)
+			motionCoverMu.Lock()
+			motionCoverUnrecognizedUntil[collectionID] = time.Now().Add(motionCoverUnrecognizedBackoff)
+			motionCoverMu.Unlock()
+			return motionCover{}, false
+		}
 		log.Printf("motion-cover: album %d has no fetchable page: %v", collectionID, err)
 	case err != nil:
 		// 请求失败**不写缓存**:跟"这张没有"是两件事,下次还该再试。
@@ -203,6 +221,9 @@ func motionCoverFor(collectionID int64) (motionCover, bool) {
 			return motionCover{}, false
 		}
 		noteParserRecognized(motionCoverParserName)
+		motionCoverMu.Lock()
+		motionCoverUnavailableStreak = 0
+		motionCoverMu.Unlock()
 	}
 	mc.Checked = true
 
@@ -785,9 +806,10 @@ func parseMotionCover(page []byte, wantID string) (motionCover, motionParse) {
 		}
 		return motionCover{}, motionParseAbsent
 	}
+	// 节点有内容却没有 dictionary:形状变了,不是「没有」(没有时 videoArtwork 是 null 或空对象,上面已经判过)。
 	dict, _ := node["dictionary"].(map[string]any)
 	if len(dict) == 0 {
-		return motionCover{}, motionParseAbsent
+		return motionCover{}, motionParseUnrecognized
 	}
 	sq, _ := dict["motionDetailSquare"].(map[string]any)
 	video, _ := sq["video"].(string)

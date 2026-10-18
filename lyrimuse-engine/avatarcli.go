@@ -96,19 +96,10 @@ func runArtistAvatarsCLI(args []string) {
 			mu.Lock()
 			defer mu.Unlock()
 			old, hasOld := cache[name]
-			switch {
-			case url != "" || definitive:
-				// 拿到了图,或者两条腿都正常应答说"确实没有" —— 都可以放心存 14 天
-				out[name] = url
-				updated[name] = avatarCacheEntry{URL: url, TS: now.Unix()}
-			case hasOld && old.URL != "":
-				// 暂时故障 + 手上有过期的旧头像:继续用旧的,**不覆盖**(serve-stale,
-				// 过期的真图永远好过一个空位;不这么做会抹掉好头像)。
-				out[name] = old.URL
-			default:
-				// 暂时故障且没有旧值:输出空,落 30 分钟短负缓存防抖动期连打。
-				out[name] = ""
-				updated[name] = avatarCacheEntry{URL: "", TS: now.Unix(), Transient: true}
+			shown, entry, write := avatarVerdict(url, definitive, old, hasOld, now)
+			out[name] = shown
+			if write {
+				updated[name] = entry
 			}
 		}(name)
 	}
@@ -161,4 +152,25 @@ func mergeAvatarCache(cachePath string, updated map[string]avatarCacheEntry) map
 		merged[name] = entry
 	}
 	return merged
+}
+
+// avatarVerdict:一位歌手这次解析的结果怎么显示、缓存写什么(write=false 不写)。url / definitive 是 resolveArtistAvatar
+// 的返回,old / hasOld 是缓存里原来那条。
+func avatarVerdict(url string, definitive bool, old avatarCacheEntry, hasOld bool, now time.Time) (shown string, entry avatarCacheEntry, write bool) {
+	switch {
+	case url == "" && definitive && hasOld && old.URL != "":
+		// 两条腿都说"没有",手上却有一张以前拿到的:留着旧的、14 天后再核。上游改了应答形状时解出来的也是
+		// "没有",照单全收就把好头像全抹掉了;真下架了,旧图顶多是一张过时的图。
+		return old.URL, avatarCacheEntry{URL: old.URL, TS: now.Unix()}, true
+	case url != "" || definitive:
+		// 拿到了图,或者两条腿都正常应答说"确实没有" —— 都可以放心存 14 天
+		return url, avatarCacheEntry{URL: url, TS: now.Unix()}, true
+	case hasOld && old.URL != "":
+		// 暂时故障 + 手上有过期的旧头像:继续用旧的,**不覆盖**(serve-stale,
+		// 过期的真图永远好过一个空位;不这么做会抹掉好头像)。
+		return old.URL, avatarCacheEntry{}, false
+	default:
+		// 暂时故障且没有旧值:输出空,落 30 分钟短负缓存防抖动期连打。
+		return "", avatarCacheEntry{URL: "", TS: now.Unix(), Transient: true}, true
+	}
 }

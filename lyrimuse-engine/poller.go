@@ -991,7 +991,8 @@ func (p *poller) applySubmitOutcome(r submitOutcome) {
 		// LB 明确拒收(4xx)的重发也没用,不进队列。
 		if errors.Is(r.err, errListenRejected) {
 			// LB 明确不收这条(内容本身的问题,令牌被拒是另一种错误、不走这里):重发多少次都一样,标成已处理,
-			// 免得歌还在放时每拍再发一次。
+			// 免得歌还在放时每拍再发一次。原样载荷留档,LB 改了校验时还找得回来。
+			keepUnsentLBListen(r.startedAt, r.lm, "rejected")
 			r.sess.listenSent = true
 			return
 		}
@@ -1476,6 +1477,7 @@ func (p *poller) forwardBridgeListens(items []bridgeForwardItem) {
 		if err != nil {
 			if errors.Is(err, errListenRejected) {
 				log.Printf("bridge: skip rejected lastfm listen %q - %q: %v", it.track.Artist, it.track.Title, err)
+				keepUnsentLBListen(it.uts, it.meta, "rejected")
 				out = append(out, bridgeForwardResult{item: it, rejected: true})
 				continue
 			}
@@ -1877,7 +1879,9 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 				} else if err := lb.submit(flushCtx, "single", p.sess.startedAt.Unix(), lm); err != nil {
 					warnf("final listen flush failed: %v", err)
 					// 进程正在退出,没有下一拍重试它了:交给 LB 待重发队列(同 applySubmitOutcome 里会话已结束那一支)。
-					if !errors.Is(err, errListenRejected) {
+					if errors.Is(err, errListenRejected) {
+						keepUnsentLBListen(p.sess.startedAt.Unix(), lm, "rejected")
+					} else {
 						enqueueLBRetry(p.sess.startedAt.Unix(), lm)
 					}
 				} else {

@@ -291,10 +291,12 @@ func (c *lbClient) submit(ctx context.Context, listenType string, listenedAt int
 		status, err := c.submitOnce(ctx, body, perTry)
 		if err == nil {
 			c.noteOutcome(true, status)
+			noteLBSubmitOK()
 			return nil
 		}
 		lastStatus = status
 		if status == http.StatusUnauthorized || status == http.StatusForbidden {
+			noteLBAuthRejected(status)
 			if c.noteAuthRejected() {
 				slog.Warn("listenbrainz: token rejected, holding submissions until the token changes",
 					"status", status, "hold", lbAuthRejectedHold)

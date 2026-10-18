@@ -145,6 +145,10 @@ enum DiagnosticsExporter {
         lines.append("Architecture: \(binaryArch)" + (translated ? " (running under Rosetta)" : ""))
         lines.append("")
 
+        lines.append("== Players ==")
+        lines.append(contentsOf: installedPlayerVersionLines())
+        lines.append("")
+
         lines.append("== State ==")
         let settings = AppSettings.shared
         let config = ConfigStore.shared
@@ -284,6 +288,21 @@ enum DiagnosticsExporter {
     /// secrets/currentTrackLines 由调用方在 MainActor 上先算好传进来:前者来自
     /// @MainActor 的 ConfigStore,后者需要调 @MainActor 的 EnrichCacheReader,
     /// 都不能在这个后台上下文里现读/现调。
+    /// 本机装了的播放器和版本号。播放位置外推、锚点补偿里有不少按播放器实测的常数(players.json 的 positionTier 等),
+    /// 播放器一升级就可能失准;报告里有版本号,才对得上是哪次更新开始偏的。没装的不列。
+    private static func installedPlayerVersionLines() -> [String] {
+        var lines: [String] = []
+        var seen: Set<String> = []
+        for player in PlaybackPlayer.allCases where !player.bundleIdentifier.isEmpty && seen.insert(player.bundleIdentifier).inserted {
+            guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: player.bundleIdentifier),
+                  let info = Bundle(url: url)?.infoDictionary else { continue }
+            let short = info["CFBundleShortVersionString"] as? String ?? "?"
+            let build = info["CFBundleVersion"] as? String ?? "?"
+            lines.append("\(player.bundleIdentifier): \(short) (\(build))")
+        }
+        return lines.isEmpty ? ["(none installed)"] : lines
+    }
+
     private static func logLines(secrets: [String: String], currentTrackLines: [String]?) -> [String] {
         var lines: [String] = []
         // 两段日志正文搬进了压缩包里各自的文件(见 writeDiagnosticsBundle),这里只留一句

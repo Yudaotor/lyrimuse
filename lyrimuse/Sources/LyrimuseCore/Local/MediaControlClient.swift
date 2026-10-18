@@ -1774,6 +1774,11 @@ public enum MediaControlClient {
     /// 通道坏了时按顺序问谁:勾了「自动识别」三家都问,否则只问勾了的。QQ 音乐 / 网易云 / 酷狗 / 汽水音乐 / KKBOX
     /// 没有 AppleScript 字典,按 bundle id 直查系统的那条路(`NowPlayingClientsProbe`)也是 MediaRemote,跟着一起坏,
     /// 不在其列。纯函数,selftest 覆盖。
+    /// 通道坏了时,勾选的播放器里有没有读不到的(勾了「自动识别」也算:它会遇到任何播放器)。`MediaChannelNotifier` 据此决定弹不弹通知。
+    public static func channelOutageAffects(selected: Set<PlaybackPlayer>) -> Bool {
+        selected.contains(.auto) || !selected.isSubset(of: Set(channelFallbackCandidates(selected: [.auto])))
+    }
+
     public static func channelFallbackCandidates(selected: Set<PlaybackPlayer>) -> [PlaybackPlayer] {
         let order: [PlaybackPlayer] = [.appleMusic, .spotify, .kaset]
         if selected.contains(.auto) { return order }

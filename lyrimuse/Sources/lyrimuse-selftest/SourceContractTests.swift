@@ -46,6 +46,24 @@ func runSourceContractTests() {
                     "歌词窗口纯图标键: 置顶(提示是两句、读屏名只取前一句)和「⋯」(没有悬停提示)也有读屏名")
     }
 
+    // 私有函数一律运行时 dlsym 查找、查不到降级(BackgroundCursor、FullScreenSpaceMonitor 的写法),不用 @_silgen_name 强链接:
+    // 系统哪天拿掉一个强链接的私有符号,整个 App 启动时就被 dyld 拦下,连降级的机会都没有。
+    do {
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        var scanned = 0, linked: [String] = []
+        for dir in ["lyrimuse", "LyrimuseCore"] {
+            let root = sources.appendingPathComponent(dir)
+            guard let walker = FileManager.default.enumerator(atPath: root.path) else { continue }
+            for case let rel as String in walker where rel.hasSuffix(".swift") {
+                guard let text = try? String(contentsOfFile: root.appendingPathComponent(rel).path, encoding: .utf8) else { continue }
+                scanned += 1
+                if sourceBytes(text, contain: "@_silgen_name") { linked.append("\(dir)/\(rel)") }
+            }
+        }
+        expectEqual(scanned > 100, true, "私有符号: 至少扫到 100 个源文件(实际 \(scanned)),少了说明路径不对")
+        expectEqual(linked, [], "私有符号: 不用 @_silgen_name 强链接,改成 dlsym 运行时查找、查不到降级")
+    }
+
     // 换歌后要及时做的去抖挂主队列(01 章决策 11):Combine 挂 RunLoop.main 的计时器只在默认模式走,菜单栏菜单开着时不触发。
     do {
         let appSources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -2893,6 +2911,8 @@ func runSourceContractTests() {
             .deletingLastPathComponent()   // lyrimuse(包目录)
             .deletingLastPathComponent()   // 仓库根
         let docPath = repoRoot.appendingPathComponent("docs/features/08-lyrics-engine.md").path
+        // 「设计决策与已知坑」那一节在 docs/features/decisions/ 下的同名文件里(15 章决策 47),两份拼起来读。
+        let decisionsPath = repoRoot.appendingPathComponent("docs/features/decisions/08-lyrics-engine.md").path
         /// 「十六」→ 16。只覆盖 1…99 的写法(一位数 / 十 / 十X / X十 / X十Y),不够用时返回 nil 而不是瞎猜。
         func chineseNumeral(_ s: String) -> Int? {
             let digits: [Character: Int] = ["一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
@@ -2930,7 +2950,8 @@ func runSourceContractTests() {
             }
             return out
         }
-        if let doc = try? String(contentsOfFile: docPath, encoding: .utf8) {
+        if let chapter = try? String(contentsOfFile: docPath, encoding: .utf8) {
+            let doc = chapter + "\n" + ((try? String(contentsOfFile: decisionsPath, encoding: .utf8)) ?? "")
             // 每个条目行只取**第一个**「第 N 轮」:条目正文里常回指别的轮次(「跟第十三轮同源」),
             // 全收会把回指也算成条目、连带把连续性判据搞乱。
             let entryRounds: [Int] = doc.split(separator: "\n", omittingEmptySubsequences: false)
@@ -5591,8 +5612,28 @@ func runSourceContractTests() {
                     && RelayPushStatus.fileName == "lyrimuse-relay-status.json"
                     && relayEngineSource("relaystatus.go").contains("const relayStatusSchema = \(RelayPushStatus.currentSchema)\n"), true,
                     "网页推送: 引擎写的状态文件名、版本跟 App 读的一样")
+        // ListenBrainz 令牌被拒:引擎写状态文件(lbstatus.go),账号徽标报红、App 弹一次通知。
+        expectEqual(relayEngineSource("main.go").contains("clientName+\"-lb-status.json\"")
+                    && ListenBrainzSubmitStatus.fileName == "lyrimuse-lb-status.json"
+                    && relayEngineSource("lbstatus.go").contains("const lbStatusSchema = \(ListenBrainzSubmitStatus.currentSchema)\n"), true,
+                    "ListenBrainz 令牌状态: 引擎写的状态文件名、版本跟 App 读的一样")
+        // 媒体信息通道:Perl 不在单独归因;坏了且勾了读不到的播放器时弹一次通知,点了去「播放器」页。
+        expectEqual(code("AppDelegate.swift").contains("MediaChannelNotifier.shared.start()")
+                    && code("Settings/UnknownPlayerNotifier.swift").contains("if category == MediaChannelNotifier.categoryID {")
+                    && code("SettingsView.swift").contains("MediaControlClient.channelFallbackCandidates(selected: [.auto]).map(\\.displayName)"), true,
+                    "媒体通道: 启动订阅通知、点通知去播放器页、设置页按替代名单列名字")
+        // 诊断导出带上本机播放器的版本号(按播放器实测的时间轴常数失准时,对得上是哪次更新)。
+        expectEqual(code("Settings/DiagnosticsExporter.swift").contains("lines.append(\"== Players ==\")\n        lines.append(contentsOf: installedPlayerVersionLines())"), true,
+                    "诊断导出: 有「Players」一段,列本机播放器的版本号")
+        let labsPage = code("Settings/LabsPage.swift")
         let accountTab = code("AccountLinkingTab.swift")
-        expectEqual(accountTab.contains("mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict)")
+        let statusCall = "mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict, lbInfo: lbStatus.info)"
+        expectEqual(accountTab.components(separatedBy: statusCall).count - 1 == 2 && labsPage.components(separatedBy: statusCall).count - 1 == 2
+                    && accountTab.contains("if config.isListenBrainzConfigured, lbInfo != nil { return .error(L10n.t(\"令牌已失效\")) }")
+                    && code("AppDelegate.swift").contains("ListenBrainzAuthNotifier.shared.start()")
+                    && code("Settings/UnknownPlayerNotifier.swift").contains("if category == ListenBrainzAuthNotifier.categoryID {"), true,
+                    "ListenBrainz 令牌状态: 四处账号徽标都传引擎报的状态,被拒时报红;启动时订阅通知,点通知去 ListenBrainz 页")
+        expectEqual(accountTab.contains(statusCall)
                     && accountTab.contains("guard let problem = relayPushProblem(relayVerdict) else { return .active() }")
                     && accountTab.contains("return problem.isError ? .error(problem.text) : .warning(problem.text)")
                     && accountTab.contains("return relayPushProblem(relayStatus.verdict)")

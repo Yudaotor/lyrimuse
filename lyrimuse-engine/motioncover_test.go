@@ -85,6 +85,8 @@ func TestParseMotionCoverMissingPieces(t *testing.T) {
 		{"有 videoArtwork 但没有 video 字段", script +
 			`{"data":[{"identifiers":{"storeAdamID":"6773830957"},` +
 			`"videoArtwork":{"dictionary":{"motionDetailSquare":{"previewFrame":{"url":"u"}}}}}]}</script>`, motionParseUnrecognized},
+		{"videoArtwork 有内容但没有 dictionary", script +
+			`{"data":[{"identifiers":{"storeAdamID":"6773830957"},"videoArtwork":{"dict":{"motionDetailSquare":{"video":"v"}}}}]}</script>`, motionParseUnrecognized},
 		{"dictionary 里换了键名", script +
 			`{"data":[{"identifiers":{"storeAdamID":"6773830957"},` +
 			`"videoArtwork":{"dictionary":{"motionSquare":{"video":"v"}}}}]}</script>`, motionParseUnrecognized},
@@ -512,6 +514,7 @@ func TestMotionCoverUnfetchablePageIsCached(t *testing.T) {
 	motionCoverPageURL = func(id int64) string { return fmt.Sprintf("%s/%d", srv.URL, id) }
 	motionCoverMu.Lock()
 	motionCoverPath = ""
+	motionCoverUnavailableStreak = 0
 	for _, k := range []string{"1", "2", "3"} {
 		delete(motionCoverCache, k)
 	}
@@ -605,5 +608,54 @@ func TestMotionCoverUnrecognizedPageIsNotCached(t *testing.T) {
 	parserDriftMu.Unlock()
 	if still {
 		t.Error("认出一次之后计数应清零")
+	}
+}
+
+// 一连 motionCoverUnavailableStreakMax 张都取不到页面:更像地址改了,从这一张起不记「没有」(没有定论、退避);
+// 认出一页就清零,之后单独一张 404 照旧记「没有」。
+func TestMotionCoverUnavailableStreakStopsCachingAbsent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/50" {
+			fmt.Fprint(w, `<script type="application/json" id="serialized-server-data">`+
+				`{"data":[{"identifiers":{"storeAdamID":"50"},"videoArtwork":null}]}</script>`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	ids := []int64{41, 42, 43, 44, 45, 46, 50, 51}
+	oldURL, oldPath := motionCoverPageURL, motionCoverPath
+	motionCoverPageURL = func(id int64) string { return fmt.Sprintf("%s/%d", srv.URL, id) }
+	clear := func() {
+		motionCoverMu.Lock()
+		motionCoverUnavailableStreak = 0
+		for _, id := range ids {
+			delete(motionCoverCache, fmt.Sprint(id))
+			delete(motionCoverUnrecognizedUntil, id)
+		}
+		motionCoverMu.Unlock()
+	}
+	motionCoverMu.Lock()
+	motionCoverPath = ""
+	motionCoverMu.Unlock()
+	clear()
+	t.Cleanup(func() {
+		motionCoverPageURL = oldURL
+		motionCoverMu.Lock()
+		motionCoverPath = oldPath
+		motionCoverMu.Unlock()
+		clear()
+	})
+	for i, id := range ids[:6] {
+		_, done := motionCoverFor(id)
+		if want := i+1 < motionCoverUnavailableStreakMax; done != want {
+			t.Errorf("第 %d 张连续 404: done=%v want %v", i+1, done, want)
+		}
+	}
+	if _, done := motionCoverFor(50); !done {
+		t.Error("认得出的页面照常有定论")
+	}
+	if mc, done := motionCoverFor(51); !done || !mc.Checked {
+		t.Errorf("认出一页之后清零,单独一张 404 照旧记「没有」: done=%v %+v", done, mc)
 	}
 }

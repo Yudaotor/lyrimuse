@@ -30,6 +30,9 @@ var (
 	artistAliasFailedUntil = map[string]time.Time{}
 	artistAliasPath        string // 落盘路径；空则只用内存不持久化
 	artistAliasDirty       bool
+	// artistAliasRemoved:重核后作废的条目(recheckArtistAliases)。存盘时并完盘上那份再删掉它们,否则 mergeMissingFromDisk
+	// 会把盘上的旧值并回来。整个进程期间都留着:别的进程把旧值写回去,下一次存盘照样删。
+	artistAliasRemoved = map[string]bool{}
 )
 
 // loadArtistAliasCache/saveArtistAliasCache 跟 loadEnrichCache/saveEnrichCache
@@ -68,10 +71,17 @@ func saveArtistAliasCache() {
 			keep[k] = v
 		}
 	}
+	removed := make([]string, 0, len(artistAliasRemoved))
+	for k := range artistAliasRemoved {
+		removed = append(removed, k)
+	}
 	path := artistAliasPath
 	artistAliasDirty = false
 	artistAliasMu.Unlock()
 	mergeMissingFromDisk(path, keep, func(v string) bool { return v != "" })
+	for _, k := range removed {
+		delete(keep, k)
+	}
 	data, err := json.Marshal(keep)
 	if err != nil {
 		return
@@ -162,6 +172,7 @@ func canonicalArtistViaMusicBrainz(ctx context.Context, rawArtist string) string
 		artistAliasMu.Lock()
 		if artistAliasCache[rawArtist] != v {
 			artistAliasCache[rawArtist] = v
+			delete(artistAliasRemoved, rawArtist)
 			artistAliasDirty = true
 		}
 		artistAliasMu.Unlock()
@@ -200,6 +211,7 @@ func canonicalArtistViaMusicBrainz(ctx context.Context, rawArtist string) string
 	artistAliasCache[rawArtist] = resolved
 	// 查空不算脏:空值不落盘,下一次进程还能再试一次(见 artistAliasCache)。
 	if resolved != "" {
+		delete(artistAliasRemoved, rawArtist)
 		artistAliasDirty = true
 	}
 	artistAliasMu.Unlock()
@@ -230,6 +242,18 @@ type mbArtistIdentity struct {
 	Zh   string `json:"zh,omitempty"`
 	// Checked:这条是按现行判据得出的(resolveArtistIdentityMB 写的,或补核时留下的)。
 	Checked bool `json:"checked,omitempty"`
+	// CheckedAt:resolveArtistIdentityMB 写下「认不出身份」(Mbid 空)这个结论的时刻(Unix 秒),过 artistIdentityNoneTTL
+	// 就重查,见 artistIdentityNoneExpired;早先写下的没有这一项,当作已过期。认出了身份的不记。
+	CheckedAt int64 `json:"checked_at,omitempty"`
+}
+
+// artistIdentityNoneTTL:「这个名字认不出身份」的结论多久后重查。MusicBrainz 是社区数据,会有人补登;
+// 应答形状变了时解出来的也是「认不出」,不能让一次结论永久生效。
+const artistIdentityNoneTTL = 30 * 24 * time.Hour
+
+// artistIdentityNoneExpired:这是一条过期了的「认不出身份」结论吗。
+func artistIdentityNoneExpired(id mbArtistIdentity, now time.Time) bool {
+	return id.Checked && id.Mbid == "" && now.Sub(time.Unix(id.CheckedAt, 0)) > artistIdentityNoneTTL
 }
 
 var (
@@ -336,7 +360,7 @@ func resolveArtistIdentityMB(name, knownMbid string) mbArtistIdentity {
 			aliasesFor = top.ID
 			// 分数高不等于是这个人(「David Tao」排到过一位德国音乐人头上):本地写法得是这位艺人的主名或
 			// 登记过的别名才收,同 mbAliasCandidatesForRetry 的判据。
-			if mbNameBelongsToArtist(top.Name, withAliases.Aliases, name) {
+			if mbNameBelongsToArtist(top.Name, withAliases.SortName, withAliases.Aliases, name) {
 				id.Mbid, verified = top.ID, true
 			}
 		}
@@ -351,17 +375,24 @@ func resolveArtistIdentityMB(name, knownMbid string) mbArtistIdentity {
 		id.Zh = pickChineseAlias(withAliases.Aliases, withAliases.Country)
 	}
 	id.Checked = true
+	if id.Mbid == "" {
+		id.CheckedAt = time.Now().Unix()
+	}
 	storeArtistIdentity(name, id)
 	return id
 }
 
-// mbNameBelongsToArtist:本地写法是不是这位艺人的主名或登记过的别名(按 normLoose 比)。
-func mbNameBelongsToArtist(primary string, aliases []mbAlias, raw string) bool {
+// mbNameBelongsToArtist:本地写法是不是这位艺人的主名、排序名或登记过的别名(按 normLoose 比)。排序名是编辑维护的
+// 「姓, 名」,原样和倒成「名 姓」都算:「蕭煌奇」没登记英文别名,排序名「Hsiao, Ricky」认得出本地的「Ricky Hsiao」。
+func mbNameBelongsToArtist(primary, sortName string, aliases []mbAlias, raw string) bool {
 	target := normLoose(raw)
 	if target == "" {
 		return false
 	}
-	if normLoose(primary) == target {
+	if normLoose(primary) == target || normLoose(sortName) == target {
+		return true
+	}
+	if last, first, ok := strings.Cut(sortName, ","); ok && normLoose(first+" "+last) == target {
 		return true
 	}
 	for _, al := range aliases {
@@ -398,8 +429,10 @@ type mbArtistWithAliases struct {
 	Country string `json:"country"`
 	// Name 是这位歌手在 MusicBrainz 上的**主名**(艺人页标题那个)。加,
 	// 给 musicBrainzPrimaryArtistName 用 —— 本名/艺名互换那一类问题要的正是它。
-	Name    string    `json:"name"`
-	Aliases []mbAlias `json:"aliases"`
+	Name string `json:"name"`
+	// SortName:编辑维护的排序名(「Hsiao, Ricky」),mbNameBelongsToArtist 拿它认本地的英文写法。
+	SortName string    `json:"sort-name"`
+	Aliases  []mbAlias `json:"aliases"`
 }
 
 // 中文圈地区——只有这些地区的艺人,MusicBrainz 上那条中文别名才是"他本人的名字";
@@ -467,6 +500,11 @@ func lookupMusicBrainzChineseAlias(ctx context.Context, rawArtist string) (strin
 	aliasURL := mbArtistAliasesURL(top.ID)
 	if err := mbGetJSONShared(ctx, aliasURL, &withAliases); err != nil {
 		return "", err
+	}
+	// 分数高不等于是这个人(「Lexie Liu」首条是另一位歌手「刘昱妤」):本地写法得是这位艺人的主名或登记过的别名才收,
+	// 同 resolveArtistIdentityMB、mbAliasCandidatesForRetry 的判据。改这道判据就抬 migrationArtistAliasJudgeVersion,存量重核。
+	if !mbNameBelongsToArtist(top.Name, withAliases.SortName, withAliases.Aliases, rawArtist) {
+		return "", nil
 	}
 	return pickChineseAlias(withAliases.Aliases, withAliases.Country), nil
 }
@@ -967,8 +1005,35 @@ func mbGetJSONShared(ctx context.Context, url string, v any) error {
 		return err
 	}
 	if err := json.Unmarshal(body, v); err != nil {
+		noteParserUnrecognized(musicbrainzParserName, err.Error())
 		return err
+	}
+	if detail := mbResponseShapeProblem(url, body); detail != "" {
+		noteParserUnrecognized(musicbrainzParserName, detail)
+	} else {
+		noteParserRecognized(musicbrainzParserName)
 	}
 	mbStoreBody(url, body, time.Now())
 	return nil
+}
+
+// musicbrainzParserName:parserdrift.go 里这条路径的名字。
+const musicbrainzParserName = "musicbrainz-ws2"
+
+// mbResponseShapeProblem:应答缺了这类请求必有的键时说缺了什么,形状对就返回空串。按名字搜艺人的应答必有 artists、
+// 艺人详情必有 id。字段改了名 encoding/json 不报错,只会解出空结果,被当成「查过、没有」(见 resolveArtistIdentityMB、
+// recheckArtistAliases 那道整批闸),靠这里报出来。
+func mbResponseShapeProblem(url string, body []byte) string {
+	var top map[string]json.RawMessage
+	if json.Unmarshal(body, &top) != nil {
+		return "response is not a JSON object"
+	}
+	want := "id"
+	if strings.Contains(url, "?query=") {
+		want = "artists"
+	}
+	if _, ok := top[want]; !ok {
+		return "response has no " + want
+	}
+	return ""
 }

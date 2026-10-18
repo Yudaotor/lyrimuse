@@ -123,6 +123,10 @@ const (
 	// applyShareRound 两槽一起写,不再产生。
 	migrationShareLatestDecisions        = "share_latest_decisions"
 	migrationShareLatestDecisionsVersion = 1
+	// migrationArtistAliasJudge:MusicBrainz 中文名缓存的存量按现在的判据重核(artistaliasrecheck.go)。运行期查询走
+	// 同一个 lookupMusicBrainzChineseAlias,不再产生旧判据的结果。改了它的判据就 +1。
+	migrationArtistAliasJudge        = "artist_alias_judge"
+	migrationArtistAliasJudgeVersion = 1
 )
 
 // loadMigrationState 读水位文件。文件不存在 / 解不出来都当作"一道都没跑过",照常全量跑 ——

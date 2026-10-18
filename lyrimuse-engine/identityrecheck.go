@@ -89,7 +89,7 @@ func recheckArtistIdentity(ctx context.Context, name string, lastfm lastfmMbidFn
 	if id.Mbid != "" && knownArtistAlias(name) == "" {
 		var a mbArtistWithAliases
 		err := mbGetJSONShared(ctx, mbArtistAliasesURL(id.Mbid), &a)
-		if err == nil && mbNameBelongsToArtist(a.Name, a.Aliases, name) {
+		if err == nil && mbNameBelongsToArtist(a.Name, a.SortName, a.Aliases, name) {
 			id.Zh = ""
 			if !containsHan(name) {
 				id.Zh = pickChineseAlias(a.Aliases, a.Country)

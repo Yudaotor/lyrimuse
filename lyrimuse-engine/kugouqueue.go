@@ -375,6 +375,9 @@ func kugouLibraryQuery(query string, dst any) bool {
 	out, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", uri, query).Output()
 	if err != nil {
 		noteLocalCacheReadFailure("kugou", path)
+		if sqliteSchemaMismatch(err) {
+			noteParserUnrecognized("kugou-local-queue", sqliteErrorDetail(err))
+		}
 		return false
 	}
 	noteLocalCacheReadable("kugou")

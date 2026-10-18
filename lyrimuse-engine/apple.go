@@ -699,10 +699,20 @@ func itunesSearch(ctx context.Context, q, country string) ([]itunesResult, bool)
 		return nil, false
 	}
 	var out struct {
-		Results []itunesResult `json:"results"`
+		Results *[]itunesResult `json:"results"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+	// 200 却解不开、或者没有 results 这个键:接口换了形状,不是「Apple 没有」,记进解析漂移计数(parserdrift.go)。
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || out.Results == nil {
+		detail := "response has no results"
+		if err != nil {
+			detail = err.Error()
+		}
+		noteParserUnrecognized(itunesSearchParserName, detail)
 		return nil, false
 	}
-	return out.Results, true
+	noteParserRecognized(itunesSearchParserName)
+	return *out.Results, true
 }
+
+// itunesSearchParserName:parserdrift.go 里 iTunes Search / Lookup 这条路径的名字。
+const itunesSearchParserName = "itunes-search"

@@ -197,10 +197,10 @@ func TestAmllFetchMirrors(t *testing.T) {
 		}
 		return http.StatusNotFound, ""
 	})
-	if body, ok := amllFetch(qqRoundCtx(), "ncm-lyrics", "1"); !ok || body != "<tt/>" {
+	if body, ok, _ := amllFetch(qqRoundCtx(), "ncm-lyrics", "1"); !ok || body != "<tt/>" {
 		t.Fatalf("该从 jsDelivr 拿到: %q %v", body, ok)
 	}
-	if _, ok := amllFetch(qqRoundCtx(), "ncm-lyrics", "2"); ok {
+	if _, ok, _ := amllFetch(qqRoundCtx(), "ncm-lyrics", "2"); ok {
 		t.Fatal("库里没有的不该拿到")
 	}
 	if f.count("https://cdn.jsdelivr.net/gh/amll-dev/amll-ttml-db@main/ncm-lyrics/2.ttml") != 0 {

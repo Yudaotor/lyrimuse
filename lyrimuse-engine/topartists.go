@@ -224,7 +224,8 @@ func budgetedArtistIdentity(budget int) artistIdentityFn {
 		if name == "" {
 			return mbArtistIdentity{}
 		}
-		if id, ok := cachedArtistIdentity(name); ok {
+		// 过期的「认不出身份」结论跟没缓存一样,占一份预算重查。
+		if id, ok := cachedArtistIdentity(name); ok && !artistIdentityNoneExpired(id, time.Now()) {
 			return id
 		}
 		mu.Lock()

@@ -51,12 +51,24 @@ final class FullScreenSpaceMonitor: ObservableObject {
     }
 
     private func refresh() {
-        let raw = CGSCopyManagedDisplaySpaces(CGSMainConnectionID()) as? [[String: Any]] ?? []
+        let raw = Self.spaceFunctions.flatMap { mainConnection, copySpaces in
+            copySpaces(mainConnection())?.takeRetainedValue() as? [[String: Any]]
+        } ?? []
         let next = FullScreenSpaces.fullScreenDisplays(in: raw)
         if next != fullScreenDisplays { fullScreenDisplays = next }
     }
 }
 
-// SkyLight 私有函数。返回值按 Copy 规则是 +1 引用,Swift 调用约定按已持有接管;可能为 NULL,所以声明成可选。
-@_silgen_name("CGSMainConnectionID") private func CGSMainConnectionID() -> Int32
-@_silgen_name("CGSCopyManagedDisplaySpaces") private func CGSCopyManagedDisplaySpaces(_ cid: Int32) -> CFArray?
+// SkyLight 私有函数,运行时查找(同 BackgroundCursor):强链接的话系统哪天拿掉这两个符号,整个 App 启动时就被 dyld 拦下;
+// 查不到时 refresh 按「没有全屏」算。返回值按 Copy 规则是 +1 引用,用 Unmanaged 接住再 takeRetainedValue;可能为 NULL。
+extension FullScreenSpaceMonitor {
+    private typealias MainConnectionID = @convention(c) () -> Int32
+    private typealias CopyManagedDisplaySpaces = @convention(c) (Int32) -> Unmanaged<CFArray>?
+
+    private static let spaceFunctions: (MainConnectionID, CopyManagedDisplaySpaces)? = {
+        guard let handle = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_LAZY),
+              let main = dlsym(handle, "CGSMainConnectionID"),
+              let copy = dlsym(handle, "CGSCopyManagedDisplaySpaces") else { return nil }
+        return (unsafeBitCast(main, to: MainConnectionID.self), unsafeBitCast(copy, to: CopyManagedDisplaySpaces.self))
+    }()
+}

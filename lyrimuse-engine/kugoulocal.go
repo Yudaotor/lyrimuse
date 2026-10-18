@@ -604,6 +604,9 @@ func kugouUpcomingFromSQLite(artist, title string, n int) ([]upcomingTrack, bool
 	out, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", uri, kugouUpcomingSQL).Output()
 	if err != nil {
 		noteLocalCacheReadFailure("kugou", path)
+		if sqliteSchemaMismatch(err) {
+			noteParserUnrecognized("kugou-local-library", sqliteErrorDetail(err))
+		}
 		return nil, false
 	}
 	noteLocalCacheReadable("kugou")

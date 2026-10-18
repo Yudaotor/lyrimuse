@@ -92,7 +92,15 @@ func TestRecheckArtistIdentities(t *testing.T) {
 		"Pei-Yu Hung": {Zh: "洪佩瑜", Checked: true},
 		"Already":     {Mbid: "mbid-already", Checked: true},
 	}
-	if got := identityCacheSnapshot(); !reflect.DeepEqual(got, want) {
+	got := identityCacheSnapshot()
+	// 「查过、没有」记下核对时刻(过期重查,见 artistIdentityNoneExpired),认出了身份的不记。
+	if none := got["防弹少年团"]; none.CheckedAt == 0 {
+		t.Error("「查过、没有」要记核对时刻")
+	} else {
+		none.CheckedAt = 0
+		got["防弹少年团"] = none
+	}
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("核完的缓存:\n got  %+v\n want %+v", got, want)
 	}
 	for _, u := range *calls {

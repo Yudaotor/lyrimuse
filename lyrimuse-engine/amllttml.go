@@ -1026,26 +1026,41 @@ func buildYRCLine(startMs, endMs int, prefix string, words []ttmlWord) string {
 
 // amllFetch 按平台目录 + 音乐 ID 直取 TTML。404 = 这首歌不在库里,不是错误。按 amllBases 的顺序试,
 // 只有没问成(传输失败 / 5xx 等非 200、非 404)才换镜像;404 是答了,不换。三个都没问成时再问官方接口
-// (amllFetchAPI)。
-func amllFetch(ctx context.Context, platformDir, musicID string) (string, bool) {
+// (amllFetchAPI)。answered:有一处答了(找到或 404);全都没问成时为 false。
+func amllFetch(ctx context.Context, platformDir, musicID string) (ttml string, found, answered bool) {
 	if platformDir == "" || musicID == "" {
-		return "", false
+		return "", false, false
 	}
-	var ttml string
-	found := false
 	err := tryEach(ctx, amllBases, func(base string) error {
 		body, ok, err := amllFetchAt(ctx, base, platformDir, musicID)
 		if err == nil {
-			ttml, found = body, ok
+			ttml, found, answered = body, ok, true
 		}
 		return err
 	})
 	if err != nil && ctx.Err() == nil {
 		if body, ok, err := amllFetchAPI(ctx, platformDir, musicID); err == nil {
-			ttml, found = body, ok
+			ttml, found, answered = body, ok, true
 		}
 	}
-	return ttml, found
+	return ttml, found, answered
+}
+
+// amllLayoutParserName:parserdrift.go 里这条路径的名字。索引里登记了的 ID 取回来却是 404,或者取回来的 TTML 解不出来,
+// 说明 amll-ttml-db 的目录布局(`{平台}-lyrics/{id}.ttml`)或格式变了;404 一律当「库里没有」的话,整源会静默变空。
+const amllLayoutParserName = "amll-ttml-db"
+
+// noteAMLLFetchShape:一次按 ID 取词的结果记进解析漂移计数。listed:这个 ID 在索引里;parsed:取回的 TTML 解得开。
+// 没问成、不在索引里的 404 都不算(那不说明上游变了)。
+func noteAMLLFetchShape(dir, id string, listed, found, answered, parsed bool) {
+	switch {
+	case found && parsed:
+		noteParserRecognized(amllLayoutParserName)
+	case found:
+		noteParserUnrecognized(amllLayoutParserName, "ttml not parseable: "+dir+"/"+id)
+	case listed && answered:
+		noteParserUnrecognized(amllLayoutParserName, "indexed id answered 404: "+dir+"/"+id)
+	}
 }
 
 // amllAPIBase:AMLL 官方的 HTTP 接口。词库跟 amll-ttml-db 同步,同一首的 TTML 逐字节相同,只是包在 JSON 里
@@ -1176,20 +1191,24 @@ func amllLyric(ctx context.Context, q amllQuery) amllResult {
 		if try.id == "" {
 			continue
 		}
+		listed := false
 		if idx != nil {
-			i, listed := idx.entryFor(try.dir, try.id)
-			if !listed && gate {
+			i, inIndex := idx.entryFor(try.dir, try.id)
+			if !inIndex && gate {
 				continue
 			}
-			if listed {
+			if inIndex {
 				tried[i] = true
 			}
+			listed = inIndex
 		}
-		raw, ok := amllFetch(ctx, try.dir, try.id)
-		if !ok {
-			continue
+		raw, ok, answered := amllFetch(ctx, try.dir, try.id)
+		r, parsed := amllResult{}, false
+		if ok {
+			r, parsed = parseAMLLTTMLFor(raw, q.translationLang)
 		}
-		if r, ok := parseAMLLTTMLFor(raw, q.translationLang); ok {
+		noteAMLLFetchShape(try.dir, try.id, listed, ok, answered, parsed)
+		if parsed {
 			r.platform = try.dir
 			return r
 		}
@@ -1202,12 +1221,13 @@ func amllLyric(ctx context.Context, q amllQuery) amllResult {
 			continue
 		}
 		dir, id := idx.fetchTarget(m.entry)
-		raw, ok := amllFetch(ctx, dir, id)
-		if !ok {
-			continue
+		raw, ok, answered := amllFetch(ctx, dir, id)
+		r, parsed := amllResult{}, false
+		if ok {
+			r, parsed = parseAMLLTTMLFor(raw, q.translationLang)
 		}
-		r, ok := parseAMLLTTMLFor(raw, q.translationLang)
-		if !ok || !amllLookupFits(m, r, q.durationSecs) {
+		noteAMLLFetchShape(dir, id, true, ok, answered, parsed)
+		if !parsed || !amllLookupFits(m, r, q.durationSecs) {
 			continue
 		}
 		r.matchTitle, r.matchArtist, r.matchAlbum = m.title, m.artist, m.album

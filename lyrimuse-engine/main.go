@@ -420,6 +420,8 @@ func main() {
 	setEngineStatusPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-collector-status.json"))
 	// 引擎→App 的网页推送健康度(见 relaystatus.go),同样一登记就清掉上次运行留下的那份。
 	setRelayStatusPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-relay-status.json"))
+	setLBStatusPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-lb-status.json"))
+	lbUnsentPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lb-unsent.jsonl")
 	setParserDriftPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-parser-drift.json"))
 	// App 侧"停止搜索"按钮的信号文件路径(见 enrichcancel.go)——跟 Swift 那边
 	// LyricsManagerView.cancelPlaceholderSearch 写入的路径逐字节一致。
@@ -466,6 +468,7 @@ func main() {
 	startAmazonBorrowedISRCCleanup(ctx)
 	// 存量 Apple 链接换成已校验目录锚点的页面(applecataloglink.go),要联网,同样放后台。
 	startAppleCatalogLinkMigration(ctx)
+	startArtistAliasRecheck(ctx)
 	// 存量 Apple 歌曲页按合作署名重核(applecreditlinks.go),要联网,同样放后台。
 	startAppleCreditLinkRecheck(ctx)
 	// 存量里早先预生成的韩文罗马音换成按读音的(koreanroma.go),要起 helper 子进程,同样放后台。

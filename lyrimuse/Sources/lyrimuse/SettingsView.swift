@@ -6116,16 +6116,13 @@ private struct PlayerSettingsTab: View {
         // 私有通道自检失败时明说。不显示成报错红字:用户无法修复它(只能等上游适配),
         // 说清受影响范围比制造焦虑有用。
         //
-        // 受影响范围**不是**"只有 QQ 音乐/网易云"。判据在 `MediaControlClient.fetchSnapshot`
-        // 那三条路径上:勾了「自动识别」→ 整条路的基座就是 media-control(Apple Music 也在内,
-        // AppleScript 只做位置精化);恰好只勾 Apple Music、没勾自动识别 → 纯 AppleScript,
-        // 这是**唯一**绕开它的配置;其余组合(QQ 音乐/网易云/Spotify/酷狗/汽水…)一律经它读。
-        // 所以文案按"哪一种配置绕开了它"说,不按"哪几个播放器不受影响"说 —— 后者既不准
-        // (Spotify 其实也经这条通道),又会随着新增播放器过期。
+        // 通道坏了时还读得到的播放器按 `MediaControlClient.channelFallbackCandidates` 列(改为直接问它们,
+        // 见 snapshotWhileChannelBroken),不在文案里写死:那份名单以后加了播放器,这句话跟着变。
         if case .unavailable(let message) = stores.mediaControlState {
             CardDivider()
             SettingsNote {
-                Text(L10n.t("系统媒体信息通道在本机不可用，可能无法读取播放状态。仅有一种配置可绕过该通道：关闭「自动识别」并只勾选 Apple Music；其他配置均需通过该通道读取。"))
+                Text(String(format: L10n.t("系统媒体信息通道在本机不可用：%@ 会改为直接读取播放状态（进度可能略有偏差），其他播放器暂时读取不到。"),
+                            MediaControlClient.channelFallbackCandidates(selected: [.auto]).map(\.displayName).joined(separator: L10n.t("、"))))
                 Text(message)
                     .font(.caption)
                     .foregroundStyle(.tertiary)

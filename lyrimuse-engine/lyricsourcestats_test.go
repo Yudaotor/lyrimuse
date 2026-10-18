@@ -802,3 +802,78 @@ func TestLyricSourceStatsHealthItems(t *testing.T) {
 		}
 	}
 }
+
+// lyricSourceTestWordDays:同 lyricSourceTestDays,每天都带 word 标记;unmarked 里列的那几天除外(升级那天)。
+func lyricSourceTestWordDays(spec map[int]map[string]lyricSourceDayCounts, unmarked ...int) map[string]*lyricSourceStatsDay {
+	days := lyricSourceTestDays(spec)
+	for ago := range spec {
+		days[lyricSourceStatsTestToday.AddDate(0, 0, -ago).Format(lyricSourceStatsDayLayout)].Word = !slices.Contains(unmarked, ago)
+	}
+	return days
+}
+
+func lyricSourceQualitySummary(t *testing.T, days map[string]*lyricSourceStatsDay, src string) lyricSourceStatsSummary {
+	t.Helper()
+	for _, s := range summarizeLyricSourceStats(days, nil, lyricSourceStatsTestToday, allLyricSourcesOn) {
+		if s.Source == src {
+			return s
+		}
+	}
+	t.Fatalf("没有 %s 的摘要", src)
+	return lyricSourceStatsSummary{}
+}
+
+// 质量下降:还在给,但逐字率(逐字解不开退成逐行)或可用率(带时间戳的退成纯文本、判负分)掉到平时一半以下就报。
+func TestLyricSourceDegradedQuality(t *testing.T) {
+	healthy := lyricSourceDayCounts{Asked: 40, Responded: 40, Usable: 36, Word: 30}
+	spec := map[int]map[string]lyricSourceDayCounts{}
+	lyricSourceTestRange(spec, 3, 16, "qq", healthy)
+	lyricSourceTestRange(spec, 0, 2, "qq", lyricSourceDayCounts{Asked: 40, Responded: 40, Usable: 36, Word: 4})
+	s := lyricSourceQualitySummary(t, lyricSourceTestWordDays(spec), "qq")
+	if s.Alert != lyricSourceAlertDegraded || s.Degraded != lyricSourceDegradedWord || s.PeerRounds != 108 {
+		t.Errorf("逐字率掉了:报 degraded/word,got %+v", s)
+	}
+
+	spec = map[int]map[string]lyricSourceDayCounts{}
+	lyricSourceTestRange(spec, 3, 16, "lyricfind", lyricSourceDayCounts{Asked: 40, Responded: 40, Usable: 32})
+	lyricSourceTestRange(spec, 0, 2, "lyricfind", lyricSourceDayCounts{Asked: 40, Responded: 40, Usable: 6})
+	s = lyricSourceQualitySummary(t, lyricSourceTestWordDays(spec), "lyricfind")
+	if s.Alert != lyricSourceAlertDegraded || s.Degraded != lyricSourceDegradedUsable || s.UsualRate != 0.8 {
+		t.Errorf("可用率掉了(平时本来没逐字):报 degraded/usable,got %+v", s)
+	}
+
+	spec = map[int]map[string]lyricSourceDayCounts{}
+	lyricSourceTestRange(spec, 0, 16, "qq", healthy)
+	if s := lyricSourceQualitySummary(t, lyricSourceTestWordDays(spec), "qq"); s.Alert != "" {
+		t.Errorf("跟平时一样不报: %+v", s)
+	}
+
+	// 没有 word 标记的日子(升级之前、升级那天)Word 恒为 0,不能当成逐字率掉了。
+	spec = map[int]map[string]lyricSourceDayCounts{}
+	lyricSourceTestRange(spec, 3, 16, "qq", healthy)
+	lyricSourceTestRange(spec, 0, 2, "qq", lyricSourceDayCounts{Asked: 40, Responded: 40, Usable: 36})
+	if s := lyricSourceQualitySummary(t, lyricSourceTestWordDays(spec, 0, 1, 2), "qq"); s.Alert != "" {
+		t.Errorf("没有 word 标记的日子不看逐字率: %+v", s)
+	}
+}
+
+// 一轮里有可用候选、带逐字的才记逐字数;新开的一天带 word 标记。
+func TestLyricSourceRoundCountsWordTiming(t *testing.T) {
+	d := &lyricsDecision{Candidates: []lyricsDecisionCandidate{
+		{Source: "qq", Score: 500, HasWordTiming: true},
+		{Source: "kugou", Score: -1, HasWordTiming: true},
+		{Source: "netease", Score: 300},
+	}}
+	o := lyricSourceOutcomeFromDecision(d, allLyricSourcesOn, allLyricSourcesOn, nil)
+	day := &lyricSourceStatsDay{}
+	addLyricSourceRound(day, o)
+	for src, want := range map[string]int{"qq": 1, "kugou": 0, "netease": 0} {
+		if got := day.Sources[src].Word; got != want {
+			t.Errorf("%s: Word=%d want %d", src, got, want)
+		}
+	}
+	s := &lyricSourceStats{data: lyricSourceStatsFile{Days: map[string]*lyricSourceStatsDay{}}, now: func() time.Time { return lyricSourceStatsTestToday }}
+	if !s.today().Word {
+		t.Error("新开的一天带 word 标记")
+	}
+}

@@ -162,6 +162,9 @@ func lxMusicSQL(ctx context.Context, query string, out any) error {
 	uri := (&neturl.URL{Scheme: "file", Path: db, RawQuery: "mode=ro"}).String()
 	raw, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", uri, query).Output()
 	if err != nil {
+		if sqliteSchemaMismatch(err) {
+			noteParserUnrecognized("lx-music-library", sqliteErrorDetail(err))
+		}
 		return err
 	}
 	if strings.TrimSpace(string(raw)) == "" {

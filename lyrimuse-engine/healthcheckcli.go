@@ -148,6 +148,12 @@ func runHealthcheckCLI(args []string) {
 		}
 		add("网页与本地文件解析", healthWarn, "上游可能改版,已退回备用路径:%s", strings.Join(parts, ";"))
 	}
+	// 冒用上游客户端身份的硬编码参数(upstreamidentity.go):太久没核对的提一句,上游升级后它们是最先失效的。
+	if stale, text := upstreamIdentitySummary(time.Now()); stale {
+		add("上游客户端参数", healthWarn, "%s", text)
+	} else {
+		add("上游客户端参数", healthOK, "%s", text)
+	}
 	report.Items = append(report.Items, lyricSourceStatsHealthItems(readLyricSourceStatsFile(), time.Now())...)
 
 	// 歌词导出目录:写不进去的话"歌词文件夹作为权威源"整条链路是坏的,而它不会有任何

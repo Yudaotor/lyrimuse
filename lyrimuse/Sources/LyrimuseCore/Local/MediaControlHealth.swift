@@ -53,6 +53,8 @@ public final class MediaControlHealth: ObservableObject {
     ///
     /// 代价很小:真坏了也只是多跑两次瞬间返回的子进程。
     private static let launchRetries = 2
+    /// 通道靠它加载,见 `run`。
+    static let perlPath = "/usr/bin/perl"
     private static let retryDelay: TimeInterval = 5
 
     private init() {}
@@ -75,6 +77,14 @@ public final class MediaControlHealth: ObservableObject {
 
     private func run(retriesLeft: Int) {
         guard !isChecking else { return }
+        // 通道的两样东西(media-control 脚本、常驻的取数进程)都靠系统自带的 /usr/bin/perl 加载:那些私有接口只回应 Apple
+        // 自家的程序。Perl 哪天随系统更新被拿掉,通道整个起不来,说清是这个原因,别混进一句笼统的「起不来」。
+        if !FileManager.default.isExecutableFile(atPath: Self.perlPath) {
+            state = .unavailable(message: "\(Self.perlPath) not found: this macOS no longer ships Perl, which the media channel runs on")
+            MediaControlClient.setChannelTestFailed(true)
+            Self.logger.error("media-control channel unavailable: perl missing")
+            return
+        }
         guard let binary = MediaControlClient.binaryPath() else {
             // 没走 build.sh 打包时(直接 swift build)拿不到二进制。这不是"通道坏了",
             // 别报成不可用去吓用户。

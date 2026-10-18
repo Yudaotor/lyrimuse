@@ -74,6 +74,12 @@ const (
 	// 快速判定「突然不给了」:这一段问了它的那些轮,每位歌手只算一次、按那一类的基线累加,平时本该给出至少
 	// 这么多次。
 	lyricSourceStoppedMinExpected = 12
+	// 质量下降:3 天窗口里「可用率」(给了候选的轮里有可用候选的比例)或「逐字率」(有可用候选的轮里带逐字的比例)
+	// 掉到平时的这个比例以下。上游改版最常见的结局不是不给,而是给得差:带时间戳的退成纯文本(判负分、不可用)、
+	// 逐字解不开退成逐行 —— 「给没给」那几档都看不出来。平时 = 此前 14 天里样本够的那些天各自比例的中位数。
+	lyricSourceDegradedRatio      = 0.5
+	lyricSourceDegradedMinSamples = 30
+	lyricSourceDegradedMinUsual   = 0.3
 )
 
 // 判定结果(写进摘要的 alert 字段,App 侧 LyricSourceHealth.Alert 是同一套取值)。
@@ -86,6 +92,14 @@ const (
 	lyricSourceAlertBlocked = "blocked"
 	// lyricSourceAlertStopped:最近连续一段里它一首词都没给,按它平时的收录这不该发生。
 	lyricSourceAlertStopped = "stopped"
+	// lyricSourceAlertDegraded:还在给,但质量掉了一截(见 lyricSourceDegradedRatio),摘要的 degraded 说是哪一项。
+	lyricSourceAlertDegraded = "degraded"
+)
+
+// 质量下降的两项(摘要的 degraded 字段)。
+const (
+	lyricSourceDegradedWord   = "word"   // 逐字率
+	lyricSourceDegradedUsable = "usable" // 可用率
 )
 
 // lyricSourcePeerGroups:同类曲库。amll 按平台 ID 直取、vibe 只在韩文歌上是主力,覆盖面都跟组里别的源不可比,不进任何一组;
@@ -129,9 +143,11 @@ type lyricSourceDayCounts struct {
 	SkippedBlocked int `json:"skipped_blocked,omitempty"`
 	Responded      int `json:"responded,omitempty"`
 	Usable         int `json:"usable,omitempty"`
-	Won            int `json:"won,omitempty"`
-	PeerRounds     int `json:"peer_rounds,omitempty"`
-	PeerHits       int `json:"peer_hits,omitempty"`
+	// Word:Usable 里可用候选带逐字时间轴的轮数。只有带 word 标记的那天作数(见 lyricSourceStatsDay.Word)。
+	Word       int `json:"word,omitempty"`
+	Won        int `json:"won,omitempty"`
+	PeerRounds int `json:"peer_rounds,omitempty"`
+	PeerHits   int `json:"peer_hits,omitempty"`
 	// PeerRoundsCJK / PeerHitsCJK:PeerRounds / PeerHits 里歌名或歌手名带中日韩文字的那部分,其余是另一类。
 	// 只有带 classes 标记的那天作数。
 	PeerRoundsCJK int `json:"peer_rounds_cjk,omitempty"`
@@ -152,7 +168,9 @@ type lyricSourceStatsDay struct {
 	Rounds int `json:"rounds"`
 	// Classes:这一天从第一轮起就分两类记了(决策 202 之后才开的日子)。升级那天是半路开始分的,不带它,
 	// 按两类算的基线和窗口都跳过那天。
-	Classes bool                             `json:"classes,omitempty"`
+	Classes bool `json:"classes,omitempty"`
+	// Word:这一天从第一轮起就记了逐字数(lyricSourceDayCounts.Word)。升级那天不带它,按逐字率算基线和窗口时跳过。
+	Word    bool                             `json:"word,omitempty"`
 	Sources map[string]*lyricSourceDayCounts `json:"sources"`
 }
 
@@ -204,6 +222,8 @@ type lyricSourceStatsSummary struct {
 	ExpectedHits int `json:"expected_hits,omitempty"`
 	// BlockedRounds:blocked 那条,因为被反爬拦下而没问它的轮数。
 	BlockedRounds int `json:"blocked_rounds,omitempty"`
+	// Degraded:degraded 那条掉的是哪一项(lyricSourceDegradedWord / Usable);比例、平时、样本数沿用 PeerRate、UsualRate、PeerRounds。
+	Degraded string `json:"degraded,omitempty"`
 }
 
 type lyricSourceStatsFile struct {
@@ -222,7 +242,9 @@ type lyricSourceRoundOutcome struct {
 	skipReason map[string]string
 	responded  map[string]bool
 	usable     map[string]bool
-	winner     string
+	// word:有可用候选、而且带逐字时间轴。
+	word   map[string]bool
+	winner string
 	// cjk:这首歌的歌名或歌手名带中日韩文字,同类计数按它分类。
 	cjk bool
 	// artist:歌手名的短哈希(lyricSourceArtistHash)。
@@ -258,6 +280,9 @@ func addLyricSourceRound(day *lyricSourceStatsDay, o lyricSourceRoundOutcome) {
 		}
 		if o.usable[src] {
 			c.Usable++
+			if o.word[src] {
+				c.Word++
+			}
 		}
 		if o.winner == src {
 			c.Won++
@@ -312,6 +337,7 @@ func lyricSourceOutcomeFromDecision(d *lyricsDecision, enabled, eligible func(st
 		skipReason: map[string]string{},
 		responded:  map[string]bool{},
 		usable:     map[string]bool{},
+		word:       map[string]bool{},
 		winner:     d.Winner,
 		cjk:        containsCJKScript(d.QueryArtist) || containsCJKScript(d.QueryTitle),
 		artist:     lyricSourceArtistHash(d.QueryArtist),
@@ -345,6 +371,9 @@ func lyricSourceOutcomeFromDecision(d *lyricsDecision, enabled, eligible func(st
 		o.responded[c.Source] = true
 		if c.Score >= 0 {
 			o.usable[c.Source] = true
+			if c.HasWordTiming {
+				o.word[c.Source] = true
+			}
 		}
 	}
 	for _, s := range lyricSourceNames {
@@ -510,9 +539,59 @@ func judgeLyricSource(s *lyricSourceStatsSummary, days map[string]*lyricSourceSt
 			s.PeerRate = roundRate(float64(mix.hits) / float64(mix.rounds))
 			s.PeerRounds = mix.rounds
 			s.UsualRate = roundRate(mix.expected / float64(mix.rounds))
+			return false
 		}
+		judgeLyricSourceQuality(s, days, last3, base)
 	}
 	return false
+}
+
+// lyricSourceQuality:一个窗口里一项质量比例的分子分母。
+type lyricSourceQuality struct{ num, den int }
+
+// lyricSourceQualityOf:这一天这个源的可用率或逐字率的分子分母;逐字率只认带 word 标记的那天,其余天 ok=false。
+func lyricSourceQualityOf(d *lyricSourceStatsDay, source, kind string) (q lyricSourceQuality, ok bool) {
+	if d == nil || d.Sources[source] == nil {
+		return q, false
+	}
+	c := d.Sources[source]
+	if kind == lyricSourceDegradedWord {
+		return lyricSourceQuality{c.Word, c.Usable}, d.Word
+	}
+	return lyricSourceQuality{c.Usable, c.Responded}, true
+}
+
+// judgeLyricSourceQuality:「给没给」那几档都没事时,看质量掉没掉(lyricSourceDegradedRatio)。逐字率先看:逐字解不开
+// 退成逐行时候选照样可用,可用率看不出来。
+func judgeLyricSourceQuality(s *lyricSourceStatsSummary, days map[string]*lyricSourceStatsDay, last3, base []string) {
+	for _, kind := range []string{lyricSourceDegradedWord, lyricSourceDegradedUsable} {
+		var rates []float64
+		for _, k := range base {
+			if q, ok := lyricSourceQualityOf(days[k], s.Source, kind); ok && q.den >= lyricSourceBaselineMinRounds {
+				rates = append(rates, float64(q.num)/float64(q.den))
+			}
+		}
+		if len(rates) < lyricSourceBaselineMinDays {
+			continue
+		}
+		usual := lyricSourceMedian(rates)
+		var win lyricSourceQuality
+		for _, k := range last3 {
+			if q, ok := lyricSourceQualityOf(days[k], s.Source, kind); ok {
+				win.num += q.num
+				win.den += q.den
+			}
+		}
+		if usual < lyricSourceDegradedMinUsual || win.den < lyricSourceDegradedMinSamples {
+			continue
+		}
+		rate := float64(win.num) / float64(win.den)
+		if rate < lyricSourceDegradedRatio*usual {
+			s.Alert, s.Degraded = lyricSourceAlertDegraded, kind
+			s.PeerRate, s.UsualRate, s.PeerRounds = roundRate(rate), roundRate(usual), win.den
+			return
+		}
+	}
 }
 
 // lyricSourceClassBaseline:两类各自的基线 = keys 那几天(只认带 classes 标记的)里这一类样本
@@ -757,12 +836,12 @@ func noteLyricSourceTrip(source, reason string) {
 	s.dirty = true
 }
 
-// today:调用方持锁。新开的一天从第一轮起就分两类记;读回来的、升级之前开的那天保持原样。
+// today:调用方持锁。新开的一天从第一轮起就分两类记、记逐字数;读回来的、升级之前开的那天保持原样。
 func (s *lyricSourceStats) today() *lyricSourceStatsDay {
 	k := s.now().Format(lyricSourceStatsDayLayout)
 	d := s.data.Days[k]
 	if d == nil {
-		d = &lyricSourceStatsDay{Classes: true}
+		d = &lyricSourceStatsDay{Classes: true, Word: true}
 		s.data.Days[k] = d
 	}
 	return d

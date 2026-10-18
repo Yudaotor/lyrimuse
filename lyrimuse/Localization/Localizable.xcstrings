@@ -11815,6 +11815,144 @@
         }
       }
     },
+    "令牌已失效" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Token rejected"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "令牌已失效"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "權杖已失效"
+          }
+        }
+      }
+    },
+    "令牌已失效，收听提交已暂停" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Token rejected — listen submissions paused"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "令牌已失效，收听提交已暂停"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "權杖已失效，收聽提交已暫停"
+          }
+        }
+      }
+    },
+    "系统媒体信息通道在本机不可用：%@ 会改为直接读取播放状态（进度可能略有偏差），其他播放器暂时读取不到。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The system media channel is unavailable on this Mac: %@ will be read directly instead (progress may be slightly off); other players cannot be read for now."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系统媒体信息通道在本机不可用：%@ 会改为直接读取播放状态（进度可能略有偏差），其他播放器暂时读取不到。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系統媒體資訊通道在本機無法使用：%@ 會改為直接讀取播放狀態（進度可能略有偏差），其他播放器暫時讀取不到。"
+          }
+        }
+      }
+    },
+    "系统媒体信息通道不可用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System media channel unavailable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系统媒体信息通道不可用"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系統媒體資訊通道無法使用"
+          }
+        }
+      }
+    },
+    "部分播放器的播放状态读取不到，歌词不会跟着走" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playback state from some players cannot be read, so their lyrics will not follow along"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分播放器的播放状态读取不到，歌词不会跟着走"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分播放器的播放狀態讀取不到，歌詞不會跟著走"
+          }
+        }
+      }
+    },
+    "点按此处查看受影响的播放器" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click to see which players are affected"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点按此处查看受影响的播放器"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按一下此處查看受影響的播放器"
+          }
+        }
+      }
+    },
     "授权已失效" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -31666,23 +31804,6 @@
         }
       }
     },
-    "系统媒体信息通道在本机不可用，可能无法读取播放状态。仅有一种配置可绕过该通道：关闭「自动识别」并只勾选 Apple Music；其他配置均需通过该通道读取。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The system media info channel does not work on this Mac, so playback state may not be readable. Only one setup bypasses it: “Auto-detect” off with just Apple Music ticked. Every other setup reads through this channel."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "系統媒體資訊通道在本機不可用，可能無法讀取播放狀態。僅有一種設定可繞過該通道：關閉「自動識別」並只勾選 Apple Music；其他設定均需透過該通道讀取。"
-          }
-        }
-      }
-    },
     "选择播放器" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -35139,6 +35260,75 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 拒絕了這台 Mac 的請求"
+          }
+        }
+      }
+    },
+    "%@ 近期歌词质量下降" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: lyric quality dropped recently"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 近期歌词质量下降"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 近期歌詞品質下降"
+          }
+        }
+      }
+    },
+    "最近 3 天 %1$@ 给出的 %2$d 份歌词中，可用（带时间轴且与歌曲对得上）的只占 %3$d%%，平时约为 %4$d%%。可能是其接口发生变化，只返回纯文本。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Over the last 3 days, only %3$d%% of the %2$d lyrics %1$@ returned were usable (timed and matching the song), against about %4$d%% usually. Its API may have changed and now return plain text only."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近 3 天 %1$@ 给出的 %2$d 份歌词中，可用（带时间轴且与歌曲对得上）的只占 %3$d%%，平时约为 %4$d%%。可能是其接口发生变化，只返回纯文本。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近 3 天 %1$@ 提供的 %2$d 份歌詞中，可用（帶時間軸且與歌曲對得上）的只佔 %3$d%%，平時約為 %4$d%%。可能是其介面發生變化，只回傳純文字。"
+          }
+        }
+      }
+    },
+    "最近 3 天 %1$@ 给出的 %2$d 份可用歌词中，带逐字时间轴的只占 %3$d%%，平时约为 %4$d%%。可能是其接口或加密方式发生变化，逐字歌词解不开。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Over the last 3 days, only %3$d%% of the %2$d usable lyrics %1$@ returned had word-by-word timing, against about %4$d%% usually. Its API or encryption may have changed so word timing can no longer be decoded."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近 3 天 %1$@ 给出的 %2$d 份可用歌词中，带逐字时间轴的只占 %3$d%%，平时约为 %4$d%%。可能是其接口或加密方式发生变化，逐字歌词解不开。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近 3 天 %1$@ 提供的 %2$d 份可用歌詞中，帶逐字時間軸的只佔 %3$d%%，平時約為 %4$d%%。可能是其介面或加密方式發生變化，逐字歌詞解不開。"
           }
         }
       }

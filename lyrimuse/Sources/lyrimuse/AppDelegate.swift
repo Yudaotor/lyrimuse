@@ -338,6 +338,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LyricsSweepNotifier.shared.start()
         // Last.fm 授权失效(打卡停了)时弹一条系统通知,点它打开 Last.fm 设置页。
         LastfmMirrorNotifier.shared.start()
+        ListenBrainzAuthNotifier.shared.start()
+        MediaChannelNotifier.shared.start()
         // Last.fm 账号跟 Spotify 的连接:设置里提示会不会重复记,排除了 Spotify 又过期时弹通知。
         LastfmSpotifyLinkMonitor.shared.start()
         // 换歌时弹一条系统通知(默认关,设置 › 通用 › 通知)。点通知的分流在 UnknownPlayerNotifier 的 delegate。

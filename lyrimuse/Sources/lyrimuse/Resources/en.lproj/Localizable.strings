@@ -76,6 +76,7 @@
 "%@ 行无时间戳，未写入逐字歌词#one" = "%@ line without a timestamp wasn't added to the word-timed lyrics";
 "%@ 近期几乎未返回歌词" = "%@ has found almost no lyrics lately";
 "%@ 近期找到的歌词明显少于平时" = "%@ is finding far fewer lyrics than usual";
+"%@ 近期歌词质量下降" = "%@: lyric quality dropped recently";
 "%@ 近期运行异常，点按查看详情" = "%@ hasn't been working well lately — click for details";
 "%@ 近期频繁出错" = "%@ keeps running into errors";
 "%@ 近期频繁无法连接" = "%@ often can't be reached";
@@ -379,6 +380,8 @@
 "从此句开始播放" = "Play from this line";
 "从自动备份恢复" = "Restore from Auto Backup";
 "从资料库删除" = "Delete from Library";
+"令牌已失效" = "Token rejected";
+"令牌已失效，收听提交已暂停" = "Token rejected — listen submissions paused";
 "以下位置 Lyrimuse 无法写入，歌词引擎因此无法启动：" = "Lyrimuse can't write to these locations, so the lyrics engine can't start:";
 "以下播放器尚未安装，可提前选择，安装后自动生效" = "These players aren't installed yet. Select one now and it takes effect once installed.";
 "以下条目已识别为同一首歌，播放次数合并统计；如有误识别，可将其拆分。" = "These entries are identified as the same song and their plays are combined. Split any that were misidentified.";
@@ -1387,6 +1390,8 @@
 "最大宽度" = "Max Width";
 "最近 2 天有 %1$d%% 的查询因无法连接 %2$@ 而跳过，%3$@ 也是如此。多个源同时无法连接，通常是这台 Mac 无法访问这些网站（例如需要开启代理），而非歌词源本身故障。" = "In the last 2 days, %2$@ was skipped in %1$d%% of lookups because it couldn't be reached, and so were %3$@. When several sources fail at once, this Mac most likely can't reach those sites (for example, a proxy is needed), rather than the sources being broken.";
 "最近 2 天有 %1$d%% 的查询未使用 %2$@：该源连续出错，已被暂时停用，稍后将自动恢复。" = "In the last 2 days, %2$@ was left out of %1$d%% of lookups: after repeated errors it was paused for a while. It resumes on its own.";
+"最近 3 天 %1$@ 给出的 %2$d 份可用歌词中，带逐字时间轴的只占 %3$d%%，平时约为 %4$d%%。可能是其接口或加密方式发生变化，逐字歌词解不开。" = "Over the last 3 days, only %3$d%% of the %2$d usable lyrics %1$@ returned had word-by-word timing, against about %4$d%% usually. Its API or encryption may have changed so word timing can no longer be decoded.";
+"最近 3 天 %1$@ 给出的 %2$d 份歌词中，可用（带时间轴且与歌曲对得上）的只占 %3$d%%，平时约为 %4$d%%。可能是其接口发生变化，只返回纯文本。" = "Over the last 3 days, only %3$d%% of the %2$d lyrics %1$@ returned were usable (timed and matching the song), against about %4$d%% usually. Its API may have changed and now return plain text only.";
 "最近 3 天的 %1$d 次查询中，同类曲库至少有两家找到了歌词，%2$@ 在其中 %3$d%% 提供了歌词；按这几天所听歌曲的语种构成，平时约为 %4$d%%。" = "In the last 3 days, at least two other sources of the same kind found lyrics in %1$d lookups; %2$@ returned lyrics in %3$d%% of them. Given the languages of the songs played these days, it usually manages about %4$d%%.";
 "最近 3 天的 %1$d 次查询中，同类曲库至少有两家找到了歌词，而 %2$@ 仅在其中 %3$d%% 提供了歌词。可能是其接口发生变化，或请求被拦截。" = "In the last 3 days, at least two other sources of the same kind found lyrics in %1$d lookups, but %2$@ returned lyrics in only %3$d%% of them. Its API may have changed, or its requests are being blocked.";
 "最近一次解析时没有任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲没有歌词。稍后会自动重试，也可立即重新自动匹配" = "No lyrics source responded during the last lookup, possibly because the network was unavailable; it doesn't mean the song has no lyrics. It will be retried automatically, or you can auto re-match now";
@@ -1770,6 +1775,7 @@
 "点按时间可修改此句的时间戳" = "Click a time to change that line’s timestamp";
 "点按此处前往设置查看" = "Click to view in Settings";
 "点按此处前往设置重新连接" = "Click to reconnect in Settings";
+"点按此处查看受影响的播放器" = "Click to see which players are affected";
 "热力图、听歌时段、那年今日" = "Heatmap, listening hours and On This Day";
 "焦点在别的 App 上，暂时控制不了「%@」" = "Can't control %@ while another app holds the playback focus";
 "焦点在别的 App 上，暂时无法控制播放" = "Can't control playback while another app holds the playback focus";
@@ -1849,7 +1855,8 @@
 "粤语" = "Cantonese";
 "系统兜底翻译" = "System Fallback Translation";
 "系统功能栏" = "System Control Strip";
-"系统媒体信息通道在本机不可用，可能无法读取播放状态。仅有一种配置可绕过该通道：关闭「自动识别」并只勾选 Apple Music；其他配置均需通过该通道读取。" = "The system media info channel does not work on this Mac, so playback state may not be readable. Only one setup bypasses it: “Auto-detect” off with just Apple Music ticked. Every other setup reads through this channel.";
+"系统媒体信息通道不可用" = "System media channel unavailable";
+"系统媒体信息通道在本机不可用：%@ 会改为直接读取播放状态（进度可能略有偏差），其他播放器暂时读取不到。" = "The system media channel is unavailable on this Mac: %@ will be read directly instead (progress may be slightly off); other players cannot be read for now.";
 "系统字体" = "System Font";
 "系统已开启「减弱动态效果」，触控栏歌词不滚动、不逐字高亮" = "Reduce Motion is on, so Touch Bar lyrics don't scroll or light up word by word";
 "系统自动化授权：上次检测时已授权" = "System automation access: granted as of the last check";
@@ -2251,6 +2258,7 @@
 "那年今日 · 去年收听 %@ 次#one" = "On this day · %@ play a year ago";
 "邮件反馈" = "Email Feedback";
 "部分写法未能获取" = "Some spellings couldn't be loaded";
+"部分播放器的播放状态读取不到，歌词不会跟着走" = "Playback state from some players cannot be read, so their lyrics will not follow along";
 "部分设置未能写入（%@），其余已导入。可再次导入，或检查配置文件夹的写入权限" = "Some settings couldn't be written (%@); the rest were imported. Try importing again, or check that the config folder is writable.";
 "配对浏览器" = "Pair a Browser";
 "配置尚未完成，点按查看缺少的项目" = "Setup isn’t finished — click to see what’s left";

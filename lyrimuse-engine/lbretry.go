@@ -25,7 +25,7 @@ import (
 
 const (
 	lbRetryInterval = 5 * time.Minute // 两轮重发之间隔多久
-	lbRetryMaxItems = 1000            // 保险丝:再多就丢最老的(正常一年也攒不到这么多)
+	lbRetryMaxItems = 1000            // 保险丝:再多就把最老的挪进留档(keepUnsentLBListen;正常一年也攒不到这么多)
 )
 
 // lbRetryItem 是一条等着重发的完成收听。Meta 就是当初 submit 的那份载荷。
@@ -101,6 +101,9 @@ func enqueueLBRetry(listenedAt int64, meta lbTrackMeta) {
 	}
 	items = append(items, lbRetryItem{ListenedAt: listenedAt, Meta: meta, QueuedAt: time.Now().Unix()})
 	if len(items) > lbRetryMaxItems {
+		for _, it := range items[:len(items)-lbRetryMaxItems] {
+			keepUnsentLBListen(it.ListenedAt, it.Meta, "queue_full")
+		}
 		items = items[len(items)-lbRetryMaxItems:]
 	}
 	saveLBRetryLocked(items)
@@ -152,6 +155,7 @@ func processLBRetry(ctx context.Context, submit lbRetrySubmitter) int {
 		}
 		if errors.Is(err, errListenRejected) {
 			done[it.key()] = true
+			keepUnsentLBListen(it.ListenedAt, it.Meta, "rejected")
 			log.Printf("lb retry: dropping rejected listen %q - %q: %v", it.Meta.ArtistName, it.Meta.TrackName, err)
 			continue
 		}
@@ -193,6 +197,7 @@ func startLBRetryLoop(ctx context.Context, lb *lbClient) {
 			processLBRetry(ctx, func(ctx context.Context, listenedAt int64, meta lbTrackMeta) error {
 				return lb.submit(ctx, "single", listenedAt, meta)
 			})
+			refillLBRetryFromUnsent(lbRetryRefillBatch)
 		}
 	}
 }

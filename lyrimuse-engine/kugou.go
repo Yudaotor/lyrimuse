@@ -433,10 +433,10 @@ func kugouLyricForSong(ctx context.Context, artist, title string, durationSecs f
 	if len(kr.Candidates) == 0 {
 		return kugouKeywordLyric(ctx, artist, title, durationSecs, chosen)
 	}
-	// 第一条候选缺 id / accesskey 取不了词,或者答了却没有能用的整行(多半是酷狗给没词的歌挂的那条占位,「The Seasons
-	// Op. 37b: June - Barcarole」正文只有「纯音乐,请欣赏」)时,跟候选为空一样再不带 hash 查一次。
-	c := kr.Candidates[0]
-	if c.ID == "" || c.AccessKey == "" {
+	// 挑不出能用的候选(缺 id / accesskey,或歌名跟挑中的那首对不上),或者答了却没有能用的整行(多半是酷狗给没词的歌挂的
+	// 那条占位,「The Seasons Op. 37b: June - Barcarole」正文只有「纯音乐,请欣赏」)时,跟候选为空一样再不带 hash 查一次。
+	c, ok := kugouHashCandidate(kr.Candidates, chosen.SongName)
+	if !ok {
 		return kugouKeywordLyric(ctx, artist, title, durationSecs, chosen)
 	}
 	got, ok, answered := kugouFetchLyric(ctx, c.ID, c.AccessKey)
@@ -537,6 +537,22 @@ func kugouKeywordLyric(ctx context.Context, artist, title string, durationSecs f
 		r.cover = kugouSongCoverURL(ctx, chosen)
 	}
 	return r
+}
+
+// kugouHashCandidate 在按 hash 查回的歌词候选里挑第一条有 id / accesskey、歌名跟挑中的那首(chosenTitle,同是酷狗的写法)
+// 对得上的。按 hash 查回的候选跟着 hash 走,但里面混着用户上传的版本(歌名写成「周杰伦 - 晴天」、歌手是上传者),
+// 不核歌名就是排第一的那条说了算。候选没报歌名的照收(没有可比的)。歌手不比:上传版的歌手是上传者。纯函数,便于单测。
+func kugouHashCandidate(cands []kugouLyricCandidate, chosenTitle string) (kugouLyricCandidate, bool) {
+	for _, c := range cands {
+		if c.ID == "" || c.AccessKey == "" {
+			continue
+		}
+		if c.Song != "" && chosenTitle != "" && !lyricTitleAccepted(c.Song, chosenTitle) {
+			continue
+		}
+		return c, true
+	}
+	return kugouLyricCandidate{}, false
 }
 
 // kugouKeywordCandidate 在不带 hash 查回的歌词候选里按顺序挑第一条:歌名过闸、歌手过 lyricSourceArtistMatches、歌名的

@@ -19,6 +19,16 @@ public enum LyricSourceHealth {
         case blocked
         /// 最近连续一段里一首词都没给,按它平时的收录这不该发生。
         case stopped
+        /// 还在给,但质量掉了一截:逐字率或可用率掉到平时一半以下(哪一项见 `degraded`)。
+        case degraded
+    }
+
+    /// `degraded` 掉的是哪一项,取值同引擎 lyricSourceDegraded*。
+    public enum Degraded: String, Sendable {
+        /// 给出的可用歌词里带逐字时间轴的比例。
+        case word
+        /// 给出的歌词里可用(带时间轴、跟歌曲对得上)的比例。
+        case usable
     }
 
     public struct Summary: Decodable, Equatable, Sendable {
@@ -41,12 +51,14 @@ public enum LyricSourceHealth {
         public let expectedHits: Int
         /// `blocked`:因为被反爬拦下而没问它的查询次数。
         public let blockedRounds: Int
+        /// `degraded`:掉的是哪一项;比例、平时、样本数沿用 peerRate、usualRate、peerRounds。
+        public let degraded: Degraded?
 
         enum CodingKeys: String, CodingKey {
             case source, enabled, rounds, responded, won, alert
             case peerRate = "peer_rate", peerRounds = "peer_rounds", usualRate = "usual_rate"
             case skipRate = "skip_rate", networkPeers = "network_peers"
-            case streak, expectedHits = "expected_hits", blockedRounds = "blocked_rounds"
+            case streak, expectedHits = "expected_hits", blockedRounds = "blocked_rounds", degraded
         }
 
         public init(from decoder: Decoder) throws {
@@ -65,13 +77,14 @@ public enum LyricSourceHealth {
             streak = try c.decodeIfPresent(Int.self, forKey: .streak) ?? 0
             expectedHits = try c.decodeIfPresent(Int.self, forKey: .expectedHits) ?? 0
             blockedRounds = try c.decodeIfPresent(Int.self, forKey: .blockedRounds) ?? 0
+            degraded = try c.decodeIfPresent(String.self, forKey: .degraded).flatMap(Degraded.init(rawValue:))
         }
 
         public init(
             source: String, enabled: Bool = true, rounds: Int = 0, responded: Int = 0, won: Int = 0,
             alert: Alert? = nil, peerRate: Double = 0, peerRounds: Int = 0, usualRate: Double = 0,
             skipRate: Double = 0, networkPeers: [String] = [], streak: Int = 0, expectedHits: Int = 0,
-            blockedRounds: Int = 0
+            blockedRounds: Int = 0, degraded: Degraded? = nil
         ) {
             self.source = source
             self.enabled = enabled
@@ -87,6 +100,7 @@ public enum LyricSourceHealth {
             self.streak = streak
             self.expectedHits = expectedHits
             self.blockedRounds = blockedRounds
+            self.degraded = degraded
         }
     }
 

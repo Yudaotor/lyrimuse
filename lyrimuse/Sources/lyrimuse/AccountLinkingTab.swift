@@ -319,11 +319,13 @@ func lastfmDisplayName(config: ConfigStore) -> String {
 /// mirrorInfo 是引擎落盘的"授权已失效"状态,调用方从 LastfmMirrorStatusWatcher
 /// 取 —— 必须经由观察器而不是在这里直接读文件:文件被删(引擎自愈)不触发任何
 /// SwiftUI 观察,直接读的话红标会滞留到下一次无关的重渲染。relayVerdict 是引擎报的网页推送结果,
-/// 同理从 RelayPushStatusWatcher 取。
+/// 同理从 RelayPushStatusWatcher 取;lbInfo 是引擎报的 ListenBrainz 令牌被拒,从 ListenBrainzSubmitStatusWatcher 取。
 func destinationStatus(for destination: AccountDestination, config: ConfigStore, lastfmConnect: LastfmConnectController, mirrorInfo: LastfmMirrorStatus.Info?,
-                       relayVerdict: RelayPushStatus.Verdict = .ok) -> DestinationStatus {
+                       relayVerdict: RelayPushStatus.Verdict = .ok, lbInfo: ListenBrainzSubmitStatus.Info? = nil) -> DestinationStatus {
     switch destination {
     case .listenBrainz:
+        // 引擎报令牌被拒压过「已连接」:提交全停在待重发队列里,绿标就是在撒谎(同 Last.fm 的「授权已失效」)。
+        if config.isListenBrainzConfigured, lbInfo != nil { return .error(L10n.t("令牌已失效")) }
         // ListenBrainz 是可选账号(只想用悬浮歌词可以完全不配),未配置不算硬性错误,
         // 跟其它卡片一致用橙色"缺凭据"提示。
         if config.isListenBrainzReadable {
@@ -434,6 +436,7 @@ struct AccountSidebarRow: View {
     @ObservedObject private var mirrorStatus = LastfmMirrorStatusWatcher.shared
     // 「网页推送」推不出去时的红 / 橙徽标,订阅理由同上(见 RelayPushStatusWatcher)。
     @ObservedObject private var relayStatus = RelayPushStatusWatcher.shared
+    @ObservedObject private var lbStatus = ListenBrainzSubmitStatusWatcher.shared
     // 只为了让这一行在手动切换语言时重新渲染——这个 View 本身已经嵌在 SettingsView
     // 的 List 里,父视图理论上会因为语言变化重新构造子行,这里独立再观察一份是保险,
     // 不依赖 ForEach 复用行为的具体细节。
@@ -447,7 +450,7 @@ struct AccountSidebarRow: View {
             HStack(spacing: 6) {
                 Text(destination.title)
                 destinationStatus(for: destination, config: config, lastfmConnect: lastfmConnect,
-                                  mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict)
+                                  mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict, lbInfo: lbStatus.info)
                     .indicator
             }
         } icon: {
@@ -491,6 +494,7 @@ struct AccountLinkingTab: View {
     @ObservedObject private var mirrorStatus = LastfmMirrorStatusWatcher.shared
     // 「网页推送」页那行推送状态说明的数据源(见 RelayPushStatusWatcher)。
     @ObservedObject private var relayStatus = RelayPushStatusWatcher.shared
+    @ObservedObject private var lbStatus = ListenBrainzSubmitStatusWatcher.shared
     // 默认展开:一进页面就直接看到清单,想收起自己点一下;清单自己限高滚动(见 pendingListensRow),
     // 攒到几十首也不会把整页顶开。不做成偏好持久化(只是这一次开窗的初始状态)。
     @State private var pendingListensExpanded = true
@@ -909,7 +913,7 @@ struct AccountLinkingTab: View {
             }
         }
         let status = destinationStatus(for: destination, config: config, lastfmConnect: lastfmConnect,
-                                       mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict)
+                                       mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict, lbInfo: lbStatus.info)
         switch status {
         case .disabled:
             return (.secondary, L10n.t("未启用"), nil)

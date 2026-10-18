@@ -38,6 +38,7 @@ struct LyricSourceHealthHelp: View {
         case .cooling: return String(format: L10n.t("%@ 近期频繁出错"), name)
         case .blocked: return String(format: L10n.t("%@ 拒绝了这台 Mac 的请求"), name)
         case .stopped: return String(format: L10n.t("%@ 突然不再返回歌词"), name)
+        case .degraded: return String(format: L10n.t("%@ 近期歌词质量下降"), name)
         case .network, nil: return String(format: L10n.t("%@ 近期频繁无法连接"), name)
         }
     }
@@ -63,6 +64,15 @@ struct LyricSourceHealthHelp: View {
         case .stopped:
             return String(format: L10n.t("最近连续 %1$d 次查询中，同类曲库至少有两家找到了歌词，%2$@ 一次也没有提供；按它平时的收录情况，本该提供约 %3$d 次。可能是其接口发生变化，或请求被拦截。"),
                           summary.streak, name, summary.expectedHits)
+        case .degraded:
+            // 比例、平时、样本数沿用 peerRate / usualRate / peerRounds,见引擎 judgeLyricSourceQuality。
+            let usual = LyricSourceHealth.percent(summary.usualRate)
+            if summary.degraded == .usable {
+                return String(format: L10n.t("最近 3 天 %1$@ 给出的 %2$d 份歌词中，可用（带时间轴且与歌曲对得上）的只占 %3$d%%，平时约为 %4$d%%。可能是其接口发生变化，只返回纯文本。"),
+                              name, summary.peerRounds, peerRate, usual)
+            }
+            return String(format: L10n.t("最近 3 天 %1$@ 给出的 %2$d 份可用歌词中，带逐字时间轴的只占 %3$d%%，平时约为 %4$d%%。可能是其接口或加密方式发生变化，逐字歌词解不开。"),
+                          name, summary.peerRounds, peerRate, usual)
         case .network, nil:
             let peers = summary.networkPeers.map(sourceDisplayName).joined(separator: L10n.t("、"))
             return String(format: L10n.t("最近 2 天有 %1$d%% 的查询因无法连接 %2$@ 而跳过，%3$@ 也是如此。多个源同时无法连接，通常是这台 Mac 无法访问这些网站（例如需要开启代理），而非歌词源本身故障。"),

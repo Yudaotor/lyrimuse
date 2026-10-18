@@ -117,15 +117,24 @@ func googleTranslateChunk(ctx context.Context, hc *http.Client, lines []string, 
 	if err != nil {
 		return nil, fmt.Errorf("read google translate response: %w", err)
 	}
+	// 免 key 的非官方端点,哪天改了返回形状不会报错、只是解不出来:记进解析漂移计数(parserdrift.go)。
 	text, err := parseGoogleTranslateResponse(body)
 	if err != nil {
+		noteParserUnrecognized(googleTranslateParserName, err.Error())
 		return nil, err
 	}
 	if text == "" {
+		if strings.TrimSpace(strings.Join(lines, "")) != "" {
+			noteParserUnrecognized(googleTranslateParserName, "segments carry no translated text")
+		}
 		return lines, nil
 	}
+	noteParserRecognized(googleTranslateParserName)
 	return strings.Split(text, "\n"), nil
 }
+
+// googleTranslateParserName:parserdrift.go 里这条路径的名字。
+const googleTranslateParserName = "google-translate"
 
 // parseGoogleTranslateResponse 取出拼好的译文。返回形状是嵌套数组:
 //

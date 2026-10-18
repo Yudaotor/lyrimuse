@@ -286,13 +286,13 @@ func TestAmllFetchFallsBackToAPI(t *testing.T) {
 			w.WriteHeader(http.StatusBadGateway)
 		}
 	})
-	if _, ok := amllFetch(qqRoundCtx(), "qq-lyrics", "mid3"); ok || f.count(api) != 0 {
+	if _, ok, _ := amllFetch(qqRoundCtx(), "qq-lyrics", "mid3"); ok || f.count(api) != 0 {
 		t.Fatalf("原始仓库回 404 是答了,不该再问官方接口(问了 %d 次)", f.count(api))
 	}
-	if body, ok := amllFetch(qqRoundCtx(), "qq-lyrics", "mid1"); !ok || body != "<tt/>" {
+	if body, ok, _ := amllFetch(qqRoundCtx(), "qq-lyrics", "mid1"); !ok || body != "<tt/>" {
 		t.Fatalf("三个镜像都没问成时该从官方接口拿到: %q %v", body, ok)
 	}
-	if _, ok := amllFetch(qqRoundCtx(), "qq-lyrics", "mid2"); ok {
+	if _, ok, _ := amllFetch(qqRoundCtx(), "qq-lyrics", "mid2"); ok {
 		t.Error("官方接口回 404 是库里没有")
 	}
 	if f.count(api) != 2 {
