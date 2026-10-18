@@ -1945,7 +1945,7 @@ func runSourceContractSurfaceTests() {
             }
             // 背景光斑动画必须在 Core Animation 里跑:SwiftUI 的 repeatForever 是主线程逐帧推进的,
             // 这扇窗开着就一直重算依赖图 + 提交图层,实测多出约 30% 持续 CPU(07 章决策 48)。
-            expectEqual(lwv.contains("CABasicAnimation(keyPath: \"transform.rotation.z\")"), true,
+            expectEqual(lwv.contains("CAKeyframeAnimation(keyPath: \"transform.rotation.z\")"), true,
                         "歌词窗口背景: 光斑往复摆动是 Core Animation 关键帧动画")
             expectEqual(sourceHas(lwv, ".rotationEffect(\n                            .degrees(pose.initialAngle"), false,
                         "歌词窗口背景: 别改回 SwiftUI rotationEffect + repeatForever")

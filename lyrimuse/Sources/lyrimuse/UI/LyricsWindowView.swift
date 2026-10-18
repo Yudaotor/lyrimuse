@@ -7410,14 +7410,16 @@ final class BackdropNSView: NSView {
             if on {
                 if rotator.animation(forKey: Self.spinKey) == nil {
                     let pose = poses[i]
-                    let swing = CABasicAnimation(keyPath: "transform.rotation.z")
-                    swing.fromValue = Self.caAngle(pose.initialAngle - Self.swingDegrees)
-                    swing.toValue = Self.caAngle(pose.initialAngle + Self.swingDegrees)
                     // 烘焙里的时长带符号(负 = 反向),摆动只要一个周期长度,方向由往复本身给出。
-                    swing.duration = max(1, abs(pose.spinDuration))
-                    swing.autoreverses = true
+                    let half = max(1, abs(pose.spinDuration))
+                    // 离散关键帧、别改回连续插值或靠 preferredFrameRateRange 降帧:见 07 章决策 172。
+                    let swing = CAKeyframeAnimation(keyPath: "transform.rotation.z")
+                    swing.values = BackdropSwing.angles(from: pose.initialAngle - Self.swingDegrees,
+                                                        to: pose.initialAngle + Self.swingDegrees,
+                                                        halfPeriod: half).map(Self.caAngle)
+                    swing.calculationMode = .discrete
+                    swing.duration = 2 * half
                     swing.repeatCount = .infinity
-                    swing.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                     swing.isRemovedOnCompletion = false
                     rotator.add(swing, forKey: Self.spinKey)
                 }

@@ -25,6 +25,13 @@ public enum FrameCadence {
         return (displayRate / Double(step) * 1000).rounded() / 1000
     }
 
+    /// 图层动画帧率区间:上限跟屏幕实际支持的最高刷新率走,下限钉 `animationFloor`;读不到(0)或屏幕不到 60Hz 时按下限。
+    public static let animationFloor = 60
+
+    public static func animationCeiling(displayMaximum: Int) -> Int {
+        max(animationFloor, displayMaximum)
+    }
+
     private static func greatestCommonDivisor(_ a: Int, _ b: Int) -> Int {
         b == 0 ? a : greatestCommonDivisor(b, a % b)
     }

@@ -229,6 +229,25 @@ func runLyricsWindowTests() {
         expectEqual(updates, 4, "节流: 0.25 秒档在 60Hz 屏上每秒刷 4 次")
     }
 
+    // MARK: - 背景光斑摆动取样(BackdropSwing,07 章决策 172)
+    do {
+        let a = BackdropSwing.angles(from: -12, to: 12, halfPeriod: 55)
+        expectEqual(a.count, 1101, "光斑摆动: 110 秒往复按 10Hz 取 1100 档")
+        expectEqual(a.first, -12, "光斑摆动: 从起点出发")
+        expectEqual(a.last, -12, "光斑摆动: 回到起点,循环接得上")
+        expectEqual(a[550], 12, "光斑摆动: 半程到终点")
+        expectEqual(zip(a, a.dropFirst()).prefix(550).allSatisfy { $0 <= $1 }, true, "光斑摆动: 去程单调")
+        expectEqual(zip(a, a.dropFirst()).dropFirst(550).allSatisfy { $0 >= $1 }, true, "光斑摆动: 回程单调")
+        expectEqual(zip(a, a.dropFirst()).map { abs($1 - $0) }.max()! < 0.1, true, "光斑摆动: 一档转动不到 0.1°")
+        expectEqual(BackdropSwing.angles(from: 0, to: 1, halfPeriod: 0).count, 3, "光斑摆动: 时长为 0 也至少两档")
+        let window = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(window, contain: "swing.calculationMode = .discrete"), true,
+                    "光斑摆动(契约): 背景光斑走离散关键帧")
+        expectEqual(sourceBytes(window, contain: "let swing = CABasicAnimation(keyPath: \"transform.rotation.z\")"), false,
+                    "光斑摆动(契约): 不用连续插值的旋转动画")
+    }
+
     // MARK: - 逐帧时钟降频(FrameCadence.linkRate,07 章决策 140)
     do {
         typealias C = FrameCadence
@@ -246,6 +265,11 @@ func runLyricsWindowTests() {
         expectEqual(C.linkRate(intervals: [0.25], displayRate: 0), nil, "降频: 屏幕刷新率读不到不降")
         expectEqual(C.linkRate(intervals: [0.25], displayRate: 59.94), 3.996, "降频: 59.94Hz 屏上 0.25 秒按 15 帧算")
         expectEqual(C.linkRate(intervals: [0.25], displayRate: 1 / 0.0166666), 4, "降频: 帧长读数的零头不改档位")
+        expectEqual(C.animationCeiling(displayMaximum: 120), 120, "图层动画帧率: 120Hz 屏上限 120")
+        expectEqual(C.animationCeiling(displayMaximum: 144), 144, "图层动画帧率: 144Hz 外接屏上限跟到 144")
+        expectEqual(C.animationCeiling(displayMaximum: 60), 60, "图层动画帧率: 60Hz 屏上限 60")
+        expectEqual(C.animationCeiling(displayMaximum: 48), C.animationFloor, "图层动画帧率: 不到 60Hz 的屏按下限,区间不倒挂")
+        expectEqual(C.animationCeiling(displayMaximum: 0), C.animationFloor, "图层动画帧率: 读不到屏幕按下限")
         // 降下来之后每一档照旧按自己的间隔准点刷新:10 秒里刷的次数正好是 10 / 间隔
         let cases: [([Double], Double)] = [([0.25], 60), ([0.25], 120), ([0.25], 144), ([0.25], 59.94),
                                            ([1.0 / 30], 60), ([0.25, 1.0 / 60], 120), ([0.25, 1.0 / 30], 120)]
@@ -352,6 +376,12 @@ func runLyricsWindowTests() {
                     "逐帧时钟(契约): 时钟挂在这一份所在的窗口上")
         expectEqual(sourceBytes(frame, contain: "displayLink(target: proxy, selector: selector)"), true,
                     "逐帧时钟(契约): 时钟是宿主窗口的 display link")
+        let layerList = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsLayerList.swift"),
+                                     encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(layerList, contain: "FrameCadence.animationCeiling(displayMaximum: window?.screen?.maximumFramesPerSecond ?? 0)"), true,
+                    "图层动画帧率(契约): 图层列表的动画上限取所在屏幕的最高刷新率")
+        expectEqual(sourceBytes(layerList, contain: "CAFrameRateRange(minimum: 60"), false,
+                    "图层动画帧率(契约): 图层列表不写死帧率区间")
         expectEqual(sourceBytes(frame, contain: "let rate = FrameCadence.linkRate(intervals: tickets.map(\\.minimumInterval), displayRate: display)"), true,
                     "逐帧时钟(契约): display link 按在用的票要的间隔降频")
         expectEqual(frame.components(separatedBy: "retune(").count - 1, 4,

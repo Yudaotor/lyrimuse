@@ -118,8 +118,12 @@ final class LyricsLayerListView: NSView {
         var columnWidth: CGFloat
     }
 
-    /// 动画的帧率:跟显示刷新走满(渲染服务对长时程慢动画会自己降档,别靠默认值)。
-    private static let frameRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
+    /// 动画的帧率:按所在屏幕支持的最高刷新率跑满(渲染服务对长时程慢动画会自己降档,别靠默认值),下限钉 60。
+    /// 每次建动画时现取,窗口换到别的屏之后新起的动画跟着换(07 章决策 170)。
+    private var frameRange: CAFrameRateRange {
+        let top = Float(FrameCadence.animationCeiling(displayMaximum: window?.screen?.maximumFramesPerSecond ?? 0))
+        return CAFrameRateRange(minimum: Float(FrameCadence.animationFloor), maximum: top, preferred: top)
+    }
     /// 重装填色动画的漂移门:动画此刻推到的位置跟播放时钟差过它才重装(同悬浮歌词 `resyncToleranceMs`)。
     private static let resyncToleranceMs = 250
     /// 当前行滚到视口从上往下这个比例处(同 SwiftUI 版 `activeLineAnchor`,07 章决策 87);开场滚第一句、锚 0.52。
@@ -423,6 +427,7 @@ final class LyricsLayerListView: NSView {
             return
         }
         let newScroll = scrollY
+        let range = frameRange
         // 只给屏幕上看得见(换之前或换之后在视口附近)的项挂动画,远处的直接落位。起步时刻留给提交那一刻(beginTime 为 0):
         // 装完动画之后主线程这一轮更新再卡多久,起步都不会一下跳过一截;各行的错开延迟放在组动画里面算。
         func animate(_ layer: CALayer, oldScreen: CGFloat, newScreen: CGFloat, height: CGFloat) {
@@ -454,7 +459,7 @@ final class LyricsLayerListView: NSView {
             let group = CAAnimationGroup()
             group.animations = [spring]
             group.duration = delay + spring.duration
-            group.preferredFrameRateRange = Self.frameRange
+            group.preferredFrameRateRange = range
             layer.add(group, forKey: Self.staggerKey + ".\(shiftSerial)")
             shiftSerial &+= 1
         }
@@ -689,7 +694,7 @@ final class LyricsLayerListView: NSView {
             a.fromValue = from
             a.toValue = to
             a.duration = a.settlingDuration
-            a.preferredFrameRateRange = Self.frameRange
+            a.preferredFrameRateRange = frameRange
             return a
         case .hover:
             let a = CABasicAnimation(keyPath: key)
@@ -697,7 +702,7 @@ final class LyricsLayerListView: NSView {
             a.toValue = to
             a.duration = LyricsDepthMotion.hoverDuration
             a.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            a.preferredFrameRateRange = Self.frameRange
+            a.preferredFrameRateRange = frameRange
             return a
         }
     }
@@ -751,7 +756,7 @@ final class LyricsLayerListView: NSView {
             } else if !running {
                 rows[i].showFrozen(atMs: nowMs)
             } else if timingChanged || drifted || changedRows.contains(i) {
-                rows[i].play(nowMs: nowMs, rate: s.rate, mediaNow: media, frameRange: Self.frameRange)
+                rows[i].play(nowMs: nowMs, rate: s.rate, mediaNow: media, frameRange: frameRange)
                 playing = true
             } else {
                 playing = true
@@ -844,7 +849,7 @@ final class LyricsLayerListView: NSView {
         a.fromValue = from
         a.toValue = to
         a.duration = a.settlingDuration
-        a.preferredFrameRateRange = Self.frameRange
+        a.preferredFrameRateRange = frameRange
         thumb.add(a, forKey: "lyrimuse.layer-list.thumb")
     }
 
