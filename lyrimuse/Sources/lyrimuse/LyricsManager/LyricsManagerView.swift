@@ -350,9 +350,8 @@ func sourceDisplayName(_ source: String) -> String {
     }
 }
 
-// 来源格子的悬停提示。绝大多数来源就是展示名本身——`.help` 在那里的本职是给固定 4 列网格
-// 里被截断的长译名兜底(见 SettingsView.sourceCheckbox 里的说明),名字没被截断时它只是把
-// 同一个词重复一遍、那个槽位是空着的。
+// 「歌词管理」列表里来源徽章的悬停提示。绝大多数来源就是展示名本身;设置页「歌词来源」那一格悬停说的是
+// `LyricsSource.about`,不走这里。
 //
 // lyricfind 是唯一一个"展示名 ≠ 检索对象"的源:数据是 LyricFind 的(候选过滤只留真正的
 // LyricFind 数据,见 lyrimuse-engine/ytmusic.go 头注),但取数走的是 YouTube Music 这条管道。

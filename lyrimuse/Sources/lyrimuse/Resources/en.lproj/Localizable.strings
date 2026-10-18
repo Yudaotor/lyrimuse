@@ -132,6 +132,7 @@
 "Apple Music 播放的曲目 ID 一致" = "Same Apple Music track ID from playback";
 "Apple Music 检索结果为同一曲目" = "Same track found by Apple Music search";
 "Apple Music 登录已失效（已过期或被撤销），请重新连接" = "Your Apple Music sign-in is no longer valid (expired or revoked). Reconnect to continue.";
+"Apple Music 的官方歌词，连接账号后可用" = "Apple Music's own lyrics, available after you connect your account";
 "Apple Music 的登录已过期或被吊销（有效期 6 个月，Apple 不提供自动续期），请在「歌词来源」卡片底部重新连接" = "The Apple Music sign-in has expired or been revoked (it lasts 6 months and Apple issues no renewable token) — reconnect at the bottom of the Lyrics Sources card";
 "Apple Music 账号连接" = "Apple Music Account Connection";
 "Apple 各地商店署名" = "Apple storefront credit";
@@ -317,6 +318,7 @@
 "两者同分。" = "Both scored the same.";
 "两者均为现场版，但该候选的专辑名对应另一场演出（如另一次巡演），其时间轴与当前录音无法对齐" = "Both are live versions, but this candidate's album points to a different performance (such as another tour), so its timing won't line up with this recording";
 "两首探测曲均无响应，该源目前可能不可用" = "Neither probe track got a response — this source may currently be unavailable";
+"中国移动旗下的音乐平台" = "China Mobile's music service";
 "中文" = "Chinese";
 "中文歌词统一成简体或繁体" = "Show Chinese lyrics in Simplified or Traditional characters";
 "为当前配色命名" = "Name these colors";
@@ -425,8 +427,10 @@
 "允许局域网访问" = "Allow Local Network Access";
 "允许远程控制" = "Allow Remote Control";
 "光盘" = "Disc";
+"免费开放的社区歌词库" = "A free, open lyrics database run by its community";
 "免费开源，感谢你的 ⭐ 支持" = "Free and open source. A ⭐ means a lot — thank you!";
 "全屏时隐藏" = "Hide in Full Screen";
+"全球最大的歌词库，Spotify 的歌词也来自它" = "The world's largest lyrics catalog, also behind Spotify's lyrics";
 "全球用户最多的流媒体音乐 App" = "The world's most popular music streaming app";
 "全角/半角" = "Full-width/half-width";
 "全选" = "Select All";
@@ -558,6 +562,7 @@
 "功能清单" = "Feature List";
 "加入信任列表" = "Trust This App";
 "加到%@的稍后播放" = "Play Later in %@";
+"加拿大的歌词版权公司，经由 YouTube Music 检索" = "A Canadian lyrics licensing company, searched via YouTube Music";
 "加签密钥（可选）" = "Signing Secret (Optional)";
 "加粗" = "Bold";
 "加载失败" = "Couldn't load";
@@ -771,6 +776,7 @@
 "字号 %@pt" = "Font size %@pt";
 "字形" = "Type";
 "字节跳动旗下的音乐 App" = "ByteDance's music app";
+"字节跳动旗下的音乐平台" = "ByteDance's music service";
 "存在差异" = "Different";
 "存在标题更吻合的候选，撤销逐字加分" = "A candidate matches the title better, so the word-timing bonus is withdrawn";
 "安装并登录后将自动连接；网页版和手机版不支持连接" = "Connects automatically once it's installed and you're signed in. The web and mobile apps can't connect.";
@@ -1714,6 +1720,7 @@
 "沿用同一首歌另一种写法「%@」的校正，在这里调整后记在这一条上" = "Uses the timing correction from “%@”, another version of this song. Adjusting it here saves it to this version.";
 "沿用同一首歌的人工修正" = "Uses the manual correction from another version of this song";
 "沿用同一首歌的修正" = "From Another Version";
+"法国的流媒体音乐平台，歌词由 LyricFind 提供" = "A French music streaming service with lyrics from LyricFind";
 "洛雪音乐" = "LX Music";
 "洛雪音乐开放 API" = "LX Music Open API";
 "浅色" = "Light";
@@ -1817,6 +1824,7 @@
 "确认没有歌词后才收起，找到歌词时自动展开；搜索期间照常显示" = "Collapses only after confirming there are no lyrics, and expands again once lyrics are found. Stays shown while searching";
 "确认重置" = "Confirm Reset";
 "磨砂玻璃" = "Frosted";
+"社区人工校对的逐字歌词库" = "Word-by-word lyrics checked by hand by its community";
 "秒" = "s";
 "移除" = "Remove";
 "移除配对" = "Unpair";
@@ -1917,6 +1925,7 @@
 "网易云音乐检索结果为同一曲目" = "Same track found by NetEase Cloud Music search";
 "网易云音乐歌曲页" = "NetEase Cloud Music song page";
 "网易旗下的音乐 App" = "NetEase's music app";
+"网易旗下的音乐平台" = "NetEase's music service";
 "网络不可用，已搜索 %1$@ 首、找到 %2$@ 首后停止" = "No connection: stopped after %1$@ songs, %2$@ found";
 "网络不可用，已搜索 %1$@ 首、找到 %2$@ 首后停止#one" = "No connection: stopped after %1$@ song, %2$@ found";
 "网络不可用，已暂停，稍后将自动继续" = "Paused: no connection; it resumes automatically";
@@ -1944,7 +1953,9 @@
 "胜者" = "Winner";
 "能跳过的广告一出现就自动跳过" = "Skippable ads are skipped as soon as they appear";
 "腾讯旗下的音乐 App" = "Tencent's music app";
+"腾讯旗下的音乐平台" = "Tencent's music service";
 "腾讯音乐旗下的音乐 App" = "A music app from Tencent Music";
+"腾讯音乐旗下的音乐平台" = "A music service from Tencent Music";
 "自 %@ 起" = "Since %@";
 "自动" = "Automatic";
 "自动 Scrobble" = "Automatic Scrobbling";
@@ -2333,6 +2344,7 @@
 "霓虹" = "Neon";
 "静音" = "Mute";
 "静默启动" = "Launch Silently";
+"韩国 Naver 旗下的音乐平台" = "Naver's music service from Korea";
 "韩语" = "Korean";
 "音乐 App" = "Music Apps";
 "音叉" = "Tuning Fork";

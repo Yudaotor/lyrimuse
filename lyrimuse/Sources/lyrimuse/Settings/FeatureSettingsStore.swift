@@ -39,6 +39,28 @@ public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable 
     }
 }
 
+// 不放进枚举体里:selftest 按枚举体里的 case 行核对两侧源名单(contracts-settings「歌词源名单」),switch 的 case 行会被当成源。
+extension LyricsSource {
+    /// 「歌词来源」那一格悬停时说一句它是什么,口径同播放器卡的 `PlayerChoiceCard.about`。不写 `default`,新加的源漏了这句编译不过。
+    public var about: String {
+        switch self {
+        case .kugou: return L10n.t("腾讯音乐旗下的音乐平台")
+        case .netease: return L10n.t("网易旗下的音乐平台")
+        case .qq: return L10n.t("腾讯旗下的音乐平台")
+        case .musixmatch: return L10n.t("全球最大的歌词库，Spotify 的歌词也来自它")
+        case .lrclib: return L10n.t("免费开放的社区歌词库")
+        case .amll: return L10n.t("社区人工校对的逐字歌词库")
+        case .lyricfind: return L10n.t("加拿大的歌词版权公司，经由 YouTube Music 检索")
+        case .kuwo: return L10n.t("腾讯音乐旗下的音乐平台")
+        case .migu: return L10n.t("中国移动旗下的音乐平台")
+        case .deezer: return L10n.t("法国的流媒体音乐平台，歌词由 LyricFind 提供")
+        case .applemusic: return L10n.t("Apple Music 的官方歌词，连接账号后可用")
+        case .soda: return L10n.t("字节跳动旗下的音乐平台")
+        case .vibe: return L10n.t("韩国 Naver 旗下的音乐平台")
+        }
+    }
+}
+
 // Musixmatch 译文(lyrimuse-engine/musixmatch.go 的 crowd.track.translations.get)目标语言——
 // 网易云/QQ 音乐的译文固定是中文,只有 Musixmatch 这个源能指定任意语言,rawValue 必须是
 // Musixmatch 认的 ISO 639-1 两位小写代码(已用真实接口核实过这个格式,见开发时的调研)。

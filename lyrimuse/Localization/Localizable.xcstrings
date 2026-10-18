@@ -49449,6 +49449,210 @@
           }
         }
       }
+    },
+    "腾讯音乐旗下的音乐平台" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A music service from Tencent Music"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "騰訊音樂旗下的音樂平台"
+          }
+        }
+      }
+    },
+    "网易旗下的音乐平台" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NetEase's music service"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "網易旗下的音樂平台"
+          }
+        }
+      }
+    },
+    "腾讯旗下的音乐平台" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tencent's music service"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "騰訊旗下的音樂平台"
+          }
+        }
+      }
+    },
+    "全球最大的歌词库，Spotify 的歌词也来自它" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The world's largest lyrics catalog, also behind Spotify's lyrics"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全球最大的歌詞庫，Spotify 的歌詞也來自它"
+          }
+        }
+      }
+    },
+    "免费开放的社区歌词库" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A free, open lyrics database run by its community"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "免費開放的社群歌詞庫"
+          }
+        }
+      }
+    },
+    "社区人工校对的逐字歌词库" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Word-by-word lyrics checked by hand by its community"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "社群人工校對的逐字歌詞庫"
+          }
+        }
+      }
+    },
+    "加拿大的歌词版权公司，经由 YouTube Music 检索" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Canadian lyrics licensing company, searched via YouTube Music"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加拿大的歌詞版權公司，經由 YouTube Music 檢索"
+          }
+        }
+      }
+    },
+    "中国移动旗下的音乐平台" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "China Mobile's music service"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "中國移動旗下的音樂平台"
+          }
+        }
+      }
+    },
+    "法国的流媒体音乐平台，歌词由 LyricFind 提供" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A French music streaming service with lyrics from LyricFind"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "法國的串流音樂平台，歌詞由 LyricFind 提供"
+          }
+        }
+      }
+    },
+    "Apple Music 的官方歌词，连接账号后可用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Music's own lyrics, available after you connect your account"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Music 的官方歌詞，連線帳號後可用"
+          }
+        }
+      }
+    },
+    "字节跳动旗下的音乐平台" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ByteDance's music service"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字節跳動旗下的音樂平台"
+          }
+        }
+      }
+    },
+    "韩国 Naver 旗下的音乐平台" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Naver's music service from Korea"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "韓國 Naver 旗下的音樂平台"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

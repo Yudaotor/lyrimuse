@@ -2652,6 +2652,20 @@ func runSourceContractSurfaceTests() {
             expectEqual(true, false, "网页版悬停介绍: 读不到 PlayerChoiceCard.swift / SettingsView.swift(路径挪了?)")
         }
 
+        // 「歌词来源」每一格悬停说一句它是什么(`LyricsSource.about`,switch 不写 default、漏了编译不过);这里守的是那一格真挂上了,
+        // 而且用的是自绘气泡、不是只在前台才弹的系统 `.help`。
+        if let store = read("Settings/FeatureSettingsStore.swift"), let settings = read("SettingsView.swift") {
+            expectEqual(sourceBytes(store, contain: "public var about: String {\n        switch self {"), true,
+                        "歌词来源悬停介绍: LyricsSource.about 不见了")
+            expectEqual(settings.contains("note: source.about, color: source.color")
+                        && settings.contains("        .hoverNote(note)\n        .onHover { hoveredSource = $0 ? id"), true,
+                        "歌词来源悬停介绍: 设置页那一格(sourceCheckbox)没挂上介绍")
+            expectEqual(settings.contains(".help(sourceHelpText(id))"), false,
+                        "歌词来源悬停介绍: 别再挂系统 .help,两种都弹时会出两个")
+        } else {
+            expectEqual(true, false, "歌词来源悬停介绍: 读不到 FeatureSettingsStore.swift / SettingsView.swift(路径挪了?)")
+        }
+
         // 悬停说明不能只信 onHover(App 不在前台时「离开」会丢):到点核对指针还在锚点里、弹出后轮询,
         // 量位置的 NSView 不接点击(垫在按钮背后)。
         if let help = read("HelpButton.swift") {

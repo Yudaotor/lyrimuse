@@ -1037,8 +1037,8 @@ private struct LyricsSettingsTab: View {
             // 固定 4 列的网格,不用 WrapLayout 按可用宽度贪心折行 —— 那样折行位置完全由译文长度
             // 决定("网易云音乐"5 个字、英文界面下 "NetEase Cloud Music" 20 个字符,同一张卡在两种
             // 语言下从两行变三行)。固定列数下行数只取决于「来源数 ÷ 4」,跟语言、译文长短无关,
-            // 以后加新源最多只多一行。单格文字太长会被 sourceCheckbox 内部的 .lineLimit(1) 截断、
-            // hover 出完整名字(.help),不会像 WrapLayout 那样把整张卡的折行结构带歪。
+            // 以后加新源最多只多一行。单格文字太长先缩一点、再被 sourceCheckbox 内部的 .lineLimit(1) 截断,
+            // 不会像 WrapLayout 那样把整张卡的折行结构带歪。
             SettingsRawRow(insetToText: true) {
                 LazyVGrid(
                     columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4),
@@ -1070,8 +1070,8 @@ private struct LyricsSettingsTab: View {
                         // 在整行(复选框+空白+图标)上补一层独立的悬停追踪,专门喂给 hoveredRow:
                         // sourceCheckbox 自己的悬停范围紧贴内容(不占满整格,见上面那段),跟测试小图标
                         // 之间隔着 Spacer 撑出来的一段空白,指针走在那段空白里时两边的悬停信号都不成立。
-                        // 这一层只用来决定测试图标要不要露出来,跟 sourceCheckbox 那层驱动高亮底色/
-                        // `.help` 的 hoveredSource 是两件不同的事,不合并。
+                        // 这一层只用来决定测试图标要不要露出来,跟 sourceCheckbox 那层驱动高亮底色 /
+                        // 悬停说明的 hoveredSource 是两件不同的事,不合并。
                         .contentShape(Rectangle())
                         .onHover { hovering in
                             hoveredRow = hovering ? source : (hoveredRow == source ? nil : hoveredRow)
@@ -1547,13 +1547,13 @@ private struct LyricsSettingsTab: View {
     /// 外来物。悬停时才给一层极淡的底,只为了说明"这里能点"。
     private func sourceCheckbox(_ source: LyricsSource) -> some View {
         sourceCheckbox(
-            id: source.rawValue, name: source.displayName, color: source.color,
+            id: source.rawValue, name: source.displayName, note: source.about, color: source.color,
             on: features.lyricsSources.contains(source),
             toggle: { setSource(source, enabled: $0) })
     }
 
     private func sourceCheckbox(
-        id: String, name: String, color: Color, on: Bool, toggle: @escaping (Bool) -> Void
+        id: String, name: String, note: String, color: Color, on: Bool, toggle: @escaping (Bool) -> Void
     ) -> some View {
         Button {
             toggle(!on)
@@ -1576,12 +1576,13 @@ private struct LyricsSettingsTab: View {
                 }
                 .frame(width: 15, height: 15)
                 // 固定 4 列网格里,格宽是卡片宽度的四分之一 —— 英文译名("NetEase Cloud Music"
-                // 这类)在这个宽度下装不下。所以用截断:单行 + 尾部省略号,鼠标悬停(.help)给出
-                // 完整名字,不让某一个来源的长译名撑破所在的整列宽度。
+                // 这类)在这个宽度下可能装不下。先缩一点(同播放器卡),再不够就单行 + 尾部省略号,
+                // 不让某一个来源的长译名撑破所在的整列宽度;旁白读的是完整名字。
                 Text(name)
                     .font(.system(size: 12.5))
                     .foregroundStyle(on ? Color.primary : Color.secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                     .truncationMode(.tail)
             }
             // 这个 Button **不要**加 `.frame(maxWidth: .infinity, alignment: .leading)`:它只
@@ -1595,9 +1596,12 @@ private struct LyricsSettingsTab: View {
             .contentShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
-        .help(sourceHelpText(id))
+        // 悬停说一句它是什么,用自绘的气泡:系统 tooltip 只在 lyrimuse 是前台 App 时才弹(见 `HoverNote`)。别再挂 `.help`,
+        // 两种都弹时会出两个。
+        .hoverNote(note)
         .onHover { hoveredSource = $0 ? id : (hoveredSource == id ? nil : hoveredSource) }
         .accessibilityAddTraits(on ? [.isSelected] : [])
+        .accessibilityHint(note)
     }
 
     /// 来源那一格的底:开着是一块玻璃,关着只剩一圈细线(字和勾已经变灰);指针压在格子上时再叠一层淡底。
