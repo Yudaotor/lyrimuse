@@ -2391,6 +2391,41 @@ func searchTitleVariants(title string) []string {
 	return append(stripped, title)
 }
 
+// titleFeatGuestCovered:候选歌名括号外带合作署名、本地不带,去掉署名之后跟本地歌名相等,而且署名里的每一位都在本地署名里
+// (artistCreditParts 逐段比,artistMatches / artistNameFormMatches)——本地这首就是有这几位参与的那次录音。lyricTitleAccepted 只在本地
+// 带署名时去掉两边的(候选多出来的客串段落可能是另一次录音,见 09 章决策 187),这里用本地署名补上那个方向。见 09 章决策 280。
+func titleFeatGuestCovered(candidateTitle, localTitle, localArtist string) bool {
+	c := stripParens(candidateTitle)
+	loc := titleFeatCreditRe.FindStringIndex(c)
+	if loc == nil || strings.TrimSpace(c[:loc[0]]) == "" {
+		return false
+	}
+	if a, b := normLoose(c[:loc[0]]), normLoose(stripParens(localTitle)); a == "" || a != b {
+		return false
+	}
+	guests := artistCreditParts(titleFeatWordRe.ReplaceAllString(c[loc[0]:], ""))
+	parts := artistCreditParts(localArtist)
+	if len(guests) == 0 || len(parts) < 2 {
+		return false
+	}
+	for _, g := range guests {
+		found := false
+		for _, p := range parts {
+			if artistMatches(g, p) || artistNameFormMatches(g, p) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+// titleFeatWordRe:合作署名开头那个词(titleFeatCreditRe 认到的起点),去掉它剩下的是名字。
+var titleFeatWordRe = regexp.MustCompile(`(?i)^\s*(?:featuring|feat\.|feat\b|ft\.|ft\b)\s*`)
+
 // titleFeatCreditRe 认歌名里合作署名的起点:featuring / feat. / feat / ft. / ft(大小写不敏感),前面是词边界,
 // 后面跟着名字(字母、数字或汉字打头;feat. 、ft. 后面可以不空格)。feat / ft 不带点时后面不能紧跟字母,「Feather」「Lift」不算。
 var titleFeatCreditRe = regexp.MustCompile(`(?i)\b(?:featuring|feat\.|feat\b|ft\.|ft\b)\s*[\p{L}\p{N}]`)
@@ -3568,6 +3603,10 @@ func lyricTitleAccepted(candidateTitle, localTitle string) bool {
 		if a, b := normLoose(xc), normLoose(xl); a != "" && b != "" && a == b {
 			return true
 		}
+	}
+	// ⑥ 歌名里的汉字数字:两边都换成阿拉伯数字之后相等(「爱情三十六计」对「爱情36计」),见 foldHanNumerals。
+	if hc, hl := normLoose(foldHanNumerals(stripParens(candidateTitle))), normLoose(foldHanNumerals(stripParens(localTitle))); hc != "" && hc == hl {
+		return true
 	}
 	// ③ 双语标题(去括号后的形态上比,让「起源 Origin (Live)」这类叠加形态也能走到这里;
 	// live 之类的版本差异照旧由 versionTagsMismatch 那一层单独处理)

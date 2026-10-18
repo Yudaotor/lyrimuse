@@ -49,6 +49,123 @@ func spacingDroppedNextTo(r rune) bool {
 	return r == '&' || unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul)
 }
 
+// artistJoinedKey:artistSpacingKey 之外,夹在两个中日韩字之间的「-」「·」「・」也去掉 —— 酷我把「小宇 宋念宇」写成「小宇-宋念宇」。
+// 只去夹在中间的:「周杰伦-」这类仿冒号的尾巴、「周杰伦-翻唱」去掉之后照样对不上。s 先过 artistMatchKey。见 09 章决策 280。
+func artistJoinedKey(s string) string {
+	s = artistSpacingKey(s)
+	if !strings.ContainsAny(s, "-·・") {
+		return s
+	}
+	rs := []rune(s)
+	var b strings.Builder
+	b.Grow(len(s))
+	for i, r := range rs {
+		if (r == '-' || r == '·' || r == '・') && i > 0 && i < len(rs)-1 && isCJKLetter(rs[i-1]) && isCJKLetter(rs[i+1]) {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// isCJKLetter:汉字、假名、谚文。
+func isCJKLetter(r rune) bool {
+	return unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul)
+}
+
+// artistGenericWords:拉丁字母那一半里有这些词就不当名字认(「邓紫棋Cover」「某某 Fans」是上传者,不是这位歌手)。
+var artistGenericWords = map[string]bool{
+	"cover": true, "covers": true, "remix": true, "mix": true, "live": true, "dj": true, "demo": true, "ver": true, "version": true,
+	"official": true, "music": true, "band": true, "mv": true, "ost": true, "inst": true, "karaoke": true, "acoustic": true,
+	"fan": true, "fans": true, "club": true, "studio": true, "records": true, "channel": true, "tv": true, "radio": true,
+	"feat": true, "ft": true, "and": true, "x": true, "vs": true, "edit": true, "bgm": true, "sped": true, "slowed": true,
+}
+
+// artistScriptHalves:署名恰好是一段中日韩字跟一段拉丁字母连写(「G.E.M.邓紫棋」「袁娅维TIA RAY」「法兰Fran」),返回两半;中文那半
+// 至少两个字、拉丁那半至少两个字母。带合作分隔符(「&」「/」「,」这些)、两种文字交替不止一次的不算。s 先过 artistMatchKey。
+func artistScriptHalves(s string) (cjk, latin string, ok bool) {
+	if strings.ContainsFunc(s, isArtistCreditMatchSep) {
+		return "", "", false
+	}
+	cut, last := -1, 0
+	for i, r := range s {
+		k := 0
+		switch {
+		case isCJKLetter(r):
+			k = 1
+		case unicode.In(r, unicode.Latin):
+			k = 2
+		default:
+			continue
+		}
+		if last != 0 && k != last {
+			if cut >= 0 {
+				return "", "", false
+			}
+			cut = i
+		}
+		last = k
+	}
+	if cut < 0 {
+		return "", "", false
+	}
+	a, b := strings.Trim(s[:cut], " -·・"), strings.Trim(s[cut:], " -·・")
+	if strings.ContainsFunc(a, isCJKLetter) {
+		cjk, latin = a, b
+	} else {
+		cjk, latin = b, a
+	}
+	if utf8.RuneCountInString(strings.TrimFunc(cjk, func(r rune) bool { return !isCJKLetter(r) })) < 2 {
+		return "", "", false
+	}
+	for _, w := range strings.FieldsFunc(latin, func(r rune) bool { return !unicode.IsLetter(r) }) {
+		if artistGenericWords[w] {
+			return "", "", false
+		}
+	}
+	if latinLetterCount(latin) < 2 {
+		return "", "", false
+	}
+	return cjk, latin, true
+}
+
+// latinLetterCount:s 里拉丁字母的个数。
+func latinLetterCount(s string) int {
+	n := 0
+	for _, r := range s {
+		if unicode.In(r, unicode.Latin) {
+			n++
+		}
+	}
+	return n
+}
+
+// artistNameFormMatches:候选署名 candidate 跟本地署名 query 是同一位歌手的两种写法 —— 只差夹在中日韩字之间的分隔符
+// (artistJoinedKey,两个方向都认);或者候选是「中文名英文名」连写、其中一半跟本地整个名字相等,本地只有那一种文字
+// (artistScriptHalves,酷我把「邓紫棋」写成「G.E.M.邓紫棋」)。反过来本地是双语署名、候选只写一半的不认:首轮按双语署名搜出来的
+// 常是单曲版、精选集,见 09 章决策 180。比的都是整个名字,不按段求交集。见 09 章决策 280。
+func artistNameFormMatches(candidate, query string) bool {
+	kc, kq := artistJoinedKey(artistMatchKey(candidate)), artistJoinedKey(artistMatchKey(query))
+	if kc == "" || kq == "" {
+		return false
+	}
+	if kc == kq {
+		return true
+	}
+	c, l, ok := artistScriptHalves(kc)
+	if !ok {
+		return false
+	}
+	switch {
+	case !strings.ContainsFunc(kq, isCJKLetter):
+		// 拿拉丁那半去比,至少三个字母:两个字母的名字(「en」)太容易撞上别人。
+		return latinLetterCount(l) >= 3 && artistJoinedKey(l) == kq
+	case !strings.ContainsFunc(kq, func(r rune) bool { return unicode.In(r, unicode.Latin) }):
+		return artistJoinedKey(c) == kq
+	}
+	return false
+}
+
 // foldIterationMark 把跟在汉字后面的「々」换成那个字:中文曲库把「水樹奈々」写成「水树奈奈」、「佐々木」写成
 // 「佐佐木」。别的位置的「々」原样留着。
 func foldIterationMark(s string) string {

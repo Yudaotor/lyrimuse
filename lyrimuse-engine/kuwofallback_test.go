@@ -19,6 +19,24 @@ func TestKuwoSongTitle(t *testing.T) {
 		"稻香 (3D环绕版)": "稻香 (3D环绕版)",
 		"《红楼梦》":      "《红楼梦》",
 		"Love-Lost":  "Love-Lost",
+		// 尾段带书名号、宣传语标志词、「原唱：」的剥掉:
+		"删了一百遍-汪苏泷概念创作集《联名2》作品":             "删了一百遍",
+		"花田错-Sony Ericsson W900i 广告主题曲":     "花田错",
+		"不将就-电影\"何以笙箫默\"片尾曲":                "不将就",
+		"心升明月-2012年旅游卫视频道主题曲 现场版":           "心升明月-2012年旅游卫视频道主题曲 现场版",
+		"心升明月-2012年旅游卫视频道主题曲":               "心升明月",
+		"Regression-崩坏3《阿波卡利斯如是说》动画短片印象曲":   "Regression",
+		"Wonderful Tonight-原唱：Eric Clapton": "Wonderful Tonight",
+		"我的世界因你而改变-原唱:丢火车":                  "我的世界因你而改变",
+		"不说(路过版)-电影《从你的全世界路过》主题曲":           "不说(路过版)",
+		// 尾段里有版本词、尾段不是说明、前面剥空的不动:
+		"阿姆斯壮 (Live)-天堂的五个朋友 07 Epic Mixing": "阿姆斯壮 (Live)-天堂的五个朋友 07 Epic Mixing",
+		"你的志明-志明与春娇 粤语版":                     "你的志明-志明与春娇 粤语版",
+		"月食-下雨版":                             "月食-下雨版",
+		"继续-给十五岁的自己":                         "继续-给十五岁的自己",
+		"E-Lover (Remastered)":               "E-Lover (Remastered)",
+		"桥豆麻袋 (Live)-2016简单生活音乐节":            "桥豆麻袋 (Live)-2016简单生活音乐节",
+		"-主题曲": "-主题曲",
 	} {
 		if got := kuwoSongTitle(in); got != want {
 			t.Errorf("kuwoSongTitle(%q) = %q, want %q", in, got, want)
@@ -162,5 +180,26 @@ func TestKuwoLyricRejectedCodeFallsBackToMobiLRC(t *testing.T) {
 		if !c.wantMobi && (err != nil || len(lines) != 0) {
 			t.Errorf("%s: 查无应是空列表、不报错: %d %v", c.body, len(lines), err)
 		}
+	}
+}
+
+// 分数相同时专辑对得上的在前;分数不同时照分数排,专辑不管;都对不上专辑时保留搜索顺序;没有 MUSICRID 的不要,最多 5 条。
+func TestKuwoRankItemsAlbumBreaksTie(t *testing.T) {
+	items := []kuwoSearchItem{
+		{SongName: "不说(路过版)-电影《从你的全世界路过》主题曲", Artist: "李荣浩", Album: "不说", Duration: "326", MusicRID: "MUSIC_1"},
+		{SongName: "不说 (路过版)-《从你的全世界路过》电影路过版主题曲", Artist: "李荣浩", Album: "嗯", Duration: "326", MusicRID: "MUSIC_2"},
+		{SongName: "不说 (路过版)", Artist: "李荣浩", Album: "嗯", Duration: "300", MusicRID: "MUSIC_3"},
+		{SongName: "不说 (路过版)", Artist: "李荣浩", Album: "嗯", Duration: "326"},
+		{SongName: "不说(路过版)", Artist: "李荣浩", Album: "热歌", Duration: "326", MusicRID: "MUSIC_4"},
+		{SongName: "不说(路过版)", Artist: "李荣浩", Album: "金曲", Duration: "326", MusicRID: "MUSIC_5"},
+		{SongName: "不说(路过版)", Artist: "李荣浩", Album: "合辑", Duration: "326", MusicRID: "MUSIC_6"},
+	}
+	var got []string
+	for _, it := range kuwoRankItems(items, "李荣浩", "不说 (路过版)", "嗯", 326.474) {
+		got = append(got, it.MusicRID)
+	}
+	want := []string{"MUSIC_2", "MUSIC_1", "MUSIC_4", "MUSIC_5", "MUSIC_6"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("排序 %v,期望 %v", got, want)
 	}
 }

@@ -279,7 +279,7 @@ func originRecordingByISRC(ctx context.Context, title, isrc string, origins []st
 
 // lyricOriginRecording:本地曲名在这首歌的原产地商店里换了一套文字写时,返回原产地的曲名(和署名);否则零值。原产地商店按
 // 署名 / 曲名 / 专辑名和首轮歌词正文(samples)的文字系统判(originStorefronts)。先按 ISRC 查(originRecordingByISRC,
-// 带回署名);没有 ISRC 或查不出时用区服遍历留下的结论(只读缓存,不打请求,只有曲名)。
+// 带回署名);没有 ISRC 或查不出时用区服遍历留下的结论(只读缓存,不打请求,只有曲名,过 storefrontTraversalTitleUsable)。
 func lyricOriginRecording(ctx context.Context, artist, title, album string, durationSecs float64, samples []string, isrc string) originRecording {
 	origins, isrc := recordingOrigins(ctx, artist, title, album, durationSecs, samples, isrc)
 	if len(origins) == 0 {
@@ -288,16 +288,31 @@ func lyricOriginRecording(ctx context.Context, artist, title, album string, dura
 	if rec := originRecordingByISRC(ctx, title, isrc, origins, durationSecs); rec.title != "" {
 		return rec
 	}
-	if t, ok := appleStorefrontCachedTitle(artist, album, title); ok && crossScriptBase(title, t) {
+	if t, ok := appleStorefrontCachedTitle(artist, album, title); ok && storefrontTraversalTitleUsable(title, album, t) {
 		return originRecording{title: t}
 	}
 	return originRecording{}
 }
 
-// titleReverseOriginTitle:标题反查第三条路的曲名 —— 区服遍历的结论(appleStorefrontCanonicalTitle),给不出跨文字的
-// 原产地曲名时按 ISRC 查(originRecordingByISRC)。只认去掉括号部分之后换了文字的(crossScriptBase),否则空。
+// storefrontTraversalTitleUsable:区服遍历按专辑名定位、凭时长挑出来的原产地曲名 found 能不能当这首的曲名用 —— 去掉括号部分之后
+// 换了文字(crossScriptBase),而且本地是一字一词的拼音时读音对得上(pinyinTitleContradicts)。跨文字那一档没有曲名证据,同专辑里
+// 时长相近的另一首会被挑中;按 ISRC 查到的不过这一关。连写的拼音不判:这条路本是给日文罗马字改写用的,「Kaiju」→「怪獣」按普通话读
+// 对不上。见 09 章决策 280。
+func storefrontTraversalTitleUsable(title, album, found string) bool {
+	if !crossScriptBase(title, found) {
+		return false
+	}
+	if pinyinTitleContradicts(title, album, found, false) {
+		log.Printf("lyrics: storefront title %q picked for pinyin title %q by duration only, but it does not read that way; not using it", found, title)
+		return false
+	}
+	return true
+}
+
+// titleReverseOriginTitle:标题反查第三条路的曲名 —— 区服遍历的结论(appleStorefrontCanonicalTitle,过
+// storefrontTraversalTitleUsable),给不出时按 ISRC 查(originRecordingByISRC)。只认去掉括号部分之后换了文字的(crossScriptBase),否则空。
 func titleReverseOriginTitle(ctx context.Context, artist, title, album string, durationSecs float64, samples []string, isrc string) string {
-	if t := appleStorefrontCanonicalTitle(ctx, artist, title, album, durationSecs, samples); crossScriptBase(title, t) {
+	if t := appleStorefrontCanonicalTitle(ctx, artist, title, album, durationSecs, samples); t != "" && storefrontTraversalTitleUsable(title, album, t) {
 		return t
 	}
 	origins, isrc := recordingOrigins(ctx, artist, title, album, durationSecs, samples, isrc)

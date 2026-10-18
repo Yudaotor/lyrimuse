@@ -314,10 +314,12 @@ const kuwoScoreDurationTolerance = 0.25
 // 另起一套更松的规则。纯函数,便于单测。
 func kuwoCandidateScore(item kuwoSearchItem, artist, title, album string, durationSecs float64) int {
 	name := kuwoSongTitle(item.SongName)
-	if !lyricTitleAccepted(name, title) {
+	if !lyricTitleAccepted(name, title) && !titleFeatGuestCovered(name, title, artist) {
 		return -1
 	}
-	if !lyricSourceArtistMatches(item.Artist, artist) {
+	// 酷我只有这一道歌手闸,没有别的源那种「歌手名包含」的宽松档:它常把「邓紫棋」写成「G.E.M.邓紫棋」、「小宇 宋念宇」写成
+	// 「小宇-宋念宇」,见 artistNameFormMatches。
+	if !lyricSourceArtistMatches(item.Artist, artist) && !artistNameFormMatches(item.Artist, artist) {
 		return -1
 	}
 	if versionTagsMismatch(title, album, name, item.Album) {
@@ -342,10 +344,27 @@ func kuwoCandidateScore(item kuwoSearchItem, artist, title, album string, durati
 // 「能不能勇敢说爱-《公主小妹》电视剧插曲」),别的源把这类信息放在括号里或干脆不写。
 var kuwoPromoSuffixRe = regexp.MustCompile(`^(.*\S)\s*-\s*《[^》]+》.*$`)
 
-// kuwoSongTitle 去掉 kuwoPromoSuffixRe 那种后缀,打分与返回的歌名都用它。纯函数,便于单测。
+// kuwoOriginalSingerRe:翻唱曲的说明尾段「原唱：某某」。
+var kuwoOriginalSingerRe = regexp.MustCompile(`^原唱\s*[:：]`)
+
+// kuwoSongTitle 去掉酷我拼在歌名后面的说明尾段,打分与返回的歌名都用它:kuwoPromoSuffixRe 那种;最后一个「-」后面的尾段带
+// 书名号、宣传语标志词(promoTitleTailRe,「花田错-Sony Ericsson W900i 广告主题曲」)或以「原唱：」开头的。尾段里有版本词
+// (titleVersionTags,「阿姆斯壮 (Live)-天堂的五个朋友 07 Epic Mixing」)或前面剥空了的不动:「月食-下雨版」「E-Lover」本身就是歌名。
+// 纯函数,便于单测。见 09 章决策 280。
 func kuwoSongTitle(name string) string {
 	if m := kuwoPromoSuffixRe.FindStringSubmatch(name); m != nil {
 		return m[1]
+	}
+	i := strings.LastIndex(name, "-")
+	if i <= 0 {
+		return name
+	}
+	head, tail := strings.TrimSpace(name[:i]), strings.TrimSpace(name[i+1:])
+	if head == "" || tail == "" || len(titleVersionTags("("+tail+")")) > 0 {
+		return name
+	}
+	if strings.Contains(tail, "《") || promoTitleTailRe.MatchString(tail) || kuwoOriginalSingerRe.MatchString(tail) {
+		return head
 	}
 	return name
 }
@@ -355,6 +374,40 @@ func kuwoSongTitle(name string) string {
 // "有没有真同步歌词"才是筛不掉的那道门,拉太多条只是白耗网络,5 条足够覆盖实测产出率
 // (海阔天空 5 中 4、平凡之路 5 中 3)。
 const kuwoMaxCandidatesToFetch = 5
+
+// kuwoRankItems:搜索结果里过了 kuwoCandidateScore 的条目,按分数从高到低排,最多 kuwoMaxCandidatesToFetch 条。
+// 稳定排序:分数相同时专辑对得上的(albumScore)在前,再相同保留搜索结果原有的先后顺序,不引入运行间的随机性。
+// 酷我同一首常有几条时长一样的条目,搜索顺序不可信,见 09 章决策 280。
+func kuwoRankItems(items []kuwoSearchItem, artist, title, album string, durationSecs float64) []kuwoSearchItem {
+	type scoredItem struct {
+		item  kuwoSearchItem
+		score int
+		album int
+	}
+	var scored []scoredItem
+	for _, it := range items {
+		if it.MusicRID == "" {
+			continue
+		}
+		if s := kuwoCandidateScore(it, artist, title, album, durationSecs); s >= 0 {
+			scored = append(scored, scoredItem{it, s, albumScore(it.Album, album)})
+		}
+	}
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].score != scored[j].score {
+			return scored[i].score > scored[j].score
+		}
+		return scored[i].album > scored[j].album
+	})
+	if len(scored) > kuwoMaxCandidatesToFetch {
+		scored = scored[:kuwoMaxCandidatesToFetch]
+	}
+	out := make([]kuwoSearchItem, len(scored))
+	for i, s := range scored {
+		out[i] = s.item
+	}
+	return out
+}
 
 // resolveKuwoLyric:①搜索(单次请求,10 条原始结果);②按元数据重新打分排序、淘汰
 // 身份对不上的;③取分数最高的几条**并发**拉歌词;④丢弃 lrclist 为空的、丢弃解析后
@@ -366,27 +419,9 @@ func resolveKuwoLyric(ctx context.Context, artist, title, album string, duration
 	if err != nil || len(items) == 0 {
 		return kuwoResult{}
 	}
-
-	type scoredItem struct {
-		item  kuwoSearchItem
-		score int
-	}
-	var candidates []scoredItem
-	for _, it := range items {
-		if it.MusicRID == "" {
-			continue
-		}
-		if s := kuwoCandidateScore(it, artist, title, album, durationSecs); s >= 0 {
-			candidates = append(candidates, scoredItem{it, s})
-		}
-	}
+	candidates := kuwoRankItems(items, artist, title, album, durationSecs)
 	if len(candidates) == 0 {
 		return kuwoResult{}
-	}
-	// 稳定排序:分数相同时保留搜索结果原有的先后顺序,不引入运行间的随机性。
-	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].score > candidates[j].score })
-	if len(candidates) > kuwoMaxCandidatesToFetch {
-		candidates = candidates[:kuwoMaxCandidatesToFetch]
 	}
 
 	type fetched struct {
@@ -417,7 +452,7 @@ func resolveKuwoLyric(ctx context.Context, artist, title, album string, duration
 				return // 解析后不是真同步的——丢弃,见文件头注
 			}
 			fetchedByRank[rank] = &fetched{lrc: lrc, it: item}
-		}(i, c.item)
+		}(i, c)
 	}
 	wg.Wait()
 
