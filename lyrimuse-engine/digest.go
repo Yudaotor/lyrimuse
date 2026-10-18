@@ -355,9 +355,9 @@ func topTallies(tallies []digestTally) []digestTally {
 }
 
 // digestPush 推送一条听歌报告——各 cadence 各自算好 title、拿到 stats 后调用同一份文案
-// 拼装逻辑(digestBody)。推送失败返回错误，调用方不记「已推送」，下次检查重推。
-func digestPush(a *alerter, title string, stats digestStats) error {
-	return a.push(title, digestBody(stats))
+// 拼装逻辑(digestBody)。一个渠道都没收下才返回错误，调用方不记「已推送」，下次检查重推。
+func digestPush(a *alerter, event, title string, stats digestStats) error {
+	return a.send(event, title, digestBody(stats))
 }
 
 // digestBody 拼推送正文。顺序是歌手、专辑、歌曲；某一类只有超过 1 条时才展示(只有一条时

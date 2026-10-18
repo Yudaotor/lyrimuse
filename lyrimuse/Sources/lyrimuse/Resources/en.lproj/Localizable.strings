@@ -10,6 +10,7 @@
 "%1$@ 从「%2$@」导出的备份" = "Backup exported from “%2$@” on %1$@";
 "%1$@ 在此项被扣 %2$d 分，胜者未被扣分，%3$d 分的分差全部来自此项。" = "%1$@ lost %2$d points on this term and the winner did not; the entire %3$d-point gap comes from it.";
 "%1$@ 在此项被扣 %2$d 分，胜者未被扣分，%3$d 分的分差全部来自此项。#one" = "%1$@ lost %2$d point on this term and the winner did not; the entire %3$d-point gap comes from it.";
+"%1$@ 失败 · %2$@" = "%1$@ failed · %2$@";
 "%1$@ 小时 %2$@ 分钟" = "%1$@ h %2$@ min";
 "%1$@ 年 %2$@ 月 %3$@ 日" = "%1$@-%2$@-%3$@";
 "%1$@ 年共 %2$@ 次" = "%2$@ plays in %1$@";
@@ -26,6 +27,7 @@
 "%1$@ 首来自歌词源，%2$@ 首为机器翻译" = "%1$@ from the source, %2$@ machine-translated";
 "%1$@–%2$@ 点 · %3$@ 次" = "%1$@:00–%2$@:00 · %3$@ plays";
 "%1$@–%2$@ 点 · %3$@ 次#one" = "%1$@:00–%2$@:00 · %3$@ play";
+"%1$@拒收：%2$@" = "%1$@ rejected it: %2$@";
 "%1$@（%2$@）" = "%1$@ (%2$@)";
 "%1$d 条候选中仅 %2$d 条获得内容印证，正文未必一致。" = "Only %2$d of %1$d candidates were corroborated; their lyrics may differ.";
 "%1$d 条候选中仅 %2$d 条获得内容印证，正文未必一致。#one" = "Only %2$d of %1$d candidates was corroborated; their lyrics may differ.";
@@ -52,6 +54,7 @@
 "%@ 小时前更新" = "Updated %@ h ago";
 "%@ 已下载，点按安装" = "%@ downloaded, click to install";
 "%@ 已匹配到该曲目，无歌词文本" = "%@ matched this track; no lyrics text";
+"%@ 已送达" = "Delivered %@";
 "%@ 拒绝了这台 Mac 的请求" = "%@ is refusing requests from this Mac";
 "%@ 更新内容" = "What’s New in %@";
 "%@ 月" = "%@";
@@ -114,6 +117,8 @@
 "%d 个条目独立匹配" = "%d Entries Matched Separately";
 "%d 个条目独立匹配#one" = "%d Entry Matched Separately";
 "%d 个歌词同步" = "%d synced";
+"%d 个渠道" = "%d channels";
+"%d 个渠道上次推送失败" = "Last push failed on %d channels";
 "%d 个源的歌词正文相同" = "%d sources returned identical lyrics";
 "%d 个独立匹配" = "%d matched separately";
 "%d 天前" = "%d days ago";
@@ -147,6 +152,7 @@
 "Discord 拒绝连接" = "Discord refused the connection";
 "Discord 未打开" = "Discord isn't open";
 "Discord 社区" = "Discord Community";
+"Discord 频道的 Webhook：报告发到你服务器里的某个频道" = "A Discord channel webhook. Reports are posted to a channel on your server.";
 "GPL-3.0" = "GPL-3.0";
 "GitHub Star 数" = "GitHub stars";
 "HDR 高亮" = "HDR Highlight";
@@ -165,6 +171,7 @@
 "LyricFind（经由 YouTube Music 检索）" = "LyricFind (searched via YouTube Music)";
 "Lyrimuse" = "Lyrimuse";
 "Lyrimuse 从这里读洛雪自己的播放进度、调它的音量" = "Lyrimuse reads LX Music's own playback position here and adjusts its volume";
+"Lyrimuse 会向这个地址 POST 一段 JSON：app、event（如 weekly_digest）、title、body、sent_at，适合接 Home Assistant、n8n 或你自己的服务" = "Lyrimuse POSTs JSON to this URL with app, event (such as weekly_digest), title, body and sent_at. Good for Home Assistant, n8n or your own service.";
 "Lyrimuse 反馈" = "Lyrimuse Feedback";
 "Lyrimuse 启动时同时打开勾选的播放器，已在运行的播放器不受影响，也不会抢占焦点" = "When Lyrimuse starts, open the checked players too. Ones already running are left alone, and nothing steals focus";
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse shows lyrics for whichever app is playing. You can change this in Settings any time";
@@ -189,7 +196,9 @@
 "Scrobble 时机" = "Scrobble Point";
 "Scrobble 的播放器" = "Players to Scrobble";
 "Scrobble 规则" = "Scrobble Rules";
+"SendKey 不对" = "Wrong SendKey";
 "Server酱" = "ServerChan";
+"Slack 的 Incoming Webhook：报告发到工作区里的某个频道" = "A Slack incoming webhook. Reports are posted to a channel in your workspace.";
 "Spotify 上播放的歌曲未记录到 Last.fm" = "Songs played on Spotify aren't being scrobbled";
 "Spotify 专辑页" = "Spotify album page";
 "Spotify 曲目 ID 一致" = "Same Spotify track ID";
@@ -197,6 +206,7 @@
 "Spotify 歌曲页" = "Spotify song page";
 "Spotify 的每首歌曲会被记录两次" = "Each Spotify song is scrobbled twice";
 "Spotify 的网页播放器，网址 open.spotify.com" = "Spotify's web player at open.spotify.com";
+"Telegram 机器人：找 @BotFather 建一个，报告发给你本人或你所在的群" = "A Telegram bot. Create one with @BotFather; reports go to you or to a group you're in.";
 "Telegram 群组" = "Telegram Group";
 "Token 无效，请重新拷贝" = "Invalid token — copy it again";
 "Webhook 地址" = "Webhook URL";
@@ -211,8 +221,10 @@
 "YouTube Music 的第三方 Mac 客户端" = "A third-party Mac client for YouTube Music";
 "YouTube Music 视频 ID 一致" = "Same YouTube Music video ID";
 "https://api.day.app/你的Key" = "https://api.day.app/YourKey";
+"https://ntfy.sh/你的主题" = "https://ntfy.sh/your-topic";
 "https://sctapi.ftqq.com/你的SendKey.send" = "https://sctapi.ftqq.com/YourSendKey.send";
 "iCloud 备份" = "iCloud Backup";
+"iPhone 上的推送 App：装好后首页就有专属地址，报告直接弹在 iPhone 上。免费、开源" = "A push app for iPhone. Its home screen shows your own URL, and reports pop up right on your iPhone. Free and open source.";
 "macOS 自带的音乐 App" = "The music app built into macOS";
 "mode 可选 list、shuffle、repeat-all、repeat-one" = "mode can be list, shuffle, repeat-all or repeat-one";
 "ms 为毫秒，正数提前、负数延后，±10000 以内" = "ms is in milliseconds: positive moves lyrics earlier, negative later, within ±10000";
@@ -224,6 +236,7 @@
 "✓ 当前可用，但仅在浏览器重启前有效：上述选项已关闭，重启后将失效" = "✓ Works right now, but only until this browser restarts: the switch above has been turned off, so it will stop working after a restart.";
 "、" = ", ";
 "《%1$@》：%2$@" = "“%1$@”: %2$@";
+"「%@」上次推送失败" = "Last push to “%@” failed";
 "「%@」已在列表中。" = "“%@” is already in this list.";
 "「%@」已是内置播放器，在上方「播放器」卡片中勾选即可。" = "“%@” is already a built-in player — just tick it in the Players card above.";
 "「%@」无法用于同步歌词进度。此功能需要浏览器执行一段 JavaScript 来读取播放进度，而该应用未提供相应的脚本命令。Firefox 目前不支持，非浏览器应用同样不支持。" = "“%@” can’t be used to sync lyric timing. This feature reads playback position by having the browser run a small piece of JavaScript, and this app provides no scripting command for that. Firefox doesn’t support it, and neither do apps that aren’t browsers.";
@@ -239,6 +252,7 @@
 "一切就绪" = "All Set";
 "一并解锁" = "Unlock Them";
 "一直留在你放它的那块屏幕" = "Stays on the screen you put it on";
+"一般是暂时的，稍后再试" = "Usually temporary. Try again later.";
 "一行 1 分，最多 200" = "One point per line, up to 200";
 "一行放不下时拆成几段依次显示" = "Lines too long to fit are shown in parts, one after another";
 "三" = "W";
@@ -325,6 +339,8 @@
 "主行的字重；副行和展开时的下一句预览比主行细一档" = "Font weight of the main line; the secondary line and the expanded next-line preview are one step lighter";
 "主题" = "Theme";
 "主题名称" = "Theme Name";
+"主题地址" = "Topic URL";
+"主题设了访问控制时填写：令牌以 tk_ 开头，也可以填「用户名:密码」" = "Needed when the topic has access control: a token starting with tk_, or “username:password”.";
 "之前手动选定的 %@ 首均已锁定" = "All %@ songs you picked manually are already locked";
 "之前手动选定的 %@ 首均已锁定#one" = "The %@ song you picked manually is already locked";
 "之前手动选定的 %@ 首歌曲，歌词已被自动更新，不再是当初选定的版本，因此未锁定" = "The %@ songs you picked earlier have since been updated automatically — they are no longer the versions you chose, so they were not locked";
@@ -391,6 +407,7 @@
 "以系统通知显示封面、歌名、歌手与专辑" = "Shows the artwork, title, artist and album in a system notification";
 "仿 Winamp 的本地音乐播放器" = "A Winamp-style local music player";
 "企业微信" = "WeCom";
+"企业微信群里的机器人：报告发到群聊里，粘贴地址就能用" = "A bot in a WeCom group. Reports are posted to the group chat; just paste its URL.";
 "优先在本机翻译，翻不了再联网" = "Translates on this Mac first, then online if that fails";
 "会打开 Last.fm 授权页，点「Yes, allow access」后自动回到这里。" = "Opens the Last.fm authorization page. Click “Yes, allow access” and you'll come straight back here.";
 "伴奏版，不用人声歌词" = "Instrumental version, vocal lyrics not used";
@@ -426,6 +443,7 @@
 "停止重新匹配" = "Stop Re-matching";
 "允许局域网访问" = "Allow Local Network Access";
 "允许远程控制" = "Allow Remote Control";
+"先给机器人发一条消息（群组要先把机器人拉进群），再核对 Chat ID" = "Send the bot a message first (add it to the group for group chats), then check the Chat ID.";
 "光盘" = "Disc";
 "免费开放的社区歌词库" = "A free, open lyrics database run by its community";
 "免费开源，感谢你的 ⭐ 支持" = "Free and open source. A ⭐ means a lot — thank you!";
@@ -436,6 +454,7 @@
 "全选" = "Select All";
 "全选 %@ 首" = "Select All (%@)";
 "全部" = "All";
+"全部 %d 条" = "All %d";
 "全部一致" = "All Identical";
 "全部不显示" = "None shown";
 "全部专辑" = "All Albums";
@@ -532,8 +551,11 @@
 "创作者：" = "Written by: ";
 "删除" = "Delete";
 "删除 %@ 条" = "Delete %@";
+"删除…" = "Delete…";
+"删除「%@」？" = "Delete “%@”?";
 "删除「%@」？删除后无法恢复" = "Delete “%@”? This can’t be undone.";
 "删除中…" = "Removing…";
+"删除后这里不再推送，推送记录保留" = "Nothing will be pushed here any more. The delivery history is kept.";
 "删除失败" = "Couldn't Remove";
 "删除本地记录…" = "Delete Saved Lyrics…";
 "删除此导入的字体（不可恢复）" = "Remove this imported font (cannot be undone)";
@@ -543,6 +565,8 @@
 "别名轮：无可用候选" = "Alias round: no usable candidate";
 "别名轮：补查未应答的源" = "Alias round: re-queried sources that didn't respond";
 "别名轮：补读音" = "Alias round: missing romanization";
+"到 @BotFather 核对 Token" = "Check the token with @BotFather.";
+"到平台上重新拷贝一次地址" = "Copy the URL from the platform again.";
 "到第 %@ 次 Scrobble" = "Until scrobble #%@";
 "刷新" = "Refresh";
 "前 %1$d 位占 %2$d%%" = "Top %1$d: %2$d%%";
@@ -607,7 +631,10 @@
 "反馈问题" = "Report an Issue";
 "反馈问题…" = "Report an Issue…";
 "发布于 %@" = "Released %@";
+"发得太频繁，被限流" = "Rate limited: too many messages";
+"发标准 JSON，自己写接收端" = "Sends plain JSON to a receiver you run";
 "发给 Last.fm 的歌手名和歌名。\n智能：用 Last.fm 上收听人数最多的写法，查不到就原样发；专辑名去掉「 - Single」「 - EP」。\n自定义：歌名、歌手分开设置。\n原始：照播放器报告的原样发。" = "The artist and title sent to Last.fm.\nSmart: the most-listened spelling on Last.fm, or as-is when there's no match. Albums drop “ - Single” / “ - EP”.\nCustom: set title and artist separately.\nRaw: exactly what the player reports.";
+"发送测试" = "Send Test";
 "取消" = "Cancel";
 "取消「纯音乐」标记：已有歌词的恢复显示，无歌词的重新加入自动匹配队列" = "Remove the instrumental mark: lyrics it has show again, and a track without lyrics goes back into the auto-match queue";
 "取消喜欢" = "Remove Favorite";
@@ -633,6 +660,7 @@
 "只有勾选的播放器会 Scrobble；网页播放器按浏览器算。" = "Only checked players scrobble; web players count as their browser.";
 "只用于悬浮歌词、灵动岛、菜单栏和触控栏" = "Only for Floating Lyrics, Notch, Menu Bar and Touch Bar";
 "只识别勾选的播放器；没勾的不显示歌词，也不计入收听记录。" = "Only the players you check are detected. The rest don't show lyrics or count toward your listening history.";
+"可以直接粘贴一整段地址，认得出的平台会自动切换" = "You can paste a whole URL. Recognized platforms are selected automatically.";
 "可同时开启多种" = "You can turn on more than one";
 "可在任意 App 中触发，需包含 ⌘、⌥ 或 ⌃ 之一" = "Works in any app; must include ⌘, ⌥ or ⌃";
 "可在其他设备上控制播放、跳转歌词" = "Control playback and jump to lyrics from other devices";
@@ -668,8 +696,12 @@
 "同步服务持续出错（%d），网页上的状态未更新" = "The sync server keeps failing (%d), so the web page isn't updating";
 "同步策略" = "Sync Policy";
 "名次与上一期相同" = "Same rank as the previous period";
+"名称" = "Name";
+"后台服务没有响应，没有重发" = "The background service didn't respond. Nothing was resent.";
+"后台服务没有响应，测试没有发出。确认后台服务在运行后再试" = "The background service didn't respond, so the test wasn't sent. Make sure it is running and try again.";
 "后退" = "Back";
 "向 Discord 好友展示正在收听的歌曲" = "Let your Discord friends see what you're listening to";
+"向你指定的地址 POST 一段 JSON，适合接 Home Assistant、n8n 或自己写的服务" = "POSTs JSON to a URL you choose. Good for Home Assistant, n8n or your own service.";
 "含明文凭证；导出为设置与歌词库两个文件，导入将覆盖全部设置" = "Contains credentials in plain text; exports two files, settings and lyrics library; importing replaces all settings";
 "听到哪里才记一次 Scrobble。\n50%：一半或 4 分钟，先到为准（官方规则）。\n75% / 90%：听满对应比例。\n曲终：播完才记，中途切歌不记。" = "How far you listen before it's scrobbled.\n50%: half the track or 4 minutes, whichever comes first (Last.fm's rule).\n75% / 90%: that share of the track.\nTrack End: only when played through; skips don't count.";
 "启动与通知" = "Startup & Notifications";
@@ -720,6 +752,7 @@
 "在 iPhone 上安装 Bark App，首页即显示专属推送地址，拷贝后粘贴到此处即可，无需额外设置" = "Install the Bark app on your iPhone — the home screen shows your personal push URL. Just copy and paste it here; no extra setup needed";
 "在「Scrobble 的播放器」中取消勾选 Spotify；在手机等其他设备上收听的 Spotify 仍会照常记录。" = "Unchecks Spotify in Players to Scrobble. Spotify plays on your other devices are still recorded.";
 "在「系统设置 → 隐私与安全性 → %@」中开启 Lyrimuse。列表里没有时，用「+」添加当前运行的 Lyrimuse.app；已开启却仍无效时，移除旧条目并重新添加，然后重启 Lyrimuse。" = "Enable Lyrimuse in System Settings → Privacy & Security → %@. If it is missing, use “+” to add the Lyrimuse.app you are currently running. If it is already enabled but still unavailable, remove the old entry, add the current app again, then restart Lyrimuse.";
+"在「访问令牌」里填 tk_ 开头的令牌，或「用户名:密码」" = "Enter a token starting with tk_, or “username:password”, under Access Token.";
 "在主歌词下方增加一行。译文和读音对应当前句，「下一句」显示即将演唱的歌词；选择「下一句」时，展开区不再重复显示下一句预览。放不下两行时歌词行会自动加高" = "Adds one more line under the main lyric. Translation and Romanization show the current line; Next Line shows the upcoming one. With Next Line, the expanded area no longer repeats the next-line preview. If two lines don't fit, the lyric row grows to fit them";
 "在主歌词下方增加一行，高度不变（两行分别为 10pt / 9pt，「字号」不生效）。译文和读音对应当前句，「下一句」显示即将演唱的歌词；开启副行时，主行不再提前切换到下一句。副行不滚动，显示不下时末尾渐隐。" = "Adds a second line under the lyric without changing the item's height (10pt / 9pt; Font Size has no effect). Translation and Romanization show the current line; Next Line shows the upcoming one. With a second line on, the main line no longer switches early. The second line never scrolls — its tail fades when it doesn't fit.";
 "在主行下方再显示一行：译文和读音对应当前句，「下一句」为即将演唱的歌词。开启后两行字号固定为 14pt / 11pt，「字号」不生效，主行也不再提前切到下一句；副行显示不下时，按该句时长横向滚动" = "Adds a second line under the main line: Translation and Romanization follow the current line, and Next Line shows the upcoming one. With it on, the two lines are fixed at 14pt / 11pt (Font Size has no effect) and the main line no longer switches early. A second line that doesn't fit scrolls across over the line's duration";
@@ -730,8 +763,11 @@
 "在后台下载，退出 Lyrimuse 时安装" = "Downloads in the background and installs when you quit Lyrimuse";
 "在外部编辑器中编辑歌词" = "Edit Lyrics in External Editor";
 "在快捷指令中用「打开 X-Callback URL」打开，歌名、歌手、专辑和当前这句会作为参数传回" = "Open it with “Open X-Callback URL” in Shortcuts. The title, artist, album and current line come back as parameters";
+"在手机或电脑上安装 ntfy，订阅一个别人猜不到的主题名，然后把主题地址（如 https://ntfy.sh/你的主题）填入此处。自建服务器填你自己的地址" = "Install ntfy on your phone or computer, subscribe to a topic name nobody can guess, and enter the topic URL here (such as https://ntfy.sh/your-topic). For a self-hosted server, use your own URL.";
 "在播放器中播放任意歌曲，歌词将自动显示" = "Play something in your player and lyrics will appear here";
 "在支持 HDR 的屏幕上提亮已唱部分，开启后更耗电" = "Brightens the sung part on HDR displays. Uses more power when on";
+"在机器人安全设置里关掉 IP 白名单，或改用签名校验" = "Turn off the IP allowlist in the bot's security settings, or use signature verification instead.";
+"在机器人安全设置里加一个关键词「%@」，或改用签名校验" = "Add the keyword “%@” in the bot's security settings, or use signature verification instead.";
 "在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱颜色」，其余使用「未唱颜色」。仅在显示歌词时出现。" = "Puts a menu bar icon at the far left or right of the lyrics slot; its color fills from the bottom up to show playback progress — the filled part in Sung Color, the rest in Unsung Color. Only appears while lyrics are showing.";
 "在洛雪的设置里打开开放 API 后可调音量" = "Turn on Open API in LX Music settings to adjust its volume";
 "在浏览器中打开" = "Open in Browser";
@@ -746,10 +782,12 @@
 "在该浏览器的开发者菜单中开启「允许 Apple 事件中的 JavaScript」。" = "Turn on “Allow JavaScript from Apple Events” in this browser’s Developer menu.";
 "在钉钉群中：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后拷贝 Webhook 地址。安全设置建议选择「加签」，并将生成的密钥填入下方的「加签密钥」" = "In your DingTalk group: Group Settings → Group Assistant → Add Robot → Custom, then copy the webhook URL after creating it. For security, choose “Signature” and put the generated secret in the “Signing Secret” field below";
 "在飞书群中：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后拷贝 Webhook 地址。如需额外校验，可开启「签名校验」，并将密钥填入下方的「签名密钥」" = "In your Feishu group: Settings → Group Bots → Add Bot → Custom Bot, then copy the webhook URL after creating it. For an extra layer of verification, enable “Signature Verification” and enter the secret in the “Signature Secret” field below";
+"地址不存在" = "URL not found";
 "均为独立匹配" = "All Matched Separately";
 "均衡器" = "Equalizer";
 "域名解析失败（DNS），请求未能发出。常见于 VPN 或公司网络接管 DNS 的情况；浏览器能打开网页并不代表此处可以连接" = "DNS lookup failed, so no request was ever sent. Common when a VPN or corporate network takes over DNS; a browser loading pages doesn't mean this can get through.";
 "域名解析失败（DNS）：%@" = "DNS lookup failed: %@";
+"填写后每次请求带上 X-Lyrimuse-Signature: sha256=…（用这个密钥对请求体算的 HMAC-SHA256），接收端可据此校验来源" = "When set, every request carries X-Lyrimuse-Signature: sha256=… (an HMAC-SHA256 of the body with this secret) so the receiver can verify where it came from.";
 "墨字白边" = "Ink Outline";
 "声波" = "Waveform";
 "备份与迁移" = "Backup & Migration";
@@ -779,6 +817,7 @@
 "字节跳动旗下的音乐平台" = "ByteDance's music service";
 "存在差异" = "Different";
 "存在标题更吻合的候选，撤销逐字加分" = "A candidate matches the title better, so the word-timing bonus is withdrawn";
+"安全设置没通过（关键词、加签或 IP 地址）" = "Blocked by security settings (keyword, signing or IP address)";
 "安装并登录后将自动连接；网页版和手机版不支持连接" = "Connects automatically once it's installed and you're signed in. The web and mobile apps can't connect.";
 "完全一致" = "Identical";
 "完全同名 120 · 仅括号差异 60 · 中英双语同名 30" = "Exact title 120 · parenthetical-only difference 60 · bilingual same name 30";
@@ -794,6 +833,7 @@
 "实验室" = "Labs";
 "宽度" = "Width";
 "宽度模式" = "Width Mode";
+"密钥或地址不对" = "Wrong secret or URL";
 "对齐方式" = "Alignment";
 "导入" = "Import";
 "导入失败：不是有效的 .ttf / .otf 字体文件" = "Import failed: not a valid .ttf / .otf font file";
@@ -838,6 +878,7 @@
 "尚未成熟、可能不够完善的功能，之后可能调整、重构或移除" = "Features that aren't mature yet and may be incomplete. They could be changed, reworked or removed later.";
 "尚未手动选定过歌词；此后选定的歌词将直接锁定" = "You haven't picked any lyrics manually yet; from now on, your picks will be locked right away";
 "尚未检查更新" = "No update check yet";
+"尚未添加推送渠道" = "No push channels yet";
 "尚未生效：浏览器拒绝了执行 JavaScript 的请求，请按上述路径确认该选项已勾选" = "Not working yet: the browser refused to run JavaScript. Follow the path above and make sure the switch is ticked";
 "尚未生效：浏览器收到请求但未响应，可能是该选项尚未勾选（部分浏览器不报错，而是不作响应）。请按上述路径再次确认" = "Not working yet: the browser took the request but never answered — most likely that switch still isn't ticked (some browsers stay silent instead of reporting an error). Follow the path above and check again";
 "尚未确认" = "Not confirmed yet";
@@ -879,6 +920,7 @@
 "已修改 %@ 处" = "%@ changes";
 "已修改 %@ 处#one" = "%@ change";
 "已停止重新匹配" = "Re-matching stopped";
+"已停用" = "Off";
 "已允许局域网访问，同一网络里的设备也能控制洛雪" = "LAN access is allowed, so devices on the same network can also control LX Music";
 "已减少推荐" = "Suggested Less";
 "已分享的链接将失效" = "Links you've already shared will stop working";
@@ -974,6 +1016,7 @@
 "已连接 · @%@" = "Connected · @%@";
 "已连接为 @%@" = "Connected as @%@";
 "已连接：%@" = "Connected: %@";
+"已送达 · %.1f 秒。到手机或群里看一眼收到没有" = "Delivered · %.1f s. Check your phone or group to see it arrived.";
 "已选 %@ 首" = "%@ selected";
 "已选 %d / %d" = "%d of %d selected";
 "已选择 %@ 首" = "%@ Songs Selected";
@@ -986,6 +1029,7 @@
 "已配置，点按可查看或移除" = "Configured — click to review or remove";
 "已采用" = "Applied";
 "已采用 %@ 的歌词" = "Now using lyrics from %@";
+"已重发" = "Resent";
 "已重新匹配：仍为「%1$@」（%2$@ 分），未找到更好的结果" = "Re-matched: still “%1$@” (%2$@ pts); nothing better found";
 "已重新匹配：仍为「%1$@」，但歌词正文和逐字时间轴均有变化，已更新为本轮结果（%2$@ 分）" = "Re-matched: still “%1$@”, but both the text and the word timing changed; updated to this round's result (%2$@ pts)";
 "已重新匹配：仍为「%1$@」，但歌词正文有变化，已更新为本轮结果（%2$@ 分）" = "Re-matched: still “%1$@”, but the text changed; updated to this round's result (%2$@ pts)";
@@ -1005,6 +1049,8 @@
 "帮助" = "Help";
 "常见于 VPN 或公司网络接管 DNS 的情况；浏览器能打开网页并不代表此处可以连接" = "Common when a VPN or corporate network takes over DNS; a browser loading pages doesn't mean this can get through.";
 "常规" = "Regular";
+"平台拒收了这条消息" = "The platform rejected the message";
+"平台服务出错" = "The platform had an error";
 "年度听歌小结" = "Yearly Listening Digest";
 "广告中" = "Ad Break";
 "应用主题前手动调整的配色，点按即可恢复" = "The colors you set before applying a theme. Click to restore them";
@@ -1025,6 +1071,7 @@
 "开始播放时自动展开" = "Expand When Playback Starts";
 "开机启动" = "Launch at Login";
 "开机时自动启动 Lyrimuse" = "Launch Lyrimuse at login";
+"开源的推送服务：手机、电脑装上 ntfy 订阅一个主题就能收到，不用注册，也可以自建服务器" = "An open-source push service. Install ntfy on your phone or computer and subscribe to a topic; no sign-up needed, and you can self-host it.";
 "开源的音乐播放器，曲库来自国内各大平台" = "An open-source player for music from Chinese streaming platforms";
 "开源组件与词典" = "Open-source components and dictionaries";
 "开源许可证" = "Open-Source License";
@@ -1122,8 +1169,11 @@
 "扫描间隔" = "Scan Interval";
 "批量匹配" = "Batch Matching";
 "找不到正确的歌词？在 GitHub 反馈" = "Can't find the right lyrics? Report it on GitHub";
+"找不到这个会话（Chat ID 不对，或还没跟机器人说过话）" = "Chat not found (wrong Chat ID, or you haven't messaged the bot yet)";
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Found %1$@ · Not found %2$@ · Skipped %3$@";
 "找到 %@ 首" = "%@ Found";
+"把消息转发到微信的服务：微信扫码登录拿到 SendKey，报告出现在微信「方糖」服务号里" = "A service that forwards messages to WeChat. Scan the QR code with WeChat to get a SendKey; reports arrive in the Fangtang official account.";
+"报告会推到每个启用着的渠道。点一行编辑、发送测试；右键可以测试或删除。" = "Reports go to every channel that is on. Click a row to edit it or send a test; right-click to delete.";
 "拆分" = "Split";
 "拆分…" = "Split…";
 "拆分「%@」？" = "Split “%@”?";
@@ -1182,6 +1232,9 @@
 "推荐。为每个歌词源评分，选用最高分的结果" = "Recommended. Scores every source and keeps the best match";
 "推送地址" = "Push URL";
 "推送提醒" = "Push Alerts";
+"推送渠道" = "Push Channels";
+"推送渠道都已停用" = "All push channels are off";
+"推送记录" = "Delivery History";
 "描边颜色" = "Stroke Color";
 "提前" = "Advance";
 "提前 %@ 秒显示" = "Show %@s earlier";
@@ -1310,6 +1363,7 @@
 "时间轴偏移" = "Timing Offset";
 "时间轴整体偏移" = "Whole timeline offset";
 "昨天" = "Yesterday";
+"显示" = "Show";
 "显示 10 首" = "Show 10 songs";
 "显示/隐藏悬浮歌词" = "Show/Hide Floating Lyrics";
 "显示/隐藏灵动岛歌词" = "Show/Hide Notch Lyrics";
@@ -1426,6 +1480,7 @@
 "未在运行，无法获取当前状态" = "Not running, so its status can’t be read";
 "未在这台 Mac 上找到默认列出的浏览器（Safari、Chrome、Edge）。其他浏览器可通过下方的「从应用程序中选择…」添加" = "None of the browsers listed by default (Safari, Chrome, Edge) were found on this Mac. For any other browser, use “Choose from Applications…” below to pick it yourself";
 "未填写 Chat ID" = "Chat ID not set yet";
+"未填写地址" = "No URL";
 "未填写服务地址（可选）" = "Server URL not set yet (optional)";
 "未填写机器人 Token" = "Bot token not set yet";
 "未填写访问令牌（可选）" = "Access token not set yet (optional)";
@@ -1474,6 +1529,7 @@
 "本地暂无待补交的收听记录" = "No scrobbles are waiting locally";
 "本地歌名无检索结果，经「%@」查得正式曲名。" = "The local title returned nothing; the official title was found via “%@”.";
 "本地歌词文件" = "Local lyrics file";
+"本机 IP 不在机器人的白名单里" = "This Mac's IP isn't on the bot's allowlist";
 "本机地址" = "Local Address";
 "本机学到的署名" = "Credit learned on this Mac";
 "本机已记下 %@ 首" = "%@ plays saved on this Mac";
@@ -1494,7 +1550,10 @@
 "本轮给出候选的歌词源数量，点按查看详情" = "How many lyrics sources returned a candidate this round — click for details";
 "本轮输入与过程" = "This round's inputs and process";
 "机器人 Token" = "Bot Token";
+"机器人 Token 不对，或机器人被移出了会话" = "Wrong bot token, or the bot was removed from the chat";
 "机器人 Token，形如 123456789:AAH…" = "Bot token, e.g. 123456789:AAH…";
+"机器人不存在（被删了，或地址拷错了）" = "Bot not found (deleted, or the URL was copied wrong)";
+"机器人安全设置选了「自定义关键词」的话，加一个关键词「%@」；选了「加签」就把密钥填进「加签密钥」" = "If the bot uses Custom Keywords, add the keyword “%@”. If it uses Signing, enter the secret under Signing Secret.";
 "机器翻译" = "Machine translation";
 "权限与服务" = "Permissions & Services";
 "权限只列出所选播放器用得到的" = "Only permissions your players need are listed";
@@ -1536,9 +1595,12 @@
 "样式" = "Style";
 "桌面悬浮歌词" = "Desktop Floating Lyrics";
 "桌面歌词，为 Mac 全新构想" = "Desktop lyrics, reimagined for the Mac";
+"检查「签名密钥」是否跟机器人设置里的一致；没开签名校验就把这一栏清空" = "Check that Signing Secret matches the bot settings. If signature verification is off, clear this field.";
 "检查中…" = "Checking…";
 "检查更新" = "Check for Updates";
 "检查更新…" = "Check for Updates…";
+"检查网络和地址" = "Check your network and the URL.";
+"检查网络；Telegram 在部分网络下要开系统代理才连得上" = "Check your network. On some networks Telegram is only reachable through the system proxy.";
 "检测到播放器打开时自动启动 Lyrimuse" = "Starts Lyrimuse automatically when your player opens";
 "检测到新的播放器" = "New player detected";
 "检测是否已生效" = "Check If It Works";
@@ -1637,6 +1699,7 @@
 "正在准备安装…" = "Preparing to install…";
 "正在准备自动匹配…" = "Preparing to auto-match…";
 "正在加载…" = "Loading…";
+"正在发送测试消息…" = "Sending a test message…";
 "正在同步…" = "Syncing…";
 "正在同步历史" = "Syncing history";
 "正在同步历史（%1$@/%2$@ 页）" = "Syncing history (page %1$@ of %2$@)";
@@ -1717,6 +1780,7 @@
 "汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更），并非这首歌曲没有歌词，通常会在后续版本中修复" = "Soda Music's lyrics endpoint returned something unrecognizable (the API may have changed) — this does not mean the song has no lyrics; an app update usually fixes it";
 "没有可恢复的歌词" = "No hidden lyrics to restore";
 "没有译文时自动翻译" = "Translate When None Is Provided";
+"没连上" = "Couldn't connect";
 "沿用同一首歌另一种写法「%@」的校正，在这里调整后记在这一条上" = "Uses the timing correction from “%@”, another version of this song. Adjusting it here saves it to this version.";
 "沿用同一首歌的人工修正" = "Uses the manual correction from another version of this song";
 "沿用同一首歌的修正" = "From Another Version";
@@ -1733,6 +1797,7 @@
 "浏览器源地址" = "Browser Source URL";
 "浓淡" = "Density";
 "浮在所有窗口之上" = "Floats above all windows";
+"消息里没有自定义关键词" = "The message doesn't contain the custom keyword";
 "淡化时点按会落到下面的窗口；按住 ⌥ 恢复不透明，就能操作" = "While faded, clicks go to the window underneath. Hold ⌥ to make it opaque again and use it";
 "淡化时点按穿透" = "Click Through While Faded";
 "深度链接" = "Deep Links";
@@ -1740,10 +1805,13 @@
 "深色卡片" = "Dark Card";
 "深色渐变" = "Dark Gradient";
 "添加 App…" = "Add App…";
+"添加一个渠道，听歌报告就会推到手机、群聊或你自己的服务" = "Add a channel and your listening reports will be pushed to your phone, a group chat or your own service.";
 "添加中…" = "Adding…";
 "添加到资料库" = "Add to Library";
 "添加失败" = "Couldn't Add";
+"添加推送渠道" = "Add Push Channel";
 "添加播放器…" = "Add a Player…";
+"添加渠道" = "Add Channel";
 "添加的应用与内置播放器相同：显示其正在播放的内容，并计入收听记录。可随时移除。" = "An app you add here counts the same as a built-in player: whatever it plays is shown, and it goes into your listening history. Remove it any time.";
 "清理" = "Clean Up";
 "清理 %@ 条无效记录…" = "Clean Up %@ Invalid Entries…";
@@ -1760,6 +1828,7 @@
 "清除搜索" = "Clear Search";
 "清除筛选" = "Clear Filters";
 "渐变" = "Gradient";
+"渠道信息不完整，或地址不是有效的网址" = "The channel is incomplete, or the URL isn't valid";
 "源自报曲长不符" = "Source duration mismatch";
 "滚动" = "Scroll";
 "演唱：%@" = "by %@";
@@ -1849,6 +1918,7 @@
 "等待 Last.fm 确认（通常几秒内）" = "Waiting for Last.fm to acknowledge (usually a few seconds)";
 "等待下一首…" = "Waiting for the next song…";
 "筛选" = "Filter";
+"签名不对" = "Wrong signature";
 "签名密钥（可选）" = "Signature Secret (Optional)";
 "简体" = "Simplified";
 "简体中文" = "简体中文";
@@ -1911,6 +1981,8 @@
 "继续播放" = "Resume";
 "继续显示" = "Keep Showing";
 "继续编辑" = "Keep Editing";
+"编辑…" = "Edit…";
+"编辑「%@」" = "Edit “%@”";
 "编辑中" = "Editing";
 "编辑期间这首歌曲的歌词已发生变化，本次未应用；再次编辑将打开最新版本" = "This song's lyrics changed while you were editing, so this save wasn't applied. Click Edit again to open the latest version.";
 "编辑歌词" = "Edit Lyrics";
@@ -2040,6 +2112,7 @@
 "触控栏右侧的亮度、音量等系统按键，可在「系统设置 › 键盘 › 触控栏设置…」中增减或调整顺序" = "Add, remove or reorder the brightness, volume and other system buttons on the right of the Touch Bar in System Settings › Keyboard › Touch Bar Settings…";
 "触控栏歌词" = "Touch Bar Lyrics";
 "触控栏歌词仅适用于配备触控栏的 MacBook Pro" = "Touch Bar Lyrics works only on MacBook Pro models with a Touch Bar";
+"认出是%@的地址，已切换" = "Recognized as a %@ URL and switched to it";
 "设备控制和数据访问" = "Device Control and Data Access";
 "设定歌词偏移" = "Set Lyrics Offset";
 "设置" = "Settings";
@@ -2052,6 +2125,7 @@
 "设置文件" = "Settings File";
 "访问令牌" = "Access Token";
 "访问令牌无效，同步服务拒绝了推送" = "The sync server rejected the access token";
+"访问令牌（可选）" = "Access Token (Optional)";
 "访问链接" = "Access Link";
 "评估后未更换" = "Evaluated, not replaced";
 "评分时被排除的候选（如无时间戳、语言或时长不符），自动匹配不会选用；仍可预览和采用" = "Candidates excluded during scoring (for example no timestamps, or the wrong language or length). Automatic matching won't pick them, but you can still preview and use them.";
@@ -2151,6 +2225,7 @@
 "辅助功能权限可显示%@的随机、循环与喜欢键，也能在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首" = "Accessibility permission enables shuffle, repeat and liking songs for %@, and lets its menus pause, resume and skip tracks when another app holds system media focus";
 "辅助功能权限可显示%@的随机、循环键" = "Accessibility permission enables shuffle and repeat for %@";
 "辅助功能权限可让%@的播放进度更准确，并显示随机、循环键" = "Accessibility keeps %@'s playback position accurate and shows its shuffle and repeat buttons";
+"过一会儿再试" = "Try again in a while.";
 "过去三年的今天及前后一周均无收听记录" = "No listening on this day, or the week around it, in the past three years";
 "运行中" = "Running";
 "运行日志" = "Activity Log";
@@ -2168,14 +2243,18 @@
 "还差最后几步：请完成下方标为橙色的项目" = "Almost there: complete the items marked in orange below";
 "还有 %@ 条" = "and %@ more";
 "还有未完成的项目" = "Some Items Need Attention";
+"还没推送过" = "Nothing pushed yet";
+"还没有推送渠道" = "No push channels yet";
 "还需 %@ 次" = "%@ to go";
 "这一天收听 %@ 次，听得最多的是以下歌曲" = "%@ plays that day, most played below";
 "这一天收听 %@ 次，听得最多的是以下歌曲#one" = "%@ play that day, most played below";
+"这个主题需要访问令牌，或令牌不对" = "This topic needs an access token, or the token is wrong";
 "这也是你最长的一次连续" = "Your longest streak yet";
 "这些源连续失败，本轮暂时没有查询" = "These sources failed repeatedly and were not queried this round";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常是广告、播客或有声书。人工修正、标为纯音乐、校准过时间轴的记录和正在播放的歌曲不在其中；再次播放时会重新匹配。" = "These entries have no lyrics and either no artist or a duration over 20 minutes — usually ads, podcasts, or audiobooks. Manually edited, instrumental, and calibrated entries and the song now playing aren’t included. They’ll be matched again if played.";
 "这份歌词无时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮" = "These lyrics have no timing. Once adopted they only show as static text in the Lyrics Window, and won't highlight word by word or line by line as the song plays";
 "这份歌词是同一首歌另一种写法「%@」的人工修正，那边改了这边跟着改；直接改这一条就成为它自己的修正" = "These lyrics are the manual correction made on “%@”, another version of this song, and follow it when it changes. Editing this one makes it its own correction.";
+"这像是%@的地址。要换平台，删掉这个渠道再添加一个" = "This looks like a %@ URL. To switch platforms, delete this channel and add a new one.";
 "这台 Mac 上未安装此播放器" = "This player isn't installed on this Mac";
 "这台 Mac 上未安装的播放器" = "Players not installed on this Mac";
 "这是 Lyrimuse 本身。" = "That’s Lyrimuse itself.";
@@ -2258,6 +2337,7 @@
 "逐行歌词对比" = "Line-by-Line Lyrics Comparison";
 "逐首联网搜索，每首间隔约 5 秒；跳过纯音乐和人工修正过的歌曲" = "Searches one song at a time, about 5 seconds apart. Instrumentals and manually edited songs are skipped.";
 "通用" = "General";
+"通用 Webhook" = "Generic Webhook";
 "通知" = "Notifications";
 "通知已在「系统设置 › 通知」中关闭" = "Notifications are turned off in System Settings › Notifications";
 "通知平台" = "Notification Platform";
@@ -2284,6 +2364,8 @@
 "采用此候选" = "Use This Candidate";
 "采用的不是得分最高的那条" = "The applied candidate is not the highest-scoring one";
 "采纳为静态文本" = "Adopt as Static Text";
+"重发" = "Resend";
+"重发也没成：%@" = "Resend failed too: %@";
 "重启后仍无法读取。请确认 Lyrimuse 已打开；已打开时，用「−」移除后再用「+」重新添加。" = "Still can’t read after the restart. Make sure Lyrimuse is turned on; if it is, remove it with “−” and add it back with “+”.";
 "重启歌词引擎" = "Restart Lyrics Engine";
 "重命名…" = "Rename…";
@@ -2309,6 +2391,7 @@
 "重试" = "Retry";
 "重试退出" = "Retry Quit";
 "钉钉" = "DingTalk";
+"钉钉群里的自定义机器人：报告发到群聊里。机器人要设关键词或加签" = "A custom bot in a DingTalk group. Reports are posted to the group chat. The bot needs a keyword or signing.";
 "钢琴键" = "Piano Keys";
 "链接" = "Link";
 "链接无效或已失效" = "This link is invalid or has expired.";
@@ -2329,6 +2412,7 @@
 "随机播放" = "Shuffle";
 "随演唱进度将已演唱部分显示为系统强调色。仅在歌曲有逐字时间轴时生效；打开菜单反白期间暂停着色" = "Tints the sung portion with the system accent color, following the vocal timing. Only takes effect when this track has word-level timing; fill pauses while the menu is open and highlighted";
 "隐私" = "Privacy";
+"隐藏" = "Hide";
 "隐藏/恢复全部歌词" = "Hide/Restore All Lyrics";
 "隐藏…" = "Hide…";
 "隐藏功能栏" = "Hide Control Strip";
@@ -2378,6 +2462,7 @@
 "颜色" = "Color";
 "风格" = "Style";
 "飞书" = "Feishu";
+"飞书群里的自定义机器人：报告发到群聊里" = "A custom bot in a Feishu (Lark) group. Reports are posted to the group chat.";
 "首次同步历史中（%1$@/%2$@ 页）" = "First-time history sync (page %1$@ of %2$@)";
 "首次同步历史记录后，将在此显示收听时段" = "Your listening hours appear here once the first history sync finishes";
 "首次同步历史记录后，将在此显示收听足迹" = "Your listening footprint appears here once the first history sync finishes";

@@ -409,6 +409,10 @@ func runOpsDiagnosticsTests() {
         for f in credentialFields {
             if let v = cfg[f] as? String, !v.isEmpty { secrets[f] = v }
         }
+        for (i, ch) in (NotificationChannel.list(fromConfig: cfg) ?? []).enumerated() {
+            if !ch.url.isEmpty { secrets["notification_channels[\(i)].url"] = ch.url }
+            if !ch.secret.isEmpty { secrets["notification_channels[\(i)].secret"] = ch.secret }
+        }
 
         let before = secrets.filter { window.contains($0.value) }
         let cleaned = LogRedactor.redactAll(window, secrets: secrets)

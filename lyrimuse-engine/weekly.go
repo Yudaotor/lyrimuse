@@ -227,7 +227,7 @@ func mostRecentMonday(t time.Time) time.Time {
 // (推送目的地未配置则整体跳过——alerter.push 本身也会在 url 为空时忽略，这里提前
 // 判断纯粹省一次网络请求)。
 func (p *poller) weeklyDigest(now time.Time, env digestEnv) {
-	if !features().WeeklyDigest || env.alerter == nil || env.alerter.url == "" {
+	if !features().WeeklyDigest || !env.alerter.configured(notifyEventWeekly) {
 		return
 	}
 	if !p.weeklyLastCheckedAt.IsZero() && now.Sub(p.weeklyLastCheckedAt) < weeklyDigestCheckInterval {
@@ -277,7 +277,7 @@ func (p *poller) weeklyDigest(now time.Time, env digestEnv) {
 	}
 	title := fmt.Sprintf("🎵 上周听歌小结（%s~%s）",
 		time.Unix(from, 0).Local().Format("01-02"), time.Unix(to, 0).Local().Format("01-02"))
-	if digestPush(env.alerter, title, stats) != nil {
+	if digestPush(env.alerter, notifyEventWeekly, title, stats) != nil {
 		return
 	}
 	p.weeklyState.save(to)

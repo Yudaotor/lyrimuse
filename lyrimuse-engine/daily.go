@@ -65,7 +65,7 @@ var dailyDigestPath string
 // 推一条报告。取数/聚合/拼文案的逻辑统一定义在 digest.go(lastfmDigestStats/
 // listenbrainzDigestStats)，这里只负责判断该不该触发、选哪个源、传今天的时间范围。
 func (p *poller) dailyDigest(now time.Time, env digestEnv) {
-	if !features().DailyDigest || env.alerter == nil || env.alerter.url == "" {
+	if !features().DailyDigest || !env.alerter.configured(notifyEventDaily) {
 		return
 	}
 	if !p.dailyLastCheckedAt.IsZero() && now.Sub(p.dailyLastCheckedAt) < dailyDigestCheckInterval {
@@ -103,7 +103,7 @@ func (p *poller) dailyDigest(now time.Time, env digestEnv) {
 		p.dailyState.save(today) // 今天确实没听,跳过不推送,但仍标记已处理,避免当天反复重查
 		return
 	}
-	if digestPush(env.alerter, fmt.Sprintf("🎧 今日听歌报告（%s）", now.Format("01-02")), stats) != nil {
+	if digestPush(env.alerter, notifyEventDaily, fmt.Sprintf("🎧 今日听歌报告（%s）", now.Format("01-02")), stats) != nil {
 		return // 推送没成功,不标记已推送,下次检查再推
 	}
 	p.dailyState.save(today)

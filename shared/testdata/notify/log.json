@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "entries": [
+    {"id": "e1", "at": 1800000000, "channel": "c1", "channel_name": "我的 Telegram", "platform": "telegram", "event": "weekly_digest", "title": "🎵 上周听歌小结（10-06~10-12）", "ok": true, "kind": "ok", "status": 200, "elapsed_ms": 812},
+    {"id": "e2", "at": 1800000060, "channel": "c2", "platform": "feishu", "event": "weekly_digest", "title": "🎵 上周听歌小结（10-06~10-12）", "body": "Top 3", "ok": false, "kind": "auth", "status": 200, "code": "19021", "detail": "sign match fail", "elapsed_ms": 230},
+    {"id": "e3", "at": 1800000120, "channel": "c1", "platform": "telegram", "event": "test", "title": "🎧 Lyrimuse 推送测试", "ok": true, "kind": "ok", "status": 200, "elapsed_ms": 640}
+  ]
+}

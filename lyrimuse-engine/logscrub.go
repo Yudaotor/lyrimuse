@@ -177,16 +177,29 @@ func rememberConfigSecrets(c *config) {
 		c.DingtalkSignSecret,
 		c.FeishuSignSecret,
 	)
-	// Bark 的 token 不是 query 参数,而是 URL 的一段 path(https://api.day.app/<token>),
-	// 第二道防线够不着它。只登记 path 段、不登记整条 URL:host 留着,日志里还看得出
-	// 这条推送是往哪个平台发的;整条登记也会在 URL 后面拼了标题/正文时直接匹配不上。
-	if u, err := url.Parse(c.NotificationWebhookURL); err == nil {
-		registerSecretsMinLen(minPathSecretLen, strings.Split(u.Path, "/")...)
-	}
-	// 地址栏填的不是 URL(Telegram 允许只填机器人 Token，形如 123456789:AAH…)时整段都是凭据。
-	// 这种写法 url.Parse 会直接报错，上面那条登记不上。
-	if raw := strings.TrimSpace(c.NotificationWebhookURL); raw != "" && !strings.Contains(raw, "://") {
-		registerSecrets(raw)
+	rememberNotifyChannelSecrets(append(configNotifyChannels(c), notifyChannel{URL: c.NotificationWebhookURL})...)
+}
+
+// rememberNotifyChannelSecrets 登记推送渠道的凭据:密钥整段登记;地址只登记 path 段和 query 值。
+// Bark 的 token 不是 query 参数,而是 URL 的一段 path(https://api.day.app/<token>),
+// 第二道防线够不着它。只登记 path 段、不登记整条 URL:host 留着,日志里还看得出
+// 这条推送是往哪个平台发的;整条登记也会在 URL 后面拼了标题/正文时直接匹配不上。
+// 企业微信的 key、钉钉的 access_token 在 query 里,参数名那道防线认得,这里也按值登记一遍。
+// App 发来的「测一下」请求带的渠道可能还没存进配置,收到时也走这里(notifytest.go)。
+func rememberNotifyChannelSecrets(channels ...notifyChannel) {
+	for _, ch := range channels {
+		registerSecrets(ch.Secret)
+		if u, err := url.Parse(ch.URL); err == nil {
+			registerSecretsMinLen(minPathSecretLen, strings.Split(u.Path, "/")...)
+			for _, vs := range u.Query() {
+				registerSecretsMinLen(minPathSecretLen, vs...)
+			}
+		}
+		// 地址栏填的不是 URL(Telegram 允许只填机器人 Token，形如 123456789:AAH…)时整段都是凭据。
+		// 这种写法 url.Parse 会直接报错，上面那条登记不上。
+		if raw := strings.TrimSpace(ch.URL); raw != "" && !strings.Contains(raw, "://") {
+			registerSecrets(raw)
+		}
 	}
 }
 

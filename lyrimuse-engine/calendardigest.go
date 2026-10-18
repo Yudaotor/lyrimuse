@@ -109,7 +109,11 @@ func (p *poller) yearlyDigest(now time.Time, env digestEnv) {
 //   - ListenBrainz：逐条翻收听记录翻不完一个月、一年，改用它的统计接口(lbStatsDigest)。
 //     统计接口按 UTC 自然月 / 年切，跟本地边界差几个小时，接受。
 func (p *poller) calendarDigest(now time.Time, env digestEnv, kind calendarDigestKind, run *calendarDigestRun, enabled bool, preference string) {
-	if !enabled || env.alerter == nil || env.alerter.url == "" {
+	event := notifyEventMonthly
+	if kind == calendarDigestYearly {
+		event = notifyEventYearly
+	}
+	if !enabled || !env.alerter.configured(event) {
 		return
 	}
 	if !run.lastCheckedAt.IsZero() && now.Sub(run.lastCheckedAt) < calendarDigestCheckInterval {
@@ -154,7 +158,7 @@ func (p *poller) calendarDigest(now time.Time, env digestEnv, kind calendarDiges
 		run.state.save(key) // 这个周期确实没听，不推送，但标记已处理
 		return
 	}
-	if digestPush(env.alerter, calendarDigestTitle(kind, from), stats) != nil {
+	if digestPush(env.alerter, event, calendarDigestTitle(kind, from), stats) != nil {
 		return
 	}
 	run.state.save(key)

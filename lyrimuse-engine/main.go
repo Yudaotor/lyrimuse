@@ -433,6 +433,8 @@ func main() {
 	setLyricsFillPaths()
 	// 「歌词管理」的「重新自动匹配」请求文件 + 状态文件(见 lyricsrematch.go)。
 	setLyricsRematchPaths()
+	// 推送记录、推送页「测一下」的请求和结果(见 notifytest.go)。
+	setNotifyPaths()
 	weeklyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-weekly.json")
 	dailyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lb-daily.json")
 	monthlyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-monthly-digest.json")

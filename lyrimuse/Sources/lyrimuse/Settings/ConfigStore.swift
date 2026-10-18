@@ -4,17 +4,17 @@ import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "config-store")
 
-// 推送提醒目前支持的平台——绝大多数都是"群机器人 webhook"这个模子,一个 URL、POST
+// 推送提醒支持的平台——绝大多数都是"群机器人 webhook"这个模子,一个 URL、POST
 // 一份 JSON 就能收到消息(Server酱是个例外,走表单编码,见 lyrimuse-engine/notify.go 顶部
 // 注释),Lyrimuse 这边只管选平台+填 webhook 地址,不关心具体协议。rawValue
 // 必须跟引擎侧的平台字符串常量(platformBark/platformDingtalk/platformWecom/
-// platformDiscord/platformFeishu/platformServerChan/platformTelegram/platformSlack)逐字对应——这是两侧通过同一份
-// config.json 交换的字符串,不是各自随便定义的展示文案。
+// platformDiscord/platformFeishu/platformServerChan/platformTelegram/platformSlack/platformNtfy/platformWebhook)
+// 逐字对应——这是两侧通过同一份 config.json 交换的字符串,不是各自随便定义的展示文案。
 public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
-    case bark, dingtalk, wecom, discord, feishu, serverchan, telegram, slack
+    case bark, dingtalk, wecom, discord, feishu, serverchan, telegram, slack, ntfy, webhook
     public var id: Self { self }
 
-    /// 下拉菜单里的排列:中文用户国内平台在前,其余国外平台在前(规则见 `NotificationPlatformRegion`)。
+    /// 添加渠道时的平台排列:不分组,中文用户国内平台在前(规则见 `NotificationPlatformRegion`);通用 Webhook 不在里面。
     static var displayOrder: [NotificationPlatform] {
         let chineseFirst = LyricsSourceRegion.prefersChineseSources(
             appLanguageOverride: L10n.languageOverride, preferredLanguage: Locale.preferredLanguages.first)
@@ -32,16 +32,70 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
         case .serverchan: return L10n.t("Server酱")
         case .telegram: return "Telegram"
         case .slack: return "Slack"
+        case .ntfy: return "ntfy"
+        case .webhook: return L10n.t("通用 Webhook")
+        }
+    }
+
+    /// 指向平台时的悬浮说明:这是什么、消息会到哪里。怎么拿地址在 `setupGuide`。
+    public var summary: String {
+        switch self {
+        case .bark: return L10n.t("iPhone 上的推送 App：装好后首页就有专属地址，报告直接弹在 iPhone 上。免费、开源")
+        case .feishu: return L10n.t("飞书群里的自定义机器人：报告发到群聊里")
+        case .dingtalk: return L10n.t("钉钉群里的自定义机器人：报告发到群聊里。机器人要设关键词或加签")
+        case .wecom: return L10n.t("企业微信群里的机器人：报告发到群聊里，粘贴地址就能用")
+        case .serverchan: return L10n.t("把消息转发到微信的服务：微信扫码登录拿到 SendKey，报告出现在微信「方糖」服务号里")
+        case .telegram: return L10n.t("Telegram 机器人：找 @BotFather 建一个，报告发给你本人或你所在的群")
+        case .discord: return L10n.t("Discord 频道的 Webhook：报告发到你服务器里的某个频道")
+        case .slack: return L10n.t("Slack 的 Incoming Webhook：报告发到工作区里的某个频道")
+        case .ntfy: return L10n.t("开源的推送服务：手机、电脑装上 ntfy 订阅一个主题就能收到，不用注册，也可以自建服务器")
+        case .webhook: return L10n.t("向你指定的地址 POST 一段 JSON，适合接 Home Assistant、n8n 或自己写的服务")
+        }
+    }
+
+    /// 平台图标的资源名(`Resources/<名字>.png`,见 `NotificationPlatformBadge`);通用 Webhook 不是哪一家,用花括号符号,为 nil。
+    /// 来路:飞书、钉钉、企业微信、Bark 取本机 App 自己的图标(按 636 导出、裁掉图标网格的透明边铺满 512,同 SpotifyIcon.png
+    /// 的做法);Telegram、Discord、Slack、ntfy 是 Simple Icons(CC0)的矢量,品牌色铺底、白色标志占 62% 宽;Server酱取它
+    /// 官网 sct.ftqq.com 的站点图标(300 → 512)。
+    public var iconResource: String? {
+        switch self {
+        case .bark: return "BarkIcon"
+        case .feishu: return "FeishuIcon"
+        case .dingtalk: return "DingTalkIcon"
+        case .wecom: return "WeComIcon"
+        case .serverchan: return "ServerChanIcon"
+        case .telegram: return "TelegramIcon"
+        case .discord: return "DiscordIcon"
+        case .slack: return "SlackIcon"
+        case .ntfy: return "NtfyIcon"
+        case .webhook: return nil
         }
     }
 
     // 地址输入框前面那个标题。Telegram 这一栏填的是机器人 Token,Bark / Server酱 是带 Key 的推送地址,
-    // 统一叫「Webhook 地址」会让人不知道该填什么。
+    // ntfy 是订阅时的主题地址,统一叫「Webhook 地址」会让人不知道该填什么。
     public var fieldLabel: String {
         switch self {
         case .bark, .serverchan: return L10n.t("推送地址")
         case .telegram: return L10n.t("机器人 Token")
-        case .dingtalk, .wecom, .discord, .feishu, .slack: return L10n.t("Webhook 地址")
+        case .ntfy: return L10n.t("主题地址")
+        case .dingtalk, .wecom, .discord, .feishu, .slack, .webhook: return L10n.t("Webhook 地址")
+        }
+    }
+
+    /// 密钥那一栏的标题和说明;这个平台用不着密钥时为 nil。都是可选的。
+    public var secretField: (label: String, note: String)? {
+        switch self {
+        case .dingtalk:
+            return (L10n.t("加签密钥（可选）"), L10n.t("仅在机器人安全设置选择「加签」时需要填写，留空则按未加签处理"))
+        case .feishu:
+            return (L10n.t("签名密钥（可选）"), L10n.t("仅在机器人安全设置开启「签名校验」时需要填写，未开启时也能正常接收消息"))
+        case .ntfy:
+            return (L10n.t("访问令牌（可选）"), L10n.t("主题设了访问控制时填写：令牌以 tk_ 开头，也可以填「用户名:密码」"))
+        case .webhook:
+            return (L10n.t("签名密钥（可选）"), L10n.t("填写后每次请求带上 X-Lyrimuse-Signature: sha256=…（用这个密钥对请求体算的 HMAC-SHA256），接收端可据此校验来源"))
+        case .bark, .wecom, .discord, .serverchan, .telegram, .slack:
+            return nil
         }
     }
 
@@ -57,6 +111,8 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
         case .serverchan: return L10n.t("https://sctapi.ftqq.com/你的SendKey.send")
         case .telegram: return L10n.t("机器人 Token，形如 123456789:AAH…")
         case .slack: return "https://hooks.slack.com/services/..."
+        case .ntfy: return L10n.t("https://ntfy.sh/你的主题")
+        case .webhook: return "https://example.com/hooks/lyrimuse"
         }
     }
 
@@ -80,10 +136,15 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
             return L10n.t("在 Telegram 中向 @BotFather 发送 /newbot 创建机器人，并将获得的 Token 填入「机器人 Token」。然后向机器人发送任意消息，在浏览器中打开 https://api.telegram.org/bot你的Token/getUpdates，chat 下的 id 即为 Chat ID")
         case .slack:
             return L10n.t("在 api.slack.com/apps 新建应用（From scratch）并选择工作区，开启 Incoming Webhooks，点「Add New Webhook」选择要发送到的频道，授权后拷贝 Webhook URL")
+        case .ntfy:
+            return L10n.t("在手机或电脑上安装 ntfy，订阅一个别人猜不到的主题名，然后把主题地址（如 https://ntfy.sh/你的主题）填入此处。自建服务器填你自己的地址")
+        case .webhook:
+            return L10n.t("Lyrimuse 会向这个地址 POST 一段 JSON：app、event（如 weekly_digest）、title、body、sent_at，适合接 Home Assistant、n8n 或你自己的服务")
         }
     }
 
-    public var setupDocURL: URL {
+    /// 通用 Webhook 没有官方文档,收的字段在 setupGuide 里写全了。
+    public var setupDocURL: URL? {
         switch self {
         case .bark: return URL(string: "https://bark.day.app/")!
         case .dingtalk: return URL(string: "https://open.dingtalk.com/document/group/custom-robot-access")!
@@ -93,6 +154,8 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
         case .serverchan: return URL(string: "https://sct.ftqq.com/")!
         case .telegram: return URL(string: "https://core.telegram.org/bots/tutorial")!
         case .slack: return URL(string: "https://api.slack.com/messaging/webhooks")!
+        case .ntfy: return URL(string: "https://docs.ntfy.sh/subscribe/phone/")!
+        case .webhook: return nil
         }
     }
 }
@@ -137,28 +200,9 @@ public final class ConfigStore: ObservableObject {
     // 持久化下来是为了 App 重启后"已连接:xxx"这句话不会退化成不带用户名的泛化文案
     // (LastfmConnectController 的 state 是内存态,重启即丢)。
     @Published public var lastfmScrobbleUsername = ""
-    // 切换平台时地址输入框换成那个平台自己的地址,见 Core `NotificationWebhookSlots`。load() 期间
-    // 不走这段(那时平台和地址是一起从磁盘读进来的)。
-    @Published public var notificationPlatform: NotificationPlatform = .bark {
-        didSet {
-            guard !isLoading, oldValue != notificationPlatform else { return }
-            notificationWebhookURL = webhookSlots.switchPlatform(
-                from: oldValue.rawValue, currentURL: notificationWebhookURL, to: notificationPlatform.rawValue
-            )
-        }
-    }
-    /// 当前平台的地址,即 config.json 的 `bark_url`(引擎只读这一份)。
-    @Published public var notificationWebhookURL = ""
-    /// 其余平台各自存下的地址(`notification_webhook_urls`),只有 App 侧用。
-    private var webhookSlots = NotificationWebhookSlots(stored: [:], activePlatform: "bark", activeURL: "")
-    private var isLoading = false
-    // 只有对应平台的机器人开了"加签"安全设置时才需要填,留空则按未加签处理——钉钉/
-    // 飞书两个平台的签名算法不同(见 lyrimuse-engine/notify.go),分开两个字段存,切换平台
-    // 不会互相污染。
-    @Published public var dingtalkSignSecret = ""
-    @Published public var feishuSignSecret = ""
-    // Telegram 平台必填:推送发到哪个会话。地址栏可以只填机器人 Token,见 lyrimuse-engine/notify.go telegramSendURL。
-    @Published public var telegramChatID = ""
+    /// 推送提醒的渠道(`notification_channels`,见 Core `NotificationChannel`)。旧版的单渠道字段在 load 时换成这个列表,
+    /// 旧键留在文件里不删、也不再写。
+    @Published public var notificationChannels: [NotificationChannel] = []
 
     @Published public private(set) var lastError: String?
     /// 同 FeatureSettingsStore.pendingUntilServiceEnabled:落盘成功、因后台服务被主动停用而没重启。
@@ -181,20 +225,13 @@ public final class ConfigStore: ObservableObject {
         var stateRelayURL, stateRelayToken: String
         var lastfmUser, lastfmAPIKey: String
         var lastfmScrobbleAPIKey, lastfmScrobbleSecret, lastfmScrobbleSessionKey, lastfmScrobbleUsername: String
-        var notificationPlatform: NotificationPlatform
-        var notificationWebhookURL: String
-        var webhookURLsByPlatform: [String: String]
-        var dingtalkSignSecret: String
-        var feishuSignSecret: String
-        var telegramChatID: String
+        var notificationChannels: [NotificationChannel]
     }
     private var savedSnapshot = Snapshot(
         listenbrainzToken: "", listenbrainzUser: "", stateRelayURL: "", stateRelayToken: "",
         lastfmUser: "", lastfmAPIKey: "", lastfmScrobbleAPIKey: "", lastfmScrobbleSecret: "",
         lastfmScrobbleSessionKey: "", lastfmScrobbleUsername: "",
-        notificationPlatform: .bark, notificationWebhookURL: "", webhookURLsByPlatform: [:],
-        dingtalkSignSecret: "", feishuSignSecret: "",
-        telegramChatID: ""
+        notificationChannels: []
     )
     private var currentSnapshot: Snapshot {
         Snapshot(
@@ -203,10 +240,7 @@ public final class ConfigStore: ObservableObject {
             lastfmUser: lastfmUser, lastfmAPIKey: lastfmAPIKey,
             lastfmScrobbleAPIKey: lastfmScrobbleAPIKey, lastfmScrobbleSecret: lastfmScrobbleSecret,
             lastfmScrobbleSessionKey: lastfmScrobbleSessionKey, lastfmScrobbleUsername: lastfmScrobbleUsername,
-            notificationPlatform: notificationPlatform, notificationWebhookURL: notificationWebhookURL,
-            webhookURLsByPlatform: persistedWebhookURLs,
-            dingtalkSignSecret: dingtalkSignSecret, feishuSignSecret: feishuSignSecret,
-            telegramChatID: telegramChatID
+            notificationChannels: notificationChannels
         )
     }
     public var isDirty: Bool { currentSnapshot != savedSnapshot }
@@ -226,29 +260,34 @@ public final class ConfigStore: ObservableObject {
     /// - **用户名**(lastfmUser / listenbrainzUser 等):是公开信息,而且排查"scrobble 到
     ///   了哪个账号"这类问题时正需要它。
     /// - **stateRelayURL**:host 本身对排查网络问题有用;它的凭据部分是另一个字段
-    ///   (stateRelayToken)。反过来 `notificationWebhookURL` 必须收 —— Bark/Server酱/
+    ///   (stateRelayToken)。反过来推送渠道的地址必须收 —— Bark/Server酱/
     ///   飞书的 webhook 地址里凭据就长在 URL 自己身上,整条即凭据。
     public var secretsForRedaction: [String: String] {
-        [
+        var out = [
             "listenbrainzToken": listenbrainzToken,
             "stateRelayToken": stateRelayToken,
             "lastfmAPIKey": lastfmAPIKey,
             "lastfmScrobbleAPIKey": lastfmScrobbleAPIKey,
             "lastfmScrobbleSecret": lastfmScrobbleSecret,
             "lastfmScrobbleSessionKey": lastfmScrobbleSessionKey,
-            "notificationWebhookURL": notificationWebhookURL,
-            "dingtalkSignSecret": dingtalkSignSecret,
-            "feishuSignSecret": feishuSignSecret,
-        ].merging(
-            persistedWebhookURLs.map { ("notificationWebhookURL.\($0.key)", $0.value) },
-            uniquingKeysWith: { current, _ in current }
-        ).filter { !$0.value.isEmpty }
+        ]
+        for (i, ch) in notificationChannels.enumerated() {
+            out["notificationChannel\(i).url"] = ch.url
+            out["notificationChannel\(i).secret"] = ch.secret
+        }
+        // 旧版的单渠道字段还留在文件里(见 notificationChannels),引擎早先的日志里可能有它们。
+        for (key, value) in document.raw where Self.legacyPushSecretKeys.contains(key) {
+            if let value = value as? String { out["legacy.\(key)"] = value }
+            if let urls = value as? [String: String] {
+                for (platform, url) in urls { out["legacy.\(key).\(platform)"] = url }
+            }
+        }
+        return out.filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
-    /// 各平台地址的落盘全集(并入当前平台此刻的地址)。
-    private var persistedWebhookURLs: [String: String] {
-        webhookSlots.persisted(activePlatform: notificationPlatform.rawValue, activeURL: notificationWebhookURL)
-    }
+    private static let legacyPushSecretKeys: Set<String> = [
+        "bark_url", "notification_webhook_urls", "dingtalk_sign_secret", "feishu_sign_secret",
+    ]
 
     // 以下几个只读判断专给"推送账号"tab 的状态徽标用——刻意读 savedSnapshot(已保存的
     // 值)而不是当前 @Published 字段,道理跟 isDirty 一样:用户刚敲了几个字符还没点
@@ -309,16 +348,17 @@ public final class ConfigStore: ObservableObject {
         return nil
     }
 
-    // 推送提醒支持多个平台,这个判断跟具体平台无关,只看 webhook 地址填没填
-    // (平台本身有默认值 .bark,不会缺失)。
+    /// 有没有能推的渠道(启用着、填齐了);没有时返回缺什么的提示。
     public func pushMissingHint() -> String? {
-        let saved = savedSnapshot
-        if saved.notificationPlatform == .telegram {
-            if saved.notificationWebhookURL.isEmpty { return L10n.t("未填写机器人 Token") }
-            if saved.telegramChatID.trimmingCharacters(in: .whitespaces).isEmpty { return L10n.t("未填写 Chat ID") }
-            return nil
-        }
-        return saved.notificationWebhookURL.isEmpty ? L10n.t("尚未填写 Webhook 地址") : nil
+        let saved = savedSnapshot.notificationChannels
+        if saved.isEmpty { return L10n.t("尚未添加推送渠道") }
+        if !saved.contains(where: { $0.enabled && $0.isComplete }) { return L10n.t("推送渠道都已停用") }
+        return nil
+    }
+
+    /// 已保存的、启用着且填齐了的渠道。
+    public var activeNotificationChannels: [NotificationChannel] {
+        savedSnapshot.notificationChannels.filter { $0.enabled && $0.isComplete }
     }
 
     private init() {
@@ -349,21 +389,9 @@ public final class ConfigStore: ObservableObject {
         lastfmScrobbleSecret = raw["lastfm_scrobble_secret"] as? String ?? ""
         lastfmScrobbleSessionKey = raw["lastfm_scrobble_session_key"] as? String ?? ""
         lastfmScrobbleUsername = raw["lastfm_scrobble_username"] as? String ?? ""
-        // notification_platform 是这次新加的字段——旧配置文件里没有,缺失/无法识别的
-        // 字符串都按 .bark 处理(这个字段加平台选择之前唯一支持过的形态)。
-        isLoading = true
-        defer { isLoading = false }
-        notificationPlatform = (raw["notification_platform"] as? String).flatMap(NotificationPlatform.init) ?? .bark
-        // JSON key 还是历史上的 bark_url——见 lyrimuse-engine/config.go 里 NotificationWebhookURL
-        // 字段上的注释,两边保持一致,不单独给 Lyrimuse 这边改名。
-        notificationWebhookURL = raw["bark_url"] as? String ?? ""
-        webhookSlots = NotificationWebhookSlots(
-            stored: raw["notification_webhook_urls"] as? [String: String] ?? [:],
-            activePlatform: notificationPlatform.rawValue, activeURL: notificationWebhookURL
-        )
-        dingtalkSignSecret = raw["dingtalk_sign_secret"] as? String ?? ""
-        feishuSignSecret = raw["feishu_sign_secret"] as? String ?? ""
-        telegramChatID = raw["telegram_chat_id"] as? String ?? ""
+        // 还没有渠道列表的旧配置:换成渠道列表。快照按换好的算(没有要保存的改动),下一次保存时才写进文件;
+        // 那之前引擎照样读旧字段,推的是同一个渠道。
+        notificationChannels = NotificationChannel.list(fromConfig: raw) ?? NotificationChannel.migrated(fromLegacy: raw)
         savedSnapshot = currentSnapshot
     }
 
@@ -389,12 +417,8 @@ public final class ConfigStore: ObservableObject {
             "lastfm_scrobble_secret": t(lastfmScrobbleSecret),
             "lastfm_scrobble_session_key": t(lastfmScrobbleSessionKey),
             "lastfm_scrobble_username": t(lastfmScrobbleUsername),
-            "notification_platform": notificationPlatform.rawValue,
-            "bark_url": t(notificationWebhookURL),
-            "notification_webhook_urls": persistedWebhookURLs,
-            "dingtalk_sign_secret": t(dingtalkSignSecret),
-            "feishu_sign_secret": t(feishuSignSecret),
-            "telegram_chat_id": t(telegramChatID),
+            // 删光了也写 []:没有这个键时引擎会退回去读旧的单渠道字段。
+            "notification_channels": notificationChannels.map(\.jsonObject),
         ]
         do {
             // 合并进磁盘镜像(api_root / bundle_ids 这些 UI 不管的字段原样保留)→ 原子写 + 0600(这份就是

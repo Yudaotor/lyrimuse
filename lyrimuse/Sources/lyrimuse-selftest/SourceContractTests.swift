@@ -5458,7 +5458,7 @@ func runSourceContractIdentityTests() {
                     "诊断导出: 有「Players」一段,列本机播放器的版本号")
         let labsPage = code("Settings/LabsPage.swift")
         let accountTab = code("AccountLinkingTab.swift")
-        let statusCall = "mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict, lbInfo: lbStatus.info)"
+        let statusCall = "mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict, lbInfo: lbStatus.info,"
         expectEqual(accountTab.components(separatedBy: statusCall).count - 1 == 2 && labsPage.components(separatedBy: statusCall).count - 1 == 2
                     && accountTab.contains("if config.isListenBrainzConfigured, lbInfo != nil { return .error(L10n.t(\"令牌已失效\")) }")
                     && code("AppDelegate.swift").contains("ListenBrainzAuthNotifier.shared.start()")
@@ -5470,6 +5470,16 @@ func runSourceContractIdentityTests() {
                     && accountTab.contains("return relayPushProblem(relayStatus.verdict)")
                     && accountTab.contains("if let note = relayPushNote {"), true,
                     "网页推送: 侧边栏徽标和「网页推送」页都看引擎报的推送结果")
+        let notifyCall = "notifyLatest: notifyLog.latestByChannel)"
+        expectEqual(accountTab.components(separatedBy: notifyCall).count - 1 == 2 && labsPage.components(separatedBy: notifyCall).count - 1 == 2
+                    && accountTab.contains("let failing = config.activeNotificationChannels.filter { notifyLatest[$0.id]?.ok == false }"), true,
+                    "推送提醒: 四处账号徽标都看引擎的推送记录,启用着的渠道上次没推成时报橙")
+        // 推送记录、测试请求的文件名跟引擎 setNotifyPaths 逐字一致。
+        let notifyTestGo = relayEngineSource("notifytest.go")
+        expectEqual(notifyTestGo.contains("clientName + \"-notify-log.json\"") && NotificationDeliveryLog.fileName == "lyrimuse-notify-log.json"
+                    && notifyTestGo.contains("clientName + \"-notify-test-request.json\"") && NotificationTest.requestFileName == "lyrimuse-notify-test-request.json"
+                    && notifyTestGo.contains("clientName + \"-notify-test-result.json\"") && NotificationTest.resultFileName == "lyrimuse-notify-test-result.json",
+                    true, "推送提醒: 推送记录、测试请求 / 结果的文件名两边一致")
         expectEqual(accountTab.contains("case .misconfigured(let problem): return (relayPushProblemText(problem), true)")
                     && accountTab.contains("case .unreachable(let problem): return (relayPushProblemText(problem), false)"), true,
                     "网页推送: 配置错报红、一直连不上报橙")

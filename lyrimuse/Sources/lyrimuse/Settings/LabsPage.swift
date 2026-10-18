@@ -12,6 +12,7 @@ struct LabsSidebarRow: View {
     @ObservedObject private var mirrorStatus = LastfmMirrorStatusWatcher.shared
     @ObservedObject private var relayStatus = RelayPushStatusWatcher.shared
     @ObservedObject private var lbStatus = ListenBrainzSubmitStatusWatcher.shared
+    @ObservedObject private var notifyLog = NotificationDeliveryWatcher.shared
     // 手动切语言时这一行要重画(理由同 AccountSidebarRow)。
     @ObservedObject private var languageSettings = AppSettings.shared
 
@@ -34,7 +35,8 @@ struct LabsSidebarRow: View {
     private var attention: DestinationStatus? {
         let statuses = AccountDestination.allCases.filter(\.livesInLabs).map {
             destinationStatus(for: $0, config: config, lastfmConnect: lastfmConnect,
-                              mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict, lbInfo: lbStatus.info)
+                              mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict, lbInfo: lbStatus.info,
+                              notifyLatest: notifyLog.latestByChannel)
         }
         if let error = statuses.first(where: { if case .error = $0 { return true } else { return false } }) {
             return error
@@ -62,6 +64,7 @@ struct LabsPage: View {
     @ObservedObject private var mirrorStatus = LastfmMirrorStatusWatcher.shared
     @ObservedObject private var relayStatus = RelayPushStatusWatcher.shared
     @ObservedObject private var lbStatus = ListenBrainzSubmitStatusWatcher.shared
+    @ObservedObject private var notifyLog = NotificationDeliveryWatcher.shared
 
     var body: some View {
         SettingsPage(title: L10n.t("实验室"), subtitle: L10n.t("尚未成熟、可能不够完善的功能，之后可能调整、重构或移除")) {
@@ -73,7 +76,8 @@ struct LabsPage: View {
                         LabsFeatureRow(
                             destination: destination,
                             status: destinationStatus(for: destination, config: config, lastfmConnect: lastfmConnect,
-                                                      mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict, lbInfo: lbStatus.info)
+                                                      mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict, lbInfo: lbStatus.info,
+                                                      notifyLatest: notifyLog.latestByChannel)
                         ) { open(destination) }
                     }
                 }

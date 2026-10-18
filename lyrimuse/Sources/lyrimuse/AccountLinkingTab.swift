@@ -243,7 +243,7 @@ private let discordBadgeImage: NSImage = {
 }()
 
 // Telegram 品牌图(蓝底 + 白色纸飞机),标志矢量取自 Simple Icons(CC0)。整张不透明,圆角由调用方裁。
-// 只给「关于」页头的社群按钮用,不是账号页。
+// 「关于」页头的社群按钮用它;推送渠道的 Telegram 图标(NotificationPlatformBadge)用同一张资源。
 let telegramBadgeImage: NSImage = {
     guard let path = Bundle.main.path(forResource: "TelegramIcon", ofType: "png"),
           let image = NSImage(contentsOfFile: path) else {
@@ -319,9 +319,11 @@ func lastfmDisplayName(config: ConfigStore) -> String {
 /// mirrorInfo 是引擎落盘的"授权已失效"状态,调用方从 LastfmMirrorStatusWatcher
 /// 取 —— 必须经由观察器而不是在这里直接读文件:文件被删(引擎自愈)不触发任何
 /// SwiftUI 观察,直接读的话红标会滞留到下一次无关的重渲染。relayVerdict 是引擎报的网页推送结果,
-/// 同理从 RelayPushStatusWatcher 取;lbInfo 是引擎报的 ListenBrainz 令牌被拒,从 ListenBrainzSubmitStatusWatcher 取。
+/// 同理从 RelayPushStatusWatcher 取;lbInfo 是引擎报的 ListenBrainz 令牌被拒,从 ListenBrainzSubmitStatusWatcher 取;
+/// notifyLatest 是每个推送渠道最近一次推送,从 NotificationDeliveryWatcher 取。
 func destinationStatus(for destination: AccountDestination, config: ConfigStore, lastfmConnect: LastfmConnectController, mirrorInfo: LastfmMirrorStatus.Info?,
-                       relayVerdict: RelayPushStatus.Verdict = .ok, lbInfo: ListenBrainzSubmitStatus.Info? = nil) -> DestinationStatus {
+                       relayVerdict: RelayPushStatus.Verdict = .ok, lbInfo: ListenBrainzSubmitStatus.Info? = nil,
+                       notifyLatest: [String: NotificationDeliveryLog.Entry] = [:]) -> DestinationStatus {
     switch destination {
     case .listenBrainz:
         // 引擎报令牌被拒压过「已连接」:提交全停在待重发队列里,绿标就是在撒谎(同 Last.fm 的「授权已失效」)。
@@ -355,12 +357,24 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         let name = lastfmDisplayName(config: config)
         return .active(name.isEmpty ? nil : String(format: L10n.t("已连接：%@"), name))
     case .bark:
-        // 只有一个字段,所以"没填"就等于"没碰过",没有中间态。
+        // 一个渠道都没有 = 没碰过;有渠道但都停用 / 没填齐不算出错(停用是用户自己选的),也不给徽标。
         if let hint = config.pushMissingHint() { return .notConfigured(hint) }
-        return .active(config.notificationPlatform.displayName)
+        // 渠道填齐了不等于推得出去:启用着的渠道最近一次推送没成,压过「已设置」。
+        let failing = config.activeNotificationChannels.filter { notifyLatest[$0.id]?.ok == false }
+        if let first = failing.first {
+            return .warning(failing.count == 1
+                ? String(format: L10n.t("「%@」上次推送失败"), first.displayName)
+                : String(format: L10n.t("%d 个渠道上次推送失败"), failing.count))
+        }
+        return .active(notificationChannelSummary(config.activeNotificationChannels))
     case .discord:
         return discordDestinationStatus()
     }
+}
+
+/// 推送提醒的状态摘要:一个渠道写它的名字,几个写「N 个渠道」。
+func notificationChannelSummary(_ channels: [NotificationChannel]) -> String {
+    channels.count == 1 ? channels[0].displayName : String(format: L10n.t("%d 个渠道"), channels.count)
 }
 
 /// Discord 卡的状态。连接状态在 `DiscordPresenceController`,调用方要观察它,徽标才跟着变。
@@ -437,6 +451,7 @@ struct AccountSidebarRow: View {
     // 「网页推送」推不出去时的红 / 橙徽标,订阅理由同上(见 RelayPushStatusWatcher)。
     @ObservedObject private var relayStatus = RelayPushStatusWatcher.shared
     @ObservedObject private var lbStatus = ListenBrainzSubmitStatusWatcher.shared
+    @ObservedObject private var notifyLog = NotificationDeliveryWatcher.shared
     // 只为了让这一行在手动切换语言时重新渲染——这个 View 本身已经嵌在 SettingsView
     // 的 List 里,父视图理论上会因为语言变化重新构造子行,这里独立再观察一份是保险,
     // 不依赖 ForEach 复用行为的具体细节。
@@ -450,7 +465,8 @@ struct AccountSidebarRow: View {
             HStack(spacing: 6) {
                 Text(destination.title)
                 destinationStatus(for: destination, config: config, lastfmConnect: lastfmConnect,
-                                  mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict, lbInfo: lbStatus.info)
+                                  mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict, lbInfo: lbStatus.info,
+                                  notifyLatest: notifyLog.latestByChannel)
                     .indicator
             }
         } icon: {
@@ -495,6 +511,7 @@ struct AccountLinkingTab: View {
     // 「网页推送」页那行推送状态说明的数据源(见 RelayPushStatusWatcher)。
     @ObservedObject private var relayStatus = RelayPushStatusWatcher.shared
     @ObservedObject private var lbStatus = ListenBrainzSubmitStatusWatcher.shared
+    @ObservedObject private var notifyLog = NotificationDeliveryWatcher.shared
     // 默认展开:一进页面就直接看到清单,想收起自己点一下;清单自己限高滚动(见 pendingListensRow),
     // 攒到几十首也不会把整页顶开。不做成偏好持久化(只是这一次开窗的初始状态)。
     @State private var pendingListensExpanded = true
@@ -913,7 +930,8 @@ struct AccountLinkingTab: View {
             }
         }
         let status = destinationStatus(for: destination, config: config, lastfmConnect: lastfmConnect,
-                                       mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict, lbInfo: lbStatus.info)
+                                       mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict, lbInfo: lbStatus.info,
+                                       notifyLatest: notifyLog.latestByChannel)
         switch status {
         case .disabled:
             return (.secondary, L10n.t("未启用"), nil)
@@ -932,7 +950,7 @@ struct AccountLinkingTab: View {
                 let host = URL(string: config.stateRelayURL)?.host ?? config.stateRelayURL
                 return (.green, L10n.t("已配置"), host.isEmpty ? nil : host)
             case .bark:
-                return (.green, config.notificationPlatform.displayName, L10n.t("已设置"))
+                return (.green, notificationChannelSummary(config.activeNotificationChannels), L10n.t("已设置"))
             case .lastfm, .discord:
                 return (.green, L10n.t("已连接"), nil)
             }
@@ -2003,14 +2021,10 @@ struct AccountLinkingTab: View {
 
     // MARK: - 推送提醒
 
-    // 绝大多数平台都是"群机器人 webhook"这个模子(一个 URL,POST 一份 JSON),具体 payload
-    // 长什么样在 lyrimuse-engine/notify.go 里,这边只管选平台+填地址;Server酱是个例外,走表单
-    // 编码不是 JSON,但那是纯后端的事,这边 UI 完全不用关心。钉钉/飞书这两个平台的机器人
-    // 如果开了"加签"安全设置就还需要额外一个签名密钥(两边算法不同,分开存,见 ConfigStore
-    // 的字段注释),用 SecretFieldRow 收起来;其余平台(Bark/企业微信/Discord/Server酱)
-    // 都不需要。
+    // 推到哪(渠道列表、添加 / 编辑、测试、推送记录)在 Settings/NotificationChannelsSection.swift;具体 payload
+    // 长什么样、怎么判断平台收没收下在 lyrimuse-engine/notify.go、notifyresult.go,这边 UI 完全不用关心。
     //
-    // 两个听歌报告开关放在这里(而不是单独的"功能开关"tab),是因为开关跟着它依赖的账号
+    // 听歌报告开关放在这里(而不是单独的"功能开关"tab),是因为开关跟着它依赖的账号
     // 模块走,不用去别处猜"这个开关归哪个账号管";还依赖 Last.fm 桥接(数据来源),缺了给
     // 一个跳转提示。实际推送的是 Top 歌手+Top 歌曲各三条+总播放次数(见 lyrimuse-engine/weekly.go
     // 的 weeklyDigestPush),别跟另一个不相关的功能"历史 Top10 歌手统计"搞混——那是网页上
@@ -2018,55 +2032,7 @@ struct AccountLinkingTab: View {
     @ViewBuilder
     private var barkFields: some View {
         VStack(spacing: 14) {
-            SettingsCard(cornerRadius: 18) {
-                // 这一行的"?"里带官方文档外链(docTitle/docURL),SettingsRow 的 help 参数只收
-                // 纯文本,所以这一行整块用 SettingsRawRow 自己排:图标列宽和左缩进都取
-                // SettingsRowMetrics,跟其它行对齐在同一条竖线上。
-                SettingsRawRow {
-                    HStack(spacing: SettingsRowMetrics.iconTextSpacing) {
-                        Image(systemName: "bell.badge")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                            .frame(width: SettingsRowMetrics.iconWidth)
-                        Text(L10n.t("通知平台"))
-                            .font(.system(size: 13))
-                        HelpButton(
-                            text: config.notificationPlatform.setupGuide,
-                            docTitle: L10n.t("查看官方文档 →"),
-                            docURL: config.notificationPlatform.setupDocURL
-                        )
-                        Spacer(minLength: 12)
-                        SettingsGlassMenuPicker(
-                            selection: $config.notificationPlatform,
-                            options: NotificationPlatform.displayOrder,
-                            label: \.displayName,
-                            compact: true
-                        )
-                    }
-                }
-                CardDivider()
-                // 推送地址里带着密钥(Bark 的 Key、Webhook 的 access_token、机器人 Token),跟别的凭据一样填好就收起。
-                // 每个平台各存一份地址:换平台时整块按平台重建,收起 / 展开跟着那个平台自己的值走。
-                SettingsRawRow(insetToText: true) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        SecretFieldRow(config.notificationPlatform.fieldLabel, value: $config.notificationWebhookURL,
-                                       prompt: config.notificationPlatform.urlPlaceholder)
-                        if config.notificationPlatform == .dingtalk {
-                            SecretFieldRow(L10n.t("加签密钥（可选）"), value: $config.dingtalkSignSecret)
-                            Text(L10n.t("仅在机器人安全设置选择「加签」时需要填写，留空则按未加签处理"))
-                                .font(.caption2).foregroundStyle(.secondary)
-                        } else if config.notificationPlatform == .feishu {
-                            SecretFieldRow(L10n.t("签名密钥（可选）"), value: $config.feishuSignSecret)
-                            Text(L10n.t("仅在机器人安全设置开启「签名校验」时需要填写，未开启时也能正常接收消息"))
-                                .font(.caption2).foregroundStyle(.secondary)
-                        } else if config.notificationPlatform == .telegram {
-                            SecretFieldRow(L10n.t("Chat ID"), value: $config.telegramChatID,
-                                           prompt: L10n.t("Chat ID：个人为一串数字，群组以 -100 开头"), masked: false)
-                        }
-                    }
-                    .id(config.notificationPlatform)
-                }
-            }
+            NotificationChannelsCard(config: config)
 
             // 数据源可选——Last.fm 的周榜接口(user.getWeekly*Chart)接受任意 from/to,不是只认
             // 官方周边界,所以每个 cadence 都能自己选数据源。四块排两列,见 digestTile。
@@ -2085,6 +2051,8 @@ struct AccountLinkingTab: View {
                 .padding(.top, 4)
                 .padding(.bottom, 12)
             }
+
+            NotificationLogCard(config: config)
         }
         .background { LastfmGlassGlow() }
     }

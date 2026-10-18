@@ -4,17 +4,19 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 )
 
-// 推送提醒目前支持的平台——绝大多数都是"群机器人 webhook"这个模子:一个 URL,POST
+// 推送提醒支持的平台——绝大多数都是"群机器人 webhook"这个模子:一个 URL,POST
 // 一份 JSON 就能收到消息(Server酱是个例外,见下)。新增平台照这个模子接,只需要在
 // buildNotifyPayload 里加一个 case。Telegram 多要一个 Chat ID,地址也可以只填机器人
-// Token,见 telegramSendURL。
+// Token,见 telegramSendURL。ntfy 和通用 Webhook 还要带请求头,见 buildNotifyRequest。
 const (
 	platformBark       = "bark"
 	platformDingtalk   = "dingtalk"
@@ -24,7 +26,111 @@ const (
 	platformServerChan = "serverchan"
 	platformTelegram   = "telegram"
 	platformSlack      = "slack"
+	platformNtfy       = "ntfy"
+	platformWebhook    = "webhook"
 )
+
+// notifyRequest 是往一个渠道发的那一个 POST。
+type notifyRequest struct {
+	target      string
+	body        []byte
+	contentType string
+	headers     map[string]string
+}
+
+// buildNotifyRequest 按渠道的平台拼出请求:地址(钉钉加签、Telegram 只填 Token 时在这里换)、正文、请求头。
+func buildNotifyRequest(ch notifyChannel, msg notifyMessage) (notifyRequest, error) {
+	switch ch.Platform {
+	case platformNtfy:
+		return buildNtfyRequest(ch, msg)
+	case platformWebhook:
+		return buildWebhookRequest(ch, msg)
+	}
+	feishuSecret := ""
+	if ch.Platform == platformFeishu {
+		feishuSecret = ch.Secret
+	}
+	payload, contentType, err := buildNotifyPayload(ch.Platform, msg.Title, msg.Body, feishuSecret, ch.ChatID)
+	if err != nil {
+		return notifyRequest{}, err
+	}
+	target := ch.URL
+	switch ch.Platform {
+	case platformDingtalk:
+		target = dingtalkSignedURL(ch.URL, ch.Secret)
+	case platformTelegram:
+		target = telegramSendURL(ch.URL)
+	}
+	return notifyRequest{target: target, body: payload, contentType: contentType}, nil
+}
+
+// buildNtfyRequest:ntfy 用 JSON 发布 —— 往服务器根地址 POST {"topic","title","message"}。标题放请求头的话
+// 中文和 emoji 得另外编码,JSON 没这个麻烦。用户填的是订阅时的那个地址(https://ntfy.sh/<主题>),最后一段是主题,
+// 前面是服务器(自建的可以挂在子路径下)。Secret 是访问令牌(tk_ 开头)或「用户名:密码」,开了访问控制的主题才要。
+func buildNtfyRequest(ch notifyChannel, msg notifyMessage) (notifyRequest, error) {
+	u, err := url.Parse(ch.URL)
+	if err != nil || u.Host == "" {
+		return notifyRequest{}, errors.New("ntfy address is not a URL")
+	}
+	path := strings.TrimRight(u.Path, "/")
+	cut := strings.LastIndex(path, "/")
+	topic := path[cut+1:]
+	if topic == "" {
+		return notifyRequest{}, errors.New("ntfy address has no topic")
+	}
+	u.Path, u.RawPath, u.RawQuery, u.Fragment = path[:cut+1], "", "", ""
+	if u.Path == "" {
+		u.Path = "/"
+	}
+	b, err := json.Marshal(map[string]any{"topic": topic, "title": msg.Title, "message": msg.Body, "tags": []string{"headphones"}})
+	if err != nil {
+		return notifyRequest{}, err
+	}
+	nr := notifyRequest{target: u.String(), body: b, contentType: "application/json"}
+	switch {
+	case ch.Secret == "":
+	case strings.Contains(ch.Secret, ":"):
+		nr.headers = map[string]string{"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(ch.Secret))}
+	default:
+		nr.headers = map[string]string{"Authorization": "Bearer " + ch.Secret}
+	}
+	return nr, nil
+}
+
+// webhookPayload 是通用 Webhook 收到的 JSON,给自己写接收端(Home Assistant、n8n、自建服务)的人看的,字段只增不改。
+type webhookPayload struct {
+	App    string `json:"app"`
+	Event  string `json:"event"`
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	SentAt string `json:"sent_at"` // RFC 3339
+}
+
+// buildWebhookRequest:通用 Webhook 原样 POST webhookPayload。填了 Secret 就用它对整个请求体算 HMAC-SHA256,
+// 放进 X-Lyrimuse-Signature: sha256=<十六进制>(跟 GitHub webhook 同一个写法),接收端据此确认是这台机器发的。
+func buildWebhookRequest(ch notifyChannel, msg notifyMessage) (notifyRequest, error) {
+	event := msg.Event
+	if event == "" {
+		event = "message"
+	}
+	b, err := json.Marshal(webhookPayload{App: "lyrimuse", Event: event, Title: msg.Title, Body: msg.Body,
+		SentAt: time.Now().UTC().Format(time.RFC3339)})
+	if err != nil {
+		return notifyRequest{}, err
+	}
+	nr := notifyRequest{target: ch.URL, body: b, contentType: "application/json",
+		headers: map[string]string{"X-Lyrimuse-Event": event}}
+	if ch.Secret != "" {
+		nr.headers["X-Lyrimuse-Signature"] = "sha256=" + webhookSignature(ch.Secret, b)
+	}
+	return nr, nil
+}
+
+func webhookSignature(secret string, body []byte) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	return hex.EncodeToString(mac.Sum(nil))
+}
 
 // buildNotifyPayload 按平台拼出 POST body + 对应的 Content-Type。绝大多数平台都是
 // application/json,只有 Server酱是表单编码(它的 Turbo 接口 sctapi.ftqq.com 不接受

@@ -175,7 +175,7 @@ func (p *poller) syncLiveConfig() {
 	if cfgChanged {
 		prev := p.cfg
 		p.cfg = next
-		if p.lb != nil && (prev == nil || notifyTarget(prev) != notifyTarget(next)) {
+		if p.lb != nil && (prev == nil || notifyConfigKey(prev) != notifyConfigKey(next)) {
 			p.lb.alerter = alerterFromConfig(next)
 		}
 		if prev == nil || prev.StateRelayURL != next.StateRelayURL || prev.StateRelayToken != next.StateRelayToken {
@@ -196,19 +196,6 @@ func (p *poller) syncLiveConfig() {
 		lfmRetryTarget.Store(p.lfm)
 		log.Printf("config: lastfm mirror writer rebuilt enabled=%v dead_retry=%v", p.lfm != nil, deadRetry)
 	}
-}
-
-// notifyTarget 是推送通道用到的全部配置字段,任一变了就要重建 alerter。
-type notifyTargetFields struct {
-	platform, url, dingtalkSecret, feishuSecret, telegramChatID string
-}
-
-func notifyTarget(c *config) notifyTargetFields {
-	return notifyTargetFields{c.NotificationPlatform, c.NotificationWebhookURL, c.DingtalkSignSecret, c.FeishuSignSecret, c.TelegramChatID}
-}
-
-func alerterFromConfig(c *config) *alerter {
-	return newAlerter(c.NotificationPlatform, c.NotificationWebhookURL, c.DingtalkSignSecret, c.FeishuSignSecret, c.TelegramChatID)
 }
 
 // lastfmScrobblerKey 是 lastfmScrobblerIfEnabled 的全部输入。相同就沿用现有的 writer:它身上有

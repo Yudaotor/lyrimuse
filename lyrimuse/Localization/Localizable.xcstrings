@@ -49653,6 +49653,1451 @@
           }
         }
       }
+    },
+    "%1$@ 失败 · %2$@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ failed · %2$@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 失敗 · %2$@"
+          }
+        }
+      }
+    },
+    "%1$@拒收：%2$@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ rejected it: %2$@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 拒收：%2$@"
+          }
+        }
+      }
+    },
+    "%@ 已送达" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delivered %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 已送達"
+          }
+        }
+      }
+    },
+    "%d 个渠道" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d channels"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 個管道"
+          }
+        }
+      }
+    },
+    "%d 个渠道上次推送失败" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last push failed on %d channels"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 個管道上次推播失敗"
+          }
+        }
+      }
+    },
+    "Lyrimuse 会向这个地址 POST 一段 JSON：app、event（如 weekly_digest）、title、body、sent_at，适合接 Home Assistant、n8n 或你自己的服务" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse POSTs JSON to this URL with app, event (such as weekly_digest), title, body and sent_at. Good for Home Assistant, n8n or your own service."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse 會向這個網址 POST 一段 JSON：app、event（如 weekly_digest）、title、body、sent_at，適合接 Home Assistant、n8n 或你自己的服務"
+          }
+        }
+      }
+    },
+    "SendKey 不对" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wrong SendKey"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SendKey 不正確"
+          }
+        }
+      }
+    },
+    "https://ntfy.sh/你的主题" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "https://ntfy.sh/your-topic"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "https://ntfy.sh/你的主題"
+          }
+        }
+      }
+    },
+    "「%@」上次推送失败" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last push to “%@” failed"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「%@」上次推播失敗"
+          }
+        }
+      }
+    },
+    "一般是暂时的，稍后再试" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usually temporary. Try again later."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通常是暫時的，稍後再試"
+          }
+        }
+      }
+    },
+    "主题地址" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Topic URL"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主題網址"
+          }
+        }
+      }
+    },
+    "主题设了访问控制时填写：令牌以 tk_ 开头，也可以填「用户名:密码」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needed when the topic has access control: a token starting with tk_, or “username:password”."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主題設有取用控制時填寫：權杖以 tk_ 開頭，也可以填「使用者名稱:密碼」"
+          }
+        }
+      }
+    },
+    "先给机器人发一条消息（群组要先把机器人拉进群），再核对 Chat ID" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send the bot a message first (add it to the group for group chats), then check the Chat ID."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先傳一則訊息給機器人（群組要先把機器人加進群組），再核對 Chat ID"
+          }
+        }
+      }
+    },
+    "全部 %d 条" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All %d"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部 %d 筆"
+          }
+        }
+      }
+    },
+    "删除…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除⋯"
+          }
+        }
+      }
+    },
+    "删除「%@」？" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete “%@”?"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除「%@」？"
+          }
+        }
+      }
+    },
+    "删除后这里不再推送，推送记录保留" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing will be pushed here any more. The delivery history is kept."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除後這裡不再推播，推播記錄保留"
+          }
+        }
+      }
+    },
+    "到 @BotFather 核对 Token" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the token with @BotFather."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "到 @BotFather 核對 Token"
+          }
+        }
+      }
+    },
+    "到平台上重新拷贝一次地址" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy the URL from the platform again."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "到平台上重新拷貝一次網址"
+          }
+        }
+      }
+    },
+    "发得太频繁，被限流" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rate limited: too many messages"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "傳送太頻繁，被限流"
+          }
+        }
+      }
+    },
+    "发送测试" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send Test"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "傳送測試"
+          }
+        }
+      }
+    },
+    "可以直接粘贴一整段地址，认得出的平台会自动切换" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can paste a whole URL. Recognized platforms are selected automatically."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可以直接貼上整段網址，認得出的平台會自動切換"
+          }
+        }
+      }
+    },
+    "名称" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名稱"
+          }
+        }
+      }
+    },
+    "后台服务没有响应，没有重发" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The background service didn't respond. Nothing was resent."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "背景服務沒有回應，沒有重新傳送"
+          }
+        }
+      }
+    },
+    "后台服务没有响应，测试没有发出。确认后台服务在运行后再试" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The background service didn't respond, so the test wasn't sent. Make sure it is running and try again."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "背景服務沒有回應，測試沒有送出。確認背景服務正在執行後再試"
+          }
+        }
+      }
+    },
+    "在「访问令牌」里填 tk_ 开头的令牌，或「用户名:密码」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a token starting with tk_, or “username:password”, under Access Token."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在「存取權杖」裡填 tk_ 開頭的權杖，或「使用者名稱:密碼」"
+          }
+        }
+      }
+    },
+    "在手机或电脑上安装 ntfy，订阅一个别人猜不到的主题名，然后把主题地址（如 https://ntfy.sh/你的主题）填入此处。自建服务器填你自己的地址" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install ntfy on your phone or computer, subscribe to a topic name nobody can guess, and enter the topic URL here (such as https://ntfy.sh/your-topic). For a self-hosted server, use your own URL."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在手機或電腦上安裝 ntfy，訂閱一個別人猜不到的主題名稱，然後把主題網址（如 https://ntfy.sh/你的主題）填入此處。自架伺服器填你自己的網址"
+          }
+        }
+      }
+    },
+    "在机器人安全设置里关掉 IP 白名单，或改用签名校验" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn off the IP allowlist in the bot's security settings, or use signature verification instead."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在機器人安全設定裡關閉 IP 白名單，或改用簽章驗證"
+          }
+        }
+      }
+    },
+    "在机器人安全设置里加一个关键词「%@」，或改用签名校验" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add the keyword “%@” in the bot's security settings, or use signature verification instead."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在機器人安全設定裡加一個關鍵字「%@」，或改用簽章驗證"
+          }
+        }
+      }
+    },
+    "地址不存在" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "URL not found"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "網址不存在"
+          }
+        }
+      }
+    },
+    "填写后每次请求带上 X-Lyrimuse-Signature: sha256=…（用这个密钥对请求体算的 HMAC-SHA256），接收端可据此校验来源" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When set, every request carries X-Lyrimuse-Signature: sha256=… (an HMAC-SHA256 of the body with this secret) so the receiver can verify where it came from."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "填寫後每次請求帶上 X-Lyrimuse-Signature: sha256=⋯（用這個金鑰對請求內文算的 HMAC-SHA256），接收端可據此驗證來源"
+          }
+        }
+      }
+    },
+    "安全设置没通过（关键词、加签或 IP 地址）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocked by security settings (keyword, signing or IP address)"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安全設定沒有通過（關鍵字、加簽或 IP 位址）"
+          }
+        }
+      }
+    },
+    "密钥或地址不对" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wrong secret or URL"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "金鑰或網址不正確"
+          }
+        }
+      }
+    },
+    "尚未添加推送渠道" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No push channels yet"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未新增推播管道"
+          }
+        }
+      }
+    },
+    "已停用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已停用"
+          }
+        }
+      }
+    },
+    "已送达 · %.1f 秒。到手机或群里看一眼收到没有" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delivered · %.1f s. Check your phone or group to see it arrived."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已送達 · %.1f 秒。到手機或群組裡看一下有沒有收到"
+          }
+        }
+      }
+    },
+    "已重发" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resent"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已重新傳送"
+          }
+        }
+      }
+    },
+    "平台拒收了这条消息" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The platform rejected the message"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "平台拒收了這則訊息"
+          }
+        }
+      }
+    },
+    "平台服务出错" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The platform had an error"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "平台服務發生錯誤"
+          }
+        }
+      }
+    },
+    "找不到这个会话（Chat ID 不对，或还没跟机器人说过话）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chat not found (wrong Chat ID, or you haven't messaged the bot yet)"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找不到這個對話（Chat ID 不正確，或還沒跟機器人說過話）"
+          }
+        }
+      }
+    },
+    "报告会推到每个启用着的渠道。点一行编辑、发送测试；右键可以测试或删除。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reports go to every channel that is on. Click a row to edit it or send a test; right-click to delete."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "報告會推播到每個已啟用的管道。按一下一列可編輯、傳送測試；按右鍵可刪除。"
+          }
+        }
+      }
+    },
+    "推送渠道" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push Channels"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推播管道"
+          }
+        }
+      }
+    },
+    "推送渠道都已停用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All push channels are off"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推播管道都已停用"
+          }
+        }
+      }
+    },
+    "推送记录" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delivery History"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推播記錄"
+          }
+        }
+      }
+    },
+    "未填写地址" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No URL"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未填寫網址"
+          }
+        }
+      }
+    },
+    "本机 IP 不在机器人的白名单里" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Mac's IP isn't on the bot's allowlist"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本機 IP 不在機器人的白名單裡"
+          }
+        }
+      }
+    },
+    "机器人 Token 不对，或机器人被移出了会话" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wrong bot token, or the bot was removed from the chat"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "機器人 Token 不正確，或機器人被移出了對話"
+          }
+        }
+      }
+    },
+    "机器人不存在（被删了，或地址拷错了）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bot not found (deleted, or the URL was copied wrong)"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "機器人不存在（被刪除了，或網址拷貝錯了）"
+          }
+        }
+      }
+    },
+    "机器人安全设置选了「自定义关键词」的话，加一个关键词「%@」；选了「加签」就把密钥填进「加签密钥」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "If the bot uses Custom Keywords, add the keyword “%@”. If it uses Signing, enter the secret under Signing Secret."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "機器人安全設定選了「自訂關鍵字」的話，加一個關鍵字「%@」；選了「加簽」就把金鑰填進「加簽金鑰」"
+          }
+        }
+      }
+    },
+    "检查「签名密钥」是否跟机器人设置里的一致；没开签名校验就把这一栏清空" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check that Signing Secret matches the bot settings. If signature verification is off, clear this field."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "檢查「簽章金鑰」是否跟機器人設定裡的一致；沒開簽章驗證就把這一欄清空"
+          }
+        }
+      }
+    },
+    "检查网络和地址" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check your network and the URL."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "檢查網路和網址"
+          }
+        }
+      }
+    },
+    "检查网络；Telegram 在部分网络下要开系统代理才连得上" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check your network. On some networks Telegram is only reachable through the system proxy."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "檢查網路；Telegram 在部分網路下要開系統代理伺服器才連得上"
+          }
+        }
+      }
+    },
+    "正在发送测试消息…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending a test message…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在傳送測試訊息⋯"
+          }
+        }
+      }
+    },
+    "没连上" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't connect"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒有連上"
+          }
+        }
+      }
+    },
+    "消息里没有自定义关键词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The message doesn't contain the custom keyword"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "訊息裡沒有自訂關鍵字"
+          }
+        }
+      }
+    },
+    "添加一个渠道，听歌报告就会推到手机、群聊或你自己的服务" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a channel and your listening reports will be pushed to your phone, a group chat or your own service."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新增一個管道，聆聽報告就會推播到手機、群組或你自己的服務"
+          }
+        }
+      }
+    },
+    "添加推送渠道" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Push Channel"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新增推播管道"
+          }
+        }
+      }
+    },
+    "添加渠道" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Channel"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新增管道"
+          }
+        }
+      }
+    },
+    "渠道信息不完整，或地址不是有效的网址" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The channel is incomplete, or the URL isn't valid"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "管道資訊不完整，或網址無效"
+          }
+        }
+      }
+    },
+    "签名不对" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wrong signature"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "簽章不正確"
+          }
+        }
+      }
+    },
+    "编辑…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編輯⋯"
+          }
+        }
+      }
+    },
+    "编辑「%@」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit “%@”"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編輯「%@」"
+          }
+        }
+      }
+    },
+    "认出是%@的地址，已切换" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognized as a %@ URL and switched to it"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "認出是 %@ 的網址，已切換"
+          }
+        }
+      }
+    },
+    "访问令牌（可选）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Access Token (Optional)"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存取權杖（選填）"
+          }
+        }
+      }
+    },
+    "过一会儿再试" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try again in a while."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "過一會兒再試"
+          }
+        }
+      }
+    },
+    "还没推送过" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing pushed yet"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "還沒推播過"
+          }
+        }
+      }
+    },
+    "还没有推送渠道" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No push channels yet"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "還沒有推播管道"
+          }
+        }
+      }
+    },
+    "这个主题需要访问令牌，或令牌不对" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This topic needs an access token, or the token is wrong"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這個主題需要存取權杖，或權杖不正確"
+          }
+        }
+      }
+    },
+    "通用 Webhook" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Generic Webhook"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通用 Webhook"
+          }
+        }
+      }
+    },
+    "重发" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resend"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新傳送"
+          }
+        }
+      }
+    },
+    "重发也没成：%@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resend failed too: %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新傳送也沒有成功：%@"
+          }
+        }
+      }
+    },
+    "发标准 JSON，自己写接收端" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sends plain JSON to a receiver you run"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "傳送標準 JSON，自己寫接收端"
+          }
+        }
+      }
+    },
+    "iPhone 上的推送 App：装好后首页就有专属地址，报告直接弹在 iPhone 上。免费、开源" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A push app for iPhone. Its home screen shows your own URL, and reports pop up right on your iPhone. Free and open source."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone 上的推播 App：安裝後首頁就有專屬網址，報告直接跳出在 iPhone 上。免費、開源"
+          }
+        }
+      }
+    },
+    "飞书群里的自定义机器人：报告发到群聊里" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A custom bot in a Feishu (Lark) group. Reports are posted to the group chat."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "飛書群組裡的自訂機器人：報告傳到群組聊天裡"
+          }
+        }
+      }
+    },
+    "钉钉群里的自定义机器人：报告发到群聊里。机器人要设关键词或加签" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A custom bot in a DingTalk group. Reports are posted to the group chat. The bot needs a keyword or signing."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "釘釘群組裡的自訂機器人：報告傳到群組聊天裡。機器人要設定關鍵字或加簽"
+          }
+        }
+      }
+    },
+    "企业微信群里的机器人：报告发到群聊里，粘贴地址就能用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A bot in a WeCom group. Reports are posted to the group chat; just paste its URL."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "企業微信群組裡的機器人：報告傳到群組聊天裡，貼上網址就能用"
+          }
+        }
+      }
+    },
+    "把消息转发到微信的服务：微信扫码登录拿到 SendKey，报告出现在微信「方糖」服务号里" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A service that forwards messages to WeChat. Scan the QR code with WeChat to get a SendKey; reports arrive in the Fangtang official account."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把訊息轉發到微信的服務：用微信掃描 QR Code 登入取得 SendKey，報告出現在微信「方糖」服務號裡"
+          }
+        }
+      }
+    },
+    "Telegram 机器人：找 @BotFather 建一个，报告发给你本人或你所在的群" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Telegram bot. Create one with @BotFather; reports go to you or to a group you're in."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Telegram 機器人：找 @BotFather 建立一個，報告傳給你本人或你所在的群組"
+          }
+        }
+      }
+    },
+    "Discord 频道的 Webhook：报告发到你服务器里的某个频道" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Discord channel webhook. Reports are posted to a channel on your server."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discord 頻道的 Webhook：報告傳到你伺服器裡的某個頻道"
+          }
+        }
+      }
+    },
+    "Slack 的 Incoming Webhook：报告发到工作区里的某个频道" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Slack incoming webhook. Reports are posted to a channel in your workspace."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slack 的 Incoming Webhook：報告傳到工作區裡的某個頻道"
+          }
+        }
+      }
+    },
+    "开源的推送服务：手机、电脑装上 ntfy 订阅一个主题就能收到，不用注册，也可以自建服务器" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An open-source push service. Install ntfy on your phone or computer and subscribe to a topic; no sign-up needed, and you can self-host it."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開源的推播服務：手機、電腦安裝 ntfy 訂閱一個主題就能收到，不用註冊，也可以自架伺服器"
+          }
+        }
+      }
+    },
+    "向你指定的地址 POST 一段 JSON，适合接 Home Assistant、n8n 或自己写的服务" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "POSTs JSON to a URL you choose. Good for Home Assistant, n8n or your own service."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向你指定的網址 POST 一段 JSON，適合接 Home Assistant、n8n 或自己寫的服務"
+          }
+        }
+      }
+    },
+    "这像是%@的地址。要换平台，删掉这个渠道再添加一个" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This looks like a %@ URL. To switch platforms, delete this channel and add a new one."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這看起來是 %@ 的網址。要換平台，刪除這個管道再新增一個"
+          }
+        }
+      }
+    },
+    "显示" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示"
+          }
+        }
+      }
+    },
+    "隐藏" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隱藏"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -230,19 +230,19 @@ func runSettingsInteractionTests() {
                     "来源排列: 读不到系统语言时按非中文")
     }
 
-    // 「通知平台」下拉菜单的排列:中文用户国内平台在前,其余国外平台在前。两组合起来必须正好是 App 侧
-    // NotificationPlatform 的全部 rawValue(跟引擎 notify.go 的平台常量逐字对应),漏一个就从菜单里消失。
+    // 添加渠道时平台的排列:不分组,中文用户国内平台在前,其余用户国外平台在前;通用 Webhook 单独放最后。加上 generic 必须
+    // 正好是 App 侧 NotificationPlatform 的全部 rawValue(跟引擎 notify.go 的平台常量逐字对应),漏一个就从表单里消失。
     do {
         typealias N = NotificationPlatformRegion
         expectEqual(N.displayOrder(chineseFirst: true),
-                    ["bark", "dingtalk", "wecom", "feishu", "serverchan", "telegram", "discord", "slack"],
+                    ["bark", "feishu", "dingtalk", "wecom", "serverchan", "telegram", "discord", "slack", "ntfy"],
                     "通知平台排列: 中文用户国内平台在前")
         expectEqual(N.displayOrder(chineseFirst: false),
-                    ["telegram", "discord", "slack", "bark", "dingtalk", "wecom", "feishu", "serverchan"],
+                    ["telegram", "discord", "slack", "ntfy", "bark", "feishu", "dingtalk", "wecom", "serverchan"],
                     "通知平台排列: 其余用户国外平台在前")
-        let all: Set<String> = ["bark", "dingtalk", "wecom", "discord", "feishu", "serverchan", "telegram", "slack"]
-        expectEqual(Set(N.displayOrder(chineseFirst: true)), all, "通知平台排列: 两组覆盖全部平台")
-        expectEqual(N.displayOrder(chineseFirst: true).count, all.count, "通知平台排列: 没有重复")
+        let all: Set<String> = ["bark", "dingtalk", "wecom", "discord", "feishu", "serverchan", "telegram", "slack", "ntfy", "webhook"]
+        expectEqual(Set(N.displayOrder(chineseFirst: true) + N.generic), all, "通知平台排列: 加上通用 Webhook 覆盖全部平台")
+        expectEqual(N.displayOrder(chineseFirst: true).count + N.generic.count, all.count, "通知平台排列: 没有重复")
         // App 侧枚举在 selftest 链不到的 target 里,按源码对一遍 case 列表。
         let store = (try? String(contentsOfFile: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/Settings/ConfigStore.swift").path,
@@ -251,7 +251,24 @@ func runSettingsInteractionTests() {
             .flatMap { _ in store.split(separator: "\n").first { $0.trimmingCharacters(in: .whitespaces).hasPrefix("case bark") } }
         let cases = Set((caseLine ?? "").replacingOccurrences(of: "case", with: "")
             .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) })
-        expectEqual(cases, all, "通知平台排列: NotificationPlatform 的 case 跟两组对得上(加了平台要同步进 NotificationPlatformRegion)")
+        expectEqual(cases, all, "通知平台排列: NotificationPlatform 的 case 跟排列对得上(加了平台要同步进 NotificationPlatformRegion)")
+        // 每个有品牌图的平台,资源文件都在。
+        let resources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/Resources")
+        let iconNames = ["BarkIcon", "FeishuIcon", "DingTalkIcon", "WeComIcon", "ServerChanIcon", "TelegramIcon", "DiscordIcon", "SlackIcon", "NtfyIcon"]
+        expectEqual(iconNames.filter { !FileManager.default.fileExists(atPath: resources.appendingPathComponent($0 + ".png").path) }, [],
+                    "通知平台图标: 品牌图资源都在")
+        expectEqual(iconNames.allSatisfy { store.contains("return \"\($0)\"") }, true, "通知平台图标: NotificationPlatform.iconResource 用的就是这几张")
+        // 引擎的平台常量也对一遍。
+        let notifyGo = (try? String(contentsOfFile: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse-engine/notify.go").path, encoding: .utf8)) ?? ""
+        let engine = Set(notifyGo.split(separator: "\n").compactMap { line -> String? in
+            let t = line.trimmingCharacters(in: .whitespaces)
+            guard t.hasPrefix("platform"), let q = t.range(of: "= \"") else { return nil }
+            return String(t[q.upperBound...].dropLast())
+        })
+        expectEqual(engine, all, "通知平台排列: 引擎 notify.go 的平台常量跟 App 一致")
     }
 
     // ---- 保存时的键差分(EngineRestartPolicy.changedKeys,只给日志用)----
@@ -369,26 +386,91 @@ func runSettingsInteractionTests() {
         expectEqual(h.goForward(), Loc(panel: "歌词", section: "translation"), "历史(分段): 前进走回去")
     }
 
-    // ---- NotificationWebhookSlots ----
+    // ---- 推送渠道(NotificationChannel)----
     do {
-        print("\n== 推送平台各自的 webhook 地址 ==")
-        typealias S = NotificationWebhookSlots
-        var slots = S(stored: [:], activePlatform: "bark", activeURL: "https://api.day.app/KEY")
-        expectEqual(slots.switchPlatform(from: "bark", currentURL: "https://api.day.app/KEY", to: "telegram"), "",
-                    "推送地址: 切到没填过的平台,输入框是空的(不能还显示上一个平台的地址)")
-        expectEqual(slots.switchPlatform(from: "telegram", currentURL: "123:AAH", to: "bark"), "https://api.day.app/KEY",
-                    "推送地址: 切回来,原来的地址还在")
-        expectEqual(slots.switchPlatform(from: "bark", currentURL: "https://api.day.app/KEY", to: "telegram"), "123:AAH",
-                    "推送地址: 再切过去,那个平台刚才填的也还在")
-        expectEqual(slots.persisted(activePlatform: "telegram", activeURL: "456:BBB"),
-                    ["bark": "https://api.day.app/KEY", "telegram": "456:BBB"],
-                    "推送地址: 落盘全集并入当前平台此刻的地址")
-        expectEqual(slots.persisted(activePlatform: "telegram", activeURL: "  "), ["bark": "https://api.day.app/KEY"],
-                    "推送地址: 清空了的平台不落盘")
-        let legacy = S(stored: [:], activePlatform: "feishu", activeURL: "https://open.feishu.cn/x")
-        expectEqual(legacy.persisted(activePlatform: "feishu", activeURL: "https://open.feishu.cn/x"),
-                    ["feishu": "https://open.feishu.cn/x"],
-                    "推送地址: 旧配置只有 bark_url,读进来就记在当前平台名下")
+        print("\n== 推送渠道 ==")
+        typealias C = NotificationChannel
+        // 旧的单渠道配置:正在用的平台迁成启用的渠道(id 跟引擎拼出来的那个一样,推送记录对得上);
+        // 别的平台存过的地址迁成停用的渠道,不突然开始往那边推、也不丢。
+        let legacy: [String: Any] = [
+            "notification_platform": "dingtalk", "bark_url": " https://oapi.dingtalk.com/robot/send?access_token=a \n",
+            "dingtalk_sign_secret": "SEC1", "feishu_sign_secret": "FS",
+            "notification_webhook_urls": ["bark": "https://api.day.app/K", "dingtalk": "https://old", "telegram": "123:abc"],
+            "telegram_chat_id": "42",
+        ]
+        let migrated = C.migrated(fromLegacy: legacy)
+        expectEqual(migrated.map(\.id), ["legacy", "legacy-bark", "legacy-telegram"], "推送渠道迁移: 正在用的排第一,其余按平台名")
+        expectEqual(migrated[0], C(id: "legacy", platform: "dingtalk", url: "https://oapi.dingtalk.com/robot/send?access_token=a",
+                                   secret: "SEC1", enabled: true, isDefault: true),
+                    "推送渠道迁移: 正在用的那个取 bark_url(不是另存的旧地址)、带上钉钉的加签密钥")
+        expectEqual(migrated[1].enabled || migrated[2].enabled, false, "推送渠道迁移: 别的平台迁过来是停用的")
+        expectEqual(migrated[2].chatID, "42", "推送渠道迁移: Telegram 带上 Chat ID")
+        expectEqual(C.migrated(fromLegacy: [:]), [], "推送渠道迁移: 什么都没填就没有渠道")
+        expectEqual(C.migrated(fromLegacy: ["bark_url": "https://api.day.app/K"]).first?.platform, "bark",
+                    "推送渠道迁移: 没有平台字段按 Bark")
+        expectEqual(C.list(fromConfig: legacy) == nil, true, "推送渠道: 没有 notification_channels 键时算旧配置")
+        expectEqual(C.list(fromConfig: ["notification_channels": [Any]()]), [], "推送渠道: 删光了是 [],不是旧配置")
+        let ch = C(id: "x", name: "我的 Telegram", platform: "telegram", url: " 123:abc ", secret: "", chatID: "42", enabled: true)
+        expectEqual(C(jsonObject: ch.jsonObject), C(id: "x", name: "我的 Telegram", platform: "telegram", url: "123:abc", chatID: "42", enabled: true),
+                    "推送渠道: 落盘再读回来一样(地址去掉首尾空白)")
+        expectEqual(ch.jsonObject["secret"] == nil && ch.jsonObject["default"] == nil, true, "推送渠道: 空的密钥、非默认不写")
+        expectEqual(C(id: "t", platform: "telegram", url: "123:abc").isComplete, false, "推送渠道: Telegram 缺 Chat ID 不算填齐")
+        // 引擎读得懂 App 写的形状:共用样例两边各读一遍。
+        let samples = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("shared/testdata/notify")
+        let channelsSample = (try? Data(contentsOf: samples.appendingPathComponent("channels.json")))
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+        expectEqual(C.list(fromConfig: channelsSample)?.map(\.platform), ["telegram", "ntfy"], "推送渠道: 读得懂共用样例")
+
+        // 粘贴地址认平台
+        typealias D = NotificationPlatformDetector
+        let cases: [(String, String?)] = [
+            ("https://api.day.app/abcDEF123/", "bark"),
+            ("https://oapi.dingtalk.com/robot/send?access_token=x", "dingtalk"),
+            ("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=x", "wecom"),
+            ("https://discord.com/api/webhooks/1/x", "discord"),
+            ("https://ptb.discordapp.com/api/webhooks/1/x", "discord"),
+            ("https://open.feishu.cn/open-apis/bot/v2/hook/x", "feishu"),
+            ("https://open.larksuite.com/open-apis/bot/v2/hook/x", "feishu"),
+            ("https://sctapi.ftqq.com/SCT1.send", "serverchan"),
+            ("https://1234.push.ft07.com/send/sctp1.send", "serverchan"),
+            ("https://hooks.slack.com/services/T/B/x", "slack"),
+            ("https://ntfy.sh/my-topic", "ntfy"),
+            ("  123456789:AAHfakeTokenFakeTokenFakeTokenFake12 \n", "telegram"),
+            ("https://example.com/hook", nil),
+            ("https://discord.com/channels/1/2", nil),
+            ("not a url", nil),
+        ]
+        for (text, want) in cases {
+            expectEqual(D.detect(text)?.platform, want, "粘贴认平台: \(text.trimmingCharacters(in: .whitespacesAndNewlines))")
+        }
+        expectEqual(D.detect("https://api.telegram.org/bot1:x/sendMessage?chat_id=-1001")?.chatID, "-1001",
+                    "粘贴认平台: Telegram 地址里带着的 Chat ID 一起拆出来")
+
+        // 推送记录:新的在前,每个渠道取最近一次;版本不认识当作没有记录。
+        typealias L = NotificationDeliveryLog
+        let logSample = (try? Data(contentsOf: samples.appendingPathComponent("log.json"))).map(L.parse) ?? []
+        expectEqual(logSample.map(\.id), ["e3", "e2", "e1"], "推送记录: 读得懂共用样例,新的在前")
+        let latest = L.latestByChannel(logSample)
+        expectEqual(latest["c1"]?.id, "e3", "推送记录: 每个渠道取最近一次")
+        expectEqual(latest["c2"]?.failure, NotificationFailure(kind: "auth", status: 200, code: "19021", detail: "sign match fail"),
+                    "推送记录: 没推成的带原因")
+        expectEqual(L.parse(Data(#"{"schema":2,"entries":[]}"#.utf8)), [], "推送记录: 版本不认识当作没有")
+        expectEqual(NotificationFailure(kind: "brand_new", status: 0, code: "", detail: "").kind, .rejected,
+                    "推送记录: 认不出的类别按拒收说;空的状态码、错误码当没有")
+
+        // 测一下:请求的形状、按 id 找结果。
+        typealias T = NotificationTest
+        let body = (try? JSONSerialization.jsonObject(with: T.testBody(id: "r1", channel: ch))) as? [String: Any]
+        expectEqual(body?["id"] as? String, "r1", "测一下: 请求带 id")
+        expectEqual((body?["channel"] as? [String: Any])?["chat_id"] as? String, "42", "测一下: 请求带完整渠道")
+        let resend = (try? JSONSerialization.jsonObject(with: T.resendBody(id: "r2", entryID: "e2"))) as? [String: Any]
+        expectEqual(resend?["resend"] as? String, "e2", "重发: 请求带推送记录 id")
+        let resultSample = (try? Data(contentsOf: samples.appendingPathComponent("test-result.json"))) ?? Data()
+        expectEqual(T.result(id: "r1", in: resultSample)?.ok, true, "测一下: 读得懂共用样例")
+        expectEqual(T.result(id: "r2", in: resultSample)?.failure?.kind, .notFound, "测一下: 按 id 找到自己的那次")
+        expectEqual(T.result(id: "zz", in: resultSample) == nil, true, "测一下: 别人的结果不算")
     }
 
     // ---- 导入字体(CustomFontFile)----

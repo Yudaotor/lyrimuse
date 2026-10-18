@@ -1,0 +1,4 @@
+{"results": [
+  {"id": "r1", "ok": true, "kind": "ok", "status": 200, "elapsed_ms": 640, "at": 1800000120},
+  {"id": "r2", "ok": false, "kind": "not_found", "status": 400, "code": "400", "detail": "Bad Request: chat not found", "elapsed_ms": 300, "at": 1800000180}
+]}

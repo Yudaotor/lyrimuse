@@ -37,8 +37,11 @@ type config struct {
 	LastfmScrobbleSessionKey string `json:"lastfm_scrobble_session_key,omitempty"`
 	// LastfmScrobbleUsername:打卡授权属于哪个账号(App 连接时写)。引擎只拿它认账号,见 lfmretry.go。
 	LastfmScrobbleUsername string `json:"lastfm_scrobble_username,omitempty"`
-	// 推送提醒目的地：LB 连不上或读不到播放状态持续异常时推一条告警,每周听歌小结也走
-	// 这个通道。NotificationPlatform 选平台("bark"默认/"dingtalk"/"wecom"/"discord"/
+	// 推送提醒的渠道列表和按事件选渠道,见 notifychannel.go。
+	NotificationChannels []notifyChannel     `json:"notification_channels,omitempty"`
+	NotificationRoutes   map[string][]string `json:"notification_routes,omitempty"`
+	// 下面这组是渠道列表之前的单渠道写法,还没有 notification_channels 时当成一个渠道读(configNotifyChannels)。
+	// NotificationPlatform 选平台("bark"默认/"dingtalk"/"wecom"/"discord"/
 	// "feishu"/"serverchan"/"telegram"/"slack"),NotificationWebhookURL 是对应平台的 webhook 地址,留空
 	// 则不推。
 	//
@@ -109,6 +112,9 @@ func (c *config) trimCredentials() {
 		&c.NotificationWebhookURL, &c.DingtalkSignSecret, &c.FeishuSignSecret, &c.TelegramChatID,
 	} {
 		*f = strings.TrimSpace(*f)
+	}
+	for i := range c.NotificationChannels {
+		c.NotificationChannels[i] = c.NotificationChannels[i].trimmed()
 	}
 }
 

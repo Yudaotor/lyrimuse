@@ -163,8 +163,14 @@ func TestSyncLiveConfigRebuildsAlerter(t *testing.T) {
 	writeConfigForTest(t, path, `{"notification_platform":"telegram","bark_url":"123:abc","telegram_chat_id":"42","listenbrainz_user":"u"}`)
 	p.syncLiveConfig()
 	a := p.lb.alerter
-	if a == before || a.platform != platformTelegram || a.url != "123:abc" || a.telegramChatID != "42" {
+	if a == before || len(a.channels) != 1 || a.channels[0].Platform != platformTelegram || a.channels[0].URL != "123:abc" || a.channels[0].ChatID != "42" {
 		t.Errorf("换了平台 / 地址 / Chat ID 应重建 alerter,got %+v", a)
+	}
+
+	writeConfigForTest(t, path, `{"notification_platform":"telegram","bark_url":"123:abc","telegram_chat_id":"42","listenbrainz_user":"u","notification_routes":{"weekly_digest":[]}}`)
+	p.syncLiveConfig()
+	if p.lb.alerter == a || p.lb.alerter.configured(notifyEventWeekly) {
+		t.Error("按事件选渠道变了也要重建;周报一个渠道都没选就不该推")
 	}
 }
 
