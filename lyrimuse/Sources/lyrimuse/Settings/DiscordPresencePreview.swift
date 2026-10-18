@@ -121,7 +121,7 @@ struct DiscordPresencePreview: View {
         } else if !playback.isPlayingSmoothed && !settings.discordKeepWhenPaused {
             caption = String(format: L10n.t("预览 · 暂停 %d 秒后从 Discord 上清除"), Int(DiscordPresence.pauseGrace))
         } else if activity.buttons?.isEmpty == false {
-            caption = L10n.t("预览 · 好友看到的效果，按钮只有别人看得到")
+            caption = L10n.t("预览 · 好友所见效果，按钮仅对他人可见")
         } else {
             caption = L10n.t("预览 · 好友在 Discord 上看到的效果")
         }
@@ -151,7 +151,7 @@ struct DiscordPresencePreview: View {
             coverURL: URL(string: "https://lyrimuse.invalid/sample.jpg"),
             positionMs: 83_000, durationMs: 269_000,
             applicationID: applicationID,
-            lyric: discord.presenceLayout().followsLyrics ? L10n.t("正在唱的这一句") : nil,
+            lyric: discord.presenceLayout().followsLyrics ? L10n.t("当前演唱的歌词") : nil,
             buttons: discord.presenceButtons(songURL: songURL, applicationID: applicationID, playerName: player))
     }
 

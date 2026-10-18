@@ -72,7 +72,7 @@ struct LabsPage: View {
     @ObservedObject private var notifyLog = NotificationDeliveryWatcher.shared
 
     var body: some View {
-        SettingsPage(title: L10n.t("实验室"), subtitle: L10n.t("尚未成熟、可能不够完善的功能，之后可能调整、重构或移除")) {
+        SettingsPage(title: L10n.t("实验室"), subtitle: L10n.t("尚在试验阶段的功能，后续可能调整、重构或移除")) {
             VStack(spacing: 14) {
                 SettingsCard {
                     let destinations = AccountDestination.allCases.filter(\.livesInLabs)

@@ -574,7 +574,7 @@ struct LastfmStatsSection: View {
            let play = LXMusicLinks.searchPlayURL(track, playLater: false),
            let later = LXMusicLinks.searchPlayURL(track, playLater: true) {
             Button(String(format: L10n.t("在 %@ 中播放"), PlaybackPlayer.lxMusic.displayName)) { NSWorkspace.shared.open(play) }
-            Button(String(format: L10n.t("加到%@的稍后播放"), PlaybackPlayer.lxMusic.displayName)) {
+            Button(String(format: L10n.t("添加到 %@ 的稍后播放"), PlaybackPlayer.lxMusic.displayName)) {
                 Self.openInBackground(later)
                 Task.detached(priority: .utility) { LXMusicPlayLater.record(track) }
             }

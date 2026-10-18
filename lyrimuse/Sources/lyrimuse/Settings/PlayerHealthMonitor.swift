@@ -136,7 +136,7 @@ final class PlayerHealthMonitor: ObservableObject {
     func description(_ warning: PlayerHealth.Warning) -> String {
         switch warning {
         case .automationMissing:
-            return String(format: L10n.t("%@ 的自动化权限未开启，播放状态可能读不准"), names(automationMissingPlayers))
+            return String(format: L10n.t("%@ 的自动化权限未开启，播放状态可能不准确"), names(automationMissingPlayers))
         case .engineNotRunning: return L10n.t("歌词引擎未运行，歌词不会更新")
         case .fullDiskAccessDenied:
             return String(format: L10n.t("未获得完全磁盘访问权限，无法读取 %@ 的本机歌词"), names(fullDiskAccessDeniedPlayers))
@@ -149,19 +149,19 @@ final class PlayerHealthMonitor: ObservableObject {
             }
             let playMode = accessibilityMissingPlayers.filter { $0.accessibilityUse == .switchesPlayMode }
             if !playMode.isEmpty {
-                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环与喜欢键，失焦时也无法控制播放"), names(playMode)))
+                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去焦点时也无法控制播放"), names(playMode)))
             }
             let playback = accessibilityMissingPlayers.filter { $0.accessibilityUse == .controlsPlayback }
             if !playback.isEmpty {
-                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示喜欢键，失去系统媒体焦点时也无法控制暂停、恢复和上下首"), names(playback)))
+                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首"), names(playback)))
             }
             let favorite = accessibilityMissingPlayers.filter { $0.accessibilityUse == .pressesFavorite }
             if !favorite.isEmpty {
-                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示喜欢键"), names(favorite)))
+                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示喜欢按钮"), names(favorite)))
             }
             let modeOnly = accessibilityMissingPlayers.filter { $0.accessibilityUse == .pressesPlayMode }
             if !modeOnly.isEmpty {
-                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环键"), names(modeOnly)))
+                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环按钮"), names(modeOnly)))
             }
             return parts.joined(separator: L10n.t("；"))
         }

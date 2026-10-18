@@ -87,7 +87,7 @@ enum DeepLinkRouter {
         let line = PlaybackCoordinator.shared.currentLine
         let text = (line?.plainText ?? line?.mainText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
-            GlobalHotkeys.flashHint(icon: "text.badge.xmark", text: L10n.t("当前没有歌词"))
+            GlobalHotkeys.flashHint(icon: "text.badge.xmark", text: L10n.t("当前无歌词"))
             return
         }
         var copied = text

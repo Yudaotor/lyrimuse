@@ -220,7 +220,7 @@ final class LyricsSearchService {
             // 见引擎 match.go 的 scoreRejectContinuousMix 头注。
             case "rejectContinuousMix": return L10n.t("连续混音版，与原版编排不同")
             // 见引擎 match.go 的 scoreRejectInstrumentalTrack 头注。
-            case "rejectInstrumentalTrack": return L10n.t("伴奏版，不用人声歌词")
+            case "rejectInstrumentalTrack": return L10n.t("伴奏版，不采用人声歌词")
             default: return kind
             }
         }
@@ -241,7 +241,7 @@ final class LyricsSearchService {
             case "album": return L10n.t("该源匹配到的专辑与本地专辑一致，版本很可能正确（最高 150）")
             case "titleMatch": return L10n.t("完全同名 120 · 仅括号差异 60 · 中英双语同名 30")
             case "consensus": return L10n.t("歌词内容与其他歌词源高度一致（2 家及以上 250 · 1 家 150），版本不符的候选不计")
-            case "translation": return L10n.t("自带当前译文语言的可用译文，同水平候选间优先")
+            case "translation": return L10n.t("附带当前译文语言的可用译文，同等候选中优先")
             case "romanization": return L10n.t("日文歌词自带读音，同水平候选间优先")
             case "versionTags": return L10n.t("歌名、专辑名或歌词文件头标注的版本（Live / Remix / Demo / Club Mix 等）与本地歌曲不符")
             case "sourceDurationOff":
@@ -253,17 +253,17 @@ final class LyricsSearchService {
             case "timelineOffset":
                 return L10n.t("至少两个曲长与本地一致、时间轴相互吻合的歌词源显示，这份歌词整体提前或延后 2.5 秒以上，可能是基于前奏长度不同的另一个母带制作，与当前播放会整首错位")
             case "timelineIntrusion":
-                return L10n.t("至少两个曲长与本地一致的歌词源显示这一段是间奏、没有歌词，而这份歌词在此处放入了其他段落的歌词，时间轴有误，播放到中段时会错位")
+                return L10n.t("至少两个时长与本地一致的歌词源显示此段为间奏、无歌词，而这份歌词在此处填入了其他段落的歌词，时间轴有误，播放至中段时将错位")
             case "durationOff":
                 return L10n.t("最后一句的时间与曲长相差 25% 以上；仍可选用，但排在所有时长相符的候选之后")
             case "rejectDurationMismatch":
                 return L10n.t("最后一句的时间与曲长相差 25% 以上，可能是其他版本")
             case "rejectPlainTextOnly":
-                return L10n.t("该源收录了这首歌曲，但只有不带时间戳的纯文本，可在「歌词窗口」中作为静态文字阅读，无法随播放逐字 / 逐行高亮")
+                return L10n.t("该歌词源收录了这首歌曲，但仅有无时间戳的纯文本，可在「歌词窗口」中作为静态文字阅读，无法随播放逐字 / 逐行高亮")
             case "rejectInstrumentalTrack":
-                return L10n.t("当前播放的是伴奏版（歌名或专辑标着伴奏 / 纯音乐 / Instrumental），没有人声，人声版歌词不采用，按纯音乐显示")
+                return L10n.t("当前播放的是伴奏版（歌名或专辑标注为伴奏、纯音乐或 Instrumental），不采用人声版歌词，按纯音乐显示")
             case "rejectContinuousMix":
-                return L10n.t("当前播放的是 DJ Mix 专辑中的一段（歌名带 [Mixed]、专辑带 (DJ Mix)）。这类曲目截取自整场演出，前后带有过渡，长度与原版不同，原版歌词的时间轴无法对齐，且没有歌词源收录混音版的时间轴")
+                return L10n.t("当前播放的是 DJ Mix 专辑中的片段（歌名带 [Mixed]，专辑名带 (DJ Mix)）。此类曲目截取自完整演出，前后带有过渡，时长与原版不同，原版歌词的时间轴无法对齐，且暂无歌词源收录混音版的时间轴")
             default: return ""
             }
         }

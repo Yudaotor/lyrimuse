@@ -295,8 +295,8 @@ func runSongVersionsTests() {
         expectEqual(sourceBytes(manager, contain: "LyricsManagerStatus.Facts(kind: kind, isManual: s.isManualOriginal,")
                     && sourceBytes(manager, contain: "pending.contains($0.key) && $0.isManualOriginal }.count")
                     && sourceBytes(manager, contain: "picked.filter(\\.isManualOriginal).count")
-                    && sourceBytes(manager, contain: "L10n.t(\"沿用同一首歌的修正\")")
-                    && sourceBytes(parts, contain: "help: L10n.t(\"沿用同一首歌的人工修正\")"), true,
+                    && sourceBytes(manager, contain: "L10n.t(\"沿用同曲条目的修正\")")
+                    && sourceBytes(parts, contain: "help: L10n.t(\"沿用同曲条目的人工修正\")"), true,
                     "其他写法(契约): 手改副本不算进人工修正,单独标出来")
         expectEqual(sourceBytes(store, contain: "manualOrigin: entry[\"lyrics_entity_origin\"] as? String ?? \"\",")
                     && sourceBytes(store, contain: "guard state != .neverPicked, (entry[\"lyrics_entity_origin\"] as? String ?? \"\").isEmpty else { continue }")
@@ -316,7 +316,7 @@ func runSongVersionsTests() {
                     && sourceHas(settings, "songEntityShareLyrics = f.songEntityShareLyrics ?? true\n        EnrichCacheReader.sharesEntityLyrics = songEntityShareLyrics")
                     && sourceBytes(settings, contain: "case songEntityShareLyrics = \"song_entity_share_lyrics\""), true,
                     "其他写法(契约): 两份手改的提示、统一请求、开关读法接上")
-        expectEqual(sourceBytes(manager, contain: "instrumentalFollowsGroup ? L10n.t(\"；同一首歌共用歌词的其他写法也会一起改\") : \"\"")
+        expectEqual(sourceBytes(manager, contain: "instrumentalFollowsGroup ? L10n.t(\"；共用歌词的同曲条目也将一并更改\") : \"\"")
                     && sourceBytes(edit, contain: "keys = withShareGroupMatesLocked(keys)"), true,
                     "其他写法(契约): 标纯音乐作用到共享组,详情页的说明跟着说")
         let enrichEngine = read(engine, "enrich.go")

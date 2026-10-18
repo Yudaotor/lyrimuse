@@ -76,10 +76,10 @@ private struct MenuBarPositionHintView: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 8) {
-                Text(L10n.t("按住 ⌘ 拖移此图标，可将其移到菜单栏中的任意位置。"))
+                Text(L10n.t("按住 ⌘ 拖移此图标，可将其移到菜单栏中的任意位置"))
                     .font(.system(size: 12))
                     .fixedSize(horizontal: false, vertical: true)
-                Button(L10n.t("知道了"), action: dismiss)
+                Button(L10n.t("好"), action: dismiss)
                     .settingsProminentGlassButton(tint: .accentColor)
                     .buttonBorderShape(.capsule)
                     .controlSize(.small)

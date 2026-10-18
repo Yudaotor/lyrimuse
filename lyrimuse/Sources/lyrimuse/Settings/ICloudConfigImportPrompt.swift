@@ -51,9 +51,9 @@ enum ICloudConfigImportPrompt {
             let when = formatter.string(from: snapshot.exportedAt ?? snapshot.modifiedAt)
             let detail: String
             if let device = snapshot.deviceName, !device.isEmpty {
-                detail = String(format: L10n.t("导出时间 %1$@，来自 %2$@。"), when, device)
+                detail = String(format: L10n.t("导出时间 %1$@，来自 %2$@"), when, device)
             } else {
-                detail = String(format: L10n.t("导出时间 %@。"), when)
+                detail = String(format: L10n.t("导出时间 %@"), when)
             }
 
             // 兄弟歌词包(同名、-Config- 换成 -Lyrics-)。这条是"换新 Mac 第一次开机"的主
@@ -68,9 +68,9 @@ enum ICloudConfigImportPrompt {
             let alert = NSAlert()
             alert.messageText = L10n.t("在 iCloud 中发现 Lyrimuse 备份")
             let lyricsLine = lyricsCount > 0
-                ? String(format: L10n.plural("其中包含 %@ 个歌词文件，将一并恢复。", count: lyricsCount), "\(lyricsCount)")
+                ? String(format: L10n.plural("其中包含 %@ 个歌词文件，将一并恢复", count: lyricsCount), "\(lyricsCount)")
                 : ""
-            alert.informativeText = detail + L10n.t("导入将包含账号和所有个人设置，完成后重启 Lyrimuse。") + lyricsLine
+            alert.informativeText = detail + L10n.t("导入将包含账号和所有个人设置，完成后重启 Lyrimuse") + lyricsLine
             alert.addButton(withTitle: L10n.t("导入并重启"))
             alert.addButton(withTitle: L10n.t("跳过"))
             // .accessory 策略的 App 不会自动抢到前台,不激活的话这个弹窗可能压在别的

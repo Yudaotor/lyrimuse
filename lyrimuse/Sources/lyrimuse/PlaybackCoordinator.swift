@@ -540,9 +540,9 @@ final class PlaybackCoordinator: ObservableObject {
     /// 播放控制被拦下时的那句说明。认得出播放器就点名(「QQ 音乐」),认不出说「播放」。
     static func withheldControlsReason(bundleID: String) -> String {
         guard let player = PlaybackPlayer.allCases.first(where: { $0 != .auto && $0.bundleIdentifier == bundleID }) else {
-            return L10n.t("焦点在别的 App 上，暂时无法控制播放")
+            return L10n.t("其他 App 正占用播放焦点，暂时无法控制播放")
         }
-        return String(format: L10n.t("焦点在别的 App 上，暂时控制不了「%@」"), player.displayName)
+        return String(format: L10n.t("其他 App 正占用播放焦点，暂时无法控制「%@」"), player.displayName)
     }
 
     /// **这一刻实际在播**的那个播放器。注意不是设置里选的那个 —— 设置可能是"自动识别",
@@ -622,7 +622,7 @@ final class PlaybackCoordinator: ObservableObject {
     private func applyVolumeHint(player: PlaybackPlayer?, volume: Int?) {
         let config = player == .lxMusic && volume == nil ? LXMusicOpenAPI.shared.currentConfig() : nil
         let hint = player == .lxMusic && volume == nil && config?.enabled != true
-            ? L10n.t("在洛雪的设置里打开开放 API 后可调音量") : nil
+            ? L10n.t("在洛雪音乐的设置中开启开放 API 后可调节音量") : nil
         let level = hint == nil ? nil : LXMusicOpenAPI.configVolumePercent(config)
         if volumeHint != hint { volumeHint = hint }
         if volumeHintLevel != level { volumeHintLevel = level }

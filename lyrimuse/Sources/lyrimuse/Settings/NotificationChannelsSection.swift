@@ -77,24 +77,24 @@ enum NotificationFailureText {
     static func summary(_ f: NotificationFailure, platform: NotificationPlatform?) -> String {
         let reason: String
         switch (f.kind, platform) {
-        case (.network, _): reason = L10n.t("没连上")
-        case (.config, _): reason = L10n.t("渠道信息不完整，或地址不是有效的网址")
-        case (.rateLimited, _): reason = L10n.t("发得太频繁，被限流")
+        case (.network, _): reason = L10n.t("无法连接")
+        case (.config, _): reason = L10n.t("渠道信息不完整，或地址无效")
+        case (.rateLimited, _): reason = L10n.t("发送过于频繁，已被限流")
         case (.server, _): reason = L10n.t("平台服务出错")
-        case (.notFound, .telegram?): reason = L10n.t("找不到这个会话（Chat ID 不对，或还没跟机器人说过话）")
+        case (.notFound, .telegram?): reason = L10n.t("找不到该会话（Chat ID 有误，或尚未向机器人发送过消息）")
         case (.notFound, .ntfy?), (.notFound, .webhook?): reason = L10n.t("地址不存在")
-        case (.notFound, _): reason = L10n.t("机器人不存在（被删了，或地址拷错了）")
-        case (.auth, .dingtalk?): reason = L10n.t("安全设置没通过（关键词、加签或 IP 地址）")
+        case (.notFound, _): reason = L10n.t("机器人不存在（已被删除，或地址拷贝有误）")
+        case (.auth, .dingtalk?): reason = L10n.t("未通过安全设置校验（关键词、加签或 IP 地址）")
         case (.auth, .feishu?):
             switch f.code {
             case "19024": reason = L10n.t("消息里没有自定义关键词")
-            case "19022": reason = L10n.t("本机 IP 不在机器人的白名单里")
-            default: reason = L10n.t("签名不对")
+            case "19022": reason = L10n.t("本机 IP 不在机器人的白名单中")
+            default: reason = L10n.t("签名有误")
             }
-        case (.auth, .telegram?): reason = L10n.t("机器人 Token 不对，或机器人被移出了会话")
-        case (.auth, .ntfy?): reason = L10n.t("这个主题需要访问令牌，或令牌不对")
-        case (.auth, .serverchan?): reason = L10n.t("SendKey 不对")
-        case (.auth, _): reason = L10n.t("密钥或地址不对")
+        case (.auth, .telegram?): reason = L10n.t("机器人 Token 有误，或机器人已被移出会话")
+        case (.auth, .ntfy?): reason = L10n.t("该主题需要访问令牌，或令牌有误")
+        case (.auth, .serverchan?): reason = L10n.t("SendKey 无效")
+        case (.auth, _): reason = L10n.t("密钥或地址有误")
         case (.rejected, _): reason = L10n.t("平台拒收了这条消息")
         }
         var parts = [reason]
@@ -107,22 +107,22 @@ enum NotificationFailureText {
     /// 该怎么改;说不出具体建议时为 nil(平台原话见 `detail`)。
     static func advice(_ f: NotificationFailure, platform: NotificationPlatform?) -> String? {
         switch (f.kind, platform) {
-        case (.network, .telegram?): return L10n.t("检查网络；Telegram 在部分网络下要开系统代理才连得上")
-        case (.network, _): return L10n.t("检查网络和地址")
-        case (.rateLimited, _): return L10n.t("过一会儿再试")
-        case (.server, _): return L10n.t("一般是暂时的，稍后再试")
-        case (.notFound, .telegram?): return L10n.t("先给机器人发一条消息（群组要先把机器人拉进群），再核对 Chat ID")
-        case (.notFound, _): return L10n.t("到平台上重新拷贝一次地址")
+        case (.network, .telegram?): return L10n.t("请检查网络；在部分网络环境下，Telegram 需开启系统代理才能连接")
+        case (.network, _): return L10n.t("请检查网络和地址")
+        case (.rateLimited, _): return L10n.t("请稍后重试")
+        case (.server, _): return L10n.t("通常为暂时性问题，请稍后重试")
+        case (.notFound, .telegram?): return L10n.t("请先向机器人发送一条消息（群组需先将机器人添加到群中），再核对 Chat ID")
+        case (.notFound, _): return L10n.t("请在平台上重新拷贝地址")
         case (.auth, .dingtalk?):
-            return String(format: L10n.t("机器人安全设置选了「自定义关键词」的话，加一个关键词「%@」；选了「加签」就把密钥填进「加签密钥」"), keyword)
+            return String(format: L10n.t("若机器人安全设置选择了「自定义关键词」，请添加关键词「%@」；若选择了「加签」，请将密钥填入「加签密钥」"), keyword)
         case (.auth, .feishu?) where f.code == "19024":
-            return String(format: L10n.t("在机器人安全设置里加一个关键词「%@」，或改用签名校验"), keyword)
+            return String(format: L10n.t("请在机器人安全设置中添加关键词「%@」，或改用签名校验"), keyword)
         case (.auth, .feishu?) where f.code == "19022":
-            return L10n.t("在机器人安全设置里关掉 IP 白名单，或改用签名校验")
+            return L10n.t("请在机器人安全设置中关闭 IP 白名单，或改用签名校验")
         case (.auth, .feishu?):
-            return L10n.t("检查「签名密钥」是否跟机器人设置里的一致；没开签名校验就把这一栏清空")
-        case (.auth, .telegram?): return L10n.t("到 @BotFather 核对 Token")
-        case (.auth, .ntfy?): return L10n.t("在「访问令牌」里填 tk_ 开头的令牌，或「用户名:密码」")
+            return L10n.t("请检查「签名密钥」是否与机器人设置一致；若未开启签名校验，请清空此栏")
+        case (.auth, .telegram?): return L10n.t("请在 @BotFather 中核对 Token")
+        case (.auth, .ntfy?): return L10n.t("请在「访问令牌」中填写以 tk_ 开头的令牌，或「用户名:密码」")
         case (.auth, _), (.config, _), (.rejected, _): return nil
         }
     }
@@ -192,7 +192,7 @@ struct NotificationChannelsCard: View {
         SettingsCard(cornerRadius: 18) {
             SettingsCardHeader(
                 title: L10n.t("推送渠道"),
-                help: L10n.t("报告会推到每个启用着的渠道。点一行编辑、发送测试；右键可以测试或删除。")
+                help: L10n.t("报告将推送到所有已启用的渠道。点按一行可编辑或发送测试；右键点按可测试或删除")
             ) {
                 Button {
                     editing = NotificationChannel(platform: NotificationPlatform.displayOrder.first?.rawValue ?? "bark")
@@ -228,7 +228,7 @@ struct NotificationChannelsCard: View {
             Button(L10n.t("取消"), role: .cancel) {}
             Button(L10n.t("删除"), role: .destructive) { delete(channel) }
         } message: { _ in
-            Text(L10n.t("删除后这里不再推送，推送记录保留"))
+            Text(L10n.t("删除后不再向此渠道推送，推送记录将保留"))
         }
     }
 
@@ -242,9 +242,9 @@ struct NotificationChannelsCard: View {
             Image(systemName: "bell.badge")
                 .font(.system(size: 22))
                 .foregroundStyle(.secondary)
-            Text(L10n.t("还没有推送渠道"))
+            Text(L10n.t("尚无推送渠道"))
                 .font(.system(size: 13, weight: .medium))
-            Text(L10n.t("添加一个渠道，听歌报告就会推到手机、群聊或你自己的服务"))
+            Text(L10n.t("添加渠道后，收听报告将推送到手机、群聊或自建服务"))
                 .font(.system(size: 11.5))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -304,7 +304,7 @@ struct NotificationChannelsCard: View {
             let missing = channel.platform == "telegram" && !channel.url.isEmpty ? L10n.t("未填写 Chat ID") : L10n.t("未填写地址")
             return (prefix + missing, .orange, nil)
         }
-        guard let last = log.latestByChannel[channel.id] else { return (prefix + L10n.t("还没推送过"), .secondary, nil) }
+        guard let last = log.latestByChannel[channel.id] else { return (prefix + L10n.t("尚未推送"), .secondary, nil) }
         let when = notificationTimeText(last.date)
         guard let failure = last.failure else {
             return (prefix + String(format: L10n.t("%@ 已送达"), when), .secondary, last.title)
@@ -379,7 +379,7 @@ struct NotificationChannelEditor: View {
         .confirmationDialog(String(format: L10n.t("删除「%@」？"), original.displayName), isPresented: $confirmingDelete) {
             Button(L10n.t("删除"), role: .destructive) { onDelete(original) }
         } message: {
-            Text(L10n.t("删除后这里不再推送，推送记录保留"))
+            Text(L10n.t("删除后不再向此渠道推送，推送记录将保留"))
         }
     }
 
@@ -472,16 +472,16 @@ struct NotificationChannelEditor: View {
                         }
                     }
                     if let mismatch {
-                        Label(String(format: L10n.t("这像是%@的地址。要换平台，删掉这个渠道再添加一个"), mismatch.displayName),
+                        Label(String(format: L10n.t("此地址似乎属于%@。如需更换平台，请删除此渠道后重新添加"), mismatch.displayName),
                               systemImage: "exclamationmark.triangle")
                             .font(.system(size: 11))
                             .foregroundStyle(.orange)
                     } else if let detected {
-                        Label(String(format: L10n.t("认出是%@的地址，已切换"), detected.displayName), systemImage: "sparkle.magnifyingglass")
+                        Label(String(format: L10n.t("已识别为%@的地址并自动切换"), detected.displayName), systemImage: "sparkle.magnifyingglass")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     } else if isNew && draft.url.isEmpty {
-                        Text(L10n.t("可以直接粘贴一整段地址，认得出的平台会自动切换"))
+                        Text(L10n.t("可直接粘贴完整地址，可识别的平台将自动切换"))
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
@@ -547,7 +547,7 @@ struct NotificationChannelEditor: View {
         } else if let outcome = testOutcome {
             switch outcome {
             case .delivered(let seconds):
-                Label(String(format: L10n.t("已送达 · %.1f 秒。到手机或群里看一眼收到没有"), seconds), systemImage: "checkmark.circle.fill")
+                Label(String(format: L10n.t("已送达 · %.1f 秒。请在手机或群聊中确认是否收到"), seconds), systemImage: "checkmark.circle.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(.green)
             case .failed(let failure):
@@ -564,7 +564,7 @@ struct NotificationChannelEditor: View {
                 .font(.system(size: 12))
                 .fixedSize(horizontal: false, vertical: true)
             case .noEngine:
-                Label(L10n.t("后台服务没有响应，测试没有发出。确认后台服务在运行后再试"), systemImage: "exclamationmark.triangle.fill")
+                Label(L10n.t("歌词引擎未响应，测试消息未发送。请确认歌词引擎正在运行后重试"), systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(.orange)
             }
@@ -695,10 +695,10 @@ struct NotificationLogCard: View {
         case .delivered:
             Text(L10n.t("已重发")).font(.system(size: 11)).foregroundStyle(.green)
         case .failed(let failure):
-            Text(String(format: L10n.t("重发也没成：%@"), NotificationFailureText.summary(failure, platform: platform)))
+            Text(String(format: L10n.t("重发失败：%@"), NotificationFailureText.summary(failure, platform: platform)))
                 .font(.system(size: 11)).foregroundStyle(.red)
         case .noEngine:
-            Text(L10n.t("后台服务没有响应，没有重发")).font(.system(size: 11)).foregroundStyle(.orange)
+            Text(L10n.t("歌词引擎未响应，未重发")).font(.system(size: 11)).foregroundStyle(.orange)
         }
     }
 

@@ -234,7 +234,7 @@ struct OverlayLayoutSettingsRows: View {
                 SettingsControlCell(
                     icon: "arrow.left.and.right.text.vertical",
                     title: L10n.t("长句处理"),
-                    help: L10n.t("换行（默认）：一行显示不下时折行显示，窗口随之增高。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动。")
+                    help: L10n.t("换行（默认）：一行显示不下时折行显示，窗口随之增高。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动")
                 ) {
                     SettingsPillSegmentedControl(
                         selection: $settings.overlayLineOverflow,
@@ -274,7 +274,7 @@ struct OverlayLayoutSettingsRows: View {
         SettingsRow(
             icon: "text.alignleft",
             title: L10n.t("对齐方式"),
-            help: L10n.t("自动（默认）：按对唱声部在左 / 右 / 居中之间切换。\n其他：忽略声部，固定在同一位置。")
+            help: L10n.t("自动（默认）：按对唱声部在左 / 右 / 居中之间切换。\n其他：忽略声部，固定在同一位置")
         ) {
             // 故意不用系统 `.pickerStyle(.segmented)`(三轮修法都没
             // 按住"选了哪个选项、控件整体宽度就跟着变"这个问题,完整排查过程见

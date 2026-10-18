@@ -1314,7 +1314,7 @@ private func checkDiscordWiring() {
     expectEqual(sourceBytes(code("lyrimuse/Settings/AppSettings.swift"),
                             contain: "discordButtonGetLyrimuse = (defaults.object(forKey: Keys.discordButtonGetLyrimuse) as? Bool) ?? true"), true,
                 "Discord(接线): 「获取 Lyrimuse」默认开(同 Music Presence 的「Get this status」)")
-    expectEqual(sourceHas(accountTab, "title: L10n.t(\"「获取 Lyrimuse」\"),\n                        subtitle: L10n.t(\"另外两个都开着时不显示\"))"), true,
+    expectEqual(sourceHas(accountTab, "title: L10n.t(\"「获取 Lyrimuse」\"),\n                        subtitle: L10n.t(\"另外两项均开启时不显示\"))"), true,
                 "Discord(接线): 「获取 Lyrimuse」那一行写明另外两个都开着时让位")
     for needle in ["signal(playback.$title)", "signal(playback.$anchor)", "signal(playback.$isPlayingSmoothed)",
                    "signal(source.$webPageArtworkURL)", "signal(ConfigStore.shared.$stateRelayURL)",

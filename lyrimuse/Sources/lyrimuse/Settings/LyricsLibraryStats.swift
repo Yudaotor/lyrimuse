@@ -326,7 +326,7 @@ struct LyricsLibraryStatsPanel: View {
             title: L10n.t("扫描间隔"),
             subtitle: tooFast
                 ? L10n.t("低于建议的 2 秒，可能被歌词源限流")
-                : L10n.t("每首之间停几秒；建议不快于 2 秒，以免被限流")
+                : L10n.t("每首歌曲之间的间隔秒数；建议不少于 2 秒，以免被限流")
         ) {
             HStack(spacing: 8) {
                 if tooFast {
@@ -399,7 +399,7 @@ struct LyricsLibraryStatsPanel: View {
                 metricItem(
                     label: L10n.t("已缓存读音"),
                     value: counts.bundledRomanization,
-                    help: L10n.t("只数存进缓存、会随歌词文件导出的读音；其余的在播放时现算，不算在内"))
+                    help: L10n.t("仅统计已存入缓存、随歌词文件导出的读音；播放时实时生成的读音不计入"))
             }
             .padding(.top, 2)
         }
@@ -492,7 +492,7 @@ struct LyricsLibraryStatsPanel: View {
         SettingsRow(
             icon: "text.magnifyingglass",
             title: L10n.t("自动匹配缺失歌词"),
-            subtitle: L10n.t("只搜没有歌词或只有纯文本的歌")
+            subtitle: L10n.t("仅搜索无歌词或仅有纯文本歌词的歌曲")
         ) {
             HStack(spacing: 10) {
                 if sweepRunning, let status {
@@ -656,7 +656,7 @@ struct LyricsLibraryStatsPanel: View {
             SettingsRow(
                 icon: "arrow.clockwise",
                 title: L10n.t("重新匹配整个歌词库"),
-                subtitle: L10n.t("已有歌词的也重挑一遍；手改、校准过和纯音乐的不动")
+                subtitle: L10n.t("已有歌词的歌曲也重新选择；手动修改、已校准和纯音乐的歌曲保持不变")
             ) {
                 HStack(spacing: 10) {
                     if fullRunning, let status {

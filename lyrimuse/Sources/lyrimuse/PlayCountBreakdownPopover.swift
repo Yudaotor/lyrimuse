@@ -44,7 +44,7 @@ struct PlayCountBadge: View {
             }
             .buttonStyle(.plain)
             .onHover { hovered = $0 }
-            .help(L10n.t("这首歌曲在 Last.fm 上的收听次序，点按查看合并了哪些写法"))
+            .help(L10n.t("这首歌曲在 Last.fm 上的收听序号，点按查看已合并的条目"))
             .popover(isPresented: $showing, arrowEdge: .bottom) {
                 PlayCountBreakdownPopover(artist: artist, title: title,
                                           anchorDate: anchorDate, expectedTotal: expectedTotal)

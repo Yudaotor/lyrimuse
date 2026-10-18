@@ -17,7 +17,7 @@ enum LyricSourceFailureReason {
         case "lyricfind_region_restricted":
             return L10n.t("YouTube Music 在当前网络所在地区不可用（地区限制，并非网络故障）")
         case "musixmatch_rate_limited":
-            return L10n.t("Musixmatch 拒绝了匿名令牌请求（反爬限流，hint=captcha），并非网络故障，稍后重试通常可恢复")
+            return L10n.t("Musixmatch 拒绝了匿名令牌请求（反爬虫限流，hint=captcha），并非网络故障，通常稍后重试即可恢复")
         case "netease_rate_limited":
             return L10n.t("网易云音乐接口限流（短时间内请求过多，code 405），并非网络故障")
         case "deezer_auth_failed":
@@ -26,7 +26,7 @@ enum LyricSourceFailureReason {
             // 不会报到这里来。 这个 case 曾经是 deezer_region_restricted,那是误判:
             // 当时走的旧接口对任何歌都回 "No lyrics id ... and country XX",换出口到别的
             // 国家照样如此,真因是那条接口废了,见 lyrimuse-engine/deezer.go 头注。
-            return L10n.t("无法从 Deezer 获取匿名访问令牌（并非这首歌曲没有歌词，稍后重试通常可恢复）")
+            return L10n.t("无法从 Deezer 获取匿名访问令牌（与歌曲是否有歌词无关，通常稍后重试即可恢复）")
         case "applemusic_not_connected":
             // 这一条不是故障:Apple Music 的歌词端点只认订阅用户的 media-user-token,
             // 用户还没在设置里连过账号时就是这个码。文案要指路,不要像别的码那样报"失败"。
@@ -42,7 +42,7 @@ enum LyricSourceFailureReason {
             // 所以它改了形状要能说出来,而不是退化成"汽水一直没有歌词"。
             // 另外两种结局都不会走到这里:曲库里有这首歌但没给词(正常结果)、这首没用汽水
             // 放过所以取不到曲目 id(这一路的常态)。
-            return L10n.t("汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更），并非这首歌曲没有歌词，通常会在后续版本中修复")
+            return L10n.t("汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更），并非这首歌曲无歌词，通常将在后续版本中修复")
         case "musixmatch_direct_blocked":
             // 跟上面的 musixmatch_rate_limited 是完全不同的两回事,别混:那个是服务器
             // **正经回了** 401 hint=captcha(反爬),这个是一个字节都没拿到。实测

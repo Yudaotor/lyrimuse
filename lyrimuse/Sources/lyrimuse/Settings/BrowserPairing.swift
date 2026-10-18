@@ -157,7 +157,7 @@ enum BrowserPairing {
         panel.message = L10n.t("选择用于播放此网站的浏览器")
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
         guard let bundleID = Bundle(url: url)?.bundleIdentifier else {
-            return L10n.t("无法读取该应用的标识，请选择其他应用。")
+            return L10n.t("无法读取该应用的标识，请选择其他应用")
         }
         // 已经认识引擎族的(内置那几个、代码里适配着但不默认展示的 Arc、或者之前加过的)
         // 不必再判一次 —— 但**仍然要登记成"用户自己选的"**:否则像 Arc 这种"适配全在、只是
@@ -175,7 +175,7 @@ enum BrowserPairing {
             // 而不是 bundle id 或者文件名。
             let name = FileManager.default.displayName(atPath: url.path)
             return String(
-                format: L10n.t("「%@」无法用于同步歌词进度。此功能需要浏览器执行一段 JavaScript 来读取播放进度，而该应用未提供相应的脚本命令。Firefox 目前不支持，非浏览器应用同样不支持。"),
+                format: L10n.t("「%@」无法用于同步歌词进度。此功能需要浏览器执行一段 JavaScript 来读取播放进度，而该应用未提供相应的脚本命令。Firefox 目前不支持，非浏览器应用同样不支持"),
                 name)
         }
         rememberManualBrowser(bundleID, family: family)

@@ -1027,7 +1027,7 @@ private struct LyricsSettingsTab: View {
         SettingsCard(cornerRadius: 18) {
             SettingsCardHeader(title: L10n.t("歌词来源")) {
                 HStack(spacing: 10) {
-                    Text(String(format: L10n.t("开着 %@ 个"), "\(features.lyricsSources.count)"))
+                    Text(String(format: L10n.t("已开启 %@ 项"), "\(features.lyricsSources.count)"))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
@@ -1396,7 +1396,7 @@ private struct LyricsSettingsTab: View {
                 //
                 // 这行字必须跟 `manualPickLocksLyrics` 的真实两态逐字对得上。以后改这个开关的
                 // 行为,这行字要一起改。
-                help: L10n.t("关（默认）：仅本次更换，之后的自动搜索或评分变化仍可能替换\n开：锁定这首歌曲的歌词，自动匹配不再更改\n开启时，之前手动选定的歌曲一并锁定（已被自动替换的除外）")
+                help: L10n.t("关（默认）：仅替换本次歌词，之后的自动搜索或评分变化仍可能再次替换\n开：锁定这首歌曲的歌词，自动匹配不再更改\n开启后，此前手动选定的歌曲一并锁定（已被自动替换的除外）")
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.manualPickLocksLyrics },
@@ -1870,7 +1870,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "globe",
                 title: L10n.t("译文语言"),
-                subtitle: L10n.t("各处显不显示译文，在「歌词显示」里设")
+                subtitle: L10n.t("各处是否显示译文，在「歌词显示」中设置")
             ) {
                 SettingsGlassMenuPicker(
                     selection: Binding(
@@ -1886,8 +1886,8 @@ private struct LyricsSettingsTab: View {
             // 副标题要写出「翻不了再联网」:不只是本机翻译,本机翻不了会把歌词发给联网翻译(09 章)。
             SettingsRow(
                 icon: "character.book.closed",
-                title: L10n.t("没有译文时自动翻译"),
-                subtitle: L10n.t("优先在本机翻译，翻不了再联网")
+                title: L10n.t("无译文时自动翻译"),
+                subtitle: L10n.t("优先在本机翻译，无法翻译时再联网翻译")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.lyricsMachineTranslation },
@@ -1971,7 +1971,7 @@ private struct LyricsSettingsTab: View {
                 SettingsRow(
                     icon: "textformat.alt",
                     title: L10n.t("标注读音的语言"),
-                    subtitle: L10n.t("勾选的语言标上读音；显不显示在「歌词显示」里设")
+                    subtitle: L10n.t("为勾选的语言标注读音；是否显示在「歌词显示」中设置")
                 )
                 SettingsRawRow(insetToText: true) {
                     HStack(spacing: 6) {
@@ -1994,11 +1994,11 @@ private struct LyricsSettingsTab: View {
             // 下面两项跟繁简 / 罗马音同样双写:AppSettings 持久化,LocalPlaybackSource 让当前这首立刻重新加载。
             // 卡头的适用范围就是这两项生效的展示面;触控栏合并另有「合计不超过 5 秒」一条,写在 04 章,不进副标题。
             SettingsCard(cornerRadius: 18) {
-                SettingsCardHeader(title: L10n.t("断句"), subtitle: L10n.t("只用于悬浮歌词、灵动岛、菜单栏和触控栏"))
+                SettingsCardHeader(title: L10n.t("断句"), subtitle: L10n.t("仅用于悬浮歌词、灵动岛、菜单栏和触控栏"))
                 SettingsRow(
                     icon: "rectangle.split.2x1",
                     title: L10n.t("长句拆分"),
-                    subtitle: L10n.t("一行放不下时拆成几段依次显示")
+                    subtitle: L10n.t("单行无法完整显示时，拆分为多段依次显示")
                 ) {
                     Toggle("", isOn: Binding(
                         get: { settings.splitLongLyricLines },
@@ -2009,7 +2009,7 @@ private struct LyricsSettingsTab: View {
                 SettingsRow(
                     icon: "rectangle.compress.vertical",
                     title: L10n.t("短句合并"),
-                    subtitle: L10n.t("相邻的短句放得进一行时并成一行")
+                    subtitle: L10n.t("相邻短句可容纳于一行时合并显示")
                 ) {
                     Toggle("", isOn: Binding(
                         get: { settings.mergeShortLyricLines },
@@ -2214,7 +2214,7 @@ private struct LyricsSettingsTab: View {
         return SettingsRow(
             icon: "folder",
             title: L10n.t("歌词文件夹"),
-            subtitle: L10n.t("改位置后，已有文件不会跟着搬")
+            subtitle: L10n.t("更改位置后，已有文件不会随之移动")
         ) {
             HStack(spacing: 8) {
                 // 路径本身就是「在访达中显示」那颗按钮:一行里不再另摆一颗同义的按钮。
@@ -2485,7 +2485,7 @@ private struct AppearanceSettingsTab: View {
                 // 最后一段「歌词窗口」没有开关,靠快捷键/菜单按需打开,所以副标题要把它分开讲。
                 // 写「可同时开」不写「可同时开启」:多一个字就把末尾的「开」单独折到第二行(13pt 下这 29 字
                 // 约 375pt,副标题限宽 380)。
-                subtitle: L10n.t("悬浮歌词、灵动岛、菜单栏和触控栏可同时开，歌词窗口按需打开")
+                subtitle: L10n.t("悬浮歌词、灵动岛、菜单栏和触控栏可同时开启，歌词窗口可按需打开")
                 // 这里**不要**再写 showsHeader: false:六个分类里只有这一页没有 22pt 大标题会显得
                 // 不一致。省下来的纵向空间由窗口高度补(见 SettingsView 的 .frame:minHeight 520 /
                 // idealHeight 720),保证桌面悬浮歌词的开关能落在首屏。
@@ -2976,11 +2976,11 @@ private struct AppearanceSettingsTab: View {
             // 从属于「悬浮淡化」,只在它开着时出现(07 章决策 144)。
             if settings.lyricsWindowMiniFadeOnHover {
                 SettingsToggleTile(icon: "cursorarrow.click", title: L10n.t("淡化时点按穿透"),
-                                   help: L10n.t("淡化时点按会落到下面的窗口；按住 ⌥ 恢复不透明，就能操作"),
+                                   help: L10n.t("淡化时点按将穿透到下层窗口；按住 ⌥ 可恢复不透明并进行操作"),
                                    isOn: $settings.lyricsWindowMiniFadeClickThrough)
             }
             SettingsToggleTile(icon: "pause.circle", title: L10n.t("暂停时隐藏"),
-                               help: L10n.t("迷你尺寸下，暂停或没有播放时隐藏，开始播放后重新出现"),
+                               help: L10n.t("迷你尺寸下，暂停或未播放时隐藏，开始播放后重新显示"),
                                isOn: $settings.lyricsWindowMiniHideWhenNotPlaying)
             SettingsToggleTile(icon: "arrow.up.left.and.arrow.down.right", title: L10n.t("全屏时隐藏"),
                                help: L10n.t("迷你尺寸下，所在屏幕有 App 全屏时隐藏"),
@@ -3372,7 +3372,7 @@ private struct AppearanceSettingsTab: View {
                     SettingsRow(
                         icon: "rectangle.split.1x2",
                         title: L10n.t("歌词布局"),
-                        help: L10n.t("单行：仅显示当前句。\n双行：显示当前句和下一句。\n多行：与完整尺寸相同，整页滚动显示歌词。")
+                        help: L10n.t("单行：仅显示当前句。\n双行：显示当前句和下一句。\n多行：与完整尺寸相同，整页滚动显示歌词")
                     ) {
                         SettingsPillSegmentedControl(
                             selection: miniLyricsLayout,
@@ -3387,7 +3387,7 @@ private struct AppearanceSettingsTab: View {
                         SettingsRow(
                             icon: "arrow.left.and.right.text.vertical",
                             title: L10n.t("长句处理"),
-                            help: L10n.t("换行（默认）：一行显示不下时折行显示。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动。")
+                            help: L10n.t("换行（默认）：一行显示不下时折行显示。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动")
                         ) {
                             SettingsPillSegmentedControl(
                                 selection: lineOverflow,
@@ -3563,7 +3563,7 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
     /// 带帮助气泡的项;其余返回 nil,宿主据此决定要不要传 `help:` 参数。
     var help: String? {
         switch self {
-        case .expandedNextLine: return L10n.t("展开时在进度条上方显示下一句要唱的歌词。")
+        case .expandedNextLine: return L10n.t("展开时在进度条上方显示下一句要唱的歌词")
         case .karaoke: return L10n.t("逐字歌词随演唱逐字高亮；无逐字数据的歌曲整行高亮")
         case .hideInFullScreen: return L10n.t("灵动岛所在屏幕有 App 全屏时隐藏")
         case .listenMilestones:
@@ -3743,7 +3743,7 @@ private struct NotchLyricsAlignmentRow: View {
             icon: "text.alignleft",
             title: L10n.t("对齐方式"),
             // 「自动」那一档按什么走也写在这条 help 里(菜单栏那一行用的是另一条词条)。
-            help: L10n.t("只作用于能完整显示的句子；显示不下、需横向滚动的句子不受影响。「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左")
+            help: L10n.t("仅作用于可完整显示的句子，需横向滚动的句子不受影响。「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左对齐")
         ) {
             LyricsAlignmentSegmentedControl(selection: $settings.notchLyricsAlignment,
                                             options: LyricsRestingAlignment.notchOptions)
@@ -3768,7 +3768,7 @@ private struct LyricSecondaryLineRow: View {
         SettingsRow(
             icon: "text.append",
             title: L10n.t("副行"),
-            help: L10n.t("在主歌词下方增加一行。译文和读音对应当前句，「下一句」显示即将演唱的歌词；选择「下一句」时，展开区不再重复显示下一句预览。放不下两行时歌词行会自动加高")
+            help: L10n.t("在主歌词下方增加一行。译文和读音对应当前句，「下一句」显示即将演唱的歌词，选择后展开区不再重复显示下一句预览。空间不足时歌词行自动增高")
         ) {
             SettingsGlassMenuPicker(
                 selection: $settings.notchSecondaryLine,
@@ -3882,7 +3882,7 @@ struct NotchFontSettingsRows: View {
     }
 
     private var sizeHelp: String {
-        String(format: L10n.t("仅调整主行，%@～%@pt，放不下时歌词行会自动加高；副行和展开时的下一句预览固定为 %@pt，仅跟随字体与字重"),
+        String(format: L10n.t("仅调整主行，%@～%@pt，空间不足时歌词行自动增高；副行和展开时的下一句预览固定为 %@pt，仅跟随字体与字重"),
                "\(Int(NotchLyricRowMetrics.mainFontSizeRange.lowerBound))",
                "\(Int(NotchLyricRowMetrics.mainFontSizeRange.upperBound))",
                "\(Int(NotchLyricRowMetrics.secondaryFontSize))")
@@ -3950,7 +3950,7 @@ struct NotchExpandedSettingsRows: View {
                 NotchBehaviorToggleTile(item: .expandedShowsQuickActions)
             }
             SettingsTileGrid(title: L10n.t("曲目信息"),
-                               help: L10n.t("展开时在歌词行上方显示曲目信息，四项可分别开关；全部关闭时不占用空间。"),
+                               help: L10n.t("展开时在歌词行上方显示曲目信息，四项可分别开启或关闭；全部关闭时不占用空间"),
                                columns: 4) {
                 NotchBehaviorToggleTile(item: .expandedShowsArtwork)
                 NotchBehaviorToggleTile(item: .expandedShowsTrackTitle)
@@ -4505,7 +4505,7 @@ private struct YouTubeMusicAutoSkipRow: View {
     var asPanel = false
 
     private var helpText: String {
-        L10n.t("出现「跳过」按钮时自动点按，无法跳过的广告照常播放。需要「辅助功能」权限。YouTube Music 位于后台标签页时会短暂切换过去再切回，当前使用的浏览器窗口不受影响。")
+        L10n.t("出现「跳过」按钮时自动点按，无法跳过的广告照常播放。需要「辅助功能」权限。YouTube Music 位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响")
     }
 
     private var isOn: Binding<Bool> {
@@ -4548,12 +4548,12 @@ private struct YouTubeMusicAutoSkipRow: View {
                     .labelsHidden()
                     .accessibilityLabel(L10n.t("自动跳过 YouTube Music 广告"))
             }
-            Text(L10n.t("能跳过的广告一出现就自动跳过"))
+            Text(L10n.t("可跳过的广告出现时自动跳过"))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
             if settings.youTubeMusicAutoSkipAds && !AccessibilitySkipPress.isTrusted {
                 HStack(spacing: 6) {
-                    Text(L10n.t("尚未获得「辅助功能」权限，自动跳过不会生效。"))
+                    Text(L10n.t("尚未获得「辅助功能」权限，自动跳过无法生效"))
                         .font(.system(size: 11))
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
@@ -4579,14 +4579,14 @@ private struct YouTubeMusicAutoSkipRow: View {
         SettingsRow(
             icon: "forward.end",
             title: L10n.t("自动跳过 YouTube Music 广告"),
-            subtitle: L10n.t("能跳过的广告一出现就自动跳过"),
+            subtitle: L10n.t("可跳过的广告出现时自动跳过"),
             help: helpText
         ) {
             Toggle("", isOn: isOn)
         }
         if settings.youTubeMusicAutoSkipAds && !AccessibilitySkipPress.isTrusted {
             SettingsNote {
-                Text(L10n.t("尚未获得「辅助功能」权限，自动跳过不会生效。"))
+                Text(L10n.t("尚未获得「辅助功能」权限，自动跳过无法生效"))
                 Text(AccessibilityPermission.shared.steps)
                 Button(L10n.t("打开系统设置"), action: openAccessibilitySettings)
             }
@@ -4791,7 +4791,7 @@ private struct PlayerSettingsTab: View {
                 if isAuto {
                     autoDetectBanner
                 } else {
-                    Text(L10n.t("只识别勾选的播放器；没勾的不显示歌词，也不计入收听记录。"))
+                    Text(L10n.t("仅识别勾选的播放器；未勾选的播放器不显示歌词，也不计入收听记录"))
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -4810,8 +4810,8 @@ private struct PlayerSettingsTab: View {
         VStack(alignment: .leading, spacing: 4) {
             (Text(L10n.t("自动识别中")).fontWeight(.semibold).foregroundStyle(Color.accentColor)
                 + Text("  ")
-                + Text(L10n.t("下列播放器均会自动识别；如需仅识别部分播放器，请关闭右上角开关后手动勾选。")))
-            Text(L10n.t("未列出的 App 会在检测到时提示添加。此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用。"))
+                + Text(L10n.t("下列播放器均会自动识别；如需仅识别部分播放器，请关闭右上角开关后手动勾选")))
+            Text(L10n.t("未列出的 App 会在检测到时提示添加。此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用"))
         }
             .font(.system(size: 11.5))
             .foregroundStyle(.secondary)
@@ -4839,7 +4839,7 @@ private struct PlayerSettingsTab: View {
                 .controlSize(.mini)
                 .labelsHidden()
                 .accessibilityLabel(PlaybackPlayer.auto.displayName)
-            HelpButton(text: L10n.t("开着时识别所有已知和已信任的播放器；关掉后只认勾选的。"))
+            HelpButton(text: L10n.t("开启时识别所有已知和已信任的播放器；关闭后仅识别勾选的播放器"))
         }
     }
 
@@ -4933,7 +4933,7 @@ private struct PlayerSettingsTab: View {
     /// 细节放进点开的气泡里(跟浏览器头像同一个套路),格子面上只留图标+名字。
     private var trustedPlayersCard: some View {
         SettingsCard(cornerRadius: 18) {
-            SettingsCardHeader(title: L10n.t("其他 App"), help: L10n.t("不在上面的 App 也能当播放器：添加后显示它正在放的歌，也计入收听记录。点格子可以移除。"))
+            SettingsCardHeader(title: L10n.t("其他 App"), help: L10n.t("未在上方列出的 App 也可作为播放器：添加后将显示其正在播放的歌曲，并计入收听记录。点按图标即可移除"))
             SettingsRawRow {
                 VStack(alignment: .leading, spacing: 8) {
                     LazyVGrid(columns: PlayerPicker<EmptyView>.compactColumns, spacing: 8) {
@@ -4946,13 +4946,13 @@ private struct PlayerSettingsTab: View {
                     .frame(maxWidth: .infinity)
                     // 空列表时只剩一个「添加」格,得有一句话交代"加进来会怎样";有信任项时那几格本身就说明了。
                     if stores.trustedPlayers.isEmpty {
-                        Text(L10n.t("添加的应用与内置播放器相同：显示其正在播放的内容，并计入收听记录。可随时移除。"))
+                        Text(L10n.t("添加的应用与内置播放器相同：显示其正在播放的内容，并计入收听记录。可随时移除"))
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     // 有没有信任项都留着:这里的 App 都没有逐个适配过。
-                    Text(L10n.t("此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用。"))
+                    Text(L10n.t("此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用"))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -4967,7 +4967,7 @@ private struct PlayerSettingsTab: View {
                 get: { trustedPlayerPickerError != nil },
                 set: { if !$0 { trustedPlayerPickerError = nil } })
         ) {
-            Button(L10n.t("知道了"), role: .cancel) { trustedPlayerPickerError = nil }
+            Button(L10n.t("好"), role: .cancel) { trustedPlayerPickerError = nil }
         } message: {
             Text(trustedPlayerPickerError ?? "")
         }
@@ -5098,10 +5098,10 @@ private struct PlayerSettingsTab: View {
         panel.allowedContentTypes = [.application]
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         panel.prompt = L10n.t("选择")
-        panel.message = L10n.t("选择要让 Lyrimuse 视为播放器的应用")
+        panel.message = L10n.t("选择 Lyrimuse 应视为播放器的 App")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard let bundleID = Bundle(url: url)?.bundleIdentifier else {
-            trustedPlayerPickerError = L10n.t("无法读取该应用的标识，请选择其他应用。")
+            trustedPlayerPickerError = L10n.t("无法读取该应用的标识，请选择其他应用")
             return
         }
         // 用 Finder 显示的那个名字(本地化过、跟用户在「应用程序」里看到的一致),
@@ -5113,13 +5113,13 @@ private struct PlayerSettingsTab: View {
             selfBundleID: Bundle.main.bundleIdentifier
         ) {
         case .itself:
-            trustedPlayerPickerError = L10n.t("这是 Lyrimuse 本身。")
+            trustedPlayerPickerError = L10n.t("这是 Lyrimuse 本身")
         case .builtin(let player):
             trustedPlayerPickerError = String(
-                format: L10n.t("「%@」已是内置播放器，在上方「播放器」卡片中勾选即可。"),
+                format: L10n.t("「%@」已是内置播放器，在上方「播放器」卡片中勾选即可"),
                 player.displayName)
         case .alreadyTrusted:
-            trustedPlayerPickerError = String(format: L10n.t("「%@」已在列表中。"), name)
+            trustedPlayerPickerError = String(format: L10n.t("「%@」已在列表中"), name)
         case .addable:
             Task { await FeatureSettingsStore.shared.trust(bundleID: bundleID) }
         }
@@ -5383,7 +5383,7 @@ private struct PlayerSettingsTab: View {
         let columns = PlayerPicker<EmptyView>.compactColumnCount
         if anySupportedInstalled {
             SettingsCard(cornerRadius: 18) {
-                SettingsCardHeader(title: L10n.t("网页版"), help: L10n.t("在浏览器里听歌也能显示歌词。点「+」配对你用的浏览器，进度直接从网页读，换歌后马上对准。"))
+                SettingsCardHeader(title: L10n.t("网页版"), help: L10n.t("在浏览器中播放时同样可显示歌词。点按「+」配对所用浏览器，播放进度直接从网页读取，切歌后立即同步"))
                 SettingsRawRow {
                     // 平台格跟「音乐 App」卡的方块格同宽;跳广告只管网页版 YouTube Music,放在同一行剩下的列里。
                     // 平台数 + 1 要不超过列数,超了就得把面板挪到下一行。
@@ -5408,7 +5408,7 @@ private struct PlayerSettingsTab: View {
                     get: { browserPickerError != nil },
                     set: { if !$0 { browserPickerError = nil } })
             ) {
-                Button(L10n.t("知道了"), role: .cancel) { browserPickerError = nil }
+                Button(L10n.t("好"), role: .cancel) { browserPickerError = nil }
             } message: {
                 Text(browserPickerError ?? "")
             }
@@ -5587,7 +5587,7 @@ private struct PlayerSettingsTab: View {
                 //
                 // 单独一行、不并进上面那句路径:那句是"点哪",这句是"点完还要做什么",混在一起
                 // 读者会以为是同一步的补充说明而略过 —— 而略过的代价正是那种"我明明开了却不 work"。
-                Text(L10n.t("勾选后需退出并重新打开浏览器才能生效，此选项仅在浏览器启动时读取。"))
+                Text(L10n.t("勾选后需退出并重新打开浏览器才能生效，此选项仅在浏览器启动时读取"))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -5825,17 +5825,17 @@ private struct PlayerSettingsTab: View {
         case "com.google.Chrome":
             // **别把"Chrome 自己的帮助文案写错了"那段考据加进用户文案里** —— 那是给维护者
             // 看的,写在 `browserManualEnableHint` 的头注里就够了;用户要的只是"点哪"。
-            return L10n.t("在 Chrome 菜单栏中依次选择「显示 → 开发者 → 允许 Apple 事件中的 JavaScript」。")
+            return L10n.t("在 Chrome 菜单栏中依次选择「显示 → 开发者 → 允许 Apple 事件中的 JavaScript」")
         case "com.microsoft.edgemac":
-            return L10n.t("在 Edge 菜单栏中依次选择「查看 → 开发人员 → 允许 Apple 事件中的 JavaScript」。")
+            return L10n.t("在 Edge 菜单栏中依次选择「查看 → 开发人员 → 允许 Apple 事件中的 JavaScript」")
         case "com.brave.Browser":
-            return L10n.t("在 Brave 菜单栏中依次选择「显示 → 开发者 → 允许 Apple 事件中的 JavaScript」。")
+            return L10n.t("在 Brave 菜单栏中依次选择「显示 → 开发者 → 允许 Apple 事件中的 JavaScript」")
         case "company.thebrowser.Browser":
-            return L10n.t("在 Arc 菜单栏中依次选择「View → Developer → Allow JavaScript from Apple Events」。Arc 的这些菜单项在中文系统下也显示为英文。")
+            return L10n.t("在 Arc 菜单栏中依次选择「View → Developer → Allow JavaScript from Apple Events」。Arc 的这些菜单项在中文系统下也显示为英文")
         case "com.apple.Safari":
-            return L10n.t("Safari 的此选项位于设置中：先在「Safari 浏览器 → 设置 → 高级」中勾选「显示网页开发者功能」，设置中随即出现「开发者」面板，再在其中勾选「允许Apple事件中的JavaScript」。")
+            return L10n.t("Safari 的此选项位于设置中：先在「Safari 浏览器 › 设置 › 高级」中勾选「显示网页开发者功能」，设置中将出现「开发者」面板，再在其中勾选「允许Apple事件中的JavaScript」")
         default:
-            return L10n.t("在该浏览器的开发者菜单中开启「允许 Apple 事件中的 JavaScript」。")
+            return L10n.t("在该浏览器的开发者菜单中开启「允许 Apple 事件中的 JavaScript」")
         }
     }
 
@@ -5903,7 +5903,7 @@ private struct PlayerSettingsTab: View {
         let permissionRows = !automationTargets.isEmpty || !diskTargets.isEmpty || !accessibilityTargets.isEmpty
         return SettingsCard(cornerRadius: 18) {
             SettingsCardHeader(title: L10n.t("权限与服务")) {
-                Text(L10n.t("权限只列出所选播放器用得到的"))
+                Text(L10n.t("仅列出所选播放器所需的权限"))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -6060,11 +6060,11 @@ private struct PlayerSettingsTab: View {
                 icon: on ? "checkmark.circle.fill" : "minus.circle.fill",
                 iconTint: on ? .green : .secondary,
                 title: L10n.t("洛雪音乐开放 API"),
-                subtitle: on ? L10n.t("已打开") : L10n.t("未打开 · 打开后进度更准，还能调洛雪的音量"),
-                help: L10n.t("Lyrimuse 从这里读洛雪自己的播放进度、调它的音量")
+                subtitle: on ? L10n.t("已开启") : L10n.t("未开启 · 开启后播放进度更准确，并可调节洛雪音乐的音量"),
+                help: L10n.t("Lyrimuse 通过此接口读取洛雪音乐的播放进度并调节其音量")
             ) {
                 if !on {
-                    Button(L10n.t("怎么打开")) { showsLXOpenAPIGuide = true }
+                    Button(L10n.t("开启方法")) { showsLXOpenAPIGuide = true }
                         .popover(isPresented: $showsLXOpenAPIGuide, arrowEdge: .bottom) {
                             LXOpenAPIGuide { showsLXOpenAPIGuide = false }
                         }
@@ -6073,7 +6073,7 @@ private struct PlayerSettingsTab: View {
             if on, lxOpenAPIConfig?.bindLan == true {
                 CardDivider()
                 SettingsNote {
-                    Text(L10n.t("已允许局域网访问，同一网络里的设备也能控制洛雪"))
+                    Text(L10n.t("已允许局域网访问，同一网络中的设备也可控制洛雪音乐"))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
@@ -6124,7 +6124,7 @@ private struct PlayerSettingsTab: View {
         if case .unavailable(let message) = stores.mediaControlState {
             CardDivider()
             SettingsNote {
-                Text(String(format: L10n.t("系统媒体信息通道在本机不可用：%@ 会改为直接读取播放状态（进度可能略有偏差），其他播放器暂时读取不到。"),
+                Text(String(format: L10n.t("系统媒体信息通道在本机不可用：%@ 将改为直接读取播放状态（进度可能略有偏差），其他播放器暂时无法读取"),
                             MediaControlClient.channelFallbackCandidates(selected: [.auto]).map(\.displayName).joined(separator: L10n.t("、"))))
                 Text(message)
                     .font(.caption)
@@ -6826,7 +6826,7 @@ private struct GeneralSettingsTab: View {
                 }
             }
         } message: {
-            Text(L10n.t("将删除本机的全部账号凭证、密钥与个人设置，恢复为初始安装状态，下次启动时重新显示设置引导。此操作无法撤销。iCloud 中的备份与已导出的文件不受影响；如两者均没有，建议先备份"))
+            Text(L10n.t("将删除本机的全部账号凭证、密钥与个人设置，恢复为初始安装状态，下次启动时重新显示设置引导。此操作无法撤销。iCloud 中的备份与已导出的文件不受影响；如两者均无，建议先备份"))
         }
     }
 
@@ -7137,13 +7137,13 @@ private struct ShortcutsSettingsTab: View {
             ("doc.on.doc", L10n.t("拷贝当前歌词"), .copyLyric(includeTranslation: false), nil),
             ("doc.on.clipboard", L10n.t("拷贝当前歌词（含译文）"), .copyLyric(includeTranslation: true), nil),
             ("arrowshape.turn.up.backward", L10n.t("获取正在播放"), .nowPlayingCallback(success: nil),
-             L10n.t("在快捷指令中用「打开 X-Callback URL」打开，歌名、歌手、专辑和当前这句会作为参数传回")),
+             L10n.t("在快捷指令中通过「打开 X-Callback URL」打开，歌名、歌手、专辑和当前歌词将作为参数返回")),
             ("shuffle", L10n.t("设置播放模式"), .setPlayMode(.shuffle),
              L10n.t("mode 可选 list、shuffle、repeat-all、repeat-one")),
             ("rectangle.3.group", L10n.t("指定显示哪些歌词"), .setSurfaces(overlay: true, notch: false, menuBar: true),
-             L10n.t("overlay、notch、menubar 填 1 显示、填 0 隐藏，只带要改的那几个")),
+             L10n.t("overlay、notch、menubar 设为 1 表示显示、0 表示隐藏，仅需包含要更改的参数")),
             ("timer", L10n.t("设定歌词偏移"), .setLyricsOffset(ms: -300),
-             L10n.t("ms 为毫秒，正数提前、负数延后，±10000 以内")),
+             L10n.t("ms 单位为毫秒，正值提前、负值延后，范围为 ±10000")),
         ]
         let cells = links.compactMap { item in
             item.link.url(scheme: LyrimuseIdentity.urlScheme).map { url in
@@ -7199,7 +7199,7 @@ private struct ShortcutsSettingsTab: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("深度链接"))
                         .font(.system(size: 13))
-                    Text(L10n.t("可在快捷指令、Raycast、Alfred 等工具中打开；指针移到上方的快捷键上，可拷贝对应动作的链接"))
+                    Text(L10n.t("可在快捷指令、Raycast、Alfred 等工具中打开；将指针悬停在上方的快捷键上，可拷贝对应操作的链接"))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -7352,9 +7352,9 @@ private struct LXOpenAPIGuide: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(L10n.t("1. 在洛雪里打开「设置」，找到「开放 API」"))
-                Text(L10n.t("2. 勾上「启用开放 API 服务」"))
-                Text(L10n.t("3. 「允许来自局域网的访问」不用勾"))
+                Text(L10n.t("1. 在洛雪音乐中打开「设置」，找到「开放 API」"))
+                Text(L10n.t("2. 勾选「启用开放 API 服务」"))
+                Text(L10n.t("3. 无需勾选「允许来自局域网的访问」"))
             }
             .font(.callout)
             .fixedSize(horizontal: false, vertical: true)
@@ -7453,7 +7453,7 @@ private struct AboutSettingsTab: View {
             Text(LyrimuseIdentity.displayName)
                 .font(.system(size: 24, weight: .bold))
             versionChip
-            Text(L10n.t("Lyric × Muse——把歌词交给音乐女神"))
+            Text(L10n.t("Lyric × Muse：把歌词交给音乐女神"))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -7612,7 +7612,7 @@ private struct AboutSettingsTab: View {
             }
             CardDivider()
             SettingsLinkRow(icon: "list.bullet.rectangle", title: L10n.t("功能清单"),
-                         subtitle: L10n.t("全部功能、所在位置与默认开关"), opensExternally: true) {
+                         subtitle: L10n.t("全部功能、所在位置及默认状态"), opensExternally: true) {
                 NSWorkspace.shared.open(FeedbackLinks.featureListURL(language: L10n.current))
             }
         }
@@ -7705,7 +7705,7 @@ private struct AboutSettingsTab: View {
                 title: L10n.t("配置文件夹"),
                 // 路径按变体显示(正式 ~/.config/lyrimuse,Dev ~/.config/lyrimuse-dev),别让 Dev 的用户对着一个错的路径找文件。
                 subtitle: "~/.config/" + LyrimuseIdentity.configDirName + " · "
-                    + L10n.t("纯文本，含账号凭据；外观与快捷键不在此处，整体迁移请使用「备份与迁移」")
+                    + L10n.t("纯文本格式，含账号凭据；不含外观与快捷键，完整迁移请使用「备份与迁移」")
             ) {
                 Button(L10n.t("在访达中显示")) {
                     NSWorkspace.shared.activateFileViewerSelecting([ConfigPortability.configFolderURL])

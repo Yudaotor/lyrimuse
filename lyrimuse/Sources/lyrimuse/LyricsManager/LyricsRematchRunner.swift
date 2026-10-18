@@ -91,7 +91,7 @@ enum LyricsRematchRunner {
         case .offline:
             return L10n.t("网络可能不可用，本轮未找到任何候选")
         case .busy:
-            return L10n.t("这首歌曲正在搜索，或「自动匹配缺失歌词」/「重新匹配整个歌词库」正在进行，请稍后重试")
+            return L10n.t("这首歌曲正在搜索中，或「自动匹配缺失歌词」/「重新匹配整个歌词库」正在进行，请稍后重试")
         case .missing:
             return L10n.t("这首歌曲已不在歌词库中")
         case .edited:

@@ -1305,7 +1305,7 @@ struct LyricsManagerView: View {
     /// 清理确认框的正文:判据和不受影响的几类,下面列出前几条的歌名。
     private var cleanupMessage: String {
         let shown = pendingCleanupKeys.prefix(6)
-        var lines = [L10n.t("这些记录无歌词，且无歌手或时长超过 20 分钟，通常是广告、播客或有声书。人工修正、标为纯音乐、校准过时间轴的记录和正在播放的歌曲不在其中；再次播放时会重新匹配。"), ""]
+        var lines = [L10n.t("这些记录无歌词，且无歌手或时长超过 20 分钟，通常为广告、播客或有声书。人工修正、标为纯音乐、已校准时间轴的记录和正在播放的歌曲不包含在内；再次播放时将重新匹配"), ""]
         for key in shown {
             let title = store.summary(forKey: key)?.title ?? ""
             lines.append(title.isEmpty ? key : title)
@@ -2629,7 +2629,7 @@ struct LyricsManagerView: View {
             } else if summary.isManual {
                 Image(systemName: "pencil.circle")
                     .foregroundStyle(.orange)
-                    .help(L10n.t("沿用同一首歌的人工修正"))
+                    .help(L10n.t("沿用同曲条目的人工修正"))
             }
         }
         .padding(.horizontal, 10)
@@ -3345,13 +3345,13 @@ struct LyricsManagerView: View {
             Image(systemName: "exclamationmark.bubble")
                 .foregroundStyle(LyricsFeatureTint.manual)
             VStack(alignment: .leading, spacing: 6) {
-                Text(String(format: L10n.t("这首歌有 %d 份你改过的歌词，内容不一样；同一首歌的其他写法暂时不跟着任何一份同步。"),
+                Text(String(format: L10n.t("这首歌曲有 %d 份内容不同的人工修正歌词；同曲条目暂不与其中任何一份同步"),
                             manualConflictKeys.count))
                     .font(.callout)
                     .fixedSize(horizontal: false, vertical: true)
                 SettingsFlowRow(spacing: 8) {
                     if manualConflictKeys.contains(key) {
-                        Button(L10n.t("统一用这一份…")) { confirmManualConflict = true }
+                        Button(L10n.t("统一使用此版本…")) { confirmManualConflict = true }
                             .disabled(editMode != .preview)
                     }
                     ForEach(manualConflictKeys.filter { $0 != key }, id: \.self) { other in
@@ -3364,11 +3364,11 @@ struct LyricsManagerView: View {
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(LyricsFeatureTint.manual.opacity(0.08)))
-        .alert(L10n.t("统一用这一份改过的歌词？"), isPresented: $confirmManualConflict) {
-            Button(L10n.t("统一")) { Task { await store.resolveManualConflict(key: key) } }
+        .alert(L10n.t("统一使用这份修正后的歌词？"), isPresented: $confirmManualConflict) {
+            Button(L10n.t("统一使用")) { Task { await store.resolveManualConflict(key: key) } }
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
-            Text(L10n.t("同一首歌另外几份改过的歌词会换成这一份，其他写法也跟着用它。被换掉的那几份会另存一份备份。"))
+            Text(L10n.t("这首歌曲的其他修正版本将替换为此版本，同曲条目也将使用此版本。被替换的歌词将另存备份"))
         }
     }
 
@@ -3377,13 +3377,13 @@ struct LyricsManagerView: View {
     private func detailMoreMenu(_ summary: EnrichCacheStore.Summary) -> some View {
         // 「标为纯音乐」/「取消纯音乐标记」:有没有歌词都能标。标上之后各处不显示歌词,引擎也不再自动搜;
         // 歌词留在条目里,撤掉就回来(见 EnrichCacheStore.setInstrumental)。搜索候选歌词面板标题栏有同一对动作。
-        let groupNote = instrumentalFollowsGroup ? L10n.t("；同一首歌共用歌词的其他写法也会一起改") : ""
+        let groupNote = instrumentalFollowsGroup ? L10n.t("；共用歌词的同曲条目也将一并更改") : ""
         if summary.isInstrumental {
             Button(L10n.t("取消纯音乐标记")) { Task { await store.setInstrumental(key: summary.key, false) } }
                 .help(L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，无歌词的重新加入自动匹配队列") + groupNote)
         } else {
             Button(L10n.t("标为纯音乐")) { Task { await store.setInstrumental(key: summary.key, true) } }
-                .help(L10n.t("按纯音乐处理：不显示歌词，也不会自动搜索；原有歌词仍会保留，取消标记即可恢复") + groupNote)
+                .help(L10n.t("按纯音乐处理：不显示歌词，也不自动搜索；原有歌词将保留，取消标记即可恢复") + groupNote)
         }
         Button(L10n.t("拷贝歌名与歌手")) { copySongName(summary) }
         // 「同一首歌的其他写法」:这条写法有实体 id 才有(实体表开关关着、还没建过表时没有),见 18 章决策 28。
@@ -3478,8 +3478,8 @@ struct LyricsManagerView: View {
             if summary.isManualOriginal {
                 LyricsManagerTag(icon: "pencil.circle.fill", text: L10n.t("人工修正"), tint: LyricsFeatureTint.manual)
             } else if summary.isManual {
-                LyricsManagerTag(icon: "pencil.circle", text: L10n.t("沿用同一首歌的修正"), tint: LyricsFeatureTint.manual)
-                    .help(String(format: L10n.t("这份歌词是同一首歌另一种写法「%@」的人工修正，那边改了这边跟着改；直接改这一条就成为它自己的修正"),
+                LyricsManagerTag(icon: "pencil.circle", text: L10n.t("沿用同曲条目的修正"), tint: LyricsFeatureTint.manual)
+                    .help(String(format: L10n.t("这份歌词沿用同曲条目「%@」的人工修正，该条目修改时此处同步更新；直接编辑此条目将使其成为独立的修正"),
                                  writingDisplayName(summary.manualOrigin)))
             }
             // 「来源已选定」:这个字段已经没有写入方,引擎每次启动都会把存量转成 manual_pick_sha;读取侧整套跟引擎一起删,
@@ -4168,11 +4168,11 @@ struct LyricsManagerView: View {
             switch self {
             case .noResponder:
                 if let day {
-                    return String(format: L10n.t("%@解析时没有任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲没有歌词。重新自动匹配通常可以找到"), day)
+                    return String(format: L10n.t("%@解析时无任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲无歌词。重新自动匹配通常可找到歌词"), day)
                 }
-                return L10n.t("上次解析时没有任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲没有歌词。重新自动匹配通常可以找到")
+                return L10n.t("上次解析时无任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲无歌词。重新自动匹配通常可找到歌词")
             case .indexed:
-                return L10n.t("网易云音乐或 QQ 音乐已收录这首歌曲，但尚未提供歌词，新发行的歌曲常见这种情况。重新匹配效果有限，可搜索候选歌词或稍后再试")
+                return L10n.t("网易云音乐或 QQ 音乐已收录这首歌曲，但尚未提供歌词，常见于新发行的歌曲。重新匹配效果有限，可搜索候选歌词或稍后重试")
             case .none:
                 return L10n.t("已搜索的歌词源均未提供这首歌曲的歌词。可搜索候选歌词手动选择；若为纯音乐，可标为纯音乐")
             }
@@ -4208,8 +4208,8 @@ struct LyricsManagerView: View {
             Text(L10n.t("已标为纯音乐"))
                 .font(.system(size: 19, weight: .semibold))
             Text(summary.hasLyrics
-                 ? L10n.t("各处显示为纯音乐，不会自动搜索歌词。原有歌词仍会保留，取消标记即可恢复")
-                 : L10n.t("各处显示为纯音乐，不会自动搜索歌词"))
+                 ? L10n.t("各处显示为纯音乐，不自动搜索歌词。原有歌词将保留，取消标记即可恢复")
+                 : L10n.t("各处显示为纯音乐，不自动搜索歌词"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -4319,7 +4319,7 @@ struct LyricsManagerView: View {
         var text = LyricsRematchRunner.text(line)
         let followers = LyricsRematch.followers(of: LyricsRematch.current, key: key)
         if followers > 0 {
-            text += String(format: L10n.t("；同一首歌另外 %d 种写法也跟着用这一份"), followers)
+            text += String(format: L10n.t("；另外 %d 个同曲条目也将使用此版本"), followers)
         }
         rematchResult = RematchOutcome(key: key, tone: line.tone, text: text)
         rematchRunningKey = nil
@@ -4465,7 +4465,7 @@ private struct DecisionUnavailableSheet: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            ContentUnavailableView(L10n.t("无法读取这首歌的解析记录"), systemImage: "list.number")
+            ContentUnavailableView(L10n.t("无法读取这首歌曲的解析记录"), systemImage: "list.number")
             HStack {
                 Spacer()
                 Button(L10n.t("完成")) { dismiss() }

@@ -158,7 +158,7 @@ struct LastfmHeatmapView: View {
                                 cellShape(fill: futureColor).help(day.label)
                             } else if let day = week.days[row], let n = stats.dailyCounts[day.key], n > 0 {
                                 cellShape(fill: color(for: n, thresholds: thresholds, levels: levels))
-                                    .help("\(day.label) · \(n.formatted()) \(L10n.t("次"))\n\(L10n.t("按一下查看这一天听得最多的歌"))")
+                                    .help("\(day.label) · \(n.formatted()) \(L10n.t("次"))\n\(L10n.t("点按查看当天收听最多的歌曲"))")
                                     .contentShape(Rectangle())
                                     .onTapGesture {
                                         openedDay = OpenedDay(key: day.key, label: day.label, column: column, row: row)
@@ -309,19 +309,19 @@ private struct HeatmapDayPopover: View {
             case .loading:
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text(L10n.t("正在查询这一天的收听…")).foregroundStyle(.secondary)
+                    Text(L10n.t("正在查询当天的收听记录…")).foregroundStyle(.secondary)
                 }
             case .empty:
-                Text(L10n.t("Last.fm 上查不到这一天的收听")).foregroundStyle(.secondary)
+                Text(L10n.t("Last.fm 上无当天的收听记录")).foregroundStyle(.secondary)
             case .failed:
                 HStack(spacing: 8) {
-                    Label(L10n.t("无法获取这一天的收听：Last.fm 未响应"), systemImage: "exclamationmark.triangle")
+                    Label(L10n.t("无法获取当天的收听记录：Last.fm 未响应"), systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 8)
                     Button(L10n.t("重试")) { stats.loadDayListens(dayKey, force: true) }
                 }
             case .loaded(let total, let top):
-                Text(String(format: L10n.plural("这一天收听 %@ 次，听得最多的是以下歌曲", count: total), total.formatted()))
+                Text(String(format: L10n.plural("当天收听 %@ 次，以下为收听最多的歌曲", count: total), total.formatted()))
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 VStack(alignment: .leading, spacing: 6) {

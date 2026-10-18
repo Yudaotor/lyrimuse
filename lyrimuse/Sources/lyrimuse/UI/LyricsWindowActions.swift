@@ -138,12 +138,12 @@ final class LyricsWindowRematch: ObservableObject {
         }
         var reasons: [String] = []
         if stored.manualLyrics {
-            reasons.append(L10n.t("这首歌曲的歌词经过手动修改或选定，更换后将被覆盖。"))
+            reasons.append(L10n.t("这首歌曲的歌词经过手动修改或选定，更换后将被覆盖"))
         }
         if stored.instrumental {
-            reasons.append(L10n.t("这首歌曲已标为纯音乐，找到歌词后将取消该标记。"))
+            reasons.append(L10n.t("这首歌曲已标为纯音乐，找到歌词后将取消该标记"))
         } else if playback.trackLyricsOffsetMs != 0 {
-            reasons.append(String(format: L10n.t("这首歌曲调整过歌词时间轴（%@），更换歌词后该校准可能失效。"),
+            reasons.append(String(format: L10n.t("这首歌曲调整过歌词时间轴（%@），更换歌词后该校准可能失效"),
                                   AppSettings.signedSeconds(ms: playback.trackLyricsOffsetMs) + "s"))
         }
         return Confirm(key: stored.key, title: title, reasons: reasons)

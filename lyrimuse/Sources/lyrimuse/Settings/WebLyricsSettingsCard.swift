@@ -270,9 +270,9 @@ private struct WebLyricsProblemRow: View {
     private var problem: String? {
         switch server.state {
         case .portInUse:
-            return String(format: L10n.t("端口 %lld 已被占用，服务未能启动"), server.port)
+            return String(format: L10n.t("端口 %lld 已被占用，服务无法启动"), server.port)
         case .failed(let reason):
-            return String(format: L10n.t("服务未能启动：%@"), reason)
+            return String(format: L10n.t("服务无法启动：%@"), reason)
         case .off, .running:
             return nil
         }

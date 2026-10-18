@@ -124,7 +124,7 @@ enum LyrimuseActionRunner {
             let text: String
             switch TouchBarLyricsController.shared.toggleFromHotkey() {
             case .noTouchBar: text = L10n.t("未检测到触控栏")
-            case .unavailable: text = L10n.t("本机系统未提供触控栏接口")
+            case .unavailable: text = L10n.t("当前系统未提供触控栏接口")
             case .turnOn, .expand: text = L10n.t("已展开触控栏歌词")
             case .collapse: text = L10n.t("已收起触控栏歌词")
             }
@@ -134,7 +134,7 @@ enum LyrimuseActionRunner {
         case .overlayFontLargerHotkey, .overlayFontSmallerHotkey:
             let settings = AppSettings.shared
             guard settings.classicOverlayEnabled else {
-                GlobalHotkeys.flashHint(icon: "textformat.size", text: L10n.t("调字号仅对桌面悬浮歌词有效"))
+                GlobalHotkeys.flashHint(icon: "textformat.size", text: L10n.t("字号快捷键仅对悬浮歌词有效"))
                 return
             }
             let larger = action == .overlayFontLargerHotkey
@@ -183,7 +183,7 @@ enum LyrimuseActionRunner {
         }
         let saved = defaults.stringArray(forKey: hiddenSurfacesKey) ?? []
         guard !saved.isEmpty else {
-            if shown.isEmpty { GlobalHotkeys.flashHint(icon: "eye.slash", text: L10n.t("没有可恢复的歌词")) }
+            if shown.isEmpty { GlobalHotkeys.flashHint(icon: "eye.slash", text: L10n.t("无可恢复的歌词")) }
             return
         }
         defaults.removeObject(forKey: hiddenSurfacesKey)

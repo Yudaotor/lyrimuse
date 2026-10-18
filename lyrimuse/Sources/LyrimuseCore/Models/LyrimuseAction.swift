@@ -131,7 +131,7 @@ public enum LyrimuseAction: String, CaseIterable, Sendable {
         case .toggleLyricsWindowMiniHotkey: return "切换迷你 / 完整尺寸"
         case .lyricsQuickSearchHotkey: return "搜索歌词"
         case .openSettingsHotkey: return "打开设置"
-        case .openPlayerHotkey: return "回到播放器"
+        case .openPlayerHotkey: return "切换到播放器"
         case .lyricsAdvanceHotkey: return "歌词提前"
         case .lyricsDelayHotkey: return "歌词延后"
         case .lyricsOffsetResetHotkey: return "歌词偏移归零"

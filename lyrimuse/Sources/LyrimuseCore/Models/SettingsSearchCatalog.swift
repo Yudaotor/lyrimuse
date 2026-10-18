@@ -206,7 +206,7 @@ public enum SettingsSearchCatalog {
 
     /// 「快捷键」页:「深度链接」卡、各个动作(格子、顺序、标题、关键词都取 `LyrimuseAction`)、「歌词时间轴」卡底下的「步长」。
     private static var shortcutEntries: [SettingsSearchEntry] {
-        var entries = [shortcut("深度链接", sub: "可在快捷指令、Raycast、Alfred 等工具中打开；指针移到上方的快捷键上，可拷贝对应动作的链接",
+        var entries = [shortcut("深度链接", sub: "可在快捷指令、Raycast、Alfred 等工具中打开；将指针悬停在上方的快捷键上，可拷贝对应操作的链接",
                                 kw: ["深链", "URL", "URL Scheme", "x-callback", "文档", "lyrimuse://", "Raycast", "Alfred", "Stream Deck",
                                      "自动化", "拷贝链接"])]
         for (group, actions) in LyrimuseAction.shortcutLayout {
@@ -260,30 +260,30 @@ public enum SettingsSearchCatalog {
         lyrics("fetch", "预解析待播曲目", kw: ["预解析", "提前解析", "待播", "专辑", "队列", "播放列表", "下一首"]),
         lyrics("fetch", "锁定手选歌词", kw: ["手动选定", "锁定"]),
         // ---- 歌词 › 译文 ----
-        lyrics("translation", "译文语言", sub: "各处显不显示译文，在「歌词显示」里设", kw: ["翻译", "语言"]),
-        lyrics("translation", "没有译文时自动翻译", alt: ["系统兜底翻译"], sub: "优先在本机翻译，翻不了再联网",
+        lyrics("translation", "译文语言", sub: "各处是否显示译文，在「歌词显示」中设置", kw: ["翻译", "语言"]),
+        lyrics("translation", "无译文时自动翻译", alt: ["系统兜底翻译"], sub: "优先在本机翻译，无法翻译时再联网翻译",
                kw: ["机翻", "Google", "MyMemory", "翻译"]),
         lyrics("translation", "翻译语言包", kw: ["下载", "语言包", "Apple 翻译"]),
         // ---- 歌词 › 调整 ----
         lyrics("display", "繁简转换", sub: "中文歌词统一成简体或繁体", kw: ["繁体", "简体", "OpenCC"]),
-        lyrics("display", "标注读音的语言", alt: ["标注的语言"], sub: "勾选的语言标上读音；显不显示在「歌词显示」里设",
+        lyrics("display", "标注读音的语言", alt: ["标注的语言"], sub: "为勾选的语言标注读音；是否显示在「歌词显示」中设置",
                kw: ["日语", "韩语", "普通话", "粤语", "中文", "拼音", "粤拼", "读音", "罗马音", "罗马字", "注音", "发音"]),
-        lyrics("display", "长句拆分", sub: "一行放不下时拆成几段依次显示", kw: ["长句", "拆分", "断句", "换行", "折行", "滚动", "跑马灯", "宽度", "悬浮歌词", "灵动岛", "菜单栏", "触控栏"]),
-        lyrics("display", "短句合并", sub: "相邻的短句放得进一行时并成一行", kw: ["短句", "合并", "断句", "频繁", "闪", "宽度", "悬浮歌词", "灵动岛", "菜单栏", "触控栏"]),
+        lyrics("display", "长句拆分", sub: "单行无法完整显示时，拆分为多段依次显示", kw: ["长句", "拆分", "断句", "换行", "折行", "滚动", "跑马灯", "宽度", "悬浮歌词", "灵动岛", "菜单栏", "触控栏"]),
+        lyrics("display", "短句合并", sub: "相邻短句可容纳于一行时合并显示", kw: ["短句", "合并", "断句", "频繁", "闪", "宽度", "悬浮歌词", "灵动岛", "菜单栏", "触控栏"]),
         lyrics("display", "时间轴偏移", sub: "正值歌词提前，负值延后", kw: ["全局", "歌词偏移", "提前", "延后", "校准", "同步", "延迟"]),
         // ---- 歌词 › 管理 ----
         lyrics("manage", "歌词库", kw: ["歌词管理", "统计", "缓存"]),
-        lyrics("manage", "自动匹配缺失歌词", sub: "只搜没有歌词或只有纯文本的歌", kw: ["重新扫描", "重搜", "补空", "没有歌词", "暂无", "缺失"]),
-        lyrics("manage", "重新匹配整个歌词库", sub: "已有歌词的也重挑一遍；手改、校准过和纯音乐的不动", kw: ["重新扫描", "重搜", "全量", "扫库", "升级", "跟进算法"]),
-        lyrics("manage", "扫描间隔", sub: "每首之间停几秒；建议不快于 2 秒，以免被限流",
+        lyrics("manage", "自动匹配缺失歌词", sub: "仅搜索无歌词或仅有纯文本歌词的歌曲", kw: ["重新扫描", "重搜", "补空", "没有歌词", "暂无", "缺失"]),
+        lyrics("manage", "重新匹配整个歌词库", sub: "已有歌词的歌曲也重新选择；手动修改、已校准和纯音乐的歌曲保持不变", kw: ["重新扫描", "重搜", "全量", "扫库", "升级", "跟进算法"]),
+        lyrics("manage", "扫描间隔", sub: "每首歌曲之间的间隔秒数；建议不少于 2 秒，以免被限流",
                kw: ["速度", "间隔", "限流", "风控", "并发", "快", "慢"]),
-        lyrics("manage", "歌词文件夹", sub: "改位置后，已有文件不会跟着搬", kw: ["lyrics", "自定义位置", "目录", "lrc"]),
+        lyrics("manage", "歌词文件夹", sub: "更改位置后，已有文件不会随之移动", kw: ["lyrics", "自定义位置", "目录", "lrc"]),
 
         // ---- 播放器 ----
         player("players", "音乐 App", alt: ["选择播放器"],
                kw: ["Apple Music", "QQ音乐", "网易云音乐", "酷狗音乐", "Spotify", "自动识别", "多选"]),
         player("players", "网页版", alt: ["网页播放器"], kw: ["YouTube Music", "Spotify", "浏览器", "Chrome", "Safari", "Edge", "Arc", "配对"]),
-        player("players", "自动跳过 YouTube Music 广告", sub: "能跳过的广告一出现就自动跳过", kw: ["广告", "跳过", "YouTube Music", "辅助功能"],
+        player("players", "自动跳过 YouTube Music 广告", sub: "可跳过的广告出现时自动跳过", kw: ["广告", "跳过", "YouTube Music", "辅助功能"],
                group: ["网页版"]),
         player("players", "其他 App", alt: ["已信任的播放器"], kw: ["信任列表", "其它播放器"]),
         player("players", "添加 App…", alt: ["添加播放器…"], sub: "从「应用程序」中选择，无需等待其开始播放",
@@ -461,7 +461,7 @@ public enum SettingsSearchCatalog {
                      group: "布局"),
         // 跟悬浮歌词那条「悬浮淡化」同名、不同段,各自跳到自己那一段。
         lyricsWindow("悬浮淡化", kw: ["透明", "半透明", "淡出", "让开", "悬停", "鼠标", "指针", "迷你"], group: "行为"),
-        lyricsWindow("淡化时点按穿透", sub: "淡化时点按会落到下面的窗口；按住 ⌥ 恢复不透明，就能操作",
+        lyricsWindow("淡化时点按穿透", sub: "淡化时点按将穿透到下层窗口；按住 ⌥ 可恢复不透明并进行操作",
                      kw: ["穿透", "点击穿透", "透明", "点不到", "下面的窗口", "option", "迷你"], group: "行为"),
         // 跟悬浮歌词、灵动岛那两条同名、不同段,各自跳到自己那一段。
         lyricsWindow("暂停时隐藏", kw: ["自动隐藏", "暂停", "没在播放", "迷你"], group: "行为"),
@@ -529,7 +529,7 @@ public enum SettingsSearchCatalog {
         softwareUpdate("测试版更新", sub: "预发布版本，可能不稳定", kw: ["beta", "测试版", "预发布"], group: "更新设置"),
         about("反馈问题", sub: "在 GitHub 新建 issue，自动附带版本、系统与播放器信息", kw: ["issue", "bug", "反馈", "建议", "github", "邮件", "邮箱", "email"], group: "更新与帮助"),
         about("使用求助", sub: "在 GitHub 讨论区的问答分类中提问", kw: ["discussion", "求助", "提问", "问答", "help"], group: "更新与帮助"),
-        about("功能清单", sub: "全部功能、所在位置与默认开关", kw: ["全部功能", "功能列表", "功能介绍", "默认", "设置项", "features"], group: "更新与帮助"),
+        about("功能清单", sub: "全部功能、所在位置及默认状态", kw: ["全部功能", "功能列表", "功能介绍", "默认", "设置项", "features"], group: "更新与帮助"),
         about("Discord 社区", sub: "与其他用户交流，也可在此提问或提出建议", kw: ["discord", "社区", "社群", "交流", "聊天", "community"], group: nil),
         about("Telegram 群组", sub: "与其他用户交流，也可在此提问或提出建议", kw: ["telegram", "电报", "群组", "社群", "交流", "聊天", "community"], group: nil),
         about("版权说明", kw: ["版权", "歌词版权"], group: nil),
@@ -537,7 +537,7 @@ public enum SettingsSearchCatalog {
         about("开源许可证", sub: "GPL-3.0", kw: ["GPL", "许可证", "license"], group: nil),
         about("导出诊断", sub: "打包日志、崩溃记录与运行状态，已移除账号凭据；含曲目名与本机路径，公开前请检查", kw: ["诊断", "日志", "排查", "反馈"], group: "诊断与数据"),
         about("运行日志", sub: "歌词引擎的原始日志，供自行排查", kw: ["日志", "log", "排查", "访达"], group: "诊断与数据"),
-        about("配置文件夹", sub: "纯文本，含账号凭据；外观与快捷键不在此处，整体迁移请使用「备份与迁移」", kw: ["config", "配置", "文件夹", "路径"], group: "诊断与数据"),
+        about("配置文件夹", sub: "纯文本格式，含账号凭据；不含外观与快捷键，完整迁移请使用「备份与迁移」", kw: ["config", "配置", "文件夹", "路径"], group: "诊断与数据"),
 
         // ---- 账号 ----
         account("listenBrainz", path: ["ListenBrainz"], "账号信息", kw: ["ListenBrainz", "token", "令牌", "用户名", "连接"]),
@@ -571,14 +571,14 @@ public enum SettingsSearchCatalog {
                 kw: ["Discord", "歌名", "歌手", "专辑", "歌词", "当前歌词", "第一行", "第二行", "第三行", "顺序", "合并", "资料卡"]),
         account("discord", path: ["Discord"], sectionValue: "display", "状态文字", kw: ["Discord", "正在收听", "用户名", "好友列表"]),
         account("discord", path: ["Discord"], sectionValue: "display", "封面与进度", kw: ["Discord", "封面", "角标", "进度条", "暂停"]),
-        account("discord", path: ["Discord"], sectionValue: "display", "歌手、专辑前加说明", kw: ["Discord", "演唱", "专辑", "前缀", "by", "on"]),
+        account("discord", path: ["Discord"], sectionValue: "display", "为歌手和专辑添加前缀", kw: ["Discord", "演唱", "专辑", "前缀", "by", "on"]),
         account("discord", path: ["Discord"], sectionValue: "buttons", "按钮", kw: ["Discord", "按钮", "链接", "button"]),
         account("discord", path: ["Discord"], sectionValue: "buttons", "自定义按钮", kw: ["Discord", "按钮", "自定义", "链接", "button"]),
         account("discord", path: ["Discord"], sectionValue: "buttons", "「在播放器上收听」", kw: ["Discord", "按钮", "收听", "歌曲页", "链接"]),
         account("discord", path: ["Discord"], sectionValue: "buttons", "「获取 Lyrimuse」", kw: ["Discord", "按钮", "官网", "Lyrimuse"]),
         account("discord", path: ["Discord"], sectionValue: "privacy", "隐私", kw: ["Discord", "隐藏", "播放器", "不显示"]),
         account("discord", path: ["Discord"], sectionValue: "privacy", "暂时隐藏", kw: ["Discord", "隐藏", "暂时", "隐私", "不显示"]),
-        account("discord", path: ["Discord"], sectionValue: "privacy", "不显示是哪首歌", kw: ["Discord", "隐私", "隐藏歌名", "不显示", "匿名"]),
+        account("discord", path: ["Discord"], sectionValue: "privacy", "隐藏歌曲信息", kw: ["Discord", "隐私", "隐藏歌名", "不显示", "匿名"]),
         account("discord", path: ["Discord"], sectionValue: "display", "显示进度条", kw: ["Discord", "进度条", "时间", "隐私"]),
         account("discord", path: ["Discord"], sectionValue: "privacy", "显示哪些播放器", kw: ["Discord", "播放器", "排除", "浏览器"]),
     ]

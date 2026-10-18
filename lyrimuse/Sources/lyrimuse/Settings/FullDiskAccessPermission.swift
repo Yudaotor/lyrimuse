@@ -138,11 +138,11 @@ final class FullDiskAccessPermission: ObservableObject {
     /// 没授权时怎么补,两个界面共用。授权过的直接讲删掉再加回来:失效的那条留在列表里、开关亮着,关了再开不管用。
     var steps: String {
         everGranted
-            ? L10n.t("更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加，然后点「重启歌词引擎」。")
-            : L10n.t("在系统设置中打开 Lyrimuse，然后点「重启歌词引擎」。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。")
+            ? L10n.t("更新后原有授权已失效。请在系统设置中通过「−」移除 Lyrimuse，再通过「+」重新添加，然后点按「重启歌词引擎」")
+            : L10n.t("请在系统设置中开启 Lyrimuse，然后点按「重启歌词引擎」。若已开启但仍未生效，请通过「−」移除 Lyrimuse，再通过「+」重新添加")
     }
 
-    var stillDeniedNote: String { L10n.t("重启后仍无法读取。请确认 Lyrimuse 已打开；已打开时，用「−」移除后再用「+」重新添加。") }
+    var stillDeniedNote: String { L10n.t("重启后仍无法读取。请确认 Lyrimuse 已开启；若已开启，请通过「−」移除后再通过「+」重新添加") }
 
     /// 「QQ 音乐和酷狗音乐」—— 说明文字里替哪几家要。拼接走 `L10n.list`(按界面语言,见
     /// `SettingsToggleSummary` 头注)。
@@ -184,7 +184,7 @@ struct FullDiskAccessGuide: View {
     /// 「为什么要这项授权」那一句,引导页正文也用它。
     @MainActor
     static func reason(_ players: [PlaybackPlayer]) -> String {
-        String(format: L10n.t("%@ 的歌词缓存和播放队列在受保护的目录中。授权后可直接使用本机已有的歌词，并提前解析即将播放的歌曲；不授权也能联网查找歌词。"),
+        String(format: L10n.t("%@ 的歌词缓存和播放队列位于受保护的目录中。授权后可直接使用本机已有的歌词，并预先解析即将播放的歌曲；未授权时仍可联网查找歌词"),
                FullDiskAccessPermission.shared.playerNames(players))
     }
 

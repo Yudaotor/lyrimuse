@@ -372,7 +372,7 @@ struct MenuBarLyricsIconRow: View {
         SettingsRow(
             icon: "chart.bar.fill",
             title: L10n.t("歌词旁的图标"),
-            help: L10n.t("在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱颜色」，其余使用「未唱颜色」。仅在显示歌词时出现。")
+            help: L10n.t("在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱颜色」，其余使用「未唱颜色」。仅在显示歌词时出现")
         ) {
             SettingsPillSegmentedControl(
                 selection: $settings.menuBarLyricsIconPosition,
@@ -406,7 +406,7 @@ struct MenuBarHoverControlsTile: View {
         SettingsToggleTile(
             icon: "playpause.circle",
             title: L10n.t("悬停显示播放控制"),
-            help: L10n.t("指针移到菜单栏歌词上时显示「上一曲 / 播放暂停 / 下一曲」三个按钮，移开后恢复。暂停后歌词收起为图标，或区域过窄放不下三个按钮时不显示。点按按钮以外的区域仍会打开面板。"),
+            help: L10n.t("指针移到菜单栏歌词上时显示「上一曲 / 播放暂停 / 下一曲」三个按钮，移开后恢复。暂停后歌词收起为图标，或区域过窄放不下三个按钮时不显示。点按按钮以外的区域仍会打开面板"),
             isOn: $settings.menuBarHoverShowsControls)
     }
 }
@@ -560,7 +560,7 @@ struct MenuBarWidthModeRow: View {
             // 图标会停在旧位置(错位、闪动),左键面板也可能被挤掉。UI 上现在只保留它的
             // **可见结果**(宽度随句变、旁边图标跟着挪)——那是"效果";成因和"别用"属于
             // 判断,不进这行字。
-            help: L10n.t("固定：所有歌曲使用设定的宽度。\n自适应：按每首歌曲的歌词确定宽度，不超过设定宽度。")
+            help: L10n.t("固定：所有歌曲使用设定的宽度。\n自适应：按每首歌曲的歌词确定宽度，不超过设定宽度")
         ) {
             SettingsPillSegmentedControl(
                 selection: $settings.menuBarLyricsWidthMode,
@@ -685,7 +685,7 @@ struct MenuBarSecondaryLineRow: View {
         SettingsRow(
             icon: "text.append",
             title: L10n.t("副行"),
-            help: L10n.t("在主歌词下方增加一行，高度不变（两行分别为 10pt / 9pt，「字号」不生效）。译文和读音对应当前句，「下一句」显示即将演唱的歌词；开启副行时，主行不再提前切换到下一句。副行不滚动，显示不下时末尾渐隐。")
+            help: L10n.t("在主歌词下方增加一行，高度不变（两行分别为 10pt / 9pt，「字号」不生效）。译文和读音对应当前句，「下一句」显示即将演唱的歌词；开启副行时，主行不再提前切换到下一句。副行不滚动，空间不足时末尾渐隐")
         ) {
             SettingsGlassMenuPicker(
                 selection: $settings.menuBarSecondaryLine,
@@ -713,7 +713,7 @@ struct MenuBarFontSizeRow: View {
         SettingsRow(
             icon: "textformat.size",
             title: L10n.t("字号"),
-            help: L10n.t("默认跟随系统菜单栏，可在 10～16pt 之间调整，16pt 仍在菜单栏项高度内。拖回系统字号处即恢复跟随。")
+            help: L10n.t("默认跟随系统菜单栏字号，可在 10～16pt 之间调整，16pt 仍在菜单栏高度范围内。拖回系统字号即恢复跟随")
         ) {
             // 副行开着时两行字号由行高推出(10 / 9pt,见 MenuBarLyricRows),滑杆翻了也没效果 —— ~07
             // 之间这一行是整行隐藏的;「副行」搬去「布局」浮层之后,这里再藏整行就成了"字号去哪了",

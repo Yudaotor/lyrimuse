@@ -21,7 +21,7 @@ struct LyricSourceHealthHelp: View {
                             LyricSourceHealth.percent(summary.won, of: summary.rounds)))
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text(L10n.t("其他歌词源照常搜索，只要有其他源找到歌词，就不受影响。这些数据仅在本机统计。"))
+            Text(L10n.t("其他歌词源照常搜索，只要其中任一找到歌词即不受影响。以上数据仅在本机统计"))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .font(.system(size: 11))
@@ -49,33 +49,33 @@ struct LyricSourceHealthHelp: View {
         let skipRate = LyricSourceHealth.percent(summary.skipRate)
         switch summary.alert {
         case .barely:
-            return String(format: L10n.t("最近 3 天的 %1$d 次查询中，同类曲库至少有两家找到了歌词，而 %2$@ 仅在其中 %3$d%% 提供了歌词。可能是其接口发生变化，或请求被拦截。"),
+            return String(format: L10n.t("最近 3 天的 %1$d 次查询中，至少两个同类曲库找到了歌词，而 %2$@ 仅在其中 %3$d%% 提供了歌词。可能是其接口发生变化，或请求被拦截"),
                           summary.peerRounds, name, peerRate)
         case .belowUsual:
             // 「平时」是引擎按这几天两类歌(中日韩文 / 其他)各占多少现算的,不是这个源过去的总比例。
-            return String(format: L10n.t("最近 3 天的 %1$d 次查询中，同类曲库至少有两家找到了歌词，%2$@ 在其中 %3$d%% 提供了歌词；按这几天所听歌曲的语种构成，平时约为 %4$d%%。"),
+            return String(format: L10n.t("最近 3 天的 %1$d 次查询中，至少两个同类曲库找到了歌词，%2$@ 在其中 %3$d%% 提供了歌词；按近期所听歌曲的语种构成，通常约为 %4$d%%"),
                           summary.peerRounds, name, peerRate, LyricSourceHealth.percent(summary.usualRate))
         case .cooling:
-            return String(format: L10n.t("最近 2 天有 %1$d%% 的查询未使用 %2$@：该源连续出错，已被暂时停用，稍后将自动恢复。"),
+            return String(format: L10n.t("最近 2 天有 %1$d%% 的查询未使用 %2$@：该源连续出错，已被暂时停用，稍后将自动恢复"),
                           skipRate, name)
         case .blocked:
-            return String(format: L10n.plural("%1$@ 的反爬限制拦下了这台 Mac 的请求，最近有 %2$d 次查询因此未使用它。已暂时停用，稍后将自动重试。", count: summary.blockedRounds),
+            return String(format: L10n.plural("%1$@ 的反爬虫限制拦截了这台 Mac 的请求，近期有 %2$d 次查询因此未使用该歌词源。已暂时停用，稍后将自动重试", count: summary.blockedRounds),
                           name, summary.blockedRounds)
         case .stopped:
-            return String(format: L10n.t("最近连续 %1$d 次查询中，同类曲库至少有两家找到了歌词，%2$@ 一次也没有提供；按它平时的收录情况，本该提供约 %3$d 次。可能是其接口发生变化，或请求被拦截。"),
+            return String(format: L10n.t("最近连续 %1$d 次查询中，至少两个同类曲库找到了歌词，%2$@ 均未提供；按其通常的收录情况，应提供约 %3$d 次。可能是其接口发生变化，或请求被拦截"),
                           summary.streak, name, summary.expectedHits)
         case .degraded:
             // 比例、平时、样本数沿用 peerRate / usualRate / peerRounds,见引擎 judgeLyricSourceQuality。
             let usual = LyricSourceHealth.percent(summary.usualRate)
             if summary.degraded == .usable {
-                return String(format: L10n.t("最近 3 天 %1$@ 给出的 %2$d 份歌词中，可用（带时间轴且与歌曲对得上）的只占 %3$d%%，平时约为 %4$d%%。可能是其接口发生变化，只返回纯文本。"),
+                return String(format: L10n.t("最近 3 天 %1$@ 返回的 %2$d 份歌词中，可用（带时间轴且与歌曲吻合）的仅占 %3$d%%，通常约为 %4$d%%。可能是其接口发生变化，仅返回纯文本"),
                               name, summary.peerRounds, peerRate, usual)
             }
-            return String(format: L10n.t("最近 3 天 %1$@ 给出的 %2$d 份可用歌词中，带逐字时间轴的只占 %3$d%%，平时约为 %4$d%%。可能是其接口或加密方式发生变化，逐字歌词解不开。"),
+            return String(format: L10n.t("最近 3 天 %1$@ 返回的 %2$d 份可用歌词中，带逐字时间轴的仅占 %3$d%%，通常约为 %4$d%%。可能是其接口或加密方式发生变化，导致逐字歌词无法解析"),
                           name, summary.peerRounds, peerRate, usual)
         case .network, nil:
             let peers = summary.networkPeers.map(sourceDisplayName).joined(separator: L10n.t("、"))
-            return String(format: L10n.t("最近 2 天有 %1$d%% 的查询因无法连接 %2$@ 而跳过，%3$@ 也是如此。多个源同时无法连接，通常是这台 Mac 无法访问这些网站（例如需要开启代理），而非歌词源本身故障。"),
+            return String(format: L10n.t("最近 2 天有 %1$d%% 的查询因无法连接 %2$@ 而跳过，%3$@ 也是如此。多个源同时无法连接，通常是这台 Mac 无法访问这些网站（例如需要开启代理），而非歌词源本身故障"),
                           skipRate, name, peers)
         }
     }

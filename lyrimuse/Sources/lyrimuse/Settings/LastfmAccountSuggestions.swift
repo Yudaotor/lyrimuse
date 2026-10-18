@@ -100,12 +100,12 @@ struct LastfmSpotifySuggestionRow: View {
                     let spotify = PlaybackPlayer.spotify.bundleIdentifier
                     Task { await FeatureSettingsStore.shared.updateLastfmExclusion(scrobbled: [], excluded: [spotify]) }
                 }
-                .help(L10n.t("在「Scrobble 的播放器」中取消勾选 Spotify；在手机等其他设备上收听的 Spotify 仍会照常记录。"))
+                .help(L10n.t("在「Scrobble 的播放器」中取消勾选 Spotify；在手机等其他设备上收听的 Spotify 仍会照常记录"))
                 Button(L10n.t("仅由 Lyrimuse 记录…")) { openLastfmApplications() }
-                    .help(L10n.t("打开 Last.fm 网站，在「Spotify Scrobbling」一栏点按 Disconnect；之后仅记录这台 Mac 上播放的 Spotify。"))
+                    .help(L10n.t("打开 Last.fm 网站，在「Spotify Scrobbling」一栏点按 Disconnect；之后仅记录这台 Mac 上播放的 Spotify"))
             case .expiredWhileExcluded:
                 Button(L10n.t("前往 Last.fm 重新连接…")) { openLastfmApplications() }
-                    .help(L10n.t("打开 Last.fm 网站，在「Spotify Scrobbling」一栏点按 Connect。"))
+                    .help(L10n.t("打开 Last.fm 网站，在「Spotify Scrobbling」一栏点按 Connect"))
             }
         }
     }
@@ -113,9 +113,9 @@ struct LastfmSpotifySuggestionRow: View {
     private var detail: String {
         switch hint {
         case .doubleScrobble:
-            return L10n.t("Last.fm 已直接连接 Spotify，Lyrimuse 也在记录，保留其中一方即可。")
+            return L10n.t("Last.fm 已直接连接 Spotify，Lyrimuse 也在记录，保留其中一方即可")
         case .expiredWhileExcluded(let at):
-            return String(format: L10n.t("Last.fm 与 Spotify 的连接已于 %@ 过期，Lyrimuse 中也未勾选 Spotify。"),
+            return String(format: L10n.t("Last.fm 与 Spotify 的连接已于 %@ 过期，Lyrimuse 中也未勾选 Spotify"),
                           at.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, locale: L10n.locale)))
         }
     }
@@ -161,7 +161,7 @@ struct LastfmSuggestionsPage: View {
             LastfmReconnectSuggestionRow(title: L10n.t("无法连接 Last.fm"), detail: message)
         case .authRevoked:
             LastfmReconnectSuggestionRow(title: L10n.t("授权已失效，Scrobble 已暂停"),
-                                         detail: L10n.t("授权可能已在 Last.fm 网站上被撤销，重新连接即可恢复。"))
+                                         detail: L10n.t("授权可能已在 Last.fm 网站上被撤销，重新连接即可恢复"))
         case .spotify(let hint):
             LastfmSpotifySuggestionRow(hint: hint)
         }

@@ -65,7 +65,7 @@ struct TouchBarLyricsRows: View {
             VStack(spacing: 0) {
                 // 四选一同灵动岛 / 菜单栏的「副行」(同一个枚举、同一套显示名),各存各的键,默认不显示。
                 SettingsRow(icon: "text.append", title: L10n.t("副行"),
-                            help: L10n.t("在主行下方再显示一行：译文和读音对应当前句，「下一句」为即将演唱的歌词。开启后两行字号固定为 14pt / 11pt，「字号」不生效，主行也不再提前切到下一句；副行显示不下时，按该句时长横向滚动")) {
+                            help: L10n.t("在主行下方增加一行：译文和读音对应当前句，「下一句」为即将演唱的歌词。开启后两行字号固定为 14pt / 11pt，「字号」不生效，主行也不再提前切换到下一句；副行空间不足时，按该句时长横向滚动")) {
                     SettingsGlassMenuPicker(
                         selection: $settings.touchBarSecondaryLine,
                         options: LyricSecondaryLine.allCases,
@@ -101,7 +101,7 @@ struct TouchBarLyricsRows: View {
                 CardDivider()
                 // 同灵动岛「对齐方式」那四档(含按对唱声部走的「自动」),说明文案也是同一条。
                 SettingsRow(icon: "text.alignleft", title: L10n.t("对齐方式"),
-                            help: L10n.t("只作用于能完整显示的句子；显示不下、需横向滚动的句子不受影响。「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左")) {
+                            help: L10n.t("仅作用于可完整显示的句子，需横向滚动的句子不受影响。「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左对齐")) {
                     LyricsAlignmentSegmentedControl(selection: $settings.touchBarLyricsAlignment,
                                                     options: LyricsRestingAlignment.notchOptions)
                 }
@@ -242,7 +242,7 @@ struct TouchBarBehaviorRows: View {
                                help: L10n.t("暂停 10 秒后收起为功能栏图标，恢复播放时自动展开"),
                                isOn: $settings.touchBarCollapseWhenPaused)
             SettingsToggleTile(icon: "text.badge.xmark", title: L10n.t("纯音乐/无歌词时收起"),
-                               help: L10n.t("确认没有歌词后才收起，找到歌词时自动展开；搜索期间照常显示"),
+                               help: L10n.t("确认无歌词后才收起，找到歌词后自动展开；搜索期间照常显示"),
                                isOn: $settings.touchBarCollapseWhenNoLyrics)
         }
     }

@@ -49,7 +49,7 @@ final class MediaChannelNotifier {
         guard await UnknownPlayerNotifier.shared.ensureAuthorized() else { return }
         let content = UNMutableNotificationContent()
         content.title = L10n.t("系统媒体信息通道不可用")
-        content.body = L10n.t("部分播放器的播放状态读取不到，歌词不会跟着走") + "\n" + L10n.t("点按此处查看受影响的播放器")
+        content.body = L10n.t("无法读取部分播放器的播放状态，其歌词无法随播放同步") + "\n" + L10n.t("点按此处查看受影响的播放器")
         content.categoryIdentifier = Self.categoryID
         content.threadIdentifier = Self.categoryID
         content.sound = .default

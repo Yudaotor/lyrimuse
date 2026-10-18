@@ -153,7 +153,7 @@ struct SongVersionsSheet: View {
             }
             Button(L10n.t("取消"), role: .cancel) {}
         } message: { _ in
-            Text(L10n.t("拆分后，该条目将作为独立歌曲：播放次数单独统计，不再同步歌词；此前同步过去的歌词将恢复为原有版本。之后可在此恢复合并。"))
+            Text(L10n.t("拆分后，该条目将作为独立歌曲：播放次数单独统计，不再同步歌词；此前同步过去的歌词将恢复为原有版本。之后可在此恢复合并"))
         }
     }
 
@@ -168,7 +168,7 @@ struct SongVersionsSheet: View {
                         let inSong = versions.filter { $0.relation != .split }.count
                         Text(String(format: L10n.plural("%d 个条目已识别为同一首歌，播放次数合并统计", count: inSong), inSong))
                     } else {
-                        Text(L10n.t("以下条目已识别为同一首歌，播放次数合并统计；如有误识别，可将其拆分。"))
+                        Text(L10n.t("以下条目已识别为同一首歌，播放次数合并统计；如有误识别，可将其拆分"))
                     }
                 }
                 .font(.caption)
@@ -304,7 +304,7 @@ struct SongVersionsSheet: View {
             factsTable(c)
             allVersionsTable(c)
             if !edges.isEmpty { evidenceSummary }
-            Text(L10n.t("选择左侧或表格中的其他条目，可与当前条目逐项对比。"))
+            Text(L10n.t("选择左侧或表格中的其他条目，可与当前条目逐项对比"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -519,7 +519,7 @@ struct SongVersionsSheet: View {
         }
         return DisclosureGroup(isExpanded: $evidenceExpanded) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(L10n.t("播放器或曲库提供的标识符可信度最高；按曲名检索得到的结果可能有误，仅供参考。"))
+                Text(L10n.t("播放器或曲库提供的标识符可信度最高；按曲名检索得到的结果可能有误，仅供参考"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -766,7 +766,7 @@ struct SongVersionsSheet: View {
         let current = versions.first { $0.relation == .current }
         return DisclosureGroup(isExpanded: $pairEvidenceExpanded) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(L10n.t("播放器或曲库提供的标识符可信度最高；按曲名检索得到的结果可能有误，仅供参考。"))
+                Text(L10n.t("播放器或曲库提供的标识符可信度最高；按曲名检索得到的结果可能有误，仅供参考"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -786,7 +786,7 @@ struct SongVersionsSheet: View {
                                 .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.06)))
                         }
                         if countOnly {
-                            Text(L10n.t("检索到的曲目与本条目曲名不符，仅用于合并播放次数，不参与歌词同步。"))
+                            Text(L10n.t("检索到的曲目与本条目曲名不符，仅用于合并播放次数，不参与歌词同步"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -807,7 +807,7 @@ struct SongVersionsSheet: View {
             let gap = abs(a - b)
             let seconds = gap < 0.95 ? String(format: "%.1f", gap) : String(Int(gap.rounded()))
             return String(format: kind == "family" ? L10n.t("艺人、曲名一致，时长相差 %@ 秒")
-                : L10n.t("艺人一致，曲名除括号里的说明外一致，时长相差 %@ 秒"), seconds)
+                : L10n.t("艺人一致，曲名除括号内说明外一致，时长相差 %@ 秒"), seconds)
         }
         return Self.evidenceLabel(kind)
     }
@@ -994,9 +994,9 @@ struct SongVersionsSheet: View {
     static func relationExplanation(_ relation: Relation) -> String {
         switch relation {
         case .current: return ""
-        case .shared: return L10n.t("自动匹配的歌词与当前条目同步：更换歌词时一并更新，手动修改也会同步。")
-        case .own: return L10n.t("歌词独立匹配，不随当前条目更换；手动修改也不会同步。")
-        case .split: return L10n.t("已从此歌曲拆分：作为独立歌曲单独统计播放次数，歌词不再关联。如拆分有误，可恢复合并。")
+        case .shared: return L10n.t("自动匹配的歌词与当前条目同步：更换歌词时一并更新，手动修改也会同步")
+        case .own: return L10n.t("歌词独立匹配，不随当前条目更换；手动修改也不会同步")
+        case .split: return L10n.t("已从此歌曲拆分：作为独立歌曲单独统计播放次数，歌词不再关联。如拆分有误，可恢复合并")
         }
     }
 
@@ -1105,7 +1105,7 @@ struct SongVersionsSheet: View {
         case "netease_song": return L10n.t("网易云音乐检索结果为同一曲目")
         case "qq_song": return L10n.t("QQ 音乐检索结果为同一曲目")
         case "family": return L10n.t("艺人、曲名一致，时长相近")
-        case "bare_title": return L10n.t("艺人一致，曲名除括号里的说明外一致，时长相近")
+        case "bare_title": return L10n.t("艺人一致，曲名除括号内说明外一致，时长相近")
         case "lyrics": return L10n.t("两条独立匹配的歌词一致")
         case "apple_name": return L10n.t("与 Apple Music 目录中的曲名吻合")
         case "netease_name": return L10n.t("与网易云音乐目录中的曲名吻合")

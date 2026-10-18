@@ -996,7 +996,7 @@ func runTouchBarTests() {
                         && local.contains("if touchBar != touchBarLyrics { touchBarLyrics = touchBar }"), true,
                     "触控栏断句: 逐拍算触控栏这个面并发布")
         let settingsSource = code(appDir.appendingPathComponent("SettingsView.swift")) ?? ""
-        expectEqual(settingsSource.contains("SettingsCardHeader(title: L10n.t(\"断句\"), subtitle: L10n.t(\"只用于悬浮歌词、灵动岛、菜单栏和触控栏\"))"), true,
+        expectEqual(settingsSource.contains("SettingsCardHeader(title: L10n.t(\"断句\"), subtitle: L10n.t(\"仅用于悬浮歌词、灵动岛、菜单栏和触控栏\"))"), true,
                     "触控栏断句: 「长句拆分」「短句合并」所在的「断句」卡头写明适用范围含触控栏")
         // 隐藏功能栏时系统不给 ✕:自己那颗收起键要接上「收起」,展开着的时候切换要按新的方式重新展开。
         expectEqual(controller.contains("TouchBarPrivateAPI.minimizeSystemModal(bar)"), true,

@@ -112,7 +112,7 @@
     ["Discord", "歌曲信息"],
     ["Discord", "状态文字"],
     ["Discord", "封面与进度"],
-    ["Discord", "歌手、专辑前加说明"],
+    ["Discord", "为歌手和专辑添加前缀"],
     ["Discord", "自定义按钮"],
     ["Discord", "「在播放器上收听」"],
     ["Discord", "「获取 Lyrimuse」"],

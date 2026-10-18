@@ -67,7 +67,7 @@ struct LyricsDecisionSheet: View {
     private func pathLabel(_ decision: LyricsResolutionDecision) -> String {
         switch decision.path {
         case "first-resolve": return L10n.t("首次解析")
-        case "upgrade": return L10n.t("尝试更优歌词")
+        case "upgrade": return L10n.t("查找更优歌词")
         case "rescore": return L10n.t("评分规则更新后重选")
         // 「当初一条歌词都没搜到、后来又试了一次」那条路径(引擎的
         // needsLyricsFirstFill)。跟「升级重试」分开显示:那个是"本来有、想换更好的",
@@ -85,7 +85,7 @@ struct LyricsDecisionSheet: View {
         case "artist-alias-reuse": return L10n.t("复用同一首歌曲的其他歌手写法")
         // 歌曲实体同步过来的(引擎的 songentityshare.go):共享组以整首歌重搜那一轮选出的,或者同一首歌另一条写法上
         // 手改的副本(reused_from 记搜的那条 / 原件)。
-        case "song-entity-share": return L10n.t("与同一首歌曲的其他写法共用")
+        case "song-entity-share": return L10n.t("与同曲条目共用")
         // 兜底显示原始值:引擎那边新增一条路径、这边忘了补译名时,至少还看得出是哪条
         // (而不是空白)。但那就是漏了 —— 这张表跟引擎里 buildLyricsDecision 的 path
         // 取值必须成对改,的 manual-rematch 就是这么漏出来一个英文串的。
@@ -110,7 +110,7 @@ struct LyricsDecisionSheet: View {
         // 是中日韩文字(dominantScript 判 Han/Kana/Hangul),而**没有任何一个源**给出
         // 罗马音字段、也没有源标出语种(标了的话本地能自己注音,不用再查)。
         case "alias-roma": return L10n.t("别名轮：补读音")
-        case "alias-missing": return L10n.t("别名轮：补查未应答的源")
+        case "alias-missing": return L10n.t("别名轮：重新查询未应答的歌词源")
         case "primary-artist-variant": return L10n.t("仅用首位歌手")
         case "title-from-album": return L10n.t("标题反查：专辑曲目表")
         case "title-from-artist-search": return L10n.t("标题反查：歌手泛搜")
@@ -515,12 +515,12 @@ struct LyricsDecisionSheet: View {
             var detail = gapSentence(gap: gap, percent: percent, nearTie: nearTie,
                                      sayNearTie: true, separator: separator)
             // 内容一致意味着分差比的是包装,不是词本身 —— 这句话是这一档判词的全部价值。
-            detail += " " + L10n.t("分差来自附加信息（逐字时间轴、译文），与歌词正文无关。")
+            detail += " " + L10n.t("分差来自附加信息（逐字时间轴、译文），与歌词正文无关")
             return (String(format: L10n.t("%d 个源的歌词正文相同"), contenders), detail)
 
         case let .decisiveNegative(term, loser, gap):
             return (String(format: L10n.t("决定性差异：「%@」"), termLabel(term.kind)),
-                    String(format: L10n.plural("%1$@ 在此项被扣 %2$d 分，胜者未被扣分，%3$d 分的分差全部来自此项。", count: abs(term.points)),
+                    String(format: L10n.plural("%1$@ 在此项被扣 %2$d 分，胜者未被扣分，%3$d 分的分差全部来自此项", count: abs(term.points)),
                            sourceDisplayName(loser), abs(term.points), gap))
 
         case let .tooClose(contenders, corroborated, gap, percent, separator):
@@ -530,7 +530,7 @@ struct LyricsDecisionSheet: View {
             // 跟 .sameLyrics 的分水岭:那边每条候选都拿到了别的源的内容印证,这边没有。
             // 给出**计数**而不是只说「不是每条都有」——读的人眼睛正盯着冠亚两行,
             // 光说"不是每条"很容易读成"这两份不是同一份词",而它们往往恰恰是同一份。
-            detail += " " + String(format: L10n.plural("%1$d 条候选中仅 %2$d 条获得内容印证，正文未必一致。", count: corroborated),
+            detail += " " + String(format: L10n.plural("%1$d 条候选中仅 %2$d 条获得内容印证，正文未必一致", count: corroborated),
                                    contenders, corroborated)
             // 标题两件事都说全:分差极小 **且** 内容印证不全 —— 后者才是这一档跟
             // .sameLyrics 的分水岭,也是真正值得人工看一眼的原因。
@@ -548,25 +548,25 @@ struct LyricsDecisionSheet: View {
     private func gapSentence(gap: Int, percent: Double?, nearTie: Bool, sayNearTie: Bool,
                              separator: LyricsVerdictSeparator) -> String {
         if case .identical = separator {
-            return L10n.t("两者各项得分完全相同，按源的顺序排列。")
+            return L10n.t("两者各项得分完全相同，按歌词源顺序排列")
         }
         let pct = gapPercentText(gap: gap, percent: percent)
         var s: String
         if gap == 0 {
             // 分项有差但加起来正好抵平 —— 罕见,但不能说成「分差只有 0 分」。
-            s = L10n.t("两者同分。")
+            s = L10n.t("两者同分")
         } else if nearTie && sayNearTie {
             s = pct.isEmpty
-                ? String(format: L10n.t("分差仅 %d 分，接近平分。"), gap)
-                : String(format: L10n.t("分差仅 %1$d 分（%2$@），接近平分。"), gap, pct)
+                ? String(format: L10n.t("分差仅 %d 分，接近平分"), gap)
+                : String(format: L10n.t("分差仅 %1$d 分（%2$@），接近平分"), gap, pct)
         } else if nearTie {
             s = pct.isEmpty
-                ? String(format: L10n.t("分差仅 %d 分。"), gap)
-                : String(format: L10n.t("分差仅 %1$d 分（%2$@）。"), gap, pct)
+                ? String(format: L10n.t("分差仅 %d 分"), gap)
+                : String(format: L10n.t("分差仅 %1$d 分（%2$@）"), gap, pct)
         } else {
             s = pct.isEmpty
-                ? String(format: L10n.t("分差 %d 分。"), gap)
-                : String(format: L10n.t("分差 %1$d 分（%2$@）。"), gap, pct)
+                ? String(format: L10n.t("分差 %d 分"), gap)
+                : String(format: L10n.t("分差 %1$d 分（%2$@）"), gap, pct)
         }
         if let extra = separatorText(separator) { s += " " + extra }
         return s
@@ -576,14 +576,14 @@ struct LyricsDecisionSheet: View {
     private func separatorText(_ s: LyricsVerdictSeparator) -> String? {
         switch s {
         case .identical:
-            return L10n.t("两者各项得分完全相同，按源的顺序排列。")
+            return L10n.t("两者各项得分完全相同，按歌词源顺序排列")
         case let .single(term) where term.points > 0:
-            return String(format: L10n.t("唯一的差异是胜者在「%1$@」一项多 %2$d 分。"),
+            return String(format: L10n.t("唯一的差异是胜者在「%1$@」一项多 %2$d 分"),
                           termLabel(term.kind), term.points)
         case let .single(term):
             // 理论上冠军在唯一有差的那项上不该更低(会输)——除非分数被夹过。兜底说一句
             // 中性的,别印一个"多 −30 分"。
-            return String(format: L10n.t("唯一的差异在于「%@」一项。"), termLabel(term.kind))
+            return String(format: L10n.t("唯一的差异在于「%@」一项"), termLabel(term.kind))
         case .multiple:
             return nil
         }
@@ -663,7 +663,7 @@ struct LyricsDecisionSheet: View {
             }
             if row.core.isNoLyricsMarker {
                 lines.append(sourceDisplayName(c.source) + " · " + L10n.t("已匹配，无歌词"))
-                lines.append(L10n.t("该源匹配到了这首歌，但没有歌词文本，未参与评分"))
+                lines.append(L10n.t("该歌词源匹配到这首歌曲，但无歌词文本，未参与评分"))
                 continue
             }
             if row.core.isRejected {
@@ -719,8 +719,8 @@ struct LyricsDecisionSheet: View {
                     VerdictCard(title: t.title, detail: t.detail, tint: verdictTint(v))
                 }
                 if a.outscored {
-                    VerdictCard(title: L10n.t("采用的不是得分最高的那条"),
-                                detail: L10n.t("匹配算法为「顺序优先」，或得分更高的候选版本、时长与这首歌不符"),
+                    VerdictCard(title: L10n.t("采用的并非得分最高的候选"),
+                                detail: L10n.t("匹配算法为「顺序优先」，或得分更高的候选版本、时长与这首歌曲不符"),
                                 tint: .orange)
                 }
                 if let rewrite {
@@ -745,7 +745,7 @@ struct LyricsDecisionSheet: View {
     /// 所以复用同一张译名表(queryReasonLabel)——漏补译名两处一起漏,不会一边对一边错。
     private func titleRewriteHow(_ decision: LyricsResolutionDecision) -> String? {
         guard let m = decision.retryMethod, !m.isEmpty else { return nil }
-        return String(format: L10n.t("本地歌名无检索结果，经「%@」查得正式曲名。"),
+        return String(format: L10n.t("本地歌名无检索结果，经「%@」查得正式曲名"),
                       queryReasonLabel(m))
     }
 
@@ -1022,7 +1022,7 @@ struct LyricsDecisionSheet: View {
                                 GridRow {
                                     inputFieldLabel(L10n.t("已跳过"))
                                     inputFieldValue(sourceNamesText(skipped, dimmed: true))
-                                        .help(L10n.t("这些源连续失败，本轮暂时没有查询"))
+                                        .help(L10n.t("这些歌词源连续失败，本轮暂未查询"))
                                 }
                             }
                         }
@@ -1274,13 +1274,13 @@ struct LyricsDecisionSheet: View {
                 }
                 if isInstrumental {
                     Text(c.playerInstrumental == true
-                         ? L10n.t("当前播放器标记此曲为纯音乐，其余候选都不采用")
+                         ? L10n.t("当前播放器将这首歌曲标记为纯音乐，其他候选均不采用")
                          : L10n.t("该源标记此曲为纯音乐，未参与评分"))
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else if isNoLyrics {
-                    Text(L10n.t("该源匹配到了这首歌，但没有歌词文本，未参与评分"))
+                    Text(L10n.t("该歌词源匹配到这首歌曲，但无歌词文本，未参与评分"))
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)

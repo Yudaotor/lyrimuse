@@ -27,7 +27,7 @@ struct LastfmFootprintView: View {
             milestoneTiles
             heatmapTile
             HStack(alignment: .center, spacing: 8) {
-                sectionTitle(L10n.t("什么时候听、听谁"))
+                sectionTitle(L10n.t("收听时段与艺人"))
                 Spacer(minLength: 8)
                 SettingsPillSegmentedControl(
                     selection: Binding(get: { span }, set: { spanRaw = $0.rawValue }),
@@ -99,12 +99,12 @@ struct LastfmFootprintView: View {
                     .padding(.top, 6)
                 VStack(alignment: .leading, spacing: 1) {
                     if sum.currentStreak > 0, sum.currentStreak == sum.longestStreak {
-                        Text(L10n.t("这也是你最长的一次连续"))
+                        Text(L10n.t("这也是你最长的连续记录"))
                     } else {
                         Text(String(format: L10n.plural("最长 %@ 天", count: sum.longestStreak), sum.longestStreak.formatted()))
                     }
                     if let today = stats.overview?.today {
-                        Text(String(format: L10n.plural("今天已听 %@ 次", count: today), today.formatted()))
+                        Text(String(format: L10n.plural("今日已收听 %@ 次", count: today), today.formatted()))
                     }
                 }
                 .font(.caption)
@@ -655,7 +655,7 @@ struct LastfmFootprintView: View {
                          "\(o.yearsAgo)", "\(o.total)")
         }
         return o.yearsAgo == 1
-            ? String(format: L10n.plural("去年今天收听 %@ 次，循环最多的是以下歌曲", count: o.total), "\(o.total)")
+            ? String(format: L10n.plural("去年今日收听 %@ 次，以下为循环最多的歌曲", count: o.total), "\(o.total)")
             : String(format: L10n.plural("%1$@ 年前的今天收听 %2$@ 次，循环最多的是以下歌曲", count: o.total),
                      "\(o.yearsAgo)", "\(o.total)")
     }

@@ -72,9 +72,9 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
         switch (self, surface) {
         case (.duringScreenCapture, _): return L10n.t("截屏、录屏和屏幕共享均无法捕捉，但你仍可正常看到")
         case (.whenNotPlaying, _): return nil
-        case (.whenNoLyrics, .desktopOverlay): return L10n.t("搜完确认没有歌词才隐藏，搜索期间照常显示")
+        case (.whenNoLyrics, .desktopOverlay): return L10n.t("搜索确认无歌词后才隐藏，搜索期间照常显示")
         case (.whenNoLyrics, .notch):
-            return L10n.t("搜完确认没有歌词才收起，只留顶部那一条，悬停展开照常；搜索期间照常显示歌词行")
+            return L10n.t("搜索确认无歌词后才收起，仅保留顶部窄条，悬停时仍可展开；搜索期间照常显示歌词行")
         }
     }
 

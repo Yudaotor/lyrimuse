@@ -640,7 +640,7 @@ struct LyricsSearchSheet: View {
                 answered: Self.allLyricSourceNames.filter(respondedSources.contains).map(sourceDisplayName)
                     .joined(separator: L10n.t("、"))))
         } label: {
-            Label(L10n.t("找不到正确的歌词？在 GitHub 反馈"), systemImage: "exclamationmark.bubble")
+            Label(L10n.t("未找到正确的歌词？可在 GitHub 反馈"), systemImage: "exclamationmark.bubble")
         }
         .buttonStyle(.link)
         .font(.callout)
@@ -777,7 +777,7 @@ struct LyricsSearchSheet: View {
         if !isSearching, loadError == nil, searchResults.isEmpty, currentShown != nil {
             VStack(alignment: .leading, spacing: 4) {
                 if !candidates.isEmpty {
-                    conclusionTitle(L10n.t("搜索结果只有现在使用的这一份"), systemImage: "checkmark.circle")
+                    conclusionTitle(L10n.t("搜索结果仅有当前使用的歌词"), systemImage: "checkmark.circle")
                 } else if networkLooksDown {
                     conclusionTitle(L10n.t("无法连接任何歌词源"), systemImage: "wifi.slash")
                 } else if !unreachableSourcesByCode.isEmpty {
@@ -830,7 +830,7 @@ struct LyricsSearchSheet: View {
                     }
                     if !layout.same.isEmpty {
                         groupHeader(L10n.t("内容与其他候选相同"), count: layout.same.count, expanded: $showsSameGroup,
-                                    help: L10n.t("歌词文字和每行时间都与列表中的某条候选相同，也没有多出逐字时间轴、译文或读音"))
+                                    help: L10n.t("歌词文字和每行时间均与列表中的某条候选相同，且未额外提供逐字时间轴、译文或读音"))
                         if layout.sameExpanded {
                             ForEach(layout.same) { c in
                                 candidateRow(c)
@@ -1086,7 +1086,7 @@ struct LyricsSearchSheet: View {
                 ContentUnavailableView {
                     Label(L10n.t("无法连接任何歌词源"), systemImage: "wifi.slash")
                 } description: {
-                    Text(L10n.t("所有已启用的歌词源请求均失败，可能是网络连接问题，并不代表这首歌曲没有歌词。检查网络后可点按下方的「重试」"))
+                    Text(L10n.t("所有已启用的歌词源请求均失败，可能是网络连接问题，并不代表这首歌曲无歌词。请检查网络后点按下方的「重试」"))
                 } actions: {
                     Button(L10n.t("重试")) { Task { await load() } }
                 }
@@ -1372,7 +1372,7 @@ struct LyricsSearchSheet: View {
         }
         .help(markedInstrumental
               ? L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，无歌词的重新加入自动匹配队列")
-              : L10n.t("按纯音乐处理：不显示歌词，也不会自动搜索；原有歌词仍会保留，取消标记即可恢复"))
+              : L10n.t("按纯音乐处理：不显示歌词，也不自动搜索；原有歌词将保留，取消标记即可恢复"))
         .disabled(settingInstrumental || applyingSource != nil || autoMatching)
         .settingsGlassButtons()
         .fixedSize()
@@ -1440,7 +1440,7 @@ struct LyricsSearchSheet: View {
     @ViewBuilder
     private var instrumentalBanner: some View {
         if markedInstrumental {
-            Label(L10n.t("已标为纯音乐：不显示歌词，也不会自动搜索。采用任一候选将取消标记"),
+            Label(L10n.t("已标为纯音乐：不显示歌词，也不自动搜索。采用任一候选将取消标记"),
                   systemImage: "pianokeys.inverse")
                 .font(.callout)
                 .padding(10)
@@ -1635,8 +1635,8 @@ struct LyricsSearchSheet: View {
         }
         let text: String
         if parts.isEmpty {
-            text = s.scriptVariants > 0 ? L10n.t("与当前使用的歌词文字一致，只是繁简写法不同")
-                : s.resegmented > 0 ? L10n.t("与当前使用的歌词文字一致，只是分行不同")
+            text = s.scriptVariants > 0 ? L10n.t("与当前使用的歌词文字一致，仅繁简写法不同")
+                : s.resegmented > 0 ? L10n.t("与当前使用的歌词文字一致，仅分行不同")
                 : L10n.t("与当前使用的歌词逐句一致")
         } else {
             if s.scriptVariants > 0 { parts.append(L10n.t("繁简写法不同")) }
@@ -1822,7 +1822,7 @@ struct LyricsSearchSheet: View {
                 // 悬停说清楚,不然看着像标记和预览对不上。
                 if c.hasRomanization {
                     characteristicBadge(L10n.t("自带读音"), "textformat.abc", LyricsFeatureTint.romanization, latinIcon: true)
-                        .help(L10n.t("歌词源自带的读音。没有这个标记的歌词，也会按设置中「标注读音的语言」自动标注"))
+                        .help(L10n.t("歌词源自带的读音。无此标记的歌词也将按设置中的「标注读音的语言」自动标注"))
                 }
                 // 来源:用它在别处(歌词管理列表、设置里的来源勾选)一贯的身份色,一眼能对上号。
                 if showsSource {
@@ -1891,7 +1891,7 @@ struct LyricsSearchSheet: View {
         }
         Group {
             if c.isStored {
-                QuickHelpLabel(text: L10n.t("这首歌曲现在使用的歌词，从本机缓存读取，未参与本轮评分。搜索结果中出现同一份时换成那一条")) { label }
+                QuickHelpLabel(text: L10n.t("这首歌曲当前使用的歌词，读取自本机缓存，未参与本轮评分。搜索结果中出现相同歌词时以该结果替代")) { label }
             } else if c.scoreTerms.isEmpty {
                 // 没有可摊开的明细就别摆一个点了什么都没有的问号。
                 label
@@ -1931,7 +1931,7 @@ struct LyricsSearchSheet: View {
             ? String(format: L10n.t("歌词源标注的曲目时长，这首歌曲时长 %@"), LyricsCandidateDuration.clock(durationSecs))
             : L10n.t("歌词源标注的曲目时长")
         guard !c.durationBorrowedFrom.isEmpty else { return reported }
-        let borrowed = String(format: L10n.t("该歌词源不提供时长，这是同一条录音在 %@ 标注的时长"),
+        let borrowed = String(format: L10n.t("该歌词源未提供时长，此为同一录音在 %@ 标注的时长"),
                               sourceDisplayName(c.durationBorrowedFrom))
         return durationSecs > 0
             ? borrowed + "\n" + String(format: L10n.t("这首歌曲时长 %@"), LyricsCandidateDuration.clock(durationSecs))

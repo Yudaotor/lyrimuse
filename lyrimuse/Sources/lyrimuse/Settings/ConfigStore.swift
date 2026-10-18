@@ -40,16 +40,16 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
     /// 指向平台时的悬浮说明:这是什么、消息会到哪里。怎么拿地址在 `setupGuide`。
     public var summary: String {
         switch self {
-        case .bark: return L10n.t("iPhone 上的推送 App：装好后首页就有专属地址，报告直接弹在 iPhone 上。免费、开源")
-        case .feishu: return L10n.t("飞书群里的自定义机器人：报告发到群聊里")
-        case .dingtalk: return L10n.t("钉钉群里的自定义机器人：报告发到群聊里。机器人要设关键词或加签")
-        case .wecom: return L10n.t("企业微信群里的机器人：报告发到群聊里，粘贴地址就能用")
-        case .serverchan: return L10n.t("把消息转发到微信的服务：微信扫码登录拿到 SendKey，报告出现在微信「方糖」服务号里")
-        case .telegram: return L10n.t("Telegram 机器人：找 @BotFather 建一个，报告发给你本人或你所在的群")
-        case .discord: return L10n.t("Discord 频道的 Webhook：报告发到你服务器里的某个频道")
-        case .slack: return L10n.t("Slack 的 Incoming Webhook：报告发到工作区里的某个频道")
-        case .ntfy: return L10n.t("开源的推送服务：手机、电脑装上 ntfy 订阅一个主题就能收到，不用注册，也可以自建服务器")
-        case .webhook: return L10n.t("向你指定的地址 POST 一段 JSON，适合接 Home Assistant、n8n 或自己写的服务")
+        case .bark: return L10n.t("iPhone 推送 App：安装后首页即显示专属地址，报告将直接推送到 iPhone。免费且开源")
+        case .feishu: return L10n.t("飞书群自定义机器人：报告将发送到群聊")
+        case .dingtalk: return L10n.t("钉钉群自定义机器人：报告将发送到群聊。机器人需设置关键词或加签")
+        case .wecom: return L10n.t("企业微信群机器人：报告将发送到群聊，粘贴地址即可使用")
+        case .serverchan: return L10n.t("将消息转发到微信的服务：使用微信扫码登录获取 SendKey，报告将显示在微信「方糖」服务号中")
+        case .telegram: return L10n.t("Telegram 机器人：通过 @BotFather 创建，报告将发送给你本人或你所在的群组")
+        case .discord: return L10n.t("Discord 频道 Webhook：报告将发送到你服务器中的指定频道")
+        case .slack: return L10n.t("Slack Incoming Webhook：报告将发送到工作区中的指定频道")
+        case .ntfy: return L10n.t("开源推送服务：在手机或电脑上安装 ntfy 并订阅主题即可接收，无需注册，也可自建服务器")
+        case .webhook: return L10n.t("向指定地址 POST 一段 JSON，适用于对接 Home Assistant、n8n 或自建服务")
         }
     }
 
@@ -91,9 +91,9 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
         case .feishu:
             return (L10n.t("签名密钥（可选）"), L10n.t("仅在机器人安全设置开启「签名校验」时需要填写，未开启时也能正常接收消息"))
         case .ntfy:
-            return (L10n.t("访问令牌（可选）"), L10n.t("主题设了访问控制时填写：令牌以 tk_ 开头，也可以填「用户名:密码」"))
+            return (L10n.t("访问令牌（可选）"), L10n.t("主题设置了访问控制时填写：以 tk_ 开头的令牌，或「用户名:密码」"))
         case .webhook:
-            return (L10n.t("签名密钥（可选）"), L10n.t("填写后每次请求带上 X-Lyrimuse-Signature: sha256=…（用这个密钥对请求体算的 HMAC-SHA256），接收端可据此校验来源"))
+            return (L10n.t("签名密钥（可选）"), L10n.t("填写后，每次请求将附带 X-Lyrimuse-Signature: sha256=…（使用此密钥对请求体计算的 HMAC-SHA256），接收端可据此校验来源"))
         case .bark, .wecom, .discord, .serverchan, .telegram, .slack:
             return nil
         }
@@ -135,11 +135,11 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
         case .telegram:
             return L10n.t("在 Telegram 中向 @BotFather 发送 /newbot 创建机器人，并将获得的 Token 填入「机器人 Token」。然后向机器人发送任意消息，在浏览器中打开 https://api.telegram.org/bot你的Token/getUpdates，chat 下的 id 即为 Chat ID")
         case .slack:
-            return L10n.t("在 api.slack.com/apps 新建应用（From scratch）并选择工作区，开启 Incoming Webhooks，点「Add New Webhook」选择要发送到的频道，授权后拷贝 Webhook URL")
+            return L10n.t("在 api.slack.com/apps 新建应用（From scratch）并选择工作区，开启 Incoming Webhooks，点按「Add New Webhook」并选择目标频道，授权后拷贝 Webhook URL")
         case .ntfy:
-            return L10n.t("在手机或电脑上安装 ntfy，订阅一个别人猜不到的主题名，然后把主题地址（如 https://ntfy.sh/你的主题）填入此处。自建服务器填你自己的地址")
+            return L10n.t("在手机或电脑上安装 ntfy，订阅一个他人难以猜到的主题名，然后将主题地址（如 https://ntfy.sh/你的主题）填入此处。使用自建服务器时填写其地址")
         case .webhook:
-            return L10n.t("Lyrimuse 会向这个地址 POST 一段 JSON：app、event（如 weekly_digest）、title、body、sent_at，适合接 Home Assistant、n8n 或你自己的服务")
+            return L10n.t("Lyrimuse 将向此地址 POST 一段 JSON，包含 app、event（如 weekly_digest）、title、body、sent_at，适用于对接 Home Assistant、n8n 或自建服务")
         }
     }
 
@@ -352,7 +352,7 @@ public final class ConfigStore: ObservableObject {
     public func pushMissingHint() -> String? {
         let saved = savedSnapshot.notificationChannels
         if saved.isEmpty { return L10n.t("尚未添加推送渠道") }
-        if !saved.contains(where: { $0.enabled && $0.isComplete }) { return L10n.t("推送渠道都已停用") }
+        if !saved.contains(where: { $0.enabled && $0.isComplete }) { return L10n.t("推送渠道均已停用") }
         return nil
     }
 

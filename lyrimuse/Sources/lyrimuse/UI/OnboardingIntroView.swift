@@ -139,7 +139,7 @@ private struct OnboardingIntroFrame: View {
             // 柔光在光球下面:从图标背后晕开,不盖在图标上把它冲淡。
             flash
             orb
-            Text(L10n.t("点一下跳过"))
+            Text(L10n.t("点按以跳过"))
                 .font(.system(size: 11))
                 .foregroundStyle(OnboardingIntroPalette.mauve.opacity(0.7))
                 .opacity(I.Segment(1.2, 0.4).progress(t) * (t < I.handoff ? 1 : 0))

@@ -793,35 +793,35 @@ Every setting in the Settings window, by where it lives: 269 in all. Type a name
 - **Re-Pick After Algorithm Updates**: On (default): when the matching algorithm or scoring rules change, existing lyrics are re-evaluated in the background and may be swapped for a better match Off: once chosen, lyrics are never swapped automatically; first-time lookups, manual re-searches and manual edits are unaffected
 - **Share Lyrics Across Entries of a Song**: On (default): entries of the same song from different players or album editions that are confirmed to be the same recording use the same lyrics, and manual edits apply to all of them Off: each entry is matched on its own, and entries that were synced go back to their original lyrics
 - **Pre-Resolve Upcoming Tracks**
-- **Lock Hand-Picked Lyrics**: Off (default): swaps in this version now — later auto re-searches or scoring changes can still replace it On: locks this song’s lyrics; automatic matching won’t touch it again Turning it on also locks songs you picked earlier (except those already replaced automatically)
+- **Lock Hand-Picked Lyrics**: Off (default): replaces the lyrics this time only; later automatic searches or scoring changes may replace them again On: locks this song’s lyrics so automatic matching no longer changes them Turning it on also locks songs you chose manually before (except those already replaced automatically)
 
 ### Lyrics › Translation
 
 - **Translation Language**: Whether each place shows translations is set in Lyrics Display
-- **Translate When None Is Provided**: Translates on this Mac first, then online if that fails
-- **Translation Languages**: Only languages that can be translated into your translation language are listed, so there may be a few fewer than in System Settings. Click one that isn't downloaded to download it.
+- **Translate When None Is Provided**: Translates on this Mac first, and online when that isn’t possible
+- **Translation Languages**: Only languages that can be translated into your translation language are listed, so there may be fewer than in System Settings. Click a language that isn’t downloaded to download it
 
 ### Lyrics › Adjust
 
 - **Chinese Script**: Show Chinese lyrics in Simplified or Traditional characters
-- **Romanization Languages**: Selected languages get pronunciation; whether it shows is set in Lyrics Display
-- **Split Long Lines**: Lines too long to fit are shown in parts, one after another
-- **Join Short Lines**: Neighbouring short lines are joined when they fit on one line
+- **Romanization Languages**: Adds pronunciation for the selected languages; whether it shows is set in Lyrics Display
+- **Split Long Lines**: Lines too long to fit are split and shown in parts
+- **Join Short Lines**: Adjacent short lines are merged when they fit on one line
 - **Timing Offset**: Positive shows lyrics earlier, negative later
 
 ### Lyrics › Library
 
 - **Lyrics Library**
-- **Auto-Match Missing Lyrics**: Only songs with no lyrics or only plain text
-- **Re-Match Whole Library**: Songs that already have lyrics get re-picked too; hand-edited, re-timed and instrumental songs are left alone
-- **Scan Interval**: Seconds to pause between songs; 2 seconds is the fastest we recommend, to avoid rate limits
+- **Auto-Match Missing Lyrics**: Only songs without lyrics or with plain-text lyrics only
+- **Re-Match Whole Library**: Songs that already have lyrics are re-matched too; manually edited, calibrated and instrumental songs are left unchanged
+- **Scan Interval**: Seconds between songs; at least 2 seconds is recommended to avoid rate limits
 - **Lyrics Folder**: Existing files stay where they are when you change the location
 
 ### Player
 
 - **Music Apps**
-- **Web**: Lyrics work for songs playing in a browser too. Click + to pair the browser you use; the position is read straight from the page, so lyrics line up right after a song change.
-- **Other Apps**: Apps not listed above can count as players too: once added, what they play shows lyrics and goes into your listening history. Click a tile to remove it.
+- **Web**: Lyrics also work for music playing in a browser. Click + to pair the browser you use; the position is read directly from the page, so lyrics sync immediately after a song change
+- **Other Apps**: Apps not listed above can be used as players too: once added, their songs show lyrics and count toward your listening history. Click a tile to remove it
 - **Add App…**: Pick one from Applications — no need to wait until it’s playing
 - **New Player Alerts**
 
@@ -834,7 +834,7 @@ Every setting in the Settings window, by where it lives: 269 in all. Type a name
 - **Automation Permission**
 - **Full Disk Access**
 - **Accessibility**
-- **LX Music Open API**: Lyrimuse reads LX Music's own playback position here and adjusts its volume
+- **LX Music Open API**: Lyrimuse reads LX Music’s playback position and adjusts its volume through this API
 - **Lyrics Engine**: Reads playback state and fetches lyrics and artwork
 
 ### Player › Linkage
@@ -933,7 +933,7 @@ Every setting in the Settings window, by where it lives: 269 in all. Type a name
 
 ### Lyrics Display › Notch › Lyric Row
 
-- **Show Lyrics**: When off, the resting card keeps only the notch-height row and shows no lyrics; hovering to expand still shows playback controls, the scrubber, and the next-line preview as usual.
+- **Show Lyrics**: When off, the resting card keeps only the notch-height row and shows no lyrics; hovering to expand still shows playback controls, the scrubber, and the next-line preview as usual
 - **Alignment**
 - **Second Line**
 - **Preview Next Line When Expanded**
@@ -973,10 +973,10 @@ Every setting in the Settings window, by where it lives: 269 in all. Type a name
 
 ### Lyrics Display › Menu Bar › Layout
 
-- **Width Mode**: Fixed: every song uses the set width. Adaptive: each song gets its own width from its lyrics, up to the set width.
+- **Width Mode**: Fixed: every song uses the set width. Adaptive: each song gets its own width from its lyrics, up to the set width
 - **Alignment**
 - **Second Line**
-- **Icon Beside Lyrics**: Puts a menu bar icon at the far left or right of the lyrics slot; its color fills from the bottom up to show playback progress — the filled part in Sung Color, the rest in Unsung Color. Only appears while lyrics are showing.
+- **Icon Beside Lyrics**: Shows the menu bar icon at the far left or right of the lyrics area, filling from the bottom up to show playback progress: the filled part uses Sung Color and the rest Unsung Color. Appears only while lyrics are shown
 
 ### Lyrics Display › Menu Bar › Color
 
@@ -992,7 +992,7 @@ Every setting in the Settings window, by where it lives: 269 in all. Type a name
 
 ### Lyrics Display › Menu Bar › Behavior
 
-- **Show Controls on Hover**: Hover over the menu bar lyrics to turn them into Previous / Play-Pause / Next; move away and the lyrics return. Doesn't take over once the lyrics shrink back to the icon after pausing, or when the slot is too narrow for three buttons. Clicking outside the three buttons still opens the panel.
+- **Show Controls on Hover**: Hover over the menu bar lyrics to turn them into Previous / Play-Pause / Next; move away and the lyrics return. Doesn't take over once the lyrics shrink back to the icon after pausing, or when the slot is too narrow for three buttons. Clicking outside the three buttons still opens the panel
 - **Show Title When No Lyrics**: While a song has no lyrics or is still being searched, keep the lyrics slot with the song title instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads
 
 ### Lyrics Display › Touch Bar
@@ -1055,7 +1055,7 @@ Every setting in the Settings window, by where it lives: 269 in all. Type a name
 
 - **Font Size** (mini size only): Ceiling for the mini size's lyrics font size
 - **Karaoke Effect**
-- **Text Color**: The lyrics window's text color. Auto switches between light and dark based on the background's brightness.
+- **Text Color**: The lyrics window's text color. Auto switches between light and dark based on the background's brightness
 - **Custom Color**
 - **Font**: Lyrics font for the lyrics window (main text, translation, romanization)
 - **Weight**
@@ -1065,13 +1065,13 @@ Every setting in the Settings window, by where it lives: 269 in all. Type a name
 ### Lyrics Display › Lyrics Window › Layout
 
 - **Long Lines** (mini size only): Whether long lines wrap or scroll in the mini size
-- **Lyrics Layout** (mini size only): One Line: only the current line. Two Lines: the current line and the next one. Multi-Line: a scrolling page of lyrics, like the full size.
+- **Lyrics Layout** (mini size only): One Line: only the current line. Two Lines: the current line and the next one. Multi-Line: a scrolling page of lyrics, like the full size
 - **Alignment** (full size only): Lyrics alignment in the full size; Automatic follows the duet parts
 
 ### Lyrics Display › Lyrics Window › Behavior
 
 - **Fade on Hover** (mini size only)
-- **Click Through While Faded** (mini size only): While faded, clicks go to the window underneath. Hold ⌥ to make it opaque again and use it
+- **Click Through While Faded** (mini size only): While faded, clicks pass through to the window below. Hold ⌥ to make it opaque and interact with it
 - **Hide When Paused** (mini size only)
 - **Hide in Full Screen** (mini size only)
 
@@ -1097,7 +1097,7 @@ Every setting in the Settings window, by where it lives: 269 in all. Type a name
 
 ### Keyboard Shortcuts
 
-- **Deep Links**: Open these from Shortcuts, Raycast, Alfred and similar tools. Hover over a shortcut above to copy the link for that action.
+- **Deep Links**: Open these from Shortcuts, Raycast, Alfred and similar tools. Hover over a shortcut above to copy the link for that action
 - **Show/Hide Floating Lyrics**
 - **Show/Hide Notch Lyrics**
 - **Show/Hide Menu Bar Lyrics**
@@ -1160,7 +1160,7 @@ Every setting in the Settings window, by where it lives: 269 in all. Type a name
 
 - **Report an Issue**: Opens a new GitHub issue with your version, macOS and player filled in
 - **Get Help**: Ask in the Q&A category of GitHub Discussions
-- **Feature List**: Every feature, where it is in Settings, and whether it is on by default
+- **Feature List**: Every feature, where to find it in Settings, and its default state
 
 ### About
 
@@ -1174,7 +1174,7 @@ Every setting in the Settings window, by where it lives: 269 in all. Type a name
 
 - **Export Diagnostics**: Logs, crash reports and app state in one file, with account credentials removed. Track names and local paths stay in, so review it before posting publicly
 - **Activity Log**: The lyrics engine’s raw log, for your own troubleshooting
-- **Config Folder**: Plain text with account credentials. Appearance and shortcuts aren’t here; to move everything, use Backup & Migration
+- **Config Folder**: Plain text with account credentials. Appearance and shortcuts aren’t included; to migrate everything, use Backup & Migration
 
 ### Labs › ListenBrainz
 
@@ -1183,11 +1183,11 @@ Every setting in the Settings window, by where it lives: 269 in all. Type a name
 ### Last.fm › Settings
 
 - **Scrobble Rules**
-- **Matching Mode**: The artist and title sent to Last.fm. Smart: the most-listened spelling on Last.fm, or as-is when there's no match. Albums drop “ - Single” / “ - EP”. Custom: set title and artist separately. Raw: exactly what the player reports.
+- **Matching Mode**: The artist and title sent to Last.fm Smart: uses the most-listened spelling on Last.fm, or sends it as-is when there’s no match. Albums drop “ - Single” / “ - EP” Custom: set title and artist separately Raw: sends exactly what the player reports
 - **Title**
 - **Artist**
 - **Scrobble Point**
-- **Tracks Under 30 Seconds**: On: scrobbled too, once half-played. Off: not scrobbled (Last.fm's rule).
+- **Tracks Under 30 Seconds**: On: also scrobbled once half played Off: not scrobbled (Last.fm’s rule)
 - **Players to Scrobble**
 
 ### Labs › Web Push
@@ -1196,7 +1196,7 @@ Every setting in the Settings window, by where it lives: 269 in all. Type a name
 
 ### Labs › Push Alerts
 
-- **Push Channels**: Reports go to every channel that is on. Click a row to edit it or send a test; right-click to delete.
+- **Push Channels**: Reports are pushed to every enabled channel. Click a row to edit it or send a test; right-click to test or delete
 - **Alerts**
 - **Weekly Listening Digest**
 - **Daily Listening Report**
@@ -1206,22 +1206,22 @@ Every setting in the Settings window, by where it lives: 269 in all. Type a name
 
 ### Discord
 
-- **Show on Discord**: When on, the song you're playing shows on your Discord profile and in your friends list. If friends can't see it, go to User Settings › Activity Privacy in Discord and turn on activity sharing.
+- **Show on Discord**: When on, the song you're playing shows on your Discord profile and in your friends list. If friends can't see it, go to User Settings › Activity Privacy in Discord and turn on activity sharing
 - **What's Shown**
-- **After “Listening to”**: The “××” in “Listening to ××” on your profile. Discord on iOS and the web ignores this and keeps showing the player. With Title or Artist here, “Shown Under Your Name” can't show the player.
-- **Shown Under Your Name**: Discord can only show the first line, the second line, or what follows “Listening to” under your name. If the title or artist isn’t in one of those, that option is dimmed.
+- **After “Listening to”**: The “××” in “Listening to ××” on your profile. Discord on iOS and the web ignores this and keeps showing the player With Title or Artist here, “Shown Under Your Name” can’t show the player
+- **Shown Under Your Name**: Discord can only show the first line, the second line, or what follows “Listening to” under your name. If neither the title nor the artist is in one of those, that option is unavailable
 - **Cover Badge**
 - **When Paused**
 - **Song Info**
 - **Status Text**
 - **Cover and Progress**
-- **Label Artist and Album**: Adds “by” before the artist and “on” before the album. Not added when the title and artist share a line.
+- **Label Artist and Album**: Adds “by” before the artist and “on” before the album. Not added when the title and artist share a line
 - **Buttons**
 - **Custom Button**
-- **“Listen on Player”**: Opens this song’s page on the current player’s website, same as clicking the title. Hidden when there’s no page for the song.
+- **“Listen on Player”**: Opens this song’s page on the current player’s website, same as clicking the title. Hidden when no page is available
 - **“Get Lyrimuse”**
 - **Privacy**
 - **Hide Temporarily**
-- **Hide Song Details**: Shows only which player you’re listening on and the progress. The title, artist, album, lyrics, links and the “Listen on Player” button aren’t sent.
-- **Show Progress Bar**: When off, there’s no progress bar. Discord shows how long the song has been playing instead, which can’t be turned off.
+- **Hide Song Details**: Shows only the player you’re using and the progress. The title, artist, album, lyrics, links and the “Listen on Player” button aren’t sent
+- **Show Progress Bar**: When off, there’s no progress bar; Discord shows the elapsed time instead, which can’t be turned off
 - **Players Shown**

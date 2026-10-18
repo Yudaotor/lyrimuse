@@ -413,7 +413,7 @@ struct LyricsManagerSongRow: View {
                             .padding(.vertical, 1)
                             .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(.secondary.opacity(0.5), lineWidth: 0.5))
                             .fixedSize()
-                            .help(L10n.t("同名但时长不同，按另一段录音单独保存歌词"))
+                            .help(L10n.t("同名但时长不同，作为另一录音单独保存歌词"))
                     }
                 }
                 Text(highlighted(subtitle))
@@ -457,7 +457,7 @@ struct LyricsManagerSongRow: View {
                 Text(L10n.t("仅纯文本")).foregroundStyle(emphasized ? Color.primary : LyricsFeatureTint.plainTextOnly)
             } else if summary.lastRoundHadNoResponder {
                 Text(L10n.t("无源应答")).foregroundStyle(.secondary)
-                    .help(L10n.t("最近一次解析时没有任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲没有歌词。稍后会自动重试，也可立即重新自动匹配"))
+                    .help(L10n.t("最近一次解析时无任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲无歌词。稍后将自动重试，也可立即重新自动匹配"))
             } else if summary.knownOnSources {
                 Text(L10n.t("已收录、无歌词")).foregroundStyle(.secondary)
             } else {
@@ -478,7 +478,7 @@ struct LyricsManagerSongRow: View {
                 if summary.isManualOriginal {
                     badge("pencil.circle.fill", tint: LyricsFeatureTint.manual, help: L10n.t("已人工修正"))
                 } else if summary.isManual {
-                    badge("pencil.circle", tint: LyricsFeatureTint.manual, help: L10n.t("沿用同一首歌的人工修正"))
+                    badge("pencil.circle", tint: LyricsFeatureTint.manual, help: L10n.t("沿用同曲条目的人工修正"))
                 }
                 if !summary.sourceChoice.isEmpty {
                     badge("pin.circle.fill", tint: LyricsFeatureTint.sourceChoice,
@@ -915,8 +915,8 @@ struct LyricsManagerOffsetControl: View {
             if let borrowedFrom {
                 Image(systemName: "link")
                     .foregroundStyle(.secondary)
-                    .help(String(format: L10n.t("沿用同一首歌另一种写法「%@」的校正，在这里调整后记在这一条上"), borrowedFrom))
-                    .accessibilityLabel(String(format: L10n.t("沿用同一首歌另一种写法「%@」的校正，在这里调整后记在这一条上"), borrowedFrom))
+                    .help(String(format: L10n.t("沿用同曲条目「%@」的时间轴校准，在此调整后将保存到当前条目"), borrowedFrom))
+                    .accessibilityLabel(String(format: L10n.t("沿用同曲条目「%@」的时间轴校准，在此调整后将保存到当前条目"), borrowedFrom))
             }
             Button { onStep(1) } label: {
                 Image(systemName: "plus").frame(width: 18, height: 18).contentShape(Rectangle())

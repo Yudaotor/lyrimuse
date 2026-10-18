@@ -636,7 +636,7 @@ struct OnboardingView: View {
             Text(L10n.t("YouTube Music 使用哪个浏览器？"))
                 .font(.title2.bold())
                 .onboardingReveal(0)
-            Text(L10n.t("YouTube Music 在浏览器中播放，Lyrimuse 需要知道是哪个浏览器才能读取播放进度。请选择常用的浏览器（可多选），随后系统会请求授权，选择允许即可；之后可在设置的「网页播放器」中更改"))
+            Text(L10n.t("YouTube Music 在浏览器中播放，Lyrimuse 需通过所用浏览器读取播放进度。请选择常用的浏览器（可多选），随后在系统授权请求中选择「允许」。之后可在设置的「网页播放器」中更改"))
                 .foregroundStyle(.secondary)
                 .onboardingReveal(1)
             if candidates.isEmpty {
@@ -690,7 +690,7 @@ struct OnboardingView: View {
                 get: { browserPickerError != nil },
                 set: { if !$0 { browserPickerError = nil } })
         ) {
-            Button(L10n.t("知道了"), role: .cancel) { browserPickerError = nil }
+            Button(L10n.t("好"), role: .cancel) { browserPickerError = nil }
         } message: {
             Text(browserPickerError ?? "")
         }
@@ -734,12 +734,12 @@ struct OnboardingView: View {
             Text(L10n.t("启用歌词引擎与权限"))
                 .font(.title2.bold())
                 .onboardingReveal(0)
-            Text(L10n.t("请启用歌词引擎，并开启以下权限；未开启的权限只影响对应功能"))
+            Text(L10n.t("请启用歌词引擎，并开启以下权限；未开启的权限仅影响对应功能"))
                 .foregroundStyle(.secondary)
                 .onboardingReveal(1)
             VStack(alignment: .leading, spacing: 0) {
                 setupRow(icon: engineIcon, tint: engineTint, title: L10n.t("歌词引擎"),
-                         subtitle: L10n.t("识别歌曲、查找歌词和封面；仅在本机运行，查找歌词时只发送歌名、歌手等曲目信息")) {
+                         subtitle: L10n.t("识别歌曲，查找歌词和封面；仅在本机运行，查找歌词时仅发送歌名、歌手等曲目信息")) {
                     engineTrailing
                 }
                 // 自动启用没起来时的交代:原因 + 出路(按钮已经变成「重试」)。
@@ -895,7 +895,7 @@ struct OnboardingView: View {
         let pendingAutomation = automationTargets.filter { automation.status($0) != .authorized }
         let refineTargets = pendingAutomation.filter { $0.automationUse == .refinesProgress }
         if !refineTargets.isEmpty {
-            lines.append(String(format: L10n.t("自动化权限可让%@的播放进度更准确，并可在歌词上直接控制播放"),
+            lines.append(String(format: L10n.t("自动化权限可提高%@播放进度的准确性，并可在歌词上直接控制播放"),
                                 automation.playerNames(refineTargets)))
         }
         let trackTargets = pendingAutomation.filter { $0.automationUse == .readsTrack }
@@ -910,27 +910,27 @@ struct OnboardingView: View {
         let pendingAccessibility = accessibility.trusted ? [] : axTargets
         let progressTargets = pendingAccessibility.filter { $0.accessibilityUse == .calibratesProgress }
         if !progressTargets.isEmpty {
-            lines.append(String(format: L10n.t("辅助功能权限可让%@的播放进度更准确，并显示随机、循环键"),
+            lines.append(String(format: L10n.t("辅助功能权限可提高%@播放进度的准确性，并显示随机、循环按钮"),
                                 accessibility.playerNames(progressTargets)))
         }
         let playModeTargets = pendingAccessibility.filter { $0.accessibilityUse == .switchesPlayMode }
         if !playModeTargets.isEmpty {
-            lines.append(String(format: L10n.t("辅助功能权限可显示%@的随机、循环与喜欢键，也能在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首"),
+            lines.append(String(format: L10n.t("辅助功能权限可显示%@的随机、循环与喜欢按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首"),
                                 accessibility.playerNames(playModeTargets)))
         }
         let playbackTargets = pendingAccessibility.filter { $0.accessibilityUse == .controlsPlayback }
         if !playbackTargets.isEmpty {
-            lines.append(String(format: L10n.t("辅助功能权限可显示%@的喜欢键，也能在系统媒体焦点被其它 App 占用时控制暂停、恢复和上下首"),
+            lines.append(String(format: L10n.t("辅助功能权限可显示%@的喜欢按钮，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首"),
                                 accessibility.playerNames(playbackTargets)))
         }
         let favoriteTargets = pendingAccessibility.filter { $0.accessibilityUse == .pressesFavorite }
         if !favoriteTargets.isEmpty {
-            lines.append(String(format: L10n.t("辅助功能权限可显示%@的喜欢键"),
+            lines.append(String(format: L10n.t("辅助功能权限可显示%@的喜欢按钮"),
                                 accessibility.playerNames(favoriteTargets)))
         }
         let modeOnlyTargets = pendingAccessibility.filter { $0.accessibilityUse == .pressesPlayMode }
         if !modeOnlyTargets.isEmpty {
-            lines.append(String(format: L10n.t("辅助功能权限可显示%@的随机、循环键"),
+            lines.append(String(format: L10n.t("辅助功能权限可显示%@的随机、循环按钮"),
                                 accessibility.playerNames(modeOnlyTargets)))
         }
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
@@ -1030,7 +1030,7 @@ struct OnboardingView: View {
                     isOn: overlayAndWindow(\.overlayShowRomanization, \.showRomanization))
             }
             .onboardingCard()
-            Text(L10n.t("只作用于悬浮歌词和歌词窗口"))
+            Text(L10n.t("仅作用于悬浮歌词和歌词窗口"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1071,7 +1071,7 @@ struct OnboardingView: View {
             Text(L10n.t("选择歌词显示方式"))
                 .font(.title2.bold())
                 .onboardingReveal(0)
-            Text(L10n.t("可同时开启多种"))
+            Text(L10n.t("可同时开启多项"))
                 .foregroundStyle(.secondary)
                 .onboardingReveal(1)
 
@@ -1119,7 +1119,7 @@ struct OnboardingView: View {
                 displayModeNote(
                     icon: "exclamationmark.triangle.fill",
                     tint: .orange,
-                    text: L10n.t("全部关闭后不会显示歌词"))
+                    text: L10n.t("全部关闭时不显示歌词"))
             } else if !isPlayingNow {
                 displayModeNote(
                     icon: "info.circle.fill",
@@ -1580,7 +1580,7 @@ struct OnboardingView: View {
     private func recommendedBenefit(_ kind: OnboardingFlow.ReadinessKind) -> String {
         switch kind {
         case .fullDiskAccess:
-            return L10n.t("请开启此权限，以便直接使用本机已有的歌词，并提前准备下一首")
+            return L10n.t("请开启此权限，以便直接使用本机已有的歌词，并预先准备下一首歌曲")
         case .accessibility:
             let targets = accessibilityTargets
             let progress = targets.filter { $0.accessibilityUse == .calibratesProgress }
@@ -1590,32 +1590,32 @@ struct OnboardingView: View {
             let modeOnly = targets.filter { $0.accessibilityUse == .pressesPlayMode }
             var lines: [String] = []
             if !progress.isEmpty && !playMode.isEmpty {
-                lines.append(String(format: L10n.t("请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环与喜欢键及失焦播放控制"),
+                lines.append(String(format: L10n.t("请开启此权限，以提高%@自动连播时播放进度的准确性，并显示%@的随机、循环与喜欢按钮及失去焦点时的播放控制"),
                                     accessibility.playerNames(progress), accessibility.playerNames(playMode)))
             } else if !progress.isEmpty {
-                lines.append(String(format: L10n.t("请开启此权限，让%@自动连播时的播放进度更准确，并显示随机、循环键"),
+                lines.append(String(format: L10n.t("请开启此权限，以提高%@自动连播时播放进度的准确性，并显示随机、循环按钮"),
                                     accessibility.playerNames(progress)))
             } else if !playMode.isEmpty {
-                lines.append(String(format: L10n.t("请开启此权限，以显示%@的随机、循环与喜欢键，并在失去系统媒体焦点时控制播放"),
+                lines.append(String(format: L10n.t("请开启此权限，以显示%@的随机、循环与喜欢按钮，并在失去系统媒体焦点时控制播放"),
                                     accessibility.playerNames(playMode)))
             }
             if !playback.isEmpty {
-                lines.append(String(format: L10n.t("请开启此权限，以显示%@的喜欢键，并在失去系统媒体焦点时控制暂停、恢复和上下首"),
+                lines.append(String(format: L10n.t("请开启此权限，以显示%@的喜欢按钮，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首"),
                                     accessibility.playerNames(playback)))
             }
             if !favorite.isEmpty {
-                lines.append(String(format: L10n.t("请开启此权限，以显示%@的喜欢键"),
+                lines.append(String(format: L10n.t("请开启此权限，以显示%@的喜欢按钮"),
                                     accessibility.playerNames(favorite)))
             }
             if !modeOnly.isEmpty {
-                lines.append(String(format: L10n.t("请开启此权限，以显示%@的随机、循环键"),
+                lines.append(String(format: L10n.t("请开启此权限，以显示%@的随机、循环按钮"),
                                     accessibility.playerNames(modeOnly)))
             }
             return lines.joined(separator: "\n")
         case .automation(let player) where player.automationUse == .readsTrack:
             return L10n.t("请开启此权限，以便准确识别正在播放的歌曲，并可在歌词上直接控制播放")
         default:
-            return L10n.t("请开启此权限，让播放进度更准确，并可在歌词上直接控制播放")
+            return L10n.t("请开启此权限，以提高播放进度的准确性，并可在歌词上直接控制播放")
         }
     }
 
@@ -1648,7 +1648,7 @@ struct OnboardingView: View {
             // 是固定英文的诊断串(见那边头注:它本来就是拿来贴给别人看的),所以只放进括号里
             // 当线索,不承担正文的表达。
             engineFailure = state.isRunning ? nil : String(
-                format: L10n.t("启动失败（%@）。可先「暂时跳过」，之后在设置的「播放器 → 歌词引擎」中重试，该页面会显示更详细的状态。"),
+                format: L10n.t("启动失败（%@）。可先「暂时跳过」，之后在设置的「播放器 → 歌词引擎」中重试，该页面会显示更详细的状态"),
                 state.description)
         }
     }
@@ -1810,7 +1810,7 @@ private struct DisplayModeThumbnail: View {
     private var sketch: some View {
         switch kind {
         case .classic:
-            // 桌面偏下方的两行歌词,第一行用强调色表示"正在唱的这一句"。
+            // 桌面偏下方的两行歌词,第一行用强调色表示"当前演唱的歌词"。
             VStack(spacing: 4) {
                 singingLine(width: 32, height: 4)
                 Capsule().fill(Color.primary.opacity(0.3)).frame(width: 22, height: 3)

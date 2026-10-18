@@ -79,8 +79,8 @@ final class AccessibilityPermission: ObservableObject {
 
     var steps: String {
         everGranted
-            ? String(format: L10n.t("授权已失效。请在「系统设置 → 隐私与安全性 → %@」中移除旧条目，重新添加当前运行的 Lyrimuse.app，然后重启 Lyrimuse。"), settingsPaneTitle)
-            : String(format: L10n.t("在「系统设置 → 隐私与安全性 → %@」中开启 Lyrimuse。列表里没有时，用「+」添加当前运行的 Lyrimuse.app；已开启却仍无效时，移除旧条目并重新添加，然后重启 Lyrimuse。"), settingsPaneTitle)
+            ? String(format: L10n.t("授权已失效。请在「系统设置 › 隐私与安全性 › %@」中移除旧条目，重新添加当前运行的 Lyrimuse.app，然后重启 Lyrimuse"), settingsPaneTitle)
+            : String(format: L10n.t("在「系统设置 › 隐私与安全性 › %@」中开启 Lyrimuse。若列表中没有，请通过「+」添加当前运行的 Lyrimuse.app；若已开启但仍无效，请移除旧条目并重新添加，然后重启 Lyrimuse"), settingsPaneTitle)
     }
     var iconName: String { trusted ? "checkmark.circle.fill" : "xmark.circle.fill" }
     var iconColor: Color { trusted ? .green : .orange }
@@ -113,27 +113,27 @@ struct AccessibilityPermissionGuide: View {
         var lines: [String] = []
         let progress = players.filter { $0.accessibilityUse == .calibratesProgress }
         if !progress.isEmpty {
-            lines.append(String(format: L10n.t("%@ 不向系统报告播放进度。授权后 Lyrimuse 会读取它界面上的播放时间来校准，并在你点随机、循环键时替你按下对应按钮。不授权也能用，但自动连播时进度可能差一两秒，也没有这两颗键。"),
+            lines.append(String(format: L10n.t("%@ 不向系统报告播放进度。授权后，Lyrimuse 将读取其界面上的播放时间进行校准，并在你点按随机或循环按钮时代为操作对应按钮。未授权时仍可使用，但自动连播时进度可能偏差 1～2 秒，且不提供随机和循环按钮"),
                                 model.playerNames(progress)))
         }
         let playMode = players.filter { $0.accessibilityUse == .switchesPlayMode }
         if !playMode.isEmpty {
-            lines.append(String(format: L10n.t("%@ 没有脚本接口。授权后 Lyrimuse 会读取并点按它的菜单，以控制随机、循环与喜欢；系统媒体焦点被其它 App 占用时，也能暂停、恢复和切换上下首。不授权也能用，但没有这几颗键，失焦时也无法控制播放。失焦时的进度跳转暂不支持。"),
+            lines.append(String(format: L10n.t("%@ 未提供脚本接口。授权后，Lyrimuse 将读取并操作其菜单，以控制随机、循环与喜欢；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可使用，但不提供这些按钮，失去焦点时也无法控制播放。失去焦点时暂不支持跳转进度"),
                                 model.playerNames(playMode)))
         }
         let playback = players.filter { $0.accessibilityUse == .controlsPlayback }
         if !playback.isEmpty {
-            lines.append(String(format: L10n.t("授权后 Lyrimuse 会读取并点按%@的界面，以显示和切换喜欢；系统媒体焦点被其它 App 占用时，也能暂停、恢复和切换上下首。不授权也能显示歌词，但没有喜欢键，失焦时也无法控制播放；失焦时的进度跳转暂不支持。"),
+            lines.append(String(format: L10n.t("授权后，Lyrimuse 将读取并操作%@的界面，以显示和切换喜欢状态；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可显示歌词，但不提供喜欢按钮，失去焦点时也无法控制播放，且暂不支持跳转进度"),
                                 model.playerNames(playback)))
         }
         let favorite = players.filter { $0.accessibilityUse == .pressesFavorite }
         if !favorite.isEmpty {
-            lines.append(String(format: L10n.t("授权后 Lyrimuse 会读取%@的喜欢状态，并在你点喜欢键时替你按下它界面上对应的那一项。不授权也能用，只是没有喜欢键。"),
+            lines.append(String(format: L10n.t("授权后，Lyrimuse 将读取%@的喜欢状态，并在你点按喜欢按钮时代为操作其界面中的对应控件。未授权时其他功能照常可用，仅不提供喜欢按钮"),
                                 model.playerNames(favorite)))
         }
         let modeOnly = players.filter { $0.accessibilityUse == .pressesPlayMode }
         if !modeOnly.isEmpty {
-            lines.append(String(format: L10n.t("授权后 Lyrimuse 会读取%@的随机、循环状态，并在你点这两颗键时替你按下它菜单里对应的那一项。不授权也能用，只是没有这两颗键。"),
+            lines.append(String(format: L10n.t("授权后，Lyrimuse 将读取%@的随机和循环状态，并在你点按这两个按钮时代为操作其菜单中的对应项。未授权时其他功能照常可用，仅不提供随机和循环按钮"),
                                 model.playerNames(modeOnly)))
         }
         return lines.joined(separator: "\n")

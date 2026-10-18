@@ -1069,7 +1069,7 @@ struct AccountLinkingTab: View {
                             .foregroundStyle(.secondary)
                         Text(lastfmConnected
                              ? String(format: L10n.plural("%@ 首待补交", count: items.count), "\(items.count)")
-                             : String(format: L10n.plural("本机已记下 %@ 首", count: items.count), "\(items.count)"))
+                             : String(format: L10n.plural("本机已记录 %@ 首", count: items.count), "\(items.count)"))
                         Image(systemName: "chevron.down")
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(.secondary)
@@ -1120,7 +1120,7 @@ struct AccountLinkingTab: View {
                     .fixedSize(horizontal: false, vertical: true)
                     // Last.fm 只接受约两周内的时间戳,更老的会被服务端静默 ignore
                     // (backfill.go 的 backfillMaxAge = 13 天,留了一天余量)。
-                    Text(L10n.t("Last.fm 只收两周内的记录"))
+                    Text(L10n.t("Last.fm 仅接受两周内的收听记录"))
                         .font(.system(size: 10.5))
                         .foregroundStyle(.tertiary)
                         .padding(.top, 6)
@@ -1181,7 +1181,7 @@ struct AccountLinkingTab: View {
         var parts = [String(format: L10n.t("已补 %@ 条"), "\(last.accepted)")]
         if last.quarantined > 0 {
             // 隔离的条目常驻引擎会自己去 Last.fm 核对、确认没有就重交,不用再点。
-            parts.append(String(format: L10n.t("%@ 条状态未知，稍后会自动去 Last.fm 核对"), "\(last.quarantined)"))
+            parts.append(String(format: L10n.t("%@ 条状态未知，稍后将自动与 Last.fm 核对"), "\(last.quarantined)"))
         }
         if last.ignored > 0 {
             parts.append(String(format: L10n.t("%@ 条被 Last.fm 拒绝"), "\(last.ignored)"))
@@ -1275,7 +1275,7 @@ struct AccountLinkingTab: View {
                     //
                     // 「智能」那一档同样只写效果 —— 机制(候选只来自哪几处、时长闸、每首歌只判
                     // 一次、失败维持原样)在引擎 lastfmcatalog.go 头注,不在这行字里展开。
-                    help: L10n.t("发给 Last.fm 的歌手名和歌名。\n智能：用 Last.fm 上收听人数最多的写法，查不到就原样发；专辑名去掉「 - Single」「 - EP」。\n自定义：歌名、歌手分开设置。\n原始：照播放器报告的原样发。")
+                    help: L10n.t("发送到 Last.fm 的歌手名和歌名\n智能：使用 Last.fm 上收听人数最多的写法，未匹配时按原样发送；专辑名去除「 - Single」「 - EP」\n自定义：分别设置歌名和歌手\n原始：按播放器报告的内容原样发送")
                 ) {
                     SettingsGlassTabPicker(
                         selection: Binding(
@@ -1300,7 +1300,7 @@ struct AccountLinkingTab: View {
                 if features.lastfmMatchMode == .custom {
                     SettingsSubRow(
                         title: L10n.t("歌名"),
-                        help: L10n.t("匹配条目：用 Last.fm 收录的写法，如「那个女孩」→「那個女孩」，查不到就原样发；专辑名同时去掉「 - Single」「 - EP」。\n原始：照播放器报告的原样发。")
+                        help: L10n.t("匹配条目：使用 Last.fm 收录的写法，如「那个女孩」→「那個女孩」，未收录时按原样发送；专辑名同时去除「 - Single」「 - EP」\n原始：按播放器报告的内容原样发送")
                     ) {
                         SettingsGlassTabPicker(
                             selection: Binding(
@@ -1318,7 +1318,7 @@ struct AccountLinkingTab: View {
                     // 条目)。判据在引擎 resolveScrobbleTags,说明气泡里照实写了这一句。
                     SettingsSubRow(
                         title: L10n.t("歌手"),
-                        help: L10n.t("匹配条目：用 Last.fm 收录的写法，如「Wang Leehom」→「王力宏」，查不到就原样发。\n仅第一位：合唱只发第一位，如「陶喆, 卢广仲」→「陶喆」；歌名选「匹配条目」且 Last.fm 收录了这首时不截。\n原始：照播放器报告的原样发。")
+                        help: L10n.t("匹配条目：使用 Last.fm 收录的写法，如「Wang Leehom」→「王力宏」，未收录时按原样发送\n仅第一位：合唱歌曲仅发送第一位歌手，如「陶喆, 卢广仲」→「陶喆」；歌名设为「匹配条目」且 Last.fm 已收录该歌曲时不截取\n原始：按播放器报告的内容原样发送")
                     ) {
                         SettingsGlassTabPicker(
                             selection: Binding(
@@ -1341,7 +1341,7 @@ struct AccountLinkingTab: View {
                 SettingsRow(
                     icon: "hourglass",
                     title: L10n.t("Scrobble 时机"),
-                    help: L10n.t("听到哪里才记一次 Scrobble。\n50%：一半或 4 分钟，先到为准（官方规则）。\n75% / 90%：听满对应比例。\n曲终：播完才记，中途切歌不记。")
+                    help: L10n.t("播放到何处时记录一次 Scrobble\n50%：播放一半或 4 分钟，以先到者为准（Last.fm 官方规则）\n75% / 90%：播放达到对应比例\n曲终：完整播放后才记录，中途切歌不记录")
                 ) {
                     SettingsGlassTabPicker(
                         selection: Binding(
@@ -1362,7 +1362,7 @@ struct AccountLinkingTab: View {
                 SettingsRow(
                     icon: "timer",
                     title: L10n.t("短于 30 秒的曲目"),
-                    help: L10n.t("开：也 Scrobble，播放过半即记。\n关：不记（官方规则）。")
+                    help: L10n.t("开：同样 Scrobble，播放过半即记录\n关：不记录（Last.fm 官方规则）")
                 ) {
                     Toggle("", isOn: Binding(
                         get: { features.scrobbleShortTracks },
@@ -1380,7 +1380,7 @@ struct AccountLinkingTab: View {
                 PlayerBundleChipsRow(
                     icon: "music.note.list",
                     title: L10n.t("Scrobble 的播放器"),
-                    note: L10n.t("只有勾选的播放器会 Scrobble；网页播放器按浏览器算。"),
+                    note: L10n.t("仅勾选的播放器会 Scrobble；网页播放器按浏览器计算"),
                     allOffSummary: L10n.t("不 Scrobble 任何播放器"),
                     glassButton: true,
                     choices: playerBundleChoices,
@@ -1534,7 +1534,7 @@ struct AccountLinkingTab: View {
                 Text(L10n.t("开始你的听歌档案"))
                     .font(.system(size: 17, weight: .bold))
                     .padding(.top, 4)
-                Text(L10n.t("连接 Last.fm，把听过的每一首歌都留下来。"))
+                Text(L10n.t("连接 Last.fm，记录你收听的每一首歌"))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -1543,11 +1543,11 @@ struct AccountLinkingTab: View {
             // 三列各自对齐(图标 / 名称 / 说明):标题长短不一,用 HStack 各排各的,说明会参差不齐。
             Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 9) {
                 lastfmWelcomeRow(symbol: "music.note", title: L10n.t("自动 Scrobble"),
-                                 detail: L10n.t("各个播放器里听的歌都会记上"))
+                                 detail: L10n.t("各播放器中收听的歌曲均会记录"))
                 lastfmWelcomeRow(symbol: "chart.bar", title: L10n.t("统计与榜单"),
-                                 detail: L10n.t("今天、近 7 天、听得最多的歌手和歌"))
+                                 detail: L10n.t("今日、近 7 天，以及收听最多的歌手和歌曲"))
                 lastfmWelcomeRow(symbol: "square.grid.3x3", title: L10n.t("收听足迹"),
-                                 detail: L10n.t("热力图、听歌时段、那年今日"))
+                                 detail: L10n.t("热力图、收听时段、那年今日"))
             }
             .fixedSize()
             Button(L10n.t("连接 Last.fm 账号")) { showLastfmWizard = true }
@@ -1746,7 +1746,7 @@ struct AccountLinkingTab: View {
                 accountIconBadge(.lastfm, size: 36, cornerRadius: 9)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("连接 Last.fm")).font(.system(size: 16, weight: .bold))
-                    Text(L10n.t("三步，大约一分钟"))
+                    Text(L10n.t("三个步骤，约需一分钟"))
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                 }
@@ -1773,7 +1773,7 @@ struct AccountLinkingTab: View {
             } content: {
                 if lastfmKeyStepState == .active { lastfmKeyStepFields }
             }
-            lastfmWizardStep(2, title: L10n.t("在浏览器里授权"), state: lastfmAuthStepState) {
+            lastfmWizardStep(2, title: L10n.t("在浏览器中授权"), state: lastfmAuthStepState) {
                 EmptyView()
             } content: {
                 if lastfmAuthStepState == .active { lastfmAuthStepContent }
@@ -1852,7 +1852,7 @@ struct AccountLinkingTab: View {
             Spacer(minLength: 8)
             // 申请页在登录墙后面、不支持 URL 参数预填(实测:未登录 302 到 /login),帮用户填表做不到,
             // 能做的是把"该填什么"写在下面那条提示里。
-            Button(L10n.t("去 Last.fm 申请")) {
+            Button(L10n.t("前往 Last.fm 申请")) {
                 NSWorkspace.shared.open(URL(string: "https://www.last.fm/api/account/create")!)
             }
             .buttonStyle(.link)
@@ -1873,7 +1873,7 @@ struct AccountLinkingTab: View {
         lastfmKeyField("API Key", text: $config.lastfmScrobbleAPIKey, prompt: L10n.t("粘贴 API Key"))
         lastfmKeyField("Secret", text: $config.lastfmScrobbleSecret, prompt: L10n.t("粘贴 Shared Secret"))
         HStack(alignment: .top, spacing: 8) {
-            Text(L10n.t("申请页只需填写「应用名称」，其余可留空。提交后页面会显示 API Key 和 Shared Secret；Secret 只显示这一次，以后找不回来，忘了就再建一个应用。"))
+            Text(L10n.t("申请页只需填写「应用名称」，其余可留空。提交后页面将显示 API Key 和 Shared Secret；Secret 仅显示一次，之后无法找回，遗失时请重新创建应用"))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1939,7 +1939,7 @@ struct AccountLinkingTab: View {
             Button(L10n.t("重试")) { lastfmConnect.reset() }
                 .buttonStyle(.link)
         default:
-            Text(L10n.t("会打开 Last.fm 授权页，点「Yes, allow access」后自动回到这里。"))
+            Text(L10n.t("将打开 Last.fm 授权页，点按「Yes, allow access」后自动返回此处"))
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             // 已连着账号(从「授权已失效 · 重新连接…」进来)也直接重走授权:换到同一个账号的新 session 不清统计,
@@ -2089,7 +2089,7 @@ struct AccountLinkingTab: View {
             .lineLimit(1)
             SettingsChipToggle(
                 title: L10n.t("在 Discord 上显示"),
-                help: L10n.t("开启后，Discord 资料卡和好友列表中将显示正在收听的歌曲。如好友无法看到，请在 Discord 的「用户设置 › 活动隐私」中开启活动状态分享。"),
+                help: L10n.t("开启后，Discord 资料卡和好友列表中将显示正在收听的歌曲。如好友无法看到，请在 Discord 的「用户设置 › 活动隐私」中开启活动状态分享"),
                 isOn: $appSettings.discordPresenceEnabled
             )
         }
@@ -2215,7 +2215,7 @@ struct AccountLinkingTab: View {
         let hidesSong = appSettings.discordHideSongInfo
         return VStack(spacing: 14) {
             if hidesSong {
-                Text(L10n.t("已选择「不显示是哪首歌」，跟歌曲有关的几项暂不起作用"))
+                Text(L10n.t("已开启「隐藏歌曲信息」，与歌曲相关的选项暂不生效"))
                     .font(.caption).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)
@@ -2227,11 +2227,11 @@ struct AccountLinkingTab: View {
                 CardDivider()
                 discordLineRow(L10n.t("第二行"), icon: "2.circle", selection: $appSettings.discordLine2)
                 CardDivider()
-                discordLineRow(L10n.t("第三行"), icon: "3.circle", help: L10n.t("鼠标停在封面上时也显示这一行。"),
+                discordLineRow(L10n.t("第三行"), icon: "3.circle", help: L10n.t("指针悬停在封面上时也显示此行"),
                                selection: $appSettings.discordLine3)
                 CardDivider()
-                SettingsRow(icon: "character.textbox", title: L10n.t("歌手、专辑前加说明"),
-                            help: L10n.t("歌手前加「演唱：」，专辑前加「专辑：」。歌名和歌手写在同一行时不加。")) {
+                SettingsRow(icon: "character.textbox", title: L10n.t("为歌手和专辑添加前缀"),
+                            help: L10n.t("在歌手前添加「演唱：」，在专辑前添加「专辑：」。歌名和歌手位于同一行时不添加")) {
                     Toggle("", isOn: $appSettings.discordLabelArtistAlbum)
                         .labelsHidden()
                         .toggleStyle(.switch)
@@ -2239,7 +2239,7 @@ struct AccountLinkingTab: View {
             }
             .disabled(hidesSong)
             if layout.followsLyrics {
-                Text(L10n.t("「当前歌词」那一行最多每 4 秒换一句，很短的句子会跳过；间奏、暂停或这首没有歌词时显示专辑，专辑已经占了一行时空着。"))
+                Text(L10n.t("「当前歌词」行最多每 4 秒切换一句，过短的句子将跳过；间奏、暂停或这首歌曲无歌词时显示专辑，专辑已占用一行时留空"))
                     .font(.caption).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)
@@ -2250,7 +2250,7 @@ struct AccountLinkingTab: View {
                 SettingsCardHeader(title: L10n.t("状态文字"))
                 CardDivider()
                 SettingsRow(icon: "music.note", title: L10n.t("「正在收听」后面显示"),
-                            help: L10n.t("资料卡「正在收听 ××」里的 ××。iOS 和网页版的 Discord 不认这一项，仍显示播放器名。\n选歌名或歌手时，用户名下方不能再选「播放器」。")) {
+                            help: L10n.t("资料卡「正在收听 ××」中的 ××。iOS 版和网页版 Discord 不支持此项，仍显示播放器名\n选择歌名或歌手时，用户名下方无法再选择「播放器」")) {
                     SettingsGlassTabPicker(
                         selection: Binding(
                             get: { DiscordPresence.effectiveListeningName(appSettings.discordListeningName, layout: layout) },
@@ -2269,7 +2269,7 @@ struct AccountLinkingTab: View {
                 }
                 CardDivider()
                 SettingsRow(icon: "text.alignleft", title: L10n.t("用户名下方显示"),
-                            help: L10n.t("Discord 只能把第一行、第二行或「正在收听」后面那个放到用户名下方。歌名、歌手都不在这几处时，那一档变灰。")) {
+                            help: L10n.t("Discord 仅支持将第一行、第二行或「正在收听」后的内容显示在用户名下方。歌名和歌手均不在这些位置时，对应选项不可用")) {
                     SettingsGlassTabPicker(
                         selection: Binding(
                             get: {
@@ -2314,7 +2314,7 @@ struct AccountLinkingTab: View {
                 }
                 CardDivider()
                 SettingsRow(icon: "slider.horizontal.below.rectangle", title: L10n.t("显示进度条"),
-                            help: L10n.t("关掉后不显示进度条，Discord 改为显示这首已经放了多久，这个计时关不掉。")) {
+                            help: L10n.t("关闭后不显示进度条，Discord 将改为显示已播放时长，该计时无法关闭")) {
                     Toggle("", isOn: $appSettings.discordShowProgress)
                         .labelsHidden()
                         .toggleStyle(.switch)
@@ -2366,8 +2366,8 @@ struct AccountLinkingTab: View {
             CardDivider()
             // 这个按钮会说出是哪首歌,选了「不显示是哪首歌」时不发(`DiscordPresence.activity`),这里跟着变灰。
             SettingsRow(icon: "play.circle", title: L10n.t("「在播放器上收听」"),
-                        subtitle: appSettings.discordHideSongInfo ? L10n.t("已选择「不显示是哪首歌」") : nil,
-                        help: L10n.t("打开这首歌在当前播放器网站上的页面，跟点歌名一样。找不到这首歌的页面时不显示。")) {
+                        subtitle: appSettings.discordHideSongInfo ? L10n.t("已开启「隐藏歌曲信息」") : nil,
+                        help: L10n.t("打开这首歌曲在当前播放器网站上的页面，与点按歌名效果相同。无对应页面时不显示")) {
                 Toggle("", isOn: $appSettings.discordButtonListen)
                     .labelsHidden()
                     .toggleStyle(.switch)
@@ -2375,7 +2375,7 @@ struct AccountLinkingTab: View {
             .disabled(appSettings.discordHideSongInfo)
             CardDivider()
             SettingsRow(icon: "arrow.down.app", title: L10n.t("「获取 Lyrimuse」"),
-                        subtitle: L10n.t("另外两个都开着时不显示")) {
+                        subtitle: L10n.t("另外两项均开启时不显示")) {
                 Toggle("", isOn: $appSettings.discordButtonGetLyrimuse)
                     .labelsHidden()
                     .toggleStyle(.switch)
@@ -2386,8 +2386,8 @@ struct AccountLinkingTab: View {
     /// 「隐私」:不显示是哪首歌(影响最大,排第一),暂时隐藏,显示哪些播放器。卡片上显示哪些内容在「显示内容」。
     private var discordPrivacyCard: some View {
         SettingsCard(cornerRadius: 18) {
-            SettingsRow(icon: "theatermasks", title: L10n.t("不显示是哪首歌"),
-                        help: L10n.t("只显示在用哪个播放器听歌和播放进度，歌名、歌手、专辑、歌词、链接和「在播放器上收听」按钮都不发。")) {
+            SettingsRow(icon: "theatermasks", title: L10n.t("隐藏歌曲信息"),
+                        help: L10n.t("仅显示所用播放器和播放进度，不发送歌名、歌手、专辑、歌词、链接和「在播放器上收听」按钮")) {
                 Toggle("", isOn: $appSettings.discordHideSongInfo)
                     .labelsHidden()
                     .toggleStyle(.switch)
@@ -2428,7 +2428,7 @@ struct AccountLinkingTab: View {
         PlayerBundleChipsRow(
             icon: "music.note.list",
             title: L10n.t("显示哪些播放器"),
-            note: L10n.t("仅勾选的播放器会显示在 Discord 上；网页播放器按所在浏览器计算。"),
+            note: L10n.t("仅勾选的播放器会显示在 Discord 上；网页播放器按所在浏览器计算"),
             allOffSummary: L10n.t("全部不显示"),
             glassButton: true,
             choices: playerBundleChoices,
@@ -2536,7 +2536,7 @@ private struct PendingListenRow: View {
             // 藏起来的时候必须同时不接受点击 —— 否则清单右侧会有一条看不见却挡手
             // 的区域。
             .allowsHitTesting(isHovered && !busy)
-            .help(L10n.t("从待补交清单中移除此条（不可恢复）"))
+            .help(L10n.t("从待补交清单中移除此条（无法撤销）"))
         }
         .padding(.vertical, 5)
         .contentShape(Rectangle())

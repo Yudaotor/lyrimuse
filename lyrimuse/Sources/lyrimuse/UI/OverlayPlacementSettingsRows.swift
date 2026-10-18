@@ -42,8 +42,8 @@ struct OverlayPlacementSettingsRows: View {
                             minWidth: 56)
                     }
                     Text(settings.overlayFollowsActiveScreen
-                         ? L10n.t("你切到哪块屏幕，歌词就跟到哪块，位置不变")
-                         : L10n.t("一直留在你放它的那块屏幕"))
+                         ? L10n.t("跟随当前使用的屏幕，位置保持不变")
+                         : L10n.t("始终停留在所放置的屏幕"))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -57,8 +57,8 @@ struct OverlayPlacementSettingsRows: View {
     private var placementHelp: String {
         switch settings.overlayPlacementMode {
         case .free: return L10n.t("可拖到任意位置")
-        case .topCenter: return L10n.t("固定在菜单栏下方正中，不能拖动")
-        case .bottomCenter: return L10n.t("固定在 Dock 上方正中，不能拖动")
+        case .topCenter: return L10n.t("固定在菜单栏下方正中，无法拖动")
+        case .bottomCenter: return L10n.t("固定在 Dock 上方正中，无法拖动")
         }
     }
 }

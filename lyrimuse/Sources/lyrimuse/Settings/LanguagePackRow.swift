@@ -207,7 +207,7 @@ struct LanguagePackCard: View {
         SettingsCard(cornerRadius: 18) {
             SettingsCardHeader(
                 title: L10n.t("翻译语言包"),
-                help: L10n.t("只列能翻成当前译文语言的语言，所以可能比「系统设置」里少几种。点一下没下载的就能下载")
+                help: L10n.t("仅列出可翻译为当前译文语言的语言，因此可能少于「系统设置」中的数量。点按未下载的语言即可下载")
             ) {
                 // 首次读取有可见延迟(进程刚起时 translationd 冷启动还会先误报全零、
                 // 等 5 秒复查,见 LanguagePackStatusStore.refresh),这段时间明说

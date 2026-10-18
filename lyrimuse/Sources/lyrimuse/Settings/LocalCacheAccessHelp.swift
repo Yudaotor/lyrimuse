@@ -38,7 +38,7 @@ struct LocalCacheAccessHelp: View {
                   systemImage: "lock.circle.fill")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.orange)
-            Text(String(format: L10n.t("%@ 的歌词缓存位于受系统保护的目录中。授予「完全磁盘访问权限」后，可直接使用本机已有的逐字歌词，无需每次联网搜索。"),
+            Text(String(format: L10n.t("%@ 的歌词缓存位于受系统保护的目录中。授予「完全磁盘访问权限」后，可直接使用本机已有的逐字歌词，无需每次联网搜索"),
                         source.displayName))
                 .fixedSize(horizontal: false, vertical: true)
             Text(fullDiskAccess.steps)
