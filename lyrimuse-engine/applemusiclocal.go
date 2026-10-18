@@ -14,7 +14,7 @@ import (
 
 // Music.app 自己缓存下来的官方歌词 —— applemusic 源的快速路径。
 //
-// Apple Music 客户端**每播一首歌**就把这首歌的 amp-api 响应原样落进
+// Apple Music 客户端在歌词栏开着时**每播一首歌**就把这首歌的 amp-api 响应原样落进
 // `~/Library/Caches/com.apple.Music/fsCachedData/<UUID>`,里头是完整的 song 对象
 // (id / name / artistName / albumName / artwork / durationInMillis)外加
 // `relationships["syllable-lyrics"].ttmlLocalizations` —— **官方 TTML 歌词全文**。
@@ -42,9 +42,9 @@ import (
 //
 // # 前提与边界(都实测过)
 //
-//   - **必须用 Apple Music 播放才有**。只在界面里选中(AppleScript `reveal`)会缓存封面
-//     和专辑元数据、但**一条歌词都不写**;MusicKit 的 downloaded_catalog_data 库
-//     (catalog_song 表)是空的。
+//   - **必须用 Apple Music 播放、且 Music 的歌词栏开着才有**。只播不开歌词栏一条歌词都不写;
+//     只在界面里选中(AppleScript `reveal`)只缓存封面和专辑元数据;MusicKit 的
+//     downloaded_catalog_data 库(catalog_song 表)是空的。见 09 章决策 285。
 //   - **写入延迟 0.5~1.0 秒**(三次实测 0.50 / 0.76 / 1.01,T0 取系统报出新曲目的时刻)。
 //     引擎是 5 秒轮询、没有事件通知,实测两首的缓存分别比引擎发现换歌早
 //     3.4 秒和 1.7 秒 —— 竞态窗口存在但很小,miss 了照常走网络那条,零损失。
@@ -70,7 +70,7 @@ func applemusicLocalCacheDir() string {
 }
 
 // applemusicLocalRescanMin:重扫节流。比另外几条本地路径短一个数量级,是被实测逼出来的 ——
-// 这个目录**每播一首歌就多一个文件**,而我们要找的恰恰是刚写进去的那一份。
+// 歌词栏开着时这个目录**每播一首歌就多一个文件**,而我们要找的恰恰是刚写进去的那一份。
 //
 // 最早设 5 秒,结果是:引擎在换歌那一拍解析,而 Music.app 要 0.5~1 秒才把歌词写下来;
 // 只要引擎抢先扫过一次,后面 5 秒都不再重扫,这首歌就整轮查不到(实测「自以为」
