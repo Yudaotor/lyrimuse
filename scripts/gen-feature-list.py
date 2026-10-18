@@ -8,13 +8,17 @@
   布尔设置时,这里扫源码核对默认值,写错了就报错。
 - shared/settings-catalog.json:设置搜索目录(LyrimuseCore 的 SettingsSearchCatalog)的导出,selftest
   「settings-search」组核它跟代码逐字节一致。清单末尾的「全部设置项」由它生成,每一行设置都在,不会漏。
+- shared/feature-list-unclaimed.json:目录里不单独写进功能清单的设置(字体、颜色、宽度这类细项,关于页的链接)。
+  目录里每一项要么被 feature-list.json 某项的 `settings` 引用,要么列在这里;新加的设置两边都没有就报错,
+  逼着加设置的人决定它要不要写进清单。只给生成和 --check 用,落地页不读。
 
 界面上的字(设置位置的每一级、全部设置项的标题和说明)取自 Localizable.xcstrings,跟 App 一字不差。
 设置项的说明取设置页那一行的 `help:`(这个标题在源码和目录里都只出现一次时),没有就取目录里的副标题。
 
 落地页的 /features/ 页(Lyrimuse资料/19-落地页源文件/features.py)导入本文件,用同一个 `load_model`。
 
-CI 跑 `--check`:生成物没被手改、也没忘记重新生成;引用的设置位置都存在;默认值跟代码一致。
+CI 跑 `--check`:生成物没被手改、也没忘记重新生成;引用的设置位置都存在;默认值跟代码一致;
+目录里每一项都有着落(被功能项引用,或列在 feature-list-unclaimed.json)。
 """
 
 from __future__ import annotations
@@ -279,6 +283,34 @@ def load_model(root: Path = ROOT) -> dict:
             "settings_label": {lang: tr("设置", lang) for lang in LANGS}}
 
 
+UNCLAIMED_FILE = "shared/feature-list-unclaimed.json"
+
+
+def coverage_problems(root: Path = ROOT) -> list[str]:
+    """设置目录里没着落的项、登记表里多余的项。空列表 = 没问题。"""
+    features = json.loads((root / "shared/feature-list.json").read_text(encoding="utf-8"))
+    catalog = json.loads((root / "shared/settings-catalog.json").read_text(encoding="utf-8"))["entries"]
+    unclaimed = [tuple(r) for r in json.loads((root / UNCLAIMED_FILE).read_text(encoding="utf-8"))["entries"]]
+    refs = {tuple(r) for sec in features["sections"] for f in sec["features"] for r in f.get("settings", [])}
+    in_catalog = {tuple(e["path"] + [e["title"]]) for e in catalog}
+    problems = []
+    seen = set()
+    for r in unclaimed:
+        if r in seen:
+            problems.append(f"{UNCLAIMED_FILE} 里重复:{' › '.join(r)}")
+        seen.add(r)
+        if r not in in_catalog:
+            problems.append(f"{UNCLAIMED_FILE} 里的设置已经不在目录里,删掉这一行:{' › '.join(r)}")
+        elif r in refs:
+            problems.append(f"{UNCLAIMED_FILE} 里的设置已被功能项引用,删掉这一行:{' › '.join(r)}")
+    for e in catalog:
+        r = tuple(e["path"] + [e["title"]])
+        if r not in refs and r not in seen:
+            problems.append(f"新设置没写进功能清单:{' › '.join(r)}。值得介绍的写进 shared/feature-list.json 对应功能的 settings"
+                            f"(没有对应的就新加一项),只是细项的加进 {UNCLAIMED_FILE}")
+    return problems
+
+
 def _anchor(kind: str, ident: str) -> str:
     return f"{kind}-{ident}"
 
@@ -352,10 +384,13 @@ def main(argv: list[str]) -> int:
         else:
             path.write_text(text, encoding="utf-8")
             print(f"写入 {path.relative_to(ROOT)}")
+    problems = coverage_problems(ROOT)
+    for p in problems:
+        print(f"!! {p}", file=sys.stderr)
     if stale:
         print("!! 这些文件跟数据对不上,跑一遍 python3 scripts/gen-feature-list.py:" + "、".join(stale), file=sys.stderr)
         return 1
-    return 0
+    return 1 if problems else 0
 
 
 if __name__ == "__main__":

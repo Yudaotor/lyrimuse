@@ -42,6 +42,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Lock position, long-press to drag](#feature-lock-position) | Settings › Lyrics Display › Floating Lyrics › Behavior › Lock Position |
 | [Hidden from screenshots and screen sharing](#feature-hide-in-screenshots) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Screenshots |
 | [Hide or shrink when paused](#feature-hide-when-paused) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide When Paused |
+| [Hide for instrumentals and songs without lyrics](#feature-hide-when-no-lyrics) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide for Instrumentals & No Lyrics |
 | [Floating lyrics step aside in full screen](#feature-overlay-hide-in-full-screen) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Full Screen |
 | [Web lyrics: a phone or tablet as a second screen, or an OBS browser source](#feature-web-lyrics) | Settings › Lyrics Display › Lyrics Window › Web Lyrics |
 | [YouTube Music and Spotify Web in your browser](#feature-web-players) | Settings › Player › Web |
@@ -99,7 +100,7 @@ When a new version improves matching or scoring, lyrics you already have are re-
 
 ### Lyrics ready before the next song
 
-Reads your player's queue and finds lyrics for the next few songs ahead of time; when there is no queue to read, it works through the rest of the album. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for this.
+Reads your player's queue and finds lyrics for the next few songs ahead of time; when there is no queue to read, it works through the rest of the album. QQ Music, NetEase Cloud Music, Kugou and Soda Music need Full Disk Access for this.
 
 - On by default
 - Settings: Lyrics › Sources › Pre-Resolve Upcoming Tracks
@@ -109,7 +110,7 @@ Reads your player's queue and finds lyrics for the next few songs ahead of time;
 
 ### Use the lyrics your player already saved
 
-Lyrics that QQ Music, NetEase Cloud Music and Kugou already downloaded can be used directly: the same version the player shows, and faster. This needs Full Disk Access for Lyrimuse in System Settings; without it lyrics are still found online.
+Lyrics that QQ Music, NetEase Cloud Music, Kugou, KKBOX, Amazon Music and LX Music already saved can be used directly: the same version the player shows, and faster. For reAMP, the lyrics inside the playing file or a .lrc file of the same name are used. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for Lyrimuse in System Settings; without it lyrics are still found online.
 
 - Off by default
 - Settings: Player › Permissions & Services › Full Disk Access
@@ -135,12 +136,22 @@ When on, lyrics you pick by hand from search results are locked, so later automa
 
 ### Lyrics Manager
 
-Browse, edit, delete or search again for any song's lyrics, delete in bulk, and clear out the empty entries ads and podcasts leave behind. Give a single song its own timing offset. Retry every song that has no lyrics yet in one go, or re-match the whole library under the current rules; anything you edited by hand is left alone.
+Browse, edit, delete or search again for any song's lyrics, delete in bulk, and clear out the empty entries ads and podcasts leave behind. Give a single song its own timing offset. Retry every song that has no lyrics yet in one go, or re-match the whole library under the current rules, with an adjustable pause between songs; anything you edited by hand is left alone.
 
 - Settings: Lyrics › Library › Lyrics Library
 - Settings: Lyrics › Library › Auto-Match Missing Lyrics
 - Settings: Lyrics › Library › Re-Match Whole Library
 - Settings: Keyboard Shortcuts › Open Lyrics Manager
+- Settings: Lyrics › Library › Scan Interval
+
+<a id="feature-song-entries"></a>
+
+### Entries for the same song
+
+The same song played in different players or from different releases is recognized as one song: its entries share one set of lyrics, hand edits and timing fixes carry over, and play counts are added up. In Lyrics Manager, Entries for This Song compares each entry's lyrics line by line, and an entry matched by mistake can be split off and merged back later. Turn the sharing off to have each entry matched on its own.
+
+- On by default
+- Settings: Lyrics › Sources › Share Lyrics Across Entries of a Song
 
 <a id="feature-fix-lyrics"></a>
 
@@ -230,19 +241,20 @@ Move all lyrics earlier or later, optionally for one player only. Single songs g
 
 ### Desktop floating lyrics
 
-Lyrics floating above every window, always on top, lit up word by word. Leave them wherever you drag them, or pin them to the top centre of the screen or just above the Dock. Romanization, translation and the next line can show alongside.
+Lyrics floating above every window, always on top, lit up word by word. Leave them wherever you drag them, or pin them to the top centre of the screen or just above the Dock. With several displays they can stay on one screen or follow the screen of the window you are using. Romanization, translation and the next line can show alongside.
 
 - On by default
 - Settings: Lyrics Display › Floating Lyrics › Desktop Floating Lyrics
 - Settings: Lyrics Display › Floating Lyrics › Position
 - Settings: Lyrics Display › Floating Lyrics › Content › Next Line
 - Settings: Keyboard Shortcuts › Show/Hide Floating Lyrics
+- Settings: Lyrics Display › Floating Lyrics › Screen
 
 <a id="feature-notch-lyrics"></a>
 
 ### Notch lyrics
 
-A Dynamic Island-style capsule beside the notch at the top of the screen; Macs without a notch and external displays get one too. Each side can show the title, artist, album, artwork, playback controls, or elapsed or remaining time, next to a moving audio wave. Hover to expand it for controls, a seekable progress bar and lyrics timing. During ads it counts down the time left.
+A Dynamic Island-style capsule beside the notch at the top of the screen; Macs without a notch and external displays get one too. Each side can show the title, artist, album, artwork, playback controls, or elapsed or remaining time, next to a moving audio wave. Hover to expand it for controls, a seekable progress bar, lyrics timing and quick buttons such as like and search lyrics. During ads it counts down the time left.
 
 - Off by default
 - Settings: Lyrics Display › Notch › Notch Lyrics
@@ -250,6 +262,7 @@ A Dynamic Island-style capsule beside the notch at the top of the screen; Macs w
 - Settings: Lyrics Display › Notch › Display
 - Settings: Lyrics Display › Notch › Left Ear
 - Settings: Keyboard Shortcuts › Show/Hide Notch Lyrics
+- Settings: Lyrics Display › Notch › Expanded State › Quick Actions
 
 <a id="feature-menu-bar-lyrics"></a>
 
@@ -266,21 +279,25 @@ The current line right in the menu bar, scrolling when it is too long instead of
 
 ### Touch Bar lyrics
 
-On a MacBook Pro with a Touch Bar, the current line scrolls along as it is sung, with optional artwork and playback controls.
+On a MacBook Pro with a Touch Bar, the current line scrolls along as it is sung, with optional artwork and playback controls. The lyrics can be white, follow the artwork or use your own color, with adjustable brightness for the unsung part. They can expand when playback starts and fold away when paused, and a More button brings up timing, like, shuffle and repeat, volume and a progress slider.
 
 - Off by default
 - Settings: Lyrics Display › Touch Bar › Touch Bar Lyrics
 - Settings: Keyboard Shortcuts › Expand/Collapse Touch Bar Lyrics
+- Settings: Lyrics Display › Touch Bar › Style › Lyrics Color
+- Settings: Lyrics Display › Touch Bar › Behavior › Expand When Playback Starts
+- Settings: Lyrics Display › Touch Bar › Layout › Show More Button
 
 <a id="feature-lyrics-window"></a>
 
 ### Lyrics window
 
-Full-page lyrics modelled on Apple Music's lyrics view: blurred artwork behind, the whole song scrolling to the current line, duets split by singer, background vocals on their own line, held notes that swell and glow. The background can follow the artwork or be solid, a gradient or frosted glass. Open it from the menu bar icon or a shortcut.
+Full-page lyrics modelled on Apple Music's lyrics view: blurred artwork behind, the whole song scrolling to the current line, duets split by singer, background vocals on their own line, held notes that swell and glow. The background can follow the artwork or be solid, a gradient or frosted glass, and the text weight, sung color and alignment can be changed. Open it from the menu bar icon or a shortcut.
 
 - Settings: Lyrics Display › Lyrics Window › Lyrics Window
 - Settings: Lyrics Display › Lyrics Window › Background › Background
 - Settings: Keyboard Shortcuts › Open Lyrics Window
+- Settings: Lyrics Display › Lyrics Window › Layout › Alignment
 
 <a id="feature-lyrics-window-hdr"></a>
 
@@ -314,10 +331,11 @@ The mini window can disappear while paused or idle and come back when playback s
 
 ### Animated artwork
 
-Albums with animated artwork on Apple Music move in the full-size lyrics window too. It pauses in Low Power Mode or with Reduce Motion on.
+Albums with animated artwork on Apple Music move in the full-size lyrics window too. It pauses in Low Power Mode or with Reduce Motion on. You can see how much space the downloaded animations take and clear them.
 
 - On by default
 - Settings: Lyrics Display › Lyrics Window › Artwork › Animated Artwork
+- Settings: Lyrics Display › Lyrics Window › Artwork › Animated Artwork Cache
 
 <a id="feature-idle-overview"></a>
 
@@ -342,12 +360,14 @@ Font (the system's, or your own .ttf / .otf), size, weight, text and background 
 
 ### Word-by-word karaoke fill
 
-Each word lights up as it is sung. Floating lyrics, the notch, the menu bar, the Touch Bar and the mini lyrics window each have their own switch; off means the whole line lights at once.
+Each word lights up as it is sung. Floating lyrics, the notch, the menu bar, the Touch Bar and both sizes of the lyrics window each have their own switch; off means the whole line lights at once.
 
 - On by default
 - Settings: Lyrics Display › Floating Lyrics › Color › Karaoke Effect
 - Settings: Lyrics Display › Notch › Lyric Row › Karaoke Effect
 - Settings: Lyrics Display › Menu Bar › Color › Karaoke Effect
+- Settings: Lyrics Display › Touch Bar › Style › Karaoke Effect
+- Settings: Lyrics Display › Lyrics Window › Text › Karaoke Effect
 
 <a id="feature-line-transition"></a>
 
@@ -411,6 +431,17 @@ Floating lyrics and the notch disappear while paused or idle; the notch can inst
 - Settings: Lyrics Display › Notch › Behavior › Hide When Paused
 - Settings: Lyrics Display › Notch › Behavior › Shrink When Paused
 
+<a id="feature-hide-when-no-lyrics"></a>
+
+### Hide for instrumentals and songs without lyrics
+
+When a song is instrumental, or the search is done and found no lyrics, floating lyrics can hide, and the notch and the Touch Bar can fold their lyric row away. Nothing hides while the search is still running. Each has its own switch.
+
+- Off by default
+- Settings: Lyrics Display › Floating Lyrics › Behavior › Hide for Instrumentals & No Lyrics
+- Settings: Lyrics Display › Notch › Behavior › Collapse Lyric Row for Instrumentals & No Lyrics
+- Settings: Lyrics Display › Touch Bar › Behavior › Collapse for Instrumentals & No Lyrics
+
 <a id="feature-hide-in-full-screen"></a>
 
 ### Notch steps aside in full screen
@@ -451,12 +482,13 @@ When a song reaches its 100th, 1,000th or 10,000th play, or your Last.fm total p
 
 ### Web lyrics: a phone or tablet as a second screen, or an OBS browser source
 
-Lyrics in a web browser. Web Lyrics shows exactly what the lyrics window shows; OBS Output has a transparent background and the same fonts and colors as the floating lyrics. Each has its own port and local network setting. Both are available only on this Mac until you turn on "Allow Local Network Access"; then devices on the same network can scan a QR code to connect, using a link with an access key.
+Lyrics in a web browser. Web Lyrics shows exactly what the lyrics window shows; OBS Output has a transparent background and the same fonts and colors as the floating lyrics. Each has its own port and local network setting. Both are available only on this Mac until you turn on "Allow Local Network Access"; then devices on the same network can scan a QR code to connect, using a link with an access key. With "Allow Remote Control" on, the page can also control playback and jump to a line.
 
 - Off by default
 - Settings: Lyrics Display › Lyrics Window › Web Lyrics
 - Settings: Lyrics Display › Lyrics Window › Web Lyrics › Allow Local Network Access
 - Settings: Lyrics Display › Floating Lyrics › OBS › OBS Output
+- Settings: Lyrics Display › Lyrics Window › Web Lyrics › Allow Remote Control
 
 <a id="section-players"></a>
 
@@ -503,7 +535,7 @@ Players not on the list can be added to your trusted players from Applications, 
 
 ### Permissions, only where needed
 
-Apple Music, Spotify and Kaset need Automation permission to read what is playing. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for their saved lyrics and queues. Amazon Music's progress calibration, the shuffle, repeat and like buttons of QQ Music, NetEase Cloud Music, Kugou Music, Soda Music and Amazon Music, and QQ Music's and NetEase Cloud Music's playback buttons while another app holds Now Playing need Accessibility. Web players need Automation for the browser and its Allow JavaScript from Apple Events option. The other players need nothing. Settings shows the current state of each.
+Apple Music, Spotify and Kaset need Automation permission to read what is playing. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for their saved lyrics and queues, and Soda Music for its queue. Amazon Music's progress calibration, the shuffle, repeat and like buttons of QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Amazon Music and reAMP, and the playback buttons of QQ Music, NetEase Cloud Music and Soda Music while another app holds Now Playing need Accessibility. Web players need Automation for the browser and its Allow JavaScript from Apple Events option. The other players need nothing. Settings shows the current state of each.
 
 - Settings: Player › Permissions & Services › Automation Permission
 - Settings: Player › Permissions & Services › Full Disk Access
@@ -513,13 +545,14 @@ Apple Music, Spotify and Kaset need Automation permission to read what is playin
 
 ### Playback controls and seeking
 
-Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them, and NetEase Cloud Music, Kugou Music, Soda Music and LX Music have like, with LX Music volume too once Open API is on in its settings. Play, pause, skipping and like can have global shortcuts. While something like a browser video holds Now Playing, play, pause and skipping for QQ Music and NetEase Cloud Music go through their own menus, and seeking isn't available.
+Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them, and NetEase Cloud Music, Kugou Music, Soda Music and LX Music have like, with LX Music volume too once Open API is on in its settings. Play, pause, skipping and like can have global shortcuts. While something like a browser video holds Now Playing, play, pause and skipping for QQ Music, NetEase Cloud Music and Soda Music go through their own menus or play bar, and seeking isn't available.
 
 - Settings: Lyrics Display › Notch › Expanded State › Show Playback Controls
 - Settings: Keyboard Shortcuts › Play/Pause
 - Settings: Keyboard Shortcuts › Next Track
 - Settings: Keyboard Shortcuts › Previous Track
 - Settings: Keyboard Shortcuts › Favorite/Remove Favorite
+- Settings: Player › Permissions & Services › LX Music Open API
 
 <a id="feature-song-pages"></a>
 
@@ -552,7 +585,7 @@ Per player: open the player when Lyrimuse opens, open Lyrimuse when the player o
 
 ### Last.fm scrobbling and listening profile
 
-Connect Last.fm in one click, no token to copy. See today's, this week's and all-time listening, artist, album and track charts with movement, and Footprints: a year heatmap, listening hours, where your artists come from, and On This Day. Love any recent track with a click.
+Connect Last.fm in one click, no token to copy. See today's, this week's and all-time listening, artist, album and track charts with movement, and Footprints: a year heatmap where clicking a day lists its most played songs, listening hours, where your artists come from, and On This Day. Love any recent track with a click.
 
 - Off by default
 - Settings: Last.fm › Settings › Scrobble Rules
@@ -572,7 +605,7 @@ Count a play at 50%, 75%, 90% or only at the end; decide on tracks under 30 seco
 
 ### Every play is logged locally first
 
-Plays are recorded on your Mac while Last.fm is not connected, or when one fails to send. Once connected, click Backfill under Pending Scrobbles on the Last.fm page; Last.fm only accepts plays from about the last two weeks.
+Plays made while Last.fm is not connected are recorded on your Mac; once connected, click Backfill under Pending Scrobbles on the Last.fm page. A play that may not have reached Last.fm while connected is checked against Last.fm and resent automatically. Last.fm only accepts plays from about the last two weeks.
 
 <a id="feature-listenbrainz"></a>
 
@@ -587,13 +620,16 @@ Each play goes to Last.fm and ListenBrainz from the same reading, so the two agr
 
 ### Show what you're playing on Discord
 
-Your profile and friends list show the player, title, artist, artwork and a progress bar; clicking the title or artist opens the player's web page. Choose which players count, whether it stays while paused and which badge sits on the artwork, or hide it for a while.
+Your profile and friends list show the player, title, artist, artwork and a progress bar; clicking the title or artist opens the player's web page. The album line can show the line being sung, and up to two buttons can be added. Choose how the text is laid out, which players count, whether it stays while paused and which badge sits on the artwork, show only the player without naming the song, or hide it for a while.
 
 - Off by default
 - Settings: Discord › Show on Discord
 - Settings: Discord › Players Shown
 - Settings: Discord › When Paused
 - Settings: Discord › Hide Temporarily
+- Settings: Discord › What's Shown
+- Settings: Discord › Buttons
+- Settings: Discord › Hide Song Details
 
 <a id="feature-now-playing-page"></a>
 
@@ -652,6 +688,14 @@ Showing or hiding each kind of lyrics (or all of them at once, for meetings and 
 - Settings: Keyboard Shortcuts › Open Settings
 - Settings: Keyboard Shortcuts › Hide/Restore All Lyrics
 - Settings: Keyboard Shortcuts › Switch to Player
+
+<a id="feature-deep-links"></a>
+
+### Deep links (lyrimuse://)
+
+lyrimuse:// links open any Settings page, the lyrics window or Lyrics Manager, and run every action that can have a shortcut, such as playback, like or hiding all lyrics, from Shortcuts, Raycast, Alfred and similar tools. Opened with x-callback-url from Shortcuts, a link can also send back the title, artist, album and current line. The Deep Links card on the Shortcuts page lists every link, ready to copy.
+
+- Settings: Keyboard Shortcuts › Deep Links
 
 <a id="feature-settings-search"></a>
 

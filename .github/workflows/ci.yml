@@ -56,7 +56,8 @@ jobs:
 
       - name: 功能清单与 shared/feature-list.json、设置目录一致
         # docs/feature-list*.md 由那份 JSON 和 shared/settings-catalog.json 生成;这一步还核对清单引用的设置位置
-        # 都在目录里、写的默认开关跟代码一致。settings-catalog.json 跟代码的一致性由 selftest「settings-search」组核。
+        # 都在目录里、写的默认开关跟代码一致,目录里每一项都被清单引用或登记在 shared/feature-list-unclaimed.json。
+        # settings-catalog.json 跟代码的一致性由 selftest「settings-search」组核。
         run: python3 scripts/gen-feature-list.py --check
 
       - name: gofmt
