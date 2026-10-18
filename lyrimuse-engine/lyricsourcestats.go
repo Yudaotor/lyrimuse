@@ -80,6 +80,9 @@ const (
 	lyricSourceDegradedRatio      = 0.5
 	lyricSourceDegradedMinSamples = 30
 	lyricSourceDegradedMinUsual   = 0.3
+	// 质量那两项按歌手封顶:同一天里每位歌手(第一位署名)只算前这么多轮。同专辑预取、按歌手连听一口气查十几首,
+	// 这个源恰好只收了这位歌手的纯文本 / 逐行版时,不封顶会把整个窗口的比例拉下来(09 章决策 290)。
+	lyricSourceQualityPerArtist = 3
 )
 
 // 判定结果(写进摘要的 alert 字段,App 侧 LyricSourceHealth.Alert 是同一套取值)。
@@ -144,10 +147,15 @@ type lyricSourceDayCounts struct {
 	Responded      int `json:"responded,omitempty"`
 	Usable         int `json:"usable,omitempty"`
 	// Word:Usable 里可用候选带逐字时间轴的轮数。只有带 word 标记的那天作数(见 lyricSourceStatsDay.Word)。
-	Word       int `json:"word,omitempty"`
-	Won        int `json:"won,omitempty"`
-	PeerRounds int `json:"peer_rounds,omitempty"`
-	PeerHits   int `json:"peer_hits,omitempty"`
+	Word int `json:"word,omitempty"`
+	// QualityResponded / QualityUsable / QualityWord:Responded / Usable / Word 里落在每位歌手当天前
+	// lyricSourceQualityPerArtist 轮之内的那部分,质量那一档只看它们。只有带 artist_capped 标记的那天作数。
+	QualityResponded int `json:"q_responded,omitempty"`
+	QualityUsable    int `json:"q_usable,omitempty"`
+	QualityWord      int `json:"q_word,omitempty"`
+	Won              int `json:"won,omitempty"`
+	PeerRounds       int `json:"peer_rounds,omitempty"`
+	PeerHits         int `json:"peer_hits,omitempty"`
 	// PeerRoundsCJK / PeerHitsCJK:PeerRounds / PeerHits 里歌名或歌手名带中日韩文字的那部分,其余是另一类。
 	// 只有带 classes 标记的那天作数。
 	PeerRoundsCJK int `json:"peer_rounds_cjk,omitempty"`
@@ -170,8 +178,13 @@ type lyricSourceStatsDay struct {
 	// 按两类算的基线和窗口都跳过那天。
 	Classes bool `json:"classes,omitempty"`
 	// Word:这一天从第一轮起就记了逐字数(lyricSourceDayCounts.Word)。升级那天不带它,按逐字率算基线和窗口时跳过。
-	Word    bool                             `json:"word,omitempty"`
-	Sources map[string]*lyricSourceDayCounts `json:"sources"`
+	Word bool `json:"word,omitempty"`
+	// ArtistCapped:这一天从第一轮起就记了按歌手封顶的 Quality* 计数。升级那天不带它,窗口里跳过那天。
+	ArtistCapped bool `json:"artist_capped,omitempty"`
+	// ArtistRounds:当天每位歌手(第一位署名的 lyricSourceArtistHash)已经记了几轮,封顶用。只有今天要用,
+	// 落盘前清掉别的日子的(pruneLyricSourceStats)。
+	ArtistRounds map[uint32]int                   `json:"artist_rounds,omitempty"`
+	Sources      map[string]*lyricSourceDayCounts `json:"sources"`
 }
 
 func (d *lyricSourceStatsDay) counts(source string) *lyricSourceDayCounts {
@@ -249,6 +262,8 @@ type lyricSourceRoundOutcome struct {
 	cjk bool
 	// artist:歌手名的短哈希(lyricSourceArtistHash)。
 	artist uint32
+	// leadArtist:第一位署名歌手的短哈希,质量计数按它封顶。合作曲署名各不相同,按整串算会把同一位歌手拆成好几位。
+	leadArtist uint32
 }
 
 // lyricSourcePeersResponded:这一轮同组除 src 以外给了候选的有几家;不在任何一组的源是 0。
@@ -265,6 +280,14 @@ func lyricSourcePeersResponded(o lyricSourceRoundOutcome, src string) int {
 // addLyricSourceRound 把一轮结局加进当天的计数。纯函数,单测直接覆盖。
 func addLyricSourceRound(day *lyricSourceStatsDay, o lyricSourceRoundOutcome) {
 	day.Rounds++
+	quality := false
+	if day.ArtistCapped {
+		if day.ArtistRounds == nil {
+			day.ArtistRounds = map[uint32]int{}
+		}
+		quality = day.ArtistRounds[o.leadArtist] < lyricSourceQualityPerArtist
+		day.ArtistRounds[o.leadArtist]++
+	}
 	for _, src := range o.enabled {
 		c := day.counts(src)
 		if o.skipped[src] {
@@ -282,6 +305,15 @@ func addLyricSourceRound(day *lyricSourceStatsDay, o lyricSourceRoundOutcome) {
 			c.Usable++
 			if o.word[src] {
 				c.Word++
+			}
+		}
+		if quality && o.responded[src] {
+			c.QualityResponded++
+			if o.usable[src] {
+				c.QualityUsable++
+				if o.word[src] {
+					c.QualityWord++
+				}
 			}
 		}
 		if o.winner == src {
@@ -341,6 +373,7 @@ func lyricSourceOutcomeFromDecision(d *lyricsDecision, enabled, eligible func(st
 		winner:     d.Winner,
 		cjk:        containsCJKScript(d.QueryArtist) || containsCJKScript(d.QueryTitle),
 		artist:     lyricSourceArtistHash(d.QueryArtist),
+		leadArtist: lyricSourceArtistHash(firstCreditedArtist(d.QueryArtist)),
 	}
 	// 本地排队排不上的那几次没问它,也跟它好不好无关:这一轮不算它的(既不算问了,也不算跳过)。
 	queued := map[string]bool{}
@@ -550,11 +583,21 @@ func judgeLyricSource(s *lyricSourceStatsSummary, days map[string]*lyricSourceSt
 type lyricSourceQuality struct{ num, den int }
 
 // lyricSourceQualityOf:这一天这个源的可用率或逐字率的分子分母;逐字率只认带 word 标记的那天,其余天 ok=false。
-func lyricSourceQualityOf(d *lyricSourceStatsDay, source, kind string) (q lyricSourceQuality, ok bool) {
+// 带 artist_capped 标记的那天用按歌手封顶的计数;没有的那天只给基线用原始计数(window=false),窗口里跳过。
+func lyricSourceQualityOf(d *lyricSourceStatsDay, source, kind string, window bool) (q lyricSourceQuality, ok bool) {
 	if d == nil || d.Sources[source] == nil {
 		return q, false
 	}
 	c := d.Sources[source]
+	if d.ArtistCapped {
+		if kind == lyricSourceDegradedWord {
+			return lyricSourceQuality{c.QualityWord, c.QualityUsable}, d.Word
+		}
+		return lyricSourceQuality{c.QualityUsable, c.QualityResponded}, true
+	}
+	if window {
+		return q, false
+	}
 	if kind == lyricSourceDegradedWord {
 		return lyricSourceQuality{c.Word, c.Usable}, d.Word
 	}
@@ -567,7 +610,7 @@ func judgeLyricSourceQuality(s *lyricSourceStatsSummary, days map[string]*lyricS
 	for _, kind := range []string{lyricSourceDegradedWord, lyricSourceDegradedUsable} {
 		var rates []float64
 		for _, k := range base {
-			if q, ok := lyricSourceQualityOf(days[k], s.Source, kind); ok && q.den >= lyricSourceBaselineMinRounds {
+			if q, ok := lyricSourceQualityOf(days[k], s.Source, kind, false); ok && q.den >= lyricSourceBaselineMinRounds {
 				rates = append(rates, float64(q.num)/float64(q.den))
 			}
 		}
@@ -577,7 +620,7 @@ func judgeLyricSourceQuality(s *lyricSourceStatsSummary, days map[string]*lyricS
 		usual := lyricSourceMedian(rates)
 		var win lyricSourceQuality
 		for _, k := range last3 {
-			if q, ok := lyricSourceQualityOf(days[k], s.Source, kind); ok {
+			if q, ok := lyricSourceQualityOf(days[k], s.Source, kind, true); ok {
 				win.num += q.num
 				win.den += q.den
 			}
@@ -698,12 +741,16 @@ func lyricSourceStreakOf(recent []lyricSourceRecentRound, usual [lyricSourceClas
 	return st
 }
 
-// pruneLyricSourceStats 删掉 today 往前 keep 天以外的日子。
+// pruneLyricSourceStats 删掉 today 往前 keep 天以外的日子,并清掉今天以外各天的 ArtistRounds。
 func pruneLyricSourceStats(days map[string]*lyricSourceStatsDay, today time.Time, keep int) {
 	oldest := today.AddDate(0, 0, -(keep - 1)).Format(lyricSourceStatsDayLayout)
-	for k := range days {
-		if k < oldest {
+	todayKey := today.Format(lyricSourceStatsDayLayout)
+	for k, d := range days {
+		switch {
+		case k < oldest:
 			delete(days, k)
+		case k != todayKey:
+			d.ArtistRounds = nil
 		}
 	}
 }
@@ -836,12 +883,12 @@ func noteLyricSourceTrip(source, reason string) {
 	s.dirty = true
 }
 
-// today:调用方持锁。新开的一天从第一轮起就分两类记、记逐字数;读回来的、升级之前开的那天保持原样。
+// today:调用方持锁。新开的一天从第一轮起就分两类记、记逐字数、按歌手封顶记质量计数;读回来的、升级之前开的那天保持原样。
 func (s *lyricSourceStats) today() *lyricSourceStatsDay {
 	k := s.now().Format(lyricSourceStatsDayLayout)
 	d := s.data.Days[k]
 	if d == nil {
-		d = &lyricSourceStatsDay{Classes: true, Word: true}
+		d = &lyricSourceStatsDay{Classes: true, Word: true, ArtistCapped: true}
 		s.data.Days[k] = d
 	}
 	return d

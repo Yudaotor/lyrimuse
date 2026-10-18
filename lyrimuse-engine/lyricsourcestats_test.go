@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -804,10 +805,16 @@ func TestLyricSourceStatsHealthItems(t *testing.T) {
 }
 
 // lyricSourceTestWordDays:同 lyricSourceTestDays,每天都带 word 标记;unmarked 里列的那几天除外(升级那天)。
+// 每天都带 artist_capped 标记,按歌手封顶的计数照抄原始计数(样本里没有哪位歌手超过封顶)。
 func lyricSourceTestWordDays(spec map[int]map[string]lyricSourceDayCounts, unmarked ...int) map[string]*lyricSourceStatsDay {
 	days := lyricSourceTestDays(spec)
 	for ago := range spec {
-		days[lyricSourceStatsTestToday.AddDate(0, 0, -ago).Format(lyricSourceStatsDayLayout)].Word = !slices.Contains(unmarked, ago)
+		d := days[lyricSourceStatsTestToday.AddDate(0, 0, -ago).Format(lyricSourceStatsDayLayout)]
+		d.Word = !slices.Contains(unmarked, ago)
+		d.ArtistCapped = true
+		for _, c := range d.Sources {
+			c.QualityResponded, c.QualityUsable, c.QualityWord = c.Responded, c.Usable, c.Word
+		}
 	}
 	return days
 }
@@ -873,7 +880,101 @@ func TestLyricSourceRoundCountsWordTiming(t *testing.T) {
 		}
 	}
 	s := &lyricSourceStats{data: lyricSourceStatsFile{Days: map[string]*lyricSourceStatsDay{}}, now: func() time.Time { return lyricSourceStatsTestToday }}
-	if !s.today().Word {
-		t.Error("新开的一天带 word 标记")
+	if d := s.today(); !d.Word || !d.ArtistCapped {
+		t.Error("新开的一天带 word、artist_capped 标记")
+	}
+}
+
+// lyricSourceTestQualityRound:一轮里 deezer 给了候选(usable 决定分数正负),歌手是 artist。
+func lyricSourceTestQualityRound(day *lyricSourceStatsDay, artist string, usable bool) {
+	score := -1
+	if usable {
+		score = 500
+	}
+	d := &lyricsDecision{QueryArtist: artist, Candidates: []lyricsDecisionCandidate{{Source: "deezer", Score: score, HasWordTiming: usable}}}
+	addLyricSourceRound(day, lyricSourceOutcomeFromDecision(d, allLyricSourcesOn, allLyricSourcesOn, nil))
+}
+
+// 质量计数按第一位署名歌手封顶:同一位歌手当天只算前 lyricSourceQualityPerArtist 轮,合作署名也归到他头上;
+// 原始计数照常全记。
+func TestLyricSourceQualityCappedPerArtist(t *testing.T) {
+	day := &lyricSourceStatsDay{ArtistCapped: true}
+	for _, a := range []string{"Prince", "Prince", "Prince、The New Power Generation", "Prince & Judith Hill", "Prince"} {
+		lyricSourceTestQualityRound(day, a, false)
+	}
+	lyricSourceTestQualityRound(day, "The New Power Generation、Prince", true)
+	lyricSourceTestQualityRound(day, "Michael Jackson", true)
+	c := day.Sources["deezer"]
+	if c.Responded != 7 || c.Usable != 2 {
+		t.Errorf("原始计数全记: responded=%d usable=%d", c.Responded, c.Usable)
+	}
+	if c.QualityResponded != lyricSourceQualityPerArtist+2 || c.QualityUsable != 2 || c.QualityWord != 2 {
+		t.Errorf("Prince 只算前 %d 轮: %+v", lyricSourceQualityPerArtist, *c)
+	}
+
+	old := &lyricSourceStatsDay{}
+	lyricSourceTestQualityRound(old, "Prince", false)
+	if old.Sources["deezer"].QualityResponded != 0 || old.ArtistRounds != nil {
+		t.Errorf("升级之前开的那天不记封顶计数: %+v", *old.Sources["deezer"])
+	}
+}
+
+// 一位歌手连查一大串、这个源只收了他的纯文本:封顶后窗口样本不够或比例没掉,不报;各位歌手普遍掉了照样报。
+func TestLyricSourceDegradedIgnoresSingleArtistBinge(t *testing.T) {
+	window := func(bingeOnly bool) map[string]*lyricSourceStatsDay {
+		days := map[string]*lyricSourceStatsDay{}
+		for ago := 0; ago <= 16; ago++ {
+			d := &lyricSourceStatsDay{ArtistCapped: true, Word: true}
+			for i := 0; i < 30; i++ {
+				lyricSourceTestQualityRound(d, fmt.Sprintf("artist %d", i), ago >= 3 || bingeOnly)
+			}
+			if ago < 3 {
+				for i := 0; i < 200; i++ {
+					lyricSourceTestQualityRound(d, "Prince", false)
+				}
+			}
+			days[lyricSourceStatsTestToday.AddDate(0, 0, -ago).Format(lyricSourceStatsDayLayout)] = d
+		}
+		return days
+	}
+	if s := lyricSourceQualitySummary(t, window(true), "deezer"); s.Alert != "" {
+		t.Errorf("只有一位歌手连查落空,不报: %+v", s)
+	}
+	if s := lyricSourceQualitySummary(t, window(false), "deezer"); s.Alert != lyricSourceAlertDegraded || s.Degraded != lyricSourceDegradedUsable {
+		t.Errorf("各位歌手普遍不可用,报 degraded/usable: %+v", s)
+	}
+}
+
+// 升级那天(没有 artist_capped)不进窗口,但之前的日子照样用原始计数当基线,不用重新攒两周。
+func TestLyricSourceQualityUpgradeDays(t *testing.T) {
+	spec := map[int]map[string]lyricSourceDayCounts{}
+	lyricSourceTestRange(spec, 3, 16, "lyricfind", lyricSourceDayCounts{Asked: 40, Responded: 40, Usable: 32})
+	lyricSourceTestRange(spec, 0, 2, "lyricfind", lyricSourceDayCounts{Asked: 40, Responded: 40, Usable: 6})
+	days := lyricSourceTestDays(spec)
+	if s := lyricSourceQualitySummary(t, days, "lyricfind"); s.Alert != "" {
+		t.Errorf("窗口里全是没封顶的日子,不报: %+v", s)
+	}
+	for ago := 0; ago <= 2; ago++ {
+		d := days[lyricSourceStatsTestToday.AddDate(0, 0, -ago).Format(lyricSourceStatsDayLayout)]
+		d.ArtistCapped = true
+		c := d.Sources["lyricfind"]
+		c.QualityResponded, c.QualityUsable = c.Responded, c.Usable
+	}
+	if s := lyricSourceQualitySummary(t, days, "lyricfind"); s.Alert != lyricSourceAlertDegraded || s.UsualRate != 0.8 {
+		t.Errorf("基线用升级之前的原始计数: %+v", s)
+	}
+}
+
+// 落盘前只留今天的 ArtistRounds。
+func TestPruneLyricSourceStatsDropsOldArtistRounds(t *testing.T) {
+	today := lyricSourceStatsTestToday.Format(lyricSourceStatsDayLayout)
+	yesterday := lyricSourceStatsTestToday.AddDate(0, 0, -1).Format(lyricSourceStatsDayLayout)
+	days := map[string]*lyricSourceStatsDay{
+		today:     {ArtistRounds: map[uint32]int{1: 2}},
+		yesterday: {ArtistRounds: map[uint32]int{1: 5}},
+	}
+	pruneLyricSourceStats(days, lyricSourceStatsTestToday, 60)
+	if days[today].ArtistRounds == nil || days[yesterday].ArtistRounds != nil {
+		t.Errorf("今天留着、昨天清掉: today=%v yesterday=%v", days[today].ArtistRounds, days[yesterday].ArtistRounds)
 	}
 }
