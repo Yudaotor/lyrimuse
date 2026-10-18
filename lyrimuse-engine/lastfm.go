@@ -59,6 +59,8 @@ type lastfmScrobbler struct {
 	// bridge 判「Last.fm 上的正在播放是不是我们自己的回声」要拿它比:改写过的写法(`鶴` 发成 `The Crane`)
 	// 跟本地标签比永远对不上,自己的回声会被当成 iPhone 在播。
 	lastSentNP atomic.Pointer[sentNowPlaying]
+	// sentNPPath:lastSentNP 落盘的位置(空 = 不落盘)。重启后读回来,回声窗口照旧按发出时刻算。
+	sentNPPath string
 	// npSeq:正在播放的代次,见 nextNowPlaying。
 	npSeq atomic.Uint64
 }
@@ -71,6 +73,51 @@ type sentNowPlaying struct {
 // lastfmSentNPEchoWindow:发出去的正在播放多久之内还当回声认。Last.fm 按 duration 参数挂着,不给时按它自己的
 // 默认;超过这么久还挂着的「正在播放」不会是我们那一条,同一首歌在 iPhone 上真的在放,不能被它挡掉。
 const lastfmSentNPEchoWindow = 15 * time.Minute
+
+type sentNowPlayingFile struct {
+	Artist string `json:"artist"`
+	Track  string `json:"track"`
+	At     int64  `json:"at"`
+}
+
+// noteSentNowPlaying 记下这次发出去的正在播放,并写进 sentNPPath。写失败只记日志:丢了顶多重启后认错一条回声。
+func (s *lastfmScrobbler) noteSentNowPlaying(artist, track string, at time.Time) {
+	s.lastSentNP.Store(&sentNowPlaying{artist: artist, track: track, at: at})
+	if s.sentNPPath == "" {
+		return
+	}
+	if b, err := json.Marshal(sentNowPlayingFile{Artist: artist, Track: track, At: at.Unix()}); err == nil {
+		_ = writeFileAtomic(s.sentNPPath, b)
+	}
+}
+
+// loadSentNowPlaying 读回上次运行发出去的正在播放;文件不在、坏了或缺字段都返回 nil。
+func loadSentNowPlaying(path string) *sentNowPlaying {
+	if path == "" {
+		return nil
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		noteFileErr("read", path, err)
+		return nil
+	}
+	var f sentNowPlayingFile
+	if err := json.Unmarshal(b, &f); err != nil {
+		noteFileErr("decode", path, err)
+		return nil
+	}
+	if f.Track == "" || f.At <= 0 {
+		return nil
+	}
+	return &sentNowPlaying{artist: f.Artist, track: f.Track, at: time.Unix(f.At, 0)}
+}
+
+// restoreSentNowPlaying 启动时把上次运行发出去的那条读回 lastSentNP。
+func (s *lastfmScrobbler) restoreSentNowPlaying() {
+	if v := loadSentNowPlaying(s.sentNPPath); v != nil {
+		s.lastSentNP.Store(v)
+	}
+}
 
 // sentNowPlayingAt:now 时刻仍在回声窗口内的、最近一次发出去的正在播放(歌手, 曲名);没有返回空串。nil 接收者安全。
 func (s *lastfmScrobbler) sentNowPlayingAt(now time.Time) (string, string) {
@@ -107,6 +154,8 @@ func lastfmScrobblerIfEnabled(cfg *config) *lastfmScrobbler {
 		// 用**只读**的那把 api_key:track.getInfo 不需要签名/session key,判定这一步不碰写凭据。
 		// 三档都建(匹配器只是读了一下缓存文件),档位在 resolveScrobbleTags 里判。
 		s.catalog = newLastfmCatalogMatcher(cfg.lastfmBridgeAPIKey())
+		s.sentNPPath = lfmSentNPPath
+		s.restoreSentNowPlaying()
 	}
 	return s
 }
@@ -456,7 +505,7 @@ func (s *lastfmScrobbler) updateNowPlaying(ctx context.Context, artist, track, a
 	// 时长,长曲子会提前掉、短曲子会挂太久。官方文档列了这个参数、标注选填。
 	durationParam(p, "duration", durationSecs)
 	// 发之前记:请求发出去、回执没回来时 Last.fm 那边也可能已经挂上了。
-	s.lastSentNP.Store(&sentNowPlaying{artist: artist, track: track, at: time.Now()})
+	s.noteSentNowPlaying(artist, track, time.Now())
 	return s.call(ctx, "track.updateNowPlaying", p)
 }
 

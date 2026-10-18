@@ -402,6 +402,7 @@ func main() {
 	artworkConfirmPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-artwork-confirmed.json")
 	forwardedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-forwarded.json")
 	lfmMirroredPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-mirrored.json")
+	lfmSentNPPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-sent-nowplaying.json")
 	// ListenBrainz 待重发队列(lbretry.go):会话结束后才失败的收听存在这里,后台重发。
 	lbRetryPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lb-retry.json")
 	lfmRetryPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-retry.json")

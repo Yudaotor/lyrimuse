@@ -92,6 +92,10 @@ const lfmMirroredTTL = 7 * 24 * time.Hour
 
 var lfmMirroredPath string
 
+// lfmSentNPPath:最近一次发给 Last.fm 的正在播放(见 lastfmScrobbler.lastSentNP)落盘的位置。
+// 引擎重启后照样认得出 Last.fm 上还挂着的那条是自己发的,不当成 iPhone 在放。
+var lfmSentNPPath string
+
 // lastfmStatusPath:Last.fm 镜像凭据致命错误的状态文件(见 lastfm.go 的
 // writeLastfmMirrorStatus),App 的账号卡读它显示"授权已失效"。
 var lastfmStatusPath string
