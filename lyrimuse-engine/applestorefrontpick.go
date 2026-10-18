@@ -54,10 +54,14 @@ func appleStorefrontAlbumMismatch(localDurations []float64, tracks []itunesResul
 	return matched*2 < len(small)
 }
 
-// appleStorefrontPickContradiction:按时长挑中的 hit 有没有反证,返回 "album"、"version" 或空串。
+// appleStorefrontPickContradiction:按时长挑中的 hit 有没有反证,返回 "album"、"version"、"named" 或空串。
 //   - album:本地同一张专辑的歌在店面这张专辑里大多找不到(appleStorefrontAlbumMismatch)—— 定位错了专辑。
 //   - version:本地歌名 / 专辑名自己写了版本(Live、伴奏之类),跟 hit 的歌名 / 专辑名对不上(versionTagsMismatch)。本地没写版本、
 //     店面写了的不判:本地标签可能是坏的(歌名只剩「13」),店面那首的现场版名字正是它的真名。
+//   - named:店面这张专辑里另有一首跟本地同名(appleStorefrontBaseTitle),时长跟 hit 差出一秒以上,版本标记跟本地或跟 hit 一样 ——
+//     本地这首在专辑里有自己的名字,hit 是另一首(本地「天機 - feat.五月天阿信」、专辑里列着「天機」时,第②步只看换了文字的曲目,
+//     挑中的是「I Still Love You」)。同名那首的版本跟两边都不一样时不判:专辑里同时列着「紅豆 (Live)」和录音室版的英文名时,
+//     本地录音室版挑中英文名是对的。见 09 章决策 287。
 //
 // 纯函数。
 func appleStorefrontPickContradiction(localTitle, localAlbum string, hit itunesResult, tracks []itunesResult, localDurations []float64) string {
@@ -67,7 +71,26 @@ func appleStorefrontPickContradiction(localTitle, localAlbum string, hit itunesR
 	if len(recordingVersionTags(localTitle, localAlbum)) > 0 && versionTagsMismatch(localTitle, localAlbum, hit.TrackName, hit.CollectionName) {
 		return "version"
 	}
+	if base := appleStorefrontBaseTitle(localTitle); base != "" {
+		for _, t := range tracks {
+			if t.TrackName == hit.TrackName || appleStorefrontBaseTitle(t.TrackName) != base || math.Abs(t.TrackTimeMillis-hit.TrackTimeMillis) <= 1000 {
+				continue
+			}
+			if !versionTagsMismatch(localTitle, "", t.TrackName, "") || !versionTagsMismatch(hit.TrackName, "", t.TrackName, "") {
+				return "named"
+			}
+		}
+	}
 	return ""
+}
+
+// appleStorefrontBaseTitle:去掉括号、合作署名(stripTitleFeatCredit)之后按 normLoose 规整的歌名。纯函数。
+func appleStorefrontBaseTitle(s string) string {
+	b := stripParens(s)
+	if x, ok := stripTitleFeatCredit(b); ok {
+		b = x
+	}
+	return normLoose(b)
 }
 
 // appleStorefrontPickShadowed:别的商店按本地歌名找到了这首(h 以外、曲名相同的那条 g),而 g 的时长跟 h 差出一秒以上、

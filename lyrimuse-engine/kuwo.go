@@ -459,19 +459,45 @@ func resolveKuwoLyric(ctx context.Context, artist, title, album string, duration
 	// 按分数名次(rank 从 0 开始,分数已从高到低排过)挑第一个真的拿到同步歌词的,
 	// 不是"谁先拉完网络请求"——并发只是为了不串行等 5 次网络往返,采纳顺序仍然由
 	// 打分结果决定。
-	for rank, f := range fetchedByRank {
-		if f == nil {
-			// 名次更靠前的那条取词没问成、退到后面一条:这一份不进缓存,下次再问前面那条(见 lyricsubfetch.go)。
-			if failedByRank[rank] {
-				noteLyricSubFetchFailure(ctx)
-			}
-			continue
-		}
-		return kuwoResult{
-			lyrics: f.lrc, title: kuwoSongTitle(f.it.SongName), artist: f.it.Artist, album: f.it.Album,
-			durationSecs: kuwoDurationSecs(f.it.Duration), cover: kuwoCoverURL(f.it.WebAlbumPicShort),
-			yrc: kuwoFetchLrcxYRC(ctx, kuwoMusicID(f.it.MusicRID)),
+	lrcs := make([]string, len(fetchedByRank))
+	for i, f := range fetchedByRank {
+		if f != nil {
+			lrcs[i] = f.lrc
 		}
 	}
-	return kuwoResult{}
+	rank := kuwoPickFetchedRank(lrcs, durationSecs)
+	if rank < 0 {
+		return kuwoResult{}
+	}
+	// 名次更靠前的那条取词没问成、退到后面一条:这一份不进缓存,下次再问前面那条(见 lyricsubfetch.go)。
+	for r := 0; r < rank; r++ {
+		if failedByRank[r] {
+			noteLyricSubFetchFailure(ctx)
+		}
+	}
+	f := fetchedByRank[rank]
+	return kuwoResult{
+		lyrics: f.lrc, title: kuwoSongTitle(f.it.SongName), artist: f.it.Artist, album: f.it.Album,
+		durationSecs: kuwoDurationSecs(f.it.Duration), cover: kuwoCoverURL(f.it.WebAlbumPicShort),
+		yrc: kuwoFetchLrcxYRC(ctx, kuwoMusicID(f.it.MusicRID)),
+	}
+}
+
+// kuwoPickFetchedRank:取到词的那几名(lrcs 按名次排,没取到的是空串)里采纳哪一名。时间轴末句跟曲长对得上的
+// (durationFits,跟打分同一把尺子)里名次最前的;一份都对不上、或曲长未知时取名次最前的那份。都没取到返回 -1。
+// 酷我同一首常有几条同分的条目,配的词不一样完整,名次最前的那份可能是截断的。见 09 章决策 287。纯函数。
+func kuwoPickFetchedRank(lrcs []string, durationSecs float64) int {
+	first := -1
+	for rank, lrc := range lrcs {
+		if lrc == "" {
+			continue
+		}
+		if first < 0 {
+			first = rank
+		}
+		if last, ok := lastLRCTimestampSecs(lrc); ok && durationFits(last, durationSecs) {
+			return rank
+		}
+	}
+	return first
 }

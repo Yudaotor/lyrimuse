@@ -56,6 +56,11 @@ func TestAppleStorefrontPickContradiction(t *testing.T) {
 		{"本地是现场版、店面是录音室版", "叮叮车 (Live)", "Filicious Fiona In Concert 2012", itunesResult{TrackName: "9:55 PM (feat. Chapman To)", CollectionName: "Filicious - EP"}, storefrontTrackList(189), nil, "version"},
 		{"本地没写版本、店面是现场版:不判", "13", "十指紧扣", itunesResult{TrackName: "十指緊扣 (903狂熱份子音樂會現場版)", CollectionName: "十指緊扣"}, storefrontTrackList(255), nil, ""},
 		{"两边都是现场版", "Hero (Live)", "Jay Chou The Invincible Concert Tour", itunesResult{TrackName: "英雄 (Live)", CollectionName: "周杰倫 嘉年華 世界巡迴演唱會"}, storefrontTrackList(300), nil, ""},
+		{"专辑里列着本地这首(去掉 feat)", "天機 - feat.五月天阿信", "THE BEST OF MAGIC POWER", itunesResult{TrackName: "I Still Love You (Japanese Version)", TrackTimeMillis: 278200}, []itunesResult{{TrackName: "天機", TrackTimeMillis: 275700}, {TrackName: "I Still Love You (Japanese Version)", TrackTimeMillis: 278200}}, nil, "named"},
+		{"专辑里列着本地这首(去掉括号署名)", "弹错", "影子", itunesResult{TrackName: "Tell me why", TrackTimeMillis: 258100}, []itunesResult{{TrackName: "彈錯 (feat. Gabe)", TrackTimeMillis: 260900}, {TrackName: "Tell me why", TrackTimeMillis: 258100}}, nil, "named"},
+		{"同名那首跟挑中的都是现场版", "红豆", "Timeless", itunesResult{TrackName: "Wonderful Tonight (Live)", TrackTimeMillis: 237200}, []itunesResult{{TrackName: "紅豆 (Live)", TrackTimeMillis: 243900}, {TrackName: "Wonderful Tonight (Live)", TrackTimeMillis: 237200}}, nil, "named"},
+		{"同名那首是现场版、挑中的是录音室版:不判", "红豆", "Timeless", itunesResult{TrackName: "Red Bean", TrackTimeMillis: 236100}, []itunesResult{{TrackName: "紅豆 (Live)", TrackTimeMillis: 243900}, {TrackName: "Red Bean", TrackTimeMillis: 236100}}, nil, ""},
+		{"同名那首跟挑中的一样长:不判", "一坪半", "What a Folk", itunesResult{TrackName: "4.95m² Dream", TrackTimeMillis: 208000}, []itunesResult{{TrackName: "一坪半", TrackTimeMillis: 208400}, {TrackName: "4.95m² Dream", TrackTimeMillis: 208000}}, nil, ""},
 		{"本地同专辑的歌太少:不判专辑", "唯一", "T.I.M.E.", itunesResult{TrackName: "Only One", CollectionName: "T.I.M.E. - EP"}, storefrontTrackList(253, 400), []float64{253}, ""},
 	} {
 		if got := appleStorefrontPickContradiction(c.title, c.album, c.hit, c.tracks, c.local); got != c.want {

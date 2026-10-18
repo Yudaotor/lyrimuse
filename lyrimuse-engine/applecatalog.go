@@ -947,6 +947,11 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 				log.Printf("lyrics: storefront %s: %q (%q) picked for %q (%q) by duration only is another version; title not used", country, hit.TrackName, hit.CollectionName, title, album)
 				h.titleOK = false
 				rejectedTitles[normLoose(hit.TrackName)] = true
+			case "named":
+				log.Printf("lyrics: storefront %s: %q picked for %q by duration only, but %q lists a track by that name; title not used", country, hit.TrackName, title, hit.CollectionName)
+				h.titleOK = false
+				rejectedTitles[normLoose(hit.TrackName)] = true
+				markLocated()
 			default:
 				markLocated()
 			}

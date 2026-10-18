@@ -182,6 +182,7 @@ func TestApplemusicPlainOnlyCachedOnlyWhenComplete(t *testing.T) {
 
 // Musixmatch:说有字幕却没问成(拒绝码、连不上)记一次;404 是这首没有,不记。
 func TestMusixmatchSubtitleFailureIsIncomplete(t *testing.T) {
+	t.Cleanup(func() { musixmatchSetLastFailureReason("") })
 	var code string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"message":{"header":{"status_code":` + code + `},"body":{}}}`))

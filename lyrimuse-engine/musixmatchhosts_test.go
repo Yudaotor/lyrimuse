@@ -104,6 +104,7 @@ func TestMusixmatchSwitchesToBackupHost(t *testing.T) {
 
 // 主用答了(查无、captcha、token 失效都算答了):不换主机。
 func TestMusixmatchAnsweredRequestDoesNotSwitchHost(t *testing.T) {
+	t.Cleanup(func() { musixmatchSetLastFailureReason("") })
 	primary, backup, _ := withMxmHosts(t)
 	for i, reply := range []func(http.ResponseWriter){
 		mxmReplyEnvelope(404, ""),

@@ -5,6 +5,7 @@ import (
 	"compress/zlib"
 	"context"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -201,5 +202,30 @@ func TestKuwoRankItemsAlbumBreaksTie(t *testing.T) {
 	want := []string{"MUSIC_2", "MUSIC_1", "MUSIC_4", "MUSIC_5", "MUSIC_6"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("排序 %v,期望 %v", got, want)
+	}
+}
+
+// 取到词的几名里采纳时间轴对得上曲长的那名;都对不上、曲长未知时取名次最前的;都没取到返回 -1。
+func TestKuwoPickFetchedRank(t *testing.T) {
+	lrc := func(lastSecs int) string {
+		return fmt.Sprintf("[00:01.00]第一句\n[%02d:%02d.00]最后一句\n", lastSecs/60, lastSecs%60)
+	}
+	for _, c := range []struct {
+		name string
+		lrcs []string
+		dur  float64
+		want int
+	}{
+		{"名次最前的截断了,取对得上的那名", []string{lrc(120), lrc(280)}, 290, 1},
+		{"都对得上取名次最前的", []string{lrc(280), lrc(285)}, 290, 0},
+		{"最前的超出曲长", []string{lrc(330), lrc(285)}, 290, 1},
+		{"没取到的跳过", []string{"", lrc(285)}, 290, 1},
+		{"都对不上取名次最前的", []string{lrc(100), lrc(120)}, 290, 0},
+		{"曲长未知取名次最前的", []string{"", lrc(100), lrc(280)}, 0, 1},
+		{"都没取到", []string{"", ""}, 290, -1},
+	} {
+		if got := kuwoPickFetchedRank(c.lrcs, c.dur); got != c.want {
+			t.Errorf("%s: %d,期望 %d", c.name, got, c.want)
+		}
 	}
 }
