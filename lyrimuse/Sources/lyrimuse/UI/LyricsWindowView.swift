@@ -46,6 +46,7 @@ final class WindowPlayback: ObservableObject {
     @Published private(set) var fullKaraokeFill: LyricsWindowKaraokeFill = .text
     @Published private(set) var fullKaraokeFillColor = AppSettings.defaultLyricsWindowMiniKaraokeFillColorFallback
     @Published private(set) var fullAlignment: LyricsRestingAlignment = .automatic
+    @Published private(set) var fullHDRHighlight = false
     /// 封面均值色(十六进制,高清替代那份优先),「已唱颜色 › 跟随封面」用。
     @Published private(set) var coverAverageHex: String?
     @Published private(set) var lyricsGapMarkers: [LyricsGapMarker] = []
@@ -160,6 +161,7 @@ final class WindowPlayback: ObservableObject {
                 .sink { [weak self] in self?.fullLines = $0 },
             s.$lyricsWindowFontWeight.removeDuplicates().sink { [weak self] in self?.fullFontWeight = $0 },
             s.$lyricsWindowKaraokeFill.removeDuplicates().sink { [weak self] in self?.fullKaraokeFill = $0 },
+            s.$lyricsWindowHDRHighlight.removeDuplicates().sink { [weak self] in self?.fullHDRHighlight = $0 },
             s.$lyricsWindowKaraokeFillColorHex.removeDuplicates().sink { [weak self] hex in
                 self?.fullKaraokeFillColor = Color(
                     hexWithAlpha: hex, fallback: AppSettings.defaultLyricsWindowMiniKaraokeFillColorFallback)
@@ -3473,7 +3475,8 @@ struct LyricsWindowView: View {
                              centered: centered, wordRise: wordRise, reduceMotion: reduceMotion,
                              duetInsetUnit: duetInsetUnit, scale: displayScale,
                              weight: lyricFontWeight,
-                             fillColor: karaokeFillColor.map { NSColor($0) }, forcedSide: lyricForcedSide),
+                             fillColor: karaokeFillColor.map { NSColor($0) }, forcedSide: lyricForcedSide,
+                             hdrHighlight: !showsMiniLayout && playback.fullHDRHighlight),
                 lineSpacing: lyricLineSpacing, showsScrollIndicator: !centered, leading: leading, trailing: trailing,
                 onArtwork: hasArtworkBackground, suspendsBlur: windowController.isLiveResizing,
                 currentLineIndex: playback.currentLineIndex, scrollLineIndex: playback.scrollLineIndex,

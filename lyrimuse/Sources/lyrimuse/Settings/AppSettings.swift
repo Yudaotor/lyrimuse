@@ -374,6 +374,7 @@ final class AppSettings: ObservableObject {
         static let lyricsWindowFontWeight = "np:lyricsWindowFontWeight"
         static let lyricsWindowKaraokeFill = "np:lyricsWindowKaraokeFill"
         static let lyricsWindowKaraokeFillColorHex = "np:lyricsWindowKaraokeFillColorHex"
+        static let lyricsWindowHDRHighlight = "np:lyricsWindowHDRHighlight"
         static let lyricsWindowLyricsAlignment = "np:lyricsWindowLyricsAlignment"
         static let lyricsWindowMiniHeaderFields = "np:lyricsWindowMiniHeaderFields"
         static let lyricsWindowMiniShowsTime = "np:lyricsWindowMiniShowsTime"
@@ -1464,6 +1465,11 @@ final class AppSettings: ObservableObject {
         }
     }
     private(set) var lyricsWindowKaraokeFillColor: Color = AppSettings.defaultLyricsWindowMiniKaraokeFillColorFallback
+    /// 完整尺寸「HDR 高亮」:当前行已唱那一端在支持 HDR 的屏幕上提亮到普通白以上(`LyricsWindowHDR`),默认关。
+    /// 开着且窗口在屏上唱着时屏幕保持提亮,更耗电。迷你尺寸没有这一项。
+    @Published var lyricsWindowHDRHighlight: Bool {
+        didSet { defaults.set(lyricsWindowHDRHighlight, forKey: Keys.lyricsWindowHDRHighlight) }
+    }
     /// 完整尺寸歌词的对齐方式。「自动」= 有对唱标记的行按声部、其余靠左;左 / 中 / 右三档所有行一律按它排,不再按声部
     /// 分左右(`LyricsRestingAlignment.forcedDuetSide`)。迷你尺寸没有这一项。
     @Published var lyricsWindowLyricsAlignment: LyricsRestingAlignment {
@@ -2429,6 +2435,7 @@ final class AppSettings: ObservableObject {
                                              fallback: Self.defaultLyricsWindowMiniKaraokeFillColorFallback)
         lyricsWindowLyricsAlignment = defaults.string(forKey: Keys.lyricsWindowLyricsAlignment)
             .flatMap(LyricsRestingAlignment.init(rawValue:)) ?? .automatic
+        lyricsWindowHDRHighlight = (defaults.object(forKey: Keys.lyricsWindowHDRHighlight) as? Bool) ?? false
         // 没存过(全新安装 / 老用户升级)才落默认档。不能用 `integer(forKey:)` 直接取 ——
         // 它对"没存过"和"存了 0(一样都不显示)"返回同一个 0,后者是合法选择,会被悄悄改回默认。
         lyricsWindowMiniHeaderFields = (defaults.object(forKey: Keys.lyricsWindowMiniHeaderFields) as? Int)

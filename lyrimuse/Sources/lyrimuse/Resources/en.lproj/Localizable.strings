@@ -147,6 +147,7 @@
 "Discord 社区" = "Discord Community";
 "GPL-3.0" = "GPL-3.0";
 "GitHub Star 数" = "GitHub stars";
+"HDR 高亮" = "HDR Highlight";
 "ISRC 一致" = "Same ISRC";
 "KKBOX 歌曲 ID 一致" = "Same KKBOX song ID";
 "Last.fm 上查不到这一天的收听" = "Last.fm has no scrobbles for this day";
@@ -721,6 +722,7 @@
 "在外部编辑器中编辑歌词" = "Edit Lyrics in External Editor";
 "在快捷指令中用「打开 X-Callback URL」打开，歌名、歌手、专辑和当前这句会作为参数传回" = "Open it with “Open X-Callback URL” in Shortcuts. The title, artist, album and current line come back as parameters";
 "在播放器中播放任意歌曲，歌词将自动显示" = "Play something in your player and lyrics will appear here";
+"在支持 HDR 的屏幕上提亮已唱部分，开启后更耗电" = "Brightens the sung part on HDR displays. Uses more power when on";
 "在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱颜色」，其余使用「未唱颜色」。仅在显示歌词时出现。" = "Puts a menu bar icon at the far left or right of the lyrics slot; its color fills from the bottom up to show playback progress — the filled part in Sung Color, the rest in Unsung Color. Only appears while lyrics are showing.";
 "在洛雪的设置里打开开放 API 后可调音量" = "Turn on Open API in LX Music settings to adjust its volume";
 "在浏览器中打开" = "Open in Browser";

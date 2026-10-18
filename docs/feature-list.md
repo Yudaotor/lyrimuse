@@ -35,6 +35,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Notch lyrics](#feature-notch-lyrics) | Settings › Lyrics Display › Notch › Notch Lyrics |
 | [Menu bar lyrics](#feature-menu-bar-lyrics) | Settings › Lyrics Display › Menu Bar › Menu Bar Lyrics |
 | [Touch Bar lyrics](#feature-touch-bar-lyrics) | Settings › Lyrics Display › Touch Bar › Touch Bar Lyrics |
+| [Lyrics window HDR highlight](#feature-lyrics-window-hdr) | Settings › Lyrics Display › Lyrics Window › Text › HDR Highlight |
 | [Mini window hides when paused or in full screen](#feature-mini-window-auto-hide) | Settings › Lyrics Display › Lyrics Window › Behavior › Hide When Paused |
 | [Line transition](#feature-line-transition) | Settings › Lyrics Display › Floating Lyrics › Layout › Line Transition |
 | [Fade when the pointer is over it](#feature-fade-on-hover) | Settings › Lyrics Display › Floating Lyrics › Behavior › Fade on Hover |
@@ -280,6 +281,15 @@ Full-page lyrics modelled on Apple Music's lyrics view: blurred artwork behind, 
 - Settings: Lyrics Display › Lyrics Window › Lyrics Window
 - Settings: Lyrics Display › Lyrics Window › Background › Background
 - Settings: Keyboard Shortcuts › Open Lyrics Window
+
+<a id="feature-lyrics-window-hdr"></a>
+
+### Lyrics window HDR highlight
+
+On an HDR display, the sung part of the current line in the lyrics window is brightened past normal white. Off by default and uses more power when on. Full size only.
+
+- Off by default
+- Settings: Lyrics Display › Lyrics Window › Text › HDR Highlight
 
 <a id="feature-mini-lyrics-window"></a>
 
@@ -728,7 +738,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 266 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 267 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1004,6 +1014,7 @@ Every setting in the Settings window, by where it lives: 266 in all. Type a name
 - **Font**: Lyrics font for the lyrics window (main text, translation, romanization)
 - **Weight**
 - **Sung Color**
+- **HDR Highlight** (full size only): Brightens the sung part on HDR displays. Uses more power when on
 
 ### Lyrics Display › Lyrics Window › Layout
 

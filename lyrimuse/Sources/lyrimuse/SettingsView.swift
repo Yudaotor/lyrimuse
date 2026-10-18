@@ -3143,6 +3143,7 @@ private struct AppearanceSettingsTab: View {
                 karaokeFillColor: Binding(
                     get: { settings.lyricsWindowKaraokeFillColor },
                     set: { settings.lyricsWindowKaraokeFillColorHex = $0.hexStringWithAlpha }),
+                hdrHighlight: $settings.lyricsWindowHDRHighlight,
                 alignment: $settings.lyricsWindowLyricsAlignment)
         }
     }
@@ -3172,6 +3173,8 @@ private struct AppearanceSettingsTab: View {
         fontWeight: Binding<OverlayFontWeight>? = nil,
         karaokeFill: Binding<LyricsWindowKaraokeFill>? = nil,
         karaokeFillColor: Binding<Color>? = nil,
+        /// 只有完整尺寸传:「HDR 高亮」(07 章决策 165)。
+        hdrHighlight: Binding<Bool>? = nil,
         /// 只有完整尺寸传:迷你单行 / 双行居中、多行是完整布局那份列表的迷你版,不给对齐。
         alignment: Binding<LyricsRestingAlignment>? = nil
     ) -> some View {
@@ -3351,6 +3354,13 @@ private struct AppearanceSettingsTab: View {
                             }
                         }
                     }
+                }
+                if let hdrHighlight {
+                    SettingsToggleTile(
+                        icon: "sun.max",
+                        title: L10n.t("HDR 高亮"),
+                        help: L10n.t("在支持 HDR 的屏幕上提亮已唱部分，开启后更耗电"),
+                        isOn: hdrHighlight)
                 }
             }
         case .layout:

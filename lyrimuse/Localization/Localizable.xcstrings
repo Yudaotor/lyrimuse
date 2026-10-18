@@ -49190,6 +49190,52 @@
           }
         }
       }
+    },
+    "HDR 高亮" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HDR Highlight"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HDR 高亮"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HDR 高亮"
+          }
+        }
+      }
+    },
+    "在支持 HDR 的屏幕上提亮已唱部分，开启后更耗电" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brightens the sung part on HDR displays. Uses more power when on"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在支持 HDR 的屏幕上提亮已唱部分，开启后更耗电"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在支援 HDR 的螢幕上提亮已唱部分，開啟後更耗電"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

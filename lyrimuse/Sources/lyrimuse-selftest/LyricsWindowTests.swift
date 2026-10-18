@@ -885,7 +885,7 @@ func runLyricsWindowTests() {
         expectEqual(sourceBytes(window, contain: "if let fill, !forceFilled {"), true, "已唱颜色接线: 非当前行不用填色颜色")
         expectEqual(sourceBytes(window, contain: "fillColor: NSColor(fill ?? color),"), true, "已唱颜色接线: 滚动档当前行按填色颜色")
         expectEqual(sourceBytes(window, contain: "fill: karaokeFillColor,\n                            forcedSide: lyricForcedSide")
-                    && sourceBytes(window, contain: "fillColor: karaokeFillColor.map { NSColor($0) }, forcedSide: lyricForcedSide)")
+                    && sourceBytes(window, contain: "fillColor: karaokeFillColor.map { NSColor($0) }, forcedSide: lyricForcedSide,")
                     && sourceBytes(window, contain: "fill: karaokeFillColor,\n                showRomanization"),
                     true, "已唱颜色接线: reel 和两份列表都带此刻尺寸那一套的填色颜色")
         expectEqual(sourceBytes(window, contain: "let mode = showsMiniLayout ? playback.miniKaraokeFill : playback.fullKaraokeFill")
@@ -1401,6 +1401,39 @@ func runLyricsWindowTests() {
                     && window.contains("private struct LyricsSearchContext: Identifiable, Equatable {")
                     && window.contains("private struct LyricsWindowSearchSheet: View, Equatable {\n    let ctx: LyricsSearchContext\n\n    var body: some View {"),
                     true, "搜索歌词 sheet(契约): 只摆 LyricsWindowSearchSheet(ctx:),它是 Equatable、只存曲目快照")
+    }
+    // ---- HDR 高亮(LyricsWindowHDR,07 章决策 165) ----
+    do {
+        typealias H = LyricsWindowHDR
+        let white = CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
+        let boosted = H.boosted(white)
+        let linear = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!
+        let parts = (boosted.converted(to: linear, intent: .defaultIntent, options: nil)?.components ?? []).map { ($0 * 100).rounded() / 100 }
+        expectEqual(parts, [H.gain, H.gain, H.gain, 1], "HDR 高亮: 三个通道一起乘倍数,透明度不动")
+        expectEqual(H.exceedsStandardRange(white), false, "HDR 高亮: 普通白不算超过")
+        expectEqual(H.exceedsStandardRange(boosted), true, "HDR 高亮: 提亮后的白超过普通白,那几层要声明扩展范围")
+        expectEqual(H.boosted(CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.4)).alpha, 0.4, "HDR 高亮: 透明度不跟着乘")
+        expectEqual(H.exceedsStandardRange(H.boosted(CGColor(srgbRed: 0.1, green: 0.1, blue: 0.1, alpha: 1))), false,
+                    "HDR 高亮: 深色乘了倍数还在普通范围里,不声明扩展范围(浅色背景上本来就不起作用)")
+
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ path: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let window = source("lyrimuse/UI/LyricsWindowView.swift")
+        let rows = source("lyrimuse/UI/LyricsLayerListRow.swift")
+        let appSettings = source("lyrimuse/Settings/AppSettings.swift")
+        let settingsView = source("lyrimuse/SettingsView.swift")
+        expectEqual(sourceBytes(appSettings, contain: "lyricsWindowHDRHighlight = (defaults.object(forKey: Keys.lyricsWindowHDRHighlight) as? Bool) ?? false"),
+                    true, "HDR 高亮: 没存过时默认关")
+        expectEqual(sourceBytes(window, contain: "s.$lyricsWindowHDRHighlight.removeDuplicates().sink { [weak self] in self?.fullHDRHighlight = $0 }")
+                    && sourceBytes(window, contain: "hdrHighlight: !showsMiniLayout && playback.fullHDRHighlight"),
+                    true, "HDR 高亮: 只在完整尺寸开,改了样式就重建,切换当场生效")
+        expectEqual(sourceBytes(rows, contain: "self.activeText = style.hdrHighlight ? LyricsWindowHDR.boosted(activeText) : activeText")
+                    && sourceBytes(rows, contain: "if LyricsWindowHDR.exceedsStandardRange(plan.activeSung) {\n            for layer in [container, fill, gradient] { Self.allowExtendedRange(layer) }"),
+                    true, "HDR 高亮: 只提亮当前行已唱那一端,颜色超过普通白的那几层才声明扩展范围")
+        expectEqual(sourceBytes(settingsView, contain: "hdrHighlight: $settings.lyricsWindowHDRHighlight,"),
+                    true, "HDR 高亮: 设置页只有完整尺寸那一支传这颗开关")
     }
     checkLyricsWindowFormMorph()
 }

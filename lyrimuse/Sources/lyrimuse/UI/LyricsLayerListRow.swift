@@ -69,6 +69,9 @@ final class LyricsLayerElement {
         gradient.locations = [0, NSNumber(value: 0.5 - band), NSNumber(value: 0.5 + band), 1]
         gradient.bounds = CGRect(x: 0, y: 0, width: gradientWidth, height: frame.height + 2 * pad)
         fill.addSublayer(gradient)
+        if LyricsWindowHDR.exceedsStandardRange(plan.activeSung) {
+            for layer in [container, fill, gradient] { Self.allowExtendedRange(layer) }
+        }
         if let glowImage = plan.glow {
             let g = CALayer()
             g.actions = noActions
@@ -88,6 +91,15 @@ final class LyricsLayerElement {
         container.addSublayer(fill)
         if plan.hidden { container.opacity = 0 }
         setFill(center: LyricsLayerTiming.unsungCenter)
+    }
+
+    /// 颜色超过普通白时(「HDR 高亮」)这几层要声明扩展范围,不声明的话屏幕不提亮。
+    private static func allowExtendedRange(_ layer: CALayer) {
+        layer.wantsExtendedDynamicRangeContent = true
+        if #available(macOS 26.0, *) {
+            layer.preferredDynamicRange = .high
+            layer.contentsHeadroom = LyricsWindowHDR.gain
+        }
     }
 
     /// 软边中心在词宽里的位置 → 渐变层的 x:渐变正中那条过渡带对准中心。
@@ -193,6 +205,8 @@ struct LyricsLayerRowStyle: Equatable, @unchecked Sendable {
     var fillColor: NSColor? = nil
     /// 完整尺寸「对齐方式」选了左 / 中 / 右:所有行、间奏点、末尾创作者一律按它排,不给对唱留白;nil = 自动。
     var forcedSide: LyricDuet.Side? = nil
+    /// 「HDR 高亮」:当前行已唱那一端提亮到普通白以上(`LyricsWindowHDR`)。只有完整尺寸开,迷你和网页歌词恒为 false。
+    var hdrHighlight = false
 
     /// 不分声部的那几样(间奏点、末尾创作者)靠哪一侧。
     var listSide: LyricDuet.Side { forcedSide ?? (centered ? .center : .leading) }
@@ -253,7 +267,7 @@ struct LyricsLayerRowInk: @unchecked Sendable {
         }
         self.text = text
         self.secondary = secondary
-        self.activeText = activeText
+        self.activeText = style.hdrHighlight ? LyricsWindowHDR.boosted(activeText) : activeText
         footerLabel = L10n.t("创作者：")
         footerSeparator = L10n.t("、")
     }

@@ -1507,6 +1507,16 @@
       "path" : [
         "歌词显示",
         "歌词窗口",
+        "文字"
+      ],
+      "title" : "HDR 高亮"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : false,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
         "布局"
       ],
       "subtitle" : "完整尺寸歌词的对齐；「自动」按对唱声部对齐",
