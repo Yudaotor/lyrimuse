@@ -14,39 +14,50 @@ final class WebLyricsScreenHub {
     /// 同时最多画几种尺寸;再来新尺寸的网页就共用最早那一个(画面按比例缩放显示)。
     static let maxRenderers = 3
 
-    private var renderers: [WebLyricsViewport: WebLyricsScreenRenderer] = [:]
-    private var order: [WebLyricsViewport] = []
-    private var viewers: [ObjectIdentifier: (connection: WebLyricsConnection, viewport: WebLyricsViewport, visible: Bool)] = [:]
+    /// 同一尺寸、同一种推法(视频流 / 逐帧 JPEG)的网页共用一个渲染器。
+    struct Key: Hashable {
+        let viewport: WebLyricsViewport
+        let video: Bool
+    }
+
+    private var renderers: [Key: WebLyricsScreenRenderer] = [:]
+    private var order: [Key] = []
+    /// `needsKeyFrame`:视频流里这个网页要等下一个关键帧才解得开(刚连上、掉过帧),见 `WebLyricsVideo.deliver`。
+    private var viewers: [ObjectIdentifier: (connection: WebLyricsConnection, key: Key, visible: Bool, needsKeyFrame: Bool)] = [:]
     private static let log = Logger(subsystem: "me.yudaotor.lyrimuse", category: "web-lyrics")
 
-    func add(_ connection: WebLyricsConnection, viewport requested: WebLyricsViewport) {
-        var viewport = requested
-        if renderers[viewport] == nil {
-            if renderers.count >= Self.maxRenderers, let first = order.first {
-                viewport = first
+    func add(_ connection: WebLyricsConnection, viewport requested: WebLyricsViewport, video: Bool) {
+        var key = Key(viewport: requested, video: video)
+        if renderers[key] == nil {
+            // 尺寸满了共用最早那个同一种推法的;一个都没有就照样新开(视频和 JPEG 的消息格式不同,不能混)
+            if renderers.count >= Self.maxRenderers, let first = order.first(where: { $0.video == video }) {
+                key = first
             } else {
-                let renderer = WebLyricsScreenRenderer(viewport: viewport)
-                renderer.onFrame = { [weak self] frame in self?.broadcast(frame, for: viewport) }
-                renderer.onText = { [weak self] text in self?.broadcastText(text, for: viewport) }
-                renderers[viewport] = renderer
-                order.append(viewport)
+                let made = key
+                let renderer = WebLyricsScreenRenderer(viewport: made.viewport, video: made.video)
+                renderer.onFrame = { [weak self] frame in self?.broadcast(frame, for: made) }
+                renderer.onText = { [weak self] text in self?.broadcastText(text, for: made) }
+                renderers[made] = renderer
+                order.append(made)
                 renderer.start()
             }
         }
-        viewers[ObjectIdentifier(connection)] = (connection, viewport, true)
-        refreshBacklog(viewport)
-        renderers[viewport]?.requestFrame()
-        refreshVisibility(viewport)
+        viewers[ObjectIdentifier(connection)] = (connection, key, true, true)
+        Self.log.notice("screen viewer joined \(key.viewport.width, privacy: .public)x\(key.viewport.height, privacy: .public)@\(key.viewport.scale, privacy: .public) \(key.video ? "video" : "jpeg", privacy: .public)")
+        refreshBacklog(key)
+        renderers[key]?.requestKeyFrame()
+        renderers[key]?.requestFrame()
+        refreshVisibility(key)
     }
 
     func remove(_ connection: WebLyricsConnection) {
         guard let entry = viewers.removeValue(forKey: ObjectIdentifier(connection)) else { return }
-        guard !viewers.values.contains(where: { $0.viewport == entry.viewport }) else {
-            refreshBacklog(entry.viewport)
+        guard !viewers.values.contains(where: { $0.key == entry.key }) else {
+            refreshBacklog(entry.key)
             return
         }
-        renderers.removeValue(forKey: entry.viewport)?.stop()
-        order.removeAll { $0 == entry.viewport }
+        renderers.removeValue(forKey: entry.key)?.stop()
+        order.removeAll { $0 == entry.key }
     }
 
     /// 网页发回来的文本消息:可见性(谁都能报),指针、滚轮(别的设备要「允许局域网设备控制播放」开着才算数)。
@@ -57,43 +68,53 @@ final class WebLyricsScreenHub {
             guard visible != entry.visible else { return }
             viewers[id]?.visible = visible
             Self.log.notice("screen viewer \(visible ? "visible" : "hidden", privacy: .public)")
-            refreshVisibility(entry.viewport)
+            refreshVisibility(entry.key)
             return
         }
         guard WebLyricsPointer.permits(remoteIsLoopback: connection.isLoopback,
                                        lanControlEnabled: AppSettings.shared.webLyricsAllowLANControl) else { return }
         if let event = WebLyricsPointer.parse(payload) {
-            renderers[entry.viewport]?.handlePointer(event)
+            renderers[entry.key]?.handlePointer(event)
         } else if let wheel = WebLyricsWheel.parse(payload) {
-            renderers[entry.viewport]?.handleWheel(wheel)
+            renderers[entry.key]?.handleWheel(wheel)
         }
     }
 
     /// 这一尺寸的网页里只要有一个看得见就照常出帧,全看不见时降到暂停那一档。
-    private func refreshVisibility(_ viewport: WebLyricsViewport) {
-        renderers[viewport]?.setViewersVisible(viewers.values.contains { $0.viewport == viewport && $0.visible })
+    private func refreshVisibility(_ key: Key) {
+        renderers[key]?.setViewersVisible(viewers.values.contains { $0.key == key && $0.visible })
     }
 
-    private func broadcastText(_ text: String, for viewport: WebLyricsViewport) {
-        for entry in viewers.values where entry.viewport == viewport { entry.connection.sendText(text) }
+    private func broadcastText(_ text: String, for key: Key) {
+        for entry in viewers.values where entry.key == key { entry.connection.sendText(text) }
     }
 
-    /// `frame` 是出帧线程上已经包好的 WebSocket 帧,几个网页共用同一份,主线程这里只交给连接发出去。
-    private func broadcast(_ frame: Data, for viewport: WebLyricsViewport) {
-        for entry in viewers.values where entry.viewport == viewport { entry.connection.sendEncodedFrame(frame) }
-        refreshBacklog(viewport)
+    /// `frame` 是出帧线程上已经包好的 WebSocket 帧,几个网页共用同一份,主线程这里只交给连接发出去。排满了的网页这一帧
+    /// 丢掉(逐帧 JPEG 上一帧没发完就算满,视频流按字节,见 `frameBacklogged(video:)`);视频流里丢了帧的、刚连上的,
+    /// 等下一个关键帧再发,同时要一个关键帧(`WebLyricsVideo.deliver`)。
+    private func broadcast(_ frame: WebLyricsScreenFrame, for key: Key) {
+        var wantsKeyFrame = false
+        for (id, entry) in viewers where entry.key == key {
+            let delivery = WebLyricsVideo.deliver(isKeyFrame: frame.isKeyFrame, needsKeyFrame: entry.needsKeyFrame,
+                                                  previousStillSending: entry.connection.frameBacklogged(video: key.video))
+            if delivery.send { entry.connection.sendEncodedFrame(frame.data) }
+            viewers[id]?.needsKeyFrame = delivery.needsKeyFrame
+            wantsKeyFrame = wantsKeyFrame || delivery.wantsKeyFrame
+        }
+        if wantsKeyFrame, key.video { renderers[key]?.requestKeyFrame() }
+        refreshBacklog(key)
     }
 
     /// 某条连接上一帧发完了。
     func frameSent(_ connection: WebLyricsConnection) {
         guard let entry = viewers[ObjectIdentifier(connection)] else { return }
-        refreshBacklog(entry.viewport)
+        refreshBacklog(entry.key)
     }
 
-    /// 这一尺寸的网页全都还有上一帧没发完时,出帧线程先不画:画出来也是每条连接都丢,白画白编。
-    private func refreshBacklog(_ viewport: WebLyricsViewport) {
-        let entries = viewers.values.filter { $0.viewport == viewport }
-        renderers[viewport]?.setSendBacklogged(!entries.isEmpty && entries.allSatisfy { $0.connection.isFrameInFlight })
+    /// 这一尺寸的网页全都排满了时,出帧线程先不画:画出来也是每条连接都丢,白画白编。
+    private func refreshBacklog(_ key: Key) {
+        let entries = viewers.values.filter { $0.key == key }
+        renderers[key]?.setSendBacklogged(!entries.isEmpty && entries.allSatisfy { $0.connection.frameBacklogged(video: key.video) })
     }
 }
 
@@ -111,7 +132,7 @@ final class WebLyricsScreenHub {
 @MainActor
 final class WebLyricsScreenRenderer {
     let viewport: WebLyricsViewport
-    var onFrame: ((Data) -> Void)?
+    var onFrame: ((WebLyricsScreenFrame) -> Void)?
     /// 发给这一尺寸所有网页的文本消息(菜单里平台页那几行的位置与网址)。
     var onText: ((String) -> Void)?
 
@@ -185,7 +206,11 @@ final class WebLyricsScreenRenderer {
     /// 小窗报成不可见时(同 rAF 不来的那种窗口),画面只是变慢、不会定住。见 19 章决策 13。
     private var viewersVisible = true
 
-    init(viewport: WebLyricsViewport) {
+    /// 推 H.264 视频流(网页能硬解时);否则逐帧 JPEG。
+    private let video: Bool
+
+    init(viewport: WebLyricsViewport, video: Bool = false) {
+        self.video = video
         self.viewport = viewport
         let bounds = CGRect(x: 0, y: 0, width: viewport.width, height: viewport.height)
         backdrop = BackdropNSView(frame: bounds)
@@ -247,7 +272,9 @@ final class WebLyricsScreenRenderer {
         EditorialNotesStore.shared.retain()
         chromeIdle.revealUntil = Date().addingTimeInterval(LyricsWindowChromeIdle.idleSeconds)
         commit()
-        frames = WebLyricsFrameSource(root: container, pixelWidth: viewport.pixelWidth, pixelHeight: viewport.pixelHeight) {
+        let motion = pane.motion
+        frames = WebLyricsFrameSource(root: container, pixelWidth: viewport.pixelWidth, pixelHeight: viewport.pixelHeight,
+                                      minResolution: 1 / viewport.scale, video: video, prepare: { motion.pullFrame() }) {
             [weak self] jpeg in self?.onFrame?(jpeg)
         }
         frames?.start()
@@ -268,7 +295,13 @@ final class WebLyricsScreenRenderer {
     func setViewersVisible(_ visible: Bool) {
         guard visible != viewersVisible else { return }
         viewersVisible = visible
-        if visible { requestFrame() } else { commit() }
+        if visible {
+            requestFrame()
+        } else {
+            // 重搭一次左栏:动态封面跟着停
+            dirty = true
+            commit()
+        }
     }
 
     /// 这一尺寸的网页全都还有上一帧没发完(慢网):出帧线程跳过这几拍,有一条发完了再接着画。
@@ -276,6 +309,11 @@ final class WebLyricsScreenRenderer {
         guard backlogged != sendBacklogged else { return }
         sendBacklogged = backlogged
         frames?.setSendBacklogged(backlogged)
+    }
+
+    /// 视频流里有网页要从关键帧开始。
+    func requestKeyFrame() {
+        frames?.requestKeyFrame()
     }
 
     /// 新网页连上来时立刻出一帧,不等下一拍。
@@ -734,6 +772,8 @@ final class WebLyricsScreenRenderer {
             pane.apply(.init(
                 style: paneStyle,
                 artwork: (playback.highResArtworkImage ?? playback.artworkImage)?.cgImage(forProposedRect: nil, context: nil, hints: nil),
+                motionFile: playback.motionCoverFile,
+                motionPlaying: playback.isPlayingSmoothed && viewersVisible,
                 title: playback.isCurrentTrackAdBreak ? L10n.t("广告中") : playback.displayTitle,
                 artistAlbum: playback.isCurrentTrackAdBreak ? "" : Self.artistAlbum(playback.displayArtist, playback.displayAlbum),
                 primary: onArtwork ? .white : resolved(.primary),
@@ -1070,41 +1110,46 @@ final class WebLyricsScreenRenderer {
 /// Core Animation 动画,主线程不用逐帧参与,主线程忙的时候出帧节拍照样稳。像素缓冲轮着用三块:画下一帧时前两帧
 /// 可以还在编码。见 19 章决策 5。
 final class WebLyricsFrameSource: @unchecked Sendable {
-    /// 在播时 60 帧,暂停或停播时 5 帧:会动的东西都只在播放时动。
-    private static let fastInterval: TimeInterval = 1.0 / 60
+    /// 暂停或停播时 5 帧:会动的东西都只在播放时动。在播时的档位(节拍、JPEG 质量、编码尺寸)由 `pacer` 定。
     private static let idleInterval: TimeInterval = 1.0 / 5
-    /// 画一帧平均超过 12ms 就降到 30 帧、回到 8ms 以下再升回 60 帧:这台机器画不动 60 帧时宁可匀速 30 帧,不忽快忽慢。
-    private static let reducedInterval: TimeInterval = 1.0 / 30
-    private static let reduceAbove: CFTimeInterval = 0.012
-    private static let restoreBelow: CFTimeInterval = 0.008
     /// 同时在 GPU 或编码器里的帧数上限;像素缓冲比它多一块,正在画的那块不会是正在编的。
     private static let maxFramesInFlight = 2
-    private static let jpegQuality = 0.75
+    private static let log = Logger(subsystem: "me.yudaotor.lyrimuse", category: "web-lyrics")
 
     private let queue = DispatchQueue(label: "me.yudaotor.lyrimuse.web-lyrics.frames", qos: .userInteractive)
+    /// 缩放和编码在这条串行队列上按画的顺序一次一帧做:视频编码器要求帧按顺序交进去,别指望 Metal 完成回调线程的顺序。
+    private let encodeQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.web-lyrics.encode", qos: .userInteractive)
     private let timer: DispatchSourceTimer
-    private let onFrame: @MainActor (Data) -> Void
+    private let onFrame: @MainActor (WebLyricsScreenFrame) -> Void
+    /// 每拍开画之前在出帧线程上调(动态封面取帧)。
+    private let prepare: @Sendable () -> Void
 
     // 以下只在 `queue` 上读写。
     private let renderer: CARenderer
     private let commandQueue: MTLCommandQueue
     private let slots: [(buffer: CVPixelBuffer, texture: CVMetalTexture)]
     private let textureCache: CVMetalTextureCache
-    private let session: VTCompressionSession
+    private let pixelWidth: Int
+    private let pixelHeight: Int
+    /// 每种编码尺寸(渲染尺寸的几分之几)一个编码器,用到才建;档位来回换时不重建。视频流不用。
+    private var encoders: [Double: WebLyricsFrameEncoder]
+    /// 网页要的是视频流时的 H.264 编码器(不缩尺寸,改尺寸要重新开流);逐帧 JPEG 时 nil。
+    private let videoEncoder: WebLyricsVideoEncoder?
     private var nextSlot = 0
     private var framesInFlight = 0
     private var fast = true
     private var interval: TimeInterval = 0
-    /// 画一帧(不含编码)的耗时,指数平均。
-    private var frameCost: CFTimeInterval = 0
-    private var reduced = false
+    /// 在播时的档位:按跳过的拍数和开画到 JPEG 编完的整段耗时挑一档匀速的,见 `WebLyricsFramePacer`。
+    private var pacer: WebLyricsFramePacer
     private var stopped = false
     /// 这一尺寸的网页全都还有上一帧没发完(主线程报):这时画了也发不出去,跳过这一拍。
     private var sendBacklogged = false
 
-    /// 在主线程上建:`root` 是整幅画面的根图层,之后只读它的渲染树。
+    /// 在主线程上建:`root` 是整幅画面的根图层,之后只读它的渲染树。`minResolution` 是编码尺寸最多缩到渲染尺寸的
+    /// 几分之几(像素倍数不低于 1);`video` 为真时编 H.264 视频流,不编逐帧 JPEG。
     @MainActor
-    init?(root: CALayer, pixelWidth w: Int, pixelHeight h: Int, onFrame: @escaping @MainActor (Data) -> Void) {
+    init?(root: CALayer, pixelWidth w: Int, pixelHeight h: Int, minResolution: Double = 0.5, video: Bool = false,
+          prepare: @escaping @Sendable () -> Void = {}, onFrame: @escaping @MainActor (WebLyricsScreenFrame) -> Void) {
         guard let device = MTLCreateSystemDefaultDevice(), let commandQueue = device.makeCommandQueue() else { return nil }
         var cache: CVMetalTextureCache?
         CVMetalTextureCacheCreate(nil, nil, device, nil, &cache)
@@ -1121,13 +1166,16 @@ final class WebLyricsFrameSource: @unchecked Sendable {
             made.append((buffer, cvTexture))
         }
         guard let first = made.first.flatMap({ CVMetalTextureGetTexture($0.texture) }) else { return nil }
-        var compression: VTCompressionSession?
-        VTCompressionSessionCreate(allocator: nil, width: Int32(w), height: Int32(h), codecType: kCMVideoCodecType_JPEG,
-                                   encoderSpecification: nil, imageBufferAttributes: nil, compressedDataAllocator: nil,
-                                   outputCallback: nil, refcon: nil, compressionSessionOut: &compression)
-        guard let compression else { return nil }
-        VTSessionSetProperty(compression, key: kVTCompressionPropertyKey_Quality, value: Self.jpegQuality as CFNumber)
-        VTCompressionSessionPrepareToEncodeFrames(compression)
+        let pacer = WebLyricsFramePacer(maxFramesInFlight: Self.maxFramesInFlight, minResolution: video ? 1 : minResolution)
+        var jpeg: [Double: WebLyricsFrameEncoder] = [:]
+        var videoEncoder: WebLyricsVideoEncoder?
+        if video {
+            guard let made = WebLyricsVideoEncoder(width: w, height: h) else { return nil }
+            videoEncoder = made
+        } else {
+            guard let full = WebLyricsFrameEncoder(width: w, height: h, scaled: false, quality: pacer.step.quality) else { return nil }
+            jpeg[1] = full
+        }
 
         let r = CARenderer(mtlTexture: first, options: [kCARendererColorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
                                                         kCARendererMetalCommandQueue: commandQueue])
@@ -1137,8 +1185,13 @@ final class WebLyricsFrameSource: @unchecked Sendable {
         self.commandQueue = commandQueue
         slots = made
         textureCache = cache
-        session = compression
+        pixelWidth = w
+        pixelHeight = h
+        encoders = jpeg
+        self.videoEncoder = videoEncoder
+        self.pacer = pacer
         self.onFrame = onFrame
+        self.prepare = prepare
         timer = DispatchSource.makeTimerSource(queue: queue)
         timer.setEventHandler { [weak self] in self?.tick() }
     }
@@ -1153,12 +1206,18 @@ final class WebLyricsFrameSource: @unchecked Sendable {
         queue.async {
             guard self.fast != fast else { return }
             self.fast = fast
+            self.pacer.resetWindow()
             self.reschedule()
         }
     }
 
     func setSendBacklogged(_ backlogged: Bool) {
         queue.async { self.sendBacklogged = backlogged }
+    }
+
+    /// 视频流:有网页要从关键帧开始(刚连上、掉过帧),下一帧编成关键帧(编码器自己限频)。
+    func requestKeyFrame() {
+        videoEncoder?.requestKeyFrame()
     }
 
     /// 主线程刚提交了要立刻看到的变化(新网页连上、点了按钮):不等下一拍,马上补画一帧。
@@ -1170,20 +1229,49 @@ final class WebLyricsFrameSource: @unchecked Sendable {
         queue.async {
             self.stopped = true
             self.timer.cancel()
-            VTCompressionSessionInvalidate(self.session)
+            for encoder in self.encoders.values { encoder.invalidate() }
+            self.videoEncoder?.invalidate()
         }
     }
 
     private func reschedule() {
-        let target = fast ? (reduced ? Self.reducedInterval : Self.fastInterval) : Self.idleInterval
+        let target = fast ? pacer.interval : Self.idleInterval
         guard target != interval, !stopped else { return }
         interval = target
         timer.schedule(deadline: .now(), repeating: target, leeway: .milliseconds(1))
     }
 
+    /// 这一档的编码器:尺寸按档位缩,质量按档位设。缩出来的尺寸取偶数(JPEG 按 2×2 块存色度)。
+    private func encoder(for step: WebLyricsFrameStep) -> WebLyricsFrameEncoder? {
+        let made: WebLyricsFrameEncoder?
+        if let existing = encoders[step.resolution] {
+            made = existing
+        } else {
+            let w = max(2, Int(Double(pixelWidth) * step.resolution / 2) * 2)
+            let h = max(2, Int(Double(pixelHeight) * step.resolution / 2) * 2)
+            made = WebLyricsFrameEncoder(width: w, height: h, scaled: true, quality: step.quality)
+            encoders[step.resolution] = made
+        }
+        made?.setQuality(step.quality)
+        return made
+    }
+
     private func tick() {
-        guard !stopped, !sendBacklogged, framesInFlight < Self.maxFramesInFlight,
-              let texture = CVMetalTextureGetTexture(slots[nextSlot].texture) else { return }
+        guard !stopped else { return }
+        if sendBacklogged {
+            notePace(.backlog)
+            return
+        }
+        guard framesInFlight < Self.maxFramesInFlight else {
+            notePace(.inFlight)
+            return
+        }
+        guard let texture = CVMetalTextureGetTexture(slots[nextSlot].texture) else { return }
+        let video = videoEncoder
+        let jpeg = video == nil ? encoder(for: pacer.step) : nil
+        guard video != nil || jpeg != nil else { return }
+        video?.setQuality(pacer.step.quality)
+        prepare()
         let started = CACurrentMediaTime()
         let pixelBuffer = slots[nextSlot].buffer
         nextSlot = (nextSlot + 1) % slots.count
@@ -1195,48 +1283,135 @@ final class WebLyricsFrameSource: @unchecked Sendable {
         guard let commandBuffer = commandQueue.makeCommandBuffer() else { return }
         framesInFlight += 1
         let presentation = CMTime(value: CMTimeValue(started * 1000), timescale: 1000)
-        let session = session
         // 同一条命令队列按提交顺序执行:这条空命令跑完时,CARenderer 那一帧已经画进像素缓冲。
-        commandBuffer.addCompletedHandler { [weak self] _ in
-            let status = VTCompressionSessionEncodeFrame(
-                session, imageBuffer: pixelBuffer, presentationTimeStamp: presentation,
-                duration: .invalid, frameProperties: nil, infoFlagsOut: nil
-            ) { status, _, sample in
-                var jpeg: Data?
-                if status == noErr, let sample, let block = CMSampleBufferGetDataBuffer(sample) {
-                    var length = 0
-                    var pointer: UnsafeMutablePointer<CChar>?
-                    if CMBlockBufferGetDataPointer(block, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length,
-                                                   dataPointerOut: &pointer) == kCMBlockBufferNoErr, let pointer {
-                        jpeg = Data(bytes: pointer, count: length)
-                    }
+        let encodeQueue = encodeQueue
+        commandBuffer.addCompletedHandler { [weak self] _ in encodeQueue.async {
+            if let video {
+                video.encode(pixelBuffer, at: presentation, stamp: started * 1000) { frame in self?.finish(frame, renderedAt: started) }
+            } else {
+                jpeg?.encode(pixelBuffer, at: presentation) { data in
+                    self?.finish(data.map { Self.jpegFrame($0, renderedAt: started) }, renderedAt: started)
                 }
-                self?.finish(jpeg, renderedAt: started)
             }
-            if status != noErr { self?.finish(nil, renderedAt: started) }
-        }
+        } }
         commandBuffer.commit()
 
-        let cost = CACurrentMediaTime() - started
-        frameCost = frameCost == 0 ? cost : frameCost * 0.9 + cost * 0.1
-        if frameCost > Self.reduceAbove { reduced = true } else if frameCost < Self.restoreBelow { reduced = false }
+        pacer.noteDraw(CACurrentMediaTime() - started)
+        notePace(.none)
+    }
+
+    /// 在播时每一拍记一笔,档位变了按新间隔重排节拍(质量、尺寸下一拍取编码器时跟着换)。暂停、停播时的 5 帧不参与。
+    private func notePace(_ skip: WebLyricsFrameSkip) {
+        guard fast, pacer.tick(at: CACurrentMediaTime(), skipped: skip) else { return }
+        let step = pacer.step
+        Self.log.notice("web lyrics pace: \(Int((1 / step.interval).rounded()), privacy: .public) fps, quality \(step.quality, privacy: .public), size \(step.resolution, privacy: .public)x (skipped \(Int(self.pacer.lastSkipRatio * 100), privacy: .public)%, draw \(Int(self.pacer.drawCost * 1000), privacy: .public)ms, pipeline \(Int(self.pacer.pipelineCost * 1000), privacy: .public)ms)")
         reschedule()
     }
 
-    /// 发出去的一帧 = 画它的时刻(毫秒,大端 Float64,网页按它匀速放)+ JPEG,在这里(编码回调的线程上)就包成
+    /// 逐帧 JPEG 发出去的一帧 = 画它的时刻(毫秒,大端 Float64,网页按它匀速放)+ JPEG,在编码回调的线程上就包成
     /// WebSocket 二进制帧:拼帧、拷贝整帧数据别放回主线程做,放歌时它们每秒要占主线程二十多毫秒。
-    private func finish(_ jpeg: Data?, renderedAt: CFTimeInterval) {
-        queue.async { self.framesInFlight -= 1 }
-        guard let jpeg else { return }
+    private static func jpegFrame(_ jpeg: Data, renderedAt: CFTimeInterval) -> WebLyricsScreenFrame {
         var stamp = (renderedAt * 1000).bitPattern.bigEndian
         var payload = Data(capacity: 8 + jpeg.count)
         payload.append(Data(bytes: &stamp, count: 8))
         payload.append(jpeg)
-        let frame = WebSocketFrame.encode(payload, opcode: .binary)
+        return WebLyricsScreenFrame(data: WebSocketFrame.encode(payload, opcode: .binary), isKeyFrame: true)
+    }
+
+    /// 编完一帧(包好的消息,失败给 nil):记账,交给主线程分发。
+    private func finish(_ frame: WebLyricsScreenFrame?, renderedAt: CFTimeInterval) {
+        let pipeline = CACurrentMediaTime() - renderedAt
+        queue.async {
+            self.framesInFlight -= 1
+            self.pacer.noteEncoded(pipeline: pipeline)
+        }
+        guard let frame else { return }
         let onFrame = onFrame
         DispatchQueue.main.async {
             MainActor.assumeIsolated { onFrame(frame) }
         }
+    }
+}
+
+/// 一种编码尺寸的 JPEG 编码器。比渲染尺寸小时先用 VideoToolbox 的缩放会话(GPU)缩进池里的像素缓冲再编,渲染照旧按原尺寸,
+/// 档位来回换不用重建渲染器;网页把画布按 CSS 铺满,帧小了只是放大显示。在出帧线程上建、设质量,编码在 GPU 完成回调的线程上。
+final class WebLyricsFrameEncoder: @unchecked Sendable {
+    private let session: VTCompressionSession
+    private let transfer: VTPixelTransferSession?
+    private let pool: CVPixelBufferPool?
+    private var quality: Double
+
+    init?(width: Int, height: Int, scaled: Bool, quality: Double) {
+        var compression: VTCompressionSession?
+        VTCompressionSessionCreate(allocator: nil, width: Int32(width), height: Int32(height), codecType: kCMVideoCodecType_JPEG,
+                                   encoderSpecification: nil, imageBufferAttributes: nil, compressedDataAllocator: nil,
+                                   outputCallback: nil, refcon: nil, compressionSessionOut: &compression)
+        guard let compression else { return nil }
+        VTSessionSetProperty(compression, key: kVTCompressionPropertyKey_Quality, value: quality as CFNumber)
+        VTCompressionSessionPrepareToEncodeFrames(compression)
+        if scaled {
+            var t: VTPixelTransferSession?
+            VTPixelTransferSessionCreate(allocator: nil, pixelTransferSessionOut: &t)
+            var p: CVPixelBufferPool?
+            let attributes: [String: Any] = [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey as String: width,
+                kCVPixelBufferHeightKey as String: height,
+                kCVPixelBufferIOSurfacePropertiesKey as String: [String: Any](),
+            ]
+            CVPixelBufferPoolCreate(nil, nil, attributes as CFDictionary, &p)
+            guard let t, let p else {
+                VTCompressionSessionInvalidate(compression)
+                return nil
+            }
+            transfer = t
+            pool = p
+        } else {
+            transfer = nil
+            pool = nil
+        }
+        session = compression
+        self.quality = quality
+    }
+
+    func setQuality(_ next: Double) {
+        guard next != quality else { return }
+        quality = next
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_Quality, value: next as CFNumber)
+    }
+
+    /// 编一帧,`done` 在编码回调的线程上收到 JPEG(失败给 nil)。
+    func encode(_ source: CVPixelBuffer, at time: CMTime, done: @escaping (Data?) -> Void) {
+        var input = source
+        if let transfer, let pool {
+            var scaled: CVPixelBuffer?
+            guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &scaled) == kCVReturnSuccess, let scaled,
+                  VTPixelTransferSessionTransferImage(transfer, from: source, to: scaled) == noErr else {
+                done(nil)
+                return
+            }
+            input = scaled
+        }
+        let status = VTCompressionSessionEncodeFrame(
+            session, imageBuffer: input, presentationTimeStamp: time, duration: .invalid, frameProperties: nil, infoFlagsOut: nil
+        ) { status, _, sample in
+            var jpeg: Data?
+            if status == noErr, let sample, let block = CMSampleBufferGetDataBuffer(sample) {
+                var length = 0
+                var pointer: UnsafeMutablePointer<CChar>?
+                if CMBlockBufferGetDataPointer(block, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length,
+                                               dataPointerOut: &pointer) == kCMBlockBufferNoErr, let pointer {
+                    jpeg = Data(bytes: pointer, count: length)
+                }
+            }
+            done(jpeg)
+        }
+        if status != noErr { done(nil) }
+    }
+
+    func invalidate() {
+        VTCompressionSessionInvalidate(session)
+        if let transfer { VTPixelTransferSessionInvalidate(transfer) }
     }
 }
 
@@ -1265,6 +1440,9 @@ final class WebLyricsPlayerPane: CALayer {
     struct Content {
         var style: Style
         var artwork: CGImage?
+        /// 动态封面的本地 mp4,nil = 没有(或总闸关着);`motionPlaying` 是此刻该不该动。
+        var motionFile: URL?
+        var motionPlaying: Bool
         var title: String
         var artistAlbum: String
         var primary: NSColor
@@ -1302,6 +1480,8 @@ final class WebLyricsPlayerPane: CALayer {
 
     private let coverHost = CALayer()
     private let cover = CALayer()
+    /// 盖在静态封面上的动态封面,出帧线程每拍取帧(`WebLyricsMotionCover.pullFrame`)。
+    let motion = WebLyricsMotionCover()
     /// 歌名、歌手行是跑马灯,字自己画成位图:`CATextLayer` 按 `.end` 截断过长的一行时整行往上错位、上半截被裁掉。
     private let titleLayer = WebLyricsMarqueeLayer()
     private let artistLayer = WebLyricsMarqueeLayer()
@@ -1349,6 +1529,7 @@ final class WebLyricsPlayerPane: CALayer {
         cover.cornerCurve = .continuous
         cover.masksToBounds = true
         cover.contentsGravity = .resizeAspectFill
+        cover.addSublayer(motion.layer)
         coverHost.addSublayer(cover)
         coverHost.shadowColor = NSColor.black.cgColor
         coverHost.shadowRadius = 26
@@ -1386,6 +1567,7 @@ final class WebLyricsPlayerPane: CALayer {
 
     func apply(_ next: Content) {
         content = next
+        motion.update(file: next.controls.reduceMotion ? nil : next.motionFile, playing: next.motionPlaying)
         let scale = contentsScaleForText
         transportGroup.frame = bounds
         transportPanel.isHidden = next.style != .compact
@@ -1461,6 +1643,7 @@ final class WebLyricsPlayerPane: CALayer {
         coverHost.bounds = CGRect(x: 0, y: 0, width: side, height: side)
         coverHost.position = CGPoint(x: origin.x + side / 2, y: origin.y + side / 2)
         cover.frame = coverHost.bounds
+        motion.layer.frame = cover.bounds
         cover.cornerRadius = radius
         coverHost.shadowRadius = small ? 6 : 26
         coverHost.shadowOffset = CGSize(width: 0, height: small ? 3 : 12)

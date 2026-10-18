@@ -264,7 +264,7 @@ final class WebLyricsServer: ObservableObject {
             } else {
                 let viewport = WebLyricsViewport(query: request.query)
                 connection.role = .screen(viewport)
-                screens.add(connection, viewport: viewport)
+                screens.add(connection, viewport: viewport, video: WebLyricsVideo.wantsVideo(request.query))
             }
             connection.sendText(WebLyricsPages.helloMessage())
             updateViewerCount()
@@ -290,8 +290,12 @@ final class WebLyricsConnection {
     private weak var server: WebLyricsServer?
     private var buffer = Data()
     private var closed = false
-    /// 上一帧画面还没发完时新帧直接丢:网络慢的设备只会掉帧,不会越积越多、越来越迟。
-    private var frameInFlight = false
+    /// 交给协议栈还没发完的画面帧数和字节数。排满了新帧直接丢,网络慢的设备只会掉帧,不会越积越多、越来越迟;
+    /// 排多少由推法定,见 `frameBacklogged(video:)`。
+    private var pendingFrames = 0
+    private var pendingFrameBytes = 0
+    /// 视频流最多排这么多字节:视频帧小,丢一帧就要等关键帧,Wi-Fi 抖一下不该就丢;按每秒 3.5MB 算多等约 70ms。
+    static let videoQueueBytes = 256 * 1024
     /// 连上之后这么久还没收完请求头就断开;发出去的东西这么久都没交给协议栈(对方不收)也断开。
     /// 名额只有 `WebLyricsServer.maxConnections` 个,不能被只连不发、只连不收的连接一直占着。
     static let requestTimeout: TimeInterval = 10
@@ -302,7 +306,7 @@ final class WebLyricsConnection {
     private var sendProgressAt: TimeInterval = 0
     private var stallCheckScheduled = false
 
-    private enum AfterSend { case nothing, close, frameDone }
+    private enum AfterSend { case nothing, close, frameDone(bytes: Int) }
 
     init(nw: NWConnection, server: WebLyricsServer) {
         self.nw = nw
@@ -407,14 +411,19 @@ final class WebLyricsConnection {
         send(WebLyricsHTTP.upgradeResponse(key: key))
     }
 
-    /// 上一帧还没发完:出帧那一侧据此跳过这条连接。
-    var isFrameInFlight: Bool { frameInFlight }
+    /// 再交一帧就超出能排的量:逐帧 JPEG 只排一帧(上一帧没发完就算),视频流按字节排到 `videoQueueBytes`。
+    /// 出帧那一侧据此跳过这条连接。
+    func frameBacklogged(video: Bool) -> Bool {
+        video ? pendingFrameBytes >= Self.videoQueueBytes : pendingFrames > 0
+    }
 
-    /// `frame` 已经是包好的 WebSocket 帧(`WebLyricsFrameSource` 在出帧线程上包的),这里不再编码。
+    /// `frame` 已经是包好的 WebSocket 帧(`WebLyricsFrameSource` 在出帧线程上包的),这里不再编码。排不排得下由调用方
+    /// 先问 `frameBacklogged(video:)`。
     func sendEncodedFrame(_ frame: Data) {
-        guard !closed, !frameInFlight else { return }
-        frameInFlight = true
-        send(frame, then: .frameDone)
+        guard !closed else { return }
+        pendingFrames += 1
+        pendingFrameBytes += frame.count
+        send(frame, then: .frameDone(bytes: frame.count))
     }
 
     func sendText(_ text: String) {
@@ -434,8 +443,9 @@ final class WebLyricsConnection {
                 switch after {
                 case .nothing: break
                 case .close: self.close()
-                case .frameDone:
-                    self.frameInFlight = false
+                case .frameDone(let bytes):
+                    self.pendingFrames -= 1
+                    self.pendingFrameBytes -= bytes
                     if error != nil {
                         self.close()
                     } else {

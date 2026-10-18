@@ -26,9 +26,11 @@ enum WebLyricsPages {
     }
 
     /// 副屏:全屏显示 App 推来的画面帧,尺寸变了就带新尺寸重连。每帧开头 8 字节是 App 画它的时刻(毫秒,大端 Float64),
-    /// 后面是 JPEG。帧在后台线程解码(`createImageBitmap`)后排队,`requestAnimationFrame`(它停了时由定时器接着)每一拍按画它的时刻晚
-    /// `DELAY` 毫秒放出来:网络和解码的快慢不均被这段余量吸掉,画面照 App 画的间隔匀速走。解码跟不上时新来的直接丢,
-    /// 不积压。手指按下、拖动、抬起都把画面上的相对位置(`{"ptr":["d",u,v]}`)发回 App,点中什么、拖的是什么由 App 判;
+    /// 后面是 JPEG;浏览器能硬解 H.264(`VideoDecoder`)时改要视频流(`WebLyricsVideo`,出过解码错误的标签页退回 JPEG)。
+    /// 帧在后台线程解码(`createImageBitmap` / `VideoDecoder`)后排队,`requestAnimationFrame`(它停了时由定时器接着)每一拍按画它的时刻晚
+    /// `delay()` 毫秒放出来:网络和解码的快慢不均被这段余量吸掉,画面照 App 画的间隔匀速走。余量至少 40ms,到得越不齐越长
+    /// (最近到帧比最快那次晚了多少,涨得快、落得慢),最多攒得下的帧数个帧间隔、500ms:解好的帧很占内存,按这一帧的像素数
+    /// 留 6～24 帧(合计约 80MB),App 缩小编码尺寸时留得多;点按的反馈也跟着晚这么多。解码跟不上时新来的直接丢,不积压。手指按下、拖动、抬起都把画面上的相对位置(`{"ptr":["d",u,v]}`)发回 App,点中什么、拖的是什么由 App 判;
     /// 拖动 16ms 最多发一次,发送缓冲里还压着东西时不再发。菜单里平台页那几行的位置由 App 发来(`links`),
     /// 网页在手指抬起那一刻自己开链接。
     static func screenPage(revision: String = revision) -> String {
@@ -73,9 +75,16 @@ enum WebLyricsPages {
           const canvas = document.getElementById('frame');
           const ctx = canvas.getContext('2d', { alpha: false });
           const msg = document.getElementById('msg');
-          const DELAY = 40;
+          const MIN_DELAY = 40, MAX_DELAY = 500, BUFFER_BYTES = 8e7;
           let ws = null, retry = 1000, retryTimer = 0, resizeTimer = 0;
           let queue = [], decoding = 0, offset = Infinity, lastShown = -Infinity, lastFrame = 0;
+          let jitter = 0, gap = 1000 / 60, lastT = 0, framePixels = 0;
+          function bufferCap() { return framePixels ? Math.max(6, Math.min(24, Math.floor(BUFFER_BYTES / (framePixels * 4)))) : 6; }
+          // 逐帧 JPEG 排的是解好的图,余量受内存限制;视频排的是没解的数据(每帧几 KB),只按时间封顶
+          function delay() {
+            const cap = useVideo ? MAX_DELAY : Math.min(gap * bufferCap(), MAX_DELAY);
+            return Math.max(MIN_DELAY, Math.min(jitter + 16, cap));
+          }
           msg.textContent = T.connecting;
           function decode(blob) {
             if (window.createImageBitmap) return createImageBitmap(blob);
@@ -88,34 +97,104 @@ enum WebLyricsPages {
             });
           }
           function release(item) { if (item.frame.close) item.frame.close(); }
-          function receive(buffer) {
-            if (buffer.byteLength <= 8) return;
-            const t = new DataView(buffer).getFloat64(0);
+          function frameWidth(f) { return f.displayWidth || f.width; }
+          function frameHeight(f) { return f.displayHeight || f.height; }
+          // 记一帧到达:t 是 App 画它的时刻
+          function arrived(t) {
             // 两边时钟之差加最短路上的延迟:取见过的最小值,再慢慢往上松,网络路径变慢了也跟得上
             const lag = performance.now() - t;
             offset = lag < offset ? lag : offset + (lag - offset) * 0.002;
+            // 这一帧比最快那次晚到多少:晚得多立刻放宽余量,之后慢慢收回;App 降档后帧间隔变长,余量上限跟着放宽
+            const late = lag - offset;
+            jitter = late > jitter ? late : jitter + (late - jitter) * 0.01;
+            if (lastT && t > lastT) gap += (t - lastT - gap) * 0.1;
+            if (t > lastT) lastT = t;
+          }
+          // 解好的一帧(图片或视频帧)排进队列,按画帧时刻放
+          function accept(t, frame) {
+            const item = { t, frame };
+            if (t <= lastShown) { release(item); return; }
+            queue.push(item);
+            queue.sort((a, b) => a.t - b.t);
+            framePixels = frameWidth(frame) * frameHeight(frame);
+            while (queue.length > bufferCap() + 2) release(queue.shift());
+          }
+          function receive(buffer) {
+            if (useVideo) { receiveVideo(buffer); return; }
+            if (buffer.byteLength <= 8) return;
+            const t = new DataView(buffer).getFloat64(0);
+            arrived(t);
             if (decoding >= 3) return;
             decoding++;
-            decode(new Blob([new Uint8Array(buffer, 8)], { type: 'image/jpeg' })).then((frame) => {
-              const item = { t, frame };
-              if (t <= lastShown) { release(item); return; }
-              queue.push(item);
-              queue.sort((a, b) => a.t - b.t);
-              while (queue.length > 8) release(queue.shift());
-            }, () => {}).then(() => { decoding--; });
+            decode(new Blob([new Uint8Array(buffer, 8)], { type: 'image/jpeg' })).then((frame) => { accept(t, frame); }, () => {})
+              .then(() => { decoding--; });
+          }
+          // 能硬解 H.264 就要视频流(只发跟上一帧的差别,慢网上流量小几十倍):每条消息 1 字节类型(1 解码配置 avcC、2 关键帧、
+          // 3 普通帧)+ 8 字节画帧时刻 + 数据。解码器出过错就记下,这个标签页改回逐帧 JPEG 重连
+          // 视频帧收到后先按没解的数据排着,快到放的时候(提前 DECODE_LEAD 毫秒)才按顺序送去解:解好的 VideoFrame 占着解码器的
+          // 输出缓冲,压多了解码器会停住不再出帧。排得太多(标签页在后台很久)就整个丢掉,等下一个关键帧
+          const DECODE_LEAD = 50, MAX_PENDING_CHUNKS = 600;
+          let useVideo = false, decoder = null, decoderConfig = '', needKey = true, chunks = [];
+          try { useVideo = !!window.VideoDecoder && sessionStorage.getItem('lyrimuse.noVideo') !== '1'; } catch (err) {}
+          function dropVideo() {
+            try { sessionStorage.setItem('lyrimuse.noVideo', '1'); } catch (err) {}
+            useVideo = false;
+            if (decoder) { try { decoder.close(); } catch (err) {} }
+            decoder = null;
+            chunks = [];
+            if (ws) ws.close();
+          }
+          function receiveVideo(buffer) {
+            if (buffer.byteLength <= 9) return;
+            const view = new DataView(buffer);
+            const type = view.getUint8(0), t = view.getFloat64(1);
+            const data = new Uint8Array(buffer, 9);
+            if (type === 1) {
+              const config = Array.from(data).join(',');
+              if (decoder && config === decoderConfig) return;
+              if (!decoder) {
+                decoder = new VideoDecoder({ output: (f) => { accept(f.timestamp / 1000, f); }, error: dropVideo });
+              }
+              const codec = 'avc1.' + [data[1], data[2], data[3]].map((x) => x.toString(16).padStart(2, '0')).join('');
+              try {
+                decoder.configure({ codec, description: data.slice(), optimizeForLatency: true });
+                decoderConfig = config;
+                needKey = true;
+                chunks = [];
+              } catch (err) { dropVideo(); }
+              return;
+            }
+            if (!decoder || decoder.state !== 'configured') return;
+            if (type !== 2 && needKey) return;
+            arrived(t);
+            if (type === 2) needKey = false;
+            chunks.push(new EncodedVideoChunk({ type: type === 2 ? 'key' : 'delta', timestamp: Math.round(t * 1000), data }));
+            if (chunks.length > MAX_PENDING_CHUNKS) { chunks = []; needKey = true; }
+          }
+          // 把快到放的时候的那些按顺序送去解
+          function decodeDue(now) {
+            if (!chunks.length || !decoder || decoder.state !== 'configured') return;
+            const until = now - offset - delay() + DECODE_LEAD;
+            let n = 0;
+            while (n < chunks.length && chunks[n].timestamp / 1000 <= until) n++;
+            if (!n) return;
+            const due = chunks.slice(0, n);
+            chunks = chunks.slice(n);
+            try { for (const c of due) decoder.decode(c); } catch (err) { dropVideo(); }
           }
           function present() {
-            const now = performance.now();
+            const now = performance.now(), wait = offset + delay();
+            if (useVideo) decodeDue(now);
             let pick = -1;
-            for (let i = 0; i < queue.length && queue[i].t + offset + DELAY <= now; i++) pick = i;
+            for (let i = 0; i < queue.length && queue[i].t + wait <= now; i++) pick = i;
             if (pick < 0) return;
             for (let i = 0; i < pick; i++) release(queue[i]);
             const item = queue[pick];
             queue = queue.slice(pick + 1);
             lastShown = item.t;
-            if (canvas.width !== item.frame.width || canvas.height !== item.frame.height) {
-              canvas.width = item.frame.width;
-              canvas.height = item.frame.height;
+            if (canvas.width !== frameWidth(item.frame) || canvas.height !== frameHeight(item.frame)) {
+              canvas.width = frameWidth(item.frame);
+              canvas.height = frameHeight(item.frame);
             }
             ctx.drawImage(item.frame, 0, 0);
             release(item);
@@ -137,6 +216,9 @@ enum WebLyricsPages {
             url.searchParams.set('w', Math.round(innerWidth));
             url.searchParams.set('h', Math.round(innerHeight));
             url.searchParams.set('dpr', Math.max(1, Math.min(3, devicePixelRatio || 1)).toFixed(2));
+            if (useVideo) url.searchParams.set('codec', 'avc');
+            needKey = true;
+            chunks = [];
             const socket = new WebSocket(url);
             ws = socket;
             socket.binaryType = 'arraybuffer';
