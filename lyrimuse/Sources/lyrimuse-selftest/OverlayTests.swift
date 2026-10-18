@@ -856,6 +856,16 @@ func runOverlayTests() {
                     true, "倍率回调(契约): 换上长图时记下它按哪个倍率画的")
     }
 
+    // ---- 图层行不设帧率区间(契约):设了系统按上限跑满,不设反而画得更少(04 章决策 68) ----
+    do {
+        let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI")
+        let row = (try? String(contentsOf: ui.appendingPathComponent("OverlayScrollingLyricRow.swift"), encoding: .utf8)) ?? ""
+        expectEqual(row.contains("func installFill("), true, "图层行帧率(契约): 找得到图层行的填色动画")
+        expectEqual(row.contains(".preferredFrameRateRange ="), false,
+                    "图层行帧率(契约): 填色、滚动动画不设 preferredFrameRateRange")
+    }
+
     // ---- 行间距接线(契约):三处行高同一个式子;卡片的 VStack 不另加间距,各行自己加 ----
     do {
         let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()

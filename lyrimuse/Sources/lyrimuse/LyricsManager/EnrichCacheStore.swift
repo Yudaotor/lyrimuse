@@ -430,7 +430,7 @@ public final class EnrichCacheStore: ObservableObject {
         if onlyIfChanged,
            let fp = Self.fileFingerprint(cacheURL),
            fp == lastLoadedFingerprint,
-           !overlayChanged(cacheFingerprint: fp) {
+           !(await overlayChanged(cacheFingerprint: fp)) {
             return
         }
         // "缓存占用"这个数字只是侧栏「⋯」里一个菜单段头,不是 List 要渲染的内容,别跟 JSON 解析捆在同一个
@@ -543,14 +543,19 @@ public final class EnrichCacheStore: ObservableObject {
         editError = L10n.t("这首歌曲的歌词在编辑期间已更新，本次修改未保存；修改内容仍保留在编辑框中，放弃修改后重新编辑将打开最新版本")
     }
 
-    /// 整份缓存没变时还要重读的两种情况:待落盘条目比整份新、又换了一版(预取、补空扫描刚改过,整份最多攒 10 分钟);
-    /// 单条快照比整份新、里面那首还不在列表里(新歌首次解析)。同一版只看一次;单条快照里已经在列表里的那首不为它整份重读
-    /// (一首歌里快照要写好几次,整份重读一次近 1 秒)。轮询多久问一次由调用方定(LyricsManagerRefresh)。
-    private func overlayChanged(cacheFingerprint: FileFingerprint) -> Bool {
+    /// 整份缓存没变时还要重读的两种情况:待落盘条目比整份新、又换了一版,而且改到了列表行的状态(新歌、有没有词这些,
+    /// 见 `EnrichPendingEntries.changesListedRows`;预取、补空扫描约几秒就写一版,整份最多攒 10 分钟);单条快照比整份新、
+    /// 里面那首还不在列表里(新歌首次解析)。同一版只看一次;单条快照里已经在列表里的那首不为它整份重读(一首歌里快照要写
+    /// 好几次,整份重读一次近 1 秒)。待落盘文件最多 200 条带正文的条目,在后台读。轮询多久问一次由调用方定
+    /// (LyricsManagerRefresh)。见 11 章决策 127。
+    private func overlayChanged(cacheFingerprint: FileFingerprint) async -> Bool {
         if let pending = Self.fileFingerprint(EnrichPendingEntries.url), pending != lastSeenPendingFingerprint,
            PlayingEntrySnapshot.supersedes(snapshotMTime: pending.mtime, cacheMTime: cacheFingerprint.mtime) {
             lastSeenPendingFingerprint = pending
-            return true
+            let entries = await Task.detached(priority: .utility) { EnrichPendingEntries.read() }.value
+            if let entries, EnrichPendingEntries.changesListedRows(entries, listed: { self.raw[$0] }) {
+                return true
+            }
         }
         guard let snap = Self.fileFingerprint(PlayingEntrySnapshot.url), snap != lastSeenSnapshotFingerprint,
               PlayingEntrySnapshot.supersedes(snapshotMTime: snap.mtime, cacheMTime: cacheFingerprint.mtime) else { return false }

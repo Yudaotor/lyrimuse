@@ -675,6 +675,7 @@ func applyEnrichKeyMigration() bool {
 	log.Printf("enrich key migration: %d entries -> %d (%d renamed, %d merged away, %d stale files removed)",
 		len(merged)+mergedAway, len(merged), renamed, mergedAway, removedFiles)
 	enrichCache = merged
+	canonicalMemoReset()
 	enrichDirty = true
 	return true
 }

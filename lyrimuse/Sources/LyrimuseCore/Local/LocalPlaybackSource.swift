@@ -3085,6 +3085,8 @@ public final class LocalPlaybackSource: ObservableObject {
         let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.poll() }
         }
+        // 留 10% 余量让系统把这一拍跟别的唤醒并在一起;歌词那一拍(scheduleTick)要准,不在这里。
+        t.tolerance = interval * 0.1
         RunLoop.main.add(t, forMode: .common)
         pollTimer = t
     }

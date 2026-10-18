@@ -105,6 +105,15 @@ type lbTrackMeta struct {
 }
 
 func lbMeta(s snapshot) lbTrackMeta {
+	return lbMetaWith(s, enrichmentFor(s))
+}
+
+// lbMetaWith 同 lbMeta,enrichment 字段由调用方给:同一拍里还要用这份完整字段的调用方(relayState)只查一次。
+// 封面/主色/各平台链接/歌词只跟 歌手|歌名|专辑 有关、且稳定不变，解析代价不小
+// (多次外部搜索 + 封面主色解码)。统一缓存并落盘，同一首歌重播/重启后都不再重解析。
+// 查询走 enrichmentFor:isNewTrack 传 false,只是再查一次已经解析好的缓存(或触发首次解析),不是
+// poller.go handle() 那种"刚确认是新曲目"的现场时刻;桥接来的只查缓存。
+func lbMetaWith(s snapshot, enr map[string]string) lbTrackMeta {
 	info := map[string]any{
 		"media_player":              mediaPlayerLabel(s.Bundle), // 按当前选定的本地播放器如实报告,见该函数注释
 		"source":                    "mac",                      // 播放来源:mac 本地;桥接的 iPhone 由 bridge 覆盖为 iphone(连带覆盖 media_player,见 poller.go 两处 "source"]="iphone" 附近)
@@ -128,12 +137,6 @@ func lbMeta(s snapshot) lbTrackMeta {
 		info["progress_ts"] = s.AnchorTS.UnixMilli()
 		info["playback_rate"] = rate
 	}
-	// 封面/主色/各平台链接/歌词只跟 歌手|歌名|专辑 有关、且稳定不变，解析代价不小
-	// (多次外部搜索 + 封面主色解码)。统一缓存并落盘，同一首歌重播/重启后都不再重解析。
-	// isNewTrack 传 false:这里只是再查一次已经解析好的缓存(或触发首次解析),不是
-	// poller.go handle() 那种"刚确认是新曲目"的现场时刻。
-	// 桥接来的只查缓存,见 enrichmentFor。
-	enr := enrichmentFor(s)
 	for _, k := range []string{"cover_url", "accent_color", "netease_url", "apple_music_url", "qq_music_url", "spotify_url", "kkbox_url", "amazon_url", "youtube_music_url", "soda_url", "cover_source", "lyrics_source"} {
 		v := enr[k]
 		if k == "cover_url" {

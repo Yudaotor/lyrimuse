@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"log/slog"
 	"os"
@@ -230,6 +231,7 @@ func rebuildSongEntityTableWith(now time.Time, compare bool) *songEntityBuild {
 	songEntityTableUnsaved = nil
 	if seed == nil {
 		seed = readSongEntityTable(songEntityTablePath())
+		noteSongEntityTableOnDisk(seed)
 	}
 	b, table, st := buildSongEntityState(src, seed, now)
 	prev := songEntityLive
@@ -247,13 +249,7 @@ func rebuildSongEntityTableWith(now time.Time, compare bool) *songEntityBuild {
 		songEntityTableUnsaved = table
 		songEntityLive, songEntityLivePath = st, songEntityTablePath()
 	}
-	data, err := json.Marshal(table)
-	if err != nil {
-		slog.Error("song entities: encode table", "err", err)
-		keep()
-		return nil
-	}
-	if err := writeFileAtomic(songEntityTablePath(), data); err != nil {
+	if err := writeSongEntityTableIfChanged(table); err != nil {
 		slog.Error("song entities: write table", "err", err)
 		keep()
 		return nil
@@ -261,8 +257,10 @@ func rebuildSongEntityTableWith(now time.Time, compare bool) *songEntityBuild {
 	var report bytes.Buffer
 	r := b.report()
 	r.writeText(&report, 0)
-	if err := writeFileAtomic(songEntityReportPath(), report.Bytes()); err != nil {
-		slog.Error("song entities: write report", "err", err)
+	if old, err := os.ReadFile(songEntityReportPath()); err != nil || !bytes.Equal(old, report.Bytes()) {
+		if err := writeFileAtomic(songEntityReportPath(), report.Bytes()); err != nil {
+			slog.Error("song entities: write report", "err", err)
+		}
 	}
 	slog.Info("song entities: rebuilt", "variants", r.variants, "songs", r.entities, "multi", r.multi,
 		"merges", len(b.merged), "vetoed", len(b.vetoed), "took", time.Since(start).Round(time.Millisecond))
@@ -340,15 +338,62 @@ func flushSongEntityTable() {
 		songEntityTableUnsaved = nil
 		return
 	}
-	data, err := json.Marshal(t)
-	if err == nil {
-		err = writeFileAtomic(songEntityTablePath(), data)
-	}
-	if err != nil {
+	if err := writeSongEntityTableIfChanged(t); err != nil {
 		slog.Error("song entities: write table", "err", err)
 		return
 	}
 	songEntityTableUnsaved = nil
+}
+
+// songEntityWritten:盘上那份实体表去掉 built_at 之后的摘要。增量重算、全量建表的结果常常跟盘上那份只差 built_at
+// (每次都是这一刻),逐字一样时不再整份重写(约 5 MB,增量重算后一分钟一次、每次启动全量建表一次)。写成功、或全量建表
+// 从盘上读种子时记下;路径不同(单测换了配置目录)不算。只在持有 songEntityRebuildMu 时读写。见 15 章决策 51。
+var songEntityWritten struct {
+	path   string
+	digest [sha256.Size]byte
+}
+
+func songEntityTableDigest(t *songEntityTableFile) ([sha256.Size]byte, error) {
+	c := *t
+	c.BuiltAt = 0
+	data, err := json.Marshal(&c)
+	if err != nil {
+		return [sha256.Size]byte{}, err
+	}
+	return sha256.Sum256(data), nil
+}
+
+// noteSongEntityTableOnDisk:t 是刚从盘上读出来的那份。
+func noteSongEntityTableOnDisk(t *songEntityTableFile) {
+	if t == nil {
+		return
+	}
+	if d, err := songEntityTableDigest(t); err == nil {
+		songEntityWritten.path, songEntityWritten.digest = songEntityTablePath(), d
+	}
+}
+
+// writeSongEntityTableIfChanged 写实体表;去掉 built_at 之后跟盘上那份一样、文件也还在就不写。
+func writeSongEntityTableIfChanged(t *songEntityTableFile) error {
+	path := songEntityTablePath()
+	digest, err := songEntityTableDigest(t)
+	if err != nil {
+		return err
+	}
+	if songEntityWritten.path == path && songEntityWritten.digest == digest {
+		if _, err := os.Stat(path); err == nil {
+			return nil
+		}
+	}
+	data, err := json.Marshal(t)
+	if err != nil {
+		return err
+	}
+	if err := writeFileAtomic(path, data); err != nil {
+		return err
+	}
+	songEntityWritten.path, songEntityWritten.digest = path, digest
+	return nil
 }
 
 // saveSongEntityIDs:写回了实体 id 之后落盘,在写实体表之前(18 章决策 8 的顺序)。写回的条目当场写进待落盘小文件(App 叠上去

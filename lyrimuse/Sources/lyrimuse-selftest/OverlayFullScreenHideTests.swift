@@ -39,6 +39,9 @@ func checkOverlayFullScreenHide() {
                 true, "悬浮歌词全屏时隐藏: 显示判定走 Core,带上全屏那一项")
     expectEqual(sourceBytes(controller, contain: "let wanted = followsActiveScreen && shownApartFromFullScreen"), true,
                 "悬浮歌词跟随当前窗口: 窗口藏着(全屏隐藏除外)时不每秒列窗口")
+    expectEqual(sourceBytes(controller, contain: "let wantsPoll = wanted && NSScreen.screens.count > 1")
+                && sourceBytes(controller, contain: "self?.reconcilePlacementWithScreens()\n                self?.syncActiveScreenTracking()"),
+                true, "悬浮歌词跟随当前窗口: 单屏时不开每秒一次的兜底,插拔屏幕时重判")
     expectEqual(sourceHas(controller, "        recomputeControlsBelowCard()\n        // 藏着(orderOut)的窗口换了屏不一定收到 didChangeScreen"),
                 true, "悬浮歌词跟随当前窗口: 搬到别的屏后当场重判全屏隐藏")
     expectEqual(sourceHas(controller, "if shouldShow { window?.orderFront(nil) } else { window?.orderOut(nil) }\n        syncActiveScreenTracking()"),

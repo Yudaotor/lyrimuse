@@ -1061,6 +1061,14 @@ private func checkDiscordLyrics() {
     expectEqual(L.pick(lines, atMs: 12_500, windowMs: 4_000), nil, "Discord 歌词: 唱完了为 nil")
     expectEqual(L.pick([L.Span(startMs: 0, endMs: 2_000, text: "前"), L.Span(startMs: 2_000, endMs: 4_000, text: "后")],
                        atMs: 0, windowMs: 4_000), "前", "Discord 歌词: 一样久挑先唱的")
+    // ---- 下一次该看的时刻 ----
+    expectEqual(L.nextChangeMs(lines, atMs: 0, windowMs: 4_000), 5_100,
+                "Discord 歌词: 「长」在这一段里剩不到 1 秒的那一刻换成「一秒」")
+    expectEqual(L.nextChangeMs(lines, atMs: 7_100, windowMs: 4_000), 4_000, "Discord 歌词: 唱到只剩不到 1 秒时变成没有")
+    expectEqual(L.nextChangeMs(lines, atMs: 5_000, windowMs: 4_000), 100, "Discord 歌词: 下一步就换句时返回一步")
+    expectEqual(L.nextChangeMs(lines, atMs: 7_100, windowMs: 4_000, horizonMs: 3_000), nil,
+                "Discord 歌词: 看的范围里一直不变为 nil")
+    expectEqual(L.nextChangeMs(lines, atMs: 12_500, windowMs: 4_000), nil, "Discord 歌词: 唱完了一直不变")
 
     // ---- 进 activity ----
     let now = Date(timeIntervalSince1970: 1_000_000)
@@ -1322,7 +1330,7 @@ private func checkDiscordWiring() {
                    "signal(settings.$discordCustomButtonURL)", "signal(settings.$discordButtonListen)",
                    "signal(settings.$discordButtonGetLyrimuse)", "lyric: currentLyric(now: now)",
                    "atMs: playback.lyricsTimelineMs(now: now)", "windowMs: Int(DiscordPresenceGate.minInterval * 1000)",
-                   "wake(at: now.addingTimeInterval(Self.lyricTick))", "layout: presenceLayout(),",
+                   "wake(at: now.addingTimeInterval(nextLyricCheck(now: now)))", "layout: presenceLayout(),",
                    "signal(settings.$discordHideSongInfo)", "signal(settings.$discordShowProgress)",
                    "signal(settings.$discordLine2)", "signal(settings.$discordLine3)",
                    "guard presenceLayout().followsLyrics, playback.isPlayingSmoothed else { return nil }"] {

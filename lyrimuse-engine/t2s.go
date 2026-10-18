@@ -104,36 +104,51 @@ func loadT2SDict(path string) map[string]string {
 // 长度就要切一次子串、分配一个新字符串,而绝大多数字根本不是任何词组的开头。宽松 key 比对
 // 会对整个 enrich 缓存逐条调这里(几千条),一律按全表最长试时一次全表比对要两百多毫秒。
 // 结果跟一律试全表最长逐字相同 —— 比这个窗口更长的、以这个字开头的词组不存在(对拍见测试)。
-// ASCII 字符三张表都没有,直接原样写出。
+// ASCII 字符三张表都没有,直接原样写出;整串都是 ASCII 时原样返回。直接在原串上按字节解码,查表用原串的子串,不转
+// []rune、不为每个试过的长度另分配字符串。非法 UTF-8 字节解成 U+FFFD(宽 1 字节),跟按 []rune 走时写出的一样;
+// 含它的窗口两种写法都不会命中词组。见 15 章决策 53。
 func toSimplifiedT2S(s string) string {
-	runes := []rune(s)
+	ascii := true
+	for i := 0; i < len(s); i++ {
+		if s[i] >= utf8.RuneSelf {
+			ascii = false
+			break
+		}
+	}
+	if ascii {
+		return s
+	}
 	var b strings.Builder
 	b.Grow(len(s))
-	i := 0
-	for i < len(runes) {
-		if runes[i] < utf8.RuneSelf {
-			b.WriteRune(runes[i])
-			i++
+	var endsBuf [16]int
+	for p := 0; p < len(s); {
+		r, w := utf8.DecodeRuneInString(s[p:])
+		if r < utf8.RuneSelf {
+			b.WriteByte(s[p])
+			p++
 			continue
 		}
-		matched := false
-		maxLen := t2sPhraseMaxLenByFirst[runes[i]]
-		if remain := len(runes) - i; remain < maxLen {
-			maxLen = remain
-		}
-		for l := maxLen; l >= 2; l-- {
-			candidate := string(runes[i : i+l])
-			if repl, ok := t2sPhraseMap[candidate]; ok {
-				b.WriteString(repl)
-				i += l
-				matched = true
-				break
+		if maxLen := t2sPhraseMaxLenByFirst[r]; maxLen >= 2 {
+			// ends[l]:从 p 起 l 个字之后的字节位置;后面不够 maxLen 个字时窗口跟着缩。
+			ends := append(endsBuf[:0], p, p+w)
+			for q := p + w; len(ends) <= maxLen && q < len(s); {
+				_, qw := utf8.DecodeRuneInString(s[q:])
+				q += qw
+				ends = append(ends, q)
+			}
+			matched := false
+			for l := len(ends) - 1; l >= 2; l-- {
+				if repl, ok := t2sPhraseMap[s[p:ends[l]]]; ok {
+					b.WriteString(repl)
+					p = ends[l]
+					matched = true
+					break
+				}
+			}
+			if matched {
+				continue
 			}
 		}
-		if matched {
-			continue
-		}
-		r := runes[i]
 		if repl, ok := t2sCharMap[string(r)]; ok {
 			b.WriteString(repl)
 		} else if std, ok := hanVariantMap[r]; ok {
@@ -144,7 +159,7 @@ func toSimplifiedT2S(s string) string {
 		} else {
 			b.WriteRune(r)
 		}
-		i++
+		p += w
 	}
 	return b.String()
 }

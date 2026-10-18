@@ -7,6 +7,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -352,6 +353,58 @@ func writeEnrichSnapshot(w io.Writer, snapshot map[string]enrichEntry) error {
 // (被强杀 / 断电 / 磁盘满)的残骸 —— 正常保存几秒内就改名成正式文件。一天远大于任何一次正常保存,
 // 不会误删另一个进程(命令行子命令)正在写的那一份。
 const staleEnrichTempAge = 24 * time.Hour
+
+// migrationBackupAge:一次性迁移留在主缓存旁边的备份过了这么久就删(removeOldMigrationBackups)。
+const migrationBackupAge = 30 * 24 * time.Hour
+
+// removeOldMigrationBackups 删掉引擎自己的一次性迁移留下、超过 migrationBackupAge 的备份:`.full-format.bak`
+// (backupFullEnrichCacheOnce,盘上已经是精简格式时)、`.pre-keynorm.bak`(applyEnrichKeyMigration)、
+// `.keynorm-<时间>.bak`(backupEnrichKeyMergeGroups)。没有代码读它们,只给迁移出错时手工找回;前两份各约百 MB,
+// 每个升级过的用户都留着一份、从不清。只认这三种名字,手工留的 `backup-*`、`*.bak-before-*` 不碰。
+// 常驻进程启动时调一次。见 15 章决策 52。
+func removeOldMigrationBackups() {
+	if enrichPath == "" {
+		return
+	}
+	dir, base := filepath.Dir(enrichPath), filepath.Base(enrichPath)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-migrationBackupAge)
+	removed, freed := 0, int64(0)
+	for _, ent := range entries {
+		name := ent.Name()
+		rest, ok := strings.CutPrefix(name, base+".")
+		if !ok || ent.IsDir() {
+			continue
+		}
+		switch {
+		case rest == "full-format.bak":
+			if enrichDiskFullFormat {
+				continue
+			}
+		case rest == "pre-keynorm.bak":
+		case strings.HasPrefix(rest, "keynorm-") && strings.HasSuffix(rest, ".bak"):
+		default:
+			continue
+		}
+		info, err := ent.Info()
+		if err != nil || !info.ModTime().Before(cutoff) {
+			continue
+		}
+		if err := os.Remove(filepath.Join(dir, name)); err != nil {
+			noteFileErr("remove", filepath.Join(dir, name), err)
+			continue
+		}
+		removed++
+		freed += info.Size()
+	}
+	if removed > 0 {
+		log.Printf("enrich cache: removed %d migration backup(s) older than %d days, %d MB freed",
+			removed, int(migrationBackupAge.Hours()/24), freed>>20)
+	}
+}
 
 // removeStaleEnrichTemps 删掉超过 staleEnrichTempAge 的保存残骸。实测本机攒过 9 份、555 MB,
 // 从来没人清过。只认 os.CreateTemp 在 saveEnrichCache 里起的那种名字,别的文件(各次迁移前的备份

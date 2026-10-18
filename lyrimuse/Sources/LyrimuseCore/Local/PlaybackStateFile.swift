@@ -525,6 +525,8 @@ public final class PlaybackStatePublisher {
                 self.write(content, now: Date())
             }
         }
+        // 10% 余量让系统合并唤醒;离 lateHeartbeatSeconds 和引擎判过期的 15 秒都远。
+        timer.tolerance = PlaybackStateFile.heartbeatInterval * 0.1
         RunLoop.main.add(timer, forMode: .common)
         heartbeat = timer
     }

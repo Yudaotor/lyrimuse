@@ -175,5 +175,6 @@ func loadEnrichCacheReadOnly(path string) {
 	}
 	enrichMu.Lock()
 	enrichCache = m
+	canonicalMemoReset()
 	enrichMu.Unlock()
 }

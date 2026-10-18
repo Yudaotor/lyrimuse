@@ -70,21 +70,19 @@ var relaySeedClient = proxyFallbackClient()
 // 不这样显式区分的话,"暂停中的活跃曲目"因为没有 listenedAt(语义上合理:它不是一条完成
 // 收听记录)会被网页误判成"数据不可信",从而被本地缓存里几天前的旧记录顶替显示。
 func relayState(s snapshot, playing bool, device string, listenedAt int64, current bool) map[string]any {
-	meta := lbMeta(s)
+	// 歌词字段不能从 ai(=lbMeta 的 AdditionalInfo)里取——那份数据已经按 ListenBrainz
+	// 单条 listen ≤10240 字节的硬上限裁剪过(lb.go 的 budget 循环,按 原文>翻译>罗马音>
+	// 逐字 优先级加入,超预算的字段整个丢弃、逐字数据体积最大最先被丢),这个预算是
+	// LB API 自己的限制,状态中继/网页并不受它约束。这里直接用 enrichmentFor 那份未裁剪的完整字段,
+	// 同一份也交给 lbMetaWith:poller 每拍都会构建一次负载,只查一次缓存。
+	enr := enrichmentFor(s)
+	meta := lbMetaWith(s, enr)
 	ai := meta.AdditionalInfo
 	if device == "" {
 		if v, _ := ai["source"].(string); v != "" {
 			device = v
 		}
 	}
-	// 歌词字段不能从 ai(=lbMeta 的 AdditionalInfo)里取——那份数据已经按 ListenBrainz
-	// 单条 listen ≤10240 字节的硬上限裁剪过(lb.go 的 budget 循环,按 原文>翻译>罗马音>
-	// 逐字 优先级加入,超预算的字段整个丢弃、逐字数据体积最大最先被丢),这个预算是
-	// LB API 自己的限制,状态中继/网页并不受它约束。这里改为直接从 trackEnrichment
-	// 现拿一份未裁剪的完整歌词字段——enrichCache 在 lbMeta 内部已经解析过一次,这里
-	// 只是再查一次内存缓存,没有额外网络开销。
-	// 跟 lb.go 那处走同一个入口(桥接来的只查缓存,见 enrichmentFor)——这里也只是再查一次内存缓存。
-	enr := enrichmentFor(s)
 	st := map[string]any{
 		"ok": true, "playing": playing, "current": current,
 		// artist 用 meta.ArtistName(可能已被网易云/QQ 音乐核实的官方写法覆盖,统一大小写/

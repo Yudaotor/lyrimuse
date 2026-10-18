@@ -12,6 +12,7 @@ import (
 	neturl "net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strconv"
@@ -625,19 +626,30 @@ func canonicalEnrichKey(key string) (string, bool) {
 	}
 	loose := loosenEnrichKey(key)
 	looseLegacy := loosenEnrichKey(legacy)
+	cacheID, size, now := reflect.ValueOf(enrichCache).Pointer(), len(enrichCache), time.Now()
+	if alt, ok := canonicalMemoLookup(key, cacheID, size, now); ok {
+		if alt == "" {
+			return "", false
+		}
+		if _, still := enrichCache[alt]; still && canonicalEnrichKeyMatches(alt, loose, looseLegacy, bracketed, title) {
+			return alt, true
+		}
+	}
 	// 必须挑出**确定的**那一条,不能"遍历时撞见谁就用谁"—— Go 的 map 遍历顺序是随机的,
 	// 而缓存里真的存在一个宽松键对应多条的情况(上面孙燕姿那组是三条)。随机命中的后果是
 	// 同一首歌这次读到 A 的歌词、下次读到 B 的,时间轴还可能不一样,排查起来像见了鬼。
 	// 用 betterEnrichEntry 挑最好的那条 —— 跟迁移合并时的胜者规则同一套,两处结论一致。
+	// 只遍历 key:条目约 1.4 KB,按值遍历会把每条都拷一遍,而绝大多数按 key 就筛掉了。
 	best := ""
-	for existing, e := range enrichCache {
-		if existing == key || !canonicalEnrichKeyMatches(existing, e, loose, looseLegacy, bracketed, title) {
+	for existing := range enrichCache {
+		if existing == key || !canonicalEnrichKeyMatches(existing, loose, looseLegacy, bracketed, title) {
 			continue
 		}
-		if best == "" || betterEnrichEntry(e, enrichCache[best], existing, best) {
+		if best == "" || betterEnrichEntry(enrichCache[existing], enrichCache[best], existing, best) {
 			best = existing
 		}
 	}
+	canonicalMemoStore(key, best, cacheID, size, now)
 	if best == "" {
 		return "", false
 	}
@@ -645,7 +657,8 @@ func canonicalEnrichKey(key string) (string, bool) {
 }
 
 // canonicalEnrichKeyMatches:existing 这条能不能给宽松 key 是 loose、旧规则宽松 key 是 looseLegacy 的那首歌用(见 canonicalEnrichKey)。
-func canonicalEnrichKeyMatches(existing string, e enrichEntry, loose, looseLegacy string, bracketed bool, title string) bool {
+// 调用方持有 enrichMu(要读 existing 那条的内容时现取)。
+func canonicalEnrichKeyMatches(existing, loose, looseLegacy string, bracketed bool, title string) bool {
 	if loosenEnrichKey(existing) == loose {
 		return true
 	}
@@ -656,7 +669,54 @@ func canonicalEnrichKeyMatches(existing string, e enrichEntry, loose, looseLegac
 	if !bracketed {
 		return true
 	}
-	return el == existing && !enrichLegacyClaimedByOther(e, title)
+	return el == existing && !enrichLegacyClaimedByOther(enrichCache[existing], title)
+}
+
+// canonicalEnrichKey 整表扫描的结果按 key 记住:精确 key 查不到的那首歌,poller 每拍构建中继 / ListenBrainz 负载
+// 都会再问一遍。记下的结果在这几种情况下作废、重扫:缓存整张换过(加载、恢复、单测)、条目数变了(增删条目)、
+// 超过 canonicalMemoTTL、记下的那条已经不在或不再匹配。条目内容变了(旧规则那条被另一种写法占了、胜者规则比较的
+// 字段变了)不让它作废,最多晚 canonicalMemoTTL 才按新内容重挑。整张替换 enrichCache 的地方都要调 canonicalMemoReset:
+// 旧 map 回收后地址可能被新 map 复用,只靠 map 身份认不出来。见 15 章决策 50。
+const canonicalMemoMax = 1024
+
+// canonicalMemoTTL 是变量只为单测:TestMain 设成 0(各用例直接换 enrichCache,不经 canonicalMemoReset)。
+var canonicalMemoTTL = 30 * time.Second
+
+type canonicalMemoEntry struct {
+	alt     string
+	cacheID uintptr
+	size    int
+	at      time.Time
+}
+
+var (
+	canonicalMemoMu sync.Mutex
+	canonicalMemo   = map[string]canonicalMemoEntry{}
+)
+
+func canonicalMemoLookup(key string, cacheID uintptr, size int, now time.Time) (string, bool) {
+	canonicalMemoMu.Lock()
+	m, ok := canonicalMemo[key]
+	canonicalMemoMu.Unlock()
+	if !ok || m.cacheID != cacheID || m.size != size || now.Sub(m.at) >= canonicalMemoTTL {
+		return "", false
+	}
+	return m.alt, true
+}
+
+func canonicalMemoReset() {
+	canonicalMemoMu.Lock()
+	canonicalMemo = map[string]canonicalMemoEntry{}
+	canonicalMemoMu.Unlock()
+}
+
+func canonicalMemoStore(key, alt string, cacheID uintptr, size int, now time.Time) {
+	canonicalMemoMu.Lock()
+	if len(canonicalMemo) >= canonicalMemoMax {
+		canonicalMemo = map[string]canonicalMemoEntry{}
+	}
+	canonicalMemo[key] = canonicalMemoEntry{alt: alt, cacheID: cacheID, size: size, at: now}
+	canonicalMemoMu.Unlock()
 }
 
 // looseInflightKey 在**正在后台解析**的队列里找宽松等价的 key。
@@ -1102,6 +1162,11 @@ const peripheralBackfillMaxAttempts = 5
 // 会直接死锁(Go 的 sync.Mutex 不可重入),表现是引擎进程还在、日志还在打别的
 // goroutine 的行,但轮询、feed 刷新、歌曲解析全部无声停摆。
 func needsPeripheralBackfill(e enrichEntry, artist, album string) bool {
+	// 节流和次数上限先判:窗口关着时结论必然是 false,下面那几项里有整表扫描(coverCanUpgradeToVerifiedSiblingLocked)
+	// 和读本机文件(deviceCoverSmall),而同一首歌每拍都会问到这里。见 15 章决策 50。
+	if !peripheralBackfillWindowOpen(e) {
+		return false
+	}
 	// canonical_artist 也要进这个条件:它在 backfillPeripheralFields 里本就有 `== ""` 的
 	// 补全分支,但触发条件不看它的话,只要那四个字段都齐了,一条缺 canonical 的记录就再也
 	// 没机会补上(同一张专辑里一半曲目报 "Leah Dou"、一半报"窦靖童",后者靠 canonical
@@ -1130,15 +1195,11 @@ func needsPeripheralBackfill(e enrichEntry, artist, album string) bool {
 	// 设备封面太小(deviceCoverSmall,排在最后:要读本机文件)也算缺:这一轮查到的远程封面跟它是同一张图、更清晰就换上
 	// (backfillPeripheralFields 里 deviceCoverUpgradable 那段)。存这张小图的时候手上常常还没有远程封面可比,之后没有
 	// 别的时机再比一次。
-	missing := missingAccent || e.AppleURL == "" || e.QQURL == "" || missingNeteaseURL ||
+	return missingAccent || e.AppleURL == "" || e.QQURL == "" || missingNeteaseURL ||
 		isQQSearchFallbackURL(e.QQURL) || missingQQMids ||
 		missingCanonical || coverNeedsAlbumCheck(e, album) ||
 		coverCanUpgradeToVerifiedSiblingLocked(e, artist, album) ||
 		(e.CoverSource == "device" && deviceCoverSmall(e.CoverURL))
-	if !missing {
-		return false
-	}
-	return peripheralBackfillWindowOpen(e)
 }
 
 // peripheralBackfillWindowOpen:外围补全的上限(peripheralBackfillMaxAttempts)+ 节流
@@ -5917,6 +5978,7 @@ func loadEnrichCache(path string) {
 	shared := shareIdenticalDecisions(m) // 内存里两槽相同的判决记录共用一个对象,见 enrichdedupe.go
 	enrichMu.Lock()
 	enrichCache = m
+	canonicalMemoReset()
 	enrichMu.Unlock()
 	applyEnrichPendingAtLoad(path)
 	log.Printf("cache: loaded %d track enrichments from %s (%d identical decision pairs shared)", len(m), path, shared)

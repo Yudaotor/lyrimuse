@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"unicode/utf8"
 )
@@ -103,9 +104,30 @@ func lyricsDisambiguatedBase(key string) string {
 	return fmt.Sprintf("%s~%06x", sanitizeLyricsFilename(key), sum&0xFFFFFF)
 }
 
-// lyricsFileFold 是"文件系统会认成同一份文件"的分组键,见下面碰撞消歧那段。
+// lyricsFileFold 是"文件系统会认成同一份文件"的分组键,见下面碰撞消歧那段。只取决于 key,按 key 记住:每次提交歌词
+// (exportLyricsFilesFor)都要给整个缓存的 key 各算一遍。条目数超过 lyricsFoldMemoMax 整张清掉重来。
+const lyricsFoldMemoMax = 64 << 10
+
+var (
+	lyricsFoldMemoMu sync.RWMutex
+	lyricsFoldMemo   = map[string]string{}
+)
+
 func lyricsFileFold(key string) string {
-	return strings.ToLower(sanitizeLyricsFilename(key))
+	lyricsFoldMemoMu.RLock()
+	v, ok := lyricsFoldMemo[key]
+	lyricsFoldMemoMu.RUnlock()
+	if ok {
+		return v
+	}
+	v = strings.ToLower(sanitizeLyricsFilename(key))
+	lyricsFoldMemoMu.Lock()
+	if len(lyricsFoldMemo) >= lyricsFoldMemoMax {
+		lyricsFoldMemo = map[string]string{}
+	}
+	lyricsFoldMemo[key] = v
+	lyricsFoldMemoMu.Unlock()
+	return v
 }
 
 // exportLyricsFilesMatching:onlyFolds 为 nil 时导出全部条目,否则只对分组键在其中的条目读写文件。
@@ -122,9 +144,19 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		manual               bool
 		variants             [4]string // 对应 lyricsFileSuffixes,空串表示这个变体没有内容
 	}
+	// 只导出几个分组时,不在 onlyFolds 里的条目连拷都不拷:碰撞分组只对要导出的分组有意义,而同一分组的 key 分组键相同、
+	// 必然都在 onlyFolds 里,整组照样算全。只遍历 key,条目约 1.4 KB,按值遍历会把整个缓存拷一遍。见 15 章决策 53。
 	enrichMu.Lock()
-	jobs := make([]entryJob, 0, len(enrichCache))
-	for key, e := range enrichCache {
+	capHint := len(enrichCache)
+	if onlyFolds != nil {
+		capHint = len(onlyFolds)
+	}
+	jobs := make([]entryJob, 0, capHint)
+	for key := range enrichCache {
+		if onlyFolds != nil && !onlyFolds[lyricsFileFold(key)] {
+			continue
+		}
+		e := enrichCache[key]
 		if e.Lyrics == "" {
 			continue
 		}

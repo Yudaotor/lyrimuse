@@ -91,6 +91,37 @@ func runCacheKeyTests() {
         expectEqual(playing?.entry["lyrics_source"] as? String, "kugou", "单条快照: 条目原样交出")
         try? Data(#"{"key":"","entry":{}}"#.utf8).write(to: snapURL)
         expectEqual(PlayingEntrySnapshot.read(at: snapURL) == nil, true, "单条快照: 没有 key 不算")
+        // 待落盘条目换了一版:只有改到列表行状态的(新歌、有没有词、正文、纯音乐、手动、来源)才让「歌词管理」整份重读。
+        let listedRow: [String: Any] = EnrichCacheSlim.slim(["lyrics": "[00:01.00]x", "lyrics_yrc": "y", "lyrics_source": "qq",
+                                                              "cover_url": "https://x/a.jpg"])
+        let listedRows = ["A|Song|B": listedRow]
+        func changes(_ entries: [String: [String: Any]]) -> Bool {
+            EnrichPendingEntries.changesListedRows(entries, listed: { listedRows[$0] })
+        }
+        let sameStatus: [String: Any] = ["lyrics": "[00:01.00]x", "lyrics_yrc": "y", "lyrics_source": "qq",
+                                         "cover_url": "https://x/b.jpg", "lyrics_tr_source": "deepl"]
+        expectEqual(changes(["A|Song|B": sameStatus]), false, "待落盘条目: 只改了封面、译文来源这类小标记不整份重读")
+        expectEqual(changes(["A|Song|B": sameStatus, "C|New|D": [:]]), true, "待落盘条目: 有列表里还没有的那首要重读")
+        var noYRC = sameStatus
+        noYRC["lyrics_yrc"] = nil
+        expectEqual(changes(["A|Song|B": noYRC]), true, "待落盘条目: 正文少了一块(逐字)要重读")
+        var gone = sameStatus
+        gone["lyrics"] = nil
+        expectEqual(changes(["A|Song|B": gone]), true, "待落盘条目: 主歌词没了要重读")
+        var instrumental = sameStatus
+        instrumental["instrumental"] = true
+        expectEqual(changes(["A|Song|B": instrumental]), true, "待落盘条目: 标成纯音乐要重读")
+        var manual = sameStatus
+        manual["manual_lyrics"] = true
+        expectEqual(changes(["A|Song|B": manual]), true, "待落盘条目: 改成手动要重读")
+        var source = sameStatus
+        source["lyrics_source"] = "netease"
+        expectEqual(changes(["A|Song|B": source]), true, "待落盘条目: 歌词来源换了要重读")
+        var dropped = listedRows
+        EnrichCacheSlim.dropMainLyrics(&dropped)
+        expectEqual(dropped["A|Song|B"]?["lyrics"] == nil
+                    && !EnrichPendingEntries.changesListedRows(["A|Song|B": sameStatus], listed: { dropped[$0] }), true,
+                    "待落盘条目: 列表快照里主歌词拿掉之后(dropMainLyrics)照样认得有词")
         let pendingURL = FileManager.default.temporaryDirectory.appendingPathComponent("lyrimuse-enrich-pending-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: pendingURL) }
         try? Data(#"{"entries":{"a|1|x":{"lyrics_source":"qq","ts":1},"b|2|y":{"song":"s_1","ts":2}}}"#.utf8).write(to: pendingURL)

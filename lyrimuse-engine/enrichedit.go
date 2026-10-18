@@ -335,6 +335,7 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 			keys = append(keys, k)
 		}
 		enrichCache = map[string]enrichEntry{}
+		canonicalMemoReset()
 		// changed 至少记 1:缓存本来就空时也要清歌词目录(那里可能还有上次没清干净的文件),清空的语义是两边都空。
 		return enrichEditOutcome{changed: max(len(keys), 1), dropped: keys, trashAll: true}
 	}

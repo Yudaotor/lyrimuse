@@ -41,6 +41,7 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	testRealHome, _ = os.UserHomeDir()
+	canonicalMemoTTL = 0 // 各用例直接换 enrichCache,不让上一个用例记下的宽松匹配漏到下一个(见 canonicalMemoTTL)
 	_ = os.Unsetenv("LYRIMUSE_CONFIG_DIR")
 	_ = os.Setenv("HOME", sandbox)
 	missing := filepath.Join(os.TempDir(), "lyrimuse-no-such-external-app-data")

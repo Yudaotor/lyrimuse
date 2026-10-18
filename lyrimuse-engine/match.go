@@ -1147,7 +1147,34 @@ func applyWordTimingTitleOverride(results []scoredLyricCandidateResult) {
 // (titleMatches/albumScore 等)各自补一遍,统一受益。toSimplified 认不出的字符原样
 // 保留,不会让不相关的名字被错误判定成相关,也不影响下游防仿冒号判定(那部分靠歌手名/
 // 专辑名核实,繁简转换只影响字符形式)。
+//
+// 按输入记住结果(繁简词典、变音和全角折叠都是常量):AMLL 按歌名查索引、同专辑封面比对这类循环会对同一批字符串
+// 反复算,一次查找上万次。条目数超过 normLooseMemoMax 整张清掉重来。见 15 章决策 53。
 func normLoose(s string) string {
+	normLooseMemoMu.RLock()
+	v, ok := normLooseMemo[s]
+	normLooseMemoMu.RUnlock()
+	if ok {
+		return v
+	}
+	v = normLooseUncached(s)
+	normLooseMemoMu.Lock()
+	if len(normLooseMemo) >= normLooseMemoMax {
+		normLooseMemo = map[string]string{}
+	}
+	normLooseMemo[s] = v
+	normLooseMemoMu.Unlock()
+	return v
+}
+
+const normLooseMemoMax = 64 << 10
+
+var (
+	normLooseMemoMu sync.RWMutex
+	normLooseMemo   = map[string]string{}
+)
+
+func normLooseUncached(s string) string {
 	var b strings.Builder
 	// 变音折叠、全角字母数字折成半角(foldFullwidthAlnum)跟 toSimplified 同一个下沉位置、同一个理由:在这里做一次,全部源的匹配
 	// 同时受益,而不是让每个调用点各自记得处理(见 fold.go)。

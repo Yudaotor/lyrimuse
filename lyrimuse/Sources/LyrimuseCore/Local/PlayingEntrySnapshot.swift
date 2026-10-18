@@ -35,4 +35,31 @@ public enum EnrichPendingEntries {
               let entries = obj["entries"] as? [String: [String: Any]], !entries.isEmpty else { return nil }
         return entries
     }
+
+    /// 待落盘条目换了一版,值不值得「歌词管理」为它整份重读(一次近 1 秒):有列表里还没有的那首,或已有那首的
+    /// 有没有词 / 四块正文 / 纯音乐 / 手动 / 歌词来源变了。别的小标记(译文来源、各平台在不在……)不为它重读,
+    /// 等引擎整份落盘(最多 10 分钟)。`listed` 按 key 取列表快照里那一条。见 11 章决策 127。
+    public static func changesListedRows(_ entries: [String: [String: Any]], listed: (String) -> [String: Any]?) -> Bool {
+        entries.contains { key, entry in
+            guard let row = listed(key) else { return true }
+            return RowStatus(entry) != RowStatus(row)
+        }
+    }
+
+    /// 列表行状态里跟着条目变的几项;完整条目和精简条目(正文在小文件里)算出来一样。
+    struct RowStatus: Equatable {
+        var fields: Int
+        var hasLyrics: Bool
+        var instrumental: Bool
+        var manual: Bool
+        var source: String
+
+        init(_ entry: [String: Any]) {
+            fields = EnrichCacheSlim.presentFields(entry).subtracting([.lyrics, .known]).rawValue
+            hasLyrics = EnrichCacheSlim.hasMainLyrics(entry)
+            instrumental = entry["instrumental"] as? Bool ?? false
+            manual = entry["manual_lyrics"] as? Bool ?? false
+            source = entry["lyrics_source"] as? String ?? ""
+        }
+    }
 }

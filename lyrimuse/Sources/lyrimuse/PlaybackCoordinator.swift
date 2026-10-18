@@ -1029,19 +1029,17 @@ final class PlaybackCoordinator: ObservableObject {
                     self.scheduleSettledFavoriteRefresh()
                 },
             s.$artist.assign(to: \.artist, on: self),
-            // 除了 artist / title 变化,还要每秒重读一次纠正文件:署名本来就干净的歌,纠正落地时
+            // 除了 artist / title 变化,纠正文件换了一版也要重算:署名本来就干净的歌,纠正落地时
             // artist / title 一个字都不变(App 2 秒一拍、引擎 5 秒一拍,App 先看到新歌那一拍
             // 文件里还是上一首),只靠 combineLatest 会把这首歌的歌手位整首钉在空串上。
-            // PlayerArtistFix.current 按 mtime 缓存,文件没变时只多一次 stat。
-            // 每秒那一拍只在播放时打:暂停 / 停播时纠正文件不会变,常驻的 1Hz 定时器就是每秒白唤醒一次主线程
-            // 再 stat 一次文件。恢复播放时立刻补一拍(prepend)。
+            // 文件变了没有靠 PlayerArtistFix.changes(盯配置目录的目录事件),不每秒 stat;只在播放时订阅,
+            // 暂停 / 停播时纠正文件不会变。恢复播放时立刻补一拍(prepend)。见 02 章决策 139。
             s.$artist.combineLatest(
                 s.$title,
                 s.$isPlayingNow.removeDuplicates()
                     .map { playing -> AnyPublisher<Void, Never> in
                         playing
-                            ? Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-                                .map { _ in () }.prepend(()).eraseToAnyPublisher()
+                            ? PlayerArtistFix.changes.prepend(()).eraseToAnyPublisher()
                             : Just(()).eraseToAnyPublisher()
                     }
                     .switchToLatest(),

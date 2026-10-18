@@ -389,6 +389,7 @@ func main() {
 	// 内存里候选的 cover_url,拆完就扫不到了。
 	startupStep("externalizeDecisions", externalizeDecisionsAtStartup)
 	startupStep("removeStaleEnrichTemps", removeStaleEnrichTemps)
+	startupStep("removeOldMigrationBackups", removeOldMigrationBackups)
 	// 给 App 的精简索引 + 正文小文件(enrichindex.go):缺失或比主缓存旧就重新生成。排在所有会改缓存的
 	// 启动迁移之后。
 	startupStep("refreshEnrichIndex", refreshEnrichIndexAtStartup)

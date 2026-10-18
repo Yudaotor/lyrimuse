@@ -2371,6 +2371,22 @@ func runPlayerIdentityTests() {
                     .builtin(.appleMusic), "主动信任: selfBundleID 空串不当成「挑中了自己」")
     }
 
+    // ---- 署名纠正文件换版的叫醒方式(契约):播放时订阅目录事件,不每秒 stat ----
+    do {
+        let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func src(_ path: String) -> String {
+            (try? String(contentsOf: sourcesRoot.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let coordinator = src("lyrimuse/PlaybackCoordinator.swift")
+        let monitor = src("LyrimuseCore/Local/PlayerArtistFixMonitor.swift")
+        expectEqual(sourceBytes(coordinator, contain: "? PlayerArtistFix.changes.prepend(()).eraseToAnyPublisher()")
+                    && !coordinator.contains("Timer.publish(every: 1, on: .main, in: .common)"), true,
+                    "署名纠正: 播放时按纠正文件换版重算,不再每秒一拍")
+        expectEqual(sourceBytes(monitor, contain: "DirectoryChangeWatcher(directory: PlayerArtistFix.stateURL.deletingLastPathComponent()")
+                    && sourceBytes(monitor, contain: "guard mtime != lastMTime else { return }"), true,
+                    "署名纠正: 盯配置目录,修改时间变了才发")
+    }
+
     // ---- 被歌词顶掉的署名(酷狗 3.3.2) ----
     //
     // 那一版把当前这一句歌词发布成 MediaRemote 的 artist,每唱一句换一次,曲名和时长

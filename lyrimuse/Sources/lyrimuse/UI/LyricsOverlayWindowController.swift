@@ -590,6 +590,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.reconcilePlacementWithScreens()
+                self?.syncActiveScreenTracking()
             }
         }
 
@@ -1873,9 +1874,12 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     }
 
     /// 跟随开着、窗口该摆着(不算全屏时隐藏)时才盯焦点屏;开始盯的这一刻当场跟一次。
+    /// 每秒一次的兜底只在多屏时开:单屏时焦点屏不会变,每拍跨进程列一遍窗口(`focusedScreen`)是白做。屏幕数变了在
+    /// 屏幕参数通知里重判。见 04 章决策 67。
     private func syncActiveScreenTracking() {
         let wanted = followsActiveScreen && shownApartFromFullScreen
-        guard wanted != (activeScreenTimer != nil) else { return }
+        let wantsPoll = wanted && NSScreen.screens.count > 1
+        guard wanted != (activeAppObserver != nil) || wantsPoll != (activeScreenTimer != nil) else { return }
         activeScreenTimer?.invalidate()
         activeScreenTimer = nil
         if let activeAppObserver {
@@ -1889,11 +1893,14 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.checkActiveScreen() }
         }
-        let timer = Timer(timeInterval: Self.activeScreenPollInterval, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.checkActiveScreen() }
+        if wantsPoll {
+            let timer = Timer(timeInterval: Self.activeScreenPollInterval, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.checkActiveScreen() }
+            }
+            timer.tolerance = Self.activeScreenPollInterval * 0.2
+            RunLoop.main.add(timer, forMode: .common)
+            activeScreenTimer = timer
         }
-        RunLoop.main.add(timer, forMode: .common)
-        activeScreenTimer = timer
         followActiveScreen(force: true)
     }
 

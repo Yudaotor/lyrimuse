@@ -48,4 +48,19 @@ public enum DiscordLyricLine {
         }
         return best?.text
     }
+
+    /// `pick` 的结论从 `atMs` 往后多少毫秒第一次变:按 `stepMs` 往前试,最多看 `horizonMs`,一直不变为 nil。资料卡要跟着
+    /// 换句时用它排下一次该看的时刻,不用每半秒醒一次(句子几十条、`pick` 遇到窗口外的就停,试一遍是微秒级)。
+    /// 见 12 章决策 81。
+    public static func nextChangeMs(_ spans: [Span], atMs: Int, windowMs: Int, stepMs: Int = 100,
+                                    horizonMs: Int = 10_000, minOverlapMs: Int = 1_000) -> Int? {
+        guard stepMs > 0 else { return nil }
+        let now = pick(spans, atMs: atMs, windowMs: windowMs, minOverlapMs: minOverlapMs)
+        var delta = stepMs
+        while delta <= horizonMs {
+            if pick(spans, atMs: atMs + delta, windowMs: windowMs, minOverlapMs: minOverlapMs) != now { return delta }
+            delta += stepMs
+        }
+        return nil
+    }
 }

@@ -52,8 +52,11 @@ final class DiscordPresenceController: ObservableObject {
     static let fastConnectWindow: TimeInterval = 60
     /// Discord 开着、过了这么久还没连上,算卡住了。
     static let stallThreshold: TimeInterval = 20
-    /// 有一行写当前歌词、正在放有歌词的歌时,隔这么久看一次该不该换句;真发出去仍受 `DiscordPresenceGate.minInterval` 限。
+    /// 有一行写当前歌词、正在放有歌词的歌时,按这一句往后第一次会变的时刻再看一次(`nextLyricCheck`),最短隔 `lyricTick`、
+    /// 最长隔 `lyricHorizon`;真发出去仍受 `DiscordPresenceGate.minInterval` 限。拖进度、重新对齐经 `$anchor` 叫刷新,
+    /// 当场按新位置重排。见 12 章决策 81。
     static let lyricTick: TimeInterval = 0.5
+    static let lyricHorizon: TimeInterval = 10
 
     private lazy var link = DiscordPresenceLink(
         socketPaths: {
@@ -209,10 +212,21 @@ final class DiscordPresenceController: ObservableObject {
                 Task { @MainActor in self?.sendFinished(delivery, wanted: activity, generation: sentGeneration) }
             }
         }
-        // 歌词跟着时间走,没有别的信号会叫刷新:正在放有歌词的歌时自己按 `lyricTick` 再看一次。
+        // 歌词跟着时间走,没有别的信号会叫刷新:正在放有歌词的歌时自己排到下一次换句再看。
         if wakeTask == nil, track != nil, followsLyrics, case .connected = status {
-            wake(at: now.addingTimeInterval(Self.lyricTick))
+            wake(at: now.addingTimeInterval(nextLyricCheck(now: now)))
         }
+    }
+
+    /// 离当前这句(`currentLyric` 的挑法)按歌词时间轴第一次会变还有几秒,夹在 `lyricTick`…`lyricHorizon`;倍速时按速率折成墙钟。
+    private func nextLyricCheck(now: Date) -> TimeInterval {
+        let playback = PlaybackCoordinator.shared
+        let deltaMs = DiscordLyricLine.nextChangeMs(currentLyricSpans(), atMs: playback.lyricsTimelineMs(now: now),
+                                                    windowMs: Int(DiscordPresenceGate.minInterval * 1000),
+                                                    horizonMs: Int(Self.lyricHorizon * 1000))
+        let rate = max(playback.anchor?.rate ?? 1, 0.25)
+        let seconds = Double(deltaMs ?? Int(Self.lyricHorizon * 1000)) / 1000 / rate
+        return min(max(seconds, Self.lyricTick), Self.lyricHorizon)
     }
 
     /// 有一行写当前歌词、没选「不显示是哪首歌」(`Layout.followsLyrics`)、在放、这首有歌词。

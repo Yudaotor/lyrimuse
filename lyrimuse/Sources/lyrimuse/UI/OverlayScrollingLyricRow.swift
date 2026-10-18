@@ -487,6 +487,7 @@ final class OverlayLyricScrollView: NSView {
         baseBounds.values = widths.map {
             CGRect(x: $0, y: 0, width: max(0, boxWidth - $0), height: boxHeight)
         }
+        // 填色、滚动这几条动画都别设 preferredFrameRateRange:设了系统按上限跑满,不设它自己降得更低。见 04 章决策 68。
         for a in [fill, basePos, baseBounds] {
             a.keyTimes = frames.keyTimes.map(NSNumber.init(value:))
             a.duration = frames.duration
