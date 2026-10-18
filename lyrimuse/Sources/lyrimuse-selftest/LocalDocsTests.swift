@@ -92,7 +92,7 @@ func runLocalDocsTests() {
 
     // ---- 项目级 skill----
     //
-    // `.claude/skills/<名>/SKILL.md` 是操作型流程(真机验证 / 歌词排查 / 接入新播放器 / 发版)的「步骤版」:
+    // `.claude/skills/<名>/SKILL.md` 是操作型流程(真机验证 / 歌词排查 / 接入新播放器 / 接入新歌词源 / 发版)的「步骤版」:
     // 只写步骤与判据,理由回链 AGENTS.md 与 docs。它最常见的死法是锚点腐烂(脚本改名、文档挪位、链接失效)和
     // 越写越长变成第二份 AGENTS.md,这里守:行数上限、frontmatter 齐、引用的仓库路径 / 文档链接都在、发版只许
     // 显式触发、真机验证开头就是禁 AppleScript 那条、两个入口文件都指过去。
@@ -107,7 +107,8 @@ func runLocalDocsTests() {
         // 本地有就照旧全查(锚点腐烂、超长、发版 skill 漏 disable-model-invocation 都还是红)。
         // 别把这个 guard 改成 expectEqual:CI 会因为「文件缺失」红,而那不是缺陷,是刻意不发布。
         guard FileManager.default.fileExists(atPath: skillsDir.path) else { break skillGuard }
-        let expected = ["lyrimuse-lyrics-triage", "lyrimuse-player-integration", "lyrimuse-release", "lyrimuse-verify-ui"]
+        let expected = ["lyrimuse-lyric-source-integration", "lyrimuse-lyrics-triage", "lyrimuse-player-integration",
+                        "lyrimuse-release", "lyrimuse-verify-ui"]
         let found = ((try? FileManager.default.contentsOfDirectory(atPath: skillsDir.path)) ?? [])
             .filter { !$0.hasPrefix(".") }.sorted()
         expectEqual(found, expected, "项目级 skill: 登记的都在、没有多出来的(多一份要来这里登记)")
