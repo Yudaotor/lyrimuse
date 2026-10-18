@@ -2732,7 +2732,8 @@ struct LyricsWindowView: View {
                             },
                             onOpenTrack: { title, artist in
                                 openCatalogPage(title: title, artist: artist, target: .track)
-                            })
+                            },
+                            surfaceVisible: windowController.isSurfaceVisible)
                     } else {
                         idleWelcomeView
                             .offset(y: -geo.safeAreaInsets.top / 2)

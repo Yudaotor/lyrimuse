@@ -449,6 +449,10 @@ func runNotchTests() {
         let controller = read("NotchLyricsWindowController.swift")
         let view = read("NotchLyricsView.swift")
         let stage = read("NotchEditorStage.swift")
+        let scrubber = sourceBody("private func scrubberAndTimes(", in: view)
+        expectEqual(scrubber.contains(".offset(x: -ProgressFillGeometry.leadingOffset(") && scrubber.contains(".clipShape(Capsule())")
+                    && !scrubber.contains(".frame(width: proxy.size.width *"), true,
+                    "展开区进度条: 满宽填充按 offset 移出、按胶囊裁,不每帧改布局宽度")
         expectEqual(controller.contains(
             "AppSettings.shared.$notchLyricRowHeight, AppSettings.shared.$notchFontSize, AppSettings.shared.$notchSecondaryLine")
                     && controller.contains("height: max(geo.notchHeight + lyricRowHeight + self.expandedExtraHeight("), true,

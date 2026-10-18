@@ -33,6 +33,8 @@ struct IdleStandbyView: View {
     let onOpenAlbum: (String, String, String) -> Void
     /// (歌名, 歌手) → 打开这首歌在 Apple Music 的曲目页。
     let onOpenTrack: (String, String) -> Void
+    /// 歌词窗口此刻看不看得见(`isSurfaceVisible`),看不见时全新用户那颗呼吸的音符停下。
+    var surfaceVisible = true
 
     @ObservedObject private var stats = LastfmStatsService.shared
 
@@ -51,7 +53,7 @@ struct IdleStandbyView: View {
                         .settingsCardBackground(cornerRadius: 18)
                 }
                 IdleLastTrackHero(player: player, onResume: onResume,
-                                  onOpenPlayer: onOpenPlayer, onOpenAlbum: onOpenAlbum)
+                                  onOpenPlayer: onOpenPlayer, onOpenAlbum: onOpenAlbum, surfaceVisible: surfaceVisible)
                     .padding(20)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .settingsCardBackground(cornerRadius: 18)
@@ -490,6 +492,7 @@ private struct IdleLastTrackHero: View {
     let onResume: () -> Void
     let onOpenPlayer: () -> Void
     let onOpenAlbum: (String, String, String) -> Void
+    let surfaceVisible: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var coverURL: URL?
@@ -662,10 +665,8 @@ private struct IdleLastTrackHero: View {
 
     private var noTrackHero: some View {
         VStack(spacing: 0) {
-            // 呼吸交给 Core Animation(`LayerBreathing`):原来的 `.repeatForever` 是 SwiftUI 在主线程
-            // 逐帧推进的,而且这里没有可见性闸 —— 全新用户开着歌词窗口,不管窗口看不看得见都按屏幕
-            // 刷新率一直跑,没播放时也占着 CPU。
-            LayerBreathing(animating: !reduceMotion) {
+            // 呼吸交给 Core Animation(`LayerBreathing`,封了帧率),窗口看不见时停下(同 LyricsWindowView 欢迎态那一颗)。
+            LayerBreathing(animating: !reduceMotion && surfaceVisible) {
                 ZStack {
                     Circle()
                         .fill(RadialGradient(colors: [Color.accentColor.opacity(0.12), .clear],

@@ -3005,10 +3005,15 @@ private struct NotchScrubber: View {
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     Capsule().fill(tint.opacity(0.18))
+                    // 满宽填充往左移出、外面按满宽胶囊裁一次:随进度变的只有 offset(不参与布局),别写回
+                    // `.frame(width:)` —— 那样每帧都要重新布局。几何同歌词窗口那条,见 ProgressFillGeometry。
                     FrameTimeline(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !ticking) { now in
                         Capsule().fill(tint.opacity(0.85))
-                            .frame(width: proxy.size.width * min(1, max(0, Double(positionMs(now)) / Double(durationMs))))
+                            .offset(x: -ProgressFillGeometry.leadingOffset(
+                                containerWidth: proxy.size.width,
+                                fraction: CGFloat(Double(positionMs(now)) / Double(durationMs))))
                     }
+                    .clipShape(Capsule())
                 }
                 // 变粗只发生在下面那个**恒定高度的槽**里(垂直居中),布局上不占多一分 ——
                 // 别让 .frame(height: scrubberHeight) 直接参与布局:悬停 3→5 那 2pt 会把

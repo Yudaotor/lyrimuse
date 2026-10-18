@@ -616,6 +616,11 @@ func runLyricsWindowTests() {
                     "看不见停动画(契约): 闸挂在根部那个 Group 上,迷你 / 完整两套布局和各处浮层胶囊都在它下面")
         expectEqual(sourceHas(window, ".transaction { transaction in\n            guard !windowController.isSurfaceVisible else { return }\n            transaction.disablesAnimations = true\n            transaction.animation = nil\n        }"),
                     true, "看不见停动画(契约): 看不见时关掉隐式动画 —— SwiftUI 不替被盖住的窗口停动画,换句的景深每帧照跑")
+        let idle = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/IdleStandbyView.swift"), encoding: .utf8)) ?? ""
+        expectEqual(window.contains("surfaceVisible: windowController.isSurfaceVisible)")
+                    && idle.contains("onOpenAlbum: onOpenAlbum, surfaceVisible: surfaceVisible)")
+                    && idle.contains("LayerBreathing(animating: !reduceMotion && surfaceVisible)"), true,
+                    "看不见停动画(契约): 停播宽版欢迎态那颗呼吸的音符也跟窗口可见性走")
     }
 
     // MARK: - 系统判为看不见时算盖住(源码契约)
