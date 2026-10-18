@@ -419,6 +419,9 @@ type enrichEntry struct {
 	// CoverMissingRetryRules:后台补封面上一次按哪一版补法补过这条缺封面的(coverMissingRetryRules)。补法多了一道,
 	// 按旧版补过的不管补过几次都再补一次。
 	CoverMissingRetryRules int `json:"cover_missing_retry_rules,omitempty"`
+	// CoverAppleAlbumCheckTS:后台补封面上一次为这条另一张专辑的封面按显示的专辑问到 Apple 目录的时刻(coversweep.go),
+	// 隔 coverAppleAlbumRecheckInterval 再问。
+	CoverAppleAlbumCheckTS int64 `json:"cover_apple_album_check_ts,omitempty"`
 	// VideoFrameURL:播放这首时 App 交来的视频帧(视频缩略图、竖屏截图这类不像封面的图),落成本机文件。不当封面用:
 	// 引擎照旧按缺封面去找,「歌词管理」只在 cover_url 为空时拿它当缩略图。见 03 章决策 39。
 	VideoFrameURL string `json:"video_frame_url,omitempty"`

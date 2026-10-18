@@ -33,6 +33,9 @@ import (
 // QQ 上的专辑名记进 cover_album(coverSweepNameQQCoverAlbums,一个 mid 只查一次),那一轮就判得出它是不是另一张专辑的。
 // 见 03 章决策 47。
 //
+// 不联网的几步都没换掉、封面仍明确是另一张专辑的,按歌词管理显示的专辑问一次 Apple 目录(coverSweepAppleForOtherAlbumCovers),
+// 专辑逐字对上的换成它。见 03 章决策 56。
+//
 // 那一轮之后,同一张专辑里有核实过的设备封面、各首的封面又不止一个地址的,给整张专辑定一张封面
 // (coverSweepSettleAlbumCovers):各首按图比,不止一张图时以 Apple 目录这张专辑的封面为准,Apple 没有这张专辑时用设备封面
 // 那张;跟定下的不是同一张图的换成它,定下的记进 CoverSettled,之后设备封面、外围补全都不再换掉它。见 03 章决策 48。
@@ -56,6 +59,8 @@ const (
 	coverSweepSaveEvery    = 10
 
 	coverUpgradeRecheckInterval = 30 * 24 * time.Hour
+	// coverAppleAlbumRecheckInterval:封面是另一张专辑的条目,问过一次 Apple 之后隔多久再问(CoverAppleAlbumCheckTS)。
+	coverAppleAlbumRecheckInterval = 30 * 24 * time.Hour
 	// coverUpgradeCheckRules:找清晰版的第几版找法,多了来源就加一(第 2 版加了歌词判决的各源候选,见 03 章决策 36;
 	// 第 3 版不是同一张图时换成播放器自带的,见 smallDeviceCoverYieldsTo)。
 	coverUpgradeCheckRules = 3
@@ -246,6 +251,10 @@ func runCoverSweep(ctx context.Context) coverSweepPass {
 	}
 	if n := coverSweepBorrowAlbumSiblings(); n > 0 {
 		slog.Info("cover sweep: borrowed the album's cover from a sibling", "count", n)
+		coverSweepSave()
+	}
+	if n := coverSweepAppleForOtherAlbumCovers(ctx); n > 0 {
+		slog.Info("cover sweep: took Apple's cover of the listed album", "count", n)
 		coverSweepSave()
 	}
 	if switched, settled := coverSweepSettleAlbumCovers(ctx); settled > 0 {
@@ -556,6 +565,78 @@ func albumSiblingArtistMatches(artist, canonical, lenderArtist, lenderCanonical 
 		(canonical != "" && artistMatches(canonical, lenderArtist)) ||
 		(lenderCanonical != "" && artistMatches(artist, lenderCanonical)) ||
 		(canonical != "" && lenderCanonical != "" && artistMatches(canonical, lenderCanonical))
+}
+
+// coverSweepAppleForOtherAlbumCovers:封面仍明确是另一张专辑的(coverOfAnotherAlbum)条目,按歌词管理显示的专辑问 Apple 目录这首
+// (coverSweepAppleCover),给回的专辑跟显示的专辑逐字对上(appleCoverIsListedAlbum)就换成那张,记成 apple、cover_album 记
+// Apple 的专辑名,主色清空。首次解析时写法键里没有专辑(专辑是后来 YouTube Music 登记的)、或 Apple 那时还没有这张,封面就会停在
+// 另一张专辑上,之后不再有人按专辑重问。问到了就记下 CoverAppleAlbumCheckTS(换没换都记),隔 coverAppleAlbumRecheckInterval
+// 再问;没问到的不记。两次真联网之间隔 coverSweepAppleGap,只读本地答得出的(coverSweepAppleAnswered)不等;连着
+// coverSweepOfflineLimit 条没问到就停,下一遍再来。排在不联网的几步之后。见 03 章决策 56。返回换了几条。
+func coverSweepAppleForOtherAlbumCovers(ctx context.Context) int {
+	type pending struct {
+		key, artist, title, album, cover string
+		secs                             float64
+	}
+	now := time.Now()
+	enrichMu.Lock()
+	var list []pending
+	for key, e := range enrichCache {
+		if enrichInflight[key] || enrichProvisional[key] ||
+			now.Unix()-e.CoverAppleAlbumCheckTS < int64(coverAppleAlbumRecheckInterval/time.Second) {
+			continue
+		}
+		artist, title, _ := splitEnrichKey(key)
+		album := entryListedAlbum(key, e)
+		if artist == "" || title == "" || !coverOfAnotherAlbum(e, album) {
+			continue
+		}
+		list = append(list, pending{key, artist, coverSweepTitle(title), album, e.CoverURL, e.DurationSecs})
+	}
+	enrichMu.Unlock()
+	sort.Slice(list, func(i, j int) bool { return list[i].key < list[j].key })
+	switched, unreached := 0, 0
+	asked := false
+	for _, p := range list {
+		coverSweepYield(ctx)
+		if !coverSweepAppleAnswered(p.artist, p.title, p.album) {
+			if asked {
+				coverSweepWait(ctx, coverSweepAppleGap)
+			}
+			asked = true
+		}
+		if ctx.Err() != nil {
+			break
+		}
+		cover, coverAlbum, reached := coverSweepAppleCover(withBackgroundOutbound(ctx), p.artist, p.title, p.album, p.secs)
+		if !reached {
+			if unreached++; unreached >= coverSweepOfflineLimit {
+				slog.Warn("cover sweep: Apple lookups for other-album covers got no answer, stopping", "streak", unreached, "key", p.key)
+				break
+			}
+			continue
+		}
+		unreached = 0
+		enrichMu.Lock()
+		e, ok := enrichCache[p.key]
+		if ok && e.CoverURL == p.cover && !enrichInflight[p.key] && !enrichProvisional[p.key] && !coverSettled(e) {
+			if cover != "" && cover != e.CoverURL && appleCoverIsListedAlbum(coverAlbum, p.album) {
+				e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor = cover, "apple", coverAlbum, ""
+				switched++
+			}
+			e.CoverAppleAlbumCheckTS = time.Now().Unix()
+			enrichCache[p.key] = e
+			enrichDirty = true
+		}
+		enrichMu.Unlock()
+	}
+	return switched
+}
+
+// appleCoverIsListedAlbum:Apple 给回的专辑跟显示的专辑逐字对上(albumScore 200),Apple 那边多带的「 - Single」「 - EP」不算差别。
+// 不收「一个包含另一个」那一档:本地是合辑《Greatest Hits Of The '80s》时,Apple 的另一张合辑《Hits of the 80's》也包含得上。纯函数。
+func appleCoverIsListedAlbum(appleAlbum, album string) bool {
+	return albumScore(trimSingleOrEPSuffix(appleAlbum), album) == 200 || albumScore(appleAlbum, album) == 200
 }
 
 // coverSweepBorrowVerifiedSiblings:封面归属没核实的条目(coverAwaitsVerifiedSibling),同一张专辑已经有一条归属核实过的设备

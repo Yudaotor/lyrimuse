@@ -441,7 +441,7 @@ func resolveAppleMusicMatchViaAlbum(ctx context.Context, artist, title, album st
 	reached := true
 	generic := appleAlbumIsJustTheTitle(album, title)
 	for _, country := range appleStorefrontsFor(artist, title, album) {
-		bestID, bestScore := int64(0), 0
+		bestID, bestScore, bestArtist := int64(0), 0, ""
 		var bestAlbumCover appleMusicMatch
 		rs, ok := itunesSearch(ctx, q, country)
 		if !ok {
@@ -453,7 +453,7 @@ func resolveAppleMusicMatchViaAlbum(ctx context.Context, artist, title, album st
 				continue
 			}
 			if sc := albumScore(r.CollectionName, album); sc > bestScore {
-				bestScore, bestID = sc, r.CollectionID
+				bestScore, bestID, bestArtist = sc, r.CollectionID, r.ArtistName
 				bestAlbumCover = appleMusicMatch{cover: hiResArtwork(r.ArtworkURL100), album: r.CollectionName}
 			}
 		}
@@ -478,12 +478,33 @@ func resolveAppleMusicMatchViaAlbum(ctx context.Context, artist, title, album st
 		// 靠曲名再验一遍,好过因为曲名比不上就整条放弃、任由上面 searchAppleMusicMatch
 		// 那个"没有专辑证据的第一个标题匹配"顶替成挂到别的发行版(合辑/精选)上的封面。
 		// 只给 cover/album,不给 url:没找到这首歌具体的曲目页,不能假装有一个能跳转
-		// 过去的链接。
-		if bestScore >= 200 && bestAlbumCover.cover != "" {
+		// 过去的链接。歌手要另核(appleAlbumCoverIdentityOK):曲名没对上,专辑名逐字相等就是唯一的证据。
+		if bestScore >= 200 && bestAlbumCover.cover != "" && appleAlbumCoverIdentityOK(bestArtist, artist, tracks, durationSecs) {
 			return bestAlbumCover, reached
 		}
 	}
 	return appleMusicMatch{}, reached
+}
+
+// appleAlbumCoverIdentityOK:按专辑名定位到了专辑、曲目表里又认不出这一首时,这张专辑的封面能不能当这首的:挑中专辑的那条结果、
+// 或曲目表里任一轨的署名对得上本地署名(lyricSourceArtistMatches,不走 appleResultIdentityOK 的专辑名旁路);挑中那条的署名跟
+// 本地一边是拉丁字母、一边不是(商店换了文字写法:Terry Lin / 林志炫);或曲目表里有一轨能算同一份录音换了署名写法
+// (appleSameSingleByAnotherName)。同一种文字下的另一个名字只凭专辑名逐字相等不认:「7」「Super Star」这类专辑名别的歌手也发过。
+// 两边署名任一为空时放行,同 appleResultIdentityOK。纯函数。见 03 章决策 56。
+func appleAlbumCoverIdentityOK(albumArtist, localArtist string, tracks []itunesResult, localSecs float64) bool {
+	if strings.TrimSpace(localArtist) == "" || strings.TrimSpace(albumArtist) == "" {
+		return true
+	}
+	if lyricSourceArtistMatches(albumArtist, localArtist) || hasNonLatinLetter(albumArtist) != hasNonLatinLetter(localArtist) {
+		return true
+	}
+	for _, t := range tracks {
+		if lyricSourceArtistMatches(t.ArtistName, localArtist) ||
+			appleSameSingleByAnotherName(t.ArtistName, localArtist, t.TrackTimeMillis/1000, localSecs) {
+			return true
+		}
+	}
+	return false
 }
 
 // itunesLookupTracksURL 只为单测可改。
