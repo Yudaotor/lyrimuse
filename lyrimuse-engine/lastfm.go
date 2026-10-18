@@ -733,6 +733,16 @@ func lastfmRecentRateLimited(now time.Time) bool {
 	return now.UnixNano() < lastfmRecentRateLimitedUntil.Load()
 }
 
+// lastfmRecentFailureBackoff:周期拉取连续失败 n 次之后,下一次至少隔多久再拉。Last.fm 偶尔整段一两个小时慢到超时
+// 或回 500(别的服务都正常),照 15 秒一拉只是每次白等满 8 秒超时、再记一条失败。第二次连续失败起 30 秒,逐次翻倍,
+// 封顶 5 分钟;成功一次回到正常节奏。镜像 scrobble、回填之后的提前拉取(lastfmFeedNudgeDue)不受它限制。
+func lastfmRecentFailureBackoff(n int) time.Duration {
+	if n < 2 {
+		return 0
+	}
+	return min(30*time.Second<<min(n-2, 4), 5*time.Minute)
+}
+
 // parseLastfmRecent 把 `user.getrecenttracks` 的响应体解成 lastfmRecentPage。拆出来是为了
 // 能用样本 JSON 单测(lastfmfeed_test.go);网络部分在 lastfmRecent。
 // lastfmRecentTrackJSON 是 recenttracks.track 里的一条。

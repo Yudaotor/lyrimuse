@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"log/slog"
 	"os"
@@ -733,8 +736,9 @@ func appleLocaleLanguage(s string) string {
 // 什么。"为什么我这儿不补译文 / 不跟着启动 / 少一个源"这类问题,不先把"配置不同"这个
 // 变量排除掉就没法往下查,而这些开关是用户自己在设置里改的,问他往往问不明白。
 //
-// 全量打而不是只挑"跟默认不一样的":默认值散在各个 resolve* 函数里,挑出来容易挑错,
-// 而这一行一次启动只出现一次,全打也就几百字节。
+// 全量打而不是只挑"跟默认不一样的":默认值散在各个 resolve* 函数里,挑出来容易挑错。
+// 跟上一次整行打的一样、又不到 featureSnapshotFullEvery 时只打一行指纹:整行约 1.3KB,开发时一天装机几十次,
+// 几乎每次都一样,曾占日志体积 6%。每天至少整行打一次,任何一天的日志里都查得到完整快照。
 //
 // 这里全是布尔 / 枚举 / 名单,不含任何凭据。LyricsDir 只记"有没有自定义过",不记路径
 // 本身 —— 那是用户的目录结构,跟排查无关。
@@ -743,7 +747,7 @@ func logFeatureSnapshot() {
 	if features().LyricsDir != "" {
 		lyricsDirMode = "custom"
 	}
-	slog.Info("feature flags",
+	attrs := []any{
 		"players", sortedEnabledKeys(features().Players),
 		"album_prefetch", features().AlbumPrefetch,
 		"lyrics_auto_upgrade", features().LyricsAutoUpgrade,
@@ -766,7 +770,7 @@ func logFeatureSnapshot() {
 		"lastfm_match_track", features().LastfmMatchTrack,
 		"lastfm_match_first_artist_only", features().LastfmMatchFirstArtistOnly,
 		"lastfm_scrobble_point", orDash(features().LastfmScrobblePoint),
-		"lyrics_sweep_gap_secs", int(features().LyricsSweepGap/time.Second),
+		"lyrics_sweep_gap_secs", int(features().LyricsSweepGap / time.Second),
 		"scrobble_short_tracks", features().ScrobbleShortTracks,
 		"lastfm_excluded_bundles", len(features().LastfmExcludedBundles),
 		"weekly_digest", features().WeeklyDigest,
@@ -780,7 +784,36 @@ func logFeatureSnapshot() {
 		"launch_on_players", sortedEnabledKeys(features().LaunchLyrimuseOnPlayers),
 		"trusted_players", orDash(sortedMapKeys(features().TrustedPlayers)),
 		"browser_platform_pairs", browserPlatformPairsSummary(features().BrowserPlatformPairs),
-	)
+	}
+	sum := sha256.Sum256([]byte(fmt.Sprint(attrs...)))
+	fp := hex.EncodeToString(sum[:6])
+	path := configFilePath(featureSnapshotStateFile)
+	now := time.Now()
+	var last featureSnapshotState
+	if b, err := os.ReadFile(path); err != nil {
+		noteFileErr("read", path, err)
+	} else if err := json.Unmarshal(b, &last); err != nil {
+		noteFileErr("decode", path, err)
+	}
+	if last.Fingerprint == fp && now.Sub(last.LoggedAt) >= 0 && now.Sub(last.LoggedAt) < featureSnapshotFullEvery {
+		slog.Info("feature flags unchanged", "fingerprint", fp, "logged_in_full_at", last.LoggedAt.UTC().Format(time.RFC3339))
+		return
+	}
+	slog.Info("feature flags", append(attrs, "fingerprint", fp)...)
+	if b, err := json.Marshal(featureSnapshotState{Fingerprint: fp, LoggedAt: now}); err == nil {
+		_ = writeFileAtomic(path, b)
+	}
+}
+
+// featureSnapshotStateFile:上一次整行打功能开关的指纹和时刻,logFeatureSnapshot 据此决定这次整行打还是只打指纹。
+const featureSnapshotStateFile = "lyrimuse-feature-flags-logged.json"
+
+// featureSnapshotFullEvery:开关没变时也至少隔这么久整行打一次。
+const featureSnapshotFullEvery = 24 * time.Hour
+
+type featureSnapshotState struct {
+	Fingerprint string    `json:"fingerprint"`
+	LoggedAt    time.Time `json:"logged_at"`
 }
 
 // orDash 把空串换成 "-":key=value 里一个空值读起来像是字段丢了,而"这一项是空的"

@@ -615,3 +615,34 @@ func TestDigestStateSaveIsAtomic(t *testing.T) {
 		t.Errorf("应当正好三份状态文件,有 %d 份", len(entries))
 	}
 }
+
+// 周期拉取连续失败:第二次起按 30 秒翻倍退避、封顶 5 分钟,退避期内到了周期也不拉;成功一次计数清零。
+func TestLastfmRecentFailureBackoff(t *testing.T) {
+	for n, want := range map[int]time.Duration{0: 0, 1: 0, 2: 30 * time.Second, 3: time.Minute, 4: 2 * time.Minute,
+		5: 4 * time.Minute, 6: 5 * time.Minute, 40: 5 * time.Minute} {
+		if got := lastfmRecentFailureBackoff(n); got != want {
+			t.Errorf("连续失败 %d 次退避 %v,want %v", n, got, want)
+		}
+	}
+
+	t.Setenv("LYRIMUSE_CONFIG_DIR", t.TempDir())
+	now := time.Now()
+	// 已取消的 ctx:万一起了拉取,请求当场失败,不联网。
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	p := &poller{ctx: ctx, cfg: &config{LastfmUser: "someone", LastfmAPIKey: "key"}, feedActivityAt: now,
+		lastfmCheckedAt: now.Add(-feedIntervalActive - time.Second), bridgeFailures: 3}
+	p.bridge(now)
+	if p.bridgeFetching {
+		t.Error("连续失败 3 次、离上次拉取不到 1 分钟:周期到了也不拉")
+	}
+
+	p.applyBridgeResult(bridgeFetchResult{now: now})
+	if p.bridgeFailures != 4 {
+		t.Errorf("失败一次计数加一,got %d", p.bridgeFailures)
+	}
+	p.applyBridgeResult(bridgeFetchResult{now: now, ok: true})
+	if p.bridgeFailures != 0 {
+		t.Errorf("成功一次计数清零,got %d", p.bridgeFailures)
+	}
+}

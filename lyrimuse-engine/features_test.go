@@ -2,14 +2,18 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"log"
+	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // 启动快照。它的价值全在"覆盖得全不全"上:漏掉一个开关,那一项造成的行为差异事后就
 // 查不出来了 —— 所以这里逐字段核对,新增开关忘了加进快照会在这里红。
 func TestLogFeatureSnapshot(t *testing.T) {
+	t.Setenv("LYRIMUSE_CONFIG_DIR", t.TempDir())
 	saved := features()
 	t.Cleanup(func() { setFeatures(saved) })
 
@@ -79,5 +83,67 @@ func TestLogFeatureSnapshot(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("空值该记成 -,缺 %s,实际: %q", want, out)
 		}
+	}
+}
+
+// 跟上一次整行打的一样、不到一天:只打指纹,带上次整行打的时刻;开关变了、或上一次整行打已过一天,照常整行打。
+func TestLogFeatureSnapshotSkipsUnchanged(t *testing.T) {
+	t.Setenv("LYRIMUSE_CONFIG_DIR", t.TempDir())
+	saved := features()
+	t.Cleanup(func() { setFeatures(saved) })
+	var buf bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(prev) })
+	full := func() bool {
+		t.Helper()
+		out := buf.String()
+		buf.Reset()
+		if strings.Contains(out, "feature flags unchanged") {
+			if !strings.Contains(out, "fingerprint=") || !strings.Contains(out, "logged_in_full_at=") {
+				t.Errorf("只打指纹那行要带指纹和上次整行打的时刻: %q", out)
+			}
+			return false
+		}
+		if !strings.Contains(out, "players=") {
+			t.Fatalf("既不是整行也不是指纹: %q", out)
+		}
+		return true
+	}
+
+	setFeatures(featureFlags{Players: map[string]bool{"qq": true}})
+	logFeatureSnapshot()
+	if !full() {
+		t.Error("第一次整行打")
+	}
+	logFeatureSnapshot()
+	if full() {
+		t.Error("没变、不到一天:只打指纹")
+	}
+	setFeatures(featureFlags{Players: map[string]bool{"qq": true, "spotify": true}})
+	logFeatureSnapshot()
+	if !full() {
+		t.Error("开关变了:整行打")
+	}
+
+	path := configFilePath(featureSnapshotStateFile)
+	var st featureSnapshotState
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &st); err != nil {
+		t.Fatal(err)
+	}
+	st.LoggedAt = time.Now().Add(-featureSnapshotFullEvery - time.Minute)
+	if b, err = json.Marshal(st); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logFeatureSnapshot()
+	if !full() {
+		t.Error("上一次整行打已过一天:整行打")
 	}
 }

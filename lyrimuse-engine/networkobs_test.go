@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -497,5 +499,79 @@ func TestWithNetworkRoundCountsOnlyItsOwnRequests(t *testing.T) {
 	}
 	if a, f := outerRound(); a != 2 || f != 1 {
 		t.Errorf("外层: attempts=%d failures=%d, 要 2/1", a, f)
+	}
+}
+
+// 歌词源回 503 / 429 是对方在限流:只记出站闸那条 Info(带暂停多久),逐条请求行不再记 Warn;别的主机回 503 照旧记 Warn。
+// 已经记过「FAILED」的传输层错误,调用方再用 warnf 记时降到 Debug,同一次失败只出现一次。
+func TestDoHTTPTrackedLogsEachFailureOnce(t *testing.T) {
+	savedGuard, savedBreaker := sharedHostGuard(), sharedLyricSourceBreaker()
+	setSharedHostGuard(newHostGuard(time.Now))
+	setSharedLyricSourceBreaker(newLyricSourceBreaker(time.Now))
+	t.Cleanup(func() {
+		setSharedHostGuard(savedGuard)
+		setSharedLyricSourceBreaker(savedBreaker)
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(srv.Close)
+	toServer := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, network, srv.Listener.Addr().String())
+		},
+	}}
+
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	defer slog.SetDefault(prev)
+
+	for _, u := range []string{"http://lrclib.net/api/get?track_name=x", srv.URL + "/other"} {
+		req, err := http.NewRequest(http.MethodGet, u, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := doHTTPTracked(toServer, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+	out := buf.String()
+	if strings.Contains(out, "api call: GET lrclib.net") {
+		t.Errorf("歌词源限流不该再逐条记请求行,got: %q", out)
+	}
+	if !strings.Contains(out, `level=INFO msg="lyric source rate-limited, pausing background requests" host=lrclib.net for=1s`) {
+		t.Errorf("歌词源限流记一条 Info、带暂停多久,got: %q", out)
+	}
+	if !strings.Contains(out, "level=WARN") || !strings.Contains(out, "/other") {
+		t.Errorf("别的主机回 503 照旧记 Warn,got: %q", out)
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	ln.Close()
+	req, err := http.NewRequest(http.MethodPost, "http://"+addr+"/1/submit-listens", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = doHTTPTracked(&http.Client{Timeout: 2 * time.Second}, req)
+	if err == nil {
+		t.Fatal("连已关闭的端口该失败")
+	}
+	if !errors.As(err, new(*url.Error)) {
+		t.Errorf("包了一层之后 errors.As 仍认得出 *url.Error: %T", err)
+	}
+	buf.Reset()
+	warnf("submit playing_now (new) failed: %v", fmt.Errorf("post playing_now: %w", err))
+	warnf("relay push failed: %v", errors.New("status 502"))
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 1 || !strings.Contains(lines[0], `level=WARN msg="relay push failed: status 502"`) {
+		t.Errorf("已记过 FAILED 的传输层错误不再记 Warn,别的失败照旧,got: %q", buf.String())
 	}
 }

@@ -16,13 +16,14 @@ import (
 //
 // 两者都认调用方主动取消(退出时的 SIGTERM、切歌、这一轮已经选出结果):参数里有 context.Canceled
 // 的错误就降到 Debug,那是正常收尾。错误被 %v 包进字符串、链上认不出来的,按文案结尾认。
+// 参数里有 doHTTPTracked 已经记过 WARN 的传输层错误(loggedTransportError)也降到 Debug:同一次失败只记一次。
 func warnf(format string, args ...any) { logFailuref(slog.LevelWarn, format, args...) }
 
 func infoFailf(format string, args ...any) { logFailuref(slog.LevelInfo, format, args...) }
 
 func logFailuref(level slog.Level, format string, args ...any) {
 	for _, a := range args {
-		if err, ok := a.(error); ok && isCanceledErr(err) {
+		if err, ok := a.(error); ok && (isCanceledErr(err) || errors.As(err, new(loggedTransportError))) {
 			level = slog.LevelDebug
 			break
 		}

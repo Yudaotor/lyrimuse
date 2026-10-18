@@ -132,6 +132,9 @@ func doHTTPTrackedOnce(cli *http.Client, req *http.Request) (*http.Response, err
 		// 歌词源级熔断的失败观察(见 sourcebreaker.go):只有歌词源的主机会被记,别的请求
 		// 在 lyricSourceForHost 那里直接归零。
 		sharedLyricSourceBreaker().observeTraced(req.URL.Host, guardEndpointKey(req.URL), err, 0, "", tr)
+		if !errors.Is(err, context.Canceled) {
+			err = loggedTransportError{err}
+		}
 		return resp, err
 	}
 	if !lyricSourceRetryForgiven(req.Context(), resp.StatusCode, resp.Header.Get("Retry-After")) {
@@ -155,7 +158,11 @@ func doHTTPTrackedOnce(cli *http.Client, req *http.Request) (*http.Response, err
 	// 把原始状态码给它了),不受这里影响。
 	notFound := resp.StatusCode == http.StatusNotFound
 	failed := resp.StatusCode >= 400 && !notFound
-	if failed {
+	// 歌词源回 503 / 429 是对方在限流(lrclib 忙时回 503 + Retry-After: 1),由出站闸那条「lyric source rate-limited」
+	// 记一次、带暂停多久(hostguard.go noteLyricSourceThrottled);这里逐次只到 Debug,汇总照样计 failed。
+	throttled := (resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusTooManyRequests) &&
+		lyricSourceForHost(guardHost(req.URL)) != "" && guardApplies(req)
+	if failed && !throttled {
 		slog.Warn("api call: "+target, "status", resp.StatusCode, "elapsed_ms", elapsed.Milliseconds())
 	} else {
 		// 成功(以及 404)的逐次记录在 Debug(默认不落盘,log_level=debug 时可见);落盘的是
@@ -166,6 +173,13 @@ func doHTTPTrackedOnce(cli *http.Client, req *http.Request) (*http.Response, err
 	recordAPICall(summaryKey, elapsed, failed, notFound, time.Now())
 	return resp, err
 }
+
+// loggedTransportError:上面已经按「api call … FAILED」记过一条 WARN 的传输层错误。调用方再用 warnf / infoFailf
+// 记它时降到 Debug(logfail.go),同一次失败在日志里只出现一次。文案、errors.Is / errors.As 都跟原错误一样。
+type loggedTransportError struct{ err error }
+
+func (e loggedTransportError) Error() string { return e.err.Error() }
+func (e loggedTransportError) Unwrap() error { return e.err }
 
 // ---- 审计汇总----
 //

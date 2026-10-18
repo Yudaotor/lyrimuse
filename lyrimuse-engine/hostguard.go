@@ -552,7 +552,8 @@ func (g *hostGuard) noteLyricSourceThrottled(host, retryAfter string) {
 	}
 	p.level++
 	p.until = now.Add(d)
-	slog.Warn("lyric source rate-limited, pausing background requests", "host", host, "for", d.String())
+	// Info 不是 Warn:按对方的要求暂停是设计内的常态(09 章决策 137),一天几百次,记成 Warn 会把真故障淹掉。
+	slog.Info("lyric source rate-limited, pausing background requests", "host", host, "for", d.String())
 }
 
 // lyricSourceRetryAfterStreakWindow:按 Retry-After 暂停时,上一次暂停结束后多久之内再被拒算「接着被拒」(停的时间翻倍)。

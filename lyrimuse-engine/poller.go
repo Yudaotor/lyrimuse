@@ -316,6 +316,7 @@ type poller struct {
 	lfmMirroredSet  persistedTTLSet
 	lastfmCheckedAt time.Time
 	bridgeFetching  bool // 见 bridge()/applyBridgeResult 顶部注释,防止同时起两个 lastfmRecent 请求
+	bridgeFailures  int  // 周期拉取连续失败的次数,见 lastfmRecentFailureBackoff
 	// feed 里最近一次"有人在听"的时刻(now-playing / 新 scrobble),决定拉取节奏,见
 	// lastfmFeedInterval。跟 remoteAt 不是一回事:remoteAt 只在 LB 桥接那段里维护、
 	// 且 Mac 一活跃就被清零,这里要的是"Last.fm 那边最近有没有动静"本身。
@@ -1421,7 +1422,8 @@ func (p *poller) bridge(now time.Time) {
 		return
 	}
 	localPlaying := p.cur.Playing && p.isTracked()
-	due := now.Sub(p.lastfmCheckedAt) >= lastfmFeedInterval(localPlaying, p.feedActivityAt, now)
+	due := now.Sub(p.lastfmCheckedAt) >= max(lastfmFeedInterval(localPlaying, p.feedActivityAt, now),
+		lastfmRecentFailureBackoff(p.bridgeFailures))
 	// 跨进程信号文件(回填子命令刚补进一批,见 lastfmFeedNudgePath):**消费掉,但不当场拉**,
 	// 改成排一个延迟拉取。理由跟 requestLastfmFeedRefresh 头注是同一条 —— Last.fm 把刚收到的
 	// scrobble 并进 recenttracks 要一两秒,立刻拉多半还看不到。
@@ -1534,8 +1536,10 @@ func (p *poller) bridgeForwardingEnabled() bool {
 func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 	p.bridgeFetching = false
 	if !r.ok {
+		p.bridgeFailures++
 		return
 	}
+	p.bridgeFailures = 0
 	// 先落 feed(App 读的那份,见 lastfmfeed.go)——这一步只要 Last.fm 凭据,跟下面的 LB
 	// 桥接无关。fetchedAt 用发起拉取的时刻 r.now(不是现在):响应体反映的是那一刻的状态。
 	writeLastfmRecentFeed(p.cfg.LastfmUser, r.page, r.now)
