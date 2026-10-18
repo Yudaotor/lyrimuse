@@ -3227,7 +3227,7 @@ struct LyricsManagerView: View {
                 LyricsSearchSheet(
                     artist: target.artist, title: target.title, album: target.album, songKey: key,
                     currentSource: live?.lyricsSource,
-                    // 「当前使用」双判据要的正文指纹,跟另外两个入口(storedLyrics)同一个口径:条目里存着的正文,标了纯音乐也照给。
+                    // 「当前使用」双判据要的正文指纹,跟「搜索歌词…」独立窗口(storedLyrics)同一个口径:条目里存着的正文,标了纯音乐也照给。
                     // 按 key 原样取,不走 lookup:那条会按正在播放的快照、时长变体去认,同名的另一份录音在放时取到的是那一条。
                     currentFingerprint: EnrichCacheReader.storedEntry(forKey: key)
                         .map { ManualPickLock.fingerprint(lyrics: $0.lyrics) }.flatMap { $0.isEmpty ? nil : $0 },

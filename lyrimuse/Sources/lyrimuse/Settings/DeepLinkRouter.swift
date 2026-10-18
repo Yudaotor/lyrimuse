@@ -34,8 +34,9 @@ enum DeepLinkRouter {
         case .lyricsWindow:
             AppActions.shared.openLyricsWindow?()
         case .lyricsWindowSearch:
+            // 跟歌词窗口里点「搜索歌词…」一样开独立的搜索窗口,摆在歌词窗口前面。
             AppActions.shared.openLyricsWindow?()
-            AppActions.shared.requestLyricsWindowSearch()
+            AppActions.shared.openLyricsQuickSearch?()
         case .lyricsSearch:
             AppActions.shared.openLyricsQuickSearch?()
         case let .menuBarPanel(quick):
@@ -72,9 +73,9 @@ enum DeepLinkRouter {
         switch link {
         case .settings: return "settings"
         case .lyricsManager, .lyricsManagerSongVersions, .action(.openLyricsManagerHotkey, _, _): return "lyrics-manager"
-        case .lyricsWindow, .lyricsWindowSearch, .action(.openLyricsWindowHotkey, _, _),
+        case .lyricsWindow, .action(.openLyricsWindowHotkey, _, _),
              .action(.toggleLyricsWindowMiniHotkey, _, _): return "lyrics-window"
-        case .lyricsSearch, .action(.lyricsQuickSearchHotkey, _, _): return "lyrics-quick-search"
+        case .lyricsSearch, .lyricsWindowSearch, .action(.lyricsQuickSearchHotkey, _, _): return "lyrics-quick-search"
         case .onboarding: return "onboarding"
         case .action(.openSettingsHotkey, _, _): return "settings"
         default: return nil

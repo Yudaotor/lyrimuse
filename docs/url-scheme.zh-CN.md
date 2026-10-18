@@ -19,7 +19,7 @@
 | 链接 | 作用 |
 |---|---|
 | `lyrimuse://lyrics-window` | 打开歌词窗口 |
-| `lyrimuse://lyrics-window/search` | 打开歌词窗口，并打开搜索候选歌词的面板 |
+| `lyrimuse://lyrics-window/search` | 打开歌词窗口，并打开「搜索歌词…」窗口（跟 `lyrics-search` 是同一扇） |
 | `lyrimuse://lyrics-manager` | 打开歌词管理 |
 | `lyrimuse://lyrics-search` | 打开「搜索歌词」小窗（搜的是正在放的这首） |
 | `lyrimuse://menubar-panel` | 打开或关闭菜单栏面板 |

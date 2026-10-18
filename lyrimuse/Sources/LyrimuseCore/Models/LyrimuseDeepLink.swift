@@ -10,7 +10,7 @@ import Foundation
 ///                                   详情页正显示的那条;evidence=1 打开就展开概况里的「匹配依据」;compare 打开就选中这一条、显示它跟
 ///                                   当前条目的对照)
 ///     lyrics-window                 歌词窗口
-///     lyrics-window/search          歌词窗口 + 搜索候选歌词面板
+///     lyrics-window/search          歌词窗口 + 「搜索歌词…」窗口(同 lyrics-search 那扇)
 ///     lyrics-search                 「搜索歌词…」小窗(当前这首)
 ///     menubar-panel[?quick=<格子>]   开 / 关菜单栏左键面板,带 quick 时翻到那一格的快捷设置
 ///     menubar-menu                  弹出菜单栏右键菜单(同右键点状态栏图标)

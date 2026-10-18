@@ -1398,16 +1398,15 @@ func runLyricsWindowTests() {
                     && !window.contains("LyricsWindowHintSurface.visible ="), true,
                     "快捷键回声面(契约): 可见性变化报自己那一条、关窗只撤自己那一条")
     }
-    // 「搜索歌词…」的 sheet 内容只收曲目快照(11 章决策 112):内容闭包随歌词窗口的 body 重算,带着闭包参数的话
-    // 歌词窗口每换一句整张面板都跟着重算。
+    // 「搜索歌词…」不挂在歌词窗口上:跟悬浮窗 ⚙ 那几个入口开同一扇独立窗口,尺寸、采纳后的行为只有一份。
     do {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let window = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
                                   encoding: .utf8)) ?? ""
-        expectEqual(sourceHas(window, ".sheet(item: $lyricsSearchContext) { ctx in\n                LyricsWindowSearchSheet(ctx: ctx)\n            }")
-                    && window.contains("private struct LyricsSearchContext: Identifiable, Equatable {")
-                    && sourceHas(window, "private struct LyricsWindowSearchSheet: View, Equatable {\n    let ctx: LyricsSearchContext\n\n    var body: some View {"),
-                    true, "搜索歌词 sheet(契约): 只摆 LyricsWindowSearchSheet(ctx:),它是 Equatable、只存曲目快照")
+        // 「搜索歌词…」开悬浮窗 ⚙ 那几个入口同一扇独立窗口,不在歌词窗口上另挂 sheet(11 章决策 130)。
+        expectEqual(sourceHas(window, "private func openLyricsSearch() {\n        AppActions.shared.openLyricsQuickSearch?()\n    }")
+                    && !window.contains(".sheet(item:") && !window.contains("LyricsSearchSheet("),
+                    true, "搜索歌词(契约): 开「搜索歌词…」独立窗口,歌词窗口不另挂 sheet")
     }
     // ---- HDR 高亮(LyricsWindowHDR,07 章决策 165) ----
     do {

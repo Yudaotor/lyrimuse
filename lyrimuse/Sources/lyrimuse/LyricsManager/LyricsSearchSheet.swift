@@ -7,10 +7,10 @@ import SwiftUI
 // 候选(来源 + 分数 + 是否逐字);右边是选中候选的预览,"采用此候选"把内容交回调用方
 // (调用方负责真正写回缓存,这里只管搜索和展示)。onApply 是可等待的、回报有没有真的落盘:
 // 面板据此挪「当前使用」徽标、给一条回声;`keepsOpenAfterApply` 决定采纳后关窗还是留着
-// (只有悬浮窗 ⚙ 的独立小窗传 true,理由见 apply(_:))。
+// (只有「搜索歌词…」独立小窗传 true,理由见 apply(_:))。
 //
-// 两种宿主:悬浮窗 ⚙ 的独立小窗(`standaloneWindow: true`)标题栏透明、内容铺到最顶上,红绿灯落在
-// 侧栏顶部那一截里,「关闭」交给红灯和 Esc;歌词管理、歌词窗口弹出的是 sheet,没有标题栏,右上角留
+// 两种宿主:「搜索歌词…」独立小窗(`standaloneWindow: true`,悬浮窗 ⚙、菜单栏、歌词窗口都开它)标题栏透明、内容铺到最顶上,
+// 红绿灯落在侧栏顶部那一截里,「关闭」交给红灯和 Esc;歌词管理弹出的是 sheet,没有标题栏,右上角留
 // 「关闭」。版面与取舍见 11 章决策 51。
 //
 // 歌名/歌手/专辑是可编辑字段,默认沿用这首歌本身的元数据,也支持改关键词后重新联网
@@ -25,7 +25,7 @@ struct LyricsSearchSheet: View {
     let originalTitle: String
     let originalAlbum: String
     /// 面板为之打开的那一首的缓存 key(跟宿主写回的是同一条)。正在放的就是这首时,预览标出此刻唱到哪一句、能点时间跳过去。
-    /// 三个入口都得传(contracts 组守卫钉着)。
+    /// 两个入口都得传(contracts 组守卫钉着)。
     let songKey: String
     // 这首歌眼下实际生效的歌词来源(EnrichCacheStore.Summary.lyricsSource,比如"qq")——
     // 默认选中它,而不是"搜索结果里谁先到就选谁":默认选中的
@@ -34,16 +34,15 @@ struct LyricsSearchSheet: View {
     let currentSource: String?
     /// 这首歌当前正文的「只取词」指纹(ManualPickLock.fingerprint),nil = 调用方拿不到正文。
     /// 「当前使用」徽标是来源 + 词双判据(LyricsCandidateDuplicates.isCurrent):同源但
-    /// 正文被手改过的不再标当前;拿不到指纹时退回只比来源。三个入口都得传(contracts 组守卫钉着)。
+    /// 正文被手改过的不再标当前;拿不到指纹时退回只比来源。两个入口都得传(contracts 组守卫钉着)。
     let currentFingerprint: String?
     /// 曲目真实时长(秒),0 表示未知。必须传:打分里时长匹配那一档权重很重,传 0 时整档对所有候选跳过,面板里的排名
     /// 就跟自动选歌词时用的那组分数对不上。候选的源自报曲长也拿它比(`durationLabel`)。
     let durationSecs: Double
-    /// 采纳后面板留着不关。三个入口里只有悬浮窗 ⚙ 的独立小窗传 true:那是边听边换词的入口,留着的话同一批候选还在,
-    /// 点即切,不用关窗重开、再等各个源重搜。歌词管理(编辑器上方的模态,留着会挡住刚回填的编辑器)和歌词窗口的 sheet
-    /// (关了才看得到背后的歌词)采纳后关窗。
+    /// 采纳后面板留着不关。只有「搜索歌词…」独立窗口传 true:那是边听边换词的入口,留着的话同一批候选还在,
+    /// 点即切,不用关窗重开、再等各个源重搜。歌词管理(编辑器上方的模态,留着会挡住刚回填的编辑器)采纳后关窗。
     let keepsOpenAfterApply: Bool
-    /// 宿主是悬浮窗 ⚙ 的独立小窗,不是 sheet:侧栏顶上给红绿灯让出一截、不画「关闭」(红灯和 Esc 都能关)。
+    /// 宿主是「搜索歌词…」独立窗口,不是 sheet:侧栏顶上给红绿灯让出一截、不画「关闭」(红灯和 Esc 都能关)。
     /// 窗口那一侧:场景挂 `.windowStyle(.hiddenTitleBar)`(标题栏透明、内容铺到顶),宿主再挂 EmptyUnifiedToolbar
     /// 把标题栏撑高、红绿灯挪进侧栏的圆角里。
     let standaloneWindow: Bool
@@ -66,11 +65,11 @@ struct LyricsSearchSheet: View {
     let onApply: (LyricsSearchService.Candidate) async -> Bool
     /// 打开面板时这首歌是不是标成了纯音乐(宿主读缓存给的)。
     let isMarkedInstrumental: Bool
-    /// 标 / 撤「纯音乐」:调用方按打开面板时那首歌写回,回报有没有落盘。三个入口都得传(contracts 组守卫钉着)。
+    /// 标 / 撤「纯音乐」:调用方按打开面板时那首歌写回,回报有没有落盘。两个入口都得传(contracts 组守卫钉着)。
     let onSetInstrumental: (Bool) async -> Bool
     /// 「重新自动匹配」:请引擎按设置里的「匹配算法」重挑一轮、等结论(宿主转给 LyricsRematchRunner,跟歌词管理那颗
     /// 按钮同一条路),不经过这里的候选列表。参数是进度回调(回过话的源数 / 一共几个源);返回 nil = 没拿到结论。
-    /// 三个入口都得传(contracts 组守卫钉着)。
+    /// 两个入口都得传(contracts 组守卫钉着)。
     let onAutoMatch: (@escaping (Int, Int) -> Void) async -> LyricsRematch.Line?
 
     /// 正在写回的那条候选的来源(按钮禁用 + 文案变「正在采用…」);nil = 没有在飞的采纳。
@@ -121,7 +120,7 @@ struct LyricsSearchSheet: View {
     @State private var currentPreviewMemo = PreviewRowsMemo()
     @State private var displaySignatures = DisplaySignatureMemo()
     /// 面板所在那扇窗口(sheet 自己也是一扇窗口,跟着宿主窗口一起被挡住、最小化)看不看得见,往下传给预览
-    /// (`previewHostVisible`):看不见时当前句不跟播放走表。三个入口一样,不靠宿主各自去传。
+    /// (`previewHostVisible`):看不见时当前句不跟播放走表。两个入口一样,不靠宿主各自去传。
     @StateObject private var windowSurface = SettingsWindowSurface()
     /// 预览显示原文 / 原文 + 译文 / 原文 + 读音;选中的候选没有那一档时按原文显示,选择本身不改,换到有的候选又回来。
     /// 跟歌词管理详情页记在同一个偏好键,两边改一处另一处跟着变,下次打开照旧。
@@ -535,7 +534,7 @@ struct LyricsSearchSheet: View {
         artist != originalArtist || title != originalTitle || album != originalAlbum
     }
 
-    /// 从歌词管理 / 歌词窗口弹出的 sheet(不是悬浮窗 ⚙ 的独立小窗)。sheet 里的玻璃一直是失焦那一档,侧栏和玻璃
+    /// 从歌词管理弹出的 sheet(不是「搜索歌词…」独立小窗)。sheet 里的玻璃一直是失焦那一档,侧栏和玻璃
     /// 按钮改画设计系统的替身(决策 57)。
     private var presentedAsSheet: Bool { !standaloneWindow }
 
@@ -543,8 +542,7 @@ struct LyricsSearchSheet: View {
     private var markedInstrumental: Bool { instrumentalOverride ?? host.instrumental }
 
     /// 「这次搜索是为哪首歌开的」——三个原始字段拼成的标识,给下面 `.task(id:)` / `.onChange`
-    /// 用。三个入口里,歌词管理(`sheet(isPresented:)`)与歌词窗口(`sheet(item:)`)在面板存活
-    /// 期间它不会变;只有悬浮窗 ⚙ 的独立小窗
+    /// 用。歌词管理的 sheet 在面板存活期间它不会变;「搜索歌词…」独立窗口
     /// (`LyricsQuickSearchWindow`)会在窗口开着期间换歌再点一次时把新曲目喂进来。
     /// 缓存 key 和时长也并进来:小窗在同名同专辑的两份录音(`~durN` 变体)之间换歌时三段字段一样,不并的话不重搜、
     /// 分数按上一首的时长算,采纳也会记到新那首名下。
@@ -567,12 +565,12 @@ struct LyricsSearchSheet: View {
                minHeight: Self.minimumSize.height, idealHeight: Self.defaultSize.height, maxHeight: .infinity)
         .background(WindowSurfaceCapture(surface: windowSurface).frame(width: 0, height: 0))
         .environment(\.previewHostVisible, windowSurface.isVisible)
-        // 从歌词管理 / 歌词窗口弹出的这张是 sheet,AppKit 给 sheet 的默认 styleMask 里没有 .resizable,
+        // 从歌词管理弹出的这张是 sheet,AppKit 给 sheet 的默认 styleMask 里没有 .resizable,
         // 窗口边缘对拖拽完全没反应:这颗探针把标志插回去,同时把最小尺寸写进窗口(同 WindowDragHandle
         // 的路子:垫在背景层拿到底层 NSWindow)。上面的 frame 要带 maxWidth / maxHeight: .infinity,
         // 不然窗口拖大了内容仍停在最小尺寸。
         .background(WindowResizeEnabler(minWidth: Self.minimumSize.width, minHeight: Self.minimumSize.height))
-        // 悬浮窗 ⚙ 的独立小窗是 `if let context { LyricsSearchSheet(...) }`,开着时换歌再点一次会把新 context 喂进来,
+        // 「搜索歌词…」独立窗口是 `if let context { LyricsSearchSheet(...) }`,开着时换歌再点一次会把新 context 喂进来,
         // 而 Optional 从 A 换成 B 是同一个视图身份:@State 不会重取 initialValue,`.task {}` 也不会重跑。换歌时这里把
         // 查询词、采纳记录重置,搜索挂在 `.task(id: searchSubject)` 上;不然面板留着上一首的候选,onApply 却已经捕获
         // 新曲目的 key,采纳会把上一首的歌词写进这一首。
@@ -1461,7 +1459,7 @@ struct LyricsSearchSheet: View {
     }
 
     /// 「重新自动匹配」的整条流程:等宿主跑完一轮(进度经回调写进来)。改写了歌词时 sheet 跟采纳一样关掉(歌词管理
-    /// 的编辑框、歌词窗口的正文都在背后),独立小窗留着、挂结论,「当前使用」随宿主重读挪过去;没改写时都留着、挂结论,
+    /// 的编辑框在背后),独立小窗留着、挂结论,「当前使用」随宿主重读挪过去;没改写时都留着、挂结论,
     /// 用户可以接着自己挑。等待期间换了歌,这一轮的结论不挂。
     private func runAutoMatch() async {
         guard !autoMatching, applyingSource == nil, !settingInstrumental else { return }
@@ -2105,7 +2103,7 @@ struct LyricsSearchSheet: View {
     }
 }
 
-/// 正在放的那首对应的缓存 key(实际命中优先,没有条目退 normalizedKey,跟三个入口算写回 key 同一套),换歌才变。
+/// 正在放的那首对应的缓存 key(实际命中优先,没有条目退 normalizedKey,跟两个入口算写回 key 同一套),换歌才变。
 /// 搜索面板拿它跟自己那首比,决定预览要不要标出此刻唱到哪一句。
 @MainActor
 private final class LyricsSearchNowPlaying: ObservableObject {
@@ -2126,7 +2124,7 @@ private final class LyricsSearchNowPlaying: ObservableObject {
 }
 
 /// 用一个零尺寸的 NSView 拿到所在的 NSWindow 交给 `SettingsWindowSurface`(同 LyricsManagerView 的 LyricsManagerWindowCapture)。
-/// 搜索面板和歌词窗口弹出的搜索小窗用。
+/// 搜索面板和「搜索歌词…」独立小窗用。
 struct WindowSurfaceCapture: NSViewRepresentable {
     let surface: SettingsWindowSurface
 

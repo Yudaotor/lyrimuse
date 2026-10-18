@@ -16,12 +16,10 @@ final class AppActions {
     /// 只开场景那扇完整尺寸的歌词窗口(激活 App),不按形态分流:出迷你时用(07 章决策 133)。别的地方一律走 `openLyricsWindow`。
     var openLyricsWindowScene: (() -> Void)?
     var openOnboarding: (() -> Void)?
-    /// 唤出「搜索歌词…」独立小窗(悬浮窗 ⚙ 快捷菜单用)——**不是**歌词窗口
-    /// 那个 `.sheet(item)`(那个要求歌词窗口先开着,"只弹搜索页面,不用
-    /// 拉起歌词窗口")。这是它自己独立的一扇 `Window(id: "lyrics-quick-search")`(见
-    /// App.swift),`LyricsQuickSearchWindow` 是根内容,自己在 `.task` 里现查一次当前
-    /// 曲目——跟上面三个 open* 同一个理由,在 MenuBarSceneActions.swift 的锚点视图里
-    /// 捕获 `openWindow(id:)` 这个环境 action。
+    /// 唤出「搜索歌词…」独立窗口(悬浮窗 ⚙、菜单栏、快捷键、歌词窗口共用):它自己独立的一扇
+    /// `Window(id: "lyrics-quick-search")`(见 App.swift),不用先开歌词窗口。`LyricsQuickSearchWindow` 是根内容,自己在 `.task`
+    /// 里现查一次当前曲目——跟上面三个 open* 同一个理由,在 MenuBarSceneActions.swift 的锚点视图里捕获 `openWindow(id:)`
+    /// 这个环境 action。
     var openLyricsQuickSearch: (() -> Void)?
 
     /// 「搜索歌词…」小窗**已经开着**(没被真的关掉,只是被别的窗口挡住/切到后台)时的
@@ -40,16 +38,6 @@ final class AppActions {
     /// 只是把它带到前台,靠这一下补上;窗口是新开的,开场由它自己进门时放(同 `quickSearchRefreshRequests` 的做法)。
     /// 授权后把引导带回前台那条路只调 `openOnboarding`,不发这个。见 14 章决策 109。
     let onboardingRestartRequests = PassthroughSubject<Void, Never>()
-
-    /// 歌词窗口里弹「搜索候选歌词」面板的请求(`lyrimuse://lyrics-window/search`)。跟设置那一对同样两条路:信箱管
-    /// 「歌词窗口还没建出来」(LyricsWindowView 的 `.onAppear` 读),subject 管「已经开着」;都走 `requestLyricsWindowSearch()`。
-    var pendingLyricsWindowSearch = false
-    let lyricsWindowSearchRequests = PassthroughSubject<Void, Never>()
-
-    func requestLyricsWindowSearch() {
-        pendingLyricsWindowSearch = true
-        lyricsWindowSearchRequests.send()
-    }
 
     /// 歌词管理里弹「同曲条目」面板(`lyrimuse://lyrics-manager/song-versions[?key=…][&evidence=1][&compare=…]`)。同上两条路:信箱管
     /// 窗口刚建出来(LyricsManagerView 读完缓存、自动定位过正在放的那首之后取),subject 管已经开着。信箱记着请求时刻,只认 60 秒

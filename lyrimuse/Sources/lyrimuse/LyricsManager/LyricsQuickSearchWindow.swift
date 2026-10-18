@@ -1,18 +1,17 @@
 import SwiftUI
 import LyrimuseCore
 
-// 悬浮窗 ⚙ 快捷菜单「搜索歌词…」的独立宿主:只弹出搜索歌词面板,不把歌词窗口也拉起来。所以不复用 LyricsWindowView 那条
-// `.sheet(item:)`(那条要先有一扇开着的歌词窗口),而是单独一扇 `Window(id: "lyrics-quick-search")`(见 App.swift),
-// `LyricsSearchSheet` 直接是它的根内容。面板里「关闭」走的 `@Environment(\.dismiss)` 在场景根内容上就是关掉这扇窗口。
+// 「搜索歌词…」的独立窗口:悬浮窗 ⚙、菜单栏、快捷键、歌词窗口里的「搜索歌词…」都开这一扇(`Window(id: "lyrics-quick-search")`,
+// 见 App.swift),窗口大小由系统记着,`LyricsSearchSheet` 直接是它的根内容。面板里「关闭」走的 `@Environment(\.dismiss)` 在场景
+// 根内容上就是关掉这扇窗口。歌词窗口别另挂一张 sheet:两个宿主的尺寸和采纳后的行为会各走各的(见 11 章决策 130)。
 //
-// 这扇窗口**采纳后不关**(`keepsOpenAfterApply: true`,三个入口里只有它这么传):它是"边听边换词"的入口,同一批候选
-// 留在原地,点即切,「当前使用」徽标跟着挪,标题栏给一条"已采用 X 的歌词"的回声。另外两个入口(歌词管理的编辑器模态、
-// 歌词窗口的 sheet)采纳后关窗:前者留着会挡住刚回填的编辑器,后者关了才看得到背后的歌词。引擎重启每次采纳照旧排一次
-// (`scheduleEngineRestart` 已合并:在飞最多一个、补一次),不延后到关窗:引擎内存里还留着旧条目,它下一次落盘会把 App
-// 刚写的盖回去。
+// 这扇窗口**采纳后不关**(`keepsOpenAfterApply: true`,两个入口里只有它这么传):它是"边听边换词"的入口,同一批候选
+// 留在原地,点即切,「当前使用」徽标跟着挪,标题栏给一条"已采用 X 的歌词"的回声。歌词管理的编辑器模态采纳后关窗:留着会挡住
+// 刚回填的编辑器。引擎重启每次采纳照旧排一次(`scheduleEngineRestart` 已合并:在飞最多一个、补一次),不延后到关窗:引擎内存里
+// 还留着旧条目,它下一次落盘会把 App 刚写的盖回去。
 //
-// 曲目快照跟 `LyricsWindowView.openLyricsSearch()` 同一套算法(resolvedKey 精确→宽松两级,缺条目退 normalizedKey),没有抽成
-// 共用类型:那边"sheet(item:) 的身份即快照、弹窗期间换歌不串",这边窗口开着期间不跟着换歌,两处生命周期不一样。
+// 曲目快照:写回 key 用缓存里实际命中的那条(`resolvedKey`,精确→宽松两级),播放器报法与缓存写法有空格 / 繁简出入时,写回
+// 必须落在读取路径同一条上;缓存里还没有条目(引擎未解析)就退回 normalizedKey 新建。窗口开着期间不跟着换歌。
 //
 // 每次点「搜索歌词…」都按正在放的那首现查一次:窗口还没建出来时由 `.task` 查;已经开着(只是在后台 / 被挡住)时再点,
 // `Window(id:)` 只是把已有的视图带到前台、`.task` 不会重跑,由 `.onReceive(AppActions.quickSearchRefreshRequests)` 重查。
@@ -76,7 +75,7 @@ struct LyricsQuickSearchWindow: View {
                         // 歌词窗口两处保持一致——喂没有时间戳的纯文本直接当 LRC 进 saveEdit,
                         // 后果正是 savePlainTextEdit 头注写的:这首歌在别的展示面上从"至少有
                         // 静态文字"退化成"看起来完全没有歌词"。selftest contracts 组的「采纳候选
-                        // 入口」守卫钉住三处同进同出,防止漏改其中一处。
+                        // 入口」守卫钉住两处同进同出,防止漏改其中一处。
                         saved = await EnrichCacheStore.shared.savePlainTextEdit(
                             key: context.key, plainLyrics: candidate.lyrics, source: candidate.source)
                     } else {
@@ -87,7 +86,7 @@ struct LyricsQuickSearchWindow: View {
                         //
                         // sourceChoice 恒传空串(= 显式清掉):关态不留任何源约束,开态靠
                         // manual_lyrics 就够了。完整理由见 LyricsManagerView.swift 那个
-                        // 调用点的注释,三处必须同进同出。
+                        // 调用点的注释,两处必须同进同出。
                         saved = await EnrichCacheStore.shared.saveEdit(
                             key: context.key,
                             lyrics: candidate.lyrics, tr: candidate.lyricsTr,
@@ -171,8 +170,8 @@ struct LyricsQuickSearchWindow: View {
         let cached = EnrichCacheReader.lookup(artist: artist, title: title, album: album)
         let lyrics = cached?.storedLyrics ?? ""
         let fingerprint = lyrics.isEmpty ? nil : ManualPickLock.fingerprint(lyrics: lyrics)
-        // title 传归一化后的,理由跟 LyricsWindowView.openLyricsSearch 同一处注释——两处
-        // 曲目快照算法本来就是"同一套"(见本文件头注),这条也要保持一致。
+        // title 传归一化后的(EnrichCacheKeys.normalizedTitle),不是原始播放器标题:引擎算缓存 key 时会把标题结尾那种非版本标记的
+        // 括号剥掉,传原始标题的话手动搜索跟自动解析一样各个源都搜不到。key / source 两个查找仍然传原始 title,它们各自内部会归一化。
         context = Context(
             artist: artist, title: EnrichCacheKeys.normalizedTitle(title),
             album: LocalPlaybackSource.albumOrListed(album: album, youtubeMusicAlbum: LocalPlaybackSource.shared.youtubeMusicAlbum),

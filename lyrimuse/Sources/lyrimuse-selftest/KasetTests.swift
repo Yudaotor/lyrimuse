@@ -728,11 +728,9 @@ func runKasetTests() {
         expectEqual(client.contains("if let id = raw.videoID, !id.isEmpty, first?.videoID != id {")
                         && client.contains("first = queuedFirstReport(videoID: id) ?? first"), true,
                     "Kaset 契约: 新歌第一拍按队列补开播那份")
-        expectEqual(src("lyrimuse/UI/LyricsWindowView.swift").contains(
-            "album: LocalPlaybackSource.albumOrListed(album: album, youtubeMusicAlbum: listedAlbum),")
-                        && src("lyrimuse/LyricsManager/LyricsQuickSearchWindow.swift").contains(
+        expectEqual(src("lyrimuse/LyricsManager/LyricsQuickSearchWindow.swift").contains(
             "album: LocalPlaybackSource.albumOrListed(album: album, youtubeMusicAlbum: LocalPlaybackSource.shared.youtubeMusicAlbum),"),
-                    true, "Kaset 契约: 两个搜歌词入口没报专辑时预填登记的专辑")
+                    true, "Kaset 契约: 「搜索歌词…」窗口搜正在放的那首、没报专辑时预填登记的专辑")
         let store = src("lyrimuse/LyricsManager/EnrichCacheStore.swift")
         expectEqual(store.contains(#"youtubeMusicAlbum: (entry["youtube_music_album"] as? String)?.trimmingCharacters(in: .whitespaces) ?? "")"#)
                         && store.contains("normAlbum: toSimplified(displayAlbum).lowercased(),")

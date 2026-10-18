@@ -19,7 +19,7 @@ The common ones can be copied from **Deep Links** at the bottom of Settings › 
 | Link | What it does |
 |---|---|
 | `lyrimuse://lyrics-window` | Opens the lyrics window |
-| `lyrimuse://lyrics-window/search` | Opens the lyrics window with the lyrics candidate search panel |
+| `lyrimuse://lyrics-window/search` | Opens the lyrics window and the Search Lyrics window (the same one as `lyrics-search`) |
 | `lyrimuse://lyrics-manager` | Opens the Lyrics Manager |
 | `lyrimuse://lyrics-search` | Opens the Search Lyrics window for the current song |
 | `lyrimuse://menubar-panel` | Opens or closes the menu bar panel |

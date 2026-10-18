@@ -1616,9 +1616,6 @@ struct LyricsWindowView: View {
     @State private var scrollPendingWhileHidden = false
     /// 简介面板里的歌词来源(EnrichCacheReader 异步查,面板打开时取一次)。
     @State private var infoLyricsSource: String?
-    /// 「搜索歌词…」的上下文:菜单点击瞬间把 曲目字段+写回 key+当前来源
-    /// 一次性快照下来 —— sheet 打开期间歌可能换,搜索和写回都要钉在点击那一刻的曲目上。
-    @State private var lyricsSearchContext: LyricsSearchContext?
     /// 「…」菜单里直接执行的那几行(资料库、减少推荐、平台页、在播放器中显示)的状态与动作,跟网页歌词副屏共用一份实现。
     @StateObject private var moreMenu = LyricsMoreMenuModel()
     /// 「显示简介」面板「网页」那一行用的各平台链接,面板打开时读一次。
@@ -1711,9 +1708,6 @@ struct LyricsWindowView: View {
             if previewMode { windowController.setPreviewHostVisible(visible) }
         }
         .onDisappear { if !previewMode, !hostsMiniPanel { AuxiliaryWindowActivation.windowDidDisappear("lyrics-window") } }
-        // lyrimuse://lyrics-window/search:窗口刚建出来读信箱,已经开着收 subject(见 AppActions.requestLyricsWindowSearch)。
-        .onAppear { consumeLyricsWindowSearchRequest() }
-        .onReceive(AppActions.shared.lyricsWindowSearchRequests) { consumeLyricsWindowSearchRequest() }
         // 专辑简介:这扇窗开着时每次换歌预取,入口才能按「有没有简介」决定可不可点。预览不登记。
         .onAppear { if !previewMode { EditorialNotesStore.shared.retain() } }
         .onDisappear { if !previewMode { EditorialNotesStore.shared.release() } }
@@ -3067,12 +3061,6 @@ struct LyricsWindowView: View {
                 }
                 .onChange(of: chromePanelsOpen) { _, open in windowController.chromeFade.setPanelsOpen(open) }
             }
-            // 「搜索歌词…」:歌词管理的联网搜索面板独立调起(它自包含,写回 key 由这里
-            // 持有,见 LyricsSearchContext)。用 sheet(item:) 而不是 isPresented:上下文
-            // 快照即身份,换歌后再开是新的一份。
-            .sheet(item: $lyricsSearchContext) { ctx in
-                LyricsWindowSearchSheet(ctx: ctx)
-            }
         }
     }
 
@@ -3950,52 +3938,10 @@ struct LyricsWindowView: View {
         infoPlatformLinks = EnrichCacheReader.platformLinks(artist: artist, title: title, album: album)
     }
 
-    /// 「搜索歌词…」:点击瞬间快照曲目字段、后台解析 写回 key + 当前来源,齐了再弹面板。
-    /// key 用缓存里**实际命中**的那条(EnrichCacheReader.resolvedKey,含宽松匹配)——
-    /// 播放器报法与缓存写法有空格/繁简出入时,写回必须落在读取路径同一条上;缓存里还
-    /// 没有条目(引擎未解析)就退回 normalizedKey 新建。
-    ///
-    /// 直接读 PlaybackCoordinator.shared,不经本窗口的 WindowPlayback 代理(那份代理对
-    /// title/artist/album/currentDurationMs 各开一条独立的 Combine 订阅转发,见
-    /// WindowPlayback.init)——只隔一层转发更直接,跟 LyricsManagerView.refreshPlaceholder
-    /// 已有的写法一致。
-    /// `lyrimuse://lyrics-window/search` 的落点:跟点「搜索歌词…」一样弹面板。预览不接;迷你尺寸、没在播放时只清掉信箱:
-    /// 面板的 `.sheet` 只挂在完整版面上,迷你时设了上下文,面板会等切回完整尺寸才突然弹出来。
-    private func consumeLyricsWindowSearchRequest() {
-        guard !previewMode, AppActions.shared.pendingLyricsWindowSearch else { return }
-        AppActions.shared.pendingLyricsWindowSearch = false
-        guard !showsMiniLayout, !playback.title.isEmpty else { return }
-        openLyricsSearch()
-    }
-
+    /// 「搜索歌词…」:开悬浮窗 ⚙、菜单栏那几个入口同一扇「搜索歌词…」窗口(`LyricsQuickSearchWindow`),曲目快照由它按正在放的
+    /// 那首取。别在歌词窗口上另挂 sheet:两个宿主的尺寸和采纳后的行为会各走各的(见 11 章决策 130)。
     private func openLyricsSearch() {
-        let p = PlaybackCoordinator.shared
-        let artist = p.artist, title = p.title, album = p.album
-        let listedAlbum = LocalPlaybackSource.shared.youtubeMusicAlbum
-        let durationSecs = Double(p.currentDurationMs ?? 0) / 1000
-        // 三次缓存读取在主线程做(EnrichCacheReader 只许在主线程用,缓存已加载时 µs 级),
-        // 只有正文指纹(SHA-256)放后台。
-        let key = EnrichCacheReader.resolvedKey(artist: artist, title: title, album: album)
-            ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        let source = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
-        // 「当前使用」双判据要的正文指纹,取条目里存着的那份(标了纯音乐时 lyrics 是空的)。
-        let cached = EnrichCacheReader.lookup(artist: artist, title: title, album: album)
-        let lyrics = cached?.storedLyrics ?? ""
-        let instrumental = cached?.instrumental ?? false
-        Task.detached(priority: .userInitiated) {
-            let fingerprint = lyrics.isEmpty ? nil : ManualPickLock.fingerprint(lyrics: lyrics)
-            await MainActor.run {
-                // title 传归一化后的(EnrichCacheKeys.normalizedTitle),不是原始播放器标题:引擎
-                // 算缓存 key 时会把标题结尾那种非版本标记的括号剥掉(林潔心《想逃避(22)》→「想逃避」),
-                // 这里传原始标题的话,手动搜索会重蹈自动解析"八个源全搜不到"的覆辙。
-                // key/source 两个查找仍然传原始 title——它们各自内部会归一化,契约不变。
-                lyricsSearchContext = LyricsSearchContext(
-                    artist: artist, title: EnrichCacheKeys.normalizedTitle(title),
-                    album: LocalPlaybackSource.albumOrListed(album: album, youtubeMusicAlbum: listedAlbum),
-                    key: key, currentSource: source, currentFingerprint: fingerprint, durationSecs: durationSecs,
-                    isInstrumental: instrumental)
-            }
-        }
+        AppActions.shared.openLyricsQuickSearch?()
     }
 
     /// 「歌词时间轴」内联行:标签 + 当前值(只显示**这首歌**的微调,不含全局基准 ——
@@ -5001,7 +4947,7 @@ struct LyricsWindowView: View {
                 Text(spec.text).font(.system(size: 16, weight: .semibold))
                 // 「搜索歌词…」:此前这个入口只藏在「⋯」菜单里,看到「暂无歌词」的人
                 // 得先知道那里有。样式跟本窗口别的浮层控件一样是白色玻璃胶囊(clearGlassCapsule),
-                // 动作跟「⋯」菜单那一项同一条 openLyricsSearch(),弹同一个面板、不另开小窗。
+                // 动作跟「⋯」菜单那一项同一条 openLyricsSearch()。
                 if spec.offersSearch {
                     Button {
                         openLyricsSearch()
@@ -7130,77 +7076,6 @@ private struct OffsetNudgeButton: View {
         .onHover { hovered = $0 }
         .help(help)
         .accessibilityLabel(help)
-    }
-}
-
-/// 「搜索歌词…」的曲目快照(sheet(item:) 的身份即快照,见声明处注释)。
-private struct LyricsSearchContext: Identifiable, Equatable {
-    let artist: String
-    let title: String
-    let album: String
-    /// 写回用的缓存条目 key(实际命中优先,新建退 normalizedKey)。
-    let key: String
-    let currentSource: String?
-    /// 当前正文的只取词指纹(「当前使用」双判据);没有正文时 nil。
-    let currentFingerprint: String?
-    let durationSecs: Double
-    /// 这首眼下是不是标成了纯音乐(搜索面板里纯音乐按钮和说明条的初值)。
-    let isInstrumental: Bool
-
-    var id: String { key }
-}
-
-/// 「搜索歌词…」面板的 sheet 内容。sheet 的内容跟着歌词窗口的 body 一起重算,而歌词窗口每换一句都要重算好几次:
-/// 这里只收曲目快照(Equatable),几个回调在 body 里现建,快照没变就整张跳过。别给它加闭包或别的每次都会变的参数,
-/// 不然换句时整张面板连同预览跟着重算,预览的滚动和逐字染色卡顿。见 11 章决策 112。
-private struct LyricsWindowSearchSheet: View, Equatable {
-    let ctx: LyricsSearchContext
-
-    var body: some View {
-        LyricsSearchSheet(
-            artist: ctx.artist, title: ctx.title, album: ctx.album, songKey: ctx.key,
-            currentSource: ctx.currentSource, currentFingerprint: ctx.currentFingerprint,
-            durationSecs: ctx.durationSecs,
-            isMarkedInstrumental: ctx.isInstrumental,
-            onSetInstrumental: { value in await EnrichCacheStore.shared.setInstrumental(key: ctx.key, value) },
-            onAutoMatch: { progress in
-                // 跟歌词管理「重新自动匹配」同一条路;换了词让播放侧立刻重载(面板随后关掉,同采纳)。
-                let line = await LyricsRematchRunner.run(key: ctx.key, onProgress: progress)
-                if let line, LyricsRematchRunner.rewroteLyrics(line) {
-                    PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
-                }
-                return line
-            }
-        ) { candidate in
-            // 保存前不用先把整份缓存读进 store:写入由引擎执行(EnrichEditChannel),不经 store 的内存副本。
-            // 仅纯文本的候选走独立的存法(见 savePlainTextEdit 头注)——不能
-            // 跟带时间戳的候选共用 saveEdit,那会把纯文本当成一份"没有任何一行
-            // 能同步显示"的坏 LRC 写进 lyrics,反而让这首歌在别的展示面上从
-            // "至少有静态文字"退化成"看起来完全没有歌词"。
-            let saved: Bool
-            if candidate.isPlainTextOnly {
-                saved = await EnrichCacheStore.shared.savePlainTextEdit(
-                    key: ctx.key, plainLyrics: candidate.lyrics, source: candidate.source)
-            } else {
-                // 必须显式传 markManual / sourceChoice:落进 saveEdit 的默认值 markManual: true
-                // 的话,「歌词窗口」里搜一次、采纳一次就把这首歌**永久冻结**了,以后打分改进/该源
-                // 补出逐字都再也不会被采纳,而用户只是想换份词。
-                //
-                // 这是「采纳候选」的第三个入口(另外两个:歌词管理、悬浮窗 ⚙ 的「搜索歌词…」小窗)。
-                // 三处必须同进同出 —— 改任何一处之前先 grep `LyricsSearchSheet(` 数清楚有几个。
-                saved = await EnrichCacheStore.shared.saveEdit(
-                    key: ctx.key,
-                    lyrics: candidate.lyrics, tr: candidate.lyricsTr,
-                    roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
-                    source: candidate.source,
-                    markManual: AppSettings.shared.manualPickLocksLyrics,
-                    sourceChoice: "", fromManualPick: true, bg: candidate.lyricsBG, trLang: candidate.lyricsTrLang)
-            }
-            // 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
-            PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
-            // 回报落盘成败:面板等它决定关窗/挪徽标(onApply 可等待,不用自己套 Task)。
-            return saved
-        }
     }
 }
 
