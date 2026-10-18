@@ -1672,6 +1672,11 @@ func runLyricsManagerTests() {
                     && decisionSheet.contains("(version, decision.scoringRevision ?? 0) < (current.scoringVersion, current.scoringRevision)")
                     && !decisionSheet.contains("currentLyricsScoringVersion"), true,
                     "旧版评分规则: 按引擎发布的打分版本号与修订号判,不写死")
+        // 没存过位置时按 defaultWindowSize 开窗:场景要挂 .defaultSize,只写根视图的 idealWidth 会按最小尺寸开(11 章决策 129)。
+        expectEqual(sourceHas(appSource("App.swift"), "LyricsManagerView() } .defaultSize(LyricsManagerView.defaultWindowSize)")
+                    && sourceHas(managerView, "idealWidth: Self.defaultWindowSize.width")
+                    && sourceHas(managerView, "idealHeight: Self.defaultWindowSize.height"), true,
+                    "窗口尺寸: 首次打开按默认尺寸,不是最小尺寸")
 
         // 请求动词。引擎侧 parseLyricsFillRequest 认的是这一个词,写错一个字母就会被
         // 当成一个不存在的缓存 key、空跑一轮,而且**不报错**。

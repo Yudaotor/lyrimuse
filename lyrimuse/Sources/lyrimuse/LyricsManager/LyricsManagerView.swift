@@ -2269,8 +2269,8 @@ struct LyricsManagerView: View {
         // 标题栏透明、内容铺到顶(场景挂 .windowStyle(.hiddenTitleBar)),红绿灯落在侧栏左上角。
         .ignoresSafeArea()
         .background(Color(nsColor: .textBackgroundColor))
-        .frame(minWidth: Self.minimumWindowSize.width, idealWidth: 1360,
-               minHeight: Self.minimumWindowSize.height, idealHeight: 820)
+        .frame(minWidth: Self.minimumWindowSize.width, idealWidth: Self.defaultWindowSize.width,
+               minHeight: Self.minimumWindowSize.height, idealHeight: Self.defaultWindowSize.height)
         // 窗口标题跟着界面语言走:App.swift 里 Window 的标题只在构造场景时求值一次,body 随 languageSettings 重算时这里
         // 每次重新应用(同欢迎页)。标题栏藏着,标题出现在 Dock 右键的窗口列表、调度中心和辅助功能里。
         .navigationTitle(L10n.t("歌词管理"))
@@ -2411,6 +2411,9 @@ struct LyricsManagerView: View {
 
     /// 窗口最小尺寸:侧栏最窄 440、右边至少 480,加上侧栏外边距。
     private static let minimumWindowSize = CGSize(width: 940, height: 620)
+    /// 没存过位置时开出来的尺寸。场景上的 `.defaultSize` 和根视图的 idealWidth / idealHeight 都用它:
+    /// 只写 ideal 的话窗口按最小尺寸开出来(见 11 章决策 129)。
+    static let defaultWindowSize = CGSize(width: 1360, height: 820)
 
     /// 不画出来的几颗按钮,只为接窗口级快捷键:⌘F 聚焦搜索、⌘⌫ 删除选中、⌘E 编辑歌词。
     private var shortcutButtons: some View {

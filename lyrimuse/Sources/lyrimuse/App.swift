@@ -39,6 +39,7 @@ struct LyrimuseApp: App {
         Window(L10n.t("歌词管理"), id: "lyrics-manager") {
             LyricsManagerView()
         }
+        .defaultSize(LyricsManagerView.defaultWindowSize)
         // 标题栏透明、内容铺到顶:红绿灯落在歌词管理的浮动侧栏里。别改成在 NSWindow 上手设,理由见
         // SheetWindowAffordances.swift 的 EmptyUnifiedToolbar。
         .windowStyle(.hiddenTitleBar)
