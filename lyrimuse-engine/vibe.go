@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -46,6 +47,9 @@ const (
 	vibeMaxCandidatesToFetch = 3
 	// vibeScoreDurationTolerance 跟别的源的时长闸(match.go 的 0.25)取同一个值。
 	vibeScoreDurationTolerance = 0.25
+	// vibeMaxDurationDiffSecs:两边时长都知道时差多少秒就不是同一版。VIBE 的 playTime 精确到秒,同一版跟播放器报的差
+	// 不过一两秒;差十几秒的是另一个剪辑(Remix、节目现场版),时间轴整体错开(09 章决策 283)。
+	vibeMaxDurationDiffSecs = 8.0
 	// vibeTranslationLang:VIBE 只给韩文译文。
 	vibeTranslationLang = "ko"
 )
@@ -89,7 +93,9 @@ type vibeSearchItem struct {
 	PlayTime     string       `json:"playTime"` // "mm:ss",不知道时是 "00:00"
 	HasLyric     bool         `json:"hasLyric"`
 	HasSyncLyric bool         `json:"hasSyncLyric"`
-	Album        struct {
+	// IsAdult:19 禁曲目,取词要成人认证(不登录回 403 NO_PERMISSON),拿不到。
+	IsAdult bool `json:"isAdult"`
+	Album   struct {
 		Title    string `json:"albumTitle"`
 		ImageURL string `json:"imageUrl"`
 	} `json:"album"`
@@ -149,6 +155,31 @@ func vibeFetchLyric(ctx context.Context, trackID int64) (vibeLyricBody, error) {
 	return out.Response.Result.Lyric, err
 }
 
+// vibeStatusError:VIBE 回了非 200。取词的 403(19 禁要成人认证)、404(没有这首的词)是答了「没有」,不算没问成。
+type vibeStatusError int
+
+func (e vibeStatusError) Error() string { return fmt.Sprintf("status %d", int(e)) }
+
+func vibeAnsweredNone(err error) bool {
+	var se vibeStatusError
+	return errors.As(err, &se) && (se == http.StatusForbidden || se == http.StatusNotFound)
+}
+
+// vibeFeatSegmentRe / vibeFeatTailRe:歌名里的合作者段(括号里带 feat / ft / with / prod 的,以及末尾不带括号的 feat. …)。
+var (
+	vibeFeatSegmentRe = regexp.MustCompile(`(?i)\s*[(\[（【][^()\[\]（）【】]*\b(?:feat|ft|featuring|with|prod)\b[^()\[\]（）【】]*[)\]）】]`)
+	vibeFeatTailRe    = regexp.MustCompile(`(?i)\s+(?:feat|ft|featuring)\b.*$`)
+)
+
+// vibeQueryText 把歌名 / 歌手整理成 VIBE 搜得动的检索词。VIBE 的搜索碰到这几样就一条都不回:「feat」这个词(带不带括号都一样)、
+// 撇号(「I Don't Love You」0 条、「I Dont Love You」5 条)、「&」(换成空格才有);括号本身不碍事。纯函数,便于单测。
+func vibeQueryText(s string) string {
+	s = vibeFeatSegmentRe.ReplaceAllString(s, "")
+	s = vibeFeatTailRe.ReplaceAllString(s, "")
+	s = strings.NewReplacer("'", "", "’", "", "‘", "", "`", "", "&", " ", "＆", " ").Replace(s)
+	return strings.Join(strings.Fields(s), " ")
+}
+
 func vibeGetJSON(ctx context.Context, u string, out any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -162,7 +193,7 @@ func vibeGetJSON(ctx context.Context, u string, out any) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("status %d", resp.StatusCode)
+		return vibeStatusError(resp.StatusCode)
 	}
 	return json.NewDecoder(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes)).Decode(out)
 }
@@ -280,7 +311,7 @@ func containsHangul(s string) bool {
 // vibeCandidateScore 给一条搜索结果打分,越高越像本地这首;负数 = 淘汰。身份判定用跟别的源一致的函数,
 // 歌手对不上时退到三角验证(lyricRecordingTriangleMatchesGuarded)。纯函数,便于单测。
 func vibeCandidateScore(item vibeSearchItem, artist, title, album string, durationSecs float64) int {
-	if !item.HasLyric && !item.HasSyncLyric {
+	if item.IsAdult || (!item.HasLyric && !item.HasSyncLyric) {
 		return -1
 	}
 	name := vibeSongTitle(item.Title)
@@ -301,7 +332,7 @@ func vibeCandidateScore(item vibeSearchItem, artist, title, album string, durati
 	}
 	if durationSecs > 0 && d > 0 {
 		diff := math.Abs(d-durationSecs) / durationSecs
-		if diff > vibeScoreDurationTolerance {
+		if diff > vibeScoreDurationTolerance || math.Abs(d-durationSecs) > vibeMaxDurationDiffSecs {
 			return -1
 		}
 		score += int((1 - diff) * 50)
@@ -309,16 +340,21 @@ func vibeCandidateScore(item vibeSearchItem, artist, title, album string, durati
 	return score
 }
 
-// resolveVibeLyric:先按「歌名 歌手」搜,一条都没过闸再只按歌名搜一次(歌手在 VIBE 上常是另一种写法,写进检索词
-// 反而搜不到);过闸的按分数取前几条并发拉歌词,按名次挑第一份带同步时间轴的。全都只有纯文本时交名次最高的那份。
+// resolveVibeLyric:先按「歌名 第一位歌手」搜(都过一遍 vibeQueryText),一条都没过闸再只按歌名搜一次(歌手在 VIBE 上常是另一种写法,
+// 写进检索词反而搜不到),还没有且歌名被清理过时再按原样的歌名搜一次;过闸的按分数取前几条并发拉歌词,按名次挑第一份带同步时间轴的。全都只有纯文本时交名次最高的那份。
 func resolveVibeLyric(ctx context.Context, artist, title, album string, durationSecs float64) vibeResult {
 	type scoredItem struct {
 		item  vibeSearchItem
 		score int
 	}
-	qTitle := lyricQueryTitle(title)
+	qTitle := vibeQueryText(lyricQueryTitle(title))
+	queries := []string{strings.TrimSpace(qTitle + " " + vibeQueryText(firstCreditedArtist(artist))), qTitle}
+	// 合作者写法跟 VIBE 一致时,带着 feat 段反而搜得到(歌名跟专辑同名时,只按歌名搜,前 10 条全是这张专辑的别的歌)。
+	if raw := strings.TrimSpace(lyricQueryTitle(title)); raw != qTitle && raw != "" {
+		queries = append(queries, raw)
+	}
 	var candidates []scoredItem
-	for _, q := range []string{strings.TrimSpace(qTitle + " " + artist), qTitle} {
+	for qi, q := range queries {
 		items, err := vibeSearch(ctx, q)
 		if err != nil {
 			return vibeResult{}
@@ -331,7 +367,7 @@ func resolveVibeLyric(ctx context.Context, artist, title, album string, duration
 				candidates = append(candidates, scoredItem{it, s})
 			}
 		}
-		if len(candidates) > 0 || q == qTitle {
+		if len(candidates) > 0 || qi == len(queries)-1 {
 			break
 		}
 	}
@@ -352,7 +388,7 @@ func resolveVibeLyric(ctx context.Context, artist, title, album string, duration
 			defer wg.Done()
 			body, err := vibeFetchLyric(ctx, id)
 			if err != nil {
-				failed[rank] = true
+				failed[rank] = !vibeAnsweredNone(err)
 				return
 			}
 			bodies[rank] = &body

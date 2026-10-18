@@ -226,3 +226,104 @@ func TestRankLyricSourceResultsVibe(t *testing.T) {
 		t.Errorf("只有纯文本的交 plainOnly、分数恒 -1: plain=%v score=%d", c.PlainTextOnly, c.Score)
 	}
 }
+
+func TestVibeQueryText(t *testing.T) {
+	for in, want := range map[string]string{
+		"LOVE (feat. BUMKEY & Paloalto)":            "LOVE",
+		"Mine Tonight (Feat. JINBO the SuperFreak)": "Mine Tonight",
+		"attention (with Justin Bieber)":            "attention",
+		"Stay With Me feat. Nicki Minaj":            "Stay With Me",
+		"I Don't Love You":                          "I Dont Love You",
+		"KUNICHI’S CALL":                            "KUNICHIS CALL",
+		"Me & You":                                  "Me You",
+		"주문(MIROTIC)":                               "주문(MIROTIC)",
+		"MOONLIGHT SUNRISE (Jonas Blue Remix)":      "MOONLIGHT SUNRISE (Jonas Blue Remix)",
+		"Without You":                               "Without You",
+		"반타01 & MPT":                                "반타01 MPT",
+	} {
+		if got := vibeQueryText(in); got != want {
+			t.Errorf("vibeQueryText(%q) = %q,期望 %q", in, got, want)
+		}
+	}
+}
+
+func TestVibeCandidateScoreAdultAndAbsoluteDuration(t *testing.T) {
+	it := vibeItem("가끔 난 날 안 믿어", "씨잼", "킁", "03:20")
+	if vibeCandidateScore(it, "씨잼", "가끔 난 날 안 믿어", "", 200) < 0 {
+		t.Fatal("普通曲目应过闸")
+	}
+	it.IsAdult = true
+	if vibeCandidateScore(it, "씨잼", "가끔 난 날 안 믿어", "", 200) >= 0 {
+		t.Error("19 禁曲目取不到词,不该选")
+	}
+	// 211 秒对 228 秒:比例只差 7%,但差了 17 秒,是另一版
+	if vibeCandidateScore(vibeItem("Heaven", "에일리(Ailee)", "Heaven", "03:31"), "Ailee", "Heaven", "", 228) >= 0 {
+		t.Error("时长差超过 8 秒应淘汰")
+	}
+	if vibeCandidateScore(vibeItem("Heaven", "에일리(Ailee)", "Heaven", "03:31"), "Ailee", "Heaven", "", 218) < 0 {
+		t.Error("差 7 秒仍在容差里")
+	}
+}
+
+func TestResolveVibeLyricQueryCleanupAndForbidden(t *testing.T) {
+	const search = `{"response":{"result":{"tracks":[` +
+		`{"trackId":21,"trackTitle":"Love (Feat. Bumkey, Paloalto)","artists":[{"artistName":"프라이머리"}],"album":{"albumTitle":"LP"},"playTime":"04:22","hasLyric":true,"hasSyncLyric":true},` +
+		`{"trackId":22,"trackTitle":"Love (Feat. Bumkey, Paloalto)","artists":[{"artistName":"프라이머리"}],"album":{"albumTitle":"Part 3"},"playTime":"04:21","hasLyric":true,"hasSyncLyric":true}]}}}`
+	for _, c := range []struct {
+		name         string
+		status       int
+		wantComplete bool
+	}{
+		{"第一名 403(19 禁)", http.StatusForbidden, true},
+		{"第一名 404", http.StatusNotFound, true},
+		{"第一名 502", http.StatusBadGateway, false},
+	} {
+		var queries []string
+		withKugouFakeReq(t, func(r *http.Request, target string) (int, string) {
+			switch {
+			case strings.HasSuffix(target, "/v4/search/track"):
+				queries = append(queries, r.URL.Query().Get("query"))
+				return http.StatusOK, search
+			case strings.HasSuffix(target, "/vibe/v4/lyric/21"):
+				return c.status, `{"response":{"message":{"apiStatusCode":"NO_PERMISSON"}}}`
+			case strings.HasSuffix(target, "/vibe/v4/lyric/22"):
+				return http.StatusOK, vibeTestSync
+			}
+			return http.StatusNotFound, ""
+		})
+		ctx, sub := withLyricSubFetch(qqRoundCtx())
+		r := resolveVibeLyric(ctx, "프라이머리 & 다이나믹 듀오", "LOVE (feat. BUMKEY & Paloalto)", "LP", 262)
+		if len(queries) == 0 || queries[0] != "LOVE 프라이머리" {
+			t.Errorf("%s: 检索词去掉 feat 段、只带第一位歌手: %v", c.name, queries)
+		}
+		if r.album != "Part 3" {
+			t.Errorf("%s: 第一名取不到时退到第二名: %+v", c.name, r)
+		}
+		if got := sub.complete(ctx); got != c.wantComplete {
+			t.Errorf("%s: complete = %v,期望 %v(403 / 404 是答了没有)", c.name, got, c.wantComplete)
+		}
+	}
+}
+
+// 清理过的两次都没过闸、原歌名被改过时,再按原样的歌名搜一次(歌名跟专辑同名、合作者写法跟 VIBE 一致的那种)。
+func TestResolveVibeLyricFallsBackToRawTitle(t *testing.T) {
+	var queries []string
+	withKugouFakeReq(t, func(r *http.Request, target string) (int, string) {
+		switch {
+		case strings.HasSuffix(target, "/v4/search/track"):
+			q := r.URL.Query().Get("query")
+			queries = append(queries, q)
+			if q == "evermore (feat. Bon Iver)" {
+				return http.StatusOK, `{"response":{"result":{"tracks":[{"trackId":31,"trackTitle":"evermore (Feat. Bon Iver)","artists":[{"artistName":"Taylor Swift"}],"album":{"albumTitle":"evermore"},"playTime":"05:04","hasLyric":true,"hasSyncLyric":true}]}}}`
+			}
+			return http.StatusOK, `{"response":{"result":{"tracks":[{"trackId":32,"trackTitle":"willow","artists":[{"artistName":"Taylor Swift"}],"album":{"albumTitle":"evermore"},"playTime":"03:34","hasLyric":true,"hasSyncLyric":true}]}}}`
+		case strings.HasSuffix(target, "/vibe/v4/lyric/31"):
+			return http.StatusOK, vibeTestSync
+		}
+		return http.StatusNotFound, ""
+	})
+	r := resolveVibeLyric(qqRoundCtx(), "Taylor Swift & Bon Iver", "evermore (feat. Bon Iver)", "evermore", 304)
+	if len(queries) != 3 || queries[2] != "evermore (feat. Bon Iver)" || r.lyrics == "" {
+		t.Fatalf("应按原样的歌名再搜一次并找到: queries=%v r=%+v", queries, r)
+	}
+}
