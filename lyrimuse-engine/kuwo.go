@@ -187,8 +187,8 @@ type kuwoLyricLine struct {
 
 // kuwoFetchLyric 请求歌词端点(Referer 必须是 kuwo.cn,不是 www.kuwo.cn——两个端点
 // 各自要求不同的 Referer,写死同一个会被其中一个拒掉)。
-// lrclist 可能是空数组(纯音乐/伴奏/无歌词),这种情况 HTTP 状态码仍是 200、`code`
-// 字段仍是 200,不是错误,调用方按"空列表"处理即可,不需要单独判 code。
+// 查无时 `code` 是 200、data 为空或 lrclist 是空数组,按"空列表"处理;出错(参数错误之类)也回 HTTP 200,
+// 但 `code` 不是 200(实测 -1、success=false),按没问成算:换主机,都不行时退到 mlyric。
 // 三个主机都没问成时退到 mlyric.kuwo.cn 的 lrcx=0(另一个主机上的同一份逐行歌词,见 kuwoFetchMobiLRC);
 // 查无(空列表)不退。
 func kuwoFetchLyric(ctx context.Context, musicID string) ([]kuwoLyricLine, error) {
@@ -254,6 +254,7 @@ func kuwoFetchLyricAt(ctx context.Context, base, musicID string) ([]kuwoLyricLin
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
 	var out struct {
+		Code int `json:"code"`
 		Data struct {
 			LrcList []kuwoLyricLine `json:"lrclist"`
 		} `json:"data"`
@@ -261,6 +262,11 @@ func kuwoFetchLyricAt(ctx context.Context, base, musicID string) ([]kuwoLyricLin
 	if err := json.NewDecoder(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes)).Decode(&out); err != nil {
 		return nil, err
 	}
+	if out.Code != 200 {
+		reportEndpointRejected(req.URL)
+		return nil, fmt.Errorf("getlyric code %d", out.Code)
+	}
+	reportEndpointAccepted(req.URL)
 	return out.Data.LrcList, nil
 }
 

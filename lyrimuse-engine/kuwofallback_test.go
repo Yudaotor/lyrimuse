@@ -125,3 +125,42 @@ func TestKuwoLyricFallsBackToMobiLRC(t *testing.T) {
 		}
 	}
 }
+
+// 网页端 getlyric 回 HTTP 200 但 code 不是 200(实测出错时是 -1、success=false):算没问成,三个主机都这样就退到 mlyric;
+// code 200、data 为空(实测查无时的形状)是答了没有词,不退。
+func TestKuwoLyricRejectedCodeFallsBackToMobiLRC(t *testing.T) {
+	mobi := kuwoFakeMobiBody(t, "[ti:雨眠]\n[00:03.75]彼个有你的暗眠\n[00:09.00]第二句")
+	for _, c := range []struct {
+		body     string
+		wantMobi bool
+	}{
+		{`{"code":-1,"msg":"参数错误","success":false}`, true},
+		{`{"code":200,"msg":"success","data":{},"success":true}`, false},
+	} {
+		var mu sync.Mutex
+		mobiHits := 0
+		withKugouFake(t, func(target string) (int, string) {
+			switch {
+			case strings.HasSuffix(target, "/openapi/v1/www/lyric/getlyric"):
+				return http.StatusOK, c.body
+			case target == "https://mlyric.kuwo.cn/mobi.s":
+				mu.Lock()
+				mobiHits++
+				mu.Unlock()
+				return http.StatusOK, mobi
+			}
+			return http.StatusNotFound, ""
+		})
+		ctx, _ := withLyricSourceRound(context.Background())
+		lines, err := kuwoFetchLyric(ctx, "214900")
+		mu.Lock()
+		hits := mobiHits
+		mu.Unlock()
+		if got := hits > 0 && err == nil && len(lines) == 2; got != c.wantMobi {
+			t.Errorf("%s: 退到 mlyric = %v(hits=%d lines=%d err=%v),期望 %v", c.body, got, hits, len(lines), err, c.wantMobi)
+		}
+		if !c.wantMobi && (err != nil || len(lines) != 0) {
+			t.Errorf("%s: 查无应是空列表、不报错: %d %v", c.body, len(lines), err)
+		}
+	}
+}

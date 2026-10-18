@@ -296,3 +296,29 @@ func TestResolveMusixmatchISRCKeepsMacroDurationReject(t *testing.T) {
 		}
 	}
 }
+
+// 同一歌手同名、时长不同(各版本的时间轴不同)不共用进程内缓存;时长取整后一样的照旧命中。
+func TestMusixmatchCacheKeyIncludesDuration(t *testing.T) {
+	saved := musixmatchResolve
+	musixmatchMu.Lock()
+	savedCache := musixmatchCache
+	musixmatchCache = map[string]musixmatchResult{}
+	musixmatchMu.Unlock()
+	t.Cleanup(func() {
+		musixmatchResolve = saved
+		musixmatchMu.Lock()
+		musixmatchCache = savedCache
+		musixmatchMu.Unlock()
+	})
+	var calls []float64
+	musixmatchResolve = func(_ context.Context, _, _ string, durationSecs float64, _, _ string) musixmatchResult {
+		calls = append(calls, durationSecs)
+		return musixmatchResult{lrc: mxmTestLRC}
+	}
+	for _, d := range []float64{216, 200, 216.3} {
+		musixmatchLyric(context.Background(), "Hearts2Hearts", "RUDE!", d, "", "")
+	}
+	if len(calls) != 2 || calls[0] != 216 || calls[1] != 200 {
+		t.Fatalf("216 秒与 200 秒各问一次、216.3 秒命中 216 秒那份,实际问了 %v", calls)
+	}
+}

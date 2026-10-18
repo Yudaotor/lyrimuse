@@ -151,6 +151,9 @@ func qqAlbumSongsWeb(ctx context.Context, albumMid string) ([]qqAlbumSong, error
 	return songs, err
 }
 
+// qqAlbumNotFoundCode:fcg_v8_album_info_cp 对没有这张专辑回的 code(实测不存在的 mid、乱写的参数都是它),算答了、没有曲目。
+const qqAlbumNotFoundCode = 1101
+
 func qqAlbumSongsWebAt(ctx context.Context, host, albumMid string) ([]qqAlbumSong, error) {
 	u := "https://" + host + "/v8/fcg-bin/fcg_v8_album_info_cp.fcg?format=json&albummid=" + neturl.QueryEscape(albumMid)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
@@ -182,6 +185,9 @@ func qqAlbumSongsWebAt(ctx context.Context, host, albumMid string) ([]qqAlbumSon
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, qqResponseMaxBytes)).Decode(&out); err != nil {
 		return nil, err
+	}
+	if out.Code == qqAlbumNotFoundCode {
+		return nil, nil
 	}
 	if out.Code != 0 {
 		return nil, fmt.Errorf("album_info_cp code %d", out.Code)

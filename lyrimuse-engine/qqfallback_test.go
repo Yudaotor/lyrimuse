@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -291,6 +292,28 @@ func TestQQAlbumSongsFallsBackToWeb(t *testing.T) {
 	songs, err := qqAlbumSongs(qqRoundCtx(), "alb1")
 	if err != nil || len(songs) != 1 || songs[0].mid != "s1" || songs[0].singer != "周杰伦" || songs[0].interval != 269 {
 		t.Fatalf("该从网页版专辑接口拿到曲目: %+v %v", songs, err)
+	}
+}
+
+// 网页版专辑接口回 1101(实测没有这张专辑就是它):答了、没有曲目,不当没问成;别的非零 code 照旧算没问成。
+func TestQQAlbumSongsWebNotFoundIsAnswer(t *testing.T) {
+	for _, c := range []struct {
+		code    int
+		wantErr bool
+	}{{qqAlbumNotFoundCode, false}, {500, true}} {
+		withQQFake(t, func(target string) (int, string) {
+			if strings.HasSuffix(target, "/musicu:GetAlbumSongList") {
+				return http.StatusInternalServerError, ""
+			}
+			if strings.HasSuffix(target, "/v8/fcg-bin/fcg_v8_album_info_cp.fcg") {
+				return http.StatusOK, fmt.Sprintf(`{"code":%d,"subcode":%d,"message":"para error!"}`, c.code, c.code)
+			}
+			return http.StatusNotFound, ""
+		})
+		songs, err := qqAlbumSongs(qqRoundCtx(), fmt.Sprintf("missing%d", c.code))
+		if (err != nil) != c.wantErr || len(songs) != 0 {
+			t.Errorf("code %d: songs=%d err=%v,期望报错 %v", c.code, len(songs), err, c.wantErr)
+		}
 	}
 }
 

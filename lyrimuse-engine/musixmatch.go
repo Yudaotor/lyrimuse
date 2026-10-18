@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	neturl "net/url"
 	"os"
@@ -192,7 +193,8 @@ func musixmatchLyric(ctx context.Context, artist, title string, durationSecs flo
 	// isrc 进缓存键,理由同 deezerLyric:首播那一拍索引常还没建好,不区分的话那次
 	// "按名字搜"的结果会把后面每一次都挡住。
 	// 播放器给的 Apple / Spotify ID 同理(见 musixmatchMacroByID)。
-	key := artist + "|" + title + "|" + trLang + "|" + isrc + "|" + musixmatchPlaybackIDsFrom(ctx).cacheKey()
+	// 时长(取整秒)也进键:同一条曲目按不同时长取回的是不同的时间轴(macro 的 f_subtitle_length 挑那一份)。
+	key := artist + "|" + title + "|" + strconv.Itoa(int(math.Round(durationSecs))) + "|" + trLang + "|" + isrc + "|" + musixmatchPlaybackIDsFrom(ctx).cacheKey()
 	musixmatchMu.Lock()
 	if v, ok := musixmatchCache[key]; ok {
 		musixmatchMu.Unlock()
