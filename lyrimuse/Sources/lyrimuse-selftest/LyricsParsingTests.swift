@@ -125,6 +125,12 @@ func runLyricsParsingTests() {
     )
 
     expectEqual(LRCParser.parse("just plain text\n"), [], "LRC: 无时间戳的行整体忽略")
+    expectEqual(
+        LRCParser.parse("[00:31.90] [[Verse 1]]I was wandering\n[01:37.42] let me[[Chorus 1]]How does it feel\n"
+                        + "[02:59.26] cold inside[[Chorus 2]] [[Verse 3]]Like stranger\n").map(\.text),
+        ["I was wandering", "let me How does it feel", "cold inside Like stranger"],
+        "LRC: 两层方括号的段落标记整段剥掉、不留「]」,夹在两句中间的换成一个空格"
+    )
     expectEqual(LRCParser.parse(""), [], "LRC: 空输入")
 
     expectEqual(

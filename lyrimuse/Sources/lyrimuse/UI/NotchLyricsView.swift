@@ -2072,6 +2072,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                         color: accentOrWhite,
                         isPlaying: playback.isPlayingNow, isVisible: layerActive,
                         reduceMotion: reduceMotion,
+                        timingEpoch: LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
+                                                          offsetMs: playback.lyricsOffsetMs),
                         // 同这一格其它占位文字的 `.shadow(color: .black.opacity(0.45), radius: 2, y: 1)`;
                         // 三点现在画在原生图层上(见 LyricsGapDotsView 头注),SwiftUI 的 .shadow 罩不到,由图层自己投。
                         shadow: .init(color: NSColor.black.withAlphaComponent(0.45), radius: 2, offsetY: 1)

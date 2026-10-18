@@ -14,6 +14,9 @@ public struct LyricLine: Equatable {
 public enum LRCParser {
     private static let tagRegex = try! NSRegularExpression(pattern: #"\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]"#)
     private static let bracketRegex = try! NSRegularExpression(pattern: #"\[[^\]]*\]"#)
+    /// 包了两层的段落标记(`[[Verse 1]]`,有的源还把它夹在两句中间、粘成一行):连同两侧空白整段换成一个空格。
+    /// 得在 `bracketRegex` 之前剥 —— 它只认到第一个「]」,会把第二个「]」留在正文里。web 两份 parseLRC 同步改。
+    private static let doubleBracketRegex = try! NSRegularExpression(pattern: #"\s*(?:\[\[[^\[\]]*\]\]\s*)+"#)
     private static let offsetRegex = try! NSRegularExpression(pattern: #"\[offset:\s*([+-]?\d+)\s*\]"#)
 
     /// LRC 格式标准里的 `[offset:±毫秒]` 标签 —— 「这份歌词的全部时间戳整体偏移多少」。
@@ -159,8 +162,10 @@ public enum LRCParser {
             let fullRange = NSRange(location: 0, length: nsLine.length)
             let matches = tagRegex.matches(in: line, range: fullRange)
             if matches.isEmpty { continue }
+            let unwrapped = doubleBracketRegex.stringByReplacingMatches(in: line, range: fullRange, withTemplate: " ")
             let stripped = bracketRegex
-                .stringByReplacingMatches(in: line, range: fullRange, withTemplate: "")
+                .stringByReplacingMatches(in: unwrapped, range: NSRange(location: 0, length: (unwrapped as NSString).length),
+                                          withTemplate: "")
                 .trimmingCharacters(in: .whitespaces)
             for m in matches {
                 let minutes = Int(nsLine.substring(with: m.range(at: 1))) ?? 0

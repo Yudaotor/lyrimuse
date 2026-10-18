@@ -19,7 +19,7 @@ import LyrimuseCore
 ///     位置对齐相位。三颗点同步放大缩小(AM 的样子),各绕自己的中心。
 /// 歌词窗口那一份(`.window`)也逐颗点亮,只是没轮到的点更淡;倍率曲线不循环(出现、结束前那两段只走一次),从此刻到间奏
 /// 结束整段采样成一条关键帧,每颗点绕自己的中心放大、再横挪让间隙不变,整组从对齐那一侧张开。
-/// 重装时机:起止时间 / 在播 / 可见 / 减弱动态效果变了,以及每 3 秒对一次表(拖动进度 / 锚点重发会让
+/// 重装时机:起止时间 / 在播 / 可见 / 减弱动态效果 / 时间基准(`timingEpoch`)变了,以及每 3 秒对一次表(拖动进度 / 锚点重发会让
 /// 位置跳一下,偏差超过 250ms 就按新位置重排)。暂停 / 看不见时摘掉动画、定格在此刻的样子。
 ///
 /// 位置入参仍是闭包(`currentPositionMs`):装动画、对表时各现读一次,不再每帧调。
@@ -32,6 +32,9 @@ struct LyricsGapDotsView: View {
     let isPlaying: Bool
     let isVisible: Bool
     let reduceMotion: Bool
+    /// 时间基准的指纹(`LyricsTimingEpoch.of`):一变就按新位置重排。暂停时拖进度、重新锚定都靠它,
+    /// 别的入参一个没变时位置闭包不会被重读。
+    let timingEpoch: Int
     /// 非 nil = 三颗点各投一层阴影(灵动岛那条 `.shadow(color: .black.opacity(0.45), radius: 2, y: 1)`
     /// 的图层版 —— SwiftUI 的 `.shadow` 罩不到原生图层上)。
     var shadow: GapDotsShadow? = nil
@@ -44,7 +47,7 @@ struct LyricsGapDotsView: View {
     var body: some View {
         GapDotsLayer(startMs: startMs, endMs: endMs, dotSize: dotSize, spacing: spacing,
                      color: NSColor(color), running: isPlaying && isVisible,
-                     reduceMotion: reduceMotion, shadow: shadow, style: style, anchor: anchor,
+                     reduceMotion: reduceMotion, timingEpoch: timingEpoch, shadow: shadow, style: style, anchor: anchor,
                      currentPositionMs: currentPositionMs)
             .frame(width: CGFloat(GapDotsCurve.dotCount) * dotSize
                        + CGFloat(GapDotsCurve.dotCount - 1) * spacing,
@@ -75,6 +78,7 @@ private struct GapDotsLayer: NSViewRepresentable {
     let color: NSColor
     let running: Bool
     let reduceMotion: Bool
+    let timingEpoch: Int
     let shadow: GapDotsShadow?
     let style: GapDotsStyle
     let anchor: LyricDuet.Side
@@ -85,8 +89,8 @@ private struct GapDotsLayer: NSViewRepresentable {
     func updateNSView(_ view: GapDotsNSView, context: Context) {
         view.positionProvider = currentPositionMs
         view.apply(.init(startMs: startMs, endMs: endMs, dotSize: dotSize, spacing: spacing, color: color,
-                         running: running, reduceMotion: reduceMotion, shadow: shadow, style: style,
-                         anchor: anchor))
+                         running: running, reduceMotion: reduceMotion, timingEpoch: timingEpoch, shadow: shadow,
+                         style: style, anchor: anchor))
     }
 }
 
@@ -100,6 +104,7 @@ final class GapDotsNSView: NSView {
         var color: NSColor
         var running: Bool
         var reduceMotion: Bool
+        var timingEpoch: Int
         var shadow: GapDotsShadow?
         var style: GapDotsStyle
         var anchor: LyricDuet.Side = .center

@@ -594,6 +594,16 @@ func runLyricsWindowTests() {
                     "窗口三点(契约): 图层版按这排点靠的那一侧张开 —— 靠左时涨满不越过正文左缘")
         expectEqual(sourceBytes(windowView, contain: "style: .window,\n                anchor: listSide(centered: centered)"), true,
                     "窗口三点(契约): SwiftUI 版同上")
+        let notch = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/NotchLyricsView.swift"),
+                                 encoding: .utf8)) ?? ""
+        expectEqual(dots.components(separatedBy: "reduceMotion: reduceMotion, timingEpoch: timingEpoch, shadow: shadow,").count - 1, 2,
+                    "三点(契约): 时间基准指纹一路传进配置 —— 暂停时拖进度,别的入参都没变,不进配置就不重排")
+        expectEqual(sourceBytes(layerList, contain: "timingEpoch: s.timingEpoch,\n              shadow: nil, style: .window,"), true,
+                    "窗口三点(契约): 图层版接时间基准指纹")
+        expectEqual(windowView.components(separatedBy: "timingEpoch: lyricsTimingEpoch").count - 1, 3,
+                    "窗口三点(契约): SwiftUI 版完整、迷你两处三点和图层版列表都接同一份时间基准指纹")
+        expectEqual(sourceBytes(notch, contain: "timingEpoch: LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,"), true,
+                    "三点(契约): 灵动岛接时间基准指纹")
     }
 
     // MARK: - 歌词窗口看不见时不做隐式动画(源码契约)

@@ -2290,6 +2290,7 @@ struct LyricsWindowView: View {
                     color: miniPrimaryColor,
                     isPlaying: playback.isPlayingNow, isVisible: windowController.isSurfaceVisible,
                     reduceMotion: reduceMotion,
+                    timingEpoch: lyricsTimingEpoch,
                     style: .window
                 ) { _ in
                     // 时间基准跟逐字填色同一套:外推位置 + 当前歌词偏移(间奏窗口是歌词原始
@@ -3479,8 +3480,7 @@ struct LyricsWindowView: View {
                 overlapping: Set(playback.overlappingLineIndices), currentGapIndex: playback.currentGapIndex,
                 fillSettled: playback.currentLineFillSettled,
                 isPlaying: playback.isPlayingNow, surfaceVisible: windowController.isSurfaceVisible,
-                timingEpoch: LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
-                                                  offsetMs: PlaybackCoordinator.shared.currentLyricsOffsetMs),
+                timingEpoch: lyricsTimingEpoch,
                 rate: playback.anchor?.rate ?? 1),
             chromeFade: windowController.chromeFade,
             nowMs: { PlaybackCoordinator.shared.lyricsTimelineMs() },
@@ -4660,6 +4660,12 @@ struct LyricsWindowView: View {
         playback.lyricsGapMarkersByIndex[index]
     }
 
+    /// 歌词时间基准的指纹(锚点、暂停位置、歌词偏移),逐字填色和间奏三点按它重排。
+    private var lyricsTimingEpoch: Int {
+        LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
+                             offsetMs: PlaybackCoordinator.shared.currentLyricsOffsetMs)
+    }
+
     /// 间奏活跃时滚动定位用的行 id(跟列表里 gapDotsRow 的 .id 拼法保持一致)。
     private func gapRowID(_ index: Int) -> String? {
         if index == -1 { return playback.allLines.first.map { "\($0.id)-intro" } }
@@ -4685,6 +4691,7 @@ struct LyricsWindowView: View {
                 color: lyricTextColor,
                 isPlaying: playback.isPlayingNow, isVisible: windowController.isSurfaceVisible,
                 reduceMotion: reduceMotion,
+                timingEpoch: lyricsTimingEpoch,
                 style: .window,
                 anchor: listSide(centered: centered)
             ) { _ in

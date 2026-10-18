@@ -496,7 +496,8 @@ final class LyricsLayerListView: NSView {
     private func gapConfig(_ marker: LyricsGapMarker, _ s: LyricsLayerList.Spec) -> GapDotsNSView.Config {
         .init(startMs: marker.startMs, endMs: marker.endMs, dotSize: s.style.fontSize * 0.32,
               spacing: s.style.fontSize * 0.23, color: s.style.textColor,
-              running: s.isPlaying && s.surfaceVisible, reduceMotion: s.style.reduceMotion, shadow: nil, style: .window,
+              running: s.isPlaying && s.surfaceVisible, reduceMotion: s.style.reduceMotion, timingEpoch: s.timingEpoch,
+              shadow: nil, style: .window,
               anchor: s.style.listSide)
     }
 

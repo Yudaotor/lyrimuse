@@ -1830,7 +1830,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 dotSize: playback.mainFontSize * 0.32, spacing: playback.mainFontSize * 0.3,
                 color: playback.displayForegroundColor,
                 isPlaying: playback.isPlayingNow, isVisible: surfaceVisible,
-                reduceMotion: reduceMotion
+                reduceMotion: reduceMotion, timingEpoch: playback.timingEpoch
             ) { date in
                 (PlaybackCoordinator.shared.anchor?.extrapolatedPositionMs(now: date)
                     ?? PlaybackCoordinator.shared.pausedPositionMs ?? window.startMs)
