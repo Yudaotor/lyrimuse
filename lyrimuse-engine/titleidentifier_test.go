@@ -231,10 +231,10 @@ func TestLyricSearchTitle(t *testing.T) {
 			t.Errorf("lyricSearchTitle(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
-	// 括号里没有编号时跟 normEnrichTitle 逐字相同:搜索、挑选、缓存 key 都跟原来一样。
+	// 括号里没有编号、也不是「(with 某某)」时跟 normEnrichTitle 逐字相同(with 的见 withcredit_test.go)。
 	for _, in := range []string{
-		"不散的筵席（I Miss You）", "Colder (Explicit)", "万幸 (电影《金多宝》片尾曲)", "Toronto 2014 (with Mustafa)",
-		"等你下课 (with 杨瑞代)", "皇帝的新衣(Skr)", "君をのせて (天空の城ラピュタ)", "404 (New Era)",
+		"不散的筵席（I Miss You）", "Colder (Explicit)", "万幸 (电影《金多宝》片尾曲)",
+		"皇帝的新衣(Skr)", "君をのせて (天空の城ラピュタ)", "404 (New Era)",
 		"Don't Call (feat. Free Nationals) (Explicit)", "Song (2014 Remaster)", "Song (Live)", "Song (Remastered 2009)",
 		"(Interlude)", "Song (TV Size)", "Song", "",
 		// 光数字、上 / 下说不准是不是编号,照样剥:

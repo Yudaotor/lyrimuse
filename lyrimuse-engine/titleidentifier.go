@@ -344,18 +344,32 @@ func versionLabelSegments(title string) []string {
 	return segs
 }
 
-// lyricSearchTitle 是交给各歌词源去搜、去挑候选的歌名:跟 normEnrichTitle 一样从结尾一层层剥括号,碰到版本标记或明说
-// 第几个的编号就停。光数字、上 / 下照样剥:说不准是不是编号,带着去搜常常整轮落空。
+// lyricSearchTitle 是交给各歌词源去搜、去挑候选的歌名:跟 normEnrichTitle 一样从结尾一层层剥括号,碰到版本标记、明说
+// 第几个的编号或「(with 某某)」合作署名就停。光数字、上 / 下照样剥:说不准是不是编号,带着去搜常常整轮落空。
 func lyricSearchTitle(title string) string {
 	return trimTrailingBrackets(title, func(inner string) bool {
-		return enrichKeyKeepsBracket(inner) || bracketHasStrongIdentifier(inner)
+		return enrichKeyKeepsBracket(inner) || bracketHasStrongIdentifier(inner) || bracketIsWithCredit(inner)
 	})
 }
 
-// lyricQueryTitle:只拿「歌手 + 歌名」原样当搜索词、没有去括号那一种写法的源用它拼搜索词。歌名带明说第几个的编号时去掉
-// 带编号的那几层(搜索词跟按 key 搜的时候一样,不多问一次),搜回来的候选照旧拿带编号的歌名去比。不带时原样返回。
+// bracketIsWithCredit:这段括号(inner 不带括号本身)是「with 某某」合作署名。各源常把它写进歌名(「一秒 with 陳奕迅」),
+// 留着它挑候选才认得出是同一首;拼成一个搜索词时去掉(lyricQueryTitle)。见 09 章决策 276。
+func bracketIsWithCredit(inner string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(narrowASCII(inner))), "with ")
+}
+
+// titleEndsWithWithCredit:歌名最后一组括号是「with 某某」合作署名。压在版本标记括号底下的不算:normEnrichTitle 碰到版本
+// 标记就停,本来也剥不到它。
+func titleEndsWithWithCredit(title string) bool {
+	m := enrichKeyTrailingBracket.FindStringSubmatch(cleanMediaTag(title))
+	return m != nil && bracketIsWithCredit(m[1])
+}
+
+// lyricQueryTitle:只拿「歌手 + 歌名」原样当搜索词、没有去括号那一种写法的源用它拼搜索词。歌名带明说第几个的编号或
+// 「(with 某某)」时去掉那几层(搜索词跟按 key 搜的时候一样,不多问一次),搜回来的候选照旧拿带编号、带署名的歌名去比。
+// 都不带时原样返回。
 func lyricQueryTitle(title string) string {
-	if !hasStrongTitleIdentifier(title) {
+	if !hasStrongTitleIdentifier(title) && !titleEndsWithWithCredit(title) {
 		return title
 	}
 	return normEnrichTitle(title)

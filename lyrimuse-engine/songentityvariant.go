@@ -324,11 +324,13 @@ func songFamilyTitle(title string) string {
 	return normLoose(songStripTitleNoise(title))
 }
 
-// songBareTitle:先像 lyricSearchTitle 那样从结尾剥掉不是版本标注的括号(译名「(I Miss You)」、主题曲说明),碰到版本词、
-// 明说第几个的编号就停,再取写法族歌名键。「不散的筵席（I Miss You）」和「不散的筵席」相同;「Song (#6)」和「Song (#11)」、
-// 「Song (唯Ver.)」和「Song (律Ver.)」括号留着,不同。
+// songBareTitle:先从结尾剥掉不是版本标注的括号(译名「(I Miss You)」、主题曲说明、「(with 某某)」),碰到版本词、明说第几个
+// 的编号就停,再取写法族歌名键。「不散的筵席（I Miss You）」和「不散的筵席」相同;「Song (#6)」和「Song (#11)」、
+// 「Song (唯Ver.)」和「Song (律Ver.)」括号留着,不同。跟 lyricSearchTitle 的差别只在「(with 某某)」:那边留着挑候选,这里剥掉。
 func songBareTitle(title string) string {
-	return songFamilyTitle(lyricSearchTitle(title))
+	return songFamilyTitle(trimTrailingBrackets(title, func(inner string) bool {
+		return enrichKeyKeepsBracket(inner) || bracketHasStrongIdentifier(inner)
+	}))
 }
 
 var songDashSuffixRe = regexp.MustCompile(`\s+[-\x{2013}\x{2014}]\s+`)
