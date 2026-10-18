@@ -30,6 +30,11 @@ struct LabsSidebarRow: View {
         } icon: {
             labsIconBadge()
         }
+        // 「网页推送」状态和推送记录只有设置页看:侧栏这一行设置窗口开着就一直在,定时重读挂在这里,窗口看不见就停。
+        .settingsPolling(every: 5, runsOnAppear: true) {
+            RelayPushStatusWatcher.shared.refresh()
+            NotificationDeliveryWatcher.shared.refresh()
+        }
     }
 
     private var attention: DestinationStatus? {

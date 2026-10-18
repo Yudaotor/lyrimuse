@@ -1294,6 +1294,19 @@ func runSourceContractTests() {
                 expectEqual(true, false, "设置页轮询: 读不到 \(file)(路径挪了?)")
             }
         }
+        // 只给设置页看的两个状态观察器不起自己的定时器,定时重读挂在侧栏的实验室那一行(settingsPolling)。
+        let relay = code(sourcesRoot.appendingPathComponent("lyrimuse/Settings/RelayPushStatusWatcher.swift")) ?? ""
+        let notify = code(sourcesRoot.appendingPathComponent("lyrimuse/Settings/NotificationChannelsSection.swift")) ?? ""
+        let labs = code(sourcesRoot.appendingPathComponent("lyrimuse/Settings/LabsPage.swift")) ?? ""
+        expectEqual(!relay.isEmpty && !relay.contains("Timer(")
+                    && !sourceBody("final class NotificationDeliveryWatcher", in: notify).contains("Timer(")
+                    && sourceHas(sourceBody("struct LabsSidebarRow: View {", in: labs), """
+                        .settingsPolling(every: 5, runsOnAppear: true) {
+                            RelayPushStatusWatcher.shared.refresh()
+                            NotificationDeliveryWatcher.shared.refresh()
+                        }
+                        """), true,
+                    "设置页轮询: 网页推送状态、推送记录只在设置窗口看得见时重读,挂在实验室侧栏那一行")
     }
 
 }

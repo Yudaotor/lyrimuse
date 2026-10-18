@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// App 主线程卡顿探针。后台队列每秒往主线程投一个空任务:超过 `stallThreshold` 秒才被执行到,恢复时记一行卡了多久;
+/// App 主线程卡顿探针。后台队列每 `probeInterval` 秒往主线程投一个空任务:超过 `stallThreshold` 秒才被执行到,恢复时记一行卡了多久;
 /// 卡满 `sampleAfter` 秒还没被执行到,先记一行,再用 `/usr/bin/sample` 采一次调用栈写到 `LogFiles.mainThreadStall`
 /// (覆盖写,`sampleCooldown` 秒内最多采一次)。播放状态的保活挂在主线程上(PlaybackStatePublisher),
 /// 卡满 15 秒引擎就判 App 不可用、进待机。
@@ -13,7 +13,9 @@ import os
 public final class MainThreadWatchdog: @unchecked Sendable {
     public static let shared = MainThreadWatchdog()
 
-    public static let probeInterval: TimeInterval = 1
+    /// 2 秒:探针从启动跑到退出,一拍就是后台、主线程各醒一次。卡满 `sampleAfter` 最晚隔一拍报出(第 6 秒),
+    /// 仍早于引擎判过期的 15 秒(ops-diagnostics 组守着)。见 15 章决策 63。
+    public static let probeInterval: TimeInterval = 2
     public static let stallThreshold: TimeInterval = 3
     public static let sampleAfter: TimeInterval = 5
     public static let sampleCooldown: TimeInterval = 30 * 60

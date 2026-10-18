@@ -651,7 +651,8 @@ func (c *lastfmCatalogMatcher) save(snapshot map[string]lastfmCatalogDecision) {
 	if lastfmCatalogPath == "" {
 		return
 	}
-	data, err := json.MarshalIndent(snapshot, "", "  ")
+	// 不缩进:每判出一条结论就整份重写一次(两千多条、约 1 MB),缩进要多写近三成。见 12 章决策 85。
+	data, err := json.Marshal(snapshot)
 	if err != nil {
 		log.Printf("lastfm catalog: marshal cache: %v", err)
 		return

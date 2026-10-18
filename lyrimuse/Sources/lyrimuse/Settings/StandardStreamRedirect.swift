@@ -12,9 +12,16 @@ import LyrimuseCore
 ///
 /// 两条边界:
 ///  - stderr 是终端(`isatty`)时**不**重定向 —— 开发时 `swift run` / 直接跑二进制要在终端里看到输出;
-///  - 只装一次,`O_APPEND` 追加不截断,跟当年 launchd 的行为一致(它也是追加)。
+///  - 只装一次,`O_APPEND` 追加不截断,跟当年 launchd 的行为一致(它也是追加);打开之前超过 `maxBytes` 就先挪成
+///    `archiveURL`(覆盖上一份),只留一份归档。见 15 章决策 64。
 enum StandardStreamRedirect {
     private static var installed = false
+
+    /// 启动时超过这么大就轮转。正常情况下这个文件几乎是空的,长到 1 MB 多半是有东西在反复往 stderr 打。
+    static let maxBytes = 1 << 20
+
+    /// 轮转出去的那一份,卸载脚本(scripts/uninstall.sh 的 APP_LOG_ARCHIVE)一并清理。
+    static var archiveURL: URL { LogFiles.appStderr.appendingPathExtension("old") }
 
     static func installIfNeeded() {
         guard !installed else { return }
@@ -22,6 +29,10 @@ enum StandardStreamRedirect {
         guard isatty(STDERR_FILENO) == 0 else { return }
         let url = LogFiles.appStderr
         FileIO.createDirectory(url.deletingLastPathComponent())
+        if let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int, size > maxBytes {
+            FileIO.remove(archiveURL)
+            FileIO.move(url, to: archiveURL)
+        }
         let fd = open(url.path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
         guard fd >= 0 else { return }
         dup2(fd, STDOUT_FILENO)

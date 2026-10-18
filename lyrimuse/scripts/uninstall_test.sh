@@ -54,6 +54,8 @@ setup_fake_home() {
     echo 'archived log line' > "$FAKE_HOME/Library/Logs/$a"
   done
   echo 'Sampling process' > "$FAKE_HOME/Library/Logs/lyrimuse-main-thread-stall.txt"
+  echo 'app stderr' > "$FAKE_HOME/Library/Logs/lyrimuse-app.log"
+  echo 'archived app stderr' > "$FAKE_HOME/Library/Logs/lyrimuse-app.log.old"
   # probe 偏好域：--purge 会对 $APP_LABEL(= $PROBE_B) 跑 defaults delete，先种一个进去，
   # 否则 HAS_DEFAULTS 恒为 no、那条分支根本走不到，等于没测。
   # defaults 的 domain 不受 LYRIMUSE_UNINSTALL_PREFIX 管辖（它写的是真实用户的
@@ -115,6 +117,8 @@ echo "yes" | run_uninstall --purge >/dev/null 2>&1
 [[ -d "$FAKE_HOME/.config/lyrimuse" ]] && fail "配置目录没删" || ok "配置目录已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse.log" ]] && fail "日志没删" || ok "日志已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse-main-thread-stall.txt" ]] && fail "主线程卡顿采样没删" || ok "主线程卡顿采样已删"
+[[ -f "$FAKE_HOME/Library/Logs/lyrimuse-app.log" ]] && fail "App 日志没删" || ok "App 日志已删"
+[[ -f "$FAKE_HOME/Library/Logs/lyrimuse-app.log.old" ]] && fail "App 日志归档没删" || ok "App 日志归档已删"
 for a in lyrimuse.log.old lyrimuse.log.old.1 lyrimuse.log.old.2; do
   [[ -f "$FAKE_HOME/Library/Logs/$a" ]] && fail "日志归档 $a 没删" || ok "日志归档 $a 已删"
 done

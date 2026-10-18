@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 )
 
@@ -18,7 +19,7 @@ import (
 // 多音字坐实这是主读音,如"雅→ngaa5"/"中→zung1"/"和→wo4"/"我→ngo5"/"唔→m4"/
 // "係→hai6"/"嘅→ge3");都带权重时取权重最高的那条;再打平就按文件原始出现顺序取
 // 第一条。单字层面这样简化没问题——真正影响读音的多音字消歧交给下面
-// jyutpingWordMap 的词级匹配去做,单字表只兜底"词典完全没收这个词"的情况。
+// jyutpingDictSet.words 的词级匹配去做,单字表只兜底"词典完全没收这个词"的情况。
 //
 //go:embed dictionary/JyutpingChars.txt
 var jyutpingDictFS embed.FS
@@ -28,14 +29,13 @@ var jyutpingDictFS embed.FS
 // 简体歌词逐字查不到读音会大片原样穿透、不转写。toJyutpingLine 直接查不到时,借 t2s.go
 // 已经内嵌的 s2tCharMap(同一个 OpenCC 数据源,方向相反)转一次繁体再查一次,查到就用,
 // 查不到才真的放弃——不为这一件事单独再嵌一份数据。
-var jyutpingCharMap map[rune]string
 
 // dictionary/JyutpingCollisionOverrides.txt 修一类跟上面单字表本身设计有关的坑,
 // 表现是「离」这类字读错:简体字里有 71 个字,本身**同时**是
 // jyut6ping3.chars.dict.yaml 收录的另一个独立汉字(繁简共用同一个 Unicode 码位,
 // 但那是两个不同的字,各有各的含义)。比如"离"——简体"离开"的"离"和文言里一个独立
 // 的生僻字共用同一个码位,后者在词典里的读音是 ci1;"离"作为"離"的简体这层身份,
-// 词典压根没有单独给它一条"当简体字用时怎么读"的记录。jyutpingReading 原来的查法是
+// 词典压根没有单独给它一条"当简体字用时怎么读"的记录。reading 原来的查法是
 // "先查这个字自己在字表里有没有,有就直接用"——查到的是那个生僻字的读音 ci1,查到就
 // 直接返回,根本轮不到下面"转一次繁体再查"那条兜底,"離→lei4"这条正确读音永远用不上。
 //
@@ -54,13 +54,11 @@ var jyutpingCharMap map[rune]string
 // 客观上更对的默认值(举例:林家谦《隔离》"回复掣 无情被废"里的"复"该读覆/fuk1,
 // 选"復"的 fuk6(恢复义)就错了)。判据可编程复核:同一简体字的
 // 繁体候选,去掉指向自己的那个之后,剩下的候选如果读音不止一种,就不进这份覆盖表
-// (jyutpingWordMap 覆盖不到的场景就老实退回字表默认值,好过强行选一个可能错的)。
+// (jyutpingDictSet.words 覆盖不到的场景就老实退回字表默认值,好过强行选一个可能错的)。
 // 共 38 条。
 //
 //go:embed dictionary/JyutpingCollisionOverrides.txt
 var jyutpingCollisionOverrideDictFS embed.FS
-
-var jyutpingCollisionOverrideMap map[rune]string
 
 // dictionary/JyutpingWords.txt 是同一个 rime-cantonese 项目
 // jyut6ping3.words.dict.yaml(CC-BY-4.0,同上)的词级读音数据,同样离线预处理成
@@ -79,36 +77,76 @@ var jyutpingCollisionOverrideMap map[rune]string
 //go:embed dictionary/JyutpingWords.txt
 var jyutpingWordDictFS embed.FS
 
-// jyutpingWordMap 只收长度 >= 2 个汉字的词条,跟 jyutpingCharMap 职责分开、互不重叠
-// (单字永远走 jyutpingCharMap,查词只在 toJyutpingLine 里遇到 2 个字以上的窗口时才发生)。
-var jyutpingWordMap map[string]string
-
-// jyutpingMaxWordRunes 是 jyutpingWordMap 里最长词条的字数——toJyutpingLine 逐位置
-// 贪心找词时用它限定最多往前看几个字,而不是拍脑袋定一个数字或者对每个位置试到行尾:
-// 词典最长的词条是几十字的谚语,真按那个上限去试效率也够(逐行歌词最多几十字、一首歌
-// 只转写一次、结果永久缓存),没必要额外设更小的上限自找麻烦。
-var jyutpingMaxWordRunes int
-
-// jyutpingDictsOnce:三份词典第一次用到时才解析。只有粤语歌会用到(maybeGenerateJyutpingRoma),而放在
-// init() 里的话每个引擎进程启动都要付约 16ms 解析、常驻约 9.6MB —— 包括 App 每次联网搜歌词拉起的
-// search-lyrics 子进程和各个命令行子命令,它们一首粤语歌都碰不到。
-var jyutpingDictsOnce sync.Once
-
-// ensureJyutpingDicts 在读三份词典之前调用。查表的入口(jyutpingReading / jyutpingWordReading /
-// toJyutpingLine)自己会调,直接读 map 的地方(测试)要先调它。
-func ensureJyutpingDicts() {
-	jyutpingDictsOnce.Do(loadJyutpingDicts)
+// jyutpingDictSet:解析好的三份词典。
+type jyutpingDictSet struct {
+	chars     map[rune]string // JyutpingChars.txt
+	overrides map[rune]string // JyutpingCollisionOverrides.txt
+	// words:JyutpingWords.txt,只收 2 个字以上的词条,跟 chars 职责分开、互不重叠(单字永远走 chars,查词只在
+	// toJyutpingLine 里遇到 2 个字以上的窗口时才发生)。
+	words map[string]string
+	// maxWordRunes:words 里最长词条的字数,toJyutpingLine 逐位置贪心找词时最多往前看几个字。最长的词条是几十字的
+	// 谚语,按它去试效率也够(逐行歌词最多几十字、一首歌只转写一次、结果永久缓存),不另设更小的上限。
+	maxWordRunes int
 }
 
-func loadJyutpingDicts() {
-	jyutpingCharMap = loadJyutpingDict(jyutpingDictFS, "dictionary/JyutpingChars.txt")
-	jyutpingCollisionOverrideMap = loadJyutpingDict(jyutpingCollisionOverrideDictFS, "dictionary/JyutpingCollisionOverrides.txt")
-	jyutpingWordMap = loadJyutpingWordDict("dictionary/JyutpingWords.txt")
-	for w := range jyutpingWordMap {
-		if n := len([]rune(w)); n > jyutpingMaxWordRunes {
-			jyutpingMaxWordRunes = n
+// 三份词典第一次用到时才解析,`jyutpingDictsIdleRelease` 没再用到就放掉,下次用到再解析。只有粤语歌会用到
+// (maybeGenerateJyutpingRoma),而常驻的话约 9.6MB 一直留在堆里,放过一首粤语歌就再也不还;放在 init() 里的话每个
+// 引擎进程启动都要付约 16ms 解析,包括 App 每次联网搜歌词拉起的 search-lyrics 子进程。见 10 章决策 40。
+var (
+	jyutpingDictsMu      sync.Mutex
+	jyutpingDictsCur     *jyutpingDictSet
+	jyutpingDictsUsedAt  time.Time
+	jyutpingDictsRelease *time.Timer
+	// jyutpingDictsLoads:解析过几次(单测核对放掉之后会重新解析)。
+	jyutpingDictsLoads int
+)
+
+// jyutpingDictsIdleRelease:词典多久没用到就放掉。单测调短。
+var jyutpingDictsIdleRelease = 30 * time.Minute
+
+// jyutpingDicts 取词典,没有就当场解析;顺带记一次「用过」,排上空闲释放。拿到的那份在调用方手里一直有效,放掉只是不再
+// 从这里交出去。
+func jyutpingDicts() *jyutpingDictSet {
+	jyutpingDictsMu.Lock()
+	defer jyutpingDictsMu.Unlock()
+	if jyutpingDictsCur == nil {
+		jyutpingDictsCur = loadJyutpingDicts()
+		jyutpingDictsLoads++
+	}
+	jyutpingDictsUsedAt = time.Now()
+	if jyutpingDictsRelease == nil {
+		jyutpingDictsRelease = time.AfterFunc(jyutpingDictsIdleRelease, releaseIdleJyutpingDicts)
+	}
+	return jyutpingDictsCur
+}
+
+// releaseIdleJyutpingDicts:距上次用到满了 jyutpingDictsIdleRelease 就放掉,没满就排到满的那一刻再看。
+func releaseIdleJyutpingDicts() {
+	jyutpingDictsMu.Lock()
+	defer jyutpingDictsMu.Unlock()
+	jyutpingDictsRelease = nil
+	if jyutpingDictsCur == nil {
+		return
+	}
+	if wait := jyutpingDictsIdleRelease - time.Since(jyutpingDictsUsedAt); wait > 0 {
+		jyutpingDictsRelease = time.AfterFunc(wait, releaseIdleJyutpingDicts)
+		return
+	}
+	jyutpingDictsCur = nil
+}
+
+func loadJyutpingDicts() *jyutpingDictSet {
+	d := &jyutpingDictSet{
+		chars:     loadJyutpingDict(jyutpingDictFS, "dictionary/JyutpingChars.txt"),
+		overrides: loadJyutpingDict(jyutpingCollisionOverrideDictFS, "dictionary/JyutpingCollisionOverrides.txt"),
+		words:     loadJyutpingWordDict("dictionary/JyutpingWords.txt"),
+	}
+	for w := range d.words {
+		if n := len([]rune(w)); n > d.maxWordRunes {
+			d.maxWordRunes = n
 		}
 	}
+	return d
 }
 
 // loadJyutpingDict 解析 "字\t读音" 格式的词典文件,fs 由调用方传入——这个格式被两份
@@ -189,23 +227,22 @@ func isAllHan(s string) bool {
 	return true
 }
 
-// jyutpingReading 查一个字的粤拼读音:直接查不到时,借 s2tCharMap 转一次繁体再查一次
-// (见 jyutpingCharMap 的注释)。两次都查不到返回 false。
-func jyutpingReading(r rune) (string, bool) {
-	ensureJyutpingDicts()
-	// 见 jyutpingCollisionOverrideMap 的注释:这 38 个字自己在字表里就有独立的一条
+// reading 查一个字的粤拼读音:直接查不到时,借 s2tCharMap 转一次繁体再查一次
+// (见 JyutpingChars.txt 那段注释)。两次都查不到返回 false。
+func (d *jyutpingDictSet) reading(r rune) (string, bool) {
+	// 见 JyutpingCollisionOverrides.txt 那段注释:这 38 个字自己在字表里就有独立的一条
 	// (通常是某个生僻/罕见含义),必须先查这张表挡在前面,不然下面第一步会先命中那个
 	// 无关的独立读音,永远轮不到"当简体字用时该读什么"这层。
-	if jp, ok := jyutpingCollisionOverrideMap[r]; ok {
+	if jp, ok := d.overrides[r]; ok {
 		return jp, true
 	}
-	if jp, ok := jyutpingCharMap[r]; ok {
+	if jp, ok := d.chars[r]; ok {
 		return jp, true
 	}
 	if trad, ok := s2tCharMap[string(r)]; ok {
 		tr := []rune(trad)
 		if len(tr) == 1 {
-			if jp, ok := jyutpingCharMap[tr[0]]; ok {
+			if jp, ok := d.chars[tr[0]]; ok {
 				return jp, true
 			}
 		}
@@ -213,12 +250,11 @@ func jyutpingReading(r rune) (string, bool) {
 	return "", false
 }
 
-// jyutpingWordReading 查一个词(2 个字以上)的粤拼读音,跟 jyutpingReading 同一套
+// wordReading 查一个词(2 个字以上)的粤拼读音,跟 reading 同一套
 // "查不到就转一次繁体再查"兜底,只是把单字的转换扩展成逐字转换再拼回词——
 // JyutpingWords.txt 跟 JyutpingChars.txt 同源,主体同样是繁体收字。
-func jyutpingWordReading(word string) (string, bool) {
-	ensureJyutpingDicts()
-	if jp, ok := jyutpingWordMap[word]; ok {
+func (d *jyutpingDictSet) wordReading(word string) (string, bool) {
+	if jp, ok := d.words[word]; ok {
 		return jp, true
 	}
 	runes := []rune(word)
@@ -240,14 +276,14 @@ func jyutpingWordReading(word string) (string, bool) {
 	if !changed {
 		return "", false
 	}
-	jp, ok := jyutpingWordMap[string(converted)]
+	jp, ok := d.words[string(converted)]
 	return jp, ok
 }
 
-// toJyutpingLine 把一行文本转写成粤拼:优先按 jyutpingWordMap 做最长词匹配(见该
-// 变量注释——这是修多音字的关键一步),当前位置往后数 jyutpingMaxWordRunes 个字开始
+// toJyutpingLine 把一行文本转写成粤拼:优先按 jyutpingDictSet.words 做最长词匹配(见该
+// 变量注释——这是修多音字的关键一步),当前位置往后数 jyutpingDictSet.maxWordRunes 个字开始
 // 逐级缩短试,只要拼出的子串命中词典就整段吃掉、按词里的读音(词条本身就是空格分隔的
-// 多音节字符串)整体输出;命中不了才退回单字 jyutpingReading。汉字之间(不管是按词
+// 多音节字符串)整体输出;命中不了才退回单字 reading。汉字之间(不管是按词
 // 还是按单字转写出来的)、以及汉字与非汉字之间的音节用空格分隔;拉丁字母/数字保持原样
 // 连写(不会把 "baby" 拆成 "b a b y");查不到读音的字符(词表/字表繁简都不在里面,或
 // 本来就不是汉字)原样保留,不猜、不报错。
@@ -255,7 +291,7 @@ func jyutpingWordReading(word string) (string, bool) {
 // 词表本身也不是万能的——遇到词表没收录的词,还是会退回单字、可能跟语境不符,跟单字表
 // 那个"选一个主读音"的简化是同一类局限,只是覆盖面比纯单字查表宽得多。
 func toJyutpingLine(text string) string {
-	ensureJyutpingDicts()
+	d := jyutpingDicts()
 	runes := []rune(text)
 	var b strings.Builder
 	// 分隔只发生在**读音**与相邻内容之间。原文里本来连写的东西(拉丁串内部、撇号跟
@@ -296,12 +332,12 @@ func toJyutpingLine(text string) string {
 	}
 	for i := 0; i < len(runes); {
 		matched := false
-		maxLen := jyutpingMaxWordRunes
+		maxLen := d.maxWordRunes
 		if remaining := len(runes) - i; maxLen > remaining {
 			maxLen = remaining
 		}
 		for l := maxLen; l >= 2; l-- {
-			if jp, ok := jyutpingWordReading(string(runes[i : i+l])); ok {
+			if jp, ok := d.wordReading(string(runes[i : i+l])); ok {
 				emit(jp)
 				i += l
 				matched = true
@@ -312,7 +348,7 @@ func toJyutpingLine(text string) string {
 			continue
 		}
 		r := runes[i]
-		if jp, ok := jyutpingReading(r); ok {
+		if jp, ok := d.reading(r); ok {
 			emit(jp)
 			i++
 			continue

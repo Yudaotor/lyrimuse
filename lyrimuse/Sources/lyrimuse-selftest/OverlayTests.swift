@@ -1838,6 +1838,14 @@ func runOverlayTests() {
                     "调字号: 每次指针移动都判一次,锁定、长按模式也接")
         expectEqual(controller.contains("setFontZoomCapture(commandHeld && (fontZoomCaptured ? window.frame.contains(loc) : onLyrics))"), true,
                     "调字号: 按着 ⌘ 停在歌词文字上才接,接住后指针不出窗口就一直接着")
+        typealias FZ = OverlayFontZoom
+        expectEqual(FZ.modifierPollInterval(pointerStillFor: 0, engaged: false) == 1.0 / 30
+                    && FZ.modifierPollInterval(pointerStillFor: 1.9, engaged: false) == 1.0 / 30
+                    && FZ.modifierPollInterval(pointerStillFor: 2, engaged: false) == 1.0 / 10
+                    && FZ.modifierPollInterval(pointerStillFor: 60, engaged: true) == 1.0 / 30, true,
+                    "调字号: 指针停着 2 秒后 ⌘ 轮询降到 10Hz,动了、按着 ⌘ 或正接着时 30Hz")
+        expectEqual(controller.contains("if polling, fontZoomModifierPoll == nil || fontZoomPollInterval != interval {"), true,
+                    "调字号: 轮询间隔换档时重建定时器")
         expectEqual(sourceHas(controller, "controlCaptured = false\n        lyricsCaptured = false\n        fontZoomCaptured = false"), true,
                     "调字号: 锁定时一并放掉,按着 ⌘ 还在字上由轮询重新接住")
         expectEqual(controller.contains("next = AppSettings.steppedOverlayFontSize(from: next, direction: steps > 0 ? 1 : -1)"), true,

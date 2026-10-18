@@ -8,6 +8,16 @@ public struct OverlayFontZoom: Sendable {
     /// 触控板滚动攒够这么多点算一档。鼠标滚轮不攒,一格一档。
     public static let pointsPerStep: CGFloat = 24
 
+    /// 判 ⌘ 的轮询间隔:按着 ⌘、正接着调字号,或指针最近 `modifierPollSettle` 秒内动过时 30Hz;指针停着不动降到 10Hz。
+    /// 指针停在歌词文字上多久就轮询多久,悬浮窗在菜单栏下方正中,鼠标停在那里很常见。降档后按下 ⌘ 到窗口接得住滚轮最多
+    /// 晚 0.1 秒。纯函数,selftest 覆盖。见 04 章决策 69。
+    public static func modifierPollInterval(pointerStillFor: TimeInterval, engaged: Bool) -> TimeInterval {
+        engaged || pointerStillFor < modifierPollSettle ? 1.0 / 30 : 1.0 / 10
+    }
+
+    /// 见 `modifierPollInterval`。
+    public static let modifierPollSettle: TimeInterval = 2
+
     private var scrollCarry: CGFloat = 0
 
     public init() {}

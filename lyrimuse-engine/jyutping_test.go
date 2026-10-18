@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // review 坐实的真实 bug:jyut6ping3.words.dict.yaml 里混了 696 条带逗号/
@@ -37,11 +38,11 @@ func TestIsAllHan(t *testing.T) {
 // 兜住了,只要以后重新拉取上游数据换了这份 txt、又不小心把带标点的谚语条目带回来,
 // 这条测试就会炸,而不是安安静静地在某首歌的歌词里吞掉一个逗号才被用户发现。
 func TestJyutpingWordMapHasNoPunctuationKeys(t *testing.T) {
-	ensureJyutpingDicts()
-	if len(jyutpingWordMap) == 0 {
+	d := jyutpingDicts()
+	if len(d.words) == 0 {
 		t.Fatal("词典没加载上")
 	}
-	for word := range jyutpingWordMap {
+	for word := range d.words {
 		if !isAllHan(word) {
 			t.Fatalf("jyutpingWordMap contains a non-Han key %q — toJyutpingLine would silently drop its non-Han characters when this word matches", word)
 		}
@@ -182,5 +183,65 @@ func TestJyutpingDictsLoadLazily(t *testing.T) {
 	// 单独跑这条(-run TestJyutpingDictsLoadLazily)才测得到"首次调用",同进程里别的用例可能已经加载过。
 	if got := toJyutpingLine("重要"); got != "zung6 jiu3" {
 		t.Fatalf("首次查表要自己把词典加载上: %q", got)
+	}
+}
+
+// 词典空闲 jyutpingDictsIdleRelease 之后放掉,下次用到重新解析,结果照旧。
+func TestJyutpingDictsReleaseWhenIdle(t *testing.T) {
+	old := jyutpingDictsIdleRelease
+	jyutpingDictsIdleRelease = 20 * time.Millisecond
+	t.Cleanup(func() { jyutpingDictsIdleRelease = old })
+	jyutpingDictsMu.Lock()
+	if jyutpingDictsRelease != nil {
+		jyutpingDictsRelease.Stop()
+		jyutpingDictsRelease = nil
+	}
+	jyutpingDictsCur = nil
+	loads := jyutpingDictsLoads
+	jyutpingDictsMu.Unlock()
+
+	if jyutpingDicts() == nil {
+		t.Fatal("取不到词典")
+	}
+	released := func() bool {
+		jyutpingDictsMu.Lock()
+		defer jyutpingDictsMu.Unlock()
+		return jyutpingDictsCur == nil
+	}
+	for deadline := time.Now().Add(2 * time.Second); !released(); {
+		if time.Now().After(deadline) {
+			t.Fatal("空闲之后词典没放掉")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := toJyutpingLine("重要"); got != "zung6 jiu3" {
+		t.Fatalf("放掉之后重新解析的结果不对: %q", got)
+	}
+	jyutpingDictsMu.Lock()
+	reloaded := jyutpingDictsLoads - loads
+	jyutpingDictsMu.Unlock()
+	if reloaded != 2 {
+		t.Fatalf("该解析两次(第一次用、放掉后再用),实际 %d 次", reloaded)
+	}
+}
+
+// 刚用过时到点检查:还没空闲满 jyutpingDictsIdleRelease,不放掉,排到满的那一刻再看。
+func TestJyutpingDictsKeptWhileRecentlyUsed(t *testing.T) {
+	old := jyutpingDictsIdleRelease
+	jyutpingDictsIdleRelease = time.Hour
+	t.Cleanup(func() { jyutpingDictsIdleRelease = old })
+	if jyutpingDicts() == nil {
+		t.Fatal("取不到词典")
+	}
+	releaseIdleJyutpingDicts()
+	jyutpingDictsMu.Lock()
+	kept, rescheduled := jyutpingDictsCur != nil, jyutpingDictsRelease != nil
+	if jyutpingDictsRelease != nil {
+		jyutpingDictsRelease.Stop()
+		jyutpingDictsRelease = nil
+	}
+	jyutpingDictsMu.Unlock()
+	if !kept || !rescheduled {
+		t.Fatalf("刚用过就放掉了或没再排检查: kept=%v rescheduled=%v", kept, rescheduled)
 	}
 }

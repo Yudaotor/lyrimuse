@@ -4,8 +4,8 @@ import SwiftUI
 // 「推送提醒」页(实验室)的渠道列表、渠道编辑表单、推送记录。推送由引擎发(notifychannel.go / alerter.go),
 // 这边只管渠道配置(ConfigStore.notificationChannels)、读引擎写的推送记录、经请求文件请引擎「测一下」「重发」。
 
-/// 引擎推送记录(`lyrimuse-notify-log.json`)的观察器。每 5 秒按 mtime 重读一次,做法同 RelayPushStatusWatcher;
-/// 测一下、重发之后调用方立刻 `refresh()`。
+/// 引擎推送记录(`lyrimuse-notify-log.json`)的观察器。设置窗口看得见时每 5 秒按 mtime 重读一次,定时重读同样挂在
+/// `LabsSidebarRow` 上(见 RelayPushStatusWatcher);测一下、重发之后调用方立刻 `refresh()`。
 final class NotificationDeliveryWatcher: ObservableObject {
     static let shared = NotificationDeliveryWatcher()
 
@@ -14,14 +14,9 @@ final class NotificationDeliveryWatcher: ObservableObject {
 
     private let url = LyrimusePaths.configFile(NotificationDeliveryLog.fileName)
     private var cachedMTime: Date?
-    private var timer: Timer?
 
     private init() {
         refresh()
-        let t = Timer(timeInterval: 5, repeats: true) { [weak self] _ in self?.refresh() }
-        t.tolerance = 2
-        RunLoop.main.add(t, forMode: .common)
-        timer = t
     }
 
     var latestByChannel: [String: NotificationDeliveryLog.Entry] { NotificationDeliveryLog.latestByChannel(entries) }

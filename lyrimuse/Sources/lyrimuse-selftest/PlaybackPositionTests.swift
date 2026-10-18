@@ -240,6 +240,17 @@ func runPlaybackPositionTests() {
             let playingOnly = Data("{\"type\":\"data\",\"diff\":true,\"payload\":{\"playing\":false}}".utf8)
             expectEqual(MediaControlStreamWatcher.digest(line: playingOnly, merged: d1.merged, arrivedAt: arrival).anchorKey, nil,
                         "digest: 只翻 playing 不算锚点目击")
+            // anchor sighting 的日志级别:换歌、暂停、恢复之后头 4 个记 notice,之后同一首里的定时重发记 debug
+            expectEqual((0..<4).allSatisfy { MediaControlStreamWatcher.logsAnchorSightingAsNotice(sinceEvent: $0) }
+                        && !MediaControlStreamWatcher.logsAnchorSightingAsNotice(sinceEvent: 4), true,
+                        "anchor sighting: 事件后头 4 个记 notice,之后记 debug")
+            let watcherSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/MediaControlStreamWatcher.swift"), encoding: .utf8)) ?? ""
+            expectEqual(sourceHas(watcherSource, """
+                if digest.trackChangeKey != nil || digest.pausedAtArrival || digest.resumedAtArrival {
+                    anchorSightingsSinceEvent = 0
+                }
+                """), true, "anchor sighting: 换歌、暂停、恢复时计数清零")
             // watcher 重启时整份吐出的旧锚点:到达时时间戳已经 30s 老 → loose
             let stale = MediaControlStreamWatcher.digest(line: full, merged: [:], arrivedAt: ts.addingTimeInterval(30))
             expectEqual(stale.anchorKey != nil && stale.tight == false, true, "digest: 重启时看到的旧锚点只算 loose")

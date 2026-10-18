@@ -216,6 +216,8 @@ public final class MediaControlStreamWatcher {
 
     /// 最近一行带 playing 的状态(nil = 还没见过)。判"锚点是不是在暂停中发布的"要用。
     private var lastPlaying: Bool?
+    /// 上一次换歌、暂停、恢复之后见过几个锚点,决定 `anchor sighting` 那行记什么级别(`logsAnchorSightingAsNotice`)。
+    private var anchorSightingsSinceEvent = 0
 
     /// stream 输出里"当前 Now Playing"的合并状态:`diff:false` 的行整份替换,`diff:true` 的行
     /// 只带变化的字段。只留拼锚点身份要用的四个键(artist/title/elapsedTime/timestamp),外加判暂停
@@ -281,9 +283,13 @@ public final class MediaControlStreamWatcher {
                     lastAnchorTitle = title
                     lastAnchorDuration = duration
                 }
-                // 每个新锚点一行(换歌/暂停/恢复才有),不是每拍都打。年龄是"到达时锚点整秒时间戳
-                // 已经多老",tight 与否就看它。
-                Self.logger.notice("anchor sighting tight=\(digest.tight) ageAtArrival=\(digest.anchorAge ?? -1, format: .fixed(precision: 3)) key=\(key, privacy: .public)")
+                // 每个新锚点一行,不是每拍都打。年龄是"到达时锚点整秒时间戳已经多老",tight 与否就看它。
+                if digest.trackChangeKey != nil || digest.pausedAtArrival || digest.resumedAtArrival {
+                    anchorSightingsSinceEvent = 0
+                }
+                let level: OSLogType = Self.logsAnchorSightingAsNotice(sinceEvent: anchorSightingsSinceEvent) ? .default : .debug
+                anchorSightingsSinceEvent += 1
+                Self.logger.log(level: level, "anchor sighting tight=\(digest.tight) ageAtArrival=\(digest.anchorAge ?? -1, format: .fixed(precision: 3)) key=\(key, privacy: .public)")
             }
         }
         // 一次回调里来了多行也只触发一次 —— 反正下游是"补查一次 poll()",行数没有意义。
@@ -297,6 +303,16 @@ public final class MediaControlStreamWatcher {
             onEvent(stateSignal, resumeSignal)
         }
     }
+
+    /// 换歌、暂停、恢复之后的头几个锚点记 notice:开播连发的几个 0 锚点、恢复锚点是排查位置偏移的依据(02 章决策 41)。
+    /// 之后同一首里的锚点多半是播放器自己的定时重发(KKBOX 约每秒一次、酷狗每句一次),记 debug,不进持久日志。
+    /// 纯函数,selftest 覆盖。见 02 章决策 145。
+    public static func logsAnchorSightingAsNotice(sinceEvent: Int) -> Bool {
+        sinceEvent < noticeAnchorSightingsPerEvent
+    }
+
+    /// 见 `logsAnchorSightingAsNotice`。
+    public static let noticeAnchorSightingsPerEvent = 4
 
     /// 消化 stream 的一行:更新合并状态,并判断这一行是不是一次"锚点目击"。纯函数,selftest
     /// 直接覆盖。

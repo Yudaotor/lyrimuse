@@ -1017,10 +1017,22 @@ func runOpsDiagnosticsTests() {
         print("\n== 主线程卡顿探针 ==")
         typealias W = MainThreadWatchdog
         // 引擎判 App 状态过期:放歌时 15 秒、别的状态 90 秒(appstate.go appStateFreshnessFor):探针要在那之前留下记录。
-        expectEqual(W.stallThreshold < W.sampleAfter && W.sampleAfter < 15, true, "卡顿探针: 先记卡顿、再采样,都早于引擎判过期")
+        expectEqual(W.stallThreshold < W.sampleAfter && W.sampleAfter + W.probeInterval < 15, true,
+                    "卡顿探针: 先记卡顿、再采样,采样那一行最晚隔一拍报出,都早于引擎判过期")
         expectEqual(PlaybackStatePublisher.lateHeartbeatSeconds(for: .playing) < 15
                     && PlaybackStatePublisher.lateHeartbeatSeconds(for: .paused) < 90
                     && PlaybackStatePublisher.lateHeartbeatSeconds(for: .idle) < 90, true, "卡顿探针: 保活晚到的记录早于引擎判过期")
+
+        let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let redirect = (try? String(contentsOf: repoRoot.appendingPathComponent("Sources/lyrimuse/Settings/StandardStreamRedirect.swift"),
+                                    encoding: .utf8)) ?? ""
+        let uninstall = (try? String(contentsOf: repoRoot.appendingPathComponent("scripts/uninstall.sh"), encoding: .utf8)) ?? ""
+        let rotate = redirect.range(of: "FileIO.move(url, to: archiveURL)")
+        let open = redirect.range(of: "let fd = open(url.path, O_WRONLY | O_APPEND | O_CREAT, 0o644)")
+        expectEqual(rotate != nil && open != nil && rotate!.lowerBound < open!.lowerBound
+                    && uninstall.contains(#"APP_LOG_ARCHIVE="$APP_LOG_FILE.old""#), true,
+                    "App 日志: 打开之前超过上限先挪成 .old,卸载脚本一并清理")
 
         var tracker = W.Tracker()
         expectEqual(tracker.shouldProbe(now: 100), true, "卡顿探针: 没有在等的探测就投一个")

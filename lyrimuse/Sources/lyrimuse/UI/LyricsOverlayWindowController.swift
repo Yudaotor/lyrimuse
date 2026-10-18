@@ -279,6 +279,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private var fontZoom = OverlayFontZoom()
     /// 指针停在歌词文字上(或正接着)时轮询 ⌘:按下 ⌘、鼠标不动时收不到任何鼠标事件,监听键盘又要辅助功能权限。
     private var fontZoomModifierPoll: Timer?
+    private var fontZoomPollInterval: TimeInterval = 0
+    /// 轮询看到的指针位置和它上一次移动的时刻(`systemUptime`),决定轮询间隔(`OverlayFontZoom.modifierPollInterval`)。
+    private var fontZoomPointer: (location: NSPoint, movedAt: TimeInterval)?
 
     private func setFontZoomCapture(_ on: Bool) {
         guard on != fontZoomCaptured, let window else { return }
@@ -303,12 +306,18 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         let commandHeld = NSEvent.modifierFlags.contains(OverlayFontZoom.modifier)
         setFontZoomCapture(commandHeld && (fontZoomCaptured ? window.frame.contains(loc) : onLyrics))
         let polling = onLyrics || fontZoomCaptured
-        if polling, fontZoomModifierPoll == nil {
-            let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+        let now = ProcessInfo.processInfo.systemUptime
+        if fontZoomPointer?.location != loc { fontZoomPointer = (loc, now) }
+        let interval = OverlayFontZoom.modifierPollInterval(pointerStillFor: now - (fontZoomPointer?.movedAt ?? now),
+                                                            engaged: commandHeld || fontZoomCaptured)
+        if polling, fontZoomModifierPoll == nil || fontZoomPollInterval != interval {
+            fontZoomModifierPoll?.invalidate()
+            let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.refreshFontZoomCapture() }
             }
             RunLoop.main.add(timer, forMode: .common)
             fontZoomModifierPoll = timer
+            fontZoomPollInterval = interval
         } else if !polling {
             fontZoomModifierPoll?.invalidate()
             fontZoomModifierPoll = nil

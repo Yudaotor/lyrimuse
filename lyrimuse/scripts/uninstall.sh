@@ -39,6 +39,8 @@ LOG_FILE="$PREFIX/Library/Logs/lyrimuse.log"
 LOG_ARCHIVES=("$LOG_FILE.old" "$LOG_FILE.old.1" "$LOG_FILE.old.2")
 # App 进程的 launchd stdout/stderr(单独一份,见 LyrimuseCore LogFiles.appStderr)。
 APP_LOG_FILE="$PREFIX/Library/Logs/lyrimuse-app.log"
+# 它在 App 启动时超过上限就挪成这一份(见 StandardStreamRedirect.archiveURL)。
+APP_LOG_ARCHIVE="$APP_LOG_FILE.old"
 # App 主线程卡住时采的调用栈(见 LyrimuseCore LogFiles.mainThreadStall)。
 STALL_SAMPLE_FILE="$PREFIX/Library/Logs/lyrimuse-main-thread-stall.txt"
 
@@ -82,7 +84,7 @@ for label in "$ENGINE_LABEL" "$APP_LABEL"; do
     echo "  launchd job  $label  [未注册]"
   fi
 done
-for p in "$ENGINE_PLIST" "$APP_PLIST" "$CONFIG_DIR" "$LOG_FILE" "${LOG_ARCHIVES[@]}" "$APP_LOG_FILE" "$STALL_SAMPLE_FILE"; do
+for p in "$ENGINE_PLIST" "$APP_PLIST" "$CONFIG_DIR" "$LOG_FILE" "${LOG_ARCHIVES[@]}" "$APP_LOG_FILE" "$APP_LOG_ARCHIVE" "$STALL_SAMPLE_FILE"; do
   if [[ -e "$p" ]]; then
     echo "  存在  $p  ($(human_size "$p"))"
   else
@@ -162,6 +164,7 @@ for p in "${LOG_ARCHIVES[@]}"; do
   [[ -e "$p" ]] && TO_DELETE+=("$p")
 done
 [[ -e "$APP_LOG_FILE" ]] && TO_DELETE+=("$APP_LOG_FILE")
+[[ -e "$APP_LOG_ARCHIVE" ]] && TO_DELETE+=("$APP_LOG_ARCHIVE")
 [[ -e "$STALL_SAMPLE_FILE" ]] && TO_DELETE+=("$STALL_SAMPLE_FILE")
 if (( ${#TO_DELETE[@]} == 0 )); then
   echo "  （没有数据文件）"
