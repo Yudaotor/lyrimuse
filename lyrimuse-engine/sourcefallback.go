@@ -55,6 +55,20 @@ var (
 	musixmatchBases = []string{"https://apic-appmobile.musixmatch.com/ws/1.1/", "https://apic.musixmatch.com/ws/1.1/"}
 )
 
+// 备用主机平时只在没问成时才问。不急着上屏的几条路(手动搜索、重新自动匹配、升级重试、规则换版重选)
+// 另外允许在主用主机答了、但答的结果里没有能用的那条时再问一次备用主机;首次解析不问,免得拖慢上屏。
+// 目前只有汽水用它(sodaLyricBySearch)。
+type lyricSearchBackupHostsKey struct{}
+
+func withLyricSearchBackupHosts(ctx context.Context) context.Context {
+	return context.WithValue(ctx, lyricSearchBackupHostsKey{}, true)
+}
+
+func lyricSearchAsksBackupHosts(ctx context.Context) bool {
+	v, _ := ctx.Value(lyricSearchBackupHostsKey{}).(bool)
+	return v || manualLyricSearch(ctx)
+}
+
 // errSourceNotReached:这次没问成(不是「查无」)。
 var errSourceNotReached = errors.New("source: not reached")
 

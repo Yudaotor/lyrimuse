@@ -1907,6 +1907,8 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 
 // retryLyricsUpgradeWith 是带上手动重新匹配那几处差别的 retryLyricsUpgrade,见 lyricsRescoreOpts。
 func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album string, durationSecs float64, firstFill bool, opts lyricsRescoreOpts) {
+	// 已经有词在屏上、不急:主用主机答了却没有能用的结果时也问备用主机,见 lyricSearchAsksBackupHosts。
+	ctx = withLyricSearchBackupHosts(ctx)
 	defer func() {
 		enrichMu.Lock()
 		delete(enrichInflight, key)
@@ -2299,6 +2301,8 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 
 // rescoreLyricsWith 是带上手动重新匹配那几处差别的 rescoreLyrics,见 lyricsRescoreOpts。
 func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, durationSecs float64, opts lyricsRescoreOpts) (deferred bool) {
+	// 已经有词在屏上、不急:主用主机答了却没有能用的结果时也问备用主机,见 lyricSearchAsksBackupHosts。
+	ctx = withLyricSearchBackupHosts(ctx)
 	defer func() {
 		enrichMu.Lock()
 		delete(enrichInflight, key)

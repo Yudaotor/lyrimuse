@@ -11,6 +11,7 @@ import (
 	"math"
 	"net/http"
 	neturl "net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -141,6 +142,7 @@ var (
 type sodaSearchCacheEntry struct {
 	items []sodaSearchItem
 	at    time.Time
+	host  string // 答了话的那个主机
 }
 
 const (
@@ -189,8 +191,29 @@ func sodaLyric(ctx context.Context, artist, title, album string, durationSecs fl
 }
 
 // sodaLyricBySearch 搜索兜底:身份闸淘汰后按名次依次试,拿到带词的那条就收工。
+// 这一轮允许问备用主机(lyricSearchAsksBackupHosts)时,答了话的主机给的结果里没有一条拿得到词,再问排在它后面的主机:
+// 同一个查询两个主机给的结果可能整组不同,主用主机那份里连原版都没有。见 09 章决策 282。
 func sodaLyricBySearch(ctx context.Context, artist, title, album string, durationSecs float64) (sodaResult, bool) {
-	key := artist + "|" + title
+	r, noLyrics, host := sodaLyricFromHosts(ctx, sodaSearchHosts, artist, title, album, durationSecs)
+	if !r.empty() || host == "" || !lyricSearchAsksBackupHosts(ctx) {
+		return r, noLyrics
+	}
+	i := slices.Index(sodaSearchHosts, host)
+	if i < 0 || i+1 >= len(sodaSearchHosts) {
+		return r, noLyrics
+	}
+	backup, backupNoLyrics, backupHost := sodaLyricFromHosts(ctx, sodaSearchHosts[i+1:], artist, title, album, durationSecs)
+	if !backup.empty() {
+		log.Printf("soda: %s had no usable match for %q - %q, backup host %s did", host, artist, title, backupHost)
+		return backup, false
+	}
+	return backup, noLyrics || backupNoLyrics
+}
+
+// sodaLyricFromHosts 按 hosts 的顺序搜一次(没问成才换下一个),过身份闸后按名次取词。host 是答了话的主机,
+// 全都没问成时是空串。
+func sodaLyricFromHosts(ctx context.Context, hosts []string, artist, title, album string, durationSecs float64) (sodaResult, bool, string) {
+	key := hosts[0] + "|" + artist + "|" + title
 	now := time.Now()
 	sodaSearchMu.Lock()
 	cached, ok := sodaSearchCache[key]
@@ -199,16 +222,16 @@ func sodaLyricBySearch(ctx context.Context, artist, title, album string, duratio
 	if len(cached.items) == 0 {
 		ttl = sodaSearchEmptyTTL
 	}
-	items := cached.items
+	items, host := cached.items, cached.host
 	if !ok || now.Sub(cached.at) >= ttl {
 		var err error
-		items, err = sodaSearch(ctx, artist, title)
+		items, host, err = sodaSearchVia(ctx, hosts, artist, title)
 		if err != nil {
 			infoFailf("soda: search for %q - %q failed: %v", artist, title, err)
-			return sodaResult{}, false
+			return sodaResult{}, false, ""
 		}
 		sodaSearchMu.Lock()
-		sodaSearchCache[key] = sodaSearchCacheEntry{items: items, at: now}
+		sodaSearchCache[key] = sodaSearchCacheEntry{items: items, at: now, host: host}
 		sodaSearchMu.Unlock()
 	}
 	ids := sodaRankCandidates(items, artist, title, album, durationSecs)
@@ -220,11 +243,11 @@ func sodaLyricBySearch(ctx context.Context, artist, title, album string, duratio
 		}
 		r, noLyrics := sodaLyricByID(ctx, id, artist, title)
 		if !r.empty() {
-			return r, false
+			return r, false, host
 		}
 		lastNoLyrics = lastNoLyrics || noLyrics
 	}
-	return sodaResult{}, lastNoLyrics
+	return sodaResult{}, lastNoLyrics, host
 }
 
 // sodaLyricByID 按曲目 id 取词。两条入口(本地 id / 搜索到的 id)共用。
@@ -657,20 +680,27 @@ func sodaCandidateScore(item sodaSearchItem, artist, title, album string, durati
 
 // sodaSearch 按 sodaSearchHosts 逐个主机发一次搜索请求;只有没问成才换下一个。
 func sodaSearch(ctx context.Context, artist, title string) ([]sodaSearchItem, error) {
+	items, _, err := sodaSearchVia(ctx, sodaSearchHosts, artist, title)
+	return items, err
+}
+
+// sodaSearchVia 同 sodaSearch,主机按 hosts 的顺序试;另外交出答了话的那个主机。
+func sodaSearchVia(ctx context.Context, hosts []string, artist, title string) ([]sodaSearchItem, string, error) {
 	// 搜索词里歌名带编号时去掉带编号的那几层,见 lyricQueryTitle。
 	q := strings.TrimSpace(strings.TrimSpace(artist) + " " + strings.TrimSpace(lyricQueryTitle(title)))
 	if q == "" {
-		return nil, nil
+		return nil, "", nil
 	}
 	var items []sodaSearchItem
-	err := tryEach(ctx, sodaSearchHosts, func(host string) error {
+	var answered string
+	err := tryEach(ctx, hosts, func(host string) error {
 		got, err := sodaSearchAt(ctx, host, q)
 		if err == nil {
-			items = got
+			items, answered = got, host
 		}
 		return err
 	})
-	return items, err
+	return items, answered, err
 }
 
 // sodaSearchAt 打一个主机上的搜索;两个主机同一个路径、同一个响应结构(实测)。
