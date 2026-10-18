@@ -13,6 +13,8 @@ LYRIMUSE_GO_TEST_SHARDS(默认 4)份 → 同时跑。耗时记在 <树根>/.buil
 没过(打出它的输出);单跑过了照样算通过,打一行提醒 —— 那是测试之间争同一份进程外资源(端口、固定路径),不是
 被测代码的问题,要修的是测试的隔离。
 
+带 -test.short 跑:按设计打真实网络的测试(skipLiveInShort)在这里跳过,CI 整套跑不带 -short,它们留在那里验。
+
 不进 go 自己的测试缓存:要不要跑、跑哪几个由 commit-checks.sh 按「这个目录上一次通过的树」到这一棵的改动定。
 """
 import json
@@ -28,7 +30,7 @@ TOP = re.compile(r'^--- (PASS|FAIL|SKIP): (\S+) \(([\d.]+)s\)')
 def run_shard(binary, engine, names, out_path, pattern=None):
     pat = pattern or '^(' + '|'.join(re.escape(n) for n in names) + ')$'
     out = open(out_path, 'w')
-    return subprocess.Popen([binary, '-test.run', pat, '-test.count=1', '-test.v', '-test.timeout=10m'],
+    return subprocess.Popen([binary, '-test.run', pat, '-test.count=1', '-test.short', '-test.v', '-test.timeout=10m'],
                             cwd=engine, stdout=out, stderr=subprocess.STDOUT)
 
 

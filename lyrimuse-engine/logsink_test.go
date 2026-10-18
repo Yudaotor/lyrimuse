@@ -192,7 +192,8 @@ func TestRotatingLogFile_StderrFollowsRotation(t *testing.T) {
 	redirectStderrTo(r.f)
 	_, _ = r.Write([]byte("first line, about 25 b\n"))
 	_, _ = r.Write([]byte("second line pushes past the cap\n"))
-	_, _ = os.Stderr.WriteString("stderr probe after rotation\n")
+	// 直接写 fd 2:go test -json 下 os.Stderr 不经 fd 2,探针写它就测不到重定向。
+	_, _ = syscall.Write(2, []byte("stderr probe after rotation\n"))
 	restore()
 
 	cur, _ := os.ReadFile(path)

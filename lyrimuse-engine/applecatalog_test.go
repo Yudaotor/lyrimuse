@@ -177,12 +177,22 @@ func skipUnlessStorefrontsAnswered(t *testing.T, complete bool) {
 	}
 }
 
+// skipLiveInShort:按设计打真实网络的测试在 -short 下跳过。提交校验(go-test-shards.py)带 -short,不等第三方、
+// 不因对方限流时红时绿;CI 整套跑不带 -short,这几条照样打真实服务。
+func skipLiveInShort(t *testing.T) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("按设计打真实网络,-short 下跳过")
+	}
+}
+
 // TestAppleStorefrontArtistIdentitiesLive 是真实网络集成测试(加,方大同
 // 《Lovers Policy》案,见 appleStorefrontArtistIdentities 头注)——直接打真实 iTunes
 // Search API,不 mock。跟同包内 TestRetryArtistIdentitiesGenericMusicBrainzReverseDirection
 // 同一个前提:这类"通用查询是否真的通用"的验证,意义就在于打真实的第三方服务,mock 掉
 // 就只是在验证自己写的 mock 数据,证明不了任何事。iTunes 这一刻没答全时跳过,见 skipUnlessStorefrontsAnswered。
 func TestAppleStorefrontArtistIdentitiesLive(t *testing.T) {
+	skipLiveInShort(t)
 	withEmptyAppleStorefrontCaches(t)
 	// US 商店里这首叫「情勝策略」(243.3s):曲名跨文字系统 + 时长对上才放行,见 appleStorefrontTrackMatches。
 	got, _, complete := appleStorefrontIdentitiesAndTitle(context.Background(), "方大同", "Lovers Policy", "15", 243.3, nil)
@@ -213,6 +223,7 @@ func TestAppleStorefrontArtistIdentitiesLive(t *testing.T) {
 //
 // 跟上面 TestAppleStorefrontArtistIdentitiesLive 同一个前提:真打 iTunes,不 mock;这一刻没答全时跳过。
 func TestAppleStorefrontCanonicalTitleLive(t *testing.T) {
+	skipLiveInShort(t)
 	withEmptyAppleStorefrontCaches(t)
 
 	const wantTitle = "クスシキ"

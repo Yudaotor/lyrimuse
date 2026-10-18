@@ -163,6 +163,7 @@ func TestRetryArtistIdentitiesFallsBackToQQ(t *testing.T) {
 // "Khalil Fong"，不依赖任何手工登记。命中 MusicBrainz 的真实数据、发起真实网络请求
 // (跟同文件里 TestRetryArtistIdentitiesUsesMusicBrainzName 等测试同一个前提)。
 func TestRetryArtistIdentitiesGenericMusicBrainzReverseDirection(t *testing.T) {
+	skipLiveInShort(t)
 	withEnrichCache(t, nil)
 	const artist = "方大同"
 	// 先把这条真实查询单独跑一遍、拿它**自己**的 error —— 这是"MB 没答"和"MB 答了但

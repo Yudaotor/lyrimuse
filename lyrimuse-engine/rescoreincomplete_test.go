@@ -18,13 +18,14 @@ const rescoreTestNewBody = "[00:05.00]Brand new first line\n[00:15.00]Brand new 
 
 // 走真实的 rescoreLyrics,歌词源只开 sources 里那几个,musixmatch 换成假的(返回 rescoreTestNewBody,并调一次 onFetch)。
 // 可用源数够不上兜底轮门槛时会去解析歌手别名:MusicBrainz 那一路预先记成"查过、没有",走歌词源传输的请求拨号即失败,
-// iTunes 指到不监听的本机端口 —— 整轮不连外网。
+// iTunes 指到不监听的本机端口 —— 整轮不连外网。出站闸换一份令牌给足的:伴奏版标题会顺带跑标题反查,
+// 那几次搜索拨号即失败,但照样要等全局闸的限速令牌,一次重评能等两秒。
 func setupRescoreTest(t *testing.T, sources []string, onFetch func(ctx context.Context)) {
 	t.Helper()
 	setupTranslateStart(t)
 	savedPlaying := enrichPlayingKey.Load()
 	savedResolve := musixmatchResolve
-	savedBreaker, savedTransport := sharedLyricSourceBreaker(), sharedLyricSourceTransport()
+	savedGuard, savedBreaker, savedTransport := sharedHostGuard(), sharedLyricSourceBreaker(), sharedLyricSourceTransport()
 	savedLookup, savedSearch, savedCatalog := itunesLookupTracksURL, itunesSearchBaseURL, appleCatalogLookupURL
 	artistAliasMu.Lock()
 	_, hadAlias := artistAliasCache[rescoreTestArtist]
@@ -34,6 +35,7 @@ func setupRescoreTest(t *testing.T, sources []string, onFetch func(ctx context.C
 	t.Cleanup(func() {
 		enrichPlayingKey.Store(savedPlaying)
 		musixmatchResolve = savedResolve
+		setSharedHostGuard(savedGuard)
 		setSharedLyricSourceBreaker(savedBreaker)
 		setSharedLyricSourceTransport(savedTransport)
 		itunesLookupTracksURL, itunesSearchBaseURL, appleCatalogLookupURL = savedLookup, savedSearch, savedCatalog
@@ -49,6 +51,9 @@ func setupRescoreTest(t *testing.T, sources []string, onFetch func(ctx context.C
 	setSharedLyricSourceTransport(&http.Transport{DialContext: func(context.Context, string, string) (net.Conn, error) {
 		return nil, errors.New("offline in tests")
 	}})
+	guard := newHostGuard(time.Now)
+	guard.rateFor = func(string) hostRate { return hostRate{perSec: 1000, burst: 1000} }
+	setSharedHostGuard(guard)
 	setSharedLyricSourceBreaker(newLyricSourceBreaker(time.Now))
 	resetMusixmatchCacheForTest(t)
 	enabled := map[string]bool{}
