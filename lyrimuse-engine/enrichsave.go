@@ -56,8 +56,9 @@ import (
 // enrichSaveMinInterval 两次保存之间的最小间隔(节流打开时)。
 var enrichSaveMinInterval = 2 * time.Second
 
-// enrichBackgroundSaveDelay 改动最多攒多久才整份落盘(正在播的那首另有单条快照,见文件头注)。
-var enrichBackgroundSaveDelay = 10 * time.Minute
+// enrichBackgroundSaveDelay 改动最多攒多久才整份落盘(正在播的那首另有单条快照,见文件头注)。带 key 的改动在这之前已经
+// 进了待落盘小文件(enrichpending.go),App 叠得上、引擎重启叠得回;只有不带 key 的后台批量改动要等它。见 15 章决策 62。
+var enrichBackgroundSaveDelay = 30 * time.Minute
 
 var (
 	enrichSaveThrottleMu sync.Mutex
@@ -239,7 +240,7 @@ func requestEnrichBackgroundSave() {
 }
 
 // enrichBookkeepingSaveDelay 只推进了记账字段(重试计数 / 时间戳)的改动最多攒多久才落盘。
-var enrichBookkeepingSaveDelay = 10 * time.Minute
+var enrichBookkeepingSaveDelay = 30 * time.Minute
 
 // requestEnrichBookkeepingSave 是「这一趟一个歌词字段都没换,只推进了重试计数 / 时间戳」时的保存入口
 // (升级重试、重评)。全量扫库、补空扫描每首都走这两条路,大多数一个字都没改:每首都整份写一次主缓存

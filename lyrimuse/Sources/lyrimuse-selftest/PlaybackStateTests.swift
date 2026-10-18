@@ -223,6 +223,16 @@ func runPlaybackStateTests() {
     expectEqual(hold2.decide(current: cur, next: other, now: t0.addingTimeInterval(1)), .accept,
                 "撕裂快照: 形态解除立即放行")
 
+    // ---- 保活间隔按状态分:放歌 5 秒,暂停、停播 30 秒(02 章决策 143)----
+    expectEqual(F.heartbeatInterval(for: .playing), 5, "保活: 放歌时 5 秒一次")
+    expectEqual(F.heartbeatInterval(for: .paused) == 30 && F.heartbeatInterval(for: .idle) == 30, true, "保活: 不放歌时 30 秒一次")
+    let heartbeatSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/PlaybackStateFile.swift"), encoding: .utf8)) ?? ""
+    expectEqual(sourceHas(sourceBody("public func publish(", in: heartbeatSource), "syncHeartbeat(for: content.state)")
+                && sourceHas(sourceBody("private func syncHeartbeat(", in: heartbeatSource),
+                             "guard heartbeat == nil || heartbeatEvery != interval else { return }"), true,
+                "保活: 每次发布按当前状态对一次计时器,换档时重建")
+
     // ---- 放歌时持有系统活动(防 App Nap 推迟保活),别的状态不持有(02 章决策 89)----
     expectEqual(PlaybackStatePublisher.holdsActivity(for: .playing), true, "防节能: 放歌时持有活动")
     for state in [F.State.paused, .idle, .exiting] {

@@ -171,7 +171,7 @@ final class ScrobbleBackfillService: ObservableObject {
                 // 常驻进程消费掉它并排一个 backfillFeedNudgeDelay(5 s)之后的拉取(必须带这个延迟,当场拉回来的是旧内容),
                 // App 靠 5 s 一次的 mtime 轮询几秒内拿到。
                 //
-                // 下面这发延迟强刷只兜引擎不在的情况,别把它当成主路径:feedIsFresh 看的是 feed 的 fetchedAt 在不在 180 s
+                // 下面这发延迟强刷只兜引擎不在的情况,别把它当成主路径:feedIsFresh 看的是 feed 的 fetchedAt 在不在 freshWindow
                 // 窗口内,而引擎只要活着就每 feedHeartbeat(60 s)重写一次 feed,跟有没有包含刚补的那几条无关,所以引擎在跑时
                 // 这一发不会触发。
                 Task { @MainActor in

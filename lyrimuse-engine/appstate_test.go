@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -148,6 +150,38 @@ func TestAppStateUsable(t *testing.T) {
 	noPID.AppPID = 0
 	if got := appStateUsable(noPID, written, alwaysAlive); got != appStateProcessGone {
 		t.Fatalf("missing pid: got %s", got)
+	}
+	for _, state := range []string{"paused", "idle"} {
+		quiet := rec
+		quiet.State = state
+		if got := appStateUsable(quiet, written.Add(80*time.Second), alwaysAlive); got != appStateAvailable {
+			t.Fatalf("%s, 80s old (heartbeat every 30s): got %s", state, got)
+		}
+		if got := appStateUsable(quiet, written.Add(91*time.Second), alwaysAlive); got != appStateStale {
+			t.Fatalf("%s, 91s old: got %s", state, got)
+		}
+	}
+}
+
+// 引擎判过期的阈值不小于 App 保活间隔的三倍(Swift PlaybackStateFile.heartbeatInterval(for:))。
+func TestAppStateFreshnessCoversSwiftHeartbeat(t *testing.T) {
+	src, err := os.ReadFile("../lyrimuse/Sources/LyrimuseCore/Local/PlaybackStateFile.swift")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`state == \.playing \? (\d+) : (\d+)`).FindStringSubmatch(string(src))
+	if m == nil {
+		t.Fatal("找不到 Swift 侧 heartbeatInterval(for:) 的两档间隔")
+	}
+	playing, _ := strconv.Atoi(m[1])
+	quiet, _ := strconv.Atoi(m[2])
+	if appStateFreshnessFor("playing") < 3*time.Duration(playing)*time.Second {
+		t.Fatalf("放歌时阈值 %v 小于保活 %ds 的三倍", appStateFreshnessFor("playing"), playing)
+	}
+	for _, state := range []string{"paused", "idle"} {
+		if appStateFreshnessFor(state) < 3*time.Duration(quiet)*time.Second {
+			t.Fatalf("%s 阈值 %v 小于保活 %ds 的三倍", state, appStateFreshnessFor(state), quiet)
+		}
 	}
 }
 

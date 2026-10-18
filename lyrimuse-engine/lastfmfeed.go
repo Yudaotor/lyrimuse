@@ -37,15 +37,20 @@ const feedHeartbeat = 60 * time.Second
 // feed 拉取节奏(自适应,替代原来固定的 lastfmPollInterval=15s):
 //   - 有人在听(本机在放、或 feed 里最近 feedActivityWindow 内有 now-playing / 新 scrobble)
 //     → feedIntervalActive(15 s),跟原桥接一样快,红点/新行 ≤15 s 到位;
-//   - 完全空闲 → feedIntervalIdle(60 s):这时 Last.fm 上不会有任何新东西,拉得再快也只是
+//   - 空闲 → feedIntervalIdle(60 s):这时 Last.fm 上不会有任何新东西,拉得再快也只是
 //     白发请求。手机一开播,最多 60 s 后进入活跃节奏。
+//   - 最近一次动静已过 feedDeepIdleAfter(1 小时),或账号里一条记录都没有 → feedIntervalDeepIdle(5 分钟):
+//     睡觉、出门那几个小时按 60 s 拉,一天四五百次请求全是白发。手机一开播,最多 5 分钟后进入活跃节奏。
+//     App 判 feed 新不新鲜的窗口(LastfmRecentFeed.freshWindow)跟着这一档,两边一起改。见 12 章决策 84。
 //
-// 桥接(iPhone→LB 转发)沿用同一个节奏:空闲时 60 s 才发现手机开播,对"转发已完成的收听"
+// 桥接(iPhone→LB 转发)沿用同一个节奏:空闲时晚几分钟发现手机开播,对"转发已完成的收听"
 // 这件事毫无影响(bridgeMaxListenAge 是 3 天)。
 const (
-	feedIntervalActive = 15 * time.Second
-	feedIntervalIdle   = 60 * time.Second
-	feedActivityWindow = 10 * time.Minute
+	feedIntervalActive   = 15 * time.Second
+	feedIntervalIdle     = 60 * time.Second
+	feedIntervalDeepIdle = 5 * time.Minute
+	feedActivityWindow   = 10 * time.Minute
+	feedDeepIdleAfter    = time.Hour
 )
 
 // lastfmFeedInterval 决定下一次拉取要隔多久。纯函数,单测钉住。
@@ -53,10 +58,16 @@ func lastfmFeedInterval(localPlaying bool, lastActivity, now time.Time) time.Dur
 	if localPlaying {
 		return feedIntervalActive
 	}
-	if !lastActivity.IsZero() && now.Sub(lastActivity) < feedActivityWindow {
-		return feedIntervalActive
+	if lastActivity.IsZero() {
+		return feedIntervalDeepIdle
 	}
-	return feedIntervalIdle
+	switch since := now.Sub(lastActivity); {
+	case since < feedActivityWindow:
+		return feedIntervalActive
+	case since < feedDeepIdleAfter:
+		return feedIntervalIdle
+	}
+	return feedIntervalDeepIdle
 }
 
 // lastfmFeedActivityAt 从一页拉取结果里判断"最近一次活动"是什么时候:有 now-playing 就是

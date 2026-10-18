@@ -1016,9 +1016,11 @@ func runOpsDiagnosticsTests() {
     do {
         print("\n== 主线程卡顿探针 ==")
         typealias W = MainThreadWatchdog
-        // 引擎判 App 状态过期是 15 秒(appstate.go appStateFreshness):探针要在那之前留下记录。
+        // 引擎判 App 状态过期:放歌时 15 秒、别的状态 90 秒(appstate.go appStateFreshnessFor):探针要在那之前留下记录。
         expectEqual(W.stallThreshold < W.sampleAfter && W.sampleAfter < 15, true, "卡顿探针: 先记卡顿、再采样,都早于引擎判过期")
-        expectEqual(PlaybackStatePublisher.lateHeartbeatSeconds < 15, true, "卡顿探针: 保活晚到的记录早于引擎判过期")
+        expectEqual(PlaybackStatePublisher.lateHeartbeatSeconds(for: .playing) < 15
+                    && PlaybackStatePublisher.lateHeartbeatSeconds(for: .paused) < 90
+                    && PlaybackStatePublisher.lateHeartbeatSeconds(for: .idle) < 90, true, "卡顿探针: 保活晚到的记录早于引擎判过期")
 
         var tracker = W.Tracker()
         expectEqual(tracker.shouldProbe(now: 100), true, "卡顿探针: 没有在等的探测就投一个")

@@ -1633,8 +1633,8 @@ func runLastfmTests() {
         expectEqual(LastfmRecentFeed.decode(Data("{\"tracks\":[]}".utf8)), nil, "feed: 缺必填字段 → nil")
 
         let at = Date(timeIntervalSince1970: 1800000000)
-        expectEqual(feed?.isFresh(now: at.addingTimeInterval(179)), true, "feed: 3 分钟内算活着")
-        expectEqual(feed?.isFresh(now: at.addingTimeInterval(180)), false, "feed: 满 3 分钟算陈旧")
+        expectEqual(feed?.isFresh(now: at.addingTimeInterval(419)), true, "feed: 7 分钟内算活着(引擎最慢 5 分钟拉一次)")
+        expectEqual(feed?.isFresh(now: at.addingTimeInterval(420)), false, "feed: 满 7 分钟算陈旧")
         expectEqual(feed?.isFresh(now: at.addingTimeInterval(-5)), false, "feed: 时间戳在未来(时钟回拨)不算活着")
 
         expectEqual(LastfmRecentFeed.totalPages(total: 24271, pageSize: 20), 1214, "feed: 总页数向上取整(跟网页 1214 页一致)")

@@ -3,7 +3,7 @@ import Foundation
 /// 引擎落盘的 Last.fm「最近记录」feed(`lyrimuse-lastfm-recent-feed.json`)。
 ///
 /// 写入方是引擎的桥接拉取(lyrimuse-engine/lastfmfeed.go):它本来就每 15 s
-/// (空闲 60 s)拉一次 `user.getrecenttracks limit=50`,现在把结果原样落盘。App 侧读它代替
+/// (空闲 60 s、一小时没动静 5 分钟)拉一次 `user.getrecenttracks limit=50`,现在把结果原样落盘。App 侧读它代替
 /// 自己直连轮询同一个接口——本机实测 App 那条链路(URLSession 走系统代理)p50 1.2 s、16%
 /// 超时,引擎的 Go 直连 p50 0.4 s、~1% 失败;而且同一份数据两个进程各拉一遍本来就没有
 /// 道理。字段名跟 Go 侧 `lastfmFeedFile` 逐字对应,改一边必须改另一边。
@@ -46,10 +46,10 @@ public struct LastfmRecentFeed: Equatable, Decodable, Sendable {
         self.tracks = tracks
     }
 
-    /// feed 多旧算"活着"。引擎内容没变时也至少每 60 s 心跳重写一次、空闲拉取周期 60 s,
-    /// 两者相加再留余量:3 分钟内有过写入就认为引擎在、数据可信;超过就当它不在,
-    /// App 退回自己轮询(旧行为)。
-    public static let freshWindow: TimeInterval = 180
+    /// feed 多旧算"活着"。`fetchedAt` 是拉取时刻,最旧落后一个拉取周期(最慢那档 5 分钟)再加心跳 60 s,
+    /// 再留余量:7 分钟内拉过就认为引擎在、数据可信;超过就当它不在,App 退回自己轮询(旧行为)。
+    /// 引擎那边的拉取节奏改了要跟着改(lastfmfeed.go 有测试守着)。见 12 章决策 84。
+    public static let freshWindow: TimeInterval = 420
 
     public func isFresh(now: Date = Date()) -> Bool {
         let age = now.timeIntervalSince1970 - fetchedAt

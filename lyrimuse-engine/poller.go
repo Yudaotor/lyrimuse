@@ -1431,10 +1431,10 @@ func (p *poller) bridge(now time.Time) {
 	//
 	// 当场拉的代价不止"这一次白拉":拉回来的是旧内容,却照样把 feed 的 fetchedAt 刷成此刻,
 	// 于是 App 侧那道兜底强刷(ScrobbleBackfillService 在 accepted > 0 之后 8 秒发、判据是
-	// LastfmStatsService.feedIsFresh → LastfmRecentFeed.isFresh,fetchedAt 在 180 s 窗口内)
+	// LastfmStatsService.feedIsFresh → LastfmRecentFeed.isFresh,fetchedAt 在 freshWindow 窗口内)
 	// **永远判"新鲜"、永远不触发** —— 而 feed 只要引擎活着就每 60 s 心跳重写一次
 	// (feedHeartbeat),fetchedAt 跟内容有没有变没关系。两头一叠,补提交之后列表只能干等下一个
-	// 15 s/60 s 周期才刷新。镜像 scrobble 那条路径也是延迟 5 秒的,这里跟它对齐。
+	// 拉取周期才刷新。镜像 scrobble 那条路径也是延迟 5 秒的,这里跟它对齐。
 	if lastfmFeedNudgeFileDue() {
 		requestLastfmFeedRefresh(backfillFeedNudgeDelay)
 	}
@@ -1734,7 +1734,7 @@ func (p *poller) applyAppPlaybackTick(now time.Time, t appPlaybackTick) (reancho
 		p.nullStreak++
 		if nullStreakMeansStopped(p.nullStreak, p.nullSince, now) {
 			p.cur = snapshot{}
-			// 广告标记跟着留下的那一首走,p.cur 清空时才清。别在空拍一来就清:App 卡住超过 appStateFreshness 时
+			// 广告标记跟着留下的那一首走,p.cur 清空时才清。别在空拍一来就清:App 卡住超过 appStateFreshnessFor 时
 			// 引擎进待机、p.cur 还留着那首广告,标记先没了的话补歌词会把广告当歌搜、写进缓存(见 02 章决策 99)。
 			noteAppReportedAd(snapshot{}, false)
 		}

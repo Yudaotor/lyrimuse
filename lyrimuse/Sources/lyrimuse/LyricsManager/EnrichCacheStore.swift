@@ -472,7 +472,7 @@ public final class EnrichCacheStore: ObservableObject {
             }
             // 只留 obj 这一个引用,下面 dropMainLyrics 才是就地改、不复制整份。
             snapshot.obj = nil
-            // 比整份新的待落盘条目、单条快照叠上去(见 EnrichPendingEntries / PlayingEntrySnapshot):整份最多攒 10 分钟才落盘。
+            // 比整份新的待落盘条目、单条快照叠上去(见 EnrichPendingEntries / PlayingEntrySnapshot):整份最多攒 30 分钟才落盘。
             // 两份都新时先叠旧的那份,同一条以后写的为准。
             let cacheMTime = box.fingerprint?.mtime
             box.pendingFingerprint = Self.fileFingerprint(EnrichPendingEntries.url)
@@ -544,7 +544,7 @@ public final class EnrichCacheStore: ObservableObject {
     }
 
     /// 整份缓存没变时还要重读的两种情况:待落盘条目比整份新、又换了一版,而且改到了列表行的状态(新歌、有没有词这些,
-    /// 见 `EnrichPendingEntries.changesListedRows`;预取、补空扫描约几秒就写一版,整份最多攒 10 分钟);单条快照比整份新、
+    /// 见 `EnrichPendingEntries.changesListedRows`;预取、补空扫描约几秒就写一版,整份最多攒 30 分钟);单条快照比整份新、
     /// 里面那首还不在列表里(新歌首次解析)。同一版只看一次;单条快照里已经在列表里的那首不为它整份重读(一首歌里快照要写
     /// 好几次,整份重读一次近 1 秒)。待落盘文件最多 200 条带正文的条目,在后台读。轮询多久问一次由调用方定
     /// (LyricsManagerRefresh)。见 11 章决策 127。

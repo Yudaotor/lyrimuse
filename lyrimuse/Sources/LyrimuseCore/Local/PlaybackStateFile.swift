@@ -11,7 +11,7 @@ import os
 /// - `play_seq`:每开始播一首加一,同一首重新起播(单曲循环、拖回开头)也加一;从停播回到同一首不加。
 /// - `anchor_seq`:位置出现一次不连续(拖动、恢复、校准跳变)加一。位置在连续播放期间不重写,
 ///   读方按 `secs + (now - at_ms) × rate` 外推。
-/// - 平时每 `heartbeatInterval` 秒重写一次(`seq` 与 `written_at_ms` 前进),读方据此判 App 还在。
+/// - 内容没变时按 `heartbeatInterval(for:)` 重写(`seq` 与 `written_at_ms` 前进),读方据此判 App 还在。
 /// - `holding`:App 这几拍读不到播放器、还在宽限期里按住上一份状态(单拍读空、焦点被别的 App 占走),
 ///   内容是旧的,读方不该按它继续累计收听时长。
 public enum PlaybackStateFile {
@@ -21,7 +21,12 @@ public enum PlaybackStateFile {
     public static var artworkURL: URL { LyrimusePaths.configFile(artworkFileName) }
 
     public static let schema = 1
-    public static let heartbeatInterval: TimeInterval = 5
+    /// 内容没变时多久保活一次:放歌时 5 秒,暂停、停播时 30 秒。App 每写一次,引擎那边要连带唤醒几十次(15 章决策 61),
+    /// 不放歌时不必这么勤。引擎判过期的阈值跟着按状态分(appstate.go 的 `appStateFreshnessFor`,不小于这里的三倍),
+    /// 两边一起改。见 02 章决策 143。
+    public static func heartbeatInterval(for state: State) -> TimeInterval {
+        state == .playing ? 5 : 30
+    }
 
     /// 位置跟上一份写出的外推值差出这么多才重写位置(并让 `anchor_seq` 加一)。
     public static let positionRepublishToleranceSecs = 0.25
@@ -356,10 +361,10 @@ public enum PlaybackStateFile {
     }
 }
 
-/// 播放状态文件的写方:内容变了就写,没变时每 `heartbeatInterval` 秒保活一次;退出时写 `exiting`。
+/// 播放状态文件的写方:内容变了就写,没变时按 `heartbeatInterval(for:)` 保活;退出时写 `exiting`。
 ///
 /// 保活计时器跑在主线程上:主线程卡住时保活也停,引擎据此判 App 不可用,而不是按一份冻住的「在播」继续计时。
-/// 保活离上一次写出晚到 `lateHeartbeatSeconds` 以上记一行 notice(引擎 15 秒判过期);对照 MainThreadWatchdog
+/// 保活离上一次写出晚到 `lateHeartbeatSeconds(for:)` 以上记一行 notice(早于引擎判过期);对照 MainThreadWatchdog
 /// 的记录,分得清是主线程卡住了还是计时器被系统推迟了。间隔按不含睡眠的系统运行时长算。
 ///
 /// 只在以 Lyrimuse.app 身份运行时落盘:selftest 与 `swift run` 起的进程共用同一个配置目录,
@@ -370,7 +375,10 @@ public enum PlaybackStateFile {
 @MainActor
 public final class PlaybackStatePublisher {
     public static let shared = PlaybackStatePublisher()
-    public static let lateHeartbeatSeconds: TimeInterval = 10
+    /// 保活晚到多久记一行:保活间隔的两倍(放歌时 10 秒,别的状态 60 秒),都早于引擎判过期。
+    public nonisolated static func lateHeartbeatSeconds(for state: PlaybackStateFile.State) -> TimeInterval {
+        PlaybackStateFile.heartbeatInterval(for: state) * 2
+    }
 
     private let writesEnabled: Bool
     /// 测试实例写出的去处(编码好的记录);正式实例为 nil,写配置目录里的状态文件。
@@ -387,6 +395,8 @@ public final class PlaybackStatePublisher {
     private var tracker = PlaybackStateFile.Tracker()
     private var lastContent: PlaybackStateFile.Content?
     private var heartbeat: Timer?
+    /// 当前保活计时器的间隔,状态换到另一档时重建计时器。
+    private var heartbeatEvery: TimeInterval?
     private var exiting = false
     private let artworkQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.playback-state-artwork", qos: .utility)
     /// 最近一次写出的封面校验和,同一张图不重复落盘。
@@ -408,7 +418,7 @@ public final class PlaybackStatePublisher {
     public func publish(_ input: PlaybackStateFile.Input, now: Date = Date()) {
         guard !exiting else { return }
         let content = tracker.advance(input, now: now)
-        startHeartbeatIfNeeded()
+        syncHeartbeat(for: content.state)
         updateActivity(for: content.state)
         guard content != lastContent else { return }
         lastContent = content
@@ -511,22 +521,28 @@ public final class PlaybackStatePublisher {
         write(content, now: Date())
     }
 
-    private func startHeartbeatIfNeeded() {
-        guard sink == nil, heartbeat == nil else { return }
-        let timer = Timer(timeInterval: PlaybackStateFile.heartbeatInterval, repeats: true) { [weak self] _ in
+    /// 保活计时器按这个状态的间隔跑;状态换到另一档(放歌 / 不放歌)时重建。换档那一刻内容变了,`publish` 当场就写,
+    /// 新鲜度不会断。
+    private func syncHeartbeat(for state: PlaybackStateFile.State) {
+        guard sink == nil else { return }
+        let interval = PlaybackStateFile.heartbeatInterval(for: state)
+        guard heartbeat == nil || heartbeatEvery != interval else { return }
+        heartbeat?.invalidate()
+        heartbeatEvery = interval
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, !self.exiting, let content = self.lastContent else { return }
                 if let last = self.lastWriteUptime {
                     let gap = ProcessInfo.processInfo.systemUptime - last
-                    if gap >= Self.lateHeartbeatSeconds {
+                    if gap >= Self.lateHeartbeatSeconds(for: content.state) {
                         self.logger.notice("playback state: heartbeat \(String(format: "%.1f", gap), privacy: .public)s after the last write")
                     }
                 }
                 self.write(content, now: Date())
             }
         }
-        // 10% 余量让系统合并唤醒;离 lateHeartbeatSeconds 和引擎判过期的 15 秒都远。
-        timer.tolerance = PlaybackStateFile.heartbeatInterval * 0.1
+        // 10% 余量让系统合并唤醒;离 lateHeartbeatSeconds(for:) 和引擎判过期都远。
+        timer.tolerance = interval * 0.1
         RunLoop.main.add(timer, forMode: .common)
         heartbeat = timer
     }

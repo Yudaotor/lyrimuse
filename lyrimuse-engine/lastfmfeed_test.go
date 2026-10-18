@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -58,8 +60,34 @@ func TestLastfmFeedInterval(t *testing.T) {
 	if got := lastfmFeedInterval(false, now.Add(-11*time.Minute), now); got != feedIntervalIdle {
 		t.Fatalf("11 分钟没动静应当 60s,got %v", got)
 	}
-	if got := lastfmFeedInterval(false, time.Time{}, now); got != feedIntervalIdle {
-		t.Fatalf("从没有过记录应当 60s,got %v", got)
+	if got := lastfmFeedInterval(false, now.Add(-59*time.Minute), now); got != feedIntervalIdle {
+		t.Fatalf("59 分钟没动静应当 60s,got %v", got)
+	}
+	if got := lastfmFeedInterval(false, now.Add(-61*time.Minute), now); got != feedIntervalDeepIdle {
+		t.Fatalf("超过 1 小时没动静应当 5 分钟,got %v", got)
+	}
+	if got := lastfmFeedInterval(false, time.Time{}, now); got != feedIntervalDeepIdle {
+		t.Fatalf("从没有过记录应当 5 分钟,got %v", got)
+	}
+	if got := lastfmFeedInterval(true, now.Add(-3*time.Hour), now); got != feedIntervalActive {
+		t.Fatalf("本机在放时不看多久没动静,got %v", got)
+	}
+}
+
+// App 判 feed 新鲜的窗口(Swift LastfmRecentFeed.freshWindow)要大于心跳 + 最慢的拉取周期,不然深度空闲时 App 会当引擎不在、
+// 自己再轮询一遍。
+func TestLastfmFeedFreshWindowCoversSlowestPoll(t *testing.T) {
+	src, err := os.ReadFile("../lyrimuse/Sources/LyrimuseCore/Local/LastfmRecentFeed.swift")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`static let freshWindow: TimeInterval = (\d+)`).FindStringSubmatch(string(src))
+	if m == nil {
+		t.Fatal("找不到 Swift 侧 LastfmRecentFeed.freshWindow")
+	}
+	secs, _ := strconv.Atoi(m[1])
+	if window := time.Duration(secs) * time.Second; window <= feedHeartbeat+feedIntervalDeepIdle {
+		t.Fatalf("freshWindow %v 不大于心跳 %v + 最慢拉取 %v", window, feedHeartbeat, feedIntervalDeepIdle)
 	}
 }
 

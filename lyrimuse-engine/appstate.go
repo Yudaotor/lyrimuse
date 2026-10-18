@@ -21,7 +21,7 @@ import (
 //   - play_seq:每开始播一首加一,同一首重新起播也加一;从停播回到同一首不加。只在同一个 app_pid 内比较。
 //   - anchor_seq:位置每出现一次不连续(拖动、恢复、校准跳变)加一。
 //   - holding:App 读不到播放器、还在宽限期里按住上一份状态,内容是旧的;引擎不按它计收听时长。
-//   - App 平时每 5 秒重写一次;超过 appStateFreshness 没更新(写出时刻落在此刻之后同样多也算)、进程不在、
+//   - App 放歌时每 5 秒、别的状态每 30 秒重写一次;超过 appStateFreshnessFor 没更新(写出时刻落在此刻之后同样多也算)、进程不在、
 //     写着 exiting、契约版本不认识,都算不可用。
 //
 // 两份 App 短暂并存(新实例请走旧实例的那几秒)时两边都会写,认启动时刻更晚、进程还在的那一份。
@@ -108,10 +108,17 @@ func (r appStateRecord) hasTrack() bool {
 	return r.Track != nil && (r.State == "playing" || r.State == "paused")
 }
 
-const (
-	appStateSchema    = 1
-	appStateFreshness = 15 * time.Second
-)
+const appStateSchema = 1
+
+// appStateFreshnessFor:这份记录多久没更新算过期。App 放歌时 5 秒、暂停和停播时 30 秒保活一次(Swift
+// PlaybackStateFile.heartbeatInterval(for:),两边一起改);阈值留三倍,不放歌时 App 没持有活动、计时器可能被 App Nap
+// 推迟。App 崩了靠进程检查当场认出,这里只管它卡住不写。见 02 章决策 143。
+func appStateFreshnessFor(state string) time.Duration {
+	if state == "playing" {
+		return 15 * time.Second
+	}
+	return 90 * time.Second
+}
 
 type appStateAvailability string
 
@@ -130,6 +137,7 @@ const (
 // App 卡住了也不会一直被当成新鲜的。
 func appStateUsable(rec appStateRecord, now time.Time, alive func(pid int) bool) appStateAvailability {
 	age := now.Sub(time.UnixMilli(rec.WrittenAtMs))
+	fresh := appStateFreshnessFor(rec.State)
 	switch {
 	case rec.Schema != appStateSchema:
 		return appStateUnsupported
@@ -137,7 +145,7 @@ func appStateUsable(rec appStateRecord, now time.Time, alive func(pid int) bool)
 		return appStateExiting
 	case rec.AppPID <= 0 || !alive(rec.AppPID):
 		return appStateProcessGone
-	case age > appStateFreshness || age < -appStateFreshness:
+	case age > fresh || age < -fresh:
 		return appStateStale
 	}
 	return appStateAvailable
