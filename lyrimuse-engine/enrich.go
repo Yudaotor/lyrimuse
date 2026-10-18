@@ -958,7 +958,8 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 还把决策记录盖掉,见 observeWrongDuration。每次进来都要喂一口(包括时长又对上
 		// 的观察,它负责清零),所以放在分支链外面。
 		wrongDuration := observeWrongDuration(key,
-			durationMismatch(e.ResolvedDurationSecs, durationSecs) && !sameRecordingStay, durationSecs, time.Now().Unix())
+			(durationMismatch(e.ResolvedDurationSecs, durationSecs) || lyricsOutrunPlayback(e.Lyrics, e.ResolvedDurationSecs, durationSecs)) &&
+				!sameRecordingStay, durationSecs, time.Now().Unix())
 		// 正在播的是 MV、而这份歌词当初是按视频时长选的:跟 wrongDuration 同一个理由重来一次(见 musicvideolyrics.go)。
 		// 这一拍放的不是 MV(MV 交给歌词解析的时长是 0):之前记下的视频时长提示不再适用,清掉 —— 留着的话放音频版时
 		// 仍会越过 observeWrongDuration 的去抖直接判时长不符,MV 跟歌曲只差一两秒时本来选对的词也要白重来一次。
@@ -1673,6 +1674,10 @@ func lyricsUpgradeApplies(e enrichEntry, scored []scoredLyricCandidateResult, pi
 	if durationSecs <= 0 && e.ResolvedDurationSecs > 0 && e.Lyrics != "" {
 		baseline, comparable = lyricsBaselineForUnknownDuration(e, scored)
 	}
+	// 现存那份的末句比这一轮的曲长还晚(lyricsOutrunPlayback):它不是给这段音频的,存着的分是按另一个时长算的,不当基准。
+	if lyricsOutrunPlayback(e.Lyrics, e.ResolvedDurationSecs, durationSecs) {
+		baseline, comparable = 0, true
+	}
 	if picked == nil || !comparable {
 		return false
 	}
@@ -1693,6 +1698,18 @@ func durationMismatch(resolved, actual float64) bool {
 	}
 	larger := math.Max(resolved, actual)
 	return math.Abs(resolved-actual)/larger > 0.12
+}
+
+// lyricsOutrunPlayback:这份歌词按 resolved 秒选的,末句(lastLRCTimestampSecs)比现在真播的 actual 秒还晚
+// lyricOvershootToleranceSecs 以上 —— 打分里 durationOvershoot 那条物理矛盾,词是给更长的另一个版本的(开头多一段对白的
+// 专辑版配了没有对白的版本)。时长差在 durationMismatch 的 12% 以内时只有这条认得出来。resolved 不比 actual 长出这个余量的
+// 不解析歌词就返回 false(每一拍都会问);任一时长未知、没有时间戳时返回 false。纯函数。见 09 章决策 277。
+func lyricsOutrunPlayback(lyrics string, resolved, actual float64) bool {
+	if lyrics == "" || actual <= 0 || resolved <= actual+lyricOvershootToleranceSecs {
+		return false
+	}
+	last, ok := lastLRCTimestampSecs(lyrics)
+	return ok && last > actual+lyricOvershootToleranceSecs
 }
 
 // observeWrongDuration:「时长对不上」这个观察值必须同值稳定满一个窗口才可信。
