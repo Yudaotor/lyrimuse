@@ -9,14 +9,19 @@ public struct ProgressAnchor {
     public let progressTs: Int?   // 服务器锚点的 epoch 毫秒;没有 ageMs 时的兜底基准
     public let baseAgeMs: Int?    // 服务器算好的锚点年龄(Cloudflare 时钟,不受本机时钟偏差影响)
     public let fetchedAt: Date    // 本机收到这份数据的时刻
+    /// 暂停类通知先到、把外推冻在那一刻(rate 0),下一次轮询才知道是不是真停了。rate 0 本身不能当这个信号:
+    /// 播放器没报速率时锚点也是 0,别处都按 1 倍速算。
+    public let isFrozen: Bool
 
-    public init(durationMs: Int, progressMs: Int, rate: Double, progressTs: Int?, baseAgeMs: Int?, fetchedAt: Date) {
+    public init(durationMs: Int, progressMs: Int, rate: Double, progressTs: Int?, baseAgeMs: Int?, fetchedAt: Date,
+                isFrozen: Bool = false) {
         self.durationMs = durationMs
         self.progressMs = progressMs
         self.rate = rate
         self.progressTs = progressTs
         self.baseAgeMs = baseAgeMs
         self.fetchedAt = fetchedAt
+        self.isFrozen = isFrozen
     }
 
     // from(_ state: NowPlayingState, fetchedAt:) 工厂方法已删:它与

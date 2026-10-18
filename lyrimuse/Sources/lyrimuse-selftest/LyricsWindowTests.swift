@@ -1359,8 +1359,10 @@ func runLyricsWindowTests() {
         expectEqual(declared.count >= 10, true, "窗口收尾(契约): 扫到了控制器里的观察者声明(\(declared.count) 个)")
         expectEqual(declared.filter { !removeList.contains($0) }, [],
                     "窗口收尾(契约): attach 挂的观察者 deinit 都要摘掉")
-        expectEqual(view.contains("if coverageMonitor == nil, window.isVisible { startCoverageMonitor(window) }"), true,
-                    "窗口收尾(契约): 同一扇窗关了再开,遮挡检测要重新挂上")
+        expectEqual(view.contains("if window.isVisible { restoreAfterReopen(window) }")
+                    && sourceHas(view, "guard win.isVisible else { return }\n                self?.restoreAfterReopen(win)")
+                    && sourceHas(view, "private func restoreAfterReopen(_ window: NSWindow) {\n        if coverageMonitor == nil { startCoverageMonitor(window) }\n    }"),
+                    true, "窗口收尾(契约): 同一扇窗关了再开(attach 不一定再走),遮挡检测要补回;菜单项系统自己会加回,别再加")
         expectEqual(monitor.contains("deinit {") && monitor.contains("timer?.invalidate()"), true,
                     "窗口收尾(契约): 遮挡检测被放手时自己停表")
         expectEqual(view.contains("if let anchor, isVisible {")
@@ -1415,6 +1417,11 @@ func runLyricsWindowTests() {
         expectEqual(H.boosted(CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.4)).alpha, 0.4, "HDR 高亮: 透明度不跟着乘")
         expectEqual(H.exceedsStandardRange(H.boosted(CGColor(srgbRed: 0.1, green: 0.1, blue: 0.1, alpha: 1))), false,
                     "HDR 高亮: 深色乘了倍数还在普通范围里,不声明扩展范围(浅色背景上本来就不起作用)")
+        let red = CGColor(srgbRed: 252.0 / 255, green: 60.0 / 255, blue: 68.0 / 255, alpha: 1)
+        expectEqual(H.boosted(red) === red || H.boosted(red) == red, true,
+                    "HDR 高亮: 带颜色的已唱色(自定义 / 跟随封面)不提亮,没有余量的屏幕上各通道截断会偏色")
+        expectEqual(H.exceedsStandardRange(H.boosted(CGColor(srgbRed: 0.92, green: 0.92, blue: 0.95, alpha: 1))), true,
+                    "HDR 高亮: 略带冷暖的浅灰白仍算不带颜色,照样提亮")
 
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         func source(_ path: String) -> String {
@@ -1434,6 +1441,47 @@ func runLyricsWindowTests() {
                     true, "HDR 高亮: 只提亮当前行已唱那一端,颜色超过普通白的那几层才声明扩展范围")
         expectEqual(sourceBytes(settingsView, contain: "hdrHighlight: $settings.lyricsWindowHDRHighlight,"),
                     true, "HDR 高亮: 设置页只有完整尺寸那一支传这颗开关")
+    }
+
+    // ---- 歌词窗口审计的修复(07 章决策 167) ----
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ path: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let list = source("lyrimuse/UI/LyricsLayerList.swift")
+        let dots = source("lyrimuse/UI/LyricsGapDots.swift")
+        let morph = source("lyrimuse/UI/LyricsWindowFormMorph.swift")
+        let window = source("lyrimuse/UI/LyricsWindowView.swift")
+        expectEqual(sourceBytes(window, contain: "var lyricsClockRunning: Bool { isPlayingNow && !(anchor?.isFrozen ?? false) }")
+                    && sourceBytes(window, contain: "isPlaying: playback.lyricsClockRunning, surfaceVisible: windowController.isSurfaceVisible,")
+                    && sourceBytes(window, contain: "isPlaying: playback.lyricsClockRunning && windowController.isSurfaceVisible,")
+                    && !sourceBytes(list, contain: "s.rate > 0"),
+                    true, "暂停回跳: 锚点冻住时图层版逐字和间奏三点按停着画;别拿速率 0 判冻住(没报速率时也是 0)")
+        let playbackSource = source("LyrimuseCore/Local/LocalPlaybackSource.swift")
+        expectEqual(sourceHas(playbackSource, "baseAgeMs: nil,\n            fetchedAt: now,\n            isFrozen: true)"), true,
+                    "暂停回跳: 暂停通知冻住外推的那份锚点带上 isFrozen")
+        expectEqual(sourceBytes(dots, contain: "fade.duration = remainingMs / 1000 / rate")
+                    && sourceBytes(dots, contain: "size.duration = remainingMs / 1000 / rate")
+                    && sourceBytes(dots, contain: "let predicted = at.posMs + (CACurrentMediaTime() - at.media) * 1000 * at.rate"),
+                    true, "间奏三点: 动画时长和对表都按播放速率换算")
+        expectEqual(sourceHas(dots, "deinit {\n        resyncTimer?.invalidate()"), true,
+                    "间奏三点: 整棵视图直接释放(离屏渲染)时对表计时器也停")
+        expectEqual(sourceHas(list, "guard old?.opacity != opacity || old?.blur != blur else {\n                depthTargets[i]?.hovered = hovered"),
+                    true, "景深: 透明度、模糊都没变时也写回悬停标记,换句不误走悬停那条曲线")
+        expectEqual(sourceBytes(list, contain: "CATransaction.setCompletionBlock { [weak layer] in")
+                    && sourceBytes(list, contain: "layer.animation(forKey: Self.depthAnimationKey + \"filters.blur.inputRadius\") == nil"),
+                    true, "景深: 模糊对焦到 0 收尾后摘掉滤镜,不再每帧走离屏")
+        expectEqual(sourceHas(morph, "if let level = self?.levelAfterMorph { destination.level = level }\n                self?.levelAfterMorph = nil\n                destination.orderFrontRegardless()"),
+                    true, "形态切换: 首张截图没截到、放弃动画时也把压到桌面以下的那扇还回层级")
+        expectEqual(sourceBytes(morph, contain: "        destination.level = levelAfterMorph ?? destinationLevel\n        // 迷你面板不当 main")
+                    && !sourceBytes(morph, contain: "if destination.isVisible {\n            destination.level"),
+                    true, "形态切换: 落地时目标窗口被规则藏起也还层级,下次摆出来不在桌面以下")
+        expectEqual(sourceBytes(window, contain: "p.$currentLyricsOffsetMs.removeDuplicates().sink { [weak self] in self?.lyricsOffsetMs = $0 }")
+                    && sourceBytes(window, contain: "offsetMs: playback.lyricsOffsetMs)")
+                    && !sourceBytes(window, contain: "offsetMs: PlaybackCoordinator.shared.currentLyricsOffsetMs"),
+                    true, "歌词偏移: 订阅合起来那份偏移,只改全局 / 播放器那档时逐字时间基准也重算")
+        expectEqual(sourceBytes(window, contain: "_logChanges"), false, "主 body 不留 SwiftUI 诊断探针")
     }
     checkLyricsWindowFormMorph()
 }

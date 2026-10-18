@@ -496,7 +496,8 @@ final class LyricsLayerListView: NSView {
     private func gapConfig(_ marker: LyricsGapMarker, _ s: LyricsLayerList.Spec) -> GapDotsNSView.Config {
         .init(startMs: marker.startMs, endMs: marker.endMs, dotSize: s.style.fontSize * 0.32,
               spacing: s.style.fontSize * 0.23, color: s.style.textColor,
-              running: s.isPlaying && s.surfaceVisible, reduceMotion: s.style.reduceMotion, timingEpoch: s.timingEpoch,
+              running: s.isPlaying && s.surfaceVisible, rate: s.rate,
+              reduceMotion: s.style.reduceMotion, timingEpoch: s.timingEpoch,
               shadow: nil, style: .window,
               anchor: s.style.listSide)
     }
@@ -592,7 +593,10 @@ final class LyricsLayerListView: NSView {
                 r.layer.rasterizationScale = s.style.scale
             }
             let old = depthTargets[i]
-            guard old?.opacity != opacity || old?.blur != blur else { continue }
+            guard old?.opacity != opacity || old?.blur != blur else {
+                depthTargets[i]?.hovered = hovered
+                continue
+            }
             depthTargets[i] = (opacity, blur, hovered)
             let curve: DepthCurve = !animated || old == nil ? .instant : (old?.hovered != hovered ? .hover : .line)
             // 换句时当前行的透明度瞬时到位(跟着爬会跟填色相乘出先暗一拍的凹陷),模糊照样「对焦」
@@ -653,10 +657,22 @@ final class LyricsLayerListView: NSView {
         layer.opacity = opacity
         CATransaction.commit()
         add(depthAnimation("opacity", from: Double(fromOpacity), to: Double(opacity), curve: opacityCurve), to: layer)
-        if layer.filters != nil {
-            add(depthAnimation("filters.blur.inputRadius", from: Double(fromBlur), to: Double(blur), curve: blurCurve), to: layer)
+        let blurAnimation = layer.filters == nil ? nil
+            : depthAnimation("filters.blur.inputRadius", from: Double(fromBlur), to: Double(blur), curve: blurCurve)
+        guard blur == 0 else { return add(blurAnimation, to: layer) }
+        guard let blurAnimation else {
+            layer.filters = nil
+            return
         }
-        if blur == 0, blurCurve == .instant { layer.filters = nil }
+        // 对焦到 0 收尾后摘掉滤镜:半径 0 的滤镜挂着,这一层每帧照样走一趟离屏。收尾前又换了新的模糊动画就不摘。
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { [weak layer] in
+            guard let layer, layer.animation(forKey: Self.depthAnimationKey + "filters.blur.inputRadius") == nil,
+                  (layer.value(forKeyPath: "filters.blur.inputRadius") as? CGFloat ?? 0) == 0 else { return }
+            layer.filters = nil
+        }
+        add(blurAnimation, to: layer)
+        CATransaction.commit()
     }
 
     private func depthAnimation(_ key: String, from: Double, to: Double, curve: DepthCurve) -> CAAnimation? {
@@ -686,9 +702,11 @@ final class LyricsLayerListView: NSView {
         }
     }
 
+    private static let depthAnimationKey = "lyrimuse.layer-list.depth."
+
     private func add(_ a: CAAnimation?, to layer: CALayer) {
         guard let a, let key = (a as? CAPropertyAnimation)?.keyPath else { return }
-        layer.add(a, forKey: "lyrimuse.layer-list.depth." + key)
+        layer.add(a, forKey: Self.depthAnimationKey + key)
     }
 
     // MARK: - 逐字

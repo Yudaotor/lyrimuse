@@ -3034,7 +3034,8 @@ public final class LocalPlaybackSource: ObservableObject {
             // 已经把外推结果落成了锚点位置本身,不需要再带任何年龄基准。
             progressTs: nil,
             baseAgeMs: nil,
-            fetchedAt: now)
+            fetchedAt: now,
+            isFrozen: true)
     }
 
     /// 轮询间隔按播放状态分档:每一拍都要 fork 一个子进程
@@ -4634,7 +4635,8 @@ public final class LocalPlaybackSource: ObservableObject {
                 rate: existing.rate,
                 progressTs: nil,
                 baseAgeMs: 0,
-                fetchedAt: now
+                fetchedAt: now,
+                isFrozen: existing.isFrozen
             )
         } else if currentDurationMs != nil {
             // 暂停态:显示源是 pausedPositionMs(见 apply() 里那段注释),没有锚点可改。

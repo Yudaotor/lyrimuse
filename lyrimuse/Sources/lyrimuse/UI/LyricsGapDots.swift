@@ -103,6 +103,8 @@ final class GapDotsNSView: NSView {
         var spacing: CGFloat
         var color: NSColor
         var running: Bool
+        /// 播放速率(歌词时间 / 墙钟时间),动画时长与对表都按它换算。
+        var rate: Double = 1
         var reduceMotion: Bool
         var timingEpoch: Int
         var shadow: GapDotsShadow?
@@ -126,7 +128,7 @@ final class GapDotsNSView: NSView {
     private var config: Config?
     private var dots: [CALayer] = []
     /// 装动画那一刻的(歌词位置, 媒体时间),对表时外推「动画此刻推到哪」。
-    private var installedAt: (posMs: Double, media: CFTimeInterval)?
+    private var installedAt: (posMs: Double, media: CFTimeInterval, rate: Double)?
     private var resyncTimer: Timer?
 
     override init(frame frameRect: NSRect) {
@@ -209,10 +211,11 @@ final class GapDotsNSView: NSView {
         guard c.running, window != nil || rendersDetached else { return }
 
         let media = CACurrentMediaTime()
-        installedAt = (pos, media)
+        let rate = c.rate > 0 ? c.rate : 1
+        installedAt = (pos, media, rate)
         switch c.style {
-        case .standard: installStandard(c, pos: pos, media: media)
-        case .window: installWindow(c, pos: pos, media: media)
+        case .standard: installStandard(c, pos: pos, media: media, rate: rate)
+        case .window: installWindow(c, pos: pos, media: media, rate: rate)
         }
         let t = Timer(timeInterval: Self.resyncInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.resyncIfDrifted() }
@@ -254,13 +257,13 @@ final class GapDotsNSView: NSView {
     }
 
     /// 悬浮歌词 / 灵动岛那一份:逐颗点亮 + 周期呼吸。
-    private func installStandard(_ c: Config, pos: Double, media: CFTimeInterval) {
+    private func installStandard(_ c: Config, pos: Double, media: CFTimeInterval, rate: Double) {
         let remainingMs = max(0, Double(c.endMs) - pos)
         for (i, dot) in dots.enumerated() {
             let begin = dot.convertTime(media, from: nil)
             installFade(on: dot, frames: GapDotsCurve.opacityKeyframes(dot: i, startMs: c.startMs, endMs: c.endMs,
                                                                        fromMs: pos),
-                        pos: pos, remainingMs: remainingMs, begin: begin)
+                        pos: pos, remainingMs: remainingMs, rate: rate, begin: begin)
             // 呼吸:一个周期的关键帧、无限循环,相位对齐此刻的位置。
             if !c.reduceMotion {
                 let period = GapDotsCurve.breathePeriodMs
@@ -272,10 +275,10 @@ final class GapDotsNSView: NSView {
                 let breathe = CAKeyframeAnimation(keyPath: "transform")
                 breathe.values = values
                 breathe.calculationMode = .linear
-                breathe.duration = period / 1000
+                breathe.duration = period / 1000 / rate
                 breathe.repeatCount = .infinity
                 breathe.beginTime = begin
-                breathe.timeOffset = pos.truncatingRemainder(dividingBy: period) / 1000
+                breathe.timeOffset = pos.truncatingRemainder(dividingBy: period) / 1000 / rate
                 breathe.preferredFrameRateRange = CAFrameRateRange(minimum: 10, maximum: 30, preferred: 30)
                 dot.add(breathe, forKey: Self.breatheKey)
             }
@@ -284,7 +287,7 @@ final class GapDotsNSView: NSView {
 
     /// 歌词窗口那一份:逐颗点亮 + 大小。大小曲线不循环,从此刻到间奏结束整段采样成一条关键帧;
     /// 减弱动态效果时只停大小,点亮照走(那是进度信息)。
-    private func installWindow(_ c: Config, pos: Double, media: CFTimeInterval) {
+    private func installWindow(_ c: Config, pos: Double, media: CFTimeInterval, rate: Double) {
         let remainingMs = Double(c.endMs) - pos
         guard remainingMs > 0 else { return }
         let count = max(1, Int((remainingMs / 1000 * Self.windowSamplesPerSecond).rounded(.up)))
@@ -296,12 +299,12 @@ final class GapDotsNSView: NSView {
             let begin = dot.convertTime(media, from: nil)
             installFade(on: dot, frames: GapDotsCurve.windowOpacityKeyframes(dot: i, startMs: c.startMs, endMs: c.endMs,
                                                                              fromMs: pos),
-                        pos: pos, remainingMs: remainingMs, begin: begin)
+                        pos: pos, remainingMs: remainingMs, rate: rate, begin: begin)
             guard let last = scales.last else { continue }
             let size = CAKeyframeAnimation(keyPath: "transform")
             size.values = scales.map { NSValue(caTransform3D: Self.windowTransform(dot: i, dotSize: c.dotSize, anchor: c.anchor, scale: $0)) }
             size.calculationMode = .linear
-            size.duration = remainingMs / 1000
+            size.duration = remainingMs / 1000 / rate
             size.beginTime = begin
             size.fillMode = .forwards
             size.isRemovedOnCompletion = false
@@ -313,12 +316,12 @@ final class GapDotsNSView: NSView {
 
     /// 点亮:progress 线性于时间,亮度在 i/3、(i+1)/3 处折 —— 这两个时刻加首尾四个关键帧。
     private func installFade(on dot: CALayer, frames: [(ms: Double, opacity: Double)], pos: Double,
-                             remainingMs: Double, begin: CFTimeInterval) {
+                             remainingMs: Double, rate: Double, begin: CFTimeInterval) {
         guard remainingMs > 0, let last = frames.last else { return }
         let fade = CAKeyframeAnimation(keyPath: "opacity")
         fade.values = frames.map(\.opacity)
         fade.keyTimes = frames.map { NSNumber(value: ($0.ms - pos) / remainingMs) }
-        fade.duration = remainingMs / 1000
+        fade.duration = remainingMs / 1000 / rate
         fade.beginTime = begin
         fade.calculationMode = .linear
         fade.fillMode = .forwards
@@ -329,7 +332,7 @@ final class GapDotsNSView: NSView {
 
     private func resyncIfDrifted() {
         guard let at = installedAt else { return }
-        let predicted = at.posMs + (CACurrentMediaTime() - at.media) * 1000
+        let predicted = at.posMs + (CACurrentMediaTime() - at.media) * 1000 * at.rate
         if abs(currentPos() - predicted) > Self.resyncToleranceMs { install() }
     }
 
@@ -337,5 +340,10 @@ final class GapDotsNSView: NSView {
         resyncTimer?.invalidate()
         resyncTimer = nil
         super.removeFromSuperview()
+    }
+
+    // 整棵视图直接释放时(网页歌词的离屏渲染)子视图收不到 removeFromSuperview,计时器在这里停。
+    deinit {
+        resyncTimer?.invalidate()
     }
 }

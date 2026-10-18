@@ -84,8 +84,11 @@ final class LyricsWindowFormMorph {
         guard let old = await capture(source, allowWarm: true, timeout: Plan.firstCaptureTimeout),
               source.isVisible, source.frame == start else {
             isRunning = false
-            prepare { destination in
+            prepare { [weak self] destination in
                 guard let destination else { return failed() }
+                // 调用方在 prepare 里可能把复用的那扇压到了桌面以下、等收尾还(levelAfterMorph):不做动画也得还。
+                if let level = self?.levelAfterMorph { destination.level = level }
+                self?.levelAfterMorph = nil
                 destination.orderFrontRegardless()
                 finish(destination)
             }
@@ -140,11 +143,10 @@ final class LyricsWindowFormMorph {
         if wait > 0 { await Self.pause(wait) }
 
         // 目标窗口回到它的层级(动画期间别处要改的那份优先),此刻它正好在卡片底下、跟新图对齐;源窗口交给调用方关掉。
-        if destination.isVisible {
-            destination.level = levelAfterMorph ?? destinationLevel
-            // 迷你面板不当 main,也不抢 key。
-            if wasKey, destination.canBecomeMain { destination.makeKey() }
-        }
+        // 层级不看在不在屏:落地前被「暂停时隐藏」这类规则藏起的,下次摆出来不能还在桌面以下。
+        destination.level = levelAfterMorph ?? destinationLevel
+        // 迷你面板不当 main,也不抢 key。
+        if destination.isVisible, wasKey, destination.canBecomeMain { destination.makeKey() }
         levelAfterMorph = nil
         finish(destination)
         // 关掉的源窗口层级还回去:SwiftUI 关掉场景窗后留着它,下次开出来复用同一扇,停在桌面以下就看不见了(07 章决策 135)。

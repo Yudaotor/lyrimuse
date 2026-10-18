@@ -23,6 +23,9 @@ final class WindowPlayback: ObservableObject {
     @Published private(set) var album = ""
     @Published private(set) var displayAlbum = ""
     @Published private(set) var isPlayingNow = false
+    /// 图层版逐字 / 间奏三点按墙钟自己跑动画:暂停通知先到、锚点已冻住而 isPlayingNow 还没翻时也算停着,
+    /// 不然先按原速冲出去、等轮询报了暂停再跳回(见 07 章决策 167)。
+    var lyricsClockRunning: Bool { isPlayingNow && !(anchor?.isFrozen ?? false) }
     /// 播放控制被拦下时的说明,没拦下是 nil(见 `PlaybackCoordinator.playbackControlsWithheldReason`)。
     @Published private(set) var controlsWithheldReason: String?
     @Published private(set) var isPlayingSmoothed = false
@@ -70,6 +73,9 @@ final class WindowPlayback: ObservableObject {
     /// 「⋯」菜单里「歌词时间轴」行的当前值(只这首歌的微调;低频,只在用户按 提前/延后/
     /// 重置 或换歌加载校准时变)。
     @Published private(set) var trackLyricsOffsetMs = 0
+    /// 生效的歌词偏移(全局基准 + 播放器 + 这首歌 + 空间音频等合起来那份),逐字和间奏的时间基准用它。
+    /// 只改全局 / 播放器那一档时 trackLyricsOffsetMs 不变,不订阅这一份窗口就不重算(见 07 章决策 167)。
+    @Published private(set) var lyricsOffsetMs = 0
     @Published private(set) var currentDurationMs: Int?
     @Published private(set) var isFavorited: Bool?
     @Published private(set) var playbackMode: MusicPlaybackController.MusicPlaybackMode?
@@ -193,6 +199,7 @@ final class WindowPlayback: ObservableObject {
             p.$anchor.sink { [weak self] in self?.anchor = $0 },
             p.$pausedPositionMs.removeDuplicates().sink { [weak self] in self?.pausedPositionMs = $0 },
             p.$trackLyricsOffsetMs.removeDuplicates().sink { [weak self] in self?.trackLyricsOffsetMs = $0 },
+            p.$currentLyricsOffsetMs.removeDuplicates().sink { [weak self] in self?.lyricsOffsetMs = $0 },
             p.$currentDurationMs.removeDuplicates().sink { [weak self] in self?.currentDurationMs = $0 },
             p.$isFavorited.removeDuplicates().sink { [weak self] in self?.isFavorited = $0 },
             p.$playbackMode.removeDuplicates().sink { [weak self] in self?.playbackMode = $0 },
@@ -860,6 +867,12 @@ private final class LyricsWindowController: ObservableObject {
         NSApp.addWindowsItem(window, title: window.title, filename: false)
     }
 
+    /// 关窗时停掉的遮挡检测,同一扇窗再上屏时补回。SwiftUI 关掉场景窗后留着它、下次复用,这时 attach 不一定再走一遍,
+    /// 由遮挡变化的观察者调(见 07 章决策 167)。「窗口」菜单那一项不用补:再上屏时系统自己加回,再加一次就重复。
+    private func restoreAfterReopen(_ window: NSWindow) {
+        if coverageMonitor == nil { startCoverageMonitor(window) }
+    }
+
     /// 窗口的 Space / 全屏属性跟着形态和置顶走:完整尺寸能进原生全屏;迷你置顶时在每个桌面都出现、能浮在别的 App 的全屏上,
     /// 不置顶时跟普通窗口一样只待在自己那个桌面、不进别人的全屏 Space;迷你都不能进全屏(藏了全屏键,全屏时也不能切迷你)。
     /// 缺才写(写入后自身即满足条件,不会自激);见 attach() 里的守护注释与 07 章决策 131、134。
@@ -1034,7 +1047,7 @@ private final class LyricsWindowController: ObservableObject {
     func attach(_ window: NSWindow) {
         guard self.window !== window else {
             // 同一扇窗关掉再开:关窗时遮挡检测已经停了(closeObserver),这里补回来,其余观察者都还挂着。
-            if coverageMonitor == nil, window.isVisible { startCoverageMonitor(window) }
+            if window.isVisible { restoreAfterReopen(window) }
             if !(window is LyricsMiniPanel) { LyricsWindowSession.deliverFullWindow(window) }
             markOpenIfVisible(window)
             MainActor.assumeIsolated { chromeFade.reveal() }
@@ -1183,6 +1196,7 @@ private final class LyricsWindowController: ObservableObject {
                 // 关了再开同一扇窗时 attach 不一定再走一遍,上屏这一下由这里补记「开着」、
                 // 补上「设置 › 打开」要的形态。
                 guard win.isVisible else { return }
+                self?.restoreAfterReopen(win)
                 self?.markOpenIfVisible(win)
                 if LyricsWindowSession.hasPendingFormRequest { self?.applyFormRequest() }
             }
@@ -1646,9 +1660,6 @@ struct LyricsWindowView: View {
     @State private var miniScrubWidth: CGFloat = 0
 
     var body: some View {
-        // 诊断探针(「菜单开着很卡」排查,debug 级、不 log stream 时零成本):
-        // 打出每次主 body 重算的触发属性。定位结束后可删。
-        let _ = { if #available(macOS 14.1, *) { Self._logChanges() } }()
         // 两套布局共用下面那一整串**窗口级**修饰符(尺寸下限、attach、透明度、记账、
         // 刷新时机)—— 它们管的是这扇窗本身,跟里面画什么无关。布局本身分两支:
         // 迷你是为小尺寸**重新排的**一版(见 miniBody),不是把完整布局挤窄。
@@ -2333,7 +2344,7 @@ struct LyricsWindowView: View {
                 showTranslation: playback.showTranslation,
                 lineOverflow: playback.miniLineOverflow,
                 timing: miniReelTiming,
-                isPlaying: playback.isPlayingNow && windowController.isSurfaceVisible,
+                isPlaying: playback.lyricsClockRunning && windowController.isSurfaceVisible,
                 fillSettled: playback.currentLineFillSettled,
                 reduceMotion: reduceMotion,
                 displayScale: displayScale
@@ -2633,7 +2644,7 @@ struct LyricsWindowView: View {
     private var miniReelTiming: MiniLyricsReel.Timing {
         MiniLyricsReel.Timing(
             epoch: LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
-                                        offsetMs: PlaybackCoordinator.shared.currentLyricsOffsetMs),
+                                        offsetMs: playback.lyricsOffsetMs),
             rate: playback.anchor?.rate ?? 1)
     }
 
@@ -2641,7 +2652,7 @@ struct LyricsWindowView: View {
     /// 拖进度 / 调偏移时重画,见 KaraokeWordText.pausedMs。
     private var pausedFillKey: Int? {
         guard !playback.isPlayingNow, let paused = playback.pausedPositionMs else { return nil }
-        return paused &+ PlaybackCoordinator.shared.currentLyricsOffsetMs
+        return paused &+ playback.lyricsOffsetMs
     }
 
     /// 交给 reel 的下一句:「单行」不画;「双行」是当前那一格那一句的再下一句,三颗点亮着时是点后面要唱的那一句。
@@ -3482,7 +3493,7 @@ struct LyricsWindowView: View {
                 currentLineIndex: playback.currentLineIndex, scrollLineIndex: playback.scrollLineIndex,
                 overlapping: Set(playback.overlappingLineIndices), currentGapIndex: playback.currentGapIndex,
                 fillSettled: playback.currentLineFillSettled,
-                isPlaying: playback.isPlayingNow, surfaceVisible: windowController.isSurfaceVisible,
+                isPlaying: playback.lyricsClockRunning, surfaceVisible: windowController.isSurfaceVisible,
                 timingEpoch: lyricsTimingEpoch,
                 rate: playback.anchor?.rate ?? 1),
             chromeFade: windowController.chromeFade,
@@ -4666,7 +4677,7 @@ struct LyricsWindowView: View {
     /// 歌词时间基准的指纹(锚点、暂停位置、歌词偏移),逐字填色和间奏三点按它重排。
     private var lyricsTimingEpoch: Int {
         LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
-                             offsetMs: PlaybackCoordinator.shared.currentLyricsOffsetMs)
+                             offsetMs: playback.lyricsOffsetMs)
     }
 
     /// 间奏活跃时滚动定位用的行 id(跟列表里 gapDotsRow 的 .id 拼法保持一致)。
