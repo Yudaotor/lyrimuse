@@ -332,7 +332,7 @@ struct NotificationChannelsCard: View {
 
 // MARK: - 添加 / 编辑渠道
 
-/// 添加 / 编辑一个渠道的表单。添加时先选平台(平铺,指向有说明),再填字段;也可以直接粘一整段地址,认出平台就切过去。
+/// 添加 / 编辑一个渠道的表单。添加时先选平台(平铺,悬停有说明),再填字段;也可以直接粘一整段地址,认出平台就切过去。
 /// 编辑已有的渠道只出这个平台自己的字段,不列别的平台:平台定了就不换,要换平台删掉再添加。
 /// 「发送测试」用表单里此刻的内容(还没保存也行)推一条示例消息,结果就地显示,表单不关。
 struct NotificationChannelEditor: View {
@@ -391,7 +391,7 @@ struct NotificationChannelEditor: View {
     private var header: some View {
         HStack(spacing: 10) {
             NotificationPlatformBadge(platform: platform, size: 30)
-                .help(platform.summary)
+                .hoverNote(platform.summary)
             VStack(alignment: .leading, spacing: 1) {
                 Text(isNew ? L10n.t("添加推送渠道") : String(format: L10n.t("编辑「%@」"), original.displayName))
                     .font(.system(size: 15, weight: .bold))
@@ -408,19 +408,11 @@ struct NotificationChannelEditor: View {
         }
     }
 
-    /// 平台不分组、一排铺开(10 个平台平铺两行就看全,分组的轴怎么取都有放哪组都不对的)。通用 Webhook 不是一个消息平台,
-    /// 单独一行放最后,旁边一句说明。
+    /// 平台不分组、一排铺开(10 个平台平铺两行就看全,分组的轴怎么取都有放哪组都不对的),通用 Webhook 排最后。
+    /// 每个是什么靠悬停说明,不在外面另写字。
     private var platformGrid: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SettingsFlowRow(spacing: 6) {
-                ForEach(NotificationPlatform.displayOrder) { p in platformChip(p) }
-            }
-            HStack(spacing: 8) {
-                platformChip(.webhook)
-                Text(L10n.t("发标准 JSON，自己写接收端"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
+        SettingsFlowRow(spacing: 6) {
+            ForEach(NotificationPlatform.displayOrder + [.webhook]) { p in platformChip(p) }
         }
     }
 
@@ -443,7 +435,8 @@ struct NotificationChannelEditor: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help(p.summary)
+        // 自绘气泡,不用 .help():系统提示要停约 2 秒才弹,设置窗不在前台时还不弹(见 HoverNote 头注)。
+        .hoverNote(p.summary)
     }
 
     private func selectPlatform(_ p: NotificationPlatform) {

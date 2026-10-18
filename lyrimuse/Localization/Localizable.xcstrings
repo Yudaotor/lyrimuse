@@ -50861,23 +50861,6 @@
         }
       }
     },
-    "发标准 JSON，自己写接收端" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sends plain JSON to a receiver you run"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "傳送標準 JSON，自己寫接收端"
-          }
-        }
-      }
-    },
     "iPhone 上的推送 App：装好后首页就有专属地址，报告直接弹在 iPhone 上。免费、开源" : {
       "extractionState" : "manual",
       "localizations" : {

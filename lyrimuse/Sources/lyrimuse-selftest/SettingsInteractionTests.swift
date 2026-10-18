@@ -230,7 +230,7 @@ func runSettingsInteractionTests() {
                     "来源排列: 读不到系统语言时按非中文")
     }
 
-    // 添加渠道时平台的排列:不分组,中文用户国内平台在前,其余用户国外平台在前;通用 Webhook 单独放最后。加上 generic 必须
+    // 添加渠道时平台的排列:不分组,中文用户国内平台在前,其余用户国外平台在前;通用 Webhook 排最后。加上 generic 必须
     // 正好是 App 侧 NotificationPlatform 的全部 rawValue(跟引擎 notify.go 的平台常量逐字对应),漏一个就从表单里消失。
     do {
         typealias N = NotificationPlatformRegion

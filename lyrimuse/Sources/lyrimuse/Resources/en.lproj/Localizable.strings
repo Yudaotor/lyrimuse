@@ -632,7 +632,6 @@
 "反馈问题…" = "Report an Issue…";
 "发布于 %@" = "Released %@";
 "发得太频繁，被限流" = "Rate limited: too many messages";
-"发标准 JSON，自己写接收端" = "Sends plain JSON to a receiver you run";
 "发给 Last.fm 的歌手名和歌名。\n智能：用 Last.fm 上收听人数最多的写法，查不到就原样发；专辑名去掉「 - Single」「 - EP」。\n自定义：歌名、歌手分开设置。\n原始：照播放器报告的原样发。" = "The artist and title sent to Last.fm.\nSmart: the most-listened spelling on Last.fm, or as-is when there's no match. Albums drop “ - Single” / “ - EP”.\nCustom: set title and artist separately.\nRaw: exactly what the player reports.";
 "发送测试" = "Send Test";
 "取消" = "Cancel";
