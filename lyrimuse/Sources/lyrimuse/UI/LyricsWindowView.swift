@@ -4685,7 +4685,8 @@ struct LyricsWindowView: View {
                 color: lyricTextColor,
                 isPlaying: playback.isPlayingNow, isVisible: windowController.isSurfaceVisible,
                 reduceMotion: reduceMotion,
-                style: .window
+                style: .window,
+                anchor: listSide(centered: centered)
             ) { _ in
                 // 跟逐字填色同一套时间基准:外推位置 + 当前歌词偏移(间奏窗口是歌词
                 // 原始时间轴,见 LyricsGapMarker 注释)。暂停时 anchor 为 nil,退回

@@ -18,7 +18,7 @@ import LyrimuseCore
 ///   - 呼吸:`breathe(atMs:)` 以 `breathePeriodMs` 为周期,排一个周期(30 点/秒)无限循环,按此刻的
 ///     位置对齐相位。三颗点同步放大缩小(AM 的样子),各绕自己的中心。
 /// 歌词窗口那一份(`.window`)也逐颗点亮,只是没轮到的点更淡;倍率曲线不循环(出现、结束前那两段只走一次),从此刻到间奏
-/// 结束整段采样成一条关键帧,每颗点绕自己的中心放大、再横挪让间隙不变。
+/// 结束整段采样成一条关键帧,每颗点绕自己的中心放大、再横挪让间隙不变,整组从对齐那一侧张开。
 /// 重装时机:起止时间 / 在播 / 可见 / 减弱动态效果变了,以及每 3 秒对一次表(拖动进度 / 锚点重发会让
 /// 位置跳一下,偏差超过 250ms 就按新位置重排)。暂停 / 看不见时摘掉动画、定格在此刻的样子。
 ///
@@ -36,13 +36,15 @@ struct LyricsGapDotsView: View {
     /// 的图层版 —— SwiftUI 的 `.shadow` 罩不到原生图层上)。
     var shadow: GapDotsShadow? = nil
     var style: GapDotsStyle = .standard
+    /// `.window` 那份变大时哪一侧的外缘不动,跟这排点在列表里靠哪一侧一致(`GapDotsCurve.windowOffset`)。
+    var anchor: LyricDuet.Side = .center
     /// 某一刻的播放位置(歌词时间轴毫秒)。入参是求值那一刻的 `Date`。
     let currentPositionMs: (Date) -> Int
 
     var body: some View {
         GapDotsLayer(startMs: startMs, endMs: endMs, dotSize: dotSize, spacing: spacing,
                      color: NSColor(color), running: isPlaying && isVisible,
-                     reduceMotion: reduceMotion, shadow: shadow, style: style,
+                     reduceMotion: reduceMotion, shadow: shadow, style: style, anchor: anchor,
                      currentPositionMs: currentPositionMs)
             .frame(width: CGFloat(GapDotsCurve.dotCount) * dotSize
                        + CGFloat(GapDotsCurve.dotCount - 1) * spacing,
@@ -75,6 +77,7 @@ private struct GapDotsLayer: NSViewRepresentable {
     let reduceMotion: Bool
     let shadow: GapDotsShadow?
     let style: GapDotsStyle
+    let anchor: LyricDuet.Side
     let currentPositionMs: (Date) -> Int
 
     func makeNSView(context: Context) -> GapDotsNSView { GapDotsNSView() }
@@ -82,7 +85,8 @@ private struct GapDotsLayer: NSViewRepresentable {
     func updateNSView(_ view: GapDotsNSView, context: Context) {
         view.positionProvider = currentPositionMs
         view.apply(.init(startMs: startMs, endMs: endMs, dotSize: dotSize, spacing: spacing, color: color,
-                         running: running, reduceMotion: reduceMotion, shadow: shadow, style: style))
+                         running: running, reduceMotion: reduceMotion, shadow: shadow, style: style,
+                         anchor: anchor))
     }
 }
 
@@ -98,6 +102,7 @@ final class GapDotsNSView: NSView {
         var reduceMotion: Bool
         var shadow: GapDotsShadow?
         var style: GapDotsStyle
+        var anchor: LyricDuet.Side = .center
     }
 
     private static let opacityKey = "lyrimuse.gapdots-opacity"
@@ -231,15 +236,15 @@ final class GapDotsNSView: NSView {
             let s = CGFloat(GapDotsCurve.breathe(atMs: Int(ms), reduceMotion: c.reduceMotion))
             return CATransform3DMakeScale(s, s, 1)
         case .window:
-            return windowTransform(dot: dot, dotSize: c.dotSize,
+            return windowTransform(dot: dot, dotSize: c.dotSize, anchor: c.anchor,
                                    scale: GapDotsCurve.windowScale(atMs: ms, startMs: c.startMs, endMs: c.endMs,
                                                                    reduceMotion: c.reduceMotion))
         }
     }
 
-    /// 歌词窗口那一份的变换:绕自己的中心放大,再横挪 `windowOffset` 让间隙不变。
-    private static func windowTransform(dot: Int, dotSize: CGFloat, scale: Double) -> CATransform3D {
-        let dx = CGFloat(GapDotsCurve.windowOffset(dot: dot, scale: scale, dotSize: Double(dotSize)))
+    /// 歌词窗口那一份的变换:绕自己的中心放大,再横挪 `windowOffset` 让间隙不变、对齐那一侧的外缘不动。
+    private static func windowTransform(dot: Int, dotSize: CGFloat, anchor: LyricDuet.Side, scale: Double) -> CATransform3D {
+        let dx = CGFloat(GapDotsCurve.windowOffset(dot: dot, scale: scale, dotSize: Double(dotSize), anchor: anchor))
         return CATransform3DScale(CATransform3DMakeTranslation(dx, 0, 0), CGFloat(scale), CGFloat(scale), 1)
     }
 
@@ -289,7 +294,7 @@ final class GapDotsNSView: NSView {
                         pos: pos, remainingMs: remainingMs, begin: begin)
             guard let last = scales.last else { continue }
             let size = CAKeyframeAnimation(keyPath: "transform")
-            size.values = scales.map { NSValue(caTransform3D: Self.windowTransform(dot: i, dotSize: c.dotSize, scale: $0)) }
+            size.values = scales.map { NSValue(caTransform3D: Self.windowTransform(dot: i, dotSize: c.dotSize, anchor: c.anchor, scale: $0)) }
             size.calculationMode = .linear
             size.duration = remainingMs / 1000
             size.beginTime = begin
@@ -297,7 +302,7 @@ final class GapDotsNSView: NSView {
             size.isRemovedOnCompletion = false
             size.preferredFrameRateRange = CAFrameRateRange(minimum: 10, maximum: 30, preferred: 30)
             dot.add(size, forKey: Self.breatheKey)
-            dot.transform = Self.windowTransform(dot: i, dotSize: c.dotSize, scale: last)
+            dot.transform = Self.windowTransform(dot: i, dotSize: c.dotSize, anchor: c.anchor, scale: last)
         }
     }
 

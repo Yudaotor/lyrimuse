@@ -2193,10 +2193,22 @@ func runSyncEngineTests() {
         expectEqual(abs(ws(30_500) - G.windowPeakScale) < 1e-9, true, "窗口三点: 过了结束停在顶上")
         expectEqual(G.windowScale(atMs: 12_345, startMs: 10_000, endMs: 30_000, reduceMotion: true), 1,
                     "窗口三点: 减弱动态效果时不变大小")
-        expectEqual(G.windowOffset(dot: 1, scale: 1.3, dotSize: 10), 0, "窗口三点: 中间那颗不挪")
-        expectEqual(abs(G.windowOffset(dot: 0, scale: 1.3, dotSize: 10) + 3) < 1e-9
-                        && abs(G.windowOffset(dot: 2, scale: 1.3, dotSize: 10) - 3) < 1e-9, true,
-                    "窗口三点: 两侧各往外挪一个放大量,间隙不变")
+        expectEqual(G.windowOffset(dot: 1, scale: 1.3, dotSize: 10, anchor: .center), 0, "窗口三点: 居中时中间那颗不挪")
+        expectEqual(abs(G.windowOffset(dot: 0, scale: 1.3, dotSize: 10, anchor: .center) + 3) < 1e-9
+                        && abs(G.windowOffset(dot: 2, scale: 1.3, dotSize: 10, anchor: .center) - 3) < 1e-9, true,
+                    "窗口三点: 居中时两侧各往外挪一个放大量,间隙不变")
+        // 排版:点 10、间隙 5,第 i 颗中心在 5 + 15i,整排宽 40。量放大后三颗的外缘与间隙。
+        func spread(_ anchor: LyricDuet.Side, scale: Double) -> (left: Double, right: Double, gaps: [Double]) {
+            let half = 5 * scale
+            let centers = (0..<3).map { 5 + 15 * Double($0) + G.windowOffset(dot: $0, scale: scale, dotSize: 10, anchor: anchor) }
+            return (centers[0] - half, centers[2] + half, zip(centers, centers.dropFirst()).map { $1 - $0 - 2 * half })
+        }
+        let peak = G.windowPeakScale
+        expectEqual(abs(spread(.leading, scale: peak).left) < 1e-9, true, "窗口三点: 靠左时涨满左缘也不越过正文左缘")
+        expectEqual(abs(spread(.trailing, scale: peak).right - 40) < 1e-9, true, "窗口三点: 靠右时涨满右缘也不越过正文右缘")
+        expectEqual([LyricDuet.Side.leading, .center, .trailing].allSatisfy { a in
+                        spread(a, scale: peak).gaps.allSatisfy { abs($0 - 5) < 1e-9 } }, true,
+                    "窗口三点: 哪一侧对齐间隙都不变")
 
         // 歌词窗口的点亮(07 章决策 105):进度同悬浮歌词那一份,还没轮到的点更淡
         let wf = G.windowOpacityFloor

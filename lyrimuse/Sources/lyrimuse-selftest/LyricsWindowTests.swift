@@ -586,6 +586,14 @@ func runLyricsWindowTests() {
                     "窗口三点(契约): 装动画时把点亮交给 Core Animation")
         expectEqual(sourceBytes(dots, contain: "let scales: [Double] = c.reduceMotion ? [] :"), true,
                     "窗口三点(契约): 减弱动态效果只停大小,点亮照走")
+        let layerList = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsLayerList.swift"),
+                                     encoding: .utf8)) ?? ""
+        let windowView = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
+                                      encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(layerList, contain: "style: .window,\n              anchor: s.style.listSide)"), true,
+                    "窗口三点(契约): 图层版按这排点靠的那一侧张开 —— 靠左时涨满不越过正文左缘")
+        expectEqual(sourceBytes(windowView, contain: "style: .window,\n                anchor: listSide(centered: centered)"), true,
+                    "窗口三点(契约): SwiftUI 版同上")
     }
 
     // MARK: - 歌词窗口看不见时不做隐式动画(源码契约)

@@ -78,7 +78,8 @@ public enum GapDotsCurve {
     // MARK: - 歌词窗口
 
     /// 歌词窗口的三颗点照 Apple Music 歌词页同窗口录屏:按间奏进度逐颗点亮,还没轮到的点更淡(07 章决策 105);
-    /// 大小另走一条曲线(07 章决策 91)。排版尺寸是最小那一档,倍率在 1…`windowPeakScale` 之间:出现时 `windowAppearScale`,
+    /// 大小另走一条曲线(07 章决策 91),整组从对齐那一侧张开(`windowOffset`)。
+    /// 排版尺寸是最小那一档,倍率在 1…`windowPeakScale` 之间:出现时 `windowAppearScale`,
     /// `windowAppearMs` 内涨到顶;之后以 `windowBreathePeriodMs` 为周期从顶上缓缓缩到 1 再涨回;
     /// 离结束 `windowSwellMs` 起涨回顶,停在顶上等收起。
     public static let windowPeakScale = 1.35
@@ -123,9 +124,16 @@ public enum GapDotsCurve {
         return scale
     }
 
-    /// 第 `dot` 颗点在倍率 `scale` 下横向要挪多少(跟 `dotSize` 同单位):每颗绕自己的中心放大,
-    /// 两侧的再往外挪,点与点的间隙不变,整组绕中间那颗张开。
-    public static func windowOffset(dot: Int, scale: Double, dotSize: Double) -> Double {
-        (Double(dot) - Double(dotCount - 1) / 2) * (scale - 1) * dotSize
+    /// 第 `dot` 颗点在倍率 `scale` 下横向要挪多少(跟 `dotSize` 同单位):每颗绕自己的中心放大,再横挪让点与点的间隙不变。
+    /// 整组朝 `anchor` 的反方向张开:靠左时最左那颗的左缘不动,靠右时最右那颗的右缘不动,居中时绕中间那颗 ——
+    /// 外缘不越过正文那一侧的边(07 章决策 164)。
+    public static func windowOffset(dot: Int, scale: Double, dotSize: Double, anchor: LyricDuet.Side) -> Double {
+        let pivot: Double
+        switch anchor {
+        case .leading: pivot = -0.5
+        case .center: pivot = Double(dotCount - 1) / 2
+        case .trailing: pivot = Double(dotCount) - 0.5
+        }
+        return (Double(dot) - pivot) * (scale - 1) * dotSize
     }
 }
