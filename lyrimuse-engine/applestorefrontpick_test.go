@@ -63,7 +63,7 @@ func TestAppleStorefrontPickContradiction(t *testing.T) {
 		{"同名那首跟挑中的一样长:不判", "一坪半", "What a Folk", itunesResult{TrackName: "4.95m² Dream", TrackTimeMillis: 208000}, []itunesResult{{TrackName: "一坪半", TrackTimeMillis: 208400}, {TrackName: "4.95m² Dream", TrackTimeMillis: 208000}}, nil, ""},
 		{"本地同专辑的歌太少:不判专辑", "唯一", "T.I.M.E.", itunesResult{TrackName: "Only One", CollectionName: "T.I.M.E. - EP"}, storefrontTrackList(253, 400), []float64{253}, ""},
 	} {
-		if got := appleStorefrontPickContradiction(c.title, c.album, c.hit, c.tracks, c.local); got != c.want {
+		if got := appleStorefrontPickContradiction(c.title, c.album, 0, c.hit, c.tracks, c.local); got != c.want {
 			t.Errorf("%s: %q,期望 %q", c.name, got, c.want)
 		}
 	}
@@ -266,4 +266,23 @@ func TestAppleStorefrontLegacyTitleRecheck(t *testing.T) {
 			t.Errorf("曲名 %q,期望照旧", title)
 		}
 	})
+}
+
+// 同名那首跟本地一样长(一秒内)时它就是本地这首,版本词写法不同也判:本地「特别来宾(Special Version)」、店面「特別來賓 (Remix)」。
+func TestAppleStorefrontPickContradictionNamedSameLength(t *testing.T) {
+	tracks := []itunesResult{{TrackName: "特別來賓 (Remix)", TrackTimeMillis: 228700}, {TrackName: "Tell Me", TrackTimeMillis: 231900}}
+	hit := tracks[1]
+	if got := appleStorefrontPickContradiction("特别来宾(Special Version)", "壁虎漫步", 228.693, hit, tracks, nil); got != "named" {
+		t.Errorf("一样长: %q,期望 named", got)
+	}
+	if got := appleStorefrontPickContradiction("特别来宾(Special Version)", "壁虎漫步", 0, hit, tracks, nil); got != "" {
+		t.Errorf("曲长未知: %q,期望空", got)
+	}
+	if got := appleStorefrontPickContradiction("特别来宾(Special Version)", "壁虎漫步", 225, hit, tracks, nil); got != "" {
+		t.Errorf("差三秒多: %q,期望空", got)
+	}
+	noLen := []itunesResult{{TrackName: "特別來賓 (Remix)"}, hit}
+	if got := appleStorefrontPickContradiction("特别来宾(Special Version)", "壁虎漫步", 0, hit, noLen, nil); got != "" {
+		t.Errorf("两边都没有时长: %q,期望空", got)
+	}
 }

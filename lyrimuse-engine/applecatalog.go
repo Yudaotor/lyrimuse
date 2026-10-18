@@ -937,7 +937,7 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 			if !localDurationsLoaded {
 				localDurations, localDurationsLoaded = localAlbumTrackDurations(artist, album), true
 			}
-			switch appleStorefrontPickContradiction(title, album, *hit, tracks, localDurations) {
+			switch appleStorefrontPickContradiction(title, album, durationSecs, *hit, tracks, localDurations) {
 			case "album":
 				rejectedTitles[normLoose(hit.TrackName)] = true
 				rejectedArtists[normLoose(hit.ArtistName)] = true
