@@ -792,7 +792,7 @@ func TestSettledCoverIsWired(t *testing.T) {
 		"listedAlbum := coverAlbum\n\tif listedAlbum == \"\" {\n\t\tlistedAlbum = strings.TrimSpace(e.YouTubeMusicAlbum)\n\t}\n\tif coverAlbum == \"\" {\n\t\tcoverAlbum = appleAlbumHintSync(",
 		"e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor, e.CoverSettled =\n\t\t\tfresh.CoverURL, fresh.CoverSource, fresh.CoverAlbum, fresh.AccentColor, fresh.CoverSettled",
 	} {
-		if !strings.Contains(src, n) {
+		if !containsCode(src, n) {
 			t.Errorf("enrich.go 缺 %q", n)
 		}
 	}

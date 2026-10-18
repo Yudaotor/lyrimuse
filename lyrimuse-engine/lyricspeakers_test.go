@@ -366,7 +366,7 @@ func TestLyricSpeakersRefreshIsWired(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(r), "cur = applyResync(cur, picked, plan, songLanguage, preparedRoma)\n\t\trefreshSpeakers(&cur, scored)\n") {
+	if !containsCode(string(r), "cur = applyResync(cur, picked, plan, songLanguage, preparedRoma)\n\t\trefreshSpeakers(&cur, scored)\n") {
 		t.Error("resynclyricscli.go 缺刷新标注")
 	}
 }

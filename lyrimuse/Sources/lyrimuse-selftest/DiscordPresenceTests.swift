@@ -1297,7 +1297,7 @@ private func checkDiscordWiring() {
     let accountTab = code("lyrimuse/AccountLinkingTab.swift")
     expectEqual(sourceBytes(accountTab, contain: "pinnedViews"), false,
                 "Discord(接线): 预览不用 LazyVStack 的组头钉住(玻璃卡片、胶囊会压到组头上)")
-    expectEqual(sourceBytes(accountTab, contain: "VStack(spacing: 14) {\n            DiscordPresencePreview()\n                .padding(.bottom, 6)\n            if appSettings.discordPresenceEnabled"), true,
+    expectEqual(sourceHas(accountTab, "VStack(spacing: 14) {\n            DiscordPresencePreview()\n                .padding(.bottom, 6)\n            if appSettings.discordPresenceEnabled"), true,
                 "Discord(接线): 预览排在最前面、跟着页面一起滚,不钉住(钉住会挡住下面的设置项)")
     for toggle in ["discordCustomButtonEnabled", "discordButtonListen", "discordButtonGetLyrimuse"] {
         expectEqual(sourceBytes(accountTab, contain: "Toggle(\"\", isOn: $appSettings.\(toggle))"), true,
@@ -1306,7 +1306,7 @@ private func checkDiscordWiring() {
     expectEqual(sourceBytes(code("lyrimuse/Settings/AppSettings.swift"),
                             contain: "discordButtonGetLyrimuse = (defaults.object(forKey: Keys.discordButtonGetLyrimuse) as? Bool) ?? true"), true,
                 "Discord(接线): 「获取 Lyrimuse」默认开(同 Music Presence 的「Get this status」)")
-    expectEqual(sourceBytes(accountTab, contain: "title: L10n.t(\"「获取 Lyrimuse」\"),\n                        subtitle: L10n.t(\"另外两个都开着时不显示\"))"), true,
+    expectEqual(sourceHas(accountTab, "title: L10n.t(\"「获取 Lyrimuse」\"),\n                        subtitle: L10n.t(\"另外两个都开着时不显示\"))"), true,
                 "Discord(接线): 「获取 Lyrimuse」那一行写明另外两个都开着时让位")
     for needle in ["signal(playback.$title)", "signal(playback.$anchor)", "signal(playback.$isPlayingSmoothed)",
                    "signal(source.$webPageArtworkURL)", "signal(ConfigStore.shared.$stateRelayURL)",
@@ -1332,7 +1332,7 @@ private func checkDiscordWiring() {
                    "attempt: lookup.attempt + 1", "ITunesSearchGate.shared.cooldownEnds()", "lookup.attempt == 0",
                    "        if track != nil {\n            scheduleCoverWake(now: now)",
                    "guard let at = due.filter({ $0 > now }).min() else { return }", "coverWakeTask = Task { [weak self] in"] {
-        expectEqual(sourceBytes(controller, contain: needle), true, "Discord(接线): 没问成的封面到点再查 \(needle)")
+        expectEqual(sourceHas(controller, needle), true, "Discord(接线): 没问成的封面到点再查 \(needle)")
     }
     for needle in ["Task { @MainActor in self?.sendFinished(delivery, wanted: activity, generation: sentGeneration) }",
                    "            delivered = (wanted, shown)",
@@ -1352,7 +1352,7 @@ private func checkDiscordWiring() {
     for needle in ["DiscordAvatarImage(size: Self.popoutAvatar)\n                .overlay { avatarDecoration(size: Self.popoutAvatar) }",
                    "DiscordAvatarImage(size: size)\n            .overlay { avatarDecoration(size: size) }\n            .overlay(alignment: .bottomTrailing) { onlineDot(",
                    ".frame(width: size * Self.decorationScale, height: size * Self.decorationScale)"] {
-        expectEqual(sourceBytes(preview, contain: needle), true, "Discord(接线): 预览两处头像压上头像框 \(needle)")
+        expectEqual(sourceHas(preview, needle), true, "Discord(接线): 预览两处头像压上头像框 \(needle)")
     }
     // 成员名单的示例好友里有作者 Yudaotor,头像是随包的那张鸭子图;名单人数跟着是 4。
     for needle in ["friendRow(name: \"Yudaotor\"", "image: Self.yudaotorAvatar", "forResource: \"YudaotorAvatar\", ofType: \"png\"",

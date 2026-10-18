@@ -524,8 +524,8 @@ func runLyricsOffsetTests() {
         expectEqual(lps.isEmpty || manager.isEmpty || app.isEmpty, false, "读穿接线(契约): 读到源码")
         expectEqual(sourceBytes(lps, contain: "currentOffsetSiblings = EnrichCacheReader.offsetSiblings(")
                     && sourceBytes(lps, contain: "let track = LyricsOffsetStore.shared.offset(forKey: currentOffsetKey, siblings: currentOffsetSiblings)")
-                    && sourceBytes(lps, contain: "radioKey: radioKey,\n            siblings: currentOffsetSiblings\n")
-                    && sourceBytes(lps, contain: "pinKey: currentPinKey,\n                                           siblings: currentOffsetSiblings)")
+                    && sourceHas(lps, "radioKey: radioKey,\n            siblings: currentOffsetSiblings\n")
+                    && sourceHas(lps, "pinKey: currentPinKey,\n                                           siblings: currentOffsetSiblings)")
                     && sourceBytes(lps, contain: "LyricsOffsetStore.shared.reset(forKey: currentOffsetKey, pinKey: currentPinKey, siblings: currentOffsetSiblings)"),
                     true, "读穿接线(契约): 播放时生效、加减、重置都按这首的其它写法读穿")
         expectEqual(sourceBytes(manager, contain: "offsetSiblings = EnrichCacheReader.offsetSiblings(forKey: key)")

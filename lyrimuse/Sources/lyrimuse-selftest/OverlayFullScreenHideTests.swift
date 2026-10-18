@@ -31,17 +31,17 @@ func checkOverlayFullScreenHide() {
     let stage = source("lyrimuse/UI/OverlayEditorStage.swift")
     let appSettings = source("lyrimuse/Settings/AppSettings.swift")
 
-    expectEqual(sourceBytes(controller, contain: "AppSettings.shared.$overlayHideInFullScreen\n            .combineLatest(FullScreenSpaceMonitor.shared.$fullScreenDisplays)"),
+    expectEqual(sourceHas(controller, "AppSettings.shared.$overlayHideInFullScreen\n            .combineLatest(FullScreenSpaceMonitor.shared.$fullScreenDisplays)"),
                 true, "悬浮歌词全屏时隐藏: 控制器订阅开关 + 全屏表,两路都从 sink 参数拿")
     expectEqual(sourceBytes(controller, contain: "forName: NSWindow.didChangeScreenNotification, object: window, queue: .main"),
                 true, "悬浮歌词全屏时隐藏: 窗口换屏时重算")
-    expectEqual(sourceBytes(controller, contain: "let shouldShow = OverlayVisibility.shouldShow(isVisible: isVisible, hiddenForNoLyrics: hiddenForNoLyrics,\n                                                      coveredByFullScreen: coveredByFullScreen,"),
+    expectEqual(sourceHas(controller, "let shouldShow = OverlayVisibility.shouldShow(isVisible: isVisible, hiddenForNoLyrics: hiddenForNoLyrics,\n                                                      coveredByFullScreen: coveredByFullScreen,"),
                 true, "悬浮歌词全屏时隐藏: 显示判定走 Core,带上全屏那一项")
     expectEqual(sourceBytes(controller, contain: "let wanted = followsActiveScreen && shownApartFromFullScreen"), true,
                 "悬浮歌词跟随当前窗口: 窗口藏着(全屏隐藏除外)时不每秒列窗口")
-    expectEqual(sourceBytes(controller, contain: "        recomputeControlsBelowCard()\n        // 藏着(orderOut)的窗口换了屏不一定收到 didChangeScreen"),
+    expectEqual(sourceHas(controller, "        recomputeControlsBelowCard()\n        // 藏着(orderOut)的窗口换了屏不一定收到 didChangeScreen"),
                 true, "悬浮歌词跟随当前窗口: 搬到别的屏后当场重判全屏隐藏")
-    expectEqual(sourceBytes(controller, contain: "if shouldShow { window?.orderFront(nil) } else { window?.orderOut(nil) }\n        syncActiveScreenTracking()"),
+    expectEqual(sourceHas(controller, "if shouldShow { window?.orderFront(nil) } else { window?.orderOut(nil) }\n        syncActiveScreenTracking()"),
                 true, "悬浮歌词跟随当前窗口: 显示状态一变就同步要不要盯焦点屏")
     expectEqual(sourceBytes(appSettings, contain: "overlayHideInFullScreen = (defaults.object(forKey: Keys.overlayHideInFullScreen) as? Bool) ?? false"),
                 true, "悬浮歌词全屏时隐藏: 默认关")

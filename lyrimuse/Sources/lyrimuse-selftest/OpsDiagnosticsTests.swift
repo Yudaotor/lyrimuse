@@ -1184,7 +1184,7 @@ func runOpsDiagnosticsTests() {
                     "常驻内存(契约): 同步整份解析按映射读 —— 读进堆的话每解一次多一份几十 MB 的拷贝")
         expectEqual(sourceBytes(reader, contain: "FileIO.read(url, options: .mappedIfSafe)"), true,
                     "常驻内存(契约): 后台整份解析按映射读")
-        expectEqual(sourceBytes(build, contain: "<key>LSEnvironment</key>\n    <dict>\n        <key>MallocLargeCache</key>\n        <string>0</string>"), true,
+        expectEqual(sourceHas(build, "<key>LSEnvironment</key>\n    <dict>\n        <key>MallocLargeCache</key>\n        <string>0</string>"), true,
                     "常驻内存(契约): Info.plist 关掉 malloc 的大块缓存 —— 不关的话解完索引释放的大块攒着算进占用")
     }
 
@@ -1211,11 +1211,11 @@ func runOpsDiagnosticsTests() {
                                   encoding: .utf8)) ?? ""
         expectEqual(sourceBytes(reader, contain: "guard releasedUnderMemoryPressure || EnrichIndexRefreshPolicy.shouldRedecode("), true,
                     "重解节奏(契约): 轮询发现文件变了先问节奏")
-        expectEqual(sourceBytes(reader, contain: "let entry = all[matchedKey] else {\n            redecodeSoonIfNewer()"), true,
+        expectEqual(sourceHas(reader, "let entry = all[matchedKey] else {\n            redecodeSoonIfNewer()"), true,
                     "重解节奏(契约): 查歌词查不到时走提前重解")
         for getter in ["func platformLinks(", "func trackDurationSecs(", "func sourceInfo(", "func appleAlbumRef(",
                        "func youtubeMusicAlbum(", "func youtubeMusicIsMV("] {
-            let body = reader.components(separatedBy: getter).dropFirst().first?.components(separatedBy: "\n    }\n").first ?? ""
+            let body = sourceBody(getter, in: reader)
             expectEqual(body.contains("currentEntry(key)") && !body.contains("loadEntries()"), true,
                         "重解节奏(契约): \(getter)…) 正在播的那首先读单条快照")
         }
@@ -1285,8 +1285,8 @@ func runOpsDiagnosticsTests() {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let reader = (try? String(contentsOf: sources.appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"),
                                   encoding: .utf8)) ?? ""
-        expectEqual(sourceBytes(reader, contain: "} else {\n            lyrics = nil\n")
-                        && sourceBytes(reader, contain: "hasLyrics = c.contains(.lyrics) || fields.map { EnrichCacheSlim.Fields(rawValue: $0).contains(.lyrics) } == true\n        }"),
+        expectEqual(sourceHas(reader, "} else {\n            lyrics = nil\n")
+                        && sourceHas(reader, "hasLyrics = c.contains(.lyrics) || fields.map { EnrichCacheSlim.Fields(rawValue: $0).contains(.lyrics) } == true\n        }"),
                     true, "主歌词不常驻(契约): 精简条目不解主歌词")
         expectEqual(sourceBytes(reader, contain: "if let s = playingSnapshot(forExactKey: matchedKey) {"), true,
                     "主歌词不常驻(契约): 正文小文件读不到时拿正在播放快照兜底")
@@ -1367,7 +1367,7 @@ func runOpsDiagnosticsTests() {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let reader = (try? String(contentsOf: sources.appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"),
                                   encoding: .utf8)) ?? ""
-        expectEqual(sourceBytes(reader, contain: "public static func resolvedKey(artist: String, title: String, album: String) -> String? {"
+        expectEqual(sourceHas(reader, "public static func resolvedKey(artist: String, title: String, album: String) -> String? {"
                                     + "\n        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)"
                                     + "\n        if let p = freshPlayingEntry(),"),
                     true, "延后存盘(契约): 搜索歌词写回用的 key 先看正在播放快照(整份存盘可能还攒着)")

@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -113,7 +112,7 @@ func TestVideoTitleWiredIntoLyricsAlbumAndCover(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, needle := range needles {
-			if !strings.Contains(string(data), needle) {
+			if !containsCode(string(data), needle) {
 				t.Errorf("%s 缺 %q", file, needle)
 			}
 		}

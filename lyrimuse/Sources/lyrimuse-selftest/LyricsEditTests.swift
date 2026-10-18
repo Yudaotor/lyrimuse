@@ -249,7 +249,7 @@ func runLyricsExternalEditTests(yrc: String, lrc: String) {
                 && window.contains("LyricsWindowActionCaption(currentTitle: playback.title, onArtwork: hasArtworkBackground)"), true,
                 "外部编辑(接法): 歌词窗口右下摆三颗图标和上方的说明条,广告 / 串场时置灰")
     let actions = read("lyrimuse/UI/LyricsWindowActions.swift")
-    expectEqual(actions.components(separatedBy: ".help(label)\n        .accessibilityLabel(label)").count - 1 == 3
+    expectEqual(sourceCount(actions, ".help(label)\n        .accessibilityLabel(label)") == 3
                 && actions.contains("LyricsRematchRunner.run(key: key, id: id, isCurrent: { round?.id == id })")
                 && actions.contains("if stored.manualLyrics {") && actions.contains("if stored.instrumental {")
                 && actions.contains("} else if playback.trackLyricsOffsetMs != 0 {"), true,
@@ -259,8 +259,8 @@ func runLyricsExternalEditTests(yrc: String, lrc: String) {
                 && !runner.contains("try? await Task.sleep"), true,
                 "重新匹配(接法): 等结论时任务被取消就返回,不吞掉取消、在主线程上空转")
     expectEqual(actions.contains("Image(systemName: \"chevron.up\")")
-                && actions.contains("if menu.isOpen {\n                menuPanel")
-                && actions.contains("Button(\"\", action: openEditor)\n                .keyboardShortcut(\"e\", modifiers: .command)")
+                && sourceHas(actions, "if menu.isOpen {\n                menuPanel")
+                && sourceHas(actions, "Button(\"\", action: openEditor)\n                .keyboardShortcut(\"e\", modifiers: .command)")
                 && actions.contains(".padding(.bottom, menu.isOpen ? 44 : 0)"), true,
                 "外部编辑(接法): 第三格是箭头,指针停上去或点一下往上弹出放着手动编辑的小菜单,说明条让开;⌘E 不用打开菜单也能用")
     let editor = read("lyrimuse/LyricsManager/LyricsExternalEditor.swift")

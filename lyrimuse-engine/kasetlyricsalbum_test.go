@@ -159,7 +159,7 @@ func TestListedAlbumLyricsSearchIsWired(t *testing.T) {
 		"\te.LyricsListedAlbum = listedAlbum\n",
 		"\t\trecheck := lyricsRecheckForLocked(key, e, lyricsRecheckScene{\n\t\t\talbum: album, ",
 	} {
-		if !strings.Contains(src, want) {
+		if !containsCode(src, want) {
 			t.Errorf("enrich.go 缺 %q", want)
 		}
 	}

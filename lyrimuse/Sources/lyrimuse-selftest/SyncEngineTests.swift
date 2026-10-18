@@ -593,7 +593,7 @@ func runSyncEngineTests() {
         expectEqual(sourceBytes(playbackSource, contain: "let timer = Timer(timeInterval: seconds, repeats: false)")
                     && !sourceBytes(playbackSource, contain: "Timer(timeInterval: 1.0 / 20.0, repeats: true)"), true,
                     "歌词那一拍(契约): 一次性定时器,不再每 50ms 一拍")
-        expectEqual(sourceBytes(playbackSource, contain: "        updateLineFillSettled(line: r.line, index: r.index, atRawMs: pos)\n        scheduleNextTick(atRawMs: pos, anchor: anchor)\n"), true,
+        expectEqual(sourceHas(playbackSource, "        updateLineFillSettled(line: r.line, index: r.index, atRawMs: pos)\n        scheduleNextTick(atRawMs: pos, anchor: anchor)\n"), true,
                     "歌词那一拍(契约): 每拍结束时按下一个会变的时刻排下一拍")
         // 选句位置小退保持:每拍选句、各展示面按停住的位置,填色和下一拍按实际位置;几处重置点都清掉。
         expectEqual(sourceBytes(playbackSource, contain: "let selectPos = LineSelectionHold.position(raw: pos, held: lineSelectionHeldMs)")
@@ -625,9 +625,9 @@ func runSyncEngineTests() {
                     && sourceBytes(playbackSource, contain: "let settle = settledThresholdMs - syncEngine.effectiveOffsetMs")
                     && sourceBytes(playbackSource, contain: "if mv.timeline.holdsSong(atVideoMs: pos) {"), true,
                     "歌词那一拍(契约): 下一拍取引擎的时刻、这一行填完的时刻、MV 插段里的节奏里最早的")
-        expectEqual(sourceBytes(playbackSource, contain: "            fastTick()\n        } else {\n            // 在播、但引擎里没有任何歌词内容"), true,
+        expectEqual(sourceHas(playbackSource, "            fastTick()\n        } else {\n            // 在播、但引擎里没有任何歌词内容"), true,
                     "歌词那一拍(契约): 每次 poll 按新锚点补一拍(锚点一改,排好的时刻就不准了)")
-        expectEqual(playbackSource.components(separatedBy: "        retickSoon()\n    }").count - 1, 2,
+        expectEqual(sourceCount(playbackSource, "        retickSoon()\n    }"), 2,
                     "歌词那一拍(契约): 偏移、展示面宽度变了马上补一拍")
         if let dir = ProcessInfo.processInfo.environment["LYRIMUSE_NEXTCHANGE_LIBRARY"] {
             expectEqual(nextChangeLibraryFailures(bodiesDir: dir), 0, "下一个会变的时刻: 全库只会早不会晚")

@@ -422,8 +422,7 @@ func runWebLyricsTests() {
         expectEqual(sourceBytes(app("WebLyrics/WebLyricsChrome.swift"), contain: "4 + max(value?.size.width ?? 0, widestValue)")
                         && sourceBytes(app("WebLyrics/WebLyricsChrome.swift"), contain: "4 + widestButtons + 10 + 6)"), true,
                     "网页歌词: 「…」菜单宽度按出现「重置」、数值最长时留足(偏移一变就变宽的话 ± 跟着右移,连点「＋」落空)")
-        expectEqual(sourceBytes(app("WebLyrics/WebLyricsObsFeed.swift"),
-                                contain: "if subs.isEmpty { subscribe() }\n        clients[ObjectIdentifier(connection)] = connection"), true,
+        expectEqual(sourceHas(app("WebLyrics/WebLyricsObsFeed.swift"), "if subs.isEmpty { subscribe() }\n        clients[ObjectIdentifier(connection)] = connection"), true,
                     "网页歌词: OBS 第一条连接先订阅再登记(登记在前会把样式、整首歌词、位置各收两份)")
         expectEqual(sourceBytes(app("WebLyrics/WebLyricsScreen.swift"), contain: "moved: false, seeks: chromeShown)")
                         && sourceBytes(app("WebLyrics/WebLyricsScreen.swift"), contain: "if !moved, seeks { seekToLine(at: p) }"), true,

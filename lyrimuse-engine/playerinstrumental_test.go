@@ -391,14 +391,14 @@ func TestPlayerInstrumentalSignalsAreWired(t *testing.T) {
 		"earlyWatch.holdForNative = playerLocalNoVocalsHint(artist, srcTitle, album, durationSecs)",
 		"if !turnedInstrumental && adoptCrossAlbumSiblingLyrics(key, &e) {",
 	} {
-		if !strings.Contains(enrich, n) {
+		if !containsCode(enrich, n) {
 			t.Errorf("enrich.go 缺 %q", n)
 		}
 	}
 	i := strings.Index(enrich, "func scoredLyricCandidatesStreaming(")
 	body := enrich[i:]
 	if j := strings.Index(body, "if !hasUsableLyricCandidate(results) && !coverPerformerOnly(ctx) {"); j < 0 ||
-		!strings.Contains(body[:j], "if playerSaysInstrumental(results) && !manualLyricSearch(ctx) {\n\t\treturn ne, results\n\t}") {
+		!containsCode(body[:j], "if playerSaysInstrumental(results) && !manualLyricSearch(ctx) {\n\t\treturn ne, results\n\t}") {
 		t.Error("播放器说是纯音乐时,首轮之后就该返回,排在所有换身份重搜的轮次之前")
 	}
 	if !strings.Contains(string(mustRead(t, "kugou.go")), "r.noVocals = chosen.TransParam.Language == kugouLanguagePureMusic") {

@@ -84,7 +84,7 @@ func TestMusicVideoLyricsWiring(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(src)
-	if !strings.Contains(s, "if musicVideoLyricsStaleLocked(hintKey, e) {\n\t\t\twrongDuration = true") {
+	if !containsCode(s, "if musicVideoLyricsStaleLocked(hintKey, e) {\n\t\t\twrongDuration = true") {
 		t.Error("trackEnrichment 命中缓存时要问 musicVideoLyricsStaleLocked,并按 wrongDuration 重来")
 	}
 	funcBody := func(name string) string {
@@ -109,7 +109,7 @@ func TestMusicVideoLyricsWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(poller), "if p.cur.NotAudio {\n\t\tnoteMusicVideoDuration(") {
+	if !containsCode(string(poller), "if p.cur.NotAudio {\n\t\tnoteMusicVideoDuration(") {
 		t.Error("poller 要把正在播的 MV 的视频时长记成提示")
 	}
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -40,7 +39,7 @@ func TestCoverAlbumUsesKasetListedAlbum(t *testing.T) {
 		"\tctx = withCachedYouTubeMusicVideoIDLocked(ctx, key)\n\tenrichMu.Unlock()\n",
 		"\t\tcoverAlbum = kasetListedAlbumFor(youTubeMusicVideoIDFrom(ctx), durationSecs, artist, title)\n",
 	} {
-		if !strings.Contains(string(src), want) {
+		if !containsCode(string(src), want) {
 			t.Errorf("enrich.go 缺 %q:选封面的三处都要先看登记的专辑", want)
 		}
 	}

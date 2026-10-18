@@ -15,7 +15,7 @@ func TestDeezerCarriesISRC(t *testing.T) {
 	withDeezerFake(t, func(c dzCall) (int, string) {
 		switch c.op {
 		case "SearchTracks":
-			if !strings.Contains(deezerSearchQuery, "\n            isrc\n") {
+			if !containsCode(deezerSearchQuery, "\n            isrc\n") {
 				t.Error("搜索请求要带 isrc 字段")
 			}
 			var root map[string]any

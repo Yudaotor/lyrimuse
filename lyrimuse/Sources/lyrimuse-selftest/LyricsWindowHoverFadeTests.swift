@@ -59,16 +59,16 @@ func checkLyricsWindowHoverFade() {
                 "迷你悬浮淡化: 动的是整扇窗的 alphaValue")
     expectEqual(window.components(separatedBy: ".overlay { miniHoverTracker }").count - 1, 1,
                 "迷你悬浮淡化: 挂在整个迷你布局上(进窗就算),不只挂歌词那块")
-    expectEqual(sourceBytes(window, contain: "MiniWindowHoverTracker { windowController.setMiniHovered($0) }\n                .ignoresSafeArea()"),
+    expectEqual(sourceHas(window, "MiniWindowHoverTracker { windowController.setMiniHovered($0) }\n                .ignoresSafeArea()"),
                 true, "迷你悬浮淡化: 跟踪铺进标题栏那一条")
-    expectEqual(sourceBytes(window, contain: "if !previewMode {\n            MiniWindowHoverTracker {"), true,
+    expectEqual(sourceHas(window, "if !previewMode {\n            MiniWindowHoverTracker {"), true,
                 "迷你悬浮淡化: 设置页预览里不挂")
     expectEqual(sourceBytes(window, contain: "hoverFade.attach(window, isMini: $isMini.eraseToAnyPublisher())")
                 && sourceBytes(window, contain: "self?.hoverFade.windowClosed()"), true,
                 "迷你悬浮淡化: 窗口 attach 时接上、跟着进出迷你,关窗复位")
     expectEqual(sourceBytes(window, contain: "lyricsWindowMiniFadeOnHover"), false,
                 "迷你悬浮淡化: 开关不在窗口里(在设置页「行为」)")
-    expectEqual(sourceBytes(settingsView, contain: "SettingsToggleTile(icon: \"cursorarrow.motionlines\", title: L10n.t(\"悬浮淡化\"),\n"
+    expectEqual(sourceHas(settingsView, "SettingsToggleTile(icon: \"cursorarrow.motionlines\", title: L10n.t(\"悬浮淡化\"),\n"
                             + "                               isOn: $settings.lyricsWindowMiniFadeOnHover)"), true,
                 "迷你悬浮淡化: 设置页迷你「行为」摆这颗开关")
     let overlayBehavior = source("lyrimuse/UI/OverlayBehaviorSettingsRows.swift")
@@ -83,7 +83,7 @@ func checkLyricsWindowHoverFade() {
     expectEqual(sourceBytes(fade, contain: "window.ignoresMouseEvents = pass")
                 && sourceBytes(fade, contain: "if pass != passingThrough {"), true,
                 "淡化时点按穿透: 穿透是整扇窗 ignoresMouseEvents,只在自己的状态翻转时写")
-    expectEqual(sourceBytes(fade, contain: "        if passingThrough { return }\n        hovered = value"), true,
+    expectEqual(sourceHas(fade, "        if passingThrough { return }\n        hovered = value"), true,
                 "淡化时点按穿透: 穿透期间跟踪区报的进出不作数")
     expectEqual(sourceBytes(fade, contain: "window.frame.contains(NSEvent.mouseLocation)")
                 && sourceBytes(fade, contain: "NSEvent.modifierFlags.contains(.option)"), true,
@@ -94,13 +94,13 @@ func checkLyricsWindowHoverFade() {
                 "淡化时点按穿透: 穿透结束让跟踪区按真实指针位置重报")
     expectEqual(sourceBytes(fade, contain: "$lyricsWindowMiniFadeClickThrough.removeDuplicates()"), true,
                 "淡化时点按穿透: 跟着设置走")
-    expectEqual(sourceBytes(settingsView, contain: "            if settings.lyricsWindowMiniFadeOnHover {\n"
+    expectEqual(sourceHas(settingsView, "            if settings.lyricsWindowMiniFadeOnHover {\n"
                             + "                SettingsToggleTile(icon: \"cursorarrow.click\", title: L10n.t(\"淡化时点按穿透\"),")
                 && sourceBytes(settingsView, contain: "isOn: $settings.lyricsWindowMiniFadeClickThrough)"), true,
                 "淡化时点按穿透: 设置页「悬浮淡化」后面的那一块,只在它开着时出现")
     expectEqual(sourceBytes(settingsView, contain: "s.lyricsWindowMiniFadeClickThrough = false"), true,
                 "淡化时点按穿透: 迷你「重置」恢复成关")
-    expectEqual(sourceBytes(appSettings, contain: "lyricsWindowMiniFadeClickThrough =\n            (defaults.object(forKey: Keys.lyricsWindowMiniFadeClickThrough) as? Bool) ?? false"),
+    expectEqual(sourceHas(appSettings, "lyricsWindowMiniFadeClickThrough =\n            (defaults.object(forKey: Keys.lyricsWindowMiniFadeClickThrough) as? Bool) ?? false"),
                 true, "淡化时点按穿透: 默认关")
     expectEqual(SettingsSearchCatalog.lyricsWindowMiniOnlyTitles.contains("淡化时点按穿透"), true,
                 "淡化时点按穿透: 设置搜索登记为只有迷你")
@@ -153,7 +153,7 @@ func checkLyricsWindowChromeIdle() {
         expectEqual(window.components(separatedBy: ".lyricsWindowChromeFade(windowController.chromeFade, group: \"\(group)\")").count - 1, 1,
                     "闲置隐藏: \(group) 那一组跟着收")
     }
-    expectEqual(sourceBytes(window, contain: "            chromeFade: windowController.chromeFade,\n            nowMs:"), true,
+    expectEqual(sourceHas(window, "            chromeFade: windowController.chromeFade,\n            nowMs:"), true,
                 "闲置隐藏: 图层版歌词列表的指示条也跟着收(SwiftUI 版那一份见上面 scroll 那组)")
     expectEqual(sourceBytes(source("lyrimuse/UI/LyricsLayerList.swift"), contain: "view.bindChromeFade(chromeFade)"), true,
                 "闲置隐藏: 图层版歌词列表接上淡入淡出")

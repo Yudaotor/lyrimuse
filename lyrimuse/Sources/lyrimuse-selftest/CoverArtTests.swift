@@ -1190,7 +1190,7 @@ func runCoverArtTests() {
                     "动态封面下载: 跳过终审时也要确认解得出帧,解不出就试下一条")
         expectEqual(storeSource.contains("MotionCoverManifest.pick("), false,
                     "动态封面下载: 别回到只挑一档、失败就放弃的写法")
-        expectEqual(settingsSource.contains("CardDivider()\n            MotionCoverCacheRow()"), true,
+        expectEqual(sourceHas(settingsSource, "CardDivider()\n            MotionCoverCacheRow()"), true,
                     "动态封面缓存: 完整尺寸「封面」那几行里有这一行(浮层和抽屉同一份)")
         expectEqual(settingsSource.contains("keeping: PlaybackCoordinator.shared.motionCoverFile)"), true,
                     "动态封面缓存: 清除时留下歌词窗口正在播的那一份")
@@ -1313,7 +1313,7 @@ func runCoverArtTests() {
         let playback = source("LyrimuseCore/Local/LocalPlaybackSource.swift")
         expectEqual(coordinator.contains("systemArtworkIsPlaceholder: LocalPlaybackSource.shared.artworkIsPlaceholder"), true,
                     "云盘歌接线: 高清替代问这一首是不是只推了占位图")
-        expectEqual(coordinator.contains("s.$artworkIsPlaceholder\n                .removeDuplicates()\n                .filter { $0 }"), true,
+        expectEqual(sourceHas(coordinator, "s.$artworkIsPlaceholder\n                .removeDuplicates()\n                .filter { $0 }"), true,
                     "云盘歌接线: 认出占位图时补查一次高清封面")
         expectEqual(coordinator.components(separatedBy: "self?.refreshInferredIdentity()").count - 1, 2,
                     "云盘歌接线: 换歌、缓存内容变了两个时机都重读认出来的歌手 / 专辑")
@@ -1321,9 +1321,9 @@ func runCoverArtTests() {
                     && coordinator.contains("InferredTrackIdentity.displayAlbum(")
                     && coordinator.components(separatedBy: "inferred: inferred)").count - 1 == 2, true,
                     "云盘歌接线: 歌手位、专辑位都接上兜底")
-        expectEqual(playback.contains("holdingPrevious = true\n                self.artworkIsPlaceholder = true"), true,
+        expectEqual(sourceHas(playback, "holdingPrevious = true\n                self.artworkIsPlaceholder = true"), true,
                     "云盘歌接线: 认出占位图时记下这一首")
-        expectEqual(playback.contains("if artworkIsPlaceholder { artworkIsPlaceholder = false }\n                clearMusicVideoTimeline()"), true,
+        expectEqual(sourceHas(playback, "if artworkIsPlaceholder { artworkIsPlaceholder = false }\n                clearMusicVideoTimeline()"), true,
                     "云盘歌接线: 换歌时清掉占位标记")
         expectEqual(playback.components(separatedBy: "self.artworkIsPlaceholder = false").count - 1, 4,
                     "云盘歌接线: 首轮换上真封面、确认循环换上或等到这首的封面、晚到的封面补上时都清掉占位标记")
@@ -1546,10 +1546,10 @@ func runCoverArtTests() {
                     "简介兜底契约: 专辑两处退兜底(网易云 / Last.fm)—— 没有 Apple 专辑链接、公开页没有简介")
         expectEqual(store.components(separatedBy: "fallback(.artist, track)").count - 1, 4,
                     "简介兜底契约: 歌手四处退兜底(网易云 / Last.fm)—— 记过找不到、同歌手专辑都对不上、缓存命中没简介、请求回来没简介")
-        expectEqual(store.contains("Self.logger.debug(\"siblings: enrich cache not loaded yet\")\n            artist = nil\n            return"), true,
+        expectEqual(sourceHas(store, "Self.logger.debug(\"siblings: enrich cache not loaded yet\")\n            artist = nil\n            return"), true,
                     "简介兜底契约: enrich 缓存还没加载好不算「没有」,不退 Last.fm")
-        expectEqual(store.contains("if let attribution = card.source.attribution {\n                Text(attribution)")
-                    && store.contains("case .appleMusic: return nil\n            case .lastfm: return L10n.t(\"来自 Last.fm\")\n            case .netease: return L10n.t(\"来自网易云音乐\")\n            case .qqMusic: return L10n.t(\"来自 QQ 音乐\")\n            case .soda: return L10n.t(\"来自汽水音乐\")\n            case .youtubeMusic: return L10n.t(\"来自维基百科\")"),
+        expectEqual(sourceHas(store, "if let attribution = card.source.attribution {\n                Text(attribution)")
+                    && sourceHas(store, "case .appleMusic: return nil\n            case .lastfm: return L10n.t(\"来自 Last.fm\")\n            case .netease: return L10n.t(\"来自网易云音乐\")\n            case .qqMusic: return L10n.t(\"来自 QQ 音乐\")\n            case .soda: return L10n.t(\"来自汽水音乐\")\n            case .youtubeMusic: return L10n.t(\"来自维基百科\")"),
                     true, "简介兜底契约: Last.fm(CC BY-SA)、网易云、QQ 音乐、汽水的卡片注明出处,YouTube Music 那一路注明维基百科,Apple Music 的不注")
         expectEqual(service.contains("return await requestDetailed(method: method, cred: cred, extra: extra, priority: .interactive)"), true,
                     "简介兜底契约: 查询走 LastfmStatsService 那条带限速与退避的通道")
@@ -1659,7 +1659,7 @@ func runCoverArtTests() {
             ("EditorialCard(kind: .album, title: track.album, subtitle: track.artist, facts: [], text: $0, source: .netease)",
              "专辑卡片用播放器报的名字,注明来自网易云"),
         ] {
-            expectEqual(store.contains(needle), true, "网易云简介契约: \(label)")
+            expectEqual(sourceHas(store, needle), true, "网易云简介契约: \(label)")
         }
         expectEqual(store.components(separatedBy: "guard let parsed else { return }").count - 1, 3,
                     "网易云简介契约: 歌手介绍、专辑介绍(以及 QQ 的歌曲简介)没问成都不往下走")
@@ -1725,7 +1725,7 @@ func runCoverArtTests() {
              "QQ 的卡片注明来自 QQ 音乐"),
             ("case .song: if self.song == nil { self.song = card }", "取到的歌曲简介只在还空着时放上去"),
         ] {
-            expectEqual(store.contains(needle), true, "歌曲简介契约: \(label)")
+            expectEqual(sourceHas(store, needle), true, "歌曲简介契约: \(label)")
         }
     }
 
@@ -1902,7 +1902,7 @@ func runCoverArtTests() {
             ("guard !youtubeMusicCoolingDown else { return then(nil) }", "歌手:冷却期里当没有,交给下一个来源"),
             ("waiting.forEach { $0.body(lookup?.album) }", "专辑查询问不通时,等它的几路也往下走(不记结论)"),
         ] {
-            expectEqual(store.contains(needle), true, "YouTube Music / 汽水简介契约: \(label)")
+            expectEqual(sourceHas(store, needle), true, "YouTube Music / 汽水简介契约: \(label)")
         }
         expectEqual(store.contains("searchArtist"), false, "YouTube Music / 汽水简介契约: 不按名字搜歌手")
         expectEqual(store.components(separatedBy: "self.youtubeMusicUnreachableSince = Date()").count - 1, 2,
@@ -2054,10 +2054,10 @@ func runCoverArtTests() {
             (try? String(contentsOfFile: sources.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
         }
         let lps = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
-        expectEqual(lps.contains("            while true {\n                let delay = Self.artworkLateRetryDelay(afterWaiting: waited)")
-                        && lps.contains("guard stillWaiting() else { return }\n                // 暂停着不取,恢复播放后接着取。\n                guard self.isPlayingNow else { continue }\n                let late = await attempt()")
+        expectEqual(sourceHas(lps, "            while true {\n                let delay = Self.artworkLateRetryDelay(afterWaiting: waited)")
+                        && sourceHas(lps, "guard stillWaiting() else { return }\n                // 暂停着不取,恢复播放后接着取。\n                guard self.isPlayingNow else { continue }\n                let late = await attempt()")
                         && lps.contains("generation == self.artworkFetchGeneration && expectedKey == self.lastKey && self.artworkData == nil")
-                        && lps.contains("artworkFetchGeneration += 1\n        let generation = artworkFetchGeneration")
+                        && sourceHas(lps, "artworkFetchGeneration += 1\n        let generation = artworkFetchGeneration")
                         && lps.contains("last attempt: \\(lastMiss ?? \"-\", privacy: .public)"), true,
                     "封面晚到(契约): 二次确认跑完还没封面就接着取,同一首另起一轮就让给它;那条日志带上最后一次为什么没取到")
         expectEqual(lps.contains("if KnownPlaceholderArtwork.isPlaceholder(data) { return \"the player's built-in placeholder\" }"), true,
@@ -2123,11 +2123,11 @@ func runCoverArtTests() {
         let coordinator = src("lyrimuse/PlaybackCoordinator.swift")
         expectEqual(coordinator.contains("let file = await MotionCoverStore.shared.prepare(master: found.master, reference: compareFrame ? reference : nil)")
                         && !coordinator.contains("if let hit = MotionCoverStore.shared.cachedFile(master: found.master) {")
-                        && coordinator.contains("$highResArtworkImage\n                .dropFirst()")
+                        && sourceHas(coordinator, "$highResArtworkImage\n                .dropFirst()")
                         && coordinator.contains(".sink { [weak self] _ in self?.refreshMotionCover() },"), true,
                     "动态封面(契约): 盘上已有的也要跟显示的封面比;高清替代换了重新比")
         let store = src("lyrimuse/MotionCoverStore.swift")
-        expectEqual(store.contains("if let hit = cachedFile(master: master) {\n            guard let reference else { return hit }\n            return await checkCached(hit, key: key, reference: reference)"), true,
+        expectEqual(sourceHas(store, "if let hit = cachedFile(master: master) {\n            guard let reference else { return hit }\n            return await checkCached(hit, key: key, reference: reference)"), true,
                     "动态封面(契约): 命中盘上那份时按参照图比一次")
         expectEqual(src("LyrimuseCore/Local/EnrichCacheReader.swift")
                         .contains("guard let entry, motionCoverCurrent(entry), let s = entry.motionCoverURL"), true,

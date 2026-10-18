@@ -57,6 +57,7 @@ func TestGoogleTranslateShapeDrift(t *testing.T) {
 // iTunes Search:200 却没有 results 记一次认不出(不是「Apple 没有」);形状对、零条结果照常。
 func TestITunesSearchShapeDrift(t *testing.T) {
 	withParserDrift(t)
+	resetITunesSearchBackoff(t)
 	body := `{"resultCount":0}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(body)) }))
 	t.Cleanup(srv.Close)

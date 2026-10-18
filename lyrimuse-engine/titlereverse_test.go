@@ -68,7 +68,7 @@ func TestTitleReverseSpecIsWired(t *testing.T) {
 		"correctedTitle, retryMethod, titleArtist = titleReverseLookup(ctx, artist, title, album, durationSecs, samples, isrc, chinese)",
 		"if spec != nil && spec.fetched {",
 	} {
-		if !strings.Contains(src, n) {
+		if !containsCode(src, n) {
 			t.Errorf("enrich.go 缺 %q", n)
 		}
 	}

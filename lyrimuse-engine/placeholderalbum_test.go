@@ -186,13 +186,13 @@ func TestMotionVerdictAndPlaceholderWiring(t *testing.T) {
 		return b
 	}
 	backfill := body("func backfillPeripheralFields(ctx context.Context,")
-	if !strings.Contains(backfill, "takeFreshMotion := motionCheckMatchesRetainedCover && fresh.MotionCoverChecked &&\n\t\t(fresh.MotionCoverURL != \"\" || e.MotionCoverURL == \"\")") ||
+	if !containsCode(backfill, "takeFreshMotion := motionCheckMatchesRetainedCover && fresh.MotionCoverChecked &&\n\t\t(fresh.MotionCoverURL != \"\" || e.MotionCoverURL == \"\")") ||
 		!strings.Contains(backfill, "e.MotionCoverFor = fresh.MotionCoverFor") ||
-		!strings.Contains(backfill, "motionCoverNeedsRecheckAgainstOwnCover(\n\t\ttakeFreshMotion || (motionCheckMatchesRetainedCover && !fresh.MotionCoverChecked), e)") {
+		!containsCode(backfill, "motionCoverNeedsRecheckAgainstOwnCover(\n\t\ttakeFreshMotion || (motionCheckMatchesRetainedCover && !fresh.MotionCoverChecked), e)") {
 		t.Error("外围补全:fresh 对着留用的封面核出了结论就整组换上(连对照封面),说没有而手上挂着一段时不换、交给重核")
 	}
 	upgrade := body("func deviceCoverUpgradePass(")
-	if !strings.Contains(upgrade, "requestEnrichSaveFor(key)\n\t// 封面刚换了,动态封面原来的结论是对着旧封面核的:按这张重核。\n\trecheckMotionCoverAgainstCurrentCover(ctx, key, title, album)") {
+	if !containsCode(upgrade, "requestEnrichSaveFor(key)\n\t// 封面刚换了,动态封面原来的结论是对着旧封面核的:按这张重核。\n\trecheckMotionCoverAgainstCurrentCover(ctx, key, title, album)") {
 		t.Error("换上设备封面之后照新封面重核动态封面")
 	}
 	track := body("func trackEnrichment(")

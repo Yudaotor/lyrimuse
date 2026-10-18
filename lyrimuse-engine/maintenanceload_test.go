@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -103,7 +102,7 @@ func TestMaintenanceRefusesWhileSharing(t *testing.T) {
 		t.Errorf("只开建表不拦: %v", err)
 	}
 	src, err := os.ReadFile("maintenanceload.go")
-	if err != nil || !strings.Contains(string(src), "\tif err := maintenanceSharingRefusal(apply); err != nil {\n\t\tlog.Fatal(err)\n\t}\n") {
+	if err != nil || !containsCode(string(src), "\tif err := maintenanceSharingRefusal(apply); err != nil {\n\t\tlog.Fatal(err)\n\t}\n") {
 		t.Errorf("loadEnrichForMaintenance 要先拦: %v", err)
 	}
 }

@@ -1079,7 +1079,7 @@ func TestLyricsCalibratedGatesWired(t *testing.T) {
 	} {
 		src := string(mustRead(t, file))
 		for _, n := range needles {
-			if !strings.Contains(src, n) {
+			if !containsCode(src, n) {
 				t.Errorf("%s 里少了: %q", file, n)
 			}
 		}

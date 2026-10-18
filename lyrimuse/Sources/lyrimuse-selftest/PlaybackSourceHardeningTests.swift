@@ -270,19 +270,6 @@ private func wiringContracts() {
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
     }
     /// `signature` 起到与它第一个 `{` 配对的 `}` 为止;找不到返回空串(断言随之失败)。
-    func body(_ signature: String, in text: String) -> String {
-        guard let start = text.range(of: signature), let open = text[start.lowerBound...].firstIndex(of: "{") else { return "" }
-        var depth = 0
-        var i = open
-        while i < text.endIndex {
-            if text[i] == "{" { depth += 1 } else if text[i] == "}" {
-                depth -= 1
-                if depth == 0 { return String(text[start.lowerBound...i]) }
-            }
-            i = text.index(after: i)
-        }
-        return ""
-    }
     /// `a` 在 `text` 里出现、且第一次出现在 `b` 第一次出现之前。
     func before(_ a: String, _ b: String, in text: String) -> Bool {
         guard let ra = text.range(of: a), let rb = text.range(of: b) else { return false }
@@ -290,7 +277,7 @@ private func wiringContracts() {
     }
 
     let source = code("LyrimuseCore/Local/LocalPlaybackSource.swift")
-    let poll = body("private func poll() {", in: source)
+    let poll = sourceBody("private func poll() {", in: source)
     expectEqual(poll.split(separator: "\n").dropFirst().first?.trimmingCharacters(in: .whitespaces),
                 "guard pollFlight.begin() else { return }", "单飞接线: poll() 第一句就过单飞闸,在飞时不再起第二轮")
     expectEqual(poll.contains("defer { self.finishPoll() }"), true, "单飞接线: 每一轮(含被丢弃的)收尾都放开单飞")
@@ -298,16 +285,16 @@ private func wiringContracts() {
     expectEqual(poll.contains("let fetched = MediaControlClient.fetchSnapshotWithProvenance()")
                     && poll.contains("return (fetched.snapshot, fetched.provenance, MediaControlClient.lastSnapshotFailure)"), true,
                 "单飞接线: 失败原因、快照与它的来源在同一条队列上一起取,回主线程再读可能已是别一轮的")
-    expectEqual(body("private func finishPoll() {", in: source).contains("if pollFlight.finish() { poll() }"), true,
+    expectEqual(sourceBody("private func finishPoll() {", in: source).contains("if pollFlight.finish() { poll() }"), true,
                 "单飞接线: 收尾时期间有人要过就补跑")
-    let seek = body("public func seek(toMs targetMs: Int) {", in: source)
+    let seek = sourceBody("public func seek(toMs targetMs: Int) {", in: source)
     expectEqual(seek.contains("pollFlight.invalidateInFlight()"), true, "单飞接线: 拖动作废在飞那一轮、回来后补跑")
     expectEqual(seek.contains("env.browserProbeSeeked(now)"), true, "拖动作废读数: 拖动时通知浏览器探针")
-    expectEqual(body("private func reloadCurrentLyrics() {", in: source).contains("searchIncomplete: found?.searchIncomplete ?? false"),
+    expectEqual(sourceBody("private func reloadCurrentLyrics() {", in: source).contains("searchIncomplete: found?.searchIncomplete ?? false"),
                 true, "歌词重载等值闸: 补搜跑完只翻 searchIncomplete 时也重算,不停在「搜索歌词中…」")
 
     let client = code("LyrimuseCore/Local/MediaControlClient.swift")
-    let focus = body("private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {", in: client)
+    let focus = sourceBody("private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {", in: client)
     let stateUpdate = "lastAcceptedDirectQueryTarget = nextFocusFallbackTarget("
     expectEqual(before("playerContentNotMusic(bundleID: target.bundleID, snapshot: s)", stateUpdate, in: focus), true,
                 "焦点回退: 回退问到的无歌手非音乐内容先挡下,再动回退开关")
@@ -333,9 +320,9 @@ private func wiringContracts() {
     let mainAssemble = client.components(separatedBy: "Self.amazonMusicReading(").count - 1
     expectEqual(mainAssemble, 1, "Amazon 位置: 主路径走同一个 amazonMusicReading,不另写一份")
 
-    let verifyAd = body("private func classifySpotifyViaAppleScript(forKey key: String, title: String?, artist: String?) {", in: source)
+    let verifyAd = sourceBody("private func classifySpotifyViaAppleScript(forKey key: String, title: String?, artist: String?) {", in: source)
     expectEqual(verifyAd.contains("self.revertLastTrackAfterAd(key: key)"), true, "广告撤回: AppleScript 晚到确认是广告 → 撤回「上次在听」")
-    let revert = body("private func revertLastTrackAfterAd(key: String) {", in: source)
+    let revert = sourceBody("private func revertLastTrackAfterAd(key: String) {", in: source)
     expectEqual(revert.contains("prev.key == key"), true, "广告撤回: 只撤回同一首写进去的那一次")
     for k in ["np:lastTrackTitle", "np:lastTrackArtist", "np:lastTrackAlbum"] {
         expectEqual(revert.contains("\"\(k)\""), true, "广告撤回: \(k) 还原成写之前的值")
@@ -350,10 +337,10 @@ private func wiringContracts() {
     expectEqual(env.contains("browserProbeSeeked: { BrowserPositionProbe.shared.discardReadings(before: $0) }"), true,
                 "拖动作废读数: 真实环境把拖动接到浏览器探针的 discardReadings")
     let probe = code("LyrimuseCore/Local/BrowserPositionProbe.swift")
-    let discard = body("public func discardReadings(before moment: Date) {", in: probe)
+    let discard = sourceBody("public func discardReadings(before moment: Date) {", in: probe)
     expectEqual(discard.contains("seekBarrier = moment"), true, "拖动作废读数: 记下拖动时刻,在飞的那次回来也不采信")
     expectEqual(discard.contains("snapshot.capturedAt < moment { cached = nil }"), true, "拖动作废读数: 拖动之前抓到的缓存读数丢掉")
-    let apply = body("private func applyProbeResult(", in: probe)
+    let apply = sourceBody("private func applyProbeResult(", in: probe)
     expectEqual(before("if let barrier = seekBarrier, startedAt < barrier { return }", "cached = CachedResult(", in: apply), true,
                 "拖动作废读数: 拖动之前发起的探测结果不进缓存")
     expectEqual(before("guard myGeneration == generation else { return }", "lastAttemptEndedAt = Date()", in: apply), true,
@@ -369,7 +356,7 @@ private func wiringContracts() {
     } else {
         expectEqual(true, false, "深页缓存(契约): 读不到 lateInsertDetected 调用点(改名了?)")
     }
-    let drop = body("func dropDeepRecentPageCache(reason: String) {", in: stats)
+    let drop = sourceBody("func dropDeepRecentPageCache(reason: String) {", in: stats)
     expectEqual(drop.contains("filter { $0 >= 3 }"), true, "深页缓存: 只作废第 3 页起(第 1、2 页由 feed 每次重写)")
     for m in ["recentPageCache[p] = nil", "recentPageCacheTotal[p] = nil", "fetchedAt[Self.recentPageCacheKey(p)] = nil"] {
         expectEqual(drop.contains(m), true, "深页缓存: 作废时一并清 \(m)")
@@ -391,7 +378,7 @@ private func wiringContracts() {
     }
 
     let trusted = code("LyrimuseCore/Local/TrustedPlayers.swift")
-    let accepted = body("public static func isAccepted(_ bundleID: String?) -> Bool {", in: trusted)
+    let accepted = sourceBody("public static func isAccepted(_ bundleID: String?) -> Bool {", in: trusted)
     expectEqual(before("PlaybackPlayer.allCases.contains(", "trusted: current)", in: accepted), true,
                 "信任名单: 内置播放器先判掉,不在轮询热路径上每次读盘解码 features.json")
     expectEqual(TrustedPlayers.isAccepted(PlaybackPlayer.spotify.bundleIdentifier), true, "信任名单: 内置播放器直接认")
@@ -399,14 +386,14 @@ private func wiringContracts() {
 
     // 网页平台探针只对配对过的浏览器跑:App 侧 YouTube Music 广告探针的入口 + 配对关系镜像给引擎。
     let ytAd = code("LyrimuseCore/Local/YouTubeMusicAdProbe.swift")
-    let kick = body("public func kickIfNeeded(bundleIdentifier: String?, key: String) {", in: ytAd)
+    let kick = sourceBody("public func kickIfNeeded(bundleIdentifier: String?, key: String) {", in: ytAd)
     expectEqual(before("BrowserPositionProbe.shared.isPaired(bundleID: hostBundleID, platformID: \"youtubeMusic\")", "inFlightKey = key", in: kick), true,
                 "网页探针配对: YouTube Music 广告探针没配对就不发起")
     let store = code("lyrimuse/Settings/FeatureSettingsStore.swift")
     expectEqual(store.contains("case browserPlatformPairs = \"browser_platform_pairs\""), true, "网页探针配对: features.json 键名跟引擎一致")
     expectEqual(store.contains("browserPlatformPairs: browserPlatformPairs\n"), true, "网页探针配对: 写盘快照带上配对镜像")
     expectEqual(store.contains("browserPlatformPairs = f.browserPlatformPairs"), true, "网页探针配对: 读盘时认回已写的镜像(没变就不重写)")
-    let sync = body("public func syncBrowserPlatformPairs(_ pairs: [String: Set<String>]) async {", in: store)
+    let sync = sourceBody("public func syncBrowserPlatformPairs(_ pairs: [String: Set<String>]) async {", in: store)
     expectEqual(before("guard next != browserPlatformPairs else { return }", "await save()", in: sync) && sync.contains("BrowserPositionProbe.mirroredPairs(pairs)"), true,
                 "网页探针配对: 同步时先规整、没变就不落盘")
     let delegate = code("lyrimuse/AppDelegate.swift")
@@ -431,7 +418,7 @@ private func wiringContracts() {
 
     // 换歌后取图还在路上时不清旧封面:兜底期限按"一次取图最多能跑多久"定(子进程超时 + 宽限)。从换歌 / 每次重试前
     // 起算 3 秒的话,机器满载时取图本身就能超过它,同一张专辑的下一首也会先把封面清掉、几秒后才回来。
-    let fetchArtwork = body("private func fetchArtworkForCurrentTrack(expectedKey: String, album: String?, bundleID: String?) {", in: source)
+    let fetchArtwork = sourceBody("private func fetchArtworkForCurrentTrack(expectedKey: String, album: String?, bundleID: String?) {", in: source)
     expectEqual(source.contains("artworkInFlightBackstop: TimeInterval = MediaControlClient.artworkTimeout + artworkStaleTimeout"), true,
                 "封面兜底: 取图在路上时的期限 = 子进程超时 + 宽限")
     expectEqual(source.contains("scheduleArtworkStaleTimeout(forKey: key, after: Self.artworkInFlightBackstop)"), true,
@@ -460,9 +447,9 @@ private func wiringContracts() {
                 "洛雪退路: 洛雪开着就保持订阅,不只在系统报洛雪时;连着的不因一拍没认出它就断开")
     expectEqual(code("LyrimuseCore/Local/LXMusicOpenAPI.swift").contains(#"NetworkAuditLog.record(service: "image", operation: "lxmusic.artwork""#),
                 true, "洛雪退路: 下开放 API 推的封面记进对外请求审计日志")
-    expectEqual(source.contains("if LXMusicOpenAPI.outputsToDefaultDevice(LXMusicOpenAPI.shared.currentConfig()) {\n                    beginLXMusicColdStart(signalAt: Date(), watch: true)"),
+    expectEqual(sourceHas(source, "if LXMusicOpenAPI.outputsToDefaultDevice(LXMusicOpenAPI.shared.currentConfig()) {\n                    beginLXMusicColdStart(signalAt: Date(), watch: true)"),
                 true, "洛雪冷恢复: 洛雪选了别的输出设备时不等默认设备")
-    expectEqual(sourceBytes(source, contain: "if let lxTrack, let own = Self.lxMusicOwnArtwork(title: lxTrack.title, artist: lxTrack.artist, listed: lxTrack.listed) {\n"
+    expectEqual(sourceHas(source, "if let lxTrack, let own = Self.lxMusicOwnArtwork(title: lxTrack.title, artist: lxTrack.artist, listed: lxTrack.listed) {\n"
                             + "                        if Self.lxOwnArtworkLoggedKey.withLock({ last in defer { last = expectedKey }; return last != expectedKey }) {\n"
                             + "                            logger.notice(\"artwork: using LX Music's own cover for \\(expectedKey, privacy: .public) (from \\(own.from, privacy: .public))\")\n"
                             + "                        }\n"
@@ -509,13 +496,13 @@ private func wiringContracts() {
     expectEqual(engineService.contains("\"ProcessType\": \"Background\""), false, "歌词引擎调度: 别退回后台档")
 
     // 桌面版 Spotify 的 Connect 镜像:两条取快照的入口都先过它;先问 CoreAudio,不该问时一个子进程都不起。
-    let autoDetected = body("private static func fetchAutoDetectedSnapshot() -> MediaControlSnapshot? {", in: client)
-    let multiSelected = body("private static func fetchMultiSelectedSnapshot(_ players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {", in: client)
+    let autoDetected = sourceBody("private static func fetchAutoDetectedSnapshot() -> MediaControlSnapshot? {", in: client)
+    let multiSelected = sourceBody("private static func fetchMultiSelectedSnapshot(_ players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {", in: client)
     expectEqual(autoDetected.contains("resolvingSpotifyConnectMirror(fetchRawMediaControlSnapshot())"), true,
                 "Spotify 镜像接线: 自动识别那条路先过镜像判定")
     expectEqual(multiSelected.contains("resolvingSpotifyConnectMirror(fetchRawMediaControlSnapshot())"), true,
                 "Spotify 镜像接线: 多选那条路先过镜像判定")
-    let mirror = body("private static func resolvingSpotifyConnectMirror(", in: client)
+    let mirror = sourceBody("private static func resolvingSpotifyConnectMirror(", in: client)
     expectEqual(before("ProcessAudioOutput.isRunningOutput(bundleID: bundleID)",
                        "NowPlayingClientsProbe.snapshot(forBundleID: webSource)", in: mirror), true,
                 "Spotify 镜像接线: 先问 CoreAudio,再起子进程问网页版")
@@ -523,19 +510,19 @@ private func wiringContracts() {
                 "Spotify 镜像接线: 不该问时不起子进程")
     expectEqual(mirror.contains("if !useWeb { spotifyWebSource = nil }"), true,
                 "Spotify 镜像接线: 没换成网页版就清掉记录,之后不再问")
-    let noteAcceptedBody = body("private static func noteAccepted(bundleID: String) {", in: client)
+    let noteAcceptedBody = sourceBody("private static func noteAccepted(bundleID: String) {", in: client)
     expectEqual(noteAcceptedBody.contains("spotifyWebSource = webSource"), true, "Spotify 镜像接线: 每次接受快照都更新网页版来源")
     expectEqual(noteAcceptedBody.contains("fallbackFailureStreak = 0"), true, "焦点回退: 接受了快照,回退的失败拍数清零")
 
     // 播放控制被拦下时各展示面置灰 + 说明:判据跟真发指令同一个,每拍轮询收尾刷新,六个展示面都接上。
     let controller = code("LyrimuseCore/Local/MusicPlaybackController.swift")
-    expectEqual(body("public static func controlsWithheld() -> Bool {", in: controller)
+    expectEqual(sourceBody("public static func controlsWithheld() -> Bool {", in: controller)
                     .contains("currentBaseRoute(mediaControlCommand: \"toggle-play-pause\") == .withheld")
-                && body("private static func dispatchRoute(", in: controller)
+                && sourceBody("private static func dispatchRoute(", in: controller)
                     .contains("let base = currentBaseRoute(mediaControlCommand: mediaControlCommand)"), true,
                 "拦下置灰: 展示与发指令共用按命令能力判定的 currentBaseRoute")
     let localSource = code("LyrimuseCore/Local/LocalPlaybackSource.swift")
-    expectEqual(body("private func finishPoll() {", in: localSource).contains("refreshPlaybackControlsWithheld()"), true,
+    expectEqual(sourceBody("private func finishPoll() {", in: localSource).contains("refreshPlaybackControlsWithheld()"), true,
                 "拦下置灰: 每拍轮询收尾刷新")
     let coordinatorSource = code("lyrimuse/PlaybackCoordinator.swift")
     expectEqual(coordinatorSource.contains("s.$playbackControlsWithheldBundleID.removeDuplicates()")
@@ -555,31 +542,31 @@ private func wiringContracts() {
     let windowText = code("lyrimuse/UI/LyricsWindowView.swift")
     expectEqual(windowText.components(separatedBy: ".opacity(playback.controlsWithheldReason == nil ? 1 : PlaybackCoordinator.withheldControlOpacity)").count - 1, 2,
                 "拦下置灰: 歌词窗口完整、迷你两排都置灰")
-    let focusLost = body("private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {", in: client)
+    let focusLost = sourceBody("private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {", in: client)
     expectEqual(focusLost.contains("fallbackFailureStreak = snapshot == nil ? fallbackFailureStreak + 1 : 0")
                 && focusLost.contains("consecutiveFailures: fallbackFailureStreak)"), true,
                 "焦点回退: 问不到时按连着失败的拍数决定关不关,问到就清零")
 
     // 会话在放时被撤(网易云冷启动,02 章决策 96):保持接在两条取快照的入口共用的 heldAcrossPlayerGap;保持出来的那首,播放控制
     // 不发 —— 这时系统焦点是空的或者在别人手里,media-control 的指令会落在焦点上。
-    let gapHold = body("private static func heldAcrossPlayerGap(_ snapshot: MediaControlSnapshot?) -> MediaControlSnapshot? {", in: client)
+    let gapHold = sourceBody("private static func heldAcrossPlayerGap(_ snapshot: MediaControlSnapshot?) -> MediaControlSnapshot? {", in: client)
     expectEqual(gapHold.contains("PlayerGapHold.shouldHoldWhileOutputting(") && gapHold.contains("holdingDroppedSession = true")
                 && gapHold.contains("outputting: { ProcessAudioOutput.isRunningOutput(bundleID: lastBundleID) }"), true,
                 "会话在放时被撤: 保持接在 heldAcrossPlayerGap、按进程出声判,保持时记下")
-    expectEqual(body("public static func focusControlContext() -> (scriptTarget: PlaybackPlayer?, directQueryTarget: PlaybackPlayer?, heldElsewhere: Bool) {", in: client).contains("let heldElsewhere = viaProbe || holdingDroppedSession"),
+    expectEqual(sourceBody("public static func focusControlContext() -> (scriptTarget: PlaybackPlayer?, directQueryTarget: PlaybackPlayer?, heldElsewhere: Bool) {", in: client).contains("let heldElsewhere = viaProbe || holdingDroppedSession"),
                 true, "会话在放时被撤: 保持出来的那首,播放控制不发")
 
     // 按相对量的写入要排队(07 章决策 139、138 补记):Amazon 循环键按一下进一档、QQ「喜欢」按一下翻一次,连点时后一次读到的
     // 是前一次按之前的状态。行为在 players 组用桩测,这里钉住接线:锁在读状态之前拿,按完等确认。
     let amazon = code("LyrimuseCore/Local/AmazonMusicModeControl.swift")
-    let amazonSet = body("public static func setMode(", in: amazon)
+    let amazonSet = sourceBody("public static func setMode(", in: amazon)
     expectEqual(before("writeLock.lock()", "readSettings(logPath: logPath)", in: amazonSet)
                 && amazonSet.contains("pressUntilConfirmed(from: start, to: target"), true,
                 "Amazon 写入: 先排队再读当前档,逐下按、等日志确认")
     expectEqual(before("guard AXIsProcessTrusted() else { return nil }", "readSettings(logPath: logPath)",
-                       in: body("public static func readMode(", in: amazon)), true,
+                       in: sourceBody("public static func readMode(", in: amazon)), true,
                 "Amazon 读档: 没有辅助功能权限不报档位,两颗键不出现(按不了)")
-    let menuFavorite = body("public func set(_ value: Bool) -> Bool {", in: code("LyrimuseCore/Local/MenuTitleFavorite.swift"))
+    let menuFavorite = sourceBody("public func set(_ value: Bool) -> Bool {", in: code("LyrimuseCore/Local/MenuTitleFavorite.swift"))
     expectEqual(before("lock.lock()", "item()", in: menuFavorite) && menuFavorite.contains("return MenuBarAX.waitFor(value"), true,
                 "菜单标题喜欢(QQ、网易云): 先排队再读标题,按完等标题翻过来")
     // 换歌后标题可能还是上一首的(07 章决策 147):写之前等到标题换好、等的时候又换了歌就作废;换歌后过一会儿再读一次;

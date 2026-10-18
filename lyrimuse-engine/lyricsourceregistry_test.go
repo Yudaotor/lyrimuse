@@ -89,7 +89,7 @@ func TestLyricSourceCollectLoopTracksSourceCount(t *testing.T) {
 		// 结果 channel 的缓冲:每个源一个 goroutine,都能不阻塞地放下自己那一份
 		"make(chan lyricSourceResult, len(lyricSourceNames))",
 	} {
-		if !strings.Contains(body, want) {
+		if !containsCode(body, want) {
 			t.Errorf("enrich.go 里没找到 %q —— 这两处必须跟源数联动,写死字面量会在下次加源时静默丢结果", want)
 		}
 	}

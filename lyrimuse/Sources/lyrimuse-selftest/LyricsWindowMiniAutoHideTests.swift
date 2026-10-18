@@ -36,10 +36,10 @@ func checkLyricsWindowMiniAutoHide() {
     let appSettings = source("lyrimuse/Settings/AppSettings.swift")
     let settingsView = source("lyrimuse/SettingsView.swift")
 
-    expectEqual(sourceBytes(autoHide, contain: "$isPlayingSmoothed.removeDuplicates()\n            .sink { [weak self] in self?.isPlaying = $0;")
-                && sourceBytes(autoHide, contain: "$fullScreenDisplays.removeDuplicates()\n            .sink { [weak self] in self?.fullScreenDisplays = $0;")
-                && sourceBytes(autoHide, contain: "$lyricsWindowMiniHideWhenNotPlaying.removeDuplicates()\n            .sink { [weak self] in self?.hideWhenNotPlaying = $0;")
-                && sourceBytes(autoHide, contain: "$lyricsWindowMiniHideInFullScreen.removeDuplicates()\n            .sink { [weak self] in self?.hideInFullScreen = $0;"),
+    expectEqual(sourceHas(autoHide, "$isPlayingSmoothed.removeDuplicates()\n            .sink { [weak self] in self?.isPlaying = $0;")
+                && sourceHas(autoHide, "$fullScreenDisplays.removeDuplicates()\n            .sink { [weak self] in self?.fullScreenDisplays = $0;")
+                && sourceHas(autoHide, "$lyricsWindowMiniHideWhenNotPlaying.removeDuplicates()\n            .sink { [weak self] in self?.hideWhenNotPlaying = $0;")
+                && sourceHas(autoHide, "$lyricsWindowMiniHideInFullScreen.removeDuplicates()\n            .sink { [weak self] in self?.hideInFullScreen = $0;"),
                 true, "迷你自动隐藏: 四路订阅都用发布出来的值(订阅回调里回读属性是旧值)")
     expectEqual(sourceBytes(autoHide, contain: "fullScreenDisplays: fullScreenDisplays)")
                 && !sourceBytes(autoHide, contain: "FullScreenSpaceMonitor.shared.fullScreenDisplays")
@@ -51,21 +51,21 @@ func checkLyricsWindowMiniAutoHide() {
                 "迷你自动隐藏: 藏用 orderOut、不 close,「开着」照旧记着")
     expectEqual(sourceBytes(autoHide, contain: "forName: NSWindow.didChangeScreenNotification, object: panel"), true,
                 "迷你自动隐藏: 面板换屏重算全屏")
-    expectEqual(sourceBytes(panel, contain: "if atLaunch, LyricsMiniPanelAutoHide.shared.holdAtLaunch() { return }\n"
+    expectEqual(sourceHas(panel, "if atLaunch, LyricsMiniPanelAutoHide.shared.holdAtLaunch() { return }\n"
                             + "        LyricsMiniPanelAutoHide.shared.panelShownByUser()\n        panel.orderFrontRegardless()"),
                 true, "迷你自动隐藏: 用户打开照常摆出来;启动重开规则要藏就只建不上屏")
     expectEqual(sourceBytes(panel, contain: "LyricsMiniPanelAutoHide.shared.attach(panel)")
-                && sourceBytes(panel, contain: "guard let panel, !panel.isVisible else { return }\n        LyricsMiniPanelAutoHide.shared.detach()"),
+                && sourceHas(panel, "guard let panel, !panel.isVisible else { return }\n        LyricsMiniPanelAutoHide.shared.detach()"),
                 true, "迷你自动隐藏: 面板建出来接上、放掉时解开")
     expectEqual(sourceBytes(sceneActions, contain: "LyricsMiniPanelHost.show(atLaunch: true)"), true,
                 "迷你自动隐藏: 启动重开走 atLaunch")
-    expectEqual(sourceBytes(restorer, contain: "onScreen: LyricsMiniPanelAutoHide.shared.isHoldingPanel\n                ||"), true,
+    expectEqual(sourceHas(restorer, "onScreen: LyricsMiniPanelAutoHide.shared.isHoldingPanel\n                ||"), true,
                 "迷你自动隐藏: 启动重开把藏着的面板算作已上屏,不重试")
-    expectEqual(sourceBytes(window, contain: "LyricsMiniPanelHost.closeHeldPanel()\n            openScene()"), true,
+    expectEqual(sourceHas(window, "LyricsMiniPanelHost.closeHeldPanel()\n            openScene()"), true,
                 "迷你自动隐藏: 藏着时要开完整尺寸,先关掉藏着的面板")
 
-    expectEqual(sourceBytes(appSettings, contain: "lyricsWindowMiniHideWhenNotPlaying =\n            (defaults.object(forKey: Keys.lyricsWindowMiniHideWhenNotPlaying) as? Bool) ?? false")
-                && sourceBytes(appSettings, contain: "lyricsWindowMiniHideInFullScreen =\n            (defaults.object(forKey: Keys.lyricsWindowMiniHideInFullScreen) as? Bool) ?? false"),
+    expectEqual(sourceHas(appSettings, "lyricsWindowMiniHideWhenNotPlaying =\n            (defaults.object(forKey: Keys.lyricsWindowMiniHideWhenNotPlaying) as? Bool) ?? false")
+                && sourceHas(appSettings, "lyricsWindowMiniHideInFullScreen =\n            (defaults.object(forKey: Keys.lyricsWindowMiniHideInFullScreen) as? Bool) ?? false"),
                 true, "迷你自动隐藏: 两项默认关")
     expectEqual(sourceBytes(settingsView, contain: "isOn: $settings.lyricsWindowMiniHideWhenNotPlaying)")
                 && sourceBytes(settingsView, contain: "isOn: $settings.lyricsWindowMiniHideInFullScreen)"), true,

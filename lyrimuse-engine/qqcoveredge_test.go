@@ -109,7 +109,7 @@ func TestPeripheralQQCoverUpgradeSkipsSettledCovers(t *testing.T) {
 		t.Fatal("找不到 backfillPeripheralFields")
 	}
 	body := src[start:]
-	if !strings.Contains(body, "\tif !coverSettled(e) {\n\t\te.CoverURL = qqCoverAtEdge(e.CoverURL, qqCoverMaxEdge)\n\t}\n") {
+	if !containsCode(body, "\tif !coverSettled(e) {\n\t\te.CoverURL = qqCoverAtEdge(e.CoverURL, qqCoverMaxEdge)\n\t}\n") {
 		t.Error("QQ 封面提档要跳过专辑定下的封面")
 	}
 }

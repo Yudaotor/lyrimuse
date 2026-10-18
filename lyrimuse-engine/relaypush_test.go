@@ -325,7 +325,7 @@ func TestRelayStartupWaitIsWired(t *testing.T) {
 			t.Errorf("run() 要在第一拍之前: %s", needle)
 		}
 	}
-	if !strings.Contains(s, "case r := <-p.lastListenSeedCh:\n\t\t\tp.applyLastListenSeed(r)\n") {
+	if !containsCode(s, "case r := <-p.lastListenSeedCh:\n\t\t\tp.applyLastListenSeed(r)\n") {
 		t.Error("补种回来要交给 applyLastListenSeed")
 	}
 }

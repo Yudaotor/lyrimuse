@@ -87,7 +87,7 @@ func TestKasetAlbumPrefetchWired(t *testing.T) {
 		"if bundleID == kasetBundleID {\n\t\tgo prefetchKasetAlbumSiblings(currentArtist, currentTitle)",
 		"prefetchAlbumTracks(album, tracks, currentArtist, currentTitle, album)",
 	} {
-		if !strings.Contains(src, want) {
+		if !containsCode(src, want) {
 			t.Errorf("albumprefetch.go 缺 %q", want)
 		}
 	}

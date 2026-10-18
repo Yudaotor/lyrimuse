@@ -488,7 +488,7 @@ func TestLXMusicLocalLyricsIsWired(t *testing.T) {
 		"s != lxMusicLocalLyricsSource",
 		"if lxMusicAwaitsDuration(bundleID, durationSecs) {\n\t\tenrichMu.Unlock()\n\t\treturn nil\n\t}\n\t// 从没见过这首歌:首次解析",
 	} {
-		if !strings.Contains(string(b), wire) {
+		if !containsCode(string(b), wire) {
 			t.Errorf("enrich.go 缺 %q", wire)
 		}
 	}

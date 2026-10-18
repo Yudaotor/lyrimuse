@@ -40,7 +40,7 @@ func TestDeezerFetchLyricsSongwriters(t *testing.T) {
 	if !reflect.DeepEqual(p.songwriters, []string{"Alex One", "Sam Two"}) {
 		t.Errorf("songwriters = %q", p.songwriters)
 	}
-	if !strings.Contains(deezerLyricsQuery, "\n      writers\n") {
+	if !containsCode(deezerLyricsQuery, "\n      writers\n") {
 		t.Error("取词查询里要请求 writers")
 	}
 }

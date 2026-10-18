@@ -113,7 +113,7 @@ func TestRescueFanoutIsWired(t *testing.T) {
 		"notifyProvisionalLyrics(ctx, bNe, mergeLyricCandidateRounds(artist, title, album, durationSecs, rescueBase, bRes))",
 		"\t\tfan.stop()\n\t}",
 	} {
-		if !strings.Contains(src, n) {
+		if !containsCode(src, n) {
 			t.Errorf("enrich.go 缺 %q", n)
 		}
 	}

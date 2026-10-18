@@ -67,7 +67,7 @@ func TestTitleVariantRoundIsWired(t *testing.T) {
 		t.Fatal(err)
 	}
 	needle := "\t}\n\t// 还缺着的源换一种曲名写法再问一次,见 titleVariantRound。\n\tne, results = titleVariantRound(ctx, artist, title, album, durationSecs, ne, results, onUpdate)\n\t// 按 ISRC 补取"
-	if !strings.Contains(string(b), needle) {
+	if !containsCode(string(b), needle) {
 		t.Errorf("enrich.go 缺 %q", needle)
 	}
 	v, err := os.ReadFile("titlevariant.go")

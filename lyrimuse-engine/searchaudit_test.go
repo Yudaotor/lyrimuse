@@ -49,7 +49,7 @@ func TestSearchAuditWiring(t *testing.T) {
 	if only < 0 || search < 0 || only > search {
 		t.Error("peripheralOnly 那一支要排在整套歌词搜索之前")
 	}
-	if !strings.Contains(src, "\tif skipLyrics {\n\t\tctx = withPeripheralOnly(ctx)\n\t}") {
+	if !containsCode(src, "\tif skipLyrics {\n\t\tctx = withPeripheralOnly(ctx)\n\t}") {
 		t.Error("backfillPeripheralFields 没接 withPeripheralOnly")
 	}
 	prov, _ := os.ReadFile("provisionallyrics.go")

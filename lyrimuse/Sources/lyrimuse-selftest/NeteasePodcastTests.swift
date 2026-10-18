@@ -66,7 +66,7 @@ func runNeteasePodcastTests() {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let client = (try? String(contentsOfFile: sources.appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift").path,
                                   encoding: .utf8)) ?? ""
-        expectEqual(client.contains("guard artistless || neteasePodcastEpisode(bundleID: bundleID, snapshot: snapshot)\n                || spotifyContentNotMusic(bundleID: bundleID, snapshot: snapshot)\n")
+        expectEqual(sourceHas(client, "guard artistless || neteasePodcastEpisode(bundleID: bundleID, snapshot: snapshot)\n                || spotifyContentNotMusic(bundleID: bundleID, snapshot: snapshot)\n")
                         && client.contains("guard NeteasePodcastQueue.isEpisode(bundleID: bundleID, title: snapshot.title, artist: snapshot.artist) else {"),
                     true, "网易云播客 契约: 跟 KKBOX / Amazon 的播客走同一道「不是音乐」的闸")
         var calls = 0

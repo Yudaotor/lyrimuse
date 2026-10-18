@@ -2691,7 +2691,7 @@ func runLastfmTests() {
                                    encoding: .utf8)) ?? ""
         let section = (try? String(contentsOf: base.appendingPathComponent("lyrimuse/LastfmStatsSection.swift"),
                                    encoding: .utf8)) ?? ""
-        expectEqual(service.contains("private func refreshChartAppLinks() {\n        guard chartAppLinksOnScreen else { return }"),
+        expectEqual(sourceHas(service, "private func refreshChartAppLinks() {\n        guard chartAppLinksOnScreen else { return }"),
                     true, "右键链接: 统计区不在屏上时不算")
         expectEqual(section.contains(".onChange(of: windowVisible) { _, visible in stats.setChartAppLinksOnScreen(visible) }"),
                     true, "右键链接: 设置窗口看不看得见报给服务")
@@ -2702,7 +2702,7 @@ func runLastfmTests() {
                     "右键链接: QQ 音乐那项只在装了 QQ 音乐时出,有它的行才挂菜单")
         expectEqual(section.contains(#"NetworkAuditLog.record(service: "qq", operation: "song.detail""#), true,
                     "右键链接: 查 QQ 数字歌曲 ID 记对外请求日志")
-        expectEqual(section.contains("await launchQQMusicIfNeeded()\n            NSWorkspace.shared.open(url)"), true,
+        expectEqual(sourceHas(section, "await launchQQMusicIfNeeded()\n            NSWorkspace.shared.open(url)"), true,
                     "右键链接: QQ 音乐没开着时先启动好再发链接")
     }
 
@@ -2759,8 +2759,8 @@ func runLastfmTests() {
         expectEqual(section.contains("relFmt = RecentRelativeTimeSamples.formatter(locale: L10n.locale)")
                     && section.contains("relSamples = RecentRelativeTimeSamples.samples(locale: L10n.locale)"), true,
                     "最近记录尾格: 行上的相对时间和取样用同一种格式")
-        expectEqual(section.contains("RecentLiveStatusLabel(confirmed: true)\n            RecentLiveStatusLabel(confirmed: false)\n            ForEach(times, id: \\.self) { Text($0).font(.caption).monospacedDigit() }")
-                    && section.contains("Text(Self.relative(date))\n                        .font(.caption).foregroundStyle(.tertiary).monospacedDigit()"), true,
+        expectEqual(sourceHas(section, "RecentLiveStatusLabel(confirmed: true)\n            RecentLiveStatusLabel(confirmed: false)\n            ForEach(times, id: \\.self) { Text($0).font(.caption).monospacedDigit() }")
+                    && sourceHas(section, "Text(Self.relative(date))\n                        .font(.caption).foregroundStyle(.tertiary).monospacedDigit()"), true,
                     "最近记录尾格: 量宽视图里放两个状态标签和每一种相对时间,字体跟行上一样")
         expectEqual(section.contains("RecentTrailingWidthProbe(times: Self.relativeSamples())")
                     && section.contains(".onPreferenceChange(RecentTrailingWidthKey.self) { recentTrailingWidth = max(recentRowTrailingMinWidth, $0) }")
@@ -2818,11 +2818,11 @@ func runLastfmTests() {
         let reader = (try? String(contentsOf: base.appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"),
                                   encoding: .utf8)) ?? ""
         expectEqual(reader.isEmpty, false, "派生索引(契约): 读到源码")
-        expectEqual(reader.contains("// 派生索引也在这里建好,主线程接过去只换指针(见 DerivedIndexes);输入没变就沿用手上那份\n            let derived = refresh.flatMap { r in"),
+        expectEqual(sourceHas(reader, "// 派生索引也在这里建好,主线程接过去只换指针(见 DerivedIndexes);输入没变就沿用手上那份\n            let derived = refresh.flatMap { r in"),
                     true, "派生索引(契约): 后台解码那一路顺带建索引")
         expectEqual(reader.contains("derived: derived.map(DerivedUpdate.replace) ?? .keep, fingerprints: refresh.fingerprints,"), true,
                     "派生索引(契约): 采纳新内容时连同建好的索引一起换上(输入没变的沿用)")
-        expectEqual(reader.contains("case .replace(let d):\n            cachedCoverIndex = d.covers\n            cachedAlbumCoverIndex = d.albumCovers\n            cachedLooseIndex = d.loose"),
+        expectEqual(sourceHas(reader, "case .replace(let d):\n            cachedCoverIndex = d.covers\n            cachedAlbumCoverIndex = d.albumCovers\n            cachedLooseIndex = d.loose"),
                     true, "派生索引(契约): 换上的就是后台建的那三份,不在主线程作废重建")
     }
 
@@ -2835,13 +2835,13 @@ func runLastfmTests() {
         let recent = (try? String(contentsOf: base.appendingPathComponent("lyrimuse/UI/RecentListensPanel.swift"),
                                   encoding: .utf8)) ?? ""
         expectEqual(service.isEmpty || recent.isEmpty, false, "本机封面: 读到源码")
-        expectEqual(service.contains("if chartAppLinksOnScreen || !localCoversConsumers.isEmpty { refreshLocalCovers() }\n        if chartAppLinksOnScreen { refreshChartLocalCovers() }"),
+        expectEqual(sourceHas(service, "if chartAppLinksOnScreen || !localCoversConsumers.isEmpty { refreshLocalCovers() }\n        if chartAppLinksOnScreen { refreshChartLocalCovers() }"),
                     true, "本机封面: 缓存推进时只在有面板在屏上才重算")
-        expectEqual(service.contains("guard localCoversConsumers.insert(id).inserted else { return }\n            refreshLocalCovers()"),
+        expectEqual(sourceHas(service, "guard localCoversConsumers.insert(id).inserted else { return }\n            refreshLocalCovers()"),
                     true, "本机封面: 最近听过面板露出来那一刻补算")
-        expectEqual(service.contains("refreshChartAppLinks()\n            refreshLocalCovers()\n            refreshChartLocalCovers()"),
+        expectEqual(sourceHas(service, "refreshChartAppLinks()\n            refreshLocalCovers()\n            refreshChartLocalCovers()"),
                     true, "本机封面: 统计区露出来那一刻两份都补算")
-        expectEqual(service.contains("先补齐,免得本机给得出封面的行也去发 getinfo。行和缓存都没变时只是一次比较。\n        refreshLocalCovers()"),
+        expectEqual(sourceHas(service, "先补齐,免得本机给得出封面的行也去发 getinfo。行和缓存都没变时只是一次比较。\n        refreshLocalCovers()"),
                     true, "本机封面: 判「封面还缺」之前先补齐 —— 不然本机给得出封面的行也去发 getinfo,白烧限速额度")
         expectEqual(recent.contains(".onAppear { stats.setLocalCoversConsumer(coverConsumerID, onScreen: true) }"), true,
                     "本机封面: 最近听过面板挂上时报给服务")
@@ -2936,11 +2936,11 @@ func runLastfmTests() {
         let groupStart = tab.range(of: "private var lastfmSuggestionsGroup: some View {")?.upperBound
         let group = groupStart.map { String(tab[$0...].prefix(700)) } ?? ""
         expectEqual(group.contains("if let hint = spotifyLink.hint {") && group.contains("LastfmSpotifySuggestionRow(hint: hint)")
-                        && tab.contains("lastfmProfileCard\n                        lastfmSuggestionsGroup"), true,
+                        && sourceHas(tab, "lastfmProfileCard\n                        lastfmSuggestionsGroup"), true,
                     "Spotify 连接(契约): 建议在页头卡下面单独一组")
         let settingsView = src("lyrimuse/SettingsView.swift")
         expectEqual(settingsView.contains("if !suggestions.items.isEmpty {")
-                        && settingsView.contains("LastfmSuggestionsSidebarRow(count: suggestions.items.count)\n                    .tag(SettingsSidebarItem.lastfmSuggestions)"),
+                        && sourceHas(settingsView, "LastfmSuggestionsSidebarRow(count: suggestions.items.count)\n                    .tag(SettingsSidebarItem.lastfmSuggestions)"),
                     true, "Spotify 连接(契约): 侧栏有建议时多一行「Last.fm 账号建议」")
         expectEqual(src("lyrimuse/Settings/SettingsSidebarChrome.swift").contains("SidebarAlertDot"), false,
                     "账号建议(契约): 头像上不再挂标记")
@@ -2958,7 +2958,7 @@ func runLastfmTests() {
         let row = src("lyrimuse/Settings/LastfmAccountSuggestions.swift")
         expectEqual(row.contains("Button(L10n.t(\"仅由 Lyrimuse 记录…\")) { openLastfmApplications() }"), true,
                     "Spotify 连接(契约): 重复记那一行能去 Last.fm 断开")
-        expectEqual(row.contains("LastfmSpotifyLinkMonitor.shared.recheckWhenBack()\n        NSWorkspace.shared.open("), true,
+        expectEqual(sourceHas(row, "LastfmSpotifyLinkMonitor.shared.recheckWhenBack()\n        NSWorkspace.shared.open("), true,
                     "Spotify 连接(契约): 去网站之前登记回来重查")
         expectEqual(src("lyrimuse/Settings/LastfmSpotifyLinkMonitor.swift")
                         .contains(".publisher(for: NSApplication.didBecomeActiveNotification)"), true,
@@ -2987,7 +2987,7 @@ func runLastfmTests() {
            let end = stats.range(of: "let top = Array(Self.rankDayTracks(rows)", range: start.upperBound..<stats.endIndex) {
             let body = String(stats[start.upperBound..<end.lowerBound])
             expectEqual(body.contains("else { break }"), false, "这一天(契约): 缺页不再 break 后照常存成取到了")
-            expectEqual(body.contains("if epoch == accountEpoch { dayListens[dayKey] = .failed }\n                        return"),
+            expectEqual(sourceHas(body, "if epoch == accountEpoch { dayListens[dayKey] = .failed }\n                        return"),
                         true, "这一天(契约): 缺页记失败")
         } else {
             expectEqual(false, true, "这一天(契约): 找不到 loadDayListens")

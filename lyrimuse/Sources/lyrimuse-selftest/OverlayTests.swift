@@ -845,17 +845,14 @@ func runOverlayTests() {
             .appendingPathComponent("lyrimuse/UI")
         let row = (try? String(contentsOf: ui.appendingPathComponent("OverlayScrollingLyricRow.swift"), encoding: .utf8)) ?? ""
         let marker = "override func viewDidChangeBackingProperties() {"
-        let callback = row.range(of: marker).flatMap { start -> String? in
-            let rest = row[start.lowerBound...]
-            return rest.range(of: "\n    }\n").map { String(rest[..<$0.lowerBound]) }
-        } ?? ""
+        let callback = sourceBody(marker, in: row)
         expectEqual(callback.isEmpty, false, "倍率回调(契约): 找得到图层行的 viewDidChangeBackingProperties")
         let guardRange = callback.range(of: "guard let spec, bitmapScale != imageScale else { return }")
         let rebuildRange = callback.range(of: "rebuildImages(spec: spec)")
         expectEqual(guardRange != nil && rebuildRange != nil
                         && guardRange!.lowerBound < rebuildRange!.lowerBound, true,
                     "倍率回调(契约): 图层行先比倍率、相等就返回,才重画长图")
-        expectEqual(sourceBytes(row, contain: "    private func adopt(_ g: OverlayRowGeometry, images: OverlayRowImages) {\n        imageScale = g.scale\n"),
+        expectEqual(sourceHas(row, "    private func adopt(_ g: OverlayRowGeometry, images: OverlayRowImages) {\n        imageScale = g.scale\n"),
                     true, "倍率回调(契约): 换上长图时记下它按哪个倍率画的")
     }
 
@@ -1746,19 +1743,6 @@ func runOverlayTests() {
             (try? String(contentsOf: ui.appendingPathComponent(name), encoding: .utf8)) ?? ""
         }
         /// `signature` 起到与它之后第一个 `{` 配对的 `}` 为止;找不到返回空串。
-        func body(_ signature: String, in text: String) -> String {
-            guard let start = text.range(of: signature), let open = text[start.lowerBound...].firstIndex(of: "{") else { return "" }
-            var depth = 0
-            var i = open
-            while i < text.endIndex {
-                if text[i] == "{" { depth += 1 } else if text[i] == "}" {
-                    depth -= 1
-                    if depth == 0 { return String(text[start.lowerBound...i]) }
-                }
-                i = text.index(after: i)
-            }
-            return ""
-        }
         let view = src("LyricsOverlayView.swift")
         let controller = src("LyricsOverlayWindowController.swift")
         expectEqual(view.components(separatedBy: "timingEpoch: playback.timingEpoch").count - 1, 4,
@@ -1767,7 +1751,7 @@ func runOverlayTests() {
                     "悬浮接线: 三处图层行都按播放速率排关键帧")
         expectEqual(controller.contains("setControlCapture(nowHovered != nil)"), true,
                     "悬浮接线: 指针在按钮上时收回点击穿透,点按钮不再连带点到下层")
-        expectEqual(controller.contains("isBorrowingScreen = true\n            moveDebounceTimer?.invalidate()"), true,
+        expectEqual(sourceHas(controller, "isBorrowingScreen = true\n            moveDebounceTimer?.invalidate()"), true,
                     "悬浮接线: 锚点那块屏不在了就算借屏,并作废已排队的落盘")
         expectEqual(view.contains("!surfaceVisible") && controller.contains("didChangeOcclusionStateNotification"), true,
                     "悬浮接线: 看不见时停表")
@@ -1781,15 +1765,13 @@ func runOverlayTests() {
                     "悬浮接线: 开始拖之前控制排换到卡片下方,卡片能一路贴到菜单栏")
         expectEqual(view.contains("adjustingWidth: overlayController.isAdjustingWidth) && !overlayController.isDragArmed"), true,
                     "悬浮接线: 拖动中不显示控制排")
-        expectEqual(controller.contains(
-            "window.performDrag(with: syntheticDown)\n        guard NSEvent.pressedMouseButtons & 1 != 0 else {\n            finishArmedDrag()"),
+        expectEqual(sourceHas(controller, "window.performDrag(with: syntheticDown)\n        guard NSEvent.pressedMouseButtons & 1 != 0 else {\n            finishArmedDrag()"),
                     true, "悬浮接线: performDrag 当场返回时等左键松开才收尾,不在开拖那一刻收尾")
         expectEqual(controller.contains("dragReleasePoll = poll"), true, "悬浮接线: 系统接手拖动后轮询左键松没松")
-        expectEqual(controller.contains("dragFrameWhilePressed = window.frame\n        window.performDrag(with: syntheticDown)")
-                    && controller.contains("if NSEvent.pressedMouseButtons & 1 != 0 {\n                        self.dragFrameWhilePressed = panel.frame"),
+        expectEqual(sourceHas(controller, "dragFrameWhilePressed = window.frame\n        window.performDrag(with: syntheticDown)")
+                    && sourceHas(controller, "if NSEvent.pressedMouseButtons & 1 != 0 {\n                        self.dragFrameWhilePressed = panel.frame"),
                     true, "悬浮接线: 拖动中记下左键还按着时的窗口位置")
-        expectEqual(controller.contains(
-            "} else if self.dragReleasePoll != nil {\n                        // 左键已经松了、轮询还没认出来:这一帧是系统在挪,当场收尾、挪回松手的位置。\n                        self.finishArmedDrag()"),
+        expectEqual(sourceHas(controller, "} else if self.dragReleasePoll != nil {\n                        // 左键已经松了、轮询还没认出来:这一帧是系统在挪,当场收尾、挪回松手的位置。\n                        self.finishArmedDrag()"),
                     true, "悬浮接线: 松手后系统一挪窗口就收尾,不等轮询")
         expectEqual(controller.contains(
             "let released = OverlayPlacement.ReleaseAnchor(frame: dragFrameWhilePressed ?? window.frame, now: CACurrentMediaTime())")
@@ -1797,8 +1779,7 @@ func runOverlayTests() {
                     true, "悬浮接线: 落点以左键还按着时的位置为准,认出松手前系统挪的那几帧挪回去")
         expectEqual(controller.contains("dragReleaseAnchor = OverlayPlacement.ReleaseAnchor(frame: window.frame, now: CACurrentMediaTime())"),
                     true, "悬浮接线: 松手时记下窗口的 x 和顶边")
-        expectEqual(controller.contains(
-            "} else if let origin = anchor.restoredOrigin(for: panel.frame) {\n                        panel.setFrameOrigin(origin)"),
+        expectEqual(sourceHas(controller, "} else if let origin = anchor.restoredOrigin(for: panel.frame) {\n                        panel.setFrameOrigin(origin)"),
                     true, "悬浮接线: 松手后系统接着挪窗口(拖进菜单栏摆到正中、贴边平铺)时挪回松手的位置")
         for (site, what) in [
             ("isDragArmed = true\n        dragReleaseAnchor = nil", "再拖一次"),
@@ -1808,17 +1789,15 @@ func runOverlayTests() {
             ("private func reconcilePlacementWithScreens() {\n        guard let window else { return }\n        dragReleaseAnchor = nil",
              "屏幕变了"),
         ] {
-            expectEqual(controller.contains(site), true, "悬浮接线: \(what)时先作废松手护位,不被当成系统挪动挪回去")
+            expectEqual(sourceHas(controller, site), true, "悬浮接线: \(what)时先作废松手护位,不被当成系统挪动挪回去")
         }
-        expectEqual(controller.contains(
-            "setControlsBelowCard(true, keepingCardIn: window)\n            let timer = Timer(timeInterval: dragStartRenderDelay, repeats: false)"),
+        expectEqual(sourceHas(controller, "setControlsBelowCard(true, keepingCardIn: window)\n            let timer = Timer(timeInterval: dragStartRenderDelay, repeats: false)"),
                     true, "悬浮接线: 开拖前换了布局就等它画出来、窗口位置落到系统那边再拖")
-        expectEqual(controller.contains("if let pending = dragStartTimer {\n            pending.invalidate()"), true,
+        expectEqual(sourceHas(controller, "if let pending = dragStartTimer {\n            pending.invalidate()"), true,
                     "悬浮接线: 等着开拖时被取消,作废这次拖动并放回控制排")
-        expectEqual(controller.contains("if let poll = dragReleasePoll {\n            poll.invalidate()"), true,
+        expectEqual(sourceHas(controller, "if let poll = dragReleasePoll {\n            poll.invalidate()"), true,
                     "悬浮接线: 拖动中被锁定或隐藏时停掉等松手的轮询,放回控制排")
-        expectEqual(controller.contains(
-            "recomputeControlsBelowCard()\n        dragReleaseAnchor = OverlayPlacement.ReleaseAnchor(frame: window.frame, now: CACurrentMediaTime())"),
+        expectEqual(sourceHas(controller, "recomputeControlsBelowCard()\n        dragReleaseAnchor = OverlayPlacement.ReleaseAnchor(frame: window.frame, now: CACurrentMediaTime())"),
                     true, "悬浮接线: 松手时按卡片落点判一次,判完再记护位")
         expectEqual(controller.contains("window.setFrameOrigin(NSPoint(x: frame.minX, y: top - frame.height))"), true,
                     "悬浮接线: 翻面时窗口反向挪一个槽位,卡片不动")
@@ -1828,51 +1807,47 @@ func runOverlayTests() {
                     && view.contains(".padding(.bottom, cardBottomPadding)"), true,
                     "悬浮接线: 背景透明且控制排在下方时卡片不留底边距,歌词和控制排之间不空一截")
         let overlayWindow = src("LyricsOverlayWindow.swift")
-        expectEqual(controller.contains(
-            "setLyricsCapture(insideLyrics && lyricsHotZoneLocal != nil && !isPositionLocked\n                             && !placementMode.isPreset && !AppSettings.shared.overlayDragNeedsLongPress\n                             && !clickReplayInFlight)"),
+        expectEqual(sourceHas(controller, "setLyricsCapture(insideLyrics && lyricsHotZoneLocal != nil && !isPositionLocked\n                             && !placementMode.isPreset && !AppSettings.shared.overlayDragNeedsLongPress\n                             && !clickReplayInFlight)"),
                     true, "悬浮接线: 「长按拖动」关着时指针停在歌词文字上先接住点击,按下和拖动都不漏给下层")
         expectEqual(controller.contains("guard !edgeCaptured, !controlCaptured, !lyricsCaptured, !fontZoomCaptured, !isDragArmed else { return }"), true,
                     "悬浮接线: 歌词文字、调字号接管着时不还原穿透")
-        expectEqual(body("private func finishArmedDrag() {", in: controller).contains("restorePointerCaptureAfterDrag()")
-                    && !controller.contains("ignoresMouseEvents = true\n            isDragArmed = false")
-                    && !controller.contains("ignoresMouseEvents = true\n            recomputeControlsBelowCard()"),
+        expectEqual(sourceBody("private func finishArmedDrag() {", in: controller).contains("restorePointerCaptureAfterDrag()")
+                    && !sourceHas(controller, "ignoresMouseEvents = true\n            isDragArmed = false")
+                    && !sourceHas(controller, "ignoresMouseEvents = true\n            recomputeControlsBelowCard()"),
                     true, "悬浮接线: 拖完或拖动作废时按接管状态还原,指针还在字上就接着接住")
-        expectEqual(controller.contains("controlCaptured = false\n        lyricsCaptured = false"), true,
+        expectEqual(sourceHas(controller, "controlCaptured = false\n        lyricsCaptured = false"), true,
                     "悬浮接线: 锁定时一并放掉歌词文字的接管")
-        expectEqual(controller.components(separatedBy: "setControlCapture(false)\n        setLyricsCapture(false)\n    }").count - 1, 2,
+        expectEqual(sourceCount(controller, "setControlCapture(false)\n        setLyricsCapture(false)\n    }"), 2,
                     "悬浮接线: 悬停态清零、滚轮让开时按钮和歌词文字两处接管一起还原")
-        expectEqual(overlayWindow.contains("if event.type == .scrollWheel {\n            onScrollWheel?(event)\n            return\n        }")
+        expectEqual(sourceHas(overlayWindow, "if event.type == .scrollWheel {\n            onScrollWheel?(event)\n            return\n        }")
                     && controller.contains("panel.onScrollWheel = { [weak self] event in self?.handleScrollWheel(event) }")
-                    && controller.contains("guard event.modifierFlags.contains(OverlayFontZoom.modifier), fontZoomCaptured || isPointerOnLyricsText() else {\n            yieldPointerCaptureToScroll()\n            return"),
+                    && sourceHas(controller, "guard event.modifierFlags.contains(OverlayFontZoom.modifier), fontZoomCaptured || isPointerOnLyricsText() else {\n            yieldPointerCaptureToScroll()\n            return"),
                     true, "悬浮接线: 接管期间收到没按 ⌘ 的滚轮就让开,同一手势后面的滚动到下层")
         // 按住 ⌘ 在歌词上滚动调字号(04 章决策 62)。
-        expectEqual(controller.contains("// 锁定、长按模式也接(见 fontZoomCaptured)。\n            refreshFontZoomCapture()"), true,
+        expectEqual(sourceHas(controller, "// 锁定、长按模式也接(见 fontZoomCaptured)。\n            refreshFontZoomCapture()"), true,
                     "调字号: 每次指针移动都判一次,锁定、长按模式也接")
         expectEqual(controller.contains("setFontZoomCapture(commandHeld && (fontZoomCaptured ? window.frame.contains(loc) : onLyrics))"), true,
                     "调字号: 按着 ⌘ 停在歌词文字上才接,接住后指针不出窗口就一直接着")
-        expectEqual(controller.contains("controlCaptured = false\n        lyricsCaptured = false\n        fontZoomCaptured = false"), true,
+        expectEqual(sourceHas(controller, "controlCaptured = false\n        lyricsCaptured = false\n        fontZoomCaptured = false"), true,
                     "调字号: 锁定时一并放掉,按着 ⌘ 还在字上由轮询重新接住")
         expectEqual(controller.contains("next = AppSettings.steppedOverlayFontSize(from: next, direction: steps > 0 ? 1 : -1)"), true,
                     "调字号: 跟 ⚙ 菜单、快捷键同一个步长和范围")
-        expectEqual(controller.contains("clearControlsHoverState()\n        stopFontZoom()\n    }")
-                    && controller.contains("if isHoveringLyrics { isHoveringLyrics = false }\n            }\n            stopFontZoom()"),
+        expectEqual(sourceHas(controller, "clearControlsHoverState()\n        stopFontZoom()\n    }")
+                    && sourceHas(controller, "if isHoveringLyrics { isHoveringLyrics = false }\n            }\n            stopFontZoom()"),
                     true, "调字号: 卸监听器、窗口隐藏时停掉轮询、放掉接管")
         overlayFontZoomChecks()
         // 按在歌词上拖出一段才开拖,没拖就松手算单击、补发给下层(04 章决策 55)。
-        expectEqual(controller.contains(
-            "pendingLyricsPress = PendingPress(location: loc, modifiers: modifiers, clickCount: clickCount,\n                                                  swallowed: local)\n                return"),
+        expectEqual(sourceHas(controller, "pendingLyricsPress = PendingPress(location: loc, modifiers: modifiers, clickCount: clickCount,\n                                                  swallowed: local)\n                return"),
                     true, "悬浮接线: 按在歌词上先不武装,只记下这一下")
-        expectEqual(controller.contains(
-            "if OverlayClickReplay.isDrag(from: start, to: loc) {\n                    pendingLyricsPress = nil\n                    armDragIfStillPressed()"),
+        expectEqual(sourceHas(controller, "if OverlayClickReplay.isDrag(from: start, to: loc) {\n                    pendingLyricsPress = nil\n                    armDragIfStillPressed()"),
                     true, "悬浮接线: 拖出一段才武装开拖(这时才描边、换布局)")
-        expectEqual(controller.contains("cancelPendingPress()\n            if let press { replayClickBelow(press, button: .left, upAt: loc) }"),
+        expectEqual(sourceHas(controller, "cancelPendingPress()\n            if let press { replayClickBelow(press, button: .left, upAt: loc) }"),
                     true, "悬浮接线: 没拖就松手算单击,补发给下层")
-        expectEqual(controller.contains("guard press.swallowed else { return }\n        guard AccessibilitySkipPress.isTrusted else {"),
+        expectEqual(sourceHas(controller, "guard press.swallowed else { return }\n        guard AccessibilitySkipPress.isTrusted else {"),
                     true, "悬浮接线: 只补发被这扇窗接住的那一下,没有辅助功能权限不发")
-        expectEqual(controller.contains("clickReplayInFlight = true\n        setLyricsCapture(false)"), true,
+        expectEqual(sourceHas(controller, "clickReplayInFlight = true\n        setLyricsCapture(false)"), true,
                     "悬浮接线: 补发前放掉歌词文字的接管、还原穿透")
-        expectEqual(controller.contains(
-            "if info.replayed {\n            // 自己补发的那一下不是用户的操作,不进手势处理;松开回来了就算补发完。\n            if info.type == .leftMouseUp || info.type == .rightMouseUp { clickReplayLanded() }\n            return\n        }"),
+        expectEqual(sourceHas(controller, "if info.replayed {\n            // 自己补发的那一下不是用户的操作,不进手势处理;松开回来了就算补发完。\n            if info.type == .leftMouseUp || info.type == .rightMouseUp { clickReplayLanded() }\n            return\n        }"),
                     true, "悬浮接线: 监听器跳过自己补发的事件,补发的松开回来才恢复接管")
         expectEqual(controller.contains("let timer = Timer(timeInterval: OverlayClickReplay.landingTimeout, repeats: false)"), true,
                     "悬浮接线: 补发的松开没回来也按时恢复接管")
@@ -1880,7 +1855,7 @@ func runOverlayTests() {
                     && controller.contains("replayClickBelow(press, button: .right, upAt: loc)")
                     && controller.contains(".rightMouseDown, .rightMouseUp]"),
                     true, "悬浮接线: 右键点在歌词上同样补发给下层")
-        expectEqual(controller.contains("pressStartLocation = nil\n        pendingLyricsPress = nil\n        pendingRightPress = nil"), true,
+        expectEqual(sourceHas(controller, "pressStartLocation = nil\n        pendingLyricsPress = nil\n        pendingRightPress = nil"), true,
                     "悬浮接线: 作废这次按下时连待定的单击一起清掉")
         let compensate = controller.range(
             of: "window.setFrameOrigin(NSPoint(x: frame.minX + now.x - start.x, y: frame.minY + now.y - start.y))")

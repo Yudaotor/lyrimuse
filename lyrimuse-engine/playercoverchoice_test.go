@@ -6,7 +6,6 @@ import (
 	"image/jpeg"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -282,7 +281,7 @@ func TestPlayerCoverIsWired(t *testing.T) {
 		"if own := playerCoverFor(ctx); smallDeviceCoverYieldsTo(deviceCoverURL, own) {\n\t\t// 小设备封面碰上播放器自带的那张:用自带的,同 applyDeviceOrPlayerCover。\n\t\tif existing.CoverURL == own {\n\t\t\treturn false\n\t\t}\n\t\tcover, source = own, \"player\"\n\t} else {",
 		"if pc := playerCoverOverDevice(ctx, deviceCoverURL, existing.CoverURL); pc != \"\" {\n\t\t\tcover, source = pc, \"player\"",
 	} {
-		if !strings.Contains(enrich, n) {
+		if !containsCode(enrich, n) {
 			t.Errorf("enrich.go 缺 %q", n)
 		}
 	}

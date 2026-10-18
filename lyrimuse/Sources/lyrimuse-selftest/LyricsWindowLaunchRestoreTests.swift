@@ -74,7 +74,7 @@ func checkLyricsWindowLaunchRestore() {
     let actions = source("lyrimuse/MenuBar/MenuBarSceneActions.swift")
     let restorer = source("lyrimuse/UI/LyricsWindowLaunchRestorer.swift")
     let window = source("lyrimuse/UI/LyricsWindowView.swift")
-    expectEqual(sourceBytes(actions, contain: "let plan = LaunchWindowPlan(silentLaunch: settings.silentLaunch,\n"
+    expectEqual(sourceHas(actions, "let plan = LaunchWindowPlan(silentLaunch: settings.silentLaunch,\n"
                             + "                                            hasCompletedOnboarding: settings.hasCompletedOnboarding,\n"
                             + "                                            lyricsWindowWasOpen: LyricsWindowSession.shouldReopenAtLaunch)\n"
                             + "                if plan.reopensLyricsWindow {\n"
@@ -98,13 +98,13 @@ func checkLyricsWindowLaunchRestore() {
                 "静默启动: 没重开时把「开着」记成没开")
     let delegate = source("lyrimuse/AppDelegate.swift")
     let settingsView = source("lyrimuse/SettingsView.swift")
-    expectEqual(sourceBytes(delegate, contain: "_ = SparkleUpdaterManager.shared\n"
+    expectEqual(sourceHas(delegate, "_ = SparkleUpdaterManager.shared\n"
                             + "        // 放到下一拍:启动流程里排在这之后的窗口(SwiftUI 默认开的设置窗口)也还算启动阶段。\n"
                             + "        DispatchQueue.main.async { LaunchPhase.finish() }\n    }"),
                 true, "静默启动: applicationDidFinishLaunching 末尾的下一拍才算启动流程走完")
-    expectEqual(sourceBytes(actions, contain: "static func presentSettings(fallback: () -> Void) {\n        LaunchPhase.settingsRequested = true\n"),
+    expectEqual(sourceHas(actions, "static func presentSettings(fallback: () -> Void) {\n        LaunchPhase.settingsRequested = true\n"),
                 true, "静默启动: 菜单、快捷键、深链要设置窗口时记一笔,那扇不关")
-    expectEqual(sourceBytes(settingsView, contain: "if LaunchWindowPlan.dropsSettingsWindow(launching: LaunchPhase.isLaunching,\n"
+    expectEqual(sourceHas(settingsView, "if LaunchWindowPlan.dropsSettingsWindow(launching: LaunchPhase.isLaunching,\n"
                             + "                                                    requested: LaunchPhase.settingsRequested) {\n"
                             + "                window.alphaValue = 0\n"
                             + "                DispatchQueue.main.async {\n"
@@ -114,19 +114,19 @@ func checkLyricsWindowLaunchRestore() {
                             + "            }"),
                 true, "启动时开窗: SwiftUI 默认开的设置窗口先透明、下一拍关掉,关完还原透明度")
     let settings = source("lyrimuse/Settings/AppSettings.swift")
-    expectEqual(sourceBytes(settings, contain: "defaults.set(silentLaunch, forKey: Keys.silentLaunch)\n"
+    expectEqual(sourceHas(settings, "defaults.set(silentLaunch, forKey: Keys.silentLaunch)\n"
                             + "            // 打开时顺带关掉「在 Dock 中显示」,只留菜单栏图标;之后用户再把 Dock 打开不拦(14 章决策 62)。\n"
                             + "            if silentLaunch, !oldValue { showInDock = false }"),
                 true, "静默启动: 打开时顺带关掉「在 Dock 中显示」")
     expectEqual(sourceBytes(delegate, contain: "applicationShouldOpenUntitledFile"), false,
                 "静默启动: 不靠 applicationShouldOpenUntitledFile(SwiftUI 不经过 App 委托问它)")
     expectEqual(sourceBytes(restorer, contain: "openLyricsWindow"), false, "启动重开: 重试也不走先激活 App 的 openLyricsWindow")
-    expectEqual(sourceBytes(restorer, contain: "if let window = LyricsWindowSession.window {\n            window.orderFrontRegardless()\n        } else {\n            openWindow()\n        }"),
+    expectEqual(sourceHas(restorer, "if let window = LyricsWindowSession.window {\n            window.orderFrontRegardless()\n        } else {\n            openWindow()\n        }"),
                 true, "启动重开: 窗口建出来了只是没上屏就直接摆到最前,没建出来才再开")
     expectEqual(sourceBytes(restorer, contain: "|| (LyricsWindowSession.window.map { $0.isVisible || $0.isMiniaturized } ?? false),")
                 && sourceBytes(restorer, contain: "stillWanted: LyricsWindowSession.shouldReopenAtLaunch && !AppExit.isTerminating)"),
                 true, "启动重开: 核对用登记的窗口(最小化也算),还该不该开读「开着」那个键和退出标记")
-    expectEqual(sourceBytes(window, contain: "        self.window = window\n        LyricsWindowSession.window = window\n"), true,
+    expectEqual(sourceHas(window, "        self.window = window\n        LyricsWindowSession.window = window\n"), true,
                 "启动重开: 控制器 attach 新窗口时登记")
     for line in ["launch restore: lyrics window on screen attempts=", "launch restore: lyrics window not on screen, retrying attempt=",
                  "launch restore: lyrics window still not on screen, giving up attempts=", "launch restore: stopped, window closed"] {

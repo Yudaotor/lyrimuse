@@ -1298,7 +1298,7 @@ func runMenuBarTests() {
                let end = text.range(of: "let work = DispatchWorkItem",
                                     range: start.upperBound..<text.endIndex) {
                 let branch = String(text[start.lowerBound..<end.lowerBound])
-                expectEqual(branch.contains("if cls == \"icon\" {\n                        render(button)"), false,
+                expectEqual(sourceHas(branch, "if cls == \"icon\" {\n                        render(button)"), false,
                             "间隙不闪(反例): 推迟分支里不许再出现无条件的 render(button)")
                 expectEqual(branch.contains("if delay <= 0 { render(button) }"), false,
                             "间隙不闪(反例): 判据是 observeRemaining,不是 delay(delay 含节流那一半)")
@@ -1367,7 +1367,7 @@ func runMenuBarTests() {
                         "落定窗: 粘性条件接进判据")
             // 收进图标槽那条**不许**也标成 provisional —— 它有自己的收缩观察窗,
             // 两个窗叠上去会让"暂停后多久收回图标"变得没法解释。
-            expectEqual(text.contains("collapseDelay: settings.showLyricsInMenuBar ? Self.slotReleaseSecs : 0,\n                    targetIsProvisional"), false,
+            expectEqual(sourceHas(text, "collapseDelay: settings.showLyricsInMenuBar ? Self.slotReleaseSecs : 0,\n                    targetIsProvisional"), false,
                         "落定窗(反例): 图标那条不叠落定窗")
             // 固定窗,不因目标变化重新计时 —— 重新计时的话目标一直在变就永远建不出来。
             expectEqual(text.contains("let began = iconExitSettleBegan ?? now"), true,
@@ -1572,7 +1572,7 @@ func runMenuBarTests() {
         let rows = source("lyrimuse/MenuBar/MenuBarPanelLyricsManagerQuick.swift")
         let settingsView = source("lyrimuse/SettingsView.swift")
         let actions = source("lyrimuse/UI/LyricsWindowActions.swift")
-        expectEqual(panel.contains("on: false, quick: .lyricsManager,\n                         action: openLyricsManagerAction)")
+        expectEqual(sourceHas(panel, "on: false, quick: .lyricsManager,\n                         action: openLyricsManagerAction)")
                     && panel.contains("case .lyricsManager: return openLyricsManagerAction"), true,
                     "歌词管理背面: 格子接上快捷设置,短按和头部「打开」是同一条闭包")
         expectEqual(quick.contains("case \"lyrics-manager\": self = .lyricsManager")
@@ -1593,7 +1593,7 @@ func runMenuBarTests() {
                     "歌词管理背面: 不收歌词库那一组,也不收外部编辑器")
         // 窗口跟着内容长高:尺寸由宿主视图在 layout() 里报。GeometryReader + PreferenceKey 那条在内容比窗口高时不来(06 章决策 44)。
         expectEqual(panel.contains("host.onFittingSizeChange = { [weak self] size in self?.place(size: size) }")
-                    && panel.contains("guard fitting != bounds.size else { return }\n        onFittingSizeChange?(fitting)")
+                    && sourceHas(panel, "guard fitting != bounds.size else { return }\n        onFittingSizeChange?(fitting)")
                     && !panel.contains("onPreferenceChange("), true,
                     "面板尺寸: 宿主视图 layout() 里当场报 fittingSize,不用 PreferenceKey、不推到下一拍")
         // 内容贴顶:对不上高度的那一帧不许上下居中(翻面时整个面板抖一下),minHeight: 0 不能省(06 章决策 45)。

@@ -517,8 +517,7 @@ func runSettingsInteractionTests() {
         let src = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift")
         let service = (try? String(contentsOf: src, encoding: .utf8)) ?? ""
-        let body = service.components(separatedBy: "private func requestDetailed(method:").dropFirst().first?
-            .components(separatedBy: "\n    }\n").first ?? ""
+        let body = sourceBody("private func requestDetailed(method:", in: service)
         expectEqual(body.isEmpty, false, "Last.fm 解析(契约): 读到 requestDetailed")
         expectEqual(body.contains("try await Self.decodeJSONObject(data)")
                     && !body.contains("JSONSerialization.jsonObject(with: data)"), true,
@@ -739,7 +738,7 @@ private func runPermissionGuideContracts() {
     let appDelegate = read("AppDelegate.swift")
     expectEqual([memory, portability, ax, fda, onboarding, lockHelp, settings, appDelegate].allSatisfy { !$0.isEmpty }, true,
                 "权限说明(契约): 读不到源码(路径挪了?)")
-    expectEqual(appDelegate.contains("AccessibilityPermission.shared.refresh()\n        FullDiskAccessPermission.shared.refresh()"), true,
+    expectEqual(sourceHas(appDelegate, "AccessibilityPermission.shared.refresh()\n        FullDiskAccessPermission.shared.refresh()"), true,
                 "权限说明(契约): 启动时就记授权成功过,不等设置页打开")
     for key in ["np:fullDiskAccessEverGranted", "np:accessibilityEverGranted"] {
         expectEqual(memory.contains("\"\(key)\"") && portability.contains("\"\(key)\","), true,

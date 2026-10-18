@@ -277,7 +277,7 @@ func runPlayerIdentityTests() {
             expectEqual(coordinator.contains("MusicPlaybackController.playPause { [weak self] route in")
                         && coordinator.contains("guard let route, let self, LocalPlaybackSource.shared.lastResolvedBundleID == targetBundleID else { return }")
                         && coordinator.contains("isPlayingSmoothed = MusicPlaybackController.shownPlayingAfterPlayPause(")
-                        && source.contains("guard let route = MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic,\n"
+                        && sourceHas(source, "guard let route = MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic,\n"
                                            + "                                                       kasetWasPlaying: kasetWasPlaying, qqWasPaused: qqWasPaused) else { return }"),
                         true, "控制分派(契约): 没发出去时不乐观翻转播放状态、不挪屏上进度")
             expectEqual(client.contains("fallbackViaAppleScript = viaAppleScript")
@@ -510,17 +510,15 @@ func runPlayerIdentityTests() {
             let reject = "guard !trustedPlaybackRejected(bundleID: bundleID, snapshot: snapshot) else {"
             // 函数体里最后那道「不是歌 → 问别家」之前先认出开播那一帧(多选那条路前面还有一道只管信任的未知播放器的,碰不到 KKBOX)。
             func checkedFirst(in fn: String) -> Bool {
-                guard let f = client.range(of: fn) else { return false }
-                let rest = client[f.upperBound...]
-                let body = rest[..<(rest.range(of: "\n    }\n")?.lowerBound ?? rest.endIndex)]
+                let body = sourceBody(fn, in: client)
                 guard let c = body.range(of: check), let r = body.range(of: reject, options: .backwards) else { return false }
                 return c.lowerBound < r.lowerBound
             }
             expectEqual(checkedFirst(in: "private static func fetchAutoDetectedSnapshot()")
                             && checkedFirst(in: "private static func fetchMultiSelectedSnapshot("), true,
                         "KKBOX(契约): 自动识别、多选两条路都先认出开播那一帧,不走「不是歌 → 问别家」")
-            expectEqual(client.contains("setSnapshotFailure(.targetLoading)\n        kasetLock.lock()\n        otherPlayerLoadingThisRound = true")
-                            && client.contains("kasetLoadingThisRound = false\n        otherPlayerLoadingThisRound = false")
+            expectEqual(sourceHas(client, "setSnapshotFailure(.targetLoading)\n        kasetLock.lock()\n        otherPlayerLoadingThisRound = true")
+                            && sourceHas(client, "kasetLoadingThisRound = false\n        otherPlayerLoadingThisRound = false")
                             && client.contains("Self.kasetWins(over: found, kaset: kaset, otherPlayerLoading: otherLoading)"),
                         true, "KKBOX(契约): 开播那一帧记成在加载,每拍清零,并告诉 Kaset 那一路")
         }
@@ -999,19 +997,6 @@ func runPlayerIdentityTests() {
                 .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
         }
         /// `signature` 起到与它之后第一个 `{` 配对的 `}` 为止;找不到返回空串。
-        func body(_ signature: String, in text: String) -> String {
-            guard let start = text.range(of: signature), let open = text[start.lowerBound...].firstIndex(of: "{") else { return "" }
-            var depth = 0
-            var i = open
-            while i < text.endIndex {
-                if text[i] == "{" { depth += 1 } else if text[i] == "}" {
-                    depth -= 1
-                    if depth == 0 { return String(text[start.lowerBound...i]) }
-                }
-                i = text.index(after: i)
-            }
-            return ""
-        }
         /// 一段代码里点到的播放器(`.appleMusic`、`PlaybackPlayer.appleMusic.bundleIdentifier` 都算),按名字排好。
         func named(_ text: String) -> [String] {
             PlaybackPlayer.allCases.map { "\($0)" }
@@ -1031,25 +1016,25 @@ func runPlayerIdentityTests() {
         let window = code("lyrimuse/UI/LyricsWindowView.swift")
         let switches: [(name: String, body: String, column: On)] = [
             ("snapshotAfterFocusLost",
-             body("private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {", in: client), .appleScriptSnapshot),
-            ("adaptedSnapshot", body("private static func adaptedSnapshot(", in: client), .appleScriptSnapshot),
-            ("extendedControlsState", body("public static func extendedControlsState(", in: controller), .extendedControls),
+             sourceBody("private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {", in: client), .appleScriptSnapshot),
+            ("adaptedSnapshot", sourceBody("private static func adaptedSnapshot(", in: client), .appleScriptSnapshot),
+            ("extendedControlsState", sourceBody("public static func extendedControlsState(", in: controller), .extendedControls),
             ("playbackMode(for:)",
-             body("public static func playbackMode(for player: PlaybackPlayer) -> PlaybackModeState? {", in: controller),
+             sourceBody("public static func playbackMode(for player: PlaybackPlayer) -> PlaybackModeState? {", in: controller),
              .extendedControls),
             ("setPlaybackMode(_:for:)",
-             body("public static func setPlaybackMode(_ mode: MusicPlaybackMode, for player: PlaybackPlayer) -> Bool {",
+             sourceBody("public static func setPlaybackMode(_ mode: MusicPlaybackMode, for player: PlaybackPlayer) -> Bool {",
                   in: controller), .extendedControls),
-            ("soundVolume(for:)", body("public static func soundVolume(for player: PlaybackPlayer) -> Int? {", in: controller),
+            ("soundVolume(for:)", sourceBody("public static func soundVolume(for player: PlaybackPlayer) -> Int? {", in: controller),
              .extendedControls),
             ("setSoundVolume(_:for:)",
-             body("public static func setSoundVolume(_ value: Int, for player: PlaybackPlayer) -> Bool {", in: controller),
+             sourceBody("public static func setSoundVolume(_ value: Int, for player: PlaybackPlayer) -> Bool {", in: controller),
              .extendedControls),
-            ("favoritedState(for:)", body("public static func favoritedState(for player: PlaybackPlayer) -> Bool? {", in: controller),
+            ("favoritedState(for:)", sourceBody("public static func favoritedState(for player: PlaybackPlayer) -> Bool? {", in: controller),
              .favorite),
             ("setFavorited(_:for:)",
-             body("public static func setFavorited(_ value: Bool, for player: PlaybackPlayer) -> Bool {", in: controller), .favorite),
-            ("IdlePlaybackActions.resume", body("static func resume(player: PlaybackPlayer) {", in: idle), .resume),
+             sourceBody("public static func setFavorited(_ value: Bool, for player: PlaybackPlayer) -> Bool {", in: controller), .favorite),
+            ("IdlePlaybackActions.resume", sourceBody("static func resume(player: PlaybackPlayer) {", in: idle), .resume),
         ]
         expectEqual(switches.filter { $0.body.isEmpty }.map(\.name), [],
                     "决定表(源码): 这几个函数都找得到(找不到 = 签名改了,跟着改这里的签名串)")
@@ -1058,7 +1043,7 @@ func runPlayerIdentityTests() {
                         "决定表(源码): \(s.name) 的 switch 点名的就是表里「\(s.column.rawValue)」那几家")
         }
         // 通道坏了那条的 default 分支直接问 Spotify,case 里没有它,所以连 default 问的那一家一起算。
-        let broken = body("private static func snapshotWhileChannelBroken(players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {",
+        let broken = sourceBody("private static func snapshotWhileChannelBroken(players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {",
                           in: client)
         let defaultFetch = broken.range(of: #"default:\s*snapshot = fetch\w+Snapshot\(\)"#, options: .regularExpression)
             .map { broken[$0].lowercased() } ?? ""
@@ -1066,9 +1051,9 @@ func runPlayerIdentityTests() {
             .filter { defaultFetch.contains("fetch\($0.lowercased())snapshot") }
         expectEqual((caseLabels(broken) + defaultPlayer).sorted(), players(.channelFallback),
                     "决定表(源码): snapshotWhileChannelBroken 的 switch(连同 default 问的那一家)就是表里「\(On.channelFallback.rawValue)」那几家")
-        expectEqual(named(body("static func canResume(_ player: PlaybackPlayer) -> Bool {", in: idle)), players(.resume),
+        expectEqual(named(sourceBody("static func canResume(_ player: PlaybackPlayer) -> Bool {", in: idle)), players(.resume),
                     "决定表(源码): IdlePlaybackActions.canResume 点名的就是表里「\(On.resume.rawValue)」那几家")
-        expectEqual(named(body("var platformRows: [PlatformRow] {", in: code("lyrimuse/UI/LyricsMoreMenuModel.swift"))),
+        expectEqual(named(sourceBody("var platformRows: [PlatformRow] {", in: code("lyrimuse/UI/LyricsMoreMenuModel.swift"))),
                     players(.catalogMenuRows),
                     "决定表(源码): LyricsMoreMenuModel.platformRows 点名的就是表里「\(On.catalogMenuRows.rawValue)」那几家")
     }

@@ -98,7 +98,7 @@ func TestISRCRetryIsWired(t *testing.T) {
 		"r := applemusicLyric(ctx, artist, srcTitle, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))",
 		"if isrc, sources := isrcRetryPlan(ctx, results, durationSecs); isrc != \"\" {",
 	} {
-		if !strings.Contains(src, n) {
+		if !containsCode(src, n) {
 			t.Errorf("enrich.go 缺 %q", n)
 		}
 	}

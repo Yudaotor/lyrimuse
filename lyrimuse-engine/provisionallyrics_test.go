@@ -83,7 +83,7 @@ func TestProvisionalLyricsIsWired(t *testing.T) {
 		"primary != \"\" && usableLyricSourceCount(results) < targetSources {\n\t\tnotifyProvisionalLyrics(ctx, ne, results)\n",
 		"\n\tif usableLyricSourceCount(results) < targetSources {\n\t\tnotifyProvisionalLyrics(ctx, ne, results)\n",
 	} {
-		if !strings.Contains(src, needle) {
+		if !containsCode(src, needle) {
 			t.Errorf("enrich.go 缺 %q", needle)
 		}
 	}

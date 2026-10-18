@@ -87,7 +87,7 @@ func runDeepLinkTests() {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let hotkeys = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/Settings/GlobalHotkeys.swift"), encoding: .utf8)) ?? ""
         expectEqual(sourceBytes(hotkeys, contain: "static let allLyrimuseNames: [Self] = LyrimuseAction.allCases.map { Self($0) }")
-                    && sourceBytes(hotkeys, contain: "init(_ action: LyrimuseAction) {\n        self.init(action.rawValue)"), true,
+                    && sourceHas(hotkeys, "init(_ action: LyrimuseAction) {\n        self.init(action.rawValue)"), true,
                     "动作: 快捷键名单和名字从 LyrimuseAction 派生")
         expectEqual(hotkeys.contains("= Self(\""), false, "动作: App 里不再逐个声明快捷键名(名单只有 LyrimuseAction 一份)")
         // 快捷键页的格子、撞键提示、设置搜索都按 LyrimuseAction 的排布和名字来:漏摆一格就是录不了,名字重了撞键提示分不清。
@@ -105,7 +105,7 @@ func runDeepLinkTests() {
                     "动作: 隐藏 / 恢复全部歌词带目标状态")
         expectEqual(link("lyrimuse://action/toggle-favorite?on=1"), .action(.toggleFavoriteHotkey, on: true, stepSeconds: nil),
                     "动作: 喜欢带目标状态")
-        expectEqual(hotkeys.contains("KeyboardShortcuts.onKeyUp(for: KeyboardShortcuts.Name(action.rawValue)) {\n                LyrimuseActionRunner.perform(action)")
+        expectEqual(sourceHas(hotkeys, "KeyboardShortcuts.onKeyUp(for: KeyboardShortcuts.Name(action.rawValue)) {\n                LyrimuseActionRunner.perform(action)")
                     && hotkeys.components(separatedBy: "KeyboardShortcuts.onKeyUp(for:").count - 1 == 1, true,
                     "动作: 快捷键只经 LyrimuseActionRunner 执行,跟深链同一份逻辑")
         expectEqual(link("lyrimuse://action/overlay-font-larger") == .action(.overlayFontLargerHotkey, on: nil, stepSeconds: nil)
@@ -252,7 +252,7 @@ func runDeepLinkTests() {
         expectEqual(publish.prefix(400).contains("guard !PlaybackSimulation.isActive else { return }"), true,
                     "模拟播放: 不写给引擎的播放状态(引擎据此打卡 Last.fm)")
         expectEqual(lps.contains("bid != lastPersistedPlayerBundleID, !PlaybackSimulation.isActive")
-                    && lps.contains("newTitle != lastPersistedTrackTitle,\n           !PlaybackSimulation.isActive"), true,
+                    && sourceHas(lps, "newTitle != lastPersistedTrackTitle,\n           !PlaybackSimulation.isActive"), true,
                     "模拟播放: 不落「上次在听」")
         expectEqual(lps.contains("if let simulated = PlaybackSimulation.current {")
                     && lps.contains("if PlaybackSimulation.seek(toSeconds: seconds) {"), true,
@@ -367,18 +367,18 @@ func runDeepLinkTests() {
         let router = source("lyrimuse/Settings/DeepLinkRouter.swift")
         let statusItem = source("lyrimuse/MenuBar/MenuBarStatusItem.swift")
         let manager = source("lyrimuse/LyricsManager/LyricsManagerView.swift")
-        expectEqual(router.contains("case let .lyricsManagerSongVersions(key, showEvidence, compare):\n            AppActions.shared.openLyricsManager?()\n            AppActions.shared.requestSongVersions(key: key, showEvidence: showEvidence, compare: compare)")
+        expectEqual(sourceHas(router, "case let .lyricsManagerSongVersions(key, showEvidence, compare):\n            AppActions.shared.openLyricsManager?()\n            AppActions.shared.requestSongVersions(key: key, showEvidence: showEvidence, compare: compare)")
                     && manager.contains(".onReceive(AppActions.shared.songVersionsRequests) { if !pendingAutoFocus { consumeSongVersionsRequest() } }")
-                    && manager.contains("guard pendingAutoFocus else {\n                    consumeSongVersionsRequest()")
-                    && manager.contains("DispatchQueue.main.async { windowFrame.focusList() }\n                // 链接带的条目排在自动定位之后")
+                    && sourceHas(manager, "guard pendingAutoFocus else {\n                    consumeSongVersionsRequest()")
+                    && sourceHas(manager, "DispatchQueue.main.async { windowFrame.focusList() }\n                // 链接带的条目排在自动定位之后")
                     && manager.contains("guard showSongVersions || !windowFrame.hasAttachedSheet,")
                     && manager.contains("Date().timeIntervalSince(request.at) < 60, let key = request.key ?? singleSelectedKey,")
                     && manager.contains("store.songMembership(forKey: key) != nil, select(key) else { return }"), true,
                     "深链接线: 同曲条目面板在开窗那一轮读完缓存、自动定位之后才取,条件同「⋯」里那一项,有没保存的修改先问,开着别的面板不动,信箱只认 60 秒内的请求")
         let sheet = source("lyrimuse/LyricsManager/SongVersionsSheet.swift")
-        expectEqual(manager.contains("songVersionsShowEvidence = request.showEvidence\n        songVersionsCompare = request.compare\n        showSongVersions = true")
+        expectEqual(sourceHas(manager, "songVersionsShowEvidence = request.showEvidence\n        songVersionsCompare = request.compare\n        showSongVersions = true")
                     && manager.contains(".sheet(isPresented: $showSongVersions, onDismiss: { songVersionsShowEvidence = false; songVersionsCompare = nil }) {")
-                    && manager.contains("onOpen: { other in _ = select(other) }, showEvidence: songVersionsShowEvidence,\n                                  compareKey: songVersionsCompare)")
+                    && sourceHas(manager, "onOpen: { other in _ = select(other) }, showEvidence: songVersionsShowEvidence,\n                                  compareKey: songVersionsCompare)")
                     && sheet.contains(".onChange(of: \"\\(summary.key)#\\(showEvidence)\", initial: true) { _, _ in if showEvidence { evidenceExpanded = true } }")
                     && sheet.contains(".onChange(of: \"\\(summary.key)#\\(compareKey ?? \"\")\", initial: true) { _, _ in if let compareKey { selected = compareKey } }"), true,
                     "深链接线: evidence=1 打开同曲条目就展开匹配依据、compare 选中那一条的对照,开着时换一首也照办;面板关掉后手点打开照旧")
@@ -390,7 +390,7 @@ func runDeepLinkTests() {
                     "深链接线: AppDelegate 只交给 DeepLinkRouter,不再兜底调授权回调")
         expectEqual(router.contains("let logged = (url.host ?? \"\") + url.path") && !router.contains("url.absoluteString"), true,
                     "深链接线: 日志不记查询参数(Last.fm 回跳带 token,导出诊断会带走 App 日志)")
-        expectEqual(router.contains("case .lastfmAuthCallback:\n            LastfmConnectController.shared.handleAuthCallback()")
+        expectEqual(sourceHas(router, "case .lastfmAuthCallback:\n            LastfmConnectController.shared.handleAuthCallback()")
                     && router.contains("GlobalHotkeys.flashHint(icon: \"link\", text: L10n.t(\"无法识别的链接\"))"), true,
                     "深链接线: 授权回调只认自己那个 host,认不出的闪一句")
     }

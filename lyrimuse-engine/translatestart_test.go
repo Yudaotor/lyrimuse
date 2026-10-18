@@ -160,10 +160,10 @@ func TestTranslationStartIsWired(t *testing.T) {
 	if strings.Contains(enrich, "go backfillTranslation(") || strings.Contains(enrich, "needsTranslationBackfill(e, key) && !enrichInflight[key]") {
 		t.Error("enrich.go 里机翻又挂回了 enrichInflight 那条链")
 	}
-	if !strings.Contains(enrich, "\t\tstartTranslationBackfillLocked(key, e)\n\t\tenrichMu.Unlock()") {
+	if !containsCode(enrich, "\t\tstartTranslationBackfillLocked(key, e)\n\t\tenrichMu.Unlock()") {
 		t.Error("enrich.go 缓存命中那段没接 startTranslationBackfillLocked")
 	}
-	if !strings.Contains(enrich, "\t\tif translateAfterResolve(ctx) {\n\t\t\ttranslateUpcomingLocked(key)\n\t\t}\n\t\tenrichMu.Unlock()") {
+	if !containsCode(enrich, "\t\tif translateAfterResolve(ctx) {\n\t\t\ttranslateUpcomingLocked(key)\n\t\t}\n\t\tenrichMu.Unlock()") {
 		t.Error("resolveEnrichAsync 收尾没接 translateAfterResolve")
 	}
 	upcoming := read("upcoming.go")
@@ -171,7 +171,7 @@ func TestTranslationStartIsWired(t *testing.T) {
 		"go resolveEnrichAsync(withBackgroundOutbound(withPlayerQueueTrack(withLyricSearchTitle(withTranslateAfterResolve(withYouTubeMusicVideoID(context.Background(), t.videoID)), lyricSearchTitle(t.title)))), key,",
 		"} else if exists && !claim {\n\t\t\t\t// 解析过、但还没译文的",
 	} {
-		if !strings.Contains(upcoming, needle) {
+		if !containsCode(upcoming, needle) {
 			t.Errorf("upcoming.go 缺 %q", needle)
 		}
 	}
@@ -239,7 +239,7 @@ func TestLyricsSwapPathsTranslateAndWritePlayingEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(tb), "\t\tcommitEnrichSave(key)\n\t\texportLyricsFilesFor(key)\n") {
+	if !containsCode(string(tb), "\t\tcommitEnrichSave(key)\n\t\texportLyricsFilesFor(key)\n") {
 		t.Error("backfillTranslation 翻出译文之后没写单条快照")
 	}
 }

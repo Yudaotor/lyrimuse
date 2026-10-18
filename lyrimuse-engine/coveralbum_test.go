@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"strings"
 	"testing"
 	"time"
 )
@@ -470,7 +469,7 @@ func TestQQFallbackCoverWiredWithItsAlbum(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(src), "if qqFallbackCoverTaken(e, qqCover, qqAlbum, coverAlbum) {\n\t\t\te.CoverURL, e.CoverSource, e.CoverAlbum = qqCover, \"qq\", qqAlbum\n") {
+	if !containsCode(string(src), "if qqFallbackCoverTaken(e, qqCover, qqAlbum, coverAlbum) {\n\t\t\te.CoverURL, e.CoverSource, e.CoverAlbum = qqCover, \"qq\", qqAlbum\n") {
 		t.Error("enrich.go 里 QQ 兜底该经 qqFallbackCoverTaken 判、换上时记 qqAlbum")
 	}
 }

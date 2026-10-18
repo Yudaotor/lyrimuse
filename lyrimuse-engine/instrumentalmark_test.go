@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -134,7 +133,7 @@ func TestRematchClearsInstrumentalIsWired(t *testing.T) {
 		t.Fatal(err)
 	}
 	wire := "\tif rematchClearsInstrumental(opts.manual, before, e) {\n\t\te.Instrumental = false\n\t}\n\topts.finish("
-	if n := strings.Count(string(b), wire); n != 2 {
+	if n := countCode(string(b), wire); n != 2 {
 		t.Errorf("retryLyricsUpgradeWith / rescoreLyricsWith 报结论前要撤标,接上的有 %d 处", n)
 	}
 }

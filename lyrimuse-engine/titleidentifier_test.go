@@ -584,7 +584,7 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 		"applemusicLyric(ctx, artist, srcTitle, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))",
 		"sodaLyric(ctx, artist, srcTitle, album, durationSecs)",
 	} {
-		if !strings.Contains(enrich, n) {
+		if !containsCode(enrich, n) {
 			t.Errorf("enrich.go 缺 %q", n)
 		}
 	}

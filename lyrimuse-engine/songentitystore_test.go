@@ -234,7 +234,7 @@ func TestSongEntityEvidenceRebuildsSkipCompare(t *testing.T) {
 		"b = rebuildSongEntityTableWith(time.Now(), evidenceAt == nil)\n\t\t\t\tevidenceAt = nil", "case <-evidenceAt:\n\t\t\tevidenceAt = nil\n\t\t\tif !features().SongEntityShadow {\n\t\t\t\tcontinue\n\t\t\t}",
 		// 补扫之后的全量建表也按开关同步一轮(每次建表之后都跑)。
 		"if b := rebuildSongEntityTableForEvidence(time.Now()); b != nil && songEntitySharing() {\n\t\t\t\tsharing = songEntityShareStep(ctx, b)\n\t\t\t}"} {
-		if !strings.Contains(string(src), want) {
+		if !containsCode(string(src), want) {
 			t.Errorf("songentitystore.go 少了 %q", want)
 		}
 	}

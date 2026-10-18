@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 )
@@ -378,7 +377,7 @@ func TestEarlyLyricsIsWired(t *testing.T) {
 		"context.WithCancel(withEarlyLyricsTarget(withYouTubeMusicVideoID(context.Background(), kasetVideoID), playKey))",
 		"\t\t\t\tif shownFirst == \"\" {\n\t\t\t\t\tshownFirst = picked.Source\n\t\t\t\t}\n",
 	} {
-		if !strings.Contains(src, needle) {
+		if !containsCode(src, needle) {
 			t.Errorf("enrich.go 缺 %q", needle)
 		}
 	}

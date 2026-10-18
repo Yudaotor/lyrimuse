@@ -195,7 +195,7 @@ func TestFillSweepHandsOffToPendingFullScan(t *testing.T) {
 		"if req.full {\n\t\t\tsetLyricsFullScanActive(true)\n\t\t}",
 		"if full {\n\t\t\t\t\treleaseLyricsFullScanAttempt(keys[i])\n\t\t\t\t}",
 	} {
-		if !strings.Contains(src, needle) {
+		if !containsCode(src, needle) {
 			t.Errorf("lyricsfillsweep.go 缺 %q", needle)
 		}
 	}

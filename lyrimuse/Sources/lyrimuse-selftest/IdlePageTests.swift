@@ -336,7 +336,7 @@ func runIdlePageTests() {
                     true, "↗ 落点(契约): 「⋯」菜单按链接判带不带 ↗,不是每行都拼")
         expectEqual(sourceBytes(menuModel, contain: "\"kkbox-song\""), false,
                     "↗ 落点(契约): KKBOX 这首歌不在目录入口里另占一行(跟下面「在 KKBOX 中显示」同名)")
-        expectEqual(sourceBytes(menuModel, contain: "let song = platformLinks?.kkboxSong {\n            NSWorkspace.shared.open(song)"),
+        expectEqual(sourceHas(menuModel, "let song = platformLinks?.kkboxSong {\n            NSWorkspace.shared.open(song)"),
                     true, "↗ 落点(契约): 「在 KKBOX 中显示」有歌曲深链时打开它")
 
         // 设置页那张歌词窗口预览是 scaleEffect 缩小画的,玻璃里的内容不吃这层缩放和裁切(07 章决策 156)。预览里关玻璃靠

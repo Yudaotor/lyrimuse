@@ -43,7 +43,7 @@ func TestTrackEnrichmentNotesPlayer(t *testing.T) {
 	if j := strings.Index(body[1:], "\nfunc "); j >= 0 {
 		body = body[:j+1]
 	}
-	if !strings.Contains(body, "\t\tif notePlayerLocked(&e, bundleID) {\n\t\t\tspotifyHintDirty = true\n\t\t}\n") {
+	if !containsCode(body, "\t\tif notePlayerLocked(&e, bundleID) {\n\t\t\tspotifyHintDirty = true\n\t\t}\n") {
 		t.Error("trackEnrichment 要记下放这首的播放器")
 	}
 }
@@ -191,7 +191,7 @@ func TestMigratePlayersFromAppleAnchors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(src), "startupStep(\"migratePlayersFromRecords\", migratePlayersFromRecords)\n\t// 存量条目按 Apple 目录锚点补记") ||
+	if !containsCode(string(src), "startupStep(\"migratePlayersFromRecords\", migratePlayersFromRecords)\n\t// 存量条目按 Apple 目录锚点补记") ||
 		!strings.Contains(string(src), "startupStep(\"migratePlayersFromAppleAnchors\", migratePlayersFromAppleAnchors)") {
 		t.Error("启动时接在 migratePlayersFromRecords 后面")
 	}
@@ -219,7 +219,7 @@ func TestNotePlayerSongIDLocked(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(src), "if bundleID == appleMusicBundleID && anchorLink != \"\" &&\n\t\t\tnotePlayerSongIDLocked(&e, appleMusicBundleID, appleCatalogIDFromURL(anchorLink)) {") {
+	if !containsCode(string(src), "if bundleID == appleMusicBundleID && anchorLink != \"\" &&\n\t\t\tnotePlayerSongIDLocked(&e, appleMusicBundleID, appleCatalogIDFromURL(anchorLink)) {") {
 		t.Error("Apple Music 在放时,缓存命中那一支把这一拍的锚点 id 记成它报的这一首")
 	}
 }
@@ -350,10 +350,10 @@ func TestPlayersFromRecordsWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(src), "\t\tif notePlayersFromRecords(&e) {\n\t\t\tspotifyHintDirty = true\n\t\t}\n\t\tif notePlayerLocked(&e, bundleID) {") {
+	if !containsCode(string(src), "\t\tif notePlayersFromRecords(&e) {\n\t\t\tspotifyHintDirty = true\n\t\t}\n\t\tif notePlayerLocked(&e, bundleID) {") {
 		t.Error("trackEnrichment 要按 id 补记播放器")
 	}
-	if !strings.Contains(string(src), "\t\tif e.DurationSecs <= 0 && durationSecs > 0 {\n\t\t\te.DurationSecs = durationSecs\n\t\t\tspotifyHintDirty = true\n\t\t}") {
+	if !containsCode(string(src), "\t\tif e.DurationSecs <= 0 && durationSecs > 0 {\n\t\t\te.DurationSecs = durationSecs\n\t\t\tspotifyHintDirty = true\n\t\t}") {
 		t.Error("trackEnrichment 放到没有时长的条目时补上播放器报的时长")
 	}
 	m, err := os.ReadFile("main.go")
@@ -398,7 +398,7 @@ func TestReportedNameWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(src), "\t\tif noteReportedNameLocked(&e, key, bundleID, reported) {\n\t\t\tspotifyHintDirty = true\n\t\t}") {
+	if !containsCode(string(src), "\t\tif noteReportedNameLocked(&e, key, bundleID, reported) {\n\t\t\tspotifyHintDirty = true\n\t\t}") {
 		t.Error("trackEnrichment 要记下播放器原样报的写法")
 	}
 	loser := enrichEntry{Reported: map[string]reportedName{qqMusicBundleID: {Title: "偷笑 (Tou Xiao)"}}}

@@ -308,12 +308,12 @@ func runSongVersionsTests() {
                     "其他写法(契约): 偏移输入框标出借来的值")
         let settings = read(sources, "lyrimuse/Settings/FeatureSettingsStore.swift")
         let sheetSource = read(sources, "lyrimuse/LyricsManager/SongVersionsSheet.swift")
-        expectEqual(sheetSource.components(separatedBy: "label: {\n            disclosureLabel(").count - 1, 3, "其他写法(契约): 三处折叠区点标题文字也能展开")
+        expectEqual(sourceCount(sheetSource, "label: {\n            disclosureLabel("), 3, "其他写法(契约): 三处折叠区点标题文字也能展开")
         expectEqual(sourceBytes(store, contain: "commit(\"resolve_manual_conflict\", [\"key\": key])")
                     && sourceBytes(edit, contain: "case \"resolve_manual_conflict\":")
                     && sourceBytes(manager, contain: "manualConflictKeys = store.manualConflict(forKey: key)")
                     && sourceBytes(manager, contain: "if manualConflictKeys.count > 1 {")
-                    && sourceBytes(settings, contain: "songEntityShareLyrics = f.songEntityShareLyrics ?? true\n        EnrichCacheReader.sharesEntityLyrics = songEntityShareLyrics")
+                    && sourceHas(settings, "songEntityShareLyrics = f.songEntityShareLyrics ?? true\n        EnrichCacheReader.sharesEntityLyrics = songEntityShareLyrics")
                     && sourceBytes(settings, contain: "case songEntityShareLyrics = \"song_entity_share_lyrics\""), true,
                     "其他写法(契约): 两份手改的提示、统一请求、开关读法接上")
         expectEqual(sourceBytes(manager, contain: "instrumentalFollowsGroup ? L10n.t(\"；同一首歌共用歌词的其他写法也会一起改\") : \"\"")
@@ -354,11 +354,11 @@ func runSongVersionsTests() {
                     && sourceBytes(manager, contain: "Button(L10n.t(\"同曲条目…\")) { showSongVersions = true }"), true,
                     "其他写法(契约): 详情页「⋯」菜单接上弹窗")
         expectEqual(sourceBytes(manager, contain: "let versions = store.songVersionCount(forKey: summary.key)")
-                    && sourceBytes(manager, contain: "if versions > 1 {\n                Button { showSongVersions = true } label: {")
+                    && sourceHas(manager, "if versions > 1 {\n                Button { showSongVersions = true } label: {")
                     && sourceBytes(store, contain: "songVersionCounts[song, default: 0] += 1")
                     && sourceBytes(store, contain: "songVersionCounts = bundle.songVersionCounts"), true,
                     "其他写法(契约): 详情页概况那一行露出「同一首歌的 N 种写法」,随列表一起数")
-        expectEqual(sourceBytes(sheet, contain: "if v.relation == .current {\n                overview(current)")
+        expectEqual(sourceHas(sheet, "if v.relation == .current {\n                overview(current)")
                     && sourceBytes(sheet, contain: "allVersionsTable(c)")
                     && sourceBytes(sheet, contain: "if !edges.isEmpty { evidenceSummary }"), true,
                     "其他写法(契约): 选中当前这条时右边是这首歌的概况(总览卡、当前这条的信息、全部写法一览、依据汇总)")
@@ -367,12 +367,12 @@ func runSongVersionsTests() {
                     && sourceBytes(sheet, contain: "if !EnrichCacheReader.sharesEntityLyrics {"), true,
                     "其他写法(契约): 概况两张卡跟对照页同名、说的是其他全部条目,关了歌词同步时同步策略写已关闭")
         expectEqual(sourceBytes(sheet, contain: "return v.match == .different ? .red : .green")
-                    && sourceBytes(sheet, contain: "case .shared: return .green\n        case .own: return .red\n        case .split: return .secondary")
+                    && sourceHas(sheet, "case .shared: return .green\n        case .own: return .red\n        case .split: return .secondary")
                     && sourceBytes(sheet, contain: "let relation: Relation = own == 0 ? .shared : .own")
                     && !sourceBytes(sheet, contain: "Color.orange.opacity(0.12)") && !sourceBytes(sheet, contain: ".purple"), true,
                     "其他写法(契约): 状态色一套(绿一样 / 同步、红不一样 / 不同步、灰比不了 / 已拆分),有独立匹配时同步策略数不跟的那几条")
-        expectEqual(sourceBytes(sheet, contain: "case .identical: return \"checkmark.circle.fill\"\n        case .sameText: return \"equal.circle.fill\"\n        case .different: return \"xmark.circle.fill\"")
-                    && sourceBytes(sheet, contain: "case .shared: return \"checkmark.circle.fill\"\n        case .own: return \"xmark.circle.fill\"")
+        expectEqual(sourceHas(sheet, "case .identical: return \"checkmark.circle.fill\"\n        case .sameText: return \"equal.circle.fill\"\n        case .different: return \"xmark.circle.fill\"")
+                    && sourceHas(sheet, "case .shared: return \"checkmark.circle.fill\"\n        case .own: return \"xmark.circle.fill\"")
                     && sourceBytes(sheet, contain: "statusDot(lyricsSymbol(v), lyricsColor(v), size: 11, label: lyricsVerdict(v))")
                     && sourceBytes(sheet, contain: "statusDot(lyricsSymbol(v), lyricsColor(v), size: 10, label: nil)")
                     && !sourceBytes(sheet, contain: "Circle().fill("), true,

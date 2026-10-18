@@ -307,7 +307,7 @@ func TestPlayerCatalogSweepWiring(t *testing.T) {
 		return string(b)
 	}
 	if !strings.Contains(read("poller.go"), "go startPlayerCatalogSweep(ctx)") ||
-		!strings.Contains(read("playercatalogbackfill.go"), "\tbackfillSodaPagesFromClientCache()\n\tbackfillPlayerAlbumIDsFromClientCache()\n\tbackfillNeteasePlayerSongsFromHistory(ctx)\n\tbackfillKugouPlayerSongsFromLibrary()\n") {
+		!containsCode(read("playercatalogbackfill.go"), "\tbackfillSodaPagesFromClientCache()\n\tbackfillPlayerAlbumIDsFromClientCache()\n\tbackfillNeteasePlayerSongsFromHistory(ctx)\n\tbackfillKugouPlayerSongsFromLibrary()\n") {
 		t.Error("poller 起补扫,补扫依次跑汽水歌曲页、Spotify / Amazon 专辑、网易云播放历史、酷狗曲库")
 	}
 }

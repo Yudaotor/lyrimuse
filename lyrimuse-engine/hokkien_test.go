@@ -128,7 +128,7 @@ func TestHokkienIsWired(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, n := range needles {
-			if !strings.Contains(string(data), n) {
+			if !containsCode(string(data), n) {
 				t.Errorf("%s 缺 %q", file, n)
 			}
 		}

@@ -772,15 +772,15 @@ func runTouchBarTests() {
         // 自动展开 / 收起(17 章决策 45):启用那一刻先记状态再订阅播放状态(订阅的头一拍丢掉);四项一起防抖;可见状态的变化
         // 跟自己发起的对不上就当成用户动的;工具栏第二行是「行为」加两份占位和「重置 ▾」的占位。漏一处不报错,只表现成
         // 自动展开 / 收起不灵、或者手动收起后又被弹出来。
-        expectEqual(controller.contains("startAuto(presentingNow: presentNow)\n            observePlayback()")
-                        && controller.contains("Publishers.CombineLatest4(p.$isPlayingNow, p.$currentTrackLacksLyrics, p.$title, p.$artist)\n                .dropFirst()\n                .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)")
-                        && controller.contains("Self.expectedVisibilityTimeout {\n            } else {\n                autoPresent.userChangedVisibility()")
+        expectEqual(sourceHas(controller, "startAuto(presentingNow: presentNow)\n            observePlayback()")
+                        && sourceHas(controller, "Publishers.CombineLatest4(p.$isPlayingNow, p.$currentTrackLacksLyrics, p.$title, p.$artist)\n                .dropFirst()\n                .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)")
+                        && sourceHas(controller, "Self.expectedVisibilityTimeout {\n            } else {\n                autoPresent.userChangedVisibility()")
                         && controller.contains("try? await Task.sleep(for: .milliseconds(TouchBarAutoPresent.pauseCollapseDelayMs))")
                         && controller.contains("if isPlaying { cancelPauseCollapse() } else { cancelSettleExpand() }")
                         && controller.contains("try? await Task.sleep(for: .milliseconds(TouchBarAutoPresent.settleExpandDelayMs))")
                         && controller.contains("self.performAuto(self.autoPresent.settleElapsed("), true,
                     "触控栏自动展开: 控制器接线(先记状态再订阅、防抖、认出用户操作、暂停计时、开始播放后再确认)")
-        expectEqual(rows.contains("toolbarButton(.behavior)\n            ghostButton(.style)\n            ghostButton(.layout)\n            Spacer(minLength: 8)\n            EditorToolbarResetReserve()")
+        expectEqual(sourceHas(rows, "toolbarButton(.behavior)\n            ghostButton(.style)\n            ghostButton(.layout)\n            Spacer(minLength: 8)\n            EditorToolbarResetReserve()")
                         && rows.contains("static let firstRow: [TouchBarSettingsGroup] = [.lyrics, .style, .layout]")
                         && rows.contains("ForEach(TouchBarSettingsGroup.firstRow, id: \\.self)"), true,
                     "触控栏自动展开: 「行为」在工具栏第二行,带对齐占位")
@@ -788,21 +788,21 @@ func runTouchBarTests() {
         // 返回、8 秒没有操作、收起、换歌、停用都回到歌词;这一页的键由 TouchBarMorePageBar 建。漏一处不报错,只表现成点了没反应、
         // 回不到歌词,或者收起键没了。
         expectEqual(controller.contains("bar.defaultItemIdentifiers = (layout.slots.contains(.collapse) ? [Item.collapse] : []) + morePage.identifiers()")
-                        && controller.contains("case Item.more:\n            item.view = moreButton")
+                        && sourceHas(controller, "case Item.more:\n            item.view = moreButton")
                         && controller.contains("return morePage.makeItem(for: identifier)")
                         && controller.contains("page.onBack = { [weak self] in self?.showLyricsPage(reason: \"back\") }")
                         && controller.contains("try? await Task.sleep(for: .milliseconds(TouchBarMorePage.autoReturnDelayMs))")
-                        && controller.contains("guard visible else {\n            showLyricsPage(reason: \"collapsed\")")
+                        && sourceHas(controller, "guard visible else {\n            showLyricsPage(reason: \"collapsed\")")
                         && controller.contains(".sink { [weak self] _ in self?.showLyricsPage(reason: \"track changed\") }")
                         && controller.contains("showLyricsPage(reason: \"disabled\")")
                         && controller.contains("playbackObservers = morePage.observations() + [")
-                        && controller.contains("morePage.refreshStates()\n        morePage.setActive(true)")
-                        && controller.contains("showingMorePage = false\n        morePage.setActive(false)"), true,
+                        && sourceHas(controller, "morePage.refreshStates()\n        morePage.setActive(true)")
+                        && sourceHas(controller, "showingMorePage = false\n        morePage.setActive(false)"), true,
                     "触控栏更多页: 换页、回到歌词的几个时机、这一页的键")
         // 进度(决策 47):这一页显示着才跟播放位置走;拖着时不盖滑杆,松手一会儿才跳一次;不接受跳转的播放器只显示不能拖;
         // 位置不叠歌词偏移。
         let moreBar = code(appDir.appendingPathComponent("TouchBar/TouchBarMorePageBar.swift")) ?? ""
-        expectEqual(moreBar.contains("repeats: true) { [weak self] _ in\n            MainActor.assumeIsolated { self?.refreshProgress() }"), true,
+        expectEqual(sourceHas(moreBar, "repeats: true) { [weak self] _ in\n            MainActor.assumeIsolated { self?.refreshProgress() }"), true,
                     "触控栏更多页: 进度定时器弱引用写在定时器闭包上,不被定时器强持有")
         expectEqual(moreBar.contains("progressItem.slider.isEnabled = p.acceptsSeek")
                         && moreBar.contains("let position = p.anchor?.extrapolatedPositionMs(now: Date()) ?? p.pausedPositionMs ?? 0")
@@ -813,7 +813,7 @@ func runTouchBarTests() {
                     "触控栏更多页: 进度条跟着走、拖动不被盖、松手才跳、只读不叠偏移的播放位置")
         // 审查后补的三条(决策 48):这一页没显示时状态变了不重排;进度、音量优先级最低、返回最高、每颗键定宽;
         // 自动展开 / 收起等的可见状态有时限。
-        expectEqual(moreBar.contains("private func stateChanged() {\n        guard active else { return }")
+        expectEqual(sourceHas(moreBar, "private func stateChanged() {\n        guard active else { return }")
                         && moreBar.contains("item.visibilityPriority = .low")
                         && moreBar.components(separatedBy: "item.visibilityPriority = .low").count == 3
                         && moreBar.contains("custom.visibilityPriority = .high")
@@ -831,9 +831,9 @@ func runTouchBarTests() {
         // 整行用已唱那张;本体收到系统通知当场重画,预览的「横向滚动」提示也看它。漏一处不报错,只表现成照样滚 / 填色。
         let scrollRow = code(appDir.appendingPathComponent("UI/OverlayScrollingLyricRow.swift")) ?? ""
         let previewSource = code(appDir.appendingPathComponent("UI/TouchBarPreviewStage.swift")) ?? ""
-        expectEqual(dimmedColorCell.contains("rate: inputs.rate,\n            still: inputs.still)"), true,
+        expectEqual(sourceHas(dimmedColorCell, "rate: inputs.rate,\n            still: inputs.still)"), true,
                     "触控栏减弱动态: 规格把 still 传给图层行")
-        expectEqual(scrollRow.contains("if spec.still {\n            scrollPath = []")
+        expectEqual(sourceHas(scrollRow, "if spec.still {\n            scrollPath = []")
                         && scrollRow.contains("let running = reinstall && !spec.paused && !spec.still")
                         && scrollRow.contains("spec.pacedWindow != nil || spec.still")
                         && scrollRow.contains("a.still = b.still")
@@ -912,7 +912,7 @@ func runTouchBarTests() {
                     "触控栏: 三键旁边的设置键打开设置里「触控栏」那一段")
         // 封面那一格按下去打开歌词窗口,跟灵动岛的封面键、菜单栏菜单同一个入口。
         expectEqual(controller.contains("action: #selector(artworkTapped)")
-                        && controller.contains("@objc private func artworkTapped() {\n        AppActions.shared.openLyricsWindow?()\n    }")
+                        && sourceHas(controller, "@objc private func artworkTapped() {\n        AppActions.shared.openLyricsWindow?()\n    }")
                         && controller.contains("item.view = artworkButton"), true,
                     "触控栏: 封面那一格按下去打开歌词窗口")
         // 预览:整条按真实大小画(1:1),比内容列宽出来的部分左右滑动看,不再整体缩小。
@@ -939,9 +939,9 @@ func runTouchBarTests() {
                         && controller.contains("let escapeKey = " + escapePredicate), true,
                     "触控栏预览: 第一代的判据跟本体放 esc 键那一条一样")
         expectEqual(preview.contains("hidesControlStrip: hidesStrip, escapeKey: escapeKey,")
-                        && preview.contains("if escapeKey {\n                escapeKeyCap")
+                        && sourceHas(preview, "if escapeKey {\n                escapeKeyCap")
                         && preview.contains(".offset(x: escapeSlot + TouchBarLyricsCell.closeBoxCenterX")
-                        && preview.contains(".overlay { hotspot(.collapse) }\n                .padding(.leading, escapeSlot)")
+                        && sourceHas(preview, ".overlay { hotspot(.collapse) }\n                .padding(.leading, escapeSlot)")
                         && preview.contains(".frame(width: Self.barWidth(escapeKey: escapeKey), height: Self.barSize.height")
                         && preview.contains("CGFloat(TouchBarLyricsStyle.fullWidthModalWidthWithEscapeKey - TouchBarLyricsStyle.fullWidthModalWidth)"),
                     true, "触控栏预览: 第一代整条加宽、左端先画 esc 键、收起键和后面那一排往右挪、歌词宽按第一代算")
@@ -1076,7 +1076,7 @@ func runTouchBarTests() {
                         && controller.contains("let escapeKey = hasEscapeKey && TouchBarPrivateAPI.supportsHidingControlStrip")
                         && controller.contains("replacesEscapeKey: escapeKey,")
                         && controller.contains("bar.escapeKeyReplacementItemIdentifier = new.escapeKey ? Item.escape : nil")
-                        && controller.contains("case Item.escape:\n            item.view = escapeButton"), true,
+                        && sourceHas(controller, "case Item.escape:\n            item.view = escapeButton"), true,
                     "触控栏 esc 键: 1st generation 上放进左端 Esc 那一格,收得起来时才放,放了就带上自己的收起键")
         expectEqual(controller.contains("escapeKey: escapeKey)"), true, "触控栏 esc 键: 估算宽带上 Esc 那一格")
         if let guardAt = escape.range(of: "guard AccessibilitySkipPress.isTrusted else {"),
@@ -1114,10 +1114,10 @@ func runTouchBarTests() {
                         && controller.contains("touchBarPresent: TouchBarAvailability.shared.isPresent, entryPointsAvailable: TouchBarPrivateAPI.isAvailable,")
                         && controller.contains("switchOn: settings.showLyricsInTouchBar, visible: bar.isVisible)"), true,
                     "触控栏快捷键: 控制器按此刻有没有触控栏、有没有系统入口、开关和看不看得见判定")
-        expectEqual(controller.contains("case .turnOn:\n            settings.showLyricsInTouchBar = true")
-                        && controller.contains("case .expand:\n            presentLyrics(hidingControlStrip: settings.touchBarHidesControlStrip)")
-                        && controller.contains("case .collapse:\n            collapseBar()\n        }")
-                        && controller.contains("private func collapseBar() {\n        if TouchBarPrivateAPI.supportsHidingControlStrip {\n"
+        expectEqual(sourceHas(controller, "case .turnOn:\n            settings.showLyricsInTouchBar = true")
+                        && sourceHas(controller, "case .expand:\n            presentLyrics(hidingControlStrip: settings.touchBarHidesControlStrip)")
+                        && sourceHas(controller, "case .collapse:\n            collapseBar()\n        }")
+                        && sourceHas(controller, "private func collapseBar() {\n        if TouchBarPrivateAPI.supportsHidingControlStrip {\n"
                                                + "            TouchBarPrivateAPI.minimizeSystemModal(bar)"), true,
                     "触控栏快捷键: 关着就打开开关(订阅当场展开),收着就展开,看得见就照 ✕ 收起")
         expectEqual(settingsView.contains("return actions.filter { $0 != .toggleTouchBarLyricsHotkey || touchBar.isPresent }"), true,
@@ -1136,10 +1136,10 @@ func runTouchBarTests() {
     do {
         let controller = code(appDir.appendingPathComponent("TouchBar/TouchBarLyricsController.swift")) ?? ""
         let api = code(appDir.appendingPathComponent("TouchBar/TouchBarPrivateAPI.swift")) ?? ""
-        expectEqual(controller.contains("presentedFullWidth = hidingControlStrip && TouchBarPrivateAPI.supportsHidingControlStrip\n"
+        expectEqual(sourceHas(controller, "presentedFullWidth = hidingControlStrip && TouchBarPrivateAPI.supportsHidingControlStrip\n"
                                         + "        TouchBarPrivateAPI.presentSystemModal("), true,
                     "功能栏图标: 展开时按实际用的方式记下是不是占满整条")
-        expectEqual(controller.contains("guard visible else {\n            showLyricsPage(reason: \"collapsed\")\n"
+        expectEqual(sourceHas(controller, "guard visible else {\n            showLyricsPage(reason: \"collapsed\")\n"
                                         + "            if presentedFullWidth || trayDisplaced {\n"
                                         + "                presentedFullWidth = false\n"
                                         + "                trayDisplaced = false\n"
@@ -1150,12 +1150,12 @@ func runTouchBarTests() {
         expectEqual(controller.contains("Publishers.CombineLatest3(p.$isPlayingNow, p.$title, p.$artist)")
                         && controller.contains(".sink { [weak self] _ in self?.scheduleTrayReassert() }")
                         && controller.contains("try? await Task.sleep(for: .milliseconds(Self.trayReassertDelayMs))")
-                        && controller.contains("if self.bar.isVisible {\n                self.trayDisplaced = true\n            } else {\n"
+                        && sourceHas(controller, "if self.bar.isVisible {\n                self.trayDisplaced = true\n            } else {\n"
                                                + "                TouchBarPrivateAPI.reassertInControlStrip(self.trayItem)"), true,
                     "功能栏图标: 开始放歌、换曲目后重新露面(收着当场、展开着等收起)")
-        if let r = api.range(of: "static func reassertInControlStrip(") {
-            expectEqual(String(api[r.upperBound...].prefix(400))
-                            .contains("e.setPresence(identifier, false)\n        e.setPresence(identifier, true)"), true,
+        if api.contains("static func reassertInControlStrip(") {
+            expectEqual(sourceHas(sourceBody("static func reassertInControlStrip(", in: api),
+                                  "e.setPresence(identifier, false)\n        e.setPresence(identifier, true)"), true,
                         "功能栏图标: 重新露面是先藏再露")
         } else {
             expectEqual(false, true, "功能栏图标: TouchBarPrivateAPI 里有 reassertInControlStrip")

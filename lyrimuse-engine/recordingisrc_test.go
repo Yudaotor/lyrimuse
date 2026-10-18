@@ -515,10 +515,10 @@ func TestRecordingISRCWiring(t *testing.T) {
 		strings.Contains(sweep, "spotifyLocalISRC(job.") {
 		t.Error("补号的 Spotify 那几条一次查完(spotifyLocalISRCs),别一条一条查;Amazon 读本机目录缓存")
 	}
-	if !strings.Contains(sweep, "enrichMu.Unlock()\n\t// 锚点在 appleCatalogMu 后面,放开 enrichMu 再核对。\n\tjobs = isrcResolveAnchors(jobs, appleCatalogLinkFor)") {
+	if !containsCode(sweep, "enrichMu.Unlock()\n\t// 锚点在 appleCatalogMu 后面,放开 enrichMu 再核对。\n\tjobs = isrcResolveAnchors(jobs, appleCatalogLinkFor)") {
 		t.Error("补扫在放开 enrichMu 之后才核对锚点(appleCatalogMu 要先于 enrichMu 取)")
 	}
-	if !strings.Contains(enrich, "if !enrichInflight[key] {\n\t\t\tif job, ok := playbackISRCJobLocked(key, e, bundleID, anchorLink, time.Now()); ok {\n\t\t\t\tgo runPlaybackISRCJob(job)") {
+	if !containsCode(enrich, "if !enrichInflight[key] {\n\t\t\tif job, ok := playbackISRCJobLocked(key, e, bundleID, anchorLink, time.Now()); ok {\n\t\t\t\tgo runPlaybackISRCJob(job)") {
 		t.Error("缓存命中那一支当场补播放器给的号(锚点在取 enrichMu 之前算好);这条还有后台解析在跑时先不起,免得被那次整条提交盖掉")
 	}
 	if !strings.Contains(read("../lyrimuse/Sources/LyrimuseCore/Local/EnrichCacheReader.swift"), "        case isrcs\n") {

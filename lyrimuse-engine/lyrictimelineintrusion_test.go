@@ -244,7 +244,7 @@ func TestTimelineIntrusionWiredIntoBothPipelines(t *testing.T) {
 		"applyTimelineOffsetPenalty(out, durationSecs)\n\tapplyTimelineIntrusionPenalty(out, durationSecs)\n\tapplyWordTimingTitleOverride(out)",
 		"applyTimelineOffsetPenalty(results, durationSecs)\n\tapplyTimelineIntrusionPenalty(results, durationSecs)\n\tapplyWordTimingTitleOverride(results)",
 	} {
-		if !strings.Contains(src, pair) {
+		if !containsCode(src, pair) {
 			t.Errorf("调用位置要紧跟在时间轴平移扣分之后、逐字加分撤销之前:%q", pair)
 		}
 	}

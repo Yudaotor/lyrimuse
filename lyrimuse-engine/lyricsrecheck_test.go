@@ -155,7 +155,7 @@ func TestLyricsRecheckWiring(t *testing.T) {
 		"lyricsRescoreOpts{reasons: recheck.String()})",
 		"path, artist, title, searchAlbum, durationSecs, scored, picked, upgraded, opts.logAttrs()...)",
 	} {
-		if !strings.Contains(s, want) {
+		if !containsCode(s, want) {
 			t.Errorf("enrich.go 里要有: %q", want)
 		}
 	}

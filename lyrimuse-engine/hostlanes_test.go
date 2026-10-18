@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"strings"
 	"testing"
 	"time"
 )
@@ -125,12 +124,12 @@ func TestOutboundSchedulingIsWired(t *testing.T) {
 		"resp, err := cli.Do(req)\n\treleaseSlot()",
 		"func doHTTPTrackedOnce(cli *http.Client, req *http.Request)",
 	} {
-		if !strings.Contains(src, n) {
+		if !containsCode(src, n) {
 			t.Errorf("networkobs.go 缺 %q", n)
 		}
 	}
 	data, _ = os.ReadFile("hostguard.go")
-	if !strings.Contains(string(data), "case laneSecondary:\n\t\treturn g.acquireSecondary(ctx, host)") {
+	if !containsCode(string(data), "case laneSecondary:\n\t\treturn g.acquireSecondary(ctx, host)") {
 		t.Error("hostguard.go 的 acquire 没接补查档")
 	}
 }

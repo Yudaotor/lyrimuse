@@ -591,9 +591,9 @@ func runNotchTests() {
             let view = src("NotchLyricsView.swift")
             expectEqual(src("NotchLyricsWindow.swift").contains("becomesKeyOnlyIfNeeded = true"), true,
                         "灵动岛接线: 点按钮不抢键盘焦点")
-            expectEqual(controller.contains("AppSettings.shared.$notchHideWhenNotPlaying, AppSettings.shared.$notchHideDuringScreenCapture,\n            AppSettings.shared.$notchContentWidth, AppSettings.shared.$notchExpandedContentWidth\n        )\n        .dropFirst()\n        .sink { [weak self] hide, captureHidden, width, expandedWidth in")
-                        && controller.contains("if pinnedScreenID == nil {\n            AppSettings.shared.$notchScreenID")
-                        && controller.contains(".receive(on: DispatchQueue.main)\n                .sink { [weak self] _ in self?.applyScreenSetting() }"), true,
+            expectEqual(sourceHas(controller, "AppSettings.shared.$notchHideWhenNotPlaying, AppSettings.shared.$notchHideDuringScreenCapture,\n            AppSettings.shared.$notchContentWidth, AppSettings.shared.$notchExpandedContentWidth\n        )\n        .dropFirst()\n        .sink { [weak self] hide, captureHidden, width, expandedWidth in")
+                        && sourceHas(controller, "if pinnedScreenID == nil {\n            AppSettings.shared.$notchScreenID")
+                        && sourceHas(controller, ".receive(on: DispatchQueue.main)\n                .sink { [weak self] _ in self?.applyScreenSetting() }"), true,
                         "灵动岛接线: 自动隐藏两个开关、一对宽度由每个实例自己订阅(取 sink 参数),主实例另订屏幕(下一拍再读设置)")
             expectEqual(controller.contains("if hideWhenNotPlaying != hide { hideWhenNotPlaying = hide }")
                         && controller.contains("recomputeGeometry(animate: false, contentWidth: contentWidth, expandedContentWidth: expandedContentWidth)"), true,
@@ -607,7 +607,7 @@ func runNotchTests() {
                         "灵动岛接线: 恢复默认、宽度、屏幕、自动隐藏这些写入口只写设置,不再手动同步主实例;镜像管理器不另订一份")
             // 订阅统一存进一个集合,teardown 一行清掉;不再单独开 AnyCancellable 字段(漏配一行清理就泄漏)。
             expectEqual(!controller.contains(": AnyCancellable?")
-                        && controller.components(separatedBy: "\n        .store(in: &subscriptions)").count - 1 >= 28
+                        && sourceCount(controller, "\n        .store(in: &subscriptions)") >= 28
                         && controller.contains("subscriptions.removeAll()"), true,
                         "灵动岛接线: 订阅都存进 subscriptions,teardown 统一清掉")
             expectEqual(controller.contains("return ScreenIdentity.notched ?? NSScreen.screens.first"), true,
@@ -627,7 +627,7 @@ func runNotchTests() {
             expectEqual(initBody.contains("hosting.frame = NSRect(origin: .zero, size: panel.frame.size)"), true,
                         "灵动岛接线: hostingView 按算好的窗口尺寸建,不按占位尺寸")
             // 展开区下一句那一行跟它留的高度同一个判据:最后一句没有下一句时照样占位,下面的进度条和控制键不上挪。见 05 章决策 75。
-            expectEqual(view.contains("if controller.showsExpandedLyricPreview {\n                Text(nextLineDisplayText.isEmpty ? \" \" : nextLineDisplayText)"),
+            expectEqual(sourceHas(view, "if controller.showsExpandedLyricPreview {\n                Text(nextLineDisplayText.isEmpty ? \" \" : nextLineDisplayText)"),
                         true, "灵动岛接线: 展开区最后一句时下一句那一行留空占位")
             expectEqual(view.contains("if controller.showsExpandedLyricPreview, !nextLineDisplayText.isEmpty"), false,
                         "灵动岛接线: 展开区下一句为空时不再拿掉那一行")
@@ -639,14 +639,14 @@ func runNotchTests() {
             let v = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
                 .appendingPathComponent("lyrimuse/UI/NotchLyricsView.swift"), encoding: .utf8)) ?? ""
             expectEqual(v.contains("NotchCrossfadeBackdrop(image: image, size: size)"), true, "封面背景契约: 模糊图走两层交叉淡入")
-            expectEqual(v.contains("case .solidBlack, .coverArt:\n            return AnyShapeStyle(Color.black)"), true,
+            expectEqual(sourceHas(v, "case .solidBlack, .coverArt:\n            return AnyShapeStyle(Color.black)"), true,
                         "封面背景契约: 跟随封面没有封面时是纯黑,跟机器刘海融成一块")
             expectEqual(v.contains("case .darkGradient, .coverArt:"), false, "封面背景契约: 没有封面时不再退回深色渐变")
             expectEqual(v.contains(".animation(.easeInOut(duration: 0.5), value: playback.blurredArtworkImage)"), false,
                         "封面背景契约: 不再直接换 Image 内容做过渡(会露出打底色)")
-            expectEqual(v.contains("if let back { layer(back) }\n            if let front { layer(front).opacity(frontOpacity) }"), true,
+            expectEqual(sourceHas(v, "if let back { layer(back) }\n            if let front { layer(front).opacity(frontOpacity) }"), true,
                         "封面背景契约: 旧图在下、不透明;只有新图做透明度动画")
-            expectEqual(v.contains("} completion: {\n                if generation == fadeGeneration { back = nil }"), true,
+            expectEqual(sourceHas(v, "} completion: {\n                if generation == fadeGeneration { back = nil }"), true,
                         "封面背景契约: 淡完才撤旧图,而且只撤最新那一次的(连着换两次不暗闪)")
         }
 
@@ -1082,7 +1082,7 @@ func runNotchTests() {
             expectEqual(rootSrc.contains(".modifier(NotchRevealClip(widthFraction: state.widthFraction,")
                         && rootSrc.contains("outline: controller.cardOutline))"), true,
                         "外轮廓契约: 出场裁剪传的是同一个刘海高度和圆角")
-            expectEqual(stageSrc.contains("NotchCardOutlineReader(outline: chrome.cardOutline) {\n            $0.stroke("), true,
+            expectEqual(sourceHas(stageSrc, "NotchCardOutlineReader(outline: chrome.cardOutline) {\n            $0.stroke("), true,
                         "外轮廓契约: 编辑台拖宽度那圈虚线跟卡片同形")
             // 圆角按这一帧的高度算,不靠动画插值:两道形状都不该再声明 animatableData(插值的起点会把没展开那张卡片拉成直角再长回来)。
             expectEqual(v.contains("r = NotchOutline.clampedCornerRadius(corner.radius(height: rect.height), height: rect.height,"), true,
@@ -1107,13 +1107,9 @@ func runNotchTests() {
                         && stageSrc.contains("let range = NotchOutline.customRadiusRange(cardHeight: cardHeight, notchHeight: notchHeight)")
                         && stageSrc.contains("), in: range, step: 1, onEditingChanged: { editing in"), true,
                         "圆角契约: 滑杆拖动只改 NotchCornerLive、松手提交,上限按卡片高度")
-            expectEqual(stageSrc.contains(".onDisappear {\n            corners.endDrag()\n            corners.clearHover()\n        }"), true,
+            expectEqual(sourceHas(stageSrc, ".onDisappear {\n            corners.endDrag()\n            corners.clearHover()\n        }"), true,
                         "圆角契约: 拖到一半、或指针还停在行上时页面没了,值写回去、预览放开")
-            let dragBody: String = {
-                guard let a = liveSrc.range(of: "func drag(_ slot: NotchCornerSlot, to value: Double) {"),
-                      let b = liveSrc.range(of: "\n    }\n", range: a.upperBound..<liveSrc.endIndex) else { return "" }
-                return String(liveSrc[a.lowerBound..<b.lowerBound])
-            }()
+            let dragBody = sourceBody("func drag(_ slot: NotchCornerSlot, to value: Double) {", in: liveSrc)
             expectEqual(dragBody.isEmpty, false, "圆角契约: 切得出 NotchCornerLive.drag")
             expectEqual(dragBody.contains("AppSettings") || dragBody.contains("settings."), false, "圆角契约: 拖动中的一格不碰 AppSettings")
             expectEqual(liveSrc.contains("if settings.notchCornerRadius != collapsed { settings.notchCornerRadius = collapsed }")
@@ -1176,7 +1172,7 @@ func runNotchTests() {
             expectEqual(centerSrc.contains("NotchLyricsWindowController.shared"), false,
                         "里程碑契约: 里程碑中心不碰灵动岛控制器的 .shared(碰一下就会建窗口)")
             let panelSrc = src("NotchMilestonePanel.swift")
-            expectEqual(panelSrc.contains(".allowsHitTesting(false)\n        .accessibilityHidden(true)")
+            expectEqual(sourceHas(panelSrc, ".allowsHitTesting(false)\n        .accessibilityHidden(true)")
                         && rootSrc.contains("NotchMilestoneConfetti(milestone: controller.milestone"), true,
                         "里程碑契约: 碎屑挂在裁剪外面、不吃点击")
             let portabilitySrc = (try? String(contentsOf: uiDir.deletingLastPathComponent()
@@ -1196,7 +1192,7 @@ func runNotchTests() {
             expectEqual(v.contains("flippingEarArtwork(alignment: .leading, showsAdIcon: controller.isAdBreakNow)"), true,
                         "换歌翻牌契约: 左耳的翻牌连广告时的喇叭一起画(广告结束才能翻成封面)")
             expectEqual(v.contains("} else if leftModule == .artwork {\n")
-                        && v.contains("case .artwork:\n            flippingEarArtwork(alignment: alignment, showsAdIcon: false)")
+                        && sourceHas(v, "case .artwork:\n            flippingEarArtwork(alignment: alignment, showsAdIcon: false)")
                         && !v.contains("notchShowsTrackDrop"), true,
                         "换歌翻牌契约: 耳朵里的封面一直走翻牌,「换歌时显示歌名」只管歌名条")
             let dropSrc = src("NotchTrackChangeViews.swift")
@@ -1204,8 +1200,8 @@ func runNotchTests() {
                         && dropSrc.contains(".foregroundStyle(.white.opacity(0.96))")
                         && dropSrc.contains("scrim.modifier(NotchTrackDropReveal(progress: progress, travel: 0))"), true,
                         "换歌翻牌契约: 歌名白字、颜色只给音符,暗晕只在有歌名时出现")
-            expectEqual(rootSrc.contains("if controller.trackDrop != nil {\n            return NotchTrackDropStrip.revealAnimation")
-                        && rootSrc.contains("if wasDropping {\n            return NotchTrackDropStrip.retractAnimation")
+            expectEqual(sourceHas(rootSrc, "if controller.trackDrop != nil {\n            return NotchTrackDropStrip.revealAnimation")
+                        && sourceHas(rootSrc, "if wasDropping {\n            return NotchTrackDropStrip.retractAnimation")
                         && rootSrc.contains(".onChange(of: controller.trackDrop != nil) { _, dropping in wasDropping = dropping }")
                         && dropSrc.contains(".animation(animated ? (drop == nil ? Self.retractAnimation : Self.revealAnimation)")
                         && dropSrc.contains(".modifier(NotchTrackDropReveal(progress: progress, travel: animated ? height : 0))"), true,
@@ -1214,10 +1210,10 @@ func runNotchTests() {
                         && ctrlSrc.contains("clearedTrackDrop = (shown, Date())")
                         && dropSrc.contains("NotchTrackDropRoll(drop: drop ?? lastShown, travel: height, animated: animated)"), true,
                         "换歌翻牌契约: 收回时接着画刚才那条;停着时换歌,新的把旧的推出去")
-            expectEqual(ctrlSrc.contains("if showsLyrics {\n            let untilLyrics = secondsUntilLyrics()\n            guard let lyricsHold = NotchTrackDropRules.hold(secondsUntilLyrics: untilLyrics) else {")
+            expectEqual(sourceHas(ctrlSrc, "if showsLyrics {\n            let untilLyrics = secondsUntilLyrics()\n            guard let lyricsHold = NotchTrackDropRules.hold(secondsUntilLyrics: untilLyrics) else {")
                         && ctrlSrc.contains("try? await Task.sleep(for: .seconds(hold))")
                         && !ctrlSrc.contains("Task.sleep(for: NotchTrackDropRules.holdDuration)")
-                        && ctrlSrc.contains("PlaybackCoordinator.shared.$notchLyrics\n            .map { $0.compactLine != nil }")
+                        && sourceHas(ctrlSrc, "PlaybackCoordinator.shared.$notchLyrics\n            .map { $0.compactLine != nil }")
                         && ctrlSrc.contains("guard showsLyrics, let shown = trackDrop else { return }"), true,
                         "换歌翻牌契约: 开着歌词行时歌名停到第一句之前、马上开唱不掉,歌词行出现一句就收(05 章决策 72)")
             expectEqual(v.contains(".foregroundStyle(bubbleTextColor)")
@@ -1226,7 +1222,7 @@ func runNotchTests() {
             expectEqual(dropSrc.contains("Text(Image(systemName: \"music.note\"))")
                         && dropSrc.contains("trigger: drop?.replacing == nil ? -1 : drop?.id ?? -1"), true,
                         "换歌翻牌契约: 音符包在 Text 里跟歌名一起收;关键帧只在推出旧行时跑")
-            expectEqual(ctrlSrc.contains(".debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)\n        .sink { [weak self] title, artist, isAd, isWaiting in"), true,
+            expectEqual(sourceHas(ctrlSrc, ".debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)\n        .sink { [weak self] title, artist, isAd, isWaiting in"), true,
                         "换歌翻牌契约: 掉歌名前的去抖挂主队列,菜单栏菜单开着时也照常走")
             expectEqual(v.contains("playback.notchCardStyle == .coverArt ? (playback.vividAccent ?? .white) : .white"), true,
                         "换歌翻牌契约: 音符只在「跟随封面」风格下取封面色,其余风格白")
@@ -1416,7 +1412,7 @@ func runNotchTests() {
                     "广告态契约: 头部封面渲染读同一个判据")
         expectEqual(view.contains("if fields && controller.expandedTrackInfoShowsTitle"), true,
                     "广告态契约: 头部文字渲染读同一个判据")
-        expectEqual(view.contains("if playback.isCurrentTrackAdBreak {\n                    adStatusColumn"), true,
+        expectEqual(sourceHas(view, "if playback.isCurrentTrackAdBreak {\n                    adStatusColumn"), true,
                     "广告态契约: 歌词行在 lyricRowContent 这一层分流到 adStatusColumn")
         expectEqual(view.contains("showsLyricsOffsetControls: playback.showsLyricsOffsetControls && !playback.isCurrentTrackAdBreak"),
                     true, "广告态契约: 广告期间不画歌词校准控件")
@@ -1454,7 +1450,7 @@ func runNotchTests() {
         // 轮询只在「广告中」且有人要结果时跑:自动跳过开着,或至少一扇真灵动岛在广告态。
         expectEqual(center.contains("let wanted = adBreak && (autoSkipEnabled || !notchDemand.isEmpty)"), true,
                     "广告态契约: 灵动岛关着、自动跳过也关着时一次 AppleEvent 都不发")
-        expectEqual(center.contains("if !skipInFlight,\n           YouTubeMusicAdAutoSkip.shouldAttempt(enabled: autoSkipEnabled"), true,
+        expectEqual(sourceHas(center, "if !skipInFlight,\n           YouTubeMusicAdAutoSkip.shouldAttempt(enabled: autoSkipEnabled"), true,
                     "自动跳过契约: 门槛读数走 Core 判据,且不跟正在跑的那次叠")
         let appDelegate = (try? String(contentsOfFile: ui.deletingLastPathComponent().appendingPathComponent("AppDelegate.swift").path,
                                        encoding: .utf8)) ?? ""
@@ -1515,7 +1511,7 @@ func runNotchTests() {
         // (`trackInfoShowsTrackFields`,上面已有断言),它是被那条覆盖的。
         expectEqual(view.contains("adBreakArtworkTile(side:"), true,
                     "广告态契约: 灵动岛歌词行末尾那枚封面在广告期间换成替代方块")
-        expectEqual(view.contains("controller.isAdBreakNow\n                || (radioTalkStation?.image ?? playback.highResArtworkImage ?? playback.artworkImage) != nil"),
+        expectEqual(sourceHas(view, "controller.isAdBreakNow\n                || (radioTalkStation?.image ?? playback.highResArtworkImage ?? playback.artworkImage) != nil"),
                     true, "广告态契约: 替代方块照样算「这一格占着位置」,别放行多余的布局动画(电台口白的台标也算)")
         let window = (try? String(contentsOfFile: ui.appendingPathComponent("LyricsWindowView.swift").path,
                                   encoding: .utf8)) ?? ""
@@ -1530,7 +1526,7 @@ func runNotchTests() {
                     true, "广告态契约: 菜单栏面板那枚封面在广告期间换成同一枚喇叭")
         // 广告计数「· 1/2」。
         // 钉两件:它排在「广告中」和倒计时**之间**(三段连起来才是一句话),以及拿不到时整段不画。
-        expectEqual(view.contains("adSlotText\n                    .font(playback.mainDetailFont)\n                adCountdown"), true,
+        expectEqual(sourceHas(view, "adSlotText\n                    .font(playback.mainDetailFont)\n                adCountdown"), true,
                     "广告态契约: 计数排在「广告中」与倒计时之间")
         expectEqual(view.contains("if let slot = playback.currentAdSlot {"), true,
                     "广告态契约: 拿不到广告计数就整段不画,不编数字")
@@ -1840,11 +1836,11 @@ func runNotchTests() {
                     "光标契约: 放手时停定时器、放掉后台光标")
         expectEqual(cursorBody.contains("guard onCard || onPanel else { releaseCardCursor(); return }"), true,
                     "光标契约: 定时器发现指针已不在卡片 / 浮框上就放手")
-        expectEqual(controller.contains("cardHovered = expanded\n        syncCardCursor()\n        applyHoverIntent()")
-                        && controller.contains("editorialHovered = hovered\n        syncCardCursor()\n        applyHoverIntent()"), true,
+        expectEqual(sourceHas(controller, "cardHovered = expanded\n        syncCardCursor()\n        applyHoverIntent()")
+                        && sourceHas(controller, "editorialHovered = hovered\n        syncCardCursor()\n        applyHoverIntent()"), true,
                     "光标契约: 进出卡片 / 浮框当场同步光标,不等进入延迟")
-        expectEqual(controller.contains("editorialHovered = false\n        syncCardCursor()")
-                        && controller.contains("window?.orderOut(nil)\n        releaseCardCursor()"), true,
+        expectEqual(sourceHas(controller, "editorialHovered = false\n        syncCardCursor()")
+                        && sourceHas(controller, "window?.orderOut(nil)\n        releaseCardCursor()"), true,
                     "光标契约: 窗口收走、副本拆掉时放手")
         let backgroundCursor = read("BackgroundCursor.swift")
         expectEqual(backgroundCursor.contains("private static var holders: Set<ObjectIdentifier> = []")
@@ -1881,7 +1877,7 @@ func runNotchTests() {
                     "进度条契约: 灵动岛不用 TimelineView(.animation) —— 进程里有 SwiftUI ScrollView 时每拍要渲染两次")
         expectEqual(view.components(separatedBy: "FrameTimeline(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !ticking)").count - 1, 3,
                     "进度条契约: 已播段和两个时间数字各一个时钟")
-        expectEqual(view.contains("if showsLyricsOffsetControls {\n                    lyricsOffsetControls"), true,
+        expectEqual(sourceHas(view, "if showsLyricsOffsetControls {\n                    lyricsOffsetControls"), true,
                     "进度条契约: 偏移按钮直接排在时间行里,不在时钟闭包里")
         expectEqual(root.contains(".environment(\\.frameClock, frameClock)"), true, "进度条契约: 时钟挂在这扇灵动岛窗口上")
 
@@ -1904,19 +1900,19 @@ func runNotchTests() {
                     "全屏契约: 立刻判定与延迟隐藏到点的复核都带上全屏条件")
         expectEqual(controller.contains("hiddenForNoLyrics"), false,
                     "无歌词收起契约: 灵动岛没有歌词时只收歌词行,不进显隐判据")
-        expectEqual(controller.contains("AppSettings.shared.$notchCollapseLyricsWhenNoLyrics\n            .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)"), true,
+        expectEqual(sourceHas(controller, "AppSettings.shared.$notchCollapseLyricsWhenNoLyrics\n            .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)"), true,
                     "无歌词收起契约: 每个实例(含镜像副本)自己订阅开关与「这首有没有歌词」,值从 sink 参数拿")
-        expectEqual(controller.contains("let shows = NotchVisibility.showsLyrics(setting: showsLyricsSetting,\n                                                collapsedForNoLyrics: lyricsCollapsedForNoLyrics)")
+        expectEqual(sourceHas(controller, "let shows = NotchVisibility.showsLyrics(setting: showsLyricsSetting,\n                                                collapsedForNoLyrics: lyricsCollapsedForNoLyrics)")
                     && controller.components(separatedBy: "applyShowsLyrics()").count - 1 == 3, true,
                     "无歌词收起契约: 卡片读的 showsLyrics 由 Core 合成,「显示歌词」开关和无歌词两路变化都重算")
         expectEqual(controller.contains("subscriptions.removeAll()"), true, "无歌词收起契约: 副本 teardown 摘掉订阅")
         let overlayController = read("LyricsOverlayWindowController.swift")
-        expectEqual(overlayController.contains("AppSettings.shared.$hideWhenNoLyrics\n            .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)")
+        expectEqual(sourceHas(overlayController, "AppSettings.shared.$hideWhenNoLyrics\n            .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)")
                     && overlayController.contains("let shouldShow = OverlayVisibility.shouldShow(isVisible: isVisible, hiddenForNoLyrics: hiddenForNoLyrics,"), true,
                     "无歌词隐藏契约: 悬浮歌词订阅自己那一份开关,并进显隐判据")
-        expectEqual(controller.contains("AppSettings.shared.$notchHideInFullScreen\n            .combineLatest(FullScreenSpaceMonitor.shared.$fullScreenDisplays)"), true,
+        expectEqual(sourceHas(controller, "AppSettings.shared.$notchHideInFullScreen\n            .combineLatest(FullScreenSpaceMonitor.shared.$fullScreenDisplays)"), true,
                     "全屏契约: 每个实例(含镜像副本)自己订阅开关与全屏表,值从 sink 参数拿")
-        expectEqual(controller.contains("let screen = resolvedScreen()\n        let covered = FullScreenSpaces.covers("), true,
+        expectEqual(sourceHas(controller, "let screen = resolvedScreen()\n        let covered = FullScreenSpaces.covers("), true,
                     "全屏契约: 按这扇窗自己所在的屏判,不看别的屏")
         expectEqual(controller.contains("let hide = NotchVisibility.fullScreenHides(enabled: enabled, coveredByFullScreenApp: covered)"), true,
                     "全屏契约: 全屏一律整卡隐藏,判据走 Core")
@@ -1941,11 +1937,11 @@ func runNotchTests() {
                     "跳过门槛契约: 同一条广告不重起轮询(开始那一拍两条订阅前后脚到)")
         expectEqual(center.contains("if nextAdInBreak { YouTubeMusicAdSkipper.invalidateGateCache() }"), true,
                     "跳过门槛契约: 换条时清掉上一条的缓存判定")
-        expectEqual(center.contains("autoAttempts = 0\n        autoStopped = false"), true,
+        expectEqual(sourceHas(center, "autoAttempts = 0\n        autoStopped = false"), true,
                     "自动跳过契约: 换到下一条广告时按键次数清零")
 
         // 快捷操作:Last.fm 那颗只在连着账号时出现,落点是设置 › Last.fm。
-        expectEqual(view.contains("if LastfmStatsService.shared.isConnected {\n                    quickActionButton(\"chart.bar.fill\""), true,
+        expectEqual(sourceHas(view, "if LastfmStatsService.shared.isConnected {\n                    quickActionButton(\"chart.bar.fill\""), true,
                     "快捷操作契约: Last.fm 键只在连着账号时画")
         expectEqual(view.contains("AppActions.shared.requestSettings(.account(.lastfm))"), true,
                     "快捷操作契约: Last.fm 键翻到设置 › Last.fm 详情页")
@@ -1955,13 +1951,13 @@ func runNotchTests() {
         let searchAt = view.range(of: "quickActionButton(\"magnifyingglass\", label: L10n.t(\"搜索歌词…\"))")?.lowerBound
         expectEqual(favoriteAt != nil, true, "快捷操作契约: 喜欢键只在 isFavorited 非 nil、不在广告里时画,气泡认固定的 key")
         expectEqual(favoriteAt.flatMap { f in searchAt.map { f < $0 } }, true, "快捷操作契约: 喜欢键排在搜索歌词前面(最左)")
-        expectEqual(view.contains("label: favorited ? L10n.t(\"取消喜欢\") : L10n.t(\"喜欢\"), lit: favorited) {\n                        PlaybackCoordinator.shared.toggleFavorited()"), true,
+        expectEqual(sourceHas(view, "label: favorited ? L10n.t(\"取消喜欢\") : L10n.t(\"喜欢\"), lit: favorited) {\n                        PlaybackCoordinator.shared.toggleFavorited()"), true,
                     "快捷操作契约: 喜欢键走 toggleFavorited,已喜欢时点亮")
-        expectEqual(view.contains("glyphOpacity: lit ? 1 : (dimmed ? 0.4 : 0.75),\n                               restingLevel: lit ? 0.16 : 0"), true,
+        expectEqual(sourceHas(view, "glyphOpacity: lit ? 1 : (dimmed ? 0.4 : 0.75),\n                               restingLevel: lit ? 0.16 : 0"), true,
                     "快捷操作契约: 点亮样式同随机 / 循环键(字形全亮 + 0.16 淡底)")
         expectEqual(view.contains("p.$isFavorited.removeDuplicates().sink { [weak self] in self?.isFavorited = $0 }"), true,
                     "快捷操作契约: 灵动岛镜像协调器的 isFavorited")
-        expectEqual(controller.contains("if hoverOpening, expandedShowsQuickActions, !isAdBreakNow {\n            PlaybackCoordinator.shared.refreshFavorited()"), true,
+        expectEqual(sourceHas(controller, "if hoverOpening, expandedShowsQuickActions, !isAdBreakNow {\n            PlaybackCoordinator.shared.refreshFavorited()"), true,
                     "快捷操作契约: 展开时回读一次喜欢状态")
         expectEqual(controller.contains("let hoverOpening = opening && hoverExpanded && !alertHold && !milestoneHold")
                     && controller.contains("if hoverOpening, expandedShowsControls,"), true,
@@ -1973,7 +1969,7 @@ func runNotchTests() {
                     "卡片宽度契约: 收起态宽度只有 NotchChromeSource.cardWidth 一份,光标判定用的屏幕矩形也读它")
         // 歌词行高度那条订阅按副行的 sink 参数算展开区要不要留「下一句」。
         expectEqual(controller.contains(".removeDuplicates { $0.height == $1.height }")
-                    && controller.contains("self.recomputeGeometry(animate: false, expandedShowsNextLine: LyricSecondaryLine.expandedNextLinePreviewVisible(\n                userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: row.secondary))"), true,
+                    && sourceHas(controller, "self.recomputeGeometry(animate: false, expandedShowsNextLine: LyricSecondaryLine.expandedNextLinePreviewVisible(\n                userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: row.secondary))"), true,
                     "willSet 契约: 改副行时重算窗口高度用新副行判「下一句」那一行,不回退去读 AppSettings 里的旧值")
 
         // 主行取句的规则只有 Core 一份。
@@ -2107,7 +2103,7 @@ func runNotchTests() {
                              ("LyricsWindowView", window), ("EditorialNotes", store)] {
             expectEqual(text.isEmpty, false, "专辑简介契约: 读到 \(name).swift")
         }
-        expectEqual(view.contains("if fields && controller.expandedTrackInfoShowsAlbum {\n                trackInfoAlbumLine"), true,
+        expectEqual(sourceHas(view, "if fields && controller.expandedTrackInfoShowsAlbum {\n                trackInfoAlbumLine"), true,
                     "专辑简介契约: 灵动岛只在开了「显示专辑」时画那一行")
         expectEqual(view.contains("tappable: !playback.album.isEmpty || !playback.youtubeMusicAlbum.isEmpty) { controller.toggleEditorial(.album) }"),
                     true,
@@ -2139,11 +2135,11 @@ func runNotchTests() {
                     "专辑简介契约: 编辑台预览里是空实现,不从预览弹真浮框")
         expectEqual(controller.contains("NotchEditorialPanel.shared.toggle(card: card, cardFrame: frame, owner: window)"), true,
                     "专辑简介契约: 真窗口按卡片在屏幕上的位置打开浮框")
-        expectEqual(window.contains("if editorial.album != nil {\n                MoreMenuRow(title: L10n.t(\"显示专辑简介\"))"), true,
+        expectEqual(sourceHas(window, "if editorial.album != nil {\n                MoreMenuRow(title: L10n.t(\"显示专辑简介\"))"), true,
                     "专辑简介契约: 歌词窗口「⋯」菜单只在这首有专辑简介时出现「显示专辑简介」")
-        expectEqual(window.contains("if editorial.artist != nil {\n                MoreMenuRow(title: L10n.t(\"显示歌手简介\"))"), true,
+        expectEqual(sourceHas(window, "if editorial.artist != nil {\n                MoreMenuRow(title: L10n.t(\"显示歌手简介\"))"), true,
                     "歌手简介契约: 歌词窗口「⋯」菜单只在这首有歌手简介时出现「显示歌手简介」")
-        expectEqual(window.contains("if editorial.song != nil {\n                MoreMenuRow(title: L10n.t(\"显示歌曲简介\")) {\n                    closeMoreMenu()\n                    openEditorialPanel(.song)"), true,
+        expectEqual(sourceHas(window, "if editorial.song != nil {\n                MoreMenuRow(title: L10n.t(\"显示歌曲简介\")) {\n                    closeMoreMenu()\n                    openEditorialPanel(.song)"), true,
                     "歌曲简介契约: 歌词窗口「⋯」菜单只在这首有歌曲简介时出现「显示歌曲简介」")
         expectEqual(window.contains("EditorialLinkText(text: displayTitle, available: songNotes,")
                     && window.contains(".allowsHitTesting(songNotes)")
@@ -2157,7 +2153,7 @@ func runNotchTests() {
         expectEqual(window.components(separatedBy: "EditorialLinkText(text:").count - 1, 3,
                     "简介契约: 完整布局的歌名、「歌手 — 专辑」与迷你顶部都用同一个可点文字组件(悬停手形光标 + 下划线)")
         expectEqual(window.contains("NSCursor.pointingHand.push()") && window.contains("NSCursor.pop()")
-                    && window.contains(".onDisappear {\n                if cursorPushed {"), true,
+                    && sourceHas(window, ".onDisappear {\n                if cursorPushed {"), true,
                     "简介契约: 手形光标成对 push / pop,视图消失时也还回去")
         expectEqual(window.contains("miniHeaderPart(lines[i][j], color: color)")
                     && window.contains(".popover(isPresented: Binding(get: { miniEditorialKind != nil },"), true,
@@ -2170,7 +2166,7 @@ func runNotchTests() {
                     "专辑简介契约: 歌词窗口开着才预取,设置页预览不算")
         expectEqual(store.components(separatedBy: "AlbumEditorialNotes.fetchAlbumPage(").count - 1, 1,
                     "简介契约: 专辑页只有一处发请求")
-        expectEqual(store.contains("album = nil\n            fallback(.album, track)\n            resolveArtistFromSiblings(track)"), true,
+        expectEqual(sourceHas(store, "album = nil\n            fallback(.album, track)\n            resolveArtistFromSiblings(track)"), true,
                     "歌手简介契约: 这首没有 Apple 链接时,专辑退兜底(网易云 / Last.fm)、歌手从同歌手的别的专辑页找")
         expectEqual(store.contains("Timer") || store.contains("Task.sleep"), false,
                     "专辑简介契约: 只在换歌 / 消费方来要时取,不轮询")
@@ -2178,12 +2174,12 @@ func runNotchTests() {
                     "专辑简介契约: 没有消费方挂着时一个请求都不发")
         expectEqual(store.components(separatedBy: "guard self.currentKey == track.key else { return self.refreshCurrent() }").count - 1, 10,
                     "简介契约: 专辑页 / 同歌手专辑页 / 歌手页 / Last.fm / 网易云歌手介绍 / 网易云专辑介绍 / QQ 歌曲简介 / 汽水 / YouTube Music 歌手介绍(问通、问不通各一处)回来时已经换歌,都按当前曲目重查(同专辑连切时新歌不会整首拿不到)")
-        expectEqual(store.contains("guard self.currentKey == track.key else { return self.refreshCurrent() }\n            self.artist = card"), true,
+        expectEqual(sourceHas(store, "guard self.currentKey == track.key else { return self.refreshCurrent() }\n            self.artist = card"), true,
                     "简介契约: 歌手页回来时已经换歌,同样按当前曲目重查")
         expectEqual(store.contains("appleAlbumRefs(forArtist: track.artist, limit: 3)")
                     && store.contains("return self.trySiblings(refs.dropFirst(), name: name, track: track)"), true,
                     "简介契约: 同歌手的别的专辑最多试 3 张,对不上换下一张")
-        expectEqual(store.contains("case .failed:\n                return\n            }\n            self.albumPages[ref.id] = .some(fetched)"), true,
+        expectEqual(sourceHas(store, "case .failed:\n                return\n            }\n            self.albumPages[ref.id] = .some(fetched)"), true,
                     "简介契约: 失败不记(下次再试),取到和都 404 都记")
     }
 
@@ -2196,7 +2192,7 @@ func runNotchTests() {
                                encoding: .utf8)) ?? ""
         expectEqual(row.contains("@Environment(\\.notchCardLayerActive) private var layerActive"), true,
                     "隐藏层契约: 共用歌词行把「这一层显示着没有」当输入读(翻回 true 才会重新 updateNSView)")
-        expectEqual(row.contains("guard layerActive else { return }\n        view.apply(spec: spec, nowMs: nowMs())"), true,
+        expectEqual(sourceHas(row, "guard layerActive else { return }\n        view.apply(spec: spec, nowMs: nowMs())"), true,
                     "隐藏层契约: 藏着时不调 apply(不重画位图、不装动画)")
     }
 

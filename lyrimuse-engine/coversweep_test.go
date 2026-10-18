@@ -315,13 +315,13 @@ func TestBackfillPeripheralFieldsCountsOnlyReachedRounds(t *testing.T) {
 	if begin < 0 || resolve < 0 || begin > resolve {
 		t.Error("要在发请求之前开始观察这一轮,而且只数这一轮自己的请求(ctx, networkRound := withNetworkRound(ctx))")
 	}
-	if !strings.Contains(body, "if attempts, failures := networkRound(); lyricsRoundConfirmsNoResult(attempts, failures) {\n\t\te.PeripheralRetryCount++") {
+	if !containsCode(body, "if attempts, failures := networkRound(); lyricsRoundConfirmsNoResult(attempts, failures) {\n\t\te.PeripheralRetryCount++") {
 		t.Error("PeripheralRetryCount 只在这一轮有请求成功时才加")
 	}
 	if strings.Count(body, "e.PeripheralRetryCount++") != 1 {
 		t.Error("PeripheralRetryCount 只该在那一处加")
 	}
-	if !strings.Contains(body, "!coverSweepSaveDeferred(ctx) || (cur != nil && *cur == key) {\n\t\t// 后台补封面那一遍攒着存") {
+	if !containsCode(body, "!coverSweepSaveDeferred(ctx) || (cur != nil && *cur == key) {\n\t\t// 后台补封面那一遍攒着存") {
 		t.Error("后台补封面带着「先别存」标记时不当场存盘,正在播的那首除外")
 	}
 }
@@ -846,7 +846,7 @@ func TestCoverSweepUpgradeOneMeasuresOutsideLock(t *testing.T) {
 	}
 	body := src[start:]
 	body = body[:strings.Index(body, "\n}\n")]
-	if !strings.Contains(body, "\tenrichMu.Unlock()\n\tif !ok || !deviceCoverSmall(e.CoverURL) {") ||
+	if !containsCode(body, "\tenrichMu.Unlock()\n\tif !ok || !deviceCoverSmall(e.CoverURL) {") ||
 		strings.Count(body, "deviceCoverSmall(") != 1 {
 		t.Error("deviceCoverSmall 要在放掉 enrichMu 之后量")
 	}

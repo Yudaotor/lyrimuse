@@ -1106,9 +1106,9 @@ func runLyricsManagerTests() {
             expectEqual(service.contains("let summary = Self.completionSummary(")
                             && service.contains("box.lastUpdate = raw"), true,
                         "搜索汇总契约: 每次搜索收尾(含被停掉)写一行汇总:给了候选的源、没给的原因、轮次、耗时")
-            expectEqual(sheet.contains(".onChange(of: currentSource) { _, value in\n            host.source = value\n            appliedSource = nil"), true,
+            expectEqual(sourceHas(sheet, ".onChange(of: currentSource) { _, value in\n            host.source = value\n            appliedSource = nil"), true,
                         "当前使用契约: 宿主给的来源变了,面板记的采纳结果让位")
-            expectEqual(sheet.contains(".onChange(of: currentFingerprint) { _, value in\n            host.fingerprint = value\n            appliedSource = nil"), true,
+            expectEqual(sourceHas(sheet, ".onChange(of: currentFingerprint) { _, value in\n            host.fingerprint = value\n            appliedSource = nil"), true,
                         "当前使用契约: 宿主给的指纹变了,面板记的采纳结果让位")
             // 选中的就是在用的那一份时,采用按钮只说明状态、点不了(11 章决策 55)。
             expectEqual(sheet.contains("if isCurrentCandidate(c) { return L10n.t(\"当前使用\") }"), true,
@@ -1939,7 +1939,7 @@ func runLyricsManagerTests() {
                     && sheet.contains("title: LyricsManagerSearch.query(title),")
                     && sheet.contains("album: LyricsManagerSearch.query(album),"),
                     true, "搜索候选歌词: 歌名 / 歌手 / 专辑去掉首尾空白再交出去搜")
-        expectEqual(sheet.contains("storedCandidate = makeStoredCandidate()\n        loadError = nil\n")
+        expectEqual(sourceHas(sheet, "storedCandidate = makeStoredCandidate()\n        loadError = nil\n")
                     && sheet.contains("selectedSource = shownCandidates.first?.id")
                     && sheet.contains("EnrichCacheReader.storedEntry(forKey: songKey)")
                     && sheet.contains("if let hit = candidates.first(where: isCurrentCandidate) { return hit }")
@@ -1956,11 +1956,11 @@ func runLyricsManagerTests() {
         expectEqual(sheet.contains("let groups = LyricsCandidateGroups.groups(")
                     && sheet.contains("if layout.sameExpanded {") && sheet.contains("if layout.excludedExpanded {")
                     && sheet.contains("layout.excludedForced = layout.current == nil && layout.main.isEmpty && layout.same.isEmpty")
-                    && sheet.contains(".onChange(of: selectedSource) { _, _ in\n            revealSelection()"), true,
+                    && sourceHas(sheet, ".onChange(of: selectedSource) { _, _ in\n            revealSelection()"), true,
                     "搜索候选歌词: 内容相同、不可用的候选收进折叠组,只剩不可用时那一组一直展开,选中落在收起的组里时展开")
-        expectEqual(sheet.contains("            revealSelection()\n            followPlayback = true\n        }"), true,
+        expectEqual(sourceHas(sheet, "            revealSelection()\n            followPlayback = true\n        }"), true,
                     "搜索候选歌词: 换选一条候选时重新跟随播放")
-        expectEqual(sheet.contains("            searchConclusion\n            Spacer(minLength: 0)")
+        expectEqual(sourceHas(sheet, "            searchConclusion\n            Spacer(minLength: 0)")
                     && sheet.contains("if !isSearching, loadError == nil, searchResults.isEmpty, currentShown != nil {"), true,
                     "搜索候选歌词: 搜完只剩「当前使用」那条时,结论挂在侧栏")
         expectEqual(sheet.contains("metaLine(c, font: .caption2)") && sheet.contains("metaLine(c, font: .caption)")
@@ -1986,7 +1986,7 @@ func runLyricsManagerTests() {
                     true, "搜索框: 边打边筛,停手 150 毫秒才真的过滤一次")
         expectEqual(view.contains("if LyricsManagerSearch.query(newValue).isEmpty && !committedSearchText.isEmpty {"), true,
                     "搜索框: 删到只剩空格就回到全量列表")
-        expectEqual(view.contains("await store.reload(onlyIfChanged: true)\n        guard generation == rematchGeneration else { return }\n        finishRematch(key: key, line: line)"),
+        expectEqual(sourceHas(view, "await store.reload(onlyIfChanged: true)\n        guard generation == rematchGeneration else { return }\n        finishRematch(key: key, line: line)"),
                     true, "重新匹配: 「正在重新匹配」撑到列表重读完再清,中间不空一下、按钮不提前解禁")
     }
 
@@ -2061,12 +2061,12 @@ func runLyricsManagerTests() {
         } else {
             expectEqual(false, true, "正文回退: 找不到 hydrate")
         }
-        expectEqual(store.contains("Self.digestWriteQueue.async {") && !store.contains("Task.detached(priority: .utility) {\n            if let digest"),
+        expectEqual(store.contains("Self.digestWriteQueue.async {") && !sourceHas(store, "Task.detached(priority: .utility) {\n            if let digest"),
                     true, "歌词库摘要: 写盘排在同一条串行队列上,后写的不会被先发起的旧值盖掉")
         let quick = (try? String(contentsOf: appDir.appendingPathComponent("LyricsManager/LyricsQuickSearchWindow.swift"),
                                  encoding: .utf8)) ?? ""
-        expectEqual(quick.contains("trLang: candidate.lyricsTrLang)\n                    }\n                    PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()")
-                    || !store.contains("        PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()\n        // 上面读过盘的话"), false,
+        expectEqual(sourceHas(quick, "trLang: candidate.lyricsTrLang)\n                    }\n                    PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()")
+                    || !sourceHas(store, "        PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()\n        // 上面读过盘的话"), false,
                     "搜索歌词小窗: 采纳后不再自己重读当前歌词(commit 收尾时已经做了)")
 
         // 外部编辑器:打开它的编辑器退出、没有还没套用的修改就结束会话,会话都结束了停掉每秒那一拍。
@@ -2082,7 +2082,7 @@ func runLyricsManagerTests() {
         } else {
             expectEqual(false, true, "外部编辑: 找不到 endSessionsWhoseEditorQuit")
         }
-        expectEqual(editor.contains("for key in Array(sessions.keys) { check(key) }\n        endSessionsWhoseEditorQuit()")
+        expectEqual(sourceHas(editor, "for key in Array(sessions.keys) { check(key) }\n        endSessionsWhoseEditorQuit()")
                     && editor.contains("if let pid { LyricsExternalEditor.shared.sessions[key]?.editorPID = pid }"), true,
                     "外部编辑: 每拍先看文件、再收结束的会话;编辑器进程号在打开成功后记下")
 

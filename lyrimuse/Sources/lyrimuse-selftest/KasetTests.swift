@@ -704,8 +704,7 @@ func runKasetTests() {
                         && src("lyrimuse/UI/NotchLyricsView.swift").contains("switch playback.adCountdown {"), true,
                     "Kaset 契约: 广告倒计时按播放源给的来源画(Kaset 用广告自己的表)")
         expectEqual(client.contains("? kasetWebClockPosition(reading, at: readAt) : nil")
-                        && src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(
-                            "if snapshot.positionIsPrecise == true {\n                    usedBrowserProbe = true\n                    browserProbePrecise = true"), true,
+                        && sourceHas(src("LyrimuseCore/Local/LocalPlaybackSource.swift"), "if snapshot.positionIsPrecise == true {\n                    usedBrowserProbe = true\n                    browserProbePrecise = true"), true,
                     "Kaset 契约: 在走时位置用网页时钟,播放源当精确真值采信")
         expectEqual(client.contains("step = KasetPlayerInfo.webClockStep(reading, web: web, at: t, check: previous)")
                         && src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(
@@ -770,7 +769,7 @@ func runKasetTests() {
         let watcherSource = src("LyrimuseCore/Local/KasetWebSessionWatcher.swift")
         let helper = src("../native/nowplaying-clients/nowplaying-clients.m")
         expectEqual(playbackSource.contains("self?.handlePlayerInfoChanged(freezeExtrapolation: signal == .paused, stateSignal: true)")
-                        && playbackSource.contains("        syncKasetWebWatch()\n        if pollFlight.finish() { poll() }")
+                        && sourceHas(playbackSource, "        syncKasetWebWatch()\n        if pollFlight.finish() { poll() }")
                         && playbackSource.contains("let kaset = !title.isEmpty && lastSnapshot?.bundleIdentifier == PlaybackPlayer.kaset.bundleIdentifier")
                         && playbackSource.contains("kasetWebWatcher?.watch(bundleID: kaset ? PlaybackPlayer.kaset.bundleIdentifier : nil)")
                         && playbackSource.contains("kasetWebWatcher?.watch(bundleID: nil)")
@@ -786,8 +785,8 @@ func runKasetTests() {
                     "Kaset 契约: helper 常驻按 bundle id 自己认进程号,变了才输出(键排好序),父进程没了自己退出")
         expectEqual(client.contains("let kind = KasetPlayerInfo.isPlaceholder(raw) ? nil : KasetVideoKind.verdict(for: raw.videoID ?? \"\")")
                         && client.contains("if kind != .notPodcast {")
-                        && client.contains("if let kaset = fetchKasetSnapshot() { return kaset }\n            return kasetNotSongThisRoundValue() ? nil : mediaControl")
-                        && client.contains("if kaset == nil, let failure = kasetNotSongFailure() {\n            setSnapshotFailure(failure)\n            return nil")
+                        && sourceHas(client, "if let kaset = fetchKasetSnapshot() { return kaset }\n            return kasetNotSongThisRoundValue() ? nil : mediaControl")
+                        && sourceHas(client, "if kaset == nil, let failure = kasetNotSongFailure() {\n            setSnapshotFailure(failure)\n            return nil")
                         && client.contains("setSnapshotFailure(kasetNotSongFailure() ?? .appleScriptUnavailable)"),
                     true, "Kaset 契约: 开播占位、播客单集这一拍不报,也不退回去报系统那份或别家暂停着的")
         expectEqual(client.contains("kasetLoadingThisRound = kind != .podcastEpisode")
@@ -807,7 +806,7 @@ func runKasetTests() {
                         && videoKind.contains("if known.count >= cacheLimit { known = known.filter { $0.key == lastAsked } }")
                         && videoKind.contains("if failedAt.count >= cacheLimit { failedAt = failedAt.filter { $0.key == lastAsked } }"), true,
                     "Kaset 契约: 结论表满了清表时留下正在放那一条的,它不会被重新按住")
-        expectEqual(client.contains("let owner = reportedBundleID == safariMediaProcessBundleID\n            ? raw.processIdentifier.flatMap { responsibleBundleID(ofPID: $0) } : nil")
+        expectEqual(sourceHas(client, "let owner = reportedBundleID == safariMediaProcessBundleID\n            ? raw.processIdentifier.flatMap { responsibleBundleID(ofPID: $0) } : nil")
                         && client.contains("let bundleID = reportingPlayerBundleID(reportedBundleID, owner: owner)"), true,
                     "Kaset 契约: 系统当选的是 WebKit 媒体进程时按负责进程认,Kaset 内嵌网页那份不当成 Safari")
         expectEqual(playbackSource.contains("kasetWasPlaying: kasetWasPlaying, qqWasPaused: qqWasPaused) else { return }")
@@ -818,9 +817,9 @@ func runKasetTests() {
                             "emit(want ? sendSeek(h, [NSString stringWithUTF8String:want], atof(seekEnv)) : nil);"), true,
                     "Kaset 契约: 跳转带上跳转前在不在放、定向发给 Kaset 本体,helper 有 seek 模式")
         expectEqual(playbackSource.contains("            @MainActor func attempt() async -> (data: Data?, payloadKey: String?, miss: String?) {")
-                    && playbackSource.contains("                let fromKaset = self.lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier\n                // 洛雪:"),
+                    && sourceHas(playbackSource, "                let fromKaset = self.lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier\n                // 洛雪:"),
                     true, "Kaset 契约: 封面每次取都按此刻认下的播放器挑")
-        expectEqual(client.contains("if snapshot == nil, target.player != .kaset,\n           let probed = NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: target.bundleID) {"), true,
+        expectEqual(sourceHas(client, "if snapshot == nil, target.player != .kaset,\n           let probed = NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: target.bundleID) {"), true,
                     "Kaset 契约: 焦点回退不拿系统按 bundle id 存的那份(换歌后常停在上一首)")
         expectEqual(client.contains("return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(fetchAutoDetectedSnapshot()), wanted: true))"), true,
                     "Kaset 契约: 自动识别时系统那边没在放就问它")

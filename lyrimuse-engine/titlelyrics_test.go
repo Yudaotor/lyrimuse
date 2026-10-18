@@ -78,7 +78,7 @@ func TestTitleReverseLyricSearchIsWired(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(src)
-	if !strings.Contains(s, "\tdefault:\n\t\tvar lyricArtist string\n\t\tif lyricTitle, lyricArtist, lyricDiff, lyricOK = retryTitleFromLyricSearchDetailed(ctx, titleArtists, samples, durationSecs); lyricOK {\n\t\t\tcorrectedTitle, retryMethod, titleArtist = lyricTitle, lyricQueryReasonTitleLyrics, lyricArtist") {
+	if !containsCode(s, "\tdefault:\n\t\tvar lyricArtist string\n\t\tif lyricTitle, lyricArtist, lyricDiff, lyricOK = retryTitleFromLyricSearchDetailed(ctx, titleArtists, samples, durationSecs); lyricOK {\n\t\t\tcorrectedTitle, retryMethod, titleArtist = lyricTitle, lyricQueryReasonTitleLyrics, lyricArtist") {
 		t.Error("标题反查的 switch 末尾(前三条都没查到)走按歌词搜")
 	}
 	lyr, err := os.ReadFile("titlelyrics.go")

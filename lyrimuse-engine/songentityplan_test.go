@@ -309,7 +309,7 @@ func TestShareEvalReplay(t *testing.T) {
 		"按不变式 6 留着自己那份的 1 条:在放播放器自家的词 0、这一轮比不了 1、没搜到而冠军不比它存的分高 0、有逐字 0、屏上看不出差别 0、有时间轴 0\n",
 		"参照:冠军只比多数那份高不到 30 分时留多数那份,换词和补词合计 2 条(按冠军是 4 条)\n",
 	} {
-		if !strings.Contains(s, want) {
+		if !containsCode(s, want) {
 			t.Errorf("缺这一段:%s\n全文:\n%s", want, s)
 		}
 	}

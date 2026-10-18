@@ -2308,8 +2308,8 @@ func runPlaybackPositionTests() {
                     "来源角标(契约): 菜单栏角标与歌词窗口「在 XX 中显示」都走统一入口")
         // Safari 上报 com.apple.WebKit.GPU:翻标签页和整 App 激活两条路都得先折回宿主,
         // 漏任一处,点 Safari 里的 YouTube Music 角标就毫无反应。
-        expectEqual(probeSrc.contains("guard let host = probeTargetBundleID(forReported: bundleID),\n              let rule = siteRules.first(where: { $0.platformID == platformID })")
-                    && coordinatorSrc.contains("guard let id = BrowserPositionProbe.probeTargetBundleID(\n            forReported: LocalPlaybackSource.shared.lastResolvedBundleID)"), true,
+        expectEqual(sourceHas(probeSrc, "guard let host = probeTargetBundleID(forReported: bundleID),\n              let rule = siteRules.first(where: { $0.platformID == platformID })")
+                    && sourceHas(coordinatorSrc, "guard let id = BrowserPositionProbe.probeTargetBundleID(\n            forReported: LocalPlaybackSource.shared.lastResolvedBundleID)"), true,
                     "来源角标(契约): 翻标签页与整 App 激活都按宿主(WebKit.GPU 到 Safari)")
     }
 

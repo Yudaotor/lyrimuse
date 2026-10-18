@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 )
@@ -53,7 +52,7 @@ func TestDurationVariantSteadyIsWired(t *testing.T) {
 		"playingSongID := playingSongIDFor(bundleID, anchorLink, catalogIDs)\n\tenrichMu.Lock()",
 		"} else {\n\t\t\tdelete(durationVariantSeen, key)\n\t\t}",
 	} {
-		if !strings.Contains(string(b), n) {
+		if !containsCode(string(b), n) {
 			t.Errorf("enrich.go 缺 %q", n)
 		}
 	}
@@ -97,7 +96,7 @@ func TestDurationCorrectedInPlaceIsWired(t *testing.T) {
 		"if correctDuration {\n\t\t\te.DurationSecs = durationSecs\n\t\t\tspotifyHintDirty = true\n\t\t}",
 		"stamp := enrichEditStampLocked()\n\tnoteEnrichCreatedLocked(key)\n",
 	} {
-		if !strings.Contains(string(b), n) {
+		if !containsCode(string(b), n) {
 			t.Errorf("enrich.go 缺 %q", n)
 		}
 	}

@@ -270,9 +270,7 @@ func runSettingsSearchTests() {
     expectEqual(staleAllowlist, [], "设置搜索: 白名单里的每一项都还真的存在于源码里")
     // 两处「内容」浮层不放标读音的语言:那是所有展示面共用的设置,只在「歌词 › 调整 › 标注读音的语言」设(04 章决策 47)。
     func memberBody(_ text: String, after marker: String) -> String {
-        guard let start = text.range(of: marker) else { return "" }
-        let rest = text[start.upperBound...]
-        return String(rest[..<(rest.range(of: "\n    }\n")?.lowerBound ?? rest.endIndex)])
+        sourceBody(marker, in: text)
     }
     let contentRows = [
         memberBody(source("UI/OverlayStyleSettingsRows.swift"), after: "struct OverlayContentSettingsRows: View {"),
@@ -394,6 +392,6 @@ func runSettingsSearchTests() {
                 "歌词窗口尺寸: 完整尺寸那一支外观行不传迷你独有的那几样绑定")
     // 跳转那一段:写完分段键、翻面板之前,把预览切到这一行所在的尺寸。
     let jump = block(from: "    private func openSettingsSearchHit(_ hit: SettingsSearchHit) {", to: "        searchRouter.reveal(hit)")
-    expectEqual(sourceBytes(jump, contain: "if let mini = entry.lyricsWindowMini {\n            UserDefaults.standard.set(mini, forKey: LyricsWindowPreviewStage.showsMiniStorageKey)\n        }\n        switch entry.destination {"),
+    expectEqual(sourceHas(jump, "if let mini = entry.lyricsWindowMini {\n            UserDefaults.standard.set(mini, forKey: LyricsWindowPreviewStage.showsMiniStorageKey)\n        }\n        switch entry.destination {"),
                 true, "歌词窗口尺寸: 命中时先切预览尺寸,再翻面板")
 }

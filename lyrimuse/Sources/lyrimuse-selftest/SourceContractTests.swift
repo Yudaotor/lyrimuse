@@ -10,15 +10,15 @@ func runSourceContractTests() {
     do {
         let window = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"), encoding: .utf8)) ?? ""
-        expectEqual(window.contains("        ZStack {\n            if shown {\n                Button(action: action) {"), true,
+        expectEqual(sourceHas(window, "        ZStack {\n            if shown {\n                Button(action: action) {"), true,
                     "歌词窗口播控排: 随机 / 循环那一格外层是 ZStack,按钮不显示时定宽不塌")
         expectEqual(window.contains("shown: playback.playbackMode != nil && playback.playbackModeOptions.contains(.shuffle),")
                         && window.contains("shown: mode != nil && options.canRepeat,")
-                        && window.contains("(mode ?? .list).nextRepeat(allowsRepeatOne: options.contains(.repeatOne),\n"
+                        && sourceHas(window, "(mode ?? .list).nextRepeat(allowsRepeatOne: options.contains(.repeatOne),\n"
                                            + "                                           allowsRepeatAll: options.contains(.repeatAll)))"), true,
                     "歌词窗口播控排: 随机、循环各按能切哪几档显示,循环键按有没有单曲循环 / 列表循环走三态 / 两态")
         expectEqual(window.contains("                .help(label)\n")
-                        && window.contains(".accessibilityLabel(label)\n                .accessibilityAddTraits(active ? .isSelected : [])")
+                        && sourceHas(window, ".accessibilityLabel(label)\n                .accessibilityAddTraits(active ? .isSelected : [])")
                         && window.contains("label: mode == .repeatOne ? L10n.t(\"单曲循环\") : L10n.t(\"循环播放\")"), true,
                     "歌词窗口播控排: 随机 / 循环键的读屏名跟悬停提示同一串(单曲循环时读「单曲循环」),点亮时带「已选择」")
     }
@@ -41,7 +41,7 @@ func runSourceContractTests() {
         expectEqual(window.isEmpty, false, "歌词窗口纯图标键: 读不到 UI/LyricsWindowView.swift")
         expectEqual(unlabeled, [], "歌词窗口纯图标键: 悬停提示后面要紧跟读屏名(带文字的控件加进 textHelps)")
         expectEqual(window.contains(".accessibilityLabel(windowController.isAlwaysOnTop ? L10n.t(\"取消置顶\") : L10n.t(\"置于最顶层\"))")
-                        && window.contains("circleIcon(\"ellipsis\")\n            }\n            .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))\n            .accessibilityLabel(L10n.t(\"更多\"))"), true,
+                        && sourceHas(window, "circleIcon(\"ellipsis\")\n            }\n            .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))\n            .accessibilityLabel(L10n.t(\"更多\"))"), true,
                     "歌词窗口纯图标键: 置顶(提示是两句、读屏名只取前一句)和「⋯」(没有悬停提示)也有读屏名")
     }
 
@@ -95,7 +95,7 @@ func runSourceContractTests() {
                     "封面预算: 小封面缓存在后台按最近要过的尺寸先缩,源图留 3 张")
         expectEqual(flip.contains("static func prefetch(_ image: NSImage)") && flip.contains("Task.detached(priority: .userInitiated)"), true,
                     "封面预算: 翻牌指纹在后台先算")
-        expectEqual(flip.contains(".onChange(of: input) { old, new in\n            prefetchArtwork()\n            react(from: old, to: new)"), true,
+        expectEqual(sourceHas(flip, ".onChange(of: input) { old, new in\n            prefetchArtwork()\n            react(from: old, to: new)"), true,
                     "封面预算: 翻牌视图输入一变先排上后台预算,再走翻牌规划")
     }
 
@@ -331,7 +331,7 @@ func runSourceContractTests() {
                     .replacingOccurrences(of: "&", with: "&amp;")
                     .replacingOccurrences(of: "<", with: "&lt;")
                     .replacingOccurrences(of: ">", with: "&gt;")
-                expectEqual(buildScript.contains("<key>\(plistKey)</key>\n    <string>\(english)</string>"), true,
+                expectEqual(sourceHas(buildScript, "<key>\(plistKey)</key>\n    <string>\(english)</string>"), true,
                             "本地化: build.sh 写进 Info.plist 的 \(plistKey) 英文原文跟 catalog 的英文一致")
             }
 
@@ -913,7 +913,7 @@ func runSourceContractTests() {
                             "封面沉降: 间隔表要真的逐档跑")
                 if let r = lps3.range(of: "confirmData != self.artworkData else {") {
                     let tail = lps3[r.upperBound...].prefix(900)
-                    expectEqual(tail.contains("continue\n                }") && !tail.prefix(700).contains("return\n"), true,
+                    expectEqual(sourceHas(tail, "continue\n                }") && !tail.prefix(700).contains("return\n"), true,
                                 "封面沉降: 某一档读空要 continue 不能 return,否则撞上一次空载荷就没有第二次机会")
                 } else {
                     expectEqual(true, false, "封面沉降: 找不到二次确认那道 guard")
@@ -1032,7 +1032,7 @@ func runSourceContractTests() {
                 expectEqual(lps.contains("RadioTrackClock.passedTrackEnd("), true,
                             "电台: 越过真曲长要把歌词收掉(主持人说话那一两分钟)")
                 expectEqual(lps.contains("private var lyricLinesSuppressed: Bool { radioTrackFinished || isCurrentTrackAdBreak }")
-                            && lps.contains("if lyricLinesSuppressed {\n            clearLineDisplay()"), true,
+                            && sourceHas(lps, "if lyricLinesSuppressed {\n            clearLineDisplay()"), true,
                             "电台 / 广告: 收歌词的闸要挂在 20Hz 那条 tick 上,不然只有 2 秒轮询那一拍生效")
                 expectEqual(lps.contains("syncEngine.hasContent, !lyricLinesSuppressed else {")
                             && lps.contains("if !lyricLinesSuppressed, let pos = anchor?.extrapolatedPositionMs() ?? pausedPositionMs {"), true,
@@ -1078,7 +1078,7 @@ func runSourceContractTests() {
                                     && face_text.contains("case .radioTalk: text = L10n.t(\"口白\")"), true,
                                     "电台: 歌词窗口的空状态那一格也要认口白,不能只改元数据行")
                         expectEqual(face_text.contains("private var lyricsOnHold: Bool { playback.isRadioTalkBreak || playback.isCurrentTrackAdBreak }")
-                                    && face_text.contains("if lyricsOnHold {\n            // 口白、广告期间不显示任何歌词"), true,
+                                    && sourceHas(face_text, "if lyricsOnHold {\n            // 口白、广告期间不显示任何歌词"), true,
                                     "电台 / 广告: 歌词窗口的歌词列表那一栏要在口白、广告期间整段挡掉(闸要排在 allLines.isEmpty 之前)")
                     }
                 } else {
@@ -1734,7 +1734,7 @@ func runSourceContractSurfaceTests() {
             // 迷你尺寸单独持久化:拖过的大小下次进迷你还是它,且绝不写进完整窗口那份 frame。
             expectEqual(lwv.contains("private static let miniSizeKey = \"np:lyricsWindowMiniSize\""), true,
                         "迷你窗: 用户拖出来的迷你尺寸单独存一个键")
-            expectEqual(lwv.contains("            return\n        }\n        defaults.set(NSStringFromRect(window.frame), forKey: Self.frameKey)"), true,
+            expectEqual(sourceHas(lwv, "            return\n        }\n        defaults.set(NSStringFromRect(window.frame), forKey: Self.frameKey)"), true,
                         "迷你窗: 迷你期间只存迷你尺寸就返回,不能落到完整窗口那份 frame 上")
             expectEqual(lwv.contains("let size = Self.miniTargetSize(on: window.screen)"), true,
                         "迷你窗: 进迷你时先读存过的尺寸(夹在下限与屏幕可见区之间)")
@@ -1753,14 +1753,14 @@ func runSourceContractSurfaceTests() {
             expectEqual(lwv.contains("private struct MiniLyricsReel: View, Equatable"), true,
                         "迷你歌词: 当前行 + 下一行收进一个 Equatable 子视图")
             expectEqual(lwv.contains("WrappedKaraokeRows(")
-                        && lwv.contains("isActive: false,\n                isPlaying: isPlaying,\n                fillSettled: false,"), true,
+                        && sourceHas(lwv, "isActive: false,\n                isPlaying: isPlaying,\n                fillSettled: false,"), true,
                         "迷你歌词: 换行档带逐字的当前行走图层(WrappedKaraokeRows),下一行是时钟全停的 KaraokeLineText")
             expectEqual(lwv.contains(".scaleEffect(scale, anchor: .top)"), true,
                         "迷你歌词: 下一行靠缩放变小(折行不变),别改回按 0.62 字号排版")
             // 迷你换句不做动画、逐字不上浮(07 章决策 42)。
             expectEqual(lwv.contains("MiniLyricsReel.transition"), false,
                         "迷你歌词: 换句不做动画,新的一句直接替上来")
-            expectEqual(lwv.contains("字一抬一抬只显得在晃。\n                rises: false,"), true,
+            expectEqual(sourceHas(lwv, "字一抬一抬只显得在晃。\n                rises: false,"), true,
                         "迷你歌词: 逐字填色不上浮(完整布局照旧上浮)")
             // 迷你默认高度要装下「当前行 + 罗马音 + 译文 + 下一行 + 悬停控制条」;旧默认登记成已退役,
             // 挪过窗(于是存下了旧默认)的老用户也换到新默认;设置页预览按同一个尺寸画。
@@ -1777,12 +1777,12 @@ func runSourceContractSurfaceTests() {
                 expectEqual(true, false, "迷你尺寸: 读不到 UI/LyricsWindowPreviewStage.swift(路径挪了?)")
             }
             // 逐词排版里每个词的 Text 左对齐:继承外层居中 / 靠右时词尾空格不参与对齐,行末那个词前的空格会被吃掉。
-            expectEqual(lwv.contains(".font(.system(size: fontSize, weight: .bold))\n        // 每个词自己的 Text 必须左对齐"), true,
+            expectEqual(sourceHas(lwv, ".font(.system(size: fontSize, weight: .bold))\n        // 每个词自己的 Text 必须左对齐"), true,
                         "逐词歌词: KaraokeLineText 在 WrapLayout 外钉 .multilineTextAlignment(.leading)")
-            expectEqual(lwv.contains("        .multilineTextAlignment(.leading)\n    }\n}\n\n/// 一个逐字填色的字"), true,
+            expectEqual(sourceHas(lwv, "        .multilineTextAlignment(.leading)\n    }\n}\n\n/// 一个逐字填色的字"), true,
                         "逐词歌词: 左对齐钉在 KaraokeLineText.lineContent 的末尾(对唱靠右 / 居中行也受保护)")
             // 简介入口只接鼠标点按:报了按钮特征就得给辅助功能的「按下」,否则 VoiceOver 按不开。
-            expectEqual(lwv.contains(".accessibilityHint(available ? hint : \"\")\n            // onTapGesture 不接辅助功能的「按下」"), true,
+            expectEqual(sourceHas(lwv, ".accessibilityHint(available ? hint : \"\")\n            // onTapGesture 不接辅助功能的「按下」"), true,
                         "简介入口: EditorialLinkText 给辅助功能的按下动作")
             expectEqual(lwv.contains(".accessibilityAction { if available { action() } }"), true,
                         "简介入口: 按下动作只在有简介时执行")
@@ -1804,7 +1804,7 @@ func runSourceContractSurfaceTests() {
                 expectEqual(true, false, "跟唱滚动行: 读不到 UI/OverlayScrollingLyricRow.swift(路径挪了?)")
             }
             // 迷你「多行」复用完整布局那份整页列表和那一套自动滚动,不另写(07 章决策 46)。
-            expectEqual(lwv.contains("rightPane(leading: Self.miniListHorizontalInset, trailing: Self.miniListHorizontalInset,\n                                  centered: true, wordRise: false)"), true,
+            expectEqual(sourceHas(lwv, "rightPane(leading: Self.miniListHorizontalInset, trailing: Self.miniListHorizontalInset,\n                                  centered: true, wordRise: false)"), true,
                         "迷你多行: 用完整布局那份 rightPane 列表,居中、逐字不上浮(同两行那套)")
             expectEqual(lwv.contains("&& a.wordRise == b.wordRise"), true,
                         "迷你多行: 行的 == 必须比 wordRise,否则切换后整表行不重画")
@@ -1832,7 +1832,7 @@ func runSourceContractSurfaceTests() {
             // —— 等下一拍的话窗口先按默认尺寸显示、再一闪跳成上次的大小(07 章决策 52)。
             expectEqual(lwv.contains("override func viewDidMoveToWindow()"), true,
                         "歌词窗口: 在 viewDidMoveToWindow 里同步拿到窗口")
-            expectEqual(lwv.contains("DispatchQueue.main.async {\n            if let window = view.window {\n                controller.attach(window)"), false,
+            expectEqual(sourceHas(lwv, "DispatchQueue.main.async {\n            if let window = view.window {\n                controller.attach(window)"), false,
                         "歌词窗口: 别改回下一拍才 attach")
             // 恢复完整尺寸时把系统按场景 id 存的那份 frame 也改写掉,否则它后套用、把窗口摆回迷你尺寸
             // (07 章决策 88)。名字必须跟 App.swift 的 Window 场景 id 一致。
@@ -1874,10 +1874,10 @@ func runSourceContractSurfaceTests() {
                         "歌词窗口: 动画期间置顶不直接改窗口层级")
             // 逐字填色那层必须是 overlay、不进布局链:放回布局链的话每帧一失效,SwiftUI 就把整张
             // 列表 / 整扇窗从下往上重测一遍(07 章决策 50)。
-            expectEqual(lwv.contains(".opacity(0)\n                .overlay { animatedGlyph }"), true,
+            expectEqual(sourceHas(lwv, ".opacity(0)\n                .overlay { animatedGlyph }"), true,
                         "逐字填色: 底层透明字占位、逐帧换色的那层走 overlay")
             // 非当前行只画一层静态字,省掉一半 Text 和 TimelineView(07 章决策 53)。
-            expectEqual(lwv.contains("if forceFilled {\n            Text(word.text)"), true,
+            expectEqual(sourceHas(lwv, "if forceFilled {\n            Text(word.text)"), true,
                         "逐字填色: 非当前行的字只画一层静态字")
             // 拖窗口边角 / 切迷你期间歌词栏尺寸只量不提交,否则字号逐帧变、整张列表逐帧重排(07 章决策 53)。
             expectEqual(lwv.contains("NSWindow.willStartLiveResizeNotification")
@@ -1889,8 +1889,8 @@ func runSourceContractSurfaceTests() {
                         "歌词窗口: 尺寸变化只在不延后时提交")
             expectEqual(lwv.contains("lyricsColumnWidth = w") || lwv.contains("lyricsViewportHeight = h"), false,
                         "歌词窗口: 别改回尺寸一变就直接写字号依据")
-            expectEqual(lwv.contains("UserDefaults.standard.set(true, forKey: LyricsWindowSession.miniModeKey)\n        isSwitchingForm = true")
-                        && lwv.contains("UserDefaults.standard.set(false, forKey: LyricsWindowSession.miniModeKey)\n        isSwitchingForm = true"), true,
+            expectEqual(sourceHas(lwv, "UserDefaults.standard.set(true, forKey: LyricsWindowSession.miniModeKey)\n        isSwitchingForm = true")
+                        && sourceHas(lwv, "UserDefaults.standard.set(false, forKey: LyricsWindowSession.miniModeKey)\n        isSwitchingForm = true"), true,
                         "歌词窗口: 进出迷你一开始就进入切换态")
             // 播控排两侧只放随机 / 循环,够不到就空着占位;Last.fm 喜欢只进「⋯」菜单(07 章决策 54)。
             expectEqual(lwv.contains("LastfmLoveTransportButton"), false,
@@ -1900,7 +1900,7 @@ func runSourceContractSurfaceTests() {
             // 窗口动作胶囊的图标要有悬停 / 按下态,底块不参与布局(07 章「窗口动作胶囊」)。
             expectEqual(lwv.contains(".buttonStyle(WindowActionButtonStyle(onArtwork: hasArtworkBackground))"), true,
                         "窗口动作胶囊: 图标走带悬停态的按钮样式")
-            expectEqual(lwv.contains("                    .padding(-inset)\n            }\n            .contentShape(Rectangle().inset(by: -inset))"), true,
+            expectEqual(sourceHas(lwv, "                    .padding(-inset)\n            }\n            .contentShape(Rectangle().inset(by: -inset))"), true,
                         "悬停底块: 画在 background 里向外扩、命中区跟着扩,不挤开邻居")
             // 迷你控制条里的键也要有悬停态(播控 / 喇叭 / 歌词时间轴 ± / 设置)。
             expectEqual(lwv.components(separatedBy: ".modifier(miniDeckHover)").count - 1, 4,
@@ -1934,7 +1934,7 @@ func runSourceContractSurfaceTests() {
             // 这扇窗开着就一直重算依赖图 + 提交图层,实测多出约 30% 持续 CPU(07 章决策 48)。
             expectEqual(lwv.contains("CABasicAnimation(keyPath: \"transform.rotation.z\")"), true,
                         "歌词窗口背景: 光斑往复摆动是 Core Animation 关键帧动画")
-            expectEqual(lwv.contains(".rotationEffect(\n                            .degrees(pose.initialAngle"), false,
+            expectEqual(sourceHas(lwv, ".rotationEffect(\n                            .degrees(pose.initialAngle"), false,
                         "歌词窗口背景: 别改回 SwiftUI rotationEffect + repeatForever")
             expectEqual(lwv.contains("animating: windowController.isSurfaceVisible && playback.isPlayingNow)"), true,
                         "歌词窗口背景: 窗口不可见 / 暂停播放时光斑定格")
@@ -1943,7 +1943,7 @@ func runSourceContractSurfaceTests() {
             // 迷你窗:红绿灯只留关闭和最小化;进迷你默认置顶,退出时置顶状态原样还回去。
             expectEqual(lwv.contains("let hide = hidden || (type == .zoomButton && isMini)"), true,
                         "迷你窗: 绿键单独藏起来,只留关闭和最小化")
-            expectEqual(lwv.contains("if isMiniPanel {\n            isMini = true\n            setAlwaysOnTop(true)\n        }"), true,
+            expectEqual(sourceHas(lwv, "if isMiniPanel {\n            isMini = true\n            setAlwaysOnTop(true)\n        }"), true,
                         "迷你窗: 迷你面板挂上来就是迷你、默认置顶(07 章决策 133)")
             expectEqual(lwv.contains("alwaysOnTopBeforeMini"), false,
                         "迷你窗: 完整尺寸那扇窗的置顶不随切迷你改(两扇窗各管各的)")
@@ -1956,14 +1956,14 @@ func runSourceContractSurfaceTests() {
                         && !lwv.contains("\"pip.enter\"") && !lwv.contains("\"pip.exit\""), true,
                         "窗口控件: 进迷你用「窗口缩到角落」、回完整用指向左上的箭头,不用画中画符号(07 章决策 131、137)")
             // 迷你尺寸在每个桌面都出现、能浮在别的 App 的全屏上;完整尺寸照旧能进原生全屏。持续守护和切换那一拍都按形态补(07 章决策 131)。
-            expectEqual(lwv.contains("case (true, true):\n            wanted = [.canJoinAllSpaces, .fullScreenAuxiliary]")
-                        && lwv.contains("case (false, _):\n            wanted = [.fullScreenPrimary]")
+            expectEqual(sourceHas(lwv, "case (true, true):\n            wanted = [.canJoinAllSpaces, .fullScreenAuxiliary]")
+                        && sourceHas(lwv, "case (false, _):\n            wanted = [.fullScreenPrimary]")
                         && lwv.contains("Self.enforceSpaceBehavior(win, mini: self?.isMini ?? false, floating: self?.isAlwaysOnTop ?? false)")
                         && (read("UI/LyricsMiniPanel.swift") ?? "").contains("collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]")
                         && !lwv.contains("enforceFullScreenCapability"), true,
                         "窗口控件: 迷你尺寸跟着切换桌面、浮在别的 App 的全屏上,完整尺寸能进原生全屏")
             // 迷你不置顶时就是一扇普通窗口:不跨桌面、不进别人的全屏 Space;切置顶当场补(07 章决策 134)。
-            expectEqual(lwv.contains("case (true, false):\n            wanted = []\n            unwanted = [.fullScreenPrimary, .canJoinAllSpaces, .fullScreenAuxiliary]")
+            expectEqual(sourceHas(lwv, "case (true, false):\n            wanted = []\n            unwanted = [.fullScreenPrimary, .canJoinAllSpaces, .fullScreenAuxiliary]")
                         && lwv.contains("Self.enforceSpaceBehavior(window, mini: isMini, floating: on)"), true,
                         "窗口控件: 迷你不置顶时不跨桌面、不浮在全屏上,切置顶当场生效")
             // 迷你是一扇不激活 App 的面板,完整尺寸仍是场景那扇窗,切换是两扇窗交接;入口按形态分流(07 章决策 133)。
@@ -1973,7 +1973,7 @@ func runSourceContractSurfaceTests() {
                         && miniPanel.contains("override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }")
                         && miniPanel.contains("LyricsMiniHostingView(rootView: LyricsWindowView(hostsMiniPanel: true))"), true,
                         "迷你面板: 不激活 App、不当 key、认第一下点击,里面挂迷你那一份歌词窗口")
-            expectEqual(lwv.contains("if window is LyricsMiniPanel {\n            switchToFullWindow(from: window, animated: animated)")
+            expectEqual(sourceHas(lwv, "if window is LyricsMiniPanel {\n            switchToFullWindow(from: window, animated: animated)")
                         && lwv.contains("prepare: { done in done(LyricsMiniPanelHost.make(frame: target)) },")
                         && lwv.contains("AppActions.shared.openLyricsWindowScene?()")
                         && morph.contains("destination.level = Self.hiddenLevel")
@@ -1981,14 +1981,14 @@ func runSourceContractSurfaceTests() {
                         && !morph.contains("func run(window:"), true,
                         "迷你面板: 进出迷你是两扇窗交接,变形动画截源窗口和目标窗口")
             // 反复切换:关掉的源窗口层级要还回去,复用的场景窗靠轮询拿到、先藏再摆出来(07 章决策 135)。
-            expectEqual(morph.contains("finish(destination)\n        // 关掉的源窗口层级还回去")
-                        && morph.contains("        source.level = sourceLevel\n        CATransaction.flush()")
+            expectEqual(sourceHas(morph, "finish(destination)\n        // 关掉的源窗口层级还回去")
+                        && sourceHas(morph, "        source.level = sourceLevel\n        CATransaction.flush()")
                         && lwv.contains("if let scene = sceneWindow, scene.isVisible { return deliverFullWindow(scene) }")
-                        && lwv.contains("} else {\n            LyricsWindowSession.sceneWindow = window\n        }")
+                        && sourceHas(lwv, "} else {\n            LyricsWindowSession.sceneWindow = window\n        }")
                         && lwv.contains("reused.level = LyricsWindowFormMorph.hiddenLevel")
                         && lwv.contains("if window == nil, let reused { reused.level = reusedLevel }"), true,
                         "迷你面板: 反复切换时关掉的窗口层级还原、复用的场景窗拿得到")
-            expectEqual(lwv.contains("if mini {\n            LyricsMiniPanelHost.show()\n        } else {\n            LyricsMiniPanelHost.closeHeldPanel()\n            openScene()\n        }")
+            expectEqual(sourceHas(lwv, "if mini {\n            LyricsMiniPanelHost.show()\n        } else {\n            LyricsMiniPanelHost.closeHeldPanel()\n            openScene()\n        }")
                         && lwv.contains("if formRequest.map({ !$0.mini && $0.isFresh(now: Date()) }) == true { return }"), true,
                         "迷你面板: 打开入口按形态分流,面板开着、要完整尺寸时交给面板自己切")
             expectEqual(lwv.contains("let inactive = window is LyricsMiniPanel ? !miniPointerInside : !window.isKeyWindow")
@@ -2010,7 +2010,7 @@ func runSourceContractSurfaceTests() {
             }
             if let r = lwv.range(of: "private var miniDeck: some View {") {
                 let deck = String(lwv[r.upperBound...].prefix(400))
-                expectEqual(deck.contains("miniOffsetPill\n            miniSettingsButton\n        }"), true,
+                expectEqual(sourceHas(deck, "miniOffsetPill\n            miniSettingsButton\n        }"), true,
                             "窗口控件: 「设置…」排在迷你控制条最右,歌词时间轴那颗后面")
             } else {
                 expectEqual(true, false, "窗口控件(契约): 读不到 miniDeck(改名了?)")
@@ -2055,11 +2055,9 @@ func runSourceContractSurfaceTests() {
         }
         // 迷你顶部信息宽度 = 窗口宽度的百分比(07 章决策 74)。
         if let settings = read("Settings/AppSettings.swift") {
-            expectEqual(settings.contains(
-                "(defaults.object(forKey: Keys.lyricsWindowMiniHeaderWidthPercent) as? Double)\n            ?? LyricsWindowMiniHeaderWidth.defaultPercent"),
+            expectEqual(sourceHas(settings, "(defaults.object(forKey: Keys.lyricsWindowMiniHeaderWidthPercent) as? Double)\n            ?? LyricsWindowMiniHeaderWidth.defaultPercent"),
                         true, "迷你顶部宽度: 没存过按 Core 里那个默认值读")
-            expectEqual(settings.contains(
-                "(defaults.object(forKey: Keys.lyricsWindowMiniHeaderHeightPercent) as? Double)\n            ?? LyricsWindowMiniHeaderSize.defaultPercent"),
+            expectEqual(sourceHas(settings, "(defaults.object(forKey: Keys.lyricsWindowMiniHeaderHeightPercent) as? Double)\n            ?? LyricsWindowMiniHeaderSize.defaultPercent"),
                         true, "迷你顶部高度: 没存过按 Core 里那个默认值读")
         }
         if let lwv = read("UI/LyricsWindowView.swift") {
@@ -2069,7 +2067,7 @@ func runSourceContractSurfaceTests() {
                         "迷你顶部高度: 倍率按窗口高度和「高度」百分比算")
             expectEqual(lwv.contains("private static let miniInfoFontSize"), false,
                         "迷你顶部高度: 基准字号只在 Core 那一份(LyricsWindowMiniHeaderSize),视图里别再写死一份")
-            expectEqual(lwv.contains(".frame(width: width)\n            // 预览里报出这一组的范围"), true,
+            expectEqual(sourceHas(lwv, ".frame(width: width)\n            // 预览里报出这一组的范围"), true,
                         "迷你顶部宽度: 先定宽再报范围,预览虚线框画的就是这块宽度")
             expectEqual(lwv.contains(".padding(.horizontal, 76)"), false,
                         "迷你顶部宽度: 不再按两侧固定边距摆")
@@ -2102,7 +2100,7 @@ func runSourceContractSurfaceTests() {
             // 换句动画(样子见 04 章决策 52,做法见 04 章决策 54):开关关着、或开了「减弱动态效果」时不用舞台;开着时两格交给
             // OverlayLineChangeStage,位移、放大、淡入淡出由它装 Core Animation 动画,卡片上不挂 SwiftUI 的配对 / 过渡动画。
             expectEqual(view.contains("private var animatesLineChange: Bool { playback.lineChangeAnimation && !reduceMotion }")
-                        && view.contains("            if animatesLineChange {\n                lineChangeRows\n            } else {")
+                        && sourceHas(view, "            if animatesLineChange {\n                lineChangeRows\n            } else {")
                         && view.contains("OverlayLineChangeStage(")
                         && view.contains("private var nextSlotID: String { \"line\\((playback.lineIndex ?? -1) + 1)\" }")
                         && !view.contains("matchedGeometryEffect")
@@ -2128,7 +2126,7 @@ func runSourceContractSurfaceTests() {
                             && stage.contains("if tailFades, let tailLayer {"), true,
                             "悬浮换句动画: 读音、译文跟主句一起走上来、从透明渐显;间奏接回时不渐显")
                 // 走上来的那行路上不挡东西:旧下一句当场收掉,新的后半程才淡入,旧主句原地淡完。
-                expectEqual(stage.contains("next?.view.removeFromSuperview()\n            next = install(n)")
+                expectEqual(sourceHas(stage, "next?.view.removeFromSuperview()\n            next = install(n)")
                             && stage.contains("lateIn.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + OverlayLineRise.lateInDelay")
                             && stage.contains("Self.fade(from: 1, to: 0, duration: OverlayLineRise.fadeOutDuration,"), true,
                             "悬浮换句动画: 旧的下一句当场收掉、新的后半程淡入,旧主句原地淡完")
@@ -2147,7 +2145,7 @@ func runSourceContractSurfaceTests() {
             // 读音、译文跟着自己那一句走:两格(这一句 / 下一句);格子里量的矩形在格子根部接住、清零,由外层按舞台位置发出。
             // 坐标空间定义在撑满整宽的那一层上,量出来的才是相对格子左上角的(定义在内容自己身上会少算居中 / 靠右的横向偏移)。
             expectEqual(view.components(separatedBy: "content: AnyView(lineChangeSlot(").count - 1 == 2
-                        && view.contains("content: content().frame(maxWidth: .infinity, alignment: alignment)\n                                      .padding(.leading, insets.leading).padding(.trailing, insets.trailing))")
+                        && sourceHas(view, "content: content().frame(maxWidth: .infinity, alignment: alignment)\n                                      .padding(.leading, insets.leading).padding(.trailing, insets.trailing))")
                         && view.contains(".transformPreference(LyricsTextRectPreferenceKey.self) { $0 = .zero }")
                         && view.contains(".background(OverlayLineChangeReportEmitter(reports: lineChangeReports, coordinateSpace: overlayCoordSpaceName,"), true,
                         "悬浮换句动画: 开着时卡片里只有这一句 / 下一句两格;格子撑满整宽后量矩形,接住清零、由外层按舞台位置发出")
@@ -2168,7 +2166,7 @@ func runSourceContractSurfaceTests() {
             }
             // 截断的那一行先撑满再描边,否则描边剪影在另一个宽度上截断、轮廓对不上字。
             if let a = view.range(of: "private func stillUpcomingText"), let b = view.range(of: "/// 按显示时长配速的图层行") {
-                expectEqual(String(view[a.upperBound..<b.lowerBound]).contains(".frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)\n                .lyricsTextStroke("), true,
+                expectEqual(sourceHas(String(view[a.upperBound..<b.lowerBound]), ".frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)\n                .lyricsTextStroke("), true,
                             "描边: 不滚的那一行截断时先撑满整行再描边")
             } else {
                 expectEqual(true, false, "描边: 找不到 stillUpcomingText(改名了?)")
@@ -2287,17 +2285,16 @@ func runSourceContractSurfaceTests() {
                         "全局快捷键: 菜单结束跟踪时恢复")
             // 灵动岛、悬浮歌词都没开时回声另外交给触控栏和菜单栏歌词(14 章决策 60)。漏了不报错,只表现成只用这两样的人按键没回声;
             // 菜单栏那条要是走了 present 就是为一条提示重建状态项,提示期间 refresh 不早退就会被下一拍换回歌词。
-            expectEqual(hk.contains("guard !settings.notchOverlayEnabled, !settings.classicOverlayEnabled else { return }\n"
+            expectEqual(sourceHas(hk, "guard !settings.notchOverlayEnabled, !settings.classicOverlayEnabled else { return }\n"
                                     + "        TouchBarLyricsController.shared.flashHint(text, seconds: hintSeconds)\n"
                                     + "        MenuBarStatusItem.shared.flashHint(text, seconds: hintSeconds)"), true,
                         "全局快捷键: 灵动岛、悬浮歌词都没开时回声交给触控栏和菜单栏歌词")
             let touchBar = read("TouchBar/TouchBarLyricsController.swift") ?? ""
-            expectEqual(touchBar.contains("guard enabled, bar.isVisible else { return }\n        hint = (text, PlaybackCoordinator.shared.lyricsTimelineMs())")
+            expectEqual(sourceHas(touchBar, "guard enabled, bar.isVisible else { return }\n        hint = (text, PlaybackCoordinator.shared.lyricsTimelineMs())")
                             && touchBar.contains("lyricsView.apply(spec: TouchBarLyricsCell.hintSpec(hint.text, row), nowMs: nowMs)"), true,
                         "全局快捷键: 触控栏展开着时歌词那一格换成回声")
             let menuBar = read("MenuBar/MenuBarStatusItem.swift") ?? ""
-            let menuHint = menuBar.components(separatedBy: "    func flashHint(_ text: String, seconds: TimeInterval) {").dropFirst().first?
-                .components(separatedBy: "\n    }\n").first ?? ""
+            let menuHint = sourceBody("func flashHint(_ text: String, seconds: TimeInterval) {", in: menuBar)
             expectEqual(!menuHint.isEmpty && !menuHint.contains("present(")
                             && menuHint.contains("showFixedWidth(button, text: lineText, windowWidth: win, pacing: pacing, icon: icon)")
                             && menuBar.contains("guard !hoverControlsEngaged, !hintActive else { return }"), true,
@@ -2492,25 +2489,25 @@ func runSourceContractSurfaceTests() {
         if let settings = read("SettingsView.swift") {
             // 「歌词窗口」设置段同另外三段:预览上面一排工具栏(浮层 + 重置)、预览下面一张卡(打开窗口)、
             // 默认折叠的全部设置抽屉,外观行只有一份、两处共用(07 章决策 44、45)。
-            expectEqual(settings.contains("lyricsWindowToolbar\n            LyricsWindowPreviewStage("), true,
+            expectEqual(sourceHas(settings, "lyricsWindowToolbar\n            LyricsWindowPreviewStage("), true,
                         "歌词窗口设置: 工具栏在预览上面")
-            expectEqual(settings.contains("LyricsWindowPreviewStage(highlightsHeader: lyricsWindowPopover == .info) {\n                lyricsWindowPopoverContent(.info)\n            }"), true,
+            expectEqual(sourceHas(settings, "LyricsWindowPreviewStage(highlightsHeader: lyricsWindowPopover == .info) {\n                lyricsWindowPopoverContent(.info)\n            }"), true,
                         "歌词窗口设置: 预览里顶部信息那块点开的浮层跟工具栏「顶部信息」是同一份")
             if let stage = read("UI/LyricsWindowPreviewStage.swift"), let view = read("UI/LyricsWindowView.swift") {
                 expectEqual(stage.contains("StrokeStyle(lineWidth: 1, dash: [4, 3])"), true,
                             "歌词窗口预览: 顶部信息可点区域悬停是虚线框(跟灵动岛编辑台同一套)")
                 expectEqual(stage.contains(".popover(isPresented: $headerPopoverShown, arrowEdge: .bottom) { headerPopover() }"), true,
                             "歌词窗口预览: 点顶部信息弹出浮层")
-                expectEqual(stage.contains("preview\n            if mini, let headerRect {"), true,
+                expectEqual(sourceHas(stage, "preview\n            if mini, let headerRect {"), true,
                             "歌词窗口预览: 可点区域叠在预览外面(预览本体仍整块 allowsHitTesting(false))")
                 expectEqual(view.components(separatedBy: "anchorPreference(key: LyricsWindowPreviewHeaderAnchorKey.self").count - 1, 2,
                             "歌词窗口预览: 迷你顶部信息两种形态(有文字 / 只有封面)都报出范围")
                 // 迷你窗的停播页(07 章决策 64、67):跟完整布局同一个判据、同一层柔光底,停播时不出控制条。
-                expectEqual(view.contains("if isIdle {\n                    miniIdleView"), true,
+                expectEqual(sourceHas(view, "if isIdle {\n                    miniIdleView"), true,
                             "迷你停播页: 停播时整块换成停播页,不摆顶部信息 / 歌词 / 进度条")
-                expectEqual(view.contains("IdleStandbyBackground(wide: false)\n                        .opacity(isIdle ? 1 : 0)"), true,
+                expectEqual(sourceHas(view, "IdleStandbyBackground(wide: false)\n                        .opacity(isIdle ? 1 : 0)"), true,
                             "迷你停播页: 背景叠完整布局那层中心柔光,透明度交叉淡入")
-                expectEqual(view.contains("if !previewMode, !isIdle {\n                    miniDeck"), true,
+                expectEqual(sourceHas(view, "if !previewMode, !isIdle {\n                    miniDeck"), true,
                             "迷你停播页: 停播时悬停控制条不出来")
                 expectEqual(view.contains("return MiniIdleStandby("), true,
                             "迷你停播页: 版式在 MiniIdleStandby(上次那首 + 一句歌词)")
@@ -2525,10 +2522,10 @@ func runSourceContractSurfaceTests() {
                 // 歌词窗口跨重启接着上次:开着没有、是不是迷你(07 章决策 72)。
                 expectEqual(view.contains("if !AppExit.isTerminating, !handoff { UserDefaults.standard.set(false, forKey: LyricsWindowSession.openKey) }"), true,
                             "歌词窗口重开: 退出 App 途中、两扇窗交接时的关窗都不清「开着」标记")
-                expectEqual(view.contains("if !isMiniPanel, UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) {\n            DispatchQueue.main.async { [weak self] in self?.toggleMini() }"), true,
+                expectEqual(sourceHas(view, "if !isMiniPanel, UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) {\n            DispatchQueue.main.async { [weak self] in self?.toggleMini() }"), true,
                             "歌词窗口重开: 首次 attach 按上次状态进迷你")
                 // 「设置 › 打开」按预览的形态开窗(07 章决策 77)。
-                expectEqual(view.contains("if !isMiniPanel, let requested = LyricsWindowSession.takeFormRequest() {\n            UserDefaults.standard.set(requested, forKey: LyricsWindowSession.miniModeKey)\n        }\n        // 场景窗在迷你形态下开出来(打开入口已经分流到面板,剩下系统恢复窗口这类路):上屏之后交接给面板。\n        if !isMiniPanel, UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) {\n            DispatchQueue.main.async { [weak self] in self?.toggleMini() }"), true,
+                expectEqual(sourceHas(view, "if !isMiniPanel, let requested = LyricsWindowSession.takeFormRequest() {\n            UserDefaults.standard.set(requested, forKey: LyricsWindowSession.miniModeKey)\n        }\n        // 场景窗在迷你形态下开出来(打开入口已经分流到面板,剩下系统恢复窗口这类路):上屏之后交接给面板。\n        if !isMiniPanel, UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) {\n            DispatchQueue.main.async { [weak self] in self?.toggleMini() }"), true,
                             "开窗形态: 首次 attach 先取「设置 › 打开」的请求,再按迷你那个键进不进迷你")
                 expectEqual(view.contains("guard let window, window.isVisible, let requested = LyricsWindowSession.takeFormRequest() else { return }"), true,
                             "开窗形态: 窗口上屏了才取请求(关着时取走了就切不过去)")
@@ -2539,10 +2536,10 @@ func runSourceContractSurfaceTests() {
                 // attach 会被 updateNSView 反复调用:「开着」只在真的在屏上、而且值不一样时才写。
                 expectEqual(view.contains("guard window.isVisible, !UserDefaults.standard.bool(forKey: LyricsWindowSession.openKey) else { return }"), true,
                             "歌词窗口重开: 记「开着」只在窗口在屏上、且原来不是 true 时写")
-                expectEqual(view.contains("            UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)\n            return\n"), false,
+                expectEqual(sourceHas(view, "            UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)\n            return\n"), false,
                             "歌词窗口重开: 同一扇窗再次 attach 时别无条件写「开着」(关窗后保活的视图树一刷新就会写回去)")
                 if let settingsView = read("SettingsView.swift") {
-                    expectEqual(settingsView.contains("LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)\n                            AppActions.shared.openLyricsWindow?()"), true,
+                    expectEqual(sourceHas(settingsView, "LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)\n                            AppActions.shared.openLyricsWindow?()"), true,
                                 "开窗形态: 「打开」先按预览的形态发请求,再开窗")
                 }
                 if let restore = view.range(of: "restorePersistedFrame(window)\n"),
@@ -2554,19 +2551,19 @@ func runSourceContractSurfaceTests() {
                     expectEqual(actions.contains("if plan.reopensLyricsWindow {"), true,
                                 "歌词窗口重开: 启动时上次开着就再开,引导没走完、静默启动时不开(LaunchWindowPlan)")
                     // 启动重开不激活 App(07 章决策 123):先标记再直接开窗,手动打开的入口照旧先激活。
-                    expectEqual(actions.contains("LyricsMiniPanelHost.show(atLaunch: true)\n                        } else {\n                            LyricsWindowSession.markRestoringAtLaunch()\n                            openWindowAction(id: \"lyrics-window\")"), true,
+                    expectEqual(sourceHas(actions, "LyricsMiniPanelHost.show(atLaunch: true)\n                        } else {\n                            LyricsWindowSession.markRestoringAtLaunch()\n                            openWindowAction(id: \"lyrics-window\")"), true,
                                 "歌词窗口重开: 启动时先置标记、再直接开窗")
-                    expectEqual(actions.contains("LyricsWindowSession.shouldReopenAtLaunch {\n                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {\n                        AppActions.shared.openLyricsWindow?()"), false,
+                    expectEqual(sourceHas(actions, "LyricsWindowSession.shouldReopenAtLaunch {\n                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {\n                        AppActions.shared.openLyricsWindow?()"), false,
                                 "歌词窗口重开: 启动时不走先激活 App 的 openLyricsWindow")
-                    expectEqual(actions.contains("AppActions.shared.openLyricsWindow = {\n                    LyricsWindowSession.open {\n                        WindowActivation.activateApp()\n                        openWindowAction(id: \"lyrics-window\")"), true,
+                    expectEqual(sourceHas(actions, "AppActions.shared.openLyricsWindow = {\n                    LyricsWindowSession.open {\n                        WindowActivation.activateApp()\n                        openWindowAction(id: \"lyrics-window\")"), true,
                                 "歌词窗口: 菜单、快捷键这些手动打开的入口照旧先激活 App")
                 }
                 expectEqual(view.contains("if LyricsWindowSession.takeRestoringAtLaunch() { window.orderFrontRegardless() }"), true,
                             "歌词窗口重开: 启动重开那一次在首次 attach 里摆到最前、不激活")
-                expectEqual(view.contains("defer { restoringAtLaunch = false }\n        return restoringAtLaunch"), true,
+                expectEqual(sourceHas(view, "defer { restoringAtLaunch = false }\n        return restoringAtLaunch"), true,
                             "歌词窗口重开: 启动重开的标记取一次就清掉")
                 if let exit = read("AppExit.swift") {
-                    expectEqual(exit.contains("isTerminating = true\n        let reason = pendingReason"), true,
+                    expectEqual(sourceHas(exit, "isTerminating = true\n        let reason = pendingReason"), true,
                                 "歌词窗口重开: 进退出流程第一件事就置 isTerminating")
                 }
                 if let portability = read("Settings/ConfigPortability.swift") {
@@ -2589,7 +2586,7 @@ func runSourceContractSurfaceTests() {
             expectEqual(settings.contains("LyricsWindowAllSettingsDrawer {"), true,
                         "歌词窗口设置: 全量配置收进「全部设置」抽屉")
             expectEqual(settings.contains("Button(L10n.t(\"打开\")) {")
-                        && settings.contains("LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)\n                            AppActions.shared.openLyricsWindow?()"), true,
+                        && sourceHas(settings, "LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)\n                            AppActions.shared.openLyricsWindow?()"), true,
                         "歌词窗口设置: 预览下面那张卡里有打开窗口的按钮,走 AppActions 那个统一入口(先按预览的形态发请求)")
             expectEqual(settings.contains("LyricsWindowStyleDefaults.restoreDefaults(mini: lyricsWindowPreviewShowsMini)"), true,
                         "歌词窗口设置: 工具栏「重置 ▾」只恢复当前预览的那个尺寸")
@@ -2900,88 +2897,6 @@ func runSourceContractSurfaceTests() {
         } else {
             expectEqual(true, false, "罗马音阶梯一份: 读不到 LyricsRomanization.swift")
         }
-    }
-
-    // ---- 署名过滤的「轮次计数」必须跟条目对齐----
-    //
-    // docs/features/08-lyrics-engine.md 里有两处**各自手工维护**的同一个数:一条条
-    // 「第 N 轮」的条目,和「设计决策」那节「枚举法收敛不了(至今补到第 N 轮)」里的计数。
-    // 加规则的人常常只补条目、忘了抬计数 —— 实测:第十五轮记得抬,紧接着另一个
-    // session 加第十六轮时就漏了。漏了什么都不报,只是让下一个读文档的人拿到一个偏小的数,
-    // 从而低估这套规则的枚举成本 —— 而"枚举法收敛不了"正是这一节要传达的结论本身。
-    //
-    // 顺带钉住条目编号**连续且不重复**:这份文档同时有多个 session 在改(第十五轮和第十六轮
-    // 就来自两个不同 session),两边各写一条「第十七轮」而互不知道是真实存在的撞车形态。
-    do {
-        let repoRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Sources/lyrimuse-selftest
-            .deletingLastPathComponent()   // Sources
-            .deletingLastPathComponent()   // lyrimuse(包目录)
-            .deletingLastPathComponent()   // 仓库根
-        let docPath = repoRoot.appendingPathComponent("docs/features/08-lyrics-engine.md").path
-        // 「设计决策与已知坑」那一节在 docs/features/decisions/ 下的同名文件里(15 章决策 47),两份拼起来读。
-        let decisionsPath = repoRoot.appendingPathComponent("docs/features/decisions/08-lyrics-engine.md").path
-        /// 「十六」→ 16。只覆盖 1…99 的写法(一位数 / 十 / 十X / X十 / X十Y),不够用时返回 nil 而不是瞎猜。
-        func chineseNumeral(_ s: String) -> Int? {
-            let digits: [Character: Int] = ["一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
-                                            "六": 6, "七": 7, "八": 8, "九": 9]
-            let chars = Array(s)
-            guard !chars.isEmpty, chars.count <= 3 else { return nil }
-            guard let tenIdx = chars.firstIndex(of: "十") else {
-                guard chars.count == 1, let v = digits[chars[0]] else { return nil }
-                return v
-            }
-            let high = chars[..<tenIdx], low = chars[(tenIdx + 1)...]
-            var value = 0
-            if high.isEmpty {
-                value = 10
-            } else if high.count == 1, let v = digits[high[high.startIndex]] {
-                value = v * 10
-            } else {
-                return nil
-            }
-            if low.isEmpty { return value }
-            guard low.count == 1, let v = digits[low[low.startIndex]] else { return nil }
-            return value + v
-        }
-        /// 扫出文本里 `<prefix>第…轮` 的那个数,按出现顺序。
-        func rounds(in text: String, prefix: String) -> [Int] {
-            var out: [Int] = []
-            var rest = Substring(text)
-            while let hit = rest.range(of: prefix + "第") {
-                let tail = rest[hit.upperBound...]
-                if let close = tail.firstIndex(of: "轮"),
-                   let v = chineseNumeral(String(tail[tail.startIndex..<close])) {
-                    out.append(v)
-                }
-                rest = rest[hit.upperBound...]
-            }
-            return out
-        }
-        if let chapter = try? String(contentsOfFile: docPath, encoding: .utf8) {
-            let doc = chapter + "\n" + ((try? String(contentsOfFile: decisionsPath, encoding: .utf8)) ?? "")
-            // 每个条目行只取**第一个**「第 N 轮」:条目正文里常回指别的轮次(「跟第十三轮同源」),
-            // 全收会把回指也算成条目、连带把连续性判据搞乱。
-            let entryRounds: [Int] = doc.split(separator: "\n", omittingEmptySubsequences: false)
-                .map(String.init)
-                .filter { $0.hasPrefix("- **第") }
-                .compactMap { rounds(in: $0, prefix: "").first }
-            expectNotEqual(entryRounds.count, 0,
-                           "署名轮次: 扫到了「- **第 N 轮」条目(一条都没扫到 = 文档格式变了、这道闸自己失效了)")
-            let counters = rounds(in: doc, prefix: "至今补到")
-            expectEqual(counters.count, 1,
-                        "署名轮次: 「至今补到第 N 轮」这句计数应当有且只有一处")
-            expectEqual(counters.first, entryRounds.max(),
-                        "署名轮次: 「至今补到第 N 轮」的计数必须等于最后一条「第 N 轮」条目的编号 —— 加了条目忘抬计数")
-            let expectedRun = Array(stride(from: entryRounds.min() ?? 0, through: entryRounds.max() ?? 0, by: 1))
-            expectEqual(entryRounds, expectedRun,
-                        "署名轮次: 条目编号要连续不重复 —— 重号 = 两个 session 各加了一轮却互不知道")
-        } else if FileManager.default.fileExists(
-            atPath: repoRoot.appendingPathComponent("docs/features").path) {
-            // 目录在却读不到这一份 = 真的被挪走/改名了。
-            expectEqual(true, false, "署名轮次: 读不到 docs/features/08-lyrics-engine.md(路径挪了?)")
-        }
-        // docs/features 整个目录不在 = 本地-only 的文档没被检出(CI 上就是这样),这一项跳过。
     }
 
     // ---- 反馈链接 ----
@@ -3527,23 +3442,6 @@ func runSourceContractSettingsTests() {
                 .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
                 .joined(separator: "\n")
         }
-        // `signature` 起、到与它之后第一个 `{` 配对的 `}` 为止;找不到返回空串(断言随之失败)。
-        func body(_ signature: String, in text: String) -> String {
-            guard let start = text.range(of: signature),
-                  let open = text[start.lowerBound...].firstIndex(of: "{") else { return "" }
-            var depth = 0
-            var i = open
-            while i < text.endIndex {
-                if text[i] == "{" {
-                    depth += 1
-                } else if text[i] == "}" {
-                    depth -= 1
-                    if depth == 0 { return String(text[start.lowerBound...i]) }
-                }
-                i = text.index(after: i)
-            }
-            return ""
-        }
         func captures(_ pattern: String, in text: String) -> [[String]] {
             guard let re = try? NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines]) else { return [] }
             let ns = text as NSString
@@ -3553,7 +3451,7 @@ func runSourceContractSettingsTests() {
         }
         // 枚举声明里独占一行的 `case xxx`(计算属性里的 `case .xxx:` 不算)。
         func enumCases(_ signature: String, in text: String) -> Set<String> {
-            Set(captures(#"^\s*case (\w+)\s*$"#, in: body(signature, in: text)).map { $0[0] })
+            Set(captures(#"^\s*case (\w+)\s*$"#, in: sourceBody(signature, in: text)).map { $0[0] })
         }
 
         let overlayStage = code("lyrimuse/UI/OverlayEditorStage.swift")
@@ -3567,14 +3465,14 @@ func runSourceContractSettingsTests() {
         // 悬浮歌词:popoverRows(for:) 的每个 case 直接是一份行视图;抽屉 body 里装配的组是本文件的 private var,展开一层再找。
         let overlayStageCases = enumCases("private enum StagePopover: Hashable, CaseIterable {", in: overlayStage)
         let overlayRows = captures(#"case \.(\w+): (Overlay\w+SettingsRows)\(\)"#,
-                                   in: body("private func popoverRows(for target: StagePopover) -> some View {", in: overlayStage))
+                                   in: sourceBody("private func popoverRows(for target: StagePopover) -> some View {", in: overlayStage))
         expectEqual(overlayStageCases.isEmpty, false, "抽屉镜像(悬浮歌词): 认得出浮层枚举")
         expectEqual(Set(overlayRows.map { $0[0] }), overlayStageCases,
                     "抽屉镜像(悬浮歌词): 每个浮层的内容都是一份共享行视图")
-        var overlayDrawer = body("var body: some View {", in: overlayDrawerFile)
+        var overlayDrawer = sourceBody("var body: some View {", in: overlayDrawerFile)
         for name in captures(#"private var (\w+): some View \{"#, in: overlayDrawerFile).map({ $0[0] })
         where overlayDrawer.range(of: #"\b\#(name)\b"#, options: .regularExpression) != nil {
-            overlayDrawer += "\n" + body("private var \(name): some View {", in: overlayDrawerFile)
+            overlayDrawer += "\n" + sourceBody("private var \(name): some View {", in: overlayDrawerFile)
         }
         expectEqual(overlayRows.map { $0[1] }.filter { !overlayDrawer.contains("\($0)()") }, [],
                     "抽屉镜像(悬浮歌词): 浮层里的行视图抽屉都要装配")
@@ -3585,15 +3483,15 @@ func runSourceContractSettingsTests() {
         // 左右耳是同一份行视图带 side 参数,抽屉里两边都要有。
         let notchStageCases = enumCases("private enum StagePopover: Equatable {", in: notchStage)
         let notchCases = captures(#"case \.(\w+): (Notch\w+Popover)\((.*)$"#,
-                                  in: body("private func popoverContent(for target: StagePopover) -> some View {", in: notchStage))
+                                  in: sourceBody("private func popoverContent(for target: StagePopover) -> some View {", in: notchStage))
         expectEqual(notchStageCases.isEmpty, false, "抽屉镜像(灵动岛): 认得出浮层枚举")
         expectEqual(Set(notchCases.map { $0[0] }), notchStageCases,
                     "抽屉镜像(灵动岛): 每个浮层都是一个 NotchXxxPopover")
-        let notchDrawerStruct = body("private struct NotchAllSettingsDrawer: View {", in: settingsView)
-        let notchDrawer = body("var body: some View {", in: notchDrawerStruct)
+        let notchDrawerStruct = sourceBody("private struct NotchAllSettingsDrawer: View {", in: settingsView)
+        let notchDrawer = sourceBody("var body: some View {", in: notchDrawerStruct)
         var notchMissing: [String] = []
         for c in notchCases {
-            let popover = body("struct \(c[1]): View {", in: notchStage + "\n" + settingsView)
+            let popover = sourceBody("struct \(c[1]): View {", in: notchStage + "\n" + settingsView)
             guard let rows = captures(#"(Notch\w+SettingsRows)\("#, in: popover).first?[0] else {
                 notchMissing.append("\(c[1]) 里认不出行视图")
                 continue
@@ -3611,14 +3509,14 @@ func runSourceContractSettingsTests() {
         // 菜单栏:popoverContent(for:) 的每个 case 是一个 MenuBarXxxPopover,它的 body 里是一份 MenuBarXxxRows。
         let menuBarStageCases = enumCases("private enum StagePopover: Equatable {", in: menuBarStage)
         let menuBarCases = captures(#"case \.(\w+): (MenuBar\w+Popover)\(\)"#,
-                                    in: body("private func popoverContent(for target: StagePopover) -> some View {", in: menuBarStage))
+                                    in: sourceBody("private func popoverContent(for target: StagePopover) -> some View {", in: menuBarStage))
         expectEqual(menuBarStageCases.isEmpty, false, "抽屉镜像(菜单栏): 认得出浮层枚举")
         expectEqual(Set(menuBarCases.map { $0[0] }), menuBarStageCases,
                     "抽屉镜像(菜单栏): 每个浮层都是一个 MenuBarXxxPopover")
-        let menuBarDrawer = body("var body: some View {", in: body("struct MenuBarAllSettingsDrawer: View {", in: menuBarStage))
+        let menuBarDrawer = sourceBody("var body: some View {", in: sourceBody("struct MenuBarAllSettingsDrawer: View {", in: menuBarStage))
         var menuBarMissing: [String] = []
         for c in menuBarCases {
-            guard let rows = captures(#"(MenuBar\w+Rows)\(\)"#, in: body("struct \(c[1]): View {", in: menuBarStage)).first?[0] else {
+            guard let rows = captures(#"(MenuBar\w+Rows)\(\)"#, in: sourceBody("struct \(c[1]): View {", in: menuBarStage)).first?[0] else {
                 menuBarMissing.append("\(c[1]) 里认不出行视图")
                 continue
             }
@@ -3631,9 +3529,9 @@ func runSourceContractSettingsTests() {
         // 歌词窗口:浮层和抽屉都在 SettingsView 里,调的是同一组 lyricsWindowXxxRows。抽屉跟着预览的「完整 / 迷你」
         // 只装配那一套,跟工具栏同一个条件,这里只比"浮层里出现过的,抽屉里也出现过"。
         let lyricsWindowRows = #"(lyricsWindow\w+Rows(?:\(\.\w+\))?)"#
-        let lyricsWindowPopover = body("private func lyricsWindowPopoverContent(_ item: LyricsWindowToolbarItem) -> some View {", in: settingsView)
+        let lyricsWindowPopover = sourceBody("private func lyricsWindowPopoverContent(_ item: LyricsWindowToolbarItem) -> some View {", in: settingsView)
         let lyricsWindowPopoverRows = Set(captures(lyricsWindowRows, in: lyricsWindowPopover).map { $0[0] })
-        let lyricsWindowDrawerRows = Set(captures(lyricsWindowRows, in: body("LyricsWindowAllSettingsDrawer {", in: settingsView)).map { $0[0] })
+        let lyricsWindowDrawerRows = Set(captures(lyricsWindowRows, in: sourceBody("LyricsWindowAllSettingsDrawer {", in: settingsView)).map { $0[0] })
         expectEqual(Set(captures(#"case \.(\w+):"#, in: lyricsWindowPopover).map { $0[0] }),
                     enumCases("enum LyricsWindowToolbarItem: Equatable {", in: settingsView),
                     "抽屉镜像(歌词窗口): 每个工具栏入口都有浮层内容")
@@ -3646,11 +3544,11 @@ func runSourceContractSettingsTests() {
         expectEqual(touchBarFile.isEmpty, false, "抽屉镜像(触控栏): 宿主文件读得到(读不到 = 路径挪了)")
         let touchBarGroups = enumCases("enum TouchBarSettingsGroup: CaseIterable {", in: touchBarFile)
         let touchBarPopovers = captures(#"case \.(\w+): SettingsPopoverShell\([^\n]*\{ (TouchBar\w+Rows)\(\) \}"#,
-                                        in: body("func popoverContent() -> some View {", in: touchBarFile))
+                                        in: sourceBody("func popoverContent() -> some View {", in: touchBarFile))
         expectEqual(touchBarGroups.isEmpty, false, "抽屉镜像(触控栏): 认得出工具栏入口的枚举")
         expectEqual(Set(touchBarPopovers.map { $0[0] }), touchBarGroups,
                     "抽屉镜像(触控栏): 每个工具栏入口的浮层都是一份 TouchBarXxxRows")
-        let touchBarDrawer = body("var body: some View {", in: body("struct TouchBarAllSettingsDrawer: View {", in: touchBarFile))
+        let touchBarDrawer = sourceBody("var body: some View {", in: sourceBody("struct TouchBarAllSettingsDrawer: View {", in: touchBarFile))
         expectEqual(touchBarPopovers.map { $0[1] }.filter { !touchBarDrawer.contains("\($0)()") }, [],
                     "抽屉镜像(触控栏): 浮层里的行视图抽屉都要装配")
     }
@@ -4178,16 +4076,16 @@ func runSourceContractSettingsTests() {
             }
         }
         let sheet = read("LyricsManager/LyricsSearchSheet.swift") ?? ""
-        expectEqual(sheet.contains("autoMatchButton(iconOnly: iconOnly)\n            instrumentalButton(iconOnly: iconOnly)\n")
-                    && sheet.contains("toolbarRow(showsTitle: true, iconOnly: false)\n                toolbarRow(showsTitle: false, iconOnly: false)\n                toolbarRow(showsTitle: false, iconOnly: true)")
+        expectEqual(sourceHas(sheet, "autoMatchButton(iconOnly: iconOnly)\n            instrumentalButton(iconOnly: iconOnly)\n")
+                    && sourceHas(sheet, "toolbarRow(showsTitle: true, iconOnly: false)\n                toolbarRow(showsTitle: false, iconOnly: false)\n                toolbarRow(showsTitle: false, iconOnly: true)")
                     && sheet.contains("toolbarLabel(markedInstrumental ? L10n.t(\"取消纯音乐标记\") : L10n.t(\"标为纯音乐\"),")
-                    && sheet.contains("detailToolbar\n            instrumentalBanner\n")
+                    && sourceHas(sheet, "detailToolbar\n            instrumentalBanner\n")
                     && sheet.contains("instrumentalOverride = false"), true,
                     "采纳候选入口: 搜索面板右侧标题行常驻带文字的标 / 撤纯音乐按钮,标上时说明条挂在那一行下面,采纳成功后跟着撤")
         // 「重新自动匹配」:面板和歌词管理详情页走同一个 runner、同一套结论说法(管理页不留自己那份 rematchText),
         // 自动匹配在飞时采纳、标纯音乐都置灰(期间改了条目,引擎那一轮就作废)。
         let managerView = read("LyricsManager/LyricsManagerView.swift") ?? ""
-        expectEqual(managerView.contains("guard let line = await LyricsRematchRunner.run(\n            key: key, id: id,")
+        expectEqual(sourceHas(managerView, "guard let line = await LyricsRematchRunner.run(\n            key: key, id: id,")
                     && !managerView.contains("func rematchText(")
                     && sheet.contains("Label(LyricsRematchRunner.text(line), systemImage: LyricsRematchRunner.icon(line.tone))"), true,
                     "搜索候选歌词: 重新自动匹配跟歌词管理同一个 runner、同一套结论文案")
@@ -4201,16 +4099,16 @@ func runSourceContractSettingsTests() {
                     "搜索候选歌词: 搜索进度只在侧栏那一行,右边还没有候选时空着")
         // 来源名、来源色走全局 sourceDisplayName / sourceColor:本地歌词那几家不在 LyricsSource 里(11 章决策 88)。
         expectEqual(!sheet.contains("LyricsSource(rawValue:")
-                    && sheet.contains("let tint = sourceColor(source)\n        return Text(sourceDisplayName(source))")
+                    && sourceHas(sheet, "let tint = sourceColor(source)\n        return Text(sourceDisplayName(source))")
                     && sheet.contains("let name = sourceDisplayName(c.source)")
                     && sheet.contains("let anchor = sourceDisplayName(duplicate.anchor)"), true,
                     "搜索候选歌词: 来源名和来源色走全局那一份,Spotify / Amazon Music / KKBOX 不露小写的原始 id")
         // 表头、徽标一打开就在,进度跟「候选 N」同一行、表头定高:搜索中和搜完列表都不跳(用户:「不要页面发生跳动」),
         // 搜完也不在表头下面留一截空行。别把进度挪回单独一行。
         expectEqual(!sheet.contains("if sourcesTotal > 0 || !candidates.isEmpty {")
-                    && !sheet.contains("if sourcesTotal > 0 {\n            Button {\n                showSourceAvailability = true")
-                    && sheet.contains("private var candidatesHeader: some View {\n        HStack(alignment: .center, spacing: 6) {")
-                    && sheet.contains("            sourceAvailabilityBadge\n                .layoutPriority(1)\n        }\n        .frame(height: 24)"), true,
+                    && !sourceHas(sheet, "if sourcesTotal > 0 {\n            Button {\n                showSourceAvailability = true")
+                    && sourceHas(sheet, "private var candidatesHeader: some View {\n        HStack(alignment: .center, spacing: 6) {")
+                    && sourceHas(sheet, "            sourceAvailabilityBadge\n                .layoutPriority(1)\n        }\n        .frame(height: 24)"), true,
                     "搜索候选歌词: 表头和徽标一打开就在,进度在表头同一行、表头定高,列表不跳也不留空行")
         // 独立小窗(悬浮窗 ⚙)标题栏透明、红灯就是关闭,面板不画「关闭」、Esc 由一颗不可见的按钮接;sheet 没有红灯,
         // 右上角得有「关闭」。透明要靠场景的 .windowStyle(.hiddenTitleBar):手设 titlebarAppearsTransparent 会在窗口
@@ -4225,8 +4123,8 @@ func runSourceContractSettingsTests() {
                     "搜索候选歌词: 独立小窗的透明标题栏由场景的 .windowStyle(.hiddenTitleBar) 负责")
         expectEqual((read("LyricsManager/SheetWindowAffordances.swift") ?? "").contains("titlebarAppearsTransparent = "), false,
                     "搜索候选歌词: 不在窗口上手设 titlebarAppearsTransparent(激活时会被 SwiftUI 盖回去)")
-        expectEqual(sheet.contains("if !standaloneWindow {\n                Button(L10n.t(\"关闭\")) { dismiss() }\n                    .keyboardShortcut(.cancelAction)")
-                    && sheet.contains("Button(\"\") { dismiss() }\n                    .keyboardShortcut(.cancelAction)\n                    .opacity(0)"), true,
+        expectEqual(sourceHas(sheet, "if !standaloneWindow {\n                Button(L10n.t(\"关闭\")) { dismiss() }\n                    .keyboardShortcut(.cancelAction)")
+                    && sourceHas(sheet, "Button(\"\") { dismiss() }\n                    .keyboardShortcut(.cancelAction)\n                    .opacity(0)"), true,
                     "搜索候选歌词: sheet 右上角有「关闭」;独立小窗不画它,Esc 由不可见的按钮接")
         // sheet 拿不到窗口的激活外观,玻璃在 sheet 里一直是失焦那一档(决策 57):侧栏和玻璃按钮在 sheet 里画设计系统的
         // 替身,独立小窗照用玻璃。漏一处不会编译报错,只是那一块在 sheet 里发灰。
@@ -4234,8 +4132,8 @@ func runSourceContractSettingsTests() {
         expectEqual(sheet.contains("private var presentedAsSheet: Bool { !standaloneWindow }")
                     && sheet.contains(".settingsCardBackground(cornerRadius: Self.panelCornerRadius, inSheet: presentedAsSheet)")
                     && !sheet.contains(".settingsGlassButtons()")
-                    && designSystem.contains("if inSheet {\n                content.modifier(SheetGlassCardBackground(shape: shape))")
-                    && designSystem.contains("if inSheet {\n                content.buttonStyle(SheetGlassButtonStyle())"), true,
+                    && sourceHas(designSystem, "if inSheet {\n                content.modifier(SheetGlassCardBackground(shape: shape))")
+                    && sourceHas(designSystem, "if inSheet {\n                content.buttonStyle(SheetGlassButtonStyle())"), true,
                     "搜索候选歌词: sheet 里的侧栏和玻璃按钮画设计系统的替身(inSheet: presentedAsSheet),不直接用玻璃")
         expectEqual(sheet.components(separatedBy: "markInstrumentalAction\n").count - 1, 2,
                     "采纳候选入口: 「纯音乐」「已匹配曲目 · 无歌词文本」两个空状态里有「标为纯音乐」")
@@ -4263,7 +4161,7 @@ func runSourceContractSettingsTests() {
         expectEqual(manager.contains("title: EnrichCacheKeys.strippingDurationVariantTitle(summary.title)"), true,
                     "歌词管理: 搜索候选歌词的歌名去掉时长变体位「~durN」")
         expectEqual(sheet.contains("private var effectiveCurrentSource: String? { appliedSource ?? host.source }")
-                    && sheet.contains(".onChange(of: markedInstrumental) { _, _ in\n            storedCandidate = makeStoredCandidate()")
+                    && sourceHas(sheet, ".onChange(of: markedInstrumental) { _, _ in\n            storedCandidate = makeStoredCandidate()")
                     && sheet.contains("[originalArtist, originalTitle, originalAlbum, songKey, String(durationSecs)]")
                     && sheet.contains("String(c.lyrics.hashValue), String(current.lyrics.hashValue)"), true,
                     "搜索候选歌词: 逐批回调读宿主的最新值、撤标后重建「当前使用」、同名另一份录音也重搜、对照缓存看时间轴")
@@ -4329,11 +4227,11 @@ func runSourceContractSettingsTests() {
         let karaokeOverlay = (managerParts.components(separatedBy: "private struct LyricsManagerKaraokeOverlay: View").dropFirst().first ?? "")
             .components(separatedBy: "/// 逐字染色那一层里,一段字是第几段").first ?? ""
         expectEqual(previewRow.contains(".overlay(alignment: .topLeading) {")
-                    && previewRow.contains("LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs,\n                                                    offsetMs: karaokeOffsetMs)")
+                    && sourceHas(previewRow, "LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs,\n                                                    offsetMs: karaokeOffsetMs)")
                     && karaokeOverlay.contains("FrameTimeline(minimumInterval: Self.refreshInterval, paused: !isPlaying)")
                     && karaokeOverlay.contains("LyricsManagerKaraokeHost(clock: clock, content: AnyView(")
                     && karaokeOverlay.contains(".textRenderer(LyricsManagerKaraokeRenderer(")
-                    && karaokeOverlay.contains("return (coordinator.anchor?.extrapolatedPositionMs(now: date) ?? coordinator.pausedPositionMs ?? 0)\n            + (offsetMs ?? coordinator.currentLyricsOffsetMs)"),
+                    && sourceHas(karaokeOverlay, "return (coordinator.anchor?.extrapolatedPositionMs(now: date) ?? coordinator.pausedPositionMs ?? 0)\n            + (offsetMs ?? coordinator.currentLyricsOffsetMs)"),
                     true, "歌词管理: 预览当前句的逐字染色画在 overlay 里,时间基准含歌词偏移(搜索候选传它自己的偏移)")
         // 标签和小标记的颜色都读 LyricsFeatureTint,跟搜索候选歌词面板同一份,不在调用点各写一份(11 章决策 79)。
         let headerTagsSource = (manager.components(separatedBy: "private func headerTags(").dropFirst().first ?? "")
@@ -4353,7 +4251,7 @@ func runSourceContractSettingsTests() {
         // 逐句编辑也标出正在唱的那一句,找法同预览(11 章决策 81)。
         expectEqual(lineEditorSource.contains("LyricsPreviewText.currentRow(times: entries.map(\\.ms),")
                     && lineEditorSource.contains("row(index, isCurrent: index == current, changed: changed, sIndex: pairs[index])")
-                    && manager.contains("focus: $focusedLine,\n                isNowPlaying: summary.key == nowPlayingKey)"), true,
+                    && sourceHas(manager, "focus: $focusedLine,\n                isNowPlaying: summary.key == nowPlayingKey)"), true,
                     "歌词管理: 逐句编辑标出正在唱的那一句")
         // 换分组、换排序之后滚回选中的那一首(11 章决策 75)。
         expectEqual(manager.contains(".onChange(of: groupByAlbum) { _, _ in revealSelection(scrollProxy: scrollProxy) }")
@@ -4362,7 +4260,7 @@ func runSourceContractSettingsTests() {
         // 正在放的那首在列表行、多选清单里跟详情页头部一样用播放器给的封面(11 章决策 78)。
         expectEqual(manager.contains("artwork: isNowPlaying ? nowPlaying.artwork : nil)")
                     && manager.contains("listNowPlaying.update(key: nowPlayingKey, artwork: nowPlaying.artwork)")
-                    && manager.contains("LyricsManagerCover(url: summary.coverURL, image: summary.key == nowPlayingKey ? nowPlaying.artwork : nil,\n                               size: 32, radius: 6)")
+                    && sourceHas(manager, "LyricsManagerCover(url: summary.coverURL, image: summary.key == nowPlayingKey ? nowPlaying.artwork : nil,\n                               size: 32, radius: 6)")
                     && managerParts.contains("LyricsManagerCover(url: summary.coverURL, image: artwork, size: 40, radius: 7)"), true,
                     "歌词管理: 正在放的那首在列表里用播放器给的封面")
         // 「清理无效记录」按 Core 的判据挑,正在放的那首不算,确认框只在开着时算正文(11 章决策 83)。
@@ -4371,7 +4269,7 @@ func runSourceContractSettingsTests() {
                     && manager.contains("if showCleanupConfirm { Text(cleanupMessage) }"), true,
                     "歌词管理: 清理无效记录按 Core 判据挑,正在放的那首不算")
         // 「正在播放」那一行整行是按钮(11 章决策 82)。
-        expectEqual(managerParts.contains("Button(action: onLocate) {\n            HStack(spacing: 10) {"), true,
+        expectEqual(sourceHas(managerParts, "Button(action: onLocate) {\n            HStack(spacing: 10) {"), true,
                     "歌词管理: 「正在播放」整行点着定位")
         // 排序和分组记在 UserDefaults(11 章决策 84)。
         expectEqual(manager.contains("@AppStorage(\"np:lyricsManagerSortOption\") private var sortOption: LyricsSortOption = .updatedDescending")
@@ -4401,10 +4299,10 @@ func runSourceContractSettingsTests() {
         let songListSource = (manager.components(separatedBy: "private struct SongList<Menu: View>: View, Equatable {").dropFirst().first ?? "")
             .components(separatedBy: "/// 列表的一行。").first ?? ""
         expectEqual(!songListSource.isEmpty
-                    && manager.contains("menu: { keys in listMenu(keys) })\n        .equatable()")
+                    && sourceHas(manager, "menu: { keys in listMenu(keys) })\n        .equatable()")
                     && manager.contains("selection: listSelection,")
                     && manager.contains(".onReceive(listSelection.$keys) { keys in listSelectionChanged(keys) }")
-                    && songListSource.contains("List(selection: $selection.keys) {\n                rows\n            }")
+                    && sourceHas(songListSource, "List(selection: $selection.keys) {\n                rows\n            }")
                     && songListSource.contains("private struct SongRows: View, Equatable {")
                     && !songListSource.contains("selectedKeys")
                     && manager.contains("isEmphasized: emphasis.keys.contains(summary.key),")
@@ -4420,20 +4318,20 @@ func runSourceContractSettingsTests() {
                     && manager.contains(".onChange(of: nowPlayingKey, initial: true) { _, _ in syncListNowPlaying() }")
                     && manager.contains(".onChange(of: nowPlaying.artwork) { _, _ in syncListNowPlaying() }"), true,
                     "歌词管理: 正在放的那首和封面各行自己读,换歌、封面到达时列表不整表重比")
-        expectEqual(storeSource.contains("            return Summary(\n                key: Self.nativeKey(key),\n")
+        expectEqual(sourceHas(storeSource, "            return Summary(\n                key: Self.nativeKey(key),\n")
                     && storeSource.contains("native.makeContiguousUTF8()"), true,
                     "歌词管理: 条目的 key 转成原生字符串再存")
         // 代码里改了选中,下一拍按数据把表格的选中整份对一遍:SwiftUI 取消不掉屏幕外那行旧选中(11 章决策 91)。
-        expectEqual(manager.contains("listSelection.keys = keys\n                // 代码里改的选中:等列表这一拍按它同步完,再把表格对一遍。\n                DispatchQueue.main.async { alignTableSelection() }")
+        expectEqual(sourceHas(manager, "listSelection.keys = keys\n                // 代码里改的选中:等列表这一拍按它同步完,再把表格对一遍。\n                DispatchQueue.main.async { alignTableSelection() }")
                     && manager.contains("guard table.numberOfRows == keys.count else { return }")
                     && manager.contains("selectedKeys.contains(keys[$0]) }), byExtendingSelection: false)"), true,
                     "歌词管理: 代码里改了选中,表格上留着的旧选中按数据清掉")
         // 缓存里已经有正在放的那首时占位行不并进列表:同一个键两行,表格的选中会多出一行、落到下一组的组头上(11 章决策 118)。
-        expectEqual(manager.contains("let placeholder = placeholderSummary.flatMap { store.hasEntry(forKey: $0.key) ? nil : $0 }\n        let base = placeholder.map { store.summaries + [$0] } ?? store.summaries"), true,
+        expectEqual(sourceHas(manager, "let placeholder = placeholderSummary.flatMap { store.hasEntry(forKey: $0.key) ? nil : $0 }\n        let base = placeholder.map { store.summaries + [$0] } ?? store.summaries"), true,
                     "歌词管理: 真条目到了之后占位行不再并进列表")
         // 换歌时预览不拿上一首的行去建,编辑框的正文在 loadDetail 里当场拆好(11 章决策 96)。
         expectEqual(manager.contains("guard previewInputs.first == summary.key else { return [] }")
-                    && manager.contains("            resetBodyEdits(title: summary.title, artist: summary.artist)\n            refreshOffsetState("), true,
+                    && sourceHas(manager, "            resetBodyEdits(title: summary.title, artist: summary.artist)\n            refreshOffsetState("), true,
                     "歌词管理: 换歌时预览不用上一首的行,编辑框正文随载入一起拆好")
         // App.swift 里每扇 Window 场景的标题都要另挂一份 .navigationTitle:场景那个标题只在构造时求值一次,切了界面语言不跟着变
         // (14 章决策 61)。
@@ -4500,12 +4398,10 @@ func runSourceContractSettingsTests() {
         func read(_ rel: String) -> String? {
             try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)
         }
-        /// 取 `marker` 起到下一个四空格缩进的 `}` 为止的函数体。
+        /// 取 `marker` 起的那一个函数体(sourceBody),找不到返回 nil。
         func body(of source: String, from marker: String) -> String? {
-            guard let start = source.range(of: marker) else { return nil }
-            let rest = source[start.lowerBound...]
-            guard let end = rest.range(of: "\n    }\n") else { return nil }
-            return String(rest[..<end.lowerBound])
+            let found = sourceBody(marker, in: source)
+            return found.isEmpty ? nil : found
         }
         for (file, marker) in [("MenuBar/MenuBarStatusItem.swift", "private func followReadingPath(for text: String)"),
                                ("UI/SectionPreviewBars.swift", "private var followReadingPath:")] {
@@ -4685,83 +4581,6 @@ func runSourceContractSettingsTests() {
         }
     }
 
-    // ---- 项目级 skill----
-    //
-    // `.claude/skills/<名>/SKILL.md` 是操作型流程(真机验证 / 歌词排查 / 接入新播放器 / 发版)的「步骤版」:
-    // 只写步骤与判据,理由回链 AGENTS.md 与 docs。它最常见的死法是锚点腐烂(脚本改名、文档挪位、链接失效)和
-    // 越写越长变成第二份 AGENTS.md,这里守:行数上限、frontmatter 齐、引用的仓库路径 / 文档链接都在、发版只许
-    // 显式触发、真机验证开头就是禁 AppleScript 那条、两个入口文件都指过去。
-    skillGuard: do {
-        // #filePath = <repo>/lyrimuse/Sources/lyrimuse-selftest/SourceContractTests.swift → 上 4 层到仓库根
-        let repoRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-        let skillsDir = repoRoot.appendingPathComponent(".claude/skills")
-        // **这几份 skill 与 AGENTS.md / CLAUDE.md 不进版本库**(AI 协作文件只留
-        // 作者本地)。所以在别人的 clone 和 CI 上它们**根本不存在** —— 那时整段跳过,不是失败。
-        // 本地有就照旧全查(锚点腐烂、超长、发版 skill 漏 disable-model-invocation 都还是红)。
-        // 别把这个 guard 改成 expectEqual:CI 会因为「文件缺失」红,而那不是缺陷,是刻意不发布。
-        guard FileManager.default.fileExists(atPath: skillsDir.path) else { break skillGuard }
-        let expected = ["lyrimuse-lyrics-triage", "lyrimuse-player-integration", "lyrimuse-release", "lyrimuse-verify-ui"]
-        let found = ((try? FileManager.default.contentsOfDirectory(atPath: skillsDir.path)) ?? [])
-            .filter { !$0.hasPrefix(".") }.sorted()
-        expectEqual(found, expected, "项目级 skill: 登记的都在、没有多出来的(多一份要来这里登记)")
-        let linkPattern = try? NSRegularExpression(pattern: #"\]\(([^)\s]+)\)"#)
-        let codePattern = try? NSRegularExpression(pattern: #"`([^`\n]+)`"#)
-        let pathPrefixes = ["lyrimuse/", "lyrimuse-engine/", "docs/", ".github/", ".claude/"]
-        for name in expected {
-            let file = skillsDir.appendingPathComponent("\(name)/SKILL.md")
-            guard let src = try? String(contentsOfFile: file.path, encoding: .utf8) else {
-                expectEqual(true, false, "项目级 skill: 读得到 \(name)/SKILL.md")
-                continue
-            }
-            // 跟 wc -l 一样数:末尾换行后面那段空的不算一行。
-            let lineCount = src.split(separator: "\n", omittingEmptySubsequences: false).count - (src.hasSuffix("\n") ? 1 : 0)
-            expectEqual(lineCount <= 80, true, "项目级 skill: \(name) 不超过 80 行(实际 \(lineCount))——只写步骤,理由回链")
-            expectEqual(src.hasPrefix("---\nname: \(name)\n"), true, "项目级 skill: \(name) frontmatter 以 name 开头且与目录名一致")
-            expectEqual(src.contains("\ndescription: "), true, "项目级 skill: \(name) 有 description(按场景触发靠它)")
-            expectEqual(src.contains("AGENTS.md"), true, "项目级 skill: \(name) 回链 AGENTS.md(理由不在 skill 里)")
-            let ns = src as NSString
-            let whole = NSRange(location: 0, length: ns.length)
-            var missing: [String] = []
-            if let linkPattern {
-                for m in linkPattern.matches(in: src, range: whole) {
-                    var target = ns.substring(with: m.range(at: 1))
-                    if target.hasPrefix("http") { continue }
-                    if let hash = target.firstIndex(of: "#") { target = String(target[..<hash]) }
-                    guard !target.isEmpty else { continue }
-                    let url = file.deletingLastPathComponent().appendingPathComponent(target).standardizedFileURL
-                    if !FileManager.default.fileExists(atPath: url.path) { missing.append("link:" + target) }
-                }
-            }
-            if let codePattern {
-                for m in codePattern.matches(in: src, range: whole) {
-                    let token = ns.substring(with: m.range(at: 1))
-                    var first = token.split(separator: " ").first.map(String.init) ?? ""
-                    if first.hasPrefix("./") { first.removeFirst(2) }
-                    guard pathPrefixes.contains(where: { first.hasPrefix($0) }),
-                          !first.contains("<"), !first.contains("*") else { continue }
-                    if !FileManager.default.fileExists(atPath: repoRoot.appendingPathComponent(first).path) {
-                        missing.append("path:" + first)
-                    }
-                }
-            }
-            expectEqual(missing, [], "项目级 skill: \(name) 引用的路径 / 链接都存在")
-        }
-        let release = (try? String(contentsOfFile: skillsDir.appendingPathComponent("lyrimuse-release/SKILL.md").path,
-                                   encoding: .utf8)) ?? ""
-        expectEqual(release.contains("\ndisable-model-invocation: true\n"), true,
-                    "项目级 skill: 发版 skill 只许显式触发(它会打 tag 推远端)")
-        let verify = (try? String(contentsOfFile: skillsDir.appendingPathComponent("lyrimuse-verify-ui/SKILL.md").path,
-                                  encoding: .utf8)) ?? ""
-        let verifyHead = verify.split(separator: "\n", omittingEmptySubsequences: false).prefix(12).joined(separator: "\n")
-        expectEqual(verifyHead.contains("AppleScript"), true, "项目级 skill: 真机验证 skill 开头就写禁 AppleScript 那条硬规则")
-        for entry in ["AGENTS.md", "CLAUDE.md"] {
-            let text = (try? String(contentsOfFile: repoRoot.appendingPathComponent(entry).path, encoding: .utf8)) ?? ""
-            expectEqual(text.contains(".claude/skills/"), true, "项目级 skill: \(entry) 指向 .claude/skills/")
-        }
-    }
-
     // ---- 预发布闸与测试版频道的发布链路(「接收测试版」开关)----
     //
     // 这条链路只在真打 tag 时跑得到,出错全是静默的(全体用户被推到测试版 / beta 用户收不到 beta.2)。能在本机
@@ -4795,9 +4614,9 @@ func runSourceContractSettingsTests() {
         expectEqual(yml.contains("check_appcast.py appcast.xml --tag"), true, "发布链路: appcast 自检带 tag / 版本 / 预发布参数")
         let buildSh = read("lyrimuse/build.sh")
         expectEqual(buildSh.contains("scripts/build-version.sh"), true, "发布链路: build.sh 的 CFBundleVersion 走同一份脚本")
-        expectEqual(buildSh.contains("<key>CFBundleVersion</key>\n    <string>${BUILD_VERSION}</string>"), true,
+        expectEqual(sourceHas(buildSh, "<key>CFBundleVersion</key>\n    <string>${BUILD_VERSION}</string>"), true,
                     "发布链路: CFBundleVersion 写构建号")
-        expectEqual(buildSh.contains("<key>CFBundleShortVersionString</key>\n    <string>${APP_VERSION}</string>"), true,
+        expectEqual(sourceHas(buildSh, "<key>CFBundleShortVersionString</key>\n    <string>${APP_VERSION}</string>"), true,
                     "发布链路: CFBundleShortVersionString 仍是展示版本(tag 原文)")
         let portability = read("lyrimuse/Sources/lyrimuse/Settings/ConfigPortability.swift")
         expectEqual(portability.contains("\"np:receiveBetaUpdates\""), true, "发布链路: 「接收测试版」是这台机器的偏好,不随配置搬家")
@@ -4839,25 +4658,6 @@ func runSourceContractSettingsTests() {
                     "发版关卡: Release 先草稿、核对资产后再公开")
         expectEqual(yml.contains("-T /usr/bin/codesign -x") && yml.contains("--require-hashes -r .github/scripts/dmgbuild-requirements.txt"), true,
                     "发版关卡: 签名私钥不可导出,dmgbuild 按哈希安装")
-        // docs/releasing.md 跟 AGENTS.md 一样**不进版本库**(理由同下一段),别人的 clone 和 CI 上
-        // `read` 返回空串 —— 有就查,没有就跳过,别改回无条件 expectEqual。
-        let releasingDoc = read("docs/releasing.md")
-        if !releasingDoc.isEmpty {
-            expectEqual(releasingDoc.contains("check_release_tag.sh"), true, "tag 校验: releasing.md 让打 tag 的人 push 前本地跑同一份")
-            // 落地页推送走脚本,不手写 URL 名单 —— 手写那份在加页那天不会有人想起来改,
-            // 而且漏推不报错,只表现成新页在 Bing 里迟迟不出现。
-            expectEqual(releasingDoc.contains("ping-indexnow.py"), true,
-                        "IndexNow: releasing.md 走 scripts/ping-indexnow.py(URL 列表从 sitemap 读),别退回手写名单")
-        }
-        // **AGENTS.md 不进版本库**(理由见本文件「项目级 skill」那段),别人的 clone 和 CI 上
-        // `read` 返回空串 —— 有就查,没有就跳过。这一条守的是「作者本地那份写清了 CI 会拒什么」,对使用者
-        // 和贡献者没有意义。 别改回无条件 expectEqual:CI 会因为「文件缺失」红,而那不是缺陷,是刻意不发布。
-        // (实测:第一次只给 .claude/skills 那段加了跳过、漏了这一条,在模拟 clone 里当场红。
-        //  同类读点共 6 处,其余 5 处都在上面那个 skillGuard 块里、已被整段跳过覆盖。)
-        let agentsDoc = read("AGENTS.md")
-        if !agentsDoc.isEmpty {
-            expectEqual(agentsDoc.contains("check_release_tag.sh"), true, "tag 校验: AGENTS.md「提交」写明 CI 拒什么")
-        }
     }
 
 }
@@ -5021,7 +4821,7 @@ func runSourceContractIdentityTests() {
         }
         let theme = stripComments(code("Settings/ColorTheme.swift"))
         expectEqual(theme.contains("public var karaokeUnsungColorHex: String"), true, "主题: 未唱色是主题的字段")
-        expectEqual(theme.contains("decodeIfPresent(String.self, forKey: .karaokeUnsungColorHex)\n            ?? AppSettings.dimmedForegroundHex(foregroundColorHex)"), true,
+        expectEqual(sourceHas(theme, "decodeIfPresent(String.self, forKey: .karaokeUnsungColorHex)\n            ?? AppSettings.dimmedForegroundHex(foregroundColorHex)"), true,
                     "主题: 老 JSON 没有未唱色时按文字色淡化补上,不让整个数组解码失败")
         expectEqual(theme.contains("settings.karaokeUnsungColorHex = karaokeUnsungColorHex"), true, "主题: 套用时一并写未唱色")
         expectEqual(theme.contains("settings.followsCoverArt = followsCoverArt"), true, "主题: 套用时按主题写文字色的跟随封面")
@@ -5036,7 +4836,7 @@ func runSourceContractIdentityTests() {
                     "主题: 老 JSON 没有毛玻璃字段时按关着算")
         expectEqual(theme.contains("public static var defaultTheme: ColorTheme { initialDefault }"), true,
                     "主题: 默认配色是内置预设里的一套,全新安装时预览卡里有一张是选中的")
-        expectEqual(theme.contains("public static var builtInPresets: [ColorTheme] { [\n        initialDefault,"), true,
+        expectEqual(sourceHas(theme, "public static var builtInPresets: [ColorTheme] { [\n        initialDefault,"), true,
                     "主题: 「默认」排第一")
         expectEqual(theme.contains("static var legacyBuiltInPresets: [ColorTheme]"), true,
                     "主题: 上一轮六套内置主题的原始色值留着给升级迁移用")
@@ -5080,7 +4880,7 @@ func runSourceContractIdentityTests() {
         expectEqual(rows.contains("guard !settings.followsCoverArt"), false,
                     "配色主题: 当前是哪套不许被「跟随封面」短路")
         expectEqual(rows.contains(".alert("), false, "主题: 命名 / 改名 / 删除确认都是内联,宿主之一是 transient 的 NSPopover")
-        expectEqual(rows.contains("Spacer(minLength: 12)\n                editorControls"), true,
+        expectEqual(sourceHas(rows, "Spacer(minLength: 12)\n                editorControls"), true,
                     "主题: 命名 / 改名 / 删除确认摆在「我的配色主题」标题行右侧,不另起一行(浮层高度封顶,多一行就得滚动)")
         let gallery = stripComments(code("UI/OverlayThemeGallery.swift"))
         expectEqual(gallery.contains(".lyricsTextStroke("), true, "主题预览卡: 描边跟悬浮窗同一个实现")
@@ -5585,9 +5385,8 @@ func runSourceContractIdentityTests() {
         expectEqual(stats.contains("let key: ChartMerge.KeyMemo = pool.kind == .albums ? .albums() : .songs()"), true,
                     "Last.fm 榜单: 专辑榜按同一张专辑、歌曲榜按同一首歌合并")
         // 歌曲榜跟「第 N 次听」用同一套别名表合并:本机别名表一变就按原始行重新合并。
-        if let fn = stats.range(of: "private func applyLocalAliases("),
-           let end = stats.range(of: "\n    }\n", range: fn.upperBound..<stats.endIndex) {
-            expectEqual(stats[fn.lowerBound..<end.lowerBound].contains("remergeCharts()"), true,
+        if case let fnBody = sourceBody("private func applyLocalAliases(", in: stats), !fnBody.isEmpty {
+            expectEqual(fnBody.contains("remergeCharts()"), true,
                         "Last.fm 榜单: 本机别名表变了重新合并歌曲榜、专辑榜")
         } else {
             expectEqual(false, true, "Last.fm 榜单: 找不到 applyLocalAliases")
@@ -5609,9 +5408,8 @@ func runSourceContractIdentityTests() {
         expectEqual(platformPages.contains("platformPagesWantedFileName = \"\(PlatformPagesWanted.fileName)\"\n")
                     && platformPages.contains("platformPagesWantedSchema = \(PlatformPagesWanted.currentSchema)\n"), true,
                     "Last.fm 榜单: 引擎读的预取清单文件名、版本跟 App 写的一样")
-        if let fn = stats.range(of: "private func scheduleSnapshotSave() {"),
-           let end = stats.range(of: "\n    }\n", range: fn.upperBound..<stats.endIndex) {
-            expectEqual(stats[fn.lowerBound..<end.lowerBound].contains("writePlatformPagesWanted()"), true,
+        if case let fnBody = sourceBody("private func scheduleSnapshotSave() {", in: stats), !fnBody.isEmpty {
+            expectEqual(fnBody.contains("writePlatformPagesWanted()"), true,
                         "Last.fm 榜单: 榜单变了跟快照一起把合并后的行写给引擎预取")
         } else {
             expectEqual(false, true, "Last.fm 榜单: 找不到 scheduleSnapshotSave")
@@ -5642,7 +5440,7 @@ func runSourceContractIdentityTests() {
                     && code("SettingsView.swift").contains("MediaControlClient.channelFallbackCandidates(selected: [.auto]).map(\\.displayName)"), true,
                     "媒体通道: 启动订阅通知、点通知去播放器页、设置页按替代名单列名字")
         // 诊断导出带上本机播放器的版本号(按播放器实测的时间轴常数失准时,对得上是哪次更新)。
-        expectEqual(code("Settings/DiagnosticsExporter.swift").contains("lines.append(\"== Players ==\")\n        lines.append(contentsOf: installedPlayerVersionLines())"), true,
+        expectEqual(sourceHas(code("Settings/DiagnosticsExporter.swift"), "lines.append(\"== Players ==\")\n        lines.append(contentsOf: installedPlayerVersionLines())"), true,
                     "诊断导出: 有「Players」一段,列本机播放器的版本号")
         let labsPage = code("Settings/LabsPage.swift")
         let accountTab = code("AccountLinkingTab.swift")
@@ -5664,9 +5462,8 @@ func runSourceContractIdentityTests() {
         let pollerGo = relayEngineSource("poller.go")
         expectEqual(pollerGo.contains("watchDirWrites(ctx, filepath.Dir(appState.path), appWrites)") && pollerGo.contains("case <-appWrites:"), true,
                     "网页推送: 引擎盯着播放状态所在的目录,App 一写就跑一轮")
-        if let fn = stats.range(of: "private func writePlatformPagesWanted() {"),
-           let end = stats.range(of: "\n    }\n", range: fn.upperBound..<stats.endIndex) {
-            let body = stats[fn.lowerBound..<end.lowerBound]
+        if case let fnBody = sourceBody("private func writePlatformPagesWanted() {", in: stats), !fnBody.isEmpty {
+            let body = fnBody
             expectEqual(body.contains("for e in chart(.albums, period) ?? [] { albums += e.spellings.map")
                         && body.contains("for e in chart(.tracks, period) ?? [] { tracks += e.spellings.map"), true,
                         "Last.fm 榜单: 预取清单带上并进来的其它写法")
@@ -5674,10 +5471,9 @@ func runSourceContractIdentityTests() {
             expectEqual(false, true, "Last.fm 榜单: 找不到 writePlatformPagesWanted")
         }
         // 只有歌手榜在引擎子命令失败时走不合并的原始行;专辑榜、歌曲榜都进 ChartPool 合并
-        if let fn = stats.range(of: "private func fetchChartDirect("),
-           let end = stats.range(of: "\n    }\n", range: fn.upperBound..<stats.endIndex) {
-            let body = stats[fn.lowerBound..<end.lowerBound]
-            expectEqual(body.contains("        if kind == .artists {\n            var entries: [ChartEntry] = []")
+        if case let fnBody = sourceBody("private func fetchChartDirect(", in: stats), !fnBody.isEmpty {
+            let body = fnBody
+            expectEqual(sourceHas(body, "        if kind == .artists {\n            var entries: [ChartEntry] = []")
                         && body.contains("let pool = ChartPool(kind: kind,"), true,
                         "Last.fm 榜单: 只有歌手榜兜底时走原始行,专辑榜、歌曲榜都合并")
         } else {
@@ -5725,7 +5521,7 @@ func runSourceContractIdentityTests() {
                     "Last.fm 榜单: 显示更多补封面走后台档")
         // 榜单封面:Last.fm 没图时退到本机缓存;缓存变了、统计区在屏上时跟着重算,统计区露出来那一刻补算。
         expectEqual(stats.contains("if chartAppLinksOnScreen { refreshChartLocalCovers() }")
-                    && stats.contains("refreshLocalCovers()\n            refreshChartLocalCovers()"), true,
+                    && sourceHas(stats, "refreshLocalCovers()\n            refreshChartLocalCovers()"), true,
                     "Last.fm 榜单封面: 本机缓存变了也重算榜单的本机封面(统计区在屏上时;露出来那一刻补算)")
         expectEqual(code("LastfmStatsSection.swift").contains("?? stats.chartLocalCover(kind: kind, entry: e)"), true,
                     "Last.fm 榜单封面: 缩略图在 Last.fm 之后退到本机封面")
