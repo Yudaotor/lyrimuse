@@ -2124,6 +2124,13 @@
       "path" : [
         "推送提醒"
       ],
+      "title" : "推送渠道"
+    },
+    {
+      "dest" : "account:bark",
+      "path" : [
+        "推送提醒"
+      ],
       "title" : "提醒"
     },
     {
@@ -2153,6 +2160,13 @@
         "推送提醒"
       ],
       "title" : "年度听歌小结"
+    },
+    {
+      "dest" : "account:bark",
+      "path" : [
+        "推送提醒"
+      ],
+      "title" : "推送记录"
     },
     {
       "dest" : "account:discord",

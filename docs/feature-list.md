@@ -52,7 +52,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Scrobble to ListenBrainz too](#feature-listenbrainz) | Settings › Labs › ListenBrainz › Account Info |
 | [Show what you're playing on Discord](#feature-discord) | Settings › Discord › Show on Discord |
 | [A shareable now-playing web page](#feature-now-playing-page) | Settings › Labs › Web Push › Connection Info |
-| [Daily, weekly, monthly and yearly listening digests](#feature-digests) | Settings › Labs › Push Alerts › Alerts |
+| [Daily, weekly, monthly and yearly listening digests](#feature-digests) | Settings › Labs › Push Alerts › Push Channels |
 | [Launch silently](#feature-silent-launch) | Settings › General › Startup & Notifications › Launch Silently |
 | [Notify when the song changes](#feature-song-notifications) | Settings › General › Startup & Notifications › Notify When the Song Changes |
 | [Automatic updates and betas](#feature-updates) | Settings › Software Update › Update Settings › Check Automatically |
@@ -644,14 +644,16 @@ A public page with what you are playing and your history, with optional guestboo
 
 ### Daily, weekly, monthly and yearly listening digests
 
-Sent to you as push notifications through Bark, DingTalk, WeCom, Discord, Feishu, ServerChan, Telegram or Slack. Each of the four has its own switch. Under Labs.
+Pushed to the channels you set up, as many as you like: Bark, ntfy, ServerChan, Feishu, DingTalk, WeCom, Telegram, Discord, Slack or a generic webhook. Each channel can send a test, and the delivery history shows whether each push arrived, with a resend for the ones that didn't. Each of the four has its own switch. Under Labs.
 
 - Off by default
+- Settings: Labs › Push Alerts › Push Channels
 - Settings: Labs › Push Alerts › Alerts
 - Settings: Labs › Push Alerts › Daily Listening Report
 - Settings: Labs › Push Alerts › Weekly Listening Digest
 - Settings: Labs › Push Alerts › Monthly Listening Digest
 - Settings: Labs › Push Alerts › Yearly Listening Digest
+- Settings: Labs › Push Alerts › Delivery History
 
 <a id="section-general"></a>
 
@@ -782,7 +784,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 267 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 269 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1194,11 +1196,13 @@ Every setting in the Settings window, by where it lives: 267 in all. Type a name
 
 ### Labs › Push Alerts
 
+- **Push Channels**: Reports go to every channel that is on. Click a row to edit it or send a test; right-click to delete.
 - **Alerts**
 - **Weekly Listening Digest**
 - **Daily Listening Report**
 - **Monthly Listening Digest**
 - **Yearly Listening Digest**
+- **Delivery History**
 
 ### Discord
 

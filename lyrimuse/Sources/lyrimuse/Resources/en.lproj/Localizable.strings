@@ -873,7 +873,6 @@
 "尚无备份，将保存到「%@」" = "No backup yet; it will be saved to “%@”";
 "尚无备份；保存到 iCloud 后，可在新 Mac 上直接恢复" = "No backup yet. Save to iCloud to restore it on a new Mac";
 "尚未修改" = "No changes yet";
-"尚未填写 Webhook 地址" = "Webhook URL not set yet";
 "尚未成熟、可能不够完善的功能，之后可能调整、重构或移除" = "Features that aren't mature yet and may be incomplete. They could be changed, reworked or removed later.";
 "尚未手动选定过歌词；此后选定的歌词将直接锁定" = "You haven't picked any lyrics manually yet; from now on, your picks will be locked right away";
 "尚未检查更新" = "No update check yet";
@@ -1481,7 +1480,6 @@
 "未填写 Chat ID" = "Chat ID not set yet";
 "未填写地址" = "No URL";
 "未填写服务地址（可选）" = "Server URL not set yet (optional)";
-"未填写机器人 Token" = "Bot token not set yet";
 "未填写访问令牌（可选）" = "Access token not set yet (optional)";
 "未完成" = "Not done";
 "未应答" = "No response";
@@ -2339,7 +2337,6 @@
 "通用 Webhook" = "Generic Webhook";
 "通知" = "Notifications";
 "通知已在「系统设置 › 通知」中关闭" = "Notifications are turned off in System Settings › Notifications";
-"通知平台" = "Notification Platform";
 "遇到问题时，可右键点按菜单栏图标，选择「帮助」›「反馈问题…」" = "If something goes wrong, right-click the menu bar icon and choose Help › “Report an Issue…”";
 "那年今日" = "On This Day";
 "那年今日 · %1$@ 年前收听 %2$@ 次" = "On this day · %2$@ plays %1$@ years ago";

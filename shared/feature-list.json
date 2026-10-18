@@ -1703,15 +1703,19 @@
             "zh-Hant": "日報、週報、月報和年度聽歌小結"
           },
           "desc": {
-            "zh-Hans": "通过推送发给你，支持 Bark、钉钉、企业微信、Discord、飞书、Server酱、Telegram 和 Slack。四种各自开关。在「实验室」里。",
-            "en": "Sent to you as push notifications through Bark, DingTalk, WeCom, Discord, Feishu, ServerChan, Telegram or Slack. Each of the four has its own switch. Under Labs.",
-            "zh-Hant": "透過推播送給你，支援 Bark、釘釘、企業微信、Discord、飛書、Server醬、Telegram 和 Slack。四種各自開關。在「實驗室」裡。"
+            "zh-Hans": "推送到你设置的渠道，可以同时设置多个：Bark、ntfy、Server酱、飞书、钉钉、企业微信、Telegram、Discord、Slack，或通用 Webhook。每个渠道都能发送测试；推送记录里看得到每次是否送达，未送达的可以重发。四种各自开关。在「实验室」里。",
+            "en": "Pushed to the channels you set up, as many as you like: Bark, ntfy, ServerChan, Feishu, DingTalk, WeCom, Telegram, Discord, Slack or a generic webhook. Each channel can send a test, and the delivery history shows whether each push arrived, with a resend for the ones that didn't. Each of the four has its own switch. Under Labs.",
+            "zh-Hant": "推播到你設定的管道，可以同時設定多個：Bark、ntfy、Server醬、飛書、釘釘、企業微信、Telegram、Discord、Slack，或通用 Webhook。每個管道都能傳送測試；推播記錄裡看得到每次是否送達，未送達的可以重新傳送。四種各自開關。在「實驗室」裡。"
           },
           "default": "off",
           "check": {
             "featureFlag": "weeklyDigest"
           },
           "settings": [
+            [
+              "推送提醒",
+              "推送渠道"
+            ],
             [
               "推送提醒",
               "提醒"
@@ -1731,6 +1735,10 @@
             [
               "推送提醒",
               "年度听歌小结"
+            ],
+            [
+              "推送提醒",
+              "推送记录"
             ]
           ]
         }

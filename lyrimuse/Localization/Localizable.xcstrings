@@ -20610,29 +20610,6 @@
         }
       }
     },
-    "尚未填写 Webhook 地址" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Webhook URL not set yet"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "尚未填写 Webhook 地址"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "尚未填寫 Webhook 網址"
-          }
-        }
-      }
-    },
     "未填写服务地址（可选）" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -22330,29 +22307,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "一般"
-          }
-        }
-      }
-    },
-    "通知平台" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notification Platform"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通知平台"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通知平台"
           }
         }
       }
@@ -32081,29 +32035,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chat ID：個人為一串數字，群組以 -100 開頭"
-          }
-        }
-      }
-    },
-    "未填写机器人 Token" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bot token not set yet"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未填写机器人 Token"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未填寫機器人 Token"
           }
         }
       }
