@@ -882,8 +882,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			key, e, ok = alt, enrichCache[alt], true
 		}
 	}
-	// 正在播的这首记在哪条上(poller 换歌时按 playingEnrichKey 记的就是它):兜底找到的那条,时长变体不算在内。
+	// 正在播的这首记在哪条上(poller 换歌时按 playingEnrichKey 记的就是它):兜底找到的那条;下面换到时长变体时跟着挪过去。
 	playKey := key
+	// 这一拍把「正在播」从基条目挪到了时长变体上:变体已有条目就在锁外补写它的单条快照。
+	movedPlaying := false
 	correctDuration := false
 	// 播放器自己说是同一段录音(sameRecordingAsPlaying),时长对不上不算换了版本:不另开「~durN」,也不按时长重搜歌词。
 	sameRecordingStay := false
@@ -926,6 +928,16 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			default:
 				log.Printf("enrich: %q duration mismatch (cached %.1fs vs actual %.1fs), using variant %q",
 					key, e.DurationSecs, durationSecs, rk)
+				// 放的是变体那份录音:「正在播」改记在变体上。单条快照、早上屏、机翻、封面补扫都按它认正在播的那首,
+				// App 读快照时也认定它已按时长挑过变体;留在基条目上,变体的提交一概不写快照,App 拿基条目那份
+				// 录音的歌词一直顶到整份落盘(见 09 章决策 288)。
+				if isEnrichPlayingKey(playKey) {
+					enrichPlayingKey.Store(&rk)
+					movedPlaying = rok
+				}
+				if isEnrichPlayingKey(rk) {
+					playKey = rk
+				}
 				key, e, ok = rk, re, rok
 			}
 		} else {
@@ -1097,6 +1109,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 机翻不排上面这条链,跟哪一路都能同时跑,理由见 translatestart.go。
 		startTranslationBackfillLocked(key, e)
 		enrichMu.Unlock()
+		if movedPlaying {
+			writePlayingEntry(key)
+		}
 		if spotifyHintDirty {
 			requestEnrichSaveFor(key)
 		}
@@ -1739,6 +1754,11 @@ func lyricsUpgradeApplies(e enrichEntry, scored []scoredLyricCandidateResult, pi
 	if lyricsOutrunPlayback(e.Lyrics, e.ResolvedDurationSecs, durationSecs) {
 		baseline, comparable = 0, true
 	}
+	// 反方向:条目记下的时长已经认了这一轮的曲长,现存那份却是给短得多的另一个版本选的,存着的分带着那个时长的加分,
+	// 换成它在这一轮里的分再比(同 MV 那条)。只认「放的比词长」:试听段只会比整首短,不走这条(见 09 章决策 289)。
+	if lyricsChosenForShorterCut(e, durationSecs) {
+		baseline, comparable = lyricsBaselineForUnknownDuration(e, scored)
+	}
 	if picked == nil || !comparable {
 		return false
 	}
@@ -1771,6 +1791,16 @@ func lyricsOutrunPlayback(lyrics string, resolved, actual float64) bool {
 	}
 	last, ok := lastLRCTimestampSecs(lyrics)
 	return ok && last > actual+lyricOvershootToleranceSecs
+}
+
+// lyricsChosenForShorterCut:现存那份歌词按 ResolvedDurationSecs 选的,这一轮真播的 actual 秒比它长出 durationMismatch 那 12%,
+// 而条目记下的 DurationSecs 已经跟 actual 对得上(播放器说是同一段录音、原地改过时长,或者稳定观察过)。没有歌词、
+// 任一时长未知都是 false。纯函数。
+func lyricsChosenForShorterCut(e enrichEntry, actual float64) bool {
+	if e.Lyrics == "" || actual <= e.ResolvedDurationSecs || e.DurationSecs <= 0 {
+		return false
+	}
+	return durationMismatch(e.ResolvedDurationSecs, actual) && !durationMismatch(e.DurationSecs, actual)
 }
 
 // observeWrongDuration:「时长对不上」这个观察值必须同值稳定满一个窗口才可信。
@@ -2412,7 +2442,8 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	}
 	// 同 retryLyricsUpgrade:换正文会让正在播的这首丢掉能用的译文时先翻好。判据对着下面 default 分支换正文那一支。
 	preparedTr := prepareSwapTranslation(ctx, key, artist, title, picked, func(e enrichEntry) bool {
-		return (opts.manual || !e.ManualLyrics) && decidable && picked != nil && !rescoreKeepsLyrics(e, scored, picked, opts.manual, contradicted) &&
+		return (opts.manual || !e.ManualLyrics) && decidable && picked != nil &&
+			!rescoreKeepsLyrics(rescoreComparedEntry(e, durationSecs), scored, picked, opts.manual, contradicted) &&
 			picked.Lyrics != e.Lyrics
 	})
 	// 只打了纯音乐标记(rescoreTurnsInstrumental):要马上落盘、通知重推,但歌词没换,不导出、不补翻。
@@ -2512,7 +2543,8 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	complete := len(skipped) == 0
 	deferred = !decidable || !complete
 	// 冠军换词之前先看当前这份该不该留着,见 rescoreKeepsLyrics。
-	keep := decidable && picked != nil && rescoreKeepsLyrics(e, scored, picked, opts.manual, contradicted)
+	compared := rescoreComparedEntry(e, durationSecs)
+	keep := decidable && picked != nil && rescoreKeepsLyrics(compared, scored, picked, opts.manual, contradicted)
 	if decidable {
 		e.LyricsDecision = buildLyricsDecision(
 			opts.decisionPath(lyricsDecisionPathRescore), artist, title, searchAlbum, durationSecs, scored, picked,
@@ -2568,16 +2600,19 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		e.ResolvedDurationSecs = durationSecs
 		log.Printf("lyrics rescore: %s  no valid candidate under v%s, keeping %s", key, currentLyricsScoring, e.LyricsSource)
 	case keep:
-		// 当前这份留着(见 rescoreKeeps),只记这一轮做过。
+		// 当前这份留着(见 rescoreKeeps),只记这一轮做过。给短得多的另一版选的那份留下来时不改记成这一轮的时长:它没在这个
+		// 时长下赢过,改了之后升级重选和重新匹配都认不出它配不上这段录音。
 		if complete {
 			e.stampLyricsScoring()
 		}
-		e.ResolvedDurationSecs = durationSecs
+		if !lyricsChosenForShorterCut(e, durationSecs) {
+			e.ResolvedDurationSecs = durationSecs
+		}
 		switch {
 		case rescoreWouldLoseWordTiming(e, scored, picked):
 			log.Printf("lyrics rescore: %s  keeping %s(%d) with word timing, %s(%d) has none this round",
 				key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
-		case rescoreKeepsCurrent(e, scored, picked):
+		case rescoreKeepsCurrent(compared, scored, picked):
 			log.Printf("lyrics rescore: %s  keeping %s(%d), current lyrics not among candidates and %s(%d) is no better",
 				key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
 		default:
@@ -2696,6 +2731,16 @@ func rescoreKeepsCurrent(e enrichEntry, scored []scoredLyricCandidateResult, pic
 		}
 	}
 	return !rescoreCurrentTimelineOff(e, scored) && picked.Score <= e.LyricsScore
+}
+
+// rescoreComparedEntry:重评判当前这份留不留时拿来比的那一份。它是给短得多的另一版选的(lyricsChosenForShorterCut)时,
+// 存着的分带着那个时长的加分,记成 0;它这一轮也在候选里时 rescoreKeepsCurrent 照旧按这一轮的分比。同升级重选那条,
+// 见 09 章决策 289。
+func rescoreComparedEntry(e enrichEntry, durationSecs float64) enrichEntry {
+	if lyricsChosenForShorterCut(e, durationSecs) {
+		e.LyricsScore = 0
+	}
+	return e
 }
 
 // rescoreKeeps:重评可判、有冠军时,当前这份要不要留着 —— 它没参与比较而冠军不比它高(rescoreKeepsCurrent),

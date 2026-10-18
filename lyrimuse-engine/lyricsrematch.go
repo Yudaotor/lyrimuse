@@ -342,7 +342,8 @@ func runLyricsRematchOne(ctx context.Context, key string, progress func(done, to
 		return lyricsRematchResult{Outcome: lyricsRematchBusy}
 	}
 	duration := e.ResolvedDurationSecs
-	if duration <= 0 {
+	// 条目记下的时长已经比选词时长出一截(播放器说是同一段录音、原地改过):按现在这段录音搜,同升级重选那条(见 09 章决策 289)。
+	if duration <= 0 || lyricsChosenForShorterCut(e, e.DurationSecs) {
 		duration = e.DurationSecs
 	}
 	var result lyricsRematchResult
