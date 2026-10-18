@@ -6,12 +6,10 @@ import SwiftUI
 // "联网搜索候选歌词"弹窗。左边一块浮起来的侧栏:查询词(歌名 / 歌手 / 专辑)、「重新搜索」和搜出来的
 // 候选(来源 + 分数 + 是否逐字);右边是选中候选的预览,"采用此候选"把内容交回调用方
 // (调用方负责真正写回缓存,这里只管搜索和展示)。onApply 是可等待的、回报有没有真的落盘:
-// 面板据此挪「当前使用」徽标、给一条回声;`keepsOpenAfterApply` 决定采纳后关窗还是留着
-// (只有「搜索歌词…」独立小窗传 true,理由见 apply(_:))。
+// 面板据此挪「当前使用」徽标、给一条回声,采纳后不关(理由见 apply(_:))。
 //
-// 两种宿主:「搜索歌词…」独立小窗(`standaloneWindow: true`,悬浮窗 ⚙、菜单栏、歌词窗口都开它)标题栏透明、内容铺到最顶上,
-// 红绿灯落在侧栏顶部那一截里,「关闭」交给红灯和 Esc;歌词管理弹出的是 sheet,没有标题栏,右上角留
-// 「关闭」。版面与取舍见 11 章决策 51。
+// 宿主只有「搜索歌词…」独立窗口(`LyricsQuickSearchWindow`,各个入口都开它,见 11 章决策 130、131):标题栏透明、内容铺到
+// 最顶上,红绿灯落在侧栏顶部那一截里,关窗交给红灯和 Esc。版面与取舍见 11 章决策 51。
 //
 // 歌名/歌手/专辑是可编辑字段,默认沿用这首歌本身的元数据,也支持改关键词后重新联网
 // 查(比如原始元数据不准/有别名,想换个关键词试试能不能搜到更好的候选)。改这三个
@@ -25,7 +23,7 @@ struct LyricsSearchSheet: View {
     let originalTitle: String
     let originalAlbum: String
     /// 面板为之打开的那一首的缓存 key(跟宿主写回的是同一条)。正在放的就是这首时,预览标出此刻唱到哪一句、能点时间跳过去。
-    /// 两个入口都得传(contracts 组守卫钉着)。
+    /// 宿主必须传(contracts 组守卫钉着)。
     let songKey: String
     // 这首歌眼下实际生效的歌词来源(EnrichCacheStore.Summary.lyricsSource,比如"qq")——
     // 默认选中它,而不是"搜索结果里谁先到就选谁":默认选中的
@@ -34,25 +32,18 @@ struct LyricsSearchSheet: View {
     let currentSource: String?
     /// 这首歌当前正文的「只取词」指纹(ManualPickLock.fingerprint),nil = 调用方拿不到正文。
     /// 「当前使用」徽标是来源 + 词双判据(LyricsCandidateDuplicates.isCurrent):同源但
-    /// 正文被手改过的不再标当前;拿不到指纹时退回只比来源。两个入口都得传(contracts 组守卫钉着)。
+    /// 正文被手改过的不再标当前;拿不到指纹时退回只比来源。宿主必须传(contracts 组守卫钉着)。
     let currentFingerprint: String?
     /// 曲目真实时长(秒),0 表示未知。必须传:打分里时长匹配那一档权重很重,传 0 时整档对所有候选跳过,面板里的排名
     /// 就跟自动选歌词时用的那组分数对不上。候选的源自报曲长也拿它比(`durationLabel`)。
     let durationSecs: Double
-    /// 采纳后面板留着不关。只有「搜索歌词…」独立窗口传 true:那是边听边换词的入口,留着的话同一批候选还在,
-    /// 点即切,不用关窗重开、再等各个源重搜。歌词管理(编辑器上方的模态,留着会挡住刚回填的编辑器)采纳后关窗。
-    let keepsOpenAfterApply: Bool
-    /// 宿主是「搜索歌词…」独立窗口,不是 sheet:侧栏顶上给红绿灯让出一截、不画「关闭」(红灯和 Esc 都能关)。
-    /// 窗口那一侧:场景挂 `.windowStyle(.hiddenTitleBar)`(标题栏透明、内容铺到顶),宿主再挂 EmptyUnifiedToolbar
-    /// 把标题栏撑高、红绿灯挪进侧栏的圆角里。
-    let standaloneWindow: Bool
 
-    /// 窗口 / sheet 能拖到的最小内容尺寸。宽:侧栏连外边距约 404pt,右边预览至少留 ~400pt;高:独立小窗里侧栏
+    /// 窗口能拖到的最小内容尺寸。宽:侧栏连外边距约 404pt,右边预览至少留 ~400pt;高:独立小窗里侧栏
     /// 上半截(红绿灯那一截 + 查询卡 + 按钮 + 表头)约 240pt,剩下的放得下三条候选。独立小窗的宿主在面板出来之前也用这一对。
     static let minimumSize = CGSize(width: 800, height: 580)
-    /// 打开时的尺寸:右侧标题行的三颗按钮连同采纳后的回声放得下(宽度怎么量的见 11 章决策 56)。sheet 按它开,
-    /// 独立小窗第一次开也按它,之后窗口自己记尺寸。
-    static let defaultSize = CGSize(width: 1040, height: 680)
+    /// 窗口第一次开的尺寸(场景的 `.defaultSize`),之后窗口自己记尺寸。宽度要让右边预览栏够 `compareMinWidth`,
+    /// 选中别的候选时两栏对照才摆得出来(见 11 章决策 131)。
+    static let defaultSize = CGSize(width: 1360, height: 820)
     /// 侧栏宽度,固定、不能拖。
     private static let sidebarWidth: CGFloat = 396
     /// 侧栏离窗口边缘的距离。
@@ -65,11 +56,11 @@ struct LyricsSearchSheet: View {
     let onApply: (LyricsSearchService.Candidate) async -> Bool
     /// 打开面板时这首歌是不是标成了纯音乐(宿主读缓存给的)。
     let isMarkedInstrumental: Bool
-    /// 标 / 撤「纯音乐」:调用方按打开面板时那首歌写回,回报有没有落盘。两个入口都得传(contracts 组守卫钉着)。
+    /// 标 / 撤「纯音乐」:调用方按打开面板时那首歌写回,回报有没有落盘。宿主必须传(contracts 组守卫钉着)。
     let onSetInstrumental: (Bool) async -> Bool
     /// 「重新自动匹配」:请引擎按设置里的「匹配算法」重挑一轮、等结论(宿主转给 LyricsRematchRunner,跟歌词管理那颗
     /// 按钮同一条路),不经过这里的候选列表。参数是进度回调(回过话的源数 / 一共几个源);返回 nil = 没拿到结论。
-    /// 两个入口都得传(contracts 组守卫钉着)。
+    /// 宿主必须传(contracts 组守卫钉着)。
     let onAutoMatch: (@escaping (Int, Int) -> Void) async -> LyricsRematch.Line?
 
     /// 正在写回的那条候选的来源(按钮禁用 + 文案变「正在采用…」);nil = 没有在飞的采纳。
@@ -101,7 +92,7 @@ struct LyricsSearchSheet: View {
     @Environment(\.dismiss) private var dismiss
     // 只为了让这个弹窗在手动切换语言时重新渲染,同 LyricsManagerView 的理由 ——
     // 经 AppLanguageObserver 窄代理,不整对象订阅 AppSettings(那样设置页
-    // 拖任何滑杆/色轮都会打醒这个 sheet 的整个 body,含候选列表和预览面板)。
+    // 拖任何滑杆/色轮都会打醒这个面板的整个 body,含候选列表和预览面板)。
     @ObservedObject private var languageSettings = AppLanguageObserver.shared
     // candidates / isSearching 分开存,不揉成一个「加载中 / 已加载 / 失败」三态:结果是陆续到达的(引擎按 NDJSON 逐行
     // 输出,见 LyricsSearchService.search 的 onUpdate),「还在搜」和「已经有哪些候选」是两个独立维度。
@@ -119,8 +110,7 @@ struct LyricsSearchSheet: View {
     /// 当前使用那份的预览行,对照用(`comparison`)。
     @State private var currentPreviewMemo = PreviewRowsMemo()
     @State private var displaySignatures = DisplaySignatureMemo()
-    /// 面板所在那扇窗口(sheet 自己也是一扇窗口,跟着宿主窗口一起被挡住、最小化)看不看得见,往下传给预览
-    /// (`previewHostVisible`):看不见时当前句不跟播放走表。两个入口一样,不靠宿主各自去传。
+    /// 面板所在那扇窗口看不看得见,往下传给预览(`previewHostVisible`):看不见时当前句不跟播放走表。
     @StateObject private var windowSurface = SettingsWindowSurface()
     /// 预览显示原文 / 原文 + 译文 / 原文 + 读音;选中的候选没有那一档时按原文显示,选择本身不改,换到有的候选又回来。
     /// 跟歌词管理详情页记在同一个偏好键,两边改一处另一处跟着变,下次打开照旧。
@@ -296,7 +286,7 @@ struct LyricsSearchSheet: View {
             }
         }
         .controlSize(.small)
-        .settingsGlassButtons(inSheet: presentedAsSheet)
+        .settingsGlassButtons()
         .help(L10n.t("本轮给出候选的歌词源数量，点按查看详情"))
         .popover(isPresented: $showSourceAvailability, arrowEdge: .bottom) {
             sourceAvailabilityList
@@ -506,7 +496,7 @@ struct LyricsSearchSheet: View {
     }
 
     init(artist: String, title: String, album: String, songKey: String, currentSource: String?, currentFingerprint: String? = nil,
-         durationSecs: Double, keepsOpenAfterApply: Bool = false, standaloneWindow: Bool = false,
+         durationSecs: Double,
          isMarkedInstrumental: Bool, onSetInstrumental: @escaping (Bool) async -> Bool,
          onAutoMatch: @escaping (@escaping (Int, Int) -> Void) async -> LyricsRematch.Line?,
          onApply: @escaping (LyricsSearchService.Candidate) async -> Bool) {
@@ -517,8 +507,6 @@ struct LyricsSearchSheet: View {
         self.currentSource = currentSource
         self.currentFingerprint = currentFingerprint
         self.durationSecs = durationSecs
-        self.keepsOpenAfterApply = keepsOpenAfterApply
-        self.standaloneWindow = standaloneWindow
         self.isMarkedInstrumental = isMarkedInstrumental
         self._host = State(initialValue: HostValues(source: currentSource, fingerprint: currentFingerprint,
                                                     instrumental: isMarkedInstrumental))
@@ -534,16 +522,11 @@ struct LyricsSearchSheet: View {
         artist != originalArtist || title != originalTitle || album != originalAlbum
     }
 
-    /// 从歌词管理弹出的 sheet(不是「搜索歌词…」独立小窗)。sheet 里的玻璃一直是失焦那一档,侧栏和玻璃
-    /// 按钮改画设计系统的替身(决策 57)。
-    private var presentedAsSheet: Bool { !standaloneWindow }
-
     /// 这首歌眼下是不是标成了纯音乐:面板里切过就认切过之后的,没切过认宿主给的。
     private var markedInstrumental: Bool { instrumentalOverride ?? host.instrumental }
 
     /// 「这次搜索是为哪首歌开的」——三个原始字段拼成的标识,给下面 `.task(id:)` / `.onChange`
-    /// 用。歌词管理的 sheet 在面板存活期间它不会变;「搜索歌词…」独立窗口
-    /// (`LyricsQuickSearchWindow`)会在窗口开着期间换歌再点一次时把新曲目喂进来。
+    /// 用。「搜索歌词…」窗口(`LyricsQuickSearchWindow`)开着期间换歌再点一次、或从歌词管理换一首再点,会把新曲目喂进来。
     /// 缓存 key 和时长也并进来:小窗在同名同专辑的两份录音(`~durN` 变体)之间换歌时三段字段一样,不并的话不重搜、
     /// 分数按上一首的时长算,采纳也会记到新那首名下。
     private var searchSubject: String {
@@ -558,18 +541,12 @@ struct LyricsSearchSheet: View {
                 .padding(.vertical, Self.panelInset)
             detail
         }
-        // 独立小窗的标题栏是透明的(场景挂 .windowStyle(.hiddenTitleBar)),内容铺到最顶上,红绿灯压在侧栏
-        // 顶部那一截里;sheet 没有标题栏,这句不改什么。
+        // 标题栏是透明的(场景挂 .windowStyle(.hiddenTitleBar)),内容铺到最顶上,红绿灯压在侧栏顶部那一截里。
         .ignoresSafeArea()
         .frame(minWidth: Self.minimumSize.width, idealWidth: Self.defaultSize.width, maxWidth: .infinity,
                minHeight: Self.minimumSize.height, idealHeight: Self.defaultSize.height, maxHeight: .infinity)
         .background(WindowSurfaceCapture(surface: windowSurface).frame(width: 0, height: 0))
         .environment(\.previewHostVisible, windowSurface.isVisible)
-        // 从歌词管理弹出的这张是 sheet,AppKit 给 sheet 的默认 styleMask 里没有 .resizable,
-        // 窗口边缘对拖拽完全没反应:这颗探针把标志插回去,同时把最小尺寸写进窗口(同 WindowDragHandle
-        // 的路子:垫在背景层拿到底层 NSWindow)。上面的 frame 要带 maxWidth / maxHeight: .infinity,
-        // 不然窗口拖大了内容仍停在最小尺寸。
-        .background(WindowResizeEnabler(minWidth: Self.minimumSize.width, minHeight: Self.minimumSize.height))
         // 「搜索歌词…」独立窗口是 `if let context { LyricsSearchSheet(...) }`,开着时换歌再点一次会把新 context 喂进来,
         // 而 Optional 从 A 换成 B 是同一个视图身份:@State 不会重取 initialValue,`.task {}` 也不会重跑。换歌时这里把
         // 查询词、采纳记录重置,搜索挂在 `.task(id: searchSubject)` 上;不然面板留着上一首的候选,onApply 却已经捕获
@@ -635,13 +612,11 @@ struct LyricsSearchSheet: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if standaloneWindow {
-                // 独立小窗的红绿灯落在这一截里;垫拖拽区,按住这里能拖窗口。高度让查询卡从标题栏(连工具栏
-                // 66pt)下面开始:那一条是系统的拖拽区,在里面按住拖动挪的是窗口,输入框里拖选文字会变成拖窗口。
-                Color.clear
-                    .frame(height: 48)
-                    .background(WindowDragHandle())
-            }
+            // 红绿灯落在这一截里;垫拖拽区,按住这里能拖窗口。高度让查询卡从标题栏(连工具栏
+            // 66pt)下面开始:那一条是系统的拖拽区,在里面按住拖动挪的是窗口,输入框里拖选文字会变成拖窗口。
+            Color.clear
+                .frame(height: 48)
+                .background(WindowDragHandle())
             queryCard
             searchActions
             currentSection
@@ -650,10 +625,9 @@ struct LyricsSearchSheet: View {
             reportLyricsLink
         }
         .padding(.horizontal, 12)
-        .padding(.top, standaloneWindow ? 0 : 12)
         // 列表滚到底时别把行画到侧栏圆角外面。
         .clipShape(RoundedRectangle(cornerRadius: Self.panelCornerRadius, style: .continuous))
-        .settingsCardBackground(cornerRadius: Self.panelCornerRadius, inSheet: presentedAsSheet)
+        .settingsCardBackground(cornerRadius: Self.panelCornerRadius)
     }
 
     /// 「找不到对的歌词？」:打开 GitHub 的歌词类 issue 表单,歌名、歌手、专辑、现在用的来源、这一轮返回了候选的来源已经
@@ -721,7 +695,7 @@ struct LyricsSearchSheet: View {
                     .frame(maxWidth: .infinity)
             }
             .controlSize(.large)
-            .settingsGlassButtons(inSheet: presentedAsSheet)
+            .settingsGlassButtons()
             .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
             if isDirty {
                 Button(L10n.t("恢复原信息")) {
@@ -1058,13 +1032,10 @@ struct LyricsSearchSheet: View {
         .animation(.easeInOut(duration: 0.2), value: markedInstrumental)
     }
 
-    /// 右侧顶上那一行:标题、回声、「标为纯音乐」,sheet 里再加「关闭」。独立小窗里这一行正好压在透明
-    /// 标题栏那一截(52pt)上。
+    /// 右侧顶上那一行:标题、回声、「标为纯音乐」。这一行正好压在透明标题栏那一截(52pt)上。
     ///
-    /// 背后垫 WindowDragHandle,按住这一行能拖窗口:sheet 默认**不可拖**——AppKit 故意把它钉死在依附点,
-    /// 不是漏配了 isMovableByWindowBackground 能补的(那个修饰符对 sheet 样式的窗口不生效);独立小窗的
-    /// 透明标题栏整片被内容盖住,点到的是内容,也靠这块拖。垫在背景层不影响上面的按钮各自接收点击
-    /// (SwiftUI 命中测试是前景优先,背景只接住前景没吃掉的点击)。
+    /// 背后垫 WindowDragHandle,按住这一行能拖窗口:透明标题栏整片被内容盖住,点到的是内容,靠这块拖。
+    /// 垫在背景层不影响上面的按钮各自接收点击(SwiftUI 命中测试是前景优先,背景只接住前景没吃掉的点击)。
     private var detailToolbar: some View {
         HStack(spacing: 8) {
             // 放得下就是「标题 + 带文字的按钮」;右栏窄(面板拖到最窄、英文文案更长)时先收起标题,再窄才把两颗按钮
@@ -1074,27 +1045,18 @@ struct LyricsSearchSheet: View {
                 toolbarRow(showsTitle: false, iconOnly: false)
                 toolbarRow(showsTitle: false, iconOnly: true)
             }
-            if !standaloneWindow {
-                Button(L10n.t("关闭")) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                    .settingsGlassButtons(inSheet: presentedAsSheet)
-                    .fixedSize()
-            }
         }
         .padding(.leading, 22)
         .padding(.trailing, 14)
         .frame(height: 52)
         .background(WindowDragHandle())
         .background {
-            if standaloneWindow {
-                // 独立小窗不画「关闭」(左上角的红灯就是),Esc 照样关:一颗不可见的按钮接 cancelAction,
-                // 同设置页 ⌘F 那颗。
-                Button("") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                    .opacity(0)
-                    .frame(width: 0, height: 0)
-                    .accessibilityHidden(true)
-            }
+            // 不画「关闭」(左上角的红灯就是),Esc 照样关:一颗不可见的按钮接 cancelAction,同设置页 ⌘F 那颗。
+            Button("") { dismiss() }
+                .keyboardShortcut(.cancelAction)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
         }
     }
 
@@ -1340,8 +1302,8 @@ struct LyricsSearchSheet: View {
     /// 一把关掉——那样写盘在背后跑、面板上什么反馈都没有):
     /// ① 防重入 —— 写盘 + 排引擎重启在飞时不再叠一笔,按钮禁用、文案变「正在采用…」;
     /// ② 等待期间换了歌(小窗再按一次热键会换 context)这一笔写的是上一首,不挪徽标、不回声;
-    /// ③ 成功 → `appliedSource` 挪「当前使用」徽标;关窗模式到此关窗(失败也关,调用方那边
-    ///    的 lastError 红字负责说明),留着的模式给标题栏一条回声、不重搜 —— 候选本来就在。
+    /// ③ 成功 → `appliedSource` 挪「当前使用」徽标,标题栏给一条回声、不关窗、不重搜 —— 候选本来就在,
+    ///    边听边换词时点即切。
     private func apply(_ c: LyricsSearchService.Candidate) async {
         guard applyingSource == nil, !autoMatching else { return }
         // 比 @State 里的代数,不比 searchSubject:这个方法跑在按钮闭包捕获的那份视图副本上,副本的 let 属性
@@ -1357,10 +1319,6 @@ struct LyricsSearchSheet: View {
             autoMatchLine = nil
             // 存进歌词时引擎顺带撤掉纯音乐标记(enrichedit.go 的 save_edit / save_plain_text)。
             instrumentalOverride = false
-        }
-        guard keepsOpenAfterApply else {
-            dismiss()
-            return
         }
         if saved {
             let name = sourceDisplayName(c.source)
@@ -1416,7 +1374,7 @@ struct LyricsSearchSheet: View {
               ? L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，无歌词的重新加入自动匹配队列")
               : L10n.t("按纯音乐处理：不显示歌词，也不会自动搜索；原有歌词仍会保留，取消标记即可恢复"))
         .disabled(settingInstrumental || applyingSource != nil || autoMatching)
-        .settingsGlassButtons(inSheet: presentedAsSheet)
+        .settingsGlassButtons()
         .fixedSize()
     }
 
@@ -1430,7 +1388,7 @@ struct LyricsSearchSheet: View {
         }
         .help(L10n.t("重新联网匹配，直接采用算法选出的结果，依据设置中的「匹配算法」"))
         .disabled(autoMatching || applyingSource != nil || settingInstrumental)
-        .settingsGlassButtons(inSheet: presentedAsSheet)
+        .settingsGlassButtons()
         .fixedSize()
     }
 
@@ -1458,9 +1416,8 @@ struct LyricsSearchSheet: View {
         }
     }
 
-    /// 「重新自动匹配」的整条流程:等宿主跑完一轮(进度经回调写进来)。改写了歌词时 sheet 跟采纳一样关掉(歌词管理
-    /// 的编辑框在背后),独立小窗留着、挂结论,「当前使用」随宿主重读挪过去;没改写时都留着、挂结论,
-    /// 用户可以接着自己挑。等待期间换了歌,这一轮的结论不挂。
+    /// 「重新自动匹配」的整条流程:等宿主跑完一轮(进度经回调写进来)。窗口留着、挂结论,改写了歌词时「当前使用」随宿主
+    /// 重读挪过去,用户可以接着自己挑。等待期间换了歌,这一轮的结论不挂。
     private func runAutoMatch() async {
         guard !autoMatching, applyingSource == nil, !settingInstrumental else { return }
         let subject = subjectGeneration
@@ -1475,10 +1432,6 @@ struct LyricsSearchSheet: View {
         }
         autoMatching = false
         guard subject == subjectGeneration, let line else { return }
-        if LyricsRematchRunner.rewroteLyrics(line), !keepsOpenAfterApply {
-            dismiss()
-            return
-        }
         autoMatchLine = line
     }
 
@@ -2103,7 +2056,7 @@ struct LyricsSearchSheet: View {
     }
 }
 
-/// 正在放的那首对应的缓存 key(实际命中优先,没有条目退 normalizedKey,跟两个入口算写回 key 同一套),换歌才变。
+/// 正在放的那首对应的缓存 key(实际命中优先,没有条目退 normalizedKey,跟「搜索歌词…」窗口算写回 key 同一套),换歌才变。
 /// 搜索面板拿它跟自己那首比,决定预览要不要标出此刻唱到哪一句。
 @MainActor
 private final class LyricsSearchNowPlaying: ObservableObject {

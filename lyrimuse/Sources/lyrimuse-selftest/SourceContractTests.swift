@@ -4062,9 +4062,9 @@ func runSourceContractSettingsTests() {
         }
     }
 
-    // ---- 「采纳候选」的两个入口必须同进同出----
+    // ---- 「采纳候选」的入口只有一处----
     //
-    // `LyricsSearchSheet` 有两个调用点(歌词管理的 sheet / 「搜索歌词…」独立小窗,悬浮窗 ⚙、菜单栏、歌词窗口都开它),
+    // `LyricsSearchSheet` 只有一个调用点(「搜索歌词…」独立窗口,悬浮窗 ⚙、菜单栏、歌词窗口、歌词管理都开它),
     // 每一处的 onApply 都要有同一套分流与参数:纯文本候选走 `savePlainTextEdit`(否则把没有
     // 时间戳的纯文本当 LRC 喂进 saveEdit,这首歌在别的展示面上从"至少有静态文字"退化成"看
     // 起来完全没有歌词"),带时间戳的走 `saveEdit` 且 `markManual` 读 `manualPickLocksLyrics`、
@@ -4092,9 +4092,8 @@ func runSourceContractSettingsTests() {
                 if hit { callSites.append(rel) }
             }
         }
-        expectEqual(callSites.sorted(),
-                    ["LyricsManager/LyricsManagerView.swift", "LyricsManager/LyricsQuickSearchWindow.swift"],
-                    "采纳候选入口: LyricsSearchSheet 的调用点就这两处(多了/少了都要来这条守卫登记)")
+        expectEqual(callSites.sorted(), ["LyricsManager/LyricsQuickSearchWindow.swift"],
+                    "采纳候选入口: LyricsSearchSheet 的调用点就这一处(多了/少了都要来这条守卫登记)")
         for rel in callSites.sorted() {
             guard let text = read(rel) else { continue }
             for marker in ["isPlainTextOnly", "savePlainTextEdit(", "manualPickLocksLyrics", "fromManualPick: true", "bg: candidate.lyricsBG", "trLang: candidate.lyricsTrLang", "currentFingerprint:", "songKey:",
@@ -4138,12 +4137,12 @@ func runSourceContractSettingsTests() {
                     && sourceHas(sheet, "private var candidatesHeader: some View {\n        HStack(alignment: .center, spacing: 6) {")
                     && sourceHas(sheet, "            sourceAvailabilityBadge\n                .layoutPriority(1)\n        }\n        .frame(height: 24)"), true,
                     "搜索候选歌词: 表头和徽标一打开就在,进度在表头同一行、表头定高,列表不跳也不留空行")
-        // 独立小窗(悬浮窗 ⚙)标题栏透明、红灯就是关闭,面板不画「关闭」、Esc 由一颗不可见的按钮接;sheet 没有红灯,
-        // 右上角得有「关闭」。透明要靠场景的 .windowStyle(.hiddenTitleBar):手设 titlebarAppearsTransparent 会在窗口
-        // 激活时被 SwiftUI 盖回去,顶上留一条模糊底色带。这几样退回去都不会编译报错。
+        // 独立窗口标题栏透明、红灯就是关闭,面板不画「关闭」、Esc 由一颗不可见的按钮接。透明要靠场景的
+        // .windowStyle(.hiddenTitleBar):手设 titlebarAppearsTransparent 会在窗口激活时被 SwiftUI 盖回去,顶上留一条
+        // 模糊底色带。这几样退回去都不会编译报错。
         let quick = read("LyricsManager/LyricsQuickSearchWindow.swift") ?? ""
-        expectEqual(quick.contains("standaloneWindow: true,") && quick.contains(".background(EmptyUnifiedToolbar())"), true,
-                    "搜索候选歌词: 独立小窗挂空工具栏,并告诉面板它在独立窗口里")
+        expectEqual(quick.contains(".background(EmptyUnifiedToolbar())"), true,
+                    "搜索候选歌词: 独立窗口挂空工具栏")
         let quickScene = (read("App.swift") ?? "")
             .components(separatedBy: "Window(L10n.t(\"搜索歌词…\"), id: \"lyrics-quick-search\")").dropFirst().first?
             .components(separatedBy: "\n        Window(").first ?? ""
@@ -4151,18 +4150,14 @@ func runSourceContractSettingsTests() {
                     "搜索候选歌词: 独立小窗的透明标题栏由场景的 .windowStyle(.hiddenTitleBar) 负责")
         expectEqual((read("LyricsManager/SheetWindowAffordances.swift") ?? "").contains("titlebarAppearsTransparent = "), false,
                     "搜索候选歌词: 不在窗口上手设 titlebarAppearsTransparent(激活时会被 SwiftUI 盖回去)")
-        expectEqual(sourceHas(sheet, "if !standaloneWindow {\n                Button(L10n.t(\"关闭\")) { dismiss() }\n                    .keyboardShortcut(.cancelAction)")
-                    && sourceHas(sheet, "Button(\"\") { dismiss() }\n                    .keyboardShortcut(.cancelAction)\n                    .opacity(0)"), true,
-                    "搜索候选歌词: sheet 右上角有「关闭」;独立小窗不画它,Esc 由不可见的按钮接")
-        // sheet 拿不到窗口的激活外观,玻璃在 sheet 里一直是失焦那一档(决策 57):侧栏和玻璃按钮在 sheet 里画设计系统的
-        // 替身,独立小窗照用玻璃。漏一处不会编译报错,只是那一块在 sheet 里发灰。
-        let designSystem = read("Settings/SettingsDesignSystem.swift") ?? ""
-        expectEqual(sheet.contains("private var presentedAsSheet: Bool { !standaloneWindow }")
-                    && sheet.contains(".settingsCardBackground(cornerRadius: Self.panelCornerRadius, inSheet: presentedAsSheet)")
-                    && !sheet.contains(".settingsGlassButtons()")
-                    && sourceHas(designSystem, "if inSheet {\n                content.modifier(SheetGlassCardBackground(shape: shape))")
-                    && sourceHas(designSystem, "if inSheet {\n                content.buttonStyle(SheetGlassButtonStyle())"), true,
-                    "搜索候选歌词: sheet 里的侧栏和玻璃按钮画设计系统的替身(inSheet: presentedAsSheet),不直接用玻璃")
+        expectEqual(!sheet.contains("Button(L10n.t(\"关闭\"))")
+                    && sourceHas(sheet, "Button(\"\") { dismiss() }\n .keyboardShortcut(.cancelAction)\n .opacity(0)"), true,
+                    "搜索候选歌词: 不画「关闭」,Esc 由不可见的按钮接")
+        // 宿主只剩独立窗口一种(11 章决策 130、131):sheet 那几支(采纳后关窗、右上角「关闭」、玻璃替身)别再长回来,
+        // 第一次开按场景的 .defaultSize,宽到两栏对照摆得出来。
+        expectEqual(!sheet.contains("standaloneWindow") && !sheet.contains("keepsOpenAfterApply") && !sheet.contains("presentedAsSheet")
+                    && sourceHas(read("App.swift") ?? "", "LyricsQuickSearchWindow() } .defaultSize(LyricsSearchSheet.defaultSize)"), true,
+                    "搜索候选歌词: 只有独立窗口一种宿主,第一次开按 defaultSize")
         expectEqual(sheet.components(separatedBy: "markInstrumentalAction\n").count - 1, 2,
                     "采纳候选入口: 「纯音乐」「已匹配曲目 · 无歌词文本」两个空状态里有「标为纯音乐」")
         // 「搜索歌词…」独立小窗算「当前使用」的正文指纹取条目里存着的那份:标了纯音乐时 lyrics 是空的,撤标之后
@@ -4171,9 +4166,21 @@ func runSourceContractSettingsTests() {
                         .components(separatedBy: "let lyrics = cached?.storedLyrics ?? \"\"").count - 1 == 2, true,
                     "采纳候选入口: 「当前使用」的正文指纹取 storedLyrics")
         let manager = read("LyricsManager/LyricsManagerView.swift") ?? ""
-        // 歌词管理那个入口同一个口径,按 key 原样取:lookup 会按正在播放的快照、时长变体去认,同名的另一份录音在放时取错。
-        expectEqual(manager.contains("currentFingerprint: EnrichCacheReader.storedEntry(forKey: key)"), true,
-                    "采纳候选入口: 歌词管理的「当前使用」指纹按 key 取条目里存着的正文")
+        // 歌词管理指定的那一首按 key 原样取:lookup 会按正在播放的快照、时长变体去认,同名的另一份录音在放时取错。
+        // 歌词管理把选中那首交给窗口,窗口采纳 / 自动匹配之后告诉它,它重载编辑框、挂结论。
+        expectEqual(quick.contains("let stored = EnrichCacheReader.storedEntry(forKey: key)")
+                    && manager.contains("AppActions.shared.openLyricsSearch(for: LyricsSearchTarget(")
+                    && quick.contains("if saved { AppActions.shared.lyricsSearchApplied.send(context.key) }")
+                    && quick.contains("AppActions.shared.lyricsSearchRematched.send(")
+                    && manager.contains(".onReceive(AppActions.shared.lyricsSearchApplied) { key in")
+                    && manager.contains(".onReceive(AppActions.shared.lyricsSearchRematched) { result in"), true,
+                    "采纳候选入口: 歌词管理开的那一首按 key 取「当前使用」指纹,采纳 / 自动匹配之后回报歌词管理")
+        // 搜哪一首由打开的入口定,窗口读的时候不清:新开的窗口 .task 和刷新信号各读一遍,读一次就清的话后一次又换回正在放的那首。
+        let actions = read("Settings/AppActions.swift") ?? ""
+        expectEqual(!quick.contains("lyricsSearchTarget = nil")
+                    && sourceHas(actions, "return { [weak self] in\n self?.lyricsSearchTarget = nil\n present()\n }")
+                    && sourceHas(actions, "lyricsSearchTarget = target\n present()"), true,
+                    "采纳候选入口: 搜哪一首由打开的入口写,窗口读时不清")
         // 编辑缓冲跟「这是哪首」绑在一起:换选中的旁路(右键菜单、「定位」、全选)先问有没有没保存的改动;删掉正在改的那首、
         // 详情页卸载再装回来时编辑状态跟着收口,不把上一首的底稿带到下一首。
         expectEqual(manager.contains("let editingThis = editMode != .preview && editingKey == summary.key")
@@ -4302,12 +4309,12 @@ func runSourceContractSettingsTests() {
         expectEqual(manager.contains("@AppStorage(\"np:lyricsManagerSortOption\") private var sortOption: LyricsSortOption = .updatedDescending")
                     && manager.contains("@AppStorage(\"np:lyricsManagerGroupByAlbum\") private var groupByAlbum = false"), true,
                     "歌词管理: 排序和分组下次开窗照旧")
-        // 搜索候选歌词、解析决策面板开着时换歌不跟随,面板的查询词和写回的条目不变(11 章决策 86)。
-        expectEqual(manager.contains("guard followsPlayback, !isEditorDirty, editMode == .preview, searchTarget == nil, !showDecisionSheet,"),
-                    true, "歌词管理: 搜索候选歌词、解析决策面板开着时换歌不跟随")
+        // 解析决策面板开着时换歌不跟随,面板读的那首不变(11 章决策 86)。
+        expectEqual(manager.contains("guard followsPlayback, !isEditorDirty, editMode == .preview, !showDecisionSheet,"),
+                    true, "歌词管理: 解析决策面板开着时换歌不跟随")
         // 审查之后那几处修法:搜索面板打开那一刻拍下查询词;多选标纯音乐一次请求;编辑中的那一行不受筛选;偏移输入走 Core 的
         // 解析(nan / inf / 1e20 直接转 Int 会崩);调偏移不再整库重建;逐句编辑一进来就有焦点,静态格子读屏能按(11 章决策 92)。
-        expectEqual(manager.contains(".sheet(item: $searchTarget) { target in")
+        expectEqual(manager.contains("AppActions.shared.openLyricsSearch(for: LyricsSearchTarget(")
                     && !manager.contains("$showSearchSheet")
                     && manager.contains("await store.setInstrumental(keys: keys, true)")
                     && manager.contains("if s.key == kept { return true }")

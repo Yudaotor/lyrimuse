@@ -662,20 +662,6 @@ struct LyricsManagerView: View {
     @ObservedObject private var offsets = LyricsOffsetStore.shared
     // 已校准名单:列表的「已校准」胶囊、详情页那颗「已校准」标签和它下面那句说明认它(见 LyricsPinStore)。
     @ObservedObject private var pins = LyricsPinStore.shared
-    /// 「搜索候选歌词」面板为哪一首开着;nil = 没开。
-    @State private var searchTarget: SearchTarget?
-
-    /// 搜索面板为哪一首开的:打开那一刻拍下歌名、歌手、专辑和时长,面板开着期间不随列表重读改动(引擎补写了专辑,查询词也
-    /// 不重置、不重搜,见 11 章决策 92)。「当前使用」的来源和指纹、纯音乐标记照常按这一首此刻的记录算。
-    private struct SearchTarget: Identifiable {
-        let key: String
-        let artist: String
-        let title: String
-        /// 面板里预填的专辑(给人看的那份)。
-        let album: String
-        let durationSecs: Double
-        var id: String { key }
-    }
 
     // MARK: - 「重新自动匹配」
     //
@@ -2076,14 +2062,16 @@ struct LyricsManagerView: View {
 
     private func openSearch(for key: String) {
         guard select(key), let summary = store.summary(forKey: key) else { return }
-        openSearchSheet(summary)
+        openSearchWindow(summary)
     }
 
-    private func openSearchSheet(_ summary: EnrichCacheStore.Summary) {
+    /// 「搜索候选歌词」开「搜索歌词…」独立窗口,搜这一首(不一定是正在放的那首),跟悬浮窗 ⚙、歌词窗口那几个入口同一扇
+    /// (见 11 章决策 131)。打开那一刻拍下歌名、歌手、专辑和时长,窗口开着期间不随列表重读改动(见 11 章决策 92)。
+    private func openSearchWindow(_ summary: EnrichCacheStore.Summary) {
         // 歌名去掉时长变体的 `~durN`:那是缓存键里的消歧位,拿它去各源搜什么都搜不到。写回仍按 key。
-        searchTarget = SearchTarget(key: summary.key, artist: summary.artist,
-                                    title: EnrichCacheKeys.strippingDurationVariantTitle(summary.title),
-                                    album: summary.displayAlbum, durationSecs: summary.durationSecs)
+        AppActions.shared.openLyricsSearch(for: LyricsSearchTarget(
+            key: summary.key, artist: summary.artist, title: EnrichCacheKeys.strippingDurationVariantTitle(summary.title),
+            album: summary.displayAlbum, durationSecs: summary.durationSecs))
     }
 
     private func openDecision(for key: String) {
@@ -2217,11 +2205,11 @@ struct LyricsManagerView: View {
                     refreshNowPlayingKey()
                     // 选中的正是上一首正在放的歌(或什么都没选)才跟着换,点了别的歌就不动;列表不滚动(见 11 章决策 64)。
                     // 正在改歌词或多选了一批时也不动:选中整个换成新歌,编辑缓冲随之重载,敲的内容没有任何提示就没了。
-                    // 解析决策面板开着时也不动:它读的是选中那首。搜索候选歌词面板开着时同样不动:面板自己记着为哪首开的
-                    // (SearchTarget),背后的详情却会换成新歌,采纳之后看到的不是刚采纳的那首(见 11 章决策 86、92)。同曲条目面板和
+                    // 解析决策面板开着时也不动:它读的是选中那首(见 11 章决策 86)。同曲条目面板和
                     // 别的确认框同理:面板读的是选中那首,开着时换掉,内容当场变成另一首,「统一用这一份」会作用到新歌上。
+                    // 「搜索歌词…」窗口是独立的一扇、自己记着为哪首开的,不在这里拦。
                     let followsPlayback = selectedKeys.isEmpty || previous.map { selectedKeys == [$0] } == true
-                    guard followsPlayback, !isEditorDirty, editMode == .preview, searchTarget == nil, !showDecisionSheet,
+                    guard followsPlayback, !isEditorDirty, editMode == .preview, !showDecisionSheet,
                           !showSongVersions, !windowFrame.hasAttachedSheet else { return }
                     focusCurrentlyPlaying(scrollProxy: scrollProxy, scroll: false)
                 }
@@ -3219,90 +3207,25 @@ struct LyricsManagerView: View {
                 SongVersionsSheet(summary: summary, onOpen: { other in _ = select(other) }, showEvidence: songVersionsShowEvidence,
                                   compareKey: songVersionsCompare)
             }
-            .sheet(item: $searchTarget) { target in
-                // 采纳候选直接保存,不需要再手动点"保存修改"——避免让人误以为选了就已经
-                // 存上了,结果只是填进了编辑框,还得再点一下保存才真正落盘。下面的 key 是面板为之打开的那一首。
-                let key = target.key
-                let live = store.summary(forKey: key)
-                LyricsSearchSheet(
-                    artist: target.artist, title: target.title, album: target.album, songKey: key,
-                    currentSource: live?.lyricsSource,
-                    // 「当前使用」双判据要的正文指纹,跟「搜索歌词…」独立窗口(storedLyrics)同一个口径:条目里存着的正文,标了纯音乐也照给。
-                    // 按 key 原样取,不走 lookup:那条会按正在播放的快照、时长变体去认,同名的另一份录音在放时取到的是那一条。
-                    currentFingerprint: EnrichCacheReader.storedEntry(forKey: key)
-                        .map { ManualPickLock.fingerprint(lyrics: $0.lyrics) }.flatMap { $0.isEmpty ? nil : $0 },
-                    durationSecs: target.durationSecs,
-                    isMarkedInstrumental: live?.isInstrumental ?? false,
-                    onSetInstrumental: { value in await store.setInstrumental(key: key, value) },
-                    onAutoMatch: { progress in
-                        // 跟详情页「重新自动匹配」同一条路、同一个收尾:列表重读,换了词换掉编辑框,结论挂在详情页那一行
-                        // (面板换了词会关掉,关掉之后看得到)。
-                        guard let line = await LyricsRematchRunner.run(key: key, onProgress: progress) else { return nil }
-                        await store.reload(onlyIfChanged: true)
-                        finishRematch(key: key, line: line)
-                        return line
-                    }
-                ) { candidate in
-                    // 仅纯文本的候选走完全独立的一条路——不写 editedLyrics/
-                    // editedTr/editedRoma(那三个编辑框是给带时间戳的 LRC 内容准备的,纯文本
-                    // 塞进去只会让用户以为能像平时一样调 offset/看逐字,其实什么都不对得上)、
-                    // 不 refreshOffsetState(offset 的整套机制建立在"对内容做 SHA256 指纹"上,
-                    // 纯文本没有时间戳、没有这个概念)、不经 saveEdit 的 markManual/sourceChoice
-                    // 这些"带时间戳歌词"专属的字段。见 EnrichCacheStore.savePlainTextEdit 头注。
-                    guard !candidate.isPlainTextOnly else {
-                        let saved = await store.savePlainTextEdit(
-                            key: key, plainLyrics: candidate.lyrics, source: candidate.source)
-                        if saved { flashSaveEditFeedback() }
-                        return saved
-                    }
-                    if editingKey == key {
-                        editedLyrics = candidate.lyrics
-                        editedTr = candidate.lyricsTr
-                        editedRoma = candidate.lyricsRoma
-                    }
-                    // 「采纳候选」要不要顺带冻结这首歌,由 `manualPickLocksLyrics` 决定 ——
-                    // 而**两种状态都不写** lyrics_source_choice(空串 = 显式清掉)。
-                    //
-                    // 这里曾有第三态:开关关着时记下"选了哪个源",自愈路径照常跑
-                    // 但被约束在该源内(引擎侧 pickLyricCandidatePreferring)。当时的想法
-                    // 是把"我手改过正文"和"我不同意这次选源"拆成强弱两级约束。
-                    //
-                    // 用户看到设置里写出来的说明后当场否掉了这个中间态:他要的
-                    // 两态是「关 = 之后所有自动更新/优化照常调整这首歌,**不限制源**;
-                    // 开 = 就定在这份歌词上不动」。中间那档除了不是他想要的,本身也讲不清楚
-                    // —— 它是一个看不见的约束,只能靠歌词管理里事后一枚 pin 徽章解释"为什么
-                    // 这首歌一直是这个源"。于是关态改成什么痕迹都不留;存量缓存里那 6 条
-                    // lyrics_source_choice 也一并清掉了(清理记录见 docs/features/11)。
-                    //
-                    // 直接编辑正文那条路径(「保存修改」)**永远**置 manual_lyrics,不受这个
-                    // 开关影响——那份内容删了就找不回来,自动逻辑没有任何理由觉得自己比人工更懂。
-                    let saved = await store.saveEdit(key: key, lyrics: candidate.lyrics, tr: candidate.lyricsTr,
-                                                     roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
-                                                     source: candidate.source, markManual: AppSettings.shared.manualPickLocksLyrics,
-                                                     sourceChoice: "", fromManualPick: true, bg: candidate.lyricsBG, trLang: candidate.lyricsTrLang)
-                    guard saved else {
-                        // 没存上:编辑框和偏移退回盘上那份。留着候选的话,下一次 ⌘S 会把它当手改存进去并锁定。
-                        // 这期间切到了别的歌就不动 —— 编辑框已经是那一首的了。
-                        if editingKey == key { loadDetail(key: key) }
-                        return false
-                    }
-                    // 采纳的候选歌词内容跟原来不一样,offset 的 key(内容指纹)也跟着变——输入框要显示"新内容对应的
-                    // 偏移值"。按盘上刚落下的那份重载(不再算未保存);这期间切到了别的歌就不动。
-                    if editingKey == key { loadDetail(key: key) }
-                    // 补上——采纳候选之前点了就直接关闭弹窗,真正的保存(交给
-                    // 引擎)在后台异步跑,用户看不到任何进度,失败时只能在下面
-                    // store.lastError 那行小字里发现。复用"保存修改"同一个反馈机制:
-                    // 成功就闪一下"已保存",失败不闪(已经有 lastError 的红字提示,不需要
-                    // 叠加两套反馈互相矛盾)。
-                    flashSaveEditFeedback()
-                    return true
+            // 「搜索歌词…」窗口里采纳了候选:详情正开着这首、编辑框没有没保存的改动时按盘上刚落下的那份重载(内容指纹变了,
+            // 偏移也跟着换),再闪一下「已保存」。有没保存的改动时不动,保存时按格合并,同 finishRematch。
+            .onReceive(AppActions.shared.lyricsSearchApplied) { key in
+                guard editingKey == key else { return }
+                if !isEditorDirty { loadDetail(key: key) }
+                flashSaveEditFeedback()
+            }
+            // 窗口里「重新自动匹配」有了结论:列表重读,结论挂在详情页那一行,同详情页那颗按钮。这边自己正在匹配另一首时
+            // 只重读,不动那一行的状态。
+            .onReceive(AppActions.shared.lyricsSearchRematched) { result in
+                Task {
+                    await store.reload(onlyIfChanged: true)
+                    guard rematchRunningKey == nil || rematchRunningKey == result.key else { return }
+                    finishRematch(key: result.key, line: result.line)
                 }
             }
     }
 
-    /// 采纳候选成功后闪一下「已保存」—— 跟「保存修改」同一个反馈机制(showSaveEditFeedback)。
-    /// 抽出来是因为 onApply 从要**等保存结束再回报成败**(面板据此决定关不关窗、
-    /// 挪不挪「当前使用」徽标),这 1 秒的收尾不能再挂在同一个 Task 里阻塞回报。
+    /// 闪一下「已保存」:「保存修改」和「搜索歌词…」窗口里采纳成功后都用它(showSaveEditFeedback)。
     private func flashSaveEditFeedback() {
         Task {
             withAnimation { showSaveEditFeedback = true }
@@ -3371,7 +3294,7 @@ struct LyricsManagerView: View {
             .help(L10n.t("重新联网匹配，直接采用算法选出的结果，依据设置中的「匹配算法」"))
             // 自动匹配飞行途中不开这个弹窗:在弹窗里采纳的那份会让这一轮作废(引擎见到期间改过就不写)。
             Button {
-                openSearchSheet(summary)
+                openSearchWindow(summary)
             } label: {
                 topBarLabel(L10n.t("搜索候选歌词"), icon: "magnifyingglass", iconOnly: iconOnly)
             }
@@ -4186,7 +4109,7 @@ struct LyricsManagerView: View {
                 .disabled(rematchBlocked)
                 Group {
                     Button {
-                        openSearchSheet(summary)
+                        openSearchWindow(summary)
                     } label: {
                         Label(L10n.t("搜索候选歌词"), systemImage: "magnifyingglass")
                     }
@@ -4299,7 +4222,7 @@ struct LyricsManagerView: View {
                 }
                 .help(L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，无歌词的重新加入自动匹配队列"))
                 Button {
-                    openSearchSheet(summary)
+                    openSearchWindow(summary)
                 } label: {
                     Label(L10n.t("搜索候选歌词"), systemImage: "magnifyingglass")
                 }
@@ -4322,7 +4245,7 @@ struct LyricsManagerView: View {
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 8)
                 Button {
-                    openSearchSheet(summary)
+                    openSearchWindow(summary)
                 } label: {
                     Label(L10n.t("搜索候选歌词"), systemImage: "magnifyingglass")
                 }

@@ -16,11 +16,19 @@ final class AppActions {
     /// 只开场景那扇完整尺寸的歌词窗口(激活 App),不按形态分流:出迷你时用(07 章决策 133)。别的地方一律走 `openLyricsWindow`。
     var openLyricsWindowScene: (() -> Void)?
     var openOnboarding: (() -> Void)?
-    /// 唤出「搜索歌词…」独立窗口(悬浮窗 ⚙、菜单栏、快捷键、歌词窗口共用):它自己独立的一扇
-    /// `Window(id: "lyrics-quick-search")`(见 App.swift),不用先开歌词窗口。`LyricsQuickSearchWindow` 是根内容,自己在 `.task`
-    /// 里现查一次当前曲目——跟上面三个 open* 同一个理由,在 MenuBarSceneActions.swift 的锚点视图里捕获 `openWindow(id:)`
-    /// 这个环境 action。
-    var openLyricsQuickSearch: (() -> Void)?
+    /// 把「搜索歌词…」独立窗口叫出来(`Window(id: "lyrics-quick-search")`,见 App.swift),不用先开歌词窗口。跟上面三个 open*
+    /// 同一个理由,在 MenuBarSceneActions.swift 的锚点视图里捕获 `openWindow(id:)` 这个环境 action。只经下面两个入口调,
+    /// 它们先定好搜哪一首(`lyricsSearchTarget`)。
+    var presentLyricsSearchWindow: (() -> Void)?
+
+    /// 唤出「搜索歌词…」窗口搜正在放的那首(悬浮窗 ⚙、菜单栏、快捷键、歌词窗口、灵动岛共用)。
+    var openLyricsQuickSearch: (() -> Void)? {
+        guard let present = presentLyricsSearchWindow else { return nil }
+        return { [weak self] in
+            self?.lyricsSearchTarget = nil
+            present()
+        }
+    }
 
     /// 「搜索歌词…」小窗**已经开着**(没被真的关掉,只是被别的窗口挡住/切到后台)时的
     /// 那一半信号——跟上面 `selectionRequests` 是同一个坑的同一个修法(现象是
@@ -33,6 +41,21 @@ final class AppActions {
     /// send 会落空,但不需要它,`.task` 本来就会查一遍),两条路合起来才是"点这个按钮一定
     /// 看到当前这首歌"。
     let quickSearchRefreshRequests = PassthroughSubject<Void, Never>()
+
+    /// 「搜索歌词…」窗口要搜的那一首:歌词管理按选中那首开时是它(`openLyricsSearch(for:)`),别的入口开时是 nil = 正在放的
+    /// 那首。每次打开由入口定好,窗口读的时候不清:新开的窗口 `.task` 和 `quickSearchRefreshRequests` 两条路都会读一遍,
+    /// 读一次就清的话后一次读到 nil,又换回正在放的那首。
+    private(set) var lyricsSearchTarget: LyricsSearchTarget?
+
+    func openLyricsSearch(for target: LyricsSearchTarget) {
+        guard let present = presentLyricsSearchWindow else { return }
+        lyricsSearchTarget = target
+        present()
+    }
+
+    /// 「搜索歌词…」窗口里采纳成功(带写回的 key)、「重新自动匹配」有了结论。歌词管理开着同一首时据此重载编辑框、挂结论。
+    let lyricsSearchApplied = PassthroughSubject<String, Never>()
+    let lyricsSearchRematched = PassthroughSubject<LyricsSearchRematchResult, Never>()
 
     /// 「重新运行引导…」要从头再来:回到第一页、清掉走过的进度、重放开场。引导窗口已经开着时 `openOnboarding`
     /// 只是把它带到前台,靠这一下补上;窗口是新开的,开场由它自己进门时放(同 `quickSearchRefreshRequests` 的做法)。

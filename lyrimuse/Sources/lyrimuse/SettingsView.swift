@@ -1375,9 +1375,8 @@ private struct LyricsSettingsTab: View {
                 ))
             }
             CardDivider()
-            // 「采纳候选要不要顺带锁定这首歌」的开关 —— 见 LyricsManagerView /
-            // LyricsQuickSearchWindow **两处**「采纳候选」调用点的 markManual
-            // 参数注释(grep `LyricsSearchSheet(` 数得到,改一处就要两处一起改)。默认关,纯本地
+            // 「采纳候选要不要顺带锁定这首歌」的开关 —— 见 LyricsQuickSearchWindow「采纳候选」调用点的 markManual
+            // 参数注释(`LyricsSearchSheet(` 只有那一处调用)。默认关,纯本地
             // UI 偏好,不需要引擎知道,存进 AppSettings 而不是 FeatureSettingsStore。
             //
             // 这是整个设置页唯一一个**会去改歌词缓存**的开关(其余全是显示偏好):翻面时

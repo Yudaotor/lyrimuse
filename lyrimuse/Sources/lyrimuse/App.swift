@@ -43,14 +43,15 @@ struct LyrimuseApp: App {
         // 标题栏透明、内容铺到顶:红绿灯落在歌词管理的浮动侧栏里。别改成在 NSWindow 上手设,理由见
         // SheetWindowAffordances.swift 的 EmptyUnifiedToolbar。
         .windowStyle(.hiddenTitleBar)
-        // 悬浮窗 ⚙ 快捷菜单「搜索歌词…」的独立小窗——故意跟"歌词窗口"
-        // 分开开:点了只弹这一个搜索页面,不需要连带拉起完整的歌词窗口。
+        // 「搜索歌词…」独立窗口:悬浮窗 ⚙、菜单栏、快捷键、歌词窗口和歌词管理都开这一扇,点了只弹这一个搜索页面,
+        // 不连带拉起别的窗口(见 LyricsQuickSearchWindow 头注)。
         Window(L10n.t("搜索歌词…"), id: "lyrics-quick-search") {
             LyricsQuickSearchWindow()
         }
+        .defaultSize(LyricsSearchSheet.defaultSize)
         // 「窗口」菜单里不列这扇一次性小窗(开着时照样在底下的已打开窗口清单里)。
         .commandsRemoved()
-        // 标题栏透明、内容铺到顶:红绿灯落在搜索面板的浮动侧栏里(LyricsSearchSheet.standaloneWindow)。
+        // 标题栏透明、内容铺到顶:红绿灯落在搜索面板的浮动侧栏里(LyricsSearchSheet.sidebar 顶上那一截)。
         // 别改成在 NSWindow 上手设,理由见 SheetWindowAffordances.swift 的 EmptyUnifiedToolbar。
         .windowStyle(.hiddenTitleBar)
         // 正经的标题栏窗口(不是悬浮歌词/灵动岛那种无边框浮层),展示完整歌词并跟随

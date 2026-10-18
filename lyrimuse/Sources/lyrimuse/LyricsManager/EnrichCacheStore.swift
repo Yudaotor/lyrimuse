@@ -1100,8 +1100,8 @@ public final class EnrichCacheStore: ObservableObject {
     ///   字符串 = **显式清掉**(交回算法自由选源);传 nil = 不动这个字段。
     ///   语义见引擎侧 `enrichEntry.LyricsSourceChoice` 的注释:它跟 `markManual`
     ///   是两件事 —— 那个说"我改过正文,别碰",这个只说"我要这个源的词"。
-    /// - Parameter fromManualPick: 这一笔是不是「采纳一条候选」(两个入口:歌词管理、「搜索歌词…」
-    ///   独立窗口)。传 true 会写下内容指纹 `manual_pick_sha`,
+    /// - Parameter fromManualPick: 这一笔是不是「采纳一条候选」(入口只有「搜索歌词…」
+    ///   窗口,歌词管理也开它)。传 true 会写下内容指纹 `manual_pick_sha`,
     ///   供「手动选定歌词后锁定」开关**追溯**用;传 false(默认)会把它清掉。详见写入处的
     ///   注释与 `applyManualPickLock`。它跟 `markManual` 正交:markManual 决定"现在锁不锁",
     ///   这个只决定"以后开关打开时要不要把这首歌算进去"。

@@ -121,7 +121,7 @@ private struct SceneActionRegistrar: View {
                     WindowActivation.activateApp()
                     openWindowAction(id: "lyrics-window")
                 }
-                AppActions.shared.openLyricsQuickSearch = {
+                AppActions.shared.presentLyricsSearchWindow = {
                     WindowActivation.activateApp()
                     openWindowAction(id: "lyrics-quick-search")
                     // 窗口已经开着(没被真关掉)时,上面这行只是把它带到前台,不会让
