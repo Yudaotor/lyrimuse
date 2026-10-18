@@ -1336,6 +1336,17 @@ private final class LyricsWindowController: ObservableObject {
         setAlwaysOnTop(!isAlwaysOnTop)
     }
 
+    /// 标题栏那一条的空白处双击:照系统「双击窗口标题栏以」那一项放大(再双击还原)或最小化(`TitlebarDoubleClickAction`)。
+    /// 迷你窗没有放大(07 章决策 32),全屏时没有标题栏。
+    func titlebarDoubleClicked() {
+        guard let window, !isMini, !isFullScreenActive, !isNativeFullScreenTransition else { return }
+        switch TitlebarDoubleClickAction.current() {
+        case .zoom: window.zoom(nil)
+        case .minimize: window.miniaturize(nil)
+        case .none: break
+        }
+    }
+
     private func setAlwaysOnTop(_ on: Bool) {
         guard let window else { return }
         isAlwaysOnTop = on
@@ -2786,6 +2797,16 @@ struct LyricsWindowView: View {
                     }
                     .animation(.easeInOut(duration: 0.45), value: isIdle)
                     .ignoresSafeArea())
+                // 标题栏那一条的空白处接双击(07 章决策 171)。挂在两颗胶囊的 overlay 之前,胶囊、红绿灯叠在上面照旧接自己的点按。
+                .overlay(alignment: .top) {
+                    if !previewMode, !showsMiniLayout, geo.safeAreaInsets.top > 0 {
+                        Color.clear
+                            .frame(height: geo.safeAreaInsets.top)
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) { windowController.titlebarDoubleClicked() }
+                            .offset(y: -geo.safeAreaInsets.top)
+                    }
+                }
                 // 音量胶囊必须**浮在内容之上**,不能放进 .toolbar。
                 //
                 // Liquid Glass 的规则(见 LiquidGlassReference:"Glass cannot sample other glass"、

@@ -24,6 +24,25 @@ func runLyricsWindowTests() {
         expectEqual(TrackNameDisplay.cleaned("晴天"), "晴天", "歌名显示: 没有包围符号原样返回")
     }
 
+    // ---- 标题栏双击:照系统「双击窗口标题栏以」那一项 ----
+    do {
+        typealias A = TitlebarDoubleClickAction
+        expectEqual(A.resolve(action: nil, miniaturizeOnDoubleClick: false), .zoom, "标题栏双击: 没设过按放大")
+        expectEqual(A.resolve(action: "Maximize", miniaturizeOnDoubleClick: false), .zoom, "标题栏双击: 缩放")
+        expectEqual(A.resolve(action: "Fill", miniaturizeOnDoubleClick: false), .zoom, "标题栏双击: 填充也是放大")
+        expectEqual(A.resolve(action: "Minimize", miniaturizeOnDoubleClick: false), .minimize, "标题栏双击: 最小化")
+        expectEqual(A.resolve(action: "None", miniaturizeOnDoubleClick: true), .none, "标题栏双击: 不执行任何操作")
+        expectEqual(A.resolve(action: nil, miniaturizeOnDoubleClick: true), .minimize, "标题栏双击: 只有旧的最小化开关")
+        expectEqual(A.resolve(action: "Maximize", miniaturizeOnDoubleClick: true), .zoom, "标题栏双击: 新那一项优先于旧开关")
+        expectEqual(A.resolve(action: "Something", miniaturizeOnDoubleClick: false), .zoom, "标题栏双击: 认不得的取值按放大")
+        let suite = "lyrimuse-selftest-titlebar-\(getpid())"
+        if let d = UserDefaults(suiteName: suite) {
+            d.set("Minimize", forKey: "AppleActionOnDoubleClick")
+            expectEqual(A.current(d), .minimize, "标题栏双击: 从偏好里读")
+            d.removePersistentDomain(forName: suite)
+        }
+    }
+
     checkLyricsWindowHoverFade()
     checkLyricsWindowMiniAutoHide()
     checkLyricsWindowChromeIdle()
