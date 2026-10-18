@@ -41,6 +41,7 @@ enum AppMenuActions {
 
 /// App 主菜单:「关于 Lyrimuse」翻到设置的关于页,下面跟着「检查更新…」(查到新版本时换成那一句);「帮助」只留
 /// 反馈问题、重新运行引导,跟状态栏菜单的「帮助」一样。无 Sparkle 构建里不给检查更新:点了没反应,不如不给。
+/// 「窗口」菜单里打开歌词窗口用自己这一项(走 `openLyricsWindow`,按设置开迷你或完整),不用 SwiftUI 给场景自动加的那一项。
 struct AppMainMenuCommands: Commands {
     @ObservedObject private var updater = SparkleUpdaterManager.shared
 
@@ -54,6 +55,9 @@ struct AppMainMenuCommands: Commands {
                 Button(L10n.t("检查更新…")) { AppMenuActions.checkForUpdates() }
             }
             #endif
+        }
+        CommandGroup(after: .singleWindowList) {
+            Button(L10n.t("打开歌词窗口")) { AppActions.shared.openLyricsWindow?() }
         }
         CommandGroup(replacing: .help) {
             Button(L10n.t("反馈问题…")) { AppMenuActions.reportIssue() }

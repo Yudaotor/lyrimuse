@@ -3022,9 +3022,11 @@ func runSourceContractSurfaceTests() {
                     true, "主菜单: 系统插的发送反馈给 Apple 那一项按 action 移掉")
         expectEqual(sceneBlock("onboarding").contains(".commandsRemoved()")
                     && sceneBlock("lyrics-quick-search").contains(".commandsRemoved()")
-                    && !sceneBlock("lyrics-manager").contains(".commandsRemoved()")
-                    && !sceneBlock("lyrics-window").contains(".commandsRemoved()"),
-                    true, "主菜单: 引导和搜索小窗不进「窗口」菜单,歌词管理、歌词窗口照常列")
+                    && !sceneBlock("lyrics-manager").contains(".commandsRemoved()"),
+                    true, "主菜单: 引导和搜索小窗不进「窗口」菜单,歌词管理照常列")
+        expectEqual(sceneBlock("lyrics-window").contains(".commandsRemoved()")
+                    && sourceBytes(mainMenuSrc, contain: "CommandGroup(after: .singleWindowList) {\n            Button(L10n.t(\"打开歌词窗口\")) { AppActions.shared.openLyricsWindow?() }"),
+                    true, "主菜单: 歌词窗口不用 SwiftUI 自动加的那一项(绕过开迷你还是完整那一层),改用走 openLyricsWindow 的「打开歌词窗口」")
         expectEqual(sourceBytes(settingsSrc, contain: "lyrimuse/issues\")!")
                     || sourceBytes(settingsSrc, contain: "discussions/categories/ideas"), false,
                     "反馈链接: 设置页不再自己拼 issue 列表 / 想法分类的链接")

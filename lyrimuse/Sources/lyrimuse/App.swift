@@ -74,6 +74,9 @@ struct LyrimuseApp: App {
                 LyricsWindowScene()
             }
         }
+        // 不要 SwiftUI 给这个场景自动加的「窗口」菜单项:它直接 openWindow、不分迷你还是完整,迷你开着时会再开一扇完整窗口。
+        // 打开歌词窗口用 AppMainMenuCommands 里那一项(06 章决策 53)。
+        .commandsRemoved()
         // AM 式顶部(对齐 Apple Music 视觉):无标题白条,背景一直通到窗顶、
         // 红绿灯悬浮在背景上。hiddenTitleBar = 标题栏透明 + 隐藏标题 + 内容全尺寸,
         // 一个修饰符抵三行 NSWindow 配置,而且在窗口显示前就生效(不闪白条)。
