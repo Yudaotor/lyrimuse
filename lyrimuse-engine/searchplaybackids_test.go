@@ -127,15 +127,19 @@ func TestSearchLyricsAttachesCachedVideoID(t *testing.T) {
 }
 
 // search-lyrics 开搜之前用只读加载读缓存:它叠上常驻进程还没整份落盘的改动(待落盘小文件、在播单条快照),见 loadEnrichCacheReadOnly。
+// 有落盘的重音词表时只读元数据(loadEnrichCacheMetaReadOnly),没有才读正文、自己建词表。
 func TestSearchLyricsLoadsUnsavedChanges(t *testing.T) {
 	src, err := os.ReadFile("searchcli.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := string(src)
-	load := strings.Index(s, `loadEnrichCacheReadOnly(filepath.Join(filepath.Dir(cfgPath), clientName+"-enrich-cache.json"))`)
+	path := strings.Index(s, `cachePath := filepath.Join(filepath.Dir(cfgPath), clientName+"-enrich-cache.json")`)
+	words := strings.Index(s, "if loadAccentCacheWordsFile(filepath.Join(filepath.Dir(cfgPath), accentWordsFileName)) {")
+	meta := strings.Index(s, "loadEnrichCacheMetaReadOnly(cachePath)")
+	full := strings.Index(s, "loadEnrichCacheReadOnly(cachePath)")
 	search := strings.Index(s, "scoredLyricCandidatesStreaming(searchCtx")
-	if load < 0 || search < 0 || load > search {
-		t.Error("search-lyrics 要在开搜之前用 loadEnrichCacheReadOnly 读缓存")
+	if path < 0 || words < path || meta < words || full < meta || search < full {
+		t.Error("search-lyrics 要在开搜之前读缓存:有词表时只读元数据,没有才读正文")
 	}
 }

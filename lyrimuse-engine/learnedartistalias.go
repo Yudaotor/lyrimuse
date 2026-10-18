@@ -155,6 +155,16 @@ func winningCandidateArtist(e enrichEntry) string {
 // 这段时间里放过、预取过的歌只在这两份里,不叠的话子命令读不到它们的 ISRC、平台曲目页、学到的署名。主缓存不在时照叠。
 // 见 09 章决策 252。
 func loadEnrichCacheReadOnly(path string) {
+	loadEnrichCacheReadOnlyWith(path, true)
+}
+
+// loadEnrichCacheMetaReadOnly 同 loadEnrichCacheReadOnly,但不读正文小文件:精简条目的正文字段留空。只给明确不读缓存正文的
+// 调用方用(search-lyrics,词表另读 accentWordsFileName)。
+func loadEnrichCacheMetaReadOnly(path string) {
+	loadEnrichCacheReadOnlyWith(path, false)
+}
+
+func loadEnrichCacheReadOnlyWith(path string, bodies bool) {
 	m := map[string]enrichEntry{}
 	data, err := os.ReadFile(path)
 	switch {
@@ -162,7 +172,9 @@ func loadEnrichCacheReadOnly(path string) {
 		if err := json.Unmarshal(data, &m); err != nil || m == nil {
 			return
 		}
-		hydrateEnrichBodies(m, enrichBodiesDirFor(path)) // 只读正文小文件,不动它们
+		if bodies {
+			hydrateEnrichBodies(m, enrichBodiesDirFor(path)) // 只读正文小文件,不动它们
+		}
 	case !errors.Is(err, fs.ErrNotExist):
 		noteFileErr("read", path, err)
 		return

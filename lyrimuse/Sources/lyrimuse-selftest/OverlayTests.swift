@@ -1889,6 +1889,9 @@ func runOverlayTests() {
                     "UI 接线: 图片解码不跑在主线程(View 里的静态方法默认主线程隔离)")
         expectEqual(src("DirectFirstImageLoad.swift").contains("case .serverAnswered:"), true,
                     "UI 接线: 直连拿到 404 不拉黑主机、不再走代理")
+        expectEqual(src("CachedImage.swift").contains("var maxPixel: CGFloat { self == .thumbnail ? 256 : 1024 }")
+                    && src("DirectFirstImageLoad.swift").contains("ImageMemoryCache.Variant.original.decode(data)"), true,
+                    "UI 接线: 高清封面解码封顶 1024px(歌词窗口封面卡最大 920px),直连那条也按这一档降采样")
         expectEqual(src("SectionPreviewBars.swift").contains("MenuBarSlotPolicy.naturalWidth("), true,
                     "UI 接线: 菜单栏预览跟本体共用槽宽算式")
         expectEqual(src("ProgressFillLayer.swift").contains("override func viewDidChangeEffectiveAppearance()"), true,

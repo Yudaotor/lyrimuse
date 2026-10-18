@@ -20,14 +20,28 @@ final class ImageMemoryCache {
     /// 就能吃掉 48MB 预算的大半,把几百张列表缩略图挤出去,表现成列表滚动时缩略图
     /// 反复换入换出闪占位符。缩略档在解码时就降采样到 ≤256px(Retina 下 40pt 行高
     /// 也远够),cost 直接小两个数量级;原图档留给真需要分辨率的消费方(高清封面替代),
-    /// 同样在解码时封顶 2048px:最大的消费面是歌词窗口 460pt 的封面卡,2 倍屏 920px,
-    /// 放大到 1840pt@2x 也够。网易云图床去掉尺寸参数后原图最大 3000²(解码 36MB、占掉这里
-    /// 48MB 预算的四分之三),封顶后约 16MB;小于 2048 的图原样解码。
+    /// 同样在解码时封顶 1024px:最大的消费面是歌词窗口 460pt 的封面卡,2 倍屏 920px。网易云图床去掉尺寸参数后
+    /// 原图最大 3000²(解码 36MB),封顶后 4MB;这张图挂到图层上,WindowServer 还要再存一份同样大小的。
+    /// 小于 1024 的图原样解码。见 03 章决策 58。
     enum Variant: String {
         case thumbnail // ≤256px,列表/头像/小封面
-        case original  // ≤2048px,高清封面替代
+        case original  // ≤1024px,高清封面替代
 
-        var maxPixel: CGFloat { self == .thumbnail ? 256 : 2048 }
+        var maxPixel: CGFloat { self == .thumbnail ? 256 : 1024 }
+
+        /// 按这一档解码下载回来的字节:超过 maxPixel 的在解码期就降采样(CGImageSource 缩略图管线,不把原图整张解出来
+        /// 再缩),拿不到缩略图(罕见格式)退回整图解码。
+        nonisolated func decode(_ data: Data) -> NSImage? {
+            if let src = CGImageSourceCreateWithData(data as CFData, nil),
+               let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
+                   kCGImageSourceCreateThumbnailFromImageAlways: true,
+                   kCGImageSourceCreateThumbnailWithTransform: true,
+                   kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+               ] as CFDictionary) {
+                return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+            }
+            return NSImage(data: data)
+        }
     }
 
     private let cache: NSCache<NSString, NSImage> = {

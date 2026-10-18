@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func testFullEnrichEntries() map[string]enrichEntry {
@@ -137,6 +138,61 @@ func TestLoadEnrichCacheReadOnlyHydratesLeanEntries(t *testing.T) {
 	loadEnrichCacheReadOnly(path)
 	if !reflect.DeepEqual(enrichCache, full) {
 		t.Errorf("只读加载没补回正文:\n got %#v", enrichCache)
+	}
+	if enrichPath != "" {
+		t.Error("只读加载不该设 enrichPath")
+	}
+}
+
+// 只读元数据:精简条目的正文留空、元数据照有,待落盘小文件照样叠上(它比主缓存新时是完整条目)。
+func TestLoadEnrichCacheMetaReadOnlySkipsBodiesKeepsPending(t *testing.T) {
+	oldCache, oldPath := enrichCache, enrichPath
+	t.Cleanup(func() { enrichCache, enrichPath = oldCache, oldPath })
+	enrichPath = ""
+
+	full := testFullEnrichEntries()
+	cfg := t.TempDir()
+	path := filepath.Join(cfg, clientName+"-enrich-cache.json")
+	lean := writeLeanForTest(t, full, enrichBodiesDirFor(path))
+	data, err := json.Marshal(lean)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var pendingKey string
+	for k := range full {
+		pendingKey = k
+		break
+	}
+	pending, err := json.Marshal(enrichPendingFile{Entries: map[string]enrichEntry{pendingKey: full[pendingKey]}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pendingPath := enrichPendingPathFor(path)
+	if err := os.WriteFile(pendingPath, pending, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	later := time.Now().Add(time.Minute)
+	if err := os.Chtimes(pendingPath, later, later); err != nil {
+		t.Fatal(err)
+	}
+	loadEnrichCacheMetaReadOnly(path)
+	if !reflect.DeepEqual(enrichCache[pendingKey], full[pendingKey]) {
+		t.Errorf("待落盘小文件没叠上: %#v", enrichCache[pendingKey])
+	}
+	for k, e := range full {
+		if k == pendingKey || e.Lyrics == "" {
+			continue
+		}
+		got := enrichCache[k]
+		if got.Lyrics != "" {
+			t.Errorf("%s: 只读元数据不该补回正文", k)
+		}
+		if got.LyricsSource != e.LyricsSource {
+			t.Errorf("%s: 元数据丢了: %q != %q", k, got.LyricsSource, e.LyricsSource)
+		}
 	}
 	if enrichPath != "" {
 		t.Error("只读加载不该设 enrichPath")

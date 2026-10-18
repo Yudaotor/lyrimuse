@@ -1,7 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"log"
+	"os"
+	"sort"
 	"strings"
 	"sync"
 	"unicode"
@@ -366,6 +370,49 @@ func refreshAccentCacheWords() {
 	accentCacheWordsMu.Unlock()
 }
 
+// accentWordsFileName:常驻引擎建好的第二级证据词表落盘的那份(配置目录下,排好序的 JSON 数组,两万来字节)。只给 search-lyrics 读:
+// 它为了建这张表要把一万多个正文小文件全读一遍(本机约 0.4～0.8 秒),读这份就够了,主缓存只读元数据(loadEnrichCacheMetaReadOnly)。
+// 见 09 章决策 292。
+const accentWordsFileName = clientName + "-accent-words.json"
+
+// writeAccentCacheWordsFile 把词表写成 path;跟磁盘上那份一字不差就不写。
+func writeAccentCacheWordsFile(path string, set accentWordSet) {
+	words := make([]string, 0, len(set))
+	for w := range set {
+		words = append(words, w)
+	}
+	sort.Strings(words)
+	data, err := json.Marshal(words)
+	if err != nil {
+		return
+	}
+	if old, err := os.ReadFile(path); err == nil && bytes.Equal(old, data) {
+		return
+	}
+	noteFileErr("write", path, writeFileAtomic(path, data))
+}
+
+// loadAccentCacheWordsFile 读 writeAccentCacheWordsFile 写的那份当第二级证据词表;读不到、解不开返回 false,调用方自己建。
+func loadAccentCacheWordsFile(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		noteFileErr("read", path, err)
+		return false
+	}
+	var words []string
+	if json.Unmarshal(data, &words) != nil {
+		return false
+	}
+	set := make(accentWordSet, len(words))
+	for _, w := range words {
+		set[w] = struct{}{}
+	}
+	accentCacheWordsMu.Lock()
+	accentCacheWords = set
+	accentCacheWordsMu.Unlock()
+	return true
+}
+
 // currentAccentCacheWords:第二级证据词表,没建过时为空。只整份替换、不原地改,拿到的那份不加锁也能查。
 func currentAccentCacheWords() accentWordSet {
 	accentCacheWordsMu.Lock()
@@ -383,6 +430,9 @@ func currentAccentCacheWords() accentWordSet {
 func migrateAccentSplits() {
 	refreshAccentCacheWords()
 	cached := currentAccentCacheWords()
+	if configDir() != "" {
+		writeAccentCacheWordsFile(configFilePath(accentWordsFileName), cached)
+	}
 	enrichMu.Lock()
 	fixed := 0
 	for k, e := range enrichCache {

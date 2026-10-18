@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func accentEvidence(texts ...string) func(string) bool {
@@ -380,5 +382,51 @@ func TestHasAccentSplitPoint(t *testing.T) {
 		if hasAccentSplitPoint(line) {
 			t.Errorf("%q: 没有可删的位置", line)
 		}
+	}
+}
+
+// 词表落盘再读回:一字不差;内容没变不重写;读不到、解不开返回 false。
+func TestAccentWordsFileRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), accentWordsFileName)
+	if loadAccentCacheWordsFile(path) {
+		t.Fatal("文件不在该返回 false")
+	}
+	set := accentWordSet{}
+	set.addText("[00:01.00]Café déjà vu\n[00:02.00]plain words")
+	writeAccentCacheWordsFile(path, set)
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(path, old, old); err != nil {
+		t.Fatal(err)
+	}
+	writeAccentCacheWordsFile(path, set)
+	if st, err := os.Stat(path); err != nil || !st.ModTime().Equal(old) {
+		t.Fatal("内容没变不该重写")
+	}
+	accentCacheWordsMu.Lock()
+	saved := accentCacheWords
+	accentCacheWords = nil
+	accentCacheWordsMu.Unlock()
+	t.Cleanup(func() {
+		accentCacheWordsMu.Lock()
+		accentCacheWords = saved
+		accentCacheWordsMu.Unlock()
+	})
+	if !loadAccentCacheWordsFile(path) {
+		t.Fatal("读不回来")
+	}
+	got := currentAccentCacheWords()
+	if len(got) != len(set) {
+		t.Fatalf("读回 %d 个词,写的是 %d 个", len(got), len(set))
+	}
+	for w := range set {
+		if _, ok := got[w]; !ok {
+			t.Fatalf("读回的词表少了 %q", w)
+		}
+	}
+	if err := os.WriteFile(path, []byte("{broken"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if loadAccentCacheWordsFile(path) {
+		t.Fatal("解不开该返回 false")
 	}
 }

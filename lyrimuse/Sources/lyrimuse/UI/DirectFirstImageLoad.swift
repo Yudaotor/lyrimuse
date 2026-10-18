@@ -22,7 +22,7 @@ enum DirectFirstImageLoad {
     private static let directRetryAfter: TimeInterval = 10 * 60
     private static var directFailedAt: [String: Date] = [:]
 
-    /// 原图档。直连这条不降采样(Spotify 原图实测最大 2000²,本来就在原图档 2048 的封顶之内);
+    /// 原图档。直连拿到的图同样按原图档封顶解码(`ImageMemoryCache.Variant.decode`,Spotify 原图实测 2000²);
     /// 直连失败退回 ImageMemoryCache.shared.load(系统代理,不设总时长上限)。
     static func loadOriginal(_ url: URL) async -> NSImage? {
         if let hit = ImageMemoryCache.shared.image(for: url, variant: .original) { return hit }
@@ -56,7 +56,7 @@ enum DirectFirstImageLoad {
         case transportFailed
     }
 
-    /// nonisolated:解码(Spotify 原图最大 2000²)在后台做,别占主线程。
+    /// nonisolated:解码、降采样(Spotify 原图最大 2000²)在后台做,别占主线程。
     private nonisolated static func fetchDirect(_ url: URL) async -> DirectResult {
         let start = Date()
         do {
@@ -64,7 +64,7 @@ enum DirectFirstImageLoad {
             let status = (resp as? HTTPURLResponse)?.statusCode
             NetworkAuditLog.recordSummarized(service: "image", operation: "image-direct", host: url.host ?? "unknown",
                                    statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
-            guard status == 200, let image = NSImage(data: data) else { return .serverAnswered }
+            guard status == 200, let image = ImageMemoryCache.Variant.original.decode(data) else { return .serverAnswered }
             return .image(image)
         } catch {
             NetworkAuditLog.recordSummarized(service: "image", operation: "image-direct", host: url.host ?? "unknown",
