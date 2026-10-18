@@ -5,7 +5,7 @@ import SwiftUI
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "feature-settings")
 
-// 十三个歌词源——rawValue 必须跟 lyrimuse-engine/features.go 的 lyricSourceXxx 常量逐字对应,
+// 十四个歌词源——rawValue 必须跟 lyrimuse-engine/features.go 的 lyricSourceXxx 常量逐字对应,
 // 这是两侧通过共享 json 文件交换的字符串。displayName/color 直接委托给
 // LyricsManagerView.swift 已有的 sourceDisplayName/sourceColor(那两个函数也在给
 // "歌词管理"窗口的来源筛选/列表用),不重复维护第二份名字/颜色映射。
@@ -24,7 +24,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "featur
 // deezer 跟 lyricfind 数据同源(都是 LyricFind 供词),但两条管道各走各的接口:接它既是
 // 给那家版权方补条后路,也因为 Deezer 的法语曲库覆盖更好,见 lyrimuse-engine/deezer.go 头注。
 public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable {
-    case kugou, netease, qq, musixmatch, lrclib, amll, lyricfind, kuwo, migu, deezer, applemusic, soda, vibe
+    case kugou, netease, qq, musixmatch, lrclib, amll, lyricfind, kuwo, migu, deezer, applemusic, soda, vibe, genie
     public var id: Self { self }
     public var displayName: String { sourceDisplayName(rawValue) }
     public var color: Color { sourceColor(rawValue) }
@@ -57,6 +57,7 @@ extension LyricsSource {
         case .applemusic: return L10n.t("Apple Music 的官方歌词，连接账号后可用")
         case .soda: return L10n.t("字节跳动旗下的音乐平台")
         case .vibe: return L10n.t("韩国 Naver 旗下的音乐平台")
+        case .genie: return L10n.t("韩国 KT 旗下的音乐平台")
         }
     }
 }
@@ -295,6 +296,7 @@ struct FeatureFlagsFile: Codable, Equatable {
     var appleMusicLyrics: Bool?
     var sodaLyrics: Bool?
     var vibeLyrics: Bool?
+    var genieLyrics: Bool?
     var lyricsSourceMode: String?
     var lyricsSourceOrder: [String]?
     var lyricsDir: String?
@@ -365,6 +367,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case appleMusicLyrics = "applemusic_lyrics"
         case sodaLyrics = "soda_lyrics"
         case vibeLyrics = "vibe_lyrics"
+        case genieLyrics = "genie_lyrics"
         case lyricsSourceMode = "lyrics_source_mode"
         case lyricsSourceOrder = "lyrics_source_order"
         case lyricsDir = "lyrics_dir"
@@ -659,6 +662,8 @@ public final class FeatureSettingsStore: ObservableObject {
             sodaLyrics: lyricsSources.contains(.soda),
             // 同上,vibe 的迁移标记独立生效一次。
             vibeLyrics: lyricsSources.contains(.vibe),
+            // 同上,genie 的迁移标记独立生效一次。
+            genieLyrics: lyricsSources.contains(.genie),
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
@@ -909,6 +914,10 @@ public final class FeatureSettingsStore: ObservableObject {
             if f.vibeLyrics == nil {
                 // 同上,见 FeatureFlagsFile.vibeLyrics。
                 enabled.insert(.vibe)
+            }
+            if f.genieLyrics == nil {
+                // 同上,见 FeatureFlagsFile.genieLyrics。
+                enabled.insert(.genie)
             }
         }
         lyricsSources = enabled

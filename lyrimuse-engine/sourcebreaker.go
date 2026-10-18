@@ -393,6 +393,10 @@ func lyricSourceForHost(host string) string {
 		// VIBE 的搜索和取词都在这个主机的 /vibeWeb/ 下(vibe.go)。全仓只有这一源请求它;封面图在 musicmeta-phinf.pstatic.net,
 		// 跟歌词无关,不进来。
 		return "vibe"
+	case h == "app.genie.co.kr" || h == "dn.genie.co.kr":
+		// Genie 的搜索在 app.genie.co.kr、取词在 dn.genie.co.kr(genie.go)。全仓只有这一源请求它们;封面图在
+		// image.genie.co.kr,跟歌词无关,不进来。
+		return "genie"
 	}
 	return ""
 }

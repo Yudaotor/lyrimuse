@@ -50950,6 +50950,22 @@
           }
         }
       }
+    },
+    "韩国 KT 旗下的音乐平台" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "KT's music service from Korea"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "韓國 KT 旗下的音樂平台"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
