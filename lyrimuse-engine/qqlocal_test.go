@@ -34,7 +34,7 @@ func writeTestQQDB(t *testing.T, rows []qqLocalRow) string {
 			i+1, sqlQuote(r.Name), sqlQuote(r.Singer), sqlQuote(r.Album), sqlQuote(r.Mid), r.MS))
 	}
 	cmd := exec.Command("/usr/bin/sqlite3", path)
-	cmd.Stdin = strings.NewReader(sb.String())
+	cmd.Stdin = strings.NewReader(sqliteBatch(sb.String()))
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Skipf("建测试库失败(没有 /usr/bin/sqlite3?): %v %s", err, out)
 	}

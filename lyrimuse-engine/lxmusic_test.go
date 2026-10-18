@@ -49,7 +49,7 @@ func withLXMusicData(t *testing.T, tracks []lxTestTrack, lyrics []lxTestLyric, l
 			sqlQuote(base64.StdEncoding.EncodeToString([]byte(l.text)))))
 	}
 	cmd := exec.Command("/usr/bin/sqlite3", filepath.Join(dir, "lx.data.db"))
-	cmd.Stdin = strings.NewReader(sb.String())
+	cmd.Stdin = strings.NewReader(sqliteBatch(sb.String()))
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Skipf("建测试库失败(没有 /usr/bin/sqlite3?): %v %s", err, out)
 	}

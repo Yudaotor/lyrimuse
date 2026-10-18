@@ -58,7 +58,7 @@ func writeTestKugouQueue(t *testing.T, songs []testKugouSong) string {
 	}
 	dir := t.TempDir()
 	sqlPath := filepath.Join(dir, "seed.sql")
-	if err := os.WriteFile(sqlPath, []byte(sql.String()), 0o644); err != nil {
+	if err := os.WriteFile(sqlPath, []byte(sqliteBatch(sql.String())), 0o644); err != nil {
 		t.Fatalf("写 seed.sql: %v", err)
 	}
 	dbPath := filepath.Join(dir, "currentPlayList.sqlite")

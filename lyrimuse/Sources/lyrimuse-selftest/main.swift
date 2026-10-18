@@ -75,7 +75,10 @@ let groups: [TestGroup] = [
     TestGroup(name: "deep-links", summary: "lyrimuse:// 路由表:老链接兼容 / 认不出不落进授权回调 / 往返 / 设置二级分段对得上 App 枚举", run: runDeepLinkTests),
     TestGroup(name: "settings-search", summary: "设置搜索:目录 ↔ 源码调用点 ↔ catalog 三方对账 / 匹配排序", run: runSettingsSearchTests),
     TestGroup(name: "onboarding", summary: "首启引导:步骤序列 / 翻页防越界 / 锁与收尾 / 体检清单 / 收尾页顺序 / 开场时间轴与月桂冠 / 撒花几何", run: runOnboardingTests),
-    TestGroup(name: "contracts", summary: "跨文件契约(多数靠 #filePath 扫源码文本):设置页分段 / 本地化 / 滑杆 / 封面口径 / 灵动岛对齐 / 引导页", run: runSourceContractTests),
+    TestGroup(name: "contracts-core", summary: "跨文件契约(扫源码文本):歌词窗口 / 本地化 / 滑杆 / 封面口径 / Spotify / Last.fm 播放器排除", run: runSourceContractTests),
+    TestGroup(name: "contracts-surfaces", summary: "跨文件契约(扫源码文本):灵动岛 / 菜单栏 / 歌词窗口 / 悬浮歌词 / 引导页 / 署名轮次 / 反馈 / 许可", run: runSourceContractSurfaceTests),
+    TestGroup(name: "contracts-settings", summary: "跨文件契约(扫源码文本):设置页闸 / 玻璃门控 / 两侧镜像 / 歌词源名单 / 采纳候选 / 菜单栏 / 项目级 skill / 预发布", run: runSourceContractSettingsTests),
+    TestGroup(name: "contracts-identity", summary: "跨文件契约(扫源码文本):身份与路径 / 主题 / 诊断导出 / omitempty / 日志规范 / 设置页判定 / 排字语言", run: runSourceContractIdentityTests),
     TestGroup(name: "ops-diagnostics", summary: "诊断脱敏 / 备份发现 / 导入策略 / 安全写文件 / launchd / 进程", run: runOpsDiagnosticsTests),
 ]
 

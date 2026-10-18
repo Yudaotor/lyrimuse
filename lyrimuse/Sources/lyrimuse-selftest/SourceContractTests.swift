@@ -1,9 +1,8 @@
 import LyrimuseCore
 import Foundation
 
-// 跨文件契约(多数靠 #filePath 扫源码文本):设置页分段 / 本地化 / 滑杆 / 封面口径 / 灵动岛对齐 / 引导页。
-// 由 main.swift 的注册表按组调用;往这一组加断言就写进下面这个函数体里(顺序执行,失败只计
-// 数不中断)。要开新的一组见 main.swift 顶部说明。
+// 跨文件契约(多数靠 #filePath 扫源码文本)。按小节分成四组(main.swift 注册表里 contracts-*),各起一个进程并行跑:
+// 往哪一组加断言就写进对应函数体里(顺序执行,失败只计数不中断),挑耗时少的那组。要开新的一组见 main.swift 顶部说明。
 
 @MainActor
 func runSourceContractTests() {
@@ -268,13 +267,14 @@ func runSourceContractTests() {
             // 格式参数:各语言的值(含单数变体「键#one」)要跟键用同一组参数 —— 第几个参数、什么类型。调用方按键的参数表
             // 传值,String(format:) 却按译文里的格式符取:译文把 %d 写成 %@ 会把整数当对象指针解引用(崩溃)。规则跟
             // generate-strings.py 的 format_arg_problems 同一套:%% 不算参数,不认空格标志,长度修饰同属整数。
+            let spec = #/%(?:(\d+)\$)?[-+0#]*\d*(?:\.\d+)?(?:hh|ll|h|l|q|z|t|j)?([@dDiuUxXoOfeEgGcCsSpaA%])/#
+            var kinds: [Character: String] = ["@": "object", "p": "pointer"]
+            for c in "dDiuUxXoO" { kinds[c] = "int" }
+            for c in "feEgGaA" { kinds[c] = "float" }
+            for c in "cC" { kinds[c] = "char" }
+            for c in "sS" { kinds[c] = "cstring" }
             func argSignature(_ s: String) -> [Int: String]? {
-                let spec = #/%(?:(\d+)\$)?[-+0#]*\d*(?:\.\d+)?(?:hh|ll|h|l|q|z|t|j)?([@dDiuUxXoOfeEgGcCsSpaA%])/#
-                var kinds: [Character: String] = ["@": "object", "p": "pointer"]
-                for c in "dDiuUxXoO" { kinds[c] = "int" }
-                for c in "feEgGaA" { kinds[c] = "float" }
-                for c in "cC" { kinds[c] = "char" }
-                for c in "sS" { kinds[c] = "cstring" }
+                if !s.contains("%") { return [:] }
                 var sig: [Int: String] = [:]
                 var next = 1
                 for m in s.matches(of: spec) {
@@ -404,6 +404,7 @@ func runSourceContractTests() {
                 for case let rel as String in walker where rel.hasSuffix(".swift") {
                     guard let text = try? String(contentsOfFile: uiSources.appendingPathComponent(rel).path, encoding: .utf8)
                     else { continue }
+                    guard sourceBytes(text, contain: "L10n.plural(") else { continue }
                     for m in text.matches(of: pluralPattern) { pluralKeys.insert(String(m.1)) }
                 }
             }
@@ -534,7 +535,9 @@ func runSourceContractTests() {
                 guard let text = try? String(contentsOfFile: uiSources.appendingPathComponent(rel).path,
                                              encoding: .utf8) else { continue }
                 scannedFiles += 1
-                for (i, rawLine) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+                guard sourceBytes(text, contain: ".artworkImage") else { continue }
+                for (i, rawLine) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated()
+                where rawLine.contains(".artworkImage") {
                     let line = String(rawLine)
                     let trimmed = line.trimmingCharacters(in: .whitespaces)
                     if trimmed.hasPrefix("//") || trimmed.hasPrefix("///") { continue }
@@ -1293,6 +1296,10 @@ func runSourceContractTests() {
         }
     }
 
+}
+
+@MainActor
+func runSourceContractSurfaceTests() {
     // ---- 灵动岛「字体」组的接线----
     //
     // 三个字体设置只影响渲染,漏接任何一处都不报错,只表现成"改了字体、某处没跟着变"。要吃字体的五处歌词
@@ -1387,8 +1394,9 @@ func runSourceContractTests() {
         var controlDefs: [String] = []
         if let walker = FileManager.default.enumerator(atPath: appSources.path) {
             for case let rel as String in walker where rel.hasSuffix(".swift") {
-                guard let text = read(rel) else { continue }
-                for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
+                guard let text = read(rel), sourceBytes(text, contain: "AlignmentSegmentedControl") else { continue }
+                for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false)
+                where rawLine.contains("AlignmentSegmentedControl") {
                     let line = String(rawLine).trimmingCharacters(in: .whitespaces)
                     guard line.hasPrefix("struct "), line.contains("AlignmentSegmentedControl"),
                           line.contains(": View") else { continue }
@@ -3242,6 +3250,10 @@ func runSourceContractTests() {
         }
     }
 
+}
+
+@MainActor
+func runSourceContractSettingsTests() {
     // ---- 设置页:跨进程调用不许出现在 view body 里 ----
     //
     // 真机 `sample` 抓栈坐实的卡顿(现象是「设置页切分页有延迟、不跟手」):「播放器」页的
@@ -4430,8 +4442,8 @@ func runSourceContractTests() {
         var titledScenes: Set<String> = []
         if let walker = FileManager.default.enumerator(atPath: appSources.path) {
             for case let rel as String in walker where rel.hasSuffix(".swift") {
-                guard let text = read(rel) else { continue }
-                for title in sceneTitles where text.contains(".navigationTitle(L10n.t(\"\(title)\"))") { titledScenes.insert(title) }
+                guard let text = read(rel), sourceBytes(text, contain: ".navigationTitle(") else { continue }
+                for title in sceneTitles where sourceBytes(text, contain: ".navigationTitle(L10n.t(\"\(title)\"))") { titledScenes.insert(title) }
             }
         }
         expectEqual(sceneTitles.count >= 4 && titledScenes == Set(sceneTitles), true,
@@ -4848,6 +4860,10 @@ func runSourceContractTests() {
         }
     }
 
+}
+
+@MainActor
+func runSourceContractIdentityTests() {
     // ---- 身份与路径收口----
     //
     // 配置目录 `~/.config/lyrimuse`、两个 launchd label、两份日志文件名,在 Swift 侧只许出现在 Core
@@ -5410,8 +5426,11 @@ func runSourceContractTests() {
         var subsystems: Set<String> = []
         let swiftLogCall = try? NSRegularExpression(pattern: #"logger\.(debug|info|notice|error|warning|fault|log)\(""#)
         for dir in ["Sources/lyrimuse", "Sources/LyrimuseCore"] {
-            for (rel, text) in files(under: packageDir.appendingPathComponent(dir), suffix: ".swift") {
-                for (n, raw) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+            let needles = ["NSLog(", "print(", "Logger(subsystem:", "logger."]
+            for (rel, text) in files(under: packageDir.appendingPathComponent(dir), suffix: ".swift")
+            where needles.contains(where: { sourceBytes(text, contain: $0) }) {
+                for (n, raw) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated()
+                where needles.contains(where: { raw.contains($0) }) {
                     let line = String(raw)
                     let t = line.trimmingCharacters(in: .whitespaces)
                     if t.hasPrefix("//") || line.contains("// log-style: allow") { continue }
@@ -5438,8 +5457,8 @@ func runSourceContractTests() {
         // 引擎新写的日志走 slog.Debug/Info/Warn/Error(logsink.go),一并扫。
         let goLogCall = try? NSRegularExpression(pattern: #"\b(?:log|slog)\.(Printf|Println|Print|Fatalf|Fatal|Debug|Info|Warn|Error)\(""#)
         for (rel, text) in files(under: repoRoot.appendingPathComponent("lyrimuse-engine"), suffix: ".go")
-        where !rel.hasSuffix("_test.go") && !rel.contains("/") {
-            for (n, raw) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+        where !rel.hasSuffix("_test.go") && !rel.contains("/") && sourceBytes(text, contain: "log.") {
+            for (n, raw) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() where raw.contains("log.") {
                 let line = String(raw)
                 let t = line.trimmingCharacters(in: .whitespaces)
                 if t.hasPrefix("//") || line.contains("// log-style: allow") { continue }

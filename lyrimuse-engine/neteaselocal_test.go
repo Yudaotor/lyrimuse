@@ -48,7 +48,7 @@ func writeTestNeteaseDB(t *testing.T, tracks []string) string {
 		sb.WriteString(fmt.Sprintf("INSERT INTO dbTrack VALUES ('k%d',%s);\n", i, sqlQuote(j)))
 	}
 	cmd := exec.Command("/usr/bin/sqlite3", path)
-	cmd.Stdin = strings.NewReader(sb.String())
+	cmd.Stdin = strings.NewReader(sqliteBatch(sb.String()))
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Skipf("建测试库失败(没有 /usr/bin/sqlite3?): %v %s", err, out)
 	}
@@ -207,7 +207,7 @@ func writeTestNeteaseDBWithHistory(t *testing.T, tracks, history []string) strin
 		sb.WriteString(fmt.Sprintf("INSERT INTO historyTracks VALUES (%d,'h%d',%s);\n", 1791547264000+i, i, sqlQuote(j)))
 	}
 	cmd := exec.Command("/usr/bin/sqlite3", path)
-	cmd.Stdin = strings.NewReader(sb.String())
+	cmd.Stdin = strings.NewReader(sqliteBatch(sb.String()))
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Skipf("建测试库失败: %v %s", err, out)
 	}

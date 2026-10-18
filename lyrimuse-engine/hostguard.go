@@ -188,10 +188,13 @@ const endpointTripAfter = 5
 // endpointCooldownSchedule:第 N 次跳闸停用多久,超出表长按最后一档。
 var endpointCooldownSchedule = []time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute, 30 * time.Minute}
 
+// newHostGuardRateFor:newHostGuard 建出来的闸按哪张速率表放行。单测在 TestMain 里换成令牌给足的,专测限速的用例自己设 rateFor。
+var newHostGuardRateFor = hostRateFor
+
 func newHostGuard(now func() time.Time) *hostGuard {
 	return &hostGuard{
 		now:               now,
-		rateFor:           hostRateFor,
+		rateFor:           newHostGuardRateFor,
 		maxWait:           hostGuardMaxWait,
 		backgroundMaxWait: hostGuardBackgroundMaxWait,
 		buckets:           map[string]*hostBucket{},

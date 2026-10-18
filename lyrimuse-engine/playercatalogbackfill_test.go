@@ -331,7 +331,7 @@ func writeTestKugouLibrary(t *testing.T, rows []testKugouLibRow) {
 	}
 	path := filepath.Join(t.TempDir(), "kugou3.sqlite")
 	cmd := exec.Command("/usr/bin/sqlite3", path)
-	cmd.Stdin = strings.NewReader(sql.String())
+	cmd.Stdin = strings.NewReader(sqliteBatch(sql.String()))
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Skipf("建曲库失败: %v %s", err, out)
 	}

@@ -108,7 +108,7 @@ func (e *testKugouPlistEnv) writeLibrary(albums map[string]*string) {
 	}
 	path := filepath.Join(e.dir, "kugou3.sqlite")
 	cmd := exec.Command("/usr/bin/sqlite3", path)
-	cmd.Stdin = strings.NewReader(sql.String())
+	cmd.Stdin = strings.NewReader(sqliteBatch(sql.String()))
 	if out, err := cmd.CombinedOutput(); err != nil {
 		e.t.Fatalf("建曲库失败: %v\n%s", err, out)
 	}
