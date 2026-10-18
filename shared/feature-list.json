@@ -1703,9 +1703,9 @@
             "zh-Hant": "日報、週報、月報和年度聽歌小結"
           },
           "desc": {
-            "zh-Hans": "通过推送发给你，支持 Bark、钉钉、企业微信、Discord、飞书、Server酱和 Telegram。四种各自开关。在「实验室」里。",
-            "en": "Sent to you as push notifications through Bark, DingTalk, WeCom, Discord, Feishu, ServerChan or Telegram. Each of the four has its own switch. Under Labs.",
-            "zh-Hant": "透過推播送給你，支援 Bark、釘釘、企業微信、Discord、飛書、Server醬和 Telegram。四種各自開關。在「實驗室」裡。"
+            "zh-Hans": "通过推送发给你，支持 Bark、钉钉、企业微信、Discord、飞书、Server酱、Telegram 和 Slack。四种各自开关。在「实验室」里。",
+            "en": "Sent to you as push notifications through Bark, DingTalk, WeCom, Discord, Feishu, ServerChan, Telegram or Slack. Each of the four has its own switch. Under Labs.",
+            "zh-Hant": "透過推播送給你，支援 Bark、釘釘、企業微信、Discord、飛書、Server醬、Telegram 和 Slack。四種各自開關。在「實驗室」裡。"
           },
           "default": "off",
           "check": {

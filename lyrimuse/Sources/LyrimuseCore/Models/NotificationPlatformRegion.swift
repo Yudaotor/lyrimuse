@@ -7,7 +7,7 @@ import Foundation
 /// 两组的并集必须覆盖 App 侧 `NotificationPlatform` 的全部 case —— 漏掉的那个会从菜单里消失,selftest 钉着。
 public enum NotificationPlatformRegion {
     public static let chinesePlatforms = ["bark", "dingtalk", "wecom", "feishu", "serverchan"]
-    public static let internationalPlatforms = ["telegram", "discord"]
+    public static let internationalPlatforms = ["telegram", "discord", "slack"]
 
     /// 按用户偏好排好的平台 rawValue。
     public static func displayOrder(chineseFirst: Bool) -> [String] {

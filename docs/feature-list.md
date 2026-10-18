@@ -644,7 +644,7 @@ A public page with what you are playing and your history, with optional guestboo
 
 ### Daily, weekly, monthly and yearly listening digests
 
-Sent to you as push notifications through Bark, DingTalk, WeCom, Discord, Feishu, ServerChan or Telegram. Each of the four has its own switch. Under Labs.
+Sent to you as push notifications through Bark, DingTalk, WeCom, Discord, Feishu, ServerChan, Telegram or Slack. Each of the four has its own switch. Under Labs.
 
 - Off by default
 - Settings: Labs › Push Alerts › Alerts

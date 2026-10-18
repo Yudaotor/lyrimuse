@@ -707,6 +707,7 @@
 "在 Last.fm 上打开" = "Open on Last.fm";
 "在 Last.fm 网站查看主页" = "View My Profile on Last.fm";
 "在 Telegram 中向 @BotFather 发送 /newbot 创建机器人，并将获得的 Token 填入「机器人 Token」。然后向机器人发送任意消息，在浏览器中打开 https://api.telegram.org/bot你的Token/getUpdates，chat 下的 id 即为 Chat ID" = "In Telegram, message @BotFather with /newbot to create a bot and paste the token it gives you into “Bot Token”. Then send your bot a message and open https://api.telegram.org/bot<your token>/getUpdates in a browser — the id under chat is your Chat ID";
+"在 api.slack.com/apps 新建应用（From scratch）并选择工作区，开启 Incoming Webhooks，点「Add New Webhook」选择要发送到的频道，授权后拷贝 Webhook URL" = "Create an app at api.slack.com/apps (From scratch) and pick your workspace. Turn on Incoming Webhooks, click “Add New Webhook”, choose the channel to post to, then copy the Webhook URL";
 "在 iCloud 中发现 Lyrimuse 备份" = "Found a Lyrimuse backup in iCloud";
 "在 iPhone 上安装 Bark App，首页即显示专属推送地址，拷贝后粘贴到此处即可，无需额外设置" = "Install the Bark app on your iPhone — the home screen shows your personal push URL. Just copy and paste it here; no extra setup needed";
 "在「Scrobble 的播放器」中取消勾选 Spotify；在手机等其他设备上收听的 Spotify 仍会照常记录。" = "Unchecks Spotify in Players to Scrobble. Spotify plays on your other devices are still recorded.";

@@ -23,6 +23,7 @@ const (
 	platformFeishu     = "feishu"
 	platformServerChan = "serverchan"
 	platformTelegram   = "telegram"
+	platformSlack      = "slack"
 )
 
 // buildNotifyPayload 按平台拼出 POST body + 对应的 Content-Type。绝大多数平台都是
@@ -68,6 +69,13 @@ func buildNotifyPayload(platform, title, body, feishuSecret, telegramChatID stri
 			"content": "**" + title + "**\n" + body,
 		})
 		return b, "application/json", err
+	case platformSlack:
+		// Slack Incoming Webhook:text 按 mrkdwn 渲染,单个星号加粗。& < > 必须先转成实体,
+		// 否则歌名里的 < > 会被当成链接 / 提及语法吞掉。
+		b, err := json.Marshal(map[string]any{
+			"text": "*" + slackEscape(title) + "*\n" + slackEscape(body),
+		})
+		return b, "application/json", err
 	case platformServerChan:
 		// Server酱 Turbo(sctapi.ftqq.com)只认 application/x-www-form-urlencoded,
 		// 字段叫 title/desp(desp 支持 Markdown)——跟其它平台的 JSON body 完全是
@@ -81,6 +89,11 @@ func buildNotifyPayload(platform, title, body, feishuSecret, telegramChatID stri
 		return b, "application/json", err
 	}
 }
+
+// slackEscape 只转 Slack 要求转的三个字符,其余原样(整段 HTML 转义的话别的实体 Slack 不认、会原样显示)。
+var slackEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
+
+func slackEscape(s string) string { return slackEscaper.Replace(s) }
 
 // telegramSendURL 把用户填的值换成 sendMessage 地址:填的是完整地址(http 开头)就原样用,
 // 否则当成 @BotFather 给的机器人 Token 拼出来。

@@ -13785,6 +13785,29 @@
         }
       }
     },
+    "在 api.slack.com/apps 新建应用（From scratch）并选择工作区，开启 Incoming Webhooks，点「Add New Webhook」选择要发送到的频道，授权后拷贝 Webhook URL" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create an app at api.slack.com/apps (From scratch) and pick your workspace. Turn on Incoming Webhooks, click “Add New Webhook”, choose the channel to post to, then copy the Webhook URL"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 api.slack.com/apps 新建应用（From scratch）并选择工作区，开启 Incoming Webhooks，点「Add New Webhook」选择要发送到的频道，授权后拷贝 Webhook URL"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 api.slack.com/apps 新增應用程式（From scratch）並選擇工作區，開啟 Incoming Webhooks，點「Add New Webhook」選擇要傳送到的頻道，授權後拷貝 Webhook URL"
+          }
+        }
+      }
+    },
     "未启用" : {
       "extractionState" : "manual",
       "localizations" : {

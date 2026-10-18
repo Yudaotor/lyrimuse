@@ -644,7 +644,7 @@ Apple Music、Spotify 和 Kaset 要「自动化」权限才能读播放状态；
 
 ### 日报、周报、月报和年度听歌小结
 
-通过推送发给你，支持 Bark、钉钉、企业微信、Discord、飞书、Server酱和 Telegram。四种各自开关。在「实验室」里。
+通过推送发给你，支持 Bark、钉钉、企业微信、Discord、飞书、Server酱、Telegram 和 Slack。四种各自开关。在「实验室」里。
 
 - 默认关闭
 - 设置位置：实验室 › 推送提醒 › 提醒

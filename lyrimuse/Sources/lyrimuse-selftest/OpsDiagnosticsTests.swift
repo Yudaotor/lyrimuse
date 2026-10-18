@@ -53,7 +53,7 @@ func runOpsDiagnosticsTests() {
         expectEqual(R.redactAll("nothing sensitive here", secrets: secrets),
                     "nothing sensitive here", "干净的行原样返回")
 
-        // 另外两个凭据长在路径里的推送平台。
+        // 其余凭据长在路径里的推送平台。
         let telegram = "Post \"https://api.telegram.org/bot123456789:AAHfakeFAKEfake/sendMessage\": timeout"
         expectEqual(R.redactAll(telegram, secrets: [:]).contains("AAHfake"), false, "路径型凭据: Telegram 机器人 token 打掉")
         expectEqual(R.redactAll(telegram, secrets: [:]).contains("api.telegram.org/bot<redacted>/sendMessage"), true,
@@ -61,6 +61,10 @@ func runOpsDiagnosticsTests() {
         let discord = "Post \"https://discord.com/api/webhooks/1234567890/FakeWebhookToken_abc\": 404"
         expectEqual(R.redactAll(discord, secrets: [:]).contains("FakeWebhookToken"), false, "路径型凭据: Discord webhook token 打掉")
         expectEqual(R.redactAll(discord, secrets: [:]).contains("webhooks/1234567890/"), true, "路径型凭据: Discord 的 id 保留")
+        let slack = "Post \"https://hooks.slack.com/services/T0FAKE123/B0FAKE456/FakeSlackHookSecret0123\": 404"
+        expectEqual(R.redactAll(slack, secrets: [:]).contains("FakeSlackHookSecret"), false, "路径型凭据: Slack webhook 密钥打掉")
+        expectEqual(R.redactAll(slack, secrets: [:]).contains("services/T0FAKE123/B0FAKE456/<redacted>"), true,
+                    "路径型凭据: Slack 的工作区、频道 ID 保留")
         // 查询参数按词根认(跟引擎 logscrub.go 同一条):固定名单里没有的 client_secret、refresh_token。
         let oauth = "Get \"https://example.com/cb?client_secret=CS123456&refresh_token=RT123456&state=ok\""
         let oauthOut = R.redactAll(oauth, secrets: [:])

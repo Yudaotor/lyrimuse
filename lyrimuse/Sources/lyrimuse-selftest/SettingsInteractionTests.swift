@@ -221,12 +221,12 @@ func runSettingsInteractionTests() {
     do {
         typealias N = NotificationPlatformRegion
         expectEqual(N.displayOrder(chineseFirst: true),
-                    ["bark", "dingtalk", "wecom", "feishu", "serverchan", "telegram", "discord"],
+                    ["bark", "dingtalk", "wecom", "feishu", "serverchan", "telegram", "discord", "slack"],
                     "通知平台排列: 中文用户国内平台在前")
         expectEqual(N.displayOrder(chineseFirst: false),
-                    ["telegram", "discord", "bark", "dingtalk", "wecom", "feishu", "serverchan"],
+                    ["telegram", "discord", "slack", "bark", "dingtalk", "wecom", "feishu", "serverchan"],
                     "通知平台排列: 其余用户国外平台在前")
-        let all: Set<String> = ["bark", "dingtalk", "wecom", "discord", "feishu", "serverchan", "telegram"]
+        let all: Set<String> = ["bark", "dingtalk", "wecom", "discord", "feishu", "serverchan", "telegram", "slack"]
         expectEqual(Set(N.displayOrder(chineseFirst: true)), all, "通知平台排列: 两组覆盖全部平台")
         expectEqual(N.displayOrder(chineseFirst: true).count, all.count, "通知平台排列: 没有重复")
         // App 侧枚举在 selftest 链不到的 target 里,按源码对一遍 case 列表。

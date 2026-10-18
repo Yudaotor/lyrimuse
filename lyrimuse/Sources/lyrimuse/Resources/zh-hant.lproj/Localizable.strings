@@ -658,6 +658,7 @@
 "在 Last.fm 上打开" = "在 Last.fm 上打開";
 "在 Last.fm 网站查看主页" = "在 Last.fm 網站查看個人頁面";
 "在 Telegram 中向 @BotFather 发送 /newbot 创建机器人，并将获得的 Token 填入「机器人 Token」。然后向机器人发送任意消息，在浏览器中打开 https://api.telegram.org/bot你的Token/getUpdates，chat 下的 id 即为 Chat ID" = "在 Telegram 中向 @BotFather 傳送 /newbot 建立機器人，並將取得的 Token 填入「機器人 Token」。然後傳送任意訊息給機器人，在瀏覽器中開啟 https://api.telegram.org/bot你的Token/getUpdates，chat 下的 id 即為 Chat ID";
+"在 api.slack.com/apps 新建应用（From scratch）并选择工作区，开启 Incoming Webhooks，点「Add New Webhook」选择要发送到的频道，授权后拷贝 Webhook URL" = "在 api.slack.com/apps 新增應用程式（From scratch）並選擇工作區，開啟 Incoming Webhooks，點「Add New Webhook」選擇要傳送到的頻道，授權後拷貝 Webhook URL";
 "在 iCloud 中发现 Lyrimuse 备份" = "在 iCloud 中發現 Lyrimuse 備份";
 "在 iPhone 上安装 Bark App，首页即显示专属推送地址，拷贝后粘贴到此处即可，无需额外设置" = "在 iPhone 上安裝 Bark App，首頁即顯示專屬推播網址，拷貝後貼到此處即可，無需額外設定";
 "在「Scrobble 的播放器」中取消勾选 Spotify；在手机等其他设备上收听的 Spotify 仍会照常记录。" = "在「Scrobble 的播放器」中取消勾選 Spotify；在手機等其他裝置上聆聽的 Spotify 仍會照常記錄。";

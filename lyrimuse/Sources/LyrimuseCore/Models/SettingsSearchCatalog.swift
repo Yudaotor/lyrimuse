@@ -552,7 +552,7 @@ public enum SettingsSearchCatalog {
         account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "短于 30 秒的曲目", kw: ["Last.fm", "scrobble", "短曲"]),
         account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "Scrobble 的播放器", kw: ["Last.fm", "scrobble", "播放器", "排除", "不上送", "浏览器"]),
         account("stateRelay", path: ["网页推送"], "连接信息", kw: ["中继", "网页", "relay", "worker", "推送"]),
-        account("bark", path: ["推送提醒"], "提醒", kw: ["Bark", "推送", "webhook", "通知", "Telegram", "钉钉", "飞书", "企业微信", "Discord"]),
+        account("bark", path: ["推送提醒"], "提醒", kw: ["Bark", "推送", "webhook", "通知", "Telegram", "钉钉", "飞书", "企业微信", "Discord", "Slack"]),
         account("bark", path: ["推送提醒"], "每周听歌小结", kw: ["周报", "推送", "Bark"]),
         account("bark", path: ["推送提醒"], "每日听歌报告", kw: ["日报", "推送", "Bark"]),
         account("bark", path: ["推送提醒"], "每月听歌小结", kw: ["月报", "推送", "Bark", "专辑"]),

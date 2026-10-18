@@ -87,3 +87,70 @@ func TestRememberConfigSecretsBareTelegramToken(t *testing.T) {
 		t.Errorf("host 应保留: %s", got)
 	}
 }
+
+// Slack:标题加粗,& < > 转成实体(歌名里的 < > 不转会被当成链接语法),别的字符原样。
+func TestBuildNotifyPayloadSlack(t *testing.T) {
+	b, ct, err := buildNotifyPayload(platformSlack, "周报 <1>", "A & B - <Song> *x*", "", "")
+	if err != nil || ct != "application/json" {
+		t.Fatalf("err=%v ct=%q", err, ct)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	if want := "*周报 &lt;1&gt;*\nA &amp; B - &lt;Song&gt; *x*"; got["text"] != want {
+		t.Errorf("text = %q, want %q", got["text"], want)
+	}
+	if len(got) != 1 {
+		t.Errorf("只该有 text 一个字段: %v", got)
+	}
+}
+
+// Slack webhook 地址里只有最后一段是凭据,写进日志前要抹掉;工作区、频道 ID 留着好排查。
+func TestRememberConfigSecretsSlackWebhook(t *testing.T) {
+	const secret = "FakeSlackHookSecret0123456"
+	rememberConfigSecrets(&config{NotificationPlatform: platformSlack,
+		NotificationWebhookURL: "https://hooks.slack.com/services/T0FAKE1/B0FAKE2/" + secret})
+	got := scrubSecrets(`Post "https://hooks.slack.com/services/T0FAKE1/B0FAKE2/` + secret + `": 404`)
+	if strings.Contains(got, secret) {
+		t.Errorf("webhook 凭据没被抹掉: %s", got)
+	}
+	if !strings.Contains(got, "hooks.slack.com/services/T0FAKE1/B0FAKE2/") {
+		t.Errorf("host 与工作区、频道 ID 应保留: %s", got)
+	}
+}
+
+// 端到端:从配置建出的推送器把 Slack 消息原样 POST 到地址栏的地址;Slack 拒收(地址失效回 404)时返回错误,不记「已推送」。
+func TestAlerterPushSlack(t *testing.T) {
+	var gotPath, gotCT string
+	var gotBody map[string]any
+	status := http.StatusOK
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotCT = r.URL.Path, r.Header.Get("Content-Type")
+		b, _ := io.ReadAll(r.Body)
+		json.Unmarshal(b, &gotBody)
+		w.WriteHeader(status)
+	}))
+	defer srv.Close()
+
+	a := alerterFromConfig(&config{NotificationPlatform: platformSlack,
+		NotificationWebhookURL: srv.URL + "/services/T0FAKE1/B0FAKE2/secret"})
+	if err := a.push("标题", "A <B>"); err != nil {
+		t.Fatalf("收下时不该报错: %v", err)
+	}
+	if gotPath != "/services/T0FAKE1/B0FAKE2/secret" || gotCT != "application/json" || gotBody["text"] != "*标题*\nA &lt;B&gt;" {
+		t.Errorf("path=%q ct=%q body=%v", gotPath, gotCT, gotBody)
+	}
+
+	var buf bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(prev) })
+	status = http.StatusNotFound
+	if err := a.push("t", "b"); err == nil {
+		t.Error("Slack 拒收时要返回错误,否则会记成已推送")
+	}
+	if !strings.Contains(buf.String(), "notify push rejected (platform=slack): status 404") {
+		t.Errorf("拒收时应记一行 rejected，实际日志: %q", buf.String())
+	}
+}

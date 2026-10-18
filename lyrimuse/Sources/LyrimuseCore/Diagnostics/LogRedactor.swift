@@ -70,6 +70,8 @@ public enum LogRedactor {
         ("api.telegram.org", #"(api\.telegram\.org/bot)(?!<redacted)[^/\s"']+"#),
         // Discord:`/api/webhooks/<id>/<token>`,id 不是凭据,token 是。
         ("discord.com", #"(discord(?:app)?\.com/api/webhooks/[0-9]+/)(?!<redacted)[^/\s"'?]+"#),
+        // Slack:`/services/<工作区 ID>/<频道 ID>/<密钥>`,只有最后一段是凭据。
+        ("hooks.slack.com", #"(hooks\.slack\.com/services/[A-Z0-9]+/[A-Z0-9]+/)(?!<redacted)[^/\s"'?]+"#),
     ]
 
     /// 正则兜底:打掉常见形状的凭据,不要求它出现在当前配置里。

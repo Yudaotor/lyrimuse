@@ -8,10 +8,10 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "config
 // 一份 JSON 就能收到消息(Server酱是个例外,走表单编码,见 lyrimuse-engine/notify.go 顶部
 // 注释),Lyrimuse 这边只管选平台+填 webhook 地址,不关心具体协议。rawValue
 // 必须跟引擎侧的平台字符串常量(platformBark/platformDingtalk/platformWecom/
-// platformDiscord/platformFeishu/platformServerChan/platformTelegram)逐字对应——这是两侧通过同一份
+// platformDiscord/platformFeishu/platformServerChan/platformTelegram/platformSlack)逐字对应——这是两侧通过同一份
 // config.json 交换的字符串,不是各自随便定义的展示文案。
 public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
-    case bark, dingtalk, wecom, discord, feishu, serverchan, telegram
+    case bark, dingtalk, wecom, discord, feishu, serverchan, telegram, slack
     public var id: Self { self }
 
     /// 下拉菜单里的排列:中文用户国内平台在前,其余国外平台在前(规则见 `NotificationPlatformRegion`)。
@@ -31,6 +31,7 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
         case .feishu: return L10n.t("飞书")
         case .serverchan: return L10n.t("Server酱")
         case .telegram: return "Telegram"
+        case .slack: return "Slack"
         }
     }
 
@@ -40,7 +41,7 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .bark, .serverchan: return L10n.t("推送地址")
         case .telegram: return L10n.t("机器人 Token")
-        case .dingtalk, .wecom, .discord, .feishu: return L10n.t("Webhook 地址")
+        case .dingtalk, .wecom, .discord, .feishu, .slack: return L10n.t("Webhook 地址")
         }
     }
 
@@ -55,6 +56,7 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
         case .feishu: return "https://open.feishu.cn/open-apis/bot/v2/hook/..."
         case .serverchan: return L10n.t("https://sctapi.ftqq.com/你的SendKey.send")
         case .telegram: return L10n.t("机器人 Token，形如 123456789:AAH…")
+        case .slack: return "https://hooks.slack.com/services/..."
         }
     }
 
@@ -76,6 +78,8 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
             return L10n.t("打开 sct.ftqq.com，使用微信扫码登录，首页将显示 SendKey。完整地址为 https://sctapi.ftqq.com/你的SendKey.send，请将完整地址填入上方")
         case .telegram:
             return L10n.t("在 Telegram 中向 @BotFather 发送 /newbot 创建机器人，并将获得的 Token 填入「机器人 Token」。然后向机器人发送任意消息，在浏览器中打开 https://api.telegram.org/bot你的Token/getUpdates，chat 下的 id 即为 Chat ID")
+        case .slack:
+            return L10n.t("在 api.slack.com/apps 新建应用（From scratch）并选择工作区，开启 Incoming Webhooks，点「Add New Webhook」选择要发送到的频道，授权后拷贝 Webhook URL")
         }
     }
 
@@ -88,6 +92,7 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
         case .feishu: return URL(string: "https://open.feishu.cn/document/client-docs/bot-v3/add-custom-bot?lang=zh-CN")!
         case .serverchan: return URL(string: "https://sct.ftqq.com/")!
         case .telegram: return URL(string: "https://core.telegram.org/bots/tutorial")!
+        case .slack: return URL(string: "https://api.slack.com/messaging/webhooks")!
         }
     }
 }
