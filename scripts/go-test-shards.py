@@ -11,7 +11,8 @@ LYRIMUSE_GO_TEST_SHARDS(默认 4)份 → 同时跑。耗时记在 <树根>/.buil
 
 带 --run 时只跑名字匹配的那几个,单进程。有测试没过时,把没过的那几个放进一个进程单独再跑一次:单跑也没过才算
 没过(打出它的输出);单跑过了照样算通过,打一行提醒 —— 那是测试之间争同一份进程外资源(端口、固定路径),不是
-被测代码的问题,要修的是测试的隔离。
+被测代码的问题,要修的是测试的隔离。单跑过了时把第一次没过的那段输出打到 stderr(shard-N.out 下次运行就被覆盖,
+不打出来就再也看不到为什么没过);某份因 panic / 超时提前退出、后面的测试没跑到的,打那份输出的末尾。
 
 带 -test.short 跑:按设计打真实网络的测试(skipLiveInShort)在这里跳过,CI 整套跑不带 -short,它们留在那里验。
 
@@ -50,6 +51,22 @@ def failure_excerpt(text, limit=200):
             if not l.startswith(('=== RUN', '=== PAUSE', '=== CONT', '--- PASS', '--- SKIP'))
             and not re.match(r'^\s+--- (PASS|SKIP)', l)]
     return '\n'.join(keep[-limit:])
+
+
+def first_failure(texts, name, limit=60):
+    """并行那一轮里 name 这个顶层测试的输出:从它的 === RUN 到下一个顶层 === RUN(panic 的堆栈打在 --- FAIL 之后,
+    要一起带上);没截到返回 None。"""
+    for text in texts:
+        lines = text.splitlines()
+        start = next((i for i, l in enumerate(lines) if l.rstrip() == '=== RUN   ' + name), None)
+        if start is None:
+            continue
+        fail = next((i for i in range(start, len(lines)) if lines[i].startswith('--- FAIL: %s ' % name)), None)
+        if fail is None:
+            continue
+        end = next((i for i in range(fail, len(lines)) if lines[i].startswith('=== RUN') and '/' not in lines[i]), len(lines))
+        return failure_excerpt('\n'.join(lines[start:end]), limit)
+    return None
 
 
 def main(argv):
@@ -130,6 +147,16 @@ def main(argv):
     if code == 0:
         print('    !! 单独跑通过了:这几个只在并行时没过,多半是测试之间争同一份进程外资源(端口、固定路径),'
               '要修测试的隔离:%s' % ' '.join(failed))
+        for name in failed:
+            excerpt = first_failure(texts, name)
+            print('    --- 并行那一轮 %s 没过时的输出 ---\n%s' % (name, excerpt or '(没截到,看 %s 下的 shard-*.out)' % work),
+                  file=sys.stderr)
+        if unrun:
+            for text, c in zip(texts, codes):
+                started = [l[len('=== RUN'):].strip() for l in text.splitlines() if l.startswith('=== RUN') and '/' not in l]
+                if c and started and started[-1] not in results:
+                    print('    --- 提前退出的那份(%s 没跑完,panic / 超时 / 退出)末尾 ---\n%s' % (started[-1], failure_excerpt(text, 40)),
+                          file=sys.stderr)
         return 0
     print(failure_excerpt(text), file=sys.stderr)
     return 1
