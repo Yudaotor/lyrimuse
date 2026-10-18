@@ -519,6 +519,12 @@ func runKasetTests() {
         expectEqual(MediaControlClient.kasetWins(over: other, kaset: kPlaying), true, "Kaset 取舍: 别的暂停着、它在放,换过去")
         expectEqual(MediaControlClient.kasetWins(over: other, kaset: kWaiting), true, "Kaset 取舍: 它正要放(加载 / 广告),换过去")
         expectEqual(MediaControlClient.kasetWins(over: otherPlaying, kaset: kPlaying), false, "Kaset 取舍: 别的在放,听系统的")
+        expectEqual(MediaControlClient.kasetWins(over: other, kaset: kPaused, alreadyPreferred: true), true,
+                    "Kaset 取舍: 上一拍已在顶替、它刚暂停,别的那份也只是暂停着,接着用它(不落回更早暂停的旧会话)")
+        expectEqual(MediaControlClient.kasetWins(over: otherPlaying, kaset: kPaused, alreadyPreferred: true), false,
+                    "Kaset 取舍: 上一拍在顶替,但别的那份开始放了,让回去")
+        expectEqual(MediaControlClient.kasetWins(over: nil, kaset: kPaused, otherPlayerLoading: true, alreadyPreferred: true), false,
+                    "Kaset 取舍: 别的播放器在加载下一首时不因为上一拍在顶替就报暂停着的它")
         // 别的播放器在加载下一首(KKBOX 开播那一帧没有歌手,02 章决策 106):这一拍是空的,暂停着的不报,在放 / 正要放才换过去。
         expectEqual(MediaControlClient.kasetWins(over: nil, kaset: kPaused, otherPlayerLoading: true), false,
                     "Kaset 取舍: 别的播放器在加载下一首时,暂停着的不报")

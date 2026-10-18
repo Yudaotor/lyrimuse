@@ -519,7 +519,7 @@ func runPlayerIdentityTests() {
                         "KKBOX(契约): 自动识别、多选两条路都先认出开播那一帧,不走「不是歌 → 问别家」")
             expectEqual(sourceHas(client, "setSnapshotFailure(.targetLoading)\n        kasetLock.lock()\n        otherPlayerLoadingThisRound = true")
                             && sourceHas(client, "kasetLoadingThisRound = false\n        otherPlayerLoadingThisRound = false")
-                            && client.contains("Self.kasetWins(over: found, kaset: kaset, otherPlayerLoading: otherLoading)"),
+                            && client.contains("Self.kasetWins(over: found, kaset: kaset, otherPlayerLoading: otherLoading, alreadyPreferred: alreadyPreferred)"),
                         true, "KKBOX(契约): 开播那一帧记成在加载,每拍清零,并告诉 Kaset 那一路")
         }
 

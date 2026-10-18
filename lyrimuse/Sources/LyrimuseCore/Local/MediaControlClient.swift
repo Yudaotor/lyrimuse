@@ -817,11 +817,14 @@ public enum MediaControlClient {
             && !NSRunningApplication.runningApplications(withBundleIdentifier: PlaybackPlayer.lxMusic.bundleIdentifier).isEmpty
         LXMusicOpenAPI.shared.noteAppRunning(running)
         var lx: MediaControlSnapshot?
+        kasetLock.lock()
+        let alreadyPreferred = lxMusicPreferredOver != nil
+        kasetLock.unlock()
         // 订阅连着(`currentState` 不是 nil)就说明洛雪活着,不再看 `running`:那个后台线程上偶尔返回空。
         if wanted, found?.bundleIdentifier != PlaybackPlayer.lxMusic.bundleIdentifier,
            let state = LXMusicOpenAPI.shared.currentState(),
            let synthesized = LXMusicOpenAPI.nowPlayingSnapshot(state, now: Date()),
-           kasetWins(over: found, kaset: synthesized) {
+           kasetWins(over: found, kaset: synthesized, alreadyPreferred: alreadyPreferred) {
             lx = synthesized
         }
         let other = lx == nil ? nil : (found?.bundleIdentifier ?? "nothing")
@@ -858,20 +861,24 @@ public enum MediaControlClient {
         kasetLock.lock()
         let asked = kasetAskedThisRound
         let otherLoading = otherPlayerLoadingThisRound
+        let alreadyPreferred = kasetPreferredOver != nil
         kasetLock.unlock()
         guard !asked,
               !NSRunningApplication.runningApplications(withBundleIdentifier: PlaybackPlayer.kaset.bundleIdentifier).isEmpty,
               let kaset = readKasetSnapshot(),
-              Self.kasetWins(over: found, kaset: kaset, otherPlayerLoading: otherLoading)
+              Self.kasetWins(over: found, kaset: kaset, otherPlayerLoading: otherLoading, alreadyPreferred: alreadyPreferred)
         else { return nil }
         return kaset
     }
 
     /// 别的来源这一拍给出的(nil = 什么都没有)跟 Kaset 自己报的,用哪个。`otherPlayerLoading`:这一拍是空的,是因为别的播放器
-    /// 在加载下一首(`artistNotYetReported`),不是没人在放 —— 这时 Kaset 暂停着的那首不报。纯函数,selftest 覆盖。
+    /// 在加载下一首(`artistNotYetReported`),不是没人在放 —— 这时 Kaset 暂停着的那首不报。`alreadyPreferred`:上一拍已经在顶替
+    /// 别的来源;别的那份这一拍还只是暂停着,就接着用它 —— 它刚停下,比那份更早暂停的会话更像用户在听的,否则一暂停读数和播放
+    /// 控制就落到那份旧会话上(见 02 章决策 142)。纯函数,selftest 覆盖。
     public static func kasetWins(over found: MediaControlSnapshot?, kaset: MediaControlSnapshot,
-                                 otherPlayerLoading: Bool = false) -> Bool {
+                                 otherPlayerLoading: Bool = false, alreadyPreferred: Bool = false) -> Bool {
         if let found, found.playing == true { return false }
+        if alreadyPreferred, found != nil { return true }
         let kasetMoving = kaset.playing == true || kaset.isWaitingToPlay == true
         if found == nil, otherPlayerLoading { return kasetMoving }
         return found == nil || kasetMoving
