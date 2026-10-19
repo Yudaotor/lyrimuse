@@ -1060,16 +1060,18 @@ private struct MenuBarPanelView: View {
 
         @State private var hovering = false
         @State private var pressing = false
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         var body: some View {
             content
-                // 玻璃格,同正在播放卡;悬停 / 按下在玻璃上再叠一层灰(玻璃自带的交互反馈收不到:
-                // 鼠标事件都落在上面那层 TileMouseRouter 上)。
+                // 玻璃格,同正在播放卡;悬停 / 按下在玻璃上再叠一层灰,整格跟着微微浮起 / 压下(玻璃自带的交互反馈
+                // 收不到:鼠标事件都落在上面那层 TileMouseRouter 上;不激活 App 的面板里 `.interactive()` 玻璃悬停也几乎看不出变化)。
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(Color.primary.opacity(stateFillLevel))
                 )
                 .menuBarPanelCardBackground(cornerRadius: 16)
+                .scaleEffect(reduceMotion ? 1 : stateScale)
                 .overlay {
                     // 事件路由盖在最上面一层:整格都是热区,内容那边不用再加 contentShape。
                     TileMouseRouter(
@@ -1079,7 +1081,10 @@ private struct MenuBarPanelView: View {
                         onHoverChange: { hovering = $0 },
                         toolTip: openQuick == nil ? nil : L10n.t("长按或右键打开设置"))
                 }
-                .animation(.easeOut(duration: 0.12), value: hovering)
+                // 跟手:进出都是 0.1 秒上下的缓出、不用弹簧(弹簧要 0.2 秒以上才稳住,还带回弹,指针到了格子还在晃);
+                // 按下比悬停更快。
+                .animation(.easeOut(duration: 0.1), value: hovering)
+                .animation(.easeOut(duration: 0.06), value: pressing)
                 .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(.isButton)
                 // 点击全走盖在上面的 AppKit 视图(TileMouseRouter)的鼠标事件,VoiceOver 的「按下」到不了那里:
@@ -1092,11 +1097,17 @@ private struct MenuBarPanelView: View {
                 }
         }
 
-        /// 静止 → 悬停 → 按下三档,一档比一档实一点点——默认的 Button + buttonStyle
-        /// 什么反馈都没给,鼠标放上去看不出这一格是可点的。
+        /// 静止 → 悬停 → 按下三档,一档比一档实——默认的 Button + buttonStyle 什么反馈都没给,鼠标放上去看不出
+        /// 这一格是可点的。玻璃格本身很浅,叠得太淡(0.05)在亮色下几乎看不出来。
         private var stateFillLevel: Double {
-            if pressing { return 0.10 }
-            return hovering ? 0.05 : 0
+            if pressing { return 0.12 }
+            return hovering ? 0.07 : 0
+        }
+
+        /// 悬停整格浮起一点、按下压回去一点;开了「减弱动态效果」时不缩放,只留底色变化。
+        private var stateScale: CGFloat {
+            if pressing { return 0.97 }
+            return hovering ? 1.02 : 1
         }
 
         // 去掉了右上角那个悬停才出现的「⋯」。它本来是"这一格还能长按"的提示,
