@@ -26,8 +26,10 @@ struct MenuBarEditorStage: View {
         VStack(spacing: 10) {
             toolbar
                 .overlay(alignment: .top) { probeAnchor(row1Probe) }
+                .editorToolbarGlassGroup()
             toolbarRow2
                 .overlay(alignment: .top) { probeAnchor(row2Probe) }
+                .editorToolbarGlassGroup()
             // 宽度调整条注入给预览条、浮在预览框底部那条通道里,不在这里 overlay 在外面:壁纸底要包住它,
             // 背景 / 高度 / 圆角只能由预览条一处算(见 MenuBarPreviewBar.lane)。
             MenuBarPreviewBar(reservesWidthLane: true) {

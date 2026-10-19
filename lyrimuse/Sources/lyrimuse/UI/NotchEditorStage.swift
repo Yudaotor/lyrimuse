@@ -473,8 +473,10 @@ struct NotchEditorStage: View {
             VStack(spacing: Self.toolbarSpacing) {
                 toolbar
                     .frame(height: Self.toolbarHeight)
+                    .editorToolbarGlassGroup()
                 toolbarRow2
                     .frame(height: Self.toolbarHeight)
+                    .editorToolbarGlassGroup()
                 VStack(spacing: SectionPreviewMetrics.captionSpacing) {
                     stage(stageWidth: stageWidth)
                     caption(stageWidth: stageWidth)

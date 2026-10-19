@@ -320,6 +320,7 @@ struct TouchBarEditorToolbar: View {
         }
         .font(.system(size: 12))
         .padding(.horizontal, 2)
+        .editorToolbarGlassGroup()
     }
 
     private var row2: some View {

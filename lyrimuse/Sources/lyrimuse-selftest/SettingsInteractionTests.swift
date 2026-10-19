@@ -721,6 +721,26 @@ func runSettingsInteractionTests() {
                     "设置深链(契约): URL 回调按路径翻页(带分段时先去掉分段)")
     }
 
+    // ---- 编辑台工具栏单独一层玻璃容器:整页容器里的玻璃共享取色,不隔开会染上预览的颜色(见 14 章决策 115) ----
+    do {
+        let appDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func appSource(_ name: String) -> String {
+            (try? String(contentsOf: appDir.appendingPathComponent(name), encoding: .utf8)) ?? ""
+        }
+        let design = appSource("Settings/SettingsDesignSystem.swift")
+        expectEqual(design.contains("func editorToolbarGlassGroup() -> some View {")
+                    && design.contains("GlassEffectContainer(spacing: 0) { self }"), true,
+                    "编辑台工具栏(契约): editorToolbarGlassGroup 在 macOS 26 上单独套一层 GlassEffectContainer")
+        let uses: [(String, Int)] = [("UI/OverlayEditorStage.swift", 2), ("UI/NotchEditorStage.swift", 2),
+                                     ("UI/MenuBarEditorStage.swift", 2), ("UI/TouchBarSettingsRows.swift", 1),
+                                     ("SettingsView.swift", 1)]
+        for (file, count) in uses {
+            expectEqual(appSource(file).components(separatedBy: ".editorToolbarGlassGroup()").count - 1, count,
+                        "编辑台工具栏(契约): \(file) 的工具栏都套了 editorToolbarGlassGroup")
+        }
+    }
+
     // ---- 设置窗侧栏:宽度放得下当前语言最长的那一行、收不起来(见 14 章决策 58) ----
     do {
         typealias W = SettingsSidebarWidth

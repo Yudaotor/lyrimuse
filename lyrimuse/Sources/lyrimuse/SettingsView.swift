@@ -2814,6 +2814,7 @@ private struct AppearanceSettingsTab: View {
         }
         .font(.system(size: 12))
         .padding(.horizontal, 2)
+        .editorToolbarGlassGroup()
     }
 
     /// 按钮那一行上沿的测量点(同另外几段编辑台的 `StageTopProbe`)。

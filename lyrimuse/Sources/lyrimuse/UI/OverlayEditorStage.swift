@@ -382,8 +382,10 @@ struct OverlayEditorStage: View {
             VStack(spacing: Self.toolbarSpacing) {
                 toolbar
                     .frame(height: Self.toolbarHeight)
+                    .editorToolbarGlassGroup()
                 toolbarRow2
                     .frame(height: Self.toolbarHeight)
+                    .editorToolbarGlassGroup()
                 // 舞台底下没有 caption 那一行了(21pt,理由见 totalHeight),
                 // 这里直接就是舞台本身。
                 stage(stageWidth: stageWidth)

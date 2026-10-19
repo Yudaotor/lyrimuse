@@ -134,6 +134,17 @@ extension View {
         }
     }
 
+    /// 编辑台工具栏的一行(或整块)单独一层玻璃容器。整页那层容器(`SettingsGlassContainer`)里的玻璃共享一次取色,
+    /// 工具栏挨着预览,不隔开的话窗口激活时按钮会染上预览里封面背景、桌面照片的颜色。见 14 章决策 115。
+    @ViewBuilder
+    func editorToolbarGlassGroup() -> some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: 0) { self }
+        } else {
+            self
+        }
+    }
+
     /// 玻璃按钮那一排里的菜单(如「⋯」)。菜单不吃 `.buttonStyle(.glass)`,也不认标签上的 padding / frame:macOS 26 起
     /// 画成无边框菜单,外面套同一种可交互玻璃,宽高跟玻璃文字按钮一致(24pt 高);更早的系统用按钮样式的菜单。
     /// 标签写成文字里嵌符号(`Text(Image(systemName:))`):单独一个 Image 时旧系统按符号本身的高度画,ellipsis 很扁。
