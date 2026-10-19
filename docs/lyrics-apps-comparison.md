@@ -28,7 +28,7 @@ of the actively maintained open-source options:
 | | **Lyrimuse** | **LyricsX** | **Lyric Fever** |
 |---|---|---|---|
 | License · price | GPL-3.0 · free | MPL-2.0 · free | MIT · free |
-| Latest release | v1.10.0 (Oct 2026) | v1.6.3 (Apr 2022) | v3.3 (Nov 2025) |
+| Latest release | v1.11.0 (Oct 2026) | v1.6.3 (Apr 2022) | v3.3 (Nov 2025) |
 | Minimum macOS | 14 (Sonoma) | 10.11 | 15 (Sequoia) |
 | Players | Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, Kaset (YouTube Music), reAMP — any combination | Apple Music, Spotify, Vox, Audirvana, Swinsian (via its MusicPlayer library) | Spotify, Apple Music |
 | Web players in a browser | YouTube Music & Spotify Web, synced to the page's own progress | — | — |
@@ -40,8 +40,8 @@ of the actively maintained open-source options:
 | Simplified ⇄ Traditional Chinese | yes, independent of UI language | yes | yes, including the Hong Kong and Taiwan variants |
 | Duet / multi-singer line splitting | yes, when the source marks parts | — | — |
 | Scrobbling & listening stats | Last.fm + ListenBrainz scrobbling, backfill, local history, charts, listening heatmap | — | — |
-| Display surfaces | floating overlay, Dynamic-Island-style capsule, menu bar lyrics, Touch Bar lyrics, full lyrics window | desktop + menu bar + Touch Bar | menu bar, fullscreen view, karaoke popup |
-| Discord status | the playing song, artist, album, cover and progress on your Discord profile (off by default; talks only to the Discord app on your Mac) | — | — |
+| Display surfaces | floating overlay, Dynamic-Island-style capsule, menu bar lyrics, Touch Bar lyrics, full lyrics window, web lyrics on a phone or tablet, OBS browser source | desktop + menu bar + Touch Bar | menu bar, fullscreen view, karaoke popup |
+| Discord status | the playing song, artist, album, cover, progress and optionally the line being sung on your Discord profile (off by default; talks only to the Discord app on your Mac) | — | — |
 | UI languages | English, Simplified Chinese, Traditional Chinese | multiple (Crowdin) | English, Simplified Chinese, Traditional Chinese |
 
 ## Where Lyrimuse fits

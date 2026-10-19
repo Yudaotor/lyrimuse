@@ -4,7 +4,7 @@
 
 [English](feature-list.md) · 简体中文 · [繁體中文](feature-list.zh-Hant.md)
 
-Lyrimuse 是一款开源（GPL-3.0）的 macOS 逐字歌词 App，支持 macOS 14 及以上版本，兼容 Apple Silicon 和 Intel 芯片。它为 Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、Kaset，以及浏览器中的 YouTube Music 和 Spotify 网页版显示逐字同步的歌词：可显示在桌面悬浮歌词、灵动岛、菜单栏、触控栏和歌词窗口中，并提供译文和读音标注（拼音、粤拼、日语罗马音、韩语罗马字），还可将收听记录打卡到 Last.fm 和 ListenBrainz，并在 Discord 上显示正在收听的歌曲。界面支持简体中文、繁体中文和英文。
+Lyrimuse 是一款开源（GPL-3.0）的 macOS 逐字歌词 App，支持 macOS 14 及以上版本，兼容 Apple Silicon 和 Intel 芯片。它为 Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、洛雪音乐、Kaset、reAMP，以及浏览器中的 YouTube Music 和 Spotify 网页版显示逐字同步的歌词：可显示在桌面悬浮歌词、灵动岛、菜单栏、触控栏和歌词窗口中，并提供译文和读音标注（拼音、粤拼、日语罗马音、韩语罗马字），还可将收听记录打卡到 Last.fm 和 ListenBrainz，并在 Discord 上显示正在收听的歌曲。界面支持简体中文、繁体中文和英文。
 
 这份清单列出 Lyrimuse 的每一项功能：做什么、在设置的哪里、装好后默认开着还是关着；最后附上设置窗口里的全部设置项。清单跟代码一起维护，功能有增减时同步更新。
 
