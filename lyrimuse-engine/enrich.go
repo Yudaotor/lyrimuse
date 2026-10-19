@@ -423,6 +423,11 @@ type enrichEntry struct {
 	// CoverAppleAlbumCheckTS:后台补封面上一次为这条另一张专辑的封面按显示的专辑问到 Apple 目录的时刻(coversweep.go),
 	// 隔 coverAppleAlbumRecheckInterval 再问。
 	CoverAppleAlbumCheckTS int64 `json:"cover_apple_album_check_ts,omitempty"`
+	// CoverSettleCheckTS / CoverSettleCheckFor:后台补封面给这条所在的专辑定封面、比完定不了(各首不是同一张图,Apple 也没给出
+	// 其中一张)的时刻,和当时这条的封面地址(coversweep.go coverSettleCheckedRecently)。组里各条的封面都没变、隔
+	// coverSettleRecheckInterval 之内不再比。
+	CoverSettleCheckTS  int64  `json:"cover_settle_check_ts,omitempty"`
+	CoverSettleCheckFor string `json:"cover_settle_check_for,omitempty"`
 	// VideoFrameURL:播放这首时 App 交来的视频帧(视频缩略图、竖屏截图这类不像封面的图),落成本机文件。不当封面用:
 	// 引擎照旧按缺封面去找,「歌词管理」只在 cover_url 为空时拿它当缩略图。见 03 章决策 39。
 	VideoFrameURL string `json:"video_frame_url,omitempty"`
@@ -5881,7 +5886,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			mxCtx = withMusixmatchPlaybackIDs(ctx, appleID, spotifyID)
 		}
 		r := musixmatchLyric(mxCtx, artist, srcTitle, durationSecs, features().LyricsTranslationLanguage, lyricSourceISRC(ctx, artist, title, album))
-		resultsCh <- lyricSourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly, instrumental: r.instrumental, performers: r.performers}
+		resultsCh <- lyricSourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: musixmatchResultCover(ctx, r), srcDur: r.durationSecs, plainOnly: r.plainOnly, instrumental: r.instrumental, performers: r.performers}
 	}()
 	go func() {
 		if skipSource("lyricfind") {

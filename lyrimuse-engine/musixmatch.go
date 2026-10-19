@@ -1480,3 +1480,72 @@ func musixmatchLargestCover(r musixmatchTrackRow) string {
 	}
 	return u
 }
+
+// musixmatchCover500For:Musixmatch 图床上 800 档地址对应的 500 档地址;不是 800 档的返回空串。纯函数。
+func musixmatchCover500For(u string) string {
+	if !strings.Contains(u, "mxmcdn.net/") || !strings.HasSuffix(u, "_800_800.jpg") {
+		return ""
+	}
+	return strings.TrimSuffix(u, "_800_800.jpg") + "_500_500.jpg"
+}
+
+const musixmatchCoverCheckMemoMax = 1024
+
+var (
+	musixmatchCoverCheckMu   sync.Mutex
+	musixmatchCoverCheckMemo = map[string]bool{}
+)
+
+// musixmatchCoverExists:HEAD 一次这个地址,回 200 为 true;明确回了别的状态为 false;网络出错 ok=false(不下结论)。
+// 做成变量好让单测换成桩。
+var musixmatchCoverExists = func(ctx context.Context, u string) (exists, ok bool) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u, nil)
+	if err != nil {
+		return false, false
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	resp, err := doHTTPTracked(&http.Client{Timeout: 4 * time.Second}, req)
+	if err != nil {
+		return false, false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK, true
+}
+
+// musixmatchResultCover:这一源交给歌词轮次的封面。拿到了词(或纯音乐断言)才核 800 档在不在(musixmatchCheckedCover),
+// 没词的候选进不了判决,不白发请求。
+func musixmatchResultCover(ctx context.Context, r musixmatchResult) string {
+	if r.lrc == "" && !r.instrumental {
+		return r.cover
+	}
+	return musixmatchCheckedCover(ctx, r.cover)
+}
+
+// musixmatchCheckedCover:800 档地址是按形状从 500 档拼的(musixmatchLargestCover),个别专辑图没有这一档(实测 _800_800 回 403、
+// _500_500 照常),存下去就是一张取不到的封面。800 档先核一次在不在,明确不在就用 500 档;网络出错照旧用 800 档、不记结论。
+// 结论按地址记着,同一张图只问一次。见 03 章决策 60。
+func musixmatchCheckedCover(ctx context.Context, u string) string {
+	fallback := musixmatchCover500For(u)
+	if fallback == "" {
+		return u
+	}
+	musixmatchCoverCheckMu.Lock()
+	exists, known := musixmatchCoverCheckMemo[u]
+	musixmatchCoverCheckMu.Unlock()
+	if !known {
+		var ok bool
+		if exists, ok = musixmatchCoverExists(ctx, u); !ok {
+			return u
+		}
+		musixmatchCoverCheckMu.Lock()
+		if len(musixmatchCoverCheckMemo) >= musixmatchCoverCheckMemoMax {
+			musixmatchCoverCheckMemo = map[string]bool{}
+		}
+		musixmatchCoverCheckMemo[u] = exists
+		musixmatchCoverCheckMu.Unlock()
+	}
+	if exists {
+		return u
+	}
+	return fallback
+}

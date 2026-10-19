@@ -80,24 +80,7 @@ func loadCoverImage(ctx context.Context, coverURL string) image.Image {
 		}
 		return img
 	}
-	small := coverURL
-	if strings.Contains(coverURL, "music.126.net") || strings.Contains(coverURL, "music.127.net") {
-		if i := strings.Index(small, "?"); i >= 0 {
-			small = small[:i] // 摘掉 ?param= 或 neteaseCoverQuery 那一串
-		}
-		small += "?param=64y64" // 网易云 CDN 支持按需缩图,省流量
-	} else if strings.Contains(coverURL, "qq.com") {
-		// 网易云那套 ?param=WxH 对 QQ 域名无效(会被原样忽略),QQ 的尺寸档在**路径**里 ——
-		// 所以降采样要改路径,见 qqCoverAtEdge。存下来的 QQ 封面是 800x800
-		// (歌词窗口那张大卡要的),而取一个主色用不着 800:降回 300 少下 150KB。
-		// 见 qqCoverFallback:网易云曲库缺失该艺人时的兜底封面。
-		small = qqCoverAtEdge(small, "300")
-	} else if strings.Contains(coverURL, "i.kfs.io/") {
-		// KKBOX 图床按路径里的 fit 档出图,取色、比指纹 64 档就够。
-		small = kkboxCoverAtEdge(small, "64")
-	} else {
-		small = miguJPEGCover(small)
-	}
+	small := coverThumbURL(coverURL)
 	cli := &http.Client{Timeout: 4 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, small, nil)
 	if err != nil {
@@ -122,6 +105,33 @@ func loadCoverImage(ctx context.Context, coverURL string) image.Image {
 		return nil
 	}
 	return img
+}
+
+// coverThumbURL:取色、比指纹用的那一份缩图地址,能按地址缩图的图床换成小档,别的原样(咪咕换成 JPEG)。纯函数。
+func coverThumbURL(coverURL string) string {
+	small := coverURL
+	if strings.Contains(coverURL, "music.126.net") || strings.Contains(coverURL, "music.127.net") {
+		if i := strings.Index(small, "?"); i >= 0 {
+			small = small[:i] // 摘掉 ?param= 或 neteaseCoverQuery 那一串
+		}
+		small += "?param=64y64" // 网易云 CDN 支持按需缩图,省流量
+	} else if strings.Contains(coverURL, "qq.com") {
+		// 网易云那套 ?param=WxH 对 QQ 域名无效(会被原样忽略),QQ 的尺寸档在**路径**里 ——
+		// 所以降采样要改路径,见 qqCoverAtEdge。存下来的 QQ 封面是 800x800
+		// (歌词窗口那张大卡要的),而取一个主色用不着 800:降回 300 少下 150KB。
+		// 见 qqCoverFallback:网易云曲库缺失该艺人时的兜底封面。
+		small = qqCoverAtEdge(small, "300")
+	} else if strings.Contains(coverURL, "i.kfs.io/") {
+		// KKBOX 图床按路径里的 fit 档出图,取色、比指纹 64 档就够。
+		small = kkboxCoverAtEdge(small, "64")
+	} else if strings.Contains(coverURL, ".mzstatic.com/") {
+		// Apple 图床同样按路径末段的尺寸出图。存下来的常是 10000x10000bb(取原图,见 applemusicSong.cover),原图几 MB,
+		// 4 秒超时内下不完,取色、比指纹、核动态封面就一直取不到这张图(见 03 章决策 61)。
+		small = itunesArtworkSizeRE.ReplaceAllString(small, "/64x64bb.jpg")
+	} else {
+		small = miguJPEGCover(small)
+	}
+	return small
 }
 
 // miguJPEGCover:咪咕图床(d.musicapp.migu.cn)的 .webp 封面换成同一路径的 .jpg —— 给的是同一张图的 JPEG,引擎只注册了

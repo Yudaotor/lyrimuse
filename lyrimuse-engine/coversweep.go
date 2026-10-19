@@ -61,6 +61,8 @@ const (
 	coverUpgradeRecheckInterval = 30 * 24 * time.Hour
 	// coverAppleAlbumRecheckInterval:封面是另一张专辑的条目,问过一次 Apple 之后隔多久再问(CoverAppleAlbumCheckTS)。
 	coverAppleAlbumRecheckInterval = 30 * 24 * time.Hour
+	// coverSettleRecheckInterval:给专辑定封面比完定不了的组,封面都没变时隔多久再比(CoverSettleCheckTS)。
+	coverSettleRecheckInterval = 30 * 24 * time.Hour
 	// coverUpgradeCheckRules:找清晰版的第几版找法,多了来源就加一(第 2 版加了歌词判决的各源候选,见 03 章决策 36;
 	// 第 3 版不是同一张图时换成播放器自带的,见 smallDeviceCoverYieldsTo)。
 	coverUpgradeCheckRules = 3
@@ -849,6 +851,10 @@ func coverSweepSettleAlbumCovers(ctx context.Context) (switched, settled int) {
 			continue
 		}
 		unreached = 0
+		if outcome == coverSettleUndecided {
+			coverSettleMarkChecked(g, time.Now())
+			continue
+		}
 		if outcome != coverSettleDecided {
 			continue
 		}
@@ -892,11 +898,12 @@ func coverSettleGroupsLocked() (groups, mixed [][]coverSettleMember) {
 				byArtist = append(byArtist, []coverSettleMember{m})
 			}
 		}
+		now := time.Now()
 		for _, g := range byArtist {
 			switch {
 			case coverSettleAlbumsDiffer(g):
 				mixed = append(mixed, g)
-			case coverSettleGroupDue(g):
+			case coverSettleGroupDue(g) && !coverSettleCheckedRecently(g, now):
 				groups = append(groups, g)
 			}
 		}
@@ -953,6 +960,40 @@ func coverSettleGroupDue(g []coverSettleMember) bool {
 		urls[m.e.CoverURL] = true
 	}
 	return len(urls) > 1
+}
+
+// coverSettleCheckedRecently:这组上一遍比完定不了,之后组里每条的封面都没变(新进组的条目没有记号,也算变了),离那次又不到
+// coverSettleRecheckInterval —— 再比还是一样的结果,不比。取图的记忆、Apple 的查询缓存都只在内存里,不记的话每次启动、每一遍
+// 都要把这几组的图重取一遍、Apple 重问一轮(实测本机 4 组每遍 46 个请求)。见 03 章决策 62。纯函数。
+func coverSettleCheckedRecently(g []coverSettleMember, now time.Time) bool {
+	for _, m := range g {
+		if m.e.CoverSettleCheckFor != m.e.CoverURL || now.Unix()-m.e.CoverSettleCheckTS >= int64(coverSettleRecheckInterval/time.Second) {
+			return false
+		}
+	}
+	return true
+}
+
+// coverSettleMarkChecked:这组比完定不了,给组里封面还是当时那张的条目记下时刻和地址(见 coverSettleCheckedRecently)。
+func coverSettleMarkChecked(g []coverSettleMember, now time.Time) {
+	enrichMu.Lock()
+	marked := 0
+	for _, m := range g {
+		e, ok := enrichCache[m.key]
+		if !ok || e.CoverURL != m.e.CoverURL || enrichInflight[m.key] || enrichProvisional[m.key] {
+			continue
+		}
+		e.CoverSettleCheckTS, e.CoverSettleCheckFor = now.Unix(), e.CoverURL
+		enrichCache[m.key] = e
+		marked++
+	}
+	if marked > 0 {
+		enrichDirty = true
+	}
+	enrichMu.Unlock()
+	if marked > 0 {
+		coverSweepSave()
+	}
 }
 
 // coverSettlePlanFor 给一组定封面,各首的封面按图比(coverSweepPicture):

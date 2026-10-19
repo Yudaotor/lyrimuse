@@ -476,6 +476,8 @@ func main() {
 	startLocalLibraryLinkRecheck(ctx)
 	// 存量里从同名另一条写法借来的 Amazon ISRC 拿掉(amazonborrowedisrc.go),要读 Amazon 的本机目录缓存,同样放后台。
 	startAmazonBorrowedISRCCleanup(ctx)
+	// 存量里取不到的 Musixmatch 800 档封面换回 500 档(musixmatchcoverrepair.go),要联网,同样放后台。
+	startMusixmatchCoverRepair(ctx)
 	// 存量 Apple 链接换成已校验目录锚点的页面(applecataloglink.go),要联网,同样放后台。
 	startAppleCatalogLinkMigration(ctx)
 	startArtistAliasRecheck(ctx)

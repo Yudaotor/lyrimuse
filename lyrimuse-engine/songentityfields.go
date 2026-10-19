@@ -65,6 +65,7 @@ var songEntityFieldClasses = map[string]songFieldClass{
 	"youtube_music_album_lang": songFieldAlbum, "youtube_music_album_rev": songFieldAlbum,
 	"cover_upgrade_check_ts": songFieldAlbum, "cover_upgrade_check_rules": songFieldAlbum,
 	"cover_missing_retry_rules": songFieldAlbum, "cover_apple_album_check_ts": songFieldAlbum, "inferred_album": songFieldAlbum, "cover_settled": songFieldAlbum,
+	"cover_settle_check_ts": songFieldAlbum, "cover_settle_check_for": songFieldAlbum,
 
 	"canonical_artist": songFieldArtist, "inferred_artist": songFieldArtist, "qq_singer_mid": songFieldArtist,
 	"spotify_artist_id": songFieldArtist, "kkbox_artist_id": songFieldArtist, "amazon_artist_asin": songFieldArtist,
