@@ -153,7 +153,7 @@ func backfillNeteasePlayerSongsFromHistory(ctx context.Context) int {
 	if len(wants) == 0 || path == "" {
 		return 0
 	}
-	history, err := queryNeteaseLocalTable(ctx, path, neteaseLocalHistorySQL)
+	history, _, err := queryNeteaseLocalTable(ctx, path, neteaseLocalHistorySQL)
 	if err != nil {
 		return 0
 	}

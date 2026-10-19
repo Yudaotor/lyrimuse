@@ -312,3 +312,49 @@ func neteaseAlbumCoverUsersLocked(excluded map[string]bool) map[string]bool {
 	}
 	return used
 }
+
+// 存量条目的网易云链接跟网易云播放器报的那一首(player_song_ids)对不上时,换成播放器报的那首(03 章决策 63)。链接是按歌名
+// 在本机曲库挑、或者检索配的,同名的另一版(收在合辑、精选里,时长差不到 1 秒)也会认下;播放器报的是它在放的这一版。运行期
+// 网易云在放时按播放队列的 id 取本机曲库那一条(neteaseLocalEntryKeeping),不再产生。
+const (
+	migrationNeteaseLinksFromPlayer        = "netease_links_from_player"
+	migrationNeteaseLinksFromPlayerVersion = 1
+)
+
+// neteaseLinkFromPlayer:e 的网易云链接要换成哪一条;不用换返回 ""。链接空着的不补(判错清掉的、身份扣下的,见
+// withholdImpersonatorRiddenIdentity),播放器报的那首判错过(NeteaseRejected)的不换。纯函数。
+func neteaseLinkFromPlayer(e enrichEntry) string {
+	sid, cur := e.PlayerSongIDs[neteaseMusicBundleID], neteaseSongIDFromURL(e.NeteaseURL)
+	if cur == "" || cur == sid || !playerSongIDOK(neteaseMusicBundleID, sid) || sid == e.NeteaseRejected {
+		return ""
+	}
+	return "https://music.163.com/song?id=" + sid
+}
+
+// migrateNeteaseLinksFromPlayer:启动时把 scope 里网易云链接跟播放器报的那一首对不上的换掉,记水位。
+func migrateNeteaseLinksFromPlayer() {
+	scope := migrationScopeOf(migrationNeteaseLinksFromPlayer, migrationNeteaseLinksFromPlayerVersion)
+	if scope.skip() {
+		return
+	}
+	enrichMu.Lock()
+	n := 0
+	for k, e := range scope.entries() {
+		u := neteaseLinkFromPlayer(e)
+		if u == "" {
+			continue
+		}
+		log.Printf("netease links: %q linked %s, the client played %s, following the client", k, e.NeteaseURL, u)
+		e.NeteaseURL = u
+		enrichCache[k] = e
+		n++
+	}
+	if n > 0 {
+		enrichDirty = true
+	}
+	enrichMu.Unlock()
+	if n > 0 {
+		saveEnrichCache()
+	}
+	markMigrationDone(migrationNeteaseLinksFromPlayer, migrationNeteaseLinksFromPlayerVersion)
+}

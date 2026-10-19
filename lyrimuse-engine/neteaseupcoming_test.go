@@ -17,6 +17,7 @@ type testNeteaseSong struct {
 	resourceType string  // 空 = 不写这个字段
 	id           string  // 空 = 拿歌名当 id
 	albumID      any     // nil = 不写专辑 id(真实队列里是字符串)
+	picURL       string  // 空 = 不写专辑封面
 }
 
 // writeTestNeteaseQueue 造一份跟真实 playingList 同构的队列文件(明文 JSON,无加密)。
@@ -82,6 +83,9 @@ func testNeteaseQueueBody(t *testing.T, songs []testNeteaseSong) []byte {
 		}
 		if s.albumID != nil {
 			item["track"].(map[string]any)["album"].(map[string]any)["id"] = s.albumID
+		}
+		if s.picURL != "" {
+			item["track"].(map[string]any)["album"].(map[string]any)["picUrl"] = s.picURL
 		}
 		if s.resourceType != "" {
 			item["resourceType"] = s.resourceType

@@ -130,17 +130,31 @@ func neteaseLocalKey(artist, title string) string {
 	return na + "|" + nt
 }
 
+// neteaseLocalRowsRead:一次扫描读到几行,其中几行解得开、带着 id 和歌名。
+type neteaseLocalRowsRead struct{ rows, usable int }
+
+// neteaseLocalUsableShare:有行时至少这么多成解得开、带着 id 和歌名,才算认得这份库的格式。实测 1082 行全部解得开;
+// 客户端换版改了 jsonStr 的写法时一行都解不开,或者解得开却没有 id、歌名,索引是空的。
+const neteaseLocalUsableShare = 0.5
+
+// recognized:读到的行里解得开、带着 id 和歌名的够不够 neteaseLocalUsableShare;一行都没有(新装、清过记录)不算认不出。
+func (r neteaseLocalRowsRead) recognized() bool {
+	return r.rows == 0 || float64(r.usable) >= neteaseLocalUsableShare*float64(r.rows)
+}
+
 // queryNeteaseLocalTracks 读一次 dbTrack,再读播放历史补上 dbTrack 里没有的曲目。dbTrack 读不了就报错;播放历史
-// 读不了(老版本没有这张表)只用 dbTrack。
-func queryNeteaseLocalTracks(ctx context.Context, dbPath string) ([]neteaseLocalTrack, error) {
-	tracks, err := queryNeteaseLocalTable(ctx, dbPath, neteaseLocalTracksSQL)
+// 读不了(老版本没有这张表)只用 dbTrack。read 是两张表合起来读到的行数。
+func queryNeteaseLocalTracks(ctx context.Context, dbPath string) ([]neteaseLocalTrack, neteaseLocalRowsRead, error) {
+	tracks, read, err := queryNeteaseLocalTable(ctx, dbPath, neteaseLocalTracksSQL)
 	if err != nil {
-		return nil, err
+		return nil, read, err
 	}
-	history, err := queryNeteaseLocalTable(ctx, dbPath, neteaseLocalHistorySQL)
+	history, historyRead, err := queryNeteaseLocalTable(ctx, dbPath, neteaseLocalHistorySQL)
 	if err != nil {
-		return tracks, nil
+		return tracks, read, nil
 	}
+	read.rows += historyRead.rows
+	read.usable += historyRead.usable
 	seen := make(map[flexID]bool, len(tracks))
 	for _, t := range tracks {
 		seen[t.ID] = true
@@ -151,43 +165,47 @@ func queryNeteaseLocalTracks(ctx context.Context, dbPath string) ([]neteaseLocal
 			tracks = append(tracks, t)
 		}
 	}
-	return tracks, nil
+	return tracks, read, nil
 }
 
-// queryNeteaseLocalTable 跑一条只取 jsonStr 的查询。mode=ro 的理由同 qqlocal.go:拿一致快照、撞锁
+// queryNeteaseLocalTable 跑一条只取 jsonStr 的查询,read 记读到几行、几行解得开且带着 id 和歌名。mode=ro 的理由同 qqlocal.go:拿一致快照、撞锁
 // 就干净失败;该库是 rollback journal 模式(实测 journal_mode=delete,无 -wal/-shm),
 // 只读打开不写任何东西,不会干扰客户端。
-func queryNeteaseLocalTable(ctx context.Context, dbPath, query string) ([]neteaseLocalTrack, error) {
+func queryNeteaseLocalTable(ctx context.Context, dbPath, query string) ([]neteaseLocalTrack, neteaseLocalRowsRead, error) {
 	ctx, cancel := context.WithTimeout(ctx, neteaseLocalQueryTimeout)
 	defer cancel()
 	uri := (&neturl.URL{Scheme: "file", Path: dbPath, RawQuery: "mode=ro"}).String()
 	out, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", uri, query).Output()
 	if err != nil {
-		return nil, err
+		return nil, neteaseLocalRowsRead{}, err
 	}
 	trimmed := bytes.TrimSpace(out)
 	// 零行时 sqlite3 -json 输出空串而不是 "[]",同 qqlocal.go。
 	if len(trimmed) == 0 {
-		return nil, nil
+		return nil, neteaseLocalRowsRead{}, nil
 	}
 	var rows []neteaseLocalRow
 	if err := json.Unmarshal(trimmed, &rows); err != nil {
-		return nil, err
+		return nil, neteaseLocalRowsRead{}, err
 	}
 	if len(rows) > neteaseLocalMaxRows {
 		rows = rows[:neteaseLocalMaxRows]
 	}
 	// 逐行解,单行解不开就跳过而不是整批放弃:jsonStr 是客户端写进去的整条曲目 JSON,
 	// 里头混进一条格式异常的记录不该让另外七百多条一起失效。
+	read := neteaseLocalRowsRead{rows: len(rows)}
 	tracks := make([]neteaseLocalTrack, 0, len(rows))
 	for _, r := range rows {
 		var t neteaseLocalTrack
 		if err := json.Unmarshal([]byte(r.JSONStr), &t); err != nil {
 			continue
 		}
+		if t.ID != 0 && t.Name != "" {
+			read.usable++
+		}
 		tracks = append(tracks, t)
 	}
-	return tracks, nil
+	return tracks, read, nil
 }
 
 // refreshNeteaseLocalIndexLocked 在库变过、且距上次扫描超过节流间隔时重建索引。
@@ -199,6 +217,13 @@ func refreshNeteaseLocalIndexLocked(ctx context.Context) {
 // neteaseLocalEntriesLocked:keys 里第一个在索引里有条目的那组。都没有时按 neteaseLocalMissRescanMin 再试一次重扫
 // (库没变过照旧不扫)。调用方必须持有 neteaseLocalMu,返回的是拷贝。
 func neteaseLocalEntriesLocked(ctx context.Context, keys ...string) []neteaseLocalTrack {
+	return neteaseLocalEntriesSettledLocked(ctx, nil, keys...)
+}
+
+// neteaseLocalEntriesSettledLocked 同 neteaseLocalEntriesLocked;settled 不空时,查到的那组它不认(同名的只有别的版本)
+// 也按 neteaseLocalMissRescanMin 再试一次重扫:客户端点播时才把这一版写进播放历史,同名的另一版早就在索引里。
+// 调用方必须持有 neteaseLocalMu。
+func neteaseLocalEntriesSettledLocked(ctx context.Context, settled func([]neteaseLocalTrack) bool, keys ...string) []neteaseLocalTrack {
 	refreshNeteaseLocalIndexLocked(ctx)
 	find := func() []neteaseLocalTrack {
 		for _, k := range keys {
@@ -208,7 +233,7 @@ func neteaseLocalEntriesLocked(ctx context.Context, keys ...string) []neteaseLoc
 		}
 		return nil
 	}
-	if ents := find(); ents != nil {
+	if ents := find(); ents != nil && (settled == nil || settled(ents)) {
 		return ents
 	}
 	refreshNeteaseLocalIndexAfterLocked(ctx, neteaseLocalMissRescanMin)
@@ -239,7 +264,7 @@ func refreshNeteaseLocalIndexAfterLocked(ctx context.Context, minGap time.Durati
 	}
 	neteaseLocalScanned, neteaseLocalReady = now, true
 
-	tracks, err := queryNeteaseLocalTracks(ctx, path)
+	tracks, read, err := queryNeteaseLocalTracks(ctx, path)
 	if err != nil {
 		// 保留上一次的索引,理由同 qqlocal.go:重建失败是常态化的偶发。
 		noteLocalCacheReadFailure("netease", path)
@@ -251,7 +276,12 @@ func refreshNeteaseLocalIndexAfterLocked(ctx context.Context, minGap time.Durati
 	// 版本读成功才记、真读到才撤掉「被拒」,理由同 qqlocal.go。
 	neteaseLocalDBMod, neteaseLocalDBSize = st.ModTime(), st.Size()
 	noteLocalCacheReadable("netease")
-	noteParserRecognized("netease-local-library")
+	// 读得了不等于认得:有行、却大半解不开(或解开了没有 id、歌名)是客户端换了 jsonStr 的写法,索引是空的。
+	if read.recognized() {
+		noteParserRecognized("netease-local-library")
+	} else {
+		noteParserUnrecognized("netease-local-library", fmt.Sprintf("%d of %d rows in dbTrack / historyTracks decode with an id and a name", read.usable, read.rows))
+	}
 	idx := map[string][]neteaseLocalTrack{}
 	for _, t := range tracks {
 		if t.ID == 0 || t.Name == "" || len(t.Artists) == 0 {
@@ -298,20 +328,64 @@ func pickNeteaseLocalEntry(entries []neteaseLocalTrack, album string, durationSe
 	return best, found
 }
 
+// neteaseLocalAlbumAgrees:本机曲库一条记录的专辑(entryAlbum)跟这首的专辑(album)对得上,或者有一边不知道。
+func neteaseLocalAlbumAgrees(album, entryAlbum string) bool {
+	return album == "" || entryAlbum == "" || normLoose(album) == normLoose(entryAlbum)
+}
+
 // neteaseLocalEntry 在网易云客户端的本地曲库里挑这首歌的那条记录,不打日志(neteaseLocalSong 命中时才记一行)。
 func neteaseLocalEntry(ctx context.Context, artist, title, album string, durationSecs float64) (neteaseLocalTrack, bool) {
+	return neteaseLocalEntryKeeping(ctx, artist, title, album, durationSecs, nil)
+}
+
+// neteaseLocalEntryKeeping:同 neteaseLocalEntry,keep 不空时按歌名挑的那几条只在它认的里头挑。
+//
+// 网易云在放这首时(neteaseLocalPlayingTrack)不按歌名挑:播放队列报了这一版的歌曲 id,按 id 在索引里取;索引里还没有
+// (刚点播、还没写进播放历史,或者在 60 秒节流里)就用队列里这一条,它跟曲库是同一种曲目 JSON。同名的另一版不拿来顶。
+// 不在放时按歌名挑(pickNeteaseLocalEntry);挑出来的专辑对不上、或一条都不认时按 neteaseLocalMissRescanMin 再试一次重扫,
+// 刚写进播放历史的这一版不用等 60 秒。见 03 章决策 63。
+func neteaseLocalEntryKeeping(ctx context.Context, artist, title, album string, durationSecs float64,
+	keep func(neteaseLocalTrack) bool) (neteaseLocalTrack, bool) {
 	key := neteaseLocalKey(artist, title)
 	if key == "" {
 		// 歌手名缺失时不做"只按歌名"兜底:本机跨歌手同名 23 组,这条路径的价值就是不靠猜。
 		return neteaseLocalTrack{}, false
 	}
+	if playing, ok := neteaseLocalPlayingTrack(ctx, artist, title, album, durationSecs); ok {
+		neteaseLocalMu.Lock()
+		refreshNeteaseLocalIndexLocked(ctx)
+		ents := neteaseLocalIndex[key]
+		if i := slices.IndexFunc(ents, func(t neteaseLocalTrack) bool { return t.ID == playing.ID }); i >= 0 {
+			playing = ents[i]
+		}
+		neteaseLocalMu.Unlock()
+		return playing, true
+	}
+	candidates := func(ents []neteaseLocalTrack) []neteaseLocalTrack {
+		if keep == nil {
+			return ents
+		}
+		return slices.DeleteFunc(slices.Clone(ents), func(t neteaseLocalTrack) bool { return !keep(t) })
+	}
 	neteaseLocalMu.Lock()
-	ents := neteaseLocalEntriesLocked(ctx, key)
+	ents := neteaseLocalEntriesSettledLocked(ctx, func(ents []neteaseLocalTrack) bool {
+		t, ok := pickNeteaseLocalEntry(candidates(ents), album, durationSecs)
+		return ok && neteaseLocalAlbumAgrees(album, t.Album.Name)
+	}, key)
 	neteaseLocalMu.Unlock()
 	if len(ents) == 0 {
 		return neteaseLocalTrack{}, false
 	}
-	return pickNeteaseLocalEntry(ents, album, durationSecs)
+	return pickNeteaseLocalEntry(candidates(ents), album, durationSecs)
+}
+
+// neteaseLocalPlayingTrack:网易云在放、这次解析的是它在放的这首或它的待播队列(playerSignalApplies,不是别的歌那一轮)时,
+// 播放队列里的这一条(neteasePlayingTrack);别的情形 ok=false。
+func neteaseLocalPlayingTrack(ctx context.Context, artist, title, album string, durationSecs float64) (neteaseLocalTrack, bool) {
+	if playingPlayer() != playerNetease || !playerSignalApplies(ctx) || isOtherTrackRound(ctx) {
+		return neteaseLocalTrack{}, false
+	}
+	return neteasePlayingTrack(artist, title, album, durationSecs)
 }
 
 // neteaseLocalSong 在网易云客户端的本地曲库里找这首歌,命中时返回一条可以直接当作
@@ -382,9 +456,11 @@ type neteaseUpcomingFile struct {
 			Album struct {
 				Name string `json:"name"`
 				// ID 原样收下再取数字(rawDigitsID):实测是字符串,形状变了也不能让整份队列解不开。
-				ID json.RawMessage `json:"id"`
+				ID     json.RawMessage `json:"id"`
+				PicURL string          `json:"picUrl"`
 			} `json:"album"`
 			Duration int64 `json:"duration"` // 毫秒
+			Mark     int64 `json:"mark"`     // 见 neSearchSong.Mark
 		} `json:"track"`
 	} `json:"list"`
 }
@@ -597,6 +673,38 @@ func neteasePlayingSong(artist, title string, durationSecs float64) (id, albumID
 		return "", ""
 	}
 	return strings.TrimSpace(tr.ID), rawDigitsID(tr.Album.ID)
+}
+
+// neteasePlayingTrack:网易云播放队列里此刻在放的这首,换成本机曲库那种形状(neteaseLocalTrack:id、歌名、署名、专辑 id /
+// 名字 / 封面、时长、mark)。认法同 neteasePlayingSong;两边专辑都知道又对不上时也不认(队列里同名的另一版排在前面)。
+// 认不出、单集、id 不是数字时 ok=false。
+func neteasePlayingTrack(artist, title, album string, durationSecs float64) (neteaseLocalTrack, bool) {
+	f, _, _, pos := neteaseQueueAt(artist, title)
+	if pos < 0 || neteaseVoiceTypes[f.List[pos].ResourceType] {
+		return neteaseLocalTrack{}, false
+	}
+	tr := f.List[pos].Track
+	if dur := float64(tr.Duration) / 1000; dur > 0 && durationSecs > 0 && !sourceDurationFits(durationSecs, dur) {
+		return neteaseLocalTrack{}, false
+	}
+	if !neteaseLocalAlbumAgrees(album, tr.Album.Name) {
+		return neteaseLocalTrack{}, false
+	}
+	id, err := strconv.ParseInt(strings.TrimSpace(tr.ID), 10, 64)
+	if err != nil || id <= 0 || tr.Name == "" {
+		return neteaseLocalTrack{}, false
+	}
+	t := neteaseLocalTrack{ID: flexID(id), Name: tr.Name, Duration: float64(tr.Duration), Mark: tr.Mark}
+	if albumID, err := strconv.ParseInt(rawDigitsID(tr.Album.ID), 10, 64); err == nil {
+		t.Album.ID = flexID(albumID)
+	}
+	t.Album.Name, t.Album.PicURL = tr.Album.Name, tr.Album.PicURL
+	for _, a := range tr.Artists {
+		t.Artists = append(t.Artists, struct {
+			Name string `json:"name"`
+		}{Name: a.Name})
+	}
+	return t, true
 }
 
 func neteaseUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {

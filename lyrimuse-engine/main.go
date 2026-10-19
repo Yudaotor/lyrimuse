@@ -371,6 +371,9 @@ func main() {
 	startupStep("migratePlayersFromRecords", migratePlayersFromRecords)
 	// 存量条目按 Apple 目录锚点补记 Apple Music 放过(见 enrich.go migratePlayersFromAppleAnchors),锚点缓存上面已经读好。
 	startupStep("migratePlayersFromAppleAnchors", migratePlayersFromAppleAnchors)
+	// 存量网易云链接跟网易云播放器报的那一首对不上的换成后者(见 neteaselinkcheck.go migrateNeteaseLinksFromPlayer),排在
+	// refreshEnrichIndex 之前。
+	startupStep("migrateNeteaseLinksFromPlayer", migrateNeteaseLinksFromPlayer)
 	// 存量没有时长的条目从收听记录补(见 enrich.go migrateListenDurations),同样排在 refreshEnrichIndex 之前。
 	startupStep("migrateListenDurations", func() {
 		migrateListenDurations(func() []listenLogLine {
@@ -479,6 +482,8 @@ func main() {
 	startLocalLibraryLinkRecheck(ctx)
 	// 存量里从同名另一条写法借来的 Amazon ISRC 拿掉(amazonborrowedisrc.go),要读 Amazon 的本机目录缓存,同样放后台。
 	startAmazonBorrowedISRCCleanup(ctx)
+	// 存量里同名另一版那张专辑的 Amazon 播放器封面拿掉(amazonforeigncover.go),要读 Amazon 的本机目录缓存,同样放后台。
+	startAmazonForeignPlayerCoverCleanup(ctx)
 	// 存量里取不到的 Musixmatch 800 档封面换回 500 档(musixmatchcoverrepair.go),要联网,同样放后台。
 	startMusixmatchCoverRepair(ctx)
 	// 存量 Apple 链接换成已校验目录锚点的页面(applecataloglink.go),要联网,同样放后台。

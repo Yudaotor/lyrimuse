@@ -14,7 +14,8 @@ import (
 // (CoverURL 常是设备直送、存在本机的文件,离开这台机器打不开)。
 //
 // 各家来源,都是引擎本来就在读的本机数据:
-//   - 网易云:客户端曲库 dbTrack 里这首的 album.picUrl(neteaselocal.go 的索引),图床给的 http 换成 https;
+//   - 网易云:播放队列 playingList 里当前这首的 album.picUrl,队列里认不出时按歌名取客户端曲库(dbTrack、播放历史)里专辑
+//     对得上的那条(neteaselocal.go 的索引),图床给的 http 换成 https;
 //   - QQ 音乐:播放列表归档里当前这首的 albumInfo.albumMid,按 qqAlbumCoverURL 拼;
 //   - KKBOX:客户端缓存的单曲详情里的专辑图 600 档(kkboxPlayingInfo.cover);
 //   - Amazon Music:目录缓存里这首(按 ASIN)的 album.image,换成同尺寸的 JPEG;
@@ -61,6 +62,11 @@ func playerCoverURLFor(bundleID, artist, title, album string, durationSecs float
 		return ""
 	}
 	key := bundleID + "\x00" + loosenEnrichKey(artist) + "\x00" + loosenEnrichKey(title) + "\x00" + loosenEnrichKey(album)
+	if bundleID == amazonMusicBundleID {
+		// 键带上 App 这一刻报的当前曲目 ASIN:报出之前按歌手 + 歌名认的那一条可能是同名的另一版,报出之后当场按它重读,
+		// 不等记忆过期。
+		key += "\x00" + amazonCurrentASIN(artist, title)
+	}
 	now := time.Now()
 	playerCoverMu.Lock()
 	if m, ok := playerCoverMemo[key]; ok && now.Sub(m.at) < playerCoverTTL(m.cover) {
@@ -106,16 +112,14 @@ func applyPlayerCoverLocked(e *enrichEntry, bundleID, cover string) bool {
 	return true
 }
 
-// neteaseLocalCoverURL:网易云客户端曲库里这首的专辑图,挑条目的判据同 neteaseLocalSong。
+// neteaseLocalCoverURL:网易云客户端给这首记的专辑图,挑条目的判据同 neteaseLocalSong:网易云在放这首时是播放队列里这一版的
+// (按 id 取,见 neteaseLocalEntryKeeping);按歌名在曲库里挑时只认专辑对得上、或有一边不知道的记录(neteaseLocalAlbumAgrees)。
+// localLibraryEntryFits 认下的另一张专辑(合辑、精选里时长差不到 1 秒的同一份音频)歌词能用,封面是那张专辑的;这张图拿去当
+// 小设备封面的担保(smallDeviceCoverYieldsTo)就换成了另一张专辑的封面。见 03 章决策 63。
 func neteaseLocalCoverURL(artist, title, album string, durationSecs float64) string {
-	key := neteaseLocalKey(artist, title)
-	if key == "" {
-		return ""
-	}
-	neteaseLocalMu.Lock()
-	ents := neteaseLocalEntriesLocked(context.Background(), key)
-	neteaseLocalMu.Unlock()
-	t, ok := pickNeteaseLocalEntry(ents, album, durationSecs)
+	t, ok := neteaseLocalEntryKeeping(context.Background(), artist, title, album, durationSecs, func(t neteaseLocalTrack) bool {
+		return neteaseLocalAlbumAgrees(album, t.Album.Name)
+	})
 	if !ok {
 		return ""
 	}
@@ -162,7 +166,9 @@ func qqMidShape(mid string) bool {
 	return true
 }
 
-// amazonPlayingCoverURL:Amazon Music 目录缓存里这首(App 报的 ASIN)的专辑图。
+// amazonPlayingCoverURL:Amazon Music 目录缓存里这首(amazonASINFor 认的 ASIN)的专辑图。App 还没报当前曲目时 amazonASINFor
+// 按歌手 + 歌名从队列、整份缓存认 ASIN,同名的单曲与专辑版会认到另一条上;目录里这一轨的专辑名跟这一条的专辑对不上时不认,
+// 同 amazonPlayingCatalogIDs(07 章决策 143)。见 03 章决策 63。
 func amazonPlayingCoverURL(artist, title, album string) string {
 	asin := amazonASINFor(artist, title, album)
 	if asin == "" {
@@ -170,6 +176,9 @@ func amazonPlayingCoverURL(artist, title, album string) string {
 	}
 	t, ok := amazonCatalog([]string{asin})[asin]
 	if !ok {
+		return ""
+	}
+	if name := t.albumName(); album != "" && name != "" && amazonAlbumKey(name) != amazonAlbumKey(album) {
 		return ""
 	}
 	return amazonJPEGImage(t.Album.Image)

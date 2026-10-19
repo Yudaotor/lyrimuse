@@ -182,13 +182,13 @@ func TestNeteaseLocalFlexIDAcceptsBothForms(t *testing.T) {
 
 func TestQueryNeteaseLocalTracksSkipsBadRowsAndEmptyResult(t *testing.T) {
 	// 零行:sqlite3 -json 输出空串,不该报错。
-	rows, err := queryNeteaseLocalTracks(context.Background(), writeTestNeteaseDB(t, nil))
+	rows, _, err := queryNeteaseLocalTracks(context.Background(), writeTestNeteaseDB(t, nil))
 	if err != nil || len(rows) != 0 {
 		t.Fatalf("零行结果应当无错且为空: err=%v n=%d", err, len(rows))
 	}
 	// 混一条坏 JSON:跳过它,其余照读 —— 不能让一条脏记录带走整批。
 	mixed := append([]string{"{这不是合法 JSON"}, neteaseLocalTestTracks...)
-	rows, err = queryNeteaseLocalTracks(context.Background(), writeTestNeteaseDB(t, mixed))
+	rows, _, err = queryNeteaseLocalTracks(context.Background(), writeTestNeteaseDB(t, mixed))
 	if err != nil {
 		t.Fatalf("含坏行时不该整批失败: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestNeteaseLocalIndexReadsPlayHistory(t *testing.T) {
 	if n != 2 {
 		t.Fatalf("两张表都有的同一首只留一条,索引里该是 2 条,得到 %d", n)
 	}
-	tracks, err := queryNeteaseLocalTracks(context.Background(), writeTestNeteaseDB(t, []string{old}))
+	tracks, _, err := queryNeteaseLocalTracks(context.Background(), writeTestNeteaseDB(t, []string{old}))
 	if err != nil || len(tracks) != 1 {
 		t.Fatalf("没有播放历史表时照读 dbTrack: err=%v n=%d", err, len(tracks))
 	}

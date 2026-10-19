@@ -143,8 +143,8 @@ func applyDeviceOrPlayerCover(ctx context.Context, e *enrichEntry, deviceCoverUR
 // 调用方持有 enrichMu。
 var deviceCoverUpgradeTried = map[string]bool{}
 
-// localPlayerCovers:本机播放器数据里按歌名记着的这首的封面 —— KKBOX 客户端缓存的单曲详情、网易云客户端曲库,不看现在
-// 哪个播放器在放;都没有返回空。只用来给小设备封面找同一张图的清晰版(upgradeSmallDeviceCover 比过是同一张图
+// localPlayerCovers:本机播放器数据里按歌名记着的这首的封面 —— KKBOX 客户端缓存的单曲详情、网易云客户端曲库(专辑对得上的,
+// 网易云在放这首时是播放队列里这一版的,见 neteaseLocalCoverURL),不看现在哪个播放器在放;都没有返回空。只用来给小设备封面找同一张图的清晰版(upgradeSmallDeviceCover 比过是同一张图
 // 才换)。要读别的 App 的本机文件,调用方不能持着 enrichMu。包级变量:单测换成桩(TestMain 里默认没有)。
 var localPlayerCovers = func(artist, title, album string, durationSecs float64) []string {
 	var out []string
