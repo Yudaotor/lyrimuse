@@ -208,6 +208,27 @@ func runWebLyricsTests() {
         noDelay.noteSent(stamp: 990, bytes: 100, at: 1.0)
         _ = noDelay.noteFeedback(WebLyricsFeedback(stamp: 990, receivedBytes: 100, sinceArrival: 0), at: 1.04)
         expectEqual(noDelay.displayLatency, nil, "网页歌词提前画: 网页没报余量就不提前")
+
+        func cutWindow(lead: Int = 800, previous: (positionMs: Int, at: TimeInterval, playing: Bool)? = (10_000, 100.0, true),
+                       position: Int, now: TimeInterval = 100.4, playing: Bool, rate: Double = 1) -> [Double]? {
+            WebLyricsPredictionCut.window(leadMs: lead, previous: previous, positionMs: position, now: now, playing: playing,
+                                          rate: rate).map { [$0.from, $0.to] }
+        }
+        // 上一次提交在 100.0s、位置 10.000s;此刻 100.4s 发现停了,实际停在 10.100s(照原样该到 10.400s,晚发现了 300ms)
+        expectEqual(cutWindow(position: 10_100, playing: false), [100_400 - 800 - 300 - 200, 100_400],
+                    "网页歌词提前画: 暂停时丢掉押过头的帧,起点按晚发现的那一截再往前挪,再多留 200ms")
+        expectEqual(cutWindow(position: 40_000, playing: true), [100_000 - 800 - 200, 100_400],
+                    "网页歌词提前画: 跳转也算押错,起点取上一次提交的时刻")
+        expectEqual(cutWindow(position: 10_550, playing: true), nil, "网页歌词提前画: 锚点小幅校正不算跳转")
+        expectEqual(cutWindow(position: 10_800, playing: true, rate: 2), nil, "网页歌词提前画: 按播放速率外推")
+        expectEqual(cutWindow(lead: 250, position: 10_100, playing: false), nil,
+                    "网页歌词提前画: 提前量不到 300ms 不丢(押过头看不出,丢帧反而要停一下)")
+        expectEqual(cutWindow(position: 1_200, playing: true), nil,
+                    "网页歌词提前画: 跳到开头 3 秒以内(开播时的位置校正、自动换下一首)不算跳转")
+        expectEqual(cutWindow(previous: (10_000, 100.0, false), position: 40_000, playing: true), nil,
+                    "网页歌词提前画: 原来就停着(恢复播放)不用丢")
+        expectEqual(WebLyricsPredictionCut.message((1234.5, 2000)), #"{"type":"cut","from":1234.5,"t":2000.0}"#,
+                    "网页歌词提前画: 丢帧通知的格式")
         expectEqual(WebLyricsFeedback.parse(Data(#"{"vis":1}"#.utf8)), nil, "网页歌词码率: 可见性不当回报")
     }
 
@@ -708,6 +729,12 @@ func runWebLyricsTests() {
         expectEqual(sourceHas(hubSource, "PlaybackCoordinator.shared.lyricsLookahead(leadMs: leadMs)")
                         && sourceHas(hubSource, "guard let wait = next?.nextChangeInMs else { return }"), true,
                     "网页歌词提前画: 在播时按提前量重解歌词行,并在下一次换行的时刻补一次提交")
+        expectEqual(sourceHas(hubSource, "CATransaction.flush()\n if let from = pendingCutFrom {\n pendingCutFrom = nil\n onText?(WebLyricsPredictionCut.message((from, CACurrentMediaTime() * 1000 + WebLyricsPredictionCut.settleMs)))")
+                        && sourceHas(pagesSource, "else if (m.type === 'cut') cut(m.from, m.t);")
+                        && sourceHas(pagesSource, "if (t <= lastShown || cutOut(t)) { release(item); return; }"), true,
+                    "网页歌词提前画: 暂停、跳转时通知网页,网页把押错的帧解了不放")
+        expectEqual(sourceHas(pagesSource, "let jitter = remote ? START_DELAY - 16 : 0, jitterAt = performance.now(), lastArrival = 0;"), true,
+                    "网页歌词: 别的设备上开的副屏余量从 300ms 起步,头一次停顿就接得住")
         expectEqual(sourceHas(pagesSource, "ws.send(JSON.stringify({ fb: [rxStamp, rxBytes, Math.round(performance.now() - rxAt),")
                         && sourceHas(pagesSource, "rxBytes += buffer.byteLength;"), true,
                     "网页歌词: 副屏网页定时回报收到的最后一帧和字节数(按消息内容数,跟 App 记的同一个数法)")

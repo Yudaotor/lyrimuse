@@ -299,6 +299,11 @@ final class WebLyricsScreenRenderer {
     private var appliedLeadMs: Int { lookahead == nil ? 0 : leadMs }
     /// 上一次记进诊断日志的提前量目标;变了 100ms 以上才再记。
     private var loggedLeadMs = 0
+    /// 上一次提交时的播放位置,下一次比对有没有暂停、跳转(押错了提前画,见 `WebLyricsPredictionCut`)。
+    private var lastTimeline: (positionMs: Int, at: TimeInterval, playing: Bool)?
+    /// 这次提交发现押错了要丢的起点(画帧时刻毫秒)。终点等这次提交把图层树交出去之后再取:在那之前画的帧还是旧的树、
+    /// 还带着提前量。
+    private var pendingCutFrom: Double?
 
     init(viewport: WebLyricsViewport, video: Bool = false) {
         self.video = video
@@ -747,6 +752,16 @@ final class WebLyricsScreenRenderer {
 
     /// 每次提交前:提前量往目标挪一步;在播时按它重解一次歌词行,变了就重搭模型,并在下一次会变的时刻补一次提交。
     private func updateLead(_ now: CFTimeInterval) {
+        let position = currentPositionMs()
+        let playing = playback.isPlayingNow
+        let rate = playback.anchor.map { $0.rate > 0 ? $0.rate : 1 } ?? 1
+        if let window = WebLyricsPredictionCut.window(leadMs: appliedLeadMs, previous: lastTimeline, positionMs: position,
+                                                      now: now, playing: playing, rate: rate) {
+            pendingCutFrom = window.from
+            let expected = lastTimeline.map { $0.positionMs + Int((now - $0.at) * 1000 * rate) } ?? position
+            Self.log.notice("web lyrics cut: \(playing ? "seek" : "pause", privacy: .public) at \(position, privacy: .public)ms (expected \(expected, privacy: .public)ms, lead \(self.appliedLeadMs, privacy: .public)ms, drop \(Int(now * 1000 - window.from), privacy: .public)ms back)")
+        }
+        lastTimeline = (position, now, playing)
         let elapsed = leadUpdatedAt.map { now - $0 } ?? 0
         leadUpdatedAt = now
         let reach = Self.leadSlewPerSecond * elapsed * 1000
@@ -764,7 +779,6 @@ final class WebLyricsScreenRenderer {
         lookaheadTimer?.invalidate()
         lookaheadTimer = nil
         guard let wait = next?.nextChangeInMs else { return }
-        let rate = playback.anchor.map { $0.rate > 0 ? $0.rate : 1 } ?? 1
         let t = Timer(timeInterval: max(0.005, Double(wait) / 1000 / rate + 0.005), repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.commit() }
         }
@@ -812,6 +826,10 @@ final class WebLyricsScreenRenderer {
         }
         CATransaction.commit()
         CATransaction.flush()
+        if let from = pendingCutFrom {
+            pendingCutFrom = nil
+            onText?(WebLyricsPredictionCut.message((from, CACurrentMediaTime() * 1000 + WebLyricsPredictionCut.settleMs)))
+        }
 
         let active = viewersVisible && (playback.isPlayingNow || now < fastUntil)
         frames?.setPace(fast: active)

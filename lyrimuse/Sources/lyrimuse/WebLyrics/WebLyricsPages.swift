@@ -79,7 +79,23 @@ enum WebLyricsPages {
           const MIN_DELAY = 40, MAX_DELAY = 500, MAX_VIDEO_DELAY = 2000, BUFFER_BYTES = 8e7, PEAK_HOLD = 20000, PEAK_DECAY = 0.01;
           let ws = null, retry = 1000, retryTimer = 0, resizeTimer = 0;
           let queue = [], decoding = 0, offset = Infinity, lastShown = -Infinity, lastFrame = 0;
-          let jitter = 0, jitterAt = 0, lastArrival = 0, gap = 1000 / 60, lastT = 0, framePixels = 0;
+          // 别的设备上开的(不是本机回环)余量从 START_DELAY 起步,头一次停顿就接得住;App 按余量提前画,歌词不跟着拖后
+          const START_DELAY = 300;
+          const remote = !['localhost', '127.0.0.1', '[::1]', '::1'].includes(location.hostname);
+          let jitter = remote ? START_DELAY - 16 : 0, jitterAt = performance.now(), lastArrival = 0;
+          let gap = 1000 / 60, lastT = 0, framePixels = 0;
+          // 暂停、跳转时 App 发来的 [from, to]:画帧时刻落在里面的帧是提前画押错的,收到了也不放(视频照解,后面的帧要参照)
+          let cuts = [];
+          function cutOut(t) { return cuts.some((c) => t > c[0] && t <= c[1]); }
+          function cut(from, to) {
+            cuts.push([from, to]);
+            if (cuts.length > 8) cuts.shift();
+            queue = queue.filter((item) => {
+              if (!cutOut(item.t)) return true;
+              release(item);
+              return false;
+            });
+          }
           function bufferCap() { return framePixels ? Math.max(6, Math.min(24, Math.floor(BUFFER_BYTES / (framePixels * 4)))) : 6; }
           // 逐帧 JPEG 排的是解好的图,余量受内存限制;视频排的是没解的数据(每帧几 KB),只按时间封顶
           function delay() {
@@ -117,7 +133,7 @@ enum WebLyricsPages {
           // 解好的一帧(图片或视频帧)排进队列,按画帧时刻放
           function accept(t, frame) {
             const item = { t, frame };
-            if (t <= lastShown) { release(item); return; }
+            if (t <= lastShown || cutOut(t)) { release(item); return; }
             queue.push(item);
             queue.sort((a, b) => a.t - b.t);
             framePixels = frameWidth(frame) * frameHeight(frame);
@@ -246,6 +262,7 @@ enum WebLyricsPages {
                   const m = JSON.parse(e.data);
                   if (m.type === 'hello') checkRevision(m.rev);
                   else if (m.type === 'links') links = m.items;
+                  else if (m.type === 'cut') cut(m.from, m.t);
                   else if (m.type === 'no-video') dropVideo();
                 } catch (err) {}
                 return;
