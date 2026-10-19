@@ -773,6 +773,8 @@ cp -R Sources/lyrimuse/Resources/en.lproj "$APP_DIR/Contents/Resources/en.lproj"
 # 不崩溃,极难发现(当天新增 Spotify 平台图标时当场踩到)。遍历之后这类漏拷不可能再发生。
 # Resources/ 下的 PNG 全都是要随包分发的,没有"只用于开发"的例外;.lproj 目录和
 # THIRD_PARTY_LICENSES 各有各的拷贝方式,不走这里。
+# 新加的 PNG 入库前先无损压一遍:`oxipng -o max --strip safe -Z --nx <文件>`(`--nx` 不改颜色格式,
+# 去掉它会被换成调色板 / 灰度、色彩空间跟着变),见 15 章决策 71。
 for png in Sources/lyrimuse/Resources/*.png; do
   cp "$png" "$APP_DIR/Contents/Resources/$(basename "$png")"
 done
