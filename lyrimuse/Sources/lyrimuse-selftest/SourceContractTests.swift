@@ -1220,7 +1220,7 @@ func runSourceContractTests() {
                             "适配优先: AppleScript 时长为空时只补 media-control 的 duration,不借位置")
                 expectEqual(mcc.contains("let playable = supplementingMissingAppleDuration(snapshot, radioProbe: takeRadioProbeReply())"), true,
                             "只勾 Apple Music: 时长为空时按曲目向系统探一次,否则建不起锚点;这一拍判电台已经问过的就用那一份")
-                expectEqual(mcc.contains("noteRadioProbeReply(ran: true, reply: appleMusicSystemSnapshot(raw))"), true,
+                expectEqual(mcc.contains("let system = appleMusicSystemSnapshot(raw)") && mcc.contains("noteRadioProbeReply(ran: true, reply: system)"), true,
                             "只勾 Apple Music: 电台判据那次探测的应答要留给补时长用,同一首别为时长再起一次 media-control")
                 // 必须留的例外(电台那条钉在上面「电台」那一段里,不重复)。
                 expectEqual(mcc.contains("guard mediaControl.playing == true else { return mediaControl }"), true,

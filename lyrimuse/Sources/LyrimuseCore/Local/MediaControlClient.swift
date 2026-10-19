@@ -1103,6 +1103,31 @@ public enum MediaControlClient {
         return filled
     }
 
+    // MARK: - Apple Music 在放的那一版的时长
+
+    private static let appleSystemDurationLock = NSLock()
+    private static var appleSystemDuration: (trackKey: String, secs: Double)?
+
+    /// 系统媒体信息(MediaRemote)给 Apple Music 这一首报的时长;没见过这一首的系统读数时为 nil。
+    ///
+    /// AppleScript 的 `duration` 是目录里立体声版的时长,放杜比全景声版时跟实际在放的差几秒,只有系统这份是在放的那一版。
+    /// 认空间音频版、界面上的总时长要用它,见 `LocalPlaybackSource.applePlayingDuration` 与 08 章决策 54。三条读法都记:自动识别 / 多选在 `adaptedSnapshot` 里两份读数同时在手,
+    /// 只选 Apple Music 时每首歌本来就为电台判据问一次 media-control(`probeRadioStationHash`)。
+    public static func appleMusicSystemDuration(forTrack trackKey: String) -> Double? {
+        appleSystemDurationLock.lock()
+        defer { appleSystemDurationLock.unlock() }
+        guard let known = appleSystemDuration, known.trackKey == trackKey else { return nil }
+        return known.secs
+    }
+
+    /// 电台报的是整档节目的时长,不记。
+    private static func noteAppleMusicSystemDuration(trackKey: String, duration: Double?, isRadio: Bool) {
+        guard !isRadio, let duration, duration > 0 else { return }
+        appleSystemDurationLock.lock()
+        appleSystemDuration = (trackKey, duration)
+        appleSystemDurationLock.unlock()
+    }
+
     /// 取走这一拍电台判据那次探测的应答,取完清空(下一拍没有新的探测就是「没问」)。
     private static func takeRadioProbeReply() -> (ran: Bool, reply: MediaControlSnapshot?) {
         appleDurationProbeLock.lock()
@@ -1177,7 +1202,10 @@ public enum MediaControlClient {
         // 播放器),不能扣到 Music.app 头上 —— 跟 matchMediaControlState 那道核对同一条理由。
         guard raw.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier else { return nil }
         // 同一份应答里有这首的时长:AppleScript 没给时长的那几首拿它补(supplementingMissingAppleDuration),不再另问一次。
-        noteRadioProbeReply(ran: true, reply: appleMusicSystemSnapshot(raw))
+        let system = appleMusicSystemSnapshot(raw)
+        noteRadioProbeReply(ran: true, reply: system)
+        noteAppleMusicSystemDuration(trackKey: system.trackKey, duration: system.duration,
+                                     isRadio: !(raw.radioStationHash ?? "").isEmpty)
         setNowPlayingIdentifiers(bundleID: PlaybackPlayer.appleMusic.bundleIdentifier, title: raw.title, artist: raw.artist,
                                  uniqueIdentifier: raw.uniqueIdentifier, trackNumber: raw.trackNumber,
                                  mediaType: raw.mediaType)
@@ -2090,6 +2118,8 @@ public enum MediaControlClient {
         // 拿不到(没授「自动化」权限 / 播放器不可达 / 超时)一律退回 media-control 这份,不整个放弃。
         switch bundleID {
         case PlaybackPlayer.appleMusic.bundleIdentifier:
+            noteAppleMusicSystemDuration(trackKey: mediaControl.trackKey, duration: mediaControl.duration,
+                                         isRadio: mediaControl.isRadio == true)
             // 暂停态不问:Apple Music 暂停时会重新发布一次 elapsedTime,那个值**就是**暂停位置
             // (见 livePositionSeconds 里的同一条),多 fork 一个 osascript 换不到任何精度。
             guard mediaControl.playing == true else { return mediaControl }

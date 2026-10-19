@@ -560,6 +560,40 @@ func runLyricsOffsetTests() {
         let early = LRCParser.SpatialAudioCue(lyricOffsetMs: -131, stereoDurationMs: 178721)
         expectEqual(L.spatialAudioOffsetMs(cue: early, bundleID: am, playingDuration: 177.6, isMusicVideo: false), 131,
                     "空间音频: 负偏移(空间音频版歌词要早)换算成提前")
+
+        // 在放的那一版的时长:AppleScript 报目录里立体声版的时长,系统媒体信息报在放的那一版。
+        // D'Angelo《Untitled》实测:脚本 435.364、系统 430.853,歌词带 -2.697s 的空间音频偏移。
+        expectEqual(L.applePlayingDuration(bundleID: am, scriptDuration: 435.364, systemDuration: 430.853), 430.853,
+                    "在放时长: 系统报的跟脚本差几秒 = 在放空间音频版,取系统的")
+        expectEqual(L.applePlayingDuration(bundleID: am, scriptDuration: 196.373, systemDuration: 196.4), 196.373,
+                    "在放时长: 同一份母带的毫秒级差别,仍用脚本的")
+        expectEqual(L.applePlayingDuration(bundleID: am, scriptDuration: 196.373, systemDuration: 3600), 196.373,
+                    "在放时长: 差得太多不是两版混音,仍用脚本的")
+        expectEqual(L.applePlayingDuration(bundleID: am, scriptDuration: 435.364, systemDuration: nil), 435.364,
+                    "在放时长: 没有系统读数,仍用脚本的")
+        expectEqual(L.applePlayingDuration(bundleID: PlaybackPlayer.spotify.bundleIdentifier, scriptDuration: 200,
+                                           systemDuration: 204), 200,
+                    "在放时长: 只认 Apple Music")
+        let dangelo = LRCParser.SpatialAudioCue(lyricOffsetMs: -2697, stereoDurationMs: 435364)
+        let playing = L.applePlayingDuration(bundleID: am, scriptDuration: 435.364, systemDuration: 430.853)
+        expectEqual(L.spatialAudioOffsetMs(cue: dangelo, bundleID: am, playingDuration: playing, isMusicVideo: false), 2697,
+                    "在放时长: 拿系统时长认出空间音频版,偏移生效")
+        expectEqual(L.spatialAudioOffsetMs(cue: dangelo, bundleID: am, playingDuration: 435.364, isMusicVideo: false), 0,
+                    "在放时长: 只拿脚本的目录时长认不出(修之前的样子)")
+
+        // 接线(契约):两条有系统读数的读法都记下系统时长,认空间音频版和界面总时长都走 playingDuration
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func read(_ rel: String) -> String { (try? String(contentsOf: sources.appendingPathComponent(rel), encoding: .utf8)) ?? "" }
+        let client = read("LyrimuseCore/Local/MediaControlClient.swift")
+        let source = read("LyrimuseCore/Local/LocalPlaybackSource.swift")
+        expectEqual(sourceBody("private static func adaptedSnapshot", in: client).contains("noteAppleMusicSystemDuration"),
+                    true, "在放时长(契约): 自动识别 / 多选那条路记系统时长")
+        expectEqual(sourceBody("private static func probeRadioStationHash", in: client).contains("noteAppleMusicSystemDuration"),
+                    true, "在放时长(契约): 只选 Apple Music 那条路记系统时长")
+        expectEqual(sourceBody("private func currentSpatialAudioOffsetMs", in: source).contains("playingDuration(snapshot)"),
+                    true, "在放时长(契约): 认空间音频版用在放的时长")
+        expectEqual(sourceBytes(source, contain: "if let d = playingDuration(snapshot), d > 0 { return Int(d * 1000) }"), true,
+                    "在放时长(契约): 界面总时长用在放的时长")
     }
 
     // ---- 第四层:电台校正----

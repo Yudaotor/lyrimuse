@@ -1983,8 +1983,29 @@ public final class LocalPlaybackSource: ObservableObject {
     private func currentSpatialAudioOffsetMs() -> Int {
         let snapshot = lastSnapshot
         return Self.spatialAudioOffsetMs(
-            cue: syncEngine.spatialAudioCue, bundleID: snapshot?.bundleIdentifier, playingDuration: snapshot?.duration,
+            cue: syncEngine.spatialAudioCue, bundleID: snapshot?.bundleIdentifier, playingDuration: playingDuration(snapshot),
             isMusicVideo: musicVideoKey != nil && musicVideoKey == snapshot?.trackKey)
+    }
+
+    /// 快照这一首实际在放的那一版的时长(见 applePlayingDuration)。
+    private func playingDuration(_ snapshot: MediaControlSnapshot?) -> Double? {
+        guard let snapshot else { return nil }
+        let system = snapshot.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier
+            ? MediaControlClient.appleMusicSystemDuration(forTrack: snapshot.trackKey) : nil
+        return Self.applePlayingDuration(bundleID: snapshot.bundleIdentifier, scriptDuration: snapshot.duration,
+                                         systemDuration: system)
+    }
+
+    /// Apple Music 实际在放的那一版的时长。AppleScript 报的是目录里立体声版的时长,系统媒体信息报的才是在放的那一版;
+    /// 两者差在空间音频那个区间(`spatialDurationToleranceSecs`~`spatialDurationMaxSecs`)里时取系统的,否则就是快照里的。
+    /// 只给认空间音频版、界面上的总时长(进度条、剩余时间、拖进度换算、Discord)用 —— 播放位置本来就是在放那一版的时间轴。
+    /// 写给引擎的、挑录音变体的仍用快照里的:那个要跟目录、歌词时长对得上。纯函数,selftest 覆盖。
+    public nonisolated static func applePlayingDuration(bundleID: String?, scriptDuration: Double?,
+                                                        systemDuration: Double?) -> Double? {
+        guard bundleID == PlaybackPlayer.appleMusic.bundleIdentifier, let system = systemDuration, system > 0,
+              let script = scriptDuration, script > 0 else { return scriptDuration }
+        let diff = abs(system - script)
+        return diff > spatialDurationToleranceSecs && diff <= spatialDurationMaxSecs ? system : script
     }
 
     /// 挑同名不同录音变体(`~durN`)用的时长,口径跟引擎的 `lyricsDurationSecs` 一致:电台(整档节目的时长)、
@@ -4428,7 +4449,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 播放器都是"暂停即冻结",见 MediaControlClient.fetchRawMediaControlSnapshot
         // 里暂停分支的注释),不需要再经过 resolvePositionSeconds 平滑。
         let newDurationMs: Int? = {
-            if let d = snapshot.duration, d > 0 { return Int(d * 1000) }
+            if let d = playingDuration(snapshot), d > 0 { return Int(d * 1000) }
             return nil
         }()
         if newDurationMs != currentDurationMs { currentDurationMs = newDurationMs }
@@ -4748,7 +4769,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if spatial != spatialAudioOffsetMs {
             spatialAudioOffsetMs = spatial
             let cue = syncEngine.spatialAudioCue
-            logger.notice("spatial audio lyrics offset: \(spatial, privacy: .public)ms (playing \(self.lastSnapshot?.duration ?? -1, format: .fixed(precision: 3))s, stereo \(cue?.stereoDurationMs ?? -1, privacy: .public)ms, cue \(cue?.lyricOffsetMs ?? 0, privacy: .public)ms)")
+            logger.notice("spatial audio lyrics offset: \(spatial, privacy: .public)ms (playing \(self.playingDuration(self.lastSnapshot) ?? -1, format: .fixed(precision: 3))s, script \(self.lastSnapshot?.duration ?? -1, format: .fixed(precision: 3))s, stereo \(cue?.stereoDurationMs ?? -1, privacy: .public)ms, cue \(cue?.lyricOffsetMs ?? 0, privacy: .public)ms)")
         }
         // MV 偏移只进引擎与 currentLyricsOffsetMs(歌词对齐用),不进 trackLyricsOffsetMs(「你调了多少」)。
         syncEngine.offsetMs = effective + musicVideoOffsetMs + spatialAudioOffsetMs
