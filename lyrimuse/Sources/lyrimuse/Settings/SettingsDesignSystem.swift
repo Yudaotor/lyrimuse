@@ -1360,6 +1360,9 @@ struct SettingsPopoverShell<Content: View>: View {
     /// 高度上限,内容更高就在浮层里滚动。默认 `SettingsPopoverMetrics.defaultMaxHeight`;悬浮歌词编辑台
     /// 按舞台上方剩下的空间传更小的值,免得 NSPopover 放不下时翻到另一边盖住预览。
     var maxHeight: CGFloat = SettingsPopoverMetrics.defaultMaxHeight
+    /// 内容里某一行的 `.id`:从 nil 变成这个值时把它滚到浮层中间(内容异步加载完才知道要滚到哪)。
+    /// 那一行要是 `LazyVStack` 的直接子视图,藏在没画出来的子视图里面的 id 滚不过去。
+    var scrollTarget: AnyHashable?
     @ViewBuilder let content: () -> Content
 
     /// 内容的真实(未裁剪)高度,由下面的 `GeometryReader` 实测上报。
@@ -1432,6 +1435,11 @@ struct SettingsPopoverShell<Content: View>: View {
                 }
                 .animation(.easeOut(duration: 0.15), value: moreBelow)
                 .onPreferenceChange(PopoverScrollOffsetKey.self) { if let offset = $0 { scrollOffset = offset } }
+                .onChange(of: scrollTarget) { _, target in
+                    guard let target else { return }
+                    // 等这一帧把新内容排完、浮层按新高度摆好再滚,同一帧里滚的位置会按旧高度算。
+                    DispatchQueue.main.async { reader.scrollTo(target, anchor: .center) }
+                }
             }
             .modifier(PopoverScrollEdgeEffectHidden())
             // measuredHeight 还没测出来之前(刚弹出的第一帧)只按上限约束,让 ScrollView 按内容自身高度走;

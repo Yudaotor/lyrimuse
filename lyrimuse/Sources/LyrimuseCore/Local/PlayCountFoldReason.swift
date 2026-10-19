@@ -80,21 +80,7 @@ public enum PlayCountFoldExplainer {
         return .other
     }
 
-    /// 同一个 Last.fm 条目下**专辑名**写法不同(《晴天》的 scrobble 一半挂「葉惠美」一半挂「叶惠美」)。
-    /// 专辑不是 Last.fm 曲目身份的一部分,这种分裂是 Last.fm 自己并的、
-    /// 不经我们的折叠规则,但用户核对「合并了哪些记录」时同样想看到 —— 原因沿同一条流水线判到
-    /// 双语拼接那一级为止(专辑名没有别名表)。
-    ///
-    /// 跟 `reasons` 不同,这里对不上任何一档返回 **nil、不是 .other**:写法族那一层「并了却说不出
-    /// 为什么」是异常,该报;而专辑名之间对不上是**常态** —— 同一首录音本来就会出现在原专辑、精选集、
-    /// 专辑的另一语言名(王力宏《心中的日月》= 「Shangri-la」)下面,那是不同的专辑,不是写法差异,
-    /// 挂「其他折叠规则」就说反了(那会让人以为是我们的折叠规则把它们并在一起的)。
-    public static func albumReason(base: String?, variant: String?) -> PlayCountFoldReason? {
-        guard let a = base, let b = variant, a != b else { return nil }
-        return stagedTextReason(a, b)
-    }
-
-    /// 歌名 / 专辑名共用的逐级比对:从最轻的大小写/空格一路到双语拼接收敛。都不等返回 nil,
+    /// 歌名的逐级比对:从最轻的大小写/空格一路到双语拼接收敛。都不等返回 nil,
     /// 由调用方决定还要不要查别名表(歌名有、专辑名没有)。
     private static func stagedTextReason(_ a: String, _ b: String) -> PlayCountFoldReason? {
         if loose(a) == loose(b) { return .caseOrSpacing }

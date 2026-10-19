@@ -68,33 +68,6 @@ public struct PlayCountBreakdown: Equatable {
     public var canLoadOlder: Bool { variants.contains { !$0.failed && !$0.exhausted } }
     public var hasFailure: Bool { variants.contains { $0.failed } }
 
-    /// 同一种写法(= 同一个 Last.fm 条目)下,已拉到的记录按**专辑名**分组
-    /// (《晴天》23 次里一半挂「葉惠美」一半挂「叶惠美」,这也是一种"写法不同",清单里得看得见)。
-    /// 专辑不进 Last.fm 的曲目身份、也不进我们的折叠键,所以它只能从逐条记录里数出来 —— 数的是
-    /// **已拉到的**那些:写法拉完时就是真实分布,没拉完时是下界(界面据 `exhausted` 决定标不标
-    /// "至少")。按条数降序、同数按专辑名,结果确定。没有专辑名的记录归成 `album == nil` 一组。
-    public struct AlbumGroup: Equatable {
-        public let album: String?
-        public let count: Int
-        public init(album: String?, count: Int) {
-            self.album = album
-            self.count = count
-        }
-    }
-
-    public func albumGroups(variantIndex: Int) -> [AlbumGroup] {
-        var counts: [String?: Int] = [:]
-        for p in plays where p.variantIndex == variantIndex {
-            let key = p.album?.trimmingCharacters(in: .whitespaces)
-            counts[key.flatMap { $0.isEmpty ? nil : $0 }, default: 0] += 1
-        }
-        return counts.map { AlbumGroup(album: $0.key, count: $0.value) }
-            .sorted {
-                if $0.count != $1.count { return $0.count > $1.count }
-                return ($0.album ?? "") < ($1.album ?? "")
-            }
-    }
-
     /// 每一行是「第几次」,与 `plays` 等长;编不出来(在 cutoff 之前、或算出 ≤ 0)的位置为 nil。
     /// 列表倒序,所以第 i 行(0 起)= 合计 − i。
     public var ordinals: [Int?] {

@@ -866,6 +866,7 @@
 "尚无备份；保存到 iCloud 后，可在新 Mac 上直接恢复" = "No backup yet. Save to iCloud to restore it on a new Mac";
 "尚无推送渠道" = "No push channels yet";
 "尚未修改" = "No changes yet";
+"尚未加载" = "Not loaded yet";
 "尚未手动选定过歌词；此后选定的歌词将直接锁定" = "You haven't picked any lyrics manually yet; from now on, your picks will be locked right away";
 "尚未推送" = "Nothing pushed yet";
 "尚未检查更新" = "No update check yet";
@@ -1269,7 +1270,9 @@
 "收听最多" = "Most Played";
 "收听最多 %@" = "Top day %@";
 "收听最少 %@" = "Quietest %@";
+"收听次数" = "Plays";
 "收听次数：%@" = "Plays: %@";
+"收听记录" = "Listening history";
 "收听足迹" = "Listening Footprint";
 "收听里程碑" = "Listening Milestones";
 "收听高峰" = "Busiest hour";
@@ -1468,6 +1471,7 @@
 "最长 %@ 天#one" = "Longest: %@ day";
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定" = "%@ songs are locked because of this switch. Unlocking lets automatic re-search and scoring improvements adjust them again; songs whose lyrics you edited by hand are unaffected and stay locked";
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定#one" = "%@ song is locked because of this switch. Unlocking lets automatic re-search and scoring improvements adjust it again; songs whose lyrics you edited by hand are unaffected and stay locked";
+"有一种写法只在其中一边被合并时会这样" = "This happens when a spelling is merged on only one side";
 "有新版本 %@" = "Update available: %@";
 "有歌词源将这首歌曲标记为纯音乐，无可用的候选歌词" = "A lyrics source marks this song as instrumental; no usable lyrics candidate";
 "有软件更新可用" = "Software Update Available";
@@ -1508,6 +1512,7 @@
 "未播放过" = "Never played";
 "未查到" = "Unknown";
 "未检测到触控栏" = "No Touch Bar detected";
+"未注明专辑" = "No album";
 "未演唱部分的文字颜色。默认跟随系统：自动适配浅色 / 深色菜单栏，打开菜单时自动反白" = "Color of the not-yet-sung text. Defaults to system: adapts to light/dark menu bars and inverts while the menu is open";
 "未知专辑" = "Unknown Album";
 "未知歌手" = "Unknown Artist";
@@ -1539,7 +1544,6 @@
 "本机学到的署名" = "Credit learned on this Mac";
 "本机已记录 %@ 首" = "%@ plays saved on this Mac";
 "本机已记录 %@ 首#one" = "%@ play saved on this Mac";
-"本条" = "This entry";
 "本轮「%@」未应答，为避免误降级未作更换，可稍后重试" = "“%@” didn't respond this round, so nothing was changed to avoid a downgrade. Try again later";
 "本轮候选明细已不可用" = "This round's candidate details are no longer available";
 "本轮共查询 %d 组" = "%d query sets this round";

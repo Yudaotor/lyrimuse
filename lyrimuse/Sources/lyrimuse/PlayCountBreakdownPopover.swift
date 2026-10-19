@@ -5,9 +5,9 @@ import SwiftUI
 //
 // 起因:那一格数字是**写法族合并后**的总数(繁简 / 括号风格 / 合唱署名……,见 12 章 §7),用户
 // 看得到「第 8 次」,看不到这 8 次是由哪几个 Last.fm 条目凑出来的、每个几次、为什么算同一首。
-// 「合并得对不对」在此之前只能靠肉眼在 Last.fm 网页上翻。点开这个弹框:上半段列每种写法 +
-// 各自次数 + 并进来的原因标签;下半段是合并后逐次的时刻(点的那一条高亮);底部把行上的数跟
-// 明细合计对账,不相等就直接标出来 —— 那正是「一边合并了、另一边没合并」的信号。
+// 点开这个弹框:顶上是次数 / 首次 / 上次三格,行上的数跟明细合计对不上时紧跟一张提示(那正是「一边合并了、
+// 另一边没合并」的信号);有几种写法时列出每种写法(次数、为什么并进来);最后是按月分组的逐次收听,
+// 点的那一条高亮并滚到中间。布局取舍见 12 章决策 86。
 //
 // 数据面见 PlayCountBreakdownLoader / PlayCountBreakdown(Core,纯函数,selftest 钉住编号与合并)。
 
@@ -73,13 +73,17 @@ struct PlayCountBreakdownPopover: View {
     private static let palette: [Color] = [.accentColor, .orange, .green, .purple, .pink, .teal, .brown, .indigo, .mint]
     private static func color(_ index: Int) -> Color { palette[index % palette.count] }
 
+    /// 分组框的圆角和左右外边距,跟 `SettingsRowGroup` 在浮层里的画法一致。
+    private static let groupRadius: CGFloat = 12
+    private static let groupInset: CGFloat = 10
+
     var body: some View {
-        // 440:比默认 380 宽 —— 写法行右边要同时放「N 次」和原因标签,量过最长的中文原因
-        // (「Remaster/feat. 等标注」)加上 30 字歌名在 380 里会把歌名压成省略号。
+        // 480:正文 13pt 时一行收听要放下「第 N 次」「10月13日 周一 11:07」和专辑名,440 会把常见的专辑名截掉。
         SettingsPopoverShell(
             title: L10n.t("合并明细"),
             help: L10n.t("「第 N 次收听」会将同一首歌曲的不同写法（繁简、括号风格、合唱署名等）合并计数。此处列出合并到这一行的每种写法、各自的次数与原因，以及每次收听的时间"),
-            width: 440
+            width: 480,
+            scrollTarget: anchorRowID
         ) {
             switch loader.state {
             case .loading:
@@ -99,118 +103,182 @@ struct PlayCountBreakdownPopover: View {
         .task { await loader.load() }
     }
 
+    /// 点的那一条(同一秒即同一条,scrobble 时间戳精度就是秒)。加载完才有,外壳据此滚过去;排在最前几条时
+    /// 不滚,打开时顶上的次数和写法就在眼前,那一行也已经看得见。
+    private var anchorRowID: AnyHashable? {
+        guard loader.state == .loaded, let anchorDate, let b = loader.breakdown,
+              let i = b.plays.firstIndex(where: { abs($0.date.timeIntervalSince(anchorDate)) < 1 }),
+              i >= Self.visibleOnOpen else { return nil }
+        return AnyHashable(b.plays[i].id)
+    }
+    /// 打开时不用滚就看得见的大约条数。
+    private static let visibleOnOpen = 4
+
     // MARK: 内容
 
+    /// 收听记录按月分组、月份标题滚动时固定在顶上;每一行都是 `LazyVStack` 的直接子视图,外壳的 `scrollTarget` 才滚得到。
     @ViewBuilder private func content(_ b: PlayCountBreakdown) -> some View {
-        summary(b)
-        if b.variants.count > 1 {
-            // 多种写法:每种一行(带色点、次数、原因),写法下面再按专辑名分组(见 albumRows)。
-            CardDivider()
-            ForEach(Array(b.variants.enumerated()), id: \.element.id) { i, v in
-                variantRow(i, v)
-                albumRows(b, variantIndex: i, indented: true)
-            }
-        } else if b.albumGroups(variantIndex: 0).count > 1 {
-            // 只有一种写法时不再单独列它 —— 跟摘要行是同一条信息,列两遍像重复(用户
-            // 反馈)。但同一条目下专辑名分裂的话,专辑分组照样列出来,那是用户真正想核对的东西。
-            CardDivider()
-            albumRows(b, variantIndex: 0, indented: false)
-        }
-        if !b.plays.isEmpty {
-            CardDivider()
-            playsList(b)
-        }
-        footer(b)
-    }
-
-    /// 同一种写法下按专辑名分组的子行:只在有 ≥ 2 个不同专辑名时画(《晴天》挂「葉惠美」12 次 +
-    /// 「叶惠美」11 次这种)。第一组(条数最多)当基准,其余组挂"为什么算不同专辑名"的原因标签。
-    /// 写法没拉完时数的是已拉到的那部分,次数前加「至少」,不冒充真实分布。
-    @ViewBuilder private func albumRows(_ b: PlayCountBreakdown, variantIndex: Int, indented: Bool) -> some View {
-        let groups = b.albumGroups(variantIndex: variantIndex)
-        if groups.count > 1 {
-            let exhausted = b.variants[variantIndex].exhausted
-            let base = groups[0].album
-            ForEach(Array(groups.enumerated()), id: \.offset) { j, g in
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Image(systemName: "opticaldisc")
-                        .font(.system(size: 9)).foregroundStyle(.tertiary)
-                    Text(g.album ?? "—")
-                        .font(.system(size: 11.5)).foregroundStyle(.secondary).lineLimit(1)
-                    Spacer(minLength: 8)
-                    // 两个字面量分开写(不用三元表达式塞进 L10n.t):本地化守卫只认字面量入参。
-                    Text(String(format: exhausted ? L10n.t("%@ 次") : L10n.t("至少 %@ 次"), "\(g.count)"))
-                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                    if j > 0, let r = PlayCountFoldExplainer.albumReason(base: base, variant: g.album) {
-                        tag(Self.reasonLabel(r), emphasized: false)
+        LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+            header(b)
+            notices(b)
+            variantsGroup(b)
+            sectionTitle(L10n.t("收听记录"))
+                .padding(.top, 14)
+            let ordinals = b.ordinals
+            ForEach(Self.months(b), id: \.key) { month in
+                Section {
+                    ForEach(month.range, id: \.self) { i in
+                        playRow(b.plays[i], ordinal: ordinals[i], multi: b.variants.count > 1)
+                            .background(groupedRowBackground(first: i == month.range.lowerBound,
+                                                             last: i == month.range.upperBound - 1))
+                            .padding(.horizontal, Self.groupInset)
+                            .id(b.plays[i].id)
                     }
+                } header: {
+                    monthHeader(month, isOldestLoaded: b.canLoadOlder && month.range.upperBound == b.plays.count)
                 }
-                .padding(.leading, SettingsRowMetrics.horizontalPadding + (indented ? 15 : 0))
-                .padding(.trailing, SettingsRowMetrics.horizontalPadding)
-                .padding(.vertical, 3)
             }
+            if b.canLoadOlder { loadOlder(b) }
         }
     }
 
-    private func summary(_ b: PlayCountBreakdown) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+    private func header(_ b: PlayCountBreakdown) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
-                Text(loader.title).font(.system(size: 13)).lineLimit(1)
-                Text(loader.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                Text(loader.title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                Text(loader.artist).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
             }
-            Spacer(minLength: 8)
-            HStack(spacing: 4) {
-                Text(String(format: L10n.plural("共 %@ 次", count: b.total), "\(b.total)"))
-                if b.variants.count > 1 {
-                    Text("·")
-                    Text(String(format: L10n.plural("%@ 种写法", count: b.variants.count), "\(b.variants.count)"))
-                }
+            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+            HStack(spacing: 0) {
+                statCell(L10n.t("收听次数"), value: "\(b.total)")
+                Divider()
+                // 首次只在全部拉完时才知道:没拉完时已拉到的最早一条不是第一次。
+                statCell(L10n.t("首次收听"),
+                         value: b.canLoadOlder || b.hasFailure ? nil : b.plays.last.map { Self.format($0.date, "yMd") })
+                Divider()
+                statCell(L10n.t("上次收听"),
+                         value: b.plays.first.map { "\(Self.rowDay($0.date)) \(Self.timeLabel($0.date))" })
             }
-            .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            .fixedSize(horizontal: false, vertical: true)
+            .background(RoundedRectangle(cornerRadius: Self.groupRadius, style: .continuous)
+                .fill(Color.primary.opacity(0.05)))
+            .padding(.horizontal, Self.groupInset)
         }
-        .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+        .padding(.top, 2)
+    }
+
+    /// nil = 还不知道,写「尚未加载」。
+    private func statCell(_ label: String, value: String?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.system(size: 11)).foregroundStyle(.secondary)
+            if let value {
+                Text(value).font(.system(size: 17, weight: .semibold)).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.8)
+            } else {
+                Text(L10n.t("尚未加载")).font(.system(size: 15)).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
         .padding(.vertical, 9)
     }
 
-    /// 只在 ≥ 2 种写法时才画(见 content),所以色点和「本条」都是无条件的。
-    private func variantRow(_ index: Int, _ v: PlayCountBreakdown.Variant) -> some View {
+    /// 取数没取全、两边合计对不上:放在最上面,滚到底才看得到的话等于没说。
+    @ViewBuilder private func notices(_ b: PlayCountBreakdown) -> some View {
+        if b.hasFailure {
+            notice(L10n.t("部分写法未能获取"), detail: nil) {
+                Button(L10n.t("重试")) { Task { await loader.load() } }.buttonStyle(.link)
+            }
+        }
+        if !b.hasFailure, let expected = expectedTotal, expected != b.total {
+            notice(String(format: L10n.t("行上按 %1$@ 次计，明细合计 %2$@ 次"), "\(expected)", "\(b.total)"),
+                   detail: L10n.t("有一种写法只在其中一边被合并时会这样")) {
+                HelpButton(text: L10n.t("两个数字来自 Last.fm 的两个接口：行上的次数由 track.getInfo（autocorrect）按写法族求和，明细由 user.getTrackScrobbles 按精确写法逐条列出。两者不一致通常是因为某种写法只在其中一边被合并"))
+            }
+        }
+    }
+
+    private func notice<Accessory: View>(_ text: String, detail: String?,
+                                         @ViewBuilder accessory: () -> Accessory) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(text).font(.system(size: 13)).monospacedDigit()
+                if let detail {
+                    Text(detail).font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 4)
+            accessory()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(RoundedRectangle(cornerRadius: Self.groupRadius, style: .continuous)
+            .fill(Color.orange.opacity(0.12)))
+        .overlay(RoundedRectangle(cornerRadius: Self.groupRadius, style: .continuous)
+            .strokeBorder(Color.orange.opacity(0.35), lineWidth: 0.5))
+        .padding(.horizontal, Self.groupInset)
+        .padding(.top, 10)
+    }
+
+    private func sectionTitle(_ text: String, trailing: String? = nil) -> some View {
+        HStack {
+            Text(text)
+            Spacer()
+            if let trailing { Text(trailing).fontWeight(.regular) }
+        }
+        .font(.system(size: 12, weight: .semibold))
+        .foregroundStyle(.secondary)
+        .monospacedDigit()
+        .padding(.horizontal, SettingsRowMetrics.horizontalPadding + 2)
+        .padding(.bottom, 6)
+    }
+
+    // MARK: 写法
+
+    /// 只有一种写法时不列:跟顶上的歌名是同一条信息。
+    @ViewBuilder private func variantsGroup(_ b: PlayCountBreakdown) -> some View {
+        if b.variants.count > 1 {
+            VStack(alignment: .leading, spacing: 0) {
+                sectionTitle(String(format: L10n.plural("%@ 种写法", count: b.variants.count), "\(b.variants.count)"))
+                    .padding(.top, 14)
+                VStack(spacing: 0) {
+                    ForEach(Array(b.variants.enumerated()), id: \.element.id) { i, v in
+                        if i > 0 { Divider().padding(.leading, 12) }
+                        variantRow(i, v)
+                    }
+                }
+                .background(RoundedRectangle(cornerRadius: Self.groupRadius, style: .continuous)
+                    .fill(Color.primary.opacity(0.05)))
+                .padding(.horizontal, Self.groupInset)
+            }
+        }
+    }
+
+    /// 色点对应下面收听记录里的行;本尊不写原因,其余写为什么并进来。
+    private func variantRow(_ index: Int, _ v: PlayCountBreakdown.Variant) -> some View {
+        HStack(spacing: 8) {
             Circle().fill(Self.color(index)).frame(width: 7, height: 7)
-                .alignmentGuide(.firstTextBaseline) { d in d[VerticalAlignment.center] + 4 }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(v.title).font(.system(size: 12)).lineLimit(1)
-                Text(v.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+            Text("\(v.artist) · \(v.title)").lineLimit(1)
+            if !v.isSelf {
+                Text(Self.variantReason(v)).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 8)
             if v.failed {
-                Text(L10n.t("未获取")).font(.caption).foregroundStyle(.tertiary)
+                Text(L10n.t("未获取")).foregroundStyle(.secondary)
             } else {
-                Text(String(format: L10n.t("%@ 次"), "\(v.total)"))
-                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-            }
-            if v.isSelf {
-                tag(L10n.t("本条"), emphasized: true)
-            } else if v.reasons.isEmpty {
-                // 写法完全一致却是两条 —— 只可能是 Last.fm 那边按大小写/空格分开存的,我们这边
-                // 折到同一个键。归到最轻的那一档,不留空白。
-                tag(Self.reasonLabel(.caseOrSpacing), emphasized: false)
-            } else {
-                ForEach(v.reasons, id: \.self) { tag(Self.reasonLabel($0), emphasized: false) }
+                Text(String(format: L10n.t("%@ 次"), "\(v.total)")).monospacedDigit()
             }
         }
-        .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-        .padding(.vertical, 5)
+        .font(.system(size: 13))
+        .padding(.horizontal, 12)
+        .frame(height: 32)
     }
 
-    private func tag(_ text: String, emphasized: Bool) -> some View {
-        Text(text)
-            .font(.system(size: 10, weight: emphasized ? .semibold : .regular))
-            .foregroundStyle(emphasized ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(
-                Capsule().fill(emphasized ? Color.accentColor.opacity(0.14) : Color.secondary.opacity(0.12)))
-            .lineLimit(1)
-            .fixedSize()
+    /// 写法完全一致却是两条 —— 只可能是 Last.fm 那边按大小写/空格分开存的、我们这边折到同一个键,
+    /// 归到最轻的那一档。
+    private static func variantReason(_ v: PlayCountBreakdown.Variant) -> String {
+        L10n.list((v.reasons.isEmpty ? [PlayCountFoldReason.caseOrSpacing] : v.reasons).map(reasonLabel))
     }
 
     static func reasonLabel(_ r: PlayCountFoldReason) -> String {
@@ -228,127 +296,150 @@ struct PlayCountBreakdownPopover: View {
         }
     }
 
-    // MARK: 逐次
+    // MARK: 收听记录
 
-    private func playsList(_ b: PlayCountBreakdown) -> some View {
-        let ordinals = b.ordinals
-        let multi = b.variants.count > 1
-        return VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(b.plays.enumerated()), id: \.element.id) { i, p in
-                // 日期分隔行:跟上一行不同一天才画。
-                if i == 0 || !Calendar.current.isDate(p.date, inSameDayAs: b.plays[i - 1].date) {
-                    Text(Self.dayLabel(p.date))
-                        .font(.system(size: 10.5)).foregroundStyle(.tertiary)
-                        .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-                        .padding(.top, i == 0 ? 8 : 10)
-                        .padding(.bottom, 3)
-                }
-                playRow(p, ordinal: ordinals[i], multi: multi)
+    private struct Month {
+        let key: Int
+        let date: Date
+        /// 在 `plays` 里的下标区间(倒序列表里同一个月连续)。
+        let range: Range<Int>
+    }
+
+    private static func months(_ b: PlayCountBreakdown) -> [Month] {
+        let cal = Calendar.current
+        var out: [Month] = []
+        var start = 0
+        for i in b.plays.indices {
+            let c = cal.dateComponents([.year, .month], from: b.plays[i].date)
+            let key = (c.year ?? 0) * 12 + (c.month ?? 0)
+            if let last = out.last, last.key == key {
+                out[out.count - 1] = Month(key: key, date: last.date, range: start..<(i + 1))
+            } else {
+                start = i
+                out.append(Month(key: key, date: b.plays[i].date, range: i..<(i + 1)))
             }
         }
-        .padding(.bottom, 6)
+        return out
+    }
+
+    /// 最后一个已加载的月份没拉完时次数前加「至少」。
+    private func monthHeader(_ month: Month, isOldestLoaded: Bool) -> some View {
+        PinnedMonthHeader(
+            title: Self.format(month.date, "yMMMM"),
+            count: String(format: isOldestLoaded ? L10n.t("至少 %@ 次") : L10n.t("%@ 次"), "\(month.range.count)"))
     }
 
     private func playRow(_ p: PlayCountBreakdown.Play, ordinal: Int?, multi: Bool) -> some View {
-        // 点的那一条:同一秒即同一条(scrobble 时间戳精度就是秒)。
         let isAnchor = anchorDate.map { abs($0.timeIntervalSince(p.date)) < 1 } ?? false
-        return HStack(spacing: 8) {
-            if multi {
-                Circle().fill(Self.color(p.variantIndex)).frame(width: 6, height: 6)
+        return HStack(spacing: 12) {
+            HStack(spacing: 6) {
+                if multi {
+                    Circle().fill(Self.color(p.variantIndex)).frame(width: 6, height: 6)
+                }
+                Text(ordinal.map { String(format: L10n.t("第 %@ 次"), "\($0)") } ?? "—")
+                    .foregroundStyle(isAnchor ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+                    .fontWeight(isAnchor ? .semibold : .regular)
             }
-            Text(ordinal.map { String(format: L10n.t("第 %@ 次"), "\($0)") } ?? "—")
-                .font(.caption).foregroundStyle(isAnchor ? .primary : .secondary).monospacedDigit()
-                .frame(width: 64, alignment: .leading)
-            Text(Self.timeLabel(p.date))
-                .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                .help(LastfmStatsSection.absolute(p.date))
-            // 刻意不在这里重复写法的歌名:色点对回上面的清单就够了,多一列字反而挤。
+            .frame(width: 84, alignment: .leading)
+            HStack(spacing: 5) {
+                Text(Self.rowDay(p.date))
+                Text(Self.timeLabel(p.date)).foregroundStyle(.secondary)
+            }
+            .lineLimit(1)
+            .fixedSize()
+            .help(LastfmStatsSection.absolute(p.date))
             Spacer(minLength: 8)
-            if let album = p.album {
-                // 字号/色跟上半段的专辑分组行、跟同行的次数与时刻取齐。 不能用 `.quaternary`:
-                // 它在这套界面里本是背景填充色,唯二的文字用法是「···」占位和「未取到」这种
-                // 刻意淡掉的态 —— 拿它显示真实内容,浅色模式下 10.5pt 几乎读不出来。
-                //
-                // 宽度 150 → 240:440 的框里这一行左侧固定只吃掉 14+64+8+35+8+8+14 ≈ 151,余量一直
-                // 在那儿闲着,而 150 把「The Best of Earth, Wind & Fire Vol. 1」这类精选集名截成
-                // 省略号 —— 同一张专辑的相邻两行长得一模一样,本来能一眼看出的"这两次同一张"反而
-                // 看不出来了。真正超长的仍会截,`help` 兜住全名。
-                Text(album).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    .frame(maxWidth: 240, alignment: .trailing)
-                    .help(album)
-            }
+            Text(p.album ?? L10n.t("未注明专辑"))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .help(p.album ?? "")
         }
-        .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-        .padding(.vertical, 3)
-        .background(
-            RoundedRectangle(cornerRadius: 5)
-                .fill(isAnchor ? Color.accentColor.opacity(0.12) : .clear)
-                .padding(.horizontal, 6))
+        .font(.system(size: 13))
+        .monospacedDigit()
+        .padding(.horizontal, 12)
+        .frame(height: 32)
+        .background(isAnchor ? Color.accentColor.opacity(0.14) : .clear)
     }
 
-    // MARK: 尾部
+    /// 同一个月的行拼成一个圆角分组框:首行圆上角、末行圆下角,中间的行之间画分隔线。
+    private func groupedRowBackground(first: Bool, last: Bool) -> some View {
+        let r = Self.groupRadius
+        return UnevenRoundedRectangle(topLeadingRadius: first ? r : 0, bottomLeadingRadius: last ? r : 0,
+                                      bottomTrailingRadius: last ? r : 0, topTrailingRadius: first ? r : 0,
+                                      style: .continuous)
+            .fill(Color.primary.opacity(0.05))
+            .overlay(alignment: .top) {
+                if !first { Divider().padding(.horizontal, 12) }
+            }
+    }
 
-    @ViewBuilder private func footer(_ b: PlayCountBreakdown) -> some View {
-        let showsMismatch = !b.hasFailure && expectedTotal.map { $0 != b.total } ?? false
-        if b.hasFailure || showsMismatch || b.canLoadOlder {
-            CardDivider()
-            VStack(alignment: .leading, spacing: 6) {
-                if b.hasFailure {
-                    HStack(spacing: 8) {
-                        Text(L10n.t("部分写法未能获取")).font(.caption).foregroundStyle(.secondary)
-                        Button(L10n.t("重试")) { Task { await loader.load() } }
-                            .buttonStyle(.link).font(.caption)
-                    }
-                }
-                if showsMismatch, let expected = expectedTotal {
-                    HStack(spacing: 4) {
-                        Text(String(format: L10n.t("行上按 %1$@ 次计，明细合计 %2$@ 次"), "\(expected)", "\(b.total)"))
-                            .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                        HelpButton(text: L10n.t("两个数字来自 Last.fm 的两个接口：行上的次数由 track.getInfo（autocorrect）按写法族求和，明细由 user.getTrackScrobbles 按精确写法逐条列出。两者不一致通常是因为某种写法只在其中一边被合并"))
-                            .font(.system(size: 11))
-                    }
-                }
-                if b.canLoadOlder {
-                    HStack(spacing: 8) {
-                        if loader.loadingOlder {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Button(L10n.t("加载更早的记录")) { Task { await loader.loadOlder() } }
-                                .buttonStyle(.link).font(.caption)
-                        }
-                        if b.ordinalCutoff != nil {
-                            Text(L10n.t("更早的记录尚未加载，这些行暂不编号"))
-                                .font(.system(size: 10.5)).foregroundStyle(.tertiary)
-                        }
-                    }
+    @ViewBuilder private func loadOlder(_ b: PlayCountBreakdown) -> some View {
+        VStack(spacing: 6) {
+            Group {
+                if loader.loadingOlder {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button(L10n.t("加载更早的记录")) { Task { await loader.loadOlder() } }
+                        .buttonStyle(.link)
                 }
             }
-            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-            .padding(.vertical, 8)
+            .font(.system(size: 13))
+            .frame(maxWidth: .infinity)
+            .frame(height: 32)
+            .background(RoundedRectangle(cornerRadius: Self.groupRadius, style: .continuous)
+                .fill(Color.primary.opacity(0.05)))
+            if b.ordinalCutoff != nil {
+                Text(L10n.t("更早的记录尚未加载，这些行暂不编号"))
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+            }
         }
+        .padding(.horizontal, Self.groupInset)
+        .padding(.top, 10)
     }
 
     // MARK: 格式化
 
-    /// 「今天 / 昨天 / 8月16日 / 2024年3月2日」—— 跟 RecentListensPanel 同一套前两档;跨年的
-    /// 记录必须带年份,这个弹框列的是一首歌几年来的全部收听,光「3月2日」分不清是哪一年。
-    private static func dayLabel(_ date: Date) -> String {
+    /// 收听记录里的日期:今天 / 昨天,其余「10月13日 周一」—— 同一个月的行在一个框里,月份标题已经写了年份。
+    private static func rowDay(_ date: Date) -> String {
         let cal = Calendar.current
         if cal.isDateInToday(date) || cal.isDateInYesterday(date) { return RelativeDayFormat.dayLabel(date) }
-        let sameYear = cal.component(.year, from: date) == cal.component(.year, from: Date())
-        return (sameYear ? dayFormatter : dayWithYearFormatter).string(from: date)
+        return format(date, "MMMdEEE")
     }
 
     private static func timeLabel(_ date: Date) -> String { RelativeDayFormat.timeFormatter.string(from: date) }
 
-    private static let dayFormatter: DateFormatter = {
+    /// 跟 App 界面语言走(`L10n.locale`),不跟系统语言。
+    private static var formatters: [String: DateFormatter] = [:]
+    private static func format(_ date: Date, _ template: String) -> String {
+        let key = L10n.locale.identifier + "|" + template
+        if let f = formatters[key] { return f.string(from: date) }
         let f = DateFormatter()
-        f.setLocalizedDateFormatFromTemplate("Md")
-        return f
-    }()
-    private static let dayWithYearFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.setLocalizedDateFormatFromTemplate("yMd")
-        return f
-    }()
+        f.locale = L10n.locale
+        f.setLocalizedDateFormatFromTemplate(template)
+        formatters[key] = f
+        return f.string(from: date)
+    }
+}
+
+/// 收听记录的月份标题。吸在顶上时才铺一层材质底,挡住滚到它底下的行;没吸顶时跟上面的分组标题一样没有底。
+private struct PinnedMonthHeader: View {
+    let title: String
+    let count: String
+    @State private var pinned = false
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(count).fontWeight(.regular)
+        }
+        .font(.system(size: 12, weight: .semibold))
+        .foregroundStyle(.secondary)
+        .monospacedDigit()
+        .padding(.horizontal, SettingsRowMetrics.horizontalPadding + 2)
+        .padding(.top, 10)
+        .padding(.bottom, 5)
+        .background { if pinned { Rectangle().fill(.regularMaterial) } }
+        .onGeometryChange(for: Bool.self, of: { $0.frame(in: .scrollView).minY <= 0.5 }) { pinned = $0 }
+    }
 }

@@ -2068,18 +2068,6 @@ func runLastfmTests() {
                     "合并原因: 歌手、歌名各差一档 → 两条,歌手在前")
         expectEqual(r(("Prince", "Call My Name"), ("Prince", "Kiss")), [.other],
                     "合并原因: 压根不是一族的(规则演进留的缝)→ 报 other,不藏")
-
-        // 专辑名维度(同一个 Last.fm 条目下专辑名分裂,《晴天》葉惠美/叶惠美 实测)
-        expectEqual(E.albumReason(base: "葉惠美", variant: "叶惠美"), .hanScript, "专辑名原因: 繁简")
-        expectEqual(E.albumReason(base: "First Love", variant: "First Love (Remastered 2014)"), .catalogNoise,
-                    "专辑名原因: Remaster 标注 → 目录学噪音")
-        expectEqual(E.albumReason(base: "八度空间", variant: "八度空间"), nil, "专辑名原因: 相同 → nil")
-        expectEqual(E.albumReason(base: nil, variant: "八度空间"), nil, "专辑名原因: 一方没有专辑名 → 不判")
-        // 对不上任何一档 = 就是两张不同的专辑(原专辑 vs 精选集 / 另一语言的专辑名),不是写法差异,
-        // 不挂标签 —— 跟写法族那层的 .other 语义刻意不同(挂上去会让人以为是折叠规则并的)
-        expectEqual(E.albumReason(base: "葉惠美", variant: "范特西"), nil, "专辑名原因: 两张不同的专辑 → nil,不挂标签")
-        expectEqual(E.albumReason(base: "心中的日月", variant: "Shangri-la"), nil,
-                    "专辑名原因: 同一张专辑的另一语言名 → 也判不出来,nil(没有专辑别名表,接受)")
     }
     do {
         typealias M = PlayCountBreakdownMath
@@ -2150,25 +2138,6 @@ func runLastfmTests() {
         let empty = M.build([v("A", "x", total: 0, isSelf: true, [])])
         expectEqual(empty.total, 0, "合并明细: 本尊 0 次 → 合计 0")
         expectEqual(empty.ordinals, [], "合并明细: 没有条目就没有编号")
-
-        // 专辑名分组:同一写法下按专辑名数条数,条数降序、同数按名字;空/纯空白专辑名归成 nil 一组;
-        // 只数这一写法自己的记录(《晴天》葉惠美/叶惠美两种专辑名要看得见)
-        let albums = M.build([
-            .init(artist: "周杰倫", title: "晴天", total: 6, isSelf: true, reasons: [], plays: [
-                (date: at(6000), album: "葉惠美"), (date: at(5000), album: "叶惠美"),
-                (date: at(4000), album: "葉惠美"), (date: at(3000), album: " "),
-                (date: at(2000), album: "叶惠美"), (date: at(1000), album: "葉惠美"),
-            ]),
-            .init(artist: "周杰伦", title: "晴天", total: 1, isSelf: false, reasons: [.hanScript],
-                  plays: [(date: at(500), album: "范特西")]),
-        ])
-        expectEqual(albums.albumGroups(variantIndex: 0).map { ($0.album ?? "∅") + ":\($0.count)" },
-                    ["葉惠美:3", "叶惠美:2", "∅:1"],
-                    "专辑分组: 按条数降序,空白专辑名归 nil 一组")
-        expectEqual(albums.albumGroups(variantIndex: 1).map { ($0.album ?? "∅") + ":\($0.count)" }, ["范特西:1"],
-                    "专辑分组: 只数这一写法自己的记录")
-        expectEqual(M.build([v("A", "x", total: 2, isSelf: true, [2000, 1000])]).albumGroups(variantIndex: 0).count, 1,
-                    "专辑分组: 全部没有专辑名 → 只有 nil 一组(界面据此不画子行)")
     }
 
     // ---- 第三层歌名别名:从本机 enrich 缓存推「英文歌名 → 中文歌名」 ----
