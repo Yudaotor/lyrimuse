@@ -16,16 +16,26 @@ public enum DiscordLyricLine {
         }
     }
 
-    /// 每句唱到哪:下一句开始、或者这一句后面的间奏开始(`gapStarts`:句号 → 间奏起点),取早的那个;最后一句没有间奏时到
-    /// 整首结束,不知道整首多长时按 `lastLineMs` 算。只有空白的句子不要。`starts` 与 `texts` 一一对应,按时间排好。
+    /// 每句唱到哪:下一句开始、或者这一句后面的间奏开始(`gapStarts`:句号 → 间奏起点),取早的那个。最后一句后面没有间奏标记,
+    /// 唱完就算完(之后写专辑,12 章决策 65):有逐字时到最后一个字唱完(`lastSungEndMs`),没有时最多 `lastLineCapMs`
+    /// (同间奏判据的 `GapRule.plainAssumedSingingCapMs`),都不超过整首结束;不知道整首多长时按 `lastLineMs` 算。不封顶的话
+    /// 尾奏里一直挂着最后一句,曲终前那一下换回专辑还占掉下一首的发送名额(12 章决策 88)。只有空白的句子不要。
+    /// `starts` 与 `texts` 一一对应,按时间排好。
     public static func spans(starts: [Int], texts: [String], gapStarts: [Int: Int], trackDurationMs: Int?,
-                             lastLineMs: Int = 5_000) -> [Span] {
+                             lastSungEndMs: Int? = nil, lastLineMs: Int = 5_000,
+                             lastLineCapMs: Int = LyricsSyncEngine.GapRule.plainAssumedSingingCapMs) -> [Span] {
         var result: [Span] = []
         for index in starts.indices where index < texts.count {
             let text = texts[index].trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { continue }
             let start = starts[index]
-            var end = index + 1 < starts.count ? starts[index + 1] : (trackDurationMs ?? start + lastLineMs)
+            var end: Int
+            if index + 1 < starts.count {
+                end = starts[index + 1]
+            } else {
+                let sung = lastSungEndMs.flatMap { $0 > start ? $0 : nil } ?? start + lastLineCapMs
+                end = min(trackDurationMs ?? start + lastLineMs, sung)
+            }
             if let gap = gapStarts[index], gap > start { end = min(end, gap) }
             guard end > start else { continue }
             result.append(Span(startMs: start, endMs: end, text: text))

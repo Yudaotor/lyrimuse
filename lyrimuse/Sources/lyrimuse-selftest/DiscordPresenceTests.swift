@@ -1049,6 +1049,16 @@ private func checkDiscordLyrics() {
                 "Discord 歌词: 唱到下一句开始或间奏开始,空白句不要,最后一句到整首结束")
     expectEqual(L.spans(starts: [5_000], texts: ["只有一句"], gapStarts: [:], trackDurationMs: nil).first?.endMs, 10_000,
                 "Discord 歌词: 不知道整首多长时最后一句按 5 秒算")
+    // 最后一句唱完就算完(12 章决策 88):实测《I'm Yours》最后一句只唱 0.5 秒,原来在资料卡上挂了 164 秒。
+    let tail = L.spans(starts: [10_000, 138_474], texts: ["前一句", "I'm yours"], gapStarts: [:], trackDurationMs: 301_000,
+                       lastSungEndMs: 139_027)
+    expectEqual(tail.last?.endMs, 139_027, "Discord 歌词: 有逐字时最后一句到最后一个字唱完")
+    expectEqual(L.pick(tail, atMs: 160_000, windowMs: 4_000), nil, "Discord 歌词: 尾奏里不再挂着最后一句")
+    expectEqual(L.spans(starts: [10_000, 138_474], texts: ["前一句", "I'm yours"], gapStarts: [:], trackDurationMs: 301_000)
+                    .last?.endMs, 138_474 + LyricsSyncEngine.GapRule.plainAssumedSingingCapMs,
+                "Discord 歌词: 没有逐字时最后一句最多唱 8 秒(同间奏判据)")
+    expectEqual(L.spans(starts: [298_000], texts: ["唱到最后"], gapStarts: [:], trackDurationMs: 301_000, lastSungEndMs: 305_000)
+                    .first?.endMs, 301_000, "Discord 歌词: 唱完的时刻不超过整首结束")
     // ---- 挑哪一句 ----
     let lines = [L.Span(startMs: 0, endMs: 1_500, text: "短"), L.Span(startMs: 1_500, endMs: 6_000, text: "长"),
                  L.Span(startMs: 6_000, endMs: 7_000, text: "一秒"), L.Span(startMs: 9_000, endMs: 12_000, text: "间奏后")]
@@ -1302,6 +1312,19 @@ private func checkDiscordWiring() {
     expectEqual(sourceBytes(code("lyrimuse/AppDelegate.swift"), contain: "DiscordPresenceController.shared.start()"), true,
                 "Discord(接线): App 启动时开始盯")
     let controller = code("lyrimuse/Settings/DiscordPresenceController.swift")
+    // 12 章决策 88:观感层没跟上真值时先不判定;离曲终不到一个发送间隔时歌词那一行停住;最后一句带上唱完的时刻。
+    let refreshBody = sourceBody("private func refresh() {", in: controller)
+    expectEqual(sourceBytes(refreshBody, contain: "if playback.isPlayingSmoothed, !playback.isPlayingNow || playback.anchor?.rate == 0 {")
+                && sourceBytes(refreshBody, contain: "if now.timeIntervalSince(since) < Self.playStateSettleLimit {")
+                && refreshBody.range(of: "playback.anchor?.rate == 0 {")!.lowerBound
+                    < refreshBody.range(of: "DiscordPresence.intent(")!.lowerBound, true,
+                "Discord 接线: 刚暂停、观感层还没翻过来时不组卡片(不发没有进度条的在放卡),最多等一会儿")
+    expectEqual(sourceBytes(controller, contain: "return min(at, duration - Int(DiscordPresenceGate.minInterval * 1000))")
+                && sourceBody("private func currentLyric(", in: controller).contains("atMs: lyricCheckMs(now: now)")
+                && sourceBody("private func nextLyricCheck(", in: controller).contains("atMs: lyricCheckMs(now: now)"), true,
+                "Discord 接线: 离曲终不到一个发送间隔时歌词那一行停住,挑句和排下一次刷新用同一个时刻")
+    expectEqual(sourceBytes(controller, contain: "lastSungEndMs: lines.last?.line.words?.last.map { $0.startMs + $0.durationMs }"), true,
+                "Discord 接线: 最后一句带上逐字唱完的时刻")
     let accountTab = code("lyrimuse/AccountLinkingTab.swift")
     expectEqual(sourceBytes(accountTab, contain: "pinnedViews"), false,
                 "Discord(接线): 预览不用 LazyVStack 的组头钉住(玻璃卡片、胶囊会压到组头上)")
@@ -1329,7 +1352,7 @@ private func checkDiscordWiring() {
                    "signal(settings.$discordLine1)", "signal(playback.$allLines)", "signal(playback.$lyricsGapMarkers)",
                    "signal(settings.$discordCustomButtonURL)", "signal(settings.$discordButtonListen)",
                    "signal(settings.$discordButtonGetLyrimuse)", "lyric: currentLyric(now: now)",
-                   "atMs: playback.lyricsTimelineMs(now: now)", "windowMs: Int(DiscordPresenceGate.minInterval * 1000)",
+                   "let at = playback.lyricsTimelineMs(now: now)", "windowMs: Int(DiscordPresenceGate.minInterval * 1000)",
                    "wake(at: now.addingTimeInterval(nextLyricCheck(now: now)))", "layout: presenceLayout(),",
                    "signal(settings.$discordHideSongInfo)", "signal(settings.$discordShowProgress)",
                    "signal(settings.$discordLine2)", "signal(settings.$discordLine3)",

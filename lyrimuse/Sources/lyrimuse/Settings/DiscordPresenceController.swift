@@ -57,6 +57,10 @@ final class DiscordPresenceController: ObservableObject {
     /// 当场按新位置重排。见 12 章决策 81。
     static let lyricTick: TimeInterval = 0.5
     static let lyricHorizon: TimeInterval = 10
+    /// 观感层跟真值对不上(停播宽限、乐观翻转)时隔多久再看一次、最多等多久,见 refresh。实测暂停后锚点先停,
+    /// 约 1.9 秒后观感层才翻成暂停。
+    static let playStateSettle: TimeInterval = 0.3
+    static let playStateSettleLimit: TimeInterval = 3
 
     private lazy var link = DiscordPresenceLink(
         socketPaths: {
@@ -70,6 +74,8 @@ final class DiscordPresenceController: ObservableObject {
     private var observers: [AnyCancellable] = []
     /// 这一段暂停从什么时候开始;在放时为 nil。预览按它判暂停宽限期。
     private(set) var pausedSince: Date?
+    /// 观感层说在放、真值或锚点却已经停了,是从什么时候起的(见 refresh)。
+    private var playStateMismatchSince: Date?
     /// 最近一次从暂停变成在放的时刻,见 `DiscordPresence.resumeSettleUntil`。
     private var resumedAt: Date?
     /// 当前播放器归哪个 Discord 应用(`DiscordPresence.applicationID(forBundleID:webPlatformID:)`);连接、重连都按它。
@@ -167,6 +173,20 @@ final class DiscordPresenceController: ObservableObject {
             wake(at: until)
             return
         }
+        // 观感层还说在放、播放器已经停了:暂停时锚点先变成不走、真值随后才翻,观感层再晚 0.25 秒(停播宽限);刚点了播放、
+        // 乐观翻成在放也一样。这时按「在放」组卡片,发出去的是一份没有进度条的在放卡,原样保留的那 10 秒就破了
+        // (12 章决策 88)。保持上一份等它们对上,最多等 playStateSettleLimit(锚点不走也可能是缓冲卡住,不能一直等)。
+        let playback = PlaybackCoordinator.shared
+        if playback.isPlayingSmoothed, !playback.isPlayingNow || playback.anchor?.rate == 0 {
+            let since = playStateMismatchSince ?? now
+            playStateMismatchSince = since
+            if now.timeIntervalSince(since) < Self.playStateSettleLimit {
+                wake(at: now.addingTimeInterval(Self.playStateSettle))
+                return
+            }
+        } else {
+            playStateMismatchSince = nil
+        }
         // QQ 这一首是不是有声节目还没判出来:保持上一份,结论到了(或到点)再看。
         if let until = LocalPlaybackSource.shared.spokenAudioPendingUntil(now: now) {
             wake(at: until)
@@ -221,7 +241,7 @@ final class DiscordPresenceController: ObservableObject {
     /// 离当前这句(`currentLyric` 的挑法)按歌词时间轴第一次会变还有几秒,夹在 `lyricTick`…`lyricHorizon`;倍速时按速率折成墙钟。
     private func nextLyricCheck(now: Date) -> TimeInterval {
         let playback = PlaybackCoordinator.shared
-        let deltaMs = DiscordLyricLine.nextChangeMs(currentLyricSpans(), atMs: playback.lyricsTimelineMs(now: now),
+        let deltaMs = DiscordLyricLine.nextChangeMs(currentLyricSpans(), atMs: lyricCheckMs(now: now),
                                                     windowMs: Int(DiscordPresenceGate.minInterval * 1000),
                                                     horizonMs: Int(Self.lyricHorizon * 1000))
         let rate = max(playback.anchor?.rate ?? 1, 0.25)
@@ -514,8 +534,17 @@ final class DiscordPresenceController: ObservableObject {
         guard presenceLayout().followsLyrics, playback.isPlayingSmoothed else { return nil }
         let spans = currentLyricSpans()
         guard !spans.isEmpty else { return nil }
-        return DiscordLyricLine.pick(spans, atMs: playback.lyricsTimelineMs(now: now),
+        return DiscordLyricLine.pick(spans, atMs: lyricCheckMs(now: now),
                                      windowMs: Int(DiscordPresenceGate.minInterval * 1000))
+    }
+
+    /// 挑句子用的歌词时间轴时刻。离整首结束不到一个发送间隔时停在那一刻:之后歌词那一行再变也来不及让人看到,
+    /// 却会占掉下一首的发送名额,下一首晚几秒才上 Discord(12 章决策 88)。
+    private func lyricCheckMs(now: Date) -> Int {
+        let playback = PlaybackCoordinator.shared
+        let at = playback.lyricsTimelineMs(now: now)
+        guard let duration = playback.currentDurationMs else { return at }
+        return min(at, duration - Int(DiscordPresenceGate.minInterval * 1000))
     }
 
     private func currentLyricSpans() -> [DiscordLyricLine.Span] {
@@ -531,7 +560,8 @@ final class DiscordPresenceController: ObservableObject {
         var gapStarts: [Int: Int] = [:]
         for gap in gaps where gap.index >= 0 { gapStarts[gap.index] = gap.startMs }
         let spans = DiscordLyricLine.spans(starts: lines.map(\.timeMs), texts: lines.map { $0.line.plainText ?? "" },
-                                           gapStarts: gapStarts, trackDurationMs: playback.currentDurationMs)
+                                           gapStarts: gapStarts, trackDurationMs: playback.currentDurationMs,
+                                           lastSungEndMs: lines.last?.line.words?.last.map { $0.startMs + $0.durationMs })
         lyricSpans = (key, spans)
         return spans
     }
