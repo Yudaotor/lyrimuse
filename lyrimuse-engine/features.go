@@ -108,6 +108,10 @@ var lyricsSourceDefaultOrder = []string{
 	lyricSourceAppleMusic, lyricSourceSoda, lyricSourceVibe, lyricSourceGenie,
 }
 
+// lyricsPriorityPlayerLocal:「顺序优先」顺序表(lyrics_source_order)里「播放器自带歌词」那一项,不是歌词源。App
+// LyricsPriorityEntry.playerLocalRawValue 逐字相同;默认排在全部源之后。
+const lyricsPriorityPlayerLocal = "player_local"
+
 // featureFlagsFile 是 App「设置」写的共享文件 lyrimuse-features.json(FeatureSettingsStore)在这边的形状,引擎
 // 只读,按 mtime 热重读(featuresreload.go)。App 每次加载设置都把整份写全:缺的项补上默认值、旧写法改成新写法
 // (FeatureSettingsStore.load),所以这里不做迁移,遗留键一律不认;各项的缺省只在 App 还没写过这份文件时用。
@@ -172,7 +176,7 @@ type featureFlagsFile struct {
 	LyricsSources []string `json:"lyrics_sources,omitempty"`
 	// LyricsSourceMode："smart"(默认,全部源全查+打分取最高分,见 enrich.go 的
 	// scoredLyricCandidates/pickLyricCandidate)或"priority"(按 LyricsSourceOrder
-	// 的顺序,取第一个通过质量校验(score>=0)的源,不比较分数高低)。空值按 smart 处理。
+	// 的顺序,取第一个给出能用、没带扣分项的候选的源,不比较分数高低;都带扣分项时取第一个能用的)。空值按 smart 处理。
 	LyricsSourceMode string `json:"lyrics_source_mode,omitempty"`
 	// LyricsSourceOrder：只有 LyricsSourceMode == "priority" 时才生效。缺失时按
 	// lyricsSourceDefaultOrder 兜底。
@@ -628,24 +632,19 @@ func resolveLyricsSourceMode(mode string) string {
 	return lyricsModeSmart
 }
 
-// resolveLyricsSourceOrder:用户排的顺序里认得的源按原顺序保留(去重、丢掉不认得的),没排进去的按默认顺序
-// 补在末尾 —— 新加了一个源、旧文件的顺序表还没有它时,用户手排的前几位原样生效,新源排最后。口径与 Swift 侧
-// FeatureSettingsStore.completedLyricsSourceOrder 一致。原来非空就原样用,缺的源在「顺序优先」模式下永远选不到。
+// resolveLyricsSourceOrder:用户排的顺序里认得的项(歌词源和「播放器自带歌词」lyricsPriorityPlayerLocal)按原顺序保留
+// (去重、丢掉不认得的),没排进去的按默认顺序(全部源,再是「播放器自带歌词」)补在末尾 —— 新加了一个源、旧文件的顺序表
+// 还没有它时,用户手排的前几位原样生效,新源排最后。口径与 Swift 侧 FeatureSettingsStore.completedLyricsPriorityOrder 一致。
 func resolveLyricsSourceOrder(order []string) []string {
-	known := make(map[string]bool, len(lyricsSourceDefaultOrder))
-	for _, s := range lyricsSourceDefaultOrder {
-		known[s] = true
-	}
-	out := make([]string, 0, len(lyricsSourceDefaultOrder))
-	seen := make(map[string]bool, len(lyricsSourceDefaultOrder))
+	defaults := append(slices.Clone(lyricsSourceDefaultOrder), lyricsPriorityPlayerLocal)
+	out := make([]string, 0, len(defaults))
 	for _, s := range order {
-		if known[s] && !seen[s] {
-			seen[s] = true
+		if slices.Contains(defaults, s) && !slices.Contains(out, s) {
 			out = append(out, s)
 		}
 	}
-	for _, s := range lyricsSourceDefaultOrder {
-		if !seen[s] {
+	for _, s := range defaults {
+		if !slices.Contains(out, s) {
 			out = append(out, s)
 		}
 	}

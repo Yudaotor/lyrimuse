@@ -25752,25 +25752,25 @@
         }
       }
     },
-    "不进行评分，按下方顺序采用第一个有结果的来源" : {
+    "按下方顺序采用第一个合适的结果" : {
       "extractionState" : "manual",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "不进行评分，按下方顺序采用第一个有结果的来源"
+            "value" : "按下方顺序采用第一个合适的结果"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No scoring — takes the first source below that returns lyrics"
+            "value" : "Takes the first suitable result in the order below"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "不進行評分，按下方順序採用第一個有結果的來源"
+            "value" : "按下方順序採用第一個合適的結果"
           }
         }
       }
@@ -51218,6 +51218,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "韓國 KT 旗下的音樂平台"
+          }
+        }
+      }
+    },
+    "播放器自带歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Player's Own Lyrics"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放器自帶歌詞"
+          }
+        }
+      }
+    },
+    "KKBOX、Spotify、Amazon Music、洛雪音乐自己缓存的歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrics cached by KKBOX, Spotify, Amazon Music and LX Music themselves"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "KKBOX、Spotify、Amazon Music、洛雪音樂自己快取的歌詞"
           }
         }
       }

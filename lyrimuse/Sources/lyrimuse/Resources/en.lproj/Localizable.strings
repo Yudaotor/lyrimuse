@@ -159,6 +159,7 @@
 "HDR 高亮" = "HDR Highlight";
 "ISRC 一致" = "Same ISRC";
 "KKBOX 歌曲 ID 一致" = "Same KKBOX song ID";
+"KKBOX、Spotify、Amazon Music、洛雪音乐自己缓存的歌词" = "Lyrics cached by KKBOX, Spotify, Amazon Music and LX Music themselves";
 "Last.fm 上无当天的收听记录" = "Last.fm has no scrobbles for this day";
 "Last.fm 与 Spotify 的连接已于 %@ 过期，Lyrimuse 中也未勾选 Spotify" = "Last.fm's connection to Spotify expired on %@, and Spotify isn't checked in Lyrimuse either";
 "Last.fm 仅接受两周内的收听记录" = "Last.fm only accepts plays from the last two weeks";
@@ -302,7 +303,6 @@
 "不显示" = "None";
 "不足 1 分钟" = "under a minute";
 "不转换" = "As-is";
-"不进行评分，按下方顺序采用第一个有结果的来源" = "No scoring — takes the first source below that returns lyrics";
 "不透明度" = "Opacity";
 "与 %@ 正文相同" = "Same lyrics as %@";
 "与 Apple Music 目录中的曲名吻合" = "Matches a title in the Apple Music catalog";
@@ -1191,6 +1191,7 @@
 "按 ISRC 补查未应答的源" = "By ISRC: re-queried sources that didn't respond";
 "按 MusicBrainz 登记的所属国家或地区统计，而非出生地" = "Counted by the country or region each artist is associated with on MusicBrainz, not where they were born";
 "按「署名 - 歌名」拆分" = "Split as “artist - title”";
+"按下方顺序采用第一个合适的结果" = "Takes the first suitable result in the order below";
 "按专辑分组" = "Group by Album";
 "按住 ⌘ 拖移此图标，可将其移到菜单栏中的任意位置" = "Hold ⌘ and drag this icon to move it anywhere in the menu bar";
 "按住歌词即可拖动位置" = "Hold the lyrics to reposition";
@@ -1253,6 +1254,7 @@
 "播放器或曲库提供的标识符可信度最高；按曲名检索得到的结果可能有误，仅供参考" = "Identifiers provided by players or music databases are the most reliable; results found by title search may be wrong and are for reference only";
 "播放器未提供歌手，按歌名和时长推断" = "The player didn’t provide an artist; inferred from the title and duration";
 "播放器联动" = "Player Linkage";
+"播放器自带歌词" = "Player's Own Lyrics";
 "播放控制" = "Controls";
 "播放控制位置" = "Controls Position";
 "播放时显示动画，暂停时静止" = "Animates while music plays and stays still when paused";

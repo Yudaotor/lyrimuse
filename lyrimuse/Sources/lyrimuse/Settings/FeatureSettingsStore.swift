@@ -12,7 +12,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "featur
 //
 // **声明顺序是有语义的,不是随手排的**,它同时是两处的顺序:
 //   ① 设置页「歌词来源」那张卡里勾选框的展示序(`ForEach(LyricsSource.allCases)`);
-//   ② 「顺序优先」模式下 `lyricsSourceOrder` 的**默认值**(见下面 @Published 的初值)——
+//   ② 「顺序优先」模式下 `lyricsPriorityOrder` 的**默认值**(`LyricsPriorityEntry.defaultOrder`)——
 //      也就是新装机器上"按顺序取第一个有结果的源"真正的取用顺序。用户拖拽排过之后
 //      以自己那份为准,改这里只影响没排过的人。
 // 所以它必须跟引擎 `features.go` 的 `lyricsSourceDefaultOrder` **逐字同序**,
@@ -125,9 +125,45 @@ extension PlaybackPlayer {
     }
 }
 
+/// 「顺序优先」列表里的一行:一个歌词源,或「播放器自带歌词」—— KKBOX、Spotify、Amazon Music、洛雪音乐自己缓存的那份,
+/// 不是歌词源、没有开关,只占一个名次(reAMP 歌曲旁边的同名 .lrc 不在这一项里,引擎固定排最前)。落盘进 lyrics_source_order,
+/// 后者写成 `playerLocalRawValue`,跟引擎 features.go `lyricsPriorityPlayerLocal` 逐字相同。
+public enum LyricsPriorityEntry: Hashable, Identifiable {
+    case source(LyricsSource)
+    case playerLocal
+
+    public static let playerLocalRawValue = "player_local"
+    /// 没排过时的顺序:全部源(`LyricsSource.allCases`),再是「播放器自带歌词」,同引擎 resolveLyricsSourceOrder。
+    public static var defaultOrder: [LyricsPriorityEntry] { LyricsSource.allCases.map(Self.source) + [.playerLocal] }
+
+    public init?(rawValue: String) {
+        if rawValue == Self.playerLocalRawValue {
+            self = .playerLocal
+        } else if let source = LyricsSource(rawValue: rawValue) {
+            self = .source(source)
+        } else {
+            return nil
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .source(let source): return source.rawValue
+        case .playerLocal: return Self.playerLocalRawValue
+        }
+    }
+
+    public var id: String { rawValue }
+
+    public var source: LyricsSource? {
+        if case .source(let source) = self { return source }
+        return nil
+    }
+}
+
 // "智能算法"=四源全查+打分取最高分(现有行为,见 lyrimuse-engine/enrich.go 的
 // scoredLyricCandidates/pickLyricCandidate);"顺序优先"=按用户手排的顺序,取第一个
-// 通过质量校验的源,不比较分数。
+// 给出能用、没带扣分项(版本不符、时间轴错开等)的候选的源,不比较分数。
 public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
     case smart, priority
     public var id: Self { self }
@@ -538,10 +574,12 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var yearlyDigestSource = ""
     @Published public var lyricsSources: Set<LyricsSource> = Set(LyricsSource.allCases)
     @Published public var lyricsSourceMode: LyricsSourceMode = .smart
-    // 始终是全部 4 个源的一个排列(不是"只放启用的那几个")——启用/禁用状态单独由
+    // 始终是全部源加「播放器自带歌词」的一个排列(不是"只放启用的那几个")——启用/禁用状态单独由
     // lyricsSources 记录,顺序调整只在这个数组内部交换位置,两者互不干扰,不需要"禁用
     // 一个源时把它从顺序表里摘出来/重新插回去"这种同步逻辑。
-    @Published public var lyricsSourceOrder: [LyricsSource] = LyricsSource.allCases
+    @Published public var lyricsPriorityOrder: [LyricsPriorityEntry] = LyricsPriorityEntry.defaultOrder
+    /// lyricsPriorityOrder 里的歌词源,按顺序。
+    public var lyricsSourceOrder: [LyricsSource] { lyricsPriorityOrder.compactMap(\.source) }
     // 空字符串 = 用默认位置(~/.config/lyrimuse/lyrics)。用 effectiveLyricsDir
     // 取实际生效的路径,不要直接读这个属性去拼路径。
     @Published public var lyricsDir = ""
@@ -577,12 +615,13 @@ public final class FeatureSettingsStore: ObservableObject {
 
     static let fileURL = LyrimusePaths.configFile("lyrimuse-features.json")
 
-    /// 用户排的顺序补全成全部源的排列:认得的按原顺序保留(去重),没排进去的按 `LyricsSource.allCases`(默认顺序)
+    /// 用户排的顺序补全成完整排列:认得的按原顺序保留(去重),没排进去的按 `LyricsPriorityEntry.defaultOrder`
     /// 补在末尾。别在对不上时整体退回默认顺序 —— 那样每加一个新源,「顺序优先」模式下用户手排的顺序就被静默清掉。
-    static func completedLyricsSourceOrder(_ order: [LyricsSource]) -> [LyricsSource] {
-        var seen = Set<LyricsSource>()
+    /// 口径同引擎 resolveLyricsSourceOrder。
+    static func completedLyricsPriorityOrder(_ order: [LyricsPriorityEntry]) -> [LyricsPriorityEntry] {
+        var seen = Set<LyricsPriorityEntry>()
         let kept = order.filter { seen.insert($0).inserted }
-        return kept + LyricsSource.allCases.filter { !seen.contains($0) }
+        return kept + LyricsPriorityEntry.defaultOrder.filter { !seen.contains($0) }
     }
 
     /// 这台机器是不是**头一回**用 lyrimuse。只给"新装的默认值跟老用户不一样"的开关用
@@ -665,7 +704,7 @@ public final class FeatureSettingsStore: ObservableObject {
             // 同上,genie 的迁移标记独立生效一次。
             genieLyrics: lyricsSources.contains(.genie),
             lyricsSourceMode: lyricsSourceMode.rawValue,
-            lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
+            lyricsSourceOrder: lyricsPriorityOrder.map(\.rawValue),
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
             lyricsTranslationLanguage: lyricsTranslationLanguage.rawValue,
             systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
@@ -923,8 +962,9 @@ public final class FeatureSettingsStore: ObservableObject {
         lyricsSources = enabled
         lyricsSourceMode = f.lyricsSourceMode.flatMap(LyricsSourceMode.init(rawValue:)) ?? .smart
         // 顺序表跟全部源对不上(刚加了新源、旧文件的顺序表还没有它;文件被手改过)时,用户排过的那几位原样保留,
-        // 缺的按默认顺序补在末尾(见 completedLyricsSourceOrder),补完随整份写回。
-        lyricsSourceOrder = Self.completedLyricsSourceOrder((f.lyricsSourceOrder ?? []).compactMap(LyricsSource.init(rawValue:)))
+        // 缺的按默认顺序补在末尾(见 completedLyricsPriorityOrder),补完随整份写回。
+        lyricsPriorityOrder = Self.completedLyricsPriorityOrder(
+            (f.lyricsSourceOrder ?? []).compactMap(LyricsPriorityEntry.init(rawValue:)))
         // 信任列表里后来成了内置播放器的(KKBOX)挪进播放器选择,见 TrustedPlayers.promotingBuiltins。
         let promoted = TrustedPlayers.promotingBuiltins(trusted: f.trustedPlayers ?? [:], players: players)
         trustedPlayers = promoted.trusted

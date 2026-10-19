@@ -1759,6 +1759,11 @@ func lyricsUpgradeApplies(e enrichEntry, scored []scoredLyricCandidateResult, pi
 	if lyricsChosenForShorterCut(e, durationSecs) {
 		baseline, comparable = lyricsBaselineForUnknownDuration(e, scored)
 	}
+	if picked != nil && !e.Lyrics.IsZero() && features().LyricsSourceMode == lyricsModePriority {
+		if applies, decided := priorityUpgradeVerdict(e, scored, picked, durationSecs); decided {
+			return applies
+		}
+	}
 	if picked == nil || !comparable {
 		return false
 	}
@@ -1766,6 +1771,24 @@ func lyricsUpgradeApplies(e enrichEntry, scored []scoredLyricCandidateResult, pi
 		return picked.Score > baseline
 	}
 	return picked.Score >= baseline+lyricsUpgradeMinGain && !keepsShownLyricsOver(e, picked)
+}
+
+// priorityUpgradeVerdict:「顺序优先」下升级重试换不换按名次定,不比分数(decided 为 false 时照分数门槛判):
+//   - 这一轮的冠军排在现存那份的来源前面:换(排前面的源上次没回话、这次回来了);
+//   - 排在后面:现存那份的来源这一轮回了话、却没给出能挑的(它给的都带扣分项或不能用),或者现存那份是给另一版选的
+//     (lyricsFitAnotherCut),才换;它这一轮没回话就不动 —— 不然排第一的源一次超时,词就被排后面的换走;
+//   - 同一个来源、来源关掉了或认不出:不归这里管。
+//
+// 换上去屏上看不出差别的照样不换(keepsShownLyricsOver)。见 09 章决策 296。
+func priorityUpgradeVerdict(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult, durationSecs float64) (applies, decided bool) {
+	cur, next := priorityRank(e.LyricsSource), priorityRank(picked.Source)
+	if cur < 0 || next < 0 || cur == next {
+		return false, false
+	}
+	if next > cur && !containsString(lyricSourcesResponded(scored), e.LyricsSource) && !lyricsFitAnotherCut(e, durationSecs) {
+		return false, true
+	}
+	return !keepsShownLyricsOver(e, picked), true
 }
 
 // durationMismatch:这条歌词当初按 resolved 秒校验,现在真播的版本是 actual 秒 ——
@@ -1924,7 +1947,8 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bo
 	// observeWrongDuration 的稳定性确认 —— 换曲/预载窗口里 media-control 会把下一首的
 	// 时长和当前曲目的标题拼进同一份快照,一次性的脏观察值不能直接当真(这个函数保持
 	// 纯函数,时间态的去抖状态留在调用方那层,单测才不用碰包级状态)。
-	if !e.LyricsYRC.IsZero() && !nativeMissedOut && !wrongDuration {
+	// 「顺序优先」下排在当前来源前面的源上一轮没回话:同样越过这道闸,它回来了就该轮到它(见 lyricsAheadSourceAbsent)。
+	if !e.LyricsYRC.IsZero() && !nativeMissedOut && !wrongDuration && !lyricsAheadSourceAbsent(e) {
 		return false
 	}
 	// 用户手改过的绝不自动重搜,理由见 ManualLyrics 字段的注释。这道闸不能省:saveEdit 只写
@@ -1980,6 +2004,30 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bo
 		base = e.TS
 	}
 	return time.Now().Unix()-base >= int64(lyricsRetryInterval/time.Second)
+}
+
+// lyricsAheadSourceAbsent:「顺序优先」模式下,顺序里排在当前来源前面、开着的源上一轮没回话(应答名单同 needsLyricsRetry)。
+// 现存那份带逐字时 needsLyricsRetry 本来不重试,排第一的源一次超时、排后面的填上之后,它就再也轮不到。见 09 章决策 296。
+func lyricsAheadSourceAbsent(e enrichEntry) bool {
+	if features().LyricsSourceMode != lyricsModePriority || e.LyricsSource == "" {
+		return false
+	}
+	answered := e.LyricsSourcesResponded
+	if len(answered) == 0 {
+		answered = e.LyricsSourcesSeen
+	}
+	for _, tier := range priorityTiers() {
+		if slices.Contains(tier, e.LyricsSource) {
+			return false
+		}
+		// 播放器本地歌词开搜前就读好了,不算缺席。
+		for _, s := range tier {
+			if !isPlayerLocalLyricSource(s) && !slices.Contains(answered, s) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // retryLyricsUpgrade 后台重跑一轮全源搜索,只有分数**严格更高**才替换歌词。
@@ -3893,26 +3941,11 @@ func pickLyricCandidatePreferring(scored []scoredLyricCandidateResult, sourceCho
 func pickLyricCandidate(scored []scoredLyricCandidateResult) *scoredLyricCandidateResult {
 	usable := lyricCandidateUsable(scored)
 	if features().LyricsSourceMode == lyricsModePriority {
-		for _, source := range features().LyricsSourceOrder {
-			if !lyricSourceEnabled(source) {
-				continue
-			}
-			for i := range scored {
-				if scored[i].Source == source && usable(scored[i]) {
-					return &scored[i]
-				}
-			}
+		// 先找顺序里第一个给出干净候选的源;各源给的都带扣分项时,退回顺序里第一个能用的。见 09 章决策 296。
+		if p := priorityPick(scored, func(c scoredLyricCandidateResult) bool { return usable(c) && priorityCandidateClean(c) }); p != nil {
+			return p
 		}
-		// KKBOX / Spotify / Amazon Music 本地歌词不在用户排的顺序里(它们不是歌词源):顺序里的源都没给出可用的,才轮到它们。
-		for _, local := range []string{kkboxLocalLyricsSource, spotifyLocalLyricsSource, amazonLocalLyricsSource, localFileLyricsSource,
-			lxMusicLocalLyricsSource} {
-			for i := range scored {
-				if scored[i].Source == local && usable(scored[i]) {
-					return &scored[i]
-				}
-			}
-		}
-		return nil
+		return priorityPick(scored, usable)
 	}
 	var picked *scoredLyricCandidateResult
 	bestScore := -1
@@ -3927,6 +3960,58 @@ func pickLyricCandidate(scored []scoredLyricCandidateResult) *scoredLyricCandida
 		picked = &scored[i]
 	}
 	return picked
+}
+
+// priorityPick:「顺序优先」按 priorityTiers 的先后,取第一个有 ok 候选的名次里分数最高的那条(scored 已按分数从高到低排)。
+func priorityPick(scored []scoredLyricCandidateResult, ok func(scoredLyricCandidateResult) bool) *scoredLyricCandidateResult {
+	for _, tier := range priorityTiers() {
+		for i := range scored {
+			if slices.Contains(tier, scored[i].Source) && ok(scored[i]) {
+				return &scored[i]
+			}
+		}
+	}
+	return nil
+}
+
+// priorityTiers:「顺序优先」实际的取用先后,每一项是占同一个名次的几个来源。reAMP 同名 .lrc 排最前(用户自己放在歌曲旁边的
+// 文件);用户顺序里的歌词源各占一个名次,关掉的跳过;「播放器自带歌词」那一项(lyricsPriorityPlayerLocal)展开成
+// priorityPlayerCacheSources,顺序表里没有那一项时(没经过 resolveLyricsSourceOrder 的数据)排在最后。见 09 章决策 297。
+func priorityTiers() [][]string {
+	tiers := [][]string{{localFileLyricsSource}}
+	placed := false
+	for _, entry := range features().LyricsSourceOrder {
+		switch {
+		case entry == lyricsPriorityPlayerLocal:
+			tiers, placed = append(tiers, priorityPlayerCacheSources), true
+		case lyricSourceEnabled(entry):
+			tiers = append(tiers, []string{entry})
+		}
+	}
+	if !placed {
+		tiers = append(tiers, priorityPlayerCacheSources)
+	}
+	return tiers
+}
+
+// priorityPlayerCacheSources:「播放器自带歌词」那一项包括的播放器本地歌词,同一个名次里按分数挑。
+var priorityPlayerCacheSources = []string{kkboxLocalLyricsSource, spotifyLocalLyricsSource, amazonLocalLyricsSource,
+	lxMusicLocalLyricsSource}
+
+// priorityCandidateClean:这一条没带说明它可能是别的版本、别的录音或时间轴不对的扣分项(earlyLyricsPenaltyTerms;逐字加分
+// 撤销那一项不算,它只是把逐字那份加分退回去)。智能算法里这些扣分让它比分落后;「顺序优先」不比分,得在挑源时直接跳过它。
+func priorityCandidateClean(c scoredLyricCandidateResult) bool {
+	for _, t := range c.ScoreTerms {
+		if t.Kind != scoreTermWordTimingOverride && earlyLyricsPenaltyTerms[t.Kind] {
+			return false
+		}
+	}
+	return true
+}
+
+// priorityRank:「顺序优先」里这个来源排第几(priorityTiers 的下标,0 起);关掉了的、不认得的返回 -1。
+func priorityRank(source string) int {
+	return slices.IndexFunc(priorityTiers(), func(tier []string) bool { return slices.Contains(tier, source) })
 }
 
 // lyricCandidateUsable 给出「这一条能不能当冠军」的判定:分数不为负;这一轮有纯音乐标记时,吃过版本不符扣分的

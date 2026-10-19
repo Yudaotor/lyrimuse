@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 )
 
@@ -94,22 +95,27 @@ func earlyLyricsVerdict(scored []scoredLyricCandidateResult, picked *scoredLyric
 
 // priorityPickSettled:「顺序优先」模式下,排在 picked 前面的源是不是都回话了、而且谁也翻不了盘。
 // 排在前面的源有一份因语言不符被判废的候选时不算:后到的源跟它正文一致,判废就会解除(语言闸看正文互证)。
-// picked 是播放器本地歌词(不在顺序里)时,顺序里开着的源要全部回话。
+// 先后按 priorityTiers(「播放器自带歌词」排在哪儿就在哪儿)。picked 带着扣分项(各源都没给出干净的、退回来的,见
+// pickLyricCandidate)时,顺序里开着的源要全部回话:排在后面的源也可能给出干净的那份。
 func priorityPickSettled(scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult, answered func(string) bool) bool {
-	for _, source := range features().LyricsSourceOrder {
-		if source == picked.Source {
+	clean := priorityCandidateClean(*picked)
+	for _, tier := range priorityTiers() {
+		if slices.Contains(tier, picked.Source) && clean {
 			return true
 		}
-		if !lyricSourceEnabled(source) {
-			continue
-		}
-		if !answered(source) {
-			return false
-		}
-		for i := range scored {
-			c := &scored[i]
-			if c.Source == source && c.Score < 0 && len(c.ScoreTerms) > 0 && c.ScoreTerms[0].Kind == scoreRejectWrongLanguage {
+		for _, source := range tier {
+			// 播放器本地歌词开搜前就放进来了,没有回不回话这回事。
+			if isPlayerLocalLyricSource(source) {
+				continue
+			}
+			if !answered(source) {
 				return false
+			}
+			for i := range scored {
+				c := &scored[i]
+				if c.Source == source && c.Score < 0 && len(c.ScoreTerms) > 0 && c.ScoreTerms[0].Kind == scoreRejectWrongLanguage {
+					return false
+				}
 			}
 		}
 	}

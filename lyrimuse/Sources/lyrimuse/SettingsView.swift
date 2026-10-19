@@ -776,7 +776,7 @@ private struct LyricsSettingsTab: View {
     /// 「顺序优先」列表正在进行的把手拖拽(nil = 没在拖)。纯视图态,不进 store;松手一次 move + save。
     @State private var sourceDrag: SourceDragState?
     /// 各可见行在卡片坐标空间里的静止 frame(PrioritySourceFramesKey 收集)。只在拖拽**开始**那一刻读一次做快照。
-    @State private var priorityRowFrames: [LyricsSource: CGRect] = [:]
+    @State private var priorityRowFrames: [LyricsPriorityEntry: CGRect] = [:]
 
     @ObservedObject private var features = FeatureSettingsStore.shared
     /// Apple Music 源要用户先连一次账号才有输出(见 AppleMusicConnection 的头注),
@@ -1284,7 +1284,7 @@ private struct LyricsSettingsTab: View {
         switch features.lyricsSourceMode {
         // 「推荐」写在智能那一档的说明开头:分段控件每一格只放档名,别往格子上叠星标之类的装饰。
         case .smart: return L10n.t("推荐。为每个歌词源评分，选用最高分的结果")
-        case .priority: return L10n.t("不进行评分，按下方顺序采用第一个有结果的来源")
+        case .priority: return L10n.t("按下方顺序采用第一个合适的结果")
         }
     }
 
@@ -2272,11 +2272,15 @@ private struct LyricsSettingsTab: View {
         }
     }
 
-    // 只包含当前启用的来源,按 lyricsSourceOrder 里的相对顺序展示——"顺序优先"模式的
+    // 只包含当前启用的来源和「播放器自带歌词」,按 lyricsPriorityOrder 里的相对顺序展示——"顺序优先"模式的
     // 列表只需要用户关心"我选的这几个,先后顺序是什么",被禁用的来源不出现在这份列表里,
     // 不需要用户先想着"跳过那些没打开的"。
-    private var orderedEnabledSources: [LyricsSource] {
-        features.lyricsSourceOrder.filter { features.lyricsSources.contains($0) }
+    private var orderedEnabledSources: [LyricsPriorityEntry] {
+        features.lyricsPriorityOrder.filter(isPriorityEntryVisible)
+    }
+
+    private func isPriorityEntryVisible(_ entry: LyricsPriorityEntry) -> Bool {
+        entry.source.map { features.lyricsSources.contains($0) } ?? true
     }
 
     // MARK: 顺序优先列表:拖拽排序
@@ -2300,7 +2304,7 @@ private struct LyricsSettingsTab: View {
     /// 顺序列表里的一行:把手 + 序号 + 色点 + 名称 + 上下箭头。拖拽期间被拖行跟着指针走(不动画),其余行按
     /// Core 算出的让位位移挪(0.15s 让位动画;reduceMotion 时不动画)。frame 收集放在 .offset **之后**,量到的
     /// 才是静止位置而不是挪动中的位置。
-    private func priorityRow(index: Int, source: LyricsSource, visible: [LyricsSource]) -> some View {
+    private func priorityRow(index: Int, source: LyricsPriorityEntry, visible: [LyricsPriorityEntry]) -> some View {
         let isDragged = sourceDrag?.source == index
         let offset: CGFloat = {
             guard let drag = sourceDrag else { return 0 }
@@ -2322,9 +2326,10 @@ private struct LyricsSettingsTab: View {
                 Text("\(index + 1)")
                     .font(.caption).monospacedDigit().foregroundStyle(.secondary)
                     .frame(width: 14, alignment: .trailing)
-                Circle().fill(source.color).frame(width: 8, height: 8)
-                Text(source.displayName)
+                Circle().fill(source.source?.color ?? Color.secondary).frame(width: 8, height: 8)
+                Text(source.source?.displayName ?? L10n.t("播放器自带歌词"))
                     .font(.system(size: 13))
+                    .help(source.source == nil ? L10n.t("KKBOX、Spotify、Amazon Music、洛雪音乐自己缓存的歌词") : "")
                 Spacer()
                 // 箭头保留:键盘 / VoiceOver 的通路。把手是 Image 不是按钮,VoiceOver 操作不了它。
                 Button {
@@ -2359,8 +2364,8 @@ private struct LyricsSettingsTab: View {
 
     /// 把手上的拖拽手势。minimumDistance 4:点一下不算拖;macOS 没有按住拖动滚动这回事,不必担心跟滚动区抢。
     /// 开始时一次性快照各可见行的静止中线(任一行还没量到就不开始);拖拽中另一只把手来的事件不理;松手时
-    /// 目标位变了才写回一次 lyricsSourceOrder 并 save()。
-    private func priorityDragGesture(index: Int, visible: [LyricsSource]) -> some Gesture {
+    /// 目标位变了才写回一次 lyricsPriorityOrder 并 save()。
+    private func priorityDragGesture(index: Int, visible: [LyricsPriorityEntry]) -> some Gesture {
         DragGesture(minimumDistance: 4, coordinateSpace: .named(Self.priorityListSpace))
             .onChanged { value in
                 if sourceDrag == nil {
@@ -2383,9 +2388,9 @@ private struct LyricsSettingsTab: View {
                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
                     sourceDrag = nil
                     if changed {
-                        features.lyricsSourceOrder = ReorderDrag.moved(
-                            features.lyricsSourceOrder,
-                            isVisible: { features.lyricsSources.contains($0) },
+                        features.lyricsPriorityOrder = ReorderDrag.moved(
+                            features.lyricsPriorityOrder,
+                            isVisible: isPriorityEntryVisible,
                             from: drag.source, to: drag.target
                         )
                     }
@@ -2394,27 +2399,27 @@ private struct LyricsSettingsTab: View {
             }
     }
 
-    // lyricsSourceOrder 始终是全部源的完整排列(LyricsSource.allCases,现在 9 个),不只是启用的那几个——
+    // lyricsPriorityOrder 始终是全部源加「播放器自带歌词」的完整排列,不只是启用的那几个——
     // "上移/下移"只需要在这个完整数组里,把 source 换到"当前可见列表"里相邻的那个启用来源的位置,禁用的
     // 来源被跳过、位置不受影响,不需要临时把它们摘出数组再塞回去。把手拖拽松手时走 Core ReorderDrag.moved,
     // 语义与这里一致(禁用槽位不动),selftest 钉着两者等价。
-    private func moveEnabledSource(_ source: LyricsSource, direction: Int) {
+    private func moveEnabledSource(_ source: LyricsPriorityEntry, direction: Int) {
         let visible = orderedEnabledSources
         guard let visibleIndex = visible.firstIndex(of: source) else { return }
         let targetIndex = visibleIndex + direction
         guard visible.indices.contains(targetIndex) else { return }
         let other = visible[targetIndex]
-        guard let i = features.lyricsSourceOrder.firstIndex(of: source),
-              let j = features.lyricsSourceOrder.firstIndex(of: other) else { return }
-        features.lyricsSourceOrder.swapAt(i, j)
+        guard let i = features.lyricsPriorityOrder.firstIndex(of: source),
+              let j = features.lyricsPriorityOrder.firstIndex(of: other) else { return }
+        features.lyricsPriorityOrder.swapAt(i, j)
         Task { await features.save() }
     }
 }
 
 /// 「顺序优先」列表各行在卡片坐标空间里的 frame,按来源收集(见 LyricsSettingsTab.priorityRow)。
 private struct PrioritySourceFramesKey: PreferenceKey {
-    static let defaultValue: [LyricsSource: CGRect] = [:]
-    static func reduce(value: inout [LyricsSource: CGRect], nextValue: () -> [LyricsSource: CGRect]) {
+    static let defaultValue: [LyricsPriorityEntry: CGRect] = [:]
+    static func reduce(value: inout [LyricsPriorityEntry: CGRect], nextValue: () -> [LyricsPriorityEntry: CGRect]) {
         value.merge(nextValue()) { _, new in new }
     }
 }
