@@ -785,6 +785,45 @@ private func scriptServerTests() {
     expectEqual(s.request("x\ny", timeout: 5) == nil, true, "常驻脚本: 请求里带换行不发")
     s.stop()
 
+    // 按回答字节数换:每次回答约二十字节,累计过 30 字节的那一次答完就换。
+    let bySize = P(label: "selftest", endMarker: marker, recycleAfterRequests: 100, recycleAfterBytes: 30,
+                   disableAfterFailures: 2, launch: { .init(executable: "/usr/bin/perl", arguments: ["-e", fake]) })
+    let s1 = fields(bySize.request("aaaaaaaaaa", timeout: 5))
+    let s2 = fields(bySize.request("bbbbbbbbbb", timeout: 5))
+    let s3 = fields(bySize.request("cccccccccc", timeout: 5))
+    expectEqual(s1.count == 3 && s2.count == 3 && s3.count == 3 && s1[0] == s2[0] && s3[0] != s1[0] && s3[1] == "1"
+                && bySize.launchCount == 2, true, "常驻脚本: 回答累计到字节上限换新进程")
+    bySize.stop()
+    let clientSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift"), encoding: .utf8)) ?? ""
+    expectEqual(sourceBytes(clientSource, contain: "guard let r = artworkServer.request(\"now\", timeout: artworkTimeout)\n                ?? ProcessRunner.run(binaryPath, [\"get\", \"--now\"], timeout: artworkTimeout),"), true,
+                "常驻取封面(契约): 先问取封面的常驻进程,用不上再起子进程")
+    expectEqual(sourceBytes(clientSource, contain: "recycleAfterRequests: artworkServerRecycleAfterRequests, recycleAfterBytes: artworkServerRecycleAfterBytes,"), true,
+                "常驻取封面(契约): 取封面的常驻进程按次数和字节数换新")
+
+    // 常驻 helper(焦点被占时单问那一份):请求行拼法;本机装着 helper 时真跑一次脚本,问一个没在报的 App 答 null。
+    typealias NPC = NowPlayingClientsProbe
+    expectEqual(NPC.snapshotServerRequest(bundleID: "com.netease.163music", ratePlaying: false), "com.netease.163music",
+                "常驻 helper: 请求行就是 bundle id")
+    expectEqual(NPC.snapshotServerRequest(bundleID: "com.kugou.mac", ratePlaying: true), "com.kugou.mac rate-playing",
+                "常驻 helper: 按速率判在放的播放器带 rate-playing")
+    expectEqual(NPC.snapshotServerRequest(bundleID: "a b", ratePlaying: false) == nil
+                && NPC.snapshotServerRequest(bundleID: "", ratePlaying: false) == nil, true,
+                "常驻 helper: 带空白或空的 bundle id 走起子进程")
+    let probeSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("LyrimuseCore/Local/NowPlayingClientsProbe.swift"), encoding: .utf8)) ?? ""
+    expectEqual(sourceBytes(probeSource, contain: ".flatMap({ snapshotServer.request($0, timeout: timeout) })\n                ?? ProcessRunner.run(\"/usr/bin/perl\", arguments, timeout: timeout),"), true,
+                "常驻 helper(契约): 单问那一份先问常驻进程,用不上再起 perl")
+    let installedHelper = "/Applications/Lyrimuse.app/Contents/Resources/nowplaying-clients/libnowplaying-clients.dylib"
+    if FileManager.default.isReadableFile(atPath: installedHelper) {
+        let npc = P(label: "selftest npc", endMarker: "__LYRIMUSE_SCRIPT_END__", recycleAfterRequests: 10,
+                    launch: { .init(executable: "/usr/bin/perl", arguments: ["-e", NPC.snapshotServerScript, installedHelper]) })
+        let none = npc.request("com.example.selftest.none", timeout: 5)
+        expectEqual(text(none?.stdout)?.trimmingCharacters(in: .whitespacesAndNewlines) == "null" && none?.succeeded == true,
+                    true, "常驻 helper: 真跑脚本,没在报的 App 答 null")
+        npc.stop()
+    }
+
     let dying = server(recycle: 100)
     expectEqual(dying.request("die", timeout: 5) == nil && dying.launchCount == 1, true,
                 "常驻脚本: 半路退出这次交 nil(调用方退回起子进程)")

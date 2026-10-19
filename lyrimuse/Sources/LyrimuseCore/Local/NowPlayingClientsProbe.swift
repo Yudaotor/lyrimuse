@@ -153,19 +153,57 @@ public enum NowPlayingClientsProbe {
         public let processIdentifier: Int32?
     }
 
-    /// 同 `snapshot(forBundleID:)`,另外带回锚点时刻与发布进程。
+    /// 同 `snapshot(forBundleID:)`,另外带回锚点时刻与发布进程。先问常驻的 helper,用不上再起一个 perl。
     public static func snapshotWithAnchor(forBundleID bundleID: String)
         -> (snapshot: MediaControlSnapshot, anchor: SessionAnchor)? {
         guard !bundleID.isEmpty, let paths = helperPaths() else { return nil }
+        let ratePlaying = PlaybackPlayer.builtin(forBundleID: bundleID)?.playingFromRate == true
         var arguments = [paths.script, paths.library, bundleID]
-        if PlaybackPlayer.builtin(forBundleID: bundleID)?.playingFromRate == true {
-            arguments.append("rate-playing")
-        }
-        guard let r = ProcessRunner.run(
-            "/usr/bin/perl", arguments, timeout: timeout),
+        if ratePlaying { arguments.append("rate-playing") }
+        guard let r = snapshotServerRequest(bundleID: bundleID, ratePlaying: ratePlaying)
+                .flatMap({ snapshotServer.request($0, timeout: timeout) })
+                ?? ProcessRunner.run("/usr/bin/perl", arguments, timeout: timeout),
             r.succeeded
         else { return nil }
         return decodeSnapshot(r.stdout)
+    }
+
+    // MARK: - 常驻 helper(见 02 章决策 146)
+
+    /// 焦点被别的 App 占走时每拍都要单问一份:helper 常驻在一个 perl 里,不再每拍起一个。每答一次进程涨约 2KB,
+    /// 答满这么多次换一个。
+    static let snapshotServerRecycleAfterRequests = 1000
+
+    /// 常驻 helper 跑的 perl:加载 dylib 一次,每读到一行请求(`<bundle id> [rate-playing]`)就先清掉 helper 认的全部开关、
+    /// 再按请求设好(同 nowplaying-clients.pl 单问那条),调一次 `nowplaying_clients`(回答由它直接写 stdout 并刷出),
+    /// 再写结束行。stdin 读到 EOF 就退出。
+    public static let snapshotServerScript = #"""
+    use strict; use warnings; use DynaLoader;
+    $| = 1;
+    my $lib = shift @ARGV;
+    my $handle = DynaLoader::dl_load_file($lib, 0) or exit 3;
+    my $symbol = DynaLoader::dl_find_symbol($handle, 'nowplaying_clients') or exit 4;
+    DynaLoader::dl_install_xsub('main::nowplaying_clients', $symbol);
+    while (my $line = <STDIN>) {
+        my ($bundle, $mode) = split ' ', $line;
+        delete @ENV{qw(LYRIMUSE_NOWPLAYING_BUNDLE LYRIMUSE_NOWPLAYING_ARTWORK LYRIMUSE_NOWPLAYING_QUEUE LYRIMUSE_NOWPLAYING_WATCH
+                       LYRIMUSE_NOWPLAYING_SEEK LYRIMUSE_NOWPLAYING_RATE_PLAYING)};
+        $ENV{LYRIMUSE_NOWPLAYING_BUNDLE} = $bundle if defined $bundle && length $bundle;
+        $ENV{LYRIMUSE_NOWPLAYING_RATE_PLAYING} = 1 if defined $mode && $mode eq 'rate-playing';
+        main::nowplaying_clients();
+        print "\n\#(MediaControlClient.scriptServerEndMarker) 0\n";
+    }
+    """#
+
+    static let snapshotServer = PersistentScriptServer(
+        label: "nowplaying-clients server", endMarker: MediaControlClient.scriptServerEndMarker,
+        recycleAfterRequests: snapshotServerRecycleAfterRequests,
+        launch: { helperPaths().map { .init(executable: "/usr/bin/perl", arguments: ["-e", snapshotServerScript, $0.library]) } })
+
+    /// 单问一份的请求行。bundle id 里带空白(拆不开)时为 nil,走起子进程那条。
+    public static func snapshotServerRequest(bundleID: String, ratePlaying: Bool) -> String? {
+        guard !bundleID.isEmpty, bundleID.rangeOfCharacter(from: .whitespacesAndNewlines) == nil else { return nil }
+        return ratePlaying ? bundleID + " rate-playing" : bundleID
     }
 
     /// 解出 helper 单问那一份的输出。纯函数,selftest 覆盖。

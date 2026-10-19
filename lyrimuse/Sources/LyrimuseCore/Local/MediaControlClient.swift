@@ -1212,6 +1212,10 @@ public enum MediaControlClient {
     static let scriptServerEndMarker = "__LYRIMUSE_SCRIPT_END__"
     /// 常驻取数进程每答这么多次换一个:适配器每答一次,进程涨约 8KB。
     static let getServerRecycleAfterRequests = 300
+    /// 取封面的常驻进程:带封面的回答每次让它涨约五倍于回答的内存,回答累计到这么多字节就换(一张专辑封面约 160KB,
+    /// 九张左右换一次);系统一直不给封面、回答很小的歌,答满这么多次也换。见 02 章决策 146。
+    static let artworkServerRecycleAfterBytes = 1_500_000
+    static let artworkServerRecycleAfterRequests = 60
     /// 常驻 osascript 每答这么多次换一个:每答一次,进程涨 24~72KB。
     static let appleScriptServerRecycleAfterRequests = 100
 
@@ -1240,6 +1244,12 @@ public enum MediaControlClient {
     static let getServer = PersistentScriptServer(
         label: "media-control get server", endMarker: scriptServerEndMarker,
         recycleAfterRequests: getServerRecycleAfterRequests, launch: { getServerLaunch() })
+
+    /// 取封面单独一个常驻进程,跟每拍轮询那个分开:封面回答撑大的内存不带进轮询那个、换进程的节奏也各管各的。
+    static let artworkServer = PersistentScriptServer(
+        label: "media-control artwork server", endMarker: scriptServerEndMarker,
+        recycleAfterRequests: artworkServerRecycleAfterRequests, recycleAfterBytes: artworkServerRecycleAfterBytes,
+        launch: { getServerLaunch() })
 
     /// 常驻取数进程的起法:`/usr/bin/perl -e getServerScript <适配框架>`。没走 build.sh 打包、找不到适配框架时为 nil。
     private static func getServerLaunch() -> PersistentScriptServer.Launch? {
@@ -2064,9 +2074,9 @@ public enum MediaControlClient {
         }
         guard let binaryPath = binaryPath() else { return (nil, prefix + "media-control is not bundled") }
         // 这次不传 --no-artwork——就是为了要这份数据,所以超时给得比状态查询宽:
-        // 封面 base64 有几百 KB。
-        guard let r = ProcessRunner.run(
-            binaryPath, ["get", "--now"], timeout: artworkTimeout),
+        // 封面 base64 有几百 KB。先问取封面的常驻进程,用不上再起子进程。
+        guard let r = artworkServer.request("now", timeout: artworkTimeout)
+                ?? ProcessRunner.run(binaryPath, ["get", "--now"], timeout: artworkTimeout),
             r.succeeded
         else { return (nil, prefix + "media-control get --now failed") }
         guard let raw = try? JSONDecoder().decode(ArtworkPayload.self, from: r.stdout) else {

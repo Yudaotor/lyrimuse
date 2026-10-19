@@ -10,7 +10,8 @@ private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: 
 /// 协议:请求是一行文字(不含换行)。脚本对每一行先把回答原样写到 stdout,再写结束行 `\n<endMarker> <状态码>\n`;
 /// 回答里不能出现 `\n<endMarker> `。状态码照子进程退出码的口径,0 = 成功。
 ///
-/// - 一个进程答满 `recycleAfterRequests` 次就换新的(长跑的脚本进程会涨内存):关掉它的 stdin,`exitGrace` 之后还在就 SIGKILL。
+/// - 一个进程答满 `recycleAfterRequests` 次、或者回答累计到 `recycleAfterBytes` 字节,就换新的(长跑的脚本进程会涨内存,
+///   涨多少跟回答大小有关):关掉它的 stdin,`exitGrace` 之后还在就 SIGKILL。
 /// - 一次请求超时:SIGKILL 掉进程,这次按超时交回(`timedOut = true`,同 `ProcessRunner`),下次重开。
 /// - 起不来、半路退出:这次返回 nil,调用方自己退回每次起子进程那条路。连着 `disableAfterFailures` 次就停用
 ///   `disabledInterval`,这段时间一律返回 nil、不起进程。
@@ -33,6 +34,8 @@ public final class PersistentScriptServer: @unchecked Sendable {
     public let label: String
     public let endMarker: String
     public let recycleAfterRequests: Int
+    /// 非 nil = 一个进程的回答累计到这么多字节也换新的。
+    public let recycleAfterBytes: Int?
     public let disableAfterFailures: Int
     public let disabledInterval: TimeInterval
     private let launch: @Sendable () -> Launch?
@@ -43,16 +46,18 @@ public final class PersistentScriptServer: @unchecked Sendable {
     private var output: Pipe?
     private var buffer = Data()
     private var answeredByCurrent = 0
+    private var bytesByCurrent = 0
     private var consecutiveFailures = 0
     private var disabledUntil: Date?
     private var launched = 0
 
-    public init(label: String, endMarker: String, recycleAfterRequests: Int,
+    public init(label: String, endMarker: String, recycleAfterRequests: Int, recycleAfterBytes: Int? = nil,
                 disableAfterFailures: Int = 3, disabledInterval: TimeInterval = 600,
                 launch: @escaping @Sendable () -> Launch?) {
         self.label = label
         self.endMarker = endMarker
         self.recycleAfterRequests = max(1, recycleAfterRequests)
+        self.recycleAfterBytes = recycleAfterBytes.map { max(1, $0) }
         self.disableAfterFailures = max(1, disableAfterFailures)
         self.disabledInterval = disabledInterval
         self.launch = launch
@@ -91,8 +96,9 @@ public final class PersistentScriptServer: @unchecked Sendable {
         case .answered(let status, let body):
             consecutiveFailures = 0
             answeredByCurrent += 1
-            if answeredByCurrent >= recycleAfterRequests {
-                logger.notice("\(self.label, privacy: .public) recycled after \(self.answeredByCurrent) requests")
+            bytesByCurrent += body.count
+            if answeredByCurrent >= recycleAfterRequests || recycleAfterBytes.map({ bytesByCurrent >= $0 }) == true {
+                logger.notice("\(self.label, privacy: .public) recycled after \(self.answeredByCurrent) requests, \(self.bytesByCurrent) bytes")
                 stopLocked(force: false)
             }
             return ProcessRunner.Result(status: status, stdout: body, stderr: Data(), timedOut: false)
@@ -153,6 +159,7 @@ public final class PersistentScriptServer: @unchecked Sendable {
         self.output = output
         buffer.removeAll()
         answeredByCurrent = 0
+        bytesByCurrent = 0
         logger.notice("\(self.label, privacy: .public) started (pid \(process.processIdentifier), launch \(self.launched))")
         return true
     }
@@ -169,6 +176,7 @@ public final class PersistentScriptServer: @unchecked Sendable {
         output = nil
         buffer.removeAll()
         answeredByCurrent = 0
+        bytesByCurrent = 0
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + Self.exitGrace) {
             if process.isRunning { Darwin.kill(pid, SIGKILL) }
         }
