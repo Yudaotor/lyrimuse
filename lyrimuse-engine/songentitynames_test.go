@@ -148,7 +148,7 @@ func TestSongEntityLocaleVocalsVeto(t *testing.T) {
 	}
 	none := mk("A|Intro|X", "zxx", enrichEntry{DurationSecs: 192})
 	byLocale := mk("A|Intro|Y", "zh-Hans-CN", enrichEntry{DurationSecs: 192})
-	byLyrics := mk("A|Intro|Z", "", enrichEntry{DurationSecs: 192, Lyrics: lyrics, ResolvedDurationSecs: 192})
+	byLyrics := mk("A|Intro|Z", "", enrichEntry{DurationSecs: 192, Lyrics: bt(lyrics), ResolvedDurationSecs: 192})
 	if r := songPairVeto(&none, &byLocale, true, nil); r != "vocals" {
 		t.Errorf("zxx 对 audioLocale 有人声要否决,得到 %q", r)
 	}

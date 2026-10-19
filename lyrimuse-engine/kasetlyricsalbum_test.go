@@ -35,7 +35,7 @@ func TestLyricsSearchAlbum(t *testing.T) {
 
 func TestListedAlbumLyricsWorthRecheck(t *testing.T) {
 	entry := func(edit func(*enrichEntry)) enrichEntry {
-		e := enrichEntry{Lyrics: "[00:01.00]hi", LyricsSource: "qq", YouTubeMusicAlbum: "Listed"}
+		e := enrichEntry{Lyrics: bt("[00:01.00]hi"), LyricsSource: "qq", YouTubeMusicAlbum: "Listed"}
 		if edit != nil {
 			edit(&e)
 		}
@@ -56,7 +56,7 @@ func TestListedAlbumLyricsWorthRecheck(t *testing.T) {
 		{"播放器报了专辑", entry(nil), "Reported", false, true},
 		{"登记专辑还没判出来", entry(func(e *enrichEntry) { e.YouTubeMusicAlbum = "" }), "", false, true},
 		{"已经带着它搜过", entry(func(e *enrichEntry) { e.LyricsListedAlbum = "Listed" }), "", false, true},
-		{"没词(补空那条管)", entry(func(e *enrichEntry) { e.Lyrics, e.LyricsSource = "", "" }), "", false, true},
+		{"没词(补空那条管)", entry(func(e *enrichEntry) { e.Lyrics, e.LyricsSource = bodyText{}, "" }), "", false, true},
 		{"手改过", entry(func(e *enrichEntry) { e.ManualLyrics = true }), "", false, true},
 		{"校准过", entry(nil), "", true, true},
 		{"关了自动升级", entry(nil), "", false, false},
@@ -93,7 +93,7 @@ func TestLyricsRetriesSearchWithListedAlbum(t *testing.T) {
 	enrichCache = map[string]enrichEntry{
 		listedKey: {YouTubeMusicAlbum: "Listed Album"},
 		plainKey:  {},
-		rescoreKey: {Lyrics: "[00:05.00]Old line one\n[00:15.00]Old line two", LyricsSource: "musixmatch",
+		rescoreKey: {Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "musixmatch",
 			LyricsScoringVersion: lyricsScoringVersion - 1, YouTubeMusicAlbum: "Listed Album"},
 	}
 	enrichMu.Unlock()
@@ -111,7 +111,7 @@ func TestLyricsRetriesSearchWithListedAlbum(t *testing.T) {
 	if plain.LyricsDecision == nil || plain.LyricsDecision.QueryAlbum != "" || plain.LyricsListedAlbum != "" {
 		t.Fatalf("没有登记专辑就照旧不带专辑: decision=%+v listed=%q", plain.LyricsDecision, plain.LyricsListedAlbum)
 	}
-	if listed.Lyrics == "" || listed.LyricsScore <= plain.LyricsScore {
+	if listed.Lyrics.IsZero() || listed.LyricsScore <= plain.LyricsScore {
 		t.Errorf("登记专辑要进打分(专辑对得上的候选加分): with=%d without=%d", listed.LyricsScore, plain.LyricsScore)
 	}
 	if rescored.LyricsDecision == nil || rescored.LyricsDecision.QueryAlbum != "Listed Album" || rescored.LyricsListedAlbum != "Listed Album" {
@@ -124,7 +124,7 @@ func TestLyricsRetriesSearchWithListedAlbum(t *testing.T) {
 
 func TestAdoptBackfilledLyricsKeepsListedAlbum(t *testing.T) {
 	var e enrichEntry
-	fresh := enrichEntry{Lyrics: "[00:01.00]hi", LyricsSource: "qq", LyricsListedAlbum: "Listed"}
+	fresh := enrichEntry{Lyrics: bt("[00:01.00]hi"), LyricsSource: "qq", LyricsListedAlbum: "Listed"}
 	if !adoptBackfilledLyrics(&e, fresh) || e.LyricsListedAlbum != "Listed" {
 		t.Errorf("收下的词是带着哪个登记专辑搜的要一起收: %q", e.LyricsListedAlbum)
 	}

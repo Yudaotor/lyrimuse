@@ -96,7 +96,7 @@ func TestVideoFrameIsKeptApartFromTheCover(t *testing.T) {
 		t.Fatalf("视频帧要落盘: %q", url)
 	}
 	const key = "Singer|Song|"
-	withEnrichCache(t, map[string]enrichEntry{key: {Lyrics: "[00:01.00]x"}})
+	withEnrichCache(t, map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]x")}})
 	if !noteVideoFrame(key, "com.apple.Music", "Singer", "Song") {
 		t.Fatal("条目在缓存里要记上视频帧")
 	}

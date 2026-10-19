@@ -95,14 +95,14 @@ func TestLooksMandarinPinyin(t *testing.T) {
 	if !looksMandarinPinyin("[00:01.00]gu shi de xiao huang hua\n[00:03.00]cong chu sheng na tian qi jiu piao zhe") {
 		t.Error("普通话拼音没认出来")
 	}
-	e := enrichEntry{SongLanguage: songLanguageCantonese, LyricsRoma: "[00:01.00]wo ai ni zhong guo shi jie"}
+	e := enrichEntry{SongLanguage: songLanguageCantonese, LyricsRoma: bt("[00:01.00]wo ai ni zhong guo shi jie")}
 	e.dropUnusableCantoneseRoma()
-	if e.LyricsRoma != "" {
+	if !e.LyricsRoma.IsZero() {
 		t.Error("粤语歌的普通话拼音应当清掉,交给粤拼")
 	}
-	e = enrichEntry{SongLanguage: songLanguageCantonese, LyricsRoma: "[00:01.00]ngo5 oi3 nei5\n[00:03.50]ngo5 dei6 gam1 jat6 hou2 hoi1 sam1"}
+	e = enrichEntry{SongLanguage: songLanguageCantonese, LyricsRoma: bt("[00:01.00]ngo5 oi3 nei5\n[00:03.50]ngo5 dei6 gam1 jat6 hou2 hoi1 sam1")}
 	e.dropUnusableCantoneseRoma()
-	if e.LyricsRoma == "" {
+	if e.LyricsRoma.IsZero() {
 		t.Error("源给的带声调粤拼要留着")
 	}
 }

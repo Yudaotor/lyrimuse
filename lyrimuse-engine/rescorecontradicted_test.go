@@ -81,7 +81,7 @@ func TestRescoreReplacesAnotherSongWhenCurrentSourceSilent(t *testing.T) {
 			const oldYRC = "[5000,1000](5000,500,0)Completely(5500,500,0)unrelated"
 			enrichMu.Lock()
 			enrichCache = map[string]enrichEntry{key: {
-				Lyrics: c.current, LyricsYRC: oldYRC, LyricsSource: "netease", LyricsScore: 1300,
+				Lyrics: bt(c.current), LyricsYRC: bt(oldYRC), LyricsSource: "netease", LyricsScore: 1300,
 				LyricsScoringVersion: lyricsScoringVersion - 1,
 			}}
 			enrichMu.Unlock()
@@ -92,12 +92,12 @@ func TestRescoreReplacesAnotherSongWhenCurrentSourceSilent(t *testing.T) {
 			e := enrichCache[key]
 			enrichMu.Unlock()
 			if !c.replaced {
-				if !deferred || e.Lyrics != c.current || e.LyricsSource != "netease" {
+				if !deferred || !e.Lyrics.EqualString(c.current) || e.LyricsSource != "netease" {
 					t.Fatalf("当前来源没应答、当前这份跟这一轮一样:应判不了、不动,deferred=%v source=%s", deferred, e.LyricsSource)
 				}
 				return
 			}
-			if e.Lyrics != rescoreTestNewBody || e.LyricsYRC == oldYRC || e.LyricsSource == "netease" {
+			if !e.Lyrics.EqualString(rescoreTestNewBody) || e.LyricsYRC.EqualString(oldYRC) || e.LyricsSource == "netease" {
 				t.Fatalf("应换上这一轮的词: source=%s lyrics=%q yrc=%q", e.LyricsSource, e.Lyrics, e.LyricsYRC)
 			}
 			if e.LyricsDecision == nil || e.LyricsDecisionApplied == nil {

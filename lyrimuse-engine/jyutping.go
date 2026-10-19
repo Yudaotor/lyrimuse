@@ -450,13 +450,13 @@ func migrateTonelessCantoneseRoma() {
 	enrichMu.Lock()
 	replaced := 0
 	for k, e := range scope.entries() {
-		if e.SongLanguage != songLanguageCantonese || e.LyricsRoma == "" || !lacksJyutpingTones(e.LyricsRoma) {
+		if e.SongLanguage != songLanguageCantonese || e.LyricsRoma.IsZero() || !lacksJyutpingTones(e.LyricsRoma.String()) {
 			continue
 		}
 		before := e.LyricsRoma
 		e.dropUnusableCantoneseRoma()
 		e.maybeGenerateJyutpingRoma()
-		if e.LyricsRoma == before {
+		if e.LyricsRoma.Equal(before) {
 			continue
 		}
 		enrichCache[k] = e

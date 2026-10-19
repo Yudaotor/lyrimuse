@@ -75,7 +75,7 @@ func TestAdoptEnrichRestoreCreatesMissingEntries(t *testing.T) {
 		t.Errorf("CanonicalArtist = %q, want 周杰伦", e.CanonicalArtist)
 	}
 	// plain_lyrics 此前不在任何备份里(没有对应的导出文件),必须跟着 meta 走。
-	if e.PlainLyrics != "没有时间戳的纯文本" {
+	if !e.PlainLyrics.EqualString("没有时间戳的纯文本") {
 		t.Errorf("PlainLyrics = %q, want 没有时间戳的纯文本", e.PlainLyrics)
 	}
 	if !enrichDirty && !fileExistsForTest(enrichPath) {
@@ -90,8 +90,8 @@ func TestAdoptEnrichRestoreKeepsFieldsAbsentFromBackup(t *testing.T) {
 	const key = "方大同|特别的人|危险世界"
 	// 本机这条已经有歌词(importLyricsFromFiles 灌进来的那种),还有一个备份里没有的字段。
 	enrichCache[key] = enrichEntry{
-		Lyrics:       "[00:01.00]本机正文",
-		LyricsYRC:    "本机逐字",
+		Lyrics:       bt("[00:01.00]本机正文"),
+		LyricsYRC:    bt("本机逐字"),
 		LyricsSource: "kugou",
 		ManualLyrics: true,
 		SpotifyURL:   "https://example.invalid/only-local",
@@ -114,10 +114,10 @@ func TestAdoptEnrichRestoreKeepsFieldsAbsentFromBackup(t *testing.T) {
 		t.Errorf("CanonicalArtist = %q, want 方大同", e.CanonicalArtist)
 	}
 	// 备份里没有的一个都不许动 —— 六个歌词字段的权威源是 lyrics/ 文件族。
-	if e.Lyrics != "[00:01.00]本机正文" {
+	if !e.Lyrics.EqualString("[00:01.00]本机正文") {
 		t.Errorf("Lyrics 被动过: %q", e.Lyrics)
 	}
-	if e.LyricsYRC != "本机逐字" {
+	if !e.LyricsYRC.EqualString("本机逐字") {
 		t.Errorf("LyricsYRC 被动过: %q", e.LyricsYRC)
 	}
 	if e.LyricsSource != "kugou" {

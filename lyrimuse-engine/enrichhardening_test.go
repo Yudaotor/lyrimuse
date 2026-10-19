@@ -14,8 +14,8 @@ import (
 func TestRetryFallbacksOnlyForEntriesWithoutLyrics(t *testing.T) {
 	src := string(mustRead(t, "enrich.go"))
 	for _, needle := range []string{
-		"if picked == nil && e.autoMarksInstrumental() && (e.Lyrics == \"\" || (playerSaysInstrumental(scored) && sourceChoice == \"\" && !opts.manual)) {",
-		"if picked == nil && !e.Instrumental && e.PlainLyrics == \"\" && e.Lyrics == \"\" {",
+		"if picked == nil && e.autoMarksInstrumental() && (e.Lyrics.IsZero() || (playerSaysInstrumental(scored) && sourceChoice == \"\" && !opts.manual)) {",
+		"if picked == nil && !e.Instrumental && e.PlainLyrics.IsZero() && e.Lyrics.IsZero() {",
 	} {
 		if !strings.Contains(src, needle) {
 			t.Errorf("enrich.go 缺 %q", needle)
@@ -45,7 +45,7 @@ func TestStartupMigrationsMarkDirty(t *testing.T) {
 	withTempDecisionCache(t)
 	enrichMu.Lock()
 	enrichPath = "" // 不落盘:只看脏标记
-	enrichCache["a|t2|b"] = enrichEntry{Lyrics: "[00:01.00]x", LyricsSource: "qq", LyricsSourceChoice: "qq"}
+	enrichCache["a|t2|b"] = enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsSource: "qq", LyricsSourceChoice: "qq"}
 	enrichDirty = false
 	enrichMu.Unlock()
 	migrateManualPickMarks()
@@ -89,7 +89,7 @@ func TestReadEnrichBodyCheckedDistinguishesIOErrors(t *testing.T) {
 // 硬链接做不成时的索引兜底:正文小文件这次没写成的条目不能带新校验值。
 func TestWriteEnrichIndexOnlyLeanForWrittenBodies(t *testing.T) {
 	withTempIndexCache(t)
-	snapshot := map[string]enrichEntry{"a|t|b": {Lyrics: "[00:01.00]x", LyricsTr: "[00:01.00]译"}}
+	snapshot := map[string]enrichEntry{"a|t|b": {Lyrics: bt("[00:01.00]x"), LyricsTr: bt("[00:01.00]译")}}
 	crcs := map[string]uint32{"a|t|b": enrichBodyCRC(snapshot["a|t|b"])}
 	enrichBodyCRCs = map[string]uint32{} // 这一次一个都没写成
 	writeEnrichIndex(snapshot, crcs)
@@ -167,7 +167,7 @@ func TestFullScanReleaseAndSkippedOutcome(t *testing.T) {
 	lyricsFullScanMu.Lock()
 	lyricsFullScanStatePath = path
 	lyricsFullScanMu.Unlock()
-	withEnrichCache(t, map[string]enrichEntry{"a|t|b": {Lyrics: "x", LyricsRescoreTS: 1500, LyricsRetryTS: 900, LyricsFillTS: 1000}})
+	withEnrichCache(t, map[string]enrichEntry{"a|t|b": {Lyrics: bt("x"), LyricsRescoreTS: 1500, LyricsRetryTS: 900, LyricsFillTS: 1000}})
 	releaseLyricsFullScanAttempt("a|t|b")
 	e := enrichCache["a|t|b"]
 	if e.LyricsRescoreTS != 999 || e.LyricsFillTS != 999 || e.LyricsRetryTS != 900 {

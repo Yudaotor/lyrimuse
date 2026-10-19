@@ -36,32 +36,32 @@ func TestMigrateLyricLineEndings(t *testing.T) {
 	old := "\ufeff[00:01.00]第一句\r\n[00:02.00]第二句\r\n"
 	enrichMu.Lock()
 	enrichPath = ""
-	enrichCache["a|t|b"] = enrichEntry{Lyrics: old, LyricsTr: "[00:01.00]tr\r\n", LyricsYRC: "\ufeff[0,1](0,1,0)x\r\n",
-		PlainLyrics: "p\r\n", LyricsRoma: "r\r", LyricsBG: "bg\r\n", ManualPickSHA: manualPickFingerprint(old), ManualLyrics: true}
-	enrichCache["a|clean|b"] = enrichEntry{Lyrics: "[00:01.00]x\n"}
-	enrichCache["a|stale-pick|b"] = enrichEntry{Lyrics: "[00:01.00]y\r\n", ManualPickSHA: "deadbeef0000"}
+	enrichCache["a|t|b"] = enrichEntry{Lyrics: bt(old), LyricsTr: bt("[00:01.00]tr\r\n"), LyricsYRC: bt("\ufeff[0,1](0,1,0)x\r\n"),
+		PlainLyrics: bt("p\r\n"), LyricsRoma: bt("r\r"), LyricsBG: bt("bg\r\n"), ManualPickSHA: manualPickFingerprint(old), ManualLyrics: true}
+	enrichCache["a|clean|b"] = enrichEntry{Lyrics: bt("[00:01.00]x\n")}
+	enrichCache["a|stale-pick|b"] = enrichEntry{Lyrics: bt("[00:01.00]y\r\n"), ManualPickSHA: "deadbeef0000"}
 	enrichDirty = false
 	enrichMu.Unlock()
 	migrateLyricLineEndings()
 	e := enrichCache["a|t|b"]
-	if e.Lyrics != "[00:01.00]第一句\n[00:02.00]第二句\n" || e.LyricsTr != "[00:01.00]tr\n" || e.LyricsYRC != "[0,1](0,1,0)x\n" ||
-		e.PlainLyrics != "p\n" || e.LyricsRoma != "r\n" || e.LyricsBG != "bg\n" {
+	if !e.Lyrics.EqualString("[00:01.00]第一句\n[00:02.00]第二句\n") || !e.LyricsTr.EqualString("[00:01.00]tr\n") || !e.LyricsYRC.EqualString("[0,1](0,1,0)x\n") ||
+		!e.PlainLyrics.EqualString("p\n") || !e.LyricsRoma.EqualString("r\n") || !e.LyricsBG.EqualString("bg\n") {
 		t.Fatalf("六个字段都该统一: %+v", e)
 	}
-	if e.ManualPickSHA != manualPickFingerprint(e.Lyrics) || !e.ManualLyrics {
+	if e.ManualPickSHA != manualPickFingerprint(e.Lyrics.String()) || !e.ManualLyrics {
 		t.Fatalf("手动选定留痕应当跟着新正文: %+v", e)
 	}
 	if enrichCache["a|stale-pick|b"].ManualPickSHA != "deadbeef0000" {
 		t.Fatal("本来就对不上的留痕不动")
 	}
-	if enrichCache["a|clean|b"].Lyrics != "[00:01.00]x\n" || !enrichDirty {
+	if !enrichCache["a|clean|b"].Lyrics.EqualString("[00:01.00]x\n") || !enrichDirty {
 		t.Fatal("干净的不动,改过就置脏")
 	}
 	enrichMu.Lock()
-	enrichCache["a|later|b"] = enrichEntry{Lyrics: "[00:01.00]z\r\n"}
+	enrichCache["a|later|b"] = enrichEntry{Lyrics: bt("[00:01.00]z\r\n")}
 	enrichMu.Unlock()
 	migrateLyricLineEndings()
-	if enrichCache["a|later|b"].Lyrics != "[00:01.00]z\r\n" {
+	if !enrichCache["a|later|b"].Lyrics.EqualString("[00:01.00]z\r\n") {
 		t.Fatal("有水位之后不再跑")
 	}
 }

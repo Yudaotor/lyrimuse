@@ -410,58 +410,58 @@ func TestMigrateKuwoSharedStampTranslation(t *testing.T) {
 	zhClean, _, _ := splitSharedStampTranslation(zhSong, false)
 	enrichMu.Lock()
 	enrichPath = ""
-	enrichCache["a|machine|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: baked, LyricsTr: "[00:10.00]机翻占位",
+	enrichCache["a|machine|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: bt(baked), LyricsTr: bt("[00:10.00]机翻占位"),
 		LyricsTrSource: "machine", LyricsTrLang: "zh-CN", TranslationRetryCount: 1, TranslationTS: 123,
-		TranslationLang: "zh-CN", LyricsRoma: "[00:10.00]zhan wei", LyricsYRC: "[10000,1000](10000,1000,0)x"}
-	enrichCache["a|own|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: leftover, LyricsTr: "[00:05.00]已有译文", LyricsTrLang: "zh"}
-	enrichCache["a|zhsong|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: zhSong, LyricsTr: zhMachine, LyricsTrSource: "machine",
-		LyricsTrLang: "zh-CN", TranslationRetryCount: 1, LyricsRoma: "[00:05.00]zhan wei"}
-	enrichCache["a|zhfull|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: zhFull, LyricsTr: "[00:09.00]机翻", LyricsTrSource: "machine",
+		TranslationLang: "zh-CN", LyricsRoma: bt("[00:10.00]zhan wei"), LyricsYRC: bt("[10000,1000](10000,1000,0)x")}
+	enrichCache["a|own|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: bt(leftover), LyricsTr: bt("[00:05.00]已有译文"), LyricsTrLang: "zh"}
+	enrichCache["a|zhsong|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: bt(zhSong), LyricsTr: bt(zhMachine), LyricsTrSource: "machine",
+		LyricsTrLang: "zh-CN", TranslationRetryCount: 1, LyricsRoma: bt("[00:05.00]zhan wei")}
+	enrichCache["a|zhfull|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: bt(zhFull), LyricsTr: bt("[00:09.00]机翻"), LyricsTrSource: "machine",
 		LyricsTrLang: "zh-CN", TranslationRetryCount: 1}
-	enrichCache["a|manual|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: baked, ManualLyrics: true}
-	enrichCache["a|qq|b"] = enrichEntry{LyricsSource: "qq", Lyrics: baked}
-	enrichCache["a|pick|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: baked, ManualPickSHA: manualPickFingerprint(baked)}
+	enrichCache["a|manual|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: bt(baked), ManualLyrics: true}
+	enrichCache["a|qq|b"] = enrichEntry{LyricsSource: "qq", Lyrics: bt(baked)}
+	enrichCache["a|pick|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: bt(baked), ManualPickSHA: manualPickFingerprint(baked)}
 	enrichDirty = false
 	enrichMu.Unlock()
 	migrateKuwoSharedStampTranslation()
 
 	e := enrichCache["a|machine|b"]
-	if e.Lyrics != wantClean || e.LyricsTr != wantTr || e.LyricsTrSource != "" || e.LyricsTrLang != "zh" {
+	if !e.Lyrics.EqualString(wantClean) || !e.LyricsTr.EqualString(wantTr) || e.LyricsTrSource != "" || e.LyricsTrLang != "zh" {
 		t.Fatalf("机翻换成摘出来的译文,语言记 zh: %+v", e)
 	}
-	if e.TranslationRetryCount != 0 || e.TranslationTS != 0 || e.TranslationLang != "" || e.LyricsRoma != "" {
+	if e.TranslationRetryCount != 0 || e.TranslationTS != 0 || e.TranslationLang != "" || !e.LyricsRoma.IsZero() {
 		t.Fatalf("机翻重试计数、读音都清掉: %+v", e)
 	}
-	if e.LyricsYRC != "[10000,1000](10000,1000,0)x" {
+	if !e.LyricsYRC.EqualString("[10000,1000](10000,1000,0)x") {
 		t.Fatal("逐字轨不动")
 	}
 	own := enrichCache["a|own|b"]
-	if strings.Contains(own.Lyrics, "我") || own.LyricsTr != "[00:05.00]已有译文\n[00:08.00]我" || own.LyricsTrLang != "zh" {
+	if strings.Contains(own.Lyrics.String(), "我") || !own.LyricsTr.EqualString("[00:05.00]已有译文\n[00:08.00]我") || own.LyricsTrLang != "zh" {
 		t.Fatalf("已有自带译文的剩一行也摘,按时间并进去: %+v", own)
 	}
 	zh := enrichCache["a|zhsong|b"]
-	if zh.Lyrics != zhClean || zh.LyricsTr != zhMachine || zh.LyricsTrSource != "machine" || zh.TranslationRetryCount != 1 ||
-		zh.LyricsRoma != "" {
+	if !zh.Lyrics.EqualString(zhClean) || !zh.LyricsTr.EqualString(zhMachine) || zh.LyricsTrSource != "machine" || zh.TranslationRetryCount != 1 ||
+		!zh.LyricsRoma.IsZero() {
 		t.Fatalf("摘出来的用不上时中文机翻留着、正文照摘、读音清掉: %+v", zh)
 	}
-	if f := enrichCache["a|zhfull|b"]; f.Lyrics != zhFullClean || f.LyricsTr != zhFullTr || f.LyricsTrSource != "" ||
+	if f := enrichCache["a|zhfull|b"]; !f.Lyrics.EqualString(zhFullClean) || !f.LyricsTr.EqualString(zhFullTr) || f.LyricsTrSource != "" ||
 		f.LyricsTrLang != "zh" || f.TranslationRetryCount != 0 {
 		t.Fatalf("中文歌里那段外文被自带译文译全了:换成它: %+v", f)
 	}
-	if enrichCache["a|manual|b"].Lyrics != baked || enrichCache["a|qq|b"].Lyrics != baked {
+	if !enrichCache["a|manual|b"].Lyrics.EqualString(baked) || !enrichCache["a|qq|b"].Lyrics.EqualString(baked) {
 		t.Fatal("手动锁定的、别的源的不动")
 	}
-	if p := enrichCache["a|pick|b"]; p.Lyrics != wantClean || p.ManualPickSHA != manualPickFingerprint(wantClean) {
+	if p := enrichCache["a|pick|b"]; !p.Lyrics.EqualString(wantClean) || p.ManualPickSHA != manualPickFingerprint(wantClean) {
 		t.Fatalf("选定留痕跟着新正文: %+v", p)
 	}
 	if !enrichDirty {
 		t.Fatal("改过就置脏")
 	}
 	enrichMu.Lock()
-	enrichCache["a|later|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: baked}
+	enrichCache["a|later|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: bt(baked)}
 	enrichMu.Unlock()
 	migrateKuwoSharedStampTranslation()
-	if enrichCache["a|later|b"].Lyrics != baked {
+	if !enrichCache["a|later|b"].Lyrics.EqualString(baked) {
 		t.Fatal("有水位之后不再跑")
 	}
 }
@@ -480,15 +480,15 @@ func TestMigrateKuwoSharedStampTranslationOtherTarget(t *testing.T) {
 	baked := kuwoStampSample(nil, pairs, 10000, 3000)
 	enrichMu.Lock()
 	enrichPath = ""
-	enrichCache["a|ja|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: baked, LyricsTr: "[00:10.00]日本語の占位", LyricsTrSource: "machine",
+	enrichCache["a|ja|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: bt(baked), LyricsTr: bt("[00:10.00]日本語の占位"), LyricsTrSource: "machine",
 		LyricsTrLang: "ja", TranslationRetryCount: 2, TranslationTS: 9, TranslationLang: "ja"}
 	enrichMu.Unlock()
 	migrateKuwoSharedStampTranslation()
 	e := enrichCache["a|ja|b"]
-	if strings.Contains(e.Lyrics, "占位译文") {
+	if strings.Contains(e.Lyrics.String(), "占位译文") {
 		t.Fatalf("正文照摘: %q", e.Lyrics)
 	}
-	if e.LyricsTr != "" || e.LyricsTrSource != "" || e.LyricsTrLang != "" || e.TranslationRetryCount != 0 || e.TranslationTS != 0 {
+	if !e.LyricsTr.IsZero() || e.LyricsTrSource != "" || e.LyricsTrLang != "" || e.TranslationRetryCount != 0 || e.TranslationTS != 0 {
 		t.Fatalf("目标语言不是中文:按旧正文翻的日文机翻清掉、重试计数归零,交给补翻: %+v", e)
 	}
 }

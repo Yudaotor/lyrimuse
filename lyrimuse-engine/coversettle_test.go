@@ -673,11 +673,11 @@ func TestRunCoverSweepSettlesAlbumCovers(t *testing.T) {
 			withSettleFakes(t, map[string]image.Image{settleLegs: settlePicture(0, false), settleTux1: c.netease,
 				settleApple: settlePicture(1, false)}, nil)
 			cache := map[string]enrichEntry{
-				"A|a|Album": {CoverURL: settleLegs, CoverSource: "device", CoverAlbum: "Album", Lyrics: coverSweepLyrics},
-				"A|b|Album": {CoverURL: settleTux1, CoverSource: "netease", CoverAlbum: "Album", Lyrics: coverSweepLyrics},
+				"A|a|Album": {CoverURL: settleLegs, CoverSource: "device", CoverAlbum: "Album", Lyrics: bt(coverSweepLyrics)},
+				"A|b|Album": {CoverURL: settleTux1, CoverSource: "netease", CoverAlbum: "Album", Lyrics: bt(coverSweepLyrics)},
 			}
 			if c.withApple {
-				cache["A|c|Album"] = enrichEntry{CoverURL: settleApple, CoverSource: "apple", CoverAlbum: "Album", Lyrics: coverSweepLyrics}
+				cache["A|c|Album"] = enrichEntry{CoverURL: settleApple, CoverSource: "apple", CoverAlbum: "Album", Lyrics: bt(coverSweepLyrics)}
 			}
 			withEnrichCache(t, cache)
 			runCoverSweep(context.Background())

@@ -133,11 +133,11 @@ func (e *enrichEntry) maybeGenerateHelperRoma() {
 	if !e.shouldGenerateHelperRoma() {
 		return
 	}
-	roma, err := onDeviceRomanizer(e.Lyrics)
+	roma, err := onDeviceRomanizer(e.Lyrics.String())
 	if err != nil || roma == "" {
 		return
 	}
-	e.LyricsRoma = roma
+	e.LyricsRoma = bt(roma)
 }
 
 // shouldGenerateHelperRoma:该不该为这一条起 helper。
@@ -148,10 +148,10 @@ func (e *enrichEntry) maybeGenerateHelperRoma() {
 // 那是一条证明不了任何东西的测试。判据是纯函数,测它才有意义。
 func (e *enrichEntry) shouldGenerateHelperRoma() bool {
 	// 台语歌不标普通话拼音,见 hokkien.go。
-	if e.Lyrics == "" || e.LyricsRoma != "" || e.SongLanguage == songLanguageHokkien {
+	if e.Lyrics.IsZero() || !e.LyricsRoma.IsZero() || e.SongLanguage == songLanguageHokkien {
 		return false
 	}
-	switch dominantScript(e.Lyrics) {
+	switch dominantScript(e.Lyrics.String()) {
 	case scriptHan, scriptKana, scriptHangul:
 		return true
 	}
@@ -178,19 +178,19 @@ func (e *enrichEntry) maybeGenerateRoma() {
 // generatedRomaFor 按 maybeGenerateRoma 的规则给这份正文算一份罗马音(sourceRoma 非空就原样返回)。
 // 可能起 lyrics-romanize 子进程(平均几十毫秒,超时 20 秒),调用方别持 enrichMu。
 func generatedRomaFor(lyrics, sourceRoma, songLanguage string) string {
-	e := enrichEntry{Lyrics: lyrics, LyricsRoma: sourceRoma, SongLanguage: songLanguage}
+	e := enrichEntry{Lyrics: bt(lyrics), LyricsRoma: bt(sourceRoma), SongLanguage: songLanguage}
 	e.maybeGenerateRoma()
-	return e.LyricsRoma
+	return e.LyricsRoma.String()
 }
 
 // applyPregeneratedRoma 把锁外用 generatedRomaFor 算好的罗马音填进来(本字段为空时才填)。prepared 为空
 // (锁外判断这一轮不会换正文、没算)就只补粤拼:纯查表,持锁也便宜;helper 那一步留给下一次解析。
 func (e *enrichEntry) applyPregeneratedRoma(prepared string) {
-	if e.LyricsRoma != "" {
+	if !e.LyricsRoma.IsZero() {
 		return
 	}
 	if prepared != "" {
-		e.LyricsRoma = prepared
+		e.LyricsRoma = bt(prepared)
 		return
 	}
 	e.maybeGenerateJyutpingRoma()

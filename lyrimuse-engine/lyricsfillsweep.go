@@ -358,7 +358,7 @@ func lyricsFillSweepCandidates(req lyricsFillRequest) []string {
 		if req.keys != nil && !req.keys[key] {
 			continue
 		}
-		if e.Lyrics != "" || e.ManualLyrics || e.Instrumental || enrichInflight[key] {
+		if !e.Lyrics.IsZero() || e.ManualLyrics || e.Instrumental || enrichInflight[key] {
 			continue
 		}
 		if !req.manual && !needsLyricsFirstFill(e) {
@@ -589,7 +589,7 @@ func lyricsFillSweepOne(ctx context.Context, key string) lyricsSweepOutcome {
 	artist, title, album := splitEnrichKey(key)
 	enrichMu.Lock()
 	before, ok := enrichCache[key]
-	if !ok || before.Lyrics != "" || before.ManualLyrics || before.Instrumental || enrichInflight[key] {
+	if !ok || !before.Lyrics.IsZero() || before.ManualLyrics || before.Instrumental || enrichInflight[key] {
 		enrichMu.Unlock()
 		return lyricsSweepOutcome{skipped: true}
 	}
@@ -607,7 +607,7 @@ func lyricsFillSweepOne(ctx context.Context, key string) lyricsSweepOutcome {
 	after := enrichCache[key]
 	enrichMu.Unlock()
 	return lyricsSweepOutcome{
-		filled:  after.Lyrics != "" || after.Instrumental || (after.PlainLyrics != "" && before.PlainLyrics == ""),
+		filled:  !after.Lyrics.IsZero() || after.Instrumental || (!after.PlainLyrics.IsZero() && before.PlainLyrics.IsZero()),
 		offline: !round.reachedAny(),
 	}
 }

@@ -28,11 +28,11 @@ var speakersBackfillTried = map[string]bool{}
 // Musixmatch 以前给过可用候选(多半认得这首)、像是好几个人唱的(署名里有好几位,或曲名带 feat.)、正文自己
 // 不带演唱者标记,而且 Musixmatch 这个源开着。手改过的、标了纯音乐的不动。
 func needsLyricSpeakersBackfill(e enrichEntry, artist, title string) bool {
-	if e.LyricsSpeakersChecked >= lyricsSpeakersVersion || e.Lyrics == "" || e.Instrumental || e.lyricsHandEdited() ||
+	if e.LyricsSpeakersChecked >= lyricsSpeakersVersion || e.Lyrics.IsZero() || e.Instrumental || e.lyricsHandEdited() ||
 		!lyricSourceEnabled("musixmatch") {
 		return false
 	}
-	if e.LyricsSpeakers != nil && e.LyricsSpeakers.For == lyricSpeakersFingerprint(e.Lyrics, e.LyricsYRC) {
+	if e.LyricsSpeakers != nil && e.LyricsSpeakers.For == lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) {
 		return false
 	}
 	if !slices.Contains(e.LyricsSourcesSeen, "musixmatch") {
@@ -41,7 +41,7 @@ func needsLyricSpeakersBackfill(e enrichEntry, artist, title string) bool {
 	if len(artistCreditParts(artist)) < 2 && !featCreditSepRe.MatchString(title) {
 		return false
 	}
-	return len(lyricSpeakerLabels(e.Lyrics)) == 0 && len(lyricSpeakerLabels(yrcPlainLines(e.LyricsYRC))) == 0
+	return len(lyricSpeakerLabels(e.Lyrics.String())) == 0 && len(lyricSpeakerLabels(yrcPlainLines(e.LyricsYRC.String()))) == 0
 }
 
 // speakersBackfillOnce:这一进程里第一次问到这个 key 时返回 true。调用方持 enrichMu。
@@ -82,11 +82,11 @@ func backfillLyricSpeakers(key, artist, title, album string, durationSecs float6
 	enrichMu.Lock()
 	cur, ok := enrichCache[key]
 	// 问 Musixmatch 这段时间里正文被换了(重新选源、用户编辑),或者别的路径已经补过。
-	if !ok || cur.Lyrics != e.Lyrics || cur.LyricsYRC != e.LyricsYRC || cur.LyricsSpeakersChecked >= lyricsSpeakersVersion {
+	if !ok || !cur.Lyrics.Equal(e.Lyrics) || !cur.LyricsYRC.Equal(e.LyricsYRC) || cur.LyricsSpeakersChecked >= lyricsSpeakersVersion {
 		enrichMu.Unlock()
 		return
 	}
-	if sp := speakersFromScored(cur.Lyrics, cur.LyricsYRC, mx); sp != nil {
+	if sp := speakersFromScored(cur.Lyrics.String(), cur.LyricsYRC.String(), mx); sp != nil {
 		cur.LyricsSpeakers = sp
 		log.Printf("speakers backfill: %s  %d lines tagged", key, countSpeakerLines(sp))
 	} else {

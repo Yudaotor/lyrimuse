@@ -41,7 +41,7 @@ func kkboxAliasSiblingLocked(key, bundleID string) (string, bool) {
 	}
 	suffix := "|" + title + "|" + album
 	for k, e := range enrichCache {
-		if !strings.HasSuffix(k, suffix) || strings.TrimSpace(e.Lyrics) == "" {
+		if !strings.HasSuffix(k, suffix) || strings.TrimSpace(e.Lyrics.String()) == "" {
 			continue
 		}
 		if kkboxAliasVariant(strings.TrimSuffix(k, suffix), artist) {

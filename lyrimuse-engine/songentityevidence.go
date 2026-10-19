@@ -476,7 +476,7 @@ func songLyricsIndependent(x, y *songVariant, dir string) bool {
 			return a != b
 		}
 	}
-	return x.evLyrics != y.evLyrics
+	return !x.evLyrics.Equal(y.evLyrics)
 }
 
 // songLyricsFromMismatchedCandidate:当前这份歌词的候选在源那边的歌名跟写法歌名同一种文字、却对不上。

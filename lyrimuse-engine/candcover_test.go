@@ -103,7 +103,7 @@ func TestUpgradeSmallDeviceCoverFromDecisionCandidates(t *testing.T) {
 	const key = "甲|乙|丙"
 	run := func(cands ...lyricsDecisionCandidate) enrichEntry {
 		enrichMu.Lock()
-		enrichCache[key] = enrichEntry{CoverURL: device, CoverSource: "device", Lyrics: "[00:01.00]x",
+		enrichCache[key] = enrichEntry{CoverURL: device, CoverSource: "device", Lyrics: bt("[00:01.00]x"),
 			LyricsDecision: &lyricsDecision{Winner: "qq", Candidates: cands}}
 		enrichInflight[key] = true
 		enrichMu.Unlock()
@@ -137,7 +137,7 @@ func TestUpgradeSmallLetterboxedDeviceCover(t *testing.T) {
 	const key = "甲|乙|丙"
 	run := func(ctx context.Context, cands ...lyricsDecisionCandidate) enrichEntry {
 		enrichMu.Lock()
-		enrichCache[key] = enrichEntry{CoverURL: device, CoverSource: "device", Lyrics: "[00:01.00]x",
+		enrichCache[key] = enrichEntry{CoverURL: device, CoverSource: "device", Lyrics: bt("[00:01.00]x"),
 			LyricsDecision: &lyricsDecision{Winner: "lrclib", Candidates: cands}}
 		enrichInflight[key] = true
 		enrichMu.Unlock()
@@ -163,10 +163,10 @@ func TestCoverSweepFillsFromLyricsWinner(t *testing.T) {
 			{Source: "kugou", Score: 1000, Album: album, CoverURL: cover}}}
 	}
 	withEnrichCache(t, map[string]enrichEntry{
-		"A|fill|半生雪":  {Lyrics: coverSweepLyrics, PeripheralRetryCount: 3, LyricsDecision: dec("半生雪", "https://k/1.jpg")},
-		"A|other|半生雪": {Lyrics: coverSweepLyrics, PeripheralRetryCount: 3, LyricsDecision: dec("另一张", "https://k/2.jpg")},
-		"A|has|半生雪":   {Lyrics: coverSweepLyrics, CoverURL: "https://n/1.jpg", CoverSource: "netease", LyricsDecision: dec("半生雪", "https://k/3.jpg")},
-		"A|nodec|半生雪": {Lyrics: coverSweepLyrics, PeripheralRetryCount: 3},
+		"A|fill|半生雪":  {Lyrics: bt(coverSweepLyrics), PeripheralRetryCount: 3, LyricsDecision: dec("半生雪", "https://k/1.jpg")},
+		"A|other|半生雪": {Lyrics: bt(coverSweepLyrics), PeripheralRetryCount: 3, LyricsDecision: dec("另一张", "https://k/2.jpg")},
+		"A|has|半生雪":   {Lyrics: bt(coverSweepLyrics), CoverURL: "https://n/1.jpg", CoverSource: "netease", LyricsDecision: dec("半生雪", "https://k/3.jpg")},
+		"A|nodec|半生雪": {Lyrics: bt(coverSweepLyrics), PeripheralRetryCount: 3},
 	})
 	withCoverSweepFakes(t, [][2]int32{{1, 0}}, nil)
 	fakeCoverSweepUpgrade(t, nil)

@@ -20,16 +20,16 @@ func TestNeedsTranslationBackfillSkipsCreditOnlyForeignLines(t *testing.T) {
 	featuresRef().LyricsTranslationLanguage = "zh"
 
 	key := enrichKey("方大同", "南音", "Soulboy")
-	creditOnly := enrichEntry{Lyrics: "[00:00.50]南音 - 方大同\n[00:01.00]制作人 : Edward Chan/Charles Lee/Derrick Sepnio\n" +
-		"[00:10.00]让我们唱一首南音\n[00:15.00]慢慢地走"}
+	creditOnly := enrichEntry{Lyrics: bt("[00:00.50]南音 - 方大同\n[00:01.00]制作人 : Edward Chan/Charles Lee/Derrick Sepnio\n" +
+		"[00:10.00]让我们唱一首南音\n[00:15.00]慢慢地走")}
 	if needsTranslationBackfill(creditOnly, key) {
 		t.Fatal("外文只有署名行时不该起机翻")
 	}
-	if work := selectTranslationWork(creditOnly.Lyrics, "zh-CN", "方大同", "南音"); len(work.uniqueTexts) != 0 {
+	if work := selectTranslationWork(creditOnly.Lyrics.String(), "zh-CN", "方大同", "南音"); len(work.uniqueTexts) != 0 {
 		t.Fatalf("执行侧同样一行不送: %v", work.uniqueTexts)
 	}
 	withLyric := creditOnly
-	withLyric.Lyrics += "\n[00:20.00]It represent my heart"
+	withLyric.Lyrics = bt(withLyric.Lyrics.String() + "\n[00:20.00]It represent my heart")
 	if !needsTranslationBackfill(withLyric, key) {
 		t.Fatal("有真歌词外文行时要翻")
 	}
@@ -78,8 +78,8 @@ func TestTranslationLanguageHotReloadClearsStaleMachineTranslations(t *testing.T
 	machine := enrichKey("Utada", "First Love", "")
 	community := enrichKey("Other", "Song", "")
 	lyricsDir, _ := setUpEnrichEditTest(t, map[string]enrichEntry{
-		machine:   {Lyrics: "[00:01.00]hello", LyricsTr: "[00:01.00]hello en", LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "en", TS: 1},
-		community: {Lyrics: "[00:01.00]hi", LyricsTr: "[00:01.00]嗨", LyricsTrLang: "zh", TS: 1},
+		machine:   {Lyrics: bt("[00:01.00]hello"), LyricsTr: bt("[00:01.00]hello en"), LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "en", TS: 1},
+		community: {Lyrics: bt("[00:01.00]hi"), LyricsTr: bt("[00:01.00]嗨"), LyricsTrLang: "zh", TS: 1},
 	})
 	exportLyricsFilesFor(machine, community)
 	trFiles := func() []string {
@@ -106,16 +106,16 @@ func TestTranslationLanguageHotReloadClearsStaleMachineTranslations(t *testing.T
 
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		if e, _ := cacheEntry(t, machine); e.LyricsTr == "" && len(trFiles()) == 1 {
+		if e, _ := cacheEntry(t, machine); e.LyricsTr.IsZero() && len(trFiles()) == 1 {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
 	featuresReloadWork.Wait()
-	if e, _ := cacheEntry(t, machine); e.LyricsTr != "" || e.LyricsTrSource != "" {
+	if e, _ := cacheEntry(t, machine); !e.LyricsTr.IsZero() || e.LyricsTrSource != "" {
 		t.Fatalf("旧语言的机翻该清掉: %+v", e)
 	}
-	if e, _ := cacheEntry(t, community); e.LyricsTr == "" {
+	if e, _ := cacheEntry(t, community); e.LyricsTr.IsZero() {
 		t.Fatal("社区译文不该动")
 	}
 	if n := len(trFiles()); n != 1 {

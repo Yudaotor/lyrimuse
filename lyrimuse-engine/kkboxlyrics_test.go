@@ -112,7 +112,7 @@ func TestKKBOXLyricsRecheckOnce(t *testing.T) {
 func TestKKBOXNativeMissNotRetried(t *testing.T) {
 	setNativeLyricSourcesForPlayer(kkboxBundleID)
 	t.Cleanup(func() { setNativeLyricSourcesForPlayer("") })
-	e := enrichEntry{Lyrics: "[00:01.00]x", LyricsYRC: "yrc", LyricsSource: "kugou", LyricsSourcesSeen: []string{"kugou", "kkbox"}}
+	e := enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsYRC: bt("yrc"), LyricsSource: "kugou", LyricsSourcesSeen: []string{"kugou", "kkbox"}}
 	if needsLyricsRetry(e, false, false, true) {
 		t.Error("kkbox 带着同源加权输给逐字的酷狗:不该连着重搜")
 	}
@@ -147,7 +147,7 @@ func TestKKBOXLocalLyricsOnlyForKKBOX(t *testing.T) {
 }
 
 func TestKKBOXLyricsWorthRecheck(t *testing.T) {
-	fresh := enrichEntry{Lyrics: "[00:01.00]x", LyricsSourcesSeen: []string{"netease", "qq"}}
+	fresh := enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsSourcesSeen: []string{"netease", "qq"}}
 	if !kkboxLyricsWorthRecheck(fresh, kkboxBundleID, false, true, true) {
 		t.Error("用 KKBOX 放、当初没见过 kkbox、现在有词:重来一次")
 	}

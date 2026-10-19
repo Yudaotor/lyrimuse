@@ -425,7 +425,7 @@ func (b *songEntityBuild) labelVariant(i int) songLabelVariant {
 	case songVocalsPresent:
 		out.Vocals = "present"
 	}
-	for _, line := range strings.Split(v.lyrics, "\n") {
+	for _, line := range strings.Split(v.lyrics.String(), "\n") {
 		if len(out.FirstLines) == 3 {
 			break
 		}

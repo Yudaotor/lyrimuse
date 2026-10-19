@@ -32,7 +32,7 @@ func TestLyricsOutrunPlayback(t *testing.T) {
 // 按原来的时长再放,照旧要高出门槛才换。见 09 章决策 277。
 func TestLyricsUpgradeAppliesWhenStoredLyricsOutrunPlayback(t *testing.T) {
 	cur := enrichEntry{
-		Lyrics: outrunAlbumBody, LyricsSource: "soda", LyricsScore: 1412,
+		Lyrics: bt(outrunAlbumBody), LyricsSource: "soda", LyricsScore: 1412,
 		LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision,
 		ResolvedDurationSecs: 337.733,
 	}

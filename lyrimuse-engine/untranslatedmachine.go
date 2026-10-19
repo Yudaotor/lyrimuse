@@ -88,14 +88,14 @@ func migrateMachineTranslationLines(name string, version int, drop func(key, lyr
 	enrichMu.Lock()
 	fixed, emptied := 0, 0
 	for k, e := range scope.entries() {
-		if e.LyricsTrSource != lyricsTrSourceMachine || e.LyricsTr == "" || e.LyricsTrLang == "" {
+		if e.LyricsTrSource != lyricsTrSourceMachine || e.LyricsTr.IsZero() || e.LyricsTrLang == "" {
 			continue
 		}
-		tr, ok := drop(k, e.Lyrics, e.LyricsTr, myMemoryLangCode(e.LyricsTrLang))
+		tr, ok := drop(k, e.Lyrics.String(), e.LyricsTr.String(), myMemoryLangCode(e.LyricsTrLang))
 		if !ok {
 			continue
 		}
-		e.LyricsTr = tr
+		e.LyricsTr = bt(tr)
 		if tr == "" {
 			e.LyricsTrLang, e.LyricsTrSource = "", ""
 			emptied++

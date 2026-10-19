@@ -19,7 +19,7 @@ func TestLyricsRoundsLookUpPlaybackISRCOutsideTheLock(t *testing.T) {
 	emptyKey, lyricKey := enrichKey(artist, "Lock Empty Song", ""), enrichKey(artist, "Lock Rescored Song", "Some Album")
 	withEnrichCache(t, map[string]enrichEntry{
 		emptyKey: {},
-		lyricKey: {Lyrics: "[00:05.00]Old line one\n[00:15.00]Old line two", LyricsSource: "musixmatch",
+		lyricKey: {Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "musixmatch",
 			LyricsScoringVersion: lyricsScoringVersion - 1},
 	})
 	run := func(name string, round func()) {

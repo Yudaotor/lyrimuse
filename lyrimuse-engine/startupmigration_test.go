@@ -164,8 +164,8 @@ func TestMigrateLyricEntitiesRechecksOnlyRewrittenEntries(t *testing.T) {
 	withTempDecisionCache(t)
 	enrichMu.Lock()
 	enrichPath = ""
-	enrichCache["a|imported|b"] = enrichEntry{Lyrics: "[00:01.00]they&apos;re"}
-	enrichCache["a|other|b"] = enrichEntry{Lyrics: "[00:01.00]we&amp;apos;re"}
+	enrichCache["a|imported|b"] = enrichEntry{Lyrics: bt("[00:01.00]they&apos;re")}
+	enrichCache["a|other|b"] = enrichEntry{Lyrics: bt("[00:01.00]we&amp;apos;re")}
 	enrichMu.Unlock()
 	markMigrationDone(migrationLyricEntities, migrationLyricEntitiesVersion)
 
@@ -175,10 +175,10 @@ func TestMigrateLyricEntitiesRechecksOnlyRewrittenEntries(t *testing.T) {
 	imported, other := enrichCache["a|imported|b"].Lyrics, enrichCache["a|other|b"].Lyrics
 	_, gone := enrichCache["a|gone|b"]
 	enrichMu.Unlock()
-	if imported != "[00:01.00]they're" {
+	if !imported.EqualString("[00:01.00]they're") {
 		t.Errorf("改写过的那条要补扫: %q", imported)
 	}
-	if other != "[00:01.00]we&amp;apos;re" {
+	if !other.EqualString("[00:01.00]we&amp;apos;re") {
 		t.Errorf("没改写过的不补扫: %q", other)
 	}
 	if gone {

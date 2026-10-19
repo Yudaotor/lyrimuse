@@ -35,7 +35,7 @@ func TestNeedsLyricsFirstFill(t *testing.T) {
 		{
 			// 这一条是整条路径存在的理由:它以前恒为 false。
 			name: "已经有歌词 → 不是这条路径的事(交给升级重试)",
-			e:    enrichEntry{TS: now - 30*day, Lyrics: "[00:01.00]x"},
+			e:    enrichEntry{TS: now - 30*day, Lyrics: bt("[00:01.00]x")},
 			want: false,
 		},
 		{
@@ -93,7 +93,7 @@ func TestNeedsLyricsFirstFill(t *testing.T) {
 		},
 		{
 			name: "时长对不上但已经有歌词 → 不是这条路径的事",
-			e:    enrichEntry{TS: now - 10, Lyrics: "[00:01.00]x", DurationSecs: 105.378, LyricsDecision: &lyricsDecision{DurationSecs: 199.779}},
+			e:    enrichEntry{TS: now - 10, Lyrics: bt("[00:01.00]x"), DurationSecs: 105.378, LyricsDecision: &lyricsDecision{DurationSecs: 199.779}},
 			want: false,
 		},
 		{
@@ -138,7 +138,7 @@ func TestLyricsUpgradeBaselineEmptyEntry(t *testing.T) {
 		t.Errorf("空歌词条目: baseline=%d comparable=%v, want 0/true", baseline, comparable)
 	}
 	// 有歌词、版本又是当前版本 → 照旧用它自己的分数当基准(不能被上面那一支吃掉)。
-	e := enrichEntry{Lyrics: "[00:01.00]x", LyricsScore: 900, LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision}
+	e := enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsScore: 900, LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision}
 	if baseline, comparable = lyricsUpgradeBaseline(e, nil); baseline != 900 || !comparable {
 		t.Errorf("有歌词同版本: baseline=%d comparable=%v, want 900/true", baseline, comparable)
 	}

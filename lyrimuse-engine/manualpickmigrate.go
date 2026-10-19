@@ -33,13 +33,13 @@ func manualPickFingerprint(lyrics string) string {
 // (manual_pick_sha 跟正文对不上)。原样采纳的候选按源给的内容处理:罗马音规则、背景人声与演唱者标注的补齐
 // 照常做;正文、译文、逐字轴照旧不动。
 func (e enrichEntry) lyricsHandEdited() bool {
-	return e.ManualLyrics && e.ManualPickSHA != manualPickFingerprint(e.Lyrics)
+	return e.ManualLyrics && e.ManualPickSHA != manualPickFingerprint(e.Lyrics.String())
 }
 
 // lyricsFromUser:正文是用户给的 —— 锁定着(手改过,或采纳时锁上的),或者是原样采纳的候选(manual_pick_sha 跟正文
 // 对得上)。这时 LyricsDecisionApplied 记的是被换掉的那一份,说的不是现在的正文。
 func (e enrichEntry) lyricsFromUser() bool {
-	return e.ManualLyrics || (e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics))
+	return e.ManualLyrics || (e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics.String()))
 }
 
 // manualPickCanonicalLyrics 逐行剥掉开头所有 `[...]` 方括号组(行时间戳,以及
@@ -119,7 +119,7 @@ func migrateManualPickMarks() {
 		// 已经有留痕的不覆盖:那是 App 侧新写的,比这里从旧字段推断出来的更权威。
 		// 指纹为空(正文只剩元数据标签、归一化后没有词)时不写:空标记等于"没有留痕",
 		// 写进去只会让缓存里多一个永远匹配不上的空字段。
-		if sha := manualPickFingerprint(e.Lyrics); sha != "" &&
+		if sha := manualPickFingerprint(e.Lyrics.String()); sha != "" &&
 			e.ManualPickSHA == "" && !e.ManualLyrics && e.LyricsSource == choice {
 			e.ManualPickSHA = sha
 			marked++

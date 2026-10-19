@@ -240,14 +240,14 @@ func betterEnrichEntry(a, b enrichEntry, aKey, bKey string) bool {
 	if a.ManualLyrics != b.ManualLyrics {
 		return a.ManualLyrics
 	}
-	if (a.Lyrics != "") != (b.Lyrics != "") {
-		return a.Lyrics != ""
+	if (!a.Lyrics.IsZero()) != (!b.Lyrics.IsZero()) {
+		return !a.Lyrics.IsZero()
 	}
 	if a.LyricsScore != b.LyricsScore {
 		return a.LyricsScore > b.LyricsScore
 	}
-	if (a.LyricsYRC != "") != (b.LyricsYRC != "") {
-		return a.LyricsYRC != ""
+	if (!a.LyricsYRC.IsZero()) != (!b.LyricsYRC.IsZero()) {
+		return !a.LyricsYRC.IsZero()
 	}
 	if a.TS != b.TS {
 		return a.TS > b.TS

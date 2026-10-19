@@ -15,7 +15,7 @@ func learnedEntry(winner, sourceArtist string, losers ...string) enrichEntry {
 		cands = append(cands, lyricsDecisionCandidate{Source: "loser" + string(rune('a'+i)), Artist: l})
 	}
 	return enrichEntry{
-		Lyrics:                "[00:01.00]x",
+		Lyrics:                bt("[00:01.00]x"),
 		LyricsDecisionApplied: &lyricsDecision{Winner: winner, Candidates: cands},
 	}
 }
@@ -162,7 +162,7 @@ func TestLyricsReSearchMarksLearnedAliasSelf(t *testing.T) {
 	emptyKey, lyricKey := enrichKey(artist, "Empty Song", ""), enrichKey(artist, "Rescored Song", "Some Album")
 	withEnrichCache(t, map[string]enrichEntry{
 		emptyKey: {},
-		lyricKey: {Lyrics: "[00:05.00]Old line one\n[00:15.00]Old line two", LyricsSource: "musixmatch",
+		lyricKey: {Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "musixmatch",
 			LyricsScoringVersion: lyricsScoringVersion - 1},
 	})
 	retryLyricsUpgrade(context.Background(), emptyKey, artist, "Empty Song", "", 180, true)
@@ -203,7 +203,7 @@ func TestLearnedAliasSelfMarkedOnOtherReSearches(t *testing.T) {
 // 正文是用户给的条目不算依据:锁定着的、原样采纳的候选,决策记录记的都是被换掉的那一份;采纳之后正文又被自动换过的照常算。
 func TestLearnedSourceArtistAliasIgnoresUserProvidedLyrics(t *testing.T) {
 	adopted := learnedEntry("qq", "Maty Noyes")
-	adopted.ManualPickSHA = manualPickFingerprint(adopted.Lyrics)
+	adopted.ManualPickSHA = manualPickFingerprint(adopted.Lyrics.String())
 	locked := learnedEntry("qq", "Maty Noyes")
 	locked.ManualLyrics = true
 	for name, e := range map[string]enrichEntry{"原样采纳": adopted, "锁定着": locked} {

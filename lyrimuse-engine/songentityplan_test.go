@@ -34,9 +34,9 @@ func TestSongEntitySharePlan(t *testing.T) {
 	entry := func(isrc, seed, yrc, source string) enrichEntry {
 		e := enrichEntry{DurationSecs: 200, ISRCs: []string{isrc}, LyricsSource: source}
 		if seed != "" {
-			e.Lyrics = lrc(seed)
+			e.Lyrics = bt(lrc(seed))
 		}
-		e.LyricsYRC = yrc
+		e.LyricsYRC = bt(yrc)
 		return e
 	}
 	decided := func(v songVariant, source string, version, score, native int) songVariant {
@@ -68,7 +68,7 @@ func TestSongEntitySharePlan(t *testing.T) {
 	fp := func(key string) string {
 		for i := range b.variants {
 			if b.variants[i].key == key {
-				return songOffsetFingerprint(b.variants[i].lyrics, b.variants[i].yrc)
+				return songOffsetFingerprint(b.variants[i].lyrics.String(), b.variants[i].yrc.String())
 			}
 		}
 		t.Fatalf("没有 %s", key)
@@ -111,7 +111,7 @@ func TestSongEntitySharePlan(t *testing.T) {
 func TestShareEvalPlanAutoUpgradeOff(t *testing.T) {
 	lrc := func(seed string) string { return songTestLRC(0, songTestWords(seed, 4)) }
 	keys := []string{"e0", "e1", "e2"}
-	entries := []enrichEntry{{}, {Lyrics: lrc("c"), LyricsSource: "netease"}, {Lyrics: lrc("l4"), LyricsSource: "qq"}}
+	entries := []enrichEntry{{}, {Lyrics: bt(lrc("c")), LyricsSource: "netease"}, {Lyrics: bt(lrc("l4")), LyricsSource: "qq"}}
 	scored := []scoredLyricCandidateResult{
 		{Source: "netease", Lyrics: lrc("c"), LyricsYRC: "[0,500]y", Score: 1200},
 		{Source: "qq", Lyrics: lrc("l4"), Score: 900},
@@ -139,11 +139,11 @@ func TestShareEvalPlan(t *testing.T) {
 	keys := []string{"e0", "e1", "e2", "e3", "e4", "e5", "e6"}
 	entries := []enrichEntry{
 		{},
-		{Lyrics: lrc("c"), LyricsSource: "netease"},
-		{Lyrics: lrc("l2"), LyricsSource: "qq"},
-		{Lyrics: lrc("l3"), LyricsSource: "kuwo"},
-		{Lyrics: lrc("l4"), LyricsSource: "qq"},
-		{Lyrics: lrc("l5"), LyricsSource: "qq"},
+		{Lyrics: bt(lrc("c")), LyricsSource: "netease"},
+		{Lyrics: bt(lrc("l2")), LyricsSource: "qq"},
+		{Lyrics: bt(lrc("l3")), LyricsSource: "kuwo"},
+		{Lyrics: bt(lrc("l4")), LyricsSource: "qq"},
+		{Lyrics: bt(lrc("l5")), LyricsSource: "qq"},
 		{Instrumental: true},
 	}
 	own := []*songPlanLyrics{nil, {}, {native: true}, {}, {}, {}, nil}
@@ -179,10 +179,10 @@ func TestShareEvalPlan(t *testing.T) {
 	plain := []scoredLyricCandidateResult{{Source: "lrclib", Lyrics: "P", Score: 800}, {Source: "qq", Lyrics: "Q", Score: 700}}
 	keys2 := []string{"words", "timed", "manual", "credits"}
 	entries2 := []enrichEntry{
-		{Lyrics: timed, LyricsYRC: "[0,500]w", LyricsSource: "qq"},
-		{Lyrics: timed, LyricsSource: "qq"},
-		{Lyrics: "M", LyricsSource: "qq"},
-		{Lyrics: credits, LyricsSource: "qq"},
+		{Lyrics: bt(timed), LyricsYRC: bt("[0,500]w"), LyricsSource: "qq"},
+		{Lyrics: bt(timed), LyricsSource: "qq"},
+		{Lyrics: bt("M"), LyricsSource: "qq"},
+		{Lyrics: bt(credits), LyricsSource: "qq"},
 	}
 	own2 := []*songPlanLyrics{{}, {}, {manual: true}, {}}
 	checkWhys(t, shareEvalPlan(keys2, entries2, own2, plain, &plain[0], true), map[string]string{
@@ -196,7 +196,7 @@ func TestShareEvalPlan(t *testing.T) {
 	}
 	stamped := func(score int) enrichEntry {
 		// 跟 qq 那份同一段词、多一行:这一轮没搜到它,又不是另一首歌的词。
-		return enrichEntry{Lyrics: other + "[00:40.00]bonus words here\n", LyricsSource: "qq", LyricsScore: score,
+		return enrichEntry{Lyrics: bt(other + "[00:40.00]bonus words here\n"), LyricsSource: "qq", LyricsScore: score,
 			LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision}
 	}
 	stale := stamped(1300)
@@ -206,8 +206,8 @@ func TestShareEvalPlan(t *testing.T) {
 		stamped(1300),
 		stamped(1100),
 		stale,
-		{Lyrics: champ + "\n", LyricsSource: "netease"},
-		{Lyrics: lrc("z"), LyricsYRC: "[0,500]z", LyricsSource: "kuwo"},
+		{Lyrics: bt(champ + "\n"), LyricsSource: "netease"},
+		{Lyrics: bt(lrc("z")), LyricsYRC: bt("[0,500]z"), LyricsSource: "kuwo"},
 	}
 	lines3 := shareEvalPlan(keys3, entries3, []*songPlanLyrics{{}, {}, {}, {}, {}}, full, &full[0], true)
 	checkWhys(t, lines3, map[string]string{
@@ -243,11 +243,11 @@ func TestShareEvalReplay(t *testing.T) {
 	setFeatures(featureFlags{LyricsAutoUpgrade: true})
 	lrc := func(seed string) string { return songTestLRC(0, songTestWords(seed, 4)) }
 	cache := map[string]enrichEntry{
-		"A|Song|Album1": {DurationSecs: 200, ISRCs: []string{"USAAA1100001"}, Lyrics: lrc("a1"), LyricsSource: "qq"},
-		"A|Song|Album2": {DurationSecs: 200.4, ISRCs: []string{"USAAA1100001"}, Lyrics: lrc("a2"), LyricsYRC: "[0,500]y", LyricsSource: "kugou"},
+		"A|Song|Album1": {DurationSecs: 200, ISRCs: []string{"USAAA1100001"}, Lyrics: bt(lrc("a1")), LyricsSource: "qq"},
+		"A|Song|Album2": {DurationSecs: 200.4, ISRCs: []string{"USAAA1100001"}, Lyrics: bt(lrc("a2")), LyricsYRC: bt("[0,500]y"), LyricsSource: "kugou"},
 		"A|Song|Album3": {DurationSecs: 201, ISRCs: []string{"USAAA1100001"}},
-		"A|Song|Album4": {DurationSecs: 200.2, ISRCs: []string{"USAAA1100001"}, Lyrics: lrc("z"), LyricsSource: "kuwo"},
-		"A|Song|Album5": {DurationSecs: 200.6, ISRCs: []string{"USAAA1100001"}, Lyrics: lrc("a1") + "[00:40.00]bonus words here\n", LyricsSource: "migu"},
+		"A|Song|Album4": {DurationSecs: 200.2, ISRCs: []string{"USAAA1100001"}, Lyrics: bt(lrc("z")), LyricsSource: "kuwo"},
+		"A|Song|Album5": {DurationSecs: 200.6, ISRCs: []string{"USAAA1100001"}, Lyrics: bt(lrc("a1") + "[00:40.00]bonus words here\n"), LyricsSource: "migu"},
 	}
 	withEnrichCache(t, cache)
 	var vs []songVariant

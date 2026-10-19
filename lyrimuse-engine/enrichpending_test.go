@@ -67,11 +67,11 @@ func withEnrichPendingCache(t *testing.T, cache map[string]enrichEntry) {
 
 // 带 key 的改动攒一下写进小文件;整份落盘之后清掉已经写进去的,取快照之后又改的留着重写;一条不剩就删文件。
 func TestEnrichPendingWriteAndClearAfterFullSave(t *testing.T) {
-	withEnrichPendingCache(t, map[string]enrichEntry{"a|1|x": {Lyrics: "A"}, "b|2|y": {Lyrics: "B"}})
+	withEnrichPendingCache(t, map[string]enrichEntry{"a|1|x": {Lyrics: bt("A")}, "b|2|y": {Lyrics: bt("B")}})
 	noteEnrichPending("a|1|x", false)
 	noteEnrichPending("b|2|y", false)
 	f := readEnrichPendingFile(t, time.Second)
-	if len(f.Entries) != 2 || f.Entries["a|1|x"].Lyrics != "A" {
+	if len(f.Entries) != 2 || !f.Entries["a|1|x"].Lyrics.EqualString("A") {
 		t.Fatalf("两条都该在小文件里: %+v", f.Entries)
 	}
 	enrichMu.Lock()
@@ -94,7 +94,7 @@ func TestEnrichPendingWriteAndClearAfterFullSave(t *testing.T) {
 
 // 新歌进缓存:写完小文件就提醒歌曲实体增量重算,不等整份落盘;只是改了旧条目不提醒。
 func TestEnrichPendingNewKeyNudgesSongEntities(t *testing.T) {
-	withEnrichPendingCache(t, map[string]enrichEntry{"a|1|x": {Lyrics: "A"}})
+	withEnrichPendingCache(t, map[string]enrichEntry{"a|1|x": {Lyrics: bt("A")}})
 	select {
 	case <-songEntityCacheSaved:
 	default:
@@ -116,12 +116,12 @@ func TestEnrichPendingNewKeyNudgesSongEntities(t *testing.T) {
 
 // 启动时小文件比主缓存新:叠回内存、记成待落盘;比主缓存旧就不动。
 func TestApplyEnrichPendingAtLoad(t *testing.T) {
-	withEnrichPendingCache(t, map[string]enrichEntry{"a|1|x": {Lyrics: "old"}})
+	withEnrichPendingCache(t, map[string]enrichEntry{"a|1|x": {Lyrics: bt("old")}})
 	cachePath := enrichPath
 	if err := os.WriteFile(cachePath, []byte(`{}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	b, _ := json.Marshal(enrichPendingFile{Entries: map[string]enrichEntry{"a|1|x": {Lyrics: "new"}, "c|3|z": {Lyrics: "C"}}})
+	b, _ := json.Marshal(enrichPendingFile{Entries: map[string]enrichEntry{"a|1|x": {Lyrics: bt("new")}, "c|3|z": {Lyrics: bt("C")}}})
 	if err := os.WriteFile(enrichPendingPath(), b, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestApplyEnrichPendingAtLoad(t *testing.T) {
 	enrichMu.Lock()
 	got := enrichCache["a|1|x"].Lyrics
 	enrichMu.Unlock()
-	if got != "old" {
+	if !got.EqualString("old") {
 		t.Fatalf("小文件比主缓存旧,不该叠回: %q", got)
 	}
 	newer := time.Now().Add(time.Minute)
@@ -144,7 +144,7 @@ func TestApplyEnrichPendingAtLoad(t *testing.T) {
 	enrichMu.Lock()
 	got, c, dirty, pending := enrichCache["a|1|x"].Lyrics, enrichCache["c|3|z"].Lyrics, enrichDirty, len(enrichPendingKeys)
 	enrichMu.Unlock()
-	if got != "new" || c != "C" || !dirty || pending != 2 {
+	if !got.EqualString("new") || !c.EqualString("C") || !dirty || pending != 2 {
 		t.Fatalf("小文件比主缓存新,该叠回并记成待落盘: a=%q c=%q dirty=%v pending=%d", got, c, dirty, pending)
 	}
 }
@@ -153,7 +153,7 @@ func TestApplyEnrichPendingAtLoad(t *testing.T) {
 // 「解析决策」照样能按指纹从旁路文件里把候选找回来。内存里的条目不动,还带着明细。
 func TestEnrichPendingWritesDecisionSidecar(t *testing.T) {
 	d := fullDecision("first", 1700000000, "netease")
-	withEnrichPendingCache(t, map[string]enrichEntry{"a|1|x": {Lyrics: "A", LyricsDecision: d, LyricsDecisionApplied: d}})
+	withEnrichPendingCache(t, map[string]enrichEntry{"a|1|x": {Lyrics: bt("A"), LyricsDecision: d, LyricsDecisionApplied: d}})
 	noteEnrichPending("a|1|x", false)
 	f := readEnrichPendingFile(t, time.Second)
 	got := f.Entries["a|1|x"].LyricsDecision
@@ -176,7 +176,7 @@ func TestEnrichPendingWritesDecisionSidecar(t *testing.T) {
 func TestLoadEnrichCacheWithoutMainFileAppliesPending(t *testing.T) {
 	withEnrichPendingCache(t, map[string]enrichEntry{})
 	cachePath := enrichPath
-	b, _ := json.Marshal(enrichPendingFile{Entries: map[string]enrichEntry{"a|1|x": {Lyrics: "A"}}})
+	b, _ := json.Marshal(enrichPendingFile{Entries: map[string]enrichEntry{"a|1|x": {Lyrics: bt("A")}}})
 	if err := os.WriteFile(enrichPendingPath(), b, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +184,7 @@ func TestLoadEnrichCacheWithoutMainFileAppliesPending(t *testing.T) {
 	enrichMu.Lock()
 	got, dirty, pending := enrichCache["a|1|x"].Lyrics, enrichDirty, len(enrichPendingKeys)
 	enrichMu.Unlock()
-	if got != "A" || !dirty || pending != 1 {
+	if !got.EqualString("A") || !dirty || pending != 1 {
 		t.Fatalf("主缓存不在时小文件该叠回: a=%q dirty=%v pending=%d", got, dirty, pending)
 	}
 }

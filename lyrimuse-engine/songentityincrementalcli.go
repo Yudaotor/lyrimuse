@@ -41,7 +41,11 @@ func runSongEntityIncrementalCheck(src *songEntitySource, n int, w io.Writer) {
 		{"no-duration", func(c map[string]enrichEntry, k, _ string) { e := c[k]; e.DurationSecs = 0; c[k] = e }},
 		{"duration+3", func(c map[string]enrichEntry, k, _ string) { e := c[k]; e.DurationSecs += 3; c[k] = e }},
 		{"no-isrc", func(c map[string]enrichEntry, k, _ string) { e := c[k]; e.ISRCs, e.ISRCLevels = nil, nil; c[k] = e }},
-		{"no-lyrics", func(c map[string]enrichEntry, k, _ string) { e := c[k]; e.Lyrics, e.LyricsYRC = "", ""; c[k] = e }},
+		{"no-lyrics", func(c map[string]enrichEntry, k, _ string) {
+			e := c[k]
+			e.Lyrics, e.LyricsYRC = bodyText{}, bodyText{}
+			c[k] = e
+		}},
 		{"no-searched-links", func(c map[string]enrichEntry, k, _ string) {
 			e := c[k]
 			e.NeteaseURL, e.AppleURL, e.QQURL = "", "", ""

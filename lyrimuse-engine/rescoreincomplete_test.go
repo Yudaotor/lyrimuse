@@ -80,7 +80,7 @@ func TestRescoreWithSkippedSourceDoesNotCatchUpVersion(t *testing.T) {
 	key := enrichKey(artist, title, album)
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
-		Lyrics: "[00:05.00]Old line one\n[00:15.00]Old line two", LyricsSource: "musixmatch", LyricsScore: 10,
+		Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "musixmatch", LyricsScore: 10,
 		LyricsScoringVersion: lyricsScoringVersion - 1,
 	}}
 	enrichMu.Unlock()
@@ -93,7 +93,7 @@ func TestRescoreWithSkippedSourceDoesNotCatchUpVersion(t *testing.T) {
 	if !deferred {
 		t.Error("有源被跳过的一轮应当返回 deferred")
 	}
-	if !strings.HasPrefix(e.Lyrics, "[00:05.00]Brand new first line") {
+	if !strings.HasPrefix(e.Lyrics.String(), "[00:05.00]Brand new first line") {
 		t.Errorf("照常重选,应换上这一轮的新正文,got %q", e.Lyrics)
 	}
 	if e.lyricsScoring() == currentLyricsScoring {
@@ -117,7 +117,7 @@ func TestRescoreKeepsWordTimingOverAPlainWinner(t *testing.T) {
 	const oldYRC = "[5000,1000](5000,500,0)Old(5500,500,0)line"
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
-		Lyrics: oldBody, LyricsYRC: oldYRC, LyricsSource: "musixmatch", LyricsScore: 900,
+		Lyrics: bt(oldBody), LyricsYRC: bt(oldYRC), LyricsSource: "musixmatch", LyricsScore: 900,
 		LyricsScoringVersion: lyricsScoringVersion - 1,
 	}}
 	enrichMu.Unlock()
@@ -127,7 +127,7 @@ func TestRescoreKeepsWordTimingOverAPlainWinner(t *testing.T) {
 	enrichMu.Lock()
 	e := enrichCache[key]
 	enrichMu.Unlock()
-	if e.Lyrics != oldBody || e.LyricsYRC != oldYRC || e.LyricsSource != "musixmatch" {
+	if !e.Lyrics.EqualString(oldBody) || !e.LyricsYRC.EqualString(oldYRC) || e.LyricsSource != "musixmatch" {
 		t.Fatalf("冠军没有逐字时不该换掉有逐字的这份: lyrics=%q yrc=%q", e.Lyrics, e.LyricsYRC)
 	}
 	if e.lyricsScoring() != currentLyricsScoring {
@@ -151,7 +151,7 @@ func TestBackgroundRetriesSearchWithNormalizedQuery(t *testing.T) {
 	key := enrichKey(artist, title, album)
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
-		Lyrics: "[00:05.00]Old line one\n[00:15.00]Old line two", LyricsSource: "musixmatch",
+		Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "musixmatch",
 		LyricsScoringVersion: lyricsScoringVersion - 1,
 	}}
 	enrichMu.Unlock()
@@ -191,7 +191,7 @@ func TestRescoreUndecidableKeepsSourceLists(t *testing.T) {
 	prevDecision := &lyricsDecision{Path: lyricsDecisionPathRescore, Winner: "lrclib", SourcesResponded: []string{"lrclib", "musixmatch"}}
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
-		Lyrics: oldBody, LyricsSource: "lrclib", LyricsScore: 10, LyricsScoringVersion: lyricsScoringVersion - 1,
+		Lyrics: bt(oldBody), LyricsSource: "lrclib", LyricsScore: 10, LyricsScoringVersion: lyricsScoringVersion - 1,
 		LyricsSourcesSeen: []string{"lrclib", "musixmatch"}, LyricsSourcesResponded: []string{"lrclib", "musixmatch"},
 		LyricsDecision: prevDecision,
 	}}
@@ -205,7 +205,7 @@ func TestRescoreUndecidableKeepsSourceLists(t *testing.T) {
 	if !deferred {
 		t.Error("不可判的一轮应当返回 deferred")
 	}
-	if e.Lyrics != oldBody || e.LyricsSource != "lrclib" {
+	if !e.Lyrics.EqualString(oldBody) || e.LyricsSource != "lrclib" {
 		t.Errorf("不可判时不该换词,got source=%q", e.LyricsSource)
 	}
 	if !slices.Equal(e.LyricsSourcesResponded, []string{"lrclib", "musixmatch"}) || !slices.Equal(e.LyricsSourcesSeen, []string{"lrclib", "musixmatch"}) {

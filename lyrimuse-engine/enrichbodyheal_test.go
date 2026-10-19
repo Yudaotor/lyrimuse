@@ -24,7 +24,7 @@ func TestLeanSaveWritesSelfConsistentBodyForInvalidUTF8(t *testing.T) {
 	withTempLeanCache(t)
 	resetBodyHealStateForTest(t)
 	key := "Justin Bieber|Trust|Purpose (Deluxe)"
-	entry := enrichEntry{Lyrics: "[00:01.00]Trust", LyricsTr: "[00:01.00]\xb8\xe8\xc7\xfa"}
+	entry := enrichEntry{Lyrics: bt("[00:01.00]Trust"), LyricsTr: bt("[00:01.00]\xb8\xe8\xc7\xfa")}
 	putEntriesForTest(map[string]enrichEntry{key: entry})
 	saveEnrichCache()
 
@@ -49,7 +49,7 @@ func TestLeanSaveWritesSelfConsistentBodyForInvalidUTF8(t *testing.T) {
 	enrichMu.Lock()
 	got := enrichCache[key]
 	enrichMu.Unlock()
-	if got.LyricsTr != jsonSafeString(entry.LyricsTr) {
+	if !got.LyricsTr.EqualString(jsonSafeString(entry.LyricsTr.String())) {
 		t.Errorf("重新加载后译文 = %q", got.LyricsTr)
 	}
 	if takeEnrichBodiesToRewrite()[key] {
@@ -62,7 +62,7 @@ func TestLeanSaveDoesNotRewriteSanitizedBodyEverySave(t *testing.T) {
 	withTempLeanCache(t)
 	resetBodyHealStateForTest(t)
 	key := "Justin Bieber|Trust|Purpose (Deluxe)"
-	entry := enrichEntry{Lyrics: "[00:01.00]Trust", LyricsTr: "[00:01.00]\xb8\xe8\xc7\xfa"}
+	entry := enrichEntry{Lyrics: bt("[00:01.00]Trust"), LyricsTr: bt("[00:01.00]\xb8\xe8\xc7\xfa")}
 	putEntriesForTest(map[string]enrichEntry{key: entry})
 	saveEnrichCache()
 	side := filepath.Join(enrichBodiesDir(), decisionSidecarName(key))
@@ -82,7 +82,7 @@ func TestSanitizedBodyRecordKeepsRawCRCWhenForcedRewrite(t *testing.T) {
 	withTempLeanCache(t)
 	resetBodyHealStateForTest(t)
 	key := "Justin Bieber|Trust|Purpose (Deluxe)"
-	entry := enrichEntry{Lyrics: "[00:01.00]Trust", LyricsTr: "[00:01.00]\xb8\xe8\xc7\xfa"}
+	entry := enrichEntry{Lyrics: bt("[00:01.00]Trust"), LyricsTr: bt("[00:01.00]\xb8\xe8\xc7\xfa")}
 	raw := enrichBodyCRC(entry)
 	putEntriesForTest(map[string]enrichEntry{key: entry})
 	saveEnrichCache()

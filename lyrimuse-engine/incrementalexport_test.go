@@ -47,10 +47,10 @@ func dirContents(t *testing.T, dir string) map[string]string {
 
 func exportFixtureCache() map[string]enrichEntry {
 	return map[string]enrichEntry{
-		"歌手|歌名|专辑":          {Lyrics: "[00:01.00]a", LyricsTr: "[00:01.00]译", LyricsSource: "qq"},
-		"Artist|Song|Album": {Lyrics: "[00:01.00]b", LyricsYRC: "{}", LyricsSource: "netease"},
+		"歌手|歌名|专辑":          {Lyrics: bt("[00:01.00]a"), LyricsTr: bt("[00:01.00]译"), LyricsSource: "qq"},
+		"Artist|Song|Album": {Lyrics: bt("[00:01.00]b"), LyricsYRC: bt("{}"), LyricsSource: "netease"},
 		// 大小写折叠后撞名的一对,两条都要落到带哈希后缀的文件名上。
-		"artist|song|album": {Lyrics: "[00:01.00]c", LyricsSource: "kugou"},
+		"artist|song|album": {Lyrics: bt("[00:01.00]c"), LyricsSource: "kugou"},
 		"没歌词|x|y":           {},
 	}
 }
@@ -101,7 +101,7 @@ func TestExportLyricsFilesForLeavesOtherEntriesAlone(t *testing.T) {
 }
 
 func TestExportLyricsFilesForRenamesWholeCollisionGroup(t *testing.T) {
-	cache := map[string]enrichEntry{"Artist|Song|Album": {Lyrics: "[00:01.00]b", LyricsSource: "netease"}}
+	cache := map[string]enrichEntry{"Artist|Song|Album": {Lyrics: bt("[00:01.00]b"), LyricsSource: "netease"}}
 	dir := withExportFixture(t, cache)
 	exportLyricsFiles()
 	plain := filepath.Join(dir, "Artist - Song - Album.lrc")
@@ -110,7 +110,7 @@ func TestExportLyricsFilesForRenamesWholeCollisionGroup(t *testing.T) {
 	}
 
 	enrichMu.Lock()
-	enrichCache["artist|song|album"] = enrichEntry{Lyrics: "[00:01.00]c", LyricsSource: "kugou"}
+	enrichCache["artist|song|album"] = enrichEntry{Lyrics: bt("[00:01.00]c"), LyricsSource: "kugou"}
 	enrichMu.Unlock()
 	exportLyricsFilesFor("artist|song|album")
 
@@ -150,7 +150,7 @@ func TestSaveEnrichCacheConcurrentWithCommits(t *testing.T) {
 		go func(w int) {
 			defer wg.Done()
 			for i := 0; i < 50; i++ {
-				e := enrichEntry{Lyrics: fmt.Sprintf("[00:01.00]%d-%d", w, i)}
+				e := enrichEntry{Lyrics: bt(fmt.Sprintf("[00:01.00]%d-%d", w, i))}
 				e.LyricsDecision = &lyricsDecision{Winner: "qq"}
 				e.LyricsDecisionApplied = e.LyricsDecision
 				enrichMu.Lock()

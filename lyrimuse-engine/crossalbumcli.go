@@ -197,7 +197,7 @@ func applyCrossAlbumReuse(groups []crossAlbumGroup) (applied, skipped int) {
 		}
 		best := g.bestMember()
 		src, ok := enrichCache[g.members[best].key]
-		if !ok || strings.TrimSpace(src.Lyrics) == "" {
+		if !ok || strings.TrimSpace(src.Lyrics.String()) == "" {
 			continue
 		}
 		for i, m := range g.members {
@@ -205,7 +205,7 @@ func applyCrossAlbumReuse(groups []crossAlbumGroup) (applied, skipped int) {
 				continue
 			}
 			dst, ok := enrichCache[m.key]
-			if !ok || dst.Lyrics == src.Lyrics {
+			if !ok || dst.Lyrics.Equal(src.Lyrics) {
 				continue
 			}
 			if dst.ManualLyrics || dst.ManualPickSHA != "" || pinned[m.key] {
@@ -259,7 +259,7 @@ func applyCrossAlbumReuse(groups []crossAlbumGroup) (applied, skipped int) {
 func groupCrossAlbumCandidates(cache map[string]enrichEntry, tolerance float64) []crossAlbumGroup {
 	byTitle := map[string][]crossAlbumMember{}
 	for key, e := range cache {
-		if strings.TrimSpace(e.Lyrics) == "" || e.DurationSecs <= 0 {
+		if strings.TrimSpace(e.Lyrics.String()) == "" || e.DurationSecs <= 0 {
 			continue
 		}
 		artist, title, album := splitEnrichKey(key)
@@ -274,8 +274,8 @@ func groupCrossAlbumCandidates(cache map[string]enrichEntry, tolerance float64) 
 			source:   e.LyricsSource,
 			score:    e.LyricsScore,
 			version:  e.lyricsScoring(),
-			lines:    strings.Count(e.Lyrics, "\n") + 1,
-			lyrics:   e.Lyrics,
+			lines:    strings.Count(e.Lyrics.String(), "\n") + 1,
+			lyrics:   e.Lyrics.String(),
 		})
 	}
 

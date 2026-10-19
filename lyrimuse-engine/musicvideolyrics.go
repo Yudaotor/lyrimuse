@@ -41,7 +41,7 @@ func noteMusicVideoDuration(artist, title, album string, videoSecs float64) {
 
 // lyricsChosenByVideoDuration:这条条目的歌词是不是按正在播的这支 MV 的视频时长选出来的。纯函数。
 func lyricsChosenByVideoDuration(e enrichEntry, videoSecs float64) bool {
-	if e.Lyrics == "" || e.ResolvedDurationSecs <= 0 || videoSecs <= 0 {
+	if e.Lyrics.IsZero() || e.ResolvedDurationSecs <= 0 || videoSecs <= 0 {
 		return false
 	}
 	return math.Abs(e.ResolvedDurationSecs-videoSecs) <= musicVideoDurationMatchSecs
@@ -58,7 +58,7 @@ func musicVideoLyricsStaleLocked(key string, e enrichEntry) bool {
 // 不下结论(同 rescoreDecidable:一次偶发超时不该把人换到更差的一份)。
 func lyricsBaselineForUnknownDuration(e enrichEntry, scored []scoredLyricCandidateResult) (baseline int, comparable bool) {
 	for i := range scored {
-		if scored[i].Source == e.LyricsSource && scored[i].Lyrics == e.Lyrics {
+		if scored[i].Source == e.LyricsSource && e.Lyrics.EqualString(scored[i].Lyrics) {
 			return scored[i].Score, true
 		}
 	}

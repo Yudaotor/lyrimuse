@@ -393,6 +393,8 @@ func main() {
 	// 给 App 的精简索引 + 正文小文件(enrichindex.go):缺失或比主缓存旧就重新生成。排在所有会改缓存的
 	// 启动迁移之后。
 	startupStep("refreshEnrichIndex", refreshEnrichIndexAtStartup)
+	// 启动迁移、导入、导出都跑完了:从这里起正文跟小文件逐字节相同的就退回小文件,用到再读(bodytext.go)。
+	startupStep("enableBodyEviction", enableBodyEviction)
 	// 启动迁移跑完了,从这里起 lyrics_dir 可以热切换;启动期间要是改过它,这一步当场补上。
 	enableLyricsDirSwitch()
 	// 本地收听日志:刻意**不带** lastfm-/lb- 这类账号域前缀 —— 这份日志存在的全部意义

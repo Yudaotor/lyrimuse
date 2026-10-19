@@ -16,16 +16,16 @@ func enrichStampNow() uint64 {
 
 // 首次解析跑着的时候条目被删:那一轮(包括被这次删除取消后的收尾)不能把它写回;删完之后新开的一轮照常落盘。
 func TestResolveRoundDroppedAfterDelete(t *testing.T) {
-	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: "[00:01.00]早提交的歌词", TS: 1}})
+	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: bt("[00:01.00]早提交的歌词"), TS: 1}})
 	stamp := enrichStampNow()
 	if res := applyEnrichEdit(enrichEditRequest{Op: "delete", Keys: []string{editKey}}); !res.OK || res.Changed != 1 {
 		t.Fatalf("delete: %+v", res)
 	}
-	commitEnrichEntrySince(editKey, enrichEntry{Lyrics: "[00:01.00]早提交的歌词", TS: 2}, stamp)
+	commitEnrichEntrySince(editKey, enrichEntry{Lyrics: bt("[00:01.00]早提交的歌词"), TS: 2}, stamp)
 	if _, ok := cacheEntry(t, editKey); ok {
 		t.Fatal("删除之前开跑的那一轮不该把条目写回")
 	}
-	commitEnrichEntrySince(editKey, enrichEntry{Lyrics: "[00:01.00]重新解析", TS: 3}, enrichStampNow())
+	commitEnrichEntrySince(editKey, enrichEntry{Lyrics: bt("[00:01.00]重新解析"), TS: 3}, enrichStampNow())
 	if e, ok := cacheEntry(t, editKey); !ok || e.TS != 3 {
 		t.Fatalf("删除之后新开的一轮要照常落盘 got %+v ok=%v", e, ok)
 	}
@@ -34,17 +34,17 @@ func TestResolveRoundDroppedAfterDelete(t *testing.T) {
 // 采纳候选(开关关着,不置 ManualLyrics)之后,之前开跑的那一轮落盘作废,别的歌不受影响。
 func TestResolveRoundDroppedAfterSaveEdit(t *testing.T) {
 	other := enrichKey("Other Artist", "Other Song", "")
-	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: "[00:01.00]自动", TS: 1}})
+	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: bt("[00:01.00]自动"), TS: 1}})
 	stamp := enrichStampNow()
 	res := applyEnrichEdit(enrichEditRequest{Op: "save_edit", Key: editKey, Lyrics: "[00:01.00]采纳的", FromManualPick: true})
 	if !res.OK {
 		t.Fatalf("save_edit: %+v", res)
 	}
-	commitEnrichEntrySince(editKey, enrichEntry{Lyrics: "[00:01.00]自动", TS: 2}, stamp)
-	if e, _ := cacheEntry(t, editKey); e.Lyrics != "[00:01.00]采纳的" {
+	commitEnrichEntrySince(editKey, enrichEntry{Lyrics: bt("[00:01.00]自动"), TS: 2}, stamp)
+	if e, _ := cacheEntry(t, editKey); !e.Lyrics.EqualString("[00:01.00]采纳的") {
 		t.Fatalf("刚采纳的歌词被换掉了: %q", e.Lyrics)
 	}
-	commitEnrichEntrySince(other, enrichEntry{Lyrics: "[00:01.00]别的", TS: 2}, stamp)
+	commitEnrichEntrySince(other, enrichEntry{Lyrics: bt("[00:01.00]别的"), TS: 2}, stamp)
 	if _, ok := cacheEntry(t, other); !ok {
 		t.Fatal("没被改过的歌照常落盘")
 	}
@@ -53,13 +53,13 @@ func TestResolveRoundDroppedAfterSaveEdit(t *testing.T) {
 // 清空之前开跑的每一轮都作废,不论 key 当时在不在缓存里。
 func TestResolveRoundDroppedAfterClearAll(t *testing.T) {
 	fresh := enrichKey("Fresh Artist", "Fresh Song", "")
-	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: "[00:01.00]x", TS: 1}})
+	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: bt("[00:01.00]x"), TS: 1}})
 	stamp := enrichStampNow()
 	if res := applyEnrichEdit(enrichEditRequest{Op: "clear_all"}); !res.OK {
 		t.Fatalf("clear_all: %+v", res)
 	}
-	commitEnrichEntrySince(editKey, enrichEntry{Lyrics: "[00:01.00]x", TS: 2}, stamp)
-	commitEnrichEntrySince(fresh, enrichEntry{Lyrics: "[00:01.00]y", TS: 2}, stamp)
+	commitEnrichEntrySince(editKey, enrichEntry{Lyrics: bt("[00:01.00]x"), TS: 2}, stamp)
+	commitEnrichEntrySince(fresh, enrichEntry{Lyrics: bt("[00:01.00]y"), TS: 2}, stamp)
 	enrichMu.Lock()
 	n := len(enrichCache)
 	enrichMu.Unlock()
@@ -75,7 +75,7 @@ func TestFailedEditDoesNotSupersede(t *testing.T) {
 	if res := applyEnrichEdit(enrichEditRequest{Op: "save_edit"}); res.OK {
 		t.Fatal("空 key 的 save_edit 应该失败")
 	}
-	commitEnrichEntrySince(editKey, enrichEntry{Lyrics: "[00:01.00]x", TS: 2}, stamp)
+	commitEnrichEntrySince(editKey, enrichEntry{Lyrics: bt("[00:01.00]x"), TS: 2}, stamp)
 	if _, ok := cacheEntry(t, editKey); !ok {
 		t.Fatal("没有改动成功时不该作废这一轮")
 	}

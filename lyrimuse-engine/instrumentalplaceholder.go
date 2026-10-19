@@ -15,10 +15,10 @@ func migrateInstrumentalPlaceholders() {
 	enrichMu.Lock()
 	marked := 0
 	for k, e := range scope.entries() {
-		if e.Lyrics == "" || e.ManualLyrics || e.ManualPickSHA != "" || e.LyricsSourceChoice != "" || !e.autoMarksInstrumental() {
+		if e.Lyrics.IsZero() || e.ManualLyrics || e.ManualPickSHA != "" || e.LyricsSourceChoice != "" || !e.autoMarksInstrumental() {
 			continue
 		}
-		if !isInstrumentalPlaceholderLyric(e.Lyrics) {
+		if !isInstrumentalPlaceholderLyric(e.Lyrics.String()) {
 			continue
 		}
 		e.Instrumental = true

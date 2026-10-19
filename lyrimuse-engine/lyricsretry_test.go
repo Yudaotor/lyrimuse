@@ -26,27 +26,27 @@ func TestNeedsLyricsRetry(t *testing.T) {
 	}{
 		{
 			name: "有源缺席且已过节流窗口:该重试",
-			e:    enrichEntry{Lyrics: "x", LyricsSourcesSeen: []string{"lrclib"}, TS: long},
+			e:    enrichEntry{Lyrics: bt("x"), LyricsSourcesSeen: []string{"lrclib"}, TS: long},
 			want: true,
 		},
 		{
 			name: "所有启用的源都露过面:货真价实赢的,不折腾",
-			e:    enrichEntry{Lyrics: "x", LyricsSourcesSeen: []string{"netease", "qq", "lrclib"}, TS: long},
+			e:    enrichEntry{Lyrics: bt("x"), LyricsSourcesSeen: []string{"netease", "qq", "lrclib"}, TS: long},
 			want: false,
 		},
 		{
 			name: "已经有逐字歌词:最值钱的东西已到手,没什么可升级的",
-			e:    enrichEntry{Lyrics: "x", LyricsYRC: "y", LyricsSourcesSeen: []string{"lrclib"}, TS: long},
+			e:    enrichEntry{Lyrics: bt("x"), LyricsYRC: bt("y"), LyricsSourcesSeen: []string{"lrclib"}, TS: long},
 			want: false,
 		},
 		{
 			name: "还没到节流窗口:同一首歌反复播放时不能每次都重搜",
-			e:    enrichEntry{Lyrics: "x", LyricsSourcesSeen: []string{"lrclib"}, TS: recent},
+			e:    enrichEntry{Lyrics: bt("x"), LyricsSourcesSeen: []string{"lrclib"}, TS: recent},
 			want: false,
 		},
 		{
 			name: "重试次数用尽:缺席的源可能真的没这首歌,必须有硬上限",
-			e:    enrichEntry{Lyrics: "x", LyricsSourcesSeen: []string{"lrclib"}, TS: long, LyricsRetryCount: lyricsRetryMaxAttempts},
+			e:    enrichEntry{Lyrics: bt("x"), LyricsSourcesSeen: []string{"lrclib"}, TS: long, LyricsRetryCount: lyricsRetryMaxAttempts},
 			want: false,
 		},
 		{
@@ -56,12 +56,12 @@ func TestNeedsLyricsRetry(t *testing.T) {
 		},
 		{
 			name: "老条目(没有 LyricsSourcesSeen):当初正是在没有这层保护时定的,给一次机会",
-			e:    enrichEntry{Lyrics: "x", TS: long},
+			e:    enrichEntry{Lyrics: bt("x"), TS: long},
 			want: true,
 		},
 		{
 			name: "节流基准取 TS 和 LyricsRetryTS 里更晚的那个:刚重试过就不该又符合条件",
-			e:    enrichEntry{Lyrics: "x", LyricsSourcesSeen: []string{"lrclib"}, TS: long, LyricsRetryTS: recent},
+			e:    enrichEntry{Lyrics: bt("x"), LyricsSourcesSeen: []string{"lrclib"}, TS: long, LyricsRetryTS: recent},
 			want: false,
 		},
 	}
@@ -81,7 +81,7 @@ func TestNeedsLyricsRetryBypassStillThrottled(t *testing.T) {
 	featuresRef().LyricsSources = map[string]bool{"kugou": true, "qq": true}
 	setNativeLyricSourcesForPlayer(qqMusicBundleID)
 	long, recent := time.Now().Unix()-int64(lyricsRetryInterval/time.Second)-1, time.Now().Unix()
-	missed := enrichEntry{Lyrics: "[00:01.00]x", LyricsYRC: "yrc", LyricsSource: "kugou",
+	missed := enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsYRC: bt("yrc"), LyricsSource: "kugou",
 		LyricsSourcesSeen: []string{"kugou", "qq"}, LyricsSourcesResponded: []string{"kugou", "qq"}}
 	with := func(e enrichEntry, f func(e *enrichEntry)) enrichEntry { f(&e); return e }
 	for _, c := range []struct {
@@ -113,7 +113,7 @@ func TestNeedsLyricsRetryIgnoresDisabledSources(t *testing.T) {
 	featuresRef().LyricsSources = map[string]bool{"lrclib": true, "netease": false}
 	long := time.Now().Unix() - int64(lyricsRetryInterval/time.Second) - 1
 
-	e := enrichEntry{Lyrics: "x", LyricsSourcesSeen: []string{"lrclib"}, TS: long}
+	e := enrichEntry{Lyrics: bt("x"), LyricsSourcesSeen: []string{"lrclib"}, TS: long}
 	if needsLyricsRetry(e, false, false, true) {
 		t.Error("只有被禁用的 netease 缺席,不该触发重试")
 	}

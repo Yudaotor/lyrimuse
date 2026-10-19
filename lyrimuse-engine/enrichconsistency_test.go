@@ -45,7 +45,7 @@ func TestFullScanVersionBumpRestartsPass(t *testing.T) {
 
 // 重评:当前这份没参与比较、又是这一版规则打的分时,冠军不比它高就不换。
 func TestRescoreKeepsCurrent(t *testing.T) {
-	cur := enrichEntry{Lyrics: "old", LyricsSource: "lrclib", LyricsScore: 820, LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision}
+	cur := enrichEntry{Lyrics: bt("old"), LyricsSource: "lrclib", LyricsScore: 820, LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision}
 	winner := &scoredLyricCandidateResult{Source: "migu", Lyrics: "new", Score: 500}
 	other := []scoredLyricCandidateResult{{Source: "lrclib", Lyrics: "another version", Score: -1}, *winner}
 	cases := []struct {
@@ -58,7 +58,7 @@ func TestRescoreKeepsCurrent(t *testing.T) {
 		{"当前这份没进比较、冠军更低", cur, other, winner, true},
 		{"当前这份参与了比较、输了就换", cur, append(other, scoredLyricCandidateResult{Source: "lrclib", Lyrics: "old", Score: 400}), winner, false},
 		{"冠军更高", cur, other, &scoredLyricCandidateResult{Source: "migu", Lyrics: "new", Score: 900}, false},
-		{"旧版本的分数不比", enrichEntry{Lyrics: "old", LyricsScore: 820, LyricsScoringVersion: lyricsScoringVersion - 1}, other, winner, false},
+		{"旧版本的分数不比", enrichEntry{Lyrics: bt("old"), LyricsScore: 820, LyricsScoringVersion: lyricsScoringVersion - 1}, other, winner, false},
 		{"冠军就是当前这份", cur, other, &scoredLyricCandidateResult{Lyrics: "old", Score: 100}, false},
 	}
 	for _, c := range cases {
@@ -70,7 +70,7 @@ func TestRescoreKeepsCurrent(t *testing.T) {
 
 // 重评:冠军换的是另一份正文、没有逐字,而当前这份有逐字时留着当前这份(正文相同只会补逐字,不算)。
 func TestRescoreWouldLoseWordTiming(t *testing.T) {
-	cur := enrichEntry{Lyrics: "old", LyricsYRC: "[1000,500](1000,500,0)old"}
+	cur := enrichEntry{Lyrics: bt("old"), LyricsYRC: bt("[1000,500](1000,500,0)old")}
 	cases := []struct {
 		name   string
 		e      enrichEntry
@@ -80,7 +80,7 @@ func TestRescoreWouldLoseWordTiming(t *testing.T) {
 		{"换成没有逐字的另一份", cur, scoredLyricCandidateResult{Lyrics: "new"}, true},
 		{"冠军也有逐字", cur, scoredLyricCandidateResult{Lyrics: "new", LyricsYRC: "[1000,500](1000,500,0)new"}, false},
 		{"正文相同", cur, scoredLyricCandidateResult{Lyrics: "old"}, false},
-		{"当前这份本来就没有逐字", enrichEntry{Lyrics: "old"}, scoredLyricCandidateResult{Lyrics: "new"}, false},
+		{"当前这份本来就没有逐字", enrichEntry{Lyrics: bt("old")}, scoredLyricCandidateResult{Lyrics: "new"}, false},
 	}
 	for _, c := range cases {
 		if got := rescoreWouldLoseWordTiming(c.e, nil, &c.picked); got != c.want {
@@ -172,8 +172,8 @@ func TestImportDropsStaleMachineTranslationAndRoma(t *testing.T) {
 	key := "歌手|歌名|专辑"
 	for _, trSource := range []string{lyricsTrSourceMachine, ""} {
 		dir := withExportFixture(t, map[string]enrichEntry{key: {
-			Lyrics: "[00:01.00]原文", LyricsTr: "[00:01.00]译文", LyricsTrSource: trSource,
-			LyricsRoma: "[00:01.00]yuan wen", LyricsSource: "netease",
+			Lyrics: bt("[00:01.00]原文"), LyricsTr: bt("[00:01.00]译文"), LyricsTrSource: trSource,
+			LyricsRoma: bt("[00:01.00]yuan wen"), LyricsSource: "netease",
 		}})
 		exportLyricsFiles()
 		p := filepath.Join(dir, sanitizeLyricsFilename(key)+".lrc")
@@ -183,10 +183,10 @@ func TestImportDropsStaleMachineTranslationAndRoma(t *testing.T) {
 		}
 		importLyricsFrom(dir, false)
 		e := enrichCache[key]
-		if e.Lyrics != "[00:01.00]改过的原文" || e.LyricsRoma != "" {
+		if !e.Lyrics.EqualString("[00:01.00]改过的原文") || !e.LyricsRoma.IsZero() {
 			t.Fatalf("trSource=%q: 正文应采纳、旧罗马音应清掉: %+v", trSource, e)
 		}
-		if wantTr := trSource != lyricsTrSourceMachine; (e.LyricsTr != "") != wantTr {
+		if wantTr := trSource != lyricsTrSourceMachine; (!e.LyricsTr.IsZero()) != wantTr {
 			t.Fatalf("trSource=%q: 译文 = %q", trSource, e.LyricsTr)
 		}
 	}
@@ -195,7 +195,7 @@ func TestImportDropsStaleMachineTranslationAndRoma(t *testing.T) {
 // 碰撞组缩回一个 key 后留下的 `~hash` 旧文件:导出顺手清掉;清掉之前导入按修改时间让新的那组赢。
 func TestStaleDisambiguatedFilesLoseAndGetRemoved(t *testing.T) {
 	key := "歌手|歌名|专辑"
-	dir := withExportFixture(t, map[string]enrichEntry{key: {Lyrics: "[00:01.00]新的", LyricsSource: "netease"}})
+	dir := withExportFixture(t, map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]新的"), LyricsSource: "netease"}})
 	exportLyricsFiles()
 	header := lyricsFileHeader("歌手", "歌名", "专辑", "netease", false)
 	hashed := filepath.Join(dir, lyricsDisambiguatedBase(key)+".lrc")
@@ -208,7 +208,7 @@ func TestStaleDisambiguatedFilesLoseAndGetRemoved(t *testing.T) {
 	}
 	for range 10 {
 		importLyricsFrom(dir, false)
-		if got := enrichCache[key].Lyrics; got != "[00:01.00]新的" {
+		if got := enrichCache[key].Lyrics; !got.EqualString("[00:01.00]新的") {
 			t.Fatalf("旧的 ~hash 文件不该赢: %q", got)
 		}
 	}
@@ -222,8 +222,8 @@ func TestStaleDisambiguatedFilesLoseAndGetRemoved(t *testing.T) {
 func TestKeyMigrationBacksUpEachMerge(t *testing.T) {
 	dir := withTempDecisionCache(t)
 	enrichMu.Lock()
-	enrichCache["a|t|b"] = enrichEntry{Lyrics: "one"}
-	enrichCache["a|t |b"] = enrichEntry{Lyrics: "two"}
+	enrichCache["a|t|b"] = enrichEntry{Lyrics: bt("one")}
+	enrichCache["a|t |b"] = enrichEntry{Lyrics: bt("two")}
 	err := backupEnrichKeyMergeGroups(map[string][]string{"a|t|b": {"a|t|b", "a|t |b"}, "c|d|e": {"c|d|e"}})
 	enrichMu.Unlock()
 	if err != nil {

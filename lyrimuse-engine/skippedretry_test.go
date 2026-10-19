@@ -63,7 +63,7 @@ func TestSkippedSourcesForRetryAtEveryWrite(t *testing.T) {
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{
 		fillKey: {},
-		rescoreKey: {Lyrics: "[00:05.00]Old line one\n[00:15.00]Old line two", LyricsSource: "musixmatch",
+		rescoreKey: {Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "musixmatch",
 			LyricsScoringVersion: lyricsScoringVersion - 1},
 	}
 	enrichMu.Unlock()

@@ -78,7 +78,7 @@ func TestResolveInstrumentalVersionSkipsLyricSearch(t *testing.T) {
 	var shown []enrichEntry
 	e := resolveTrackEnrichment(ctx, "某测试歌手不存在", "占位曲 (Instrumental)", "", 99, "",
 		func(p enrichEntry) { shown = append(shown, p) }, lyricsDecisionPathFirstResolve)
-	if len(shown) != 1 || !shown[0].Instrumental || shown[0].Lyrics != "" {
+	if len(shown) != 1 || !shown[0].Instrumental || !shown[0].Lyrics.IsZero() {
 		t.Fatalf("开搜前先上屏一份纯音乐: %+v", shown)
 	}
 	if !e.Instrumental || e.LyricsDecision != nil {
@@ -103,10 +103,10 @@ func rescoreInstrumentalEntry(t *testing.T, title string, e enrichEntry, manual 
 func TestRescoreReplacesCreditOnlyLyricsDespiteWordTiming(t *testing.T) {
 	setupRescoreTest(t, []string{"musixmatch"}, nil)
 	e, r := rescoreInstrumentalEntry(t, "Credit Song", enrichEntry{
-		Lyrics: creditOnlyTestLyrics, LyricsYRC: "[0,500](0,500,0)作曲：甲", LyricsSource: "musixmatch",
+		Lyrics: bt(creditOnlyTestLyrics), LyricsYRC: bt("[0,500](0,500,0)作曲：甲"), LyricsSource: "musixmatch",
 		LyricsScoringVersion: lyricsScoringVersion - 1,
 	}, false)
-	if !strings.HasPrefix(e.Lyrics, "[00:05.00]Brand new first line") || r.Outcome != lyricsRematchChanged {
+	if !strings.HasPrefix(e.Lyrics.String(), "[00:05.00]Brand new first line") || r.Outcome != lyricsRematchChanged {
 		t.Errorf("只有署名的当前这份不受逐字保护,该换成冠军:%q outcome=%s", e.Lyrics, r.Outcome)
 	}
 }
@@ -114,10 +114,10 @@ func TestRescoreReplacesCreditOnlyLyricsDespiteWordTiming(t *testing.T) {
 func TestRescoreMarksInstrumentalVersion(t *testing.T) {
 	setupRescoreTest(t, []string{"musixmatch"}, nil)
 	const old = "[00:05.00]Old line one\n[00:15.00]Old line two\n[00:25.00]Old line three\n[02:50.00]Old last line"
-	entry := enrichEntry{Lyrics: old, LyricsSource: "musixmatch", LyricsScoringVersion: lyricsScoringVersion - 1}
+	entry := enrichEntry{Lyrics: bt(old), LyricsSource: "musixmatch", LyricsScoringVersion: lyricsScoringVersion - 1}
 
 	e, _ := rescoreInstrumentalEntry(t, "Inst Song (Instrumental)", entry, false)
-	if !e.Instrumental || e.Lyrics != old {
+	if !e.Instrumental || !e.Lyrics.EqualString(old) {
 		t.Errorf("伴奏版、候选全被拒:标纯音乐、歌词留着,得到 instrumental=%v lyrics=%q", e.Instrumental, e.Lyrics)
 	}
 	if e, r := rescoreInstrumentalEntry(t, "Inst Song (Instrumental)", entry, true); !e.Instrumental ||
@@ -137,7 +137,7 @@ func TestRescoreMarksCreditOnlyLyricsInstrumental(t *testing.T) {
 		return musixmatchResult{instrumental: true, title: title, artist: artist}
 	}
 	e, _ := rescoreInstrumentalEntry(t, "Credit Song", enrichEntry{
-		Lyrics: creditOnlyTestLyrics, LyricsSource: "musixmatch", LyricsScoringVersion: lyricsScoringVersion - 1,
+		Lyrics: bt(creditOnlyTestLyrics), LyricsSource: "musixmatch", LyricsScoringVersion: lyricsScoringVersion - 1,
 	}, false)
 	if !e.Instrumental {
 		t.Error("当前这份只有署名、这一轮有源说是纯音乐:标纯音乐")

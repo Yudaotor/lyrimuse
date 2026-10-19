@@ -33,7 +33,7 @@ func TestLyricsRecheckOneRoundCoversEveryReason(t *testing.T) {
 	featuresRef().LyricsAutoUpgrade = true
 	setNativeLyricSourcesForPlayer(kasetBundleID)
 	const key = "a|t|"
-	e := enrichEntry{Lyrics: "[00:01.00]hi", LyricsSource: "qq", YouTubeMusicAlbum: "Listed",
+	e := enrichEntry{Lyrics: bt("[00:01.00]hi"), LyricsSource: "qq", YouTubeMusicAlbum: "Listed",
 		LyricsSourcesSeen: []string{"qq"}, LyricsSourcesResponded: []string{"qq", "lyricfind"}}
 	scene := lyricsRecheckScene{bundleID: kasetBundleID, kasetVideoID: "Song0000001"}
 
@@ -59,7 +59,7 @@ func TestLyricsRecheckKeepsReasonsThatDidNotHoldYet(t *testing.T) {
 	featuresRef().LyricsSources = map[string]bool{"qq": true, "lyricfind": true}
 	featuresRef().LyricsAutoUpgrade = true
 	const key = "a|mv|"
-	e := enrichEntry{Lyrics: "[00:01.00]hi", LyricsSource: "qq", YouTubeMusicAlbum: "Listed", YouTubeMusicMV: true,
+	e := enrichEntry{Lyrics: bt("[00:01.00]hi"), LyricsSource: "qq", YouTubeMusicAlbum: "Listed", YouTubeMusicMV: true,
 		LyricsSourcesSeen: []string{"qq"}, LyricsSourcesResponded: []string{"qq", "lyricfind"}}
 	scene := lyricsRecheckScene{bundleID: kasetBundleID, kasetVideoID: "Mv000000001"}
 
@@ -89,7 +89,7 @@ func TestLyricsRecheckDoesNotRepeatAnIdenticalRound(t *testing.T) {
 	key := enrichKey(artist, title, "")
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
-		Lyrics: rescoreTestNewBody, LyricsSource: "musixmatch", LyricsScore: 5000, ResolvedDurationSecs: 180,
+		Lyrics: bt(rescoreTestNewBody), LyricsSource: "musixmatch", LyricsScore: 5000, ResolvedDurationSecs: 180,
 		LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision,
 	}}
 	enrichMu.Unlock()

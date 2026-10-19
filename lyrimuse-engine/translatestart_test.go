@@ -69,7 +69,7 @@ func TestTranslationRunsAlongsideOtherBackgroundWork(t *testing.T) {
 	setupTranslateStart(t)
 	const key = "Someone|Some Song|Some Album"
 	enrichMu.Lock()
-	enrichCache = map[string]enrichEntry{key: {Lyrics: translateStartLyrics}}
+	enrichCache = map[string]enrichEntry{key: {Lyrics: bt(translateStartLyrics)}}
 	enrichInflight[key] = true // 比如重打分正在跑
 	started := startTranslationBackfillLocked(key, enrichCache[key])
 	again := startTranslationBackfillLocked(key, enrichCache[key])
@@ -88,7 +88,7 @@ func TestTranslationRunsAlongsideOtherBackgroundWork(t *testing.T) {
 	}
 	// 同时在跑的重打分随后换了正文、译文跟着清空:下一次轮询要能马上按新正文重翻,不被节流挡住。
 	e := enrichCache[key]
-	e.Lyrics, e.LyricsTr, e.LyricsTrLang, e.LyricsTrSource = "[00:01.00]Another line\n[00:02.00]And one more", "", "", ""
+	e.Lyrics, e.LyricsTr, e.LyricsTrLang, e.LyricsTrSource = bt("[00:01.00]Another line\n[00:02.00]And one more"), bodyText{}, "", ""
 	if !needsTranslationBackfill(e, key) {
 		t.Fatalf("翻成之后换了正文,重翻被节流挡住了: ts=%d retries=%d", e.TranslationTS, e.TranslationRetryCount)
 	}
@@ -106,7 +106,7 @@ func TestTranslationWaitsForProvisionalCommit(t *testing.T) {
 	const key = "Someone|Some Song|Some Album"
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
-	enrichCache = map[string]enrichEntry{key: {Lyrics: translateStartLyrics}}
+	enrichCache = map[string]enrichEntry{key: {Lyrics: bt(translateStartLyrics)}}
 	enrichProvisional[key] = true
 	if startTranslationBackfillLocked(key, enrichCache[key]) || translateUpcomingLocked(key) {
 		t.Fatal("先上屏那一份还会被整条覆盖,不该起机翻")
@@ -123,7 +123,7 @@ func TestTranslateUpcomingQueuesBehindSlot(t *testing.T) {
 	const key = "Someone|Next Song|Some Album"
 	prefetchTranslateSlot <- struct{}{}
 	enrichMu.Lock()
-	enrichCache = map[string]enrichEntry{key: {Lyrics: translateStartLyrics}}
+	enrichCache = map[string]enrichEntry{key: {Lyrics: bt(translateStartLyrics)}}
 	queued := translateUpcomingLocked(key)
 	enrichMu.Unlock()
 	if !queued {
@@ -141,7 +141,7 @@ func TestTranslateUpcomingQueuesBehindSlot(t *testing.T) {
 	waitTranslationDone(t, key)
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
-	if enrichCache[key].LyricsTr == "" {
+	if enrichCache[key].LyricsTr.IsZero() {
 		t.Fatal("槽空出来之后没翻")
 	}
 }
@@ -191,8 +191,8 @@ func TestTranslateAfterLyricsSwapOnlyForPlayingKey(t *testing.T) {
 	noteEnrichPlayingKey(playing)
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{
-		playing: {Lyrics: translateStartLyrics},
-		other:   {Lyrics: translateStartLyrics},
+		playing: {Lyrics: bt(translateStartLyrics)},
+		other:   {Lyrics: bt(translateStartLyrics)},
 	}
 	translateAfterLyricsSwapLocked(other)
 	sweptStarted := translationInflight[other]

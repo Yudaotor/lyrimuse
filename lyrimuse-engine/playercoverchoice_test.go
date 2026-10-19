@@ -172,7 +172,7 @@ func TestUpgradeDeviceCoverToPlayerCover(t *testing.T) {
 	run := func(player string, locals ...string) (enrichEntry, bool) {
 		local = locals
 		enrichMu.Lock()
-		enrichCache[key] = enrichEntry{CoverURL: device, CoverSource: "device", CoverAlbum: "丙", Lyrics: "[00:01.00]x"}
+		enrichCache[key] = enrichEntry{CoverURL: device, CoverSource: "device", CoverAlbum: "丙", Lyrics: bt("[00:01.00]x")}
 		enrichInflight[key] = true
 		enrichMu.Unlock()
 		changed := upgradeSmallDeviceCover(withPlayerCover(context.Background(), player), key, device, "甲", "乙", "丙", 0)
@@ -202,7 +202,7 @@ func TestUpgradeDeviceCoverToPlayerCover(t *testing.T) {
 	runEntry := func(players []string, covers map[string]string) (enrichEntry, bool) {
 		local = nil
 		enrichMu.Lock()
-		enrichCache[key] = enrichEntry{CoverURL: device, CoverSource: "device", CoverAlbum: "丙", Lyrics: "[00:01.00]x",
+		enrichCache[key] = enrichEntry{CoverURL: device, CoverSource: "device", CoverAlbum: "丙", Lyrics: bt("[00:01.00]x"),
 			Players: players, PlayerCovers: covers}
 		enrichInflight[key] = true
 		enrichMu.Unlock()
@@ -222,7 +222,7 @@ func TestUpgradeDeviceCoverToPlayerCover(t *testing.T) {
 		t.Errorf("条目上也没记:留设备封面,得到 %+v", e)
 	}
 	enrichMu.Lock()
-	enrichCache[key] = enrichEntry{CoverURL: device, CoverSource: "device", CoverAlbum: "丙", Lyrics: "[00:01.00]x",
+	enrichCache[key] = enrichEntry{CoverURL: device, CoverSource: "device", CoverAlbum: "丙", Lyrics: bt("[00:01.00]x"),
 		PlayerCovers: map[string]string{"b.player": other}, CoverSettled: device}
 	enrichInflight[key] = true
 	enrichMu.Unlock()

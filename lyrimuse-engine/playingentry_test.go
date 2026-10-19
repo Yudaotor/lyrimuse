@@ -21,14 +21,14 @@ func TestCommitPlayingKeyWritesEntryBeforeFullSave(t *testing.T) {
 		sawSnapshotAtSave = err == nil
 	}
 
-	commitEnrichEntry("x|prefetch|y", enrichEntry{Lyrics: "[00:01.00]other"})
+	commitEnrichEntry("x|prefetch|y", enrichEntry{Lyrics: bt("[00:01.00]other")})
 	if _, err := os.Stat(playingEntryPath()); err == nil {
 		t.Fatal("预解析别的歌不该写单条快照")
 	}
 
 	const key = "a|now|b"
 	noteEnrichPlayingKey(key)
-	commitEnrichEntry(key, enrichEntry{Lyrics: "[00:01.00]hi", LyricsYRC: "[1000,500](1000,500,0)hi", TS: 7,
+	commitEnrichEntry(key, enrichEntry{Lyrics: bt("[00:01.00]hi"), LyricsYRC: bt("[1000,500](1000,500,0)hi"), TS: 7,
 		LyricsDecision: fullDecision(lyricsDecisionPathFirstResolve, 7, "qq")})
 	if !sawSnapshotAtSave {
 		t.Fatal("整份写盘开始时单条快照就该已经在磁盘上")
@@ -41,7 +41,7 @@ func TestCommitPlayingKeyWritesEntryBeforeFullSave(t *testing.T) {
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Key != key || got.Entry.Lyrics != "[00:01.00]hi" || got.Entry.LyricsYRC == "" || got.Entry.TS != 7 {
+	if got.Key != key || !got.Entry.Lyrics.EqualString("[00:01.00]hi") || got.Entry.LyricsYRC.IsZero() || got.Entry.TS != 7 {
 		t.Fatalf("单条快照内容不对: %+v", got)
 	}
 	if hasDecisionDetails(got.Entry.LyricsDecision) {

@@ -69,22 +69,22 @@ func TestEntrySongLanguage(t *testing.T) {
 }
 
 func TestDropHokkienRomaAndHelperGate(t *testing.T) {
-	e := enrichEntry{Lyrics: "[00:01.00]阮", LyricsRoma: "[00:01.00]ruan", SongLanguage: songLanguageHokkien}
+	e := enrichEntry{Lyrics: bt("[00:01.00]阮"), LyricsRoma: bt("[00:01.00]ruan"), SongLanguage: songLanguageHokkien}
 	e.dropHokkienRoma()
-	if e.LyricsRoma != "" {
+	if !e.LyricsRoma.IsZero() {
 		t.Fatal("台语歌不留罗马音")
 	}
 	if e.shouldGenerateHelperRoma() {
 		t.Fatal("台语歌不该生成拼音")
 	}
-	manual := enrichEntry{Lyrics: "[00:01.00]阮", LyricsRoma: "[00:01.00]guan", SongLanguage: songLanguageHokkien, ManualLyrics: true}
+	manual := enrichEntry{Lyrics: bt("[00:01.00]阮"), LyricsRoma: bt("[00:01.00]guan"), SongLanguage: songLanguageHokkien, ManualLyrics: true}
 	manual.dropHokkienRoma()
-	if manual.LyricsRoma == "" {
+	if manual.LyricsRoma.IsZero() {
 		t.Fatal("手改过的不动")
 	}
-	cmn := enrichEntry{Lyrics: "[00:01.00]我", LyricsRoma: "[00:01.00]wo", SongLanguage: songLanguageMandarin}
+	cmn := enrichEntry{Lyrics: bt("[00:01.00]我"), LyricsRoma: bt("[00:01.00]wo"), SongLanguage: songLanguageMandarin}
 	cmn.dropHokkienRoma()
-	if cmn.LyricsRoma == "" {
+	if cmn.LyricsRoma.IsZero() {
 		t.Fatal("普通话歌不动")
 	}
 }
@@ -92,24 +92,24 @@ func TestDropHokkienRomaAndHelperGate(t *testing.T) {
 func TestMigrateHokkienSongLanguage(t *testing.T) {
 	hok := lrcOf(mandarinFill, "你袂记得阮", "阮毋是你的人")
 	withEnrichCache(t, map[string]enrichEntry{
-		"a|台语|":   {Lyrics: hok, LyricsRoma: "[00:01.00]pinyin"},
-		"b|手改台语|": {Lyrics: hok, LyricsRoma: "[00:01.00]mine", ManualLyrics: true},
-		"c|粤语|":   {Lyrics: hok, LyricsRoma: "[00:01.00]jyut6", SongLanguage: songLanguageCantonese},
-		"d|普通话|":  {Lyrics: lrcOf(mandarinFill), LyricsRoma: "[00:01.00]wo", SongLanguage: songLanguageMandarin},
+		"a|台语|":   {Lyrics: bt(hok), LyricsRoma: bt("[00:01.00]pinyin")},
+		"b|手改台语|": {Lyrics: bt(hok), LyricsRoma: bt("[00:01.00]mine"), ManualLyrics: true},
+		"c|粤语|":   {Lyrics: bt(hok), LyricsRoma: bt("[00:01.00]jyut6"), SongLanguage: songLanguageCantonese},
+		"d|普通话|":  {Lyrics: bt(lrcOf(mandarinFill)), LyricsRoma: bt("[00:01.00]wo"), SongLanguage: songLanguageMandarin},
 	})
 	migrateHokkienSongLanguage()
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
-	if e := enrichCache["a|台语|"]; e.SongLanguage != songLanguageHokkien || e.LyricsRoma != "" {
+	if e := enrichCache["a|台语|"]; e.SongLanguage != songLanguageHokkien || !e.LyricsRoma.IsZero() {
 		t.Errorf("台语条目: %+v", e)
 	}
-	if e := enrichCache["b|手改台语|"]; e.SongLanguage != songLanguageHokkien || e.LyricsRoma == "" {
+	if e := enrichCache["b|手改台语|"]; e.SongLanguage != songLanguageHokkien || e.LyricsRoma.IsZero() {
 		t.Errorf("手改过的只补语种、不清罗马音: %+v", e)
 	}
-	if e := enrichCache["c|粤语|"]; e.SongLanguage != songLanguageCantonese || e.LyricsRoma == "" {
+	if e := enrichCache["c|粤语|"]; e.SongLanguage != songLanguageCantonese || e.LyricsRoma.IsZero() {
 		t.Errorf("粤语条目不动: %+v", e)
 	}
-	if e := enrichCache["d|普通话|"]; e.SongLanguage != songLanguageMandarin || e.LyricsRoma == "" {
+	if e := enrichCache["d|普通话|"]; e.SongLanguage != songLanguageMandarin || e.LyricsRoma.IsZero() {
 		t.Errorf("普通话条目不动: %+v", e)
 	}
 }

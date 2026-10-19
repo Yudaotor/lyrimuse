@@ -15,11 +15,11 @@ func TestIsLegacyKoreanRomaCandidate(t *testing.T) {
 		e    enrichEntry
 		want bool
 	}{
-		{"有罗马音的韩文歌", enrichEntry{Lyrics: "[00:01.00]사랑해", LyricsRoma: "[00:01.00]salanghae"}, true},
-		{"用户手改过", enrichEntry{Lyrics: "[00:01.00]사랑해", LyricsRoma: "[00:01.00]salanghae", ManualLyrics: true}, false},
-		{"没有罗马音", enrichEntry{Lyrics: "[00:01.00]사랑해"}, false},
-		{"正文没有谚文", enrichEntry{Lyrics: "[00:01.00]君の名は", LyricsRoma: "[00:01.00]kimi no na wa"}, false},
-		{"没有正文", enrichEntry{LyricsRoma: "[00:01.00]salanghae"}, false},
+		{"有罗马音的韩文歌", enrichEntry{Lyrics: bt("[00:01.00]사랑해"), LyricsRoma: bt("[00:01.00]salanghae")}, true},
+		{"用户手改过", enrichEntry{Lyrics: bt("[00:01.00]사랑해"), LyricsRoma: bt("[00:01.00]salanghae"), ManualLyrics: true}, false},
+		{"没有罗马音", enrichEntry{Lyrics: bt("[00:01.00]사랑해")}, false},
+		{"正文没有谚文", enrichEntry{Lyrics: bt("[00:01.00]君の名は"), LyricsRoma: bt("[00:01.00]kimi no na wa")}, false},
+		{"没有正文", enrichEntry{LyricsRoma: bt("[00:01.00]salanghae")}, false},
 	}
 	for _, c := range cases {
 		if got := isLegacyKoreanRomaCandidate(c.e); got != c.want {
@@ -86,10 +86,10 @@ func TestMigrateLegacyKoreanRomaReplacesOnlyOurs(t *testing.T) {
 	const ours, source, edited, manual = "A|ours|X", "A|source|X", "A|edited|X", "A|manual|X"
 	asked := 0
 	withLegacyKoreanRomaFixture(t, map[string]enrichEntry{
-		ours:   {Lyrics: "[00:01.00]사랑해", LyricsRoma: "[00:01.00]salanghae"},
-		source: {Lyrics: "[00:01.00]사랑해", LyricsRoma: "[00:01.00]sa rang hae"},
-		edited: {Lyrics: "[00:01.00]같이", LyricsRoma: "[00:01.00]gat-i"},
-		manual: {Lyrics: "[00:01.00]사랑해\n[00:02.00]같이", LyricsRoma: "[00:01.00]salanghae\n[00:02.00]ga chi", ManualLyrics: true},
+		ours:   {Lyrics: bt("[00:01.00]사랑해"), LyricsRoma: bt("[00:01.00]salanghae")},
+		source: {Lyrics: bt("[00:01.00]사랑해"), LyricsRoma: bt("[00:01.00]sa rang hae")},
+		edited: {Lyrics: bt("[00:01.00]같이"), LyricsRoma: bt("[00:01.00]gat-i")},
+		manual: {Lyrics: bt("[00:01.00]사랑해\n[00:02.00]같이"), LyricsRoma: bt("[00:01.00]salanghae\n[00:02.00]ga chi"), ManualLyrics: true},
 	}, func(lyrics, stored string) (string, error) {
 		asked++
 		switch stored {
@@ -99,7 +99,7 @@ func TestMigrateLegacyKoreanRomaReplacesOnlyOurs(t *testing.T) {
 			// helper 跑着的时候这一条被手改了:写回时要放弃,不能拿算好的盖掉。
 			enrichMu.Lock()
 			e := enrichCache[edited]
-			e.LyricsRoma = "[00:01.00]ga chi"
+			e.LyricsRoma = bt("[00:01.00]ga chi")
 			enrichCache[edited] = e
 			enrichMu.Unlock()
 			return "[00:01.00]gachi", nil
@@ -110,16 +110,16 @@ func TestMigrateLegacyKoreanRomaReplacesOnlyOurs(t *testing.T) {
 	if n := runLegacyKoreanRomaMigration(context.Background()); n != 1 || asked != 3 {
 		t.Fatalf("应问 3 条(手改过的那条不问)、换 1 条,实问 %d、换 %d", asked, n)
 	}
-	if got := enrichCache[ours].LyricsRoma; got != "[00:01.00]saranghae" {
+	if got := enrichCache[ours].LyricsRoma; !got.EqualString("[00:01.00]saranghae") {
 		t.Errorf("我们旧版生成的那份应换成按读音的,实得 %q", got)
 	}
-	if got := enrichCache[source].LyricsRoma; got != "[00:01.00]sa rang hae" {
+	if got := enrichCache[source].LyricsRoma; !got.EqualString("[00:01.00]sa rang hae") {
 		t.Errorf("歌词源给的不动,实得 %q", got)
 	}
-	if got := enrichCache[edited].LyricsRoma; got != "[00:01.00]ga chi" {
+	if got := enrichCache[edited].LyricsRoma; !got.EqualString("[00:01.00]ga chi") {
 		t.Errorf("期间被改过的不动,实得 %q", got)
 	}
-	if got := enrichCache[manual].LyricsRoma; got != "[00:01.00]salanghae\n[00:02.00]ga chi" {
+	if got := enrichCache[manual].LyricsRoma; !got.EqualString("[00:01.00]salanghae\n[00:02.00]ga chi") {
 		t.Errorf("用户手改过的整条不动,实得 %q", got)
 	}
 	if !legacyKoreanRomaMarked() {
@@ -132,8 +132,8 @@ func TestMigrateLegacyKoreanRomaStopsOnUnusableHelper(t *testing.T) {
 	for _, helperErr := range []error{errRomanizeHelperMissing, errLegacyCheckUnsupported} {
 		asked := 0
 		withLegacyKoreanRomaFixture(t, map[string]enrichEntry{
-			"A|one|X": {Lyrics: "[00:01.00]사랑해", LyricsRoma: "[00:01.00]sa rang hae"},
-			"A|two|X": {Lyrics: "[00:01.00]같이", LyricsRoma: "[00:01.00]ga chi"},
+			"A|one|X": {Lyrics: bt("[00:01.00]사랑해"), LyricsRoma: bt("[00:01.00]sa rang hae")},
+			"A|two|X": {Lyrics: bt("[00:01.00]같이"), LyricsRoma: bt("[00:01.00]ga chi")},
 		}, func(string, string) (string, error) {
 			asked++
 			return "", helperErr
@@ -141,7 +141,7 @@ func TestMigrateLegacyKoreanRomaStopsOnUnusableHelper(t *testing.T) {
 		if n := runLegacyKoreanRomaMigration(context.Background()); n != 0 || asked != 1 {
 			t.Errorf("%v: 应问 1 条就停、一条不换,实问 %d、换 %d", helperErr, asked, n)
 		}
-		if enrichCache["A|one|X"].LyricsRoma != "[00:01.00]sa rang hae" || enrichCache["A|two|X"].LyricsRoma != "[00:01.00]ga chi" {
+		if !enrichCache["A|one|X"].LyricsRoma.EqualString("[00:01.00]sa rang hae") || !enrichCache["A|two|X"].LyricsRoma.EqualString("[00:01.00]ga chi") {
 			t.Errorf("%v: 原样保留", helperErr)
 		}
 		if legacyKoreanRomaMarked() {
@@ -154,7 +154,7 @@ func TestMigrateLegacyKoreanRomaStopsOnUnusableHelper(t *testing.T) {
 func TestMigrateLegacyKoreanRomaKeepsWatermarkWhenSaveFails(t *testing.T) {
 	const key = "A|ours|X"
 	withLegacyKoreanRomaFixture(t, map[string]enrichEntry{
-		key: {Lyrics: "[00:01.00]사랑해", LyricsRoma: "[00:01.00]salanghae"},
+		key: {Lyrics: bt("[00:01.00]사랑해"), LyricsRoma: bt("[00:01.00]salanghae")},
 	}, func(string, string) (string, error) { return "[00:01.00]saranghae", nil })
 	ro := t.TempDir()
 	if err := os.Chmod(ro, 0o500); err != nil { // 只读目录:临时文件建不出来
@@ -171,7 +171,7 @@ func TestMigrateLegacyKoreanRomaKeepsWatermarkWhenSaveFails(t *testing.T) {
 	enrichMu.Lock()
 	roma, dirty := enrichCache[key].LyricsRoma, enrichDirty
 	enrichMu.Unlock()
-	if roma != "[00:01.00]saranghae" || !dirty {
+	if !roma.EqualString("[00:01.00]saranghae") || !dirty {
 		t.Errorf("换好的留在内存里、脏标记在,等下一次保存:roma=%q dirty=%v", roma, dirty)
 	}
 	if legacyKoreanRomaMarked() {
@@ -182,7 +182,7 @@ func TestMigrateLegacyKoreanRomaKeepsWatermarkWhenSaveFails(t *testing.T) {
 func TestMigrateLegacyKoreanRomaStopsOnCancel(t *testing.T) {
 	asked := 0
 	withLegacyKoreanRomaFixture(t, map[string]enrichEntry{
-		"A|ours|X": {Lyrics: "[00:01.00]사랑해", LyricsRoma: "[00:01.00]salanghae"},
+		"A|ours|X": {Lyrics: bt("[00:01.00]사랑해"), LyricsRoma: bt("[00:01.00]salanghae")},
 	}, func(string, string) (string, error) {
 		asked++
 		return "", errors.New("unreachable")

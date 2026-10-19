@@ -47,11 +47,11 @@ const translateShareLyrics = "[00:01.00]The painful youth\n[00:02.00]I have had"
 func TestBackfillTranslationBorrowsFromSameSong(t *testing.T) {
 	borrowed := "[00:01.00]痛苦的青春\n[00:02.00]我经历过"
 	calls := setUpTranslateShareTest(t, map[string]enrichEntry{
-		"A|Song|One": {Song: "s_1", Lyrics: translateShareLyrics, LyricsTr: borrowed, LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
-		"A|Song|Two": {Song: "s_1", Lyrics: translateShareLyrics, TranslationRetryCount: 2},
+		"A|Song|One": {Song: "s_1", Lyrics: bt(translateShareLyrics), LyricsTr: bt(borrowed), LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
+		"A|Song|Two": {Song: "s_1", Lyrics: bt(translateShareLyrics), TranslationRetryCount: 2},
 	})
 	backfillTranslation("A|Song|Two")
-	if got := enrichCache["A|Song|Two"]; got.LyricsTr != borrowed || got.LyricsTrSource != lyricsTrSourceMachine ||
+	if got := enrichCache["A|Song|Two"]; !got.LyricsTr.EqualString(borrowed) || got.LyricsTrSource != lyricsTrSourceMachine ||
 		got.LyricsTrLang != "zh-CN" || got.TranslationRetryCount != 0 {
 		t.Errorf("借同一首歌、同一份歌词的机翻: %+v", got)
 	}
@@ -62,18 +62,18 @@ func TestBackfillTranslationBorrowsFromSameSong(t *testing.T) {
 
 func TestBackfillTranslationDoesNotBorrowOtherTranslations(t *testing.T) {
 	for name, src := range map[string]enrichEntry{
-		"别的语言的机翻": {LyricsTr: "[00:01.00]youth ja\n[00:02.00]had ja", LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "ja"},
-		"社区译文":    {LyricsTr: "[00:01.00]痛苦的青春\n[00:02.00]我经历过", LyricsTrLang: "zh-CN"},
-		"没记语言的机翻": {LyricsTr: "[00:01.00]痛苦的青春\n[00:02.00]我经历过", LyricsTrSource: lyricsTrSourceMachine},
+		"别的语言的机翻": {LyricsTr: bt("[00:01.00]youth ja\n[00:02.00]had ja"), LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "ja"},
+		"社区译文":    {LyricsTr: bt("[00:01.00]痛苦的青春\n[00:02.00]我经历过"), LyricsTrLang: "zh-CN"},
+		"没记语言的机翻": {LyricsTr: bt("[00:01.00]痛苦的青春\n[00:02.00]我经历过"), LyricsTrSource: lyricsTrSourceMachine},
 	} {
 		t.Run(name, func(t *testing.T) {
-			src.Song, src.Lyrics = "s_1", translateShareLyrics
+			src.Song, src.Lyrics = "s_1", bt(translateShareLyrics)
 			calls := setUpTranslateShareTest(t, map[string]enrichEntry{
 				"A|Song|One": src,
-				"A|Song|Two": {Song: "s_1", Lyrics: translateShareLyrics},
+				"A|Song|Two": {Song: "s_1", Lyrics: bt(translateShareLyrics)},
 			})
 			backfillTranslation("A|Song|Two")
-			if got := enrichCache["A|Song|Two"]; got.LyricsTr == src.LyricsTr || atomic.LoadInt32(calls) == 0 {
+			if got := enrichCache["A|Song|Two"]; got.LyricsTr.Equal(src.LyricsTr) || atomic.LoadInt32(calls) == 0 {
 				t.Errorf("不借,自己翻: %+v calls=%d", got, *calls)
 			}
 		})
@@ -83,24 +83,24 @@ func TestBackfillTranslationDoesNotBorrowOtherTranslations(t *testing.T) {
 func TestBackfillTranslationSharesWithSameSong(t *testing.T) {
 	community := "[00:01.00]社区的译文\n[00:02.00]第二行"
 	setUpTranslateShareTest(t, map[string]enrichEntry{
-		"A|Song|One":   {Song: "s_1", Lyrics: translateShareLyrics},
-		"A|Song|Two":   {Song: "s_1", Lyrics: translateShareLyrics},
-		"A|Song|Three": {Song: "s_1", Lyrics: translateShareLyrics, Instrumental: true},
-		"A|Song|Four":  {Song: "s_1", Lyrics: translateShareLyrics, LyricsTr: community, LyricsTrLang: "zh-CN"},
-		"A|Song|Five":  {Song: "s_1", Lyrics: "[00:01.00]Another body"},
-		"B|Other|One":  {Song: "s_2", Lyrics: translateShareLyrics},
-		"C|None|One":   {Lyrics: translateShareLyrics},
+		"A|Song|One":   {Song: "s_1", Lyrics: bt(translateShareLyrics)},
+		"A|Song|Two":   {Song: "s_1", Lyrics: bt(translateShareLyrics)},
+		"A|Song|Three": {Song: "s_1", Lyrics: bt(translateShareLyrics), Instrumental: true},
+		"A|Song|Four":  {Song: "s_1", Lyrics: bt(translateShareLyrics), LyricsTr: bt(community), LyricsTrLang: "zh-CN"},
+		"A|Song|Five":  {Song: "s_1", Lyrics: bt("[00:01.00]Another body")},
+		"B|Other|One":  {Song: "s_2", Lyrics: bt(translateShareLyrics)},
+		"C|None|One":   {Lyrics: bt(translateShareLyrics)},
 	})
 	backfillTranslation("A|Song|One")
 	tr := enrichCache["A|Song|One"].LyricsTr
-	if tr == "" {
+	if tr.IsZero() {
 		t.Fatal("没翻出来")
 	}
-	if got := enrichCache["A|Song|Two"]; got.LyricsTr != tr || got.LyricsTrSource != lyricsTrSourceMachine || got.LyricsTrLang != "zh-CN" {
+	if got := enrichCache["A|Song|Two"]; !got.LyricsTr.Equal(tr) || got.LyricsTrSource != lyricsTrSourceMachine || got.LyricsTrLang != "zh-CN" {
 		t.Errorf("同一首歌、同一份歌词的写法跟着用上: %+v", got)
 	}
 	for k, want := range map[string]string{"A|Song|Three": "", "A|Song|Four": community, "A|Song|Five": "", "B|Other|One": "", "C|None|One": ""} {
-		if got := enrichCache[k].LyricsTr; got != want {
+		if got := enrichCache[k].LyricsTr; !got.EqualString(want) {
 			t.Errorf("%s 不动: %q", k, got)
 		}
 	}

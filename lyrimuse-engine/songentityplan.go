@@ -447,7 +447,7 @@ func (b *songEntityBuild) evaluateShareGroup(w io.Writer, ms []int, own []*songP
 	var stable *scoredLyricCandidateResult
 	for _, e := range entries {
 		for j := range scored {
-			if scored[j].Source != e.LyricsSource || scored[j].Lyrics != e.Lyrics {
+			if scored[j].Source != e.LyricsSource || !e.Lyrics.EqualString(scored[j].Lyrics) {
 				continue
 			}
 			c := &scored[j]

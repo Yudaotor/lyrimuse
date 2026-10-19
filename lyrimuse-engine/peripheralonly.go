@@ -21,5 +21,5 @@ func peripheralOnly(ctx context.Context) bool {
 // peripheralBackfillSkipsLyrics:这一条做周边补全时要不要跳过歌词搜索。判据跟 adoptBackfilledLyrics
 // 收不收这一轮歌词互为反面,两处必须同步改。
 func peripheralBackfillSkipsLyrics(e enrichEntry) bool {
-	return e.Lyrics != "" || e.ManualLyrics || e.Instrumental
+	return !e.Lyrics.IsZero() || e.ManualLyrics || e.Instrumental
 }

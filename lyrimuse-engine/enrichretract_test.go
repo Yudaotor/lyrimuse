@@ -54,14 +54,14 @@ func TestCommitEnrichEntrySkipsRetractedKey(t *testing.T) {
 	withEnrichCache(t, nil)
 	key := enrichKey("作曲: 中岛美雪", "漫步人生路 - 邓丽君", "漫步人生路")
 	retractEnrichKeys([]string{key}, time.Now())
-	commitEnrichEntry(key, enrichEntry{TS: time.Now().Unix(), Lyrics: "[00:01.00]歌词"})
+	commitEnrichEntry(key, enrichEntry{TS: time.Now().Unix(), Lyrics: bt("[00:01.00]歌词")})
 	if _, ok := enrichCache[key]; ok {
 		t.Error("撤回期内不该再写进缓存")
 	}
 	enrichMu.Lock()
 	enrichRetracted[key] = time.Now().Add(-enrichRetractTTL - time.Second)
 	enrichMu.Unlock()
-	commitEnrichEntry(key, enrichEntry{TS: time.Now().Unix(), Lyrics: "[00:01.00]歌词"})
+	commitEnrichEntry(key, enrichEntry{TS: time.Now().Unix(), Lyrics: bt("[00:01.00]歌词")})
 	if _, ok := enrichCache[key]; !ok {
 		t.Error("过了撤回期该照常写")
 	}

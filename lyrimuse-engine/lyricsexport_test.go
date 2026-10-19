@@ -120,7 +120,7 @@ func TestImportLyricsFromFilesSweepsTempFiles(t *testing.T) {
 	enrichMu.Lock()
 	e := enrichCache[enrichKey("A", "B", "C")]
 	enrichMu.Unlock()
-	if !strings.HasSuffix(e.Lyrics, "three") {
+	if !strings.HasSuffix(e.Lyrics.String(), "three") {
 		t.Fatalf("导入应采纳完整的 .lrc 正文而不是临时文件里的半截,实际 %q", e.Lyrics)
 	}
 }
@@ -139,7 +139,7 @@ func TestExportLyricsFilesConcurrentWritesStayWhole(t *testing.T) {
 	body := strings.Repeat("[00:01.00]一行歌词正文用来把文件撑长一点,交错截断才看得出来\n", 200)
 	enrichMu.Lock()
 	setLyricsDir(dir)
-	enrichCache = map[string]enrichEntry{"歌手|歌名|专辑": {Lyrics: body, LyricsSource: "qq"}}
+	enrichCache = map[string]enrichEntry{"歌手|歌名|专辑": {Lyrics: bt(body), LyricsSource: "qq"}}
 	enrichMu.Unlock()
 
 	var wg sync.WaitGroup
@@ -308,7 +308,7 @@ func TestExportLyricsFilesRemovesUntruncatedLeftover(t *testing.T) {
 
 	enrichMu.Lock()
 	oldCache := enrichCache
-	enrichCache = map[string]enrichEntry{key: {Lyrics: "[00:01.00]新内容\n"}}
+	enrichCache = map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]新内容\n")}}
 	enrichMu.Unlock()
 	t.Cleanup(func() {
 		enrichMu.Lock()
@@ -344,8 +344,8 @@ func TestSanitizeLyricsFilenameTruncationStillDisambiguates(t *testing.T) {
 	enrichMu.Lock()
 	oldCache := enrichCache
 	enrichCache = map[string]enrichEntry{
-		k1: {Lyrics: "[00:01.00]甲的歌词\n"},
-		k2: {Lyrics: "[00:01.00]乙的歌词\n"},
+		k1: {Lyrics: bt("[00:01.00]甲的歌词\n")},
+		k2: {Lyrics: bt("[00:01.00]乙的歌词\n")},
 	}
 	enrichMu.Unlock()
 	t.Cleanup(func() {

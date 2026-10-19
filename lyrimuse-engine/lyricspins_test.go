@@ -14,7 +14,7 @@ func TestPinBlocksAutomaticLyricsReselection(t *testing.T) {
 	t.Cleanup(func() { setFeatures(saved) })
 
 	// 版本落后 → 不 pin 该重选。
-	stale := enrichEntry{Lyrics: "x", LyricsScoringVersion: lyricsScoringVersion - 1}
+	stale := enrichEntry{Lyrics: bt("x"), LyricsScoringVersion: lyricsScoringVersion - 1}
 	if !needsLyricsRescore(stale, false, true) {
 		t.Fatal("前提不成立：版本落后的条目本来就该重选，测试用例失效")
 	}
@@ -28,7 +28,7 @@ func TestPinBlocksAutomaticLyricsReselection(t *testing.T) {
 	t.Cleanup(func() { nativeLyricSources = savedNative })
 	nativeLyricSources = map[string]bool{"qq": true}
 	missed := enrichEntry{
-		Lyrics: "[00:01.00]x", LyricsYRC: "[1,2](1,1,0)x",
+		Lyrics: bt("[00:01.00]x"), LyricsYRC: bt("[1,2](1,1,0)x"),
 		LyricsSource: "kugou", LyricsSourcesSeen: []string{"kugou", "qq"},
 	}
 	if !needsLyricsRetry(missed, false, false, true) {
@@ -41,7 +41,7 @@ func TestPinBlocksAutomaticLyricsReselection(t *testing.T) {
 	// 时长对不上那条同样是越闸路径，一并覆盖。
 	nativeLyricSources = nil
 	wrongDur := enrichEntry{
-		Lyrics: "[00:01.00]x", LyricsYRC: "[1,2](1,1,0)x",
+		Lyrics: bt("[00:01.00]x"), LyricsYRC: bt("[1,2](1,1,0)x"),
 		LyricsSource: "kugou", ResolvedDurationSecs: 300,
 	}
 	// wrongDuration 标志由 trackEnrichment 用 durationMismatch + observeWrongDuration

@@ -82,18 +82,18 @@ const coverSweepLyrics = "[00:01.00]line"
 
 func TestCoverSweepCandidates(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
-		"B|t1|Album": {Lyrics: coverSweepLyrics},
-		"A|t2|Z":     {Lyrics: coverSweepLyrics},
+		"B|t1|Album": {Lyrics: bt(coverSweepLyrics)},
+		"A|t2|Z":     {Lyrics: bt(coverSweepLyrics)},
 		"A|t1|Y":     {Instrumental: true},
-		"A|t3|Y":     {ManualLyrics: true, Lyrics: coverSweepLyrics},
-		"A|has|Y":    {Lyrics: coverSweepLyrics, CoverURL: "https://c"},
-		"A|tried|Y":  {Lyrics: coverSweepLyrics, PeripheralRetryCount: 1, CoverMissingRetryRules: coverMissingRetryRules},
-		"A|old|Y":    {Lyrics: coverSweepLyrics, PeripheralRetryCount: peripheralBackfillMaxAttempts},
-		"A|recent|Y": {Lyrics: coverSweepLyrics, PeripheralRetryCount: 1, PeripheralTS: time.Now().Unix()},
+		"A|t3|Y":     {ManualLyrics: true, Lyrics: bt(coverSweepLyrics)},
+		"A|has|Y":    {Lyrics: bt(coverSweepLyrics), CoverURL: "https://c"},
+		"A|tried|Y":  {Lyrics: bt(coverSweepLyrics), PeripheralRetryCount: 1, CoverMissingRetryRules: coverMissingRetryRules},
+		"A|old|Y":    {Lyrics: bt(coverSweepLyrics), PeripheralRetryCount: peripheralBackfillMaxAttempts},
+		"A|recent|Y": {Lyrics: bt(coverSweepLyrics), PeripheralRetryCount: 1, PeripheralTS: time.Now().Unix()},
 		"A|nolyr|Y":  {},
-		"|t|Y":       {Lyrics: coverSweepLyrics},
-		"A|fresh|Y":  {Lyrics: coverSweepLyrics, TS: time.Now().Unix()},
-		"A|busy|Y":   {Lyrics: coverSweepLyrics},
+		"|t|Y":       {Lyrics: bt(coverSweepLyrics)},
+		"A|fresh|Y":  {Lyrics: bt(coverSweepLyrics), TS: time.Now().Unix()},
+		"A|busy|Y":   {Lyrics: bt(coverSweepLyrics)},
 	})
 	withCoverSweepFakes(t, [][2]int32{{1, 0}}, nil)
 	enrichMu.Lock()
@@ -122,9 +122,9 @@ func TestCoverSweepTitle(t *testing.T) {
 // 两首之间等 coverSweepGap,轮到时不用补的那条之后不等。
 func TestCoverSweepRunsEachCandidateOnce(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
-		"A|Gone|Al":      {Lyrics: coverSweepLyrics, DurationSecs: 180},
-		"A|Other|Al":     {Lyrics: coverSweepLyrics},
-		"A|Song~dur2|Al": {Lyrics: coverSweepLyrics, ResolvedDurationSecs: 200, DurationSecs: 190},
+		"A|Gone|Al":      {Lyrics: bt(coverSweepLyrics), DurationSecs: 180},
+		"A|Other|Al":     {Lyrics: bt(coverSweepLyrics)},
+		"A|Song~dur2|Al": {Lyrics: bt(coverSweepLyrics), ResolvedDurationSecs: 200, DurationSecs: 190},
 	})
 	calls, waits := withCoverSweepFakes(t, [][2]int32{{4, 1}}, func(key string) {
 		switch key {
@@ -155,9 +155,9 @@ func TestCoverSweepRunsEachCandidateOnce(t *testing.T) {
 func TestCoverSweepBatchesSaves(t *testing.T) {
 	entries := map[string]enrichEntry{}
 	for i := 0; i < 2*coverSweepSaveEvery+3; i++ {
-		entries[fmt.Sprintf("A|%02d|X", i)] = enrichEntry{Lyrics: coverSweepLyrics}
+		entries[fmt.Sprintf("A|%02d|X", i)] = enrichEntry{Lyrics: bt(coverSweepLyrics)}
 	}
-	entries["A|01a|X"] = enrichEntry{Lyrics: coverSweepLyrics}
+	entries["A|01a|X"] = enrichEntry{Lyrics: bt(coverSweepLyrics)}
 	withEnrichCache(t, entries)
 	var savesAt []int
 	calls, _ := withCoverSweepFakes(t, [][2]int32{{3, 0}}, func(key string) {
@@ -184,7 +184,7 @@ func TestCoverSweepBatchesSaves(t *testing.T) {
 func TestCoverSweepStopsAfterOfflineStreak(t *testing.T) {
 	entries := map[string]enrichEntry{}
 	for _, k := range []string{"A|1|X", "A|2|X", "A|3|X", "A|4|X", "A|5|X", "A|6|X", "A|7|X"} {
-		entries[k] = enrichEntry{Lyrics: coverSweepLyrics}
+		entries[k] = enrichEntry{Lyrics: bt(coverSweepLyrics)}
 	}
 	withEnrichCache(t, entries)
 	calls, waits := withCoverSweepFakes(t, [][2]int32{{3, 3}, {0, 0}, {5, 5}, {2, 2}, {4, 4}}, nil)
@@ -229,7 +229,7 @@ func TestCoverSweepCountsOnlyItsOwnRequests(t *testing.T) {
 		{"自己的全失败", deadURL, coverSweepOffline},
 		{"自己的有成功", ok.URL, coverSweepMissed},
 	} {
-		withEnrichCache(t, map[string]enrichEntry{"A|1|X": {Lyrics: coverSweepLyrics}})
+		withEnrichCache(t, map[string]enrichEntry{"A|1|X": {Lyrics: bt(coverSweepLyrics)}})
 		withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
 		coverSweepNetworkRound = productionRound
 		coverSweepBackfill = func(ctx context.Context, key, _, _, _ string, _ float64) {
@@ -248,9 +248,9 @@ func TestCoverSweepCountsOnlyItsOwnRequests(t *testing.T) {
 // 补过一次(补上了、没补上)记下这一版补法;一个请求都没成功的不记,下一遍还挑它。
 func TestCoverSweepRecordsRetryRules(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
-		"A|Hit|X":  {Lyrics: coverSweepLyrics},
-		"A|Miss|X": {Lyrics: coverSweepLyrics},
-		"A|Off|X":  {Lyrics: coverSweepLyrics},
+		"A|Hit|X":  {Lyrics: bt(coverSweepLyrics)},
+		"A|Miss|X": {Lyrics: bt(coverSweepLyrics)},
+		"A|Off|X":  {Lyrics: bt(coverSweepLyrics)},
 	})
 	withCoverSweepFakes(t, [][2]int32{{2, 0}, {2, 0}, {2, 2}}, func(key string) {
 		if key == "A|Hit|X" {
@@ -269,7 +269,7 @@ func TestCoverSweepRecordsRetryRules(t *testing.T) {
 
 // 有别的歌在解析时先等它;一直不完也只等 coverSweepYieldMax。
 func TestCoverSweepYieldsToResolvingEntries(t *testing.T) {
-	withEnrichCache(t, map[string]enrichEntry{"A|1|X": {Lyrics: coverSweepLyrics}})
+	withEnrichCache(t, map[string]enrichEntry{"A|1|X": {Lyrics: bt(coverSweepLyrics)}})
 	calls, waits := withCoverSweepFakes(t, [][2]int32{{1, 0}}, nil)
 	enrichMu.Lock()
 	enrichInflight["Z|playing|Y"] = true
@@ -288,7 +288,7 @@ func TestCoverSweepYieldsToResolvingEntries(t *testing.T) {
 		t.Fatalf("要等三次再补: 调用 %d, 等待 %v", len(*calls), *waits)
 	}
 
-	withEnrichCache(t, map[string]enrichEntry{"A|1|X": {Lyrics: coverSweepLyrics}})
+	withEnrichCache(t, map[string]enrichEntry{"A|1|X": {Lyrics: bt(coverSweepLyrics)}})
 	calls, waits = withCoverSweepFakes(t, [][2]int32{{1, 0}}, nil)
 	enrichMu.Lock()
 	enrichInflight["Z|stuck|Y"] = true
@@ -501,7 +501,7 @@ func TestRunCoverSweepReplacesQQCoverOfAnotherAlbum(t *testing.T) {
 	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
 	const key = "Michael Jackson|Off the Wall|世纪典藏"
 	withEnrichCache(t, map[string]enrichEntry{
-		key: {CoverURL: qqAlbumCoverURL("0034Gnut4OoYpJ"), CoverSource: "qq", Lyrics: coverSweepLyrics,
+		key: {CoverURL: qqAlbumCoverURL("0034Gnut4OoYpJ"), CoverSource: "qq", Lyrics: bt(coverSweepLyrics),
 			LyricsDecision: &lyricsDecision{Winner: "soda", Candidates: []lyricsDecisionCandidate{
 				{Source: "soda", Score: 1310, Album: "世纪典藏", CoverURL: "https://s/essential.jpg"}}}},
 	})
@@ -553,8 +553,8 @@ func TestCoverSweepBorrowVerifiedSiblingsPicksSmallestKey(t *testing.T) {
 func TestRunCoverSweepBorrowsVerifiedSibling(t *testing.T) {
 	withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
 	withEnrichCache(t, map[string]enrichEntry{
-		"A|lender|Alb": {CoverURL: "file:///d.jpg", CoverSource: "device", CoverAlbum: "Alb", Lyrics: coverSweepLyrics},
-		"A|other|Alb":  {CoverURL: "https://qq/o.jpg", CoverSource: "qq", Lyrics: coverSweepLyrics},
+		"A|lender|Alb": {CoverURL: "file:///d.jpg", CoverSource: "device", CoverAlbum: "Alb", Lyrics: bt(coverSweepLyrics)},
+		"A|other|Alb":  {CoverURL: "https://qq/o.jpg", CoverSource: "qq", Lyrics: bt(coverSweepLyrics)},
 	})
 	runCoverSweep(context.Background())
 	enrichMu.Lock()

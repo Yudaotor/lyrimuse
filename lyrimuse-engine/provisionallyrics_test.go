@@ -48,7 +48,7 @@ func TestLyricsEntryFromScored(t *testing.T) {
 	if picked == nil || picked.Source != "kugou" {
 		t.Fatalf("picked=%+v", picked)
 	}
-	if e.Lyrics != "[00:01.00]hi" || e.LyricsSource != "kugou" || e.LyricsScore != 900 || e.LyricsYRC == "" ||
+	if !e.Lyrics.EqualString("[00:01.00]hi") || e.LyricsSource != "kugou" || e.LyricsScore != 900 || e.LyricsYRC.IsZero() ||
 		e.lyricsScoring() != currentLyricsScoring || e.ResolvedDurationSecs != 200 || e.DurationSecs != 200 {
 		t.Fatalf("歌词字段: %+v", e)
 	}
@@ -61,7 +61,7 @@ func TestLyricsEntryFromScored(t *testing.T) {
 	}
 
 	e, picked = lyricsEntryFromScored(lyricsDecisionPathFirstResolve, "x", "y", "A", 200, ne, scored[1:], nil, nil, false, "", nil)
-	if picked != nil || e.Lyrics != "" || e.LyricsDecisionApplied != nil || e.LyricsDecision == nil {
+	if picked != nil || !e.Lyrics.IsZero() || e.LyricsDecisionApplied != nil || e.LyricsDecision == nil {
 		t.Fatalf("选不出歌词:只留决策存档,不写出处 %+v", e)
 	}
 }

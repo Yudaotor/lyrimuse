@@ -38,13 +38,13 @@ func TestShareGroupSkipsManualSavedAfterBuild(t *testing.T) {
 		name string
 		edit func(e *enrichEntry)
 	}{
-		{"手改", func(e *enrichEntry) { e.Lyrics, e.LyricsSource, e.ManualLyrics = mine, "manual", true }},
-		{"采纳", func(e *enrichEntry) { e.ManualPickSHA = manualPickFingerprint(e.Lyrics) }},
+		{"手改", func(e *enrichEntry) { e.Lyrics, e.LyricsSource, e.ManualLyrics = bt(mine), "manual", true }},
+		{"采纳", func(e *enrichEntry) { e.ManualPickSHA = manualPickFingerprint(e.Lyrics.String()) }},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			entries := map[string]enrichEntry{
-				"A|Song|One": {DurationSecs: 200, ISRCs: []string{"USAAA1100001"}, Lyrics: a1, LyricsSource: "qq"},
-				"A|Song|Two": {DurationSecs: 200.2, ISRCs: []string{"USAAA1100001"}, Lyrics: a2, LyricsSource: "kugou"},
+				"A|Song|One": {DurationSecs: 200, ISRCs: []string{"USAAA1100001"}, Lyrics: bt(a1), LyricsSource: "qq"},
+				"A|Song|Two": {DurationSecs: 200.2, ISRCs: []string{"USAAA1100001"}, Lyrics: bt(a2), LyricsSource: "kugou"},
 			}
 			setUpSongShareTest(t, entries, true)
 			saved := searchShareRound
@@ -66,10 +66,10 @@ func TestShareGroupSkipsManualSavedAfterBuild(t *testing.T) {
 			if out := b.shareGroup(context.Background(), []int{0, 1}, own); out.state != nil || calls != 0 {
 				t.Fatalf("组里有了手改或采纳不搜: %+v calls=%d", out, calls)
 			}
-			if got, _ := cacheEntry(t, "A|Song|Two"); got.Lyrics != want.Lyrics || got.ManualLyrics != want.ManualLyrics || hasPre("A|Song|Two") {
+			if got, _ := cacheEntry(t, "A|Song|Two"); !got.Lyrics.Equal(want.Lyrics) || got.ManualLyrics != want.ManualLyrics || hasPre("A|Song|Two") {
 				t.Errorf("手改或采纳的那份留着: %+v", got)
 			}
-			if got, _ := cacheEntry(t, "A|Song|One"); got.Lyrics != a1 || hasPre("A|Song|One") {
+			if got, _ := cacheEntry(t, "A|Song|One"); !got.Lyrics.EqualString(a1) || hasPre("A|Song|One") {
 				t.Errorf("同组别的写法也不动: %+v", got)
 			}
 		})
@@ -82,18 +82,18 @@ func TestApplyShareRoundAbandonsGroupWithManual(t *testing.T) {
 	mine := songShareLRC("mine")
 	keys := []string{"A|Song|One", "A|Song|Two"}
 	setUpSongShareTest(t, map[string]enrichEntry{
-		keys[0]: {Song: "s", Lyrics: songShareLRC("a1"), LyricsSource: "qq"},
-		keys[1]: {Song: "s", Lyrics: mine, LyricsSource: "manual", ManualLyrics: true},
+		keys[0]: {Song: "s", Lyrics: bt(songShareLRC("a1")), LyricsSource: "qq"},
+		keys[1]: {Song: "s", Lyrics: bt(mine), LyricsSource: "manual", ManualLyrics: true},
 	}, true)
 	snap, stamp := songShareSnapOf(keys)
 	own := []*songPlanLyrics{{}, {}}
 	if out := applyShareRound(keys, own, snap, stamp, songShareRaceRound(keys[0], songShareLRC("champ")), now); out.state != nil {
 		t.Fatalf("组里有手改要作废: %+v", out)
 	}
-	if got, _ := cacheEntry(t, keys[1]); got.Lyrics != mine || !got.ManualLyrics || hasPre(keys[1]) {
+	if got, _ := cacheEntry(t, keys[1]); !got.Lyrics.EqualString(mine) || !got.ManualLyrics || hasPre(keys[1]) {
 		t.Errorf("手改不被冠军覆盖: %+v", got)
 	}
-	if got, _ := cacheEntry(t, keys[0]); got.Lyrics != songShareLRC("a1") || hasPre(keys[0]) {
+	if got, _ := cacheEntry(t, keys[0]); !got.Lyrics.EqualString(songShareLRC("a1")) || hasPre(keys[0]) {
 		t.Errorf("作废的一轮不改、不留底: %+v", got)
 	}
 }
@@ -106,15 +106,15 @@ func TestApplyShareRoundKeepsExistingPreOnAbandon(t *testing.T) {
 	keys := []string{"A|Song|One", "A|Song|Two", "A|Song|Three"}
 	entries := func() map[string]enrichEntry {
 		return map[string]enrichEntry{
-			keys[0]: {Song: "s", Lyrics: songShareLRC("a1"), LyricsSource: "qq"},
-			keys[1]: {Song: "s", Lyrics: x, LyricsSource: "kugou",
+			keys[0]: {Song: "s", Lyrics: bt(songShareLRC("a1")), LyricsSource: "qq"},
+			keys[1]: {Song: "s", Lyrics: bt(x), LyricsSource: "kugou",
 				LyricsDecisionApplied: &lyricsDecision{Path: lyricsDecisionPathSongEntityShare, ReusedFrom: "B|Gone|One"}},
-			keys[2]: {Song: "s", Lyrics: songShareLRC("a3"), LyricsSource: "kuwo"},
+			keys[2]: {Song: "s", Lyrics: bt(songShareLRC("a3")), LyricsSource: "kuwo"},
 		}
 	}
 	setPre := func(t *testing.T) {
 		t.Helper()
-		if _, err := writeSongSharePre(keys[1], enrichEntry{Lyrics: songShareLRC("before"), LyricsSource: "qq"}, songOffsetFingerprint(x, ""), now); err != nil {
+		if _, err := writeSongSharePre(keys[1], enrichEntry{Lyrics: bt(songShareLRC("before")), LyricsSource: "qq"}, songOffsetFingerprint(x, ""), now); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -152,14 +152,14 @@ func TestApplyShareRoundKeepsExistingPreOnAbandon(t *testing.T) {
 		t.Fatalf("没人动过要做成: %+v", out)
 	}
 	for _, k := range keys[:2] {
-		if got, _ := cacheEntry(t, k); got.Lyrics != champ {
+		if got, _ := cacheEntry(t, k); !got.Lyrics.EqualString(champ) {
 			t.Errorf("%s 换成冠军: %+v", k, got)
 		}
 	}
-	if p, pre := readPreEntry(t, keys[1]); p.Synced != songOffsetFingerprint(champ, "") || pre.Lyrics != songShareLRC("before") {
+	if p, pre := readPreEntry(t, keys[1]); p.Synced != songOffsetFingerprint(champ, "") || !pre.Lyrics.EqualString(songShareLRC("before")) {
 		t.Errorf("已有的留底只改 synced: %+v %+v", p, pre)
 	}
-	if got, _ := cacheEntry(t, keys[2]); got.Lyrics != songShareLRC("a3") || hasPre(keys[2]) {
+	if got, _ := cacheEntry(t, keys[2]); !got.Lyrics.EqualString(songShareLRC("a3")) || hasPre(keys[2]) {
 		t.Errorf("翻转保险挡下的不改、新建的留底删掉: %+v pre=%v", got, hasPre(keys[2]))
 	}
 }
@@ -169,17 +169,17 @@ func TestResolveManualConflictUndoesBackupsOnFailure(t *testing.T) {
 	now := time.Now()
 	keep, b, c, d := songShareLRC("keep"), songShareLRC("b"), songShareLRC("c"), songShareLRC("d")
 	setUpSongShareTest(t, map[string]enrichEntry{
-		"A|Song|Nine":  {Song: "s_000000000001", Lyrics: keep, ManualLyrics: true, LyricsSource: "manual"},
-		"A|Song|One":   {Song: "s_000000000001", Lyrics: b, ManualLyrics: true, LyricsSource: "manual"},
-		"A|Song|Three": {Song: "s_000000000001", Lyrics: d, ManualLyrics: true, LyricsSource: "manual"},
-		"A|Song|Two":   {Song: "s_000000000001", Lyrics: c, ManualLyrics: true, LyricsSource: "manual"},
+		"A|Song|Nine":  {Song: "s_000000000001", Lyrics: bt(keep), ManualLyrics: true, LyricsSource: "manual"},
+		"A|Song|One":   {Song: "s_000000000001", Lyrics: bt(b), ManualLyrics: true, LyricsSource: "manual"},
+		"A|Song|Three": {Song: "s_000000000001", Lyrics: bt(d), ManualLyrics: true, LyricsSource: "manual"},
+		"A|Song|Two":   {Song: "s_000000000001", Lyrics: bt(c), ManualLyrics: true, LyricsSource: "manual"},
 	}, true)
 	// One 没有留底(会新建);Three 已有一份(synced 对着 d);Two 那个文件是别的写法的,写不成。
 	prev := songOffsetFingerprint(d, "")
-	if _, err := writeSongSharePre("A|Song|Three", enrichEntry{Lyrics: songShareLRC("old")}, prev, now); err != nil {
+	if _, err := writeSongSharePre("A|Song|Three", enrichEntry{Lyrics: bt(songShareLRC("old"))}, prev, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := writeSongSharePre("B|Other|One", enrichEntry{Lyrics: songShareLRC("other")}, "", now); err != nil {
+	if _, err := writeSongSharePre("B|Other|One", enrichEntry{Lyrics: bt(songShareLRC("other"))}, "", now); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(songSharePrePath("B|Other|One"))
@@ -199,7 +199,7 @@ func TestResolveManualConflictUndoesBackupsOnFailure(t *testing.T) {
 		t.Errorf("已有留底的 synced 改回原来的: %+v", p)
 	}
 	for k, want := range map[string]string{"A|Song|One": b, "A|Song|Two": c, "A|Song|Three": d} {
-		if got, _ := cacheEntry(t, k); got.Lyrics != want || got.LyricsEntityOrigin != "" {
+		if got, _ := cacheEntry(t, k); !got.Lyrics.EqualString(want) || got.LyricsEntityOrigin != "" {
 			t.Errorf("%s 不动: %+v", k, got)
 		}
 	}
@@ -209,10 +209,10 @@ func TestResolveManualConflictUndoesBackupsOnFailure(t *testing.T) {
 func TestSongSharePassYieldsToRebuildRequest(t *testing.T) {
 	champ := songShareLRC("champ")
 	entries := map[string]enrichEntry{
-		"A|Song|One": {DurationSecs: 200, ISRCs: []string{"USAAA1100001"}, Lyrics: songShareLRC("a1"), LyricsSource: "qq"},
-		"A|Song|Two": {DurationSecs: 200.2, ISRCs: []string{"USAAA1100001"}, Lyrics: songShareLRC("a2"), LyricsSource: "kugou"},
-		"B|Tune|One": {DurationSecs: 180, ISRCs: []string{"USAAA1100002"}, Lyrics: songShareLRC("b1"), LyricsSource: "qq"},
-		"B|Tune|Two": {DurationSecs: 180.1, ISRCs: []string{"USAAA1100002"}, Lyrics: songShareLRC("b2"), LyricsSource: "kugou"},
+		"A|Song|One": {DurationSecs: 200, ISRCs: []string{"USAAA1100001"}, Lyrics: bt(songShareLRC("a1")), LyricsSource: "qq"},
+		"A|Song|Two": {DurationSecs: 200.2, ISRCs: []string{"USAAA1100001"}, Lyrics: bt(songShareLRC("a2")), LyricsSource: "kugou"},
+		"B|Tune|One": {DurationSecs: 180, ISRCs: []string{"USAAA1100002"}, Lyrics: bt(songShareLRC("b1")), LyricsSource: "qq"},
+		"B|Tune|Two": {DurationSecs: 180.1, ISRCs: []string{"USAAA1100002"}, Lyrics: bt(songShareLRC("b2")), LyricsSource: "kugou"},
 	}
 	setUpSongShareTest(t, entries, true)
 	drainSongEntityRebuild()

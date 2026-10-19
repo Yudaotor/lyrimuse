@@ -256,14 +256,14 @@ func resolveManualConflictEdit(key string, now time.Time) enrichEditOutcome {
 	if !ok || src.Song == "" || !songShareManualOriginal(src) {
 		return enrichEditOutcome{err: fmt.Errorf("resolve_manual_conflict: %q is not a manual original of a song", key)}
 	}
-	fp := songOffsetFingerprint(src.Lyrics, src.LyricsYRC)
+	fp := songOffsetFingerprint(src.Lyrics.String(), src.LyricsYRC.String())
 	var keys, others []string
 	for k, e := range enrichCache {
 		if e.Song != src.Song || e.SongShare != src.SongShare {
 			continue
 		}
 		keys = append(keys, k)
-		if k != key && songShareManualOriginal(e) && songOffsetFingerprint(e.Lyrics, e.LyricsYRC) != fp {
+		if k != key && songShareManualOriginal(e) && songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) != fp {
 			others = append(others, k)
 		}
 	}

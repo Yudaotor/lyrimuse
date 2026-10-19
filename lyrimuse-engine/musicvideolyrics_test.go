@@ -10,14 +10,14 @@ import (
 // 279s 的混音版拿 1011 分胜出、报原版 228s 的几家全判 1 分,按「时长未知」重打原版胜出。
 
 func TestLyricsChosenByVideoDuration(t *testing.T) {
-	e := enrichEntry{Lyrics: "[00:01.00]x", ResolvedDurationSecs: 283}
+	e := enrichEntry{Lyrics: bt("[00:01.00]x"), ResolvedDurationSecs: 283}
 	if !lyricsChosenByVideoDuration(e, 282.181) {
 		t.Fatal("按视频时长(整秒 283 vs 282.181)选的要认出来")
 	}
-	if lyricsChosenByVideoDuration(enrichEntry{Lyrics: "x", ResolvedDurationSecs: 228}, 282.181) {
+	if lyricsChosenByVideoDuration(enrichEntry{Lyrics: bt("x"), ResolvedDurationSecs: 228}, 282.181) {
 		t.Fatal("按歌曲版时长选的不动")
 	}
-	if lyricsChosenByVideoDuration(enrichEntry{Lyrics: "x"}, 282.181) {
+	if lyricsChosenByVideoDuration(enrichEntry{Lyrics: bt("x")}, 282.181) {
 		t.Fatal("按未知时长选的(ResolvedDurationSecs=0)不动,重选过一次之后就是这个形态")
 	}
 	if lyricsChosenByVideoDuration(enrichEntry{ResolvedDurationSecs: 283}, 282.181) {
@@ -33,7 +33,7 @@ func TestMusicVideoLyricsStaleUsesHint(t *testing.T) {
 	defer func() { musicVideoDurationHints = saved }()
 	musicVideoDurationHints = map[string]float64{}
 	key := enrichKey("Coldplay和BTS", "My Universe", "")
-	e := enrichEntry{Lyrics: "x", ResolvedDurationSecs: 283}
+	e := enrichEntry{Lyrics: bt("x"), ResolvedDurationSecs: 283}
 	if musicVideoLyricsStaleLocked(key, e) {
 		t.Fatal("没记提示时不判")
 	}
@@ -48,7 +48,7 @@ func TestMusicVideoLyricsStaleUsesHint(t *testing.T) {
 }
 
 func TestLyricsBaselineForUnknownDuration(t *testing.T) {
-	current := enrichEntry{Lyrics: "supernova", LyricsSource: "qq", LyricsScore: 1011}
+	current := enrichEntry{Lyrics: bt("supernova"), LyricsSource: "qq", LyricsScore: 1011}
 	// 现存那份这一轮还在:按它这一轮的分比。
 	scored := []scoredLyricCandidateResult{
 		{Source: "musixmatch", Lyrics: "original", Score: 752},

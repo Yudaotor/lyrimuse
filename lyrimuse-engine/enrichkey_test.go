@@ -250,7 +250,7 @@ func TestCanonicalEnrichKeyLegacyFallback(t *testing.T) {
 		{"大小写照旧宽松", map[string]enrichEntry{"A|song|B": {}}, "A|Song|B", "A|song|B"},
 		{"别的专辑不借", map[string]enrichEntry{"A|不散的筵席|C": {}}, "A|不散的筵席（I Miss You）|B", ""},
 		{"旧规则那条精确在就用它,不挑只差大小写的", map[string]enrichEntry{
-			"A|Song|B": {}, "A|song|B": {Lyrics: "[00:01.00]x", LyricsScore: 900},
+			"A|Song|B": {}, "A|song|B": {Lyrics: bt("[00:01.00]x"), LyricsScore: 900},
 		}, "A|Song (I Miss You)|B", "A|Song|B"},
 	} {
 		enrichCache = c.cache
@@ -352,9 +352,9 @@ func TestResolveEnrichKeyForDuration(t *testing.T) {
 }
 
 func TestBetterEnrichEntry(t *testing.T) {
-	manual := enrichEntry{ManualLyrics: true, Lyrics: "x", LyricsScore: 1}
-	high := enrichEntry{Lyrics: "x", LyricsScore: 1203}
-	low := enrichEntry{Lyrics: "x", LyricsScore: 1107}
+	manual := enrichEntry{ManualLyrics: true, Lyrics: bt("x"), LyricsScore: 1}
+	high := enrichEntry{Lyrics: bt("x"), LyricsScore: 1203}
+	low := enrichEntry{Lyrics: bt("x"), LyricsScore: 1107}
 	empty := enrichEntry{LyricsScore: 9999}
 
 	// 人工修正过的永远赢,分数再高也顶不过 —— 它是唯一删了找不回来的东西。
@@ -372,16 +372,16 @@ func TestBetterEnrichEntry(t *testing.T) {
 	}
 	// 完全平手时按 key 字典序,保证同一份数据每次迁移选出同一个赢家(Go 的 map 遍历
 	// 顺序每次进程重启都不同)。
-	same := enrichEntry{Lyrics: "x", LyricsScore: 5, TS: 7}
+	same := enrichEntry{Lyrics: bt("x"), LyricsScore: 5, TS: 7}
 	if !betterEnrichEntry(same, same, "a", "b") || betterEnrichEntry(same, same, "b", "a") {
 		t.Error("ties must break deterministically on key order")
 	}
 }
 
 func TestMergePeripheralIntoKeepsLyricsBundleIntact(t *testing.T) {
-	winner := enrichEntry{Lyrics: "winner lyrics", LyricsSource: "kugou", LyricsScore: 1203}
+	winner := enrichEntry{Lyrics: bt("winner lyrics"), LyricsSource: "kugou", LyricsScore: 1203}
 	loser := enrichEntry{
-		Lyrics: "loser lyrics", LyricsTr: "loser translation", LyricsYRC: "loser yrc",
+		Lyrics: bt("loser lyrics"), LyricsTr: bt("loser translation"), LyricsYRC: bt("loser yrc"),
 		LyricsSource: "netease", LyricsScore: 1107,
 		CoverURL: "https://cover", CoverSource: "netease", AccentColor: "#123456",
 		NeteaseURL: "https://ne", CanonicalArtist: "丁世光", DurationSecs: 261,
@@ -396,10 +396,10 @@ func TestMergePeripheralIntoKeepsLyricsBundleIntact(t *testing.T) {
 	}
 	// 歌词那一组一个字都不能串。译文的断行是跟着它自己那份歌词走的,贴到别人的歌词上
 	// 时间轴直接错位 —— 宁可缺译文,让 needsTranslationBackfill 自己补。
-	if got.Lyrics != "winner lyrics" || got.LyricsSource != "kugou" || got.LyricsScore != 1203 {
+	if !got.Lyrics.EqualString("winner lyrics") || got.LyricsSource != "kugou" || got.LyricsScore != 1203 {
 		t.Errorf("winner's lyrics identity was overwritten: %#v", got)
 	}
-	if got.LyricsTr != "" || got.LyricsYRC != "" {
+	if !got.LyricsTr.IsZero() || !got.LyricsYRC.IsZero() {
 		t.Errorf("loser's lyric variants leaked onto the winner: tr=%q yrc=%q", got.LyricsTr, got.LyricsYRC)
 	}
 }

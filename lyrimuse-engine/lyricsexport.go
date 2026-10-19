@@ -157,7 +157,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			continue
 		}
 		e := enrichCache[key]
-		if e.Lyrics == "" {
+		if e.Lyrics.IsZero() {
 			continue
 		}
 		artist, title, album := splitEnrichKey(key)
@@ -171,7 +171,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		jobs = append(jobs, entryJob{
 			key: key, artist: artist, title: title, album: album,
 			source: e.LyricsSource, manual: e.ManualLyrics,
-			variants: [4]string{e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC},
+			variants: [4]string{e.Lyrics.String(), e.LyricsTr.String(), e.LyricsRoma.String(), e.LyricsYRC.String()},
 		})
 	}
 	enrichMu.Unlock()

@@ -37,8 +37,8 @@ func readBodyForTest(t *testing.T, key string) (enrichBody, os.FileInfo) {
 func TestSaveWritesLeanIndexAndBodies(t *testing.T) {
 	withTempIndexCache(t)
 	enrichMu.Lock()
-	enrichCache["a|t|b"] = enrichEntry{Lyrics: "[00:01.00]hi", LyricsYRC: "[0,100](0,100,0)hi", LyricsTr: "[00:01.00]你好",
-		LyricsRoma: "[00:01.00]ni hao", PlainLyrics: "hi", CoverURL: "https://x/c.jpg", TS: 5}
+	enrichCache["a|t|b"] = enrichEntry{Lyrics: bt("[00:01.00]hi"), LyricsYRC: bt("[0,100](0,100,0)hi"), LyricsTr: bt("[00:01.00]你好"),
+		LyricsRoma: bt("[00:01.00]ni hao"), PlainLyrics: bt("hi"), CoverURL: "https://x/c.jpg", TS: 5}
 	enrichCache["empty|t|b"] = enrichEntry{TS: 6}
 	enrichDirty = true
 	enrichMu.Unlock()
@@ -58,7 +58,7 @@ func TestSaveWritesLeanIndexAndBodies(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := idx["a|t|b"]
-	if got.Lyrics != "" || got.CoverURL != "https://x/c.jpg" || got.BodyCRC == 0 {
+	if !got.Lyrics.IsZero() || got.CoverURL != "https://x/c.jpg" || got.BodyCRC == 0 {
 		t.Fatalf("index entry keeps metadata + body_crc, main lyrics only in the body file, got %+v", got)
 	}
 	if got.BodyFields != 128|1|2|4|8|32 {
@@ -93,20 +93,20 @@ func mustRead(t *testing.T, p string) []byte {
 
 // App 侧 EnrichCacheSlim.bodyCRC 的 selftest 钉着同一组输入、同样两个值。
 func TestEnrichBodyCRCMatchesApp(t *testing.T) {
-	full := enrichEntry{Lyrics: "[00:01.00]你好", LyricsTr: "[00:01.00]hello", LyricsRoma: "[00:01.00]ni hao",
-		LyricsYRC: "[1000,500](1000,500,0)你好", PlainLyrics: "你好"}
+	full := enrichEntry{Lyrics: bt("[00:01.00]你好"), LyricsTr: bt("[00:01.00]hello"), LyricsRoma: bt("[00:01.00]ni hao"),
+		LyricsYRC: bt("[1000,500](1000,500,0)你好"), PlainLyrics: bt("你好")}
 	if got := enrichBodyCRC(full); got != 857489496 {
 		t.Fatalf("crc(full) = %d", got)
 	}
-	if got := enrichBodyCRC(enrichEntry{Lyrics: "[00:01.00]x"}); got != 2260255535 {
+	if got := enrichBodyCRC(enrichEntry{Lyrics: bt("[00:01.00]x")}); got != 2260255535 {
 		t.Fatalf("crc(lyrics only) = %d", got)
 	}
 	withBG := full
-	withBG.LyricsBG = "[1000,500](1600,300,0)(oh)"
+	withBG.LyricsBG = bt("[1000,500](1600,300,0)(oh)")
 	if got := enrichBodyCRC(withBG); got != 2392567654 {
 		t.Fatalf("crc(full + bg) = %d", got)
 	}
-	if got := enrichBodyFields(enrichEntry{Lyrics: "x", LyricsTr: "y"}); got != 128|2|32 {
+	if got := enrichBodyFields(enrichEntry{Lyrics: bt("x"), LyricsTr: bt("y")}); got != 128|2|32 {
 		t.Fatalf("fields = %d", got)
 	}
 }
@@ -115,7 +115,7 @@ func TestEnrichBodyCRCMatchesApp(t *testing.T) {
 func TestRefreshRewritesOutdatedIndex(t *testing.T) {
 	withTempIndexCache(t)
 	enrichMu.Lock()
-	enrichCache["a|t|b"] = enrichEntry{Lyrics: "[00:01.00]one", LyricsTr: "[00:01.00]壹", TS: 1}
+	enrichCache["a|t|b"] = enrichEntry{Lyrics: bt("[00:01.00]one"), LyricsTr: bt("[00:01.00]壹"), TS: 1}
 	enrichDirty = true
 	enrichMu.Unlock()
 	saveEnrichCache()
@@ -135,8 +135,8 @@ func TestRefreshRewritesOutdatedIndex(t *testing.T) {
 func TestBodiesRewrittenOnlyWhenChanged(t *testing.T) {
 	withTempIndexCache(t)
 	enrichMu.Lock()
-	enrichCache["a|t|b"] = enrichEntry{Lyrics: "[00:01.00]one", TS: 1}
-	enrichCache["c|t|d"] = enrichEntry{Lyrics: "[00:01.00]two", TS: 1}
+	enrichCache["a|t|b"] = enrichEntry{Lyrics: bt("[00:01.00]one"), TS: 1}
+	enrichCache["c|t|d"] = enrichEntry{Lyrics: bt("[00:01.00]two"), TS: 1}
 	enrichDirty = true
 	enrichMu.Unlock()
 	saveEnrichCache()
@@ -151,7 +151,7 @@ func TestBodiesRewrittenOnlyWhenChanged(t *testing.T) {
 	enrichBodyCRCs = nil
 	enrichMu.Lock()
 	e := enrichCache["c|t|d"]
-	e.LyricsTr = "[00:01.00]贰"
+	e.LyricsTr = bt("[00:01.00]贰")
 	enrichCache["c|t|d"] = e
 	enrichDirty = true
 	enrichMu.Unlock()
@@ -171,8 +171,8 @@ func TestBodiesRewrittenOnlyWhenChanged(t *testing.T) {
 func TestRefreshEnrichIndexAtStartup(t *testing.T) {
 	withTempIndexCache(t)
 	enrichMu.Lock()
-	enrichCache["a|t|b"] = enrichEntry{Lyrics: "[00:01.00]one", TS: 1}
-	enrichCache["gone|t|b"] = enrichEntry{Lyrics: "[00:01.00]bye", TS: 1}
+	enrichCache["a|t|b"] = enrichEntry{Lyrics: bt("[00:01.00]one"), TS: 1}
+	enrichCache["gone|t|b"] = enrichEntry{Lyrics: bt("[00:01.00]bye"), TS: 1}
 	enrichDirty = true
 	enrichMu.Unlock()
 	saveEnrichCache()

@@ -11,12 +11,12 @@ import (
 
 func testFullEnrichEntries() map[string]enrichEntry {
 	return map[string]enrichEntry{
-		"周杰伦|晴天|叶惠美": {CoverURL: "https://example.com/a.jpg", Lyrics: "[00:01.00]故事的小黄花",
-			LyricsTr: "[00:01.00]tr", LyricsRoma: "[00:01.00]roma", LyricsYRC: "[1000,500](1000,500,0)故",
+		"周杰伦|晴天|叶惠美": {CoverURL: "https://example.com/a.jpg", Lyrics: bt("[00:01.00]故事的小黄花"),
+			LyricsTr: bt("[00:01.00]tr"), LyricsRoma: bt("[00:01.00]roma"), LyricsYRC: bt("[1000,500](1000,500,0)故"),
 			LyricsSource: "netease", LyricsSourcesSeen: []string{"netease", "qq"},
 			LyricsDecision: &lyricsDecision{Path: "first-resolve"}},
-		"Coldplay|Yellow|Parachutes": {Lyrics: "[00:02.00]Look at the stars", LyricsSource: "qq"},
-		"方大同|手拖手|":                   {PlainLyrics: "纯文本", Unknown: map[string]json.RawMessage{"future": json.RawMessage(`1`)}},
+		"Coldplay|Yellow|Parachutes": {Lyrics: bt("[00:02.00]Look at the stars"), LyricsSource: "qq"},
+		"方大同|手拖手|":                   {PlainLyrics: bt("纯文本"), Unknown: map[string]json.RawMessage{"future": json.RawMessage(`1`)}},
 		"Nobody|Instrumental|":       {CoverURL: "https://example.com/b.jpg", Instrumental: true},
 	}
 }
@@ -31,8 +31,8 @@ func writeLeanForTest(t *testing.T, full map[string]enrichEntry, dir string) map
 	for k, e := range full {
 		crc := enrichBodyCRC(e)
 		if crc != 0 {
-			writeTestBody(t, dir, k, enrichBody{CRC: crc, Lyrics: e.Lyrics, LyricsTr: e.LyricsTr,
-				LyricsRoma: e.LyricsRoma, LyricsYRC: e.LyricsYRC, PlainLyrics: e.PlainLyrics})
+			writeTestBody(t, dir, k, enrichBody{CRC: crc, Lyrics: e.Lyrics.String(), LyricsTr: e.LyricsTr.String(),
+				LyricsRoma: e.LyricsRoma.String(), LyricsYRC: e.LyricsYRC.String(), PlainLyrics: e.PlainLyrics.String()})
 		}
 		lean[k] = leanForIndex(e, crc)
 	}
@@ -54,7 +54,7 @@ func TestHydrateEnrichBodiesRoundTrip(t *testing.T) {
 	full := testFullEnrichEntries()
 	dir := t.TempDir()
 	lean := writeLeanForTest(t, full, dir)
-	if lean["周杰伦|晴天|叶惠美"].LyricsYRC != "" || lean["周杰伦|晴天|叶惠美"].BodyCRC == 0 {
+	if !lean["周杰伦|晴天|叶惠美"].LyricsYRC.IsZero() || lean["周杰伦|晴天|叶惠美"].BodyCRC == 0 {
 		t.Fatal("测试前提:精简条目不带逐字、带校验值")
 	}
 	st := hydrateEnrichBodies(lean, dir)
@@ -70,7 +70,7 @@ func TestHydrateEnrichBodiesLeavesFullEntriesAlone(t *testing.T) {
 	full := testFullEnrichEntries()
 	dir := t.TempDir()
 	// 目录里有一份内容不同的小文件,但条目是完整格式(没有 body_crc):不看小文件。
-	writeTestBody(t, dir, "Coldplay|Yellow|Parachutes", enrichBody{CRC: enrichBodyCRC(enrichEntry{Lyrics: "别的"}), Lyrics: "别的"})
+	writeTestBody(t, dir, "Coldplay|Yellow|Parachutes", enrichBody{CRC: enrichBodyCRC(enrichEntry{Lyrics: bt("别的")}), Lyrics: "别的"})
 	got := testFullEnrichEntries()
 	if st := hydrateEnrichBodies(got, dir); st.lean != 0 || !reflect.DeepEqual(got, full) {
 		t.Errorf("完整条目被改了: %+v", st)
@@ -91,10 +91,10 @@ func TestHydrateEnrichBodiesMissingOrDamagedFile(t *testing.T) {
 		t.Errorf("stats = %+v", st)
 	}
 	jay := lean["周杰伦|晴天|叶惠美"]
-	if jay.Lyrics != "" || jay.LyricsYRC != "" || jay.LyricsTr != "" || jay.BodyCRC != 0 || jay.BodyFields != 0 {
+	if !jay.Lyrics.IsZero() || !jay.LyricsYRC.IsZero() || !jay.LyricsTr.IsZero() || jay.BodyCRC != 0 || jay.BodyFields != 0 {
 		t.Errorf("小文件缺失时正文(连主歌词)都没有、清掉校验值,等 lyrics/ 导入补回: %#v", jay)
 	}
-	if got := lean["Coldplay|Yellow|Parachutes"].Lyrics; got != "" {
+	if got := lean["Coldplay|Yellow|Parachutes"].Lyrics; !got.IsZero() {
 		t.Errorf("损坏的小文件不能拿来当正文: %q", got)
 	}
 	if !st.missingSet["周杰伦|晴天|叶惠美"] || !st.missingSet["Coldplay|Yellow|Parachutes"] {
@@ -107,13 +107,13 @@ func TestHydrateEnrichBodiesPrefersNewerSideFile(t *testing.T) {
 	full := testFullEnrichEntries()
 	dir := t.TempDir()
 	lean := writeLeanForTest(t, full, dir)
-	newer := enrichEntry{Lyrics: "[00:02.00]Look at the stars (fixed)", LyricsTr: "[00:02.00]看星星"}
-	writeTestBody(t, dir, "Coldplay|Yellow|Parachutes", enrichBody{CRC: enrichBodyCRC(newer), Lyrics: newer.Lyrics, LyricsTr: newer.LyricsTr})
+	newer := enrichEntry{Lyrics: bt("[00:02.00]Look at the stars (fixed)"), LyricsTr: bt("[00:02.00]看星星")}
+	writeTestBody(t, dir, "Coldplay|Yellow|Parachutes", enrichBody{CRC: enrichBodyCRC(newer), Lyrics: newer.Lyrics.String(), LyricsTr: newer.LyricsTr.String()})
 	st := hydrateEnrichBodies(lean, dir)
 	if st.newer != 1 {
 		t.Errorf("stats = %+v", st)
 	}
-	if got := lean["Coldplay|Yellow|Parachutes"]; got.Lyrics != newer.Lyrics || got.LyricsTr != newer.LyricsTr {
+	if got := lean["Coldplay|Yellow|Parachutes"]; !got.Lyrics.Equal(newer.Lyrics) || !got.LyricsTr.Equal(newer.LyricsTr) {
 		t.Errorf("没用更新的那份小文件: %#v", got)
 	}
 }
@@ -183,11 +183,11 @@ func TestLoadEnrichCacheMetaReadOnlySkipsBodiesKeepsPending(t *testing.T) {
 		t.Errorf("待落盘小文件没叠上: %#v", enrichCache[pendingKey])
 	}
 	for k, e := range full {
-		if k == pendingKey || e.Lyrics == "" {
+		if k == pendingKey || e.Lyrics.IsZero() {
 			continue
 		}
 		got := enrichCache[k]
-		if got.Lyrics != "" {
+		if !got.Lyrics.IsZero() {
 			t.Errorf("%s: 只读元数据不该补回正文", k)
 		}
 		if got.LyricsSource != e.LyricsSource {

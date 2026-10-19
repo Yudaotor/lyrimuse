@@ -60,7 +60,7 @@ func TestImportFallsBackToLegacyKeyForBracketedHeader(t *testing.T) {
 		{"旧规则那条是另一种写法的", map[string]reportedName{"x": {Title: "不散的筵席（Other）"}}, full},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			dir := withExportFixture(t, map[string]enrichEntry{legacy: {Lyrics: "[00:01.00]原文", LyricsSource: "netease", Reported: c.reported}})
+			dir := withExportFixture(t, map[string]enrichEntry{legacy: {Lyrics: bt("[00:01.00]原文"), LyricsSource: "netease", Reported: c.reported}})
 			exportLyricsFiles()
 			path := filepath.Join(dir, sanitizeLyricsFilename(legacy)+".lrc")
 			orig, err := os.ReadFile(path)
@@ -80,7 +80,7 @@ func TestImportFallsBackToLegacyKeyForBracketedHeader(t *testing.T) {
 			got, ok := enrichCache[c.wantKey]
 			_, fullExists := enrichCache[full]
 			enrichMu.Unlock()
-			if !ok || got.Lyrics != "[00:01.00]改过" {
+			if !ok || !got.Lyrics.EqualString("[00:01.00]改过") {
 				t.Fatalf("手改应落在 %q 上: ok=%v %q", c.wantKey, ok, got.Lyrics)
 			}
 			if c.wantKey == legacy && fullExists {

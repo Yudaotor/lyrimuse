@@ -8,24 +8,24 @@ import (
 
 // 锁外算好的罗马音在锁里怎么填:源自带的不动;算好了就用;没算时只补粤拼(纯查表)。
 func TestApplyPregeneratedRoma(t *testing.T) {
-	e := enrichEntry{Lyrics: "[00:01.00]日本語", LyricsRoma: "[00:01.00]nihongo"}
+	e := enrichEntry{Lyrics: bt("[00:01.00]日本語"), LyricsRoma: bt("[00:01.00]nihongo")}
 	e.applyPregeneratedRoma("[00:01.00]other")
-	if e.LyricsRoma != "[00:01.00]nihongo" {
+	if !e.LyricsRoma.EqualString("[00:01.00]nihongo") {
 		t.Fatalf("源自带的罗马音不能被覆盖: %q", e.LyricsRoma)
 	}
-	e = enrichEntry{Lyrics: "[00:01.00]日本語"}
+	e = enrichEntry{Lyrics: bt("[00:01.00]日本語")}
 	e.applyPregeneratedRoma("[00:01.00]nihongo")
-	if e.LyricsRoma != "[00:01.00]nihongo" {
+	if !e.LyricsRoma.EqualString("[00:01.00]nihongo") {
 		t.Fatalf("算好的要填进来: %q", e.LyricsRoma)
 	}
-	e = enrichEntry{Lyrics: "[00:01.00]我哋一齊", SongLanguage: songLanguageCantonese}
+	e = enrichEntry{Lyrics: bt("[00:01.00]我哋一齊"), SongLanguage: songLanguageCantonese}
 	e.applyPregeneratedRoma("")
-	if e.LyricsRoma == "" || !strings.Contains(e.LyricsRoma, "[00:01.00]") {
+	if e.LyricsRoma.IsZero() || !strings.Contains(e.LyricsRoma.String(), "[00:01.00]") {
 		t.Fatalf("没预算时粤语歌仍要补粤拼: %q", e.LyricsRoma)
 	}
-	e = enrichEntry{Lyrics: "[00:01.00]日本語"}
+	e = enrichEntry{Lyrics: bt("[00:01.00]日本語")}
 	e.applyPregeneratedRoma("")
-	if e.LyricsRoma != "" {
+	if !e.LyricsRoma.IsZero() {
 		t.Fatalf("没预算时不在锁里起 helper: %q", e.LyricsRoma)
 	}
 }
@@ -35,9 +35,9 @@ func TestGeneratedRomaFor(t *testing.T) {
 	if got := generatedRomaFor("[00:01.00]我哋", "[00:01.00]src", songLanguageCantonese); got != "[00:01.00]src" {
 		t.Fatalf("源自带的原样返回: %q", got)
 	}
-	want := enrichEntry{Lyrics: "[00:01.00]我哋一齊", SongLanguage: songLanguageCantonese}
+	want := enrichEntry{Lyrics: bt("[00:01.00]我哋一齊"), SongLanguage: songLanguageCantonese}
 	want.maybeGenerateRoma()
-	if got := generatedRomaFor("[00:01.00]我哋一齊", "", songLanguageCantonese); got == "" || got != want.LyricsRoma {
+	if got := generatedRomaFor("[00:01.00]我哋一齊", "", songLanguageCantonese); got == "" || !want.LyricsRoma.EqualString(got) {
 		t.Fatalf("粤语歌应与 maybeGenerateRoma 一致: got %q want %q", got, want.LyricsRoma)
 	}
 }

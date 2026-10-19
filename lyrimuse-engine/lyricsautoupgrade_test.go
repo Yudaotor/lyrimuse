@@ -13,7 +13,7 @@ import (
 // "这首歌一条歌词都没有",不属于"把用户已经拿到的那份换掉"。
 func TestLyricsAutoUpgradeGate(t *testing.T) {
 	// 打分版本落后 → 开着时该重打分
-	stale := enrichEntry{Lyrics: "[00:01.00]x", LyricsScoringVersion: lyricsScoringVersion - 1}
+	stale := enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsScoringVersion: lyricsScoringVersion - 1}
 	if !needsLyricsRescore(stale, false, true) {
 		t.Error("开着时:打分版本落后应该触发重打分")
 	}
@@ -26,7 +26,7 @@ func TestLyricsAutoUpgradeGate(t *testing.T) {
 	defer func() { setFeatures(savedFeatures) }()
 	featuresRef().LyricsSources = map[string]bool{"netease": true, "qq": true, "lrclib": true}
 	long := time.Now().Unix() - int64(lyricsRetryInterval/time.Second) - 1
-	missed := enrichEntry{Lyrics: "[00:01.00]x", LyricsSourcesSeen: []string{"lrclib"}, TS: long}
+	missed := enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsSourcesSeen: []string{"lrclib"}, TS: long}
 	if !needsLyricsRetry(missed, false, false, true) {
 		t.Error("开着时:有源缺席应该触发升级重搜")
 	}
@@ -37,13 +37,13 @@ func TestLyricsAutoUpgradeGate(t *testing.T) {
 	// 关掉这个开关**不该**连"这首歌一条歌词都没有"也一起挡住 —— 那条是首次填充,
 	// 不是"把选好的换掉"。它走的是另一个判据(needsLyricsFirstFill),这里顺手钉一下,
 	// 免得以后有人图省事把闸加到那条路径上。
-	empty := enrichEntry{Lyrics: "", LyricsSourcesSeen: []string{"lrclib"}}
+	empty := enrichEntry{Lyrics: bodyText{}, LyricsSourcesSeen: []string{"lrclib"}}
 	if !needsLyricsFirstFill(empty) {
 		t.Error("空歌词条目应该照常走首次填充(跟这个开关无关)")
 	}
 
 	// 手改过 / 钉过时间轴的,不管开关怎么设都不动(既有保护不能被削弱)
-	manual := enrichEntry{Lyrics: "[00:01.00]x", ManualLyrics: true,
+	manual := enrichEntry{Lyrics: bt("[00:01.00]x"), ManualLyrics: true,
 		LyricsScoringVersion: lyricsScoringVersion - 1}
 	for _, auto := range []bool{true, false} {
 		if needsLyricsRescore(manual, false, auto) {

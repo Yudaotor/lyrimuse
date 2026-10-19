@@ -12,9 +12,9 @@ func TestPlayingKeyFollowsDurationVariant(t *testing.T) {
 	variant := enrichKeyDurationVariant(base, 2)
 	entries := func() map[string]enrichEntry {
 		return map[string]enrichEntry{
-			base: {DurationSecs: 241, Lyrics: "[00:21.39]album cut", LyricsSource: "soda", LyricsScore: 1271,
+			base: {DurationSecs: 241, Lyrics: bt("[00:21.39]album cut"), LyricsSource: "soda", LyricsScore: 1271,
 				LyricsDecisionApplied: &lyricsDecision{Path: lyricsDecisionPathFirstResolve, Winner: "soda"}},
-			variant: {DurationSecs: 401.7, Lyrics: "[01:00.10]extended", LyricsSource: "soda", LyricsScore: 1197,
+			variant: {DurationSecs: 401.7, Lyrics: bt("[01:00.10]extended"), LyricsSource: "soda", LyricsScore: 1197,
 				LyricsDecisionApplied: &lyricsDecision{Path: lyricsDecisionPathFirstResolve, Winner: "soda"}},
 		}
 	}
@@ -46,7 +46,7 @@ func TestPlayingKeyFollowsDurationVariant(t *testing.T) {
 		if cur := enrichPlayingKey.Load(); cur == nil || *cur != variant {
 			t.Fatalf("「正在播」该挪到变体上: %v", cur)
 		}
-		if f := snapshot(t); f.Key != variant || f.Entry.Lyrics != "[01:00.10]extended" {
+		if f := snapshot(t); f.Key != variant || !f.Entry.Lyrics.EqualString("[01:00.10]extended") {
 			t.Fatalf("单条快照该改写成变体那一条: %q %q", f.Key, f.Entry.Lyrics)
 		}
 		// 下一拍照样按基条目的三段进来:留在变体上,提交变体照写快照。

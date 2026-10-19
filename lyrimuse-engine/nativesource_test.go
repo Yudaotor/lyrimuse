@@ -163,7 +163,7 @@ func TestNeedsLyricsRetry_NativeSourceMissedOut(t *testing.T) {
 
 	// 用户那首歌的形态：选了酷狗（带逐字），而 QQ 当初也答过。
 	missed := enrichEntry{
-		Lyrics: "[00:01.00]x", LyricsYRC: "[1,2](1,1,0)x",
+		Lyrics: bt("[00:01.00]x"), LyricsYRC: bt("[1,2](1,1,0)x"),
 		LyricsSource: "kugou", LyricsSourcesSeen: []string{"kugou", "qq", "lrclib"},
 	}
 	if !needsLyricsRetry(missed, false, false, true) {
@@ -210,7 +210,7 @@ func TestNeedsLyricsRetry_DurationMismatch(t *testing.T) {
 	nativeLyricSources = nil
 
 	entry := enrichEntry{
-		Lyrics: "[00:01.00]x", LyricsYRC: "[1,2](1,1,0)x",
+		Lyrics: bt("[00:01.00]x"), LyricsYRC: bt("[1,2](1,1,0)x"),
 		LyricsSource: "kugou", LyricsSourcesSeen: []string{"kugou", "qq"},
 		ResolvedDurationSecs: 164,
 	}

@@ -36,7 +36,7 @@ func assertNoNewResolution(t *testing.T, before map[string]bool, cacheSize int) 
 // 只查缓存:精确 key 与宽松等价(大小写 / 空格 / 繁简)都能命中,没命中返回 nil 且什么都不起。
 func TestCachedTrackEnrichmentLooksUpOnly(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
-		"PRINCE|P. Control|The Gold Experience": {CoverURL: "https://example.com/p.jpg", Lyrics: "[00:01.00]x"},
+		"PRINCE|P. Control|The Gold Experience": {CoverURL: "https://example.com/p.jpg", Lyrics: bt("[00:01.00]x")},
 		"盧廣仲|100種生活|100種生活":                     {CoverURL: "https://example.com/c.jpg"},
 	})
 	if got := cachedTrackEnrichment("PRINCE", "P. Control", "The Gold Experience"); got["cover_url"] != "https://example.com/p.jpg" {

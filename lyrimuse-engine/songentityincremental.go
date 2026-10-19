@@ -48,10 +48,14 @@ func noteSongEntityCacheSaved() {
 	}
 }
 
-// songEntityPrint:一条写法里建表读的那些字段。lyrics、yrc 原样留着比(同一份正文是同一个字符串,比较是常数时间),其余合成一个哈希。
+// songEntityPrint:一条写法里建表读的那些字段。lyrics、yrc 留 bodyText 按摘要比(不读正文小文件、也不另存一份明文),其余合成一个哈希。
 type songEntityPrint struct {
 	fields      uint64
-	lyrics, yrc string
+	lyrics, yrc bodyText
+}
+
+func (p songEntityPrint) equal(q songEntityPrint) bool {
+	return p.fields == q.fields && p.lyrics.Equal(q.lyrics) && p.yrc.Equal(q.yrc)
 }
 
 var songEntityPrintSeed = maphash.MakeSeed()
@@ -308,7 +312,7 @@ func (st *songEntityState) update(src *songEntitySource, now time.Time) (*songEn
 	for k, e := range src.cache {
 		p := songEntityPrintOf(e, src.pins[k])
 		prints[k] = p
-		if old, ok := st.prints[k]; !ok || old != p {
+		if old, ok := st.prints[k]; !ok || !old.equal(p) {
 			changed = append(changed, k)
 		}
 	}

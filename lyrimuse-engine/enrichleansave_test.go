@@ -100,7 +100,7 @@ func TestLeanSaveBacksUpFullFormatOnce(t *testing.T) {
 		t.Fatal("备份之后主缓存改写成精简格式")
 	}
 
-	putEntriesForTest(map[string]enrichEntry{"新|歌|": {Lyrics: "[00:01.00]new", LyricsTr: "[00:01.00]新"}})
+	putEntriesForTest(map[string]enrichEntry{"新|歌|": {Lyrics: bt("[00:01.00]new"), LyricsTr: bt("[00:01.00]新")}})
 	saveEnrichCache()
 	if b := mustRead(t, backup); !bytes.Equal(b, old) {
 		t.Fatal("备份只写一次,之后的保存不能覆盖它")

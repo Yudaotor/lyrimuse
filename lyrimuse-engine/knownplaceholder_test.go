@@ -72,7 +72,7 @@ func TestMigrateKnownPlaceholderCovers(t *testing.T) {
 	fine := enrichKey("Other", "Song", "")
 	placeholderURL := "file:///tmp/artwork/" + entry.sha256Hex[:16] + ".jpg"
 	setUpEnrichEditTest(t, map[string]enrichEntry{
-		stuck: {CoverURL: placeholderURL, CoverSource: "device", CoverAlbum: "A", AccentColor: "#112233", Lyrics: "[00:01.00]词", TS: 5},
+		stuck: {CoverURL: placeholderURL, CoverSource: "device", CoverAlbum: "A", AccentColor: "#112233", Lyrics: bt("[00:01.00]词"), TS: 5},
 		fine:  {CoverURL: "file:///tmp/artwork/0123456789abcdef.jpg", CoverSource: "device", AccentColor: "#445566", TS: 6},
 	})
 	migrateKnownPlaceholderCovers()
@@ -80,7 +80,7 @@ func TestMigrateKnownPlaceholderCovers(t *testing.T) {
 	if e.CoverURL != "" || e.CoverSource != "" || e.CoverAlbum != "" || e.AccentColor != "" {
 		t.Fatalf("占位图封面四件套要一起清: %+v", e)
 	}
-	if e.Lyrics != "[00:01.00]词" || e.TS != 5 {
+	if !e.Lyrics.EqualString("[00:01.00]词") || e.TS != 5 {
 		t.Fatalf("封面以外的字段不能动: %+v", e)
 	}
 	if f, _ := cacheEntry(t, fine); f.CoverURL == "" || f.AccentColor != "#445566" {

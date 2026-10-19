@@ -27,7 +27,7 @@ func setUpMaintenanceTest(t *testing.T) (cfgDir, key, jsonPath, tempFile string)
 	cfgDir = t.TempDir()
 	key = enrichKey("Artist", "Song", "Album")
 	jsonPath = filepath.Join(cfgDir, clientName+"-enrich-cache.json")
-	data, err := json.Marshal(map[string]enrichEntry{key: {Lyrics: "[00:01.00]old"}})
+	data, err := json.Marshal(map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]old")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func setUpMaintenanceTest(t *testing.T) (cfgDir, key, jsonPath, tempFile string)
 	lyrics := filepath.Join(cfgDir, "lyrics")
 	enrichMu.Lock()
 	setLyricsDir(lyrics)
-	enrichCache = map[string]enrichEntry{key: {Lyrics: "[00:01.00]edited"}}
+	enrichCache = map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]edited")}}
 	enrichPath = ""
 	enrichMu.Unlock()
 	exportLyricsFiles()
@@ -56,7 +56,7 @@ func setUpMaintenanceTest(t *testing.T) (cfgDir, key, jsonPath, tempFile string)
 func TestMaintenanceApplyImportsLyricsFilesOverJSON(t *testing.T) {
 	cfgDir, key, _, _ := setUpMaintenanceTest(t)
 	loadEnrichForMaintenance(cfgDir, true)
-	if e, _ := cacheEntry(t, key); e.Lyrics != "[00:01.00]edited" {
+	if e, _ := cacheEntry(t, key); !e.Lyrics.EqualString("[00:01.00]edited") {
 		t.Fatalf("lyrics/ 文件该赢过 JSON: %q", e.Lyrics)
 	}
 	if lyricsDir() != filepath.Join(cfgDir, "lyrics") {
@@ -72,7 +72,7 @@ func TestMaintenanceDryRunIsReadOnly(t *testing.T) {
 	cfgDir, key, jsonPath, tempFile := setUpMaintenanceTest(t)
 	before, _ := os.ReadFile(jsonPath)
 	loadEnrichForMaintenance(cfgDir, false)
-	if e, _ := cacheEntry(t, key); e.Lyrics != "[00:01.00]edited" {
+	if e, _ := cacheEntry(t, key); !e.Lyrics.EqualString("[00:01.00]edited") {
 		t.Fatalf("预演的内存也该按 lyrics/ 文件对齐: %q", e.Lyrics)
 	}
 	if enrichPath != "" {

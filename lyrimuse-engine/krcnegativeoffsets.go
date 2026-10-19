@@ -60,11 +60,11 @@ func migrateKRCNegativeOffsets() {
 	enrichMu.Lock()
 	fixed := 0
 	for k, e := range scope.entries() {
-		repaired, ok := repairKRCNegativeOffsets(e.LyricsYRC)
+		repaired, ok := repairKRCNegativeOffsets(e.LyricsYRC.String())
 		if !ok {
 			continue
 		}
-		e.LyricsYRC = repaired
+		e.LyricsYRC = bt(repaired)
 		enrichCache[k] = e
 		fixed++
 	}

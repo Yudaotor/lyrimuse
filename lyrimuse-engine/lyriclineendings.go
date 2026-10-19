@@ -44,20 +44,20 @@ func migrateLyricLineEndings() {
 	enrichMu.Lock()
 	fixed := 0
 	for k, e := range scope.entries() {
-		lyrics := normalizeLyricText(e.Lyrics)
-		tr := normalizeLyricText(e.LyricsTr)
-		roma := normalizeLyricText(e.LyricsRoma)
-		yrc := normalizeLyricText(e.LyricsYRC)
-		plain := normalizeLyricText(e.PlainLyrics)
-		bg := normalizeLyricText(e.LyricsBG)
-		if lyrics == e.Lyrics && tr == e.LyricsTr && roma == e.LyricsRoma && yrc == e.LyricsYRC && plain == e.PlainLyrics &&
-			bg == e.LyricsBG {
+		lyrics := normalizeLyricText(e.Lyrics.String())
+		tr := normalizeLyricText(e.LyricsTr.String())
+		roma := normalizeLyricText(e.LyricsRoma.String())
+		yrc := normalizeLyricText(e.LyricsYRC.String())
+		plain := normalizeLyricText(e.PlainLyrics.String())
+		bg := normalizeLyricText(e.LyricsBG.String())
+		if e.Lyrics.EqualString(lyrics) && e.LyricsTr.EqualString(tr) && e.LyricsRoma.EqualString(roma) && e.LyricsYRC.EqualString(yrc) && e.PlainLyrics.EqualString(plain) &&
+			e.LyricsBG.EqualString(bg) {
 			continue
 		}
-		if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics) {
+		if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics.String()) {
 			e.ManualPickSHA = manualPickFingerprint(lyrics)
 		}
-		e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC, e.PlainLyrics, e.LyricsBG = lyrics, tr, roma, yrc, plain, bg
+		e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC, e.PlainLyrics, e.LyricsBG = bt(lyrics), bt(tr), bt(roma), bt(yrc), bt(plain), bt(bg)
 		enrichCache[k] = e
 		fixed++
 	}

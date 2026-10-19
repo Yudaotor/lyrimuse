@@ -81,7 +81,8 @@ func logEnrichSave(entries int, start time.Time) {
 	if st, err := os.Stat(enrichPath); err == nil {
 		size = st.Size()
 	}
-	slog.Info("cache: saved", "entries", entries, "bytes", size, "took", time.Since(start).Round(time.Millisecond), "by", enrichSaveCaller())
+	slog.Info("cache: saved", "entries", entries, "bytes", size, "took", time.Since(start).Round(time.Millisecond), "by", enrichSaveCaller(),
+		"body_reads", bodyFileReads.Swap(0))
 }
 
 // enrichSaveCaller:调用栈上第一个不是落盘包装函数的函数名(去掉包名)。

@@ -52,8 +52,8 @@ func TestLyricsFileStateSkipsUnchangedFiles(t *testing.T) {
 	dir := withLyricsFileStateEnv(t)
 	const keyA, keyB = "歌手甲|歌一|专辑", "歌手乙|歌二|专辑"
 	withEnrichCache(t, map[string]enrichEntry{
-		keyA: {Lyrics: "[00:01.00]aaaa", LyricsTr: "[00:01.00]tr-a", LyricsSource: "kugou"},
-		keyB: {Lyrics: "[00:01.00]bbbb", LyricsSource: "qq"},
+		keyA: {Lyrics: bt("[00:01.00]aaaa"), LyricsTr: bt("[00:01.00]tr-a"), LyricsSource: "kugou"},
+		keyB: {Lyrics: bt("[00:01.00]bbbb"), LyricsSource: "qq"},
 	})
 	exportLyricsFiles()
 	pathA := filepath.Join(dir, sanitizeLyricsFilename(keyA)+".lrc")
@@ -82,10 +82,10 @@ func TestLyricsFileStateSkipsUnchangedFiles(t *testing.T) {
 	enrichMu.Lock()
 	gotA, gotB := enrichCache[keyA].Lyrics, enrichCache[keyB].Lyrics
 	enrichMu.Unlock()
-	if gotA != "[00:01.00]aaaa" {
+	if !gotA.EqualString("[00:01.00]aaaa") {
 		t.Fatalf("A 记录一致、不该读: %q", gotA)
 	}
-	if gotB != "[00:01.00]BBBB" {
+	if !gotB.EqualString("[00:01.00]BBBB") {
 		t.Fatalf("B 改过、该读进来: %q", gotB)
 	}
 
@@ -97,8 +97,8 @@ func TestLyricsFileStateSkipsUnchangedFiles(t *testing.T) {
 	// A 的译文删掉:对应的 .tr.lrc 要删,记录也要清。
 	enrichMu.Lock()
 	e := enrichCache[keyA]
-	e.LyricsTr = ""
-	e.Lyrics = "[00:01.00]aaab" // 内容变了:要重写
+	e.LyricsTr = bodyText{}
+	e.Lyrics = bt("[00:01.00]aaab") // 内容变了:要重写
 	enrichCache[keyA] = e
 	enrichMu.Unlock()
 	exportLyricsFiles()
@@ -121,7 +121,7 @@ func TestLyricsFileStateSkipsUnchangedFiles(t *testing.T) {
 func TestLyricsExportSkipsUnchangedDecomposedFilenames(t *testing.T) {
 	dir := withLyricsFileStateEnv(t)
 	const key = "Gareth.T|碧麗宮|THE PROT\u00c9G\u00c9"
-	withEnrichCache(t, map[string]enrichEntry{key: {Lyrics: "[00:01.00]bik1 lai6", LyricsSource: "kugou"}})
+	withEnrichCache(t, map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]bik1 lai6"), LyricsSource: "kugou"}})
 	exportLyricsFiles()
 	composed := filepath.Join(dir, sanitizeLyricsFilename(key)+".lrc")
 	decomposed := filepath.Join(dir, sanitizeLyricsFilename("Gareth.T|碧麗宮|THE PROTE\u0301GE\u0301")+".lrc")
@@ -153,7 +153,7 @@ func TestLyricsExportSkipsUnchangedDecomposedFilenames(t *testing.T) {
 func TestLyricsFileStateIgnoredForOtherDir(t *testing.T) {
 	dir := withLyricsFileStateEnv(t)
 	const key = "歌手甲|歌一|专辑"
-	withEnrichCache(t, map[string]enrichEntry{key: {Lyrics: "[00:01.00]aaaa"}})
+	withEnrichCache(t, map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]aaaa")}})
 	exportLyricsFiles()
 	path := filepath.Join(dir, sanitizeLyricsFilename(key)+".lrc")
 

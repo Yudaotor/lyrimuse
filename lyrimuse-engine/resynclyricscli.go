@@ -115,7 +115,7 @@ func runResyncLyrics(keys []string, apply bool) int {
 		// 慢源(Musixmatch/YTMusic 这类)没能在 20 秒内应答时 decidable 恒为 false,即便
 		// 新一轮已经搜到可用源也会被当成"跳过"——保护的是一份根本不存在的"旧歌词"
 		// (如陶喆《Airport in 10:30》这类曾撞上这个坑的例子)。
-		decidable := rescoreDecidable(scored, e.LyricsSource, e.Lyrics == "")
+		decidable := rescoreDecidable(scored, e.LyricsSource, e.Lyrics.IsZero())
 		seen := lyricSourcesWithCandidates(scored)
 		responded := lyricSourcesResponded(scored)
 
@@ -217,13 +217,13 @@ func (p resyncPlan) changed() bool {
 }
 
 func planResync(e enrichEntry, picked *scoredLyricCandidateResult) resyncPlan {
-	p := resyncPlan{lyricsSame: picked.Lyrics == e.Lyrics}
-	p.keepLocalRoma = p.lyricsSame && picked.LyricsRoma == "" && e.LyricsRoma != ""
-	p.keepMachineTr = p.lyricsSame && picked.LyricsTr == "" && e.LyricsTr != "" && e.LyricsTrSource == lyricsTrSourceMachine
-	p.keepYRC = p.lyricsSame && picked.LyricsYRC == "" && e.LyricsYRC != ""
-	p.trSame = picked.LyricsTr == e.LyricsTr || p.keepMachineTr
-	p.romaSame = picked.LyricsRoma == e.LyricsRoma || p.keepLocalRoma
-	p.yrcSame = p.keepYRC || sameYRCLines(e.LyricsYRC, picked.LyricsYRC)
+	p := resyncPlan{lyricsSame: e.Lyrics.EqualString(picked.Lyrics)}
+	p.keepLocalRoma = p.lyricsSame && picked.LyricsRoma == "" && !e.LyricsRoma.IsZero()
+	p.keepMachineTr = p.lyricsSame && picked.LyricsTr == "" && !e.LyricsTr.IsZero() && e.LyricsTrSource == lyricsTrSourceMachine
+	p.keepYRC = p.lyricsSame && picked.LyricsYRC == "" && !e.LyricsYRC.IsZero()
+	p.trSame = e.LyricsTr.EqualString(picked.LyricsTr) || p.keepMachineTr
+	p.romaSame = e.LyricsRoma.EqualString(picked.LyricsRoma) || p.keepLocalRoma
+	p.yrcSame = p.keepYRC || sameYRCLines(e.LyricsYRC.String(), picked.LyricsYRC)
 	return p
 }
 
@@ -245,16 +245,16 @@ func sameYRCLines(a, b string) bool {
 // applyResync 把冠军写进这一条,口径同 rescoreLyrics 换词那一支。preparedRoma 是锁外按 generatedRomaFor 算好的
 // 罗马音兜底(正文没换时为空,只补粤拼)。
 func applyResync(cur enrichEntry, picked *scoredLyricCandidateResult, p resyncPlan, songLanguage, preparedRoma string) enrichEntry {
-	cur.Lyrics = picked.Lyrics
+	cur.Lyrics = bt(picked.Lyrics)
 	if !p.keepMachineTr {
-		cur.LyricsTr = picked.LyricsTr
+		cur.LyricsTr = bt(picked.LyricsTr)
 	}
 	if !p.keepLocalRoma {
-		cur.LyricsRoma = picked.LyricsRoma
+		cur.LyricsRoma = bt(picked.LyricsRoma)
 	}
 	if !p.keepYRC {
-		cur.LyricsYRC = picked.LyricsYRC
-		cur.LyricsBG, cur.LyricsBGChecked = picked.LyricsBG, lyricsBGParserVersion
+		cur.LyricsYRC = bt(picked.LyricsYRC)
+		cur.LyricsBG, cur.LyricsBGChecked = bt(picked.LyricsBG), lyricsBGParserVersion
 	}
 	if !p.trSame {
 		// 译文换人了(哪怕正文没变),描述译文的两个字段必须跟着换——不然旧的

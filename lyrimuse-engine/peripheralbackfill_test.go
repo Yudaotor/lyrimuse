@@ -155,7 +155,7 @@ func TestPeripheralThrottleDoesNotDelayLyricsRetry(t *testing.T) {
 	// 一条 6 小时前解析出来的记录,当时只有网易云给了候选 —— 酷狗没出现过,该重搜。
 	longAgo := time.Now().Unix() - int64(lyricsRetryInterval/time.Second) - 1
 	e := enrichEntry{
-		Lyrics:            "[00:01.00]hello",
+		Lyrics:            bt("[00:01.00]hello"),
 		LyricsSourcesSeen: []string{"netease"},
 		TS:                longAgo,
 	}

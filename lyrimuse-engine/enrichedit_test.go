@@ -56,7 +56,7 @@ var editKey = enrichKey("Edit Artist", "Edit Song", "Edit Album")
 
 func TestSaveEditClearsTranslationBookkeepingWhenTranslationChanges(t *testing.T) {
 	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {
-		Lyrics: "[00:01.00]old", LyricsTr: "[00:01.00]旧译文", LyricsTrLang: "en", LyricsTrSource: "machine",
+		Lyrics: bt("[00:01.00]old"), LyricsTr: bt("[00:01.00]旧译文"), LyricsTrLang: "en", LyricsTrSource: "machine",
 		TranslationTS: 123, TranslationRetryCount: 2,
 	}})
 	res := applyEnrichEdit(enrichEditRequest{Op: "save_edit", Key: editKey, Lyrics: "[00:01.00]old", Tr: "[00:01.00]新译文"})
@@ -79,26 +79,26 @@ func TestSaveEditClearsTranslationBookkeepingWhenTranslationChanges(t *testing.T
 }
 
 func TestSaveEditDropsRomanizationThatDescribesOldLyrics(t *testing.T) {
-	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: "[00:01.00]旧", LyricsRoma: "[00:01.00]kyu"}})
+	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: bt("[00:01.00]旧"), LyricsRoma: bt("[00:01.00]kyu")}})
 	applyEnrichEdit(enrichEditRequest{Op: "save_edit", Key: editKey, Lyrics: "[00:01.00]新", Roma: "[00:01.00]kyu"})
-	if e, _ := cacheEntry(t, editKey); e.LyricsRoma != "" {
+	if e, _ := cacheEntry(t, editKey); !e.LyricsRoma.IsZero() {
 		t.Errorf("正文改了、罗马音原样交回,应清掉 got %q", e.LyricsRoma)
 	}
 	applyEnrichEdit(enrichEditRequest{Op: "save_edit", Key: editKey, Lyrics: "[00:01.00]再改", Roma: "[00:01.00]mine"})
-	if e, _ := cacheEntry(t, editKey); e.LyricsRoma != "[00:01.00]mine" {
+	if e, _ := cacheEntry(t, editKey); !e.LyricsRoma.EqualString("[00:01.00]mine") {
 		t.Errorf("用户自己改了罗马音就照他的来 got %q", e.LyricsRoma)
 	}
 }
 
 func TestSaveEditOptionalFields(t *testing.T) {
 	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {
-		Lyrics: "[00:01.00]x", LyricsYRC: "yrc-old", LyricsSourceChoice: "qq", LyricsScore: 5, LyricsScoringVersion: 3,
+		Lyrics: bt("[00:01.00]x"), LyricsYRC: bt("yrc-old"), LyricsSourceChoice: "qq", LyricsScore: 5, LyricsScoringVersion: 3,
 		LyricsSource: "qq", ManualPickSHA: "abc",
 	}})
 	// 可选字段都不传:source_choice / yrc / 打分都不动;source 为空 = 清掉;指纹清掉。
 	applyEnrichEdit(enrichEditRequest{Op: "save_edit", Key: editKey, Lyrics: "[00:01.00]y", MarkManual: true})
 	e, _ := cacheEntry(t, editKey)
-	if e.LyricsSourceChoice != "qq" || e.LyricsYRC != "yrc-old" || e.LyricsScore != 5 || e.LyricsScoringVersion != 3 {
+	if e.LyricsSourceChoice != "qq" || !e.LyricsYRC.EqualString("yrc-old") || e.LyricsScore != 5 || e.LyricsScoringVersion != 3 {
 		t.Errorf("没传的可选字段不该动 got %+v", e)
 	}
 	if e.LyricsSource != "" || e.ManualPickSHA != "" || !e.ManualLyrics {
@@ -111,7 +111,7 @@ func TestSaveEditOptionalFields(t *testing.T) {
 		SourceChoice: strPtr(""), YRC: strPtr(""), FromManualPick: true,
 	})
 	e, _ = cacheEntry(t, editKey)
-	if e.LyricsSourceChoice != "" || e.LyricsYRC != "" {
+	if e.LyricsSourceChoice != "" || !e.LyricsYRC.IsZero() {
 		t.Errorf("显式传的字段没生效 got %+v", e)
 	}
 	if e.ManualPickSHA == "" || e.ManualPickSHA != manualPickFingerprint("[00:01.00]picked") {
@@ -148,9 +148,9 @@ func TestSetManualLockFlipsOnlyOriginalPicks(t *testing.T) {
 	replaced := enrichKey("A", "Replaced", "X")
 	never := enrichKey("A", "Never", "X")
 	lyrics, _ := setUpEnrichEditTest(t, map[string]enrichEntry{
-		stillOriginal: {Lyrics: picked, ManualPickSHA: manualPickFingerprint(picked)},
-		replaced:      {Lyrics: "[00:01.00]auto upgraded", ManualPickSHA: manualPickFingerprint(picked)},
-		never:         {Lyrics: picked},
+		stillOriginal: {Lyrics: bt(picked), ManualPickSHA: manualPickFingerprint(picked)},
+		replaced:      {Lyrics: bt("[00:01.00]auto upgraded"), ManualPickSHA: manualPickFingerprint(picked)},
+		never:         {Lyrics: bt(picked)},
 	})
 	res := applyEnrichEdit(enrichEditRequest{Op: "set_manual_lock", Value: true})
 	if res.Changed != 1 {
@@ -178,9 +178,9 @@ func TestCountManualLockMatchesSetWithoutChanging(t *testing.T) {
 	unlocked := enrichKey("A", "Unlocked", "X")
 	replaced := enrichKey("A", "Replaced", "X")
 	setUpEnrichEditTest(t, map[string]enrichEntry{
-		locked:   {Lyrics: picked, ManualPickSHA: manualPickFingerprint(picked), ManualLyrics: true},
-		unlocked: {Lyrics: picked, ManualPickSHA: manualPickFingerprint(picked)},
-		replaced: {Lyrics: "[00:01.00]auto upgraded", ManualPickSHA: manualPickFingerprint(picked), ManualLyrics: true},
+		locked:   {Lyrics: bt(picked), ManualPickSHA: manualPickFingerprint(picked), ManualLyrics: true},
+		unlocked: {Lyrics: bt(picked), ManualPickSHA: manualPickFingerprint(picked)},
+		replaced: {Lyrics: bt("[00:01.00]auto upgraded"), ManualPickSHA: manualPickFingerprint(picked), ManualLyrics: true},
 	})
 	for _, locking := range []bool{false, true} {
 		if res := applyEnrichEdit(enrichEditRequest{Op: "count_manual_lock", Value: locking}); !res.OK || res.Changed != 1 {
@@ -209,7 +209,7 @@ func TestCountManualLockMatchesSetWithoutChanging(t *testing.T) {
 func TestSetInstrumentalAcceptsKeys(t *testing.T) {
 	other := enrichKey("Other", "Song", "Album")
 	setUpEnrichEditTest(t, map[string]enrichEntry{
-		editKey: {Lyrics: "[00:01.00]x"},
+		editKey: {Lyrics: bt("[00:01.00]x")},
 		other:   {},
 	})
 	res := applyEnrichEdit(enrichEditRequest{Op: "set_instrumental", Keys: []string{editKey, other, "No|Such|Key"}, Value: true})
@@ -238,8 +238,8 @@ func TestSetInstrumentalAcceptsKeys(t *testing.T) {
 func TestDeleteTrashesFilesAndSkipsUnknownKeys(t *testing.T) {
 	other := enrichKey("Other", "Song", "Album")
 	lyrics, trash := setUpEnrichEditTest(t, map[string]enrichEntry{
-		editKey: {Lyrics: "[00:01.00]bye"},
-		other:   {Lyrics: "[00:01.00]stay"},
+		editKey: {Lyrics: bt("[00:01.00]bye")},
+		other:   {Lyrics: bt("[00:01.00]stay")},
 	})
 	exportLyricsFiles()
 	res := applyEnrichEdit(enrichEditRequest{Op: "delete", Keys: []string{editKey, "No|Such|Key"}})
@@ -261,7 +261,7 @@ func TestDeleteTrashesFilesAndSkipsUnknownKeys(t *testing.T) {
 }
 
 func TestClearAllEmptiesCacheAndLyricsFilesOnly(t *testing.T) {
-	lyrics, _ := setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: "[00:01.00]x"}})
+	lyrics, _ := setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: bt("[00:01.00]x")}})
 	exportLyricsFiles()
 	if err := os.WriteFile(filepath.Join(lyrics, "notes.txt"), []byte("mine"), 0o644); err != nil {
 		t.Fatal(err)
@@ -299,14 +299,14 @@ func TestAdoptRestoreImportsLyricsFiles(t *testing.T) {
 	if !res.OK {
 		t.Fatalf("res=%+v", res)
 	}
-	if e, ok := cacheEntry(t, enrichKey("Restored", "Song", "Album")); !ok || !strings.Contains(e.Lyrics, "restored line") {
+	if e, ok := cacheEntry(t, enrichKey("Restored", "Song", "Album")); !ok || !strings.Contains(e.Lyrics.String(), "restored line") {
 		t.Errorf("铺回去的歌词文件应收进缓存 got %+v ok=%v", e, ok)
 	}
 }
 
 // 请求目录:处理完删请求、写结果;太老的请求不执行;坏请求回一个带错误的结果。
 func TestProcessEnrichEditRequests(t *testing.T) {
-	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: "[00:01.00]x"}})
+	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: bt("[00:01.00]x")}})
 	enrichEditDir = t.TempDir()
 	write := func(name, body string, age time.Duration) {
 		path := filepath.Join(enrichEditDir, name)
@@ -375,7 +375,7 @@ func TestManualPickShouldFlip(t *testing.T) {
 // 超长 key 在加长度上限之前导出过截断前的长文件名,删除时也要一起挪走,不然下次启动被导入复活。
 func TestDeleteAlsoTrashesUntruncatedLegacyFile(t *testing.T) {
 	longKey := strings.Repeat("A", 140) + "|" + strings.Repeat("B", 60) + "|专辑"
-	lyrics, _ := setUpEnrichEditTest(t, map[string]enrichEntry{longKey: {Lyrics: "[00:01.00]x"}})
+	lyrics, _ := setUpEnrichEditTest(t, map[string]enrichEntry{longKey: {Lyrics: bt("[00:01.00]x")}})
 	artist, title, album := splitEnrichKey(longKey)
 	legacy := filepath.Join(lyrics, sanitizeLyricsFilenameUntruncated(longKey)+".lrc")
 	if err := os.WriteFile(legacy, []byte(lyricsFileHeader(artist, title, album, "", false)+"[00:01.00]x"), 0o644); err != nil {
@@ -391,7 +391,7 @@ func TestDeleteAlsoTrashesUntruncatedLegacyFile(t *testing.T) {
 // 整条盖回去,把标记冲掉。
 func TestSetInstrumentalMarksEveryKeyEdited(t *testing.T) {
 	other := enrichKey("Other", "Song", "Album")
-	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: "[00:01.00]x"}, other: {}})
+	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: bt("[00:01.00]x")}, other: {}})
 	cancelled := map[string]bool{}
 	enrichMu.Lock()
 	stamp := enrichEditStampLocked()
@@ -423,7 +423,7 @@ func TestSetInstrumentalMarksEveryKeyEdited(t *testing.T) {
 // 请求目录:先改名认领再执行。认领之后进程退了留下的那条不再当待办执行(App 早已报了失败),过期之后清掉;
 // 正常处理完不留认领文件。
 func TestProcessEnrichEditRequestsClaimsBeforeRunning(t *testing.T) {
-	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: "[00:01.00]x"}})
+	setUpEnrichEditTest(t, map[string]enrichEntry{editKey: {Lyrics: bt("[00:01.00]x")}})
 	enrichEditDir = t.TempDir()
 	write := func(name, body string, age time.Duration) {
 		path := filepath.Join(enrichEditDir, name)

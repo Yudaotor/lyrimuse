@@ -28,7 +28,7 @@ func TestLyricsScoringStampOrder(t *testing.T) {
 
 // 主版本相同、修订号落后的条目照样按新规则重选;打上当前版本之后不再重选。
 func TestNeedsLyricsRescoreFollowsRevision(t *testing.T) {
-	e := enrichEntry{Lyrics: "[00:01.00]x", LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision - 1}
+	e := enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision - 1}
 	if lyricsScoringRevision > 0 && !needsLyricsRescore(e, false, true) {
 		t.Fatal("修订号落后的条目该重选")
 	}

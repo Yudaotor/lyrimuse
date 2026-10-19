@@ -316,13 +316,13 @@ func TestLyricsEntryFromScoredSpeakers(t *testing.T) {
 func TestAdoptedLyricsCarrySpeakers(t *testing.T) {
 	sp := &lyricSpeakers{For: "x", LRC: []string{"v1"}}
 	var e enrichEntry
-	if !adoptBackfilledLyrics(&e, enrichEntry{Lyrics: "[00:01.00]a", LyricsSpeakers: sp, LyricsSpeakersChecked: lyricsSpeakersVersion}) ||
+	if !adoptBackfilledLyrics(&e, enrichEntry{Lyrics: bt("[00:01.00]a"), LyricsSpeakers: sp, LyricsSpeakersChecked: lyricsSpeakersVersion}) ||
 		e.LyricsSpeakers != sp || e.LyricsSpeakersChecked != lyricsSpeakersVersion {
 		t.Errorf("补外围字段收下歌词时没带上标注: %+v checked=%d", e.LyricsSpeakers, e.LyricsSpeakersChecked)
 	}
 	enrichCache = map[string]enrichEntry{
-		"A|Song|Original": {DurationSecs: 200.0, Lyrics: "[00:01.00]low", LyricsSource: "kugou", LyricsScore: 1100},
-		"A|Song|Deluxe": {DurationSecs: 200.3, Lyrics: "[00:01.00]high", LyricsSource: "netease", LyricsScore: 1300, LyricsSpeakers: sp,
+		"A|Song|Original": {DurationSecs: 200.0, Lyrics: bt("[00:01.00]low"), LyricsSource: "kugou", LyricsScore: 1100},
+		"A|Song|Deluxe": {DurationSecs: 200.3, Lyrics: bt("[00:01.00]high"), LyricsSource: "netease", LyricsScore: 1300, LyricsSpeakers: sp,
 			LyricsSpeakersChecked: lyricsSpeakersVersion},
 	}
 	e = enrichCache["A|Song|Original"]
@@ -333,7 +333,7 @@ func TestAdoptedLyricsCarrySpeakers(t *testing.T) {
 
 // 标注留在索引里(不进正文小文件);候选的标注不进 search-lyrics 的输出。
 func TestLyricSpeakersSerialization(t *testing.T) {
-	e := leanForIndex(enrichEntry{Lyrics: "[00:01.00]a", LyricsYRC: "[1000,500](1000,500,0)a", LyricsSpeakers: &lyricSpeakers{For: "abc", LRC: []string{"v1"}}}, 7)
+	e := leanForIndex(enrichEntry{Lyrics: bt("[00:01.00]a"), LyricsYRC: bt("[1000,500](1000,500,0)a"), LyricsSpeakers: &lyricSpeakers{For: "abc", LRC: []string{"v1"}}}, 7)
 	b, _ := json.Marshal(e)
 	if !strings.Contains(string(b), `"lyrics_speakers":{"for":"abc","lrc":["v1"]}`) {
 		t.Errorf("索引里没有标注: %s", b)

@@ -256,7 +256,7 @@ func TestSongEntityVetoes(t *testing.T) {
 	words := songTestWords("vocal", 30)
 	inst := []songVariant{
 		songTestVariant("Singer|Tune|A", enrichEntry{DurationSecs: 200, Instrumental: true, SpotifyTrackID: "abcdefghijklmnopqrstuv"}, nil),
-		songTestVariant("Singer|Tune|B", enrichEntry{DurationSecs: 200.1, SpotifyTrackID: "abcdefghijklmnopqrstuv", Lyrics: songTestLRC(1000, words), LyricsSource: "netease", ResolvedDurationSecs: 200.1}, nil),
+		songTestVariant("Singer|Tune|B", enrichEntry{DurationSecs: 200.1, SpotifyTrackID: "abcdefghijklmnopqrstuv", Lyrics: bt(songTestLRC(1000, words)), LyricsSource: "netease", ResolvedDurationSecs: 200.1}, nil),
 	}
 	if b, of := songTestBuild(t, inst, nil); songTestSame(of, inst[0].key, inst[1].key) || len(b.vetoed) == 0 || b.vetoed[0].reason != "vocals" {
 		t.Errorf("标了纯音乐的写法不该跟有人声的并: %+v", b.vetoed)
@@ -267,8 +267,8 @@ func TestSongEntityVetoes(t *testing.T) {
 func TestSongEntityLyricsVetoOnlyForMediumEvidence(t *testing.T) {
 	a, c := songTestWords("alpha", 30), songTestWords("omega", 30)
 	mk := func(isrc bool) []songVariant {
-		x := enrichEntry{DurationSecs: 200, Lyrics: songTestLRC(1000, a), LyricsSource: "kugou", ResolvedDurationSecs: 200}
-		y := enrichEntry{DurationSecs: 200.5, Lyrics: songTestLRC(1000, c), LyricsSource: "netease", ResolvedDurationSecs: 200.5}
+		x := enrichEntry{DurationSecs: 200, Lyrics: bt(songTestLRC(1000, a)), LyricsSource: "kugou", ResolvedDurationSecs: 200}
+		y := enrichEntry{DurationSecs: 200.5, Lyrics: bt(songTestLRC(1000, c)), LyricsSource: "netease", ResolvedDurationSecs: 200.5}
 		if isrc {
 			x.ISRCs, y.ISRCs = []string{"HKA351501001"}, []string{"HKA351501001"}
 		}
@@ -300,8 +300,8 @@ func TestSongEntityShareGroups(t *testing.T) {
 		t.Error("只靠一条检索 id 连着,没有旁证,不该进同一个共享组")
 	}
 	withLyrics := []songVariant{
-		songTestVariant("Singer|Tune|One", enrichEntry{NeteaseURL: ne, Lyrics: songTestLRC(1000, words), LyricsSource: "kugou"}, reg),
-		songTestVariant("Singer|Tune|Two", enrichEntry{DurationSecs: 300, NeteaseURL: ne, Lyrics: songTestLRC(1000, words), LyricsSource: "qq", ResolvedDurationSecs: 300}, reg),
+		songTestVariant("Singer|Tune|One", enrichEntry{NeteaseURL: ne, Lyrics: bt(songTestLRC(1000, words)), LyricsSource: "kugou"}, reg),
+		songTestVariant("Singer|Tune|Two", enrichEntry{DurationSecs: 300, NeteaseURL: ne, Lyrics: bt(songTestLRC(1000, words)), LyricsSource: "qq", ResolvedDurationSecs: 300}, reg),
 	}
 	if b, _ := songTestBuild(t, withLyrics, nil); b.shareOf[0] != b.shareOf[1] {
 		t.Error("两边歌词各自独立得来又对得上,是检索 id 的旁证,应当进同一个共享组")
@@ -332,8 +332,8 @@ func TestSongEntityLyricsEvidence(t *testing.T) {
 			lb += "[05:00.00]extra closing line here\n"
 		}
 		return []songVariant{
-			songTestVariant("Khalil Fong|Listen|Journey", enrichEntry{DurationSecs: 281, Lyrics: la, LyricsSource: srcA, ResolvedDurationSecs: 281}, nil),
-			songTestVariant("Khalil Fong|听|JTW", enrichEntry{DurationSecs: 281.093, Lyrics: lb, LyricsSource: srcB, ResolvedDurationSecs: 281.093}, nil),
+			songTestVariant("Khalil Fong|Listen|Journey", enrichEntry{DurationSecs: 281, Lyrics: bt(la), LyricsSource: srcA, ResolvedDurationSecs: 281}, nil),
+			songTestVariant("Khalil Fong|听|JTW", enrichEntry{DurationSecs: 281.093, Lyrics: bt(lb), LyricsSource: srcB, ResolvedDurationSecs: 281.093}, nil),
 		}
 	}
 	vs := mk("kuwo", "kugou", true)
@@ -455,8 +455,8 @@ func TestSongEntityCountOnlyEdgeStaysOutOfShareGroup(t *testing.T) {
 	ne := "https://music.163.com/song?id=77"
 	reg := map[string]string{"netease_song:77": "听"}
 	vs := []songVariant{
-		songTestVariant("Singer|Listen|A", enrichEntry{DurationSecs: 281, NeteaseURL: ne, Lyrics: songTestLRC(1000, words), LyricsSource: "kuwo", ResolvedDurationSecs: 281}, reg),
-		songTestVariant("Singer|听|B", enrichEntry{DurationSecs: 282, NeteaseURL: ne, Lyrics: songTestLRC(1000, words), LyricsSource: "kugou", ResolvedDurationSecs: 282}, reg),
+		songTestVariant("Singer|Listen|A", enrichEntry{DurationSecs: 281, NeteaseURL: ne, Lyrics: bt(songTestLRC(1000, words)), LyricsSource: "kuwo", ResolvedDurationSecs: 281}, reg),
+		songTestVariant("Singer|听|B", enrichEntry{DurationSecs: 282, NeteaseURL: ne, Lyrics: bt(songTestLRC(1000, words)), LyricsSource: "kugou", ResolvedDurationSecs: 282}, reg),
 	}
 	b, of := songTestBuild(t, vs, nil)
 	if !songTestSame(of, vs[0].key, vs[1].key) {
@@ -544,8 +544,8 @@ func TestSongEntityTimelineVetoNeedsDifferentLength(t *testing.T) {
 	words := songTestWords("shift", 30)
 	mk := func(dx, dy float64) []songVariant {
 		return []songVariant{
-			songTestVariant("Singer|Song|One", enrichEntry{DurationSecs: dx, Lyrics: songTestLRC(1000, words), LyricsSource: "kugou", ResolvedDurationSecs: dx}, nil),
-			songTestVariant("Singer|Song|Two", enrichEntry{DurationSecs: dy, Lyrics: songTestLRC(6000, words), LyricsSource: "netease", ResolvedDurationSecs: dy}, nil),
+			songTestVariant("Singer|Song|One", enrichEntry{DurationSecs: dx, Lyrics: bt(songTestLRC(1000, words)), LyricsSource: "kugou", ResolvedDurationSecs: dx}, nil),
+			songTestVariant("Singer|Song|Two", enrichEntry{DurationSecs: dy, Lyrics: bt(songTestLRC(6000, words)), LyricsSource: "netease", ResolvedDurationSecs: dy}, nil),
 		}
 	}
 	for _, c := range []struct {

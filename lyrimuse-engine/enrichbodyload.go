@@ -63,6 +63,7 @@ func (s bodyHydrateStats) log() {
 func moveUnreadableBodiesAside(paths []string) {
 	suffix := ".unreadable-" + time.Now().Format("20060102-150405")
 	for _, p := range paths {
+		pinBodiesAt(p, nil)
 		if err := os.Rename(p, p+suffix); err != nil {
 			slog.Error("lyrics bodies: could not move an unreadable side file aside", "path", p, "err", err)
 			continue
@@ -79,7 +80,7 @@ func hydrateEnrichBodies(m map[string]enrichEntry, dir string) bodyHydrateStats 
 		switch {
 		case e.BodyCRC != 0:
 			keys = append(keys, k)
-		case e.LyricsYRC != "" || e.LyricsTr != "" || e.LyricsRoma != "" || e.PlainLyrics != "":
+		case !e.LyricsYRC.IsZero() || !e.LyricsTr.IsZero() || !e.LyricsRoma.IsZero() || !e.PlainLyrics.IsZero():
 			full++
 		}
 	}
@@ -125,8 +126,10 @@ func hydrateEnrichBodies(m map[string]enrichEntry, dir string) bodyHydrateStats 
 				st.missingKeys = append(st.missingKeys, k)
 			}
 		default:
-			e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC, e.PlainLyrics = b.Lyrics, b.LyricsTr, b.LyricsRoma, b.LyricsYRC, b.PlainLyrics
-			e.LyricsBG = b.LyricsBG
+			e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC, e.PlainLyrics = bt(b.Lyrics), bt(b.LyricsTr), bt(b.LyricsRoma), bt(b.LyricsYRC), bt(b.PlainLyrics)
+			e.LyricsBG = bt(b.LyricsBG)
+			locateEntryBodies(&e, filepath.Join(dir, decisionSidecarName(k)), b)
+			noteBodyCRC(k, &e, b.CRC)
 			if b.CRC == want {
 				st.restored++
 			} else {
@@ -158,9 +161,7 @@ func parseEnrichBody(data []byte) *enrichBody {
 	if json.Unmarshal(data, &b) != nil || b.CRC == 0 {
 		return nil
 	}
-	got := enrichBodyCRC(enrichEntry{Lyrics: b.Lyrics, LyricsTr: b.LyricsTr, LyricsRoma: b.LyricsRoma,
-		LyricsYRC: b.LyricsYRC, PlainLyrics: b.PlainLyrics, LyricsBG: b.LyricsBG})
-	if got != b.CRC {
+	if bodyCRCOf(b.fields()) != b.CRC {
 		return nil
 	}
 	return &b

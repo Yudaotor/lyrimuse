@@ -362,7 +362,7 @@ func refreshAccentCacheWords() {
 	set := accentWordSet{}
 	enrichMu.Lock()
 	for _, e := range enrichCache {
-		set.addText(e.Lyrics)
+		set.addText(e.Lyrics.String())
 	}
 	enrichMu.Unlock()
 	accentCacheWordsMu.Lock()
@@ -440,29 +440,29 @@ func migrateAccentSplits() {
 			continue
 		}
 		yrcText := ""
-		if mayContainAccentLetter(e.LyricsYRC) {
-			yrcText = yrcPlainLines(e.LyricsYRC)
+		if mayContainAccentLetter(e.LyricsYRC.String()) {
+			yrcText = yrcPlainLines(e.LyricsYRC.String())
 		}
-		if !hasAccentSplitPoint(e.Lyrics) && !hasAccentSplitPoint(yrcText) {
+		if !hasAccentSplitPoint(e.Lyrics.String()) && !hasAccentSplitPoint(yrcText) {
 			continue
 		}
 		own := accentWordSet{}
-		own.addText(e.Lyrics)
+		own.addText(e.Lyrics.String())
 		own.addText(yrcText)
-		lrc, lrcChanged := repairAccentSplitLRC(e.Lyrics, accentAttested(own, cached, !accentInsideWord(e.Lyrics)))
-		yrc, yrcChanged := repairAccentSplitYRC(e.LyricsYRC, accentAttested(own, cached, !accentInsideWord(yrcText)))
+		lrc, lrcChanged := repairAccentSplitLRC(e.Lyrics.String(), accentAttested(own, cached, !accentInsideWord(e.Lyrics.String())))
+		yrc, yrcChanged := repairAccentSplitYRC(e.LyricsYRC.String(), accentAttested(own, cached, !accentInsideWord(yrcText)))
 		if !lrcChanged && !yrcChanged {
 			continue
 		}
-		if sp := e.LyricsSpeakers; sp != nil && sp.For == lyricSpeakersFingerprint(e.Lyrics, e.LyricsYRC) {
+		if sp := e.LyricsSpeakers; sp != nil && sp.For == lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) {
 			moved := *sp
 			moved.For = lyricSpeakersFingerprint(lrc, yrc)
 			e.LyricsSpeakers = &moved
 		}
-		if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics) {
+		if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics.String()) {
 			e.ManualPickSHA = manualPickFingerprint(lrc)
 		}
-		e.Lyrics, e.LyricsYRC = lrc, yrc
+		e.Lyrics, e.LyricsYRC = bt(lrc), bt(yrc)
 		enrichCache[k] = e
 		fixed++
 	}

@@ -51,7 +51,7 @@ func TestSaveSplitsDecisionDetails(t *testing.T) {
 	dir := withTempDecisionCache(t)
 	d := fullDecision("first-resolve", 100, "kugou")
 	enrichMu.Lock()
-	enrichCache["王子|Purple Rain|"] = enrichEntry{Lyrics: "[00:01.00]x", LyricsDecision: d, LyricsDecisionApplied: d}
+	enrichCache["王子|Purple Rain|"] = enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsDecision: d, LyricsDecisionApplied: d}
 	enrichDirty = true
 	enrichMu.Unlock()
 	saveEnrichCache()

@@ -19,14 +19,14 @@ func TestLyricsEntryFromScoredDefersHelperRoma(t *testing.T) {
 
 	scored := []scoredLyricCandidateResult{{Source: "kugou", Score: 900, Lyrics: "[00:01.00]你好世界\n[00:02.00]今天天气很好"}}
 	e, picked := lyricsEntryFromScored(lyricsDecisionPathFirstResolve, "某人", "某歌", "", 200, neteaseInfo{}, scored, nil, nil, false, "", nil)
-	if picked == nil || e.Lyrics == "" {
+	if picked == nil || e.Lyrics.IsZero() {
 		t.Fatalf("picked=%v", picked)
 	}
-	if calls != 0 || e.LyricsRoma != "" {
+	if calls != 0 || !e.LyricsRoma.IsZero() {
 		t.Fatalf("出词之前不该起 helper: calls=%d roma=%q", calls, e.LyricsRoma)
 	}
 	e.maybeGenerateRoma()
-	if calls != 1 || e.LyricsRoma == "" {
+	if calls != 1 || e.LyricsRoma.IsZero() {
 		t.Fatalf("出词之后要补上: calls=%d roma=%q", calls, e.LyricsRoma)
 	}
 }
@@ -60,13 +60,13 @@ func TestSearchAuditWiring(t *testing.T) {
 
 // 已有歌词(或手改过、判定过纯音乐)的条目跳过歌词搜索;跳过的这些,adoptBackfilledLyrics 本来也不会收。
 func TestPeripheralBackfillSkipsLyricsMatchesAdopt(t *testing.T) {
-	fresh := enrichEntry{Lyrics: "[00:01.00]new", LyricsSource: "qq"}
+	fresh := enrichEntry{Lyrics: bt("[00:01.00]new"), LyricsSource: "qq"}
 	for _, c := range []struct {
 		name string
 		e    enrichEntry
 		skip bool
 	}{
-		{"有歌词", enrichEntry{Lyrics: "[00:01.00]old"}, true},
+		{"有歌词", enrichEntry{Lyrics: bt("[00:01.00]old")}, true},
 		{"手改过", enrichEntry{ManualLyrics: true}, true},
 		{"纯音乐", enrichEntry{Instrumental: true}, true},
 		{"空条目", enrichEntry{}, false},

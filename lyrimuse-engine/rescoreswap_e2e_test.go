@@ -45,8 +45,8 @@ func TestRescoreSwapRetranslatesPlayingTrackEndToEnd(t *testing.T) {
 	oldBody := "[00:05.00]Old line one\n[00:15.00]Old line two"
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
-		Lyrics: oldBody, LyricsSource: "qq", LyricsScore: 10, LyricsScoringVersion: lyricsScoringVersion - 1,
-		LyricsTr: "[00:05.00]旧译一\n[00:15.00]旧译二", LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN",
+		Lyrics: bt(oldBody), LyricsSource: "qq", LyricsScore: 10, LyricsScoringVersion: lyricsScoringVersion - 1,
+		LyricsTr: bt("[00:05.00]旧译一\n[00:15.00]旧译二"), LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN",
 	}}
 	enrichMu.Unlock()
 	noteEnrichPlayingKey(key)
@@ -58,10 +58,10 @@ func TestRescoreSwapRetranslatesPlayingTrackEndToEnd(t *testing.T) {
 	enrichMu.Lock()
 	e := enrichCache[key]
 	enrichMu.Unlock()
-	if e.Lyrics != newBody || e.LyricsSource != "musixmatch" {
+	if !e.Lyrics.EqualString(newBody) || e.LyricsSource != "musixmatch" {
 		t.Fatalf("重打分没换上新正文: source=%q lyrics=%q", e.LyricsSource, e.Lyrics)
 	}
-	if e.LyricsTrSource != lyricsTrSourceMachine || !strings.Contains(e.LyricsTr, fakeTranslated("谷:", "Brand new first line")) || strings.Contains(e.LyricsTr, "旧译") {
+	if e.LyricsTrSource != lyricsTrSourceMachine || !strings.Contains(e.LyricsTr.String(), fakeTranslated("谷:", "Brand new first line")) || strings.Contains(e.LyricsTr.String(), "旧译") {
 		t.Fatalf("换了正文之后没有当场按新正文重翻: tr_source=%q tr=%q", e.LyricsTrSource, e.LyricsTr)
 	}
 	b, err := os.ReadFile(playingEntryPath())

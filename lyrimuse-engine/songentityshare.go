@@ -245,13 +245,13 @@ func songShareLyricsFields(dst *enrichEntry, src enrichEntry) {
 
 // songShareManualOriginal:手改原件:手改过或者采纳的那一份还在,有正文,不是同步出去的副本。
 func songShareManualOriginal(e enrichEntry) bool {
-	return e.LyricsEntityOrigin == "" && strings.TrimSpace(e.Lyrics) != "" && (e.ManualLyrics || songSharePickHeld(e))
+	return e.LyricsEntityOrigin == "" && strings.TrimSpace(e.Lyrics.String()) != "" && (e.ManualLyrics || songSharePickHeld(e))
 }
 
 // songShareCopyCurrent:e 已经是原件 origin(条目 src)现在这一份的副本。
 func songShareCopyCurrent(e, src enrichEntry, origin string) bool {
-	return e.LyricsEntityOrigin == origin && e.Lyrics == src.Lyrics && e.LyricsYRC == src.LyricsYRC && e.LyricsTr == src.LyricsTr &&
-		e.LyricsRoma == src.LyricsRoma && e.LyricsSource == src.LyricsSource && e.ManualLyrics == src.ManualLyrics &&
+	return e.LyricsEntityOrigin == origin && e.Lyrics.Equal(src.Lyrics) && e.LyricsYRC.Equal(src.LyricsYRC) && e.LyricsTr.Equal(src.LyricsTr) &&
+		e.LyricsRoma.Equal(src.LyricsRoma) && e.LyricsSource == src.LyricsSource && e.ManualLyrics == src.ManualLyrics &&
 		e.ManualPickSHA == src.ManualPickSHA
 }
 
@@ -289,7 +289,7 @@ func shareManualLocked(keys []string, from string, pins map[string]bool, now tim
 			if !songShareManualOriginal(e) {
 				continue
 			}
-			fp := songOffsetFingerprint(e.Lyrics, e.LyricsYRC)
+			fp := songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String())
 			if cur, ok := contents[fp]; !ok || k < cur {
 				contents[fp] = k
 			}
@@ -312,7 +312,7 @@ func shareManualLocked(keys []string, from string, pins map[string]bool, now tim
 	if !songShareManualOriginal(src) {
 		return changed, false
 	}
-	fp := songOffsetFingerprint(src.Lyrics, src.LyricsYRC)
+	fp := songOffsetFingerprint(src.Lyrics.String(), src.LyricsYRC.String())
 	for _, k := range keys {
 		e, ok := enrichCache[k]
 		if !ok || k == origin || songShareManualOriginal(e) || pins[k] || e.Instrumental {
@@ -426,7 +426,7 @@ func releaseStrayAutoCopiesLocked(keys []string, now time.Time) []string {
 // songShareRestorable:key 这条写法有留底,而且歌词还是同步写进去的那一份,返回留底里的条目。
 func songShareRestorable(key string, e enrichEntry) (enrichEntry, bool) {
 	p, err := readSongSharePre(songSharePrePath(key))
-	if err != nil || p.Key != key || p.Synced != songOffsetFingerprint(e.Lyrics, e.LyricsYRC) {
+	if err != nil || p.Key != key || p.Synced != songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) {
 		return enrichEntry{}, false
 	}
 	var pre enrichEntry
@@ -504,9 +504,9 @@ var searchShareRound = func(ctx context.Context, key, artist, title, album strin
 // songShareApplyChoice:把这一轮的冠军 c 写进 e,字段跟自动重评换词那一支(rescoreLyricsWith)一样,当前歌词的出处记成 d。
 // roma 是在锁外按冠军正文预先生成的罗马音(冠军自己带了就是空串)。
 func songShareApplyChoice(e *enrichEntry, c *scoredLyricCandidateResult, r *songShareRound, roma string, d *lyricsDecision) {
-	e.Lyrics = c.Lyrics
-	e.LyricsTr, e.LyricsRoma, e.LyricsYRC = c.LyricsTr, c.LyricsRoma, c.LyricsYRC
-	e.LyricsBG, e.LyricsBGChecked = c.LyricsBG, lyricsBGParserVersion
+	e.Lyrics = bt(c.Lyrics)
+	e.LyricsTr, e.LyricsRoma, e.LyricsYRC = bt(c.LyricsTr), bt(c.LyricsRoma), bt(c.LyricsYRC)
+	e.LyricsBG, e.LyricsBGChecked = bt(c.LyricsBG), lyricsBGParserVersion
 	e.SongLanguage = entrySongLanguage(c.Lyrics, r.Scored)
 	e.dropHokkienRoma()
 	e.dropUnusableCantoneseRoma()
@@ -554,7 +554,7 @@ func songShareGroupStateLocked(keys []string, now, retry time.Time) *songShareGr
 	s := &songShareGroupState{At: now.Unix(), Scoring: currentLyricsScoring.String(), Members: map[string]string{}}
 	for _, k := range keys {
 		e := enrichCache[k]
-		s.Members[k] = songOffsetFingerprint(e.Lyrics, e.LyricsYRC)
+		s.Members[k] = songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String())
 	}
 	if !retry.IsZero() {
 		s.RetryAfter = retry.Unix()
@@ -604,7 +604,7 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 			created[keys[i]] = true
 		}
 		targets = append(targets, i)
-		if snap[i].Lyrics == "" {
+		if snap[i].Lyrics.IsZero() {
 			out.filled++
 		} else {
 			out.changed++
@@ -629,7 +629,7 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 		if !ok || pins[k] || enrichEditedSinceLocked(k, stamp) || e.Song != snap[i].Song || e.SongShare != snap[i].SongShare ||
 			e.Instrumental != snap[i].Instrumental || e.ManualLyrics != snap[i].ManualLyrics || e.ManualPickSHA != snap[i].ManualPickSHA ||
 			e.ManualLyrics || songSharePickHeld(e) ||
-			songOffsetFingerprint(e.Lyrics, e.LyricsYRC) != songOffsetFingerprint(snap[i].Lyrics, snap[i].LyricsYRC) {
+			songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) != songOffsetFingerprint(snap[i].Lyrics.String(), snap[i].LyricsYRC.String()) {
 			enrichMu.Unlock()
 			removeStagedSongSharePres(created, nil)
 			return songShareGroupOutcome{}
@@ -749,7 +749,7 @@ func (b *songEntityBuild) shareOwnAt(ms []int, own []*songPlanLyrics, keys []str
 	out := make([]*songPlanLyrics, len(ms))
 	for i, m := range ms {
 		e := snap[i]
-		fp := songOffsetFingerprint(e.Lyrics, e.LyricsYRC)
+		fp := songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String())
 		var l *songPlanLyrics
 		switch {
 		case fp == "":
@@ -758,7 +758,7 @@ func (b *songEntityBuild) shareOwnAt(ms []int, own []*songPlanLyrics, keys []str
 			c := *own[m]
 			l = &c
 		default:
-			l = songPlanLyricsFor(keys[i], e.Lyrics, e.LyricsYRC, e.LyricsSource, e.ManualLyrics || songSharePickHeld(e), false,
+			l = songPlanLyricsFor(keys[i], e.Lyrics.String(), e.LyricsYRC.String(), e.LyricsSource, e.ManualLyrics || songSharePickHeld(e), false,
 				e.LyricsDecisionApplied, b.decisionsDir)
 		}
 		if !l.pinned {
@@ -952,7 +952,7 @@ func songShareFingerprints(keys []string) map[string]string {
 	defer enrichMu.Unlock()
 	for _, k := range keys {
 		e := enrichCache[k]
-		out[k] = songOffsetFingerprint(e.Lyrics, e.LyricsYRC)
+		out[k] = songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String())
 	}
 	return out
 }
@@ -1087,7 +1087,7 @@ func (b *songEntityBuild) sharePinnedGroup(ms []int, own []*songPlanLyrics, pins
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
 	src, ok := enrichCache[origin]
-	if !ok || src.ManualLyrics || songSharePickHeld(src) || songOffsetFingerprint(src.Lyrics, src.LyricsYRC) != to.fp {
+	if !ok || src.ManualLyrics || songSharePickHeld(src) || songOffsetFingerprint(src.Lyrics.String(), src.LyricsYRC.String()) != to.fp {
 		return nil, 0, false
 	}
 	upgrade := features().LyricsAutoUpgrade
@@ -1097,7 +1097,7 @@ func (b *songEntityBuild) sharePinnedGroup(ms []int, own []*songPlanLyrics, pins
 		if !ok || k == origin || pins[k] || e.Instrumental || e.ManualLyrics || songSharePickHeld(e) {
 			continue
 		}
-		fp := songOffsetFingerprint(e.Lyrics, e.LyricsYRC)
+		fp := songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String())
 		if fp == to.fp || (cur == nil) != (fp == "") || (cur != nil && cur.fp != fp) {
 			continue
 		}
@@ -1151,7 +1151,7 @@ func songShareCalibrationsLocked(pins map[string]bool, content map[string]string
 // holds:e 现在这份歌词是同一首歌里一份校准对着的。
 func (c songShareCalibrations) holds(e enrichEntry) bool {
 	fps := c[e.Song]
-	return fps != nil && fps[songOffsetFingerprint(e.Lyrics, e.LyricsYRC)]
+	return fps != nil && fps[songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String())]
 }
 
 // lyricsCalibratedLocked:key 这条写法换了词会丢掉一份校准:自己钉着,或者在读穿同一首歌的一份(songShareCalibrations)。
@@ -1227,7 +1227,7 @@ func revertSongEntityShare() {
 	enrichMu.Lock()
 	for _, p := range pres {
 		e, ok := enrichCache[p.key]
-		if !ok || p.synced != songOffsetFingerprint(e.Lyrics, e.LyricsYRC) {
+		if !ok || p.synced != songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) {
 			continue
 		}
 		songShareRestore(&e, p.entry)

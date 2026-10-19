@@ -95,14 +95,14 @@ func migrateQRCLeftoverTokens() {
 	enrichMu.Lock()
 	fixed, dropped := 0, 0
 	for k, e := range scope.entries() {
-		repaired, ok := repairQRCLeftoverTokens(e.LyricsYRC)
+		repaired, ok := repairQRCLeftoverTokens(e.LyricsYRC.String())
 		if ok {
-			e.LyricsYRC = repaired
+			e.LyricsYRC = bt(repaired)
 			fixed++
 		}
-		drop := yrcHasTwoNumberTokens(e.LyricsYRC) && !e.ManualLyrics && !pins[k]
+		drop := yrcHasTwoNumberTokens(e.LyricsYRC.String()) && !e.ManualLyrics && !pins[k]
 		if drop {
-			e.LyricsYRC, e.LyricsBG = "", ""
+			e.LyricsYRC, e.LyricsBG = bodyText{}, bodyText{}
 			dropped++
 		}
 		if !ok && !drop {

@@ -53,7 +53,7 @@ func TestResolveEnrichAsyncCancelWritesNoLyricsEntry(t *testing.T) {
 	if !ok {
 		t.Fatalf("取消之后应该保留一条记录(标记为暂无歌词),但 enrichCache 里完全没有 key=%q", key)
 	}
-	if e.Lyrics != "" {
+	if !e.Lyrics.IsZero() {
 		t.Errorf("取消场景下不该凑巧真的解析出歌词,got lyrics=%q", e.Lyrics)
 	}
 	if e.TS <= 0 {

@@ -10,7 +10,7 @@ import (
 )
 
 func TestKasetLyricsWorthRecheck(t *testing.T) {
-	base := enrichEntry{Lyrics: "[00:01.00]hi", LyricsSource: "migu"}
+	base := enrichEntry{Lyrics: bt("[00:01.00]hi"), LyricsSource: "migu"}
 	with := func(f func(e *enrichEntry)) enrichEntry { e := base; f(&e); return e }
 	mv := func(e *enrichEntry) { e.YouTubeMusicMV = true }
 	cases := []struct {
@@ -34,7 +34,7 @@ func TestKasetLyricsWorthRecheck(t *testing.T) {
 			kasetBundleID, "Song0000001", "Song0000001", false, true, true, false},
 		{"不是 Kaset 放的", base, "com.apple.Music", "Song0000001", "Song0000001", false, true, true, false},
 		{"没有 videoId", base, kasetBundleID, "", "", false, true, true, false},
-		{"没词交给补空那条", with(func(e *enrichEntry) { e.Lyrics = "" }),
+		{"没词交给补空那条", with(func(e *enrichEntry) { e.Lyrics = bodyText{} }),
 			kasetBundleID, "Song0000001", "Song0000001", false, true, true, false},
 		{"手改过", with(func(e *enrichEntry) { e.ManualLyrics = true }),
 			kasetBundleID, "Song0000001", "Song0000001", false, true, true, false},
@@ -140,7 +140,7 @@ func TestLyricsEvaluationRecordsNativeVideoID(t *testing.T) {
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{
 		mvKey: {YouTubeMusicURL: "https://music.youtube.com/watch?v=Mv000000001", YouTubeMusicMV: true},
-		songKey: {Lyrics: "[00:05.00]Old line one\n[00:15.00]Old line two", LyricsSource: "musixmatch",
+		songKey: {Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "musixmatch",
 			LyricsScoringVersion: lyricsScoringVersion - 1, YouTubeMusicURL: "https://music.youtube.com/watch?v=Song0000001"},
 	}
 	enrichMu.Unlock()
@@ -178,7 +178,7 @@ func TestKasetNativeMissNotRetriedAfterVideoIDCheck(t *testing.T) {
 	saved := nativeLyricSources
 	t.Cleanup(func() { nativeLyricSources = saved })
 	setNativeLyricSourcesForPlayer(kasetBundleID)
-	e := enrichEntry{Lyrics: "[00:01.00]x", LyricsYRC: "yrc", LyricsSource: "qq", LyricsSourcesSeen: []string{"qq", "lyricfind"}}
+	e := enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsYRC: bt("yrc"), LyricsSource: "qq", LyricsSourcesSeen: []string{"qq", "lyricfind"}}
 	if !needsLyricsRetry(e, false, false, true) {
 		t.Error("还没按 videoId 问过自家源:照旧重来一次")
 	}
@@ -190,7 +190,7 @@ func TestKasetNativeMissNotRetriedAfterVideoIDCheck(t *testing.T) {
 
 func TestAdoptBackfilledLyricsKeepsNativeVideoID(t *testing.T) {
 	var e enrichEntry
-	fresh := enrichEntry{Lyrics: "[00:01.00]hi", LyricsSource: "qq", LyricsNativeVideoID: "Song0000001"}
+	fresh := enrichEntry{Lyrics: bt("[00:01.00]hi"), LyricsSource: "qq", LyricsNativeVideoID: "Song0000001"}
 	if !adoptBackfilledLyrics(&e, fresh) || e.LyricsNativeVideoID != "Song0000001" {
 		t.Errorf("收下的词是按哪个 videoId 问过自家源的要一起收: %q", e.LyricsNativeVideoID)
 	}

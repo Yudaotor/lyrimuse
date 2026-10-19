@@ -32,7 +32,7 @@ func TestSavingLyricsClearsInstrumental(t *testing.T) {
 
 // 标了纯音乐就不把歌词交给网页 / ListenBrainz(封面、链接照旧);歌词还在条目里。
 func TestInstrumentalHidesLyricsFromExport(t *testing.T) {
-	e := enrichEntry{Lyrics: "[00:01.00]词", LyricsTr: "tr", LyricsRoma: "roma", LyricsYRC: "yrc", LyricsSource: "qq", CoverURL: "https://c/1.jpg"}
+	e := enrichEntry{Lyrics: bt("[00:01.00]词"), LyricsTr: bt("tr"), LyricsRoma: bt("roma"), LyricsYRC: bt("yrc"), LyricsSource: "qq", CoverURL: "https://c/1.jpg"}
 	if f := e.fields(); f["lyrics"] == "" || f["lyrics_yrc"] == "" || f["lyrics_source"] != "qq" {
 		t.Fatalf("没标纯音乐照常导出: %v", f)
 	}
@@ -43,11 +43,11 @@ func TestInstrumentalHidesLyricsFromExport(t *testing.T) {
 			t.Errorf("标了纯音乐不导出 %s", k)
 		}
 	}
-	if f["cover_url"] == "" || e.Lyrics == "" {
+	if f["cover_url"] == "" || e.Lyrics.IsZero() {
 		t.Errorf("封面照旧,条目里的歌词留着: %v", f)
 	}
 	// 只存着歌词的条目:标上之后字段表也不能是空的,空表会让换曲那条 playing_now 当成还没解析、白等 pnPendingMax。
-	if f := (enrichEntry{Lyrics: "[00:01.00]词", LyricsSource: "qq", Instrumental: true}).fields(); len(f) == 0 {
+	if f := (enrichEntry{Lyrics: bt("[00:01.00]词"), LyricsSource: "qq", Instrumental: true}).fields(); len(f) == 0 {
 		t.Errorf("只存着歌词的条目标了纯音乐,字段表变空了")
 	}
 }
@@ -65,16 +65,16 @@ func TestInstrumentalStopsAutomaticLyricsWork(t *testing.T) {
 		due  func(enrichEntry) bool
 	}{
 		{"首次补全", enrichEntry{}, needsLyricsFirstFill},
-		{"重新打分", enrichEntry{Lyrics: "x", LyricsScoringVersion: lyricsScoringVersion - 1},
+		{"重新打分", enrichEntry{Lyrics: bt("x"), LyricsScoringVersion: lyricsScoringVersion - 1},
 			func(e enrichEntry) bool { return needsLyricsRescore(e, false, true) }},
-		{"升级重试", enrichEntry{Lyrics: "x"},
+		{"升级重试", enrichEntry{Lyrics: bt("x")},
 			func(e enrichEntry) bool { return needsLyricsRetry(e, true, false, true) }},
-		{"机翻补译文", enrichEntry{Lyrics: "[00:01.00]hello world"},
+		{"机翻补译文", enrichEntry{Lyrics: bt("[00:01.00]hello world")},
 			func(e enrichEntry) bool { return needsTranslationBackfill(e, "") }},
-		{"补背景人声", enrichEntry{Lyrics: "[00:01.00]x", LyricsSource: "amll"}, needsBackgroundVocalsBackfill},
+		{"补背景人声", enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsSource: "amll"}, needsBackgroundVocalsBackfill},
 		{"补演唱者标注", spkBackfillEntry(),
 			func(e enrichEntry) bool { return needsLyricSpeakersBackfill(e, "A & B", "Song") }},
-		{"专辑登记重查", enrichEntry{Lyrics: "x", YouTubeMusicAlbum: "Album"},
+		{"专辑登记重查", enrichEntry{Lyrics: bt("x"), YouTubeMusicAlbum: "Album"},
 			func(e enrichEntry) bool { return listedAlbumLyricsWorthRecheck(e, "", false, true) }},
 		{"KKBOX 本地歌词", enrichEntry{},
 			func(e enrichEntry) bool { return kkboxLyricsWorthRecheck(e, kkboxBundleID, false, true, true) }},
@@ -82,7 +82,7 @@ func TestInstrumentalStopsAutomaticLyricsWork(t *testing.T) {
 			func(e enrichEntry) bool { return amazonLyricsWorthRecheck(e, amazonMusicBundleID, false, true, true) }},
 		{"Spotify 本地歌词", enrichEntry{},
 			func(e enrichEntry) bool { return spotifyLyricsWorthRecheck(e, spotifyBundleID, false, true, true) }},
-		{"Kaset 自带歌词", enrichEntry{Lyrics: "x", LyricsSource: "qq"},
+		{"Kaset 自带歌词", enrichEntry{Lyrics: bt("x"), LyricsSource: "qq"},
 			func(e enrichEntry) bool {
 				return kasetLyricsWorthRecheck(e, kasetBundleID, "aaaaaaaaaaa", "bbbbbbbbbbb", false, true, true)
 			}},
@@ -100,7 +100,7 @@ func TestInstrumentalStopsAutomaticLyricsWork(t *testing.T) {
 
 // 手动重新匹配这一轮换了词(正文、逐字、来源、纯文本)才撤纯音乐标记;没换不动,自动路径永远不撤。
 func TestRematchClearsInstrumental(t *testing.T) {
-	before := enrichEntry{Lyrics: "[00:01.00]a", LyricsSource: "qq", Instrumental: true}
+	before := enrichEntry{Lyrics: bt("[00:01.00]a"), LyricsSource: "qq", Instrumental: true}
 	with := func(f func(*enrichEntry)) enrichEntry {
 		e := before
 		f(&e)
@@ -112,13 +112,13 @@ func TestRematchClearsInstrumental(t *testing.T) {
 		after  enrichEntry
 		want   bool
 	}{
-		{"换了正文", true, with(func(e *enrichEntry) { e.Lyrics = "[00:01.00]b" }), true},
-		{"补上逐字", true, with(func(e *enrichEntry) { e.LyricsYRC = "[1000,500]a" }), true},
+		{"换了正文", true, with(func(e *enrichEntry) { e.Lyrics = bt("[00:01.00]b") }), true},
+		{"补上逐字", true, with(func(e *enrichEntry) { e.LyricsYRC = bt("[1000,500]a") }), true},
 		{"换了来源", true, with(func(e *enrichEntry) { e.LyricsSource = "kugou" }), true},
-		{"采纳纯文本", true, with(func(e *enrichEntry) { e.PlainLyrics = "a" }), true},
+		{"采纳纯文本", true, with(func(e *enrichEntry) { e.PlainLyrics = bt("a") }), true},
 		{"没换词", true, before, false},
-		{"本来就没标", true, with(func(e *enrichEntry) { e.Instrumental = false; e.Lyrics = "[00:01.00]b" }), false},
-		{"自动路径换了词", false, with(func(e *enrichEntry) { e.Lyrics = "[00:01.00]b" }), false},
+		{"本来就没标", true, with(func(e *enrichEntry) { e.Instrumental = false; e.Lyrics = bt("[00:01.00]b") }), false},
+		{"自动路径换了词", false, with(func(e *enrichEntry) { e.Lyrics = bt("[00:01.00]b") }), false},
 	} {
 		if got := rematchClearsInstrumental(c.manual, before, c.after); got != c.want {
 			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
@@ -164,8 +164,8 @@ func TestSetInstrumentalRemembersUserClear(t *testing.T) {
 	marked := enrichKey("A", "Marked", "X")
 	plain := enrichKey("A", "Plain", "X")
 	setUpEnrichEditTest(t, map[string]enrichEntry{
-		marked: {Lyrics: "[00:01.00]a", Instrumental: true},
-		plain:  {Lyrics: "[00:01.00]b"},
+		marked: {Lyrics: bt("[00:01.00]a"), Instrumental: true},
+		plain:  {Lyrics: bt("[00:01.00]b")},
 	})
 	if res := applyEnrichEdit(enrichEditRequest{Op: "set_instrumental", Keys: []string{marked, plain}, Value: false}); !res.OK {
 		t.Fatalf("res=%+v", res)

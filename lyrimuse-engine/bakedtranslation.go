@@ -541,30 +541,30 @@ func migrateKuwoSharedStampTranslation() {
 		if e.LyricsSource != "kuwo" || e.ManualLyrics {
 			continue
 		}
-		ownTr := e.LyricsTr != "" && e.LyricsTrSource != "machine"
-		clean, tr, n := splitSharedStampTranslation(e.Lyrics, ownTr)
+		ownTr := !e.LyricsTr.IsZero() && e.LyricsTrSource != "machine"
+		clean, tr, n := splitSharedStampTranslation(e.Lyrics.String(), ownTr)
 		if n == 0 {
 			continue
 		}
-		if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics) {
+		if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics.String()) {
 			e.ManualPickSHA = manualPickFingerprint(clean)
 		}
-		e.Lyrics = clean
+		e.Lyrics = bt(clean)
 		usable, _ := usableValueAdd(clean, tr, "zh", "", target)
 		if artist, title, _ := splitEnrichKey(k); !usable {
 			usable = kuwoBakedTranslationCovers(clean, tr, target, artist, title)
 		}
 		switch {
 		case ownTr:
-			e.LyricsTr = mergeBakedTranslationLRC(e.LyricsTr, tr)
+			e.LyricsTr = bt(mergeBakedTranslationLRC(e.LyricsTr.String(), tr))
 		case usable:
-			e.LyricsTr, e.LyricsTrLang, e.LyricsTrSource = tr, "zh", ""
+			e.LyricsTr, e.LyricsTrLang, e.LyricsTrSource = bt(tr), "zh", ""
 			e.TranslationRetryCount, e.TranslationTS, e.TranslationLang = 0, 0, ""
 		case e.LyricsTrSource == "machine" && !strings.HasPrefix(strings.ToLower(e.LyricsTrLang), "zh"):
-			e.LyricsTr, e.LyricsTrLang, e.LyricsTrSource = "", "", ""
+			e.LyricsTr, e.LyricsTrLang, e.LyricsTrSource = bodyText{}, "", ""
 			e.TranslationRetryCount, e.TranslationTS, e.TranslationLang = 0, 0, ""
 		}
-		e.LyricsRoma = ""
+		e.LyricsRoma = bodyText{}
 		enrichCache[k] = e
 		fixed++
 	}

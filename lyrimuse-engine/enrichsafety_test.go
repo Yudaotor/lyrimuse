@@ -34,7 +34,7 @@ func TestLoadEnrichCacheReadErrorRefusesSaves(t *testing.T) {
 	if enrichPath != "" || !enrichLoadFailed || !lyricsImportRestoreAll {
 		t.Fatalf("读出错后应当不落盘并让导入全赢: enrichPath=%q failed=%v restoreAll=%v", enrichPath, enrichLoadFailed, lyricsImportRestoreAll)
 	}
-	putEntriesForTest(map[string]enrichEntry{"a|t|b": {Lyrics: "[00:01.00]hi"}})
+	putEntriesForTest(map[string]enrichEntry{"a|t|b": {Lyrics: bt("[00:01.00]hi")}})
 	if err := saveEnrichCacheChecked(); err != errEnrichCacheNotLoaded {
 		t.Fatalf("save err = %v, want errEnrichCacheNotLoaded", err)
 	}
@@ -90,7 +90,7 @@ func TestSaveEnrichCacheFailureKeepsDirty(t *testing.T) {
 	enrichMu.Lock()
 	enrichPath = filepath.Join(ro, "cache.json")
 	enrichMu.Unlock()
-	putEntriesForTest(map[string]enrichEntry{"a|t|b": {Lyrics: "[00:01.00]hi"}})
+	putEntriesForTest(map[string]enrichEntry{"a|t|b": {Lyrics: bt("[00:01.00]hi")}})
 	if err := saveEnrichCacheChecked(); err == nil {
 		t.Fatal("目录只读时保存应当失败")
 	}
@@ -160,7 +160,7 @@ func TestRequestEnrichBookkeepingSaveCoalesces(t *testing.T) {
 // 导入:带 BOM 的文件照常认;空文件 / 认不出头部的变体不采纳(不清空字段)。
 func TestImportSkipsUnreadableVariants(t *testing.T) {
 	key := "歌手|歌名|专辑"
-	dir := withExportFixture(t, map[string]enrichEntry{key: {Lyrics: "[00:01.00]原文", LyricsTr: "[00:01.00]译文", LyricsSource: "netease"}})
+	dir := withExportFixture(t, map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]原文"), LyricsTr: bt("[00:01.00]译文"), LyricsSource: "netease"}})
 	exportLyricsFiles()
 	trPath := filepath.Join(dir, sanitizeLyricsFilename(key)+".tr.lrc")
 	orig, err := os.ReadFile(trPath)
@@ -172,7 +172,7 @@ func TestImportSkipsUnreadableVariants(t *testing.T) {
 		t.Fatal(err)
 	}
 	importLyricsFrom(dir, false)
-	if got := enrichCache[key].LyricsTr; got != "[00:01.00]改过的译文" {
+	if got := enrichCache[key].LyricsTr; !got.EqualString("[00:01.00]改过的译文") {
 		t.Fatalf("带 BOM 的手改应当被采纳: %q", got)
 	}
 	for _, bad := range []string{"", "no header here\n[00:01.00]x"} {
@@ -180,7 +180,7 @@ func TestImportSkipsUnreadableVariants(t *testing.T) {
 			t.Fatal(err)
 		}
 		importLyricsFrom(dir, false)
-		if got := enrichCache[key].LyricsTr; got != "[00:01.00]改过的译文" {
+		if got := enrichCache[key].LyricsTr; !got.EqualString("[00:01.00]改过的译文") {
 			t.Fatalf("认不出的变体 %q 不该清空译文: %q", bad, got)
 		}
 	}
@@ -191,22 +191,22 @@ func TestImportRestoresKeysWithMissingBodies(t *testing.T) {
 	lyrics := withLyricsFileStateEnv(t)
 	saveEnrichLoadFlags(t)
 	key := "歌手|歌名|专辑"
-	withEnrichCache(t, map[string]enrichEntry{key: {Lyrics: "[00:01.00]原文", LyricsTr: "[00:01.00]译文", LyricsSource: "netease"}})
+	withEnrichCache(t, map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]原文"), LyricsTr: bt("[00:01.00]译文"), LyricsSource: "netease"}})
 	exportLyricsFiles()
 	enrichMu.Lock()
 	e := enrichCache[key]
-	e.Lyrics, e.LyricsTr = "", ""
+	e.Lyrics, e.LyricsTr = bodyText{}, bodyText{}
 	enrichCache[key] = e
 	enrichMu.Unlock()
 	importLyricsFrom(lyrics, false)
-	if enrichCache[key].LyricsTr != "" || enrichCache[key].Lyrics != "" {
+	if !enrichCache[key].LyricsTr.IsZero() || !enrichCache[key].Lyrics.IsZero() {
 		t.Fatal("前提:文件没动过时导入按记录跳过")
 	}
 	enrichMu.Lock()
 	lyricsImportRestoreKeys = map[string]bool{key: true}
 	enrichMu.Unlock()
 	importLyricsFrom(lyrics, false)
-	if got := enrichCache[key]; got.LyricsTr != "[00:01.00]译文" || got.Lyrics != "[00:01.00]原文" {
+	if got := enrichCache[key]; !got.LyricsTr.EqualString("[00:01.00]译文") || !got.Lyrics.EqualString("[00:01.00]原文") {
 		t.Fatalf("正文丢了的条目应当从文件补回(主歌词也只在正文小文件里,一起补): %q / %q", got.Lyrics, got.LyricsTr)
 	}
 	if lyricsImportRestoreKeys != nil {
@@ -222,7 +222,7 @@ func TestExportTrashesUnrecognizedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	key := "歌手|歌名|专辑"
-	dir := withExportFixture(t, map[string]enrichEntry{key: {Lyrics: "[00:01.00]原文", LyricsSource: "netease"}})
+	dir := withExportFixture(t, map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]原文"), LyricsSource: "netease"}})
 	base := sanitizeLyricsFilename(key)
 	for _, suffix := range []string{".lrc", ".tr.lrc"} {
 		if err := os.WriteFile(filepath.Join(dir, base+suffix), []byte("user notes "+suffix), 0o644); err != nil {

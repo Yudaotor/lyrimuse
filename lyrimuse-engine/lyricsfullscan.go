@@ -393,9 +393,9 @@ func lyricsFullScanTier(e enrichEntry, pinned, inflight bool, passStart int64) i
 	}
 	tier, tried := -1, e.LyricsRescoreTS
 	switch {
-	case e.Lyrics == "":
+	case e.Lyrics.IsZero():
 		tier, tried = 0, e.LyricsFillTS
-	case e.LyricsYRC == "":
+	case e.LyricsYRC.IsZero():
 		tier = 1
 	case e.lyricsScoring().before(currentLyricsScoring):
 		tier = 2
@@ -509,7 +509,7 @@ func lyricsFullScanOne(ctx context.Context, key string) lyricsSweepOutcome {
 	enrichMu.Unlock()
 	// 没词的整条交给补空那支:写回规则(升级/纯音乐标记/纯文本兜底/退避账)全在那边,
 	// 这里一个字都不重写。它自己会重新取锁、重新核资格。
-	if before.Lyrics == "" {
+	if before.Lyrics.IsZero() {
 		return lyricsFillSweepOne(ctx, key)
 	}
 	if calibrated {
@@ -537,8 +537,8 @@ func lyricsFullScanOne(ctx context.Context, key string) lyricsSweepOutcome {
 	// 只认"歌词族内容真的换过"。rescoreLyrics 就算什么都没换也会推进重选计数和版本号,
 	// 把那些算成"更新了"会让收据上的数字虚高一个数量级。
 	return lyricsSweepOutcome{
-		filled: after.Lyrics != before.Lyrics || after.LyricsYRC != before.LyricsYRC ||
-			after.LyricsTr != before.LyricsTr,
+		filled: !after.Lyrics.Equal(before.Lyrics) || !after.LyricsYRC.Equal(before.LyricsYRC) ||
+			!after.LyricsTr.Equal(before.LyricsTr),
 		offline:  !round.reachedAny(),
 		deferred: deferred && round.reachedAny(),
 	}

@@ -181,7 +181,7 @@ func TestAmazonUpcomingAndLocalLyrics(t *testing.T) {
 	}
 	// 开播先上屏的那份:只给正在放的这首,预取的(isNewTrack=false)不垫。
 	if p, ok := amazonProvisionalLyrics(true, amazonMusicBundleID, "Ella Langley & Morgan Wallen", "I Can't Love You Anymore", ""); !ok ||
-		p.LyricsSource != amazonLocalLyricsSource || !strings.Contains(p.Lyrics, "nightstand") {
+		p.LyricsSource != amazonLocalLyricsSource || !strings.Contains(p.Lyrics.String(), "nightstand") {
 		t.Errorf("开播先上屏 Amazon 缓存里的那份: %+v ok=%v", p, ok)
 	}
 	if _, ok := amazonProvisionalLyrics(false, amazonMusicBundleID, "Ella Langley & Morgan Wallen", "I Can't Love You Anymore", ""); ok {
@@ -197,7 +197,7 @@ func TestAmazonUpcomingAndLocalLyrics(t *testing.T) {
 }
 
 func TestAmazonLyricsWorthRecheck(t *testing.T) {
-	e := enrichEntry{Lyrics: "[00:01.00]x", LyricsSourcesSeen: []string{"qq", "kugou"}}
+	e := enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsSourcesSeen: []string{"qq", "kugou"}}
 	if !amazonLyricsWorthRecheck(e, amazonMusicBundleID, false, true, true) {
 		t.Error("没见过 Amazon 那份、现在有 → 重来一次")
 	}

@@ -199,36 +199,36 @@ func TestMigrateUntranslatedMachineLines(t *testing.T) {
 	enrichMu.Lock()
 	enrichPath = ""
 	enrichCache = map[string]enrichEntry{
-		"a|machine|":   {Lyrics: untranslatedLyrics, LyricsTr: pseudo, LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
-		"b|emptied|":   {Lyrics: untranslatedLyrics, LyricsTr: allPseudo, LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
-		"c|community|": {Lyrics: untranslatedLyrics, LyricsTr: pseudo, LyricsTrLang: "zh"},
-		"d|no-lang|":   {Lyrics: untranslatedLyrics, LyricsTr: noLang, LyricsTrSource: lyricsTrSourceMachine},
+		"a|machine|":   {Lyrics: bt(untranslatedLyrics), LyricsTr: bt(pseudo), LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
+		"b|emptied|":   {Lyrics: bt(untranslatedLyrics), LyricsTr: bt(allPseudo), LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
+		"c|community|": {Lyrics: bt(untranslatedLyrics), LyricsTr: bt(pseudo), LyricsTrLang: "zh"},
+		"d|no-lang|":   {Lyrics: bt(untranslatedLyrics), LyricsTr: bt(noLang), LyricsTrSource: lyricsTrSourceMachine},
 	}
 	enrichMu.Unlock()
 	migrateUntranslatedMachineLines()
-	if e := enrichCache["a|machine|"]; e.LyricsTr != "[00:02.00]谢谢你，亲爱的朋友\n[00:04.00]我为你而来\n[00:05.00]一切都好" ||
+	if e := enrichCache["a|machine|"]; !e.LyricsTr.EqualString("[00:02.00]谢谢你，亲爱的朋友\n[00:04.00]我为你而来\n[00:05.00]一切都好") ||
 		e.LyricsTrSource != lyricsTrSourceMachine || e.LyricsTrLang != "zh-CN" {
 		t.Errorf("机翻里只转了简体的两行该删掉: %+v", e)
 	}
-	if e := enrichCache["b|emptied|"]; e.LyricsTr != "" || e.LyricsTrSource != "" || e.LyricsTrLang != "" {
+	if e := enrichCache["b|emptied|"]; !e.LyricsTr.IsZero() || e.LyricsTrSource != "" || e.LyricsTrLang != "" {
 		t.Errorf("删空的连语言、来源一起清: %+v", e)
 	}
-	if e := enrichCache["c|community|"]; e.LyricsTr != pseudo {
+	if e := enrichCache["c|community|"]; !e.LyricsTr.EqualString(pseudo) {
 		t.Errorf("社区译文不动: %+v", e)
 	}
-	if e := enrichCache["d|no-lang|"]; e.LyricsTr != noLang {
+	if e := enrichCache["d|no-lang|"]; !e.LyricsTr.EqualString(noLang) {
 		t.Errorf("没记语言的不动: %+v", e)
 	}
 	enrichMu.Lock()
-	enrichCache["e|later|"] = enrichEntry{Lyrics: untranslatedLyrics, LyricsTr: pseudo, LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"}
+	enrichCache["e|later|"] = enrichEntry{Lyrics: bt(untranslatedLyrics), LyricsTr: bt(pseudo), LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"}
 	enrichMu.Unlock()
 	migrateUntranslatedMachineLines()
-	if e := enrichCache["e|later|"]; e.LyricsTr != pseudo {
+	if e := enrichCache["e|later|"]; !e.LyricsTr.EqualString(pseudo) {
 		t.Errorf("有水位之后不再全库重扫: %+v", e)
 	}
 	invalidateMigrationState("test")
 	migrateUntranslatedMachineLines()
-	if e := enrichCache["e|later|"]; e.LyricsTr == pseudo {
+	if e := enrichCache["e|later|"]; e.LyricsTr.EqualString(pseudo) {
 		t.Errorf("水位作废后照常扫: %+v", e)
 	}
 }
@@ -296,39 +296,39 @@ func TestMigrateUnneededMachineLines(t *testing.T) {
 	enrichMu.Lock()
 	enrichPath = ""
 	enrichCache = map[string]enrichEntry{
-		"a|machine|":   {Lyrics: unneededLyrics, LyricsTr: mixed, LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
-		"b|emptied|":   {Lyrics: unneededLyrics, LyricsTr: allMixed, LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
-		"c|community|": {Lyrics: unneededLyrics, LyricsTr: mixed, LyricsTrLang: "zh"},
-		"d|no-lang|":   {Lyrics: unneededLyrics, LyricsTr: mixed, LyricsTrSource: lyricsTrSourceMachine},
-		unneededKey:    {Lyrics: unneededLyrics, LyricsTr: "[00:00.50]必须做出改变 - 方大同\n" + mixed, LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
+		"a|machine|":   {Lyrics: bt(unneededLyrics), LyricsTr: bt(mixed), LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
+		"b|emptied|":   {Lyrics: bt(unneededLyrics), LyricsTr: bt(allMixed), LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
+		"c|community|": {Lyrics: bt(unneededLyrics), LyricsTr: bt(mixed), LyricsTrLang: "zh"},
+		"d|no-lang|":   {Lyrics: bt(unneededLyrics), LyricsTr: bt(mixed), LyricsTrSource: lyricsTrSourceMachine},
+		unneededKey:    {Lyrics: bt(unneededLyrics), LyricsTr: bt("[00:00.50]必须做出改变 - 方大同\n" + mixed), LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
 	}
 	enrichMu.Unlock()
 	migrateUnneededMachineLines()
-	if e := enrichCache[unneededKey]; e.LyricsTr != "[00:02.00]它代表我的心" {
+	if e := enrichCache[unneededKey]; !e.LyricsTr.EqualString("[00:02.00]它代表我的心") {
 		t.Errorf("抬头按条目自己的歌名认,译文该删掉: %+v", e)
 	}
-	if e := enrichCache["a|machine|"]; e.LyricsTr != "[00:02.00]它代表我的心" || e.LyricsTrSource != lyricsTrSourceMachine || e.LyricsTrLang != "zh-CN" {
+	if e := enrichCache["a|machine|"]; !e.LyricsTr.EqualString("[00:02.00]它代表我的心") || e.LyricsTrSource != lyricsTrSourceMachine || e.LyricsTrLang != "zh-CN" {
 		t.Errorf("机翻里汉字为主的那行该删掉: %+v", e)
 	}
-	if e := enrichCache["b|emptied|"]; e.LyricsTr != "" || e.LyricsTrSource != "" || e.LyricsTrLang != "" {
+	if e := enrichCache["b|emptied|"]; !e.LyricsTr.IsZero() || e.LyricsTrSource != "" || e.LyricsTrLang != "" {
 		t.Errorf("删空的连语言、来源一起清: %+v", e)
 	}
-	if e := enrichCache["c|community|"]; e.LyricsTr != mixed {
+	if e := enrichCache["c|community|"]; !e.LyricsTr.EqualString(mixed) {
 		t.Errorf("社区译文不动: %+v", e)
 	}
-	if e := enrichCache["d|no-lang|"]; e.LyricsTr != mixed {
+	if e := enrichCache["d|no-lang|"]; !e.LyricsTr.EqualString(mixed) {
 		t.Errorf("没记语言的不动: %+v", e)
 	}
 	enrichMu.Lock()
-	enrichCache["e|later|"] = enrichEntry{Lyrics: unneededLyrics, LyricsTr: mixed, LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"}
+	enrichCache["e|later|"] = enrichEntry{Lyrics: bt(unneededLyrics), LyricsTr: bt(mixed), LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"}
 	enrichMu.Unlock()
 	migrateUnneededMachineLines()
-	if e := enrichCache["e|later|"]; e.LyricsTr != mixed {
+	if e := enrichCache["e|later|"]; !e.LyricsTr.EqualString(mixed) {
 		t.Errorf("有水位之后不再全库重扫: %+v", e)
 	}
 	invalidateMigrationState("test")
 	migrateUnneededMachineLines()
-	if e := enrichCache["e|later|"]; e.LyricsTr == mixed {
+	if e := enrichCache["e|later|"]; e.LyricsTr.EqualString(mixed) {
 		t.Errorf("水位作废后照常扫: %+v", e)
 	}
 }

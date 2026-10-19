@@ -42,7 +42,7 @@ func spkTaggingJSON(t *testing.T, spans []musixmatchPerformerSpan) string {
 }
 
 func spkBackfillEntry() enrichEntry {
-	return enrichEntry{Lyrics: spkLRC(20000, spkLines...), LyricsSource: "qq", DurationSecs: 60, LyricsSourcesSeen: []string{"qq", "musixmatch"}}
+	return enrichEntry{Lyrics: bt(spkLRC(20000, spkLines...)), LyricsSource: "qq", DurationSecs: 60, LyricsSourcesSeen: []string{"qq", "musixmatch"}}
 }
 
 func TestNeedsLyricSpeakersBackfill(t *testing.T) {
@@ -62,12 +62,12 @@ func TestNeedsLyricSpeakersBackfill(t *testing.T) {
 		{"曲名带 feat.", base, "A", "Song (feat. B)", true},
 		{"单人署名", base, "A", "Song", false},
 		{"补过了", with(func(e *enrichEntry) { e.LyricsSpeakersChecked = lyricsSpeakersVersion }), "A & B", "Song", false},
-		{"没有词", with(func(e *enrichEntry) { e.Lyrics = "" }), "A & B", "Song", false},
+		{"没有词", with(func(e *enrichEntry) { e.Lyrics = bodyText{} }), "A & B", "Song", false},
 		{"手改过", with(func(e *enrichEntry) { e.ManualLyrics = true }), "A & B", "Song", false},
 		{"Musixmatch 没给过候选", with(func(e *enrichEntry) { e.LyricsSourcesSeen = []string{"qq"} }), "A & B", "Song", false},
-		{"正文自带演唱者标记", with(func(e *enrichEntry) { e.Lyrics = spkLRC(0, "男：一", "女：二", "男：三", "女：四") }), "A & B", "Song", false},
+		{"正文自带演唱者标记", with(func(e *enrichEntry) { e.Lyrics = bt(spkLRC(0, "男：一", "女：二", "男：三", "女：四")) }), "A & B", "Song", false},
 		{"已有对得上正文的标注", with(func(e *enrichEntry) {
-			e.LyricsSpeakers = &lyricSpeakers{For: lyricSpeakersFingerprint(e.Lyrics, e.LyricsYRC)}
+			e.LyricsSpeakers = &lyricSpeakers{For: lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String())}
 		}), "A & B", "Song", false},
 		{"标注对不上当前正文", with(func(e *enrichEntry) { e.LyricsSpeakers = &lyricSpeakers{For: "stale"} }), "A & B", "Song", true},
 	} {
@@ -139,7 +139,7 @@ func TestBackfillLyricSpeakersLyricsChangedMeanwhile(t *testing.T) {
 		if action == "macro.subtitles.get" {
 			enrichMu.Lock()
 			e := enrichCache["A & B|Song|"]
-			e.Lyrics = spkLRC(30000, spkLines[:6]...)
+			e.Lyrics = bt(spkLRC(30000, spkLines[:6]...))
 			enrichCache["A & B|Song|"] = e
 			enrichMu.Unlock()
 			return mxmMacroWithBody(t, "Song", "A & B", 60, spkLRC(5000, spkLines...), spkTaggingJSON(t, spkSpans))

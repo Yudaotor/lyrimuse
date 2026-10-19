@@ -87,7 +87,7 @@ func TestPickLyricCandidateInstrumentalMarkerSkipsOtherVersion(t *testing.T) {
 }
 
 func TestRescoreTurnsInstrumental(t *testing.T) {
-	e := enrichEntry{Lyrics: "[00:01.00]a\n", LyricsSource: "kugou"}
+	e := enrichEntry{Lyrics: bt("[00:01.00]a\n"), LyricsSource: "kugou"}
 	mismatched := scoredLyricCandidateResult{Source: "kugou", Score: 321,
 		ScoreTerms: []scoreTerm{{Kind: scoreTermVersionTags, Points: -versionMismatchPenalty}}}
 	marker := scoredLyricCandidateResult{Source: "lrclib", Score: -1, Instrumental: true}

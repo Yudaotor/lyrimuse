@@ -1227,7 +1227,7 @@ func TestConsensusDeniedToOvershoot(t *testing.T) {
 func TestLyricsUpgradeBaselineAcrossScoringVersions(t *testing.T) {
 	const oldLyrics = "[00:01.00]stored line one\n[00:02.00]stored line two\n[00:03.00]stored line three"
 	e := enrichEntry{
-		Lyrics:               oldLyrics,
+		Lyrics:               bt(oldLyrics),
 		LyricsSource:         "kugou",
 		LyricsScore:          549, // 按 v2 规则算出来的分
 		LyricsScoringVersion: 2,

@@ -28,7 +28,7 @@ func tlOffYRC(startMs int) string {
 // 当前这份有逐字、整首晚 2.5 秒,冠军是对齐的那份、没有逐字:这一轮有一份跟当前这份同轴的候选扣了 timelineOffset,
 // 就不再为逐字留着当前这份;同轴的那份没被扣、被扣的是另一份轴、扣的是别的项,都照旧留着。
 func TestRescoreWouldLoseWordTimingOffTimeline(t *testing.T) {
-	cur := enrichEntry{Lyrics: tlOffLRC(7500), LyricsYRC: tlOffYRC(7500), LyricsSource: "musixmatch", LyricsScore: 1030,
+	cur := enrichEntry{Lyrics: bt(tlOffLRC(7500)), LyricsYRC: bt(tlOffYRC(7500)), LyricsSource: "musixmatch", LyricsScore: 1030,
 		LyricsScoringVersion: lyricsScoringVersion - 1}
 	winner := scoredLyricCandidateResult{Source: "applemusic", Lyrics: tlOffLRC(5000), Score: 694}
 	offset := []scoreTerm{{Kind: scoreTermTimelineOffset, Points: -600}}
@@ -57,7 +57,7 @@ func TestRescoreWouldLoseWordTimingOffTimeline(t *testing.T) {
 	// 当前这份已经是这一版的分(上一轮为逐字留着它时盖的版本号,分数还是旧的),这一轮回来的同一份只是正文写法变了:
 	// 同轴的那份被判整首错开就不拿存的分数比,没被判照旧比。
 	stamped := cur
-	stamped.Lyrics = tlOffLRC(7500) + "\n"
+	stamped.Lyrics = bt(tlOffLRC(7500) + "\n")
 	stamped.stampLyricsScoring()
 	for _, c := range []struct {
 		name  string

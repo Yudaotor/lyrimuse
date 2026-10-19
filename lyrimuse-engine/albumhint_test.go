@@ -307,10 +307,10 @@ func TestCoverAlbumForTrackIgnoresReplacedWinner(t *testing.T) {
 	const title = "Why You Wanna Treat Me So Bad?"
 	key := "王子|" + title + "|"
 	locked := enrichCache[key]
-	locked.Lyrics, locked.ManualLyrics = "[00:01.00]换上的词", true
+	locked.Lyrics, locked.ManualLyrics = bt("[00:01.00]换上的词"), true
 	adopted := enrichCache[key]
-	adopted.Lyrics = "[00:01.00]换上的词"
-	adopted.ManualPickSHA = manualPickFingerprint(adopted.Lyrics)
+	adopted.Lyrics = bt("[00:01.00]换上的词")
+	adopted.ManualPickSHA = manualPickFingerprint(adopted.Lyrics.String())
 	for name, e := range map[string]enrichEntry{"锁定着": locked, "原样采纳": adopted} {
 		enrichCache = map[string]enrichEntry{key: e}
 		if got := coverAlbumForTrack(ctx, "王子", title, "", 230.121); got != "" {

@@ -364,7 +364,7 @@ func TestSongEntityGoldenFixturesWellFormed(t *testing.T) {
 			}
 			var e enrichEntry
 			_ = json.Unmarshal(v.Entry, &e)
-			for _, text := range []string{e.Lyrics, e.LyricsYRC} {
+			for _, text := range []string{e.Lyrics.String(), e.LyricsYRC.String()} {
 				if line, found := goldenFindUnscrambledLine(text); found {
 					t.Errorf("%s / %s: 正文像是明文: %q", f.ID, v.Key, line)
 				}

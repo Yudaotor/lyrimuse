@@ -19,19 +19,19 @@ func TestShouldGenerateHelperRoma(t *testing.T) {
 		want  bool
 	}{
 		{"日文且没有罗马音 → 要生成",
-			enrichEntry{Lyrics: "[00:01.00]君の名は"}, true},
+			enrichEntry{Lyrics: bt("[00:01.00]君の名は")}, true},
 		{"韩文且没有罗马音 → 要生成",
-			enrichEntry{Lyrics: "[00:01.00]세상의 모서리"}, true},
+			enrichEntry{Lyrics: bt("[00:01.00]세상의 모서리")}, true},
 		{"中文且没有罗马音 → 要生成",
-			enrichEntry{Lyrics: "[00:01.00]我爱你"}, true},
+			enrichEntry{Lyrics: bt("[00:01.00]我爱你")}, true},
 		// 这一条是整个功能的安全底线:源自带罗马音、或粤拼已经填过,一律不动。
 		{"已有罗马音 → 绝不覆盖",
-			enrichEntry{Lyrics: "[00:01.00]君の名は", LyricsRoma: "[00:01.00]existing"}, false},
+			enrichEntry{Lyrics: bt("[00:01.00]君の名は"), LyricsRoma: bt("[00:01.00]existing")}, false},
 		{"没有歌词正文 → 不生成",
-			enrichEntry{Lyrics: ""}, false},
+			enrichEntry{Lyrics: bodyText{}}, false},
 		// 没有这道闸的话,每一首纯英文歌都要白起一次子进程。
 		{"纯拉丁歌词 → 不值得起子进程",
-			enrichEntry{Lyrics: "[00:01.00]I'll be there"}, false},
+			enrichEntry{Lyrics: bt("[00:01.00]I'll be there")}, false},
 	}
 	for _, c := range cases {
 		e := c.entry
@@ -47,12 +47,12 @@ func TestShouldGenerateHelperRoma(t *testing.T) {
 // .toLatin 出来的读音完全不对,而且是静默的。这里用"粤拼填完之后 helper 的闸门必须
 // 已经关上"来钉这条,不依赖 helper 是否存在。
 func TestMaybeGenerateRomaPrefersJyutping(t *testing.T) {
-	e := enrichEntry{SongLanguage: songLanguageCantonese, Lyrics: "[00:01.00]我愛你"}
+	e := enrichEntry{SongLanguage: songLanguageCantonese, Lyrics: bt("[00:01.00]我愛你")}
 	e.maybeGenerateRoma()
-	if e.LyricsRoma == "" {
+	if e.LyricsRoma.IsZero() {
 		t.Fatal("粤语条目走完 maybeGenerateRoma 之后 LyricsRoma 仍为空,粤拼那一步没跑")
 	}
-	if !strings.Contains(e.LyricsRoma, "ngo5") {
+	if !strings.Contains(e.LyricsRoma.String(), "ngo5") {
 		t.Errorf("粤语条目拿到的不是粤拼: %q", e.LyricsRoma)
 	}
 	if e.shouldGenerateHelperRoma() {
@@ -60,9 +60,9 @@ func TestMaybeGenerateRomaPrefersJyutping(t *testing.T) {
 	}
 
 	// 反面:非粤语的中文歌,粤拼不接手,闸门应该留给 helper。
-	mandarin := enrichEntry{SongLanguage: songLanguageMandarin, Lyrics: "[00:01.00]我爱你"}
+	mandarin := enrichEntry{SongLanguage: songLanguageMandarin, Lyrics: bt("[00:01.00]我爱你")}
 	mandarin.maybeGenerateJyutpingRoma()
-	if mandarin.LyricsRoma != "" {
+	if !mandarin.LyricsRoma.IsZero() {
 		t.Errorf("国语歌不该被粤拼填: %q", mandarin.LyricsRoma)
 	}
 	if !mandarin.shouldGenerateHelperRoma() {

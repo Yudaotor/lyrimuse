@@ -152,7 +152,7 @@ func looksChinese(text string) bool {
 // 而降低网易云/QQ 的打分并不能解决这件事:打分里压根没有"有译文"这一项(见
 // scoreLyricCandidate),译文不参与选源;降分只会把原文歌词的质量一起赔进去。
 func translationUsable(e enrichEntry, target string) bool {
-	if e.LyricsTr == "" {
+	if e.LyricsTr.IsZero() {
 		return false
 	}
 	// 记的语言跟正文自相矛盾时,以**正文**为准 —— 标签会骗人,正文不会。
@@ -162,7 +162,7 @@ func translationUsable(e enrichEntry, target string) bool {
 	// 英文,却永远只看到中文。这是唯一消费 LyricsTrLang 的地方,把不变式钉在这里,既能自愈已经写坏的
 	// 老条目,也不指望以后每一个写入方都记得同步这两个字段。
 	lang := e.LyricsTrLang
-	if lang != "" && !strings.HasPrefix(strings.ToLower(lang), "zh") && looksChinese(e.LyricsTr) {
+	if lang != "" && !strings.HasPrefix(strings.ToLower(lang), "zh") && looksChinese(e.LyricsTr.String()) {
 		lang = "" // 标签说不是中文、正文明明是中文 → 当作语言不详,走下面的文本判别
 	}
 	if lang != "" {
@@ -171,11 +171,11 @@ func translationUsable(e enrichEntry, target string) bool {
 	// 语言不详(老条目,或用户手改过 lyrics/ 里的译文):只在能确定的方向上下判断。
 	if strings.HasPrefix(strings.ToLower(target), "zh") {
 		// 目标是中文:看着是中文才算数。
-		return looksChinese(e.LyricsTr)
+		return looksChinese(e.LyricsTr.String())
 	}
 	// 目标不是中文:看着是中文的一定用不上(网易云那份就是这种);其余判不出来,保守
 	// 当作算数 —— 宁可留着一份可能本来就对的社区译文,也不要平白重翻一遍。
-	return !looksChinese(e.LyricsTr)
+	return !looksChinese(e.LyricsTr.String())
 }
 
 type translationResult struct {
@@ -948,14 +948,14 @@ func invalidateStaleTranslations() []string {
 	enrichMu.Lock()
 	var clearedKeys []string
 	for key, e := range enrichCache {
-		if e.LyricsTr == "" || e.LyricsTrSource != "machine" {
+		if e.LyricsTr.IsZero() || e.LyricsTrSource != "machine" {
 			continue
 		}
 		// 语言不详的不动:判不出来就别删,交给 translationUsable 那套文本判别去处理。
 		if e.LyricsTrLang == "" || myMemoryLangCode(e.LyricsTrLang) == target {
 			continue
 		}
-		e.LyricsTr, e.LyricsTrLang, e.LyricsTrSource = "", "", ""
+		e.LyricsTr, e.LyricsTrLang, e.LyricsTrSource = bodyText{}, "", ""
 		// 连同这门语言的重试计数/节流一起清,否则新语言的第一次尝试可能被上一门语言
 		// 攒下的次数挡掉(needsTranslationBackfill 里 sameTarget 那段的同一个道理)。
 		e.TranslationRetryCount, e.TranslationTS, e.TranslationLang = 0, 0, ""
@@ -994,7 +994,7 @@ func needsTranslationBackfill(e enrichEntry, key string) bool {
 		return false
 	}
 	// 标了纯音乐的不翻:歌词不显示,翻了也看不到;撤标之后下次播放再补。
-	if e.Lyrics == "" || e.Instrumental {
+	if e.Lyrics.IsZero() || e.Instrumental {
 		return false
 	}
 	target := myMemoryLangCode(features().LyricsTranslationLanguage)
@@ -1020,7 +1020,7 @@ func needsTranslationBackfill(e enrichEntry, key string) bool {
 	// 要把整首歌过一遍筛选,而这个函数每轮轮询都在 enrichMu 里跑。
 	//
 	// 别在这之前加"整首已经是目标语言就跳过"的整首判定,理由见文件上方逐行判定那段。
-	return translatableMemoFor(key, e.Lyrics, target)
+	return translatableMemoFor(key, e.Lyrics.String(), target)
 }
 
 // myMemoryLangCode 把 features().LyricsTranslationLanguage 的 ISO 639-1 代码转成 MyMemory
@@ -1052,7 +1052,7 @@ func backfillTranslation(key string) {
 	target := myMemoryLangCode(features().LyricsTranslationLanguage)
 	enrichMu.Lock()
 	lyrics := enrichCache[key].Lyrics
-	borrowed := lyrics != "" && borrowSongMachineTranslationLocked(key, target)
+	borrowed := !lyrics.IsZero() && borrowSongMachineTranslationLocked(key, target)
 	enrichMu.Unlock()
 	if borrowed {
 		commitEnrichSave(key)
@@ -1060,7 +1060,7 @@ func backfillTranslation(key string) {
 		nudgeEnrichPush()
 		return
 	}
-	if lyrics == "" {
+	if lyrics.IsZero() {
 		return
 	}
 
@@ -1068,7 +1068,7 @@ func backfillTranslation(key string) {
 	defer cancel()
 	artist, title, _ := splitEnrichKey(key)
 	started := time.Now()
-	res, err := machineTranslateLRC(ctx, translateClient, lyrics, target, artist, title)
+	res, err := machineTranslateLRC(ctx, translateClient, lyrics.String(), target, artist, title)
 	took := time.Since(started).Seconds()
 
 	enrichMu.Lock()
@@ -1110,7 +1110,7 @@ func backfillTranslation(key string) {
 		return
 	}
 	// 正文在翻译期间换过(手改、采纳候选、重评分换了一份):这份译文对的是旧正文,不能挂到新正文上。
-	if e.Lyrics != lyrics {
+	if !e.Lyrics.Equal(lyrics) {
 		return
 	}
 	// 期间用户可能刚好手动采纳了一份**用得上的**社区译文;那份优先,别覆盖。用得上是
@@ -1136,7 +1136,7 @@ func backfillTranslation(key string) {
 		e.TranslationRetryCount++
 		log.Printf("translate: %s produced nothing usable (already target language, or too few lines translated; %.1fs)", key, took)
 	default:
-		e.LyricsTr = res.lrc
+		e.LyricsTr = bt(res.lrc)
 		e.LyricsTrSource = lyricsTrSourceMachine
 		e.LyricsTrLang = target
 		// 节流与次数只管没翻成的歌。翻成了就清零:之后正文被重打分 / 升级换掉、译文跟着清空时,
@@ -1159,12 +1159,12 @@ func backfillTranslation(key string) {
 // songMachineTranslationMates:跟 key 同一首歌、歌词一字不差的其余写法,按键排。调用方持 enrichMu。
 func songMachineTranslationMates(key string) []string {
 	e := enrichCache[key]
-	if e.Song == "" || e.Lyrics == "" {
+	if e.Song == "" || e.Lyrics.IsZero() {
 		return nil
 	}
 	var out []string
 	for k, x := range enrichCache {
-		if k != key && x.Song == e.Song && x.Lyrics == e.Lyrics {
+		if k != key && x.Song == e.Song && x.Lyrics.Equal(e.Lyrics) {
 			out = append(out, k)
 		}
 	}
@@ -1181,7 +1181,7 @@ func borrowSongMachineTranslationLocked(key, target string) bool {
 	}
 	for _, k := range songMachineTranslationMates(key) {
 		x := enrichCache[k]
-		if x.LyricsTr == "" || x.LyricsTrSource != lyricsTrSourceMachine || x.LyricsTrLang != target || !translationUsable(x, target) {
+		if x.LyricsTr.IsZero() || x.LyricsTrSource != lyricsTrSourceMachine || x.LyricsTrLang != target || !translationUsable(x, target) {
 			continue
 		}
 		songCopyMachineTranslation(&e, x, target)

@@ -81,7 +81,7 @@ func TestLyricsEntryFromScoredSongwriters(t *testing.T) {
 }
 
 func TestLyricsSongwritersSurviveIndexAndBackfill(t *testing.T) {
-	e := enrichEntry{Lyrics: "[00:01.00]x", LyricsYRC: "[1000,500](1000,500,0)x", LyricsSongwriters: []string{"甲", "乙"}}
+	e := enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsYRC: bt("[1000,500](1000,500,0)x"), LyricsSongwriters: []string{"甲", "乙"}}
 	raw, err := e.MarshalJSON()
 	if err != nil || !strings.Contains(string(raw), `"lyrics_songwriters":["甲","乙"]`) {
 		t.Fatalf("落盘键名: %s err=%v", raw, err)
@@ -94,7 +94,7 @@ func TestLyricsSongwritersSurviveIndexAndBackfill(t *testing.T) {
 		t.Fatalf("补外围字段收下歌词时连名单一起收: %q", empty.LyricsSongwriters)
 	}
 	kept := enrichEntry{LyricsSongwriters: []string{"原来的"}}
-	if !adoptBackfilledLyrics(&kept, enrichEntry{Lyrics: "[00:01.00]x"}) || !reflect.DeepEqual(kept.LyricsSongwriters, []string{"原来的"}) {
+	if !adoptBackfilledLyrics(&kept, enrichEntry{Lyrics: bt("[00:01.00]x")}) || !reflect.DeepEqual(kept.LyricsSongwriters, []string{"原来的"}) {
 		t.Fatalf("这一轮没有名单时保留原值: %q", kept.LyricsSongwriters)
 	}
 }

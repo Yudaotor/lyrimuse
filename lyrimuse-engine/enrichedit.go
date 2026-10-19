@@ -251,7 +251,7 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 			return enrichEditOutcome{err: fmt.Errorf("save_plain_text: empty key")}
 		}
 		e, existed := enrichCache[req.Key]
-		e.PlainLyrics = req.PlainLyrics
+		e.PlainLyrics = bt(req.PlainLyrics)
 		e.PlainLyricsSource = req.PlainLyricsSource
 		// 同 save_edit:存进来一份纯文本就撤掉纯音乐标记。
 		if strings.TrimSpace(req.PlainLyrics) != "" {
@@ -347,27 +347,27 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 	oldLyrics, oldYRC := e.Lyrics, e.LyricsYRC
 	// 译文换了内容:描述旧译文的语言、来源、机翻节流与重试计数一起清掉,别拿旧译文的记录给新内容背书。
-	if req.Tr != e.LyricsTr {
+	if !e.LyricsTr.EqualString(req.Tr) {
 		e.LyricsTrLang, e.LyricsTrSource = "", ""
 		e.TranslationTS, e.TranslationRetryCount = 0, 0
 	}
 	// 正文改了、罗马音原样交回来(用户没动那一格):那份罗马音描述的是旧正文,清掉。
 	roma := req.Roma
-	if roma != "" && req.Lyrics != e.Lyrics && roma == e.LyricsRoma {
+	if roma != "" && !e.Lyrics.EqualString(req.Lyrics) && e.LyricsRoma.EqualString(roma) {
 		roma = ""
 	}
 	// 背景人声挂在旧正文的行头上:采纳候选时换成候选自己那一份(取的就是当前的 TTML 附属内容解析器);
 	// 别的保存,正文或逐字换了、背景人声的行头又挂不上新正文了才清掉 —— 只改字时行头都在,留着。
 	newYRC := e.LyricsYRC
 	if req.YRC != nil {
-		newYRC = *req.YRC
+		newYRC = bt(*req.YRC)
 	}
 	if req.BG != nil {
-		e.LyricsBG, e.LyricsBGChecked = *req.BG, lyricsBGParserVersion
-	} else if (req.Lyrics != e.Lyrics || newYRC != e.LyricsYRC) && !backgroundAlignsWithLyrics(e.LyricsBG, newYRC, req.Lyrics) {
-		e.LyricsBG = ""
+		e.LyricsBG, e.LyricsBGChecked = bt(*req.BG), lyricsBGParserVersion
+	} else if (!e.Lyrics.EqualString(req.Lyrics) || !newYRC.Equal(e.LyricsYRC)) && !backgroundAlignsWithLyrics(e.LyricsBG.String(), newYRC.String(), req.Lyrics) {
+		e.LyricsBG = bodyText{}
 	}
-	e.Lyrics, e.LyricsTr, e.LyricsRoma = req.Lyrics, req.Tr, roma
+	e.Lyrics, e.LyricsTr, e.LyricsRoma = bt(req.Lyrics), bt(req.Tr), bt(roma)
 	// 存进来一份能显示的歌词,纯音乐标记跟着撤掉:标记优先于歌词(fields、App 的 makeLyrics),不撤的话这份词存了也不显示。
 	if strings.TrimSpace(req.Lyrics) != "" {
 		e.Instrumental = false
@@ -382,14 +382,14 @@ func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 	}
 	// nil = 不动;空串 = 清掉逐字时间轴。
 	if req.YRC != nil {
-		e.LyricsYRC = *req.YRC
+		e.LyricsYRC = bt(*req.YRC)
 	}
 	// 只改了字(正文、逐字各自逐行比,行数一样、每行开头的时间戳一样):演唱者标注按行号挂在正文上,换成新正文的指纹
 	// 接着用。采纳候选另有一套(下面会重问)。
-	if !req.FromManualPick && e.LyricsSpeakers != nil && e.LyricsSpeakers.For == lyricSpeakersFingerprint(oldLyrics, oldYRC) &&
-		sameLineHeads(oldLyrics, e.Lyrics) && sameLineHeads(oldYRC, e.LyricsYRC) {
+	if !req.FromManualPick && e.LyricsSpeakers != nil && e.LyricsSpeakers.For == lyricSpeakersFingerprint(oldLyrics.String(), oldYRC.String()) &&
+		sameLineHeads(oldLyrics.String(), e.Lyrics.String()) && sameLineHeads(oldYRC.String(), e.LyricsYRC.String()) {
 		speakers := *e.LyricsSpeakers
-		speakers.For = lyricSpeakersFingerprint(e.Lyrics, e.LyricsYRC)
+		speakers.For = lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String())
 		e.LyricsSpeakers = &speakers
 	}
 	e.LyricsSource = req.Source
@@ -438,7 +438,11 @@ func manualPickShouldFlip(sha, lyrics string, isLocked, locking bool) bool {
 func manualLockFlipsLocked(locking bool) []string {
 	var keys []string
 	for k, e := range enrichCache {
-		if manualPickShouldFlip(e.ManualPickSHA, e.Lyrics, e.ManualLyrics, locking) {
+		// 先看元数据:正文可能退回在小文件里,只给选过源、锁定状态要翻的那几条取正文。
+		if e.ManualPickSHA == "" || e.ManualLyrics == locking {
+			continue
+		}
+		if manualPickShouldFlip(e.ManualPickSHA, e.Lyrics.String(), e.ManualLyrics, locking) {
 			keys = append(keys, k)
 		}
 	}

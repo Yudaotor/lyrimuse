@@ -107,13 +107,13 @@ func TestMigrateInstrumentalPlaceholders(t *testing.T) {
 	withTempDecisionCache(t)
 	real := "[00:01.00]第一句\n[00:05.00]第二句\n[00:09.00]第三句\n"
 	enrichMu.Lock()
-	enrichCache["a|placeholder|"] = enrichEntry{Lyrics: placeholderSpacedCredits, LyricsSource: "netease"}
-	enrichCache["a|publisher|"] = enrichEntry{Lyrics: placeholderPublisherTags, LyricsSource: "netease"}
-	enrichCache["a|real|"] = enrichEntry{Lyrics: real, LyricsSource: "netease"}
-	enrichCache["a|manual|"] = enrichEntry{Lyrics: placeholderSpacedCredits, ManualLyrics: true}
-	enrichCache["a|picked|"] = enrichEntry{Lyrics: placeholderSpacedCredits, ManualPickSHA: "x"}
-	enrichCache["a|locked|"] = enrichEntry{Lyrics: placeholderSpacedCredits, LyricsSourceChoice: "netease"}
-	enrichCache["a|cleared|"] = enrichEntry{Lyrics: placeholderSpacedCredits, InstrumentalCleared: true}
+	enrichCache["a|placeholder|"] = enrichEntry{Lyrics: bt(placeholderSpacedCredits), LyricsSource: "netease"}
+	enrichCache["a|publisher|"] = enrichEntry{Lyrics: bt(placeholderPublisherTags), LyricsSource: "netease"}
+	enrichCache["a|real|"] = enrichEntry{Lyrics: bt(real), LyricsSource: "netease"}
+	enrichCache["a|manual|"] = enrichEntry{Lyrics: bt(placeholderSpacedCredits), ManualLyrics: true}
+	enrichCache["a|picked|"] = enrichEntry{Lyrics: bt(placeholderSpacedCredits), ManualPickSHA: "x"}
+	enrichCache["a|locked|"] = enrichEntry{Lyrics: bt(placeholderSpacedCredits), LyricsSourceChoice: "netease"}
+	enrichCache["a|cleared|"] = enrichEntry{Lyrics: bt(placeholderSpacedCredits), InstrumentalCleared: true}
 	enrichMu.Unlock()
 
 	migrateInstrumentalPlaceholders()
@@ -126,7 +126,7 @@ func TestMigrateInstrumentalPlaceholders(t *testing.T) {
 			t.Errorf("%s: Instrumental = %v, want %v", k, e.Instrumental, want[k])
 		}
 	}
-	if e := enrichCache["a|placeholder|"]; e.Lyrics != placeholderSpacedCredits {
+	if e := enrichCache["a|placeholder|"]; !e.Lyrics.EqualString(placeholderSpacedCredits) {
 		t.Errorf("只打标、不改正文: %q", e.Lyrics)
 	}
 	if !migrationDone(migrationInstrumentalPlaceholder, migrationInstrumentalPlaceholderVersion) {

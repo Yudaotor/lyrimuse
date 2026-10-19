@@ -13,10 +13,10 @@ import (
 func crossAlbumFixture() map[string]enrichEntry {
 	return map[string]enrichEntry{
 		"A|Song|Original": {
-			DurationSecs: 200.0, Lyrics: "[00:01.00]low", LyricsSource: "kugou", LyricsScore: 1100,
+			DurationSecs: 200.0, Lyrics: bt("[00:01.00]low"), LyricsSource: "kugou", LyricsScore: 1100,
 		},
 		"A|Song|Deluxe": {
-			DurationSecs: 200.3, Lyrics: "[00:01.00]high", LyricsSource: "netease", LyricsScore: 1300,
+			DurationSecs: 200.3, Lyrics: bt("[00:01.00]high"), LyricsSource: "netease", LyricsScore: 1300,
 			LyricsDecisionApplied: &lyricsDecision{Path: "first-resolve", Winner: "netease"},
 		},
 	}
@@ -26,7 +26,7 @@ func TestCrossAlbumReuseTakesHighestScore(t *testing.T) {
 	cache := crossAlbumFixture()
 	// 让胜者带上完整的歌词族字段,确认它们会被一起搬过去。
 	e := cache["A|Song|Deluxe"]
-	e.LyricsYRC, e.LyricsTr, e.LyricsRoma = "yrc", "tr", "roma"
+	e.LyricsYRC, e.LyricsTr, e.LyricsRoma = bt("yrc"), bt("tr"), bt("roma")
 	cache["A|Song|Deluxe"] = e
 	enrichCache = cache
 
@@ -39,10 +39,10 @@ func TestCrossAlbumReuseTakesHighestScore(t *testing.T) {
 		t.Fatalf("applied/skipped = %d/%d, want 1/0", applied, skipped)
 	}
 	got := enrichCache["A|Song|Original"]
-	if got.Lyrics != "[00:01.00]high" || got.LyricsSource != "netease" || got.LyricsScore != 1300 {
+	if !got.Lyrics.EqualString("[00:01.00]high") || got.LyricsSource != "netease" || got.LyricsScore != 1300 {
 		t.Errorf("低分那条没拿到高分那条的歌词: %+v", got)
 	}
-	if got.LyricsYRC != "yrc" || got.LyricsTr != "tr" || got.LyricsRoma != "roma" {
+	if !got.LyricsYRC.EqualString("yrc") || !got.LyricsTr.EqualString("tr") || !got.LyricsRoma.EqualString("roma") {
 		t.Errorf("歌词族字段没搬全: yrc=%q tr=%q roma=%q", got.LyricsYRC, got.LyricsTr, got.LyricsRoma)
 	}
 	if got.LyricsDecisionApplied == nil ||
@@ -51,7 +51,7 @@ func TestCrossAlbumReuseTakesHighestScore(t *testing.T) {
 		t.Errorf("复用留痕没写上: %+v", got.LyricsDecisionApplied)
 	}
 	// 胜者自己不该被动过。
-	if enrichCache["A|Song|Deluxe"].Lyrics != "[00:01.00]high" {
+	if !enrichCache["A|Song|Deluxe"].Lyrics.EqualString("[00:01.00]high") {
 		t.Errorf("胜者被改了")
 	}
 }
@@ -77,7 +77,7 @@ func TestCrossAlbumReuseSkipsUserDecisions(t *testing.T) {
 			if applied != 0 || skipped != 1 {
 				t.Fatalf("applied/skipped = %d/%d, want 0/1", applied, skipped)
 			}
-			if enrichCache["A|Song|Original"].Lyrics != "[00:01.00]low" {
+			if !enrichCache["A|Song|Original"].Lyrics.EqualString("[00:01.00]low") {
 				t.Errorf("用户表过态的条目被覆盖了")
 			}
 		})
@@ -98,8 +98,8 @@ func TestCrossAlbumReuseRespectsTolerance(t *testing.T) {
 // 歌词完全相同的组不算分歧 —— 复用与否对用户没区别,列出来只会淹没真正要看的。
 func TestCrossAlbumReuseNoDivergenceIsNoop(t *testing.T) {
 	cache := map[string]enrichEntry{
-		"A|Song|Original": {DurationSecs: 200.0, Lyrics: "same", LyricsScore: 1100},
-		"A|Song|Deluxe":   {DurationSecs: 200.1, Lyrics: "same", LyricsScore: 1300},
+		"A|Song|Original": {DurationSecs: 200.0, Lyrics: bt("same"), LyricsScore: 1100},
+		"A|Song|Deluxe":   {DurationSecs: 200.1, Lyrics: bt("same"), LyricsScore: 1300},
 	}
 	enrichCache = cache
 	groups := groupCrossAlbumCandidates(cache, crossAlbumReuseToleranceSecs)
@@ -118,7 +118,7 @@ func TestAdoptCrossAlbumSiblingTakesHigherScore(t *testing.T) {
 	if !adoptCrossAlbumSiblingLyrics("A|Song|Original", &e) {
 		t.Fatal("有更高分的兄弟却没采用")
 	}
-	if e.Lyrics != "[00:01.00]high" || e.LyricsSource != "netease" || e.LyricsScore != 1300 {
+	if !e.Lyrics.EqualString("[00:01.00]high") || e.LyricsSource != "netease" || e.LyricsScore != 1300 {
 		t.Errorf("没对齐到兄弟: %+v", e)
 	}
 	if e.LyricsDecisionApplied == nil ||
@@ -136,11 +136,11 @@ func TestAdoptCrossAlbumSiblingKeepsHigherSelf(t *testing.T) {
 	if adoptCrossAlbumSiblingLyrics("A|Song|Deluxe", &e) {
 		t.Fatal("自己分更高却被改了")
 	}
-	if e.Lyrics != before {
+	if !e.Lyrics.Equal(before) {
 		t.Errorf("歌词被动了")
 	}
 	// 兄弟也不该被反向写。
-	if enrichCache["A|Song|Original"].Lyrics != "[00:01.00]low" {
+	if !enrichCache["A|Song|Original"].Lyrics.EqualString("[00:01.00]low") {
 		t.Errorf("反向改了兄弟 —— 这条规则是单向的")
 	}
 }
@@ -189,8 +189,8 @@ func TestAdoptCrossAlbumSiblingRespectsTolerance(t *testing.T) {
 // 同一张专辑下的另一条(时长变体 key)不算兄弟 —— 那归 resolveEnrichKeyForDuration 管。
 func TestAdoptCrossAlbumSiblingIgnoresSameAlbum(t *testing.T) {
 	enrichCache = map[string]enrichEntry{
-		"A|Song|Same":  {DurationSecs: 200.0, Lyrics: "low", LyricsScore: 1100},
-		"A|Song2|Same": {DurationSecs: 200.1, Lyrics: "high", LyricsScore: 1300},
+		"A|Song|Same":  {DurationSecs: 200.0, Lyrics: bt("low"), LyricsScore: 1100},
+		"A|Song2|Same": {DurationSecs: 200.1, Lyrics: bt("high"), LyricsScore: 1300},
 	}
 	e := enrichCache["A|Song|Same"]
 	if adoptCrossAlbumSiblingLyrics("A|Song|Same", &e) {
@@ -201,9 +201,9 @@ func TestAdoptCrossAlbumSiblingIgnoresSameAlbum(t *testing.T) {
 // 分组跟子组第一条比时长,不链式合并:200 / 201.9 / 203.8 秒不会连成一组。
 func TestGroupCrossAlbumNoChaining(t *testing.T) {
 	cache := map[string]enrichEntry{
-		enrichKey("A", "歌", "一"): {Lyrics: "x", DurationSecs: 200},
-		enrichKey("A", "歌", "二"): {Lyrics: "y", DurationSecs: 201.9},
-		enrichKey("A", "歌", "三"): {Lyrics: "z", DurationSecs: 203.8},
+		enrichKey("A", "歌", "一"): {Lyrics: bt("x"), DurationSecs: 200},
+		enrichKey("A", "歌", "二"): {Lyrics: bt("y"), DurationSecs: 201.9},
+		enrichKey("A", "歌", "三"): {Lyrics: bt("z"), DurationSecs: 203.8},
 	}
 	groups := groupCrossAlbumCandidates(cache, 2)
 	if len(groups) != 1 || len(groups[0].members) != 2 {
@@ -221,12 +221,12 @@ func TestApplyCrossAlbumReuseGuards(t *testing.T) {
 	kBest, kPinned, kPlain := enrichKey("A", "歌", "一"), enrichKey("A", "歌", "二"), enrichKey("A", "歌", "三")
 	tie1, tie2 := enrichKey("B", "曲", "一"), enrichKey("B", "曲", "二")
 	withEnrichCache(t, map[string]enrichEntry{
-		kBest:   {Lyrics: "最好", DurationSecs: 200, LyricsScore: 900, LyricsScoringVersion: 3},
-		kPinned: {Lyrics: "校准过", DurationSecs: 200, LyricsScore: 100, LyricsScoringVersion: 3},
-		kPlain: {Lyrics: "普通", DurationSecs: 200, LyricsScore: 100, LyricsScoringVersion: 3,
+		kBest:   {Lyrics: bt("最好"), DurationSecs: 200, LyricsScore: 900, LyricsScoringVersion: 3},
+		kPinned: {Lyrics: bt("校准过"), DurationSecs: 200, LyricsScore: 100, LyricsScoringVersion: 3},
+		kPlain: {Lyrics: bt("普通"), DurationSecs: 200, LyricsScore: 100, LyricsScoringVersion: 3,
 			LyricsDecisionApplied: &lyricsDecision{Path: "old-path"}},
-		tie1: {Lyrics: "甲", DurationSecs: 180, LyricsScore: 500, LyricsScoringVersion: 3},
-		tie2: {Lyrics: "乙", DurationSecs: 180, LyricsScore: 500, LyricsScoringVersion: 3},
+		tie1: {Lyrics: bt("甲"), DurationSecs: 180, LyricsScore: 500, LyricsScoringVersion: 3},
+		tie2: {Lyrics: bt("乙"), DurationSecs: 180, LyricsScore: 500, LyricsScoringVersion: 3},
 	})
 	pins := filepath.Join(t.TempDir(), "pins.json")
 	data, _ := json.Marshal(lyricsPinsFile{Version: 1, Pins: map[string]int64{kPinned: 1}})
@@ -246,30 +246,30 @@ func TestApplyCrossAlbumReuseGuards(t *testing.T) {
 	}
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
-	if enrichCache[kPinned].Lyrics != "校准过" {
+	if !enrichCache[kPinned].Lyrics.EqualString("校准过") {
 		t.Error("校准过的不该被改")
 	}
 	plain := enrichCache[kPlain]
-	if plain.Lyrics != "最好" || plain.LyricsDecisionApplied == nil ||
+	if !plain.Lyrics.EqualString("最好") || plain.LyricsDecisionApplied == nil ||
 		plain.LyricsDecisionApplied.Path != lyricsDecisionPathCrossAlbumReuse || plain.LyricsDecisionApplied.ReusedFrom != kBest {
 		t.Errorf("普通那条应复用并换成最小决策记录: %+v", plain.LyricsDecisionApplied)
 	}
-	if enrichCache[tie1].Lyrics != "甲" || enrichCache[tie2].Lyrics != "乙" {
+	if !enrichCache[tie1].Lyrics.EqualString("甲") || !enrichCache[tie2].Lyrics.EqualString("乙") {
 		t.Error("打平的组不该动")
 	}
 }
 
 // 跨专辑复用只跟同一打分版本的兄弟比分数;存量命令优先用打分版本最新的那条。
 func TestCrossAlbumReuseComparesSameScoringVersionOnly(t *testing.T) {
-	self := enrichEntry{Lyrics: "mine", LyricsScore: 700, LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision, DurationSecs: 200}
+	self := enrichEntry{Lyrics: bt("mine"), LyricsScore: 700, LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision, DurationSecs: 200}
 	cache := map[string]enrichEntry{
 		"a|t|原版": self,
-		"a|t|典藏": {Lyrics: "inflated", LyricsScore: 900, LyricsScoringVersion: lyricsScoringVersion - 5, DurationSecs: 200.5},
+		"a|t|典藏": {Lyrics: bt("inflated"), LyricsScore: 900, LyricsScoringVersion: lyricsScoringVersion - 5, DurationSecs: 200.5},
 	}
 	if got := crossAlbumSiblingLyrics(cache, "a|t|原版", self); got != "" {
 		t.Fatalf("旧版本的高分不该赢: %q", got)
 	}
-	cache["a|t|典藏"] = enrichEntry{Lyrics: "better", LyricsScore: 900, LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision, DurationSecs: 200.5}
+	cache["a|t|典藏"] = enrichEntry{Lyrics: bt("better"), LyricsScore: 900, LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision, DurationSecs: 200.5}
 	if got := crossAlbumSiblingLyrics(cache, "a|t|原版", self); got != "a|t|典藏" {
 		t.Fatalf("同版本更高分的兄弟应当赢: %q", got)
 	}

@@ -86,7 +86,7 @@ type songVariant struct {
 	instrumental         bool // 条目标了纯音乐
 	ids                  []songGradedID
 	albums               map[string]string // 平台 → 专辑 id;跟 ids 里同一平台的曲目 id 配对,给「同一张专辑里歌曲 id 不同」用
-	lyrics, yrc          string
+	lyrics, yrc          bodyText
 	lyricsSource         string
 	manual               bool
 	pinned               bool
@@ -95,9 +95,10 @@ type songVariant struct {
 	// ev*:证据与否决看的那份歌词:这条写法自己得来的。歌词还是同步写进来的副本时换成同步之前那份(songUseOwnLyrics),
 	// 不然同一组同步之后两份一字不差,「两份歌词各自独立」那几样证据就没了,组和实体跟着拆开、来回翻(18 章决策 59)。
 	// lyrics / yrc / lyricsSource / applied 是现在这一份,同步规划、报告看它们。
-	evLyrics, evYRC, evSource string
-	evTrusted                 bool
-	evLatest, evApplied       *lyricsDecision
+	evLyrics, evYRC     bodyText
+	evSource            string
+	evTrusted           bool
+	evLatest, evApplied *lyricsDecision
 
 	// 建表时按需算、算一次留着。
 	// registered:检索 id(「netease_song:<id>」)→ 平台给这个 id 登记的歌名;对不上号的不在里面。winnerTitle:当前这份
@@ -236,7 +237,7 @@ func (v *songVariant) setEvidenceLyrics(e enrichEntry) {
 	v.evLyrics, v.evYRC, v.evSource = e.Lyrics, e.LyricsYRC, e.LyricsSource
 	v.evLatest, v.evApplied = e.LyricsDecision, e.LyricsDecisionApplied
 	resolved := math.Max(e.ResolvedDurationSecs, 0)
-	v.evTrusted = strings.TrimSpace(e.Lyrics) != "" &&
+	v.evTrusted = strings.TrimSpace(e.Lyrics.String()) != "" &&
 		(v.durationSecs <= 0 || resolved <= 0 || math.Abs(v.durationSecs-resolved) <= songLyricsTrustToleranceSecs)
 }
 
@@ -421,7 +422,7 @@ func (v *songVariant) lyricsShingles() (songHashSet, songHashSet) {
 	if !v.evTrusted || v.instrumental {
 		return nil, nil
 	}
-	tokens := songLyricsTokens(songLyricsBody(v.evLyrics))
+	tokens := songLyricsTokens(songLyricsBody(v.evLyrics.String()))
 	if len(tokens) < songLyricsMinTokens {
 		return nil, nil
 	}
@@ -434,7 +435,7 @@ func (v *songVariant) displayedLines() []timelineLine {
 	if !v.timelineDone {
 		v.timelineDone = true
 		if v.evTrusted && !v.instrumental {
-			v.timeline = displayedTimeline(v.evLyrics, v.evYRC)
+			v.timeline = displayedTimeline(v.evLyrics.String(), v.evYRC.String())
 		}
 	}
 	return v.timeline

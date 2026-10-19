@@ -14,9 +14,9 @@ import (
 // 流式写必须跟原来的 json.Marshal(map) 逐字节一致:key 排序、HTML 转义、Unknown 原样写回都要对上。
 func TestWriteEnrichSnapshotMatchesMarshal(t *testing.T) {
 	snap := map[string]enrichEntry{
-		"周杰伦|晴天|叶惠美":           {Lyrics: "[00:01.00]故事的小黄花\n", CoverURL: "https://example.com/a.jpg?x=1&y=2"},
-		"AC/DC|Back In Black|": {LyricsYRC: `[0,1000](0,500,0)Back (500,500,0)<in>`},
-		`Tom "T" & Jerry|<b>|`: {Lyrics: "a\u2028b"},
+		"周杰伦|晴天|叶惠美":           {Lyrics: bt("[00:01.00]故事的小黄花\n"), CoverURL: "https://example.com/a.jpg?x=1&y=2"},
+		"AC/DC|Back In Black|": {LyricsYRC: bt(`[0,1000](0,500,0)Back (500,500,0)<in>`)},
+		`Tom "T" & Jerry|<b>|`: {Lyrics: bt("a\u2028b")},
 		"":                     {},
 		"ゆず|夏色|":               {Unknown: map[string]json.RawMessage{"future_field": json.RawMessage(`{"n":1}`)}},
 	}
@@ -121,7 +121,7 @@ func TestRequestEnrichSaveThrottle(t *testing.T) {
 	enrichBackgroundSaveDelay = 40 * time.Millisecond
 	enrichPath = filepath.Join(t.TempDir(), "lyrimuse-enrich-cache.json")
 	enrichMu.Lock()
-	enrichCache = map[string]enrichEntry{"a|now|b": {Lyrics: "[00:01.00]hi"}}
+	enrichCache = map[string]enrichEntry{"a|now|b": {Lyrics: bt("[00:01.00]hi")}}
 	enrichMu.Unlock()
 	noteEnrichPlayingKey("a|now|b")
 	requestEnrichSave() // 刚写过:接下来都在间隔内
@@ -283,7 +283,7 @@ func TestSaveKeepsPlayingEntryFresh(t *testing.T) {
 	enrichPath = filepath.Join(t.TempDir(), "lyrimuse-enrich-cache.json")
 	const key = "p|now|x"
 	enrichMu.Lock()
-	enrichCache = map[string]enrichEntry{key: {Lyrics: "[00:01.00]v1"}}
+	enrichCache = map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]v1")}}
 	enrichMu.Unlock()
 	noteEnrichPlayingKey(key)
 	writeCache := func() {
@@ -294,7 +294,7 @@ func TestSaveKeepsPlayingEntryFresh(t *testing.T) {
 	// 假的整份写盘:取完快照、改名之前,正在播的那首又提交了一次(单条快照照常当场写)
 	saveKeepingPlayingEntryFresh(func() {
 		enrichMu.Lock()
-		enrichCache[key] = enrichEntry{Lyrics: "[00:01.00]v2"}
+		enrichCache[key] = enrichEntry{Lyrics: bt("[00:01.00]v2")}
 		enrichMu.Unlock()
 		notePlayingEntryChanged(key)
 		writeCache()
@@ -328,7 +328,7 @@ func TestNotePlayingKeyWritesSnapshotWithoutPromotingSave(t *testing.T) {
 	t.Cleanup(func() { enrichPath, enrichCache = savedPath, savedCache })
 	enrichPath = filepath.Join(t.TempDir(), "lyrimuse-enrich-cache.json")
 	enrichMu.Lock()
-	enrichCache = map[string]enrichEntry{"n|next|y": {Lyrics: "[00:01.00]next"}}
+	enrichCache = map[string]enrichEntry{"n|next|y": {Lyrics: bt("[00:01.00]next")}}
 	enrichMu.Unlock()
 	enrichSaveNow = func() { saves.Add(1) }
 	enrichSaveMinInterval = 5 * time.Millisecond
@@ -353,11 +353,11 @@ func TestNotePlayingKeyWritesSnapshotWithoutPromotingSave(t *testing.T) {
 		t.Fatalf("换到已有条目的歌,应当当场写单条快照: %v", err)
 	}
 	var got playingEntryFile
-	if err := json.Unmarshal(b, &got); err != nil || got.Key != "n|next|y" || got.Entry.Lyrics != "[00:01.00]next" {
+	if err := json.Unmarshal(b, &got); err != nil || got.Key != "n|next|y" || !got.Entry.Lyrics.EqualString("[00:01.00]next") {
 		t.Fatalf("单条快照内容不对: %+v err=%v", got, err)
 	}
 	pending := readEnrichPendingFile(t, 2*time.Second)
-	if pending.Entries["n|next|y"].Lyrics != "[00:01.00]next" {
+	if !pending.Entries["n|next|y"].Lyrics.EqualString("[00:01.00]next") {
 		t.Fatalf("预取那首的改动该在小文件里: %+v", pending.Entries)
 	}
 	if n := saves.Load(); n != 0 {

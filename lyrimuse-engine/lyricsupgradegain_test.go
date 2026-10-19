@@ -7,7 +7,7 @@ func TestLyricsUpgradeAppliesNeedsMinGain(t *testing.T) {
 	const qqBody = "[00:29.56]She was more like a beauty queen\n[00:33.31]I said don't mind\n[00:38.69]Who will dance"
 	const kuwoBody = "[00:29.50]She was more like a beauty queen\n[00:33.30]I said don't mind\n[00:38.70]Who will dance"
 	cur := enrichEntry{
-		Lyrics:               qqBody,
+		Lyrics:               bt(qqBody),
 		LyricsSource:         "qq",
 		LyricsScore:          1364,
 		LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision,

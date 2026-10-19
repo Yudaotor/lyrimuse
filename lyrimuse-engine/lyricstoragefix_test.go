@@ -41,15 +41,15 @@ func TestMigrateLyricEntitiesStableAcrossInvalidation(t *testing.T) {
 	withTempDecisionCache(t)
 	enrichMu.Lock()
 	enrichPath = ""
-	enrichCache["a|t|b"] = enrichEntry{Lyrics: "[00:01.00]they&amp;apos;re"}
+	enrichCache["a|t|b"] = enrichEntry{Lyrics: bt("[00:01.00]they&amp;apos;re")}
 	enrichMu.Unlock()
 	migrateLyricEntities()
-	if got := enrichCache["a|t|b"].Lyrics; got != "[00:01.00]they're" {
+	if got := enrichCache["a|t|b"].Lyrics; !got.EqualString("[00:01.00]they're") {
 		t.Fatalf("第一遍解到底: %q", got)
 	}
 	invalidateMigrationState("test")
 	migrateLyricEntities()
-	if got := enrichCache["a|t|b"].Lyrics; got != "[00:01.00]they're" {
+	if got := enrichCache["a|t|b"].Lyrics; !got.EqualString("[00:01.00]they're") {
 		t.Fatalf("水位作废之后重跑,正文不再变: %q", got)
 	}
 }
@@ -67,23 +67,23 @@ func TestMigrateQRCLeftoverTokensDropsUnrecoverable(t *testing.T) {
 	kana := "[kana:(0,100)あ]\n[0,1000](0,500,0)Hi"
 	enrichMu.Lock()
 	enrichPath = ""
-	enrichCache["a|fix|b"] = enrichEntry{Lyrics: "x", LyricsYRC: fixable}
-	enrichCache["a|broken|b"] = enrichEntry{Lyrics: "x", LyricsYRC: broken, LyricsBG: "bg"}
-	enrichCache["a|manual|b"] = enrichEntry{Lyrics: "x", LyricsYRC: broken, ManualLyrics: true}
-	enrichCache["a|good|b"] = enrichEntry{Lyrics: "x", LyricsYRC: good}
-	enrichCache["a|kana|b"] = enrichEntry{Lyrics: "x", LyricsYRC: kana}
+	enrichCache["a|fix|b"] = enrichEntry{Lyrics: bt("x"), LyricsYRC: bt(fixable)}
+	enrichCache["a|broken|b"] = enrichEntry{Lyrics: bt("x"), LyricsYRC: bt(broken), LyricsBG: bt("bg")}
+	enrichCache["a|manual|b"] = enrichEntry{Lyrics: bt("x"), LyricsYRC: bt(broken), ManualLyrics: true}
+	enrichCache["a|good|b"] = enrichEntry{Lyrics: bt("x"), LyricsYRC: bt(good)}
+	enrichCache["a|kana|b"] = enrichEntry{Lyrics: bt("x"), LyricsYRC: bt(kana)}
 	enrichMu.Unlock()
 	migrateQRCLeftoverTokens()
-	if got := enrichCache["a|fix|b"].LyricsYRC; yrcHasTwoNumberTokens(got) || got == fixable {
+	if got := enrichCache["a|fix|b"].LyricsYRC; yrcHasTwoNumberTokens(got.String()) || got.EqualString(fixable) {
 		t.Errorf("修得好的应当修好: %q", got)
 	}
-	if e := enrichCache["a|broken|b"]; e.LyricsYRC != "" || e.LyricsBG != "" {
+	if e := enrichCache["a|broken|b"]; !e.LyricsYRC.IsZero() || !e.LyricsBG.IsZero() {
 		t.Errorf("修不好的应当清掉逐字和背景人声: %+v", e)
 	}
-	if enrichCache["a|manual|b"].LyricsYRC != broken {
+	if !enrichCache["a|manual|b"].LyricsYRC.EqualString(broken) {
 		t.Error("手改过的不动")
 	}
-	if enrichCache["a|good|b"].LyricsYRC != good || enrichCache["a|kana|b"].LyricsYRC != kana {
+	if !enrichCache["a|good|b"].LyricsYRC.EqualString(good) || !enrichCache["a|kana|b"].LyricsYRC.EqualString(kana) {
 		t.Error("正常的逐字、假名标注行不动")
 	}
 }

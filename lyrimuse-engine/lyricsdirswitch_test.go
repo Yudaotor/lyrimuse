@@ -30,8 +30,8 @@ func setUpLyricsDirSwitchTest(t *testing.T) (oldDir, newDir string) {
 	enrichMu.Lock()
 	setLyricsDir(oldDir)
 	enrichCache = map[string]enrichEntry{
-		enrichKey("Alpha", "Song One", "Album"): {Lyrics: "[00:01.00]cache one"},
-		enrichKey("Alpha", "Song Two", "Album"): {Lyrics: "[00:01.00]cache two"},
+		enrichKey("Alpha", "Song One", "Album"): {Lyrics: bt("[00:01.00]cache one")},
+		enrichKey("Alpha", "Song Two", "Album"): {Lyrics: bt("[00:01.00]cache two")},
 	}
 	enrichPath = filepath.Join(t.TempDir(), "enrich-cache.json")
 	enrichMu.Unlock()
@@ -57,7 +57,7 @@ func TestSwitchLyricsDirAdoptsThenExports(t *testing.T) {
 	enrichMu.Lock()
 	one := enrichCache[enrichKey("Alpha", "Song One", "Album")].Lyrics
 	enrichMu.Unlock()
-	if !strings.Contains(one, "user edited") {
+	if !strings.Contains(one.String(), "user edited") {
 		t.Errorf("新目录里已有的文件应赢过缓存,got %q", one)
 	}
 	two, err := os.ReadFile(filepath.Join(newDir, "Alpha - Song Two - Album.lrc"))

@@ -13,7 +13,7 @@ func TestPeripheralPendingSkipsThrottle(t *testing.T) {
 	defer func() { webRelayURL = savedRelay }()
 	webRelayURL = ""
 
-	fresh := enrichEntry{Lyrics: "[00:01.00]x", TS: time.Now().Unix()}
+	fresh := enrichEntry{Lyrics: bt("[00:01.00]x"), TS: time.Now().Unix()}
 	if peripheralBackfillThrottleElapsed(fresh) {
 		t.Fatal("刚写下、没有待补标记的条目应该还在节流里")
 	}
@@ -40,7 +40,7 @@ func TestPeripheralPendingSkipsThrottle(t *testing.T) {
 // 后台补封面那一遍同样认待补标记:没被播到的预取条目(同专辑的下一首)重启后也能在第一遍里补上。
 func TestCoverSweepTakesPeripheralPending(t *testing.T) {
 	key := "Leehom Wang|Wei Yi|Open Fire [Clean]"
-	e := enrichEntry{Lyrics: "[00:01.00]x", TS: time.Now().Unix()}
+	e := enrichEntry{Lyrics: bt("[00:01.00]x"), TS: time.Now().Unix()}
 	if coverSweepEligibleLocked(key, e) {
 		t.Fatal("刚写下、没有待补标记的条目这一遍不补")
 	}

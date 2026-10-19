@@ -63,7 +63,7 @@ func runWatchingForGap(t *testing.T, key string, fn func()) (gap bool) {
 			enrichMu.Lock()
 			e := enrichCache[key]
 			enrichMu.Unlock()
-			if e.Lyrics == swapNewBody && !strings.Contains(e.LyricsTr, fakeTranslated("谷:", "Brand new first line")) {
+			if e.Lyrics.EqualString(swapNewBody) && !strings.Contains(e.LyricsTr.String(), fakeTranslated("谷:", "Brand new first line")) {
 				seen = true
 			}
 			select {
@@ -92,10 +92,10 @@ func assertSwappedWithTranslation(t *testing.T, key string, gap bool, googleCall
 	enrichMu.Lock()
 	e := enrichCache[key]
 	enrichMu.Unlock()
-	if e.Lyrics != swapNewBody || e.LyricsSource != "musixmatch" {
+	if !e.Lyrics.EqualString(swapNewBody) || e.LyricsSource != "musixmatch" {
 		t.Fatalf("没换上新正文: source=%q lyrics=%q", e.LyricsSource, e.Lyrics)
 	}
-	if e.LyricsTrSource != lyricsTrSourceMachine || !strings.Contains(e.LyricsTr, fakeTranslated("谷:", "Brand new first line")) || strings.Contains(e.LyricsTr, "旧") {
+	if e.LyricsTrSource != lyricsTrSourceMachine || !strings.Contains(e.LyricsTr.String(), fakeTranslated("谷:", "Brand new first line")) || strings.Contains(e.LyricsTr.String(), "旧") {
 		t.Fatalf("换上正文的同时没带上新正文的译文: tr_source=%q tr=%q", e.LyricsTrSource, e.LyricsTr)
 	}
 	if e.LyricsTrLang != "zh-CN" || e.TranslationLang != "zh-CN" || e.TranslationTS != 0 || e.TranslationRetryCount != 0 {
@@ -113,9 +113,9 @@ func TestRescoreSwapCarriesTranslationWithoutGap(t *testing.T) {
 	key := enrichKey(swapArtist, swapTitle, swapAlbum)
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
-		Lyrics: "[00:05.00]Old line one\n[00:15.00]Old line two", LyricsSource: "qq", LyricsScore: 10,
+		Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "qq", LyricsScore: 10,
 		LyricsScoringVersion: lyricsScoringVersion - 1,
-		LyricsTr:             "[00:05.00]旧译一\n[00:15.00]旧译二", LyricsTrLang: "zh",
+		LyricsTr:             bt("[00:05.00]旧译一\n[00:15.00]旧译二"), LyricsTrLang: "zh",
 	}}
 	enrichMu.Unlock()
 	noteEnrichPlayingKey(key)
@@ -131,9 +131,9 @@ func TestUpgradeSwapCarriesTranslationWithoutGap(t *testing.T) {
 	key := enrichKey(swapArtist, swapTitle, swapAlbum)
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
-		Lyrics: "[00:05.00]Old line one\n[00:15.00]Old line two", LyricsSource: "qq", LyricsScore: 10,
+		Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "qq", LyricsScore: 10,
 		LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision,
-		LyricsTr: "[00:05.00]旧译一\n[00:15.00]旧译二", LyricsTrLang: "zh",
+		LyricsTr: bt("[00:05.00]旧译一\n[00:15.00]旧译二"), LyricsTrLang: "zh",
 	}}
 	enrichMu.Unlock()
 	noteEnrichPlayingKey(key)
@@ -150,7 +150,7 @@ func TestSwapWithoutUsableTranslationStillTranslatesAfterwards(t *testing.T) {
 	key := enrichKey(swapArtist, swapTitle, swapAlbum)
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
-		Lyrics: "[00:05.00]Old line one\n[00:15.00]Old line two", LyricsSource: "qq", LyricsScore: 10,
+		Lyrics: bt("[00:05.00]Old line one\n[00:15.00]Old line two"), LyricsSource: "qq", LyricsScore: 10,
 		LyricsScoringVersion: lyricsScoringVersion - 1,
 	}}
 	enrichMu.Unlock()
@@ -161,7 +161,7 @@ func TestSwapWithoutUsableTranslationStillTranslatesAfterwards(t *testing.T) {
 	enrichMu.Lock()
 	e := enrichCache[key]
 	enrichMu.Unlock()
-	if e.Lyrics != swapNewBody || !strings.Contains(e.LyricsTr, fakeTranslated("谷:", "Brand new first line")) {
+	if !e.Lyrics.EqualString(swapNewBody) || !strings.Contains(e.LyricsTr.String(), fakeTranslated("谷:", "Brand new first line")) {
 		t.Fatalf("换完之后没补上译文: lyrics=%q tr=%q", e.Lyrics, e.LyricsTr)
 	}
 }
@@ -170,7 +170,7 @@ func TestSwapWithoutUsableTranslationStillTranslatesAfterwards(t *testing.T) {
 func TestPrepareSwapTranslationSkips(t *testing.T) {
 	googleCalls := setupSwapE2E(t, 0)
 	const key = "Someone|Swap Song|Some Album"
-	usable := enrichEntry{Lyrics: "[00:05.00]Old line one", LyricsTr: "[00:05.00]旧译一", LyricsTrLang: "zh"}
+	usable := enrichEntry{Lyrics: bt("[00:05.00]Old line one"), LyricsTr: bt("[00:05.00]旧译一"), LyricsTrLang: "zh"}
 	picked := &scoredLyricCandidateResult{}
 	picked.Lyrics = swapNewBody
 	always := func(enrichEntry) bool { return true }
@@ -184,7 +184,7 @@ func TestPrepareSwapTranslationSkips(t *testing.T) {
 	}{
 		{"没在播", usable, false, true, picked, always},
 		{"机翻关着", usable, true, false, picked, always},
-		{"现在这份没有能用的译文", enrichEntry{Lyrics: "[00:05.00]Old line one"}, true, true, picked, always},
+		{"现在这份没有能用的译文", enrichEntry{Lyrics: bt("[00:05.00]Old line one")}, true, true, picked, always},
 		{"这一轮不换正文", usable, true, true, picked, func(enrichEntry) bool { return false }},
 		{"没有胜者", usable, true, true, nil, always},
 		{"新胜者自带能用的译文", usable, true, true, func() *scoredLyricCandidateResult {
@@ -217,19 +217,19 @@ func TestPrepareSwapTranslationSkips(t *testing.T) {
 // 锁外翻好、锁内发现正文又被换过(或已经有能用的译文)时不挂。
 func TestSwapTranslationApplyChecksLyrics(t *testing.T) {
 	s := swapTranslation{lyrics: swapNewBody, lrc: "[00:05.00]谷:Brand new first line", target: "zh-CN"}
-	other := enrichEntry{Lyrics: "[00:05.00]Somebody else"}
+	other := enrichEntry{Lyrics: bt("[00:05.00]Somebody else")}
 	s.applyLocked(&other)
-	if other.LyricsTr != "" {
+	if !other.LyricsTr.IsZero() {
 		t.Fatalf("正文对不上还挂了译文: %q", other.LyricsTr)
 	}
-	has := enrichEntry{Lyrics: swapNewBody, LyricsTr: "[00:05.00]社区译文", LyricsTrLang: "zh"}
+	has := enrichEntry{Lyrics: bt(swapNewBody), LyricsTr: bt("[00:05.00]社区译文"), LyricsTrLang: "zh"}
 	s.applyLocked(&has)
-	if has.LyricsTr != "[00:05.00]社区译文" {
+	if !has.LyricsTr.EqualString("[00:05.00]社区译文") {
 		t.Fatalf("已经有能用的译文还被机翻顶掉了: %q", has.LyricsTr)
 	}
-	fresh := enrichEntry{Lyrics: swapNewBody}
+	fresh := enrichEntry{Lyrics: bt(swapNewBody)}
 	s.applyLocked(&fresh)
-	if fresh.LyricsTr != s.lrc || fresh.LyricsTrSource != lyricsTrSourceMachine {
+	if !fresh.LyricsTr.EqualString(s.lrc) || fresh.LyricsTrSource != lyricsTrSourceMachine {
 		t.Fatalf("该挂的没挂上: %+v", fresh)
 	}
 	(swapTranslation{}).applyLocked(&fresh)

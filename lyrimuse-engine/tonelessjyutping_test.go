@@ -34,21 +34,21 @@ func TestLacksJyutpingTones(t *testing.T) {
 }
 
 func TestDropUnusableCantoneseRomaRegeneratesTones(t *testing.T) {
-	e := enrichEntry{Lyrics: tonelessCantoneseLyrics, LyricsRoma: tonelessCantoneseRoma, SongLanguage: songLanguageCantonese}
+	e := enrichEntry{Lyrics: bt(tonelessCantoneseLyrics), LyricsRoma: bt(tonelessCantoneseRoma), SongLanguage: songLanguageCantonese}
 	e.dropUnusableCantoneseRoma()
 	e.maybeGenerateJyutpingRoma()
-	if e.LyricsRoma == "" || lacksJyutpingTones(e.LyricsRoma) {
+	if e.LyricsRoma.IsZero() || lacksJyutpingTones(e.LyricsRoma.String()) {
 		t.Fatalf("没标声调的应当换成带声调的粤拼: %q", e.LyricsRoma)
 	}
-	manual := enrichEntry{Lyrics: tonelessCantoneseLyrics, LyricsRoma: tonelessCantoneseRoma,
+	manual := enrichEntry{Lyrics: bt(tonelessCantoneseLyrics), LyricsRoma: bt(tonelessCantoneseRoma),
 		SongLanguage: songLanguageCantonese, ManualLyrics: true}
 	manual.dropUnusableCantoneseRoma()
-	if manual.LyricsRoma != tonelessCantoneseRoma {
+	if !manual.LyricsRoma.EqualString(tonelessCantoneseRoma) {
 		t.Error("手改过的不动")
 	}
-	cmn := enrichEntry{Lyrics: tonelessCantoneseLyrics, LyricsRoma: tonelessCantoneseRoma, SongLanguage: songLanguageMandarin}
+	cmn := enrichEntry{Lyrics: bt(tonelessCantoneseLyrics), LyricsRoma: bt(tonelessCantoneseRoma), SongLanguage: songLanguageMandarin}
 	cmn.dropUnusableCantoneseRoma()
-	if cmn.LyricsRoma != tonelessCantoneseRoma {
+	if !cmn.LyricsRoma.EqualString(tonelessCantoneseRoma) {
 		t.Error("不是粤语歌不动")
 	}
 }
@@ -56,24 +56,24 @@ func TestDropUnusableCantoneseRomaRegeneratesTones(t *testing.T) {
 func TestMigrateTonelessCantoneseRoma(t *testing.T) {
 	toned := jyutpingLRC(tonelessCantoneseLyrics)
 	withEnrichCache(t, map[string]enrichEntry{
-		"a|没标声调|": {Lyrics: tonelessCantoneseLyrics, LyricsRoma: tonelessCantoneseRoma, SongLanguage: songLanguageCantonese},
-		"b|手改|":   {Lyrics: tonelessCantoneseLyrics, LyricsRoma: tonelessCantoneseRoma, SongLanguage: songLanguageCantonese, ManualLyrics: true},
-		"c|带声调|":  {Lyrics: tonelessCantoneseLyrics, LyricsRoma: "[00:01.00]mine5 mine5 mine5 mine5 mine5 mine5 mine5 mine5", SongLanguage: songLanguageCantonese},
-		"d|普通话|":  {Lyrics: tonelessCantoneseLyrics, LyricsRoma: tonelessCantoneseRoma, SongLanguage: songLanguageMandarin},
+		"a|没标声调|": {Lyrics: bt(tonelessCantoneseLyrics), LyricsRoma: bt(tonelessCantoneseRoma), SongLanguage: songLanguageCantonese},
+		"b|手改|":   {Lyrics: bt(tonelessCantoneseLyrics), LyricsRoma: bt(tonelessCantoneseRoma), SongLanguage: songLanguageCantonese, ManualLyrics: true},
+		"c|带声调|":  {Lyrics: bt(tonelessCantoneseLyrics), LyricsRoma: bt("[00:01.00]mine5 mine5 mine5 mine5 mine5 mine5 mine5 mine5"), SongLanguage: songLanguageCantonese},
+		"d|普通话|":  {Lyrics: bt(tonelessCantoneseLyrics), LyricsRoma: bt(tonelessCantoneseRoma), SongLanguage: songLanguageMandarin},
 	})
 	migrateTonelessCantoneseRoma()
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
-	if got := enrichCache["a|没标声调|"].LyricsRoma; got != toned {
+	if got := enrichCache["a|没标声调|"].LyricsRoma; !got.EqualString(toned) {
 		t.Errorf("没标声调的换成引擎生成的粤拼: %q", got)
 	}
-	if got := enrichCache["b|手改|"].LyricsRoma; got != tonelessCantoneseRoma {
+	if got := enrichCache["b|手改|"].LyricsRoma; !got.EqualString(tonelessCantoneseRoma) {
 		t.Errorf("手改过的不动: %q", got)
 	}
-	if got := enrichCache["c|带声调|"].LyricsRoma; !strings.HasPrefix(got, "[00:01.00]mine5") {
+	if got := enrichCache["c|带声调|"].LyricsRoma; !strings.HasPrefix(got.String(), "[00:01.00]mine5") {
 		t.Errorf("带声调的不动: %q", got)
 	}
-	if got := enrichCache["d|普通话|"].LyricsRoma; got != tonelessCantoneseRoma {
+	if got := enrichCache["d|普通话|"].LyricsRoma; !got.EqualString(tonelessCantoneseRoma) {
 		t.Errorf("不是粤语歌不动: %q", got)
 	}
 }

@@ -17,7 +17,7 @@ func TestEnrichEntryJSONPreservesUnknownKeys(t *testing.T) {
 	if err := json.Unmarshal([]byte(in), &e); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if e.TS != 1700000000 || e.Lyrics != "[00:01.00]a" || e.LyricsSource != "qq" {
+	if e.TS != 1700000000 || !e.Lyrics.EqualString("[00:01.00]a") || e.LyricsSource != "qq" {
 		t.Fatalf("known fields mangled: %+v", e)
 	}
 	if got := len(e.Unknown); got != 3 {
@@ -59,7 +59,7 @@ func TestEnrichEntryJSONPreservesUnknownKeys(t *testing.T) {
 // 二进制认识全部字段时(日常情况)输出必须跟标准库默认编码逐字节一致——严格档一遍就完、
 // 编码不多绕一次 map,既是性能承诺也是"没有改变任何现有文件形状"的承诺。
 func TestEnrichEntryJSONIdenticalWhenNoUnknownKeys(t *testing.T) {
-	e := enrichEntry{TS: 1, Lyrics: "[00:00.00]x", LyricsSource: "netease", LyricsScore: 900,
+	e := enrichEntry{TS: 1, Lyrics: bt("[00:00.00]x"), LyricsSource: "netease", LyricsScore: 900,
 		LyricsSourcesSeen: []string{"netease", "qq"}, Instrumental: false}
 	got, err := json.Marshal(e)
 	if err != nil {
@@ -84,7 +84,7 @@ func TestEnrichEntryJSONIdenticalWhenNoUnknownKeys(t *testing.T) {
 // 已知键永远赢:Unknown 里若混进了一个跟结构体字段同名的键(理论上不会——解码时已知键
 // 不进 Unknown——但 map 是可写的,防御一下),写回时不能用它顶掉字段值。
 func TestEnrichEntryJSONKnownKeyWins(t *testing.T) {
-	e := enrichEntry{TS: 5, Lyrics: "real"}
+	e := enrichEntry{TS: 5, Lyrics: bt("real")}
 	e.Unknown = map[string]json.RawMessage{"lyrics": json.RawMessage(`"stale"`), "extra": json.RawMessage(`true`)}
 	out, err := json.Marshal(e)
 	if err != nil {

@@ -20,7 +20,7 @@ func shareFollowWriting(key string, now time.Time) []string {
 	enrichMu.Lock()
 	src, ok := enrichCache[key]
 	if !ok || src.Song == "" || src.Instrumental || src.ManualLyrics || songSharePickHeld(src) ||
-		songOffsetFingerprint(src.Lyrics, src.LyricsYRC) == "" {
+		songOffsetFingerprint(src.Lyrics.String(), src.LyricsYRC.String()) == "" {
 		enrichMu.Unlock()
 		return nil
 	}
@@ -46,17 +46,17 @@ func shareFollowWriting(key string, now time.Time) []string {
 	}
 	sort.Strings(mates)
 	dir := decisionSidecarDir()
-	to := songPlanLyricsFor(key, src.Lyrics, src.LyricsYRC, src.LyricsSource, false, false, src.LyricsDecisionApplied, dir)
+	to := songPlanLyricsFor(key, src.Lyrics.String(), src.LyricsYRC.String(), src.LyricsSource, false, false, src.LyricsDecisionApplied, dir)
 	own := map[string]*songPlanLyrics{}
 	for _, k := range mates {
 		e := snap[k]
-		own[k] = songPlanLyricsFor(k, e.Lyrics, e.LyricsYRC, e.LyricsSource, false, pins[k], e.LyricsDecisionApplied, dir)
+		own[k] = songPlanLyricsFor(k, e.Lyrics.String(), e.LyricsYRC.String(), e.LyricsSource, false, pins[k], e.LyricsDecisionApplied, dir)
 	}
 
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
 	live, ok := enrichCache[key]
-	if !ok || songOffsetFingerprint(live.Lyrics, live.LyricsYRC) != to.fp || live.SongShare != src.SongShare {
+	if !ok || songOffsetFingerprint(live.Lyrics.String(), live.LyricsYRC.String()) != to.fp || live.SongShare != src.SongShare {
 		return nil
 	}
 	var changed []string
@@ -68,8 +68,8 @@ func shareFollowWriting(key string, now time.Time) []string {
 			e.Song != src.Song || e.SongShare != src.SongShare {
 			continue
 		}
-		fp := songOffsetFingerprint(e.Lyrics, e.LyricsYRC)
-		if fp == to.fp || fp != songOffsetFingerprint(snap[k].Lyrics, snap[k].LyricsYRC) {
+		fp := songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String())
+		if fp == to.fp || fp != songOffsetFingerprint(snap[k].Lyrics.String(), snap[k].LyricsYRC.String()) {
 			continue
 		}
 		if cur := own[k]; cur != nil && (!upgrade || songPlanKeep(cur, to, false) != "") {
@@ -124,7 +124,7 @@ func importPredatesSongShare(key string, e enrichEntry, body func(suffix string)
 	if !hasLRC && !hasYRC {
 		return false
 	}
-	return (!hasLRC || lrc == pre.Lyrics) && (!hasYRC || yrc == pre.LyricsYRC) && (lrc != "" || yrc != "")
+	return (!hasLRC || pre.Lyrics.EqualString(lrc)) && (!hasYRC || pre.LyricsYRC.EqualString(yrc)) && (lrc != "" || yrc != "")
 }
 
 // shareImportedEditsLocked:歌词同步开着时,歌词文件夹里被用户改过的那几条(导入时状态记录确认导出之后改过、正文或逐字真的变了)
@@ -137,7 +137,7 @@ func shareImportedEditsLocked(keys []string, now time.Time) []string {
 	var changed []string
 	for _, k := range keys {
 		e, ok := enrichCache[k]
-		if !ok || e.Song == "" || strings.TrimSpace(e.Lyrics) == "" {
+		if !ok || e.Song == "" || strings.TrimSpace(e.Lyrics.String()) == "" {
 			continue
 		}
 		if !e.ManualLyrics || e.LyricsEntityOrigin != "" {

@@ -259,7 +259,7 @@ func TestDecisionKeepsPlayerInstrumentalMarker(t *testing.T) {
 }
 
 func TestRescoreTurnsInstrumentalOnPlayerMarker(t *testing.T) {
-	e := enrichEntry{Lyrics: playerTestLRC, LyricsSource: "kugou"}
+	e := enrichEntry{Lyrics: bt(playerTestLRC), LyricsSource: "kugou"}
 	scored := []scoredLyricCandidateResult{{Source: "kugou", Score: 300}, {Source: "netease", Score: -1, Instrumental: true, PlayerInstrumental: true}}
 	if !rescoreTurnsInstrumental(e, scored) {
 		t.Fatal("播放器说是纯音乐:重评时现有的词改按纯音乐处理")

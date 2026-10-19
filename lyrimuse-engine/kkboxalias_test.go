@@ -29,7 +29,7 @@ func TestKKBOXAliasVariant(t *testing.T) {
 func TestTrackEnrichmentReusesKKBOXAliasSibling(t *testing.T) {
 	sib := enrichKey("田馥甄", "小幸運", "我的少女時代")
 	setUpEnrichEditTest(t, map[string]enrichEntry{sib: {
-		Lyrics: "[00:01.00]line", LyricsSource: "kugou", LyricsScore: 900, CoverURL: "https://example.invalid/c.jpg",
+		Lyrics: bt("[00:01.00]line"), LyricsSource: "kugou", LyricsScore: 900, CoverURL: "https://example.invalid/c.jpg",
 		LyricsDecisionApplied: &lyricsDecision{Path: lyricsDecisionPathFirstResolve, Winner: "kugou"},
 	}})
 	fields := trackEnrichment("田馥甄 (Hebe)", "小幸運", "我的少女時代", kkboxBundleID, 265, true, false)
@@ -38,7 +38,7 @@ func TestTrackEnrichmentReusesKKBOXAliasSibling(t *testing.T) {
 	}
 	key := enrichKey("田馥甄 (Hebe)", "小幸運", "我的少女時代")
 	e, ok := cacheEntry(t, key)
-	if !ok || e.Lyrics != "[00:01.00]line" || e.CoverURL != "https://example.invalid/c.jpg" {
+	if !ok || !e.Lyrics.EqualString("[00:01.00]line") || e.CoverURL != "https://example.invalid/c.jpg" {
 		t.Fatalf("整份搬到播放的 key 下: ok=%v %+v", ok, e)
 	}
 	d := e.LyricsDecisionApplied
@@ -60,7 +60,7 @@ func TestKKBOXAliasSiblingGates(t *testing.T) {
 	withLyrics := enrichKey("田馥甄", "小幸運", "我的少女時代")
 	noLyrics := enrichKey("Taylor Swift", "Lover", "Lover")
 	setUpEnrichEditTest(t, map[string]enrichEntry{
-		withLyrics: {Lyrics: "[00:01.00]line"},
+		withLyrics: {Lyrics: bt("[00:01.00]line")},
 		noLyrics:   {},
 	})
 	enrichMu.Lock()

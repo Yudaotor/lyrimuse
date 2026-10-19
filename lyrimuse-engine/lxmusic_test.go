@@ -273,7 +273,7 @@ func TestLXMusicLyricsAvailableAndRecheck(t *testing.T) {
 	if lxMusicLyricsAvailable(lxMusicBundleID, "陈粒", "小半", 297) {
 		t.Fatal("没存词的不算")
 	}
-	e := enrichEntry{Lyrics: "[00:01.00]x", LyricsSource: "kuwo"}
+	e := enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsSource: "kuwo"}
 	if !lxMusicLyricsWorthRecheck(e, lxMusicBundleID, false, true, true) {
 		t.Error("没见过洛雪那份、现在有词,值得重来一次")
 	}

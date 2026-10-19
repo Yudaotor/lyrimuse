@@ -9,7 +9,7 @@ package main
 // 罗马音、逐字时间轴 / 语种 / 解析时长 / 决策存档两槽 / 本轮各源到场情况与搜索用的登记专辑 / 词曲作者名单)。PlainLyrics 不动:有了带时间戳
 // 的正文,纯文本兜底本来就不显示。调用方持 enrichMu,并已核对这期间条目没被改过。
 func adoptBackfilledLyrics(e *enrichEntry, fresh enrichEntry) bool {
-	if e.Lyrics != "" || e.ManualLyrics || e.Instrumental || fresh.Lyrics == "" {
+	if !e.Lyrics.IsZero() || e.ManualLyrics || e.Instrumental || fresh.Lyrics.IsZero() {
 		return false
 	}
 	e.Lyrics = fresh.Lyrics

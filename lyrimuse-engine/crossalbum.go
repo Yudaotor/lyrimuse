@@ -49,8 +49,9 @@ func crossAlbumSiblingLyrics(cache map[string]enrichEntry, key string, self enri
 		return ""
 	}
 	best, bestScore := "", self.LyricsScore
+	// 正文可能退回在小文件里(bodytext.go):先用元数据筛,最后才取正文,别让每次都把全库正文读一遍。
 	for k, e := range cache {
-		if k == key || strings.TrimSpace(e.Lyrics) == "" || e.DurationSecs <= 0 {
+		if k == key || e.Lyrics.IsZero() || e.DurationSecs <= 0 {
 			continue
 		}
 		if e.LyricsScore <= bestScore || e.lyricsScoring() != self.lyricsScoring() {
@@ -61,6 +62,9 @@ func crossAlbumSiblingLyrics(cache map[string]enrichEntry, key string, self enri
 			continue
 		}
 		if math.Abs(e.DurationSecs-self.DurationSecs) > crossAlbumReuseToleranceSecs {
+			continue
+		}
+		if strings.TrimSpace(e.Lyrics.String()) == "" {
 			continue
 		}
 		best, bestScore = k, e.LyricsScore
@@ -83,7 +87,7 @@ func crossAlbumSiblingLyrics(cache map[string]enrichEntry, key string, self enri
 // 「这次解析结果比兄弟更好」时两条仍然不一致 —— 那一类由存量命令
 // `cross-album-reuse -apply` 定期对齐,分工写在 09 章。
 func adoptCrossAlbumSiblingLyrics(key string, e *enrichEntry) bool {
-	if e == nil || strings.TrimSpace(e.Lyrics) == "" {
+	if e == nil || strings.TrimSpace(e.Lyrics.String()) == "" {
 		return false
 	}
 	if e.ManualLyrics || e.ManualPickSHA != "" {
@@ -94,7 +98,7 @@ func adoptCrossAlbumSiblingLyrics(key string, e *enrichEntry) bool {
 		return false
 	}
 	src := enrichCache[sib]
-	if src.Lyrics == e.Lyrics {
+	if src.Lyrics.Equal(e.Lyrics) {
 		return false
 	}
 	log.Printf("enrich: %q adopting lyrics from %q (cross-album, score %d -> %d)",

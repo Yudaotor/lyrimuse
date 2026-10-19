@@ -37,7 +37,7 @@ func (p songSimulatedPres) keep(key string, own enrichEntry, synced string) {
 func (p songSimulatedPres) lookup(fallback func(string, enrichEntry) (enrichEntry, bool)) func(string, enrichEntry) (enrichEntry, bool) {
 	return func(key string, e enrichEntry) (enrichEntry, bool) {
 		if s, ok := p[key]; ok {
-			if s.synced != songOffsetFingerprint(e.Lyrics, e.LyricsYRC) {
+			if s.synced != songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) {
 				return enrichEntry{}, false
 			}
 			return s.own, true
@@ -72,7 +72,7 @@ func songSimulateShareSync(b *songEntityBuild, entries map[string]enrichEntry, m
 		}
 		rep := ""
 		for _, m := range ms {
-			if e := entries[b.variants[m].key]; strings.TrimSpace(e.Lyrics) != "" && !e.Instrumental {
+			if e := entries[b.variants[m].key]; strings.TrimSpace(e.Lyrics.String()) != "" && !e.Instrumental {
 				rep = b.variants[m].key
 				break
 			}
@@ -85,7 +85,7 @@ func songSimulateShareSync(b *songEntityBuild, entries map[string]enrichEntry, m
 			src.ManualLyrics = true
 			entries[rep] = src
 		}
-		fp := songOffsetFingerprint(src.Lyrics, src.LyricsYRC)
+		fp := songOffsetFingerprint(src.Lyrics.String(), src.LyricsYRC.String())
 		n := 0
 		for _, m := range ms {
 			k := b.variants[m].key
@@ -93,7 +93,7 @@ func songSimulateShareSync(b *songEntityBuild, entries map[string]enrichEntry, m
 			if k == rep || e.Instrumental || songShareManualOriginal(e) {
 				continue
 			}
-			if !manual && e.Lyrics == src.Lyrics && e.LyricsYRC == src.LyricsYRC {
+			if !manual && e.Lyrics.Equal(src.Lyrics) && e.LyricsYRC.Equal(src.LyricsYRC) {
 				continue
 			}
 			keep(k, songOwnLyricsEntry(k, e), fp)

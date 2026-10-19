@@ -338,40 +338,40 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 		changed := false
 		prevLyrics, prevTr, prevRoma, prevYRC := e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC
 		if v, ok := variantBody(".lrc"); ok {
-			if e.Lyrics != v {
-				e.Lyrics, changed = v, true
+			if !e.Lyrics.EqualString(v) {
+				e.Lyrics, changed = bt(v), true
 				// 歌词文件里没有背景人声(导出不写它),正文换了就清掉,别挂在新正文下面。
-				e.LyricsBG = ""
+				e.LyricsBG = bodyText{}
 			}
 		}
 		if v, ok := variantBody(".tr.lrc"); ok {
-			if e.LyricsTr != v {
-				e.LyricsTr, changed = v, true
+			if !e.LyricsTr.EqualString(v) {
+				e.LyricsTr, changed = bt(v), true
 				// 译文被文件里的内容顶替了,原来记的语言不再描述它 —— 清掉,让
 				// translationUsable 退回文本判别,别拿旧语言给新内容背书。
 				e.LyricsTrLang = ""
 			}
 		}
 		if v, ok := variantBody(".roma.lrc"); ok {
-			if e.LyricsRoma != v {
-				e.LyricsRoma, changed = v, true
+			if !e.LyricsRoma.EqualString(v) {
+				e.LyricsRoma, changed = bt(v), true
 			}
 		}
 		if v, ok := variantBody(".yrc"); ok {
-			if e.LyricsYRC != v {
-				e.LyricsYRC, changed = v, true
-				e.LyricsBG = ""
+			if !e.LyricsYRC.EqualString(v) {
+				e.LyricsYRC, changed = bt(v), true
+				e.LyricsBG = bodyText{}
 			}
 		}
 		// 正文被文件换了、译文 / 罗马音那两个文件却没动:它们描述的是旧正文(同歌词管理保存那条规则,见 applySaveEdit)。
 		// 机翻清掉、留给机翻重翻;罗马音清掉,导出时同步删掉 .roma.lrc。用户自己的、歌词源自带的译文不动。
-		if prevLyrics != "" && e.Lyrics != prevLyrics {
-			if e.LyricsTr != "" && e.LyricsTr == prevTr && e.LyricsTrSource == lyricsTrSourceMachine {
-				e.LyricsTr, e.LyricsTrLang, e.LyricsTrSource = "", "", ""
+		if !prevLyrics.IsZero() && !e.Lyrics.Equal(prevLyrics) {
+			if !e.LyricsTr.IsZero() && e.LyricsTr.Equal(prevTr) && e.LyricsTrSource == lyricsTrSourceMachine {
+				e.LyricsTr, e.LyricsTrLang, e.LyricsTrSource = bodyText{}, "", ""
 				e.TranslationTS, e.TranslationRetryCount = 0, 0
 			}
-			if e.LyricsRoma != "" && e.LyricsRoma == prevRoma {
-				e.LyricsRoma = ""
+			if !e.LyricsRoma.IsZero() && e.LyricsRoma.Equal(prevRoma) {
+				e.LyricsRoma = bodyText{}
 			}
 		}
 		if e.LyricsSource != parsed.source {
@@ -381,14 +381,14 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 			e.ManualLyrics, changed = parsed.manual, true
 		}
 		// 文件里的正文或逐字被改过:这一条成了用户自己的,不再是从别的写法同步过来的副本(songentityshare.go)。
-		if e.LyricsEntityOrigin != "" && (e.Lyrics != prevLyrics || e.LyricsYRC != prevYRC) {
+		if e.LyricsEntityOrigin != "" && (!e.Lyrics.Equal(prevLyrics) || !e.LyricsYRC.Equal(prevYRC)) {
 			e.LyricsEntityOrigin, changed = "", true
 		}
 		if changed {
 			enrichCache[key] = e
 			enrichDirty = true
 			adopted = append(adopted, key)
-			if !restoreAll && !restoreKeys[key] && (e.Lyrics != prevLyrics || e.LyricsYRC != prevYRC) {
+			if !restoreAll && !restoreKeys[key] && (!e.Lyrics.Equal(prevLyrics) || !e.LyricsYRC.Equal(prevYRC)) {
 				switch {
 				case trusted:
 					edited = append(edited, key)

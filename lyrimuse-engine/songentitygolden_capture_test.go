@@ -262,7 +262,7 @@ func songGoldenScramble(f *songGoldenFixture) (*songGoldenFixture, error) {
 		if err := json.Unmarshal(v.Entry, &e); err != nil {
 			return nil, err
 		}
-		texts = append(texts, goldenText{e.Lyrics, false}, goldenText{e.LyricsYRC, true})
+		texts = append(texts, goldenText{e.Lyrics.String(), false}, goldenText{e.LyricsYRC.String(), true})
 	}
 	s := newGoldenScrambler(f.ID, texts)
 	out := *f

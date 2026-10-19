@@ -41,7 +41,7 @@ func prepareSwapTranslation(ctx context.Context, key, artist, title string, pick
 	if !needed {
 		return swapTranslation{}
 	}
-	if translationUsable(enrichEntry{LyricsTr: picked.LyricsTr, LyricsTrLang: picked.LyricsTrLang}, target) {
+	if translationUsable(enrichEntry{LyricsTr: bt(picked.LyricsTr), LyricsTrLang: picked.LyricsTrLang}, target) {
 		return swapTranslation{}
 	}
 	if !hasTranslatableLines(picked.Lyrics, target, artist, title) {
@@ -64,10 +64,10 @@ func prepareSwapTranslation(ctx context.Context, key, artist, title string, pick
 // applyLocked 把预先翻好的译文挂到刚换上的正文上;正文对不上(锁外到锁内之间又被换过)或这一刻已经有能用的
 // 译文时不挂。写的字段跟 backfillTranslation 翻成时一致。调用方持有 enrichMu。
 func (s swapTranslation) applyLocked(e *enrichEntry) {
-	if s.lrc == "" || e.Lyrics != s.lyrics || translationUsable(*e, s.target) {
+	if s.lrc == "" || !e.Lyrics.EqualString(s.lyrics) || translationUsable(*e, s.target) {
 		return
 	}
-	e.LyricsTr, e.LyricsTrSource, e.LyricsTrLang = s.lrc, lyricsTrSourceMachine, s.target
+	e.LyricsTr, e.LyricsTrSource, e.LyricsTrLang = bt(s.lrc), lyricsTrSourceMachine, s.target
 	e.TranslationLang = s.target
 	e.TranslationTS, e.TranslationRetryCount = 0, 0
 }

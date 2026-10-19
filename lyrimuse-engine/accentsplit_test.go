@@ -266,18 +266,18 @@ func TestMigrateAccentSplits(t *testing.T) {
 	duet := "[00:16.27]Aus der groß en traumfabrik\n[00:20.89]Seit die bilder laufen"
 	withAccentCacheWords(t)
 	withEnrichCache(t, map[string]enrichEntry{
-		"a|damaged|":  {Lyrics: damaged, LyricsYRC: damagedYRC},
-		"b|clean|":    {Lyrics: "[00:01.00]Die großen Träume"},
-		"c|manual|":   {Lyrics: damaged, LyricsYRC: damagedYRC, ManualLyrics: true},
-		"d|healthy|":  {Lyrics: healthy},
-		"e|yrc-only|": {Lyrics: "[00:12.17]Was gibt's da zu grübeln", LyricsYRC: accentYRCOnly},
-		"f|duet|":     {Lyrics: duet, LyricsSpeakers: &lyricSpeakers{For: lyricSpeakersFingerprint(duet, ""), LRC: []string{"A", "B"}}},
-		"g|stale|":    {Lyrics: duet, LyricsSpeakers: &lyricSpeakers{For: "stale", LRC: []string{"A", "B"}}},
-		"h|partial|":  {Lyrics: "[00:01.00]C'est la dernière danse\n[00:05.00]C'est la derni ère fois"},
-		"i|clean-yrc|": {Lyrics: "[00:07.26]Und ein mä rchen voll musik",
-			LyricsYRC: "[7260,1200](7260,200,0)Und (7460,200,0)ein (7660,200,0)mä(7860,200,0)rchen (8060,200,0)voll (8260,200,0)musik"},
-		"j|picked|":       {Lyrics: damaged, ManualPickSHA: manualPickFingerprint(damaged)},
-		"k|picked-stale|": {Lyrics: damaged, ManualPickSHA: "stale"},
+		"a|damaged|":  {Lyrics: bt(damaged), LyricsYRC: bt(damagedYRC)},
+		"b|clean|":    {Lyrics: bt("[00:01.00]Die großen Träume")},
+		"c|manual|":   {Lyrics: bt(damaged), LyricsYRC: bt(damagedYRC), ManualLyrics: true},
+		"d|healthy|":  {Lyrics: bt(healthy)},
+		"e|yrc-only|": {Lyrics: bt("[00:12.17]Was gibt's da zu grübeln"), LyricsYRC: bt(accentYRCOnly)},
+		"f|duet|":     {Lyrics: bt(duet), LyricsSpeakers: &lyricSpeakers{For: lyricSpeakersFingerprint(duet, ""), LRC: []string{"A", "B"}}},
+		"g|stale|":    {Lyrics: bt(duet), LyricsSpeakers: &lyricSpeakers{For: "stale", LRC: []string{"A", "B"}}},
+		"h|partial|":  {Lyrics: bt("[00:01.00]C'est la dernière danse\n[00:05.00]C'est la derni ère fois")},
+		"i|clean-yrc|": {Lyrics: bt("[00:07.26]Und ein mä rchen voll musik"),
+			LyricsYRC: bt("[7260,1200](7260,200,0)Und (7460,200,0)ein (7660,200,0)mä(7860,200,0)rchen (8060,200,0)voll (8260,200,0)musik")},
+		"j|picked|":       {Lyrics: bt(damaged), ManualPickSHA: manualPickFingerprint(damaged)},
+		"k|picked-stale|": {Lyrics: bt(damaged), ManualPickSHA: "stale"},
 	})
 	enrichMu.Lock()
 	savedPath, savedDirty := enrichPath, enrichDirty
@@ -289,38 +289,38 @@ func TestMigrateAccentSplits(t *testing.T) {
 		enrichMu.Unlock()
 	})
 	migrateAccentSplits()
-	if e := enrichCache["a|damaged|"]; e.Lyrics != "[00:16.27]Aus der großen traumfabrik" || strings.Contains(e.LyricsYRC, "groß ") {
+	if e := enrichCache["a|damaged|"]; !e.Lyrics.EqualString("[00:16.27]Aus der großen traumfabrik") || strings.Contains(e.LyricsYRC.String(), "groß ") {
 		t.Errorf("存量没修: %+v", e)
 	}
-	if e := enrichCache["c|manual|"]; e.Lyrics != damaged || e.LyricsYRC != damagedYRC {
+	if e := enrichCache["c|manual|"]; !e.Lyrics.EqualString(damaged) || !e.LyricsYRC.EqualString(damagedYRC) {
 		t.Errorf("手改过的不碰: %+v", e)
 	}
-	if e := enrichCache["d|healthy|"]; e.Lyrics != healthy {
+	if e := enrichCache["d|healthy|"]; !e.Lyrics.EqualString(healthy) {
 		t.Errorf("有词中重音字母的不用缓存证据: %+v", e)
 	}
-	if e := enrichCache["b|clean|"]; e.Lyrics != "[00:01.00]Die großen Träume" {
+	if e := enrichCache["b|clean|"]; !e.Lyrics.EqualString("[00:01.00]Die großen Träume") {
 		t.Errorf("干净的不动: %+v", e)
 	}
-	if e := enrichCache["e|yrc-only|"]; e.Lyrics != "[00:12.17]Was gibt's da zu grübeln" || !strings.Contains(e.LyricsYRC, "ü(13382,135,0)beln") {
+	if e := enrichCache["e|yrc-only|"]; !e.Lyrics.EqualString("[00:12.17]Was gibt's da zu grübeln") || !strings.Contains(e.LyricsYRC.String(), "ü(13382,135,0)beln") {
 		t.Errorf("只坏了逐字的,拿自己的整行当证据修: %+v", e)
 	}
-	if e := enrichCache["f|duet|"]; !strings.Contains(e.Lyrics, "großen") || e.LyricsSpeakers.For != lyricSpeakersFingerprint(e.Lyrics, e.LyricsYRC) ||
+	if e := enrichCache["f|duet|"]; !strings.Contains(e.Lyrics.String(), "großen") || e.LyricsSpeakers.For != lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) ||
 		strings.Join(e.LyricsSpeakers.LRC, ",") != "A,B" {
 		t.Errorf("对唱标注的指纹要跟着换成新正文的: %+v", e.LyricsSpeakers)
 	}
-	if e := enrichCache["g|stale|"]; !strings.Contains(e.Lyrics, "großen") || e.LyricsSpeakers.For != "stale" {
+	if e := enrichCache["g|stale|"]; !strings.Contains(e.Lyrics.String(), "großen") || e.LyricsSpeakers.For != "stale" {
 		t.Errorf("原本就对不上的标注不动: %+v", e.LyricsSpeakers)
 	}
-	if e := enrichCache["h|partial|"]; e.Lyrics != "[00:01.00]C'est la dernière danse\n[00:05.00]C'est la dernière fois" {
+	if e := enrichCache["h|partial|"]; !e.Lyrics.EqualString("[00:01.00]C'est la dernière danse\n[00:05.00]C'est la dernière fois") {
 		t.Errorf("只坏了一部分的,拿自己别处的拼法修: %q", e.Lyrics)
 	}
-	if e := enrichCache["i|clean-yrc|"]; e.Lyrics != "[00:07.26]Und ein märchen voll musik" {
+	if e := enrichCache["i|clean-yrc|"]; !e.Lyrics.EqualString("[00:07.26]Und ein märchen voll musik") {
 		t.Errorf("整行坏、逐字好的,拿自己的逐字修整行: %q", e.Lyrics)
 	}
-	if e := enrichCache["j|picked|"]; !strings.Contains(e.Lyrics, "großen") || e.ManualPickSHA != manualPickFingerprint(e.Lyrics) {
+	if e := enrichCache["j|picked|"]; !strings.Contains(e.Lyrics.String(), "großen") || e.ManualPickSHA != manualPickFingerprint(e.Lyrics.String()) {
 		t.Errorf("原样采纳的候选修完空格还算原样采纳,手动选定的指纹跟着换: %+v", e)
 	}
-	if e := enrichCache["k|picked-stale|"]; !strings.Contains(e.Lyrics, "großen") || e.ManualPickSHA != "stale" {
+	if e := enrichCache["k|picked-stale|"]; !strings.Contains(e.Lyrics.String(), "großen") || e.ManualPickSHA != "stale" {
 		t.Errorf("原本就对不上的手动选定指纹不动: %+v", e)
 	}
 	if !currentAccentCacheWords().has("großen") {

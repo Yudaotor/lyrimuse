@@ -74,8 +74,8 @@ type legacyKoreanRomaItem struct{ key, lyrics, roma string }
 
 // isLegacyKoreanRomaCandidate:有罗马音、正文里有谚文、用户没手改过的条目值得问 helper;是不是旧版由 helper 判。
 func isLegacyKoreanRomaCandidate(e enrichEntry) bool {
-	return e.Lyrics != "" && e.LyricsRoma != "" && !e.ManualLyrics &&
-		strings.ContainsFunc(e.Lyrics, func(r rune) bool { return unicode.Is(unicode.Hangul, r) })
+	return !e.Lyrics.IsZero() && !e.LyricsRoma.IsZero() && !e.ManualLyrics &&
+		strings.ContainsFunc(e.Lyrics.String(), func(r rune) bool { return unicode.Is(unicode.Hangul, r) })
 }
 
 // migrateLegacyKoreanRoma 是迁移本体,返回换了几条。
@@ -84,7 +84,7 @@ func migrateLegacyKoreanRoma(ctx context.Context, scope migrationScope) int {
 	enrichMu.Lock()
 	for k, e := range scope.entries() {
 		if isLegacyKoreanRomaCandidate(e) {
-			items = append(items, legacyKoreanRomaItem{key: k, lyrics: e.Lyrics, roma: e.LyricsRoma})
+			items = append(items, legacyKoreanRomaItem{key: k, lyrics: e.Lyrics.String(), roma: e.LyricsRoma.String()})
 		}
 	}
 	enrichMu.Unlock()
@@ -123,10 +123,10 @@ func migrateLegacyKoreanRoma(ctx context.Context, scope migrationScope) int {
 			continue
 		}
 		e, ok := enrichCache[it.key]
-		if !ok || e.Lyrics != it.lyrics || e.LyricsRoma != it.roma {
+		if !ok || !e.Lyrics.EqualString(it.lyrics) || !e.LyricsRoma.EqualString(it.roma) {
 			continue
 		}
-		e.LyricsRoma = roma
+		e.LyricsRoma = bt(roma)
 		enrichCache[it.key] = e
 		replaced = append(replaced, it.key)
 	}

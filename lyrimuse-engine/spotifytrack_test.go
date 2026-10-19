@@ -113,7 +113,7 @@ func TestSpotifyListenFields(t *testing.T) {
 }
 
 func TestMergePeripheralKeepsSpotifyTrackID(t *testing.T) {
-	winner := enrichEntry{Lyrics: "w"}
+	winner := enrichEntry{Lyrics: bt("w")}
 	loser := enrichEntry{SpotifyTrackID: "7HuBDWi18s4aJM8UFnNheH", SpotifyURL: "https://open.spotify.com/search/x"}
 	m := mergePeripheralInto(winner, loser)
 	if m.SpotifyTrackID != "7HuBDWi18s4aJM8UFnNheH" {

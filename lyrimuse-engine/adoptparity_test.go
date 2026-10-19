@@ -15,10 +15,10 @@ func TestLyricsHandEdited(t *testing.T) {
 		e    enrichEntry
 		want bool
 	}{
-		{"没锁", enrichEntry{Lyrics: lyrics}, false},
-		{"锁着、没有采纳指纹", enrichEntry{Lyrics: lyrics, ManualLyrics: true}, true},
-		{"锁着、正文还是采纳的那份", enrichEntry{Lyrics: lyrics, ManualLyrics: true, ManualPickSHA: manualPickFingerprint(lyrics)}, false},
-		{"锁着、采纳之后又改过", enrichEntry{Lyrics: lyrics + "\n[00:03.00]三", ManualLyrics: true, ManualPickSHA: manualPickFingerprint(lyrics)}, true},
+		{"没锁", enrichEntry{Lyrics: bt(lyrics)}, false},
+		{"锁着、没有采纳指纹", enrichEntry{Lyrics: bt(lyrics), ManualLyrics: true}, true},
+		{"锁着、正文还是采纳的那份", enrichEntry{Lyrics: bt(lyrics), ManualLyrics: true, ManualPickSHA: manualPickFingerprint(lyrics)}, false},
+		{"锁着、采纳之后又改过", enrichEntry{Lyrics: bt(lyrics + "\n[00:03.00]三"), ManualLyrics: true, ManualPickSHA: manualPickFingerprint(lyrics)}, true},
 	} {
 		if got := c.e.lyricsHandEdited(); got != c.want {
 			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
@@ -30,12 +30,12 @@ func TestLyricsHandEdited(t *testing.T) {
 // 不是采纳候选的保存照旧:正文一换背景人声清掉,译文一换语言清掉。
 func TestApplySaveEditAdoptCarriesCandidateExtras(t *testing.T) {
 	bg, lang := "[1000,500](1000,500,0)ooh", "zh-Hant"
-	e := enrichEntry{Lyrics: "[00:01.00]旧", LyricsTr: "[00:01.00]old", LyricsTrLang: "en", LyricsBG: "old-bg", LyricsSpeakersChecked: lyricsSpeakersVersion}
+	e := enrichEntry{Lyrics: bt("[00:01.00]旧"), LyricsTr: bt("[00:01.00]old"), LyricsTrLang: "en", LyricsBG: bt("old-bg"), LyricsSpeakersChecked: lyricsSpeakersVersion}
 	req := enrichEditRequest{Lyrics: "[00:01.00]新", Tr: "[00:01.00]新的譯文", Source: "amll", MarkManual: true, FromManualPick: true, BG: &bg, TrLang: &lang}
 	if err := applySaveEdit(&e, req); err != nil {
 		t.Fatal(err)
 	}
-	if e.LyricsBG != bg || e.LyricsBGChecked != lyricsBGParserVersion {
+	if !e.LyricsBG.EqualString(bg) || e.LyricsBGChecked != lyricsBGParserVersion {
 		t.Errorf("背景人声该换成候选的: %q checked=%d", e.LyricsBG, e.LyricsBGChecked)
 	}
 	if e.LyricsTrLang != lang {
@@ -48,11 +48,11 @@ func TestApplySaveEditAdoptCarriesCandidateExtras(t *testing.T) {
 		t.Error("原样采纳的候选不算手改")
 	}
 
-	e = enrichEntry{Lyrics: "[00:01.00]旧", LyricsTr: "[00:01.00]old", LyricsTrLang: "en", LyricsBG: "old-bg", LyricsBGChecked: lyricsBGParserVersion}
+	e = enrichEntry{Lyrics: bt("[00:01.00]旧"), LyricsTr: bt("[00:01.00]old"), LyricsTrLang: "en", LyricsBG: bt("old-bg"), LyricsBGChecked: lyricsBGParserVersion}
 	if err := applySaveEdit(&e, enrichEditRequest{Lyrics: "[00:01.00]手改", Tr: "[00:01.00]改", MarkManual: true}); err != nil {
 		t.Fatal(err)
 	}
-	if e.LyricsBG != "" || e.LyricsTrLang != "" {
+	if !e.LyricsBG.IsZero() || e.LyricsTrLang != "" {
 		t.Errorf("手改保存:背景人声与译文语言都该清掉: bg=%q lang=%q", e.LyricsBG, e.LyricsTrLang)
 	}
 }
@@ -62,26 +62,26 @@ func TestApplySaveEditAdoptCarriesCandidateExtras(t *testing.T) {
 func TestApplySaveEditAdoptRomaRules(t *testing.T) {
 	pinyin := "[00:01.00]wo ai ni zhong guo shi jie"
 	adopt := func(lang, roma string) enrichEntry {
-		e := enrichEntry{SongLanguage: lang, Lyrics: "[00:01.00]舊", LyricsRoma: "x"}
+		e := enrichEntry{SongLanguage: lang, Lyrics: bt("[00:01.00]舊"), LyricsRoma: bt("x")}
 		if err := applySaveEdit(&e, enrichEditRequest{Lyrics: "[00:01.00]我愛你", Roma: roma, MarkManual: true, FromManualPick: true}); err != nil {
 			t.Fatal(err)
 		}
 		return e
 	}
-	if e := adopt(songLanguageCantonese, pinyin); e.LyricsRoma == "" || e.LyricsRoma == pinyin {
+	if e := adopt(songLanguageCantonese, pinyin); e.LyricsRoma.IsZero() || e.LyricsRoma.EqualString(pinyin) {
 		t.Errorf("粤语歌:普通话拼音该换成粤拼: %q", e.LyricsRoma)
 	}
-	if e := adopt(songLanguageHokkien, pinyin); e.LyricsRoma != "" {
+	if e := adopt(songLanguageHokkien, pinyin); !e.LyricsRoma.IsZero() {
 		t.Errorf("台语歌:罗马音该清掉: %q", e.LyricsRoma)
 	}
-	if e := adopt(songLanguageMandarin, pinyin); e.LyricsRoma != pinyin {
+	if e := adopt(songLanguageMandarin, pinyin); !e.LyricsRoma.EqualString(pinyin) {
 		t.Errorf("国语歌:罗马音照留: %q", e.LyricsRoma)
 	}
-	e := enrichEntry{SongLanguage: songLanguageCantonese, Lyrics: "[00:01.00]舊"}
+	e := enrichEntry{SongLanguage: songLanguageCantonese, Lyrics: bt("[00:01.00]舊")}
 	if err := applySaveEdit(&e, enrichEditRequest{Lyrics: "[00:01.00]我愛你", Roma: pinyin, MarkManual: true}); err != nil {
 		t.Fatal(err)
 	}
-	if e.LyricsRoma != pinyin {
+	if !e.LyricsRoma.EqualString(pinyin) {
 		t.Errorf("手改保存不动罗马音: %q", e.LyricsRoma)
 	}
 }
@@ -89,14 +89,14 @@ func TestApplySaveEditAdoptRomaRules(t *testing.T) {
 // 原样采纳的候选照常补背景人声与演唱者标注;手改过的不补。
 func TestBackfillsCoverAdoptedCandidates(t *testing.T) {
 	adopted := func(e enrichEntry) enrichEntry {
-		e.ManualLyrics, e.ManualPickSHA = true, manualPickFingerprint(e.Lyrics)
+		e.ManualLyrics, e.ManualPickSHA = true, manualPickFingerprint(e.Lyrics.String())
 		return e
 	}
 	handEdited := func(e enrichEntry) enrichEntry {
 		e.ManualLyrics, e.ManualPickSHA = true, ""
 		return e
 	}
-	bg := enrichEntry{Lyrics: "[00:01.00]一", LyricsSource: "amll"}
+	bg := enrichEntry{Lyrics: bt("[00:01.00]一"), LyricsSource: "amll"}
 	if !needsBackgroundVocalsBackfill(adopted(bg)) {
 		t.Error("原样采纳的 amll 候选该补背景人声")
 	}

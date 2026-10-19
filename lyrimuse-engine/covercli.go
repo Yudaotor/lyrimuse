@@ -261,7 +261,7 @@ func runRecheckInstrumental(keys []string, apply bool) int {
 		case e.Instrumental:
 			fmt.Println("   跳过:已经标着纯音乐了")
 			continue
-		case e.Lyrics != "":
+		case !e.Lyrics.IsZero():
 			fmt.Println("   跳过:这条已经有歌词(有词就不是纯音乐)")
 			continue
 		}

@@ -103,11 +103,11 @@ func migrateYRCWhitespaceTokens() {
 	enrichMu.Lock()
 	fixed := 0
 	for k, e := range scope.entries() {
-		merged, ok := yrcMergeWhitespaceTokens(e.LyricsYRC)
+		merged, ok := yrcMergeWhitespaceTokens(e.LyricsYRC.String())
 		if !ok {
 			continue
 		}
-		e.LyricsYRC = merged
+		e.LyricsYRC = bt(merged)
 		enrichCache[k] = e
 		fixed++
 	}

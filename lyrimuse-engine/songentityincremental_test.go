@@ -21,14 +21,14 @@ func songIncrementalSynthetic() map[string]enrichEntry {
 		"Gate|Hello|One":             {DurationSecs: 201, NeteaseURL: ne("901")},
 		"Gate|Hello|Two":             {DurationSecs: 201.4, NeteaseURL: ne("901")},
 		"Gate|Hallo|Three":           {DurationSecs: 201.2, NeteaseURL: ne("901")},
-		"Veto|Song|Studio":           {DurationSecs: 180, ISRCs: []string{"USVVV1100001"}, Lyrics: songShareLRC("v1")},
-		"Veto|Song (Live)|Hk":        {DurationSecs: 180.5, ISRCs: []string{"USVVV1100009"}, Lyrics: songShareLRC("v1")},
+		"Veto|Song|Studio":           {DurationSecs: 180, ISRCs: []string{"USVVV1100001"}, Lyrics: bt(songShareLRC("v1"))},
+		"Veto|Song (Live)|Hk":        {DurationSecs: 180.5, ISRCs: []string{"USVVV1100009"}, Lyrics: bt(songShareLRC("v1"))},
 		"Veto|Song|Best":             {DurationSecs: 180.3, ISRCs: []string{"USVVV1100001"}},
-		"Lyr|晴天|Album":               {DurationSecs: 269, Lyrics: songShareLRC("ly"), LyricsSource: "qq"},
-		"Lyr|Sunny Day|Album":        {DurationSecs: 269.3, Lyrics: songShareLRC("ly"), LyricsSource: "netease"},
+		"Lyr|晴天|Album":               {DurationSecs: 269, Lyrics: bt(songShareLRC("ly")), LyricsSource: "qq"},
+		"Lyr|Sunny Day|Album":        {DurationSecs: 269.3, Lyrics: bt(songShareLRC("ly")), LyricsSource: "netease"},
 		"Solo|Alone|One":             {DurationSecs: 99},
 		"Pair|Twin|A":                {DurationSecs: 150, SpotifyTrackID: "4uLU6hMCjMI75M1A2tKUQC"},
-		"Pair|Twin|B":                {DurationSecs: 150.2, SpotifyTrackID: "4uLU6hMCjMI75M1A2tKUQC", Lyrics: songShareLRC("tw")},
+		"Pair|Twin|B":                {DurationSecs: 150.2, SpotifyTrackID: "4uLU6hMCjMI75M1A2tKUQC", Lyrics: bt(songShareLRC("tw"))},
 		"Pair|Twin (Remix)|C":        {DurationSecs: 210, SpotifyTrackID: "5uLU6hMCjMI75M1A2tKUQD"},
 		"Gate|Hello (Live)|Hk":       {DurationSecs: 230, NeteaseURL: ne("902")},
 		"Bare|不散的筵席（I Miss You）|One": {DurationSecs: 240},
@@ -92,7 +92,11 @@ var songIncrementalChanges = []songIncrementalChange{
 	{"时长没了", func(c map[string]enrichEntry, k, _ string) { e := c[k]; e.DurationSecs = 0; c[k] = e }},
 	{"时长多 3 秒", func(c map[string]enrichEntry, k, _ string) { e := c[k]; e.DurationSecs += 3; c[k] = e }},
 	{"ISRC 没了", func(c map[string]enrichEntry, k, _ string) { e := c[k]; e.ISRCs, e.ISRCLevels = nil, nil; c[k] = e }},
-	{"歌词没了", func(c map[string]enrichEntry, k, _ string) { e := c[k]; e.Lyrics, e.LyricsYRC = "", ""; c[k] = e }},
+	{"歌词没了", func(c map[string]enrichEntry, k, _ string) {
+		e := c[k]
+		e.Lyrics, e.LyricsYRC = bodyText{}, bodyText{}
+		c[k] = e
+	}},
 	{"检索链接没了", func(c map[string]enrichEntry, k, _ string) {
 		e := c[k]
 		e.NeteaseURL, e.AppleURL, e.QQURL = "", "", ""
@@ -248,14 +252,14 @@ func TestSongEntityPrintCoversVariantFields(t *testing.T) {
 			t.Errorf("songEntityPrintOf 漏了 %s", f)
 		}
 	}
-	a := songEntityPrintOf(enrichEntry{Lyrics: "x"}, false)
-	for _, b := range []songEntityPrint{songEntityPrintOf(enrichEntry{Lyrics: "y"}, false), songEntityPrintOf(enrichEntry{Lyrics: "x"}, true),
-		songEntityPrintOf(enrichEntry{Lyrics: "x", LyricsDecision: &lyricsDecision{DecidedAt: 1}}, false)} {
-		if a == b {
+	a := songEntityPrintOf(enrichEntry{Lyrics: bt("x")}, false)
+	for _, b := range []songEntityPrint{songEntityPrintOf(enrichEntry{Lyrics: bt("y")}, false), songEntityPrintOf(enrichEntry{Lyrics: bt("x")}, true),
+		songEntityPrintOf(enrichEntry{Lyrics: bt("x"), LyricsDecision: &lyricsDecision{DecidedAt: 1}}, false)} {
+		if a.equal(b) {
 			t.Errorf("正文、校准、解析决策变了指纹要变: %+v", b)
 		}
 	}
-	if songEntityPrintOf(enrichEntry{Lyrics: "x", Players: []string{"p"}, Song: "s_1"}, false) != a {
+	if !songEntityPrintOf(enrichEntry{Lyrics: bt("x"), Players: []string{"p"}, Song: "s_1"}, false).equal(a) {
 		t.Error("建表不读的字段不进指纹")
 	}
 }
@@ -300,8 +304,8 @@ func TestSongEntityUpdatesAfterCacheSave(t *testing.T) {
 // 增量重算的那一块跑同步时,不在这一块里的组的同步状态留着。
 func TestSongEntitySharePassPartialKeepsOtherGroups(t *testing.T) {
 	entries := map[string]enrichEntry{
-		"A|Song|One": {DurationSecs: 200, ISRCs: []string{"USAAA1100001"}, Lyrics: songShareLRC("a1"), LyricsSource: "qq"},
-		"A|Song|Two": {DurationSecs: 200.2, ISRCs: []string{"USAAA1100001"}, Lyrics: songShareLRC("a1"), LyricsSource: "qq"},
+		"A|Song|One": {DurationSecs: 200, ISRCs: []string{"USAAA1100001"}, Lyrics: bt(songShareLRC("a1")), LyricsSource: "qq"},
+		"A|Song|Two": {DurationSecs: 200.2, ISRCs: []string{"USAAA1100001"}, Lyrics: bt(songShareLRC("a1")), LyricsSource: "qq"},
 	}
 	setUpSongShareTest(t, entries, true)
 	savedSearch, savedWait := searchShareRound, songShareWait
@@ -389,8 +393,8 @@ func TestSongEntityIncrementalScenarios(t *testing.T) {
 		// 时长 + 歌词边:两条写法族不同、没有 id,只能按主歌手找到。
 		name: "歌词连上",
 		entries: map[string]enrichEntry{
-			"Lyr|晴天|A":        {Lyrics: lyrics, LyricsSource: "qq"},
-			"Lyr|Sunny Day|B": {DurationSecs: 269.3, Lyrics: lyrics, LyricsSource: "netease"},
+			"Lyr|晴天|A":        {Lyrics: bt(lyrics), LyricsSource: "qq"},
+			"Lyr|Sunny Day|B": {DurationSecs: 269.3, Lyrics: bt(lyrics), LyricsSource: "netease"},
 		},
 		change: func(c map[string]enrichEntry) { e := c["Lyr|晴天|A"]; e.DurationSecs = 269.3; c["Lyr|晴天|A"] = e },
 	}} {

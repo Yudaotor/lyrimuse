@@ -134,13 +134,13 @@ func lyricsEntryFromScored(decisionPath, artist, title, album string, durationSe
 	}
 	// 选中了 → 这一轮就是当前歌词的出处(分槽语义见 LyricsDecisionApplied)。
 	e.LyricsDecisionApplied = e.LyricsDecision
-	e.Lyrics = picked.Lyrics
+	e.Lyrics = bt(picked.Lyrics)
 	e.LyricsSource = picked.Source
 	e.LyricsScore = picked.Score
 	e.stampLyricsScoring()
 	e.ResolvedDurationSecs = durationSecs
-	e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
-	e.LyricsBG, e.LyricsBGChecked = picked.LyricsBG, lyricsBGParserVersion
+	e.LyricsTr, e.LyricsRoma, e.LyricsYRC = bt(picked.LyricsTr), bt(picked.LyricsRoma), bt(picked.LyricsYRC)
+	e.LyricsBG, e.LyricsBGChecked = bt(picked.LyricsBG), lyricsBGParserVersion
 	refreshSpeakers(&e, scored)
 	e.SongLanguage = entrySongLanguage(picked.Lyrics, scored)
 	e.dropHokkienRoma()
@@ -205,20 +205,20 @@ func sameShownLyrics(a, b scoredLyricCandidateResult) bool {
 // (shownLyricsForm 的口径);逐字、译文、罗马音、背景人声这几份,c 要么没给、要么跟现存那份一样。现存那份多出来的
 // (机翻补的译文、引擎生成的罗马音、c 没给的逐字)不算差别:不换就不会丢。
 func lyricsCandidateAddsNothingShown(e enrichEntry, c scoredLyricCandidateResult) bool {
-	if e.Lyrics == "" || !slices.Equal(shownLyricsForm(e.Lyrics), shownLyricsForm(c.Lyrics)) {
+	if e.Lyrics.IsZero() || !slices.Equal(shownLyricsForm(e.Lyrics.String()), shownLyricsForm(c.Lyrics)) {
 		return false
 	}
 	covered := func(current, candidate string) bool {
 		return candidate == "" || slices.Equal(shownLyricsForm(current), shownLyricsForm(candidate))
 	}
-	return covered(e.LyricsYRC, c.LyricsYRC) && covered(e.LyricsTr, c.LyricsTr) &&
-		covered(e.LyricsRoma, c.LyricsRoma) && covered(e.LyricsBG, c.LyricsBG)
+	return covered(e.LyricsYRC.String(), c.LyricsYRC) && covered(e.LyricsTr.String(), c.LyricsTr) &&
+		covered(e.LyricsRoma.String(), c.LyricsRoma) && covered(e.LyricsBG.String(), c.LyricsBG)
 }
 
 // keepsShownLyricsOver:重评、升级重试的冠军跟条目现存这份原文不同,换上去屏上却看不出差别(lyricsCandidateAddsNothingShown)
 // 时留着现存这份。原文相同的不归这里管(补逐字、换源记账照旧)。见 09 章决策 203。
 func keepsShownLyricsOver(e enrichEntry, picked *scoredLyricCandidateResult) bool {
-	return picked != nil && picked.Lyrics != e.Lyrics && lyricsCandidateAddsNothingShown(e, *picked)
+	return picked != nil && !e.Lyrics.EqualString(picked.Lyrics) && lyricsCandidateAddsNothingShown(e, *picked)
 }
 
 // shownLyricsForm 把一份歌词换成只留上屏看得出的部分:LRC 行的时间标签换算成毫秒(`[00:01.5]` 与 `[00:01.500]` 相同),

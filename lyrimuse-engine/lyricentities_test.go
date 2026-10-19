@@ -109,12 +109,12 @@ func TestMigrateLyricEntities(t *testing.T) {
 	enrichDirty = false
 	enrichCache = map[string]enrichEntry{
 		"kugou-matching-sha": {
-			Lyrics: dirtyLyrics, LyricsYRC: "[32640,1000](32640,1000,0)Don&apos;t", LyricsTr: "[00:32.64]译&amp;文",
-			LyricsRoma: "[00:32.64]don&apos;t", PlainLyrics: "Don&apos;t",
+			Lyrics: bt(dirtyLyrics), LyricsYRC: bt("[32640,1000](32640,1000,0)Don&apos;t"), LyricsTr: bt("[00:32.64]译&amp;文"),
+			LyricsRoma: bt("[00:32.64]don&apos;t"), PlainLyrics: bt("Don&apos;t"),
 			ManualPickSHA: manualPickFingerprint(dirtyLyrics), ManualLyrics: true,
 		},
-		"kugou-stale-sha": {Lyrics: dirtyLyrics, ManualPickSHA: "000000000000"},
-		"clean":           {Lyrics: "[00:01.00]rock & roll", LyricsYRC: "[1000,500](1000,500,0)rock & roll", ManualPickSHA: "abcdefabcdef"},
+		"kugou-stale-sha": {Lyrics: bt(dirtyLyrics), ManualPickSHA: "000000000000"},
+		"clean":           {Lyrics: bt("[00:01.00]rock & roll"), LyricsYRC: bt("[1000,500](1000,500,0)rock & roll"), ManualPickSHA: "abcdefabcdef"},
 	}
 	enrichMu.Unlock()
 
@@ -123,7 +123,7 @@ func TestMigrateLyricEntities(t *testing.T) {
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
 	e := enrichCache["kugou-matching-sha"]
-	if e.Lyrics != cleanLyrics || e.LyricsYRC != "[32640,1000](32640,1000,0)Don't" || e.LyricsTr != "[00:32.64]译&文" || e.LyricsRoma != "[00:32.64]don't" || e.PlainLyrics != "Don't" {
+	if !e.Lyrics.EqualString(cleanLyrics) || !e.LyricsYRC.EqualString("[32640,1000](32640,1000,0)Don't") || !e.LyricsTr.EqualString("[00:32.64]译&文") || !e.LyricsRoma.EqualString("[00:32.64]don't") || !e.PlainLyrics.EqualString("Don't") {
 		t.Errorf("fields not decoded: %+v", e)
 	}
 	if !e.ManualLyrics {
@@ -132,10 +132,10 @@ func TestMigrateLyricEntities(t *testing.T) {
 	if e.ManualPickSHA != manualPickFingerprint(cleanLyrics) {
 		t.Errorf("manual_pick_sha must be recomputed on the decoded text: got %q want %q", e.ManualPickSHA, manualPickFingerprint(cleanLyrics))
 	}
-	if s := enrichCache["kugou-stale-sha"]; s.Lyrics != cleanLyrics || s.ManualPickSHA != "000000000000" {
+	if s := enrichCache["kugou-stale-sha"]; !s.Lyrics.EqualString(cleanLyrics) || s.ManualPickSHA != "000000000000" {
 		t.Errorf("stale sha must be left alone while text is still decoded: %+v", s)
 	}
-	if c := enrichCache["clean"]; c.Lyrics != "[00:01.00]rock & roll" || c.LyricsYRC != "[1000,500](1000,500,0)rock & roll" || c.ManualPickSHA != "abcdefabcdef" {
+	if c := enrichCache["clean"]; !c.Lyrics.EqualString("[00:01.00]rock & roll") || !c.LyricsYRC.EqualString("[1000,500](1000,500,0)rock & roll") || c.ManualPickSHA != "abcdefabcdef" {
 		t.Errorf("clean entry must be untouched: %+v", c)
 	}
 	if !enrichDirty {

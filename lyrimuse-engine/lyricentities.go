@@ -156,20 +156,20 @@ func migrateLyricEntities() {
 	enrichMu.Lock()
 	fixed := 0
 	for k, e := range scope.entries() {
-		lyrics := decodeLyricEntities(e.Lyrics)
-		tr := decodeLyricEntities(e.LyricsTr)
-		roma := decodeLyricEntities(e.LyricsRoma)
-		yrc := decodeLyricEntities(e.LyricsYRC)
-		plain := decodeLyricEntities(e.PlainLyrics)
-		bg := decodeLyricEntities(e.LyricsBG)
-		if lyrics == e.Lyrics && tr == e.LyricsTr && roma == e.LyricsRoma && yrc == e.LyricsYRC && plain == e.PlainLyrics &&
-			bg == e.LyricsBG {
+		lyrics := decodeLyricEntities(e.Lyrics.String())
+		tr := decodeLyricEntities(e.LyricsTr.String())
+		roma := decodeLyricEntities(e.LyricsRoma.String())
+		yrc := decodeLyricEntities(e.LyricsYRC.String())
+		plain := decodeLyricEntities(e.PlainLyrics.String())
+		bg := decodeLyricEntities(e.LyricsBG.String())
+		if e.Lyrics.EqualString(lyrics) && e.LyricsTr.EqualString(tr) && e.LyricsRoma.EqualString(roma) && e.LyricsYRC.EqualString(yrc) && e.PlainLyrics.EqualString(plain) &&
+			e.LyricsBG.EqualString(bg) {
 			continue
 		}
-		if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics) {
+		if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics.String()) {
 			e.ManualPickSHA = manualPickFingerprint(lyrics)
 		}
-		e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC, e.PlainLyrics, e.LyricsBG = lyrics, tr, roma, yrc, plain, bg
+		e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC, e.PlainLyrics, e.LyricsBG = bt(lyrics), bt(tr), bt(roma), bt(yrc), bt(plain), bt(bg)
 		enrichCache[k] = e
 		fixed++
 	}

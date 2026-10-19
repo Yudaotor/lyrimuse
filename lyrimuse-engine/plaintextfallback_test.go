@@ -10,7 +10,7 @@ func TestEnrichRoundFoundNothing(t *testing.T) {
 	if !enrichRoundFoundNothing(enrichEntry{}) {
 		t.Error("什么都没有:全空")
 	}
-	if enrichRoundFoundNothing(enrichEntry{PlainLyrics: "只有文字", PlainLyricsSource: localFileLyricsSource}) {
+	if enrichRoundFoundNothing(enrichEntry{PlainLyrics: bt("只有文字"), PlainLyricsSource: localFileLyricsSource}) {
 		t.Error("只拿到纯文本歌词也算拿到了东西,要落盘")
 	}
 	if !enrichRoundFoundNothing(enrichEntry{QQURL: qqSearchFallbackPrefix + "x"}) {

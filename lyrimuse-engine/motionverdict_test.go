@@ -179,13 +179,13 @@ func TestRecheckMotionCoverAgainstCurrentCover(t *testing.T) {
 	preview, same, other, master, appleURL := motionTestAlbum(t, id)
 	key := enrichKey("Prince", "Love", "单曲发行")
 	setUpEnrichEditTest(t, map[string]enrichEntry{key: {CoverURL: other, AppleURL: appleURL, MotionCoverURL: master,
-		MotionPreviewURL: preview, MotionCoverChecked: true, MotionCoverFor: same, Lyrics: "[00:01.00]词"}})
+		MotionPreviewURL: preview, MotionCoverChecked: true, MotionCoverFor: same, Lyrics: bt("[00:01.00]词")}})
 	ctx := context.Background()
 	if !recheckMotionCoverAgainstCurrentCover(ctx, key, "Love", "单曲发行") {
 		t.Fatal("结论作废的条目该重核并写回")
 	}
 	e, _ := cacheEntry(t, key)
-	if e.MotionCoverURL != "" || !e.MotionCoverChecked || e.MotionCoverFor != other || e.Lyrics != "[00:01.00]词" {
+	if e.MotionCoverURL != "" || !e.MotionCoverChecked || e.MotionCoverFor != other || !e.Lyrics.EqualString("[00:01.00]词") {
 		t.Fatalf("写回整组结论,别的字段不动: %+v", e)
 	}
 	if recheckMotionCoverAgainstCurrentCover(ctx, key, "Love", "单曲发行") {

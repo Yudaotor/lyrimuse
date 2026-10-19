@@ -54,18 +54,18 @@ func TestMigrateManualPickMarks(t *testing.T) {
 		wantSHA string
 	}{{
 		name:    "正常转换:当前内容仍来自他选的源",
-		entry:   enrichEntry{Lyrics: lyrics, LyricsSource: "netease", LyricsSourceChoice: "netease"},
+		entry:   enrichEntry{Lyrics: bt(lyrics), LyricsSource: "netease", LyricsSourceChoice: "netease"},
 		wantSHA: want,
 	}, {
 		// 当前这份已经不是他选的那个源给的了,按新语义不算"他选的那份"。
 		name:    "来源已经换掉:只清字段,不写标记",
-		entry:   enrichEntry{Lyrics: lyrics, LyricsSource: "kugou", LyricsSourceChoice: "netease"},
+		entry:   enrichEntry{Lyrics: bt(lyrics), LyricsSource: "kugou", LyricsSourceChoice: "netease"},
 		wantSHA: "",
 	}, {
 		// manual_lyrics 分不出"采纳候选锁的"和"手改正文锁的";补上留痕会让后者变得可被
 		// 批量解锁,而那份内容删了找不回来。少做一件事 < 不可逆的损失。
 		name:    "已经锁着的:不补留痕(否则手改过的歌会变得可被批量解锁)",
-		entry:   enrichEntry{Lyrics: lyrics, LyricsSource: "netease", LyricsSourceChoice: "netease", ManualLyrics: true},
+		entry:   enrichEntry{Lyrics: bt(lyrics), LyricsSource: "netease", LyricsSourceChoice: "netease", ManualLyrics: true},
 		wantSHA: "",
 	}, {
 		name:    "没有正文:没东西可指纹",
@@ -74,7 +74,7 @@ func TestMigrateManualPickMarks(t *testing.T) {
 	}, {
 		// App 侧新写的比这里从旧字段推断的权威,不许覆盖。
 		name:    "已有留痕:不覆盖",
-		entry:   enrichEntry{Lyrics: lyrics, LyricsSource: "netease", LyricsSourceChoice: "netease", ManualPickSHA: "keepme"},
+		entry:   enrichEntry{Lyrics: bt(lyrics), LyricsSource: "netease", LyricsSourceChoice: "netease", ManualPickSHA: "keepme"},
 		wantSHA: "keepme",
 	}}
 
@@ -83,7 +83,7 @@ func TestMigrateManualPickMarks(t *testing.T) {
 		enrichCache[c.name] = c.entry
 	}
 	// 没有旧字段的条目一律不该被碰。
-	enrichCache["无关条目"] = enrichEntry{Lyrics: lyrics, LyricsSource: "qq"}
+	enrichCache["无关条目"] = enrichEntry{Lyrics: bt(lyrics), LyricsSource: "qq"}
 	enrichPath = t.TempDir() + "/cache.json"
 
 	migrateManualPickMarks()

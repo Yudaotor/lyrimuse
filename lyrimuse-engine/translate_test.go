@@ -370,16 +370,16 @@ func TestNeedsTranslationBackfill(t *testing.T) {
 	featuresRef().LyricsMachineTranslation = true
 	featuresRef().LyricsTranslationLanguage = "zh"
 
-	base := enrichEntry{Lyrics: "[00:01.00]hello world"}
+	base := enrichEntry{Lyrics: bt("[00:01.00]hello world")}
 	cases := []struct {
 		name string
 		e    enrichEntry
 		want bool
 	}{
 		{"外语歌、没译文:补", base, true},
-		{"已有社区译文:不动(社区翻译优于机翻)", func() enrichEntry { e := base; e.LyricsTr = "[00:01.00]你好"; return e }(), false},
+		{"已有社区译文:不动(社区翻译优于机翻)", func() enrichEntry { e := base; e.LyricsTr = bt("[00:01.00]你好"); return e }(), false},
 		{"没有歌词:没得翻", enrichEntry{}, false},
-		{"歌词本来就是中文:不翻(也躲开同语言哨兵)", enrichEntry{Lyrics: "[00:01.00]我们的时光"}, false},
+		{"歌词本来就是中文:不翻(也躲开同语言哨兵)", enrichEntry{Lyrics: bt("[00:01.00]我们的时光")}, false},
 		{"次数用尽", func() enrichEntry { e := base; e.TranslationRetryCount = translationBackfillMaxAttempts; return e }(), false},
 		{"刚试过、还没到间隔", func() enrichEntry {
 			e := base
@@ -484,25 +484,25 @@ func TestTranslationUsableRespectsLanguage(t *testing.T) {
 
 		// 记了语言的:直接按语言比,不看内容。
 		{"网易云中文译文 + 目标中文:用得上",
-			enrichEntry{LyricsTr: "[00:01.00]你好", LyricsTrLang: "zh"}, "zh-CN", true},
+			enrichEntry{LyricsTr: bt("[00:01.00]你好"), LyricsTrLang: "zh"}, "zh-CN", true},
 		{"网易云中文译文 + 目标日语:用不上,该重翻",
-			enrichEntry{LyricsTr: "[00:01.00]你好", LyricsTrLang: "zh"}, "ja", false},
+			enrichEntry{LyricsTr: bt("[00:01.00]你好"), LyricsTrLang: "zh"}, "ja", false},
 		{"Musixmatch 日语译文 + 目标日语:用得上",
-			enrichEntry{LyricsTr: "[00:01.00]こんにちは", LyricsTrLang: "ja"}, "ja", true},
+			enrichEntry{LyricsTr: bt("[00:01.00]こんにちは"), LyricsTrLang: "ja"}, "ja", true},
 		{"Musixmatch 日语译文 + 目标改成了中文:用不上",
-			enrichEntry{LyricsTr: "[00:01.00]こんにちは", LyricsTrLang: "ja"}, "zh-CN", false},
+			enrichEntry{LyricsTr: bt("[00:01.00]こんにちは"), LyricsTrLang: "ja"}, "zh-CN", false},
 		{"简繁也算不同语言",
-			enrichEntry{LyricsTr: "[00:01.00]你好", LyricsTrLang: "zh-Hans"}, "zh-TW", false},
+			enrichEntry{LyricsTr: bt("[00:01.00]你好"), LyricsTrLang: "zh-Hans"}, "zh-TW", false},
 
 		// 没记语言的老条目:退回文本判别,只在能确定的方向上下判断。
 		{"老条目中文译文 + 目标中文:用得上",
-			enrichEntry{LyricsTr: "[00:01.00]我们的时光"}, "zh-CN", true},
+			enrichEntry{LyricsTr: bt("[00:01.00]我们的时光")}, "zh-CN", true},
 		{"老条目中文译文 + 目标日语:看得出是中文,用不上",
-			enrichEntry{LyricsTr: "[00:01.00]我们的时光"}, "ja", false},
+			enrichEntry{LyricsTr: bt("[00:01.00]我们的时光")}, "ja", false},
 		{"老条目非中文译文 + 目标日语:判不出,保守留着不重翻",
-			enrichEntry{LyricsTr: "[00:01.00]Hello there"}, "ja", true},
+			enrichEntry{LyricsTr: bt("[00:01.00]Hello there")}, "ja", true},
 		{"老条目非中文译文 + 目标中文:显然用不上",
-			enrichEntry{LyricsTr: "[00:01.00]Hello there"}, "zh-CN", false},
+			enrichEntry{LyricsTr: bt("[00:01.00]Hello there")}, "zh-CN", false},
 	}
 	for _, c := range cases {
 		if got := translationUsable(c.e, c.target); got != c.want {
@@ -518,8 +518,8 @@ func TestNeedsTranslationBackfillIgnoresWrongLanguageTranslation(t *testing.T) {
 	featuresRef().LyricsMachineTranslation = true
 
 	base := enrichEntry{
-		Lyrics:       "[00:01.00]The painful youth I've had",
-		LyricsTr:     "[00:01.00]我经历过的痛苦的青春",
+		Lyrics:       bt("[00:01.00]The painful youth I've had"),
+		LyricsTr:     bt("[00:01.00]我经历过的痛苦的青春"),
 		LyricsTrLang: "zh",
 	}
 
@@ -542,7 +542,7 @@ func TestNeedsTranslationBackfillResetsAttemptsOnLanguageChange(t *testing.T) {
 	featuresRef().LyricsTranslationLanguage = "ja"
 
 	e := enrichEntry{
-		Lyrics:                "[00:01.00]The painful youth I've had",
+		Lyrics:                bt("[00:01.00]The painful youth I've had"),
 		TranslationRetryCount: translationBackfillMaxAttempts,
 		TranslationTS:         time.Now().Unix(),
 	}
@@ -598,7 +598,7 @@ func TestBackfillTranslationPersistsToDisk(t *testing.T) {
 
 	const key = "Someone|Some Song|Some Album"
 	enrichCache = map[string]enrichEntry{
-		key: {Lyrics: "[00:01.00]The painful youth\n[00:02.00]I have had"},
+		key: {Lyrics: bt("[00:01.00]The painful youth\n[00:02.00]I have had")},
 	}
 	translationInflight = map[string]bool{key: true}
 
@@ -614,7 +614,7 @@ func TestBackfillTranslationPersistsToDisk(t *testing.T) {
 	}
 	hydrateEnrichBodies(onDisk, enrichBodiesDirFor(enrichPath)) // 译文在正文小文件里,见 enrichbodyload.go
 	got := onDisk[key]
-	if got.LyricsTr == "" {
+	if got.LyricsTr.IsZero() {
 		t.Fatal("译文没有落盘 —— App 读的是这个文件,界面上就会一直没有翻译")
 	}
 	if got.LyricsTrLang != "zh-CN" {
@@ -650,7 +650,7 @@ func TestTranslationUsableDistrustsLangLabelContradictedByText(t *testing.T) {
 		{"压根没有译文", "en", "", "en", false},
 	}
 	for _, c := range cases {
-		e := enrichEntry{LyricsTr: c.tr, LyricsTrLang: c.lang}
+		e := enrichEntry{LyricsTr: bt(c.tr), LyricsTrLang: c.lang}
 		if got := translationUsable(e, c.target); got != c.want {
 			t.Errorf("%s: translationUsable(lang=%q, target=%q) = %v, want %v",
 				c.label, c.lang, c.target, got, c.want)

@@ -8,7 +8,7 @@ func TestSongLyricsIndependentSourceIDs(t *testing.T) {
 	lrc := songTestLRC(1000, songTestWords("same", 30))
 	other := songTestLRC(1000, songTestWords("diff", 30))
 	mk := func(key, src, lyrics string, e enrichEntry) *songVariant {
-		e.DurationSecs, e.ResolvedDurationSecs, e.Lyrics, e.LyricsSource = 200, 200, lyrics, src
+		e.DurationSecs, e.ResolvedDurationSecs, e.Lyrics, e.LyricsSource = 200, 200, bt(lyrics), src
 		v := songTestVariant(key, e, nil)
 		return &v
 	}

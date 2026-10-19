@@ -1310,8 +1310,8 @@ func runOpsDiagnosticsTests() {
                     "主歌词不常驻(契约): 正文小文件读不到时拿正在播放快照兜底")
         let engine = (try? String(contentsOf: sources.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse-engine/enrich.go"), encoding: .utf8)) ?? ""
-        expectEqual(sourceBytes(engine, contain: "`json:\"lyrics,omitempty\"`"), true,
-                    "主歌词不常驻(契约): 引擎写主歌词是 omitempty,精简条目里有这个键就有词")
+        expectEqual(sourceBytes(engine, contain: "`json:\"lyrics,omitzero\"`"), true,
+                    "主歌词不常驻(契约): 引擎写主歌词是 omitzero(空正文是零值),精简条目里有这个键就有词")
     }
 
     // ---- 缓存索引增量采纳(15 章决策 25)----

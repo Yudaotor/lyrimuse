@@ -466,23 +466,23 @@ func migrateLyricTimelines() {
 		if dur <= 0 {
 			dur = e.ResolvedDurationSecs
 		}
-		newLyrics, remap, ok := rehangLRCOnYRC(e.Lyrics, e.LyricsYRC, dur, true)
+		newLyrics, remap, ok := rehangLRCOnYRC(e.Lyrics.String(), e.LyricsYRC.String(), dur, true)
 		if !ok {
 			// 重挂修不了的,再看两套轴是否自相矛盾 —— 是就弃用逐字轴,播放退回行级
 			// (见 wordTimingContradictsLRC 头注,《2001太空漫游 (Live)》案)。
-			if e.LyricsYRC != "" && wordTimingContradictsLRC(e.Lyrics, e.LyricsYRC) {
-				e.LyricsYRC = ""
+			if !e.LyricsYRC.IsZero() && wordTimingContradictsLRC(e.Lyrics.String(), e.LyricsYRC.String()) {
+				e.LyricsYRC = bodyText{}
 				enrichCache[k] = e
 				dropped++
 			}
 			continue
 		}
-		e.Lyrics = newLyrics
-		if tr, ok2 := remapLRCTimestamps(e.LyricsTr, remap); ok2 {
-			e.LyricsTr = tr
+		e.Lyrics = bt(newLyrics)
+		if tr, ok2 := remapLRCTimestamps(e.LyricsTr.String(), remap); ok2 {
+			e.LyricsTr = bt(tr)
 		}
-		if roma, ok2 := remapLRCTimestamps(e.LyricsRoma, remap); ok2 {
-			e.LyricsRoma = roma
+		if roma, ok2 := remapLRCTimestamps(e.LyricsRoma.String(), remap); ok2 {
+			e.LyricsRoma = bt(roma)
 		}
 		enrichCache[k] = e
 		fixed++

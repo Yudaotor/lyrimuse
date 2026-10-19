@@ -44,7 +44,7 @@ func TestLyricsPollutedKeysFindsBothShapes(t *testing.T) {
 		"作曲: 中岛美雪|漫步人生路 - 邓丽君|漫步人生路":   {},
 		"在你身边路虽远未疲倦|漫步人生路 - 邓丽君|漫步人生路": {},
 		"伴你漫步一段又一段|漫步人生路 - 邓丽君|漫步人生路":  {},
-		"有歌词的那一条|漫步人生路 - 邓丽君|漫步人生路":    {Lyrics: "[00:01.00]x"},
+		"有歌词的那一条|漫步人生路 - 邓丽君|漫步人生路":    {Lyrics: bt("[00:01.00]x")},
 		// 歌词在 title 里,「歌手 - 歌名」在 artist 里。
 		"陈慧琳 - 记事本|作曲: 周传雄|记事本":    {},
 		"陈慧琳 - 记事本|翻开随身携带的记事本|记事本": {},
@@ -120,10 +120,10 @@ func TestLyricsFullScanCandidatesSkipsDoneAndHopeless(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
 		"a|empty done|":    {LyricsFillTS: after},
 		"b|empty todo|":    {LyricsFillTS: before},
-		"c|line done|":     {Lyrics: "[00:01.00]x", LyricsScoringVersion: cur, LyricsRescoreTS: after},
-		"d|line todo|":     {Lyrics: "[00:01.00]x", LyricsScoringVersion: cur, LyricsRescoreTS: before},
-		"e|stale done|":    {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1, LyricsRescoreTS: after},
-		"f|stale todo|":    {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1},
+		"c|line done|":     {Lyrics: bt("[00:01.00]x"), LyricsScoringVersion: cur, LyricsRescoreTS: after},
+		"d|line todo|":     {Lyrics: bt("[00:01.00]x"), LyricsScoringVersion: cur, LyricsRescoreTS: before},
+		"e|stale done|":    {Lyrics: bt("x"), LyricsYRC: bt("y"), LyricsScoringVersion: cur - 1, LyricsRescoreTS: after},
+		"f|stale todo|":    {Lyrics: bt("x"), LyricsYRC: bt("y"), LyricsScoringVersion: cur - 1},
 		"|Episode 743|":    {LyricsFillCount: lyricsNoAnchorGiveUpCount},
 		"作曲: 中岛美雪|X - Y|X": {}, "第二句|X - Y|X": {}, "第三句|X - Y|X": {},
 	})

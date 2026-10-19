@@ -23,7 +23,7 @@ func TestLyricsChosenForShorterCut(t *testing.T) {
 		{"现在的时长未知", body, 241.133, 401.707, 0, false},
 		{"没歌词", "", 241.133, 401.707, 401.7, false},
 	} {
-		e := enrichEntry{Lyrics: c.lyrics, ResolvedDurationSecs: c.resolved, DurationSecs: c.recorded}
+		e := enrichEntry{Lyrics: bt(c.lyrics), ResolvedDurationSecs: c.resolved, DurationSecs: c.recorded}
 		if got := lyricsChosenForShorterCut(e, c.now); got != c.want {
 			t.Errorf("%s: %v, want %v", c.name, got, c.want)
 		}
@@ -35,7 +35,7 @@ func TestLyricsChosenForShorterCut(t *testing.T) {
 func TestLyricsUpgradeAppliesWhenStoredLyricsFitAShorterCut(t *testing.T) {
 	old := "[00:21.39]I guess you know me well\n[03:50.00]What's this strange relationship?"
 	cur := enrichEntry{
-		Lyrics: old, LyricsSource: "soda", LyricsScore: 1271,
+		Lyrics: bt(old), LyricsSource: "soda", LyricsScore: 1271,
 		LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision,
 		ResolvedDurationSecs: 241.133, DurationSecs: 401.707,
 	}
@@ -86,7 +86,7 @@ func TestManualRematchSearchesAtTheLongerRecordedDuration(t *testing.T) {
 			key := enrichKey(rescoreTestArtist, "Longer Cut", "Some Album")
 			enrichMu.Lock()
 			enrichCache = map[string]enrichEntry{key: {
-				Lyrics: "[00:05.00]Old line", LyricsSource: "musixmatch", LyricsScoringVersion: lyricsScoringVersion - 1,
+				Lyrics: bt("[00:05.00]Old line"), LyricsSource: "musixmatch", LyricsScoringVersion: lyricsScoringVersion - 1,
 				ResolvedDurationSecs: 241, DurationSecs: c.recorded,
 			}}
 			enrichMu.Unlock()
@@ -126,14 +126,14 @@ func TestRescoreDoesNotShieldLyricsChosenForAShorterCut(t *testing.T) {
 			key := enrichKey(rescoreTestArtist, "Shorter Cut", "Some Album")
 			enrichMu.Lock()
 			enrichCache = map[string]enrichEntry{key: {
-				Lyrics: old, LyricsYRC: c.yrc, LyricsSource: "musixmatch", LyricsScore: 5000,
+				Lyrics: bt(old), LyricsYRC: bt(c.yrc), LyricsSource: "musixmatch", LyricsScore: 5000,
 				LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision,
 				ResolvedDurationSecs: 241, DurationSecs: c.recorded,
 			}}
 			enrichMu.Unlock()
 			rescoreLyrics(context.Background(), key, rescoreTestArtist, "Shorter Cut", "Some Album", c.playing)
 			e, _ := cacheEntry(t, key)
-			if got := e.Lyrics != old; got != c.wantNew {
+			if got := !e.Lyrics.EqualString(old); got != c.wantNew {
 				t.Errorf("换没换: %v, want %v (%q)", got, c.wantNew, e.Lyrics)
 			}
 			if e.ResolvedDurationSecs != c.wantResolved {

@@ -123,15 +123,23 @@ func enrichBodiesDirFor(cachePath string) string {
 // 别写成 hash.Write([]byte(s)):经接口调用的转换每次都在堆上复制一整份正文,实测一次落盘因此多分配
 // 一百多 MB。见 09 章决策 112。
 func enrichBodyCRC(e enrichEntry) uint32 {
-	if e.Lyrics == "" && e.LyricsTr == "" && e.LyricsRoma == "" && e.LyricsYRC == "" && e.PlainLyrics == "" &&
-		e.LyricsBG == "" {
+	if e.Lyrics.IsZero() && e.LyricsTr.IsZero() && e.LyricsRoma.IsZero() && e.LyricsYRC.IsZero() && e.PlainLyrics.IsZero() &&
+		e.LyricsBG.IsZero() {
+		return 0
+	}
+	return bodyCRCOf([bodyFieldCount]string{e.Lyrics.String(), e.LyricsTr.String(), e.LyricsRoma.String(), e.LyricsYRC.String(),
+		e.PlainLyrics.String(), e.LyricsBG.String()})
+}
+
+// bodyCRCOf 六块正文(顺序同 bodyField)的校验值,算法同 enrichBodyCRC;全空为 0。
+func bodyCRCOf(fields [bodyFieldCount]string) uint32 {
+	if fields == [bodyFieldCount]string{} {
 		return 0
 	}
 	bp := enrichBodyCRCBufs.Get().(*[]byte)
 	var c uint32
-	fields := [...]string{e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC, e.PlainLyrics, e.LyricsBG}
 	n := len(fields)
-	if e.LyricsBG == "" {
+	if fields[bodyFieldBG] == "" {
 		n--
 	}
 	for _, s := range fields[:n] {
@@ -157,14 +165,71 @@ func sanitizeEnrichBody(b enrichBody) (enrichBody, bool) {
 		}
 	}
 	if changed {
-		b.CRC = enrichBodyCRC(enrichEntry{Lyrics: b.Lyrics, LyricsTr: b.LyricsTr, LyricsRoma: b.LyricsRoma,
-			LyricsYRC: b.LyricsYRC, PlainLyrics: b.PlainLyrics, LyricsBG: b.LyricsBG})
+		b.CRC = bodyCRCOf(b.fields())
 	}
 	return b, changed
 }
 
 // enrichBodyCRCBufs:enrichBodyCRC 的拷贝缓冲区。加载时正文小文件是并发校验的,不能共用一块。
 var enrichBodyCRCBufs = sync.Pool{New: func() any { b := make([]byte, 0, 64<<10); return &b }}
+
+// enrichBodyCRCMemo 上次算校验值时每首的六块正文(按 bodyBlob 指针认)和结果。内容相同的正文共用一个 bodyBlob,
+// 指针没变就是内容没变,直接用上次的值,不必把退回的正文读回来再算。调用方持 enrichSaveMu。
+var enrichBodyCRCMemo map[string]bodyCRCMemo
+
+type bodyCRCMemo struct {
+	blobs [bodyFieldCount]*bodyBlob
+	crc   uint32
+}
+
+func bodyBlobsOf(e *enrichEntry) (out [bodyFieldCount]*bodyBlob) {
+	for i, t := range e.bodyFieldsOf() {
+		out[i] = t.b
+	}
+	return out
+}
+
+// noteBodyCRC 记下 e 这六块正文的校验值是 crc(补正文时用文件里记的)。
+func noteBodyCRC(k string, e *enrichEntry, crc uint32) {
+	if enrichBodyCRCMemo == nil {
+		enrichBodyCRCMemo = map[string]bodyCRCMemo{}
+	}
+	enrichBodyCRCMemo[k] = bodyCRCMemo{blobs: bodyBlobsOf(e), crc: crc}
+}
+
+func enrichBodyCRCMemoized(k string, e *enrichEntry) uint32 {
+	blobs := bodyBlobsOf(e)
+	if m, ok := enrichBodyCRCMemo[k]; ok && m.blobs == blobs {
+		return m.crc
+	}
+	crc := enrichBodyCRC(*e)
+	noteBodyCRC(k, e, crc)
+	return crc
+}
+
+// locateEntryBodies 条目上跟 body(path 那份小文件)里同一块逐字节相同的正文,记成就在那里(见 bodytext.go)。
+func locateEntryBodies(e *enrichEntry, path string, body *enrichBody) {
+	for f, t := range e.bodyFieldsOf() {
+		if !t.IsZero() && t.EqualString(body.field(bodyField(f))) {
+			locateBody(t, path, bodyField(f))
+		}
+	}
+}
+
+// hasUnlocatedResidentBody 条目上有没有常驻、又没定位到哪份小文件的正文。
+func hasUnlocatedResidentBody(e *enrichEntry) bool {
+	for _, t := range e.bodyFieldsOf() {
+		if t.b != nil && t.b.text.Load() != nil && t.b.loc.Load() == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// fields 小文件里的六块正文,顺序同 bodyField。
+func (b *enrichBody) fields() [bodyFieldCount]string {
+	return [bodyFieldCount]string{b.Lyrics, b.LyricsTr, b.LyricsRoma, b.LyricsYRC, b.PlainLyrics, b.LyricsBG}
+}
 
 // enrichBody 是正文小文件的形状(App 侧 `EnrichCacheReader` 按同样的键读)。
 type enrichBody struct {
@@ -181,22 +246,22 @@ type enrichBody struct {
 // App(`EnrichCacheSlim.Fields`)靠「有 body_crc 却没有 body_fields」认出这个字段出现之前写的老索引。
 func enrichBodyFields(e enrichEntry) uint8 {
 	f := uint8(128)
-	if e.LyricsYRC != "" {
+	if !e.LyricsYRC.IsZero() {
 		f |= 1
 	}
-	if e.LyricsTr != "" {
+	if !e.LyricsTr.IsZero() {
 		f |= 2
 	}
-	if e.LyricsRoma != "" {
+	if !e.LyricsRoma.IsZero() {
 		f |= 4
 	}
-	if e.PlainLyrics != "" {
+	if !e.PlainLyrics.IsZero() {
 		f |= 8
 	}
-	if e.LyricsBG != "" {
+	if !e.LyricsBG.IsZero() {
 		f |= 16
 	}
-	if e.Lyrics != "" {
+	if !e.Lyrics.IsZero() {
 		f |= 32
 	}
 	return f
@@ -208,7 +273,7 @@ func leanForIndex(e enrichEntry, crc uint32) enrichEntry {
 	if crc != 0 {
 		e.BodyFields = enrichBodyFields(e)
 	}
-	e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC, e.PlainLyrics, e.LyricsBG = "", "", "", "", "", ""
+	e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC, e.PlainLyrics, e.LyricsBG = bodyText{}, bodyText{}, bodyText{}, bodyText{}, bodyText{}, bodyText{}
 	e.BodyCRC = crc
 	return e
 }
@@ -245,8 +310,13 @@ func seedEnrichBodyCRCs() {
 // writeEnrichBodies 写正文有变化的那几首的小文件,返回全部 key 的校验值(给索引用)。调用方持 enrichSaveMu。
 func writeEnrichBodies(snapshot map[string]enrichEntry) map[string]uint32 {
 	crcs := make(map[string]uint32, len(snapshot))
+	for k := range enrichBodyCRCMemo {
+		if _, ok := snapshot[k]; !ok {
+			delete(enrichBodyCRCMemo, k)
+		}
+	}
 	for k, e := range snapshot {
-		crc := enrichBodyCRC(e)
+		crc := enrichBodyCRCMemoized(k, &e)
 		if s, ok := enrichBodySanitizedCRCs[k]; ok && s.raw == crc {
 			crc = s.file
 		}
@@ -269,12 +339,21 @@ func writeEnrichBodies(snapshot map[string]enrichEntry) map[string]uint32 {
 	}
 	written, failed := 0, 0
 	for k, crc := range crcs {
-		if crc == 0 || enrichBodyCRCs[k] == crc {
+		if crc == 0 {
 			continue
 		}
 		e := snapshot[k]
-		body := enrichBody{CRC: crc, Lyrics: e.Lyrics, LyricsTr: e.LyricsTr,
-			LyricsRoma: e.LyricsRoma, LyricsYRC: e.LyricsYRC, PlainLyrics: e.PlainLyrics, LyricsBG: e.LyricsBG}
+		if enrichBodyCRCs[k] == crc {
+			if hasUnlocatedResidentBody(&e) {
+				path := bodySidePath(dir, k)
+				if b, err := readEnrichBodyChecked(path); err == nil && b != nil && b.CRC == crc {
+					locateEntryBodies(&e, path, b)
+				}
+			}
+			continue
+		}
+		body := enrichBody{CRC: crc, Lyrics: e.Lyrics.String(), LyricsTr: e.LyricsTr.String(),
+			LyricsRoma: e.LyricsRoma.String(), LyricsYRC: e.LyricsYRC.String(), PlainLyrics: e.PlainLyrics.String(), LyricsBG: e.LyricsBG.String()}
 		if fixed, changed := sanitizeEnrichBody(body); changed {
 			if enrichBodySanitizedCRCs == nil {
 				enrichBodySanitizedCRCs = map[string]sanitizedBodyCRC{}
@@ -287,9 +366,11 @@ func writeEnrichBodies(snapshot map[string]enrichEntry) map[string]uint32 {
 				continue
 			}
 		}
+		path := bodySidePath(dir, k)
 		b, err := json.Marshal(body)
 		if err == nil {
-			err = writeFileAtomic(filepath.Join(dir, decisionSidecarName(k)), b)
+			pinBodiesAt(path, &body)
+			err = writeFileAtomic(path, b)
 		}
 		if err != nil {
 			failed++
@@ -299,6 +380,7 @@ func writeEnrichBodies(snapshot map[string]enrichEntry) map[string]uint32 {
 			continue
 		}
 		enrichBodyCRCs[k] = crc
+		locateEntryBodies(&e, path, &body)
 		written++
 	}
 	if written > 50 {
@@ -537,6 +619,7 @@ func sweepKeyedDir(dir, label string) {
 		if n.IsDir() || (!stale && (!strings.HasSuffix(name, ".json") || live[name])) {
 			continue
 		}
+		pinBodiesAt(filepath.Join(dir, name), nil)
 		if os.Remove(filepath.Join(dir, name)) == nil {
 			removed++
 		}

@@ -129,14 +129,14 @@ func TestMigratePlaceholderAlbumCovers(t *testing.T) {
 	lx := map[string]string{lxMusicBundleID: photo}
 	setUpEnrichEditTest(t, map[string]enrichEntry{
 		love: {CoverURL: photo, CoverSource: "player", CoverAlbum: "单曲发行", AccentColor: "#112233", PlayerCovers: lx,
-			LyricsDecision: decision, Lyrics: "[00:01.00]词"},
+			LyricsDecision: decision, Lyrics: bt("[00:01.00]词")},
 		bare: {CoverURL: photo, CoverSource: "player", CoverAlbum: "单曲发行", PlayerCovers: lx},
 		dev:  {CoverURL: device, CoverSource: "device", CoverAlbum: "单曲发行", PlayerCovers: lx},
 		real: {CoverURL: photo, CoverSource: "player", CoverAlbum: "3121", PlayerCovers: lx},
 	})
 	migratePlaceholderAlbumCovers()
 	if e, _ := cacheEntry(t, love); e.CoverURL != album || e.CoverSource != "netease" || e.CoverAlbum != "3121" ||
-		e.AccentColor != "" || e.PlayerCovers != nil || e.Lyrics != "[00:01.00]词" {
+		e.AccentColor != "" || e.PlayerCovers != nil || !e.Lyrics.EqualString("[00:01.00]词") {
 		t.Fatalf("换成判决里头一个不是歌手照片的候选封面: %+v", e)
 	}
 	if e, _ := cacheEntry(t, bare); e.CoverURL != "" || e.CoverSource != "" || e.PlayerCovers != nil {

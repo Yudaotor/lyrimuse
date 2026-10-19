@@ -44,11 +44,11 @@ func migrateTranslationNotices() {
 	enrichMu.Lock()
 	fixed := 0
 	for k, e := range enrichCache {
-		tr, ok := stripTranslationNotices(e.LyricsTr)
+		tr, ok := stripTranslationNotices(e.LyricsTr.String())
 		if !ok {
 			continue
 		}
-		e.LyricsTr = tr
+		e.LyricsTr = bt(tr)
 		if tr == "" {
 			e.LyricsTrLang = ""
 			e.LyricsTrSource = ""

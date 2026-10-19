@@ -114,8 +114,8 @@ func needsRomanizationRetry(results []scoredLyricCandidateResult) bool {
 // 引擎自己拼一份粤拼填进去(见 jyutping.go)。只在 LyricsRoma 原本为空时补——
 // 绝不覆盖任何源自己给出的罗马音(哪怕语种判断这次翻车,也不会把已经可用的内容换掉)。
 func (e *enrichEntry) maybeGenerateJyutpingRoma() {
-	if e.SongLanguage == songLanguageCantonese && e.Lyrics != "" && e.LyricsRoma == "" {
-		e.LyricsRoma = jyutpingLRC(e.Lyrics)
+	if e.SongLanguage == songLanguageCantonese && !e.Lyrics.IsZero() && e.LyricsRoma.IsZero() {
+		e.LyricsRoma = bt(jyutpingLRC(e.Lyrics.String()))
 	}
 }
 
@@ -123,9 +123,9 @@ func (e *enrichEntry) maybeGenerateJyutpingRoma() {
 // 或者音节几乎都没标声调(lacksJyutpingTones)时清掉,交给粤拼补上。用户手改过的不动(lyricsHandEdited)。必须排在
 // maybeGenerateJyutpingRoma / applyPregeneratedRoma 之前 —— 那两处只在罗马音为空时才填。见 10 章决策 36。
 func (e *enrichEntry) dropUnusableCantoneseRoma() {
-	if e.SongLanguage == songLanguageCantonese && !e.lyricsHandEdited() && e.LyricsRoma != "" &&
-		(looksMandarinPinyin(e.LyricsRoma) || lacksJyutpingTones(e.LyricsRoma)) {
-		e.LyricsRoma = ""
+	if e.SongLanguage == songLanguageCantonese && !e.lyricsHandEdited() && !e.LyricsRoma.IsZero() &&
+		(looksMandarinPinyin(e.LyricsRoma.String()) || lacksJyutpingTones(e.LyricsRoma.String())) {
+		e.LyricsRoma = bodyText{}
 	}
 }
 
@@ -175,17 +175,17 @@ type enrichEntry struct {
 	// 时那一档;页面路由见 qqSongCatalogMids)。
 	// 刻意**不进** fields() —— 那张 map 是发给 relay/LB 的载荷、有字节预算,而桌面端
 	// 直接读这份缓存文件,不需要经它绕一圈。
-	QQAlbumMid  string `json:"qq_album_mid,omitempty"`
-	QQSingerMid string `json:"qq_singer_mid,omitempty"`
-	SpotifyURL  string `json:"spotify_url,omitempty"`
-	Lyrics      string `json:"lyrics,omitempty"`
-	LyricsTr    string `json:"lyrics_tr,omitempty"` // 中文翻译(逐行 LRC)
+	QQAlbumMid  string   `json:"qq_album_mid,omitempty"`
+	QQSingerMid string   `json:"qq_singer_mid,omitempty"`
+	SpotifyURL  string   `json:"spotify_url,omitempty"`
+	Lyrics      bodyText `json:"lyrics,omitzero"`
+	LyricsTr    bodyText `json:"lyrics_tr,omitzero"` // 中文翻译(逐行 LRC)
 	// 罗马音(逐行 LRC)。三条来路,优先级见 maybeGenerateRoma:
 	//   ① 源自带(网易云 romalrc / QQ roma / 酷狗 KRC);
 	//   ② 粤语粤拼,引擎纯查表自算(maybeGenerateJyutpingRoma);
 	//   ③ 日/韩/中,起 lyrics-romanize 子进程算(maybeGenerateHelperRoma)。
 	// ②③ 都只在本字段为空时才补,绝不覆盖①。
-	LyricsRoma string `json:"lyrics_roma,omitempty"`
+	LyricsRoma bodyText `json:"lyrics_roma,omitzero"`
 	// PlainLyrics 跟 Lyrics **不是同一件事**:这里装的是没有时间戳的纯文本。存在的理由是
 	// 给"歌词窗口"一条静态兜底展示:Lyrics 为空、这个字段有内容时,说明"没有能同步显示的
 	// 版本,但至少有纯文字可读"。两个字段刻意分开,不能把纯文本塞进 Lyrics 冒充一份(那样
@@ -202,7 +202,7 @@ type enrichEntry struct {
 	// 引擎侧声明这个字段(以及下面 PlainLyricsSource)纯粹是为了让它在(Go 自己的其它
 	// 字段更新触发的)重新落盘时不被悄悄丢掉 —— json.Marshal 只认结构体里声明过的字段,
 	// 不声明就等于每次 Go 重新序列化都会把 Swift 刚写进去的这份纯文本冲掉。
-	PlainLyrics string `json:"plain_lyrics,omitempty"`
+	PlainLyrics bodyText `json:"plain_lyrics,omitzero"`
 	// PlainLyricsSource:PlainLyrics 来自哪个源(lrclib 与 musixmatch 会给,见
 	// lrclibResult.plainOnly 头注)。写入方是 Swift 侧的 EnrichCacheStore.savePlainTextEdit,
 	// 这里声明只为直通保留,理由同上。
@@ -212,12 +212,12 @@ type enrichEntry struct {
 	BodyCRC uint32 `json:"body_crc,omitempty"`
 	// BodyFields:同上,只在索引里 —— 去掉的四块正文各有没有(见 enrichBodyFields)。「歌词管理」拿索引当
 	// 精简快照,列表上「逐字 / 译文 / 罗马音 / 纯文本」四个标记靠它,不必去读几千个正文小文件。
-	BodyFields uint8  `json:"body_fields,omitempty"`
-	LyricsYRC  string `json:"lyrics_yrc,omitempty"` // 逐字(词级，网易云 yrc 格式)
+	BodyFields uint8    `json:"body_fields,omitempty"`
+	LyricsYRC  bodyText `json:"lyrics_yrc,omitzero"` // 逐字(词级，网易云 yrc 格式)
 	// LyricsBG:背景人声轨(YRC 语法,每行行头是所属主句的起止,见 amllResult.bg),只有 amll / applemusic
 	// 胜出时才有。它跟 Lyrics / LyricsYRC 是一组:从新的解析结果成套写歌词字段的地方都要带上它,
 	// 正文或逐字被替换、它又没有跟着换的地方要清掉,漏一处就是把上一份歌词的和声挂在新歌词下面。
-	LyricsBG string `json:"lyrics_bg,omitempty"`
+	LyricsBG bodyText `json:"lyrics_bg,omitzero"`
 	// LyricsBGChecked:这条的歌词已经按哪一版 TTML 附属内容解析器取过(lyricsBGParserVersion)。0 = 还没有,
 	// 胜出源是 amll / applemusic 时播放到会补一次(bgbackfill.go)。
 	LyricsBGChecked int `json:"lyrics_bg_checked,omitempty"`
@@ -560,10 +560,10 @@ func (e enrichEntry) fields() map[string]string {
 	if e.Instrumental {
 		m["instrumental"] = "1"
 	} else {
-		put("lyrics", e.Lyrics)
-		put("lyrics_tr", e.LyricsTr)
-		put("lyrics_roma", e.LyricsRoma)
-		put("lyrics_yrc", e.LyricsYRC)
+		put("lyrics", e.Lyrics.String())
+		put("lyrics_tr", e.LyricsTr.String())
+		put("lyrics_roma", e.LyricsRoma.String())
+		put("lyrics_yrc", e.LyricsYRC.String())
 		put("lyrics_source", e.LyricsSource)
 	}
 	put("canonical_artist", e.CanonicalArtist)
@@ -1030,7 +1030,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 还把决策记录盖掉,见 observeWrongDuration。每次进来都要喂一口(包括时长又对上
 		// 的观察,它负责清零),所以放在分支链外面。
 		wrongDuration := observeWrongDuration(key,
-			(durationMismatch(e.ResolvedDurationSecs, durationSecs) || lyricsOutrunPlayback(e.Lyrics, e.ResolvedDurationSecs, durationSecs)) &&
+			(durationMismatch(e.ResolvedDurationSecs, durationSecs) || lyricsOutrunPlayback(e.Lyrics.String(), e.ResolvedDurationSecs, durationSecs)) &&
 				!sameRecordingStay, durationSecs, time.Now().Unix())
 		// 正在播的是 MV、而这份歌词当初是按视频时长选的:跟 wrongDuration 同一个理由重来一次(见 musicvideolyrics.go)。
 		// 这一拍放的不是 MV(MV 交给歌词解析的时长是 0):之前记下的视频时长提示不再适用,清掉 —— 留着的话放音频版时
@@ -1661,7 +1661,7 @@ func lyricsFillBackoff(count int) time.Duration {
 //   - **明确判定为纯音乐的不重搜** —— 那是有依据的结论(lrclib 的 instrumental 标记),
 //     不是"没搜到"这种含糊状态,重搜一万次也不会有歌词。
 func needsLyricsFirstFill(e enrichEntry) bool {
-	if e.Lyrics != "" || e.ManualLyrics || e.Instrumental {
+	if !e.Lyrics.IsZero() || e.ManualLyrics || e.Instrumental {
 		return false
 	}
 	// 落成"没歌词"的那一轮是按别的时长搜的(开播那一拍播放器报错了时长、同一次播放里才改正):那一轮的结论不作数,
@@ -1723,14 +1723,14 @@ func lyricsUpgradeBaseline(e enrichEntry, scored []scoredLyricCandidateResult) (
 	// (从来没写过),于是第一条不成立;而第二条要在候选里找 Source/Lyrics 都等于现存值的
 	// 那一份,空歌词条目这两个字段都是空串、永远找不到 —— 结果 comparable=false、
 	// upgraded 恒为 false,搜出来的歌词一个字都不会被写回去(白跑一轮网络)。
-	if e.Lyrics == "" {
+	if e.Lyrics.IsZero() {
 		return 0, true
 	}
 	if e.lyricsScoring() == currentLyricsScoring {
 		return e.LyricsScore, true
 	}
 	for i := range scored {
-		if scored[i].Source == e.LyricsSource && scored[i].Lyrics == e.Lyrics {
+		if scored[i].Source == e.LyricsSource && e.Lyrics.EqualString(scored[i].Lyrics) {
 			return scored[i].Score, true
 		}
 	}
@@ -1747,11 +1747,11 @@ const lyricsUpgradeMinGain = 30
 func lyricsUpgradeApplies(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult, durationSecs float64) bool {
 	baseline, comparable := lyricsUpgradeBaseline(e, scored)
 	// 这一轮按「时长未知」打分(MV),现存那份的分数却带着时长那一项:换成它在这一轮里的分再比。
-	if durationSecs <= 0 && e.ResolvedDurationSecs > 0 && e.Lyrics != "" {
+	if durationSecs <= 0 && e.ResolvedDurationSecs > 0 && !e.Lyrics.IsZero() {
 		baseline, comparable = lyricsBaselineForUnknownDuration(e, scored)
 	}
 	// 现存那份的末句比这一轮的曲长还晚(lyricsOutrunPlayback):它不是给这段音频的,存着的分是按另一个时长算的,不当基准。
-	if lyricsOutrunPlayback(e.Lyrics, e.ResolvedDurationSecs, durationSecs) {
+	if lyricsOutrunPlayback(e.Lyrics.String(), e.ResolvedDurationSecs, durationSecs) {
 		baseline, comparable = 0, true
 	}
 	// 反方向:条目记下的时长已经认了这一轮的曲长,现存那份却是给短得多的另一个版本选的,存着的分带着那个时长的加分,
@@ -1762,7 +1762,7 @@ func lyricsUpgradeApplies(e enrichEntry, scored []scoredLyricCandidateResult, pi
 	if picked == nil || !comparable {
 		return false
 	}
-	if e.Lyrics == "" {
+	if e.Lyrics.IsZero() {
 		return picked.Score > baseline
 	}
 	return picked.Score >= baseline+lyricsUpgradeMinGain && !keepsShownLyricsOver(e, picked)
@@ -1797,7 +1797,7 @@ func lyricsOutrunPlayback(lyrics string, resolved, actual float64) bool {
 // 而条目记下的 DurationSecs 已经跟 actual 对得上(播放器说是同一段录音、原地改过时长,或者稳定观察过)。没有歌词、
 // 任一时长未知都是 false。纯函数。
 func lyricsChosenForShorterCut(e enrichEntry, actual float64) bool {
-	if e.Lyrics == "" || actual <= e.ResolvedDurationSecs || e.DurationSecs <= 0 {
+	if e.Lyrics.IsZero() || actual <= e.ResolvedDurationSecs || e.DurationSecs <= 0 {
 		return false
 	}
 	return durationMismatch(e.ResolvedDurationSecs, actual) && !durationMismatch(e.DurationSecs, actual)
@@ -1873,7 +1873,7 @@ var wrongDurationSeen = map[string]wrongDurationObs{}
 // 没有 LyricsSourcesSeen 的老条目会被判成"所有启用的源都缺席",从而获得一次升级机会。
 func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bool {
 	// 标了纯音乐的不自动重搜:用户手标时歌词留着,不挡的话这份留着的词会被换掉(见 enrichEntry.Instrumental)。
-	if e.Lyrics == "" || e.Instrumental {
+	if e.Lyrics.IsZero() || e.Instrumental {
 		return false
 	}
 	// 同 needsLyricsRescore:关掉「自动跟进算法升级」之后,已经有歌词的曲目不再自动重搜升级。
@@ -1918,7 +1918,7 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bo
 	// observeWrongDuration 的稳定性确认 —— 换曲/预载窗口里 media-control 会把下一首的
 	// 时长和当前曲目的标题拼进同一份快照,一次性的脏观察值不能直接当真(这个函数保持
 	// 纯函数,时间态的去抖状态留在调用方那层,单测才不用碰包级状态)。
-	if e.LyricsYRC != "" && !nativeMissedOut && !wrongDuration {
+	if !e.LyricsYRC.IsZero() && !nativeMissedOut && !wrongDuration {
 		return false
 	}
 	// 用户手改过的绝不自动重搜,理由见 ManualLyrics 字段的注释。这道闸不能省:saveEdit 只写
@@ -2035,7 +2035,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	seen := lyricSourcesWithCandidates(scored)
 	// 罗马音兜底可能要起子进程,在上锁之前算好(见 maybeGenerateRoma);只在这一轮会换正文时才算。
 	var preparedRoma string
-	if picked != nil && picked.LyricsRoma == "" && picked.Lyrics != startLyrics {
+	if picked != nil && picked.LyricsRoma == "" && !startLyrics.EqualString(picked.Lyrics) {
 		preparedRoma = generatedRomaFor(picked.Lyrics, "", entrySongLanguage(picked.Lyrics, scored))
 	}
 	// 换上去会让正在播的这首丢掉能用的译文时,先把新正文翻好,跟正文同一次换上。
@@ -2151,18 +2151,18 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	// lyricsUpgradeBaseline 同一口径):LRCLIB 镜像别家正文逐字节相同很常见,只比正文
 	// 会让出处槽的 Winner 记成另一个源、跟缓存 lyrics_source 对不上号 —— 那正是分槽
 	// 要消除的那类困惑。
-	if upgraded || (picked != nil && picked.Source == e.LyricsSource && picked.Lyrics == e.Lyrics) {
+	if upgraded || (picked != nil && picked.Source == e.LyricsSource && e.Lyrics.EqualString(picked.Lyrics)) {
 		e.LyricsDecisionApplied = e.LyricsDecision
 	}
 	if upgraded {
 		log.Printf("lyrics upgrade: %s  %s(%d) -> %s(%d)", key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
-		e.Lyrics = picked.Lyrics
+		e.Lyrics = bt(picked.Lyrics)
 		e.LyricsSource = picked.Source
 		e.LyricsScore = picked.Score
 		e.stampLyricsScoring()
 		e.ResolvedDurationSecs = durationSecs
-		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
-		e.LyricsBG, e.LyricsBGChecked = picked.LyricsBG, lyricsBGParserVersion
+		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = bt(picked.LyricsTr), bt(picked.LyricsRoma), bt(picked.LyricsYRC)
+		e.LyricsBG, e.LyricsBGChecked = bt(picked.LyricsBG), lyricsBGParserVersion
 		e.SongLanguage = entrySongLanguage(picked.Lyrics, scored)
 		e.dropHokkienRoma()
 		e.dropUnusableCantoneseRoma()
@@ -2192,11 +2192,11 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	// 例外是播放器自己给的标记(playerSaysInstrumental):它说的就是正在放的这一条,词留在条目里,撤标就回来。用户选定了来源、
 	// 手动重新匹配的不按它改,同重评那条(rescoreTurnsInstrumental 的调用处)。
 	turnedInstrumental := false
-	if picked == nil && e.autoMarksInstrumental() && (e.Lyrics == "" || (playerSaysInstrumental(scored) && sourceChoice == "" && !opts.manual)) {
+	if picked == nil && e.autoMarksInstrumental() && (e.Lyrics.IsZero() || (playerSaysInstrumental(scored) && sourceChoice == "" && !opts.manual)) {
 		if ok, src := instrumentalFromScored(scored, artist, title, album, durationSecs); ok {
 			e.Instrumental = true
 			turnedInstrumental = true
-			markedInstrumental = e.Lyrics != ""
+			markedInstrumental = !e.Lyrics.IsZero()
 			log.Printf("lyrics: %s marked instrumental by %s (no lyrics from any source)", key, src)
 		}
 	}
@@ -2214,9 +2214,9 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	// 同时出现在同一份 scored 里,见 scoreAndSort 里那段互斥的候选构造逻辑),即便日后
 	// 某个源两者都给,这里的顺序(先纯音乐、后纯文本)也天然让纯音乐结论优先,不会两条
 	// 都命中打架。
-	if picked == nil && !e.Instrumental && e.PlainLyrics == "" && e.Lyrics == "" {
+	if picked == nil && !e.Instrumental && e.PlainLyrics.IsZero() && e.Lyrics.IsZero() {
 		if lyrics, source := plainTextFallbackFromScored(scored); lyrics != "" {
-			e.PlainLyrics, e.PlainLyricsSource = lyrics, source
+			e.PlainLyrics, e.PlainLyricsSource = bt(lyrics), source
 			log.Printf("lyrics: %s auto-adopted plain-text fallback from %s (no timed version from any source)", key, source)
 		}
 	}
@@ -2296,7 +2296,7 @@ func instrumentalFromScored(scored []scoredLyricCandidateResult, artist, title, 
 // 来源这一轮给的候选被判了版本不符 —— 这份词是给别的版本做的(见 09 章决策 194)。调用方已经确认这一轮没有能用的
 // 候选、用户也没选定过源。用户撤过标记的不标(autoMarksInstrumental)。
 func rescoreTurnsInstrumental(e enrichEntry, scored []scoredLyricCandidateResult) bool {
-	if e.Lyrics == "" || !e.autoMarksInstrumental() || !scoredHasInstrumentalMarker(scored) {
+	if e.Lyrics.IsZero() || !e.autoMarksInstrumental() || !scoredHasInstrumentalMarker(scored) {
 		return false
 	}
 	if playerSaysInstrumental(scored) {
@@ -2344,7 +2344,7 @@ const (
 // 太近不碰。第一次尝试没有时间门槛(LyricsRescoreTS 为 0)—— 这条路径的目的就是让存量条目
 // 尽快跟上新规则;只有需要再试时才拉开间隔,见 lyricsRescoreDeferInterval。
 func needsLyricsRescore(e enrichEntry, pinned, autoUpgrade bool) bool {
-	if e.Lyrics == "" || e.ManualLyrics || e.Instrumental || pinned {
+	if e.Lyrics.IsZero() || e.ManualLyrics || e.Instrumental || pinned {
 		return false
 	}
 	// 用户关掉了「自动跟进算法升级」:已经选定的歌词不再因为打分规则升级被换掉
@@ -2432,19 +2432,19 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	decidable := rescoreDecidable(scored, currentSource, false)
 	// 当前这份跟这一轮哪一份都对不上:是另一首歌的词,当前来源没应答也可判,换不换也不再看它留不留得住
 	// (见 rescoreCurrentContradicted)。
-	contradicted := rescoreCurrentContradicted(startLyrics, scored, picked)
+	contradicted := rescoreCurrentContradicted(startLyrics.String(), scored, picked)
 	decidable = decidable || contradicted
 	seen := lyricSourcesWithCandidates(scored)
 	// 罗马音兜底在上锁之前算好,同 retryLyricsUpgrade。
 	var preparedRoma string
-	if decidable && picked != nil && picked.LyricsRoma == "" && picked.Lyrics != startLyrics {
+	if decidable && picked != nil && picked.LyricsRoma == "" && !startLyrics.EqualString(picked.Lyrics) {
 		preparedRoma = generatedRomaFor(picked.Lyrics, "", entrySongLanguage(picked.Lyrics, scored))
 	}
 	// 同 retryLyricsUpgrade:换正文会让正在播的这首丢掉能用的译文时先翻好。判据对着下面 default 分支换正文那一支。
 	preparedTr := prepareSwapTranslation(ctx, key, artist, title, picked, func(e enrichEntry) bool {
 		return (opts.manual || !e.ManualLyrics) && decidable && picked != nil &&
 			!rescoreKeepsLyrics(rescoreComparedEntry(e, durationSecs), scored, picked, opts.manual, contradicted) &&
-			picked.Lyrics != e.Lyrics
+			!e.Lyrics.EqualString(picked.Lyrics)
 	})
 	// 只打了纯音乐标记(rescoreTurnsInstrumental):要马上落盘、通知重推,但歌词没换,不导出、不补翻。
 	markedInstrumental := false
@@ -2508,7 +2508,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	}
 	before := e
 	// 当前这份只有署名:它不是要护着的歌词,见下面 keep 与纯音乐那一支。
-	currentCreditOnly := lyricsAreCreditsOnly(e.Lyrics)
+	currentCreditOnly := lyricsAreCreditsOnly(e.Lyrics.String())
 	// 换了打分版本后的第一次尝试:旧版本下的计数作废、从零开始(见 LyricsRescoreVersion 注释)。
 	if e.lyricsRescoreScoring() != currentLyricsScoring {
 		e.LyricsRescoreCount = 0
@@ -2548,7 +2548,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	if decidable {
 		e.LyricsDecision = buildLyricsDecision(
 			opts.decisionPath(lyricsDecisionPathRescore), artist, title, searchAlbum, durationSecs, scored, picked,
-			picked != nil && !keep && (picked.Lyrics != e.Lyrics || gainsWordTiming(e, picked)))
+			picked != nil && !keep && (!e.Lyrics.EqualString(picked.Lyrics) || gainsWordTiming(e, picked)))
 		e.LyricsDecision.SourcesSkipped = skipped
 		e.LyricsDecision.statsSkips = round.statsSkips()
 		e.LyricsDecision.QueriesTried = queries.queries()
@@ -2620,15 +2620,15 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 				key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
 		}
 	default:
-		if picked.Lyrics != e.Lyrics {
-			if e.LyricsYRC != "" && picked.LyricsYRC == "" && rescoreCurrentTimelineOff(e, scored) {
+		if !e.Lyrics.EqualString(picked.Lyrics) {
+			if !e.LyricsYRC.IsZero() && picked.LyricsYRC == "" && rescoreCurrentTimelineOff(e, scored) {
 				log.Printf("lyrics rescore: %s  current %s lyrics run off this round's timeline, not keeping them for their word timing",
 					key, e.LyricsSource)
 			}
 			log.Printf("lyrics rescore: %s  %s(v%s) -> %s(%d)", key, e.LyricsSource, e.lyricsScoring(), picked.Source, picked.Score)
-			e.Lyrics = picked.Lyrics
-			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
-			e.LyricsBG, e.LyricsBGChecked = picked.LyricsBG, lyricsBGParserVersion
+			e.Lyrics = bt(picked.Lyrics)
+			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = bt(picked.LyricsTr), bt(picked.LyricsRoma), bt(picked.LyricsYRC)
+			e.LyricsBG, e.LyricsBGChecked = bt(picked.LyricsBG), lyricsBGParserVersion
 			e.SongLanguage = entrySongLanguage(picked.Lyrics, scored)
 			e.dropHokkienRoma()
 			e.dropUnusableCantoneseRoma()
@@ -2639,15 +2639,15 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 			e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
 			preparedTr.applyLocked(&e)
 		}
-		if picked.Lyrics == e.Lyrics && gainsWordTiming(e, picked) {
+		if e.Lyrics.EqualString(picked.Lyrics) && gainsWordTiming(e, picked) {
 			log.Printf("lyrics rescore: %s  %s gained word timing", key, picked.Source)
-			e.LyricsYRC = picked.LyricsYRC
+			e.LyricsYRC = bt(picked.LyricsYRC)
 			lyricsChanged = true
 		}
 		// 正文没变、这条还没按背景人声解析器取过:这一轮取到的背景人声(可能为空)就是它该有的。
 		// 背景人声不导出成歌词文件,不用置 lyricsChanged。
-		if picked.Lyrics == e.Lyrics && e.LyricsBGChecked < lyricsBGParserVersion {
-			e.LyricsBG, e.LyricsBGChecked = picked.LyricsBG, lyricsBGParserVersion
+		if e.Lyrics.EqualString(picked.Lyrics) && e.LyricsBGChecked < lyricsBGParserVersion {
+			e.LyricsBG, e.LyricsBGChecked = bt(picked.LyricsBG), lyricsBGParserVersion
 		}
 		if picked.Source != e.LyricsSource {
 			// 正文一样但冠军换了源:导出的 .lrc 里 [source:] 头也得跟着重写。lyrics/ 文件夹是
@@ -2722,11 +2722,11 @@ func lookupPeripheralQQMids(ctx context.Context, key string, fresh enrichEntry) 
 // 候选同轴(rescoreCurrentTimelineOff)的也不比:那一份就是当前这份、只是正文写法变了,它已经参与比较并输了,
 // 存的分数是没扣这一项时打的。
 func rescoreKeepsCurrent(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult) bool {
-	if picked.Lyrics == e.Lyrics || e.lyricsScoring() != currentLyricsScoring {
+	if e.Lyrics.EqualString(picked.Lyrics) || e.lyricsScoring() != currentLyricsScoring {
 		return false
 	}
 	for i := range scored {
-		if scored[i].Lyrics == e.Lyrics {
+		if e.Lyrics.EqualString(scored[i].Lyrics) {
 			return false // 当前这份参与了比较,输了就换
 		}
 	}
@@ -2753,7 +2753,7 @@ func rescoreKeeps(e enrichEntry, scored []scoredLyricCandidateResult, picked *sc
 // 手动重新匹配不算)。只有署名的当前这份一律不留(09 章决策 209),跟这一轮哪份都对不上的(contradicted,见
 // rescoreCurrentContradicted)也不留。锁内正式判一次、锁外按快照预判一次(prepareSwapTranslation),两处必须调这一个函数。
 func rescoreKeepsLyrics(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult, manual, contradicted bool) bool {
-	if picked == nil || contradicted || lyricsAreCreditsOnly(e.Lyrics) {
+	if picked == nil || contradicted || lyricsAreCreditsOnly(e.Lyrics.String()) {
 		return false
 	}
 	return rescoreKeeps(e, scored, picked) || (!manual && keepsShownLyricsOver(e, picked))
@@ -2802,13 +2802,13 @@ func rescoreCurrentContradicted(current string, scored []scoredLyricCandidateRes
 // 接口给全,同一首歌这一轮有、下一轮一个都没有很常见;换过去会把卡拉 OK 填色丢掉,而且不可逆。正文相同时不算
 // (那种情形只会补逐字,见 gainsWordTiming);这一轮判了当前这份整首错开时也不算(rescoreCurrentTimelineOff)。
 func rescoreWouldLoseWordTiming(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult) bool {
-	return picked.Lyrics != e.Lyrics && e.LyricsYRC != "" && picked.LyricsYRC == "" && !rescoreCurrentTimelineOff(e, scored)
+	return !e.Lyrics.EqualString(picked.Lyrics) && !e.LyricsYRC.IsZero() && picked.LyricsYRC == "" && !rescoreCurrentTimelineOff(e, scored)
 }
 
 // rescoreCurrentTimelineOff:当前这份的时间轴跟这一轮某份扣了 timelineOffset 的候选是同一份(timelinesIdentical),
 // 即这一轮判了它整首错开,它的逐字填色也跟着错开。跟哪一份被扣分的候选都对不上时不算。见 09 章决策 217。
 func rescoreCurrentTimelineOff(e enrichEntry, scored []scoredLyricCandidateResult) bool {
-	current := displayedTimeline(e.Lyrics, e.LyricsYRC)
+	current := displayedTimeline(e.Lyrics.String(), e.LyricsYRC.String())
 	for i := range scored {
 		c := &scored[i]
 		if scoreTermPoints(c.ScoreTerms, scoreTermTimelineOffset) < 0 && timelinesIdentical(current, displayedTimeline(c.Lyrics, c.LyricsYRC)) {
@@ -2822,7 +2822,7 @@ func rescoreCurrentTimelineOff(e enrichEntry, scored []scoredLyricCandidateResul
 // 只补 LyricsYRC,译文/罗马音保持原样(正文没变,它们没有理由跟着换)。rescoreLyrics 和
 // resync-lyrics 两处共用这一条判定。
 func gainsWordTiming(e enrichEntry, picked *scoredLyricCandidateResult) bool {
-	return e.LyricsYRC == "" && picked.LyricsYRC != ""
+	return e.LyricsYRC.IsZero() && picked.LyricsYRC != ""
 }
 
 // resolveEnrichAsync 首次解析一首歌的完整信息(封面/主色/链接/歌词),写入并永久保留,
@@ -2940,7 +2940,7 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		// 必然的误报,而不是巧合。
 		//
 		// 拿到了歌词的才记外围待补:没词的照旧按 needsLyricsFirstFill 的退避重搜,别让取消变成立刻重来。
-		e.PeripheralPending = e.Lyrics != "" || e.PlainLyrics != ""
+		e.PeripheralPending = !e.Lyrics.IsZero() || !e.PlainLyrics.IsZero()
 		commitEnrichEntrySince(key, e, stamp)
 		return
 	}
@@ -2994,7 +2994,7 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 // SpotifyURL 同样是本地拼的,所以它本来就不在这个判据里。
 func enrichRoundFoundNothing(e enrichEntry) bool {
 	hasRealQQURL := e.QQURL != "" && !isQQSearchFallbackURL(e.QQURL)
-	return e.CoverURL == "" && e.Lyrics == "" && e.PlainLyrics == "" && e.AppleURL == "" && !hasRealQQURL && e.NeteaseURL == ""
+	return e.CoverURL == "" && e.Lyrics.IsZero() && e.PlainLyrics.IsZero() && e.AppleURL == "" && !hasRealQQURL && e.NeteaseURL == ""
 }
 
 // commitEnrichEntry 是 resolveEnrichAsync 两条落盘路径(正常查完/被用户取消)共用的
@@ -3554,16 +3554,16 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 		// "只在为空时写、绝不覆盖"规矩(见 PlainLyrics 字段定义处的完整说明和
 		// plainTextFallbackFromScored 头注)。first-resolve 和 rescore 是两个独立
 		// 写入点,共享挑选逻辑但各自决定何时调用。
-		if !e.Instrumental && e.PlainLyrics == "" {
+		if !e.Instrumental && e.PlainLyrics.IsZero() {
 			if lyrics, source := plainTextFallbackFromScored(scored); lyrics != "" {
-				e.PlainLyrics, e.PlainLyricsSource = lyrics, source
+				e.PlainLyrics, e.PlainLyricsSource = bt(lyrics), source
 			}
 		}
 	}
 	// 歌词一选定就先交给 onLyrics 提前提交上屏:下面封面 / 规范歌手名 / 主色 / 各平台链接 / 动态封面
 	// 这一串是串行的联网请求,都不影响歌词本身(挑选只看 scored)。没拿到歌词时不提前提交,
 	// 交给调用方原有的「全空不写入」守卫判断。
-	if onLyrics != nil && e.Lyrics != "" {
+	if onLyrics != nil && !e.Lyrics.IsZero() {
 		timer := newStepTimer()
 		onLyrics(e)
 		timer.mark("commit")

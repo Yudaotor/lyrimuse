@@ -21,16 +21,16 @@ func TestLyricsFullScanTier(t *testing.T) {
 		want     int
 	}{
 		{"空条目 → 第 0 层", enrichEntry{}, false, false, 0},
-		{"只有纯文本兜底 → 仍算没词,第 0 层", enrichEntry{PlainLyrics: "text"}, false, false, 0},
-		{"有词没逐字 → 第 1 层", enrichEntry{Lyrics: "[00:01.00]x", LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision}, false, false, 1},
-		{"有逐字但版本落后 → 第 2 层", enrichEntry{Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1}, false, false, 2},
-		{"老条目没写过版本号(读成 0)→ 第 2 层", enrichEntry{Lyrics: "x", LyricsYRC: "y"}, false, false, 2},
-		{"有逐字且版本已追平 → 不碰", enrichEntry{Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision}, false, false, -1},
-		{"版本号比当前还高(降级过)→ 不碰", enrichEntry{Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur + 1}, false, false, -1},
+		{"只有纯文本兜底 → 仍算没词,第 0 层", enrichEntry{PlainLyrics: bt("text")}, false, false, 0},
+		{"有词没逐字 → 第 1 层", enrichEntry{Lyrics: bt("[00:01.00]x"), LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision}, false, false, 1},
+		{"有逐字但版本落后 → 第 2 层", enrichEntry{Lyrics: bt("x"), LyricsYRC: bt("y"), LyricsScoringVersion: cur - 1}, false, false, 2},
+		{"老条目没写过版本号(读成 0)→ 第 2 层", enrichEntry{Lyrics: bt("x"), LyricsYRC: bt("y")}, false, false, 2},
+		{"有逐字且版本已追平 → 不碰", enrichEntry{Lyrics: bt("x"), LyricsYRC: bt("y"), LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision}, false, false, -1},
+		{"版本号比当前还高(降级过)→ 不碰", enrichEntry{Lyrics: bt("x"), LyricsYRC: bt("y"), LyricsScoringVersion: cur + 1}, false, false, -1},
 		{"人工修正过 → 一票否决,哪怕是空条目", enrichEntry{ManualLyrics: true}, false, false, -1},
 		{"确证纯音乐 → 一票否决", enrichEntry{Instrumental: true}, false, false, -1},
-		{"校准过时间轴 → 一票否决(补空扫描没有这道闸)", enrichEntry{Lyrics: "x", LyricsScoringVersion: cur - 1}, true, false, -1},
-		{"正在飞 → 这一轮跳过", enrichEntry{Lyrics: "x", LyricsScoringVersion: cur - 1}, false, true, -1},
+		{"校准过时间轴 → 一票否决(补空扫描没有这道闸)", enrichEntry{Lyrics: bt("x"), LyricsScoringVersion: cur - 1}, true, false, -1},
+		{"正在飞 → 这一轮跳过", enrichEntry{Lyrics: bt("x"), LyricsScoringVersion: cur - 1}, false, true, -1},
 	}
 	for _, c := range cases {
 		if got := lyricsFullScanTier(c.entry, c.pinned, c.inflight, 0); got != c.want {
@@ -51,14 +51,14 @@ func TestLyricsFullScanCandidatesOrder(t *testing.T) {
 	lyricsPinsPath = ""
 	lyricsPins, lyricsPinsRead = nil, false
 	enrichCache = map[string]enrichEntry{
-		"z|stale yrc|":   {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 3},
-		"a|stale yrc|":   {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1},
-		"m|line only|":   {Lyrics: "[00:01.00]x", LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision},
-		"b|line only|":   {Lyrics: "[00:01.00]x"},
+		"z|stale yrc|":   {Lyrics: bt("x"), LyricsYRC: bt("y"), LyricsScoringVersion: cur - 3},
+		"a|stale yrc|":   {Lyrics: bt("x"), LyricsYRC: bt("y"), LyricsScoringVersion: cur - 1},
+		"m|line only|":   {Lyrics: bt("[00:01.00]x"), LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision},
+		"b|line only|":   {Lyrics: bt("[00:01.00]x")},
 		"q|empty|":       {},
-		"c|empty|":       {PlainLyrics: "text"},
-		"k|caught up|":   {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision},
-		"p|manual|":      {Lyrics: "x", ManualLyrics: true},
+		"c|empty|":       {PlainLyrics: bt("text")},
+		"k|caught up|":   {Lyrics: bt("x"), LyricsYRC: bt("y"), LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision},
+		"p|manual|":      {Lyrics: bt("x"), ManualLyrics: true},
 		"i|instrumental": {Instrumental: true},
 	}
 	enrichInflight = map[string]bool{}
@@ -94,8 +94,8 @@ func TestLyricsFullScanCandidatesSkipsPinned(t *testing.T) {
 	}
 	lyricsPins, lyricsPinsRead = nil, false
 	enrichCache = map[string]enrichEntry{
-		"a|pinned|": {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1},
-		"b|plain|":  {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1},
+		"a|pinned|": {Lyrics: bt("x"), LyricsYRC: bt("y"), LyricsScoringVersion: cur - 1},
+		"b|plain|":  {Lyrics: bt("x"), LyricsYRC: bt("y"), LyricsScoringVersion: cur - 1},
 	}
 	enrichInflight = map[string]bool{}
 
@@ -162,9 +162,9 @@ func TestLyricsFullScanPendingPublished(t *testing.T) {
 	}
 	enrichCache = map[string]enrichEntry{
 		"a|empty|":     {},
-		"b|line only|": {Lyrics: "[00:01.00]x", LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision},
-		"c|stale|":     {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1},
-		"d|caught up|": {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision},
+		"b|line only|": {Lyrics: bt("[00:01.00]x"), LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision},
+		"c|stale|":     {Lyrics: bt("x"), LyricsYRC: bt("y"), LyricsScoringVersion: cur - 1},
+		"d|caught up|": {Lyrics: bt("x"), LyricsYRC: bt("y"), LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision},
 		"e|manual|":    {ManualLyrics: true},
 	}
 	enrichInflight = map[string]bool{}

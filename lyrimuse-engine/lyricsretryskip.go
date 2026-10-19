@@ -51,7 +51,7 @@ func lyricsPollutedKeys(cache map[string]enrichEntry) map[string]bool {
 	}
 	for key, e := range cache {
 		artist, title, album := splitEnrichKey(key)
-		empty := e.Lyrics == "" && !e.ManualLyrics && !e.Instrumental
+		empty := e.Lyrics.IsZero() && !e.ManualLyrics && !e.Instrumental
 		if len(trustedSplitCandidates(title)) > 0 {
 			add(byTitle, title+"|"+album, artist, key, empty)
 		}

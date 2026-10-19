@@ -145,29 +145,29 @@ type lyricsRematchFacts struct {
 // 显示纯音乐;没换词就不动,用户标的照留。自动路径(manual 为 false)永远不撤。
 func rematchClearsInstrumental(manual bool, before, after enrichEntry) bool {
 	return manual && after.Instrumental &&
-		(after.Lyrics != before.Lyrics || after.LyricsYRC != before.LyricsYRC ||
-			after.LyricsSource != before.LyricsSource || after.PlainLyrics != before.PlainLyrics)
+		(!after.Lyrics.Equal(before.Lyrics) || !after.LyricsYRC.Equal(before.LyricsYRC) ||
+			after.LyricsSource != before.LyricsSource || !after.PlainLyrics.Equal(before.PlainLyrics))
 }
 
 // lyricsRematchOutcome 按动手前后的条目定结论:真换了就是 changed,不管是哪一步换的(跨专辑对齐也算)。
 func lyricsRematchOutcome(f lyricsRematchFacts) lyricsRematchResult {
 	b, a := f.before, f.after
-	r := lyricsRematchResult{Previous: b.LyricsSource, HadLyrics: b.Lyrics != ""}
+	r := lyricsRematchResult{Previous: b.LyricsSource, HadLyrics: !b.Lyrics.IsZero()}
 	switch {
-	case a.Lyrics != b.Lyrics || a.LyricsYRC != b.LyricsYRC || a.LyricsSource != b.LyricsSource:
+	case !a.Lyrics.Equal(b.Lyrics) || !a.LyricsYRC.Equal(b.LyricsYRC) || a.LyricsSource != b.LyricsSource:
 		r.Outcome = lyricsRematchChanged
 		r.Winner, r.WinnerScore = a.LyricsSource, a.LyricsScore
-		r.TextChanged, r.TimingChanged = a.Lyrics != b.Lyrics, a.LyricsYRC != b.LyricsYRC
+		r.TextChanged, r.TimingChanged = !a.Lyrics.Equal(b.Lyrics), !a.LyricsYRC.Equal(b.LyricsYRC)
 	case !f.decidable && !f.reached:
 		r.Outcome = lyricsRematchOffline
 	case !f.decidable:
 		r.Outcome = lyricsRematchNotDecidable
-	case f.picked == nil || a.Lyrics == "":
+	case f.picked == nil || a.Lyrics.IsZero():
 		// 没有冠军,或没词的条目冠军够不上(分数不高于 0,见 lyricsUpgradeBaseline)。
 		switch {
 		case a.Instrumental && !b.Instrumental:
 			r.Outcome = lyricsRematchInstrumental
-		case a.PlainLyrics != b.PlainLyrics:
+		case !a.PlainLyrics.Equal(b.PlainLyrics):
 			r.Outcome = lyricsRematchPlainText
 		case !f.reached:
 			r.Outcome = lyricsRematchOffline
@@ -349,7 +349,7 @@ func runLyricsRematchOne(ctx context.Context, key string, progress func(done, to
 	var result lyricsRematchResult
 	opts := lyricsRescoreOpts{manual: true, progress: progress, result: &result}
 	// 两个函数自己负责清 enrichInflight、落盘、导出、通知重推。
-	if e.Lyrics == "" {
+	if e.Lyrics.IsZero() {
 		retryLyricsUpgradeWith(withManualLyricSearch(ctx), key, artist, title, album, duration, true, opts)
 	} else {
 		rescoreLyricsWith(withManualLyricSearch(ctx), key, artist, title, album, duration, opts)

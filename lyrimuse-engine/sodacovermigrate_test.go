@@ -18,8 +18,8 @@ func TestMigrateSodaCoverURLs(t *testing.T) {
 	enrichMu.Lock()
 	enrichPath = ""
 	enrichCache = map[string]enrichEntry{
-		"a|t|b": {Lyrics: "x", LyricsDecision: orig, LyricsDecisionApplied: orig},
-		"c|t|d": {Lyrics: "y"},
+		"a|t|b": {Lyrics: bt("x"), LyricsDecision: orig, LyricsDecisionApplied: orig},
+		"c|t|d": {Lyrics: bt("y")},
 	}
 	enrichMu.Unlock()
 

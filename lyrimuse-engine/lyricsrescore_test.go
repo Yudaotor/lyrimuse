@@ -15,7 +15,7 @@ func TestNeedsLyricsRescore(t *testing.T) {
 	saved := features()
 	defer func() { setFeatures(saved) }()
 
-	stale := enrichEntry{Lyrics: "x", LyricsScoringVersion: lyricsScoringVersion - 1}
+	stale := enrichEntry{Lyrics: bt("x"), LyricsScoringVersion: lyricsScoringVersion - 1}
 
 	cases := []struct {
 		name string
@@ -25,12 +25,12 @@ func TestNeedsLyricsRescore(t *testing.T) {
 		{"版本落后:重选", stale, true},
 		{
 			name: "没有版本号的老条目(读成 0):也算落后,重选",
-			e:    enrichEntry{Lyrics: "x"},
+			e:    enrichEntry{Lyrics: bt("x")},
 			want: true,
 		},
 		{
 			name: "版本已是最新:不碰",
-			e:    enrichEntry{Lyrics: "x", LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision},
+			e:    enrichEntry{Lyrics: bt("x"), LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision},
 			want: false,
 		},
 		{
@@ -80,7 +80,7 @@ func TestNeedsLyricsRescore(t *testing.T) {
 		},
 		{
 			name: "已有逐字歌词也照样重选 —— 规则变了,当初的选择本身就要重新审视",
-			e:    func() enrichEntry { e := stale; e.LyricsYRC = "y"; return e }(),
+			e:    func() enrichEntry { e := stale; e.LyricsYRC = bt("y"); return e }(),
 			want: true,
 		},
 		{

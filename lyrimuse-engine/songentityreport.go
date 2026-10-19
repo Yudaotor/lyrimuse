@@ -76,7 +76,7 @@ func (b *songEntityBuild) report() songEntityReport {
 		r.shareGroups++
 		bodies := map[string]int{}
 		for _, m := range ms {
-			if l := strings.TrimSpace(b.variants[m].lyrics); l != "" {
+			if l := strings.TrimSpace(b.variants[m].lyrics.String()); l != "" {
 				bodies[l]++
 			}
 		}
@@ -113,7 +113,7 @@ func (b *songEntityBuild) reportEntity(r *songEntityReport, ci int, members []in
 		}
 		if vs[m].manual {
 			manual++
-			manualBodies[vs[m].lyrics] = true
+			manualBodies[vs[m].lyrics.String()] = true
 		}
 		if vs[m].pinned {
 			pins++
@@ -185,12 +185,12 @@ func (b *songEntityBuild) reportEntity(r *songEntityReport, ci int, members []in
 	// 三元组、时间轴按证据那份算,歌词还是同步写进来的副本(证据换成了同步之前那份)的不比。
 	for i, x := range members {
 		_, wx := vs[x].lyricsShingles()
-		if wx == nil || vs[x].evLyrics != vs[x].lyrics {
+		if wx == nil || !vs[x].evLyrics.Equal(vs[x].lyrics) {
 			continue
 		}
 		for _, y := range members[i+1:] {
 			_, wy := vs[y].lyricsShingles()
-			if wy == nil || vs[y].evLyrics != vs[y].lyrics || vs[x].lyrics == vs[y].lyrics {
+			if wy == nil || !vs[y].evLyrics.Equal(vs[y].lyrics) || vs[x].lyrics.Equal(vs[y].lyrics) {
 				continue
 			}
 			overlap := songWordOverlap(wx, wy)

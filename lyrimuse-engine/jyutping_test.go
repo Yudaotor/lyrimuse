@@ -136,34 +136,34 @@ func TestMaybeGenerateJyutpingRoma(t *testing.T) {
 	}{
 		{
 			name:     "粤语且罗马音为空 → 应该补上",
-			entry:    enrichEntry{SongLanguage: songLanguageCantonese, Lyrics: "[00:01.00]我愛你"},
+			entry:    enrichEntry{SongLanguage: songLanguageCantonese, Lyrics: bt("[00:01.00]我愛你")},
 			wantRoma: "[00:01.00]ngo5 oi3 nei5",
 		},
 		{
 			name:     "已有罗马音 → 不覆盖",
-			entry:    enrichEntry{SongLanguage: songLanguageCantonese, Lyrics: "[00:01.00]我愛你", LyricsRoma: "[00:01.00]existing"},
+			entry:    enrichEntry{SongLanguage: songLanguageCantonese, Lyrics: bt("[00:01.00]我愛你"), LyricsRoma: bt("[00:01.00]existing")},
 			wantRoma: "[00:01.00]existing",
 		},
 		{
 			name:     "国语歌不该生成粤拼",
-			entry:    enrichEntry{SongLanguage: songLanguageMandarin, Lyrics: "[00:01.00]我愛你"},
+			entry:    enrichEntry{SongLanguage: songLanguageMandarin, Lyrics: bt("[00:01.00]我愛你")},
 			wantRoma: "",
 		},
 		{
 			name:     "语种未知不该生成粤拼",
-			entry:    enrichEntry{SongLanguage: "", Lyrics: "[00:01.00]我愛你"},
+			entry:    enrichEntry{SongLanguage: "", Lyrics: bt("[00:01.00]我愛你")},
 			wantRoma: "",
 		},
 		{
 			name:     "没有歌词正文不该生成",
-			entry:    enrichEntry{SongLanguage: songLanguageCantonese, Lyrics: ""},
+			entry:    enrichEntry{SongLanguage: songLanguageCantonese, Lyrics: bodyText{}},
 			wantRoma: "",
 		},
 	}
 	for _, c := range cases {
 		e := c.entry
 		e.maybeGenerateJyutpingRoma()
-		if e.LyricsRoma != c.wantRoma {
+		if !e.LyricsRoma.EqualString(c.wantRoma) {
 			t.Errorf("%s: LyricsRoma = %q, want %q", c.name, e.LyricsRoma, c.wantRoma)
 		}
 	}

@@ -43,7 +43,7 @@ func songOffsetFingerprint(lyrics, yrc string) string {
 // songPlanLyricsOf:这条写法现在那份歌词;没有歌词时为 nil。分数、打分版本取采用那一轮胜者的(胜者源跟现在的来源对得上才算)。
 func (b *songEntityBuild) songPlanLyricsOf(i int, picked map[string]bool) *songPlanLyrics {
 	v := &b.variants[i]
-	return songPlanLyricsFor(v.key, v.lyrics, v.yrc, v.lyricsSource, v.manual || picked[v.key], v.pinned, v.applied, b.decisionsDir)
+	return songPlanLyricsFor(v.key, v.lyrics.String(), v.yrc.String(), v.lyricsSource, v.manual || picked[v.key], v.pinned, v.applied, b.decisionsDir)
 }
 
 // songPlanLyricsFor:同 songPlanLyricsOf,按条目的几样字段算;decisionsDir 是解析决策旁路文件的目录。
@@ -133,7 +133,7 @@ func songPlanPicked(cache map[string]enrichEntry) map[string]bool {
 
 // songSharePickHeld:用户采纳的那一份还是现在的正文。
 func songSharePickHeld(e enrichEntry) bool {
-	return e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics)
+	return e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics.String())
 }
 
 // shareEvalGroups:正式空跑要重搜的共享组:组里没有手改或采纳、没有校准、两条写法以上,而且组里歌词不止一份
@@ -211,12 +211,12 @@ func shareEvalPlan(keys []string, entries []enrichEntry, own []*songPlanLyrics, 
 	var out []songEvalLine
 	for i, e := range entries {
 		switch {
-		case e.Lyrics == "" && e.Instrumental:
+		case e.Lyrics.IsZero() && e.Instrumental:
 			continue
-		case e.Lyrics == "":
+		case e.Lyrics.IsZero():
 			out = append(out, songEvalLine{key: keys[i], action: "补"})
 			continue
-		case e.Lyrics == choice.Lyrics:
+		case e.Lyrics.EqualString(choice.Lyrics):
 			if upgrade && gainsWordTiming(e, choice) {
 				out = append(out, songEvalLine{key: keys[i], action: "补逐字"})
 			}
@@ -224,16 +224,16 @@ func shareEvalPlan(keys []string, entries []enrichEntry, own []*songPlanLyrics, 
 		}
 		var cur *scoredLyricCandidateResult
 		for j := range scored {
-			if scored[j].Source == e.LyricsSource && scored[j].Lyrics == e.Lyrics {
+			if scored[j].Source == e.LyricsSource && e.Lyrics.EqualString(scored[j].Lyrics) {
 				cur = &scored[j]
 				break
 			}
 		}
-		before := fmt.Sprintf("%s 这一轮没找到 %s", e.LyricsSource, songEvalKind(e.Lyrics, e.LyricsYRC))
+		before := fmt.Sprintf("%s 这一轮没找到 %s", e.LyricsSource, songEvalKind(e.Lyrics.String(), e.LyricsYRC.String()))
 		if cur != nil {
-			before = fmt.Sprintf("%s %d 分 %s", e.LyricsSource, cur.Score, songEvalKind(e.Lyrics, e.LyricsYRC))
+			before = fmt.Sprintf("%s %d 分 %s", e.LyricsSource, cur.Score, songEvalKind(e.Lyrics.String(), e.LyricsYRC.String()))
 		}
-		contradicted := rescoreCurrentContradicted(e.Lyrics, scored, choice)
+		contradicted := rescoreCurrentContradicted(e.Lyrics.String(), scored, choice)
 		why := ""
 		switch {
 		case own[i] != nil && (own[i].manual || own[i].pinned):
@@ -248,7 +248,7 @@ func shareEvalPlan(keys []string, entries []enrichEntry, own []*songPlanLyrics, 
 			why = songKeepUndecidable
 		case rescoreKeepsLyrics(e, scored, choice, false, contradicted):
 			why = shareEvalKeepWhy(e, scored, choice)
-		case !lyricsAreCreditsOnly(e.Lyrics) && isTimedLRC(e.Lyrics) && !isTimedLRC(choice.Lyrics):
+		case !lyricsAreCreditsOnly(e.Lyrics.String()) && isTimedLRC(e.Lyrics.String()) && !isTimedLRC(choice.Lyrics):
 			why = songKeepTimed
 		}
 		action := "换"

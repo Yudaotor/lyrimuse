@@ -103,7 +103,7 @@ func entrySongLanguage(lyrics string, scored []scoredLyricCandidateResult) strin
 // dropHokkienRoma:台语歌不留罗马音(理由见文件头)。用户手改过的歌词不动。
 func (e *enrichEntry) dropHokkienRoma() {
 	if e.SongLanguage == songLanguageHokkien && !e.lyricsHandEdited() {
-		e.LyricsRoma = ""
+		e.LyricsRoma = bodyText{}
 	}
 }
 
@@ -118,12 +118,12 @@ func migrateHokkienSongLanguage() {
 	enrichMu.Lock()
 	marked, cleared := 0, 0
 	for k, e := range scope.entries() {
-		if e.Lyrics == "" || e.SongLanguage == songLanguageCantonese || e.SongLanguage == songLanguageHokkien ||
-			!lyricsLookHokkien(e.Lyrics) {
+		if e.Lyrics.IsZero() || e.SongLanguage == songLanguageCantonese || e.SongLanguage == songLanguageHokkien ||
+			!lyricsLookHokkien(e.Lyrics.String()) {
 			continue
 		}
 		e.SongLanguage = songLanguageHokkien
-		if e.LyricsRoma != "" && !e.lyricsHandEdited() {
+		if !e.LyricsRoma.IsZero() && !e.lyricsHandEdited() {
 			cleared++
 		}
 		e.dropHokkienRoma()

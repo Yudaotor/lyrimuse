@@ -30,7 +30,7 @@ var bgBackfillTried = map[string]bool{}
 // needsBackgroundVocalsBackfill:胜出源是 amll / applemusic、还没按当前 TTML 附属内容解析器取过的有词条目。
 // 手改过的不动(背景人声对不上用户改过的正文);标了纯音乐的不补(歌词不显示)。
 func needsBackgroundVocalsBackfill(e enrichEntry) bool {
-	return e.LyricsBGChecked < lyricsBGParserVersion && e.Lyrics != "" && !e.Instrumental && !e.lyricsHandEdited() &&
+	return e.LyricsBGChecked < lyricsBGParserVersion && !e.Lyrics.IsZero() && !e.Instrumental && !e.lyricsHandEdited() &&
 		(e.LyricsSource == "amll" || e.LyricsSource == "applemusic")
 }
 
@@ -86,7 +86,7 @@ func backfillBackgroundVocals(key, artist, title, album string, durationSecs flo
 	enrichMu.Lock()
 	cur, ok := enrichCache[key]
 	// 取词这段时间里正文被换了(重新选源、用户编辑),取回来的背景人声不再对应它。
-	if !ok || cur.Lyrics != e.Lyrics || cur.LyricsYRC != e.LyricsYRC || cur.LyricsSource != e.LyricsSource ||
+	if !ok || !cur.Lyrics.Equal(e.Lyrics) || !cur.LyricsYRC.Equal(e.LyricsYRC) || cur.LyricsSource != e.LyricsSource ||
 		cur.LyricsBGChecked >= lyricsBGParserVersion {
 		enrichMu.Unlock()
 		return
@@ -94,10 +94,10 @@ func backfillBackgroundVocals(key, artist, title, album string, durationSecs flo
 	switch {
 	case bg == "":
 		log.Printf("bg backfill: %s  %s has no background vocals", key, cur.LyricsSource)
-	case !backgroundAlignsWithLyrics(bg, cur.LyricsYRC, cur.Lyrics):
+	case !backgroundAlignsWithLyrics(bg, cur.LyricsYRC.String(), cur.Lyrics.String()):
 		log.Printf("bg backfill: %s  %s background vocals don't line up with the cached lyrics, skipped", key, cur.LyricsSource)
 	default:
-		cur.LyricsBG = bg
+		cur.LyricsBG = bt(bg)
 		log.Printf("bg backfill: %s  %s +%d background lines", key, cur.LyricsSource, strings.Count(bg, "\n"))
 	}
 	if len(songwriters) > 0 {

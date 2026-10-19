@@ -100,13 +100,13 @@ func TestEditSongEntityUserSplits(t *testing.T) {
 func TestSplitSongEdit(t *testing.T) {
 	own, synced := songShareLRC("own"), songShareLRC("shared")
 	setUpSongShareTest(t, map[string]enrichEntry{
-		"A|Song|One":   {Song: "s_000000000001", Lyrics: synced, LyricsSource: "netease"},
-		"A|Song|Two":   {Song: "s_000000000001", SongShare: 1, Lyrics: synced, LyricsSource: "netease"},
-		"A|Song|Three": {Song: "s_000000000001", Lyrics: synced, LyricsSource: "netease"},
-		"B|Other|One":  {Song: "s_000000000002", Lyrics: own},
+		"A|Song|One":   {Song: "s_000000000001", Lyrics: bt(synced), LyricsSource: "netease"},
+		"A|Song|Two":   {Song: "s_000000000001", SongShare: 1, Lyrics: bt(synced), LyricsSource: "netease"},
+		"A|Song|Three": {Song: "s_000000000001", Lyrics: bt(synced), LyricsSource: "netease"},
+		"B|Other|One":  {Song: "s_000000000002", Lyrics: bt(own)},
 	}, true)
 	t0 := time.Unix(1_000_000, 0)
-	if _, err := writeSongSharePre("A|Song|Two", enrichEntry{Song: "s_000000000001", Lyrics: own, LyricsSource: "qq"},
+	if _, err := writeSongSharePre("A|Song|Two", enrichEntry{Song: "s_000000000001", Lyrics: bt(own), LyricsSource: "qq"},
 		songOffsetFingerprint(synced, ""), t0); err != nil {
 		t.Fatal(err)
 	}
@@ -132,10 +132,10 @@ func TestSplitSongEdit(t *testing.T) {
 	if one.Song != "s_000000000001" || three.Song != "s_000000000001" {
 		t.Errorf("留下的不动: %q %q", one.Song, three.Song)
 	}
-	if two.Lyrics != own || two.LyricsSource != "qq" {
+	if !two.Lyrics.EqualString(own) || two.LyricsSource != "qq" {
 		t.Errorf("同步写进去的歌词按留底恢复: %q", two.LyricsSource)
 	}
-	if one.Lyrics != synced {
+	if !one.Lyrics.EqualString(synced) {
 		t.Error("留下的写法歌词不动")
 	}
 	if hasPre("A|Song|Two") {
@@ -197,12 +197,12 @@ func TestSplitSongEdit(t *testing.T) {
 func TestSplitSongEditReleasesCopies(t *testing.T) {
 	orig, mine, edited := songShareLRC("orig"), songShareLRC("mine"), songShareLRC("edited")
 	setUpSongShareTest(t, map[string]enrichEntry{
-		"A|Song|One":   {Song: "s_000000000001", Lyrics: orig, ManualLyrics: true},
-		"A|Song|Two":   {Song: "s_000000000001", Lyrics: orig, ManualLyrics: true, LyricsEntityOrigin: "A|Song|One"},
-		"A|Song|Three": {Song: "s_000000000001", Lyrics: edited, ManualLyrics: true, LyricsEntityOrigin: "A|Song|One"},
-		"A|Song|Four":  {Song: "s_000000000001", Lyrics: mine, ManualLyrics: true},
+		"A|Song|One":   {Song: "s_000000000001", Lyrics: bt(orig), ManualLyrics: true},
+		"A|Song|Two":   {Song: "s_000000000001", Lyrics: bt(orig), ManualLyrics: true, LyricsEntityOrigin: "A|Song|One"},
+		"A|Song|Three": {Song: "s_000000000001", Lyrics: bt(edited), ManualLyrics: true, LyricsEntityOrigin: "A|Song|One"},
+		"A|Song|Four":  {Song: "s_000000000001", Lyrics: bt(mine), ManualLyrics: true},
 	}, true)
-	if _, err := writeSongSharePre("A|Song|Two", enrichEntry{Lyrics: mine, LyricsSource: "qq"},
+	if _, err := writeSongSharePre("A|Song|Two", enrichEntry{Lyrics: bt(mine), LyricsSource: "qq"},
 		songOffsetFingerprint(orig, ""), time.Unix(1_000_000, 0)); err != nil {
 		t.Fatal(err)
 	}
@@ -213,13 +213,13 @@ func TestSplitSongEditReleasesCopies(t *testing.T) {
 	enrichMu.Lock()
 	two, three, four := enrichCache["A|Song|Two"], enrichCache["A|Song|Three"], enrichCache["A|Song|Four"]
 	enrichMu.Unlock()
-	if two.Lyrics != mine || two.ManualLyrics || two.LyricsEntityOrigin != "" {
+	if !two.Lyrics.EqualString(mine) || two.ManualLyrics || two.LyricsEntityOrigin != "" {
 		t.Errorf("同步来的手改副本按留底恢复: %+v", two)
 	}
-	if three.Lyrics != edited || three.LyricsEntityOrigin != "" || three.ManualLyrics {
+	if !three.Lyrics.EqualString(edited) || three.LyricsEntityOrigin != "" || three.ManualLyrics {
 		t.Errorf("没有能用的留底:词留着、去掉副本与手改标记: %+v", three)
 	}
-	if four.Lyrics != mine || !four.ManualLyrics {
+	if !four.Lyrics.EqualString(mine) || !four.ManualLyrics {
 		t.Errorf("自己的手改原件不动: %+v", four)
 	}
 	drainSongEntityRebuild()
@@ -326,10 +326,10 @@ func TestManualLockCountsOriginalsOnly(t *testing.T) {
 	lrc := songShareLRC("picked")
 	sha := manualPickFingerprint(lrc)
 	setUpSongShareTest(t, map[string]enrichEntry{
-		"A|Song|One":   {Song: "s_000000000001", Lyrics: lrc, ManualLyrics: true, ManualPickSHA: sha},
-		"A|Song|Two":   {Song: "s_000000000001", Lyrics: lrc, ManualLyrics: true, ManualPickSHA: sha, LyricsEntityOrigin: "A|Song|One"},
-		"A|Song|Three": {Song: "s_000000000001", Lyrics: lrc, ManualLyrics: true, ManualPickSHA: sha, LyricsEntityOrigin: "A|Song|One"},
-		"B|Other|One":  {Lyrics: songShareLRC("other"), ManualLyrics: true, ManualPickSHA: manualPickFingerprint(songShareLRC("other"))},
+		"A|Song|One":   {Song: "s_000000000001", Lyrics: bt(lrc), ManualLyrics: true, ManualPickSHA: sha},
+		"A|Song|Two":   {Song: "s_000000000001", Lyrics: bt(lrc), ManualLyrics: true, ManualPickSHA: sha, LyricsEntityOrigin: "A|Song|One"},
+		"A|Song|Three": {Song: "s_000000000001", Lyrics: bt(lrc), ManualLyrics: true, ManualPickSHA: sha, LyricsEntityOrigin: "A|Song|One"},
+		"B|Other|One":  {Lyrics: bt(songShareLRC("other")), ManualLyrics: true, ManualPickSHA: manualPickFingerprint(songShareLRC("other"))},
 	}, true)
 	if res := applyEnrichEdit(enrichEditRequest{Op: "count_manual_lock", Value: false}); !res.OK || res.Changed != 2 {
 		t.Fatalf("只数原件: %+v", res)
@@ -351,17 +351,17 @@ func TestManualLockCountsOriginalsOnly(t *testing.T) {
 // 统一两份手改只动同一个共享组:别的组自己的手改原件留着。
 func TestResolveManualConflictStaysInShareGroup(t *testing.T) {
 	setUpSongShareTest(t, map[string]enrichEntry{
-		"A|Song|One":   {Song: "s_000000000001", Lyrics: songShareLRC("x"), LyricsSource: "manual", ManualLyrics: true},
-		"A|Song|Two":   {Song: "s_000000000001", Lyrics: songShareLRC("y"), LyricsSource: "manual", ManualLyrics: true},
-		"A|Song|Three": {Song: "s_000000000001", SongShare: 1, Lyrics: songShareLRC("z"), LyricsSource: "manual", ManualLyrics: true},
+		"A|Song|One":   {Song: "s_000000000001", Lyrics: bt(songShareLRC("x")), LyricsSource: "manual", ManualLyrics: true},
+		"A|Song|Two":   {Song: "s_000000000001", Lyrics: bt(songShareLRC("y")), LyricsSource: "manual", ManualLyrics: true},
+		"A|Song|Three": {Song: "s_000000000001", SongShare: 1, Lyrics: bt(songShareLRC("z")), LyricsSource: "manual", ManualLyrics: true},
 	}, true)
 	if res := applyEnrichEdit(enrichEditRequest{Op: "resolve_manual_conflict", Key: "A|Song|One"}); !res.OK {
 		t.Fatalf("统一: %+v", res)
 	}
-	if got, _ := cacheEntry(t, "A|Song|Two"); got.Lyrics != songShareLRC("x") || got.LyricsEntityOrigin != "A|Song|One" {
+	if got, _ := cacheEntry(t, "A|Song|Two"); !got.Lyrics.EqualString(songShareLRC("x")) || got.LyricsEntityOrigin != "A|Song|One" {
 		t.Errorf("同组那份换成选的: %+v", got)
 	}
-	if got, _ := cacheEntry(t, "A|Song|Three"); got.Lyrics != songShareLRC("z") || got.LyricsEntityOrigin != "" {
+	if got, _ := cacheEntry(t, "A|Song|Three"); !got.Lyrics.EqualString(songShareLRC("z")) || got.LyricsEntityOrigin != "" {
 		t.Errorf("别的组的手改原件留着: %+v", got)
 	}
 }
@@ -369,12 +369,12 @@ func TestResolveManualConflictStaysInShareGroup(t *testing.T) {
 func TestResolveManualConflictEdit(t *testing.T) {
 	a, b, auto := songShareLRC("mine-a"), songShareLRC("mine-b"), songShareLRC("auto")
 	dir := setUpSongShareTest(t, map[string]enrichEntry{
-		"A|Song|One":   {Song: "s_000000000001", Lyrics: a, ManualLyrics: true, LyricsSource: "manual"},
-		"A|Song|Two":   {Song: "s_000000000001", Lyrics: b, ManualLyrics: true, LyricsSource: "manual"},
-		"A|Song|Three": {Song: "s_000000000001", Lyrics: a, ManualLyrics: true, LyricsEntityOrigin: "A|Song|One"},
-		"A|Song|Four":  {Song: "s_000000000001", Lyrics: auto, LyricsSource: "qq"},
-		"A|Song|Five":  {Song: "s_000000000001", Lyrics: b, ManualLyrics: true, LyricsSource: "manual"},
-		"B|Other|One":  {Song: "s_000000000002", Lyrics: a, ManualLyrics: true},
+		"A|Song|One":   {Song: "s_000000000001", Lyrics: bt(a), ManualLyrics: true, LyricsSource: "manual"},
+		"A|Song|Two":   {Song: "s_000000000001", Lyrics: bt(b), ManualLyrics: true, LyricsSource: "manual"},
+		"A|Song|Three": {Song: "s_000000000001", Lyrics: bt(a), ManualLyrics: true, LyricsEntityOrigin: "A|Song|One"},
+		"A|Song|Four":  {Song: "s_000000000001", Lyrics: bt(auto), LyricsSource: "qq"},
+		"A|Song|Five":  {Song: "s_000000000001", Lyrics: bt(b), ManualLyrics: true, LyricsSource: "manual"},
+		"B|Other|One":  {Song: "s_000000000002", Lyrics: bt(a), ManualLyrics: true},
 	}, true)
 	if res := applyEnrichEdit(enrichEditRequest{Op: "resolve_manual_conflict", Key: "A|Song|Three"}); res.OK {
 		t.Error("副本不能当选定的那份")
@@ -385,17 +385,17 @@ func TestResolveManualConflictEdit(t *testing.T) {
 	}
 	for _, k := range []string{"A|Song|One", "A|Song|Three", "A|Song|Four"} {
 		got, _ := cacheEntry(t, k)
-		if got.Lyrics != b || got.LyricsEntityOrigin != "A|Song|Two" || !got.ManualLyrics {
+		if !got.Lyrics.EqualString(b) || got.LyricsEntityOrigin != "A|Song|Two" || !got.ManualLyrics {
 			t.Errorf("%s 换成选定那份的副本: %+v", k, got)
 		}
 	}
-	if got, _ := cacheEntry(t, "A|Song|Five"); got.Lyrics != b || got.LyricsEntityOrigin != "" {
+	if got, _ := cacheEntry(t, "A|Song|Five"); !got.Lyrics.EqualString(b) || got.LyricsEntityOrigin != "" {
 		t.Errorf("内容跟选定那份一样的原件不动: %+v", got)
 	}
-	if got, _ := cacheEntry(t, "B|Other|One"); got.Lyrics != a || got.LyricsEntityOrigin != "" {
+	if got, _ := cacheEntry(t, "B|Other|One"); !got.Lyrics.EqualString(a) || got.LyricsEntityOrigin != "" {
 		t.Errorf("别的歌不动: %+v", got)
 	}
-	if _, pre := readPreEntry(t, "A|Song|One"); pre.Lyrics != a {
+	if _, pre := readPreEntry(t, "A|Song|One"); !pre.Lyrics.EqualString(a) {
 		t.Errorf("被换掉的原件要留底: %+v", pre)
 	}
 	matches, _ := filepath.Glob(filepath.Join(filepath.Dir(dir), clientName+"-backups", "*-song-entity-manual", "entries.json"))
@@ -404,7 +404,7 @@ func TestResolveManualConflictEdit(t *testing.T) {
 	}
 	data, _ := os.ReadFile(matches[0])
 	var saved map[string]enrichEntry
-	if err := json.Unmarshal(data, &saved); err != nil || len(saved) != 1 || saved["A|Song|One"].Lyrics != a {
+	if err := json.Unmarshal(data, &saved); err != nil || len(saved) != 1 || !saved["A|Song|One"].Lyrics.EqualString(a) {
 		t.Errorf("另存的是被换掉的原件此刻的样子: %v %+v", err, saved)
 	}
 	setFeatures(featureFlags{SongEntityShadow: true})
@@ -417,12 +417,12 @@ func TestResolveManualConflictEdit(t *testing.T) {
 func TestSetInstrumentalFollowsShareGroup(t *testing.T) {
 	picked := songShareLRC("picked")
 	setUpSongShareTest(t, map[string]enrichEntry{
-		"A|Song|One":   {Song: "s_000000000001", Lyrics: songShareLRC("a")},
-		"A|Song|Two":   {Song: "s_000000000001", Lyrics: songShareLRC("a")},
-		"A|Song|Three": {Song: "s_000000000001", SongShare: 1, Lyrics: songShareLRC("c")},
-		"A|Song|Four":  {Song: "s_000000000001", Lyrics: songShareLRC("mine"), ManualLyrics: true},
-		"A|Song|Five":  {Song: "s_000000000001", Lyrics: picked, ManualPickSHA: manualPickFingerprint(picked)},
-		"B|Other|One":  {Song: "s_000000000002", Lyrics: songShareLRC("b")},
+		"A|Song|One":   {Song: "s_000000000001", Lyrics: bt(songShareLRC("a"))},
+		"A|Song|Two":   {Song: "s_000000000001", Lyrics: bt(songShareLRC("a"))},
+		"A|Song|Three": {Song: "s_000000000001", SongShare: 1, Lyrics: bt(songShareLRC("c"))},
+		"A|Song|Four":  {Song: "s_000000000001", Lyrics: bt(songShareLRC("mine")), ManualLyrics: true},
+		"A|Song|Five":  {Song: "s_000000000001", Lyrics: bt(picked), ManualPickSHA: manualPickFingerprint(picked)},
+		"B|Other|One":  {Song: "s_000000000002", Lyrics: bt(songShareLRC("b"))},
 	}, true)
 	instrumental := func() []string {
 		enrichMu.Lock()

@@ -524,7 +524,7 @@ func amazonProvisionalLyrics(isNewTrack bool, bundleID, artist, title, album str
 	if !ok || borrowed {
 		return enrichEntry{}, false
 	}
-	return enrichEntry{Lyrics: r.lyr, LyricsSource: amazonLocalLyricsSource}, true
+	return enrichEntry{Lyrics: bt(r.lyr), LyricsSource: amazonLocalLyricsSource}, true
 }
 
 // amazonLyricsAvailableTTL:同一首记多久。trackEnrichment 在一首歌的播放期间会被反复调用,每次都扫一遍 Hammer Cache

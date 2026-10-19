@@ -46,7 +46,7 @@ func TestDurationVariantSteadyIsWired(t *testing.T) {
 	for _, n := range []string{
 		"steady := rok || durationVariantSteadyLocked(key, durationSecs, time.Now())\n\t\t\tif !steady && !sameRecording {\n\t\t\t\tenrichMu.Unlock()\n\t\t\t\treturn nil\n\t\t\t}",
 		"sameRecording := sameRecordingAsPlaying(e, bundleID, playingSongID)",
-		"(durationMismatch(e.ResolvedDurationSecs, durationSecs) || lyricsOutrunPlayback(e.Lyrics, e.ResolvedDurationSecs, durationSecs)) &&\n\t\t\t\t!sameRecordingStay, durationSecs",
+		"(durationMismatch(e.ResolvedDurationSecs, durationSecs) || lyricsOutrunPlayback(e.Lyrics.String(), e.ResolvedDurationSecs, durationSecs)) &&\n\t\t\t\t!sameRecordingStay, durationSecs",
 		"case sameRecording:\n\t\t\t\t// 时长稳定成另一个值",
 		"correctDuration, sameRecordingStay = true, true",
 		"playingSongID := playingSongIDFor(bundleID, anchorLink, catalogIDs)\n\tenrichMu.Lock()",

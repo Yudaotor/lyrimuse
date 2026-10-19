@@ -25,10 +25,10 @@ func TestImportedEditSyncsToSong(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			auto := songShareLRC("auto")
 			setUpSongShareTest(t, map[string]enrichEntry{
-				"A|Song|One":   {Song: "s_000000000001", Lyrics: auto, LyricsSource: "qq"},
-				"A|Song|Two":   {Song: "s_000000000001", Lyrics: auto, LyricsSource: "qq"},
-				"A|Song|Three": {Song: "s_000000000001", SongShare: 1, Lyrics: songShareLRC("other"), LyricsSource: "kugou"},
-				"B|Other|One":  {Song: "s_000000000002", Lyrics: auto, LyricsSource: "qq"},
+				"A|Song|One":   {Song: "s_000000000001", Lyrics: bt(auto), LyricsSource: "qq"},
+				"A|Song|Two":   {Song: "s_000000000001", Lyrics: bt(auto), LyricsSource: "qq"},
+				"A|Song|Three": {Song: "s_000000000001", SongShare: 1, Lyrics: bt(songShareLRC("other")), LyricsSource: "kugou"},
+				"B|Other|One":  {Song: "s_000000000002", Lyrics: bt(auto), LyricsSource: "qq"},
 			}, c.sharing)
 			dir := withLyricsFileStateEnv(t)
 			exportLyricsFiles()
@@ -63,19 +63,19 @@ func TestImportedEditSyncsToSong(t *testing.T) {
 				t.Errorf("跟着改了的要让在飞的后台任务作废: %v", twoEdited)
 			}
 			one, _ := cacheEntry(t, "A|Song|One")
-			if !strings.Contains(one.Lyrics, "mine") {
+			if !strings.Contains(one.Lyrics.String(), "mine") {
 				t.Fatalf("改过的文件要读进来: %q", one.Lyrics)
 			}
 			if one.ManualLyrics != c.synced {
 				t.Errorf("同步开着才按手改处理: manual=%v", one.ManualLyrics)
 			}
-			if got, _ := cacheEntry(t, "A|Song|Two"); (got.Lyrics == one.Lyrics && got.LyricsEntityOrigin == "A|Song|One") != c.synced {
+			if got, _ := cacheEntry(t, "A|Song|Two"); (got.Lyrics.Equal(one.Lyrics) && got.LyricsEntityOrigin == "A|Song|One") != c.synced {
 				t.Errorf("同一个共享组跟上手改: %+v", got)
 			}
-			if got, _ := cacheEntry(t, "A|Song|Three"); got.Lyrics != songShareLRC("other") || got.LyricsEntityOrigin != "" {
+			if got, _ := cacheEntry(t, "A|Song|Three"); !got.Lyrics.EqualString(songShareLRC("other")) || got.LyricsEntityOrigin != "" {
 				t.Errorf("别的共享组不跟: %+v", got)
 			}
-			if got, _ := cacheEntry(t, "B|Other|One"); got.Lyrics != auto {
+			if got, _ := cacheEntry(t, "B|Other|One"); !got.Lyrics.EqualString(auto) {
 				t.Errorf("别的歌不动: %q", got.Lyrics)
 			}
 			if c.synced && !slices.Contains(keys, "A|Song|Two") {
@@ -108,8 +108,8 @@ func TestImportWithoutFileStateDoesNotSync(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			auto := songShareLRC("auto")
 			setUpSongShareTest(t, map[string]enrichEntry{
-				"A|Song|One": {Song: "s_000000000001", Lyrics: auto, LyricsSource: "qq"},
-				"A|Song|Two": {Song: "s_000000000001", Lyrics: auto, LyricsSource: "qq"},
+				"A|Song|One": {Song: "s_000000000001", Lyrics: bt(auto), LyricsSource: "qq"},
+				"A|Song|Two": {Song: "s_000000000001", Lyrics: bt(auto), LyricsSource: "qq"},
 			}, true)
 			dir := withLyricsFileStateEnv(t)
 			exportLyricsFiles()
@@ -125,10 +125,10 @@ func TestImportWithoutFileStateDoesNotSync(t *testing.T) {
 			}
 			importLyricsFromFiles()
 			one, _ := cacheEntry(t, "A|Song|One")
-			if !strings.Contains(one.Lyrics, "mine") || one.ManualLyrics {
+			if !strings.Contains(one.Lyrics.String(), "mine") || one.ManualLyrics {
 				t.Errorf("文件照旧赢、但不算手改: manual=%v %q", one.ManualLyrics, one.Lyrics)
 			}
-			if two, _ := cacheEntry(t, "A|Song|Two"); two.Lyrics != auto || two.LyricsEntityOrigin != "" || hasPre("A|Song|Two") {
+			if two, _ := cacheEntry(t, "A|Song|Two"); !two.Lyrics.EqualString(auto) || two.LyricsEntityOrigin != "" || hasPre("A|Song|Two") {
 				t.Errorf("同一首歌的其他写法不动: %+v pre=%v", two, hasPre("A|Song|Two"))
 			}
 		})
@@ -150,10 +150,10 @@ func TestImportSkipsFilesPredatingSongShare(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			auto, old := songShareLRC("auto"), songShareLRC("old")
 			setUpSongShareTest(t, map[string]enrichEntry{
-				"A|Song|One": {Song: "s_000000000001", Lyrics: auto, LyricsSource: "qq"},
-				"A|Song|Two": {Song: "s_000000000001", Lyrics: auto, LyricsSource: "qq"},
+				"A|Song|One": {Song: "s_000000000001", Lyrics: bt(auto), LyricsSource: "qq"},
+				"A|Song|Two": {Song: "s_000000000001", Lyrics: bt(auto), LyricsSource: "qq"},
 			}, true)
-			if _, err := writeSongSharePre("A|Song|Two", enrichEntry{Lyrics: old, LyricsSource: "kugou"}, songOffsetFingerprint(auto, ""), time.Unix(6_000_000, 0)); err != nil {
+			if _, err := writeSongSharePre("A|Song|Two", enrichEntry{Lyrics: bt(old), LyricsSource: "kugou"}, songOffsetFingerprint(auto, ""), time.Unix(6_000_000, 0)); err != nil {
 				t.Fatal(err)
 			}
 			dir := withLyricsFileStateEnv(t)
@@ -182,21 +182,21 @@ func TestImportSkipsFilesPredatingSongShare(t *testing.T) {
 			keys := importLyricsFromFiles()
 			two, _ := cacheEntry(t, "A|Song|Two")
 			if c.trusted {
-				if two.Lyrics != old || !two.ManualLyrics {
+				if !two.Lyrics.EqualString(old) || !two.ManualLyrics {
 					t.Errorf("记录有效时照旧按用户改过处理: manual=%v %q", two.ManualLyrics, two.Lyrics)
 				}
 				return
 			}
 			if body != old {
-				if two.Lyrics != body || two.ManualLyrics {
+				if !two.Lyrics.EqualString(body) || two.ManualLyrics {
 					t.Errorf("跟留底对不上的照旧导入、只改这一条: manual=%v %q", two.ManualLyrics, two.Lyrics)
 				}
 				return
 			}
-			if two.Lyrics != auto || slices.Contains(keys, "A|Song|Two") {
+			if !two.Lyrics.EqualString(auto) || slices.Contains(keys, "A|Song|Two") {
 				t.Errorf("旧文件不导入: %q keys=%v", two.Lyrics, keys)
 			}
-			if one, _ := cacheEntry(t, "A|Song|One"); one.Lyrics != auto {
+			if one, _ := cacheEntry(t, "A|Song|One"); !one.Lyrics.EqualString(auto) {
 				t.Errorf("别的写法不动: %q", one.Lyrics)
 			}
 			exportLyricsFiles()
@@ -212,8 +212,8 @@ func TestImportSkipsFilesPredatingSongShare(t *testing.T) {
 func TestLyricsFileStateTrustAfterExport(t *testing.T) {
 	auto := songShareLRC("auto")
 	setUpSongShareTest(t, map[string]enrichEntry{
-		"A|Song|One": {Song: "s_000000000001", Lyrics: auto, LyricsSource: "qq"},
-		"A|Song|Two": {Song: "s_000000000001", Lyrics: auto, LyricsSource: "qq"},
+		"A|Song|One": {Song: "s_000000000001", Lyrics: bt(auto), LyricsSource: "qq"},
+		"A|Song|Two": {Song: "s_000000000001", Lyrics: bt(auto), LyricsSource: "qq"},
 	}, true)
 	dir := withLyricsFileStateEnv(t)
 	if lyricsFileStateEnabled(dir); lyricsFileStateTrustedFor(dir) {
@@ -236,7 +236,7 @@ func TestLyricsFileStateTrustAfterExport(t *testing.T) {
 		t.Fatal(err)
 	}
 	importLyricsFromDir(other)
-	if two, _ := cacheEntry(t, "A|Song|Two"); two.Lyrics != auto {
+	if two, _ := cacheEntry(t, "A|Song|Two"); !two.Lyrics.EqualString(auto) {
 		t.Errorf("新文件夹没有记录,不同步: %q", two.Lyrics)
 	}
 	if lyricsFileStateEnabled(dir); !lyricsFileStateTrustedFor(dir) {
