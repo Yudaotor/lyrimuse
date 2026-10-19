@@ -2733,7 +2733,7 @@ private struct AppearanceSettingsTab: View {
                         SettingsGroupCard(title: L10n.t("封面")) { lyricsWindowCoverRows }
                     }
                     // 网页显示的就是歌词窗口的完整布局、用的是这一套样式(19 章决策 12)。两种尺寸都有这一组。
-                    SettingsGroupCard(title: L10n.t("网页歌词")) { LyricsWindowWebSettingsRows() }
+                    SettingsGroupCard(title: L10n.t("网页歌词"), beta: true) { LyricsWindowWebSettingsRows() }
                     SettingsCard(cornerRadius: 18) {
                         lyricsWindowResetRow
                     }
@@ -2901,7 +2901,7 @@ private struct AppearanceSettingsTab: View {
             // 摘要报开没开,同悬浮歌词「OBS」那颗。
             return EditorToolbarButtonLabel(
                 icon: "globe", title: L10n.t("网页歌词"),
-                summary: settings.webLyricsEnabled ? L10n.t("已开启") : L10n.t("未开启"))
+                summary: settings.webLyricsEnabled ? L10n.t("已开启") : L10n.t("未开启"), beta: true)
         }
     }
 
@@ -2964,7 +2964,7 @@ private struct AppearanceSettingsTab: View {
                 }
             }
         case .web:
-            SettingsPopoverShell(title: L10n.t("网页歌词"), width: 460) {
+            SettingsPopoverShell(title: L10n.t("网页歌词"), beta: true, width: 460) {
                 LyricsWindowWebSettingsRows()
             }
         }

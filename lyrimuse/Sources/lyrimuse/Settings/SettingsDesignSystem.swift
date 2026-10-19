@@ -943,12 +943,17 @@ struct SettingsEqualColumns: Layout {
 /// 圆角分组框。自绘的卡头不会自动挂搜索高亮(只有 SettingsRow / SettingsCardHeader 会),这里手挂。
 struct SettingsGroupCard<Content: View>: View {
     let title: String
+    /// 组名后面标「Beta」(`SettingsBetaBadge`)。
+    var beta = false
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         SettingsCard(cornerRadius: 18) {
-            Text(title)
-                .font(.system(size: 13, weight: .semibold))
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                if beta { SettingsBetaBadge() }
+            }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
                 .padding(.top, 12)
@@ -958,6 +963,19 @@ struct SettingsGroupCard<Content: View>: View {
                 .padding(.bottom, 10)
                 .environment(\.settingsBoxedGroups, true)
         }
+    }
+}
+
+/// 标题后面的「Beta」小标:还在打磨、表现可能会变的功能,在它的入口(设置行、分组名、编辑台按钮、浮层标题)上标一下。
+struct SettingsBetaBadge: View {
+    var body: some View {
+        Text(L10n.t("Beta"))
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(Capsule().fill(Color.secondary.opacity(0.15)))
+            .fixedSize()
     }
 }
 
@@ -1056,6 +1074,8 @@ struct SettingsRow<Trailing: View>: View {
     var help: String?
     /// 副标题的颜色,默认次要灰。只在副标题本身是一条需要留意的状态时传(如备份已经很久没更新)。
     var subtitleTint: Color?
+    /// 标题后面标「Beta」(`SettingsBetaBadge`)。
+    var beta = false
     @ViewBuilder let trailing: () -> Trailing
 
     var body: some View {
@@ -1088,6 +1108,7 @@ struct SettingsRow<Trailing: View>: View {
                 HStack(spacing: 4) {
                     Text(title)
                         .font(.system(size: 13))
+                    if beta { SettingsBetaBadge() }
                     if let help { HelpButton(text: help) }
                 }
                 // 对齐基准取标题这一行,不取整块文字:有副标题时控件对着标题,副标题往下排。
@@ -1360,6 +1381,8 @@ struct SettingsPopoverShell<Content: View>: View {
     /// 标题右边那个「?」气泡。只有真的需要一段说明才给 —— 灵动岛「屏幕」浮层用它承接
     /// 改版前挂在设置行上的那句作用范围说明。
     var help: String?
+    /// 标题后面标「Beta」(`SettingsBetaBadge`)。
+    var beta = false
     /// 浮层宽度。默认 380 是「文字」「配色」两个浮层的既有值 —— 它们里面是滑杆和取色盘,
     /// 那点宽度是控件本身要的。
     ///
@@ -1408,6 +1431,7 @@ struct SettingsPopoverShell<Content: View>: View {
             HStack(spacing: 4) {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
+                if beta { SettingsBetaBadge() }
                 if let help { HelpButton(text: help) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

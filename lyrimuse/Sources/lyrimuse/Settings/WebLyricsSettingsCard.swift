@@ -15,7 +15,7 @@ struct LyricsWindowWebSettingsRows: View {
         SettingsRowGroupStack {
             SettingsRowGroup {
                 SettingsRow(icon: "globe", title: L10n.t("网页歌词"),
-                            subtitle: L10n.t("在浏览器中显示歌词窗口")) {
+                            subtitle: L10n.t("在浏览器中显示歌词窗口"), beta: true) {
                     Toggle("", isOn: $settings.webLyricsEnabled)
                 }
                 CardDivider()

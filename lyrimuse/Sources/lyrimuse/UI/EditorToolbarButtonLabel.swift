@@ -12,6 +12,8 @@ struct EditorToolbarButtonLabel: View {
     let icon: String
     let title: String
     let summary: String
+    /// 标题后面标「Beta」(`SettingsBetaBadge`);占的宽度从摘要那一截让出来。
+    var beta = false
 
     /// 图标那一格的宽度 —— **定宽,而且必须定宽**:这批图标的本征宽度在 13~15pt 之间不等,
     /// 不定宽的话同一列胶囊的标题起笔前后差 2.5pt。
@@ -41,6 +43,7 @@ struct EditorToolbarButtonLabel: View {
                 .frame(width: Self.iconWidth)
             Text(title)
                 .lineLimit(1)
+            if beta { SettingsBetaBadge() }
             Text("·")
                 .foregroundStyle(.tertiary)
             Text(summary)

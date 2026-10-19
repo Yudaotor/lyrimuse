@@ -744,9 +744,28 @@ func runWebLyricsTests() {
                     "网页歌词诊断: MSE 的上屏帧数取 <video> 的播放统计(每次刷新都画,画的次数不代表新帧)")
         expectEqual(sourceHas(app("WebLyrics/WebLyricsServer.swift"), "img-src blob: data:; media-src blob:;"), true,
                     "网页歌词 MSE: 副屏页面的 CSP 放行 blob: 媒体地址(Chromium 按 CSP 拦 MediaSource 的地址)")
-        expectEqual(sourceHas(app("WebLyrics/WebLyricsVideoEncoder.swift"),
-                              "VTSessionSetProperty(made, key: kVTCompressionPropertyKey_ReferenceBufferCount, value: 1 as CFNumber)"), true,
-                    "网页歌词: 视频只参考上一帧,SPS 里的解码缓冲声明成 1 帧(浏览器的 <video> 按它压帧)")
+        expectEqual(sourceBytes(app("WebLyrics/WebLyricsVideoEncoder.swift"), contain: "VTSessionSetProperty(made, key: kVTCompressionPropertyKey_ReferenceBufferCount"), false,
+                    "网页歌词: 编码器不设参考帧数(有的机器设 1 就每帧都是关键帧)")
+        expectEqual(sourceHas(app("Settings/WebLyricsSettingsCard.swift"), "subtitle: L10n.t(\"在浏览器中显示歌词窗口\"), beta: true) {")
+                        && sourceHas(app("SettingsView.swift"), "SettingsGroupCard(title: L10n.t(\"网页歌词\"), beta: true) { LyricsWindowWebSettingsRows() }")
+                        && sourceHas(app("SettingsView.swift"), "summary: settings.webLyricsEnabled ? L10n.t(\"已开启\") : L10n.t(\"未开启\"), beta: true)")
+                        && sourceHas(app("SettingsView.swift"), "SettingsPopoverShell(title: L10n.t(\"网页歌词\"), beta: true, width: 460) {"), true,
+                    "网页歌词: 设置行、全部设置的分组、编辑台工具栏按钮、浮层标题四处入口都标 Beta")
+        expectEqual(sourceHas(pagesSource, "<canvas id=\"gl\" width=\"0\" height=\"0\" style=\"display: none; pointer-events: none\"></canvas>")
+                        && sourceHas(pagesSource, "if (!glPaint(src, w, h)) ctx.drawImage(src, 0, 0);")
+                        && sourceBytes(pagesSource, contain: "ctx.drawImage(item.frame") == false
+                        && sourceBytes(pagesSource, contain: "ctx.drawImage(v, 0, 0)") == false, true,
+                    "网页歌词去色带: 三种推法都经 paint 上屏,有 WebGL 走着色器、叠在 2D 画布上面不接指针,不行就画 2D 画布")
+        expectEqual(sourceHas(pagesSource, "'    if (max(max(far(s1, res), far(s2, res)), max(far(s3, res), far(s4, res))) < thr) res = (s1 + s2 + s3 + s4) * 0.25;',"), true,
+                    "网页歌词去色带: 周围 4 点都跟当前值差在阈值以内才换成平均(只比平均会抹掉文字边缘)")
+        expectEqual(sourceHas(pagesSource, "if (glFrames >= GL_COST_SAMPLES && glCost > gap * GL_MAX_SHARE) {\n glOff();")
+                        && sourceHas(pagesSource, "if (gl.getError() !== gl.NO_ERROR) throw new Error('texImage2D');")
+                        && sourceHas(pagesSource, "glCanvas.addEventListener('webglcontextlost', glOff);")
+                        && sourceHas(pagesSource, "if (new URLSearchParams(location.search).get('deband') === '0') return;"), true,
+                    "网页歌词去色带: 传纹理加绘制超过帧间隔的四分之三、某种帧传不上去、上下文丢了都改回 2D 画布;deband=0 关掉")
+        expectEqual(sourceHas(app("WebLyrics/WebLyricsScreen.swift"),
+                              "JSONSerialization.data(withJSONObject: [\"type\": \"links\", \"items\": items], options: [.sortedKeys]),"), true,
+                    "网页歌词: 链接位置消息按排好序的键序列化,没变就不重发")
         // MediaSource 封装:从页面脚本里取出 viaMse 到 receiveMse 之前那段纯函数,在 JavaScriptCore 里拿 App 实际发出的 avcC 跑
         do {
             let helpers: String? = {

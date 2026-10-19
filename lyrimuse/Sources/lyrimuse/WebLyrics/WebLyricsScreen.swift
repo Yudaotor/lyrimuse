@@ -1198,7 +1198,8 @@ final class WebLyricsScreenRenderer {
             [Double(target.rect.minX / width), Double(target.rect.minY / height),
              Double(target.rect.width / width), Double(target.rect.height / height), target.url.absoluteString]
         }
-        guard let data = try? JSONSerialization.data(withJSONObject: ["type": "links", "items": items]),
+        // 键要排序:不排时同样的内容两次序列化键序会不同,「没变就不重发」比不出来
+        guard let data = try? JSONSerialization.data(withJSONObject: ["type": "links", "items": items], options: [.sortedKeys]),
               let text = String(data: data, encoding: .utf8), text != sentLinks else { return }
         sentLinks = text
         onText?(text)

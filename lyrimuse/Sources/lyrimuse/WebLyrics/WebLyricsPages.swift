@@ -79,6 +79,7 @@ enum WebLyricsPages {
         <body>
         <canvas id="frame" width="0" height="0"></canvas>
         <div id="safe"></div>
+        <canvas id="gl" width="0" height="0" style="display: none; pointer-events: none"></canvas>
         <div id="msg"></div>
         <script>
         (() => {
@@ -95,6 +96,120 @@ enum WebLyricsPages {
           const key = new URLSearchParams(location.search).get('k') || '';
           const canvas = document.getElementById('frame');
           const ctx = canvas.getContext('2d', { alpha: false });
+          // 去色带:App 按 8 位画的暗色渐变本来就分档,视频压缩又把档与档的边界压成沿方块走的台阶。有 WebGL 就把每帧当纹理
+          // 过一遍着色器:分 DEBAND_ITERATIONS 圈、越取越远地在周围随机取 4 点,4 点都跟当前值差在阈值以内(平坦处)就换成它们的平均,
+          // 阈值一圈比一圈紧;再叠半级的固定颗粒。文字边缘、细线跟周围差得大,原样留着。别只比 4 点的平均:贴着边的像素两边
+          // 一亮一暗,平均下来跟自己差不多,边会被抹掉。WebGL 画布叠在 2D 画布上面、不接指针;出错或上下文丢了就藏起来改回
+          // 2D 画布。传纹理在有的浏览器里要在主线程上把整帧读回再传(Firefox 里一帧 6～18ms):头 GL_COST_SAMPLES 帧之后,
+          // 传纹理加绘制平均超过帧间隔的 GL_MAX_SHARE 就关掉,画面流畅比背景平滑要紧。网址带 deband=0 关掉。见 19 章决策 38
+          const DEBAND_THRESHOLD = 3 / 255, DEBAND_RADIUS = 16, DEBAND_ITERATIONS = 3, DEBAND_GRAIN = 1 / 255;
+          const GL_COST_SAMPLES = 30, GL_MAX_SHARE = 0.75;
+          const glCanvas = document.getElementById('gl');
+          let gl = null, glPx = null, glChecked = new Set(), glCost = 0, glFrames = 0;
+          function glOff() {
+            gl = null;
+            glCanvas.style.display = 'none';
+          }
+          function glInit() {
+            if (new URLSearchParams(location.search).get('deband') === '0') return;
+            try {
+              gl = glCanvas.getContext('webgl', { alpha: false, antialias: false, depth: false, stencil: false, premultipliedAlpha: false });
+            } catch (err) { gl = null; }
+            if (!gl) return;
+            const nl = String.fromCharCode(10);
+            const vs = 'attribute vec2 p; varying vec2 uv; void main() { uv = vec2(p.x + 1.0, 1.0 - p.y) * 0.5; gl_Position = vec4(p, 0.0, 1.0); }';
+            const fs = [
+              '#ifdef GL_FRAGMENT_PRECISION_HIGH',
+              'precision highp float;',
+              '#else',
+              'precision mediump float;',
+              '#endif',
+              'uniform sampler2D t;',
+              'uniform vec2 px;',
+              'varying vec2 uv;',
+              'float rnd(vec2 q) { return fract(sin(dot(q, vec2(12.9898, 78.233))) * 43758.5453); }',
+              'float far(vec3 a, vec3 b) { vec3 d = abs(a - b); return max(max(d.r, d.g), d.b); }',
+              'void main() {',
+              '  vec3 res = texture2D(t, uv).rgb;',
+              '  for (int i = 1; i <= ' + DEBAND_ITERATIONS + '; i++) {',
+              '    float fi = float(i);',
+              '    float r = ' + DEBAND_RADIUS.toFixed(1) + ' * fi * (0.25 + 0.75 * rnd(gl_FragCoord.xy + fi * 17.0));',
+              '    float a = 6.2831853 * rnd(gl_FragCoord.yx + fi * 31.0);',
+              '    vec2 d = vec2(cos(a), sin(a)) * r * px;',
+              '    vec2 e = vec2(-d.y, d.x);',
+              '    vec3 s1 = texture2D(t, uv + d).rgb, s2 = texture2D(t, uv - d).rgb, s3 = texture2D(t, uv + e).rgb, s4 = texture2D(t, uv - e).rgb;',
+              '    float thr = ' + DEBAND_THRESHOLD.toFixed(6) + ' / fi;',
+              '    if (max(max(far(s1, res), far(s2, res)), max(far(s3, res), far(s4, res))) < thr) res = (s1 + s2 + s3 + s4) * 0.25;',
+              '  }',
+              '  res += (rnd(gl_FragCoord.xy * 0.7 + 3.0) - 0.5) * ' + DEBAND_GRAIN.toFixed(6) + ';',
+              '  gl_FragColor = vec4(res, 1.0);',
+              '}',
+            ].join(nl);
+            function shader(type, src) {
+              const s = gl.createShader(type);
+              gl.shaderSource(s, src);
+              gl.compileShader(s);
+              return gl.getShaderParameter(s, gl.COMPILE_STATUS) ? s : null;
+            }
+            const v = shader(gl.VERTEX_SHADER, vs), f = shader(gl.FRAGMENT_SHADER, fs), prog = gl.createProgram();
+            if (!v || !f) { glOff(); return; }
+            gl.attachShader(prog, v);
+            gl.attachShader(prog, f);
+            gl.linkProgram(prog);
+            if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { glOff(); return; }
+            gl.useProgram(prog);
+            gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+            const loc = gl.getAttribLocation(prog, 'p');
+            gl.enableVertexAttribArray(loc);
+            gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+            gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            glPx = gl.getUniformLocation(prog, 'px');
+            glCanvas.addEventListener('webglcontextlost', glOff);
+          }
+          glInit();
+          // 每种帧(ImageBitmap、VideoFrame、<video>…)头一次传成纹理时查一次错:有的浏览器不收某种帧,传上去是黑的不报异常
+          function glPaint(src, w, h) {
+            if (!gl) return false;
+            try {
+              if (glCanvas.width !== w || glCanvas.height !== h) {
+                glCanvas.width = w;
+                glCanvas.height = h;
+                gl.viewport(0, 0, w, h);
+                gl.uniform2f(glPx, 1 / w, 1 / h);
+              }
+              const started = performance.now();
+              gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+              const kind = src.constructor ? src.constructor.name : '';
+              if (!glChecked.has(kind)) {
+                if (gl.getError() !== gl.NO_ERROR) throw new Error('texImage2D');
+                glChecked.add(kind);
+              }
+              gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+              glCanvas.style.display = 'block';
+              glFrames++;
+              glCost += (performance.now() - started - glCost) / Math.min(glFrames, GL_COST_SAMPLES);
+              if (glFrames >= GL_COST_SAMPLES && glCost > gap * GL_MAX_SHARE) {
+                glOff();
+                return false;
+              }
+              return true;
+            } catch (err) {
+              glOff();
+              return false;
+            }
+          }
+          function paint(src, w, h) {
+            if (canvas.width !== w || canvas.height !== h) {
+              canvas.width = w;
+              canvas.height = h;
+            }
+            if (!glPaint(src, w, h)) ctx.drawImage(src, 0, 0);
+          }
           const msg = document.getElementById('msg');
           const MIN_DELAY = 40, MAX_DELAY = 500, MAX_VIDEO_DELAY = 2000, BUFFER_BYTES = 8e7, PEAK_HOLD = 20000, PEAK_DECAY = 0.01;
           let ws = null, retry = 1000, retryTimer = 0, resizeTimer = 0;
@@ -256,7 +371,7 @@ enum WebLyricsPages {
             }
             const st = statsServer || {};
             const lines = [
-              (useVideo ? T.statsVideo + (viaMse ? ' (MSE)' : '') : T.statsJpeg) + ' · ' + T.statsRendered + ' ' + (st.fps ?? '-') + ' · ' + T.statsReceived + ' ' +
+              (useVideo ? T.statsVideo + (viaMse ? ' (MSE)' : '') : T.statsJpeg) + (gl ? ' · GL' : '') + ' · ' + T.statsRendered + ' ' + (st.fps ?? '-') + ' · ' + T.statsReceived + ' ' +
                 arrivedPerSec + ' · ' + T.statsShown + ' ' + shownPerSec + ' ' + T.statsFps,
               T.statsDownload + ' ' + mb + ' MB/s' + (st.kbps != null ? ' · ' + T.statsBitrate + ' ' + (st.kbps / 1000).toFixed(1) +
                 ' Mbps (' + T.statsEncoder + ' ' + ((st.enc ?? 0) / 1000).toFixed(1) + ')' : ''),
@@ -315,8 +430,9 @@ enum WebLyricsPages {
           // 扣着的那一帧盖住重连的空档;拆了要等新连接重新攒够余量才出画面。别靠 requestVideoFrameCallback 画:Firefox 里它
           // 一秒只回调二十几次,实际上屏有将近 60 帧
           const viaMse = !window.VideoDecoder;
-          // MSE_MARGIN:Firefox 的 <video> 比自己解码(WebCodecs)多要这么多余量,少了在关键帧那几下卡、丢帧
-          const MSE_TIMESCALE = 90000, MSE_KEEP = 10, MSE_SEEK = 1, MSE_AHEAD = 0.05, MSE_MARGIN = 50;
+          // MSE_MARGIN:Firefox 的 <video> 按 SPS 声明的解码缓冲(编码器默认 9 帧)压着帧再出,比自己解码(WebCodecs)多要这么多余量,
+          // 少了在关键帧那几下卡、丢帧
+          const MSE_TIMESCALE = 90000, MSE_KEEP = 10, MSE_SEEK = 1, MSE_AHEAD = 0.05, MSE_MARGIN = 200;
           let mse = null;
           function mseSupported() {
             try { return !!window.MediaSource && MediaSource.isTypeSupported('video/mp4; codecs="avc1.640033"'); } catch (err) { return false; }
@@ -477,11 +593,7 @@ enum WebLyricsPages {
             if (!v.videoWidth || v.readyState < 2 || v.currentTime === mse.drawn) return;
             if (mse.baseMs !== null && cutOut(mse.baseMs + v.currentTime * 1000)) return;
             mse.drawn = v.currentTime;
-            if (canvas.width !== v.videoWidth || canvas.height !== v.videoHeight) {
-              canvas.width = v.videoWidth;
-              canvas.height = v.videoHeight;
-            }
-            ctx.drawImage(v, 0, 0);
+            paint(v, v.videoWidth, v.videoHeight);
             msg.style.display = 'none';
             if (mse.baseMs !== null) noteLag(performance.now() - offset - mse.baseMs - v.currentTime * 1000);
           }
@@ -537,11 +649,7 @@ enum WebLyricsPages {
             const item = queue[pick];
             queue = queue.slice(pick + 1);
             lastShown = item.t;
-            if (canvas.width !== frameWidth(item.frame) || canvas.height !== frameHeight(item.frame)) {
-              canvas.width = frameWidth(item.frame);
-              canvas.height = frameHeight(item.frame);
-            }
-            ctx.drawImage(item.frame, 0, 0);
+            paint(item.frame, frameWidth(item.frame), frameHeight(item.frame));
             statsShown++;
             noteLag(now - item.t - offset);
             release(item);

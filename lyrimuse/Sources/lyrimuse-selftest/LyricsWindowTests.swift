@@ -1011,9 +1011,9 @@ func runLyricsWindowTests() {
                     true, "设置分组: 第二行迷你是内容、布局、顶部信息、网页歌词,完整是布局、封面、网页歌词")
         // 网页歌词那一组(19 章):工具栏浮层和抽屉同一份行,抽屉里排在最后,原来那张单独的卡不要了。
         let webCard = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/Settings/WebLyricsSettingsCard.swift"), encoding: .utf8)) ?? ""
-        expectEqual(sourceHas(settingsView, "SettingsGroupCard(title: L10n.t(\"网页歌词\")) { LyricsWindowWebSettingsRows() }\n"
+        expectEqual(sourceHas(settingsView, "SettingsGroupCard(title: L10n.t(\"网页歌词\"), beta: true) { LyricsWindowWebSettingsRows() }\n"
                                 + "                    SettingsCard(cornerRadius: 18) {\n                        lyricsWindowResetRow")
-                    && sourceHas(settingsView, "SettingsPopoverShell(title: L10n.t(\"网页歌词\"), width: 460) {\n"
+                    && sourceHas(settingsView, "SettingsPopoverShell(title: L10n.t(\"网页歌词\"), beta: true, width: 460) {\n"
                                    + "                LyricsWindowWebSettingsRows()")
                     && !settingsView.contains("WebLyricsScreenCard()") && !webCard.contains("struct WebLyricsScreenCard"),
                     true, "网页歌词: 工具栏浮层和抽屉最后一组同一份行,没有单独的卡")
