@@ -4594,6 +4594,27 @@ func runSourceContractSettingsTests() {
         expectEqual(banner.contains("activateFileViewerSelecting"), true, "配置读写口径: 横幅给「在访达中显示」让用户自己修")
     }
 
+    // ---- 诊断包值级脱敏的名单 ----
+    //
+    // 诊断包要贴进公开 issue:配置里的用户名(Last.fm 两个、ListenBrainz)和网页中继地址认得出是谁,引擎日志里又常见
+    // (Last.fm 请求失败时整条 URL 带着 user=…,中继每次写入都打地址)。ConfigStore 在 app target,只能扫源码:
+    // secretsForRedaction 要把它们连同凭据一起交给 LogRedactor。
+    do {
+        let appDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        let src = (try? String(contentsOfFile: appDir.appendingPathComponent("Settings/ConfigStore.swift").path, encoding: .utf8)) ?? ""
+        let start = src.range(of: "public var secretsForRedaction: [String: String] {")
+        let body = start.map { String(src[$0.upperBound...].prefix(1200)) } ?? ""
+        expectEqual(body.isEmpty, false, "诊断脱敏名单: 找得到 secretsForRedaction")
+        for field in ["lastfmUser", "lastfmScrobbleUsername", "listenbrainzUser", "stateRelayURL",
+                      "listenbrainzToken", "stateRelayToken", "lastfmScrobbleSessionKey"] {
+            expectEqual(body.contains("\"\(field)\": \(field),"), true, "诊断脱敏名单: secretsForRedaction 收 \(field)")
+        }
+        // 引擎日志里只带中继主机名的行(请求汇总按主机计数)比带整条地址的多得多,主机名要另收一项。
+        expectEqual(body.contains("\"stateRelayHost\": URL(string: stateRelayURL"), true, "诊断脱敏名单: 中继主机名另收一项")
+    }
+
     // ---- 后台服务应用状态可见----
     //
     // 功能开关 / 账号凭据保存后的引擎重启结果,原来只写进两个 Store 的 lastError、全仓没人读。现在由设置窗口

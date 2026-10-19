@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"net/http"
+	"strings"
+	"testing"
+)
 
 // 实测形状:《Ocho Rios》(musixmatch richsync)的空白词条掏空了短词的读条时长。
 func TestYRCMergeWhitespaceTokensMusixmatchShape(t *testing.T) {
@@ -20,7 +24,7 @@ func TestYRCMergeWhitespaceTokensMusixmatchShape(t *testing.T) {
 	}
 }
 
-// 网易云归一化产物(空格并在词文本里,没有独立空白词条)必须逐字节原样保留 ——
+// 空格并在词文本里、没有独立空白词条的逐字必须逐字节原样保留 ——
 // 尤其词间的真实时间空隙不能被"顺手"重算掉。
 func TestYRCMergeWhitespaceTokensNeteaseUntouched(t *testing.T) {
 	in := "[ar:某人]\n[100,2000](100,300,0)word (500,300,0)gap留白 (1000,500,0)tail\n"
@@ -68,5 +72,27 @@ func TestYRCMergeWhitespaceTokensKeepsAllBlankLine(t *testing.T) {
 	mixed := "[1000,500](1000,100,0) (1100,100,0)词"
 	if got, changed := yrcMergeWhitespaceTokens(mixed); !changed || got != "[1000,500](1100,100,0) 词" {
 		t.Fatalf("行首空白并给下一个词: %q changed=%v", got, changed)
+	}
+}
+
+// 网易云原生逐字里的空白词条在取词时就归并(实测《SPECIALZ》:"U" 60ms 后跟一个 3620ms 的空格)。
+func TestNeteaseLookupMergesYRCWhitespaceTokens(t *testing.T) {
+	resetSourceCachesForTest(t)
+	yrc := `{"t":0,"c":[{"tx":"作词: "},{"tx":"常田大希"}]}` + "\n[11780,6580](11780,1480,0)“(13260,60,0)U (13320,3620,0) (16940,180,0)R (17120,140,0)MY"
+	withNeteaseFake(t, func(target string) (int, string) {
+		switch {
+		case strings.HasSuffix(target, "/api/search/get"):
+			return http.StatusOK, `{"code":200,"result":{"songs":[{"id":1,"name":"SPECIALZ","artists":[{"name":"King Gnu"}],"album":{"id":9,"name":"SPECIALZ"},"duration":240000}]}}`
+		case strings.HasSuffix(target, "/api/song/detail"):
+			return http.StatusOK, `{"code":200,"songs":[{"album":{"picUrl":"http://p1.music.126.net/x.jpg"}}]}`
+		case strings.HasSuffix(target, "/api/song/lyric/v1"):
+			return http.StatusOK, `{"code":200,"lrc":{"lyric":` + jsonQuoteForTest(neV1Lyric) + `},"yrc":{"lyric":` + jsonQuoteForTest(yrc) + `}}`
+		}
+		return http.StatusNotFound, ""
+	})
+	got := neteaseLookupAll(qqRoundCtx(), "King Gnu", "SPECIALZ", "SPECIALZ", 240)
+	want := `{"t":0,"c":[{"tx":"作词: "},{"tx":"常田大希"}]}` + "\n[11780,6580](11780,1480,0)“(13260,3680,0)U  (16940,180,0)R (17120,140,0)MY"
+	if got.YRC != want {
+		t.Fatalf("网易云逐字的空白词条该在源头并进前一个词:\n got %q\nwant %q", got.YRC, want)
 	}
 }

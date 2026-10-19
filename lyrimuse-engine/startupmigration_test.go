@@ -309,3 +309,72 @@ func readMigrationStateForTest(t *testing.T, path string) map[string]int {
 	}
 	return got
 }
+
+// 主缓存这次没读进来(读出错,这一场不落盘):迁移跑的是从 lyrics/ 补回来的内存、不是盘上那份,水位一道都不记 ——
+// 记了的话,下次读进来的那份就再也轮不到这些迁移。盘上原来的水位原样留着。
+func TestMigrationNotMarkedWhenEnrichLoadFailed(t *testing.T) {
+	withTempMigrationState(t)
+	saveEnrichLoadFlags(t)
+	dir := withTempIndexCache(t)
+	statePath := filepath.Join(dir, "migrations.json")
+	if err := os.WriteFile(statePath, []byte(`{"old":1}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cachePath := filepath.Join(dir, "cache-is-a-dir.json")
+	if err := os.Mkdir(cachePath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	loadEnrichCache(cachePath)
+	loadMigrationState(statePath)
+	markMigrationDone("x", 1)
+	scope := migrationScopeOf("y", 1)
+	scope.markDone("y", 1)
+	if got := readMigrationStateForTest(t, statePath); len(got) != 1 || got["old"] != 1 {
+		t.Errorf("主缓存没读进来时不该记水位: %v", got)
+	}
+}
+
+// 判据或源头改了、版本号升了的四道迁移:盘上还是旧版本的水位时,这一轮照常全库重扫。每一条用的都是旧版本放过、
+// 现在才改得动的数据 —— 网易云原生逐字里的空白词条、中英连写职务的署名行(机翻译文、纯音乐占位)、不知道曲长时
+// 没重挂的行级时间轴。版本号没升的话水位挡着,这几条永远停在旧形态。
+func TestMigrationsRescanAfterVersionBumps(t *testing.T) {
+	withTempMigrationState(t)
+	withTempDecisionCache(t)
+	for name, v := range map[string]int{
+		migrationYRCWhitespace: 1, migrationUnneededMachineLines: 2, migrationInstrumentalPlaceholder: 1, migrationLyricTimelines: 1,
+	} {
+		markMigrationDone(name, v)
+	}
+	const (
+		wsKey, trKey, instKey, tlKey = "King Gnu|SPECIALZ|", "a|credit tr|", "a|bilingual credits|", "Adele|Rumour Has It|21"
+	)
+	creditLyrics := "[00:01.00]混音Mixing Engineer : Richard Furch\n[00:05.00]I will be your history\n[00:09.00]I'll be the blame"
+	creditTr := "[00:01.00]混音工程师:理查德\n[00:05.00]我将成为你的历史\n[00:09.00]我愿承担所有责难"
+	enrichMu.Lock()
+	enrichPath = ""
+	enrichCache[wsKey] = enrichEntry{Lyrics: bt("[00:13.26]U R MY"), LyricsYRC: bt("[11780,6580](13260,60,0)U (13320,3620,0) (16940,180,0)R"), LyricsSource: "netease"}
+	enrichCache[trKey] = enrichEntry{Lyrics: bt(creditLyrics), LyricsTr: bt(creditTr), LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"}
+	enrichCache[instKey] = enrichEntry{Lyrics: bt("[00:00.00] 作曲Composer : 甲\n[00:02.00] ⺟带⼯程师 Mastering Engineer : 乙\n[00:05.00]纯音乐，请欣赏"), LyricsSource: "netease"}
+	enrichCache[tlKey] = enrichEntry{Lyrics: bt(rumourLRC), LyricsYRC: bt(rumourYRC), DurationSecs: 223.266}
+	enrichMu.Unlock()
+
+	migrateUnneededMachineLines()
+	migrateYRCWhitespaceTokens()
+	migrateLyricTimelines()
+	migrateInstrumentalPlaceholders()
+
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	if e := enrichCache[wsKey]; !e.LyricsYRC.EqualString("[11780,6580](13260,3680,0)U  (16940,180,0)R") {
+		t.Errorf("yrc_whitespace 升了版本,网易云逐字里的空白词条要并掉: %q", e.LyricsYRC)
+	}
+	if e := enrichCache[trKey]; !e.LyricsTr.EqualString("[00:05.00]我将成为你的历史\n[00:09.00]我愿承担所有责难") {
+		t.Errorf("unneeded_machine_lines 升了版本,中英连写职务那一行的机翻要删掉: %q", e.LyricsTr)
+	}
+	if e := enrichCache[instKey]; !e.Instrumental {
+		t.Error("instrumental_placeholder 升了版本,只有中英连写职员表加占位的要标成纯音乐")
+	}
+	if e := enrichCache[tlKey]; e.Lyrics.EqualString(rumourLRC) {
+		t.Error("lyric_timelines 升了版本,没重挂的行级时间轴要重扫")
+	}
+}

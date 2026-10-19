@@ -365,8 +365,14 @@ const migrationBackupAge = 30 * 24 * time.Hour
 // migrateISRCDurationRecheck 读一遍,排在这一步之前);前两份各约百 MB,
 // 每个升级过的用户都留着一份、从不清。只认这三种名字,手工留的 `backup-*`、`*.bak-before-*` 不碰。
 // 常驻进程启动时调一次。见 15 章决策 52。
+//
+// 这次启动主缓存没读进来(读出错,或解析不动挪成了 `.corrupt-*`)就一份都不删:这时它们可能是唯一还完整的那份,
+// 见 15 章决策 70。
 func removeOldMigrationBackups() {
-	if enrichPath == "" {
+	enrichMu.Lock()
+	notLoaded := enrichPath == "" || enrichLoadFailed || enrichLoadMovedAside
+	enrichMu.Unlock()
+	if notLoaded {
 		return
 	}
 	dir, base := filepath.Dir(enrichPath), filepath.Base(enrichPath)

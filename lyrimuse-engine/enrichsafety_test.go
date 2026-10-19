@@ -13,11 +13,11 @@ import (
 func saveEnrichLoadFlags(t *testing.T) {
 	t.Helper()
 	enrichMu.Lock()
-	failed, all, keys := enrichLoadFailed, lyricsImportRestoreAll, lyricsImportRestoreKeys
+	failed, movedAside, all, keys := enrichLoadFailed, enrichLoadMovedAside, lyricsImportRestoreAll, lyricsImportRestoreKeys
 	enrichMu.Unlock()
 	t.Cleanup(func() {
 		enrichMu.Lock()
-		enrichLoadFailed, lyricsImportRestoreAll, lyricsImportRestoreKeys = failed, all, keys
+		enrichLoadFailed, enrichLoadMovedAside, lyricsImportRestoreAll, lyricsImportRestoreKeys = failed, movedAside, all, keys
 		enrichMu.Unlock()
 	})
 }

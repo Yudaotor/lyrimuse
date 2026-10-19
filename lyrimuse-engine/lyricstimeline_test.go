@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // 测试数据全部取自真实缓存条目 Adele|Rumour Has It|21(那首)。
 // 它是这条修复的原始案例:LRC 与 YRC 逐行文本完全相同、行数相同,只有时间戳是两套。
@@ -310,5 +313,98 @@ func TestRehangLRCOnYRCMovesBlankEndMarks(t *testing.T) {
 	got2, _, _ := rehangLRCOnYRC(lrc2, yrc2, 0, false)
 	if want2 := "[00:10.00]第一句\n[00:12.00]\n[00:12.00]第二句\n[00:30.00]第三句"; got2 != want2 {
 		t.Fatalf("结束标记应当夹到下一句的新时间: %s", got2)
+	}
+}
+
+// 不知道曲长时选下的歌词(ResolvedDurationSecs 为 0),播放器报了曲长时补做重挂:正文、译文搬到逐字轴上,演唱者标注的
+// 指纹跟着换,记一次改动;每条每次进程只试一次。已按曲长解析过的、手改过的、没报曲长的、首次解析还在跑的都不动,
+// 还在跑的那一拍不记「试过」。
+func TestRehangOnReportedDurationLocked(t *testing.T) {
+	savedTried, savedInflight := timelineRehangTried, enrichInflight
+	t.Cleanup(func() {
+		enrichMu.Lock()
+		timelineRehangTried, enrichInflight = savedTried, savedInflight
+		enrichMu.Unlock()
+	})
+	fresh := func() enrichEntry {
+		return enrichEntry{
+			Lyrics: bt(rumourLRC), LyricsYRC: bt(rumourYRC), LyricsTr: bt(rumourTr),
+			LyricsSpeakers: &lyricSpeakers{For: lyricSpeakersFingerprint(rumourLRC, rumourYRC), LRC: []string{"a", "b"}},
+		}
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	timelineRehangTried, enrichInflight = map[string]bool{}, map[string]bool{}
+
+	const key = "Adele|Rumour Has It|21"
+	stamp := enrichEditStampLocked()
+	e := fresh()
+	if !rehangOnReportedDurationLocked(key, &e, 223.266) {
+		t.Fatal("报了曲长该补做重挂")
+	}
+	if !e.Lyrics.EqualString("[ti:Rumour Has It]\n[ar:Adele]\n\n[00:18.31]She, she ain't real\n[00:21.18]She ain't gon' be able to love you like I will\n[00:59.72]Rumour has it (rumour)\n[01:01.13]Rumour has it (rumour)") {
+		t.Errorf("正文没搬到逐字轴上: %q", e.Lyrics)
+	}
+	if !e.LyricsTr.EqualString("[00:18.31]她，她不是真的\n[00:21.18]她不可能像我一样爱你\n[00:59.72]有传言（谣言）") {
+		t.Errorf("译文要跟着搬: %q", e.LyricsTr)
+	}
+	if e.LyricsSpeakers == nil || e.LyricsSpeakers.For != lyricSpeakersFingerprint(e.Lyrics.String(), rumourYRC) {
+		t.Errorf("演唱者标注的指纹要换成新正文的: %+v", e.LyricsSpeakers)
+	}
+	if !enrichEditedSinceLocked(key, stamp) {
+		t.Error("要记一次改动,别让开跑在前的后台任务拿旧正文盖回去")
+	}
+	again := fresh()
+	if rehangOnReportedDurationLocked(key, &again, 223.266) {
+		t.Error("每条每次进程只试一次")
+	}
+
+	for name, c := range map[string]struct {
+		mut func(*enrichEntry)
+		dur float64
+	}{
+		"已按曲长解析过": {func(e *enrichEntry) { e.ResolvedDurationSecs = 223 }, 223.266},
+		"手改过":     {func(e *enrichEntry) { e.ManualLyrics = true }, 223.266},
+		"没报曲长":    {func(*enrichEntry) {}, 0},
+		"没有逐字":    {func(e *enrichEntry) { e.LyricsYRC = bodyText{} }, 223.266},
+	} {
+		e := fresh()
+		c.mut(&e)
+		if rehangOnReportedDurationLocked("k|"+name+"|", &e, c.dur) || !e.Lyrics.EqualString(rumourLRC) {
+			t.Errorf("%s: 不该动", name)
+		}
+	}
+	const busy = "k|busy|"
+	enrichInflight[busy] = true
+	e = fresh()
+	if rehangOnReportedDurationLocked(busy, &e, 223.266) || timelineRehangTried[busy] {
+		t.Error("首次解析还在跑时不动、也不记试过")
+	}
+	delete(enrichInflight, busy)
+	if !rehangOnReportedDurationLocked(busy, &e, 223.266) {
+		t.Error("解析跑完的下一拍照常补做")
+	}
+}
+
+// 补做接在播放每一拍进来、条目已存在的那条路上:改了就跟别的字段一起落盘,并把歌词文件导出一遍
+// (lyrics/ 文件夹是权威源,不导出的话下次启动导入会把重挂撤回去)。
+func TestRehangOnReportedDurationIsWired(t *testing.T) {
+	src := string(mustRead(t, "enrich.go"))
+	i := strings.Index(src, "func trackEnrichment(")
+	if i < 0 {
+		t.Fatal("找不到 trackEnrichment")
+	}
+	body := src[i:]
+	body = body[:strings.Index(body, "\n}\n")]
+	for _, n := range []string{
+		"timelineRehung := rehangOnReportedDurationLocked(key, &e, durationSecs)\n\t\tif timelineRehung {\n\t\t\tspotifyHintDirty = true\n\t\t}",
+		"if timelineRehung {\n\t\t\tlog.Printf(\"lyric timeline: rehung %q on the reported duration %.1fs\", key, durationSecs)\n\t\t\texportLyricsFilesFor(key)\n\t\t}",
+	} {
+		if !containsCode(body, n) {
+			t.Errorf("trackEnrichment 缺 %q", n)
+		}
+	}
+	if a, b := strings.Index(body, "timelineRehung := rehangOnReportedDurationLocked("), strings.Index(body, "if spotifyHintDirty {\n\t\t\tenrichCache[key] = e"); a < 0 || b < 0 || a > b {
+		t.Error("补做要排在把条目写回缓存之前")
 	}
 }

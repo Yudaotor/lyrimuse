@@ -256,12 +256,14 @@ public final class ConfigStore: ObservableObject {
     /// 密钥还没点保存,而引擎侧的日志里已经可能有它 —— 脱敏要按"可能出现过的值"
     /// 取全集,宁可多抹一个。
     ///
-    /// 不收进来的两类,都是有意的:
-    /// - **用户名**(lastfmUser / listenbrainzUser 等):是公开信息,而且排查"scrobble 到
-    ///   了哪个账号"这类问题时正需要它。
-    /// - **stateRelayURL**:host 本身对排查网络问题有用;它的凭据部分是另一个字段
-    ///   (stateRelayToken)。反过来推送渠道的地址必须收 —— Bark/Server酱/
-    ///   飞书的 webhook 地址里凭据就长在 URL 自己身上,整条即凭据。
+    /// 不只是凭据:**用户名**(lastfmUser / lastfmScrobbleUsername / listenbrainzUser)和
+    /// **stateRelayURL** 也收。用户名把诊断包连到一个公开的收听主页上;网页中继地址是用户自己的
+    /// 域名,同样认得出是谁。引擎日志里两样都常见(Last.fm 请求失败时整条 URL 带着 `user=…`,
+    /// 中继每次写入都打地址),而诊断包是要贴进公开 issue 的。中继的主机名另收一项:请求汇总那类日志行
+    /// 只带主机名,整条地址替换不到它们。打码后留着字段名(`<redacted:lastfmUser>`),排查时仍看得出
+    /// 那里原本是哪一项。
+    /// 见 15 章决策 70。推送渠道的地址一直整条收 —— Bark/Server酱/飞书的 webhook 地址里
+    /// 凭据就长在 URL 自己身上,整条即凭据。
     public var secretsForRedaction: [String: String] {
         var out = [
             "listenbrainzToken": listenbrainzToken,
@@ -270,6 +272,11 @@ public final class ConfigStore: ObservableObject {
             "lastfmScrobbleAPIKey": lastfmScrobbleAPIKey,
             "lastfmScrobbleSecret": lastfmScrobbleSecret,
             "lastfmScrobbleSessionKey": lastfmScrobbleSessionKey,
+            "lastfmUser": lastfmUser,
+            "lastfmScrobbleUsername": lastfmScrobbleUsername,
+            "listenbrainzUser": listenbrainzUser,
+            "stateRelayURL": stateRelayURL,
+            "stateRelayHost": URL(string: stateRelayURL.trimmingCharacters(in: .whitespacesAndNewlines))?.host ?? "",
         ]
         for (i, ch) in notificationChannels.enumerated() {
             out["notificationChannel\(i).url"] = ch.url

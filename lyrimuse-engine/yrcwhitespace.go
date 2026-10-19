@@ -11,15 +11,16 @@ import (
 // 纯空白的逐字词条不该独立存在(现象是"有些单词没有读条直接填满"):
 // Musixmatch richsync 把空格作为独立计时条目,空格占走了前一个词的绝大部分演唱时长
 // (实测《Ocho Rios》"In" 23ms + 空格 165ms),悬浮窗按 23ms 填完一个词,观感就是
-// "瞬间填满"。richsyncToYRC 已在源头归并(见 musixmatch.go);这里是对**存量**缓存的
+// "瞬间填满"。网易云原生逐字、QQ 的 QRC、酷狗的 KRC 同样会有(实测《SPECIALZ》网易云逐字里
+// "U" 60ms 后跟一个 3620ms 的空格)。richsyncToYRC(musixmatch.go)、qrcToYRC(qq.go)、krcToYRC(kugou.go)
+// 和网易云取词(netease.go resolveNeteaseInfo)都在源头归并;这里是对**存量**缓存的
 // 一次性清洗 —— 空白词条自带的时间信息就在数据里,原地归并即可,不需要重新联网解析。
 //
 // 变换对任何源的 YRC 都无损:
 //   - 只把空白词条的文本并入前一个词、并把前词时长**延到空白词条的终点**,不重算其它
 //     任何词的时间(网易云词间的真实空隙保持原样 —— 那些空隙没有词条,不受影响);
 //   - 行首就是空白词条的,文本并给下一个词当前缀,时间不动;
-//   - 没有空白词条的行逐字节原样保留(netease/kugou/QQ 归一化产物本来就把空格并在
-//     词文本里,整份不变)。
+//   - 没有空白词条的行逐字节原样保留(空格本来就并在词文本里的,整份不变)。
 var yrcWordTokenRe = regexp.MustCompile(`\((\d+),(\d+),(\d+)\)`)
 
 // yrcMergeWhitespaceTokens 返回清洗后的 YRC 与"是否真的改过"。
@@ -91,7 +92,7 @@ func yrcMergeWhitespaceTokens(yrc string) (string, bool) {
 // migrateYRCWhitespaceTokens 对整个 enrich 缓存跑一遍 yrcMergeWhitespaceTokens。
 // 调用时机(main.go):importLyricsFromFiles 之后、exportLyricsFiles 之前 —— 修的是
 // 权威内容,修完由 export 写回导出文件。幂等:清洗过的内容不再含空白词条,重复跑是空操作。
-// 带水位闸(startupmigration.go)。它是在 qrcToYRC / krcToYRC 两个出口都补上源头归并
+// 带水位闸(startupmigration.go)。它是在 qrcToYRC / krcToYRC / 网易云取词几个出口都补上源头归并
 // **之后**才够格加的:在那之前,每用 QQ / 酷狗解析一首新歌就又产生一批空白词条,这道迁移
 // 每次启动都能捞到东西(日志实测跑了 39 次,最近两次只隔 22 分钟、分别修 14 条和 13 条)——
 // 那种状态下加闸等于让新数据永远没人管。现在源头已经归并,它才真正变成一次性的存量清洗。

@@ -997,6 +997,11 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			e.DurationSecs = durationSecs
 			spotifyHintDirty = true
 		}
+		// 歌词是在不知道曲长时选的、行级时间轴当时没能按逐字轴重挂:这一拍有了曲长,补做(见 rehangOnReportedDurationLocked)。
+		timelineRehung := rehangOnReportedDurationLocked(key, &e, durationSecs)
+		if timelineRehung {
+			spotifyHintDirty = true
+		}
 		if ytmSettled && applyKasetAlbumVerdict(&e, ytmVerdict, ytmusicDisplayLanguage()) {
 			spotifyHintDirty = true
 		}
@@ -1121,6 +1126,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		}
 		if spotifyHintDirty {
 			requestEnrichSaveFor(key)
+		}
+		if timelineRehung {
+			log.Printf("lyric timeline: rehung %q on the reported duration %.1fs", key, durationSecs)
+			exportLyricsFilesFor(key)
 		}
 		return e.fields()
 	}
@@ -6115,6 +6124,7 @@ func loadEnrichCache(path string) {
 			moveEnrichSideDirsAside(path, suffix)
 			enrichMu.Lock()
 			lyricsImportRestoreAll = true
+			enrichLoadMovedAside = true
 			enrichMu.Unlock()
 			log.Printf("enrich cache unreadable (%v) — moved aside to %s, starting empty", err, side)
 		} else {
@@ -6142,6 +6152,9 @@ func loadEnrichCache(path string) {
 
 // enrichLoadFailed:这次启动主缓存读不进来、原文件又还在原位(读出错,或解析不动又挪不走)。
 var enrichLoadFailed bool
+
+// enrichLoadMovedAside:这次启动主缓存解析不动、挪成了 `.corrupt-*`,从空库起步。持 enrichMu。
+var enrichLoadMovedAside bool
 
 // refuseEnrichSavesThisRun 让这个进程从空库跑、但什么都不落盘:清空 enrichPath 后 saveEnrichCache、
 // 精简索引、正文小文件、判决旁路文件的写入和启动清扫全是空操作,原文件原样留给下次启动再读。

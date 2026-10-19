@@ -1005,7 +1005,9 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 				continue
 			}
 			if y := stripNeteaseEscapedApostrophes(r.Yrc.Lyric); strings.Contains(y, "[") && len(y) < 40000 {
-				yrc = y
+				// 网易云原生逐字也有纯空白的独立词条(实测《SPECIALZ》"U" 60ms 后跟一个 3620ms 的空格),
+				// 跟 qrcToYRC / krcToYRC 一样在源头归并,见 yrcwhitespace.go 头注、09 章决策 303。
+				yrc, _ = yrcMergeWhitespaceTokens(y)
 			}
 			return stripNeteaseEscapedApostrophes(neteaseV1LyricLines(r.Lrc.Lyric)),
 				stripNeteaseEscapedApostrophes(neteaseV1LyricLines(r.Tlyric.Lyric)),

@@ -26,7 +26,17 @@ func runOpsDiagnosticsTests() {
         expectEqual(cleaned.contains(apiKey), false, "值级脱敏:日志里的 API Key 原文必须消失")
         expectEqual(cleaned.contains("<redacted:lastfmScrobbleAPIKey>"), true,
                     "脱敏后要留下字段名,排查时才知道那里原本是哪一项")
-        expectEqual(cleaned.contains("user=someone"), true, "非敏感参数(用户名)要原样保留,否则报告没法读")
+        expectEqual(cleaned.contains("user=someone"), true, "没登记的参数值(不在配置里的用户名)原样保留,否则报告没法读")
+        // 配置里的用户名、网页中继地址登记进了值级脱敏(ConfigStore.secretsForRedaction):打掉,留字段名。
+        let mine = "lastfmRecent: request failed: Get \"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=someone_mine\"; "
+            + "relay write failed: Put \"https://np.example.me/state\"; api call rollup by_source=\"np.example.me=1\""
+        let mineOut = R.redactAll(mine, secrets: ["lastfmUser": "someone_mine", "stateRelayURL": "https://np.example.me",
+                                                  "stateRelayHost": "np.example.me"])
+        expectEqual(mineOut.contains("someone_mine") || mineOut.contains("np.example.me"), false,
+                    "值级脱敏: 配置里的用户名、中继地址打掉")
+        expectEqual(mineOut.contains("user=<redacted:lastfmUser>") && mineOut.contains("<redacted:stateRelayURL>/state")
+                    && mineOut.contains("<redacted:stateRelayHost>=1"), true,
+                    "值级脱敏: 用户名、中继地址、只带主机名的那行都留下字段名")
         expectEqual(cleaned.contains("audioscrobbler.com"), true, "host 要保留")
 
         // 第二层:配置里已经没有这把旧 key 了(用户换过),值级脱敏命中不了,靠正则兜住。
@@ -408,14 +418,19 @@ func runOpsDiagnosticsTests() {
         // 泄漏过的那几处 Last.fm API Key 来自 Go *url.Error 打印完整 URL,随便哪次请求失败都会写一行。
         let window = logText
 
-        // 只挑真正是凭据的字段,跟 ConfigStore.secretsForRedaction 的取舍保持一致。
+        // 跟 ConfigStore.secretsForRedaction 的取舍保持一致:凭据,加上用户名和网页中继地址。
         let credentialFields = ["listenbrainz_token", "state_relay_token", "lastfm_api_key",
                                 "lastfm_scrobble_api_key", "lastfm_scrobble_secret",
                                 "lastfm_scrobble_session_key", "bark_url",
-                                "dingtalk_sign_secret", "feishu_sign_secret"]
+                                "dingtalk_sign_secret", "feishu_sign_secret",
+                                "lastfm_user", "lastfm_scrobble_username", "listenbrainz_user", "state_relay_url"]
         var secrets: [String: String] = [:]
         for f in credentialFields {
             if let v = cfg[f] as? String, !v.isEmpty { secrets[f] = v }
+        }
+        if let relay = cfg["state_relay_url"] as? String,
+           let host = URL(string: relay.trimmingCharacters(in: .whitespacesAndNewlines))?.host {
+            secrets["state_relay_host"] = host
         }
         for (i, ch) in (NotificationChannel.list(fromConfig: cfg) ?? []).enumerated() {
             if !ch.url.isEmpty { secrets["notification_channels[\(i)].url"] = ch.url }

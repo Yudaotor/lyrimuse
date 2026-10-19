@@ -56,7 +56,9 @@ const (
 	migrationLyricTimelines = "lyric_timelines"
 	// migrationLyricTimelinesVersion:改了 rehangLRCOnYRC / wordTimingContradictsLRC 的
 	// 判据就 +1 —— 存量会被重扫一遍,否则老数据永远停在旧算法的结果上。
-	migrationLyricTimelinesVersion = 1
+	// v2:不知道曲长时选下的歌词,播放器报了曲长后补做重挂(rehangOnReportedDurationLocked);那之前存下、
+	// 之后再没重挂的重扫一遍,见 09 章决策 303。
+	migrationLyricTimelinesVersion = 2
 
 	// migrationQRCLeftoverTokens:修 qrcToYRC 旧实现漏转的残缺两数字词条(qrcleftovertokens.go)。
 	// 源头已改成按标记位置切分,不会再产生,所以是真正一次性的。
@@ -72,8 +74,9 @@ const (
 	// 它是在 qrcToYRC / krcToYRC 两个出口都补上源头归并**之后**才够格加水位闸的 ——
 	// 在那之前每解析一首新歌就又产生一批,这道"迁移"跑了 39 次也收敛不了(日志实测:
 	// 最近两次只隔 22 分钟、分别修 14 条和 13 条)。加闸前先确认源头还在做这件事。
+	// v2:网易云取词在源头补上归并(netease.go),之前存下的网易云原生逐字里的空白词条重扫一遍,见 09 章决策 303。
 	migrationYRCWhitespace        = "yrc_whitespace"
-	migrationYRCWhitespaceVersion = 1
+	migrationYRCWhitespaceVersion = 2
 	// migrationHokkienSongLanguage:存量台语歌补记 SongLanguage、清掉普通话拼音(hokkien.go)。
 	// 改了 lyricsLookHokkien 的判据就 +1。
 	migrationHokkienSongLanguage        = "hokkien_song_language"
@@ -97,8 +100,9 @@ const (
 	// migrationUnneededMachineLines:存量机翻里现在不会再送翻的行(untranslatedmachine.go dropUnneededLines)。新翻的在
 	// 送翻选行就不收,运行期不再产生。改了送翻选行(selectTranslationWork 和它用的判据)就 +1。
 	// v2:从只看文字系统改成整套送翻选行,抬头、署名、拟声词、唱名也算。
+	// v3:宽松版署名判据(isRelaxedCreditLine)多认中英连写的职务(bilingualCreditLabelRe),见 09 章决策 303。
 	migrationUnneededMachineLines        = "unneeded_machine_lines"
-	migrationUnneededMachineLinesVersion = 2
+	migrationUnneededMachineLinesVersion = 3
 	// migrationLegacyKoreanRoma:存量里早先预生成的韩文罗马音(ICU 逐字母转写)换成按读音的(koreanroma.go)。
 	// 运行期新生成的已经是按读音的,运行期不再产生。改了「是不是旧版」的判据就 +1。
 	migrationLegacyKoreanRoma        = "legacy_korean_roma"
@@ -112,9 +116,11 @@ const (
 	migrationKuwoSharedStampTranslation        = "kuwo_shared_stamp_translation"
 	migrationKuwoSharedStampTranslationVersion = 1
 	// migrationInstrumentalPlaceholder:存量里正文只有纯音乐占位和署名的条目标上纯音乐(instrumentalplaceholder.go)。
-	// 新解析的在打分时判废(isCreditOnlyLRC),运行期不再产生。改了 isInstrumentalPlaceholderLyric 的判据就 +1。
+	// 新解析的在打分时判废(isCreditOnlyLRC),运行期不再产生。改了 isInstrumentalPlaceholderLyric 的判据
+	// (连同它用的 isRelaxedCreditLine)就 +1。
+	// v2:宽松版署名判据多认中英连写的职务(bilingualCreditLabelRe),见 09 章决策 303。
 	migrationInstrumentalPlaceholder        = "instrumental_placeholder"
-	migrationInstrumentalPlaceholderVersion = 1
+	migrationInstrumentalPlaceholderVersion = 2
 	// migrationListenDurations:存量没有时长的条目从收听记录补播放器报的时长(enrich.go migrateListenDurations)。运行期
 	// trackEnrichment 放到没有时长的条目时自己补,不再产生。
 	migrationListenDurations        = "listen_durations"
@@ -215,6 +221,9 @@ func (s migrationScope) entries() map[string]enrichEntry {
 // 恢复,见 enrichedit.go adoptRestoreEdit)就不记:恢复进来的条目不在这一轮扫过的范围里,记上了它们就再也不会被扫,
 // 不记的代价只是下次启动再跑一遍。核对和记水位在同一把锁里:中间放锁的话,恰好落在两步之间的作废会被这次写回。
 func (s migrationScope) markDone(name string, version int) {
+	if migrationMarksRefused() {
+		return
+	}
 	migrationStateMu.Lock()
 	defer migrationStateMu.Unlock()
 	if s.epoch != migrationEpoch {
@@ -227,9 +236,21 @@ func (s migrationScope) markDone(name string, version int) {
 // markMigrationDone 记下水位并立刻落盘 —— 落盘失败只记一行日志:代价是下次启动多跑一遍,
 // 不值得让它影响启动流程。
 func markMigrationDone(name string, version int) {
+	if migrationMarksRefused() {
+		return
+	}
 	migrationStateMu.Lock()
 	defer migrationStateMu.Unlock()
 	markMigrationDoneLocked(name, version)
+}
+
+// migrationMarksRefused:这次启动主缓存没读进来(refuseEnrichSavesThisRun),这一场的迁移跑的是从 lyrics/ 补回来的内存、
+// 不是盘上那份,也不落盘 —— 记了水位,下次读进来的那份就再也轮不到这些迁移。不记的代价只是下次多跑一遍。
+// 见 15 章决策 70。取 enrichMu,调用方不能持 enrichMu 或 migrationStateMu。
+func migrationMarksRefused() bool {
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	return enrichLoadFailed
 }
 
 // markMigrationDoneLocked:同 markMigrationDone,调用方持 migrationStateMu。

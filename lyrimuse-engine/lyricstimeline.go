@@ -243,8 +243,8 @@ func rehangLRCOnYRC(lrc, yrc string, durationSecs float64, guard bool) (string, 
 		// 曲长未知时**放弃重挂**:闸校验不了,就没法保证"改完不会更坏"。
 		// 实测本机 41 条候选里有 22 条属于这种(从没真正播放过、缓存里没记时长),其中
 		// 《大内低手》重挂后末句会从 190.31s 缩到 140.18s —— 到底是 LRC 多转写了 50 秒
-		// 还是 YRC 少覆盖了 50 秒,没有曲长根本判不了。这些条目等它真正被播放时(那条
-		// 路径带着 durationSecs 走 rehangCandidateTimelines)自然会修,不必在这里赌。
+		// 还是 YRC 少覆盖了 50 秒,没有曲长根本判不了。不必在这里赌:不知道曲长时选下的歌词,
+		// 等播放器报了曲长由 trackEnrichment 补做一次(rehangStoredTimeline)。
 		if durationSecs <= 0 {
 			return lrc, nil, false
 		}
@@ -437,6 +437,50 @@ func rehangCandidateTimelines(candidates []lyricCandidate, durationSecs float64)
 	}
 }
 
+// timelineRehangTried:这次进程里已经按播放器报的曲长补做过重挂的条目(trackEnrichment),每条只试一次。持 enrichMu。
+var timelineRehangTried = map[string]bool{}
+
+// rehangStoredTimeline 按 durationSecs 重挂一条已存条目的行级时间轴,译文 / 罗马音跟着搬到新轴上;演唱者标注按行记、
+// 重挂不改行的结构,原先对得上正文的,指纹跟着换成新正文的。重挂不了返回 false,条目原样。手动选定的指纹不看时间戳,不用换。
+// 启动迁移(migrateLyricTimelines)和播放时补做(trackEnrichment)共用。
+func rehangStoredTimeline(e *enrichEntry, durationSecs float64) bool {
+	newLyrics, remap, ok := rehangLRCOnYRC(e.Lyrics.String(), e.LyricsYRC.String(), durationSecs, true)
+	if !ok {
+		return false
+	}
+	if sp := e.LyricsSpeakers; sp != nil && sp.For == lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) {
+		moved := *sp
+		moved.For = lyricSpeakersFingerprint(newLyrics, e.LyricsYRC.String())
+		e.LyricsSpeakers = &moved
+	}
+	e.Lyrics = bt(newLyrics)
+	if tr, ok := remapLRCTimestamps(e.LyricsTr.String(), remap); ok {
+		e.LyricsTr = bt(tr)
+	}
+	if roma, ok := remapLRCTimestamps(e.LyricsRoma.String(), remap); ok {
+		e.LyricsRoma = bt(roma)
+	}
+	return true
+}
+
+// rehangOnReportedDurationLocked:这条的歌词是在不知道曲长时选的(ResolvedDurationSecs 为 0 —— 那一拍播放器没报时长、
+// 专辑预取),重挂的时长闸校验不了、当时放弃了;这一拍播放器报了曲长,按它补做一次。不补的话这类条目只有启动迁移管,
+// 而迁移带水位、跑过就不再扫(实测网易云《Solar On The Rise》:ReAmp 报 0 秒时首次解析,行级比逐字晚 0.2 秒,
+// 一直留着)。手改过的不动;首次解析还在跑时先不动(它的提交整条覆盖),也不记「试过」,下一拍再来。
+// 每条每次进程只试一次。改了返回 true,调用方负责落盘与导出。见 09 章决策 303。持 enrichMu。
+func rehangOnReportedDurationLocked(key string, e *enrichEntry, durationSecs float64) bool {
+	if durationSecs <= 0 || e.ResolvedDurationSecs > 0 || e.ManualLyrics || e.Lyrics.IsZero() || e.LyricsYRC.IsZero() ||
+		enrichInflight[key] || timelineRehangTried[key] {
+		return false
+	}
+	timelineRehangTried[key] = true
+	if !rehangStoredTimeline(e, durationSecs) {
+		return false
+	}
+	markEnrichEditedLocked(false, key)
+	return true
+}
+
 // migrateLyricTimelines 对整个 enrich 缓存跑一遍重挂,连带把译文/罗马音搬到新轴上。
 //
 // 调用时机(main.go):importLyricsFromFiles 之后、exportLyricsFiles 之前 —— 修的是
@@ -447,7 +491,8 @@ func rehangCandidateTimelines(candidates []lyricCandidate, durationSecs float64)
 //
 // 带水位闸(startupmigration.go):跑过一遍就不再重跑。它满足水位闸要求的两个前提 ——
 // 幂等(见上一行),而且运行期写入的新数据在**候选装配期**已经过同一套重挂
-// (applyLyricTimelineFixes 调的是同一个 rehangLRCOnYRC),不靠这道迁移兜底。
+// (rehangCandidateTimelines 调的是同一个 rehangLRCOnYRC);解析时不知道曲长、闸放弃了的,
+// 播放器报了曲长时由 trackEnrichment 补做(rehangOnReportedDurationLocked),不靠这道迁移兜底。
 // 加闸的理由是它贵:实测 6952 条缓存要 9~10 秒,而连跑两轮第二轮 0 条改动 —— 每次进程
 // 启动白烧这 9 秒,正是"引擎一重启,歌词就要等一两分钟"的最大单项。
 func migrateLyricTimelines() {
@@ -466,8 +511,7 @@ func migrateLyricTimelines() {
 		if dur <= 0 {
 			dur = e.ResolvedDurationSecs
 		}
-		newLyrics, remap, ok := rehangLRCOnYRC(e.Lyrics.String(), e.LyricsYRC.String(), dur, true)
-		if !ok {
+		if !rehangStoredTimeline(&e, dur) {
 			// 重挂修不了的,再看两套轴是否自相矛盾 —— 是就弃用逐字轴,播放退回行级
 			// (见 wordTimingContradictsLRC 头注,《2001太空漫游 (Live)》案)。
 			if !e.LyricsYRC.IsZero() && wordTimingContradictsLRC(e.Lyrics.String(), e.LyricsYRC.String()) {
@@ -476,13 +520,6 @@ func migrateLyricTimelines() {
 				dropped++
 			}
 			continue
-		}
-		e.Lyrics = bt(newLyrics)
-		if tr, ok2 := remapLRCTimestamps(e.LyricsTr.String(), remap); ok2 {
-			e.LyricsTr = bt(tr)
-		}
-		if roma, ok2 := remapLRCTimestamps(e.LyricsRoma.String(), remap); ok2 {
-			e.LyricsRoma = bt(roma)
 		}
 		enrichCache[k] = e
 		fixed++
