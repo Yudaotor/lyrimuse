@@ -121,6 +121,8 @@ struct MenuBarPreviewBar<Lane: View>: View {
     @State private var pausedPositionMs: Int?
     @State private var lyricsOffsetMs = 0
     @State private var isPlayingNow = false
+    /// 整首的起步槽宽(`PlaybackCoordinator.menuBarSongRowWidth`),跟本体喂同一份。
+    @State private var songRowWidth: CGFloat?
 
     private var fullText: String {
         if let text = line?.plainText, !text.isEmpty { return text }
@@ -143,18 +145,24 @@ struct MenuBarPreviewBar<Lane: View>: View {
         }
         return secondaryKind.displayName
     }
-    /// 自适应模式下装得下的句子那一格的宽:双排取两行里宽的那个、上限「最大宽度」(跟本体 refresh 的
-    /// `.text` 分支同一个算式);单行就是主行宽。
+    /// 自适应模式下装得下的句子那一格的宽,跟本体 refresh 的 `.text` 分支同一串算式:双排取两行里宽的那个、
+    /// 上限「最大宽度」(单行就是主行宽),再从整首的起步宽度起(`MenuBarSlotPolicy.songSlotWidth`,06 章决策 34)。
+    /// 起步宽度只在演正在放的这一句时套:示例句不属于哪首歌。本体那道同一首歌内小幅回缩不缩槽的地板
+    /// (`MenuBarSlotFloor`,跟着状态项一份的状态)这里不套,地板撑着的那几句预览比真机窄。
     private func adaptiveWindowWidth(for visible: String) -> CGFloat {
         let mainW = MenuBarMarqueeRenderer.width(of: visible, font: mainFont)
-        guard twoRows else { return mainW }
-        let secondaryW = secondaryText.map {
-            MenuBarMarqueeRenderer.width(of: $0, font: MenuBarMarqueeRenderer.doubleRowSecondaryFont)
-        } ?? 0
+        // 副行是译文时按译文量(排字语言不同,宽度不同),跟本体同一个参数。
+        let secondaryW = twoRows ? (secondaryText.map {
+            MenuBarMarqueeRenderer.width(of: $0, font: MenuBarMarqueeRenderer.doubleRowSecondaryFont,
+                                         translation: secondaryKind == .translation)
+        } ?? 0) : 0
         // 跟本体同一个函数(副行是「下一句」时不撑宽),别再各写一份。
-        return MenuBarSlotPolicy.naturalWidth(
+        let naturalW = MenuBarSlotPolicy.naturalWidth(
             mainWidth: mainW, secondaryWidth: secondaryW, twoRows: twoRows,
             secondaryKind: secondaryKind, maxWidth: settings.menuBarLyricsWidth)
+        return MenuBarSlotPolicy.songSlotWidth(
+            naturalWidth: naturalW, songRowWidth: (line?.plainText ?? "").isEmpty ? nil : songRowWidth,
+            maxWidth: settings.menuBarLyricsWidth)
     }
     /// Representable 的 frame 高:双排要给满按钮那 22pt(两行在里面按 MenuBarLyricRows.layout 落位),
     /// 单行照旧一行行高。
@@ -322,6 +330,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
         .onReceive(PlaybackCoordinator.shared.$pausedPositionMs) { pausedPositionMs = $0 }
         .onReceive(PlaybackCoordinator.shared.$currentLyricsOffsetMs) { lyricsOffsetMs = $0 }
         .onReceive(PlaybackCoordinator.shared.$isPlayingNow) { isPlayingNow = $0 }
+        .onReceive(PlaybackCoordinator.shared.$menuBarSongRowWidth) { songRowWidth = $0 }
         .accessibilityHidden(true)
     }
 
@@ -583,9 +592,12 @@ struct MenuBarPreviewBar<Lane: View>: View {
             // 判据多了一个 `previewIconBadge != nil`,跟真机同步:一枚要按
             // 进度半染色的图标同样塞不进按钮自绘那条路,所以开着图标时装得下的句子也改走
             // 图层渲染(见 MenuBarStatusItem.refresh 的 .text 分支)。
-            // 判据再多一个 `twoRows`,同样跟真机同步:button.title 只能画一行。
-            if visible == fullText, karaokeFillPath != nil || previewIconBadge != nil || twoRows {
-                let w = adaptiveWindowWidth(for: visible)
+            // 判据再多一个 `twoRows`,同样跟真机同步:button.title 只能画一行。格子比文字宽时也走图层
+            // (button.title 恒居中,自适应一律贴左)。判据跟真机是同一个函数。
+            let w = adaptiveWindowWidth(for: visible)
+            if visible == fullText, MenuBarSlotPolicy.adaptiveDrawsWithLayers(
+                hasFillPath: karaokeFillPath != nil, hasIcon: previewIconBadge != nil, twoRows: twoRows,
+                windowWidth: w, textWidth: MenuBarMarqueeRenderer.width(of: visible, font: mainFont)) {
                 MenuBarScrollingLabel.Representable(
                     text: visible, windowWidth: w, pacing: nil, fillPath: karaokeFillPath,
                     followPath: followReadingPath, karaokePositionMs: karaokePositionMs,

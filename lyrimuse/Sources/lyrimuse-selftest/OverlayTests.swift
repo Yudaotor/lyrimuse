@@ -1902,6 +1902,18 @@ func runOverlayTests() {
                     "UI 接线: 高清封面解码封顶 1024px(歌词窗口封面卡最大 920px),直连那条也按这一档降采样")
         expectEqual(src("SectionPreviewBars.swift").contains("MenuBarSlotPolicy.naturalWidth("), true,
                     "UI 接线: 菜单栏预览跟本体共用槽宽算式")
+        // 起步槽宽、画法判据、副行按译文量:预览跟本体同一份(06 章决策 4、34)。
+        let previewBar = src("SectionPreviewBars.swift")
+        let statusItem = (try? String(contentsOf: ui.deletingLastPathComponent()
+            .appendingPathComponent("MenuBar/MenuBarStatusItem.swift"), encoding: .utf8)) ?? ""
+        for (name, text) in [("预览", previewBar), ("本体", statusItem)] {
+            expectEqual(text.contains("MenuBarSlotPolicy.songSlotWidth(") && text.contains("MenuBarSlotPolicy.adaptiveDrawsWithLayers("), true,
+                        "UI 接线: 菜单栏\(name)的自适应格宽从整首起步宽度起、画法判据走同一个函数")
+        }
+        expectEqual(previewBar.contains("$menuBarSongRowWidth") && !statusItem.contains("menuBarSongRowWidth.map {"), true,
+                    "UI 接线: 预览喂的是本体同一份 menuBarSongRowWidth,本体不再自己写一份起步宽度算式")
+        expectEqual(sourceHas(previewBar, "font: MenuBarMarqueeRenderer.doubleRowSecondaryFont,\ntranslation: secondaryKind == .translation)"), true,
+                    "UI 接线: 预览量副行宽度时跟本体一样按译文量")
         expectEqual(src("ProgressFillLayer.swift").contains("override func viewDidChangeEffectiveAppearance()"), true,
                     "UI 接线: 进度条切深浅色时重解颜色")
         expectEqual(src("MarqueeText.swift").contains("guard isOverflowing, !reduceMotion else { return }"), true,

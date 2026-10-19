@@ -1536,6 +1536,33 @@ func runMenuBarTests() {
         expectEqual(w(.translation, twoRows: false), 80, "槽宽: 单行就是主行宽")
     }
 
+    // ---- 自适应槽位从整首的起步宽度起(06 章决策 34;本体与设置页预览共用,06 章决策 4) ----
+    do {
+        let P = MenuBarSlotPolicy.self
+        expectEqual(P.songSlotWidth(naturalWidth: 90, songRowWidth: 130, maxWidth: 250), 130,
+                    "起步槽宽: 比起步宽度窄的句子按起步宽度占")
+        expectEqual(P.songSlotWidth(naturalWidth: 170, songRowWidth: 130, maxWidth: 250), 170,
+                    "起步槽宽: 更宽的句子照旧撑宽")
+        expectEqual(P.songSlotWidth(naturalWidth: 90, songRowWidth: 400, maxWidth: 250), 250,
+                    "起步槽宽: 起步宽度封顶最大宽度")
+        expectEqual(P.songSlotWidth(naturalWidth: 90, songRowWidth: nil, maxWidth: 250), 90,
+                    "起步槽宽: 取不到起步宽度就是这一句自己的宽")
+    }
+
+    // ---- 自适应下装得下的句子谁来画:格子比文字宽就走图层(按钮的 title 恒居中,06 章决策 56) ----
+    do {
+        func layers(fill: Bool = false, icon: Bool = false, twoRows: Bool = false,
+                    window: CGFloat, text: CGFloat) -> Bool {
+            MenuBarSlotPolicy.adaptiveDrawsWithLayers(hasFillPath: fill, hasIcon: icon, twoRows: twoRows,
+                                                      windowWidth: window, textWidth: text)
+        }
+        expectEqual(layers(window: 98.5, text: 98.5), false, "画法: 格子正好等于文字宽、没有染色 / 图标 / 双排时按钮自己画")
+        expectEqual(layers(window: 140, text: 98.5), true, "画法: 起步宽度撑出空位时走图层,跟逐字那几句同一个落点")
+        expectEqual(layers(fill: true, window: 98.5, text: 98.5), true, "画法: 逐字染色走图层")
+        expectEqual(layers(icon: true, window: 98.5, text: 98.5), true, "画法: 进度图标走图层")
+        expectEqual(layers(twoRows: true, window: 98.5, text: 98.5), true, "画法: 双排走图层")
+    }
+
     // ---- 面板头部点歌名 / 歌手名 / 专辑名翻到简介(06 章决策 51) ----
     // 简介页画在面板里:独立浮框或 popover 是另一扇窗,点它面板就收起了。
     do {

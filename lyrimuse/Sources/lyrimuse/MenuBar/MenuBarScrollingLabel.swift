@@ -103,7 +103,7 @@ final class MenuBarScrollingLabel: NSView {
     private struct Plan: Equatable {
         var text: String
         var windowWidth: CGFloat
-        /// 静止(装得下)时短句在格子里靠哪边。由 present() 现读 AppSettings 填进来 ——
+        /// 静止(装得下)时短句在格子里靠哪边。由 present() 现读 AppSettings、过 `restingAlignment` 填进来 ——
         /// 不让调用方传:两个调用点(MenuBarStatusItem.showFixedWidth、设置页预览的
         /// Representable)都只关心"画哪句话多宽",对齐是纯样式,从这里读一次比在两处各传
         /// 一遍少一个漂的机会。
@@ -273,6 +273,15 @@ final class MenuBarScrollingLabel: NSView {
 
     // MARK: - 对外
 
+    /// 静止的短句在格子里靠哪边。固定宽度按「对齐方式」;自适应一律贴左 —— 设置里那一行只在固定宽度下出现,
+    /// 自适应下藏起来的设置不能照样生效。自适应的格子从整首的起步宽度起(06 章决策 34),短句在格里是有空位的,
+    /// 贴左让同一首歌里每句的起点不动,进度图标在左(默认)时字也贴着图标、间距不随句子变(见 06 章决策 56)。
+    /// 按钮自己画字那条路不认对齐,格子比文字宽的句子都改走图层(`MenuBarSlotPolicy.adaptiveDrawsWithLayers`)。
+    static func restingAlignment(widthMode: MenuBarLyricsWidthMode,
+                                 setting: LyricsRestingAlignment) -> LyricsRestingAlignment {
+        widthMode == .fixed ? setting : .leading
+    }
+
     /// 显示(或更新)一句要滚动的歌词。同一句用同样的参数重复调用是空操作 ——
     /// 否则每次 recompute 都会把滚动打回开头,用户永远看不到后半句。
     /// - Parameter secondaryText / secondaryKind: 副行(双排),见 Plan 里两个字段的注释。
@@ -285,7 +294,8 @@ final class MenuBarScrollingLabel: NSView {
                  secondaryKind: LyricSecondaryLine = .off,
                  gapWindow: GapWindow? = nil) {
         let next = Plan(text: text, windowWidth: windowWidth,
-                        alignment: AppSettings.shared.menuBarLyricsAlignment,
+                        alignment: Self.restingAlignment(widthMode: AppSettings.shared.menuBarLyricsWidthMode,
+                                                         setting: AppSettings.shared.menuBarLyricsAlignment),
                         fontWeight: AppSettings.shared.menuBarLyricsFontWeight,
                         fontSize: AppSettings.shared.menuBarLyricsFontSize,
                         fontFamily: AppSettings.shared.menuBarLyricsFontFamily,

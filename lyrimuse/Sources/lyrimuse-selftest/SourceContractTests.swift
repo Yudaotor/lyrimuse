@@ -82,6 +82,63 @@ func runSourceContractTests() {
         }
     }
 
+    // 菜单栏歌词的订阅(换句、当前句、播放态、悬停三键、对表…)都挂主队列(06 章决策 56):RunLoop.main 只在默认模式投递,
+    // App 自己的菜单开着、拖滑杆、拖窗口时状态栏歌词会整个停住。只有宽度滑杆那条 debounce 故意留在 RunLoop.main(01 章决策 11)。
+    do {
+        let appSources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        var files = ((try? FileManager.default.contentsOfDirectory(atPath: appSources.appendingPathComponent("MenuBar").path)) ?? [])
+            .filter { $0.hasSuffix(".swift") }.map { "MenuBar/" + $0 }
+        files += ["UI/MenuBarEditorStage.swift", "UI/MenuBarIconPicker.swift"]
+        var scanned = 0, offenders: [String] = []
+        for rel in files.sorted() {
+            guard let text = try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8) else { continue }
+            scanned += 1
+            if text.contains("receive(on: RunLoop.main)") { offenders.append(rel) }
+        }
+        expectEqual(scanned > 15, true, "调度器: 菜单栏至少扫到 16 个源文件(实际 \(scanned)),少了说明路径不对")
+        expectEqual(offenders, [], "调度器: 菜单栏的订阅挂 DispatchQueue.main,别 receive(on: RunLoop.main),菜单开着时状态栏歌词会停住")
+        let item = (try? String(contentsOfFile: appSources.appendingPathComponent("MenuBar/MenuBarStatusItem.swift").path, encoding: .utf8)) ?? ""
+        expectEqual(item.components(separatedBy: "scheduler: RunLoop.main").count - 1, 1, "调度器: 菜单栏只剩宽度滑杆那一条挂 RunLoop.main")
+        expectEqual(sourceHas(item, "settings.$menuBarLyricsWidth.dropFirst()\n.debounce(for: .milliseconds(250), scheduler: RunLoop.main)"), true,
+                    "调度器: 宽度滑杆的 debounce 留在 RunLoop.main,拖动中不重建状态项(01 章决策 11)")
+        expectEqual(item.components(separatedBy: ".receive(on: DispatchQueue.main)").count - 1 >= 28, true,
+                    "调度器: 菜单栏状态项的订阅都 receive(on: DispatchQueue.main)")
+    }
+
+    // 菜单栏歌词静止时的对齐:「对齐方式」那一行只在固定宽度下出现,自适应一律贴左、不读这个设置;
+    // 按钮自己画字那条路恒居中,格子比文字宽的句子改走图层,两条路落点一致(06 章决策 56)。
+    do {
+        let menuBar = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/MenuBar")
+        let label = (try? String(contentsOfFile: menuBar.appendingPathComponent("MenuBarScrollingLabel.swift").path, encoding: .utf8)) ?? ""
+        expectEqual(label.contains("widthMode == .fixed ? setting : .leading")
+                        && sourceHas(label, "alignment: Self.restingAlignment(widthMode: AppSettings.shared.menuBarLyricsWidthMode,\nsetting: AppSettings.shared.menuBarLyricsAlignment)")
+                        && !label.contains("alignment: AppSettings.shared.menuBarLyricsAlignment,"), true,
+                    "菜单栏对齐: 自适应一律贴左,固定宽度才按「对齐方式」")
+    }
+
+    // 音符 / 歌词列表 / 三连音符 / 麦克风的摇摆绕图标中心转:挂裸图层 movingPart,不挂 imageView 的背板层
+    // (anchorPoint 是 (0,0),转起来绕左下角;06 章决策 7、06 章决策 56)。
+    do {
+        let menuBar = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/MenuBar")
+        let live = (try? String(contentsOfFile: menuBar.appendingPathComponent("MenuBarLiveIconView.swift").path, encoding: .utf8)) ?? ""
+        if let r = live.range(of: "private func buildSway(") {
+            let body = String(live[r.lowerBound...].prefix(900))
+            expectEqual(body.contains("movingPart.add(") && !body.contains("imageView.layer?.add(") && !body.contains("imageView.image ="), true,
+                        "图标摇摆: 摇摆动画挂在裸图层 movingPart 上,不碰 imageView 的背板层")
+        } else {
+            expectEqual(true, false, "图标摇摆: 读不到 buildSway(改名了?)")
+        }
+        expectEqual(live.contains("case .note, .noteList, .quarternotes, .mic: return true")
+                        && sourceHas(live, "case let style? where Self.swings(style):\n// 左下角落在整点上(同静态帧的摆法),anchor 在中心,position 就是图标中心。")
+                        && live.contains("setTinted(movingPart, key: \"sway-\\(style.rawValue)\")"), true,
+                    "图标摇摆: 四款摇摆的图层按中心摆位、现染模板图")
+        expectEqual(live.components(separatedBy: "imageView.layer?.add(").count - 1, 1,
+                    "图标摇摆: imageView 背板层上只剩音叉那条平移(平移跟 anchorPoint 无关)")
+    }
+
     // 换歌翻牌用的封面指纹、耳朵里的小封面在后台先算好,不在下拉动画开头那几帧里把整张图缩小(05 章决策 70)。
     do {
         let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -1513,7 +1570,7 @@ func runSourceContractSurfaceTests() {
         if let item = read("MenuBar/MenuBarStatusItem.swift") {
             expectEqual(item.contains("secondaryKind.displayedLine(compactLine: coordinator.menuBarLyrics.compactLine, currentLine: coordinator.menuBarLyrics.line)"), true,
                         "菜单栏双排: 取句规则走 Core 的 LyricSecondaryLine.displayedLine(跟灵动岛同一份)")
-            expectEqual(item.contains("fillPath != nil || icon != nil || rowState.twoRows"), true,
+            expectEqual(sourceHas(item, "MenuBarSlotPolicy.adaptiveDrawsWithLayers(\nhasFillPath: fillPath != nil, hasIcon: icon != nil, twoRows: rowState.twoRows,"), true,
                         "菜单栏双排: 自适应装得下的句子双排时也走图层渲染")
             expectEqual(item.contains("MenuBarMarqueeRenderer.mainFont(for: text, twoRows: twoRows)"), true,
                         "菜单栏双排: 主行字体只从 mainFont(for:twoRows:) 一个入口取")
@@ -1540,7 +1597,8 @@ func runSourceContractSurfaceTests() {
         if let preview = read("UI/SectionPreviewBars.swift") {
             expectEqual(preview.components(separatedBy: "secondaryKind: secondaryKind)").count - 1, 2,
                         "菜单栏双排: 预览两条 Representable 都要把副行传进去")
-            expectEqual(preview.contains("|| twoRows {"), true, "菜单栏双排: 预览跟真机同一条岔路,双排走图层")
+            expectEqual(sourceHas(preview, "MenuBarSlotPolicy.adaptiveDrawsWithLayers(\nhasFillPath: karaokeFillPath != nil, hasIcon: previewIconBadge != nil, twoRows: twoRows,"), true,
+                        "菜单栏双排: 预览跟真机同一条岔路,双排走图层")
         }
         if let stage = read("UI/MenuBarEditorStage.swift") {
             expectEqual(stage.contains("settings.menuBarSecondaryLine = AppSettings.defaultMenuBarSecondaryLine"), true,

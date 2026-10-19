@@ -82,10 +82,13 @@ final class MenuBarStatusItem: NSObject {
 
         let settings = AppSettings.shared
         let coordinator = PlaybackCoordinator.shared
-        // 每一条订阅都必须 .receive(on: RunLoop.main)(或 debounce),不能直接 sink:@Published 在
+        // 每一条订阅都必须 .receive(on: DispatchQueue.main)(或 debounce),不能直接 sink:@Published 在
         // **willSet** 时机发射,回调执行时属性本身还是**旧值**。下面这些回调都不用发射值、而是转头去读
         // AppSettings/PlaybackCoordinator 的当前状态(refresh() 内部这么做),直接 sink 会读到旧值 ——
         // isPlayingNow 从 false 变 true 时 refresh() 读到的仍是 false,菜单栏永远不显示歌词(06 章决策 2)。
+        // 挂主队列、别挂 RunLoop.main:RunLoop.main 只在默认模式投递,App 自己的菜单开着、拖滑杆、拖窗口时
+        // 主线程在事件跟踪模式里转,换句、播放态、对表全停在打开那一刻,关了才一起跳(见 06 章决策 56)。
+        // 宽度滑杆那条 debounce 例外,故意留在 RunLoop.main(见下面那段与 01 章决策 11)。
         // 这里订阅的是 compactLine(决定**显示哪一句**);下面另有一条 currentLine 的
         // 订阅,那条管的是"逐字填色路径此刻可不可用" —— 提前量窗口里显示的是下一句、但它
         // 还没开唱,karaokeFillPath 那道 `line.plainText == text` 守卫会不给路径(正确:
@@ -105,7 +108,7 @@ final class MenuBarStatusItem: NSObject {
                 return "\(line.words?.first?.startMs ?? -1)#\(line.plainText ?? "")"
             }
             .removeDuplicates()
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }
             .store(in: &cancellables)
         // 见上面那段:开唱那一刻要重画一次,好把逐字填色路径挂上。只关心"有没有词可染",
@@ -119,10 +122,10 @@ final class MenuBarStatusItem: NSObject {
                 return "\(line.words?.first?.startMs ?? -1)#\(line.plainText ?? "")#\(line.translation ?? "")#\(line.romanization ?? "")"
             }
             .removeDuplicates()
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }
             .store(in: &cancellables)
-        settings.$showLyricsInMenuBar.dropFirst().receive(on: RunLoop.main)
+        settings.$showLyricsInMenuBar.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 宽度改了可能从"要滚"变成"装得下"(或者反过来)。订阅的必须是现在真正在用的那个设置
         // (06 章决策 3)。
@@ -131,46 +134,48 @@ final class MenuBarStatusItem: NSObject {
         // 原地改 length 不给邻居重排,见 present 头注),拖滑杆时每个中间值都
         // 重建一次就是一场重排风暴。停手 250ms 后按最终值重建一次。
         // (debounce 本身也把回调推迟到了下一个 runloop 之后,willSet 旧值坑照样躲开。)
+        // 调度器故意是 RunLoop.main:拖滑杆时主线程在事件跟踪模式里,默认模式的计时器不走,
+        // 拖动中一次都不重建,松手回到默认模式才按最终值落地(01 章决策 11)。
         settings.$menuBarLyricsWidth.dropFirst()
             .debounce(for: .milliseconds(250), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 同理:切固定/自适应会改变**当前这一句**该走哪条显示路径,不能等下一次换句
         // 才生效 —— 那样用户在设置里点一下,菜单栏上看着像没反应。
-        settings.$menuBarLyricsWidthMode.dropFirst().receive(on: RunLoop.main)
+        settings.$menuBarLyricsWidthMode.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 「对齐模式」跟宽度模式同一条路,必须走 refresh() 而不是
         // refreshColors():后者只重排位图 + 重放填色,**不碰 position** —— 而对齐改的正是
         // position。refresh 会一路走到 present(),Plan 里带着 alignment、比出不同,静止分支
         // 就会按新对齐重新落位(见 MenuBarScrollingLabel.restartAnimation)。
-        settings.$menuBarLyricsAlignment.dropFirst().receive(on: RunLoop.main)
+        settings.$menuBarLyricsAlignment.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 换图标样式要立刻看到 —— 用户是在设置里一个个点着挑的,等下次换歌才生效
         // 等于挑不了。
-        settings.$menuBarIconStyle.dropFirst().receive(on: RunLoop.main)
+        settings.$menuBarIconStyle.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 「图标动画」开关拨动要立刻生效 —— 用户就是盯着菜单栏拨的。
-        settings.$menuBarIconAnimates.dropFirst().receive(on: RunLoop.main)
+        settings.$menuBarIconAnimates.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 歌词旁那枚带进度的图标:开/关/换边要立刻看到(用户就是盯着菜单栏点的)。
         // 必须走 refresh():它改的是这一项的**槽宽**(多让出 图标宽 + 5pt),而槽宽只在
         // 项出生那一刻算数 —— refreshColors 那条只重画不重建,换过去菜单栏上会是"图标画出来
         // 了但格子没变宽",歌词右边被挤出去(见 present 头注两条铁律)。
-        settings.$menuBarLyricsIconPosition.dropFirst().receive(on: RunLoop.main)
+        settings.$menuBarLyricsIconPosition.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        coordinator.$isPlayingNow.dropFirst().receive(on: RunLoop.main)
+        coordinator.$isPlayingNow.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 「♪ 歌名」兜底:连续两首都没歌词时 compactLine 一直是 nil,不订歌名就换不了字;
         // 广告开始 / 结束也要重算(广告态不显示广告标题);开关本身切换立刻生效。
-        coordinator.$title.dropFirst().removeDuplicates().receive(on: RunLoop.main)
+        coordinator.$title.dropFirst().removeDuplicates().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        coordinator.$isCurrentTrackAdBreak.dropFirst().removeDuplicates().receive(on: RunLoop.main)
+        coordinator.$isCurrentTrackAdBreak.dropFirst().removeDuplicates().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        settings.$menuBarShowsTitleWhenNoLyrics.dropFirst().receive(on: RunLoop.main)
+        settings.$menuBarShowsTitleWhenNoLyrics.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 悬停三键。两条订阅:
         //
         // ① 开关本身 —— 拨掉的时候如果正接管着,要立刻把歌词放回来(用户就是盯着菜单栏拨的)。
-        settings.$menuBarHoverShowsControls.dropFirst().receive(on: RunLoop.main)
+        settings.$menuBarHoverShowsControls.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.evaluateHoverEngagement() }.store(in: &cancellables)
         // ② 中间那个键画 ⏸ 还是 ▶。用**观感层** isPlayingSmoothed 而不是 isPlayingNow:
         // 这三个键最典型的用法就是"点一下暂停",而真实链路(命令→播放器切状态→分布式通知→
@@ -178,45 +183,45 @@ final class MenuBarStatusItem: NSObject {
         // (见 PlaybackCoordinator.userTogglePlayPause 的乐观回声)。
         // 这条**不能**走 refresh():接管期间 refresh 是早退的(见它开头那道 guard),
         // 图标要在接管期间照样跟得上,所以直接推给那一层自己重画。
-        coordinator.$isPlayingSmoothed.removeDuplicates().receive(on: RunLoop.main)
+        coordinator.$isPlayingSmoothed.removeDuplicates().receive(on: DispatchQueue.main)
             .sink { [weak self] on in self?.hoverControls.setPlaying(on) }.store(in: &cancellables)
         // 播放控制此刻会被拦下就把那三个字形画淡(见 PlaybackCoordinator.playbackControlsWithheldReason)。
-        coordinator.$playbackControlsWithheldReason.map { $0 != nil }.removeDuplicates().receive(on: RunLoop.main)
+        coordinator.$playbackControlsWithheldReason.map { $0 != nil }.removeDuplicates().receive(on: DispatchQueue.main)
             .sink { [weak self] on in self?.hoverControls.setWithheld(on) }.store(in: &cancellables)
         // 逐字染色开关:用户就是盯着菜单栏拨的,当前句要立刻上色/褪色。
-        settings.$menuBarLyricsKaraoke.dropFirst().receive(on: RunLoop.main)
+        settings.$menuBarLyricsKaraoke.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 粗细:字重一变文字宽度就变(拉丁字 heavy 比 regular 宽约 9%),自适应模式下
         // 槽宽跟着变 —— 所以必须走 refresh()(重排、必要时重建槽位),不能像颜色那样只
         // refreshColors。图层那条路的位图与滚动距离由 Plan.fontWeight 参与 present 判定来保证重排。
-        settings.$menuBarLyricsFontWeight.dropFirst().receive(on: RunLoop.main)
+        settings.$menuBarLyricsFontWeight.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 字号:除了宽度,行高也变 —— 固定宽度模式下槽宽不变、present(class:length:) 不重建,
         // 但 render 闭包照样跑,showFixedWidth 里那张占位图会按新的 lineHeight 重画;图层那条路由
         // Plan.fontSize 保证重排。
-        settings.$menuBarLyricsFontSize.dropFirst().receive(on: RunLoop.main)
+        settings.$menuBarLyricsFontSize.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 字体族:同粗细,宽度和位图都跟着变(删掉一款自定义字体时它会被重置成空串,也走这里)。
         // 图层那条路由 Plan.fontFamily 参与 present 判定与位图缓存键。
-        settings.$menuBarLyricsFontFamily.dropFirst().receive(on: RunLoop.main)
+        settings.$menuBarLyricsFontFamily.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 副行(双排):档位一变,主行字体、显示哪一句(currentLine / compactLine)、槽宽都变 ——
         // 必须走 refresh()。下一句文本只在副行选「下一句」时有用,其余档位到 present() 是同参数空操作。
-        settings.$menuBarSecondaryLine.dropFirst().receive(on: RunLoop.main)
+        settings.$menuBarSecondaryLine.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        coordinator.$menuBarLyrics.map(\.nextText).dropFirst().removeDuplicates().receive(on: RunLoop.main)
+        coordinator.$menuBarLyrics.map(\.nextText).dropFirst().removeDuplicates().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        coordinator.$menuBarSongRowWidth.dropFirst().removeDuplicates().receive(on: RunLoop.main)
+        coordinator.$menuBarSongRowWidth.dropFirst().removeDuplicates().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 两个自定义颜色:refreshColors 管图层渲染那条路(只换位图,不打断滚动/填色动画),
         // refresh 管自适应模式 button.title 那条路(颜色进的是 attributedTitle,
         // 得重画标题;对图层路径它是 present 同参数空操作,无副作用)。
-        settings.$menuBarLyricsTextColorHex.dropFirst().receive(on: RunLoop.main)
+        settings.$menuBarLyricsTextColorHex.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.scrollingLabel.refreshColors()
                 self?.scheduleRefresh()
             }.store(in: &cancellables)
-        settings.$menuBarLyricsFillColorHex.dropFirst().receive(on: RunLoop.main)
+        settings.$menuBarLyricsFillColorHex.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scrollingLabel.refreshColors() }.store(in: &cancellables)
         // 逐字染色的对表通道:锚点(每次 poll ~2s 重发一次 + seek/暂停/恢复)、暂停位置、
         // 时间轴偏移任一变化都重新对一次表。这条**不走 refresh**(不涉及槽位/内容,只是
@@ -224,23 +229,23 @@ final class MenuBarStatusItem: NSObject {
         // 正在跑的填色动画。偏移微调(默认步长 200ms)在漂移门之下,必须 force 立即生效。
         // 锚点/暂停位置这两条同时喂**两条**对表通道:逐字染色(对歌词时间轴)和进度图标
         // (对播放位置)。两者的位置口径差一个歌词时间轴偏移,见 syncProgressClock 头注。
-        coordinator.$anchor.receive(on: RunLoop.main)
+        coordinator.$anchor.receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.syncKaraokeClock()
                 self?.syncProgressClock()
             }.store(in: &cancellables)
-        coordinator.$pausedPositionMs.receive(on: RunLoop.main)
+        coordinator.$pausedPositionMs.receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.syncKaraokeClock()
                 self?.syncProgressClock()
             }.store(in: &cancellables)
         // 歌词时间轴偏移**只**喂染色那条:它挪的是歌词,歌本身放到第几秒没变。
-        coordinator.$currentLyricsOffsetMs.receive(on: RunLoop.main)
+        coordinator.$currentLyricsOffsetMs.receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.syncKaraokeClock(force: true) }.store(in: &cancellables)
         // 曲长**只**喂进度那条(染色的终点是这一行唱完,不看曲长)。换歌、或者播放器晚一步
         // 才报出时长,都要按新曲长重算 —— force 是因为曲长一变,旧动画描述的整段行程就作废了,
         // 而位置可能一点没动(过不了漂移门)。
-        coordinator.$currentDurationMs.removeDuplicates().receive(on: RunLoop.main)
+        coordinator.$currentDurationMs.removeDuplicates().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.syncProgressClock(force: true) }.store(in: &cancellables)
 
         refresh()
@@ -1193,7 +1198,9 @@ final class MenuBarStatusItem: NSObject {
             // 槽宽从整首定的起步宽度起(不超过「最大宽度」),比它宽的句子照旧撑宽:槽宽每变一次都要等静默窗才重建,
             // 等的时候新的一句画在旧槽里就会滚(见 present 头注)。按宽度断句开着时起步宽度是整首最宽的一行,一首之内
             // 不变;没开时是 `MenuBarSlotPolicy.songRowQuantile` 那一行。
-            let songW = coordinator.menuBarSongRowWidth.map { max(naturalW, min(settings.menuBarLyricsWidth, $0)) } ?? naturalW
+            let songW = MenuBarSlotPolicy.songSlotWidth(
+                naturalWidth: naturalW, songRowWidth: coordinator.menuBarSongRowWidth,
+                maxWidth: settings.menuBarLyricsWidth)
             // 占位态给槽宽兜个底:让它现在就有即将到来那一句要的宽度,那一句出现时几何
             // 已经到位、不必再改一次。判据是 Core 的纯函数(有 selftest),这里只喂数 ——
             // "下一句"怎么量在 `upcomingLineSlotWidth`,"该不该用它"在 `MenuBarSlotPolicy.slotWidth`。
@@ -1217,12 +1224,17 @@ final class MenuBarStatusItem: NSObject {
             // 换歌重置那一刻的目标同样"还不作数" —— 理由见 MenuBarSlotFloor.didResetOnLastCall。
             let provisional = placeholderNow || slotFloor.didResetOnLastCall
             let fillPath = visible == text ? karaokeFillPath(for: text) : nil
-            if fillPath != nil || icon != nil || rowState.twoRows {
+            // 判据跟设置页预览共用(`MenuBarSlotPolicy.adaptiveDrawsWithLayers`)。
+            if MenuBarSlotPolicy.adaptiveDrawsWithLayers(
+                hasFillPath: fillPath != nil, hasIcon: icon != nil, twoRows: rowState.twoRows,
+                windowWidth: textW, textWidth: mainW) {
                 // 逐字染色画不进 button.title(那条路是 AppKit 自绘的单色文字,没有图层
-                // 可以叠强调色),所以走图层渲染,窗口宽就取文字自身宽:槽宽公式跟上面
+                // 可以叠强调色),所以走图层渲染,窗口宽取歌词格宽 textW:槽宽公式跟上面
                 // 完全一致,footprint 不变,只是画的人是 scrollingLabel 而不是按钮。
                 // **进度图标也走这条岔路**,理由一样:要按进度半染色的图标同样塞不进
                 // button.title/image 那条 AppKit 自绘的路。**双排也走**:button.title 只能画一行。
+                // **格子比文字宽时也走**:button.title 恒居中,短句在格里的落点要跟图层那条路是同一个
+                // (自适应一律贴左,见 MenuBarScrollingLabel.restingAlignment 与 06 章决策 56)。
                 present(class: "text", length: w, collapseDelay: 0,
                         dwellSeconds: dwell, targetIsProvisional: provisional,
                         interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
@@ -1378,7 +1390,9 @@ final class MenuBarStatusItem: NSObject {
     }
 
     /// 按钮自己画文字(button.title):自适应模式下装得下、又用不着图层的句子(没有逐字染色、
-    /// 没有进度图标、不是双排),以及宽度被设成 0 或更小时的截断文字(滑杆下限 80pt,正常 UI 到不了)。
+    /// 没有进度图标、不是双排、歌词格正好等于文字宽),以及宽度被设成 0 或更小时的截断文字(滑杆下限 80pt,
+    /// 正常 UI 到不了)。button.title 恒在按钮里居中、不认对齐,所以格子比文字宽的句子不走这里
+    /// (见 `MenuBarSlotPolicy.adaptiveDrawsWithLayers`)。
     private func showStaticText(_ button: NSStatusBarButton, visible: String, full: String) {
         scrollingLabel.clear()
         liveIconView.clear()

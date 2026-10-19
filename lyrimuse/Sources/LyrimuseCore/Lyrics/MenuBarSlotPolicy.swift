@@ -110,6 +110,27 @@ public enum MenuBarSlotPolicy {
         return min(maxWidth, secondaryKind != .nextLine ? max(mainWidth, secondaryWidth) : mainWidth)
     }
 
+    /// 自适应槽位从整首的起步宽度起:`max(这一句, min(最大宽度, 起步宽度))`,比起步宽度宽的句子照旧撑宽。
+    /// 起步宽度是 `LyricsSyncEngine` 量出来的 `menuBarSongRowWidth`(没开按宽度断句时取第九成那一行,开了取整首最宽,
+    /// 见 06 章决策 34);取不到(nil)就是这一句自己的宽。菜单栏本体和设置页预览共用这一个算式(06 章决策 4)。
+    public static func songSlotWidth(naturalWidth: CGFloat, songRowWidth: CGFloat?, maxWidth: CGFloat) -> CGFloat {
+        guard let songRowWidth else { return naturalWidth }
+        return max(naturalWidth, min(maxWidth, songRowWidth))
+    }
+
+    /// 自适应模式下装得下的这一句交给谁画:true = 图层(`MenuBarScrollingLabel`),false = 按钮自己画 title。
+    ///
+    /// 逐字染色、进度图标、双排都画不进 button.title;**歌词格比文字宽**(起步宽度、占位兜底撑出来的空)时也走图层:
+    /// NSStatusBarButton 的 title 恒在按钮里居中,`alignment` 和段落样式都不认(离屏探针),落不到图层那条路
+    /// 「贴左」的位置,两条路并存的话同一首歌里有的句子居中、有的贴左(见 06 章决策 56)。
+    /// 按钮自己画只剩「格子正好等于文字宽」这一种,那时左、中、右画出来是同一个位置。
+    /// 菜单栏本体和设置页预览共用这一份判据。
+    public static func adaptiveDrawsWithLayers(
+        hasFillPath: Bool, hasIcon: Bool, twoRows: Bool, windowWidth: CGFloat, textWidth: CGFloat
+    ) -> Bool {
+        hasFillPath || hasIcon || twoRows || windowWidth > textWidth
+    }
+
     /// 占位态的槽宽该给多少。
     ///
     /// 占位文字(「♪ 歌名」兜底、或前奏/间奏那三颗点)的宽度跟**即将到来的那一句**毫无关系,所以从占位

@@ -17,8 +17,9 @@ import QuartzCore
 //   * 音条(equalizer):三根 CALayer 各挂一条相位错开的高度动画,双正弦,循环无缝。
 //   * 声波(waveform):SF Symbol 原生的 variable-color 流动(NSImageView 符号效果,
 //     系统驱动,跟 macOS 自家图标同一个质感)。
-//   * 其余(音符系/麦克风/经典):统一的轻微摇摆(±5° 正弦),NSImageView 的图层
-//     转起来 —— 模板图交给 imageView 上色,省掉自绘着色那套。
+//   * 音符 / 歌词列表 / 三连音符 / 麦克风:统一的轻微摇摆(±5° 正弦),绕图标中心转。转的是裸图层
+//     movingPart(模板图现染成位图),不是 imageView 的背板层:背板层的 anchorPoint 是 (0,0),
+//     转起来绕左下角(见 06 章决策 7、06 章决策 56)。
 //
 // 颜色/高亮机制同 MenuBarScrollingLabel:自绘图层享受不到模板图的系统着色,
 // labelColor / selectedMenuItemTextColor 自己解析、菜单开合时换色,换色绝不打断动画。
@@ -30,10 +31,10 @@ final class MenuBarLiveIconView: NSView {
     private var currentStyle: MenuBarIconStyle?
     private var highlighted = false
 
-    // ---- 呈现体:一个 imageView(摇摆/声波/旋转)+ 自绘图层(音条、黑胶双层) ----
+    // ---- 呈现体:一个 imageView(声波、音叉微颤)+ 自绘图层(音条、摇摆、黑胶双层…) ----
     private let imageView = NSImageView()
     private var equalizerBars: [CALayer] = []
-    /// "动件"层(黑胶唱盘/光盘旋转、节拍器摆针):**裸 CALayer,几何完全归这里管**。
+    /// "动件"层(黑胶唱盘/光盘旋转、节拍器摆针、音符系 / 麦克风摇摆):**裸 CALayer,几何完全归这里管**。
     /// 结构动画绝不能挂在 imageView 的视图背板层上 —— AppKit 拥有那个层的几何,布局
     /// 随时改写,变换叠上去实测就是"画圈不自转"(用户连报三轮,换了三版字形
     /// 都没救,根因在机制:黑胶走裸层没事、光盘走视图层不行,对照坐实)。图层 contents
@@ -271,13 +272,23 @@ final class MenuBarLiveIconView: NSView {
         }
     }
 
+    /// 摇摆的几款:音符、歌词列表、三连音符、麦克风(`present` 里落到 default 的那几款)。
+    static func swings(_ style: MenuBarIconStyle) -> Bool {
+        switch style {
+        case .note, .noteList, .quarternotes, .mic: return true
+        default: return false
+        }
+    }
+
     private func buildSway(_ style: MenuBarIconStyle) {
-        imageView.isHidden = false
-        imageView.image = MenuBarIconStyle.cachedImage(for: style)
+        // 裸图层、anchorPoint 在中心(teardown 归过位),旋转中心就是图标中心。
+        // 别挂到 imageView.layer 上:那是视图背板层,anchorPoint 是 (0,0)、几何归 AppKit,转起来绕左下角。
+        movingPart.isHidden = false
+        movingPart.bounds = CGRect(origin: .zero, size: MenuBarIconStyle.cachedImage(for: style).size)
         applyColor()
         // 轻微摇摆:±5° 正弦。这些是"物件"型图标,能做的运动只有律动本身,幅度收着点,
         // 常驻视野里大动作三天就烦了。
-        imageView.layer?.add(
+        movingPart.add(
             Self.sampledAnimation(keyPath: "transform.rotation.z", duration: 1.6) { t in
                 CGFloat(sin(2 * Double.pi * t) * 0.09)
             }, forKey: Self.animationKey)
@@ -459,6 +470,12 @@ final class MenuBarLiveIconView: NSView {
             let center = CGPoint(x: x0 + canvas.width / 2, y: y0 + canvas.height / 2)
             staticPart.position = center
             classicLinesHost.position = center
+        case let style? where Self.swings(style):
+            // 左下角落在整点上(同静态帧的摆法),anchor 在中心,position 就是图标中心。
+            let size = movingPart.bounds.size
+            let x0 = ((bounds.width - size.width) / 2).rounded()
+            let y0 = ((bounds.height - size.height) / 2).rounded()
+            movingPart.position = CGPoint(x: x0 + size.width / 2, y: y0 + size.height / 2)
         default:
             if let image = imageView.image {
                 imageView.frame = NSRect(
@@ -500,6 +517,8 @@ final class MenuBarLiveIconView: NSView {
         case .classic:
             setTinted(staticPart, key: "classicNoteArtwork") { MenuBarIconStyle.classicNoteArtwork() }
             classicLineBars.forEach { $0.backgroundColor = solid }
+        case let style? where Self.swings(style):
+            setTinted(movingPart, key: "sway-\(style.rawValue)") { MenuBarIconStyle.cachedImage(for: style) }
         default:
             break
         }

@@ -121,8 +121,9 @@ enum MenuBarLyricsIconPosition: String, Codable, Hashable, CaseIterable {
 //
 // **只在"有多余空间"时才有效果**,这不是偷懒而是定义使然 —— 两个展示面各有自己的失效
 // 条件,所以设置界面里这一行的显隐判据也各写在各自的调用点:
-//   - 菜单栏:自适应模式下那一格的宽度**就等于**文字宽度(见 MenuBarLyricsWidthMode
-//     .adaptive),没有多余空间,三个选项画出来一模一样 —— 所以那一行只在固定模式下出现;
+//   - 菜单栏:那一行只在固定模式下出现。自适应的格子从整首的起步宽度起(06 章决策 34),短句在格里
+//     其实有空位,但自适应下渲染一律贴左、不读这个设置(`MenuBarScrollingLabel.restingAlignment`,
+//     见 06 章决策 56),藏起来的设置不生效;
 //   - 两边共通:放不下的句子会横向滚动(菜单栏 `MenuBarMarquee.ScrollPacing`、灵动岛
 //     `MarqueeText`),文字比容器宽,同样没有空位 —— 这一条没法靠设置项显隐规避(同一首歌
 //     里长短句混着),只能在 help 文案里说明。
