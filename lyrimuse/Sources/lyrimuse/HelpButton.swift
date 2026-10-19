@@ -23,7 +23,7 @@ struct HelpButton: View {
         .buttonStyle(.glassIcon(isOpen: isPresented))
         .popover(isPresented: $isPresented, arrowEdge: .trailing) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(text).font(.callout)
+                Text(text).font(.callout).lineLimit(nil)
                 if let docTitle, let docURL {
                     // 用 Button+NSWorkspace.shared.open 而不是 SwiftUI 的 Link——Link 对
                     // file:// scheme 的 URL 在这个 app 里点了没反应(docURL 指向本地 README.md
@@ -109,6 +109,7 @@ struct QuickHelpLabel<Content: View>: View {
                 .font(.callout)
                 // 分数明细是一列对齐的数字,等宽数字读起来才是一列。
                 .monospacedDigit()
+                .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(12)
                 .frame(width: 280, alignment: .leading)
@@ -161,8 +162,10 @@ struct GlassInfoButton: View {
             }
         }
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+            // 弹层继承挂它那个视图的环境:按钮常跟标签、数字排在一行、整行设了 lineLimit(1),不放开的话说明被截成一行。
             Text(text)
                 .font(.callout)
+                .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(12)
                 .frame(maxWidth: 260, alignment: .leading)
@@ -215,6 +218,7 @@ private struct HoverNote: ViewModifier {
                      arrowEdge: .bottom) {
                 Text(text ?? "")
                     .font(.callout)
+                    .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(10)
                     .frame(maxWidth: 260, alignment: .leading)

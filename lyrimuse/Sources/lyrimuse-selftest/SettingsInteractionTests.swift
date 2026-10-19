@@ -854,5 +854,9 @@ private func runPermissionGuideContracts() {
                     "悬停说明(契约): QuickHelpLabel、GlassInfoButton、HoverNote 都走 HoverPopoverTiming")
         expectEqual(help.components(separatedBy: ".milliseconds(500)").count - 1, 1,
                     "悬停说明(契约): 弹出延时只写在 HoverPopoverTiming 一处")
+        // 弹层继承挂它的视图的 lineLimit(按钮常跟标签排在一行、整行限一行),四处说明都自己放开。
+        expectEqual(help.components(separatedBy: ".popover(").count - 1, 4, "悬停说明(契约): 一共四处弹层")
+        expectEqual(help.components(separatedBy: ".lineLimit(nil)").count - 1, 4,
+                    "悬停说明(契约): 四处弹层的说明都放开行数,不被挂它那一行的 lineLimit(1) 截成一行")
     }
 }
