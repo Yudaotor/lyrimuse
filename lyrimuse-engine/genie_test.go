@@ -2,8 +2,13 @@ package main
 
 import (
 	"net/http"
+	"slices"
+	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestGenieParseSyncLyric(t *testing.T) {
@@ -104,12 +109,15 @@ const genieTestSearch = `{"searchResult":{"result":{"songs":{"items":[
 const genieTestSync = `GenieCallback({"10":"Antifreeze","8060":"검정치마 (The Black Skirts)","16020":"우린 오래 전부터","20050":"어쩔 수 없는 거였어","24000":"우주 속을 홀로 떠돌며"});`
 
 func TestResolveGenieLyricEndToEnd(t *testing.T) {
+	var mu sync.Mutex
 	var queries []string
 	withKugouFakeReq(t, func(r *http.Request, target string) (int, string) {
 		switch {
 		case strings.HasSuffix(target, "/search/category/songs.json"):
 			q := r.URL.Query().Get("query")
+			mu.Lock()
 			queries = append(queries, q)
+			mu.Unlock()
 			if q == "Antifreeze 검정치마" {
 				return http.StatusOK, `{"searchResult":{"result":{"songs":{"items":[]}}}}`
 			}
@@ -121,8 +129,11 @@ func TestResolveGenieLyricEndToEnd(t *testing.T) {
 	})
 	ctx, sub := withLyricSubFetch(qqRoundCtx())
 	r := resolveGenieLyric(ctx, "검정치마", "Antifreeze", "201", 242)
-	if len(queries) != 2 || queries[1] != "Antifreeze" {
-		t.Fatalf("「歌名 歌手」一条都没有时只按歌名再搜一次: %v", queries)
+	mu.Lock()
+	sort.Strings(queries)
+	mu.Unlock()
+	if !slices.Equal(queries, []string{"Antifreeze", "Antifreeze 검정치마"}) {
+		t.Fatalf("「歌名 歌手」和只按歌名各搜一次: %v", queries)
 	}
 	if r.lyrics != "[00:16.02]우린 오래 전부터\n[00:20.05]어쩔 수 없는 거였어\n[00:24.00]우주 속을 홀로 떠돌며\n" || r.plainOnly {
 		t.Fatalf("去掉歌名 / 歌手两行抬头: %+v", r)
@@ -199,5 +210,67 @@ func TestRankLyricSourceResultsGenie(t *testing.T) {
 	}
 	if c := find(lyricSourceResult{lyr: "하나\n둘\n셋", plainOnly: true}); !c.PlainTextOnly || c.Score >= 0 {
 		t.Errorf("只有纯文本的交 plainOnly、分数恒 -1: plain=%v score=%d", c.PlainTextOnly, c.Score)
+	}
+}
+
+// 前两条检索词同时在途:第一条的请求挂着等第二条到达,串行时等不到。
+func TestResolveGenieLyricSearchesFirstTwoQueriesConcurrently(t *testing.T) {
+	second := make(chan struct{})
+	var once sync.Once
+	var overlapped atomic.Bool
+	withKugouFakeReq(t, func(r *http.Request, target string) (int, string) {
+		switch {
+		case strings.HasSuffix(target, "/search/category/songs.json"):
+			if r.URL.Query().Get("query") == "Antifreeze 검정치마" {
+				select {
+				case <-second:
+					overlapped.Store(true)
+				case <-time.After(500 * time.Millisecond):
+				}
+				return http.StatusOK, `{"searchResult":{"result":{"songs":{"items":[]}}}}`
+			}
+			once.Do(func() { close(second) })
+			return http.StatusOK, genieTestSearch
+		case r.URL.Query().Get("songid") == "11":
+			return http.StatusOK, genieTestSync
+		}
+		return http.StatusOK, genieNoLyrics
+	})
+	r := resolveGenieLyric(qqRoundCtx(), "검정치마", "Antifreeze", "201", 242)
+	if !overlapped.Load() {
+		t.Error("「歌名 歌手」和只按歌名应同时在途")
+	}
+	if r.lyrics == "" || r.album != "201" {
+		t.Errorf("第一条没过闸时用第二条的结果: %+v", r)
+	}
+}
+
+// 第一条有过闸的候选就用它,不等第二条回来。
+func TestResolveGenieLyricDoesNotWaitForSecondQuery(t *testing.T) {
+	release := make(chan struct{})
+	// 函数返回时先放开挂着的第二条请求:假服务器的 Cleanup 关闭时要等在途请求结束,放在 t.Cleanup 里会排在它后面、互相等。
+	defer close(release)
+	withKugouFakeReq(t, func(r *http.Request, target string) (int, string) {
+		switch {
+		case strings.HasSuffix(target, "/search/category/songs.json"):
+			if r.URL.Query().Get("query") == "Antifreeze" {
+				<-release
+				return http.StatusOK, `{"searchResult":{"result":{"songs":{"items":[]}}}}`
+			}
+			return http.StatusOK, genieTestSearch
+		case r.URL.Query().Get("songid") == "11":
+			return http.StatusOK, genieTestSync
+		}
+		return http.StatusOK, genieNoLyrics
+	})
+	done := make(chan genieResult, 1)
+	go func() { done <- resolveGenieLyric(qqRoundCtx(), "검정치마", "Antifreeze", "201", 242) }()
+	select {
+	case r := <-done:
+		if r.lyrics == "" || r.album != "201" {
+			t.Errorf("用第一条的结果: %+v", r)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("第一条有候选时不该等第二条")
 	}
 }

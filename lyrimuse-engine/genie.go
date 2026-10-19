@@ -45,6 +45,8 @@ const (
 	genieNoLyrics = "NOT FOUND LYRICS"
 	// genieHeaderLineMax:同步歌词开头最多看几行是不是歌名 / 歌手。
 	genieHeaderLineMax = 3
+	// genieConcurrentQueries:开头同时发几条检索词(见 resolveGenieLyric)。
+	genieConcurrentQueries = 2
 )
 
 var (
@@ -97,6 +99,12 @@ type genieSearchItem struct {
 }
 
 func (it genieSearchItem) hasLyrics() bool { return it.Service.Lyrics == "Y" }
+
+// genieSearchOutcome 是一次搜索的结果。
+type genieSearchOutcome struct {
+	items []genieSearchItem
+	err   error
+}
 
 func genieSearch(ctx context.Context, query string) ([]genieSearchItem, error) {
 	u := genieSearchURL + "?query=" + neturl.QueryEscape(query) + "&pg=1&pgsize=" + strconv.Itoa(genieSearchSize)
@@ -268,13 +276,31 @@ func resolveGenieLyric(ctx context.Context, artist, title, album string, duratio
 	qTitle := vibeQueryText(lyricQueryTitle(title))
 	queries := vibeQueries(qTitle, strings.TrimSpace(qTitle+" "+vibeQueryText(firstCreditedArtist(artist))),
 		strings.TrimSpace(lyricQueryTitle(title)))
+	// 前两条检索词同时发、结果仍按顺序用:第一条有过闸的就用它,不等第二条;没有才等第二条,都没有再按原样歌名搜。
+	// 串行时第一条没过闸的歌(约四成)都要等两次搜索,Genie 常是一轮里最后回来的源(09 章决策 298)。
+	// 第二条用不上时让它在后台跑完,别取消:取消掉的请求会被熔断记成一次失败。
+	pending := make([]chan genieSearchOutcome, len(queries))
+	start := func(i int) {
+		ch := make(chan genieSearchOutcome, 1)
+		pending[i] = ch
+		go func() {
+			items, err := genieSearch(ctx, queries[i])
+			ch <- genieSearchOutcome{items, err}
+		}()
+	}
+	for i := 0; i < len(queries) && i < genieConcurrentQueries; i++ {
+		start(i)
+	}
 	var candidates []scoredItem
-	for qi, q := range queries {
-		items, err := genieSearch(ctx, q)
-		if err != nil {
+	for qi := range queries {
+		if pending[qi] == nil {
+			start(qi)
+		}
+		res := <-pending[qi]
+		if res.err != nil {
 			return genieResult{}
 		}
-		for _, it := range items {
+		for _, it := range res.items {
 			if it.SongID == 0 {
 				continue
 			}
@@ -282,7 +308,7 @@ func resolveGenieLyric(ctx context.Context, artist, title, album string, duratio
 				candidates = append(candidates, scoredItem{it, s})
 			}
 		}
-		if len(candidates) > 0 || qi == len(queries)-1 {
+		if len(candidates) > 0 {
 			break
 		}
 	}
