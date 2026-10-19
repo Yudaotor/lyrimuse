@@ -294,8 +294,9 @@ final class WebLyricsConnection {
     /// 排多少由推法定,见 `frameBacklogged(video:)`。
     private var pendingFrames = 0
     private var pendingFrameBytes = 0
-    /// 视频流最多排这么多字节:视频帧小,丢一帧就要等关键帧,Wi-Fi 抖一下不该就丢;按每秒 3.5MB 算多等约 70ms。
-    static let videoQueueBytes = 256 * 1024
+    /// 视频流最多排这么多字节:丢一帧就要等关键帧,停一两秒的帧该排着,由网页的放帧余量接住;排多久主要由码率控制的
+    /// 在途上限管(`WebLyricsRateControl.admits`),这里只兜底。
+    static let videoQueueBytes = 1024 * 1024
     /// 连上之后这么久还没收完请求头就断开;发出去的东西这么久都没交给协议栈(对方不收)也断开。
     /// 名额只有 `WebLyricsServer.maxConnections` 个,不能被只连不发、只连不收的连接一直占着。
     static let requestTimeout: TimeInterval = 10

@@ -3273,6 +3273,26 @@ public final class LocalPlaybackSource: ObservableObject {
         updateLineFillSettled(line: r.line, index: r.index, atRawMs: frozen)
     }
 
+    /// 按「锚点外推 + `leadMs`」解一次的歌词行,给提前画的副屏用(见 `lyricsLookahead(leadMs:)`)。
+    public struct LyricsLookahead: Equatable, Sendable {
+        public let index: Int?
+        public let scrollIndex: Int?
+        public let overlappingIndices: [Int]
+        public let gapIndex: Int?
+        /// 下一次可能变在多少毫秒之后(播放位置时间轴);往后不会再变时 nil。
+        public let nextChangeInMs: Int?
+    }
+
+    /// 同 `fastTick` 那次打包查询,只是位置提前 `leadMs`;不改这里的任何状态(引擎的定位缓存会被踢一下,只在换行前那一小段)。
+    /// 没有锚点(暂停)、没有歌词内容、歌词被压着(广告、电台串场)时 nil。
+    public func lyricsLookahead(leadMs: Int) -> LyricsLookahead? {
+        guard let anchor, syncEngine.hasContent, !lyricLinesSuppressed else { return nil }
+        let pos = anchor.extrapolatedPositionMs() + leadMs
+        let r = syncEngine.tickQuery(atMs: pos, trackEndMs: currentDurationMs)
+        return LyricsLookahead(index: r.index, scrollIndex: r.scrollIndex, overlappingIndices: r.overlappingIndices,
+                               gapIndex: r.gapIndex, nextChangeInMs: syncEngine.nextChangeMs(afterRaw: pos).map { $0 - pos })
+    }
+
     private func fastTick() {
         if lyricLinesSuppressed {
             clearLineDisplay()

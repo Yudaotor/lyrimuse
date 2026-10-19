@@ -4,21 +4,23 @@ import LyrimuseCore
 import QuartzCore
 import VideoToolbox
 
-/// 出帧线程交给主线程分发的一帧:已经包好的 WebSocket 帧(视频关键帧前面连着一份解码配置),和它是不是关键帧。
-/// 逐帧 JPEG 每帧都是关键帧。
+/// 出帧线程交给主线程分发的一帧:已经包好的 WebSocket 帧(视频关键帧前面连着一份解码配置)、是不是关键帧、
+/// 画帧时刻(毫秒)、消息内容字节数(不含帧头,跟网页回报的收到字节数同一个数法)。逐帧 JPEG 每帧都是关键帧。
 struct WebLyricsScreenFrame: Sendable {
     let data: Data
     let isKeyFrame: Bool
+    let stamp: Double
+    let payloadBytes: Int
 }
 
 /// 副屏视频流的 H.264 编码器(见 `WebLyricsVideo`)。硬件编码、低延迟码率控制、不重排帧(没有 B 帧,解出来的顺序就是
-/// 放的顺序),约 2 秒一个关键帧;新网页连上或某个网页掉了帧时要关键帧,最多每秒插一个(不到一秒的请求记着,到点补出),
-/// 免得关键帧把慢网堵得更死。
-/// 码率跟节拍器的质量档走:原质量 4Mbps,降一档 2Mbps。在出帧线程上建、设码率,编码在 GPU 完成回调的线程上。
+/// 放的顺序);新网页连上或某个网页掉了帧时要关键帧,最多每秒插一个(不到一秒的请求记着,到点补出),免得关键帧把慢网
+/// 堵得更死。定期的关键帧只是保险,5 秒一个:窄路上关键帧是大头。
+/// 码率按网页回报定(`WebLyricsRateControl`,主线程设)。别设 `DataRateLimits`:硬件编码器为守住它每帧编得慢几倍,
+/// 两帧在途就供不上 60 帧。
+/// 在出帧线程上建,编码在编码队列上。
 final class WebLyricsVideoEncoder: @unchecked Sendable {
-    static let fullBitRate = 4_000_000
-    static let reducedBitRate = 2_000_000
-    static let keyFrameInterval: TimeInterval = 2
+    static let keyFrameInterval: TimeInterval = 5
     static let minForcedKeyFrameGap: TimeInterval = 1
 
     private let session: VTCompressionSession
@@ -47,13 +49,11 @@ final class WebLyricsVideoEncoder: @unchecked Sendable {
         VTSessionSetProperty(made, key: kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration,
                              value: Self.keyFrameInterval as CFNumber)
         session = made
-        setQuality(WebLyricsFramePacer.fullQuality)
+        setBitRate(WebLyricsRateControl.maxBitRate)
         VTCompressionSessionPrepareToEncodeFrames(made)
     }
 
-    /// 节拍器的质量档换成码率。
-    func setQuality(_ quality: Double) {
-        let target = quality >= WebLyricsFramePacer.fullQuality ? Self.fullBitRate : Self.reducedBitRate
+    func setBitRate(_ target: Int) {
         lock.lock()
         let changed = target != bitRate
         bitRate = target
@@ -108,12 +108,16 @@ final class WebLyricsVideoEncoder: @unchecked Sendable {
         let isKey = !((attachments?.first?[kCMSampleAttachmentKey_NotSync] as? Bool) ?? false)
         guard isKey else {
             let message = WebLyricsVideo.message(.deltaFrame, stamp: stamp, payload: payload)
-            return WebLyricsScreenFrame(data: WebSocketFrame.encode(message, opcode: .binary), isKeyFrame: false)
+            return WebLyricsScreenFrame(data: WebSocketFrame.encode(message, opcode: .binary), isKeyFrame: false,
+                                        stamp: stamp, payloadBytes: message.count)
         }
         guard let format = CMSampleBufferGetFormatDescription(sample), let config = decoderConfiguration(format) else { return nil }
-        var data = WebSocketFrame.encode(WebLyricsVideo.message(.config, stamp: stamp, payload: config), opcode: .binary)
-        data.append(WebSocketFrame.encode(WebLyricsVideo.message(.keyFrame, stamp: stamp, payload: payload), opcode: .binary))
-        return WebLyricsScreenFrame(data: data, isKeyFrame: true)
+        let configMessage = WebLyricsVideo.message(.config, stamp: stamp, payload: config)
+        let keyMessage = WebLyricsVideo.message(.keyFrame, stamp: stamp, payload: payload)
+        var data = WebSocketFrame.encode(configMessage, opcode: .binary)
+        data.append(WebSocketFrame.encode(keyMessage, opcode: .binary))
+        return WebLyricsScreenFrame(data: data, isKeyFrame: true, stamp: stamp,
+                                    payloadBytes: configMessage.count + keyMessage.count)
     }
 
     /// 从格式描述里取 SPS、PPS 拼 avcC。

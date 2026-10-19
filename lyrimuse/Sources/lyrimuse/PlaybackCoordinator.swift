@@ -289,6 +289,11 @@ final class PlaybackCoordinator: ObservableObject {
         (anchor?.extrapolatedPositionMs(now: now) ?? pausedPositionMs ?? 0) + currentLyricsOffsetMs
     }
 
+    /// 提前 `leadMs` 解一次歌词行,给网页歌词副屏用,见 `LocalPlaybackSource.lyricsLookahead`。
+    func lyricsLookahead(leadMs: Int) -> LocalPlaybackSource.LyricsLookahead? {
+        LocalPlaybackSource.shared.lyricsLookahead(leadMs: leadMs)
+    }
+
     private var cancellables: [AnyCancellable] = []
     private var started = false
 

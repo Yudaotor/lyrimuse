@@ -104,6 +104,111 @@ func runWebLyricsTests() {
         _ = paused.tick(at: 10, skipped: .none)
         expectEqual(paused.tick(at: 11.1, skipped: .none), false, "网页歌词档位: 暂停前那一秒的跳拍不算进恢复后的账")
         expectEqual(paused.level, 0, "网页歌词档位: 清账后档位不动")
+
+        var video = WebLyricsFramePacer(maxFramesInFlight: 2, minResolution: 1, countsBacklog: false)
+        _ = run(&video, from: 0, seconds: 5, draw: 0.003, pipeline: 0.02, bandwidth: 100_000)
+        expectEqual(video.level, 0, "网页歌词档位: 视频流网络发不完不降帧率(码率另由网页回报控制,降帧率省不了码率)")
+    }
+
+    // ---- 视频码率(WebLyricsRateControl) ----
+    do {
+        // 链路按先进先出模拟:每秒送 capacity(t) 字节,单程 10ms,stalls 里的时段一个字节都送不出。60 帧,一帧按设给编码器的
+        // 码率乘 overshoot(编码器超发)摊,
+        // 每 2 秒一个关键帧(普通帧的 5 倍),超过在途上限的帧不发。网页每 0.2 秒回报一次。返回末 5 秒里最长的排队时间、
+        // 最低码率和平均码率。
+        func simulate(_ rc: inout WebLyricsRateControl, from start: Double = 0, seconds: Double, overshoot: Double = 1,
+                      capacity: (Double) -> Double, stalls: [(at: Double, length: Double)] = [])
+            -> (queue: Double, low: Int, mean: Double) {
+            var arrivals: [(stamp: Double, at: Double, total: Int)] = []
+            var linkFree = start, total = 0, nextReport = start + 0.2
+            var worstQueue = 0.0, low = Int.max, rateSum = 0.0, rateCount = 0
+            var i = 0
+            while Double(i) / 60 < seconds {
+                let now = start + Double(i) / 60
+                while nextReport + 0.01 <= now {
+                    if let last = arrivals.last(where: { $0.at <= nextReport }) {
+                        _ = rc.noteFeedback(WebLyricsFeedback(stamp: last.stamp * 1000, receivedBytes: last.total,
+                                                              sinceArrival: nextReport - last.at), at: nextReport + 0.01)
+                    }
+                    nextReport += 0.2
+                }
+                if now > start + seconds - 5 {
+                    low = min(low, rc.bitRate)
+                    rateSum += Double(rc.bitRate)
+                    rateCount += 1
+                }
+                let bytes = Int(Double(rc.encoderBitRate) * overshoot / 8 / 60 * (i % 120 == 0 ? 5 : 1))
+                guard rc.admits(at: now) else {
+                    i += 1
+                    continue
+                }
+                rc.noteSent(stamp: now * 1000, bytes: bytes, at: now)
+                var begin = max(now, linkFree)
+                for stall in stalls where begin >= stall.at && begin < stall.at + stall.length { begin = stall.at + stall.length }
+                var end = begin + Double(bytes) / capacity(begin)
+                for stall in stalls where begin < stall.at && end > stall.at { end += stall.length }
+                linkFree = end
+                total += bytes
+                arrivals.append((now, linkFree + 0.01, total))
+                if now > start + seconds - 5 { worstQueue = max(worstQueue, linkFree - now) }
+                i += 1
+            }
+            return (worstQueue, low, rateSum / Double(max(1, rateCount)))
+        }
+
+        var narrow = WebLyricsRateControl()
+        let n = simulate(&narrow, seconds: 30, capacity: { _ in 150_000 })
+        expectEqual(n.mean <= 1_200_000 && n.low >= 600_000, true,
+                    "网页歌词码率: 路只有 1.2Mbps 时降到它以内,不压到底(末 5 秒平均 \(Int(n.mean)),最低 \(n.low))")
+        expectEqual(n.queue < 0.5, true, "网页歌词码率: 降下来之后排队消掉,不越积越迟(末 5 秒最长 \(n.queue)s)")
+
+        var greedy = WebLyricsRateControl()
+        let g = simulate(&greedy, seconds: 30, overshoot: 1.5, capacity: { _ in 150_000 })
+        expectEqual(g.queue < 0.5 && greedy.encoderBitRate < greedy.bitRate, true,
+                    "网页歌词码率: 编码器多发五成时按比例少设,排队照样消掉(末 5 秒最长 \(g.queue)s)")
+
+        var tiny = WebLyricsRateControl()
+        let tq = simulate(&tiny, seconds: 40, capacity: { _ in 40_000 })
+        expectEqual(tq.mean <= 340_000 && tq.queue < 0.8, true,
+                    "网页歌词码率: 320kbps 的路也降得进去(末 5 秒平均 \(Int(tq.mean)),最长排队 \(tq.queue)s)")
+
+        var start = WebLyricsRateControl()
+        let sq = simulate(&start, seconds: 10, capacity: { _ in 150_000 })
+        expectEqual(sq.queue < 1, true, "网页歌词码率: 刚连上灌进窄路的积压几秒内消掉(第 5～10 秒最长排队 \(sq.queue)s)")
+
+        var quick = WebLyricsRateControl()
+        _ = simulate(&quick, seconds: 1.5, capacity: { _ in 5_000_000 })
+        expectEqual(quick.bitRate, WebLyricsRateControl.maxBitRate, "网页歌词码率: 好路上从起步码率一秒多升满")
+
+        var wide = WebLyricsRateControl()
+        _ = simulate(&wide, seconds: 20, capacity: { _ in 5_000_000 })
+        expectEqual(wide.bitRate, WebLyricsRateControl.maxBitRate, "网页歌词码率: 路够宽一直用满上限")
+
+        var stalled = WebLyricsRateControl()
+        let stalls = stride(from: 3.0, to: 60, by: 3).map { (at: $0, length: 1.0) }
+        let st = simulate(&stalled, seconds: 60, capacity: { _ in 5_000_000 }, stalls: stalls)
+        expectEqual(st.low >= 2_000_000, true,
+                    "网页歌词码率: 路够宽、只是每 3 秒停 1 秒,码率不跟着压下去(末 5 秒最低 \(st.low))")
+
+        var recover = WebLyricsRateControl()
+        _ = simulate(&recover, seconds: 60, capacity: { $0 < 10 || $0 >= 30 ? 5_000_000 : 150_000 })
+        expectEqual(recover.bitRate, WebLyricsRateControl.maxBitRate, "网页歌词码率: 路变窄又变宽,码率跟着升回上限")
+
+        expectEqual(WebLyricsFeedback.parse(Data(#"{"fb":[1234.5,6789,12]}"#.utf8)),
+                    WebLyricsFeedback(stamp: 1234.5, receivedBytes: 6789, sinceArrival: 0.012), "网页歌词码率: 解析网页回报")
+        expectEqual(WebLyricsFeedback.parse(Data(#"{"fb":[1,-1,0]}"#.utf8)), nil, "网页歌词码率: 字节数是负的不认")
+        expectEqual(WebLyricsFeedback.parse(Data(#"{"fb":[1,2,3,450]}"#.utf8))?.delay, 0.45, "网页歌词码率: 回报带着放帧余量")
+
+        var latency = WebLyricsRateControl()
+        latency.noteSent(stamp: 990, bytes: 100, at: 1.0)
+        _ = latency.noteFeedback(WebLyricsFeedback(stamp: 990, receivedBytes: 100, sinceArrival: 0, delay: 0.3), at: 1.04)
+        expectEqual(abs((latency.displayLatency ?? 0) - (0.01 + 0.02 + 0.3 + 1.0 / 120)) < 0.0001, true,
+                    "网页歌词提前画: 从画到上屏 = 交出前的耗时 + 往返的一半 + 网页的放帧余量 + 半个刷新间隔(\(latency.displayLatency ?? -1))")
+        var noDelay = WebLyricsRateControl()
+        noDelay.noteSent(stamp: 990, bytes: 100, at: 1.0)
+        _ = noDelay.noteFeedback(WebLyricsFeedback(stamp: 990, receivedBytes: 100, sinceArrival: 0), at: 1.04)
+        expectEqual(noDelay.displayLatency, nil, "网页歌词提前画: 网页没报余量就不提前")
+        expectEqual(WebLyricsFeedback.parse(Data(#"{"vis":1}"#.utf8)), nil, "网页歌词码率: 可见性不当回报")
     }
 
     // ---- 副屏视频流(WebLyricsVideo) ----
@@ -546,8 +651,11 @@ func runWebLyricsTests() {
         expectEqual(sourceBytes(pagesSource, contain: "queue[i].t + wait <= now")
                         && sourceBytes(pagesSource, contain: "const now = performance.now(), wait = offset + delay();"), true,
                     "网页歌词: 副屏网页按画帧时刻匀速放,余量按到帧的抖动自适应")
-        expectEqual(sourceBytes(pagesSource, contain: "jitter = late > jitter ? late : jitter + (late - jitter) * 0.01;"), true,
-                    "网页歌词: 副屏到帧晚了立刻放宽余量、之后慢慢收回")
+        expectEqual(sourceHas(pagesSource, "if (late >= jitter) { jitter = late; jitterAt = now; }")
+                        && sourceHas(pagesSource, "else if (now - jitterAt > PEAK_HOLD) jitter = Math.max(late, jitter - (now - lastArrival) * PEAK_DECAY);"), true,
+                    "网页歌词: 副屏到帧晚了立刻放宽余量,近 20 秒最晚那次撑着,之后每秒收回一点")
+        expectEqual(sourceHas(pagesSource, "const cap = useVideo ? MAX_VIDEO_DELAY : Math.min(gap * bufferCap(), MAX_DELAY);"), true,
+                    "网页歌词: 视频流排的是没解的数据,余量能放到 2 秒;逐帧 JPEG 受内存限制")
         let frameSource = app("WebLyrics/WebLyricsScreen.swift")
         expectEqual(sourceHas(frameSource, "if sendBacklogged {\n notePace(.backlog)\n return\n }\n guard framesInFlight < Self.maxFramesInFlight else {\n notePace(.inFlight)\n return\n }"), true,
                     "网页歌词: 出帧线程跳过的拍报给节拍器,分清网络发不完和在途帧满")
@@ -556,12 +664,12 @@ func runWebLyricsTests() {
         expectEqual(sourceHas(frameSource, "let target = fast ? pacer.interval : Self.idleInterval"), true,
                     "网页歌词: 在播节拍按节拍器的档位")
         expectEqual(sourceHas(frameSource, "let jpeg = video == nil ? encoder(for: pacer.step) : nil")
-                        && sourceHas(frameSource, "video?.setQuality(pacer.step.quality)"), true,
-                    "网页歌词: 每拍按节拍器这一档取编码器(JPEG 尺寸、质量,视频码率跟着档位换)")
+                        && sourceHas(frameSource, "countsBacklog: !video)"), true,
+                    "网页歌词: 每拍按节拍器这一档取 JPEG 编码器;视频流网络发不完不降帧率")
         let hubSource = app("WebLyrics/WebLyricsScreen.swift")
         expectEqual(sourceHas(hubSource, "let delivery = WebLyricsVideo.deliver(isKeyFrame: frame.isKeyFrame, needsKeyFrame: entry.needsKeyFrame,"), true,
                     "网页歌词: 分发按 WebLyricsVideo.deliver 判这一帧发不发给这个网页")
-        expectEqual(sourceHas(hubSource, "viewers[ObjectIdentifier(connection)] = (connection, key, true, true)")
+        expectEqual(sourceHas(hubSource, "viewers[ObjectIdentifier(connection)] = Viewer(connection: connection, key: key,\n rate: key.video ? WebLyricsRateControl() : nil)")
                         && sourceHas(hubSource, "renderers[key]?.requestKeyFrame()"), true,
                     "网页歌词: 新网页从关键帧开始,连上就要一个关键帧")
         expectEqual(sourceHas(app("WebLyrics/WebLyricsServer.swift"),
@@ -577,9 +685,32 @@ func runWebLyricsTests() {
         expectEqual(sourceHas(pagesSource, "if (useVideo) decodeDue(now);")
                         && sourceHas(pagesSource, "chunks.push(new EncodedVideoChunk("), true,
                     "网页歌词: 视频帧先按没解的数据排着,快到放的时候才送去解(解好的帧占着解码器输出缓冲,压多了解码器停住)")
-        expectEqual(sourceHas(hubSource, "previousStillSending: entry.connection.frameBacklogged(video: key.video))")
-                        && sourceHas(hubSource, "entries.allSatisfy { $0.connection.frameBacklogged(video: key.video) }"), true,
-                    "网页歌词: 排没排满按推法判(视频按字节排几帧,逐帧 JPEG 只排一帧)")
+        expectEqual(sourceHas(hubSource, "previousStillSending: !admitted || entry.connection.frameBacklogged(video: key.video))")
+                        && sourceHas(hubSource, "$0.connection.frameBacklogged(video: key.video) || !($0.rate?.admits(at: now) ?? true)"), true,
+                    "网页歌词: 排没排满按推法判(视频按字节排几帧,逐帧 JPEG 只排一帧);视频流超在途上限也算排满")
+        expectEqual(sourceHas(hubSource, "let anyAdmitted = viewers.values.contains { $0.key == key && ($0.rate?.admits(at: now) ?? true) }")
+                        && sourceHas(hubSource, "let admitted = !anyAdmitted || (entry.rate?.admits(at: now) ?? true)")
+                        && sourceHas(hubSource, "viewers[id]?.rate?.noteSent(stamp: frame.stamp, bytes: frame.payloadBytes, at: now)"), true,
+                    "网页歌词: 视频流超在途上限时,只在这一尺寸还有别的网页没超时丢它的帧(全都超了由出帧线程停画,参考链不断、不等关键帧),发出去的记进码率控制")
+        expectEqual(sourceHas(hubSource, "refreshLead(entry.key)\n refreshBacklog(entry.key)\n guard changed else { return }"), true,
+                    "网页歌词: 每次回报都重判排没排满(在途上限随回报变)")
+        expectEqual(sourceHas(hubSource, "if let feedback = WebLyricsFeedback.parse(payload) {")
+                        && sourceHas(hubSource, "renderers[key]?.setVideoBitRate(lowest)"), true,
+                    "网页歌词: 网页回报进码率控制,编码器码率取这一尺寸网页里最低的")
+        expectEqual(sourceHas(hubSource, "let longest = viewers.values.filter { $0.key == key }.compactMap { $0.rate?.displayLatency }.max()")
+                        && sourceHas(pagesSource, "Math.round(performance.now() - rxAt), Math.round(delay())] }));"), true,
+                    "网页歌词提前画: 网页回报放帧余量,提前量取这一尺寸网页里从画到上屏最久的")
+        expectEqual(sourceHas(hubSource, "list.nowProvider = { [weak self] in PlaybackCoordinator.shared.lyricsTimelineMs() + (self?.appliedLeadMs ?? 0) }")
+                        && sourceHas(hubSource, "currentLineIndex: lookahead.map(\\.index) ?? playback.currentLineIndex,")
+                        && sourceHas(hubSource, "offsetMs: PlaybackCoordinator.shared.currentLyricsOffsetMs + appliedLeadMs),")
+                        && sourceHas(hubSource, "?? currentPositionMs() + appliedLeadMs,"), true,
+                    "网页歌词提前画: 填色时钟、当前行、填色动画的时间基准、进度条一起按提前量画")
+        expectEqual(sourceHas(hubSource, "PlaybackCoordinator.shared.lyricsLookahead(leadMs: leadMs)")
+                        && sourceHas(hubSource, "guard let wait = next?.nextChangeInMs else { return }"), true,
+                    "网页歌词提前画: 在播时按提前量重解歌词行,并在下一次换行的时刻补一次提交")
+        expectEqual(sourceHas(pagesSource, "ws.send(JSON.stringify({ fb: [rxStamp, rxBytes, Math.round(performance.now() - rxAt),")
+                        && sourceHas(pagesSource, "rxBytes += buffer.byteLength;"), true,
+                    "网页歌词: 副屏网页定时回报收到的最后一帧和字节数(按消息内容数,跟 App 记的同一个数法)")
         let serverSource = app("WebLyrics/WebLyricsServer.swift")
         expectEqual(sourceHas(serverSource, "video ? pendingFrameBytes >= Self.videoQueueBytes : pendingFrames > 0")
                         && sourceHas(serverSource, "self.pendingFrames -= 1\n self.pendingFrameBytes -= bytes"), true,

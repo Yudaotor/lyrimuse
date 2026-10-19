@@ -60,6 +60,8 @@ public struct WebLyricsFramePacer: Sendable {
     public var interval: TimeInterval { step.interval }
 
     private let framesInFlight: Int
+    /// 网络发不完的跳拍算不算数。视频流不算:码率按网页回报另控(`WebLyricsRateControl`),降帧率省不了码率。
+    private let countsBacklog: Bool
     private var windowStart: TimeInterval?
     private var ticks = 0
     private var inFlightSkips = 0
@@ -76,8 +78,9 @@ public struct WebLyricsFramePacer: Sendable {
     public private(set) var lastSkipRatio = 0.0
 
     /// - Parameter minResolution: 编码尺寸最多缩到渲染尺寸的几分之几,让像素倍数不低于 1(2 倍像素的网页是 0.5,1 倍的是 1)。
-    public init(maxFramesInFlight: Int, minResolution: Double = 0.5) {
+    public init(maxFramesInFlight: Int, minResolution: Double = 0.5, countsBacklog: Bool = true) {
         framesInFlight = max(1, maxFramesInFlight)
+        self.countsBacklog = countsBacklog
         let floor = min(1, max(minResolution, 0.01))
         var made: [WebLyricsFrameStep] = []
         for s in Self.ladder {
@@ -170,7 +173,7 @@ public struct WebLyricsFramePacer: Sendable {
         switch skip {
         case .none: break
         case .inFlight: inFlightSkips += 1
-        case .backlog: backlogSkips += 1
+        case .backlog: if countsBacklog { backlogSkips += 1 }
         }
     }
 

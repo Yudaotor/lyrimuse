@@ -22,8 +22,19 @@ final class WebLyricsScreenHub {
 
     private var renderers: [Key: WebLyricsScreenRenderer] = [:]
     private var order: [Key] = []
-    /// `needsKeyFrame`:视频流里这个网页要等下一个关键帧才解得开(刚连上、掉过帧),见 `WebLyricsVideo.deliver`。
-    private var viewers: [ObjectIdentifier: (connection: WebLyricsConnection, key: Key, visible: Bool, needsKeyFrame: Bool)] = [:]
+    /// 一个网页。`needsKeyFrame`:视频流里要等下一个关键帧才解得开(刚连上、掉过帧),见 `WebLyricsVideo.deliver`;
+    /// `rate`:视频流按它的回报控码率和在途上限(`WebLyricsRateControl`),逐帧 JPEG 为 nil。
+    private struct Viewer {
+        let connection: WebLyricsConnection
+        let key: Key
+        var visible = true
+        var needsKeyFrame = true
+        var rate: WebLyricsRateControl?
+        /// 这一段时间里没发出去的帧,按原因分:超在途上限、连接排满、在等关键帧。有丢帧时最多每 5 秒记一行诊断日志。
+        var drops = (inFlight: 0, queue: 0, waitingKey: 0)
+        var dropsSince: CFTimeInterval = 0
+    }
+    private var viewers: [ObjectIdentifier: Viewer] = [:]
     private static let log = Logger(subsystem: "me.yudaotor.lyrimuse", category: "web-lyrics")
 
     func add(_ connection: WebLyricsConnection, viewport requested: WebLyricsViewport, video: Bool) {
@@ -42,7 +53,8 @@ final class WebLyricsScreenHub {
                 renderer.start()
             }
         }
-        viewers[ObjectIdentifier(connection)] = (connection, key, true, true)
+        viewers[ObjectIdentifier(connection)] = Viewer(connection: connection, key: key,
+                                                       rate: key.video ? WebLyricsRateControl() : nil)
         Self.log.notice("screen viewer joined \(key.viewport.width, privacy: .public)x\(key.viewport.height, privacy: .public)@\(key.viewport.scale, privacy: .public) \(key.video ? "video" : "jpeg", privacy: .public)")
         refreshBacklog(key)
         renderers[key]?.requestKeyFrame()
@@ -54,13 +66,15 @@ final class WebLyricsScreenHub {
         guard let entry = viewers.removeValue(forKey: ObjectIdentifier(connection)) else { return }
         guard !viewers.values.contains(where: { $0.key == entry.key }) else {
             refreshBacklog(entry.key)
+            refreshBitRate(entry.key)
+            refreshLead(entry.key)
             return
         }
         renderers.removeValue(forKey: entry.key)?.stop()
         order.removeAll { $0 == entry.key }
     }
 
-    /// 网页发回来的文本消息:可见性(谁都能报),指针、滚轮(别的设备要「允许局域网设备控制播放」开着才算数)。
+    /// 网页发回来的文本消息:可见性、视频流收帧回报(谁都能报),指针、滚轮(别的设备要「允许局域网设备控制播放」开着才算数)。
     func message(_ connection: WebLyricsConnection, payload: Data) {
         let id = ObjectIdentifier(connection)
         guard let entry = viewers[id] else { return }
@@ -69,6 +83,20 @@ final class WebLyricsScreenHub {
             viewers[id]?.visible = visible
             Self.log.notice("screen viewer \(visible ? "visible" : "hidden", privacy: .public)")
             refreshVisibility(entry.key)
+            return
+        }
+        if let feedback = WebLyricsFeedback.parse(payload) {
+            guard var rate = entry.rate else { return }
+            let wire = rate.bitRate
+            let changed = rate.noteFeedback(feedback, at: CACurrentMediaTime())
+            viewers[id]?.rate = rate
+            refreshLead(entry.key)
+            refreshBacklog(entry.key)
+            guard changed else { return }
+            if rate.bitRate < wire {
+                Self.log.notice("web video bitrate: \(rate.bitRate / 1000, privacy: .public) kbps, encoder \(rate.encoderBitRate / 1000, privacy: .public) kbps (queue \(Int(rate.queueDelay * 1000), privacy: .public)ms, sent \(Int(rate.sentBitRate(at: CACurrentMediaTime()) / 1000), privacy: .public) kbps)")
+            }
+            refreshBitRate(entry.key)
             return
         }
         guard WebLyricsPointer.permits(remoteIsLoopback: connection.isLoopback,
@@ -90,14 +118,29 @@ final class WebLyricsScreenHub {
     }
 
     /// `frame` 是出帧线程上已经包好的 WebSocket 帧,几个网页共用同一份,主线程这里只交给连接发出去。排满了的网页这一帧
-    /// 丢掉(逐帧 JPEG 上一帧没发完就算满,视频流按字节,见 `frameBacklogged(video:)`);视频流里丢了帧的、刚连上的,
-    /// 等下一个关键帧再发,同时要一个关键帧(`WebLyricsVideo.deliver`)。
+    /// 丢掉(逐帧 JPEG 上一帧没发完就算满,视频流按字节,见 `frameBacklogged(video:)`;视频流在途超过上限也算,
+    /// 见 `WebLyricsRateControl.admits`);视频流里丢了帧的、刚连上的,等下一个关键帧再发,同时要一个关键帧
+    /// (`WebLyricsVideo.deliver`)。
     private func broadcast(_ frame: WebLyricsScreenFrame, for key: Key) {
         var wantsKeyFrame = false
+        let now = CACurrentMediaTime()
+        // 在途上限只在这一尺寸还有别的网页没超时才丢帧;全都超了照发这一帧,后面的由出帧线程停画挡住(见 refreshBacklog)
+        let anyAdmitted = viewers.values.contains { $0.key == key && ($0.rate?.admits(at: now) ?? true) }
         for (id, entry) in viewers where entry.key == key {
+            let admitted = !anyAdmitted || (entry.rate?.admits(at: now) ?? true)
             let delivery = WebLyricsVideo.deliver(isKeyFrame: frame.isKeyFrame, needsKeyFrame: entry.needsKeyFrame,
-                                                  previousStillSending: entry.connection.frameBacklogged(video: key.video))
-            if delivery.send { entry.connection.sendEncodedFrame(frame.data) }
+                                                  previousStillSending: !admitted || entry.connection.frameBacklogged(video: key.video))
+            if delivery.send {
+                entry.connection.sendEncodedFrame(frame.data)
+                viewers[id]?.rate?.noteSent(stamp: frame.stamp, bytes: frame.payloadBytes, at: now)
+            } else if !admitted {
+                viewers[id]?.drops.inFlight += 1
+            } else if entry.connection.frameBacklogged(video: key.video) {
+                viewers[id]?.drops.queue += 1
+            } else {
+                viewers[id]?.drops.waitingKey += 1
+            }
+            logDrops(id, now: now)
             viewers[id]?.needsKeyFrame = delivery.needsKeyFrame
             wantsKeyFrame = wantsKeyFrame || delivery.wantsKeyFrame
         }
@@ -111,10 +154,38 @@ final class WebLyricsScreenHub {
         refreshBacklog(entry.key)
     }
 
+    private func logDrops(_ id: ObjectIdentifier, now: CFTimeInterval) {
+        guard let entry = viewers[id], now - entry.dropsSince >= 5 else { return }
+        let d = entry.drops
+        if d.inFlight + d.queue + d.waitingKey > 0 {
+            Self.log.notice("web frames dropped: \(d.inFlight, privacy: .public) over in-flight cap, \(d.queue, privacy: .public) queue full, \(d.waitingKey, privacy: .public) waiting key frame")
+        }
+        viewers[id]?.drops = (0, 0, 0)
+        viewers[id]?.dropsSince = now
+    }
+
+    /// 视频流一个尺寸共用一个编码器:码率取这一尺寸网页里最低的。
+    private func refreshBitRate(_ key: Key) {
+        guard key.video,
+              let lowest = viewers.values.filter({ $0.key == key }).compactMap({ $0.rate?.encoderBitRate }).min() else { return }
+        renderers[key]?.setVideoBitRate(lowest)
+    }
+
+    /// 提前量取这一尺寸网页里「从画到上屏」最久的那个:共用一份画面,宁可稍早、不拖后。
+    private func refreshLead(_ key: Key) {
+        let longest = viewers.values.filter { $0.key == key }.compactMap { $0.rate?.displayLatency }.max()
+        renderers[key]?.setLeadTarget(longest.map { Int($0 * 1000) } ?? 0)
+    }
+
     /// 这一尺寸的网页全都排满了时,出帧线程先不画:画出来也是每条连接都丢,白画白编。
+    /// 视频流超在途上限的也算排满:全都超了时出帧线程不画不编,编码器的参考链不断,缓过来接着发普通帧;编好了再在这里丢,
+    /// 后面的帧就得等关键帧,窄路上关键帧又把排队撑长、接着丢,越丢越多。
     private func refreshBacklog(_ key: Key) {
+        let now = CACurrentMediaTime()
         let entries = viewers.values.filter { $0.key == key }
-        renderers[key]?.setSendBacklogged(!entries.isEmpty && entries.allSatisfy { $0.connection.frameBacklogged(video: key.video) })
+        renderers[key]?.setSendBacklogged(!entries.isEmpty && entries.allSatisfy {
+            $0.connection.frameBacklogged(video: key.video) || !($0.rate?.admits(at: now) ?? true)
+        })
     }
 }
 
@@ -143,6 +214,7 @@ final class WebLyricsScreenRenderer {
     private static let idleModelInterval: TimeInterval = 1.0 / 2
     /// 左栏整组垂直居中后再往上挪的量,同歌词窗口(`fullBody` 里 `-safeAreaInsets.top / 2 - 2`,顶部 inset 约 28pt)。
     private static let paneVerticalOffset: CGFloat = 16
+    private static let log = Logger(subsystem: "me.yudaotor.lyrimuse", category: "web-lyrics")
 
     private let playback = WindowPlayback()
     private var subs: [AnyCancellable] = []
@@ -209,6 +281,25 @@ final class WebLyricsScreenRenderer {
     /// 推 H.264 视频流(网页能硬解时);否则逐帧 JPEG。
     private let video: Bool
 
+    /// 提前画:网页报来的「从画到上屏」(这一尺寸网页里最久的,毫秒)。在播时歌词按「此刻 + 提前量」画,网页晚放多久就
+    /// 提前多久,屏上歌词跟音乐对得上,放帧余量放多大都不拖后。暂停、跳转那一下会多画出提前量那么一段再退回,换不来。
+    /// 见 19 章决策 28。
+    private var leadTargetMs = 0
+    /// 正在用的提前量:每秒最多挪 `leadSlewPerSecond` 秒(挪动期间逐字填色快慢差这么多,两成看不出,再快就看得出忽快
+    /// 忽慢),按 `leadStepMs` 取整(每挪一格重装一次填色动画)。
+    private var leadExact = 0.0
+    private var leadMs = 0
+    private var leadUpdatedAt: CFTimeInterval?
+    private static let leadSlewPerSecond = 0.2
+    private static let leadStepMs = 25
+    /// 按「此刻 + leadMs」解出来的歌词行;没在播、没有提前量时 nil,照用 `playback` 的。
+    private var lookahead: LocalPlaybackSource.LyricsLookahead?
+    /// 提前量下一次换行的时刻补一次提交(主线程节拍 0.1 秒,等它的话换行最多晚 0.1 秒)。
+    private var lookaheadTimer: Timer?
+    private var appliedLeadMs: Int { lookahead == nil ? 0 : leadMs }
+    /// 上一次记进诊断日志的提前量目标;变了 100ms 以上才再记。
+    private var loggedLeadMs = 0
+
     init(viewport: WebLyricsViewport, video: Bool = false) {
         self.video = video
         self.viewport = viewport
@@ -249,7 +340,7 @@ final class WebLyricsScreenRenderer {
             layer.actions = ["position": NSNull(), "bounds": NSNull(), "frame": NSNull(), "hidden": NSNull(),
                              "colors": NSNull(), "backgroundColor": NSNull()]
         }
-        list.nowProvider = { PlaybackCoordinator.shared.lyricsTimelineMs() }
+        list.nowProvider = { [weak self] in PlaybackCoordinator.shared.lyricsTimelineMs() + (self?.appliedLeadMs ?? 0) }
         layoutComponents()
 
         subs = [
@@ -287,6 +378,8 @@ final class WebLyricsScreenRenderer {
         moreMenuTrack = nil
         timer?.invalidate()
         timer = nil
+        lookaheadTimer?.invalidate()
+        lookaheadTimer = nil
         subs = []
         frames?.stop()
         frames = nil
@@ -314,6 +407,18 @@ final class WebLyricsScreenRenderer {
     /// 视频流里有网页要从关键帧开始。
     func requestKeyFrame() {
         frames?.requestKeyFrame()
+    }
+
+    /// 视频流的码率(这一尺寸网页里最低的那个)。
+    func setVideoBitRate(_ bitRate: Int) {
+        frames?.setVideoBitRate(bitRate)
+    }
+
+    func setLeadTarget(_ ms: Int) {
+        leadTargetMs = max(0, ms)
+        guard abs(leadTargetMs - loggedLeadMs) >= 100 else { return }
+        loggedLeadMs = leadTargetMs
+        Self.log.notice("web lyrics lead target: \(self.leadTargetMs, privacy: .public)ms (now \(self.leadMs, privacy: .public)ms)")
     }
 
     /// 新网页连上来时立刻出一帧,不等下一拍。
@@ -640,9 +745,37 @@ final class WebLyricsScreenRenderer {
         return now - (titleEmptySince ?? now) < Self.idleHold
     }
 
+    /// 每次提交前:提前量往目标挪一步;在播时按它重解一次歌词行,变了就重搭模型,并在下一次会变的时刻补一次提交。
+    private func updateLead(_ now: CFTimeInterval) {
+        let elapsed = leadUpdatedAt.map { now - $0 } ?? 0
+        leadUpdatedAt = now
+        let reach = Self.leadSlewPerSecond * elapsed * 1000
+        leadExact += max(-reach, min(reach, Double(leadTargetMs) - leadExact))
+        let stepped = Int((leadExact / Double(Self.leadStepMs)).rounded()) * Self.leadStepMs
+        if stepped != leadMs {
+            leadMs = stepped
+            dirty = true
+        }
+        let next = playback.isPlayingNow && leadMs > 0 ? PlaybackCoordinator.shared.lyricsLookahead(leadMs: leadMs) : nil
+        if next != lookahead {
+            lookahead = next
+            dirty = true
+        }
+        lookaheadTimer?.invalidate()
+        lookaheadTimer = nil
+        guard let wait = next?.nextChangeInMs else { return }
+        let rate = playback.anchor.map { $0.rate > 0 ? $0.rate : 1 } ?? 1
+        let t = Timer(timeInterval: max(0.005, Double(wait) / 1000 / rate + 0.005), repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.commit() }
+        }
+        RunLoop.main.add(t, forMode: .common)
+        lookaheadTimer = t
+    }
+
     /// 主线程这一侧:状态变了重搭模型、走进度,拼好图层树提交进渲染树,再告诉出帧线程该用哪档节拍。
     private func commit() {
         let now = CACurrentMediaTime()
+        updateLead(now)
         let holding = holdsThroughGap(now)
         if dirty, !holding {
             dirty = false
@@ -651,7 +784,7 @@ final class WebLyricsScreenRenderer {
         }
         if !holding {
             let duration = currentDurationMs()
-            pane.updateProgress(positionMs: scrubFraction.map { Int($0 * Double(duration)) } ?? currentPositionMs(),
+            pane.updateProgress(positionMs: scrubFraction.map { Int($0 * Double(duration)) } ?? currentPositionMs() + appliedLeadMs,
                                 durationMs: duration)
         }
         chromeIdle.held = menu != .none
@@ -849,11 +982,15 @@ final class WebLyricsScreenRenderer {
                 lines: playback.allLines, gapMarkers: playback.lyricsGapMarkersByIndex, songwriters: playback.songwriters,
                 style: style, lineSpacing: fs * 0.98, showsScrollIndicator: true,
                 leading: listLeading, trailing: listTrailing, onArtwork: onArtwork, suspendsBlur: false,
-                currentLineIndex: playback.currentLineIndex, scrollLineIndex: playback.scrollLineIndex,
-                overlapping: Set(playback.overlappingLineIndices), currentGapIndex: playback.currentGapIndex,
-                fillSettled: playback.currentLineFillSettled, isPlaying: playback.isPlayingNow, surfaceVisible: true,
+                currentLineIndex: lookahead.map(\.index) ?? playback.currentLineIndex,
+                scrollLineIndex: lookahead.map(\.scrollIndex) ?? playback.scrollLineIndex,
+                overlapping: Set(lookahead?.overlappingIndices ?? playback.overlappingLineIndices),
+                currentGapIndex: lookahead.map(\.gapIndex) ?? playback.currentGapIndex,
+                // 提前画到了下一句时,这一句刚开唱、还没填完;同一句时照用这一句填完没有
+                fillSettled: lookahead.map { $0.index == playback.currentLineIndex } ?? true ? playback.currentLineFillSettled : false,
+                isPlaying: playback.isPlayingNow, surfaceVisible: true,
                 timingEpoch: LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
-                                                  offsetMs: PlaybackCoordinator.shared.currentLyricsOffsetMs),
+                                                  offsetMs: PlaybackCoordinator.shared.currentLyricsOffsetMs + appliedLeadMs),
                 rate: playback.anchor?.rate ?? 1))
         }
     }
@@ -1172,7 +1309,8 @@ final class WebLyricsFrameSource: @unchecked Sendable {
             made.append((buffer, cvTexture))
         }
         guard let first = made.first.flatMap({ CVMetalTextureGetTexture($0.texture) }) else { return nil }
-        let pacer = WebLyricsFramePacer(maxFramesInFlight: Self.maxFramesInFlight, minResolution: video ? 1 : minResolution)
+        let pacer = WebLyricsFramePacer(maxFramesInFlight: Self.maxFramesInFlight, minResolution: video ? 1 : minResolution,
+                                        countsBacklog: !video)
         var jpeg: [Double: WebLyricsFrameEncoder] = [:]
         var videoEncoder: WebLyricsVideoEncoder?
         if video {
@@ -1224,6 +1362,10 @@ final class WebLyricsFrameSource: @unchecked Sendable {
     /// 视频流:有网页要从关键帧开始(刚连上、掉过帧),下一帧编成关键帧(编码器自己限频)。
     func requestKeyFrame() {
         videoEncoder?.requestKeyFrame()
+    }
+
+    func setVideoBitRate(_ bitRate: Int) {
+        videoEncoder?.setBitRate(bitRate)
     }
 
     /// 主线程刚提交了要立刻看到的变化(新网页连上、点了按钮):不等下一拍,马上补画一帧。
@@ -1280,7 +1422,6 @@ final class WebLyricsFrameSource: @unchecked Sendable {
         let video = videoEncoder
         let jpeg = video == nil ? encoder(for: pacer.step) : nil
         guard video != nil || jpeg != nil else { return }
-        video?.setQuality(pacer.step.quality)
         prepare()
         let started = CACurrentMediaTime()
         let pixelBuffer = slots[nextSlot].buffer
@@ -1325,7 +1466,8 @@ final class WebLyricsFrameSource: @unchecked Sendable {
         var payload = Data(capacity: 8 + jpeg.count)
         payload.append(Data(bytes: &stamp, count: 8))
         payload.append(jpeg)
-        return WebLyricsScreenFrame(data: WebSocketFrame.encode(payload, opcode: .binary), isKeyFrame: true)
+        return WebLyricsScreenFrame(data: WebSocketFrame.encode(payload, opcode: .binary), isKeyFrame: true,
+                                    stamp: renderedAt * 1000, payloadBytes: payload.count)
     }
 
     /// 编完一帧(包好的消息,失败给 nil):记账,交给主线程分发。

@@ -29,8 +29,9 @@ enum WebLyricsPages {
     /// 后面是 JPEG;浏览器能硬解 H.264(`VideoDecoder`)时改要视频流(`WebLyricsVideo`,出过解码错误的标签页退回 JPEG)。
     /// 帧在后台线程解码(`createImageBitmap` / `VideoDecoder`)后排队,`requestAnimationFrame`(它停了时由定时器接着)每一拍按画它的时刻晚
     /// `delay()` 毫秒放出来:网络和解码的快慢不均被这段余量吸掉,画面照 App 画的间隔匀速走。余量至少 40ms,到得越不齐越长
-    /// (最近到帧比最快那次晚了多少,涨得快、落得慢),最多攒得下的帧数个帧间隔、500ms:解好的帧很占内存,按这一帧的像素数
-    /// 留 6～24 帧(合计约 80MB),App 缩小编码尺寸时留得多;点按的反馈也跟着晚这么多。解码跟不上时新来的直接丢,不积压。手指按下、拖动、抬起都把画面上的相对位置(`{"ptr":["d",u,v]}`)发回 App,点中什么、拖的是什么由 App 判;
+    /// (近 20 秒里到帧比最快那次晚得最多的,涨得快、落得慢)。视频流最多 2 秒(排的是没解的数据),App 按回报的余量提前画,
+    /// 屏上歌词不跟着拖后;逐帧 JPEG 最多攒得下的帧数个帧间隔、500ms:解好的帧很占内存,按这一帧的像素数留 6～24 帧
+    /// (合计约 80MB),App 缩小编码尺寸时留得多。点按的反馈也跟着晚这么多。解码跟不上时新来的直接丢,不积压。手指按下、拖动、抬起都把画面上的相对位置(`{"ptr":["d",u,v]}`)发回 App,点中什么、拖的是什么由 App 判;
     /// 拖动 16ms 最多发一次,发送缓冲里还压着东西时不再发。菜单里平台页那几行的位置由 App 发来(`links`),
     /// 网页在手指抬起那一刻自己开链接。
     static func screenPage(revision: String = revision) -> String {
@@ -75,14 +76,14 @@ enum WebLyricsPages {
           const canvas = document.getElementById('frame');
           const ctx = canvas.getContext('2d', { alpha: false });
           const msg = document.getElementById('msg');
-          const MIN_DELAY = 40, MAX_DELAY = 500, BUFFER_BYTES = 8e7;
+          const MIN_DELAY = 40, MAX_DELAY = 500, MAX_VIDEO_DELAY = 2000, BUFFER_BYTES = 8e7, PEAK_HOLD = 20000, PEAK_DECAY = 0.01;
           let ws = null, retry = 1000, retryTimer = 0, resizeTimer = 0;
           let queue = [], decoding = 0, offset = Infinity, lastShown = -Infinity, lastFrame = 0;
-          let jitter = 0, gap = 1000 / 60, lastT = 0, framePixels = 0;
+          let jitter = 0, jitterAt = 0, lastArrival = 0, gap = 1000 / 60, lastT = 0, framePixels = 0;
           function bufferCap() { return framePixels ? Math.max(6, Math.min(24, Math.floor(BUFFER_BYTES / (framePixels * 4)))) : 6; }
           // 逐帧 JPEG 排的是解好的图,余量受内存限制;视频排的是没解的数据(每帧几 KB),只按时间封顶
           function delay() {
-            const cap = useVideo ? MAX_DELAY : Math.min(gap * bufferCap(), MAX_DELAY);
+            const cap = useVideo ? MAX_VIDEO_DELAY : Math.min(gap * bufferCap(), MAX_DELAY);
             return Math.max(MIN_DELAY, Math.min(jitter + 16, cap));
           }
           msg.textContent = T.connecting;
@@ -102,11 +103,14 @@ enum WebLyricsPages {
           // 记一帧到达:t 是 App 画它的时刻
           function arrived(t) {
             // 两边时钟之差加最短路上的延迟:取见过的最小值,再慢慢往上松,网络路径变慢了也跟得上
-            const lag = performance.now() - t;
+            const now = performance.now(), lag = now - t;
             offset = lag < offset ? lag : offset + (lag - offset) * 0.002;
-            // 这一帧比最快那次晚到多少:晚得多立刻放宽余量,之后慢慢收回;App 降档后帧间隔变长,余量上限跟着放宽
+            // 这一帧比最快那次晚到多少:近 PEAK_HOLD 毫秒里最晚的那次定余量,晚了立刻放宽,停过一次的网络多半还会再停;
+            // 之后每秒收回 PEAK_DECAY 秒,约每百帧少放一帧,看不出跳
             const late = lag - offset;
-            jitter = late > jitter ? late : jitter + (late - jitter) * 0.01;
+            if (late >= jitter) { jitter = late; jitterAt = now; }
+            else if (now - jitterAt > PEAK_HOLD) jitter = Math.max(late, jitter - (now - lastArrival) * PEAK_DECAY);
+            lastArrival = now;
             if (lastT && t > lastT) gap += (t - lastT - gap) * 0.1;
             if (t > lastT) lastT = t;
           }
@@ -144,10 +148,21 @@ enum WebLyricsPages {
             chunks = [];
             if (ws) ws.close();
           }
+          // 收帧回报(每 FEEDBACK_MS 一次):最后一条消息的画帧时刻、连上以来收到的字节数、最后一条到了多少毫秒、此刻的
+          // 放帧余量。App 按它控码率和在途上限,并按余量提前画,屏上歌词跟音乐对得上
+          const FEEDBACK_MS = 200;
+          let rxStamp = 0, rxBytes = 0, rxAt = 0;
+          setInterval(() => {
+            if (!useVideo || !rxStamp || !ws || ws.readyState !== 1) return;
+            ws.send(JSON.stringify({ fb: [rxStamp, rxBytes, Math.round(performance.now() - rxAt), Math.round(delay())] }));
+          }, FEEDBACK_MS);
           function receiveVideo(buffer) {
+            rxBytes += buffer.byteLength;
             if (buffer.byteLength <= 9) return;
             const view = new DataView(buffer);
             const type = view.getUint8(0), t = view.getFloat64(1);
+            rxStamp = t;
+            rxAt = performance.now();
             const data = new Uint8Array(buffer, 9);
             if (type === 1) {
               const config = Array.from(data).join(',');
@@ -219,6 +234,8 @@ enum WebLyricsPages {
             if (useVideo) url.searchParams.set('codec', 'avc');
             needKey = true;
             chunks = [];
+            rxStamp = 0;
+            rxBytes = 0;
             const socket = new WebSocket(url);
             ws = socket;
             socket.binaryType = 'arraybuffer';
