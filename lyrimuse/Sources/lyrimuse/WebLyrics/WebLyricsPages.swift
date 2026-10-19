@@ -26,7 +26,8 @@ enum WebLyricsPages {
     }
 
     /// 副屏:全屏显示 App 推来的画面帧,尺寸变了就带新尺寸重连。每帧开头 8 字节是 App 画它的时刻(毫秒,大端 Float64),
-    /// 后面是 JPEG;浏览器能硬解 H.264(`VideoDecoder`)时改要视频流(`WebLyricsVideo`,连上就解码出错的标签页 10 分钟内退回 JPEG)。
+    /// 后面是 JPEG;浏览器能硬解 H.264(`VideoDecoder`)时改要视频流(`WebLyricsVideo`,连上就解码出错的标签页 10 分钟内退回 JPEG);
+    /// 没有 `VideoDecoder`(非安全上下文)但有 MediaSource 的也要视频流,封成分段 MP4 交给 `<video>`(见 19 章决策 36)。
     /// 帧在后台线程解码(`createImageBitmap` / `VideoDecoder`)后排队,`requestAnimationFrame`(它停了时由定时器接着)每一拍按画它的时刻晚
     /// `delay()` 毫秒放出来:网络和解码的快慢不均被这段余量吸掉,画面照 App 画的间隔匀速走。余量至少 40ms,到得越不齐越长
     /// (近 20 秒里到帧比最快那次晚得最多的,涨得快、落得慢)。视频流最多 2 秒(排的是没解的数据),App 按回报的余量提前画,
@@ -38,6 +39,21 @@ enum WebLyricsPages {
         let strings = jsonStrings([
             "connecting": L10n.t("正在连接 Lyrimuse…"),
             "reconnecting": L10n.t("连接已断开，正在重连…"),
+            "statsVideo": L10n.t("视频流"),
+            "statsJpeg": L10n.t("逐帧 JPEG"),
+            "statsRendered": L10n.t("画帧"),
+            "statsReceived": L10n.t("到帧"),
+            "statsShown": L10n.t("上屏"),
+            "statsDownload": L10n.t("接收"),
+            "statsBitrate": L10n.t("码率"),
+            "statsEncoder": L10n.t("编码器"),
+            "statsDelay": L10n.t("放帧余量"),
+            "statsLag": L10n.t("上屏延迟"),
+            "statsDecode": L10n.t("解码"),
+            "statsLead": L10n.t("提前画"),
+            "statsQueue": L10n.t("排队"),
+            "statsDropped": L10n.t("丢帧"),
+            "statsFps": L10n.t("帧/秒"),
         ])
         return """
         <!doctype html>
@@ -98,10 +114,11 @@ enum WebLyricsPages {
           }
           function bufferCap() { return framePixels ? Math.max(6, Math.min(24, Math.floor(BUFFER_BYTES / (framePixels * 4)))) : 6; }
           // 逐帧 JPEG 排的是解好的图,余量受内存限制;视频排的是没解的数据(每帧几 KB),只按时间封顶。视频还要留出解码的工夫
-          // (decodeCost):到得晚的帧收到就解,解完也得赶在放之前;这份余量报给 App,提前画也就把解码算了进去
+          // (decodeCost):到得晚的帧收到就解,解完也得赶在放之前;走 MediaSource 的换成固定多留 MSE_MARGIN(<video> 自己解,
+          // 解好的帧压在里面一阵才放)。这份余量报给 App,提前画也就把解码算了进去
           function delay() {
             const cap = useVideo ? MAX_VIDEO_DELAY : Math.min(gap * bufferCap(), MAX_DELAY);
-            return Math.max(MIN_DELAY, Math.min(jitter + 16 + (useVideo ? decodeCost : 0), cap));
+            return Math.max(MIN_DELAY, Math.min(jitter + 16 + (useVideo ? (viaMse ? MSE_MARGIN : decodeCost) : 0), cap));
           }
           msg.textContent = T.connecting;
           function decode(blob) {
@@ -119,6 +136,7 @@ enum WebLyricsPages {
           function frameHeight(f) { return f.displayHeight || f.height; }
           // 记一帧到达:t 是 App 画它的时刻
           function arrived(t) {
+            statsArrived++;
             // 两边时钟之差加最短路上的延迟:取见过的最小值,再慢慢往上松,网络路径变慢了也跟得上
             const now = performance.now(), lag = now - t;
             offset = lag < offset ? lag : offset + (lag - offset) * 0.002;
@@ -141,6 +159,7 @@ enum WebLyricsPages {
             while (queue.length > bufferCap() + 2) release(queue.shift());
           }
           function receive(buffer) {
+            statsBytes += buffer.byteLength;
             if (useVideo) { receiveVideo(buffer); return; }
             if (buffer.byteLength <= 8) return;
             const t = new DataView(buffer).getFloat64(0);
@@ -175,7 +194,7 @@ enum WebLyricsPages {
           const VIDEO_TRUST_MS = 30000, NO_VIDEO_MS = 600000;
           let useVideo = false, decoder = null, decoderConfig = '', needKey = true, chunks = [], videoSince = 0;
           function videoAllowed() {
-            if (!window.VideoDecoder) return false;
+            if (!window.VideoDecoder && !mseSupported()) return false;
             try { return !(Date.now() - (Number(sessionStorage.getItem('lyrimuse.noVideo')) || 0) < NO_VIDEO_MS); } catch (err) { return true; }
           }
           useVideo = videoAllowed();
@@ -189,6 +208,7 @@ enum WebLyricsPages {
             decoderConfig = '';
             chunks = [];
             decodeStarted.clear();
+            closeMse();
             if (ws) ws.close();
           }
           // 收帧回报(每 FEEDBACK_MS 一次):最后一条消息的画帧时刻、连上以来收到的字节数、最后一条到了多少毫秒、此刻的
@@ -199,6 +219,59 @@ enum WebLyricsPages {
             if (!useVideo || !rxStamp || !ws || ws.readyState !== 1) return;
             ws.send(JSON.stringify({ fb: [rxStamp, rxBytes, Math.round(performance.now() - rxAt), Math.round(delay())] }));
           }, FEEDBACK_MS);
+          // 诊断浮层:按 D 或网址带 stats=1 开关。网页自己数到帧、上屏、接收,App 每秒发来画帧、码率、排队、提前量(开着时才发)
+          let statsOn = new URLSearchParams(location.search).get('stats') === '1';
+          let statsBox = null, statsServer = null, statsArrived = 0, statsShown = 0, statsBytes = 0, statsAt = performance.now();
+          // 上屏延迟:放出来那一刻比画帧时刻(折到这边的钟、去掉最短路上的延迟)晚多少,跟放帧余量比就看得出解码、放帧多花的那段
+          let statsLagSum = 0, statsLagCount = 0;
+          function noteLag(ms) { statsLagSum += ms; statsLagCount++; }
+          function sendStatsToggle() {
+            if (ws && ws.readyState === 1) ws.send(JSON.stringify({ stats: statsOn ? 1 : 0 }));
+          }
+          function renderStats() {
+            const now = performance.now(), secs = Math.max(0.001, (now - statsAt) / 1000);
+            if (mse && mse.video.getVideoPlaybackQuality) {
+              const q = mse.video.getVideoPlaybackQuality(), shown = q.totalVideoFrames - q.droppedVideoFrames;
+              statsShown = Math.max(0, shown - mse.shown);
+              mse.shown = shown;
+            }
+            const arrivedPerSec = Math.round(statsArrived / secs), shownPerSec = Math.round(statsShown / secs);
+            const mb = (statsBytes / secs / 1e6).toFixed(2), lag = statsLagCount ? Math.round(statsLagSum / statsLagCount) : null;
+            statsLagSum = 0;
+            statsLagCount = 0;
+            statsArrived = 0;
+            statsShown = 0;
+            statsBytes = 0;
+            statsAt = now;
+            if (!statsOn) return;
+            if (!statsBox) {
+              statsBox = document.createElement('div');
+              statsBox.style.cssText = 'position:fixed;top:8px;left:8px;z-index:10;padding:6px 9px;border-radius:7px;' +
+                'background:rgba(0,0,0,0.6);color:#fff;font:12px/1.5 ui-monospace,Menlo,monospace;white-space:pre;pointer-events:none';
+              document.body.appendChild(statsBox);
+            }
+            const st = statsServer || {};
+            const lines = [
+              (useVideo ? T.statsVideo + (viaMse ? ' (MSE)' : '') : T.statsJpeg) + ' · ' + T.statsRendered + ' ' + (st.fps ?? '-') + ' · ' + T.statsReceived + ' ' +
+                arrivedPerSec + ' · ' + T.statsShown + ' ' + shownPerSec + ' ' + T.statsFps,
+              T.statsDownload + ' ' + mb + ' MB/s' + (st.kbps != null ? ' · ' + T.statsBitrate + ' ' + (st.kbps / 1000).toFixed(1) +
+                ' Mbps (' + T.statsEncoder + ' ' + ((st.enc ?? 0) / 1000).toFixed(1) + ')' : ''),
+              T.statsDelay + ' ' + Math.round(delay()) + ' ms · ' + T.statsLag + ' ' + (lag ?? '-') + ' ms' +
+                (useVideo && !viaMse ? ' · ' + T.statsDecode + ' ' + Math.round(decodeCost) + ' ms' : '') +
+                ' · ' + T.statsLead + ' ' + (st.lead ?? 0) + ' / ' + (st.target ?? 0) + ' ms',
+              (st.queue != null ? T.statsQueue + ' ' + st.queue + ' ms · ' : '') + T.statsDropped + ' ' + (st.drop ?? 0),
+            ];
+            statsBox.textContent = lines.join(String.fromCharCode(10));
+            statsBox.style.display = 'block';
+          }
+          setInterval(renderStats, 1000);
+          document.addEventListener('keydown', (e) => {
+            if (e.metaKey || e.ctrlKey || e.altKey || (e.key !== 'd' && e.key !== 'D')) return;
+            statsOn = !statsOn;
+            if (!statsOn && statsBox) statsBox.style.display = 'none';
+            sendStatsToggle();
+            renderStats();
+          });
           function receiveVideo(buffer) {
             rxBytes += buffer.byteLength;
             if (buffer.byteLength <= 9) return;
@@ -207,15 +280,15 @@ enum WebLyricsPages {
             rxStamp = t;
             rxAt = performance.now();
             const data = new Uint8Array(buffer, 9);
+            if (viaMse) { receiveMse(type, t, data); return; }
             if (type === 1) {
               const config = Array.from(data).join(',');
               if (decoder && config === decoderConfig) return;
               if (!decoder) {
                 decoder = new VideoDecoder({ output: (f) => { noteDecoded(f.timestamp); accept(f.timestamp / 1000, f); }, error: dropVideo });
               }
-              const codec = 'avc1.' + [data[1], data[2], data[3]].map((x) => x.toString(16).padStart(2, '0')).join('');
               try {
-                decoder.configure({ codec, description: data.slice(), optimizeForLatency: true });
+                decoder.configure({ codec: avcCodec(data), description: data.slice(), optimizeForLatency: true });
                 decoderConfig = config;
                 needKey = true;
                 chunks = [];
@@ -229,6 +302,208 @@ enum WebLyricsPages {
             chunks.push(new EncodedVideoChunk({ type: type === 2 ? 'key' : 'delta', timestamp: Math.round(t * 1000), data }));
             if (chunks.length > MAX_PENDING_CHUNKS) { chunks = []; needKey = true; }
           }
+          // 没有 WebCodecs 的浏览器(Firefox、Chromium 用局域网主机名打开时不是安全上下文,没有 VideoDecoder)照样要视频流:
+          // 每帧封成一段分段 MP4 交给 MediaSource,由垫在画布下面的 <video> 解码,每出一帧画到画布上。<video> 按自己的时钟放,
+          // 播放位置钉在「此刻 − 两边时钟差 − 放帧余量」:超前就停住等,落后分档调快追,落后超过 MSE_SEEK 秒直接跳过去。
+          // 别往回跳:余量变大时那一下跳回去会把放过的画面再放一遍。每帧扣下来,等下一帧到了按两帧画帧时刻之差填时长再交出去,
+          // 时间轴首尾相接:时长填长了 Firefox 把缓冲切成几段、放的是旧帧;填短了中间留缺口,两帧相隔超过两倍时长浏览器还当成断流,
+          // 丢到下一个关键帧为止。重连(窗口尺寸变了之类)不拆 <video>:时间轴接着用,新连接的解码配置换一份初始化段,
+          // 扣着的那一帧盖住重连的空档;拆了要等新连接重新攒够余量才出画面。别靠 requestVideoFrameCallback 画:Firefox 里它
+          // 一秒只回调二十几次,实际上屏有将近 60 帧
+          const viaMse = !window.VideoDecoder;
+          // MSE_MARGIN:Firefox 的 <video> 比自己解码(WebCodecs)多要这么多余量,少了在关键帧那几下卡、丢帧
+          const MSE_TIMESCALE = 90000, MSE_KEEP = 10, MSE_SEEK = 1, MSE_AHEAD = 0.05, MSE_MARGIN = 50;
+          let mse = null;
+          function mseSupported() {
+            try { return !!window.MediaSource && MediaSource.isTypeSupported('video/mp4; codecs="avc1.640033"'); } catch (err) { return false; }
+          }
+          function avcCodec(avcc) { return 'avc1.' + [avcc[1], avcc[2], avcc[3]].map((x) => x.toString(16).padStart(2, '0')).join(''); }
+          function concatBytes(parts) {
+            let size = 0;
+            for (const p of parts) size += p.length;
+            const out = new Uint8Array(size);
+            let at = 0;
+            for (const p of parts) { out.set(p, at); at += p.length; }
+            return out;
+          }
+          function u32(...v) { const a = new Uint8Array(v.length * 4), d = new DataView(a.buffer); v.forEach((x, i) => d.setUint32(i * 4, x)); return a; }
+          function u16(...v) { const a = new Uint8Array(v.length * 2), d = new DataView(a.buffer); v.forEach((x, i) => d.setUint16(i * 2, x)); return a; }
+          function chars(s) { return Uint8Array.from(s, (c) => c.charCodeAt(0)); }
+          function mp4Box(type, ...parts) {
+            const body = concatBytes(parts), out = new Uint8Array(body.length + 8);
+            new DataView(out.buffer).setUint32(0, out.length);
+            out.set(chars(type), 4);
+            out.set(body, 8);
+            return out;
+          }
+          // avcC 里第一份 SPS 写的画面尺寸:去掉防竞争字节,按指数哥伦布码读到裁边那几项
+          function spsSize(avcc) {
+            const raw = avcc.subarray(9, 8 + ((avcc[6] << 8) | avcc[7])), rbsp = [];
+            let zeros = 0;
+            for (const b of raw) {
+              if (zeros >= 2 && b === 3) { zeros = 0; continue; }
+              rbsp.push(b);
+              zeros = b === 0 ? zeros + 1 : 0;
+            }
+            let pos = 0;
+            const bit = () => (rbsp[pos >> 3] >> (7 - (pos++ & 7))) & 1;
+            const bits = (n) => { let v = 0; for (let i = 0; i < n; i++) v = v * 2 + bit(); return v; };
+            const ue = () => { let z = 0; while (!bit() && z < 32) z++; return 2 ** z - 1 + bits(z); };
+            const se = () => { const k = ue(); return k % 2 ? (k + 1) / 2 : -k / 2; };
+            const profile = bits(8);
+            bits(16);
+            ue();
+            let chroma = 1;
+            if ([100, 110, 122, 244, 44, 83, 86, 118, 128, 138, 139, 134, 135].includes(profile)) {
+              chroma = ue();
+              if (chroma === 3) bit();
+              ue();
+              ue();
+              bit();
+              if (bit()) {
+                for (let i = 0; i < (chroma === 3 ? 12 : 8); i++) {
+                  if (!bit()) continue;
+                  let last = 8, next = 8;
+                  for (let j = 0; j < (i < 6 ? 16 : 64); j++) {
+                    if (next) next = (last + se() + 256) % 256;
+                    last = next || last;
+                  }
+                }
+              }
+            }
+            ue();
+            const pocType = ue();
+            if (pocType === 0) ue();
+            else if (pocType === 1) { bit(); se(); se(); const n = ue(); for (let i = 0; i < n; i++) se(); }
+            ue();
+            bit();
+            const mbWidth = ue() + 1, mapHeight = ue() + 1, frameMbsOnly = bit();
+            if (!frameMbsOnly) bit();
+            bit();
+            const crop = bit() ? [ue(), ue(), ue(), ue()] : [0, 0, 0, 0];
+            const cropX = chroma === 1 || chroma === 2 ? 2 : 1, cropY = (chroma === 1 ? 2 : 1) * (2 - frameMbsOnly);
+            return [mbWidth * 16 - cropX * (crop[0] + crop[1]), (2 - frameMbsOnly) * mapHeight * 16 - cropY * (crop[2] + crop[3])];
+          }
+          // 初始化段(ftyp + moov):一条视频轨,样本全在后面的 moof 里
+          function mseInit(avcc) {
+            const [w, h] = spsSize(avcc);
+            const matrix = u32(0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000);
+            const avc1 = mp4Box('avc1', new Uint8Array(6), u16(1, 0, 0), u32(0, 0, 0), u16(w, h), u32(0x480000, 0x480000, 0), u16(1),
+              new Uint8Array(32), u16(0x18, 0xffff), mp4Box('avcC', avcc));
+            const stbl = mp4Box('stbl', mp4Box('stsd', u32(0, 1), avc1), mp4Box('stts', u32(0, 0)), mp4Box('stsc', u32(0, 0)),
+              mp4Box('stsz', u32(0, 0, 0)), mp4Box('stco', u32(0, 0)));
+            const minf = mp4Box('minf', mp4Box('vmhd', u32(1), u16(0, 0, 0, 0)),
+              mp4Box('dinf', mp4Box('dref', u32(0, 1), mp4Box('url ', u32(1)))), stbl);
+            const trak = mp4Box('trak', mp4Box('tkhd', u32(3, 0, 0, 1, 0, 0, 0, 0), u16(0, 0, 0, 0), matrix, u32(w * 65536, h * 65536)),
+              mp4Box('mdia', mp4Box('mdhd', u32(0, 0, 0, MSE_TIMESCALE, 0), u16(0x55c4, 0)),
+                mp4Box('hdlr', u32(0, 0), chars('vide'), u32(0, 0, 0), chars('Lyrimuse'), new Uint8Array(1)), minf));
+            const mvhd = mp4Box('mvhd', u32(0, 0, 0, 1000, 0, 0x10000), u16(0x100), new Uint8Array(10), matrix, new Uint8Array(24), u32(2));
+            return concatBytes([mp4Box('ftyp', chars('isom'), u32(0x200), chars('isomiso6avc1mp41')),
+              mp4Box('moov', mvhd, trak, mp4Box('mvex', mp4Box('trex', u32(0, 1, 1, 0, 0, 0))))]);
+          }
+          // 一帧一段(moof + mdat):时刻按画帧时刻,样本标记分关键帧和普通帧
+          function mseSegment(seq, time, duration, key, data) {
+            const moof = (offset) => mp4Box('moof', mp4Box('mfhd', u32(0, seq)), mp4Box('traf', mp4Box('tfhd', u32(0x20000, 1)),
+              mp4Box('tfdt', u32(0x1000000, Math.floor(time / 4294967296), time % 4294967296)),
+              mp4Box('trun', u32(0x701, 1, offset, duration, data.length, key ? 0x2000000 : 0x1010000))));
+            return concatBytes([moof(moof(0).length + 8), mp4Box('mdat', data)]);
+          }
+          function receiveMse(type, t, data) {
+            if (type === 1) {
+              const config = Array.from(data).join(',');
+              if (mse && config === mse.config) return;
+              if (!mse) openMse(avcCodec(data));
+              try { mse.init = mseInit(data); } catch (err) { dropVideo(); return; }
+              mse.config = config;
+              needKey = true;
+              return;
+            }
+            if (!mse || !mse.init || (type !== 2 && needKey)) return;
+            arrived(t);
+            if (mse.baseMs === null) mse.baseMs = t;
+            if (t < mse.baseMs) return;
+            const time = Math.round((t - mse.baseMs) * MSE_TIMESCALE / 1000), held = mse.held;
+            if (held) mse.pending.push(mseSegment(++mse.seq, held.time, Math.max(1, time - held.time), held.key, held.data));
+            if (type === 2) {
+              if (needKey) mse.pending.push(mse.init);
+              needKey = false;
+            }
+            mse.held = { time, key: type === 2, data };
+            if (mse.pending.length > MAX_PENDING_CHUNKS) { mse.pending = []; mse.held = null; needKey = true; }
+            flushMse();
+          }
+          function flushMse() {
+            if (!mse || !mse.sb || mse.sb.updating || !mse.pending.length) return;
+            const all = concatBytes(mse.pending);
+            mse.pending = [];
+            try { mse.sb.appendBuffer(all); } catch (err) { dropVideo(); }
+          }
+          function openMse(codec) {
+            const video = document.createElement('video'), source = new MediaSource();
+            video.muted = true;
+            video.playsInline = true;
+            video.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;object-fit:contain;z-index:-1';
+            document.body.insertBefore(video, canvas);
+            const m = { video, source, sb: null, url: URL.createObjectURL(source), config: '', init: null, baseMs: null, seq: 0, pending: [], held: null, drawn: -1, shown: 0 };
+            mse = m;
+            source.addEventListener('sourceopen', () => {
+              if (mse !== m) return;
+              try {
+                m.sb = source.addSourceBuffer('video/mp4; codecs="' + codec + '"');
+                m.sb.addEventListener('updateend', () => { if (mse === m) flushMse(); });
+                m.sb.addEventListener('error', () => { if (mse === m) dropVideo(); });
+                flushMse();
+              } catch (err) { dropVideo(); }
+            }, { once: true });
+            video.addEventListener('error', () => { if (mse === m) dropVideo(); });
+            video.src = m.url;
+          }
+          function closeMse() {
+            if (!mse) return;
+            const m = mse;
+            mse = null;
+            m.video.removeAttribute('src');
+            try { m.video.load(); } catch (err) {}
+            m.video.remove();
+            URL.revokeObjectURL(m.url);
+          }
+          // 播放位置没动(停着等)就不重画;落在暂停、跳转的丢帧窗口里也不画,画布停在窗口前那一帧
+          function drawMse() {
+            const v = mse.video;
+            if (!v.videoWidth || v.readyState < 2 || v.currentTime === mse.drawn) return;
+            if (mse.baseMs !== null && cutOut(mse.baseMs + v.currentTime * 1000)) return;
+            mse.drawn = v.currentTime;
+            if (canvas.width !== v.videoWidth || canvas.height !== v.videoHeight) {
+              canvas.width = v.videoWidth;
+              canvas.height = v.videoHeight;
+            }
+            ctx.drawImage(v, 0, 0);
+            msg.style.display = 'none';
+            if (mse.baseMs !== null) noteLag(performance.now() - offset - mse.baseMs - v.currentTime * 1000);
+          }
+          function steerMse(now) {
+            const v = mse.video, sb = mse.sb;
+            if (!sb || mse.baseMs === null || offset === Infinity || v.seeking || !sb.buffered.length) return;
+            const target = (now - offset - delay() - mse.baseMs) / 1000, ahead = v.currentTime - target;
+            if (target < sb.buffered.start(0)) return;
+            if (v.paused) {
+              if (ahead > 0) return;
+              if (ahead < -MSE_SEEK) v.currentTime = target;
+              v.play().catch(() => {});
+              return;
+            }
+            if (ahead > MSE_AHEAD) { v.pause(); return; }
+            if (ahead < -MSE_SEEK) { v.currentTime = target; return; }
+            // 分几档、死区内不动:每次改播放速度浏览器都要重新对时钟,连续微调会丢帧
+            const rate = ahead < -0.25 ? 1.25 : ahead < -0.1 ? 1.1 : ahead < -0.03 ? 1.03 : ahead > 0.02 ? 0.95 : 1;
+            if (rate !== v.playbackRate) v.playbackRate = rate;
+          }
+          // 放过的清掉,只留最近 MSE_KEEP 秒
+          setInterval(() => {
+            if (!mse || !mse.sb || mse.sb.updating || mse.pending.length || !mse.sb.buffered.length) return;
+            const until = mse.video.currentTime - MSE_KEEP;
+            if (until > mse.sb.buffered.start(0) + 1) { try { mse.sb.remove(0, until); } catch (err) {} }
+          }, 2000);
           // 把快到放的时候的那些按顺序送去解
           function decodeDue(now) {
             if (!chunks.length || !decoder || decoder.state !== 'configured') return;
@@ -245,6 +520,11 @@ enum WebLyricsPages {
           }
           function present() {
             const now = performance.now(), wait = offset + delay();
+            if (mse) {
+              steerMse(now);
+              drawMse();
+              return;
+            }
             if (useVideo) decodeDue(now);
             let pick = -1;
             for (let i = 0; i < queue.length && queue[i].t + wait <= now; i++) pick = i;
@@ -258,6 +538,8 @@ enum WebLyricsPages {
               canvas.height = frameHeight(item.frame);
             }
             ctx.drawImage(item.frame, 0, 0);
+            statsShown++;
+            noteLag(now - item.t - offset);
             release(item);
             msg.style.display = 'none';
           }
@@ -287,7 +569,7 @@ enum WebLyricsPages {
             const socket = new WebSocket(url);
             ws = socket;
             socket.binaryType = 'arraybuffer';
-            socket.onopen = () => { retry = 1000; sendVisibility(); };
+            socket.onopen = () => { retry = 1000; sendVisibility(); if (statsOn) sendStatsToggle(); };
             socket.onmessage = (e) => {
               if (typeof e.data === 'string') {
                 try {
@@ -295,6 +577,7 @@ enum WebLyricsPages {
                   if (m.type === 'hello') checkRevision(m.rev);
                   else if (m.type === 'links') links = m.items;
                   else if (m.type === 'cut') cut(m.from, m.t);
+                  else if (m.type === 'stats') statsServer = m;
                   else if (m.type === 'no-video') dropVideo();
                 } catch (err) {}
                 return;
@@ -327,6 +610,35 @@ enum WebLyricsPages {
             const [u, v] = where(e);
             ws.send(JSON.stringify({ ptr: [phase, Math.round(u * 1e4) / 1e4, Math.round(v * 1e4) / 1e4] }));
           }
+          // 放帧余量大(慢网)时点按的反馈要晚这么久才在画面上出来:按下就在手指底下先画一个圆点、拖动时跟着走、抬起淡掉,
+          // 只说明「点到了」,点中什么照旧由 App 判、画面上出来
+          const TOUCH_DOT_DELAY = 150;
+          let touchDot = null;
+          function showTouchDot(e) {
+            if (delay() < TOUCH_DOT_DELAY) return;
+            if (!touchDot) {
+              touchDot = document.createElement('div');
+              touchDot.style.cssText = 'position:fixed;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;opacity:0;' +
+                'background:rgba(255,255,255,0.3);pointer-events:none;z-index:9;transition:opacity 0.25s,transform 0.15s';
+              document.body.appendChild(touchDot);
+            }
+            touchDot.style.left = e.clientX + 'px';
+            touchDot.style.top = e.clientY + 'px';
+            touchDot.style.opacity = '1';
+            touchDot.style.transform = 'scale(1)';
+            touchDot.dataset.on = '1';
+          }
+          function moveTouchDot(e) {
+            if (!touchDot || touchDot.dataset.on !== '1') return;
+            touchDot.style.left = e.clientX + 'px';
+            touchDot.style.top = e.clientY + 'px';
+          }
+          function hideTouchDot() {
+            if (!touchDot) return;
+            touchDot.dataset.on = '';
+            touchDot.style.opacity = '0';
+            touchDot.style.transform = 'scale(0.6)';
+          }
           canvas.addEventListener('pointerdown', (e) => {
             if (pointerId !== null || !canvas.width) return;
             const [u, v] = where(e);
@@ -335,6 +647,7 @@ enum WebLyricsPages {
             downLink = linkAt(u, v);
             try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
             sendPointer('d', e);
+            showTouchDot(e);
             e.preventDefault();
           });
           // 滚轮 / 触控板:攒着按 16ms 发一次,滚动量按画面显示高度折成相对值
@@ -363,6 +676,7 @@ enum WebLyricsPages {
             if (now - lastMove < 16 || (ws && ws.bufferedAmount > 4096)) return;
             lastMove = now;
             sendPointer('m', e);
+            moveTouchDot(e);
           });
           canvas.addEventListener('pointerup', (e) => {
             if (e.pointerId !== pointerId) return;
@@ -371,11 +685,13 @@ enum WebLyricsPages {
             if (downLink && linkAt(u, v) === downLink) window.open(downLink, '_blank', 'noopener');
             downLink = null;
             sendPointer('u', e);
+            hideTouchDot();
           });
           canvas.addEventListener('pointercancel', (e) => {
             if (e.pointerId !== pointerId) return;
             pointerId = null;
             sendPointer('c', e);
+            hideTouchDot();
           });
           addEventListener('resize', () => {
             clearTimeout(resizeTimer);

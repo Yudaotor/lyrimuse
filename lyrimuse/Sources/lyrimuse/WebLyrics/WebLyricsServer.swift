@@ -251,7 +251,7 @@ final class WebLyricsServer: ObservableObject {
             connection.respondAndClose(WebLyricsHTTP.response(
                 status: 200, reason: "OK", contentType: "text/html; charset=utf-8", body: Data(page.utf8),
                 extraHeaders: [("Content-Security-Policy",
-                                "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src blob: data:; connect-src 'self' ws: wss:; frame-ancestors 'none'")]))
+                                "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src blob: data:; media-src blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'")]))
         case "/ws":
             guard request.isWebSocketUpgrade, let key = request.headers["sec-websocket-key"] else {
                 connection.respondAndClose(WebLyricsHTTP.response(status: 400, reason: "Bad Request"))

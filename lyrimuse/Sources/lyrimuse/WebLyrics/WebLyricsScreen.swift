@@ -33,8 +33,12 @@ final class WebLyricsScreenHub {
         /// 这一段时间里没发出去的帧,按原因分:超在途上限、连接排满、在等关键帧。有丢帧时最多每 5 秒记一行诊断日志。
         var drops = (inFlight: 0, queue: 0, waitingKey: 0)
         var dropsSince: CFTimeInterval = 0
+        /// 网页开着诊断浮层(`WebLyricsStats`):每秒给它发一次;`statsDrops` 是上一次发完之后丢的帧。
+        var statsWanted = false
+        var statsDrops = 0
     }
     private var viewers: [ObjectIdentifier: Viewer] = [:]
+    private var statsTimer: Timer?
     private static let log = Logger(subsystem: "me.yudaotor.lyrimuse", category: "web-lyrics")
 
     func add(_ connection: WebLyricsConnection, viewport requested: WebLyricsViewport, video: Bool) {
@@ -64,6 +68,7 @@ final class WebLyricsScreenHub {
 
     func remove(_ connection: WebLyricsConnection) {
         guard let entry = viewers.removeValue(forKey: ObjectIdentifier(connection)) else { return }
+        refreshStatsTimer()
         guard !viewers.values.contains(where: { $0.key == entry.key }) else {
             refreshBacklog(entry.key)
             refreshBitRate(entry.key)
@@ -74,7 +79,8 @@ final class WebLyricsScreenHub {
         order.removeAll { $0 == entry.key }
     }
 
-    /// 网页发回来的文本消息:可见性、视频流收帧回报(谁都能报),指针、滚轮(别的设备要「允许局域网设备控制播放」开着才算数)。
+    /// 网页发回来的文本消息:可见性、视频流收帧回报、诊断浮层开关(谁都能报),指针、滚轮(别的设备要「允许局域网设备控制播放」
+    /// 开着才算数)。
     func message(_ connection: WebLyricsConnection, payload: Data) {
         let id = ObjectIdentifier(connection)
         guard let entry = viewers[id] else { return }
@@ -83,6 +89,12 @@ final class WebLyricsScreenHub {
             viewers[id]?.visible = visible
             Self.log.notice("screen viewer \(visible ? "visible" : "hidden", privacy: .public)")
             refreshVisibility(entry.key)
+            return
+        }
+        if let wanted = WebLyricsStats.parseToggle(payload) {
+            viewers[id]?.statsWanted = wanted
+            refreshStatsTimer()
+            if wanted { sendStats() }
             return
         }
         if let feedback = WebLyricsFeedback.parse(payload) {
@@ -133,12 +145,15 @@ final class WebLyricsScreenHub {
             if delivery.send {
                 entry.connection.sendEncodedFrame(frame.data)
                 viewers[id]?.rate?.noteSent(stamp: frame.stamp, bytes: frame.payloadBytes, at: now)
-            } else if !admitted {
-                viewers[id]?.drops.inFlight += 1
-            } else if entry.connection.frameBacklogged(video: key.video) {
-                viewers[id]?.drops.queue += 1
             } else {
-                viewers[id]?.drops.waitingKey += 1
+                viewers[id]?.statsDrops += 1
+                if !admitted {
+                    viewers[id]?.drops.inFlight += 1
+                } else if entry.connection.frameBacklogged(video: key.video) {
+                    viewers[id]?.drops.queue += 1
+                } else {
+                    viewers[id]?.drops.waitingKey += 1
+                }
             }
             logDrops(id, now: now)
             viewers[id]?.needsKeyFrame = delivery.needsKeyFrame
@@ -162,6 +177,33 @@ final class WebLyricsScreenHub {
         }
         viewers[id]?.drops = (0, 0, 0)
         viewers[id]?.dropsSince = now
+    }
+
+    /// 有网页开着诊断浮层时每秒发一次,都关了就停。
+    private func refreshStatsTimer() {
+        let wanted = viewers.values.contains { $0.statsWanted }
+        guard wanted != (statsTimer != nil) else { return }
+        statsTimer?.invalidate()
+        statsTimer = nil
+        guard wanted else { return }
+        let t = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.sendStats() }
+        }
+        RunLoop.main.add(t, forMode: .common)
+        statsTimer = t
+    }
+
+    private func sendStats() {
+        for (id, entry) in viewers where entry.statsWanted {
+            guard let renderer = renderers[entry.key] else { continue }
+            let s = renderer.stats
+            let text = WebLyricsStats.message(
+                renderFps: s.fps, bitRate: entry.rate?.bitRate, encoderBitRate: entry.rate?.encoderBitRate,
+                queueMs: entry.rate.map { Int($0.queueDelay * 1000) }, leadMs: s.leadMs, leadTargetMs: s.leadTargetMs,
+                dropped: entry.statsDrops)
+            entry.connection.sendText(text)
+            viewers[id]?.statsDrops = 0
+        }
     }
 
     /// 视频流一个尺寸共用一个编码器:码率取这一尺寸网页里最低的。
@@ -417,6 +459,11 @@ final class WebLyricsScreenRenderer {
     /// 视频流的码率(这一尺寸网页里最低的那个)。
     func setVideoBitRate(_ bitRate: Int) {
         frames?.setVideoBitRate(bitRate)
+    }
+
+    /// 诊断浮层用:此刻的出帧帧率、在用的提前量和它的目标(毫秒)。
+    var stats: (fps: Int, leadMs: Int, leadTargetMs: Int) {
+        (frames?.framesPerSecond ?? 0, appliedLeadMs, leadTargetMs)
     }
 
     func setLeadTarget(_ ms: Int) {
@@ -1303,6 +1350,14 @@ final class WebLyricsFrameSource: @unchecked Sendable {
     /// 在播时的档位:按跳过的拍数和开画到 JPEG 编完的整段耗时挑一档匀速的,见 `WebLyricsFramePacer`。
     private var pacer: WebLyricsFramePacer
     private var stopped = false
+    /// 此刻的节拍(帧 / 秒),诊断浮层在主线程读;只在 `queue` 上写。
+    private let statsLock = NSLock()
+    private var currentFps = 0
+    var framesPerSecond: Int {
+        statsLock.lock()
+        defer { statsLock.unlock() }
+        return currentFps
+    }
     /// 这一尺寸的网页全都还有上一帧没发完(主线程报):这时画了也发不出去,跳过这一拍。
     private var sendBacklogged = false
 
@@ -1408,6 +1463,9 @@ final class WebLyricsFrameSource: @unchecked Sendable {
         let target = fast ? pacer.interval : Self.idleInterval
         guard target != interval, !stopped else { return }
         interval = target
+        statsLock.lock()
+        currentFps = Int((1 / target).rounded())
+        statsLock.unlock()
         timer.schedule(deadline: .now(), repeating: target, leeway: .milliseconds(1))
     }
 

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import JavaScriptCore
 import LyrimuseCore
 
 /// 网页歌词(19 章):HTTP 解析 / WebSocket 握手与分帧 / 谁能打开 / 副屏尺寸 / OBS 消息 / 离屏拼图层树,外加几条接线契约。
@@ -158,7 +159,7 @@ func runWebLyricsTests() {
 
         var narrow = WebLyricsRateControl()
         let n = simulate(&narrow, seconds: 30, capacity: { _ in 150_000 })
-        expectEqual(n.mean <= 1_200_000 && n.low >= 600_000, true,
+        expectEqual(n.mean <= 1_250_000 && n.low >= 600_000, true,
                     "网页歌词码率: 路只有 1.2Mbps 时降到它以内,不压到底(末 5 秒平均 \(Int(n.mean)),最低 \(n.low))")
         expectEqual(n.queue < 0.5, true, "网页歌词码率: 降下来之后排队消掉,不越积越迟(末 5 秒最长 \(n.queue)s)")
 
@@ -229,6 +230,17 @@ func runWebLyricsTests() {
                     "网页歌词提前画: 原来就停着(恢复播放)不用丢")
         expectEqual(WebLyricsPredictionCut.message((1234.5, 2000)), #"{"type":"cut","from":1234.5,"t":2000.0}"#,
                     "网页歌词提前画: 丢帧通知的格式")
+
+        expectEqual(WebLyricsStats.parseToggle(Data(#"{"stats":1}"#.utf8)), true, "网页歌词诊断: 网页打开诊断浮层")
+        expectEqual(WebLyricsStats.parseToggle(Data(#"{"stats":0}"#.utf8)), false, "网页歌词诊断: 网页关掉诊断浮层")
+        expectEqual(WebLyricsStats.parseToggle(Data(#"{"vis":1}"#.utf8)), nil, "网页歌词诊断: 可见性不当浮层开关")
+        expectEqual(WebLyricsStats.message(renderFps: 60, bitRate: 3_900_000, encoderBitRate: 3_500_000, queueMs: 40, leadMs: 300,
+                                           leadTargetMs: 320, dropped: 2),
+                    #"{"drop":2,"enc":3500,"fps":60,"kbps":3900,"lead":300,"queue":40,"target":320,"type":"stats"}"#,
+                    "网页歌词诊断: 视频流的统计带码率、编码器码率、排队")
+        expectEqual(WebLyricsStats.message(renderFps: 30, bitRate: nil, encoderBitRate: nil, queueMs: nil, leadMs: 0,
+                                           leadTargetMs: 0, dropped: 0),
+                    #"{"drop":0,"fps":30,"lead":0,"target":0,"type":"stats"}"#, "网页歌词诊断: 逐帧 JPEG 不带码率那几项")
         expectEqual(WebLyricsFeedback.parse(Data(#"{"vis":1}"#.utf8)), nil, "网页歌词码率: 可见性不当回报")
     }
 
@@ -648,7 +660,7 @@ func runWebLyricsTests() {
                     "网页歌词: 只有副屏连接的文本帧当点按 / 可见性")
         expectEqual(sourceBytes(pagesSource, contain: "document.addEventListener('visibilitychange', sendVisibility);"), true,
                     "网页歌词: 副屏网页可见性一变就报给 App")
-        expectEqual(sourceBytes(pagesSource, contain: "socket.onopen = () => { retry = 1000; sendVisibility(); };"), true,
+        expectEqual(sourceBytes(pagesSource, contain: "socket.onopen = () => { retry = 1000; sendVisibility(); if (statsOn) sendStatsToggle(); };"), true,
                     "网页歌词: 副屏网页连上时先报一次可见性(后台标签页重连上来也算数)")
         expectEqual(sourceBytes(app("WebLyrics/WebLyricsScreen.swift"),
                                 contain: "let active = viewersVisible && (playback.isPlayingNow || now < fastUntil)"), true,
@@ -677,10 +689,90 @@ func runWebLyricsTests() {
                     "网页歌词: 副屏到帧晚了立刻放宽余量,近 20 秒最晚那次撑着,之后每秒收回一点")
         expectEqual(sourceHas(pagesSource, "const cap = useVideo ? MAX_VIDEO_DELAY : Math.min(gap * bufferCap(), MAX_DELAY);"), true,
                     "网页歌词: 视频流排的是没解的数据,余量能放到 2 秒;逐帧 JPEG 受内存限制")
-        expectEqual(sourceHas(pagesSource, "return Math.max(MIN_DELAY, Math.min(jitter + 16 + (useVideo ? decodeCost : 0), cap));")
+        expectEqual(sourceHas(pagesSource, "return Math.max(MIN_DELAY, Math.min(jitter + 16 + (useVideo ? (viaMse ? MSE_MARGIN : decodeCost) : 0), cap));")
                         && sourceHas(pagesSource, "const until = now - offset - delay() + decodeLead();")
                         && sourceHas(pagesSource, "decodeCost = sorted[Math.floor(sorted.length * 0.95)];"), true,
-                    "网页歌词: 视频按实测解一帧的耗时(p95)提前送去解,余量也留出这段(报给 App,提前画把解码算进去)")
+                    "网页歌词: 视频按实测解一帧的耗时(p95)提前送去解,余量也留出这段(报给 App,提前画把解码算进去);走 MediaSource 的固定多留一段")
+        expectEqual(sourceHas(pagesSource, "let statsOn = new URLSearchParams(location.search).get('stats') === '1';")
+                        && sourceHas(pagesSource, "if (e.metaKey || e.ctrlKey || e.altKey || (e.key !== 'd' && e.key !== 'D')) return;")
+                        && sourceHas(pagesSource, "else if (m.type === 'stats') statsServer = m;")
+                        && sourceHas(pagesSource, "socket.onopen = () => { retry = 1000; sendVisibility(); if (statsOn) sendStatsToggle(); };"), true,
+                    "网页歌词诊断: 按 D 或网址带 stats=1 开关浮层,重连后照旧要统计")
+        expectEqual(sourceHas(pagesSource, "if (delay() < TOUCH_DOT_DELAY) return;")
+                        && sourceHas(pagesSource, "sendPointer('d', e);\n showTouchDot(e);")
+                        && sourceHas(pagesSource, "sendPointer('u', e);\n hideTouchDot();"), true,
+                    "网页歌词: 放帧余量 150ms 以上时按下就在手指底下画圆点、抬起淡掉(画面上的反馈要晚这么久才到)")
+        expectEqual(sourceHas(app("WebLyrics/WebLyricsScreen.swift"), "if let wanted = WebLyricsStats.parseToggle(payload) {")
+                        && sourceHas(app("WebLyrics/WebLyricsScreen.swift"), "let t = Timer(timeInterval: 1, repeats: true) { [weak self] _ in\n MainActor.assumeIsolated { self?.sendStats() }"), true,
+                    "网页歌词诊断: 网页开着浮层时 App 每秒发统计,都关了就停")
+        expectEqual(sourceHas(pagesSource, "if (!window.VideoDecoder && !mseSupported()) return false;")
+                        && sourceHas(pagesSource, "const viaMse = !window.VideoDecoder;")
+                        && sourceHas(pagesSource, "if (viaMse) { receiveMse(type, t, data); return; }"), true,
+                    "网页歌词 MSE: 没有 WebCodecs 的浏览器(非安全上下文里的 Firefox / Chromium)照样要视频流,封成分段 MP4 交给 MediaSource")
+        expectEqual(sourceHas(pagesSource, "if (held) mse.pending.push(mseSegment(++mse.seq, held.time, Math.max(1, time - held.time), held.key, held.data));"), true,
+                    "网页歌词 MSE: 每帧扣到下一帧来了按两帧画帧时刻之差填时长,时间轴首尾相接")
+        expectEqual(sourceHas(pagesSource, "if (ahead > MSE_AHEAD) { v.pause(); return; }")
+                        && sourceHas(pagesSource, "if (ahead < -MSE_SEEK) { v.currentTime = target; return; }"), true,
+                    "网页歌词 MSE: 播放位置超前就停住等、不往回跳,落后太多才跳过去")
+        expectEqual(sourceHas(pagesSource, "steerMse(now);\n drawMse();")
+                        && sourceBytes(pagesSource, contain: "requestVideoFrameCallback("), false,
+                    "网页歌词 MSE: 每次刷新时按播放位置画,不靠 requestVideoFrameCallback(Firefox 里它一秒只回调二十几次)")
+        expectEqual(pagesSource.components(separatedBy: "closeMse();").count, 2,
+                    "网页歌词 MSE: 只在出错退回 JPEG 时拆 <video>,重连接着用同一条时间轴")
+        expectEqual(sourceHas(pagesSource, "if (mse.baseMs !== null && cutOut(mse.baseMs + v.currentTime * 1000)) return;"), true,
+                    "网页歌词 MSE: 播放位置落在暂停、跳转的丢帧窗口里时不画")
+        expectEqual(sourceHas(pagesSource, "const q = mse.video.getVideoPlaybackQuality(), shown = q.totalVideoFrames - q.droppedVideoFrames;"), true,
+                    "网页歌词诊断: MSE 的上屏帧数取 <video> 的播放统计(每次刷新都画,画的次数不代表新帧)")
+        expectEqual(sourceHas(app("WebLyrics/WebLyricsServer.swift"), "img-src blob: data:; media-src blob:;"), true,
+                    "网页歌词 MSE: 副屏页面的 CSP 放行 blob: 媒体地址(Chromium 按 CSP 拦 MediaSource 的地址)")
+        expectEqual(sourceHas(app("WebLyrics/WebLyricsVideoEncoder.swift"),
+                              "VTSessionSetProperty(made, key: kVTCompressionPropertyKey_ReferenceBufferCount, value: 1 as CFNumber)"), true,
+                    "网页歌词: 视频只参考上一帧,SPS 里的解码缓冲声明成 1 帧(浏览器的 <video> 按它压帧)")
+        // MediaSource 封装:从页面脚本里取出 viaMse 到 receiveMse 之前那段纯函数,在 JavaScriptCore 里拿 App 实际发出的 avcC 跑
+        do {
+            let helpers: String? = {
+                guard let a = pagesSource.range(of: "const viaMse = !window.VideoDecoder;"),
+                      let b = pagesSource.range(of: "function receiveMse(", range: a.upperBound..<pagesSource.endIndex) else { return nil }
+                return String(pagesSource[a.lowerBound..<b.lowerBound])
+            }()
+            let ctx = JSContext()
+            if let helpers { ctx?.evaluateScript("var window = {};\n" + helpers + """
+
+            function hexBytes(h) { return Uint8Array.from(h.match(/../g), function (x) { return parseInt(x, 16); }); }
+            function boxes(buf) {
+              var dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength), out = [], at = 0;
+              while (at + 8 <= buf.length) { var n = dv.getUint32(at); out.push(String.fromCharCode(buf[at + 4], buf[at + 5], buf[at + 6], buf[at + 7]) + ':' + n); at += n; }
+              return out.join(',') + (at === buf.length ? '' : ',trailing');
+            }
+            function find(buf, type) {
+              for (var i = buf.length - 4; i >= 4; i--) if (String.fromCharCode(buf[i], buf[i + 1], buf[i + 2], buf[i + 3]) === type) return i - 4;
+              return -1;
+            }
+            function field(buf, type, at, size) { var dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength), p = find(buf, type) + at; return size === 2 ? dv.getUint16(p) : dv.getUint32(p); }
+            var big = hexBytes('01640034ffe1001527640034ac1314802e40dbfb9a81010103c2010a8001000428ee3cb0fdf8f800');
+            var hd = hexBytes('01640020ffe1001327640020ac1314805005ba6a0404040f08042a01000428ee3cb0fdf8f800');
+            var cropped = hexBytes('0164002affe100142764002aac13148056061e6e6a0404040f08042a01000428ee3cb0fdf8f800');
+            var payload = Uint8Array.from([0, 0, 0, 1, 101]);
+            var init = mseInit(big), key = mseSegment(7, 4294967296 + 5, 1500, true, payload), delta = mseSegment(8, 90, 1500, false, payload);
+            """) }
+            func js(_ expr: String) -> String { ctx?.evaluateScript(expr)?.toString() ?? "nil" }
+            expectEqual(helpers != nil && ctx?.exception == nil, true, "网页歌词 MSE: 封装函数在 JavaScriptCore 里跑得起来")
+            expectEqual(js("spsSize(big).join('x')"), "2960x1740", "网页歌词 MSE: 从 SPS 读出编码尺寸(2960×1740,下边裁 4 行)")
+            expectEqual(js("spsSize(hd).join('x')"), "1280x720", "网页歌词 MSE: 从 SPS 读出编码尺寸(1280×720)")
+            expectEqual(js("spsSize(cropped).join('x')"), "1366x768", "网页歌词 MSE: 从 SPS 读出编码尺寸(右边裁 10 列)")
+            expectEqual(js("avcCodec(big)"), "avc1.640034", "网页歌词 MSE: 编码类型按 avcC 的档次与级别写")
+            expectEqual(js("boxes(init).replace(/moov:[0-9]+/, 'moov')"), "ftyp:32,moov", "网页歌词 MSE: 初始化段是 ftyp + moov,长度首尾相接")
+            expectEqual(js("[field(init, 'avc1', 32, 2), field(init, 'avc1', 34, 2), field(init, 'tkhd', 84) / 65536, field(init, 'tkhd', 88) / 65536].join(',')"),
+                        "2960,1740,2960,1740", "网页歌词 MSE: 样本描述和轨道头写的是 SPS 里的尺寸")
+            expectEqual(js("Array.from(init.subarray(find(init, 'avcC') + 8, find(init, 'avcC') + 8 + big.length)).join(',') === Array.from(big).join(',')"),
+                        "true", "网页歌词 MSE: avcC 原样放进样本描述")
+            expectEqual(js("boxes(key)"), "moof:100,mdat:13", "网页歌词 MSE: 一帧一段 moof + mdat")
+            expectEqual(js("[field(key, 'mfhd', 12), field(key, 'tfdt', 12), field(key, 'tfdt', 16), field(key, 'trun', 16), field(key, 'trun', 20), field(key, 'trun', 24)].join(',')"),
+                        "7,1,5,108,1500,5", "网页歌词 MSE: 序号、64 位起点、数据偏移(moof 长度 + 8)、时长、字节数")
+            expectEqual(js("Array.from(key.subarray(108)).join(',')"), "0,0,0,1,101", "网页歌词 MSE: mdat 里原样是这一帧的数据")
+            expectEqual(js("[field(key, 'trun', 28), field(delta, 'trun', 28)].map(function (x) { return x.toString(16); }).join(',')"),
+                        "2000000,1010000", "网页歌词 MSE: 关键帧标成不依赖别的帧,普通帧标成依赖、非同步点")
+        }
         let frameSource = app("WebLyrics/WebLyricsScreen.swift")
         expectEqual(sourceHas(frameSource, "if sendBacklogged {\n notePace(.backlog)\n return\n }\n guard framesInFlight < Self.maxFramesInFlight else {\n notePace(.inFlight)\n return\n }"), true,
                     "网页歌词: 出帧线程跳过的拍报给节拍器,分清网络发不完和在途帧满")

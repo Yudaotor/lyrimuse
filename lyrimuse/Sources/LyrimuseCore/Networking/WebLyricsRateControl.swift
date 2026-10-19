@@ -41,7 +41,7 @@ public struct WebLyricsFeedback: Equatable, Sendable {
 ///   涌到、排队很快回落,不降:只是停了一下,路没变窄,靠网页的放帧余量扛。
 /// - `bitRate` 是想要的线上码率;硬件编码器常比设的多发三到五成(开头关键帧更多),所以按上一秒实际发出与设给它的
 ///   比值(只认大于 1 的)折算,设给编码器的是 `encoderBitRate`。
-/// - 从 `startBitRate` 起步,第一次发不完之前每次回报升 15%,好路上约一秒升满,窄路上开头少灌一半。
+/// - 从 `startBitRate` 起步,第一次发不完之前每次回报升 25%,好路上一秒多升满;起步高了窄路上开头先灌出一两秒积压。
 /// - 排队回到 `calmDelay` 以下、离上次降已过 1 秒、编码器确实用满了码率(上一秒发出去的不少于六成):每次回报升 5%;
 ///   离上次发不完时的送达量只差一成上下时只升 1%,不在容量上下猛试。
 /// - 在途上限,超了先不发,内核缓冲再大延迟也封顶:网页还没收到的数据里最早那一帧交出去已超过 `maxInFlightAge`,或者
@@ -52,14 +52,14 @@ public struct WebLyricsFeedback: Equatable, Sendable {
 public struct WebLyricsRateControl: Sendable {
     public static let maxBitRate = 4_000_000
     public static let minBitRate = 150_000
-    public static let startBitRate = 2_000_000
+    public static let startBitRate = 1_000_000
     static let overuseDelay: TimeInterval = 0.2
     static let calmDelay: TimeInterval = 0.08
     /// 两次回报之间排队少了这么多以上算在回落。
     static let drainSlack: TimeInterval = 0.05
     static let decreaseGap: TimeInterval = 1
     static let increaseStep = 1.05
-    static let startIncreaseStep = 1.15
+    static let startIncreaseStep = 1.25
     static let nearIncreaseStep = 1.01
     static let baseDrift: TimeInterval = 0.002
     static let rateWindow: TimeInterval = 1
@@ -169,7 +169,9 @@ public struct WebLyricsRateControl: Sendable {
     /// 上一秒实际发出去的码率,写进诊断日志。
     public func sentBitRate(at now: TimeInterval) -> Double {
         guard let start = sent.last(where: { $0.at < now - Self.rateWindow }) else {
-            return Double(sentTotal) * 8 / Self.rateWindow
+            // 连上还不满一秒:按实际经过的时间算,别按一秒摊薄(起步那几次回报会被当成编码器没用满码率、不升)
+            let elapsed = max(0.2, now - (sent.first?.at ?? now))
+            return Double(sentTotal) * 8 / min(elapsed, Self.rateWindow)
         }
         return Double(sentTotal - start.total) * 8 / Self.rateWindow
     }

@@ -44,6 +44,9 @@ final class WebLyricsVideoEncoder: @unchecked Sendable {
         guard let made else { return nil }
         VTSessionSetProperty(made, key: kVTCompressionPropertyKey_RealTime, value: kCFBooleanTrue)
         VTSessionSetProperty(made, key: kVTCompressionPropertyKey_AllowFrameReordering, value: kCFBooleanFalse)
+        // 只参考上一帧,SPS 里的解码缓冲跟着声明成 1 帧:浏览器的 <video>(MediaSource)按这个帧数压着再出,默认的 9 帧
+        // 在 Firefox 里要多留约 200ms 余量才不在关键帧那几下卡。见 19 章决策 36
+        VTSessionSetProperty(made, key: kVTCompressionPropertyKey_ReferenceBufferCount, value: 1 as CFNumber)
         VTSessionSetProperty(made, key: kVTCompressionPropertyKey_ProfileLevel, value: kVTProfileLevel_H264_High_AutoLevel)
         VTSessionSetProperty(made, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: 60 as CFNumber)
         VTSessionSetProperty(made, key: kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration,
