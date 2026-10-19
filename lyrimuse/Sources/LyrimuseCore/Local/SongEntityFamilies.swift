@@ -18,7 +18,7 @@ public enum SongEntityFamilies {
     }
 
     /// 旧别名表并起来、录音对不上而撤出来的一块写法:原来所在的族键,撤出后的族键。
-    public struct AliasWithdrawal: Hashable, Sendable {
+    public struct AliasWithdrawal: Hashable, Sendable, Codable {
         public var family: String
         public var key: String
 

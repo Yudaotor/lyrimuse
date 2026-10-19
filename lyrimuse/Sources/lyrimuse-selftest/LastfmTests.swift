@@ -2934,6 +2934,36 @@ func runLastfmTests() {
                     "Spotify 连接(契约): 回到 App 时重查")
     }
 
+    // ---- 启动时拿盘上记的别名表比,表没变不标过期(12 章决策 87) ----
+    do {
+        var tables = EnrichCacheReader.LocalAliasTables.empty
+        tables.artists = ["jaychou": "周杰倫"]
+        tables.titles = ["周杰倫": ["mojito": "Mojito"]]
+        tables.entities = ["a|t": "a|r"]
+        tables.withdrawals = ["a|w": SongEntityFamilies.AliasWithdrawal(family: "a|f", key: "a|k")]
+        tables.rewrites = ["a|r": "a|s"]
+        let decoded = (try? JSONEncoder().encode(tables)).flatMap { try? JSONDecoder().decode(EnrichCacheReader.LocalAliasTables.self, from: $0) }
+        expectEqual(decoded, tables, "别名表记录: 五张表存盘读回来一样")
+
+        let stats = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift"),
+            encoding: .utf8)) ?? ""
+        let apply = sourceBody("private func applyLocalAliases(", in: stats)
+        expectEqual(apply.contains("guard !localAliasesApplied || tables != localAliasTables else { return }")
+                    && apply.contains("aliasBaselineSaved = Self.loadAliasBaseline()")
+                    && apply.contains("old = aliasBaselineSaved ?? .empty"), true,
+                    "别名表记录(契约): 启动后第一次套用跟盘上记的那份比,不跟空表比")
+        expectEqual(sourceBody("private static func loadAliasBaseline(", in: stats)
+                        .contains("baseline.mergedCountsVersion == mergedCountsVersion, baseline.foldVersion == PlayCountFold.foldVersion"),
+                    true, "别名表记录(契约): 口径版本、折叠规则版本对不上时不用,全部标一遍")
+        expectEqual(sourceBody("private func saveAliasBaselineIfSettled(", in: stats)
+                        .contains("pendingEntityTouched.isEmpty, aliasBaselineSaved != localAliasTables"), true,
+                    "别名表记录(契约): 攒着的标记没标完不记")
+        expectEqual(sourceBody("private func flushLocalAliasStaleMarks(", in: stats)
+                        .contains("defer { saveAliasBaselineIfSettled() }"), true,
+                    "别名表记录(契约): 标完过期就记下这份表")
+    }
+
     // ---- 别名表日志不带歌名歌手(契约) ----
     do {
         let stats = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()

@@ -1741,7 +1741,7 @@ public enum EnrichCacheReader {
     /// 本机推断的两张别名表:歌手写法归并(LocalArtistAliases.derive,证据 = 引擎的
     /// MusicBrainz 缓存 + 共享歌曲 id)与「英文歌名 → 中文歌名」(EnrichTitleAliases.derive,证据 = 同歌曲
     /// id / 时长 + 歌词)。歌手表先推、歌名表按新歌手表分桶 —— 两张表之间有依赖,必须一起算。
-    public struct LocalAliasTables: Equatable {
+    public struct LocalAliasTables: Equatable, Codable {
         public var artists: [String: String]
         public var titles: [String: [String: String]]
         /// 实体别名:族键 → 代表族键(SongEntityFamilies.derive,18 章决策 9)。

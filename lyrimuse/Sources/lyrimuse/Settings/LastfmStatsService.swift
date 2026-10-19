@@ -2188,13 +2188,59 @@ final class LastfmStatsService: ObservableObject {
 
     // MARK: 本机推断的别名表 —— 歌手 + 歌名
 
-    /// 上一次灌进 PlayCountFold 的那两张本机别名表,用来判"有没有变"。不持久化:它们是 enrich 缓存 +
-    /// 引擎三份 MusicBrainz 缓存的派生物,那些本身就在盘上,每次启动后台重算一次(几十毫秒)。
+    /// 上一次灌进 PlayCountFold 的那两张本机别名表,用来判"有没有变"。表本身每次启动后台重算一次(几十毫秒):
+    /// 它们是 enrich 缓存 + 引擎三份 MusicBrainz 缓存的派生物,那些本身就在盘上。启动后第一次套用拿来比的旧表
+    /// 是盘上记的那份(见 AliasBaseline)。
     ///
     /// 不用编译进二进制的手写表:一切由通用逻辑覆盖,不做特殊化。证据与保守闸见
     /// LocalArtistAliases / EnrichTitleAliases 的头注。
     private var localAliasTables = EnrichCacheReader.LocalAliasTables.empty
     private var localAliasRefreshTask: Task<Void, Never>?
+    /// 这次启动套用过别名表没有。没套用过时 localAliasTables 还是空表,不能拿它当旧表比。
+    private var localAliasesApplied = false
+    /// 盘上记着的那份(读进来的或刚写下的),跟它一样就不重写。
+    private var aliasBaselineSaved: EnrichCacheReader.LocalAliasTables?
+    private var aliasBaselineSaveTask: Task<Void, Never>?
+
+    /// 受影响写法都标过期之后的那份别名表,连同当时的次数口径版本和折叠规则版本。启动后第一次套用时拿它当旧表比:
+    /// 表没变就一个也不标。不记的话每次启动都跟空表比,别名表里几千个写法的次数全被标过期,一打开窗口就重取一遍
+    /// (实测每次启动近 4000 个键、一两百个 track.getinfo,见 12 章决策 87)。
+    /// 没有记录、哪个版本对不上时跟空表比,全部标一遍(首次装机就靠它把各写法自己的次数换成合并后的)。
+    private struct AliasBaseline: Codable {
+        var mergedCountsVersion: Int
+        var foldVersion: Int
+        var tables: EnrichCacheReader.LocalAliasTables
+    }
+
+    private static let aliasBaselineURL = LyrimusePaths.configFile("lyrimuse-lastfm-alias-baseline.json")
+
+    private static func loadAliasBaseline() -> EnrichCacheReader.LocalAliasTables? {
+        guard let data = FileIO.read(aliasBaselineURL),
+              let baseline = FileIO.decodeJSON(AliasBaseline.self, from: data, source: aliasBaselineURL),
+              baseline.mergedCountsVersion == mergedCountsVersion, baseline.foldVersion == PlayCountFold.foldVersion
+        else { return nil }
+        return baseline.tables
+    }
+
+    /// 攒着的受影响写法都标完了才记下现在这份表:族还没建好、标记还攒着时不记,下次启动照旧拿旧记录比,该标的不漏。
+    /// 标了但没等重取就退出的,由判据④在 24 小时内补上(见 stalePlayCountKeys)。
+    private func saveAliasBaselineIfSettled() {
+        guard localAliasesApplied, pendingLocalAliasTouched.isEmpty, pendingLocalArtistTouched.isEmpty,
+              pendingEntityTouched.isEmpty, aliasBaselineSaved != localAliasTables else { return }
+        aliasBaselineSaved = localAliasTables
+        let baseline = AliasBaseline(mergedCountsVersion: Self.mergedCountsVersion, foldVersion: PlayCountFold.foldVersion,
+                                     tables: localAliasTables)
+        aliasBaselineSaveTask?.cancel()
+        aliasBaselineSaveTask = Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled else { return }
+            let url = Self.aliasBaselineURL
+            await Task.detached(priority: .utility) {
+                guard let data = try? JSONEncoder().encode(baseline) else { return }
+                FileIO.write(data, to: url)
+            }.value
+        }
+    }
 
     /// 重算两张表并套用(变了才动)。已算好的直接同步套用;没算好的起后台任务,算完回主线程套用。
     /// 两个调用点:loadTitleForms(首次建族之前,`rebuildFamilies: false` —— 族马上会被那边建出来;
@@ -2221,8 +2267,16 @@ final class LastfmStatsService: ObservableObject {
         // 实体那一层和撤出表有开关(features.json 的 song_entity_phase1),关着时当空表,族退回原来的写法族(18 章决策 9、19);
         // 上送写法那一层建在实体那一层上,跟它一起关(12 章决策 73)。
         if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:]; tables.withdrawals = [:]; tables.rewrites = [:] }
-        guard tables != localAliasTables else { return }
-        let old = localAliasTables
+        guard !localAliasesApplied || tables != localAliasTables else { return }
+        // 启动后第一次套用:跟盘上记的那份比(见 AliasBaseline),没有记录就跟空表比。
+        let old: EnrichCacheReader.LocalAliasTables
+        if localAliasesApplied {
+            old = localAliasTables
+        } else {
+            aliasBaselineSaved = Self.loadAliasBaseline()
+            old = aliasBaselineSaved ?? .empty
+            localAliasesApplied = true
+        }
         localAliasTables = tables
         PlayCountFold.setLocalArtistAliases(tables.artists)
         PlayCountFold.setLocalTitleAliases(tables.titles)
@@ -2276,7 +2330,10 @@ final class LastfmStatsService: ObservableObject {
         remergeCharts()
         // 右键链接查不到时按歌手别名再查一次,别名表一变就重算(它自己按输入早退)。
         refreshChartAppLinks()
-        guard rebuildFamilies else { return }
+        guard rebuildFamilies else {
+            saveAliasBaselineIfSettled()
+            return
+        }
         rebuildPrimaryCreditFamilies()
         flushLocalAliasStaleMarks()
     }
@@ -2290,6 +2347,7 @@ final class LastfmStatsService: ObservableObject {
     /// (stalePlayCountKeys 的语义)。首次装机后的第一次启动也走这里:缓存里存的是各写法自己的次数,
     /// 不标过期的话要等判据④的 24 小时窗口才会换成合并后的数。
     private func flushLocalAliasStaleMarks() {
+        defer { saveAliasBaselineIfSettled() }
         guard !primaryCreditFamilies.isEmpty,
               !(pendingLocalAliasTouched.isEmpty && pendingLocalArtistTouched.isEmpty && pendingEntityTouched.isEmpty)
         else { return }
