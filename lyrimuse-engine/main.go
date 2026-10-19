@@ -465,6 +465,8 @@ func main() {
 	// 必须在 sweepDeviceArtwork 之前,也必须在 artworkRelayURL 定下来之后(换中继要作废旧记录)。
 	loadArtworkConfirmed()
 	startArtworkSweep(ctx)
+	// 设备封面目录里没人引用、一阵子没用过的图删掉,指向本机没有的设备封面的字段清掉(deviceartworkprune.go),一天一次。
+	startDeviceArtworkPrune(ctx)
 	// 存量单曲的 Apple 链接按新的单曲判据重核一遍(applelinkrecheck.go),要联网,同样放后台。
 	startAppleSingleLinkRecheck(ctx)
 	// 存量里从本机曲库记下、现在不认的曲目 id 清掉(locallibrarylinks.go),要读别的 App 的本机数据,同样放后台。

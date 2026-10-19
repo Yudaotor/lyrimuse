@@ -164,6 +164,9 @@ func saveDeviceArtwork(data []byte, mimeType string) (string, bool) {
 	sum := sha256.Sum256(data)
 	path := filepath.Join(deviceArtworkDir, hex.EncodeToString(sum[:8])+ext)
 	if _, err := os.Stat(path); err == nil {
+		// 刷新修改时间:清理按它判这张图多久没用过(deviceartworkprune.go)。
+		now := time.Now()
+		_ = os.Chtimes(path, now, now)
 		return "file://" + path, true
 	}
 	if err := os.MkdirAll(deviceArtworkDir, 0o755); err != nil {
