@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import ImageIO
+import JavaScriptCore
 import LyrimuseCore
 
 // 播放源(LyrimuseCore/Local)审计之后的加固:轮询单飞、停播清理、焦点宽限的归类、最近记录的计次与拼页、
@@ -12,6 +13,7 @@ func runPlaybackSourceHardeningTests() {
     playbackStateTests()
     recentListensTests()
     browserProbeTests()
+    webProbeTitleGuardTests()
     libraryAndCacheTests()
     replayNoDurationFirstTick()
     wiringContracts()
@@ -386,9 +388,28 @@ private func wiringContracts() {
 
     // 网页平台探针只对配对过的浏览器跑:App 侧 YouTube Music 广告探针的入口 + 配对关系镜像给引擎。
     let ytAd = code("LyrimuseCore/Local/YouTubeMusicAdProbe.swift")
-    let kick = sourceBody("public func kickIfNeeded(bundleIdentifier: String?, key: String) {", in: ytAd)
+    let kick = sourceBody("public func kickIfNeeded(bundleIdentifier: String?, key: String, title: String?, playing: Bool) {", in: ytAd)
     expectEqual(before("BrowserPositionProbe.shared.isPaired(bundleID: hostBundleID, platformID: \"youtubeMusic\")", "inFlightKey = key", in: kick), true,
                 "网页探针配对: YouTube Music 广告探针没配对就不发起")
+    // 只认页面上放着这一首的标签页:三处调用点都带上标题和在不在放,网页版控制的目标带上标题(02 章决策 150)。
+    expectEqual(kick.contains("title: title ?? \"\", playing: playing)")
+                && ytAd.contains("js: probeJS(title: title, playing: playing),"), true,
+                "标题核对(接线): 广告探针注入的是填过标题与在不在放的那份 JS")
+    expectEqual(code("LyrimuseCore/Local/MediaControlClient.swift")
+                    .contains("title: snapshot.title, playing: snapshot.playing != false)"), true,
+                "标题核对(接线): 广告闸踢探针时带上快照标题与在不在放")
+    expectEqual(code("LyrimuseCore/Local/LocalPlaybackSource.swift")
+                    .contains("title: snapshot.title, playing: snapshot.playing != false)"), true,
+                "标题核对(接线): 「广告中」每拍补踢也带上快照标题与在不在放")
+    expectEqual(code("lyrimuse/PlaybackCoordinator.swift").contains("title: LocalPlaybackSource.shared.title,"), true,
+                "标题核对(接线): 网页版控制的目标带上当前标题")
+    // 探针落空的日志要落盘:`.info` 只在内存里(02 章),按曲目各记一次。
+    let positionProbe = code("LyrimuseCore/Local/BrowserPositionProbe.swift")
+    expectEqual(positionProbe.contains("logger.info("), false, "探针日志: 浏览器进度探针不用 .info(不落盘)")
+    expectEqual(positionProbe.contains("if let miss { self.noteMissOnce(key: key, miss) }"), true,
+                "探针日志: 进度探针的落空按曲目各记一次")
+    expectEqual(kick.contains("self.noteOutcomeOnce(key: key, reading: reading, notFound: notFound)"), true,
+                "探针日志: 广告探针没读到 / NOTFOUND 按曲目各记一次")
     let store = code("lyrimuse/Settings/FeatureSettingsStore.swift")
     expectEqual(store.contains("case browserPlatformPairs = \"browser_platform_pairs\""), true, "网页探针配对: features.json 键名跟引擎一致")
     expectEqual(store.contains("browserPlatformPairs: browserPlatformPairs\n"), true, "网页探针配对: 写盘快照带上配对镜像")
@@ -878,4 +899,115 @@ private func scriptServerTests() {
                    "runPlayerScript(\"kaset\", source: kasetScript)"] {
         expectEqual(sourceBytes(client, contain: needle), true, "常驻脚本接线: \(needle)")
     }
+}
+
+// ---- 网页探针只认放着这一首的标签页 ----
+//
+// 真机复现(Safari):另一个窗口的 YouTube Music 页暂停在一段广告上,普通 www.youtube.com 视频
+// 「Blender - Big Buck Bunny 60fps 4K」被当成歌收下(专辑名补成那一页的),角标显示「YouTube Music」。
+// 探针 JS 原来只判广告标志、不看页面放的是哪首;只剩暂停页时模板把暂停页的读数交回去。
+// 下面在 JavaScriptCore 里跑真正注入的那段 JS,页面 DOM 用桩对象。
+
+/// 桩页面:`#movie_player` / `ytmusic-player-bar` 两个元素,`video` 暂停与否、mediaSession 标题、document.title 可调。
+private func runPageJS(_ js: String, mediaTitle: String?, documentTitle: String, paused: Bool) -> String? {
+    guard let ctx = JSContext() else { return nil }
+    ctx.setObject(mediaTitle.map { $0 as Any } ?? NSNull(), forKeyedSubscript: "__MT" as NSString)
+    ctx.setObject(documentTitle, forKeyedSubscript: "__DT" as NSString)
+    ctx.setObject(paused, forKeyedSubscript: "__PAUSED" as NSString)
+    ctx.evaluateScript("""
+    var __video = { paused: __PAUSED };
+    var __player = { className: 'html5-video-player', querySelector: function(q) { return q === 'video' ? __video : null; } };
+    var __bar = {
+      getAttribute: function(n) { return n === 'repeat-mode' ? 'ALL' : null; },
+      querySelector: function(q) {
+        if (q === 'ytmusic-like-button-renderer') {
+          return { getAttribute: function(n) { return n === 'like-status' ? 'LIKE' : null; },
+                   querySelector: function(q2) { return q2 === '#button-shape-like button' ? { click: function() {} } : null; } };
+        }
+        return null;
+      }
+    };
+    var navigator = { mediaSession: { metadata: __MT === null ? null : { title: __MT } } };
+    var document = {
+      title: __DT,
+      querySelector: function(q) {
+        if (q === '#movie_player') return __player;
+        if (q === 'ytmusic-player-bar') return __bar;
+        if (q === 'video') return __video;
+        if (q === '#volume-slider') return { value: 40, dispatchEvent: function() {} };
+        return null;
+      },
+      querySelectorAll: function(q) { return []; }
+    };
+    """)
+    return ctx.evaluateScript(js)?.toString()
+}
+
+@MainActor
+private func webProbeTitleGuardTests() {
+    typealias P = YouTubeMusicAdProbe
+    typealias Y = YouTubeMusicWebControls
+    let song = "Already Gone"
+    let video = "Blender - Big Buck Bunny 60fps 4K"
+
+    // 契约:模板仍不含双引号 / 反斜杠,填过的那份也一样(标题按 UTF-16 码元写成 String.fromCharCode)。
+    let filled = P.probeJS(title: "Live at \"Budokan\" \\ 'x' | y", playing: true)
+    expectEqual(filled.contains("\""), false, "标题核对: 填进标题之后 JS 里仍没有双引号")
+    expectEqual(filled.contains("\\"), false, "标题核对: 填进标题之后 JS 里仍没有反斜杠")
+    expectEqual(P.probeJS.contains("__TITLEGUARD__") && P.probeJS.contains("__PLAYING__"), true,
+                "标题核对: 探针模板留着标题核对和在不在放两个占位")
+    expectEqual(filled.contains("__"), false, "标题核对: 注入的那份占位都填上了")
+    expectEqual(P.jsString(""), "''", "标题核对: 空标题写成空串")
+
+    // ① 探针:页面放的就是这一首 → 照常读数;放的是别的(普通视频那次)→ NOTFOUND,模板接着找、找不到就按没有 YT Music 页处理。
+    expectEqual(runPageJS(P.probeJS(title: song, playing: true), mediaTitle: song, documentTitle: "\(song) | YouTube Music",
+                          paused: false), "0|0|0||", "标题核对: 页面上放的就是这一首 → 照常读数")
+    let mismatch = runPageJS(P.probeJS(title: video, playing: true), mediaTitle: "Liese 全新登場",
+                             documentTitle: "YouTube Music", paused: true)
+    expectEqual(mismatch, "NOTFOUND", "标题核对: 另一页暂停在广告上、快照是普通视频 → 这一页不答(真机复现那次)")
+    expectEqual(P.parse(mismatch ?? ""), nil, "标题核对: 不答就没有读数,广告闸 fail-closed 拒掉普通视频")
+    expectEqual(P.isNotFound(mismatch ?? ""), true, "标题核对: 不答按 NOTFOUND 记,30 秒内同一条不再遍历标签页(决策 53)")
+    expectEqual(runPageJS(P.probeJS(title: song, playing: true), mediaTitle: " already gone ", documentTitle: "",
+                          paused: false), "0|0|0||", "标题核对: 首尾空白、大小写不论")
+    expectEqual(runPageJS(P.probeJS(title: song, playing: true), mediaTitle: nil, documentTitle: "\(song) | YouTube Music",
+                          paused: false), "0|0|0||", "标题核对: 没有 mediaSession 时退回 document.title 去掉「 | YouTube Music」")
+    expectEqual(runPageJS(P.probeJS(title: song, playing: true), mediaTitle: nil, documentTitle: "\(song) - YouTube Music",
+                          paused: false), "0|0|0||", "标题核对: 「 - YouTube Music」后缀同样去掉")
+    expectEqual(runPageJS(P.probeJS(title: "YouTube Music", playing: true), mediaTitle: nil, documentTitle: "YouTube Music",
+                          paused: false), "NOTFOUND", "标题核对: 只有裸的「YouTube Music」标题当拿不到,不拿它去配")
+    expectEqual(runPageJS(P.probeJS(title: "", playing: true), mediaTitle: song, documentTitle: "", paused: false),
+                "NOTFOUND", "标题核对: 快照没有标题 → 不答")
+
+    // ② 暂停页:快照在放时暂停着的那一页不算(交回 STALE,parse 不认、不进缓存);快照也暂停着时照常交回(「暂停中」)。
+    let stale = runPageJS(P.probeJS(title: song, playing: true), mediaTitle: song, documentTitle: "", paused: true)
+    expectEqual(stale, "PAUSED:STALE", "暂停页: 快照在放、这一页暂停着 → 只给一个认不出的备选")
+    expectEqual(P.parse("STALE"), nil, "暂停页: 模板交回的 STALE 解不出读数,不拿它判广告、补专辑")
+    expectEqual(P.isNotFound("STALE"), false, "暂停页: STALE 不按 NOTFOUND 记(走失败退避,用户刚按暂停那一拍很快会再探)")
+    expectEqual(runPageJS(P.probeJS(title: song, playing: false), mediaTitle: song, documentTitle: "", paused: true),
+                "PAUSED:0|0|0||", "暂停页: 快照也暂停着 → 照常交回读数,「暂停中」不被当成没探到")
+
+    // ③ 网页版控制:读写都只认放着这一首的页面。
+    expectEqual(Y.target(reportedBundleID: "com.apple.Safari", webPlatformID: "youtubeMusic", title: "  ",
+                         isPaired: { _ in true }) == nil, true, "网页版: 没有标题可比就不走这里")
+    expectEqual(Y.target(reportedBundleID: "com.apple.Safari", webPlatformID: "youtubeMusic", title: video,
+                         isPaired: { _ in true })?.title, video, "网页版: 目标带上当前这一首的标题")
+    expectEqual(runPageJS(Y.readJS(title: video), mediaTitle: "Liese 全新登場", documentTitle: "", paused: true),
+                "NOTFOUND", "网页版: 放的是普通视频、YT Music 页暂停在别的东西上 → 读不到,键不显示")
+    expectEqual(runPageJS(Y.readJS(title: song), mediaTitle: song, documentTitle: "", paused: false),
+                "STATE:ALL|LIKE|40", "网页版: 页面放着这一首 → 照常读回")
+    for force in [false, true] {
+        expectEqual(runPageJS(Y.setLikeJS(liked: true, title: video, force: force), mediaTitle: "Liese 全新登場",
+                              documentTitle: "", paused: true), "NOTFOUND",
+                    "网页版: 标题对不上不写赞(force=\(force),原来第二轮会直接写第一个暂停页)")
+        expectEqual(runPageJS(Y.setVolumeJS(30, title: video, force: force), mediaTitle: "Liese 全新登場",
+                              documentTitle: "", paused: true), "NOTFOUND",
+                    "网页版: 标题对不上不写音量(force=\(force))")
+        expectEqual(runPageJS(Y.setRepeatJS(attribute: "ONE", title: video, force: force), mediaTitle: "Liese 全新登場",
+                              documentTitle: "", paused: true), "NOTFOUND",
+                    "网页版: 标题对不上不切循环(force=\(force))")
+    }
+    expectEqual(runPageJS(Y.setLikeJS(liked: true, title: song, force: true), mediaTitle: song, documentTitle: "", paused: true),
+                "SET:LIKE", "网页版: 暂停着、放的就是这一首 → 第二轮照常写(暂停时也能点赞)")
+    expectEqual(runPageJS(Y.setLikeJS(liked: true, title: song, force: false), mediaTitle: song, documentTitle: "", paused: true),
+                "PAUSED:SKIP", "网页版: 第一轮暂停页不动")
 }

@@ -574,10 +574,12 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 循环键、点赞、音量走浏览器里 YouTube Music 网页版(`YouTubeMusicWebControls`)时的那个浏览器,不是就 nil。只在当前播放器
     /// 不是内置播放器时看(内置的走 `extendedControlPlayer` / `favoritePlayer`)。网页版没有随机。
+    /// `resolvedWebPlatformID` 只是推断,读写脚本另外核对页面上放的是不是当前这一首(带上标题),见 02 章决策 150。
     private var youtubeMusicWebTarget: YouTubeMusicWebControls.Target? {
         guard currentPlayer == nil else { return nil }
         return YouTubeMusicWebControls.target(
             reportedBundleID: LocalPlaybackSource.shared.lastResolvedBundleID, webPlatformID: resolvedWebPlatformID,
+            title: LocalPlaybackSource.shared.title,
             isPaired: { BrowserPositionProbe.shared.isPaired(bundleID: $0, platformID: YouTubeMusicWebControls.platformID) })
     }
 

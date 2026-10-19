@@ -574,12 +574,12 @@ public final class BrowserPositionProbe: @unchecked Sendable {
             guard let result = ProcessRunner.run("/usr/bin/osascript", [tempURL.path], timeout: Self.probeTimeout),
                   result.succeeded
             else {
-                Self.logger.info("identify: could not read page titles from \(host, privacy: .public)")
+                Self.logger.notice("identify: could not read page titles from \(host, privacy: .public)")
                 return
             }
             let pages = Self.parseIdentifyOutput(result.stdoutText)
             guard let platformID = Self.platformMatchingTitle(title, pages: pages) else {
-                Self.logger.info("identify: no single platform reports the current title (\(pages.count, privacy: .public) tabs)")
+                Self.logger.notice("identify: no single platform reports the current title (\(pages.count, privacy: .public) tabs)")
                 return
             }
             self.recordIdentified(platformID: platformID, bundleID: host, key: key, startedAt: startedAt)
@@ -810,9 +810,10 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         lock.unlock()
 
         Task.detached(priority: .utility) {
-            let hit = await Self.probeAdvancing(
+            let (hit, miss) = await Self.probeAdvancing(
                 bundleID: hostBundleID, family: family, platformIDs: platformIDs,
                 expectedDuration: expectedDuration, attempt: attemptNumber)
+            if let miss { self.noteMissOnce(key: key, miss) }
             self.applyProbeResult(hit, key: key, generation: myGeneration,
                                   bundleID: hostBundleID, startedAt: startedAt)
         }
@@ -997,21 +998,54 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         let videoFrameURL: URL?
     }
 
+    /// 探测最常见的两种落空(一个标签页都没读到 / 第二拍没读到)。按曲目各记一次,见 `noteMissOnce`。
+    private enum ProbeMiss: Hashable {
+        case noTab(expectedDuration: Int)
+        case secondSampleEmpty(first: Double)
+
+        var kind: String {
+            switch self {
+            case .noTab: return "noTab"
+            case .secondSampleEmpty: return "secondSampleEmpty"
+            }
+        }
+    }
+
+    /// 按曲目只记一次的落空日志记到了哪首、记过哪几种。和 `lock` 同一把锁。
+    private var loggedMissKey: String?
+    private var loggedMissKinds: Set<String> = []
+
+    /// `.notice` 才落盘(`.info` 只在内存里);每首歌每种落空只记一次,有界重试的后几次不再刷。
+    private func noteMissOnce(key: String, _ miss: ProbeMiss) {
+        lock.lock()
+        if loggedMissKey != key {
+            loggedMissKey = key
+            loggedMissKinds = []
+        }
+        let fresh = loggedMissKinds.insert(miss.kind).inserted
+        lock.unlock()
+        guard fresh else { return }
+        switch miss {
+        case .noTab(let expect):
+            Self.logger.notice("probe: no tab produced a usable reading (expected duration \(expect, privacy: .public)s, key=\(key, privacy: .public))")
+        case .secondSampleEmpty(let first):
+            Self.logger.notice("probe: second sample returned nothing, discarding \(first, privacy: .public)s (key=\(key, privacy: .public))")
+        }
+    }
+
     private static func probeAdvancing(
         bundleID: String, family: BrowserAutomationPermission.Family,
         platformIDs: Set<String>, expectedDuration: Double, attempt: Int
-    ) async -> ProbeHit? {
+    ) async -> (ProbeHit?, ProbeMiss?) {
         let expect = Int(expectedDuration.rounded())
         guard let first = probeOnce(bundleID: bundleID, family: family,
                                     platformIDs: platformIDs, expectedDuration: expectedDuration) else {
-            logger.info("probe #\(attempt, privacy: .public): no tab produced a usable reading (expected duration \(expect, privacy: .public)s)")
-            return nil
+            return (nil, .noTab(expectedDuration: expect))
         }
         try? await Task.sleep(nanoseconds: UInt64(livenessGapSeconds * 1_000_000_000))
         guard let second = probeOnce(bundleID: bundleID, family: family,
                                      platformIDs: platformIDs, expectedDuration: expectedDuration) else {
-            logger.info("probe #\(attempt, privacy: .public): second sample returned nothing, discarding \(first.seconds, privacy: .public)s")
-            return nil
+            return (nil, .secondSampleEmpty(first: first.seconds))
         }
         // 两拍必须落在**同一个平台**上。同时开着 YouTube Music 和
         // Spotify 网页版、而两边规则的优先级判定在两拍之间翻了个个儿时,拿 A 站的读数减
@@ -1019,14 +1053,14 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         // 属于另一首歌的位置),也可能碰巧为负(白白弃用一次真读数)。不同平台直接弃用。
         guard first.platformID == second.platformID else {
             logger.notice("probe #\(attempt, privacy: .public): samples landed on different platforms (\(first.platformID, privacy: .public) -> \(second.platformID, privacy: .public)), discarding")
-            return nil
+            return (nil, nil)
         }
         guard pageClockIsRunning(first: first.seconds, second: second.seconds) else {
             logger.notice("probe #\(attempt, privacy: .public): page position is not advancing (\(first.seconds, privacy: .public)s -> \(second.seconds, privacy: .public)s), discarding")
-            return nil
+            return (nil, nil)
         }
         logger.notice("probe #\(attempt, privacy: .public): accepting \(second.seconds, privacy: .public)s (previous \(first.seconds, privacy: .public)s, currentTime \(second.precise?.seconds ?? -1, privacy: .public), expected duration \(expect, privacy: .public)s, platform \(second.platformID, privacy: .public))")
-        return second
+        return (second, nil)
     }
 
     private static func probeOnce(bundleID: String, family: BrowserAutomationPermission.Family, platformIDs: Set<String>, expectedDuration: Double) -> ProbeHit? {

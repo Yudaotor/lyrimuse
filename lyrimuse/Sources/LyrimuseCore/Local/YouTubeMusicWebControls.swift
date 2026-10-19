@@ -11,17 +11,22 @@ import Foundation
 ///
 /// 注入走 `BrowserTabProbeScript`(跟广告探针同一份模板、同一个 JavaScript 授权);只在这个浏览器配对过 YouTube Music
 /// 时用。开着几个 YouTube Music 标签页时认在放的那一页:写入先只动在放的那页,一页都没在放(全暂停着)再动第一页。
-/// 见 07 章决策 136、138。
+/// 读和写都只认页面上正放着当前这一首的标签页(`YouTubeMusicAdProbe.titleGuardJS`,标题对不上回 `NOTFOUND`、模板接着找):
+/// 「是哪个网页平台」是配对推断(`BrowserPositionProbe.resolvePlayingPlatformID`),同一浏览器里放着普通 www.youtube.com
+/// 视频、另一个窗口开着暂停的 YouTube Music 页时也会推成 YouTube Music,不比标题就会把赞、音量、循环写到那一页上。
+/// 见 07 章决策 136、138,02 章决策 150。
 public enum YouTubeMusicWebControls {
     public static let platformID = "youtubeMusic"
     public static let modeOptions: MusicPlaybackController.PlaybackModeOptions = [.repeatAll, .repeatOne]
     static let eventTimeoutSeconds = 4
     static let processTimeout: TimeInterval = 6
 
-    /// 往哪个浏览器注入:浏览器本体的 bundle id(Safari 报的 `com.apple.WebKit.GPU` 已换成 `com.apple.Safari`)和脚本方言。
+    /// 往哪个浏览器注入:浏览器本体的 bundle id(Safari 报的 `com.apple.WebKit.GPU` 已换成 `com.apple.Safari`)、脚本方言,
+    /// 和当前这一首的标题(只动页面上放着这个标题的标签页)。
     public struct Target: Equatable, Sendable {
         public let bundleID: String
         public let family: BrowserAutomationPermission.Family
+        public let title: String
     }
 
     /// 一次读回的三样;哪样读不懂就是 nil。
@@ -66,11 +71,9 @@ public enum YouTubeMusicWebControls {
     }
 
     /// 读三样,回 `STATE:<repeat-mode>|<like-status>|<音量条>`;暂停的标签页带 `PAUSED:` 前缀,模板据此先找在放的那一页。
-    /// 不许出现双引号(见 `BrowserTabProbeScript`)。
-    public static let readJS = """
-    (function(){\
-    var bar = document.querySelector('ytmusic-player-bar');\
-    if (!bar) return 'NOTFOUND';\
+    /// 页面上放的不是 `title` 回 `NOTFOUND`。不许出现双引号(见 `BrowserTabProbeScript`)。
+    public static func readJS(title: String) -> String {
+        "(function(){" + titleGuardPrologue(title) + """
     var lk = bar.querySelector('ytmusic-like-button-renderer');\
     var s = document.querySelector('#volume-slider');\
     var out = 'STATE:' + (bar.getAttribute('repeat-mode') || '') + '|' + (lk ? (lk.getAttribute('like-status') || '') : '') + '|' + (s ? String(s.value) : '');\
@@ -78,20 +81,29 @@ public enum YouTubeMusicWebControls {
     return (v && v.paused) ? 'PAUSED:' + out : out;\
     })()
     """
+    }
 
-    /// 写入脚本的公共头:找播放条;`force` 为 false 时暂停的标签页不动、回 `PAUSED:SKIP`,让模板接着找在放的那页。
-    static func setPrologue(force: Bool) -> String {
+    /// 读写共用的头:找播放条,再核对页面上放的是不是 `title`(对不上回 `NOTFOUND`)。
+    static func titleGuardPrologue(_ title: String) -> String {
         """
         var bar = document.querySelector('ytmusic-player-bar');\
         if (!bar) return 'NOTFOUND';\
+        \(YouTubeMusicAdProbe.titleGuard(expecting: title))
+        """
+    }
+
+    /// 写入脚本的公共头:找播放条、核对标题;`force` 为 false 时暂停的标签页不动、回 `PAUSED:SKIP`,让模板接着找在放的那页。
+    /// 第二轮(`force` 为 true)动的是第一个**放着这一首**的暂停页,不是随便哪个暂停页。
+    static func setPrologue(title: String, force: Bool) -> String {
+        titleGuardPrologue(title) + """
         var v = document.querySelector('video');\
         if (\(force ? "false" : "true") && v && v.paused) return 'PAUSED:SKIP';
         """
     }
 
     /// 点循环键直到到目标档(最多三下),回 `SET:<repeat-mode>`。
-    public static func setRepeatJS(attribute target: String, force: Bool) -> String {
-        "(function(){" + setPrologue(force: force) + """
+    public static func setRepeatJS(attribute target: String, title: String, force: Bool) -> String {
+        "(function(){" + setPrologue(title: title, force: force) + """
         var b = bar.querySelector('yt-icon-button.repeat');\
         if (!b) return 'NOTFOUND';\
         var m = bar.getAttribute('repeat-mode') || '';\
@@ -103,8 +115,8 @@ public enum YouTubeMusicWebControls {
 
     /// 赞 / 取消赞:跟目标不一样才点「赞」键,回 `SET:<like-status>`。
     /// 只认 `#button-shape-like`,找不到回 `NOTFOUND`;别拿渲染器里第一个按钮兜底,那是「踩」。
-    public static func setLikeJS(liked: Bool, force: Bool) -> String {
-        "(function(){" + setPrologue(force: force) + """
+    public static func setLikeJS(liked: Bool, title: String, force: Bool) -> String {
+        "(function(){" + setPrologue(title: title, force: force) + """
         var lk = bar.querySelector('ytmusic-like-button-renderer');\
         if (!lk) return 'NOTFOUND';\
         var b = lk.querySelector('#button-shape-like button');\
@@ -116,8 +128,8 @@ public enum YouTubeMusicWebControls {
     }
 
     /// 改音量条并发 change 事件,回 `SET:<音量条>`。
-    public static func setVolumeJS(_ value: Int, force: Bool) -> String {
-        "(function(){" + setPrologue(force: force) + """
+    public static func setVolumeJS(_ value: Int, title: String, force: Bool) -> String {
+        "(function(){" + setPrologue(title: title, force: force) + """
         var s = document.querySelector('#volume-slider');\
         if (!s) return 'NOTFOUND';\
         s.value = \(min(100, max(0, value)));\
@@ -151,37 +163,39 @@ public enum YouTubeMusicWebControls {
         return .failed
     }
 
-    /// 当前这条播放要不要走这里:播放器是浏览器、认出来在放 YouTube Music、而且这个浏览器配对过它。
-    public static func target(reportedBundleID: String?, webPlatformID: String?, isPaired: (String) -> Bool) -> Target? {
-        guard webPlatformID == platformID,
+    /// 当前这条播放要不要走这里:播放器是浏览器、认出来在放 YouTube Music、这个浏览器配对过它,而且有标题可比。
+    public static func target(reportedBundleID: String?, webPlatformID: String?, title: String?,
+                              isPaired: (String) -> Bool) -> Target? {
+        let title = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard webPlatformID == platformID, !title.isEmpty,
               let host = BrowserPositionProbe.probeTargetBundleID(forReported: reportedBundleID), !host.isEmpty,
               let family = BrowserAutomationPermission.family(forBundleID: host),
               isPaired(host) else { return nil }
-        return Target(bundleID: host, family: family)
+        return Target(bundleID: host, family: family, title: title)
     }
 
     /// 读三样;页面没找到、读不懂为 nil。会阻塞到 osascript 结束,别在主线程调。
     public static func readState(_ target: Target) -> State? {
-        run(target, js: readJS).flatMap(parseRead)
+        run(target, js: readJS(title: target.title)).flatMap(parseRead)
     }
 
     /// 切循环档,返回到没到。网页版没有随机这一档,传 `.shuffle` 回 false。会阻塞,别在主线程调。
     public static func setMode(_ mode: MusicPlaybackController.MusicPlaybackMode, _ target: Target) -> Bool {
         guard let attr = attribute(for: mode) else { return false }
-        return writeUntilSet(target) { setRepeatJS(attribute: attr, force: $0) }.map { Self.mode(fromAttribute: $0) == mode } ?? false
+        return writeUntilSet(target) { setRepeatJS(attribute: attr, title: target.title, force: $0) }.map { Self.mode(fromAttribute: $0) == mode } ?? false
     }
 
     /// 赞 / 取消赞,返回到没到。会阻塞,别在主线程调。
     public static func setLiked(_ value: Bool, _ target: Target) -> Bool {
-        writeUntilSet(target) { setLikeJS(liked: value, force: $0) }.map { liked(fromStatus: $0) == value } ?? false
+        writeUntilSet(target) { setLikeJS(liked: value, title: target.title, force: $0) }.map { liked(fromStatus: $0) == value } ?? false
     }
 
     /// 设音量(0~100),返回写没写进去。会阻塞,别在主线程调。
     public static func setVolume(_ value: Int, _ target: Target) -> Bool {
-        writeUntilSet(target) { setVolumeJS(value, force: $0) } != nil
+        writeUntilSet(target) { setVolumeJS(value, title: target.title, force: $0) } != nil
     }
 
-    /// 先只动在放的那页,一页都没在放再动第一页;回 `SET:` 后面的值,没写成为 nil。
+    /// 先只动在放的那页,一页都没在放再动第一个暂停页;两轮都只认放着 `target.title` 的页面。回 `SET:` 后面的值,没写成为 nil。
     private static func writeUntilSet(_ target: Target, js: (Bool) -> String) -> String? {
         for force in [false, true] {
             guard let raw = run(target, js: js(force)) else { return nil }

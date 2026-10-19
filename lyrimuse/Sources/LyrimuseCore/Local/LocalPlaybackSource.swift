@@ -3966,7 +3966,8 @@ public final class LocalPlaybackSource: ObservableObject {
         // 去问 YT Music 标签页只会 NOTFOUND 白烧一次往返);非浏览器 bundle 在 kickIfNeeded 里自然 no-op。
         if nextAd, !isSpotifyNative, spotifyWebVerdict != .ad {
             YouTubeMusicAdProbe.shared.kickIfNeeded(
-                bundleIdentifier: snapshot.bundleIdentifier, key: youTubeMusicAdKey)
+                bundleIdentifier: snapshot.bundleIdentifier, key: youTubeMusicAdKey,
+                title: snapshot.title, playing: snapshot.playing != false)
         }
         // 暂停着的浏览器播放:进度探测不跑,面板角标「是哪个网页平台」的证据另外补(见 identifyIfNeeded)。
         if snapshot.playing != true {

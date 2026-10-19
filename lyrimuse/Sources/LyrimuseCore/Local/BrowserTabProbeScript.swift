@@ -27,6 +27,9 @@ import Foundation
 //  * **暂停的标签页排在后面**:JS 在视频暂停时给结果加 `PAUSED:` 前缀,模板把它记成备选、接着找在播的那一页,
 //    都找完了才交回备选(去掉前缀)。开着好几个 YouTube Music 标签页时,排在前面的那页常常是暂停着、放着别的歌的,
 //    拿它的读数判广告、补专辑名、复核跳过都会错;只有一个标签页时结果跟原来一样。引擎的 browsertab.go 同一份。
+//    只剩暂停页时交回的备选不一定就是正在出声的那一页(普通 www.youtube.com 视频在放、YouTube Music 页暂停着),
+//    所以 YouTube Music 的探针和网页版控制在 JS 里先核对页面标题(`YouTubeMusicAdProbe.titleGuardJS`),快照在放时广告探针
+//    让暂停页只回一个认不出的 `STALE`(02 章决策 150)。
 //  * Chromium 系和 Safari 的 JS 注入命令**不同名**(实测坐实,不是同一个词的两种
 //    写法):Chromium 是 `execute (tab) javascript "…"`,Safari 是 `do JavaScript "…" in tab`。
 //    窗口/标签枚举语法(`count of windows`/`tabs of window`/`URL of tab`)两边一致。

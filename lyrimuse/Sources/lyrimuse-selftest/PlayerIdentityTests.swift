@@ -1309,24 +1309,24 @@ func runPlayerIdentityTests() {
         expectEqual(Y.parseSet("NOTFOUND"), .failed, "网页版: 找不到页面算没写成")
         expectEqual(Y.modeOptions.contains(.shuffle), false, "网页版: 随机是一次性动作、没有状态,随机键不显示")
         expectEqual(Y.modeOptions.canRepeat, true, "网页版: 有循环键")
-        let scripts = [Y.readJS, Y.setRepeatJS(attribute: "ALL", force: true), Y.setLikeJS(liked: true, force: false),
-                       Y.setVolumeJS(50, force: true)]
+        let scripts = [Y.readJS(title: "t"), Y.setRepeatJS(attribute: "ALL", title: "t", force: true),
+                       Y.setLikeJS(liked: true, title: "t", force: false), Y.setVolumeJS(50, title: "t", force: true)]
         expectEqual(scripts.contains { $0.contains("\"") }, false, "网页版: 注入的 JS 里没有双引号(要嵌进 AppleScript 字符串)")
-        expectEqual(Y.setLikeJS(liked: true, force: false).contains("if (true && v && v.paused) return 'PAUSED:SKIP';"), true,
+        expectEqual(Y.setLikeJS(liked: true, title: "t", force: false).contains("if (true && v && v.paused) return 'PAUSED:SKIP';"), true,
                     "网页版: 第一轮暂停的页面不动")
-        expectEqual(Y.setLikeJS(liked: true, force: false).contains("var b = lk.querySelector('#button-shape-like button');"), true,
+        expectEqual(Y.setLikeJS(liked: true, title: "t", force: false).contains("var b = lk.querySelector('#button-shape-like button');"), true,
                     "网页版: 点赞只认「赞」键")
-        expectEqual(Y.setLikeJS(liked: false, force: true).contains("lk.querySelector('button')"), false,
+        expectEqual(Y.setLikeJS(liked: false, title: "t", force: true).contains("lk.querySelector('button')"), false,
                     "网页版: 找不到「赞」键不拿渲染器里第一个按钮兜底(排在前面的是「踩」)")
-        expectEqual(Y.setVolumeJS(50, force: true).contains("if (false && v && v.paused)"), true, "网页版: 第二轮不管暂停也动")
-        expectEqual(Y.setVolumeJS(140, force: true).contains("s.value = 100;"), true, "网页版: 音量夹在 0~100")
-        expectEqual(Y.setVolumeJS(50, force: true).contains("s.dispatchEvent(new Event('change'"), true,
+        expectEqual(Y.setVolumeJS(50, title: "t", force: true).contains("if (false && v && v.paused)"), true, "网页版: 第二轮不管暂停也动")
+        expectEqual(Y.setVolumeJS(140, title: "t", force: true).contains("s.value = 100;"), true, "网页版: 音量夹在 0~100")
+        expectEqual(Y.setVolumeJS(50, title: "t", force: true).contains("s.dispatchEvent(new Event('change'"), true,
                     "网页版: 改音量条要发 change 事件,播放器和它记住的音量才一起变")
-        expectEqual(Y.target(reportedBundleID: "com.apple.WebKit.GPU", webPlatformID: "youtubeMusic", isPaired: { _ in true })?.bundleID,
+        expectEqual(Y.target(reportedBundleID: "com.apple.WebKit.GPU", webPlatformID: "youtubeMusic", title: "t", isPaired: { _ in true })?.bundleID,
                     "com.apple.Safari", "网页版: Safari 报的媒体进程换成 Safari 本体")
-        expectEqual(Y.target(reportedBundleID: "com.apple.Safari", webPlatformID: "spotifyWeb", isPaired: { _ in true }) == nil, true,
+        expectEqual(Y.target(reportedBundleID: "com.apple.Safari", webPlatformID: "spotifyWeb", title: "t", isPaired: { _ in true }) == nil, true,
                     "网页版: 浏览器里放的不是 YouTube Music 不走这里")
-        expectEqual(Y.target(reportedBundleID: "com.apple.Safari", webPlatformID: "youtubeMusic", isPaired: { _ in false }) == nil, true,
+        expectEqual(Y.target(reportedBundleID: "com.apple.Safari", webPlatformID: "youtubeMusic", title: "t", isPaired: { _ in false }) == nil, true,
                     "网页版: 没配对 YouTube Music 的浏览器不走这里")
     }
 

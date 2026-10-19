@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "ytmusicad")
 
 /// 「浏览器里这条 YouTube Music 播放是广告还是一首歌」的探针。
 ///
@@ -144,6 +147,9 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// `MPREb_` 开头,歌手链接是 `channel/UC…`,所以这一条既跟语言无关(不受 byline 里
     /// 「2026年」这类本地化后缀影响),也不会把歌手/播放量误当成专辑。
     ///
+    /// 页面放的不是这一首(标题对不上,见 `titleGuardJS`)回 `NOTFOUND`;`__TITLEGUARD__` / `__PLAYING__` 两个占位符
+    /// 由 `probeJS(title:playing:)` 填上,真正注入的是填过的那份。
+    ///
     /// 下面这一组(`probeJS` / `hostMarker` / `eventTimeoutSeconds` / `parse` /
     /// `buildAppleScript`)是 `public` **只为把这套判据的契约钉进 selftest**(selftest 是
     /// 独立 target,看不见 internal)。同 `BrowserPositionProbe.platformIDsWithSiteRules`
@@ -153,6 +159,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     var p = document.querySelector('#movie_player') || document.querySelector('.html5-video-player');\
     var hasTime = !!document.querySelector('.time-info');\
     if (!p && !hasTime) return 'NOTFOUND';\
+    __TITLEGUARD__\
     var cls = p ? (p.className || '') : '';\
     var vid = p ? p.querySelector('video') : null;\
     var adShowing = cls.indexOf('ad-showing') >= 0 ? '1' : '0';\
@@ -169,9 +176,46 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     if (h.indexOf('browse/MPREb') >= 0) { album = (bl[i].textContent || '').trim(); break; }\
     }\
     var out = adShowing + '|' + badge + '|' + bare + '|' + slot + '|' + album;\
-    return (vid && vid.paused) ? 'PAUSED:' + out : out;\
+    return (vid && vid.paused) ? 'PAUSED:' + (__PLAYING__ ? 'STALE' : out) : out;\
     })()
     """
+
+    /// 页面上正在放的是不是这一首:取 `navigator.mediaSession.metadata.title`(系统「正在播放」的标题就是页面经它报上来的),
+    /// 拿不到时退回 `document.title` 去掉「 | YouTube Music」/「 - YouTube Music」后缀(裸的「YouTube Music」当拿不到)。
+    /// 跟 `__WANT__`(当前快照的标题,`jsString` 拼成的表达式)比:去首尾空白、NFC、大小写不敏感,其余逐字相等。
+    /// 对不上或拿不到就回 `NOTFOUND`,模板接着找下一个标签页。
+    ///
+    /// 不比的话,同一浏览器里别处开着一个 YouTube Music 页(哪怕暂停在广告上),普通 www.youtube.com 视频也会拿那一页的
+    /// 读数判成歌、被安上那一页的专辑名(02 章决策 150)。探针、网页版控制(`YouTubeMusicWebControls`)共用这一段。
+    public static let titleGuardJS = """
+    var ms = navigator.mediaSession && navigator.mediaSession.metadata;\
+    var pt = (ms && ms.title) ? String(ms.title) : '';\
+    if (!pt) { pt = (document.title || '').trim(); var sfx = [' | YouTube Music', ' - YouTube Music']; for (var k = 0; k < sfx.length; k++) { if (pt.length > sfx[k].length && pt.slice(pt.length - sfx[k].length) === sfx[k]) { pt = pt.slice(0, pt.length - sfx[k].length); break; } } if (pt === 'YouTube Music') { pt = ''; } }\
+    var nz = function(x){ return String(x || '').trim().normalize('NFC').toLowerCase(); };\
+    if (!nz(pt) || nz(pt) !== nz(__WANT__)) return 'NOTFOUND';
+    """
+
+    /// 一段 Swift 字符串在 JS 里的写法:`String.fromCharCode(…)` 逐个 UTF-16 码元,空串是 `''`。
+    /// 不用引号字面量:标题里的引号、反斜杠嵌进 AppleScript 双引号串会被打坏(见 `probeJS` 头注)。
+    public static func jsString(_ text: String) -> String {
+        guard !text.isEmpty else { return "''" }
+        return "String.fromCharCode(" + text.utf16.map { String($0) }.joined(separator: ",") + ")"
+    }
+
+    /// `titleGuardJS` 填上要比的标题。
+    public static func titleGuard(expecting title: String) -> String {
+        titleGuardJS.replacingOccurrences(of: "__WANT__", with: jsString(title))
+    }
+
+    /// 实际注入的探针 JS:`probeJS` 填上这条播放的标题和在不在放。
+    ///
+    /// `playing` 为 true(快照说在放)时,暂停着的标签页回 `PAUSED:STALE`:模板仍把它记成备选,但交回去 `parse` 认不出、
+    /// 不进缓存 —— 在放的这一首不是那个暂停页放的,拿它判广告、补专辑都会错。快照也是暂停的(用户在 YouTube Music 里按了暂停)
+    /// 时照常交回暂停页的读数,不然最常见的「暂停中」会被当成没探到(16 章「网页类播放器的通用约定」第 1 条)。见 02 章决策 150。
+    public static func probeJS(title: String, playing: Bool) -> String {
+        probeJS.replacingOccurrences(of: "__TITLEGUARD__", with: titleGuard(expecting: title))
+            .replacingOccurrences(of: "__PLAYING__", with: playing ? "true" : "false")
+    }
 
     public static let hostMarker = "music.youtube.com"
     /// AppleScript `with timeout of N seconds` 的 N —— 把 Arc 那种"挂起不返回"变成一个
@@ -244,6 +288,9 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     private var inFlightKey: String?
     private var notFoundKey: String?
     private var notFoundAt: Date?
+    /// 按曲目只记一次的日志(`noteOutcomeOnce`)记到了哪首、记过哪几种。
+    private var loggedOutcomeKey: String?
+    private var loggedOutcomes: Set<String> = []
     /// 没读到(nil,不是 NOTFOUND)之后的退避,见 ProbeFailureBackoff。
     private var failureBackoff = ProbeFailureBackoff()
     /// 探针结果落地(缓存已更新)时的回调 —— `LocalPlaybackSource` 挂上"立刻 poll 一次",
@@ -440,7 +487,10 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// 宿主时,一次 AppleEvent 都不发起 —— 跟 `BrowserPositionProbe.kickIfNeeded` 的准入
     /// 判据一致(含那步"先把媒体代理进程解析成宿主 App"的别名解析,Safari 少了它会静默
     /// 一次都不探)。没在「网页播放器」里配对 YouTube Music 的浏览器同样不发起。
-    public func kickIfNeeded(bundleIdentifier: String?, key: String) {
+    ///
+    /// `title` / `playing` 是这条播放的标题和在不在放:页面上放的不是这个标题的标签页不答(`titleGuardJS`),快照在放时暂停着的
+    /// 标签页也不算(`probeJS(title:playing:)`)。
+    public func kickIfNeeded(bundleIdentifier: String?, key: String, title: String?, playing: Bool) {
         guard let hostBundleID = BrowserPositionProbe.probeTargetBundleID(forReported: bundleIdentifier),
               let family = BrowserAutomationPermission.family(forBundleID: hostBundleID)
         else { return }
@@ -474,8 +524,10 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
 
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self else { return }
-            let (reading, notFound) = Self.probeOnce(bundleID: hostBundleID, family: family)
+            let (reading, notFound) = Self.probeOnce(bundleID: hostBundleID, family: family,
+                                                     title: title ?? "", playing: playing)
             self.lock.lock()
+            self.noteOutcomeOnce(key: key, reading: reading, notFound: notFound)
             if self.inFlightKey == key { self.inFlightKey = nil }
             if reading == nil, notFound {
                 self.notFoundKey = key
@@ -516,13 +568,33 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
         inFlightKey = nil
         notFoundKey = nil
         notFoundAt = nil
+        loggedOutcomeKey = nil
+        loggedOutcomes = []
         lock.unlock()
     }
 
+    /// 没读到的几种结果,按曲目各记一次(`.notice` 才落盘;每拍都记会刷屏)。调用方持锁。
+    private func noteOutcomeOnce(key: String, reading: Reading?, notFound: Bool) {
+        guard reading == nil else { return }
+        let outcome = notFound ? "notfound" : "unreadable"
+        if loggedOutcomeKey != key {
+            loggedOutcomeKey = key
+            loggedOutcomes = []
+        }
+        guard loggedOutcomes.insert(outcome).inserted else { return }
+        let track = key.replacingOccurrences(of: "\u{0}", with: " / ")
+        if notFound {
+            logger.notice("ad probe: no YouTube Music tab is showing this track, rejected for now (track=\(track, privacy: .public))")
+        } else {
+            logger.notice("ad probe: no usable reading (script failed, timed out, or only a paused tab answered while playing) (track=\(track, privacy: .public))")
+        }
+    }
+
     /// 第二个值:脚本回的是 NOTFOUND(见 `notFoundRetryInterval`)。
-    private static func probeOnce(bundleID: String, family: BrowserAutomationPermission.Family) -> (Reading?, Bool) {
+    private static func probeOnce(bundleID: String, family: BrowserAutomationPermission.Family,
+                                  title: String, playing: Bool) -> (Reading?, Bool) {
         guard let out = BrowserTabProbeScript.run(
-            bundleID: bundleID, family: family, hostMarker: hostMarker, js: probeJS,
+            bundleID: bundleID, family: family, hostMarker: hostMarker, js: probeJS(title: title, playing: playing),
             eventTimeoutSeconds: eventTimeoutSeconds, processTimeout: processTimeout,
             label: "ytmusic-ad")
         else { return (nil, false) }

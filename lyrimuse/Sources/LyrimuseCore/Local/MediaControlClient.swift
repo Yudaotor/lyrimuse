@@ -2007,7 +2007,9 @@ public enum MediaControlClient {
         let key = YouTubeMusicAdProbe.trackKey(artist: snapshot.artist, title: snapshot.title)
         // 先踢一次(异步、不阻塞),再读缓存 —— 同步路径上绝不能等 AppleScript 往返,
         // 见 YouTubeMusicAdProbe 头注"异步 kick + 读缓存"那一节。
-        YouTubeMusicAdProbe.shared.kickIfNeeded(bundleIdentifier: bundleID, key: key)
+        // 带上标题和在不在放:只认页面上正放着这一首的 YouTube Music 标签页(02 章决策 150)。
+        YouTubeMusicAdProbe.shared.kickIfNeeded(bundleIdentifier: bundleID, key: key,
+                                                title: snapshot.title, playing: snapshot.playing != false)
         let verdict = YouTubeMusicAdProbe.shared.cachedVerdict(forKey: key)
         return YouTubeMusicAdProbe.gate(artist: snapshot.artist, verdict: verdict) == .reject
     }
