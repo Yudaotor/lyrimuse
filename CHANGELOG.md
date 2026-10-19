@@ -20,6 +20,282 @@ each version's git tag annotation and on its
   完整流程见 docs/releasing.md。
 -->
 
+## v1.11.0
+
+New / 新功能
+- Redesigned Settings, the menu bar panel, the lyrics window, the lyrics
+  manager and onboarding with Liquid Glass on macOS 26
+  在 macOS 26 上，设置、菜单栏面板、歌词窗口、歌词管理与首次引导全面改用液态玻璃设计
+- Added web lyrics (Beta): use a phone or tablet as a second screen
+  with controls, or show lyrics in OBS
+  新增网页歌词（Beta）：手机、平板可当副屏显示歌词并控制播放，也能作为 OBS 浏览器源叠加到直播画面
+- Lyrimuse now treats the same song across players and versions as
+  one, sharing lyrics, corrections and play counts
+  同一首歌在不同播放器、不同版本下会识别为同一首，共用歌词与人工修正，播放次数合并统计
+- Added Entries for This Song to the lyrics manager, with line-by-line
+  comparison and splitting
+  歌词管理新增「同曲条目」，可逐行对比各条目的歌词，识别错的可以拆分
+- Added LX Music and reAMP as built-in players
+  新增内置播放器洛雪音乐与 reAMP
+- Added Naver VIBE and Genie as lyric sources, filling gaps for Korean
+  songs
+  新增歌词源 Naver VIBE 与 Genie，补齐韩语歌曲的歌词，歌词源增至 14 个
+- Added Favorite for NetEase Cloud Music, QQ Music, Kugou Music, Amazon
+  Music and Soda Music
+  网易云音乐、QQ 音乐、酷狗音乐、Amazon Music 与汽水音乐支持喜欢
+- You can now control QQ Music, NetEase Cloud Music and Soda Music while
+  another app holds media focus
+  其他 App 占用媒体焦点时，也能控制 QQ 音乐、网易云音乐与汽水音乐的播放
+- Added hotkeys to hide or restore all lyrics, favorite the current song
+  and switch to the player
+  新增全局快捷键：隐藏 / 恢复全部歌词、喜欢当前歌曲、切换到播放器
+- The floating lyrics can now follow the screen of the active window
+  悬浮歌词可以跟随当前窗口所在的屏幕
+- Added options to hide the floating lyrics for instrumentals, songs
+  without lyrics or full-screen apps
+  悬浮歌词新增纯音乐 / 无歌词时隐藏、所在屏幕有 App 全屏时隐藏
+- The Dynamic Island can collapse its lyric row for instrumentals, and
+  its expanded view adds Favorite
+  灵动岛新增「纯音乐 / 无歌词时收起歌词行」，展开后新增喜欢按钮
+- You can now resize the floating lyrics with ⌘ and scroll, or with
+  hotkeys
+  现在可以按住 ⌘ 滚动，或用快捷键调整悬浮歌词字号
+- Added karaoke, font weight, sung color, alignment and HDR Highlight to
+  the full-size lyrics window
+  完整尺寸的歌词窗口新增逐字卡拉OK、字重、已唱颜色、对齐方式与「HDR 高亮」
+- The mini lyrics window can now hide when paused or in full screen,
+  and let clicks through when faded
+  迷你歌词窗口可在暂停或全屏时隐藏，淡化时点按可穿透到下方窗口
+- Added auto expand and collapse, a More page, lyrics color and dimmed
+  text brightness to Touch Bar lyrics
+  触控栏歌词新增自动展开与收起、「更多」页面，以及歌词颜色与暗部亮度
+- Discord can now show the current lyric line and buttons, with options
+  for layout and hiding the song
+  Discord 状态可显示当前这句歌词与按钮，排法可调，也可以不显示是哪首歌
+- Pushes can now go to several channels, with Send Test, Delivery
+  History and Resend, adding ntfy, Slack and webhooks
+  推送可同时发往多个渠道，可发送测试、查看推送记录并重发失败的推送，新增 ntfy、Slack 与通用 Webhook
+- Added a Light, Dark or Automatic appearance setting
+  新增外观设置：浅色、深色或跟随系统
+- Added a Deep Links card, and Shortcuts can now get the playing song
+  through x-callback-url
+  新增「深度链接」卡片，快捷指令可通过 x-callback-url 取回正在播放的歌曲
+- Long-press or right-click the Lyrics Manager tile in the menu bar
+  panel to search or re-match the song
+  菜单栏面板的「歌词管理」那一格长按或右键，可直接为当前歌曲搜索歌词或重新匹配
+- Added a feature list to About, plus links to the Discord and Telegram
+  communities
+  「关于」新增功能清单，以及 Discord 社区与 Telegram 群组入口
+- Click a day in the Last.fm heatmap to see that day's most played songs
+  点按 Last.fm 热力图中的某一天，可查看当天听得最多的歌曲
+- Added a lyre intro animation to the first-run guide
+  首次启动引导新增竖琴开场动画
+- Settings now says which folder stops the lyrics engine from starting
+  and how to fix it
+  歌词引擎无法启动时，设置会指出是哪个文件夹的问题并给出修复命令
+
+Improved / 改进
+- Cut the dmg download to about half its size and updates by about a
+  third
+  安装包体积减半，自动更新的下载量减少约三分之一
+- Entries of the same song share lyrics by default, which you can turn
+  off in Settings
+  同一首歌的各条目默认共用歌词，可在设置中关闭「同曲条目共用歌词」改为各自匹配
+- The lyrics engine writes over 80% less to disk during playback and
+  uses about a third less memory
+  播放时歌词引擎的磁盘写入减少八成以上，内存占用减少约三分之一
+- Reworked the menu bar right-click menu with a lyrics offset row, quick
+  toggles and a Help submenu
+  重做菜单栏右键菜单：顶部可直接调整歌词偏移，新增快捷开关，「反馈问题」与「重新运行设置引导」移进「帮助」子菜单
+- The lyrics offset and font size can now be adjusted in the floating
+  lyrics gear menu
+  悬浮歌词的齿轮菜单中可直接调整歌词偏移与字号
+- The menu bar panel now opens song, artist and album notes from its
+  header
+  菜单栏面板顶部可直接打开歌曲、歌手与专辑简介
+- Search Lyrics now opens one window from every entry, showing the
+  lyrics in use first for side-by-side comparison
+  各处的「搜索歌词」都打开同一扇独立窗口，先显示正在使用的歌词，并可与候选逐行对比
+- Improved lyrics matching for translated titles, character versions and
+  off-vocal tracks
+  提升歌词匹配：可找到以译名播放的歌曲，能区分角色版，并识别 Off Vocal 伴奏
+- Improved original title lookup for Chinese songs from Taiwan and Hong
+  Kong
+  提升台湾、香港地区中文歌曲原名的查找
+- More sources now find lyrics for songs few sources have, such as titles
+  with guest credits
+  少有来源收录的歌曲能从更多来源找到歌词，例如歌名带合唱嘉宾或数字写法不同的歌
+- Lyrics stored by players now share one Player's Own Lyrics row in the
+  source order
+  各播放器自带的本机歌词合并为歌词源顺序中的一行「播放器自带歌词」，可拖动调整位置
+- Lyric sources in Settings now show a description on hover and warn
+  when their lyric quality drops
+  设置中悬停歌词源可查看简介，某个源近期歌词质量下降时也会提示
+- Lyrics now switch less often once a song already has good lyrics
+  歌曲已有合适的歌词时，不再频繁换成其他版本
+- Lyrics for upcoming songs in NetEase Private FM and Play Next are now
+  ready in advance
+  网易云私人 FM 与「下一首播放」中的歌曲会提前准备好歌词
+- Each album now keeps one consistent cover, and motion artwork stays in
+  step with it
+  同一张专辑统一使用一张封面，动态封面与之保持一致
+- The lyrics manager's scan interval is now adjustable and shows an
+  estimated time for finding missing lyrics
+  歌词管理可调整扫描间隔，补全缺失歌词时会显示预计用时
+- Plays that may not have reached Last.fm are now checked and resent
+  automatically
+  可能没传到 Last.fm 的收听记录会自动核对并补交
+- Reworked the play count breakdown, with a summary and plays grouped by
+  month
+  重做「第 N 次」收听明细，新增汇总，并按月份分组列出每次播放
+- ListenBrainz now warns when your token is rejected and keeps plays it
+  could not send
+  ListenBrainz 令牌失效时会提醒，发送失败的收听记录会保留下来
+- Song, album and artist notes now show right away after a restart
+  歌曲、专辑与歌手简介在重启后可立即显示，无需重新联网获取
+- The floating lyrics control bar now fits its buttons, taking up less
+  space
+  悬浮歌词的控制条缩到与按钮一样大，不再多占空间
+- Double-click the lyrics window's title bar to zoom or minimize,
+  following your system setting
+  双击歌词窗口的标题栏可放大或最小化，跟随系统设置
+- Added hover and press feedback to menu bar panel tiles, glass menus
+  and other clickable items
+  菜单栏面板的格子、玻璃菜单等可点按处新增悬停与按下反馈
+- The Automation permission prompt now explains why it is needed in your
+  system language
+  「自动化」权限弹窗的用途说明改为跟随系统语言
+- Settings now explains when Full Disk Access or Accessibility stops
+  working and how to re-add Lyrimuse
+  完全磁盘访问或辅助功能权限失效时，设置会说明原因与重新添加的方法
+- Diagnostics exports now hide your Last.fm and ListenBrainz user names
+  and relay address
+  导出的诊断信息会隐去 Last.fm、ListenBrainz 用户名与中继地址
+- Sped up the Settings window, especially the lyrics library page
+  提升设置窗口的响应速度，歌词库页面尤为明显
+
+Fixed / 修复
+- Fixed credits, section markers and ISRC codes showing as lyrics in
+  some songs
+  修复部分歌曲把署名、段落标记与 ISRC 编码当作歌词显示的问题
+- Fixed podcasts, DJ voiceovers and audiobooks in Spotify, NetEase Cloud
+  Music and QQ Music being treated as songs
+  修复 Spotify、网易云音乐与 QQ 音乐中的播客、DJ 口播与有声书被当作歌曲处理的问题
+- Fixed lyrics timing in QQ Music, NetEase Cloud Music and Kugou Music at
+  track starts and after pauses
+  修复 QQ 音乐、网易云音乐与酷狗音乐在歌曲开头与暂停恢复后歌词时间不准的问题
+- Fixed Apple Music lyrics not advancing when the song duration is
+  unavailable
+  修复 Apple Music 读不到歌曲时长时歌词不走的问题
+- Fixed Dolby Atmos songs in Apple Music missing the spatial audio
+  lyrics offset outside radio
+  修复 Apple Music 播放杜比全景声歌曲时（电台除外），没有套用空间音频版歌词偏移的问题
+- Fixed Amazon Music lyrics timing after seeking, switching output
+  devices or playing a video in another app
+  修复 Amazon Music 在跳转进度、切换输出设备或其他 App 播放视频后歌词时间不准的问题
+- Fixed Amazon Music confusing versions with the same title and missing
+  covers for its local lyrics
+  修复 Amazon Music 混淆同名的不同版本，以及本机歌词缺少封面的问题
+- Fixed a paused Kaset taking over between songs, and Other Apps players
+  freezing during browser videos
+  修复切歌间隙中暂停着的 Kaset 抢走显示或控制，以及浏览器视频占用焦点时「其他 App」中的播放器歌词停住的问题
+- Fixed regular YouTube videos being shown as YouTube Music songs in the
+  same browser
+  修复同一浏览器中的普通 YouTube 视频被当作 YouTube Music 歌曲显示的问题
+- Fixed wrong or missing lyrics with Soda Music 2.9 and later, and
+  previews being detected as other songs
+  修复汽水音乐 2.9 及以后版本歌词出错或缺失，以及试听片段被识别成别的歌的问题
+- Fixed local libraries matching a version of the song from another album
+  修复本机曲库匹配到其他专辑中同名版本的问题
+- Fixed lyrics running about 30 seconds off when picked for another
+  version of the song
+  修复歌词按同一首歌的其他版本匹配、整首错开约 30 秒的问题
+- Fixed some songs getting truncated lyrics or another track's lyrics
+  from the same album
+  修复部分歌曲拿到不完整的歌词，或同专辑另一首歌歌词的问题
+- Fixed Priority Order picking the first source's lyrics even for the
+  wrong version
+  修复「顺序优先」模式下版本不对也选用排在最前的歌词源的问题
+- Fixed romanization missing from many lines when the source covers only
+  part of the song
+  修复来源只提供部分罗马音时，许多行缺少罗马音的问题
+- Fixed covers and song links coming from another album or version of
+  the song
+  修复封面与歌曲链接取自其他专辑或同名其他版本的问题
+- Fixed lyrics staying on Searching after a follow-up search found nothing
+  修复补搜没有结果后仍一直显示「搜索歌词中」的问题
+- Fixed the expanded Dynamic Island repeating the current line, controls
+  jumping on the last line and a text cursor
+  修复灵动岛展开后「下一句」与当前句重复、最后一句时控制按钮跳动，以及指针显示为文本光标的问题
+- Fixed duet lines sliding sideways during the floating lyrics line
+  transition
+  修复悬浮歌词换句动画中对唱歌词左右滑动的问题
+- Fixed the lyrics window not returning to an external display after it
+  reconnects
+  修复外接显示器重新连接后，歌词窗口不回到该显示器的问题
+- Fixed the menu bar panel reopening when closed from its icon, and
+  needing a click before it became active
+  修复点按菜单栏图标关闭面板时面板又重新打开，以及面板弹出后要先点一下才能操作的问题
+- Fixed menu bar lyrics freezing while a menu is open or a window is
+  being dragged
+  修复打开菜单或拖动窗口时，菜单栏歌词停住不走的问题
+- Fixed unsaved edits in the lyrics manager being lost when switching
+  songs or using its menus
+  修复歌词管理中切换歌曲或使用菜单时未保存的修改丢失的问题
+- Fixed lyrics manager titles upside down, wrong sorting, split albums
+  and new songs stuck on Searching
+  修复歌词管理中歌名上下颠倒、更新时间排序不对、同一张专辑被拆成两组，以及新歌停在「搜索歌词中」的问题
+- Fixed duplicate entries for the same recording with slightly different
+  lengths
+  修复同一段录音因时长略有差异被存成两条的问题
+- Fixed lyrics of songs without an artist being left out of lyric
+  backups
+  修复没有歌手信息的歌曲，歌词没有进入歌词备份的问题
+- Fixed Last.fm Now Playing lagging after quick skips, smart matching
+  picking obscure entries and plays lost on restarts
+  修复快速切歌后 Last.fm「正在听」显示成上一首、智能匹配改投到冷门条目，以及歌词引擎中途重启时收听没有记录的问题
+- Fixed Discord and Web Push briefly showing the previous song when a new
+  one starts from pause
+  修复暂停状态下开始播放另一首时，Discord 与网页推送短暂显示上一首的问题
+- Fixed ListenBrainz plays being dropped while the service was having
+  problems
+  修复 ListenBrainz 服务异常期间收听记录被丢弃的问题
+- Fixed Discord briefly showing a playing card after pausing and keeping
+  the last line too long
+  修复 Discord 暂停后短暂显示为播放中，以及最后一句歌词一直挂到歌曲结束的问题
+- Fixed missed daily reports never being sent and checks running late
+  after the Mac slept
+  修复每日听歌报告发送失败后不再补发，以及 Mac 睡眠后各项检查被推迟的问题
+- Fixed beta updates showing up a day after they were released
+  修复测试版更新晚一天才收到的问题
+- Fixed the Touch Bar's Lyrimuse button being replaced by Now Playing
+  after a song change
+  修复换歌后触控栏上的 Lyrimuse 按钮被系统「正在播放」顶掉的问题
+
+| Chip / 芯片 | dmg | zip |
+|---|---|---|
+| **Apple Silicon** (M1 and later, recommended) / **Apple M 系列**（推荐） | [Lyrimuse-v1.11.0-macos.dmg](https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos.dmg) | [Lyrimuse-v1.11.0-macos.zip](https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos.zip) |
+| **Intel** / **Intel 芯片**（也能在 Apple Silicon 上跑，但体积更大、没必要） | [Lyrimuse-v1.11.0-macos-intel.dmg](https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos-intel.dmg) | [Lyrimuse-v1.11.0-macos-intel.zip](https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos-intel.zip) |
+
+Not sure which one? Check your chip under **About This Mac**.
+不确定该下哪个？打开「关于本机」看芯片是 Apple M… 还是 Intel Core…
+
+Contributors / 贡献者
+- Thanks to @wutongyuonce for their contribution, letting QQ Music and
+  NetEase Cloud Music be controlled while another app holds media
+  focus (#45, #46)
+  感谢 @wutongyuonce 的贡献，实现其他 App 占用媒体焦点时控制 QQ 音乐与网易云音乐（#45、#46）
+- Thanks to @Sowevo for their first contribution, fixing Apple Music
+  lyrics when the duration is unavailable (#47)
+  感谢 @Sowevo 的首次贡献，修复 Apple Music 读不到歌曲时长时歌词不走的问题（#47）
+- Thanks to @renbaoshuo for their first contribution, fixing floating
+  lyrics behavior switches not updating (#50)
+  感谢 @renbaoshuo 的首次贡献，修复悬浮歌词行为开关点按后状态不更新的问题（#50）
+
+488 commits since v1.10.0.
+
+**Full Changelog**: https://github.com/Yudaotor/lyrimuse/compare/v1.10.0...v1.11.0
+
 ## v1.10.0
 
 New / 新功能
