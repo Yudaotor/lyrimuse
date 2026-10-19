@@ -476,8 +476,8 @@ func main() {
 	startArtworkSweep(ctx)
 	// 设备封面目录里没人引用、一阵子没用过的图删掉,指向本机没有的设备封面的字段清掉(deviceartworkprune.go),一天一次。
 	startDeviceArtworkPrune(ctx)
-	// 存量单曲的 Apple 链接按新的单曲判据重核一遍(applelinkrecheck.go),要联网,同样放后台。
-	startAppleSingleLinkRecheck(ctx)
+	// 存量 Apple 链接(目录锚点给的除外)按现在挑链接的规则重核一遍(applelinkrecheck.go),要联网,同样放后台。
+	startAppleLinkRecheck(ctx)
 	// 存量里从本机曲库记下、现在不认的曲目 id 清掉(locallibrarylinks.go),要读别的 App 的本机数据,同样放后台。
 	startLocalLibraryLinkRecheck(ctx)
 	// 存量里从同名另一条写法借来的 Amazon ISRC 拿掉(amazonborrowedisrc.go),要读 Amazon 的本机目录缓存,同样放后台。

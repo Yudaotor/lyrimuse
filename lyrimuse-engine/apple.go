@@ -347,19 +347,29 @@ func searchAppleMusicMatch(ctx context.Context, artist, title, album string, dur
 // pickAppleMusicMatch 是 searchAppleMusicMatch 的挑选逻辑,拆成纯函数好让上面那道身份闸
 // 能被回归测试锁住(同 pickAppleTitleSearchIdentities / pickMusixmatchTrackRow 的先例)。
 // results 按商店查询顺序拼接,所以"第一条标题匹配"仍然是 CN 优先,跟拆分之前一致。
+//
+// 时长只排先后、不拦:专辑分一样的几条取时长近的(同一张专辑里的正曲和 Reprise、同一首的几个版本);没有专辑证据时
+// 取头一条时长对得上(isrcDurationFits)的,都对不上才取头一条。本地时长常取自 MV / YouTube 那一版,跟 Apple 的
+// 录音室版差几十秒也是同一首,按时长硬拦会丢掉这批链接。见 03 章决策 64。
 func pickAppleMusicMatch(results []itunesResult, artist, title, album string, durationSecs float64) (appleMusicMatch, bool) {
 	var titleFallback appleMusicMatch
-	bestScore := 0
+	fallbackFits := false
+	bestScore, bestDiff := 0, math.Inf(1)
 	var best appleMusicMatch
 	for _, r := range results {
 		if !appleTitleResultOK(r, artist, title, album, durationSecs) {
 			continue
 		}
-		if titleFallback.url == "" {
-			titleFallback = appleMatchFromResult(r) // CN-first first title match
+		secs := r.TrackTimeMillis / 1000
+		if fits := isrcDurationFits(durationSecs, secs); titleFallback.url == "" || (fits && !fallbackFits) {
+			titleFallback, fallbackFits = appleMatchFromResult(r), fits // CN-first first title match
 		}
-		if sc := albumScore(r.CollectionName, album); sc > bestScore {
-			bestScore, best = sc, appleMatchFromResult(r) // best album match
+		diff := math.Inf(1)
+		if durationSecs > 0 && secs > 0 {
+			diff = math.Abs(secs - durationSecs)
+		}
+		if sc := albumScore(r.CollectionName, album); sc > bestScore || (sc > 0 && sc == bestScore && diff < bestDiff) {
+			bestScore, bestDiff, best = sc, diff, appleMatchFromResult(r) // best album match
 		}
 	}
 	if best.url != "" {
@@ -370,11 +380,22 @@ func pickAppleMusicMatch(results []itunesResult, artist, title, album string, du
 	return withAppleCredit(titleFallback, results, artist, title, album, durationSecs), false
 }
 
-// appleTitleResultOK:一条结果能不能当本曲的候选:有曲目页、曲名对得上,过同名不同人的闸(iTunes 对本商店没有的歌
-// 会回模糊命中,见 appleResultIdentityOK)。
+// appleTitleResultOK:一条结果能不能当本曲的候选:有曲目页、曲名对得上,不是另一个版本(appleOtherVersion),过同名
+// 不同人的闸(iTunes 对本商店没有的歌会回模糊命中,见 appleResultIdentityOK)。
 func appleTitleResultOK(r itunesResult, artist, title, album string, durationSecs float64) bool {
-	return r.TrackViewURL != "" && looseContains(r.TrackName, title) &&
+	return r.TrackViewURL != "" && looseContains(r.TrackName, title) && !appleOtherVersion(title, album, r.TrackName, r.CollectionName) &&
 		appleResultIdentityOK(r.ArtistName, r.CollectionName, artist, album, title, r.TrackTimeMillis/1000, durationSecs)
+}
+
+// appleOtherVersion:Apple 那一轨(曲名 trackName、专辑 collection)是本地这首(title、album)的另一个版本:两边曲名的
+// 版本词对不上(versionTagsMismatch),把两边专辑名的版本词一起算进来也对不上;两个曲名去掉空格标点后一字不差的不算
+// (「阿拉斯加海湾 伴奏」对「阿拉斯加海湾 (伴奏)」,版本词不带括号时认不出来)。曲名闸只看包含,同一张专辑里的
+// 「Solo (Reprise)」、伴奏带、Live、Remix 都包含曲名,要靠这一道分开。专辑名只用来对账、不单独拿来判:演唱会专辑上的
+// 曲目有的写「(Live)」有的不写,「Be Alright (Acoustic) - Single」那种单曲碟里也收着原版。版本词对不上的时长再近
+// 也不认:伴奏带跟原曲常常一样长。纯函数。见 03 章决策 64。
+func appleOtherVersion(title, album, trackName, collection string) bool {
+	return normLoose(title) != normLoose(trackName) && versionTagsMismatch(title, "", trackName, "") &&
+		versionTagsMismatch(title, album, trackName, collection)
 }
 
 func appleMatchFromResult(r itunesResult) appleMusicMatch {

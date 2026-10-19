@@ -485,7 +485,7 @@ func amllSpeakerPrefixes(agents []ttmlAgent) map[string]string {
 	if len(persons) < 2 {
 		return out
 	}
-	sort.Strings(persons) // v1 < v2 < …,与 TTML 里的声明顺序一致
+	slices.SortFunc(persons, compareTTMLAgentIDs) // v1 < v2 < … < v10,与 TTML 里的声明顺序一致
 	for i, id := range persons {
 		if i >= 8 { // anonymousMarkers 只到 v8,超出的不标(极罕见)
 			break
@@ -493,6 +493,33 @@ func amllSpeakerPrefixes(agents []ttmlAgent) map[string]string {
 		out[id] = fmt.Sprintf("v%d", i+1)
 	}
 	return out
+}
+
+// compareTTMLAgentIDs:演唱者 xml:id 的先后。末尾的数字按大小比(v2 在 v10 前面,按字面比 v10 会排到 v2 前面,超过 9 位
+// 演唱者时编号整体错位),前面那段按字面比;都一样时按整串字面比。见 09 章决策 302。
+func compareTTMLAgentIDs(a, b string) int {
+	ap, an := splitTrailingDigits(a)
+	bp, bn := splitTrailingDigits(b)
+	if c := strings.Compare(ap, bp); c != 0 {
+		return c
+	}
+	an, bn = strings.TrimLeft(an, "0"), strings.TrimLeft(bn, "0")
+	if c := len(an) - len(bn); c != 0 {
+		return c
+	}
+	if c := strings.Compare(an, bn); c != 0 {
+		return c
+	}
+	return strings.Compare(a, b)
+}
+
+// splitTrailingDigits 把 s 拆成前段和末尾那串 ASCII 数字(没有就是空串)。
+func splitTrailingDigits(s string) (prefix, digits string) {
+	i := len(s)
+	for i > 0 && s[i-1] >= '0' && s[i-1] <= '9' {
+		i--
+	}
+	return s[:i], s[i:]
 }
 
 // ttmlLineAux:一行的附属内容。translations 按文档顺序一段一条,一行可能有几种语言。
