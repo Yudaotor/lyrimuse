@@ -213,6 +213,14 @@ func runOpsDiagnosticsTests() {
         expectEqual(prompt.contains("guard await ConfigPortability.importData(data) else {")
                     && prompt.contains("let failed = ConfigPortability.lastImportFailures"), true,
                     "设置备份(契约): iCloud 首启导入看结果,失败不重启、部分失败先说再重启")
+        // 发布版写过、现在没人读的偏好键登记成死键:启动时删掉,导出、镜像、导入都跳过。
+        let obsolete = portability.components(separatedBy: "static let obsoleteDefaultsKeys: Set<String> = [").dropFirst().first?
+            .components(separatedBy: "\n    ]\n").first ?? ""
+        let retired = ["np:lastfmOnThisDayCollapsed", "np:lastfmFootprintCollapsed", "np:lastfmHeatmapCollapsed",
+                       "np:lastfmHoursCollapsed", "np:lastfmRegionsCollapsed", "np:lastfmRegionsSpan",
+                       "np:debugHUD", "np:menuBarLyricsScroll", "np:notchShowArtwork"]
+        expectEqual(retired.filter { !obsolete.contains("\"\($0)\",") }, [],
+                    "设置备份(契约): 发布版留下的死键都登记进 obsoleteDefaultsKeys")
     }
 
     // ---- writeSecurely(含凭据的文件必须落成 0600) ----

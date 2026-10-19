@@ -193,6 +193,18 @@ enum ConfigPortability {
         "np:lyricsManagerColArtist",
         "np:lyricsManagerColAlbum",
         "np:lyricsManagerColSource",
+        // Last.fm 页各卡的折叠状态和「足迹」的时间跨度(v1.10.0 及以前):页面改版后卡片不再折叠、跨度不再记。
+        "np:lastfmOnThisDayCollapsed",
+        "np:lastfmFootprintCollapsed",
+        "np:lastfmHeatmapCollapsed",
+        "np:lastfmHoursCollapsed",
+        "np:lastfmRegionsCollapsed",
+        "np:lastfmRegionsSpan",
+        // 帧率浮层的隐藏开关(v1.4.0 ～ v1.8.0),浮层整个撤掉了。
+        "np:debugHUD",
+        // 菜单栏歌词滚动、灵动岛显示封面这两个开关(v1.3.0),开关撤掉了。
+        "np:menuBarLyricsScroll",
+        "np:notchShowArtwork",
     ]
 
     /// 导出/导入都要跳过的键 = 机器专属的 + 已经死掉的。

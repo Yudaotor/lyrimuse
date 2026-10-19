@@ -64,6 +64,9 @@ if [ -f scripts/gen-feature-list.py ]; then
   /usr/bin/python3 scripts/gen-feature-list.py --check
 fi
 
+step "发布版写过的偏好键删掉后登记成死键"
+/usr/bin/python3 -B scripts/check-retired-defaults.py --repo "${PRIVATE_COMMIT_REPO:-.}"
+
 step "Localizable.xcstrings 能解析"
 /usr/bin/python3 -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8"))' \
   lyrimuse/Localization/Localizable.xcstrings
