@@ -63,7 +63,7 @@ struct TouchBarLyricsRows: View {
     var body: some View {
         SettingsRowGroup {
             VStack(spacing: 0) {
-                // 四选一同灵动岛 / 菜单栏的「副行」(同一个枚举、同一套显示名),各存各的键,默认不显示。
+                // 四选一同灵动岛 / 菜单栏的「副行」(同一个枚举、同一套显示名),各存各的键,默认「下一句」。
                 SettingsRow(icon: "text.append", title: L10n.t("副行"),
                             help: L10n.t("在主行下方增加一行：译文和读音对应当前句，「下一句」为即将演唱的歌词。开启后两行字号固定为 14pt / 11pt，「字号」不生效，主行也不再提前切换到下一句；副行空间不足时，按该句时长横向滚动")) {
                     SettingsGlassMenuPicker(
@@ -204,7 +204,7 @@ struct TouchBarLayoutRows: View {
                 SettingsToggleTile(icon: "ellipsis.circle", title: L10n.t("显示「更多」键"),
                                    help: L10n.t("点按后切换到播放进度、歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示"),
                                    isOn: $settings.touchBarShowsMoreKey)
-                // 占满整条触控栏要连系统的功能栏一起收起,展开期间够不着亮度、音量,所以默认关。
+                // 占满整条触控栏要连系统的功能栏一起收起,展开期间够不着亮度、音量;默认开(`AppSettings.defaultTouchBarHidesControlStrip`)。
                 SettingsToggleTile(icon: "arrow.left.and.right", title: L10n.t("展开时隐藏功能栏"),
                                    help: L10n.t("歌词占满整条触控栏；需要调节亮度、音量等时，请先点按左端的 ✕ 收起歌词"),
                                    isOn: $settings.touchBarHidesControlStrip)
@@ -267,7 +267,7 @@ struct TouchBarSidePicker: View {
 
 // MARK: - 恢复默认
 
-/// 「重置 ▾」和抽屉里「恢复默认」共用的动作:四组十四项回到默认值,总开关不动。默认值跟 `AppSettings.init()` 的
+/// 「重置 ▾」和抽屉里「恢复默认」共用的动作:四组十六项回到默认值,总开关不动。默认值跟 `AppSettings.init()` 的
 /// fallback 读同一组常量(`AppSettings.defaultTouchBarXxx`,字号是 Core 的 `TouchBarLyricsStyle.defaultFontSize`)。
 @MainActor
 enum TouchBarStyleDefaults {
