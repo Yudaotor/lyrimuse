@@ -1518,7 +1518,6 @@
 "未获得完全磁盘访问权限，无法读取 %@ 的本机歌词" = "No Full Disk Access; %@’s local lyrics cannot be read";
 "未获得辅助功能权限，%@ 不显示喜欢按钮" = "Accessibility permission is missing: %@ has no Like button";
 "未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Accessibility permission is missing: %@ has no Like button, and can’t pause, resume or skip tracks without system media focus";
-"未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮" = "No Accessibility permission; %@’s shuffle, repeat and Like buttons are hidden";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去焦点时也无法控制播放" = "No Accessibility permission; %@’s shuffle, repeat and Like buttons are hidden, and playback can’t be controlled while focus is elsewhere";
 "未获得辅助功能权限，%@ 不显示随机、循环按钮" = "Accessibility permission is missing: %@ has no shuffle or repeat buttons";
 "未获得辅助功能权限，无法校准 %@ 的播放进度" = "No Accessibility permission; %@’s progress cannot be calibrated";
@@ -2178,13 +2177,11 @@
 "请尝试其他筛选条件或关键词" = "Try different filters or search terms";
 "请开启此权限，以便准确识别正在播放的歌曲，并可在歌词上直接控制播放" = "Turn this on so the playing song is recognized correctly, with playback controls right on the lyrics";
 "请开启此权限，以便直接使用本机已有的歌词，并预先准备下一首歌曲" = "Turn this on to use lyrics already on this Mac and prepare the next song in advance";
-"请开启此权限，以提高%@自动连播时播放进度的准确性，并显示%@的随机、循环与喜欢按钮" = "Turn this on to keep %@'s playback position accurate during autoplay and show shuffle, repeat and Like buttons for %@";
 "请开启此权限，以提高%@自动连播时播放进度的准确性，并显示%@的随机、循环与喜欢按钮及失去焦点时的播放控制" = "Turn this on to keep %@’s playback position accurate during autoplay, and to show the shuffle, repeat and Like buttons for %@ and control playback without the system media focus";
 "请开启此权限，以提高%@自动连播时播放进度的准确性，并显示随机、循环按钮" = "Turn this on to keep %@'s playback position accurate during autoplay and show its shuffle and repeat buttons";
 "请开启此权限，以提高播放进度的准确性，并可在歌词上直接控制播放" = "Turn this on for more accurate playback progress and playback controls right on the lyrics";
 "请开启此权限，以显示%@的喜欢按钮" = "Enable this permission to show the Like button for %@";
 "请开启此权限，以显示%@的喜欢按钮，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首" = "Enable this permission to show the Like button for %@ and to pause, resume and skip tracks when it loses system media focus";
-"请开启此权限，以显示%@的随机、循环与喜欢按钮" = "Turn this on to show shuffle, repeat and Like buttons for %@";
 "请开启此权限，以显示%@的随机、循环与喜欢按钮，并在失去系统媒体焦点时控制播放" = "Turn this on to show the shuffle, repeat and Like buttons for %@ and control playback when it loses the system media focus";
 "请开启此权限，以显示%@的随机、循环按钮" = "Enable this permission to show the shuffle and repeat buttons for %@";
 "请打开 Discord" = "Discord needs to be open";

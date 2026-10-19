@@ -613,6 +613,7 @@ struct LyricsManagerSweepCard: View {
     let fallbackSecondsPerTrack: Double
     let onStop: () -> Void
     @State private var showDetail = false
+    @State private var hoveringCard = false
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -641,9 +642,13 @@ struct LyricsManagerSweepCard: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(shape.fill(Color(nsColor: .textBackgroundColor).opacity(0.92)))
+        // 正在匹配时整张卡点了出详情:悬停压一层淡色。底色近乎不透明,淡底只能叠在上面。
+        .overlay(shape.fill(Color.primary.opacity(isRunning && hoveringCard ? 0.05 : 0)).allowsHitTesting(false))
         .overlay(shape.strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
         .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
         .contentShape(shape)
+        .onHover { hoveringCard = $0 }
+        .animation(.easeOut(duration: 0.12), value: hoveringCard)
         .onTapGesture {
             if case .running = phase { showDetail.toggle() }
         }

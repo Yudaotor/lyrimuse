@@ -30,7 +30,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Apple Music's own lyrics](#feature-apple-music-lyrics) | Settings › Lyrics › Sources › Lyrics Sources |
 | [Use the lyrics your player already saved](#feature-player-local-lyrics) | Settings › Player › Permissions & Services › Full Disk Access |
 | [Lock hand-picked lyrics](#feature-lock-hand-picked) | Settings › Lyrics › Sources › Lock Hand-Picked Lyrics |
-| [Machine translation when there is none](#feature-machine-translation) | Settings › Lyrics › Translation › Translate When None Is Provided |
+| [Translate when none is provided](#feature-machine-translation) | Settings › Lyrics › Translation › Translate When None Is Provided |
 | [Split long lines, join short ones](#feature-split-join-lines) | Settings › Lyrics › Adjust › Split Long Lines |
 | [Notch lyrics](#feature-notch-lyrics) | Settings › Lyrics Display › Notch › Notch Lyrics |
 | [Menu bar lyrics](#feature-menu-bar-lyrics) | Settings › Lyrics Display › Menu Bar › Menu Bar Lyrics |
@@ -63,7 +63,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 
 <a id="feature-lyric-sources"></a>
 
-### Fourteen lyric sources, searched for you
+### Fourteen lyric sources, searched automatically
 
 NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie and Apple Music. Each source can be turned off, reordered, or tested to see whether it is reachable right now.
 
@@ -185,7 +185,7 @@ Translations that come with the lyrics appear under each line. NetEase Cloud Mus
 
 <a id="feature-machine-translation"></a>
 
-### Machine translation when there is none
+### Translate when none is provided
 
 When no source has a translation, the lyrics are translated by machine. On macOS 15 or later with the language downloaded, Apple Translation does it on your Mac and the lyrics stay there; otherwise the lines to translate are sent to Google Translate, then MyMemory. Translation languages are downloaded from the same card.
 
@@ -345,7 +345,7 @@ When nothing is playing, the lyrics window shows the last song with a line from 
 
 <a id="feature-look"></a>
 
-### Your look
+### Appearance
 
 Font (the system's, or your own .ttf / .otf), size, weight, text and background colours, outline and frosted glass. Floating lyrics come with colour themes and can save your own; text colour can follow the album artwork. Shortcuts, or scrolling over the lyrics with ⌘ held (mouse wheel or two-finger swipe), can also make floating lyrics bigger or smaller on the fly.
 
@@ -592,7 +592,7 @@ Connect Last.fm in one click, no token to copy. See today's, this week's and all
 
 <a id="feature-scrobble-rules"></a>
 
-### Scrobble rules are yours
+### Custom scrobble rules
 
 Count a play at 50%, 75%, 90% or only at the end; decide on tracks under 30 seconds; by default featured artists, Chinese script variants and suffixes like “- Single” are matched to Last.fm's catalogue entry, or send everything as is; leave any player out of Last.fm entirely.
 

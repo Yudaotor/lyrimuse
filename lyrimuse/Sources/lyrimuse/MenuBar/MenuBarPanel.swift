@@ -1525,9 +1525,14 @@ private struct PanelProgressSection: View {
     private struct TapToReset: ViewModifier {
         let enabled: Bool
         let action: () -> Void
+        @State private var hovering = false
 
         func body(content: Content) -> some View {
             content
+                // 能归零时悬停垫一层淡底,深浅同 SettingsGlassHoverButtonStyle。
+                .background(Capsule().fill(Color.primary.opacity(enabled && hovering ? 0.06 : 0)))
+                .onHover { hovering = $0 }
+                .animation(.easeOut(duration: 0.12), value: hovering)
                 .contentShape(Rectangle())
                 .onTapGesture { if enabled { action() } }
                 .modifier(OptionalHelp(text: enabled ? L10n.t("点按归零") : nil))

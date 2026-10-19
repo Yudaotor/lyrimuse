@@ -159,6 +159,7 @@ struct LastfmHeatmapView: View {
                             } else if let day = week.days[row], let n = stats.dailyCounts[day.key], n > 0 {
                                 cellShape(fill: color(for: n, thresholds: thresholds, levels: levels))
                                     .help("\(day.label) · \(n.formatted()) \(L10n.t("次"))\n\(L10n.t("点按查看当天收听最多的歌曲"))")
+                                    .modifier(HeatmapCellHover())
                                     .contentShape(Rectangle())
                                     .onTapGesture {
                                         openedDay = OpenedDay(key: day.key, label: day.label, column: column, row: row)
@@ -359,5 +360,18 @@ private struct HeatmapDayPopover: View {
         }
         .buttonStyle(.glassListRow)
         .help(entry.lastPlayed.map { String(format: L10n.t("当天最后一次收听：%@"), LastfmStatsSection.absolute($0)) } ?? "")
+    }
+}
+
+/// 能点开当天记录的格子:悬停时描一圈边。格子只有几 pt 见方,铺淡底看不出来。
+private struct HeatmapCellHover: ViewModifier {
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .strokeBorder(Color.primary.opacity(hovering ? 0.55 : 0), lineWidth: 1))
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.12), value: hovering)
     }
 }

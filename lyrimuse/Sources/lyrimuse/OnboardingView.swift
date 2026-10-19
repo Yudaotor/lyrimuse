@@ -19,6 +19,7 @@ struct OnboardingView: View {
     @ObservedObject private var features = FeatureSettingsStore.shared
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.openSettings) private var openSettings
+    @State private var hoveredDot: Int?
     @State private var step = 0
     // 「自动化」权限的状态/请求跟设置页共用同一个模型 —— 需要这份权限的播放器不止一个,
     // 每家一套"请求中 / 超时 / 已确定"状态机分散在两个界面里必然漂。见那个类的头注。
@@ -433,13 +434,18 @@ struct OnboardingView: View {
             HStack(spacing: 0) {
                 ForEach(0..<steps.count, id: \.self) { i in
                     let dotWidth: CGFloat = i == step ? 16 : 6
+                    // 能跳过去的点悬停时加深一档,看得出能点。
+                    let hot = hoveredDot == i && i != step && OnboardingFlow.canJump(toDot: i, furthest: furthestStep)
                     Capsule()
                         .fill(i == step ? Color.accentColor
-                              : i <= furthestStep ? Color.accentColor.opacity(0.35)
-                              : Color.secondary.opacity(0.3))
+                              : i <= furthestStep ? Color.accentColor.opacity(hot ? 0.6 : 0.35)
+                              : Color.secondary.opacity(hot ? 0.5 : 0.3))
                         .frame(width: dotWidth, height: 6)
                         .frame(width: dotWidth + 6, height: 12)
                         .contentShape(Rectangle())
+                        .onHover { inside in
+                            if inside { hoveredDot = i } else if hoveredDot == i { hoveredDot = nil }
+                        }
                         .onTapGesture {
                             if OnboardingFlow.canJump(toDot: i, furthest: furthestStep) { goTo(i) }
                         }

@@ -1224,6 +1224,7 @@ struct LyricsSearchSheet: View {
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 10)
+        .settingsHoverRow(cornerRadius: 13, inset: 0)
         .background(shape.fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear))
         .contentShape(shape)
         // 整行可点;分数旁的问号自己接点击(QuickHelpLabel),子视图的手势先于这里。
