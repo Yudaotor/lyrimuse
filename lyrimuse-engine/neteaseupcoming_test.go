@@ -26,12 +26,15 @@ func writeTestNeteaseQueue(t *testing.T, songs []testNeteaseSong) string {
 	if err := os.WriteFile(path, testNeteaseQueueBody(t, songs), 0o644); err != nil {
 		t.Fatalf("写测试文件: %v", err)
 	}
+	// 之前起的预取可能还在读队列路径,等它读完再换(见 upcomingQueueReads)。
+	upcomingQueueReads.Wait()
 	old := neteaseUpcomingOverride
 	neteaseUpcomingOverride = path
 	neteasePlayOrderMu.Lock()
 	neteasePlayOrderLast = neteasePlayOrder{}
 	neteasePlayOrderMu.Unlock()
 	t.Cleanup(func() {
+		upcomingQueueReads.Wait()
 		neteaseUpcomingOverride = old
 		neteasePlayOrderMu.Lock()
 		neteasePlayOrderLast = neteasePlayOrder{}

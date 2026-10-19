@@ -186,11 +186,24 @@ func TestJyutpingDictsLoadLazily(t *testing.T) {
 	}
 }
 
+// setJyutpingIdleRelease 在锁里换空闲释放时长,用例结束在锁里换回:定时器的回调持锁读它,别的用例排下的定时器可能
+// 正好在这时到点。
+func setJyutpingIdleRelease(t *testing.T, d time.Duration) {
+	t.Helper()
+	jyutpingDictsMu.Lock()
+	old := jyutpingDictsIdleRelease
+	jyutpingDictsIdleRelease = d
+	jyutpingDictsMu.Unlock()
+	t.Cleanup(func() {
+		jyutpingDictsMu.Lock()
+		jyutpingDictsIdleRelease = old
+		jyutpingDictsMu.Unlock()
+	})
+}
+
 // 词典空闲 jyutpingDictsIdleRelease 之后放掉,下次用到重新解析,结果照旧。
 func TestJyutpingDictsReleaseWhenIdle(t *testing.T) {
-	old := jyutpingDictsIdleRelease
-	jyutpingDictsIdleRelease = 20 * time.Millisecond
-	t.Cleanup(func() { jyutpingDictsIdleRelease = old })
+	setJyutpingIdleRelease(t, 20*time.Millisecond)
 	jyutpingDictsMu.Lock()
 	if jyutpingDictsRelease != nil {
 		jyutpingDictsRelease.Stop()
@@ -227,9 +240,7 @@ func TestJyutpingDictsReleaseWhenIdle(t *testing.T) {
 
 // 刚用过时到点检查:还没空闲满 jyutpingDictsIdleRelease,不放掉,排到满的那一刻再看。
 func TestJyutpingDictsKeptWhileRecentlyUsed(t *testing.T) {
-	old := jyutpingDictsIdleRelease
-	jyutpingDictsIdleRelease = time.Hour
-	t.Cleanup(func() { jyutpingDictsIdleRelease = old })
+	setJyutpingIdleRelease(t, time.Hour)
 	if jyutpingDicts() == nil {
 		t.Fatal("取不到词典")
 	}

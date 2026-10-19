@@ -51,9 +51,6 @@ const (
 	// 目录 ID"(永远查不到)也可能是网络抖动,给几次机会就够。刻意**不落盘**这个计数——
 	// 跟 mbPrimaryNameCache 只落盘查到了的条目同一个理由(见那边注释)。
 	appleCatalogMaxMisses = 3
-	// appleCatalogDurationLogThreshold:权威时长跟播放器报的(App 状态里的曲长)差多少才值得打日志。
-	// 正常情况两者逐位相等,只有撞上脏快照才会差开,所以这条日志天然稀疏。
-	appleCatalogDurationLogThreshold = 0.5
 )
 
 // appleCatalogTrack 是一条 Apple 目录曲目的权威元数据。字段名对齐 iTunes Search API 的

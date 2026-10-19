@@ -6004,6 +6004,9 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		if r, ok := lxMusicLocalLyricsFor(ctx, idArtist, idTitle, durationSecs); ok {
 			raw[lxMusicLocalLyricsSource] = r
 		}
+		for s, r := range raw {
+			raw[s] = withoutPlayerIdentity(ctx, r)
+		}
 	}
 	// scoreAndSort 用目前为止已经到手的原始结果重新构建候选、算 corroboratedEndings、
 	// 打分、排序——每次有新结果到达都会重新跑一遍(而不是缓存增量),因为一份候选的
@@ -6052,6 +6055,7 @@ collect:
 		select {
 		case r := <-resultsCh:
 			doneSources[r.source] = true
+			r = withoutPlayerIdentity(ctx, r)
 			r.forPlayingTrack = forPlaying
 			raw[r.source] = r
 			if lyricSourceResultTap != nil {

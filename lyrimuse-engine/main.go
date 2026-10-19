@@ -360,6 +360,9 @@ func main() {
 	// 存量粤语歌没标声调的罗马音换成带声调的粤拼(见 jyutping.go)。位置跟上一步同一个理由:换掉的罗马音由
 	// exportLyricsFiles 同步成新的 .roma.lrc,排在 migrateManualPickMarks 之前。
 	startupStep("migrateTonelessCantoneseRoma", migrateTonelessCantoneseRoma)
+	// 存量里说的已经不是现用歌词的「现用歌词出处」(见 lyricsimport.go migrateStaleAppliedDecisions)。排在 import 之后:
+	// 导入改写过的条目由它当场清,这一步只管存量。
+	startupStep("migrateStaleAppliedDecisions", migrateStaleAppliedDecisions)
 	// 存量网易云封面换原图档(见 netease.go migrateNeteaseCoverURLs)。排在 refreshEnrichIndex 之前,
 	// App 读的精简索引里也带封面地址。
 	startupStep("migrateNeteaseCoverURLs", migrateNeteaseCoverURLs)

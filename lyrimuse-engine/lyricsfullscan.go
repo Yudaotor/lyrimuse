@@ -530,7 +530,7 @@ func lyricsFullScanOne(ctx context.Context, key string) lyricsSweepOutcome {
 	// 外层 round 同 lyricsFillSweepOne:看里层这一轮连没连上任何歌词源。
 	roundCtx, round := withLyricSourceRound(ctx)
 	// 同步跑:rescoreLyrics 自己 defer 清 enrichInflight,并负责落盘/导出/通知重推。
-	deferred := rescoreLyrics(withBackgroundOutbound(roundCtx), key, artist, title, album, duration)
+	deferred := rescoreLyrics(withBackgroundOutbound(withOtherTrackRoundUnlessPlaying(roundCtx, key)), key, artist, title, album, duration)
 	enrichMu.Lock()
 	after := enrichCache[key]
 	enrichMu.Unlock()

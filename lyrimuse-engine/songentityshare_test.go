@@ -1386,6 +1386,10 @@ func TestShareManualPassReleasesStrayAutoCopies(t *testing.T) {
 	for _, k := range keys {
 		b.variants = append(b.variants, songVariant{key: k})
 	}
+	var rescored []string
+	prevRescore := rescoreReleasedStrays
+	rescoreReleasedStrays = func(keys []string) { rescored = append(rescored, keys...) }
+	t.Cleanup(func() { rescoreReleasedStrays = prevRescore })
 	var tally songShareTally
 	b.shareManualPass(nil, now, &tally)
 	for k, wantOwn := range map[string]bool{"A|Song|Two": true, "A|Song|Five": true, "A|Song|Three": false, "A|Song|Four": false} {
@@ -1396,6 +1400,11 @@ func TestShareManualPassReleasesStrayAutoCopies(t *testing.T) {
 	}
 	if tally.strays != 2 {
 		t.Errorf("计数: %d", tally.strays)
+	}
+	// 按留底恢复的两条交给后台重评:留底是同步之前那份,可能本来就是错的。
+	slices.Sort(rescored)
+	if !slices.Equal(rescored, []string{"A|Song|Five", "A|Song|Two"}) {
+		t.Errorf("后台重评的应是恢复了的两条,得到 %v", rescored)
 	}
 }
 

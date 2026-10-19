@@ -96,7 +96,7 @@ func TestScrobbleBatch_RejectsOversizedBatch(t *testing.T) {
 	// 部分处理 —— 那种情况下我们无法判断哪几条落库了。
 	s := &lastfmScrobbler{apiKey: "k", secret: "s", sk: "sk"}
 	items := make([]listenLogLine, backfillBatchSize+1)
-	if _, err := s.scrobbleBatch(nil, items); err == nil {
+	if _, err := s.scrobbleBatch(context.Background(), items); err == nil {
 		t.Fatal("oversized batch must be rejected before any request is sent")
 	}
 }

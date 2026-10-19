@@ -158,6 +158,37 @@ func lyricsFileSuffixOf(name string) string {
 	return suffix
 }
 
+// migrateStaleAppliedDecisions:存量里「现用歌词出处」(LyricsDecisionApplied)的胜者不是现用来源的,清掉出处 —— 它说的是
+// 早先某一份歌词,正文后来被别的路径换掉了却没跟着改(导入歌词文件时把来源改回文件头里那个旧值,见 importLyricsFromDir)。
+// 手改的、用户选定来源的、手改副本、标了纯音乐的不看:那几种的出处本来就不按胜者说话。见 11 章决策 136。
+func migrateStaleAppliedDecisions() {
+	scope := migrationScopeOf(migrationStaleAppliedDecisions, migrationStaleAppliedDecisionsVersion)
+	if scope.skip() {
+		return
+	}
+	enrichMu.Lock()
+	cleared := 0
+	for k, e := range scope.entries() {
+		d := e.LyricsDecisionApplied
+		if d == nil || d.Winner == "" || d.Winner == e.LyricsSource || e.Lyrics.IsZero() || e.ManualLyrics ||
+			e.LyricsSourceChoice != "" || e.LyricsEntityOrigin != "" || e.Instrumental {
+			continue
+		}
+		e.LyricsDecisionApplied = nil
+		enrichCache[k] = e
+		cleared++
+	}
+	if cleared > 0 {
+		enrichDirty = true
+	}
+	enrichMu.Unlock()
+	if cleared > 0 {
+		slog.Info("lyrics decisions: cleared applied records that no longer describe the current lyrics", "count", cleared)
+		saveEnrichCache()
+	}
+	markMigrationDone(migrationStaleAppliedDecisions, migrationStaleAppliedDecisionsVersion)
+}
+
 // 这次启动的缓存没能完整读进来时,导入不能按「文件没动过就跳过」:跳过的前提是缓存里还是导出时那一份。
 // lyricsImportRestoreAll:主缓存读不出 / 解析不动,从空库起;lyricsImportRestoreKeys:主缓存读进来了,但这几条
 // 的正文小文件缺失或损坏,正文(主歌词也在里面)都没有了。这些条目这一轮让 lyrics/ 里的文件赢,把正文补回来 ——
@@ -336,7 +367,7 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 			continue
 		}
 		changed := false
-		prevLyrics, prevTr, prevRoma, prevYRC := e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC
+		prevLyrics, prevTr, prevRoma, prevYRC, prevSource := e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC, e.LyricsSource
 		if v, ok := variantBody(".lrc"); ok {
 			if !e.Lyrics.EqualString(v) {
 				e.Lyrics, changed = bt(v), true
@@ -383,6 +414,13 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 		// 文件里的正文或逐字被改过:这一条成了用户自己的,不再是从别的写法同步过来的副本(songentityshare.go)。
 		if e.LyricsEntityOrigin != "" && (!e.Lyrics.Equal(prevLyrics) || !e.LyricsYRC.Equal(prevYRC)) {
 			e.LyricsEntityOrigin, changed = "", true
+		}
+		// 正文、逐字或来源被文件换了:「现用歌词出处」(LyricsDecisionApplied)说的是换之前那一份,清掉 —— 留着的话胜者跟来源
+		// 对不上,出处是按组同步的还会被 songShareAutoCopyOf 当成同步副本。正文丢了、拿文件补回来的(restoreAll / restoreKeys)
+		// 补回的就是它说的那一份,不动。见 11 章决策 136。
+		if e.LyricsDecisionApplied != nil && !restoreAll && !restoreKeys[key] &&
+			(!e.Lyrics.Equal(prevLyrics) || !e.LyricsYRC.Equal(prevYRC) || e.LyricsSource != prevSource) {
+			e.LyricsDecisionApplied, changed = nil, true
 		}
 		if changed {
 			enrichCache[key] = e

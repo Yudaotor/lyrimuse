@@ -279,10 +279,14 @@ func TestRequestEnrichSaveForDefersOtherSongs(t *testing.T) {
 func TestSaveKeepsPlayingEntryFresh(t *testing.T) {
 	restoreEnrichSaveStateOnCleanup(t)
 	savedPath, savedCache := enrichPath, enrichCache
-	t.Cleanup(func() { enrichPath, enrichCache = savedPath, savedCache })
-	enrichPath = filepath.Join(t.TempDir(), "lyrimuse-enrich-cache.json")
+	t.Cleanup(func() {
+		enrichMu.Lock()
+		enrichPath, enrichCache = savedPath, savedCache
+		enrichMu.Unlock()
+	})
 	const key = "p|now|x"
 	enrichMu.Lock()
+	enrichPath = filepath.Join(t.TempDir(), "lyrimuse-enrich-cache.json")
 	enrichCache = map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]v1")}}
 	enrichMu.Unlock()
 	noteEnrichPlayingKey(key)

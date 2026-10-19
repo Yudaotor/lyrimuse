@@ -602,7 +602,7 @@ func lyricsFillSweepOne(ctx context.Context, key string) lyricsSweepOutcome {
 	// 外层套一个 round:里层 retryLyricsUpgrade 那一轮连上过哪个源会传上来(见 markReached)。
 	roundCtx, round := withLyricSourceRound(ctx)
 	// 同步跑:retryLyricsUpgrade 自己负责清 enrichInflight、落盘、导出、通知重推。
-	retryLyricsUpgrade(withBackgroundOutbound(roundCtx), key, artist, title, album, dur, true)
+	retryLyricsUpgrade(withBackgroundOutbound(withOtherTrackRoundUnlessPlaying(roundCtx, key)), key, artist, title, album, dur, true)
 	enrichMu.Lock()
 	after := enrichCache[key]
 	enrichMu.Unlock()

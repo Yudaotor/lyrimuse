@@ -3896,8 +3896,7 @@ func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCan
 		agrees[i] = make([]bool, len(members))
 		family[i] = i
 	}
-	var root func(int) int
-	root = func(i int) int {
+	root := func(i int) int {
 		for family[i] != i {
 			i = family[i]
 		}
@@ -4312,7 +4311,6 @@ func lastYRCTimestampMs(yrc string) int {
 }
 
 var (
-	lrcLineTimeRegex = regexp.MustCompile(`^\[(\d+):(\d+)(?:[.:](\d+))?\]`)
 	// lrcLeadingTimeTagsRegex:行首连着的那一串时间戳(中间可以有空白)。
 	lrcLeadingTimeTagsRegex = regexp.MustCompile(`^(?:\s*\[\d+:\d+(?:[.:]\d+)?\])+`)
 	yrcLineTimeRegex        = regexp.MustCompile(`^\[(\d+),(\d+)\]`)

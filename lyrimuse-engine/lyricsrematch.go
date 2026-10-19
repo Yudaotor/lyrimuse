@@ -348,11 +348,12 @@ func runLyricsRematchOne(ctx context.Context, key string, progress func(done, to
 	}
 	var result lyricsRematchResult
 	opts := lyricsRescoreOpts{manual: true, progress: progress, result: &result}
-	// 两个函数自己负责清 enrichInflight、落盘、导出、通知重推。
+	// 两个函数自己负责清 enrichInflight、落盘、导出、通知重推。不是正在放的那首时不给自家源加分(withOtherTrackRound)。
+	rctx := withOtherTrackRoundUnlessPlaying(withManualLyricSearch(ctx), key)
 	if e.Lyrics.IsZero() {
-		retryLyricsUpgradeWith(withManualLyricSearch(ctx), key, artist, title, album, duration, true, opts)
+		retryLyricsUpgradeWith(rctx, key, artist, title, album, duration, true, opts)
 	} else {
-		rescoreLyricsWith(withManualLyricSearch(ctx), key, artist, title, album, duration, opts)
+		rescoreLyricsWith(rctx, key, artist, title, album, duration, opts)
 	}
 	// 换了或者算下来还是这一份:共享组的其余写法跟着用这一份(歌词同步开着时,见 shareFollowWriting)。
 	switch result.Outcome {

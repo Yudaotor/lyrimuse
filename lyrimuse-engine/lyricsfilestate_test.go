@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -183,5 +184,72 @@ func TestLyricsFileStateDisabledWithoutEnrichPath(t *testing.T) {
 	t.Cleanup(func() { enrichPath = savedPath; resetLyricsFileStateForTest() })
 	if lyricsFileStateEnabled(t.TempDir()) || lyricsFileStatePath() != "" {
 		t.Fatal("没有 enrichPath 时不该启用")
+	}
+}
+
+// 文件里的正文或来源被改过、采纳进来:「现用歌词出处」说的是改之前那一份,清掉;没动过的那条留着。见 11 章决策 136。
+func TestLyricsImportDropsStaleAppliedDecision(t *testing.T) {
+	dir := withLyricsFileStateEnv(t)
+	const kept, body, source = "歌手甲|歌一|专辑", "歌手乙|歌二|专辑", "歌手丙|歌三|专辑"
+	applied := func(src string) *lyricsDecision {
+		return &lyricsDecision{Path: lyricsDecisionPathRescore, Winner: src, Applied: true}
+	}
+	withEnrichCache(t, map[string]enrichEntry{
+		kept:   {Lyrics: bt("[00:01.00]aaaa"), LyricsSource: "kugou", LyricsDecisionApplied: applied("kugou")},
+		body:   {Lyrics: bt("[00:01.00]bbbb"), LyricsSource: "qq", LyricsDecisionApplied: applied("qq")},
+		source: {Lyrics: bt("[00:01.00]cccc"), LyricsSource: "qq", LyricsDecisionApplied: applied("qq")},
+	})
+	exportLyricsFiles()
+	resetLyricsFileStateForTest()
+	edit := func(key string, change func(string) string) {
+		t.Helper()
+		path := filepath.Join(dir, sanitizeLyricsFilename(key)+".lrc")
+		orig, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(change(string(orig))), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		future := time.Now().Add(time.Minute)
+		_ = os.Chtimes(path, future, future)
+	}
+	edit(body, func(s string) string { return strings.Replace(s, "bbbb", "BBBB", 1) })
+	edit(source, func(s string) string { return strings.Replace(s, "[source:qq]", "[source:netease]", 1) })
+	importLyricsFromFiles()
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	if d := enrichCache[kept].LyricsDecisionApplied; d == nil || d.Winner != "kugou" {
+		t.Fatalf("没动过的那条出处不该动,得到 %+v", d)
+	}
+	if e := enrichCache[body]; !e.Lyrics.EqualString("[00:01.00]BBBB") || e.LyricsDecisionApplied != nil {
+		t.Fatalf("正文被文件换了:采纳新正文、清掉出处,得到 %q %+v", e.Lyrics.String(), e.LyricsDecisionApplied)
+	}
+	if e := enrichCache[source]; e.LyricsSource != "netease" || e.LyricsDecisionApplied != nil {
+		t.Fatalf("来源被文件换了:采纳新来源、清掉出处,得到 %q %+v", e.LyricsSource, e.LyricsDecisionApplied)
+	}
+}
+
+// 存量迁移:出处的胜者跟现用来源对不上的清掉;对得上的、手改的、用户选定来源的、手改副本、纯音乐都不动。见 11 章决策 136。
+func TestMigrateStaleAppliedDecisions(t *testing.T) {
+	applied := func(src string) *lyricsDecision {
+		return &lyricsDecision{Path: lyricsDecisionPathRescore, Winner: src, Applied: true}
+	}
+	lrc := bt("[00:01.00]aaaa")
+	withEnrichCache(t, map[string]enrichEntry{
+		"stale":        {Lyrics: lrc, LyricsSource: "kugou", LyricsDecisionApplied: applied("musixmatch")},
+		"consistent":   {Lyrics: lrc, LyricsSource: "kugou", LyricsDecisionApplied: applied("kugou")},
+		"manual":       {Lyrics: lrc, LyricsSource: "kugou", ManualLyrics: true, LyricsDecisionApplied: applied("qq")},
+		"choice":       {Lyrics: lrc, LyricsSource: "kugou", LyricsSourceChoice: "kugou", LyricsDecisionApplied: applied("qq")},
+		"origin":       {Lyrics: lrc, LyricsSource: "kugou", LyricsEntityOrigin: "a|b|c", LyricsDecisionApplied: applied("qq")},
+		"instrumental": {Lyrics: lrc, LyricsSource: "kugou", Instrumental: true, LyricsDecisionApplied: applied("qq")},
+	})
+	migrateStaleAppliedDecisions()
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	for k, e := range enrichCache {
+		if cleared, want := e.LyricsDecisionApplied == nil, k == "stale"; cleared != want {
+			t.Errorf("%s: 出处清掉=%v,应为 %v", k, cleared, want)
+		}
 	}
 }

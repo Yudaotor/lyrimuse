@@ -123,6 +123,10 @@ const (
 	// applyShareRound 两槽一起写,不再产生。
 	migrationShareLatestDecisions        = "share_latest_decisions"
 	migrationShareLatestDecisionsVersion = 1
+	// migrationStaleAppliedDecisions:存量里「现用歌词出处」的胜者跟现用来源对不上的,清掉出处(lyricsimport.go)。
+	// 运行期 importLyricsFromFiles 改了正文或来源就一起清,不再产生。
+	migrationStaleAppliedDecisions        = "stale_applied_decisions"
+	migrationStaleAppliedDecisionsVersion = 1
 	// migrationArtistAliasJudge:MusicBrainz 中文名缓存的存量按现在的判据重核(artistaliasrecheck.go)。运行期查询走
 	// 同一个 lookupMusicBrainzChineseAlias,不再产生旧判据的结果。改了它的判据就 +1。
 	migrationArtistAliasJudge        = "artist_alias_judge"

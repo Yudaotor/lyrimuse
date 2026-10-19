@@ -62,10 +62,14 @@ var (
 
 // noteEnrichPending 记下 key 改过、还没整份落盘;isNew = 这一条之前不在缓存里。调用方不持 enrichMu。
 func noteEnrichPending(key string, isNew bool) {
-	if key == "" || enrichPendingPath() == "" {
+	if key == "" {
 		return
 	}
 	enrichMu.Lock()
+	if enrichPendingPath() == "" {
+		enrichMu.Unlock()
+		return
+	}
 	noteEnrichPendingLocked(key)
 	if isNew {
 		enrichPendingHasNew = true
@@ -120,13 +124,15 @@ func saveEnrichPendingBatch(keys []string) {
 
 // writeEnrichPending 把还没整份落盘的条目写成小文件;一条都没有就删掉文件。
 func writeEnrichPending() {
-	path := enrichPendingPath()
-	if path == "" {
-		return
-	}
 	enrichPendingWriteMu.Lock()
 	defer enrichPendingWriteMu.Unlock()
+	// enrichPath 跟别处一样在 enrichMu 里读:这里跑在定时器的 goroutine 上,换它的一方(加载缓存、测试)持着这把锁。
 	enrichMu.Lock()
+	path := enrichPendingPath()
+	if path == "" {
+		enrichMu.Unlock()
+		return
+	}
 	entries := make(map[string]enrichEntry, len(enrichPendingKeys))
 	for k := range enrichPendingKeys {
 		if e, ok := enrichCache[k]; ok {

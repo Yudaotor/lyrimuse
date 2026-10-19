@@ -478,14 +478,14 @@ type songShareRound struct {
 // complete:这一轮没有源被跳过(熔断冷却、后台暂停),结论按完整信息得出。
 func (r *songShareRound) complete() bool { return len(r.skipped) == 0 }
 
-// searchShareRound:以 key 那条写法的名字、时长 dur 重搜一轮。检索的上下文跟 rescoreLyricsWith 同一套;没有在放的播放器,
-// 分数里不会有自家源加分。测试换成不联网的。
+// searchShareRound:以 key 那条写法的名字、时长 dur 重搜一轮。检索的上下文跟 rescoreLyricsWith 同一套;按组重搜不占正在播的
+// 那首,这一轮评的是别的歌,分数里不给自家源加分(withOtherTrackRound)。测试换成不联网的。
 var searchShareRound = func(ctx context.Context, key, artist, title, album string, dur float64) songShareRound {
 	enrichMu.Lock()
 	listed, stored := enrichCache[key].YouTubeMusicAlbum, enrichCache[key].LyricsSearchTitle
 	sctx := withCachedYouTubeMusicVideoIDLocked(ctx, key)
 	enrichMu.Unlock()
-	sctx = withLearnedAliasSelf(sctx, key)
+	sctx = withOtherTrackRound(withLearnedAliasSelf(sctx, key))
 	searchAlbum, _ := lyricsSearchAlbum(sctx, album, listed, dur, artist, title)
 	roundCtx, round := withLyricSourceRound(sctx)
 	roundCtx, queries := withLyricQueryLog(roundCtx)
@@ -958,10 +958,10 @@ func songShareFingerprints(keys []string) map[string]string {
 }
 
 // shareManualPass:每个共享组过一遍 shareManualLocked,再把跟的那条已经不在这一组的自动同步副本按留底恢复
-// (releaseStrayAutoCopiesLocked),改了的当场落盘、导出。只有一条写法的组只在它是副本时过(原件或跟的那条分到了别的组或
-// 别的实体,要按留底恢复)。
+// (releaseStrayAutoCopiesLocked),改了的当场落盘、导出,恢复了的再交给后台重评(rescoreReleasedStrays)。只有一条写法的组
+// 只在它是副本时过(原件或跟的那条分到了别的组或别的实体,要按留底恢复)。
 func (b *songEntityBuild) shareManualPass(pins map[string]bool, now time.Time, t *songShareTally) {
-	var all []string
+	var all, released []string
 	for _, ms := range b.shareGroupsOf() {
 		keys := make([]string, len(ms))
 		for i, m := range ms {
@@ -989,8 +989,25 @@ func (b *songEntityBuild) shareManualPass(pins map[string]bool, now time.Time, t
 		}
 		t.strays += len(strays)
 		all = append(all, strays...)
+		released = append(released, strays...)
 	}
 	flushShareChanges(all)
+	rescoreReleasedStrays(released)
+}
+
+// rescoreReleasedStrays:散落的自动副本按留底恢复之后(releaseStrayAutoCopiesLocked),后台按现行规则各重评一次。留底是同步之前
+// 那份歌词,当时选它的规则和证据都旧了,还可能本来就是错的 —— 正是它跟原件的正文对不上,这两条写法才被分出这一组(分组的证据看的
+// 就是这份留底,见 songOwnLyricsEntry)。不重评要等这首歌下次被播到,期间一直显示这份。逐条串行,走全量扫库那一支
+// (lyricsFullScanOne:进门再核资格、不碰扫库进度);关了「自动跟进算法升级」不跑。见 18 章决策 76。测试换成不联网的。
+var rescoreReleasedStrays = func(keys []string) {
+	if len(keys) == 0 || !features().LyricsAutoUpgrade {
+		return
+	}
+	go func() {
+		for _, k := range keys {
+			lyricsFullScanOne(context.Background(), k)
+		}
+	}()
 }
 
 // shareGroupsOf:全部共享组(各写法下标,组内按下标、组按实体顺序和组根排),含只有一条写法的。

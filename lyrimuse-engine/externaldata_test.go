@@ -83,6 +83,8 @@ func TestMain(m *testing.M) {
 	setSharedAMLLIndexStore(newAMLLIndexStore("", time.Now))
 	// 本机播放器数据里按歌名记着的封面(KKBOX 缓存、网易云曲库):单测一律当作没有,要测的用例自己换。
 	localPlayerCovers = func(string, string, string, float64) []string { return nil }
+	// 散落副本恢复之后的后台重评会联网,而且跑在用例结束之后;单测一律不跑,要测的用例自己换。
+	rescoreReleasedStrays = func([]string) {}
 	// 出站闸令牌给足:请求多半打到假服务器或拨号即失败,按真实速率排队只是干等。专测限速的用例自己设 rateFor。
 	newHostGuardRateFor = func(string) hostRate { return hostRate{perSec: 1000, burst: 1000} }
 	setSharedHostGuard(newHostGuard(time.Now))

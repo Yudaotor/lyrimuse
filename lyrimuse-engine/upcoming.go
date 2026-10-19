@@ -162,6 +162,9 @@ var (
 	// upcomingGen 每真换一首歌加一。一批预取起下一首之前比一次:用户连跳几首时,上一首那批
 	// 还没排完的不再往下起 —— 那些歌多半不会播了,却跟新的这批抢同一批歌词源。
 	upcomingGen atomic.Uint64
+	// upcomingQueueReads:prefetchUpcoming 起的 goroutine 里读队列文件那一段。测试换队列文件路径之前靠它等读完,否则它还在
+	// 读路径时测试就把路径换掉了。后面排解析那一段会等上一首解析完,不算在里面。
+	upcomingQueueReads sync.WaitGroup
 )
 
 // prefetchUpcoming 在真正换到一首新歌时调用,整个函数体在独立 goroutine 里跑。
@@ -181,6 +184,7 @@ func prefetchUpcoming(currentArtist, currentTitle, album, bundleID string, durat
 
 	// 只有上面那把锁留在同步段。读队列要碰盘(网易云那份 1.3MB JSON、QQ 还要 exec 一次
 	// plutil),放在 poller 的 handle() 线程上会把"正在播放"的推送一起拖住。
+	upcomingQueueReads.Add(1)
 	go func() {
 		// 读的是各家播放器私有的二进制 / JSON / plist,格式随对方升级而变。解析里万一有没挡住的
 		// 越界,丢掉这一轮预取就够了,不能让它带走整个进程(这里没有别的 recover)。
@@ -189,7 +193,10 @@ func prefetchUpcoming(currentArtist, currentTitle, album, bundleID string, durat
 				log.Printf("upcoming prefetch: reading the %s queue panicked (%v), skipping this track", bundleID, r)
 			}
 		}()
-		tracks, ok := upcomingFromQueue(currentArtist, currentTitle, album, bundleID, durationSecs, prefetchUpcomingCount)
+		tracks, ok := func() ([]upcomingTrack, bool) {
+			defer upcomingQueueReads.Done()
+			return upcomingFromQueue(currentArtist, currentTitle, album, bundleID, durationSecs, prefetchUpcomingCount)
+		}()
 		if !ok {
 			prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID)
 			return
