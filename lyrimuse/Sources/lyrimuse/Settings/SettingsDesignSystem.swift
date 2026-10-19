@@ -137,12 +137,14 @@ extension View {
     /// 玻璃按钮那一排里的菜单(如「⋯」)。菜单不吃 `.buttonStyle(.glass)`,也不认标签上的 padding / frame:macOS 26 起
     /// 画成无边框菜单,外面套同一种可交互玻璃,宽高跟玻璃文字按钮一致(24pt 高);更早的系统用按钮样式的菜单。
     /// 标签写成文字里嵌符号(`Text(Image(systemName:))`):单独一个 Image 时旧系统按符号本身的高度画,ellipsis 很扁。
+    /// 鼠标事件被菜单自己接走,外面那层可交互玻璃收不到,悬停、按下的反馈由 `GlassMenuFeedback` 补(见 11 章决策 135)。
     @ViewBuilder
     func settingsGlassMenu() -> some View {
         if #available(macOS 26.0, *) {
             menuStyle(.borderlessButton)
                 .frame(width: 38, height: 24)
                 .glassEffect(.regular.interactive(), in: Capsule())
+                .modifier(GlassMenuFeedback())
         } else {
             menuStyle(.button)
                 .fixedSize()
@@ -155,6 +157,7 @@ extension View {
     func settingsGlassMenuCapsule() -> some View {
         if #available(macOS 26.0, *) {
             glassEffect(.regular.interactive(), in: Capsule())
+                .modifier(GlassMenuFeedback())
         } else {
             background(Capsule().fill(Color.primary.opacity(0.08)))
         }
@@ -1468,11 +1471,12 @@ struct SettingsPopoverShell<Content: View>: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .background(Capsule().fill(.regularMaterial))
-            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        // 底挂在按钮外面:悬停淡底画在标签后面,材质底要在它下面,不然把淡底盖住。
+        .buttonStyle(SettingsGlassHoverButtonStyle())
+        .background(Capsule().fill(.regularMaterial))
+        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
         .padding(.bottom, 6)
     }
 }
@@ -2270,5 +2274,54 @@ struct OnboardingWindowBackground: NSViewRepresentable {
             super.viewDidMoveToWindow()
             window?.titleVisibility = .visible
         }
+    }
+}
+
+/// 玻璃菜单的悬停 / 展开反馈:指针停在上面时压一层淡色,菜单展开期间加深(深浅同 `SettingsGlassHoverButtonStyle`);
+/// 菜单收起时一起清掉(展开期间指针移走,onHover 收不到离开)。按指针此刻在不在上面认是不是自己的菜单展开了,别的菜单不算。
+private struct GlassMenuFeedback: ViewModifier {
+    @State private var hovering = false
+    @State private var open = false
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                Capsule()
+                    .fill(Color.primary.opacity(open ? 0.09 : hovering ? 0.06 : 0))
+                    .allowsHitTesting(false)
+            }
+            .animation(.easeOut(duration: 0.12), value: hovering)
+            .animation(.easeOut(duration: 0.12), value: open)
+            .onHover { hovering = $0 }
+            .onReceive(NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)) { _ in
+                if hovering { open = true }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSMenu.didEndTrackingNotification)) { _ in
+                open = false
+                hovering = false
+            }
+    }
+}
+
+/// 整行可点、行里又夹着开关或按钮(不能整行包成 Button)的行:悬停时垫一层圆角淡底,深浅同 `SettingsGlassHoverButtonStyle`。
+private struct SettingsHoverRowHighlight: ViewModifier {
+    let cornerRadius: CGFloat
+    let inset: CGFloat
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(Color.primary.opacity(hovering ? 0.06 : 0))
+                .padding(inset))
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+extension View {
+    /// 见 `SettingsHoverRowHighlight`。`inset` 往里收,不碰卡片边。
+    func settingsHoverRow(cornerRadius: CGFloat = 8, inset: CGFloat = 4) -> some View {
+        modifier(SettingsHoverRowHighlight(cornerRadius: cornerRadius, inset: inset))
     }
 }

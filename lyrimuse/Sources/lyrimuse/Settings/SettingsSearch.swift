@@ -315,7 +315,7 @@ struct SettingsSearchResultRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsGlassHoverButtonStyle(cornerRadius: 6, fillInset: 3))
         .accessibilityLabel(hit.title)
         .accessibilityValue(hit.breadcrumb)
     }

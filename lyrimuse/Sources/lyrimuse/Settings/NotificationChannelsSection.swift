@@ -286,6 +286,7 @@ struct NotificationChannelsCard: View {
         }
         .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
         .padding(.vertical, 8)
+        .settingsHoverRow()
         .contentShape(Rectangle())
         .onTapGesture { editing = channel }
         .contextMenu {
@@ -694,6 +695,7 @@ struct NotificationLogCard: View {
                 .foregroundStyle(.tertiary)
                 .rotationEffect(.degrees(isOpen ? 90 : 0))
         }
+        .settingsHoverRow(cornerRadius: 6, inset: -3)
         .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.easeOut(duration: 0.15)) {

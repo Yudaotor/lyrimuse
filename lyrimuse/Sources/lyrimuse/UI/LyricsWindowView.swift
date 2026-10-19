@@ -4979,7 +4979,7 @@ struct LyricsWindowView: View {
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SettingsGlassHoverButtonStyle())
                     .clearGlassCapsule(rim: Color.white.opacity(0.28))
                     .padding(.top, 6)
                 }

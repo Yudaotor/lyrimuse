@@ -4195,6 +4195,12 @@ func runSourceContractSettingsTests() {
         expectEqual(manager.contains("editMode != .preview && editorBufferDiffers")
                     && manager.components(separatedBy: "discardStalePreviewBuffer()").count - 1 >= 2, true,
                     "歌词管理: 预览状态下缓冲跟盘上不一样不算未保存的修改,进编辑前按盘上重载")
+        let design = read("Settings/SettingsDesignSystem.swift") ?? ""
+        expectEqual(design.contains(".glassEffect(.regular.interactive(), in: Capsule())\n                .modifier(GlassMenuFeedback())")
+                    && design.contains(".onHover { hovering = $0 }")
+                    && design.contains("NSMenu.didEndTrackingNotification")
+                    && design.contains("glassEffect(.regular.interactive(), in: Capsule())\n                .modifier(GlassMenuFeedback())\n        } else {\n            background("), true,
+                    "设计系统: 玻璃菜单(「⋯」、菜单胶囊)自己补悬停 / 展开反馈(菜单接走鼠标事件,外层可交互玻璃收不到)")
         expectEqual(manager.contains("title: EnrichCacheKeys.strippingDurationVariantTitle(summary.title)"), true,
                     "歌词管理: 搜索候选歌词的歌名去掉时长变体位「~durN」")
         expectEqual(sheet.contains("private var effectiveCurrentSource: String? { appliedSource ?? host.source }")
