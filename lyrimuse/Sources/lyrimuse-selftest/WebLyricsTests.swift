@@ -677,6 +677,10 @@ func runWebLyricsTests() {
                     "网页歌词: 副屏到帧晚了立刻放宽余量,近 20 秒最晚那次撑着,之后每秒收回一点")
         expectEqual(sourceHas(pagesSource, "const cap = useVideo ? MAX_VIDEO_DELAY : Math.min(gap * bufferCap(), MAX_DELAY);"), true,
                     "网页歌词: 视频流排的是没解的数据,余量能放到 2 秒;逐帧 JPEG 受内存限制")
+        expectEqual(sourceHas(pagesSource, "return Math.max(MIN_DELAY, Math.min(jitter + 16 + (useVideo ? decodeCost : 0), cap));")
+                        && sourceHas(pagesSource, "const until = now - offset - delay() + decodeLead();")
+                        && sourceHas(pagesSource, "decodeCost = sorted[Math.floor(sorted.length * 0.95)];"), true,
+                    "网页歌词: 视频按实测解一帧的耗时(p95)提前送去解,余量也留出这段(报给 App,提前画把解码算进去)")
         let frameSource = app("WebLyrics/WebLyricsScreen.swift")
         expectEqual(sourceHas(frameSource, "if sendBacklogged {\n notePace(.backlog)\n return\n }\n guard framesInFlight < Self.maxFramesInFlight else {\n notePace(.inFlight)\n return\n }"), true,
                     "网页歌词: 出帧线程跳过的拍报给节拍器,分清网络发不完和在途帧满")
@@ -697,9 +701,11 @@ func runWebLyricsTests() {
                               "screens.add(connection, viewport: viewport, video: WebLyricsVideo.wantsVideo(request.query))"), true,
                     "网页歌词: 连接带 codec=avc 的推视频流")
         expectEqual(sourceHas(pagesSource, "if (useVideo) url.searchParams.set('codec', 'avc');")
-                        && sourceHas(pagesSource, "useVideo = !!window.VideoDecoder && sessionStorage.getItem('lyrimuse.noVideo') !== '1';"), true,
-                    "网页歌词: 副屏网页能硬解就要视频流,出过解码错误的标签页不要")
-        expectEqual(sourceHas(pagesSource, "decoder = new VideoDecoder({ output: (f) => { accept(f.timestamp / 1000, f); }, error: dropVideo });"), true,
+                        && sourceHas(pagesSource, "return !(Date.now() - (Number(sessionStorage.getItem('lyrimuse.noVideo')) || 0) < NO_VIDEO_MS);")
+                        && sourceHas(pagesSource, "if (performance.now() - videoSince < VIDEO_TRUST_MS) {")
+                        && sourceHas(pagesSource, "useVideo = videoAllowed();\n videoSince = performance.now();"), true,
+                    "网页歌词: 副屏网页能硬解就要视频流;连上就解码出错的标签页 10 分钟内改走 JPEG,用了一阵才出错的接着要视频(不记成永久的)")
+        expectEqual(sourceHas(pagesSource, "decoder = new VideoDecoder({ output: (f) => { noteDecoded(f.timestamp); accept(f.timestamp / 1000, f); }, error: dropVideo });"), true,
                     "网页歌词: 解出来的视频帧跟 JPEG 进同一个按画帧时刻放的队列,解码出错退回 JPEG")
         expectEqual(sourceHas(pagesSource, "if (type !== 2 && needKey) return;"), true,
                     "网页歌词: 网页在关键帧之前不解普通帧")

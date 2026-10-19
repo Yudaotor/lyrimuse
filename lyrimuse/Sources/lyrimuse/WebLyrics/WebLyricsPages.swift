@@ -26,7 +26,7 @@ enum WebLyricsPages {
     }
 
     /// 副屏:全屏显示 App 推来的画面帧,尺寸变了就带新尺寸重连。每帧开头 8 字节是 App 画它的时刻(毫秒,大端 Float64),
-    /// 后面是 JPEG;浏览器能硬解 H.264(`VideoDecoder`)时改要视频流(`WebLyricsVideo`,出过解码错误的标签页退回 JPEG)。
+    /// 后面是 JPEG;浏览器能硬解 H.264(`VideoDecoder`)时改要视频流(`WebLyricsVideo`,连上就解码出错的标签页 10 分钟内退回 JPEG)。
     /// 帧在后台线程解码(`createImageBitmap` / `VideoDecoder`)后排队,`requestAnimationFrame`(它停了时由定时器接着)每一拍按画它的时刻晚
     /// `delay()` 毫秒放出来:网络和解码的快慢不均被这段余量吸掉,画面照 App 画的间隔匀速走。余量至少 40ms,到得越不齐越长
     /// (近 20 秒里到帧比最快那次晚得最多的,涨得快、落得慢)。视频流最多 2 秒(排的是没解的数据),App 按回报的余量提前画,
@@ -97,10 +97,11 @@ enum WebLyricsPages {
             });
           }
           function bufferCap() { return framePixels ? Math.max(6, Math.min(24, Math.floor(BUFFER_BYTES / (framePixels * 4)))) : 6; }
-          // 逐帧 JPEG 排的是解好的图,余量受内存限制;视频排的是没解的数据(每帧几 KB),只按时间封顶
+          // 逐帧 JPEG 排的是解好的图,余量受内存限制;视频排的是没解的数据(每帧几 KB),只按时间封顶。视频还要留出解码的工夫
+          // (decodeCost):到得晚的帧收到就解,解完也得赶在放之前;这份余量报给 App,提前画也就把解码算了进去
           function delay() {
             const cap = useVideo ? MAX_VIDEO_DELAY : Math.min(gap * bufferCap(), MAX_DELAY);
-            return Math.max(MIN_DELAY, Math.min(jitter + 16, cap));
+            return Math.max(MIN_DELAY, Math.min(jitter + 16 + (useVideo ? decodeCost : 0), cap));
           }
           msg.textContent = T.connecting;
           function decode(blob) {
@@ -150,18 +151,44 @@ enum WebLyricsPages {
               .then(() => { decoding--; });
           }
           // 能硬解 H.264 就要视频流(只发跟上一帧的差别,慢网上流量小几十倍):每条消息 1 字节类型(1 解码配置 avcC、2 关键帧、
-          // 3 普通帧)+ 8 字节画帧时刻 + 数据。解码器出过错就记下,这个标签页改回逐帧 JPEG 重连
-          // 视频帧收到后先按没解的数据排着,快到放的时候(提前 DECODE_LEAD 毫秒)才按顺序送去解:解好的 VideoFrame 占着解码器的
-          // 输出缓冲,压多了解码器会停住不再出帧。排得太多(标签页在后台很久)就整个丢掉,等下一个关键帧
-          const DECODE_LEAD = 50, MAX_PENDING_CHUNKS = 600;
-          let useVideo = false, decoder = null, decoderConfig = '', needKey = true, chunks = [];
-          try { useVideo = !!window.VideoDecoder && sessionStorage.getItem('lyrimuse.noVideo') !== '1'; } catch (err) {}
+          // 3 普通帧)+ 8 字节画帧时刻 + 数据。连上 VIDEO_TRUST_MS 内解码就出错的,当这个浏览器解不了,这个标签页 NO_VIDEO_MS 内
+          // 改回逐帧 JPEG 重连;用了一阵才出错的(标签页在后台时浏览器回收了解码器之类)不记,重连接着要视频流。别记成永久的:
+          // 偶尔一次出错就让这个标签页一直走 JPEG,又糊又卡、也没有提前画
+          // 视频帧收到后先按没解的数据排着,快到放的时候才按顺序送去解:解好的 VideoFrame 占着解码器的输出缓冲,压多了解码器会
+          // 停住不再出帧。提前多少按这个浏览器实测解一帧要多久(最近 DECODE_SAMPLES 帧的 p95 + 16ms,在 DECODE_LEAD～DECODE_MAX_LEAD
+          // 之间)。别固定提前:机器一忙解一帧要几百毫秒,不够的那些帧解完已经过了该放的时候,只能跳过。排得太多(标签页在后台
+          // 很久)就整个丢掉,等下一个关键帧
+          const DECODE_LEAD = 50, DECODE_MAX_LEAD = 300, DECODE_SAMPLES = 180, MAX_PENDING_CHUNKS = 600;
+          let decodeCost = 0, decodeSamples = [], decodeStarted = new Map();
+          function noteDecoded(timestamp) {
+            const started = decodeStarted.get(timestamp);
+            if (started === undefined) return;
+            decodeStarted.delete(timestamp);
+            decodeSamples.push(performance.now() - started);
+            if (decodeSamples.length > DECODE_SAMPLES) decodeSamples.shift();
+            if (decodeSamples.length % 30 === 0 || decodeSamples.length === DECODE_SAMPLES) {
+              const sorted = decodeSamples.slice().sort((a, b) => a - b);
+              decodeCost = sorted[Math.floor(sorted.length * 0.95)];
+            }
+          }
+          function decodeLead() { return Math.max(DECODE_LEAD, Math.min(DECODE_MAX_LEAD, decodeCost + 16)); }
+          const VIDEO_TRUST_MS = 30000, NO_VIDEO_MS = 600000;
+          let useVideo = false, decoder = null, decoderConfig = '', needKey = true, chunks = [], videoSince = 0;
+          function videoAllowed() {
+            if (!window.VideoDecoder) return false;
+            try { return !(Date.now() - (Number(sessionStorage.getItem('lyrimuse.noVideo')) || 0) < NO_VIDEO_MS); } catch (err) { return true; }
+          }
+          useVideo = videoAllowed();
           function dropVideo() {
-            try { sessionStorage.setItem('lyrimuse.noVideo', '1'); } catch (err) {}
-            useVideo = false;
+            if (performance.now() - videoSince < VIDEO_TRUST_MS) {
+              try { sessionStorage.setItem('lyrimuse.noVideo', String(Date.now())); } catch (err) {}
+              useVideo = false;
+            }
             if (decoder) { try { decoder.close(); } catch (err) {} }
             decoder = null;
+            decoderConfig = '';
             chunks = [];
+            decodeStarted.clear();
             if (ws) ws.close();
           }
           // 收帧回报(每 FEEDBACK_MS 一次):最后一条消息的画帧时刻、连上以来收到的字节数、最后一条到了多少毫秒、此刻的
@@ -184,7 +211,7 @@ enum WebLyricsPages {
               const config = Array.from(data).join(',');
               if (decoder && config === decoderConfig) return;
               if (!decoder) {
-                decoder = new VideoDecoder({ output: (f) => { accept(f.timestamp / 1000, f); }, error: dropVideo });
+                decoder = new VideoDecoder({ output: (f) => { noteDecoded(f.timestamp); accept(f.timestamp / 1000, f); }, error: dropVideo });
               }
               const codec = 'avc1.' + [data[1], data[2], data[3]].map((x) => x.toString(16).padStart(2, '0')).join('');
               try {
@@ -205,13 +232,16 @@ enum WebLyricsPages {
           // 把快到放的时候的那些按顺序送去解
           function decodeDue(now) {
             if (!chunks.length || !decoder || decoder.state !== 'configured') return;
-            const until = now - offset - delay() + DECODE_LEAD;
+            const until = now - offset - delay() + decodeLead();
             let n = 0;
             while (n < chunks.length && chunks[n].timestamp / 1000 <= until) n++;
             if (!n) return;
             const due = chunks.slice(0, n);
             chunks = chunks.slice(n);
-            try { for (const c of due) decoder.decode(c); } catch (err) { dropVideo(); }
+            if (decodeStarted.size > MAX_PENDING_CHUNKS) decodeStarted.clear();
+            try {
+              for (const c of due) { decodeStarted.set(c.timestamp, now); decoder.decode(c); }
+            } catch (err) { dropVideo(); }
           }
           function present() {
             const now = performance.now(), wait = offset + delay();
@@ -247,6 +277,8 @@ enum WebLyricsPages {
             url.searchParams.set('w', Math.round(innerWidth));
             url.searchParams.set('h', Math.round(innerHeight));
             url.searchParams.set('dpr', Math.max(1, Math.min(3, devicePixelRatio || 1)).toFixed(2));
+            useVideo = videoAllowed();
+            videoSince = performance.now();
             if (useVideo) url.searchParams.set('codec', 'avc');
             needKey = true;
             chunks = [];
