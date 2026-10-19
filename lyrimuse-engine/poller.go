@@ -292,7 +292,7 @@ type poller struct {
 	relayWrites      int           // 累计成功 KV /push 写次数(埋点:实测每日写量+定位大头)
 	relayFailKey     string        // 上次推送失败时的 key:内容变了就清退避、立即再试
 	relayFailAt      time.Time     // 上次推送失败时刻(零=当前无退避)
-	relayBackoff     time.Duration // 当前退避间隔(失败翻倍,上限 10min)
+	relayBackoff     time.Duration // 当前退避间隔(失败翻倍,封顶 relayBackoffMax)
 	relayStateSince  time.Time     // 最近一次推上去的 key 从什么时候起没变过(不在播放的状态据此停心跳)
 	relayDeferKey    string        // 换歌后等封面的那条 key 与开始等的时刻(见 relayShouldPush)
 	relayDeferSince  time.Time
@@ -705,6 +705,9 @@ const (
 	relayResumeSettle = time.Second
 	// 引擎刚启动时最多等这么久再推(见 relayStartupPending),覆盖启动补种那次请求的整个时限。
 	relayStartupWait = relayRequestTimeout
+	// 推送失败后的退避:从 relayBackoffMin 起每失败一次翻倍,封顶 relayBackoffMax(见 applyRelayResult)。
+	relayBackoffMin = 30 * time.Second
+	relayBackoffMax = 10 * time.Minute
 )
 
 // relayTrackOf 取 key 里标识曲目的那段(去掉状态前缀和 |c / |a 后缀),用来判断是不是换了一首歌。
@@ -727,6 +730,10 @@ func (p *poller) relayShouldPush(now time.Time, key string, payload map[string]a
 		reanchored = false // 没有进度条的状态,重锚改不了网页上任何东西
 	}
 	changed := key != p.relayLastState
+	if !changed {
+		// 又回到推上去的那份(等的封面回来了、暂停又被撤回):之前开始等的那条作废,下次再出现从头等。
+		p.relayDeferKey, p.relayDeferSince = "", time.Time{}
+	}
 	// 暂停 → 在放、还是同一首:等 relayResumeSettle 再推。暂停着开播另一首时 QQ 音乐先报这一首在放、0.3 秒后才报
 	// 新歌名,当场推的话网页会把上一首写成在放(见 02 章决策 119)。
 	if changed && strings.HasPrefix(key, "mac|") && strings.HasPrefix(p.relayLastState, "macpause|") &&
@@ -748,6 +755,18 @@ func (p *poller) relayShouldPush(now time.Time, key string, payload map[string]a
 			if now.Sub(p.relayDeferSince) < relayCoverWait {
 				return "", false
 			}
+		}
+	}
+	// 同一个状态只是封面从有变无:最多等 relayCoverWait。设备封面刚换上、还没确认传上中继时 webSafeCoverURL 给的是空串,
+	// 传完(实测多在几秒内)又变回有封面;等一下就不写这一来一回两次,网页封面也不闪空。重锚不等:进度条比封面要紧。
+	// 见 13 章决策 14。
+	if changed && !reanchored && strings.HasSuffix(p.relayLastState, "|c") && strings.TrimSuffix(p.relayLastState, "|c") == key {
+		if key != p.relayDeferKey {
+			p.relayDeferKey, p.relayDeferSince = key, now
+			return "", false
+		}
+		if now.Sub(p.relayDeferSince) < relayCoverWait {
+			return "", false
 		}
 	}
 	if !changed && !reanchored {
@@ -812,9 +831,9 @@ func (p *poller) applyRelayResult(r relayPushResult) {
 		warnf("relay push failed: %v", r.err)
 		p.relayFailKey, p.relayFailAt = r.key, r.at
 		if p.relayBackoff == 0 {
-			p.relayBackoff = 30 * time.Second
-		} else if p.relayBackoff < 10*time.Minute {
-			p.relayBackoff *= 2
+			p.relayBackoff = relayBackoffMin
+		} else {
+			p.relayBackoff = min(p.relayBackoff*2, relayBackoffMax)
 		}
 		p.noteRelayFailure(r.err, r.at)
 		return
@@ -831,7 +850,7 @@ func (p *poller) applyRelayResult(r relayPushResult) {
 
 // pushScrobble 记一条完成收听。历史/今日统计由网页从 LB 合并(每条完成收听都提交给 LB,
 // 见各 lb.submit "single"),这里不写 KV /scrobble,省写额度。只更新内存 lastListen:
-// 空闲时"上次播放"显示 + pushRelayState 兜底态用。
+// 空闲时"上次播放"显示 + pushRelayState 兜底态用。本机播放在 applySubmitOutcome 里收听一成立就调,不看 LB 的结果。
 func (p *poller) pushScrobble(s snapshot, listenedAt int64, device string) {
 	p.lastListen, p.lastListenAt, p.lastListenDev = s, listenedAt, device
 }
@@ -988,6 +1007,10 @@ func (p *poller) applySubmitOutcome(r submitOutcome) {
 	// recordLastfmListen 管 Last.fm 镜像 + 本地收听日志:默认档(scrobblePointHalf)当场就发;用户选了
 	// 更严的 scrobble 时点时先挂在会话上,到点再发(见 recordLastfmListen 的注释)。
 	p.recordLastfmListen(r.sess, r.artistName, r.meta, r.startedAt)
+	// 网页的「上次播放」同理:收听在这里就成立了,不等 LB 的结果。LB 失败 / 拒收 / 进待重发队列时照样更新,不然空闲时
+	// 网页推的是更早那一首、甚至「空」;待重发队列补发成功也不会再回到这里。没配 LB 的 submit 直接返回 nil,同样走到。
+	// 见 13 章决策 14。
+	p.pushScrobble(r.meta, r.startedAt, "mac")
 	if r.err != nil {
 		warnf("submit listen failed: %v", r.err)
 		// 会话已经结束就不会再有人重试它(播放中每拍重试只管当前会话),交给待重发队列;
@@ -1017,7 +1040,6 @@ func (p *poller) applySubmitOutcome(r submitOutcome) {
 	} else {
 		log.Printf("listen recorded: %s - %s", r.meta.Artist, r.meta.Title)
 	}
-	p.pushScrobble(r.meta, r.startedAt, "mac")
 	p.recordRecentMacListen(r.meta.Artist, r.meta.Title, r.startedAt)
 	p.pushRelayState(time.Now(), false) // 立刻把刚确认的收听/上次播放状态推给网页,不必等下一轮 5s 心跳
 }
@@ -1819,8 +1841,8 @@ func (p *poller) flushSessionOnExit(flushCtx context.Context) {
 		} else {
 			p.recordRecentMacListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.startedAt.Unix())
 		}
-		// relay 是网页历史主源:退出前放的最后一首也要补进 relay。
-		p.pushScrobble(p.sess.meta, p.sess.startedAt.Unix(), "mac")
+		// 不记「上次播放」(pushScrobble):它只活在内存里,这之后不再推中继、进程就退出了;下次启动的
+		// 「上次播放」由 seedLastListen 从 ListenBrainz 取。
 		// 已经交给 LB(或它的待重发队列)了:下面记的续接状态据此不再提交(sessionresume.go)。
 		p.sess.listenSent = true
 	}

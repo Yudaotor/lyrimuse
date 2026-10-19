@@ -196,8 +196,11 @@ func fetchLastListen(ctx context.Context, root, user string) lastListenSeed {
 		return lastListenSeed{}
 	}
 	device, _ := m.AdditionalInfo["source"].(string)
+	// 播放器标签照 LB 记下的带回来(网页页脚据此显示是哪个播放器放的);Remote:这首此刻没在放,只查缓存、
+	// 缓存没有也不为它起一轮联网解析。见 13 章决策 14。
+	player, _ := m.AdditionalInfo["media_player"].(string)
 	return lastListenSeed{
-		track:      snapshot{Title: m.TrackName, Artist: m.ArtistName, Album: m.ReleaseName},
+		track:      snapshot{Title: m.TrackName, Artist: m.ArtistName, Album: m.ReleaseName, Remote: true, MediaPlayer: player},
 		listenedAt: l.ListenedAt,
 		device:     device,
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -337,5 +338,158 @@ func TestApplyLastListenSeedKeepsRealListen(t *testing.T) {
 	p.applyLastListenSeed(lastListenSeed{track: snapshot{Title: "浮夸", Artist: "陈奕迅"}, listenedAt: 1700000000, device: "iphone"})
 	if p.lastListen.key() != heard.key() || p.lastListenAt != 1800000000 || p.lastListenDev != "mac" || p.lastListenSeeding {
 		t.Fatalf("真实收听不该被补种盖掉: %+v / %d / %q / seeding=%v", p.lastListen, p.lastListenAt, p.lastListenDev, p.lastListenSeeding)
+	}
+}
+
+// relayTick 是喂给 relayShouldPush 的一拍:这一刻算出来的去重 key,有 |c 的带上封面。
+type relayTick struct {
+	at  time.Duration
+	key string
+}
+
+// driveRelay 按拍喂 relayShouldPush,要推的当场记成推成功(applyRelayResult),返回真写出去的 key。
+func driveRelay(p *poller, t0 time.Time, ticks []relayTick) []string {
+	var wrote []string
+	for _, tk := range ticks {
+		payload := map[string]any{"artwork": ""}
+		if strings.HasSuffix(tk.key, "|c") {
+			payload["artwork"] = "https://relay/artwork/0123456789abcdef.jpg"
+		}
+		now := t0.Add(tk.at)
+		reason, ok := p.relayShouldPush(now, tk.key, payload, false)
+		if !ok {
+			continue
+		}
+		p.applyRelayResult(relayPushResult{key: tk.key, reason: reason, at: now})
+		wrote = append(wrote, tk.key)
+	}
+	return wrote
+}
+
+// 同一首歌只是封面从有变无(设备封面刚换上、还没确认传上中继):最多等 relayCoverWait。等的时候封面回来了就一次都不写;
+// 等满了还没回来照推,回来再推。重锚不等。见 13 章决策 14。
+func TestRelayShouldPushWaitsForCoverBackOnSameTrack(t *testing.T) {
+	const lit, bare = "mac|Muñeca|Andria Rose|Muñeca|c", "mac|Muñeca|Andria Rose|Muñeca"
+	t0 := time.Now()
+	fresh := func(last string) *poller {
+		return &poller{relayLastState: last, relayLastAt: t0.Add(-time.Minute), relayStateSince: t0.Add(-time.Minute)}
+	}
+	// 照 Muñeca 那次的实况:封面没了 2.47 秒又回来,不等的话会写「无」「有」两次。
+	p := fresh(lit)
+	if got := driveRelay(p, t0, []relayTick{{0, bare}, {time.Second, bare}, {2470 * time.Millisecond, lit}, {7 * time.Second, lit}}); len(got) != 0 {
+		t.Fatalf("封面几秒内就回来,一次都不该写: %q", got)
+	}
+	if p.relayDeferKey != "" {
+		t.Fatalf("回到推上去的那份,等的那条要作废: %q", p.relayDeferKey)
+	}
+	// 隔一会儿又闪一次:从头等,不拿上一次开始等的时刻算。
+	if got := driveRelay(p, t0, []relayTick{{time.Minute, bare}, {time.Minute + 3*time.Second, lit}}); len(got) != 0 {
+		t.Fatalf("第二次闪空也从头等: %q", got)
+	}
+
+	// 传得慢:等满 relayCoverWait 照推无封面,回来再推有封面。
+	slow := fresh(lit)
+	got := driveRelay(slow, t0, []relayTick{{0, bare}, {3 * time.Second, bare}, {relayCoverWait, bare}, {8 * time.Second, lit}})
+	if len(got) != 2 || got[0] != bare || got[1] != lit {
+		t.Fatalf("等满了照推、回来再推: %q", got)
+	}
+
+	// 暂停态同样等。
+	paused := fresh("macpause|M|a|b|c")
+	if got := driveRelay(paused, t0, []relayTick{{0, "macpause|M|a|b"}, {2 * time.Second, "macpause|M|a|b|c"}}); len(got) != 0 {
+		t.Fatalf("暂停态的封面闪空也不写: %q", got)
+	}
+
+	// 别的也变了(暂停、换歌)不等;重锚不等。
+	if _, ok := fresh(lit).relayShouldPush(t0, "macpause|Muñeca|Andria Rose|Muñeca", map[string]any{"artwork": ""}, false); !ok {
+		t.Error("暂停了照推,不等封面")
+	}
+	if _, ok := fresh(lit).relayShouldPush(t0, bare, map[string]any{"artwork": ""}, true); !ok {
+		t.Error("重锚照推,不等封面")
+	}
+}
+
+// 推送失败的退避从 30 秒起翻倍,封顶 10 分钟。
+func TestRelayBackoffCapsAtTenMinutes(t *testing.T) {
+	p := &poller{}
+	at := time.Now()
+	var got []time.Duration
+	for range 9 {
+		p.relayInflight = true
+		p.applyRelayResult(relayPushResult{key: "mac|a", at: at, err: errors.New("dial tcp: no such host")})
+		got = append(got, p.relayBackoff)
+		at = at.Add(p.relayBackoff)
+	}
+	want := []time.Duration{30 * time.Second, time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute,
+		10 * time.Minute, 10 * time.Minute, 10 * time.Minute, 10 * time.Minute}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("退避序列 %v,要 %v", got, want)
+	}
+}
+
+// 网页「上次播放」在收听成立时就更新,不看 ListenBrainz 的结果:LB 失败进重发队列、拒收、还在放待重试、没配 LB(submit 直接
+// 返回 nil)都一样。照 A.I.N.Y. 那次 LB 回 404:只在提交成功后才记的话,空闲时推的是「空」。见 13 章决策 14。
+func TestApplySubmitOutcomeRecordsLastListenRegardlessOfLB(t *testing.T) {
+	withLBRetryFile(t)
+	withLBStatusFiles(t)
+	meta := snapshot{Title: "A.I.N.Y.", Artist: "G.E.M. 邓紫棋", Album: "T.I.M.E.", Duration: 200}
+	cases := []struct {
+		name string
+		sess *playSession
+		err  error
+	}{
+		{"LB 404 进重发队列", &playSession{meta: meta, lastfmSettled: true, ended: true}, errors.New("post single: status 404")},
+		{"LB 拒收", &playSession{meta: meta, lastfmSettled: true, ended: true}, fmt.Errorf("post single: 400: %w", errListenRejected)},
+		{"还在放,待重试", &playSession{meta: meta, lastfmSettled: true}, errors.New("timeout")},
+		{"没配 LB / 提交成功", &playSession{meta: meta, lastfmSettled: true, ended: true}, nil},
+	}
+	for _, c := range cases {
+		p := &poller{ctx: context.Background(), cfg: &config{}}
+		p.applySubmitOutcome(submitOutcome{sess: c.sess, meta: meta, artistName: meta.Artist, startedAt: 1760168144, err: c.err})
+		if p.lastListen.key() != meta.key() || p.lastListenAt != 1760168144 || p.lastListenDev != "mac" {
+			t.Errorf("%s: 「上次播放」该是这首: %+v / %d / %q", c.name, p.lastListen, p.lastListenAt, p.lastListenDev)
+		}
+	}
+
+	// 接着空闲:推的是「上次播放」这首,不是「空」。
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	t.Cleanup(srv.Close)
+	suppressEnrichResolveForTest(t, enrichKey(meta.Artist, meta.Title, meta.Album))
+	p := &poller{ctx: context.Background(), cfg: &config{StateRelayURL: srv.URL}, relayDoneCh: make(chan relayPushResult, 1)}
+	p.applySubmitOutcome(submitOutcome{sess: &playSession{meta: meta, lastfmSettled: true, ended: true}, meta: meta, artistName: meta.Artist,
+		startedAt: 1760168144, err: errors.New("post single: status 404")})
+	p.pushRelayState(time.Now(), false)
+	select {
+	case r := <-p.relayDoneCh:
+		if r.key != "last|"+meta.key() {
+			t.Fatalf("空闲时推「上次播放」: %q", r.key)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("没推")
+	}
+}
+
+// 启动补种取回的那条带着 LB 记下的播放器标签(网页页脚据此显示),且只查歌词缓存:这首此刻没在放,缓存没有就不起解析。
+// 见 13 章决策 14。
+func TestSeedLastListenKeepsPlayerAndStaysCacheOnly(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"payload":{"listens":[{"listened_at":1760168144,"track_metadata":{"track_name":"偷笑","artist_name":"方大同",` +
+			`"release_name":"爱爱爱","additional_info":{"source":"mac","media_player":"QQ Music (macOS)"}}}]}}`))
+	}))
+	t.Cleanup(srv.Close)
+	seed := fetchLastListen(context.Background(), srv.URL, "u")
+	if !seed.track.Remote || seed.track.MediaPlayer != "QQ Music (macOS)" {
+		t.Fatalf("补种的快照要只查缓存、带上 LB 的播放器标签: %+v", seed.track)
+	}
+	withEnrichCache(t, map[string]enrichEntry{})
+	before := inflightSnapshot()
+	st := relayState(seed.track, false, seed.device, seed.listenedAt, false)
+	if st["mediaPlayer"] != "QQ Music (macOS)" {
+		t.Errorf("网页页脚的播放器该照 LB 记下的: %v", st["mediaPlayer"])
+	}
+	assertNoNewResolution(t, before, 0)
+	// 本机播放的快照照常按 bundle 推。
+	if got := lbMetaWith(snapshot{Title: "x", Artist: "y", Bundle: "com.tencent.QQMusicMac"}, nil).AdditionalInfo["media_player"]; got != mediaPlayerLabel("com.tencent.QQMusicMac") {
+		t.Error("本机播放照常按 bundle 推出播放器标签")
 	}
 }

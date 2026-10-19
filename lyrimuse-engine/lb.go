@@ -114,9 +114,13 @@ func lbMeta(s snapshot) lbTrackMeta {
 // 查询走 enrichmentFor:isNewTrack 传 false,只是再查一次已经解析好的缓存(或触发首次解析),不是
 // poller.go handle() 那种"刚确认是新曲目"的现场时刻;桥接来的只查缓存。
 func lbMetaWith(s snapshot, enr map[string]string) lbTrackMeta {
+	player := s.MediaPlayer
+	if player == "" {
+		player = mediaPlayerLabel(s.Bundle)
+	}
 	info := map[string]any{
-		"media_player":              mediaPlayerLabel(s.Bundle), // 按当前选定的本地播放器如实报告,见该函数注释
-		"source":                    "mac",                      // 播放来源:mac 本地;桥接的 iPhone 由 bridge 覆盖为 iphone(连带覆盖 media_player,见 poller.go 两处 "source"]="iphone" 附近)
+		"media_player":              player, // 按这条的本地播放器如实报告(见 mediaPlayerLabel);启动补种那条用 LB 记下的(snapshot.MediaPlayer)
+		"source":                    "mac",  // 播放来源:mac 本地;桥接的 iPhone 由 bridge 覆盖为 iphone(连带覆盖 media_player,见 poller.go 两处 "source"]="iphone" 附近)
 		"submission_client":         clientName,
 		"submission_client_version": clientVersion,
 	}

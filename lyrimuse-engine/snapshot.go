@@ -41,9 +41,12 @@ type snapshot struct {
 	Spoken bool
 	// SpokenPending:QQ 音乐的这一条,App 还没给出是不是有声节目的结论(见 awaitsSpokenVerdict)。
 	SpokenPending bool
-	// Remote:iPhone 经 Last.fm 桥接来的这一条(转发的完成收听、同步的正在播放)。上送时只查歌词缓存、
-	// 不新建条目,见 bridgeenrich.go。
+	// Remote:iPhone 经 Last.fm 桥接来的这一条(转发的完成收听、同步的正在播放),或启动补种从 ListenBrainz 取回的
+	// 「上次播放」(fetchLastListen)。上送时只查歌词缓存、不新建条目,见 bridgeenrich.go。
 	Remote bool
+	// MediaPlayer:上送时 media_player 直接用这个标签,不按 Bundle 推(mediaPlayerLabel)。只有启动补种取回的那条带它:
+	// 那条只有 ListenBrainz 记下的标签,没有 bundle id。空串照常按 Bundle 推。见 13 章决策 14。
+	MediaPlayer string
 }
 
 func (s snapshot) key() string {
