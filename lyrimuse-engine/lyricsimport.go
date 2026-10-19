@@ -26,7 +26,7 @@ type parsedLyricsFile struct {
 	source               string
 	manual               bool
 	body                 string
-	ok                   bool // 头部按固定行号完整读到 ar/ti/al 三行、且 artist/title 内容都非空才算 true(album 内容允许是空字符串)
+	ok                   bool // 头部按固定行号完整读到 ar/ti/al 三行、且 title 非空才算 true(artist、album 内容允许是空字符串)
 }
 
 // parseLyricsBytes 解析一个 .lrc/.yrc 文件的内容,拆出 lyricsFileHeader(见 lyricsexport.go)写的
@@ -95,13 +95,13 @@ func parseLyricsBytes(data []byte) parsedLyricsFile {
 	i++
 
 	p.body = strings.Join(lines[i:], "\n")
-	// artist/title 必须非空才算真正有效的头——只检查"这一行是否匹配得上 [ar:]/[ti:]
-	// 这个标签格式"不够,空内容(比如 "[ar:]")也能匹配上正则,但那不是一个可用的身份。
-	// 有些歌词源原文自带的空 ID 标签行(比如酷狗的 "[ti:]\r\n[ar:]\r\n[al:]\r\n")在旧的
-	// 扫描式解析下会被误当成头部消费,产出 key 为 "||" 的空身份记录并持续污染"歌词管理"
-	// 列表,因此这里必须补上"内容不能是空"这层校验。album 允许是空字符串(有些曲目本来
-	// 就没有专辑名),不在这个校验范围内。
-	p.ok = p.artist != "" && p.title != ""
+	// title 必须非空才算真正有效的头——只检查"这一行是否匹配得上 [ti:] 这个标签格式"不够,
+	// 空内容(比如 "[ti:]")也能匹配上正则,但那不是一个可用的身份。有些歌词源原文自带的空 ID
+	// 标签行(比如酷狗的 "[ti:]\r\n[ar:]\r\n[al:]\r\n")在旧的扫描式解析下会被误当成头部消费,
+	// 产出 key 为 "||" 的空身份记录并持续污染"歌词管理"列表,因此这里必须补上"内容不能是空"
+	// 这层校验。artist 允许是空字符串:播放器不报歌手的歌,key 本来就没有歌手(导出那边同样照写,
+	// 见 exportLyricsFiles);album 也允许(有些曲目本来就没有专辑名)。
+	p.ok = p.title != ""
 	return p
 }
 

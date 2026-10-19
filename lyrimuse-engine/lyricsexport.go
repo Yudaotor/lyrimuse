@@ -162,11 +162,10 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			continue
 		}
 		artist, title, album := splitEnrichKey(key)
-		if artist == "" || title == "" {
-			// 防御性跳过:避免"artist/title 是空的"这种残缺 key 混进 enrichCache 时,
-			// 被这里导出成头部同样残缺的文件,再被导入逻辑当成合法数据循环放大(见
-			// lyricsimport.go 的 parseLyricsBytes 注释)。正常情况下 trackEnrichment 的
-			// title=="" 早退+key 本身的构造方式,不会产生这种记录,这里只是多一层保险。
+		if title == "" {
+			// 没有歌名的残缺 key 不导出,免得被导入当成合法数据循环放大(见 lyricsimport.go 的 parseLyricsBytes)。
+			// 没有歌手的照常导出:播放器不报歌手的歌(界面上的歌手是推断出来的,见 03 章决策 32)就是这种 key,
+			// 不导出的话它的歌词(连同手改)只在缓存里,歌词备份和「清空 → 恢复」都带不上(11 章决策 138)。
 			continue
 		}
 		jobs = append(jobs, entryJob{
