@@ -192,7 +192,7 @@ struct NotificationChannelsCard: View {
         SettingsCard(cornerRadius: 18) {
             SettingsCardHeader(
                 title: L10n.t("推送渠道"),
-                help: L10n.t("报告将推送到所有已启用的渠道。点按一行可编辑或发送测试；右键点按可测试或删除")
+                help: L10n.t("报告将推送到所有已启用的渠道。点按一行可编辑或发送测试；右键点按可删除")
             ) {
                 Button {
                     editing = NotificationChannel(platform: NotificationPlatform.displayOrder.first?.rawValue ?? "bark")

@@ -3,7 +3,7 @@
 """开发中改了哪些文件,selftest 该跑哪几组:打出要给 lyrimuse-selftest 的 --filter 参数。
 
     python3 scripts/selftest-plan.py <改过的路径…>        路径相对仓库根
-    python3 scripts/selftest-plan.py --git                取工作区相对 HEAD 改过的(含未跟踪的)
+    python3 scripts/selftest-plan.py --git                取工作区相对 HEAD 改过的(含未跟踪的;只留本地的文档在场就算)
     python3 scripts/selftest-plan.py --explain <路径…>    另打每个路径选中了哪几组、为什么
 
 输出一行:`all`(整套跑)、`none`(selftest 不读这些文件)、或 `-f <组> -f <组> …`。
@@ -30,6 +30,11 @@ SKIP_DIRS = {'.git', '.build', 'node_modules', '.gocache'}
 LITERAL = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
 # 遍历目录的写法:函数里有这些,它写的目录字面量才算「读这个目录底下的文件」;否则目录只是拼路径用的。
 WALKS = re.compile(r'enumerator\(at|contentsOfDirectory\(|subpathsOfDirectory\(|swiftFiles\(under|files\(under')
+# 拼出来的文件名不是字面量(`dir.appendingPathComponent(name + ".json")`):它写的目录里没有子目录的(样例目录)也算读,
+# 读的是底下哪一个看不出来。有子目录的(源码树)不算,那多半只是拼路径的前缀。
+JOINS = re.compile(r'appendingPathComponent\((?!")')
+# 只留本地、被 .gitignore 挡掉的文档(docs-local 组读它们):git status 列不出改没改,--git 时在场的一律当改过。
+LOCAL_ONLY = ['docs/features', 'docs/releasing.md', 'AGENTS.md', 'CLAUDE.md', '.claude/skills']
 TOP_FUNC = re.compile(r'^(?:@MainActor\s+)?(?:private |fileprivate )?func (\w+)', re.M)
 
 
@@ -84,7 +89,9 @@ def resolve(literal, files, file_set, dir_set, by_base):
         return set(), set()
     if static != literal and not static.endswith('/'):
         return set(), set()
-    cand = static.strip('/').lstrip('./')
+    cand = static.strip('/')
+    if cand.startswith('./'):
+        cand = cand[2:]
     hit_files, hit_dirs = set(), set()
     for base in BASES:
         p = os.path.normpath(os.path.join(base, cand)) if base else os.path.normpath(cand)
@@ -106,6 +113,7 @@ def group_reads():
             d = os.path.dirname(d)
             dir_set.add(d)
     dir_set.discard('')
+    parents = {os.path.dirname(d) for d in dir_set}
     by_base = {}
     for f in files:
         by_base.setdefault(os.path.basename(f), set()).add(f)
@@ -115,11 +123,14 @@ def group_reads():
         fs, ds = set(), set()
         for fn in closure(entry, funcs):
             walks = WALKS.search(funcs[fn]) is not None
+            joins = JOINS.search(funcs[fn]) is not None
             for lit in LITERAL.findall(funcs[fn]):
                 a, b = resolve(lit, files, file_set, dir_set, by_base)
                 fs |= a
                 if walks:
                     ds |= b
+                elif joins:
+                    ds |= {d for d in b if d not in parents}
         reads[group] = (fs, ds)
     return reads
 
@@ -149,12 +160,16 @@ def plan(paths, explain=False):
 def git_changed():
     out = subprocess.run(['git', '-C', ROOT, 'status', '--porcelain', '--untracked-files=all'],
                          capture_output=True, text=True, check=True).stdout
+    ignored = subprocess.run(['git', '-C', ROOT, 'status', '--porcelain', '--ignored', '--untracked-files=all', '--']
+                             + LOCAL_ONLY, capture_output=True, text=True, check=True).stdout
     paths = []
-    for line in out.splitlines():
+    for line in out.splitlines() + [l for l in ignored.splitlines() if l.startswith('!! ')]:
         p = line[3:]
         if ' -> ' in p:
             p = p.split(' -> ', 1)[1]
-        paths.append(p.strip('"'))
+        p = p.strip('"')
+        if p not in paths:
+            paths.append(p)
     return paths
 
 

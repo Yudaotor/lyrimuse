@@ -19,10 +19,9 @@ HEAVY_GATE_WANT=""
 # 取不到(owner 还没写、目录已经没了)时输出空串、返回 0:调用方开着 set -e,赋值里的非零会让整个脚本退出。
 heavy_gate_owner_pid() { sed -n 1p "$1/owner" 2>/dev/null || true; }
 
-# heavy_gate_stale <令牌目录>:持有进程不在了;或者 owner 一直没写上(建了目录就被杀)、目录超过一分钟。
+# heavy_gate_stale <令牌目录> <读到的 pid>:持有进程不在了;或者 owner 一直没写上(建了目录就被杀)、目录超过一分钟。
 heavy_gate_stale() {
-  local pid
-  pid="$(heavy_gate_owner_pid "$1")"
+  local pid="$2"
   if [ -n "$pid" ]; then
     ! kill -0 "$pid" 2>/dev/null
   else
@@ -75,13 +74,12 @@ heavy_gate_acquire() {
           fi
           return 0
         fi
-        if heavy_gate_stale "$tok"; then
-          # 回收前再核对一次持有者:别的排队者可能刚回收、写进了自己的 pid。
-          pid="$(heavy_gate_owner_pid "$tok")"
-          if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
-            rm -rf "$tok"
-            continue
-          fi
+        # 回收前再读一次 pid,跟判陈旧时读到的一样才删:别的排队者可能刚回收、重建了令牌(还没写 owner 时读到空串,
+        # 写上了是它自己的 pid),那就不是陈旧令牌了。同 build.sh 的锁。
+        pid="$(heavy_gate_owner_pid "$tok")"
+        if heavy_gate_stale "$tok" "$pid" && [ "$(heavy_gate_owner_pid "$tok")" = "$pid" ]; then
+          rm -rf "$tok"
+          continue
         fi
         i=$((i + 1))
       done

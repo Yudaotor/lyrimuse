@@ -13,10 +13,15 @@ import (
 
 func TestTelegramSendURL(t *testing.T) {
 	cases := map[string]string{
-		"123456789:AAHfake-token_x":                   "https://api.telegram.org/bot123456789:AAHfake-token_x/sendMessage",
-		"  123456789:AAHfake-token_x ":                "https://api.telegram.org/bot123456789:AAHfake-token_x/sendMessage",
-		"https://api.telegram.org/bot1:x/sendMessage": "https://api.telegram.org/bot1:x/sendMessage",
-		"http://127.0.0.1:9/bot1:x/sendMessage":       "http://127.0.0.1:9/bot1:x/sendMessage",
+		"123456789:AAHfake-token_x":                              "https://api.telegram.org/bot123456789:AAHfake-token_x/sendMessage",
+		"  123456789:AAHfake-token_x ":                           "https://api.telegram.org/bot123456789:AAHfake-token_x/sendMessage",
+		"https://api.telegram.org/bot1:x/sendMessage":            "https://api.telegram.org/bot1:x/sendMessage",
+		"http://127.0.0.1:9/bot1:x/sendMessage":                  "http://127.0.0.1:9/bot1:x/sendMessage",
+		"https://api.telegram.org/bot1:x/sendMessage?chat_id=42": "https://api.telegram.org/bot1:x/sendMessage?chat_id=42",
+		"https://api.telegram.org/bot1:x/getUpdates":             "https://api.telegram.org/bot1:x/sendMessage",
+		"https://api.telegram.org/bot1:x/getUpdates?offset=3":    "https://api.telegram.org/bot1:x/sendMessage",
+		"https://api.telegram.org/bot1:x":                        "https://api.telegram.org/bot1:x/sendMessage",
+		"https://example.com/hooks/telegram":                     "https://example.com/hooks/telegram",
 	}
 	for in, want := range cases {
 		if got := telegramSendURL(in); got != want {

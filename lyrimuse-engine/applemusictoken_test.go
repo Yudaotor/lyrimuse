@@ -107,6 +107,27 @@ func TestApplemusicFetchTTMLDoesNotBlameUserWhenDevTokenBroken(t *testing.T) {
 	}
 }
 
+// 核 developer token 那一下被限流 / 5xx:说不清是谁的事,不清掉 developer token、也不记 user token 被拒。
+func TestApplemusicFetchTTMLKeepsDevTokenWhenCheckFails(t *testing.T) {
+	withApplemusicCreds(t, "cn")
+	amTestSetDevToken("test-dev-token")
+	withLRCLIBFake(t, func(r *http.Request) (int, http.Header, string) {
+		if r.Header.Get("Media-User-Token") != "" {
+			return http.StatusUnauthorized, nil, ""
+		}
+		return http.StatusTooManyRequests, nil, ""
+	})
+	if _, err := applemusicFetchTTML(qqRoundCtx(), "cn", "1", "syllable-lyrics", "test-dev-token", "test-user-token"); err == nil {
+		t.Fatal("被拒应当报错")
+	}
+	if got := applemusicCachedDevToken(); got != "test-dev-token" {
+		t.Errorf("核票没问成时不该清掉 developer token: %q", got)
+	}
+	if st := applemusicReadStatus(); st.RejectedAt != 0 {
+		t.Error("核票没问成时不该记 user token 被拒")
+	}
+}
+
 // 晚回来的 401 只作废它带的那张票:当前已经换成新票时不动。
 func TestApplemusicClearDevTokenOnlyClearsRejected(t *testing.T) {
 	withApplemusicCreds(t, "cn")

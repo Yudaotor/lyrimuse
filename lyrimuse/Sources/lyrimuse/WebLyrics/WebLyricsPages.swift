@@ -229,6 +229,7 @@ enum WebLyricsPages {
                   const m = JSON.parse(e.data);
                   if (m.type === 'hello') checkRevision(m.rev);
                   else if (m.type === 'links') links = m.items;
+                  else if (m.type === 'no-video') dropVideo();
                 } catch (err) {}
                 return;
               }

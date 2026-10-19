@@ -374,14 +374,29 @@ func TestNotifyResendFailedEntry(t *testing.T) {
 
 	runNotifyTest(notifyTestRequest{ID: "r2", Resend: "nope"})
 	runNotifyTest(notifyTestRequest{ID: "r3", Resend: entries[1].ID}) // 推成的不重发
+	gotBody = nil
+	runNotifyTest(notifyTestRequest{ID: "r4", Resend: failed.ID}) // 之后已经推成过,不再推
+	if gotBody != nil {
+		t.Errorf("已经重发成功的那条再点重发不该再推, got %v", gotBody)
+	}
 	b, _ := os.ReadFile(notifyTestResultPath)
 	var f notifyTestResultFile
 	json.Unmarshal(b, &f)
-	if len(f.Results) != 3 || !f.Results[0].OK || f.Results[1].OK || f.Results[1].Kind != notifyKindConfig || f.Results[2].OK {
+	if len(f.Results) != 4 || !f.Results[0].OK || f.Results[1].OK || f.Results[1].Kind != notifyKindConfig || f.Results[2].OK ||
+		!f.Results[3].OK || f.Results[3].Kind != notifyKindOK {
 		t.Errorf("results = %+v", f.Results)
 	}
 	if n := len(readNotifyLog(logPath).Entries); n != 2 {
-		t.Errorf("找不到记录时不推、不记, got %d 条", n)
+		t.Errorf("找不到记录、已经推成过时不推、不记, got %d 条", n)
+	}
+
+	// 引擎下一轮自动重推同一份周报:重发推成的那个渠道跳过、算收下(不再推第二份);另一期的报告照推。
+	gotBody = nil
+	if err := alerterFromConfig(liveConfig()).send(notifyEventWeekly, "周报", "Top 3"); err != nil || gotBody != nil {
+		t.Errorf("已收到这份周报的渠道应跳过并算收下, err=%v body=%v", err, gotBody)
+	}
+	if err := alerterFromConfig(liveConfig()).send(notifyEventWeekly, "下一期周报", "Top 3"); err != nil || gotBody == nil {
+		t.Errorf("另一期报告照推, err=%v body=%v", err, gotBody)
 	}
 }
 

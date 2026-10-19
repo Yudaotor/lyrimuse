@@ -30,6 +30,10 @@ final class WebLyricsMotionCover: @unchecked Sendable {
         layer.opacity = 0
     }
 
+    deinit {
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+    }
+
     /// 主线程:这一刻该放哪份、动不动。`file` 为 nil 时淡出。
     @MainActor
     func update(file next: URL?, playing: Bool) {

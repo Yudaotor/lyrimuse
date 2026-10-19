@@ -1166,7 +1166,7 @@
 "找不到该会话（Chat ID 有误，或尚未向机器人发送过消息）" = "Chat not found (incorrect Chat ID, or you haven’t messaged the bot yet)";
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Found %1$@ · Not found %2$@ · Skipped %3$@";
 "找到 %@ 首" = "%@ Found";
-"报告将推送到所有已启用的渠道。点按一行可编辑或发送测试；右键点按可测试或删除" = "Reports are pushed to every enabled channel. Click a row to edit it or send a test; right-click to test or delete";
+"报告将推送到所有已启用的渠道。点按一行可编辑或发送测试；右键点按可删除" = "Reports are pushed to every enabled channel. Click a row to edit it or send a test; right-click to delete";
 "拆分" = "Split";
 "拆分…" = "Split…";
 "拆分「%@」？" = "Split “%@”?";

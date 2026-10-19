@@ -4158,6 +4158,7 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowKaraokeFill = .text
             s.lyricsWindowKaraokeFillColorHex = AppSettings.defaultLyricsWindowMiniKaraokeFillColorHex
             s.lyricsWindowLyricsAlignment = .automatic
+            s.lyricsWindowHDRHighlight = false
             s.motionCoverEnabled = AppSettings.defaultMotionCoverEnabled
         }
     }

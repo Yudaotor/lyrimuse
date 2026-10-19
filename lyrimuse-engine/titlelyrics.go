@@ -53,7 +53,7 @@ func lyricSearchQueries(samples []string) []string {
 				continue
 			}
 			n := countRunes(text, unicode.IsLetter)
-			key := normLoose(text)
+			key := normLooseUncached(text)
 			if n < lyricSearchQueryMinLetters || seen[key] {
 				continue
 			}

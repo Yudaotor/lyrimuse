@@ -1120,7 +1120,7 @@ func runLyricsWindowTests() {
                     && sourceBytes(layerList, contain: "switch s.style.listSide {")
                     && sourceBytes(layerList, contain: "fadeOut(old, side: s.style.listSide)"),
                     true, "完整对齐(图层版): 行、末尾创作者、间奏点都按强制方向")
-        // 默认值就是加这几项之前完整尺寸的画法,「重置」恢复成它。
+        // 完整尺寸这几项没存过时的默认值,「重置」恢复成它。
         expectEqual(sourceBytes(appSettings, contain: "lyricsWindowLyricsKaraoke = (defaults.object(forKey: Keys.lyricsWindowLyricsKaraoke) as? Bool) ?? true")
                     && sourceHas(appSettings, "lyricsWindowFontWeight = defaults.string(forKey: Keys.lyricsWindowFontWeight)\n            .flatMap(OverlayFontWeight.init(rawValue:)) ?? .bold")
                     && sourceHas(appSettings, "lyricsWindowKaraokeFill = defaults.string(forKey: Keys.lyricsWindowKaraokeFill)\n            .flatMap(LyricsWindowKaraokeFill.init(rawValue:)) ?? .text")
@@ -1129,8 +1129,9 @@ func runLyricsWindowTests() {
         expectEqual(sourceHas(settingsView, "s.lyricsWindowFontFamily = \"\"\n            s.lyricsWindowLyricsKaraoke = true\n"
                                 + "            s.lyricsWindowFontWeight = .bold\n            s.lyricsWindowKaraokeFill = .text\n"
                                 + "            s.lyricsWindowKaraokeFillColorHex = AppSettings.defaultLyricsWindowMiniKaraokeFillColorHex\n"
-                                + "            s.lyricsWindowLyricsAlignment = .automatic\n"),
-                    true, "完整尺寸: 「重置」恢复这几项")
+                                + "            s.lyricsWindowLyricsAlignment = .automatic\n"
+                                + "            s.lyricsWindowHDRHighlight = false\n"),
+                    true, "完整尺寸: 「重置」恢复这几项,含 HDR 高亮")
         expectEqual(sourceHas(settingsView, "karaoke: $settings.lyricsWindowLyricsKaraoke,\n                fontWeight: $settings.lyricsWindowFontWeight,\n"
                                 + "                karaokeFill: $settings.lyricsWindowKaraokeFill,")
                     && sourceBytes(settingsView, contain: "alignment: $settings.lyricsWindowLyricsAlignment)")

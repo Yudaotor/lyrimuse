@@ -322,7 +322,11 @@ final class WebLyricsScreenRenderer {
         dirty = true
         commit()
         frames?.renderNow()
+        // 视频流建不起来(这个尺寸硬件编码器不收、编码器不可用):叫网页改回逐帧 JPEG 重连,别停在「正在连接」。
+        if video, frames == nil { onText?(Self.noVideoMessage) }
     }
+
+    private static let noVideoMessage = #"{"type":"no-video"}"#
 
     /// 网页发回来的一次指针事件(相对位置,左上为原点)。按下时判归谁:菜单开着时只有菜单行能点、点别处只关菜单
     /// (同歌词窗口的全窗捕手);按钮抬起时还在同一颗上才执行;进度条拖动中只改显示、抬起才跳转;音量跟手;
@@ -768,6 +772,8 @@ final class WebLyricsScreenRenderer {
         let hasTranslation = playback.allLines.contains { $0.line.translation != nil }
         let hasRomanization = playback.allLines.contains { $0.line.romanization != nil }
         refreshCount()
+        // 左栏藏起来(停播)时 apply 不再调,动态封面在这里停:不然播放器会一直静音循环解码,出帧线程每拍照样取帧。
+        if pane.isHidden { pane.motion.update(file: nil, playing: false) }
         if !pane.isHidden {
             pane.apply(.init(
                 style: paneStyle,
@@ -1229,8 +1235,12 @@ final class WebLyricsFrameSource: @unchecked Sendable {
         queue.async {
             self.stopped = true
             self.timer.cancel()
-            for encoder in self.encoders.values { encoder.invalidate() }
-            self.videoEncoder?.invalidate()
+            // 缩放、编码跑在 encodeQueue 上:作废排在已经派过去的那几帧后面,别跟它们并发(见 19 章决策 26)。
+            let encoders = Array(self.encoders.values), video = self.videoEncoder
+            self.encodeQueue.async {
+                for encoder in encoders { encoder.invalidate() }
+                video?.invalidate()
+            }
         }
     }
 

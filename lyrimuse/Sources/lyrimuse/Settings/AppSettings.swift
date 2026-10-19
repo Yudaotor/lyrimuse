@@ -2422,7 +2422,7 @@ final class AppSettings: ObservableObject {
         lyricsWindowGradientDirection = defaults.string(forKey: Keys.lyricsWindowGradientDirection)
             .flatMap(LyricsWindowGradientDirection.init(rawValue:)) ?? .vertical
         lyricsWindowFontFamily = defaults.string(forKey: Keys.lyricsWindowFontFamily) ?? ""
-        // 默认开、加粗、跟随文字颜色、自动对齐:加这几项之前完整尺寸就是这样画的,升级上来的人不变。
+        // 没存过时:卡拉 OK 开、加粗、跟随文字颜色、自动对齐。
         lyricsWindowLyricsKaraoke = (defaults.object(forKey: Keys.lyricsWindowLyricsKaraoke) as? Bool) ?? true
         lyricsWindowFontWeight = defaults.string(forKey: Keys.lyricsWindowFontWeight)
             .flatMap(OverlayFontWeight.init(rawValue:)) ?? .bold

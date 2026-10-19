@@ -196,7 +196,7 @@ func splitBakedTranslation(lyrics, yrc string, foreignSong bool) (cleanLRC, trLR
 		class := bl.class
 		if class == bakedLineMixed {
 			if isTranslationNotice(bl.text) {
-				removedText[normLoose(bl.text)] = true
+				removedText[normLooseUncached(bl.text)] = true
 				continue
 			}
 			if prevClass == bakedLineForeign && bakedMixedTranslationOf(bl.text, lastForeign) {
@@ -212,7 +212,7 @@ func splitBakedTranslation(lyrics, yrc string, foreignSong bool) (cleanLRC, trLR
 			if bl.startMs >= 0 {
 				removedMs[bl.startMs] = true
 			}
-			removedText[normLoose(bl.text)] = true
+			removedText[normLooseUncached(bl.text)] = true
 			stamps := lastStamps
 			if stamps == "" {
 				stamps = bl.stamps
@@ -289,7 +289,7 @@ func stripBakedYRCLines(yrc string, removedMs map[int]bool, removedText map[stri
 			}
 		}
 		if !drop {
-			text := normLoose(raw)
+			text := normLooseUncached(raw)
 			if text != "" && removedText[text] {
 				drop = true
 			}

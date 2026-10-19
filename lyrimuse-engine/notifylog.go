@@ -94,6 +94,21 @@ func findNotifyLogEntry(id string) (notifyLogEntry, bool) {
 	return notifyLogEntry{}, false
 }
 
+// notifyDeliveredSince:推送记录里有没有 since(unix 秒)及以后推到 channel、同一事件同一标题、推成了的一条。
+func notifyDeliveredSince(channel, event, title string, since int64) bool {
+	notifyLogMu.Lock()
+	defer notifyLogMu.Unlock()
+	if notifyLogPath == "" {
+		return false
+	}
+	for _, e := range readNotifyLog(notifyLogPath).Entries {
+		if e.OK && e.At >= since && e.Channel == channel && e.Event == event && e.Title == title {
+			return true
+		}
+	}
+	return false
+}
+
 func newNotifyLogID() string {
 	var b [8]byte
 	_, _ = rand.Read(b[:])

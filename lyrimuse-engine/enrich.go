@@ -1803,6 +1803,12 @@ func lyricsChosenForShorterCut(e enrichEntry, actual float64) bool {
 	return durationMismatch(e.ResolvedDurationSecs, actual) && !durationMismatch(e.DurationSecs, actual)
 }
 
+// lyricsFitAnotherCut:现存那份是给另一个版本选的 —— 末句比这一轮的曲长还晚(lyricsOutrunPlayback),或者是给短得多的
+// 那一版选的(lyricsChosenForShorterCut)。重评留下它时不把选词时长改记成这一轮的,两个方向必须一起认,见 09 章决策 295。
+func lyricsFitAnotherCut(e enrichEntry, actual float64) bool {
+	return lyricsOutrunPlayback(e.Lyrics.String(), e.ResolvedDurationSecs, actual) || lyricsChosenForShorterCut(e, actual)
+}
+
 // observeWrongDuration:「时长对不上」这个观察值必须同值稳定满一个窗口才可信。
 //
 // 换曲/预载窗口里 media-control 会把下一首的时长和当前曲目的标题拼进同一份快照。这样一次性的脏观察值直接喂给
@@ -2597,15 +2603,17 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		if complete {
 			e.stampLyricsScoring()
 		}
-		e.ResolvedDurationSecs = durationSecs
+		if !lyricsFitAnotherCut(e, durationSecs) {
+			e.ResolvedDurationSecs = durationSecs
+		}
 		log.Printf("lyrics rescore: %s  no valid candidate under v%s, keeping %s", key, currentLyricsScoring, e.LyricsSource)
 	case keep:
-		// 当前这份留着(见 rescoreKeeps),只记这一轮做过。给短得多的另一版选的那份留下来时不改记成这一轮的时长:它没在这个
-		// 时长下赢过,改了之后升级重选和重新匹配都认不出它配不上这段录音。
+		// 当前这份留着(见 rescoreKeeps),只记这一轮做过。给另一版选的那份(lyricsFitAnotherCut)留下来时不改记成这一轮的
+		// 时长:它没在这个时长下赢过,改了之后升级重选和重新匹配都认不出它配不上这段录音。
 		if complete {
 			e.stampLyricsScoring()
 		}
-		if !lyricsChosenForShorterCut(e, durationSecs) {
+		if !lyricsFitAnotherCut(e, durationSecs) {
 			e.ResolvedDurationSecs = durationSecs
 		}
 		switch {
@@ -2733,11 +2741,10 @@ func rescoreKeepsCurrent(e enrichEntry, scored []scoredLyricCandidateResult, pic
 	return !rescoreCurrentTimelineOff(e, scored) && picked.Score <= e.LyricsScore
 }
 
-// rescoreComparedEntry:重评判当前这份留不留时拿来比的那一份。它是给短得多的另一版选的(lyricsChosenForShorterCut)时,
-// 存着的分带着那个时长的加分,记成 0;它这一轮也在候选里时 rescoreKeepsCurrent 照旧按这一轮的分比。同升级重选那条,
-// 见 09 章决策 289。
+// rescoreComparedEntry:重评判当前这份留不留时拿来比的那一份。它是给另一版选的(lyricsFitAnotherCut)时,存着的分带着
+// 那个时长的加分,记成 0;它这一轮也在候选里时 rescoreKeepsCurrent 照旧按这一轮的分比。同升级重选那条,见 09 章决策 289。
 func rescoreComparedEntry(e enrichEntry, durationSecs float64) enrichEntry {
-	if lyricsChosenForShorterCut(e, durationSecs) {
+	if lyricsFitAnotherCut(e, durationSecs) {
 		e.LyricsScore = 0
 	}
 	return e

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	neturl "net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -63,7 +64,8 @@ func vibeLyric(ctx context.Context, artist, title, album string, durationSecs fl
 	if title == "" {
 		return vibeResult{}
 	}
-	key := artist + "|" + title + "|" + album
+	// 带上时长:选候选要过时长闸,同名的不同剪辑(~durN 变体)不能共用一份结果。
+	key := artist + "|" + title + "|" + album + "|" + strconv.Itoa(int(math.Round(durationSecs)))
 	vibeMu.Lock()
 	if v, ok := vibeCache[key]; ok {
 		vibeMu.Unlock()
@@ -340,6 +342,18 @@ func vibeCandidateScore(item vibeSearchItem, artist, title, album string, durati
 	return score
 }
 
+// vibeQueries:按顺序要搜的检索词(「歌名 第一位歌手」、只按歌名、原样的歌名),去掉空的和重复的 —— 没有歌手时前两条是同一个串,
+// 歌名没被清理过时第三条跟第二条相同。VIBE 和 Genie 共用。
+func vibeQueries(qTitle, withArtist, raw string) []string {
+	var out []string
+	for _, q := range []string{withArtist, qTitle, raw} {
+		if q != "" && !slices.Contains(out, q) {
+			out = append(out, q)
+		}
+	}
+	return out
+}
+
 // resolveVibeLyric:先按「歌名 第一位歌手」搜(都过一遍 vibeQueryText),一条都没过闸再只按歌名搜一次(歌手在 VIBE 上常是另一种写法,
 // 写进检索词反而搜不到),还没有且歌名被清理过时再按原样的歌名搜一次;过闸的按分数取前几条并发拉歌词,按名次挑第一份带同步时间轴的。全都只有纯文本时交名次最高的那份。
 func resolveVibeLyric(ctx context.Context, artist, title, album string, durationSecs float64) vibeResult {
@@ -348,11 +362,9 @@ func resolveVibeLyric(ctx context.Context, artist, title, album string, duration
 		score int
 	}
 	qTitle := vibeQueryText(lyricQueryTitle(title))
-	queries := []string{strings.TrimSpace(qTitle + " " + vibeQueryText(firstCreditedArtist(artist))), qTitle}
 	// 合作者写法跟 VIBE 一致时,带着 feat 段反而搜得到(歌名跟专辑同名时,只按歌名搜,前 10 条全是这张专辑的别的歌)。
-	if raw := strings.TrimSpace(lyricQueryTitle(title)); raw != qTitle && raw != "" {
-		queries = append(queries, raw)
-	}
+	queries := vibeQueries(qTitle, strings.TrimSpace(qTitle+" "+vibeQueryText(firstCreditedArtist(artist))),
+		strings.TrimSpace(lyricQueryTitle(title)))
 	var candidates []scoredItem
 	for qi, q := range queries {
 		items, err := vibeSearch(ctx, q)

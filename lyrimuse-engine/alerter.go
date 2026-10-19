@@ -41,6 +41,7 @@ var errNoNotifyChannel = errors.New("notify: no enabled channel for this event")
 
 // send 把一条消息推到 event 该去的每个渠道,每个渠道的结果记进推送记录。至少一个渠道收下就返回 nil,调用方据此
 // 记「已推送」:再推一遍的话收下的那几个会收到两份。一个都没收下才返回错误,下次检查整条重推。
+// 听歌报告重推时,notifyDigestRedeliverWindow 内已经推成过同一标题的渠道(用户在推送页点了重发)跳过、算收下。
 func (a *alerter) send(event, title, body string) error {
 	if a == nil {
 		return errNoNotifyChannel
@@ -51,7 +52,13 @@ func (a *alerter) send(event, title, body string) error {
 	}
 	var firstErr error
 	delivered := false
+	since := time.Now().Add(-notifyDigestRedeliverWindow).Unix()
 	for _, ch := range targets {
+		if notifyEventIsDigest(event) && notifyDeliveredSince(ch.ID, event, title, since) {
+			log.Printf("notify: skipping %s, it already got this digest (event=%s)", ch.Platform, event)
+			delivered = true
+			continue
+		}
 		msg := notifyMessage{Event: event, Title: title, Body: body}
 		r := pushToChannel(ch, msg)
 		recordNotifyDelivery(ch, msg, r)
@@ -65,6 +72,18 @@ func (a *alerter) send(event, title, body string) error {
 		return nil
 	}
 	return firstErr
+}
+
+// notifyDigestRedeliverWindow:send 往回查多久的推送记录认「这个渠道已经收到过这份报告」。报告标题都带着所属的日期区间,
+// 不会跟下一期撞上。
+const notifyDigestRedeliverWindow = 7 * 24 * time.Hour
+
+func notifyEventIsDigest(event string) bool {
+	switch event {
+	case notifyEventDaily, notifyEventWeekly, notifyEventMonthly, notifyEventYearly:
+		return true
+	}
+	return false
 }
 
 // push 推一条不属于任何事件的消息(推到全部启用的渠道)。单测用。

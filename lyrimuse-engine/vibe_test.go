@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -325,5 +326,57 @@ func TestResolveVibeLyricFallsBackToRawTitle(t *testing.T) {
 	r := resolveVibeLyric(qqRoundCtx(), "Taylor Swift & Bon Iver", "evermore (feat. Bon Iver)", "evermore", 304)
 	if len(queries) != 3 || queries[2] != "evermore (feat. Bon Iver)" || r.lyrics == "" {
 		t.Fatalf("应按原样的歌名再搜一次并找到: queries=%v r=%+v", queries, r)
+	}
+}
+
+// 检索词去掉空的和重复的:没有歌手时「歌名 歌手」就是歌名本身,不搜两遍;歌名被清理过时才多一条原样的。
+func TestVibeQueriesDedupe(t *testing.T) {
+	for _, c := range []struct {
+		qTitle, withArtist, raw string
+		want                    []string
+	}{
+		{"밤편지", "밤편지 아이유", "밤편지", []string{"밤편지 아이유", "밤편지"}},
+		{"밤편지", "밤편지", "밤편지", []string{"밤편지"}},
+		{"evermore", "evermore Taylor Swift", "evermore (feat. Bon Iver)", []string{"evermore Taylor Swift", "evermore", "evermore (feat. Bon Iver)"}},
+		{"evermore", "evermore", "", []string{"evermore"}},
+	} {
+		if got := vibeQueries(c.qTitle, c.withArtist, c.raw); !slices.Equal(got, c.want) {
+			t.Errorf("vibeQueries(%q, %q, %q) = %q, want %q", c.qTitle, c.withArtist, c.raw, got, c.want)
+		}
+	}
+}
+
+// 进程内缓存按时长分开:同名同专辑、时长不同的两版各自走一遍时长闸,不拿对方的结果。
+func TestVibeCacheKeyedByDuration(t *testing.T) {
+	var searches int
+	withKugouFakeReq(t, func(r *http.Request, target string) (int, string) {
+		switch {
+		case strings.HasSuffix(target, "/vibeWeb/musicapiweb/v4/search/track"):
+			searches++
+			return http.StatusOK, vibeTestSearch
+		case strings.HasSuffix(target, "/vibe/v4/lyric/11"):
+			return http.StatusOK, vibeTestSync
+		}
+		return http.StatusNotFound, ""
+	})
+	vibeMu.Lock()
+	saved := vibeCache
+	vibeCache = map[string]vibeResult{}
+	vibeMu.Unlock()
+	t.Cleanup(func() {
+		vibeMu.Lock()
+		vibeCache = saved
+		vibeMu.Unlock()
+	})
+	if r := vibeLyric(qqRoundCtx(), "아이유", "밤편지", "밤편지", 253); r.lyrics == "" {
+		t.Fatal("253 秒那一版应拿到歌词")
+	}
+	n := searches
+	vibeLyric(qqRoundCtx(), "아이유", "밤편지", "밤편지", 253)
+	if searches != n {
+		t.Errorf("同一时长第二次应命中缓存, searches %d -> %d", n, searches)
+	}
+	if r := vibeLyric(qqRoundCtx(), "아이유", "밤편지", "밤편지", 200); searches == n || r.lyrics != "" {
+		t.Errorf("差 53 秒的另一版不能拿 253 秒那份的结果: searches=%d r=%+v", searches, r)
 	}
 }

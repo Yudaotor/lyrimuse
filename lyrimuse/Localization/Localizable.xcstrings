@@ -50203,19 +50203,19 @@
         }
       }
     },
-    "报告将推送到所有已启用的渠道。点按一行可编辑或发送测试；右键点按可测试或删除" : {
+    "报告将推送到所有已启用的渠道。点按一行可编辑或发送测试；右键点按可删除" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reports are pushed to every enabled channel. Click a row to edit it or send a test; right-click to test or delete"
+            "value" : "Reports are pushed to every enabled channel. Click a row to edit it or send a test; right-click to delete"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "報告將推播到所有已啟用的管道。按一下一列可編輯或傳送測試；按右鍵可測試或刪除"
+            "value" : "報告將推播到所有已啟用的管道。按一下一列可編輯或傳送測試；按右鍵可刪除"
           }
         }
       }

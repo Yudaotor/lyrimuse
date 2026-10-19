@@ -4931,7 +4931,7 @@ struct LyricsWindowView: View {
     /// "当前行"高亮,反而误导用户以为它在跟播放联动。
     @ViewBuilder
     private func plainLyricsFallback(leading: CGFloat, trailing: CGFloat) -> some View {
-        // 字体、粗细、文字颜色、对齐跟这一尺寸的设置走;粗细比正文细几档,默认档就是一直以来的常规字重。
+        // 字体、粗细、文字颜色、对齐跟这一尺寸的设置走;粗细比正文细几档,正文默认档推出来是常规字重。
         let side = lyricForcedSide ?? .leading
         ScrollView {
             VStack(alignment: side.horizontalAlignment, spacing: 18) {

@@ -1197,7 +1197,7 @@ Every setting in the Settings window, by where it lives: 270 in all. Type a name
 
 ### Labs › Push Alerts
 
-- **Push Channels**: Reports are pushed to every enabled channel. Click a row to edit it or send a test; right-click to test or delete
+- **Push Channels**: Reports are pushed to every enabled channel. Click a row to edit it or send a test; right-click to delete
 - **Listening Digests**
 - **Data Source**
 - **Weekly Listening Digest**

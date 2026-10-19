@@ -201,14 +201,28 @@ var slackEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 
 func slackEscape(s string) string { return slackEscaper.Replace(s) }
 
-// telegramSendURL 把用户填的值换成 sendMessage 地址:填的是完整地址(http 开头)就原样用,
-// 否则当成 @BotFather 给的机器人 Token 拼出来。
+// telegramSendURL 把用户填的值换成 sendMessage 地址:填的是完整地址(http 开头)时,路径是 `/bot<Token>/<方法>` 而方法
+// 不是 sendMessage 的(设置说明里查 Chat ID 用的 getUpdates)换成 sendMessage、去掉查询串,其余原样用;不是地址就当成
+// @BotFather 给的机器人 Token 拼出来。getUpdates 收到 chat_id、text 也回 ok:true,不换的话推送会被判成送达、实际没发。
 func telegramSendURL(raw string) string {
 	raw = strings.TrimSpace(raw)
-	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
+	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
+		return "https://api.telegram.org/bot" + raw + "/sendMessage"
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
 		return raw
 	}
-	return "https://api.telegram.org/bot" + raw + "/sendMessage"
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(parts) < 1 || len(parts) > 2 || !strings.HasPrefix(parts[0], "bot") || len(parts[0]) <= len("bot") {
+		return raw
+	}
+	if len(parts) == 2 && parts[1] == "sendMessage" {
+		return raw
+	}
+	u.Path = "/" + parts[0] + "/sendMessage"
+	u.RawPath, u.RawQuery, u.Fragment = "", "", ""
+	return u.String()
 }
 
 // dingtalkSignedURL 给钉钉机器人开了"加签"安全设置时用——把 timestamp/sign 追加成

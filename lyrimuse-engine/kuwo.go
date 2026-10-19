@@ -469,11 +469,9 @@ func resolveKuwoLyric(ctx context.Context, artist, title, album string, duration
 	if rank < 0 {
 		return kuwoResult{}
 	}
-	// 名次更靠前的那条取词没问成、退到后面一条:这一份不进缓存,下次再问前面那条(见 lyricsubfetch.go)。
-	for r := 0; r < rank; r++ {
-		if failedByRank[r] {
-			noteLyricSubFetchFailure(ctx)
-		}
+	// 没问成的那几名里可能有更合适的那份:这一份不进缓存,下次再问(见 lyricsubfetch.go)。
+	if kuwoFailedRankMayBeat(failedByRank, lrcs, rank, durationSecs) {
+		noteLyricSubFetchFailure(ctx)
 	}
 	f := fetchedByRank[rank]
 	return kuwoResult{
@@ -481,6 +479,22 @@ func resolveKuwoLyric(ctx context.Context, artist, title, album string, duration
 		durationSecs: kuwoDurationSecs(f.it.Duration), cover: kuwoCoverURL(f.it.WebAlbumPicShort),
 		yrc: kuwoFetchLrcxYRC(ctx, kuwoMusicID(f.it.MusicRID)),
 	}
+}
+
+// kuwoFailedRankMayBeat:采纳第 rank 名时,取词没问成的那几名里有没有可能本该采纳的 —— 名次更靠前的;或者采纳的这份末句
+// 对不上曲长(kuwoPickFetchedRank 退回了名次最前的),排在它后面的也可能是对得上的那份。曲长未知时只看名次。纯函数。
+func kuwoFailedRankMayBeat(failed []bool, lrcs []string, rank int, durationSecs float64) bool {
+	fits := durationSecs <= 0
+	if !fits {
+		last, ok := lastLRCTimestampSecs(lrcs[rank])
+		fits = ok && durationFits(last, durationSecs)
+	}
+	for r, f := range failed {
+		if f && (r < rank || !fits) {
+			return true
+		}
+	}
+	return false
 }
 
 // kuwoPickFetchedRank:取到词的那几名(lrcs 按名次排,没取到的是空串)里采纳哪一名。时间轴末句跟曲长对得上的

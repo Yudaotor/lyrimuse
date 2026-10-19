@@ -123,11 +123,15 @@ func runNotifyTest(req notifyTestRequest) {
 }
 
 // resendTarget:重发那条推送记录要推的渠道和消息。记录或渠道找不到(记录被挤出去了、渠道删了)时 ok 为 false,
-// r 是要写回去的结论。
+// r 是要写回去的结论。那条之后同一渠道已经推成过同一条(自动重推、之前点过重发)时也不推,结论记成送达。
 func resendTarget(entryID string) (notifyChannel, notifyMessage, notifyResult, bool) {
 	e, found := findNotifyLogEntry(entryID)
 	if !found || e.OK {
 		return notifyChannel{}, notifyMessage{}, notifyResult{Kind: notifyKindConfig, Detail: "delivery record not found"}, false
+	}
+	if notifyDeliveredSince(e.Channel, e.Event, e.Title, e.At) {
+		return notifyChannel{ID: e.Channel, Platform: e.Platform}, notifyMessage{},
+			notifyResult{OK: true, Kind: notifyKindOK, Detail: "already delivered"}, false
 	}
 	for _, ch := range configNotifyChannels(liveConfig()) {
 		if ch.ID == e.Channel {

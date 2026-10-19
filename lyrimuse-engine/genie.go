@@ -56,7 +56,8 @@ func genieLyric(ctx context.Context, artist, title, album string, durationSecs f
 	if title == "" {
 		return genieResult{}
 	}
-	key := artist + "|" + title + "|" + album
+	// 带上时长:选候选要过时长闸,同名的不同剪辑(~durN 变体)不能共用一份结果。
+	key := artist + "|" + title + "|" + album + "|" + strconv.Itoa(int(math.Round(durationSecs)))
 	genieMu.Lock()
 	if v, ok := genieCache[key]; ok {
 		genieMu.Unlock()
@@ -265,10 +266,8 @@ func resolveGenieLyric(ctx context.Context, artist, title, album string, duratio
 		score int
 	}
 	qTitle := vibeQueryText(lyricQueryTitle(title))
-	queries := []string{strings.TrimSpace(qTitle + " " + vibeQueryText(firstCreditedArtist(artist))), qTitle}
-	if raw := strings.TrimSpace(lyricQueryTitle(title)); raw != qTitle && raw != "" {
-		queries = append(queries, raw)
-	}
+	queries := vibeQueries(qTitle, strings.TrimSpace(qTitle+" "+vibeQueryText(firstCreditedArtist(artist))),
+		strings.TrimSpace(lyricQueryTitle(title)))
 	var candidates []scoredItem
 	for qi, q := range queries {
 		items, err := genieSearch(ctx, q)

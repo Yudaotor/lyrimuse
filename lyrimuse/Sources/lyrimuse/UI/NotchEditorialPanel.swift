@@ -114,7 +114,8 @@ final class NotchEditorialPanel {
                             backing: .buffered, defer: false)
         panel.level = owner.level
         panel.collectionBehavior = owner.collectionBehavior
-        panel.sharingType = owner.sharingType
+        // 按设置写,别抄灵动岛那扇窗的 sharingType:运行中读回来的值不可靠(见 NotchLyricsWindowController.applyBehaviorSettings)。
+        panel.sharingType = AppSettings.shared.notchHideDuringScreenCapture ? .none : .readWrite
         panel.appearance = NSAppearance(named: .darkAqua)
         panel.isOpaque = false
         panel.backgroundColor = .clear

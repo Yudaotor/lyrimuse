@@ -598,34 +598,57 @@ func applemusicFetchDeveloperToken(ctx context.Context) string {
 
 // applemusicDevTokenWorks 用一个最小的 catalog 请求验证 token 能不能打 amp-api。
 func applemusicDevTokenWorks(ctx context.Context, devToken string) bool {
+	return applemusicCheckDevToken(ctx, devToken) == applemusicDevTokenOK
+}
+
+type applemusicDevTokenVerdict int
+
+const (
+	applemusicDevTokenUnknown  applemusicDevTokenVerdict = iota // 没问成:网络错、超时、被限流、5xx
+	applemusicDevTokenOK                                        // catalog 答了 200
+	applemusicDevTokenRejected                                  // catalog 回 401 / 403
+)
+
+// applemusicCheckDevToken 用一个最小的 catalog 请求验证 token,分出「能用」「被拒」「没问成」三种。
+func applemusicCheckDevToken(ctx context.Context, devToken string) applemusicDevTokenVerdict {
 	u := applemusicAMPBase + "us/search?types=songs&limit=1&term=a"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return false
+		return applemusicDevTokenUnknown
 	}
 	req.Header.Set("Authorization", "Bearer "+devToken)
 	req.Header.Set("Origin", applemusicWebOrigin)
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	resp, err := doHTTPTracked(lyricHTTPClient(applemusicHTTPTimeout), req)
 	if err != nil {
-		return false
+		return applemusicDevTokenUnknown
 	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
-	return resp.StatusCode == http.StatusOK
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return applemusicDevTokenOK
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return applemusicDevTokenRejected
+	}
+	return applemusicDevTokenUnknown
 }
 
 // applemusicAfterUserAuthFailure:带 user token 的请求被 401 / 403 之后,先排除 developer token 的问题再下结论。
 // used 是这次请求带的 developer token。返回 fresh 非空 = 换这张票再发一次;userRejected = 确是 user token 失效。
 //
 // 别一见 401 就记 user token 被拒:一轮里搜索途中换过票(applemusicSearch),取词还带着旧票就会 401,记下被拒之后
-// App 一直显示「需要重新连接」,直到用户重新登录。见 09 章决策 272。
+// App 一直显示「需要重新连接」,直到用户重新登录。见 09 章决策 272。核 developer token 那一下没问成(超时、限流、5xx)时
+// 两头都不下结论:不清票、不记被拒。
 func applemusicAfterUserAuthFailure(ctx context.Context, used string) (fresh string, userRejected bool) {
 	if cur := applemusicCachedDevToken(); cur != "" && cur != used {
 		return cur, false
 	}
-	if applemusicDevTokenWorks(ctx, used) {
+	switch applemusicCheckDevToken(ctx, used) {
+	case applemusicDevTokenOK:
 		return "", true
+	case applemusicDevTokenUnknown:
+		return "", false
 	}
 	applemusicClearDevToken(used)
 	if tok := applemusicEnsureDeveloperToken(ctx); tok != "" && tok != used {

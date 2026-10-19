@@ -229,3 +229,61 @@ func TestKuwoPickFetchedRank(t *testing.T) {
 		}
 	}
 }
+
+// 取词没问成的那几名可能本该采纳时,这一份不进缓存:名次更靠前的没问成;采纳的这份对不上曲长、后面有没问成的。
+func TestKuwoFailedRankMayBeat(t *testing.T) {
+	lrc := func(lastSecs int) string {
+		return fmt.Sprintf("[00:01.00]第一句\n[%02d:%02d.00]最后一句\n", lastSecs/60, lastSecs%60)
+	}
+	for _, c := range []struct {
+		name   string
+		failed []bool
+		lrcs   []string
+		rank   int
+		dur    float64
+		want   bool
+	}{
+		{"前面一名没问成", []bool{true, false}, []string{"", lrc(280)}, 1, 290, true},
+		{"采纳的对得上,后面没问成的不算", []bool{false, true}, []string{lrc(280), ""}, 0, 290, false},
+		{"采纳的截断了,后面有没问成的", []bool{false, true}, []string{lrc(120), ""}, 0, 290, true},
+		{"采纳的截断了,都问成了", []bool{false, false}, []string{lrc(120), lrc(130)}, 0, 290, false},
+		{"曲长未知只看名次", []bool{false, true}, []string{lrc(120), ""}, 0, 0, false},
+	} {
+		if got := kuwoFailedRankMayBeat(c.failed, c.lrcs, c.rank, c.dur); got != c.want {
+			t.Errorf("%s: %v,期望 %v", c.name, got, c.want)
+		}
+	}
+}
+
+// 名次最前的那份末句对不上曲长、排在后面的那名取词没问成:这一份交出去,但不算完整(不进缓存,下次再问)。
+// 采纳的那份对得上时后面的不算,见 TestKuwoFailedRankMayBeat。
+func TestKuwoTruncatedPickWithFailedLaterRankIsIncomplete(t *testing.T) {
+	withKugouFakeReq(t, func(r *http.Request, target string) (int, string) {
+		switch {
+		case strings.HasSuffix(target, "/r.s"):
+			return http.StatusOK, `{"abslist":[` +
+				`{"MUSICRID":"MUSIC_1","SONGNAME":"雨眠","ARTIST":"五月天","ALBUM":"爱情万岁","DURATION":"222"},` +
+				`{"MUSICRID":"MUSIC_2","SONGNAME":"雨眠","ARTIST":"五月天","ALBUM":"爱情万岁","DURATION":"222"}]}`
+		case strings.HasSuffix(target, "/openapi/v1/www/lyric/getlyric"):
+			if r.URL.Query().Get("musicId") == "1" {
+				return http.StatusOK, `{"code":200,"data":{"lrclist":[{"lineLyric":"第一句","time":"3.00"},` +
+					`{"lineLyric":"第二句","time":"9.00"},{"lineLyric":"最后一句","time":"100.00"}]}}`
+			}
+			return http.StatusBadGateway, ""
+		case strings.HasSuffix(target, "/mobi.s"):
+			// 第一名的逐字接口答了(这首没有 lrcx);第二名退到 mlyric 也没问成。
+			if r.URL.Query().Get("rid") == "1" {
+				return http.StatusOK, "no lrcx"
+			}
+			return http.StatusBadGateway, ""
+		}
+		return http.StatusNotFound, ""
+	})
+	ctx, sub := withLyricSubFetch(qqRoundCtx())
+	if r := resolveKuwoLyric(ctx, "五月天", "雨眠", "爱情万岁", 222); r.lyrics == "" {
+		t.Fatal("第一名的词应当交出去")
+	}
+	if sub.complete(ctx) {
+		t.Error("后面那名没问成,可能就是对得上曲长的那份,不该算完整")
+	}
+}

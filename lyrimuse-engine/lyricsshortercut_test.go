@@ -142,3 +142,35 @@ func TestRescoreDoesNotShieldLyricsChosenForAShorterCut(t *testing.T) {
 		})
 	}
 }
+
+// 重评:现存那份末句超出现在放的版本(按 337.7 秒选、末句 330 秒,现在放 308 秒),因为换了会丢逐字而留下时,选词时长不改记成
+// 这一轮的,lyricsOutrunPlayback 以后还认得出它。
+func TestRescoreKeepsOutrunMarkWhenKeepingWordTiming(t *testing.T) {
+	const old = "[00:05.00]Old line one\n[05:30.00]Old line two"
+	setupRescoreTest(t, []string{"musixmatch"}, nil)
+	stub := musixmatchResolve
+	musixmatchResolve = func(ctx context.Context, artist, title string, d float64, trLang, isrc string) musixmatchResult {
+		r := stub(ctx, artist, title, d, trLang, isrc)
+		r.durationSecs = 308
+		return r
+	}
+	key := enrichKey(rescoreTestArtist, "Outrun Cut", "Some Album")
+	enrichMu.Lock()
+	enrichCache = map[string]enrichEntry{key: {
+		Lyrics: bt(old), LyricsYRC: bt("[5000,1000](5000,1000,0)Old"), LyricsSource: "musixmatch", LyricsScore: 5000,
+		LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision,
+		ResolvedDurationSecs: 337.7, DurationSecs: 308,
+	}}
+	enrichMu.Unlock()
+	rescoreLyrics(context.Background(), key, rescoreTestArtist, "Outrun Cut", "Some Album", 308)
+	e, _ := cacheEntry(t, key)
+	if !e.Lyrics.EqualString(old) {
+		t.Fatalf("带逐字的那份应该留下, got %q", e.Lyrics)
+	}
+	if e.ResolvedDurationSecs != 337.7 {
+		t.Errorf("选词时长 %v, want 337.7", e.ResolvedDurationSecs)
+	}
+	if !lyricsOutrunPlayback(e.Lyrics.String(), e.ResolvedDurationSecs, 308) {
+		t.Error("留下之后应该还认得出末句超出现在放的版本")
+	}
+}

@@ -1149,7 +1149,8 @@ func applyWordTimingTitleOverride(results []scoredLyricCandidateResult) {
 // 专辑名核实,繁简转换只影响字符形式)。
 //
 // 按输入记住结果(繁简词典、变音和全角折叠都是常量):AMLL 按歌名查索引、同专辑封面比对这类循环会对同一批字符串
-// 反复算,一次查找上万次。条目数超过 normLooseMemoMax 整张清掉重来。见 15 章决策 53。
+// 反复算,一次查找上万次。条目数超过 normLooseMemoMax 整张清掉重来。见 15 章决策 53。只给歌名、歌手、专辑这类短字段用,
+// 逐行处理歌词正文走 normLooseUncached。
 func normLoose(s string) string {
 	normLooseMemoMu.RLock()
 	v, ok := normLooseMemo[s]
@@ -3627,7 +3628,8 @@ func isLRCMetaTagLine(line string) bool {
 }
 
 // lyricConsensusBody 把一份 LRC 归一成"可跨源比对的正文":逐行去时间戳、丢署名行、
-// 元数据标签行与空行,每行 normLoose 后拼接。给 contentConsensusPeers 的 3-gram 比对用。
+// 元数据标签行与空行,每行 normLoose 后拼接。给 contentConsensusPeers 的 3-gram 比对用。歌词行几乎不重复,
+// 走 normLooseUncached,别灌进 normLoose 的备忘表把歌名、歌手的条目挤掉。
 func lyricConsensusBody(lyrics string) string {
 	// 演唱者标签行留下(见 lyricspeaker.go),但只留**冒号后的正文** ——
 	// 跨源比对要的是"唱了什么",标签本身是这一份的格式细节,别的源没有它。
@@ -3650,14 +3652,14 @@ func lyricConsensusBody(lyrics string) string {
 		if label, rest, ok := lyricSplitLabel(text); ok && speakers[label] {
 			// 独占一行的标记(rest 为空)对正文没有贡献,跳过。
 			if rest != "" {
-				b.WriteString(normLoose(rest))
+				b.WriteString(normLooseUncached(rest))
 			}
 			continue
 		}
 		if isCreditLine(text) {
 			continue
 		}
-		b.WriteString(normLoose(text))
+		b.WriteString(normLooseUncached(text))
 	}
 	return b.String()
 }
