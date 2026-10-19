@@ -2095,9 +2095,11 @@ struct LyricsManagerView: View {
     /// 「搜索候选歌词」开「搜索歌词…」独立窗口,搜这一首(不一定是正在放的那首),跟悬浮窗 ⚙、歌词窗口那几个入口同一扇
     /// (见 11 章决策 131)。打开那一刻拍下歌名、歌手、专辑和时长,窗口开着期间不随列表重读改动(见 11 章决策 92)。
     private func openSearchWindow(_ summary: EnrichCacheStore.Summary) {
-        // 歌名去掉时长变体的 `~durN`:那是缓存键里的消歧位,拿它去各源搜什么都搜不到。写回仍按 key。
+        // 歌名先去掉时长变体的 `~durN`(缓存键里的消歧位,拿它去各源搜什么都搜不到),再过 normalizedTitle:缓存键存的是
+        // 播放器原样的完整歌名,自动解析和「搜索歌词…」跟随播放那一路交给各源的都是剥过结尾说明括号的,这里得是同一份。写回仍按 key。
         AppActions.shared.openLyricsSearch(for: LyricsSearchTarget(
-            key: summary.key, artist: summary.artist, title: EnrichCacheKeys.strippingDurationVariantTitle(summary.title),
+            key: summary.key, artist: summary.artist,
+            title: EnrichCacheKeys.normalizedTitle(EnrichCacheKeys.strippingDurationVariantTitle(summary.title)),
             album: summary.displayAlbum, durationSecs: summary.durationSecs))
     }
 

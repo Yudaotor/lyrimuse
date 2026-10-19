@@ -4201,8 +4201,8 @@ func runSourceContractSettingsTests() {
                     && design.contains("NSMenu.didEndTrackingNotification")
                     && design.contains("glassEffect(.regular.interactive(), in: Capsule())\n                .modifier(GlassMenuFeedback())\n        } else {\n            background("), true,
                     "设计系统: 玻璃菜单(「⋯」、菜单胶囊)自己补悬停 / 展开反馈(菜单接走鼠标事件,外层可交互玻璃收不到)")
-        expectEqual(manager.contains("title: EnrichCacheKeys.strippingDurationVariantTitle(summary.title)"), true,
-                    "歌词管理: 搜索候选歌词的歌名去掉时长变体位「~durN」")
+        expectEqual(manager.contains("title: EnrichCacheKeys.normalizedTitle(EnrichCacheKeys.strippingDurationVariantTitle(summary.title))"), true,
+                    "歌词管理: 搜索候选歌词的歌名去掉时长变体位「~durN」、再按自动解析同一份归一")
         expectEqual(sheet.contains("private var effectiveCurrentSource: String? { appliedSource ?? host.source }")
                     && sourceHas(sheet, ".onChange(of: markedInstrumental) { _, _ in\n            storedCandidate = makeStoredCandidate()")
                     && sheet.contains("[originalArtist, originalTitle, originalAlbum, songKey, String(durationSecs)]")
