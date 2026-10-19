@@ -248,6 +248,16 @@ func runLyricsWindowTests() {
                     "光斑摆动(契约): 不用连续插值的旋转动画")
     }
 
+    // MARK: - 背景两张位图存小(07 章决策 173)
+    do {
+        let coordinator = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/PlaybackCoordinator.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(coordinator, contain: "nonisolated static let windowBackgroundStoreDivisor: CGFloat = 3"), true,
+                    "背景位图(契约): 存成排版边长的 1/3")
+        expectEqual(sourceBytes(coordinator, contain: "let stored = W / Self.windowBackgroundStoreDivisor"), true,
+                    "背景位图(契约): 底图和光斑都经 render 按这个比例缩小再存")
+    }
+
     // MARK: - 逐帧时钟降频(FrameCadence.linkRate,07 章决策 140)
     do {
         typealias C = FrameCadence

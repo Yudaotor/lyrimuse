@@ -1562,6 +1562,21 @@ func runMenuBarTests() {
 
     // ---- 「歌词管理」那一格的背面(06 章决策 43) ----
     // 面板里不许弹确认框(另一扇窗,点它面板就收起了),要确认的在行内问;重新匹配跟歌词窗口那颗共用一份实现。
+    // ---- 面板逐字行走图层行(契约):别换回 30Hz TimelineView 逐帧重算整个面板(06 章决策 54) ----
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let panel = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/MenuBar/MenuBarPanel.swift"),
+                                 encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(panel, contain: "return OverlayScrollingLyricRow("), true,
+                    "面板逐字行(契约): 有逐字时间轴的那一档走 OverlayScrollingLyricRow")
+        expectEqual(sourceBytes(panel, contain: "TimelineView(.animation"), false,
+                    "面板逐字行(契约): 面板里没有逐帧的 TimelineView")
+        expectEqual(sourceBytes(panel, contain: "paused: !playback.isPlayingNow || playback.currentLineFillSettled,"), true,
+                    "面板逐字行(契约): 没在放、这一行填完就停表")
+        expectEqual(sourceBytes(panel, contain: "timingEpoch: playback.lyricsOffsetMs),"), true,
+                    "面板逐字行(契约): 调了歌词偏移当场按新基准重装")
+    }
+
     do {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         func source(_ rel: String) -> String {

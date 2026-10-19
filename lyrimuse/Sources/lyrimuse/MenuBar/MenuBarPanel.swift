@@ -46,6 +46,8 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var isRadioTalkBreak = false
     @Published private(set) var radioStationName: String?
     @Published private(set) var currentLineFillSettled = true
+    /// 歌词时间轴总偏移:逐字图层行拿它当时间基准指纹,调了偏移当场按新基准重装(见 layerKaraokeLine)。
+    @Published private(set) var lyricsOffsetMs = 0
     @Published private(set) var artworkImage: NSImage?
     /// 系统那张封面的**高清替代**(`PlaybackCoordinator.highResArtworkImage`),系统给的
     /// 实在太小/不像封面时才有值。
@@ -113,6 +115,7 @@ private final class PanelPlayback: ObservableObject {
             p.$isRadioTalkBreak.removeDuplicates().sink { [weak self] in self?.isRadioTalkBreak = $0 },
             p.$radioStationName.removeDuplicates().sink { [weak self] in self?.radioStationName = $0 },
             p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
+            p.$currentLyricsOffsetMs.removeDuplicates().sink { [weak self] in self?.lyricsOffsetMs = $0 },
             p.$artworkImage.removeDuplicates(by: { $0 === $1 })
                 .sink { [weak self] in self?.artworkImage = $0 },
             // 这条订阅不能省:高清替代是**换歌后异步下载**的,只改
@@ -865,22 +868,26 @@ private struct MenuBarPanelView: View {
     /// 一行会比 44pt 的封面高出一截、两边不齐;通栏还天然读成"这张卡的字幕"。
     ///
     /// **定高一行**,状态为空时也占着 —— 歌词几秒一换,不定高的话整张 popover 会跟着一句
-    /// 一句地弹高弹矮,比不显示还烦。长句交给 MarqueeText 滚,不换行、不省略号。
+    /// 一句地弹高弹矮,比不显示还烦。长句交给 MarqueeText 滚,不换行、不省略号;有逐字时间轴的那一档走图层行(见 layerKaraokeLine)。
     private var lyricLine: some View {
-        // id 用**纯文本**而不是带填色进度的东西:同一句里逐字变色是每秒 30 次的高频刷新,
-        // 拿它当 id 会把正在进行的滚动一直打回开头(MarqueeText 头注说的就是这件事)。
-        MarqueeText(id: playback.compactLine?.plainText ?? "") {
-            lyricContent
+        Group {
+            if lyricDisplay == .words {
+                layerKaraokeLine(playback.compactLine?.words ?? [])
+            } else {
+                // id 用**纯文本**:拿会变的东西当 id 会把正在进行的滚动一直打回开头(MarqueeText 头注说的就是这件事)。
+                MarqueeText(id: playback.compactLine?.plainText ?? "") {
+                    lyricContent
+                }
+            }
         }
         .font(.system(size: 11.5, weight: .medium))
         // MarqueeText 内层是 GeometryReader,没有固有高度,必须由这里给死。
         .frame(height: 16)
     }
 
-    @ViewBuilder private var lyricContent: some View {
-        // 判定链(以及那三处"必须排在谁前面"的坑)在 LyrimuseCore.LyricsLineDisplay 里,
-        // selftest 钉着;这里只负责把结果画出来。
-        switch LyricsLineDisplay.resolve(
+    /// 判定链(以及那三处"必须排在谁前面"的坑)在 LyrimuseCore.LyricsLineDisplay 里,selftest 钉着;这里只负责把结果画出来。
+    private var lyricDisplay: LyricsLineDisplay {
+        LyricsLineDisplay.resolve(
             // 喂 compactLine:长间奏中段它是 nil,判定链自然落到 .idle —— 那一档的
             // 注释本来就写着「间奏、还没开始」,不用改判定链。
             hasWordTiming: !(playback.compactLine?.words ?? []).isEmpty,
@@ -892,9 +899,13 @@ private struct MenuBarPanelView: View {
             networkDown: playback.engineNetworkDown,
             hasLyricsContent: playback.hasLyricsContent,
             isPlaying: playback.isPlayingNow
-        ) {
+        )
+    }
+
+    @ViewBuilder private var lyricContent: some View {
+        switch lyricDisplay {
         case .words:
-            karaokeLine(playback.compactLine?.words ?? [])
+            EmptyView()
         case .plain:
             // 行级 LRC(没有逐字数据)—— 整行一个颜色,不假装有进度。
             Text(playback.compactLine?.plainText ?? "").foregroundStyle(.primary).lineLimit(1)
@@ -922,42 +933,50 @@ private struct MenuBarPanelView: View {
         Text(text).foregroundStyle(.tertiary).lineLimit(1)
     }
 
-    private func karaokeLine(_ words: [SyncedLyricWord]) -> some View {
-        // 帧率上限走 WordKaraokeGradient.refreshInterval(30Hz),跟另外三处逐字视图同一个:
-        // 裸 .animation 是显示器刷新率(这台 120Hz),实测会把主线程吃满(见那边的注释)。
-        // paused: 没在放就不空转 —— 面板可能被开着晾在那儿。
-        // paused 第二条件:行填完到换行前视觉零变化,把表停掉 —— 四个逐字
-        // 展示面的同款停表,面板是最后一个接上的(悬浮窗/灵动岛同字段,歌词窗口有等价机制)。
-        TimelineView(.animation(minimumInterval: WordKaraokeGradient.refreshInterval,
-                                paused: !playback.isPlayingNow || playback.currentLineFillSettled)) { context in
-            // 必须带上 currentLyricsOffsetMs:不加的话"当前唱到哪个字"和"这个字填了多少"
-            // 用的时间基准对不上,会出现填到一半卡住(跟悬浮歌词/灵动岛同一段注释)。
-            // anchor/offset 直读协调器不经代理:闭包按帧重跑,每帧读到的都是最新值。
-            // ?? pausedPositionMs:暂停基准兜底(四个展示面同款,理由见
-            // LyricsOverlayView.mainLine 同位置注释)。
-            let ms = (PlaybackCoordinator.shared.anchor?.extrapolatedPositionMs(now: context.date)
-                ?? PlaybackCoordinator.shared.pausedPositionMs ?? 0)
-                + PlaybackCoordinator.shared.currentLyricsOffsetMs
-            // 渐变素材每帧只取一次,纯色词跨帧复用同一实例(性能审计,见
-            // WordKaraokeGradient.Palette 注释);indices 代替 Array(enumerated()),
-            // 少一次每帧纯为当 id 的数组物化。
-            let palette = WordKaraokeGradient.palette(fg: .primary)
-            HStack(spacing: 0) {
-                ForEach(words.indices, id: \.self) { i in
-                    let fraction = WordKaraokeGradient.fillFraction(for: words[i], atMs: ms)
-                    Text(words[i].text)
-                        .foregroundStyle(palette.style(
-                            left: fraction - WordKaraokeGradient.wordEdgeSoftenBand,
-                            right: fraction + WordKaraokeGradient.wordEdgeSoftenBand))
-                }
-            }
-            .lineLimit(1)
-            // 掐掉一切**环境**动画事务:祖先上任何一次 withAnimation 事务都会把同一帧里撞上的
-            // 30Hz 填色跳变也做成插值,正在填色的单词就"跳一下"。填色是离散刷新,每帧直接
-            // 落到新位置,永远不该吃任何外来动画。只挂在这个填色 HStack 上:外层
-            // MarqueeText 自己的滚动动画不经过这里,不受影响。
-            .transaction { $0.animation = nil }
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// 有逐字时间轴的这一行走 AppKit 图层(`OverlayScrollingLyricRow`,灵动岛主行同一套):整行画成长图,逐字填色与跟唱滚动
+    /// 各一条 CAKeyframeAnimation,装好之后主线程不再按帧参与。别换回 MarqueeText 包 30Hz `TimelineView`、每个字一个渐变
+    /// `Text`:那样面板开着放歌时每拍都带着整个宿主布局一遍、`layout()` 里再量一遍整块面板(见 06 章决策 54)。
+    /// 跟 SwiftUI 版对齐的:字体、已唱 = 面板的 `.primary`、未唱 = 它的 `WordKaraokeGradient.dimOpacity`、靠左、停表判据;
+    /// 已唱 / 未唱的交界是硬边(灵动岛、悬浮歌词滚动模式同款)。
+    private func layerKaraokeLine(_ words: [SyncedLyricWord]) -> some View {
+        let fg = Self.primaryColor(dark: colorScheme == .dark)
+        return OverlayScrollingLyricRow(
+            spec: .init(
+                lineKey: playback.compactLine?.plainText ?? "",
+                words: words,
+                groups: nil,
+                font: .systemFont(ofSize: 11.5, weight: .medium),
+                romaFont: .systemFont(ofSize: 11.5, weight: .medium),
+                baseColor: fg.withAlphaComponent(fg.alphaComponent * WordKaraokeGradient.dimOpacity),
+                fillColor: fg,
+                romaBaseColor: fg,
+                romaFillColor: fg,
+                strokeColor: nil,
+                alignment: .leading,
+                paused: !playback.isPlayingNow || playback.currentLineFillSettled,
+                timingEpoch: playback.lyricsOffsetMs),
+            nowMs: Self.lyricsNowMs)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement()
+        .accessibilityLabel(Text(verbatim: playback.compactLine?.plainText ?? ""))
+    }
+
+    /// 面板外观下的 `labelColor`(SwiftUI `.primary` 的 AppKit 值):图层画长图要一个定死的颜色,动态色在那里解析不到面板的外观。
+    private static func primaryColor(dark: Bool) -> NSColor {
+        var color = NSColor.labelColor
+        NSAppearance(named: dark ? .darkAqua : .aqua)?.performAsCurrentDrawingAppearance {
+            color = NSColor.labelColor.usingColorSpace(.sRGB) ?? .labelColor
         }
+        return color
+    }
+
+    /// 图层行读的播放位置:锚点外推 ?? 暂停冻结位置,再叠歌词时间轴偏移(另外几个逐字展示面同款)。
+    private static func lyricsNowMs() -> Int {
+        (PlaybackCoordinator.shared.anchor?.extrapolatedPositionMs(now: Date())
+            ?? PlaybackCoordinator.shared.pausedPositionMs ?? 0)
+            + PlaybackCoordinator.shared.currentLyricsOffsetMs
     }
 
     /// 封面边长。没在播放那一行的最小高度跟它一致(见 idleRow)。

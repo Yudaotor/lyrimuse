@@ -1343,6 +1343,9 @@ final class PlaybackCoordinator: ObservableObject {
     /// - 视图层 3 层 lighten α0.25 摆动(α 在归一化的平场上影响很小)。
     /// 残余差异主要是 AM 各区内部还有 0.10~0.21 的柔和起伏(其动画瞬间的相位),我们单帧偏平,由摆动动画在时间维上补。
     /// 对拍数据见 07 章「背景取色逼近 Apple Music」。
+    /// 歌词窗口背景两张位图存成排版边长的几分之一(见 bakeWindowBackgroundLayers 里的 render)。
+    nonisolated static let windowBackgroundStoreDivisor: CGFloat = 3
+
     nonisolated private static func bakeWindowBackgroundLayers(cgImage: CGImage, seed: UInt64) -> WindowBackgroundLayers? {
         let W: CGFloat = 720
         let frame = CGRect(x: 0, y: 0, width: W, height: W)
@@ -1510,8 +1513,13 @@ final class PlaybackCoordinator: ObservableObject {
                 "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1),
             ])
         }
+        // 底图和光斑都出自 σ35 模糊过的平滑色场,按 720 排版、存成 1/3 边长:贴到整窗时放大看不出差别,
+        // 常驻和窗口服务器那份位图各省九成(07 章决策 173)。
         func render(_ img: CIImage) -> NSImage? {
-            guard let out = blurBakeContext.createCGImage(img, from: frame) else { return nil }
+            let stored = W / Self.windowBackgroundStoreDivisor
+            let small = img.transformed(by: CGAffineTransform(scaleX: stored / W, y: stored / W))
+            guard let out = blurBakeContext.createCGImage(small, from: CGRect(x: 0, y: 0, width: stored, height: stored))
+            else { return nil }
             return NSImage(cgImage: out, size: NSSize(width: frame.width / 2, height: frame.height / 2))
         }
 
