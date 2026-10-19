@@ -66,12 +66,40 @@ func runRomanizationTests() {
 
     do {
         let engine = LyricsSyncEngine()
-        let lrc = "[00:10.00]你好\n"
+        let lrc = "[00:10.00]你好\n[00:20.00]谢谢\n[00:30.00]再见\n[00:40.00]早安\n[00:50.00]晚安\n"
         // 服务端给了罗马音字段,但这一行本身在 700ms 容差内没匹配上——不应该在局部空档现算
         // 兜底,避免同一首歌一部分罗马音来自服务端、一部分是客户端现算,观感不一致。
-        let roma = "[00:20.00]别的行的罗马音\n"
+        let roma = "[00:20.00]xie xie\n[00:30.00]zai jian\n[00:40.00]zao an\n[00:50.00]wan an\n"
         engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: roma, lyricsYRC: "")
         expectEqual(engine.activeLine(atMs: 10000)?.romanization, nil, "SyncEngine(罗马音兜底): 服务端提供了罗马音字段时,不在没匹配上的单行现算兜底")
+        expectEqual(engine.activeLine(atMs: 20000)?.romanization, "xie xie", "SyncEngine(罗马音兜底): 匹配上的行照用服务端那份")
+    }
+
+    do {
+        // 源自带的罗马音给到的行不够多(实测宇多田光《Beautiful World》要标读音的 36 行只给到 21 行,副歌整段没有):
+        // 整首不用它,全部现算。英文行不要读音,不算进分母。
+        let engine = LyricsSyncEngine()
+        let lrc = "[00:05.00]It's only love\n[00:10.00]もしも願い一つだけ叶うなら\n[00:20.00]君の側で眠らせて\n[00:30.00]どんな場所でもいいよ\n[00:40.00]迷わず君だけを見つめている\n"
+        let roma = "[00:30.00]Donna basho demoiiyo\n"
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: roma, lyricsYRC: "")
+        let shown = engine.allLines(idPrefix: "c").map { $0.line.romanization }
+        expectEqual(shown.dropFirst().allSatisfy { ($0 ?? "").isEmpty == false }, true,
+                    "SyncEngine(源自带罗马音覆盖不够): 每一行日文都有读音")
+        expectEqual(engine.activeLine(atMs: 30000)?.romanization != "Donna basho demoiiyo", true,
+                    "SyncEngine(源自带罗马音覆盖不够): 给了的那一行也换成现算的,不混两种写法")
+        expectEqual(shown.first ?? nil, nil, "SyncEngine(源自带罗马音覆盖不够): 英文行照旧没有读音")
+    }
+
+    do {
+        // 覆盖够了时照旧:给了的行用源自带的,缺的那一行不补。
+        let engine = LyricsSyncEngine()
+        let lrc = "[00:10.00]もしも願い一つだけ叶うなら\n[00:20.00]君の側で眠らせて\n[00:30.00]どんな場所でもいいよ\n[00:40.00]自分の美しさまだ知らないの\n[00:50.00]夢見てばっか\n"
+        let roma = "[00:10.00]Moshimo negai hitotsu dake kanau nara\n[00:30.00]Donna basho demoiiyo\n[00:40.00]Jibun no utsukushi samada shira naino\n[00:50.00]Yumemi tebakka\n"
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: roma, lyricsYRC: "")
+        expectEqual(engine.activeLine(atMs: 30000)?.romanization, "Donna basho demoiiyo",
+                    "SyncEngine(源自带罗马音覆盖够了): 给了的行用源自带的")
+        expectEqual(engine.activeLine(atMs: 20000)?.romanization, nil,
+                    "SyncEngine(源自带罗马音覆盖够了): 缺的那一行不现算")
     }
 
     do {

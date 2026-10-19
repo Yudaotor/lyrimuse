@@ -69,8 +69,9 @@ func runCreditLineTests() {
         // 罗马音同理,而且这条只有认时间戳才接得住:罗马音里的署名是拼音(`zuò cí : jiǎ`),
         // 汉字角色词表一条都够不着 —— 全库量下来这类占被漏掉的大头。
         let engine = LyricsSyncEngine()
-        let lrc = "[00:00.78]作词 : 甲\n[00:01.45]一句春不晚\n[00:08.21]留在真江南\n"
-        let roma = "[00:00.78]zuò cí : jiǎ\n[00:08.21]liú zài zhēn jiāng nán\n"
+        // 其余几句都有源自带的罗马音:覆盖不够时整首改成现算(10 章决策 41),那就测不到「就近认领」了。
+        let lrc = "[00:00.78]作词 : 甲\n[00:01.45]一句春不晚\n[00:08.21]留在真江南\n[00:12.00]月下西楼\n[00:16.00]灯火阑珊\n[00:20.00]一梦千年\n"
+        let roma = "[00:00.78]zuò cí : jiǎ\n[00:08.21]liú zài zhēn jiāng nán\n[00:12.00]yuè xià xī lóu\n[00:16.00]dēng huǒ lán shān\n[00:20.00]yí mèng qiān nián\n"
         engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: roma, lyricsYRC: "")
         expectEqual(engine.activeLine(atMs: 2000)?.romanization, nil,
                     "罗马音过滤: 拼音写的职员表不许被 700ms 内的第一句就近认领")

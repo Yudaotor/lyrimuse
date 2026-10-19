@@ -1801,6 +1801,29 @@ public final class LyricsSyncEngine {
             romaFallback = SecondaryLineFallback.plan(
                 display: displayKeys, base: baseKeys, secondary: romaLines, matched: { romaDict[$0] != nil },
                 adoptLengthRatio: 1...1)
+            // 源自带的罗马音给到的行不够多(romaSourceMinCoverage)时整首不用它、全部现算:缺的行不补是为了不混两种写法(见
+            // romanizationText),可缺得多了整段副歌都没有读音,还不如统一换成现算的那份(10 章决策 41)。
+            // 台语歌不现算(songIsHokkien),照旧。
+            if !songIsHokkien, !romaLines.isEmpty {
+                let displayTexts = usingWords
+                    ? wordLines.map { ($0.timeMs, $0.words.map(\.text).joined()) }
+                    : baseLines.map { ($0.timeMs, $0.text) }
+                let fallback = romaFallback, romaSource = romaLines
+                let coverage = Self.secondaryCoverage(
+                    lines: displayTexts.filter { !Self.isBareSpeakerTag($0.1) && Romanizer.needsRomanization($0.1) },
+                    found: { timeMs, text in
+                        let key = Self.contentMatchKey(text)
+                        if romaDict[key] != nil { return true }
+                        if fallback.suppressed[timeMs] == key { return false }
+                        if Self.nearestLine(romaSource, timeMs) != nil { return true }
+                        return fallback.adopted[timeMs]?.key == key
+                    })
+                if let coverage, coverage < Self.romaSourceMinCoverage {
+                    romaLines = []
+                    romaTextByPlainText = [:]
+                    romaFallback = SecondaryLineFallback()
+                }
+            }
         }
         // 罗马音该不该对这首歌生效、以及汉字按哪种语言读 —— 都按"整首歌"粒度判一次
         // (不逐行判:极少数纯汉字的日文行会被局部误判成中文,见 Romanizer.romanize 的注释)。
@@ -2024,6 +2047,16 @@ public final class LyricsSyncEngine {
 
     private func nearestText(_ arr: [LyricLine], _ t: Int, tolerance: Int = 700) -> String? {
         Self.nearestLine(arr, t, tolerance: tolerance)?.text
+    }
+
+    /// 源自带的罗马音至少要给到这么多要标读音的行,才照它显示(见 load 里用它的那段)。本机全库按显示时的查法量:日文、韩文歌
+    /// 除了三首(6%、58%、58%)都在 90% 以上,中文歌 4893 首在 90% 以上、21 首低于 80%。
+    static let romaSourceMinCoverage = 0.8
+
+    /// 这些行里有几成能从源自带的那一轨拿到(`found` 按显示时的查法判)。一行都没有时为 nil。
+    static func secondaryCoverage(lines: [(Int, String)], found: (Int, String) -> Bool) -> Double? {
+        guard !lines.isEmpty else { return nil }
+        return Double(lines.filter { found($0.0, $0.1) }.count) / Double(lines.count)
     }
 
     /// 离 `t` 最近、不超过 `tolerance` 的那一行。`SecondaryLineFallback` 按它判「就近会挂上哪一条」,两边必须是同一个函数。

@@ -92,6 +92,7 @@ enum DebugDeepLinks {
                 "positionMs": position.map { $0 as Any } ?? NSNull(),
                 "lineIndex": p.currentLineIndex.map { $0 as Any } ?? NSNull(),
                 "line": p.currentLine?.plainText ?? "",
+                "lineRomanization": p.currentLine?.romanization ?? "",
                 "trackLyricsOffsetMs": p.trackLyricsOffsetMs,
                 "playMode": p.playbackMode.map { $0.rawValue as Any } ?? NSNull(),
                 "favorited": p.isFavorited.map { $0 as Any } ?? NSNull(),

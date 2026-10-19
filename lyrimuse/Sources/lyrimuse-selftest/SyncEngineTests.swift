@@ -2050,7 +2050,12 @@ func runSyncEngineTests() {
             lrc.append("[00:\(String(format: "%02d", 10 + i)).00]我不会怪你")
         }
         let lyrics = lrc.joined(separator: "\n") + "\n"
-        let sourceRoma = "[00:01.00]kǔ děng zhe anata liǎng nián sān gè yuè méiyǒu xiāoxí\n"
+        // 源自带的那份每一行都给了(只给混排那一行时覆盖不到一半,整首改成现算,见 10 章决策 41)。
+        var romaLines = ["[00:01.00]kǔ děng zhe anata liǎng nián sān gè yuè méiyǒu xiāoxí"]
+        for i in 0..<9 {
+            romaLines.append("[00:\(String(format: "%02d", 10 + i)).00]wǒ bú huì guài nǐ")
+        }
+        let sourceRoma = romaLines.joined(separator: "\n") + "\n"
         let toneMarks = CharacterSet(charactersIn: "āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ")
         func hasToneMark(_ s: String) -> Bool {
             s.unicodeScalars.contains(where: { toneMarks.contains($0) })
