@@ -231,6 +231,26 @@ func (b *enrichBody) fields() [bodyFieldCount]string {
 	return [bodyFieldCount]string{b.Lyrics, b.LyricsTr, b.LyricsRoma, b.LyricsYRC, b.PlainLyrics, b.LyricsBG}
 }
 
+// enrichBodyLocateTried:校验值没变、却有常驻又没定位的正文时,对着小文件试过定位的那份校验值。调用方持 enrichSaveMu。
+var enrichBodyLocateTried map[string]uint32
+
+// enrichBodyOf 条目这六块正文拼成小文件的内容;退回的正文读不回来时报错。
+func enrichBodyOf(e enrichEntry, crc uint32) (enrichBody, error) {
+	body := enrichBody{CRC: crc}
+	for _, f := range []struct {
+		dst *string
+		src bodyText
+	}{{&body.Lyrics, e.Lyrics}, {&body.LyricsTr, e.LyricsTr}, {&body.LyricsRoma, e.LyricsRoma},
+		{&body.LyricsYRC, e.LyricsYRC}, {&body.PlainLyrics, e.PlainLyrics}, {&body.LyricsBG, e.LyricsBG}} {
+		s, err := f.src.load()
+		if err != nil {
+			return enrichBody{}, err
+		}
+		*f.dst = s
+	}
+	return body, nil
+}
+
 // enrichBody 是正文小文件的形状(App 侧 `EnrichCacheReader` 按同样的键读)。
 type enrichBody struct {
 	CRC         uint32 `json:"crc"`
@@ -301,7 +321,7 @@ func seedEnrichBodyCRCs() {
 		if v.BodyCRC == 0 {
 			continue
 		}
-		if _, err := os.Stat(filepath.Join(dir, decisionSidecarName(k))); err == nil {
+		if _, err := os.Stat(bodySidePath(dir, k)); err == nil {
 			enrichBodyCRCs[k] = v.BodyCRC
 		}
 	}
@@ -344,16 +364,37 @@ func writeEnrichBodies(snapshot map[string]enrichEntry) map[string]uint32 {
 		}
 		e := snapshot[k]
 		if enrichBodyCRCs[k] == crc {
-			if hasUnlocatedResidentBody(&e) {
+			// 被清洗过的那几块原文跟文件永远对不上:同一份校验值试过一次就不再每次存盘重读这份小文件。
+			if hasUnlocatedResidentBody(&e) && enrichBodyLocateTried[k] != crc {
 				path := bodySidePath(dir, k)
 				if b, err := readEnrichBodyChecked(path); err == nil && b != nil && b.CRC == crc {
 					locateEntryBodies(&e, path, b)
 				}
+				if enrichBodyLocateTried == nil {
+					enrichBodyLocateTried = map[string]uint32{}
+				}
+				enrichBodyLocateTried[k] = crc
 			}
 			continue
 		}
-		body := enrichBody{CRC: crc, Lyrics: e.Lyrics.String(), LyricsTr: e.LyricsTr.String(),
-			LyricsRoma: e.LyricsRoma.String(), LyricsYRC: e.LyricsYRC.String(), PlainLyrics: e.PlainLyrics.String(), LyricsBG: e.LyricsBG.String()}
+		body, err := enrichBodyOf(e, crc)
+		if err == nil {
+			// 校验值来自按 blob 指针的备忘,写之前按要写的内容核一遍:对不上就别把一份自相矛盾的小文件写下去。
+			want := crc
+			if s, ok := enrichBodySanitizedCRCs[k]; ok && s.file == crc {
+				want = s.raw
+			}
+			if got := bodyCRCOf(body.fields()); got != want {
+				err = fmt.Errorf("lyrics body CRC %08x does not match the expected %08x", got, want)
+			}
+		}
+		if err != nil {
+			failed++
+			if failed == 1 {
+				slog.Error("lyrics bodies: could not assemble the body to write", "key", k, "err", err)
+			}
+			continue
+		}
 		if fixed, changed := sanitizeEnrichBody(body); changed {
 			if enrichBodySanitizedCRCs == nil {
 				enrichBodySanitizedCRCs = map[string]sanitizedBodyCRC{}
@@ -368,8 +409,10 @@ func writeEnrichBodies(snapshot map[string]enrichEntry) map[string]uint32 {
 		}
 		path := bodySidePath(dir, k)
 		b, err := json.Marshal(body)
+		if err == nil && !pinBodiesAt(path, &body) {
+			err = errBodyUnreadable
+		}
 		if err == nil {
-			pinBodiesAt(path, &body)
 			err = writeFileAtomic(path, b)
 		}
 		if err != nil {
@@ -619,7 +662,9 @@ func sweepKeyedDir(dir, label string) {
 		if n.IsDir() || (!stale && (!strings.HasSuffix(name, ".json") || live[name])) {
 			continue
 		}
-		pinBodiesAt(filepath.Join(dir, name), nil)
+		if !pinBodiesAt(filepath.Join(dir, name), nil) {
+			continue
+		}
 		if os.Remove(filepath.Join(dir, name)) == nil {
 			removed++
 		}

@@ -5,7 +5,6 @@ import (
 	"log"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -63,7 +62,9 @@ func (s bodyHydrateStats) log() {
 func moveUnreadableBodiesAside(paths []string) {
 	suffix := ".unreadable-" + time.Now().Format("20060102-150405")
 	for _, p := range paths {
-		pinBodiesAt(p, nil)
+		if !pinBodiesAt(p, nil) {
+			continue
+		}
 		if err := os.Rename(p, p+suffix); err != nil {
 			slog.Error("lyrics bodies: could not move an unreadable side file aside", "path", p, "err", err)
 			continue
@@ -98,7 +99,7 @@ func hydrateEnrichBodies(m map[string]enrichEntry, dir string) bodyHydrateStats 
 		go func() {
 			defer wg.Done()
 			for i := range next {
-				bodies[i], readErrs[i] = readEnrichBodyChecked(filepath.Join(dir, decisionSidecarName(keys[i])))
+				bodies[i], readErrs[i] = readEnrichBodyChecked(bodySidePath(dir, keys[i]))
 			}
 		}()
 	}
@@ -115,7 +116,7 @@ func hydrateEnrichBodies(m map[string]enrichEntry, dir string) bodyHydrateStats 
 		switch b := bodies[i]; {
 		case b == nil:
 			if readErrs[i] != nil {
-				st.unreadable = append(st.unreadable, filepath.Join(dir, decisionSidecarName(k)))
+				st.unreadable = append(st.unreadable, bodySidePath(dir, k))
 			}
 			st.missing++
 			if st.missingSet == nil {
@@ -128,7 +129,7 @@ func hydrateEnrichBodies(m map[string]enrichEntry, dir string) bodyHydrateStats 
 		default:
 			e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC, e.PlainLyrics = bt(b.Lyrics), bt(b.LyricsTr), bt(b.LyricsRoma), bt(b.LyricsYRC), bt(b.PlainLyrics)
 			e.LyricsBG = bt(b.LyricsBG)
-			locateEntryBodies(&e, filepath.Join(dir, decisionSidecarName(k)), b)
+			locateEntryBodies(&e, bodySidePath(dir, k), b)
 			noteBodyCRC(k, &e, b.CRC)
 			if b.CRC == want {
 				st.restored++

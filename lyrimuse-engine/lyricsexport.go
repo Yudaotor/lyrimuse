@@ -143,6 +143,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		source               string
 		manual               bool
 		variants             [4]string // 对应 lyricsFileSuffixes,空串表示这个变体没有内容
+		bodies               [4]bodyText
 	}
 	// 只导出几个分组时,不在 onlyFolds 里的条目连拷都不拷:碰撞分组只对要导出的分组有意义,而同一分组的 key 分组键相同、
 	// 必然都在 onlyFolds 里,整组照样算全。只遍历 key,条目约 1.4 KB,按值遍历会把整个缓存拷一遍。见 15 章决策 53。
@@ -171,12 +172,24 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		jobs = append(jobs, entryJob{
 			key: key, artist: artist, title: title, album: album,
 			source: e.LyricsSource, manual: e.ManualLyrics,
-			variants: [4]string{e.Lyrics.String(), e.LyricsTr.String(), e.LyricsRoma.String(), e.LyricsYRC.String()},
+			bodies: [4]bodyText{e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC},
 		})
 	}
 	enrichMu.Unlock()
 	if len(jobs) == 0 {
 		return
+	}
+	// 正文可能退回在小文件里:出了锁再读。有一份读不回来就整轮不导出(空串会被当成「这个变体没有」、删掉文件,
+	// 少一条还会改变同名分组的命名),下一次导出再来。
+	for i := range jobs {
+		for v, t := range jobs[i].bodies {
+			s, err := t.load()
+			if err != nil {
+				slog.Error("lyrics export: skipped this round, a lyrics body could not be read back", "key", jobs[i].key)
+				return
+			}
+			jobs[i].variants[v] = s
+		}
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		noteFileErr("mkdir", dir, err)

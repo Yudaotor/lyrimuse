@@ -794,6 +794,16 @@ private func scriptServerTests() {
     expectEqual(s1.count == 3 && s2.count == 3 && s3.count == 3 && s1[0] == s2[0] && s3[0] != s1[0] && s3[1] == "1"
                 && bySize.launchCount == 2, true, "常驻脚本: 回答累计到字节上限换新进程")
     bySize.stop()
+    // 进程被前一个请求占着:等锁也算在 timeout 里,等不到交 nil(调用方起子进程),不排到前一个答完。
+    let busy = server(recycle: 100)
+    _ = busy.request("warm", timeout: 5)
+    let hanging = Thread { _ = busy.request("hang", timeout: 0.4) }
+    hanging.start()
+    Thread.sleep(forTimeInterval: 0.05)
+    let waitStarted = Date()
+    let queued = busy.request("x", timeout: 0.1)
+    expectEqual(queued == nil && Date().timeIntervalSince(waitStarted) < 0.3, true, "常驻脚本: 等锁超时交 nil")
+    busy.stop()
     let clientSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift"), encoding: .utf8)) ?? ""
     expectEqual(sourceBytes(clientSource, contain: "guard let r = artworkServer.request(\"now\", timeout: artworkTimeout)\n                ?? ProcessRunner.run(binaryPath, [\"get\", \"--now\"], timeout: artworkTimeout),"), true,

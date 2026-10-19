@@ -16,7 +16,7 @@ private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: 
 /// - 起不来、半路退出:这次返回 nil,调用方自己退回每次起子进程那条路。连着 `disableAfterFailures` 次就停用
 ///   `disabledInterval`,这段时间一律返回 nil、不起进程。
 /// - 脚本必须在 stdin 读到 EOF 时自己退出:App 退出(含被杀)时靠这一条不留孤儿。
-/// - 请求串行处理,同一时刻只有一次在飞。会阻塞调用线程,别在主线程上调。
+/// - 请求串行处理,同一时刻只有一次在飞;等前一次的时间也算在这次的 timeout 里,等不到交 nil。会阻塞调用线程,别在主线程上调。
 public final class PersistentScriptServer: @unchecked Sendable {
     public struct Launch: Sendable {
         public var executable: String
@@ -80,13 +80,14 @@ public final class PersistentScriptServer: @unchecked Sendable {
     /// 问一次。nil = 这次用不上(停用中、起不来、半路退出、请求里带换行),调用方自己退回起子进程。
     public func request(_ line: String, timeout: TimeInterval) -> ProcessRunner.Result? {
         guard !line.contains("\n") else { return nil }
-        lock.lock()
+        // 等锁也算在 timeout 里:前一次请求占着进程时等不到就交 nil,调用方自己起子进程。
+        let deadline = Date().addingTimeInterval(timeout)
+        guard lock.lock(before: deadline) else { return nil }
         defer { lock.unlock() }
         if let until = disabledUntil {
             guard Date() >= until else { return nil }
             disabledUntil = nil
         }
-        let deadline = Date().addingTimeInterval(timeout)
         if process == nil, !startLocked() { return failLocked("could not start") }
         guard let fd = input?.fileHandleForWriting.fileDescriptor, Self.writeAll(Data((line + "\n").utf8), to: fd) else {
             stopLocked(force: true)

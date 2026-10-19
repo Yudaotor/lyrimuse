@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"hash/maphash"
 	"log/slog"
 	"os"
@@ -127,27 +128,47 @@ func (t bodyText) EqualString(s string) bool {
 	return t.b.n == len(s) && t.b.sum == bodySum(s)
 }
 
+// String 取内容;读不回来(见 load)时是空串并记一行错误。要写盘、导出的地方用 load,别拿空串当真内容写下去。
 func (t bodyText) String() string {
+	s, _ := t.load()
+	return s
+}
+
+// errBodyUnreadable 退回的正文读不回来:小文件读出错、被挪走,或者内容对不上。
+var errBodyUnreadable = errors.New("lyrics body: evicted body could not be read back from its side file")
+
+// load 取内容;退回的正文读不回来时报 errBodyUnreadable,不交回空串冒充「没有正文」。
+func (t bodyText) load() (string, error) {
 	b := t.b
 	if b == nil {
-		return ""
+		return "", nil
 	}
 	if p := b.text.Load(); p != nil {
-		return *p
+		return *p, nil
 	}
 	if s, ok := readLocatedBody(b); ok {
-		return s
+		return s, nil
 	}
 	// 改写小文件之前会先把内容钉回内存(pinBodiesAt),读到新文件对不上时这里一定已经有了。
 	if p := b.text.Load(); p != nil {
-		return *p
+		return *p, nil
 	}
-	l := b.loc.Load()
-	slog.Error("lyrics bodies: evicted body no longer matches its side file", "path", l.path, "field", l.field)
-	return ""
+	if l := b.loc.Load(); l != nil {
+		slog.Error("lyrics bodies: evicted body could not be read back", "path", l.path, "field", l.field)
+	} else {
+		slog.Error("lyrics bodies: evicted body has neither text nor a side file")
+	}
+	return "", errBodyUnreadable
 }
 
-func (t bodyText) MarshalJSON() ([]byte, error) { return json.Marshal(t.String()) }
+// MarshalJSON 读不回来时报错,整份编码跟着失败(存盘这一次作罢、下次再存),不把空串写下去。
+func (t bodyText) MarshalJSON() ([]byte, error) {
+	s, err := t.load()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(s)
+}
 
 func (t *bodyText) UnmarshalJSON(data []byte) error {
 	var s string
@@ -214,15 +235,16 @@ func enableBodyEviction() {
 }
 
 // pinBodiesAt 在改写 / 挪走 / 删除 path 之前调:定位在这份文件里的正文,next(新内容,nil = 文件要没了)里同一块
-// 不是同样内容的,从现在的文件读回内存。同样内容的照旧定位在这里。
-func pinBodiesAt(path string, next *enrichBody) {
+// 不是同样内容的,从现在的文件读回内存。同样内容的照旧定位在这里。返回 false = 要钉的读不回来(登记原样放回),
+// 调用方这一次别改写、挪走、删除这份文件。
+func pinBodiesAt(path string, next *enrichBody) bool {
 	bodyRegMu.Lock()
 	ws := bodyLocated[path]
 	delete(bodyLocated, path)
 	bodyRegMu.Unlock()
 	dropBodyFileCache(path)
 	if len(ws) == 0 {
-		return
+		return true
 	}
 	var cur *enrichBody
 	var keep []weak.Pointer[bodyBlob]
@@ -253,7 +275,8 @@ func pinBodiesAt(path string, next *enrichBody) {
 			}
 			if cur == nil {
 				slog.Error("lyrics bodies: could not pin bodies before rewriting their side file", "path", path, "err", err)
-				return
+				restoreBodyLocations(path, ws)
+				return false
 			}
 		}
 		s := cur.field(l.field)
@@ -269,6 +292,25 @@ func pinBodiesAt(path string, next *enrichBody) {
 		bodyLocated[path] = append(bodyLocated[path], keep...)
 		bodyRegMu.Unlock()
 	}
+	return true
+}
+
+// restoreBodyLocations 钉不成时把还定位在 path 的登记放回去,下次改写之前还钉得到。
+func restoreBodyLocations(path string, ws []weak.Pointer[bodyBlob]) {
+	var back []weak.Pointer[bodyBlob]
+	for _, w := range ws {
+		if b := w.Value(); b != nil {
+			if l := b.loc.Load(); l != nil && l.path == path {
+				back = append(back, w)
+			}
+		}
+	}
+	if len(back) == 0 {
+		return
+	}
+	bodyRegMu.Lock()
+	bodyLocated[path] = append(bodyLocated[path], back...)
+	bodyRegMu.Unlock()
 }
 
 // readLocatedBody 从退回的位置读回内容,摘要对得上才算数。
@@ -304,8 +346,8 @@ var bodyFileReads atomic.Int64
 
 // ---- 最近读过的几份小文件 ----
 
-// bodyFileCacheSize 解析结果留几份:同一首歌的几块正文常常前后脚被读。
-const bodyFileCacheSize = 16
+// bodyFileCacheSize 解析结果留几份:同一首歌的几块正文常常前后脚被读,在放的那首每拍都读。命中时挪到最近,按最久没用的挤掉。
+const bodyFileCacheSize = 32
 
 var (
 	bodyFileMu    sync.Mutex
@@ -316,7 +358,21 @@ var (
 func cachedBodyFile(path string) *enrichBody {
 	bodyFileMu.Lock()
 	defer bodyFileMu.Unlock()
-	return bodyFiles[path]
+	body := bodyFiles[path]
+	if body != nil {
+		touchBodyFileLocked(path)
+	}
+	return body
+}
+
+// touchBodyFileLocked 把 path 挪到最近用过的那一头。调用方持 bodyFileMu。
+func touchBodyFileLocked(path string) {
+	for i, p := range bodyFileOrder {
+		if p == path {
+			bodyFileOrder = append(append(bodyFileOrder[:i:i], bodyFileOrder[i+1:]...), path)
+			return
+		}
+	}
 }
 
 func rememberBodyFile(path string, body *enrichBody) {
@@ -325,7 +381,9 @@ func rememberBodyFile(path string, body *enrichBody) {
 	}
 	bodyFileMu.Lock()
 	defer bodyFileMu.Unlock()
-	if _, ok := bodyFiles[path]; !ok {
+	if _, ok := bodyFiles[path]; ok {
+		touchBodyFileLocked(path)
+	} else {
 		bodyFileOrder = append(bodyFileOrder, path)
 		if len(bodyFileOrder) > bodyFileCacheSize {
 			delete(bodyFiles, bodyFileOrder[0])
@@ -338,7 +396,16 @@ func rememberBodyFile(path string, body *enrichBody) {
 func dropBodyFileCache(path string) {
 	bodyFileMu.Lock()
 	defer bodyFileMu.Unlock()
+	if _, ok := bodyFiles[path]; !ok {
+		return
+	}
 	delete(bodyFiles, path)
+	for i, p := range bodyFileOrder {
+		if p == path {
+			bodyFileOrder = append(bodyFileOrder[:i:i], bodyFileOrder[i+1:]...)
+			break
+		}
+	}
 }
 
 // field 小文件里的第 f 块。

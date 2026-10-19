@@ -904,8 +904,6 @@ private struct MenuBarPanelView: View {
 
     @ViewBuilder private var lyricContent: some View {
         switch lyricDisplay {
-        case .words:
-            EmptyView()
         case .plain:
             // 行级 LRC(没有逐字数据)—— 整行一个颜色,不假装有进度。
             Text(playback.compactLine?.plainText ?? "").foregroundStyle(.primary).lineLimit(1)
@@ -923,7 +921,7 @@ private struct MenuBarPanelView: View {
             statusText(L10n.t("网络连接失败"))
         case .searching:
             statusText(L10n.t("搜索歌词中…"))
-        case .idle:
+        case .idle, .words:
             Text("")
         }
     }

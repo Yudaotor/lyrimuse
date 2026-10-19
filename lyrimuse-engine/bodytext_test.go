@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -304,5 +306,187 @@ func TestLoadedBodiesEvictWhenEnabled(t *testing.T) {
 	}
 	if e.Lyrics.String() != "[00:01.00]阴天 在不开灯的房间" || e.LyricsYRC.String() != "[1000,500](1000,500,0)阴" {
 		t.Fatal("退回之后读得回")
+	}
+}
+
+// 钉住要读的旧文件读不了:返回 false、登记放回;存盘这一次不改写那份文件,文件恢复之后旧快照照样读得回。
+func TestPinFailureKeepsFileAndSnapshot(t *testing.T) {
+	withTempLeanCache(t)
+	withBodyEviction(t)
+	const key = "张学友|吻别|吻别"
+	putEntriesForTest(map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]前尘往事成云烟"),
+		LyricsTr: bt("[00:01.00]the past turns into smoke"), LyricsSource: "qq"}})
+	saveEnrichCache()
+	enrichMu.Lock()
+	snap := enrichCache[key]
+	enrichMu.Unlock()
+	path := bodySidePath(enrichBodiesDir(), key)
+	before := mustRead(t, path)
+	clearBodyFileCacheForTest()
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+
+	next := enrichBody{Lyrics: "[00:01.00]别的歌词"}
+	if pinBodiesAt(path, &next) {
+		t.Fatal("旧文件读不了时钉住要报失败")
+	}
+	bodyRegMu.Lock()
+	n := len(bodyLocated[path])
+	bodyRegMu.Unlock()
+	if n == 0 {
+		t.Fatal("钉不成时登记要放回去")
+	}
+
+	changed := snap
+	changed.Lyrics = bt("[00:01.00]别的歌词")
+	putEntriesForTest(map[string]enrichEntry{key: changed})
+	saveEnrichCache()
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(mustRead(t, path), before) {
+		t.Fatal("钉不成的那份小文件这一次不该被改写")
+	}
+	clearBodyFileCacheForTest()
+	if snap.Lyrics.String() != "[00:01.00]前尘往事成云烟" || snap.LyricsTr.String() != "[00:01.00]the past turns into smoke" {
+		t.Fatal("文件恢复之后旧快照读得回")
+	}
+}
+
+// 退回的正文读不回来:load 报错,条目整份编码失败,不把空串写下去。
+func TestUnreadableBodyFailsMarshal(t *testing.T) {
+	withBodyEviction(t)
+	path := filepath.Join(t.TempDir(), "gone.json")
+	writeBodyFileForTest(t, path, enrichBody{Lyrics: "[00:01.00]读不回来的那份"})
+	lyr := bt("[00:01.00]读不回来的那份")
+	locateBody(lyr, path, bodyFieldLyrics)
+	clearBodyFileCacheForTest()
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lyr.load(); err == nil {
+		t.Fatal("读不回来要报错")
+	}
+	if _, err := json.Marshal(enrichEntry{Lyrics: lyr}); err == nil {
+		t.Fatal("读不回来时整份编码要失败")
+	}
+	if lyr.String() != "" {
+		t.Fatal("String 读不回来是空串")
+	}
+}
+
+// 导出时有一份正文读不回来:整轮不导出,已有的文件一个都不动。
+func TestExportSkipsRoundOnUnreadableBody(t *testing.T) {
+	withTempLeanCache(t)
+	withBodyEviction(t)
+	lyricsDir := t.TempDir()
+	saved := lyricsDirValue.Load()
+	setLyricsDir(lyricsDir)
+	t.Cleanup(func() { lyricsDirValue.Store(saved) })
+	const key = "林忆莲|至少还有你|林忆莲's"
+	putEntriesForTest(map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]我怕来不及"), LyricsTr: bt("[00:01.00]afraid"),
+		LyricsSource: "qq"}})
+	saveEnrichCache()
+	exportLyricsFilesMatching(nil)
+	names := func() []string {
+		es, _ := os.ReadDir(lyricsDir)
+		var out []string
+		for _, e := range es {
+			out = append(out, e.Name())
+		}
+		return out
+	}
+	exported := names()
+	if len(exported) == 0 {
+		t.Fatal("先导出一份")
+	}
+	path := bodySidePath(enrichBodiesDir(), key)
+	clearBodyFileCacheForTest()
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+	exportLyricsFilesMatching(nil)
+	if got := names(); !reflect.DeepEqual(got, exported) {
+		t.Fatalf("读不回来时整轮不导出,文件不该少: %v → %v", exported, got)
+	}
+}
+
+// 小文件缓存按最近用过挤:命中过的那份不会被后来读的挤掉。
+func TestBodyFileCacheKeepsRecentlyUsed(t *testing.T) {
+	clearBodyFileCacheForTest()
+	t.Cleanup(clearBodyFileCacheForTest)
+	hot := &enrichBody{CRC: 1, Lyrics: "hot"}
+	rememberBodyFile("/hot", hot)
+	for i := 0; i < bodyFileCacheSize*2; i++ {
+		if cachedBodyFile("/hot") != hot {
+			t.Fatalf("第 %d 次读之前在放那份被挤掉了", i)
+		}
+		rememberBodyFile(fmt.Sprintf("/cold-%d", i), &enrichBody{CRC: 2})
+	}
+}
+
+// 新内容自己拼得出来、但旧快照退回在这份文件里而文件读不了:钉住失败,这一次不改写。
+func TestSaveSkipsWriteWhenPinFails(t *testing.T) {
+	withTempLeanCache(t)
+	withBodyEviction(t)
+	const key = "李宗盛|山丘|山丘"
+	putEntriesForTest(map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]想说却还没说的"), LyricsSource: "qq"}})
+	saveEnrichCache()
+	enrichMu.Lock()
+	snap := enrichCache[key]
+	enrichMu.Unlock()
+	path := bodySidePath(enrichBodiesDir(), key)
+	before := mustRead(t, path)
+	changed := snap
+	changed.Lyrics = bt("[00:01.00]越过山丘")
+	clearBodyFileCacheForTest()
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+	putEntriesForTest(map[string]enrichEntry{key: changed})
+	saveEnrichCache()
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(mustRead(t, path), before) {
+		t.Fatal("钉不成时这一次不改写小文件")
+	}
+	clearBodyFileCacheForTest()
+	if snap.Lyrics.String() != "[00:01.00]想说却还没说的" {
+		t.Fatal("旧快照读得回")
+	}
+}
+
+// 清孤儿文件时钉不成(文件读不了):这份先不删。
+func TestSweepKeepsFileWhenPinFails(t *testing.T) {
+	withTempLeanCache(t)
+	withBodyEviction(t)
+	const key = "陈奕迅|十年|黑白灰"
+	putEntriesForTest(map[string]enrichEntry{key: {Lyrics: bt("[00:01.00]如果那两个字没有颤抖"), LyricsSource: "qq"}})
+	saveEnrichCache()
+	enrichMu.Lock()
+	snap := enrichCache[key]
+	delete(enrichCache, key)
+	enrichMu.Unlock()
+	path := bodySidePath(enrichBodiesDir(), key)
+	clearBodyFileCacheForTest()
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+	sweepKeyedDir(enrichBodiesDir(), "lyrics bodies")
+	if _, err := os.Lstat(path); err != nil {
+		t.Fatal("钉不成时孤儿文件先留着")
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	clearBodyFileCacheForTest()
+	if snap.Lyrics.String() != "[00:01.00]如果那两个字没有颤抖" {
+		t.Fatal("留着的文件里读得回")
 	}
 }
