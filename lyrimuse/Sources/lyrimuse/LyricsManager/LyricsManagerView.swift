@@ -1737,6 +1737,8 @@ struct LyricsManagerView: View {
                  // 右键点已选中区内任一行则 keys 是整个选区。
                  menu: { keys in listMenu(keys) })
         .equatable()
+        // 滚动条跟着下面的 padding 往上伸了同样多,让它从裁剪后的上沿开始,不被裁掉一截(见 11 章决策 132)。
+        .contentMargins(.top, groupByAlbum ? Self.groupedListTopTrim : 0, for: .scrollIndicators)
         // 分组时第一行是组头,行里上方那一截是组跟组之间的间隔,排在最前面时用不上:列表往上伸进标题行底下,把它藏起来,
         // 伸出去的这一条不画,往下滚时行照旧在原来的上沿切掉。别改成单独把第一行改矮(会被最小行高撑回 56),
         // 也别用负的 contentMargins(列表不认),见 11 章决策 113。
