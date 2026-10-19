@@ -52,6 +52,12 @@ VARIANTS=(
   "|--dest|arm64"
   "-intel|--universal --dest|arm64 x86_64"
 )
+# LYRIMUSE_PACKAGE_VARIANTS=arm 只打主包(arm64),给另一台 Apple Silicon 测试用;发版不设,两份都打。
+case "${LYRIMUSE_PACKAGE_VARIANTS:-}" in
+  "") ;;
+  arm) VARIANTS=("${VARIANTS[0]}") ;;
+  *) echo "LYRIMUSE_PACKAGE_VARIANTS 只认 arm,收到: $LYRIMUSE_PACKAGE_VARIANTS" >&2; exit 1 ;;
+esac
 
 # 发布包里必须有的组件,路径相对 Lyrimuse.app/Contents/。下面的架构闸和签名校验只看包里**已有**的文件,
 # 整件没打进包时一道都不会响;media-control 在 build.sh 里找不到只警告、照常出包(给本地构建用),缺了它
