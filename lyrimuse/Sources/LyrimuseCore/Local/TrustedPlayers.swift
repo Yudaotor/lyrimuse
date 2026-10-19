@@ -165,6 +165,20 @@ public enum TrustedPlayers {
         return (artist ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// 这一帧的歌名是播放器内部的曲目 id、元数据还没加载出来:整串是至少 `placeholderIDMinDigits` 位的数字,专辑空着或跟歌名同一串。
+    /// 实测 Music.app 开播一首还没载入的歌时报过一帧「歌手 - 9218973009185534415」、专辑同一串、时长 0,照收会建一条孤儿缓存条目、
+    /// 白搜一轮歌词。不按播放器收窄:哪家这么报都一样。真歌名里的年份、日期(「20240501」)远不到这个位数。调用方当成「在加载」
+    /// (`MediaControlClient.artistNotYetReported`)。见 02 章决策 148。纯函数,selftest 覆盖。
+    public static func titleIsPlaceholderID(title: String?, album: String?) -> Bool {
+        let t = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.count >= placeholderIDMinDigits, t.allSatisfy({ $0.isASCII && $0.isNumber }) else { return false }
+        let a = (album ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return a.isEmpty || a == t
+    }
+
+    /// `titleIsPlaceholderID` 认的最短位数。
+    public static let placeholderIDMinDigits = 12
+
     public static func artistlessContent(bundleID: String?, artist: String?, duration: Double?, playing: Bool?) -> Bool {
         guard let bundleID, PlaybackPlayer.builtin(forBundleID: bundleID)?.artistlessNotMusic == true else { return false }
         guard (artist ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }

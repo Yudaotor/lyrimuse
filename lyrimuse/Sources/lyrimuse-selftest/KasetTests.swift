@@ -532,6 +532,39 @@ func runKasetTests() {
                     "Kaset 取舍: 别的播放器在加载、它在放,换过去")
         expectEqual(MediaControlClient.kasetWins(over: nil, kaset: kWaiting, otherPlayerLoading: true), true,
                     "Kaset 取舍: 别的播放器在加载、它正要放,换过去")
+        // 系统这一拍什么都没报、刚才还在报别的播放器:按它切歌撤会话处理(Music.app 自然连播撤约 2.5 秒),暂停着的兜底会话不顶上来
+        // (02 章决策 147)。
+        let am = PlaybackPlayer.appleMusic.bundleIdentifier, lx = PlaybackPlayer.lxMusic.bundleIdentifier
+        let seen = Date(timeIntervalSince1970: 1_000)
+        expectEqual(MediaControlClient.otherPlayerBetweenTracks(lastBundleID: am, lastSeenAt: seen, fallbackBundleID: lx,
+                                                                now: seen.addingTimeInterval(2.5)), true,
+                    "切歌空档: 别的播放器 2.5 秒前还在报,当它在切歌")
+        expectEqual(MediaControlClient.otherPlayerBetweenTracks(lastBundleID: am, lastSeenAt: seen, fallbackBundleID: lx,
+                                                                now: seen.addingTimeInterval(PlayerGapHold.startWindow + 1)), false,
+                    "切歌空档: 空了比切歌空档还久,当它停了,兜底的照常顶上来")
+        expectEqual(MediaControlClient.otherPlayerBetweenTracks(lastBundleID: lx, lastSeenAt: seen, fallbackBundleID: lx,
+                                                                now: seen.addingTimeInterval(1)), false,
+                    "切歌空档: 上一次报的就是兜底这一家,不算别人在切歌")
+        expectEqual(MediaControlClient.otherPlayerBetweenTracks(lastBundleID: nil, lastSeenAt: nil, fallbackBundleID: lx,
+                                                                now: seen), false,
+                    "切歌空档: 之前没人报过,不算")
+        // 切歌间隙保持把屏上留在别的播放器时,这一拍判出来的顶替不接管播放控制。
+        typealias C = MediaControlClient
+        expectEqual(C.controlScriptTarget(kasetPreferred: true, lxMusicPreferred: false, holdingAcrossGap: false,
+                                          scriptTarget: nil), .kaset,
+                    "播放控制: 顶替系统那边时发给 Kaset")
+        expectEqual(C.controlScriptTarget(kasetPreferred: false, lxMusicPreferred: true, holdingAcrossGap: false,
+                                          scriptTarget: nil), .lxMusic,
+                    "播放控制: 顶替系统那边时发给洛雪")
+        expectEqual(C.controlScriptTarget(kasetPreferred: true, lxMusicPreferred: false, holdingAcrossGap: true,
+                                          scriptTarget: nil) == nil, true,
+                    "播放控制: 屏上保持着别的播放器时不发给暂停着的 Kaset")
+        expectEqual(C.controlScriptTarget(kasetPreferred: false, lxMusicPreferred: true, holdingAcrossGap: true,
+                                          scriptTarget: .spotify), .spotify,
+                    "播放控制: 屏上保持着别的播放器时照回退目标发,不发给洛雪")
+        expectEqual(C.controlScriptTarget(kasetPreferred: false, lxMusicPreferred: false, holdingAcrossGap: false,
+                                          scriptTarget: .appleMusic), .appleMusic,
+                    "播放控制: 没在顶替时照回退目标发")
     }
 
     // ---- 封面:系统那份恒为空,用缓存里匹配到的 ----
@@ -825,14 +858,27 @@ func runKasetTests() {
                     true, "Kaset 契约: 封面每次取都按此刻认下的播放器挑")
         expectEqual(sourceHas(client, "if snapshot == nil, target.player != .kaset,\n           let probed = NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: target.bundleID) {"), true,
                     "Kaset 契约: 焦点回退不拿系统按 bundle id 存的那份(换歌后常停在上一首)")
-        expectEqual(client.contains("return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(fetchAutoDetectedSnapshot()), wanted: true))"), true,
+        expectEqual(sourceHas(client, "let found = fetchAutoDetectedSnapshot()\n            noteSystemReading(found)\n            return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(found), wanted: true))"), true,
                     "Kaset 契约: 自动识别时系统那边没在放就问它")
+        expectEqual(sourceHas(client, "let otherLoading = loading || (found == nil && otherPlayerJustDropped(besides: PlaybackPlayer.kaset.bundleIdentifier))")
+                        && sourceHas(client, "|| (found == nil && otherPlayerJustDropped(besides: PlaybackPlayer.lxMusic.bundleIdentifier))")
+                        && client.contains("kasetWins(over: found, kaset: synthesized, otherPlayerLoading: otherBetweenTracks, alreadyPreferred: alreadyPreferred)")
+                        && sourceHas(client, "let selected = fetchMultiSelectedSnapshot(players)\n        noteSystemReading(selected)"),
+                    true, "Kaset / 洛雪契约: 系统刚还在报别的播放器、这一拍空了,两路兜底都当它在切歌,暂停着的不顶上来")
         expectEqual(client.contains("let withKaset = players.contains(.kaset) ? preferringPlayingKaset(selected) : selected"), true,
                     "Kaset 契约: 勾了它的多选同样问,没勾的不问")
         expectEqual(client.contains("if !players.contains(.auto), !players.contains(.kaset) { forgetKasetPreference() }"), true,
                     "Kaset 契约: 设置不认 Kaset 时清掉顶替记录(播放控制别再发给它)")
-        expectEqual(client.contains("let target: PlaybackPlayer? = kasetPreferred ? .kaset : lxMusicPreferred ? .lxMusic : scriptTarget"), true,
-                    "Kaset 契约: 顶替系统那边时播放控制直接发给它")
+        expectEqual(client.contains("let holdingAcrossGap = gapHoldingSince != nil")
+                        && sourceHas(client, "let target = controlScriptTarget(kasetPreferred: kasetPreferred, lxMusicPreferred: lxMusicPreferred,\n                                         holdingAcrossGap: holdingAcrossGap, scriptTarget: scriptTarget)")
+                        && client.contains("return preferred && !holdingAcrossGap"), true,
+                    "Kaset 契约: 顶替系统那边时播放控制直接发给它,切歌间隙保持着别家时不发,收藏也不按洛雪认")
+        expectEqual(sourceHas(client, "guard !asked,\n              runningPID(PlaybackPlayer.kaset.bundleIdentifier) != nil,")
+                        && client.contains("guard let pid = runningPID(PlaybackPlayer.kaset.bundleIdentifier),")
+                        && client.contains("guard runningPID(player.bundleIdentifier) != nil else { continue }"), true,
+                    "Kaset 契约: 轮询线程上判它在不在跑按记下的进程号问内核,不靠 NSRunningApplication")
+        expectEqual(sourceHas(client, "if playerContentNotMusic(bundleID: target.bundleID, snapshot: s) { return nil }\n            // 开播那一帧还没有歌手(KKBOX)是在加载这一首,同主路径按「在加载」交回空,不记成「不是歌」。\n            if artistNotYetReported(bundleID: target.bundleID, snapshot: s) { return nil }"), true,
+                    "焦点回退契约: 开播那一帧还没有歌手按「在加载」处理,跟主路径一样")
         expectEqual(src("lyrimuse/LastfmStatsSection.swift").contains(
             #"if let url = links?.kaset, Self.isInstalled(.kaset) {"#), true, "Kaset 契约: 榜单右键「在 Kaset 中播放」只在装了 Kaset 时出")
         expectEqual(src("lyrimuse/UI/LyricsMoreMenuModel.swift").contains(#"L10n.t("YouTube Music 歌曲页")"#), true,

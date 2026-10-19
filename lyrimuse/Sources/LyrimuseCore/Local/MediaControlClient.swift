@@ -117,11 +117,14 @@ public enum MediaControlClient {
         let lxMusicWanted = players.contains(.auto) || players.contains(.lxMusic)
         if !lxMusicWanted { forgetLXMusicPreference() }
         if players.contains(.auto) {
-            return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(fetchAutoDetectedSnapshot()), wanted: true))
+            let found = fetchAutoDetectedSnapshot()
+            noteSystemReading(found)
+            return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(found), wanted: true))
         }
         if players == [.appleMusic] { return radioAwareAppleMusicSnapshot() }
         guard !players.isEmpty else { return nil }
         let selected = fetchMultiSelectedSnapshot(players)
+        noteSystemReading(selected)
         let withKaset = players.contains(.kaset) ? preferringPlayingKaset(selected) : selected
         return heldAcrossPlayerGap(preferringLXMusicOpenAPI(withKaset, wanted: lxMusicWanted))
     }
@@ -199,9 +202,11 @@ public enum MediaControlClient {
 
     /// `artistArrivesLate` 的播放器(KKBOX)开播先发一帧没有歌手的(约半秒后补齐):它在加载这一首,焦点没被别人占着。按
     /// 「在加载」交回空(留着上一首,见 `loadingGraceSeconds`),不去问别家暂停着的会话:焦点回退不问,Kaset 只在放或正要放时
-    /// 才顶上来(`kasetWins`)。见 02 章决策 106。
+    /// 才顶上来(`kasetWins`)。见 02 章决策 106。歌名还是播放器内部 id 的那一帧(`TrustedPlayers.titleIsPlaceholderID`,哪家都算)
+    /// 同样是在加载这一首,一并按这一档处理。
     private static func artistNotYetReported(bundleID: String, snapshot: MediaControlSnapshot) -> Bool {
-        guard TrustedPlayers.artistNotYetReported(bundleID: bundleID, artist: snapshot.artist) else { return false }
+        guard TrustedPlayers.artistNotYetReported(bundleID: bundleID, artist: snapshot.artist)
+                || TrustedPlayers.titleIsPlaceholderID(title: snapshot.title, album: snapshot.album) else { return false }
         setSnapshotFailure(.targetLoading)
         kasetLock.lock()
         otherPlayerLoadingThisRound = true
@@ -221,6 +226,23 @@ public enum MediaControlClient {
     private static var gapHoldPID: (bundleID: String, pid: pid_t)?
 
     private static func processAlive(_ pid: pid_t) -> Bool { kill(pid, 0) == 0 || errno == EPERM }
+
+    private static let runningPIDLock = NSLock()
+    private static var runningPIDs: [String: pid_t] = [:]
+
+    /// 这个播放器的进程号,没在跑为 nil。轮询线程上判「在不在跑」走这里:`NSRunningApplication` 在后台线程上偶尔返回空
+    /// (实测开着的 App 约两千多次查一次空),查到过一次就记下进程号,之后问内核它还在不在。
+    private static func runningPID(_ bundleID: String) -> pid_t? {
+        runningPIDLock.lock()
+        let cached = runningPIDs[bundleID]
+        runningPIDLock.unlock()
+        if let cached, processAlive(cached) { return cached }
+        let pid = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first?.processIdentifier
+        runningPIDLock.lock()
+        runningPIDs[bundleID] = pid
+        runningPIDLock.unlock()
+        return pid
+    }
 
     private static func noteGapHoldPID(_ bundleID: String) {
         if let cur = gapHoldPID, cur.bundleID == bundleID, processAlive(cur.pid) { return }
@@ -705,8 +727,7 @@ public enum MediaControlClient {
 
     /// Kaset 内嵌网页此刻在放的那段媒体(`KasetPlayerInfo.webMedia`)。Kaset 没在跑、helper 不可用返回 nil。
     private static func kasetWebMedia() -> KasetPlayerInfo.WebMedia? {
-        guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: PlaybackPlayer.kaset.bundleIdentifier)
-                .first?.processIdentifier,
+        guard let pid = runningPID(PlaybackPlayer.kaset.bundleIdentifier),
               let sessions = NowPlayingClientsProbe.allSessions()
         else { return nil }
         return KasetPlayerInfo.webMedia(in: sessions, kasetPID: pid)
@@ -800,11 +821,46 @@ public enum MediaControlClient {
     /// 播放控制据此直接发给洛雪(`focusControlContext`),日志在它变化时打一条。只在 `kasetLock` 里读写。
     private static var lxMusicPreferredOver: String?
 
+    /// 系统那边(顶替之前)最近一次报出来的播放器和时刻;报空的那几拍不动它。只在 `kasetLock` 里读写。
+    private static var lastSystemReading: (bundleID: String, at: Date)?
+
+    private static func noteSystemReading(_ found: MediaControlSnapshot?) {
+        guard let id = found?.bundleIdentifier else { return }
+        kasetLock.lock()
+        lastSystemReading = (id, Date())
+        kasetLock.unlock()
+    }
+
+    /// 这一拍系统什么都没报,而刚才还在报别的播放器(`fallbackBundleID` 之外的那个):按它在加载下一首处理,暂停着的兜底会话
+    /// (洛雪开放 API、Kaset)不顶上来,空读数交给轮询的单拍宽限。
+    private static func otherPlayerJustDropped(besides fallbackBundleID: String) -> Bool {
+        kasetLock.lock()
+        let last = lastSystemReading
+        kasetLock.unlock()
+        return otherPlayerBetweenTracks(lastBundleID: last?.bundleID, lastSeenAt: last?.at, fallbackBundleID: fallbackBundleID,
+                                        now: Date())
+    }
+
+    /// 系统这一拍什么都没报时,是不是上一次报的那个播放器(不是兜底的这一家)在切歌撤会话:离最后一次报它不到
+    /// `PlayerGapHold.startWindow`。Apple Music 自然连播实测会撤约 2.5 秒,哪家撤都一样,不按播放器收窄。不成立时暂停着的兜底
+    /// 会话照旧顶上来(别家停了、只剩它)。见 02 章决策 147。纯函数,selftest 覆盖。
+    public static func otherPlayerBetweenTracks(lastBundleID: String?, lastSeenAt: Date?, fallbackBundleID: String,
+                                                now: Date) -> Bool {
+        guard let lastBundleID, let lastSeenAt, lastBundleID != fallbackBundleID else { return false }
+        let age = now.timeIntervalSince(lastSeenAt)
+        return age >= 0 && age <= PlayerGapHold.startWindow
+    }
+
     /// 这一拍的读数是不是洛雪开放 API 合成的(系统那边没报洛雪)。收藏读写据此改按它推的歌名认这一首。
     public static var lxMusicReadViaOpenAPI: Bool {
         kasetLock.lock()
-        defer { kasetLock.unlock() }
-        return lxMusicPreferredOver != nil
+        let preferred = lxMusicPreferredOver != nil
+        kasetLock.unlock()
+        // 切歌间隙保持把屏上留在别的播放器时,屏上这首不是洛雪推的(同 controlScriptTarget)。
+        gapHoldLock.lock()
+        let holdingAcrossGap = gapHoldingSince != nil
+        gapHoldLock.unlock()
+        return preferred && !holdingAcrossGap
     }
 
     /// 别的来源这一拍没给出在放的歌、洛雪又开着且用户打开了它的开放 API,就用它推的状态合成一份(`LXMusicOpenAPI.nowPlayingSnapshot`)。
@@ -819,12 +875,16 @@ public enum MediaControlClient {
         var lx: MediaControlSnapshot?
         kasetLock.lock()
         let alreadyPreferred = lxMusicPreferredOver != nil
+        let otherLoading = otherPlayerLoadingThisRound
         kasetLock.unlock()
+        // 别的播放器在加载下一首、或刚撤会话(otherPlayerJustDropped)时,暂停着的洛雪不顶上来,跟 Kaset 那一路一样。
+        let otherBetweenTracks = otherLoading
+            || (found == nil && otherPlayerJustDropped(besides: PlaybackPlayer.lxMusic.bundleIdentifier))
         // 订阅连着(`currentState` 不是 nil)就说明洛雪活着,不再看 `running`:那个后台线程上偶尔返回空。
         if wanted, found?.bundleIdentifier != PlaybackPlayer.lxMusic.bundleIdentifier,
            let state = LXMusicOpenAPI.shared.currentState(),
            let synthesized = LXMusicOpenAPI.nowPlayingSnapshot(state, now: Date()),
-           kasetWins(over: found, kaset: synthesized, alreadyPreferred: alreadyPreferred) {
+           kasetWins(over: found, kaset: synthesized, otherPlayerLoading: otherBetweenTracks, alreadyPreferred: alreadyPreferred) {
             lx = synthesized
         }
         let other = lx == nil ? nil : (found?.bundleIdentifier ?? "nothing")
@@ -860,11 +920,12 @@ public enum MediaControlClient {
         }
         kasetLock.lock()
         let asked = kasetAskedThisRound
-        let otherLoading = otherPlayerLoadingThisRound
+        let loading = otherPlayerLoadingThisRound
         let alreadyPreferred = kasetPreferredOver != nil
         kasetLock.unlock()
+        let otherLoading = loading || (found == nil && otherPlayerJustDropped(besides: PlaybackPlayer.kaset.bundleIdentifier))
         guard !asked,
-              !NSRunningApplication.runningApplications(withBundleIdentifier: PlaybackPlayer.kaset.bundleIdentifier).isEmpty,
+              runningPID(PlaybackPlayer.kaset.bundleIdentifier) != nil,
               let kaset = readKasetSnapshot(),
               Self.kasetWins(over: found, kaset: kaset, otherPlayerLoading: otherLoading, alreadyPreferred: alreadyPreferred)
         else { return nil }
@@ -1558,9 +1619,20 @@ public enum MediaControlClient {
         let heldElsewhere = viaProbe || holdingDroppedSession
         let droppedSessionPlayer = holdingDroppedSession
             ? PlaybackPlayer.builtin(forBundleID: gapHoldLast?.snapshot.bundleIdentifier) : nil
+        let holdingAcrossGap = gapHoldingSince != nil
         gapHoldLock.unlock()
-        let target: PlaybackPlayer? = kasetPreferred ? .kaset : lxMusicPreferred ? .lxMusic : scriptTarget
+        let target = controlScriptTarget(kasetPreferred: kasetPreferred, lxMusicPreferred: lxMusicPreferred,
+                                         holdingAcrossGap: holdingAcrossGap, scriptTarget: scriptTarget)
         return (target, directQueryTarget ?? droppedSessionPlayer, heldElsewhere)
+    }
+
+    /// 播放控制按哪家的脚本发。Kaset / 洛雪顶替了系统那边的读数时发给它们;但切歌间隙保持(`heldAcrossPlayerGap`)把屏上
+    /// 留在别的播放器时,顶替是这一拍按「系统什么都没报」判出来的,屏上并不是它们 —— 这时照回退目标发,不然按播放会把暂停着的
+    /// Kaset / 洛雪放起来,跟保持着的那家同时出声。见 02 章决策 149。纯函数,selftest 覆盖。
+    public static func controlScriptTarget(kasetPreferred: Bool, lxMusicPreferred: Bool, holdingAcrossGap: Bool,
+                                           scriptTarget: PlaybackPlayer?) -> PlaybackPlayer? {
+        guard !holdingAcrossGap else { return scriptTarget }
+        return kasetPreferred ? .kaset : lxMusicPreferred ? .lxMusic : scriptTarget
     }
 
     /// 回退查询失败只关闭读取开关,不证明焦点恢复。targetGone 由被接受的快照清零;
@@ -1714,6 +1786,8 @@ public enum MediaControlClient {
         // 挡下时不动回退开关:播放器还是那一个,只是这一拍没有可报的歌。
         if let s = snapshot {
             if playerContentNotMusic(bundleID: target.bundleID, snapshot: s) { return nil }
+            // 开播那一帧还没有歌手(KKBOX)是在加载这一首,同主路径按「在加载」交回空,不记成「不是歌」。
+            if artistNotYetReported(bundleID: target.bundleID, snapshot: s) { return nil }
             if trustedPlaybackRejected(bundleID: target.bundleID, snapshot: s) {
                 setSnapshotFailure(.notASong)
                 return nil
@@ -1822,8 +1896,7 @@ public enum MediaControlClient {
         var paused: (PlaybackPlayer, MediaControlSnapshot)?
         var chosen: (PlaybackPlayer, MediaControlSnapshot)?
         for player in channelFallbackCandidates(selected: players) {
-            guard !NSRunningApplication.runningApplications(withBundleIdentifier: player.bundleIdentifier).isEmpty
-            else { continue }
+            guard runningPID(player.bundleIdentifier) != nil else { continue }
             let snapshot: MediaControlSnapshot?
             switch player {
             case .appleMusic: snapshot = fetchAppleMusicSnapshot()

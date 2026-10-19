@@ -502,6 +502,17 @@ func runPlayerIdentityTests() {
         expectEqual(TP.artistNotYetReported(bundleID: PlaybackPlayer.kugou.bundleIdentifier, artist: ""), false,
                     "KKBOX: 开播那一帧只管 artistArrivesLate 的播放器")
         expectEqual(TP.artistNotYetReported(bundleID: nil, artist: ""), false, "KKBOX: 没有 bundle id 不算")
+        // 歌名还是播放器内部 id 的那一帧(Music.app 实测:歌名、专辑都是同一串 19 位数字)当在加载,哪家都算(02 章决策 148)。
+        expectEqual(TP.titleIsPlaceholderID(title: "9218973009185534415", album: "9218973009185534415"), true,
+                    "占位 id: 歌名、专辑都是同一串长数字")
+        expectEqual(TP.titleIsPlaceholderID(title: "9218973009185534415", album: nil), true, "占位 id: 没有专辑也算")
+        expectEqual(TP.titleIsPlaceholderID(title: "9218973009185534415", album: "才華換桃花"), false,
+                    "占位 id: 专辑是正经名字时不认(说不定真叫这个)")
+        expectEqual(TP.titleIsPlaceholderID(title: "20240501", album: "20240501"), false, "占位 id: 日期这种短数字是正经歌名")
+        expectEqual(TP.titleIsPlaceholderID(title: "1999", album: nil), false, "占位 id: 年份是正经歌名")
+        expectEqual(TP.titleIsPlaceholderID(title: "4:44", album: nil), false, "占位 id: 带别的字符的不认")
+        expectEqual(TP.titleIsPlaceholderID(title: "１２３４５６７８９０１２", album: nil), false, "占位 id: 只认 ASCII 数字")
+        expectEqual(TP.titleIsPlaceholderID(title: nil, album: nil), false, "占位 id: 没有歌名不算")
         do {
             let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             let client = (try? String(contentsOfFile: sources.appendingPathComponent(
