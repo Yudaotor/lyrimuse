@@ -46,8 +46,8 @@ func TestGeniePrefixHeaderLines(t *testing.T) {
 			t.Errorf("%s: got %d want %d", c.name, got, c.want)
 		}
 	}
-	if got := genieBuildLRC(l("Antifreeze", "검정치마", "우린", ""), "Antifreeze", "검정치마"); got != "[00:02.25]우린\n[00:03.25]\n" {
-		t.Errorf("拼 LRC 去掉抬头、起点后移 250ms、空句只留时间戳: %q", got)
+	if got := genieBuildLRC(l("Antifreeze", "검정치마", "우린", ""), "Antifreeze", "검정치마"); got != "[00:02.00]우린\n[00:03.00]\n" {
+		t.Errorf("拼 LRC 去掉抬头、起点原样、空句只留时间戳: %q", got)
 	}
 }
 
@@ -124,7 +124,7 @@ func TestResolveGenieLyricEndToEnd(t *testing.T) {
 	if len(queries) != 2 || queries[1] != "Antifreeze" {
 		t.Fatalf("「歌名 歌手」一条都没有时只按歌名再搜一次: %v", queries)
 	}
-	if r.lyrics != "[00:16.27]우린 오래 전부터\n[00:20.30]어쩔 수 없는 거였어\n[00:24.25]우주 속을 홀로 떠돌며\n" || r.plainOnly {
+	if r.lyrics != "[00:16.02]우린 오래 전부터\n[00:20.05]어쩔 수 없는 거였어\n[00:24.00]우주 속을 홀로 떠돌며\n" || r.plainOnly {
 		t.Fatalf("去掉歌名 / 歌手两行抬头: %+v", r)
 	}
 	if r.title != "Antifreeze" || r.artist != "검정치마" || r.album != "201" || r.durationSecs != 242 ||

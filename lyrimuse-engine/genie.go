@@ -45,9 +45,6 @@ const (
 	genieNoLyrics = "NOT FOUND LYRICS"
 	// genieHeaderLineMax:同步歌词开头最多看几行是不是歌名 / 歌手。
 	genieHeaderLineMax = 3
-	// genieTimingShiftMs:每句起点往后挪多少毫秒。Genie 的起点整体偏早(跟本机已有歌词比每首中位早约 370ms、跟 VIBE 比约 270ms),
-	// 挪 200~300ms 时落在 300ms 以内的歌最多(09 章决策 293)。
-	genieTimingShiftMs = 250
 )
 
 var (
@@ -212,12 +209,13 @@ func geniePrefixHeaderLines(lines []genieLine, name, artist string) int {
 	return n
 }
 
-// genieBuildLRC 把同步歌词拼成 LRC:去掉开头的歌名 / 歌手行,起点后移 genieTimingShiftMs。空句写成只有时间戳的行(一句唱完、后面是间奏)。
+// genieBuildLRC 把同步歌词拼成 LRC,去掉开头的歌名 / 歌手行。空句写成只有时间戳的行(一句唱完、后面是间奏)。
+// 起点原样用,别按源加固定偏移:Genie 多数歌偏早、少数准或偏晚,整体后移会把那部分推成歌词晚于人声(09 章决策 294)。
 func genieBuildLRC(lines []genieLine, name, artist string) string {
 	lines = lines[geniePrefixHeaderLines(lines, name, artist):]
 	var b strings.Builder
 	for _, l := range lines {
-		b.WriteString(formatLRCStamp(l.ms+genieTimingShiftMs) + l.text + "\n")
+		b.WriteString(formatLRCStamp(l.ms) + l.text + "\n")
 	}
 	return b.String()
 }
