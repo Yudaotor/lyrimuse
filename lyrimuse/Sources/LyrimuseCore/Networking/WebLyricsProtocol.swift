@@ -327,14 +327,29 @@ public struct WebLyricsViewport: Hashable, Sendable {
     /// 实际画的像素尺寸:点数乘倍数后取偶数(JPEG 按 2×2 块存色度)。
     public let pixelWidth: Int
     public let pixelHeight: Int
+    /// 网页报的安全区:画面铺到状态栏、灵动岛、底部横条底下时,字和键要让开的那几条边。背景照样铺满整幅。见 19 章决策 37
+    public let safeArea: SafeArea
 
+    /// 点数,每边夹在 0…`maxSafeInset`,也不超过那一边宽 / 高的四分之一。
+    public struct SafeArea: Hashable, Sendable {
+        public var top: Int, left: Int, bottom: Int, right: Int
+        public static let zero = SafeArea(top: 0, left: 0, bottom: 0, right: 0)
+        public init(top: Int, left: Int, bottom: Int, right: Int) {
+            self.top = top
+            self.left = left
+            self.bottom = bottom
+            self.right = right
+        }
+    }
+
+    public static let maxSafeInset = 120
     public static let pointRange = 240...2560
     public static let scaleRange = 1.0...3.0
     /// 一帧最多这么多像素(14 寸 MacBook 全屏浏览器 2x 约 530 万),再大就按比例压倍数、不整档降:
     /// 编码、传输和显存跟像素数成正比,整档降到 1x 时浏览器放大两倍显示,字是糊的。见 19 章决策 3。
     public static let maxPixels = 7_000_000
 
-    public init(width: Int, height: Int, scale: Double) {
+    public init(width: Int, height: Int, scale: Double, safeArea: SafeArea = .zero) {
         let w = min(max(width, Self.pointRange.lowerBound), Self.pointRange.upperBound)
         let h = min(max(height, Self.pointRange.lowerBound), Self.pointRange.upperBound)
         let requested = scale.isFinite ? min(max(scale, Self.scaleRange.lowerBound), Self.scaleRange.upperBound) : 2
@@ -345,9 +360,12 @@ public struct WebLyricsViewport: Hashable, Sendable {
         self.scale = s
         pixelWidth = Int(Double(w) * s / 2) * 2
         pixelHeight = Int(Double(h) * s / 2) * 2
+        func clamp(_ v: Int, _ side: Int) -> Int { min(max(v, 0), Self.maxSafeInset, side / 4) }
+        self.safeArea = SafeArea(top: clamp(safeArea.top, h), left: clamp(safeArea.left, w),
+                                 bottom: clamp(safeArea.bottom, h), right: clamp(safeArea.right, w))
     }
 
-    /// 网页连上来时带的 `w` / `h` / `dpr`;缺了或认不出就按 1180×820@2x。宽高先在 Double 上夹进点数范围再转 Int:
+    /// 网页连上来时带的 `w` / `h` / `dpr`,安全区 `st` / `sl` / `sb` / `sr`;缺了或认不出就按 1180×820@2x、安全区 0。宽高先在 Double 上夹进点数范围再转 Int:
     /// 查询串是外部输入,`w=1e300` 这种直接转 Int 会让进程崩掉。
     public init(query: [String: String]) {
         func number(_ key: String) -> Double? { query[key].flatMap { Double($0) }.flatMap { $0.isFinite ? $0 : nil } }
@@ -357,7 +375,11 @@ public struct WebLyricsViewport: Hashable, Sendable {
         let w = points("w") ?? 1180
         let h = points("h") ?? 820
         let dpr = number("dpr") ?? 2
-        self.init(width: w, height: h, scale: dpr)
+        func inset(_ key: String) -> Int {
+            number(key).map { Int(min(max($0.rounded(), 0), Double(Self.maxSafeInset))) } ?? 0
+        }
+        self.init(width: w, height: h, scale: dpr,
+                  safeArea: SafeArea(top: inset("st"), left: inset("sl"), bottom: inset("sb"), right: inset("sr")))
     }
     /// 宽度够才摆完整的播放器(左栏或竖放时顶上那一块),同歌词窗口完整布局的 640pt 断点。
     public var showsPlayerPane: Bool { width >= 640 }

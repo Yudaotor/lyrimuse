@@ -428,6 +428,16 @@ func runWebLyricsTests() {
         let overflow = WebLyricsViewport(query: ["w": "9223372036854775807", "h": "1e400"])
         expectEqual([overflow.width, overflow.height], [WebLyricsViewport.pointRange.upperBound, 820],
                     "网页歌词: 刚好溢出 Int 的宽夹到上限,inf 按默认")
+        let notch = WebLyricsViewport(query: ["w": "393", "h": "852", "dpr": "3", "st": "59", "sb": "34"])
+        expectEqual(notch.safeArea, .init(top: 59, left: 0, bottom: 34, right: 0), "网页歌词: 安全区四边原样读出(缺的那边按 0)")
+        expectEqual(phone.safeArea, .zero, "网页歌词: 没报安全区按 0")
+        let sideways = WebLyricsViewport(query: ["w": "852", "h": "393", "sl": "59.4", "sr": "1e300", "sb": "-21", "st": "nan"])
+        expectEqual(sideways.safeArea, .init(top: 0, left: 59, bottom: 0, right: WebLyricsViewport.maxSafeInset),
+                    "网页歌词: 安全区取整、夹进 0…上限,认不出按 0")
+        expectEqual(WebLyricsViewport(width: 400, height: 300, scale: 2, safeArea: .init(top: 200, left: 0, bottom: 0, right: 0)).safeArea.top,
+                    75, "网页歌词: 安全区不超过那一边高的四分之一")
+        expectEqual(notch == WebLyricsViewport(query: ["w": "393", "h": "852", "dpr": "3"]), false,
+                    "网页歌词: 安全区不同的网页各画各的(同尺寸不合并成一份)")
     }
 
     // ---- 副屏点按 ----
@@ -615,6 +625,15 @@ func runWebLyricsTests() {
         let pages = app("WebLyrics/WebLyricsPages.swift")
         expectEqual(sourceBytes(pages, contain: "get('preview') === '1') document.body.classList.add('preview');"), true,
                     "网页歌词: OBS 页带 preview=1 时铺棋盘格底")
+        expectEqual(sourceBytes(pages, contain: "height: 100vh") || sourceBytes(pages, contain: "height:100vh"), false,
+                    "网页歌词: 画布、视频别按 100vh 铺(iOS Safari 比看得见的高度多出工具栏那截,上下留黑边)")
+        expectEqual(sourceBytes(pages, contain: "const box = canvas.getBoundingClientRect();")
+                        && sourceBytes(pages, contain: "url.searchParams.set('h', Math.round(box.height || innerHeight));"), true,
+                    "网页歌词: 画面按画布实际铺开的大小要")
+        expectEqual(sourceBytes(pages, contain: #"<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">"#)
+                        && sourceBytes(pages, contain: "env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)")
+                        && sourceBytes(pages, contain: "[['st', 'paddingTop'], ['sr', 'paddingRight'], ['sb', 'paddingBottom'], ['sl', 'paddingLeft']]"), true,
+                    "网页歌词: 添加到主屏幕后铺到状态栏底下,安全区报给 App")
         expectEqual(sourceBytes(server, contain: "token.dropFirst().removeDuplicates()"), true,
                     "网页歌词: 换了密钥就断开别的设备")
         expectEqual(sourceBytes(server, contain: "Publishers.CombineLatest4(enabled, lan, port, other)"), true,
@@ -882,11 +901,20 @@ func runWebLyricsTests() {
                                 contain: "private var coverWidth: CGFloat { max(80, min(width * 0.279, 460, height - 216)) }"), true,
                     "网页歌词: 封面边长另按高度封顶(手机横放时左栏整组放不下,封面上缘出画)")
         let chromeSource = app("WebLyrics/WebLyricsChrome.swift")
-        expectEqual(chromeSource.components(separatedBy: "panel.frame = panelFrame(width: width, height: height, anchor: anchor, in: s.size)").count - 1,
+        expectEqual(chromeSource.components(separatedBy: "panel.frame = panelFrame(width: width, height: height, anchor: anchor, in: s)").count - 1,
                     4, "网页歌词: 「…」菜单和三种面板都按 panelFrame 摆(竖排时「…」在顶上,上方放不下要挂到下方、右边要收回画面)")
-        expectEqual(sourceBytes(chromeSource, contain: "let y = above >= 8 ? above : (below + height <= size.height - 8 ? below : 8)"), true,
+        expectEqual(sourceBytes(chromeSource, contain: "let y = above >= top ? above : (below + height <= bottom ? below : top)"), true,
                     "网页歌词: 面板上方放不下时挂在「…」下方")
+        expectEqual(sourceBytes(chromeSource, contain: "y: 8 + CGFloat(s.safeArea.top)")
+                        && sourceBytes(chromeSource, contain: "(s.bottomInset > 0 ? s.bottomInset : CGFloat(s.safeArea.bottom))")
+                        && sourceBytes(chromeSource, contain: "let top = 8 + CGFloat(s.safeArea.top), bottom = s.size.height - 8 - CGFloat(s.safeArea.bottom)"), true,
+                    "网页歌词: 音量胶囊、右下一排、菜单都让开安全区")
         let paneSource = app("WebLyrics/WebLyricsScreen.swift")
+        expectEqual(sourceBytes(paneSource, contain: "top = Self.compactTop + CGFloat(safe.top)")
+                        && sourceBytes(paneSource, contain: "y: bounds.height - max(margin, CGFloat(safe.bottom)) - panelHeight")
+                        && sourceBytes(paneSource, contain: "let top = WebLyricsPlayerPane.compactHeaderBottom + safeTop + 12")
+                        && sourceBytes(paneSource, contain: "y: Self.stackedTop + safeTop,"), true,
+                    "网页歌词: 手机顶上一行、歌词起点、底部播放条和平板竖放顶上那一块从安全区量起")
         expectEqual(sourceBytes(paneSource, contain: "guard pane.transportInteractive else { return nil }")
                         && sourceBytes(paneSource, contain: "pane.transportAbsorbs(CGPoint(x: p.x - paneRect.minX, y: p.y - paneRect.minY))")
                         && sourceBytes(paneSource, contain: "pane.setTransportVisible(chromeVisible, animated: true)"), true,

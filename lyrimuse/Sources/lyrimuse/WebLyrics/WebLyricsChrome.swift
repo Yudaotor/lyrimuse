@@ -262,6 +262,8 @@ final class WebLyricsChromeLayer: CALayer {
         var accent: NSColor
         /// 右下一排往上抬多少(手机那种排法给底部的播放条让位)。
         var bottomInset: CGFloat
+        /// 胶囊、右下一排和菜单让开的边(状态栏、灵动岛、底部横条)。
+        var safeArea: WebLyricsViewport.SafeArea
         var size: CGSize
         var scale: CGFloat
     }
@@ -397,7 +399,8 @@ final class WebLyricsChromeLayer: CALayer {
         }
         volumeGroup.isHidden = false
         let width: CGFloat = 14 + 114 + 10 + 24 + 14
-        let capsule = CGRect(x: s.size.width - 5 - width, y: 8, width: width, height: 36)
+        let capsule = CGRect(x: s.size.width - 5 - CGFloat(s.safeArea.right) - width, y: 8 + CGFloat(s.safeArea.top),
+                             width: width, height: 36)
         volumeGroup.frame = CGRect(origin: .zero, size: s.size)
         glass(volumeCapsule, frame: capsule, rim: rim, onArtwork: s.onArtwork)
         let slider = CGRect(x: capsule.minX + 14, y: capsule.minY + 7, width: 114, height: 22)
@@ -430,12 +433,12 @@ final class WebLyricsChromeLayer: CALayer {
         hits.append((.mute, speakerCell.insetBy(dx: -4, dy: -7)))
     }
 
-    /// 右下一排:贴右 10、底 11;最右是 [歌词] 胶囊(36 高、一格 30 圆,显示着歌词时是白圆 + 深色字形),
+    /// 右下一排:贴右 10、底 11(在安全区里);最右是 [歌词] 胶囊(36 高、一格 30 圆,显示着歌词时是白圆 + 深色字形),
     /// 左边隔 8.5 是 36 圆的翻译钮(译文正在显示时是白圆 + 深色字形)。播放记录那一格、歌词操作胶囊不画。
     private func layoutBottomRow(_ s: State, rim: NSColor, iconColor: NSColor) {
         bottomGroup.frame = CGRect(origin: .zero, size: s.size)
-        let y = s.size.height - 11 - 36 - s.bottomInset
-        var right = s.size.width - 10
+        let y = s.size.height - 11 - 36 - (s.bottomInset > 0 ? s.bottomInset : CGFloat(s.safeArea.bottom))
+        var right = s.size.width - 10 - CGFloat(s.safeArea.right)
         lyricsCapsule.isHidden = !s.showsLyricsToggle
         lyricsSlot.isHidden = !s.showsLyricsToggle
         lyricsGlyph.isHidden = !s.showsLyricsToggle
@@ -592,7 +595,7 @@ final class WebLyricsChromeLayer: CALayer {
             }
         }
         let height = 12 + placed.map(\.height).reduce(0, +) + CGFloat(max(0, placed.count - 1)) * 2
-        panel.frame = panelFrame(width: width, height: height, anchor: anchor, in: s.size)
+        panel.frame = panelFrame(width: width, height: height, anchor: anchor, in: s)
         var top: CGFloat = 6
         for p in placed {
             switch p.item {
@@ -645,12 +648,13 @@ final class WebLyricsChromeLayer: CALayer {
 
 
     /// 「…」菜单和它弹出的面板:从「…」右缘往右长出、悬在它上方 8;上方放不下就挂在它下方 8(竖排时「…」在画面顶上
-    /// 那一块),上下都放不下时贴着画面上沿;右边超出画面时往左挪回来。
-    private func panelFrame(width: CGFloat, height: CGFloat, anchor: CGRect, in size: CGSize) -> CGRect {
-        let x = max(8, min(anchor.maxX, size.width - 8 - width))
+    /// 那一块),上下都放不下时贴着画面上沿;右边超出画面时往左挪回来。都按扣掉安全区的那一块算。
+    private func panelFrame(width: CGFloat, height: CGFloat, anchor: CGRect, in s: State) -> CGRect {
+        let top = 8 + CGFloat(s.safeArea.top), bottom = s.size.height - 8 - CGFloat(s.safeArea.bottom)
+        let x = max(8 + CGFloat(s.safeArea.left), min(anchor.maxX, s.size.width - 8 - CGFloat(s.safeArea.right) - width))
         let above = anchor.minY - 8 - height
         let below = anchor.maxY + 8
-        let y = above >= 8 ? above : (below + height <= size.height - 8 ? below : 8)
+        let y = above >= top ? above : (below + height <= bottom ? below : top)
         return CGRect(x: x, y: y, width: width, height: height)
     }
 
@@ -678,7 +682,7 @@ final class WebLyricsChromeLayer: CALayer {
         }
         let heights = laid.map { max($0.label?.size.height ?? 0, $0.value?.size.height ?? 0) }
         let height = 24 + heights.reduce(0, +) + CGFloat(max(0, laid.count - 1)) * 6
-        panel.frame = panelFrame(width: width, height: height, anchor: anchor, in: s.size)
+        panel.frame = panelFrame(width: width, height: height, anchor: anchor, in: s)
         let baselineShift = (valueFont.ascender - labelFont.ascender).rounded()
         var top: CGFloat = 12
         for (i, entry) in laid.enumerated() {
@@ -724,7 +728,7 @@ final class WebLyricsChromeLayer: CALayer {
         }
         let headHeight = blocks.reduce(CGFloat(0)) { $0 + $1.gapBefore + ($1.made?.size.height ?? 0) }
         let height = 14 + headHeight + 8 + bodyBox + (attribution.map { 8 + $0.size.height } ?? 0) + 14
-        panel.frame = panelFrame(width: width, height: height, anchor: anchor, in: s.size)
+        panel.frame = panelFrame(width: width, height: height, anchor: anchor, in: s)
         var top: CGFloat = 14
         for block in blocks {
             top += block.gapBefore
@@ -786,7 +790,7 @@ final class WebLyricsChromeLayer: CALayer {
         let pillHeight: CGFloat = 2 + 4 + ceil(NSFont.systemFont(ofSize: 12).ascender - NSFont.systemFont(ofSize: 12).descender) + 4 + 2
         let contentHeight: CGFloat = rows.isEmpty ? 48 : rows.map(\.height).reduce(0, +)
         let height = 10 + (title?.size.height ?? 0) + 8 + pillHeight + 8 + pillHeight + 8 + contentHeight + 10
-        panel.frame = panelFrame(width: width, height: height, anchor: anchor, in: s.size)
+        panel.frame = panelFrame(width: width, height: height, anchor: anchor, in: s)
         var top: CGFloat = 10
         item(title, CGPoint(x: 14, y: top))
         top += (title?.size.height ?? 0) + 8

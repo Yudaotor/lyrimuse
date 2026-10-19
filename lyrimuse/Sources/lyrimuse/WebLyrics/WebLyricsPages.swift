@@ -62,19 +62,23 @@ enum WebLyricsPages {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="theme-color" content="#000000">
         <title>Lyrimuse</title>
         <style>
         html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
-        canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: contain; display: block;
+        canvas { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block;
                  touch-action: none; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+        #safe { position: fixed; visibility: hidden; pointer-events: none;
+                padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
         #msg { position: fixed; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center;
                color: rgba(255,255,255,.55); font: 15px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
         </style>
         </head>
         <body>
         <canvas id="frame" width="0" height="0"></canvas>
+        <div id="safe"></div>
         <div id="msg"></div>
         <script>
         (() => {
@@ -442,7 +446,7 @@ enum WebLyricsPages {
             const video = document.createElement('video'), source = new MediaSource();
             video.muted = true;
             video.playsInline = true;
-            video.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;object-fit:contain;z-index:-1';
+            video.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;object-fit:contain;z-index:-1';
             document.body.insertBefore(video, canvas);
             const m = { video, source, sb: null, url: URL.createObjectURL(source), config: '', init: null, baseMs: null, seq: 0, pending: [], held: null, drawn: -1, shown: 0 };
             mse = m;
@@ -556,8 +560,16 @@ enum WebLyricsPages {
             const url = new URL('/ws', location.href);
             url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
             if (key) url.searchParams.set('k', key);
-            url.searchParams.set('w', Math.round(innerWidth));
-            url.searchParams.set('h', Math.round(innerHeight));
+            // 画面按画布此刻实际铺开的大小要,画布别按 100vh 铺:iOS Safari 的 100vh 比看得见的高度多出工具栏那截,
+            // 画面和画布宽高比一不等,contain 就在上下各留一条黑边
+            const box = canvas.getBoundingClientRect();
+            url.searchParams.set('w', Math.round(box.width || innerWidth));
+            url.searchParams.set('h', Math.round(box.height || innerHeight));
+            const safe = getComputedStyle(document.getElementById('safe'));
+            [['st', 'paddingTop'], ['sr', 'paddingRight'], ['sb', 'paddingBottom'], ['sl', 'paddingLeft']].forEach(([k, side]) => {
+              const v = Math.round(parseFloat(safe[side]) || 0);
+              if (v > 0) url.searchParams.set(k, v);
+            });
             url.searchParams.set('dpr', Math.max(1, Math.min(3, devicePixelRatio || 1)).toFixed(2));
             useVideo = videoAllowed();
             videoSince = performance.now();

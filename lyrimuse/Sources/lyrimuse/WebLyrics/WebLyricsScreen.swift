@@ -698,6 +698,10 @@ final class WebLyricsScreenRenderer {
     /// 又宽又矮的画面(手机横放)只按宽度算会把封面上缘挤出画面。歌词窗口有最小高度,碰不到。
     private var coverWidth: CGFloat { max(80, min(width * 0.279, 460, height - 216)) }
     private var arrangement: WebLyricsViewport.Arrangement { viewport.arrangement }
+    /// 安全区四边(点):背景铺满整幅,顶上那一块、歌词左右边距、胶囊和右下一排让开这几条边。
+    private var safeTop: CGFloat { CGFloat(viewport.safeArea.top) }
+    private var safeLeft: CGFloat { CGFloat(viewport.safeArea.left) }
+    private var safeRight: CGFloat { CGFloat(viewport.safeArea.right) }
     /// 平板竖放时:左右边距、顶上那一块的上缘和高(= 封面边长),歌词从它下面 24 开始。
     private var stackedSide: CGFloat { max(24, (width * 0.06).rounded()) }
     private var stackedCover: CGFloat { min(width * 0.28, 280).rounded() }
@@ -716,25 +720,25 @@ final class WebLyricsScreenRenderer {
         case .columns:
             return CGRect(x: listX, y: 0, width: width - listX, height: height)
         case .stacked:
-            let top = Self.stackedTop + stackedCover + 24
+            let top = Self.stackedTop + safeTop + stackedCover + 24
             return CGRect(x: 0, y: top, width: width, height: height - top)
         case .compact:
-            let top = WebLyricsPlayerPane.compactHeaderBottom + 12
+            let top = WebLyricsPlayerPane.compactHeaderBottom + safeTop + 12
             return CGRect(x: 0, y: top, width: width, height: height - top)
         }
     }
     private var listLeading: CGFloat {
         switch arrangement {
         case .columns: return max(24, width * 0.515 - (width * 0.111 + coverWidth))
-        case .stacked: return stackedSide
-        case .compact: return WebLyricsPlayerPane.compactSide
+        case .stacked: return stackedSide + safeLeft
+        case .compact: return WebLyricsPlayerPane.compactSide + safeLeft
         }
     }
     private var listTrailing: CGFloat {
         switch arrangement {
-        case .columns: return max(32, width * 0.06)
-        case .stacked: return stackedSide
-        case .compact: return WebLyricsPlayerPane.compactSide
+        case .columns: return max(32, width * 0.06) + safeRight
+        case .stacked: return stackedSide + safeRight
+        case .compact: return WebLyricsPlayerPane.compactSide + safeRight
         }
     }
     /// 字号按歌词那一栏的宽算;竖排、手机时那一栏是整宽,扣掉左右边距再算,不然平板竖放时字比横放还大一圈。
@@ -992,7 +996,7 @@ final class WebLyricsScreenRenderer {
                     : resolved(.primary).withAlphaComponent(0.85),
                 shadowOpacity: onArtwork ? 0.45 : 0.2,
                 isPlaying: playback.isPlayingSmoothed,
-                height: height, verticalOffset: Self.paneVerticalOffset,
+                height: height, verticalOffset: Self.paneVerticalOffset, safeArea: viewport.safeArea,
                 controls: .init(
                     shuffleShown: playback.playbackMode != nil && playback.playbackModeOptions.contains(.shuffle),
                     shuffleActive: playback.playbackMode == .shuffle,
@@ -1028,6 +1032,7 @@ final class WebLyricsScreenRenderer {
             panelScroll: panelScroll,
             accent: resolved(.accentColor),
             bottomInset: arrangement == .compact && !pane.isHidden ? max(0, height - pane.transportFrame.minY) : 0,
+            safeArea: viewport.safeArea,
             size: CGSize(width: width, height: height),
             scale: CGFloat(viewport.pixelWidth) / width))
         sendLinks()
@@ -1208,7 +1213,8 @@ final class WebLyricsScreenRenderer {
         case .stacked:
             let side = min(width * 0.6, height - 216, 520).rounded()
             paneRect = lyricsPaneVisible
-                ? CGRect(x: stackedSide, y: Self.stackedTop, width: width - stackedSide * 2, height: stackedCover)
+                ? CGRect(x: stackedSide + safeLeft, y: Self.stackedTop + safeTop,
+                         width: width - stackedSide * 2 - safeLeft - safeRight, height: stackedCover)
                 : CGRect(x: ((width - side) / 2).rounded(), y: 0, width: side, height: height)
             pane.frame = wrapperFrame(paneRect)
             paneX = paneRect.minX
@@ -1681,6 +1687,8 @@ final class WebLyricsPlayerPane: CALayer {
         var isPlaying: Bool
         var height: CGFloat
         var verticalOffset: CGFloat
+        /// 手机那种排法里顶上一行和底部播放条让开的边。
+        var safeArea: WebLyricsViewport.SafeArea
         var controls: Controls
         /// nil = 这个播放器没有「喜欢」,不画星。
         var favorited: Bool?
@@ -1839,18 +1847,23 @@ final class WebLyricsPlayerPane: CALayer {
     }
 
     /// 手机:顶上一行小封面 + 歌名(两行跟封面竖直居中);底部一块圆角底装进度、时间、播放键,左右、下缘各留 12,
-    /// 里面左右 14。
+    /// 里面左右 14。都从安全区量起,底部横条比 12 高时播放条贴着它上面。
     private func layoutCompact(_ next: Content, scale: CGFloat) {
-        let side = Self.compactSide, top = Self.compactTop, c = Self.compactCover, margin = Self.compactBarMargin
+        let safe = next.safeArea
+        let side = Self.compactSide + CGFloat(safe.left), top = Self.compactTop + CGFloat(safe.top), c = Self.compactCover
         placeCover(next, side: c, origin: CGPoint(x: side, y: top), small: true)
         let x = side + c + 12
-        layoutTitleRow(next, x: x, rowTop: (top + (c - 41) / 2).rounded(), width: bounds.width - side - x, scale: scale)
-        let panelWidth = bounds.width - margin * 2
+        layoutTitleRow(next, x: x, rowTop: (top + (c - 41) / 2).rounded(),
+                       width: bounds.width - Self.compactSide - CGFloat(safe.right) - x, scale: scale)
+        let margin = Self.compactBarMargin
+        let barLeft = margin + CGFloat(safe.left)
+        let panelWidth = bounds.width - margin * 2 - CGFloat(safe.left + safe.right)
         let inner = panelWidth - 28
         let play = min(33, max(17, inner * 0.079))
         let controlsHeight = (play * 1.21).rounded()
         let panelHeight = 14 + 6 + 5 + 13 + 10 + controlsHeight + 10
-        transportFrame = CGRect(x: margin, y: bounds.height - margin - panelHeight, width: panelWidth, height: panelHeight)
+        transportFrame = CGRect(x: barLeft, y: bounds.height - max(margin, CGFloat(safe.bottom)) - panelHeight,
+                                width: panelWidth, height: panelHeight)
         transportPanel.frame = transportFrame
         transportPanel.cornerRadius = 20
         let panelFill: NSColor = next.onArtwork ? NSColor.black.withAlphaComponent(0.5)
@@ -1859,8 +1872,8 @@ final class WebLyricsPlayerPane: CALayer {
         transportPanel.borderWidth = 0.5
         transportPanel.borderColor = (next.onArtwork ? NSColor.white.withAlphaComponent(0.16)
                                                      : next.primary.withAlphaComponent(0.12)).cgColor
-        let timeTop = layoutProgress(next, x: margin + 14, barTop: transportFrame.minY + 14, width: inner, scale: scale)
-        layoutControls(next, x: margin + 14, width: inner, rowTop: timeTop + 13 + 10, rowHeight: controlsHeight, scale: scale)
+        let timeTop = layoutProgress(next, x: barLeft + 14, barTop: transportFrame.minY + 14, width: inner, scale: scale)
+        layoutControls(next, x: barLeft + 14, width: inner, rowTop: timeTop + 13 + 10, rowHeight: controlsHeight, scale: scale)
     }
 
     /// 封面卡、换封面淡入、暂停缩小。`small`(手机顶上那一格)圆角和投影按小尺寸收,也不随暂停缩放。
