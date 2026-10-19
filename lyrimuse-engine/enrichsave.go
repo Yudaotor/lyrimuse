@@ -361,7 +361,8 @@ const migrationBackupAge = 30 * 24 * time.Hour
 
 // removeOldMigrationBackups 删掉引擎自己的一次性迁移留下、超过 migrationBackupAge 的备份:`.full-format.bak`
 // (backupFullEnrichCacheOnce,盘上已经是精简格式时)、`.pre-keynorm.bak`(applyEnrichKeyMigration)、
-// `.keynorm-<时间>.bak`(backupEnrichKeyMergeGroups)。没有代码读它们,只给迁移出错时手工找回;前两份各约百 MB,
+// `.keynorm-<时间>.bak`(backupEnrichKeyMergeGroups)。主要给迁移出错时手工找回(`.keynorm-<时间>.bak` 另由一次性迁移
+// migrateISRCDurationRecheck 读一遍,排在这一步之前);前两份各约百 MB,
 // 每个升级过的用户都留着一份、从不清。只认这三种名字,手工留的 `backup-*`、`*.bak-before-*` 不碰。
 // 常驻进程启动时调一次。见 15 章决策 52。
 func removeOldMigrationBackups() {

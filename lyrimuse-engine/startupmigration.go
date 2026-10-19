@@ -131,6 +131,10 @@ const (
 	// 同一个 lookupMusicBrainzChineseAlias,不再产生旧判据的结果。改了它的判据就 +1。
 	migrationArtistAliasJudge        = "artist_alias_judge"
 	migrationArtistAliasJudgeVersion = 1
+	// migrationISRCDurationRecheck:存量条目上按别的时长核过的 ISRC 降级(isrcdurationrecheck.go)。运行期并条目、原地改时长
+	// 时在源头降,不再产生。改了 recheckISRCDurations 的判据就 +1。
+	migrationISRCDurationRecheck        = "isrc_duration_recheck"
+	migrationISRCDurationRecheckVersion = 1
 )
 
 // loadMigrationState 读水位文件。文件不存在 / 解不出来都当作"一道都没跑过",照常全量跑 ——

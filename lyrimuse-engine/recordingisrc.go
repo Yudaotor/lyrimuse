@@ -99,7 +99,9 @@ func isrcCandidateTitleUnproven(title, album string, r scoredLyricCandidateResul
 }
 
 // confidentISRC:写入时记了级别、能拿去给别人认录音的号:播放器报的优先,其次核对过的;没有返回空串。检索配的、
-// 没记级别的(存量)不算。按号排序取第一个,结果稳定。
+// 没记级别的(存量)不算。核对过的号都是按这一条现在的时长核的:条目时长原地改了、或并进来的条目时长对不上,按别的时长
+// 核过的号已经降成检索配的(isrcLevelAcrossDuration),时长对不上的号进不了这一步,拿不准的不报。同级别还剩几个号时,
+// 它们的时长都对得上这一条(同一份录音两家发行商各登记一个),按号排序取第一个,结果稳定。见 18 章决策 77。
 func (e enrichEntry) confidentISRC() string {
 	best, bestRank := "", 0
 	for _, code := range e.ISRCs {
@@ -197,13 +199,59 @@ func evictForHigherISRCs(isrcs []string, levels map[string]string, add []recorde
 	return isrcs, evicted
 }
 
-// mergeEntryISRCs:把 src 的号连同级别并进 dst(外围补全、合并条目用)。
+// mergeEntryISRCs:把 src 的号连同级别并进 dst(外围补全、合并条目用)。src 的号是按 src 的时长核过的,两边时长对不上时
+// 按 isrcLevelAcrossDuration 降级并进来;两条记着同一个播放器的同一个曲目 id(sameRecordingEntries)时播放器报的号照旧。
 func mergeEntryISRCs(dst *enrichEntry, src enrichEntry) {
+	keepPlayer := sameRecordingEntries(*dst, src)
 	add := make([]recordedISRC, len(src.ISRCs))
 	for i, c := range src.ISRCs {
-		add[i] = recordedISRC{c, src.ISRCLevels[normalizeISRC(c)]}
+		level := isrcLevelAcrossDuration(src.ISRCLevels[normalizeISRC(c)], src.DurationSecs, dst.DurationSecs, keepPlayer)
+		add[i] = recordedISRC{c, level}
 	}
 	recordISRCs(dst, add)
+}
+
+// isrcLevelAcrossDuration:按 fromSecs 这个时长记下的号,放到时长是 toSecs 的条目上该记什么级别。候选、补扫报的号写入时按当时的
+// 时长过了 isrcDurationFits,两个时长都知道又对不上时它证明不了是这一条,降成 searched(confidentISRC 不报、歌曲实体只当弱证据,
+// 号本身留着);keepPlayer 时播放器报的号不降(按曲目 id 来的,跟时长无关)。对得上、任一边不知道时级别不变。见 18 章决策 77。
+func isrcLevelAcrossDuration(level string, fromSecs, toSecs float64, keepPlayer bool) string {
+	if fromSecs <= 0 || toSecs <= 0 || isrcDurationFits(fromSecs, toSecs) || (keepPlayer && level == isrcLevelPlayer) {
+		return level
+	}
+	return isrcLevelSearched
+}
+
+// demoteISRCsAcrossDuration:条目记下的时长从 fromSecs 原地改成 toSecs 之前调,按旧时长记下的号照 isrcLevelAcrossDuration
+// 降级;播放器报的号不降(原地改时长的几处,播放器报的都还是同一首)。返回改没改。
+func demoteISRCsAcrossDuration(e *enrichEntry, fromSecs, toSecs float64) bool {
+	return demoteISRCs(e, func(_, level string) bool {
+		return isrcLevelAcrossDuration(level, fromSecs, toSecs, true) != level
+	})
+}
+
+// demoteISRCs:demote 认定的号(参数是号和它现在的级别)级别改成 searched,号本身留着;已经是 searched 的不动。
+// isrc_levels 换一份新的写,不改原来那份(快照可能还拿着它)。返回改没改。
+func demoteISRCs(e *enrichEntry, demote func(code, level string) bool) bool {
+	var levels map[string]string
+	for _, raw := range e.ISRCs {
+		c := normalizeISRC(raw)
+		have := e.ISRCLevels[c]
+		if c == "" || have == isrcLevelSearched || !demote(c, have) {
+			continue
+		}
+		if levels == nil {
+			levels = maps.Clone(e.ISRCLevels)
+			if levels == nil {
+				levels = map[string]string{}
+			}
+		}
+		levels[c] = isrcLevelSearched
+	}
+	if levels == nil {
+		return false
+	}
+	e.ISRCLevels = levels
+	return true
 }
 
 // removeISRCs:拿掉 drop 认定的号,连同它们的级别。都拿光时两个字段都是 nil。

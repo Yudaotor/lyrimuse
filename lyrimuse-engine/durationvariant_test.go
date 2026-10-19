@@ -93,7 +93,7 @@ func TestDurationCorrectedInPlaceIsWired(t *testing.T) {
 		"case !rok && enrichCreatedThisPlayLocked(key) && enrichInflight[key]:",
 		"case !rok && enrichCreatedThisPlayLocked(key):",
 		"\t\t\t\tcorrectDuration = true\n",
-		"if correctDuration {\n\t\t\te.DurationSecs = durationSecs\n\t\t\tspotifyHintDirty = true\n\t\t}",
+		"if correctDuration {\n\t\t\tdemoteISRCsAcrossDuration(&e, e.DurationSecs, durationSecs)\n\t\t\te.DurationSecs = durationSecs\n\t\t\tspotifyHintDirty = true\n\t\t}",
 		"stamp := enrichEditStampLocked()\n\tnoteEnrichCreatedLocked(key)\n",
 	} {
 		if !containsCode(string(b), n) {

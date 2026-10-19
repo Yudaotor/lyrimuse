@@ -48,6 +48,8 @@ func applyRadioDurationHintLocked(key string, e *enrichEntry) bool {
 	if diff := e.DurationSecs - secs; diff > -0.5 && diff < 0.5 {
 		return false
 	}
+	// 按原来那个时长核过的号对不上真曲长时降级,同 trackEnrichment 原地改时长(见 demoteISRCsAcrossDuration)。
+	demoteISRCsAcrossDuration(e, e.DurationSecs, secs)
 	e.DurationSecs = secs
 	return true
 }

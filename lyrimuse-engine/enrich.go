@@ -990,8 +990,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			spotifyHintDirty = true
 		}
 		// 解析时用的时长(ResolvedDurationSecs)不动:跟这一拍对不上,下面 wrongDuration 按改好的时长重搜歌词(播放器报同一个曲目 id 时
-		// 不重搜,见 sameRecordingStay)。
+		// 不重搜,见 sameRecordingStay)。按原来那个时长核过的号对不上改好的时长,降级(demoteISRCsAcrossDuration;播放器报的不降,
+		// 两种原地改都还是同一首),重搜按新时长核过的号再升回来。见 18 章决策 77。
 		if correctDuration {
+			demoteISRCsAcrossDuration(&e, e.DurationSecs, durationSecs)
 			e.DurationSecs = durationSecs
 			spotifyHintDirty = true
 		}

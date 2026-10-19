@@ -377,6 +377,9 @@ func main() {
 			return readListenLogAt(filepath.Join(filepath.Dir(*cfgPath), clientName+"-listens.jsonl"))
 		})
 	})
+	// 存量条目上按别的时长核过的 ISRC 降级(见 isrcdurationrecheck.go)。排在 migrateEnrichKeys 之后(并过的条目一起看)、
+	// migrateListenDurations 之后(它补上的时长要用)、removeOldMigrationBackups 之前(要读合并备份)。
+	startupStep("migrateISRCDurationRecheck", func() { migrateISRCDurationRecheck(readEnrichKeyMergeBackups) })
 	// 存量「用户选定的源」→「手动选定」留痕(见 manualpickmigrate.go)。
 	// 必须排在上面三步**之后**:import / YRC 空白清洗 / 时间轴重挂都会重写 Lyrics 和
 	// LyricsYRC,而这一步要按最终内容算指纹。排在它们之前的话指纹当场过期,老用户打开
