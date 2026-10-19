@@ -1019,10 +1019,12 @@ struct LyricsManagerPreviewList: View {
             // 滚上去的行在顶边渐隐,不在上面那排控件底下被齐刷刷切掉半行。渐隐高度等于内容的顶部留白,
             // 没滚动时第一行完整不受影响。
             .mask {
-                VStack(spacing: 0) {
-                    LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-                        .frame(height: Self.topFadeHeight)
-                    Color.black
+                ScrollerSafeMask {
+                    VStack(spacing: 0) {
+                        LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                            .frame(height: Self.topFadeHeight)
+                        Color.black
+                    }
                 }
             }
             .modifier(LyricsManagerPauseFollowOnScroll(follow: $follow))

@@ -1445,12 +1445,14 @@ struct SettingsPopoverShell<Content: View>: View {
 
     /// 上下还有内容的那一侧渐隐(上 14pt、下 36pt),最后露出来的那一行明显是被截断的,不像内容到此为止。
     private var scrollFadeMask: some View {
-        VStack(spacing: 0) {
-            LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-                .frame(height: moreAbove ? 14 : 0)
-            Rectangle()
-            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                .frame(height: moreBelow ? 36 : 0)
+        ScrollerSafeMask {
+            VStack(spacing: 0) {
+                LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                    .frame(height: moreAbove ? 14 : 0)
+                Rectangle()
+                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: moreBelow ? 36 : 0)
+            }
         }
     }
 
