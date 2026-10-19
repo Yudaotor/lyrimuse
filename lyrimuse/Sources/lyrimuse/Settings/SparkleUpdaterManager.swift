@@ -390,6 +390,9 @@ final class SparkleUpdaterManager: ObservableObject {
     private var betaRetryNotBefore: Date?
     private var betaInflight: Task<Void, Never>?
     private static let betaFeedURLKey = "betaFeedURL"
+    /// Sparkle 排好下一轮周期检查时,提前这么久按 TTL 刷新一次测试版地址(`.scheduled`)。
+    private static let betaPrefetchLead: TimeInterval = 120
+    private var betaPrefetch: Task<Void, Never>?
 
     // appVersionString 的定义同样搬到文件末尾的共用 extension。
 
@@ -449,10 +452,21 @@ final class SparkleUpdaterManager: ObservableObject {
             // (马上重启,上面那个分支)——三种情况底栏都不该再喊「有新版本」。
             if availableUpdate != nil { availableUpdate = nil }
         case .cycleFinished:
-            // 一轮检查跑完顺手把 Release 列表刷新一下(按 TTL,不是每次都发),下一轮周期检查拿到的
-            // 就是新的地址 —— 周期检查是 Sparkle 自己排的,没有别的钩子能在它之前刷新。
+            // 「软件更新」页的「上次检查」读的是 Sparkle 那份(lastUpdateCheckDate),不会自己发变化:一轮跑完让页面重读。
+            objectWillChange.send()
             if AppSettings.shared.receiveBetaUpdates {
                 Task { await refreshBetaFeed(force: false) }
+            }
+        case .scheduled(let delay):
+            // 周期检查一天一次,地址只在一轮跑完后刷新的话,测试版发布后第一次周期检查拿的还是上一份 appcast,要晚一轮
+            // 才看得到。在 Sparkle 排定的那一刻之前先按 TTL 刷一遍,它来问 feedURLString 时拿到的是新的。
+            betaPrefetch?.cancel()
+            guard AppSettings.shared.receiveBetaUpdates else { return }
+            logger.notice("next update check in \(Int(delay), privacy: .public)s, beta feed refresh scheduled before it")
+            betaPrefetch = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(max(0, delay - Self.betaPrefetchLead)))
+                guard !Task.isCancelled, AppSettings.shared.receiveBetaUpdates else { return }
+                await self?.refreshBetaFeed(force: false)
             }
         }
     }
@@ -599,9 +613,9 @@ final class SparkleUpdaterManager: ObservableObject {
 /// 再把事件交回 @MainActor 的管理器。Sparkle 2 的 SPUUpdaterDelegate 回调都在主线程上,
 /// assumeIsolated 成立。
 ///
-/// 实现的回调分两类:「记状态」五个(found / notFound / downloaded / willInstall / skipped)加一个
-/// 「一轮跑完」(didFinishUpdateCycle,只用来触发 Release 列表按 TTL 刷新);「改决策」两个
-/// (feedURLString / allowedChannels),只为「接收测试版更新」那个开关,具体语义见文件头注。
+/// 实现的回调分两类:「记状态」五个(found / notFound / downloaded / willInstall / skipped)加「一轮跑完」
+/// (didFinishUpdateCycle)和「排下一轮」(willScheduleUpdateCheckAfterDelay)两个,后两个只用来按 TTL 刷新
+/// Release 列表;「改决策」两个(feedURLString / allowedChannels),只为「接收测试版更新」那个开关,具体语义见文件头注。
 /// 仍然**不实现** mayPerformUpdateCheck / shouldProceedWithUpdate 之类会拦截 Sparkle 流程的。
 private final class UpdaterDelegateBridge: NSObject, SPUUpdaterDelegate {
     enum Event {
@@ -611,6 +625,7 @@ private final class UpdaterDelegateBridge: NSObject, SPUUpdaterDelegate {
         case skipped
         case willInstall
         case cycleFinished
+        case scheduled(delay: TimeInterval)
     }
 
     var onEvent: (@MainActor (Event) -> Void)?
@@ -644,6 +659,10 @@ private final class UpdaterDelegateBridge: NSObject, SPUUpdaterDelegate {
 
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
         emit(.cycleFinished)
+    }
+
+    func updater(_ updater: SPUUpdater, willScheduleUpdateCheckAfterDelay delay: TimeInterval) {
+        emit(.scheduled(delay: delay))
     }
 
     func feedURLString(for updater: SPUUpdater) -> String? {

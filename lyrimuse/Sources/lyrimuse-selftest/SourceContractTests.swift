@@ -4667,6 +4667,9 @@ func runSourceContractSettingsTests() {
         expectEqual(sparkle.contains("func feedURLString(for updater: SPUUpdater) -> String?"), true, "发布链路: Sparkle 委托接了 feedURLString")
         expectEqual(sparkle.contains("func allowedChannels(for updater: SPUUpdater) -> Set<String>"), true, "发布链路: Sparkle 委托接了 allowedChannels")
         expectEqual(sparkle.contains("UpdateChannel.betaChannelName"), true, "发布链路: channel 名从 Core 常量来,跟 release.yml 那个字符串一处对齐")
+        expectEqual(sparkle.contains("func updater(_ updater: SPUUpdater, willScheduleUpdateCheckAfterDelay delay: TimeInterval)")
+                    && sourceHas(sparkle, "try? await Task.sleep(for: .seconds(max(0, delay - Self.betaPrefetchLead)))"), true,
+                    "发布链路: Sparkle 排下一轮周期检查时提前刷新测试版地址(不然测试版发布后要晚一轮才查得到)")
 
         // tag 构建前硬校验:annotated / 正文非空 / 能拆成中英两份,判据只在
         // check_release_tag.sh 一份;校验步排在装任何工具链之前;正文只读一次,appcast 与 Release 引用同一个输出。
