@@ -5512,6 +5512,11 @@ func runSourceContractIdentityTests() {
         expectEqual(accountTab.components(separatedBy: notifyCall).count - 1 == 2 && labsPage.components(separatedBy: notifyCall).count - 1 == 2
                     && accountTab.contains("let failing = config.activeNotificationChannels.filter { notifyLatest[$0.id]?.ok == false }"), true,
                     "推送提醒: 四处账号徽标都看引擎的推送记录,启用着的渠道上次没推成时报橙")
+        expectEqual(sourceHas(code("Settings/ConfigStore.swift"),
+                              "if saved.contains(where: { $0.enabled && $0.isComplete }) { return nil }\n"
+                              + "        if saved.contains(where: { $0.enabled }) { return L10n.t(\"推送渠道信息不完整\") }\n"
+                              + "        return L10n.t(\"推送渠道均已停用\")"), true,
+                    "推送提醒: 有启用着的渠道但都没填齐时报「信息不完整」,一个都没启用才报「均已停用」")
         // 推送记录、测试请求的文件名跟引擎 setNotifyPaths 逐字一致。
         let notifyTestGo = relayEngineSource("notifytest.go")
         expectEqual(notifyTestGo.contains("clientName + \"-notify-log.json\"") && NotificationDeliveryLog.fileName == "lyrimuse-notify-log.json"

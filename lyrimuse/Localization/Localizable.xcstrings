@@ -50145,6 +50145,23 @@
         }
       }
     },
+    "推送渠道信息不完整" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push channel details are incomplete"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推播管道資訊不完整"
+          }
+        }
+      }
+    },
     "推送渠道均已停用" : {
       "extractionState" : "manual",
       "localizations" : {

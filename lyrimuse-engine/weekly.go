@@ -230,10 +230,10 @@ func (p *poller) weeklyDigest(now time.Time, env digestEnv) {
 	if !features().WeeklyDigest || !env.alerter.configured(notifyEventWeekly) {
 		return
 	}
-	if !p.weeklyLastCheckedAt.IsZero() && now.Sub(p.weeklyLastCheckedAt) < weeklyDigestCheckInterval {
+	if !digestCheckDue(now, p.weeklyLastCheckedAt, weeklyDigestCheckInterval) {
 		return
 	}
-	p.weeklyLastCheckedAt = now
+	p.weeklyLastCheckedAt = now.Round(0)
 
 	lastfmConfigured := env.cfg.LastfmUser != "" && env.cfg.lastfmBridgeAPIKey() != ""
 	lbConfigured := env.cfg.User != "" && env.cfg.Token != ""
@@ -275,10 +275,19 @@ func (p *poller) weeklyDigest(now time.Time, env digestEnv) {
 		p.weeklyState.save(to) // 这周确实没听，跳过不推送，但仍标记已处理，避免下次重查同一周
 		return
 	}
-	title := fmt.Sprintf("🎵 上周听歌小结（%s~%s）",
-		time.Unix(from, 0).Local().Format("01-02"), time.Unix(to, 0).Local().Format("01-02"))
-	if digestPush(env.alerter, notifyEventWeekly, title, stats) != nil {
+	if digestPush(env.alerter, notifyEventWeekly, weeklyDigestTitle(source, from, to), stats) != nil {
 		return
 	}
 	p.weeklyState.save(to)
+}
+
+// weeklyDigestTitle 推送标题里的起止日期。ListenBrainz 源的 to 是本周一 00:00(开区间)，
+// 结束日写它前一秒那天(上周日)；Last.fm 源照写它图表周的 to 那天。见 15 章决策 69。
+func weeklyDigestTitle(source string, from, to int64) string {
+	end := to
+	if source == digestSourceListenBrainz {
+		end = to - 1
+	}
+	return fmt.Sprintf("🎵 上周听歌小结（%s~%s）",
+		time.Unix(from, 0).Local().Format("01-02"), time.Unix(end, 0).Local().Format("01-02"))
 }

@@ -89,6 +89,15 @@ func (p *poller) runDigests(now time.Time, env digestEnv) {
 	p.artistRegionsDigest(now, env)
 }
 
+// digestCheckDue 判各份报告「距上次检查是否已满 interval」(last 为零值 = 这个进程里还没查过，算到期)。
+// 按墙钟比：主循环的 now 来自 time.Now()，带 Go 的单调读数，darwin 上它取 mach_absolute_time，
+// 系统睡眠期间不走(本机实测开机 14 小时 18 分、pmset 记的睡眠合计 68 分 52 秒，单调读数正好少
+// 1 小时 8 分)。两头都带单调读数时 Sub 用的是单调读数，睡前刚查过的话，醒来还得再等满 interval 的
+// 清醒时间。调用方记 lastCheckedAt 时也存 now.Round(0)(只留墙钟)。见 15 章决策 69。
+func digestCheckDue(now, last time.Time, interval time.Duration) bool {
+	return last.IsZero() || now.Round(0).Sub(last.Round(0)) >= interval
+}
+
 // resolveDigestSource 判定"这次检查该用哪个数据源"：preference 非空且明确指定就用它；
 // 否则按"两个都配了→Last.fm，只配了一个→用那个，都没配→返回空字符串"解析出默认值。
 // 空字符串意味着两个账号都没配，调用方应该跳过这次检查(等同于既有 weeklyDigest/

@@ -116,10 +116,10 @@ func (p *poller) calendarDigest(now time.Time, env digestEnv, kind calendarDiges
 	if !enabled || !env.alerter.configured(event) {
 		return
 	}
-	if !run.lastCheckedAt.IsZero() && now.Sub(run.lastCheckedAt) < calendarDigestCheckInterval {
+	if !digestCheckDue(now, run.lastCheckedAt, calendarDigestCheckInterval) {
 		return
 	}
-	run.lastCheckedAt = now
+	run.lastCheckedAt = now.Round(0)
 
 	from, to, key := previousCalendarPeriod(now, kind)
 	if key <= run.state.load() {

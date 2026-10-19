@@ -408,6 +408,101 @@ func TestDailyDigestLastfm(t *testing.T) {
 	})
 }
 
+// 头天晚上推送一直失败(照一次真实时间线:23:47 最后一次被拒),过零点后的检查补推昨天那期:
+// 区间是昨天零点到今天零点,标题带昨天的日期;当晚今天那期照推;再到第二天凌晨不重复补。
+func TestDailyDigestCatchUpYesterday(t *testing.T) {
+	useDigestFeatures(t, featureFlags{DailyDigest: true, DailyDigestSource: digestSourceLastfm})
+	f := useFakeLastfmRead(t, chartRoutes())
+	p := &poller{dailyState: dailyDigestState{path: filepath.Join(t.TempDir(), "daily.json")}}
+	p.dailyState.save("2026-10-16")
+
+	rej, rejected := rejectingSink(t)
+	p.dailyDigest(time.Date(2026, 10, 17, 23, 47, 0, 0, time.Local), lastfmDigestEnv(rej.URL))
+	if *rejected != 1 || p.dailyState.load() != "2026-10-16" {
+		t.Fatalf("被拒那次不该记: pushes=%d state=%q", *rejected, p.dailyState.load())
+	}
+
+	sink, n, last := pushSink(t)
+	p.dailyDigest(time.Date(2026, 10, 18, 0, 17, 0, 0, time.Local), lastfmDigestEnv(sink.URL))
+	if *n != 1 || !strings.Contains(*last, "昨日听歌报告（10-17）") || p.dailyState.load() != "2026-10-17" {
+		t.Fatalf("零点后应补推 10-17 那期: pushes=%d state=%q body=%s", *n, p.dailyState.load(), *last)
+	}
+	q := f.queries[len(f.queries)-1]
+	from, to := time.Date(2026, 10, 17, 0, 0, 0, 0, time.Local), time.Date(2026, 10, 18, 0, 0, 0, 0, time.Local)
+	if q.Get("from") != strconv.FormatInt(from.Unix(), 10) || q.Get("to") != strconv.FormatInt(to.Unix(), 10) {
+		t.Errorf("补推区间应是昨天零点到今天零点: %v", q)
+	}
+
+	p.dailyDigest(time.Date(2026, 10, 18, 9, 0, 0, 0, time.Local), lastfmDigestEnv(sink.URL))
+	if *n != 1 {
+		t.Errorf("补推过的那期不该再推, got %d", *n)
+	}
+	p.dailyDigest(time.Date(2026, 10, 18, 22, 17, 0, 0, time.Local), lastfmDigestEnv(sink.URL))
+	if *n != 2 || !strings.Contains(*last, "今日听歌报告（10-18）") || p.dailyState.load() != "2026-10-18" {
+		t.Fatalf("当晚今天那期照推: pushes=%d state=%q body=%s", *n, p.dailyState.load(), *last)
+	}
+	p.dailyDigest(time.Date(2026, 10, 19, 0, 17, 0, 0, time.Local), lastfmDigestEnv(sink.URL))
+	if *n != 2 {
+		t.Errorf("昨晚已推过,第二天凌晨不该补, got %d", *n)
+	}
+}
+
+// 补推只到第二天 dailyDigestCatchUpUntilHour 之前:过了就不取数、不推,也不记。
+func TestDailyDigestNoCatchUpAfterNoon(t *testing.T) {
+	useDigestFeatures(t, featureFlags{DailyDigest: true, DailyDigestSource: digestSourceLastfm})
+	f := useFakeLastfmRead(t, chartRoutes())
+	sink, n, _ := pushSink(t)
+	p := &poller{dailyState: dailyDigestState{path: filepath.Join(t.TempDir(), "daily.json")}}
+	p.dailyState.save("2026-10-16")
+	p.dailyDigest(time.Date(2026, 10, 18, dailyDigestCatchUpUntilHour, 30, 0, 0, time.Local), lastfmDigestEnv(sink.URL))
+	if *n != 0 || f.count() != 0 || p.dailyState.load() != "2026-10-16" {
+		t.Errorf("pushes=%d requests=%d state=%q", *n, f.count(), p.dailyState.load())
+	}
+}
+
+// 各份报告记下的检查时刻只留墙钟:带 Go 单调读数的话,darwin 上系统睡眠期间单调读数不走,
+// 下次比间隔会把睡掉的时间算成没过(见 digestCheckDue)。
+func TestDigestLastCheckedAtIsWallClock(t *testing.T) {
+	useDigestFeatures(t, featureFlags{DailyDigest: true, DailyDigestSource: digestSourceLastfm,
+		WeeklyDigest: true, WeeklyDigestSource: digestSourceLastfm})
+	useFakeLastfmRead(t, map[string]string{})
+	sink, _, _ := pushSink(t)
+	env := lastfmDigestEnv(sink.URL)
+	p := &poller{}
+	now := time.Now()
+	if !strings.Contains(now.String(), " m=") {
+		t.Fatalf("time.Now() 应带单调读数: %s", now)
+	}
+	p.dailyDigest(now, env)
+	p.weeklyDigest(now, env)
+	p.calendarDigest(now, env, calendarDigestMonthly, &p.monthlyRun, true, digestSourceLastfm)
+	p.calendarDigest(now, env, calendarDigestYearly, &p.yearlyRun, true, digestSourceLastfm)
+	p.topArtistsDigest(now, env)
+	for name, at := range map[string]time.Time{"daily": p.dailyLastCheckedAt, "weekly": p.weeklyLastCheckedAt,
+		"monthly": p.monthlyRun.lastCheckedAt, "yearly": p.yearlyRun.lastCheckedAt, "topArtists": p.topArtistsLastCheckedAt} {
+		if at.IsZero() || strings.Contains(at.String(), " m=") || !at.Equal(now) {
+			t.Errorf("%s lastCheckedAt = %s, 应是只留墙钟的 now", name, at)
+		}
+	}
+	if digestCheckDue(now.Add(29*time.Minute), p.dailyLastCheckedAt, dailyDigestCheckInterval) ||
+		!digestCheckDue(now.Add(30*time.Minute), p.dailyLastCheckedAt, dailyDigestCheckInterval) {
+		t.Error("间隔应按墙钟满 30 分钟才到期")
+	}
+}
+
+// ListenBrainz 源的周边界是周一 00:00 到下周一 00:00(开区间),标题结束日是上周日;Last.fm 源照写图表周的 to。
+func TestWeeklyDigestTitleEndDate(t *testing.T) {
+	mon := time.Date(2026, 10, 12, 0, 0, 0, 0, time.Local)
+	nextMon := mon.AddDate(0, 0, 7)
+	if got := weeklyDigestTitle(digestSourceListenBrainz, mon.Unix(), nextMon.Unix()); got != "🎵 上周听歌小结（10-12~10-18）" {
+		t.Errorf("ListenBrainz 标题 = %q", got)
+	}
+	from, to := time.Date(2026, 10, 11, 12, 0, 0, 0, time.Local), time.Date(2026, 10, 18, 12, 0, 0, 0, time.Local)
+	if got := weeklyDigestTitle(digestSourceLastfm, from.Unix(), to.Unix()); got != "🎵 上周听歌小结（10-11~10-18）" {
+		t.Errorf("Last.fm 标题 = %q", got)
+	}
+}
+
 // ---- 月报(Last.fm 源) ----
 
 // 月报走 Last.fm 时区间是上个自然月的本地边界(ListenBrainz 源另有测试)。

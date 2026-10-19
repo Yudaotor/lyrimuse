@@ -348,12 +348,14 @@ public final class ConfigStore: ObservableObject {
         return nil
     }
 
-    /// 有没有能推的渠道(启用着、填齐了);没有时返回缺什么的提示。
+    /// 有没有能推的渠道(启用着、填齐了);没有时返回缺什么的提示:有启用着的、但都没填齐(比如 Telegram 没填
+    /// Chat ID)报「信息不完整」,一个都没启用才报「均已停用」。见 15 章决策 69。
     public func pushMissingHint() -> String? {
         let saved = savedSnapshot.notificationChannels
         if saved.isEmpty { return L10n.t("尚未添加推送渠道") }
-        if !saved.contains(where: { $0.enabled && $0.isComplete }) { return L10n.t("推送渠道均已停用") }
-        return nil
+        if saved.contains(where: { $0.enabled && $0.isComplete }) { return nil }
+        if saved.contains(where: { $0.enabled }) { return L10n.t("推送渠道信息不完整") }
+        return L10n.t("推送渠道均已停用")
     }
 
     /// 已保存的、启用着且填齐了的渠道。

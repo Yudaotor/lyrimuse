@@ -18,11 +18,16 @@ const dailyDigestCheckInterval = 30 * time.Minute
 // 同一个思路。没有做成可配置项：weeklyDigest 同样没有配置触发时机这个先例。
 const dailyDigestTriggerHour = 22
 
+// dailyDigestCatchUpUntilHour：头天晚上那一期没推成(22 点后取数 / 推送一直失败、关机或睡眠错过)，
+// 第二天本地时间这个小时之前的检查补推头天那一期；过了就不补了——周报、月报停机后补推最近一期，
+// 日报的「最近一期」只在第二天上午还算新鲜。见 15 章决策 69。
+const dailyDigestCatchUpUntilHour = 12
+
 // dailyDigestState 持久化"已推送到哪一天"(本地日期字符串 YYYY-MM-DD)，防止
 // 同一天内被 dailyDigestCheckInterval 的多次检查重复推送、也防重启后重推当天已推过
-// 的报告。用日期字符串而不是像 weeklyDigestState 那样用时间戳——这里比较的是"是不是
-// 同一天"，不是"是否已经过了某个精确边界时刻"，字符串比较更直白，不用另外套一层
-// 时间戳转日期的逻辑。
+// 的报告。用日期字符串而不是像 weeklyDigestState 那样用时间戳——这里比较的是"哪一天"，
+// 不是"是否已经过了某个精确边界时刻"，YYYY-MM-DD 按字典序比就是按日期先后比，不用另外
+// 套一层时间戳转日期的逻辑。
 type dailyDigestState struct{ path string }
 
 func (s dailyDigestState) load() string {
@@ -59,26 +64,41 @@ func (s dailyDigestState) save(date string) {
 
 var dailyDigestPath string
 
-// dailyDigest 检查(至多每 dailyDigestCheckInterval 一次)当地时间是否已经到了
-// dailyDigestTriggerHour、且今天还没推送过，是的话按 features().DailyDigestSource 解析出
-// 的数据源(Last.fm 或 ListenBrainz，见 digest.go 的 resolveDigestSource)拉今天的统计
-// 推一条报告。取数/聚合/拼文案的逻辑统一定义在 digest.go(lastfmDigestStats/
-// listenbrainzDigestStats)，这里只负责判断该不该触发、选哪个源、传今天的时间范围。
+// dailyDigestTarget 判这一次检查该推哪一期：本地时间到了 dailyDigestTriggerHour 推今天
+// (今天零点到此刻)；dailyDigestCatchUpUntilHour 之前推昨天(昨天零点到今天零点，补头天晚上没推成的那期)；
+// 其余时段 ok=false。day 是该期的本地日期(YYYY-MM-DD)，跟 dailyDigestState 里记的比。
+func dailyDigestTarget(now time.Time) (day string, from, to time.Time, title string, ok bool) {
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	switch {
+	case now.Hour() >= dailyDigestTriggerHour:
+		return midnight.Format("2006-01-02"), midnight, now, fmt.Sprintf("🎧 今日听歌报告（%s）", now.Format("01-02")), true
+	case now.Hour() < dailyDigestCatchUpUntilHour:
+		yesterday := midnight.AddDate(0, 0, -1)
+		return yesterday.Format("2006-01-02"), yesterday, midnight, fmt.Sprintf("🎧 昨日听歌报告（%s）", yesterday.Format("01-02")), true
+	}
+	return "", time.Time{}, time.Time{}, "", false
+}
+
+// dailyDigest 检查(至多每 dailyDigestCheckInterval 一次)这时该推哪一期(见 dailyDigestTarget)、
+// 那一期推过没有，没推过就按 features().DailyDigestSource 解析出的数据源(Last.fm 或 ListenBrainz，
+// 见 digest.go 的 resolveDigestSource)拉那一期的统计推一条报告。取数/聚合/拼文案的逻辑统一定义在
+// digest.go(lastfmDigestStats/listenbrainzDigestStats)，这里只负责判断该不该触发、选哪个源、传时间范围。
+// 状态只记推到哪天：补推的昨天那期记下后，当晚今天那期日期更大照推；昨晚已推过的，第二天上午不再补。
 func (p *poller) dailyDigest(now time.Time, env digestEnv) {
 	if !features().DailyDigest || !env.alerter.configured(notifyEventDaily) {
 		return
 	}
-	if !p.dailyLastCheckedAt.IsZero() && now.Sub(p.dailyLastCheckedAt) < dailyDigestCheckInterval {
+	if !digestCheckDue(now, p.dailyLastCheckedAt, dailyDigestCheckInterval) {
 		return
 	}
-	p.dailyLastCheckedAt = now
+	p.dailyLastCheckedAt = now.Round(0)
 
-	if now.Hour() < dailyDigestTriggerHour {
+	day, from, to, title, ok := dailyDigestTarget(now)
+	if !ok {
 		return
 	}
-	today := now.Format("2006-01-02")
-	if today == p.dailyState.load() {
-		return // 今天已经推送过了
+	if day <= p.dailyState.load() {
+		return // 这一期已经推送过了
 	}
 
 	lastfmConfigured := env.cfg.LastfmUser != "" && env.cfg.lastfmBridgeAPIKey() != ""
@@ -88,23 +108,22 @@ func (p *poller) dailyDigest(now time.Time, env digestEnv) {
 		return // 两个账号都没配，这个功能没法跑，等用户配好任意一个
 	}
 
-	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	var stats digestStats
 	var err error
 	if source == digestSourceLastfm {
-		stats, err = lastfmDigestStats(env.ctx, env.cfg.LastfmUser, env.cfg.lastfmBridgeAPIKey(), midnight.Unix(), now.Unix())
+		stats, err = lastfmDigestStats(env.ctx, env.cfg.LastfmUser, env.cfg.lastfmBridgeAPIKey(), from.Unix(), to.Unix())
 	} else {
-		stats, err = listenbrainzDigestStats(env.ctx, env.lbRoot, env.cfg.User, midnight.Unix(), now.Unix())
+		stats, err = listenbrainzDigestStats(env.ctx, env.lbRoot, env.cfg.User, from.Unix(), to.Unix())
 	}
 	if err != nil {
 		return // 拉取失败,不标记已推送,下次检查再试
 	}
 	if stats.TotalPlays == 0 {
-		p.dailyState.save(today) // 今天确实没听,跳过不推送,但仍标记已处理,避免当天反复重查
+		p.dailyState.save(day) // 那天确实没听,跳过不推送,但仍标记已处理,避免反复重查
 		return
 	}
-	if digestPush(env.alerter, notifyEventDaily, fmt.Sprintf("🎧 今日听歌报告（%s）", now.Format("01-02")), stats) != nil {
+	if digestPush(env.alerter, notifyEventDaily, title, stats) != nil {
 		return // 推送没成功,不标记已推送,下次检查再推
 	}
-	p.dailyState.save(today)
+	p.dailyState.save(day)
 }

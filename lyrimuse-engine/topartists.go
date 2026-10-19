@@ -532,10 +532,10 @@ func (p *poller) topArtistsDigest(now time.Time, env digestEnv) {
 	if env.cfg.LastfmUser == "" || env.cfg.lastfmBridgeAPIKey() == "" {
 		return
 	}
-	if !p.topArtistsLastCheckedAt.IsZero() && now.Sub(p.topArtistsLastCheckedAt) < topArtistsCheckInterval {
+	if !digestCheckDue(now, p.topArtistsLastCheckedAt, topArtistsCheckInterval) {
 		return
 	}
-	p.topArtistsLastCheckedAt = now
+	p.topArtistsLastCheckedAt = now.Round(0)
 	relay := env.cfg.StateRelayURL != ""
 	if last := p.topArtistsState.load(); relay && last > 0 && now.Sub(time.Unix(last, 0)) < topArtistsCheckInterval {
 		return // 磁盘上记录的上次成功推送还没满一天(比如刚重启,内存态丢了但磁盘状态还在)

@@ -1229,6 +1229,7 @@
 "推送地址" = "Push URL";
 "推送提醒" = "Push Alerts";
 "推送渠道" = "Push Channels";
+"推送渠道信息不完整" = "Push channel details are incomplete";
 "推送渠道均已停用" = "All push channels are off";
 "推送记录" = "Delivery History";
 "描边颜色" = "Stroke Color";
