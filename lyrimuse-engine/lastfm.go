@@ -68,6 +68,9 @@ type lastfmScrobbler struct {
 type sentNowPlaying struct {
 	artist, track string
 	at            time.Time
+	// corrArtist / corrTrack:track.updateNowPlaying 回执里 Last.fm 自动纠正之后的写法(没回执、没纠正时为空)。Last.fm 上
+	// 挂着的是纠正之后的那份:发 `Leehom Wang`,主页挂的是 `王力宏`,只拿发出去的写法比认不出自己的回声。见 12 章决策 89。
+	corrArtist, corrTrack string
 }
 
 // lastfmSentNPEchoWindow:发出去的正在播放多久之内还当回声认。Last.fm 按 duration 参数挂着,不给时按它自己的
@@ -75,18 +78,47 @@ type sentNowPlaying struct {
 const lastfmSentNPEchoWindow = 15 * time.Minute
 
 type sentNowPlayingFile struct {
-	Artist string `json:"artist"`
-	Track  string `json:"track"`
-	At     int64  `json:"at"`
+	Artist          string `json:"artist"`
+	Track           string `json:"track"`
+	At              int64  `json:"at"`
+	CorrectedArtist string `json:"corrected_artist,omitempty"`
+	CorrectedTrack  string `json:"corrected_track,omitempty"`
 }
 
 // noteSentNowPlaying 记下这次发出去的正在播放,并写进 sentNPPath。写失败只记日志:丢了顶多重启后认错一条回声。
 func (s *lastfmScrobbler) noteSentNowPlaying(artist, track string, at time.Time) {
-	s.lastSentNP.Store(&sentNowPlaying{artist: artist, track: track, at: at})
+	v := &sentNowPlaying{artist: artist, track: track, at: at}
+	s.lastSentNP.Store(v)
+	s.saveSentNowPlaying(v)
+}
+
+// noteNowPlayingCorrection 把 track.updateNowPlaying 回执里纠正之后的写法记到发出去的那一条上。lastSentNP 已经换成
+// 后来发的另一条时不记(回执晚到,说的不是现在挂着的那条)。
+func (s *lastfmScrobbler) noteNowPlayingCorrection(sentArtist, sentTrack string, sentAt time.Time, corrArtist, corrTrack string) {
+	corrArtist, corrTrack = strings.TrimSpace(corrArtist), strings.TrimSpace(corrTrack)
+	if corrArtist == "" && corrTrack == "" || corrArtist == sentArtist && corrTrack == sentTrack {
+		return
+	}
+	for {
+		cur := s.lastSentNP.Load()
+		if cur == nil || cur.artist != sentArtist || cur.track != sentTrack || !cur.at.Equal(sentAt) {
+			return
+		}
+		next := *cur
+		next.corrArtist, next.corrTrack = orDefault(corrArtist, sentArtist), orDefault(corrTrack, sentTrack)
+		if s.lastSentNP.CompareAndSwap(cur, &next) {
+			s.saveSentNowPlaying(&next)
+			return
+		}
+	}
+}
+
+func (s *lastfmScrobbler) saveSentNowPlaying(v *sentNowPlaying) {
 	if s.sentNPPath == "" {
 		return
 	}
-	if b, err := json.Marshal(sentNowPlayingFile{Artist: artist, Track: track, At: at.Unix()}); err == nil {
+	f := sentNowPlayingFile{Artist: v.artist, Track: v.track, At: v.at.Unix(), CorrectedArtist: v.corrArtist, CorrectedTrack: v.corrTrack}
+	if b, err := json.Marshal(f); err == nil {
 		_ = writeFileAtomic(s.sentNPPath, b)
 	}
 }
@@ -109,7 +141,7 @@ func loadSentNowPlaying(path string) *sentNowPlaying {
 	if f.Track == "" || f.At <= 0 {
 		return nil
 	}
-	return &sentNowPlaying{artist: f.Artist, track: f.Track, at: time.Unix(f.At, 0)}
+	return &sentNowPlaying{artist: f.Artist, track: f.Track, at: time.Unix(f.At, 0), corrArtist: f.CorrectedArtist, corrTrack: f.CorrectedTrack}
 }
 
 // restoreSentNowPlaying 启动时把上次运行发出去的那条读回 lastSentNP。
@@ -121,14 +153,23 @@ func (s *lastfmScrobbler) restoreSentNowPlaying() {
 
 // sentNowPlayingAt:now 时刻仍在回声窗口内的、最近一次发出去的正在播放(歌手, 曲名);没有返回空串。nil 接收者安全。
 func (s *lastfmScrobbler) sentNowPlayingAt(now time.Time) (string, string) {
-	if s == nil {
-		return "", ""
-	}
-	v := s.lastSentNP.Load()
-	if v == nil || now.Sub(v.at) > lastfmSentNPEchoWindow {
+	v := s.sentNowPlayingEntryAt(now)
+	if v == nil {
 		return "", ""
 	}
 	return v.artist, v.track
+}
+
+// sentNowPlayingEntryAt:同 sentNowPlayingAt,连同回执里纠正之后的写法;不在窗口内返回 nil。nil 接收者安全。
+func (s *lastfmScrobbler) sentNowPlayingEntryAt(now time.Time) *sentNowPlaying {
+	if s == nil {
+		return nil
+	}
+	v := s.lastSentNP.Load()
+	if v == nil || now.Sub(v.at) > lastfmSentNPEchoWindow {
+		return nil
+	}
+	return v
 }
 
 // newLastfmScrobbler 三者任一为空则不启用(返回 nil,调用方需判空跳过)。
@@ -179,6 +220,11 @@ func (s *lastfmScrobbler) sign(params map[string]string) string {
 }
 
 func (s *lastfmScrobbler) call(ctx context.Context, method string, params map[string]string) error {
+	return s.callInto(ctx, method, params, nil)
+}
+
+// callInto 同 call,成功时再把应答解进 into(nil = 不要;解不开不算失败,into 留着零值)。
+func (s *lastfmScrobbler) callInto(ctx context.Context, method string, params map[string]string, into any) error {
 	p := make(map[string]string, len(params)+2)
 	for k, v := range params {
 		p[k] = v
@@ -252,6 +298,9 @@ func (s *lastfmScrobbler) call(ctx context.Context, method string, params map[st
 	// 调用方按可能已落库那一档处理(留痕、隔离、不自动重发),口径同回执丢失。
 	if method == "track.scrobble" && out.Scrobbles == nil {
 		return &lastfmUnconfirmedError{Method: method}
+	}
+	if into != nil {
+		_ = json.Unmarshal(body, into)
 	}
 	return nil
 }
@@ -504,9 +553,24 @@ func (s *lastfmScrobbler) updateNowPlaying(ctx context.Context, artist, track, a
 	// duration 让 Last.fm 知道这条"正在播放"该挂多久 —— 不给的话它只能自己猜一个默认
 	// 时长,长曲子会提前掉、短曲子会挂太久。官方文档列了这个参数、标注选填。
 	durationParam(p, "duration", durationSecs)
-	// 发之前记:请求发出去、回执没回来时 Last.fm 那边也可能已经挂上了。
-	s.noteSentNowPlaying(artist, track, time.Now())
-	return s.call(ctx, "track.updateNowPlaying", p)
+	// 发之前记:请求发出去、回执没回来时 Last.fm 那边也可能已经挂上了。回执里有 Last.fm 纠正之后的写法,再补记上。
+	sentAt := time.Now()
+	s.noteSentNowPlaying(artist, track, sentAt)
+	var receipt struct {
+		NowPlaying struct {
+			Artist struct {
+				Text string `json:"#text"`
+			} `json:"artist"`
+			Track struct {
+				Text string `json:"#text"`
+			} `json:"track"`
+		} `json:"nowplaying"`
+	}
+	if err := s.callInto(ctx, "track.updateNowPlaying", p, &receipt); err != nil {
+		return err
+	}
+	s.noteNowPlayingCorrection(artist, track, sentAt, receipt.NowPlaying.Artist.Text, receipt.NowPlaying.Track.Text)
+	return nil
 }
 
 func (s *lastfmScrobbler) scrobble(ctx context.Context, artist, track, album string, timestamp int64, durationSecs float64) error {

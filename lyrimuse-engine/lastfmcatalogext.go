@@ -48,6 +48,8 @@ import (
 //     「编目里根本没有正规条目」的歌:几个影子条目里挑大家实际在用的那条,而不是自己再
 //     建一条只有自己的影子。
 //
+// 三档都不选「没有 mbid、听众比原样少」的条目(colderThan)。
+//
 // 版本标记(Live / Remix / DJ 版 / 伴奏)仍由曲名折叠键原样保留,时长闸仍然生效 ——
 // 扩展的只是「去哪些名字下面找」,不是「什么算同一首歌」。
 //
@@ -76,7 +78,8 @@ const (
 	// track.search 一页取多少条。结果按歌手严格过滤,取多一点只是多几行 JSON。
 	lastfmCatalogSearchLimit = "30"
 	// 扩展判定的口径版本。旧口径下判的 defer 在加载后按这个版本重判一次(见 lookup)。
-	lastfmCatalogExtVersion = 2
+	// v3:名字去重不再折繁简(lastfmCatalogNameKey),原样的繁 / 简另一种写法也会去查。见 12 章决策 89。
+	lastfmCatalogExtVersion = 3
 )
 
 // catalogArtistAliases 是 MusicBrainz 别名来源,单测替换成桩。
@@ -123,7 +126,7 @@ func (c *lastfmCatalogMatcher) decideExtended(ctx context.Context, artist, track
 	}
 	partial = partial || candsPartial
 
-	// 第 1、2 档:编目正规条目,强身份在前。
+	// 第 1、2 档:编目正规条目,强身份在前。没有 mbid、听众又比原样少的不选(colderThan)。
 	for _, want := range []identityStrength{identityStrong, identityWeak} {
 		group := filterExt(cands, func(e extCandidate) bool { return e.strength == want })
 		sortExtByListeners(group)
@@ -135,7 +138,7 @@ func (c *lastfmCatalogMatcher) decideExtended(ctx context.Context, artist, track
 			if err != nil {
 				return lastfmCatalogDecision{}, err
 			}
-			if !p.catalogued() || !p.durationFits(durationSecs) {
+			if !p.catalogued() || !p.durationFits(durationSecs) || p.colderThan(own) {
 				continue
 			}
 			if want == identityWeak && !weakCandidateOK(p, durationSecs) {
@@ -200,23 +203,36 @@ func weakCandidateOK(p lastfmCatalogProbe, durationSecs float64) bool {
 
 // extNames 列出扩展搜索要查的名字,强身份在前:合唱各位、他们的 MusicBrainz 别名、Apple 区服对照、
 // YouTube Music 英文署名(都是强);歌词解析时胜出候选报的署名、双语名的两半(弱)。不含原样整串本身
-// (基础判定查过了)。去重按折叠键,强身份优先,超过 lastfmCatalogExtMaxNames 截掉的是排在后面的弱身份。
+// (基础判定查过了)。去重按 lastfmCatalogNameKey(不折繁简),强身份优先,超过 lastfmCatalogExtMaxNames 截掉的是排在后面的弱身份。
 // 第二个返回值 partial = 有一路名字来源这次没查成(见 decideExtended 里怎么处理),其余照常列出。
 func (c *lastfmCatalogMatcher) extNames(ctx context.Context, artist, track string, durationSecs float64) ([]extName, bool) {
 	partial := false
 	var out []extName
-	seen := map[string]bool{lastfmCatalogArtistKey(artist): true}
+	credits := catalogCreditNames(artist)
+	// 去重按 lastfmCatalogNameKey(不折繁简):原样「周杰伦」的繁体写法「周杰倫」在 Last.fm 是另一个歌手页(1,051 听众、
+	// 有 mbid 的《太陽之子》在它名下),按折繁简的键去重会把它当成原样本身丢掉。折叠键(lastfmCatalogArtistKey)相同的
+	// 名字是同一个名字的另一种字形:等于原样、某位合唱歌手或一个强身份名字的,不管从哪一路来都按强身份算。见 12 章决策 89。
+	strongFolds := map[string]bool{lastfmCatalogArtistKey(artist): true}
+	for _, cr := range credits {
+		strongFolds[lastfmCatalogArtistKey(cr)] = true
+	}
+	seen := map[string]bool{lastfmCatalogNameKey(artist): true}
 	add := func(name string, strength identityStrength) {
 		name = strings.TrimSpace(name)
-		key := lastfmCatalogArtistKey(name)
-		if key == "" || seen[key] {
+		key, fold := lastfmCatalogNameKey(name), lastfmCatalogArtistKey(name)
+		if key == "" || fold == "" || seen[key] {
 			return
 		}
 		seen[key] = true
+		if strongFolds[fold] {
+			strength = identityStrong
+		}
+		if strength == identityStrong {
+			strongFolds[fold] = true
+		}
 		out = append(out, extName{name: name, strength: strength})
 	}
 
-	credits := catalogCreditNames(artist)
 	for _, cr := range credits {
 		add(cr, identityStrong)
 	}
@@ -307,7 +323,10 @@ func (c *lastfmCatalogMatcher) extCandidates(ctx context.Context, artist, track 
 	artistKey := lastfmCatalogArtistKey(artist)
 	strengthOf := map[string]identityStrength{}
 	for _, n := range names {
-		strengthOf[lastfmCatalogArtistKey(n.name)] = n.strength
+		// 繁简等字形不同的几个名字折到同一个键上,按其中最强的算。
+		if s, ok := strengthOf[lastfmCatalogArtistKey(n.name)]; !ok || n.strength < s {
+			strengthOf[lastfmCatalogArtistKey(n.name)] = n.strength
+		}
 	}
 	strengthOf[artistKey] = identityStrong
 

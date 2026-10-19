@@ -135,6 +135,10 @@ const (
 	// 时在源头降,不再产生。改了 recheckISRCDurations 的判据就 +1。
 	migrationISRCDurationRecheck        = "isrc_duration_recheck"
 	migrationISRCDurationRecheckVersion = 1
+	// migrationLastfmCatalogStale:Last.fm 编目判定缓存里现在的判据不会再判出的 match 删掉重判(lastfmcatalogmigrate.go)。
+	// 运行期 decide 不再产生这几类。改了 lastfmCatalogStaleMatch 的判据就 +1。
+	migrationLastfmCatalogStale        = "lastfm_catalog_stale_matches"
+	migrationLastfmCatalogStaleVersion = 1
 )
 
 // loadMigrationState 读水位文件。文件不存在 / 解不出来都当作"一道都没跑过",照常全量跑 ——

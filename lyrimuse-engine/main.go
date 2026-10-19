@@ -415,6 +415,8 @@ func main() {
 	forwardedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-forwarded.json")
 	lfmMirroredPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-mirrored.json")
 	lfmSentNPPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-sent-nowplaying.json")
+	// 退出时正在放的那一首的收听计时,重启后接着算(sessionresume.go)。
+	sessionResumePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-session-resume.json")
 	// ListenBrainz 待重发队列(lbretry.go):会话结束后才失败的收听存在这里,后台重发。
 	lbRetryPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lb-retry.json")
 	lfmRetryPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-retry.json")
@@ -422,6 +424,9 @@ func main() {
 	// 「智能」档的编目判定缓存(见 lastfmcatalog.go)。必须在 lastfmScrobblerIfEnabled
 	// 之前设好 —— 匹配器构造时就读它。backfillcli.go 用同一个文件名,两条路径共读一份。
 	lastfmCatalogPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-catalog.json")
+	// 编目判定里现在的判据不会再判出的 match 删掉、下次放到时重判(lastfmcatalogmigrate.go)。要在匹配器读这份缓存
+	// (run 里建 Last.fm 客户端)之前。
+	migrateLastfmCatalogStaleMatches()
 	// 引擎→App 的 Last.fm「最近记录」feed(见 lastfmfeed.go):桥接每次拉到的
 	// recenttracks 落盘,App 读它代替自己直连轮询。
 	lastfmFeedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-recent-feed.json")

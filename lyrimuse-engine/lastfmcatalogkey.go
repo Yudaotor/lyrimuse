@@ -38,6 +38,13 @@ func lastfmCatalogArtistKey(artist string) string {
 	return normLoose(artist)
 }
 
+// lastfmCatalogNameKey 是扩展搜索给「要去 Last.fm 查的名字」去重用的键:只折 Unicode 组合形式、全角字母数字和大小写,
+// **不折繁简**。Last.fm 的 autocorrect 不管繁简(见 lastfmCatalogMatcher.probe),「周杰伦」和「周杰倫」在它那里是两个
+// 歌手页:按 lastfmCatalogArtistKey 去重会把繁体那个正规写法当成原样本身丢掉,一次都不查。见 12 章决策 89。
+func lastfmCatalogNameKey(name string) string {
+	return strings.ToLower(foldFullwidthAlnum(composeNFC(strings.TrimSpace(name))))
+}
+
 // 尾部括号(半角/全角/方括号/方头括号)。只看结尾:中段的括号更可能是名字本身的一部分。
 var catalogSubtitleTrailingRe = regexp.MustCompile(`\s*[（(\[【]([^）)\]】]*)[）)\]】]\s*$`)
 

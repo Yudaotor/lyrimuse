@@ -44,7 +44,7 @@ import (
 //  2. 收集候选:原样、第一位歌手(firstCreditedArtist)、以及该歌手在编目里曲名折到同一个
 //     键上的条目(artist.getTopTracks,见 lastfmtoptracks.go)。
 //  3. 在**已被编目收录**(catalogued)的候选里取听众最多的一条,拿它复核一次时长;过闸
-//     就按它的歌手 + 曲名提交,永久。
+//     就按它的歌手 + 曲名提交,永久。没有 mbid、听众又比原样少的不选(colderThan)。
 //  4. 一条够格的都没有 到 扩展搜索(lastfmcatalogext.go):去合唱各位、MusicBrainz 别名、
 //     双语名两半名下找,再按曲名搜全站(只收歌手对得上的)。还找不到才 defer,原样发,
 //     过一段时间可重判。
@@ -179,6 +179,14 @@ func (p lastfmCatalogProbe) durationFits(durationSecs float64) bool {
 		return true
 	}
 	return math.Abs(float64(p.DurationMS)/1000-durationSecs) <= lastfmCatalogDurationTolerance
+}
+
+// colderThan 判 p 是不是「没有 mbid、听众还比原样少」的条目。catalogued 只要有编目时长就算正规条目,而编目时长
+// 也会挂在没人用的冷条目上:Fish Leong《Man Leng》原样 335 听众(无 mbid、无时长),MusicBrainz 别名「梁靜茹」名下那条
+// 有 290 s 编目时长、只有 1 个听众。从原样挪到这种条目上,收听落进的是比原样更没人看的那页。有 mbid 的不算:
+// mbid 是编目正规身份最硬的信号,听众少只是冷门。见 12 章决策 89。
+func (p lastfmCatalogProbe) colderThan(own lastfmCatalogProbe) bool {
+	return p.MBID == "" && p.Listeners < own.Listeners
 }
 
 type lastfmCatalogDecision struct {
@@ -387,7 +395,7 @@ func (c *lastfmCatalogMatcher) decide(ctx context.Context, artist, track string,
 		if err != nil {
 			return lastfmCatalogDecision{}, err
 		}
-		if !p.catalogued() || !p.durationFits(durationSecs) {
+		if !p.catalogued() || !p.durationFits(durationSecs) || p.colderThan(own) {
 			continue
 		}
 		if cand.artist == artist && cand.track == track {

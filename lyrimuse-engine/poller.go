@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -276,6 +277,8 @@ type poller struct {
 	// 终结时刻,见 finalize()/handle() 里 nullResumeGraceWindow 的用法。
 	recentFinalized   *playSession
 	recentFinalizedAt time.Time
+	// resume:上一个进程退出时记下的那首(sessionresume.go),只给本进程第一次开的会话用;nil = 没有或已用掉。
+	resume *sessionResumeFile
 	// app:读 App 写的播放状态当这一拍的快照(见 appsource.go);nil = 不读(测试)。
 	app *appPlayback
 	// appSpotifyTrackID:这一拍 App 带来的 Spotify 曲目 ID,开会话时用(见 detectAdAtSessionStart)。
@@ -1211,9 +1214,11 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		} else {
 			p.sess = &playSession{key: key, meta: p.cur, startedAt: now, lastPlaying: p.cur.Playing,
 				sodaPreviewPending: p.cur.SodaPreviewPending}
+			p.sess.lastfmExcluded = lastfmExcluded(p.cur.Bundle)
+			// 引擎重启前正在放的就是这一首、还是同一次起播:接着那次收听计时(见 sessionresume.go)。
+			p.resumeSession(p.sess, now)
 			p.noteListeningTick(now)
 			p.sess.isAd = p.detectAdAtSessionStart()
-			p.sess.lastfmExcluded = lastfmExcluded(p.cur.Bundle)
 		}
 		p.recentFinalized = nil
 		if p.cur.Spoken {
@@ -1510,16 +1515,30 @@ func (p *poller) applyBridgeForwardResults(results []bridgeForwardResult) {
 }
 
 // lfmNowPlayingEcho:Last.fm 上这条「正在播放」是不是我们自己镜像写进去的。先按本地当前曲目比,
-// 再按最近一次实际发出去的写法比 —— 编目匹配 / 合唱截断改写过的歌手名,跟本地标签比不上。
+// 再按最近一次实际发出去的写法比 —— 编目匹配 / 合唱截断改写过的歌手名,跟本地标签比不上 —— 最后按那次回执里
+// Last.fm 自动纠正之后的写法比(发 `Leehom Wang`,挂着的是 `王力宏`)。`&` 与 `and` 当成同一个写法(Last.fm 会把
+// `Beautiful, Loved & Blessed` 纠正成 `… and …`)。见 12 章决策 89。
 func (p *poller) lfmNowPlayingEcho(artist, title string, now time.Time) bool {
 	if p.lfm == nil {
 		return false
 	}
-	if p.cur.Title != "" && looseContains(artist, p.cur.Artist) && looseContains(title, p.cur.Title) {
+	same := func(remoteArtist, remoteTitle, localArtist, localTitle string) bool {
+		return localTitle != "" && looseContains(lfmEchoFold(remoteArtist), lfmEchoFold(localArtist)) &&
+			looseContains(lfmEchoFold(remoteTitle), lfmEchoFold(localTitle))
+	}
+	if same(artist, title, p.cur.Artist, p.cur.Title) {
 		return true
 	}
-	sa, st := p.lfm.sentNowPlayingAt(now)
-	return st != "" && looseContains(artist, sa) && looseContains(title, st)
+	v := p.lfm.sentNowPlayingEntryAt(now)
+	return v != nil && (same(artist, title, v.artist, v.track) || same(artist, title, v.corrArtist, v.corrTrack))
+}
+
+// lfmEchoAndRe:两边带空白的单词 and(不分大小写)。
+var lfmEchoAndRe = regexp.MustCompile(`(?i)\s+and\s+`)
+
+// lfmEchoFold 把单词 and 换成 &,其余原样(之后的比较走 looseContains,& 和空白都会被折掉)。
+func lfmEchoFold(s string) string {
+	return lfmEchoAndRe.ReplaceAllString(s, " & ")
 }
 
 // bridgeForwardingEnabled:iPhone→ListenBrainz 桥接(转发完成收听 + 镜像远端 now-playing)
@@ -1758,6 +1777,57 @@ func (p *poller) applyAppPlaybackTick(now time.Time, t appPlaybackTick) (reancho
 	return t.reanchor, t.loopRestart
 }
 
+// flushSessionOnExit 是 run() 退出兜底里管当前会话的那一段:挂着的 Last.fm 收听到点就同步发,过了门槛还没提交的
+// 同步提交,再记下续接状态(sessionresume.go)。调用前 drainSubmitsOnExit 已经处理过别的会话。
+func (p *poller) flushSessionOnExit(flushCtx context.Context) {
+	// 这条退出兜底路径直接调 mirrorScrobbleSync/lb.submit,不经过 submitSingleAsync,
+	// 所以广告判据要在这里再挡一次(见 isAdBreak)。
+	if p.sess != nil {
+		// 会话到此为止:先算「曲终」判据,再看挂着等 scrobble 时点的那条 Last.fm 收听
+		// (官方阈值早过了、LB 也早提交了的那种)到点没有,到了就同步发掉——异步 goroutine
+		// 活不过紧接着的 return(见 mirrorScrobbleSync 注释)。
+		p.sess.ended, p.sess.endedNaturally = true, sessionEndedNaturally(p.sess, time.Now())
+		p.settleLastfmPendingSync(flushCtx, p.sess)
+	}
+	if p.sess != nil && !p.sess.listenSent && !p.sess.sodaPreviewPending && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
+		!tooShortToScrobble(p.sess.meta.Duration) && !p.sess.isSpoken &&
+		!p.sess.isAd && !isAdBreak(p.sess.meta.Bundle, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album) {
+		// Last.fm 镜像:与 LB 解耦,同样服从 scrobble 时点(默认档当场发),且必须走同步变体。
+		//
+		// 艺人名跟 LB 提交取同一份(lm.ArtistName)。lbMeta 不做
+		// canonical_artist 替换,所以 lm.ArtistName 就是**播放器原始标签** ——
+		// 这里保持取同一份,是为了万一以后 lbMeta 又加了什么处理,两条路不会分叉。
+		// 本地收听日志也在 settleLastfmPendingSync 里:退出前这最后一首也是一次算数的收听,
+		// 不能漏。放在 LB 提交之前,理由跟 applySubmitOutcome 那处一致。
+		lm := lbMeta(p.sess.meta)
+		// 按播放器排除的(lastfmExcluded)不挂 Last.fm 那条,跟 recordLastfmListen 同一道闸;LB 照发。
+		if !p.sess.lastfmSettled && p.sess.lastfmPending == nil && !p.sess.lastfmExcluded {
+			p.sess.lastfmPending = &pendingLastfmListen{artistName: lm.ArtistName, meta: p.sess.meta, startedAt: p.sess.startedAt.Unix()}
+		}
+		p.settleLastfmPendingSync(flushCtx, p.sess)
+		// 短曲目只发 Last.fm、不发 LB —— 跟 submitSingleAsync 同一条判据,两处都要挡。
+		if shortTrackLastfmOnly(p.sess.meta.Duration) {
+			p.recordRecentMacListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.startedAt.Unix())
+		} else if err := p.lb.submit(flushCtx, "single", p.sess.startedAt.Unix(), lm); err != nil {
+			warnf("final listen flush failed: %v", err)
+			// 进程正在退出,没有下一拍重试它了:交给 LB 待重发队列(同 applySubmitOutcome 里会话已结束那一支)。
+			if errors.Is(err, errListenRejected) {
+				keepUnsentLBListen(p.sess.startedAt.Unix(), lm, "rejected")
+			} else {
+				enqueueLBRetry(p.sess.startedAt.Unix(), lm)
+			}
+		} else {
+			p.recordRecentMacListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.startedAt.Unix())
+		}
+		// relay 是网页历史主源:退出前放的最后一首也要补进 relay。
+		p.pushScrobble(p.sess.meta, p.sess.startedAt.Unix(), "mac")
+		// 已经交给 LB(或它的待重发队列)了:下面记的续接状态据此不再提交(sessionresume.go)。
+		p.sess.listenSent = true
+	}
+	// 这一首重启后要是还在放,新进程接着这次收听计时,不从零开始(sessionresume.go)。
+	p.saveSessionResume(time.Now())
+}
+
 func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	startLyricSourceStats(ctx)
 	defer stopLyricSourceStats()        // 退出前等最后那次统计写完,见 lyricsourcestats.go
@@ -1805,6 +1875,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 		go seedLastListen(ctx, lb.apiRoot(), cfg.User, p.lastListenSeedCh)
 	}
 	p.relayStartupUntil = time.Now().Add(relayStartupWait)
+	p.resume = takeSessionResume(sessionResumePath)
 	p.poll() // render immediately, don't wait a full interval on startup
 	if lb != nil {
 		// 不看启动时有没有令牌:令牌可能是之后热重读才填上的。没有令牌的那几轮由循环自己跳过(见 startLBRetryLoop)。
@@ -1849,48 +1920,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 			defer cancel()
 			p.exitFlushCtx = flushCtx
 			p.drainSubmitsOnExit()
-			// 这条退出兜底路径直接调 mirrorScrobbleSync/lb.submit,不经过 submitSingleAsync,
-			// 所以广告判据要在这里再挡一次(见 isAdBreak)。
-			if p.sess != nil {
-				// 会话到此为止:先算「曲终」判据,再看挂着等 scrobble 时点的那条 Last.fm 收听
-				// (官方阈值早过了、LB 也早提交了的那种)到点没有,到了就同步发掉——异步 goroutine
-				// 活不过紧接着的 return(见 mirrorScrobbleSync 注释)。
-				p.sess.ended, p.sess.endedNaturally = true, sessionEndedNaturally(p.sess, time.Now())
-				p.settleLastfmPendingSync(flushCtx, p.sess)
-			}
-			if p.sess != nil && !p.sess.listenSent && !p.sess.sodaPreviewPending && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
-				!tooShortToScrobble(p.sess.meta.Duration) && !p.sess.isSpoken &&
-				!p.sess.isAd && !isAdBreak(p.sess.meta.Bundle, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album) {
-				// Last.fm 镜像:与 LB 解耦,同样服从 scrobble 时点(默认档当场发),且必须走同步变体。
-				//
-				// 艺人名跟 LB 提交取同一份(lm.ArtistName)。lbMeta 不做
-				// canonical_artist 替换,所以 lm.ArtistName 就是**播放器原始标签** ——
-				// 这里保持取同一份,是为了万一以后 lbMeta 又加了什么处理,两条路不会分叉。
-				// 本地收听日志也在 settleLastfmPendingSync 里:退出前这最后一首也是一次算数的收听,
-				// 不能漏。放在 LB 提交之前,理由跟 applySubmitOutcome 那处一致。
-				lm := lbMeta(p.sess.meta)
-				// 按播放器排除的(lastfmExcluded)不挂 Last.fm 那条,跟 recordLastfmListen 同一道闸;LB 照发。
-				if !p.sess.lastfmSettled && p.sess.lastfmPending == nil && !p.sess.lastfmExcluded {
-					p.sess.lastfmPending = &pendingLastfmListen{artistName: lm.ArtistName, meta: p.sess.meta, startedAt: p.sess.startedAt.Unix()}
-				}
-				p.settleLastfmPendingSync(flushCtx, p.sess)
-				// 短曲目只发 Last.fm、不发 LB —— 跟 submitSingleAsync 同一条判据,两处都要挡。
-				if shortTrackLastfmOnly(p.sess.meta.Duration) {
-					p.recordRecentMacListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.startedAt.Unix())
-				} else if err := lb.submit(flushCtx, "single", p.sess.startedAt.Unix(), lm); err != nil {
-					warnf("final listen flush failed: %v", err)
-					// 进程正在退出,没有下一拍重试它了:交给 LB 待重发队列(同 applySubmitOutcome 里会话已结束那一支)。
-					if errors.Is(err, errListenRejected) {
-						keepUnsentLBListen(p.sess.startedAt.Unix(), lm, "rejected")
-					} else {
-						enqueueLBRetry(p.sess.startedAt.Unix(), lm)
-					}
-				} else {
-					p.recordRecentMacListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.startedAt.Unix())
-				}
-				// relay 是网页历史主源:退出前放的最后一首也要补进 relay。
-				p.pushScrobble(p.sess.meta, p.sess.startedAt.Unix(), "mac")
-			}
+			p.flushSessionOnExit(flushCtx)
 			// 活路径上已经发出去的 Last.fm 写入(mirrorAsync)活不过紧接着的进程退出,而它们的「已镜像」标记在
 			// 发请求之前就落了盘 —— 被截断的那一条从此谁都不会再发。等它们发完。
 			//

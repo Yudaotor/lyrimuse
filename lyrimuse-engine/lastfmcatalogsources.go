@@ -40,14 +40,15 @@ func storefrontArtistAliasesCached(artist string) []string {
 	}
 	appleStorefrontArtistMu.Lock()
 	defer appleStorefrontArtistMu.Unlock()
-	seen := map[string]bool{normLoose(artist): true}
+	// 去重不折繁简(lastfmCatalogNameKey):「周杰倫」对「周杰伦」是 Last.fm 上另一个歌手页,要留给扩展搜索去查。
+	seen := map[string]bool{lastfmCatalogNameKey(artist): true}
 	var out []string
 	for k, names := range appleStorefrontArtistCache {
 		if !strings.HasPrefix(k, prefix) {
 			continue
 		}
 		for _, n := range names {
-			if key := normLoose(n); key != "" && !seen[key] {
+			if key := lastfmCatalogNameKey(n); key != "" && normLoose(n) != "" && !seen[key] {
 				seen[key] = true
 				out = append(out, n)
 			}
@@ -146,7 +147,9 @@ func appleLinkedArtistNames(ctx context.Context, artist, title string, _ float64
 	})
 }
 
-// pickAppleLinkedNames:署名归一后等于本地写法的曲目 id 集合,再在同 id 的结果里收署名不同的,最多两个。纯函数。
+// pickAppleLinkedNames:署名归一后等于本地写法的曲目 id 集合,再在同 id 的结果里收署名不同的,最多两个;另外最多再收一个
+// 只差繁简等字形的写法(lastfmCatalogNameKey 不同、归一后相同):台湾区报的「周杰倫」对中国区的「周杰伦」是 Last.fm 上
+// 另一个歌手页,扩展搜索要去查它。字形写法另算名额,不挤掉换名的那两个。纯函数。见 12 章决策 89。
 func pickAppleLinkedNames(results []itunesResult, artist string) []string {
 	local := normLoose(artist)
 	if local == "" {
@@ -169,6 +172,12 @@ func pickAppleLinkedNames(results []itunesResult, artist string) []string {
 		out = append(out, r.ArtistName)
 		if len(out) >= 2 {
 			break
+		}
+	}
+	self := lastfmCatalogNameKey(artist)
+	for _, r := range results {
+		if ids[r.TrackID] && normLoose(r.ArtistName) == local && lastfmCatalogNameKey(r.ArtistName) != self {
+			return append(out, r.ArtistName)
 		}
 	}
 	return out
