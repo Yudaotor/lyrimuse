@@ -1,6 +1,9 @@
 import SwiftUI
 import Combine
 import LyrimuseCore
+import os
+
+private let editLog = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-manager")
 
 /// 只转发 appLanguage 的窄代理(性能审计,照 OverlayPlayback/NotchPlayback 的
 /// 既有模式):歌词管理窗口/搜索弹窗订阅 AppSettings 的唯一目的就是「手动切换语言时重新
@@ -647,9 +650,27 @@ struct LyricsManagerView: View {
     // 否则会把盘上的歌词、译文、罗马音一起清掉。
     @State private var detailIncomplete = false
 
-    /// 编辑缓冲里有没保存的改动。
+    /// 编辑缓冲里有没保存的改动。只在编辑中算:预览状态下进不了编辑框,缓冲跟盘上不一样只可能是缓冲被意外改写,
+    /// 不能拿它弹「有未保存的修改」(见 11 章决策 134)。
     private var isEditorDirty: Bool {
+        editMode != .preview && editorBufferDiffers
+    }
+
+    private var editorBufferDiffers: Bool {
         editedLyrics != loadedLyrics || editedTr != loadedTr || editedRoma != loadedRoma || editedWordText != loadedWordText
+    }
+
+    /// 从预览进编辑前:缓冲跟盘上不一样就记一行(哪几格、长度),按盘上那份重载,别把意外改写的内容当成底稿带进编辑。
+    private func discardStalePreviewBuffer() {
+        guard editMode == .preview, editorBufferDiffers, let key = editingKey else { return }
+        editLog.notice("""
+            editor buffer differs in preview, reloading: key=\(key, privacy: .public) \
+            lyrics=\(editedLyrics.count, privacy: .public)/\(loadedLyrics.count, privacy: .public) \
+            word=\(editedWordText.count, privacy: .public)/\(loadedWordText.count, privacy: .public) \
+            tr=\(editedTr.count, privacy: .public)/\(loadedTr.count, privacy: .public) \
+            roma=\(editedRoma.count, privacy: .public)/\(loadedRoma.count, privacy: .public)
+            """)
+        loadDetail(key: key)
     }
     // 单曲歌词时间轴偏移——输入框显示/编辑的秒数字符串。跟下面两个"persisted"字段
     // 分开存,是因为算 LyricsOffsetStore 的 key 必须用磁盘上实际持久化的歌词内容,不能
@@ -3171,7 +3192,10 @@ struct LyricsManagerView: View {
             }
             .onChange(of: editedLyricsBody) { _, newBody in
                 let full = lyricsBodyEdit.reassembled(body: newBody)
-                if full != editedLyrics { editedLyrics = full }
+                if full != editedLyrics {
+                    if editMode == .preview { logPreviewBufferWrite("lyrics", key: key, edit: lyricsBodyEdit, body: newBody) }
+                    editedLyrics = full
+                }
             }
             .onChange(of: editedWordText, initial: true) { _, raw in
                 if raw == wordBodyEdit.reassembled(body: editedWordBody) { return }
@@ -3180,7 +3204,10 @@ struct LyricsManagerView: View {
             }
             .onChange(of: editedWordBody) { _, newBody in
                 let full = wordBodyEdit.reassembled(body: newBody)
-                if full != editedWordText { editedWordText = full }
+                if full != editedWordText {
+                    if editMode == .preview { logPreviewBufferWrite("word", key: key, edit: wordBodyEdit, body: newBody) }
+                    editedWordText = full
+                }
             }
             .onChange(of: editedTr, initial: true) { _, raw in
                 if raw == trBodyEdit.reassembled(body: editedTrBody) { return }
@@ -3189,7 +3216,10 @@ struct LyricsManagerView: View {
             }
             .onChange(of: editedTrBody) { _, newBody in
                 let full = trBodyEdit.reassembled(body: newBody)
-                if full != editedTr { editedTr = full }
+                if full != editedTr {
+                    if editMode == .preview { logPreviewBufferWrite("tr", key: key, edit: trBodyEdit, body: newBody) }
+                    editedTr = full
+                }
             }
             .onChange(of: editedRoma, initial: true) { _, raw in
                 if raw == romaBodyEdit.reassembled(body: editedRomaBody) { return }
@@ -3198,7 +3228,10 @@ struct LyricsManagerView: View {
             }
             .onChange(of: editedRomaBody) { _, newBody in
                 let full = romaBodyEdit.reassembled(body: newBody)
-                if full != editedRoma { editedRoma = full }
+                if full != editedRoma {
+                    if editMode == .preview { logPreviewBufferWrite("roma", key: key, edit: romaBodyEdit, body: newBody) }
+                    editedRoma = full
+                }
             }
             .sheet(isPresented: $showDecisionSheet, onDismiss: { decisionSlots = nil }) {
                 // 按钮只在 hasDecision 时出现,两槽在 presentDecision 里解好。都解不出来(存档坏了、格式对不上)时给一页
@@ -3759,6 +3792,22 @@ struct LyricsManagerView: View {
         return summary.hasLyrics && !summary.isInstrumental
     }
 
+    /// 预览状态下正文拼回原文改写了缓冲:正常不该发生(编辑框只在编辑中出现),记下是哪一格、拆分时的底稿跟盘上对不对得上。
+    private func logPreviewBufferWrite(_ field: String, key: String, edit: LyricsBodyEdit, body: String) {
+        let loaded: String
+        switch field {
+        case "word": loaded = loadedWordText
+        case "tr": loaded = loadedTr
+        case "roma": loaded = loadedRoma
+        default: loaded = loadedLyrics
+        }
+        editLog.notice("""
+            body rewrote \(field, privacy: .public) in preview: key=\(key, privacy: .public) editingKey=\(editingKey ?? "nil", privacy: .public) \
+            bodyMatchesSplit=\(body == edit.body, privacy: .public) splitMatchesDisk=\(edit.original == loaded, privacy: .public) \
+            bodyLen=\(body.count, privacy: .public) splitLen=\(edit.body.count, privacy: .public)
+            """)
+    }
+
     private func captureEditBase() {
         guard let key = editingKey else { return }
         editBase = EditBase(key: key, main: loadedYRC.isEmpty ? editedLyricsBody : editedWordBody,
@@ -3768,6 +3817,7 @@ struct LyricsManagerView: View {
     /// 「编辑歌词」/ ⌘E:逐句格子。
     private func beginLineEditing() {
         guard canEditLyrics else { return }
+        discardStalePreviewBuffer()
         captureEditBase()
         editMode = .lines
     }
@@ -3775,6 +3825,7 @@ struct LyricsManagerView: View {
     /// 「⋯ → 以文本方式编辑」:整段改(粘贴替换整份、加句、删句时用),跟逐句格子改的是同一份。
     private func beginTextEditing() {
         guard canEditLyrics || editMode == .lines else { return }
+        discardStalePreviewBuffer()
         if editBase == nil { captureEditBase() }
         editMode = .text
     }

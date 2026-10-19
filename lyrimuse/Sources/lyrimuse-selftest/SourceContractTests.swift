@@ -4192,6 +4192,9 @@ func runSourceContractSettingsTests() {
                     && manager.components(separatedBy: "dropEditorIfEntryGone()").count - 1 >= 4
                     && manager.contains("!showSongVersions, !windowFrame.hasAttachedSheet"), true,
                     "歌词管理: 右键菜单、「定位」、全选、删除、详情页重装、换歌跟随都不冲掉没保存的编辑")
+        expectEqual(manager.contains("editMode != .preview && editorBufferDiffers")
+                    && manager.components(separatedBy: "discardStalePreviewBuffer()").count - 1 >= 2, true,
+                    "歌词管理: 预览状态下缓冲跟盘上不一样不算未保存的修改,进编辑前按盘上重载")
         expectEqual(manager.contains("title: EnrichCacheKeys.strippingDurationVariantTitle(summary.title)"), true,
                     "歌词管理: 搜索候选歌词的歌名去掉时长变体位「~durN」")
         expectEqual(sheet.contains("private var effectiveCurrentSource: String? { appliedSource ?? host.source }")
