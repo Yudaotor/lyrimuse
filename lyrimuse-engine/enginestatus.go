@@ -65,6 +65,20 @@ func markEngineNetworkDown() {
 	warnf("engine status: network down, every lyric source failed this round")
 }
 
+// noteLyricsRoundNetwork 按一轮歌词解析自己的请求结果(withNetworkRound)更新「网络不通」:至少 3 个请求全挂时记上
+// (roundLooksNetworkDown),界面据此把「搜索歌词中…」换成「网络连接失败」;至少一个请求成功才撤掉(口径同
+// lyricsRoundConfirmsNoResult)。一两个请求全挂、或者一个都没发(整轮命中缓存)的不动:大部分源在熔断冷却里被跳过时
+// 一轮只剩这么几个请求,拿它当「网络通了」会把断网后第一轮记上的状态提前撤掉,界面退回一直转的「搜索歌词中…」。
+// 见 09 章决策 301。
+func noteLyricsRoundNetwork(attempts, failures int32) {
+	switch {
+	case roundLooksNetworkDown(attempts, failures):
+		markEngineNetworkDown()
+	case lyricsRoundConfirmsNoResult(attempts, failures):
+		clearEngineNetworkDown()
+	}
+}
+
 // clearEngineNetworkDown 在任何一次成功的解析之后调用 —— 有结果就说明网络是通的。
 func clearEngineNetworkDown() {
 	engineStatusMu.Lock()

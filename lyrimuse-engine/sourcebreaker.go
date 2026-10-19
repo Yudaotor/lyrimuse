@@ -33,11 +33,9 @@ import (
 // 自己调 noteBlocked,见「反爬拦截」一节)。401/402/403 也不当长期粘性冷却的理由:对没有凭据的源,那样会让它
 // 永久缺席、界面还不提示。
 //
-// 三条护栏(理由见 09 章决策 41):
+// 两条护栏(理由见 09 章决策 41):
 //   - 连续 2 次失败才开(lyricSourceBreakerTripAfter),不是 1 次:一次网络抖动不该让下一首歌
 //     少一个源。网易云一轮最多发 4 个变体,lrclib 一首歌三级查询再加一次 503 重试,一首歌都可能触发。
-//   - 启用的源全部在冷却中时谁也不跳过,照常跑一轮:让 roundLooksNetworkDown 那套
-//     "至少 3 次请求全失败 = 断网"的判定接手,别让熔断把断网状态伪装成"这首歌没歌词"。
 //   - 被跳过的源记进 lyricSourceRound(经 ctx 传给 enrich.go),落到 lyrics_sources_skipped /
 //     决策留痕的 sources_skipped;歌词为空且这一轮有源被跳过时,needsLyricsFirstFill 的补空
 //     间隔缩短成 10 分钟,被跳过的源已经不在冷却时 30 秒(只对第一次生效,见 lyricsFillSkippedRetryInterval)。
@@ -55,7 +53,8 @@ import (
 // 在最后一档——上限 5 分钟,误熔断的代价有界。
 //
 // 档位(trips)走到第几档由「离上一次跳闸多久」决定,不由「中间有没有成功过」决定:
-// 成功一次当场解除冷却,但档位要连着 lyricSourceBreakerTripsDecay 没再跳闸才归零(见 observeWith 的 default 分支)。
+// 成功一次当场解除冷却,但档位要连着 lyricSourceBreakerTripsDecay 没再跳闸才归零(成功分支删 state、失败分支跳闸前
+// 清 trips,见 observeWith)。
 var lyricSourceBreakerSchedule = []time.Duration{
 	15 * time.Second, 30 * time.Second, time.Minute, 2 * time.Minute, 5 * time.Minute,
 }
@@ -223,7 +222,7 @@ type lyricSourceBreakerState struct {
 	// trips:这个源熔断过几轮(不是失败过几个请求)。冷却档位按它取,见 observeWith。
 	// 归零看的是离 lastTrip 多久,不是"中间有没有拿到过一次正常响应"。
 	trips int
-	// lastTrip:最近一次跳闸的时刻,只用来让 trips 随时间衰减(见 observeWith 的 default 分支)。
+	// lastTrip:最近一次跳闸的时刻,只用来让 trips 随时间衰减(见 observeWith 的失败分支与 default 分支)。
 	lastTrip time.Time
 	reason   string
 	// rateLimits / lastRateLimited:没带 Retry-After 的 429 连着来了几次、最近一次在什么时候。默认停的时长按它翻倍,
@@ -451,6 +450,12 @@ func (b *lyricSourceBreaker) observeWith(host, endpoint string, err error, statu
 		if st.until.After(now) {
 			return
 		}
+		// 档位衰减在这里也要做,不能只靠成功分支:一直失败、中间没有一次正常应答的源(断网、主机被打掉)走不到那一支,
+		// 隔了几个小时的下一次跳闸会接着上回的档位。离上次跳闸满 lyricSourceBreakerTripsDecay 就从第一档重新算,
+		// 两条分支同一个口径。限流的连续次数在 429 那一支自己按 lastRateLimited 衰减。见 09 章决策 41、301。
+		if !st.lastTrip.IsZero() && now.Sub(st.lastTrip) >= lyricSourceBreakerTripsDecay {
+			st.trips = 0
+		}
 		idx := st.trips
 		if idx >= len(lyricSourceBreakerSchedule) {
 			idx = len(lyricSourceBreakerSchedule) - 1
@@ -543,21 +548,18 @@ func lyricSourceRetryAfter(v string) (time.Duration, bool) {
 // lyricSourceRoundPlan:这一轮该跳过的源 → 剩余冷却时长。
 type lyricSourceRoundPlan map[string]time.Duration
 
-// planRound 在一轮全源搜索起跑前算一次"谁在冷却中"。启用的源全部都在冷却时返回 nil
-// (谁也不跳过,见文件头第二条护栏);未启用的源在不在名单里无所谓——
-// fetchScoredLyricCandidatesStreaming 对关掉的源直接跳过、根本不起请求(enrich.go
+// planRound 在一轮全源搜索起跑前算一次"谁在冷却中",在冷却的都跳过,全都在冷却时也一样。断网时别让熔断把它伪装成
+// "这首歌没歌词"由别处管:这一轮一个请求都没成功时不认定查无(lyricsRoundConfirmsNoResult),「网络连接失败」也不会被
+// 这种轮次撤掉(noteLyricsRoundNetwork)。从前这里另有一道「启用的源全部在冷却时谁也不跳过」:amll 要等网易云 / QQ 的
+// id 才发请求、从不进冷却,默认设置下凑不满,从来不触发;真触发时又正好在断网那一刻把冷却中的源全打一遍。见 09 章决策 301。
+// 未启用的源在不在名单里无所谓——fetchScoredLyricCandidatesStreaming 对关掉的源直接跳过、根本不起请求(enrich.go
 // lyricSourceSkipFor),这里只管冷却。
-func (b *lyricSourceBreaker) planRound(sources []string, enabled func(string) bool) lyricSourceRoundPlan {
+func (b *lyricSourceBreaker) planRound(sources []string) lyricSourceRoundPlan {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	now := b.now()
 	plan := lyricSourceRoundPlan{}
-	enabledTotal, enabledCooling := 0, 0
 	for _, s := range sources {
-		isEnabled := enabled(s)
-		if isEnabled {
-			enabledTotal++
-		}
 		var left time.Duration
 		// 只剩 lyricSourceShortRetryMax 以内的限流窗口不整轮跳过:一轮最长要跑 20 秒,对方只让等 1 秒。
 		if st := b.state[s]; st != nil && st.until.After(now) &&
@@ -569,16 +571,9 @@ func (b *lyricSourceBreaker) planRound(sources []string, enabled func(string) bo
 		}
 		if left > 0 {
 			plan[s] = left
-			if isEnabled {
-				enabledCooling++
-			}
 		}
 	}
 	if len(plan) == 0 {
-		return nil
-	}
-	if enabledTotal > 0 && enabledCooling == enabledTotal {
-		log.Printf("lyrics: all %d enabled sources are cooling down, running the round anyway", enabledTotal)
 		return nil
 	}
 	return plan
@@ -797,9 +792,10 @@ func (r *lyricSourceRound) skippedSources() []string {
 // 手动补。musixmatch 的 DoH 拨号(dohDialContext)没有 DNS 钩子,退回错误链判定:它用 %w 包住了系统解析的
 // NXDOMAIN,"DoH 解析成功但拨不通"会被归成 dns_failed,由 musixmatch_direct_blocked 这个具体代码盖住。
 //
-// 只有一次性 CLI(searchcli.go 的 lyricSourceFailureReasons)消费。常驻引擎里这份是进程生命周期累计的、
-// 不按轮清零,跟 xxxLastFailureReasonNow 同一条注意事项;search-lyrics 每次都是全新进程,读到的就是
-// 这一次搜索本身的结局。
+// 两处消费:一次性 CLI(searchcli.go 的 lyricSourceFailureReasons)报失败原因;常驻引擎的别名重查
+// (enrich.go lyricSourcesWorthRetry)剔掉连不上的源。常驻引擎里这份是进程生命周期累计的、不按轮清零,
+// 跟 xxxLastFailureReasonNow 同一条注意事项 —— 一个源进程里从没拿到过响应、失败过一次,就一直不进别名重查;
+// search-lyrics 每次都是全新进程,读到的就是这一次搜索本身的结局。
 
 type lyricSourceTransportState struct {
 	responded bool           // 拿到过 < 500 的响应

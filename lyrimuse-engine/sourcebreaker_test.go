@@ -412,8 +412,9 @@ func TestRetryAfterHugeValuesDoNotOverflow(t *testing.T) {
 	}
 }
 
-// 启用的源全在冷却中时谁也不跳过;只有部分在冷却时跳过那些;未启用的源在不在冷却里无所谓。
-func TestLyricSourceBreakerPlanRoundNeverSkipsAllEnabled(t *testing.T) {
+// 在冷却的源都跳过,全都在冷却时也一样(从前那道「启用的源全在冷却时谁也不跳过」已撤掉,见 planRound 头注);
+// 没冷却的不进名单。
+func TestLyricSourceBreakerPlanRoundSkipsEveryCoolingSource(t *testing.T) {
 	b, _ := newTestBreaker()
 	trip := func(host string) {
 		b.observe(host, errProbeDial, 0, "")
@@ -421,27 +422,20 @@ func TestLyricSourceBreakerPlanRoundNeverSkipsAllEnabled(t *testing.T) {
 	}
 	trip("music.163.com")
 	trip("c.y.qq.com")
-	onlyTwo := func(s string) bool { return s == "netease" || s == "qq" }
-	if plan := b.planRound(lyricSourceNames, onlyTwo); plan != nil {
-		t.Fatalf("启用的两个源都在冷却时应谁也不跳过,实际 %v", plan)
-	}
-	allOn := func(string) bool { return true }
-	plan := b.planRound(lyricSourceNames, allOn)
+	plan := b.planRound(lyricSourceNames)
 	if len(plan) != 2 || plan["netease"] == 0 || plan["qq"] == 0 {
-		t.Fatalf("全源全开时应只跳过冷却中的两个,实际 %v", plan)
+		t.Fatalf("应只跳过冷却中的两个,实际 %v", plan)
 	}
 	if _, ok := plan["kugou"]; ok {
 		t.Fatal("没冷却的源不该在跳过名单里")
 	}
-	// 只启用 kugou:netease/qq 冷却中但未启用,照样进名单(少发几个白费的请求),kugou 不进
-	onlyKugou := func(s string) bool { return s == "kugou" }
-	plan = b.planRound(lyricSourceNames, onlyKugou)
-	if len(plan) != 2 {
-		t.Fatalf("未启用的冷却源也应跳过,实际 %v", plan)
+	// 只问这两个源、两个都在冷却:照样都跳过,不再整轮放行。
+	if plan := b.planRound([]string{"netease", "qq"}); len(plan) != 2 {
+		t.Fatalf("问到的源全在冷却时也应都跳过,实际 %v", plan)
 	}
 	// 什么都没冷却 → nil
 	b2, _ := newTestBreaker()
-	if plan := b2.planRound(lyricSourceNames, allOn); plan != nil {
+	if plan := b2.planRound(lyricSourceNames); plan != nil {
 		t.Fatalf("无冷却时应返回 nil,实际 %v", plan)
 	}
 }
@@ -605,7 +599,7 @@ func TestLyricSourceBreakerBlockedPausesAndBacksOff(t *testing.T) {
 	if r := b.cooldownReason("musixmatch"); r != lyricSourceCooldownReasonBlocked {
 		t.Fatalf("原因 = %q, want blocked", r)
 	}
-	if plan := b.planRound(lyricSourceNames, func(string) bool { return true }); plan["musixmatch"] != 14*time.Minute || len(plan) != 1 {
+	if plan := b.planRound(lyricSourceNames); plan["musixmatch"] != 14*time.Minute || len(plan) != 1 {
 		t.Fatalf("这一轮应只跳过 musixmatch,实际 %v", plan)
 	}
 	for _, want := range []time.Duration{30 * time.Minute, time.Hour, 2 * time.Hour, 4 * time.Hour, 4 * time.Hour} {
@@ -691,5 +685,54 @@ func TestLyricSourceBreakerBlocksPersistAcrossRestart(t *testing.T) {
 	memOnly.noteBlocked("deezer")
 	if raw, err := os.ReadFile(path); err != nil || strings.Contains(string(raw), "deezer") {
 		t.Fatalf("没开存盘的熔断器不该写文件: %s %v", raw, err)
+	}
+}
+
+// 档位衰减在失败分支里也做:一直失败、中间没有一次正常应答的源(断网、主机被打掉),隔了很久的下一次跳闸从第一档重新算,
+// 不接着上回的档位。见 09 章决策 41。
+func TestLyricSourceBreakerTripsDecayWithoutSuccess(t *testing.T) {
+	b, clk := newTestBreaker()
+	b.observe("c.y.qq.com", errProbeDial, 0, "")
+	b.observe("c.y.qq.com", errProbeDial, 0, "") // 第 1 档 15s
+	clk.advance(16 * time.Second)
+	b.observe("c.y.qq.com", errProbeDial, 0, "") // 第 2 档 30s
+	clk.advance(31 * time.Second)
+	b.observe("c.y.qq.com", errProbeDial, 0, "") // 第 3 档 1m
+	if left, _ := b.coolingDown("qq"); left != time.Minute {
+		t.Fatalf("前置:第 3 档要 1m,得到 %s", left)
+	}
+	clk.advance(2 * time.Hour)
+	b.observe("c.y.qq.com", errProbeDial, 0, "")
+	if left, cooling := b.coolingDown("qq"); !cooling || left != lyricSourceBreakerSchedule[0] {
+		t.Errorf("离上次跳闸 2 小时后再跳闸要从第一档 %s 算,得到 cooling=%v left=%s", lyricSourceBreakerSchedule[0], cooling, left)
+	}
+}
+
+// 上次跳闸后 10 分钟内有过正常应答(state 留着),之后过了衰减期才再连着失败:同样从第一档算。
+func TestLyricSourceBreakerTripsDecayAfterEarlySuccess(t *testing.T) {
+	b, clk := newTestBreaker()
+	b.observe("lrclib.net", nil, 503, "")
+	b.observe("lrclib.net", nil, 503, "") // 第 1 档
+	clk.advance(16 * time.Second)
+	b.observe("lrclib.net", nil, 503, "") // 第 2 档
+	clk.advance(time.Minute)
+	b.observe("lrclib.net", nil, 200, "") // 离上次跳闸不到 10 分钟,档位留着
+	clk.advance(lyricSourceBreakerTripsDecay)
+	b.observe("lrclib.net", nil, 503, "")
+	b.observe("lrclib.net", nil, 503, "")
+	if left, cooling := b.coolingDown("lrclib"); !cooling || left != lyricSourceBreakerSchedule[0] {
+		t.Errorf("过了衰减期再跳闸要回第一档 %s,得到 cooling=%v left=%s", lyricSourceBreakerSchedule[0], cooling, left)
+	}
+}
+
+// 衰减期之内再跳闸照旧升档,不被上面那条误清。
+func TestLyricSourceBreakerTripsKeepClimbingWithinDecay(t *testing.T) {
+	b, clk := newTestBreaker()
+	b.observe("c.y.qq.com", errProbeDial, 0, "")
+	b.observe("c.y.qq.com", errProbeDial, 0, "") // 第 1 档 15s
+	clk.advance(lyricSourceBreakerTripsDecay - time.Second)
+	b.observe("c.y.qq.com", errProbeDial, 0, "")
+	if left, _ := b.coolingDown("qq"); left != lyricSourceBreakerSchedule[1] {
+		t.Errorf("衰减期内再跳闸要升到第二档 %s,得到 %s", lyricSourceBreakerSchedule[1], left)
 	}
 }

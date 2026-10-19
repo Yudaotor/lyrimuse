@@ -529,24 +529,147 @@ func TestProxyFallbackConnectBudgetStillFallsBack(t *testing.T) {
 	}
 }
 
-// 调用方没设时限:照旧整段请求限预算(不让连上了却不回话的服务器把调用方一直挂着),到点转代理。
-func TestProxyFallbackNoDeadlineKeepsWholeRequestBudget(t *testing.T) {
+// 调用方没设时限(Musixmatch 的请求就是):直连预算同样只管建连,连上了服务器慢一点也等它回,不转代理、不钉粘性。
+// 原来整段请求按 3 秒掐,Musixmatch 慢一点的应答全被当成直连不通。见 09 章决策 42。
+func TestProxyFallbackNoDeadlineSlowServerStaysDirect(t *testing.T) {
 	newFallbackTestEnv(t)
 	srv := delayedServer(t, 300*time.Millisecond, "slow")
 	viaProxy := &stubRoundTripper{body: "proxy"}
-	tr := &proxyFallbackTransport{direct: &http.Transport{}, viaProxy: viaProxy, directBudget: 50 * time.Millisecond}
+	blocked := 0
+	tr := &proxyFallbackTransport{direct: &http.Transport{}, viaProxy: viaProxy, directBudget: 50 * time.Millisecond,
+		onBlocked: func() { blocked++ }}
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/x", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	resp, err := tr.RoundTrip(req)
 	if err != nil {
-		t.Fatalf("err=%v", err)
+		t.Fatalf("连上了只是慢,该等它回, err=%v", err)
 	}
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if string(body) != "proxy" || viaProxy.calls != 1 {
-		t.Errorf("body=%q、代理 %d 次,没设时限的请求要按整段预算掐、转代理", body, viaProxy.calls)
+	if string(body) != "slow" || viaProxy.calls != 0 || blocked != 0 {
+		t.Errorf("body=%q、代理 %d 次、blocked %d 次,要直连拿到、不碰代理", body, viaProxy.calls, blocked)
+	}
+	if loadProxyFallbackHint(req.URL.Hostname()) {
+		t.Error("慢不是不通,不该记成要走代理")
+	}
+}
+
+// 调用方没设时限、连上了却到整段上限还不回话:返回 errDirectNoResponse,不经代理再发一遍、不报 blocked
+// (主机连得上,不是直连被打掉)。
+func TestProxyFallbackNoDeadlineCapsSilentServer(t *testing.T) {
+	newFallbackTestEnv(t)
+	srv := delayedServer(t, 500*time.Millisecond, "late")
+	viaProxy := &stubRoundTripper{body: "proxy"}
+	blocked := 0
+	tr := &proxyFallbackTransport{direct: &http.Transport{}, viaProxy: viaProxy, directBudget: 50 * time.Millisecond,
+		directCap: 150 * time.Millisecond, onBlocked: func() { blocked++ }}
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/x", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	resp, err := tr.RoundTrip(req)
+	if resp != nil {
+		resp.Body.Close()
+	}
+	if !errors.Is(err, errDirectNoResponse) || !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 400*time.Millisecond {
+		t.Fatalf("到整段上限要报 errDirectNoResponse(且是到期): err=%v,用时 %s", err, time.Since(start))
+	}
+	if viaProxy.calls != 0 || blocked != 0 {
+		t.Errorf("代理 %d 次、blocked %d 次,连得上的主机不该转代理、不该报 blocked", viaProxy.calls, blocked)
+	}
+}
+
+// 调用方没设时限、连接建不起来(黑洞):建连预算到点照旧转代理。
+func TestProxyFallbackNoDeadlineBlackholeStillFallsBack(t *testing.T) {
+	newFallbackTestEnv(t)
+	blackHole := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}}
+	viaProxy := &stubRoundTripper{body: "proxy"}
+	tr := &proxyFallbackTransport{direct: blackHole, viaProxy: viaProxy, directBudget: 50 * time.Millisecond}
+	req, err := http.NewRequest(http.MethodGet, "http://blackhole.invalid/x", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	resp, err := tr.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("直连建不起连接时该被代理救回来, err=%v", err)
+	}
+	resp.Body.Close()
+	if viaProxy.calls != 1 || time.Since(start) > 2*time.Second {
+		t.Errorf("代理 %d 次、用时 %s,要按建连预算掐完转代理 1 次", viaProxy.calls, time.Since(start))
+	}
+}
+
+// 走代理期间调用方到期 / 取消:不报 blocked,返回的是调用方那边的错(不是直连那次的「no connection within」)。
+func TestProxyFallbackCallerExpiryDuringProxyNotBlocked(t *testing.T) {
+	newFallbackTestEnv(t)
+	waitCtx := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		<-r.Context().Done()
+		return nil, r.Context().Err()
+	})
+	blocked := 0
+	tr := &proxyFallbackTransport{direct: waitCtx, viaProxy: waitCtx, directBudget: 50 * time.Millisecond,
+		onBlocked: func() { blocked++ }}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://apic-appmobile.musixmatch.com/ws/1.1/track.search", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tr.RoundTrip(req)
+	if err == nil || strings.Contains(err.Error(), "no connection within") || !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("要返回代理那次被调用方掐掉的错, err=%v", err)
+	}
+	if blocked != 0 {
+		t.Errorf("blocked %d 次,调用方自己到期不是直连 / 代理都不通", blocked)
+	}
+}
+
+// 系统代理缓存过期、此刻其实没有可用代理:直连前先拿真实结果,没有退路就不掐建连预算。只看缓存的话过期算「不知道」,
+// 建连慢一点(丢包重传)就被 3 秒预算掐掉、又没有代理可退。见 09 章决策 42。
+func TestProxyFallbackExpiredNoProxyCacheDirectHasNoBudget(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closedAddr := ln.Addr().String()
+	ln.Close()
+	// 配着、但连不上的代理 = 没有可用代理(环境变量优先于 scutil,结果不随本机设置变)。
+	t.Setenv("HTTPS_PROXY", "http://"+closedAddr)
+	resetSystemProxyCacheForTest()
+	t.Cleanup(resetSystemProxyCacheForTest)
+	systemProxyMu.Lock()
+	systemProxyValue, systemProxyReadAt = nil, time.Now().Add(-2*systemProxyCacheTTL)
+	systemProxyMu.Unlock()
+	srv := delayedServer(t, 0, "ok")
+	slowDial := &http.Transport{DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+		time.Sleep(150 * time.Millisecond)
+		var d net.Dialer
+		return d.DialContext(ctx, network, addr)
+	}}
+	viaProxy := &stubRoundTripper{body: "proxy"}
+	tr := &proxyFallbackTransport{direct: slowDial, viaProxy: viaProxy, directBudget: 50 * time.Millisecond}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/x", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := tr.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("缓存过期但实际没有代理时不该掐直连, err=%v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(body) != "ok" || viaProxy.calls != 0 {
+		t.Errorf("body=%q、代理 %d 次", body, viaProxy.calls)
 	}
 }
 

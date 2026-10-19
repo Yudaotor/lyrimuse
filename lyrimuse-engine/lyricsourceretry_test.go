@@ -126,7 +126,7 @@ func TestPlanRoundKeepsShortRateLimit(t *testing.T) {
 	} {
 		b := newLyricSourceBreaker(func() time.Time { return now })
 		b.observe("lrclib.net", nil, http.StatusTooManyRequests, c.ra)
-		plan := b.planRound([]string{"lrclib", "qq"}, func(string) bool { return true })
+		plan := b.planRound([]string{"lrclib", "qq"})
 		if _, skip := plan["lrclib"]; skip != c.wantSkip {
 			t.Errorf("Retry-After %s: 跳过 = %v,期望 %v", c.ra, skip, c.wantSkip)
 		}

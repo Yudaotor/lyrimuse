@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -28,9 +29,13 @@ import (
 const (
 	// proxyFallbackDirectBudget:直连探路预算。黑洞的特征是 SYN 石沉大海 —— 量
 	// 到的三次侥幸成功都落在 1.3s / 3.4s(SYN 重传之后),而路通的时候 TCP+TLS 全程 <1s。
-	// 3 秒足够分辨这两种,又不至于在慢网络上把"只是有点慢"误判成"被打掉了"。调用方有时限时只算到拿到连接为止,
-	// 服务器处理得慢不算(见 attemptDirect)。
+	// 3 秒足够分辨这两种,又不至于在慢网络上把"只是有点慢"误判成"被打掉了"。只算到拿到连接为止,服务器处理得慢
+	// 不算(见 attemptDirect)。
 	proxyFallbackDirectBudget = 3 * time.Second
+	// proxyFallbackDirectCap:调用方没设时限时,直连整段请求(含服务器处理、读响应体)的上限。Musixmatch 的请求不带时限
+	// (一轮 20 秒截止是 time.After,不挂在 ctx 上),它的翻译 / 字幕接口慢的时候要三秒多才回;按 3 秒整段掐表的话这些
+	// 慢应答全被当成直连不通:喂熔断、换主机、报 musixmatch_direct_blocked。见 09 章决策 42、301。
+	proxyFallbackDirectCap = 10 * time.Second
 	// proxyFallbackProxyBudget:走代理的预算。实测经本机 Clash 打 token.get 是 6.5s
 	// (代理要先把自己那条出境链路建起来),给 10s 留足余量。
 	proxyFallbackProxyBudget = 10 * time.Second
@@ -73,6 +78,8 @@ type proxyFallbackTransport struct {
 
 	// directBudget:直连探路的预算,零值 = proxyFallbackDirectBudget。只有单测改短。
 	directBudget time.Duration
+	// directCap:调用方没设时限时直连整段的上限,零值 = proxyFallbackDirectCap。只有单测改短。
+	directCap time.Duration
 
 	mu          sync.Mutex
 	stickyUntil time.Time
@@ -106,14 +113,16 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 		t.clearSticky(host)
 		log.Printf("proxy: %s failed via proxy (%v), clearing sticky proxy and retrying direct", host, err)
 		resp, err = t.attemptDirect(req, false)
-		if err != nil {
+		if err != nil && directUnreachable(req, err) {
 			t.reportBlocked()
 		}
 		return resp, err
 	}
 
+	// 直连留不留退路要看真实的代理状态:systemProxyURL 自带 60 秒缓存,过期了当场重读。只看缓存的话缓存一过期就成了
+	// 「不知道」,没有系统代理的机器上直连也照「后面有代理可退」掐 3 秒建连预算,掐完却没处可退。见 09 章决策 301。
 	directStart := time.Now()
-	resp, directErr := t.attemptDirect(req, !systemProxyKnownAbsent())
+	resp, directErr := t.attemptDirect(req, systemProxyURL() != nil)
 	directElapsed := time.Since(directStart)
 	if directErr == nil {
 		// 窗口到期、重新探直连通了:连续失败次数清零,下次再被打掉从 10 分钟重新算。粘性要是上一个进程
@@ -124,9 +133,9 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 		}
 		return resp, nil
 	}
-	// 直连失败但失败的原因是调用方自己取消 / 到期:不是「直连不通」,不试代理、也不报 blocked
-	// (那个原因常驻进程里从不清除,一次就会让 Musixmatch 这一路一直不进别名重查)。
-	if req.Context().Err() != nil {
+	// 直连失败但失败的原因是调用方自己取消 / 到期、或者连上了只是没在上限内答完:不是「直连不通」,不试代理、也不报
+	// blocked(那个原因常驻进程里从不清除,一次就会让 Musixmatch 这一路一直不进别名重查)。
+	if !directUnreachable(req, directErr) {
 		return nil, directErr
 	}
 	proxy := systemProxyURL()
@@ -137,6 +146,11 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 	proxyStart := time.Now()
 	resp, proxyErr := t.attempt(t.viaProxy, req, proxyFallbackProxyBudget)
 	if proxyErr != nil {
+		// 走代理期间调用方取消 / 到期了(切歌、救急支线被叫停):代理那次是被调用方掐掉的,不是代理也救不回来,
+		// 不报 blocked;返回代理那次的错,让 doHTTPTracked 认出是取消,不拿直连那次的错去喂熔断。跟粘性那一支同一个判断。
+		if req.Context().Err() != nil {
+			return nil, proxyErr
+		}
 		t.reportBlocked()
 		// 这一行不能省。返回值里只会带**直连**那次的错(上层真正关心的是我们本来想走
 		// 的那条路怎么了),代理那次的错在返回值里是拿不到的 —— 不在这里记一行,"兜底为什么
@@ -167,38 +181,73 @@ func (t *proxyFallbackTransport) attempt(rt http.RoundTripper, req *http.Request
 // attemptDirect 跑一次直连。fallback:直连不通时后面还有代理可退。
 //
 // 直连的预算只为判「直连通不通」,而不通的样子是连接建不起来(SYN 石沉大海、TLS 握手卡住):
-//   - 调用方 ctx 上有时限、后面有代理可退:预算只管到拿到连接为止,拿到就停表。之后服务器自己处理得慢(ListenBrainz
-//     慢的时候三五秒才回)交给调用方的时限 —— 那不是直连被打掉,按整段请求掐表的话会把同一个请求经代理再发一遍,
-//     还把这台主机钉到代理上(最长 6 小时)。
-//   - 有时限、没有代理可退(没有可用的系统代理、代理失败后回直连那一次、body 不能重放):不另设预算,早掐只会更差。
-//   - 调用方没设时限:照旧整段请求限一个预算,不让连上了却一直不回话的服务器把调用方挂着。
+//   - 后面有代理可退:预算只管到拿到连接为止,拿到就停表。之后服务器自己处理得慢(ListenBrainz 慢的时候三五秒才回,
+//     Musixmatch 的翻译 / 字幕接口也常过 3 秒)交给调用方的时限 —— 那不是直连被打掉,按整段请求掐表的话会把同一个请求
+//     经代理再发一遍,还把这台主机钉到代理上(最长 6 小时)。
+//   - 没有代理可退(没有可用的系统代理、代理失败后回直连那一次、body 不能重放):不另设建连预算,早掐只会更差。
+//   - 调用方没设时限:另外给整段请求限 proxyFallbackDirectCap,不让连上了却一直不回话的服务器把调用方挂着。连上了、
+//     到上限还没答完的返回 errDirectNoResponse:主机连得上,RoundTrip 不拿它当直连不通(directUnreachable)。
+//
+// 见 09 章决策 42、301。
 func (t *proxyFallbackTransport) attemptDirect(req *http.Request, fallback bool) (*http.Response, error) {
 	budget := t.directBudget
 	if budget <= 0 {
 		budget = proxyFallbackDirectBudget
 	}
-	if _, ok := req.Context().Deadline(); !ok {
-		return t.attempt(t.direct, req, budget)
+	limit := t.directCap
+	if limit <= 0 {
+		limit = proxyFallbackDirectCap
 	}
-	if !fallback {
-		return proxyFallbackSend(req.Context(), t.direct, req, func() {})
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+	)
+	_, hasDeadline := req.Context().Deadline()
+	if hasDeadline {
+		ctx, cancel = context.WithCancel(req.Context())
+	} else {
+		ctx, cancel = context.WithTimeout(req.Context(), limit)
 	}
-	ctx, cancel := context.WithCancel(req.Context())
-	var expired atomic.Bool
-	timer := time.AfterFunc(budget, func() {
-		expired.Store(true)
-		cancel()
-	})
-	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{GotConn: func(httptrace.GotConnInfo) { timer.Stop() }})
+	var connected, expired atomic.Bool
+	var timer *time.Timer
+	if fallback {
+		timer = time.AfterFunc(budget, func() {
+			expired.Store(true)
+			cancel()
+		})
+	}
+	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{GotConn: func(httptrace.GotConnInfo) {
+		connected.Store(true)
+		if timer != nil {
+			timer.Stop()
+		}
+	}})
 	resp, err := proxyFallbackSend(ctx, t.direct, req, func() {
-		timer.Stop()
+		if timer != nil {
+			timer.Stop()
+		}
 		cancel()
 	})
-	if err != nil && expired.Load() && req.Context().Err() == nil {
+	if err == nil || req.Context().Err() != nil {
+		return resp, err
+	}
+	if expired.Load() {
 		// 预算是拿 cancel 掐的,原样往上报就成了「调用方自己取消」,doHTTPTracked 会把它当成不算数的取消。
 		return nil, fmt.Errorf("no connection within %s: %w", budget, context.DeadlineExceeded)
 	}
+	if !hasDeadline && connected.Load() && ctx.Err() != nil {
+		return nil, fmt.Errorf("%w within %s: %w", errDirectNoResponse, limit, context.DeadlineExceeded)
+	}
 	return resp, err
+}
+
+// errDirectNoResponse:直连连上了,但调用方没设时限、整段上限(proxyFallbackDirectCap)到了还没答完。
+var errDirectNoResponse = errors.New("direct connection made but no response")
+
+// directUnreachable:直连这次失败算不算「直连不通」(该试代理、该报 blocked)。调用方自己取消 / 到期、连上了只是没在
+// 上限内答完(errDirectNoResponse)都不算。
+func directUnreachable(req *http.Request, err error) bool {
+	return req.Context().Err() == nil && !errors.Is(err, errDirectNoResponse)
 }
 
 // proxyFallbackSend 拿 ctx 发一份 req 的副本,能重放的 body 每次取新的一份。release 在出错时、或调用方关掉响应体时调一次。
