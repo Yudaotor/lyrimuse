@@ -709,8 +709,34 @@ struct AccountLinkingTab: View {
         apply(picked)
     }
 
-    /// 「提醒」卡里一块听歌报告的数据源:显示「这次实际会用哪个」(没手动选过时是 resolvedDigestSource 判定出的默认值),
-    /// 选了还没配好的源走 digestSourcePicked 的提示,不落盘。
+    /// 四档报告各自的数据源偏好(FeatureSettingsStore 里各存一份,引擎按档读)。
+    private static let digestSourceKeys: [ReferenceWritableKeyPath<FeatureSettingsStore, String>] =
+        [\.dailyDigestSource, \.weeklyDigestSource, \.monthlyDigestSource, \.yearlyDigestSource]
+
+    /// 「听歌报告」卡顶上那一行「数据来源」显示的值:四档实际用的源里最多的那个(并列时取日报的)。
+    /// 存储照旧是四档各一份,这一行只是一次改四份的入口;某一档右键单独换过的,那一行副标题会注明。
+    private var sharedDigestSource: String {
+        let resolved = Self.digestSourceKeys.map { resolvedDigestSource(preference: features[keyPath: $0]) }
+        let lastfm = resolved.filter { $0 == "lastfm" }.count
+        let lb = resolved.filter { $0 == "listenbrainz" }.count
+        if lastfm == lb { return resolved[0] }
+        return lastfm > lb ? "lastfm" : "listenbrainz"
+    }
+
+    /// 「数据来源」那一行:选了就把四档一起改成它。选了还没配好的源走 digestSourcePicked 的提示,不落盘。
+    private var sharedDigestSourceBinding: Binding<String> {
+        Binding(
+            get: { sharedDigestSource },
+            set: { picked in
+                digestSourcePicked(picked, current: sharedDigestSource) { value in
+                    for key in Self.digestSourceKeys { features[keyPath: key] = value }
+                    Task { await features.save() }
+                }
+            }
+        )
+    }
+
+    /// 某一档单独的数据源(右键那一行):显示「这次实际会用哪个」,选了还没配好的源走 digestSourcePicked 的提示,不落盘。
     private func digestSourceBinding(_ source: ReferenceWritableKeyPath<FeatureSettingsStore, String>) -> Binding<String> {
         Binding(
             get: { resolvedDigestSource(preference: features[keyPath: source]) },
@@ -723,7 +749,7 @@ struct AccountLinkingTab: View {
         )
     }
 
-    /// 同一块的开关:打开前过 toggleGuarded(推送平台没填、数据源账号没配好就弹提示)。
+    /// 一档报告的开关:打开前过 toggleGuarded(推送渠道没配、数据源账号没配好就弹提示)。
     private func digestEnabledBinding(
         _ enabled: ReferenceWritableKeyPath<FeatureSettingsStore, Bool>,
         source: ReferenceWritableKeyPath<FeatureSettingsStore, String>
@@ -740,42 +766,32 @@ struct AccountLinkingTab: View {
         )
     }
 
-    /// 「提醒」卡里的一块:图标、名字、开关;开着时下面一行是数据源的胶囊分段(没开这个提醒,选哪个数据源无所谓)。
-    /// 样子同 `SettingsToggleTile`,数据源排在名字下面而不是开关旁边:两列小块一格放不下名字、分段和开关。
-    private func digestTile(
-        icon: String, title: String,
+    private static func digestSourceName(_ source: String) -> String {
+        source == "listenbrainz" ? "ListenBrainz" : "Last.fm"
+    }
+
+    /// 「听歌报告」卡里的一档:图标、名字、什么时候推、开关。这一档的数据源跟顶上那一行不一样时副标题注明;
+    /// 右键单独换这一档的数据源(绝大多数人四档用同一个源,单独换的入口不占地方)。
+    private func digestRow(
+        icon: String, title: String, schedule: String,
         enabled: ReferenceWritableKeyPath<FeatureSettingsStore, Bool>,
         source: ReferenceWritableKeyPath<FeatureSettingsStore, String>
     ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                SymbolImage(name: icon, size: 12)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 16)
-                Text(title)
-                    .font(.system(size: 12.5))
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                Toggle("", isOn: digestEnabledBinding(enabled, source: source))
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-            }
-            if features[keyPath: enabled] {
-                SettingsPillSegmentedControl(
-                    selection: digestSourceBinding(source),
-                    options: ["lastfm", "listenbrainz"],
-                    label: { $0 == "listenbrainz" ? "ListenBrainz" : "Last.fm" },
-                    minWidth: 0
-                )
-                .padding(.leading, 22)
-            }
+        let own = resolvedDigestSource(preference: features[keyPath: source])
+        let subtitle = own.isEmpty || own == sharedDigestSource
+            ? schedule
+            : schedule + " · " + String(format: L10n.t("数据来源：%@"), Self.digestSourceName(own))
+        return SettingsRow(icon: icon, title: title, subtitle: subtitle) {
+            Toggle("", isOn: digestEnabledBinding(enabled, source: source))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.05)))
-        .settingsSearchHighlight(title: title)
+        .contentShape(Rectangle())
+        .contextMenu {
+            Picker(L10n.t("这一档的数据来源"), selection: digestSourceBinding(source)) {
+                Text("Last.fm").tag("lastfm")
+                Text("ListenBrainz").tag("listenbrainz")
+            }
+            .pickerStyle(.inline)
+        }
     }
 
     // 每张卡片最上面这句"整体介绍"文案(描述整张卡是干什么的,不是某一个 Section 的)
@@ -2034,22 +2050,30 @@ struct AccountLinkingTab: View {
         VStack(spacing: 14) {
             NotificationChannelsCard(config: config)
 
-            // 数据源可选——Last.fm 的周榜接口(user.getWeekly*Chart)接受任意 from/to,不是只认
-            // 官方周边界,所以每个 cadence 都能自己选数据源。四块排两列,见 digestTile。
+            // 数据源可选——Last.fm 的周榜接口(user.getWeekly*Chart)接受任意 from/to,不是只认官方周边界,所以每一档都能
+            // 用自己的数据源。界面上合成顶上一行「数据来源」(一次改四档),单独换某一档右键那一行,见 digestRow。
             SettingsCard(cornerRadius: 18) {
-                SettingsCardHeader(title: L10n.t("提醒"))
-                SettingsTileGrid {
-                    digestTile(icon: "sun.max", title: L10n.t("每日听歌报告"),
-                               enabled: \.dailyDigest, source: \.dailyDigestSource)
-                    digestTile(icon: "calendar", title: L10n.t("每周听歌小结"),
-                               enabled: \.weeklyDigest, source: \.weeklyDigestSource)
-                    digestTile(icon: "calendar.badge.clock", title: L10n.t("每月听歌小结"),
-                               enabled: \.monthlyDigest, source: \.monthlyDigestSource)
-                    digestTile(icon: "trophy", title: L10n.t("年度听歌小结"),
-                               enabled: \.yearlyDigest, source: \.yearlyDigestSource)
+                SettingsCardHeader(title: L10n.t("听歌报告"))
+                SettingsRow(icon: "cylinder.split.1x2", title: L10n.t("数据来源")) {
+                    SettingsPillSegmentedControl(
+                        selection: sharedDigestSourceBinding,
+                        options: ["lastfm", "listenbrainz"],
+                        label: { Self.digestSourceName($0) },
+                        minWidth: 0
+                    )
                 }
-                .padding(.top, 4)
-                .padding(.bottom, 12)
+                CardDivider()
+                digestRow(icon: "sun.max", title: L10n.t("每日听歌报告"), schedule: L10n.t("每天 22:00 后推送当日报告"),
+                          enabled: \.dailyDigest, source: \.dailyDigestSource)
+                CardDivider()
+                digestRow(icon: "calendar", title: L10n.t("每周听歌小结"), schedule: L10n.t("每周推送上一周的小结"),
+                          enabled: \.weeklyDigest, source: \.weeklyDigestSource)
+                CardDivider()
+                digestRow(icon: "calendar.badge.clock", title: L10n.t("每月听歌小结"), schedule: L10n.t("每月初推送上个月的小结"),
+                          enabled: \.monthlyDigest, source: \.monthlyDigestSource)
+                CardDivider()
+                digestRow(icon: "trophy", title: L10n.t("年度听歌小结"), schedule: L10n.t("每年 1 月初推送上一年的小结"),
+                          enabled: \.yearlyDigest, source: \.yearlyDigestSource)
             }
 
             NotificationLogCard(config: config)

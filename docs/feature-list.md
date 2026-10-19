@@ -648,7 +648,8 @@ Pushed to the channels you set up, as many as you like: Bark, ntfy, ServerChan, 
 
 - Off by default
 - Settings: Labs › Push Alerts › Push Channels
-- Settings: Labs › Push Alerts › Alerts
+- Settings: Labs › Push Alerts › Listening Digests
+- Settings: Labs › Push Alerts › Data Source
 - Settings: Labs › Push Alerts › Daily Listening Report
 - Settings: Labs › Push Alerts › Weekly Listening Digest
 - Settings: Labs › Push Alerts › Monthly Listening Digest
@@ -784,7 +785,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 269 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 270 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1197,7 +1198,8 @@ Every setting in the Settings window, by where it lives: 269 in all. Type a name
 ### Labs › Push Alerts
 
 - **Push Channels**: Reports are pushed to every enabled channel. Click a row to edit it or send a test; right-click to test or delete
-- **Alerts**
+- **Listening Digests**
+- **Data Source**
 - **Weekly Listening Digest**
 - **Daily Listening Report**
 - **Monthly Listening Digest**

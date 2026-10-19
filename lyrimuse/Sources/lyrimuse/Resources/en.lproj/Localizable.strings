@@ -3,6 +3,7 @@
    然后跑 python3 Localization/generate-strings.py 重新生成,两个文件一起提交。
    selftest 会校验 catalog 与生成物一致。 */
 
+"%.1f 秒" = "%.1f s";
 "%1$@ · %2$@ 次" = "%1$@ · %2$@ plays";
 "%1$@ · %2$@ 次#one" = "%1$@ · %2$@ play";
 "%1$@ · %2$d 分" = "%1$@ · %2$d points";
@@ -694,6 +695,7 @@
 "向 Discord 好友展示正在收听的歌曲" = "Let your Discord friends see what you're listening to";
 "向指定地址 POST 一段 JSON，适用于对接 Home Assistant、n8n 或自建服务" = "POSTs JSON to a URL you choose. Suitable for Home Assistant, n8n or your own service";
 "含明文凭证；导出为设置与歌词库两个文件，导入将覆盖全部设置" = "Contains credentials in plain text; exports two files, settings and lyrics library; importing replaces all settings";
+"听歌报告" = "Listening Digests";
 "启动与通知" = "Startup & Notifications";
 "启动失败（%@）。可先「暂时跳过」，之后在设置的「播放器 → 歌词引擎」中重试，该页面会显示更详细的状态" = "Couldn't start (%@). You can skip this for now and retry later under Settings → Player → Lyrics Engine, which reports a more detailed status";
 "启动时不打开窗口，仅保留菜单栏图标与歌词显示；开启后同时隐藏 Dock 图标" = "Opens no windows at launch, keeping only the menu bar icon and lyrics displays; turning it on also hides the Dock icon";
@@ -1006,6 +1008,7 @@
 "已连接 · @%@" = "Connected · @%@";
 "已连接为 @%@" = "Connected as @%@";
 "已连接：%@" = "Connected: %@";
+"已送达" = "Delivered";
 "已送达 · %.1f 秒。请在手机或群聊中确认是否收到" = "Delivered · %.1f s. Check your phone or group chat to confirm it arrived";
 "已选 %@ 首" = "%@ selected";
 "已选 %d / %d" = "%d of %d selected";
@@ -1039,6 +1042,7 @@
 "常规" = "Regular";
 "平台拒收了这条消息" = "The platform rejected the message";
 "平台服务出错" = "The platform had an error";
+"平台返回" = "Platform response";
 "年度听歌小结" = "Yearly Listening Digest";
 "广告中" = "Ad Break";
 "应用主题前手动调整的配色，点按即可恢复" = "The colors you set before applying a theme. Click to restore them";
@@ -1274,6 +1278,8 @@
 "放大字号" = "Increase Font Size";
 "放大悬浮歌词字号" = "Increase Floating Lyrics Font Size";
 "放弃修改" = "Discard Changes";
+"数据来源" = "Data Source";
+"数据来源：%@" = "Data source: %@";
 "整体延后 %@ 秒" = "%@ s later overall";
 "整体提前 %@ 秒" = "%@ s earlier overall";
 "整段编辑可粘贴替换、增删句子；每行开头是这一句的时间戳" = "Edit the whole text to paste, add or remove lines; each line starts with its timestamp";
@@ -1750,9 +1756,13 @@
 "此设置仅在本次打开窗口期间有效，重新打开后恢复默认" = "Applies only while this window is open; reopening resets it";
 "步长" = "Step";
 "每周听歌小结" = "Weekly Listening Digest";
+"每周推送上一周的小结" = "Sends last week's digest each week";
+"每天 22:00 后推送当日报告" = "Sends the day's digest after 22:00";
 "每天检查一次新版本" = "Checks for a new version once a day";
+"每年 1 月初推送上一年的小结" = "Sends last year's digest in early January";
 "每按一次调整的幅度" = "Amount per press";
 "每日听歌报告" = "Daily Listening Report";
+"每月初推送上个月的小结" = "Sends last month's digest early each month";
 "每月听歌小结" = "Monthly Listening Digest";
 "每项均按播放器分别勾选，仅列出已选择的播放器；选择「自动识别」时，还会列出本机已安装的播放器" = "Each item is checked per player. Only the selected players are listed; with Auto-detect selected, the ones installed on this Mac are added";
 "每首歌曲之间的间隔秒数；建议不少于 2 秒，以免被限流" = "Seconds between songs; at least 2 seconds is recommended to avoid rate limits";
@@ -1819,6 +1829,7 @@
 "清除搜索" = "Clear Search";
 "清除筛选" = "Clear Filters";
 "渐变" = "Gradient";
+"渠道" = "Channel";
 "渠道信息不完整，或地址无效" = "The channel is incomplete, or the URL isn't valid";
 "源自报曲长不符" = "Source duration mismatch";
 "滚动" = "Scroll";
@@ -1960,6 +1971,7 @@
 "经典黑字" = "Classic Black";
 "经由其他同曲条目间接关联" = "Linked indirectly through other entries";
 "结束点获印证" = "End time corroborated";
+"结果" = "Result";
 "统一使用" = "Use for All";
 "统一使用此版本…" = "Use This Version for All…";
 "统一使用这份修正后的歌词？" = "Use these corrected lyrics for all entries?";
@@ -2006,6 +2018,7 @@
 "置于最顶层" = "Always on Top";
 "署名里的汉字段" = "Han characters in the credit";
 "翻译语言包" = "Translation Languages";
+"耗时" = "Time taken";
 "联动" = "Linkage";
 "联网搜索候选歌词" = "Search Online for Lyrics";
 "联网逐首搜索，可随时停止" = "Searches online one song at a time; you can stop at any time";
@@ -2142,6 +2155,7 @@
 "该组合已分配给「%@」" = "That combination is already assigned to “%@”";
 "该组合已被 macOS 占用" = "That combination is already reserved by macOS";
 "该组合是本 App 菜单中「%@」的快捷键" = "That combination is the keyboard shortcut for “%@” in this app’s menu";
+"该记录未保存推送内容" = "This record has no saved message content";
 "该选项已关闭。当前仍可使用是因为浏览器尚未重启，重启后将失效" = "This switch has been turned off — it still works right now only because the browser hasn't restarted yet, and it will stop working after a restart";
 "语言" = "Language";
 "语言不符" = "Language mismatch";
@@ -2242,6 +2256,7 @@
 "还有 %@ 条" = "and %@ more";
 "还有未完成的项目" = "Some Items Need Attention";
 "还需 %@ 次" = "%@ to go";
+"这一档的数据来源" = "Data Source for This Digest";
 "这也是你最长的连续记录" = "Your longest streak yet";
 "这些歌词源连续失败，本轮暂未查询" = "These sources failed repeatedly and were not queried this round";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常为广告、播客或有声书。人工修正、标为纯音乐、已校准时间轴的记录和正在播放的歌曲不包含在内；再次播放时将重新匹配" = "These entries have no lyrics and either no artist or a duration over 20 minutes — usually ads, podcasts, or audiobooks. Manually edited, instrumental, and calibrated entries and the song now playing aren’t included. They’ll be matched again if played";

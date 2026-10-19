@@ -110,8 +110,8 @@ func TestAlerterSendMultiChannel(t *testing.T) {
 		e.Detail != "Key Words Not Found" || e.Event != notifyEventWeekly || e.Title != "周报" {
 		t.Errorf("飞书那条 = %+v", e)
 	}
-	if !f.Entries[1].OK || f.Entries[1].Kind != notifyKindOK || f.Entries[1].Body != "" {
-		t.Errorf("Bark 那条 = %+v(收下的不记正文)", f.Entries[1])
+	if !f.Entries[1].OK || f.Entries[1].Kind != notifyKindOK || f.Entries[1].Body != "正文" {
+		t.Errorf("Bark 那条 = %+v(收下的也记正文,推送页点开要看)", f.Entries[1])
 	}
 	if e.Body != "正文" || e.ID == "" || e.ID == f.Entries[1].ID {
 		t.Errorf("没推成的记正文、每条有自己的 id: %+v", e)

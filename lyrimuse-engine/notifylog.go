@@ -13,8 +13,8 @@ import (
 // notifyLogMax 条。App 的推送页从这里读每个渠道最近一次推送成没成、没成是哪一类原因,以及完整的推送记录。
 // 跨重启保留(不像 relay-status 那样启动时清掉):用户打开推送页想看的就是「上周的周报发出去没有」。
 //
-// 成功的只记标题;没推成的连正文一起记,推送页的「重发」照原样再推一次(notifytest.go)。正文就是听歌统计,
-// 跟配置目录里别的缓存同一个密级。平台的原话截短并去掉密钥(notifyDetail)。
+// 每条都连正文一起记:推送页点开一条看推出去的完整内容,没推成的「重发」照原样再推一次(notifytest.go)。正文就是
+// 听歌统计,跟配置目录里别的缓存同一个密级;一条几百字节,100 条也不大。平台的原话截短并去掉密钥(notifyDetail)。
 
 const (
 	notifyLogSchema = 1
@@ -29,7 +29,7 @@ type notifyLogEntry struct {
 	Platform    string `json:"platform"`
 	Event       string `json:"event,omitempty"`
 	Title       string `json:"title,omitempty"`
-	Body        string `json:"body,omitempty"` // 只有没推成的才记
+	Body        string `json:"body,omitempty"`
 	OK          bool   `json:"ok"`
 	Kind        string `json:"kind"`
 	Status      int    `json:"status,omitempty"`
@@ -65,10 +65,7 @@ func recordNotifyDelivery(ch notifyChannel, msg notifyMessage, r notifyResult) {
 	e := notifyLogEntry{
 		ID: newNotifyLogID(), At: time.Now().Unix(), Channel: ch.ID, ChannelName: ch.Name, Platform: ch.Platform,
 		Event: msg.Event, Title: msg.Title, OK: r.OK, Kind: r.Kind, Status: r.Status, Code: r.Code,
-		Detail: r.Detail, ElapsedMS: r.Elapsed.Milliseconds(),
-	}
-	if !r.OK {
-		e.Body = msg.Body
+		Body: msg.Body, Detail: r.Detail, ElapsedMS: r.Elapsed.Milliseconds(),
 	}
 	f.Entries = append(f.Entries, e)
 	if n := len(f.Entries); n > notifyLogMax {

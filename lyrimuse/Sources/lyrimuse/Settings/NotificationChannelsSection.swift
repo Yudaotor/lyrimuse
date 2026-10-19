@@ -611,7 +611,8 @@ struct NotificationChannelEditor: View {
 
 // MARK: - 推送记录
 
-/// 「推送记录」卡:最近几次推送,没成的写原因、可以重发。没有记录时整张卡不出现。
+/// 「推送记录」卡:最近几次推送,没成的写原因、可以重发;点一行展开看推出去的完整内容和渠道、耗时、平台返回。
+/// 没有记录时整张卡不出现。
 struct NotificationLogCard: View {
     @ObservedObject var config: ConfigStore
     @ObservedObject private var log = NotificationDeliveryWatcher.shared
@@ -619,6 +620,8 @@ struct NotificationLogCard: View {
     /// 正在重发的那条记录。
     @State private var resending: String?
     @State private var resendOutcome: (entry: String, outcome: NotificationTestRunner.Outcome)?
+    /// 展开着的记录。
+    @State private var expanded: Set<String> = []
 
     private static let collapsedCount = 6
 
@@ -648,7 +651,9 @@ struct NotificationLogCard: View {
         let platform = NotificationPlatform(rawValue: entry.platform)
         let channel = config.notificationChannels.first { $0.id == entry.channel }
         let channelName = channel?.displayName ?? entry.channelName.flatMap { $0.isEmpty ? nil : $0 } ?? platform?.displayName ?? entry.platform
-        return HStack(alignment: .firstTextBaseline, spacing: 10) {
+        let isOpen = expanded.contains(entry.id)
+        return VStack(alignment: .leading, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(notificationTimeText(entry.date))
                 .font(.system(size: 11).monospacedDigit())
                 .foregroundStyle(.secondary)
@@ -684,9 +689,77 @@ struct NotificationLogCard: View {
             } else {
                 Image(systemName: "xmark.circle.fill").foregroundStyle(.red).font(.system(size: 12))
             }
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .rotationEffect(.degrees(isOpen ? 90 : 0))
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.easeOut(duration: 0.15)) {
+                if isOpen { expanded.remove(entry.id) } else { expanded.insert(entry.id) }
+            }
+        }
+        if isOpen {
+            details(entry, platform: platform, channelName: channelName)
+                .padding(.leading, 102)
+        }
         }
         .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
         .padding(.vertical, 7)
+    }
+
+    /// 展开后的完整信息:推出去的正文,渠道、结果、耗时,没推成的再加该怎么改和平台的原话。
+    private func details(_ entry: NotificationDeliveryLog.Entry, platform: NotificationPlatform?, channelName: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Group {
+                if let body = entry.body, !body.isEmpty {
+                    Text(body)
+                        .textSelection(.enabled)
+                } else {
+                    // 引擎早先只给没推成的记正文,那时推成功的记录只有标题。
+                    Text(L10n.t("该记录未保存推送内容"))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .font(.system(size: 12))
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.05)))
+            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 10, verticalSpacing: 4) {
+                GridRow {
+                    Text(L10n.t("渠道")).foregroundStyle(.secondary)
+                    Text(platform.map { channelName == $0.displayName ? channelName : "\(channelName)（\($0.displayName)）" } ?? channelName)
+                }
+                GridRow {
+                    Text(L10n.t("结果")).foregroundStyle(.secondary)
+                    if let failure = entry.failure {
+                        Text(NotificationFailureText.summary(failure, platform: platform)).foregroundStyle(.red)
+                    } else {
+                        Text(L10n.t("已送达")).foregroundStyle(.green)
+                    }
+                }
+                if let failure = entry.failure, let advice = NotificationFailureText.advice(failure, platform: platform) {
+                    GridRow {
+                        Text(L10n.t("建议")).foregroundStyle(.secondary)
+                        Text(advice)
+                    }
+                }
+                if let detail = entry.failure?.detail {
+                    GridRow {
+                        Text(L10n.t("平台返回")).foregroundStyle(.secondary)
+                        Text(detail).textSelection(.enabled)
+                    }
+                }
+                GridRow {
+                    Text(L10n.t("耗时")).foregroundStyle(.secondary)
+                    Text(String(format: L10n.t("%.1f 秒"), Double(entry.elapsedMS) / 1000))
+                }
+            }
+            .font(.system(size: 11))
+            .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     @ViewBuilder
