@@ -57,7 +57,16 @@ final class MotionCoverStore {
     /// 就是新组合。不落盘,同 `failed`。
     private var cachedUndecidable: Set<String> = []
 
-    private var directory: URL { LyrimusePaths.configFile("motion-covers") }
+    private var directory: URL { LyrimusePaths.cacheFile("motion-covers") }
+
+    /// 旧版本放在配置目录下,第一次用到时搬过来(`CacheRelocation`)。
+    private init() {
+        let outcome = CacheRelocation.move(from: LyrimusePaths.configFile("motion-covers"),
+                                           to: LyrimusePaths.cacheFile("motion-covers"), extensions: ["mp4", "tmp"])
+        if outcome != CacheRelocation.Outcome() {
+            logger.info("motion cover: relocated cache, moved \(outcome.moved, privacy: .public) dropped \(outcome.dropped, privacy: .public) old dir removed \(outcome.removedOldDirectory, privacy: .public)")
+        }
+    }
 
     // MARK: - 对外
 

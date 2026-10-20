@@ -34,6 +34,9 @@ func runIdentityTests() {
         let homePath = FileManager.default.homeDirectoryForCurrentUser.path
         expectEqual(LyrimusePaths.configDir.path, homePath + "/.config/lyrimuse", "路径: 配置目录 = ~/.config/lyrimuse")
         expectEqual(LyrimusePaths.configFile("config.json").path, homePath + "/.config/lyrimuse/config.json", "路径: 配置目录下的文件")
+        expectEqual(LyrimusePaths.cachesDir.path, homePath + "/Library/Caches/me.yudaotor.lyrimuse", "路径: 缓存目录 = ~/Library/Caches/<bundle id>")
+        expectEqual(LyrimusePaths.cacheFile("motion-covers").path, homePath + "/Library/Caches/me.yudaotor.lyrimuse/motion-covers",
+                    "路径: 缓存目录下的子目录")
         expectEqual(LogFiles.engine.path, homePath + "/Library/Logs/lyrimuse.log", "路径: 引擎日志")
         expectEqual(LogFiles.appStderr.path, homePath + "/Library/Logs/lyrimuse-app.log", "路径: App stderr 日志")
         expectEqual(LyrimusePaths.launchAgentPlist(label: "x.y").path, homePath + "/Library/LaunchAgents/x.y.plist", "路径: LaunchAgent plist")
@@ -49,5 +52,33 @@ func runIdentityTests() {
         expectEqual(merged["PATH"], "/usr/bin", "环境: 继承的变量保留")
         expectEqual(merged["LYRIMUSE_CONFIG_DIR"], LyrimusePaths.configDir.path, "环境: 同名以本 App 的为准(别让终端里残留的值把目录指去别处)")
         expectEqual(merged.count, 4, "环境: 合并后恰好多三项")
+    }
+
+    do {
+        // 缓存搬家:只搬认得的扩展名,新位置已有的以新位置为准,搬空了才删旧目录;旧目录不存在什么都不做。
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("lyrimuse-cache-relocation-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: root) }
+        let old = root.appendingPathComponent("old"), new = root.appendingPathComponent("caches/motion-covers")
+        try? fm.createDirectory(at: old, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: new, withIntermediateDirectories: true)
+        try? Data("a".utf8).write(to: old.appendingPathComponent("a.mp4"))
+        try? Data("half".utf8).write(to: old.appendingPathComponent("b.mp4.tmp"))
+        try? Data("stale".utf8).write(to: old.appendingPathComponent("c.mp4"))
+        try? Data("fresh".utf8).write(to: new.appendingPathComponent("c.mp4"))
+        try? Data("keep".utf8).write(to: old.appendingPathComponent("notes.txt"))
+        let first = CacheRelocation.move(from: old, to: new, extensions: ["mp4", "tmp"])
+        expectEqual(first, CacheRelocation.Outcome(moved: 2, dropped: 1, removedOldDirectory: false),
+                    "缓存搬家: 两份搬走、新位置已有的那份丢掉旧的;旧目录还剩别的文件就不删")
+        expectEqual(try? String(contentsOf: new.appendingPathComponent("c.mp4"), encoding: .utf8), "fresh", "缓存搬家: 同名以新位置为准")
+        expectEqual(fm.fileExists(atPath: new.appendingPathComponent("a.mp4").path), true, "缓存搬家: 文件到了新位置")
+        expectEqual(fm.fileExists(atPath: old.appendingPathComponent("notes.txt").path), true, "缓存搬家: 不认得的文件原样留着")
+        try? fm.removeItem(at: old.appendingPathComponent("notes.txt"))
+        try? Data("d".utf8).write(to: old.appendingPathComponent("d.mp4"))
+        expectEqual(CacheRelocation.move(from: old, to: new, extensions: ["mp4", "tmp"]),
+                    CacheRelocation.Outcome(moved: 1, dropped: 0, removedOldDirectory: true), "缓存搬家: 搬空了删旧目录")
+        expectEqual(fm.fileExists(atPath: old.path), false, "缓存搬家: 旧目录没了")
+        expectEqual(CacheRelocation.move(from: old, to: new, extensions: ["mp4"]), CacheRelocation.Outcome(),
+                    "缓存搬家: 旧目录不存在时什么都不做")
     }
 }

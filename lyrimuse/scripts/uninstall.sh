@@ -33,6 +33,8 @@ APP_LABEL="${LYRIMUSE_UNINSTALL_APP_LABEL:-me.yudaotor.lyrimuse}"
 ENGINE_PLIST="$PREFIX/Library/LaunchAgents/$ENGINE_LABEL.plist"
 APP_PLIST="$PREFIX/Library/LaunchAgents/$APP_LABEL.plist"
 CONFIG_DIR="$PREFIX/.config/lyrimuse"
+# 能重新下载的缓存(动态封面)和 Sparkle 的下载缓存,目录名是 bundle id(= App 的 label,见 LyrimuseCore LyrimusePaths.cachesDir)。
+CACHE_DIR="$PREFIX/Library/Caches/$APP_LABEL"
 LOG_FILE="$PREFIX/Library/Logs/lyrimuse.log"
 # 引擎日志的轮转归档:名字与份数同 lyrimuse-engine/logrotate.go(logArchiveName / logRotateKeepArchives),
 # 改那边的份数要一起改这里(uninstallarchives_test.go 对账)。
@@ -84,7 +86,7 @@ for label in "$ENGINE_LABEL" "$APP_LABEL"; do
     echo "  launchd job  $label  [未注册]"
   fi
 done
-for p in "$ENGINE_PLIST" "$APP_PLIST" "$CONFIG_DIR" "$LOG_FILE" "${LOG_ARCHIVES[@]}" "$APP_LOG_FILE" "$APP_LOG_ARCHIVE" "$STALL_SAMPLE_FILE"; do
+for p in "$ENGINE_PLIST" "$APP_PLIST" "$CONFIG_DIR" "$CACHE_DIR" "$LOG_FILE" "${LOG_ARCHIVES[@]}" "$APP_LOG_FILE" "$APP_LOG_ARCHIVE" "$STALL_SAMPLE_FILE"; do
   if [[ -e "$p" ]]; then
     echo "  存在  $p  ($(human_size "$p"))"
   else
@@ -159,6 +161,7 @@ TO_DELETE=()
 HAS_DEFAULTS=no
 has_defaults "$APP_LABEL" && HAS_DEFAULTS=yes
 [[ -e "$CONFIG_DIR" ]] && TO_DELETE+=("$CONFIG_DIR")
+[[ -e "$CACHE_DIR" ]] && TO_DELETE+=("$CACHE_DIR")
 [[ -e "$LOG_FILE" ]] && TO_DELETE+=("$LOG_FILE")
 for p in "${LOG_ARCHIVES[@]}"; do
   [[ -e "$p" ]] && TO_DELETE+=("$p")

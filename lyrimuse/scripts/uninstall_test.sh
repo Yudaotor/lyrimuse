@@ -49,6 +49,8 @@ setup_fake_home() {
   echo '{}' > "$FAKE_HOME/.config/lyrimuse/config.json"
   echo '{}' > "$FAKE_HOME/.config/lyrimuse/lyrimuse-enrich-cache.json"
   echo '[00:01.00]假歌词' > "$FAKE_HOME/.config/lyrimuse/lyrics/测试 - 歌.lrc"
+  /bin/mkdir -p "$FAKE_HOME/Library/Caches/$PROBE_B/motion-covers"
+  echo 'mp4' > "$FAKE_HOME/Library/Caches/$PROBE_B/motion-covers/a.mp4"
   echo 'log line' > "$FAKE_HOME/Library/Logs/lyrimuse.log"
   for a in lyrimuse.log.old lyrimuse.log.old.1 lyrimuse.log.old.2; do
     echo 'archived log line' > "$FAKE_HOME/Library/Logs/$a"
@@ -109,12 +111,14 @@ run_uninstall --services >/dev/null 2>&1
 [[ -f "$FAKE_HOME/.config/lyrimuse/config.json" ]] && ok "数据完好保留" || fail "--services 不该碰数据"
 [[ -f "$FAKE_HOME/.config/lyrimuse/lyrics/测试 - 歌.lrc" ]] && ok "歌词文件完好" || fail "--services 删了歌词"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse.log.old.2" ]] && ok "日志归档完好" || fail "--services 删了日志归档"
+[[ -f "$FAKE_HOME/Library/Caches/$PROBE_B/motion-covers/a.mp4" ]] && ok "缓存目录完好" || fail "--services 删了缓存目录"
 
 echo
 echo "=== 5. --purge 输入 yes 才真的删 ==="
 setup_fake_home
 echo "yes" | run_uninstall --purge >/dev/null 2>&1
 [[ -d "$FAKE_HOME/.config/lyrimuse" ]] && fail "配置目录没删" || ok "配置目录已删"
+[[ -d "$FAKE_HOME/Library/Caches/$PROBE_B" ]] && fail "缓存目录没删" || ok "缓存目录已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse.log" ]] && fail "日志没删" || ok "日志已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse-main-thread-stall.txt" ]] && fail "主线程卡顿采样没删" || ok "主线程卡顿采样已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse-app.log" ]] && fail "App 日志没删" || ok "App 日志已删"

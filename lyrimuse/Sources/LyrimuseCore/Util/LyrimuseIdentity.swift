@@ -67,7 +67,7 @@ public enum LyrimuseIdentity {
     }
 }
 
-/// 所有落盘位置的唯一口径。App 与 Core 里任何要碰 `~/.config/lyrimuse` / `~/Library/Logs` / `~/Library/LaunchAgents`
+/// 所有落盘位置的唯一口径。App 与 Core 里任何要碰 `~/.config/lyrimuse` / `~/Library/Caches` / `~/Library/Logs` / `~/Library/LaunchAgents`
 /// 的地方都从这里取,不许自己拼 `homeDirectoryForCurrentUser.appendingPathComponent(".config/lyrimuse/…")`。
 public enum LyrimusePaths {
     public static var home: URL { FileManager.default.homeDirectoryForCurrentUser }
@@ -78,6 +78,14 @@ public enum LyrimusePaths {
 
     /// 配置目录下的一个文件或子目录。
     public static func configFile(_ name: String) -> URL { configDir.appendingPathComponent(name) }
+
+    /// `~/Library/Caches/<bundle id>`:丢了能原样重新下载的东西(动态封面)。备份软件和清理工具按惯例跳过或清掉这里,
+    /// 所以只放真能重建的:名字带 cache、实际是权威数据的(enrich 缓存、设备封面 `artwork/`)留在配置目录。
+    /// Sparkle 的下载缓存也在这个目录里,用它自己的子目录。见 03 章决策 65。
+    public static var cachesDir: URL { home.appendingPathComponent("Library/Caches/\(LyrimuseIdentity.bundleIdentifier)") }
+
+    /// 缓存目录下的一个文件或子目录。
+    public static func cacheFile(_ name: String) -> URL { cachesDir.appendingPathComponent(name) }
 
     public static var launchAgentsDir: URL { home.appendingPathComponent("Library/LaunchAgents") }
     public static func launchAgentPlist(label: String) -> URL { launchAgentsDir.appendingPathComponent("\(label).plist") }
