@@ -1,4 +1,4 @@
-import json, io, os, re, time, urllib.request, unicodedata, statistics, glob
+import base64, json, io, os, re, subprocess, time, urllib.request, unicodedata, statistics, glob
 
 SP = os.environ.get('SIMEVAL_DATA') or os.path.dirname(os.path.abspath(__file__))
 
@@ -25,8 +25,21 @@ for p in glob.glob(os.path.expanduser('~/.config/lyrimuse/lyrics/*.lrc')):
 print('lyrics folder tracks:', len(tracks))
 
 # --- 2. ListenBrainz 拉听歌记录取 duration_ms ---
-cfg = json.load(io.open(os.path.expanduser('~/.config/lyrimuse/config.json')))
-tok, lbuser = cfg['listenbrainz_token'], cfg['listenbrainz_user']
+# token 在登录钥匙串的凭据条目里(15 章决策 73),config.json 里有明文时以文件为准,同 App 与引擎的叠法。
+CONFIG_DIR = os.path.expanduser('~/.config/lyrimuse')
+cfg = json.load(io.open(os.path.join(CONFIG_DIR, 'config.json')))
+
+def vault_token():
+    r = subprocess.run(['/usr/bin/security', 'find-generic-password', '-s', 'me.yudaotor.lyrimuse.credentials',
+                        '-a', CONFIG_DIR, '-w'], capture_output=True, text=True, timeout=10)
+    if r.returncode != 0:
+        return ''
+    return json.loads(base64.b64decode(r.stdout.strip())).get('config', {}).get('listenbrainz_token', '')
+
+tok = (cfg.get('listenbrainz_token') or '').strip() or vault_token()
+lbuser = cfg.get('listenbrainz_user', '')
+if not tok or not lbuser:
+    raise SystemExit('没有 ListenBrainz token 或用户名(config.json 与钥匙串里都没有)')
 durs = {}   # key -> [secs...]
 max_ts = None
 fetched = 0
