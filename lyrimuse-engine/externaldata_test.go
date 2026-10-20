@@ -41,6 +41,8 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	testRealHome, _ = os.UserHomeDir()
+	// 凭据保险箱一律当没有条目,不起 security、不碰真实钥匙串;测它的用例自己换。
+	credentialVaultRead = func() ([]byte, error) { return nil, nil }
 	canonicalMemoTTL = 0 // 各用例直接换 enrichCache,不让上一个用例记下的宽松匹配漏到下一个(见 canonicalMemoTTL)
 	_ = os.Unsetenv("LYRIMUSE_CONFIG_DIR")
 	_ = os.Setenv("HOME", sandbox)

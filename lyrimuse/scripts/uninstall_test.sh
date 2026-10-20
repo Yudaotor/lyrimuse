@@ -16,6 +16,8 @@ UID_="$(id -u)"
 PROBE_A="me.yudaotor.lyrimuse.probe-uninstall-engine"
 PROBE_B="me.yudaotor.lyrimuse.probe-uninstall-app"
 FAKE_HOME="$(/usr/bin/mktemp -d /tmp/lyrimuse-uninstall-test.XXXXXX)"
+KEYCHAIN_DIR="$(/usr/bin/mktemp -d /tmp/lyrimuse-uninstall-keychain.XXXXXX)"
+TEST_KEYCHAIN="$KEYCHAIN_DIR/vault.keychain-db"
 FAILURES=0
 
 cleanup() {
@@ -24,7 +26,8 @@ cleanup() {
   done
   # probe 偏好域写在真实 cfprefs 里（domain 不受 FAKE_HOME 管），必须自己收干净。
   /usr/bin/defaults delete "$PROBE_B" >/dev/null 2>&1
-  /bin/rm -rf "$FAKE_HOME"
+  /usr/bin/security delete-keychain "$TEST_KEYCHAIN" >/dev/null 2>&1
+  /bin/rm -rf "$FAKE_HOME" "$KEYCHAIN_DIR"
 }
 trap cleanup EXIT INT TERM
 
@@ -63,6 +66,11 @@ setup_fake_home() {
   # defaults 的 domain 不受 LYRIMUSE_UNINSTALL_PREFIX 管辖（它写的是真实用户的
   # cfprefs），所以这里种的必须是 probe label 而不是真实 bundle id，cleanup 里也要删掉。
   /usr/bin/defaults write "$PROBE_B" probeKey -string probeValue 2>/dev/null
+  # 凭据保险箱种在一份临时钥匙串里(不进搜索列表),--purge 删的是它,碰不到登录钥匙串。
+  /usr/bin/security delete-keychain "$TEST_KEYCHAIN" >/dev/null 2>&1
+  /usr/bin/security create-keychain -p test "$TEST_KEYCHAIN" >/dev/null 2>&1
+  printf 'add-generic-password -U -s "%s" -a "%s" -w e30= "%s"\n' \
+    "$PROBE_B.credentials" "$FAKE_HOME/.config/lyrimuse" "$TEST_KEYCHAIN" | /usr/bin/security -i >/dev/null 2>&1
   for l in "$PROBE_A" "$PROBE_B"; do
     p="$FAKE_HOME/Library/LaunchAgents/$l.plist"
     {
@@ -79,7 +87,12 @@ setup_fake_home() {
   done
 }
 
+has_test_vault() {
+  /usr/bin/security find-generic-password -s "$PROBE_B.credentials" -a "$FAKE_HOME/.config/lyrimuse" "$TEST_KEYCHAIN" >/dev/null 2>&1
+}
+
 run_uninstall() {
+  LYRIMUSE_UNINSTALL_KEYCHAIN="$TEST_KEYCHAIN" \
   LYRIMUSE_UNINSTALL_PREFIX="$FAKE_HOME" \
   LYRIMUSE_UNINSTALL_ENGINE_LABEL="$PROBE_A" \
   LYRIMUSE_UNINSTALL_APP_LABEL="$PROBE_B" \
@@ -96,6 +109,7 @@ echo
 echo "=== 2. --purge 输入 no 应当取消 ==="
 echo "no" | run_uninstall --purge >/dev/null 2>&1
 [[ -f "$FAKE_HOME/.config/lyrimuse/config.json" ]] && ok "取消后配置还在" || fail "输入 no 却把数据删了"
+has_test_vault && ok "取消后钥匙串凭据还在" || fail "输入 no 却删了钥匙串凭据"
 /bin/launchctl print "gui/$UID_/$PROBE_A" >/dev/null 2>&1 && ok "取消后 job 还在" || fail "输入 no 却注销了 job"
 
 echo
@@ -112,6 +126,7 @@ run_uninstall --services >/dev/null 2>&1
 [[ -f "$FAKE_HOME/.config/lyrimuse/lyrics/测试 - 歌.lrc" ]] && ok "歌词文件完好" || fail "--services 删了歌词"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse.log.old.2" ]] && ok "日志归档完好" || fail "--services 删了日志归档"
 [[ -f "$FAKE_HOME/Library/Caches/$PROBE_B/motion-covers/a.mp4" ]] && ok "缓存目录完好" || fail "--services 删了缓存目录"
+has_test_vault && ok "钥匙串凭据完好" || fail "--services 删了钥匙串凭据"
 
 echo
 echo "=== 5. --purge 输入 yes 才真的删 ==="
@@ -119,6 +134,7 @@ setup_fake_home
 echo "yes" | run_uninstall --purge >/dev/null 2>&1
 [[ -d "$FAKE_HOME/.config/lyrimuse" ]] && fail "配置目录没删" || ok "配置目录已删"
 [[ -d "$FAKE_HOME/Library/Caches/$PROBE_B" ]] && fail "缓存目录没删" || ok "缓存目录已删"
+has_test_vault && fail "钥匙串凭据没删" || ok "钥匙串凭据已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse.log" ]] && fail "日志没删" || ok "日志已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse-main-thread-stall.txt" ]] && fail "主线程卡顿采样没删" || ok "主线程卡顿采样已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse-app.log" ]] && fail "App 日志没删" || ok "App 日志已删"

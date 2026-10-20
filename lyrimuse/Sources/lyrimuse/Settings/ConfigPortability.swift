@@ -290,7 +290,12 @@ enum ConfigPortability {
 
         if let configData = FileIO.read(configURL),
            let configObj = try? JSONSerialization.jsonObject(with: configData) {
-            bundle["config"] = configObj
+            // 凭据在钥匙串的保险箱里,叠回去再导出:这份包就是要带着 token 原文换机器。
+            if let fileObj = configObj as? [String: Any] {
+                bundle["config"] = CredentialVault.overlay(fileObj, vault: CredentialVaultStore.shared.load() ?? [:])
+            } else {
+                bundle["config"] = configObj
+            }
         } else {
             // 不一定是错误——采集器可能还没跑过、config.json 本来就不存在,只是留个痕迹
             // 方便"导出的文件里怎么少了 config 这部分"这类问题的排查。
@@ -367,7 +372,7 @@ enum ConfigPortability {
                     try configData.writeSecurely(to: configURL)
                     // 内存里的账号字段换成刚导入的这份,并清掉「有没保存的改动」:导入之后紧接着重启,
                     // 退出时的兜底保存(`applicationShouldTerminate`,只在 isDirty 时写)会把内存里的
-                    // 旧值整份盖回 config.json。
+                    // 旧值整份盖回 config.json。load 同时把刚写进文件的凭据挪进钥匙串。
                     await MainActor.run { ConfigStore.shared.load() }
                 } catch {
                     logger.error("importData: writing config.json failed — \(String(describing: error), privacy: .public)")
@@ -451,6 +456,16 @@ enum ConfigPortability {
                 logger.error("clearAllConfig: removing features.json failed — \(String(describing: error), privacy: .public)")
                 ok = false
             }
+        }
+        // 钥匙串里的账号凭据一起清掉(Apple Music 令牌不算设置,留着)。
+        do {
+            try CredentialVaultStore.shared.update {
+                $0[CredentialVault.configSection] = nil
+                $0[CredentialVault.channelsSection] = nil
+            }
+        } catch {
+            logger.error("clearAllConfig: clearing keychain credentials failed — \(String(describing: error), privacy: .public)")
+            ok = false
         }
         // 内存里的两份也换成刚删完的样子(空、且没有待存的改动)。不重载的话,账号页 1.2 秒防抖里还没存的
         // 改动会让 isDirty 为真,紧接着重启时的退出兜底(applicationShouldTerminate)把内存里整份旧凭据

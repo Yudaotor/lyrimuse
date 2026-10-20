@@ -50,12 +50,15 @@ public enum ProcessRunner {
     ///   `LyrimusePaths.engineProcessEnvironment()`** —— 不传的话子命令会按自己的默认
     ///   规则找配置目录,跟 App 不一定是同一份数据(见 LyrimusePaths.engineEnvironment)。
     /// - Parameter captureStderr: 把 stderr 也接出来(默认不接,见类型头注)。
+    /// - Parameter input: 喂给子进程标准输入的内容,写完即关。只给几 KB 以内的:整份在起进程后一次写进管道,
+    ///   超过管道缓冲区(64KB)而子进程又不读时会卡在这里。不给时标准输入照旧继承本进程的。
     public static func run(
         _ executable: String,
         _ arguments: [String],
         timeout: TimeInterval,
         environment: [String: String]? = nil,
-        captureStderr: Bool = false
+        captureStderr: Bool = false,
+        input: Data? = nil
     ) -> Result? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
@@ -66,8 +69,17 @@ public enum ProcessRunner {
         process.standardOutput = outPipe
         let errPipe: Pipe? = captureStderr ? Pipe() : nil
         process.standardError = errPipe ?? FileHandle.nullDevice
+        let inPipe: Pipe? = input == nil ? nil : Pipe()
+        if let inPipe { process.standardInput = inPipe }
 
         guard FileIO.attempt("launch", URL(fileURLWithPath: executable), { try process.run() }) else { return nil }
+        if let inPipe, let input {
+            // 子进程没读完就退出时,写管道不能给本进程发 SIGPIPE(默认动作是把整个 App 杀掉)。
+            let writer = inPipe.fileHandleForWriting
+            _ = fcntl(writer.fileDescriptor, F_SETNOSIGPIPE, 1)
+            _ = try? writer.write(contentsOf: input)
+            _ = try? writer.close()
+        }
 
         // 到点就杀。用 DispatchWorkItem 而不是起一个 sleep 线程 —— 正常结束时
         // cancel() 掉,不留悬挂的定时器。

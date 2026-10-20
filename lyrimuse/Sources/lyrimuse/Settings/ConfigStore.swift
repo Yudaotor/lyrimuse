@@ -180,6 +180,10 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
 // 读写字节这一层走 Core 的 `JSONConfigDocument`:读盘分**三态**(不存在 / 正常 / 损坏),
 // 损坏时 `persistFile()` 拒绝保存、`loadFailure` 亮起(设置窗口顶部横幅给出口);写盘成功后镜像才更新。
 // 为什么必须分三态、原来那版会怎么把 14 个空串覆盖上去,见 `JSONConfigDocument` 头注。这里只剩字段映射。
+//
+// 凭据(token、密钥、推送地址)不落进这份文件,存在钥匙串的保险箱里(Core `CredentialVault`):读时叠上去,
+// 存时拆出来。文件里还有明文凭据(旧版本写的、导入的、手改的)时,load 顺手挪进钥匙串。保险箱读不出来
+// (钥匙串锁着)的这一轮,保存照旧把凭据写进文件,不碰保险箱,下次读得出来时再挪。
 @MainActor
 public final class ConfigStore: ObservableObject {
     public static let shared = ConfigStore()
@@ -219,6 +223,10 @@ public final class ConfigStore: ObservableObject {
     /// 磁盘上那份对象的内存镜像 + 三态(见 Core `JSONConfigDocument`)。JSON → 字段的映射在 load,
     /// 字段 → JSON 在 persistFile,这里只管字节与字典。
     private var document = JSONConfigDocument(url: ConfigStore.fileURL)
+    /// 这一轮读到的保险箱内容;nil = 读不出来,保存时凭据照旧写进文件。
+    private var vaultContents: [String: Any]?
+    /// 文件叠上保险箱之后的整份配置,字段从它读。
+    private var credentialedRaw: [String: Any] = [:]
 
     /// 诊断导出用:磁盘上那份文件的三态。
     public var fileState: JSONConfigDocument.LoadState { document.state }
@@ -286,8 +294,8 @@ public final class ConfigStore: ObservableObject {
             out["notificationChannel\(i).url"] = ch.url
             out["notificationChannel\(i).secret"] = ch.secret
         }
-        // 旧版的单渠道字段还留在文件里(见 notificationChannels),引擎早先的日志里可能有它们。
-        for (key, value) in document.raw where Self.legacyPushSecretKeys.contains(key) {
+        // 旧版的单渠道字段还留在配置里(见 notificationChannels),引擎早先的日志里可能有它们。
+        for (key, value) in credentialedRaw where Self.legacyPushSecretKeys.contains(key) {
             if let value = value as? String { out["legacy.\(key)"] = value }
             if let urls = value as? [String: String] {
                 for (platform, url) in urls { out["legacy.\(key).\(platform)"] = url }
@@ -391,7 +399,12 @@ public final class ConfigStore: ObservableObject {
             loadFailure = reason
             logger.error("config.json is unusable, saves refused until it is fixed or discarded: \(reason, privacy: .public)")
         }
-        let raw = document.raw
+        vaultContents = CredentialVaultStore.shared.load()
+        if vaultContents == nil {
+            logger.error("keychain unreadable, credentials saved this session stay in config.json")
+        }
+        let raw = CredentialVault.overlay(document.raw, vault: vaultContents ?? [:])
+        credentialedRaw = raw
         listenbrainzToken = raw["listenbrainz_token"] as? String ?? ""
         listenbrainzUser = raw["listenbrainz_user"] as? String ?? ""
         stateRelayURL = raw["state_relay_url"] as? String ?? ""
@@ -407,6 +420,45 @@ public final class ConfigStore: ObservableObject {
         notificationChannels = NotificationChannel.list(fromConfig: raw) ?? NotificationChannel.migrated(fromLegacy: raw)
         notificationRoutes = NotificationRouting.routes(fromConfig: raw)
         savedSnapshot = currentSnapshot
+        moveFileCredentialsIntoVault()
+    }
+
+    /// 文件里的明文凭据挪进钥匙串:整份按现在的样子重写一遍(凭据进保险箱,文件里删掉)。
+    private func moveFileCredentialsIntoVault() {
+        guard vaultContents != nil, !document.isCorrupt, CredentialVault.hasPlaintext(document.raw) else { return }
+        do {
+            try writeSplittingCredentials(fields: [:], knownKeys: [])
+            logger.notice("moved the credentials in config.json into the keychain")
+        } catch {
+            logger.error("moving credentials into the keychain failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    /// 合并 → 凭据写进保险箱 → 文件写成不带凭据的那份。保险箱读不出来或写不进去时退回整份(带凭据)写进文件。
+    /// 文件判定为损坏时先抛,保险箱也不碰。
+    private func writeSplittingCredentials(fields: [String: Any], knownKeys: Set<String>) throws {
+        if document.isCorrupt {
+            try document.save(fields: fields, knownKeys: knownKeys, secure: true)
+            return
+        }
+        let full = JSONConfigDocument(url: Self.fileURL, raw: credentialedRaw, state: document.state)
+            .merging(fields: fields, knownKeys: knownKeys)
+        if vaultContents != nil {
+            let parts = CredentialVault.split(full)
+            do {
+                vaultContents = try CredentialVaultStore.shared.update {
+                    $0[CredentialVault.configSection] = parts.config
+                    $0[CredentialVault.channelsSection] = parts.channels
+                }
+                try document.save(fields: parts.file, knownKeys: Set(document.raw.keys).union(parts.file.keys), secure: true)
+                credentialedRaw = full
+                return
+            } catch let failure as KeychainCLI.Failure {
+                logger.error("keychain write failed (\(String(describing: failure), privacy: .public)), saving credentials in config.json")
+            }
+        }
+        try document.save(fields: full, knownKeys: Set(document.raw.keys).union(full.keys), secure: true)
+        credentialedRaw = full
     }
 
     // 只把当前字段写回磁盘,不重启引擎。抛出的错误里带具体原因,调用方决定怎么
@@ -437,9 +489,9 @@ public final class ConfigStore: ObservableObject {
         // 路由空了就不写这个键(没有键 = 每档都推到全部渠道),写了的要从文件里删掉,所以它算已知键。
         if !notificationRoutes.isEmpty { fields["notification_routes"] = notificationRoutes }
         do {
-            // 合并进磁盘镜像(api_root / bundle_ids 这些 UI 不管的字段原样保留)→ 原子写 + 0600(这份就是
-            // 凭据本体)→ 成功后镜像才更新。磁盘上那份判定为损坏时这里直接抛,一个字节不碰。
-            try document.save(fields: fields, knownKeys: Set(fields.keys).union(["notification_routes"]), secure: true)
+            // 合并进磁盘镜像(api_root / bundle_ids 这些 UI 不管的字段原样保留)→ 凭据进保险箱 → 原子写 + 0600
+            // → 成功后镜像才更新。磁盘上那份判定为损坏时这里直接抛,一个字节不碰。
+            try writeSplittingCredentials(fields: fields, knownKeys: Set(fields.keys).union(["notification_routes"]))
         } catch JSONConfigDocument.Failure.refusedCorruptFile {
             throw ConfigFileSaveError.refusedCorruptFile
         } catch JSONConfigDocument.Failure.notSerializable {

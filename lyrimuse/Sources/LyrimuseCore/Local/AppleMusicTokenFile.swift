@@ -1,8 +1,9 @@
 import CryptoKit
 import Foundation
 
-/// Apple Music 用户令牌文件(`lyrimuse-applemusic-token.json`):App 的登录窗口写、连接卡片读,引擎只读
-/// (`applemusicUserTokenFile`,applemusic.go)。引擎对这份令牌的观察(问到的店面、被 Apple 拒过)记在它自己的
+/// Apple Music 连接记录文件(`lyrimuse-applemusic-token.json`):App 的登录窗口写、连接卡片读,引擎只读
+/// (`applemusicUserTokenFile`,applemusic.go)。令牌本身在钥匙串的保险箱里(`CredentialVault.mediaUserTokenKey`),
+/// 文件只记店面和时间;旧版本把令牌写在文件里,照认。引擎对这份令牌的观察(问到的店面、被 Apple 拒过)记在它自己的
 /// `lyrimuse-applemusic-status.json`,按令牌指纹认,`parse` 把两份合起来。字段两边同步改。
 public enum AppleMusicTokenFile {
     /// Apple 的硬上限:令牌 6 个月,没有续期接口。cookie 没带过期时刻时按保存时间推算。
@@ -36,11 +37,12 @@ public enum AppleMusicTokenFile {
     /// 没有令牌 / 读不出返回 nil。`fileDate` 是文件修改时间:老格式没有 `saved_at` 时拿它兜底,
     /// 不能按「现在」算 —— 那样每次读都重新起算,永远不会提示续期。`engineStatus` 是引擎那份状态文件,
     /// 指纹对得上才算:令牌文件没记店面时用它问到的店面;被拒时刻不早于这次保存,就是失效。
-    public static func parse(_ data: Data, fileDate: Date, engineStatus: Data? = nil) -> Info? {
-        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let token = obj["media_user_token"] as? String,
-              !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return nil }
+    /// `vaultToken` 是保险箱里的令牌,文件里没有令牌时用它。
+    public static func parse(_ data: Data, fileDate: Date, engineStatus: Data? = nil, vaultToken: String? = nil) -> Info? {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        let fileToken = (obj["media_user_token"] as? String) ?? ""
+        let token = fileToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? (vaultToken ?? "") : fileToken
+        guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         let savedAtField = seconds(obj["saved_at"])
         let saved = savedAtField.map(Date.init(timeIntervalSince1970:)) ?? fileDate
         let expires = seconds(obj["expires_at"]).map(Date.init(timeIntervalSince1970:))
@@ -65,13 +67,13 @@ public enum AppleMusicTokenFile {
                     rejected: rejected)
     }
 
-    /// 登录窗口落盘的内容。`expiresAt` 是 cookie 自带的过期时刻,没有就不写。
-    public static func payload(token: String, storefront: String, savedAt: Date, expiresAt: Date?) -> [String: Any] {
+    /// 登录窗口落盘的内容。`token` 为 nil 时不写令牌(令牌进了保险箱);`expiresAt` 是 cookie 自带的过期时刻,没有就不写。
+    public static func payload(token: String?, storefront: String, savedAt: Date, expiresAt: Date?) -> [String: Any] {
         var out: [String: Any] = [
-            "media_user_token": token,
             "storefront": storefront,
             "saved_at": Int(savedAt.timeIntervalSince1970),
         ]
+        if let token { out["media_user_token"] = token }
         if let expiresAt { out["expires_at"] = Int(expiresAt.timeIntervalSince1970) }
         return out
     }

@@ -4,7 +4,7 @@
 #
 #   ./uninstall.sh              # 只看：报告装了什么，不做任何改动
 #   ./uninstall.sh --services   # 注销两个 launchd job（不碰数据，重装即可恢复）
-#   ./uninstall.sh --purge      # 注销 + 删除配置/缓存/日志 + 偏好设置项（要输入 yes 确认）
+#   ./uninstall.sh --purge      # 注销 + 删除配置/缓存/日志 + 偏好设置项 + 钥匙串里的凭据（要输入 yes 确认）
 #
 # 为什么需要它:把 Lyrimuse.app 拖进废纸篓**不等于卸载干净**。
 # ~/Library/LaunchAgents/com.lyrimuse.collector.plist 挂的是 KeepAlive=true 的 job,
@@ -18,7 +18,7 @@
 #   - 只删这个 App 自己写的东西，不碰 Music 库、不碰任何用户文档。
 #
 # 测试用: 设 LYRIMUSE_UNINSTALL_PREFIX 指向一个临时目录，可以在不碰真实文件的前提下
-# 走完整个流程。
+# 走完整个流程；LYRIMUSE_UNINSTALL_KEYCHAIN 指向一份临时钥匙串文件，凭据那一项就不碰登录钥匙串。
 #
 set -u
 
@@ -45,6 +45,14 @@ APP_LOG_FILE="$PREFIX/Library/Logs/lyrimuse-app.log"
 APP_LOG_ARCHIVE="$APP_LOG_FILE.old"
 # App 主线程卡住时采的调用栈(见 LyrimuseCore LogFiles.mainThreadStall)。
 STALL_SAMPLE_FILE="$PREFIX/Library/Logs/lyrimuse-main-thread-stall.txt"
+# 钥匙串里的凭据保险箱:服务名 <bundle id>.credentials、账号是配置目录(见 LyrimuseCore CredentialVault)。
+VAULT_SERVICE="$APP_LABEL.credentials"
+VAULT_KEYCHAIN=()
+[[ -n "${LYRIMUSE_UNINSTALL_KEYCHAIN:-}" ]] && VAULT_KEYCHAIN=("$LYRIMUSE_UNINSTALL_KEYCHAIN")
+# 不带 -w 只读属性,不解密、不弹授权框。
+has_vault() {
+  /usr/bin/security find-generic-password -s "$VAULT_SERVICE" -a "$CONFIG_DIR" "${VAULT_KEYCHAIN[@]}" >/dev/null 2>&1
+}
 
 MODE="report"
 case "${1:-}" in
@@ -160,6 +168,8 @@ TO_DELETE=()
 # `defaults delete`。两者混在一起的话，路径和 domain 就分不清了。
 HAS_DEFAULTS=no
 has_defaults "$APP_LABEL" && HAS_DEFAULTS=yes
+HAS_VAULT=no
+has_vault && HAS_VAULT=yes
 [[ -e "$CONFIG_DIR" ]] && TO_DELETE+=("$CONFIG_DIR")
 [[ -e "$CACHE_DIR" ]] && TO_DELETE+=("$CACHE_DIR")
 [[ -e "$LOG_FILE" ]] && TO_DELETE+=("$LOG_FILE")
@@ -186,6 +196,10 @@ else
     echo "     手工修正过的内容，删掉之后没有任何办法找回。想留着的话现在先把整个"
     echo "     lyrics/ 目录拷走。"
   fi
+fi
+if [[ "$HAS_VAULT" == "yes" ]]; then
+  echo
+  echo "  钥匙串里的账号凭据($VAULT_SERVICE)：ListenBrainz / Last.fm / 推送 / Apple Music 的令牌"
 fi
 if [[ "$HAS_DEFAULTS" == "yes" ]]; then
   echo
@@ -243,6 +257,18 @@ if [[ "$HAS_DEFAULTS" == "yes" ]]; then
   fi
 else
   echo "  —  本来就没有 $APP_LABEL"
+fi
+echo
+echo "=== 删除钥匙串里的凭据 ==="
+if [[ "$HAS_VAULT" == "yes" ]]; then
+  /usr/bin/security delete-generic-password -s "$VAULT_SERVICE" -a "$CONFIG_DIR" "${VAULT_KEYCHAIN[@]}" >/dev/null 2>&1
+  if has_vault; then
+    echo "  ❌ 还在，手动执行: security delete-generic-password -s $VAULT_SERVICE -a $CONFIG_DIR"
+  else
+    echo "  ✅ 已删除 $VAULT_SERVICE"
+  fi
+else
+  echo "  —  本来就没有 $VAULT_SERVICE"
 fi
 echo
 echo "App 本体请自行拖进废纸篓: /Applications/Lyrimuse.app"

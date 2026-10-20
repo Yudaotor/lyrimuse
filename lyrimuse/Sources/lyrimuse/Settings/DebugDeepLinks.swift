@@ -54,6 +54,11 @@ enum DebugDeepLinks {
         case let .settingsSearch(query):
             NotificationCenter.default.post(name: settingsSearchNotification, object: query)
             logger.notice("debug settings search \(query, privacy: .public)")
+        case .saveConfig:
+            Task { @MainActor in
+                let ok = await ConfigStore.shared.save()
+                logger.notice("debug config save ok=\(ok, privacy: .public)")
+            }
         }
     }
 

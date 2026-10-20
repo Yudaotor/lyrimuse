@@ -92,6 +92,8 @@ func (c *config) lastfmBridgeAPIKey() string {
 // 一个通知 webhook。一个字段的格式问题不该让悬浮歌词整个不显示。
 //
 // 所以改成逐字段解:能认的认下来,认不下来的记进 loadIssues 交给调用方打日志。
+//
+// 凭据不在文件里,在钥匙串的保险箱里,读完文件叠上去(credentialvault.go)。
 func loadConfig(path string) (*config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -99,7 +101,7 @@ func loadConfig(path string) (*config, error) {
 		// 不同——它意味着我们对配置一无所知,而且重试很可能还是这个结果。
 		return nil, fmt.Errorf("read config %s: %w", path, err)
 	}
-	return configFromBytes(data), nil
+	return configFromBytes(overlayCredentials(data, currentCredentialVault())), nil
 }
 
 // trimCredentials 去掉凭据与地址字段的首尾空白。用户粘贴 token 常带尾随空格 / 换行:App 侧校验时去掉了

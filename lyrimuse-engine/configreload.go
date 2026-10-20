@@ -115,7 +115,7 @@ func maybeReloadConfig() {
 		log.Printf("config: %s changed but is not valid JSON (%v), keeping the settings currently in effect", *pp, err)
 		return
 	}
-	next := configFromBytes(data)
+	next := configFromBytes(overlayCredentials(data, currentCredentialVault()))
 	for _, issue := range next.loadIssues {
 		log.Printf("config: %s", issue)
 	}

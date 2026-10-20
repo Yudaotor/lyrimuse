@@ -1,7 +1,10 @@
 import AppKit
 import Foundation
 import LyrimuseCore
+import os
 import WebKit
+
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "apple-music-connection")
 
 /// Apple Music 官方歌词源(lyrimuse-engine/applemusic.go)的连接状态与登录流程。
 ///
@@ -18,7 +21,8 @@ import WebKit
 public final class AppleMusicConnection: ObservableObject {
     public static let shared = AppleMusicConnection()
 
-    /// 跟引擎侧 applemusicUserTokenPath() 指的是同一个文件,两边都写死这个名字。
+    /// 跟引擎侧 applemusicUserTokenPath() 指的是同一个文件,两边都写死这个名字。文件只记店面和时间,
+    /// 令牌本身在钥匙串的保险箱里(Core `CredentialVault`)。
     private static let tokenURL = LyrimusePaths.configFile("lyrimuse-applemusic-token.json")
     /// 引擎对这份令牌的观察(问到的店面、被拒),只读;见 AppleMusicTokenFile.parse。
     private static let engineStatusURL = LyrimusePaths.configFile(AppleMusicTokenFile.engineStatusFileName)
@@ -47,10 +51,12 @@ public final class AppleMusicConnection: ObservableObject {
 
     /// 重新读盘。连接成功、断开、以及设置页每次出现时都调一次。
     public func refresh() {
+        Self.moveFileTokenIntoVault()
         let fileDate = (try? FileManager.default.attributesOfItem(atPath: Self.tokenURL.path))?[.modificationDate] as? Date
+        let vaultToken = CredentialVaultStore.shared.load()?[CredentialVault.mediaUserTokenKey] as? String
         guard let data = FileIO.read(Self.tokenURL),
               let info = AppleMusicTokenFile.parse(data, fileDate: fileDate ?? Date(),
-                                                   engineStatus: FileIO.read(Self.engineStatusURL))
+                                                   engineStatus: FileIO.read(Self.engineStatusURL), vaultToken: vaultToken)
         else {
             tokenInfo = nil
             isRejected = false
@@ -60,6 +66,26 @@ public final class AppleMusicConnection: ObservableObject {
         tokenInfo = info
         isRejected = info.rejected
         state = .connected(savedAt: info.savedAt, storefront: info.storefront)
+    }
+
+    /// 旧版本写在文件里的令牌挪进保险箱,文件里删掉令牌、别的字段原样。保险箱写不进去就留在文件里,下次再试。
+    private static func moveFileTokenIntoVault() {
+        guard let data = FileIO.read(tokenURL),
+              var obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let token = obj[CredentialVault.mediaUserTokenKey] as? String,
+              !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return }
+        do {
+            try CredentialVaultStore.shared.update { $0[CredentialVault.mediaUserTokenKey] = token }
+        } catch {
+            logger.error("apple music: keeping the token in the file, keychain write failed: \(String(describing: error), privacy: .public)")
+            return
+        }
+        obj.removeValue(forKey: CredentialVault.mediaUserTokenKey)
+        if let stripped = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted]),
+           FileIO.attempt("write", tokenURL, { try AppleMusicLoginWindowController.writeCredentialFile(stripped, to: tokenURL) }) {
+            logger.notice("apple music: moved the user token from the file into the keychain")
+        }
     }
 
     public var isConnected: Bool {
@@ -104,10 +130,15 @@ public final class AppleMusicConnection: ObservableObject {
         }
     }
 
-    /// 断开:删掉令牌文件,并清掉 WebView 那份登录态(否则下次点"连接"会直接跳过登录页、
+    /// 断开:删掉令牌文件和保险箱里的令牌,并清掉 WebView 那份登录态(否则下次点"连接"会直接跳过登录页、
     /// 把同一个账号的令牌又写回来,用户会以为断开没生效)。
     public func disconnect() {
         FileIO.remove(Self.tokenURL)
+        do {
+            try CredentialVaultStore.shared.update { $0[CredentialVault.mediaUserTokenKey] = nil }
+        } catch {
+            logger.error("apple music: removing the token from the keychain failed: \(String(describing: error), privacy: .public)")
+        }
         Self.clearAppleWebsiteData {}
         refresh()
     }
@@ -213,7 +244,15 @@ final class AppleMusicLoginWindowController: NSWindowController, WKNavigationDel
         pollTimer?.invalidate()
         pollTimer = nil
 
-        let payload = AppleMusicTokenFile.payload(token: token, storefront: storefront, savedAt: Date(), expiresAt: expiresAt)
+        // 令牌进保险箱,文件只记店面和时间;保险箱写不进去(钥匙串锁着)时令牌照旧写进文件,下次打开设置页再挪。
+        var fileToken: String? = token
+        do {
+            try CredentialVaultStore.shared.update { $0[CredentialVault.mediaUserTokenKey] = token }
+            fileToken = nil
+        } catch {
+            logger.error("apple music: keychain write failed, token kept in the file: \(String(describing: error), privacy: .public)")
+        }
+        let payload = AppleMusicTokenFile.payload(token: fileToken, storefront: storefront, savedAt: Date(), expiresAt: expiresAt)
         guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]),
               FileIO.attempt("write", tokenURL, { try Self.writeCredentialFile(data, to: tokenURL) })
         else {
@@ -228,7 +267,7 @@ final class AppleMusicLoginWindowController: NSWindowController, WKNavigationDel
 
     /// 凭据文件从创建那一刻起就是 0o600(先建同目录临时文件再改名),不存在「先按默认权限写好、再 chmod」
     /// 之间同机其它用户读得到的窗口。引擎侧写 musixmatch token 同一档权限。
-    private static func writeCredentialFile(_ data: Data, to url: URL) throws {
+    static func writeCredentialFile(_ data: Data, to url: URL) throws {
         let dir = url.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let tmp = dir.appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp")

@@ -1,0 +1,71 @@
+{
+  "comment": "凭据保险箱叠到 config.json 上的对拍样例。引擎 credentialvault_test.go(overlayCredentials)和 App selftest(CredentialVault.overlay)读同一份,改叠法时两边一起改、在这里加样例。",
+  "cases": [
+    {
+      "name": "保险箱是空的,文件原样",
+      "file": {"listenbrainz_token": "f", "listenbrainz_user": "u"},
+      "vault": {},
+      "want": {"listenbrainz_token": "f", "listenbrainz_user": "u"}
+    },
+    {
+      "name": "文件里没有的凭据取保险箱的",
+      "file": {"listenbrainz_user": "u"},
+      "vault": {"config": {"listenbrainz_token": "v", "lastfm_scrobble_session_key": "s"}},
+      "want": {"listenbrainz_user": "u", "listenbrainz_token": "v", "lastfm_scrobble_session_key": "s"}
+    },
+    {
+      "name": "文件里是空串或空白也取保险箱的",
+      "file": {"listenbrainz_token": "", "state_relay_token": "  "},
+      "vault": {"config": {"listenbrainz_token": "v1", "state_relay_token": "v2"}},
+      "want": {"listenbrainz_token": "v1", "state_relay_token": "v2"}
+    },
+    {
+      "name": "文件里有值以文件为准",
+      "file": {"listenbrainz_token": "f"},
+      "vault": {"config": {"listenbrainz_token": "v"}},
+      "want": {"listenbrainz_token": "f"}
+    },
+    {
+      "name": "不是凭据的键不叠",
+      "file": {"api_root": "https://api.listenbrainz.org"},
+      "vault": {"config": {"api_root": "https://elsewhere.example", "state_relay_url": "https://x.example", "listenbrainz_token": "v"}},
+      "want": {"api_root": "https://api.listenbrainz.org", "listenbrainz_token": "v"}
+    },
+    {
+      "name": "保险箱里的空值不叠,也不凭空加键",
+      "file": {"listenbrainz_user": "u", "state_relay_token": ""},
+      "vault": {"config": {"listenbrainz_token": "", "state_relay_token": "  "}},
+      "want": {"listenbrainz_user": "u", "state_relay_token": ""}
+    },
+    {
+      "name": "旧版各平台地址表整份取保险箱的",
+      "file": {"notification_webhook_urls": {}, "bark_url": "", "notification_platform": "telegram"},
+      "vault": {"config": {"notification_webhook_urls": {"telegram": "123:abc"}, "bark_url": "123:abc"}},
+      "want": {"notification_webhook_urls": {"telegram": "123:abc"}, "bark_url": "123:abc", "notification_platform": "telegram"}
+    },
+    {
+      "name": "渠道按 id 补地址和密钥,文件里有的不动,没有对应渠道的不凭空加",
+      "file": {"notification_channels": [
+        {"id": "a", "platform": "bark", "url": "", "enabled": true},
+        {"id": "b", "platform": "ntfy", "url": "https://ntfy.example/f", "enabled": true},
+        {"id": "d", "platform": "slack", "url": "", "enabled": false}
+      ]},
+      "vault": {"channels": {
+        "a": {"url": "https://api.day.app/K"},
+        "b": {"url": "https://ntfy.example/v", "secret": "tk_s"},
+        "c": {"url": "https://orphan.example"}
+      }},
+      "want": {"notification_channels": [
+        {"id": "a", "platform": "bark", "url": "https://api.day.app/K", "enabled": true},
+        {"id": "b", "platform": "ntfy", "url": "https://ntfy.example/f", "secret": "tk_s", "enabled": true},
+        {"id": "d", "platform": "slack", "url": "", "enabled": false}
+      ]}
+    },
+    {
+      "name": "没有渠道列表时不凭空造一份",
+      "file": {"listenbrainz_user": "u"},
+      "vault": {"channels": {"a": {"url": "https://api.day.app/K"}}},
+      "want": {"listenbrainz_user": "u"}
+    }
+  ]
+}

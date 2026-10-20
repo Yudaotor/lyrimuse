@@ -88,6 +88,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 设置窗口里搜这个词、打开第一条结果:翻页、切分段、展开抽屉,把那一行高亮并滚进可见区
         /// (`debug/settings-search?q=`)。设置窗口要先开着。
         case settingsSearch(query: String)
+        /// 账号配置按内存里的样子原样保存一次,跟账号页自动保存走同一条 `ConfigStore.save()`(`debug/config-save`)。
+        case saveConfig
     }
 
     /// `action/` 下不对应快捷键的那几个名字(跟 `LyrimuseAction.linkName` 不能重名,selftest 核对)。
@@ -182,6 +184,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/volume"):
             guard let percent = value("percent").flatMap(Int.init), (0...100).contains(percent) else { return nil }
             self = .debug(.volume(percent: percent))
+        case ("debug", "/config-save"):
+            self = .debug(.saveConfig)
         case ("debug", "/settings-search"):
             guard let query = value("q")?.trimmingCharacters(in: .whitespaces), !query.isEmpty else { return nil }
             self = .debug(.settingsSearch(query: query))
@@ -285,6 +289,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .settingsSearch(query):
                 components.path = "/settings-search"
                 components.queryItems = [URLQueryItem(name: "q", value: query)]
+            case .saveConfig: components.path = "/config-save"
             }
         case .lastfmAuthCallback:
             components.host = "lastfm-auth-callback"

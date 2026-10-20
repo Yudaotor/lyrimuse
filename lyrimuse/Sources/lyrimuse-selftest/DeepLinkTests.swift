@@ -175,6 +175,7 @@ func runDeepLinkTests() {
                     "debug: 快照没给窗口名、认不出的命令返回 nil")
         expectEqual(link("lyrimuse://debug/checkpoint"), .debug(.checkpoint), "debug: 记下")
         expectEqual(link("lyrimuse://debug/restore"), .debug(.restore), "debug: 恢复")
+        expectEqual(link("lyrimuse://debug/config-save"), .debug(.saveConfig), "debug: 账号配置原样保存一次")
         expectEqual(LyrimuseDeepLink.wantsBackground(URL(string: "lyrimuse://lyrics-manager?background=1")!), true, "后台开窗: 带了")
         expectEqual(LyrimuseDeepLink.wantsBackground(URL(string: "lyrimuse://lyrics-manager")!), false, "后台开窗: 没带")
         expectEqual(link("lyrimuse://lyrics-manager?background=1"), .lyricsManager, "后台开窗: 不影响认哪条链接")
@@ -287,7 +288,7 @@ func runDeepLinkTests() {
             .debug(.simulate(title: "x", artist: "y", album: "z", duration: nil, position: 0, playing: true)), .debug(.simulateOff),
             .debug(.simulate(title: "x", artist: "", album: "", duration: 30, position: 0, playing: true, ad: true)),
             .debug(.simulateIdle),
-            .debug(.toggleFavorite), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
+            .debug(.toggleFavorite), .debug(.saveConfig), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
             .debug(.settingsSearch(query: "OBS 输出")),
             .setPlayMode(.list), .setPlayMode(.shuffle), .setPlayMode(.repeatAll), .setPlayMode(.repeatOne),
         ] + LyrimuseAction.allCases.map { .action($0, on: nil, stepSeconds: nil) }

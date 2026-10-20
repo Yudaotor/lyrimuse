@@ -155,10 +155,10 @@ func applemusicLastFailureReasonNow() string {
 
 // ---- 凭据 ----
 
-// applemusicUserTokenPath 是 media-user-token 的落点。写入方是 lyrimuse 设置里的
+// applemusicUserTokenPath 是 Apple Music 连接的记录文件(店面、保存时刻)。写入方是 lyrimuse 设置里的
 // "连接 Apple Music"窗口(AppleMusicLoginWindow.swift),引擎只读。
 //
-// 这是用户 Apple Music 账号的访问凭据,跟 musixmatch token 一样只待在本机配置目录,
+// media-user-token 本身是用户 Apple Music 账号的访问凭据,存在钥匙串的保险箱里(credentialvault.go),
 // 不进仓库、不上传、不写日志(下面任何一处都不打印它的值,只打印长度)。
 func applemusicUserTokenPath() string {
 	if configDir() == "" {
@@ -210,7 +210,14 @@ func applemusicReadTokenFile() (applemusicUserTokenFile, bool) {
 		return applemusicUserTokenFile{}, false
 	}
 	var f applemusicUserTokenFile
-	if json.Unmarshal(raw, &f) != nil || strings.TrimSpace(f.MediaUserToken) == "" {
+	if json.Unmarshal(raw, &f) != nil {
+		return applemusicUserTokenFile{}, false
+	}
+	// 令牌本身在钥匙串的保险箱里(credentialvault.go),文件只记店面和时间;旧版本写在文件里的照认。
+	if strings.TrimSpace(f.MediaUserToken) == "" {
+		f.MediaUserToken = currentCredentialVault().MediaUserToken
+	}
+	if strings.TrimSpace(f.MediaUserToken) == "" {
 		return applemusicUserTokenFile{}, false
 	}
 	return f, true

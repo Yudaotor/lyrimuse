@@ -7,6 +7,7 @@ import Foundation
 
 @MainActor
 func runOpsDiagnosticsTests() {
+    credentialVaultChecks()
     // ---- LogRedactor(诊断包脱敏) ----
     //
     // 这一组断言守的是一条会被贴进公开 GitHub issue 的输出:实测坐实,诊断报告
@@ -405,13 +406,17 @@ func runOpsDiagnosticsTests() {
         let cfgURL = home.appendingPathComponent(".config/lyrimuse/config.json")
         let logURL = home.appendingPathComponent("Library/Logs/lyrimuse.log")
 
+        // 凭据在钥匙串的保险箱里,叠回去才是全集。
+        let vault = CredentialVaultStore(keychain: KeychainCLI(service: CredentialVault.service,
+                                                                account: cfgURL.deletingLastPathComponent().path))
         guard let cfgData = try? Data(contentsOf: cfgURL),
-              let cfg = try? JSONSerialization.jsonObject(with: cfgData) as? [String: Any],
+              let fileCfg = try? JSONSerialization.jsonObject(with: cfgData) as? [String: Any],
               let logText = try? String(contentsOf: logURL, encoding: .utf8) else {
             failures += 1
             print("FAIL - 读不到真实 config.json 或日志,校验没跑成")
             exit(1)
         }
+        let cfg = CredentialVault.overlay(fileCfg, vault: vault.load() ?? [:])
 
         // 导出的是**整份**日志(DiagnosticsExporter.fullEngineLogText),所以这里也拿整份验。
         // 原来只验最后 200 行 —— 那是当年那个导出窗口的形状,而凭据可能出现在任何一行:
