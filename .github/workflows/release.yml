@@ -149,6 +149,7 @@ jobs:
             echo "build_version=${BUILD_VERSION}"
             echo "is_prerelease=${IS_PRERELEASE}"
             echo "asset_base=Lyrimuse-v${BUNDLE_VERSION}-macos"
+            echo "symbols_base=symbols-for-crash-reports-v${BUNDLE_VERSION}"
           } >> "$GITHUB_OUTPUT"
           echo "Building ${VERSION} (display ${BUNDLE_VERSION}, CFBundleVersion ${BUILD_VERSION}, prerelease=${IS_PRERELEASE})"
 
@@ -379,7 +380,8 @@ jobs:
           prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
           # The unsuffixed assets are arm64-only; -intel is universal. Each ships as a .tar.xz (the
           # Sparkle update), a zip (Homebrew cask, hashed by its .sha256) and a dmg for manual downloads.
-          # The -dSYM zips symbolicate crash reports from exactly this build (package.sh checks the UUIDs).
+          # The symbols-for-crash-reports zips symbolicate crash reports from exactly this build (package.sh
+          # checks the UUIDs). They are named so they sort after the app downloads and do not look like one.
           files: |
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}.tar.xz
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}.zip
@@ -389,8 +391,8 @@ jobs:
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.zip
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.zip.sha256
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.dmg
-            lyrimuse/dist/${{ steps.version.outputs.asset_base }}-dSYM.zip
-            lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel-dSYM.zip
+            lyrimuse/dist/${{ steps.version.outputs.symbols_base }}-arm64.zip
+            lyrimuse/dist/${{ steps.version.outputs.symbols_base }}-intel.zip
             appcast.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -404,6 +406,7 @@ jobs:
         run: |
           TAG="${{ steps.version.outputs.version }}"
           BASE="${{ steps.version.outputs.asset_base }}"
+          SYMBOLS="${{ steps.version.outputs.symbols_base }}"
           gh release view "$TAG" --json isDraft,assets > "$RUNNER_TEMP/release.json"
           if [ "$(jq -r .isDraft "$RUNNER_TEMP/release.json")" != "true" ]; then
             echo "::error::release $TAG is not a draft -- refusing to continue" >&2
@@ -411,7 +414,7 @@ jobs:
           fi
           for f in "lyrimuse/dist/$BASE.tar.xz" "lyrimuse/dist/$BASE.zip" "lyrimuse/dist/$BASE.zip.sha256" "lyrimuse/dist/$BASE.dmg" \
                    "lyrimuse/dist/$BASE-intel.tar.xz" "lyrimuse/dist/$BASE-intel.zip" "lyrimuse/dist/$BASE-intel.zip.sha256" "lyrimuse/dist/$BASE-intel.dmg" \
-                   "lyrimuse/dist/$BASE-dSYM.zip" "lyrimuse/dist/$BASE-intel-dSYM.zip" \
+                   "lyrimuse/dist/$SYMBOLS-arm64.zip" "lyrimuse/dist/$SYMBOLS-intel.zip" \
                    appcast.xml; do
             name="$(basename "$f")"
             want="$(stat -f%z "$f")"

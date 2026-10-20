@@ -9,8 +9,8 @@
 #   Lyrimuse-v<版本>-macos-intel.zip.sha256
 #   Lyrimuse-v<版本>-macos-intel.tar.xz
 #   Lyrimuse-v<版本>-macos-intel.dmg
-#   Lyrimuse-v<版本>-macos-dSYM.zip       两份包里三个 Swift 可执行文件的 dSYM,还原用户崩溃报告用
-#   Lyrimuse-v<版本>-macos-intel-dSYM.zip
+#   symbols-for-crash-reports-v<版本>-arm64.zip   两份包里三个 Swift 可执行文件的 dSYM,还原用户崩溃报告用
+#   symbols-for-crash-reports-v<版本>-intel.zip   不以 Lyrimuse- 开头:Release 页按名字排,这样排在安装包后面,也不像安装包
 #
 # 用法:
 #   LYRIMUSE_VERSION=1.2.1 ./package.sh
@@ -245,6 +245,7 @@ for v in "${VARIANTS[@]}"; do
   label="${suffix:-(主包)}"
   app="$STAGE/${suffix:-primary}/Lyrimuse.app"
   base="Lyrimuse-v$VERSION-macos$suffix"
+  if [ -n "$suffix" ]; then dsym_zip="symbols-for-crash-reports-v$VERSION-intel.zip"; else dsym_zip="symbols-for-crash-reports-v$VERSION-arm64.zip"; fi
 
   # zip 用 ditto 而不是 zip(1) —— Sparkle 的文档和它自己的打包脚本都用 ditto,因为它保留
   # 资源分叉、扩展属性和符号链接;zip(1) 会把 framework 里的符号链接拆成实体拷贝,进而破坏
@@ -263,7 +264,7 @@ for v in "${VARIANTS[@]}"; do
     -cJf "$DIST/$base.tar.xz" -C "$(dirname "$app")" Lyrimuse.app
   verify_archive "$label" "$DIST/$base.zip" "$want"
   verify_archive "$label" "$DIST/$base.tar.xz" "$want"
-  pack_dsyms "$label" "$app" "$want" "$DIST/$base-dSYM.zip"
+  pack_dsyms "$label" "$app" "$want" "$DIST/$dsym_zip"
 
   # dmg:优先用 dmgbuild 出"带背景图、图标摆好位置"的窗口,拿不到 dmgbuild 就退回
   # 纯 hdiutil。
@@ -312,7 +313,7 @@ for v in "${VARIANTS[@]}"; do
   printf "    %-40s %s\n" "$base.zip.sha256" "$(human_size "$DIST/$base.zip.sha256")"
   printf "    %-40s %s\n" "$base.tar.xz" "$(human_size "$DIST/$base.tar.xz")"
   printf "    %-40s %s\n" "$base.dmg" "$(human_size "$DIST/$base.dmg")"
-  printf "    %-40s %s\n" "$base-dSYM.zip" "$(human_size "$DIST/$base-dSYM.zip")"
+  printf "    %-40s %s\n" "$dsym_zip" "$(human_size "$DIST/$dsym_zip")"
 done
 
 echo
