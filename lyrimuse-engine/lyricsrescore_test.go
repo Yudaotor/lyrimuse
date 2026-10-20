@@ -230,3 +230,34 @@ func TestRescoreDecidableNoCurrentLyrics(t *testing.T) {
 		t.Error("自动 rescore 口径必须一字未动:部分应答 + 没记来源 = 不够格")
 	}
 }
+
+// 当前这份是播放器本地歌词、这首此刻在用别的播放器放:那份本地歌词这一轮给不出来,照常判;用它自己的播放器放、
+// 或者没在放这首(预取、全量扫库)时不放行,见 rescorePlayerLocalUnreachable。
+func TestRescorePlayerLocalUnreachable(t *testing.T) {
+	saved := enrichPlayingKey.Load()
+	t.Cleanup(func() {
+		enrichPlayingKey.Store(saved)
+		setNativeLyricSourcesForPlayer("")
+	})
+	key := enrichKey("歌手", "歌名", "专辑")
+	enrichPlayingKey.Store(&key)
+
+	setNativeLyricSourcesForPlayer(appleMusicBundleID)
+	if !rescorePlayerLocalUnreachable(lxMusicLocalLyricsSource, key) {
+		t.Error("洛雪本地歌词、正用 Apple Music 放这首:该放行")
+	}
+	if rescorePlayerLocalUnreachable("qq", key) {
+		t.Error("当前来源是歌词源:不归这条管")
+	}
+	if rescorePlayerLocalUnreachable(lxMusicLocalLyricsSource, enrichKey("歌手", "另一首", "专辑")) {
+		t.Error("没在放这首:不放行")
+	}
+	setNativeLyricSourcesForPlayer(lxMusicBundleID)
+	if rescorePlayerLocalUnreachable(lxMusicLocalLyricsSource, key) {
+		t.Error("正用洛雪放:本地歌词读得到,不放行")
+	}
+	setNativeLyricSourcesForPlayer("")
+	if rescorePlayerLocalUnreachable(lxMusicLocalLyricsSource, key) {
+		t.Error("认不出在用哪个播放器:不放行")
+	}
+}

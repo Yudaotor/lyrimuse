@@ -818,10 +818,20 @@ public final class LyricsSyncEngine {
     /// 或**含**歌手名的某种写法。值可以是任意词,不能交给署名规则的"右边像不像句子"那道闸判,
     /// 所以按歌名 / 歌手等值来认;只在开头那段署名里用(见 strippingCreditLines)。
     static func looksLikeLabeledHeaderLine(_ text: String, trackTitle: String, trackArtist: String) -> Bool {
-        guard !trackTitle.isEmpty, !trackArtist.isEmpty,
-              let colon = text.firstIndex(where: { $0 == ":" || $0 == "：" })
-        else { return false }
+        guard !trackTitle.isEmpty, !trackArtist.isEmpty else { return false }
         func norm(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber } }
+        // 歌名、歌手两个标签写在同一行、标签后面可以没有冒号(「歌曲名 X 歌手名 Y」):歌名等值或歌手对得上一个就算。
+        // 见 08 章决策 55。
+        let r = NSRange(text.startIndex..., in: text)
+        if let m = pairedHeaderLabelPattern.firstMatch(in: text, range: r),
+           let t = Range(m.range(at: 1), in: text), let a = Range(m.range(at: 2), in: text) {
+            let titles = Set(headerTitleForms(trackTitle).map(norm)).subtracting([""])
+            let value = String(text[t])
+            return titles.contains(norm(value)) || titles.contains(norm(stripBracketsForHeaderMatch(value)))
+                || headerMatchVariants(of: trackArtist).map(norm).filter { !$0.isEmpty }
+                    .contains { norm(String(text[a])).contains($0) }
+        }
+        guard let colon = text.firstIndex(where: { $0 == ":" || $0 == "：" }) else { return false }
         let label = norm(String(text[..<colon]))
         let value = String(text[text.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
         guard !norm(value).isEmpty else { return false }
@@ -836,6 +846,10 @@ public final class LyricsSyncEngine {
             return false
         }
     }
+
+    private static let pairedHeaderLabelPattern = try! NSRegularExpression(
+        pattern: #"^(?:歌曲名|歌名)[\s:：]+(.+?)[\s,，]+(?:歌手名|歌手)[\s:：]+(.+)$"#
+    )
 
     /// 抬头里的歌名 / 歌手除了播放器报的,还认这份歌词自己的 `[ti:]` / `[ar:]`(`LRCParser.headerTags`):抬头是歌词源按
     /// 自己的写法写的,播放器报的常是另一种语种或写法(罗马字对假名)。播放器的和标签的两两搭配逐一判,任一成立就算;

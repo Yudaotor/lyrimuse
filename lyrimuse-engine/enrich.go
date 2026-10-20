@@ -1623,6 +1623,14 @@ func rescoreDecidable(scored []scoredLyricCandidateResult, currentSource string,
 	return allEnabledLyricSourcesResponded(scored)
 }
 
+// rescorePlayerLocalUnreachable:当前这份是播放器本地歌词(isPlayerLocalLyricSource),而这首此刻正用别的播放器在放 ——
+// 那份本地歌词只在用它自己的播放器放时才读得到,等它应答就一直判不了。这时照常判,当前这份留不留交给 rescoreKeepsLyrics。
+// 没在放这首(预取、全量扫库)时不算:还在用那个播放器的人,换了版本的扫库不该把它的本地歌词换掉。见 09 章决策 307。
+func rescorePlayerLocalUnreachable(currentSource, key string) bool {
+	return isPlayerLocalLyricSource(currentSource) && !isNativeLyricSource(currentSource) && playingPlayer() != "" &&
+		isEnrichPlayingKey(key)
+}
+
 func containsString(list []string, want string) bool {
 	for _, s := range list {
 		if s == want {
@@ -2497,7 +2505,8 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	picked := pickLyricCandidatePreferring(scored, sourceChoice)
 	// 传 false:这条路只对有词的条目跑(needsLyricsRescore 第一行就要求 e.Lyrics != "",全量扫库和手动重新匹配
 	// 都先把没词的分给补空那条路),手上总有一份要保护的词。
-	decidable := rescoreDecidable(scored, currentSource, false)
+	decidable := rescoreDecidable(scored, currentSource, false) ||
+		rescorePlayerLocalUnreachable(currentSource, key)
 	// 当前这份跟这一轮哪一份都对不上:是另一首歌的词,当前来源没应答也可判,换不换也不再看它留不留得住
 	// (见 rescoreCurrentContradicted)。
 	contradicted := rescoreCurrentContradicted(startLyrics.String(), scored, picked)
