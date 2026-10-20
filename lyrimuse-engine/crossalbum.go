@@ -33,8 +33,8 @@ const crossAlbumReuseToleranceSecs = 2.0
 // crossAlbumSiblingLyrics 在缓存里找「同一段录音、收在另一张专辑下」的兄弟条目,返回它的
 // key;没有合适的就返回空串。**调用方必须持有 enrichMu。**
 //
-// 兄弟的判据:同 artist、同 title(key 的前两段逐字相等,它们已经过 cleanMediaTag /
-// normEnrichTitle)、album 不同、两边时长都已知且差在容差内。
+// 兄弟的判据:同一种写法(sameEnrichWriting)、album 不同、两边时长都已知且差在容差内;两边都已经分到同一首歌的实体时
+// 要是同一个实体(实体按 ISRC 等证据拆开的原版和重制版时长常常只差一两秒)。
 //
 // 只返回**歌词评分比 self 高**的那条 —— 跟存量合并命令 `cross-album-reuse -apply` 用的是
 // 同一条「评分高的赢」规则,两处结论保持一致。同分不动:同分说明两份都站得住,这时换一份
@@ -57,11 +57,11 @@ func crossAlbumSiblingLyrics(cache map[string]enrichEntry, key string, self enri
 		if e.LyricsScore <= bestScore || e.lyricsScoring() != self.lyricsScoring() {
 			continue
 		}
-		a, t, al := splitEnrichKey(k)
-		if a != artist || t != title || al == album {
+		if math.Abs(e.DurationSecs-self.DurationSecs) > crossAlbumReuseToleranceSecs || !crossAlbumSameRecording(self, e) {
 			continue
 		}
-		if math.Abs(e.DurationSecs-self.DurationSecs) > crossAlbumReuseToleranceSecs {
+		a, t, al := splitEnrichKey(k)
+		if !sameEnrichWriting(a, t, artist, title) || loosenEnrichKey(al) == loosenEnrichKey(album) {
 			continue
 		}
 		if strings.TrimSpace(e.Lyrics.String()) == "" {
@@ -70,6 +70,23 @@ func crossAlbumSiblingLyrics(cache map[string]enrichEntry, key string, self enri
 		best, bestScore = k, e.LyricsScore
 	}
 	return best
+}
+
+// sameEnrichWriting:两条写法的歌手、歌名是不是同一种写法。按宽松比对(loosenEnrichKey:繁简、大小写、空格、多歌手分隔符),
+// 跟 canonicalEnrichKey 认重复条目同一层:enrich key 保留原样,同一位歌手在不同专辑、不同播放器下常有全大写和首字母大写、
+// 「&」和「/」两种写法。跨专辑复用、同曲共享组的写法族边(familyEdges)、cross-album-reuse 归组三处共用。见 09 章决策 305。
+func sameEnrichWriting(artistA, titleA, artistB, titleB string) bool {
+	return enrichWritingKey(artistA, titleA) == enrichWritingKey(artistB, titleB)
+}
+
+// enrichWritingKey:sameEnrichWriting 比的那个键,按它归组用。
+func enrichWritingKey(artist, title string) string {
+	return loosenEnrichKey(artist + "|" + title)
+}
+
+// crossAlbumSameRecording:两条写法可能是同一段录音 —— 有一边还没分到实体,或者两边是同一个实体。
+func crossAlbumSameRecording(a, b enrichEntry) bool {
+	return a.Song == "" || b.Song == "" || a.Song == b.Song
 }
 
 // adoptCrossAlbumSiblingLyrics 在写入一条记录之前,把它对齐到评分更高的跨专辑兄弟上。

@@ -32,6 +32,7 @@ type crossAlbumMember struct {
 	version  lyricsScoringStamp // 分数只在同一版本之间比
 	lines    int
 	lyrics   string
+	song     string // 同一首歌的实体 id,没分到时为空
 }
 
 // crossAlbumGroup 是同一个 `artist|title` 下、时长互相兼容的一组条目。
@@ -266,7 +267,7 @@ func groupCrossAlbumCandidates(cache map[string]enrichEntry, tolerance float64) 
 		if artist == "" || title == "" {
 			continue
 		}
-		id := artist + "|" + title
+		id := enrichWritingKey(artist, title)
 		byTitle[id] = append(byTitle[id], crossAlbumMember{
 			key:      key,
 			album:    album,
@@ -276,6 +277,7 @@ func groupCrossAlbumCandidates(cache map[string]enrichEntry, tolerance float64) 
 			version:  e.lyricsScoring(),
 			lines:    strings.Count(e.Lyrics.String(), "\n") + 1,
 			lyrics:   e.Lyrics.String(),
+			song:     e.Song,
 		})
 	}
 
@@ -296,13 +298,11 @@ func groupCrossAlbumCandidates(cache map[string]enrichEntry, tolerance float64) 
 			if len(bucket) >= 2 {
 				albums := map[string]bool{}
 				for _, m := range bucket {
-					albums[m.album] = true
+					albums[loosenEnrichKey(m.album)] = true
 				}
-				// key 是 artist|title|album,而这里按 artist|title 归组,所以组内 album
-				// 必然互不相同 —— 这道检查当下恒真。留着是因为归组口径一旦放宽(比如改用
-				// canonicalEnrichKey 折大小写),同 album 的两条就可能落进同一组,那时
-				// 它们是同一首的重复条目,归 key 迁移(migrateEnrichKeys)合并,不该由跨专辑复用来动。
-				if len(albums) >= 2 {
+				// 按宽松写法归组,只差大小写的两条写法可能连专辑也一样:那是同一首的重复条目,归 key 迁移(migrateEnrichKeys)
+				// 合并,不该由跨专辑复用来动,整组不碰。
+				if len(albums) == len(bucket) && crossAlbumOneRecording(bucket) {
 					artist, title, _ := splitEnrichKey(bucket[0].key)
 					out = append(out, crossAlbumGroup{artist: artist, title: title,
 						members: append([]crossAlbumMember(nil), bucket...)})
@@ -319,6 +319,21 @@ func groupCrossAlbumCandidates(cache map[string]enrichEntry, tolerance float64) 
 		flush()
 	}
 	return out
+}
+
+// crossAlbumOneRecording:这一组没有被实体分成两首(组里分到实体的写法都在同一个实体里),同 crossAlbumSameRecording。
+func crossAlbumOneRecording(ms []crossAlbumMember) bool {
+	song := ""
+	for _, m := range ms {
+		if m.song == "" {
+			continue
+		}
+		if song != "" && m.song != song {
+			return false
+		}
+		song = m.song
+	}
+	return true
 }
 
 // truncate 按显示宽度裁短专辑名,让输出的列对得齐。

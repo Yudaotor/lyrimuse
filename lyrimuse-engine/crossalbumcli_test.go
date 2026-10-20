@@ -278,3 +278,57 @@ func TestCrossAlbumReuseComparesSameScoringVersionOnly(t *testing.T) {
 		t.Fatalf("bestMember = %q, want new2", best)
 	}
 }
+
+// 同一种写法按宽松比对认:只差大小写、多歌手分隔符的两条算兄弟;两边分到了不同的实体(原版和重制版)不算。
+func TestCrossAlbumSiblingLooseWritingAndEntity(t *testing.T) {
+	self := enrichEntry{Lyrics: bt("mine"), LyricsScore: 700, DurationSecs: 200}
+	self.stampLyricsScoring()
+	better := enrichEntry{Lyrics: bt("better"), LyricsScore: 900, DurationSecs: 200.5}
+	better.stampLyricsScoring()
+	cache := map[string]enrichEntry{"PRINCE|Shhh|A": self, "Prince|Shhh|B": better}
+	if got := crossAlbumSiblingLyrics(cache, "PRINCE|Shhh|A", self); got != "Prince|Shhh|B" {
+		t.Fatalf("只差大小写应算兄弟: %q", got)
+	}
+	duo := map[string]enrichEntry{"X & Y|Song|A": self, "X/Y|Song|B": better}
+	if got := crossAlbumSiblingLyrics(duo, "X & Y|Song|A", self); got != "X/Y|Song|B" {
+		t.Fatalf("只差多歌手分隔符应算兄弟: %q", got)
+	}
+	sameAlbum := map[string]enrichEntry{"PRINCE|Shhh|A": self, "Prince|Shhh|a": better}
+	if got := crossAlbumSiblingLyrics(sameAlbum, "PRINCE|Shhh|A", self); got != "" {
+		t.Fatalf("专辑也只差大小写是重复条目,不算跨专辑: %q", got)
+	}
+	split := self
+	split.Song = "s_original"
+	remaster := better
+	remaster.Song = "s_remaster"
+	cache = map[string]enrichEntry{"PRINCE|Shhh|A": split, "Prince|Shhh|B": remaster}
+	if got := crossAlbumSiblingLyrics(cache, "PRINCE|Shhh|A", split); got != "" {
+		t.Fatalf("分到不同实体的不算同一段录音: %q", got)
+	}
+	remaster.Song = "s_original"
+	cache["Prince|Shhh|B"] = remaster
+	if got := crossAlbumSiblingLyrics(cache, "PRINCE|Shhh|A", split); got != "Prince|Shhh|B" {
+		t.Fatalf("同一个实体的算兄弟: %q", got)
+	}
+}
+
+// cross-album-reuse 归组同一口径:只差大小写的归一组;组里有两个实体、或专辑也只差大小写的整组不碰。
+func TestCrossAlbumReuseGroupsLooseWriting(t *testing.T) {
+	entry := func(lyrics string, score int, song string) enrichEntry {
+		e := enrichEntry{Lyrics: bt(lyrics), LyricsScore: score, DurationSecs: 200, Song: song}
+		e.stampLyricsScoring()
+		return e
+	}
+	cache := map[string]enrichEntry{"PRINCE|Shhh|A": entry("low", 700, ""), "Prince|Shhh|B": entry("high", 900, "")}
+	if got := len(groupCrossAlbumCandidates(cache, crossAlbumReuseToleranceSecs)); got != 1 {
+		t.Fatalf("只差大小写应归成一组,得到 %d 组", got)
+	}
+	cache = map[string]enrichEntry{"PRINCE|Shhh|A": entry("low", 700, "s_1"), "Prince|Shhh|B": entry("high", 900, "s_2")}
+	if got := len(groupCrossAlbumCandidates(cache, crossAlbumReuseToleranceSecs)); got != 0 {
+		t.Fatalf("两个实体的不归组,得到 %d 组", got)
+	}
+	cache = map[string]enrichEntry{"PRINCE|Shhh|A": entry("low", 700, ""), "Prince|Shhh|a": entry("high", 900, ""), "Prince|Shhh|B": entry("mid", 800, "")}
+	if got := len(groupCrossAlbumCandidates(cache, crossAlbumReuseToleranceSecs)); got != 0 {
+		t.Fatalf("组里有专辑只差大小写的重复条目,整组不碰,得到 %d 组", got)
+	}
+}

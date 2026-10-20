@@ -476,6 +476,13 @@ func TestSongEntityFamilyEdgeShare(t *testing.T) {
 	if b, _ := songTestBuild(t, same, nil); b.shareOf[0] != b.shareOf[1] {
 		t.Error("歌手歌名逐字相同、只差专辑(跨专辑复用同一口径),应当在同一个共享组")
 	}
+	cased := []songVariant{
+		songTestVariant("SINGER|Tune|One", enrichEntry{DurationSecs: 200}, nil),
+		songTestVariant("Singer|Tune|Two", enrichEntry{DurationSecs: 200.5}, nil),
+	}
+	if b, _ := songTestBuild(t, cased, nil); b.shareOf[0] != b.shareOf[1] {
+		t.Error("歌手只差大小写也是同一种写法(sameEnrichWriting),应当在同一个共享组")
+	}
 	tail := []songVariant{
 		songTestVariant("Singer|Tune|One", enrichEntry{DurationSecs: 200}, nil),
 		songTestVariant("Singer|Tune (feat. Guest)|Two", enrichEntry{DurationSecs: 200.5}, nil),

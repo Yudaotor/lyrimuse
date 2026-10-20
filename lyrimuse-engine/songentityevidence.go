@@ -339,8 +339,8 @@ func songArtistCachedNames(name string) []string {
 	return out
 }
 
-// familyEdges:同一位主歌手、写法族歌名相同、两边都有时长且差不超过闸的写法连边。歌手、歌名两段逐字相同(只差专辑)的
-// 那种就是跨专辑复用的判据,单独就能连共享组。
+// familyEdges:同一位主歌手、写法族歌名相同、两边都有时长且差不超过闸的写法连边。歌手、歌名是同一种写法(只差专辑,
+// sameEnrichWriting)的那种就是跨专辑复用的判据,单独就能连共享组。
 func (b *songEdgeBuilder) familyEdges() {
 	buckets := map[string][]int{}
 	var keys []string
@@ -367,7 +367,7 @@ func (b *songEdgeBuilder) familyEdges() {
 					b.drop(songEvidenceFamily, "duration", 1)
 					continue
 				}
-				b.add(songEdge{kind: songEvidenceFamily, a: ms[i], b: ms[j], share: x.artist == y.artist && x.title == y.title})
+				b.add(songEdge{kind: songEvidenceFamily, a: ms[i], b: ms[j], share: sameEnrichWriting(x.artist, x.title, y.artist, y.title)})
 			}
 		}
 	}
