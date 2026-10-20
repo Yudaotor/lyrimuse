@@ -327,3 +327,40 @@ func TestShareEvalReplay(t *testing.T) {
 		t.Error("存档坏了应当报错")
 	}
 }
+
+// 拿去搜的写法先看名字适不适合搜:带专辑、歌名跟歌词同一种文字的优先,打分版本更新也压不过;同样适合的照旧按现有歌词挑。
+func TestShareEvalRepPrefersSearchableName(t *testing.T) {
+	zh := "[00:01.00]信札拆封谁为难\n[00:05.00]不过寥寥数行\n[00:09.00]能否送我到汉阳\n"
+	ja := "[00:01.00]ここで消えるのに\n[00:05.00]地球儀を回して\n[00:09.00]僕らは歩いていく\n"
+	variant := func(key, lyrics string) songVariant {
+		v := songTestVariant(key, enrichEntry{DurationSecs: 200, Lyrics: bt(lyrics)}, nil)
+		return v
+	}
+	pick := func(vs []songVariant, own []*songPlanLyrics) string {
+		b := &songEntityBuild{variants: vs}
+		ms := make([]int, len(vs))
+		for i := range ms {
+			ms[i] = i
+		}
+		rep, _ := b.shareEvalRep(ms, own)
+		return vs[rep].key
+	}
+	newer := &songPlanLyrics{fp: "a", words: true, timed: true, version: 30, score: 933}
+	older := &songPlanLyrics{fp: "b", words: true, timed: true, version: 26, score: 1230}
+	if got := pick([]songVariant{variant("Jay Chou|Cold Hearted|Greatest Works Of Art", zh), variant("周杰倫|紅顏如霜|最偉大的作品", zh)},
+		[]*songPlanLyrics{newer, older}); got != "周杰倫|紅顏如霜|最偉大的作品" {
+		t.Errorf("中文歌应拿中文歌名去搜,得到 %s", got)
+	}
+	if got := pick([]songVariant{variant("周杰倫|愛在西元前|", zh), variant("周杰伦|爱在西元前|范特西", zh)},
+		[]*songPlanLyrics{newer, older}); got != "周杰伦|爱在西元前|范特西" {
+		t.Errorf("带专辑的应优先,得到 %s", got)
+	}
+	if got := pick([]songVariant{variant("米津玄師|Spinning Globe|LOST CORNER", ja), variant("米津玄師|地球儀|LOST CORNER", ja)},
+		[]*songPlanLyrics{newer, older}); got != "米津玄師|地球儀|LOST CORNER" {
+		t.Errorf("日文歌词配汉字歌名也算同一种文字,得到 %s", got)
+	}
+	if got := pick([]songVariant{variant("周杰倫|紅顏如霜|最偉大的作品", zh), variant("周杰伦|红颜如霜|最伟大的作品", zh)},
+		[]*songPlanLyrics{older, newer}); got != "周杰伦|红颜如霜|最伟大的作品" {
+		t.Errorf("同样适合时照旧按现有歌词挑(打分版本新的),得到 %s", got)
+	}
+}

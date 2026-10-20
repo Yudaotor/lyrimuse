@@ -89,6 +89,30 @@ func songPlanBetter(a, b *songPlanLyrics, na, nb int) bool {
 	return a.fp < b.fp
 }
 
+// songQueryFit:这条写法的名字适不适合拿去搜:带专辑记 1,歌名跟歌词同一种文字记 1(songTitleFitsScript)。
+func songQueryFit(v *songVariant, script lyricScript) int {
+	fit := 0
+	if strings.TrimSpace(v.album) != "" {
+		fit++
+	}
+	if songTitleFitsScript(v.title, script) {
+		fit++
+	}
+	return fit
+}
+
+// songLyricsScript:歌词正文主要用的文字,去掉时间戳后按 translationScript 数(英文按词、汉字按字,有假名就是日文)。
+func songLyricsScript(lyrics string) lyricScript {
+	return translationScript(lrcTimestampRe.ReplaceAllString(lyrics, ""))
+}
+
+// songTitleFitsScript:歌名跟歌词是同一种文字。歌词是日文时汉字歌名也算;歌名没有字母(纯数字、符号)或不知道歌词是哪种文字时
+// 不分高下,都算。
+func songTitleFitsScript(title string, script lyricScript) bool {
+	t := dominantScript(title)
+	return script == scriptNone || t == scriptNone || t == script || (script == scriptKana && t == scriptHan)
+}
+
 // 不变式 6 留着自己那份的原因,快速空跑和正式空跑共用。
 const (
 	songKeepOwn         = "自己的手改或校准"
@@ -276,7 +300,10 @@ type shareEvalRound struct {
 	Scored   []scoredLyricCandidateResult `json:"scored"`
 }
 
-// shareEvalRep:组里拿去搜的那条写法(现有歌词最好的那份所在的;方案:优先当前歌词选择来自的那条)和组里各写法时长的中位数。
+// shareEvalRep:组里拿去搜的那条写法和组里各写法时长的中位数。先挑名字适合拿去搜的(songQueryFit:带专辑、歌名跟歌词同一种
+// 文字),同样适合的再挑现有歌词最好的那份所在的(方案:优先当前歌词选择来自的那条)。这一轮的分数是按搜的名字算的:拿英文
+// 译名或空专辑去搜,候选的歌名、专辑两项拿不到,冠军分整体偏低,存进条目之后再比也吃亏;只按现有歌词挑时,上一轮换上的写法
+// 打分版本变新,下一轮代表跟着换,同一组来回重搜。见 18 章决策 78。
 func (b *songEntityBuild) shareEvalRep(ms []int, own []*songPlanLyrics) (int, float64) {
 	count := map[string]int{}
 	for _, m := range ms {
@@ -284,10 +311,21 @@ func (b *songEntityBuild) shareEvalRep(ms []int, own []*songPlanLyrics) (int, fl
 			count[l.fp]++
 		}
 	}
-	rep := ms[0]
+	best := ms[0]
 	for _, m := range ms {
-		if l := own[m]; l != nil && (own[rep] == nil || songPlanBetter(l, own[rep], count[l.fp], count[own[rep].fp])) {
-			rep = m
+		if l := own[m]; l != nil && (own[best] == nil || songPlanBetter(l, own[best], count[l.fp], count[own[best].fp])) {
+			best = m
+		}
+	}
+	script := songLyricsScript(b.variants[best].lyrics.String())
+	rep, repFit := best, songQueryFit(&b.variants[best], script)
+	for _, m := range ms {
+		if own[m] == nil {
+			continue
+		}
+		fit := songQueryFit(&b.variants[m], script)
+		if fit > repFit || (fit == repFit && songPlanBetter(own[m], own[rep], count[own[m].fp], count[own[rep].fp])) {
+			rep, repFit = m, fit
 		}
 	}
 	var durs []float64
