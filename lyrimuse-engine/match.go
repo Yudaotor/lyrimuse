@@ -634,6 +634,13 @@ func lyricScoreTermKinds() []string {
 	}
 }
 
+// wordTimingPoints:带逐字时间轴加多少分,跟"一档时长差距"同量级,让带逐字时间轴的候选能逆转。
+// translationPoints:自带可用译文加多少分。当前歌词在这一轮的分(currentLyricsRoundScore)按这两个数补算,改分值不用另改那边。
+const (
+	wordTimingPoints  = 400
+	translationPoints = 50
+)
+
 // durationMismatchPenalty:时长明显对不上时扣多少。
 //
 // 别判 -1(一票否决):被一票否决的候选里 83%(5/6)
@@ -950,7 +957,7 @@ func scoreLyricCandidateDetailed(
 		}
 	}
 	if c.hasWordTiming {
-		add(scoreTermWordTiming, 400) // 跟"一档时长差距"同量级,让带逐字时间轴的候选能逆转
+		add(scoreTermWordTiming, wordTimingPoints)
 	}
 	if isNativeLyricSource(c.source) && c.identityFromLocalClient {
 		// 跟当前播放器同源、**且身份由那个播放器的本地数据给定**的歌词加分。
@@ -1045,7 +1052,7 @@ func scoreLyricCandidateDetailed(
 	}
 	// 增值内容决胜:见 lyricCandidate.hasUsableTranslation 的注释。
 	if c.hasUsableTranslation {
-		add(scoreTermTranslation, 50)
+		add(scoreTermTranslation, translationPoints)
 	}
 	if c.hasUsableRomanization {
 		add(scoreTermRoma, 30)

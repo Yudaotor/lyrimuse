@@ -1745,10 +1745,8 @@ func lyricsUpgradeBaseline(e enrichEntry, scored []scoredLyricCandidateResult) (
 	if e.lyricsScoring() == currentLyricsScoring {
 		return e.LyricsScore, true
 	}
-	for i := range scored {
-		if scored[i].Source == e.LyricsSource && e.Lyrics.EqualString(scored[i].Lyrics) {
-			return scored[i].Score, true
-		}
+	if score, _, ok := currentLyricsRoundScore(e, scored, true); ok {
+		return score, true
 	}
 	return 0, false
 }
@@ -2685,6 +2683,11 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 			log.Printf("lyrics rescore: %s  keeping %s(%d) with word timing, %s(%d) has none this round",
 				key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
 		case rescoreKeepsCurrent(compared, scored, picked):
+			if cur, gained, _ := currentLyricsRoundScore(compared, scored, false); gained {
+				log.Printf("lyrics rescore: %s  keeping %s, the same lyrics this round lack its word timing or translation (%d with them), %s(%d) is no better",
+					key, e.LyricsSource, cur, picked.Source, picked.Score)
+				break
+			}
 			log.Printf("lyrics rescore: %s  keeping %s(%d), current lyrics not among candidates and %s(%d) is no better",
 				key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
 		default:
@@ -2793,16 +2796,58 @@ func lookupPeripheralQQMids(ctx context.Context, key string, fresh enrichEntry) 
 // 让 820 分的词换成 500 分的)。打分版本落后的,旧分数没法比,照原规则让这一轮说了算。跟这一轮某份被判整首错开的
 // 候选同轴(rescoreCurrentTimelineOff)的也不比:那一份就是当前这份、只是正文写法变了,它已经参与比较并输了,
 // 存的分数是没扣这一项时打的。
+//
+// 当前这份参与了比较(这一轮有同一份正文的候选)时输了就换;只有它带着那份候选没带的逐字 / 译文时,按补上之后的分比
+// (currentLyricsRoundScore),这个分是这一轮的、跟打分版本无关。
 func rescoreKeepsCurrent(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult) bool {
-	if e.Lyrics.EqualString(picked.Lyrics) || e.lyricsScoring() != currentLyricsScoring {
+	if e.Lyrics.EqualString(picked.Lyrics) {
 		return false
 	}
-	for i := range scored {
-		if e.Lyrics.EqualString(scored[i].Lyrics) {
-			return false // 当前这份参与了比较,输了就换
-		}
+	if cur, gained, ok := currentLyricsRoundScore(e, scored, false); ok {
+		return gained && picked.Score <= cur
+	}
+	if e.lyricsScoring() != currentLyricsScoring {
+		return false
 	}
 	return !rescoreCurrentTimelineOff(e, scored) && picked.Score <= e.LyricsScore
+}
+
+// currentLyricsRoundScore:当前这份歌词在这一轮的分 —— 跟它同一份正文的候选的分(sameSource 时还要同一个源;同文的有
+// 几份取最高),加上当前这份带着、那份候选没带的东西按打分同一口径该得的分(currentLyricsExtraPoints)。gained:补上了。
+// ok:这一轮有同文的候选。同一段词常挂在同一首歌的几个条目下,有的带逐字、有的没有(换专辑、同曲共享、同一个源的
+// 不同曲目 ID),只拿候选的分会把当前这份的逐字算丢,输给分数更低的另一份。被判不可用(负分)的候选不补。见 09 章决策 304。
+func currentLyricsRoundScore(e enrichEntry, scored []scoredLyricCandidateResult, sameSource bool) (score int, gained, ok bool) {
+	for i := range scored {
+		c := &scored[i]
+		if (sameSource && c.Source != e.LyricsSource) || !e.Lyrics.EqualString(c.Lyrics) {
+			continue
+		}
+		s, extra := c.Score, 0
+		if s > 0 {
+			extra = currentLyricsExtraPoints(e, c, scored)
+		}
+		if !ok || s+extra > score {
+			score, gained, ok = s+extra, extra > 0, true
+		}
+	}
+	return score, gained, ok
+}
+
+// currentLyricsExtraPoints:当前这份带着、同文候选 c 没带的增值内容在这一轮该得的分:逐字(当前这份这一轮没被判整首
+// 错开时,同 rescoreWouldLoseWordTiming)、歌词源自带的可用译文(机翻不算)。判据跟构造候选时同一套
+// (usableWordTiming、usableValueAdd)。
+func currentLyricsExtraPoints(e enrichEntry, c *scoredLyricCandidateResult, scored []scoredLyricCandidateResult) int {
+	extra := 0
+	if scoreTermPoints(c.ScoreTerms, scoreTermWordTiming) == 0 && usableWordTiming(e.Lyrics.String(), e.LyricsYRC.String()) &&
+		!rescoreCurrentTimelineOff(e, scored) {
+		extra += wordTimingPoints
+	}
+	if scoreTermPoints(c.ScoreTerms, scoreTermTranslation) == 0 && e.LyricsTrSource == "" {
+		if tr, _ := usableValueAdd(e.Lyrics.String(), e.LyricsTr.String(), e.LyricsTrLang, "", features().LyricsTranslationLanguage); tr {
+			extra += translationPoints
+		}
+	}
+	return extra
 }
 
 // rescoreComparedEntry:重评判当前这份留不留时拿来比的那一份。它是给另一版选的(lyricsFitAnotherCut)时,存着的分带着

@@ -57,10 +57,8 @@ func musicVideoLyricsStaleLocked(key string, e enrichEntry) bool {
 // 这一轮它的源应答了、却没再给出同一份正文(按未知时长它不再是候选),基准就是 0;它的源这一轮没应答,
 // 不下结论(同 rescoreDecidable:一次偶发超时不该把人换到更差的一份)。
 func lyricsBaselineForUnknownDuration(e enrichEntry, scored []scoredLyricCandidateResult) (baseline int, comparable bool) {
-	for i := range scored {
-		if scored[i].Source == e.LyricsSource && e.Lyrics.EqualString(scored[i].Lyrics) {
-			return scored[i].Score, true
-		}
+	if score, _, ok := currentLyricsRoundScore(e, scored, true); ok {
+		return score, true
 	}
 	for _, s := range lyricSourcesResponded(scored) {
 		if s == e.LyricsSource {

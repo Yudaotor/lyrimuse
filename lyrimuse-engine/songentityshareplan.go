@@ -222,16 +222,10 @@ func shareEvalPlan(keys []string, entries []enrichEntry, own []*songPlanLyrics, 
 			}
 			continue
 		}
-		var cur *scoredLyricCandidateResult
-		for j := range scored {
-			if scored[j].Source == e.LyricsSource && e.Lyrics.EqualString(scored[j].Lyrics) {
-				cur = &scored[j]
-				break
-			}
-		}
+		curScore, _, found := currentLyricsRoundScore(e, scored, true)
 		before := fmt.Sprintf("%s 这一轮没找到 %s", e.LyricsSource, songEvalKind(e.Lyrics.String(), e.LyricsYRC.String()))
-		if cur != nil {
-			before = fmt.Sprintf("%s %d 分 %s", e.LyricsSource, cur.Score, songEvalKind(e.Lyrics.String(), e.LyricsYRC.String()))
+		if found {
+			before = fmt.Sprintf("%s %d 分 %s", e.LyricsSource, curScore, songEvalKind(e.Lyrics.String(), e.LyricsYRC.String()))
 		}
 		contradicted := rescoreCurrentContradicted(e.Lyrics.String(), scored, choice)
 		why := ""
@@ -255,7 +249,7 @@ func shareEvalPlan(keys []string, entries []enrichEntry, own []*songPlanLyrics, 
 		if why != "" {
 			action = "留"
 		}
-		out = append(out, songEvalLine{key: keys[i], action: action, before: before, why: why, found: cur != nil, contradicted: contradicted})
+		out = append(out, songEvalLine{key: keys[i], action: action, before: before, why: why, found: found, contradicted: contradicted})
 	}
 	return out
 }
