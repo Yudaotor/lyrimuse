@@ -128,6 +128,12 @@ enum NotificationFailureText {
     }
 }
 
+/// 推送记录里「延后到 HH:MM」那个时刻(24 小时制)。
+func notificationClockText(_ date: Date) -> String {
+    let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+    return NotificationQuietHours.clockText((c.hour ?? 0) * 60 + (c.minute ?? 0))
+}
+
 /// 渠道行、推送记录里那一行时间:今年的不写年份。
 func notificationTimeText(_ date: Date) -> String {
     let sameYear = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year)
@@ -180,7 +186,9 @@ extension NotificationChannel {
 
 // MARK: - 渠道列表
 
-/// 「推送渠道」卡:每个渠道一行(名字、平台、上次推送成没成、启用开关),点一行编辑,右上角添加。
+/// 「推送渠道」卡:每个渠道一行(名字、平台、上次推送成没成、启用开关),点一行编辑,右上角添加;有两个以上渠道时
+/// 默认的那个名字旁一枚「默认」。渠道增删时各档报告的路由跟着改
+/// (Core `NotificationRouting`,见 15 章决策 72)。
 struct NotificationChannelsCard: View {
     @ObservedObject var config: ConfigStore
     @ObservedObject private var log = NotificationDeliveryWatcher.shared
@@ -192,7 +200,7 @@ struct NotificationChannelsCard: View {
         SettingsCard(cornerRadius: 18) {
             SettingsCardHeader(
                 title: L10n.t("推送渠道"),
-                help: L10n.t("报告将推送到所有已启用的渠道。点按一行可编辑或发送测试；右键点按可删除")
+                help: L10n.t("报告默认推送到所有已启用的渠道，有多个渠道时可在「听歌报告」中按档选择。点按一行可编辑或发送测试；右键点按可删除")
             ) {
                 Button {
                     editing = NotificationChannel(platform: NotificationPlatform.displayOrder.first?.rawValue ?? "bark")
@@ -209,13 +217,15 @@ struct NotificationChannelsCard: View {
                     if index > 0 { CardDivider() }
                     row(channel)
                 }
-                .padding(.bottom, 4)
             }
         }
         .sheet(item: $editing) { channel in
+            let isNew = !config.notificationChannels.contains { $0.id == channel.id }
             NotificationChannelEditor(
                 original: channel,
-                isNew: !config.notificationChannels.contains { $0.id == channel.id },
+                isNew: isNew,
+                // 「设为默认」只在有两个以上渠道时出现;新加的这个算在里面。
+                showsDefaultToggle: NotificationRouting.showsChoice(channelCount: config.notificationChannels.count + (isNew ? 1 : 0)),
                 onSave: save,
                 onDelete: delete
             )
@@ -233,7 +243,9 @@ struct NotificationChannelsCard: View {
     }
 
     private func delete(_ channel: NotificationChannel) {
-        config.notificationChannels.removeAll { $0.id == channel.id }
+        let next = NotificationRouting.removing(id: channel.id, from: config.notificationChannels, routes: config.notificationRoutes)
+        config.notificationRoutes = next.routes
+        config.notificationChannels = next.channels
         editing = nil
     }
 
@@ -262,10 +274,15 @@ struct NotificationChannelsCard: View {
                 .opacity(channel.enabled ? 1 : 0.45)
                 .frame(width: SettingsRowMetrics.iconWidth)
             VStack(alignment: .leading, spacing: 2) {
-                Text(channel.displayName)
-                    .font(.system(size: 13))
-                    .foregroundStyle(channel.enabled ? .primary : .secondary)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(channel.displayName)
+                        .font(.system(size: 13))
+                        .foregroundStyle(channel.enabled ? .primary : .secondary)
+                        .lineLimit(1)
+                    if channel.isDefault, NotificationRouting.showsChoice(channelCount: config.notificationChannels.count) {
+                        NotificationDefaultBadge()
+                    }
+                }
                 Text(status.text)
                     .font(.system(size: 11))
                     .foregroundStyle(status.tint)
@@ -317,12 +334,243 @@ struct NotificationChannelsCard: View {
     }
 
     private func save(_ channel: NotificationChannel) {
-        if let i = config.notificationChannels.firstIndex(where: { $0.id == channel.id }) {
-            config.notificationChannels[i] = channel
+        if config.notificationChannels.contains(where: { $0.id == channel.id }) {
+            config.notificationChannels = NotificationRouting.updating(channel, in: config.notificationChannels)
         } else {
-            config.notificationChannels.append(channel)
+            // 加之前把还没选过渠道的几档落成现有渠道,新渠道设成默认的才加进去(见 NotificationRouting.adding)。
+            let next = NotificationRouting.adding(channel, to: config.notificationChannels, routes: config.notificationRoutes)
+            config.notificationRoutes = next.routes
+            config.notificationChannels = next.channels
         }
         editing = nil
+    }
+}
+
+// MARK: - 静默时段
+
+/// 「听歌报告」卡最后一行「静默时段」:开关 + 起止两个时刻(半小时一档)。静默只管四档报告,所以放在报告卡里、不放渠道卡。
+/// 改了立刻落盘,引擎按 mtime 热重读(notifyquiet.go)。
+struct NotificationQuietHoursRow: View {
+    @ObservedObject private var features = FeatureSettingsStore.shared
+
+    var body: some View {
+        let quiet = features.notificationQuietHours
+        return HStack(spacing: SettingsRowMetrics.iconTextSpacing) {
+            Image(systemName: "moon.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 22, height: 22)
+                .background(RoundedRectangle(cornerRadius: 22 * 0.225, style: .continuous).fill(Color.indigo))
+                .frame(width: SettingsRowMetrics.iconWidth)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("静默时段"))
+                    .font(.system(size: 13))
+                Text(String(format: L10n.t("%1$@ 到 %2$@ 之间要推的，等到 %2$@ 再推"), quiet.startText, quiet.endText))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Spacer(minLength: 8)
+            NotificationClockField(label: L10n.t("静默开始"), minutes: quietBinding(\.start))
+            Text("–").foregroundStyle(.secondary)
+            NotificationClockField(label: L10n.t("静默结束"), minutes: quietBinding(\.end))
+            Toggle(L10n.t("静默时段"), isOn: quietBinding(\.enabled))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+        .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+        .padding(.vertical, 8)
+        .settingsSearchHighlight(title: L10n.t("静默时段"))
+    }
+
+    private func quietBinding<V: Equatable>(_ key: WritableKeyPath<NotificationQuietHours, V>) -> Binding<V> {
+        Binding(
+            get: { features.notificationQuietHours[keyPath: key] },
+            set: { value in
+                guard features.notificationQuietHours[keyPath: key] != value else { return }
+                features.notificationQuietHours[keyPath: key] = value
+                Task { await features.save() }
+            }
+        )
+    }
+}
+
+/// 渠道名旁那枚「默认」小标签。
+struct NotificationDefaultBadge: View {
+    var body: some View {
+        Text(L10n.t("默认"))
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(Color.accentColor)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color.accentColor.opacity(0.13)))
+    }
+}
+
+/// 一个「时:分」小下拉(24 小时制),值是零点起的分钟数。半小时一档;文件里手写的不在整半点上的值也列出来、照原样显示。
+/// 不用可输入的时间框:页面上一出现能打字的控件,设置窗口一打开焦点就落在它上面,按键会直接改掉时间。
+struct NotificationClockField: View {
+    let label: String
+    @Binding var minutes: Int
+
+    var body: some View {
+        Menu {
+            ForEach(Self.choices(including: minutes), id: \.self) { m in
+                Button { minutes = m } label: {
+                    if m == minutes { Label(Self.text(m), systemImage: "checkmark") } else { Text(Self.text(m)) }
+                }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Text(Self.text(minutes)).monospacedDigit()
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .font(.system(size: 12))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.08)))
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(label)
+    }
+
+    private static func normalized(_ minutes: Int) -> Int { ((minutes % 1440) + 1440) % 1440 }
+
+    static func choices(including minutes: Int) -> [Int] {
+        var all = Array(stride(from: 0, to: 1440, by: 30))
+        let m = normalized(minutes)
+        if !all.contains(m) { all.append(m); all.sort() }
+        return all
+    }
+
+    static func text(_ minutes: Int) -> String {
+        let m = normalized(minutes)
+        return String(format: "%02d:%02d", m / 60, m % 60)
+    }
+}
+
+// MARK: - 每档推到哪些渠道
+
+/// 「听歌报告」卡每档行尾那个小下拉:点开勾选这一档推到哪几个渠道(至少留一个),写进 `ConfigStore.notificationRoutes`。
+/// 只有一个渠道时整个不出现(页面跟只有一个渠道时一样)。
+struct NotificationRoutePicker: View {
+    @ObservedObject var config: ConfigStore
+    let event: String
+    @State private var open = false
+
+    var body: some View {
+        if NotificationRouting.showsChoice(channelCount: config.notificationChannels.count) {
+            Button { open.toggle() } label: {
+                HStack(spacing: 3) {
+                    Text(labelText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .font(.system(size: 11.5))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.08)))
+                .frame(maxWidth: 150, alignment: .trailing)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(L10n.t("选择这一档推送到哪些渠道"))
+            .popover(isPresented: $open, arrowEdge: .bottom) { popover }
+        }
+    }
+
+    private var selected: Set<String> {
+        NotificationRouting.selectedIDs(event: event, channels: config.notificationChannels, routes: config.notificationRoutes)
+    }
+
+    private var labelText: String {
+        let names = config.notificationChannels.filter { selected.contains($0.id) }.map(\.displayName)
+        switch NotificationRouting.label(selectedNames: names, total: config.notificationChannels.count) {
+        case .all: return L10n.t("全部渠道")
+        case .names(let joined): return joined
+        case .firstOfMany(let first, let count): return String(format: L10n.t("%1$@ 等 %2$d 个"), first, count)
+        }
+    }
+
+    private var popover: some View {
+        let current = selected
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(L10n.t("推到"))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            ForEach(config.notificationChannels) { channel in
+                let on = current.contains(channel.id)
+                // 至少留一个:最后一个勾着的不让取消。
+                let locked = on && current.count == 1
+                let toggle = {
+                    config.notificationRoutes = NotificationRouting.toggling(
+                        channel.id, event: event, channels: config.notificationChannels, routes: config.notificationRoutes)
+                }
+                // 勾选框不带自己的标签、名字另排:这一行挂在 SettingsRow 的尾部控件上,那里的 labelsHidden 会传进浮层。
+                HStack(spacing: 6) {
+                    Toggle(channel.displayName, isOn: Binding(get: { on }, set: { _ in toggle() }))
+                        .toggleStyle(.checkbox)
+                        .labelsHidden()
+                    NotificationPlatformBadge(platform: NotificationPlatform(rawValue: channel.platform) ?? .bark, size: 14)
+                    Text(channel.displayName)
+                    if !channel.enabled {
+                        Text(L10n.t("已停用")).foregroundStyle(.secondary)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { if !locked { toggle() } }
+                .disabled(locked)
+            }
+            Divider()
+            Text(L10n.t("新加的渠道设成「默认」时会自动勾上"))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.system(size: 12.5))
+        .padding(12)
+        .frame(minWidth: 200, alignment: .leading)
+    }
+}
+
+// MARK: - 每类列出
+
+/// 「每类列出」那一行的小步进器:− 数字 +,1～10(`DigestTopN.range`)。
+struct DigestTopNStepper: View {
+    @Binding var value: Int
+
+    var body: some View {
+        HStack(spacing: 0) {
+            step("minus", enabled: value > DigestTopN.range.lowerBound) { value -= 1 }
+            Text("\(value)")
+                .font(.system(size: 12, weight: .medium).monospacedDigit())
+                .frame(minWidth: 22)
+            step("plus", enabled: value < DigestTopN.range.upperBound) { value += 1 }
+        }
+        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.08)))
+    }
+
+    private func step(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 9, weight: .semibold))
+                .frame(width: 22, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(enabled ? .primary : .tertiary)
+        .disabled(!enabled)
     }
 }
 
@@ -330,10 +578,13 @@ struct NotificationChannelsCard: View {
 
 /// 添加 / 编辑一个渠道的表单。添加时先选平台(平铺,悬停有说明),再填字段;也可以直接粘一整段地址,认出平台就切过去。
 /// 编辑已有的渠道只出这个平台自己的字段,不列别的平台:平台定了就不换,要换平台删掉再添加。
-/// 「发送测试」用表单里此刻的内容(还没保存也行)推一条示例消息,结果就地显示,表单不关。
+/// 「发送测试」用表单里此刻的内容(还没保存也行)推一条示例消息,结果就地显示,表单不关;「预览」不用填地址,
+/// 弹出一块用测试数据画的推送效果(`NotificationPreviewCard`),跟着选的平台、填的名称变。
 struct NotificationChannelEditor: View {
     let original: NotificationChannel
     let isNew: Bool
+    /// 「设为默认」开关:有两个以上渠道(算上正在新加的这个)时才出现。
+    var showsDefaultToggle = false
     let onSave: (NotificationChannel) -> Void
     let onDelete: (NotificationChannel) -> Void
 
@@ -350,11 +601,13 @@ struct NotificationChannelEditor: View {
     @State private var testOutcome: NotificationTestRunner.Outcome?
     @State private var testTask: Task<Void, Never>?
     @State private var confirmingDelete = false
+    @State private var previewing = false
 
-    init(original: NotificationChannel, isNew: Bool,
+    init(original: NotificationChannel, isNew: Bool, showsDefaultToggle: Bool = false,
          onSave: @escaping (NotificationChannel) -> Void, onDelete: @escaping (NotificationChannel) -> Void) {
         self.original = original
         self.isNew = isNew
+        self.showsDefaultToggle = showsDefaultToggle
         self.onSave = onSave
         self.onDelete = onDelete
         _draft = State(initialValue: original)
@@ -516,6 +769,23 @@ struct NotificationChannelEditor: View {
                     .labelsHidden()
                     .textFieldStyle(.roundedBorder)
             }
+            if showsDefaultToggle {
+                GridRow {
+                    Text(L10n.t("设为默认"))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle(L10n.t("设为默认"), isOn: $draft.isDefault)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                        Text(isNew
+                             ? L10n.t("设为默认后，四档听歌报告都会推送到这个渠道；同一时间只有一个默认渠道")
+                             : L10n.t("同一时间只有一个默认渠道。之后新添加的渠道设为默认时，会自动加入四档听歌报告"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
         }
         .font(.system(size: 13))
     }
@@ -576,6 +846,12 @@ struct NotificationChannelEditor: View {
         HStack {
             Button(L10n.t("发送测试")) { runTest() }
                 .disabled(!draft.isComplete || testing)
+            Button(L10n.t("预览")) { previewing.toggle() }
+                .help(L10n.t("用测试数据看看推送在这个平台上的样子"))
+                .popover(isPresented: $previewing, arrowEdge: .top) {
+                    NotificationPreviewCard(platform: platform, senderName: cleaned.name.isEmpty ? platform.displayName : cleaned.name,
+                                            signed: !cleaned.secret.isEmpty)
+                }
             if !isNew {
                 Button(L10n.t("删除…"), role: .destructive) { confirmingDelete = true }
             }
@@ -663,7 +939,9 @@ struct NotificationLogCard: View {
                 Text(entry.title ?? "")
                     .font(.system(size: 12))
                     .lineLimit(1)
-                Text(channelName)
+                Text(entry.isDeferred
+                     ? channelName + " · " + String(format: L10n.t("静默时段里到的，延后到 %@"), notificationClockText(entry.date))
+                     : channelName)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

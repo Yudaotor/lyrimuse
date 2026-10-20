@@ -2131,6 +2131,13 @@
       "path" : [
         "推送提醒"
       ],
+      "title" : "静默时段"
+    },
+    {
+      "dest" : "account:bark",
+      "path" : [
+        "推送提醒"
+      ],
       "title" : "听歌报告"
     },
     {
@@ -2139,6 +2146,13 @@
         "推送提醒"
       ],
       "title" : "数据来源"
+    },
+    {
+      "dest" : "account:bark",
+      "path" : [
+        "推送提醒"
+      ],
+      "title" : "每类列出"
     },
     {
       "dest" : "account:bark",

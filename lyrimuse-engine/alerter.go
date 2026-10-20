@@ -43,9 +43,15 @@ var errNoNotifyChannel = errors.New("notify: no enabled channel for this event")
 // 记「已推送」:再推一遍的话收下的那几个会收到两份。一个都没收下才返回错误,下次检查整条重推。
 // 听歌报告重推时,notifyDigestRedeliverWindow 内已经推成过同一标题的渠道(用户在推送页点了重发)跳过、算收下。
 func (a *alerter) send(event, title, body string) error {
+	return a.sendMessage(notifyMessage{Event: event, Title: title, Body: body})
+}
+
+// sendMessage 同 send,消息带着推送记录要的别的标记(静默延后,见 notifyMessage.Deferred)。
+func (a *alerter) sendMessage(msg notifyMessage) error {
 	if a == nil {
 		return errNoNotifyChannel
 	}
+	event, title := msg.Event, msg.Title
 	targets := routedNotifyChannels(a.channels, a.routes, event)
 	if len(targets) == 0 {
 		return errNoNotifyChannel
@@ -59,7 +65,6 @@ func (a *alerter) send(event, title, body string) error {
 			delivered = true
 			continue
 		}
-		msg := notifyMessage{Event: event, Title: title, Body: body}
 		r := pushToChannel(ch, msg)
 		recordNotifyDelivery(ch, msg, r)
 		if r.OK {
@@ -89,9 +94,11 @@ func notifyEventIsDigest(event string) bool {
 // push 推一条不属于任何事件的消息(推到全部启用的渠道)。单测用。
 func (a *alerter) push(title, body string) error { return a.send("", title, body) }
 
-// notifyMessage 是要推的一条消息。
+// notifyMessage 是要推的一条消息。Deferred:这条报告落在静默时段里、等静默结束才推(notifyquiet.go),
+// 只进推送记录,不改推出去的内容。
 type notifyMessage struct {
 	Event, Title, Body string
+	Deferred           bool
 }
 
 // alerterPushTimeout:一次推送的总预算。Telegram 要够「直连探路 + 走系统代理」两次尝试

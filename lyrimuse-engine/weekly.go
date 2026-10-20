@@ -233,7 +233,11 @@ func (p *poller) weeklyDigest(now time.Time, env digestEnv) {
 	if !digestCheckDue(now, p.weeklyLastCheckedAt, weeklyDigestCheckInterval) {
 		return
 	}
+	if digestQuietHold(now, &p.weeklyQuietHeld) {
+		return // 静默时段里:不推、不记检查时刻(notifyquiet.go)
+	}
 	p.weeklyLastCheckedAt = now.Round(0)
+	deferred := digestQuietRelease(&p.weeklyQuietHeld)
 
 	lastfmConfigured := env.cfg.LastfmUser != "" && env.cfg.lastfmBridgeAPIKey() != ""
 	lbConfigured := env.cfg.User != "" && env.cfg.Token != ""
@@ -275,7 +279,7 @@ func (p *poller) weeklyDigest(now time.Time, env digestEnv) {
 		p.weeklyState.save(to) // 这周确实没听，跳过不推送，但仍标记已处理，避免下次重查同一周
 		return
 	}
-	if digestPush(env.alerter, notifyEventWeekly, weeklyDigestTitle(source, from, to), stats) != nil {
+	if digestPush(env.alerter, notifyEventWeekly, weeklyDigestTitle(source, from, to), stats, deferred) != nil {
 		return
 	}
 	p.weeklyState.save(to)

@@ -50111,23 +50111,6 @@
         }
       }
     },
-    "报告将推送到所有已启用的渠道。点按一行可编辑或发送测试；右键点按可删除" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reports are pushed to every enabled channel. Click a row to edit it or send a test; right-click to delete"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "報告將推播到所有已啟用的管道。按一下一列可編輯或傳送測試；按右鍵可刪除"
-          }
-        }
-      }
-    },
     "推送渠道" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -51548,6 +51531,533 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "格/秒"
+          }
+        }
+      }
+    },
+    "%1$@ 到 %2$@ 之间要推的，等到 %2$@ 再推" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anything due between %1$@ and %2$@ waits until %2$@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 到 %2$@ 之間要推播的，等到 %2$@ 再推播"
+          }
+        }
+      }
+    },
+    "%1$@ 等 %2$d 个" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ + %2$d more"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 等 %2$d 個"
+          }
+        }
+      }
+    },
+    "全部渠道" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Channels"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所有管道"
+          }
+        }
+      }
+    },
+    "同一时间只有一个默认渠道。之后新添加的渠道设为默认时，会自动加入四档听歌报告" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only one channel can be the default. A channel added later as the default joins all four listening digests"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同一時間只有一個預設管道。之後新增的管道設為預設時，會自動加入四項聆聽報告"
+          }
+        }
+      }
+    },
+    "报告默认推送到所有已启用的渠道，有多个渠道时可在「听歌报告」中按档选择。点按一行可编辑或发送测试；右键点按可删除" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Digests go to every enabled channel by default; with more than one channel, pick channels per digest under Listening Digests. Click a row to edit or send a test; Control-click to delete"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "報告預設推播到所有已啟用的管道，有多個管道時可在「聆聽報告」中按項目選擇。按一下某一列可編輯或傳送測試；按住 Control 鍵按一下可刪除"
+          }
+        }
+      }
+    },
+    "推到" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send to"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推播到"
+          }
+        }
+      }
+    },
+    "新加的渠道设成「默认」时会自动勾上" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New channels marked Default are checked automatically"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新增的管道設為「預設」時會自動勾選"
+          }
+        }
+      }
+    },
+    "未连接 Last.fm 或 ListenBrainz" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm or ListenBrainz not connected"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未連接 Last.fm 或 ListenBrainz"
+          }
+        }
+      }
+    },
+    "歌手、专辑、歌曲各列前几名" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How many top artists, albums, and tracks to list"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌手、專輯、歌曲各列前幾名"
+          }
+        }
+      }
+    },
+    "每类列出" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Items per List"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每類列出"
+          }
+        }
+      }
+    },
+    "设为默认" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default Channel"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設為預設"
+          }
+        }
+      }
+    },
+    "设为默认后，四档听歌报告都会推送到这个渠道；同一时间只有一个默认渠道" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All four listening digests will also go to this channel. Only one channel can be the default"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設為預設後，四項聆聽報告都會推播到這個管道；同一時間只有一個預設管道"
+          }
+        }
+      }
+    },
+    "选择这一档推送到哪些渠道" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose which channels this digest goes to"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇這一項推播到哪些管道"
+          }
+        }
+      }
+    },
+    "静默开始" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quiet Hours Start"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "勿擾開始"
+          }
+        }
+      }
+    },
+    "静默时段" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quiet Hours"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "勿擾時段"
+          }
+        }
+      }
+    },
+    "静默时段里到的，延后到 %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Held during quiet hours, sent at %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "勿擾時段內到期，延後到 %@"
+          }
+        }
+      }
+    },
+    "静默结束" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quiet Hours End"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "勿擾結束"
+          }
+        }
+      }
+    },
+    "每日报告" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daily Report"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每日報告"
+          }
+        }
+      }
+    },
+    "每周小结" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weekly Digest"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每週小結"
+          }
+        }
+      }
+    },
+    "测试数据" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sample Data"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "測試資料"
+          }
+        }
+      }
+    },
+    "这就是会 POST 出去的内容，真正发出时是一行" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is exactly what gets POSTed; the real request is sent on a single line"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這就是會 POST 出去的內容，實際送出時是一行"
+          }
+        }
+      }
+    },
+    "外框为示意。正文与实际推送逐字一致，数据为测试数据" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The frame is only illustrative. The text matches the real push word for word, with sample data"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "外框為示意。內文與實際推播逐字一致，資料為測試資料"
+          }
+        }
+      }
+    },
+    "外框为示意，名字和头像以你在平台上的设置为准。正文与实际推送逐字一致，数据为测试数据" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The frame is only illustrative; the name and avatar follow your settings on the platform. The text matches the real push word for word, with sample data"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "外框為示意，名稱和頭像以你在平台上的設定為準。內文與實際推播逐字一致，資料為測試資料"
+          }
+        }
+      }
+    },
+    "现在" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "now"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在"
+          }
+        }
+      }
+    },
+    "锁屏上约显示前 4 行，点开可看全文" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About the first 4 lines show on the Lock Screen; open it to read the rest"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "鎖定畫面上約顯示前 4 行，點開可看全文"
+          }
+        }
+      }
+    },
+    "机器人" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bot"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "機器人"
+          }
+        }
+      }
+    },
+    "今天 %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today at %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今天 %@"
+          }
+        }
+      }
+    },
+    "方糖 · 服务通知" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fangtang · Service Notification"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "方糖 · 服務通知"
+          }
+        }
+      }
+    },
+    "查看详情 ›" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View Details ›"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看詳情 ›"
+          }
+        }
+      }
+    },
+    "POST 到你填的地址" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "POST to the address you entered"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "POST 到你填的位址"
+          }
+        }
+      }
+    },
+    "用测试数据看看推送在这个平台上的样子" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See how a push looks on this platform, using sample data"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用測試資料看看推播在這個平台上的樣子"
           }
         }
       }

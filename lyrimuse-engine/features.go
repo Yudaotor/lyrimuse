@@ -171,6 +171,11 @@ type featureFlagsFile struct {
 	YearlyDigest        *bool  `json:"yearly_digest,omitempty"`
 	MonthlyDigestSource string `json:"monthly_digest_source,omitempty"`
 	YearlyDigestSource  string `json:"yearly_digest_source,omitempty"`
+	// DigestTopN:四档报告里歌手、专辑、歌曲各列前几名(推送提醒页「每类列出」),1～10,缺失按 defaultDigestTopN,
+	// 越界夹回(resolveDigestTopN)。四档共用一个值。
+	DigestTopN *int `json:"digest_top_n,omitempty"`
+	// NotificationQuietHours:推送提醒的静默时段,见 notifyquiet.go。缺失 = 关。
+	NotificationQuietHours *notifyQuietHoursFile `json:"notification_quiet_hours,omitempty"`
 	// LyricsSources：启用的歌词源集合(lyricSourceXxx 常量的子集)。nil / 缺失 = 全部启用。
 	// 文件里另有一组 xxx_lyrics 迁移标记(老配置升级后补上新加的源),只 App 读,补完写进这个列表。
 	LyricsSources []string `json:"lyrics_sources,omitempty"`
@@ -285,6 +290,10 @@ type featureFlags struct {
 	YearlyDigest        bool
 	MonthlyDigestSource string
 	YearlyDigestSource  string
+	// DigestTopN 恒在 1～10(resolveDigestTopN 保证);读的时候走 digestTopN()。
+	DigestTopN int
+	// NotificationQuietHours 见 notifyquiet.go。
+	NotificationQuietHours notifyQuietHours
 	// pickLyricCandidate(enrich.go)读这三个字段决定冠军。
 	//
 	// 订正:原注释说 `lyrimuse-engine search-lyrics` 子命令"从不调用
@@ -430,6 +439,8 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		YearlyDigest:              boolOr(f.YearlyDigest, false),
 		MonthlyDigestSource:       f.MonthlyDigestSource,
 		YearlyDigestSource:        f.YearlyDigestSource,
+		DigestTopN:                resolveDigestTopN(f.DigestTopN),
+		NotificationQuietHours:    resolveNotifyQuietHours(f.NotificationQuietHours),
 		LyricsSources:             resolveLyricsSources(f.LyricsSources),
 		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
@@ -782,6 +793,8 @@ func logFeatureSnapshot() {
 		"monthly_digest_source", orDash(features().MonthlyDigestSource),
 		"yearly_digest", features().YearlyDigest,
 		"yearly_digest_source", orDash(features().YearlyDigestSource),
+		"digest_top_n", digestTopN(),
+		"notification_quiet_hours", notifyQuietSummary(features().NotificationQuietHours),
 		"launch_on_players", sortedEnabledKeys(features().LaunchLyrimuseOnPlayers),
 		"trusted_players", orDash(sortedMapKeys(features().TrustedPlayers)),
 		"browser_platform_pairs", browserPlatformPairsSummary(features().BrowserPlatformPairs),

@@ -32,7 +32,7 @@ func TestDigestLastfmPathMergesArtists(t *testing.T) {
 	}
 }
 
-// digestTopN 是推送里最多展示几条 —— 归并发生在截断**之前**,否则被截掉的那条的次数
+// digestTopN() 是推送里最多展示几条 —— 归并发生在截断**之前**,否则被截掉的那条的次数
 // 就永远加不回它的本尊身上。
 func TestDigestTopArtistsMergesBeforeTruncating(t *testing.T) {
 	in := []lastfmChartEntry{
@@ -43,8 +43,8 @@ func TestDigestTopArtistsMergesBeforeTruncating(t *testing.T) {
 		{Name: "张震嶽", PlayCount: 6}, // 落在 Top3 之外,先截断就再也加不上了
 	}
 	got := digestTopArtists(in)
-	if len(got) != digestTopN {
-		t.Fatalf("应恰好取 %d 条, got %d", digestTopN, len(got))
+	if len(got) != digestTopN() {
+		t.Fatalf("应恰好取 %d 条, got %d", digestTopN(), len(got))
 	}
 	// 6+6=12 应该冲到第一;若先截断再归并,榜首会是 A(9)。
 	if got[0].Count != 12 {

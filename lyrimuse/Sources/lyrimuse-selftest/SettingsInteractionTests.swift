@@ -471,6 +471,129 @@ func runSettingsInteractionTests() {
         expectEqual(T.result(id: "r1", in: resultSample)?.ok, true, "测一下: 读得懂共用样例")
         expectEqual(T.result(id: "r2", in: resultSample)?.failure?.kind, .notFound, "测一下: 按 id 找到自己的那次")
         expectEqual(T.result(id: "zz", in: resultSample) == nil, true, "测一下: 别人的结果不算")
+        expectEqual(logSample.map(\.isDeferred), [false, false, true], "推送记录: 静默延后的那条读得出「延后」标记(共用样例)")
+        expectEqual(NotificationRouting.routes(fromConfig: channelsSample), ["weekly_digest": ["c1"], "daily_digest": ["c1", "c2"]],
+                    "按事件选渠道: 读得懂共用样例的 notification_routes")
+
+        // 渠道预览:假数据、标题、正文跟引擎逐字一样(共用样例 preview.json,引擎 notifypreview_test.go 读同一份)。
+        typealias P = NotificationPreview
+        let preview = (try? Data(contentsOf: samples.appendingPathComponent("preview.json")))
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+        func tallies(_ raw: Any?) -> [P.Tally] {
+            ((raw as? [[String: Any]]) ?? []).map { P.Tally($0["name"] as? String ?? "", $0["sub"] as? String ?? "", $0["count"] as? Int ?? 0) }
+        }
+        let previewSamples = preview["samples"] as? [String: [String: Any]] ?? [:]
+        for kind in P.Kind.allCases {
+            let s = previewSamples[kind.rawValue] ?? [:]
+            let stats = P.Stats(totalPlays: s["total_plays"] as? Int ?? 0, totalDurationMs: s["total_duration_ms"] as? Int ?? 0,
+                                artists: tallies(s["artists"]), albums: tallies(s["albums"]), tracks: tallies(s["tracks"]))
+            expectEqual(P.sample(kind), stats, "渠道预览: \(kind.rawValue) 假数据同共用样例")
+        }
+        let bodies = preview["bodies"] as? [[String: Any]] ?? []
+        expectEqual(bodies.count >= 4, true, "渠道预览: 共用样例里有正文")
+        for b in bodies {
+            let kind = P.Kind(rawValue: b["kind"] as? String ?? "") ?? .daily
+            let n = b["top_n"] as? Int ?? 0
+            expectEqual(P.body(P.sample(kind), topN: n), b["body"] as? String ?? "", "渠道预览: \(kind.rawValue) 每类 \(n) 条的正文同引擎")
+        }
+        let nowParts = preview["now"] as? [String: Int] ?? [:]
+        let previewNow = Calendar.current.date(from: DateComponents(
+            year: nowParts["year"], month: nowParts["month"], day: nowParts["day"], hour: nowParts["hour"], minute: nowParts["minute"])) ?? Date()
+        expectEqual(P.title(.daily, now: previewNow), preview["daily_title"] as? String ?? "", "渠道预览: 日报标题同引擎")
+        expectEqual(P.title(.weekly, now: previewNow), preview["weekly_title"] as? String ?? "", "渠道预览: 周报标题同引擎")
+        let sunday = Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 18, hour: 9)) ?? Date()
+        expectEqual(P.title(.weekly, now: sunday), "🎵 上周听歌小结（10-05~10-11）", "渠道预览: 周日看的上周是再往前那一周")
+        let json = P.webhookJSON(event: "daily_digest", title: "a<b>", body: "x\n\"y\"", sentAt: Date(timeIntervalSince1970: 0))
+        let decoded = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: String]
+        expectEqual(decoded, ["app": "lyrimuse", "event": "daily_digest", "title": "a<b>", "body": "x\n\"y\"", "sent_at": "1970-01-01T00:00:00Z"],
+                    "渠道预览: Webhook JSON 读回来字段齐全")
+        expectEqual(json.contains(#""title": "a\u003cb\u003e""#), true, "渠道预览: Webhook JSON 转义同 Go(< > 写成 \\u003c)")
+    }
+
+    // ---- 推送提醒第二期:默认渠道、按档选渠道、静默时段、每类列出(15 章决策 72)----
+    do {
+        print("\n== 推送提醒第二期 ==")
+        typealias R = NotificationRouting
+        typealias C = NotificationChannel
+        let a = C(id: "a", platform: "telegram", url: "1:x", chatID: "1", isDefault: true)
+        let b = C(id: "b", platform: "bark", url: "https://api.day.app/k")
+        var c = C(id: "c", platform: "ntfy", url: "https://ntfy.sh/t")
+        expectEqual(R.digestEvents, ["daily_digest", "weekly_digest", "monthly_digest", "yearly_digest"], "按事件选渠道: 四档事件名")
+
+        // 加渠道:第一个不写路由;第二个(不设默认)加之前把没有键的几档落成现有渠道,自己不进任何一档。
+        var step = R.adding(a, to: [], routes: [:])
+        expectEqual(step.routes, [:], "加渠道: 第一个渠道不写路由(没有键 = 全部)")
+        step = R.adding(b, to: step.channels, routes: ["weekly_digest": ["a"]])
+        expectEqual(step.routes, ["daily_digest": ["a"], "weekly_digest": ["a"], "monthly_digest": ["a"], "yearly_digest": ["a"]],
+                    "加渠道: 不设默认的新渠道不进任何一档,没选过的几档落成现有渠道")
+        expectEqual(step.channels.map(\.id), ["a", "b"], "加渠道: 排在最后")
+        // 第三个设成默认:加进四档,别的渠道的默认去掉;已经选过的那几档原样留着、只多它一个。
+        c.isDefault = true
+        let explicit: R.Routes = ["daily_digest": ["b"], "weekly_digest": ["a"], "monthly_digest": ["a", "b"], "yearly_digest": ["a"]]
+        step = R.adding(c, to: step.channels, routes: explicit)
+        expectEqual(step.routes, ["daily_digest": ["b", "c"], "weekly_digest": ["a", "c"], "monthly_digest": ["a", "b", "c"], "yearly_digest": ["a", "c"]],
+                    "加渠道: 设成默认的新渠道加进四档")
+        expectEqual(step.channels.filter(\.isDefault).map(\.id), ["c"], "默认渠道: 同时只有一个,新设的取代旧的")
+        // 改已有渠道:设成默认就清掉别的;不设默认不碰别的。
+        var bDefault = b
+        bDefault.isDefault = true
+        expectEqual(R.updating(bDefault, in: step.channels).filter(\.isDefault).map(\.id), ["b"], "默认渠道: 编辑时设一个就清掉别的")
+        var aRenamed = step.channels[0]
+        aRenamed.name = "改名"
+        expectEqual(R.updating(aRenamed, in: step.channels).map(\.isDefault), [false, false, true], "默认渠道: 不设默认的编辑不动别的")
+
+        // 删渠道:从各档拿掉,空了的档删掉键(回到全部渠道)。
+        let removed = R.removing(id: "b", from: step.channels, routes: ["daily_digest": ["b"], "weekly_digest": ["a", "b"], "milestone": ["b", "c"]])
+        expectEqual(removed.routes, ["weekly_digest": ["a"], "milestone": ["c"]], "删渠道: 拿掉它的 id,空了的那档删掉键")
+        expectEqual(removed.channels.map(\.id), ["a", "c"], "删渠道: 渠道列表里去掉")
+
+        // 下拉:没有键 = 全选;至少留一个;勾满了删掉键;列表按渠道顺序。
+        let chs = [a, b, c]
+        expectEqual(R.selectedIDs(event: "daily_digest", channels: chs, routes: [:]), ["a", "b", "c"], "下拉: 没有键 = 全部勾着")
+        expectEqual(R.selectedIDs(event: "daily_digest", channels: chs, routes: ["daily_digest": ["c", "gone"]]), ["c"],
+                    "下拉: 已删除的 id 不算勾着")
+        var routes = R.toggling("b", event: "daily_digest", channels: chs, routes: [:])
+        expectEqual(routes, ["daily_digest": ["a", "c"]], "下拉: 从全部里取消一个")
+        routes = R.toggling("a", event: "daily_digest", channels: chs, routes: routes)
+        expectEqual(R.toggling("c", event: "daily_digest", channels: chs, routes: routes), routes, "下拉: 最后一个勾着的取消不了")
+        routes = R.toggling("b", event: "daily_digest", channels: chs, routes: routes)
+        expectEqual(routes, ["daily_digest": ["b", "c"]], "下拉: 勾上的按渠道顺序写")
+        expectEqual(R.toggling("a", event: "daily_digest", channels: chs, routes: routes), [:], "下拉: 勾满了删掉键(= 全部渠道)")
+        expectEqual(R.showsChoice(channelCount: 1), false, "下拉 / 默认: 一个渠道时不出现")
+        expectEqual(R.showsChoice(channelCount: 2), true, "下拉 / 默认: 两个渠道起出现")
+
+        // 下拉上的字。
+        expectEqual(R.label(selectedNames: ["Telegram", "Bark"], total: 2), .all, "下拉文字: 全选写「全部渠道」")
+        expectEqual(R.label(selectedNames: [], total: 2), .all, "下拉文字: 没勾(没有键)写「全部渠道」")
+        expectEqual(R.label(selectedNames: ["Telegram"], total: 2), .names("Telegram"), "下拉文字: 一个写名字")
+        expectEqual(R.label(selectedNames: ["TG", "Bark"], total: 3), .names("TG、Bark"), "下拉文字: 放得下用「、」连")
+        expectEqual(R.label(selectedNames: ["Telegram", "Bark · 我的 iPhone"], total: 3), .firstOfMany(first: "Telegram", count: 2),
+                    "下拉文字: 放不下写「X 等 N 个」")
+        expectEqual(R.label(selectedNames: ["一个特别特别特别长的渠道名字"], total: 3), .names("一个特别特别特别长的渠道名字"),
+                    "下拉文字: 只有一个时照写名字(界面上截尾)")
+
+        // 静默时段:跨午夜、左闭右开、关着 / 首尾相同不静默;时刻解析跟引擎 parseClockMinutes 同一口径。
+        typealias Q = NotificationQuietHours
+        let night = Q(enabled: true, start: 23 * 60, end: 8 * 60)
+        expectEqual([22 * 60 + 59, 23 * 60, 0, 7 * 60 + 59, 8 * 60, 12 * 60].map(night.isActive(minuteOfDay:)),
+                    [false, true, true, true, false, false], "静默时段: 23:00–08:00 跨午夜")
+        let noon = Q(enabled: true, start: 13 * 60, end: 15 * 60 + 30)
+        expectEqual([13 * 60 - 1, 13 * 60, 15 * 60 + 29, 15 * 60 + 30].map(noon.isActive(minuteOfDay:)), [false, true, true, false],
+                    "静默时段: 不跨午夜按区间")
+        expectEqual(Q(enabled: false).isActive(minuteOfDay: 0) || Q(enabled: true, start: 540, end: 540).isActive(minuteOfDay: 540), false,
+                    "静默时段: 关着、首尾相同都不静默")
+        expectEqual(Q(file: nil), Q(enabled: false, start: 23 * 60, end: 8 * 60), "静默时段: 缺失 = 关、23:00–08:00")
+        expectEqual(["23:00", "7:30", "00:05", "24:00", "8:5x", "08:5", "abc", "", "١٢:٠٠"].map(Q.minutes(fromClock:)),
+                    [1380, 450, 5, nil, nil, nil, nil, nil, nil], "静默时段: HH:MM 解析(越界、多余字、非 ASCII 数字不认)")
+        expectEqual(Q(file: .init(enabled: true, start: "bad", end: "6:45")), Q(enabled: true, start: 23 * 60, end: 6 * 60 + 45),
+                    "静默时段: 写坏的时刻按默认")
+        expectEqual(night.file, .init(enabled: true, start: "23:00", end: "08:00"), "静默时段: 落盘写 HH:MM 补零")
+        expectEqual(Q(file: night.file), night, "静默时段: 落盘再读回来一样")
+        expectEqual([night.startText, night.endText, Q.clockText(-1), Q.clockText(1440 + 61)], ["23:00", "08:00", "23:59", "01:01"],
+                    "静默时段: 副标题的两个时刻")
+
+        // 每类列出:缺失 3,越界夹回 1～10(同引擎 resolveDigestTopN)。
+        expectEqual([nil, 0, -3, 1, 7, 10, 11, 99].map(DigestTopN.resolved), [3, 1, 1, 1, 7, 10, 10, 10], "每类列出: 缺失 3、夹回 1～10")
     }
 
     // ---- 导入字体(CustomFontFile)----

@@ -137,6 +137,10 @@ func TestDigestBodyOrderAndAlbumSection(t *testing.T) {
 	if strings.Contains(digestBody(stats), "Top 专辑") {
 		t.Error("只有一张专辑时不展示专辑榜")
 	}
+	useDigestFeatures(t, featureFlags{DigestTopN: 1})
+	if !strings.Contains(digestBody(stats), "Top 专辑：\n1. X - R1（12）") {
+		t.Error("「每类列出」设成 1 时照列第一名")
+	}
 }
 
 // lbStatsServer 模拟 ListenBrainz 统计接口：fromTS 为 0 时一律回 204。

@@ -771,9 +771,10 @@ struct AccountLinkingTab: View {
     }
 
     /// 「听歌报告」卡里的一档:图标、名字、什么时候推、开关。这一档的数据源跟顶上那一行不一样时副标题注明;
-    /// 右键单独换这一档的数据源(绝大多数人四档用同一个源,单独换的入口不占地方)。
+    /// 右键单独换这一档的数据源(绝大多数人四档用同一个源,单独换的入口不占地方)。有两个以上推送渠道时开关左边多一个
+    /// 「推到哪些渠道」的小下拉(NotificationRoutePicker,event 是引擎的事件名,见 Core `NotificationRouting`)。
     private func digestRow(
-        icon: String, title: String, schedule: String,
+        icon: String, title: String, schedule: String, event: String,
         enabled: ReferenceWritableKeyPath<FeatureSettingsStore, Bool>,
         source: ReferenceWritableKeyPath<FeatureSettingsStore, String>
     ) -> some View {
@@ -782,16 +783,26 @@ struct AccountLinkingTab: View {
             ? schedule
             : schedule + " · " + String(format: L10n.t("数据来源：%@"), Self.digestSourceName(own))
         return SettingsRow(icon: icon, title: title, subtitle: subtitle) {
-            Toggle("", isOn: digestEnabledBinding(enabled, source: source))
+            HStack(spacing: 8) {
+                NotificationRoutePicker(config: config, event: event)
+                Toggle("", isOn: digestEnabledBinding(enabled, source: source))
+            }
         }
         .contentShape(Rectangle())
         .contextMenu {
-            Picker(L10n.t("这一档的数据来源"), selection: digestSourceBinding(source)) {
-                Text("Last.fm").tag("lastfm")
-                Text("ListenBrainz").tag("listenbrainz")
+            if digestSourcesChoosable {
+                Picker(L10n.t("这一档的数据来源"), selection: digestSourceBinding(source)) {
+                    Text("Last.fm").tag("lastfm")
+                    Text("ListenBrainz").tag("listenbrainz")
+                }
+                .pickerStyle(.inline)
             }
-            .pickerStyle(.inline)
         }
+    }
+
+    /// 听歌报告的数据源能不能选:Last.fm 与 ListenBrainz 都能读统计时才能(判据同 resolvedDigestSource)。
+    private var digestSourcesChoosable: Bool {
+        config.lastfmBridgeMissingHint() == nil && config.isListenBrainzReadable
     }
 
     // 每张卡片最上面这句"整体介绍"文案(描述整张卡是干什么的,不是某一个 Section 的)
@@ -2042,8 +2053,8 @@ struct AccountLinkingTab: View {
     //
     // 听歌报告开关放在这里(而不是单独的"功能开关"tab),是因为开关跟着它依赖的账号
     // 模块走,不用去别处猜"这个开关归哪个账号管";还依赖 Last.fm 桥接(数据来源),缺了给
-    // 一个跳转提示。实际推送的是 Top 歌手+Top 歌曲各三条+总播放次数(见 lyrimuse-engine/weekly.go
-    // 的 weeklyDigestPush),别跟另一个不相关的功能"历史 Top10 歌手统计"搞混——那是网页上
+    // 一个跳转提示。实际推送的是 Top 歌手 / 专辑 / 歌曲各 N 条(「每类列出」,默认 3)+总播放次数(见 lyrimuse-engine/digest.go
+    // 的 digestBody),别跟另一个不相关的功能"历史 Top10 歌手统计"搞混——那是网页上
     // 的常驻榜单,数据来源不同。
     @ViewBuilder
     private var barkFields: some View {
@@ -2055,25 +2066,54 @@ struct AccountLinkingTab: View {
             SettingsCard(cornerRadius: 18) {
                 SettingsCardHeader(title: L10n.t("听歌报告"))
                 SettingsRow(icon: "cylinder.split.1x2", title: L10n.t("数据来源")) {
-                    SettingsPillSegmentedControl(
-                        selection: sharedDigestSourceBinding,
-                        options: ["lastfm", "listenbrainz"],
-                        label: { Self.digestSourceName($0) },
-                        minWidth: 0
-                    )
+                    // 两个账号都能读统计时才给选;只连了一个就直接写那个名字,不摆一个点了也换不过去的分段。
+                    if digestSourcesChoosable {
+                        SettingsPillSegmentedControl(
+                            selection: sharedDigestSourceBinding,
+                            options: ["lastfm", "listenbrainz"],
+                            label: { Self.digestSourceName($0) },
+                            minWidth: 0
+                        )
+                    } else if !sharedDigestSource.isEmpty {
+                        Text(Self.digestSourceName(sharedDigestSource))
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(L10n.t("未连接 Last.fm 或 ListenBrainz"))
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                CardDivider()
+                // 四档共用,跟「数据来源」一样放卡顶(引擎 digest.go 的 digestTopN)。
+                SettingsRow(icon: "list.number", title: L10n.t("每类列出"), subtitle: L10n.t("歌手、专辑、歌曲各列前几名")) {
+                    DigestTopNStepper(value: Binding(
+                        get: { features.digestTopN },
+                        set: { value in
+                            let next = DigestTopN.resolved(value)
+                            guard next != features.digestTopN else { return }
+                            features.digestTopN = next
+                            Task { await features.save() }
+                        }
+                    ))
                 }
                 CardDivider()
                 digestRow(icon: "sun.max", title: L10n.t("每日听歌报告"), schedule: L10n.t("每天 22:00 后推送当日报告"),
-                          enabled: \.dailyDigest, source: \.dailyDigestSource)
+                          event: NotificationRouting.dailyDigest, enabled: \.dailyDigest, source: \.dailyDigestSource)
                 CardDivider()
                 digestRow(icon: "calendar", title: L10n.t("每周听歌小结"), schedule: L10n.t("每周推送上一周的小结"),
-                          enabled: \.weeklyDigest, source: \.weeklyDigestSource)
+                          event: NotificationRouting.weeklyDigest, enabled: \.weeklyDigest, source: \.weeklyDigestSource)
                 CardDivider()
                 digestRow(icon: "calendar.badge.clock", title: L10n.t("每月听歌小结"), schedule: L10n.t("每月初推送上个月的小结"),
-                          enabled: \.monthlyDigest, source: \.monthlyDigestSource)
+                          event: NotificationRouting.monthlyDigest, enabled: \.monthlyDigest, source: \.monthlyDigestSource)
                 CardDivider()
                 digestRow(icon: "trophy", title: L10n.t("年度听歌小结"), schedule: L10n.t("每年 1 月初推送上一年的小结"),
-                          enabled: \.yearlyDigest, source: \.yearlyDigestSource)
+                          event: NotificationRouting.yearlyDigest, enabled: \.yearlyDigest, source: \.yearlyDigestSource)
+                if !config.notificationChannels.isEmpty {
+                    CardDivider()
+                    NotificationQuietHoursRow()
+                        .padding(.bottom, 4)
+                }
             }
 
             NotificationLogCard(config: config)

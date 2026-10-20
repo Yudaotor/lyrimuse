@@ -3877,6 +3877,90 @@ func runSourceContractSettingsTests() {
         }
     }
 
+    // ---- 推送提醒第二期的界面接线与两侧常量(15 章决策 72)----
+    //
+    // 路由跟着渠道增删变、默认唯一这些规则在 Core `NotificationRouting`(settings-ui 组测逻辑),这里钉的是界面真的走它:
+    // 卡上加 / 改 / 删渠道调的是 adding / updating / removing,四档行把引擎的事件名传给下拉,路由落盘到 notification_routes
+    // (空了删键),推送记录的「延后」、静默时段、每类列出接到了界面上;事件名、静默默认时刻、条数上下限两边一致。
+    do {
+        let packageDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let repoRoot = packageDir.deletingLastPathComponent()
+        func read(_ rel: String) -> String {
+            let text = (try? String(contentsOf: packageDir.appendingPathComponent(rel), encoding: .utf8)) ?? ""
+            expectEqual(text.isEmpty, false, "推送提醒第二期: 读到了 \(rel)")
+            return text
+        }
+        func engine(_ name: String) -> String {
+            let text = (try? String(contentsOf: repoRoot.appendingPathComponent("lyrimuse-engine/\(name)"), encoding: .utf8)) ?? ""
+            expectEqual(text.isEmpty, false, "推送提醒第二期: 读到了 lyrimuse-engine/\(name)")
+            return text
+        }
+        let section = read("Sources/lyrimuse/Settings/NotificationChannelsSection.swift")
+        let tab = read("Sources/lyrimuse/AccountLinkingTab.swift")
+        let store = read("Sources/lyrimuse/Settings/ConfigStore.swift")
+        let featureStore = read("Sources/lyrimuse/Settings/FeatureSettingsStore.swift")
+        let card = sourceBody("struct NotificationChannelsCard: View {", in: section)
+        expectEqual(sourceHas(sourceBody("private func save(_ channel: NotificationChannel) {", in: card),
+                              "NotificationRouting.updating(channel, in: config.notificationChannels)")
+                        && sourceHas(card, "NotificationRouting.adding(channel, to: config.notificationChannels, routes: config.notificationRoutes)")
+                        && sourceHas(sourceBody("private func delete(_ channel: NotificationChannel) {", in: card),
+                                     "NotificationRouting.removing(id: channel.id, from: config.notificationChannels, routes: config.notificationRoutes)"),
+                    true, "推送提醒第二期: 渠道卡加 / 改 / 删都走 NotificationRouting(路由跟着变、默认唯一)")
+        expectEqual(card.contains("config.notificationChannels.append(") || card.contains("config.notificationChannels.removeAll"), false,
+                    "推送提醒第二期: 渠道卡不再绕过 NotificationRouting 直接改列表")
+        expectEqual(sourceHas(card, "showsDefaultToggle: NotificationRouting.showsChoice(channelCount: config.notificationChannels.count + (isNew ? 1 : 0))")
+                        && sourceHas(card, "if channel.isDefault, NotificationRouting.showsChoice(channelCount: config.notificationChannels.count) {"),
+                    true, "推送提醒第二期: 「设为默认」开关和「默认」标签只在两个以上渠道时出现(新加的算在里面)")
+        expectEqual(sourceHas(section, "if showsDefaultToggle {") && sourceHas(section, "Toggle(L10n.t(\"设为默认\"), isOn: $draft.isDefault)"),
+                    true, "推送提醒第二期: 编辑表单里的「设为默认」改的是草稿的 isDefault")
+        let quietRow = sourceBody("struct NotificationQuietHoursRow: View {", in: section)
+        expectEqual(sourceHas(quietRow, "features.notificationQuietHours[keyPath: key] = value Task { await features.save() }")
+                        && sourceHas(tab, "NotificationQuietHoursRow()") && !card.contains("NotificationQuietHoursRow"),
+                    true, "推送提醒第二期: 静默时段那一行在听歌报告卡里(不在渠道卡),改了就落盘")
+        expectEqual(sourceHas(tab, "if digestSourcesChoosable {")
+                        && sourceHas(tab, "config.lastfmBridgeMissingHint() == nil && config.isListenBrainzReadable"),
+                    true, "推送提醒第二期: 两个账号都能读统计时才给选数据源(分段和右键都是)")
+        expectEqual(sourceHas(sourceBody("struct NotificationRoutePicker: View {", in: section),
+                              "if NotificationRouting.showsChoice(channelCount: config.notificationChannels.count) {")
+                        && sourceHas(section, "config.notificationRoutes = NotificationRouting.toggling("), true,
+                    "推送提醒第二期: 每档的下拉只在两个以上渠道时出现,勾选走 NotificationRouting.toggling")
+        expectEqual(sourceHas(section, "Text(entry.isDeferred ? channelName + \" · \" + String(format: L10n.t(\"静默时段里到的，延后到 %@\"), notificationClockText(entry.date)) : channelName)"),
+                    true, "推送提醒第二期: 推送记录里静默延后的那条副标题写「延后到 HH:MM」")
+        let events = ["dailyDigest", "weeklyDigest", "monthlyDigest", "yearlyDigest"]
+        expectEqual(events.map { tab.contains("event: NotificationRouting.\($0), enabled: \\.\($0),") }, [true, true, true, true],
+                    "推送提醒第二期: 四档行各把自己的事件名传给下拉")
+        expectEqual(sourceHas(sourceBody("private func digestRow(", in: tab), "NotificationRoutePicker(config: config, event: event)"), true,
+                    "推送提醒第二期: 下拉在每档行尾、开关左边")
+        expectEqual(sourceHas(tab, "SettingsRow(icon: \"list.number\", title: L10n.t(\"每类列出\"), subtitle: L10n.t(\"歌手、专辑、歌曲各列前几名\")) {")
+                        && sourceHas(tab, "features.digestTopN = next Task { await features.save() }"), true,
+                    "推送提醒第二期: 「每类列出」一行接到 features.digestTopN 并落盘")
+        expectEqual(sourceHas(store, "if !notificationRoutes.isEmpty { fields[\"notification_routes\"] = notificationRoutes }")
+                        && sourceHas(store, "knownKeys: Set(fields.keys).union([\"notification_routes\"])")
+                        && sourceHas(store, "notificationRoutes = NotificationRouting.routes(fromConfig: raw)")
+                        && sourceHas(store, "notificationChannels: notificationChannels, notificationRoutes: notificationRoutes"), true,
+                    "推送提醒第二期: 路由读进来、算进未保存改动、落盘(空了删键)")
+        expectEqual(sourceHas(featureStore, "digestTopN: DigestTopN.resolved(digestTopN), notificationQuietHours: notificationQuietHours.file,")
+                        && sourceHas(featureStore, "digestTopN = DigestTopN.resolved(f.digestTopN) notificationQuietHours = NotificationQuietHours(file: f.notificationQuietHours)"),
+                    true, "推送提醒第二期: 每类列出、静默时段进 features.json 的整份快照、加载时读回")
+
+        // 两边常量对账:事件名、静默默认时刻、条数缺省与上下限。
+        let channelGo = engine("notifychannel.go")
+        let goEvents = ["notifyEventDaily": NotificationRouting.dailyDigest, "notifyEventWeekly": NotificationRouting.weeklyDigest,
+                        "notifyEventMonthly": NotificationRouting.monthlyDigest, "notifyEventYearly": NotificationRouting.yearlyDigest]
+        for (name, value) in goEvents.sorted(by: { $0.key < $1.key }) {
+            expectEqual(sourceHas(channelGo, "\(name) = \"\(value)\""), true, "推送提醒第二期: 事件名 \(name) 两边一致")
+        }
+        let quietGo = engine("notifyquiet.go")
+        expectEqual(sourceHas(quietGo, "notifyQuietDefaultStart = \(NotificationQuietHours.defaultStart / 60) * 60")
+                        && sourceHas(quietGo, "notifyQuietDefaultEnd = \(NotificationQuietHours.defaultEnd / 60) * 60")
+                        && sourceHas(quietGo, "Enabled *bool `json:\"enabled,omitempty\"` Start string `json:\"start,omitempty\"` End string `json:\"end,omitempty\"`"),
+                    true, "推送提醒第二期: 静默时段默认时刻、字段名两边一致")
+        let digestGo = engine("digest.go")
+        expectEqual(sourceHas(digestGo, "defaultDigestTopN = \(DigestTopN.defaultValue) minDigestTopN = \(DigestTopN.range.lowerBound) maxDigestTopN = \(DigestTopN.range.upperBound)"),
+                    true, "推送提醒第二期: 每类列出的缺省与上下限两边一致")
+    }
+
     // ---- features.json 键两侧镜像----
     //
     // Swift `FeatureFlagsFile.CodingKeys` 里 App 写给引擎的每个键,引擎 features.go 都得有同名 json tag ——

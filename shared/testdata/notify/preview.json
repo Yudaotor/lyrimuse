@@ -1,0 +1,93 @@
+{
+  "now": {"year": 2026, "month": 10, "day": 20, "hour": 22, "minute": 5},
+  "daily_title": "🎧 今日听歌报告（10-20）",
+  "weekly_title": "🎵 上周听歌小结（10-12~10-18）",
+  "samples": {
+    "daily": {
+      "total_plays": 42,
+      "total_duration_ms": 9960000,
+      "artists": [
+        {"name": "周杰伦", "count": 12},
+        {"name": "方大同", "count": 8},
+        {"name": "陈绮贞", "count": 5},
+        {"name": "孙燕姿", "count": 4},
+        {"name": "陶喆", "count": 3},
+        {"name": "王菲", "count": 3},
+        {"name": "林忆莲", "count": 2},
+        {"name": "卢广仲", "count": 2},
+        {"name": "Prince", "count": 1},
+        {"name": "D'Angelo", "count": 1}
+      ],
+      "albums": [
+        {"name": "叶惠美", "sub": "周杰伦", "count": 6},
+        {"name": "15", "sub": "方大同", "count": 5},
+        {"name": "还是会寂寞", "sub": "陈绮贞", "count": 4},
+        {"name": "未完成", "sub": "孙燕姿", "count": 3},
+        {"name": "黑色柳丁", "sub": "陶喆", "count": 3},
+        {"name": "只爱陌生人", "sub": "王菲", "count": 2},
+        {"name": "范特西", "sub": "周杰伦", "count": 2},
+        {"name": "野花", "sub": "林忆莲", "count": 2},
+        {"name": "100 种生活", "sub": "卢广仲", "count": 2},
+        {"name": "橙月", "sub": "方大同", "count": 1}
+      ],
+      "tracks": [
+        {"name": "晴天", "sub": "周杰伦", "count": 4},
+        {"name": "春风吹", "sub": "方大同", "count": 3},
+        {"name": "越洋电话", "sub": "陈绮贞", "count": 3},
+        {"name": "遇见", "sub": "孙燕姿", "count": 2},
+        {"name": "爱很简单", "sub": "陶喆", "count": 2},
+        {"name": "红豆", "sub": "王菲", "count": 2},
+        {"name": "以父之名", "sub": "周杰伦", "count": 2},
+        {"name": "至少还有你", "sub": "林忆莲", "count": 1},
+        {"name": "我爱你", "sub": "卢广仲", "count": 1},
+        {"name": "特别的人", "sub": "方大同", "count": 1}
+      ]
+    },
+    "weekly": {
+      "total_plays": 286,
+      "total_duration_ms": 64320000,
+      "artists": [
+        {"name": "方大同", "count": 61},
+        {"name": "周杰伦", "count": 48},
+        {"name": "Prince", "count": 33},
+        {"name": "陈绮贞", "count": 27},
+        {"name": "孙燕姿", "count": 22},
+        {"name": "陶喆", "count": 18},
+        {"name": "D'Angelo", "count": 15},
+        {"name": "王菲", "count": 12},
+        {"name": "林忆莲", "count": 9},
+        {"name": "卢广仲", "count": 7}
+      ],
+      "albums": [
+        {"name": "JTW 西游记", "sub": "方大同", "count": 29},
+        {"name": "叶惠美", "sub": "周杰伦", "count": 21},
+        {"name": "For You", "sub": "Prince", "count": 17},
+        {"name": "还是会寂寞", "sub": "陈绮贞", "count": 14},
+        {"name": "15", "sub": "方大同", "count": 12},
+        {"name": "未完成", "sub": "孙燕姿", "count": 11},
+        {"name": "Voodoo", "sub": "D'Angelo", "count": 10},
+        {"name": "黑色柳丁", "sub": "陶喆", "count": 9},
+        {"name": "范特西", "sub": "周杰伦", "count": 8},
+        {"name": "只爱陌生人", "sub": "王菲", "count": 7}
+      ],
+      "tracks": [
+        {"name": "NMW", "sub": "方大同", "count": 11},
+        {"name": "晴天", "sub": "周杰伦", "count": 9},
+        {"name": "For You", "sub": "Prince", "count": 8},
+        {"name": "越洋电话", "sub": "陈绮贞", "count": 7},
+        {"name": "春风吹", "sub": "方大同", "count": 7},
+        {"name": "Untitled (How Does It Feel)", "sub": "D'Angelo", "count": 6},
+        {"name": "遇见", "sub": "孙燕姿", "count": 6},
+        {"name": "爱很简单", "sub": "陶喆", "count": 5},
+        {"name": "红豆", "sub": "王菲", "count": 5},
+        {"name": "至少还有你", "sub": "林忆莲", "count": 4}
+      ]
+    }
+  },
+  "bodies": [
+    {"kind": "daily", "top_n": 3, "body": "共播放 42 次 · 约 2 小时 46 分\n\nTop 歌手：\n1. 周杰伦（12）\n2. 方大同（8）\n3. 陈绮贞（5）\n\nTop 专辑：\n1. 周杰伦 - 叶惠美（6）\n2. 方大同 - 15（5）\n3. 陈绮贞 - 还是会寂寞（4）\n\nTop 歌曲：\n1. 周杰伦 - 晴天（4）\n2. 方大同 - 春风吹（3）\n3. 陈绮贞 - 越洋电话（3）"},
+    {"kind": "weekly", "top_n": 10, "body": "共播放 286 次 · 约 17 小时 52 分\n\nTop 歌手：\n1. 方大同（61）\n2. 周杰伦（48）\n3. Prince（33）\n4. 陈绮贞（27）\n5. 孙燕姿（22）\n6. 陶喆（18）\n7. D'Angelo（15）\n8. 王菲（12）\n9. 林忆莲（9）\n10. 卢广仲（7）\n\nTop 专辑：\n1. 方大同 - JTW 西游记（29）\n2. 周杰伦 - 叶惠美（21）\n3. Prince - For You（17）\n4. 陈绮贞 - 还是会寂寞（14）\n5. 方大同 - 15（12）\n6. 孙燕姿 - 未完成（11）\n7. D'Angelo - Voodoo（10）\n8. 陶喆 - 黑色柳丁（9）\n9. 周杰伦 - 范特西（8）\n10. 王菲 - 只爱陌生人（7）\n\nTop 歌曲：\n1. 方大同 - NMW（11）\n2. 周杰伦 - 晴天（9）\n3. Prince - For You（8）\n4. 陈绮贞 - 越洋电话（7）\n5. 方大同 - 春风吹（7）\n6. D'Angelo - Untitled (How Does It Feel)（6）\n7. 孙燕姿 - 遇见（6）\n8. 陶喆 - 爱很简单（5）\n9. 王菲 - 红豆（5）\n10. 林忆莲 - 至少还有你（4）"},
+    {"kind": "daily", "top_n": 1, "body": "共播放 42 次 · 约 2 小时 46 分\n\nTop 歌手：\n1. 周杰伦（12）\n\nTop 专辑：\n1. 周杰伦 - 叶惠美（6）\n\nTop 歌曲：\n1. 周杰伦 - 晴天（4）"},
+    {"kind": "weekly", "top_n": 2, "body": "共播放 286 次 · 约 17 小时 52 分\n\nTop 歌手：\n1. 方大同（61）\n2. 周杰伦（48）\n\nTop 专辑：\n1. 方大同 - JTW 西游记（29）\n2. 周杰伦 - 叶惠美（21）\n\nTop 歌曲：\n1. 方大同 - NMW（11）\n2. 周杰伦 - 晴天（9）"}
+  ]
+}

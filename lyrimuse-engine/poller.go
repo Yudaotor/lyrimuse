@@ -333,11 +333,13 @@ type poller struct {
 	// Last.fm 每周听歌小结推送(见 weekly.go)，复用桥接同一套 lastfm_user/lastfm_api_key。
 	weeklyState         weeklyDigestState
 	weeklyLastCheckedAt time.Time
+	weeklyQuietHeld     bool // 到期的检查被静默时段压过,见 notifyquiet.go
 
 	// ListenBrainz 每日听歌报告推送(见 daily.go)，复用提交收听同一套 cfg.User/cfg.Token，
 	// 跟上面的 Last.fm 每周小结是两个独立功能。
 	dailyState         dailyDigestState
 	dailyLastCheckedAt time.Time
+	dailyQuietHeld     bool // 同 weeklyQuietHeld
 
 	// 每月 / 年度听歌小结(见 calendardigest.go)。
 	monthlyRun calendarDigestRun

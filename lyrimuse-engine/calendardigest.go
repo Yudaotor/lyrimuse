@@ -91,6 +91,8 @@ func (s calendarDigestState) save(period string) {
 type calendarDigestRun struct {
 	state         calendarDigestState
 	lastCheckedAt time.Time
+	// quietHeld:到期的检查被静默时段压过(notifyquiet.go),静默之后那次推出去的记成延后。
+	quietHeld bool
 }
 
 var monthlyDigestPath, yearlyDigestPath string
@@ -119,7 +121,11 @@ func (p *poller) calendarDigest(now time.Time, env digestEnv, kind calendarDiges
 	if !digestCheckDue(now, run.lastCheckedAt, calendarDigestCheckInterval) {
 		return
 	}
+	if digestQuietHold(now, &run.quietHeld) {
+		return // 静默时段里:不推、不记检查时刻(notifyquiet.go)
+	}
 	run.lastCheckedAt = now.Round(0)
+	deferred := digestQuietRelease(&run.quietHeld)
 
 	from, to, key := previousCalendarPeriod(now, kind)
 	if key <= run.state.load() {
@@ -158,7 +164,7 @@ func (p *poller) calendarDigest(now time.Time, env digestEnv, kind calendarDiges
 		run.state.save(key) // 这个周期确实没听，不推送，但标记已处理
 		return
 	}
-	if digestPush(env.alerter, event, calendarDigestTitle(kind, from), stats) != nil {
+	if digestPush(env.alerter, event, calendarDigestTitle(kind, from), stats, deferred) != nil {
 		return
 	}
 	run.state.save(key)
@@ -236,8 +242,9 @@ func lbStatsDigest(ctx context.Context, root, user string, kind calendarDigestKi
 	if _, err := lbStatsGet(ctx, root, user, "releases", rng, 0, &releases); err != nil {
 		return digestStats{}, false, err
 	}
+	topN := digestTopN()
 	for _, r := range releases.Payload.Releases {
-		if len(stats.TopAlbums) >= digestTopN {
+		if len(stats.TopAlbums) >= topN {
 			break
 		}
 		if strings.TrimSpace(r.ReleaseName) == "" {
@@ -259,7 +266,7 @@ func lbStatsDigest(ctx context.Context, root, user string, kind calendarDigestKi
 		return digestStats{}, false, err
 	}
 	for i, r := range recordings.Payload.Recordings {
-		if i >= digestTopN {
+		if i >= topN {
 			break
 		}
 		stats.TopTracks = append(stats.TopTracks, digestTally{Name: r.TrackName, Sub: r.ArtistName, Count: r.ListenCount})

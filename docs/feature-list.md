@@ -644,12 +644,14 @@ A public page with what you are playing and your history, with optional guestboo
 
 ### Daily, weekly, monthly and yearly listening digests
 
-Pushed to the channels you set up, as many as you like: Bark, ntfy, ServerChan, Feishu, DingTalk, WeCom, Telegram, Discord, Slack or a generic webhook. Each channel can send a test, and the delivery history shows whether each push arrived, with a resend for the ones that didn't. Each of the four has its own switch. Under Labs.
+Pushed to the channels you set up, as many as you like: Bark, ntfy, ServerChan, Feishu, DingTalk, WeCom, Telegram, Discord, Slack or a generic webhook. Each channel can preview how a push will look and send a test, and the delivery history shows whether each push arrived, with a resend for the ones that didn't. Each of the four has its own switch and, with several channels, its own choice of channels; quiet hours hold pushes until they end, and you choose how many top items each list shows. Under Labs.
 
 - Off by default
 - Settings: Labs › Push Alerts › Push Channels
+- Settings: Labs › Push Alerts › Quiet Hours
 - Settings: Labs › Push Alerts › Listening Digests
 - Settings: Labs › Push Alerts › Data Source
+- Settings: Labs › Push Alerts › Items per List
 - Settings: Labs › Push Alerts › Daily Listening Report
 - Settings: Labs › Push Alerts › Weekly Listening Digest
 - Settings: Labs › Push Alerts › Monthly Listening Digest
@@ -785,7 +787,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 270 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 272 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1197,9 +1199,11 @@ Every setting in the Settings window, by where it lives: 270 in all. Type a name
 
 ### Labs › Push Alerts
 
-- **Push Channels**: Reports are pushed to every enabled channel. Click a row to edit it or send a test; right-click to delete
+- **Push Channels**: Digests go to every enabled channel by default; with more than one channel, pick channels per digest under Listening Digests. Click a row to edit or send a test; Control-click to delete
+- **Quiet Hours**
 - **Listening Digests**
 - **Data Source**
+- **Items per List**
 - **Weekly Listening Digest**
 - **Daily Listening Report**
 - **Monthly Listening Digest**

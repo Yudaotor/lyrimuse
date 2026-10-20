@@ -22,8 +22,32 @@ const (
 	digestSourceListenBrainz = "listenbrainz"
 )
 
-// digestTopN：推送里 Top 歌手/专辑/歌曲最多展示几条，Bark 锁屏预览要能读完，不铺开全量。
-const digestTopN = 3
+// defaultDigestTopN：推送里 Top 歌手/专辑/歌曲默认各列几条，Bark 锁屏预览要能读完，不铺开全量。用户在推送提醒页
+// 「每类列出」改(features.json 的 digest_top_n,1～10),四档、两种数据源共用。见 15 章决策 72。
+//
+// 条数调大以后正文不截断(推送正文从来不截):按本机真实榜单估,每类 10 条时正文约 1.1～1.5 KB,企业微信文本消息
+// 上限 2048 字节、Discord 2000 字,名字都很长的极端情况可能超过,超了那次推送按平台拒收记失败。
+const (
+	defaultDigestTopN = 3
+	minDigestTopN     = 1
+	maxDigestTopN     = 10
+)
+
+// resolveDigestTopN:缺失按 defaultDigestTopN,越界夹回 1～10。
+func resolveDigestTopN(n *int) int {
+	if n == nil {
+		return defaultDigestTopN
+	}
+	return min(max(*n, minDigestTopN), maxDigestTopN)
+}
+
+// digestTopN:这一轮各类列几条。features() 是单测里直接拼的 featureFlags 时这一项是零值,按缺省算。
+func digestTopN() int {
+	if n := features().DigestTopN; n != 0 {
+		return n
+	}
+	return defaultDigestTopN
+}
 
 // digestTally 是某首歌/某张专辑/某个歌手在统计区间内被听了几次。
 type digestTally struct {
@@ -161,15 +185,16 @@ func digestStatsFromCharts(tracks, artists, albums []lastfmChartEntry) digestSta
 		artistSum += a.PlayCount
 	}
 	stats.TotalPlays = max(trackSum, artistSum)
+	topN := digestTopN()
 	for i, t := range tracks {
-		if i >= digestTopN {
+		if i >= topN {
 			break
 		}
 		stats.TopTracks = append(stats.TopTracks, digestTally{Name: t.Name, Sub: t.Artist, Count: t.PlayCount})
 	}
 	stats.TopArtists = digestTopArtists(artists)
 	for _, a := range albums {
-		if len(stats.TopAlbums) >= digestTopN {
+		if len(stats.TopAlbums) >= topN {
 			break
 		}
 		if strings.TrimSpace(a.Name) == "" {
@@ -201,9 +226,10 @@ func digestStatsFromCharts(tracks, artists, albums []lastfmChartEntry) digestSta
 // 那是口径修正带来的一次性台阶,比"两处口径永久不一致"好。
 func digestTopArtists(artists []lastfmChartEntry) []digestTally {
 	merged := mergeAliasedArtists(artists)
+	topN := digestTopN()
 	var out []digestTally
 	for i, a := range merged {
-		if i >= digestTopN {
+		if i >= topN {
 			break
 		}
 		out = append(out, digestTally{Name: a.Name, Count: a.PlayCount})
@@ -354,24 +380,26 @@ func digestStatsFromListens(listens []lbListenEntry) digestStats {
 	return stats
 }
 
-// topTallies 按次数降序(同次数保持首次出现的顺序)取前 digestTopN 条。
+// topTallies 按次数降序(同次数保持首次出现的顺序)取前 digestTopN() 条。
 func topTallies(tallies []digestTally) []digestTally {
 	sort.SliceStable(tallies, func(i, j int) bool { return tallies[i].Count > tallies[j].Count })
-	if len(tallies) > digestTopN {
-		tallies = tallies[:digestTopN]
+	if topN := digestTopN(); len(tallies) > topN {
+		tallies = tallies[:topN]
 	}
 	return tallies
 }
 
 // digestPush 推送一条听歌报告——各 cadence 各自算好 title、拿到 stats 后调用同一份文案
 // 拼装逻辑(digestBody)。一个渠道都没收下才返回错误，调用方不记「已推送」，下次检查重推。
-func digestPush(a *alerter, event, title string, stats digestStats) error {
-	return a.send(event, title, digestBody(stats))
+// deferred:这一期是被静默时段压到现在才推的(digestQuietRelease),推送记录里标出来。
+func digestPush(a *alerter, event, title string, stats digestStats, deferred bool) error {
+	return a.sendMessage(notifyMessage{Event: event, Title: title, Body: digestBody(stats), Deferred: deferred})
 }
 
 // digestBody 拼推送正文。顺序是歌手、专辑、歌曲；某一类只有超过 1 条时才展示(只有一条时
-// 排名没有意义)。
+// 排名没有意义)，「每类列出」设成 1 时例外：用户要的就是各类第一名。
 func digestBody(stats digestStats) string {
+	shown := func(list []digestTally) bool { return len(list) > 1 || (len(list) == 1 && digestTopN() == 1) }
 	var b strings.Builder
 	if stats.Truncated {
 		fmt.Fprintf(&b, "共播放 %d 次以上（记录太多，只统计了最近这些）", stats.TotalPlays)
@@ -387,19 +415,19 @@ func digestBody(stats digestStats) string {
 		}
 	}
 	b.WriteString("\n")
-	if len(stats.TopArtists) > 1 {
+	if shown(stats.TopArtists) {
 		b.WriteString("\nTop 歌手：\n")
 		for i, t := range stats.TopArtists {
 			fmt.Fprintf(&b, "%d. %s（%d）\n", i+1, t.Name, t.Count)
 		}
 	}
-	if len(stats.TopAlbums) > 1 {
+	if shown(stats.TopAlbums) {
 		b.WriteString("\nTop 专辑：\n")
 		for i, t := range stats.TopAlbums {
 			fmt.Fprintf(&b, "%d. %s - %s（%d）\n", i+1, t.Sub, t.Name, t.Count)
 		}
 	}
-	if len(stats.TopTracks) > 1 {
+	if shown(stats.TopTracks) {
 		b.WriteString("\nTop 歌曲：\n")
 		for i, t := range stats.TopTracks {
 			fmt.Fprintf(&b, "%d. %s - %s（%d）\n", i+1, t.Sub, t.Name, t.Count)

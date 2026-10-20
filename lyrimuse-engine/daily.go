@@ -64,15 +64,26 @@ func (s dailyDigestState) save(date string) {
 
 var dailyDigestPath string
 
+// dailyDigestCatchUpDeadline:这一天补推昨天那期的截止时刻。平时是 dailyDigestCatchUpUntilHour 点;这一刻落在静默时段
+// (quiet,见 notifyquiet.go)里时顺延到那段静默结束后再一个 dailyDigestCheckInterval —— 静默期间检查被压着,不顺延的话
+// 静默一结束就已经过了截止,头天那期就丢了;静默结束那一拍必查,落在顺延的窗口里。见 15 章决策 72。
+func dailyDigestCatchUpDeadline(midnight time.Time, quiet notifyQuietHours) time.Time {
+	cutoff := time.Date(midnight.Year(), midnight.Month(), midnight.Day(), dailyDigestCatchUpUntilHour, 0, 0, 0, midnight.Location())
+	if !quiet.active(cutoff) {
+		return cutoff
+	}
+	return quiet.endAfter(cutoff).Add(dailyDigestCheckInterval)
+}
+
 // dailyDigestTarget 判这一次检查该推哪一期：本地时间到了 dailyDigestTriggerHour 推今天
-// (今天零点到此刻)；dailyDigestCatchUpUntilHour 之前推昨天(昨天零点到今天零点，补头天晚上没推成的那期)；
+// (今天零点到此刻)；补推截止(dailyDigestCatchUpDeadline)之前推昨天(昨天零点到今天零点，补头天晚上没推成的那期)；
 // 其余时段 ok=false。day 是该期的本地日期(YYYY-MM-DD)，跟 dailyDigestState 里记的比。
-func dailyDigestTarget(now time.Time) (day string, from, to time.Time, title string, ok bool) {
+func dailyDigestTarget(now time.Time, quiet notifyQuietHours) (day string, from, to time.Time, title string, ok bool) {
 	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	switch {
 	case now.Hour() >= dailyDigestTriggerHour:
 		return midnight.Format("2006-01-02"), midnight, now, fmt.Sprintf("🎧 今日听歌报告（%s）", now.Format("01-02")), true
-	case now.Hour() < dailyDigestCatchUpUntilHour:
+	case now.Before(dailyDigestCatchUpDeadline(midnight, quiet)):
 		yesterday := midnight.AddDate(0, 0, -1)
 		return yesterday.Format("2006-01-02"), yesterday, midnight, fmt.Sprintf("🎧 昨日听歌报告（%s）", yesterday.Format("01-02")), true
 	}
@@ -91,9 +102,13 @@ func (p *poller) dailyDigest(now time.Time, env digestEnv) {
 	if !digestCheckDue(now, p.dailyLastCheckedAt, dailyDigestCheckInterval) {
 		return
 	}
+	if digestQuietHold(now, &p.dailyQuietHeld) {
+		return // 静默时段里:不推、不记检查时刻,静默一结束下一拍就查(notifyquiet.go)
+	}
 	p.dailyLastCheckedAt = now.Round(0)
+	deferred := digestQuietRelease(&p.dailyQuietHeld)
 
-	day, from, to, title, ok := dailyDigestTarget(now)
+	day, from, to, title, ok := dailyDigestTarget(now, features().NotificationQuietHours)
 	if !ok {
 		return
 	}
@@ -122,7 +137,7 @@ func (p *poller) dailyDigest(now time.Time, env digestEnv) {
 		p.dailyState.save(day) // 那天确实没听,跳过不推送,但仍标记已处理,避免反复重查
 		return
 	}
-	if digestPush(env.alerter, notifyEventDaily, title, stats) != nil {
+	if digestPush(env.alerter, notifyEventDaily, title, stats, deferred) != nil {
 		return // 推送没成功,不标记已推送,下次检查再推
 	}
 	p.dailyState.save(day)

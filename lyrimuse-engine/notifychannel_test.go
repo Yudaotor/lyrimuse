@@ -412,6 +412,9 @@ func TestNotifySharedSamples(t *testing.T) {
 	if len(chs) != 2 || chs[0].ID != "c1" || chs[0].ChatID != "42" || !chs[0].Default || chs[1].Secret != "tk_faketoken" || chs[1].Enabled {
 		t.Errorf("channels = %+v", chs)
 	}
+	if routes := configFromBytes(raw).NotificationRoutes; len(routes) != 2 || len(routes[notifyEventWeekly]) != 1 || routes[notifyEventDaily][1] != "c2" {
+		t.Errorf("routes = %+v", routes)
+	}
 	strict := func(name string, v any) {
 		b, err := os.ReadFile(filepath.Join(dir, name))
 		if err != nil {
@@ -425,7 +428,8 @@ func TestNotifySharedSamples(t *testing.T) {
 	}
 	var lf notifyLogFile
 	strict("log.json", &lf)
-	if lf.Schema != notifyLogSchema || len(lf.Entries) != 3 || lf.Entries[1].Code != "19021" || lf.Entries[1].Body == "" {
+	if lf.Schema != notifyLogSchema || len(lf.Entries) != 3 || lf.Entries[1].Code != "19021" || lf.Entries[1].Body == "" ||
+		!lf.Entries[0].Deferred || lf.Entries[1].Deferred {
 		t.Errorf("log = %+v", lf)
 	}
 	var rf notifyTestResultFile

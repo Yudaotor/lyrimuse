@@ -9,6 +9,7 @@
 "%1$@ · %2$d 分" = "%1$@ · %2$d points";
 "%1$@ · 来自 %2$@" = "%1$@ · from %2$@";
 "%1$@ 从「%2$@」导出的备份" = "Backup exported from “%2$@” on %1$@";
+"%1$@ 到 %2$@ 之间要推的，等到 %2$@ 再推" = "Anything due between %1$@ and %2$@ waits until %2$@";
 "%1$@ 在此项被扣 %2$d 分，胜者未被扣分，%3$d 分的分差全部来自此项" = "%1$@ lost %2$d points on this term and the winner did not; the entire %3$d-point gap comes from it";
 "%1$@ 在此项被扣 %2$d 分，胜者未被扣分，%3$d 分的分差全部来自此项#one" = "%1$@ lost %2$d point on this term and the winner did not; the entire %3$d-point gap comes from it";
 "%1$@ 失败 · %2$@" = "%1$@ failed · %2$@";
@@ -23,6 +24,7 @@
 "%1$@ 年同期 %2$@ 次" = "%2$@ in the same span of %1$@";
 "%1$@ 的反爬虫限制拦截了这台 Mac 的请求，近期有 %2$d 次查询因此未使用该歌词源。已暂时停用，稍后将自动重试" = "%1$@'s anti-bot protection is blocking requests from this Mac, so %2$d recent lookups went without it. It's paused for now and will be retried automatically";
 "%1$@ 的反爬虫限制拦截了这台 Mac 的请求，近期有 %2$d 次查询因此未使用该歌词源。已暂时停用，稍后将自动重试#one" = "%1$@'s anti-bot protection is blocking requests from this Mac, so %2$d recent lookup went without it. It's paused for now and will be retried automatically";
+"%1$@ 等 %2$d 个" = "%1$@ + %2$d more";
 "%1$@ 首 · %2$@" = "%1$@ songs · %2$@";
 "%1$@ 首 · %2$@#one" = "%1$@ song · %2$@";
 "%1$@ 首来自歌词源，%2$@ 首为机器翻译" = "%1$@ from the source, %2$@ machine-translated";
@@ -187,6 +189,7 @@
 "Musixmatch 拒绝了匿名令牌请求（反爬虫限流，hint=captcha），并非网络故障，通常稍后重试即可恢复" = "Musixmatch rejected the anonymous token request (anti-bot rate limit, hint=captcha). This is not a network fault and usually recovers after a while";
 "OBS" = "OBS";
 "OBS 输出" = "OBS Output";
+"POST 到你填的地址" = "POST to the address you entered";
 "QQ 音乐" = "QQ Music";
 "QQ 音乐专辑页" = "QQ Music album page";
 "QQ 音乐播放的歌曲 ID 一致" = "Same QQ Music song ID from playback";
@@ -390,6 +393,7 @@
 "仅调整主行，%@～%@pt，空间不足时歌词行自动增高；副行和展开时的下一句预览固定为 %@pt，仅跟随字体与字重" = "Main line only, %@–%@pt; the lyric row grows if the text no longer fits. The secondary line and the expanded next-line preview stay at %@pt and only follow the font and weight";
 "仅部分专辑提供；低电量或「减弱动态效果」时自动暂停" = "Available on some albums only; pauses in Low Power Mode or with Reduce Motion on";
 "今天" = "Today";
+"今天 %@" = "Today at %@";
 "今天收听 %1$@ 次 · 本周 %2$@ 次" = "%1$@ plays today · %2$@ this week";
 "今天收听 %1$@ 次 · 本周 %2$@ 次#one" = "%1$@ play today · %2$@ this week";
 "今年至今" = "This year so far";
@@ -478,6 +482,7 @@
 "全部标为纯音乐" = "Mark All as Instrumental";
 "全部歌手" = "All Artists";
 "全部歌曲" = "All Songs";
+"全部渠道" = "All Channels";
 "全部源重新查询" = "re-queried every source";
 "全部设置" = "All Settings";
 "全部设置…" = "All Settings…";
@@ -679,6 +684,7 @@
 "各播放器中收听的歌曲均会记录" = "Plays from every supported player are logged";
 "合唱署名" = "Artist credit";
 "合并明细" = "Play Breakdown";
+"同一时间只有一个默认渠道。之后新添加的渠道设为默认时，会自动加入四档听歌报告" = "Only one channel can be the default. A channel added later as the default joins all four listening digests";
 "同一网络中的设备可通过带密钥的链接访问" = "Devices on the same network can connect with a link that includes an access key";
 "同名但时长不同，作为另一录音单独保存歌词" = "Same title but a different length, so its lyrics are saved separately as another recording";
 "同曲条目" = "Entries for This Song";
@@ -792,6 +798,8 @@
 "备用链接（IP 地址）" = "Fallback Link (IP Address)";
 "复用其他专辑中的同一首歌曲" = "Reused from the same recording on another album";
 "复用同一首歌曲的其他歌手写法" = "Reused from the same song under another artist spelling";
+"外框为示意。正文与实际推送逐字一致，数据为测试数据" = "The frame is only illustrative. The text matches the real push word for word, with sample data";
+"外框为示意，名字和头像以你在平台上的设置为准。正文与实际推送逐字一致，数据为测试数据" = "The frame is only illustrative; the name and avatar follow your settings on the platform. The text matches the real push word for word, with sample data";
 "外观" = "Appearance";
 "外观与语言" = "Appearance & Language";
 "多" = "More";
@@ -1173,7 +1181,7 @@
 "找不到该会话（Chat ID 有误，或尚未向机器人发送过消息）" = "Chat not found (incorrect Chat ID, or you haven’t messaged the bot yet)";
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Found %1$@ · Not found %2$@ · Skipped %3$@";
 "找到 %@ 首" = "%@ Found";
-"报告将推送到所有已启用的渠道。点按一行可编辑或发送测试；右键点按可删除" = "Reports are pushed to every enabled channel. Click a row to edit it or send a test; right-click to delete";
+"报告默认推送到所有已启用的渠道，有多个渠道时可在「听歌报告」中按档选择。点按一行可编辑或发送测试；右键点按可删除" = "Digests go to every enabled channel by default; with more than one channel, pick channels per digest under Listening Digests. Click a row to edit or send a test; Control-click to delete";
 "拆分" = "Split";
 "拆分…" = "Split…";
 "拆分「%@」？" = "Split “%@”?";
@@ -1233,6 +1241,7 @@
 "接收" = "Download";
 "接收 Lyrimuse 的推送通知" = "Receive push notifications from Lyrimuse";
 "接近平分，但内容印证不完整" = "Nearly tied, but not fully corroborated";
+"推到" = "Send to";
 "推荐。为每个歌词源评分，选用最高分的结果" = "Recommended. Scores every source and keeps the best match";
 "推送地址" = "Push URL";
 "推送提醒" = "Push Alerts";
@@ -1314,8 +1323,10 @@
 "断开 Last.fm？" = "Disconnect Last.fm?";
 "断开…" = "Disconnect…";
 "新" = "New";
+"新加的渠道设成「默认」时会自动勾上" = "New channels marked Default are checked automatically";
 "新播放器提醒" = "New Player Alerts";
 "方向" = "Direction";
+"方糖 · 服务通知" = "Fangtang · Service Notification";
 "无 GitHub 账号时，可发送邮件至 %@；右键点按可拷贝地址" = "Without a GitHub account, email %@. Right-click to copy the address";
 "无匹配的字体" = "No matching fonts";
 "无可保存的更改" = "No changes to save";
@@ -1543,6 +1554,7 @@
 "未运行" = "Not Running";
 "未返回候选" = "No candidate returned";
 "未连接" = "Not connected";
+"未连接 Last.fm 或 ListenBrainz" = "Last.fm or ListenBrainz not connected";
 "未连接局域网" = "Not connected to a local network";
 "未通过安全设置校验（关键词、加签或 IP 地址）" = "Blocked by security settings (keyword, signing or IP address)";
 "未配置" = "Not set up";
@@ -1568,6 +1580,7 @@
 "本轮未找到逐字歌词，保留现有的「%@」（逐字），以免丢失逐字时间轴" = "No word-timed lyrics this round, so the current “%@” (word-timed) is kept to preserve the word timing";
 "本轮给出候选的歌词源数量，点按查看详情" = "How many lyrics sources returned a candidate this round — click for details";
 "本轮输入与过程" = "This round's inputs and process";
+"机器人" = "Bot";
 "机器人 Token" = "Bot Token";
 "机器人 Token 有误，或机器人已被移出会话" = "Incorrect bot token, or the bot was removed from the chat";
 "机器人 Token，形如 123456789:AAH…" = "Bot token, e.g. 123456789:AAH…";
@@ -1594,6 +1607,7 @@
 "查看歌手简介" = "View Artist Bio";
 "查看歌曲简介" = "View Song Notes";
 "查看识别为同一首歌的其他条目，可拆分误识别的条目" = "View other entries identified as the same song and split any that were misidentified";
+"查看详情 ›" = "View Details ›";
 "查看进度详情" = "Show progress details";
 "查看选用这份歌词的依据：当时的候选、得分与淘汰原因" = "Why these lyrics were chosen: the candidates, scores and rejections at decision time";
 "查询 %d 组" = "%d query sets";
@@ -1637,6 +1651,7 @@
 "歌手 - 歌名" = "Artist - Title";
 "歌手 A→Z" = "Artist A→Z";
 "歌手 Z→A" = "Artist Z→A";
+"歌手、专辑、歌曲各列前几名" = "How many top artists, albums, and tracks to list";
 "歌手别名" = "Artist alias";
 "歌手地区分布" = "Artist Regions";
 "歌手简介" = "Artist Bio";
@@ -1772,14 +1787,17 @@
 "此设置仅在本次打开窗口期间有效，重新打开后恢复默认" = "Applies only while this window is open; reopening resets it";
 "步长" = "Step";
 "每周听歌小结" = "Weekly Listening Digest";
+"每周小结" = "Weekly Digest";
 "每周推送上一周的小结" = "Sends last week's digest each week";
 "每天 22:00 后推送当日报告" = "Sends the day's digest after 22:00";
 "每天检查一次新版本" = "Checks for a new version once a day";
 "每年 1 月初推送上一年的小结" = "Sends last year's digest in early January";
 "每按一次调整的幅度" = "Amount per press";
 "每日听歌报告" = "Daily Listening Report";
+"每日报告" = "Daily Report";
 "每月初推送上个月的小结" = "Sends last month's digest early each month";
 "每月听歌小结" = "Monthly Listening Digest";
+"每类列出" = "Items per List";
 "每项均按播放器分别勾选，仅列出已选择的播放器；选择「自动识别」时，还会列出本机已安装的播放器" = "Each item is checked per player. Only the selected players are listed; with Auto-detect selected, the ones installed on this Mac are added";
 "每首歌曲之间的间隔秒数；建议不少于 2 秒，以免被限流" = "Seconds between songs; at least 2 seconds is recommended to avoid rate limits";
 "比上一期上升 %@ 名" = "Up %@ from the previous period";
@@ -1809,6 +1827,7 @@
 "测试中…" = "Testing…";
 "测试全部" = "Test All";
 "测试失败：%@" = "Couldn't test lyrics sources: %@";
+"测试数据" = "Sample Data";
 "测试版更新" = "Beta Updates";
 "浏览器源地址" = "Browser Source URL";
 "浓淡" = "Density";
@@ -1881,11 +1900,13 @@
 "状态文字" = "Status Text";
 "状态未知" = "Status unknown";
 "独立匹配" = "Matched Separately";
+"现在" = "now";
 "现场版场次不符" = "Live recording from a different show";
 "玻璃浓淡" = "Glass Density";
 "用于将当前播放状态推送到网页小组件和状态徽章" = "Pushes the current playback status to the web widget and status badge";
 "用当前配色覆盖" = "Overwrite with Current Colors";
 "用户名下方显示" = "Shown Under Your Name";
+"用测试数据看看推送在这个平台上的样子" = "See how a push looks on this platform, using sample data";
 "由副行决定" = "Set by Second Line";
 "申请页只需填写「应用名称」，其余可留空。提交后页面将显示 API Key 和 Shared Secret；Secret 仅显示一次，之后无法找回，遗失时请重新创建应用" = "The form only needs an application name; leave everything else blank. After you submit it, the page shows your API Key and Shared Secret. The secret is shown only once and can’t be retrieved later; if you lose it, create a new application";
 "画帧" = "Rendered";
@@ -2134,6 +2155,8 @@
 "触控栏右侧的亮度、音量等系统按键，可在「系统设置 › 键盘 › 触控栏设置…」中增减或调整顺序" = "Add, remove or reorder the brightness, volume and other system buttons on the right of the Touch Bar in System Settings › Keyboard › Touch Bar Settings…";
 "触控栏歌词" = "Touch Bar Lyrics";
 "触控栏歌词仅适用于配备触控栏的 MacBook Pro" = "Touch Bar Lyrics works only on MacBook Pro models with a Touch Bar";
+"设为默认" = "Default Channel";
+"设为默认后，四档听歌报告都会推送到这个渠道；同一时间只有一个默认渠道" = "All four listening digests will also go to this channel. Only one channel can be the default";
 "设备控制和数据访问" = "Device Control and Data Access";
 "设定歌词偏移" = "Set Lyrics Offset";
 "设置" = "Settings";
@@ -2283,6 +2306,7 @@
 "这份歌词沿用同曲条目「%@」的人工修正，该条目修改时此处同步更新；直接编辑此条目将使其成为独立的修正" = "These lyrics use the manual correction from “%@”, another entry of this song, and update when it changes. Editing this entry makes the correction its own";
 "这台 Mac 上未安装此播放器" = "This player isn't installed on this Mac";
 "这台 Mac 上未安装的播放器" = "Players not installed on this Mac";
+"这就是会 POST 出去的内容，真正发出时是一行" = "This is exactly what gets POSTed; the real request is sent on a single line";
 "这是 Lyrimuse 本身" = "That’s Lyrimuse itself";
 "这条候选歌词无译文" = "No translation in this candidate";
 "这条候选歌词无读音" = "No romanization in this candidate";
@@ -2350,6 +2374,7 @@
 "选择播放器" = "Choose Players";
 "选择歌词显示方式" = "Choose Where Lyrics Appear";
 "选择用于播放此网站的浏览器" = "Pick the browser you use for this site";
+"选择这一档推送到哪些渠道" = "Choose which channels this digest goes to";
 "透明" = "Transparent";
 "逐字" = "Word-timed";
 "逐字填色时已唱部分使用此颜色；未唱部分和其他行仍使用文字颜色。关闭「卡拉OK效果」时无效" = "The part already sung takes this color as lyrics fill word by word. Unsung words and other lines keep the text color. Has no effect when Karaoke Effect is off";
@@ -2427,6 +2452,7 @@
 "锁定位置" = "Lock Position";
 "锁定位置仅对桌面悬浮歌词有效" = "Locking the position only applies to Floating Lyrics";
 "锁定手选歌词" = "Lock Hand-Picked Lyrics";
+"锁屏上约显示前 4 行，点开可看全文" = "About the first 4 lines show on the Lock Screen; open it to read the rest";
 "长句处理" = "Long Lines";
 "长句拆分" = "Split Long Lines";
 "长按即可拖动位置" = "Click and hold to drag";
@@ -2457,6 +2483,10 @@
 "霓虹" = "Neon";
 "静音" = "Mute";
 "静默启动" = "Launch Silently";
+"静默开始" = "Quiet Hours Start";
+"静默时段" = "Quiet Hours";
+"静默时段里到的，延后到 %@" = "Held during quiet hours, sent at %@";
+"静默结束" = "Quiet Hours End";
 "韩国 KT 旗下的音乐平台" = "KT's music service from Korea";
 "韩国 Naver 旗下的音乐平台" = "Naver's music service from Korea";
 "韩语" = "Korean";

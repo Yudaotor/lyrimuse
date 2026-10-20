@@ -203,6 +203,9 @@ public final class ConfigStore: ObservableObject {
     /// 推送提醒的渠道(`notification_channels`,见 Core `NotificationChannel`)。旧版的单渠道字段在 load 时换成这个列表,
     /// 旧键留在文件里不删、也不再写。
     @Published public var notificationChannels: [NotificationChannel] = []
+    /// 每档听歌报告推到哪些渠道(`notification_routes`,见 Core `NotificationRouting`)。没有某个事件的键 = 推到全部渠道;
+    /// 空字典时文件里不写这个键。渠道增删时跟着改,走 `NotificationRouting.adding / removing`。
+    @Published public var notificationRoutes: NotificationRouting.Routes = [:]
 
     @Published public private(set) var lastError: String?
     /// 同 FeatureSettingsStore.pendingUntilServiceEnabled:落盘成功、因后台服务被主动停用而没重启。
@@ -226,12 +229,13 @@ public final class ConfigStore: ObservableObject {
         var lastfmUser, lastfmAPIKey: String
         var lastfmScrobbleAPIKey, lastfmScrobbleSecret, lastfmScrobbleSessionKey, lastfmScrobbleUsername: String
         var notificationChannels: [NotificationChannel]
+        var notificationRoutes: NotificationRouting.Routes
     }
     private var savedSnapshot = Snapshot(
         listenbrainzToken: "", listenbrainzUser: "", stateRelayURL: "", stateRelayToken: "",
         lastfmUser: "", lastfmAPIKey: "", lastfmScrobbleAPIKey: "", lastfmScrobbleSecret: "",
         lastfmScrobbleSessionKey: "", lastfmScrobbleUsername: "",
-        notificationChannels: []
+        notificationChannels: [], notificationRoutes: [:]
     )
     private var currentSnapshot: Snapshot {
         Snapshot(
@@ -240,7 +244,7 @@ public final class ConfigStore: ObservableObject {
             lastfmUser: lastfmUser, lastfmAPIKey: lastfmAPIKey,
             lastfmScrobbleAPIKey: lastfmScrobbleAPIKey, lastfmScrobbleSecret: lastfmScrobbleSecret,
             lastfmScrobbleSessionKey: lastfmScrobbleSessionKey, lastfmScrobbleUsername: lastfmScrobbleUsername,
-            notificationChannels: notificationChannels
+            notificationChannels: notificationChannels, notificationRoutes: notificationRoutes
         )
     }
     public var isDirty: Bool { currentSnapshot != savedSnapshot }
@@ -401,6 +405,7 @@ public final class ConfigStore: ObservableObject {
         // 还没有渠道列表的旧配置:换成渠道列表。快照按换好的算(没有要保存的改动),下一次保存时才写进文件;
         // 那之前引擎照样读旧字段,推的是同一个渠道。
         notificationChannels = NotificationChannel.list(fromConfig: raw) ?? NotificationChannel.migrated(fromLegacy: raw)
+        notificationRoutes = NotificationRouting.routes(fromConfig: raw)
         savedSnapshot = currentSnapshot
     }
 
@@ -415,7 +420,7 @@ public final class ConfigStore: ObservableObject {
         // 凭据和地址落盘前去掉首尾空白:粘贴进来的 token 常带尾随空格 / 换行,界面上的校验去掉了空白所以显示
         // 「已连接」,引擎却原样拼进请求头。引擎读配置时也会再去一次(config.go trimCredentials)。
         func t(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
-        let fields: [String: Any] = [
+        var fields: [String: Any] = [
             "listenbrainz_token": t(listenbrainzToken),
             "listenbrainz_user": t(listenbrainzUser),
             "state_relay_url": t(stateRelayURL),
@@ -429,10 +434,12 @@ public final class ConfigStore: ObservableObject {
             // 删光了也写 []:没有这个键时引擎会退回去读旧的单渠道字段。
             "notification_channels": notificationChannels.map(\.jsonObject),
         ]
+        // 路由空了就不写这个键(没有键 = 每档都推到全部渠道),写了的要从文件里删掉,所以它算已知键。
+        if !notificationRoutes.isEmpty { fields["notification_routes"] = notificationRoutes }
         do {
             // 合并进磁盘镜像(api_root / bundle_ids 这些 UI 不管的字段原样保留)→ 原子写 + 0600(这份就是
             // 凭据本体)→ 成功后镜像才更新。磁盘上那份判定为损坏时这里直接抛,一个字节不碰。
-            try document.save(fields: fields, secure: true)
+            try document.save(fields: fields, knownKeys: Set(fields.keys).union(["notification_routes"]), secure: true)
         } catch JSONConfigDocument.Failure.refusedCorruptFile {
             throw ConfigFileSaveError.refusedCorruptFile
         } catch JSONConfigDocument.Failure.notSerializable {

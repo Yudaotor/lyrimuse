@@ -1703,9 +1703,9 @@
             "zh-Hant": "日報、週報、月報和年度聆聽小結"
           },
           "desc": {
-            "zh-Hans": "推送到你设置的渠道，可同时设置多个：Bark、ntfy、Server酱、飞书、钉钉、企业微信、Telegram、Discord、Slack，或通用 Webhook。每个渠道都可发送测试；推送记录中可查看每次是否送达，未送达的可重发。四种小结各有独立开关。位于「实验室」中。",
-            "en": "Pushed to the channels you set up, as many as you like: Bark, ntfy, ServerChan, Feishu, DingTalk, WeCom, Telegram, Discord, Slack or a generic webhook. Each channel can send a test, and the delivery history shows whether each push arrived, with a resend for the ones that didn't. Each of the four has its own switch. Under Labs.",
-            "zh-Hant": "推播到你設定的管道，可同時設定多個：Bark、ntfy、Server醬、飛書、釘釘、企業微信、Telegram、Discord、Slack，或通用 Webhook。每個管道都可傳送測試；推播記錄中可查看每次是否送達，未送達的可重新傳送。四種小結各有獨立開關。位於「實驗室」中。"
+            "zh-Hans": "推送到你设置的渠道，可同时设置多个：Bark、ntfy、Server酱、飞书、钉钉、企业微信、Telegram、Discord、Slack，或通用 Webhook。每个渠道都可预览推送效果、发送测试；推送记录中可查看每次是否送达，未送达的可重发。四种小结各有独立开关，有多个渠道时可分别选推到哪些渠道；可设静默时段（期间到点的等结束再推）和每类列出几名。位于「实验室」中。",
+            "en": "Pushed to the channels you set up, as many as you like: Bark, ntfy, ServerChan, Feishu, DingTalk, WeCom, Telegram, Discord, Slack or a generic webhook. Each channel can preview how a push will look and send a test, and the delivery history shows whether each push arrived, with a resend for the ones that didn't. Each of the four has its own switch and, with several channels, its own choice of channels; quiet hours hold pushes until they end, and you choose how many top items each list shows. Under Labs.",
+            "zh-Hant": "推播到你設定的管道，可同時設定多個：Bark、ntfy、Server醬、飛書、釘釘、企業微信、Telegram、Discord、Slack，或通用 Webhook。每個管道都可預覽推播效果、傳送測試；推播記錄中可查看每次是否送達，未送達的可重新傳送。四種小結各有獨立開關，有多個管道時可分別選擇推播到哪些管道；可設定勿擾時段（期間到期的等結束再推播）和每類列出幾名。位於「實驗室」中。"
           },
           "default": "off",
           "check": {
@@ -1718,11 +1718,19 @@
             ],
             [
               "推送提醒",
+              "静默时段"
+            ],
+            [
+              "推送提醒",
               "听歌报告"
             ],
             [
               "推送提醒",
               "数据来源"
+            ],
+            [
+              "推送提醒",
+              "每类列出"
             ],
             [
               "推送提醒",

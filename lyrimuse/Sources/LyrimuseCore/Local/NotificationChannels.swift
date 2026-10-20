@@ -17,7 +17,8 @@ public struct NotificationChannel: Equatable, Identifiable, Sendable {
     public var secret: String
     public var chatID: String
     public var enabled: Bool
-    /// 引擎认这个字段;按事件选渠道做好之前界面上不出现。
+    /// 默认渠道:新加渠道时设成默认的,自动加进四档听歌报告的路由(`NotificationRouting.adding`);同一时间只有一个。
+    /// 有两个以上渠道时界面上才出现(编辑表单里的开关、列表里的「默认」标签)。引擎不按它选渠道。
     public var isDefault: Bool
 
     public init(id: String = UUID().uuidString.lowercased(), name: String = "", platform: String, url: String = "",
@@ -155,16 +156,18 @@ public enum NotificationDeliveryLog {
         public let elapsedMS: Int64
         /// 只有没推成的才有,「重发」用的就是它(App 不显示)。
         public let body: String?
+        /// 静默时段里到点的报告、等静默结束才推的(引擎 notifyquiet.go)。记录行写「静默时段里到的，延后到 HH:MM」。
+        public let deferred: Bool?
 
         enum CodingKeys: String, CodingKey {
-            case id, at, channel, platform, event, title, ok, kind, status, code, detail, body
+            case id, at, channel, platform, event, title, ok, kind, status, code, detail, body, deferred
             case channelName = "channel_name"
             case elapsedMS = "elapsed_ms"
         }
 
         public init(id: String, at: Int64, channel: String, channelName: String? = nil, platform: String, event: String? = nil,
                     title: String? = nil, ok: Bool, kind: String, status: Int? = nil, code: String? = nil, detail: String? = nil,
-                    elapsedMS: Int64 = 0, body: String? = nil) {
+                    elapsedMS: Int64 = 0, body: String? = nil, deferred: Bool? = nil) {
             self.id = id
             self.at = at
             self.channel = channel
@@ -179,7 +182,10 @@ public enum NotificationDeliveryLog {
             self.detail = detail
             self.elapsedMS = elapsedMS
             self.body = body
+            self.deferred = deferred
         }
+
+        public var isDeferred: Bool { deferred == true }
 
         public var date: Date { Date(timeIntervalSince1970: TimeInterval(at)) }
         public var failure: NotificationFailure? { ok ? nil : NotificationFailure(kind: kind, status: status, code: code, detail: detail) }
