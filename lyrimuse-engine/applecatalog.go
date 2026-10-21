@@ -820,7 +820,7 @@ func appleStorefrontCachedTitle(artist, album, title string) (string, bool) {
 	if album == "" {
 		return "", false
 	}
-	key := normLoose(artist) + "|" + normLoose(album) + "|" + normLoose(title)
+	key := normLoose(artist) + "|" + normLoose(album) + "|" + titleCacheKeyPart(title)
 	appleStorefrontTitleMu.Lock()
 	defer appleStorefrontTitleMu.Unlock()
 	if t, ok := appleStorefrontTitleCache[key]; ok {
@@ -861,7 +861,7 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 	// 专辑不同曲目该共用同一次查询结果,不必逐曲重查。第一首通过曲目核对就等于核实了这张专辑。
 	// 曲名则必然是逐曲的,单独一个键(见 appleStorefrontTitleCache 头注)。
 	key := normLoose(artist) + "|" + normLoose(album)
-	titleKey := key + "|" + normLoose(title)
+	titleKey := key + "|" + titleCacheKeyPart(title)
 	appleStorefrontArtistMu.Lock()
 	cachedNames, namesOK := appleStorefrontArtistCache[key]
 	appleStorefrontArtistMu.Unlock()
@@ -1048,7 +1048,7 @@ func appleChineseStorefront(country string) bool {
 // appleStorefrontTrackMatches:挑中的那张专辑里,这一条曲目是不是本地正在放的这首歌。有时长就以时长为主
 // (同名不同歌很难恰好一样长),曲名要么归一相等、要么跨文字系统(同一录音在不同商店用不同文字写的曲名);
 // 没有时长时只能要求曲名归一相等。跨文字系统按去掉括号部分之后比(crossScriptBase):只有括号里的客串者
-// 名单是假名的别的曲目不算。
+// 名单是假名的别的曲目不算。本地曲名打了码(「****」)时,跟它逐字对得上的(titleMaskCompatible)按跨文字系统那一档算。
 //
 // 两档的时长容差**故意不同**:
 //   - 同名那一档手里有曲名证据,时长只是除重用的,用 appleTitleSearchDurationTolerance
@@ -1061,7 +1061,8 @@ func appleChineseStorefront(country string) bool {
 //     故这一档单独用下面那个紧得多的常量。
 func appleStorefrontTrackMatches(localTitle string, durationSecs float64, t itunesResult) bool {
 	want := normLoose(localTitle)
-	if want == "" {
+	masked := titleMaskCompatible(localTitle, t.TrackName)
+	if want == "" && !masked {
 		return false
 	}
 	sameTitle := normLoose(t.TrackName) == want
@@ -1075,7 +1076,7 @@ func appleStorefrontTrackMatches(localTitle string, durationSecs float64, t itun
 	if sameTitle {
 		return diff <= appleTitleSearchDurationTolerance(durationSecs)
 	}
-	return crossScriptBase(localTitle, t.TrackName) && diff <= appleStorefrontCrossScriptToleranceSecs
+	return (crossScriptBase(localTitle, t.TrackName) || masked) && diff <= appleStorefrontCrossScriptToleranceSecs
 }
 
 // appleStorefrontCrossScriptToleranceSecs:跨文字系统那一档(曲名对不上、只能靠时长认人)的时长容差。
@@ -1106,12 +1107,12 @@ const appleStorefrontTrackAmbiguityMarginSecs = 0.5
 // 选哪条都一样。
 func appleStorefrontPickTrack(localTitle string, durationSecs float64, tracks []itunesResult) *itunesResult {
 	want := normLoose(localTitle)
-	if want == "" {
+	if want == "" && !strings.Contains(localTitle, "*") {
 		return nil
 	}
 	// ① 曲名铁证优先。
 	for i := range tracks {
-		if normLoose(tracks[i].TrackName) == want && appleStorefrontTrackMatches(localTitle, durationSecs, tracks[i]) {
+		if want != "" && normLoose(tracks[i].TrackName) == want && appleStorefrontTrackMatches(localTitle, durationSecs, tracks[i]) {
 			return &tracks[i]
 		}
 	}

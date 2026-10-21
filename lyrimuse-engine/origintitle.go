@@ -297,9 +297,9 @@ func lyricOriginRecording(ctx context.Context, artist, title, album string, dura
 // storefrontTraversalTitleUsable:区服遍历按专辑名定位、凭时长挑出来的原产地曲名 found 能不能当这首的曲名用 —— 去掉括号部分之后
 // 换了文字(crossScriptBase),而且本地是一字一词的拼音时读音对得上(pinyinTitleContradicts)。跨文字那一档没有曲名证据,同专辑里
 // 时长相近的另一首会被挑中;按 ISRC 查到的不过这一关。连写的拼音不判:这条路本是给日文罗马字改写用的,「Kaiju」→「怪獣」按普通话读
-// 对不上。见 09 章决策 280。
+// 对不上。本地曲名打了码、跟 found 逐字对得上的(titleMaskCompatible)同样能用。见 09 章决策 280、325。
 func storefrontTraversalTitleUsable(title, album, found string) bool {
-	if !crossScriptBase(title, found) {
+	if !crossScriptBase(title, found) && !titleMaskCompatible(title, found) {
 		return false
 	}
 	if pinyinTitleContradicts(title, album, found, false) {
