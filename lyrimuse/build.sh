@@ -77,9 +77,34 @@ coalesce_if_installed() {
       && awk -v a="$last_snapshot_at" -v b="$BUILD_REQUESTED_AT" 'BEGIN { exit !(a > b) }'; then
     echo "==> 不再编:排队期间 build.sh(pid ${last_pid:-?})已经装好一版,它的源码快照拍在这次请求之后,这次请求之前写好的改动都在里面"
     echo "==> 正在跑的 $APP_NAME 就是那一版,pid ${running_pid% }"
+    CMUX_BUILD_RESULT="不再编,App pid ${running_pid% }"
     exit 0
   fi
 }
+
+# cmux 侧边栏:在 cmux 里跑时把当前阶段写成状态标签和进度条,结束时清掉并留一条结果日志。
+# 不在 cmux 里、或 cmux 命令失败,都不影响构建。
+cmux_ui() {
+  if [ -n "${CMUX_WORKSPACE_ID:-}" ] && command -v cmux >/dev/null 2>&1; then
+    cmux "$@" >/dev/null 2>&1 || true
+  fi
+}
+cmux_stage() {
+  cmux_ui set-status build "$2" --icon hammer --color "#A04000" --priority 80
+  cmux_ui set-progress "$1" --label "$2"
+}
+CMUX_BUILD_RESULT=""
+cmux_build_done() {
+  cmux_ui clear-status build
+  cmux_ui clear-progress
+  if [ "$1" = 0 ]; then
+    cmux_ui log --level success --source build -- "build.sh 完成${CMUX_BUILD_RESULT:+:$CMUX_BUILD_RESULT}"
+  else
+    cmux_ui log --level error --source build -- "build.sh 失败(退出码 $1)"
+  fi
+}
+trap 'cmux_build_done $?' EXIT
+cmux_stage 0 "排队"
 
 build_lock_waited=0
 while ! mkdir "$BUILD_LOCK" 2>/dev/null; do
@@ -112,7 +137,7 @@ else
   heavy_gate_release() { :; }
 fi
 release_build_lock() { heavy_gate_release; rm -rf "$BUILD_LOCK"; }
-trap release_build_lock EXIT
+trap 'cmux_build_done $?; release_build_lock' EXIT
 
 NO_RESTART=0
 UNIVERSAL=0
@@ -305,7 +330,7 @@ cleanup_build() {
   if [ -n "$STAGE" ]; then rm -rf "$STAGE"; fi
   release_build_lock
 }
-trap cleanup_build EXIT
+trap 'cmux_build_done $?; cleanup_build' EXIT
 
 coalesce_if_installed
 
@@ -324,6 +349,7 @@ if [ -z "${LYRIMUSE_NO_SOURCE_SNAPSHOT:-}" ] && [ -z "${LYRIMUSE_SPM_SCRATCH_PAT
   SNAPSHOT_AT="$(/usr/bin/python3 -c 'import time; print("%.3f" % time.time())')"
   SNAPSHOT_ROOT="$PWD/.build/source-snapshot"
   echo "==> snapshotting sources into $SNAPSHOT_ROOT"
+  cmux_stage 0.05 "拍源码快照"
   mkdir -p "$SNAPSHOT_ROOT/lyrimuse" "$SNAPSHOT_ROOT/lyrimuse-engine"
   rsync -a --delete --exclude=/.build/ --exclude=/dist/ --exclude=.DS_Store ./ "$SNAPSHOT_ROOT/lyrimuse/"
   rsync -a --delete --exclude=/collector --exclude=/lyrimuse-engine --exclude=.DS_Store ../lyrimuse-engine/ "$SNAPSHOT_ROOT/lyrimuse-engine/"
@@ -337,8 +363,10 @@ if [ -z "${LYRIMUSE_NO_SOURCE_SNAPSHOT:-}" ] && [ -z "${LYRIMUSE_SPM_SCRATCH_PAT
   cd "$SNAPSHOT_ROOT/lyrimuse"
 fi
 
+cmux_stage 0.08 "等编译名额"
 heavy_gate_acquire "build.sh${DEST:+ --dest}" install
 echo "==> building (release) [$ARCHES]"
+cmux_stage 0.1 "编译 App"
 # 每个架构单独编一次再 lipo 合并,而不是 `swift build --arch arm64 --arch x86_64` 一步
 # 出 universal —— 后者要走 xcbuild
 # (/Library/Developer/SharedFrameworks/XCBuild.framework/.../xcbuild),那是**完整 Xcode**
@@ -414,6 +442,7 @@ done
 # GOTOOLCHAIN=go1.24.4(系统 Go 1.21 产出的二进制缺 LC_UUID，AMFI 拒签，见那份脚本的
 # 注释)。
 echo "==> building $ENGINE_NAME [$ARCHES]"
+cmux_stage 0.55 "编译引擎"
 # 引擎是纯 Go(没有 import "C",核实过),所以 GOARCH 交叉编译不需要交叉
 # 工具链,直接编两份再 lipo 合并即可。GOARCH 的写法跟 uname -m 不一样:x86_64 在 Go 里
 # 叫 amd64。
@@ -450,6 +479,7 @@ merge_slices "$FAT_DIR/$ENGINE_NAME" "${ENGINE_SLICES[@]}"
 # 编译到这里就完了,后面组装、签名、重启都轻,把全机重活闸让给排队的人。
 heavy_gate_release
 echo "==> assembling .app bundle"
+cmux_stage 0.7 "打包签名"
 # CFBundleIdentifier 这次(改名 Lyrimuse)跟上面的 $LABEL 统一成同一个
 # 字符串——早先(打包成 .app 那次)故意让两者不同,是因为 CFBundleIdentifier
 # 需要继续等于裸可执行文件时代 UserDefaults.standard 隐式落的偏好域名"desktop-lyrics"、
@@ -920,6 +950,7 @@ codesign -v "$APP_DIR/Contents/Resources/$ENGINE_NAME" && echo "    $ENGINE_NAME
 # v1.0.0~v1.2.0 三个版本都在没人察觉的情况下发成了 arm64-only:光靠"记得传参数"不够,
 # 产物本身要能自证。用 find -type f(不加 -perm)以免漏掉没有执行位的 Mach-O。
 echo "==> architecture check [$ARCHES]"
+cmux_stage 0.85 "检查架构"
 ARCH_BAD=""
 while IFS= read -r f; do
   archs="$(lipo -archs "$f" 2>/dev/null || true)"
@@ -1021,6 +1052,7 @@ fi
 
 if [ "$NO_RESTART" = 1 ]; then
   echo "==> built (restart skipped)"
+  CMUX_BUILD_RESULT="已构建,未重启"
   exit 0
 fi
 
@@ -1061,6 +1093,7 @@ fi
 ENGINE_BIN="$APP_DIR/Contents/Resources/$ENGINE_NAME"
 OLD_ENGINE_PIDS="$(pgrep -f "$APP_DIR/$ENGINE_PATH_PATTERN" 2>/dev/null | tr '\n' ' ' || true)"
 echo "==> launching via LaunchServices (open -g)"
+cmux_stage 0.92 "重启 App"
 open -g "$APP_DIR"
 # 最多等 10 秒而不是固定 sleep 2:首次 open 一个新 bundle(换过 bundle id、或刚装到新路径)LaunchServices 要先注册,
 # 2 秒经常不够 —— 实测被误判成「没起来」(进程其实起了)。
@@ -1094,6 +1127,8 @@ if [ -n "$OLD_PIDS" ] && [ "$pid" = "$OLD_PIDS" ]; then
   exit 1
 fi
 echo "==> $APP_NAME running, pid ${pid% }"
+CMUX_BUILD_RESULT="App pid ${pid% }"
+cmux_stage 0.96 "等引擎起来"
 
 # 引擎是独立的一份 launchd job(com.lyrimuse.collector),上面那一整套 kickstart/
 # bootout 只管 $LABEL 这个 App job，从来没管过它 —— 而这个脚本每跑一次，都会把
