@@ -58,3 +58,43 @@ func TestWithoutPromoTitleTail(t *testing.T) {
 		}
 	}
 }
+
+func TestDashVersionTailAsBracket(t *testing.T) {
+	for in, want := range map[string]string{
+		"漂向北方 - Live at 13th KKBOX Music Awards": "漂向北方 (Live at 13th KKBOX Music Awards)",
+		"揪你出去玩 (feat. 謝和弦) - Unplugged 花絮版":      "揪你出去玩 (feat. 謝和弦) (Unplugged 花絮版)",
+		"Bad - 2012 Remaster":                    "Bad (2012 Remaster)",
+		"Boyfriend - Acoustic Version":           "Boyfriend (Acoustic Version)",
+		"Hello - Goodbye":                        "Hello - Goodbye",
+		"蘇州河 - 慕容雪":                              "蘇州河 - 慕容雪",
+		"Sorry":                                  "Sorry",
+	} {
+		if got := dashVersionTailAsBracket(in); got != want {
+			t.Errorf("dashVersionTailAsBracket(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// 本地把版本限定词写在「 - 」后面、候选写在括号里或不写:歌名闸跟两边都写括号时一样放行,版本差异照旧归版本闸;
+// 尾段不是限定词的、候选一侧的尾段不放宽。
+func TestLyricTitleAcceptsDashVersionTail(t *testing.T) {
+	for _, c := range []struct {
+		candidate, local string
+		want             bool
+	}{
+		{"漂向北方 (Live)", "漂向北方 - Live at 13th KKBOX Music Awards", true},
+		{"漂向北方", "漂向北方 - Live at 13th KKBOX Music Awards", true},
+		{"Bad - Live at Wembley", "Bad (Live)", false}, // 候选一侧的尾段归各源自己改写
+		{"Bad", "Bad - 2012 Remaster", true},
+		{"Hello", "Hello - Goodbye", false},
+		{"Hello (Live)", "Hello - Goodbye", false},
+		{"漂向北方 (Live)", "漂流 - Live at 13th KKBOX Music Awards", false},
+	} {
+		if got := lyricTitleAccepted(c.candidate, c.local); got != c.want {
+			t.Errorf("lyricTitleAccepted(%q, %q) = %v, want %v", c.candidate, c.local, got, c.want)
+		}
+	}
+	if !versionTagsMismatch("漂向北方 - Live at 13th KKBOX Music Awards", "", "漂向北方", "") {
+		t.Error("本地是现场版、候选不是,版本闸照样认出")
+	}
+}

@@ -2392,6 +2392,7 @@ func searchTitleVariants(title string) []string {
 	}
 	add(stripStructuralTitlePrefix(title))
 	add(stripParens(title))
+	add(stripParens(dashVersionTailAsBracket(title)))
 
 	if len(stripped) == 0 {
 		return []string{title}
@@ -3593,6 +3594,11 @@ func lyricTitleAccepted(candidateTitle, localTitle string) bool {
 	}
 	sc, sl := normLoose(stripParens(candidateTitle)), normLoose(stripParens(localTitle))
 	if sc != "" && sl != "" && sc == sl {
+		return true
+	}
+	// 本地歌名的「X - 版本限定词」跟「X (版本限定词)」同一档:尾段当括号去掉再比,限定词本身照旧归上面的版本闸和
+	// versionTagsMismatch。候选一侧的尾段不在这里认:酷狗、QQ、汽水各自改写,并带着各自的时长约束。见 09 章决策 323。
+	if dl := dashVersionTailAsBracket(localTitle); dl != localTitle && sc != "" && sc == normLoose(stripParens(dl)) {
 		return true
 	}
 	// ④ 结构性前缀:本地标签给串烧/间奏曲加了 "Medley: " 这类前缀,歌词源曲库里是裸曲名

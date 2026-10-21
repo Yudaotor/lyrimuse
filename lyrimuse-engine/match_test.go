@@ -825,8 +825,11 @@ func TestSearchTitleVariants(t *testing.T) {
 		{"live 同理", "Hello (Live)", []string{"Hello (Live)", "Hello"}},
 		{"remaster 不算另一次录音,该去括号",
 			"Hello (Remastered 2015)", []string{"Hello", "Hello (Remastered 2015)"}},
-		{"破折号写法的版本限定词也认", "Hello - Live at Wembley",
-			[]string{"Hello - Live at Wembley"}}, // 没有括号可剥,只有一条
+		{"破折号写法的版本限定词:跟括号写法一样原样优先", "Hello - Live at Wembley",
+			[]string{"Hello - Live at Wembley", "Hello"}},
+		{"破折号写法的曲库噪音:去掉尾段优先", "Hello - 2015 Remaster",
+			[]string{"Hello", "Hello - 2015 Remaster"}},
+		{"破折号尾段不是限定词:不动", "Hello - Goodbye", []string{"Hello - Goodbye"}},
 	}
 	for _, c := range cases {
 		got := searchTitleVariants(c.title)

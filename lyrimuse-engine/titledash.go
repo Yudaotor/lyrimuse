@@ -20,6 +20,17 @@ func dashTailAsBracket(name string) string {
 	return head + " (" + tail + ")"
 }
 
+// dashVersionTailAsBracket:最后一个「 - 」后面是版本限定词(titleVersionTags 认得出,「X - Live at Y」)或曲库噪音副题
+// (isCatalogNoiseSubtitle,「X - 2012 Remaster」)时改成括号(dashTailAsBracket),别的原样返回。尾段两样都不是的
+// (「X - Y」可能就是歌名本身)不动。见 09 章决策 323。
+func dashVersionTailAsBracket(name string) string {
+	_, tail, ok := dashTailSplit(strings.TrimSpace(name))
+	if !ok || (len(titleVersionTags("("+tail+")")) == 0 && !isCatalogNoiseSubtitle(tail)) {
+		return name
+	}
+	return dashTailAsBracket(name)
+}
+
 // dashTailHead 是最后一个「 - 」前面那段;没有尾段返回空串。
 func dashTailHead(name string) string {
 	head, _, ok := dashTailSplit(strings.TrimSpace(name))
