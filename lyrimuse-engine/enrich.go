@@ -277,6 +277,8 @@ type enrichEntry struct {
 	// 这一轮因源级熔断被跳过的源(sourcebreaker.go)。非空且歌词为空时 needsLyricsFirstFill
 	// 把补空间隔缩到 10 分钟——那不是"查过了没有",是"没问它"。每次写缓存都整体覆盖(含清空)。
 	LyricsSourcesSkipped []string `json:"lyrics_sources_skipped,omitempty"`
+	// 这一轮开搜时开着的联网歌词源(lyricSourceRound.enabled)。歌词为空时 needsLyricsFirstFill 拿它跟现在开着的比。
+	LyricsSourcesEnabled []string `json:"lyrics_sources_enabled,omitempty"`
 	// 最近一轮歌词评估拿去当专辑搜索、打分的 YouTube Music 登记专辑(播放器没报专辑时才有,见 lyricsSearchAlbum)。
 	// 跟 YouTubeMusicAlbum 对不上就带着登记专辑重搜一次,见 listedAlbumLyricsWorthRecheck。
 	LyricsListedAlbum string `json:"lyrics_listed_album,omitempty"`
@@ -1693,6 +1695,12 @@ func needsLyricsFirstFill(e enrichEntry) bool {
 	if e.LyricsFillCount == 0 && e.LyricsDecision != nil && durationMismatch(e.LyricsDecision.DurationSecs, e.DurationSecs) {
 		return true
 	}
+	// 设置里新开了歌词源、上一轮搜的时候它还没开:不等退避,按现在开着的源补一次。补完名单跟着更新,不会反复触发;
+	// 一个源都没连上的那一轮不更新名单,隔 lyricsFillSkippedReadyRetryInterval 再来,别在断网时每拍重搜。见 09 章决策 311。
+	if lyricSourceEnabledSince(e.LyricsSourcesEnabled) &&
+		time.Now().Unix()-e.LyricsFillTS >= int64(lyricsFillSkippedReadyRetryInterval/time.Second) {
+		return true
+	}
 	// 从"上次补空尝试"和"当初解析"里取更晚的那个当起算点,理由跟 needsLyricsRetry 同款:
 	// 免得刚写进缓存的新条目立刻又被重搜一遍。
 	base := e.LyricsFillTS
@@ -2203,6 +2211,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	if reached {
 		e.LyricsListedAlbum = listedAlbum
 		e.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)
+		e.LyricsSourcesEnabled = round.enabledSources()
 	}
 	if sw := songwritersFromScored(scored); len(sw) > 0 {
 		e.LyricsSongwriters = sw
@@ -3662,6 +3671,7 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	e, picked := lyricsEntryFromScored(decisionPath, artist, title, searchAlbum, durationSecs, ne, scored,
 		round.skippedSources(), queries.queries(), false, provisionalSource, lastShown)
 	e.LyricsListedAlbum = listedAlbum
+	e.LyricsSourcesEnabled = round.enabledSources()
 	recordISRCs(&e, recordingISRCsFromScored(lyricSourceISRC(ctx, artist, title, searchAlbum), scored, durationSecs, title, album))
 	e.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)
 	// 首次解析这里拿不到 key(它由上层 trackEnrichment 用**未转简体**的原始标签拼),

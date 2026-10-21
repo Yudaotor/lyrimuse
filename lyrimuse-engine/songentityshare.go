@@ -240,6 +240,7 @@ func songShareLyricsFields(dst *enrichEntry, src enrichEntry) {
 	dst.TranslationLang, dst.TranslationTS, dst.TranslationRetryCount = src.TranslationLang, src.TranslationTS, src.TranslationRetryCount
 	dst.ManualLyrics, dst.ManualPickSHA, dst.LyricsEntityOrigin = src.ManualLyrics, src.ManualPickSHA, src.LyricsEntityOrigin
 	dst.LyricsSourcesSeen, dst.LyricsSourcesResponded, dst.LyricsSourcesSkipped = src.LyricsSourcesSeen, src.LyricsSourcesResponded, src.LyricsSourcesSkipped
+	dst.LyricsSourcesEnabled = src.LyricsSourcesEnabled
 	dst.LyricsDecisionApplied = src.LyricsDecisionApplied
 }
 

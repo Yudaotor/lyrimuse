@@ -651,14 +651,25 @@ type lyricSourceRound struct {
 	// parent:外层的 round(补空扫描套在 retryLyricsUpgrade / rescoreLyrics 外面那一层)。
 	// reached 往上传,外层才看得见里层这一轮连没连上;skipped 不传,那是写缓存的那一层自己的账。
 	parent *lyricSourceRound
+	// enabled:开搜那一刻开着的联网歌词源。在开搜时取、不在写缓存时取:一轮要搜十几秒,用户在这期间新开的源
+	// 这一轮没问到,记进名单就不会再按它补搜。
+	enabled []string
 }
 
 type lyricSourceRoundKey struct{}
 
 func withLyricSourceRound(ctx context.Context) (context.Context, *lyricSourceRound) {
 	r := &lyricSourceRound{skipped: map[string]bool{}, skipReason: map[string]string{}, reached: map[string]bool{},
-		parent: lyricSourceRoundFrom(ctx)}
+		parent: lyricSourceRoundFrom(ctx), enabled: enabledNetworkLyricSources()}
 	return context.WithValue(ctx, lyricSourceRoundKey{}, r), r
+}
+
+// enabledSources:nil 接收者(CLI 路径没有 round)返回 nil。
+func (r *lyricSourceRound) enabledSources() []string {
+	if r == nil {
+		return nil
+	}
+	return r.enabled
 }
 
 func lyricSourceRoundFrom(ctx context.Context) *lyricSourceRound {

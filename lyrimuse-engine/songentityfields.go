@@ -80,6 +80,6 @@ var songEntityFieldClasses = map[string]songFieldClass{
 
 	"lyrics_decision": songFieldDecision, "lyrics_decision_applied": songFieldDecision,
 	"lyrics_sources_seen": songFieldDecision, "lyrics_sources_responded": songFieldDecision,
-	"lyrics_sources_skipped": songFieldDecision, "lyrics_decision_applied_same": songFieldDecision,
-	"netease_rejected": songFieldDecision,
+	"lyrics_sources_skipped": songFieldDecision, "lyrics_sources_enabled": songFieldDecision,
+	"lyrics_decision_applied_same": songFieldDecision, "netease_rejected": songFieldDecision,
 }

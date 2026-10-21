@@ -631,6 +631,31 @@ func lyricSourceEnabled(source string) bool {
 	return len(enabled) == 0 || enabled[source]
 }
 
+// enabledNetworkLyricSources:这一刻开着的联网歌词源,按 lyricSourceNames 的顺序。
+func enabledNetworkLyricSources() []string {
+	out := make([]string, 0, len(lyricSourceNames))
+	for _, s := range lyricSourceNames {
+		if lyricSourceEnabled(s) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// lyricSourceEnabledSince:prev 是某一轮开搜时开着的联网歌词源,现在开着、那时没开的有没有。
+// prev 为空(没记这份名单的老条目)一律 false。
+func lyricSourceEnabledSince(prev []string) bool {
+	if len(prev) == 0 {
+		return false
+	}
+	for _, s := range enabledNetworkLyricSources() {
+		if !slices.Contains(prev, s) {
+			return true
+		}
+	}
+	return false
+}
+
 // isPlayerLocalLyricSource:这份候选是不是读播放器自己缓存来的(KKBOX / Spotify / Amazon Music 本地歌词)。
 func isPlayerLocalLyricSource(source string) bool {
 	return source == kkboxLocalLyricsSource || source == spotifyLocalLyricsSource || source == amazonLocalLyricsSource ||
