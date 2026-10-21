@@ -2,7 +2,7 @@ import Foundation
 import LyrimuseCore
 
 /// VOX:AppleScript 读数的解读、没写标签的文件名、乱码、精确时长、换歌那一拍的撕裂、系统那份「歌手 — 专辑」的拆法、
-/// 循环与音量、接线契约。读数样例照真机输出的形状造(地址是 `file:/…` 单斜杠、百分号编码,总时长整秒)。
+/// 脚本读不到时的退路(系统那份的锚点、按开着的文件认曲目、脚本封面、暂停时的轮询)、循环与音量、接线契约。读数样例照真机输出的形状造(地址是 `file:/…` 单斜杠、百分号编码,总时长整秒)。
 @MainActor
 func runVoxTests() {
     typealias V = VoxPlayerInfo
@@ -178,18 +178,32 @@ func runVoxTests() {
         }
         let client = source("LyrimuseCore/Local/MediaControlClient.swift")
         let adapted = sourceBody("private static func adaptedSnapshot(", in: client)
-        expectEqual(sourceHas(adapted, "return fetchVoxSnapshot() ?? VoxPlayerInfo.splittingSystemArtist(mediaControl)"), true,
-                    "VOX 接线: 整份顶替,拿不到时退回系统那份并拆开歌手专辑")
+        expectEqual(sourceHas(adapted, "return fetchVoxSnapshot() ?? VoxPlayerInfo.systemFallback(mediaControl)"), true,
+                    "VOX 接线: 整份顶替,拿不到时退回系统那份、按开着的文件认这一首")
         let fetch = sourceBody("private static func fetchVoxSnapshot() -> MediaControlSnapshot? {", in: client)
         expectEqual(sourceHas(fetch, "VoxPlayerInfo.positionLagsTrackChange(previous: previous, current: VoxPlayerInfo.mark(reading))")
                     && sourceHas(fetch, "VoxPlayerInfo.remember(reading)"), true, "VOX 接线: 撕裂时重读,读完记下")
         let lost = sourceBody("private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {", in: client)
-        expectEqual(sourceHas(lost, "snapshot = VoxPlayerInfo.splittingSystemArtist(probed.snapshot)"), true,
-                    "VOX 接线: 焦点回退按 bundle id 问到的那份也拆开歌手专辑")
+        expectEqual(sourceHas(lost, "snapshot = VoxPlayerInfo.systemFallback(VoxPlayerInfo.probedSnapshot(")
+                    && sourceHas(lost, "probed.snapshot, anchorTimestamp: probed.anchor.timestamp, pid: probed.anchor.processIdentifier, now: now))"),
+                    true, "VOX 接线: 焦点回退按 bundle id 问到的那份补位置、按开着的文件认这一首")
+        expectEqual(sourceHas(sourceBody("private static func readVox() -> VoxPlayerInfo.Reading? {", in: client),
+                              "guard !SourceKnockout.isOut(.voxScript) else { return nil }"), true,
+                    "VOX 接线: 拔腿开关能关掉脚本读数")
+        let decode = sourceBody("init(from decoder: Decoder) throws {", in: sourceBody("private struct RawPayload: Decodable {", in: client))
+        expectEqual(sourceHas(decode, "let anchor = VoxPlayerInfo.systemAnchor(")
+                    && sourceHas(decode, "elapsedTime = anchor.elapsed") && sourceHas(decode, "elapsedTimeNow = anchor.elapsedNow")
+                    && sourceHas(decode, "playbackRate = anchor.rate"), true, "VOX 接线: 系统那份解码时补锚点")
         let artwork = sourceBody("public static func fetchArtworkExplained(", in: client)
         expectEqual(sourceHas(artwork, "VoxPlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)")
                     && sourceHas(artwork, "PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: keyArtist, title: keyTitle)"),
                     true, "VOX 接线: 封面的曲目标识用拆好的歌手")
+        expectEqual(sourceHas(artwork, "if channelFallback == .vox, let art = voxArtwork(tryingFolder: true) { return (art, nil) }")
+                    && sourceHas(artwork, "if target.bundleID == VoxPlayerInfo.bundleID, let art = voxArtwork(tryingFolder: true) { return (art, nil) }")
+                    && sourceHas(artwork, "if bundleID == VoxPlayerInfo.bundleID, let art = voxArtwork(tryingFolder: false) { return (art, nil) }"),
+                    true, "VOX 接线: 通道坏了、焦点被占、系统那份没带图,封面都退到脚本那张和同目录的图")
+        expectEqual(sourceHas(artwork, "guard !SourceKnockout.isOut(.systemArtwork), let imageData = artworkImageData(base64: raw.artworkData) else {"),
+                    true, "VOX 接线: 拔腿开关能关掉系统那份封面")
         let probe = source("LyrimuseCore/Local/NowPlayingClientsProbe.swift")
         expectEqual(sourceHas(sourceBody("public static func artwork(forBundleID bundleID: String)", in: probe),
                               "VoxPlayerInfo.artworkIdentity(title: title, artist: artist)"), true,
@@ -197,5 +211,96 @@ func runVoxTests() {
         let playback = source("LyrimuseCore/Local/LocalPlaybackSource.swift")
         expectEqual(sourceHas(playback, "? VoxPlayerInfo.currentFilePath(artist: snapshot.artist ?? \"\", title: snapshot.title ?? \"\")"),
                     true, "VOX 接线: 播放状态写当前文件,引擎据此读同名 .lrc 和内嵌歌词")
+        let observe = sourceBody("private func startObservingPlayerInfoNotification() {", in: playback)
+        expectEqual(sourceHas(observe, "forName: NSNotification.Name(VoxPlayerInfo.trackChangedNotification),")
+                    && sourceHas(observe, "guard !SourceKnockout.isOut(.voxNotice) else { return }")
+                    && sourceHas(observe, "self?.handlePlayerInfoChanged(freezeExtrapolation: false, stateSignal: false)"),
+                    true, "VOX 接线: 换歌通知只当提前 poll 一次,不冻结外推")
+        expectEqual(sourceHas(sourceBody("private func startStreamWatcher() {", in: playback),
+                              "guard !SourceKnockout.isOut(.streamEvents) else { return }"), true, "VOX 接线: 拔腿开关能关掉事件流信号")
+        expectEqual(sourceHas(sourceBody("private var desiredPollInterval: TimeInterval {", in: playback),
+                              "Self.pollsFastWhilePaused(bundleID: lastSnapshot?.bundleIdentifier,"), true,
+                    "VOX 接线: 暂停时的轮询档看 pollsFastWhilePaused")
+        expectEqual(sourceHas(playback, "if newIsPlayingNow { pausedObservedAt = nil } else if pausedObservedAt == nil { pausedObservedAt = Date() }"),
+                    true, "VOX 接线: 记下这一段暂停从什么时候起")
+    }
+
+    // ---- 系统那份的锚点(脚本读不到时位置靠它) ----
+    do {
+        func anchor(_ playing: Bool?, _ elapsed: Double?, _ now: Double?, _ rate: Double?, ts: Bool = true,
+                    bundle: String = "com.coppertino.Vox") -> String {
+            let a = V.systemAnchor(bundleID: bundle, playing: playing, elapsed: elapsed, elapsedNow: now, rate: rate, hasTimestamp: ts)
+            func f(_ x: Double?) -> String { x.map { String($0) } ?? "nil" }
+            return "\(f(a.elapsed))|\(f(a.elapsedNow))|\(f(a.rate))"
+        }
+        expectEqual(anchor(true, nil, nil, 1), "0.0|nil|1.0", "VOX 系统锚点: 开播 / 自然连播没报位置 → 从时刻那一刻的 0 秒起算")
+        expectEqual(anchor(true, nil, nil, 0), "0.0|nil|1.0", "VOX 系统锚点: 开播首帧速率 0 也当 1")
+        expectEqual(anchor(true, nil, nil, 1, ts: false), "nil|nil|1.0", "VOX 系统锚点: 连时刻都没有不编")
+        expectEqual(anchor(true, 8.26, 8.26, 0), "8.26|nil|1.0", "VOX 系统锚点: 恢复那份速率 0 → 当 1,冻结的外推值作废")
+        expectEqual(anchor(true, 60, 61.5, 1), "60.0|61.5|1.0", "VOX 系统锚点: 跳转后那份正常,原样")
+        expectEqual(anchor(false, 65.68, 70, 1), "65.68|70.0|1.0", "VOX 系统锚点: 暂停着原样")
+        expectEqual(anchor(true, nil, nil, 0, bundle: "com.apple.Music"), "nil|nil|0.0", "VOX 系统锚点: 别的播放器原样")
+    }
+
+    // ---- 脚本读不到时按开着的文件认曲目 ----
+    do {
+        expectEqual(V.fileMatchesSystemTitle("Marjoram", tagsTitle: "Marjoram", fileName: "2010-09-Accident-Marjoram.mp3"), true,
+                    "VOX 认文件: 歌名等于标签里的歌名")
+        expectEqual(V.fileMatchesSystemTitle("happy boy.mp3", tagsTitle: "", fileName: "Happy Boy.mp3"), true,
+                    "VOX 认文件: 没写标签,歌名是文件名的全小写")
+        expectEqual(V.fileMatchesSystemTitle("\u{B4}\u{B8}\u{A4}\u{D1}", tagsTitle: "晴天", fileName: "b.mp3"), true,
+                    "VOX 认文件: 系统那份是乱码、文件标签读成了正字,还原后对上")
+        expectEqual(V.fileMatchesSystemTitle("Marjoram", tagsTitle: "Кибернетичекая эра", fileName: "next.mp3"), false,
+                    "VOX 认文件: 提前打开的下一首不认")
+        expectEqual(V.fileMatchesSystemTitle("", tagsTitle: "", fileName: ".mp3"), false, "VOX 认文件: 空歌名不认")
+
+        func snap(_ json: String) -> MediaControlSnapshot {
+            try! JSONDecoder().decode(MediaControlSnapshot.self, from: Data(json.utf8))
+        }
+        func line(_ s: MediaControlSnapshot) -> String { "\(s.artist ?? "")|\(s.title ?? "")|\(s.album ?? "")|\(s.duration.map { String($0) } ?? "nil")" }
+        let tagged = snap(#"{"title":"Marjoram","artist":"Accident — Free Music Charts 2010","playing":true,"bundleIdentifier":"com.coppertino.Vox"}"#)
+        let file = (path: "/m/2010-09-Accident-Marjoram.mp3",
+                    tags: LocalAudioFileTags(title: "Marjoram", artist: "Accident", album: "Free Music Charts 2010", duration: 294.56))
+        expectEqual(line(V.systemFallback(tagged, file: file)), "Accident|Marjoram|Free Music Charts 2010|294.56",
+                    "VOX 退路: 按文件标签拆开歌手专辑,时长取文件的")
+        let dashArtist = snap(#"{"title":"Song","artist":"A — Live — 2020","playing":true,"bundleIdentifier":"com.coppertino.Vox"}"#)
+        let dashFile = (path: "/m/s.mp3", tags: LocalAudioFileTags(title: "Song", artist: "A — Live", album: "2020", duration: nil))
+        expectEqual(line(V.systemFallback(dashArtist, file: dashFile)), "A — Live|Song|2020|nil",
+                    "VOX 退路: 歌手名带「 — 」时按文件标签拆对")
+        let dashAlbumFile = (path: "/m/s.mp3", tags: LocalAudioFileTags(title: "Song", artist: "A", album: "Live — 2020", duration: nil))
+        expectEqual(line(V.systemFallback(dashArtist, file: dashAlbumFile)), "A|Song|Live — 2020|nil",
+                    "VOX 退路: 专辑名带「 — 」时也按文件标签拆对(只按最后一个分隔拆会拆错)")
+        let untagged = snap(#"{"title":"无标签 mezzamo - happy boy.mp3","artist":"","playing":true,"bundleIdentifier":"com.coppertino.Vox"}"#)
+        let untaggedFile = (path: "/m/无标签 Mezzamo - Happy Boy.mp3", tags: LocalAudioFileTags(title: "", artist: "", album: "", duration: 61))
+        let fromScript = V.identity(title: "无标签 mezzamo - happy boy.mp3", artist: "", album: "", filePath: untaggedFile.path)
+        expectEqual(line(V.systemFallback(untagged, file: untaggedFile)), "\(fromScript.artist)|\(fromScript.title)|\(fromScript.album)|61.0",
+                    "VOX 退路: 没写标签的文件跟脚本那条路认成同一份歌名歌手")
+
+        let t = 1_792_599_144.15
+        let probed = snap(#"{"title":"Marjoram","artist":"Accident","playing":true,"playbackRate":1,"bundleIdentifier":"com.coppertino.Vox"}"#)
+        let clocked = V.probedSnapshot(probed, anchorTimestamp: t, pid: 22582, now: Date(timeIntervalSince1970: t + 5))
+        expectEqual(clocked.elapsedTime.map { abs($0 - 5) < 0.001 }, true, "VOX 退路: 单问到的那份没报位置,按开播时刻起算")
+        expectEqual(clocked.processIdentifier, 22582, "VOX 退路: 进程号从锚点补上")
+        let other = snap(#"{"title":"x","playing":true,"bundleIdentifier":"com.apple.Music"}"#)
+        expectEqual(V.probedSnapshot(other, anchorTimestamp: t, pid: 1, now: Date(timeIntervalSince1970: t + 5)).elapsedTime == nil,
+                    true, "VOX 退路: 别的播放器原样")
+    }
+
+    // ---- 脚本里的封面、暂停时的轮询 ----
+    do {
+        expectEqual(V.artworkBelongs(rawTitle: "Marjoram", to: ("Marjoram", "/m/a.mp3")), true, "VOX 脚本封面: 同一首")
+        expectEqual(V.artworkBelongs(rawTitle: "happy boy.mp3", to: ("Happy Boy", "/m/Happy Boy.mp3")), true,
+                    "VOX 脚本封面: 没写标签,脚本报的是文件名全小写")
+        expectEqual(V.artworkBelongs(rawTitle: "Next", to: ("Marjoram", "/m/a.mp3")), false, "VOX 脚本封面: 已经换歌了不要")
+        expectEqual(V.artworkBelongs(rawTitle: "", to: ("Marjoram", nil)), false, "VOX 脚本封面: 没在跑 / 没有图")
+        expectEqual(sourceHas(V.artworkScriptLines.joined(separator: "\n"), "is not running then return"), true,
+                    "VOX 脚本封面: 先判在不在跑,不把它拉起来")
+
+        typealias L = LocalPlaybackSource
+        let vox = "com.coppertino.Vox"
+        expectEqual(L.pollsFastWhilePaused(bundleID: vox, pausedFor: 5), true, "VOX 暂停轮询: 刚暂停按播放档问,事件流漏了也 2 秒内认出恢复")
+        expectEqual(L.pollsFastWhilePaused(bundleID: vox, pausedFor: L.fastPausedPollWindow + 1), false, "VOX 暂停轮询: 停久了退回暂停档")
+        expectEqual(L.pollsFastWhilePaused(bundleID: vox, pausedFor: nil), false, "VOX 暂停轮询: 没在暂停")
+        expectEqual(L.pollsFastWhilePaused(bundleID: "com.apple.Music", pausedFor: 5), false, "VOX 暂停轮询: 别的播放器有自己的通知,不动")
     }
 }

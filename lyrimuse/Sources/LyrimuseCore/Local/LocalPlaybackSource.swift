@@ -2605,6 +2605,9 @@ public final class LocalPlaybackSource: ObservableObject {
     // startObservingPlayerInfoNotification() 的注释。
     private var playerInfoObserver: NSObjectProtocol?
     private var spotifyInfoObserver: NSObjectProtocol?
+    private var voxTrackObserver: NSObjectProtocol?
+    /// 这一段暂停从什么时候起(在放时为 nil)。恢复只有一条即时信号的播放器按它决定暂停时轮询的快慢,见 `pollsFastWhilePaused`。
+    private var pausedObservedAt: Date?
     /// Spotify 最近一条 PlaybackStateChanged 通知里的分类提示(Track ID / Name / Artist),给换曲那一拍的
     /// 广告判定用,见 spotifyNativeAdCheckForNewTrack 与 SpotifyNotificationHint 头注。只在 apply() 里读。
     private var spotifyNotificationHint: SpotifyNotificationHint?
@@ -2816,11 +2819,12 @@ public final class LocalPlaybackSource: ObservableObject {
 
     public func stop() {
         pollTimer?.invalidate(); pollTimer = nil
-        for observer in [playerInfoObserver, spotifyInfoObserver].compactMap({ $0 }) {
+        for observer in [playerInfoObserver, spotifyInfoObserver, voxTrackObserver].compactMap({ $0 }) {
             DistributedNotificationCenter.default().removeObserver(observer)
         }
         playerInfoObserver = nil
         spotifyInfoObserver = nil
+        voxTrackObserver = nil
         streamWatcher?.stop()
         streamWatcher = nil
         kasetWebWatcher?.watch(bundleID: nil)
@@ -2926,6 +2930,14 @@ public final class LocalPlaybackSource: ObservableObject {
                     self.handlePlayerInfoChanged(resumeSignal: playing)
                 }
             }
+        // VOX 只在开播、换歌时发这一条(开始放之后 0.8~1.2 秒,userInfo 为空;暂停、恢复、跳转都不发,见 02 章决策 153):
+        // 只当提前 poll 一次的信号,不冻结外推、不记成状态变化。
+        voxTrackObserver = center.addObserver(
+            forName: NSNotification.Name(VoxPlayerInfo.trackChangedNotification),
+            object: nil, queue: .main) { [weak self] _ in
+                guard !SourceKnockout.isOut(.voxNotice) else { return }
+                MainActor.assumeIsolated { self?.handlePlayerInfoChanged(freezeExtrapolation: false, stateSignal: false) }
+            }
     }
 
     // media-control 事件流跟两条分布式通知走**同一条**去抖动补查路径:三个来源都只是
@@ -2942,6 +2954,7 @@ public final class LocalPlaybackSource: ObservableObject {
             }
         }
         let watcher = MediaControlStreamWatcher { [weak self] pauseSignal, resumeSignal in
+            guard !SourceKnockout.isOut(.streamEvents) else { return }
             MainActor.assumeIsolated {
                 self?.handlePlayerInfoChanged(freezeExtrapolation: pauseSignal,
                                               stateSignal: pauseSignal || resumeSignal,
@@ -3094,11 +3107,25 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 播放器说在放、声音还没走起来(`MediaControlSnapshot.isWaitingToPlay`:加载、广告、卡住)也留在 2s 档。
     private var desiredPollInterval: TimeInterval {
         if isPlayingNow || lastSnapshot?.isWaitingToPlay == true { return PollInterval.playing }
+        if !title.isEmpty, Self.pollsFastWhilePaused(bundleID: lastSnapshot?.bundleIdentifier,
+                                                     pausedFor: pausedObservedAt.map { Date().timeIntervalSince($0) }) {
+            return PollInterval.playing
+        }
         // 播放器在加载下一首(`targetLoading`)时留着上一首,轮询也留在播放档,别等暂停档的慢节拍才认出新歌。
         if consecutiveNilSnapshots > 0, consecutiveNilSnapshots <= PollInterval.nilGraceTicks || nilStreakIsLoading {
             return PollInterval.playing
         }
         return title.isEmpty ? PollInterval.idle : PollInterval.paused
+    }
+
+    /// 暂停时也按播放档轮询的那一段有多长。
+    public nonisolated static let fastPausedPollWindow: TimeInterval = 600
+
+    /// 刚暂停的这一段要不要按播放档(2 秒)轮询:恢复播放只有 media-control 事件流一条即时信号的播放器(VOX 的通知只在换歌时发)
+    /// 才这样,事件流漏了也在 2 秒内认出恢复,不用等暂停档的 6 秒;停得久了退回暂停档。纯函数,selftest 覆盖。
+    public nonisolated static func pollsFastWhilePaused(bundleID: String?, pausedFor: TimeInterval?) -> Bool {
+        guard bundleID == PlaybackPlayer.vox.bundleIdentifier, let pausedFor, pausedFor >= 0 else { return false }
+        return pausedFor < fastPausedPollWindow
     }
 
     private func reschedulePollTimer() {
@@ -3898,6 +3925,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if newIsMusicVideo != isMusicVideo { isMusicVideo = newIsMusicVideo }
         let newIsPlayingNow = snapshot.playing == true
         if newIsPlayingNow != isPlayingNow { isPlayingNow = newIsPlayingNow }
+        if newIsPlayingNow { pausedObservedAt = nil } else if pausedObservedAt == nil { pausedObservedAt = Date() }
         let newIsWaitingToPlay = snapshot.isWaitingToPlay == true
         if newIsWaitingToPlay != isWaitingToPlay { isWaitingToPlay = newIsWaitingToPlay }
         // 停播欢迎态的「继续播放/打开 XX」要知道停播前在用谁、放的什么 —— 停播时快照

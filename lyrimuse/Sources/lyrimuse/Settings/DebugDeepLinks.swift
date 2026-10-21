@@ -2,7 +2,7 @@ import AppKit
 import LyrimuseCore
 import os
 
-/// `lyrimuse://debug/…`:本机验证时不打扰用户的几样工具(状态快照、窗口快照、记下 / 恢复、模拟播放、喜欢与音量)。见 14 章决策 98。
+/// `lyrimuse://debug/…`:本机验证时不打扰用户的几样工具(状态快照、窗口快照、记下 / 恢复、模拟播放、喜欢与音量、关掉一条来源)。见 14 章决策 98。
 ///
 /// **只在本机偏好 `debug:deepLinks` 为真时执行**(`defaults write me.yudaotor.lyrimuse debug:deepLinks -bool true`):
 /// 任何网页都能拉起 `lyrimuse://`,而这里会把正在听什么、开着哪些窗口写到盘上,还能关窗、改开关。网页改不了本机偏好;
@@ -59,6 +59,9 @@ enum DebugDeepLinks {
                 let ok = await ConfigStore.shared.save()
                 logger.notice("debug config save ok=\(ok, privacy: .public)")
             }
+        case let .knockout(leg, on):
+            SourceKnockout.set(leg, out: !on)
+            LocalPlaybackSource.shared.simulationChanged()
         }
     }
 
@@ -91,6 +94,7 @@ enum DebugDeepLinks {
             "windows": windows,
             "menuBarPanel": ["open": MenuBarStatusItem.shared.isPanelOpen,
                              "quick": MenuBarPanelDebugState.quickTarget.map { $0 as Any } ?? NSNull()],
+            "knockedOut": SourceKnockout.knockedOut,
             "playback": [
                 "title": p.title, "artist": p.artist, "album": p.album, "playing": p.isPlayingNow,
                 "player": p.resolvedPlayerDisplayName ?? "",

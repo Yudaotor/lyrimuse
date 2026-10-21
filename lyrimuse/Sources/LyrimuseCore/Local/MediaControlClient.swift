@@ -975,6 +975,7 @@ public enum MediaControlClient {
     }
 
     private static func readVox() -> VoxPlayerInfo.Reading? {
+        guard !SourceKnockout.isOut(.voxScript) else { return nil }
         guard let r = runPlayerScript("vox", source: VoxPlayerInfo.script), r.succeeded else { return nil }
         // 位置是脚本最后读的,按调用返回这一刻记(同 Spotify)。
         return VoxPlayerInfo.reading(fromScriptOutput: r.stdout, capturedAt: Date())
@@ -1290,7 +1291,7 @@ public enum MediaControlClient {
             album = try c.decodeIfPresent(String.self, forKey: .album)
             bundleIdentifier = try c.decodeIfPresent(String.self, forKey: .bundleIdentifier)
             playing = try c.decodeIfPresent(Bool.self, forKey: .playing)
-            playbackRate = try c.decodeIfPresent(Double.self, forKey: .playbackRate)
+            let rate = try c.decodeIfPresent(Double.self, forKey: .playbackRate)
             processIdentifier = try? c.decodeIfPresent(Int.self, forKey: .processIdentifier)
             radioStationHash = try c.decodeIfPresent(String.self, forKey: .radioStationHash)
             if let id = try? c.decodeIfPresent(Int64.self, forKey: .uniqueIdentifier) {
@@ -1304,9 +1305,14 @@ public enum MediaControlClient {
             mediaType = try? c.decodeIfPresent(String.self, forKey: .mediaType)
             let times = try MediaControlMicros.TimeFields(from: decoder)
             duration = times.duration
-            elapsedTime = times.elapsedTime
-            elapsedTimeNow = times.elapsedTimeNow
             timestamp = times.timestamp
+            // VOX 那份播放中缺位置、恢复后速率报 0,补成能外推的锚点(见 VoxPlayerInfo.systemAnchor)。
+            let anchor = VoxPlayerInfo.systemAnchor(
+                bundleID: bundleIdentifier, playing: playing, elapsed: times.elapsedTime,
+                elapsedNow: times.elapsedTimeNow, rate: rate, hasTimestamp: times.timestamp != nil)
+            elapsedTime = anchor.elapsed
+            elapsedTimeNow = anchor.elapsedNow
+            playbackRate = anchor.rate
         }
     }
 
@@ -1832,8 +1838,9 @@ public enum MediaControlClient {
         // Kaset 不走这一级:系统按 bundle id 存着的就是它自己发的那份,换歌后常停在上一首(见 KasetPlayerInfo 头注)。
         if snapshot == nil, target.player != .kaset,
            let probed = NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: target.bundleID) {
-            snapshot = VoxPlayerInfo.splittingSystemArtist(probed.snapshot)
             let now = Date()
+            snapshot = VoxPlayerInfo.systemFallback(VoxPlayerInfo.probedSnapshot(
+                probed.snapshot, anchorTimestamp: probed.anchor.timestamp, pid: probed.anchor.processIdentifier, now: now))
             if let reading = amazonMusicReading(
                 bundleID: target.bundleID, trackKey: probed.snapshot.trackKey, title: probed.snapshot.title,
                 metadataTimestamp: probed.anchor.timestamp.map { Date(timeIntervalSince1970: $0) },
@@ -2184,8 +2191,8 @@ public enum MediaControlClient {
             return kasetNotSongThisRoundValue() ? nil : mediaControl
         case PlaybackPlayer.vox.bundleIdentifier:
             // 暂停态也问:系统那份播放中不报位置,暂停时报的那一次比脚本冻结的值少 0.1 秒,换钟就是一次回跳。
-            // 拿不到时退回系统那份,歌手、专辑先拆开(见 VoxPlayerInfo)。
-            return fetchVoxSnapshot() ?? VoxPlayerInfo.splittingSystemArtist(mediaControl)
+            // 拿不到时退回系统那份:按 VOX 开着的文件认这一首、拆开歌手和专辑(见 VoxPlayerInfo.systemFallback)。
+            return fetchVoxSnapshot() ?? VoxPlayerInfo.systemFallback(mediaControl)
         default:
             return mediaControl
         }
@@ -2215,8 +2222,15 @@ public enum MediaControlClient {
         // 系统级焦点,这时候它给的是**占用者**那张图(浏览器视频的缩略图)——下游那道 trackKey 守卫
         // 会如实拦下来丢弃,于是歌还在、歌词还在,唯独封面没了。两边不对称就会长这样。
         var prefix = ""
+        // media-control 通道坏了、屏上这首是从 VOX 脚本读来的:系统那份拿不到,直接走 VOX 自己的退路。
+        appleMusicFocusLock.lock()
+        let channelFallback = channelFallbackPlayer
+        appleMusicFocusLock.unlock()
+        if channelFallback == .vox, let art = voxArtwork(tryingFolder: true) { return (art, nil) }
         if let target = activeFocusFallbackTarget() {
-            if let art = NowPlayingClientsProbe.artwork(forBundleID: target.bundleID) { return (art, nil) }
+            if !SourceKnockout.isOut(.systemArtwork),
+               let art = NowPlayingClientsProbe.artwork(forBundleID: target.bundleID) { return (art, nil) }
+            if target.bundleID == VoxPlayerInfo.bundleID, let art = voxArtwork(tryingFolder: true) { return (art, nil) }
             prefix = "focus is held elsewhere and \(target.bundleID) gave no artwork; "
         }
         guard let binaryPath = binaryPath() else { return (nil, prefix + "media-control is not bundled") }
@@ -2238,18 +2252,31 @@ public enum MediaControlClient {
         if bundleID == VoxPlayerInfo.bundleID {
             (keyTitle, keyArtist, filePath) = VoxPlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)
         }
-        guard let imageData = artworkImageData(base64: raw.artworkData) else {
+        guard !SourceKnockout.isOut(.systemArtwork), let imageData = artworkImageData(base64: raw.artworkData) else {
             // 放本地文件的播放器(reAMP、VOX)只报文件里嵌着的封面:没嵌的改用正在放的文件同目录里的那张(见 PlayerTitleSplit)。
             if let path = filePath, let cover = PlayerTitleSplit.folderCover(forAudioFile: path) {
                 return ((cover.data, cover.mimeType,
                          PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: keyArtist, title: keyTitle)), nil)
             }
+            if bundleID == VoxPlayerInfo.bundleID, let art = voxArtwork(tryingFolder: false) { return (art, nil) }
             let artwork = raw.artworkData.map { "with artwork that is not an image (\(Data(base64Encoded: $0)?.count ?? 0) bytes)" }
                 ?? "without artwork"
             return (nil, prefix + "\(bundleID) reports \(raw.title ?? "") \(artwork)")
         }
         return ((imageData, raw.artworkMimeType ?? "image/jpeg",
                  PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: keyArtist, title: keyTitle)), nil)
+    }
+
+    /// VOX 这首的封面,系统那份给不了时:先问它的脚本要它显示的那张,再找正在放的文件同目录的图(`tryingFolder`)。
+    /// 曲目标识按记下的这首算,跟快照对得上。
+    private static func voxArtwork(tryingFolder: Bool) -> (data: Data, mimeType: String, trackKey: String)? {
+        guard let entry = VoxPlayerInfo.currentEntry(), !entry.title.isEmpty else { return nil }
+        let key = PlayerArtistFix.correctedTrackKey(bundle: VoxPlayerInfo.bundleID, artist: entry.artist, title: entry.title)
+        if let jpeg = VoxPlayerInfo.scriptArtwork(for: (entry.title, entry.path)) { return (jpeg, "image/jpeg", key) }
+        if tryingFolder, let path = entry.path, let cover = PlayerTitleSplit.folderCover(forAudioFile: path) {
+            return (cover.data, cover.mimeType, key)
+        }
+        return nil
     }
 
     /// 载荷里的 `artworkData`(base64)解出来的图;没带、解不开、读不出图头(`CoverArtReplacementGate.isImage`)都是 nil。

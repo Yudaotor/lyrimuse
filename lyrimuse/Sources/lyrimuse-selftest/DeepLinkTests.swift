@@ -176,6 +176,12 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/checkpoint"), .debug(.checkpoint), "debug: 记下")
         expectEqual(link("lyrimuse://debug/restore"), .debug(.restore), "debug: 恢复")
         expectEqual(link("lyrimuse://debug/config-save"), .debug(.saveConfig), "debug: 账号配置原样保存一次")
+        expectEqual(link("lyrimuse://debug/knockout?leg=vox-script&on=0"), .debug(.knockout(leg: .voxScript, on: false)),
+                    "debug: 关掉一条来源")
+        expectEqual(link("lyrimuse://debug/knockout?leg=Stream-Events&on=1"), .debug(.knockout(leg: .streamEvents, on: true)),
+                    "debug: 接回一条来源,名字大小写不敏感")
+        expectEqual(link("lyrimuse://debug/knockout?leg=nope&on=0") == nil && link("lyrimuse://debug/knockout?leg=vox-script") == nil,
+                    true, "debug: 认不出的来源、没带 on 都不认")
         expectEqual(LyrimuseDeepLink.wantsBackground(URL(string: "lyrimuse://lyrics-manager?background=1")!), true, "后台开窗: 带了")
         expectEqual(LyrimuseDeepLink.wantsBackground(URL(string: "lyrimuse://lyrics-manager")!), false, "后台开窗: 没带")
         expectEqual(link("lyrimuse://lyrics-manager?background=1"), .lyricsManager, "后台开窗: 不影响认哪条链接")
@@ -289,6 +295,7 @@ func runDeepLinkTests() {
             .debug(.simulate(title: "x", artist: "", album: "", duration: 30, position: 0, playing: true, ad: true)),
             .debug(.simulateIdle),
             .debug(.toggleFavorite), .debug(.saveConfig), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
+            .debug(.knockout(leg: .voxScript, on: false)), .debug(.knockout(leg: .systemArtwork, on: true)),
             .debug(.settingsSearch(query: "OBS 输出")),
             .setPlayMode(.list), .setPlayMode(.shuffle), .setPlayMode(.repeatAll), .setPlayMode(.repeatOne),
         ] + LyrimuseAction.allCases.map { .action($0, on: nil, stepSeconds: nil) }

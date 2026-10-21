@@ -2109,13 +2109,15 @@ func runCoverArtTests() {
                         && coordinator.contains("playerHasOwnCover: Self.currentPlayerOwnCover() != nil"), true,
                     "播放器自带封面(契约): 高清替代按顺序试,系统那份没有时认播放器自带的那张")
         let mediaControl = src("LyrimuseCore/Local/MediaControlClient.swift")
-        expectEqual(mediaControl.contains("guard let imageData = artworkImageData(base64: raw.artworkData) else {")
+        expectEqual(mediaControl.contains("guard !SourceKnockout.isOut(.systemArtwork), let imageData = artworkImageData(base64: raw.artworkData) else {")
+                        && src("LyrimuseCore/Local/VoxPlayerInfo.swift")
+                            .contains("let tiff = FileIO.read(file), let jpeg = CoverArtReplacementGate.jpegData(tiff),")
                         && mediaControl.contains("guard got.status == 200, let data = got.data, CoverArtReplacementGate.isImage(data) else { return nil }")
                         && src("LyrimuseCore/Local/NowPlayingClientsProbe.swift")
                             .contains("let data = MediaControlClient.artworkImageData(base64: decoded.artworkData)")
                         && src("LyrimuseCore/Local/PlayerTitleSplit.swift")
                             .contains("let data = FileIO.read(url), CoverArtReplacementGate.isImage(data)"), true,
-                    "系统封面(契约): media-control 载荷、nowplaying-clients、Kaset 下载、同目录封面都只收读得出图头的数据")
+                    "系统封面(契约): media-control 载荷、nowplaying-clients、Kaset 下载、同目录封面、VOX 脚本那张都只收读得出图头的数据")
     }
 
     // ---- 动态封面认对照封面;占位专辑名下的播放器图不当封面 ----

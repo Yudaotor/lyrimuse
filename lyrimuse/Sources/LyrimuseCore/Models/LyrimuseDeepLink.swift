@@ -90,6 +90,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case settingsSearch(query: String)
         /// 账号配置按内存里的样子原样保存一次,跟账号页自动保存走同一条 `ConfigStore.save()`(`debug/config-save`)。
         case saveConfig
+        /// 关掉 / 接回一条来源(`debug/knockout?leg=<名字>&on=0|1`,`on=0` 关掉):验证退路撑不撑得住,见 `SourceKnockout`。
+        case knockout(leg: SourceKnockout.Leg, on: Bool)
     }
 
     /// `action/` 下不对应快捷键的那几个名字(跟 `LyrimuseAction.linkName` 不能重名,selftest 核对)。
@@ -189,6 +191,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/settings-search"):
             guard let query = value("q")?.trimmingCharacters(in: .whitespaces), !query.isEmpty else { return nil }
             self = .debug(.settingsSearch(query: query))
+        case ("debug", "/knockout"):
+            guard let leg = value("leg").flatMap({ SourceKnockout.Leg(rawValue: $0.lowercased()) }),
+                  let on = value("on").flatMap(Self.parseBool) else { return nil }
+            self = .debug(.knockout(leg: leg, on: on))
         case ("lastfm-auth-callback", _):
             self = .lastfmAuthCallback
         default:
@@ -290,6 +296,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.path = "/settings-search"
                 components.queryItems = [URLQueryItem(name: "q", value: query)]
             case .saveConfig: components.path = "/config-save"
+            case let .knockout(leg, on):
+                components.path = "/knockout"
+                components.queryItems = [URLQueryItem(name: "leg", value: leg.rawValue), URLQueryItem(name: "on", value: on ? "1" : "0")]
             }
         case .lastfmAuthCallback:
             components.host = "lastfm-auth-callback"

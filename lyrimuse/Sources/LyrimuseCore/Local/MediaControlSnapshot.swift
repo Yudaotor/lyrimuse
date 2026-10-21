@@ -163,8 +163,9 @@ public struct MediaControlSnapshot: Decodable {
             anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: newCapturedAt)
     }
 
-    /// 位置与锚点都换成播放器自己那块表的副本。唯一的用处是焦点回退问到的 Amazon Music(它不报进度,位置按日志重放,
-    /// 见 `MediaControlClient.amazonMusicReading`),跟主路径就地构造出的形状一致。写成显式方法,理由同 `withAlbum`。
+    /// 位置与锚点都换成播放器自己那块表的副本。用处是焦点回退问到的 Amazon Music(它不报进度,位置按日志重放,
+    /// 见 `MediaControlClient.amazonMusicReading`)和 VOX(播放中不报位置,按开播时刻起算,见 `VoxPlayerInfo.probedSnapshot`),
+    /// 跟主路径就地构造出的形状一致。写成显式方法,理由同 `withAlbum`。
     public func withPlayerClock(_ position: Double, capturedAt newCapturedAt: Date) -> MediaControlSnapshot {
         MediaControlSnapshot(
             title: title, artist: artist, album: album, duration: duration,
