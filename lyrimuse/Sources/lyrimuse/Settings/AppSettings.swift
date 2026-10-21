@@ -102,6 +102,13 @@ enum MenuBarLyricsIconPosition: String, Codable, Hashable, CaseIterable {
     case trailing
 }
 
+// 菜单栏歌词显示在哪:状态栏图标那一格(系统排在右侧那一串里),还是菜单栏正中。正中那一档另开一扇窗口画
+// (`MenuBarCenterLyrics`),只用没有刘海、灵动岛也不在的屏;一块都没有时照旧在图标那一格(06 章「菜单栏正中」)。
+enum MenuBarLyricsPlacement: String, Codable, Hashable, CaseIterable {
+    case statusItem
+    case screenCenter
+}
+
 // 「装得下的短句靠哪边」—— 菜单栏歌词和灵动岛歌词行共用同一个类型和同一个分段控件
 // (`LyricsAlignmentSegmentedControl`)。两个展示面上三个 case 的语义**逐字相同**,而这个
 // 控件是手搓的(不用系统 segmented picker,理由见 `LyricsAlignmentSegmentedControl` 的
@@ -286,6 +293,7 @@ final class AppSettings: ObservableObject {
         static let menuBarLyricsTextColorHex = "np:menuBarLyricsTextColorHex"
         static let menuBarLyricsFillColorHex = "np:menuBarLyricsFillColorHex"
         static let menuBarLyricsIconPosition = "np:menuBarLyricsIconPosition"
+        static let menuBarLyricsPlacement = "np:menuBarLyricsPlacement"
         static let menuBarLyricsFontFamily = "np:menuBarLyricsFontFamily"
         static let menuBarLyricsFontWeight = "np:menuBarLyricsFontWeight"
         static let menuBarLyricsFontSize = "np:menuBarLyricsFontSize"
@@ -584,6 +592,8 @@ final class AppSettings: ObservableObject {
     /// 歌词旁那枚带播放进度的图标摆哪边。**在**「重置」范围内,见
     /// `MenuBarStyleDefaults.restoreDefaults()`。
     static let defaultMenuBarLyricsIconPosition = MenuBarLyricsIconPosition.leading
+    /// 菜单栏歌词的位置。在「重置」范围内(`MenuBarStyleDefaults.restoreDefaults()`)。
+    static let defaultMenuBarLyricsPlacement = MenuBarLyricsPlacement.statusItem
     /// 见 `menuBarHoverShowsControls`。默认关。在「重置」范围内,所以需要命名常量:
     /// `init()` 的兜底和重置按钮读同一份。
     static let defaultMenuBarHoverShowsControls = false
@@ -1075,6 +1085,10 @@ final class AppSettings: ObservableObject {
         didSet {
             defaults.set(menuBarLyricsIconPosition.rawValue, forKey: Keys.menuBarLyricsIconPosition)
         }
+    }
+    // 菜单栏歌词显示在图标旁还是菜单栏正中。见 MenuBarLyricsPlacement。
+    @Published var menuBarLyricsPlacement: MenuBarLyricsPlacement {
+        didSet { defaults.set(menuBarLyricsPlacement.rawValue, forKey: Keys.menuBarLyricsPlacement) }
     }
     /// 菜单栏歌词的字体族,见 `defaultMenuBarLyricsFontFamily`。跟 `fontFamilyName` /
     /// `notchFontFamilyName` 同一条"空串 = 跟随系统"规则,消费方是 `MenuBarMarqueeRenderer`。
@@ -2332,6 +2346,8 @@ final class AppSettings: ObservableObject {
         menuBarLyricsFillColorHex = defaults.string(forKey: Keys.menuBarLyricsFillColorHex) ?? Self.defaultMenuBarLyricsFillColorHex
         menuBarLyricsIconPosition = defaults.string(forKey: Keys.menuBarLyricsIconPosition)
             .flatMap(MenuBarLyricsIconPosition.init(rawValue:)) ?? Self.defaultMenuBarLyricsIconPosition
+        menuBarLyricsPlacement = defaults.string(forKey: Keys.menuBarLyricsPlacement)
+            .flatMap(MenuBarLyricsPlacement.init(rawValue:)) ?? Self.defaultMenuBarLyricsPlacement
         menuBarLyricsFontFamily = defaults.string(forKey: Keys.menuBarLyricsFontFamily) ?? Self.defaultMenuBarLyricsFontFamily
         menuBarLyricsFontWeight = defaults.string(forKey: Keys.menuBarLyricsFontWeight)
             .flatMap(OverlayFontWeight.init(rawValue:)) ?? Self.defaultMenuBarLyricsFontWeight

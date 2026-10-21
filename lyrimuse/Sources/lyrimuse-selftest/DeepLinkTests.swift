@@ -182,6 +182,11 @@ func runDeepLinkTests() {
                     "debug: 接回一条来源,名字大小写不敏感")
         expectEqual(link("lyrimuse://debug/knockout?leg=nope&on=0") == nil && link("lyrimuse://debug/knockout?leg=vox-script") == nil,
                     true, "debug: 认不出的来源、没带 on 都不认")
+        expectEqual(link("lyrimuse://debug/menubar-center?center=1&ignore-notch=1"),
+                    .debug(.menuBarCenter(center: true, ignoreNotch: true)), "debug: 菜单栏歌词放正中并忽略刘海")
+        expectEqual(link("lyrimuse://debug/menubar-center?ignore-notch=0"), .debug(.menuBarCenter(center: nil, ignoreNotch: false)),
+                    "debug: 只改忽略刘海")
+        expectEqual(link("lyrimuse://debug/menubar-center"), nil, "debug: 菜单栏正中什么都没带不认")
         expectEqual(LyrimuseDeepLink.wantsBackground(URL(string: "lyrimuse://lyrics-manager?background=1")!), true, "后台开窗: 带了")
         expectEqual(LyrimuseDeepLink.wantsBackground(URL(string: "lyrimuse://lyrics-manager")!), false, "后台开窗: 没带")
         expectEqual(link("lyrimuse://lyrics-manager?background=1"), .lyricsManager, "后台开窗: 不影响认哪条链接")
@@ -296,6 +301,8 @@ func runDeepLinkTests() {
             .debug(.simulateIdle),
             .debug(.toggleFavorite), .debug(.saveConfig), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
             .debug(.knockout(leg: .voxScript, on: false)), .debug(.knockout(leg: .systemArtwork, on: true)),
+            .debug(.menuBarCenter(center: true, ignoreNotch: true)), .debug(.menuBarCenter(center: false, ignoreNotch: nil)),
+            .debug(.menuBarCenter(center: nil, ignoreNotch: false)),
             .debug(.settingsSearch(query: "OBS 输出")),
             .setPlayMode(.list), .setPlayMode(.shuffle), .setPlayMode(.repeatAll), .setPlayMode(.repeatOne),
         ] + LyrimuseAction.allCases.map { .action($0, on: nil, stepSeconds: nil) }

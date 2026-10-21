@@ -63,6 +63,11 @@ enum DebugDeepLinks {
         case let .knockout(leg, on):
             SourceKnockout.set(leg, out: !on)
             LocalPlaybackSource.shared.simulationChanged()
+        case let .menuBarCenter(center, ignoreNotch):
+            if let ignoreNotch { MenuBarCenterLyrics.ignoresNotchForDebug = ignoreNotch }
+            if let center { AppSettings.shared.menuBarLyricsPlacement = center ? .screenCenter : .statusItem }
+            MenuBarStatusItem.shared.setNeedsRefresh()
+            logger.notice("debug menubar center=\(String(describing: center), privacy: .public) ignoreNotch=\(String(describing: ignoreNotch), privacy: .public)")
         }
     }
 
@@ -93,6 +98,7 @@ enum DebugDeepLinks {
                     "isFrontmost": NSWorkspace.shared.frontmostApplication?.processIdentifier
                         == ProcessInfo.processInfo.processIdentifier],
             "windows": windows,
+            "menuBarCenter": MenuBarStatusItem.shared.centerDebugState,
             "menuBarPanel": ["open": MenuBarStatusItem.shared.isPanelOpen,
                              "quick": MenuBarPanelDebugState.quickTarget.map { $0 as Any } ?? NSNull()],
             "knockedOut": SourceKnockout.knockedOut,

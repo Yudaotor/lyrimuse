@@ -282,6 +282,10 @@ final class MenuBarScrollingLabel: NSView {
         widthMode == .fixed ? setting : .leading
     }
 
+    /// 不按设置、固定靠这一边。「菜单栏正中」那份标签用(`MenuBarCenterLyrics`):窗口宽跟着内容走、以屏幕中线居中,
+    /// 双排里窄的那一行也得居中;宽度模式与「对齐方式」两项管的是状态栏那一格。
+    var alignmentOverride: LyricsRestingAlignment?
+
     /// 显示(或更新)一句要滚动的歌词。同一句用同样的参数重复调用是空操作 ——
     /// 否则每次 recompute 都会把滚动打回开头,用户永远看不到后半句。
     /// - Parameter secondaryText / secondaryKind: 副行(双排),见 Plan 里两个字段的注释。
@@ -294,8 +298,9 @@ final class MenuBarScrollingLabel: NSView {
                  secondaryKind: LyricSecondaryLine = .off,
                  gapWindow: GapWindow? = nil) {
         let next = Plan(text: text, windowWidth: windowWidth,
-                        alignment: Self.restingAlignment(widthMode: AppSettings.shared.menuBarLyricsWidthMode,
-                                                         setting: AppSettings.shared.menuBarLyricsAlignment),
+                        alignment: alignmentOverride
+                            ?? Self.restingAlignment(widthMode: AppSettings.shared.menuBarLyricsWidthMode,
+                                                     setting: AppSettings.shared.menuBarLyricsAlignment),
                         fontWeight: AppSettings.shared.menuBarLyricsFontWeight,
                         fontSize: AppSettings.shared.menuBarLyricsFontSize,
                         fontFamily: AppSettings.shared.menuBarLyricsFontFamily,
@@ -976,6 +981,8 @@ final class MenuBarScrollingLabel: NSView {
         /// 不编一句假译文。
         let secondaryText: String?
         let secondaryKind: LyricSecondaryLine
+        /// 同 `MenuBarScrollingLabel.alignmentOverride`:演「菜单栏正中」时固定居中。
+        var alignmentOverride: LyricsRestingAlignment? = nil
 
         func makeNSView(context: Context) -> MenuBarScrollingLabel { MenuBarScrollingLabel() }
 
@@ -987,6 +994,7 @@ final class MenuBarScrollingLabel: NSView {
             // karaokeFillColor)自然就换到这一档,不用给渲染路径另开参数。
             // 见 MenuBarAppearanceStore 头注。
             view.appearance = MenuBarAppearanceStore.shared.appearance
+            view.alignmentOverride = alignmentOverride
             // present 对"参数没变"是空操作,所以设置页每次重算 body 都不会把滚动打回开头。
             view.present(text: text, windowWidth: windowWidth, pacing: pacing, fillPath: fillPath,
                          followPath: followPath, icon: icon,

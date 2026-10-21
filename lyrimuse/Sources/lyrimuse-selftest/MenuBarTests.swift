@@ -1328,8 +1328,8 @@ func runMenuBarTests() {
             // 反推内容宽的两处必须跟申请用**同一个**常量,差一截就是
             // 「点暂停生效上一首」的形状。
             let lyricsUses = text.components(separatedBy: "Self.lyricsSlotPadding").count - 1
-            expectEqual(lyricsUses, 4,
-                        "内边距: 歌词态四处(text 申请 / fixed 申请 / 两处反推)同源,实际 \(lyricsUses)")
+            expectEqual(lyricsUses, 6,
+                        "内边距: 歌词态六处(text 申请 / fixed 申请 / 两处反推 / 菜单栏正中两处)同源,实际 \(lyricsUses)")
             let iconUses = text.components(separatedBy: "Self.fixedSlotPadding").count - 1
             expectEqual(iconUses, 1, "内边距: 图标态只剩那一处申请,实际 \(iconUses)")
         } else {
@@ -1642,5 +1642,75 @@ func runMenuBarTests() {
         // 内容贴顶:对不上高度的那一帧不许上下居中(翻面时整个面板抖一下),minHeight: 0 不能省(06 章决策 45)。
         expectEqual(panel.contains(".frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)"), true,
                     "面板尺寸: 内容贴着窗口顶边摆")
+    }
+
+    // ---- 菜单栏正中:落在哪块屏、哪一段(06 章「菜单栏正中」) ----
+    do {
+        typealias L = MenuBarCenterLayout
+        let plain = L.ScreenCandidate(hasNotch: false, islandHere: false)
+        let notch = L.ScreenCandidate(hasNotch: true, islandHere: false)
+        let island = L.ScreenCandidate(hasNotch: false, islandHere: true)
+        expectEqual(L.pickScreen([plain, plain]), 0, "正中选屏: 主屏能用就用主屏")
+        expectEqual(L.pickScreen([notch, plain]), 1, "正中选屏: 主屏有刘海,换到没刘海的那块")
+        expectEqual(L.pickScreen([island, plain]), 1, "正中选屏: 灵动岛占着的屏不用")
+        expectEqual(L.pickScreen([notch]) == nil && L.pickScreen([]) == nil, true, "正中选屏: 只有刘海屏时不放正中")
+
+        let span = L.usableSpan(screenMinX: 0, screenMaxX: 1440, menusMaxX: 400, statusItemsMinX: 1000)
+        expectEqual(span, 416...984, "正中区间: 两侧各让出 clearance")
+        expectEqual(L.usableSpan(screenMinX: 0, screenMaxX: 1440, menusMaxX: nil, statusItemsMinX: nil), 16...1424,
+                    "正中区间: 两侧读不到按屏幕边缘算")
+        expectEqual(L.usableSpan(screenMinX: 0, screenMaxX: 1440, menusMaxX: 700, statusItemsMinX: 780), nil,
+                    "正中区间: 中间放不下最小宽度就不放")
+        expectEqual(L.usableSpan(screenMinX: 1440, screenMaxX: 2880, menusMaxX: 1800, statusItemsMinX: nil), 1816...2864,
+                    "正中区间: 第二块屏按全局坐标")
+
+        expectEqual(L.originX(width: 200, screenMidX: 720, span: 416...984), 620, "正中摆位: 放得下就以屏幕中线居中")
+        expectEqual(L.originX(width: 200, screenMidX: 720, span: 700...1400), 700, "正中摆位: 左边菜单挤过来就往右让")
+        expectEqual(L.originX(width: 200, screenMidX: 720, span: 16...800), 600, "正中摆位: 右边图标挤过来就往左让")
+        expectEqual(L.originX(width: 900, screenMidX: 720, span: 416...984), 416, "正中摆位: 比区间宽时贴着区间左缘")
+
+        let screen0 = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let screen1 = CGRect(x: 1440, y: 0, width: 1920, height: 1080)
+        let menus = [CGRect(x: 10, y: 0, width: 34, height: 24), CGRect(x: 43, y: 0, width: 377, height: 24)]
+        expectEqual(L.menusMaxX(menuFrames: menus, screenFrames: [screen0, screen1], target: screen0), 420,
+                    "正中左侧: 前台菜单右缘")
+        expectEqual(L.menusMaxX(menuFrames: menus, screenFrames: [screen0, screen1], target: screen1), 1860,
+                    "正中左侧: 菜单画在主屏上时按左缘偏移套到目标屏")
+        expectEqual(L.menusMaxX(menuFrames: [], screenFrames: [screen0], target: screen0), nil, "正中左侧: 读不到菜单")
+
+        let items = [CGRect(x: 1000, y: 0, width: 30, height: 24), CGRect(x: 1100, y: 2, width: 40, height: 22),
+                     CGRect(x: 7, y: 944, width: 24, height: 24), CGRect(x: 900, y: 0, width: 0, height: 24)]
+        expectEqual(L.statusItemsMinX(itemFrames: items, screenFrames: [screen0, screen1], target: screen0,
+                                      primaryMaxY: 900, menuBarHeight: 24), 1000,
+                    "正中右侧: 状态栏图标最左缘,收起藏到屏幕底部的、零宽的不算")
+        expectEqual(L.statusItemsMinX(itemFrames: items, screenFrames: [screen0, screen1], target: screen1,
+                                      primaryMaxY: 900, menuBarHeight: 24), 2920,
+                    "正中右侧: 目标屏上没读到时按别的屏的右缘偏移换算")
+        expectEqual(L.statusItemsMinX(itemFrames: [], screenFrames: [screen0], target: screen0,
+                                      primaryMaxY: 900, menuBarHeight: 24), nil, "正中右侧: 读不到图标")
+    }
+
+    // ---- 菜单栏正中:窗口与接线 ----
+    do {
+        let menuBar = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/MenuBar")
+        func src(_ name: String) -> String {
+            (try? String(contentsOfFile: menuBar.appendingPathComponent(name).path, encoding: .utf8)) ?? ""
+        }
+        let center = src("MenuBarCenterLyrics.swift")
+        expectEqual(center.contains("panel.ignoresMouseEvents = true")
+                    && center.contains("panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]")
+                    && !center.contains("fullScreenAuxiliary"), true,
+                    "菜单栏正中: 窗口不接点击、不进全屏 Space")
+        expectEqual(center.contains("label.alignmentOverride = .center"), true, "菜单栏正中: 标签固定居中,不读对齐设置")
+        expectEqual(center.contains("AXUIElementSetMessagingTimeout(app, messagingTimeout)")
+                    && center.contains("queue.async"), true,
+                    "菜单栏正中: 辅助功能读两侧放后台队列、带超时")
+        let item = src("MenuBarStatusItem.swift")
+        expectEqual(sourceHas(item, "if centerWanted, let screen = MenuBarCenterLyrics.targetScreen() {")
+                    && sourceHas(item, "present(class: \"icon\", length: iconSlotLength, collapseDelay: 0)"),
+                    true, "菜单栏正中: 用上时状态栏那一格只留图标")
+        expectEqual(sourceHas(item, "for label in [scrollingLabel, centerLyrics.label] {\nlabel.updateKaraokeClock("), true,
+                    "菜单栏正中: 染色时钟两份标签一起喂")
     }
 }

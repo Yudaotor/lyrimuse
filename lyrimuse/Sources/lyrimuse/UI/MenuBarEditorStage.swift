@@ -133,9 +133,11 @@ struct MenuBarEditorStage: View {
 
     /// 「布局」按钮摘要:宽度模式(三项里最结构性的那个),副行**非默认**时再追加「副行 · 译文」——
     /// 四选一不是开关,套不进"只列开着的";默认那一档(是「下一句」,此前是「不显示」)是多数人的状态,无条件报出来是恒定噪声
-    /// (灵动岛「歌词行」摘要同一条规则)。歌词旁的图标不报:它在预览上一眼就看得见。
+    /// (灵动岛「歌词行」摘要同一条规则)。歌词旁的图标不报:它在预览上一眼就看得见。放在菜单栏正中时报「菜单栏正中」
+    /// 顶替宽度模式(那时宽度模式管不到)。
     private var layoutSummary: String {
-        var parts = [settings.menuBarLyricsWidthMode.displayName]
+        var parts = [MenuBarPlacementRow.centerInUse(settings)
+            ? MenuBarPlacementRow.label(for: .screenCenter) : settings.menuBarLyricsWidthMode.displayName]
         if settings.menuBarSecondaryLine != AppSettings.defaultMenuBarSecondaryLine {
             parts.append("\(L10n.t("副行")) · \(settings.menuBarSecondaryLine.displayName)")
         }
@@ -455,6 +457,7 @@ enum MenuBarStyleDefaults {
         settings.menuBarLyricsAlignment = AppSettings.defaultMenuBarLyricsAlignment
         settings.menuBarSecondaryLine = AppSettings.defaultMenuBarSecondaryLine
         settings.menuBarLyricsIconPosition = AppSettings.defaultMenuBarLyricsIconPosition
+        settings.menuBarLyricsPlacement = AppSettings.defaultMenuBarLyricsPlacement
         // 「配色」浮层
         settings.menuBarLyricsKaraoke = AppSettings.defaultMenuBarLyricsKaraoke
         settings.menuBarLyricsTextColorHex = AppSettings.defaultMenuBarLyricsTextColorHex
@@ -477,11 +480,19 @@ enum MenuBarStyleDefaults {
 /// 「字号」失效这件事由「字号」那一行自己说(`MenuBarFontSizeRow`)。悬停 / 无歌词两颗行为开关同日
 /// 搬去了 `MenuBarBehaviorRows`。
 struct MenuBarLayoutRows: View {
+    @ObservedObject private var settings = AppSettings.shared
+
     var body: some View {
         SettingsRowGroup {
             VStack(spacing: 0) {
-                MenuBarWidthModeRow()
+                MenuBarPlacementRow()
                 CardDivider()
+                // 放在菜单栏正中时窗口宽跟着内容走、恒居中,宽度模式与对齐方式管不到;用不上正中(屏都有刘海、
+                // 灵动岛占着)时歌词还在图标那一格,照常显示。
+                if !MenuBarPlacementRow.centerInUse(settings) {
+                    MenuBarWidthModeRow()
+                    CardDivider()
+                }
                 MenuBarSecondaryLineRow()
                 CardDivider()
                 MenuBarLyricsIconRow()
@@ -587,6 +598,64 @@ struct MenuBarWidthModeRow: View {
             CardDivider()
             MenuBarAlignmentRow()
         }
+    }
+}
+
+/// 「歌词位置」行 —— 菜单栏歌词放在状态栏图标那一格,还是菜单栏正中(见 MenuBarLyricsPlacement)。
+/// 选了正中时,这一刻用不上(屏都有刘海 / 灵动岛占着)或没有辅助功能权限(读不到两侧、让不开)就在行里说一句。
+struct MenuBarPlacementRow: View {
+    @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var permission = AccessibilityPermission.shared
+
+    /// 放正中这一档此刻真的在用(选了、也有能用的屏)。
+    static func centerInUse(_ settings: AppSettings) -> Bool {
+        settings.menuBarLyricsPlacement == .screenCenter && MenuBarCenterLyrics.targetScreen() != nil
+    }
+
+    static func label(for placement: MenuBarLyricsPlacement) -> String {
+        switch placement {
+        case .statusItem: return L10n.t("图标旁")
+        case .screenCenter: return L10n.t("菜单栏正中")
+        }
+    }
+
+    /// 选了正中、但这一刻用不上的原因。
+    private var unavailableNote: String? {
+        guard settings.menuBarLyricsPlacement == .screenCenter, MenuBarCenterLyrics.targetScreen() == nil else { return nil }
+        let notchless = NSScreen.screens.contains { !MenuBarCenterLyrics.hasNotch($0) }
+        return notchless && settings.notchOverlayEnabled
+            ? L10n.t("灵动岛占着菜单栏中间，歌词仍显示在图标旁")
+            : L10n.t("屏幕有刘海，歌词仍显示在图标旁")
+    }
+
+    private var needsPermission: Bool { Self.centerInUse(settings) && !permission.trusted }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsRow(
+                icon: "menubar.rectangle",
+                title: L10n.t("歌词位置"),
+                subtitle: unavailableNote ?? (needsPermission ? L10n.t("未获得「辅助功能」权限，可能会盖住 App 菜单") : nil),
+                help: L10n.t("菜单栏正中：歌词显示在菜单栏中间，避开 App 菜单和右侧图标。有刘海或有灵动岛的屏幕上，仍显示在图标旁"),
+                subtitleTint: needsPermission && unavailableNote == nil ? .orange : nil
+            ) {
+                SettingsPillSegmentedControl(
+                    selection: $settings.menuBarLyricsPlacement,
+                    options: MenuBarLyricsPlacement.allCases,
+                    label: Self.label(for:)
+                )
+            }
+            if needsPermission && unavailableNote == nil {
+                Button(permission.actionTitle) { permission.handleAction() }
+                    .controlSize(.small)
+                    .settingsGlassButtons()
+                    .buttonBorderShape(.capsule)
+                    .padding(.leading, SettingsRowMetrics.horizontalPadding + SettingsRowMetrics.iconWidth
+                             + SettingsRowMetrics.iconTextSpacing)
+                    .padding(.bottom, 8)
+            }
+        }
+        .onAppear { permission.refresh() }
     }
 }
 

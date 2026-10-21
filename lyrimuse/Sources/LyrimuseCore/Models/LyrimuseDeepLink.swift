@@ -92,6 +92,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case saveConfig
         /// 关掉 / 接回一条来源(`debug/knockout?leg=<名字>&on=0|1`,`on=0` 关掉):验证退路撑不撑得住,见 `SourceKnockout`。
         case knockout(leg: SourceKnockout.Leg, on: Bool)
+        /// 菜单栏歌词放正中 / 放回图标旁(`center`),以及把有刘海的屏也当成能放正中的(`ignoreNotch`,不落盘,
+        /// App 重启复原):`debug/menubar-center?center=1&ignore-notch=1`,至少带一个。只有刘海屏的开发机靠它验「菜单栏正中」。
+        case menuBarCenter(center: Bool?, ignoreNotch: Bool?)
     }
 
     /// `action/` 下不对应快捷键的那几个名字(跟 `LyrimuseAction.linkName` 不能重名,selftest 核对)。
@@ -195,6 +198,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             guard let leg = value("leg").flatMap({ SourceKnockout.Leg(rawValue: $0.lowercased()) }),
                   let on = value("on").flatMap(Self.parseBool) else { return nil }
             self = .debug(.knockout(leg: leg, on: on))
+        case ("debug", "/menubar-center"):
+            let center = value("center").flatMap(Self.parseBool)
+            let ignoreNotch = value("ignore-notch").flatMap(Self.parseBool)
+            guard center != nil || ignoreNotch != nil else { return nil }
+            self = .debug(.menuBarCenter(center: center, ignoreNotch: ignoreNotch))
         case ("lastfm-auth-callback", _):
             self = .lastfmAuthCallback
         default:
@@ -299,6 +307,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .knockout(leg, on):
                 components.path = "/knockout"
                 components.queryItems = [URLQueryItem(name: "leg", value: leg.rawValue), URLQueryItem(name: "on", value: on ? "1" : "0")]
+            case let .menuBarCenter(center, ignoreNotch):
+                components.path = "/menubar-center"
+                components.queryItems = (center.map { [URLQueryItem(name: "center", value: $0 ? "1" : "0")] } ?? [])
+                    + (ignoreNotch.map { [URLQueryItem(name: "ignore-notch", value: $0 ? "1" : "0")] } ?? [])
             }
         case .lastfmAuthCallback:
             components.host = "lastfm-auth-callback"

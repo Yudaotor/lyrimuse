@@ -738,6 +738,7 @@
 "固定在菜单栏下方正中，无法拖动" = "Pinned centered below the menu bar; can't be dragged";
 "固定：所有歌曲使用设定的宽度。\n自适应：按每首歌曲的歌词确定宽度，不超过设定宽度" = "Fixed: every song uses the set width.\nAdaptive: each song gets its own width from its lyrics, up to the set width";
 "图标动画" = "Animate Icon";
+"图标旁" = "Beside Icon";
 "圆角" = "Corners";
 "在 %@ 上收听" = "Listen on %@";
 "在 %@ 上看完整榜单" = "See the full chart on %@";
@@ -907,6 +908,7 @@
 "局域网" = "Local Network";
 "居中" = "Center";
 "屏幕" = "Display";
+"屏幕有刘海，歌词仍显示在图标旁" = "The display has a notch, so lyrics stay beside the icon";
 "展开" = "Expand";
 "展开/收起触控栏歌词" = "Expand/Collapse Touch Bar Lyrics";
 "展开圆角" = "Expanded Corners";
@@ -1566,6 +1568,7 @@
 "未能获取最近记录" = "Couldn't load recent scrobbles";
 "未能跳过此广告" = "Couldn't skip this ad";
 "未获取" = "Not loaded";
+"未获得「辅助功能」权限，可能会盖住 App 菜单" = "Without Accessibility permission, lyrics may cover app menus";
 "未获得完全磁盘访问权限，无法读取 %@ 的本机歌词" = "No Full Disk Access; %@’s local lyrics cannot be read";
 "未获得辅助功能权限，%@ 不显示喜欢按钮" = "Accessibility permission is missing: %@ has no Like button";
 "未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Accessibility permission is missing: %@ has no Like button, and can’t pause, resume or skip tracks without system media focus";
@@ -1688,6 +1691,7 @@
 "歌曲简介" = "Song Notes";
 "歌词" = "Lyrics";
 "歌词一致性" = "Lyrics Consistency";
+"歌词位置" = "Lyrics Position";
 "歌词使用封面主色；无法获取时为白色" = "Lyrics use the cover's main color, or white when none is available";
 "歌词偏移" = "Lyrics Offset";
 "歌词偏移归零" = "Reset Lyrics Offset";
@@ -1901,6 +1905,7 @@
 "演唱：%@" = "by %@";
 "灵动岛" = "Notch";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "Notch, menu bar and Touch Bar lyrics show up during playback";
+"灵动岛占着菜单栏中间，歌词仍显示在图标旁" = "Notch Lyrics are using the middle of the menu bar, so lyrics stay beside the icon";
 "灵动岛和菜单栏歌词在播放时显示" = "Notch and menu bar lyrics show up during playback";
 "灵动岛宽度" = "Notch Card Width";
 "灵动岛展开宽度" = "Notch Card Expanded Width";
@@ -2163,6 +2168,8 @@
 "菜单栏图标：%@" = "Menu bar icon: %@";
 "菜单栏歌词" = "Menu Bar Lyrics";
 "菜单栏歌词的字重。「常规」即系统菜单栏的默认字重；中文只加粗不加宽，英文字重越大宽度略增" = "How heavy the menu bar lyrics are drawn. Regular is exactly the system default weight. Chinese only gets bolder, Latin text also gets slightly wider";
+"菜单栏正中" = "Menu Bar Center";
+"菜单栏正中：歌词显示在菜单栏中间，避开 App 菜单和右侧图标。有刘海或有灵动岛的屏幕上，仍显示在图标旁" = "Menu Bar Center: lyrics appear in the middle of the menu bar, clear of app menus and the icons on the right. On a display with a notch or with Notch Lyrics, they stay beside the icon";
 "落后 %d 分" = "Behind by %d";
 "薄" = "Thin";
 "行上按 %1$@ 次计，明细合计 %2$@ 次" = "The row counts %1$@, the breakdown totals %2$@";

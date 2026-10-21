@@ -488,17 +488,29 @@ struct PanelQuickSettings: View {
                 ), range: settings.notchLyricRowHeightRange)
             }
         case .surface(.menuBar):
-            row(L10n.t("宽度模式")) {
+            row(L10n.t("歌词位置")) {
                 SettingsPillSegmentedControl(
-                    selection: $settings.menuBarLyricsWidthMode,
-                    options: MenuBarLyricsWidthMode.allCases,
-                    label: { mode in
-                        switch mode {
-                        case .fixed: return L10n.t("固定")
-                        case .adaptive: return L10n.t("自适应")
-                        }
-                    }
+                    selection: $settings.menuBarLyricsPlacement,
+                    options: MenuBarLyricsPlacement.allCases,
+                    label: MenuBarPlacementRow.label(for:)
                 )
+            }
+            // 放在菜单栏正中时宽度模式与对齐方式管不到(窗口宽跟着内容走、恒居中),判据同设置页那一组(`MenuBarLayoutRows`);
+            // 「最大宽度」两种位置都管。
+            let centerInUse = MenuBarPlacementRow.centerInUse(settings)
+            if !centerInUse {
+                row(L10n.t("宽度模式")) {
+                    SettingsPillSegmentedControl(
+                        selection: $settings.menuBarLyricsWidthMode,
+                        options: MenuBarLyricsWidthMode.allCases,
+                        label: { mode in
+                            switch mode {
+                            case .fixed: return L10n.t("固定")
+                            case .adaptive: return L10n.t("自适应")
+                            }
+                        }
+                    )
+                }
             }
             sliderRow(L10n.t("最大宽度"), value: Binding(
                 get: { Double(settings.menuBarLyricsWidth) },
@@ -514,7 +526,7 @@ struct PanelQuickSettings: View {
             // 这里跟着藏是**说得通**的:「宽度模式」就在上面两行,原因看得见 —— 灵动岛那条
             // 现在也是同一个道理(「显示歌词」搬进面板后,它的对齐方式也跟着藏了),
             // 三个形态在这件事上口径一致:**藏一个旋钮的前提是把"为什么"摆在它上面**。
-            if settings.menuBarLyricsWidthMode == .fixed {
+            if settings.menuBarLyricsWidthMode == .fixed && !centerInUse {
                 alignmentRow(selection: $settings.menuBarLyricsAlignment,
                              options: LyricsRestingAlignment.menuBarOptions,
                              label: LyricsAlignmentSegmentedControl.label(for:))

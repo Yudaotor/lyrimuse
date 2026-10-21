@@ -395,6 +395,7 @@ public enum SettingsSearchCatalog {
 
         // ---- 歌词显示 › 菜单栏 ----
         surface(.menuBar, "菜单栏歌词", kw: ["开关", "跑马灯", "总开关"], inDrawer: false),
+        surface(.menuBar, "歌词位置", kw: ["菜单栏正中", "图标旁", "中间", "居中", "无刘海"], group: "布局"),
         surface(.menuBar, "宽度模式", kw: ["固定", "自适应", "宽度"], group: "布局"),
         surface(.menuBar, "对齐方式", kw: ["居中", "左对齐", "右对齐"], group: "布局"),
         surface(.menuBar, "副行", kw: ["下一句", "译文", "读音", "罗马音", "双排", "两行"], group: "布局"),

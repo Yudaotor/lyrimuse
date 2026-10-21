@@ -113,7 +113,7 @@ func runSourceContractTests() {
             .appendingPathComponent("lyrimuse/MenuBar")
         let label = (try? String(contentsOfFile: menuBar.appendingPathComponent("MenuBarScrollingLabel.swift").path, encoding: .utf8)) ?? ""
         expectEqual(label.contains("widthMode == .fixed ? setting : .leading")
-                        && sourceHas(label, "alignment: Self.restingAlignment(widthMode: AppSettings.shared.menuBarLyricsWidthMode,\nsetting: AppSettings.shared.menuBarLyricsAlignment)")
+                        && sourceHas(label, "alignment: alignmentOverride\n?? Self.restingAlignment(widthMode: AppSettings.shared.menuBarLyricsWidthMode,\nsetting: AppSettings.shared.menuBarLyricsAlignment)")
                         && !label.contains("alignment: AppSettings.shared.menuBarLyricsAlignment,"), true,
                     "菜单栏对齐: 自适应一律贴左,固定宽度才按「对齐方式」")
     }
@@ -1595,7 +1595,7 @@ func runSourceContractSurfaceTests() {
                         "菜单栏双排: 文字画在系统字体的基线上,不用 draw(at:) 按字体自己的文本框落位")
         }
         if let preview = read("UI/SectionPreviewBars.swift") {
-            expectEqual(preview.components(separatedBy: "secondaryKind: secondaryKind)").count - 1, 2,
+            expectEqual(preview.components(separatedBy: "secondaryText: secondaryText, secondaryKind: secondaryKind").count - 1, 2,
                         "菜单栏双排: 预览两条 Representable 都要把副行传进去")
             expectEqual(sourceHas(preview, "MenuBarSlotPolicy.adaptiveDrawsWithLayers(\nhasFillPath: karaokeFillPath != nil, hasIcon: previewIconBadge != nil, twoRows: twoRows,"), true,
                         "菜单栏双排: 预览跟真机同一条岔路,双排走图层")

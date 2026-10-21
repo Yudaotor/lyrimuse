@@ -243,8 +243,27 @@ struct MenuBarPreviewBar<Lane: View>: View {
         }
     }
 
+    /// 歌词此刻放在菜单栏正中(选了、也有能用的屏),跟本体同一个判据。
+    private var centerInUse: Bool { MenuBarPlacementRow.centerInUse(settings) }
+
     private var presentation: MenuBarMarqueeRenderer.Presentation {
-        MenuBarMarqueeRenderer.presentation(
+        // 放在正中时跟本体 `presentCenter` 同一套:格宽跟着内容走、不超过「最大宽度」,按固定宽度排版(装不下就滚)。
+        // 本体还会被两侧的菜单和图标夹窄,预览条里没有那些,不夹。
+        if centerInUse {
+            let mainW = MenuBarMarqueeRenderer.width(of: fullText, font: mainFont)
+            let secondaryW = twoRows ? (secondaryText.map {
+                MenuBarMarqueeRenderer.width(of: $0, font: MenuBarMarqueeRenderer.doubleRowSecondaryFont,
+                                             translation: secondaryKind == .translation)
+            } ?? 0) : 0
+            let naturalW = MenuBarSlotPolicy.naturalWidth(
+                mainWidth: mainW, secondaryWidth: secondaryW, twoRows: twoRows,
+                secondaryKind: secondaryKind, maxWidth: settings.menuBarLyricsWidth)
+            return MenuBarMarqueeRenderer.presentation(
+                for: fullText, windowWidth: min(settings.menuBarLyricsWidth, naturalW.rounded(.up)),
+                dwellSeconds: line == nil ? nil : PlaybackCoordinator.shared.currentLineDwellSeconds,
+                leadInSeconds: 0, widthMode: .fixed, font: mainFont)
+        }
+        return MenuBarMarqueeRenderer.presentation(
             for: fullText, windowWidth: settings.menuBarLyricsWidth,
             // 演的是示例句(没在播放)时没有"这句会显示多久"可言,给 nil 走固定速度。
             //
@@ -452,25 +471,14 @@ struct MenuBarPreviewBar<Lane: View>: View {
             // 右边)。它原来还兼任这一条的左边距,现在左边距由上面那枚苹果自己的 padding 提供,
             // 这里的 12 剩下的作用是"苹果和歌词格之间至少留这么多"。
             Spacer(minLength: 12)
-            lyricsSlot(p)
-                // 左右各加 3pt 让虚线离文字有点呼吸空间(不加的话虚线会贴着文字,观感不好)——
-                // 虚线因此比 windowWidth 本身宽了 6pt,跟"这一格
-                // 恒等于真实宽度"这条不变量有一点点出入,但这一圈线本来就是给人看的示意
-                // (真实数值在编辑台「最大宽度」滑杆那边,见 previewCaption 的注释),几个点的
-                // 松量换来不贴脸的观感,划得来。
-                .padding(.horizontal, 3)
-                // 虚线只框**歌词那一格**,不含旁边那枚进度图标。这一圈的
-                // 职责是回答"这一格有多宽"=用户设的「最大宽度」(见 slotEdgeOutline 头注),
-                // 把图标一起框进去,这个数就对不上滑杆上的读数了。做法:按歌词自身的宽度画、
-                // 贴在图标的**对侧**;没开图标时它就等于整块宽度,跟改动前逐点相同。
-                .overlay(alignment: previewIconBadge?.position == .leading ? .trailing : .leading) {
-                    slotEdgeOutline
-                        .frame(width: lyricsSlotWidth(p) + 6)
-                        // 上限标记从这一格的左缘往外画(菜单栏项由右往左长),见 widthHeadroomMarker。
-                        .overlay(alignment: .leading) {
-                            widthHeadroomMarker(slotWidth: lyricsSlotWidth(p))
-                        }
-                }
+            // 放在菜单栏正中时歌词格挪到整条中间(下面的 overlay),这里只留状态栏那一格剩下的图标。
+            if centerInUse {
+                Image(nsImage: MenuBarIconStyle.cachedImage(for: settings.menuBarIconStyle))
+                    .renderingMode(.template)
+                    .foregroundStyle(Color(nsColor: .labelColor).opacity(0.55))
+            } else {
+                outlinedLyricsSlot(p)
+            }
             // 右边这几个只是参照物,让"歌词占了菜单栏多宽"看得出来。用真实时钟而不是
             // 写死一个时间 —— 假数据会让人下意识觉得这块预览"不是真的"。
             HStack(spacing: 11) {
@@ -485,6 +493,9 @@ struct MenuBarPreviewBar<Lane: View>: View {
         }
         .frame(height: Self.cardHeight)
         .frame(maxWidth: .infinity)
+        .overlay {
+            if centerInUse { outlinedLyricsSlot(p) }
+        }
         // 只铺 .bar 材质是不够的:那层材质压在设置窗自己的背景上几乎同色,整条读起来
         // 就是"悬空的文字",完全不像菜单栏(实拍确认)。真菜单栏之所以
         // 一眼认得出来,是因为它半透明地压在**桌面壁纸**上。
@@ -498,6 +509,29 @@ struct MenuBarPreviewBar<Lane: View>: View {
         // 深色壁纸下整条菜单栏是深的、文字自动转白,那正是它一眼认得出来的原因。
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+    }
+
+    /// 歌词格连同它那圈虚线边界与上限标记。
+    private func outlinedLyricsSlot(_ p: MenuBarMarqueeRenderer.Presentation) -> some View {
+        lyricsSlot(p)
+            // 左右各加 3pt 让虚线离文字有点呼吸空间(不加的话虚线会贴着文字,观感不好)——
+            // 虚线因此比 windowWidth 本身宽了 6pt,跟"这一格
+            // 恒等于真实宽度"这条不变量有一点点出入,但这一圈线本来就是给人看的示意
+            // (真实数值在编辑台「最大宽度」滑杆那边,见 previewCaption 的注释),几个点的
+            // 松量换来不贴脸的观感,划得来。
+            .padding(.horizontal, 3)
+            // 虚线只框**歌词那一格**,不含旁边那枚进度图标。这一圈的
+            // 职责是回答"这一格有多宽"=用户设的「最大宽度」(见 slotEdgeOutline 头注),
+            // 把图标一起框进去,这个数就对不上滑杆上的读数了。做法:按歌词自身的宽度画、
+            // 贴在图标的**对侧**;没开图标时它就等于整块宽度,跟改动前逐点相同。
+            .overlay(alignment: previewIconBadge?.position == .leading ? .trailing : .leading) {
+                slotEdgeOutline
+                    .frame(width: lyricsSlotWidth(p) + 6)
+                    // 上限标记从这一格的左缘往外画(菜单栏项由右往左长),见 widthHeadroomMarker。
+                    .overlay(alignment: .leading) {
+                        widthHeadroomMarker(slotWidth: lyricsSlotWidth(p))
+                    }
+            }
     }
 
     /// 歌词那一格的虚线边界("跟悬浮歌词一样把清晰的边界用虚线画出来")。
@@ -555,7 +589,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
     @ViewBuilder
     private func widthHeadroomMarker(slotWidth: CGFloat) -> some View {
         let headroom = settings.menuBarLyricsWidth - slotWidth
-        if settings.menuBarLyricsWidthMode == .adaptive, headroom > 1 {
+        if settings.menuBarLyricsWidthMode == .adaptive, !centerInUse, headroom > 1 {
             ZStack(alignment: .leading) {
                 // 余量区:淡到只够读出"这里还能长",不跟虚线框抢注意力。
                 Rectangle().fill(Color.white.opacity(0.10))
@@ -624,7 +658,8 @@ struct MenuBarPreviewBar<Lane: View>: View {
                 karaokeRate: anchor?.rate ?? 0, karaokePlaying: isPlayingNow,
                 icon: previewIconBadge, progressPositionMs: progressPositionMs,
                 progressDurationMs: progressDurationMs,
-                secondaryText: secondaryText, secondaryKind: secondaryKind)
+                secondaryText: secondaryText, secondaryKind: secondaryKind,
+                alignmentOverride: centerInUse ? .center : nil)
                 .frame(width: windowWidth + reservedIconWidth, height: rowsHeight)
         }
     }
