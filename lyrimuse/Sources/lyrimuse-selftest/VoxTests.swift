@@ -233,8 +233,15 @@ func runVoxTests() {
             func f(_ x: Double?) -> String { x.map { String($0) } ?? "nil" }
             return "\(f(a.elapsed))|\(f(a.elapsedNow))|\(f(a.rate))"
         }
-        expectEqual(anchor(true, nil, nil, 1), "0.5|nil|1.0", "VOX 系统锚点: 开播 / 自然连播没报位置 → 那个时刻按已经放了 0.5 秒起算")
-        expectEqual(anchor(true, nil, nil, 0), "0.5|nil|1.0", "VOX 系统锚点: 开播首帧速率 0 也当 1")
+        expectEqual(anchor(true, nil, nil, 1), "0.05|nil|1.0", "VOX 系统锚点: 开播 / 自然连播没报位置 → 按 systemStartLeadSecs 起算")
+        expectEqual(anchor(true, nil, nil, 0), "0.05|nil|1.0", "VOX 系统锚点: 开播首帧速率 0 也当 1")
+        // 开播连发的第二份(晚约 0.54 秒)要按重发处理、留第一份:起算位置得大于 0,0 秒的重发只对登记了的播放器才认。
+        let first = MediaControlClient.PlayingAnchor(track: "a|b", elapsed: V.systemStartLeadSecs,
+                                                     timestamp: "@1792602186495602", instant: t0)
+        expectEqual(V.systemStartLeadSecs > 0 && MediaControlClient.isStaleAnchorRepublish(
+            last: first, track: "a|b", elapsed: V.systemStartLeadSecs, timestamp: "@1792602187039327", duration: nil,
+            bundleID: "com.coppertino.Vox", now: t0.addingTimeInterval(0.6)), true,
+                    "VOX 系统锚点: 开播连发的第二份按重发处理,留第一份的时刻")
         expectEqual(anchor(true, nil, nil, 1, ts: false), "nil|nil|1.0", "VOX 系统锚点: 连时刻都没有不编")
         expectEqual(anchor(true, 8.26, 8.26, 0), "8.26|nil|1.0", "VOX 系统锚点: 恢复那份速率 0 → 当 1,冻结的外推值作废")
         expectEqual(anchor(true, 60, 61.5, 1), "60.0|61.5|1.0", "VOX 系统锚点: 跳转后那份正常,原样")
@@ -279,7 +286,7 @@ func runVoxTests() {
         let t = 1_792_599_144.15
         let probed = snap(#"{"title":"Marjoram","artist":"Accident","playing":true,"playbackRate":1,"bundleIdentifier":"com.coppertino.Vox"}"#)
         let clocked = V.probedSnapshot(probed, anchorTimestamp: t, pid: 22582, now: Date(timeIntervalSince1970: t + 5))
-        expectEqual(clocked.elapsedTime.map { abs($0 - 5 - V.systemStartLeadSecs) < 0.001 }, true, "VOX 退路: 单问到的那份没报位置,按开播时刻起算、补上开播时刻晚的那一截")
+        expectEqual(clocked.elapsedTime.map { abs($0 - 5 - V.probedStartLeadSecs) < 0.001 }, true, "VOX 退路: 单问到的那份没报位置,按开播时刻起算、补上它晚的那一截")
         expectEqual(clocked.processIdentifier, 22582, "VOX 退路: 进程号从锚点补上")
         let other = snap(#"{"title":"x","playing":true,"bundleIdentifier":"com.apple.Music"}"#)
         expectEqual(V.probedSnapshot(other, anchorTimestamp: t, pid: 1, now: Date(timeIntervalSince1970: t + 5)).elapsedTime == nil,
