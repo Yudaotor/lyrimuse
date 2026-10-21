@@ -19,6 +19,9 @@ private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: 
 //   整份顶替;系统那边一拍都没有它、或者落回别的播放器暂停着的旧会话时,它开着就直接问
 //   (`preferringPlayingKaset`)。解读见 KasetPlayerInfo。
 //
+// - VOX:有字典,歌名、歌手、专辑、位置、当前文件分开给。系统那份把歌手和专辑拼成一栏、播放中不报位置,
+//   同样由 `adaptedSnapshot` 整份顶替。解读见 VoxPlayerInfo。
+//
 // - 洛雪音乐:用户打开了它的开放 API 时,系统那边这一拍没给出在放的歌(什么都没有、别家暂停着的旧会话、它换歌撤掉了会话)
 //   就用它推的状态合成一份(`preferringLXMusicOpenAPI`),播放控制也直接发给它。
 //
@@ -33,7 +36,7 @@ public enum MediaControlClient {
     /// 状态查询的超时。这是 2 秒一轮的热路径,正常几十毫秒就回来;它卡住,悬浮歌词
     /// 就跟着停住,所以这道闸比别处都要紧。
     static let snapshotTimeout: TimeInterval = 5
-    /// 上一份被接受的快照来自有 AppleScript 字典的播放器(Apple Music / Spotify / Kaset)时用这个短的:这一拍 media-control
+    /// 上一份被接受的快照来自有 AppleScript 字典的播放器(Apple Music / Spotify / Kaset / VOX)时用这个短的:这一拍 media-control
     /// 回不来,焦点回退(snapshotAfterFocusLost)直接问播放器自己就是真值,不用干等满 snapshotTimeout(见 02 章决策 102)。
     static let snapshotTimeoutWithAppleScriptFallback: TimeInterval = 2
     /// 状态查询用时满这么久就记一行(超时也记):卡在这里的那几秒悬浮歌词是停着的,之后的回退又不留别的痕迹。
@@ -42,7 +45,7 @@ public enum MediaControlClient {
     /// 这一拍状态查询用哪个超时。纯函数,selftest 覆盖。
     public static func pollSnapshotTimeout(fallbackPlayer: PlaybackPlayer?) -> TimeInterval {
         switch fallbackPlayer {
-        case .appleMusic?, .spotify?, .kaset?: return snapshotTimeoutWithAppleScriptFallback
+        case .appleMusic?, .spotify?, .kaset?, .vox?: return snapshotTimeoutWithAppleScriptFallback
         default: return snapshotTimeout
         }
     }
@@ -945,6 +948,38 @@ public enum MediaControlClient {
         return found == nil || kasetMoving
     }
 
+    // MARK: - VOX
+
+    /// 问一次 VOX(`VoxPlayerInfo.script`)。拿不到(没在跑、停住、没授「自动化」权限、超时)返回 nil。换歌那一拍位置还是
+    /// 上一首的(`VoxPlayerInfo.positionLagsTrackChange`)就隔一会儿再读,最多读几次,读满还是那样照用这一份。
+    private static func fetchVoxSnapshot() -> MediaControlSnapshot? {
+        let previous = VoxPlayerInfo.previousMark()
+        guard var reading = readVox() else {
+            setSnapshotFailure(.appleScriptUnavailable)
+            return nil
+        }
+        var rereads = 0
+        while rereads < VoxPlayerInfo.settleRereads,
+              VoxPlayerInfo.positionLagsTrackChange(previous: previous, current: VoxPlayerInfo.mark(reading)) {
+            Thread.sleep(forTimeInterval: VoxPlayerInfo.settleDelay)
+            rereads += 1
+            guard let fresh = readVox() else { break }
+            reading = fresh
+        }
+        if rereads > 0 {
+            let settled = !VoxPlayerInfo.positionLagsTrackChange(previous: previous, current: VoxPlayerInfo.mark(reading))
+            VoxPlayerInfo.logTornReading(rereads: rereads, settled: settled)
+        }
+        VoxPlayerInfo.remember(reading)
+        return reading.snapshot
+    }
+
+    private static func readVox() -> VoxPlayerInfo.Reading? {
+        guard let r = runPlayerScript("vox", source: VoxPlayerInfo.script), r.succeeded else { return nil }
+        // 位置是脚本最后读的,按调用返回这一刻记(同 Spotify)。
+        return VoxPlayerInfo.reading(fromScriptOutput: r.stdout, capturedAt: Date())
+    }
+
     // MARK: - 「只勾了 Apple Music」这条路上的电台判据
 
     /// 纯 AppleScript 那份快照拿不到 `radioStationHash`:那是 MediaRemote 独有的键,问 Music.app 要不到。不补的话「设置里只勾了
@@ -1372,7 +1407,7 @@ public enum MediaControlClient {
         return ProcessRunner.run(binaryPath, ["get"] + arguments, timeout: timeout)
     }
 
-    /// 常驻 osascript 跑的 JXA:每读到一行请求名(`music` / `spotify` / `kaset`)就跑对应那份快照脚本,把它返回的字符串原样
+    /// 常驻 osascript 跑的 JXA:每读到一行请求名(`music` / `spotify` / `kaset` / `vox`)就跑对应那份快照脚本,把它返回的字符串原样
     /// 写到 stdout,再写结束行;脚本抛错时状态码为 1。stdin 读到 EOF 就退出。
     /// JXA 把 NSData 的 `length` 桥成字符串,判 EOF 必须先转数字:写成 `data.length === 0` 永远不成立,EOF 之后空转占满一个核。
     public static let appleScriptServerScript = """
@@ -1380,7 +1415,8 @@ public enum MediaControlClient {
     const handlers = {
         music: () => \(script),
         spotify: () => \(spotifyScript),
-        kaset: () => \(kasetScript)
+        kaset: () => \(kasetScript),
+        vox: () => \(VoxPlayerInfo.script)
     };
     const input = $.NSFileHandle.fileHandleWithStandardInput;
     const output = $.NSFileHandle.fileHandleWithStandardOutput;
@@ -1773,7 +1809,7 @@ public enum MediaControlClient {
             if let failure = failureWithoutFallbackTarget(targetConfirmedGone: targetGone) { setSnapshotFailure(failure) }
             return nil
         }
-        // 第一级:问播放器**自己的钟**(只有 Apple Music / Spotify / Kaset 有 AppleScript 字典)。
+        // 第一级:问播放器**自己的钟**(只有 Apple Music / Spotify / Kaset / VOX 有 AppleScript 字典)。
         //
         // 顺序是这样定的,别调过来:per-client 探针拿回来的是**同一份 MediaRemote 载荷**,
         // 因此原样继承了那条链的锚点缺陷 —— Spotify 的开播锚点实测晚 ~2s(02 章决策 28:+1.91 /
@@ -1786,6 +1822,7 @@ public enum MediaControlClient {
         case .appleMusic: snapshot = fetchAppleMusicSnapshot()
         case .spotify: snapshot = fetchSpotifySnapshot()
         case .kaset: snapshot = fetchKasetSnapshot()
+        case .vox: snapshot = fetchVoxSnapshot()
         default: break
         }
         let viaAppleScript = snapshot != nil
@@ -1795,7 +1832,7 @@ public enum MediaControlClient {
         // Kaset 不走这一级:系统按 bundle id 存着的就是它自己发的那份,换歌后常停在上一首(见 KasetPlayerInfo 头注)。
         if snapshot == nil, target.player != .kaset,
            let probed = NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: target.bundleID) {
-            snapshot = probed.snapshot
+            snapshot = VoxPlayerInfo.splittingSystemArtist(probed.snapshot)
             let now = Date()
             if let reading = amazonMusicReading(
                 bundleID: target.bundleID, trackKey: probed.snapshot.trackKey, title: probed.snapshot.title,
@@ -1890,7 +1927,7 @@ public enum MediaControlClient {
         execFailures >= channelExecFailThreshold || testFailed
     }
 
-    /// 通道坏了时按顺序问谁:勾了「自动识别」三家都问,否则只问勾了的。QQ 音乐 / 网易云 / 酷狗 / 汽水音乐 / KKBOX
+    /// 通道坏了时按顺序问谁:勾了「自动识别」有字典的几家都问,否则只问勾了的。QQ 音乐 / 网易云 / 酷狗 / 汽水音乐 / KKBOX
     /// 没有 AppleScript 字典,按 bundle id 直查系统的那条路(`NowPlayingClientsProbe`)也是 MediaRemote,跟着一起坏,
     /// 不在其列。纯函数,selftest 覆盖。
     /// 通道坏了时,勾选的播放器里有没有读不到的(勾了「自动识别」也算:它会遇到任何播放器)。`MediaChannelNotifier` 据此决定弹不弹通知。
@@ -1899,12 +1936,12 @@ public enum MediaControlClient {
     }
 
     public static func channelFallbackCandidates(selected: Set<PlaybackPlayer>) -> [PlaybackPlayer] {
-        let order: [PlaybackPlayer] = [.appleMusic, .spotify, .kaset]
+        let order: [PlaybackPlayer] = [.appleMusic, .spotify, .kaset, .vox]
         if selected.contains(.auto) { return order }
         return order.filter(selected.contains)
     }
 
-    /// media-control 通道坏了(`channelLooksBroken`)时,直接问还开着的 Apple Music / Spotify / Kaset:在放的优先,都没在放取
+    /// media-control 通道坏了(`channelLooksBroken`)时,直接问还开着的 Apple Music / Spotify / Kaset / VOX:在放的优先,都没在放取
     /// 第一个暂停着的。没开着的不问(不 fork osascript,也不会对从不用它的人弹自动化授权)。
     ///
     /// `snapshotAfterFocusLost` 那条回退只在「上一份被接受的快照」存在时才走,通道一启动就坏的话开关永远点不亮,
@@ -1929,6 +1966,7 @@ public enum MediaControlClient {
             switch player {
             case .appleMusic: snapshot = fetchAppleMusicSnapshot()
             case .kaset: snapshot = fetchKasetSnapshot()
+            case .vox: snapshot = fetchVoxSnapshot()
             default: snapshot = fetchSpotifySnapshot()
             }
             guard let snapshot else { continue }
@@ -2144,6 +2182,10 @@ public enum MediaControlClient {
             // (占位、播客单集)时也不退回去报系统那份,那份就是它自己发的同一条。
             if let kaset = fetchKasetSnapshot() { return kaset }
             return kasetNotSongThisRoundValue() ? nil : mediaControl
+        case PlaybackPlayer.vox.bundleIdentifier:
+            // 暂停态也问:系统那份播放中不报位置,暂停时报的那一次比脚本冻结的值少 0.1 秒,换钟就是一次回跳。
+            // 拿不到时退回系统那份,歌手、专辑先拆开(见 VoxPlayerInfo)。
+            return fetchVoxSnapshot() ?? VoxPlayerInfo.splittingSystemArtist(mediaControl)
         default:
             return mediaControl
         }
@@ -2190,19 +2232,24 @@ public enum MediaControlClient {
         guard let bundleID = raw.bundleIdentifier, artworkBundleIDMatches(bundleID, players: players) else {
             return (nil, prefix + "the system reports \(raw.bundleIdentifier ?? "no player"), which is not accepted")
         }
+        // VOX 这份载荷的歌手是「歌手 — 专辑」、没写标签时歌名是小写文件名:换成跟快照同一份再算曲目标识(见 VoxPlayerInfo)。
+        var keyTitle = raw.title, keyArtist = raw.artist
+        var filePath = PlayerTitleSplit.currentFilePath(bundleID: bundleID, title: raw.title)
+        if bundleID == VoxPlayerInfo.bundleID {
+            (keyTitle, keyArtist, filePath) = VoxPlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)
+        }
         guard let imageData = artworkImageData(base64: raw.artworkData) else {
-            // 放本地文件的播放器(reAMP)只报文件里嵌着的封面:没嵌的改用正在放的文件同目录里的那张(见 PlayerTitleSplit)。
-            if let path = PlayerTitleSplit.currentFilePath(bundleID: bundleID, title: raw.title),
-               let cover = PlayerTitleSplit.folderCover(forAudioFile: path) {
+            // 放本地文件的播放器(reAMP、VOX)只报文件里嵌着的封面:没嵌的改用正在放的文件同目录里的那张(见 PlayerTitleSplit)。
+            if let path = filePath, let cover = PlayerTitleSplit.folderCover(forAudioFile: path) {
                 return ((cover.data, cover.mimeType,
-                         PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: raw.artist, title: raw.title)), nil)
+                         PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: keyArtist, title: keyTitle)), nil)
             }
             let artwork = raw.artworkData.map { "with artwork that is not an image (\(Data(base64Encoded: $0)?.count ?? 0) bytes)" }
                 ?? "without artwork"
             return (nil, prefix + "\(bundleID) reports \(raw.title ?? "") \(artwork)")
         }
         return ((imageData, raw.artworkMimeType ?? "image/jpeg",
-                 PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: raw.artist, title: raw.title)), nil)
+                 PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: keyArtist, title: keyTitle)), nil)
     }
 
     /// 载荷里的 `artworkData`(base64)解出来的图;没带、解不开、读不出图头(`CoverArtReplacementGate.isImage`)都是 nil。

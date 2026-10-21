@@ -79,9 +79,31 @@ func TestLocalFileLyricsOnlyForCurrentTrack(t *testing.T) {
 	if _, ok := localFileLyrics("Hawk Nelson", "Diamonds"); ok {
 		t.Error("别的歌(预解析的下一首)不该读到这首的 .lrc")
 	}
+	noteLocalFileCurrentTrack(voxBundleID, "Hawk Nelson", "Sold Out", audio)
+	if _, ok := localFileLyrics("Hawk Nelson", "Sold Out"); !ok {
+		t.Error("VOX 也放本地文件,同样读同名 .lrc")
+	}
 	noteLocalFileCurrentTrack(kkboxBundleID, "Hawk Nelson", "Sold Out", audio)
 	if _, ok := localFileLyrics("Hawk Nelson", "Sold Out"); ok {
-		t.Error("只对 reAMP 记当前文件")
+		t.Error("只对放本地文件的播放器记当前文件")
+	}
+}
+
+func TestPlaysLocalFiles(t *testing.T) {
+	for _, c := range []struct {
+		bundleID string
+		want     bool
+	}{
+		{reampBundleID, true},
+		{voxBundleID, true},
+		{appleMusicBundleID, false},
+		{kkboxBundleID, false},
+		{"com.example.player", false},
+		{"", false},
+	} {
+		if got := playsLocalFiles(c.bundleID); got != c.want {
+			t.Errorf("playsLocalFiles(%q) = %v, want %v", c.bundleID, got, c.want)
+		}
 	}
 }
 
@@ -89,6 +111,9 @@ func TestLocalFileLyricsWorthRecheck(t *testing.T) {
 	e := enrichEntry{LyricsSource: "qq"}
 	if !localFileLyricsWorthRecheck(e, reampBundleID, false, true, true) {
 		t.Error("正用 reAMP 放、有同名 .lrc、条目没见过这份 → 值得重来一次")
+	}
+	if !localFileLyricsWorthRecheck(e, voxBundleID, false, true, true) {
+		t.Error("正用 VOX 放也一样")
 	}
 	if localFileLyricsWorthRecheck(e, kkboxBundleID, false, true, true) {
 		t.Error("别的播放器不重来")

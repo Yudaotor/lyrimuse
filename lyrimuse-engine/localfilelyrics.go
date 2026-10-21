@@ -12,11 +12,11 @@ import (
 	"unicode/utf16"
 )
 
-// 放本地文件的播放器(reAMP)正在放的那首,同目录同名的 .lrc —— 用户自己给这个文件配的歌词。App 按播放器的进程号找到
-// 正在放的文件,把路径写进播放状态(local_file,只对 reAMP 填);只在正用它放这首时读。
+// 放本地文件的播放器(reAMP、VOX)正在放的那首,同目录同名的 .lrc —— 用户自己给这个文件配的歌词。App 找到正在放的文件
+// (reAMP 按进程号找开着的文件,VOX 由脚本接口直接给),把路径写进播放状态(local_file,只对这两家填);只在正用它放这首时读。
 //
-// 不是歌词源:不进源清单,同 KKBOX 本地歌词(16 章 4.3)。players.json 里 reAMP 的 nativeLyricSource 填它,按文件认这首、
-// 不靠搜,置 identityFromLocalClient 享受同源加权。见 02 章决策 126。
+// 不是歌词源:不进源清单,同 KKBOX 本地歌词(16 章 4.3)。players.json 里这两家的 nativeLyricSource 填它
+// (`playsLocalFiles` 按它认),按文件认这首、不靠搜,置 identityFromLocalClient 享受同源加权。见 02 章决策 126。
 
 // localFileLyricsSource:同名 .lrc 那份候选的来源名(歌词缓存的 lyrics_source、决策记录、界面上的来源都用它)。
 const localFileLyricsSource = "localfile"
@@ -26,13 +26,19 @@ const localFileLyricsMaxBytes = 1 << 20
 
 var (
 	localFileCurrentMu sync.Mutex
-	// localFileCurrent:App 此刻报的当前曲目和它的文件(只对 reAMP 记)。
+	// localFileCurrent:App 此刻报的当前曲目和它的文件(只对放本地文件的播放器记)。
 	localFileCurrent struct{ artist, title, path string }
 )
 
-// noteLocalFileCurrentTrack:每拍读到 App 的播放状态时记下当前曲目的文件。不是 reAMP 或没有文件时清掉。
+// playsLocalFiles:这个播放器放的是用户自己的文件(players.json 里 nativeLyricSource 填 localfile 的:reAMP、VOX)。
+func playsLocalFiles(bundleID string) bool {
+	player := playerForBundleID(bundleID)
+	return player != "" && playerNativeLyricSources[player] == localFileLyricsSource
+}
+
+// noteLocalFileCurrentTrack:每拍读到 App 的播放状态时记下当前曲目的文件。不是放本地文件的播放器或没有文件时清掉。
 func noteLocalFileCurrentTrack(bundleID, artist, title, path string) {
-	if bundleID != reampBundleID || path == "" {
+	if !playsLocalFiles(bundleID) || path == "" {
 		artist, title, path = "", "", ""
 	}
 	localFileCurrentMu.Lock()
@@ -207,9 +213,9 @@ var (
 	}{}
 )
 
-// localFileLyricsAvailable:正用 reAMP 放的这首,现在有没有同名 .lrc(见 localFileLyricsWorthRecheck)。
+// localFileLyricsAvailable:正用放本地文件的播放器放的这首,现在有没有同名 .lrc(见 localFileLyricsWorthRecheck)。
 func localFileLyricsAvailable(bundleID, artist, title string) bool {
-	if bundleID != reampBundleID {
+	if !playsLocalFiles(bundleID) {
 		return false
 	}
 	audio := localFileCurrentPath(artist, title)
@@ -252,10 +258,10 @@ func localFileLyricsRecheckOnce(key string) bool {
 	return true
 }
 
-// localFileLyricsWorthRecheck:同 amazonLyricsWorthRecheck。条目当初没见过这份候选(不是用 reAMP 放着解析的,或者 .lrc 是后来
+// localFileLyricsWorthRecheck:同 amazonLyricsWorthRecheck。条目当初没见过这份候选(不是用这类播放器放着解析的,或者 .lrc 是后来
 // 才放进去的),现在正用它放、有同名 .lrc → 值得重来一次(retryLyricsUpgrade,分数严格更高才替换)。
 func localFileLyricsWorthRecheck(e enrichEntry, bundleID string, pinned, autoUpgrade, available bool) bool {
-	if bundleID != reampBundleID || !autoUpgrade || pinned || e.ManualLyrics || e.Instrumental || !available {
+	if !playsLocalFiles(bundleID) || !autoUpgrade || pinned || e.ManualLyrics || e.Instrumental || !available {
 		return false
 	}
 	if slices.Contains(e.LyricsSourcesSeen, localFileLyricsSource) || slices.Contains(e.LyricsSourcesResponded, localFileLyricsSource) {

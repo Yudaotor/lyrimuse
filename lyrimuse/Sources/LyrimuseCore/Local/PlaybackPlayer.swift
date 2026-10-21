@@ -254,13 +254,14 @@ extension PlaybackPlayer {
     public enum AutomationUse: Sendable {
         /// 脚本接口给更准的位置和播放控制;没授权时退回系统那份,曲目照样认得出(Apple Music、Spotify)。
         case refinesProgress
-        /// 曲目与位置整份靠脚本接口:系统那份播放中歌名歌手为空、换歌后常停在上一首,没授权时连在放哪首都认不准(Kaset)。
+        /// 曲目与位置整份靠脚本接口:系统那份播放中歌名歌手为空、换歌后常停在上一首,没授权时连在放哪首都认不准(Kaset);
+        /// 系统那份播放中不报位置,没授权时歌词跟不上(VOX)。
         case readsTrack
     }
 
     /// 不要这项权限的播放器为 nil(`needsAutomationPermission`,源头 shared/players.json)。
     public var automationUse: AutomationUse? {
         guard needsAutomationPermission else { return nil }
-        return self == .kaset ? .readsTrack : .refinesProgress
+        return self == .kaset || self == .vox ? .readsTrack : .refinesProgress
     }
 }

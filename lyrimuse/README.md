@@ -6,7 +6,7 @@
 QQ音乐桌面客户端的"桌面歌词"。另外还有一个"歌词管理"窗口，可以查看/手改/删除/重新搜索每
 首歌的歌词候选。
 
-App 从本机播放器读取状态,从 `../lyrimuse-engine/` 写入的缓存读取歌词。Apple Music、Spotify 和 Kaset
+App 从本机播放器读取状态,从 `../lyrimuse-engine/` 写入的缓存读取歌词。Apple Music、Spotify、Kaset 和 VOX
 可通过 AppleScript 读取和控制,需要「自动化」权限;其余内置播放器的基础曲目信息通过系统级 MediaRemote
 读取,不需要权限。引擎随 `.app` 打包,负责联网查歌词和封面,常驻服务在引导或设置中启用。
 

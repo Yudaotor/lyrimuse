@@ -52617,6 +52617,23 @@
           }
         }
       }
+    },
+    "主打高解析音质的本地音乐播放器" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A local music player built for hi-res audio"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主打高解析音質的本機音樂播放器"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

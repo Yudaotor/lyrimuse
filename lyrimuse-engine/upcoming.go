@@ -92,6 +92,9 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 	case reampBundleID:
 		// 没有脚本接口,本地数据里也没有播放列表,读不到接下来放什么(02 章决策 126)。
 		return nil, false
+	case voxBundleID:
+		// 脚本接口不给播放列表;列表存在它沙盒容器里,读它会弹「访问其他 App 的数据」(02 章决策 152)。
+		return nil, false
 	case lxMusicBundleID:
 		return lxMusicUpcoming(artist, title, n)
 	}

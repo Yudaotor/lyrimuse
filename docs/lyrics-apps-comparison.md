@@ -30,7 +30,7 @@ of the actively maintained open-source options:
 | License · price | GPL-3.0 · free | MPL-2.0 · free | MIT · free |
 | Latest release | v1.11.0 (Oct 2026) | v1.6.3 (Apr 2022) | v3.3 (Nov 2025) |
 | Minimum macOS | 14 (Sonoma) | 10.11 | 15 (Sequoia) |
-| Players | Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, Kaset (YouTube Music), reAMP — any combination | Apple Music, Spotify, Vox, Audirvana, Swinsian (via its MusicPlayer library) | Spotify, Apple Music |
+| Players | Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, Kaset (YouTube Music), reAMP, VOX — any combination | Apple Music, Spotify, Vox, Audirvana, Swinsian (via its MusicPlayer library) | Spotify, Apple Music |
 | Web players in a browser | YouTube Music & Spotify Web, synced to the page's own progress | — | — |
 | Lyric sources checked automatically | NetEase, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics, Apple Music (official, opt-in) | multiple, via its LyricsKit library | 3: Spotify, LRCLIB, NetEase |
 | Match selection | every candidate from every source scored on one scale (title / artist / album / reported-duration fit + quality signals like word-level timing); a per-track decision panel shows each candidate's score and why the winner won; manual picks are locked and never overridden | — | — |

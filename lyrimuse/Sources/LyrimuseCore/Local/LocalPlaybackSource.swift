@@ -3455,8 +3455,10 @@ public final class LocalPlaybackSource: ObservableObject {
                 : nil,
             youtubeMusicVideoID: bundleID == PlaybackPlayer.kaset.bundleIdentifier
                 ? MediaControlClient.kasetVideoID(forTrackKey: snapshot.trackKey) : nil,
-            localFile: PlayerTitleSplit.currentFilePath(bundleID: bundleID, artist: snapshot.artist ?? "",
-                                                        title: snapshot.title ?? ""),
+            localFile: bundleID == VoxPlayerInfo.bundleID
+                ? VoxPlayerInfo.currentFilePath(artist: snapshot.artist ?? "", title: snapshot.title ?? "")
+                : PlayerTitleSplit.currentFilePath(bundleID: bundleID, artist: snapshot.artist ?? "",
+                                                   title: snapshot.title ?? ""),
             spoken: bundleID == PlaybackPlayer.qqMusic.bundleIdentifier && spokenAudioKey == snapshot.identityKey
                 ? spokenAudioVerdict : nil)
         PlaybackStatePublisher.shared.publish(input, now: now)

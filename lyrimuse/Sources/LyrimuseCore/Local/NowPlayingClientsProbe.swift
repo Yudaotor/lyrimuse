@@ -56,9 +56,12 @@ public enum NowPlayingClientsProbe {
             let decoded = try? JSONDecoder().decode(ArtworkPayload.self, from: r.stdout),
             let data = MediaControlClient.artworkImageData(base64: decoded.artworkData)
         else { return nil }
+        var title = decoded.title, artist = decoded.artist
+        if bundleID == VoxPlayerInfo.bundleID {
+            (title, artist, _) = VoxPlayerInfo.artworkIdentity(title: title, artist: artist)
+        }
         return (data, decoded.artworkMimeType ?? "image/jpeg",
-                PlayerArtistFix.correctedTrackKey(
-                    bundle: bundleID, artist: decoded.artist, title: decoded.title))
+                PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: artist, title: title))
     }
 
     /// 带封面那一趟的超时:比状态查询宽,一张图要过 base64。

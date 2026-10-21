@@ -1,8 +1,8 @@
 {
   "about": {
-    "zh-Hans": "Lyrimuse 是一款开源（GPL-3.0）的 macOS 逐字歌词 App，支持 macOS 14 及以上版本，兼容 Apple Silicon 和 Intel 芯片。它为 Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、洛雪音乐、Kaset、reAMP，以及浏览器中的 YouTube Music 和 Spotify 网页版显示逐字同步的歌词：可显示在桌面悬浮歌词、灵动岛、菜单栏、触控栏和歌词窗口中，并提供译文和读音标注（拼音、粤拼、日语罗马音、韩语罗马字），还可将收听记录打卡到 Last.fm 和 ListenBrainz，并在 Discord 上显示正在收听的歌曲。界面支持简体中文、繁体中文和英文。",
-    "en": "Lyrimuse is an open-source (GPL-3.0) Mac app for word-by-word synced lyrics, for macOS 14 or later on Apple Silicon and Intel. It shows lyrics for Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, reAMP, and YouTube Music or Spotify Web playing in a browser: floating on the desktop, beside the notch, in the menu bar, on the Touch Bar or in a full lyrics window, with translations and romanization (pinyin, Cantonese Jyutping, Japanese romaji, Korean romanization). It scrobbles to Last.fm and ListenBrainz and can show what you play on Discord. The interface is in English, Simplified Chinese and Traditional Chinese.",
-    "zh-Hant": "Lyrimuse 是一款開源（GPL-3.0）的 macOS 逐字歌詞 App，支援 macOS 14 及以上版本，相容 Apple Silicon 和 Intel 晶片。它為 Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music、洛雪音樂、Kaset、reAMP，以及瀏覽器中的 YouTube Music 和 Spotify 網頁版顯示逐字同步的歌詞：可顯示在桌面浮動歌詞、動態島、選單列、觸控列和歌詞視窗中，並提供譯文和讀音標註（拼音、粵拼、日文羅馬拼音、韓文羅馬字），還可將聆聽記錄打卡到 Last.fm 和 ListenBrainz，並在 Discord 上顯示正在聆聽的歌曲。介面支援簡體中文、繁體中文和英文。"
+    "zh-Hans": "Lyrimuse 是一款开源（GPL-3.0）的 macOS 逐字歌词 App，支持 macOS 14 及以上版本，兼容 Apple Silicon 和 Intel 芯片。它为 Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、洛雪音乐、Kaset、reAMP、VOX，以及浏览器中的 YouTube Music 和 Spotify 网页版显示逐字同步的歌词：可显示在桌面悬浮歌词、灵动岛、菜单栏、触控栏和歌词窗口中，并提供译文和读音标注（拼音、粤拼、日语罗马音、韩语罗马字），还可将收听记录打卡到 Last.fm 和 ListenBrainz，并在 Discord 上显示正在收听的歌曲。界面支持简体中文、繁体中文和英文。",
+    "en": "Lyrimuse is an open-source (GPL-3.0) Mac app for word-by-word synced lyrics, for macOS 14 or later on Apple Silicon and Intel. It shows lyrics for Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, reAMP, VOX, and YouTube Music or Spotify Web playing in a browser: floating on the desktop, beside the notch, in the menu bar, on the Touch Bar or in a full lyrics window, with translations and romanization (pinyin, Cantonese Jyutping, Japanese romaji, Korean romanization). It scrobbles to Last.fm and ListenBrainz and can show what you play on Discord. The interface is in English, Simplified Chinese and Traditional Chinese.",
+    "zh-Hant": "Lyrimuse 是一款開源（GPL-3.0）的 macOS 逐字歌詞 App，支援 macOS 14 及以上版本，相容 Apple Silicon 和 Intel 晶片。它為 Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music、洛雪音樂、Kaset、reAMP、VOX，以及瀏覽器中的 YouTube Music 和 Spotify 網頁版顯示逐字同步的歌詞：可顯示在桌面浮動歌詞、動態島、選單列、觸控列和歌詞視窗中，並提供譯文和讀音標註（拼音、粵拼、日文羅馬拼音、韓文羅馬字），還可將聆聽記錄打卡到 Last.fm 和 ListenBrainz，並在 Discord 上顯示正在聆聽的歌曲。介面支援簡體中文、繁體中文和英文。"
   },
   "sections": [
     {
@@ -136,9 +136,9 @@
             "zh-Hant": "直接使用播放器儲存在本機的歌詞"
           },
           "desc": {
-            "en": "Lyrics that QQ Music, NetEase Cloud Music, Kugou, KKBOX, Amazon Music and LX Music already saved can be used directly: the same version the player shows, and faster. For reAMP, the lyrics inside the playing file or a .lrc file of the same name are used. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for Lyrimuse in System Settings; without it lyrics are still found online.",
-            "zh-Hans": "QQ 音乐、网易云音乐、酷狗音乐、KKBOX、Amazon Music 和洛雪音乐自己保存的歌词可直接使用，与播放器显示的版本一致，速度也更快；reAMP 播放时使用文件内嵌的歌词或同名 .lrc 文件。QQ 音乐、网易云音乐、酷狗音乐需要在系统设置中为 Lyrimuse 开启「完全磁盘访问权限」；未授权时仍可联网查找歌词。",
-            "zh-Hant": "QQ 音樂、網易雲音樂、酷狗音樂、KKBOX、Amazon Music 和洛雪音樂自己儲存的歌詞可直接使用，與播放器顯示的版本一致，速度也更快；reAMP 播放時使用檔案內嵌的歌詞或同名 .lrc 檔案。QQ 音樂、網易雲音樂、酷狗音樂需要在系統設定中為 Lyrimuse 開啟「完整磁碟取用權限」；未授權時仍可連線尋找歌詞。"
+            "en": "Lyrics that QQ Music, NetEase Cloud Music, Kugou, KKBOX, Amazon Music and LX Music already saved can be used directly: the same version the player shows, and faster. For reAMP and VOX, the lyrics inside the playing file or a .lrc file of the same name are used. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for Lyrimuse in System Settings; without it lyrics are still found online.",
+            "zh-Hans": "QQ 音乐、网易云音乐、酷狗音乐、KKBOX、Amazon Music 和洛雪音乐自己保存的歌词可直接使用，与播放器显示的版本一致，速度也更快；reAMP 和 VOX 播放时使用文件内嵌的歌词或同名 .lrc 文件。QQ 音乐、网易云音乐、酷狗音乐需要在系统设置中为 Lyrimuse 开启「完全磁盘访问权限」；未授权时仍可联网查找歌词。",
+            "zh-Hant": "QQ 音樂、網易雲音樂、酷狗音樂、KKBOX、Amazon Music 和洛雪音樂自己儲存的歌詞可直接使用，與播放器顯示的版本一致，速度也更快；reAMP 和 VOX 播放時使用檔案內嵌的歌詞或同名 .lrc 檔案。QQ 音樂、網易雲音樂、酷狗音樂需要在系統設定中為 Lyrimuse 開啟「完整磁碟取用權限」；未授權時仍可連線尋找歌詞。"
           },
           "default": "off",
           "settings": [
@@ -1342,14 +1342,14 @@
         {
           "id": "players",
           "title": {
-            "zh-Hans": "十一款播放器，可多选或自动识别",
-            "en": "Eleven players, pick several or detect automatically",
-            "zh-Hant": "十一款播放器，可多選或自動辨識"
+            "zh-Hans": "十二款播放器，可多选或自动识别",
+            "en": "Twelve players, pick several or detect automatically",
+            "zh-Hant": "十二款播放器，可多選或自動辨識"
           },
           "desc": {
-            "zh-Hans": "Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、洛雪音乐、KKBOX、Amazon Music、仿 Winamp 的 reAMP，以及 YouTube Music 客户端 Kaset。可同时选择多个，也可保持自动识别，跟随 macOS「正在播放」中的播放器。支持 Apple Music 电台，主持人讲话时显示电台名称和台标。",
-            "en": "Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, the Winamp-style reAMP and the YouTube Music app Kaset. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.",
-            "zh-Hant": "Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、洛雪音樂、KKBOX、Amazon Music、仿 Winamp 的 reAMP，以及 YouTube Music 用戶端 Kaset。可同時選擇多個，也可保持自動辨識，跟隨 macOS「正在播放」中的播放器。支援 Apple Music 電台，主持人講話時顯示電台名稱和台標。"
+            "zh-Hans": "Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、洛雪音乐、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打高解析音质的本地播放器 VOX，以及 YouTube Music 客户端 Kaset。可同时选择多个，也可保持自动识别，跟随 macOS「正在播放」中的播放器。支持 Apple Music 电台，主持人讲话时显示电台名称和台标。",
+            "en": "Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, the Winamp-style reAMP, the hi-res local player VOX and the YouTube Music app Kaset. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.",
+            "zh-Hant": "Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、洛雪音樂、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打高解析音質的本機播放器 VOX，以及 YouTube Music 用戶端 Kaset。可同時選擇多個，也可保持自動辨識，跟隨 macOS「正在播放」中的播放器。支援 Apple Music 電台，主持人講話時顯示電台名稱和台標。"
           },
           "settings": [
             [
@@ -1442,9 +1442,9 @@
             "zh-Hant": "依需求申請權限"
           },
           "desc": {
-            "en": "Apple Music, Spotify and Kaset need Automation permission to read what is playing. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for their saved lyrics and queues, and Soda Music for its queue. Amazon Music's progress calibration, the shuffle, repeat and like buttons of QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Amazon Music and reAMP, and the playback buttons of QQ Music, NetEase Cloud Music and Soda Music while another app holds Now Playing need Accessibility. Web players need Automation for the browser and its Allow JavaScript from Apple Events option. The other players need nothing. Settings shows the current state of each.",
-            "zh-Hans": "Apple Music、Spotify 和 Kaset 需要「自动化」权限才能读取播放状态；QQ 音乐、网易云音乐、酷狗音乐需要「完全磁盘访问权限」才能使用本机歌词和播放队列，汽水音乐需要该权限读取播放队列；Amazon Music 的进度校准，QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、Amazon Music 和 reAMP 的随机、循环、喜欢按钮，以及其他 App 占用「正在播放」时 QQ 音乐、网易云音乐和汽水音乐的播放按钮，需要「辅助功能」权限；浏览器中的网页播放器需要为浏览器开启「自动化」权限，并在浏览器中开启「允许 Apple 事件中的 JavaScript」。其他播放器无需权限。设置中会标明每项的当前授权状态。",
-            "zh-Hant": "Apple Music、Spotify 和 Kaset 需要「自動化」權限才能讀取播放狀態；QQ 音樂、網易雲音樂、酷狗音樂需要「完整磁碟取用權限」才能使用本機歌詞和播放佇列，汽水音樂需要該權限讀取播放佇列；Amazon Music 的進度校正，QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、Amazon Music 和 reAMP 的隨機、循環、喜歡按鈕，以及其他 App 佔用「正在播放」時 QQ 音樂、網易雲音樂和汽水音樂的播放按鈕，需要「輔助使用」權限；瀏覽器中的網頁播放器需要為瀏覽器開啟「自動化」權限，並在瀏覽器中開啟「允許 Apple 事件中的 JavaScript」。其他播放器無需權限。設定中會標明每項的目前授權狀態。"
+            "en": "Apple Music, Spotify, Kaset and VOX need Automation permission to read what is playing. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for their saved lyrics and queues, and Soda Music for its queue. Amazon Music's progress calibration, the shuffle, repeat and like buttons of QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Amazon Music and reAMP, and the playback buttons of QQ Music, NetEase Cloud Music and Soda Music while another app holds Now Playing need Accessibility. Web players need Automation for the browser and its Allow JavaScript from Apple Events option. The other players need nothing. Settings shows the current state of each.",
+            "zh-Hans": "Apple Music、Spotify、Kaset 和 VOX 需要「自动化」权限才能读取播放状态；QQ 音乐、网易云音乐、酷狗音乐需要「完全磁盘访问权限」才能使用本机歌词和播放队列，汽水音乐需要该权限读取播放队列；Amazon Music 的进度校准，QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、Amazon Music 和 reAMP 的随机、循环、喜欢按钮，以及其他 App 占用「正在播放」时 QQ 音乐、网易云音乐和汽水音乐的播放按钮，需要「辅助功能」权限；浏览器中的网页播放器需要为浏览器开启「自动化」权限，并在浏览器中开启「允许 Apple 事件中的 JavaScript」。其他播放器无需权限。设置中会标明每项的当前授权状态。",
+            "zh-Hant": "Apple Music、Spotify、Kaset 和 VOX 需要「自動化」權限才能讀取播放狀態；QQ 音樂、網易雲音樂、酷狗音樂需要「完整磁碟取用權限」才能使用本機歌詞和播放佇列，汽水音樂需要該權限讀取播放佇列；Amazon Music 的進度校正，QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、Amazon Music 和 reAMP 的隨機、循環、喜歡按鈕，以及其他 App 佔用「正在播放」時 QQ 音樂、網易雲音樂和汽水音樂的播放按鈕，需要「輔助使用」權限；瀏覽器中的網頁播放器需要為瀏覽器開啟「自動化」權限，並在瀏覽器中開啟「允許 Apple 事件中的 JavaScript」。其他播放器無需權限。設定中會標明每項的目前授權狀態。"
           },
           "settings": [
             [
@@ -1472,9 +1472,9 @@
             "zh-Hant": "播放控制與進度跳轉"
           },
           "desc": {
-            "en": "Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them, and NetEase Cloud Music, Kugou Music, Soda Music and LX Music have like, with LX Music volume too once Open API is on in its settings. Play, pause, skipping and like can have global shortcuts. While something like a browser video holds Now Playing, play, pause and skipping for QQ Music, NetEase Cloud Music and Soda Music go through their own menus or play bar, and seeking isn't available.",
-            "zh-Hans": "在歌词窗口和展开的灵动岛上播放、暂停、切歌，拖动进度条跳转。随机、循环、喜欢和音量取决于播放器的支持情况：Apple Music、Spotify、Kaset、QQ 音乐、Amazon Music 和浏览器中的 YouTube Music 支持其中部分或全部功能，网易云音乐、酷狗音乐、汽水音乐和洛雪音乐支持喜欢，洛雪音乐在其设置中开启开放 API 后还可调节音量。播放、暂停、切歌和喜欢也可绑定全局快捷键。浏览器视频等 App 占用系统「正在播放」时，QQ 音乐、网易云音乐和汽水音乐的播放、暂停和切歌改为通过其自身的菜单或播放条操作，此时无法拖动进度跳转。",
-            "zh-Hant": "在歌詞視窗和展開的動態島上播放、暫停、切歌，拖移進度列跳轉。隨機、循環、喜歡和音量取決於播放器的支援情況：Apple Music、Spotify、Kaset、QQ 音樂、Amazon Music 和瀏覽器中的 YouTube Music 支援其中部分或全部功能，網易雲音樂、酷狗音樂、汽水音樂和洛雪音樂支援喜歡，洛雪音樂在其設定中開啟開放 API 後還可調整音量。播放、暫停、切歌和喜歡也可設定全域快速鍵。瀏覽器影片等 App 佔用系統「正在播放」時，QQ 音樂、網易雲音樂和汽水音樂的播放、暫停和切歌改為透過其自身的選單或播放列操作，此時無法拖移進度跳轉。"
+            "en": "Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music, VOX and YouTube Music in a browser each support some or all of them, and NetEase Cloud Music, Kugou Music, Soda Music and LX Music have like, with LX Music volume too once Open API is on in its settings. Play, pause, skipping and like can have global shortcuts. While something like a browser video holds Now Playing, play, pause and skipping for QQ Music, NetEase Cloud Music and Soda Music go through their own menus or play bar, and seeking isn't available.",
+            "zh-Hans": "在歌词窗口和展开的灵动岛上播放、暂停、切歌，拖动进度条跳转。随机、循环、喜欢和音量取决于播放器的支持情况：Apple Music、Spotify、Kaset、QQ 音乐、Amazon Music、VOX 和浏览器中的 YouTube Music 支持其中部分或全部功能，网易云音乐、酷狗音乐、汽水音乐和洛雪音乐支持喜欢，洛雪音乐在其设置中开启开放 API 后还可调节音量。播放、暂停、切歌和喜欢也可绑定全局快捷键。浏览器视频等 App 占用系统「正在播放」时，QQ 音乐、网易云音乐和汽水音乐的播放、暂停和切歌改为通过其自身的菜单或播放条操作，此时无法拖动进度跳转。",
+            "zh-Hant": "在歌詞視窗和展開的動態島上播放、暫停、切歌，拖移進度列跳轉。隨機、循環、喜歡和音量取決於播放器的支援情況：Apple Music、Spotify、Kaset、QQ 音樂、Amazon Music、VOX 和瀏覽器中的 YouTube Music 支援其中部分或全部功能，網易雲音樂、酷狗音樂、汽水音樂和洛雪音樂支援喜歡，洛雪音樂在其設定中開啟開放 API 後還可調整音量。播放、暫停、切歌和喜歡也可設定全域快速鍵。瀏覽器影片等 App 佔用系統「正在播放」時，QQ 音樂、網易雲音樂和汽水音樂的播放、暫停和切歌改為透過其自身的選單或播放列操作，此時無法拖移進度跳轉。"
           },
           "settings": [
             [

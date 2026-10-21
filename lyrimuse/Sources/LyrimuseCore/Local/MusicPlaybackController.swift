@@ -2,7 +2,7 @@ import Foundation
 import os
 
 // 本机播放器的播放控制。正常焦点保留现有脚本或 media-control 通路;失焦时只用实际回退目标的定向通路。
-// Apple Music / Spotify / Kaset 用 AppleScript,QQ / 网易云只用已验证的三个 AX 菜单动作。
+// Apple Music / Spotify / Kaset / VOX 用 AppleScript,QQ / 网易云只用已验证的三个 AX 菜单动作。
 // 没有可用的定向通路时不发全局控制。命令工作在串行后台队列,失败反馈和完成通知回到主线程。
 public enum MusicPlaybackController {
     private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "playback-control")
@@ -36,6 +36,7 @@ public enum MusicPlaybackController {
         dispatch(appleScript: #"tell application "Music" to playpause"#,
                  spotifyScript: #"tell application "Spotify" to playpause"#,
                  kasetScript: #"tell application "Kaset" to playpause"#,
+                 voxScript: #"tell application "VOX" to playpause"#,
                  mediaControlCommand: "toggle-play-pause", completion: completion)
     }
 
@@ -45,6 +46,7 @@ public enum MusicPlaybackController {
         dispatch(appleScript: #"tell application "Music" to next track"#,
                  spotifyScript: #"tell application "Spotify" to next track"#,
                  kasetScript: #"tell application "Kaset" to next track"#,
+                 voxScript: #"tell application "VOX" to next"#,
                  mediaControlCommand: "next-track", completion: completion)
     }
 
@@ -54,6 +56,7 @@ public enum MusicPlaybackController {
         dispatch(appleScript: #"tell application "Music" to previous track"#,
                  spotifyScript: #"tell application "Spotify" to previous track"#,
                  kasetScript: #"tell application "Kaset" to previous track"#,
+                 voxScript: #"tell application "VOX" to previous"#,
                  mediaControlCommand: "previous-track", completion: completion)
     }
 
@@ -377,19 +380,19 @@ public enum MusicPlaybackController {
 
     /// 这个播放器支不支持「播放模式 / 音量」这两组扩展控制。
     ///
-    /// Apple Music 和 Spotify 有可写的 AppleScript 属性,Kaset 有切换随机 / 循环、设音量的命令;QQ 音乐只有模式,走它菜单栏
+    /// Apple Music 和 Spotify 有可写的 AppleScript 属性,Kaset 有切换随机 / 循环、设音量的命令,VOX 有可写的循环和音量(没有随机);QQ 音乐只有模式,走它菜单栏
     /// 「播放模式」那三项(`QQMusicMenuControl`,要辅助功能权限),没有音量;Amazon Music 只有模式,按它播放条上的键、读它的日志
     /// (`AmazonMusicModeControl`);reAMP 只有随机和列表循环,按它菜单栏 Play 里的两个开关(`ReampMenuControl`)。网易云、酷狗等没有
     /// .sdef(不可脚本化),而
     /// media-control 走的系统级 MediaRemote 只有播放控制 —— 对它们只能不显示这些控件(各家实测见 07 章决策 130)。
     public static func supportsExtendedControls(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .spotify || player == .kaset || player == .qqMusic || player == .amazonMusic
-            || player == .reamp || player == .lxMusic
+            || player == .reamp || player == .lxMusic || player == .vox
     }
 
     /// 这个播放器的循环档位里有没有「单曲循环」。见 MusicPlaybackMode.nextRepeat。
     public static func supportsRepeatOne(_ player: PlaybackPlayer) -> Bool {
-        player == .appleMusic || player == .kaset || player == .qqMusic || player == .amazonMusic
+        player == .appleMusic || player == .kaset || player == .qqMusic || player == .amazonMusic || player == .vox
     }
 
     /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐、网易云音乐和酷狗音乐(菜单栏「喜欢歌曲」)、
@@ -501,6 +504,40 @@ public enum MusicPlaybackController {
         return KasetPlayerInfo.controls(fromJSON: Data(out.utf8))
     }
 
+    /// VOX 此刻的循环档(`repeat state`:0 不循环、1 单曲、2 列表)和音量(`player volume`,实际是 0~100,字典里写的 0~1 不对)。
+    /// 没在跑、读不出来返回 nil。会阻塞到子进程结束。
+    private static func voxControls() -> (repeatState: Int, volume: Int?)? {
+        guard let out = runAppleScriptCapturing(voxRunningGuard + #"""
+            tell application "VOX" to return ((repeat state) as text) & "|" & ((player volume) as text)
+            """#) else { return nil }
+        let parts = out.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "|")
+        guard parts.count == 2, let repeatState = Int(parts[0]) else { return nil }
+        return (repeatState, Double(parts[1].replacingOccurrences(of: ",", with: ".")).map { Int($0.rounded()) })
+    }
+
+    /// VOX 能切的档:单曲循环、列表循环。它的「随机」是把播放列表打乱一次的命令,读不出开没开,不接。
+    public static let voxModeOptions: PlaybackModeOptions = [.repeatAll, .repeatOne]
+
+    /// VOX 的 `repeat state` → 档位;认不出的值为 nil。纯函数,selftest 覆盖。
+    public static func voxPlaybackMode(repeatState: Int) -> MusicPlaybackMode? {
+        switch repeatState {
+        case 0: return .list
+        case 1: return .repeatOne
+        case 2: return .repeatAll
+        default: return nil
+        }
+    }
+
+    /// 档位 → VOX 的 `repeat state`;随机没有对应的值,为 nil。纯函数,selftest 覆盖。
+    public static func voxRepeatState(for mode: MusicPlaybackMode) -> Int? {
+        switch mode {
+        case .list: return 0
+        case .repeatOne: return 1
+        case .repeatAll: return 2
+        case .shuffle: return nil
+        }
+    }
+
     /// Kaset 的随机 + 循环换成档位,跟 Apple Music 同一套优先级:单曲循环 > 随机 > 列表循环 > 列表。纯函数,selftest 覆盖。
     public static func kasetPlaybackMode(shuffling: Bool?, repeating: String?) -> MusicPlaybackMode? {
         guard let shuffling, let repeating else { return nil }
@@ -548,6 +585,14 @@ public enum MusicPlaybackController {
     /// Kaset 的脚本前面垫这一句,理由同 `spotifyRunningGuard`。
     private static let kasetRunningGuard = #"""
         if application "Kaset" is not running then
+            return ""
+        end if
+
+        """#
+
+    /// VOX 的脚本前面垫这一句,理由同 `spotifyRunningGuard`。
+    private static let voxRunningGuard = #"""
+        if application "VOX" is not running then
             return ""
         end if
 
@@ -669,6 +714,12 @@ public enum MusicPlaybackController {
                                          mode: ReampMenuControl.readMode()
                                              .map { PlaybackModeState(mode: $0, options: ReampMenuControl.options) },
                                          volume: nil)
+        case .vox:
+            guard let c = voxControls() else { return .empty }
+            return ExtendedControlsState(favorited: nil,
+                                         mode: voxPlaybackMode(repeatState: c.repeatState)
+                                             .map { PlaybackModeState(mode: $0, options: voxModeOptions) },
+                                         volume: c.volume)
         case .lxMusic:
             // 音量只有用户在洛雪里打开了开放 API 才有(`LXMusicOpenAPI`);播放顺序它的接口不给改,不接。
             return ExtendedControlsState(favorited: includeFavorited ? LXMusicFavoriteControl.readFavorited() : nil,
@@ -783,6 +834,9 @@ public enum MusicPlaybackController {
             return AmazonMusicModeControl.readMode().map { PlaybackModeState(mode: $0, options: AmazonMusicModeControl.options) }
         case .reamp:
             return ReampMenuControl.readMode().map { PlaybackModeState(mode: $0, options: ReampMenuControl.options) }
+        case .vox:
+            return voxControls().flatMap { voxPlaybackMode(repeatState: $0.repeatState) }
+                .map { PlaybackModeState(mode: $0, options: voxModeOptions) }
         case .lxMusic: // 洛雪的播放顺序开放 API 不给读写,只接了音量和收藏。
             return nil
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
@@ -862,6 +916,9 @@ public enum MusicPlaybackController {
             return AmazonMusicModeControl.setMode(mode)
         case .reamp:
             return ReampMenuControl.setMode(mode)
+        case .vox:
+            guard let state = voxRepeatState(for: mode) else { return false }
+            return runAppleScriptCapturing(voxRunningGuard + #"tell application "VOX" to set repeat state to "# + String(state)) != nil
         case .lxMusic: // 同 playbackMode(for:)。
             return false
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
@@ -892,6 +949,8 @@ public enum MusicPlaybackController {
             return nil
         case .amazonMusic, .reamp: // 这两家只接了随机 / 循环,音量不接。
             return nil
+        case .vox:
+            return voxControls()?.volume
         case .lxMusic: // 开放 API 开着才有,没开时 nil(胶囊换成说明怎么打开)。
             return LXMusicOpenAPI.shared.currentState().flatMap(LXMusicOpenAPI.volumePercent)
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
@@ -917,6 +976,8 @@ public enum MusicPlaybackController {
             return runKasetJXACapturing("        K.setVolume(\(v));\n        return \"ok\";") == "ok"
         case .qqMusic, .amazonMusic, .reamp: // 同 soundVolume(for:):这几家不接音量。
             return false
+        case .vox:
+            return runAppleScriptCapturing(voxRunningGuard + #"tell application "VOX" to set player volume to \#(v)"#) != nil
         case .lxMusic:
             return LXMusicOpenAPI.shared.setVolume(v)
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
@@ -955,7 +1016,8 @@ public enum MusicPlaybackController {
         }
         // Kaset 的字典里没有跳转:焦点回退到它时这一下不发(见 dispatch 的 kasetScript);焦点就是它时定向发给它(`.kasetDirect`)。
         let route = dispatchRoute(appleScript: script, spotifyScript: #"tell application "Spotify" to set player position to "# + value,
-                                  kasetScript: nil, mediaControlCommand: "seek", mediaControlArguments: [value],
+                                  kasetScript: nil, voxScript: #"tell application "VOX" to set current time to "# + value,
+                                  mediaControlCommand: "seek", mediaControlArguments: [value],
                                   kasetDirectSeek: kasetWasPlaying.map { KasetDirectSeek(seconds: seconds, wasPlaying: $0) })
         if route == .mediaControl, qqWasPaused {
             commandQueue.async { checkQQAfterPausedSeek(serial: commandSerial, attempt: 1) }
@@ -1010,6 +1072,7 @@ public enum MusicPlaybackController {
         case appleMusicScript
         case spotifyScript
         case kasetScript
+        case voxScript
         case mediaControl
         /// QQ / 网易云失焦时只按目标进程的播放菜单,汽水按它播放条上的键;跳转不走这条。
         case menuAccessibility(PlaybackPlayer, PlaybackMenuControl.Command)
@@ -1034,6 +1097,7 @@ public enum MusicPlaybackController {
         case .appleMusic: return .appleMusicScript
         case .spotify: return .spotifyScript
         case .kaset: return .kasetScript
+        case .vox: return .voxScript
         case .lxMusic where LXMusicOpenAPI.directControlCommands.contains(mediaControlCommand): return .lxMusicDirect
         default:
             guard focusHeldElsewhere else { return .mediaControl }
@@ -1079,16 +1143,16 @@ public enum MusicPlaybackController {
 
     /// `kasetScript` 为 nil = Kaset 的字典里没有这个动作:焦点回退到它时不发,理由同 `.withheld`。
     @MainActor
-    private static func dispatch(appleScript: String, spotifyScript: String, kasetScript: String?,
+    private static func dispatch(appleScript: String, spotifyScript: String, kasetScript: String?, voxScript: String,
                                  mediaControlCommand: String, completion: Completion?) {
         let route = dispatchRoute(appleScript: appleScript, spotifyScript: spotifyScript, kasetScript: kasetScript,
-                                  mediaControlCommand: mediaControlCommand, completion: completion)
+                                  voxScript: voxScript, mediaControlCommand: mediaControlCommand, completion: completion)
         if case .menuAccessibility? = route { return } // 菜单通路由后台 AX 结果回报,不能把入队当成功。
         completion?(route)
     }
 
     /// 交回排入的通路;没有通路返回 nil。菜单通路另通过 completion 回报实际 AX 结果。
-    private static func dispatchRoute(appleScript: String, spotifyScript: String, kasetScript: String?,
+    private static func dispatchRoute(appleScript: String, spotifyScript: String, kasetScript: String?, voxScript: String,
                                       mediaControlCommand: String, mediaControlArguments: [String] = [],
                                       kasetDirectSeek: KasetDirectSeek? = nil,
                                       completion: Completion? = nil) -> ControlRoute? {
@@ -1104,6 +1168,8 @@ public enum MusicPlaybackController {
                 return withhold(mediaControlCommand, reason: "Kaset has no AppleScript command for it")
             }
             runAppleScript(kasetRunningGuard + kasetScript)
+        case .voxScript:
+            runAppleScript(voxRunningGuard + voxScript)
         case .mediaControl:
             runMediaControl(mediaControlCommand, arguments: mediaControlArguments)
         case .kasetDirect:

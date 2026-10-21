@@ -30,6 +30,8 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     case reamp = "reamp"
     /// 开源的 Electron 播放器(lx-music-desktop),走 media-control,没有 AppleScript 字典、没有沙盒。系统会话由网页的 MediaSession 填:歌名、歌手、专辑、封面齐全,进度在开播、恢复、跳转时按音频元素的 currentTime 写一次(带播放速度),之后不重发。换歌先发一帧新歌名、时长 0、不在放,约 0.6 秒后才补上时长和在放;上一首偶尔先发一帧新歌名配上一首的时长和位置。自然连播时先把会话撤掉约 0.5 秒,系统会落回别家暂停着的会话,所以 dropsSessionBetweenTracks。暂停那一拍报的是系统按上一个锚点外推的值,比停住的位置多出暂停事件那几十毫秒。nativeLyricSource 填 lxmusic:不是歌词源,是洛雪放过的歌它自己存下的原版歌词(按平台曲目 id,lxmusic.go)。按客户端单问时它报的 bundle id 是 Electron(ad-hoc 签名的标识),系统当选的那份是 cn.toside.music.desktop。processName 16 字节。
     case lxMusic = "lx_music"
+    /// Coppertino 出的本地音乐播放器,有 AppleScript 字典(Vox.sdef:歌名、歌手、专辑、专辑歌手、当前文件地址 trackUrl、位置、总时长、播放状态、音量、循环),带沙盒。免费版只放本地文件,电台和在线来源要会员。系统 Now Playing 里它那份字段不全:歌手和专辑拼成一栏「歌手 — 专辑」、专辑那栏空着,播放中不报位置和时长,只在暂停时报一次;恢复时报在放、速率却是 0。曲目与位置因此整份换成 AppleScript 那份(VoxPlayerInfo),系统那边只用来认是不是它在放。AppleScript 的位置跟真实出声差几毫秒,总时长只到整秒,精确时长按 trackUrl 读文件。没写标签的文件,歌名报成全小写、带扩展名的文件名。nativeLyricSource 填 localfile:正在放的文件同目录同名的 .lrc 与内嵌歌词(localfilelyrics.go)。processName 3 字节。
+    case vox = "vox"
     /// 不是一个具体 App——把「谁在报 Now Playing」交给系统仲裁。bundleID 空字符串是刻意的,调用方据此 no-op 掉需要具体 App 的联动。
     case auto = "auto"
 
@@ -50,6 +52,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .kaset: return "com.sertacozercan.Kaset"
         case .reamp: return "ru.alexfreud.ReAmp"
         case .lxMusic: return "cn.toside.music.desktop"
+        case .vox: return "com.coppertino.Vox"
         case .auto: return ""
         }
     }
@@ -67,6 +70,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .kaset: return "lyricfind"
         case .reamp: return "localfile"
         case .lxMusic: return "lxmusic"
+        case .vox: return "localfile"
         default: return nil
         }
     }
@@ -87,6 +91,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .kaset: return "noisyFloored"
         case .reamp: return "cleanExtrapolated"
         case .lxMusic: return "cleanExtrapolated"
+        case .vox: return "precise"
         default: return nil
         }
     }
@@ -100,6 +105,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .appleMusic: return true
         case .spotify: return true
         case .kaset: return true
+        case .vox: return true
         default: return false
         }
     }

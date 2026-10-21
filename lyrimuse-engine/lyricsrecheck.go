@@ -17,7 +17,7 @@ type lyricsRecheck struct {
 	spotify bool
 	// kaset:这份词最近一轮没按这一版的 videoId 问过 Kaset 自家那个源(见 kasetLyricsWorthRecheck)。
 	kaset bool
-	// localFile:这首当初没见过 reAMP 正在放的文件同名的 .lrc,现在有(见 localFileLyricsWorthRecheck)。
+	// localFile:这首当初没见过正在放的本地文件同名的 .lrc,现在有(见 localFileLyricsWorthRecheck)。
 	localFile bool
 	// lxMusic:这首当初没见过洛雪存下的原版歌词,现在有(见 lxMusicLyricsWorthRecheck)。
 	lxMusic bool
