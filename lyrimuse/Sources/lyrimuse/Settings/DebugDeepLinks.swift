@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import LyrimuseCore
 import os
 
@@ -95,6 +96,11 @@ enum DebugDeepLinks {
             "menuBarPanel": ["open": MenuBarStatusItem.shared.isPanelOpen,
                              "quick": MenuBarPanelDebugState.quickTarget.map { $0 as Any } ?? NSNull()],
             "knockedOut": SourceKnockout.knockedOut,
+            // 播放源交出来的那张封面(高清替代之前),验证封面退到了哪一条来源时跟文件的哈希对。
+            "artwork": LocalPlaybackSource.shared.artworkData.map { data -> Any in
+                ["bytes": data.count,
+                 "sha256": SHA256.hash(data: data).prefix(8).map { String(format: "%02x", $0) }.joined()]
+            } ?? NSNull(),
             "playback": [
                 "title": p.title, "artist": p.artist, "album": p.album, "playing": p.isPlayingNow,
                 "player": p.resolvedPlayerDisplayName ?? "",
