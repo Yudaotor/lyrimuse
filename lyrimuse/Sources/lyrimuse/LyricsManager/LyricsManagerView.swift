@@ -1810,6 +1810,8 @@ struct LyricsManagerView: View {
             refreshListEmphasis()
         }
         .onChange(of: windowFrame.listHasKeyFocus) { _, _ in refreshListEmphasis() }
+        // 菜单、快捷键、灵动岛改了单曲偏移:详情页的输入框跟着刷新,不然这时回车会把旧值写回去。
+        .onChange(of: offsets.revision) { _, _ in refreshShownOffset() }
         .onChange(of: nowPlayingKey, initial: true) { _, _ in syncListNowPlaying() }
         .onChange(of: nowPlaying.artwork) { _, _ in syncListNowPlaying() }
         // 删除确认弹窗挂在 List 上——不能挂在 detailView 里(多选时右侧渲染的是批量
@@ -2316,8 +2318,9 @@ struct LyricsManagerView: View {
             Button(L10n.t("清空全部时间轴校准"), role: .destructive) {
                 LyricsOffsetStore.shared.clearAllTrackOffsets()
                 PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
-                // 详情页输入框也归零,不然还显示旧值,这时回车会把刚清掉的值写回去。
+                // 详情页输入框也归零,不然还显示旧值,这时回车会把刚清掉的值写回去;借用来源一起清。
                 editedOffsetSeconds = AppSettings.formattedSeconds(ms: 0)
+                offsetBorrowedFrom = nil
             }
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
@@ -4456,6 +4459,15 @@ struct LyricsManagerView: View {
     // 歌词内容变了,LyricsOffsetStore 的 key(内容指纹的一部分)跟着变,输入框要显示
     // "新内容对应的偏移值"(通常是 0,内容变了旧的校正值自然对不上、查不到),而不是
     // 继续显示改之前那份内容的偏移值。
+    /// 按存储里此刻的值刷新详情页的偏移输入框和借用来源;正文、指纹不动(还是这一条已经落盘的那份)。
+    private func refreshShownOffset() {
+        guard let key = editingKey, let summary = store.summary(forKey: key) else { return }
+        let offsetKey = currentOffsetKey(summary)
+        offsetBorrowedFrom = LyricsOffsetStore.shared.borrowedOffsetSource(forKey: offsetKey, siblings: offsetSiblings)
+            .map { borrowedOffsetDisplayName($0, ownKey: key) }
+        editedOffsetSeconds = AppSettings.formattedSeconds(ms: LyricsOffsetStore.shared.offset(forKey: offsetKey, siblings: offsetSiblings))
+    }
+
     private func refreshOffsetState(key: String, artist: String, title: String, lyrics: String, yrc: String) {
         persistedLyricsForOffset = lyrics
         persistedYRCForOffset = yrc

@@ -29,10 +29,10 @@ type songPlanLyrics struct {
 	inherits bool
 }
 
-// songOffsetFingerprint:App 单曲偏移键里的歌词指纹(LyricsOffsetStore.contentFingerprint):正文、逐字各去掉开头一个 BOM,
+// songOffsetFingerprint:App 单曲偏移键里的歌词指纹(LyricsOffsetStore.contentFingerprint):正文、逐字各去掉开头所有 BOM,
 // 用 \x01 连起来取 SHA256 前 12 位十六进制;两样都空时是空串。两边必须一起改。
 func songOffsetFingerprint(lyrics, yrc string) string {
-	lyrics, yrc = strings.TrimPrefix(lyrics, "\uFEFF"), strings.TrimPrefix(yrc, "\uFEFF")
+	lyrics, yrc = strings.TrimLeft(lyrics, "\uFEFF"), strings.TrimLeft(yrc, "\uFEFF")
 	if lyrics == "" && yrc == "" {
 		return ""
 	}

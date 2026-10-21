@@ -1863,8 +1863,8 @@ public final class LyricsSyncEngine {
         // filteredBase 对应那一行的 timeMs 抄过去的,不是"接近",是同一个数字。所以能
         // 100% 精确配对,不需要猜。
         //
-        // 键用原文(未经 LyricDuet 去说话人标记),对唱歌的带标记行匹配不上时会退回下面
-        // translationText/romanizationText 里的 nearestText 兜底。
+        // 键用原文;带演唱者标签的行另按剥掉标签的文字补一个(见下面 addStrippedLabelKeys):显示行(plan / planWords 的输出)
+        // 已经剥过标签,只按原文建的话对唱歌的带标签行查不到,只能退回就近兜底。
         do {
             let trByTime = Dictionary(trLines.map { ($0.timeMs, $0.text) }, uniquingKeysWith: { _, new in new })
             let romaByTime = Dictionary(romaLines.map { ($0.timeMs, $0.text) }, uniquingKeysWith: { _, new in new })
@@ -1885,13 +1885,20 @@ public final class LyricsSyncEngine {
             // 拼接键,已有同名键的不覆盖(真实单句永远优先)。见决策 18。
             Self.addAdjacentPairKeys(into: &trTextByPlainText, lines: filteredBase, byTime: trByTime)
             Self.addAdjacentPairKeys(into: &romaTextByPlainText, lines: filteredBase, byTime: romaByTime)
+            Self.addStrippedLabelKeys(into: &trTextByPlainText, lines: filteredBase, secondary: trLines, speakers: allSpeakers)
+            Self.addStrippedLabelKeys(into: &romaTextByPlainText, lines: filteredBase, secondary: romaLines, speakers: allSpeakers,
+                                      transform: Self.droppingSpokenLabel)
             // 显示行的键要跟 translationText / romanizationText 收到的原文同一口径(displayLineText)。
             let displayKeys = (usingWords
                 ? wordLines.map { ($0.timeMs, $0.words.map(\.text).joined()) }
                 : baseLines.map { ($0.timeMs, $0.text) })
                 .filter { !Self.isBareSpeakerTag($0.1) }
                 .map { (timeMs: $0.0, key: Self.contentMatchKey($0.1)) }
-            let baseKeys = filteredBase.map { (timeMs: $0.timeMs, key: Self.contentMatchKey($0.text)) }
+            let baseKeys = filteredBase.flatMap { line -> [(timeMs: Int, key: String)] in
+                let own = Self.contentMatchKey(line.text)
+                let stripped = Self.contentMatchKey(LyricDuet.strippingKnownLabel(line.text, speakers: allSpeakers))
+                return stripped == own ? [(line.timeMs, own)] : [(line.timeMs, own), (line.timeMs, stripped)]
+            }
             let trDict = trTextByPlainText, romaDict = romaTextByPlainText
             trFallback = SecondaryLineFallback.plan(
                 display: displayKeys, base: baseKeys, secondary: trLines, matched: { trDict[$0] != nil },
@@ -1901,8 +1908,8 @@ public final class LyricsSyncEngine {
                 adoptLengthRatio: 1...1)
             // 源自带的罗马音给到的行不够多(romaSourceMinCoverage)时整首不用它、全部现算:缺的行不补是为了不混两种写法(见
             // romanizationText),可缺得多了整段副歌都没有读音,还不如统一换成现算的那份(10 章决策 41)。
-            // 台语歌不现算(songIsHokkien),照旧。
-            if !songIsHokkien, !romaLines.isEmpty {
+            // 台语歌不现算(songIsHokkien),照旧。粤语歌也不清:客户端没有粤拼,清掉之后现算出来的是普通话拼音。
+            if !songIsHokkien, !songIsCantonese, !romaLines.isEmpty {
                 let displayTexts = usingWords
                     ? wordLines.map { ($0.timeMs, $0.words.map(\.text).joined()) }
                     : baseLines.map { ($0.timeMs, $0.text) }
@@ -1912,9 +1919,9 @@ public final class LyricsSyncEngine {
                     found: { timeMs, text in
                         let key = Self.contentMatchKey(text)
                         if romaDict[key] != nil { return true }
+                        if fallback.adopted[timeMs]?.key == key { return true }
                         if fallback.suppressed[timeMs] == key { return false }
-                        if Self.nearestLine(romaSource, timeMs) != nil { return true }
-                        return fallback.adopted[timeMs]?.key == key
+                        return Self.nearestLine(romaSource, timeMs) != nil
                     })
                 if let coverage, coverage < Self.romaSourceMinCoverage {
                     romaLines = []
@@ -1959,7 +1966,8 @@ public final class LyricsSyncEngine {
         // .chinese——粤语这一档必须由调用方喂进来的外部信号(引擎的 SongLanguage
         // 真值)覆盖,不能指望从歌词文字里分析出来。只在判成 .chinese 时才覆盖:已经因为
         // 假名/谚文判成日文/韩文的行(比如粤语歌里引用了一句日文)不该被这个信号打断。
-        if songScript == .chinese, songIsCantonese {
+        // 判成韩文也盖:songScript(of:) 见到一个谚文就判韩文,粤语歌里一句韩文会让纯汉字行全按普通话走。
+        if songScript == .chinese || songScript == .korean, songIsCantonese {
             songScript = .cantonese
         }
         // 歌词源自带的假名标注(酷狗的 [kana:] 标签)。对不齐时 parse 返回 nil,读音自动
@@ -2097,6 +2105,39 @@ public final class LyricsSyncEngine {
 
     /// 把相邻两句整行的拼接键登记进内容匹配字典,值是两句各自的译文 / 罗马音用空格连起来(只有一句有就只用那一句)。
     /// 已有同名键的不覆盖。
+    /// 带演唱者标签的行,按剥掉标签的文字再登记一个键,已有的不盖(同一句重复出现时照旧用不带标签那几行的那条)。认不准的不补,
+    /// 留给就近兜底:那个时间戳上有好几行副行(对唱两声部同一刻各一行,按时间只取得到其中一行),或者同一句几次出现配的副行
+    /// 不一样(重复的那几次各带各的和声译文,按内容只能给成同一条)。
+    static func addStrippedLabelKeys(into dict: inout [String: String], lines: [LyricLine], secondary: [LyricLine],
+                                     speakers: Set<String>, transform: (String) -> String = { $0 }) {
+        guard !speakers.isEmpty, !secondary.isEmpty else { return }
+        var countByTime: [Int: Int] = [:]
+        var textByTime: [Int: String] = [:]
+        for s in secondary {
+            countByTime[s.timeMs, default: 0] += 1
+            textByTime[s.timeMs] = s.text
+        }
+        var found: [String: Set<String>] = [:]
+        for line in lines {
+            let stripped = LyricDuet.strippingKnownLabel(line.text, speakers: speakers)
+            guard stripped != line.text else { continue }
+            let key = contentMatchKey(stripped)
+            guard !key.isEmpty, dict[key] == nil, countByTime[line.timeMs] == 1,
+                  let value = textByTime[line.timeMs], !value.isEmpty else { continue }
+            found[key, default: []].insert(transform(value))
+        }
+        for (key, values) in found where values.count == 1 {
+            dict[key] = values.first
+        }
+    }
+
+    /// 源读音开头念出来的演唱者标签(「cài：」「giu1 ：」「v 1 :」)去掉:冒号落在前 16 个字符里才算,后面没东西时原样留着。
+    static func droppingSpokenLabel(_ roma: String) -> String {
+        guard let colon = roma.prefix(16).firstIndex(where: { $0 == ":" || $0 == "：" }) else { return roma }
+        let rest = roma[roma.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+        return rest.isEmpty ? roma : rest
+    }
+
     static func addAdjacentPairKeys(into dict: inout [String: String], lines: [LyricLine], byTime: [Int: String]) {
         guard lines.count >= 2 else { return }
         for i in 0..<(lines.count - 1) {
@@ -2124,10 +2165,10 @@ public final class LyricsSyncEngine {
         if let byContent = trTextByPlainText[key] {
             return byContent
         }
-        if trFallback.suppressed[timeMs] == key { return nil }
-        if let near = nearestText(trLines, timeMs) { return near }
+        // 补上的先查:被判不挂的行也会进补漏,补上了就用补上的那条。
         if let adopted = trFallback.adopted[timeMs], adopted.key == key { return adopted.text }
-        return nil
+        if trFallback.suppressed[timeMs] == key { return nil }
+        return nearestText(trLines, timeMs)
     }
 
     /// 译文只是把原文照抄了一遍:两边去掉标点空白、转小写后相同,或者再一起转成简体(跟引擎 `scriptVariantKey`
@@ -2235,9 +2276,9 @@ public final class LyricsSyncEngine {
             if let byContent = romaTextByPlainText[key] {
                 return byContent
             }
+            if let adopted = romaFallback.adopted[timeMs], adopted.key == key { return adopted.text }
             if romaFallback.suppressed[timeMs] == key { return nil }
             if let fromSource = nearestText(romaLines, timeMs) { return fromSource }
-            if let adopted = romaFallback.adopted[timeMs], adopted.key == key { return adopted.text }
             guard romaLines.isEmpty else { return nil }
         }
         // 不在这里替用户决定"中文不要拼音":那是用户自己的开关(上面的 romanizationAllowed,中文默认关)。绝大多数中文歌没有
@@ -2302,13 +2343,22 @@ public final class LyricsSyncEngine {
         return wordGroups(for: words, line: lineText)
     }
 
-    private func wordGroups(for words: [SyncedLyricWord], line: String) -> [SyncedLyricWordGroup]? {
+    /// `lineTimeMs`:这一行的起点,整行读音按它查(「不挂 / 补上的」两张表按行起点记);不给按首词起点(断句拆出来的段)。
+    private func wordGroups(for words: [SyncedLyricWord], line: String, lineTimeMs: Int? = nil) -> [SyncedLyricWordGroup]? {
         guard !words.isEmpty else { return nil }
         // 缓存 key 必须带上时间身份(首词 startMs),不能只按行文本:词组里内嵌绝对时间戳,副歌重复句(同文本、不同时间)只按
         // 文本缓存会让第二次出现拿到第一次的时间轴,逐词罗马音那一组从一开始就显示成已唱满。segmentsCache/romanizerFallbackCache
         // 只存文本派生物、与时间无关,仍按纯文本共享。
         // 词数也进 key:按宽度断句会把同一句按字重新分组,词的粒度不同,分出来的组也不同。
-        let key = "\(words[0].startMs)|\(words.count)|\(line)"
+        // 整行的逐字时间也进 key:同一行有几种时间版本(歌词窗口保留真重叠的原始时间,单行展示面压末字、拉回越界的字),
+        // 首词起点、词数、文本都一样,只按这三样会让后建的那一版拿到先建那一版的时间。
+        var timing = Hasher()
+        for w in words {
+            timing.combine(w.startMs)
+            timing.combine(w.durationMs)
+        }
+        let lookupMs = lineTimeMs ?? words[0].startMs
+        let key = "\(words[0].startMs)|\(words.count)|\(lookupMs)|\(timing.finalize())|\(line)"
         if let cached = wordGroupCache[key] { return cached }
         // 逐词读音受同一道按语言开关的管辖 —— 关掉某种语言的罗马音之后,逐字歌词下面
         // 也不该再标读音。哪种语言能真的标出来(日文分词 / 中文粤语一字一音节)由
@@ -2327,9 +2377,9 @@ public final class LyricsSyncEngine {
         if allowed, segments == nil {
             let script = Romanizer.script(ofLine: line, song: songScript)
             if script == .chinese || script == .cantonese {
-                hanRoma = romanizationText(timeMs: words[0].startMs, plainText: line)
+                hanRoma = romanizationText(timeMs: lookupMs, plainText: line)
             } else if script == .korean {
-                koreanRoma = romanizationText(timeMs: words[0].startMs, plainText: line)
+                koreanRoma = romanizationText(timeMs: lookupMs, plainText: line)
             }
         }
         let result = Self.buildWordGroups(
@@ -2564,7 +2614,7 @@ public final class LyricsSyncEngine {
                 translation: translationText(timeMs: ln.timeMs, plainText: joined),
                 mainText: nil,
                 words: words,
-                wordGroups: wordGroups(for: words, line: joined),
+                wordGroups: wordGroups(for: words, line: joined, lineTimeMs: ln.timeMs),
                 side: wordSides.indices.contains(idx) ? wordSides[idx] : nil,
                 plainText: joined,
                 backgroundWords: backgroundWords(forLineAt: ln.timeMs)
@@ -2644,6 +2694,8 @@ public final class LyricsSyncEngine {
     ///   整段唱完都不滚。喂进曲长之后最后一句的窗口也是行常量,这两件事一起消失。
     public func tickQuery(atMs rawPosMs: Int, trackEndMs: Int? = nil) -> TickResolution {
         let posMs = rawPosMs + effectiveOffsetMs
+        // 曲长是播放时间,行起点是歌词时间(播放时间 + 总偏移):换到同一条时间轴上再给最后一句兜底。
+        let trackEndMs = trackEndMs.map { $0 + effectiveOffsetMs }
         let idx = activeIndexCorrected(posMs)
         let gap: Int?
         if let window = gapWindow(after: idx), posMs >= window.start, posMs < window.end {
@@ -2847,7 +2899,7 @@ public final class LyricsSyncEngine {
                     translation: translationText(timeMs: ln.timeMs, plainText: joined),
                     mainText: nil,
                     words: words,
-                    wordGroups: wordGroups(for: words, line: joined),
+                    wordGroups: wordGroups(for: words, line: joined, lineTimeMs: ln.timeMs),
                     side: self.wordSides.indices.contains(i) ? self.wordSides[i] : nil,
                     plainText: joined,
                     backgroundWords: self.backgroundWords(forLineAt: ln.timeMs)
@@ -2922,11 +2974,13 @@ public final class LyricsSyncEngine {
             let next = index + 1 < baseLines.count ? baseLines[index + 1].timeMs : Int.max
             return baseEndMarks.first { $0 > start && $0 < next }
         }
+        // 取最晚唱完的那个字,不是最后一个字:起点相同的两截合成一行时字按原顺序接上(mergingSameStart),
+        // 后一截可能是贴着行首的碎片。同 overlapHoldEnds 的口径。
         guard wordLines.indices.contains(index),
-              let last = wordLines[index].words.last else { return nil }
-        let end = last.startMs + last.durationMs
-        guard let bgLast = backgroundLine(forLineAt: wordLines[index].timeMs)?.words.last else { return end }
-        return max(end, bgLast.startMs + bgLast.durationMs)
+              let end = wordLines[index].words.map({ $0.startMs + max(0, $0.durationMs) }).max() else { return nil }
+        guard let bgEnd = backgroundLine(forLineAt: wordLines[index].timeMs)?.words
+            .map({ $0.startMs + max(0, $0.durationMs) }).max() else { return end }
+        return max(end, bgEnd)
     }
 
     /// 背景人声行头跟主句行头的最大差值。两者来自同一行的起点,逐字行完全相等;逐行 LRC 只有 10ms 精度。
@@ -3238,6 +3292,8 @@ public final class LyricsSyncEngine {
     /// 一个展示面此刻该显示什么,规则跟 tickQuery 的单行几项相同,只是按这个面的段算。
     public func surfaceTick(_ surface: LineBreakSurface, atMs rawPosMs: Int, trackEndMs: Int? = nil) -> SurfaceLyrics {
         let posMs = rawPosMs + effectiveOffsetMs
+        // 同 tickQuery:曲长换到歌词时间。
+        let trackEndMs = trackEndMs.map { $0 + effectiveOffsetMs }
         extendSegments(surface, coveringMs: posMs)
         guard let starts = surfaceBreaks[surface]?.starts, !starts.isEmpty else { return .empty }
         let k = Self.segmentIndex(starts: starts, atOrBefore: posMs)

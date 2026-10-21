@@ -31,7 +31,8 @@ public enum LyricSongwriters {
 
     static func namesInLine(_ line: String) -> [String] {
         let text = line.trimmingCharacters(in: .whitespaces)
-        if let colon = text.firstIndex(where: { $0 == ":" || $0 == "：" }) {
+        // 竖排 / 小写的冒号变体(︰ ﹕ ︓)署名过滤也认(creditProbeText),这里一样认,不然行被删了名字却取不到。
+        if let colon = text.firstIndex(where: { [":", "：", "︰", "﹕", "︓"].contains($0) }) {
             let label = String(text[..<colon])
             var value = String(text[text.index(after: colon)...])
             var rest: String?

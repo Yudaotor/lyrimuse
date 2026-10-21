@@ -277,10 +277,10 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 当前行会显示多久(毫秒)。窗口口径见 `LyricDisplayWindow`(最后一句用曲长兜底,时间戳异常
     /// 返回 nil,调用方拿它做除数);还没播到第一句、没有歌词时也是 nil。用的是两句歌词时间戳之差,
-    /// 歌词时间轴校准(currentLyricsOffsetMs)同时加在两句上,不影响它。
+    /// 歌词时间轴校准(currentLyricsOffsetMs)同时加在两句上,不影响它;最后一句兜底的曲长是播放时间,要加上它换到歌词时间。
     var currentLineDwellMs: Int? {
         LyricDisplayWindow.of(index: currentLineIndex, starts: allLines.lazy.map(\.timeMs),
-                              trackDurationMs: currentDurationMs)?.dwellMs
+                              trackDurationMs: currentDurationMs.map { $0 + currentLyricsOffsetMs })?.dwellMs
     }
 
     /// 同 `currentLineDwellMs`,单位秒。

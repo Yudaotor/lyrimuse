@@ -271,7 +271,8 @@ public final class LyricsOffsetStore: ObservableObject {
         // 放在这个唯一构造点里做,而不是去改两个调用方:调用方各自记得归一化=迟早又漏一处,
         // 而漏掉的表现只在那 4.5% 的歌上出现,极难归因。归一化是幂等的,管理页那边传已经
         // 归一化过的值进来再过一遍也是同一个结果。
-        "\(EnrichCacheKeys.cleanTag(artist))|\(EnrichCacheKeys.normalizedTitle(title))|\(contentFingerprint(lyrics: lyrics, lyricsYRC: lyricsYRC))"
+        // 歌名先剥时长变体位(`歌名~dur2`):「歌词管理」拿的是缓存 key 里的歌名,播放侧拿的是播放器报的,不剥就是两个身份。
+        "\(EnrichCacheKeys.cleanTag(artist))|\(EnrichCacheKeys.normalizedTitle(EnrichCacheKeys.strippingDurationVariantTitle(title)))|\(contentFingerprint(lyrics: lyrics, lyricsYRC: lyricsYRC))"
     }
 
     /// 把存量记录的 key 搬到归一化形态。纯函数,selftest 直接覆盖。
@@ -382,10 +383,11 @@ public final class LyricsOffsetStore: ObservableObject {
     // currentLyricsOffsetMs 的注释)。拿不到 enrich key 时显式传空串,setPinned 会跳过。
     // siblings 同理不给默认值:漏传的路径会从 0 而不是从读穿来的值上加减,重置也会被读穿抵掉。
     @discardableResult
+    /// 返回存下之后的值:歌词还没出来(键里没有指纹)时不存,返回的还是原值。
     public func nudge(by deltaMs: Int, forKey key: String, pinKey: String, siblings: LyricsOffsetSiblings) -> Int {
         let newValue = offset(forKey: key, siblings: siblings) + deltaMs
         set(newValue, forKey: key, pinKey: pinKey, siblings: siblings)
-        return newValue
+        return offset(forKey: key, siblings: siblings)
     }
 
     public func reset(forKey key: String, pinKey: String, siblings: LyricsOffsetSiblings) {
@@ -511,7 +513,8 @@ public final class LyricsOffsetStore: ObservableObject {
     }
 
     private func set(_ ms: Int, forKey key: String, pinKey: String, siblings: LyricsOffsetSiblings) {
-        guard isValid(key) else { return }
+        // 指纹段为空 = 还拿不到歌词正文(「搜索歌词中…」):校正值对不上任何一份歌词,也不该钉住这首。
+        guard isValid(key), !Self.fingerprint(ofKey: key).isEmpty else { return }
         if ms == 0, inheritedOffset(forKey: key, siblings: siblings) == 0 {
             offsets.removeValue(forKey: key)
         } else {
@@ -553,7 +556,11 @@ public final class LyricsOffsetStore: ObservableObject {
         return decoded.filter { $0.value != 0 }
     }
 
+    /// 单曲偏移每落一次盘加一:开着的界面(歌词管理的输入框)据它跟上菜单、快捷键改的值。
+    @Published public private(set) var revision = 0
+
     private func persist() {
+        revision += 1
         guard
             let data = try? JSONEncoder().encode(offsets),
             let json = String(data: data, encoding: .utf8)
@@ -592,9 +599,10 @@ public struct LyricsOffsetSiblings: Equatable, Sendable {
     }
 
     /// 缓存的写法键(`歌手|歌名|专辑`,歌名段可能带时长变体位)→ 它的单曲偏移键前两段。
+    /// 歌名段要跟 `trackKey` 同一套归一化(剥结尾的译名括号):缓存 key 里是完整歌名,不剥的话这类写法永远读不穿。
     public nonisolated static func name(ofWritingKey key: String) -> String {
         let parts = EnrichCacheKeys.strippingDurationVariant(key).split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
         guard parts.count == 3 else { return key }
-        return "\(parts[0])|\(parts[1])"
+        return "\(parts[0])|\(EnrichCacheKeys.normalizedTitle(String(parts[1])))"
     }
 }

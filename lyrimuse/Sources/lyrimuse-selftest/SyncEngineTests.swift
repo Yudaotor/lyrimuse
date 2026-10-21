@@ -7,6 +7,7 @@ import Foundation
 
 @MainActor
 func runSyncEngineTests() {
+    checkSyncEngineAudit3()
     // ---- 间奏点(歌词窗口的 Apple Music 式「•••」) ----
     do {
         let engine = LyricsSyncEngine()

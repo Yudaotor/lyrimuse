@@ -118,14 +118,17 @@ public enum LyricTimelineNormalizer {
         var words: [LyricWord] = []
         words.reserveCapacity(line.words.count)
         var previousStart: Int? = nil
+        // 规则 1 比的是源数据里的起点:拿规则 2 夹过的比,行首连着两个早到的字会被误判成倒退。
+        var previousRawStart: Int? = nil
         var degrade: DegradeReason? = nil
         for w in line.words {
             var start = w.startMs
             let end = w.startMs + max(0, w.durationMs)
-            if let previousStart, start < previousStart {
+            if let previousRawStart, start < previousRawStart {
                 degrade = .wordStartDecreased
                 break
             }
+            previousRawStart = w.startMs
             if start < line.timeMs {
                 if line.timeMs - start <= maxClampMs {
                     start = line.timeMs

@@ -106,7 +106,7 @@ enum LyricsPreviewHighlight: Equatable {
             return p.currentLyricsOffsetMs
         case let .ownTimeline(embeddedOffsetMs, isCurrent):
             return LyricsPreviewText.candidateOffsetMs(
-                currentTotalMs: p.currentLyricsOffsetMs, currentTrackMs: p.trackLyricsOffsetMs,
+                currentTotalMs: p.currentLyricsOffsetMs, currentTrackMs: LocalPlaybackSource.shared.lyricsBoundOffsetMs,
                 currentEmbeddedMs: LocalPlaybackSource.shared.clockSnapshot.lrcOffsetMs,
                 candidateEmbeddedMs: embeddedOffsetMs, isCurrent: isCurrent)
         }

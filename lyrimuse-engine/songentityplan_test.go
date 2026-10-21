@@ -22,6 +22,9 @@ func TestSongOffsetFingerprint(t *testing.T) {
 	if songOffsetFingerprint("\uFEFFa", "\uFEFFb") != songOffsetFingerprint("a", "b") {
 		t.Error("开头的 BOM 不算内容")
 	}
+	if songOffsetFingerprint("\uFEFF\uFEFFa", "b") != songOffsetFingerprint("a", "b") {
+		t.Error("开头连着几个 BOM 都不算(App 那边剥掉开头所有的)")
+	}
 	if songOffsetFingerprint("", "") != "" {
 		t.Error("没有歌词时指纹为空")
 	}

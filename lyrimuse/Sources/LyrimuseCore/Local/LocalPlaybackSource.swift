@@ -190,6 +190,8 @@ public final class LocalPlaybackSource: ObservableObject {
     //
     // 菜单里偏移那一行的数值和 ↺ 归零认它:显示总和的话,归零后数字停在全局基准上,对不上操作。
     @Published public private(set) var trackLyricsOffsetMs: Int = 0
+    /// 总偏移里挂在这份歌词上的那几档(单曲 + 电台,都按歌词指纹存):换一份歌词就不算数。歌词管理的候选预览扣它。
+    public private(set) var lyricsBoundOffsetMs = 0
     // "歌词窗口"背景用的模糊封面图——原始图片数据(JPEG/PNG),不是 NSImage:
     // LyrimuseCore 这一层刻意不引入 AppKit/SwiftUI(见 Package.swift 的单向依赖注释),
     // 解码成 NSImage/Image 交给 lyrimuse 主 App target 的 View 自己做。只在换歌那一刻
@@ -3185,11 +3187,29 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     /// 播放位置之外的输入变了(偏移、歌词内容、展示面宽度):在播的话下一圈运行循环补一拍,由它重排后面的拍。
-    /// 一拍里面也会调到这里(MV 偏移),所以不当场跑。
+    /// 一拍里面也会调到这里(MV 偏移),所以不当场跑。暂停着没有拍在跑,同样下一圈按冻结位置重选一次
+    /// (暂停 ≠ 清空,08 章决策 11):不然要等下一次轮询(暂停档约 6 秒),屏上那一句跟歌词窗口对不上。
     private func retickSoon() {
-        guard anchor != nil, !screenLocked, syncEngine.hasContent, !lyricLinesSuppressed else { return }
+        guard !screenLocked else { return }
+        if anchor == nil {
+            guard pausedPositionMs != nil, !pausedReselectPending else { return }
+            pausedReselectPending = true
+            DispatchQueue.main.async { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.pausedReselectPending = false
+                    guard self.anchor == nil, self.pausedPositionMs != nil, !self.screenLocked else { return }
+                    self.resolveLinesForPausedPosition()
+                }
+            }
+            return
+        }
+        guard syncEngine.hasContent, !lyricLinesSuppressed else { return }
         scheduleTick(after: 0)
     }
+
+    /// 暂停时排了那一次重选、还没跑(一圈运行循环里多处输入一起变时只跑一次)。
+    private var pausedReselectPending = false
 
     private func stopFastTimer() {
         fastTimer?.invalidate()
@@ -4791,8 +4811,10 @@ public final class LocalPlaybackSource: ObservableObject {
         if currentLyricsOffsetMs != effectiveWithLRC { currentLyricsOffsetMs = effectiveWithLRC }
         // 对外那个"这首歌调到了多少"在电台上报的是**电台那一档** —— 用户此刻按加减键改的就是它,
         // 显示另一个数会让人以为没生效。不是电台时逐字同改动前。
-        let shown = radioKey.isEmpty ? track : LyricsOffsetStore.shared.radioOffset(forKey: radioKey)
+        let radio = radioKey.isEmpty ? 0 : LyricsOffsetStore.shared.radioOffset(forKey: radioKey)
+        let shown = radioKey.isEmpty ? track : radio
         if trackLyricsOffsetMs != shown { trackLyricsOffsetMs = shown }
+        lyricsBoundOffsetMs = track + radio
         // 前奏那个间奏点的起点跟着总偏移走(见 LyricsSyncEngine.gapWindow),偏移变了要重算。
         let newMarkers = syncEngine.gapMarkers()
         if newMarkers != lyricsGapMarkers { lyricsGapMarkers = newMarkers }
@@ -4875,7 +4897,6 @@ public final class LocalPlaybackSource: ObservableObject {
     private var lastReloadSnapshot: LyricsReloadSnapshot?
 
     private func reloadCurrentLyrics() {
-        lineSelectionHeldMs = nil
         guard let snapshot = lastSnapshot else { return }
         let found = EnrichCacheReader.lookup(
             artist: snapshot.artist ?? "",
@@ -4919,9 +4940,18 @@ public final class LocalPlaybackSource: ObservableObject {
             speakers: found?.speakers)
         if reloadSnapshot == lastReloadSnapshot {
             logger.debug("lyrics reload skipped: content unchanged (mtime-only churn)")
+            // 正文没变,读穿的兄弟写法却可能变了(缓存重建完才拿得到、引擎给这条补上了实体):单独对一次。
+            let siblings = EnrichCacheReader.offsetSiblings(
+                artist: snapshot.artist ?? "", title: snapshot.title ?? "", album: snapshot.album ?? "")
+            if siblings != currentOffsetSiblings {
+                currentOffsetSiblings = siblings
+                applyOffsets()
+            }
             return
         }
         lastReloadSnapshot = reloadSnapshot
+        // 内容真变了才清防回跳(LineSelectionHold):只是缓存文件被别的歌写了一下、内容没变的那次不算重载。
+        lineSelectionHeldMs = nil
         // 简繁转换只作用在展示上:正文、译文、逐字数据都转,罗马音是拉丁字母不用转。
         // 逐字数据整串转是安全的 —— 时间戳是数字,转换只碰汉字。
         let variant = chineseVariant
@@ -4969,13 +4999,12 @@ public final class LocalPlaybackSource: ObservableObject {
             lyrics: found?.lyrics ?? "",
             lyricsYRC: found?.lyricsYRC ?? ""
         )
-        // 钉在这首实际落着的那条缓存上(EnrichCacheReader.resolvedKey,含旧规则兜底),去掉时长变体位:「歌词管理」那边的
-        // pinKey 是缓存 key 本身,两边不一致的话,在管理页校准的歌跟播放时钉住的歌就是两个身份。缓存里还没有这首时用
+        // 钉在这首实际落着的那条缓存上(EnrichCacheReader.resolvedKey,含旧规则兜底),时长变体位照留:引擎按变体键判钉住没有,
+        // 「歌词管理」的 pinKey 也是缓存 key 本身,剥掉的话校准钉到另一段录音上,两段之间来回搬。缓存里还没有这首时用
         // EnrichCacheKeys.normalizedKey(引擎马上按它新建),不能拿播放器报的原始三段自己拼。
         let pinArtist = snapshot.artist ?? "", pinTitle = snapshot.title ?? "", pinAlbum = snapshot.album ?? ""
-        currentPinKey = EnrichCacheKeys.strippingDurationVariant(
-            EnrichCacheReader.resolvedKey(artist: pinArtist, title: pinTitle, album: pinAlbum)
-                ?? EnrichCacheKeys.normalizedKey(artist: pinArtist, title: pinTitle, album: pinAlbum))
+        currentPinKey = EnrichCacheReader.resolvedKey(artist: pinArtist, title: pinTitle, album: pinAlbum)
+            ?? EnrichCacheKeys.normalizedKey(artist: pinArtist, title: pinTitle, album: pinAlbum)
         currentOffsetSiblings = EnrichCacheReader.offsetSiblings(
             artist: snapshot.artist ?? "", title: snapshot.title ?? "", album: snapshot.album ?? "")
         applyOffsets()
