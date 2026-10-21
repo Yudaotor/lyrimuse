@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	neturl "net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,6 +54,12 @@ func TestMain(m *testing.M) {
 	// Musixmatch 被拦时换出口那一步会读本机真实的系统代理、连本机的 Clash 控制口;要测它的用例自己换回来。
 	musixmatchReroute = func(context.Context, int) bool { return false }
 	clashControllerSockets = []string{filepath.Join(missing, "clash.sock")}
+	// 「代理」设置自动档同理:系统代理只认用例自己设的环境变量,不探本机的常用代理端口。
+	scutilProxyURL = func() *neturl.URL { return nil }
+	networkProxyCommonPorts = nil
+	for _, k := range []string{"HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy"} {
+		_ = os.Unsetenv(k)
+	}
 	qqLocalDBOverride = filepath.Join(missing, "qqmusic.sqlite")
 	neteaseLocalDBOverride = filepath.Join(missing, "sqlite_storage.sqlite3")
 	spotifyISRCUsersDirOverride = filepath.Join(missing, "SpotifyUsers")

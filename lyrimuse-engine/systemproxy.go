@@ -43,9 +43,8 @@ import (
 // 反向实测:App 进程(URLSession,默认就走系统代理)打 Last.fm 是 p50 1.2s / p90 6s / 16%
 // 超时,同一时段引擎的 Go 直连是 p50 0.4s / ~1% 失败;curl 对照直连 0.6~1.0s 全成功、
 // 经代理 1.7~2.5s 且 2/6 握手失败。**在这台机器上代理是更差的通道。** 所以这里读出来的代理
-// 只作为"直连失败后的兜底"(proxyfallback.go),而且只对 doh.go 那份域名清单(当前只有
-// .musixmatch.com)生效 —— 跟 doh.go 自己"只给解析歪的那个域名开小灶"是同一条纪律,不给
-// 本来就通的源多绕一层。全仓其余 26 处 http.Client 一律不动。
+// 只作为"直连失败后的兜底"(proxyfallback.go),是「代理」设置自动档的第一个来源(networkproxy.go),
+// 用它的客户端名单在 proxyfallback.go 头注;其余 http.Client 一律直连。
 const (
 	// 系统代理设置读一次缓存多久。开关代理是低频操作,60 秒足够跟手,又不会让每个请求
 	// 都 fork 一次 scutil。
@@ -91,6 +90,11 @@ func readSystemProxyURL() *neturl.URL {
 	if u := envProxyURL(); u != nil {
 		return u
 	}
+	return scutilProxyURL()
+}
+
+// scutilProxyURL:macOS 网络设置里的代理。单测换掉,免得读到本机真实的系统代理。
+var scutilProxyURL = func() *neturl.URL {
 	ctx, cancel := context.WithTimeout(context.Background(), systemProxyReadTimeout)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "/usr/sbin/scutil", "--proxy").Output()

@@ -1939,6 +1939,14 @@
       "dest" : "tab:general",
       "path" : [
         "通用",
+        "网络"
+      ],
+      "title" : "代理"
+    },
+    {
+      "dest" : "tab:general",
+      "path" : [
+        "通用",
         "备份与迁移"
       ],
       "title" : "iCloud 备份"

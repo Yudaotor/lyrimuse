@@ -6357,6 +6357,7 @@ private struct PlayerSettingsTab: View {
 
 private struct GeneralSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var features = FeatureSettingsStore.shared
 
     // (12 款菜单栏图标的格子在 `UI/MenuBarIconPicker.swift`。别在这里长回来 —— 同一组格子
     //  两处各画一份,选中态/尺寸迟早对不上。)
@@ -6406,9 +6407,9 @@ private struct GeneralSettingsTab: View {
     var body: some View {
         SettingsPage(
             title: L10n.t("通用"),
-            subtitle: L10n.t("菜单栏图标、外观与语言、启动与通知，以及备份与迁移")
+            subtitle: L10n.t("菜单栏图标、外观与语言、启动与通知、网络，以及备份与迁移")
         ) {
-            // 四张卡:菜单栏与 Dock / 外观与语言 / 启动与通知 / 备份与迁移(含清除全部设置)。各行说明一律写成常显副标题,
+            // 五张卡:菜单栏与 Dock / 外观与语言 / 启动与通知 / 网络 / 备份与迁移(含清除全部设置)。各行说明一律写成常显副标题,
             // 这一页不放「?」。
             //
             // **这一页没有预览**:菜单栏就在屏幕顶上,选哪款抬头就看得见,不需要在设置页里
@@ -6417,6 +6418,7 @@ private struct GeneralSettingsTab: View {
                 menuBarCard
                 appearanceCard
                 startupCard
+                networkCard
                 backupCard
             }
             .background { LastfmGlassGlow() }
@@ -6567,6 +6569,45 @@ private struct GeneralSettingsTab: View {
                 await NowPlayingNotifier.shared.enabledChanged(on)
                 refreshNotificationState()
             }
+        }
+    }
+
+    /// 「网络」:代理。只管直连失败之后经哪个代理重试(引擎 networkproxy.go),说明只写选中的那一档。
+    private var networkCard: some View {
+        SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("网络"))
+            SettingsRow(icon: "network", title: L10n.t("代理"), subtitle: networkProxyNote) {
+                SettingsGlassTabPicker(
+                    selection: Binding(
+                        get: { features.networkProxy },
+                        set: { features.networkProxy = $0; Task { await features.save() } }
+                    ),
+                    options: NetworkProxyMode.allCases,
+                    label: { mode in
+                        switch mode {
+                        case .auto: return L10n.t("自动")
+                        case .manual: return L10n.t("手动")
+                        case .off: return L10n.t("不使用")
+                        }
+                    },
+                    compact: true
+                )
+            }
+            if features.networkProxy == .manual {
+                CardDivider()
+                NetworkProxyServerRow(value: Binding(
+                    get: { features.networkProxyServer },
+                    set: { features.networkProxyServer = $0; Task { await features.save() } }
+                ))
+            }
+        }
+    }
+
+    private var networkProxyNote: String {
+        switch features.networkProxy {
+        case .auto: return L10n.t("直连失败时，经系统代理或本机检测到的代理重试")
+        case .manual: return L10n.t("直连失败时，经下方代理服务器重试")
+        case .off: return L10n.t("始终直连")
         }
     }
 

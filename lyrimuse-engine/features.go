@@ -246,6 +246,10 @@ type featureFlagsFile struct {
 	// **默认开**(18 章决策 49);只有引擎认,App 靠 unknownFileKeys 原样保留,另读一份判断同曲条目面板的说法。设成 false 时把
 	// 同步动过的写法恢复回去。
 	SongEntityShareLyrics *bool `json:"song_entity_share_lyrics,omitempty"`
+	// NetworkProxy:设置 › 通用 › 网络 › 代理,auto / manual / off,缺失或不认识 = auto(networkproxy.go)。
+	NetworkProxy string `json:"network_proxy,omitempty"`
+	// NetworkProxyServer:manual 档的代理服务器,host:port,可带 http:// / socks5:// 前缀(parseProxyServer)。
+	NetworkProxyServer string `json:"network_proxy_server,omitempty"`
 }
 
 // featureFlags is the resolved (never-nil) form consulted at every gate site.
@@ -331,6 +335,9 @@ type featureFlags struct {
 	SongEntityPhase2 bool
 	// SongEntityShareLyrics 只经 songEntitySharing 读,见 featureFlagsFile.SongEntityShareLyrics。
 	SongEntityShareLyrics bool
+	// NetworkProxy 是清洗过的档位(resolveNetworkProxy),NetworkProxyServer 原样。只被 networkproxy.go 读取。
+	NetworkProxy       string
+	NetworkProxyServer string
 	// TrustedPlayers 是已经清洗过的形态(见 resolveTrustedPlayers):键一定非空、一定不是
 	// 五个内置播放器之一;值可能是空字符串(反查不到 App 名),此时标签退回 bundle id。
 	TrustedPlayers map[string]string
@@ -455,6 +462,8 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		SongEntityShadow:          boolOr(f.SongEntityShadow, true),
 		SongEntityPhase2:          boolOr(f.SongEntityPhase2, true),
 		SongEntityShareLyrics:     boolOr(f.SongEntityShareLyrics, true),
+		NetworkProxy:              resolveNetworkProxy(f.NetworkProxy),
+		NetworkProxyServer:        strings.TrimSpace(f.NetworkProxyServer),
 	}
 }
 
@@ -800,6 +809,8 @@ func logFeatureSnapshot() {
 		"song_entity_shadow", features().SongEntityShadow,
 		"song_entity_phase2", features().SongEntityPhase2,
 		"song_entity_share_lyrics", features().SongEntityShareLyrics,
+		// 只记档位:手动档的服务器地址里可能带用户名密码。
+		"network_proxy", features().NetworkProxy,
 		"lastfm_mirror_scrobble", features().LastfmMirrorScrobble,
 		// 档位 + 摊平后的三个布尔一起打:排查时「界面选了什么」和「实际按什么办」是两件事,
 		// 只记档位的话自定义档看不出它到底开了哪几项。三个布尔各占一个键 —— 拼成一个带

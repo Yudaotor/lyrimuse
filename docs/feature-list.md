@@ -71,6 +71,15 @@ NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind,
 - On by default
 - Settings: Lyrics › Sources › Lyrics Sources
 
+<a id="feature-network-proxy"></a>
+
+### Retry overseas lyric sources through a proxy
+
+When an overseas lyric source can't be reached directly, Lyrimuse retries through the system proxy or a local proxy such as Clash. You can also enter a proxy server yourself, or turn this off. Lyric sources in mainland China always connect directly.
+
+- On by default
+- Settings: General › Network › Proxy
+
 <a id="feature-apple-music-lyrics"></a>
 
 ### Apple Music's own lyrics
@@ -799,7 +808,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 276 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 277 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1158,6 +1167,10 @@ Every setting in the Settings window, by where it lives: 276 in all. Type a name
 - **Launch at Login**
 - **Launch Silently**
 - **Notify When the Song Changes**
+
+### General › Network
+
+- **Proxy**
 
 ### General › Backup & Migration
 

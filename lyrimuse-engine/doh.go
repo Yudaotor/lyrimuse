@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	neturl "net/url"
 	"strings"
 	"sync"
 	"time"
@@ -305,8 +304,8 @@ func dohDialRaceWith(ctx context.Context, dial func(context.Context, string, str
 }
 
 // dohHTTPClient 造一个走上面那套拨号逻辑的 client:直连优先(DoH 解析 + 并发拨号),直连
-// 被打掉时自动改走系统代理(proxyfallback.go / systemproxy.go —— 完整的实测依据和"为什么
-// 不全局走代理"记在 systemproxy.go 头注)。
+// 被打掉时自动改走「代理」设置里的代理(proxyfallback.go / networkproxy.go —— "为什么
+// 不全局走代理"的实测依据记在 systemproxy.go 头注)。
 //
 // onBlocked 透传给 proxyFallbackTransport:直连不通、代理也救不回来时回调一次,让调用方
 // 记一个具体的失败原因。可以为 nil。
@@ -324,12 +323,7 @@ func dohHTTPClient(onBlocked func()) *http.Client {
 			},
 			// 走代理时拨的是代理自己的地址(通常是 127.0.0.1),DoH 对它没有意义,用默认
 			// 拨号器即可;目标域名交给代理去解析。
-			viaProxy: &http.Transport{
-				Proxy:               func(*http.Request) (*neturl.URL, error) { return systemOrClashProxyURL(), nil },
-				TLSHandshakeTimeout: dohTLSHandshakeTimeout,
-				ForceAttemptHTTP2:   true,
-			},
-			proxyURL:  systemOrClashProxyURL,
+			viaProxy:  newFallbackProxyTransport(dohTLSHandshakeTimeout),
 			onBlocked: onBlocked,
 		},
 	}

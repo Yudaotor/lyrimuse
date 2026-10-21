@@ -17,16 +17,15 @@ import (
 	"time"
 )
 
-// ---- 直连优先、直连被打掉就改走系统代理 ----
+// ---- 直连优先、直连被打掉就改走代理 ----
 //
-// 配套 systemproxy.go。代理比直连慢、失败率也高得多(数据见 09 章决策 48),所以它只能是兜底:
-// 直连正常时一个包都不该经过它。
+// 用哪个代理看「代理」设置(networkproxy.go 的 fallbackProxyURL)。代理比直连慢、失败率也高得多(数据见 09 章
+// 决策 48),所以它只能是兜底:直连正常时一个包都不该经过它。
 //
-// 生效范围:doh.go 的 dohHTTPClient(dohHostSuffixes,当前只有 .musixmatch.com)、alerter.go 的 telegramHTTPClient
-// (推送到 api.telegram.org)、relay.go 的 relayHTTPClient / relaySeedClient(状态中继的推送与封面托管、启动补
-// 「上次播放」那一次 ListenBrainz 查询),以及 lb.go 的 lbHTTPClient(ListenBrainz 提交)。其它歌词源(netease/qq/kugou/lrclib/kuwo/migu/amll/
-// lyricfind)走 lyricsourcedial.go 的 lyricSourceTransport(系统 DNS 优先、不答才
-// DoH,没有代理兜底),Last.fm / iTunes 等仍是 http.DefaultTransport。
+// 生效范围:doh.go 的 dohHTTPClient(dohHostSuffixes,当前只有 .musixmatch.com)、lyricsourcedial.go 的海外歌词源
+// (lyricSourceProxyFallbackSources,每台主机一份)、alerter.go 的 telegramHTTPClient(推送到 api.telegram.org)、
+// relay.go 的 relayHTTPClient / relaySeedClient(状态中继的推送与封面托管、启动补「上次播放」那一次 ListenBrainz 查询),
+// 以及 lb.go 的 lbHTTPClient(ListenBrainz 提交)。国内歌词源只直连,Last.fm / iTunes 等仍是 http.DefaultTransport。
 const (
 	// proxyFallbackDirectBudget:直连探路预算。黑洞的特征是 SYN 石沉大海 —— 量
 	// 到的三次侥幸成功都落在 1.3s / 3.4s(SYN 重传之后),而路通的时候 TCP+TLS 全程 <1s。
@@ -77,7 +76,7 @@ type proxyFallbackTransport struct {
 	// 记一个具体的失败原因 —— 设置页那颗「测试」按钮会把它翻成人话显示出来。可以为 nil。
 	onBlocked func()
 
-	// proxyURL:兜底用的代理,nil = systemProxyURL。Musixmatch 那一份在系统代理没开时还认本机 Clash 的端口(doh.go)。
+	// proxyURL:兜底用的代理,nil = fallbackProxyURL(「代理」设置)。只有单测换。
 	proxyURL func() *neturl.URL
 
 	// directBudget:直连探路的预算,零值 = proxyFallbackDirectBudget。只有单测改短。
@@ -160,13 +159,13 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 		// 的那条路怎么了),代理那次的错在返回值里是拿不到的 —— 不在这里记一行,"兜底为什么
 		// 也没兜住"就彻底不可观测。装机验证时正是缺了它,才没法一眼看出第一首
 		// 探测曲的代理那半边是超时还是被代理拒了。
-		warnf("proxy: %s direct failed (%v, %s), then failed via system proxy %s too (%v, %s)",
+		warnf("proxy: %s direct failed (%v, %s), then failed via proxy %s too (%v, %s)",
 			host, directErr, directElapsed.Round(time.Millisecond),
 			proxy.Host, proxyErr, time.Since(proxyStart).Round(time.Millisecond))
 		return nil, directErr
 	}
 	window := t.markSticky(host)
-	log.Printf("proxy: %s direct failed (%v, %s), succeeded via system proxy %s (%s), using the proxy for the next %s",
+	log.Printf("proxy: %s direct failed (%v, %s), succeeded via proxy %s (%s), using the proxy for the next %s",
 		host, directErr, directElapsed.Round(time.Millisecond), proxy.Host,
 		time.Since(proxyStart).Round(time.Millisecond), window)
 	return resp, nil
@@ -313,7 +312,7 @@ func (t *proxyFallbackTransport) proxy() *neturl.URL {
 	if t.proxyURL != nil {
 		return t.proxyURL()
 	}
-	return systemProxyURL()
+	return fallbackProxyURL()
 }
 
 // markSticky 记下「接下来走代理」,返回这次的窗口(按连续失败次数翻倍,见 proxyStickyWindow)。

@@ -370,6 +370,10 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// 歌曲实体阶段 3:同一首歌的条目共用歌词(设置 › 歌词来源「同曲条目共用歌词」,18 章决策 26、49、56)。缺失 = 开,
     /// 跟引擎 features.go 的默认值一致;引擎每分钟看一次,关掉时把同步过的条目按留底恢复。
     var songEntityShareLyrics: Bool?
+    /// 设置 › 通用 › 网络 › 代理,NetworkProxyMode 的 rawValue。引擎 networkproxy.go 读,缺失按 auto。
+    var networkProxy: String?
+    /// 手动档的代理服务器,原样存(NetworkProxyServer.isValid 不过的不存)。空 = 没填。
+    var networkProxyServer: String?
     /// 「网页播放器」配对关系的镜像:平台 id → 浏览器 bundle id(已排序)。真源是 AppSettings.browserPlatformPairs,
     /// 这里只为让引擎知道 —— 它那几路网页平台探针只对配对过的浏览器跑(引擎 browserpairs.go)。
     /// 缺失 = 还没写过,引擎沿用所有浏览器都探;空对象 = 一个都没配。
@@ -426,6 +430,8 @@ struct FeatureFlagsFile: Codable, Equatable {
         case browserPlatformPairs = "browser_platform_pairs"
         case songEntityPhase1 = "song_entity_phase1"
         case songEntityShareLyrics = "song_entity_share_lyrics"
+        case networkProxy = "network_proxy"
+        case networkProxyServer = "network_proxy_server"
     }
 
     /// 这个版本认识的全部 JSON 键。见 FeatureSettingsStore.unknownFileKeys 的注释。
@@ -617,6 +623,9 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public private(set) var lastfmExcludedBundles: Set<String> = []
     /// 见 FeatureFlagsFile.browserPlatformPairs。只经 syncBrowserPlatformPairs 改。
     public private(set) var browserPlatformPairs: [String: [String]]?
+    /// 见 FeatureFlagsFile.networkProxy / networkProxyServer。引擎按 mtime 热重读,改了不用重启。
+    @Published public var networkProxy: NetworkProxyMode = .auto
+    @Published public var networkProxyServer = ""
     /// 见 FeatureFlagsFile.songEntityPhase1。读进来原样写回,界面上不改。
     public private(set) var songEntityPhase1: Bool?
     public var songEntityPhase1Enabled: Bool { songEntityPhase1 ?? true }
@@ -735,6 +744,8 @@ public final class FeatureSettingsStore: ObservableObject {
             lastfmExcludedBundles: lastfmExcludedBundles.isEmpty ? nil : lastfmExcludedBundles.sorted(),
             songEntityPhase1: songEntityPhase1,
             songEntityShareLyrics: songEntityShareLyrics,
+            networkProxy: networkProxy.rawValue,
+            networkProxyServer: networkProxyServer.isEmpty ? nil : networkProxyServer,
             browserPlatformPairs: browserPlatformPairs
         )
     }
@@ -1014,6 +1025,8 @@ public final class FeatureSettingsStore: ObservableObject {
         // 缺失 = 开,跟引擎 features.go 的默认值一致(18 章决策 49)。
         songEntityShareLyrics = f.songEntityShareLyrics ?? true
         EnrichCacheReader.sharesEntityLyrics = songEntityShareLyrics
+        networkProxy = f.networkProxy.flatMap(NetworkProxyMode.init(rawValue:)) ?? .auto
+        networkProxyServer = f.networkProxyServer ?? ""
         lyricsDir = f.lyricsDir ?? ""
         lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
         if let raw = f.launchLyrimuseOnPlayers {

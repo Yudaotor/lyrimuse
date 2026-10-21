@@ -33,7 +33,7 @@ func webRelayConfigured() bool {
 // relayRequestTimeout:推送、启动补「上次播放」这类一次请求的总时限,要装得下「直连探路 + 走系统代理」两次尝试。
 const relayRequestTimeout = proxyFallbackDirectBudget + proxyFallbackProxyBudget + 2*time.Second
 
-// proxyFallbackClient:先直连、不通再走 macOS 系统代理的 client(proxyfallback.go)。不设 Client.Timeout,
+// proxyFallbackClient:先直连、不通再走「代理」设置里的代理的 client(proxyfallback.go、networkproxy.go)。不设 Client.Timeout,
 // 理由同 telegramHTTPClient:预算落在每次尝试上,调用方 ctx 上的时限照常生效。走代理的粘性记在 transport
 // 实例上、不分主机,所以每个目标主机各用一个。
 func proxyFallbackClient() *http.Client {
@@ -43,11 +43,7 @@ func proxyFallbackClient() *http.Client {
 				TLSHandshakeTimeout: 10 * time.Second,
 				ForceAttemptHTTP2:   true,
 			},
-			viaProxy: &http.Transport{
-				Proxy:               func(*http.Request) (*neturl.URL, error) { return systemProxyURL(), nil },
-				TLSHandshakeTimeout: 10 * time.Second,
-				ForceAttemptHTTP2:   true,
-			},
+			viaProxy: newFallbackProxyTransport(10 * time.Second),
 		},
 	}
 }

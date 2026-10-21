@@ -110,8 +110,8 @@ const (
 	notifyResponseMaxBytes = 64 << 10
 )
 
-// telegramHTTPClient:api.telegram.org 在一部分网络里直连不通,先直连、不通再走 macOS
-// 系统代理(proxyfallback.go)。其余平台照旧 http.DefaultClient。不设 Client.Timeout,
+// telegramHTTPClient:api.telegram.org 在一部分网络里直连不通,先直连、不通再走「代理」设置里的代理
+// (proxyfallback.go、networkproxy.go)。其余平台照旧 http.DefaultClient。不设 Client.Timeout,
 // 理由同 dohHTTPClient:预算落在每次尝试上。
 var telegramHTTPClient = &http.Client{
 	Transport: &proxyFallbackTransport{
@@ -119,11 +119,7 @@ var telegramHTTPClient = &http.Client{
 			TLSHandshakeTimeout: 10 * time.Second,
 			ForceAttemptHTTP2:   true,
 		},
-		viaProxy: &http.Transport{
-			Proxy:               func(*http.Request) (*neturl.URL, error) { return systemProxyURL(), nil },
-			TLSHandshakeTimeout: 10 * time.Second,
-			ForceAttemptHTTP2:   true,
-		},
+		viaProxy: newFallbackProxyTransport(10 * time.Second),
 	},
 }
 

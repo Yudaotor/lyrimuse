@@ -326,25 +326,7 @@ func TestReadClashProxyURL(t *testing.T) {
 	}
 }
 
-// Musixmatch 那份客户端的兜底代理认 Clash 的端口;别的用这一层的客户端照旧只认系统代理。
-func TestDohClientProxyIncludesClash(t *testing.T) {
-	tr, ok := dohHTTPClient(nil).Transport.(*proxyFallbackTransport)
-	if !ok || tr.proxyURL == nil {
-		t.Fatal("dohHTTPClient 要设 proxyURL")
-	}
-	if (&proxyFallbackTransport{}).proxyURL != nil {
-		t.Fatal("零值只认系统代理")
-	}
-	raw, err := os.ReadFile("doh.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !containsCode(string(raw), "Proxy:               func(*http.Request) (*neturl.URL, error) { return systemOrClashProxyURL(), nil },") {
-		t.Error("走代理那一侧要拨同一个代理")
-	}
-}
-
-// proxy() 用设了的 proxyURL,没设才读系统代理。
+// proxy() 用设了的 proxyURL,没设才读「代理」设置(TestFallbackClientsFollowProxySetting)。
 func TestProxyFallbackTransportProxyURL(t *testing.T) {
 	want := &neturl.URL{Scheme: "http", Host: "127.0.0.1:1"}
 	tr := &proxyFallbackTransport{proxyURL: func() *neturl.URL { return want }}

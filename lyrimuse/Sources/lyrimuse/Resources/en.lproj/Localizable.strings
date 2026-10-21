@@ -297,6 +297,7 @@
 "下载 Discord…" = "Download Discord…";
 "下载中…" = "Downloading…";
 "不 Scrobble 任何播放器" = "Nothing is scrobbled";
+"不使用" = "Off";
 "不保存" = "Don’t Save";
 "不再悬停显示播放控制" = "Stop Showing Playback Controls on Hover";
 "不分组" = "No Grouping";
@@ -416,6 +417,8 @@
 "从此句开始播放" = "Play from this line";
 "从自动备份恢复" = "Restore from Auto Backup";
 "从资料库删除" = "Delete from Library";
+"代理" = "Proxy";
+"代理服务器" = "Proxy Server";
 "令牌已失效" = "Token rejected";
 "令牌已失效，收听提交已暂停" = "Token rejected — listen submissions paused";
 "以下播放器尚未安装，可提前选择，安装后自动生效" = "These players aren't installed yet. Select one now and it takes effect once installed";
@@ -821,6 +824,7 @@
 "大小写/空格" = "Case/spacing";
 "好" = "OK";
 "始终停留在所放置的屏幕" = "Stays on the screen you placed it on";
+"始终直连" = "Always connect directly";
 "字体" = "Font";
 "字号" = "Font Size";
 "字号 %@pt" = "Font size %@pt";
@@ -1164,6 +1168,7 @@
 "所有链接、参数和设置页路径" = "Every link, parameter and settings path";
 "所选条目" = "Selected Entry";
 "所选条目无逐字时间轴" = "The selected entry has no word timing";
+"手动" = "Manual";
 "手动调整" = "Manually Adjusted";
 "手动重新匹配" = "Manual re-match";
 "打包日志、崩溃记录与运行状态，已移除账号凭据；含曲目名与本机路径，公开前请检查" = "Logs, crash reports and app state in one file, with account credentials removed. Track names and local paths stay in, so review it before posting publicly";
@@ -1644,6 +1649,7 @@
 "标题反查：歌手泛搜" = "Title lookup: artist-wide search";
 "标题吻合" = "Title match";
 "样式" = "Style";
+"格式应为 主机:端口，可带 http:// 或 socks5:// 前缀" = "Use host:port, optionally prefixed with http:// or socks5://";
 "桌面悬浮歌词" = "Desktop Floating Lyrics";
 "桌面歌词，为 Mac 全新构想" = "Desktop lyrics, reimagined for the Mac";
 "检查中…" = "Checking…";
@@ -1941,6 +1947,8 @@
 "白字描边" = "White Text with Outline";
 "白色" = "White";
 "白色、跟随封面或自定义颜色" = "White, cover art color or a custom color";
+"直连失败时，经下方代理服务器重试" = "If a direct connection fails, retry through the proxy server below";
+"直连失败时，经系统代理或本机检测到的代理重试" = "If a direct connection fails, retry through the system proxy or a proxy detected on this Mac";
 "相邻短句可容纳于一行时合并显示" = "Adjacent short lines are merged when they fit on one line";
 "真实数据 · %@" = "Real data · %@";
 "短于 30 秒的曲目" = "Tracks Under 30 Seconds";
@@ -2066,6 +2074,7 @@
 "网易云音乐歌曲页" = "NetEase Cloud Music song page";
 "网易旗下的音乐 App" = "NetEase's music app";
 "网易旗下的音乐平台" = "NetEase's music service";
+"网络" = "Network";
 "网络不可用，已搜索 %1$@ 首、找到 %2$@ 首后停止" = "No connection: stopped after %1$@ songs, %2$@ found";
 "网络不可用，已搜索 %1$@ 首、找到 %2$@ 首后停止#one" = "No connection: stopped after %1$@ song, %2$@ found";
 "网络不可用，已暂停，稍后将自动继续" = "Paused: no connection; it resumes automatically";
@@ -2149,6 +2158,7 @@
 "菜单栏" = "Menu Bar";
 "菜单栏与 Dock" = "Menu Bar & Dock";
 "菜单栏图标" = "Menu Bar Icon";
+"菜单栏图标、外观与语言、启动与通知、网络，以及备份与迁移" = "Menu bar icon, appearance & language, startup & notifications, network, and backups";
 "菜单栏图标、外观与语言、启动与通知，以及备份与迁移" = "Menu bar icon, appearance & language, startup & notifications, and backups";
 "菜单栏图标：%@" = "Menu bar icon: %@";
 "菜单栏歌词" = "Menu Bar Lyrics";

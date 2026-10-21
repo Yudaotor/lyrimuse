@@ -21,8 +21,8 @@ import (
 //
 // Musixmatch 的拦截按出口 IP 来:同一时刻家宽直连的数据接口回 401 captcha,经 Clash 节点出去的照常 200。所以
 // 数据接口回 captcha 时(musixmatchDo),先按下面两级换一个出口当场重试,两级都换不了才进 sourcebreaker.go 的暂停:
-//  1. 现在走的不是系统代理、而系统代理连得上:这两台主机改走代理 musixmatchViaProxyAfterBlock(proxyfallback.go 的
-//     磁盘提示,常驻进程和一次性子命令都认)。
+//  1. 现在走的不是代理、而「代理」设置给得出一个连得上的代理(networkproxy.go 的 fallbackProxyURL):这两台主机改走
+//     代理 musixmatchViaProxyAfterBlock(proxyfallback.go 的磁盘提示,常驻进程和一次性子命令都认)。
 //  2. 已经走代理(或开着 TUN、直连其实也经过 Clash):Clash 控制口(clashControllerSockets)里有 clashMusixmatchGroup
 //     这个手动选择组时,把它切到下一个活着、clashNodeBlockTTL 内没被拦过的节点,断开 Musixmatch 的旧连接。组要用户
 //     自己在 Clash 里建,并加一条规则把 musixmatch.com 指给它;没有这个组就没有这一级。
@@ -49,9 +49,10 @@ const (
 // 不要密钥。单测换成临时目录里的假控制口。
 var clashControllerSockets = []string{"/tmp/verge/verge-mihomo.sock"}
 
-// musixmatchProxyAvailable:系统代理现在连得上。musixmatchOnProxy:这两台主机现在已经走代理。单测换掉,免得读到本机真实的代理。
+// musixmatchProxyAvailable:「代理」设置现在给得出一个连得上的代理。musixmatchOnProxy:这两台主机现在已经走代理。单测换掉,
+// 免得读到本机真实的代理。
 var (
-	musixmatchProxyAvailable = func() bool { return systemOrClashProxyURL() != nil }
+	musixmatchProxyAvailable = func() bool { return fallbackProxyURL() != nil }
 	musixmatchOnProxy        = musixmatchViaProxy
 )
 
@@ -95,7 +96,7 @@ func musixmatchRerouteAround(ctx context.Context, sentGen int) bool {
 			forceProxyFor(musixmatchHTTPClient(), h, musixmatchViaProxyAfterBlock)
 		}
 		via := "the proxy"
-		if u := systemOrClashProxyURL(); u != nil {
+		if u := fallbackProxyURL(); u != nil {
 			via = "the proxy at " + u.Host
 		}
 		log.Printf("musixmatch: blocked by its anti-bot check on this connection; sending it through %s for the next %s", via, musixmatchViaProxyAfterBlock)
@@ -144,16 +145,8 @@ var (
 	clashProxyReadAt time.Time
 )
 
-// systemOrClashProxyURL:系统代理;系统代理没开时,本机 Clash 的代理端口(clashProxyURL)。开着 Clash 却没开系统代理、也没开
-// TUN 时,Musixmatch 的请求不经过 Clash,换节点也换不到它的出口。只给 doh.go 那份客户端(Musixmatch)用。
-func systemOrClashProxyURL() *neturl.URL {
-	if u := systemProxyURL(); u != nil {
-		return u
-	}
-	return clashProxyURL()
-}
-
 // clashProxyURL:Clash 控制口报的 mixed-port(没有就 port),连得上才算。跟 systemProxyURL 同样缓存 systemProxyCacheTTL。
+// 「代理」设置自动档在系统代理没开时用它:开着 Clash 却没开系统代理、也没开 TUN 时,请求不经过 Clash。
 func clashProxyURL() *neturl.URL {
 	clashProxyMu.Lock()
 	defer clashProxyMu.Unlock()

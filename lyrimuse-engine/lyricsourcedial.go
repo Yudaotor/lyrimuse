@@ -53,7 +53,7 @@ var (
 	}
 )
 
-// lyricSourceTransport 是八个歌词源(netease/qq/kugou/lrclib/kuwo/migu/amll/lyricfind)共用的
+// lyricSourceTransport 是 lyricHTTPClient 那些歌词源共用的直连
 // Transport:DefaultTransport 的克隆(代理环境变量、连接池、HTTP/2 等一律照旧),只换拨号器。
 // 经 sharedLyricSourceTransport / setSharedLyricSourceTransport 读写(原子指针,理由同 hostGuardSharedPtr)。
 var lyricSourceTransportPtr atomic.Pointer[http.Transport]
@@ -71,9 +71,49 @@ func setSharedLyricSourceTransport(t *http.Transport) { lyricSourceTransportPtr.
 
 // lyricHTTPClient 是歌词源文件里造 client 的唯一入口(lyricsourcedial_test.go 用源码扫描钉着:
 // 名单里那些文件不许再出现裸的 `&http.Client{`)。Timeout 语义跟原来的 `&http.Client{Timeout: d}`
-// 完全一样,只是多了上面那套拨号。
+// 完全一样,只是多了上面那套拨号,海外源另有直连失败后的代理重试(lyricSourceRoundTripper)。
 func lyricHTTPClient(timeout time.Duration) *http.Client {
-	return &http.Client{Timeout: timeout, Transport: sharedLyricSourceTransport()}
+	return &http.Client{Timeout: timeout, Transport: lyricSourceRoundTripper{}}
+}
+
+// ---- 海外歌词源直连失败时经代理重试 ----
+//
+// 按请求的主机归源(lyricSourceForHost):lyricSourceProxyFallbackSources 里的源走 proxyFallbackTransport(直连优先,
+// 直连不通改走「代理」设置里的代理,networkproxy.go),每台主机一份,走代理的粘性互不牵连;国内源和不认识的主机只直连:
+// 经代理出境可能拿不到有版权的歌词。见 09 章决策 321。
+var lyricSourceProxyFallbackSources = map[string]bool{
+	lyricSourceLRCLIB: true, lyricSourceAMLL: true, lyricSourceLyricFind: true, lyricSourceDeezer: true,
+	lyricSourceAppleMusic: true, lyricSourceVibe: true, lyricSourceGenie: true, lyricSourcePetitLyrics: true,
+}
+
+type lyricSourceRoundTripper struct{}
+
+func (lyricSourceRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	host := req.URL.Hostname()
+	if !lyricSourceProxyFallbackSources[lyricSourceForHost(host)] {
+		return sharedLyricSourceTransport().RoundTrip(req)
+	}
+	return lyricSourceFallbackFor(host).RoundTrip(req)
+}
+
+// lyricSourceDirect 把直连那一半交给当下的 sharedLyricSourceTransport(单测会换掉它)。
+type lyricSourceDirect struct{}
+
+func (lyricSourceDirect) RoundTrip(req *http.Request) (*http.Response, error) {
+	return sharedLyricSourceTransport().RoundTrip(req)
+}
+
+var (
+	lyricSourceFallbacks sync.Map // host -> *proxyFallbackTransport
+	lyricSourceViaProxy  = newFallbackProxyTransport(10 * time.Second)
+)
+
+func lyricSourceFallbackFor(host string) *proxyFallbackTransport {
+	if t, ok := lyricSourceFallbacks.Load(host); ok {
+		return t.(*proxyFallbackTransport)
+	}
+	t, _ := lyricSourceFallbacks.LoadOrStore(host, &proxyFallbackTransport{direct: lyricSourceDirect{}, viaProxy: lyricSourceViaProxy})
+	return t.(*proxyFallbackTransport)
 }
 
 var (

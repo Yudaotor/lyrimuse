@@ -35,6 +35,27 @@
           ]
         },
         {
+          "id": "network-proxy",
+          "title": {
+            "zh-Hans": "海外歌词源连不上时经代理重试",
+            "en": "Retry overseas lyric sources through a proxy",
+            "zh-Hant": "海外歌詞來源連不上時經代理重試"
+          },
+          "desc": {
+            "zh-Hans": "海外歌词源直连失败时，自动经系统代理或本机的 Clash 等代理重试；也可以手动指定代理服务器，或不使用代理。国内歌词源始终直连。",
+            "en": "When an overseas lyric source can't be reached directly, Lyrimuse retries through the system proxy or a local proxy such as Clash. You can also enter a proxy server yourself, or turn this off. Lyric sources in mainland China always connect directly.",
+            "zh-Hant": "海外歌詞來源直連失敗時，自動經系統代理或本機的 Clash 等代理重試；也可以手動指定代理伺服器，或不使用代理。中國大陸的歌詞來源一律直接連線。"
+          },
+          "default": "on",
+          "settings": [
+            [
+              "通用",
+              "网络",
+              "代理"
+            ]
+          ]
+        },
+        {
           "id": "apple-music-lyrics",
           "title": {
             "zh-Hans": "Apple Music 官方歌词",

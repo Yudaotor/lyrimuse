@@ -4042,6 +4042,25 @@ func runSourceContractSettingsTests() {
         }
     }
 
+    // ---- 「代理」设置两侧同一套取值、同一套地址判据(引擎 networkproxy.go,App NetworkProxySetting.swift)----
+    do {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        if let go = try? String(contentsOf: repoRoot.appendingPathComponent("lyrimuse-engine/networkproxy.go"), encoding: .utf8) {
+            for mode in NetworkProxyMode.allCases {
+                expectEqual(go.contains("= \"\(mode.rawValue)\""), true, "代理设置: 引擎认档位 \(mode.rawValue)")
+            }
+        } else {
+            expectEqual(true, false, "代理设置: 读不到 lyrimuse-engine/networkproxy.go(路径挪了?)")
+        }
+        for (text, ok) in [("127.0.0.1:7890", true), (" 127.0.0.1:7890 ", true), ("socks5://127.0.0.1:7891", true),
+                           ("http://u:p@127.0.0.1:8080", true), ("[::1]:7890", true), ("SOCKS5H://proxy.lan:1080", true),
+                           ("", false), ("127.0.0.1", false), ("127.0.0.1:0", false), ("127.0.0.1:65536", false),
+                           (":7890", false), ("ftp://127.0.0.1:21", false), ("127.0.0.1:port", false)] {
+            expectEqual(NetworkProxyServer.isValid(text), ok, "代理设置: 代理服务器「\(text)」判据跟引擎 parseProxyServer 一致")
+        }
+    }
+
     // ---- 「这一轮没跑完整」两侧同一套判据----
     //
     // 起因是《One Last Kiss》"这里可以搜到,但是首次播放的时候显示无歌词":那 36 秒
