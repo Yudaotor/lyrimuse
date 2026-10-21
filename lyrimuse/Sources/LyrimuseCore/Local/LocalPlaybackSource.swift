@@ -3848,14 +3848,14 @@ public final class LocalPlaybackSource: ObservableObject {
             secs: Self.lyricsLookupDuration(isRadio: rawSnapshot.isRadio == true, isMusicVideo: playingMusicVideo,
                                             duration: rawSnapshot.duration))
         var snapshot = rawSnapshot
-        // reAMP 的电台流同样没有曲长,起点推算过(`PlayerTitleSplit.streamClockKnown`)的才拿缓存里的曲长建锚点;
+        // reAMP、VOX 的电台流同样没有曲长,起点推算过(`PlayerTitleSplit.streamClockKnown`)的才拿缓存里的曲长建锚点;
         // 缓存里没有曲长时退到歌词判决记下的那首的时长(引擎不给它回填)。
-        let reampStreamClock = PlayerTitleSplit.streamClockKnown(
+        let streamClock = PlayerTitleSplit.streamClockKnown(
             bundleID: rawSnapshot.bundleIdentifier, duration: rawSnapshot.duration, elapsed: rawSnapshot.elapsedTime)
-        if rawSnapshot.isRadio == true || reampStreamClock,
+        if rawSnapshot.isRadio == true || streamClock,
            let cached = EnrichCacheReader.trackDurationSecs(
                artist: rawSnapshot.artist ?? "", title: rawSnapshot.title ?? "", album: rawSnapshot.album ?? "",
-               allowsLyricsMatch: reampStreamClock),
+               allowsLyricsMatch: streamClock),
            cached > 0, cached != rawSnapshot.duration {
             snapshot = rawSnapshot.withDuration(cached)
         }

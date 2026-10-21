@@ -83,7 +83,9 @@ public enum VoxPlayerInfo {
               let extras = try? JSONDecoder().decode(Extras.self, from: data)
         else { return nil }
         let path = filePath(fromTrackURL: extras.fileURL)
-        let id = identity(title: raw.title ?? "", artist: raw.artist ?? "", album: raw.album ?? "", filePath: path)
+        let named = streamURLName(raw.title ?? "")
+        let id = named.map { (title: $0.title, artist: $0.artist, album: "") }
+            ?? identity(title: raw.title ?? "", artist: raw.artist ?? "", album: raw.album ?? "", filePath: path)
         var snapshot = raw.withTitle(id.title).withArtist(id.artist).withAlbum(id.album)
         if let duration = preciseDuration(reported: raw.duration, file: path.flatMap(fileDuration)) {
             snapshot = snapshot.withDuration(duration)
@@ -271,6 +273,8 @@ public enum VoxPlayerInfo {
     /// (系统没带图时按它找同目录的图)。系统报的歌名是最近一次读数那首的歌名、或者它文件名的全小写(没写标签)时,
     /// 用那次读数的;否则只拆歌手、没有文件。不读盘。
     public static func artworkIdentity(title: String?, artist: String?) -> (title: String?, artist: String?, path: String?) {
+        if let title, let parts = radioParts(title) { return (parts.title, parts.artist, nil) }
+        if let title, let named = streamURLName(title) { return (named.title, named.artist, nil) }
         let entry = current.withLock { $0.map { (title: $0.title, artist: $0.artist, path: $0.path) } }
         return artworkIdentity(title: title, artist: artist, known: entry)
     }
@@ -294,6 +298,13 @@ public enum VoxPlayerInfo {
     /// 歌名、歌手,歌词缓存才是同一条),时长取文件的;记下这首和它的文件,写播放状态(`local_file`)、取封面时用。找不到文件时
     /// 只拆歌手。不是 VOX 的原样返回。会读盘(同一首只找一次),在轮询的后台线程上调。
     public static func systemFallback(_ snapshot: MediaControlSnapshot?, now: Date = Date()) -> MediaControlSnapshot? {
+        if let snapshot, snapshot.bundleIdentifier == bundleID, let title = snapshot.title {
+            if let named = streamURLName(title) { return snapshot.withTitle(named.title).withArtist(named.artist).withAlbum("") }
+            // 电台那份歌手一栏是台标的地址(本地文件不会这样):当网络电台处理,台名拿不到。
+            if (snapshot.artist ?? "").hasPrefix("http"), snapshot.duration == nil {
+                return radioSnapshot(station: nil, system: snapshot, now: now)
+            }
+        }
         guard let snapshot, snapshot.bundleIdentifier == bundleID, let title = snapshot.title, !title.isEmpty,
               let pid = snapshot.processIdentifier,
               let file = systemFile(title: title, pid: pid_t(pid), now: now)
@@ -429,6 +440,62 @@ public enum VoxPlayerInfo {
         guard !rawTitle.isEmpty else { return false }
         if rawTitle == entry.title || PlayerTitleSplit.repairingCJKMojibake(rawTitle) == entry.title { return true }
         return entry.path.map { URL(fileURLWithPath: $0).lastPathComponent.lowercased() } == rawTitle
+    }
+
+    // MARK: 网络流
+
+    /// 脚本读数是不是网络电台:总时长不是正数(本地文件和网络上的音频文件都报时长)。这时脚本的歌名是台名(`icy-name`),
+    /// 在放的这一首只在系统那份里(电台流的 ICY 标题,「歌手 - 歌名」)。只拿脚本读数判,系统那份播放中本来就不报时长。
+    public static func isRadioReading(_ snapshot: MediaControlSnapshot) -> Bool {
+        snapshot.bundleIdentifier == bundleID && PlayerTitleSplit.isStream(duration: snapshot.duration)
+    }
+
+    /// 网络电台这一拍的快照:歌名换成系统那份的 ICY 标题,位置是这个标题换上来之后过了多久(`PlayerTitleSplit` 拆歌手、
+    /// 按 `streamLeadSecs(bundleID:)` 排延迟线)。系统那份不是 VOX 的、没有标题、标题就是台名或一个地址,都算这一拍没有歌,
+    /// 返回 nil,别拿台名去搜歌词。`station`:脚本读到的台名,没有脚本读数时为 nil。
+    public static func radioSnapshot(station: MediaControlSnapshot?, system: MediaControlSnapshot?, now: Date) -> MediaControlSnapshot? {
+        guard let system, system.bundleIdentifier == bundleID,
+              let raw = system.title?.trimmingCharacters(in: .whitespaces),
+              isSongTitle(raw, station: station?.title) else { return nil }
+        let since = radioTitles.withLock { seen -> Date in
+            if seen?.title != raw { seen = (raw, now) }
+            return seen?.since ?? now
+        }
+        let base = station ?? system
+        var out = base.withStreamTrack(title: raw, elapsed: max(0, now.timeIntervalSince(since)), capturedAt: now)
+        out.processIdentifier = system.processIdentifier ?? station?.processIdentifier
+        return out
+    }
+
+    /// 电台流的标题算不算一首歌:不空、不是台名、不是地址。纯函数,selftest 覆盖。
+    public static func isSongTitle(_ title: String, station: String?) -> Bool {
+        guard !title.isEmpty, !title.hasPrefix("http://"), !title.hasPrefix("https://") else { return false }
+        return title != station?.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// 最近换上来的那个电台标题和它第一次出现的时刻。
+    private static let radioTitles = OSAllocatedUnfairLock<(title: String, since: Date)?>(initialState: nil)
+
+    /// 这串标题是不是网络电台那条路交出去的:`PlayerTitleSplit` 只对这些标题按电台拆、排延迟线,VOX 放本地文件时不动。
+    public static func isRadioTitle(_ title: String?) -> Bool {
+        guard let title else { return false }
+        return radioTitles.withLock { $0?.title == title }
+    }
+
+    /// 网络电台标题拆成的歌手和歌名(跟快照经 `PlayerTitleSplit` 拆出来的一致);不是电台那条路的标题为 nil。
+    static func radioParts(_ title: String) -> (artist: String, title: String)? {
+        guard isRadioTitle(title) else { return nil }
+        return PlayerTitleSplit.split(bundleID: bundleID, title: title, artist: "", isStream: true) ?? ("", title)
+    }
+
+    /// 网络上的音频文件:VOX 不读流里的标签,歌名报成地址本身。按地址最后一段的文件名认,规则同没写标签的本地文件
+    /// (去扩展名,有「 - 」按第一个拆)。不是 http(s) 地址、地址里没有文件名为 nil。纯函数,selftest 覆盖。
+    public static func streamURLName(_ title: String) -> (title: String, artist: String)? {
+        guard title.hasPrefix("http://") || title.hasPrefix("https://"), let url = URL(string: title) else { return nil }
+        let name = url.lastPathComponent
+        guard !name.isEmpty, name != "/" else { return nil }
+        let id = identity(title: name.lowercased(), artist: "", album: "", filePath: "/" + name)
+        return id.title.isEmpty ? nil : (id.title, id.artist)
     }
 
     static func logTornReading(rereads: Int, settled: Bool) {

@@ -31,11 +31,12 @@ public enum PlayerTitleSplit {
     /// 拆不出歌手时 `artist` 是空串。纯函数,selftest 覆盖。
     public static func split(bundleID: String?, title: String?, artist: String?,
                              isStream: Bool = false) -> (artist: String, title: String)? {
-        guard let bundleID, bundleIDs.contains(bundleID),
+        guard let bundleID, bundleIDs.contains(bundleID) || (isStream && streamBundleIDs.contains(bundleID)),
               (artist ?? "").trimmingCharacters(in: .whitespaces).isEmpty,
               let title, !title.isEmpty else { return nil }
         var base = strippingAudioExtension(repairingCJKMojibake(title))
-        if isStream { base = strippingTrailingParenthetical(base) }
+        // 末尾那组括号是 reAMP 电台标题里的台名简介;VOX 的 ICY 标题没有,去掉会删掉「(Live)」这类版本标记。
+        if isStream, bundleIDs.contains(bundleID) { base = strippingTrailingParenthetical(base) }
         if let dash = base.range(of: " - ") {
             let left = base[..<dash.lowerBound].trimmingCharacters(in: .whitespaces)
             let right = base[dash.upperBound...].trimmingCharacters(in: .whitespaces)
@@ -57,6 +58,7 @@ public enum PlayerTitleSplit {
             return out
         }
         let stream = isStream(duration: snapshot.duration)
+            && (snapshot.bundleIdentifier != VoxPlayerInfo.bundleID || VoxPlayerInfo.isRadioTitle(snapshot.title))
         guard let parts = split(bundleID: snapshot.bundleIdentifier, title: snapshot.title, artist: snapshot.artist,
                                 isStream: stream)
         else { return snapshot }
@@ -80,6 +82,18 @@ public enum PlayerTitleSplit {
     /// 0 / 16KB / 64KB / 320KB)量到 3.8~5.9 秒,多数在 4.2~4.5 秒;SomaFM 4.3 秒。电台往往在新歌开始之后才发标题、晚多少
     /// 不固定(SomaFM 每 2.8 秒才能插一次),歌词因此总是偏晚:在 4.4 秒上再提前 1.5 秒。见 02 章决策 126「电台逐行歌词」。
     public static let streamLeadSecs: TimeInterval = 2.9
+
+    /// 也按电台流拆标题、排延迟线的播放器:reAMP,和放网络电台时的 VOX(只认 `VoxPlayerInfo.isRadioTitle` 的标题)。
+    public static let streamBundleIDs: Set<String> = bundleIDs.union([PlaybackPlayer.vox.bundleIdentifier])
+
+    /// VOX 一收到电台流里的标题就换,播放头比收到的晚「电台开头多推的那几秒」(各台不同,实测 0~16 秒以上,VOX 不给);
+    /// 没法量,按常见的 Icecast 默认量估。见 02 章决策 154。
+    public static let voxStreamLeadSecs: TimeInterval = 3.0
+
+    /// 这个播放器的电台标题比出声早多少秒。
+    public static func streamLeadSecs(bundleID: String?) -> TimeInterval {
+        bundleID == PlaybackPlayer.vox.bundleIdentifier ? voxStreamLeadSecs : streamLeadSecs
+    }
 
     /// 电台流的延迟线:屏上在放的那首(`shown`)和收到了、还没出声的下一首(`pending`)。`start` 是推算的出声时刻;
     /// 连上后的第一首不知道从哪里进来的,为 nil(不给进度)。
@@ -136,7 +150,7 @@ public enum PlayerTitleSplit {
         let titleAt = now.addingTimeInterval(-(snapshot.elapsedTime ?? 0))
         let line = streamLine.withLock { line -> StreamDelayLine in
             line = advance(line, raw: raw, artist: parts.artist, title: parts.title, titleAt: titleAt,
-                           playing: snapshot.playing == true, now: now)
+                           playing: snapshot.playing == true, now: now, lead: streamLeadSecs(bundleID: snapshot.bundleIdentifier))
             return line
         }
         guard let shown = line.shown else { return snapshot }
@@ -154,7 +168,7 @@ public enum PlayerTitleSplit {
 
     /// 这份快照是延迟线排出来、起点推算过的电台流:位置解算可以拿歌词缓存里的曲长建锚点。纯函数,selftest 覆盖。
     public static func streamClockKnown(bundleID: String?, duration: Double?, elapsed: Double?) -> Bool {
-        guard let bundleID, bundleIDs.contains(bundleID) else { return false }
+        guard let bundleID, streamBundleIDs.contains(bundleID) else { return false }
         return isStream(duration: duration) && elapsed != nil
     }
 

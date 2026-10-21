@@ -2,7 +2,8 @@ import Foundation
 import LyrimuseCore
 
 /// VOX:AppleScript 读数的解读、没写标签的文件名、乱码、精确时长、换歌那一拍的撕裂、系统那份「歌手 — 专辑」的拆法、
-/// 脚本读不到时的退路(系统那份的锚点、按开着的文件认曲目、脚本封面、暂停时的轮询)、循环与音量、接线契约。读数样例照真机输出的形状造(地址是 `file:/…` 单斜杠、百分号编码,总时长整秒)。
+/// 脚本读不到时的退路(系统那份的锚点、按开着的文件认曲目、脚本封面、暂停时的轮询)、网络流(网络上的音频文件、网络电台)、
+/// 循环与音量、接线契约。读数样例照真机输出的形状造(地址是 `file:/…` 单斜杠、百分号编码,总时长整秒)。
 @MainActor
 func runVoxTests() {
     typealias V = VoxPlayerInfo
@@ -178,7 +179,7 @@ func runVoxTests() {
         }
         let client = source("LyrimuseCore/Local/MediaControlClient.swift")
         let adapted = sourceBody("private static func adaptedSnapshot(", in: client)
-        expectEqual(sourceHas(adapted, "return fetchVoxSnapshot() ?? VoxPlayerInfo.systemFallback(mediaControl)"), true,
+        expectEqual(sourceHas(adapted, "guard let vox = fetchVoxSnapshot() else { return VoxPlayerInfo.systemFallback(mediaControl) }"), true,
                     "VOX 接线: 整份顶替,拿不到时退回系统那份、按开着的文件认这一首")
         let fetch = sourceBody("private static func fetchVoxSnapshot() -> MediaControlSnapshot? {", in: client)
         expectEqual(sourceHas(fetch, "VoxPlayerInfo.positionLagsTrackChange(previous: previous, current: VoxPlayerInfo.mark(reading))")
@@ -319,5 +320,85 @@ func runVoxTests() {
         expectEqual(L.pollsFastWhilePaused(bundleID: vox, pausedFor: L.fastPausedPollWindow + 1), false, "VOX 暂停轮询: 停久了退回暂停档")
         expectEqual(L.pollsFastWhilePaused(bundleID: vox, pausedFor: nil), false, "VOX 暂停轮询: 没在暂停")
         expectEqual(L.pollsFastWhilePaused(bundleID: "com.apple.Music", pausedFor: 5), false, "VOX 暂停轮询: 别的播放器有自己的通知,不动")
+    }
+
+    // ---- 网络流:网络上的音频文件、网络电台 ----
+    do {
+        let n = V.streamURLName("http://127.0.0.1:8765/marjoram.mp3")
+        expectEqual(n.map { "\($0.artist)|\($0.title)" }, "|marjoram", "VOX 网络文件: 歌名是地址,按文件名认、去扩展名")
+        expectEqual(V.streamURLName("https://h.example/m/Accident%20-%20Marjoram.flac").map { "\($0.artist)|\($0.title)" },
+                    "Accident|Marjoram", "VOX 网络文件: 文件名解出百分号编码,有「 - 」拆成歌手歌名")
+        expectEqual(V.streamURLName("Marjoram") == nil && V.streamURLName("https://h.example/") == nil, true,
+                    "VOX 网络文件: 不是地址、地址里没有文件名的不动")
+        let fileJSON = #"{"title":"http://127.0.0.1:8765/marjoram.mp3","artist":"","album":"","duration":294,"playing":true,"playbackRate":1,"isMusicApp":true,"bundleIdentifier":"com.coppertino.Vox","fileURL":"http://127.0.0.1:8765/marjoram.mp3","uniqueID":"x","elapsedTime":5}"#
+        let r = V.reading(fromScriptOutput: Data(fileJSON.utf8), capturedAt: t0, fileDuration: { _ in nil })
+        expectEqual(r?.snapshot.title == "marjoram" && r?.filePath == nil && V.isRadioReading(r!.snapshot) == false, true,
+                    "VOX 网络文件: 脚本读数按文件名认,没有本地文件,有时长不当电台")
+
+        let radioJSON = #"{"title":"Lyrimuse Test Radio","artist":"","album":"","duration":-1,"playing":true,"playbackRate":1,"isMusicApp":true,"bundleIdentifier":"com.coppertino.Vox","fileURL":"http://127.0.0.1:8766/radio","uniqueID":"y","elapsedTime":66}"#
+        let station = V.reading(fromScriptOutput: Data(radioJSON.utf8), capturedAt: t0, fileDuration: { _ in nil })!.snapshot
+        expectEqual(V.isRadioReading(station), true, "VOX 电台: 总时长 -1 的脚本读数是网络电台")
+        expectEqual(V.isSongTitle("Accident - Marjoram", station: "Lyrimuse Test Radio"), true, "VOX 电台: ICY 标题算歌")
+        expectEqual(V.isSongTitle("Lyrimuse Test Radio", station: "Lyrimuse Test Radio") || V.isSongTitle("", station: nil)
+                    || V.isSongTitle("https://somafm.com/x", station: nil), false, "VOX 电台: 台名、空标题、地址都不算歌")
+        func sys(_ title: String, artist: String? = nil, bundle: String = "com.coppertino.Vox") -> MediaControlSnapshot {
+            .forReplay(title: title, artist: artist, duration: nil, elapsedTime: nil, playing: true,
+                       bundleIdentifier: bundle, anchorElapsedTime: nil)
+        }
+        let a = V.radioSnapshot(station: station, system: sys("Accident - Marjoram", artist: "https://somafm.com/logos/x.jpg"), now: t0)
+        expectEqual(a?.title == "Accident - Marjoram" && a?.artist == "" && a?.duration == nil && a?.elapsedTime == 0, true,
+                    "VOX 电台: 这一首取系统那份的 ICY 标题,台标地址那栏丢掉,从标题换上来那一刻起算")
+        let a2 = V.radioSnapshot(station: station, system: sys("Accident - Marjoram"), now: t0.addingTimeInterval(7))
+        expectEqual(a2?.elapsedTime.map { abs($0 - 7) < 0.001 }, true, "VOX 电台: 同一个标题接着算")
+        expectEqual(V.radioSnapshot(station: station, system: sys("Lyrimuse Test Radio"), now: t0) == nil
+                    && V.radioSnapshot(station: station, system: nil, now: t0) == nil
+                    && V.radioSnapshot(station: station, system: sys("Accident - Marjoram", bundle: "com.apple.Music"), now: t0) == nil,
+                    true, "VOX 电台: 系统那份只有台名、没有、不是 VOX 的,这一拍没有歌")
+
+        typealias P = PlayerTitleSplit
+        let vox = "com.coppertino.Vox"
+        expectEqual(P.streamLeadSecs(bundleID: vox) == P.voxStreamLeadSecs && P.streamLeadSecs(bundleID: "com.reamp") == P.streamLeadSecs,
+                    true, "VOX 电台: 提前量按播放器给")
+        P.resetStreamDelayLine()
+        _ = V.radioSnapshot(station: station, system: sys("Live Band - Song (Live)"), now: t0)
+        let first = P.applied(to: V.radioSnapshot(station: station, system: sys("Live Band - Song (Live)"), now: t0.addingTimeInterval(1)),
+                              now: t0.addingTimeInterval(1))
+        expectEqual(first?.title == "Song (Live)" && first?.artist == "Live Band" && first?.elapsedTime == nil, true,
+                    "VOX 电台 出口: 拆成歌手歌名、不去掉末尾括号;连上后的第一首不给进度")
+        _ = V.radioSnapshot(station: station, system: sys("Next Artist - Next"), now: t0.addingTimeInterval(20))
+        let held = P.applied(to: V.radioSnapshot(station: station, system: sys("Next Artist - Next"), now: t0.addingTimeInterval(21)),
+                             now: t0.addingTimeInterval(21))
+        expectEqual(held?.title == "Song (Live)", true, "VOX 电台 出口: 换标题后先接着报上一首")
+        let next = P.applied(to: V.radioSnapshot(station: station, system: sys("Next Artist - Next"), now: t0.addingTimeInterval(25)),
+                             now: t0.addingTimeInterval(25))
+        expectEqual(next?.title == "Next" && next?.artist == "Next Artist"
+                    && next?.elapsedTime.map { abs($0 - (5 - P.voxStreamLeadSecs)) < 0.001 } == true, true,
+                    "VOX 电台 出口: 到点换上,进度从「换标题 + 提前量」起算")
+        expectEqual(P.streamClockKnown(bundleID: vox, duration: nil, elapsed: next?.elapsedTime), true,
+                    "VOX 电台: 起点推算过的拿歌词缓存里的曲长建锚点")
+        expectEqual(V.artworkIdentity(title: "Next Artist - Next", artist: "https://somafm.com/logos/x.jpg").artist, "Next Artist",
+                    "VOX 电台: 封面那份载荷的身份跟快照一样拆")
+        P.resetStreamDelayLine()
+        let local = P.applied(to: .forReplay(title: "happy boy.mp3", artist: "", duration: nil, elapsedTime: 3, playing: true,
+                                             bundleIdentifier: vox, anchorElapsedTime: nil), now: t0)
+        expectEqual(local?.title, "happy boy.mp3", "VOX 电台: 不是电台那条路交出的标题(本地文件的退路)不按电台拆")
+        expectEqual(P.split(bundleID: vox, title: "A - B", artist: "", isStream: false) == nil, true,
+                    "VOX: 不是电台流时不拆标题(本地文件的身份归 VoxPlayerInfo)")
+    }
+
+    // ---- 网络流接线 ----
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let client = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift").path, encoding: .utf8)) ?? ""
+        let adapted = sourceBody("private static func adaptedSnapshot(", in: client)
+        expectEqual(sourceHas(adapted, "guard VoxPlayerInfo.isRadioReading(vox) else { return vox }")
+                    && sourceHas(adapted, "if let radio = VoxPlayerInfo.radioSnapshot(station: vox, system: mediaControl, now: Date()) { return radio }")
+                    && sourceHas(adapted, "setSnapshotFailure(.targetNotPlayingMusic)"), true,
+                    "VOX 电台接线: 主路径取系统那份的 ICY 标题,取不到算没有歌")
+        expectEqual(sourceHas(sourceBody("private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {", in: client),
+                              "station: vox, system: NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: target.bundleID)?.snapshot,"),
+                    true, "VOX 电台接线: 焦点被占时按 bundle id 单问拿 ICY 标题")
+        expectEqual(sourceHas(client, "snapshot = fetchVoxSnapshot().flatMap { VoxPlayerInfo.isRadioReading($0) ? nil : $0 }"), true,
+                    "VOX 电台接线: 通道坏了时电台不报台名")
     }
 }

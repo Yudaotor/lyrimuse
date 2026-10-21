@@ -1828,7 +1828,14 @@ public enum MediaControlClient {
         case .appleMusic: snapshot = fetchAppleMusicSnapshot()
         case .spotify: snapshot = fetchSpotifySnapshot()
         case .kaset: snapshot = fetchKasetSnapshot()
-        case .vox: snapshot = fetchVoxSnapshot()
+        case .vox:
+            // 网络电台的这一首只在系统那份里:按 bundle id 单问一份拿 ICY 标题,拿不到交给下面那一级。
+            snapshot = fetchVoxSnapshot().flatMap { vox in
+                guard VoxPlayerInfo.isRadioReading(vox) else { return vox }
+                return VoxPlayerInfo.radioSnapshot(
+                    station: vox, system: NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: target.bundleID)?.snapshot,
+                    now: Date())
+            }
         default: break
         }
         let viaAppleScript = snapshot != nil
@@ -1973,7 +1980,9 @@ public enum MediaControlClient {
             switch player {
             case .appleMusic: snapshot = fetchAppleMusicSnapshot()
             case .kaset: snapshot = fetchKasetSnapshot()
-            case .vox: snapshot = fetchVoxSnapshot()
+            case .vox:
+                // 通道坏了拿不到系统那份,网络电台认不出在放哪一首,不报。
+                snapshot = fetchVoxSnapshot().flatMap { VoxPlayerInfo.isRadioReading($0) ? nil : $0 }
             default: snapshot = fetchSpotifySnapshot()
             }
             guard let snapshot else { continue }
@@ -2192,7 +2201,12 @@ public enum MediaControlClient {
         case PlaybackPlayer.vox.bundleIdentifier:
             // 暂停态也问:系统那份播放中不报位置,暂停时报的那一次比脚本冻结的值少 0.1 秒,换钟就是一次回跳。
             // 拿不到时退回系统那份:按 VOX 开着的文件认这一首、拆开歌手和专辑(见 VoxPlayerInfo.systemFallback)。
-            return fetchVoxSnapshot() ?? VoxPlayerInfo.systemFallback(mediaControl)
+            // 放网络电台时脚本只有台名,这一首取系统那份的 ICY 标题;取不到就是这一拍没有歌,不退回台名。
+            guard let vox = fetchVoxSnapshot() else { return VoxPlayerInfo.systemFallback(mediaControl) }
+            guard VoxPlayerInfo.isRadioReading(vox) else { return vox }
+            if let radio = VoxPlayerInfo.radioSnapshot(station: vox, system: mediaControl, now: Date()) { return radio }
+            setSnapshotFailure(.targetNotPlayingMusic)
+            return nil
         default:
             return mediaControl
         }

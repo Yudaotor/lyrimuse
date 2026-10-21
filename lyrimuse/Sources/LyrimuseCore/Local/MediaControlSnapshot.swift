@@ -131,6 +131,17 @@ public struct MediaControlSnapshot: Decodable {
             anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: newCapturedAt)
     }
 
+    /// 换成网络电台里这一首的副本:歌名换成电台流里的标题,歌手、专辑、时长清空,位置是这个标题换上来之后过了多久。
+    /// 用处是 VOX 放网络电台(`VoxPlayerInfo.radioSnapshot`),之后由 `PlayerTitleSplit` 拆歌手、排延迟线。写成显式方法,
+    /// 理由同 `withAlbum`。
+    public func withStreamTrack(title newTitle: String, elapsed: Double?, capturedAt newCapturedAt: Date) -> MediaControlSnapshot {
+        MediaControlSnapshot(
+            title: newTitle, artist: "", album: "", duration: nil,
+            elapsedTime: elapsed, playing: playing, playbackRate: playbackRate,
+            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
+            anchorElapsedTime: nil, isRadio: isRadio, capturedAt: newCapturedAt)
+    }
+
     /// 换掉速度和位置的副本(读数时刻不变)。唯一的用处是洛雪播放中途改速度(`LocalPlaybackSource.lxMusicRateCorrected`)。
     /// 写成显式方法,理由同 `withAlbum`。
     public func withPlaybackRate(_ newRate: Double, elapsed newElapsed: Double) -> MediaControlSnapshot {
