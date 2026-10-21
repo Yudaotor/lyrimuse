@@ -1693,6 +1693,11 @@ struct LyricsWindowView: View {
                idealWidth: 1020,
                minHeight: showsMiniLayout ? LyricsWindowController.miniMinSize.height : 480,
                idealHeight: 660)
+        // 预览里窗口透明(半透明纯色 / 渐变、毛玻璃)时垫一张桌面壁纸:真窗口透出去的是桌面、字色按壁纸亮度选,
+        // 预览的宿主却是设置页的浅底,不垫的话白字落在白底上整块看不见。见 07 章决策 177。
+        .background {
+            if previewMode, wantsTransparentWindow { OverlayDesktopSurface() }
+        }
         // 预览模式下**不能**挂:它会把宿主(设置)窗口当成歌词窗口接管,见 previewMode 的注释。
         .background {
             if !previewMode {

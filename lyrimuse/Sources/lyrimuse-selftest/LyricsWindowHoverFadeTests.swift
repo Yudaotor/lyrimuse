@@ -63,6 +63,8 @@ func checkLyricsWindowHoverFade() {
                 true, "迷你悬浮淡化: 跟踪铺进标题栏那一条")
     expectEqual(sourceHas(window, "if !previewMode {\n            MiniWindowHoverTracker {"), true,
                 "迷你悬浮淡化: 设置页预览里不挂")
+    expectEqual(sourceHas(window, "if previewMode, wantsTransparentWindow { OverlayDesktopSurface() }"), true,
+                "歌词窗口预览: 窗口透明时垫桌面壁纸,白字不落在设置页白底上")
     expectEqual(sourceBytes(window, contain: "hoverFade.attach(window, isMini: $isMini.eraseToAnyPublisher())")
                 && sourceBytes(window, contain: "self?.hoverFade.windowClosed()"), true,
                 "迷你悬浮淡化: 窗口 attach 时接上、跟着进出迷你,关窗复位")
