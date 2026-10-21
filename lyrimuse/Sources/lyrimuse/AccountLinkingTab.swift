@@ -2098,22 +2098,24 @@ struct AccountLinkingTab: View {
                     ))
                 }
                 CardDivider()
-                digestRow(icon: "sun.max", title: L10n.t("每日听歌报告"), schedule: L10n.t("每天 22:00 后推送当日报告"),
+                // 四档共用的推送时刻,跟「数据来源」「每类列出」一样放卡顶;下面四档的副标题按它写什么时候推。
+                DigestPushTimeRow()
+                CardDivider()
+                let time = DigestPushTime.clockText(features.digestPushMinutes)
+                digestRow(icon: "sun.max", title: L10n.t("每日听歌报告"),
+                          schedule: DigestPushTime.dailyCoversSameDay(features.digestPushMinutes)
+                              ? String(format: L10n.t("每天 %@ 推送当天的报告"), time)
+                              : String(format: L10n.t("每天 %@ 推送前一天的报告"), time),
                           event: NotificationRouting.dailyDigest, enabled: \.dailyDigest, source: \.dailyDigestSource)
                 CardDivider()
-                digestRow(icon: "calendar", title: L10n.t("每周听歌小结"), schedule: L10n.t("每周推送上一周的小结"),
+                digestRow(icon: "calendar", title: L10n.t("每周听歌小结"), schedule: String(format: L10n.t("一周结束后的 %@ 推送上一周的小结"), time),
                           event: NotificationRouting.weeklyDigest, enabled: \.weeklyDigest, source: \.weeklyDigestSource)
                 CardDivider()
-                digestRow(icon: "calendar.badge.clock", title: L10n.t("每月听歌小结"), schedule: L10n.t("每月初推送上个月的小结"),
+                digestRow(icon: "calendar.badge.clock", title: L10n.t("每月听歌小结"), schedule: String(format: L10n.t("每月 1 日 %@ 推送上个月的小结"), time),
                           event: NotificationRouting.monthlyDigest, enabled: \.monthlyDigest, source: \.monthlyDigestSource)
                 CardDivider()
-                digestRow(icon: "trophy", title: L10n.t("年度听歌小结"), schedule: L10n.t("每年 1 月初推送上一年的小结"),
+                digestRow(icon: "trophy", title: L10n.t("年度听歌小结"), schedule: String(format: L10n.t("每年 1 月 1 日 %@ 推送上一年的小结"), time),
                           event: NotificationRouting.yearlyDigest, enabled: \.yearlyDigest, source: \.yearlyDigestSource)
-                if !config.notificationChannels.isEmpty {
-                    CardDivider()
-                    NotificationQuietHoursRow()
-                        .padding(.bottom, 4)
-                }
             }
 
             NotificationLogCard(config: config)
@@ -2625,7 +2627,7 @@ extension AccountDestination {
             // 就是唯一的开关"是同一个思路(见 stateRelayFields 的 footer 注释)。
             return L10n.t("将播放记录同步到 Last.fm")
         case .bark:
-            return L10n.t("接收 Lyrimuse 的推送通知")
+            return L10n.t("把听歌报告推到手机、群聊或你自己的服务")
         case .discord:
             return L10n.t("向 Discord 好友展示正在收听的歌曲")
         }

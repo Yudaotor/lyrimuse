@@ -23,7 +23,7 @@ func TestConfigNotifyChannelsLegacy(t *testing.T) {
 	got := configNotifyChannels(&config{NotificationPlatform: platformDingtalk, NotificationWebhookURL: " https://oapi.dingtalk.com/robot/send?access_token=x \n",
 		DingtalkSignSecret: "SECdt", FeishuSignSecret: "fs"})
 	want := notifyChannel{ID: legacyNotifyChannelID, Platform: platformDingtalk, URL: "https://oapi.dingtalk.com/robot/send?access_token=x",
-		Secret: "SECdt", Enabled: true, Default: true}
+		Secret: "SECdt", Enabled: true}
 	if len(got) != 1 || got[0] != want {
 		t.Errorf("got %+v, want %+v", got, want)
 	}
@@ -409,7 +409,7 @@ func TestNotifySharedSamples(t *testing.T) {
 		t.Fatal(err)
 	}
 	chs := configNotifyChannels(configFromBytes(raw))
-	if len(chs) != 2 || chs[0].ID != "c1" || chs[0].ChatID != "42" || !chs[0].Default || chs[1].Secret != "tk_faketoken" || chs[1].Enabled {
+	if len(chs) != 2 || chs[0].ID != "c1" || chs[0].ChatID != "42" || chs[1].Secret != "tk_faketoken" || chs[1].Enabled {
 		t.Errorf("channels = %+v", chs)
 	}
 	if routes := configFromBytes(raw).NotificationRoutes; len(routes) != 2 || len(routes[notifyEventWeekly]) != 1 || routes[notifyEventDaily][1] != "c2" {
@@ -428,8 +428,7 @@ func TestNotifySharedSamples(t *testing.T) {
 	}
 	var lf notifyLogFile
 	strict("log.json", &lf)
-	if lf.Schema != notifyLogSchema || len(lf.Entries) != 3 || lf.Entries[1].Code != "19021" || lf.Entries[1].Body == "" ||
-		!lf.Entries[0].Deferred || lf.Entries[1].Deferred {
+	if lf.Schema != notifyLogSchema || len(lf.Entries) != 3 || lf.Entries[1].Code != "19021" || lf.Entries[1].Body == "" {
 		t.Errorf("log = %+v", lf)
 	}
 	var rf notifyTestResultFile

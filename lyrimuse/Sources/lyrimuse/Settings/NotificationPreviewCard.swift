@@ -1,26 +1,36 @@
 import LyrimuseCore
 import SwiftUI
 
-/// 渠道编辑弹窗底部「预览」弹出的那块:用一份测试数据(Core `NotificationPreview`)画出报告推到这个平台上大概的样子。
-/// 正文跟引擎真推出去的逐字一样,条数跟「每类列出」走;外框是照各平台样子画的示意,颜色写死、不随系统深浅色变。
+/// 推送渠道「预览」弹出的那块(渠道列表每一行、编辑弹窗底部各有一个入口):画出报告推到这个平台上大概的样子。
+/// 内容用这一期的真实数据 —— 请引擎按真推送同一套取数算一份(`NotificationPreviewLoader`,引擎 digestpreview.go),
+/// 日报是今天到现在(今天还没听就是昨天)、周报是最近一个整周;取的那十几秒、或者取不到(没连账号、没听、网络)时画测试数据
+/// (Core `NotificationPreview.sample`),底部写明。正文跟引擎真推出去的逐字一样,条数跟「每类列出」走;外框是照各平台样子画的
+/// 示意,颜色写死、不随系统深浅色变。
 /// 发件人名字用渠道「名称」,头像用平台图标 —— 群机器人、Telegram Bot 真正的名字和头像是在平台上设的,App 不知道。
-/// `rich`(渠道开着「按平台排版」)时照引擎 notifyrich.go 各平台的排法画:加粗、分栏、卡片;封面画成占位方块(测试数据没有
-/// 真的封面),飞书不画(群机器人带不了图)。见 15 章决策 75。
+/// 照引擎 notifyrich.go 各平台的排法画(推送一律按平台排版):加粗、分栏、卡片;封面用真实数据里的专辑封面
+/// (测试数据、没取到封面时画占位方块),飞书不画(群机器人带不了图)。见 15 章决策 75。
 struct NotificationPreviewCard: View {
     let platform: NotificationPlatform
     let senderName: String
     /// 通用 Webhook 填了签名密钥:请求头里多一行签名。
     let signed: Bool
-    let rich: Bool
 
     @ObservedObject private var features = FeatureSettingsStore.shared
     @State private var kind: NotificationPreview.Kind = .daily
+    @State private var loaded: [NotificationPreview.Kind: NotificationPreviewLoader.State] = [:]
+    @State private var loading: Set<NotificationPreview.Kind> = []
     private let now = Date()
 
-    private var stats: NotificationPreview.Stats { NotificationPreview.sample(kind) }
+    /// 这一档取到的真实报告;还没取到 / 取不到时为 nil,画测试数据。
+    private var real: (title: String, stats: NotificationPreview.Stats)? {
+        if case .real(let title, let stats)? = loaded[kind] { return (title, stats) }
+        return nil
+    }
+
+    fileprivate var stats: NotificationPreview.Stats { real?.stats ?? NotificationPreview.sample(kind) }
 
     var body: some View {
-        let title = NotificationPreview.title(kind, now: now)
+        let title = real?.title ?? NotificationPreview.title(kind, now: now)
         let text = NotificationPreview.body(stats, topN: features.digestTopN)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
@@ -31,13 +41,12 @@ struct NotificationPreviewCard: View {
                 }, compact: true)
                 .fixedSize()
                 Spacer()
-                Text(L10n.t("测试数据"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                dataBadge
             }
             ScrollView {
                 stage(title: title, text: text)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .opacity(real == nil && loading.contains(kind) ? 0.45 : 1)
             }
             .frame(height: 300)
             .background(backdrop)
@@ -49,19 +58,55 @@ struct NotificationPreviewCard: View {
         }
         .padding(12)
         .frame(width: 420)
+        .task(id: kind) { await load(kind) }
+    }
+
+    private func load(_ kind: NotificationPreview.Kind) async {
+        if let hit = NotificationPreviewLoader.cached(kind) {
+            loaded[kind] = hit
+            return
+        }
+        loading.insert(kind)
+        let state = await NotificationPreviewLoader.load(kind)
+        loading.remove(kind)
+        if let state { loaded[kind] = state }
+    }
+
+    /// 右上角:真实数据(数据源)、正在取、测试数据。
+    @ViewBuilder
+    private var dataBadge: some View {
+        if let real {
+            Text(String(format: L10n.t("真实数据 · %@"), real.stats.sourceName))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        } else if loading.contains(kind) {
+            HStack(spacing: 5) {
+                ProgressView().controlSize(.mini)
+                Text(L10n.t("正在取真实数据…"))
+            }
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+        } else {
+            Text(L10n.t("测试数据"))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        }
     }
 
     private var caption: String {
-        if rich, platform != .webhook {
-            return platform == .feishu
-                ? L10n.t("外框为示意，名字和头像以你在平台上的设置为准。内容与实际推送一致，数据为测试数据")
-                : L10n.t("外框为示意，封面用占位图代替。内容与实际推送一致，数据为测试数据")
-        }
+        let frame: String
         switch platform {
-        case .webhook: return L10n.t("这就是会 POST 出去的内容，真正发出时是一行；真推送时 data 里还带封面地址和榜单链接")
+        case .webhook: frame = L10n.t("这就是实际 POST 的内容，发送时是一行。")
         // 这几种画出来没有发件人名字和头像。
-        case .bark, .ntfy, .serverchan: return L10n.t("外框为示意。正文与实际推送逐字一致，数据为测试数据")
-        default: return L10n.t("外框为示意，名字和头像以你在平台上的设置为准。正文与实际推送逐字一致，数据为测试数据")
+        case .bark, .ntfy, .serverchan: frame = L10n.t("外框为示意。")
+        default: frame = L10n.t("外框为示意，名字和头像以你在平台上的设置为准。")
+        }
+        if real != nil { return frame + L10n.t("内容来自这一期的真实数据，跟实际推送一致") }
+        if loading.contains(kind) { return frame + L10n.t("正在取这一期的真实数据，先显示测试数据") }
+        switch loaded[kind] {
+        case .unavailable(.noAccount)?: return frame + L10n.t("还没有连接 Last.fm 或 ListenBrainz，先用测试数据示意")
+        case .unavailable(.empty)?: return frame + L10n.t("这一期还没有收听记录，先用测试数据示意")
+        default: return frame + L10n.t("没能取到真实数据（网络或后台服务未响应），先用测试数据示意")
         }
     }
 
@@ -88,23 +133,10 @@ struct NotificationPreviewCard: View {
 
     @ViewBuilder
     private func stage(title: String, text: String) -> some View {
-        if rich, platform != .webhook {
-            richStage(title: title, text: text)
+        if platform == .webhook {
+            webhook(title: title, text: text)
         } else {
-            plainStage(title: title, text: text)
-        }
-    }
-
-    @ViewBuilder
-    private func plainStage(title: String, text: String) -> some View {
-        switch platform {
-        case .bark, .ntfy: banner(title: title, text: text)
-        case .telegram: telegram(title + "\n" + text)
-        case .dingtalk, .wecom, .feishu: groupBot(title + "\n" + text)
-        case .discord: discord(title: title, text: text)
-        case .slack: slack(title: title, text: text)
-        case .serverchan: serverChan(title: title, text: text)
-        case .webhook: webhook(title: title, text: text)
+            richStage(title: title, text: text)
         }
     }
 
@@ -148,111 +180,6 @@ struct NotificationPreviewCard: View {
         .padding(14)
     }
 
-    /// 头像贴顶(Telegram 里是贴底):正文长,贴底的头像会落到预览框下面看不见。
-    private func telegram(_ message: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            avatar(32)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(senderName).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color(hex: 0x3B8AD4))
-                Text(message).font(.system(size: 12.5)).foregroundStyle(Color.black)
-                Text(clock).font(.system(size: 10)).foregroundStyle(Color.black.opacity(0.45))
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
-            .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 24)
-        }
-        .padding(12)
-    }
-
-    /// 钉钉、企业微信、飞书的群机器人:名字后面一枚「机器人」。
-    private func groupBot(_ message: String) -> some View {
-        let (tagFG, tagBG, nameFG): (Color, Color, Color) = switch platform {
-        case .dingtalk: (Color(hex: 0x3A7AFE), Color(hex: 0xE9F2FF), Color(hex: 0x858E9B))
-        case .wecom: (Color(hex: 0x2E9E57), Color(hex: 0xEAF7EF), Color(hex: 0x8F959E))
-        default: (Color(hex: 0x245BDB), Color(hex: 0xE1EAFF), Color(hex: 0x646A73))
-        }
-        return HStack(alignment: .top, spacing: 9) {
-            avatar(32, circle: platform != .wecom)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 5) {
-                    Text(senderName).font(.system(size: 11.5)).foregroundStyle(nameFG)
-                    tag(L10n.t("机器人"), fg: tagFG, bg: tagBG)
-                }
-                Text(message)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Color(hex: 0x1F2329))
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 24)
-        }
-        .padding(12)
-    }
-
-    /// Discord:标题前后的 ** 渲染成粗体。
-    private func discord(title: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            avatar(34)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    Text(senderName).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(hex: 0xF2F3F5))
-                    tag("APP", fg: .white, bg: Color(hex: 0x5865F2))
-                    Text(String(format: L10n.t("今天 %@"), clock)).font(.system(size: 10.5)).foregroundStyle(Color(hex: 0x949BA4))
-                }
-                Group {
-                    Text(title).bold()
-                    Text(text)
-                }
-                .font(.system(size: 12.5))
-                .foregroundStyle(Color(hex: 0xDBDEE1))
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-    }
-
-    /// Slack:标题前后的 * 渲染成粗体。
-    private func slack(title: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            avatar(34, circle: false)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    Text(senderName).font(.system(size: 13, weight: .heavy)).foregroundStyle(Color(hex: 0x1D1C1D))
-                    tag("APP", fg: Color(hex: 0x616061), bg: Color(hex: 0xE8E8E8))
-                    Text(clock).font(.system(size: 10.5)).foregroundStyle(Color(hex: 0x616061))
-                }
-                Group {
-                    Text(title).bold()
-                    Text(text)
-                }
-                .font(.system(size: 12.5))
-                .foregroundStyle(Color(hex: 0x1D1C1D))
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-    }
-
-    /// Server酱:微信「方糖」服务号的消息卡,只露正文前几行,点「查看详情」看全文。
-    private func serverChan(title: String, text: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(L10n.t("方糖 · 服务通知")).font(.system(size: 11)).foregroundStyle(Color(hex: 0x888888))
-            Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color(hex: 0x111111))
-            Text(text).font(.system(size: 12)).foregroundStyle(Color(hex: 0x666666)).lineLimit(3)
-            Divider().overlay(Color(hex: 0xEEEEEE))
-            Text(L10n.t("查看详情 ›")).font(.system(size: 12)).foregroundStyle(Color(hex: 0x576B95))
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white))
-        .padding(14)
-    }
-
     /// 通用 Webhook:请求头和 JSON 原样给出。
     private func webhook(title: String, text: String) -> some View {
         var head = [L10n.t("POST 到你填的地址"), "Content-Type: application/json", "X-Lyrimuse-Event: \(kind.event)"]
@@ -270,6 +197,44 @@ struct NotificationPreviewCard: View {
     }
 }
 
+// MARK: 真实数据
+
+/// 请引擎算这一期的真实报告(请求走「测一下」那条通道,结果见 `NotificationTest.previewResult`)。同一档十分钟内不重取:
+/// 来回切平台、关了再开预览都直接用上次的。
+@MainActor
+enum NotificationPreviewLoader {
+    enum State: Equatable {
+        case real(title: String, stats: NotificationPreview.Stats)
+        /// 取不到;原因为 nil 表示引擎没响应。
+        case unavailable(NotificationTest.PreviewResult.Reason?)
+    }
+
+    private static let ttl: TimeInterval = 600
+    private static var cache: [NotificationPreview.Kind: (at: Date, state: State)] = [:]
+    private static let requestURL = LyrimusePaths.configFile(NotificationTest.requestFileName)
+    private static let resultURL = LyrimusePaths.configFile(NotificationTest.previewResultFileName)
+
+    static func cached(_ kind: NotificationPreview.Kind) -> State? {
+        guard let hit = cache[kind], Date().timeIntervalSince(hit.at) < ttl, case .real = hit.state else { return nil }
+        return hit.state
+    }
+
+    /// 任务被取消(预览关了、切了档)时返回 nil。
+    static func load(_ kind: NotificationPreview.Kind) async -> State? {
+        let id = UUID().uuidString
+        guard (try? NotificationTest.previewBody(id: id, kind: kind).writeSecurely(to: requestURL)) != nil else { return .unavailable(nil) }
+        let deadline = Date().addingTimeInterval(NotificationTest.previewTimeout)
+        while Date() < deadline {
+            do { try await Task.sleep(nanoseconds: 400_000_000) } catch { return nil }
+            guard let data = FileIO.read(resultURL), let result = NotificationTest.previewResult(id: id, in: data) else { continue }
+            let state: State = result.stats.map { .real(title: result.title, stats: $0) } ?? .unavailable(result.reason)
+            cache[kind] = (Date(), state)
+            return state
+        }
+        return .unavailable(nil)
+    }
+}
+
 // MARK: 按平台排版(notifyrich.go)
 
 extension NotificationPreviewCard {
@@ -281,7 +246,8 @@ extension NotificationPreviewCard {
     fileprivate var summary: String { NotificationPreview.summaryLine(stats) }
     fileprivate var sections: [NotificationPreview.RichSection] { NotificationPreview.richSections(stats, topN: features.digestTopN) }
     fileprivate var newLine: String { NotificationPreview.newArtistsLine(stats) }
-    fileprivate var linkLabel: String { L10n.t("在 Last.fm 上看完整榜单") }
+    fileprivate var linkLabel: String { String(format: L10n.t("在 %@ 上看完整榜单"), stats.sourceName) }
+    fileprivate var footerText: String { "Lyrimuse · " + String(format: L10n.t("数据来自 %@"), stats.sourceName) }
 
     @ViewBuilder
     fileprivate func richStage(title: String, text: String) -> some View {
@@ -297,12 +263,22 @@ extension NotificationPreviewCard {
         }
     }
 
-    /// 封面占位:测试数据没有真的封面,画一块渐变加音符。
+    /// 封面:真实数据里有头号专辑的封面就加载它;测试数据、没取到封面、还没加载出来时画一块渐变加音符。
     fileprivate func cover(_ size: CGFloat?, height: CGFloat? = nil, corner: CGFloat = 6) -> some View {
-        RoundedRectangle(cornerRadius: corner, style: .continuous)
+        let placeholder = RoundedRectangle(cornerRadius: corner, style: .continuous)
             .fill(LinearGradient(colors: [Color(hex: 0xE5484D), Color(hex: 0x8E44AD)], startPoint: .topLeading, endPoint: .bottomTrailing))
             .overlay(Image(systemName: "music.note").font(.system(size: (size ?? height ?? 60) * 0.32, weight: .semibold)).foregroundStyle(.white.opacity(0.9)))
-            .frame(width: size, height: height ?? size)
+        return AsyncImage(url: URL(string: stats.coverURL)) { phase in
+            if let image = phase.image {
+                // 专辑封面是方图:整张显示,不裁(推出去的也是整张)。
+                image.resizable().aspectRatio(contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+            } else {
+                placeholder
+            }
+        }
+        .frame(width: size, height: height ?? size)
+        .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
     }
 
     /// 第一行、每类、新听的歌手、链接,按一种字色、链接色排成一列。headingPrefix:小节标题前缀(Telegram「Top 」)。
@@ -388,7 +364,7 @@ extension NotificationPreviewCard {
                             }
                         }
                         if !newLine.isEmpty { Text("🆕 " + newLine).font(.system(size: 11.5)).foregroundStyle(Color(hex: 0xDBDEE1)) }
-                        Text("Lyrimuse · " + L10n.t("数据来自 Last.fm")).font(.system(size: 10)).foregroundStyle(Color(hex: 0x949BA4))
+                        Text(footerText).font(.system(size: 10)).foregroundStyle(Color(hex: 0x949BA4))
                     }
                     .padding(9)
                 }
@@ -418,7 +394,7 @@ extension NotificationPreviewCard {
                     Spacer(minLength: 6)
                     cover(56, corner: 4)
                 }
-                (Text("Lyrimuse · " + L10n.t("数据来自 Last.fm") + " · ") + Text(linkLabel).foregroundColor(Color(hex: 0x1264A3)))
+                (Text(footerText + " · ") + Text(linkLabel).foregroundColor(Color(hex: 0x1264A3)))
                     .font(.system(size: 10.5))
                     .foregroundStyle(Color(hex: 0x616061))
             }
@@ -456,7 +432,7 @@ extension NotificationPreviewCard {
                         Text(linkLabel).font(.system(size: 11.5)).foregroundStyle(Color(hex: 0x3370FF))
                             .padding(.horizontal, 10).padding(.vertical, 3)
                             .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color(hex: 0x3370FF)))
-                        Text("Lyrimuse · " + L10n.t("数据来自 Last.fm")).font(.system(size: 10.5)).foregroundStyle(Color(hex: 0x8F959E))
+                        Text(footerText).font(.system(size: 10.5)).foregroundStyle(Color(hex: 0x8F959E))
                     }
                     .foregroundStyle(Color(hex: 0x1F2329))
                     .padding(11)
@@ -487,7 +463,7 @@ extension NotificationPreviewCard {
                     cover(nil, height: 110)
                     digestColumn(fg: Color(hex: 0x1F2329), link: Color(hex: 0x3A7AFE), boldSummary: true).font(.system(size: 12.5))
                     if platform == .dingtalk {
-                        Text("Lyrimuse · " + L10n.t("数据来自 Last.fm")).font(.system(size: 10.5)).foregroundStyle(Color(hex: 0x8F959E))
+                        Text(footerText).font(.system(size: 10.5)).foregroundStyle(Color(hex: 0x8F959E))
                     }
                 }
                 .foregroundStyle(Color(hex: 0x1F2329))

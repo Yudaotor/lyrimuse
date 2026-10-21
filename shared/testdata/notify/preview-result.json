@@ -1,0 +1,24 @@
+{
+  "results": [
+    {"id": "p-old", "kind": "daily", "ok": false, "reason": "empty", "at": 1792500000},
+    {"id": "p1", "kind": "weekly", "ok": true, "title": "🎵 上周听歌小结（10-11~10-18）", "at": 1792560000,
+      "digest": {
+        "total_plays": 286,
+        "total_duration_ms": 64320000,
+        "top_tracks": [{"name": "NMW", "sub": "方大同", "count": 11}, {"name": "晴天", "sub": "周杰伦", "count": 9}, {"name": "For You", "sub": "Prince", "count": 8}],
+        "top_artists": [{"name": "方大同", "count": 61}, {"name": "周杰伦", "count": 48}, {"name": "Prince", "count": 33}],
+        "top_albums": [{"name": "JTW 西游记", "sub": "方大同", "count": 29}, {"name": "叶惠美", "sub": "周杰伦", "count": 21}, {"name": "For You", "sub": "Prince", "count": 17}],
+        "source": "lastfm",
+        "from": "2026-10-11",
+        "to": "2026-10-18",
+        "prev_plays": 241,
+        "prev_label": "前一周",
+        "new_artists": 5,
+        "new_artist_names": ["D'Angelo", "林忆莲", "卢广仲"],
+        "duration_estimated": true,
+        "cover_url": "https://lastfm.freetls.fastly.net/i/u/300x300/sample.png",
+        "link": "https://www.last.fm/user/someone/library/artists?from=2026-10-11&to=2026-10-18"
+      }
+    }
+  ]
+}

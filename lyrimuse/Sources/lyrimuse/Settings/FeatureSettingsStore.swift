@@ -321,8 +321,8 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// 四档报告里歌手、专辑、歌曲各列前几名(推送提醒页「每类列出」),1～10,缺失 = 3。见 Core `DigestTopN`、
     /// 引擎 digest.go 的 digestTopN。
     var digestTopN: Int?
-    /// 推送提醒的静默时段(推送渠道卡底下那一行),见 Core `NotificationQuietHours`、引擎 notifyquiet.go。缺失 = 关。
-    var notificationQuietHours: NotificationQuietHours.File?
+    /// 四档报告的推送时间(推送提醒页「推送时间」),本地时间 "HH:MM",缺失 = 22:00。见 Core `DigestPushTime`、引擎 digestschedule.go。
+    var digestPushTime: String?
     var lyricsSources: [String]?
     /// **迁移标记,不是开关**,只 App 读。lyrics_sources 是白名单,而老配置写的时候后来加的源还不存在,列表里
     /// 不可能有它 —— 直接按白名单办等于对所有老用户默认关闭,而"没列出"在这里的真实含义是"当时没这个选项"。
@@ -402,7 +402,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case monthlyDigestSource = "monthly_digest_source"
         case yearlyDigestSource = "yearly_digest_source"
         case digestTopN = "digest_top_n"
-        case notificationQuietHours = "notification_quiet_hours"
+        case digestPushTime = "digest_push_time"
         case lyricsSources = "lyrics_sources"
         case amllLyrics = "amll_lyrics"
         case lyricFindLyrics = "lyricfind_lyrics"
@@ -584,8 +584,8 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var yearlyDigestSource = ""
     /// 见 FeatureFlagsFile.digestTopN。恒在 `DigestTopN.range` 里。
     @Published public var digestTopN = DigestTopN.defaultValue
-    /// 见 FeatureFlagsFile.notificationQuietHours。
-    @Published public var notificationQuietHours = NotificationQuietHours()
+    /// 见 FeatureFlagsFile.digestPushTime。零点起的分钟数。
+    @Published public var digestPushMinutes = DigestPushTime.defaultMinutes
     @Published public var lyricsSources: Set<LyricsSource> = Set(LyricsSource.allCases)
     @Published public var lyricsSourceMode: LyricsSourceMode = .smart
     // 始终是全部源加「播放器自带歌词」的一个排列(不是"只放启用的那几个")——启用/禁用状态单独由
@@ -702,7 +702,7 @@ public final class FeatureSettingsStore: ObservableObject {
             monthlyDigestSource: monthlyDigestSource.isEmpty ? nil : monthlyDigestSource,
             yearlyDigestSource: yearlyDigestSource.isEmpty ? nil : yearlyDigestSource,
             digestTopN: DigestTopN.resolved(digestTopN),
-            notificationQuietHours: notificationQuietHours.file,
+            digestPushTime: DigestPushTime.clockText(digestPushMinutes),
             lyricsSources: (lyricsSources.map(\.rawValue) + unknownLyricsSources).sorted(),
             // 只要保存过一次就落这个字段,值如实反映集合状态。它的作用是让上面那条
             // "老配置补 amll"的迁移**只生效一次** —— 之后用户取消勾选才不会被补回来。
@@ -938,7 +938,7 @@ public final class FeatureSettingsStore: ObservableObject {
         monthlyDigestSource = f.monthlyDigestSource ?? ""
         yearlyDigestSource = f.yearlyDigestSource ?? ""
         digestTopN = DigestTopN.resolved(f.digestTopN)
-        notificationQuietHours = NotificationQuietHours(file: f.notificationQuietHours)
+        digestPushMinutes = DigestPushTime.resolved(f.digestPushTime)
         // 缺失/空数组(旧配置文件没这个字段,或者曾经被清空过)都按"全部启用"处理。
         let decodedSources = (f.lyricsSources ?? []).compactMap(LyricsSource.init(rawValue:))
         unknownLyricsSources = Self.unknownNames(f.lyricsSources) { LyricsSource(rawValue: $0) != nil }

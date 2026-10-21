@@ -9,7 +9,6 @@
 "%1$@ · %2$d 分" = "%1$@ · %2$d points";
 "%1$@ · 来自 %2$@" = "%1$@ · from %2$@";
 "%1$@ 从「%2$@」导出的备份" = "Backup exported from “%2$@” on %1$@";
-"%1$@ 到 %2$@ 之间要推的，等到 %2$@ 再推" = "Anything due between %1$@ and %2$@ waits until %2$@";
 "%1$@ 在此项被扣 %2$d 分，胜者未被扣分，%3$d 分的分差全部来自此项" = "%1$@ lost %2$d points on this term and the winner did not; the entire %3$d-point gap comes from it";
 "%1$@ 在此项被扣 %2$d 分，胜者未被扣分，%3$d 分的分差全部来自此项#one" = "%1$@ lost %2$d point on this term and the winner did not; the entire %3$d-point gap comes from it";
 "%1$@ 失败 · %2$@" = "%1$@ failed · %2$@";
@@ -150,7 +149,6 @@
 "CV 声优" = "CV voice actor";
 "CV 署名里的团体" = "Unit in the CV credit";
 "Chat ID" = "Chat ID";
-"Chat ID：个人为一串数字，群组以 -100 开头" = "Chat ID: a number for a person, starting with -100 for a group";
 "Discord 仅支持将第一行、第二行或「正在收听」后的内容显示在用户名下方。歌名和歌手均不在这些位置时，对应选项不可用" = "Discord can only show the first line, the second line, or what follows “Listening to” under your name. If neither the title nor the artist is in one of those, that option is unavailable";
 "Discord 尚未就绪" = "Discord isn't ready yet";
 "Discord 拒绝连接" = "Discord refused the connection";
@@ -257,6 +255,7 @@
 "「获取 Lyrimuse」" = "“Get Lyrimuse”";
 "一" = "M";
 "一切就绪" = "All Set";
+"一周结束后的 %@ 推送上一周的小结" = "Pushed at %@ after each week ends, with last week's summary";
 "一并解锁" = "Unlock Them";
 "一直显示" = "Always";
 "一行 1 分，最多 200" = "One point per line, up to 200";
@@ -337,6 +336,7 @@
 "两者同分" = "Both scored the same";
 "两者均为现场版，但该候选的专辑名对应另一场演出（如另一次巡演），其时间轴与当前录音无法对齐" = "Both are live versions, but this candidate's album points to a different performance (such as another tour), so its timing won't line up with this recording";
 "两首探测曲均无响应，该源目前可能不可用" = "Neither probe track got a response — this source may currently be unavailable";
+"个人是一串数字，群组以 -100 开头" = "A number for a person; groups start with -100";
 "中国移动旗下的音乐平台" = "China Mobile's music service";
 "中文" = "Chinese";
 "中文歌词统一成简体或繁体" = "Show Chinese lyrics in Simplified or Traditional characters";
@@ -504,6 +504,7 @@
 "关闭" = "Close";
 "关闭后不显示进度条，Discord 将改为显示已播放时长，该计时无法关闭" = "When off, there’s no progress bar; Discord shows the elapsed time instead, which can’t be turned off";
 "关闭后仅保留菜单栏图标" = "When off, only the menu bar icon remains";
+"关闭后暂停推送到这个渠道，填写的内容会保留" = "Turn off to pause pushes to this channel; what you filled in is kept";
 "关闭后，常态下仅保留刘海高度，不显示歌词；指针悬停展开时，播放控制、进度条和下一句预览仍照常显示" = "When off, the resting card keeps only the notch-height row and shows no lyrics; hovering to expand still shows playback controls, the scrubber, and the next-line preview as usual";
 "关闭悬浮歌词" = "Close Floating Lyrics";
 "关闭灵动岛歌词" = "Turn Off Notch Lyrics";
@@ -533,6 +534,7 @@
 "其余 %@ 个源未返回候选#one" = "%@ other source returned no candidates";
 "内容" = "Content";
 "内容与其他候选相同" = "Same as another candidate";
+"内容来自这一期的真实数据，跟实际推送一致" = "The content comes from this period's real data and matches the real push";
 "内容获印证" = "Content corroborated";
 "内部数据不是有效的 JSON，已取消保存" = "The data isn't valid JSON, so nothing was saved";
 "写入 config.json 失败：%@" = "Couldn't write config.json: %@";
@@ -572,7 +574,7 @@
 "删除「%@」？" = "Delete “%@”?";
 "删除「%@」？删除后无法恢复" = "Delete “%@”? This can’t be undone";
 "删除中…" = "Removing…";
-"删除后不再向此渠道推送，推送记录将保留" = "Nothing will be pushed to this channel any more. The delivery history is kept";
+"删除后不再推送到这个渠道，推送记录会保留" = "Pushes to this channel stop after it's deleted; the delivery history is kept";
 "删除失败" = "Couldn't Remove";
 "删除本地记录…" = "Delete Saved Lyrics…";
 "删除此导入的字体（不可恢复）" = "Remove this imported font (cannot be undone)";
@@ -605,8 +607,6 @@
 "加拿大的歌词版权公司，经由 YouTube Music 检索" = "A Canadian lyrics licensing company, searched via YouTube Music";
 "加签密钥（可选）" = "Signing Secret (Optional)";
 "加粗" = "Bold";
-"加粗、分栏、带专辑封面。旧版企业微信（4.1.36 以下）会显示成带符号的纯文本，群里有人用旧版时请关闭" = "Bold text, columns and the album cover. WeCom older than 4.1.36 shows it as plain text with symbols, so turn this off if anyone in the group uses an older version";
-"加粗、分栏、带专辑封面和完整榜单链接；关闭后推纯文本" = "Bold text, columns, the album cover and a link to the full chart. Turn off to send plain text";
 "加载失败" = "Couldn't load";
 "加载更早的记录" = "Load older";
 "动态封面" = "Animated Artwork";
@@ -668,12 +668,12 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ more song had no source response · Auto-Match All";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d more couldn't be written to the lyrics folder. Check write access and disk space";
 "只显示歌词" = "Lyrics only";
+"可以直接粘贴完整地址，会自动识别是哪个平台" = "Paste the full address and the platform is recognized automatically";
 "可同时开启多项" = "You can turn on more than one";
 "可在任意 App 中触发，需包含 ⌘、⌥ 或 ⌃ 之一" = "Works in any app; must include ⌘, ⌥ or ⌃";
 "可在其他设备上控制播放、跳转歌词" = "Control playback and jump to lyrics from other devices";
 "可在快捷指令、Raycast、Alfred 等工具中打开；将指针悬停在上方的快捷键上，可拷贝对应操作的链接" = "Open these from Shortcuts, Raycast, Alfred and similar tools. Hover over a shortcut above to copy the link for that action";
 "可拖到任意位置" = "Drag it anywhere";
-"可直接粘贴完整地址，可识别的平台将自动切换" = "You can paste a full URL; recognized platforms are selected automatically";
 "可跳过的广告出现时自动跳过" = "Skippable ads are skipped as soon as they appear";
 "台湾、香港常用的流媒体音乐 App" = "A music streaming app popular in Taiwan and Hong Kong";
 "右" = "Right";
@@ -688,7 +688,6 @@
 "各播放器中收听的歌曲均会记录" = "Plays from every supported player are logged";
 "合唱署名" = "Artist credit";
 "合并明细" = "Play Breakdown";
-"同一时间只有一个默认渠道。之后新添加的渠道设为默认时，会自动加入四档听歌报告" = "Only one channel can be the default. A channel added later as the default joins all four listening digests";
 "同一网络中的设备可通过带密钥的链接访问" = "Devices on the same network can connect with a link that includes an access key";
 "同名但时长不同，作为另一录音单独保存歌词" = "Same title but a different length, so its lyrics are saved separately as another recording";
 "同曲条目" = "Entries for This Song";
@@ -711,8 +710,7 @@
 "向指定地址 POST 一段 JSON，适用于对接 Home Assistant、n8n 或自建服务" = "POSTs JSON to a URL you choose. Suitable for Home Assistant, n8n or your own service";
 "含明文凭证；导出为设置与歌词库两个文件，导入将覆盖全部设置" = "Contains credentials in plain text; exports two files, settings and lyrics library; importing replaces all settings";
 "听歌报告" = "Listening Digests";
-"听歌报告以消息卡片发送，榜单分栏、附带查看榜单的按钮；关闭后推纯文本" = "Listening reports are sent as a message card with charts in columns and a button to view the full chart. Turn off to send plain text";
-"听歌报告带上专辑封面，点开通知跳到完整榜单；关闭后只推文字" = "Listening reports include the album cover, and tapping the notification opens the full chart. Turn off to send text only";
+"听歌报告会推到所有启用的渠道；有多个渠道时，可在下方「听歌报告」里为每一档单独选择。点一行可编辑或发送测试，右键可删除" = "Listening reports go to every enabled channel. With several channels, pick channels for each report under Listening Reports below. Click a row to edit or send a test; right-click to delete";
 "启动与通知" = "Startup & Notifications";
 "启动失败（%@）。可先「暂时跳过」，之后在设置的「播放器 → 歌词引擎」中重试，该页面会显示更详细的状态" = "Couldn't start (%@). You can skip this for now and retry later under Settings → Player → Lyrics Engine, which reports a more detailed status";
 "启动时不打开窗口，仅保留菜单栏图标与歌词显示；开启后同时隐藏 Dock 图标" = "Opens no windows at launch, keeping only the menu bar icon and lyrics displays; turning it on also hides the Dock icon";
@@ -735,6 +733,7 @@
 "图标动画" = "Animate Icon";
 "圆角" = "Corners";
 "在 %@ 上收听" = "Listen on %@";
+"在 %@ 上看完整榜单" = "See the full chart on %@";
 "在 %@ 中打开" = "Open in %@";
 "在 %@ 中搜索" = "Search in %@";
 "在 %@ 中播放" = "Play in %@";
@@ -754,7 +753,6 @@
 "在 KKBOX 中显示歌手" = "Show Artist in KKBOX";
 "在 Last.fm 上喜欢" = "Love on Last.fm";
 "在 Last.fm 上打开" = "Open on Last.fm";
-"在 Last.fm 上看完整榜单" = "See the full chart on Last.fm";
 "在 Last.fm 网站查看主页" = "View My Profile on Last.fm";
 "在 Telegram 中向 @BotFather 发送 /newbot 创建机器人，并将获得的 Token 填入「机器人 Token」。然后向机器人发送任意消息，在浏览器中打开 https://api.telegram.org/bot你的Token/getUpdates，chat 下的 id 即为 Chat ID" = "In Telegram, message @BotFather with /newbot to create a bot and paste the token it gives you into “Bot Token”. Then send your bot a message and open https://api.telegram.org/bot<your token>/getUpdates in a browser. The id under chat is your Chat ID";
 "在 api.slack.com/apps 新建应用（From scratch）并选择工作区，开启 Incoming Webhooks，点按「Add New Webhook」并选择目标频道，授权后拷贝 Webhook URL" = "Create an app at api.slack.com/apps (From scratch) and pick your workspace. Turn on Incoming Webhooks, click “Add New Webhook”, choose the channel to post to, then copy the Webhook URL";
@@ -807,10 +805,8 @@
 "备用链接（IP 地址）" = "Fallback Link (IP Address)";
 "复用其他专辑中的同一首歌曲" = "Reused from the same recording on another album";
 "复用同一首歌曲的其他歌手写法" = "Reused from the same song under another artist spelling";
-"外框为示意。正文与实际推送逐字一致，数据为测试数据" = "The frame is only illustrative. The text matches the real push word for word, with sample data";
-"外框为示意，名字和头像以你在平台上的设置为准。内容与实际推送一致，数据为测试数据" = "The frame is only illustrative; the name and avatar follow your settings on the platform. The content matches the real push, with sample data";
-"外框为示意，名字和头像以你在平台上的设置为准。正文与实际推送逐字一致，数据为测试数据" = "The frame is only illustrative; the name and avatar follow your settings on the platform. The text matches the real push word for word, with sample data";
-"外框为示意，封面用占位图代替。内容与实际推送一致，数据为测试数据" = "The frame is only illustrative and the cover is a placeholder. The content matches the real push, with sample data";
+"外框为示意。" = "The frame is only illustrative. ";
+"外框为示意，名字和头像以你在平台上的设置为准。" = "The frame is only illustrative; the name and avatar follow your settings on the platform. ";
 "外观" = "Appearance";
 "外观与语言" = "Appearance & Language";
 "多" = "More";
@@ -888,11 +884,9 @@
 "尚在试验阶段的功能，后续可能调整、重构或移除" = "Experimental features that may be changed, reworked or removed later";
 "尚无备份，将保存到「%@」" = "No backup yet; it will be saved to “%@”";
 "尚无备份；保存到 iCloud 后，可在新 Mac 上直接恢复" = "No backup yet. Save to iCloud to restore it on a new Mac";
-"尚无推送渠道" = "No push channels yet";
 "尚未修改" = "No changes yet";
 "尚未加载" = "Not loaded yet";
 "尚未手动选定过歌词；此后选定的歌词将直接锁定" = "You haven't picked any lyrics manually yet; from now on, your picks will be locked right away";
-"尚未推送" = "Nothing pushed yet";
 "尚未检查更新" = "No update check yet";
 "尚未添加推送渠道" = "No push channels yet";
 "尚未生效：浏览器拒绝了执行 JavaScript 的请求，请按上述路径确认该选项已勾选" = "Not working yet: the browser refused to run JavaScript. Follow the path above and make sure the switch is ticked";
@@ -1025,7 +1019,7 @@
 "已解锁位置" = "Position unlocked";
 "已设 %d / %d" = "%d of %d set";
 "已设置" = "Set";
-"已识别为%@的地址并自动切换" = "Recognized as a %@ URL and switched to it";
+"已识别为%@，平台已自动切换" = "Recognized as %@; platform switched";
 "已跳过" = "Skipped";
 "已返回候选" = "Candidate returned";
 "已连接" = "Connected";
@@ -1035,7 +1029,7 @@
 "已连接为 @%@" = "Connected as @%@";
 "已连接：%@" = "Connected: %@";
 "已送达" = "Delivered";
-"已送达 · %.1f 秒。请在手机或群聊中确认是否收到" = "Delivered · %.1f s. Check your phone or group chat to confirm it arrived";
+"已送达（%.1f 秒），去手机或群聊里看看收到没有" = "Delivered (%.1f s). Check that it arrived on your phone or in the group";
 "已选 %@ 首" = "%@ selected";
 "已选 %d / %d" = "%d of %d selected";
 "已选择 %@ 首" = "%@ Songs Selected";
@@ -1081,6 +1075,7 @@
 "延后 %@ 秒显示" = "Show %@s later";
 "建议" = "Suggestions";
 "开启「自动识别」时，将识别所有已知和已信任的播放器，上方的勾选暂不生效。如只需识别部分播放器，请取消勾选此项。" = "“Auto-detect” recognizes every known and trusted player, so the checkboxes above have no effect right now. Untick it to recognize only the ones you pick";
+"开启后四档听歌报告都会推到这里，之后可在「听歌报告」里按档调整" = "When on, all four listening reports are pushed here; adjust per report under Listening Reports";
 "开启后，Discord 资料卡和好友列表中将显示正在收听的歌曲。如好友无法看到，请在 Discord 的「用户设置 › 活动隐私」中开启活动状态分享" = "When on, the song you're playing shows on your Discord profile and in your friends list. If friends can't see it, go to User Settings › Activity Privacy in Discord and turn on activity sharing";
 "开启方法" = "How to Turn It On";
 "开启时识别所有已知和已信任的播放器；关闭后仅识别勾选的播放器" = "When on, every known and trusted player is detected. When off, only the ones you check";
@@ -1193,7 +1188,7 @@
 "找不到该会话（Chat ID 有误，或尚未向机器人发送过消息）" = "Chat not found (incorrect Chat ID, or you haven’t messaged the bot yet)";
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Found %1$@ · Not found %2$@ · Skipped %3$@";
 "找到 %@ 首" = "%@ Found";
-"报告默认推送到所有已启用的渠道，有多个渠道时可在「听歌报告」中按档选择。点按一行可编辑或发送测试；右键点按可删除" = "Digests go to every enabled channel by default; with more than one channel, pick channels per digest under Listening Digests. Click a row to edit or send a test; Control-click to delete";
+"把听歌报告推到手机、群聊或你自己的服务" = "Send listening reports to your phone, group chats or your own service";
 "拆分" = "Split";
 "拆分…" = "Split…";
 "拆分「%@」？" = "Split “%@”?";
@@ -1222,7 +1217,6 @@
 "按专辑分组" = "Group by Album";
 "按住 ⌘ 拖移此图标，可将其移到菜单栏中的任意位置" = "Hold ⌘ and drag this icon to move it anywhere in the menu bar";
 "按住歌词即可拖动位置" = "Hold the lyrics to reposition";
-"按平台排版" = "Platform formatting";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@" = "Based on your top %1$@ artists, %2$@ of your plays in this period";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@#one" = "Based on your top %1$@ artist, %2$@ of your plays in this period";
 "按收听最多的前 %@ 位歌手统计" = "Based on your top %@ artists";
@@ -1230,6 +1224,7 @@
 "按相关度" = "By Relevance";
 "按纯音乐处理：不显示歌词，也不自动搜索；原有歌词将保留，取消标记即可恢复" = "Treat as instrumental: lyrics are hidden and aren’t searched for automatically. Existing lyrics are kept and come back when you unmark it";
 "按翻唱者署名" = "Covering artist from the title";
+"按这台 Mac 当前的时区（%@）" = "In this Mac's current time zone (%@)";
 "按钮" = "Buttons";
 "按钮文字" = "Button Text";
 "换一句" = "Another line";
@@ -1254,12 +1249,12 @@
 "排版" = "Layout";
 "排队" = "Queued";
 "接收" = "Download";
-"接收 Lyrimuse 的推送通知" = "Receive push notifications from Lyrimuse";
 "接近平分，但内容印证不完整" = "Nearly tied, but not fully corroborated";
 "推到" = "Send to";
 "推荐。为每个歌词源评分，选用最高分的结果" = "Recommended. Scores every source and keeps the best match";
 "推送地址" = "Push URL";
 "推送提醒" = "Push Alerts";
+"推送时间" = "Push Time";
 "推送渠道" = "Push Channels";
 "推送渠道信息不完整" = "Push channel details are incomplete";
 "推送渠道均已停用" = "All push channels are off";
@@ -1321,7 +1316,7 @@
 "放弃修改" = "Discard Changes";
 "数据来源" = "Data Source";
 "数据来源：%@" = "Data source: %@";
-"数据来自 Last.fm" = "Data from Last.fm";
+"数据来自 %@" = "Data from %@";
 "整体延后 %@ 秒" = "%@ s later overall";
 "整体提前 %@ 秒" = "%@ s earlier overall";
 "整段编辑可粘贴替换、增删句子；每行开头是这一句的时间戳" = "Edit the whole text to paste, add or remove lines; each line starts with its timestamp";
@@ -1340,8 +1335,8 @@
 "断开 Last.fm？" = "Disconnect Last.fm?";
 "断开…" = "Disconnect…";
 "新" = "New";
-"新加的渠道设成「默认」时会自动勾上" = "New channels marked Default are checked automatically";
 "新播放器提醒" = "New Player Alerts";
+"新添加的渠道会自动勾上" = "New channels are checked automatically";
 "方向" = "Direction";
 "方糖 · 服务通知" = "Fangtang · Service Notification";
 "方糖 · 消息详情" = "ServerChan · Message details";
@@ -1529,8 +1524,6 @@
 "未在播放" = "Not Playing";
 "未在运行，无法获取当前状态" = "Not running, so its status can’t be read";
 "未在这台 Mac 上找到默认列出的浏览器（Safari、Chrome、Edge）。其他浏览器可通过下方的「从应用程序中选择…」添加" = "None of the browsers listed by default (Safari, Chrome, Edge) were found on this Mac. For any other browser, use “Choose from Applications…” below to pick it yourself";
-"未填写 Chat ID" = "Chat ID not set yet";
-"未填写地址" = "No URL";
 "未填写服务地址（可选）" = "Server URL not set yet (optional)";
 "未填写访问令牌（可选）" = "Access token not set yet (optional)";
 "未完成" = "Not done";
@@ -1750,6 +1743,8 @@
 "正在准备自动匹配…" = "Preparing to auto-match…";
 "正在加载…" = "Loading…";
 "正在发送测试消息…" = "Sending a test message…";
+"正在取真实数据…" = "Fetching real data…";
+"正在取这一期的真实数据，先显示测试数据" = "Fetching real data for this period; showing sample data for now";
 "正在同步…" = "Syncing…";
 "正在同步历史" = "Syncing history";
 "正在同步历史（%1$@/%2$@ 页）" = "Syncing history (page %1$@ of %2$@)";
@@ -1794,7 +1789,6 @@
 "此为上限：窗口足够大时使用此字号，窗口缩小时文字随之缩小，以免超出窗口" = "This is a ceiling: the text uses this size when the window is large enough, and shrinks with the window so it never overflows";
 "此为手动修改前的最后一次自动评估" = "This records the last automatic evaluation before your manual edit";
 "此后手动选定的歌曲不再自动锁定" = "From now on, manually picked songs are no longer locked automatically";
-"此地址似乎属于%@。如需更换平台，请删除此渠道后重新添加" = "This looks like a %@ URL. To switch platforms, delete this channel and add a new one";
 "此广告可跳过" = "This ad can be skipped";
 "此广告暂不可跳过" = "This ad can't be skipped yet";
 "此时段暂无记录" = "No scrobbles in this period";
@@ -1809,14 +1803,14 @@
 "步长" = "Step";
 "每周听歌小结" = "Weekly Listening Digest";
 "每周小结" = "Weekly Digest";
-"每周推送上一周的小结" = "Sends last week's digest each week";
-"每天 22:00 后推送当日报告" = "Sends the day's digest after 22:00";
+"每天 %@ 推送前一天的报告" = "Pushed at %@ every day with the previous day's listening";
+"每天 %@ 推送当天的报告" = "Pushed at %@ every day with that day's listening";
 "每天检查一次新版本" = "Checks for a new version once a day";
-"每年 1 月初推送上一年的小结" = "Sends last year's digest in early January";
+"每年 1 月 1 日 %@ 推送上一年的小结" = "Pushed at %@ on January 1 with last year's summary";
 "每按一次调整的幅度" = "Amount per press";
 "每日听歌报告" = "Daily Listening Report";
 "每日报告" = "Daily Report";
-"每月初推送上个月的小结" = "Sends last month's digest early each month";
+"每月 1 日 %@ 推送上个月的小结" = "Pushed at %@ on the 1st with last month's summary";
 "每月听歌小结" = "Monthly Listening Digest";
 "每类列出" = "Items per List";
 "每项均按播放器分别勾选，仅列出已选择的播放器；选择「自动识别」时，还会列出本机已安装的播放器" = "Each item is checked per player. Only the selected players are listed; with Auto-detect selected, the ones installed on this Mac are added";
@@ -1836,6 +1830,7 @@
 "汽水音乐歌曲 ID 一致" = "Same Soda Music song ID";
 "汽水音乐歌曲页" = "Soda Music song page";
 "汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更），并非这首歌曲无歌词，通常将在后续版本中修复" = "Soda Music’s lyrics API returned unrecognized content (the API may have changed). This doesn’t mean the song has no lyrics; a later update usually fixes it";
+"没能取到真实数据（网络或后台服务未响应），先用测试数据示意" = "Couldn't fetch real data (network or background service not responding), so sample data is shown";
 "沿用同曲条目「%@」的时间轴校准，在此调整后将保存到当前条目" = "Uses the timing calibration from “%@”, another entry of this song. Adjusting it here saves it to this entry";
 "沿用同曲条目的人工修正" = "Uses the manual correction from another entry of this song";
 "沿用同曲条目的修正" = "From Another Entry";
@@ -1861,6 +1856,7 @@
 "深色卡片" = "Dark Card";
 "深色渐变" = "Dark Gradient";
 "添加 App…" = "Add App…";
+"添加一个渠道，听歌报告就会推到你的手机、群聊或自建服务" = "Add a channel and your listening reports will be pushed to your phone, a group chat or your own service";
 "添加中…" = "Adding…";
 "添加到 %@ 的稍后播放" = "Play Later in %@";
 "添加到资料库" = "Add to Library";
@@ -1868,7 +1864,6 @@
 "添加推送渠道" = "Add Push Channel";
 "添加播放器…" = "Add a Player…";
 "添加渠道" = "Add Channel";
-"添加渠道后，收听报告将推送到手机、群聊或自建服务" = "Add a channel to push your listening reports to your phone, a group chat or your own service";
 "添加的应用与内置播放器相同：显示其正在播放的内容，并计入收听记录。可随时移除" = "An app you add here counts the same as a built-in player: whatever it plays is shown, and it goes into your listening history. Remove it any time";
 "清理" = "Clean Up";
 "清理 %@ 条无效记录…" = "Clean Up %@ Invalid Entries…";
@@ -1928,7 +1923,7 @@
 "用于将当前播放状态推送到网页小组件和状态徽章" = "Pushes the current playback status to the web widget and status badge";
 "用当前配色覆盖" = "Overwrite with Current Colors";
 "用户名下方显示" = "Shown Under Your Name";
-"用测试数据看看推送在这个平台上的样子" = "See how a push looks on this platform, using sample data";
+"用这一期的真实数据看看推送在这个平台上的样子" = "See how a push looks on this platform, using real data from this period";
 "由副行决定" = "Set by Second Line";
 "申请页只需填写「应用名称」，其余可留空。提交后页面将显示 API Key 和 Shared Secret；Secret 仅显示一次，之后无法找回，遗失时请重新创建应用" = "The form only needs an application name; leave everything else blank. After you submit it, the page shows your API Key and Shared Secret. The secret is shown only once and can’t be retrieved later; if you lose it, create a new application";
 "画帧" = "Rendered";
@@ -1939,6 +1934,7 @@
 "白色" = "White";
 "白色、跟随封面或自定义颜色" = "White, cover art color or a custom color";
 "相邻短句可容纳于一行时合并显示" = "Adjacent short lines are merged when they fit on one line";
+"真实数据 · %@" = "Real data · %@";
 "短于 30 秒的曲目" = "Tracks Under 30 Seconds";
 "短句合并" = "Join Short Lines";
 "码率" = "Bitrate";
@@ -2180,7 +2176,6 @@
 "触控栏歌词" = "Touch Bar Lyrics";
 "触控栏歌词仅适用于配备触控栏的 MacBook Pro" = "Touch Bar Lyrics works only on MacBook Pro models with a Touch Bar";
 "设为默认" = "Default Channel";
-"设为默认后，四档听歌报告都会推送到这个渠道；同一时间只有一个默认渠道" = "All four listening digests will also go to this channel. Only one channel can be the default";
 "设备控制和数据访问" = "Device Control and Data Access";
 "设定歌词偏移" = "Set Lyrics Offset";
 "设置" = "Settings";
@@ -2223,7 +2218,6 @@
 "该组合已分配给「%@」" = "That combination is already assigned to “%@”";
 "该组合已被 macOS 占用" = "That combination is already reserved by macOS";
 "该组合是本 App 菜单中「%@」的快捷键" = "That combination is the keyboard shortcut for “%@” in this app’s menu";
-"该记录未保存推送内容" = "This record has no saved message content";
 "该选项已关闭。当前仍可使用是因为浏览器尚未重启，重启后将失效" = "This switch has been turned off — it still works right now only because the browser hasn't restarted yet, and it will stop working after a restart";
 "语言" = "Language";
 "语言不符" = "Language mismatch";
@@ -2322,8 +2316,16 @@
 "还有 %@ 条" = "and %@ more";
 "还有未完成的项目" = "Some Items Need Attention";
 "还没唱到歌词" = "No lyric line yet";
+"还没填 Chat ID" = "No Chat ID yet";
+"还没填地址" = "No address yet";
+"还没推送过" = "Nothing pushed yet";
+"还没有推送渠道" = "No push channels yet";
+"还没有连接 Last.fm 或 ListenBrainz，先用测试数据示意" = "Last.fm or ListenBrainz isn't connected yet, so sample data is shown";
 "还需 %@ 次" = "%@ to go";
+"这一期还没有收听记录，先用测试数据示意" = "No listens in this period yet, so sample data is shown";
+"这一档推到哪些渠道" = "Channels this report goes to";
 "这一档的数据来源" = "Data Source for This Digest";
+"这个地址看起来是%@的。要换平台，请删除这个渠道后重新添加" = "This address looks like %@. To change platform, delete this channel and add it again";
 "这也是你最长的连续记录" = "Your longest streak yet";
 "这些歌词源连续失败，本轮暂未查询" = "These sources failed repeatedly and were not queried this round";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常为广告、播客或有声书。人工修正、标为纯音乐、已校准时间轴的记录和正在播放的歌曲不包含在内；再次播放时将重新匹配" = "These entries have no lyrics and either no artist or a duration over 20 minutes — usually ads, podcasts, or audiobooks. Manually edited, instrumental, and calibrated entries and the song now playing aren’t included. They’ll be matched again if played";
@@ -2331,10 +2333,11 @@
 "这份歌词沿用同曲条目「%@」的人工修正，该条目修改时此处同步更新；直接编辑此条目将使其成为独立的修正" = "These lyrics use the manual correction from “%@”, another entry of this song, and update when it changes. Editing this entry makes the correction its own";
 "这台 Mac 上未安装此播放器" = "This player isn't installed on this Mac";
 "这台 Mac 上未安装的播放器" = "Players not installed on this Mac";
-"这就是会 POST 出去的内容，真正发出时是一行；真推送时 data 里还带封面地址和榜单链接" = "This is exactly what gets POSTed; the real request is sent on a single line, and real reports also carry the cover URL and chart link in data";
+"这就是实际 POST 的内容，发送时是一行。" = "This is exactly what gets POSTed, sent as a single line. ";
 "这是 Lyrimuse 本身" = "That’s Lyrimuse itself";
 "这条候选歌词无译文" = "No translation in this candidate";
 "这条候选歌词无读音" = "No romanization in this candidate";
+"这条记录没有保存推送内容" = "This record has no saved content";
 "这里是一句歌词示例" = "A line of lyrics looks like this";
 "这里是下一句歌词示例" = "The next line looks like this";
 "这里是译文示例" = "The translation looks like this";
@@ -2399,7 +2402,6 @@
 "选择播放器" = "Choose Players";
 "选择歌词显示方式" = "Choose Where Lyrics Appear";
 "选择用于播放此网站的浏览器" = "Pick the browser you use for this site";
-"选择这一档推送到哪些渠道" = "Choose which channels this digest goes to";
 "透明" = "Transparent";
 "逐字" = "Word-timed";
 "逐字填色时已唱部分使用此颜色；未唱部分和其他行仍使用文字颜色。关闭「卡拉OK效果」时无效" = "The part already sung takes this color as lyrics fill word by word. Unsung words and other lines keep the text color. Has no effect when Karaoke Effect is off";
@@ -2509,10 +2511,6 @@
 "霓虹" = "Neon";
 "静音" = "Mute";
 "静默启动" = "Launch Silently";
-"静默开始" = "Quiet Hours Start";
-"静默时段" = "Quiet Hours";
-"静默时段里到的，延后到 %@" = "Held during quiet hours, sent at %@";
-"静默结束" = "Quiet Hours End";
 "韩国 KT 旗下的音乐平台" = "KT's music service from Korea";
 "韩国 Naver 旗下的音乐平台" = "Naver's music service from Korea";
 "韩语" = "Korean";

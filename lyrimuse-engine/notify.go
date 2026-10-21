@@ -39,16 +39,22 @@ type notifyRequest struct {
 	rich        bool // 按平台排过版(notifyrich.go);被平台说格式不对时 pushToChannel 改推纯文本
 }
 
-// buildNotifyRequest 按渠道的平台拼出请求:地址(钉钉加签、Telegram 只填 Token 时在这里换)、正文、请求头。
+// buildNotifyRequest 按渠道的平台拼出请求:地址(钉钉加签、Telegram 只填 Token 时在这里换)、正文、请求头。按平台排版
+// (notifyrich.go),这个平台、这条消息不排时用纯文本。
 func buildNotifyRequest(ch notifyChannel, msg notifyMessage) (notifyRequest, error) {
+	return buildNotifyRequestAs(ch, msg, true)
+}
+
+// buildNotifyRequestAs:formatted=false 拼纯文本那份 —— 排过版的被平台判成格式不对时改推它(pushToChannel)。
+func buildNotifyRequestAs(ch notifyChannel, msg notifyMessage, formatted bool) (notifyRequest, error) {
 	switch ch.Platform {
 	case platformNtfy:
-		return buildNtfyRequest(ch, msg)
+		return buildNtfyRequest(ch, msg, formatted)
 	case platformWebhook:
 		return buildWebhookRequest(ch, msg)
 	}
 	payload, contentType, rich, err := []byte(nil), "", false, error(nil)
-	if !ch.PlainText {
+	if formatted {
 		payload, contentType, rich, err = buildRichPayload(ch, msg)
 	}
 	if err != nil {
@@ -76,7 +82,7 @@ func buildNotifyRequest(ch notifyChannel, msg notifyMessage) (notifyRequest, err
 // buildNtfyRequest:ntfy 用 JSON 发布 —— 往服务器根地址 POST {"topic","title","message"}。标题放请求头的话
 // 中文和 emoji 得另外编码,JSON 没这个麻烦。用户填的是订阅时的那个地址(https://ntfy.sh/<主题>),最后一段是主题,
 // 前面是服务器(自建的可以挂在子路径下)。Secret 是访问令牌(tk_ 开头)或「用户名:密码」,开了访问控制的主题才要。
-func buildNtfyRequest(ch notifyChannel, msg notifyMessage) (notifyRequest, error) {
+func buildNtfyRequest(ch notifyChannel, msg notifyMessage, formatted bool) (notifyRequest, error) {
 	u, err := url.Parse(ch.URL)
 	if err != nil || u.Host == "" {
 		return notifyRequest{}, errors.New("ntfy address is not a URL")
@@ -95,7 +101,7 @@ func buildNtfyRequest(ch notifyChannel, msg notifyMessage) (notifyRequest, error
 	// 按平台排版:正文仍是纯文本(ntfy 的 markdown 只有安卓和网页认,iPhone 上会显示一堆星号),只加封面(attach,
 	// 客户端拉下来显示成图)和点击跳转(click)。
 	rich := false
-	if d := msg.Digest; d != nil && !ch.PlainText {
+	if d := msg.Digest; d != nil && formatted {
 		if d.CoverURL != "" {
 			m["attach"], rich = d.CoverURL, true
 		}
@@ -125,7 +131,7 @@ type webhookPayload struct {
 	Title  string `json:"title"`
 	Body   string `json:"body"`
 	SentAt string `json:"sent_at"` // RFC 3339
-	// Data:听歌报告的结构化数(notifyrich.go 的 webhookDigestData),跟「按平台排版」开关无关,报告都带;其余消息没有。
+	// Data:听歌报告的结构化数(notifyrich.go 的 webhookDigestData),报告都带(退回纯文本时也带);其余消息没有。
 	Data *webhookDigestData `json:"data,omitempty"`
 }
 

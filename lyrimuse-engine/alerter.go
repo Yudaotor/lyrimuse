@@ -46,7 +46,7 @@ func (a *alerter) send(event, title, body string) error {
 	return a.sendMessage(notifyMessage{Event: event, Title: title, Body: body})
 }
 
-// sendMessage 同 send,消息带着推送记录要的别的标记(静默延后,见 notifyMessage.Deferred)。
+// sendMessage 同 send,消息另带听歌报告的那份数(notifyMessage.Digest)。
 func (a *alerter) sendMessage(msg notifyMessage) error {
 	if a == nil {
 		return errNoNotifyChannel
@@ -94,13 +94,11 @@ func notifyEventIsDigest(event string) bool {
 // push 推一条不属于任何事件的消息(推到全部启用的渠道)。单测用。
 func (a *alerter) push(title, body string) error { return a.send("", title, body) }
 
-// notifyMessage 是要推的一条消息。Deferred:这条报告落在静默时段里、等静默结束才推(notifyquiet.go),
-// 只进推送记录,不改推出去的内容。Digest:听歌报告的那份数,按平台排版(notifyrich.go)照它排,Body 是纯文本那一份;
+// notifyMessage 是要推的一条消息。Digest:听歌报告的那份数,按平台排版(notifyrich.go)照它排,Body 是纯文本那一份;
 // 其余消息(测一下)为 nil。
 type notifyMessage struct {
 	Event, Title, Body string
 	Digest             *digestStats
-	Deferred           bool
 }
 
 // alerterPushTimeout:一次推送的总预算。Telegram 要够「直连探路 + 走系统代理」两次尝试
@@ -144,8 +142,7 @@ func pushToChannel(ch notifyChannel, msg notifyMessage) notifyResult {
 	// 当场改推纯文本那份:报告晚一点也比丢了强。地址、密钥、限流这类问题换格式也没用,不重推。
 	if !r.OK && r.Kind == notifyKindRejected && nr.rich {
 		log.Printf("notify: %s rejected the formatted message (code=%s), sending plain text", ch.Platform, r.Code)
-		ch.PlainText = true
-		if nr, err = buildNotifyRequest(ch, msg); err == nil {
+		if nr, err = buildNotifyRequestAs(ch, msg, false); err == nil {
 			r = pushNotifyRequest(ch, nr, start)
 		}
 	}

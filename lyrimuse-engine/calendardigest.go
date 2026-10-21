@@ -91,8 +91,6 @@ func (s calendarDigestState) save(period string) {
 type calendarDigestRun struct {
 	state         calendarDigestState
 	lastCheckedAt time.Time
-	// quietHeld:到期的检查被静默时段压过(notifyquiet.go),静默之后那次推出去的记成延后。
-	quietHeld bool
 }
 
 var monthlyDigestPath, yearlyDigestPath string
@@ -118,16 +116,15 @@ func (p *poller) calendarDigest(now time.Time, env digestEnv, kind calendarDiges
 	if !enabled || !env.alerter.configured(event) {
 		return
 	}
-	if !digestCheckDue(now, run.lastCheckedAt, calendarDigestCheckInterval) {
+	if !digestDue(now, run.lastCheckedAt, calendarDigestCheckInterval) {
 		return
 	}
-	if digestQuietHold(now, &run.quietHeld) {
-		return // 静默时段里:不推、不记检查时刻(notifyquiet.go)
-	}
 	run.lastCheckedAt = now.Round(0)
-	deferred := digestQuietRelease(&run.quietHeld)
 
 	from, to, key := previousCalendarPeriod(now, kind)
+	if now.Before(firstDigestPushAtOrAfter(to, digestPushMinutes())) {
+		return // 这个月 / 这一年的 1 日还没到推送时间
+	}
 	if key <= run.state.load() {
 		return // 已经推送过了
 	}
@@ -165,7 +162,7 @@ func (p *poller) calendarDigest(now time.Time, env digestEnv, kind calendarDiges
 		return
 	}
 	addDigestExtras(env, source, calendarDigestPeriod(kind, from, to, source == digestSourceListenBrainz), &stats, now)
-	if digestPush(env.alerter, event, calendarDigestTitle(kind, from), stats, deferred) != nil {
+	if digestPush(env.alerter, event, calendarDigestTitle(kind, from), stats) != nil {
 		return
 	}
 	run.state.save(key)

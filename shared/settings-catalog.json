@@ -2141,7 +2141,7 @@
       "path" : [
         "推送提醒"
       ],
-      "title" : "静默时段"
+      "title" : "推送时间"
     },
     {
       "dest" : "account:bark",

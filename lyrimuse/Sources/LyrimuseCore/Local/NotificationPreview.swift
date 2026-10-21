@@ -34,7 +34,8 @@ public enum NotificationPreview {
         public init(_ name: String, _ count: Int) { self.init(name, "", count) }
     }
 
-    /// 同引擎 digestStats 里推送要用的那几样。`prevPlays` 为 0 = 不跟上一期比(日报不比)。
+    /// 同引擎 digestStats 里推送要用的那几样。`prevPlays` 为 0 = 不跟上一期比(日报不比)。测试数据(`sample`)只填前面几样;
+    /// 引擎算的真实报告(`NotificationTest.previewResult`)另带数据源、起止日期、封面和链接。
     public struct Stats: Equatable, Sendable {
         public let totalPlays: Int
         public let totalDurationMs: Int
@@ -45,6 +46,14 @@ public enum NotificationPreview {
         public let prevLabel: String
         public let newArtists: Int
         public let newArtistNames: [String]
+        public var truncated = false
+        public var durationEstimated = false
+        /// lastfm / listenbrainz;空 = 测试数据(按 Last.fm 画)。
+        public var source = ""
+        public var from = ""
+        public var to = ""
+        public var coverURL = ""
+        public var link = ""
 
         public init(totalPlays: Int, totalDurationMs: Int, artists: [Tally], albums: [Tally], tracks: [Tally],
                     prevPlays: Int = 0, prevLabel: String = "", newArtists: Int = 0, newArtistNames: [String] = []) {
@@ -58,6 +67,27 @@ public enum NotificationPreview {
             self.newArtists = newArtists
             self.newArtistNames = newArtistNames
         }
+
+        /// 引擎 digestStats 的 JSON(json 标签见 digest.go)。
+        public init(digestJSON o: [String: Any]) {
+            func tallies(_ key: String) -> [Tally] {
+                ((o[key] as? [[String: Any]]) ?? []).map { Tally($0["name"] as? String ?? "", $0["sub"] as? String ?? "", $0["count"] as? Int ?? 0) }
+            }
+            self.init(totalPlays: o["total_plays"] as? Int ?? 0, totalDurationMs: o["total_duration_ms"] as? Int ?? 0,
+                      artists: tallies("top_artists"), albums: tallies("top_albums"), tracks: tallies("top_tracks"),
+                      prevPlays: o["prev_plays"] as? Int ?? 0, prevLabel: o["prev_label"] as? String ?? "",
+                      newArtists: o["new_artists"] as? Int ?? 0, newArtistNames: o["new_artist_names"] as? [String] ?? [])
+            truncated = o["truncated"] as? Bool ?? false
+            durationEstimated = o["duration_estimated"] as? Bool ?? false
+            source = o["source"] as? String ?? ""
+            from = o["from"] as? String ?? ""
+            to = o["to"] as? String ?? ""
+            coverURL = o["cover_url"] as? String ?? ""
+            link = o["link"] as? String ?? ""
+        }
+
+        /// 「在 Last.fm 上看完整榜单」「数据来自 Last.fm」里的平台名(引擎 digestSourceName)。
+        public var sourceName: String { source == "listenbrainz" ? "ListenBrainz" : "Last.fm" }
     }
 
     /// 排过版的一类:标题(歌手 / 专辑 / 歌曲)和每一行。
@@ -129,7 +159,9 @@ public enum NotificationPreview {
     /// 同引擎 digestSummaryLine:总次数、跟上一期比(「前一周 241，↑19%」)、听了多久。
     public static func summaryLine(_ stats: Stats) -> String {
         var out = "共播放 \(stats.totalPlays) 次"
-        if stats.prevPlays > 0, !stats.prevLabel.isEmpty {
+        if stats.truncated {
+            out += "以上（记录太多，只统计了最近这些）"
+        } else if stats.prevPlays > 0, !stats.prevLabel.isEmpty {
             let pct = Int((Double(stats.totalPlays - stats.prevPlays) * 100 / Double(stats.prevPlays)).rounded())
             let change = pct > 0 ? "↑\(pct)%" : pct < 0 ? "↓\(-pct)%" : "持平"
             out += "（\(stats.prevLabel) \(stats.prevPlays)，\(change)）"
@@ -225,7 +257,7 @@ public enum NotificationPreview {
 
     /// 通用 Webhook 会 POST 的 JSON(引擎 notify.go 的 webhookPayload,报告多带 notifyrich.go 的 webhookDigestData),
     /// 字段顺序、转义同 Go 的 json.Marshal,只是这里分行缩进给人看(真发出去的是一行)。数据源按 Last.fm 画;
-    /// `data` 里不画封面地址和榜单链接:测试数据没有真的封面,真推送时有就带。
+    /// 测试数据没有封面地址和榜单链接,`data` 里就不写;引擎算的真实报告有就带。
     public static func webhookJSON(event: String, title: String, body: String, sentAt: Date,
                                    data: Stats? = nil, period: WebhookPeriod? = nil) -> String {
         let iso = ISO8601DateFormatter()
@@ -244,16 +276,21 @@ public enum NotificationPreview {
                 }
                 return items.isEmpty ? "[]" : "[\n" + items.joined(separator: ",\n") + "\n    ]"
             }
-            var f = ["    \"from\": \(jsonString(p.from))", "    \"to\": \(jsonString(p.to))", "    \"source\": \"lastfm\"",
-                     "    \"total_plays\": \(d.totalPlays)"]
+            let from = d.from.isEmpty ? p.from : d.from, to = d.to.isEmpty ? p.to : d.to
+            var f = ["    \"from\": \(jsonString(from))", "    \"to\": \(jsonString(to))",
+                     "    \"source\": \(jsonString(d.source.isEmpty ? "lastfm" : d.source))", "    \"total_plays\": \(d.totalPlays)"]
+            if d.truncated { f.append("    \"truncated\": true") }
             if d.prevPlays > 0 { f.append("    \"previous_plays\": \(d.prevPlays)") }
             if d.totalDurationMs / 60000 > 0 { f.append("    \"duration_minutes\": \(d.totalDurationMs / 60000)") }
+            if d.durationEstimated { f.append("    \"duration_estimated\": true") }
             f += ["    \"top_artists\": \(tallies(d.artists))", "    \"top_albums\": \(tallies(d.albums))",
                   "    \"top_tracks\": \(tallies(d.tracks))"]
             if d.newArtists > 0 {
                 let names = d.newArtistNames.map(jsonString).joined(separator: ", ")
                 f.append("    \"new_artists\": {\"count\": \(d.newArtists), \"names\": [\(names)]}")
             }
+            if !d.coverURL.isEmpty { f.append("    \"cover_url\": \(jsonString(d.coverURL))") }
+            if !d.link.isEmpty { f.append("    \"link\": \(jsonString(d.link))") }
             lines.append("  \"data\": {\n" + f.joined(separator: ",\n") + "\n  }")
         }
         return "{\n" + lines.joined(separator: ",\n") + "\n}"

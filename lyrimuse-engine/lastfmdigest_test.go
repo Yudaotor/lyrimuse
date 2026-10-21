@@ -244,7 +244,7 @@ func weeklyRoutes(latestTo int64) map[string]string {
 // 最近一个已收官的图表周推一次、记下它的结束时刻;同一周不再推。区间用 Last.fm 自己的周边界。
 func TestWeeklyDigestLastfmPushesOncePerWeek(t *testing.T) {
 	useDigestFeatures(t, featureFlags{WeeklyDigest: true, WeeklyDigestSource: digestSourceLastfm})
-	now := time.Date(2026, 9, 25, 10, 0, 0, 0, time.Local)
+	now := time.Date(2026, 9, 25, 22, 30, 0, 0, time.Local) // 周期结束后还要到推送时间(缺省 22:00)才推
 	to := now.Add(-time.Hour).Unix()
 	f := useFakeLastfmRead(t, weeklyRoutes(to))
 	sink, n, last := pushSink(t)
@@ -272,7 +272,7 @@ func TestWeeklyDigestLastfmPushesOncePerWeek(t *testing.T) {
 // 两小时内不重查:连接口都不打。
 func TestWeeklyDigestThrottlesChecks(t *testing.T) {
 	useDigestFeatures(t, featureFlags{WeeklyDigest: true, WeeklyDigestSource: digestSourceLastfm})
-	now := time.Date(2026, 9, 25, 10, 0, 0, 0, time.Local)
+	now := time.Date(2026, 9, 25, 22, 30, 0, 0, time.Local) // 周期结束后还要到推送时间(缺省 22:00)才推
 	f := useFakeLastfmRead(t, weeklyRoutes(now.Add(time.Hour).Unix()))
 	sink, _, _ := pushSink(t)
 	p := &poller{weeklyState: weeklyDigestState{path: filepath.Join(t.TempDir(), "weekly.json")}}
@@ -285,7 +285,7 @@ func TestWeeklyDigestThrottlesChecks(t *testing.T) {
 }
 
 func TestWeeklyDigestSkips(t *testing.T) {
-	now := time.Date(2026, 9, 25, 10, 0, 0, 0, time.Local)
+	now := time.Date(2026, 9, 25, 22, 30, 0, 0, time.Local) // 周期结束后还要到推送时间(缺省 22:00)才推
 	closed := now.Add(-time.Hour).Unix()
 	cases := []struct {
 		name      string
@@ -331,7 +331,7 @@ func TestWeeklyDigestSkips(t *testing.T) {
 // 推送被平台拒收:不记已推送,下一轮还会再推。
 func TestWeeklyDigestRejectedPushIsRetried(t *testing.T) {
 	useDigestFeatures(t, featureFlags{WeeklyDigest: true, WeeklyDigestSource: digestSourceLastfm})
-	now := time.Date(2026, 9, 25, 10, 0, 0, 0, time.Local)
+	now := time.Date(2026, 9, 25, 22, 30, 0, 0, time.Local) // 周期结束后还要到推送时间(缺省 22:00)才推
 	useFakeLastfmRead(t, weeklyRoutes(now.Add(-time.Hour).Unix()))
 	sink, n := rejectingSink(t)
 	p := &poller{weeklyState: weeklyDigestState{path: filepath.Join(t.TempDir(), "weekly.json")}}
@@ -349,13 +349,14 @@ func TestDailyDigestLastfm(t *testing.T) {
 	night := time.Date(2026, 9, 25, 22, 30, 0, 0, time.Local)
 	midnight := time.Date(2026, 9, 25, 0, 0, 0, 0, time.Local)
 
-	t.Run("22 点前不推也不取数", func(t *testing.T) {
+	t.Run("昨天那期推过了,今天到推送时间(22:00)前不推也不取数", func(t *testing.T) {
 		useDigestFeatures(t, featureFlags{DailyDigest: true, DailyDigestSource: digestSourceLastfm})
 		f := useFakeLastfmRead(t, chartRoutes())
 		sink, n, _ := pushSink(t)
 		p := &poller{dailyState: dailyDigestState{path: filepath.Join(t.TempDir(), "daily.json")}}
+		p.dailyState.save("2026-09-24")
 		p.dailyDigest(night.Add(-time.Hour), lastfmDigestEnv(sink.URL))
-		if *n != 0 || f.count() != 0 || p.dailyState.load() != "" {
+		if *n != 0 || f.count() != 0 || p.dailyState.load() != "2026-09-24" {
 			t.Errorf("pushes=%d requests=%d state=%q", *n, f.count(), p.dailyState.load())
 		}
 	})
@@ -453,16 +454,16 @@ func TestDailyDigestCatchUpYesterday(t *testing.T) {
 	}
 }
 
-// 补推只到第二天 dailyDigestCatchUpUntilHour 之前:过了就不取数、不推,也不记。
-func TestDailyDigestNoCatchUpAfterNoon(t *testing.T) {
+// 停了好几天的,只补最近那一期(推送时间 22:00、第二天 12:30 补的是昨天),不往前一天天补。
+func TestDailyDigestCatchUpOnlyLatest(t *testing.T) {
 	useDigestFeatures(t, featureFlags{DailyDigest: true, DailyDigestSource: digestSourceLastfm})
-	f := useFakeLastfmRead(t, chartRoutes())
-	sink, n, _ := pushSink(t)
+	useFakeLastfmRead(t, chartRoutes())
+	sink, n, last := pushSink(t)
 	p := &poller{dailyState: dailyDigestState{path: filepath.Join(t.TempDir(), "daily.json")}}
-	p.dailyState.save("2026-10-16")
-	p.dailyDigest(time.Date(2026, 10, 18, dailyDigestCatchUpUntilHour, 30, 0, 0, time.Local), lastfmDigestEnv(sink.URL))
-	if *n != 0 || f.count() != 0 || p.dailyState.load() != "2026-10-16" {
-		t.Errorf("pushes=%d requests=%d state=%q", *n, f.count(), p.dailyState.load())
+	p.dailyState.save("2026-10-15")
+	p.dailyDigest(time.Date(2026, 10, 18, 12, 30, 0, 0, time.Local), lastfmDigestEnv(sink.URL))
+	if *n != 1 || !strings.Contains(*last, "昨日听歌报告（10-17）") || p.dailyState.load() != "2026-10-17" {
+		t.Errorf("pushes=%d state=%q body=%s", *n, p.dailyState.load(), *last)
 	}
 }
 

@@ -230,14 +230,10 @@ func (p *poller) weeklyDigest(now time.Time, env digestEnv) {
 	if !features().WeeklyDigest || !env.alerter.configured(notifyEventWeekly) {
 		return
 	}
-	if !digestCheckDue(now, p.weeklyLastCheckedAt, weeklyDigestCheckInterval) {
+	if !digestDue(now, p.weeklyLastCheckedAt, weeklyDigestCheckInterval) {
 		return
 	}
-	if digestQuietHold(now, &p.weeklyQuietHeld) {
-		return // 静默时段里:不推、不记检查时刻(notifyquiet.go)
-	}
 	p.weeklyLastCheckedAt = now.Round(0)
-	deferred := digestQuietRelease(&p.weeklyQuietHeld)
 
 	lastfmConfigured := env.cfg.LastfmUser != "" && env.cfg.lastfmBridgeAPIKey() != ""
 	lbConfigured := env.cfg.User != "" && env.cfg.Token != ""
@@ -261,6 +257,9 @@ func (p *poller) weeklyDigest(now time.Time, env digestEnv) {
 		thisMonday := mostRecentMonday(now)
 		from, to = thisMonday.AddDate(0, 0, -7).Unix(), thisMonday.Unix()
 	}
+	if now.Before(firstDigestPushAtOrAfter(time.Unix(to, 0).In(now.Location()), digestPushMinutes())) {
+		return // 这周结束了,还没到推送时间
+	}
 	if to <= p.weeklyState.load() {
 		return // 已经推送过了
 	}
@@ -280,7 +279,7 @@ func (p *poller) weeklyDigest(now time.Time, env digestEnv) {
 		return
 	}
 	addDigestExtras(env, source, weeklyDigestPeriod(from, to), &stats, now)
-	if digestPush(env.alerter, notifyEventWeekly, weeklyDigestTitle(source, from, to), stats, deferred) != nil {
+	if digestPush(env.alerter, notifyEventWeekly, weeklyDigestTitle(source, from, to), stats) != nil {
 		return
 	}
 	p.weeklyState.save(to)

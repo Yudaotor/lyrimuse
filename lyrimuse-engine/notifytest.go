@@ -15,6 +15,7 @@ import (
 //     所以文件里有密钥:App 以 0600 写,这里一读到就消费掉。渠道停用着也照推:测的就是它填得对不对。
 //   - 重发 {"id","resend":"<推送记录 id>"}:把那条没推成的原样(标题、正文、事件)推到同一个渠道,渠道按 id 从
 //     此刻的配置里找(改过地址、密钥的用改过的)。
+//   - 预览 {"id","preview":"daily"|"weekly"}:不推,算一份真实报告写进 notifyPreviewResultPath(digestpreview.go)。
 //
 // 请求 notifyTestRequestPath,形制同 lyricsrematch.go:盯着目录,一变就看一次(盯不了时每
 // notifyTestRequestCheckInterval 看一次)。结果 notifyTestResultPath 留最近 notifyTestResultMax 次,App 按自己发的
@@ -31,6 +32,7 @@ type notifyTestRequest struct {
 	ID      string        `json:"id"`
 	Channel notifyChannel `json:"channel"`
 	Resend  string        `json:"resend,omitempty"`
+	Preview string        `json:"preview,omitempty"`
 }
 
 type notifyTestResult struct {
@@ -59,8 +61,10 @@ func setNotifyPaths() {
 	setNotifyLogPath(configFilePath(clientName + "-notify-log.json"))
 	notifyTestRequestPath = configFilePath(clientName + "-notify-test-request.json")
 	notifyTestResultPath = configFilePath(clientName + "-notify-test-result.json")
+	notifyPreviewResultPath = configFilePath(clientName + "-notify-preview-result.json")
 	_ = os.Remove(notifyTestRequestPath)
 	_ = os.Remove(notifyTestResultPath)
+	_ = os.Remove(notifyPreviewResultPath)
 }
 
 // notifyTestTitle / notifyTestBody:「测一下」推的那条示例消息。
@@ -90,6 +94,10 @@ func startNotifyTestWatcher(ctx context.Context) {
 		}
 		req, ok := parseNotifyTestRequest(data)
 		if !ok {
+			continue
+		}
+		if req.Preview != "" {
+			go runDigestPreview(req)
 			continue
 		}
 		go runNotifyTest(req)

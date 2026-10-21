@@ -176,8 +176,8 @@ type featureFlagsFile struct {
 	// DigestTopN:四档报告里歌手、专辑、歌曲各列前几名(推送提醒页「每类列出」),1～10,缺失按 defaultDigestTopN,
 	// 越界夹回(resolveDigestTopN)。四档共用一个值。
 	DigestTopN *int `json:"digest_top_n,omitempty"`
-	// NotificationQuietHours:推送提醒的静默时段,见 notifyquiet.go。缺失 = 关。
-	NotificationQuietHours *notifyQuietHoursFile `json:"notification_quiet_hours,omitempty"`
+	// DigestPushTime:四档报告的推送时间(推送提醒页「推送时间」),本地时间 "HH:MM",缺失 / 写坏按 22:00,见 digestschedule.go。
+	DigestPushTime string `json:"digest_push_time,omitempty"`
 	// LyricsSources：启用的歌词源集合(lyricSourceXxx 常量的子集)。nil / 缺失 = 全部启用。
 	// 文件里另有一组 xxx_lyrics 迁移标记(老配置升级后补上新加的源),只 App 读,补完写进这个列表。
 	LyricsSources []string `json:"lyrics_sources,omitempty"`
@@ -294,8 +294,8 @@ type featureFlags struct {
 	YearlyDigestSource  string
 	// DigestTopN 恒在 1～10(resolveDigestTopN 保证);读的时候走 digestTopN()。
 	DigestTopN int
-	// NotificationQuietHours 见 notifyquiet.go。
-	NotificationQuietHours notifyQuietHours
+	// DigestPushTime 见 digestschedule.go;读的时候走 digestPushMinutes()。
+	DigestPushTime digestClock
 	// pickLyricCandidate(enrich.go)读这三个字段决定冠军。
 	//
 	// 订正:原注释说 `lyrimuse-engine search-lyrics` 子命令"从不调用
@@ -442,7 +442,7 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		MonthlyDigestSource:       f.MonthlyDigestSource,
 		YearlyDigestSource:        f.YearlyDigestSource,
 		DigestTopN:                resolveDigestTopN(f.DigestTopN),
-		NotificationQuietHours:    resolveNotifyQuietHours(f.NotificationQuietHours),
+		DigestPushTime:            resolveDigestPushTime(f.DigestPushTime),
 		LyricsSources:             resolveLyricsSources(f.LyricsSources),
 		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
@@ -796,7 +796,7 @@ func logFeatureSnapshot() {
 		"yearly_digest", features().YearlyDigest,
 		"yearly_digest_source", orDash(features().YearlyDigestSource),
 		"digest_top_n", digestTopN(),
-		"notification_quiet_hours", notifyQuietSummary(features().NotificationQuietHours),
+		"digest_push_time", clockText(digestPushMinutes()),
 		"launch_on_players", sortedEnabledKeys(features().LaunchLyrimuseOnPlayers),
 		"trusted_players", orDash(sortedMapKeys(features().TrustedPlayers)),
 		"browser_platform_pairs", browserPlatformPairsSummary(features().BrowserPlatformPairs),

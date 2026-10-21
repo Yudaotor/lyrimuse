@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// 推送渠道(config.json 的 notification_channels):想推到几个地方就配几个,各自启用 / 停用,一个可以设为默认。
+// 推送渠道(config.json 的 notification_channels):想推到几个地方就配几个,各自启用 / 停用。
 // 原来只有一个渠道,字段散在顶层(notification_platform、bark_url、dingtalk_sign_secret、feishu_sign_secret、
 // telegram_chat_id);那套旧字段在还没有渠道列表时照读,当成一个渠道(configNotifyChannels),旧配置不用迁移也照常推。
 // App 读到旧配置时把它写成渠道列表,旧字段留在文件里不删(装回旧版还能用)。所以「有没有渠道列表」看的是
@@ -22,9 +22,6 @@ type notifyChannel struct {
 	Secret   string `json:"secret,omitempty"`
 	ChatID   string `json:"chat_id,omitempty"`
 	Enabled  bool   `json:"enabled"`
-	Default  bool   `json:"default,omitempty"`
-	// PlainText:编辑弹窗里「按平台排版」关掉了,推纯文本(notifyrich.go 不排)。默认排。
-	PlainText bool `json:"plain_text,omitempty"`
 }
 
 // legacyNotifyChannelID:从旧的单渠道字段拼出来的那个渠道的 id。
@@ -70,7 +67,7 @@ func configNotifyChannels(c *config) []notifyChannel {
 		return nil
 	}
 	ch := notifyChannel{ID: legacyNotifyChannelID, Platform: c.NotificationPlatform, URL: c.NotificationWebhookURL,
-		ChatID: c.TelegramChatID, Enabled: true, Default: true}
+		ChatID: c.TelegramChatID, Enabled: true}
 	switch c.NotificationPlatform {
 	case platformDingtalk:
 		ch.Secret = c.DingtalkSignSecret

@@ -17,14 +17,9 @@ public struct NotificationChannel: Equatable, Identifiable, Sendable {
     public var secret: String
     public var chatID: String
     public var enabled: Bool
-    /// 默认渠道:新加渠道时设成默认的,自动加进四档听歌报告的路由(`NotificationRouting.adding`);同一时间只有一个。
-    /// 有两个以上渠道时界面上才出现(编辑表单里的开关、列表里的「默认」标签)。引擎不按它选渠道。
-    public var isDefault: Bool
-    /// 编辑表单里「按平台排版」关掉了:推纯文本,不加粗、不分栏、不带封面(引擎 notifyChannel.PlainText)。默认排。
-    public var plainText: Bool
 
     public init(id: String = UUID().uuidString.lowercased(), name: String = "", platform: String, url: String = "",
-                secret: String = "", chatID: String = "", enabled: Bool = true, isDefault: Bool = false, plainText: Bool = false) {
+                secret: String = "", chatID: String = "", enabled: Bool = true) {
         self.id = id
         self.name = name
         self.platform = platform
@@ -32,8 +27,6 @@ public struct NotificationChannel: Equatable, Identifiable, Sendable {
         self.secret = secret
         self.chatID = chatID
         self.enabled = enabled
-        self.isDefault = isDefault
-        self.plainText = plainText
     }
 
     /// 从旧的单渠道字段拼出来的那个渠道的 id(引擎 legacyNotifyChannelID)。
@@ -50,8 +43,6 @@ public struct NotificationChannel: Equatable, Identifiable, Sendable {
         if !name.isEmpty { o["name"] = name }
         if !Self.trim(secret).isEmpty { o["secret"] = Self.trim(secret) }
         if !Self.trim(chatID).isEmpty { o["chat_id"] = Self.trim(chatID) }
-        if isDefault { o["default"] = true }
-        if plainText { o["plain_text"] = true }
         return o
     }
 
@@ -59,8 +50,7 @@ public struct NotificationChannel: Equatable, Identifiable, Sendable {
         guard let id = o["id"] as? String, !id.isEmpty else { return nil }
         self.init(id: id, name: o["name"] as? String ?? "", platform: (o["platform"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "bark",
                   url: o["url"] as? String ?? "", secret: o["secret"] as? String ?? "", chatID: o["chat_id"] as? String ?? "",
-                  enabled: o["enabled"] as? Bool ?? false, isDefault: o["default"] as? Bool ?? false,
-                  plainText: o["plain_text"] as? Bool ?? false)
+                  enabled: o["enabled"] as? Bool ?? false)
     }
 
     /// config.json 里的渠道列表;没有这个键时为 nil(还是旧配置)。认不出的项跳过。
@@ -92,7 +82,7 @@ public struct NotificationChannel: Equatable, Identifiable, Sendable {
             let isActive = platform == active && !activeURL.isEmpty
             return NotificationChannel(
                 id: isActive ? legacyID : "\(legacyID)-\(platform)", platform: platform, url: url, secret: secret(platform),
-                chatID: platform == "telegram" ? chatID : "", enabled: isActive, isDefault: isActive)
+                chatID: platform == "telegram" ? chatID : "", enabled: isActive)
         }
     }
 
@@ -161,18 +151,16 @@ public enum NotificationDeliveryLog {
         public let elapsedMS: Int64
         /// 只有没推成的才有,「重发」用的就是它(App 不显示)。
         public let body: String?
-        /// 静默时段里到点的报告、等静默结束才推的(引擎 notifyquiet.go)。记录行写「静默时段里到的，延后到 HH:MM」。
-        public let deferred: Bool?
 
         enum CodingKeys: String, CodingKey {
-            case id, at, channel, platform, event, title, ok, kind, status, code, detail, body, deferred
+            case id, at, channel, platform, event, title, ok, kind, status, code, detail, body
             case channelName = "channel_name"
             case elapsedMS = "elapsed_ms"
         }
 
         public init(id: String, at: Int64, channel: String, channelName: String? = nil, platform: String, event: String? = nil,
                     title: String? = nil, ok: Bool, kind: String, status: Int? = nil, code: String? = nil, detail: String? = nil,
-                    elapsedMS: Int64 = 0, body: String? = nil, deferred: Bool? = nil) {
+                    elapsedMS: Int64 = 0, body: String? = nil) {
             self.id = id
             self.at = at
             self.channel = channel
@@ -187,10 +175,7 @@ public enum NotificationDeliveryLog {
             self.detail = detail
             self.elapsedMS = elapsedMS
             self.body = body
-            self.deferred = deferred
         }
-
-        public var isDeferred: Bool { deferred == true }
 
         public var date: Date { Date(timeIntervalSince1970: TimeInterval(at)) }
         public var failure: NotificationFailure? { ok ? nil : NotificationFailure(kind: kind, status: status, code: code, detail: detail) }
@@ -281,6 +266,41 @@ public enum NotificationTest {
     public static func resendBody(id: String, entryID: String) -> Data {
         (try? JSONSerialization.data(withJSONObject: ["id": id, "resend": entryID], options: [.sortedKeys])) ?? Data()
     }
+
+    // MARK: 预览(引擎 digestpreview.go)
+
+    /// 预览的结果另写一个文件(最近 6 次),按 id 找。
+    public static let previewResultFileName = "lyrimuse-notify-preview-result.json"
+
+    /// 请引擎按真推送同一套取数算一份这一期的报告(不推送)。
+    public static func previewBody(id: String, kind: NotificationPreview.Kind) -> Data {
+        (try? JSONSerialization.data(withJSONObject: ["id": id, "preview": kind.rawValue], options: [.sortedKeys])) ?? Data()
+    }
+
+    public struct PreviewResult: Equatable, Sendable {
+        /// 取不到真实数据的原因,同引擎 digestPreviewNoAccount 等。
+        public enum Reason: String, Sendable {
+            case noAccount = "no_account", empty, fetch
+        }
+
+        public let id: String
+        public let title: String
+        /// 取到了就有;取不到时 `reason` 说为什么。
+        public let stats: NotificationPreview.Stats?
+        public let reason: Reason?
+    }
+
+    public static func previewResult(id: String, in data: Data) -> PreviewResult? {
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let r = (root["results"] as? [[String: Any]])?.last(where: { $0["id"] as? String == id }) else { return nil }
+        let ok = r["ok"] as? Bool ?? false
+        let stats = ok ? (r["digest"] as? [String: Any]).map(NotificationPreview.Stats.init(digestJSON:)) : nil
+        return PreviewResult(id: id, title: r["title"] as? String ?? "", stats: stats,
+                             reason: stats == nil ? PreviewResult.Reason(rawValue: r["reason"] as? String ?? "") ?? .fetch : nil)
+    }
+
+    /// 预览要取账号全部歌手(判新听的歌手),第一次一二十秒;等这么久还没有结果就当没取到。
+    public static let previewTimeout: TimeInterval = 60
 
     /// 引擎每 0.5 秒看一次请求;Telegram 走代理回退一次最长二十来秒。过了这么久还没有结果就当引擎没接手(没在跑)。
     public static let timeout: TimeInterval = 30

@@ -65,7 +65,7 @@ func TestAlerterPushTelegram(t *testing.T) {
 
 	a := newAlerter(platformTelegram, srv.URL+"/botTEST/sendMessage", "", "", "42")
 	a.push("t", "b")
-	// 渠道默认按平台排版:Telegram 走 HTML,标题加粗(纯文本那份见 TestRichPayloadPlainTextChannel)。
+	// 按平台排版:Telegram 走 HTML,标题加粗(纯文本那份见 TestPlainFallbackPayload)。
 	if gotPath != "/botTEST/sendMessage" || gotBody["chat_id"] != "42" || gotBody["text"] != "<b>t</b>\nb" || gotBody["parse_mode"] != "HTML" {
 		t.Errorf("path=%q body=%v", gotPath, gotBody)
 	}

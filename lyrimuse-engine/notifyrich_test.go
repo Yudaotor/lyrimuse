@@ -200,22 +200,23 @@ func TestRichBarkAndNtfyKeepPlainBody(t *testing.T) {
 	}
 }
 
-// 关了「按平台排版」:跟以前一样的纯文本,不带封面、跳转;通用 Webhook 的 data 照带(那是数据,不是排版)。
-func TestRichPayloadPlainTextChannel(t *testing.T) {
+// 退回纯文本的那份(排过版的被平台拒收时改推它):跟以前一样的纯文本,不带封面、跳转;通用 Webhook 的 data 照带(那是数据,不是排版)。
+func TestPlainFallbackPayload(t *testing.T) {
 	useDigestFeatures(t, featureFlags{DigestTopN: 2})
 	msg := richMessage()
 	for _, p := range []string{platformTelegram, platformDiscord, platformSlack, platformFeishu, platformDingtalk, platformWecom, platformServerChan, platformBark, platformNtfy} {
-		ch := notifyChannel{Platform: p, URL: "https://example.com/hook/topic", ChatID: "42", PlainText: true}
-		nr := buildFor(t, ch, msg)
-		if nr.rich {
-			t.Errorf("%s: 关了排版还在排", p)
+		ch := notifyChannel{Platform: p, URL: "https://example.com/hook/topic", ChatID: "42"}
+		nr, err := buildNotifyRequestAs(ch, msg, false)
+		if err != nil || nr.rich {
+			t.Errorf("%s: 纯文本那份还在排 err=%v", p, err)
 		}
 		s := string(nr.body)
 		if strings.Contains(s, "lastfm.example") || strings.Contains(s, "parse_mode") || strings.Contains(s, "embeds") || strings.Contains(s, "interactive") {
 			t.Errorf("%s: %s", p, s)
 		}
 	}
-	wh := decodeJSON(t, buildFor(t, notifyChannel{Platform: platformWebhook, URL: "https://example.com/h", PlainText: true}, msg).body)
+	whReq, _ := buildNotifyRequestAs(notifyChannel{Platform: platformWebhook, URL: "https://example.com/h"}, msg, false)
+	wh := decodeJSON(t, whReq.body)
 	data, _ := wh["data"].(map[string]any)
 	if data["total_plays"] != 601.0 || data["previous_plays"] != 883.0 || data["duration_minutes"] != 2523.0 || data["duration_estimated"] != true ||
 		data["new_artists"].(map[string]any)["count"] != 44.0 || data["from"] != "2026-10-12" || data["cover_url"] == nil {

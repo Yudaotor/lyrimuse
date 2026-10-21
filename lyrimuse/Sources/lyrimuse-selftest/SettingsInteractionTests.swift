@@ -401,7 +401,7 @@ func runSettingsInteractionTests() {
         let migrated = C.migrated(fromLegacy: legacy)
         expectEqual(migrated.map(\.id), ["legacy", "legacy-bark", "legacy-telegram"], "推送渠道迁移: 正在用的排第一,其余按平台名")
         expectEqual(migrated[0], C(id: "legacy", platform: "dingtalk", url: "https://oapi.dingtalk.com/robot/send?access_token=a",
-                                   secret: "SEC1", enabled: true, isDefault: true),
+                                   secret: "SEC1", enabled: true),
                     "推送渠道迁移: 正在用的那个取 bark_url(不是另存的旧地址)、带上钉钉的加签密钥")
         expectEqual(migrated[1].enabled || migrated[2].enabled, false, "推送渠道迁移: 别的平台迁过来是停用的")
         expectEqual(migrated[2].chatID, "42", "推送渠道迁移: Telegram 带上 Chat ID")
@@ -471,7 +471,6 @@ func runSettingsInteractionTests() {
         expectEqual(T.result(id: "r1", in: resultSample)?.ok, true, "测一下: 读得懂共用样例")
         expectEqual(T.result(id: "r2", in: resultSample)?.failure?.kind, .notFound, "测一下: 按 id 找到自己的那次")
         expectEqual(T.result(id: "zz", in: resultSample) == nil, true, "测一下: 别人的结果不算")
-        expectEqual(logSample.map(\.isDeferred), [false, false, true], "推送记录: 静默延后的那条读得出「延后」标记(共用样例)")
         expectEqual(NotificationRouting.routes(fromConfig: channelsSample), ["weekly_digest": ["c1"], "daily_digest": ["c1", "c2"]],
                     "按事件选渠道: 读得懂共用样例的 notification_routes")
 
@@ -534,43 +533,52 @@ func runSettingsInteractionTests() {
         expectEqual(mine != nil && mine == engine, true, "按平台排版: Webhook 预览(含 data)读回来同引擎那一行")
         expectEqual(P.period(.weekly, now: previewNow).from, "2026-10-12", "按平台排版: data 里的起止日期同标题那一周")
 
-        var plain = NotificationChannel(id: "p", platform: "telegram", url: "1:x", chatID: "1")
-        expectEqual(plain.jsonObject["plain_text"] == nil, true, "按平台排版: 默认开,不落 plain_text")
-        plain.plainText = true
-        expectEqual(NotificationChannel(jsonObject: plain.jsonObject)?.plainText, true, "按平台排版: 关掉后落盘读回还是关的")
+        // 预览用真实数据:引擎 digestpreview.go 写的结果(共用样例 preview-result.json,引擎 digestpreview_test.go 读同一份)。
+        let previewResultSample = (try? Data(contentsOf: samples.appendingPathComponent("preview-result.json"))) ?? Data()
+        let realResult = NotificationTest.previewResult(id: "p1", in: previewResultSample)
+        expectEqual(realResult?.title, "🎵 上周听歌小结（10-11~10-18）", "预览真实数据: 读得懂引擎的结果(标题)")
+        expectEqual(realResult?.stats?.artists.prefix(2).map(\.name), ["方大同", "周杰伦"], "预览真实数据: 榜单")
+        expectEqual(realResult?.stats?.coverURL.hasPrefix("https://"), true, "预览真实数据: 封面地址")
+        expectEqual(realResult?.stats?.sourceName, "Last.fm", "预览真实数据: 数据源")
+        expectEqual(realResult.map { P.summaryLine($0.stats!) }, "共播放 286 次（前一周 241，↑19%） · 约 17 小时 52 分", "预览真实数据: 第一行同引擎")
+        expectEqual(NotificationTest.previewResult(id: "p-old", in: previewResultSample)?.reason, .empty, "预览真实数据: 取不到时读出原因")
+        expectEqual(NotificationTest.previewResult(id: "zz", in: previewResultSample) == nil, true, "预览真实数据: 别人的结果不算")
+        let realJSON = P.webhookJSON(event: "weekly_digest", title: "t", body: "b", sentAt: Date(timeIntervalSince1970: 0),
+                                     data: realResult?.stats, period: P.WebhookPeriod(from: "x", to: "y", topN: 3))
+        let realData = ((try? JSONSerialization.jsonObject(with: Data(realJSON.utf8))) as? [String: Any])?["data"] as? [String: Any]
+        expectEqual([realData?["from"] as? String, realData?["source"] as? String], ["2026-10-11", "lastfm"], "预览真实数据: Webhook data 用这一期的日期")
+        expectEqual(realData?["cover_url"] != nil && realData?["link"] != nil && realData?["duration_estimated"] as? Bool == true, true,
+                    "预览真实数据: Webhook data 带封面、链接、估算标记")
+        let previewReq = (try? JSONSerialization.jsonObject(with: NotificationTest.previewBody(id: "q", kind: .weekly))) as? [String: String]
+        expectEqual(previewReq, ["id": "q", "preview": "weekly"], "预览真实数据: 请求格式同引擎 notifyTestRequest.Preview")
+        var cut = P.sample(.weekly)
+        cut.truncated = true
+        expectEqual(P.summaryLine(cut), "共播放 286 次以上（记录太多，只统计了最近这些） · 约 17 小时 52 分", "预览真实数据: 记录被截断时同引擎")
     }
 
-    // ---- 推送提醒第二期:默认渠道、按档选渠道、静默时段、每类列出(15 章决策 72)----
+    // ---- 推送提醒第二期:按档选渠道、推送时间、每类列出(15 章决策 72;默认渠道已去掉,见 15 章决策 76;静默时段换成推送时间,见 15 章决策 77)----
     do {
         print("\n== 推送提醒第二期 ==")
         typealias R = NotificationRouting
         typealias C = NotificationChannel
-        let a = C(id: "a", platform: "telegram", url: "1:x", chatID: "1", isDefault: true)
+        let a = C(id: "a", platform: "telegram", url: "1:x", chatID: "1")
         let b = C(id: "b", platform: "bark", url: "https://api.day.app/k")
-        var c = C(id: "c", platform: "ntfy", url: "https://ntfy.sh/t")
+        let c = C(id: "c", platform: "ntfy", url: "https://ntfy.sh/t")
         expectEqual(R.digestEvents, ["daily_digest", "weekly_digest", "monthly_digest", "yearly_digest"], "按事件选渠道: 四档事件名")
 
-        // 加渠道:第一个不写路由;第二个(不设默认)加之前把没有键的几档落成现有渠道,自己不进任何一档。
+        // 加渠道:新渠道四档都推。没选过渠道的几档(没有键 = 全部)不用写;选过的几档把它加到末尾。
         var step = R.adding(a, to: [], routes: [:])
         expectEqual(step.routes, [:], "加渠道: 第一个渠道不写路由(没有键 = 全部)")
         step = R.adding(b, to: step.channels, routes: ["weekly_digest": ["a"]])
-        expectEqual(step.routes, ["daily_digest": ["a"], "weekly_digest": ["a"], "monthly_digest": ["a"], "yearly_digest": ["a"]],
-                    "加渠道: 不设默认的新渠道不进任何一档,没选过的几档落成现有渠道")
+        expectEqual(step.routes, ["weekly_digest": ["a", "b"]], "加渠道: 选过渠道的那一档加上新渠道,没选过的几档不动(本来就是全部)")
         expectEqual(step.channels.map(\.id), ["a", "b"], "加渠道: 排在最后")
-        // 第三个设成默认:加进四档,别的渠道的默认去掉;已经选过的那几档原样留着、只多它一个。
-        c.isDefault = true
         let explicit: R.Routes = ["daily_digest": ["b"], "weekly_digest": ["a"], "monthly_digest": ["a", "b"], "yearly_digest": ["a"]]
         step = R.adding(c, to: step.channels, routes: explicit)
         expectEqual(step.routes, ["daily_digest": ["b", "c"], "weekly_digest": ["a", "c"], "monthly_digest": ["a", "b", "c"], "yearly_digest": ["a", "c"]],
-                    "加渠道: 设成默认的新渠道加进四档")
-        expectEqual(step.channels.filter(\.isDefault).map(\.id), ["c"], "默认渠道: 同时只有一个,新设的取代旧的")
-        // 改已有渠道:设成默认就清掉别的;不设默认不碰别的。
-        var bDefault = b
-        bDefault.isDefault = true
-        expectEqual(R.updating(bDefault, in: step.channels).filter(\.isDefault).map(\.id), ["b"], "默认渠道: 编辑时设一个就清掉别的")
+                    "加渠道: 四档都选过渠道时,新渠道加进每一档")
         var aRenamed = step.channels[0]
         aRenamed.name = "改名"
-        expectEqual(R.updating(aRenamed, in: step.channels).map(\.isDefault), [false, false, true], "默认渠道: 不设默认的编辑不动别的")
+        expectEqual(R.updating(aRenamed, in: step.channels).map(\.name), ["改名", "", ""], "改渠道: 原地替换")
 
         // 删渠道:从各档拿掉,空了的档删掉键(回到全部渠道)。
         let removed = R.removing(id: "b", from: step.channels, routes: ["daily_digest": ["b"], "weekly_digest": ["a", "b"], "milestone": ["b", "c"]])
@@ -602,25 +610,16 @@ func runSettingsInteractionTests() {
         expectEqual(R.label(selectedNames: ["一个特别特别特别长的渠道名字"], total: 3), .names("一个特别特别特别长的渠道名字"),
                     "下拉文字: 只有一个时照写名字(界面上截尾)")
 
-        // 静默时段:跨午夜、左闭右开、关着 / 首尾相同不静默;时刻解析跟引擎 parseClockMinutes 同一口径。
-        typealias Q = NotificationQuietHours
-        let night = Q(enabled: true, start: 23 * 60, end: 8 * 60)
-        expectEqual([22 * 60 + 59, 23 * 60, 0, 7 * 60 + 59, 8 * 60, 12 * 60].map(night.isActive(minuteOfDay:)),
-                    [false, true, true, true, false, false], "静默时段: 23:00–08:00 跨午夜")
-        let noon = Q(enabled: true, start: 13 * 60, end: 15 * 60 + 30)
-        expectEqual([13 * 60 - 1, 13 * 60, 15 * 60 + 29, 15 * 60 + 30].map(noon.isActive(minuteOfDay:)), [false, true, true, false],
-                    "静默时段: 不跨午夜按区间")
-        expectEqual(Q(enabled: false).isActive(minuteOfDay: 0) || Q(enabled: true, start: 540, end: 540).isActive(minuteOfDay: 540), false,
-                    "静默时段: 关着、首尾相同都不静默")
-        expectEqual(Q(file: nil), Q(enabled: false, start: 23 * 60, end: 8 * 60), "静默时段: 缺失 = 关、23:00–08:00")
-        expectEqual(["23:00", "7:30", "00:05", "24:00", "8:5x", "08:5", "abc", "", "١٢:٠٠"].map(Q.minutes(fromClock:)),
-                    [1380, 450, 5, nil, nil, nil, nil, nil, nil], "静默时段: HH:MM 解析(越界、多余字、非 ASCII 数字不认)")
-        expectEqual(Q(file: .init(enabled: true, start: "bad", end: "6:45")), Q(enabled: true, start: 23 * 60, end: 6 * 60 + 45),
-                    "静默时段: 写坏的时刻按默认")
-        expectEqual(night.file, .init(enabled: true, start: "23:00", end: "08:00"), "静默时段: 落盘写 HH:MM 补零")
-        expectEqual(Q(file: night.file), night, "静默时段: 落盘再读回来一样")
-        expectEqual([night.startText, night.endText, Q.clockText(-1), Q.clockText(1440 + 61)], ["23:00", "08:00", "23:59", "01:01"],
-                    "静默时段: 副标题的两个时刻")
+        // 推送时间:缺失、写坏按 22:00;时刻解析跟引擎 parseClockMinutes 同一口径;中午以后推当天、之前推前一天;时区写法。
+        typealias PT = DigestPushTime
+        expectEqual([nil, "", "7:30", "22:00", "24:00", "8:5x", "١٢:٠٠"].map(PT.resolved), [1320, 1320, 450, 1320, 1320, 1320, 1320],
+                    "推送时间: HH:MM 解析,缺失和写坏的按 22:00")
+        expectEqual([PT.clockText(450), PT.clockText(-1), PT.clockText(1440 + 61)], ["07:30", "23:59", "01:01"], "推送时间: 落盘写 HH:MM 补零")
+        expectEqual([11 * 60 + 59, 12 * 60, 22 * 60].map(PT.dailyCoversSameDay), [false, true, true], "推送时间: 中午以后推当天,之前推前一天")
+        let probe = Date(timeIntervalSince1970: 1_800_000_000)
+        expectEqual([TimeZone(identifier: "Asia/Shanghai")!, TimeZone(identifier: "Asia/Kolkata")!, TimeZone(identifier: "America/New_York")!]
+                        .map { PT.timeZoneText($0, at: probe) },
+                    ["GMT+8 · Asia/Shanghai", "GMT+5:30 · Asia/Kolkata", "GMT-5 · America/New_York"], "推送时间: 时区写成 GMT 偏移 + 时区名(冬令时)")
 
         // 每类列出:缺失 3,越界夹回 1～10(同引擎 resolveDigestTopN)。
         expectEqual([nil, 0, -3, 1, 7, 10, 11, 99].map(DigestTopN.resolved), [3, 1, 1, 1, 7, 10, 10, 10], "每类列出: 缺失 3、夹回 1～10")

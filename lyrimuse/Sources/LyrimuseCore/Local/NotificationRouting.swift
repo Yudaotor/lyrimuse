@@ -4,9 +4,9 @@ import Foundation
 /// routedNotifyChannels)。**没有这个事件的键 = 推到全部启用、填齐的渠道**;列出来的渠道还得启用、填齐才推,列表里
 /// 指向已删除渠道的 id 引擎直接跳过。
 ///
-/// 界面上(推送提醒页「听歌报告」卡每档行尾的下拉)只在有两个以上渠道时出现。这里管路由跟着渠道增删怎么变,见 15 章决策 72:
-///   - 新加渠道之前,四档里还没有键的(= 全部渠道)先落成「现有全部渠道 id」—— 否则「没有键」的语义会让新渠道自动
-///     被四档用上;新渠道设成默认的,把它的 id 加进四档;不设默认的不进任何一档。加的是第一个渠道时什么都不写。
+/// 界面上(推送提醒页「听歌报告」卡每档行尾的下拉)只在有两个以上渠道时出现。这里管路由跟着渠道增删怎么变,见 15 章决策 72、76:
+///   - 新加的渠道四档都推:还没选过渠道的那几档(没有键 = 全部渠道)本来就包括它,选过的几档把它的 id 加到末尾。
+///     不想推哪一档再到下拉里取消。
 ///   - 删渠道时从各档拿掉它的 id,某档因此空了就删掉这个键(回到全部渠道)。
 ///   - 勾选全部渠道时删掉这个键,不留一份跟「全部」等价的列表;至少要勾一个。
 public enum NotificationRouting {
@@ -33,27 +33,19 @@ public enum NotificationRouting {
     /// 选渠道这件事要不要出现在界面上:两个以上渠道才有得选。
     public static func showsChoice(channelCount: Int) -> Bool { channelCount >= 2 }
 
-    /// 加一个新渠道(还不在 `channels` 里)。见类型头注。新渠道设成默认时,别的渠道的默认去掉。
+    /// 加一个新渠道(还不在 `channels` 里),四档都推它。见类型头注。
     public static func adding(_ channel: NotificationChannel, to channels: [NotificationChannel], routes: Routes)
         -> (channels: [NotificationChannel], routes: Routes) {
         var routes = routes
-        if !channels.isEmpty {
-            let existing = channels.map(\.id)
-            for event in digestEvents where routes[event] == nil {
-                routes[event] = existing
-            }
-            if channel.isDefault {
-                for event in digestEvents where routes[event]?.contains(channel.id) == false {
-                    routes[event]?.append(channel.id)
-                }
-            }
+        for event in digestEvents where routes[event]?.contains(channel.id) == false {
+            routes[event]?.append(channel.id)
         }
-        return (makingDefaultUnique(channels + [channel], keeping: channel), routes)
+        return (channels + [channel], routes)
     }
 
-    /// 改一个已有的渠道:原地替换;它设成了默认就去掉别的渠道的默认。路由不动。
+    /// 改一个已有的渠道:原地替换,路由不动。
     public static func updating(_ channel: NotificationChannel, in channels: [NotificationChannel]) -> [NotificationChannel] {
-        makingDefaultUnique(channels.map { $0.id == channel.id ? channel : $0 }, keeping: channel)
+        channels.map { $0.id == channel.id ? channel : $0 }
     }
 
     /// 删一个渠道:从各档路由里拿掉它的 id,某档因此空了就删掉这个键(回到全部渠道)。
@@ -106,55 +98,19 @@ public enum NotificationRouting {
         if selectedNames.count == 1 || joined.count <= maxLength { return .names(joined) }
         return .firstOfMany(first: selectedNames[0], count: selectedNames.count)
     }
-
-    private static func makingDefaultUnique(_ channels: [NotificationChannel], keeping channel: NotificationChannel) -> [NotificationChannel] {
-        guard channel.isDefault else { return channels }
-        return channels.map { c in
-            var c = c
-            c.isDefault = c.id == channel.id
-            return c
-        }
-    }
 }
 
-/// 推送提醒的静默时段(features.json 的 `notification_quiet_hours`,引擎 notifyquiet.go):这段时间里到点的听歌报告
-/// 等静默结束再推。时刻是本地时间零点起的分钟数,文件里写成 "HH:MM"。跨午夜(23:00–08:00)按「开始之后或结束之前」算,
-/// 左闭右开;开始和结束一样当成没有静默。默认关、23:00–08:00。见 15 章决策 72。
-public struct NotificationQuietHours: Equatable, Sendable {
-    public var enabled: Bool
-    public var start: Int
-    public var end: Int
+/// 四档听歌报告的推送时间(推送提醒页「推送时间」,features.json 的 `digest_push_time`,"HH:MM",引擎 digestschedule.go)。
+/// 四档共用,按这台 Mac 当前的时区算,换了时区跟着变。每日报告:推送时间在 `sameDayFrom`(12:00)及以后推当天,在那之前推
+/// 前一天一整天;每周 / 每月 / 年度:周期结束后的第一个推送时间推。见 15 章决策 77。
+public enum DigestPushTime {
+    public static let defaultMinutes = 22 * 60
+    public static let sameDayFrom = 12 * 60
 
-    public static let defaultStart = 23 * 60
-    public static let defaultEnd = 8 * 60
-
-    public init(enabled: Bool = false, start: Int = NotificationQuietHours.defaultStart, end: Int = NotificationQuietHours.defaultEnd) {
-        self.enabled = enabled
-        self.start = start
-        self.end = end
+    /// 缺失、写坏了按默认(同引擎 resolveDigestPushTime)。
+    public static func resolved(_ text: String?) -> Int {
+        text.flatMap(minutes(fromClock:)) ?? defaultMinutes
     }
-
-    /// features.json 里那一段的形状,跟引擎 notifyQuietHoursFile 逐字段对应。
-    public struct File: Codable, Equatable, Sendable {
-        public var enabled: Bool?
-        public var start: String?
-        public var end: String?
-
-        public init(enabled: Bool?, start: String?, end: String?) {
-            self.enabled = enabled
-            self.start = start
-            self.end = end
-        }
-    }
-
-    /// 段缺失 = 关、默认时刻;时刻写坏了按默认时刻(同引擎 resolveNotifyQuietHours)。
-    public init(file: File?) {
-        self.init(enabled: file?.enabled ?? false,
-                  start: file?.start.flatMap(Self.minutes(fromClock:)) ?? Self.defaultStart,
-                  end: file?.end.flatMap(Self.minutes(fromClock:)) ?? Self.defaultEnd)
-    }
-
-    public var file: File { File(enabled: enabled, start: Self.clockText(start), end: Self.clockText(end)) }
 
     /// "HH:MM"(24 小时制,补零)。
     public static func clockText(_ minutes: Int) -> String {
@@ -171,15 +127,16 @@ public struct NotificationQuietHours: Equatable, Sendable {
         return h * 60 + m
     }
 
-    /// 这一分钟(零点起)在不在静默里。
-    public func isActive(minuteOfDay m: Int) -> Bool {
-        guard enabled, start != end else { return false }
-        return start < end ? (m >= start && m < end) : (m >= start || m < end)
-    }
+    /// 每日报告推的是当天(到推送那一刻为止)还是前一天一整天。
+    public static func dailyCoversSameDay(_ minutes: Int) -> Bool { minutes >= sameDayFrom }
 
-    /// 副标题「HH:MM 到 HH:MM 之间要推的，等到 HH:MM 再推」的两个时刻。
-    public var startText: String { Self.clockText(start) }
-    public var endText: String { Self.clockText(end) }
+    /// 时区写法:「GMT+8 · Asia/Shanghai」,不随界面语言变。
+    public static func timeZoneText(_ zone: TimeZone, at date: Date = Date()) -> String {
+        let seconds = zone.secondsFromGMT(for: date)
+        let h = abs(seconds) / 3600, m = abs(seconds) % 3600 / 60
+        let offset = "GMT" + (seconds < 0 ? "-" : "+") + (m == 0 ? "\(h)" : String(format: "%d:%02d", h, m))
+        return offset + " · " + zone.identifier
+    }
 }
 
 /// 听歌报告「每类列出」:歌手、专辑、歌曲各列前几名(features.json 的 `digest_top_n`,引擎 digest.go 的 digestTopN)。

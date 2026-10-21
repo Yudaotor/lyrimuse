@@ -43,6 +43,8 @@ func TestMain(m *testing.M) {
 	testRealHome, _ = os.UserHomeDir()
 	// 凭据保险箱一律当没有条目,不起 security、不碰真实钥匙串;测它的用例自己换。
 	credentialVaultRead = func() ([]byte, error) { return nil, nil }
+	// 系统时区不跟:用例都按启动时的 time.Local 拼时间,中途被换掉会对不上(换时区的用例自己设,digestschedule_test.go)。
+	localZoneLink = ""
 	canonicalMemoTTL = 0 // 各用例直接换 enrichCache,不让上一个用例记下的宽松匹配漏到下一个(见 canonicalMemoTTL)
 	_ = os.Unsetenv("LYRIMUSE_CONFIG_DIR")
 	_ = os.Setenv("HOME", sandbox)

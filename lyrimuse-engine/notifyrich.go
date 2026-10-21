@@ -12,7 +12,7 @@ import (
 // 按平台排版:同一份报告(notifyMessage.Digest),每个平台用它自己支持的格式排 —— Telegram HTML、Discord 卡片(embed)、
 // Slack Block Kit、飞书消息卡片、钉钉 markdown、企业微信 markdown_v2、Server酱 markdown;能放图的放头号专辑封面,
 // 能点的点开去这一期的完整榜单。Bark、ntfy 正文保持纯文本(Bark 锁屏只显示前几行、ntfy 的 markdown iPhone 不认),
-// 只加封面和点击跳转。渠道关了「按平台排版」(notifyChannel.PlainText)就一律推纯文本那份。
+// 只加封面和点击跳转。所有渠道都排,不给开关(用户:「应该是默认都要，不需要可配置」)。
 //
 // 「测一下」那条(Digest 为 nil)也按平台的格式发(标题加粗、卡片),测得出这个渠道收不收排过版的消息。
 // 超出平台上限(Telegram 4096 字、企业微信 4096 字节、Slack 一段 3000 字)时不排,推纯文本那份;推出去被平台说
@@ -359,8 +359,7 @@ func dingtalkRich(title, body string, d *digestStats) string {
 // wecomMarkdownMaxBytes:企业微信 markdown_v2 的 content 上限。
 const wecomMarkdownMaxBytes = 4096
 
-// wecomRich:企业微信 markdown_v2(标题、图片、列表、链接都认;旧版企业微信 4.1.36 以下会显示成带符号的纯文本 —— 群里有人用旧版
-// 就在这个渠道上关掉「按平台排版」)。
+// wecomRich:企业微信 markdown_v2(标题、图片、列表、链接都认;旧版企业微信 4.1.36 以下会显示成带符号的纯文本)。
 func wecomRich(title, body string, d *digestStats) string {
 	if d == nil {
 		return "# " + title + "\n\n" + markdownEscaper.Replace(body)

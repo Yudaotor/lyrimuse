@@ -1,7 +1,7 @@
 {
   "bark_url": "https://api.day.app/LegacyKeyStaysForDowngrade",
   "notification_channels": [
-    {"id": "c1", "name": "我的 Telegram", "platform": "telegram", "url": "123456789:AAHfakeTokenFakeTokenFakeToken12", "chat_id": "42", "enabled": true, "default": true},
+    {"id": "c1", "name": "我的 Telegram", "platform": "telegram", "url": "123456789:AAHfakeTokenFakeTokenFakeToken12", "chat_id": "42", "enabled": true},
     {"id": "c2", "platform": "ntfy", "url": "https://ntfy.sh/lyrimuse-test", "secret": "tk_faketoken", "enabled": false}
   ],
   "notification_routes": {"weekly_digest": ["c1"], "daily_digest": ["c1", "c2"]}
