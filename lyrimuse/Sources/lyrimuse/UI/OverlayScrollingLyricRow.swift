@@ -304,7 +304,7 @@ final class OverlayLyricScrollView: NSView {
         // 空走一段(followReadingPath 的首点 x 恒为 0)。
         // 配速行没有阅读位置:不填色,滚动在 `place` 里按显示窗口另算。
         let readingPath = spec.pacedWindow != nil ? [] : MenuBarMarquee.followReadingPath(
-            words: r.flatWords, wordEndXs: r.wordEndXs.map { $0 - inset })
+            words: r.flatWords, wordEndXs: r.fillEndXs.map { $0 - inset })
             .map { MenuBarMarquee.KaraokeFillPoint(ms: $0.ms, x: $0.x + inset) }
         return OverlayRowGeometry(
             scale: scale, bleed: bleed, inset: inset,
@@ -456,7 +456,7 @@ final class OverlayLyricScrollView: NSView {
         reveal.fromValue = 0
         reveal.toValue = 1
         reveal.beginTime = fadeCover.convertTime(CACurrentMediaTime(), from: nil)
-            + Double(max(0, leave.ms - nowMs)) / 1000
+            + Double(max(0, leave.ms - nowMs)) / 1000 / effectiveRate // 歌词毫秒 → 墙钟秒,同滚动动画按速率换算
         reveal.duration = 0.2
         reveal.fillMode = .both
         reveal.isRemovedOnCompletion = false

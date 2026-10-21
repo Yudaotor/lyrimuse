@@ -776,6 +776,12 @@ func runOverlayTests() {
                     "图层排版: 读音从各自列首 + 留白起画")
         expectEqual(grouped.boxWidth, 30 + 2 * pad + 20, "图层排版: 字比读音宽时列宽取字宽")
         expectEqual(grouped.flatWords.map(\.text), ["痛", "到没"], "图层排版: 摊平的字保持排版顺序")
+        expectEqual(plain.fillEndXs, plain.wordEndXs, "图层排版: 没有读音时填色右缘就是字的右缘")
+        expectEqual(grouped.fillEndXs, [30 + 2 * pad, 30 + 2 * pad + 20],
+                    "图层排版: 填色右缘延到列尾,读音比字宽的那组唱完时读音也填满(每行最后一组同理)")
+        let twoWords = L.layOut(words: [], groups: [SyncedLyricWordGroup(id: 0, words: [w("心"), w("の")], romanization: "kokorono")],
+                                inset: 0, measureMain: main, measureRoma: roma)
+        expectEqual(twoWords.fillEndXs, [10, 48 + 2 * pad], "图层排版: 一组几个字时只有最后一个字的右缘延到列尾")
 
         // 没有读音的组(混语言行里的英文词)按一个空格占位,不画读音、列宽照样算留白。
         let bare = SyncedLyricWordGroup(id: 0, words: [w("a")], romanization: nil)   // 字 10,占位 6+4

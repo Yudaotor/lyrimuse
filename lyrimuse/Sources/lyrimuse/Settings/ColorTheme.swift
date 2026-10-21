@@ -289,11 +289,17 @@ extension ColorTheme {
     /// `UnsavedColorThemeSnapshot`,不然「自定义」那张卡随即消失、手调的颜色就找不回来了。
     @MainActor
     func applyKeepingUnsaved(to settings: AppSettings) {
+        ColorTheme.rememberUnsaved(settings)
+        apply(to: settings)
+    }
+
+    /// 当前配色手调过、还没存成主题时记一份(`UnsavedColorThemeSnapshot`)。整套覆盖配色之前调:套用主题、恢复默认。
+    @MainActor
+    static func rememberUnsaved(_ settings: AppSettings) {
         let current = ColorTheme.current(settings)
         if !UnsavedColorThemeSnapshot.isKnown(current, settings: settings) {
             UnsavedColorThemeSnapshot.save(current)
         }
-        apply(to: settings)
     }
 }
 

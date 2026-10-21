@@ -923,6 +923,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         guard let window else { return }
         let contentChanged = abs(contentHeight - lastContentHeight) >= 0.5
         lastContentHeight = contentHeight
+        // 系统正在拖窗口(武装中):这时的高度动画以按下那一刻的位置为起止,会把窗口钉回原处、松手后卡片不在指针下。
+        // 先不改高,松手时 finishArmedDrag 按最后的内容高补一次。
+        if isDragArmed { return }
         let current = baseFrame(of: window)
         // 增高的同时,不能让另一侧的边超出当前屏幕可见区域:罗马音+译文+下一句预览都开着、又遇上
         // 长歌词多行换行时,只保证"不小于默认高度"的话可能把窗口下半部分撑到 Dock 后面甚至屏幕外。
@@ -965,6 +968,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 的钳制就不再守恒(newX + width/2 != centerX),再以中间帧为基准重算一次,窗口就会漂到
     // 一个跟时序有关的位置上。统一以"上一次的目标 frame"为基准,两处都稳。
     private var animatingTargetFrame: NSRect?
+    /// 第几次 setFrameAnimated。完成回调凭它认「自己是不是最后那次」:拖边改宽会把 animatingTargetFrame
+    /// 改成当前这一帧(applyWidthDrag),按 frame 判等的话旧动画的回调永远对不上、缓存一直不清。
+    private var frameAnimationSerial = 0
 
     // 算新 frame 的基准:有动画在飞就用它的目标,否则用窗口真实 frame —— 用户可能自己把
     // 窗口拖走过(performDrag),那种情况必须以真实位置为准,所以动画一结束就把缓存放掉。
@@ -974,6 +980,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
 
     private func setFrameAnimated(_ window: NSWindow, to frame: NSRect) {
         animatingTargetFrame = frame
+        frameAnimationSerial += 1
+        let serial = frameAnimationSerial
         NSAnimationContext.runAnimationGroup({ context in
             // 拖边改宽期间折行会变、高度跟着变:这时的高度动画会跟下一帧直接设的宽度抢同一个
             // frame,直接到位。
@@ -983,7 +991,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             MainActor.assumeIsolated {
                 // 只有"最后那次动画"结束时才清:动画途中又来一次调用会覆盖
                 // animatingTargetFrame,那时旧动画的完成回调不该把新目标清掉。
-                guard let self, self.animatingTargetFrame == frame else { return }
+                guard let self, self.frameAnimationSerial == serial else { return }
                 self.animatingTargetFrame = nil
                 // didMove 观察者对程序性动画整段豁免(见 init() 那条 guard),最终落点在
                 // 这里统一存一次 —— setWidth 是保持中心伸缩的,x 会真的变,不存的话重启
@@ -1623,6 +1631,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 拖动中的中间位置不存(武装期间 didMove 观察者跳过 scheduleSavePosition),只存这一次最终落点。
         persistPosition(window.frame)
         cancelPendingPress()
+        // 拖动中跳过的高度变化(见 updateHeight)。
+        updateHeight(lastContentHeight)
     }
 
     /// 预设模式下拖动被拒的反馈:槽位胶囊 + 抖动,2.4 秒后收回(比 flashTransientHint 的 1.6 秒长——

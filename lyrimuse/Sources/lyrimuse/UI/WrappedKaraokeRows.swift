@@ -162,6 +162,9 @@ final class WrappedKaraokeRowsView: NSView {
 
     private var pending: PendingRows?
     private var renderGeneration = 0
+    /// 最新一批的世代号,出图队列开画前看一眼:排队期间又来了更新的一批(快速换句、拖进度、拖宽度反复折行),
+    /// 这批画了也会在 finishRender 被丢掉,不画。
+    private let latestRender = RowRasterGeneration()
     /// 一句的几行在一个任务里依次画完,再一起回主线程。
     private static let rasterQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.wrapped-rows-raster",
                                                    qos: .userInteractive)
@@ -240,7 +243,10 @@ final class WrappedKaraokeRowsView: NSView {
         let batch = RowRasterBatch(items: zip(geometries, targets).map { ($0, $1.spec) })
         // 后台任务只拿弱引用:视图在画的这段时间里被拆掉时,最后一次释放不能落在出图队列上。
         let owner = WeakRowsView(self)
+        let latest = latestRender
+        latest.set(generation)
         Self.rasterQueue.async {
+            guard latest.isCurrent(generation) else { return }
             let result = RowRasterResult(images: batch.items.map { OverlayRowRaster.render($0.0, spec: $0.1) })
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { owner.view?.finishRender(generation: generation, images: result.images) }
@@ -326,6 +332,24 @@ private struct RowRasterBatch: @unchecked Sendable {
 /// 出图队列画好的几行。
 private struct RowRasterResult: @unchecked Sendable {
     var images: [OverlayRowImages]
+}
+
+/// 行视图最新一批的世代号:主线程写,出图队列读。
+private final class RowRasterGeneration: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+
+    func set(_ generation: Int) {
+        lock.lock()
+        value = generation
+        lock.unlock()
+    }
+
+    func isCurrent(_ generation: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return value == generation
+    }
 }
 
 /// 出图任务对行视图的弱引用,只在主线程上解引用。

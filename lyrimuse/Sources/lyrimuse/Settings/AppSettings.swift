@@ -468,6 +468,7 @@ final class AppSettings: ObservableObject {
     static let defaultFontSize = 31.0
     /// 悬浮歌词主字号的可调范围。设置页「文字」浮层和菜单栏面板快捷设置两根滑杆都读这一份。
     static let overlayFontSizeRange: ClosedRange<Double> = 14...64
+    static let defaultOverlayLyricsKaraoke = true
     /// 悬浮歌词字号往大(`direction` = 1)或往小(-1)走一档(2pt)后的值,夹在 `overlayFontSizeRange` 里。
     /// ⚙ 菜单「字号」那一行和放大 / 缩小字号快捷键共用。
     static func steppedOverlayFontSize(from size: Double, direction: Int) -> Double {
@@ -2132,7 +2133,7 @@ final class AppSettings: ObservableObject {
         // (局部变量而不是回读 self.xxx:init 里所有存储属性赋完之前不准碰 self,同下面
         //  legacyHideDuringCapture 那段的写法。)
         let legacyKaraoke = defaults.object(forKey: Keys.preferWordLevelKaraoke) as? Bool
-        let overlayKaraoke = (defaults.object(forKey: Keys.overlayLyricsKaraoke) as? Bool) ?? legacyKaraoke ?? true
+        let overlayKaraoke = (defaults.object(forKey: Keys.overlayLyricsKaraoke) as? Bool) ?? legacyKaraoke ?? Self.defaultOverlayLyricsKaraoke
         let notchKaraoke = (defaults.object(forKey: Keys.notchLyricsKaraoke) as? Bool) ?? legacyKaraoke ?? true
         overlayLyricsKaraoke = overlayKaraoke
         notchLyricsKaraoke = notchKaraoke
@@ -2579,7 +2580,9 @@ final class AppSettings: ObservableObject {
         notchAllScreens = (defaults.object(forKey: Keys.notchAllScreens) as? Bool) ?? Self.defaultNotchAllScreens
         notchScreenID = defaults.string(forKey: Keys.notchScreenID) ?? Self.defaultNotchScreenID
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? Self.defaultFontFamilyName
-        fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? Self.defaultFontSize
+        // 手改过、旧版写下的越界值夹回滑杆的范围,不然窗口按它画、滑杆却顶在头上。
+        let storedFontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? Self.defaultFontSize
+        fontSize = min(max(storedFontSize, Self.overlayFontSizeRange.lowerBound), Self.overlayFontSizeRange.upperBound)
         // 没存过(老用户 / 全新安装)一律落到 Self.defaultOverlayFontWeight。rawValue 被手改坏时也走这条兜底,
         // 不让一个坏字符串把悬浮歌词的字重变成随机档。
         overlayFontWeight = defaults.string(forKey: Keys.overlayFontWeight)
@@ -2588,7 +2591,8 @@ final class AppSettings: ObservableObject {
         // 他的宽度调整条停在 488)。 宽度**不在**「恢复默认」的范围里(跟锁定位置一起排除,
         // 见 OverlayStyleDefaults.restoreTextAndColors 的头注),所以这个数字只对新装 / 没存过
         // 这个键的配置生效。合法区间的唯一真源是 OverlayEditorStage.widthRange(300…1400)。
-        overlayWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 488
+        let storedWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 488
+        overlayWidth = min(max(storedWidth, OverlayEditorStage.widthRange.lowerBound), OverlayEditorStage.widthRange.upperBound)
         notchContentWidth = (defaults.object(forKey: Keys.notchContentWidth) as? Double) ?? Self.defaultNotchContentWidth
         // 没存过就落到 Self.defaultNotchExpandedContentWidth(前这里读的是稳态那个
         // 常量,两个键共用一份;拆开的理由见那两个常量上方的注释)。 无论如何**不读用户当前的

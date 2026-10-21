@@ -669,6 +669,10 @@ struct OverlayThemeSettingsRows: View {
 enum OverlayStyleDefaults {
     static func restoreTextAndColors() {
         let settings = AppSettings.shared
+        // 配色要被整套覆盖:手调过、没存成主题的那套先记一份,同点「默认」主题卡(ColorTheme.applyKeepingUnsaved)。
+        ColorTheme.rememberUnsaved(settings)
+        // 「卡拉OK效果」跟下面这些同在「颜色」组,两处范围说明也没把它排除。
+        settings.overlayLyricsKaraoke = AppSettings.defaultOverlayLyricsKaraoke
         // 从硬编码 false 改成读 defaultFollowsCoverArt——这颗按钮的
         // 名字就是"恢复默认",默认值现在是"跟随封面开着",硬编码 false 会让它
         // 跟"全新安装长什么样"不一致(点了"恢复默认"却恢复不出默认的样子)。

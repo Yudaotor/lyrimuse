@@ -40,6 +40,10 @@ public enum OverlayRowLayout {
         /// 每个字的左缘 / 右缘(点,长图坐标,含左侧 `inset`),与 `flatWords` 一一对应。
         public var wordStartXs: [CGFloat]
         public var wordEndXs: [CGFloat]
+        /// 填色路径用的右缘:同 `wordEndXs`,只是每组最后一个字的右缘延到这一列的列尾。读音比字宽时
+        /// 列尾在字的右边,按字的右缘填的话,读音多出来的那截要等下一组开唱才填、每行最后一组永远填不满;
+        /// 读音按整组起止填色,这一组唱完时整列(字和读音)都该填满。
+        public var fillEndXs: [CGFloat]
         /// 有读音的组各一条:读音从哪儿画。
         public var romaPlacements: [RomaPlacement]
         /// 按排版顺序摊平的字。
@@ -58,6 +62,7 @@ public enum OverlayRowLayout {
         let pad = romaSidePadding(strokeInset: strokeInset)
         var starts: [CGFloat] = []
         var ends: [CGFloat] = []
+        var fills: [CGFloat] = []
         var romas: [RomaPlacement] = []
         var flat: [SyncedLyricWord] = []
         func place(_ ws: [SyncedLyricWord], from origin: CGFloat) -> CGFloat {
@@ -78,11 +83,13 @@ public enum OverlayRowLayout {
                 let romaWidth = measureRoma(g.romanization ?? " ") + pad * 2
                 if let r = g.romanization { romas.append(RomaPlacement(x: columnStart + pad, text: r)) }
                 cursor = columnStart + max(wordsWidth, romaWidth)
+                if !g.words.isEmpty { fills += ends[fills.count...].dropLast() + [cursor] }
             }
         } else {
             cursor += place(words, from: cursor)
+            fills = ends
         }
-        return Result(wordStartXs: starts, wordEndXs: ends, romaPlacements: romas,
+        return Result(wordStartXs: starts, wordEndXs: ends, fillEndXs: fills, romaPlacements: romas,
                       flatWords: flat, boxWidth: cursor + inset)
     }
 }

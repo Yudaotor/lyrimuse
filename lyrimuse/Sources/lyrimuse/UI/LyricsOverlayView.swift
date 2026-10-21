@@ -46,6 +46,9 @@ private final class OverlayPlayback: ObservableObject {
     /// 滚动模式下没有逐字时间轴的行、以及当前行的译文 / 罗马音按它配速(`OverlayScrollingLyricRow.PacedWindow`)。
     @Published private(set) var currentLineWindow: OverlayScrollingLyricRow.PacedWindow?
     @Published private(set) var isPlayingNow = false
+    /// 图层版逐字 / 配速行 / 间奏三点按墙钟自己跑动画:暂停通知先到、锚点已冻住而 isPlayingNow 还没翻时也算停着,
+    /// 不然先按原速冲出去、等轮询报了暂停再跳回(同歌词窗口,07 章决策 167)。
+    @Published private(set) var lyricsClockRunning = false
     /// 播放控制被拦下时的说明,没拦下是 nil(见 `PlaybackCoordinator.playbackControlsWithheldReason`)。
     @Published private(set) var controlsWithheldReason: String?
     /// 此刻有没有曲目。false = 停播/播放器没开/刚装好还没放过歌 —— 停播时
@@ -187,6 +190,10 @@ private final class OverlayPlayback: ObservableObject {
                 .removeDuplicates()
                 .sink { [weak self] in self?.nextLineWordGroups = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
+            Publishers.CombineLatest(p.$isPlayingNow, p.$anchor.map { $0?.isFrozen ?? false })
+                .map { playing, frozen in playing && !frozen }
+                .removeDuplicates()
+                .sink { [weak self] in self?.lyricsClockRunning = $0 },
             p.$playbackControlsWithheldReason.removeDuplicates().sink { [weak self] in self?.controlsWithheldReason = $0 },
             // CombineLatest3 而不是三个独立 sink:三个输入要**同时**拿到才能算,独立 sink 里另两个
             // 只能回头读存储属性 —— 正是本文件头注说的 willSet 旧值坑(灵动岛那份同款写法)。
@@ -974,7 +981,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 strokeColor: playback.textStrokeEnabled ? NSColor(playback.textStrokeColor) : nil,
                 alignment: duetSide,
                 // 跟 SwiftUI 那条逐字染色的 TimelineView 同一条 paused 判据。
-                paused: !playback.isPlayingNow || playback.currentLineFillSettled || !surfaceVisible,
+                paused: !playback.lyricsClockRunning || playback.currentLineFillSettled || !surfaceVisible,
                 timingEpoch: playback.timingEpoch,
                 rate: playback.playbackRate),
             nowMs: Self.lyricsNowMs)
@@ -1001,7 +1008,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 romaFillColor: NSColor(playback.displayForegroundColor.opacity(0.75)),
                 strokeColor: playback.textStrokeEnabled ? NSColor(playback.textStrokeColor) : nil,
                 rowAlignment: duetRowAlignment,
-                paused: !playback.isPlayingNow || playback.currentLineFillSettled || !surfaceVisible,
+                paused: !playback.lyricsClockRunning || playback.currentLineFillSettled || !surfaceVisible,
                 timingEpoch: playback.timingEpoch,
                 rate: playback.playbackRate),
             nowMs: Self.lyricsNowMs,
@@ -1079,7 +1086,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 baseColor: ns, fillColor: ns, romaBaseColor: ns, romaFillColor: ns,
                 strokeColor: playback.textStrokeEnabled ? NSColor(playback.textStrokeColor) : nil,
                 alignment: alignment,
-                paused: !playback.isPlayingNow || !surfaceVisible,
+                paused: !playback.lyricsClockRunning || !surfaceVisible,
                 pacedWindow: window,
                 timingEpoch: playback.timingEpoch,
                 rate: playback.playbackRate,
@@ -1829,7 +1836,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 startMs: window.startMs, endMs: window.endMs,
                 dotSize: playback.mainFontSize * 0.32, spacing: playback.mainFontSize * 0.3,
                 color: playback.displayForegroundColor,
-                isPlaying: playback.isPlayingNow, isVisible: surfaceVisible,
+                isPlaying: playback.lyricsClockRunning, isVisible: surfaceVisible,
                 reduceMotion: reduceMotion, timingEpoch: playback.timingEpoch
             ) { date in
                 (PlaybackCoordinator.shared.anchor?.extrapolatedPositionMs(now: date)
