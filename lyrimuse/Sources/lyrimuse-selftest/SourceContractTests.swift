@@ -5242,13 +5242,35 @@ func runSourceContractIdentityTests() {
                         && stripComments(code("MenuBar/AppMainMenu.swift")).contains("AppActions.shared.requestSettings(.softwareUpdate)"), true,
                     "右键菜单: 有未装的新版本时「检查更新…」换成新版本提示,点了翻到「软件更新」页(同面板底栏)")
 
-        // 悬浮歌词「跟随当前窗口」认焦点屏(04 章决策 64):Lyrimuse 不在前台时 NSScreen.main 不跟别的 App 的焦点走。
+        // 「跟随当前窗口」认焦点屏(04 章决策 64):Lyrimuse 不在前台时 NSScreen.main 不跟别的 App 的焦点走。悬浮歌词和灵动岛
+        // 共用 ActiveScreenFollower(05 章决策 86)。
+        let follower = stripComments(code("UI/ActiveScreenFollower.swift"))
         let overlayController = stripComments(code("UI/LyricsOverlayWindowController.swift"))
-        expectEqual(overlayController.contains("let id = focusedScreen().flatMap(ScreenIdentity.id(of:))")
-                        && overlayController.contains("guard let window, let active = focusedScreen() else { return }")
-                        && overlayController.contains("OverlayPlacement.screenIndex(ofWindowBounds: bounds, screens: screens.map(\\.frame))")
-                        && overlayController.contains("NSWorkspace.shared.frontmostApplication?.processIdentifier"), true,
-                    "跟随当前窗口: 焦点屏按前台 App 最前面那扇窗口认,不用 NSScreen.main")
+        let notchController = stripComments(code("UI/NotchLyricsWindowController.swift"))
+        expectEqual(follower.contains("let id = Self.focusedScreen().flatMap(ScreenIdentity.id(of:))")
+                        && follower.contains("guard let screen = Self.focusedScreen(), let id = ScreenIdentity.id(of: screen) else { return }")
+                        && follower.contains("OverlayPlacement.screenIndex(ofWindowBounds: bounds, screens: screens.map(\\.frame))")
+                        && follower.contains("NSWorkspace.shared.frontmostApplication?.processIdentifier")
+                        && follower.contains("switch settle.observe(id, at: Date())"), true,
+                    "跟随当前窗口: 焦点屏按前台 App 最前面那扇窗口认,不用 NSScreen.main;换屏判据走 Core")
+        expectEqual(overlayController.contains("private let activeScreen = ActiveScreenFollower()")
+                        && overlayController.contains("activeScreen.canMove = { [weak self] in self.map { !$0.isDragArmed } ?? false }")
+                        && !overlayController.contains("NSScreen.main"), true,
+                    "跟随当前窗口: 悬浮歌词用共用部件,拖着窗口时不搬")
+        expectEqual(notchController.contains("private let activeScreen = ActiveScreenFollower()")
+                        && notchController.contains("activeScreen.update(wanted: followsActiveScreen && shownApartFromFullScreen)")
+                        && notchController.contains(".map { follows, allScreens in follows && !allScreens }")
+                        && notchController.contains("if AppSettings.shared.notchFollowsActiveScreen && !AppSettings.shared.notchAllScreens {")
+                        && notchController.contains("self?.refreshFullScreenCover()\n                    self?.syncActiveScreenTracking()"), true,
+                    "灵动岛跟随当前窗口: 主实例盯焦点屏(跟全部屏幕互斥、藏着时不盯),targetScreen 贴跟到的那块,插拔屏幕重判")
+        expectEqual(stripComments(code("MenuBar/MenuBarStatusItem.swift")).contains("NotchFollowedScreen.shared.$id.map { _ in () }")
+                        && stripComments(code("UI/NotchEditorStage.swift")).contains("NotchFollowedScreen.shared.$id.removeDuplicates().map { _ in () }"),
+                    true, "灵动岛跟随当前窗口: 跟到的屏换了,菜单栏正中和编辑台预览跟着重排")
+        let notchStage = stripComments(code("UI/NotchEditorStage.swift"))
+        expectEqual(notchStage.contains("(Self.followActiveTag, L10n.t(\"跟随当前窗口\"))")
+                        && notchStage.contains("if settings.notchFollowsActiveScreen != follows {")
+                        && notchStage.contains("settings.notchFollowsActiveScreen = AppSettings.defaultNotchFollowsActiveScreen"), true,
+                    "灵动岛跟随当前窗口: 「显示在」下拉多一档,跟自动 / 全部屏幕 / 指定屏互斥,恢复默认关掉")
     }
 
     // ---- 关于页页头的漂浮符号走 Core Animation----

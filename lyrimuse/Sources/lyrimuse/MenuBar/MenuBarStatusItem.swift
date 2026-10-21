@@ -168,9 +168,10 @@ final class MenuBarStatusItem: NSObject {
         // 状态栏图标)变了都要重摆。
         settings.$menuBarLyricsPlacement.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        Publishers.Merge3(settings.$notchOverlayEnabled.map { _ in () }, settings.$notchAllScreens.map { _ in () },
-                          settings.$notchScreenID.map { _ in () })
-            .dropFirst(3).receive(on: DispatchQueue.main)
+        Publishers.Merge5(settings.$notchOverlayEnabled.map { _ in () }, settings.$notchAllScreens.map { _ in () },
+                          settings.$notchScreenID.map { _ in () }, settings.$notchFollowsActiveScreen.map { _ in () },
+                          NotchFollowedScreen.shared.$id.map { _ in () })
+            .dropFirst(5).receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
             .receive(on: DispatchQueue.main)

@@ -252,6 +252,7 @@
 "「第 N 次收听」会将同一首歌曲的不同写法（繁简、括号风格、合唱署名等）合并计数。此处列出合并到这一行的每种写法、各自的次数与原因，以及每次收听的时间" = "“Play #N” merges different spellings of the same track (Traditional/Simplified, bracket styles, artist credits and so on). This lists every spelling folded into this row with its own count and the reason, plus every individual play";
 "「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左" = "Automatic follows the duet parts: each singer's lines sit on their side, choruses are centered, and lines without duet info stay left";
 "「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开时按「自动」显示，插回后回到那块屏幕" = "“Automatic” picks the display with the notch; “All Displays” shows one on every display; while the chosen display is unplugged it follows Automatic and moves back when it’s plugged in again";
+"「自动」选择带刘海的屏幕；「跟随当前窗口」显示在正在使用的窗口所在的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开时按「自动」显示，插回后回到那块屏幕" = "“Automatic” picks the display with the notch; “Follow Active Window” shows it on the display of the window you’re using; “All Displays” shows one on every display; while the chosen display is unplugged it follows Automatic and moves back when it’s plugged in again";
 "「获取 Lyrimuse」" = "“Get Lyrimuse”";
 "一" = "M";
 "一切就绪" = "All Set";

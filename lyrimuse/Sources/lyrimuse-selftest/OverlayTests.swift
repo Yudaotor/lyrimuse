@@ -1312,6 +1312,34 @@ func runOverlayTests() {
         expectEqual(OverlayPlacement.screenIndex(ofWindowBounds: CGRect(x: 5000, y: 5000, width: 100, height: 100), screens: screenFrames), nil,
                     "认焦点屏: 一块屏都不沾时不认")
 
+        // 跟随当前窗口的换屏判据(ActiveScreenSettle):换了先等,稳定够久才跟;跟着的那块不再触发。
+        do {
+            var settle = ActiveScreenSettle()
+            let t0 = Date(timeIntervalSince1970: 1_000_000)
+            let half = ActiveScreenSettle.delay / 2
+            expectEqual(settle.observe("A", at: t0), .wait, "换屏判据: 还没跟过时看到一块屏,先等")
+            expectEqual(settle.observe("A", at: t0.addingTimeInterval(half)), .none, "换屏判据: 没稳定够久不跟")
+            expectEqual(settle.observe("A", at: t0.addingTimeInterval(ActiveScreenSettle.delay)), .follow, "换屏判据: 稳定够久了跟过去")
+            settle.followed("A")
+            expectEqual(settle.observe("A", at: t0.addingTimeInterval(5)), .none, "换屏判据: 已经在这块屏上不再触发")
+            expectEqual(settle.observe("B", at: t0.addingTimeInterval(6)), .wait, "换屏判据: 换到另一块,先等")
+            expectEqual(settle.observe("A", at: t0.addingTimeInterval(6 + half)), .none, "换屏判据: 又切回原来那块,作罢")
+            expectEqual(settle.observe("B", at: t0.addingTimeInterval(7)), .wait, "换屏判据: 再切过去从头计时")
+            expectEqual(settle.observe("C", at: t0.addingTimeInterval(7 + half)), .wait, "换屏判据: 等着时又换一块,按新的从头等")
+            expectEqual(settle.observe("C", at: t0.addingTimeInterval(7 + half + ActiveScreenSettle.delay)), .follow,
+                        "换屏判据: 新的那块稳定够久跟过去")
+            expectEqual(settle.observe("D", at: t0.addingTimeInterval(10)), .wait, "换屏判据: 等着另一块")
+            settle.followed("C")
+            expectEqual(settle.observe("D", at: t0.addingTimeInterval(10 + ActiveScreenSettle.delay + 1)), .wait,
+                        "换屏判据: 当场跟过一次(屏幕参数变了)之后,等着的那块从头计时")
+            settle.dropPending()
+            expectEqual(settle.observe("D", at: t0.addingTimeInterval(21)), .wait, "换屏判据: 停止盯之后等着的那块作废,再看到从头等")
+            settle.followed("C")
+            settle.reset()
+            expectEqual(settle.followedID, nil, "换屏判据: 重新打开开关忘掉跟过的屏")
+            expectEqual(settle.observe("C", at: t0.addingTimeInterval(30)), .wait, "换屏判据: 重新打开之后同一块屏也要跟一次")
+        }
+
         // 「自由」模式控制排放卡片上方还是下方,按卡片位置判:卡片上方放得下整个槽位才放上方。
         let slot = OverlayPlacement.controlsSlotHeight
         expectEqual(slot, 30, "控制排翻面: 槽位高 = 胶囊 22 + 上下各 4")

@@ -29,6 +29,7 @@ func checkOverlayFullScreenHide() {
         (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
     }
     let controller = source("lyrimuse/UI/LyricsOverlayWindowController.swift")
+    let follower = source("lyrimuse/UI/ActiveScreenFollower.swift")
     let rows = source("lyrimuse/UI/OverlayBehaviorSettingsRows.swift")
     let stage = source("lyrimuse/UI/OverlayEditorStage.swift")
     let appSettings = source("lyrimuse/Settings/AppSettings.swift")
@@ -44,7 +45,8 @@ func checkOverlayFullScreenHide() {
                 "悬浮歌词广告时隐藏: 订阅开关和广告状态(值从 sink 参数拿),两处显示判定都带上")
     expectEqual(sourceBytes(controller, contain: "let wanted = followsActiveScreen && shownApartFromFullScreen"), true,
                 "悬浮歌词跟随当前窗口: 窗口藏着(全屏隐藏除外)时不每秒列窗口")
-    expectEqual(sourceBytes(controller, contain: "let wantsPoll = wanted && NSScreen.screens.count > 1")
+    expectEqual(sourceBytes(follower, contain: "let wantsPoll = wanted && NSScreen.screens.count > 1")
+                && sourceBytes(controller, contain: "activeScreen.update(wanted: wanted)")
                 && sourceBytes(controller, contain: "self?.reconcilePlacementWithScreens()\n                self?.syncActiveScreenTracking()"),
                 true, "悬浮歌词跟随当前窗口: 单屏时不开每秒一次的兜底,插拔屏幕时重判")
     expectEqual(sourceHas(controller, "        recomputeControlsBelowCard()\n        // 藏着(orderOut)的窗口换了屏不一定收到 didChangeScreen"),

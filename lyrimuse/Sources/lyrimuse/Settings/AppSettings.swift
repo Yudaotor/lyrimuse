@@ -441,6 +441,8 @@ final class AppSettings: ObservableObject {
         static let notchRightEar = "np:notchRightEar"
         static let notchScreenID = "np:notchScreenID"
         static let notchAllScreens = "np:notchAllScreens"
+        // 灵动岛跟不跟着当前窗口换屏,见 notchFollowsActiveScreen。
+        static let notchFollowsActiveScreen = "np:notchFollowsActiveScreen"
         // 历史遗留键:这两个曾是两个 WindowController 各自私有的"这种悬浮歌词要不要显示",
         // 与上面 {classic,notch}OverlayEnabled 并存过。现在真值只剩上面那两个,这两个 key 只在
         // init() 里被读一次做迁移、随后主动删除(不能留着——留着的话每次启动都会再做一次逻辑与,
@@ -513,6 +515,7 @@ final class AppSettings: ObservableObject {
     static let defaultNotchCornerRadius: Double = NotchOutline.defaultRadiusSetting
     static let defaultNotchExpandedCornerRadius: Double = NotchOutline.defaultRadiusSetting
     static let defaultNotchAllScreens = false
+    static let defaultNotchFollowsActiveScreen = false
     static let defaultNotchScreenID = ""
     /// 左右耳装什么:左耳一枚封面、右耳空着。右耳空着,音浪(`defaultNotchEqualizerEar` = right)贴着的
     /// 就是那一侧,不跟歌手名挤在一起。
@@ -1411,6 +1414,11 @@ final class AppSettings: ObservableObject {
     /// 每块屏都显示一个灵动岛(默认关:绝大多数人只在眼前那块屏上看)。
     @Published var notchAllScreens: Bool {
         didSet { defaults.set(notchAllScreens, forKey: Keys.notchAllScreens) }
+    }
+    /// 「显示在:跟随当前窗口」:主灵动岛跟着前台 App 最前面那扇窗口换屏(默认关)。开着时不看 `notchScreenID`;
+    /// 跟「全部屏幕」互斥,由「屏幕」浮层那一个下拉保证。见 05 章决策 86。
+    @Published var notchFollowsActiveScreen: Bool {
+        didSet { defaults.set(notchFollowsActiveScreen, forKey: Keys.notchFollowsActiveScreen) }
     }
 
     // 音量提示没有单独的开关,随灵动岛开关走(见 AppDelegate.startObservingVolumeBannerPreference)。
@@ -2604,6 +2612,8 @@ final class AppSettings: ObservableObject {
         notchRightEar = defaults.string(forKey: Keys.notchRightEar)
             .flatMap(NotchEarModule.init(rawValue:)) ?? Self.defaultNotchRightEar
         notchAllScreens = (defaults.object(forKey: Keys.notchAllScreens) as? Bool) ?? Self.defaultNotchAllScreens
+        notchFollowsActiveScreen = (defaults.object(forKey: Keys.notchFollowsActiveScreen) as? Bool)
+            ?? Self.defaultNotchFollowsActiveScreen
         notchScreenID = defaults.string(forKey: Keys.notchScreenID) ?? Self.defaultNotchScreenID
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? Self.defaultFontFamilyName
         // 手改过、旧版写下的越界值夹回滑杆的范围,不然窗口按它画、滑杆却顶在头上。

@@ -53071,6 +53071,29 @@
           }
         }
       }
+    },
+    "「自动」选择带刘海的屏幕；「跟随当前窗口」显示在正在使用的窗口所在的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开时按「自动」显示，插回后回到那块屏幕" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Automatic” picks the display with the notch; “Follow Active Window” shows it on the display of the window you’re using; “All Displays” shows one on every display; while the chosen display is unplugged it follows Automatic and moves back when it’s plugged in again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「自动」选择带刘海的屏幕；「跟随当前窗口」显示在正在使用的窗口所在的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开时按「自动」显示，插回后回到那块屏幕"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「自動」選擇帶瀏海的螢幕；「跟隨目前視窗」顯示在正在使用的視窗所在的螢幕；「全部螢幕」在每個螢幕上各顯示一個；指定的螢幕拔除時按「自動」顯示，接回後回到那個螢幕"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

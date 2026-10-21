@@ -467,24 +467,14 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private var presetDragRejectedThisPress = false
 
     /// 「所在屏幕:跟随当前窗口」。真值在 `AppSettings.overlayFollowsActiveScreen`,这里是订阅来的镜像。开着时不借屏、
-    /// 不送回锚点那块屏,换屏只看焦点屏(`focusedScreen()`,前台 App 最前面那扇窗口所在那块屏):只在它**换了**、并且新的那块
-    /// 稳定了 `activeScreenSettleDelay` 之后才搬。按「窗口不在焦点屏上」去判的话,用户把歌词拖到另一块屏,下一秒就会
-    /// 被拽回焦点屏。见 04 章决策 63。
+    /// 不送回锚点那块屏,换屏只看焦点屏(`activeScreen`,前台 App 最前面那扇窗口所在那块屏换了、稳定一会儿才搬)。
+    /// 见 04 章决策 63。
     private var followsActiveScreen = false
     /// 不算「全屏时隐藏」的话窗口该不该摆着(`updateActualVisibility` 写入)。跟随焦点屏只在它为真时盯着:手动关掉、
     /// 暂停时隐藏、无歌词隐藏时不用每秒列一遍全部窗口;只因全屏藏着时照盯,焦点换到别的屏就搬过去、在那块屏上摆出来。
     private var shownApartFromFullScreen = false
     private var followsActiveScreenObserver: AnyCancellable?
-    private var activeAppObserver: NSObjectProtocol?
-    private var activeScreenTimer: Timer?
-    /// 上一次跟过去的焦点屏;nil = 还没跟过(刚打开开关 / 刚启动,下一拍无论在哪块屏都跟一次)。
-    private var followedScreenID: String?
-    /// 焦点屏刚换到的那块和换过去的时刻,稳定够久才搬。
-    private var pendingActiveScreen: (id: String, since: Date)?
-    /// 同一个 App 的窗口拖到另一块屏上时系统不发通知,靠这一拍兜底;前台 App 换了的通知让大多数换屏不用等这一拍。
-    private static let activeScreenPollInterval: TimeInterval = 1
-    /// 焦点屏换了之后等多久才搬:快速切几个 App 时不来回闪。
-    private static let activeScreenSettleDelay: TimeInterval = 0.5
+    private let activeScreen = ActiveScreenFollower()
 
     convenience init() {
         let size = NSSize(width: AppSettings.shared.overlayWidth, height: overlayDefaultHeight)
@@ -586,7 +576,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
                 }
             }
 
-        // 「所在屏幕」。初值这里接上(当场跟一次焦点屏),之后的切换同样走这条。
+        // 「所在屏幕」。初值这里接上(当场跟一次焦点屏),之后的切换同样走这条。拖着窗口时不搬。
+        activeScreen.canMove = { [weak self] in self.map { !$0.isDragArmed } ?? false }
+        activeScreen.onFollow = { [weak self] screen, force in self?.moveToActiveScreen(screen, force: force) }
         followsActiveScreenObserver = AppSettings.shared.$overlayFollowsActiveScreen
             .removeDuplicates()
             .sink { [weak self] on in
@@ -1807,7 +1799,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 跟随当前窗口:没有"借屏"和"送回锚点那块屏",屏幕变了就在焦点屏上重新落位。
         if followsActiveScreen {
             isBorrowingScreen = false
-            followActiveScreen(force: true)
+            activeScreen.follow(force: true)
             return
         }
 
@@ -1931,89 +1923,24 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
 
     private func setFollowsActiveScreen(_ on: Bool) {
         followsActiveScreen = on
-        followedScreenID = nil
-        pendingActiveScreen = nil
+        activeScreen.reset()
         // 跟随模式下锚点就是窗口此刻在哪儿,借屏那套不再适用。
         if on { isBorrowingScreen = false }
         syncActiveScreenTracking()
     }
 
-    /// 跟随开着、窗口该摆着(不算全屏时隐藏)时才盯焦点屏;开始盯的这一刻当场跟一次。
-    /// 每秒一次的兜底只在多屏时开:单屏时焦点屏不会变,每拍跨进程列一遍窗口(`focusedScreen`)是白做。屏幕数变了在
-    /// 屏幕参数通知里重判。见 04 章决策 67。
+    /// 跟随开着、窗口该摆着(不算全屏时隐藏)时才盯焦点屏;开始盯的这一刻当场跟一次。每秒一次的兜底只在多屏时开,
+    /// 屏幕数变了在屏幕参数通知里重判(`ActiveScreenFollower.update`,04 章决策 67)。
     private func syncActiveScreenTracking() {
         let wanted = followsActiveScreen && shownApartFromFullScreen
-        let wantsPoll = wanted && NSScreen.screens.count > 1
-        guard wanted != (activeAppObserver != nil) || wantsPoll != (activeScreenTimer != nil) else { return }
-        activeScreenTimer?.invalidate()
-        activeScreenTimer = nil
-        if let activeAppObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(activeAppObserver)
-            self.activeAppObserver = nil
-        }
-        pendingActiveScreen = nil
-        guard wanted else { return }
-        activeAppObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.checkActiveScreen() }
-        }
-        if wantsPoll {
-            let timer = Timer(timeInterval: Self.activeScreenPollInterval, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { self?.checkActiveScreen() }
-            }
-            timer.tolerance = Self.activeScreenPollInterval * 0.2
-            RunLoop.main.add(timer, forMode: .common)
-            activeScreenTimer = timer
-        }
-        followActiveScreen(force: true)
-    }
-
-    /// 焦点屏换了没有。换了先记下,稳定 `activeScreenSettleDelay` 再搬;拖着窗口时不动。
-    private func checkActiveScreen(now: Date = Date()) {
-        guard followsActiveScreen, !isDragArmed,
-              let id = focusedScreen().flatMap(ScreenIdentity.id(of:)) else { return }
-        guard id != followedScreenID else {
-            pendingActiveScreen = nil
-            return
-        }
-        guard let pending = pendingActiveScreen, pending.id == id else {
-            pendingActiveScreen = (id, now)
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.activeScreenSettleDelay) { [weak self] in
-                self?.checkActiveScreen()
-            }
-            return
-        }
-        guard now.timeIntervalSince(pending.since) >= Self.activeScreenSettleDelay else { return }
-        followActiveScreen(force: false)
-    }
-
-    /// 焦点屏:前台 App 最前面那扇普通窗口(layer 0)跟哪块屏重叠最多。别换回 `NSScreen.main`:Lyrimuse 不在前台时
-    /// 它不跟别的 App 的焦点走,焦点在外接屏上照样报内置屏(见 04 章决策 64)。前台 App 此刻没有在屏的普通窗口时返回 nil,不换屏。
-    private func focusedScreen() -> NSScreen? {
-        guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier else { return nil }
-        let windows = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
-            as? [[String: Any]]) ?? []
-        // 列表按从前到后排:前台 App 的第一扇看得见的普通窗口就是它最前面那扇。太小的多半是看不见的辅助窗口。
-        for info in windows where (info[kCGWindowOwnerPID as String] as? pid_t) == pid
-            && (info[kCGWindowLayer as String] as? Int) == 0
-            && ((info[kCGWindowAlpha as String] as? Double) ?? 1) > 0 {
-            guard let dict = info[kCGWindowBounds as String] as? NSDictionary,
-                  let bounds = CGRect(dictionaryRepresentation: dict as CFDictionary),
-                  bounds.width >= 40, bounds.height >= 40 else { continue }
-            let screens = NSScreen.screens
-            return OverlayPlacement.screenIndex(ofWindowBounds: bounds, screens: screens.map(\.frame)).map { screens[$0] }
-        }
-        return nil
+        activeScreen.update(wanted: wanted)
     }
 
     /// 把窗口落到焦点屏上:预设模式按预设在那块屏上重算,自由模式按屏内相对位置搬过去
     /// (`OverlayPlacement.relocated`)。`force`:窗口已经在焦点屏上也重新对一次(屏幕参数变了、刚打开开关)。
-    private func followActiveScreen(force: Bool) {
-        pendingActiveScreen = nil
-        guard let window, let active = focusedScreen() else { return }
+    private func moveToActiveScreen(_ active: NSScreen, force: Bool) {
+        guard let window else { return }
         settleFrameAnimation(window)
-        followedScreenID = ScreenIdentity.id(of: active)
         let target = active.visibleFrame
         let current = baseFrame(of: window)
         let screens = Self.allVisibleFrames()

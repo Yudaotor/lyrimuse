@@ -390,6 +390,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 Task { @MainActor in
                     self?.recomputeGeometry(animate: false)
                     self?.refreshFullScreenCover()
+                    self?.syncActiveScreenTracking()
                 }
             }
         }
@@ -676,10 +677,26 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] _ in self?.applyScreenSetting() }
                 .store(in: &subscriptions)
+            // 「显示在:跟随当前窗口」(跟「全部屏幕」互斥,开着全部屏幕时不跟)。展开着时不搬:用户正在这块屏上点它。
+            activeScreen.canMove = { [weak self] in self.map { !$0.isExpanded } ?? false }
+            activeScreen.onFollow = { [weak self] screen, force in self?.followActiveScreen(screen, force: force) }
+            AppSettings.shared.$notchFollowsActiveScreen
+                .combineLatest(AppSettings.shared.$notchAllScreens)
+                .map { follows, allScreens in follows && !allScreens }
+                .removeDuplicates()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] on in self?.setFollowsActiveScreen(on) }
+                .store(in: &subscriptions)
         }
 
         // 宽度固定,recomputeGeometry 的结果跟 currentLine 没有关系,不需要额外订阅 currentLine 来触发重算。
     }
+
+    /// 「显示在:跟随当前窗口」的镜像(`AppSettings.notchFollowsActiveScreen` 且没开全部屏幕),只有主实例用。
+    private var followsActiveScreen = false
+    /// 不算全屏遮挡的话该不该摆着(`updateActualVisibility` 写入)。
+    private var shownApartFromFullScreen = false
+    private let activeScreen = ActiveScreenFollower()
 
     deinit {
         if let screenParamsObserver { NotificationCenter.default.removeObserver(screenParamsObserver) }
@@ -1123,6 +1140,15 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     }
 
     private func updateActualVisibility(isPlayingNow: Bool) {
+        // 跟随当前窗口:显示状态定下来之后同步要不要盯焦点屏(主实例才盯),换屏放在这一步执行完之后。
+        defer {
+            if pinnedScreenID == nil {
+                shownApartFromFullScreen = NotchVisibility.shouldShow(
+                    isVisible: isVisible, hideWhenNotPlaying: hideWhenNotPlaying, isPlaying: isPlayingNow,
+                    alertHold: alertHold, coveredByFullScreen: false)
+                syncActiveScreenTracking()
+            }
+        }
         // 该做哪一步由 Core 的 NotchVisibility 决定(selftest 覆盖),这里只执行。
         let shouldShow = NotchVisibility.shouldShow(isVisible: isVisible, hideWhenNotPlaying: hideWhenNotPlaying,
                                                     isPlaying: isPlayingNow, alertHold: alertHold,
@@ -1306,7 +1332,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 没有刘海的外接屏顶部,用户在内置屏上怎么找都找不到。
     // 不加 private:设置页预览要跟真窗口取同一块屏(纯静态、不碰实例状态,安全)。
     static func targetScreen() -> NSScreen? {
-        if let pinned = ScreenIdentity.screen(withID: AppSettings.shared.notchScreenID) {
+        // 跟随当前窗口:贴主实例跟到的那块屏(还没跟过、那块屏没了就按「自动」),不看指定的屏。
+        if AppSettings.shared.notchFollowsActiveScreen && !AppSettings.shared.notchAllScreens {
+            if let id = NotchFollowedScreen.shared.id, let followed = ScreenIdentity.screen(withID: id) {
+                return followed
+            }
+        } else if let pinned = ScreenIdentity.screen(withID: AppSettings.shared.notchScreenID) {
             return pinned
         }
         // 没有刘海时取主屏(`screens.first`,带菜单栏的那块),不取 `NSScreen.main`:后者跟着键盘焦点跳,
@@ -1318,6 +1349,32 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private func applyScreenSetting() {
         recomputeGeometry(animate: false)
         refreshFullScreenCover()
+    }
+
+    // MARK: - 显示在:跟随当前窗口
+
+    private func setFollowsActiveScreen(_ on: Bool) {
+        followsActiveScreen = on
+        activeScreen.reset()
+        if !on, NotchFollowedScreen.shared.id != nil {
+            NotchFollowedScreen.shared.id = nil
+            applyScreenSetting()
+        }
+        syncActiveScreenTracking()
+    }
+
+    /// 跟随开着、灵动岛该摆着(不算全屏时隐藏)时才盯焦点屏:关着、暂停时隐藏时不用每秒列一遍窗口;只因全屏藏着时照盯,
+    /// 焦点换到别的屏就搬过去、在那块屏上摆出来。见 05 章决策 86。
+    private func syncActiveScreenTracking() {
+        activeScreen.update(wanted: followsActiveScreen && shownApartFromFullScreen)
+    }
+
+    /// 跟到了这块屏:记下来(targetScreen 读它),换了屏才重算几何、重判全屏遮挡;`force`(刚开始跟、屏幕参数变了)也重算。
+    private func followActiveScreen(_ screen: NSScreen, force: Bool) {
+        guard let id = ScreenIdentity.id(of: screen) else { return }
+        guard force || NotchFollowedScreen.shared.id != id else { return }
+        NotchFollowedScreen.shared.id = id
+        applyScreenSetting()
     }
 
     /// 窗口换了屏(设置里改屏幕、插拔显示器)时按现值重判一次;开关或全屏表变化走 init 里全屏那条订阅。
@@ -1515,4 +1572,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var pendingShrinkWork: DispatchWorkItem?
     /// 比卡片那条最慢的弹簧(收起态 response 0.45)稍长。
     private static let windowShrinkDelay: TimeInterval = 0.5
+}
+
+/// 灵动岛「显示在:跟随当前窗口」此刻跟到的那块屏(屏幕身份串)。主实例写,`targetScreen()`、菜单栏正中、编辑台预览读;
+/// nil = 没开或还没跟过。
+@MainActor
+final class NotchFollowedScreen: ObservableObject {
+    static let shared = NotchFollowedScreen()
+    @Published fileprivate(set) var id: String?
 }

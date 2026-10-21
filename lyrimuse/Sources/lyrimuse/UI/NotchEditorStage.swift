@@ -127,9 +127,13 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
 
     init() {
         refreshGeometry()
-        // 屏幕设置从哪条路改的都要跟上(「屏幕」浮层、「恢复默认」、设置页别处的重置)。@Published 在 willSet
-        // 发布、那时 targetScreen() 读到的还是旧值,所以挪到下一拍再算。
-        screenSubscription = AppSettings.shared.$notchScreenID.removeDuplicates()
+        // 屏幕设置从哪条路改的都要跟上(「屏幕」浮层、「恢复默认」、设置页别处的重置),跟随当前窗口时跟到的屏换了
+        // 也一样。@Published 在 willSet 发布、那时 targetScreen() 读到的还是旧值,所以挪到下一拍再算。
+        screenSubscription = Publishers.Merge3(
+            AppSettings.shared.$notchScreenID.removeDuplicates().map { _ in () },
+            AppSettings.shared.$notchFollowsActiveScreen.removeDuplicates().map { _ in () },
+            NotchFollowedScreen.shared.$id.removeDuplicates().map { _ in () }
+        )
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.refreshGeometry() }
         cornerSubscription = NotchCornerLive.shared.focusPublisher
@@ -1421,6 +1425,7 @@ enum NotchScreenSummary {
     static var current: String {
         let settings = AppSettings.shared
         if settings.notchAllScreens { return L10n.t("全部屏幕") }
+        if settings.notchFollowsActiveScreen { return L10n.t("跟随当前窗口") }
         if settings.notchScreenID.isEmpty { return L10n.t("自动") }
         if let screen = ScreenIdentity.screen(withID: settings.notchScreenID) {
             return screen.localizedName
@@ -1634,6 +1639,7 @@ enum NotchStyleDefaults {
         settings.notchLeftEar = AppSettings.defaultNotchLeftEar
         settings.notchRightEar = AppSettings.defaultNotchRightEar
         settings.notchAllScreens = AppSettings.defaultNotchAllScreens
+        settings.notchFollowsActiveScreen = AppSettings.defaultNotchFollowsActiveScreen
         settings.notchScreenID = AppSettings.defaultNotchScreenID
         settings.notchShowLyrics = AppSettings.defaultNotchShowLyrics
         settings.notchCollapsesWhenPaused = AppSettings.defaultNotchCollapsesWhenPaused
@@ -1810,28 +1816,33 @@ struct NotchScreenSettingsRows: View {
     /// didChangeScreenParameters 通知显式刷新。
     @State private var availableScreens: [NSScreen] = NSScreen.screens
 
-    /// 「所有屏幕」在这个列表里的哨兵 tag。屏幕的真实 tag 是 ScreenIdentity 给的 UUID 串,
-    /// 不可能撞上这个值;空串已经被「自动」占了。
+    /// 「所有屏幕」「跟随当前窗口」在这个列表里的哨兵 tag。屏幕的真实 tag 是 ScreenIdentity 给的 UUID 串,
+    /// 不可能撞上这两个值;空串已经被「自动」占了。
     private static let allScreensTag = "__all_screens__"
+    private static let followActiveTag = "__follow_active_window__"
 
-    /// 下拉里的各项:自动、全部屏幕、接着的每块屏。存着的那块屏现在没接着时补一项「已断开的屏幕」 ——
+    /// 下拉里的各项:自动、跟随当前窗口、全部屏幕、接着的每块屏。存着的那块屏现在没接着时补一项「已断开的屏幕」 ——
     /// 少了它,没有任何一项是选中的,看起来像设置丢了,而实际上偏好还在、屏幕插回来就会恢复。
     private var screenOptions: [(tag: String, name: String)] {
-        var options: [(tag: String, name: String)] = [("", L10n.t("自动")), (Self.allScreensTag, L10n.t("全部屏幕"))]
+        var options: [(tag: String, name: String)] = [
+            ("", L10n.t("自动")), (Self.followActiveTag, L10n.t("跟随当前窗口")), (Self.allScreensTag, L10n.t("全部屏幕")),
+        ]
         for screen in availableScreens {
             if let id = ScreenIdentity.id(of: screen) { options.append((id, screen.localizedName)) }
         }
-        if !settings.notchAllScreens, !settings.notchScreenID.isEmpty,
+        if !settings.notchAllScreens, !settings.notchFollowsActiveScreen, !settings.notchScreenID.isEmpty,
            ScreenIdentity.screen(withID: settings.notchScreenID) == nil {
             options.append((settings.notchScreenID, L10n.t("已断开的屏幕")))
         }
         return options
     }
 
-    /// 当前选中的是哪一项。两个设置项还是各存各的(notchAllScreens 有自己的订阅方
-    /// NotchMirrorManager),这里只是把它们合成一个选择呈现出来。
+    /// 当前选中的是哪一项。三个设置项还是各存各的(notchAllScreens 有自己的订阅方 NotchMirrorManager,
+    /// notchFollowsActiveScreen 由主灵动岛订阅),这里只是把它们合成一个选择呈现出来。
     private var selection: String {
-        settings.notchAllScreens ? Self.allScreensTag : settings.notchScreenID
+        if settings.notchAllScreens { return Self.allScreensTag }
+        if settings.notchFollowsActiveScreen { return Self.followActiveTag }
+        return settings.notchScreenID
     }
 
     // 一行「显示在 [下拉]」,说明在这一行的 ⓘ 里(浮层和抽屉两个宿主都看得到)。别做成没有行名、居中铺开的下拉:
@@ -1841,7 +1852,7 @@ struct NotchScreenSettingsRows: View {
             SettingsRow(
                 icon: "display",
                 title: L10n.t("显示在"),
-                help: L10n.t("「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开时按「自动」显示，插回后回到那块屏幕")
+                help: L10n.t("「自动」选择带刘海的屏幕；「跟随当前窗口」显示在正在使用的窗口所在的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开时按「自动」显示，插回后回到那块屏幕")
             ) {
                 let options = screenOptions
                 SettingsGlassMenuPicker(
@@ -1866,13 +1877,18 @@ struct NotchScreenSettingsRows: View {
     /// 只写设置:主灵动岛自己订阅 `notchScreenID`(`NotchLyricsWindowController` init),这里不碰它的 `.shared`。
     private func apply(_ tag: String) {
         let allScreens = (tag == Self.allScreensTag)
+        let follows = (tag == Self.followActiveTag)
         var changed = false
         if settings.notchAllScreens != allScreens {
             settings.notchAllScreens = allScreens
             changed = true
         }
-        // 选具体屏幕时顺手把 allScreens 关掉(上面那一句已经做了),否则选了没反应。
-        if !allScreens, settings.notchScreenID != tag {
+        if settings.notchFollowsActiveScreen != follows {
+            settings.notchFollowsActiveScreen = follows
+            changed = true
+        }
+        // 选具体屏幕 / 自动时顺手把另两项关掉(上面两句已经做了),否则选了没反应。选跟随时留着原来指定的屏,换回来还在。
+        if !allScreens, !follows, settings.notchScreenID != tag {
             settings.notchScreenID = tag
             changed = true
         }
