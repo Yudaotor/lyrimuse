@@ -2248,12 +2248,20 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	}
 	if upgraded {
 		log.Printf("lyrics upgrade: %s  %s(%d) -> %s(%d)", key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
+		// 换上的正文跟现在这份一字不差、新候选又没带读音:现有那份读音描述的就是这份正文,留着(锁外没为它预算)。
+		var keptRoma bodyText
+		if picked.LyricsRoma == "" && e.Lyrics.EqualString(picked.Lyrics) {
+			keptRoma = e.LyricsRoma
+		}
 		e.Lyrics = bt(picked.Lyrics)
 		e.LyricsSource = picked.Source
 		e.LyricsScore = picked.Score
 		e.stampLyricsScoring()
 		e.ResolvedDurationSecs = durationSecs
 		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = bt(picked.LyricsTr), bt(picked.LyricsRoma), bt(picked.LyricsYRC)
+		if !keptRoma.IsZero() {
+			e.LyricsRoma = keptRoma
+		}
 		e.LyricsBG, e.LyricsBGChecked = bt(picked.LyricsBG), lyricsBGParserVersion
 		e.SongLanguage = entrySongLanguage(picked.Lyrics, scored)
 		e.dropHokkienRoma()
@@ -2263,6 +2271,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
 		// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
 		e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, lyricsTrSourceFor(picked)
+		e.resetTranslationAttempts()
 		preparedTr.applyLocked(&e)
 		if opts.manual {
 			e.ManualLyrics, e.LyricsSourceChoice = false, ""
@@ -2748,6 +2757,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 			// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
 			// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
 			e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, lyricsTrSourceFor(picked)
+			e.resetTranslationAttempts()
 			preparedTr.applyLocked(&e)
 		}
 		if e.Lyrics.EqualString(picked.Lyrics) && gainsWordTiming(e, picked) {
@@ -4872,7 +4882,12 @@ func usableLyricSourceCount(scored []scoredLyricCandidateResult) int {
 // 让"还原"名副其实——以后谁在打分里用到它,不会在合并轮里悄悄拿到空值。timelineRemap
 // 不还原:重挂时间轴在候选构造时已经作用到正文上,scored 结果里的正文就是重挂后的。
 func lyricCandidateFromScored(r scoredLyricCandidateResult) lyricCandidate {
-	tr, roma := usableValueAdd(r.Lyrics, r.LyricsTr, r.LyricsTrLang, r.LyricsRoma, features().LyricsTranslationLanguage)
+	// 借来的译文(LyricsTrFrom)不算这条自己的,不加分(10 章决策 42)。
+	ownTr := r.LyricsTr
+	if r.LyricsTrFrom != "" {
+		ownTr = ""
+	}
+	tr, roma := usableValueAdd(r.Lyrics, ownTr, r.LyricsTrLang, r.LyricsRoma, features().LyricsTranslationLanguage)
 	return lyricCandidate{
 		source:                     r.Source,
 		lyrics:                     r.Lyrics,
@@ -4977,6 +4992,11 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	}
 	cands := make([]lyricCandidate, 0, len(ordered))
 	for _, s := range ordered {
+		// 前几轮排完序借过的译文先撤掉,合并后按这一批候选重借(末尾的 applyBorrowedTranslations):供体可能已被顶替或判废。
+		if r := chosen[s]; r.LyricsTrFrom != "" {
+			r.LyricsTr, r.LyricsTrLang, r.LyricsTrFrom = "", "", ""
+			chosen[s] = r
+		}
 		cands = append(cands, lyricCandidateFromScored(chosen[s]))
 	}
 	// 重音字母旁多切的空格,同 rankLyricSourceResults(见 accentsplit.go)。修的是 cands,下面打分时写回结果。

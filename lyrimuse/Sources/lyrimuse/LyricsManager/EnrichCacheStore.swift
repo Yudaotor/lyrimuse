@@ -1113,6 +1113,7 @@ public final class EnrichCacheStore: ObservableObject {
     /// - Parameters:
     ///   - bg: 采纳候选时这条候选的背景人声轨(`Candidate.lyricsBG`);nil = 不是采纳候选。
     ///   - trLang: 采纳候选时这条候选的译文语言(`Candidate.lyricsTrLang`);nil = 不动。
+    ///   - trFrom: 采纳候选时这条候选的译文借自哪个源(`Candidate.lyricsTrFrom`);空 = 自带的。
     /// - Returns: 引擎有没有执行成功。「采纳候选」的面板等着它
     ///   决定挪不挪「当前使用」徽标、给成功还是失败的回声;失败原因照旧写在 `lastError`。
     ///   老调用点不关心结果,所以 `@discardableResult`。
@@ -1120,7 +1121,7 @@ public final class EnrichCacheStore: ObservableObject {
     public func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil,
                          source: String? = nil, markManual: Bool = true,
                          sourceChoice: String? = nil, fromManualPick: Bool = false,
-                         bg: String? = nil, trLang: String? = nil) async -> Bool {
+                         bg: String? = nil, trLang: String? = nil, trFrom: String = "") async -> Bool {
         // 字段规则(译文换了清译文记录、罗马音描述旧正文就清掉、采纳留内容指纹……)都在引擎的
         // applySaveEdit,这里只把参数原样交过去。nil 的参数不传 = 引擎那边不动这个字段。
         var fields: [String: Any] = [
@@ -1132,6 +1133,7 @@ public final class EnrichCacheStore: ObservableObject {
         if let sourceChoice { fields["source_choice"] = sourceChoice }
         if let bg { fields["bg"] = bg }
         if let trLang { fields["tr_lang"] = trLang }
+        if !trFrom.isEmpty { fields["tr_from"] = trFrom }
         return await commit("save_edit", fields).ok
     }
 

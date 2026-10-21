@@ -94,6 +94,9 @@ type enrichEditRequest struct {
 	// BG / TrLang:采纳候选时这条候选自己的背景人声轨与译文语言(nil = 不是采纳候选,不动)。
 	BG     *string `json:"bg,omitempty"`
 	TrLang *string `json:"tr_lang,omitempty"`
+	// TrFrom:采纳的候选的译文是从哪个源借来的(候选的 lyrics_tr_from);空 = 候选自带的。借来的照自动选中时那样
+	// 记成 borrowed:<源>,不然存下之后被当成自带译文,重新打分时白加分(10 章决策 42)。
+	TrFrom string `json:"tr_from,omitempty"`
 
 	// save_plain_text
 	PlainLyrics       string `json:"plain_lyrics,omitempty"`
@@ -374,6 +377,9 @@ func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 	}
 	if req.TrLang != nil {
 		e.LyricsTrLang = *req.TrLang
+	}
+	if req.TrFrom != "" && req.Tr != "" {
+		e.LyricsTrSource = lyricsTrSourceBorrowedPrefix + req.TrFrom
 	}
 	e.ManualLyrics = req.MarkManual
 	// nil = 不动;空串 = 显式清掉(交回算法自由选源)。

@@ -376,17 +376,19 @@ func toJyutpingLine(text string) string {
 
 // jyutpingLRC 把整份逐行 LRC 歌词转写成粤拼逐行 LRC,时间戳与原文逐行对齐——复用
 // translate.go 的 parseLRCLines/assembleTranslationLRC,跟机器翻译走同一套"保留原
-// 时间戳、转不出内容就整体放弃"逻辑,不是重新发明一套。
+// 时间戳、转不出内容就整体放弃"逻辑,不是重新发明一套。「转出来的够不够」只数带汉字的行:
+// 英文行本来就没有粤拼,算进分母的话英文多的粤语歌整份作废。
 func jyutpingLRC(lyrics string) string {
 	lines := parseLRCLines(lyrics)
-	if len(lines) == 0 {
-		return ""
-	}
 	texts := make([]string, len(lines))
+	withHan := 0
 	for i, l := range lines {
 		texts[i] = toJyutpingLine(l.text)
+		if strings.ContainsFunc(l.text, isHanRune) {
+			withHan++
+		}
 	}
-	return assembleTranslationLRC(lines, texts, len(lines)).lrc
+	return assembleTranslationLRC(lines, texts, withHan).lrc
 }
 
 // mandarinOnlyInitials:普通话拼音有、粤拼没有的声母。粤拼的声母只有
@@ -456,7 +458,8 @@ func migrateTonelessCantoneseRoma() {
 		before := e.LyricsRoma
 		e.dropUnusableCantoneseRoma()
 		e.maybeGenerateJyutpingRoma()
-		if e.LyricsRoma.Equal(before) {
+		// 生成不出来(粤拼转不出够多的行)就留着源那份,别换成空的。
+		if e.LyricsRoma.IsZero() || e.LyricsRoma.Equal(before) {
 			continue
 		}
 		enrichCache[k] = e

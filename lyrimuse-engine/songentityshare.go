@@ -513,6 +513,7 @@ func songShareApplyChoice(e *enrichEntry, c *scoredLyricCandidateResult, r *song
 	e.dropUnusableCantoneseRoma()
 	e.applyPregeneratedRoma(roma)
 	e.LyricsTrLang, e.LyricsTrSource = c.LyricsTrLang, lyricsTrSourceFor(c)
+	e.resetTranslationAttempts()
 	e.LyricsSource, e.LyricsScore = c.Source, c.Score
 	if r.complete() {
 		e.stampLyricsScoring()

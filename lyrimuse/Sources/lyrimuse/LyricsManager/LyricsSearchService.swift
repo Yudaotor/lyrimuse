@@ -308,6 +308,8 @@ final class LyricsSearchService {
         /// 采纳时原样交给 saveEdit,条目跟自动选中这条候选时写的一样。
         let lyricsBG: String
         let lyricsTrLang: String
+        /// 译文是从哪个源借来的(引擎的 lyrics_tr_from);空 = 自带的。采纳时交给 saveEdit,条目照样记成借来的。
+        var lyricsTrFrom: String = ""
         let hasWordTiming: Bool
         let score: Int
         /// 这个分数的构成明细;被判 -1 时只有一项,内容是原因。引擎只给机器可读的
@@ -734,6 +736,7 @@ private struct RawCandidate: Decodable {
     let lyricsYRC: String?
     let lyricsBG: String?
     let lyricsTrLang: String?
+    let lyricsTrFrom: String?
     let hasWordTiming: Bool
     let score: Int
     let scoreTerms: [LyricsSearchService.ScoreTerm]?
@@ -755,6 +758,7 @@ private struct RawCandidate: Decodable {
         case lyricsYRC = "lyrics_yrc"
         case lyricsBG = "lyrics_bg"
         case lyricsTrLang = "lyrics_tr_lang"
+        case lyricsTrFrom = "lyrics_tr_from"
         case hasWordTiming = "has_word_timing"
         case scoreTerms = "score_terms"
         case coverURL = "cover_url"
@@ -778,6 +782,7 @@ private extension LyricsSearchService.Candidate {
             lyricsYRC: raw.lyricsYRC ?? "",
             lyricsBG: raw.lyricsBG ?? "",
             lyricsTrLang: raw.lyricsTrLang ?? "",
+            lyricsTrFrom: raw.lyricsTrFrom ?? "",
             hasWordTiming: raw.hasWordTiming,
             score: raw.score,
             scoreTerms: raw.scoreTerms ?? [],

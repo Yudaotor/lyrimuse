@@ -60,6 +60,7 @@ func TestMigrateTonelessCantoneseRoma(t *testing.T) {
 		"b|手改|":   {Lyrics: bt(tonelessCantoneseLyrics), LyricsRoma: bt(tonelessCantoneseRoma), SongLanguage: songLanguageCantonese, ManualLyrics: true},
 		"c|带声调|":  {Lyrics: bt(tonelessCantoneseLyrics), LyricsRoma: bt("[00:01.00]mine5 mine5 mine5 mine5 mine5 mine5 mine5 mine5"), SongLanguage: songLanguageCantonese},
 		"d|普通话|":  {Lyrics: bt(tonelessCantoneseLyrics), LyricsRoma: bt(tonelessCantoneseRoma), SongLanguage: songLanguageMandarin},
+		"e|转不出|":  {Lyrics: bt("[00:01.00]Hello hello hello\n[00:02.00]Goodbye goodbye"), LyricsRoma: bt(tonelessCantoneseRoma), SongLanguage: songLanguageCantonese},
 	})
 	migrateTonelessCantoneseRoma()
 	enrichMu.Lock()
@@ -75,6 +76,9 @@ func TestMigrateTonelessCantoneseRoma(t *testing.T) {
 	}
 	if got := enrichCache["d|普通话|"].LyricsRoma; !got.EqualString(tonelessCantoneseRoma) {
 		t.Errorf("不是粤语歌不动: %q", got)
+	}
+	if got := enrichCache["e|转不出|"].LyricsRoma; !got.EqualString(tonelessCantoneseRoma) {
+		t.Errorf("粤拼生成不出来时留着源那份,不换成空的: %q", got)
 	}
 }
 

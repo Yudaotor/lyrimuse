@@ -249,13 +249,15 @@ struct LanguagePackCard: View {
         // "已下载 0 / 19",而同一份代码事后连查四轮(含三次冷启动)都是正确的 5 / 19 ——
         // 原因没能复现,但至少点开别处再回来就能纠正,而不是一直卡着。
         //
-        // 它还兜住"回来时上一轮下载的转圈还亮着":didBecomeActive 时若 downloading 那个语言
-        // 系统已报已装,就把 spinner 收掉(下面看门狗是超时兜底,这个是"回到前台立刻纠正")。
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification)
         ) { _ in
             store.refresh(target: target)
-            if let code = downloading, store.statuses[code] == .installed {
+        }
+        // 兜住"回来时上一轮下载的转圈还亮着":刷新发布出来、downloading 那个语言系统已报已装,就把 spinner 收掉
+        // (下面看门狗是超时兜底)。refresh 是异步的,得等它发布之后再看,别在调完 refresh 的同一拍里读。
+        .onChange(of: downloading.flatMap { store.statuses[$0] }) { _, status in
+            if status == .installed {
                 downloading = nil
                 pending = nil
             }

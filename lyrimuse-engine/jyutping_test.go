@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -112,6 +113,19 @@ func TestJyutpingLRC(t *testing.T) {
 	want := "[00:01.00]ngo5 oi3 nei5\n[00:03.50]ngo5 dei6 gam1 jat6 hou2 hoi1 sam1"
 	if got != want {
 		t.Errorf("jyutpingLRC(%q) = %q, want %q", lrc, got, want)
+	}
+}
+
+// 英文行多的粤语歌:「转出来的够不够」只数带汉字的行,英文行不拖垮整份粤拼。
+func TestJyutpingLRCMostlyEnglish(t *testing.T) {
+	var lrc strings.Builder
+	for i := 0; i < 8; i++ {
+		fmt.Fprintf(&lrc, "%sOh baby baby tonight %d\n", formatLRCTime(1000+i*3000), i)
+	}
+	lrc.WriteString("[00:30.00]我愛你\n[00:33.00]我哋今日好開心")
+	got := jyutpingLRC(lrc.String())
+	if !strings.Contains(got, "[00:30.00]ngo5 oi3 nei5") {
+		t.Fatalf("带汉字的两行都转出来了,整份粤拼不该作废,得到 %q", got)
 	}
 }
 

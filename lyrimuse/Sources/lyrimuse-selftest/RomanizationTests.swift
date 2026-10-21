@@ -386,6 +386,23 @@ func runRomanizationTests() {
         let bad = KanaAnnotation.parse(lrc: "[00:43.12]明日の今頃には\n[kana:2あした]")
         expectEqual(bad == nil, true, "覆盖字数对不上时必须整份弃用,不能半对半错地标歪")
 
+        // 演唱者标签:补进正文的「合：」不在条目里,剥掉再对一次;源里本来带标签的行,显示时标签剥掉了也查得到。
+        let injected = KanaAnnotation.parse(lrc: "[00:43.12]合：明日の今頃には\n[kana:2あした1いま1ごろ]")
+        expectEqual(injected?.marks(forLine: "明日の今頃には").first?.reading, "あした",
+                    "补进来的演唱者标签不让整份假名标注作废")
+        let native = KanaAnnotation.parse(lrc: "[00:01.00]男：明日\n[kana:1おとこ2あした]")
+        let nativeMarks = native?.marks(forLine: "明日") ?? []
+        expectEqual(nativeMarks.count == 1 && nativeMarks.first?.utf16Start == 0 && nativeMarks.first?.reading == "あした", true,
+                    "源里带标签的行按剥掉标签之后的文字也查得到标注,偏移挪到标签之后")
+
+        // 标注只盖住词里一部分汉字(「京」那条读音为空):剩下的字不交给 .toLatin 读成拼音,整个词退回分词器。
+        let partial = KanaAnnotation.parse(lrc: "[00:01.00]東京へ行く\n[kana:1とう11い]")
+        let partialRoma = Romanizer.romanize("東京へ行く", japanese: true,
+                                             marks: partial?.marks(forLine: "東京へ行く") ?? []) ?? ""
+        expectEqual(partial != nil && !partialRoma.contains("jīng") && !partialRoma.lowercased().contains("jing")
+                    && partialRoma.lowercased().hasPrefix("t"), true,
+                    "假名标注缺字时整词退回分词器,不出普通话拼音:\(partialRoma)")
+
         // 叠字符号 々 也算待标字符 —— 漏算它会从那里开始整体错位
         expectEqual(KanaAnnotation.needsAnnotation("々"), true, "々 必须算作待标字符")
         expectEqual(KanaAnnotation.needsAnnotation("明"), true, "汉字是待标字符")
@@ -866,6 +883,11 @@ func runRomanizationTests() {
         let oneAlone = Romanizer.lineReading(
             "私は1人泣く", songLooksJapanese: true, segments: Romanizer.japaneseSegments("私は1人泣く")) ?? ""
         expectEqual(oneAlone.contains("hitori") && !oneAlone.contains("rén"), true, "数字+汉字: 整行读音里 1人 读 hitori")
+        // 日文歌里夹汉字的韩文行:谚文按读音转写,不进日语分词器逐字母硬转。
+        let koreanWithHan = Romanizer.lineReading(
+            "사랑해 愛", songLooksJapanese: true, segments: Romanizer.japaneseSegments("사랑해 愛")) ?? ""
+        expectEqual(koreanWithHan.contains("saranghae") && !koreanWithHan.contains("salanghae"), true,
+                    "日文歌里的韩文行(带汉字)走韩文读音:\(koreanWithHan)")
         let threeCount = Romanizer.lineReading(
             "3つ数えて Honey", songLooksJapanese: true, segments: Romanizer.japaneseSegments("3つ数えて Honey")) ?? ""
         expectEqual(threeCount.contains("mittsu"), true, "数字+つ: 3つ 读 mittsu")
@@ -1143,6 +1165,19 @@ func runRomanizationTests() {
                            romanizationScripts: [.chinese], songIsCantonese: true)
             expectEqual(engineOff.activeLine(atMs: 200)?.wordGroups, nil,
                         "端到端: 关掉粤拼开关后逐字歌词不再对齐出词组")
+        }
+
+        // ---- 粤语歌里的一句日文:粤拼轨里没有这一行,照常现算日文读音 ----
+        do {
+            let engine = LyricsSyncEngine()
+            engine.load(lyrics: "[00:01.00]我愛你\n[00:02.00]我哋今日好開心\n[00:03.00]我愛你\n[00:04.00]我哋今日好開心\n[00:05.00]ありがとう\n",
+                        lyricsTr: "",
+                        lyricsRoma: "[00:01.00]ngo5 oi3 nei5\n[00:02.00]ngo5 dei6 gam1 jat6 hou2 hoi1 sam1\n[00:03.00]ngo5 oi3 nei5\n[00:04.00]ngo5 dei6 gam1 jat6 hou2 hoi1 sam1\n",
+                        lyricsYRC: "",
+                        romanizationScripts: [.cantonese, .japanese], songIsCantonese: true)
+            expectEqual(engine.activeLine(atMs: 1200)?.romanization, "ngo5 oi3 nei5", "粤语歌: 汉字行照用粤拼轨")
+            expectEqual(engine.activeLine(atMs: 5200)?.romanization?.contains("arigat") ?? false, true,
+                        "粤语歌里的日文行: 粤拼轨没有这一行时现算日文读音")
         }
 
         // ---- 前奏里首句的逐词分组(TickResolution.nextWordGroups) ----
@@ -1439,6 +1474,22 @@ func runRomanizationTests() {
                     "旧版判定: 一致的不到八成不算")
         expectEqual(isLegacy("[00:09.00]salanghae", lyrics), false, "旧版判定: 时间标签对不上不算")
         expectEqual(isLegacy("", lyrics), false, "旧版判定: 空的不算")
+
+        // 启动迁移用的「是不是我们早先预生成、按现在的算法已经过时的那份」判定。
+        let ja = "[00:01.00]君の名前を呼んだ\n[00:02.00]明日はきっと晴れる\n[00:03.00]夜空に星が光る\n[00:04.00]遠くの空を見上げた\n[00:05.00]3つ数えて Honey"
+        let jaFresh = LyricsRomanization.romanizeLRC(ja) ?? ""
+        let refreshed = LyricsRomanization.refreshedGeneratedRomanization
+        let staleLines = jaFresh.split(separator: "\n").map(String.init)
+        let stale = (staleLines.dropLast() + ["[00:05.00]3 tsu kazoe te Honey"]).joined(separator: "\n")
+        expectEqual(staleLines.count == 5 && refreshed(stale, ja) == jaFresh, true,
+                    "过时判定: 八成行跟现算一字不差、余下不同,换成现算的")
+        expectEqual(refreshed(jaFresh, ja) == nil, true, "过时判定: 跟现算一字不差的不动,迁移跑第二遍不会再动它")
+        expectEqual(refreshed("[00:01.00]kimi no namae wo yonda\n[00:02.00]ashita wa kitto hareru", ja) == nil, true,
+                    "过时判定: 歌词源给的(多数行写法不同)不动")
+        expectEqual(refreshed("", ja) == nil, true, "过时判定: 空的不算")
+        // 同形异码字(康熙部首)先换回标准字,跟播放侧一致。
+        expectEqual(LyricsRomanization.romanizeLRC("[00:01.00]夢が\u{2F92}える"), LyricsRomanization.romanizeLRC("[00:01.00]夢が見える"),
+                    "整份罗马音: 康熙部首形的「⾒」按标准字「見」读")
     }
 
     // 日文汉字修回(JapaneseKanjiRepair)。不维护任何表:「不能用 JIS X 0208 编码的汉字 →

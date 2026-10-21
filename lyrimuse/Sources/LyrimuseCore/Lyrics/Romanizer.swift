@@ -296,7 +296,9 @@ public enum Romanizer {
         if cursor < end {
             kana += String(utf16CodeUnits: Array(units[cursor..<end]), count: end - cursor)
         }
-        guard !kana.isEmpty,
+        // 标注没盖住这个词里的每个汉字(那几个字没给读音):剩下的汉字交给 .toLatin 会读成普通话拼音,整个词退回分词器。
+        guard !kana.contains(where: KanaAnnotation.needsAnnotation),
+              !kana.isEmpty,
             let latin = kana.applyingTransform(.toLatin, reverse: false),
             latin != kana
         else { return nil }
@@ -337,7 +339,8 @@ public enum Romanizer {
         songLooksJapanese: Bool,
         segments: @autoclosure () -> [JapaneseSegment]
     ) -> String? {
-        if looksJapanese(line) || (songLooksJapanese && containsHan(line)),
+        // 带谚文的行是韩文(夹的汉字是汉字词):不进日语分词器,谚文走 KoreanRomanization。
+        if looksJapanese(line) || (songLooksJapanese && containsHan(line) && !containsHangul(line)),
             let reading = readingFromSegments(segments(), original: line)
         {
             return reading

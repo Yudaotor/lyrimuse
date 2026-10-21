@@ -29,12 +29,12 @@ func setupTranslateStart(t *testing.T) *int {
 	})
 	savedFeatures, savedCache, savedPath, savedBase, savedDir, savedClient :=
 		features(), enrichCache, enrichPath, translateBaseURL, lyricsDir(), translateClient
-	savedInflight, savedTr, savedProv := enrichInflight, translationInflight, enrichProvisional
+	savedInflight, savedTr, savedProv, savedQueued := enrichInflight, translationInflight, enrichProvisional, translationQueued
 	t.Cleanup(func() {
 		setFeatures(savedFeatures)
 		enrichCache, enrichPath, translateBaseURL, translateClient =
 			savedCache, savedPath, savedBase, savedClient
-		enrichInflight, translationInflight, enrichProvisional = savedInflight, savedTr, savedProv
+		enrichInflight, translationInflight, enrichProvisional, translationQueued = savedInflight, savedTr, savedProv, savedQueued
 		setLyricsDir(savedDir)
 	})
 	featuresRef().LyricsMachineTranslation = true
@@ -44,6 +44,7 @@ func setupTranslateStart(t *testing.T) *int {
 	setLyricsDir("")
 	enrichPath = filepath.Join(t.TempDir(), "enrich-cache.json")
 	enrichInflight, translationInflight, enrichProvisional = map[string]bool{}, map[string]bool{}, map[string]bool{}
+	translationQueued = map[string]uint64{}
 	return calls
 }
 

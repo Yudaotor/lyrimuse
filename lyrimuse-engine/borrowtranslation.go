@@ -82,11 +82,26 @@ func borrowedTranslation(lyrics, donorLyrics, donorTr string) (string, bool) {
 		}
 	}
 	sort.SliceStable(trLines, func(i, j int) bool { return trLines[i].ms < trLines[j].ms })
+	// 供体正文同一时刻有几行、译文也有几条时按先后一一配对;译文条数不够时后面那行沿用窗口里的第一条。
 	donorTrText := make([]string, len(donor))
+	used := make([]bool, len(trLines))
 	for j, d := range donor {
+		first := -1
 		k := sort.Search(len(trLines), func(k int) bool { return trLines[k].ms >= d.ms-borrowTranslationStampSlackMs })
-		if k < len(trLines) && trLines[k].ms <= d.ms+borrowTranslationStampSlackMs {
+		for ; k < len(trLines) && trLines[k].ms <= d.ms+borrowTranslationStampSlackMs; k++ {
+			if first < 0 {
+				first = k
+			}
+			if !used[k] {
+				break
+			}
+		}
+		switch {
+		case k < len(trLines) && trLines[k].ms <= d.ms+borrowTranslationStampSlackMs:
+			used[k] = true
 			donorTrText[j] = trLines[k].text
+		case first >= 0:
+			donorTrText[j] = trLines[first].text
 		}
 	}
 	var out []string
@@ -173,7 +188,8 @@ func applyBorrowedTranslations(results []scoredLyricCandidateResult) {
 		}
 		for j := range results {
 			d := &results[j]
-			if j == i || d.Score < 0 || d.Lyrics == "" || d.LyricsTrFrom != "" {
+			// 供体没有译文就不解析两份正文去配对:每到一个源都要重排一次,多数候选不带译文。
+			if j == i || d.Score < 0 || d.Lyrics == "" || d.LyricsTr == "" || d.LyricsTrFrom != "" {
 				continue
 			}
 			tr, ok := borrowedTranslation(r.Lyrics, d.Lyrics, d.LyricsTr)
@@ -189,8 +205,8 @@ func applyBorrowedTranslations(results []scoredLyricCandidateResult) {
 	}
 }
 
-// gainBorrowedTranslation:条目自己没有可用译文、这一轮有一份跟它正文逐字相同的候选借到了译文时,把那份译文补进条目。
-// 升级重试与重新打分两条路在正文没换时调。
+// gainBorrowedTranslation:条目自己没有可用译文、这一轮有候选借到了译文时,按条目自己的正文再对齐一次补进条目
+// (正文没换、只差几个时间戳时也补得上,对不齐就不补)。升级重试与重新打分两条路在正文没换时调。
 func gainBorrowedTranslation(e *enrichEntry, scored []scoredLyricCandidateResult) bool {
 	target := myMemoryLangCode(features().LyricsTranslationLanguage)
 	if target == "" || e.Instrumental || e.Lyrics.IsZero() || translationUsable(*e, target) {
@@ -198,10 +214,17 @@ func gainBorrowedTranslation(e *enrichEntry, scored []scoredLyricCandidateResult
 	}
 	for i := range scored {
 		c := &scored[i]
-		if c.Score < 0 || c.LyricsTrFrom == "" || !e.Lyrics.EqualString(c.Lyrics) {
+		if c.Score < 0 || c.LyricsTrFrom == "" {
 			continue
 		}
-		e.LyricsTr, e.LyricsTrLang, e.LyricsTrSource = bt(c.LyricsTr), c.LyricsTrLang, lyricsTrSourceFor(c)
+		tr := c.LyricsTr
+		if !e.Lyrics.EqualString(c.Lyrics) {
+			var ok bool
+			if tr, ok = borrowedTranslation(e.Lyrics.String(), c.Lyrics, c.LyricsTr); !ok {
+				continue
+			}
+		}
+		e.LyricsTr, e.LyricsTrLang, e.LyricsTrSource = bt(tr), c.LyricsTrLang, lyricsTrSourceFor(c)
 		return true
 	}
 	return false

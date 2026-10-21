@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
+	"unicode"
 )
 
 // 罗马音预生成。
@@ -39,19 +41,21 @@ import (
 // 下一轮解析会自然再试一次。
 const romanizeHelperTimeout = 20 * time.Second
 
-// romanizeRequest 是 lyrics-romanize 的入参。LegacyKoreanRoma 只在启动迁移里带(见 koreanroma.go)。
+// romanizeRequest 是 lyrics-romanize 的入参。LegacyKoreanRoma、StaleRoma 只在启动迁移里带(见 koreanroma.go、staleroma.go)。
 type romanizeRequest struct {
 	Lyrics           string `json:"lyrics"`
 	LegacyKoreanRoma string `json:"legacy_korean_roma,omitempty"`
+	StaleRoma        string `json:"stale_roma,omitempty"`
 }
 
 // romanizeReply 是 lyrics-romanize 的回包。ok:false 时原因在 Reason(no-romanization / empty-input / not-legacy
-// 都是正常结论,不是故障);LegacyChecked 只在带了 legacy_korean_roma、判过是旧版时为真。
+// 都是正常结论,不是故障);LegacyChecked 只在带了 legacy_korean_roma、判过是旧版时为真,StaleChecked 同理对 stale_roma。
 type romanizeReply struct {
 	OK            bool   `json:"ok"`
 	Roma          string `json:"roma"`
 	Reason        string `json:"reason"`
 	LegacyChecked bool   `json:"legacy_checked"`
+	StaleChecked  bool   `json:"stale_checked"`
 }
 
 // errRomanizeHelperMissing:没走 build.sh 打包(直接 go build 跑引擎)时找不到 helper。
@@ -147,15 +151,17 @@ func (e *enrichEntry) maybeGenerateHelperRoma() {
 // 没有 lyrics-romanize,直接测那个函数会因为"helper 找不到 → 静默返回"而**恒真通过**,
 // 那是一条证明不了任何东西的测试。判据是纯函数,测它才有意义。
 func (e *enrichEntry) shouldGenerateHelperRoma() bool {
-	// 台语歌不标普通话拼音,见 hokkien.go。
-	if e.Lyrics.IsZero() || !e.LyricsRoma.IsZero() || e.SongLanguage == songLanguageHokkien {
+	// 台语歌不标普通话拼音,见 hokkien.go;粤语歌的读音只认粤拼,粤拼转不出来时 helper 给的也是普通话拼音。
+	if e.Lyrics.IsZero() || !e.LyricsRoma.IsZero() || e.SongLanguage == songLanguageHokkien || e.SongLanguage == songLanguageCantonese {
 		return false
 	}
 	switch dominantScript(e.Lyrics.String()) {
 	case scriptHan, scriptKana, scriptHangul:
 		return true
 	}
-	return false
+	// 英文行占多数的韩文歌:主体文字判成拉丁(有假名的 dominantScript 已经判成日文),带谚文的那几行照样要读音
+	// (导出的 .roma.lrc)。只有汉字不算:英文歌里一行中文署名不值得起子进程。
+	return strings.ContainsFunc(e.Lyrics.String(), func(r rune) bool { return unicode.Is(unicode.Hangul, r) })
 }
 
 // maybeGenerateRoma 是罗马音兜底的**唯一入口**,顺序固定:

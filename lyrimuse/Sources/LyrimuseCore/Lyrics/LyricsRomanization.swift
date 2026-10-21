@@ -29,7 +29,8 @@ public enum LyricsRomanization {
     ///   会**关掉**客户端兜底那条路,比没有更糟)。
     ///
     /// 喂给读音函数之前的预处理跟播放那条路逐项一致,顺序也一样,每一步都调同一个函数:
-    ///  1. 日文歌先修回被源写成简体的汉字(`JapaneseKanjiRepair`,播放侧在 `LocalPlaybackSource` 交给引擎之前做);
+    ///  1. 同形异码字换回标准字(`HanCompatibility`),日文歌再修回被源写成简体的汉字(`JapaneseKanjiRepair`),
+    ///     播放侧在 `LocalPlaybackSource` 交给引擎之前做;
     ///  2. 认出演唱者标签、按同一套规则判掉署名行(`LyricDuet.speakers` + `LyricsSyncEngine.strippingCreditLines`);
     ///  3. 「整首是不是日文歌」按**过滤后的正文**判 —— 按原文判会被元信息行、署名行里的日文人名带偏;
     ///  4. 每行先剥掉演唱者标签再算读音(否则读出「nán： zhōu mò」,引擎剥罗马音标签只认汉字那一形)。
@@ -68,15 +69,7 @@ public enum LyricsRomanization {
     /// 一致的占八成以上才算。
     public static func isLegacyKoreanRomanization(_ roma: String, lyrics: String) -> Bool {
         guard !roma.isEmpty, !lyrics.isEmpty else { return false }
-        var stored: [String: String] = [:]
-        for raw in roma.replacingOccurrences(of: "\r\n", with: "\n").split(separator: "\n") {
-            let line = String(raw)
-            let ns = line as NSString
-            guard let tagMatch = leadingTagsRegex.firstMatch(
-                in: line, range: NSRange(location: 0, length: ns.length))
-            else { continue }
-            stored[ns.substring(with: tagMatch.range(at: 1))] = ns.substring(from: tagMatch.range.length)
-        }
+        let stored = taggedLines(roma)
         var compared = 0
         var same = 0
         for (tags, body) in readingRows(lyrics).rows where Romanizer.containsHangul(body) {
@@ -87,6 +80,33 @@ public enum LyricsRomanization {
         return compared > 0 && same * 5 >= compared * 4
     }
 
+    /// `roma` 是引擎早先按 `romanizeLRC` 预生成、读音算法改过之后已经过时的那份时,返回现在该存的那份;
+    /// 跟现算一字不差、或者对不上(歌词源给的)返回 nil。启动迁移靠它只换掉我们自己生成的(手改过的条目
+    /// 引擎那边整条跳过,不送来判)。按时间标签串逐行比:`roma` 的行里跟现算一字不差的占八成以上才算。
+    /// 改了读音算法(`Romanizer`、这里的预处理)之后,引擎那边的迁移版本号加一,存量就会按新算法重算一遍。
+    public static func refreshedGeneratedRomanization(_ roma: String, lyrics: String) -> String? {
+        guard !roma.isEmpty, let fresh = romanizeLRC(lyrics), fresh != roma else { return nil }
+        let stored = taggedLines(roma)
+        guard !stored.isEmpty else { return nil }
+        let current = taggedLines(fresh)
+        let same = stored.filter { current[$0.key] == $0.value }.count
+        return same * 5 >= stored.count * 4 ? fresh : nil
+    }
+
+    /// 一份 LRC 按行首时间标签串分开:标签串 → 这一行的正文。没有标签的行跳过。
+    private static func taggedLines(_ lrc: String) -> [String: String] {
+        var out: [String: String] = [:]
+        for raw in lrc.replacingOccurrences(of: "\r\n", with: "\n").split(separator: "\n") {
+            let line = String(raw)
+            let ns = line as NSString
+            guard let tagMatch = leadingTagsRegex.firstMatch(
+                in: line, range: NSRange(location: 0, length: ns.length))
+            else { continue }
+            out[ns.substring(with: tagMatch.range(at: 1))] = ns.substring(from: tagMatch.range.length)
+        }
+        return out
+    }
+
     /// 要算读音的正文行(时间标签串 + 剥掉演唱者标签后的正文)和整首的判定,预处理见 `romanizeLRC` 的说明。
     private struct ReadingRows {
         var rows: [(tags: String, body: String)]
@@ -95,7 +115,9 @@ public enum LyricsRomanization {
     }
 
     private static func readingRows(_ lyrics: String) -> ReadingRows {
-        let repaired = JapaneseKanjiRepair.repair(lyrics, japaneseSong: Romanizer.looksJapaneseSong(lyrics))
+        // 同形异码字(康熙部首等)先换回标准字,同播放侧交给引擎之前那一步。
+        let compatible = HanCompatibility.normalized(lyrics)
+        let repaired = JapaneseKanjiRepair.repair(compatible, japaneseSong: Romanizer.looksJapaneseSong(compatible))
         // 酷狗那类把假名标注写进同一份 LRC 的源,读音优先用标注 —— 播放引擎也是从同一份
         // 歌词里 `KanaAnnotation.parse(lrc:)` 出来的,这里照做才能保证两条路读音一致。
         let annotation = KanaAnnotation.parse(lrc: repaired)

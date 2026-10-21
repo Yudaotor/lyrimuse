@@ -2075,7 +2075,7 @@ func runLyricsManagerTests() {
                     true, "歌词库摘要: 写盘排在同一条串行队列上,后写的不会被先发起的旧值盖掉")
         let quick = (try? String(contentsOf: appDir.appendingPathComponent("LyricsManager/LyricsQuickSearchWindow.swift"),
                                  encoding: .utf8)) ?? ""
-        expectEqual(sourceHas(quick, "trLang: candidate.lyricsTrLang)\n                    }\n                    PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()")
+        expectEqual(sourceHas(quick, "trFrom: candidate.lyricsTrFrom)\n                    }\n                    PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()")
                     || !sourceHas(store, "        PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()\n        // 上面读过盘的话"), false,
                     "搜索歌词小窗: 采纳后不再自己重读当前歌词(commit 收尾时已经做了)")
 

@@ -108,6 +108,10 @@ const (
 	// 运行期新生成的已经是按读音的,运行期不再产生。改了「是不是旧版」的判据就 +1。
 	migrationLegacyKoreanRoma        = "legacy_korean_roma"
 	migrationLegacyKoreanRomaVersion = 1
+	// migrationStaleGeneratedRoma:存量里早先预生成、读音算法改过之后已经过时的读音按现在的算法重算(staleroma.go)。
+	// 改了读音算法(Swift 的 Romanizer、LyricsRomanization 的预处理)就 +1。
+	migrationStaleGeneratedRoma        = "stale_generated_roma"
+	migrationStaleGeneratedRomaVersion = 1
 	// migrationTonelessCantoneseRoma:存量粤语歌里没标声调的罗马音换成带声调的粤拼(jyutping.go)。运行期在源头
 	// 已经这样做,不再产生。改了 lacksJyutpingTones 的判据就 +1。
 	migrationTonelessCantoneseRoma        = "toneless_cantonese_roma"

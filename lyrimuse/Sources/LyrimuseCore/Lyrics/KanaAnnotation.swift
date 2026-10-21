@@ -59,10 +59,18 @@ public struct KanaAnnotation {
         let entries = parseEntries(raw)
         guard !entries.isEmpty else { return nil }
 
-        let lines = bodyLines(of: lrc)
+        var lines = bodyLines(of: lrc)
         // 先做总数校验 —— 对不上就整份弃用,不冒着"从某一行开始全歪"的风险硬塞。
-        let need = lines.reduce(0) { $0 + $1.filter(needsAnnotation).count }
-        guard need == entries.reduce(0, { $0 + $1.count }), need > 0 else { return nil }
+        // 补进正文的演唱者标签(Musixmatch 的「合：」)不在条目里:总数对不上时剥掉行首标签再对一次,对上才用。
+        let total = entries.reduce(0, { $0 + $1.count })
+        func need(_ lines: [String]) -> Int { lines.reduce(0) { $0 + $1.filter(needsAnnotation).count } }
+        if need(lines) != total {
+            lines = lines.map { line in
+                guard let (_, rest, _) = LyricDuet.splitLabel(line), !rest.isEmpty else { return line }
+                return rest
+            }
+        }
+        guard need(lines) == total, total > 0 else { return nil }
 
         var byLine: [String: [Mark]] = [:]
         var entryIdx = 0
@@ -110,6 +118,15 @@ public struct KanaAnnotation {
                 }
             }
             if !marks.isEmpty { byLine[line] = marks }
+        }
+        // 显示的行剥掉了行首的演唱者标签:按剥掉之后的文字另登记一份,偏移挪到标签之后。
+        for line in lines {
+            guard let marks = byLine[line], let (_, rest, prefixCount) = LyricDuet.splitLabel(line),
+                  !rest.isEmpty, byLine[rest] == nil else { continue }
+            let offset = line.prefix(prefixCount).utf16.count
+            let shifted = marks.filter { $0.utf16Start >= offset }
+                .map { Mark(utf16Start: $0.utf16Start - offset, utf16Length: $0.utf16Length, reading: $0.reading) }
+            if !shifted.isEmpty { byLine[rest] = shifted }
         }
         guard !byLine.isEmpty else { return nil }
         return KanaAnnotation(byLine: byLine)

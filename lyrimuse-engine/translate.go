@@ -584,7 +584,10 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 		if quota {
 			return translationResult{quotaReached: true}, nil
 		}
-		if err != nil {
+		switch {
+		case errors.Is(err, errMyMemoryNoTranslation):
+			got = chunk
+		case err != nil:
 			return translationResult{}, err
 		}
 		// 行数对不上就整块作废,用原文占位 —— 错位的译文比没有译文更糟:第 3 行的中文
@@ -806,6 +809,10 @@ func withoutRequestURL(err error) error {
 
 // translateChunk 发一次 MyMemory 请求。第二个返回值为真表示当天配额用尽(调用方应该整体
 // 停下,而不是继续把剩下的块也撞上去)。
+// errMyMemoryNoTranslation:MyMemory 回了话,但这一块没有可用译文(空的、或说跟原文同一语言)。由内容决定、重试也一样,
+// 那一块按没翻处理,别的块照拼;网络、状态码一类的错误才整首交回。
+var errMyMemoryNoTranslation = errors.New("no usable translation")
+
 func translateChunk(ctx context.Context, hc *http.Client, baseURL string, lines []string, target string) ([]string, bool, error) {
 	q := neturl.Values{}
 	q.Set("q", strings.Join(lines, "\n"))
@@ -844,7 +851,7 @@ func translateChunk(ctx context.Context, hc *http.Client, baseURL string, lines 
 	}
 	text := body.ResponseData.TranslatedText
 	if text == "" || strings.Contains(strings.ToUpper(text), translateSameLangSentinel) {
-		return nil, false, fmt.Errorf("no usable translation: %q", body.ResponseDetails)
+		return nil, false, fmt.Errorf("%w: %q", errMyMemoryNoTranslation, body.ResponseDetails)
 	}
 	return strings.Split(text, "\n"), false, nil
 }
@@ -985,6 +992,12 @@ func reapplyTranslationLanguage() {
 	}
 }
 
+// resetTranslationAttempts:正文换了一份,上一份正文攒下的机翻失败次数和节流不算到新正文头上。
+// 换正文的各条路(升级重试、重新打分、跨专辑借词、同曲共享)都要调,手改与导入在各自那里清。
+func (e *enrichEntry) resetTranslationAttempts() {
+	e.TranslationTS, e.TranslationRetryCount = 0, 0
+}
+
 // needsTranslationBackfill 判断这条要不要机翻补一份译文。
 //
 // 已经有 lyrics_tr 就一律不动 —— 社区翻译(网易云/Musixmatch 的人工译文)质量高于机翻,
@@ -1066,10 +1079,14 @@ func backfillTranslation(key string) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
+	ctx, roundStat := withNetworkRound(ctx)
 	artist, title, _ := splitEnrichKey(key)
 	started := time.Now()
 	res, err := machineTranslateLRC(ctx, translateClient, lyrics.String(), target, artist, title)
 	took := time.Since(started).Seconds()
+	// 发出去的翻译请求一个都没连上(断网):跟配额用尽一样只节流、不记一次尝试,不然离线听三次这首就再也不翻。
+	attempts, failures := roundStat()
+	unreachable := attempts > 0 && failures == attempts
 
 	enrichMu.Lock()
 	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读
@@ -1113,6 +1130,10 @@ func backfillTranslation(key string) {
 	if !e.Lyrics.Equal(lyrics) {
 		return
 	}
+	// 翻译期间改了译文语言:这份是按旧语言翻的,不挂(旧语言的机翻已由 reapplyTranslationLanguage 清掉)。
+	if myMemoryLangCode(features().LyricsTranslationLanguage) != target {
+		return
+	}
 	// 期间用户可能刚好手动采纳了一份**用得上的**社区译文;那份优先,别覆盖。用得上是
 	// 关键限定:一份语言对不上的社区译文正是这次翻译要顶替的东西,不能反过来挡住它。
 	if translationUsable(e, target) {
@@ -1129,6 +1150,8 @@ func backfillTranslation(key string) {
 		// **不**记这次尝试:配额是全局的、跟这首歌翻不翻得出来无关,记进去等于让今天
 		// 恰好轮到的那几首歌白白烧掉重试额度,以后再也不会被翻。只更新时间戳做节流。
 		log.Printf("translate: %s deferred, daily quota reached (%.1fs)", key, took)
+	case unreachable && (err != nil || res.lrc == ""):
+		log.Printf("translate: %s deferred, no translation service reachable (%.1fs)", key, took)
 	case err != nil:
 		e.TranslationRetryCount++
 		warnf("translate: %s failed after %.1fs: %v", key, took, err)

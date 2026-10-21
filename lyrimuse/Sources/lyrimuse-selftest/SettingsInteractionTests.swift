@@ -830,6 +830,10 @@ func runSettingsInteractionTests() {
         let store = source("FeatureSettingsStore.swift")
         let portability = source("ConfigPortability.swift")
         let packRow = source("LanguagePackRow.swift")
+        // 回到前台时 refresh 是异步的:转圈要等状态发布出来再收,不在调完 refresh 的同一拍里读旧值。
+        expectEqual(sourceHas(packRow, ".onChange(of: downloading.flatMap { store.statuses[$0] }) { _, status in\n if status == .installed {")
+                    && !sourceHas(packRow, "store.refresh(target: target)\n if let code = downloading, store.statuses[code] == .installed {"), true,
+                    "翻译语言包: 回到前台装好了的语言,等刷新发布之后收掉下载转圈")
         expectEqual(store.contains("case systemLanguage = \"\(L.featuresKey)\""), true,
                     "系统语言(契约): features.json 的键名用 SystemLanguage.featuresKey")
         expectEqual(store.contains("systemLanguage = SystemLanguage.current()")

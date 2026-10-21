@@ -2279,7 +2279,10 @@ public final class LyricsSyncEngine {
             if let adopted = romaFallback.adopted[timeMs], adopted.key == key { return adopted.text }
             if romaFallback.suppressed[timeMs] == key { return nil }
             if let fromSource = nearestText(romaLines, timeMs) { return fromSource }
-            guard romaLines.isEmpty else { return nil }
+            // 中文 / 粤语歌的读音轨只管汉字行(粤拼查不到假名、谚文),里面一行日文 / 韩文没有对应,照常现算。
+            let foreignLine = (songScript == .cantonese || songScript == .chinese)
+                && (Romanizer.looksJapanese(plainText) || Romanizer.containsHangul(plainText))
+            guard romaLines.isEmpty || foreignLine else { return nil }
         }
         // 不在这里替用户决定"中文不要拼音":那是用户自己的开关(上面的 romanizationAllowed,中文默认关)。绝大多数中文歌没有
         // 服务端 lyrics_roma,用户打开中文罗马音时,能出拼音的唯一途径就是这里的客户端兜底。

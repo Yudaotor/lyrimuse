@@ -32,6 +32,13 @@ func TestShouldGenerateHelperRoma(t *testing.T) {
 		// 没有这道闸的话,每一首纯英文歌都要白起一次子进程。
 		{"纯拉丁歌词 → 不值得起子进程",
 			enrichEntry{Lyrics: bt("[00:01.00]I'll be there")}, false},
+		// 粤拼转不出来时 helper 给的是普通话拼音,下次重评分又会被当成普通话拼音清掉。
+		{"英文行占多数的韩文歌 → 带谚文的那几行也要读音",
+			enrichEntry{Lyrics: bt("[00:01.00]Come on everybody dance tonight\n[00:02.00]Feel the rhythm of the night\n[00:03.00]Shake it baby shake it all\n[00:04.00]사랑해")}, true},
+		{"英文歌里一行中文署名 → 只有汉字不起 helper",
+			enrichEntry{Lyrics: bt("[00:01.00]Come on everybody dance tonight\n[00:02.00]Feel the rhythm of the night\n[00:03.00]Shake it baby shake it all\n[00:04.00]作词 某人")}, false},
+		{"粤语歌 → 只认粤拼,不起 helper",
+			enrichEntry{Lyrics: bt("[00:01.00]我愛你"), SongLanguage: songLanguageCantonese}, false},
 	}
 	for _, c := range cases {
 		e := c.entry

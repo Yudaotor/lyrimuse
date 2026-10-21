@@ -91,7 +91,8 @@ struct LyricsQuickSearchWindow: View {
                             lyrics: candidate.lyrics, tr: candidate.lyricsTr,
                             roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
                             source: candidate.source, markManual: AppSettings.shared.manualPickLocksLyrics,
-                            sourceChoice: "", fromManualPick: true, bg: candidate.lyricsBG, trLang: candidate.lyricsTrLang)
+                            sourceChoice: "", fromManualPick: true, bg: candidate.lyricsBG, trLang: candidate.lyricsTrLang,
+                            trFrom: candidate.lyricsTrFrom)
                     }
                     // 正在放的那首重读歌词由 EnrichCacheStore.commit 收尾时做,这里不再调一次。
                     if saved { AppActions.shared.lyricsSearchApplied.send(context.key) }

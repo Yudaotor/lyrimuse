@@ -16,6 +16,10 @@ import "context"
 var (
 	// translationInflight 正在机翻(或排队等 prefetchTranslateSlot)的 key,受 enrichMu 保护。
 	translationInflight = map[string]bool{}
+	// translationQueued 排在 prefetchTranslateSlot 前面、还没轮到的待播机翻,值是那一次排队的序号,受 enrichMu 保护。
+	// 排着的那首开始播放时由 startTranslationBackfillLocked 提出来当场翻;排队那一路轮到时序号对不上就不跑。
+	translationQueued   = map[string]uint64{}
+	translationQueueSeq uint64
 	// prefetchTranslateSlot 预取来的机翻一次只跑一首,几首一起跑会跟正在播的那首抢端上翻译 helper
 	// 和网络翻译端点。正在播的那首不经过它。
 	prefetchTranslateSlot = make(chan struct{}, 1)
@@ -41,6 +45,11 @@ func translationStartableLocked(key string, e enrichEntry) bool {
 
 // startTranslationBackfillLocked 给正在播的那首起机翻,起了返回 true。调用方持有 enrichMu。
 func startTranslationBackfillLocked(key string, e enrichEntry) bool {
+	if _, queued := translationQueued[key]; queued && !enrichProvisional[key] && needsTranslationBackfill(e, key) {
+		delete(translationQueued, key)
+		go backfillTranslation(key)
+		return true
+	}
 	if !translationStartableLocked(key, e) {
 		return false
 	}
@@ -68,10 +77,26 @@ func translateUpcomingLocked(key string) bool {
 		return false
 	}
 	translationInflight[key] = true
+	translationQueueSeq++
+	ticket := translationQueueSeq
+	translationQueued[key] = ticket
 	go func() {
 		prefetchTranslateSlot <- struct{}{}
 		defer func() { <-prefetchTranslateSlot }()
-		backfillTranslation(key)
+		// 排队期间可能已被正在播放那一路提走、关了机翻、有了译文或条目被删:轮到时按此刻的条目再判一次。
+		enrichMu.Lock()
+		mine := translationQueued[key] == ticket
+		if mine {
+			delete(translationQueued, key)
+		}
+		run := mine && needsTranslationBackfill(enrichCache[key], key)
+		if mine && !run {
+			delete(translationInflight, key)
+		}
+		enrichMu.Unlock()
+		if run {
+			backfillTranslation(key)
+		}
 	}()
 	return true
 }

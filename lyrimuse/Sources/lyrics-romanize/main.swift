@@ -26,21 +26,28 @@ import LyrimuseCore
 //
 // 协议(stdin/stdout 各一行 JSON):
 //   入:  {"lyrics":"[00:12.34]君の名は\n..."}
-//        启动迁移时多带 "legacy_korean_roma"(缓存里现有的罗马音):它不是旧版韩文读音给这份正文算出来的,
+//        启动迁移时多带 "stale_roma"(缓存里现有的罗马音):它不是我们早先预生成、按现在的算法已经过时的那份,就回
+//        not-stale、不产出(见 LyricsRomanization.refreshedGeneratedRomanization);是就回现在该存的那份,另带
+//        "stale_checked":true。
+//        或者多带 "legacy_korean_roma"(缓存里现有的罗马音):它不是旧版韩文读音给这份正文算出来的,
 //        就回 not-legacy、不产出(见 LyricsRomanization.isLegacyKoreanRomanization);是旧版就照常产出,
 //        另带 "legacy_checked":true。引擎只认带了这个标记的回包(不认这个入参的旧 helper 会照常回一份)。
 //   出:  {"ok":true,"roma":"[00:12.34]kimi no na wa\n..."}
 //        {"ok":true,"roma":"...","legacy_checked":true}
 //        {"ok":false,"reason":"no-romanization"}
 //        {"ok":false,"reason":"not-legacy"}
+//        {"ok":true,"roma":"...","stale_checked":true}
+//        {"ok":false,"reason":"not-stale"}
 
 struct Input: Decodable {
     let lyrics: String
     let legacyKoreanRoma: String?
+    let staleRoma: String?
 
     enum CodingKeys: String, CodingKey {
         case lyrics
         case legacyKoreanRoma = "legacy_korean_roma"
+        case staleRoma = "stale_roma"
     }
 }
 
@@ -49,10 +56,12 @@ struct Output: Encodable {
     var roma: String?
     var reason: String?
     var legacyChecked: Bool?
+    var staleChecked: Bool?
 
     enum CodingKeys: String, CodingKey {
         case ok, roma, reason
         case legacyChecked = "legacy_checked"
+        case staleChecked = "stale_checked"
     }
 }
 
@@ -71,6 +80,12 @@ guard let input = try? JSONDecoder().decode(Input.self, from: data) else {
 }
 guard !input.lyrics.isEmpty else {
     emit(Output(ok: false, reason: "empty-input"))
+}
+if let stored = input.staleRoma {
+    guard let roma = LyricsRomanization.refreshedGeneratedRomanization(stored, lyrics: input.lyrics) else {
+        emit(Output(ok: false, reason: "not-stale"))
+    }
+    emit(Output(ok: true, roma: roma, staleChecked: true))
 }
 var legacyChecked: Bool?
 if let stored = input.legacyKoreanRoma {

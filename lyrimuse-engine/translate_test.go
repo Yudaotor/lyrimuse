@@ -304,10 +304,10 @@ func TestTranslateRejectsSameLanguageSentinel(t *testing.T) {
 	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"responseData":{"translatedText":"PLEASE SELECT TWO DISTINCT LANGUAGES"},"responseStatus":200}`)
 	})
-	_, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL,
+	res, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL,
 		"[00:01.00]hello", "zh-CN", "", "")
-	if err == nil {
-		t.Error("哨兵串应该被当成失败,而不是当译文用")
+	if err != nil || res.lrc != "" {
+		t.Errorf("哨兵串那一块按没翻处理:不当译文用,也不报错(整首没翻出来照样记一次尝试),得到 lrc=%q err=%v", res.lrc, err)
 	}
 }
 

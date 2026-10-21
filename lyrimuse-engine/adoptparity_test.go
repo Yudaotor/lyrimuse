@@ -140,3 +140,24 @@ func TestAdoptExtrasFieldNamesMatchTheApp(t *testing.T) {
 		}
 	}
 }
+
+// 采纳一条译文是借来的候选:条目记成 borrowed:<源>,跟自动选中时一样,不会被当成自带译文。
+func TestApplySaveEditAdoptKeepsBorrowedTranslationSource(t *testing.T) {
+	lang := "zh"
+	e := enrichEntry{Lyrics: bt("[00:01.00]旧")}
+	req := enrichEditRequest{Lyrics: "[00:01.00]君の名は", Tr: "[00:01.00]你的名字", Source: "applemusic", FromManualPick: true, TrLang: &lang, TrFrom: "qq"}
+	if err := applySaveEdit(&e, req); err != nil {
+		t.Fatal(err)
+	}
+	if e.LyricsTrSource != "borrowed:qq" {
+		t.Fatalf("借来的译文该记成 borrowed:qq,得到 %q", e.LyricsTrSource)
+	}
+	e = enrichEntry{Lyrics: bt("[00:01.00]旧")}
+	req.TrFrom = ""
+	if err := applySaveEdit(&e, req); err != nil {
+		t.Fatal(err)
+	}
+	if e.LyricsTrSource != "" {
+		t.Fatalf("自带译文的来源是空串,得到 %q", e.LyricsTrSource)
+	}
+}

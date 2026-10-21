@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"strings"
 	"time"
 	"unicode"
@@ -70,8 +69,6 @@ func startLegacyKoreanRomaMigration(ctx context.Context) {
 	}()
 }
 
-type legacyKoreanRomaItem struct{ key, lyrics, roma string }
-
 // isLegacyKoreanRomaCandidate:有罗马音、正文里有谚文、用户没手改过的条目值得问 helper;是不是旧版由 helper 判。
 func isLegacyKoreanRomaCandidate(e enrichEntry) bool {
 	return !e.Lyrics.IsZero() && !e.LyricsRoma.IsZero() && !e.ManualLyrics &&
@@ -80,72 +77,21 @@ func isLegacyKoreanRomaCandidate(e enrichEntry) bool {
 
 // migrateLegacyKoreanRoma 是迁移本体,返回换了几条。
 func migrateLegacyKoreanRoma(ctx context.Context, scope migrationScope) int {
-	var items []legacyKoreanRomaItem
+	var items []storedRomaItem
 	enrichMu.Lock()
 	for k, e := range scope.entries() {
 		if isLegacyKoreanRomaCandidate(e) {
-			items = append(items, legacyKoreanRomaItem{key: k, lyrics: e.Lyrics.String(), roma: e.LyricsRoma.String()})
+			items = append(items, storedRomaItem{key: k, lyrics: e.Lyrics.String(), roma: e.LyricsRoma.String()})
 		}
 	}
 	enrichMu.Unlock()
-
-	fresh := make(map[string]string)
-	complete := true
-	failed := 0
-	for _, it := range items {
-		if ctx.Err() != nil {
-			complete = false
-			break
-		}
-		roma, err := legacyKoreanRomaRegenerator(it.lyrics, it.roma)
-		if err != nil {
-			complete = false
-			failed++
-			if failed == 1 {
-				warnf("legacy korean romanization: helper failed key=%q: %v", it.key, err)
-			}
-			// 找不到 helper、helper 不认这个入参:后面每一条结果都一样,不再一条条白问。
-			if errors.Is(err, errRomanizeHelperMissing) || errors.Is(err, errLegacyCheckUnsupported) {
-				break
-			}
-			continue
-		}
-		if roma != "" && roma != it.roma {
-			fresh[it.key] = roma
-		}
-	}
-
-	var replaced []string
-	enrichMu.Lock()
-	for _, it := range items {
-		roma, ok := fresh[it.key]
-		if !ok {
-			continue
-		}
-		e, ok := enrichCache[it.key]
-		if !ok || !e.Lyrics.EqualString(it.lyrics) || !e.LyricsRoma.EqualString(it.roma) {
-			continue
-		}
-		e.LyricsRoma = bt(roma)
-		enrichCache[it.key] = e
-		replaced = append(replaced, it.key)
-	}
-	if len(replaced) > 0 {
-		enrichDirty = true // 不置脏 saveEnrichCache 不写盘
-	}
-	enrichMu.Unlock()
-	if len(replaced) > 0 {
-		if err := saveEnrichCacheChecked(); err != nil {
-			// 换好的留在内存里、脏标记已还原,之后哪一次保存成功都会写下;水位不记,下次启动再核一遍。
-			warnf("legacy korean romanization: save failed regenerated=%d: %v", len(replaced), err)
-			complete = false
-		}
-		exportLyricsFilesFor(replaced...)
-	}
-	slog.Info("legacy korean romanization: done", "candidates", len(items), "regenerated", len(replaced),
-		"failed", failed, "complete", complete)
+	replaced, complete := regenerateStoredRoma(ctx, items, storedRomaRegeneration{
+		label:       "legacy korean romanization",
+		regenerate:  func(lyrics, stored string) (string, error) { return legacyKoreanRomaRegenerator(lyrics, stored) },
+		unsupported: errLegacyCheckUnsupported,
+	})
 	if complete {
 		scope.markDone(migrationLegacyKoreanRoma, migrationLegacyKoreanRomaVersion)
 	}
-	return len(replaced)
+	return replaced
 }

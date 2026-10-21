@@ -146,9 +146,14 @@ func TestGainBorrowedTranslation(t *testing.T) {
 	if gainBorrowedTranslation(&e, scored) {
 		t.Fatal("已有可用译文时不再补")
 	}
-	other := enrichEntry{Lyrics: bt(appleLRC + "[01:30.00]もう一行\n")}
+	shifted, _ := borrowJaLyrics(10, 10300, false)
+	moved := enrichEntry{Lyrics: bt(shifted)}
+	if !gainBorrowedTranslation(&moved, scored) || !strings.HasPrefix(moved.LyricsTr.String(), formatLRCTime(10300)+"第0次") {
+		t.Fatalf("正文只差时间戳时按条目自己的时间戳补上,得到:\n%s", moved.LyricsTr.String())
+	}
+	other := enrichEntry{Lyrics: bt("[00:10.00]まったく別の歌\n[00:14.00]知らない言葉\n")}
 	if gainBorrowedTranslation(&other, scored) {
-		t.Fatal("正文不同不补")
+		t.Fatal("正文对不上不补")
 	}
 	inst := enrichEntry{Lyrics: bt(appleLRC), Instrumental: true}
 	if gainBorrowedTranslation(&inst, scored) {
@@ -245,5 +250,55 @@ func TestBorrowedTranslationSplitCoverageAndTail(t *testing.T) {
 	}
 	if !strings.HasSuffix(got, formatLRCTime(34000)+"第3句") {
 		t.Fatalf("最后一句也要配上,得到:\n%s", got)
+	}
+}
+
+// 合并轮按候选自己的字段重打分:借来的译文不算这条自己的,不加分;供体在合并后这批里不在了,借来的那份撤掉。
+func TestMergedRoundsDropBorrowedTranslation(t *testing.T) {
+	withTranslationTarget(t, "zh")
+	appleLRC, _ := borrowJaLyrics(10, 10000, false)
+	qqLRC, qqTr := borrowJaLyrics(10, 10150, true)
+	borrowed, _ := borrowedTranslation(appleLRC, qqLRC, qqTr)
+	withBorrowed := scoredLyricCandidateResult{Source: "applemusic", Score: 1300, Lyrics: appleLRC,
+		LyricsTr: borrowed, LyricsTrLang: "zh", LyricsTrFrom: "qq"}
+	if lyricCandidateFromScored(withBorrowed).hasUsableTranslation {
+		t.Fatal("借来的译文不该算这条自己的可用译文")
+	}
+	own := withBorrowed
+	own.LyricsTrFrom = ""
+	if !lyricCandidateFromScored(own).hasUsableTranslation {
+		t.Fatal("自带的同一份译文照常算可用")
+	}
+	merged := mergeLyricCandidateRounds("", "", "", 0, []scoredLyricCandidateResult{withBorrowed}, nil)
+	if len(merged) != 1 || merged[0].LyricsTr != "" || merged[0].LyricsTrFrom != "" {
+		t.Fatalf("供体不在这一批,借来的译文要撤掉,得到 from=%q tr=%q", merged[0].LyricsTrFrom, merged[0].LyricsTr)
+	}
+	merged = mergeLyricCandidateRounds("", "", "", 0, []scoredLyricCandidateResult{withBorrowed},
+		[]scoredLyricCandidateResult{{Source: "qq", Score: 1100, Lyrics: qqLRC, LyricsTr: qqTr, LyricsTrLang: "zh"}})
+	var apple *scoredLyricCandidateResult
+	for i := range merged {
+		if merged[i].Source == "applemusic" {
+			apple = &merged[i]
+		}
+	}
+	if apple == nil || apple.LyricsTrFrom != "qq" {
+		t.Fatal("供体还在,合并后照样借到")
+	}
+}
+
+// 供体同一时刻两行、译文也两条:按先后各配各的,不都配到第一条。
+func TestBorrowedTranslationSameStampLines(t *testing.T) {
+	var lrc, tr strings.Builder
+	for i := 0; i < 8; i++ {
+		ts := formatLRCTime(10000 + i*4000)
+		lrc.WriteString(fmt.Sprintf("%s君の名前を呼んだ%d回目の夜\n%s遠くの空を見上げた%d度目の朝\n", ts, i, ts, i))
+		tr.WriteString(fmt.Sprintf("%s第%d次呼唤你名字的夜晚\n%s第%d次仰望远方天空的早晨\n", ts, i, ts, i))
+	}
+	got, ok := borrowedTranslation(lrc.String(), lrc.String(), tr.String())
+	if !ok {
+		t.Fatal("正文相同,应借到译文")
+	}
+	if !strings.Contains(got, formatLRCTime(10000)+"第0次呼唤你名字的夜晚") || !strings.Contains(got, formatLRCTime(10000)+"第0次仰望远方天空的早晨") {
+		t.Fatalf("同一时刻的两行应各配各的译文,得到:\n%s", got)
 	}
 }

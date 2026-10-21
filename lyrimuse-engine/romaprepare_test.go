@@ -67,3 +67,15 @@ func TestRetryAndRescoreDoNotRomanizeUnderLock(t *testing.T) {
 		}
 	}
 }
+
+// 升级重试换上一字不差的正文、新候选不带读音时,留着现有那份读音(锁外没为同一份正文预算)。
+func TestLyricsUpgradeKeepsRomaForSameLyrics(t *testing.T) {
+	b, err := os.ReadFile("enrich.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsCode(string(b), "if picked.LyricsRoma == \"\" && e.Lyrics.EqualString(picked.Lyrics) {\n\t\t\tkeptRoma = e.LyricsRoma\n\t\t}") ||
+		!containsCode(string(b), "if !keptRoma.IsZero() {\n\t\t\te.LyricsRoma = keptRoma\n\t\t}") {
+		t.Fatal("升级重试换同文正文时没留读音")
+	}
+}
