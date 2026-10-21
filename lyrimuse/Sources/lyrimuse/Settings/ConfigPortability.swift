@@ -66,6 +66,7 @@ enum ConfigPortability {
     ///   配对才有意义,一起留在这台机器。
     /// - `notchScreenID`:灵动岛显示在哪块屏幕上,存的是屏幕身份串。这个 ID 在新机器上
     ///   一定解析不出对应屏幕(设置页为此专门有一档"已断开的屏幕"占位)。
+    /// - `menuBarCenterScreen`:「菜单栏正中」放哪几块屏,可能存的是屏幕身份串,理由同上。
     ///
     /// ### 装没装 LaunchAgent:是机器状态,不是开关状态
     ///
@@ -104,6 +105,7 @@ enum ConfigPortability {
         "np:overlayPositionOrigin",
         "np:overlayControlsBelowCard",
         "np:notchScreenID",
+        "np:menuBarCenterScreen",
         // 歌词窗口的位置/尺寸与它所在的那块屏幕。判据跟上面
         // np:overlayPosition* 一字不差:存的是绝对屏幕坐标 + 一块具体显示器的 UUID,
         // 新机器的显示器尺寸/排布/UUID 全不一样,搬过去只会把窗口摆到看不见的地方。

@@ -92,9 +92,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case saveConfig
         /// 关掉 / 接回一条来源(`debug/knockout?leg=<名字>&on=0|1`,`on=0` 关掉):验证退路撑不撑得住,见 `SourceKnockout`。
         case knockout(leg: SourceKnockout.Leg, on: Bool)
-        /// 菜单栏歌词放正中 / 放回图标旁(`center`),以及当作没有刘海、直接压在屏幕正中(`ignoreNotch`,不落盘,
-        /// App 重启复原):`debug/menubar-center?center=1&ignore-notch=1`,至少带一个。刘海屏的开发机靠它验无刘海屏的摆法。
-        case menuBarCenter(center: Bool?, ignoreNotch: Bool?)
+        /// 菜单栏歌词放正中 / 放回图标旁(`center`)、正中放哪几块屏(`screen`:all / auto / 屏幕身份串,同设置页「显示在」),
+        /// 以及当作没有刘海、直接压在屏幕正中(`ignoreNotch`,不落盘,App 重启复原):
+        /// `debug/menubar-center?center=1&screen=all&ignore-notch=1`,至少带一个。刘海屏的开发机靠它验无刘海屏的摆法。
+        case menuBarCenter(center: Bool?, ignoreNotch: Bool?, screen: String? = nil)
     }
 
     /// `action/` 下不对应快捷键的那几个名字(跟 `LyrimuseAction.linkName` 不能重名,selftest 核对)。
@@ -201,8 +202,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/menubar-center"):
             let center = value("center").flatMap(Self.parseBool)
             let ignoreNotch = value("ignore-notch").flatMap(Self.parseBool)
-            guard center != nil || ignoreNotch != nil else { return nil }
-            self = .debug(.menuBarCenter(center: center, ignoreNotch: ignoreNotch))
+            let screen = value("screen").flatMap { $0.isEmpty ? nil : $0 }
+            guard center != nil || ignoreNotch != nil || screen != nil else { return nil }
+            self = .debug(.menuBarCenter(center: center, ignoreNotch: ignoreNotch, screen: screen))
         case ("lastfm-auth-callback", _):
             self = .lastfmAuthCallback
         default:
@@ -307,10 +309,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .knockout(leg, on):
                 components.path = "/knockout"
                 components.queryItems = [URLQueryItem(name: "leg", value: leg.rawValue), URLQueryItem(name: "on", value: on ? "1" : "0")]
-            case let .menuBarCenter(center, ignoreNotch):
+            case let .menuBarCenter(center, ignoreNotch, screen):
                 components.path = "/menubar-center"
                 components.queryItems = (center.map { [URLQueryItem(name: "center", value: $0 ? "1" : "0")] } ?? [])
                     + (ignoreNotch.map { [URLQueryItem(name: "ignore-notch", value: $0 ? "1" : "0")] } ?? [])
+                    + (screen.map { [URLQueryItem(name: "screen", value: $0)] } ?? [])
             }
         case .lastfmAuthCallback:
             components.host = "lastfm-auth-callback"

@@ -1649,9 +1649,18 @@ func runMenuBarTests() {
         typealias L = MenuBarCenterLayout
         let plain = L.ScreenCandidate(islandHere: false)
         let island = L.ScreenCandidate(islandHere: true)
-        expectEqual(L.pickScreen([plain, plain]), 0, "正中选屏: 主屏能用就用主屏")
-        expectEqual(L.pickScreen([island, plain]), 1, "正中选屏: 灵动岛占着的屏不用")
-        expectEqual(L.pickScreen([island]) == nil && L.pickScreen([]) == nil, true, "正中选屏: 灵动岛占着唯一的屏时不放正中")
+        let noBar = L.ScreenCandidate(islandHere: false, hasMenuBar: false)
+        expectEqual(L.pickScreens([plain, plain, plain], choice: .all), [0, 1, 2], "正中选屏: 全部屏幕每块各放一扇")
+        expectEqual(L.pickScreens([island, plain, noBar], choice: .all), [1],
+                    "正中选屏: 全部屏幕跳过灵动岛占着的、没有菜单栏的")
+        expectEqual(L.pickScreens([plain, plain], choice: .auto), [0], "正中选屏: 自动用主屏")
+        expectEqual(L.pickScreens([island, plain], choice: .auto), [1], "正中选屏: 自动时主屏被灵动岛占着换下一块")
+        expectEqual(L.pickScreens([plain, plain], choice: .specific(1)), [1], "正中选屏: 指定哪块放哪块")
+        expectEqual(L.pickScreens([plain, island], choice: .specific(1)), [], "正中选屏: 指定的屏被灵动岛占着不挪到别的屏")
+        expectEqual(L.pickScreens([island, plain], choice: .specific(nil)), [1], "正中选屏: 指定的屏没接着按自动")
+        expectEqual(L.pickScreens([plain], choice: .specific(3)), [], "正中选屏: 下标越界不放")
+        expectEqual(L.pickScreens([island], choice: .all).isEmpty && L.pickScreens([], choice: .auto).isEmpty, true,
+                    "正中选屏: 灵动岛占着唯一的屏时不放正中")
 
         let span = L.usableSpan(screenMinX: 0, screenMaxX: 1440, menusMaxX: 400, statusItemsMinX: 1000)
         expectEqual(span, 416...984, "正中区间: 两侧各让出 clearance")
@@ -1720,10 +1729,17 @@ func runMenuBarTests() {
                     && center.contains("queue.async"), true,
                     "菜单栏正中: 辅助功能读两侧放后台队列、带超时")
         let item = src("MenuBarStatusItem.swift")
-        expectEqual(sourceHas(item, "if centerWanted, let screen = MenuBarCenterLyrics.targetScreen() {")
+        expectEqual(sourceHas(item, "let centerScreens = centerWanted ? MenuBarCenterLyrics.targetScreens() : []\nif !centerScreens.isEmpty {")
                     && sourceHas(item, "present(class: \"icon\", length: iconSlotLength, collapseDelay: 0)"),
                     true, "菜单栏正中: 用上时状态栏那一格只留图标")
-        expectEqual(sourceHas(item, "for label in [scrollingLabel, centerLyrics.label] {\nlabel.updateKaraokeClock("), true,
-                    "菜单栏正中: 染色时钟两份标签一起喂")
+        expectEqual(sourceHas(item, "for label in [scrollingLabel] + centerLyrics.labels {\nlabel.updateKaraokeClock(")
+                    && sourceHas(item, "for label in [scrollingLabel] + centerLyrics.labels {\nlabel.updateProgressClock("), true,
+                    "菜单栏正中: 染色和进度时钟每一扇都喂")
+        expectEqual(sourceHas(item, "if lyricsActive, MenuBarOccupancy.shared.isReady {"), true,
+                    "菜单栏正中: 两侧第一轮读全之前不出来,免得刘海屏上先落到右边再跳到左边")
+        expectEqual(sourceHas(item, "centerLyrics.keep(only: placed)"), true,
+                    "菜单栏正中: 这一轮没放上的屏(换了显示在、拔了显示器、两侧放不下)当场收掉")
+        expectEqual(center.contains("hasMenuBar: separateSpaces || index == 0"), true,
+                    "菜单栏正中: 关了「显示器具有单独的空间」时只有主屏有菜单栏")
     }
 }

@@ -20,15 +20,36 @@ public enum MenuBarCenterLayout {
     public struct ScreenCandidate: Equatable, Sendable {
         /// 灵动岛在这块屏上(它占着菜单栏正中和刘海两侧)。
         public let islandHere: Bool
-        public init(islandHere: Bool) {
+        /// 这块屏有自己的菜单栏。系统设置里关了「显示器具有单独的空间」时只有主屏有,别的屏顶上画歌词就是悬在半空。
+        public let hasMenuBar: Bool
+        public init(islandHere: Bool, hasMenuBar: Bool = true) {
             self.islandHere = islandHere
+            self.hasMenuBar = hasMenuBar
         }
+        var usable: Bool { hasMenuBar && !islandHere }
     }
 
-    /// 选哪块屏:主屏(第 0 块,带菜单栏的那块)能用就用它,否则第一块能用的。灵动岛占着的屏不算。
-    /// nil = 没有能用的,歌词照旧在图标旁。
-    public static func pickScreen(_ candidates: [ScreenCandidate]) -> Int? {
-        candidates.firstIndex { !$0.islandHere }
+    /// 「显示在」那一项选的是什么。
+    public enum ScreenChoice: Equatable, Sendable {
+        /// 每块有菜单栏的屏各放一扇(默认,跟状态栏那一格每块屏的菜单栏上都有一份一致)。
+        case all
+        /// 只放一块:主屏(第 0 块)能用就用它,否则第一块能用的。
+        case auto
+        /// 指定的那块屏(下标);它现在没接着时传 nil,按「自动」放。
+        case specific(Int?)
+    }
+
+    /// 放哪几块屏(按下标,升序)。灵动岛占着的、没有菜单栏的屏不算;空 = 一块都不放,歌词照旧在图标旁。
+    /// 指定的屏接着但不能用(灵动岛在那儿)时也是空,不挪到别的屏。
+    public static func pickScreens(_ candidates: [ScreenCandidate], choice: ScreenChoice) -> [Int] {
+        switch choice {
+        case .all:
+            return candidates.indices.filter { candidates[$0].usable }
+        case .auto, .specific(nil):
+            return candidates.firstIndex { $0.usable }.map { [$0] } ?? []
+        case .specific(let index?):
+            return candidates.indices.contains(index) && candidates[index].usable ? [index] : []
+        }
     }
 
     /// 菜单栏里能放歌词的那一段(全局横坐标)。`menusMaxX` 是前台 App 菜单的右缘,`statusItemsMinX` 是状态栏图标的左缘,

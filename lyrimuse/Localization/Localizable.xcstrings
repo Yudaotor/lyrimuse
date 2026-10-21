@@ -53094,6 +53094,29 @@
           }
         }
       }
+    },
+    "「全部屏幕」在每块屏幕的菜单栏上各显示一份；「自动」优先主屏幕；指定的屏幕断开时按「自动」显示。灵动岛所在的屏幕不显示" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Displays shows a copy in the menu bar of every display; Automatic prefers the main display; a chosen display that is disconnected falls back to Automatic. Not shown on the display with Notch Lyrics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「全部屏幕」在每块屏幕的菜单栏上各显示一份；「自动」优先主屏幕；指定的屏幕断开时按「自动」显示。灵动岛所在的屏幕不显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「全部螢幕」在每塊螢幕的選單列上各顯示一份；「自動」優先主螢幕；指定的螢幕中斷連接時按「自動」顯示。動態島所在的螢幕不顯示"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

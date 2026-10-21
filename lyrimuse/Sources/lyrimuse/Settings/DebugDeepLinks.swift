@@ -63,9 +63,10 @@ enum DebugDeepLinks {
         case let .knockout(leg, on):
             SourceKnockout.set(leg, out: !on)
             LocalPlaybackSource.shared.simulationChanged()
-        case let .menuBarCenter(center, ignoreNotch):
+        case let .menuBarCenter(center, ignoreNotch, screen):
             if let ignoreNotch { MenuBarCenterLyrics.ignoresNotchForDebug = ignoreNotch }
             if let center { AppSettings.shared.menuBarLyricsPlacement = center ? .screenCenter : .statusItem }
+            if let screen { AppSettings.shared.menuBarCenterScreen = screen }
             MenuBarStatusItem.shared.setNeedsRefresh()
             logger.notice("debug menubar center=\(String(describing: center), privacy: .public) ignoreNotch=\(String(describing: ignoreNotch), privacy: .public)")
         }

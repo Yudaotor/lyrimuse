@@ -458,6 +458,7 @@ enum MenuBarStyleDefaults {
         settings.menuBarSecondaryLine = AppSettings.defaultMenuBarSecondaryLine
         settings.menuBarLyricsIconPosition = AppSettings.defaultMenuBarLyricsIconPosition
         settings.menuBarLyricsPlacement = AppSettings.defaultMenuBarLyricsPlacement
+        settings.menuBarCenterScreen = AppSettings.defaultMenuBarCenterScreen
         // 「配色」浮层
         settings.menuBarLyricsKaraoke = AppSettings.defaultMenuBarLyricsKaraoke
         settings.menuBarLyricsTextColorHex = AppSettings.defaultMenuBarLyricsTextColorHex
@@ -487,6 +488,10 @@ struct MenuBarLayoutRows: View {
             VStack(spacing: 0) {
                 MenuBarPlacementRow()
                 CardDivider()
+                if settings.menuBarLyricsPlacement == .screenCenter {
+                    MenuBarCenterScreenRow()
+                    CardDivider()
+                }
                 // 放在菜单栏正中时窗口宽跟着内容走、恒居中,宽度模式与对齐方式管不到;用不上正中(灵动岛占着)时
                 // 歌词还在图标那一格,照常显示。
                 if !MenuBarPlacementRow.centerInUse(settings) {
@@ -609,7 +614,7 @@ struct MenuBarPlacementRow: View {
 
     /// 放正中这一档此刻真的在用(选了、也有能用的屏)。
     static func centerInUse(_ settings: AppSettings) -> Bool {
-        settings.menuBarLyricsPlacement == .screenCenter && MenuBarCenterLyrics.targetScreen() != nil
+        settings.menuBarLyricsPlacement == .screenCenter && !MenuBarCenterLyrics.targetScreens().isEmpty
     }
 
     static func label(for placement: MenuBarLyricsPlacement) -> String {
@@ -621,7 +626,7 @@ struct MenuBarPlacementRow: View {
 
     /// 选了正中、但这一刻用不上的原因(只剩灵动岛占着所有屏这一种)。
     private var unavailableNote: String? {
-        guard settings.menuBarLyricsPlacement == .screenCenter, MenuBarCenterLyrics.targetScreen() == nil else { return nil }
+        guard settings.menuBarLyricsPlacement == .screenCenter, MenuBarCenterLyrics.targetScreens().isEmpty else { return nil }
         return L10n.t("灵动岛占着菜单栏中间，歌词仍显示在图标旁")
     }
 
@@ -653,6 +658,51 @@ struct MenuBarPlacementRow: View {
             }
         }
         .onAppear { permission.refresh() }
+    }
+}
+
+/// 「显示在」行 —— 「菜单栏正中」放哪几块屏:全部屏幕 / 自动 / 指定某块屏(选项排法同灵动岛的
+/// `NotchScreenSettingsRows`)。只在选了「菜单栏正中」时出现:图标旁那一格由系统在每块屏的菜单栏上各放一份,管不了。
+struct MenuBarCenterScreenRow: View {
+    @ObservedObject private var settings = AppSettings.shared
+    /// 选项来源的快照:插拔显示器时 SwiftUI 不会因为全局数组变了就重算 body,靠下面那条通知刷新。
+    @State private var availableScreens: [NSScreen] = NSScreen.screens
+
+    /// 全部屏幕、自动、接着的每块屏;存着的那块屏现在没接着时补一项「已断开的屏幕」,不然没有一项是选中的。
+    private var options: [(tag: String, name: String)] {
+        var out: [(tag: String, name: String)] = [
+            (AppSettings.menuBarCenterAllScreens, L10n.t("全部屏幕")),
+            (AppSettings.menuBarCenterAutoScreen, L10n.t("自动")),
+        ]
+        for screen in availableScreens {
+            if let id = ScreenIdentity.id(of: screen) { out.append((id, screen.localizedName)) }
+        }
+        let current = settings.menuBarCenterScreen
+        if !out.contains(where: { $0.tag == current }) {
+            out.append((current, L10n.t("已断开的屏幕")))
+        }
+        return out
+    }
+
+    var body: some View {
+        SettingsRow(
+            icon: "display",
+            title: L10n.t("显示在"),
+            help: L10n.t("「全部屏幕」在每块屏幕的菜单栏上各显示一份；「自动」优先主屏幕；指定的屏幕断开时按「自动」显示。灵动岛所在的屏幕不显示")
+        ) {
+            let options = options
+            SettingsGlassMenuPicker(
+                selection: $settings.menuBarCenterScreen,
+                options: options.map(\.tag),
+                label: { tag in options.first { $0.tag == tag }?.name ?? "" },
+                compact: true
+            )
+        }
+        // 搜索目录里这一项按「屏幕」登记,同灵动岛那一行。
+        .settingsSearchHighlight(title: L10n.t("屏幕"))
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            availableScreens = NSScreen.screens
+        }
     }
 }
 

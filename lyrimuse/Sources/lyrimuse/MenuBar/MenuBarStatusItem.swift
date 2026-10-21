@@ -75,7 +75,8 @@ final class MenuBarStatusItem: NSObject {
         NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification)
             .sink { [weak self] note in
                 guard let self, let window = note.object as? NSWindow,
-                      window === self.statusItem?.button?.window || window === self.centerLyrics.window else { return }
+                      window === self.statusItem?.button?.window
+                        || self.centerLyrics.windows.contains(where: { $0 === window }) else { return }
                 self.applyAnimationPause()
             }.store(in: &cancellables)
         NSWorkspace.shared.notificationCenter
@@ -168,6 +169,8 @@ final class MenuBarStatusItem: NSObject {
         // 状态栏图标)变了都要重摆。
         settings.$menuBarLyricsPlacement.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
+        settings.$menuBarCenterScreen.dropFirst().receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         Publishers.Merge5(settings.$notchOverlayEnabled.map { _ in () }, settings.$notchAllScreens.map { _ in () },
                           settings.$notchScreenID.map { _ in () }, settings.$notchFollowsActiveScreen.map { _ in () },
                           NotchFollowedScreen.shared.$id.map { _ in () })
@@ -234,13 +237,13 @@ final class MenuBarStatusItem: NSObject {
         settings.$menuBarLyricsTextColorHex.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.scrollingLabel.refreshColors()
-                self?.centerLyrics.label.refreshColors()
+                self?.centerLyrics.labels.forEach { $0.refreshColors() }
                 self?.scheduleRefresh()
             }.store(in: &cancellables)
         settings.$menuBarLyricsFillColorHex.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.scrollingLabel.refreshColors()
-                self?.centerLyrics.label.refreshColors()
+                self?.centerLyrics.labels.forEach { $0.refreshColors() }
             }.store(in: &cancellables)
         // 逐字染色的对表通道:锚点(每次 poll ~2s 重发一次 + seek/暂停/恢复)、暂停位置、
         // 时间轴偏移任一变化都重新对一次表。这条**不走 refresh**(不涉及槽位/内容,只是
@@ -292,7 +295,6 @@ final class MenuBarStatusItem: NSObject {
 
     private var screensHidden = false
     private var labelAnimationsPaused = false
-    private var centerAnimationsPaused = false
 
     /// 按钮此刻反白没有(右键菜单或面板开着)。只有「自定义文字色 + 文字直接画在按钮上」那条路要知道它,
     /// 图层那条路自己有 setHighlighted。
@@ -310,15 +312,10 @@ final class MenuBarStatusItem: NSObject {
         let windowVisible = statusItem?.button?.window?.occlusionState.contains(.visible) ?? true
         let paused = screensHidden || !windowVisible
         liveIconView.setAnimationsPaused(paused || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
-        // 正中那扇窗口各看各的(可能在另一块屏上),恢复时同样强制对一次表。
-        let centerPaused = screensHidden || !(centerLyrics.window?.occlusionState.contains(.visible) ?? true)
-        if centerPaused != centerAnimationsPaused {
-            centerAnimationsPaused = centerPaused
-            centerLyrics.label.setAnimationsPaused(centerPaused)
-            if !centerPaused {
-                syncKaraokeClock(force: true)
-                syncProgressClock(force: true)
-            }
+        // 正中那几扇窗口各看各的(各在各的屏上),有一扇恢复时同样强制对一次表。
+        if centerLyrics.applyAnimationPause(screensHidden: screensHidden) {
+            syncKaraokeClock(force: true)
+            syncProgressClock(force: true)
         }
         guard paused != labelAnimationsPaused else { return }
         labelAnimationsPaused = paused
@@ -339,7 +336,7 @@ final class MenuBarStatusItem: NSObject {
         } else {
             raw = coordinator.pausedPositionMs
         }
-        for label in [scrollingLabel, centerLyrics.label] {
+        for label in [scrollingLabel] + centerLyrics.labels {
             label.updateKaraokeClock(
                 positionMs: raw.map { $0 + coordinator.currentLyricsOffsetMs },
                 rate: coordinator.anchor?.rate ?? 0,
@@ -365,7 +362,7 @@ final class MenuBarStatusItem: NSObject {
             ?? coordinator.pausedPositionMs
         let duration = [anchor?.durationMs, coordinator.currentDurationMs]
             .compactMap { $0 }.first { $0 > 0 }
-        for label in [scrollingLabel, centerLyrics.label] {
+        for label in [scrollingLabel] + centerLyrics.labels {
             label.updateProgressClock(
                 positionMs: raw, durationMs: duration,
                 rate: anchor?.rate ?? 0, playing: coordinator.isPlayingNow, force: force)
@@ -1184,24 +1181,29 @@ final class MenuBarStatusItem: NSObject {
         let placeholderNow = titleFallbackActive || MenuBarMarqueeRenderer.isPlaceholder(text)
         let upcomingW = upcomingLineSlotWidth(isPlaceholder: placeholderNow)
 
-        // 「菜单栏正中」:有能用的屏时歌词画进正中那扇窗口,状态栏这一格只留图标(那一格的槽宽规则、节流都不涉及)。
-        // 没有能用的屏(灵动岛占着)时整段跳过,照旧走下面状态栏那一格。
+        // 「菜单栏正中」:有能用的屏时歌词画进那几块屏正中的窗口,状态栏这一格只留图标(那一格的槽宽规则、节流都不涉及)。
+        // 一块能用的屏都没有(灵动岛占着、选的那块被占)时整段跳过,照旧走下面状态栏那一格。
         let centerWanted = settings.showLyricsInMenuBar && settings.menuBarLyricsPlacement == .screenCenter
         MenuBarOccupancy.shared.setActive(centerWanted)
-        if centerWanted, let screen = MenuBarCenterLyrics.targetScreen() {
+        let centerScreens = centerWanted ? MenuBarCenterLyrics.targetScreens() : []
+        if !centerScreens.isEmpty {
             present(class: "icon", length: iconSlotLength, collapseDelay: 0) {
                 showIcon($0)
             }
-            if lyricsActive, let span = centerLyrics.span(on: screen) {
-                presentCenter(text: text, on: screen, span: span, dwell: dwell, leadIn: leadIn,
+            if lyricsActive, MenuBarOccupancy.shared.isReady {
+                presentCenter(text: text, on: centerScreens, dwell: dwell, leadIn: leadIn,
                               icon: lyricsIconBadge(), karaoke: true)
+            } else if lyricsActive {
+                // 两侧还没读全(刚打开、第一轮扫描约 3 秒),先不出来,扫完那一下 onChange 会补一次重算。
+                centerLyrics.keep(only: [])
             } else {
-                // 歌词间隙 / 暂停先留一会儿,跟状态栏那一格同一个保持时长;两侧挤得放不下时立刻收。
-                centerLyrics.hide(after: lyricsActive ? 0 : Self.iconContentHoldSecs)
+                // 歌词间隙 / 暂停先留一会儿,跟状态栏那一格同一个保持时长。
+                centerLyrics.keep(only: centerScreens)
+                centerLyrics.hide(after: Self.iconContentHoldSecs)
             }
             return
         }
-        centerLyrics.hide()
+        centerLyrics.keep(only: [])
 
         // 没开菜单栏歌词 / 没在播放 / 当前句为空:收回小图标槽。槽宽 = 当前图标款式的
         // 图宽 + fixedSlotPadding,跟歌词态同一套"出生就带显式宽度"规则(variableLength 出生、
@@ -1320,42 +1322,41 @@ final class MenuBarStatusItem: NSObject {
         }
     }
 
-    /// 把这一句画进「菜单栏正中」那扇窗口。窗口宽跟着内容走(不超过「最大宽度」,也不超过两侧之间那一段),
-    /// 以屏幕中线居中;装不下就在这个宽里滚 —— 断句、配速、提前量、染色、副行都跟状态栏那一格同一套。
-    /// `karaoke`:要不要挂逐字填色和跟唱滚动(快捷键回声不挂)。
-    private func presentCenter(text: String, on screen: NSScreen, span: ClosedRange<CGFloat>,
-                               dwell: Double?, leadIn: Double,
+    /// 把这一句画进「菜单栏正中」那几扇窗口,每块屏一扇。窗口宽跟着内容走(不超过「最大宽度」,也不超过那块屏两侧之间那一段),
+    /// 以屏幕中线居中(有刘海时紧挨着刘海);装不下就在这个宽里滚 —— 断句、配速、提前量、染色、副行都跟状态栏那一格同一套。
+    /// 两侧挤得放不下的屏不放。`karaoke`:要不要挂逐字填色和跟唱滚动(快捷键回声不挂)。
+    private func presentCenter(text: String, on screens: [NSScreen], dwell: Double?, leadIn: Double,
                                icon: MenuBarScrollingLabel.IconBadge?, karaoke: Bool) {
         let reserved = MenuBarProgressIcon.reservedWidth(for: icon?.style)
-        let cap = min(AppSettings.shared.menuBarLyricsWidth,
-                      span.upperBound - span.lowerBound - reserved - Self.lyricsSlotPadding)
-        guard cap > 0 else {
-            centerLyrics.hide()
-            return
-        }
         let mainW = MenuBarMarqueeRenderer.width(of: text, font: rowState.mainFont)
         let secondaryW = rowState.secondaryText.map {
             MenuBarMarqueeRenderer.width(of: $0, font: MenuBarMarqueeRenderer.doubleRowSecondaryFont,
                                          translation: rowState.kind == .translation)
         } ?? 0
-        let naturalW = MenuBarSlotPolicy.naturalWidth(
-            mainWidth: mainW, secondaryWidth: secondaryW, twoRows: rowState.twoRows,
-            secondaryKind: rowState.kind, maxWidth: cap)
-        guard case .fixed(let lineText, let win, let pacing) = MenuBarMarqueeRenderer.presentation(
-            for: text, windowWidth: min(cap, naturalW.rounded(.up)), dwellSeconds: dwell,
-            leadInSeconds: leadIn, widthMode: .fixed, font: rowState.mainFont)
-        else {
-            centerLyrics.hide()
-            return
+        let fillPath = karaoke ? karaokeFillPath(for: text) : nil
+        let followPath = karaoke ? followReadingPath(for: text) : nil
+        let gap = gapWindow(for: text)
+        var placed: [NSScreen] = []
+        for screen in screens {
+            guard let span = centerLyrics.span(on: screen) else { continue }
+            let cap = min(AppSettings.shared.menuBarLyricsWidth,
+                          span.upperBound - span.lowerBound - reserved - Self.lyricsSlotPadding)
+            guard cap > 0 else { continue }
+            let naturalW = MenuBarSlotPolicy.naturalWidth(
+                mainWidth: mainW, secondaryWidth: secondaryW, twoRows: rowState.twoRows,
+                secondaryKind: rowState.kind, maxWidth: cap)
+            guard case .fixed(let lineText, let win, let pacing) = MenuBarMarqueeRenderer.presentation(
+                for: text, windowWidth: min(cap, naturalW.rounded(.up)), dwellSeconds: dwell,
+                leadInSeconds: leadIn, widthMode: .fixed, font: rowState.mainFont)
+            else { continue }
+            placed.append(screen)
+            let label = centerLyrics.show(on: screen, span: span, contentWidth: win + reserved + Self.lyricsSlotPadding)
+            label.present(text: lineText, windowWidth: win, pacing: pacing,
+                          fillPath: fillPath, followPath: followPath, icon: icon,
+                          secondaryText: rowState.secondaryText, secondaryKind: rowState.kind,
+                          gapWindow: gap)
         }
-        centerLyrics.show(on: screen, span: span, contentWidth: win + reserved + Self.lyricsSlotPadding)
-        let fillPath = karaoke ? karaokeFillPath(for: lineText) : nil
-        let followPath = karaoke ? followReadingPath(for: lineText) : nil
-        let gap = gapWindow(for: lineText)
-        centerLyrics.label.present(text: lineText, windowWidth: win, pacing: pacing,
-                                   fillPath: fillPath, followPath: followPath, icon: icon,
-                                   secondaryText: rowState.secondaryText, secondaryKind: rowState.kind,
-                                   gapWindow: gap)
+        centerLyrics.keep(only: placed)
         // 同 showFixedWidth 末尾:换句后立刻按真实播放位置对一次表。
         if fillPath != nil || followPath != nil || gap != nil { syncKaraokeClock(force: true) }
         if icon != nil { syncProgressClock(force: true) }
@@ -1372,15 +1373,9 @@ final class MenuBarStatusItem: NSObject {
             "ignoresNotch": MenuBarCenterLyrics.ignoresNotchForDebug,
             "statusItemClass": displayClass,
         ]
-        if let frame = centerLyrics.window?.frame {
-            out["frame"] = [frame.minX, frame.minY, frame.width, frame.height]
-        }
-        if let layout = centerLyrics.lastLayout {
-            out["span"] = [layout.span.lowerBound, layout.span.upperBound]
-            out["menusMaxX"] = layout.menusMaxX.map { $0 as Any } ?? NSNull()
-            out["statusItemsMinX"] = layout.statusItemsMinX.map { $0 as Any } ?? NSNull()
-            out["screen"] = [layout.screen.minX, layout.screen.minY, layout.screen.width, layout.screen.height]
-        }
+        out["screenSetting"] = AppSettings.shared.menuBarCenterScreen
+        out["targetScreens"] = MenuBarCenterLyrics.targetScreens().map { ScreenIdentity.id(of: $0) ?? "" }
+        out["slots"] = centerLyrics.debugSlots
         return out
     }
 
@@ -1419,12 +1414,11 @@ final class MenuBarStatusItem: NSObject {
     /// 头注)。槽此刻是图标(没在显示歌词)、悬停三键接管着时不画(14 章决策 60)。
     func flashHint(_ text: String, seconds: TimeInterval) {
         // 「菜单栏正中」正显示着歌词时回声画在那里(状态栏那一格此刻只有图标)。
-        if centerLyrics.isShowing, let screen = MenuBarCenterLyrics.targetScreen(),
-           let span = centerLyrics.span(on: screen) {
+        if centerLyrics.isShowing, case let screens = MenuBarCenterLyrics.targetScreens(), !screens.isEmpty {
             hintActive = true
             rowState = RowState(kind: .off, secondaryText: nil,
                                 mainFont: MenuBarMarqueeRenderer.mainFont(for: text, twoRows: false))
-            presentCenter(text: text, on: screen, span: span, dwell: nil, leadIn: 0, icon: nil, karaoke: false)
+            presentCenter(text: text, on: screens, dwell: nil, leadIn: 0, icon: nil, karaoke: false)
             scheduleHintEnd(after: seconds)
             return
         }

@@ -294,6 +294,7 @@ final class AppSettings: ObservableObject {
         static let menuBarLyricsFillColorHex = "np:menuBarLyricsFillColorHex"
         static let menuBarLyricsIconPosition = "np:menuBarLyricsIconPosition"
         static let menuBarLyricsPlacement = "np:menuBarLyricsPlacement"
+        static let menuBarCenterScreen = "np:menuBarCenterScreen"
         static let menuBarLyricsFontFamily = "np:menuBarLyricsFontFamily"
         static let menuBarLyricsFontWeight = "np:menuBarLyricsFontWeight"
         static let menuBarLyricsFontSize = "np:menuBarLyricsFontSize"
@@ -597,6 +598,11 @@ final class AppSettings: ObservableObject {
     static let defaultMenuBarLyricsIconPosition = MenuBarLyricsIconPosition.leading
     /// 菜单栏歌词的位置。在「重置」范围内(`MenuBarStyleDefaults.restoreDefaults()`)。
     static let defaultMenuBarLyricsPlacement = MenuBarLyricsPlacement.statusItem
+    /// 「菜单栏正中」放哪几块屏(`menuBarCenterScreen`)的两个固定取值;别的值是某块屏的 `ScreenIdentity`。
+    static let menuBarCenterAllScreens = "all"
+    static let menuBarCenterAutoScreen = "auto"
+    /// 默认每块屏的菜单栏都放,跟状态栏那一格每块屏都有一份一致。在「重置」范围内。
+    static let defaultMenuBarCenterScreen = menuBarCenterAllScreens
     /// 见 `menuBarHoverShowsControls`。默认关。在「重置」范围内,所以需要命名常量:
     /// `init()` 的兜底和重置按钮读同一份。
     static let defaultMenuBarHoverShowsControls = false
@@ -1092,6 +1098,10 @@ final class AppSettings: ObservableObject {
     // 菜单栏歌词显示在图标旁还是菜单栏正中。见 MenuBarLyricsPlacement。
     @Published var menuBarLyricsPlacement: MenuBarLyricsPlacement {
         didSet { defaults.set(menuBarLyricsPlacement.rawValue, forKey: Keys.menuBarLyricsPlacement) }
+    }
+    // 「菜单栏正中」放哪几块屏:全部 / 自动 / 某块屏的 ScreenIdentity(那块没接着时按自动)。见 MenuBarCenterLyrics.targetScreens。
+    @Published var menuBarCenterScreen: String {
+        didSet { defaults.set(menuBarCenterScreen, forKey: Keys.menuBarCenterScreen) }
     }
     /// 菜单栏歌词的字体族,见 `defaultMenuBarLyricsFontFamily`。跟 `fontFamilyName` /
     /// `notchFontFamilyName` 同一条"空串 = 跟随系统"规则,消费方是 `MenuBarMarqueeRenderer`。
@@ -2356,6 +2366,7 @@ final class AppSettings: ObservableObject {
             .flatMap(MenuBarLyricsIconPosition.init(rawValue:)) ?? Self.defaultMenuBarLyricsIconPosition
         menuBarLyricsPlacement = defaults.string(forKey: Keys.menuBarLyricsPlacement)
             .flatMap(MenuBarLyricsPlacement.init(rawValue:)) ?? Self.defaultMenuBarLyricsPlacement
+        menuBarCenterScreen = defaults.string(forKey: Keys.menuBarCenterScreen) ?? Self.defaultMenuBarCenterScreen
         menuBarLyricsFontFamily = defaults.string(forKey: Keys.menuBarLyricsFontFamily) ?? Self.defaultMenuBarLyricsFontFamily
         menuBarLyricsFontWeight = defaults.string(forKey: Keys.menuBarLyricsFontWeight)
             .flatMap(OverlayFontWeight.init(rawValue:)) ?? Self.defaultMenuBarLyricsFontWeight

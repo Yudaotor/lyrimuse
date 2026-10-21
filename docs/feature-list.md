@@ -809,7 +809,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 278 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 279 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1002,6 +1002,7 @@ Every setting in the Settings window, by where it lives: 278 in all. Type a name
 ### Lyrics Display › Menu Bar › Layout
 
 - **Lyrics Position**: Menu Bar Center: lyrics appear in the middle of the menu bar, clear of app menus, the icons on the right and the notch. With Notch Lyrics on, they stay beside the icon
+- **Display**
 - **Width Mode**: Fixed: every song uses the set width. Adaptive: each song gets its own width from its lyrics, up to the set width
 - **Alignment**
 - **Second Line**
