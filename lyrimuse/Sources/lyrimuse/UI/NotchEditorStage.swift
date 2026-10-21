@@ -1426,11 +1426,11 @@ enum NotchScreenSummary {
 ///      对齐;单选列表全在浮层自己这一层,没有这层不确定性。
 /// 代价是四行比一行下拉高,纵向有的是空间。
 ///
-/// 宽度 360 是给圆角那两行的(标题 + 100pt 滑杆 + 92pt 读数菜单)。
+/// 宽度 440 是给圆角那两行的(英文行名「Expanded Corners」+ 100pt 滑杆 + 92pt 读数菜单)。
 @MainActor
 struct NotchStylePopover: View {
     var body: some View {
-        SettingsPopoverShell(title: L10n.t("风格"), width: 360) {
+        SettingsPopoverShell(title: L10n.t("风格"), width: 440) {
             NotchStyleSettingsRows()
         }
     }

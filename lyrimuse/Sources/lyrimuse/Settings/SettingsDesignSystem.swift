@@ -1390,6 +1390,8 @@ struct SettingsPopoverShell<Content: View>: View {
     /// 基线;每个调用点都该按自己内容的 `fittingSize` 取一个带余量的值,理由(带实测数字)
     /// 分别写在 `NotchStylePopover`、`NotchEarPopover`(都该更窄)上面。直接吃这个默认值会让内容自然宽只有 124pt(中文)/ 136pt(英文)
     /// 的浮层(如「左耳」「右耳」)被硬撑到 380,明显偏空。
+    ///
+    /// 按英文界面取值:英文行名最长,窄了会从单词中间折断或截尾(见 14 章决策 132)。
     var width: CGFloat = 380
     /// 高度上限,内容更高就在浮层里滚动。默认 `SettingsPopoverMetrics.defaultMaxHeight`;悬浮歌词编辑台
     /// 按舞台上方剩下的空间传更小的值,免得 NSPopover 放不下时翻到另一边盖住预览。

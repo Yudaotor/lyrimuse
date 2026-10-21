@@ -2958,11 +2958,11 @@ private struct AppearanceSettingsTab: View {
     private func lyricsWindowPopoverContent(_ item: LyricsWindowToolbarItem) -> some View {
         switch item {
         case .background:
-            SettingsPopoverShell(title: L10n.t("背景"), width: 480) {
+            SettingsPopoverShell(title: L10n.t("背景"), width: 540) {
                 VStack(spacing: 0) { lyricsWindowAppearanceRows(.background) }
             }
         case .text:
-            SettingsPopoverShell(title: L10n.t("文字"), width: 580) {
+            SettingsPopoverShell(title: L10n.t("文字"), width: 640) {
                 VStack(spacing: 0) { lyricsWindowAppearanceRows(.text) }
             }
         case .behavior:
@@ -2970,7 +2970,7 @@ private struct AppearanceSettingsTab: View {
                 VStack(spacing: 0) { lyricsWindowBehaviorRows }
             }
         case .layout:
-            SettingsPopoverShell(title: L10n.t("布局"), width: 460) {
+            SettingsPopoverShell(title: L10n.t("布局"), width: 540) {
                 VStack(spacing: 0) { lyricsWindowAppearanceRows(.layout) }
             }
         case .content:
@@ -4038,12 +4038,10 @@ struct NotchLyricRowPopover: View {
 
 /// 工具栏第二行「字体」入口的浮层。内容就是 `NotchFontSettingsRows`。
 ///
-/// 宽度用 `SettingsPopoverShell` 的默认 380,跟菜单栏「字体」浮层同一个理由:那是悬浮歌词「文字」浮层(同样装着
-/// 字号滑杆 150 + 读数 46 那一行)量出来的值。这里「字号」行还带一枚 ⓘ(19pt),跟菜单栏那根带 ⓘ 的「字号」行
-/// 几何完全相同,380 在那边真机验过。
+/// 宽度 420:「字号」行是英文「Font Size」+ ⓘ + 字号滑杆 150 + 读数 46,380 时行名折成两行。
 struct NotchFontPopover: View {
     var body: some View {
-        SettingsPopoverShell(title: L10n.t("字体")) {
+        SettingsPopoverShell(title: L10n.t("字体"), width: 420) {
             NotchFontSettingsRows()
         }
     }
@@ -4051,13 +4049,10 @@ struct NotchFontPopover: View {
 
 /// 工具栏第二行「展开态」入口的浮层。内容就是 `NotchExpandedSettingsRows`。
 ///
-/// `width` 340 是**按 13pt 系统字量出来的文字宽算的**,不是估:最宽一行是英文
-/// "Show Playback Controls" 145.9pt + `SettingsRow` 固定开销 150pt(2×14 内边距 + 20 图标列 +
-/// 3×12 间距 + 12 `Spacer(minLength:)` + 54 开关)= **296pt**,中文「显示播放控制」77.4 + 150 = 227。
-/// 340 给英文留 44pt,比同族(24~+34)略宽一点,是给「曲目信息」那行的 ⓘ 和四个子行的竖线留的。
+/// 宽度 640:上面三格要把英文「Show Playback Controls」排成两行,「曲目信息」四格要放下英文「Artwork」。
 struct NotchExpandedPopover: View {
     var body: some View {
-        SettingsPopoverShell(title: L10n.t("展开态"), width: 560) {
+        SettingsPopoverShell(title: L10n.t("展开态"), width: 640) {
             NotchExpandedSettingsRows()
         }
     }
@@ -4065,17 +4060,11 @@ struct NotchExpandedPopover: View {
 
 /// 工具栏第二行「行为」入口的浮层。内容就是 `NotchBehaviorSettingsRows`。
 ///
-/// `width` 420 是**离屏量出来的**,不是拍脑袋。`SettingsRow` 固定开销 **150pt**:
-/// 2×14(左右内边距)+ 20(图标列)+ 3×12(图标 / 文字 / `Spacer` / 尾部控件四个子节点 = 三段
-/// `iconTextSpacing`)+ 12(`Spacer(minLength:)`)+ 54(开关固有宽,`NSSwitch().intrinsicContentSize`,
-/// 四档 controlSize 都是 54×24)。 手算最常漏的是"图标 → 文字"那一段 12pt。再加最宽那一行 ——
-/// 英文 "Hide During Screenshots/Recording" 216pt + ⓘ 19pt = 235pt,合计 385pt(中文只要 271pt);
-/// 1pt 步进的换行探测给出英文硬下限 386,按同族浮层的余量取 420。 不能指望"截断"兜底:标题没有
-/// `lineLimit`,超宽是**折行**,而 ⓘ 跟标题同处一个 HStack 会垂直居中、尾部开关却是 `.top` 对齐,
-/// 三者当场错位。跟悬浮歌词的「行为」浮层同宽,两个形态的「行为」看起来是一件东西。
+/// 宽度 840:三列开关小块,最长的英文「Collapse Lyric Row for Instrumentals & No Lyrics」+ ⓘ + 开关要两行排下,
+/// 窄了第二行截尾。
 struct NotchBehaviorPopover: View {
     var body: some View {
-        SettingsPopoverShell(title: L10n.t("行为"), width: 780) {
+        SettingsPopoverShell(title: L10n.t("行为"), width: 840) {
             NotchBehaviorSettingsRows()
         }
     }

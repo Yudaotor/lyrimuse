@@ -47,8 +47,8 @@ extension TouchBarSettingsGroup {
         case .style: SettingsPopoverShell(title: title, width: 520) { TouchBarStyleRows() }
         // 「布局」四个开关两列小块、封面和三键的左 / 右下拉挂在小块里;「行为」三个开关两列。
         // 别排成一行三格:要 780 宽,浮层伸出设置窗口外。
-        case .layout: SettingsPopoverShell(title: title, width: 560) { TouchBarLayoutRows() }
-        case .behavior: SettingsPopoverShell(title: title, width: 520) { TouchBarBehaviorRows() }
+        case .layout: SettingsPopoverShell(title: title, width: 680) { TouchBarLayoutRows() }
+        case .behavior: SettingsPopoverShell(title: title, width: 580) { TouchBarBehaviorRows() }
         }
     }
 }

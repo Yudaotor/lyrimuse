@@ -618,19 +618,21 @@ struct OverlayEditorStage: View {
         }
 
         /// 各浮层按自己内容的自然宽度取值。「主题」720:7 张预览卡排成一行,浮层更矮,更容易放进舞台上方;
-        /// 「排版」540:对齐方式那组分段选择器加上不折行的标题;「字形」380:字号滑杆;「颜色」「行为」见下;其余 420。
+        /// 「排版」600:对齐方式那组分段选择器加上不折行的标题,间距三格要放下英文「Romanization Spacing」;「字形」380:字号滑杆;
+        /// 「内容」560:三格一行要放下英文「Romanization」;「颜色」「行为」见下;「位置」420。
         var width: CGFloat {
             switch self {
             case .theme: return 720
             case .type: return 380
-            // 「颜色」开关三列、颜色两列,一格要放下名字 + 「跟随封面」下拉 + 取色块。
-            case .color: return 560
-            case .layout: return 540
-            case .content, .placement: return 420
+            // 「颜色」开关三列、颜色两列,一格要放下名字 + 「跟随封面」下拉 + 取色块(英文「Unsung Color」「Transparent」最长)。
+            case .color: return 620
+            case .layout: return 600
+            case .content: return 560
+            case .placement: return 420
             // 「OBS」浏览器源地址那一行要放下地址和「预览」「拷贝」两颗按钮。
             case .obs: return 460
-            // 「行为」三列开关小块,最长的「纯音乐/无歌词时隐藏」+ ⓘ + 开关要 230 左右一格。
-            case .behavior: return 740
+            // 「行为」三列开关小块,最长的英文「Hide for Instrumentals & No Lyrics」+ ⓘ + 开关要两行排下。
+            case .behavior: return 800
             }
         }
     }
