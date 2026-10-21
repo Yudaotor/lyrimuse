@@ -309,6 +309,8 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "OBS 输出", sub: "作为浏览器源叠加到直播画面，宽高设为 OBS 画布尺寸",
                 kw: ["OBS", "直播", "推流", "浏览器源", "录屏", "开关"], group: "OBS"),
         surface(.overlay, "浏览器源地址", kw: ["OBS", "链接", "预览", "直播", "localhost"], group: "OBS"),
+        surface(.overlay, "歌名卡", sub: "左上角显示歌名、歌手和封面",
+                kw: ["OBS", "歌名", "歌手", "封面", "正在播放", "直播", "换歌"], group: "OBS"),
         surface(.overlay, "允许局域网访问", sub: "同一网络中的设备可通过带密钥的链接访问",
                 kw: ["局域网", "LAN", "OBS", "推流", "另一台电脑", "双机"], group: "OBS"),
         surface(.overlay, "访问链接", kw: ["OBS", ".local", "拷贝", "链接"], group: "OBS"),

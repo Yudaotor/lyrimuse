@@ -258,6 +258,7 @@
 "一" = "M";
 "一切就绪" = "All Set";
 "一并解锁" = "Unlock Them";
+"一直显示" = "Always";
 "一行 1 分，最多 200" = "One point per line, up to 200";
 "三" = "W";
 "三个步骤，约需一分钟" = "Three steps, about a minute";
@@ -666,6 +667,7 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ more songs had no source response · Auto-Match All";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ more song had no source response · Auto-Match All";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d more couldn't be written to the lyrics folder. Check write access and disk space";
+"只显示歌词" = "Lyrics only";
 "可同时开启多项" = "You can turn on more than one";
 "可在任意 App 中触发，需包含 ⌘、⌥ 或 ⌃ 之一" = "Works in any app; must include ⌘, ⌥ or ⌃";
 "可在其他设备上控制播放、跳转歌词" = "Control playback and jump to lyrics from other devices";
@@ -914,6 +916,7 @@
 "展开时隐藏功能栏" = "Hide Control Strip While Expanded";
 "展开时预览下一句" = "Preview Next Line When Expanded";
 "左" = "Left";
+"左上角显示歌名、歌手和封面" = "Shows the title, artist and cover in the top-left corner";
 "左侧" = "Left";
 "左侧颜色" = "Left Color";
 "左对齐" = "Left-Aligned";
@@ -1232,6 +1235,8 @@
 "换一句" = "Another line";
 "换句动画" = "Line Transition";
 "换句时，下一句从原来的位置移到当前行；关闭时直接切换" = "When the lyric changes, the next line moves up into place. When off, lines switch instantly";
+"换歌后显示 5 秒，无歌词时一直显示" = "Shows for 5 seconds after a song change, and stays when there are no lyrics";
+"换歌时显示" = "On Song Change";
 "换歌时显示歌名" = "Show Title on Song Change";
 "换歌时显示通知" = "Notify When the Song Changes";
 "换行" = "Wrap";
@@ -1658,6 +1663,7 @@
 "歌名、专辑名或歌词文件头标注的版本（Live / Remix / Demo / Club Mix 等）与本地歌曲不符" = "The version (Live / Remix / Demo / Club Mix …) in the title, album, or lyrics header doesn't match the local track";
 "歌名不一致：本地为「%1$@」，匹配到《%2$@》" = "Title mismatch: local title is “%1$@”, matched “%2$@”";
 "歌名别名" = "Title alias";
+"歌名卡" = "Title Card";
 "歌名始终为「%@」" = "Title was always “%@”";
 "歌名未变" = "Title unchanged";
 "歌手" = "Artist";

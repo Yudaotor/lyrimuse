@@ -238,6 +238,7 @@ final class AppSettings: ObservableObject {
         static let obsLyricsAllowLAN = "np:obsLyricsAllowLAN"
         static let obsLyricsToken = "np:obsLyricsToken"
         static let obsLyricsPort = "np:obsLyricsPort"
+        static let obsSongCard = "np:obsSongCard"
         static let discordBadge = "np:discordBadge"
         static let discordButtonListen = "np:discordButtonListen"
         static let discordButtonGetLyrimuse = "np:discordButtonGetLyrimuse"
@@ -836,6 +837,10 @@ final class AppSettings: ObservableObject {
     /// 别的电脑上的 OBS 能不能打开。关着时只绑 127.0.0.1。
     @Published var obsLyricsAllowLAN: Bool {
         didSet { defaults.set(obsLyricsAllowLAN, forKey: Keys.obsLyricsAllowLAN) }
+    }
+    /// OBS 页左上角的歌名卡(歌名、歌手、专辑、封面)什么时候显示,见 `WebLyricsObsPayload.SongCard`。
+    @Published var obsSongCard: WebLyricsObsPayload.SongCard {
+        didSet { defaults.set(obsSongCard.rawValue, forKey: Keys.obsSongCard) }
     }
     /// OBS 局域网链接里的密钥,同 `webLyricsToken` 但另一把。本机专属,不进配置备份。
     @Published private(set) var obsLyricsToken: String
@@ -2193,6 +2198,7 @@ final class AppSettings: ObservableObject {
         obsLyricsEnabled = (defaults.object(forKey: Keys.obsLyricsEnabled) as? Bool)
             ?? (defaults.object(forKey: Keys.webLyricsEnabled) as? Bool) ?? false
         obsLyricsAllowLAN = (defaults.object(forKey: Keys.obsLyricsAllowLAN) as? Bool) ?? false
+        obsSongCard = defaults.string(forKey: Keys.obsSongCard).flatMap(WebLyricsObsPayload.SongCard.init(rawValue:)) ?? .always
         obsLyricsPort = WebLyricsPort.clamped((defaults.object(forKey: Keys.obsLyricsPort) as? Int) ?? WebLyricsPort.obsStandard,
                                               fallback: WebLyricsPort.obsStandard)
         if let token = defaults.string(forKey: Keys.obsLyricsToken), !token.isEmpty {

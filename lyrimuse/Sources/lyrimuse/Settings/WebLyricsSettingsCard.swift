@@ -84,6 +84,19 @@ struct OverlayObsSettingsRows: View {
                         CopyLinkButton(url: server.localURL)
                     }
                 }
+                CardDivider()
+                SettingsRow(icon: "music.note", title: L10n.t("歌名卡"), subtitle: ObsSongCardLabel.subtitle(for: settings.obsSongCard)) {
+                    SettingsGlassMenuPicker(
+                        selection: Binding(
+                            get: { settings.obsSongCard },
+                            set: { mode in
+                                guard settings.obsSongCard != mode else { return }
+                                settings.obsSongCard = mode
+                            }),
+                        options: WebLyricsObsPayload.SongCard.allCases,
+                        label: ObsSongCardLabel.text(for:),
+                        compact: true)
+                }
                 WebLyricsProblemRow(server: server)
             }
             SettingsRowGroup(title: L10n.t("局域网")) {
@@ -117,6 +130,25 @@ struct OverlayObsSettingsRows: View {
         .onChange(of: settings.obsLyricsToken) { _, _ in links.refresh(server) }
         .onChange(of: settings.obsLyricsPort) { _, _ in links.refresh(server) }
         .onChange(of: server.state) { _, _ in links.refresh(server) }
+    }
+}
+
+/// 歌名卡几档的名字和说明(说明只讲选中的那一档)。
+enum ObsSongCardLabel {
+    static func text(for mode: WebLyricsObsPayload.SongCard) -> String {
+        switch mode {
+        case .off: return L10n.t("不显示")
+        case .always: return L10n.t("一直显示")
+        case .songChange: return L10n.t("换歌时显示")
+        }
+    }
+
+    static func subtitle(for mode: WebLyricsObsPayload.SongCard) -> String {
+        switch mode {
+        case .off: return L10n.t("只显示歌词")
+        case .always: return L10n.t("左上角显示歌名、歌手和封面")
+        case .songChange: return L10n.t("换歌后显示 5 秒，无歌词时一直显示")
+        }
     }
 }
 

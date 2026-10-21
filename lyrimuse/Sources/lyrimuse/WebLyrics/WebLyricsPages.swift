@@ -836,6 +836,7 @@ enum WebLyricsPages {
     /// (`GapDotsCurve` 同一条曲线)和接下来那句。换句动画照 `OverlayLineRise`:新的一句从下一句的位置、字号、亮度起步走到
     /// 当前行,旧的一句原地淡完,新的下一句后半程淡入。描边照 `LyricsTextStrokeMetrics`:模糊剪影再把透明度拉成实心。
     /// 停播、广告 / 口白、断线时淡出,暂停时按悬浮歌词的「暂停时隐藏」。带 `preview=1` 时铺棋盘格底(设置里的「预览」)。
+    /// 左上角的歌名卡(歌名、歌手 — 专辑、封面)字体、颜色、描边、背景卡同歌词卡,何时显示按 `style.songCard`(`songCardShown`)。
     /// 逐字填色跟着 `requestAnimationFrame` 刷;OBS 窗口不在前台时浏览器源里的 rAF 可能被挂起,另有定时器在 rAF 停了时接着刷。
     static func obsPage(revision: String = revision) -> String {
         """
@@ -864,6 +865,14 @@ enum WebLyricsPages {
         .dots { display: flex; gap: .3em; padding-top: .25em; }
         .dots > i { width: .32em; height: .32em; border-radius: 50%; background: var(--sung); }
         .ghost { position: absolute; left: 0; right: 0; pointer-events: none; }
+        #song { position: fixed; display: flex; align-items: center; max-width: 60vw; box-sizing: border-box; line-height: normal;
+                opacity: 0; transform: translateX(-.6em); transition: opacity .4s ease, transform .4s ease; }
+        #song.on { opacity: 1; transform: none; }
+        #song img { flex: none; object-fit: cover; }
+        #song .meta { min-width: 0; }
+        #song .tx { white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+        #song.stroked .tx { filter: url(#lmStroke); }
+        @media (prefers-reduced-motion: reduce) { #song { transform: none; transition: opacity .4s ease; } }
         body.preview { background: repeating-conic-gradient(#8c8c8c 0 25%, #b3b3b3 0 50%) 0 0 / 32px 32px; }
         </style>
         </head>
@@ -878,6 +887,7 @@ enum WebLyricsPages {
           </filter>
         </svg>
         <div id="box"><div id="card"></div></div>
+        <div id="song"><img alt=""><div class="meta"><div class="tx" id="songTitle"></div><div class="tx" id="songArtist"></div></div></div>
         <script>
         (() => {
           const REV = "\(revision)";
@@ -891,6 +901,10 @@ enum WebLyricsPages {
           }
           const box = document.getElementById('box');
           const card = document.getElementById('card');
+          const songBox = document.getElementById('song');
+          const songCover = songBox.querySelector('img');
+          const songTitle = document.getElementById('songTitle');
+          const songArtist = document.getElementById('songArtist');
           if (new URLSearchParams(location.search).get('preview') === '1') document.body.classList.add('preview');
           const blurNode = document.getElementById('lmBlur');
           const rampNode = document.getElementById('lmRamp');
@@ -901,6 +915,40 @@ enum WebLyricsPages {
           const RISE = { ms: 250, ease: 'cubic-bezier(0.4, 0, 0.2, 1)', outMs: 120, lateDelay: 130, lateMs: 120, preview: .4 };
           const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
           let style = null, track = null, pos = null, at = 0, shownKey = '', connected = false, lastTick = 0;
+          let song = null, songSince = 0;
+          // 歌名卡:「一直显示」时跟着能不能显示走;「换歌时」从这首能显示起亮 SONG_HOLD 毫秒,这首没有歌词时一直亮。
+          const SONG_HOLD = 5000;
+          function songCardShown(mode, eligible, since, nowMs, hasLyrics) {
+            if (!eligible) return false;
+            if (mode === 'always') return true;
+            if (mode === 'songChange') return nowMs - since < SONG_HOLD || !hasLyrics;
+            return false;
+          }
+          function applySong() {
+            if (!style || !song) return;
+            const u = unit();
+            const family = style.font ? `"${style.font}", ` : '';
+            songBox.style.fontFamily = family + '-apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans", sans-serif';
+            songBox.style.fontSize = style.size * u + 'px';
+            songBox.style.left = 24 * u + 'px';
+            songBox.style.top = 24 * u + 'px';
+            songBox.style.gap = '.5em';
+            songBox.style.padding = style.card ? `${8 * u}px ${20 * u}px ${8 * u}px ${8 * u}px` : '0';
+            songBox.style.borderRadius = 16 * u + 'px';
+            songBox.style.background = style.card || 'transparent';
+            songBox.classList.toggle('stroked', !!style.stroke);
+            songCover.style.width = songCover.style.height = '2.6em';
+            songCover.style.borderRadius = '.22em';
+            songCover.style.display = song.cover ? '' : 'none';
+            if (song.cover && songCover.getAttribute('src') !== song.cover) songCover.src = song.cover;
+            songTitle.textContent = song.title;
+            songTitle.style.fontWeight = style.weights[0];
+            songTitle.style.color = style.sung;
+            songArtist.textContent = [song.artist, song.album].filter(Boolean).join(' — ');
+            songArtist.style.fontSize = '.65em';
+            songArtist.style.fontWeight = style.weights[2];
+            songArtist.style.color = `color-mix(in srgb, ${style.sung} 75%, transparent)`;
+          }
           let view = null, ws = null, retry = 1000;
           const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
           const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -945,6 +993,7 @@ enum WebLyricsPages {
             rampNode.setAttribute('intercept', String(-lo / (hi - lo)));
             floodNode.setAttribute('flood-color', style.stroke || 'transparent');
             shownKey = '';
+            applySong();
           }
           function currentIndex(t) {
             let found = -1;
@@ -1145,6 +1194,10 @@ enum WebLyricsPages {
             const paused = !!pos && pos.state === 'paused';
             const ready = connected && style && track && track.lines.length > 0;
             box.classList.toggle('on', !!(ready && (playing || (paused && !style.hidePaused))));
+            const eligible = !!(connected && style && song && song.title && (playing || (paused && !style.hidePaused)));
+            if (eligible && !songSince) songSince = performance.now();
+            const hasLyrics = !!(track && song && track.id === song.id && track.lines.length > 0);
+            songBox.classList.toggle('on', songCardShown(style && style.songCard, eligible, songSince, performance.now(), hasLyrics));
             if (!ready) return;
             const previous = view;
             view = resolve(t);
@@ -1180,6 +1233,7 @@ enum WebLyricsPages {
               if (m.type === 'style') { style = m; applyStyle(); }
               else if (m.type === 'track') { track = m; shownKey = ''; }
               else if (m.type === 'pos') { pos = m; at = performance.now(); }
+              else if (m.type === 'song') { if (!song || song.id !== m.id) songSince = 0; song = m; applySong(); }
               else if (m.type === 'hello') checkRevision(m.rev);
             };
             ws.onclose = () => {

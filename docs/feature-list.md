@@ -482,12 +482,13 @@ When a song reaches its 100th, 1,000th or 10,000th play, or your Last.fm total p
 
 ### Web lyrics: a phone or tablet as a second screen, or an OBS browser source
 
-Lyrics in a web browser. Web Lyrics shows exactly what the lyrics window shows; OBS Output has a transparent background and the same fonts and colors as the floating lyrics. Each has its own port and local network setting. Both are available only on this Mac until you turn on "Allow Local Network Access"; then devices on the same network can scan a QR code to connect, using a link with an access key. With "Allow Remote Control" on, the page can also control playback and jump to a line.
+Lyrics in a web browser. Web Lyrics shows exactly what the lyrics window shows; OBS Output has a transparent background and the same fonts and colors as the floating lyrics, plus a title card (title, artist and cover) in the top-left corner that can show always, on song changes, or not at all. Each has its own port and local network setting. Both are available only on this Mac until you turn on "Allow Local Network Access"; then devices on the same network can scan a QR code to connect, using a link with an access key. With "Allow Remote Control" on, the page can also control playback and jump to a line.
 
 - Off by default
 - Settings: Lyrics Display › Lyrics Window › Web Lyrics
 - Settings: Lyrics Display › Lyrics Window › Web Lyrics › Allow Local Network Access
 - Settings: Lyrics Display › Floating Lyrics › OBS › OBS Output
+- Settings: Lyrics Display › Floating Lyrics › OBS › Title Card
 - Settings: Lyrics Display › Lyrics Window › Web Lyrics › Allow Remote Control
 
 <a id="section-players"></a>
@@ -787,7 +788,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 272 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 273 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -860,6 +861,7 @@ Every setting in the Settings window, by where it lives: 272 in all. Type a name
 
 - **OBS Output**: Overlay the lyrics on your stream as a browser source. Set its width and height to your OBS canvas size
 - **Browser Source URL**
+- **Title Card**: Shows the title, artist and cover in the top-left corner
 - **Allow Local Network Access**: Devices on the same network can connect with a link that includes an access key
 - **Access Link**
 - **Fallback Link (IP Address)**

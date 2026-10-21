@@ -1258,9 +1258,9 @@
             "zh-Hant": "網頁歌詞：用手機、平板作為副螢幕，或作為 OBS 瀏覽器來源"
           },
           "desc": {
-            "zh-Hans": "在浏览器中显示歌词。网页歌词显示的是歌词窗口的画面；OBS 输出背景透明，字体和颜色与悬浮歌词一致。两者各自设置端口与局域网访问；默认只对本机开放，开启「允许局域网访问」后，同一网络中的设备可扫码打开，链接带有访问密钥。开启「允许远程控制」后，还能在网页上控制播放、点歌词跳转。",
-            "en": "Lyrics in a web browser. Web Lyrics shows exactly what the lyrics window shows; OBS Output has a transparent background and the same fonts and colors as the floating lyrics. Each has its own port and local network setting. Both are available only on this Mac until you turn on \"Allow Local Network Access\"; then devices on the same network can scan a QR code to connect, using a link with an access key. With \"Allow Remote Control\" on, the page can also control playback and jump to a line.",
-            "zh-Hant": "在瀏覽器中顯示歌詞。網頁歌詞顯示的是歌詞視窗的畫面；OBS 輸出背景透明，字體和顏色與浮動歌詞一致。兩者各自設定連接埠與區域網路存取；預設只對本機開放，開啟「允許區域網路存取」後，同一網路中的裝置可掃描 QR Code 開啟，連結帶有存取金鑰。開啟「允許遠端控制」後，還能在網頁上控制播放、點歌詞跳轉。"
+            "zh-Hans": "在浏览器中显示歌词。网页歌词显示的是歌词窗口的画面；OBS 输出背景透明，字体和颜色与悬浮歌词一致，左上角另有歌名卡（歌名、歌手和封面），可设为一直显示、换歌时显示或不显示。两者各自设置端口与局域网访问；默认只对本机开放，开启「允许局域网访问」后，同一网络中的设备可扫码打开，链接带有访问密钥。开启「允许远程控制」后，还能在网页上控制播放、点歌词跳转。",
+            "en": "Lyrics in a web browser. Web Lyrics shows exactly what the lyrics window shows; OBS Output has a transparent background and the same fonts and colors as the floating lyrics, plus a title card (title, artist and cover) in the top-left corner that can show always, on song changes, or not at all. Each has its own port and local network setting. Both are available only on this Mac until you turn on \"Allow Local Network Access\"; then devices on the same network can scan a QR code to connect, using a link with an access key. With \"Allow Remote Control\" on, the page can also control playback and jump to a line.",
+            "zh-Hant": "在瀏覽器中顯示歌詞。網頁歌詞顯示的是歌詞視窗的畫面；OBS 輸出背景透明，字體和顏色與浮動歌詞一致，左上角另有歌名卡（歌名、歌手和封面），可設為一直顯示、換歌時顯示或不顯示。兩者各自設定連接埠與區域網路存取；預設只對本機開放，開啟「允許區域網路存取」後，同一網路中的裝置可掃描 QR Code 開啟，連結帶有存取金鑰。開啟「允許遠端控制」後，還能在網頁上控制播放、點歌詞跳轉。"
           },
           "default": "off",
           "check": {
@@ -1283,6 +1283,12 @@
               "悬浮歌词",
               "OBS",
               "OBS 输出"
+            ],
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "OBS",
+              "歌名卡"
             ],
             [
               "歌词显示",

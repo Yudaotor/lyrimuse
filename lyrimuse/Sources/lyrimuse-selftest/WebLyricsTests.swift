@@ -585,6 +585,29 @@ func runWebLyricsTests() {
         expectEqual(plainLines.first?["w"] == nil, true, "网页歌词: 没有逐字时间的行省略 w")
         let pos = WebLyricsObsPayload.position(timelineMs: 1_234, rate: 1, state: .paused)
         expectEqual(pos, #"{"pos":1234,"rate":1,"state":"paused","type":"pos"}"#, "网页歌词: pos 消息")
+
+        expectEqual(styleObject?["songCard"] as? String, "off", "网页歌词: style 带歌名卡档位(没给时按不显示)")
+        let songObject = (try? JSONSerialization.jsonObject(with: Data(WebLyricsObsPayload.song(
+            id: "七里香\u{1F}周杰伦", title: "七里香", artist: "周杰伦", album: "七里香", cover: nil).utf8))) as? [String: Any]
+        expectEqual(songObject?["type"] as? String, "song", "网页歌词: song 消息类型")
+        expectEqual(songObject?["id"] as? String, "七里香\u{1F}周杰伦", "网页歌词: song 的 id 跟 track 同一种拼法")
+        expectEqual(songObject?["album"] as? String, "七里香", "网页歌词: song 带专辑")
+        expectEqual(songObject?["cover"] == nil, true, "网页歌词: 没有封面时省略 cover")
+        let bigCover: Data? = {
+            guard let ctx = CGContext(data: nil, width: 600, height: 400, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+            ctx.setFillColor(CGColor(red: 1, green: 0.5, blue: 0, alpha: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: 600, height: 400))
+            guard let image = ctx.makeImage() else { return nil }
+            return NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+        }()
+        let coverURL = bigCover.flatMap { WebLyricsObsPayload.coverDataURL($0) }
+        let coverBytes = coverURL.flatMap { Data(base64Encoded: String($0.dropFirst("data:image/jpeg;base64,".count))) }
+        expectEqual(coverURL?.hasPrefix("data:image/jpeg;base64,"), true, "网页歌词: 封面转成 JPEG 的 data URL")
+        expectEqual(coverBytes.map { CoverArtReplacementGate.pixelSize(of: $0).width }, WebLyricsObsPayload.coverMaxPixels,
+                    "网页歌词: 封面最长边缩到上限")
+        expectEqual(coverBytes.map { CoverArtReplacementGate.pixelSize(of: $0).height }, 171, "网页歌词: 封面缩放保持比例")
+        expectEqual(WebLyricsObsPayload.coverDataURL(Data("not an image".utf8)) == nil, true, "网页歌词: 读不出来的封面返回 nil")
     }
 
     // ---- 离屏拼图层树 ----
@@ -787,6 +810,36 @@ func runWebLyricsTests() {
         expectEqual(sourceHas(app("WebLyrics/WebLyricsScreen.swift"),
                               "JSONSerialization.data(withJSONObject: [\"type\": \"links\", \"items\": items], options: [.sortedKeys]),"), true,
                     "网页歌词: 链接位置消息按排好序的键序列化,没变就不重发")
+        // 歌名卡什么时候显示:取出 OBS 页里那个纯函数,在 JavaScriptCore 里跑
+        do {
+            let obsPage = pagesSource
+            let helper: String? = {
+                guard let a = obsPage.range(of: "const SONG_HOLD = 5000;"),
+                      let b = obsPage.range(of: "function applySong(", range: a.upperBound..<obsPage.endIndex) else { return nil }
+                return String(obsPage[a.lowerBound..<b.lowerBound])
+            }()
+            let ctx = JSContext()
+            if let helper { ctx?.evaluateScript(helper) }
+            func shown(_ args: String) -> String { ctx?.evaluateScript("String(songCardShown(\(args)))")?.toString() ?? "nil" }
+            expectEqual(helper != nil && ctx?.exception == nil, true, "网页歌词 歌名卡: 显示判断在 JavaScriptCore 里跑得起来")
+            expectEqual(shown("'always', true, 0, 60000, true"), "true", "网页歌词 歌名卡: 一直显示")
+            expectEqual(shown("'always', false, 0, 0, true"), "false", "网页歌词 歌名卡: 停播 / 暂停隐藏时不显示")
+            expectEqual(shown("'off', true, 0, 0, false"), "false", "网页歌词 歌名卡: 不显示")
+            expectEqual(shown("'songChange', true, 1000, 5999, true"), "true", "网页歌词 歌名卡: 换歌后 5 秒内显示")
+            expectEqual(shown("'songChange', true, 1000, 6000, true"), "false", "网页歌词 歌名卡: 换歌 5 秒后收起")
+            expectEqual(shown("'songChange', true, 1000, 60000, false"), "true", "网页歌词 歌名卡: 换歌时显示那档里,没歌词时一直显示")
+            expectEqual(shown("undefined, true, 0, 0, false"), "false", "网页歌词 歌名卡: 还没收到 style 时不显示")
+            expectEqual(sourceHas(obsPage, "else if (m.type === 'song') { if (!song || song.id !== m.id) songSince = 0; song = m; applySong(); }")
+                            && sourceHas(obsPage, "const hasLyrics = !!(track && song && track.id === song.id && track.lines.length > 0);"), true,
+                        "网页歌词 歌名卡: 换了一首才重新计时;有没有歌词按同一首的 track 判")
+            expectEqual(sourceHas(app("WebLyrics/WebLyricsObsFeed.swift"), "songCard: s.obsSongCard))")
+                            && sourceHas(app("WebLyrics/WebLyricsObsFeed.swift"), "s.$obsSongCard.map { _ in () }.eraseToAnyPublisher(),")
+                            && sourceHas(app("WebLyrics/WebLyricsObsFeed.swift"), "for message in [lastStyle, lastTrack, lastPosition, lastSong] where !message.isEmpty"), true,
+                        "网页歌词 歌名卡: 档位随 style 发、改了就重发;新连上的网页补发 song")
+            expectEqual(sourceHas(app("Settings/AppSettings.swift"),
+                                  "obsSongCard = defaults.string(forKey: Keys.obsSongCard).flatMap(WebLyricsObsPayload.SongCard.init(rawValue:)) ?? .always"), true,
+                        "网页歌词 歌名卡: 默认一直显示")
+        }
         // MediaSource 封装:从页面脚本里取出 viaMse 到 receiveMse 之前那段纯函数,在 JavaScriptCore 里拿 App 实际发出的 avcC 跑
         do {
             let helpers: String? = {

@@ -1,8 +1,19 @@
 import Foundation
+import ImageIO
 
-/// 网页歌词 OBS 那条推给网页的 JSON(19 章)。三种消息:`style`(悬浮歌词的字体、颜色与排版)、`track`(整首歌词,
-/// 换歌或歌词变了才发)、`pos`(播放位置,锚点变了才发,外加定时心跳)。网页自己按 `pos` 往前推算。
+/// 网页歌词 OBS 那条推给网页的 JSON(19 章)。四种消息:`style`(悬浮歌词的字体、颜色与排版)、`track`(整首歌词,
+/// 换歌或歌词变了才发)、`pos`(播放位置,锚点变了才发,外加定时心跳)、`song`(歌名卡的歌名、歌手、专辑、封面)。
+/// 网页自己按 `pos` 往前推算。
 public enum WebLyricsObsPayload {
+    /// 歌名卡(左上角的歌名、歌手、专辑和封面)什么时候显示。「换歌时」显示一会儿就收起,这首没有歌词时一直显示。
+    public enum SongCard: String, CaseIterable, Sendable, Identifiable {
+        case off, always, songChange
+        public var id: String { rawValue }
+    }
+
+    /// 歌名卡封面的最长边(像素)。OBS 画布 1920 宽时卡片封面约 120px,留一倍余量。
+    public static let coverMaxPixels = 256
+
     /// 悬浮歌词那几项排版设置。字号、宽度、行距都是悬浮歌词自己的点数,网页按 `源宽度 / 1200` 换算。
     public struct Style: Equatable, Sendable {
         public var fontFamily: String
@@ -26,12 +37,13 @@ public enum WebLyricsObsPayload {
         /// 对唱留白(点):左右声部近侧的舞台缩进、合唱两侧的留白,同 `OverlayCardGeometry.cardInsets` 的两个入参。
         public var duetStageInset: Double
         public var duetCenterInset: Double
+        public var songCard: SongCard
 
         public init(fontFamily: String, fontSize: Double, weights: [Int], sung: String, unsung: String,
                     stroke: String?, card: String?, showRomanization: Bool, showTranslation: Bool, showNextLine: Bool,
                     karaoke: Bool, alignment: OverlayDuetAlignmentOverride, overflow: OverlayLineOverflow,
                     spacing: OverlayRowSpacing.Values, width: Double, hideWhenPaused: Bool, lineChangeAnimation: Bool,
-                    duetStageInset: Double, duetCenterInset: Double) {
+                    duetStageInset: Double, duetCenterInset: Double, songCard: SongCard = .off) {
             self.fontFamily = fontFamily
             self.fontSize = fontSize
             self.weights = weights
@@ -51,6 +63,7 @@ public enum WebLyricsObsPayload {
             self.lineChangeAnimation = lineChangeAnimation
             self.duetStageInset = duetStageInset
             self.duetCenterInset = duetCenterInset
+            self.songCard = songCard
         }
     }
 
@@ -65,7 +78,7 @@ public enum WebLyricsObsPayload {
             "next": s.showNextLine, "karaoke": s.karaoke, "align": s.alignment.rawValue, "overflow": s.overflow.rawValue,
             "spacing": [s.spacing.romanization, s.spacing.translation, s.spacing.nextLine],
             "width": s.width, "hidePaused": s.hideWhenPaused, "anim": s.lineChangeAnimation,
-            "duet": [s.duetStageInset, s.duetCenterInset],
+            "duet": [s.duetStageInset, s.duetCenterInset], "songCard": s.songCard.rawValue,
         ]
         if let stroke = s.stroke { o["stroke"] = stroke }
         if let card = s.card { o["card"] = card }
@@ -93,6 +106,28 @@ public enum WebLyricsObsPayload {
         }
         return json(["type": "track", "id": id, "lines": encodedLines,
                      "gaps": gaps.map { [$0.startMs, $0.endMs] }])
+    }
+
+    /// 歌名卡:`id` 跟 `track` 的同一种拼法(网页拿它判断这首有没有歌词),`cover` 是 JPEG 的 data URL,没有封面时省略。
+    public static func song(id: String, title: String, artist: String, album: String, cover: String?) -> String {
+        var o: [String: Any] = ["type": "song", "id": id, "title": title, "artist": artist, "album": album]
+        if let cover { o["cover"] = cover }
+        return json(o)
+    }
+
+    /// 封面缩到最长边 `maxPixels` 以内、转成 JPEG 的 data URL。读不出来返回 nil。
+    public static func coverDataURL(_ data: Data, maxPixels: Int = coverMaxPixels) -> String? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(src, 0, [
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceCreateThumbnailWithTransform: true,
+                  kCGImageSourceThumbnailMaxPixelSize: maxPixels,
+              ] as CFDictionary) else { return nil }
+        let out = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(out as CFMutableData, "public.jpeg" as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return "data:image/jpeg;base64," + (out as Data).base64EncodedString()
     }
 
     public static func position(timelineMs: Int, rate: Double, state: State) -> String {
