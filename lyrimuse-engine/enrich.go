@@ -4224,7 +4224,7 @@ type scoredLyricCandidateResult struct {
 	Artist   string `json:"artist,omitempty"`
 	Album    string `json:"album,omitempty"`
 	CoverURL string `json:"cover_url,omitempty"`
-	// BorrowedCoverURL / BorrowedCoverFrom:自己没有封面时,借同一批里ISRC 相同的那条候选的封面和它的源名
+	// BorrowedCoverURL / BorrowedCoverFrom:自己没有封面时,借同一批里 ISRC 相同的那条候选的封面和它的源名
 	// (applyBorrowedCovers)。只给「搜索候选歌词」显示缩略图,不参与打分,不进歌词判决、不当条目封面。
 	BorrowedCoverURL  string `json:"borrowed_cover_url,omitempty"`
 	BorrowedCoverFrom string `json:"borrowed_cover_from,omitempty"`
