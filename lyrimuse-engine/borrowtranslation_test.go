@@ -167,8 +167,8 @@ func TestBorrowedTranslationWired(t *testing.T) {
 	}
 	src := read("enrich.go")
 	for _, pair := range []string{
-		"sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })\n\tapplyBorrowedTranslations(out)",
-		"sort.SliceStable(results, func(i, j int) bool { return results[i].Score > results[j].Score })\n\tapplyBorrowedTranslations(results)",
+		"sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })\n\tapplyUnmaskedWords(out)\n\tapplyBorrowedTranslations(out)",
+		"sort.SliceStable(results, func(i, j int) bool { return results[i].Score > results[j].Score })\n\tapplyUnmaskedWords(results)\n\tapplyBorrowedTranslations(results)",
 	} {
 		if !containsCode(src, pair) {
 			t.Errorf("enrich.go 里要在排序之后借译文:%q", pair)

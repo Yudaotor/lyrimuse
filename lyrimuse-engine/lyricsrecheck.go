@@ -21,6 +21,8 @@ type lyricsRecheck struct {
 	localFile bool
 	// lxMusic:这首当初没见过洛雪存下的原版歌词,现在有(见 lxMusicLyricsWorthRecheck)。
 	lxMusic bool
+	// masked:当前歌词里有被打码的词(见 maskedLyricsWorthRecheck)。
+	masked bool
 	// retry:升级重试 —— 有源缺席、同源落选、时长对不上(见 needsLyricsRetry)。它没有「只来一次」的记录,
 	// 靠条目上的重试时间节流。
 	retry bool
@@ -46,12 +48,13 @@ func lyricsRecheckForLocked(key string, e enrichEntry, s lyricsRecheckScene) lyr
 			lyricSourceEnabled("lyricfind")) && !kasetLyricsRechecked[key],
 		localFile: localFileLyricsWorthRecheck(e, s.bundleID, s.pinned, auto, s.localFileLyrics) && !localFileLyricsRechecked[key],
 		lxMusic:   lxMusicLyricsWorthRecheck(e, s.bundleID, s.pinned, auto, s.lxMusicLyrics) && !lxMusicLyricsRechecked[key],
+		masked:    maskedLyricsWorthRecheck(e, s.pinned, auto) && !maskedLyricsRechecked[key],
 		retry:     needsLyricsRetry(e, s.wrongDuration, s.pinned, auto),
 	}
 }
 
 func (r lyricsRecheck) due() bool {
-	return r.listedAlbum || r.kkbox || r.amazon || r.spotify || r.kaset || r.localFile || r.lxMusic || r.retry
+	return r.listedAlbum || r.kkbox || r.amazon || r.spotify || r.kaset || r.localFile || r.lxMusic || r.masked || r.retry
 }
 
 // consumeLocked:为这一刻成立的理由起了一轮,把其中「只来一次」的都记成这次进程里用过了。只记成立的那几个:
@@ -78,6 +81,9 @@ func (r lyricsRecheck) consumeLocked(key string) {
 	if r.lxMusic {
 		lxMusicLyricsRecheckOnce(key)
 	}
+	if r.masked {
+		maskedLyricsRechecked[key] = true
+	}
 }
 
 // String:成立的理由,逗号分隔,记进这一轮决策日志那一行(reasons=)。
@@ -88,7 +94,7 @@ func (r lyricsRecheck) String() string {
 		name string
 	}{
 		{r.listedAlbum, "listed-album"}, {r.kkbox, "kkbox"}, {r.amazon, "amazon"},
-		{r.spotify, "spotify"}, {r.kaset, "kaset"}, {r.localFile, "localfile"}, {r.lxMusic, "lxmusic"},
+		{r.spotify, "spotify"}, {r.kaset, "kaset"}, {r.localFile, "localfile"}, {r.lxMusic, "lxmusic"}, {r.masked, "masked"},
 		{r.retry, "retry"},
 	} {
 		if x.on {

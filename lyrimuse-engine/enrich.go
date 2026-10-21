@@ -2092,6 +2092,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	enrichMu.Lock()
 	sourceChoice := opts.sourceChoice(enrichCache[key].LyricsSourceChoice)
 	startLyrics := enrichCache[key].Lyrics
+	startSource := enrichCache[key].LyricsSource
 	listed := enrichCache[key].YouTubeMusicAlbum
 	storedSearchTitle := enrichCache[key].LyricsSearchTitle
 	stamp := enrichEditStampLocked()
@@ -2114,6 +2115,8 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		return
 	}
 	reached := round.reachedAny()
+	// 存着的是这一轮某个候选补词之前的原文:下面的比较都按补好的那份算,见 gainUnmaskedWords。
+	startLyrics = unmaskedCounterpart(startSource, startLyrics, scored)
 	// 用户选定过源就只在那个源内重选,见 LyricsSourceChoice 字段注释。
 	picked := pickLyricCandidatePreferring(scored, sourceChoice)
 	seen := lyricSourcesWithCandidates(scored)
@@ -2186,6 +2189,10 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		return
 	}
 	before := e
+	if gainUnmaskedWords(&e, scored) {
+		log.Printf("lyrics: %s  %s masked words filled in from this round", key, e.LyricsSource)
+		lyricsChanged = true
+	}
 	// 一个歌词源都没连上(断网、DNS 抽风、全被熔断)的这一轮不算一次尝试:计数只记时间戳。
 	// 算上的话,补空的指数退避、「有源被跳过就快点重来」那一次机会(只认计数 0)、没歌手没专辑
 	// 满 3 次就放弃(lyricsNoAnchorGaveUp)都会被一次断网白白用掉。时间戳照记,免得断网期间每拍重搜。
@@ -2515,6 +2522,8 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		return false
 	}
 	reached := round.reachedAny()
+	// 同 retryLyricsUpgradeWith:快照按补好的那份算。
+	startLyrics = unmaskedCounterpart(currentSource, startLyrics, scored)
 	// 用户选定过源就只在那个源内重选,见 LyricsSourceChoice 字段注释。
 	picked := pickLyricCandidatePreferring(scored, sourceChoice)
 	// 传 false:这条路只对有词的条目跑(needsLyricsRescore 第一行就要求 e.Lyrics != "",全量扫库和手动重新匹配
@@ -2598,6 +2607,10 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		return false
 	}
 	before := e
+	if gainUnmaskedWords(&e, scored) {
+		log.Printf("lyrics: %s  %s masked words filled in from this round", key, e.LyricsSource)
+		lyricsChanged = true
+	}
 	// 当前这份只有署名:它不是要护着的歌词,见下面 keep 与纯音乐那一支。
 	currentCreditOnly := lyricsAreCreditsOnly(e.Lyrics.String())
 	// 换了打分版本后的第一次尝试:旧版本下的计数作废、从零开始(见 LyricsRescoreVersion 注释)。
@@ -4275,6 +4288,8 @@ type scoredLyricCandidateResult struct {
 	// (bakedtranslation.go)。0 = 这条候选没有这种形态。透传进决策留痕,让"这条候选行数
 	// 怎么比另一个源少了一半 / 译文哪来的"能事后回答。不参与打分。
 	BakedTranslationLines int `json:"baked_translation_lines,omitempty"`
+	// unmasked:星号补成原词之前的原文(applyUnmaskedWords),没补过是 nil。
+	unmasked *lyricUnmaskOrig
 }
 
 // lyricSearchDeadline 给 fetchScoredLyricCandidatesStreaming 整体加一个上限。各源的 HTTP client 都有自己的超时
@@ -5015,6 +5030,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	applyTimelineIntrusionPenalty(out, durationSecs)
 	applyWordTimingTitleOverride(out)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
+	applyUnmaskedWords(out)
 	applyBorrowedTranslations(out)
 	applyBorrowedCovers(out)
 	return out
@@ -5673,6 +5689,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// 不稳定的排序会让同分候选的先后随运行变化,同一首歌两次解析可能选出不同的源。
 	// 稳定之后就是按 candidates 的构造顺序决胜,确定且可复现。
 	sort.SliceStable(results, func(i, j int) bool { return results[i].Score > results[j].Score })
+	applyUnmaskedWords(results)
 	applyBorrowedTranslations(results)
 	applyBorrowedCovers(results)
 	return results
