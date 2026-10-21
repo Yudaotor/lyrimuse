@@ -26,14 +26,15 @@ var earlyLyricsGrace = 2 * time.Second
 // earlyLyricsPenaltyTerms:打分里的扣分项。候选带着任意一项,就可能是别的版本、别的录音或时间轴不对,不提前上屏。
 // 新加打分项时这里要跟着判一次,TestEarlyLyricsPenaltyTermsCoverEveryDeduction 钉着。
 var earlyLyricsPenaltyTerms = map[string]bool{
-	scoreTermVersionTags:        true,
-	scoreTermDurationOff:        true,
-	scoreTermDurationOvershoot:  true,
-	scoreTermSourceDurationOff:  true,
-	scoreTermWordTimingOverride: true,
-	scoreTermLiveAlbumConflict:  true,
-	scoreTermTimelineOffset:     true,
-	scoreTermTimelineIntrusion:  true,
+	scoreTermVersionTags:            true,
+	scoreTermDurationOff:            true,
+	scoreTermDurationOvershoot:      true,
+	scoreTermSourceDurationOff:      true,
+	scoreTermWordTimingOverride:     true,
+	scoreTermLiveAlbumConflict:      true,
+	scoreTermTimelineOffset:         true,
+	scoreTermTimelineIntrusion:      true,
+	scoreTermSourceDurationNearMiss: true,
 }
 
 // titleMatchFullPoints:titleMatch 满档(精确同名,或括号里只有不算版本的噪音)的分值,跟着 titleMatchTierPoints 走。
@@ -72,10 +73,15 @@ const (
 )
 
 // earlyLyricsVerdict 判断首轮这一刻能不能先上屏。scored 是这一刻到手结果的打分排序,picked 是 pickLyricCandidate(scored);
-// answered 报某个歌词源这一轮回话了没有(跳过、关掉的源也会回一份空结果);graceOver:第一份能用的候选到达后是否已经等满。
+// answered 报某个歌词源这一轮回话了没有(跳过、关掉的源也会回一份空结果);graceOver:第一份能用的候选到达后是否已经等满;
+// durationSecs:本地曲长,0 = 不知道。
 func earlyLyricsVerdict(scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult,
-	answered func(string) bool, graceOver bool) earlyLyricsRule {
+	answered func(string) bool, graceOver bool, durationSecs float64) earlyLyricsRule {
 	if picked == nil {
+		return earlyLyricsWait
+	}
+	// 自报曲长差出收紧档的不提前上屏:曲长吻合的那家还没回话时,applySourceDurationNearMissPenalty 还扣不到它。
+	if sourceDurationNearMissApplies(*picked, durationSecs) {
 		return earlyLyricsWait
 	}
 	if features().LyricsSourceMode == lyricsModePriority {
@@ -155,6 +161,7 @@ type earlyLyricsWatch struct {
 	ctx           context.Context
 	hook          *provisionalLyricsHook
 	artist, title string
+	durationSecs  float64 // 本地曲长,0 = 不知道
 	start         time.Time
 	grace         *time.Timer // 第一份能用的候选到达时起;nil = 还没有能用的
 	graceOver     bool
@@ -169,12 +176,12 @@ type earlyLyricsWatch struct {
 }
 
 // newEarlyLyricsWatch:ctx 上挂着首轮先上屏的回调(首次解析才挂)、这是第一轮、这首此刻正在播,三样都满足才返回非 nil。
-func newEarlyLyricsWatch(ctx context.Context, artist, title string) *earlyLyricsWatch {
+func newEarlyLyricsWatch(ctx context.Context, artist, title string, durationSecs float64) *earlyLyricsWatch {
 	h, _ := ctx.Value(provisionalLyricsKey{}).(*provisionalLyricsHook)
 	if h == nil || lyricQueryReasonFrom(ctx) != lyricQueryReasonPrimary || !earlyLyricsTargetPlaying(ctx) {
 		return nil
 	}
-	return &earlyLyricsWatch{ctx: ctx, hook: h, artist: artist, title: title, start: time.Now()}
+	return &earlyLyricsWatch{ctx: ctx, hook: h, artist: artist, title: title, durationSecs: durationSecs, start: time.Now()}
 }
 
 // active:还在等先上屏的时机。为假时收集循环不用为它打分。
@@ -215,7 +222,7 @@ func (w *earlyLyricsWatch) observe(ne neteaseInfo, scored []scoredLyricCandidate
 		w.grace = time.NewTimer(earlyLyricsGrace)
 	}
 	isAnswered := func(s string) bool { return answered[s] }
-	rule := earlyLyricsVerdict(scored, picked, isAnswered, w.graceOver)
+	rule := earlyLyricsVerdict(scored, picked, isAnswered, w.graceOver, w.durationSecs)
 	if rule == earlyLyricsWait || (rule == earlyLyricsGraced && w.holdForNative && nativeLyricSourcePending(isAnswered)) {
 		return
 	}

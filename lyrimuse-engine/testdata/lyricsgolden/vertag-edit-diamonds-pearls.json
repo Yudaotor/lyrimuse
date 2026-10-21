@@ -204,7 +204,7 @@
       },
       {
         "source": "kugou",
-        "score": 452,
+        "score": 52,
         "terms": [
           {
             "kind": "duration",
@@ -229,6 +229,10 @@
           {
             "kind": "consensus",
             "points": 250
+          },
+          {
+            "kind": "sourceDurationNearMiss",
+            "points": -400
           }
         ],
         "has_word_timing": true

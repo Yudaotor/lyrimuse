@@ -198,7 +198,7 @@
       },
       {
         "source": "qq",
-        "score": 70,
+        "score": 1,
         "terms": [
           {
             "kind": "durationOvershoot",
@@ -223,6 +223,10 @@
           {
             "kind": "translation",
             "points": 50
+          },
+          {
+            "kind": "sourceDurationNearMiss",
+            "points": -400
           }
         ],
         "has_word_timing": true,
@@ -252,6 +256,10 @@
           {
             "kind": "translation",
             "points": 50
+          },
+          {
+            "kind": "sourceDurationNearMiss",
+            "points": -400
           }
         ],
         "has_word_timing": true,

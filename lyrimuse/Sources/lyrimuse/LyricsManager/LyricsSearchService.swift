@@ -201,6 +201,8 @@ final class LyricsSearchService {
             case "timelineOffset": return L10n.t("时间轴整体偏移")
             // v24:见引擎侧 lyrictimelineintrusion.go。
             case "timelineIntrusion": return L10n.t("间奏中多出一段歌词")
+            // v30.1:见引擎侧 sourcedurationanchor.go。
+            case "sourceDurationNearMiss": return L10n.t("源自报曲长偏离吻合版本")
             // 与引擎 match.go 的 scoreTerm kind 一一对应。引擎不再给来源先验分,没有 "source" 这一项。
             case "durationOvershoot": return L10n.t("歌词超出曲长")
             case "album": return L10n.t("专辑吻合")
@@ -254,6 +256,8 @@ final class LyricsSearchService {
                 return L10n.t("至少两个曲长与本地一致、时间轴相互吻合的歌词源显示，这份歌词整体提前或延后 2.5 秒以上，可能是基于前奏长度不同的另一个母带制作，与当前播放会整首错位")
             case "timelineIntrusion":
                 return L10n.t("至少两个时长与本地一致的歌词源显示此段为间奏、无歌词，而这份歌词在此处填入了其他段落的歌词，时间轴有误，播放至中段时将错位")
+            case "sourceDurationNearMiss":
+                return L10n.t("其他歌词源标注的曲目时长与本地一致，该源标注的时长却相差 5% 以上，可能是现场版、混音版等其他录音")
             case "durationOff":
                 return L10n.t("最后一句的时间与曲长相差 25% 以上；仍可选用，但排在所有时长相符的候选之后")
             case "rejectDurationMismatch":

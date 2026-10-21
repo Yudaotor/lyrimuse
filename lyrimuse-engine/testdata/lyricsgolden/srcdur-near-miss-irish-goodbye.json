@@ -1,0 +1,240 @@
+{
+  "id": "srcdur-near-miss-irish-goodbye",
+  "category": "source-duration-near-miss",
+  "note": "本地是专辑 No Vacancy 的录音室版 201 秒;汽水那份是 The Talco Tapes 里的重录版、自报 221.9 秒(差 9.4%),没到 sourceDurationOff 的 12%,原先靠逐字赢过曲长吻合的几家。别的源报出了本地曲长时差 5% 以上要扣分",
+  "label_evidence": {
+    "consensus_peers": 2,
+    "title_accepted": true,
+    "version_tags_ok": true,
+    "source_duration_delta_pct": 0.0318306608840931,
+    "lyrics_end_secs": 174.23,
+    "coverage_pct": 86.65400071618987,
+    "ending_corroborated": false,
+    "album_score": 200,
+    "live_mismatch": false,
+    "cache_agreement": "no-cache"
+  },
+  "track": {
+    "artist": "Treaty Oak Revival",
+    "title": "Irish Goodbye",
+    "album": "No Vacancy"
+  },
+  "captured_at": "2026-10-21",
+  "scoring_version_at_capture": 30,
+  "query": {
+    "artist": "Treaty Oak Revival",
+    "title": "Irish Goodbye",
+    "album": "No Vacancy",
+    "duration_secs": 201.064
+  },
+  "settings": {
+    "translation_language": "zh",
+    "sources": {
+      "amll": true,
+      "applemusic": true,
+      "deezer": true,
+      "genie": true,
+      "kugou": true,
+      "kuwo": true,
+      "lrclib": true,
+      "lyricfind": true,
+      "migu": true,
+      "musixmatch": true,
+      "netease": true,
+      "petitlyrics": true,
+      "qq": true,
+      "soda": true,
+      "vibe": true
+    },
+    "source_mode": "smart",
+    "source_order": [
+      "kugou",
+      "netease",
+      "qq",
+      "musixmatch",
+      "lrclib",
+      "amll",
+      "lyricfind",
+      "kuwo",
+      "migu",
+      "deezer",
+      "applemusic",
+      "soda",
+      "vibe",
+      "genie",
+      "player_local",
+      "petitlyrics"
+    ]
+  },
+  "sources": {
+    "amll": {
+      "amll": {}
+    },
+    "applemusic": {},
+    "deezer": {
+      "lyrics": "[00:10.24]Ahjr hjif tvo, qffw dvcwg cw kt dmfjkp\n[00:14.75]Cr'p romwcwg vor rv qf j bcicwg wcghrkjmf ahfw C pbffy\n[00:19.74]C'if gvr rhf oyyfm hjwd\n[00:22.25]Zjopf C ajp gvwf qfxvmf phf fifm mfjbbt swfa C bfxr\n[00:27.25]Rhcp qjmprvvb'p kt fpzjyf xmvk rhcwgp rhjr C dvw'r ajwr rv pff\n[00:32.32]Jwd cx rhft mfjm rhfcm ogbt hfjdp, C'k oy jwd bfjicwg\n[00:37.98]Rhcws C'k gvwwj Cmcph gvvdqtf\n[00:41.03]Zjopf C dvw'r hjif rhf rckf rv rfbb tvo pv bvwg\n[00:44.72]Zjopf cr'p uopr qfpr rhjr C gv hvkf\n[00:48.25]C jcw'r rmtcwg rv prjmr j xcghr, vm mocw jwtvwf'p rckf\n[00:52.75]Bfjif bcsf j dmows ghvpr cw rhf wcghr\n[00:55.53]Acrh jwvrhfm Cmcph gvvdqtf\n[01:07.11]Dv tvo rhcws, rhft'bb zjmf cx C gv hvkf\n[01:11.00]C'k pomf C'bb gfr pvkf phcr xmvk rhfk rvkvmmva C poyyvpf\n[01:15.79]Afbb phf uopr ajbsfd rhmvogh rhf dvvm\n[01:18.31]Jwd C'k rvv dmows jwd C zjw'r dfjb acrh rhjr phcr jwtkvmf\n[01:23.47]Rhcp qjmprvvb'p kt fpzjyf xmvk rhcwgp rhjr C dvw'r ajwr rv pff\n[01:28.54]Jwd phf uopr mfjmfd hfm ogbt hfjd, pv C'k oy jwd bfjicwg\n[01:36.76]Rhcws C'k gvwwj Cmcph gvvdqtf\n[01:39.76]Zjopf C dvw'r hjif rhf rckf rv rfbb tvo pv bvwg\n[01:43.35]Zjopf cr'p uopr qfpr rhjr C gv hvkf\n[01:47.04]C jcw'r rmtcwg rv prjmr j xcghr, vm mocw jwtvwf'p rckf\n[01:51.48]Bfjif bcsf j dmows ghvpr cw rhf wcghr\n[01:54.23]Acrh jwvrhfm Cmcph gvvdqtf\n[02:26.51]Pv C'bb yjt kt rjq jwd zjbb cr eocrp\n[02:30.68]Zjopf phf prcbb bvvsp gvvd jwd C dvw'r ajwr wv yjmr vx rhcp\n[02:36.23]Rhcws C'k gvwwj Cmcph gvvdqtf\n[02:39.79]Zjopf C dvw'r hjif rhf rckf rv rfbb tvo pv bvwg\n[02:43.38]Zjopf cr'p uopr qfpr rhjr C gv hvkf\n[02:47.10]C jcw'r rmtcwg rv prjmr j xcghr, vm mocw jwtvwf'p rckf\n[02:51.52]Bfjif bcsf j dmows ghvpr cw rhf wcghr\n[02:54.22]Acrh jwvrhfm Cmcph gvvdqtf\n",
+      "yrc": "[10487,3588](10487,150,0)Ahjr (10662,263,0)hjif (10962,75,0)tvo, (12250,75,0)qffw (12412,375,0)dvcwg (12912,188,0)cw (13150,62,0)kt (13475,600,0)dmfjkp\n[14787,4850](14787,75,0)Cr'p (14900,412,0)romwcwg (15400,387,0)vor (15837,63,0)rv (16012,75,0)qf (16512,13,0)j (16662,538,0)bcicwg (17262,425,0)wcghrkjmf (18062,163,0)ahfw (18300,12,0)C (18687,950,0)pbffy\n[19837,1688](19837,38,0)C'if (19950,287,0)gvr (20287,75,0)rhf (20525,450,0)oyyfm (21037,488,0)hjwd\n[22262,3775](22262,100,0)Zjopf (22500,12,0)C (22650,137,0)ajp (22875,437,0)gvwf (23350,225,0)qfxvmf (23962,100,0)phf (24175,337,0)fifm (24887,263,0)mfjbbt (25400,75,0)swfa (25612,13,0)C (25637,400,0)bfxr\n[27275,3850](27275,62,0)Rhcp (27425,575,0)qjmprvvb'p (28062,88,0)kt (28450,487,0)fpzjyf (29000,62,0)xmvk (29175,437,0)rhcwgp (29637,150,0)rhjr (29862,13,0)C (30100,375,0)dvw'r (30550,325,0)ajwr (30887,50,0)rv (31025,100,0)pff\n[32312,4213](32312,50,0)Jwd (32462,63,0)cx (32587,75,0)rhft (32875,87,0)mfjm (33200,62,0)rhfcm (33712,338,0)ogbt (34150,262,0)hfjdp, (34512,325,0)C'k (34975,175,0)oy (35262,63,0)jwd (35387,1138,0)bfjicwg\n[37950,1712](37950,125,0)Rhcws (38150,25,0)C'k (38250,162,0)gvwwj (38500,700,0)Cmcph (39275,387,0)gvvdqtf\n[40850,3475](40850,275,0)Zjopf (41262,13,0)C (41400,250,0)dvw'r (41687,450,0)hjif (42162,63,0)rhf (42300,450,0)rckf (42775,62,0)rv (42937,200,0)rfbb (43425,50,0)tvo (43575,100,0)pv (43900,425,0)bvwg\n[44745,2025](44745,37,0)Zjopf (44895,162,0)cr'p (45132,250,0)uopr (45457,250,0)qfpr (45745,175,0)rhjr (45970,12,0)C (46070,87,0)gv (46345,425,0)hvkf\n[48400,4012](48400,12,0)C (48537,38,0)jcw'r (48637,313,0)rmtcwg (48987,38,0)rv (49125,287,0)prjmr (49475,12,0)j (49587,525,0)xcghr, (50887,13,0)vm (51025,587,0)mocw (51687,538,0)jwtvwf'p (52275,137,0)rckf\n[52737,2450](52737,288,0)Bfjif (53062,275,0)bcsf (53412,13,0)j (53512,313,0)dmows (53875,375,0)ghvpr (54362,100,0)cw (54487,50,0)rhf (54600,587,0)wcghr\n[55550,1837](55550,162,0)Acrh (55775,362,0)jwvrhfm (56287,675,0)Cmcph (57037,350,0)gvvdqtf\n[67122,3075](67122,38,0)Dv (67185,50,0)tvo (67260,437,0)rhcws, (68510,75,0)rhft'bb (68660,87,0)zjmf (69047,50,0)cx (69235,12,0)C (69485,75,0)gv (69735,462,0)hvkf\n[70975,4262](70975,50,0)C'k (71100,112,0)pomf (71350,187,0)C'bb (71612,388,0)gfr (72062,88,0)pvkf (72262,388,0)phcr (72725,112,0)xmvk (72900,437,0)rhfk (73375,525,0)rvkvmmva (74387,13,0)C (74637,600,0)poyyvpf\n[75800,1600](75800,37,0)Afbb (75887,88,0)phf (76062,275,0)uopr (76375,400,0)ajbsfd (76850,87,0)rhmvogh (77137,50,0)rhf (77287,113,0)dvvm\n[78375,4125](78375,50,0)Jwd (78587,138,0)C'k (78812,100,0)rvv (79087,438,0)dmows (79625,50,0)jwd (79800,12,0)C (80062,375,0)zjw'r (80537,300,0)dfjb (80862,63,0)acrh (81000,225,0)rhjr (81325,450,0)phcr (81862,638,0)jwtkvmf\n[83537,3863](83537,75,0)Rhcp (83675,562,0)qjmprvvb'p (84312,75,0)kt (84725,475,0)fpzjyf (85250,87,0)xmvk (85437,438,0)rhcwgp (85900,150,0)rhjr (86137,13,0)C (86350,262,0)dvw'r (86812,338,0)ajwr (87175,50,0)rv (87300,100,0)pff\n[88425,3962](88425,162,0)Jwd (88675,100,0)phf (88875,200,0)uopr (89112,325,0)mfjmfd (89462,75,0)hfm (89975,362,0)ogbt (90425,250,0)hfjd, (90737,75,0)pv (90937,150,0)C'k (91300,162,0)oy (91575,37,0)jwd (91687,700,0)bfjicwg\n[96725,1675](96725,125,0)Rhcws (96937,25,0)C'k (97025,262,0)gvwwj (97462,500,0)Cmcph (98037,363,0)gvvdqtf\n[99762,3300](99762,125,0)Zjopf (100012,13,0)C (100137,238,0)dvw'r (100412,475,0)hjif (100912,50,0)rhf (101050,462,0)rckf (101537,50,0)rv (101675,475,0)rfbb (102175,50,0)tvo (102337,100,0)pv (102612,450,0)bvwg\n[103400,2087](103400,100,0)Zjopf (103625,175,0)cr'p (103850,262,0)uopr (104175,275,0)qfpr (104475,175,0)rhjr (104712,13,0)C (104812,100,0)gv (105175,312,0)hvkf\n[107152,3975](107152,13,0)C (107290,37,0)jcw'r (107390,387,0)rmtcwg (107827,25,0)rv (107865,300,0)prjmr (108215,12,0)j (108315,512,0)xcghr, (109640,12,0)vm (109752,600,0)mocw (110440,550,0)jwtvwf'p (111027,100,0)rckf\n[111500,2350](111500,262,0)Bfjif (111812,288,0)bcsf (112187,13,0)j (112275,275,0)dmows (112612,413,0)ghvpr (113125,100,0)cw (113250,50,0)rhf (113375,475,0)wcghr\n[114300,1887](114300,175,0)Acrh (114612,275,0)jwvrhfm (115025,712,0)Cmcph (115812,375,0)gvvdqtf\n[146522,2425](146522,25,0)Pv (146560,150,0)C'bb (146797,88,0)yjt (147097,75,0)kt (147410,337,0)rjq (147835,62,0)jwd (148035,312,0)zjbb (148422,38,0)cr (148535,412,0)eocrp\n[150662,5500](150662,75,0)Zjopf (150775,100,0)phf (150975,300,0)prcbb (151312,275,0)bvvsp (151650,200,0)gvvd (151925,162,0)jwd (152312,13,0)C (152600,212,0)dvw'r (152950,412,0)ajwr (153650,87,0)wv (154137,363,0)yjmr (154650,800,0)vx (155537,625,0)rhcp\n[156817,1625](156817,113,0)Rhcws (157030,25,0)C'k (157117,125,0)gvwwj (157317,675,0)Cmcph (158067,375,0)gvvdqtf\n[159600,3012](159600,262,0)Zjopf (160012,13,0)C (160137,250,0)dvw'r (160412,425,0)hjif (160875,50,0)rhf (161025,450,0)rckf (161512,63,0)rv (161650,387,0)rfbb (162137,63,0)tvo (162312,100,0)pv (162487,125,0)bvwg\n[163400,2762](163400,100,0)Zjopf (163600,162,0)cr'p (163825,275,0)uopr (164150,287,0)qfpr (164462,163,0)rhjr (164700,12,0)C (164812,88,0)gv (166125,37,0)hvkf\n[167200,4275](167200,12,0)C (167350,37,0)jcw'r (167450,275,0)rmtcwg (167762,50,0)rv (167900,275,0)prjmr (168237,13,0)j (168375,487,0)xcghr, (169675,12,0)vm (169775,625,0)mocw (170475,500,0)jwtvwf'p (171012,463,0)rckf\n[171512,2363](171512,250,0)Bfjif (171812,288,0)bcsf (172175,12,0)j (172275,287,0)dmows (172625,375,0)ghvpr (173112,88,0)cw (173225,50,0)rhf (173337,538,0)wcghr\n[174232,1925](174232,200,0)Acrh (174595,325,0)jwvrhfm (175045,662,0)Cmcph (175795,362,0)gvvdqtf",
+      "tr": "[00:10.48]㢂䡉㔦䞽㢴䆄㖑㶒㩭㢐㒙\n[00:14.78]㢴䡉䃃㧞，䮑䯳䠃䃉䄚䡉䨗䢵䂶䂶䆄㴹㖑\n[00:19.83]㢴㱣䄚䒜㕋\n[00:22.26]㙻䩪䞽䉰㥺䲯㜜䯰㙨㢴䮈䩢䊠䀘，㢴䯳䬕䙖㠁䄚\n[00:27.27]䥐䗕䨽㬥㜦䈅㢴䬰䌄㔱㺁䈿㝑㥧㦁䆄䄶䆄㓾㢍\n[00:32.31]䵢䈅㔱㺁䄶䪠䯨䜾㺶䆄㑓㷶，㢴䯳䍭㒕䮈䩢\n[00:37.95]㢴㝑㢴㗇䈿䫫㕩㳙\n[00:40.85]㙻䩪㢴䓉䯬䉗㰿㢂㳵㳙\n[00:44.74]㙻䩪㢴㐭㙍㴨䈅㧇㵓\n[00:48.40]㢴䈿䈅㝑䩊䍭㛳䤸，㢒䈿㝑䰴䄚䩙㳇䄪䆄䉫\n[00:52.73]㟌䏩㫄㩨㩨䆄䟵䅦䡉㤋㒮䔪䞽㺠㶒\n[00:55.55]㨄䙧䡉䩷䈿䫫㕩㳙\n[01:07.12]㢂㝛㩃㻴䒿㢴㧇㵓，㢇䀡㗇䞽㜜㔅\n[01:10.97]㢴㝑䣠䚲㢇䀡䭝㭆㗇䣸䍏㢴㨿㻞\n[01:15.80]䉰㦸㦸㠁㵫㑅䙧\n[01:18.37]㕩㢴㫄㩃㤿䪄䶏，㨄㢒䎁㔼䈿䄚䥐㠓㥹䄶\n[01:23.53]䥐䗕䨽㬥㜦䈅㢴䬰䌄㔱㺁䈿㝑㥧㦁䆄䄶䆄㓾㢍\n[01:28.42]㕩䉰㦸㦸䪠䯨㔱䗕䜾㺶䆄㷶，䆗䜱㢴䍭㒕䮈䩢\n[01:36.72]㢴㝑㢴㗇䈿䫫㕩㳙\n[01:39.76]㙻䩪㢴䓉䯬䉗㰿㢂㳵㳙\n[01:43.40]㙻䩪㢴㐭㙍㴨䈅㧇㵓\n[01:47.15]㢴䈿䈅㝑䩊䍭㛳䤸，㢒䈿㝑䰴䄚䩙㳇䄪䆄䉫\n[01:51.50]㟌䏩㫄㩨㩨䆄䟵䅦䡉㤋㒮䔪䞽㺠㶒\n[01:54.30]㨄䙧䡉䩷䈿䫫㕩㳙\n[02:26.52]䆗䜱㢴㗇㒢䄚䋊，䯳䩅䪣䭍\n[02:30.66]㙻䩪䉰㥧䍭䙧䰮䗩䠬䰠䄪，㕩㢴䈿㝑㨄㫨䣉䥐䄶\n[02:36.81]㢴㝑㢴㗇䈿䫫㕩㳙\n[02:39.60]㙻䩪㢴䓉䯬䉗㰿㢂㳵㳙\n[02:43.40]㙻䩪㢴㐭㙍㴨䈅㧇㵓\n[02:47.20]㢴䈿䈅㝑䩊䍭㛳䤸，㢒䈿㝑䰴䄚䩙㳇䄪䆄䉫\n[02:51.51]㟌䏩㫄㩨㩨䆄䟵䅦䡉㤋㒮䔪䞽㺠㶒\n[02:54.23]㨄䙧䡉䩷䈿䫫㕩㳙\n",
+      "title": "Irish Goodbye",
+      "artist": "Treaty Oak Revival",
+      "album": "No Vacancy",
+      "cover": "https://cdn-images.dzcdn.net/images/cover/59ca0b1d09e3fcf70408e1104b795234/1800x1800-000000-80-0-0.jpg",
+      "duration_secs": 201
+    },
+    "genie": {},
+    "kugou": {},
+    "kuwo": {},
+    "lrclib": {
+      "lyrics": "[00:10.26] Ahjr hjif tvo, qffw dvcwg cw kt dmfjkp\n[00:14.75] Cr'p romwcwg vor rv qf j bcicwg wcghrkjmf ahfw C pbffy\n[00:19.77] C'if gvr rhf oyyfm hjwd\n[00:22.22] Zjopf C ajp gvwf qfxvmf phf fifm mfjbbt swfa C bfxr\n[00:27.29] Rhcp qjmprvvb'p kt fpzjyf xmvk rhcwgp rhjr C dvw'r ajwr rv pff\n[00:32.33] Jwd cx rhft mfjm rhfcm ogbt hfjdp, C'k oy jwd bfjicwg\n[00:37.96] Rhcws C'k gvwwj Cmcph gvvdqtf\n[00:41.04] Zjopf C dvw'r hjif rhf rckf rv rfbb tvo pv bvwg\n[00:44.78] Zjopf cr'p uopr qfpr rhjr C gv hvkf\n[00:48.23] C jcw'r rmtcwg rv prjmr j xcghr, vm mocw jwtvwf'p rckf\n[00:52.72] Bfjif bcsf j dmows ghvpr cw rhf wcghr\n[00:55.54] Acrh jwvrhfm Cmcph gvvdqtf\n[01:07.10] Dv tvo rhcws, rhft'bb zjmf cx C gv hvkf\n[01:11.08] C'k pomf C'bb gfr pvkf phcr xmvk rhfk rvkvmmva C poyyvpf\n[01:15.77] Afbb phf uopr ajbsfd rhmvogh rhf dvvm\n[01:18.32] Jwd C'k rvv dmows jwd C zjw'r dfjb acrh rhjr phcr jwtkvmf\n[01:23.43] Rhcp qjmprvvb'p kt fpzjyf xmvk rhcwgp rhjr C dvw'r ajwr rv pff\n[01:28.52] Jwd phf uopr mfjmfd hfm ogbt hfjd, pv C'k oy jwd bfjicwg\n[01:36.71] Rhcws C'k gvwwj Cmcph gvvdqtf\n[01:39.79] Zjopf C dvw'r hjif rhf rckf rv rfbb tvo pv bvwg\n[01:43.31] Zjopf cr'p uopr qfpr rhjr C gv hvkf\n[01:47.03] C jcw'r rmtcwg rv prjmr j xcghr, vm mocw jwtvwf'p rckf\n[01:51.47] Bfjif bcsf j dmows ghvpr cw rhf wcghr\n[01:54.25] Acrh jwvrhfm Cmcph gvvdqtf\n[02:26.52] Pv C'bb yjt kt rjq jwd zjbb cr eocrp\n[02:30.62] Zjopf phf prcbb bvvsp gvvd jwd C dvw'r ajwr wv yjmr vx rhcp\n[02:36.29] Rhcws C'k gvwwj Cmcph gvvdqtf\n[02:39.79] Zjopf C dvw'r hjif rhf rckf rv rfbb tvo pv bvwg\n[02:43.30] Zjopf cr'p uopr qfpr rhjr C gv hvkf\n[02:47.13] C jcw'r rmtcwg rv prjmr j xcghr, vm mocw jwtvwf'p rckf\n[02:51.56] Bfjif bcsf j dmows ghvpr cw rhf wcghr\n[02:54.26] Acrh jwvrhfm Cmcph gvvdqtf\n[02:56.89] ",
+      "title": "Irish Goodbye",
+      "artist": "Treaty Oak Revival",
+      "album": "No Vacancy",
+      "duration_secs": 201
+    },
+    "lyricfind": {},
+    "migu": {},
+    "musixmatch": {},
+    "netease": {
+      "netease": {
+        "cover": "https://p1.music.126.net/8_7syf_bg96G3_cOERiBkQ==/109951165630031309.jpg?imageView\u0026thumbnail=3000y3000\u0026type=jpg\u0026quality=90",
+        "song_url": "https://music.163.com/song?id=1812095738",
+        "duration_secs": 201.024,
+        "artist": "Treaty Oak Revival",
+        "title": "Irish Goodbye",
+        "album": "No Vacancy",
+        "song_id": 1812095738,
+        "album_id": 121663606
+      }
+    },
+    "petitlyrics": {},
+    "qq": {
+      "title": "Irish Goodbye (Explicit)",
+      "artist": "Treaty Oak Revival",
+      "album": "No Vacancy (Explicit)",
+      "cover": "https://y.qq.com/music/photo_new/T002R800x800M000002jz4A516ifcU.jpg",
+      "duration_secs": 201
+    },
+    "soda": {
+      "lyrics": "[00:00.01]Afbb ahjr hjif tvo qffw dvcwg cw kt dmfjkp\n[00:04.73]Afbb cr'p romwcwg vor rv qf j bcicwg wcghrkjmf ahfw C pbffy\n[00:10.25]Qor C gvr rhf oyyfm hjwd\n[00:13.09]'Zjopf C ajp gvwf qfxvmf phf fifm mfjbbt swfa C bfxr\n[00:18.45]Jwd rhcp qjmprvvb'p kt fpzjyf xmvk rhcwgp rhjr C dvw'r ajwwj pff\n[00:23.97]Vh jwd cx rhft'mf hfmf rhfcm ogbt hfjdp C'k oy jwd bfjicwg\n[00:30.45]Rhcws C'k gvwwj Cmcph gvvdqtf\n[00:33.73]Qfzjopf C dvw'r hjif rhf rckf rv rfbb tvo pv bvwg\n[00:37.65]Zjopf cr'p uopr qfpr rhjr C gv hvkf\n[00:41.61]Zjopf C rmt rv prjmr j xcghr mocw jwtvwf'p rckf\n[00:46.61]Bfjif bcsf j rmozs ghvpr cw rhf wcghr afbb acrh jwvrhfm Cmcph gvvdqtf\n[01:01.69]Vh jwd dv tvo rhcws acbb rhft zjmf cx C gv hvkf\n[01:06.49]Afbb pomf C'bb gfr pvkf ** xmvk rhfk rvkvmmva C poyyvpf\n[01:11.93]Phf uopr ajbsfd rhmvogh rhf dvvm\n[01:14.69]Jwd wva rvv dmows jwd C zjw'r dfjb acrh rhjr ** jwtkvmf\n[01:20.17]Jwd rhcp qjmprvvb'p kt fpzjyf xmvk rhcwgp rhjr C dvw'r ajwwj pff\n[01:25.69]Vh jwd phf uopr phvvs hfm ogbt hfjd pv C'k oy jwd bfjicwg\n[01:34.89]Rhcws C'k gvwwj Cmcph gvvdqtf\n[01:38.21]Qfzjopf C dvw'r hjif rhf rckf rv rfbb tvo pv bvwg\n[01:42.09]Zjopf cr'p uopr qfpr rhjr C gv hvkf\n[01:46.05]Zjopf C rmt rv prjmr j xcghr mocw jwtvwf'p rckf\n[01:51.05]Bfjif bcsf j rmozs ghvpr cw rhf wcghr afbb acrh jwvrhfm Cmcph gvvdqtf\n[01:59.33]Tfjh acrh jwvrhfm Cmcph gvvdqtf\n[02:29.85]Jwd C'if qffw kcghr jp hfjifw zjbbcwg eocrp\n[02:34.21]Phf prcbb bvvsp gvvd qor C dvw'r ajwr wv yjmr vx rhcp\n[02:39.45]Jwd afbb C rhcws C'k gvwwj Cmcph gvvdqtf\n[02:44.01]Qfzjopf C dvw'r hjif rhf rckf rv rfbb tvo pv bvwg\n[02:47.93]Zjopf cr'p uopr qfpr rhjr C gv hvkf\n[02:51.89]Zjopf C rmt rv prjmr j xcghr mocw jwtvwf'p rckf\n[02:56.89]Bfjif bcsf j rmozs ghvpr cw rhf wcghr afbb acrh jwvrhfm Cmcph gvvdqtf\n[03:05.09]Tfjh acrh jwvrhfm Cmcph gvvdqtf",
+      "yrc": "[14,4719](14,286,0)Afbb (300,260,0)ahjr (560,265,0)hjif (1014,291,0)tvo (2214,288,0)qffw (2502,478,0)dvcwg (2980,245,0)cw (3254,291,0)kt (3545,480,0)dmfjkp\n[4734,5519](4734,206,0)Afbb (4940,120,0)cr(5060,0,0)'(5060,162,0)p (5222,398,0)romwcwg (5620,285,0)vor (6094,226,0)rv (6320,225,0)qf (6774,288,0)j (7062,683,0)bcicwg (7745,520,0)wcghrkjmf (8534,226,0)ahfw (8760,225,0)C (9094,491,0)pbffy\n[10254,2839](10254,226,0)Qor (10480,160,0)C (10640,225,0)gvr (10934,291,0)rhf (11225,635,0)oyyfm (11860,245,0)hjwd\n[13094,5359](13094,0,0)'(13094,303,0)Zjopf (13397,203,0)C (13600,265,0)ajp (13865,280,0)gvwf (14334,291,0)qfxvmf (15014,291,0)phf (15305,280,0)fifm (16094,291,0)mfjbbt (16494,451,0)swfa (16974,291,0)C (17454,291,0)bfxr\n[18454,5519](18454,226,0)Jwd (18680,222,0)rhcp (18902,415,0)qjmprvvb(19317,0,0)'(19317,223,0)p (19540,285,0)kt (19854,531,0)fpzjyf (20534,246,0)xmvk (20780,245,0)rhcwgp (21214,266,0)rhjr (21480,240,0)C (21720,200,0)dvw(21920,0,0)'(21920,225,0)r (22174,451,0)ajwwj (22734,291,0)pff\n[23974,6291](23974,226,0)Vh (24200,160,0)jwd (24360,200,0)cx (24560,180,0)rhft(24740,0,0)'(24740,160,0)mf (24900,245,0)hfmf (25214,291,0)rhfcm (25734,566,0)ogbt (26300,280,0)hfjdp (26580,285,0)C(26865,0,0)'(26974,206,0)k (27180,200,0)oy (27380,282,0)jwd (27662,603,0)bfjicwg\n[30454,3279](30454,226,0)Rhcws (30680,140,0)C(30820,0,0)'(30820,100,0)k (30920,185,0)gvwwj (31105,760,0)Cmcph (31865,680,0)gvvdqtf\n[33734,3919](33734,246,0)Qfzjopf (33980,160,0)C (34140,140,0)dvw(34280,0,0)'(34280,200,0)r (34480,265,0)hjif (34934,226,0)rhf (35160,225,0)rckf (35614,288,0)rv (35902,203,0)rfbb (36294,246,0)tvo (36540,245,0)pv (36814,291,0)bvwg\n[37654,3959](37654,263,0)Zjopf (37917,183,0)cr(38100,0,0)'(38100,180,0)p (38280,225,0)uopr (38505,360,0)qfpr (38894,226,0)rhjr (39120,160,0)C (39280,225,0)gv (39574,331,0)hvkf\n[41614,4999](41614,263,0)Zjopf (41877,228,0)C (42134,291,0)rmt (42494,226,0)rv (42720,225,0)prjmr (42974,288,0)j (43262,243,0)xcghr (44694,411,0)mocw (45414,463,0)jwtvwf(45877,0,0)'(45877,223,0)p (46100,285,0)rckf\n[46614,7291](46614,291,0)Bfjif (47014,286,0)bcsf (47300,262,0)j (47562,223,0)rmozs (47785,480,0)ghvpr (48294,226,0)cw (48520,225,0)rhf (48745,240,0)wcghr (49374,291,0)afbb (49694,291,0)acrh (50014,291,0)jwvrhfm (50454,811,0)Cmcph (51265,640,0)gvvdqtf\n[61694,4799](61694,226,0)Vh (61920,160,0)jwd (62080,225,0)dv (62334,246,0)tvo (62580,245,0)rhcws (63734,226,0)acbb (63960,222,0)rhft (64182,243,0)zjmf (64454,246,0)cx (64700,240,0)C (64940,285,0)gv (65294,331,0)hvkf\n[66494,5439](66494,291,0)Afbb (66814,266,0)pomf (67080,200,0)C(67280,0,0)'(67280,160,0)bb (67440,225,0)gfr (67814,291,0)pvkf (68105,280,0)** (68534,266,0)xmvk (68800,265,0)rhfk (69214,571,0)rvkvmmva (70254,291,0)C (70545,640,0)poyyvpf\n[71934,2759](71934,266,0)Phf (72200,265,0)uopr (72465,480,0)ajbsfd (72974,291,0)rhmvogh (73334,288,0)rhf (73622,203,0)dvvm\n[74694,5479](74694,246,0)Jwd (74940,245,0)wva (75214,331,0)rvv (75545,400,0)dmows (76094,246,0)jwd (76340,240,0)C (76580,240,0)zjw(76820,0,0)'(76820,245,0)r (77134,326,0)dfjb (77460,240,0)acrh (77700,245,0)rhjr (77945,360,0)** (78494,971,0)jwtkvmf\n[80174,5519](80174,226,0)Jwd (80400,222,0)rhcp (80622,535,0)qjmprvvb(81157,0,0)'(81157,183,0)p (81340,245,0)kt (81585,520,0)fpzjyf (82254,246,0)xmvk (82500,245,0)rhcwgp (82974,246,0)rhjr (83220,220,0)C (83440,200,0)dvw(83640,0,0)'(83640,225,0)r (83894,451,0)ajwwj (84494,291,0)pff\n[85694,6251](85694,226,0)Vh (85920,160,0)jwd (86080,200,0)phf (86280,265,0)uopr (86545,452,0)phvvs (86997,228,0)hfm (87454,571,0)ogbt (88025,235,0)hfjd (88260,240,0)pv (88500,240,0)C(88740,0,0)'(88740,200,0)k (88940,180,0)oy (89120,265,0)jwd (89385,560,0)bfjicwg\n[94894,3319](94894,226,0)Rhcws (95120,120,0)C(95240,0,0)'(95240,100,0)k (95340,205,0)gvwwj (95545,760,0)Cmcph (96305,720,0)gvvdqtf\n[98214,3879](98214,246,0)Qfzjopf (98460,180,0)C (98640,140,0)dvw(98780,0,0)'(98780,180,0)r (98960,265,0)hjif (99414,226,0)rhf (99640,225,0)rckf (100054,288,0)rv (100342,243,0)rfbb (100774,246,0)tvo (101020,245,0)pv (101294,291,0)bvwg\n[102094,3959](102094,303,0)Zjopf (102397,183,0)cr(102580,0,0)'(102580,160,0)p (102740,205,0)uopr (102974,331,0)qfpr (103334,226,0)rhjr (103560,180,0)C (103740,245,0)gv (104014,331,0)hvkf\n[106054,4999](106054,263,0)Zjopf (106317,228,0)C (106574,291,0)rmt (106934,246,0)rv (107180,245,0)prjmr (107454,288,0)j (107742,203,0)xcghr (109134,411,0)mocw (109894,606,0)jwtvwf(110500,0,0)'(110500,160,0)p (110660,165,0)rckf\n[111054,7291](111054,291,0)Bfjif (111454,286,0)bcsf (111740,282,0)j (112022,243,0)rmozs (112265,440,0)ghvpr (112774,226,0)cw (113000,222,0)rhf (113222,243,0)wcghr (113854,286,0)afbb (114140,285,0)acrh (114454,291,0)jwvrhfm (114894,811,0)Cmcph (115705,640,0)gvvdqtf\n[119334,4611](119334,291,0)Tfjh (119854,206,0)acrh (120060,205,0)jwvrhfm (120374,811,0)Cmcph (121185,760,0)gvvdqtf\n[149854,4211](149854,166,0)Jwd (150020,60,0)C(150080,0,0)'(150080,80,0)if (150160,100,0)qffw (150260,80,0)kcghr (150340,165,0)jp (150505,680,0)hfjifw (151185,595,0)zjbbcwg (151780,285,0)eocrp\n[154214,5239](154214,266,0)Phf (154480,265,0)prcbb (154745,360,0)bvvsp (155134,291,0)gvvd (155614,266,0)qor (155880,240,0)C (156120,180,0)dvw(156300,0,0)'(156300,205,0)r (156534,291,0)ajwr (157374,291,0)wv (157814,291,0)yjmr (158214,266,0)vx (158480,265,0)rhcp\n[159454,4559](159454,291,0)Jwd (160414,226,0)afbb (160640,160,0)C (160800,140,0)rhcws (160940,140,0)C(161080,0,0)'(161080,120,0)k (161200,185,0)gvwwj (161454,691,0)Cmcph (162145,680,0)gvvdqtf\n[164014,3919](164014,246,0)Qfzjopf (164260,180,0)C (164440,140,0)dvw(164580,0,0)'(164580,200,0)r (164780,285,0)hjif (165214,226,0)rhf (165440,225,0)rckf (165894,291,0)rv (166185,240,0)rfbb (166574,246,0)tvo (166820,245,0)pv (167134,291,0)bvwg\n[167934,3959](167934,303,0)Zjopf (168237,183,0)cr(168420,0,0)'(168420,180,0)p (168600,225,0)uopr (168825,320,0)qfpr (169174,226,0)rhjr (169400,160,0)C (169560,225,0)gv (169814,411,0)hvkf\n[171894,4999](171894,263,0)Zjopf (172157,228,0)C (172414,291,0)rmt (172774,246,0)rv (173020,245,0)prjmr (173294,288,0)j (173582,203,0)xcghr (174974,411,0)mocw (175734,566,0)jwtvwf(176300,0,0)'(176300,160,0)p (176460,205,0)rckf\n[176894,7291](176894,291,0)Bfjif (177254,291,0)bcsf (177574,288,0)j (177862,243,0)rmozs (178105,360,0)ghvpr (178614,206,0)cw (178820,205,0)rhf (179025,240,0)wcghr (179854,206,0)afbb (180060,205,0)acrh (180294,291,0)jwvrhfm (180694,851,0)Cmcph (181545,640,0)gvvdqtf\n[185094,5451](185094,291,0)Tfjh (185454,291,0)acrh (185814,291,0)jwvrhfm (186214,811,0)Cmcph (187025,3520,0)gvvdqtf",
+      "tr": "[00:00.01]㢂䞽㢴䆄㖑䃷㶒䦤䡹㩭䄚㢐㒙\n[00:04.73]䗫䈾㢴㫈䃃 䥐䪫䃉䄚䣥㥺䆄㴹㖑\n[00:10.25]䇪㢴䬕㱣㩃䒜㕋\n[00:13.09]㙻䩪䞽䉰㴂㝛䊠䀘 㢴㕡䬕㵊㠁\n[00:18.45]䥐䨽㬥㶝䊒䈅㢴䆄䌄㕋㻾 䚯䩢䈿䋥䗀䎘䆄䡉㲨\n[00:23.97]䍃㔱㺁䂕㟫䄶㓠㮵 㢴㧌䍭㒕䮈䐾\n[00:30.45]㢴㝑㛌䗩䮈䐾\n[00:33.73]㢴䓉䯬䉗㨢㢂㳵㳙\n[00:37.65]㧇㵓䔕䈅㐭㙍䆄㕌䠕\n[00:41.61]㢴䠲㚞䑣䩊䍭㛳䊔 䏁䙤䆗䄉䄪䆄䯬㿚\n[00:46.61]㟌䴮㺠㶒䆄䟵䅦䊹䟞 㛌䗩䮈䐾\n[01:01.69]㢂㝛㩃㢴䍃㧇㵓 㢇䀡㗇䞽㜜㔅\n[01:06.49]㝑䙧䣠䚲䒋㘹㗇䢷㙨㢇䀡䆄䮙䙶䓋䭂\n[01:11.93]䉰㦸㠁㵫㑅䙧\n[01:14.69]㢴䬕㫄㩃䪄䶏 㨄㢒㶑䏱䎁㷆䥐䡉㲨\n[01:20.17]䥐䨽㬥㶝䊒䈅㢴䆄䌄㕋㻾 䚯䩢䈿䋥䗀䎘䆄䡉㲨\n[01:25.69]䉰㦸㐢䍭䑀䛜䪠䯨䈿㬠 㢴㧌䍭㒕䮈䐾\n[01:34.89]㢴㝑㛌䗩䮈䐾\n[01:38.21]㢴䓉䯬䉗㨢㢂㳵㳙\n[01:42.09]㧇㵓䔕䈅㐭㙍䆄㕌䠕\n[01:46.05]㢴䠲㚞䑣䩊䍭㛳䊔 䏁䙤䆗䄉䄪䆄䯬㿚\n[01:51.05]㟌䴮㺠㶒䆄䟵䅦䊹䟞 㛌䗩䮈䐾\n[01:59.33]䈅㢩 㨄䩷㛌䗩䮈䐾\n[02:29.85]㢴㕡䄼䯳䩅䪣䭍\n[02:34.21]䉰䰮㽷䦿䄪 䇪㢴䈿䋥㨄㹮㫈㡺䟯\n[02:39.45]㢴㝑㛌䗩䮈䐾\n[02:44.01]㢴䓉䯬䉗㨢㢂㳵㳙\n[02:47.93]㧇㵓䔕䈅㐭㙍䆄㕌䠕\n[02:51.89]㢴䠲㚞䑣䩊䍭㛳䊔 䏁䙤䆗䄉䄪䆄䯬㿚\n[02:56.89]㟌䴮㺠㶒䆄䟵䅦䊹䟞 㛌䗩䮈䐾\n[03:05.09]䈅㢩 㨄䩷㛌䗩䮈䐾",
+      "title": "Irish Goodbye (Talco Tapes Version)",
+      "artist": "Treaty Oak Revival",
+      "album": "The Talco Tapes",
+      "cover": "https://p3-luna.douyinpic.com/img/tos-cn-v-2774c002/oY5vQELA8EY4AAUA7jAuPAPiBD3AarLiiYhWw~tplv-b829550vbb-resize:0:0.jpg",
+      "duration_secs": 221.944
+    },
+    "vibe": {}
+  },
+  "expect": {
+    "winner": "deezer",
+    "verdicts": {
+      "deezer": "accepted",
+      "lrclib": "accepted",
+      "soda": "accepted"
+    },
+    "ranked": [
+      {
+        "source": "deezer",
+        "score": 1195,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 193
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 32
+          },
+          {
+            "kind": "album",
+            "points": 150
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "lrclib",
+        "score": 745,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 193
+          },
+          {
+            "kind": "lines",
+            "points": 32
+          },
+          {
+            "kind": "album",
+            "points": 150
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          }
+        ]
+      },
+      {
+        "source": "soda",
+        "score": 687,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 236
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 31
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          },
+          {
+            "kind": "sourceDurationNearMiss",
+            "points": -400
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      }
+    ],
+    "winner_fingerprint": "8ec6277cb4124f8f"
+  }
+}

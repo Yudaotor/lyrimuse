@@ -110,10 +110,10 @@ func TestEarlyLyricsVerdict(t *testing.T) {
 		return func(s string) bool { return slices.Contains(sources, s) }
 	}
 	verdict := func(c scoredLyricCandidateResult, ans func(string) bool, graceOver bool) earlyLyricsRule {
-		return earlyLyricsVerdict([]scoredLyricCandidateResult{c}, &c, ans, graceOver)
+		return earlyLyricsVerdict([]scoredLyricCandidateResult{c}, &c, ans, graceOver, 0)
 	}
 
-	if got := earlyLyricsVerdict(nil, nil, answered(), true); got != earlyLyricsWait {
+	if got := earlyLyricsVerdict(nil, nil, answered(), true, 0); got != earlyLyricsWait {
 		t.Errorf("没有可用候选: %q", got)
 	}
 	if got := verdict(trusted, answered("kugou"), false); got != earlyLyricsTrust {
@@ -160,7 +160,7 @@ func TestEarlyLyricsVerdict(t *testing.T) {
 		t.Errorf("排在前面的都回话了: %q", got)
 	}
 	wrongLanguage := scoredLyricCandidateResult{Source: "kugou", Score: -1, ScoreTerms: []scoreTerm{{Kind: scoreRejectWrongLanguage}}}
-	if got := earlyLyricsVerdict([]scoredLyricCandidateResult{lineOnly, wrongLanguage}, &lineOnly, answered("netease", "kugou"), true); got != earlyLyricsWait {
+	if got := earlyLyricsVerdict([]scoredLyricCandidateResult{lineOnly, wrongLanguage}, &lineOnly, answered("netease", "kugou"), true, 0); got != earlyLyricsWait {
 		t.Errorf("排在前面的那份因语言判废,后到的源可能解除它: %q", got)
 	}
 	featuresRef().LyricsSources = map[string]bool{"netease": true, "qq": true}
@@ -186,13 +186,13 @@ func TestEarlyLyricsWatch(t *testing.T) {
 	}
 	target := withEarlyLyricsTarget(context.Background(), "A|T|Al")
 
-	if newEarlyLyricsWatch(withProvisionalLyrics(withEarlyLyricsTarget(context.Background(), "B|T|Al"), record), "B", "T") != nil {
+	if newEarlyLyricsWatch(withProvisionalLyrics(withEarlyLyricsTarget(context.Background(), "B|T|Al"), record), "B", "T", 0) != nil {
 		t.Error("不是正在播的这首,不该提前上屏")
 	}
-	if newEarlyLyricsWatch(target, "A", "T") != nil {
+	if newEarlyLyricsWatch(target, "A", "T", 0) != nil {
 		t.Error("没挂首轮先上屏的回调(不是首次解析),不该提前上屏")
 	}
-	if newEarlyLyricsWatch(withLyricQueryReason(withProvisionalLyrics(target, record), lyricQueryReasonAliasMissing), "A", "T") != nil {
+	if newEarlyLyricsWatch(withLyricQueryReason(withProvisionalLyrics(target, record), lyricQueryReasonAliasMissing), "A", "T", 0) != nil {
 		t.Error("不是第一轮,不该提前上屏")
 	}
 	var none *earlyLyricsWatch
@@ -205,7 +205,7 @@ func TestEarlyLyricsWatch(t *testing.T) {
 
 	// 逐行那份不够靠得住:第一份能用的到了就起计时,等满之后才上;首轮收齐还是它就不再提交。
 	ctx := withProvisionalLyrics(target, record)
-	w := newEarlyLyricsWatch(ctx, "A", "T")
+	w := newEarlyLyricsWatch(ctx, "A", "T", 0)
 	if w == nil {
 		t.Fatal("正在播的这首、首次解析、第一轮,应该起作用")
 	}
@@ -245,7 +245,7 @@ func TestEarlyLyricsWatch(t *testing.T) {
 	// 靠得住的立刻上;收齐后换了一份就再提交一次,之后不再提交。
 	calls = nil
 	ctx = withProvisionalLyrics(target, record)
-	w = newEarlyLyricsWatch(ctx, "A", "T")
+	w = newEarlyLyricsWatch(ctx, "A", "T", 0)
 	kugou := earlyCand("kugou", earlyTermWord, earlyTermTitle, earlyTermDur, earlyTermLines)
 	w.observe(neteaseInfo{}, []scoredLyricCandidateResult{kugou}, map[string]bool{"kugou": true})
 	if !slices.Equal(calls, []string{"kugou"}) {
@@ -262,7 +262,7 @@ func TestEarlyLyricsWatch(t *testing.T) {
 	// 收齐后挑出来的是别的源、内容跟先上屏的一样(只差元信息标签):不再提交。
 	calls = nil
 	ctx = withProvisionalLyrics(target, record)
-	w = newEarlyLyricsWatch(ctx, "A", "T")
+	w = newEarlyLyricsWatch(ctx, "A", "T", 0)
 	w.observe(neteaseInfo{}, []scoredLyricCandidateResult{kugou}, map[string]bool{"kugou": true})
 	qqSame := qq
 	qqSame.Lyrics = "[offset:0]\n" + kugou.Lyrics
@@ -282,7 +282,7 @@ func TestEarlyLyricsWatch(t *testing.T) {
 
 	// 切到了别的歌、或者取消了:这一首不再提前上屏。
 	calls = nil
-	w = newEarlyLyricsWatch(withProvisionalLyrics(target, record), "A", "T")
+	w = newEarlyLyricsWatch(withProvisionalLyrics(target, record), "A", "T", 0)
 	noteEnrichPlayingKey("B|T2|Al")
 	w.observe(neteaseInfo{}, []scoredLyricCandidateResult{kugou}, map[string]bool{"kugou": true})
 	if len(calls) != 0 || w.active() {
@@ -290,7 +290,7 @@ func TestEarlyLyricsWatch(t *testing.T) {
 	}
 	noteEnrichPlayingKey("A|T|Al")
 	cancelled, cancel := context.WithCancel(withProvisionalLyrics(target, record))
-	w = newEarlyLyricsWatch(cancelled, "A", "T")
+	w = newEarlyLyricsWatch(cancelled, "A", "T", 0)
 	cancel()
 	w.observe(neteaseInfo{}, []scoredLyricCandidateResult{kugou}, map[string]bool{"kugou": true})
 	if len(calls) != 0 || w.active() {
@@ -331,7 +331,7 @@ func TestEarlyLyricsGoldenNeverShowsAPenalizedCandidate(t *testing.T) {
 				scored := rankLyricSourceResults(q.Artist, q.Title, q.Album, q.DurationSecs, part)
 				picked := pickLyricCandidate(scored)
 				for _, graceOver := range []bool{false, true} {
-					if earlyLyricsVerdict(scored, picked, func(s string) bool { return slices.Contains(sub, s) }, graceOver) == earlyLyricsWait {
+					if earlyLyricsVerdict(scored, picked, func(s string) bool { return slices.Contains(sub, s) }, graceOver, q.DurationSecs) == earlyLyricsWait {
 						continue
 					}
 					i := slices.IndexFunc(full, func(c scoredLyricCandidateResult) bool { return c.Source == picked.Source && c.Lyrics != "" })
@@ -369,7 +369,7 @@ func TestEarlyLyricsIsWired(t *testing.T) {
 	}
 	src := string(data)
 	for _, needle := range []string{
-		"\tearlyWatch := newEarlyLyricsWatch(ctx, artist, title)\n\tif earlyWatch != nil && forPlaying {\n\t\tearlyWatch.holdForNative = playerLocalNoVocalsHint(artist, srcTitle, album, durationSecs)\n\t}\ncollect:\n",
+		"\tearlyWatch := newEarlyLyricsWatch(ctx, artist, title, durationSecs)\n\tif earlyWatch != nil && forPlaying {\n\t\tearlyWatch.holdForNative = playerLocalNoVocalsHint(artist, srcTitle, album, durationSecs)\n\t}\ncollect:\n",
 		"\t\t\tif onUpdate != nil || earlyWatch.active() {\n\t\t\t\tscored := scoreAndSort()\n",
 		"\t\t\t\tearlyWatch.observe(raw[\"netease\"].ne, scored, doneSources)\n",
 		"\t\tcase <-earlyWatch.graceC():\n\t\t\tearlyWatch.endGrace()\n\t\t\tearlyWatch.observe(raw[\"netease\"].ne, scoreAndSort(), doneSources)\n",

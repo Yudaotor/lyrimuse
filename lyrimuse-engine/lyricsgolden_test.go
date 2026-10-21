@@ -358,22 +358,23 @@ func goldenJudgeEvidence(q goldenQuery, winner string, ev goldenLabelEvidence) e
 // 守什么"。新增一条打分判据 / 新修一个真实错配,就在这里加一行并采一个样本——没有样本的判据
 // 等于没有回归保护。
 var goldenRequiredCategories = map[string]string{
-	"zh-studio-multisource": "华语录音室版,多源应答,逐字时间轴——最普通的一类,守基线",
-	"latin-title":           "英文歌(歌手/歌名均无汉字),语言闸不许误杀,Musixmatch/LRCLIB 参与",
-	"ja-romanization":       "日文歌,罗马音可用(+30),假名标注行不破坏共识",
-	"ko-hangul-lyrics":      "韩文歌(谚文正文、拉丁标签),语言闸不误杀、中文译文可用、没有罗马音加分",
-	"cantonese":             "粤语歌",
-	"live-same-concert":     "现场版,候选与本地是同一场演出(live 标记双向对称,不吃 versionTags)",
-	"live-other-concert":    "现场版,另一场演出的候选吃 liveAlbumConflict",
-	"timeline-offset":       "时间轴相对时长对得上的几家整体平移的候选吃 timelineOffset,冠军交给对齐的那份(v23)",
-	"timeline-intrusion":    "时长对得上的几家都空着的间奏里多出一段复制来的歌词的候选吃 timelineIntrusion,冠军交给参照组那份(v24)",
-	"version-tag-mismatch":  "版本限定词错配的候选吃 versionTags -600",
-	"version-tag-edit":      "「(Edit)」单曲剪辑版被识别为另一次录音(v12,2026-09-04 用户报的 Diamonds and Pearls 案)",
-	"language-version":      "粤语/国语语种版本:标了语种、与本地推断一致的候选不吃 versionTags 且标题拿精确档;自报另一语种的候选吃 versionTags(v15,2026-09-07 K歌之王 案)",
-	"multi-artist-credit":   "多歌手合 credit 的署名",
-	"reject-credit-only":    "整份只有署名行的候选被否决",
-	"reject-plain-text":     "无时间戳纯文本候选被否决",
-	"reject-wrong-language": "语言跟这首歌对不上的候选被否决",
+	"zh-studio-multisource":     "华语录音室版,多源应答,逐字时间轴——最普通的一类,守基线",
+	"latin-title":               "英文歌(歌手/歌名均无汉字),语言闸不许误杀,Musixmatch/LRCLIB 参与",
+	"ja-romanization":           "日文歌,罗马音可用(+30),假名标注行不破坏共识",
+	"ko-hangul-lyrics":          "韩文歌(谚文正文、拉丁标签),语言闸不误杀、中文译文可用、没有罗马音加分",
+	"cantonese":                 "粤语歌",
+	"live-same-concert":         "现场版,候选与本地是同一场演出(live 标记双向对称,不吃 versionTags)",
+	"live-other-concert":        "现场版,另一场演出的候选吃 liveAlbumConflict",
+	"timeline-offset":           "时间轴相对时长对得上的几家整体平移的候选吃 timelineOffset,冠军交给对齐的那份(v23)",
+	"timeline-intrusion":        "时长对得上的几家都空着的间奏里多出一段复制来的歌词的候选吃 timelineIntrusion,冠军交给参照组那份(v24)",
+	"source-duration-near-miss": "别的源报出了本地曲长时,自报曲长差 5%~12% 的另一次录音吃 sourceDurationNearMiss,冠军交给曲长吻合的那份(v30.1)",
+	"version-tag-mismatch":      "版本限定词错配的候选吃 versionTags -600",
+	"version-tag-edit":          "「(Edit)」单曲剪辑版被识别为另一次录音(v12,2026-09-04 用户报的 Diamonds and Pearls 案)",
+	"language-version":          "粤语/国语语种版本:标了语种、与本地推断一致的候选不吃 versionTags 且标题拿精确档;自报另一语种的候选吃 versionTags(v15,2026-09-07 K歌之王 案)",
+	"multi-artist-credit":       "多歌手合 credit 的署名",
+	"reject-credit-only":        "整份只有署名行的候选被否决",
+	"reject-plain-text":         "无时间戳纯文本候选被否决",
+	"reject-wrong-language":     "语言跟这首歌对不上的候选被否决",
 	// 没有 "word-timing-override"(applyWordTimingTitleOverride)这一类:采集时把库里
 	// 全部 20 条真实触发案例过了一遍,没有一条站得住——原始案例(方大同《公园/南音 (Live版)》,酷狗是
 	// 另一场演唱会)如今被 v7 的 liveAlbumConflict 先行接住、逐字加分不再是决胜项,这条规则根本不触发;
@@ -947,6 +948,18 @@ func goldenCategoryCheck(fx *goldenFixture, category string, e goldenExpect) err
 			return c.Source != e.Winner && hasTerm(c, scoreTermTimelineIntrusion)
 		}) {
 			return fmt.Errorf("要求:有非冠军候选吃到 timelineIntrusion")
+		}
+	case "source-duration-near-miss":
+		if err := needWinner(); err != nil {
+			return err
+		}
+		if hasTerm(*winner, scoreTermSourceDurationNearMiss) {
+			return fmt.Errorf("要求:冠军不吃 sourceDurationNearMiss")
+		}
+		if !anyCand(func(c goldenRankedCandidate) bool {
+			return c.Source != e.Winner && hasTerm(c, scoreTermSourceDurationNearMiss)
+		}) {
+			return fmt.Errorf("要求:有非冠军候选吃到 sourceDurationNearMiss")
 		}
 	case "live-other-concert":
 		if err := needWinner(); err != nil {

@@ -52571,6 +52571,52 @@
           }
         }
       }
+    },
+    "源自报曲长偏离吻合版本" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Source duration off from matching version"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "源自报曲长偏离吻合版本"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "來源自報的曲長偏離吻合版本"
+          }
+        }
+      }
+    },
+    "其他歌词源标注的曲目时长与本地一致，该源标注的时长却相差 5% 以上，可能是现场版、混音版等其他录音" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other lyric sources report the same track length as the local one, but this source's differs by more than 5%; likely another recording such as a live version or remix"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他歌词源标注的曲目时长与本地一致，该源标注的时长却相差 5% 以上，可能是现场版、混音版等其他录音"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他歌詞來源標註的曲目時長與本機一致，該來源標註的時長卻相差 5% 以上，可能是現場版、混音版等其他錄音"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

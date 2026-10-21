@@ -83,9 +83,10 @@ func TestLyricsGoldenCapture(t *testing.T) {
 	}
 
 	// ---- 缓存条目(只读) ----
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatal(err)
+	// TestMain 把 HOME 换成了沙箱,采集器要读的是换之前那个家目录下的真实缓存。
+	home := testRealHome
+	if home == "" {
+		t.Fatal("取不到真实家目录")
 	}
 	cfgDir := filepath.Join(home, ".config", clientName)
 	rawCache, err := os.ReadFile(filepath.Join(cfgDir, clientName+"-enrich-cache.json"))

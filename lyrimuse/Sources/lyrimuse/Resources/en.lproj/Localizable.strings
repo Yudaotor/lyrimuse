@@ -528,6 +528,7 @@
 "其他 App 正占用播放焦点，暂时无法控制播放" = "Can’t control playback while another app holds the playback focus";
 "其他折叠规则" = "Other fold rule";
 "其他歌词源仍在搜索中…" = "Still searching other sources…";
+"其他歌词源标注的曲目时长与本地一致，该源标注的时长却相差 5% 以上，可能是现场版、混音版等其他录音" = "Other lyric sources report the same track length as the local one, but this source's differs by more than 5%; likely another recording such as a live version or remix";
 "其他歌词源照常搜索，只要其中任一找到歌词即不受影响。以上数据仅在本机统计" = "Other sources keep searching; as long as any of them finds lyrics, nothing is affected. These figures are counted only on this Mac";
 "其余 %@ 个源" = "%@ other sources";
 "其余 %@ 个源#one" = "%@ other source";
@@ -1888,6 +1889,7 @@
 "渠道" = "Channel";
 "渠道信息不完整，或地址无效" = "The channel is incomplete, or the URL isn't valid";
 "源自报曲长不符" = "Source duration mismatch";
+"源自报曲长偏离吻合版本" = "Source duration off from matching version";
 "滚动" = "Scroll";
 "演唱：%@" = "by %@";
 "灵动岛" = "Notch";

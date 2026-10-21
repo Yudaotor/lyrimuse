@@ -140,7 +140,7 @@ func TestEarlyLyricsHoldsForNativeWhenPlayerHintsNoVocals(t *testing.T) {
 	lineOnly := []scoredLyricCandidateResult{earlyCand("kugou", earlyTermTitle, earlyTermDur, earlyTermLines)}
 	for _, hold := range []bool{true, false} {
 		calls = nil
-		w := newEarlyLyricsWatch(withProvisionalLyrics(withEarlyLyricsTarget(context.Background(), "A|T|Al"), record), "A", "T")
+		w := newEarlyLyricsWatch(withProvisionalLyrics(withEarlyLyricsTarget(context.Background(), "A|T|Al"), record), "A", "T", 0)
 		w.holdForNative = hold
 		w.observe(neteaseInfo{}, lineOnly, map[string]bool{"kugou": true})
 		select {

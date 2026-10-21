@@ -4984,6 +4984,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	// v5:同 scoreAndSort 里那一处——必须在排序之前跑,见 applyWordTimingTitleOverride
 	// 的注释。变体轮合并出来的这批候选一样要过这道闸,不然同一首歌走没走变体轮,判定标准会不一致。
 	// 时间轴平移扣分同理,且排在它前面(见 applyTimelineOffsetPenalty)。
+	applySourceDurationNearMissPenalty(out, durationSecs)
 	applyTimelineOffsetPenalty(out, durationSecs)
 	applyTimelineIntrusionPenalty(out, durationSecs)
 	applyWordTimingTitleOverride(out)
@@ -5635,6 +5636,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// 决定要不要撤销冠军的逐字加分,晚了就成了在排好的结果上事后改分,顺序会跟着乱。
 	// instrumentalMarker(Score:-1)不受影响,函数内部本来就跳过负分。
 	// 时间轴整体平移的扣分排在它前面:那一步要看的是扣完之后谁赢(见 applyTimelineOffsetPenalty)。
+	applySourceDurationNearMissPenalty(results, durationSecs)
 	applyTimelineOffsetPenalty(results, durationSecs)
 	applyTimelineIntrusionPenalty(results, durationSecs)
 	applyWordTimingTitleOverride(results)
@@ -6123,7 +6125,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	}
 	// 首轮中途先上屏(见 earlylyrics.go):只有首次解析正在播的这首、第一轮才有,别的情况是 nil,下面几处都是空操作。
 	// 它不在等的时候别为它打分:自动解析不要中间结果,每到一个源整份重打分是白算(见 09 章决策 94)。
-	earlyWatch := newEarlyLyricsWatch(ctx, artist, title)
+	earlyWatch := newEarlyLyricsWatch(ctx, artist, title, durationSecs)
 	if earlyWatch != nil && forPlaying {
 		earlyWatch.holdForNative = playerLocalNoVocalsHint(artist, srcTitle, album, durationSecs)
 	}
