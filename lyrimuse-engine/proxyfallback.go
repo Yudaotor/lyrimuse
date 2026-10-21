@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptrace"
+	neturl "net/url"
 	"os"
 	"path/filepath"
 	"sync"
@@ -76,6 +77,9 @@ type proxyFallbackTransport struct {
 	// 记一个具体的失败原因 —— 设置页那颗「测试」按钮会把它翻成人话显示出来。可以为 nil。
 	onBlocked func()
 
+	// proxyURL:兜底用的代理,nil = systemProxyURL。Musixmatch 那一份在系统代理没开时还认本机 Clash 的端口(doh.go)。
+	proxyURL func() *neturl.URL
+
 	// directBudget:直连探路的预算,零值 = proxyFallbackDirectBudget。只有单测改短。
 	directBudget time.Duration
 	// directCap:调用方没设时限时直连整段的上限,零值 = proxyFallbackDirectCap。只有单测改短。
@@ -122,7 +126,7 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 	// 直连留不留退路要看真实的代理状态:systemProxyURL 自带 60 秒缓存,过期了当场重读。只看缓存的话缓存一过期就成了
 	// 「不知道」,没有系统代理的机器上直连也照「后面有代理可退」掐 3 秒建连预算,掐完却没处可退。见 09 章决策 301。
 	directStart := time.Now()
-	resp, directErr := t.attemptDirect(req, systemProxyURL() != nil)
+	resp, directErr := t.attemptDirect(req, t.proxy() != nil)
 	directElapsed := time.Since(directStart)
 	if directErr == nil {
 		// 窗口到期、重新探直连通了:连续失败次数清零,下次再被打掉从 10 分钟重新算。粘性要是上一个进程
@@ -138,7 +142,7 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 	if !directUnreachable(req, directErr) {
 		return nil, directErr
 	}
-	proxy := systemProxyURL()
+	proxy := t.proxy()
 	if proxy == nil {
 		t.reportBlocked()
 		return nil, directErr
@@ -301,7 +305,15 @@ func (t *proxyFallbackTransport) preferProxy(host string) bool {
 	if !sticky && !loadProxyFallbackHint(host) {
 		return false
 	}
-	return systemProxyURL() != nil
+	return t.proxy() != nil
+}
+
+// proxy:现在可用的兜底代理,没有返回 nil。
+func (t *proxyFallbackTransport) proxy() *neturl.URL {
+	if t.proxyURL != nil {
+		return t.proxyURL()
+	}
+	return systemProxyURL()
 }
 
 // markSticky 记下「接下来走代理」,返回这次的窗口(按连续失败次数翻倍,见 proxyStickyWindow)。
@@ -311,6 +323,34 @@ func (t *proxyFallbackTransport) markSticky(host string) time.Duration {
 	t.stickyUntil = time.Now().Add(window)
 	t.mu.Unlock()
 	return window
+}
+
+// forceProxyFor:不等直连失败,接下来 d 这么久 host 直接走代理(直连这个出口被对方反爬拦下时用,见 musixmatchreroute.go)。
+// 连续失败次数不动,到期之后照常重新探一次直连。c 不是这一层的客户端时什么都不做。
+func forceProxyFor(c *http.Client, host string, d time.Duration) {
+	t, ok := c.Transport.(*proxyFallbackTransport)
+	if !ok {
+		return
+	}
+	until := time.Now().Add(d)
+	t.mu.Lock()
+	if until.After(t.stickyUntil) {
+		t.stickyUntil = until
+	}
+	t.mu.Unlock()
+	path := proxyFallbackHintPath()
+	if path == "" || os.MkdirAll(filepath.Dir(path), 0o700) != nil {
+		return
+	}
+	f := readProxyFallbackHint()
+	if f.Until == nil {
+		f.Until = map[string]int64{}
+	}
+	f.Hosts[host] = time.Now().Unix()
+	f.Until[host] = until.Unix()
+	if raw, err := json.Marshal(f); err == nil {
+		_ = writeFileAtomic(path, raw)
+	}
 }
 
 // hintStreakPending:这台主机在磁盘提示里还记着连续失败次数,而且这个进程还没看过它。每台主机只读一次文件。

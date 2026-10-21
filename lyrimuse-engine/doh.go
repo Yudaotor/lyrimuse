@@ -325,10 +325,11 @@ func dohHTTPClient(onBlocked func()) *http.Client {
 			// 走代理时拨的是代理自己的地址(通常是 127.0.0.1),DoH 对它没有意义,用默认
 			// 拨号器即可;目标域名交给代理去解析。
 			viaProxy: &http.Transport{
-				Proxy:               func(*http.Request) (*neturl.URL, error) { return systemProxyURL(), nil },
+				Proxy:               func(*http.Request) (*neturl.URL, error) { return systemOrClashProxyURL(), nil },
 				TLSHandshakeTimeout: dohTLSHandshakeTimeout,
 				ForceAttemptHTTP2:   true,
 			},
+			proxyURL:  systemOrClashProxyURL,
 			onBlocked: onBlocked,
 		},
 	}

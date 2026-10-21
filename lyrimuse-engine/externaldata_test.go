@@ -50,6 +50,9 @@ func TestMain(m *testing.M) {
 	_ = os.Setenv("HOME", sandbox)
 	missing := filepath.Join(os.TempDir(), "lyrimuse-no-such-external-app-data")
 	kugouLocalDirOverride = missing
+	// Musixmatch 被拦时换出口那一步会读本机真实的系统代理、连本机的 Clash 控制口;要测它的用例自己换回来。
+	musixmatchReroute = func(context.Context, int) bool { return false }
+	clashControllerSockets = []string{filepath.Join(missing, "clash.sock")}
 	qqLocalDBOverride = filepath.Join(missing, "qqmusic.sqlite")
 	neteaseLocalDBOverride = filepath.Join(missing, "sqlite_storage.sqlite3")
 	spotifyISRCUsersDirOverride = filepath.Join(missing, "SpotifyUsers")

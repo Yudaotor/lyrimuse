@@ -114,8 +114,9 @@ const (
 
 // ---- 反爬拦截:按源暂停,15 分钟起翻倍 ----
 //
-// Musixmatch 拦一台机器时,对它的每个数据请求都回 HTTP 200 + `status_code:401, hint:"captcha"`,两台主机、
-// 直连和走代理都一样,刚换的 token 也照样被拒。上面那套熔断看的是 HTTP 层,这种应答算成功、一档都不跳 ——
+// Musixmatch 拦一个出口 IP 时,从这个出口来的每个数据请求都回 HTTP 200 + `status_code:401, hint:"captcha"`,两台主机
+// 都一样,刚换的 token 也照样被拒。换个出口(改走系统代理、切 Clash 节点)照常能用,所以 musixmatch.go 先换出口,
+// 换不了才走到这里的暂停(musixmatchreroute.go)。上面那套熔断看的是 HTTP 层,这种应答算成功、一档都不跳 ——
 // 不单独处理的话每一轮照发、每一轮被拒,整段时间一首词都给不出,还可能把封禁拖得更久。认得出这种应答的
 // 只有源自己(musixmatch.go 解应答头),由它调 noteBlocked。
 //
