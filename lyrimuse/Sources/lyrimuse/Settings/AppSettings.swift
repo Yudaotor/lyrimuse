@@ -388,6 +388,7 @@ final class AppSettings: ObservableObject {
         static let lyricsWindowMiniKaraokeFill = "np:lyricsWindowMiniKaraokeFill"
         static let lyricsWindowMiniKaraokeFillColorHex = "np:lyricsWindowMiniKaraokeFillColorHex"
         static let lyricsWindowMiniShowsControls = "np:lyricsWindowMiniShowsControls"
+        static let lyricsWindowMiniShowsProgress = "np:lyricsWindowMiniShowsProgress"
         static let lyricsWindowMiniFadeOnHover = "np:lyricsWindowMiniFadeOnHover"
         static let lyricsWindowMiniFadeClickThrough = "np:lyricsWindowMiniFadeClickThrough"
         static let lyricsWindowMiniHideWhenNotPlaying = "np:lyricsWindowMiniHideWhenNotPlaying"
@@ -1590,6 +1591,10 @@ final class AppSettings: ObservableObject {
     @Published var lyricsWindowMiniShowsControls: Bool {
         didSet { defaults.set(lyricsWindowMiniShowsControls, forKey: Keys.lyricsWindowMiniShowsControls) }
     }
+    /// 迷你窗底边那条进度条平时画不画。关掉之后只在悬停浮出控制条时跟着出现(照样能拖),默认开(07 章决策 178)。
+    @Published var lyricsWindowMiniShowsProgress: Bool {
+        didSet { defaults.set(lyricsWindowMiniShowsProgress, forKey: Keys.lyricsWindowMiniShowsProgress) }
+    }
     /// 迷你窗「悬浮淡化」:指针一进窗要不要整扇窗变透明(07 章决策 118)。默认关,同悬浮歌词那颗。
     /// 开关在设置页迷你「行为」里,「重置」恢复成关。
     @Published var lyricsWindowMiniFadeOnHover: Bool {
@@ -2477,6 +2482,8 @@ final class AppSettings: ObservableObject {
                                                  fallback: Self.defaultLyricsWindowMiniKaraokeFillColorFallback)
         lyricsWindowMiniShowsControls =
             (defaults.object(forKey: Keys.lyricsWindowMiniShowsControls) as? Bool) ?? true
+        lyricsWindowMiniShowsProgress =
+            (defaults.object(forKey: Keys.lyricsWindowMiniShowsProgress) as? Bool) ?? true
         lyricsWindowMiniFadeOnHover = (defaults.object(forKey: Keys.lyricsWindowMiniFadeOnHover) as? Bool) ?? false
         lyricsWindowMiniFadeClickThrough =
             (defaults.object(forKey: Keys.lyricsWindowMiniFadeClickThrough) as? Bool) ?? false

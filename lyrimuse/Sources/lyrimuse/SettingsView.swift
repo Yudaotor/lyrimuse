@@ -2833,6 +2833,18 @@ private struct AppearanceSettingsTab: View {
     }
 
     /// 背景几档的名字,工具栏摘要和「背景」那一行的胶囊分段共用。
+    /// 「背景」那颗的摘要:纯色 / 渐变用到的颜色全是不透明度 0 时写「透明」,不写档名 —— 那样读起来像铺了一块颜色。
+    /// `colors` 是起止两色,纯色只看第一个。
+    private func lyricsWindowBackgroundSummary(_ mode: LyricsWindowBackgroundMode, colors: [String]) -> String {
+        switch mode {
+        case .solid where LyricsWindowBackgroundLuma.allTransparent(hexes: Array(colors.prefix(1))),
+             .gradient where LyricsWindowBackgroundLuma.allTransparent(hexes: colors):
+            return L10n.t("透明")
+        default:
+            return lyricsWindowBackgroundModeName(mode)
+        }
+    }
+
     private func lyricsWindowBackgroundModeName(_ mode: LyricsWindowBackgroundMode) -> String {
         switch mode {
         case .artwork: L10n.t("跟随封面")
@@ -2847,8 +2859,11 @@ private struct AppearanceSettingsTab: View {
         switch item {
         case .background:
             let mode = mini ? settings.lyricsWindowMiniBackgroundMode : settings.lyricsWindowBackgroundMode
+            let colors = mini
+                ? [settings.lyricsWindowMiniBackgroundColorHex, settings.lyricsWindowMiniBackgroundColorEndHex]
+                : [settings.lyricsWindowBackgroundColorHex, settings.lyricsWindowBackgroundColorEndHex]
             return EditorToolbarButtonLabel(icon: "photo.artframe", title: L10n.t("背景"),
-                                            summary: lyricsWindowBackgroundModeName(mode))
+                                            summary: lyricsWindowBackgroundSummary(mode, colors: colors))
         case .text:
             // 摘要报字体和粗细(迷你再加字号),同悬浮歌词「文字」那颗。
             var summary = FontFamilyPicker.displayName(
@@ -2881,12 +2896,13 @@ private struct AppearanceSettingsTab: View {
             }
             return EditorToolbarButtonLabel(icon: "rectangle.split.1x2", title: L10n.t("布局"), summary: summary)
         case .content:
-            return EditorToolbarButtonLabel(
-                icon: "checklist", title: L10n.t("内容"),
-                summary: SettingsToggleSummary.text([
-                    (title: L10n.t("读音"), isOn: settings.showRomanization),
-                    (title: L10n.t("译文"), isOn: settings.showTranslation),
-                ]))
+            var items = [
+                (title: L10n.t("读音"), isOn: settings.showRomanization),
+                (title: L10n.t("译文"), isOn: settings.showTranslation),
+            ]
+            if mini { items.append((title: L10n.t("进度条"), isOn: settings.lyricsWindowMiniShowsProgress)) }
+            return EditorToolbarButtonLabel(icon: "checklist", title: L10n.t("内容"),
+                                            summary: SettingsToggleSummary.text(items))
         case .info:
             if mini {
                 let fields = settings.lyricsWindowMiniHeaderFields
@@ -2958,7 +2974,7 @@ private struct AppearanceSettingsTab: View {
                 VStack(spacing: 0) { lyricsWindowAppearanceRows(.layout) }
             }
         case .content:
-            SettingsPopoverShell(title: L10n.t("内容"), width: 360) {
+            SettingsPopoverShell(title: L10n.t("内容"), width: 440) {
                 VStack(spacing: 0) { lyricsWindowContentRows }
             }
         case .info:
@@ -3011,6 +3027,12 @@ private struct AppearanceSettingsTab: View {
         SettingsTileGrid {
             SettingsToggleTile(icon: "textformat.alt", title: L10n.t("读音"), isOn: $settings.showRomanization)
             SettingsToggleTile(icon: "text.bubble", title: L10n.t("译文"), isOn: $settings.showTranslation)
+            // 迷你底边那条进度条,只有迷你有(07 章决策 178)。
+            if lyricsWindowPreviewShowsMini {
+                SettingsToggleTile(icon: "slider.horizontal.below.rectangle", title: L10n.t("进度条"),
+                                   help: L10n.t("关闭后，仅在悬停显示播放控制时出现"),
+                                   isOn: $settings.lyricsWindowMiniShowsProgress)
+            }
         }
     }
 
@@ -4155,6 +4177,7 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowMiniKaraokeFillColorHex = AppSettings.defaultLyricsWindowMiniKaraokeFillColorHex
             s.lyricsWindowMiniHeaderFields = .default
             s.lyricsWindowMiniShowsCover = true
+            s.lyricsWindowMiniShowsProgress = true
             s.lyricsWindowMiniShowsTime = true
             s.lyricsWindowMiniHeaderWidthPercent = LyricsWindowMiniHeaderWidth.defaultPercent
             s.lyricsWindowMiniHeaderHeightPercent = LyricsWindowMiniHeaderSize.defaultPercent

@@ -1556,6 +1556,17 @@
       "path" : [
         "歌词显示",
         "歌词窗口",
+        "内容"
+      ],
+      "subtitle" : "关闭后，仅在悬停显示播放控制时出现",
+      "title" : "进度条"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
         "顶部信息"
       ],
       "subtitle" : "迷你尺寸顶部显示歌名／歌手／专辑",

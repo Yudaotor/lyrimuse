@@ -113,7 +113,7 @@ public enum SettingsSearchCatalog {
     /// 「行为」「顶部信息」两组也只在迷你装配。设置页加了这类行要来这里登记。
     public static let lyricsWindowMiniOnlyTitles: Set<String> = [
         "字号", "歌词布局", "长句处理", "悬浮淡化", "淡化时点按穿透", "暂停时隐藏",
-        "全屏时隐藏", "歌名", "歌手", "专辑", "封面", "时间", "宽度", "高度",
+        "全屏时隐藏", "歌名", "歌手", "专辑", "封面", "时间", "宽度", "高度", "进度条",
     ]
     /// 只在完整预览下才有的行:「封面」那一组、「布局」里的对齐方式、「文字」里的 HDR 高亮。
     public static let lyricsWindowFullOnlyTitles: Set<String> = ["动态封面", "动态封面缓存", "对齐方式", "HDR 高亮"]
@@ -486,6 +486,8 @@ public enum SettingsSearchCatalog {
                      kw: ["对齐", "左对齐", "居中", "右对齐", "靠左", "靠右", "对唱", "alignment"], group: "布局"),
         lyricsWindow("读音", kw: ["罗马音", "罗马字", "注音", "拼音", "粤拼", "发音", "显示读音"], group: "内容"),
         lyricsWindow("译文", kw: ["翻译", "显示译文"], group: "内容"),
+        lyricsWindow("进度条", sub: "关闭后，仅在悬停显示播放控制时出现",
+                     kw: ["进度", "底部", "播放进度", "隐藏进度条", "迷你", "progress"], group: "内容"),
         lyricsWindow("歌名", sub: "迷你尺寸顶部显示歌名／歌手／专辑",
                      kw: ["顶部信息", "标题", "迷你"], group: "顶部信息"),
         lyricsWindow("歌手", kw: ["顶部信息", "艺人", "迷你"], group: "顶部信息"),

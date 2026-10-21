@@ -788,7 +788,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 273 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 274 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1084,6 +1084,7 @@ Every setting in the Settings window, by where it lives: 273 in all. Type a name
 
 - **Romanization**
 - **Translation**
+- **Progress Bar** (mini size only): When off, appears only while the playback controls show on hover
 
 ### Lyrics Display › Lyrics Window › Header
 

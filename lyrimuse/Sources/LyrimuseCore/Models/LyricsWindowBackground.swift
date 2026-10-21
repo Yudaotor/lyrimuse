@@ -86,6 +86,11 @@ public enum LyricsWindowBackgroundLuma {
 
     /// 解析 `#RRGGBB` / `#RRGGBBAA`(井号可省)。认不出来返回 nil —— 调用方按"没设过颜色"处理,
     /// 不要自己编一个默认色,那会让"配置坏了"表现成"颜色莫名其妙变了"。
+    /// 这几种颜色是不是全都完全透明(不透明度 0)。空数组、读不出来的颜色都不算。设置页「背景」摘要据此写「透明」。
+    public static func allTransparent(hexes: [String]) -> Bool {
+        !hexes.isEmpty && hexes.allSatisfy { parse(hex: $0)?.a == 0 }
+    }
+
     public static func parse(hex: String) -> (r: Double, g: Double, b: Double, a: Double)? {
         var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.hasPrefix("#") { s.removeFirst() }

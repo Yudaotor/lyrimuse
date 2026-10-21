@@ -52486,6 +52486,40 @@
           }
         }
       }
+    },
+    "进度条" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Progress Bar"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "進度條"
+          }
+        }
+      }
+    },
+    "关闭后，仅在悬停显示播放控制时出现" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When off, appears only while the playback controls show on hover"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "關閉後，僅在懸停顯示播放控制時出現"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -284,8 +284,8 @@ func runSettingsSearchTests() {
     }
     expectEqual(contentGroupTitles(LyricsSurface.overlay.appearanceSectionRawValue), ["读音", "译文", "下一句"],
                 "设置搜索: 悬浮歌词「内容」三行都登记在悬浮歌词那一段")
-    expectEqual(contentGroupTitles(SettingsSearchCatalog.lyricsWindowSectionValue), ["读音", "译文"],
-                "设置搜索: 歌词窗口「内容」两行都登记在歌词窗口那一段")
+    expectEqual(contentGroupTitles(SettingsSearchCatalog.lyricsWindowSectionValue), ["读音", "进度条", "译文"],
+                "设置搜索: 歌词窗口「内容」三行都登记在歌词窗口那一段(进度条只在迷你)")
     let allowlistedButIndexed = intentionallyUnindexed.filter { indexedTitles.contains($0) }.sorted()
     expectEqual(allowlistedButIndexed, [], "设置搜索: 白名单与目录不重叠")
 
@@ -344,6 +344,9 @@ func runSettingsSearchTests() {
     let qqHits = SettingsSearchMatcher.ranked(entries, query: "QQ", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
     expectEqual(qqHits.map(\.titleKey).contains("歌词来源"), true, "目录: 搜「QQ」能落到「歌词来源」卡")
     expectEqual(qqHits.map(\.titleKey).contains("音乐 App"), true, "目录: 搜「QQ」也能落到「音乐 App」卡")
+    let progressEntry = entries.first { $0.titleKey == "进度条" && $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue }
+    expectEqual(progressEntry != nil && SettingsSearchCatalog.lyricsWindowMiniOnlyTitles.contains("进度条"), true,
+                "目录: 迷你「进度条」登记在歌词窗口那一段,命中时预览切到迷你")
     // 用户嫌歌词不准时多半照抱怨的原话搜,不会搜「时间轴偏移」。
     for query in ["歌词太快", "太慢", "不同步", "out of sync"] {
         let hits = SettingsSearchMatcher.ranked(entries, query: query, title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })

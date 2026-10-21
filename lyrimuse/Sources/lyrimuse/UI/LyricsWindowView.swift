@@ -107,6 +107,8 @@ final class WindowPlayback: ObservableObject {
     @Published private(set) var miniShowsTime = true
     /// 迷你悬停要不要浮出控制条。
     @Published private(set) var miniShowsControls = true
+    /// 迷你底边进度条平时画不画(`lyricsWindowMiniShowsProgress`)。
+    @Published private(set) var miniShowsProgress = true
     /// 迷你顶部信息那一组左边要不要摆封面小图。
     @Published private(set) var miniShowsCover = true
     @Published private(set) var miniLineOverflow: OverlayLineOverflow = .wrap
@@ -219,6 +221,7 @@ final class WindowPlayback: ObservableObject {
             s.$lyricsWindowMiniHeaderFields.removeDuplicates().sink { [weak self] in self?.miniHeaderFields = $0 },
             s.$lyricsWindowMiniShowsTime.removeDuplicates().sink { [weak self] in self?.miniShowsTime = $0 },
             s.$lyricsWindowMiniShowsControls.removeDuplicates().sink { [weak self] in self?.miniShowsControls = $0 },
+            s.$lyricsWindowMiniShowsProgress.removeDuplicates().sink { [weak self] in self?.miniShowsProgress = $0 },
             s.$lyricsWindowMiniShowsCover.removeDuplicates().sink { [weak self] in self?.miniShowsCover = $0 },
             s.$lyricsWindowMiniLineOverflow.removeDuplicates().sink { [weak self] in self?.miniLineOverflow = $0 },
             s.$lyricsWindowMiniLyricsLayout.removeDuplicates().sink { [weak self] in self?.miniLyricsLayout = $0 },
@@ -1881,7 +1884,12 @@ struct LyricsWindowView: View {
                 // 控制条那一格的**常驻预留**:歌词区的下沿永远停在控制条上沿之上,控制条浮出来时
                 // 下一行照常显示、谁也不压谁,而且悬停进出时歌词一个像素都不动。
                 Color.clear.frame(height: miniDeckReserve)
+                // 「进度条」关掉时平时不画、也不接点按,悬停浮出控制条时跟着出来(照样能拖)。只动透明度,
+                // 布局高度不变,开关和悬停都不会让歌词跳。见 07 章决策 178。
                 miniProgressBar
+                    .opacity(miniProgressBarShown ? 1 : 0)
+                    .allowsHitTesting(miniProgressBarShown)
+                    .animation(.easeOut(duration: 0.15), value: miniProgressBarShown)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -2463,6 +2471,9 @@ struct LyricsWindowView: View {
         // 播放器不吃外部跳转指令(Amazon Music)、或者在放广告时只显示、不能拖,见 `PlaybackCoordinator.acceptsSeek`。
         .allowsHitTesting(PlaybackCoordinator.shared.acceptsSeek)
     }
+
+    /// 底边进度条此刻画不画:设置里开着,或者控制条正浮着(拖进度时也算,见 miniControlsVisible)。
+    private var miniProgressBarShown: Bool { playback.miniShowsProgress || miniControlsVisible }
 
     // MARK: 迷你控制条
 

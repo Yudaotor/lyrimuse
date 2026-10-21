@@ -505,6 +505,7 @@
 "关闭后不显示进度条，Discord 将改为显示已播放时长，该计时无法关闭" = "When off, there’s no progress bar; Discord shows the elapsed time instead, which can’t be turned off";
 "关闭后仅保留菜单栏图标" = "When off, only the menu bar icon remains";
 "关闭后暂停推送到这个渠道，填写的内容会保留" = "Turn off to pause pushes to this channel; what you filled in is kept";
+"关闭后，仅在悬停显示播放控制时出现" = "When off, appears only while the playback controls show on hover";
 "关闭后，常态下仅保留刘海高度，不显示歌词；指针悬停展开时，播放控制、进度条和下一句预览仍照常显示" = "When off, the resting card keeps only the notch-height row and shows no lyrics; hovering to expand still shows playback controls, the scrubber, and the next-line preview as usual";
 "关闭悬浮歌词" = "Close Floating Lyrics";
 "关闭灵动岛歌词" = "Turn Off Notch Lyrics";
@@ -2362,6 +2363,7 @@
 "这首歌曲调整过歌词时间轴（%@），更换歌词后该校准可能失效" = "You've adjusted this song's lyrics timing (%@); with new lyrics that adjustment may no longer fit";
 "进入全屏" = "Enter Full Screen";
 "进入迷你尺寸" = "Enter Mini Size";
+"进度条" = "Progress Bar";
 "连接" = "Connection";
 "连接 Apple Music" = "Connect Apple Music";
 "连接 Last.fm" = "Connect Last.fm";

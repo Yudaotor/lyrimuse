@@ -65,6 +65,15 @@ func checkLyricsWindowHoverFade() {
                 "迷你悬浮淡化: 设置页预览里不挂")
     expectEqual(sourceHas(window, "if previewMode, wantsTransparentWindow { OverlayDesktopSurface() }"), true,
                 "歌词窗口预览: 窗口透明时垫桌面壁纸,白字不落在设置页白底上")
+    expectEqual(sourceHas(window, "private var miniProgressBarShown: Bool { playback.miniShowsProgress || miniControlsVisible }")
+                    && sourceHas(window, ".opacity(miniProgressBarShown ? 1 : 0)\n                    .allowsHitTesting(miniProgressBarShown)"), true,
+                "迷你进度条: 关掉时平时不画也不接点按,控制条浮出时跟着出来;只动透明度,布局高度不变")
+    typealias Luma = LyricsWindowBackgroundLuma
+    expectEqual([Luma.allTransparent(hexes: ["#2B2D4200"]), Luma.allTransparent(hexes: ["#2B2D4200", "#12131A00"]),
+                 Luma.allTransparent(hexes: ["#2B2D4200", "#12131A80"]), Luma.allTransparent(hexes: ["#2B2D42"]),
+                 Luma.allTransparent(hexes: []), Luma.allTransparent(hexes: ["nope"])],
+                [true, true, false, false, false, false],
+                "背景摘要: 颜色全是不透明度 0 才算透明;缺 alpha 位、空、读不出来都不算")
     expectEqual(sourceBytes(window, contain: "hoverFade.attach(window, isMini: $isMini.eraseToAnyPublisher())")
                 && sourceBytes(window, contain: "self?.hoverFade.windowClosed()"), true,
                 "迷你悬浮淡化: 窗口 attach 时接上、跟着进出迷你,关窗复位")
