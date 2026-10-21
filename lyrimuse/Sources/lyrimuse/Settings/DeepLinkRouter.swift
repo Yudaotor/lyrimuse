@@ -87,7 +87,9 @@ enum DeepLinkRouter {
         let line = PlaybackCoordinator.shared.currentLine
         let text = (line?.plainText ?? line?.mainText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
-            GlobalHotkeys.flashHint(icon: "text.badge.xmark", text: L10n.t("当前无歌词"))
+            // 这首有歌词、只是还没唱到(前奏、间奏)时别说「无歌词」,听着像没匹配到。
+            let hint = PlaybackCoordinator.shared.hasLyricsContent ? L10n.t("还没唱到歌词") : L10n.t("当前无歌词")
+            GlobalHotkeys.flashHint(icon: "text.badge.xmark", text: hint)
             return
         }
         var copied = text
@@ -100,7 +102,8 @@ enum DeepLinkRouter {
         GlobalHotkeys.flashHint(icon: "doc.on.doc", text: L10n.t("已拷贝当前歌词"))
     }
 
-    /// x-callback-url 回传。没在放时照样回传(各项空、`playing=0`),调用方按 `playing` 判断;没给回传地址、本机没有
+    /// x-callback-url 回传。`playing` 只在正在放时为 1;暂停时曲目各项照样带上、`playing=0`,没有曲目时各项空、`playing=0`。
+    /// 没给回传地址、本机没有
     /// App 开得了它、或开它的是浏览器时什么都不做(网页、文件、脚本的地址 `LyrimuseDeepLink` 解析时已经挡在外面)。
     private static func replyNowPlaying(to success: URL?) {
         guard let success else {
@@ -116,12 +119,13 @@ enum DeepLinkRouter {
             return
         }
         let p = PlaybackCoordinator.shared
-        let playing = !p.title.isEmpty
+        let hasTrack = !p.title.isEmpty
         let line = p.currentLine
         guard let url = LyrimuseDeepLink.callbackURL(
             success, title: p.title, artist: p.artist, album: p.album,
             lyric: (line?.plainText ?? line?.mainText ?? ""),
-            player: playing ? (p.resolvedPlayerDisplayName ?? "") : "", playing: playing) else { return }
+            player: hasTrack ? (p.resolvedPlayerDisplayName ?? "") : "",
+            playing: hasTrack && p.isPlayingSmoothed) else { return }
         NSWorkspace.shared.open(url)
     }
 

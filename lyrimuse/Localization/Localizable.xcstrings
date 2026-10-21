@@ -2198,25 +2198,25 @@
         }
       }
     },
-    "YouTube Music 在浏览器中播放，Lyrimuse 需通过所用浏览器读取播放进度。请选择常用的浏览器（可多选），随后在系统授权请求中选择「允许」。之后可在设置的「网页播放器」中更改" : {
+    "YouTube Music 在浏览器中播放，Lyrimuse 需通过所用浏览器读取播放进度。请选择常用的浏览器（可多选），随后在系统授权请求中选择「允许」。之后可在设置的「播放器 › 网页版」中更改" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "YouTube Music plays in a browser, and Lyrimuse reads the playback position through it. Choose the browsers you use (more than one is allowed), then choose Allow when macOS asks for permission. You can change this later under Web Players in Settings"
+            "value" : "YouTube Music plays in a browser, and Lyrimuse reads the playback position through it. Choose the browsers you use (more than one is allowed), then choose Allow when macOS asks for permission. You can change this later in Settings › Player › Web"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "YouTube Music 在浏览器中播放，Lyrimuse 需通过所用浏览器读取播放进度。请选择常用的浏览器（可多选），随后在系统授权请求中选择「允许」。之后可在设置的「网页播放器」中更改"
+            "value" : "YouTube Music 在浏览器中播放，Lyrimuse 需通过所用浏览器读取播放进度。请选择常用的浏览器（可多选），随后在系统授权请求中选择「允许」。之后可在设置的「播放器 › 网页版」中更改"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "YouTube Music 在瀏覽器中播放，Lyrimuse 需透過所用瀏覽器讀取播放進度。請選擇常用的瀏覽器（可多選），隨後在系統授權請求中選擇「允許」。之後可在設定的「網頁播放器」中更改"
+            "value" : "YouTube Music 在瀏覽器中播放，Lyrimuse 需透過所用瀏覽器讀取播放進度。請選擇常用的瀏覽器（可多選），隨後在系統授權請求中選擇「允許」。之後可在設定的「播放器 › 網頁版」中更改"
           }
         }
       }
@@ -13756,7 +13756,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recently played"
+            "value" : "Recently Played"
           }
         },
         "zh-Hans" : {
@@ -25330,19 +25330,19 @@
         }
       }
     },
-    "打开 Lyrimuse 时启动" : {
+    "启动时打开播放器" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Launch When Lyrimuse Opens"
+            "value" : "Open Players at Launch"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打開 Lyrimuse 時啟動"
+            "value" : "啟動時打開播放器"
           }
         }
       }
@@ -29831,7 +29831,7 @@
         }
       }
     },
-    "共 %1$@ 首，预计%2$@。已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外。可随时停止，关闭后进度不会丢失" : {
+    "共 %1$@ 首，耗时%2$@。已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外。可随时停止，关闭后进度不会丢失" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -29840,13 +29840,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%1$@ song, about %2$@. Songs that already have lyrics are re-matched too, except manually edited, timing-calibrated and instrumental songs. You can stop at any time without losing progress"
+                  "value" : "%1$@ song; takes %2$@. Songs that already have lyrics are re-matched too, except manually edited, timing-calibrated and instrumental songs. You can stop at any time without losing progress"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%1$@ songs, about %2$@. Songs that already have lyrics are re-matched too, except manually edited, timing-calibrated and instrumental songs. You can stop at any time without losing progress"
+                  "value" : "%1$@ songs; takes %2$@. Songs that already have lyrics are re-matched too, except manually edited, timing-calibrated and instrumental songs. You can stop at any time without losing progress"
                 }
               }
             }
@@ -29855,7 +29855,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "共 %1$@ 首，預計%2$@。已有歌詞的歌曲也會重新比對；人工修正、已校正時間軸和純音樂的歌曲除外。可隨時停止，關閉後進度不會丟失"
+            "value" : "共 %1$@ 首，耗時%2$@。已有歌詞的歌曲也會重新比對；人工修正、已校正時間軸和純音樂的歌曲除外。可隨時停止，關閉後進度不會丟失"
           }
         }
       }
@@ -29911,19 +29911,19 @@
         }
       }
     },
-    "预计%@，可随时停止" : {
+    "耗时%@，可随时停止" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Roughly %@, and you can stop any time"
+            "value" : "Takes %@; you can stop at any time"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "預計%@，可隨時停止"
+            "value" : "耗時%@，可隨時停止"
           }
         }
       }
@@ -31560,7 +31560,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ automation permission"
+            "value" : "%@ Automation"
           }
         },
         "zh-Hans" : {
@@ -34006,25 +34006,25 @@
         }
       }
     },
-    "纯文本格式，含账号凭据；不含外观与快捷键，完整迁移请使用「备份与迁移」" : {
+    "纯文本格式，不含账号凭据、外观与快捷键；完整迁移请使用「备份与迁移」" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Plain text with account credentials. Appearance and shortcuts aren’t included; to migrate everything, use Backup & Migration"
+            "value" : "Plain text. Account credentials, appearance and shortcuts aren’t included; to migrate everything, use Backup & Migration"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "纯文本格式，含账号凭据；不含外观与快捷键，完整迁移请使用「备份与迁移」"
+            "value" : "纯文本格式，不含账号凭据、外观与快捷键；完整迁移请使用「备份与迁移」"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "純文字格式，含帳號憑證；不含外觀與快速鍵，完整遷移請使用「備份與遷移」"
+            "value" : "純文字格式，不含帳號憑證、外觀與快速鍵；完整遷移請使用「備份與遷移」"
           }
         }
       }
@@ -36730,7 +36730,7 @@
         }
       }
     },
-    "悬浮歌词、灵动岛、菜单栏和触控栏可同时开启，歌词窗口可按需打开" : {
+    "悬浮歌词、灵动岛、菜单栏和触控栏可同时开，歌词窗口按需打开" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -36742,13 +36742,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "悬浮歌词、灵动岛、菜单栏和触控栏可同时开启，歌词窗口可按需打开"
+            "value" : "悬浮歌词、灵动岛、菜单栏和触控栏可同时开，歌词窗口按需打开"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "浮動歌詞、動態島、選單列和觸控列可同時開啟，歌詞視窗可按需打開"
+            "value" : "浮動歌詞、動態島、選單列和觸控列可同時開，歌詞視窗按需打開"
           }
         }
       }
@@ -43351,7 +43351,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Only songs without lyrics or with plain-text lyrics only"
+            "value" : "Only songs with no lyrics or plain-text lyrics"
           }
         },
         "zh-Hans" : {
@@ -52262,6 +52262,108 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "方糖 · 訊息詳情"
+          }
+        }
+      }
+    },
+    "收起时显示歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Lyrics When Collapsed"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收起時顯示歌詞"
+          }
+        }
+      }
+    },
+    "还没唱到歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No lyric line yet"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "還沒唱到歌詞"
+          }
+        }
+      }
+    },
+    "系统防火墙挡住了其他设备" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The macOS firewall is blocking other devices"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系統防火牆擋住了其他裝置"
+          }
+        }
+      }
+    },
+    "在防火墙设置中允许 Lyrimuse 的传入连接后，其他设备才能打开链接" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow incoming connections for Lyrimuse in Firewall settings so other devices can open the link"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在防火牆設定中允許 Lyrimuse 的傳入連線後，其他裝置才能打開連結"
+          }
+        }
+      }
+    },
+    "打开防火墙设置" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Firewall Settings"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打開防火牆設定"
+          }
+        }
+      }
+    },
+    "正在更新" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updating"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在更新"
           }
         }
       }

@@ -83,6 +83,8 @@ private final class NotchPlayback: ObservableObject {
     // 动态封面只留在歌词窗口那张 460pt 的大卡上。理由见 artworkThumbnail 上方那段。
     // `PlaybackCoordinator.motionCoverFile` 本身还在(歌词窗口在用),别顺手把它一起删了。
     @Published private(set) var blurredArtworkImage: NSImage?
+    /// coverArt 背景那层黑色压暗,按模糊图亮区算(`NotchBackdropTone.overlayOpacity`)。
+    @Published private(set) var backdropOverlayOpacity: Double = LocalPlaybackSource.notchCoverArtOverlayOpacity
     @Published private(set) var anchor: ProgressAnchor?
     @Published private(set) var pausedPositionMs: Int?
     @Published private(set) var currentDurationMs: Int?
@@ -331,6 +333,9 @@ private final class NotchPlayback: ObservableObject {
                 .sink { [weak self] in self?.highResArtworkImage = $0 },
             p.$blurredArtworkImage.removeDuplicates(by: { $0 === $1 })
                 .sink { [weak self] in self?.blurredArtworkImage = $0 },
+            p.$notchBackdropTone.map { $0?.overlayOpacity ?? LocalPlaybackSource.notchCoverArtOverlayOpacity }
+                .removeDuplicates()
+                .sink { [weak self] in self?.backdropOverlayOpacity = $0 },
             // 锚点本身低频(见类型注释),不去重(ProgressAnchor 非 Equatable,每次重锚
             // 也确实都是新值)。
             p.$anchor.sink { [weak self] in self?.anchor = $0 },
@@ -1060,7 +1065,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // 两层交叉淡入(`NotchCrossfadeBackdrop`):换图时旧图留在下面、新图从透明淡到不透明。
                 // 别换回 `.animation(value:)` 直接换 Image 内容 —— 那样旧图当场消失、新图从透明淡入,
                 // 中间露出上面那块打底色,同一首歌换上高清封面(两张模糊图几乎一样)时表现为整卡暗一下再亮回来。
-                NotchCrossfadeBackdrop(image: image, size: size)
+                NotchCrossfadeBackdrop(image: image, size: size, overlayOpacity: playback.backdropOverlayOpacity)
             }
         } else {
             NotchCardOutlineReader(outline: controller.cardOutline) { $0.fill(playback.notchCardStyle.fill) }
@@ -3571,12 +3576,13 @@ private struct NotchEditorialLine: View {
 /// 淡完撤掉旧图。换歌、高清替代到货都会产出一张新的烘焙图实例(`PlaybackCoordinator.blurredArtworkImage`,
 /// 按实例比较),每次都走这一条。
 ///
-/// 每一层自带那道黑色压暗(`notchCoverArtOverlayOpacity`,跟 PlaybackCoordinator 估算背景亮度用的同一个常量)
+/// 每一层自带那道黑色压暗(`overlayOpacity`,按模糊图亮区算,跟 PlaybackCoordinator 估算背景亮度用的同一个值)
 /// —— 两层都不透明,上层按透明度叠在下层上,压暗不会叠两遍。尺寸必须按 `size` 钉住:`scaledToFill` 协商出的
 /// 偏大 frame 不钉回来,外层裁剪会裁在错的边界上。
 private struct NotchCrossfadeBackdrop: View {
     let image: NSImage
     let size: CGSize
+    let overlayOpacity: Double
 
     @State private var front: NSImage?
     @State private var back: NSImage?
@@ -3610,6 +3616,6 @@ private struct NotchCrossfadeBackdrop: View {
             .resizable()
             .scaledToFill()
             .frame(width: size.width, height: size.height)
-            .overlay(Color.black.opacity(LocalPlaybackSource.notchCoverArtOverlayOpacity))
+            .overlay(Color.black.opacity(overlayOpacity))
     }
 }

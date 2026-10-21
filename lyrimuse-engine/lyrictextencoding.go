@@ -19,7 +19,14 @@ import (
 // 别整份转:一份文件可能只有一部分是 GBK(引擎用 UTF-8 写的头部和正文里混进了一段咪咕的 GBK 译文),整份按 GB18030
 // 转会把 UTF-8 的中文歌手名、歌名也转成乱码,而歌词文件夹导入拿主歌词文件的头部当这首歌的身份,乱码身份会新建
 // 一条幽灵条目。按换行切开不会切坏字:GB18030 的多字节序列里没有 0x0A。
+//
+// 转出来的文本再去掉控制字符(stripLyricControlChars)。
 func decodeLyricBytes(data []byte) (text string, ok bool) {
+	text, ok = decodeLyricBytesRaw(data)
+	return stripLyricControlChars(text), ok
+}
+
+func decodeLyricBytesRaw(data []byte) (text string, ok bool) {
 	if utf8.Valid(data) {
 		return string(data), true
 	}
@@ -53,6 +60,24 @@ var gb18030ToUTF8 = func(data []byte) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "/usr/bin/iconv", "-f", "GB18030", "-t", "UTF-8")
 	cmd.Stdin = bytes.NewReader(data)
 	return cmd.Output()
+}
+
+// stripLyricControlChars 去掉歌词里的控制字符(U+0000～U+001F 里除换行、回车、制表符以外的,和 U+007F)。咪咕个别歌词
+// 文件末尾带两个 NUL 字节,原样存下来会让 ListenBrainz 整条拒收:它不收任何字段里带 U+0000 的提交。见 09 章决策 308。
+func stripLyricControlChars(s string) string {
+	if strings.IndexFunc(s, isLyricControlChar) < 0 {
+		return s
+	}
+	return strings.Map(func(r rune) rune {
+		if isLyricControlChar(r) {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+func isLyricControlChar(r rune) bool {
+	return r < 0x20 && r != '\n' && r != '\r' && r != '\t' || r == 0x7f
 }
 
 // jsonSafeString 跟 encoding/json 编码字符串时一样,把每个非法 UTF-8 字节各换成一个 U+FFFD。

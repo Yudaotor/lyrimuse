@@ -53,5 +53,7 @@ struct EditorToolbarButtonLabel: View {
                 .frame(idealWidth: Self.summaryWidth, maxWidth: Self.summaryWidth, alignment: .leading)
                 .layoutPriority(-1)
         }
+        // 摘要挤不下时被截成「系统字体 较粗 3…」:悬停给出整句,不用点开浮层才知道选的是什么。
+        .help(title + " · " + summary)
     }
 }

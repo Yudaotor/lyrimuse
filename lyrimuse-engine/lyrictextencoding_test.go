@@ -88,3 +88,11 @@ func TestDecodeLyricBytesOneConversionForAllBadLines(t *testing.T) {
 		t.Errorf("行数对不上该走兜底: %q %v", text, ok)
 	}
 }
+
+// 文件里的 NUL 等控制字符不进缓存:ListenBrainz 不收带 U+0000 的提交。
+func TestDecodeLyricBytesStripsControlChars(t *testing.T) {
+	text, ok := decodeLyricBytes([]byte("[00:01.00]夜来香\n\x00\x00\n"))
+	if !ok || text != "[00:01.00]夜来香\n\n" {
+		t.Fatalf("got %q ok=%v", text, ok)
+	}
+}

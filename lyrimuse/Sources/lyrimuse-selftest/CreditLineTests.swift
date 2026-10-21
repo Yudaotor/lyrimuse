@@ -1396,6 +1396,14 @@ func runCreditLineTests() {
                     false, "抬头行: 歌名、歌手标签同一行但两个值都对不上不算")
         expectEqual(header(["作词：某某", "让我掉下眼泪的人", "歌曲名 成都 歌手名 赵雷"], 2, title: "成都", artist: "赵雷"),
                     false, "抬头行: 歌名、歌手标签同一行,正文开始之后不再认")
+        expectEqual(header(["歌曲名 天天", "歌手名 陶喆", "作词：娃娃"], 0, title: "天天", artist: "陶喆"),
+                    true, "抬头行: 歌名标签单独一行、不带冒号")
+        expectEqual(header(["歌曲名 天天", "歌手名 陶喆", "作词：娃娃"], 1, title: "天天", artist: "陶喆"),
+                    true, "抬头行: 歌手标签单独一行、不带冒号")
+        expectEqual(header(["歌手 唱着那首歌", "第二句"], 0, title: "天天", artist: "陶喆"),
+                    false, "抬头行: 「歌手」打头但后面不是这首的歌手不算")
+        expectEqual(header(["歌曲名 稻香"], 0, title: "天天", artist: "陶喆"),
+                    false, "抬头行: 歌名标签单独一行但不是这首不算")
         expectEqual(header(["动力火车 - 再会吧！ 我的心上人"], 0, title: "再会吧!心上人", artist: "动力火车"),
                     false, "抬头行: 只共有一段(「再会吧」)不算等于歌名")
 

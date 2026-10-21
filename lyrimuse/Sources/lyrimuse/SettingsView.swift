@@ -2426,6 +2426,8 @@ private struct PrioritySourceFramesKey: PreferenceKey {
 
 private struct AppearanceSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
+    /// 歌词窗口此刻开没开(`LyricsWindowSession.openKey`):开着时「打开」那颗键写「显示」,按下去是切到它。
+    @AppStorage(LyricsWindowSession.openKey) private var lyricsWindowOpen = false
     /// 这台 Mac 此刻有没有触控栏:没有时「触控栏」那一段照样在,点进去只有一张「这台 Mac 没有触控栏」的说明卡。
     @ObservedObject private var touchBar = TouchBarAvailability.shared
     // (灵动岛「显示于」的选项快照和「所有屏幕」哨兵 tag 在 NotchEditorStage.swift
@@ -2488,9 +2490,8 @@ private struct AppearanceSettingsTab: View {
                 title: L10n.t("歌词显示"),
                 // 前四个分段 = 四个展示方式开关,互不排斥,直接点名、不写「前四种」让读者去对分段。
                 // 最后一段「歌词窗口」没有开关,靠快捷键/菜单按需打开,所以副标题要把它分开讲。
-                // 写「可同时开」不写「可同时开启」:多一个字就把末尾的「开」单独折到第二行(13pt 下这 29 字
-                // 约 375pt,副标题限宽 380)。
-                subtitle: L10n.t("悬浮歌词、灵动岛、菜单栏和触控栏可同时开启，歌词窗口可按需打开")
+                // 控制在 29 字以内(13pt 下约 375pt,副标题限宽 380):再多一个字,末尾的词就单独折到第二行。
+                subtitle: L10n.t("悬浮歌词、灵动岛、菜单栏和触控栏可同时开，歌词窗口按需打开")
                 // 这里**不要**再写 showsHeader: false:六个分类里只有这一页没有 22pt 大标题会显得
                 // 不一致。省下来的纵向空间由窗口高度补(见 SettingsView 的 .frame:minHeight 520 /
                 // idealHeight 720),保证桌面悬浮歌词的开关能落在首屏。
@@ -2699,7 +2700,7 @@ private struct AppearanceSettingsTab: View {
             VStack(spacing: 14) {
                 SettingsCard(cornerRadius: 18) {
                     SettingsRow(icon: "macwindow", title: L10n.t("歌词窗口")) {
-                        Button(L10n.t("打开")) {
+                        Button(lyricsWindowOpen ? L10n.t("显示") : L10n.t("打开")) {
                             // 按预览停在哪个尺寸开:迷你预览开迷你窗,完整预览开完整窗口;窗口已经开着就当场切过去。
                             LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)
                             AppActions.shared.openLyricsWindow?()
@@ -2719,7 +2720,7 @@ private struct AppearanceSettingsTab: View {
                 // 消失,所以 LyricsWindowView.hasArtworkBackground 改成了真的算背景亮度 —— 判据在
                 // LyricsWindowBackgroundLuma,selftest 钉着边界值。这里只管收集配置。
                 // 工具栏浮层之外的全量兜底:默认折叠,展开后一组一张卡,顺序和组名跟工具栏一致。
-                LyricsWindowAllSettingsDrawer {
+                LyricsWindowAllSettingsDrawer(groupNames: lyricsWindowDrawerGroupNames) {
                     SettingsGroupCard(title: L10n.t("背景")) { lyricsWindowAppearanceRows(.background) }
                     SettingsGroupCard(title: L10n.t("文字")) { lyricsWindowAppearanceRows(.text) }
                     if lyricsWindowPreviewShowsMini {
@@ -2756,6 +2757,13 @@ private struct AppearanceSettingsTab: View {
     /// 抽屉里的「恢复默认」:动作跟工具栏「重置 ▾」是同一个函数,标题 / 副标题也同一份。
     /// 这一行不能省:抽屉是键盘 / VoiceOver 的全量兜底通路,而工具栏那颗是 SwiftUI `Menu`
     /// (另外三段同款,见 `OverlayAllSettingsDrawer.resetRow`)。
+    /// 「全部设置」抽屉折起来时列的组名,顺序同抽屉里各卡(迷你、完整两种尺寸的组不同)。
+    private var lyricsWindowDrawerGroupNames: [String] {
+        lyricsWindowPreviewShowsMini
+            ? [L10n.t("背景"), L10n.t("文字"), L10n.t("行为"), L10n.t("内容"), L10n.t("布局"), L10n.t("顶部信息"), L10n.t("网页歌词")]
+            : [L10n.t("背景"), L10n.t("文字"), L10n.t("内容"), L10n.t("布局"), L10n.t("封面"), L10n.t("网页歌词")]
+    }
+
     private var lyricsWindowResetRow: some View {
         SettingsRow(
             icon: "arrow.uturn.backward",
@@ -3544,7 +3552,7 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .showLyrics: return L10n.t("显示歌词")
+        case .showLyrics: return L10n.t("收起时显示歌词")
         case .karaoke: return L10n.t("卡拉OK效果")
         case .collapseWhenPaused: return L10n.t("暂停时收起")
         case .hideInFullScreen: return L10n.t("全屏时隐藏")
@@ -4191,11 +4199,14 @@ enum LyricsWindowToolbarItem: Equatable {
 /// 抽屉里有常驻位置,工具栏浮层要点开才看得到)。
 struct LyricsWindowAllSettingsDrawer<Content: View>: View {
     private let content: () -> Content
+    /// 折起来时标题右边列的组名,跟 `content` 里各卡的顺序一致(迷你、完整两种尺寸的组不同,由调用方给)。
+    private let groupNames: [String]
     /// 同另外三个抽屉:用 @State 不用 @AppStorage,每次打开设置窗口都是折叠的。
     @State private var isExpanded = false
     @Environment(\.settingsSearchHighlightedTitles) private var highlightedTitles
 
-    init(@ViewBuilder content: @escaping () -> Content) {
+    init(groupNames: [String], @ViewBuilder content: @escaping () -> Content) {
+        self.groupNames = groupNames
         self.content = content
     }
 
@@ -4236,7 +4247,10 @@ struct LyricsWindowAllSettingsDrawer<Content: View>: View {
                 Text(L10n.t("全部设置"))
                     .font(.system(size: 13))
                 // 撑满宽度:整行可点靠下面的 contentShape,它认的是 HStack 的实际尺寸。
-                Spacer(minLength: 0)
+                Spacer(minLength: 12)
+                if !isExpanded {
+                    AllSettingsGroupNames(groupNames)
+                }
             }
             .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
             .padding(.vertical, SettingsRowMetrics.verticalPadding)
@@ -4425,7 +4439,11 @@ private struct NotchAllSettingsDrawer: View {
                     .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
                 Text(L10n.t("全部设置"))
                     .font(.system(size: 13))
-                Spacer(minLength: 0)
+                Spacer(minLength: 12)
+                if !isExpanded {
+                    AllSettingsGroupNames([L10n.t("风格"), L10n.t("屏幕"), L10n.t("左耳"), L10n.t("右耳"), L10n.t("宽度"), L10n.t("歌词行"),
+                                            L10n.t("字体"), L10n.t("展开态"), L10n.t("行为")])
+                }
             }
             .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
             .padding(.vertical, SettingsRowMetrics.verticalPadding)
@@ -6174,7 +6192,7 @@ private struct PlayerSettingsTab: View {
                 help: L10n.t("每项均按播放器分别勾选，仅列出已选择的播放器；选择「自动识别」时，还会列出本机已安装的播放器"))
             PlayerLinkageRow(
                 icon: "arrow.up.forward.app",
-                title: L10n.t("打开 Lyrimuse 时启动"),
+                title: L10n.t("启动时打开播放器"),
                 help: L10n.t("Lyrimuse 启动时同时打开勾选的播放器，已在运行的播放器不受影响，也不会抢占焦点"),
                 candidates: linkageCandidates,
                 chosen: stores.launchPlayersOnLyrimuseOpen
@@ -6606,7 +6624,7 @@ private struct GeneralSettingsTab: View {
             // (SettingsDesignSystem「两者只用其一」、SettingsView 里「副标题**常显**…藏在
             // tooltip 里等于没说」),而 HelpButton 是**点击**才弹、不是悬停。既有先例也都这么做:
             // 「导出诊断信息」把"不含 token"放副标题、「清除所有设置」把"无法撤销"放副标题。
-            // 含凭证、覆盖一切并重启、含账号凭据这三条都是最该常显的事实,不许塞进气泡。
+            // 含凭证、覆盖一切并重启、配置文件夹不含凭据这三条都是最该常显的事实,不许塞进气泡。
             SettingsRow(
                 icon: "doc.badge.gearshape",
                 title: L10n.t("设置文件"),
@@ -7224,8 +7242,8 @@ private struct ShortcutsSettingsTab: View {
     }
 }
 
-/// 快捷键页一格:图标 + 名字(+ ?)+ 尾部控件(录制框,或深度链接卡的拷贝 / 打开按钮),一行。名字放不下先缩一点
-/// 字号,再不行截断(悬停看全名)。
+/// 快捷键页一格:图标 + 名字(+ ?)+ 尾部控件(录制框,或深度链接卡的拷贝 / 打开按钮),一行。名字放不下折成两行
+/// (字号不缩),两行还放不下才截断(悬停看全名)。
 /// 自绘的格子不会自动挂设置搜索高亮(只有 SettingsRow / SettingsCardHeader 会),这里手挂。
 private struct HotkeyCell<Recorder: View>: View {
     let icon: String
@@ -7263,9 +7281,9 @@ private struct HotkeyCell<Recorder: View>: View {
             .frame(width: 18)
             Text(title)
                 .font(.system(size: 13))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .lineLimit(2)
                 .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: true)
                 .help(title)
             if let help { HelpButton(text: help) }
             Spacer(minLength: 6)
@@ -7706,13 +7724,14 @@ private struct AboutSettingsTab: View {
             // 这一行**不是备份手段**:它是给拿 dotfiles / chezmoi 管机器的人直接看活配置的入口,所以不放进
             // 「备份与迁移」那张卡 —— 两个同叫「在访达中显示」的按钮挨在一起却打开两个不同目录,用户会把活配置当备份去拷 / 删。
             //
-            // 副标题里「外观与快捷键不在此处」必须常显:它们存在 UserDefaults,只拷这个文件夹会静默丢掉。
+            // 副标题里「账号凭据、外观与快捷键不在此处」必须常显:凭据在登录钥匙串、另两样在 UserDefaults,只拷这个文件夹
+            // 会静默丢掉。
             SettingsRow(
                 icon: "folder",
                 title: L10n.t("配置文件夹"),
                 // 路径按变体显示(正式 ~/.config/lyrimuse,Dev ~/.config/lyrimuse-dev),别让 Dev 的用户对着一个错的路径找文件。
                 subtitle: "~/.config/" + LyrimuseIdentity.configDirName + " · "
-                    + L10n.t("纯文本格式，含账号凭据；不含外观与快捷键，完整迁移请使用「备份与迁移」")
+                    + L10n.t("纯文本格式，不含账号凭据、外观与快捷键；完整迁移请使用「备份与迁移」")
             ) {
                 Button(L10n.t("在访达中显示")) {
                     NSWorkspace.shared.activateFileViewerSelecting([ConfigPortability.configFolderURL])

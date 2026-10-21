@@ -47,7 +47,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Web lyrics: a phone or tablet as a second screen, or an OBS browser source](#feature-web-lyrics) | Settings › Lyrics Display › Lyrics Window › Web Lyrics |
 | [YouTube Music and Spotify Web in your browser](#feature-web-players) | Settings › Player › Web |
 | [Skip YouTube Music ads automatically](#feature-skip-youtube-ads) | Settings › Player › Web › Skip YouTube Music Ads Automatically |
-| [Start and quit together with your player](#feature-player-linkage) | Settings › Player › Linkage › Launch When Lyrimuse Opens |
+| [Start and quit together with your player](#feature-player-linkage) | Settings › Player › Linkage › Open Players at Launch |
 | [Last.fm scrobbling and listening profile](#feature-lastfm) | Settings › Last.fm › Settings › Scrobble Rules |
 | [Scrobble to ListenBrainz too](#feature-listenbrainz) | Settings › Labs › ListenBrainz › Account Info |
 | [Show what you're playing on Discord](#feature-discord) | Settings › Discord › Show on Discord |
@@ -573,7 +573,7 @@ Click the title, artist or album in the lyrics window or the expanded notch to r
 Per player: open the player when Lyrimuse opens, open Lyrimuse when the player opens, or quit Lyrimuse once every player it follows has quit.
 
 - Off by default
-- Settings: Player › Linkage › Launch When Lyrimuse Opens
+- Settings: Player › Linkage › Open Players at Launch
 - Settings: Player › Linkage › Launch When Your Player Opens
 - Settings: Player › Linkage › Quit With Player
 
@@ -815,7 +815,7 @@ Every setting in the Settings window, by where it lives: 272 in all. Type a name
 ### Lyrics › Library
 
 - **Lyrics Library**
-- **Auto-Match Missing Lyrics**: Only songs without lyrics or with plain-text lyrics only
+- **Auto-Match Missing Lyrics**: Only songs with no lyrics or plain-text lyrics
 - **Re-Match Whole Library**: Songs that already have lyrics are re-matched too; manually edited, calibrated and instrumental songs are left unchanged
 - **Scan Interval**: Seconds between songs; at least 2 seconds is recommended to avoid rate limits
 - **Lyrics Folder**: Existing files stay where they are when you change the location
@@ -843,7 +843,7 @@ Every setting in the Settings window, by where it lives: 272 in all. Type a name
 ### Player › Linkage
 
 - **Player Linkage**: Each item is checked per player. Only the selected players are listed; with Auto-detect selected, the ones installed on this Mac are added
-- **Launch When Lyrimuse Opens**
+- **Open Players at Launch**
 - **Launch When Your Player Opens**
 - **Quit With Player**
 
@@ -936,7 +936,7 @@ Every setting in the Settings window, by where it lives: 272 in all. Type a name
 
 ### Lyrics Display › Notch › Lyric Row
 
-- **Show Lyrics**: When off, the resting card keeps only the notch-height row and shows no lyrics; hovering to expand still shows playback controls, the scrubber, and the next-line preview as usual
+- **Show Lyrics When Collapsed**: When off, the resting card keeps only the notch-height row and shows no lyrics; hovering to expand still shows playback controls, the scrubber, and the next-line preview as usual
 - **Alignment**
 - **Second Line**
 - **Preview Next Line When Expanded**
@@ -1177,7 +1177,7 @@ Every setting in the Settings window, by where it lives: 272 in all. Type a name
 
 - **Export Diagnostics**: Logs, crash reports and app state in one file, with account credentials removed. Track names and local paths stay in, so review it before posting publicly
 - **Activity Log**: The lyrics engine’s raw log, for your own troubleshooting
-- **Config Folder**: Plain text with account credentials. Appearance and shortcuts aren’t included; to migrate everything, use Backup & Migration
+- **Config Folder**: Plain text. Account credentials, appearance and shortcuts aren’t included; to migrate everything, use Backup & Migration
 
 ### Labs › ListenBrainz
 

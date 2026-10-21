@@ -32,6 +32,11 @@ func TestMiguStripMetaLines(t *testing.T) {
 	if got := miguStripMetaLines(in2); got != want2 {
 		t.Fatalf("带冒号的元数据行没剥干净:\n got=%q\nwant=%q", got, want2)
 	}
+	// 时间戳的秒数写成一位([00:1.00])的元数据行也剥。
+	in4 := "[00:1.00]歌曲名 Come Together\n[00:25.90]Here come old flat top\n"
+	if got := miguStripMetaLines(in4); got != "[00:25.90]Here come old flat top\n" {
+		t.Fatalf("一位数秒的元数据行没剥: %q", got)
+	}
 	// 纯文本版本开头的水印行剥掉;正文里恰好含这几个字的行不受影响。
 	in3 := "@migu music@\r\n@migu music@\r\n\r\nHit the Wall - Gracie Abrams\r\nI heard @migu music@ once\r\n"
 	want3 := "Hit the Wall - Gracie Abrams\nI heard @migu music@ once\n"

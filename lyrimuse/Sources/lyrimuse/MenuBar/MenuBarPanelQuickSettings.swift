@@ -315,6 +315,8 @@ struct PanelQuickSettings: View {
     let close: () -> Void
 
     @ObservedObject private var settings = AppSettings.shared
+    /// 歌词窗口此刻开没开(`LyricsWindowSession.openKey`):开着时那颗键写「显示」,按下去是切到它。
+    @AppStorage(LyricsWindowSession.openKey) private var lyricsWindowOpen = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -376,7 +378,7 @@ struct PanelQuickSettings: View {
                 .controlSize(.mini)
         case .lyricsWindow:
             Button(action: action) {
-                Text(L10n.t("打开")).font(.system(size: 11))
+                Text(lyricsWindowOpen ? L10n.t("显示") : L10n.t("打开")).font(.system(size: 11))
             }
             .settingsGlassButtons()
             .buttonBorderShape(.capsule)
@@ -448,7 +450,7 @@ struct PanelQuickSettings: View {
             //
             // 位置刻意紧挨着下面的「对齐方式」,跟设置页同序:那两项都是"歌词行自己的事",
             // 而上面的风格/宽度说的是整张卡。
-            toggleRow(L10n.t("显示歌词"), isOn: $settings.notchShowLyrics)
+            toggleRow(L10n.t("收起时显示歌词"), isOn: $settings.notchShowLyrics)
             // **跟着 `notchShowLyrics` 一起显隐**,跟设置页那一行拉齐了。
             // 在此之前这里是故意不藏的,理由是"这块面板里没有「显示歌词」这一项,跟着藏就成了
             // 凭空少一行、看不出为什么"——那条理由随着上面这个开关搬进来已经不成立:关掉的

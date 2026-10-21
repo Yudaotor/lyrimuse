@@ -600,6 +600,12 @@ private func wiringContracts() {
                     && coordinator.contains("guard let player = favoritePlayer, !favoriteBlockedForTrack else { return }")
                     && coordinator.contains("let value = includeFavorited && !self.favoriteBlockedForTrack ? state.favorited : nil"), true,
                 "菜单标题喜欢: 换歌后推迟读写、没写成这一首藏起心")
+    // Music.app 的写入要好几秒才生效,期间反向再写会被吞掉(07 章决策 175):写完过了滞后期、仍是最后一次写时回读补写;
+    // 快捷键回读时刚写过的这一首信本地那份。
+    expectEqual(coordinator.contains("guard MusicPlaybackController.reconcilesFavoriteAfterWrite(player) else { return }")
+                    && coordinator.contains("self?.lastFavoriteWrite?.at == writtenAt && self?.currentTrackKey == trackKey")
+                    && coordinator.contains("MusicPlaybackController.adoptsFavoriteReadback(current, local: self.isFavorited,"), true,
+                "喜欢对账: 写完过了滞后期回读补写,快捷键回读不盖刚写的")
 }
 
 // ---- 桌面版 Spotify 的 Connect 镜像 ----

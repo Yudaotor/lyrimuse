@@ -123,7 +123,7 @@ Lyrimuse opens the `x-success` URL with what's playing added as parameters (any 
 | `album` | Album |
 | `lyric` | The current lyric line |
 | `player` | Player name |
-| `playing` | `1` if something is playing, `0` if not (the fields above are then empty) |
+| `playing` | `1` while something is playing, `0` when paused or nothing is loaded (with nothing loaded, the fields above are empty) |
 
 In Shortcuts, use the **Open X-Callback URL** action with `lyrimuse://x-callback-url/now-playing` as the URL. Shortcuts adds `x-success` itself, and the returned parameters become the action's output.
 

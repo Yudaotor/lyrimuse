@@ -2356,7 +2356,14 @@ func runSourceContractSurfaceTests() {
                         "全局快捷键: 菜单结束跟踪时恢复")
             // 灵动岛、悬浮歌词都没开时回声另外交给触控栏和菜单栏歌词(14 章决策 60)。漏了不报错,只表现成只用这两样的人按键没回声;
             // 菜单栏那条要是走了 present 就是为一条提示重建状态项,提示期间 refresh 不早退就会被下一拍换回歌词。
-            expectEqual(sourceHas(hk, "guard !settings.notchOverlayEnabled, !settings.classicOverlayEnabled else { return }\n"
+            // 灵动岛开着但此刻显示不了横幅(收起、关了「显示歌词」)也要交出去,否则只开灵动岛的人暂停时按键没有任何回声;
+            // 先判开关再读控制器,灵动岛关着时引用 .shared 会把窗口建出来。
+            expectEqual(sourceHas(hk, "let notchShowsHint = settings.notchOverlayEnabled && NotchLyricsWindowController.shared.showsTransientBanner"),
+                        true, "全局快捷键: 灵动岛显示不了横幅时回声照样交出去,且先判开关再读控制器")
+            let notchController = read("UI/NotchLyricsWindowController.swift") ?? ""
+            expectEqual(sourceHas(notchController, "lastAppliedShouldShow == true && !isVanished && !isCollapsed && showsLyricRow"), true,
+                        "全局快捷键: 灵动岛能显示横幅 = 在屏、没缩进刘海、没收起、画着歌词行")
+            expectEqual(sourceHas(hk, "guard !notchShowsHint, !settings.classicOverlayEnabled else { return }\n"
                                     + "        TouchBarLyricsController.shared.flashHint(text, seconds: hintSeconds)\n"
                                     + "        MenuBarStatusItem.shared.flashHint(text, seconds: hintSeconds)"), true,
                         "全局快捷键: 灵动岛、悬浮歌词都没开时回声交给触控栏和菜单栏歌词")
@@ -2654,9 +2661,9 @@ func runSourceContractSurfaceTests() {
             } else {
                 expectEqual(true, false, "歌词窗口预览: 读不到 LyricsWindowPreviewStage.swift / LyricsWindowView.swift")
             }
-            expectEqual(settings.contains("LyricsWindowAllSettingsDrawer {"), true,
+            expectEqual(settings.contains("LyricsWindowAllSettingsDrawer(groupNames: lyricsWindowDrawerGroupNames) {"), true,
                         "歌词窗口设置: 全量配置收进「全部设置」抽屉")
-            expectEqual(settings.contains("Button(L10n.t(\"打开\")) {")
+            expectEqual(settings.contains("Button(lyricsWindowOpen ? L10n.t(\"显示\") : L10n.t(\"打开\")) {")
                         && sourceHas(settings, "LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)\n                            AppActions.shared.openLyricsWindow?()"), true,
                         "歌词窗口设置: 预览下面那张卡里有打开窗口的按钮,走 AppActions 那个统一入口(先按预览的形态发请求)")
             expectEqual(settings.contains("LyricsWindowStyleDefaults.restoreDefaults(mini: lyricsWindowPreviewShowsMini)"), true,
@@ -3618,7 +3625,7 @@ func runSourceContractSettingsTests() {
         let lyricsWindowRows = #"(lyricsWindow\w+Rows(?:\(\.\w+\))?)"#
         let lyricsWindowPopover = sourceBody("private func lyricsWindowPopoverContent(_ item: LyricsWindowToolbarItem) -> some View {", in: settingsView)
         let lyricsWindowPopoverRows = Set(captures(lyricsWindowRows, in: lyricsWindowPopover).map { $0[0] })
-        let lyricsWindowDrawerRows = Set(captures(lyricsWindowRows, in: sourceBody("LyricsWindowAllSettingsDrawer {", in: settingsView)).map { $0[0] })
+        let lyricsWindowDrawerRows = Set(captures(lyricsWindowRows, in: sourceBody("LyricsWindowAllSettingsDrawer(groupNames: lyricsWindowDrawerGroupNames) {", in: settingsView)).map { $0[0] })
         expectEqual(Set(captures(#"case \.(\w+):"#, in: lyricsWindowPopover).map { $0[0] }),
                     enumCases("enum LyricsWindowToolbarItem: Equatable {", in: settingsView),
                     "抽屉镜像(歌词窗口): 每个工具栏入口都有浮层内容")

@@ -2645,6 +2645,8 @@ final class LastfmStatsService: ObservableObject {
     /// 常听面板)按它显隐。非 @Published:凭据变化本来就伴随设置页操作,
     /// 消费方随下一次 body 重算取到新值就够了。
     var isConnected: Bool { credentials != nil }
+    /// 连着的账号名(同 `isConnected` 的口径);没连为 nil。
+    var connectedUsername: String? { credentials?.user }
 
     // MARK: - 拉取
 

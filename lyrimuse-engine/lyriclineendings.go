@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// 歌词文本的换行统一成 LF、去掉开头的 BOM。
+// 歌词文本的换行统一成 LF、去掉开头的 BOM 和控制字符。
 //
 // 酷狗的网络歌词几乎全是 CRLF(本机 3509 条里 3494 条),三分之一开头带 BOM(1198 条,偶尔两个);QQ 偶有 CRLF(34 条);
 // 逐字轨 1304 份、译文 28 份同样带着。App 的 LRCParser / YRCParser 和这边的打分都自己兜了底,显示不受影响,但每个新的
@@ -15,11 +15,12 @@ import (
 // 只做一头的话,重评时新抓的和存着的只差换行,也会被当成「正文变了」整份重写(机翻清掉重翻,App 按内容指纹存的单曲
 // 偏移跟着失效)。
 
-// normalizeLyricText 去掉开头的 BOM(可能不止一个),把 CRLF / 单独的 CR 统一成 LF。
+// normalizeLyricText 去掉开头的 BOM(可能不止一个)和控制字符(stripLyricControlChars),把 CRLF / 单独的 CR 统一成 LF。
 func normalizeLyricText(s string) string {
 	for strings.HasPrefix(s, "\ufeff") {
 		s = strings.TrimPrefix(s, "\ufeff")
 	}
+	s = stripLyricControlChars(s)
 	if !strings.Contains(s, "\r") {
 		return s
 	}

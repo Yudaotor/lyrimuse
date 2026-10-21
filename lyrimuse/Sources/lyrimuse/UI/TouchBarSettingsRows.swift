@@ -488,7 +488,10 @@ struct TouchBarAllSettingsDrawer: View {
                     .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
                 Text(L10n.t("全部设置"))
                     .font(.system(size: 13))
-                Spacer(minLength: 0)
+                Spacer(minLength: 12)
+                if !isExpanded {
+                    AllSettingsGroupNames([TouchBarSettingsGroup.lyrics, .style, .layout, .behavior].map(\.title))
+                }
             }
             .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
             .padding(.vertical, SettingsRowMetrics.verticalPadding)

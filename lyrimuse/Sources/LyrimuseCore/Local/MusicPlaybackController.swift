@@ -416,6 +416,23 @@ public enum MusicPlaybackController {
         return max(0, favoriteSettleSeconds - sinceTrackChange)
     }
 
+    /// 快捷键「喜欢」先回读再决定切不切。Lyrimuse 刚写过这一首时,读到的多半还是写之前那个值(Music.app 的 getter 实测
+    /// 滞后约 9 秒),这段时间信自己写的那份,过了才认回读值。见 07 章决策 175。
+    public static let favoriteReadbackLagSeconds: TimeInterval = 15
+
+    /// 写完「喜欢」过了滞后期要不要回读对账、没生效就补写。只有 Apple Music:它的写入要好几秒才生效,期间反向再写一次会被吞掉。
+    public static func reconcilesFavoriteAfterWrite(_ player: PlaybackPlayer) -> Bool {
+        player == .appleMusic
+    }
+
+    /// 回读值 `readback` 要不要盖掉本地那份 `local`。`sinceLocalWrite`:Lyrimuse 上次给这一首写「喜欢」过去多少秒,没写过是 nil。
+    /// 纯函数,selftest 覆盖。
+    public static func adoptsFavoriteReadback(_ readback: Bool?, local: Bool?, sinceLocalWrite: TimeInterval?) -> Bool {
+        guard let readback, readback != local else { return false }
+        guard let sinceLocalWrite else { return true }
+        return sinceLocalWrite >= favoriteReadbackLagSeconds
+    }
+
     /// 按播放器读当前曲目的「喜欢」状态;不支持、读不到返回 nil。会阻塞到子进程结束,不要在主线程调用。
     public static func favoritedState(for player: PlaybackPlayer) -> Bool? {
         switch player {

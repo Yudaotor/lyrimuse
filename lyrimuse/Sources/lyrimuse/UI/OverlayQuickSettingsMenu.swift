@@ -312,7 +312,11 @@ final class MenuStepperRowView: NSView {
         minusButton = MenuStepButton(symbol: minus.symbol, help: minus.help, filled: true)
         plusButton = MenuStepButton(symbol: plus.symbol, help: plus.help, filled: true)
         resetButton = MenuStepButton(symbol: "arrow.counterclockwise", help: resetHelp, filled: false)
-        super.init(frame: NSRect(x: 0, y: 0, width: 260, height: 30))
+        // 宽度按标题算:定死 260 时按钮区占掉 158,英文「Lyrics Offset」被截成「Lyrics Off…」,读起来像「歌词已关」。
+        // 菜单会撑到最宽那一项,这里只保证标题放得下。
+        let titleWidth = ceil((title as NSString).size(withAttributes: [.font: NSFont.menuFont(ofSize: 0)]).width)
+        let width = max(260, titleInset + titleWidth + 12 + Self.controlsWidth)
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 30))
         autoresizingMask = [.width]
 
         let titleLabel = NSTextField(labelWithString: title)
@@ -363,6 +367,9 @@ final class MenuStepperRowView: NSView {
 
         subscription = state.sink { [weak self] in self?.apply($0) }
     }
+
+    /// 标题右边那一截(间距 + − / 数值 / ＋ / 归零 + 右边距)的宽度,跟下面的约束一一对应。
+    private static let controlsWidth: CGFloat = 30 + 4 + 54 + 4 + 30 + 4 + 22 + 10
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }

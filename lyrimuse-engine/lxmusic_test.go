@@ -170,9 +170,9 @@ func TestLXMusicCurrentTrack(t *testing.T) {
 func TestLXMusicLyrics(t *testing.T) {
 	ctx := context.Background()
 	lyrics := []lxTestLyric{
-		{"kw_3", "raw", "lyric", "[00:01.00]原版第一句\n[00:02.00]原版第二句"},
+		{"kw_3", "raw", "lyric", "[00:00.000]歌曲名 一样的月光\n[00:00.000]歌手名 徐佳莹\n[00:01.00]原版第一句\n[00:02.00]原版第二句"},
 		{"kw_3", "raw", "tlyric", "[00:01.00]tr"},
-		{"kw_3", "raw", "lxlyric", "[00:01.000]<0,500>原<500,500>版"},
+		{"kw_3", "raw", "lxlyric", "[00:00.000]<0,0>歌<0,0>曲<0,0>名 <0,0>一\n[00:01.000]<0,500>原<500,500>版"},
 		{"kw_4", "raw", "lyric", "[00:01.00]演员原版"},
 		{"kw_4", "edited", "lyric", "[00:01.00]演员改过"},
 	}
@@ -180,6 +180,9 @@ func TestLXMusicLyrics(t *testing.T) {
 	s, ok := lxMusicLyrics(ctx, "kw_3")
 	if !ok || !strings.Contains(s.lrc, "原版第一句") || s.tr != "[00:01.00]tr" || s.word == "" {
 		t.Fatalf("got %+v ok=%v", s, ok)
+	}
+	if strings.Contains(s.lrc, "歌曲名") || strings.Contains(s.lrc, "歌手名") || strings.Contains(s.word, "曲<0,0>名") {
+		t.Errorf("开头的元数据行应当剥掉: lrc=%q word=%q", s.lrc, s.word)
 	}
 	if s, _ := lxMusicLyrics(ctx, "kw_4"); !strings.Contains(s.lrc, "改过") {
 		t.Errorf("用户改过的那份优先: %q", s.lrc)
@@ -663,5 +666,21 @@ func TestLXMusicOpenAPILyrics(t *testing.T) {
 		if got := lxMusicOpenAPIPort(); got != want {
 			t.Errorf("%s: port %d, want %d", cfg, got, want)
 		}
+	}
+}
+
+// 洛雪歌词开头那两行没有冒号的元数据剥掉,逐字那份去掉标记再认;正文里含这几个字的行不动。
+func TestLXMusicStripMetaLines(t *testing.T) {
+	lrc := "[00:00.000]歌曲名 天天 \n[00:00.000]歌手名 陶喆\n[00:00.000]作词：娃娃\n[00:14.685]太阳天或下雨天\n[00:20.000]歌曲名字叫天天"
+	want := "[00:00.000]作词：娃娃\n[00:14.685]太阳天或下雨天\n[00:20.000]歌曲名字叫天天"
+	if got := lxMusicStripMetaLines(lrc); got != want {
+		t.Fatalf("lrc:\n got=%q\nwant=%q", got, want)
+	}
+	word := "[00:00.000]<0,0>歌<0,0>曲<0,0>名 <0,0>天<0,0>天\n[00:00.000]<0,0>歌<0,0>手<0,0>名 <0,0>陶<0,0>喆\n[00:14.685]<0,249>太<249,250>阳"
+	if got := lxMusicStripMetaLines(word); got != "[00:14.685]<0,249>太<249,250>阳" {
+		t.Fatalf("逐字: %q", got)
+	}
+	if plain := "[00:01.00]第一句"; lxMusicStripMetaLines(plain) != plain {
+		t.Fatal("没有元数据行的原样")
 	}
 }

@@ -297,7 +297,8 @@ func runLyricsManagerTests() {
         expectEqual(D.isOff(candidate: 300, song: 266), false, "候选曲长: 差 11.3% 不算另一个版本")
         expectEqual(D.isOff(candidate: 300, song: 260), true, "候选曲长: 差 13.3%(分母取较长那方)算另一个版本,同引擎 12% 门槛")
         expectEqual(D.isOff(candidate: 0, song: 260), false, "候选曲长: 不知道时长不下结论")
-        expectEqual([D.clock(271.4), D.clock(59.6), D.clock(3725)], ["4:31", "1:00", "1:02:05"], "候选曲长: 分:秒,一小时以上带小时")
+        expectEqual([D.clock(271.4), D.clock(59.6), D.clock(3725)], ["4:31", "0:59", "1:02:05"], "候选曲长: 分:秒,一小时以上带小时")
+        expectEqual(D.clock(258.573), "4:18", "候选曲长: 不足一秒舍去,同歌词窗口(258.57 秒写 4:18)")
         let zh = "[00:29.67]风吹乱头发\n[00:32.92]小孩不听话"
         let generated = LyricsRomanization.romanizeLRC(zh) ?? ""
         expectEqual(generated.isEmpty, false, "存档读音: 中文正文生成得出读音(守卫自身没跑空)")

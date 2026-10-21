@@ -74,9 +74,11 @@ enum GlobalHotkeys {
         if settings.classicOverlayEnabled {
             LyricsOverlayWindowController.shared.flashTransientHint(text)
         }
-        // 灵动岛、悬浮歌词都没开时,同一条提示交给触控栏(展开着时)和菜单栏歌词;有一个开着就不发,
-        // 那两处是回声的主场,别的面再闪一遍是噪音(14 章决策 60)。
-        guard !settings.notchOverlayEnabled, !settings.classicOverlayEnabled else { return }
+        // 灵动岛显示不了横幅(没开,或开着但此刻无处显示,见 showsTransientBanner)、悬浮歌词也没开时,同一条提示交给触控栏
+        // (展开着时)和菜单栏歌词;有一处显示得了就不发,那两处是回声的主场,别的面再闪一遍是噪音(14 章决策 60、130)。
+        // 先判开关再碰 NotchLyricsWindowController.shared:灵动岛关着时引用它会把窗口建出来。
+        let notchShowsHint = settings.notchOverlayEnabled && NotchLyricsWindowController.shared.showsTransientBanner
+        guard !notchShowsHint, !settings.classicOverlayEnabled else { return }
         TouchBarLyricsController.shared.flashHint(text, seconds: hintSeconds)
         MenuBarStatusItem.shared.flashHint(text, seconds: hintSeconds)
         if LyricsWindowHintSurface.visible {

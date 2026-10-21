@@ -947,7 +947,10 @@ struct MenuBarAllSettingsDrawer: View {
                     .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
                 Text(L10n.t("全部设置"))
                     .font(.system(size: 13))
-                Spacer(minLength: 0)
+                Spacer(minLength: 12)
+                if !isExpanded {
+                    AllSettingsGroupNames([L10n.t("布局"), L10n.t("配色"), L10n.t("字体"), L10n.t("宽度"), L10n.t("行为")])
+                }
             }
             .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
             .padding(.vertical, SettingsRowMetrics.verticalPadding)

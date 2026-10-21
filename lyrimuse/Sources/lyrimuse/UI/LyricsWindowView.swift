@@ -3549,7 +3549,8 @@ struct LyricsWindowView: View {
                 seekable: PlaybackCoordinator.shared.acceptsSeek,
                 onArtwork: hasArtworkBackground,
                 backgroundLayers: playback.windowBackgroundLayers,
-                title: playback.title,
+                // 广告不是歌、也不会打卡:交空歌名,收听次数徽标不显示、也不拿广告标题去查 Last.fm。
+                title: playback.isCurrentTrackAdBreak ? "" : playback.title,
                 artist: playback.artist)
                 .padding(.top, 19)
             playbackControls
@@ -7153,9 +7154,11 @@ private struct InfoPanelLinksRow: View {
             } label: {
                 Text(name + " ↗")
                     .font(.system(size: 13, weight: .medium))
+                    // 封面底上系统蓝看不清:跟同面板的值一样用前景色,加下划线标明能点。
+                    .underline(onArtwork)
             }
             .buttonStyle(.glassIcon())
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(onArtwork ? Color.white : Color.accentColor)
         }
     }
 }
@@ -7698,10 +7701,18 @@ private struct ChartsPanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(L10n.t("你的常听"))
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
+            HStack(spacing: 6) {
+                Text(L10n.t("你的常听"))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                // 先摆出上次存下的那份、后台再刷新:有旧数据时也要看得出正在更新,不然几秒后整张榜突然换掉。
+                if stats.chartLoading(kind, period), stats.chart(kind, period)?.isEmpty == false {
+                    ProgressView().controlSize(.mini)
+                        .help(L10n.t("正在更新"))
+                        .accessibilityLabel(L10n.t("正在更新"))
+                }
+            }
+            .padding(.horizontal, 4)
             SettingsPillSegmentedControl(
                 selection: $kind,
                 options: LastfmStatsService.ChartKind.allCases,

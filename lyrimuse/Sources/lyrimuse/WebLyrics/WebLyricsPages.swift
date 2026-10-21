@@ -999,7 +999,10 @@ enum WebLyricsPages {
             if (style.roma && line.roma && !perWord(line)) {
               html += row(esc(line.roma), { em: .65, weight: style.weights[1], color: color(60), top: style.spacing[0], side, cls });
             }
-            if (style.tr && line.tr) html += row(esc(line.tr), { em: .7, weight: style.weights[2], color: color(75), top: style.spacing[1], side, cls });
+            // 紧跟读音(整行或逐词)的译文不往上挤:网页的行框比原生卡片里的窄,负的行距会让读音的下伸部(g、p)压到译文上。
+            const afterReading = (style.roma && line.roma) || perWord(line);
+            const trTop = afterReading ? Math.max(0, style.spacing[1]) : style.spacing[1];
+            if (style.tr && line.tr) html += row(esc(line.tr), { em: .7, weight: style.weights[2], color: color(75), top: trTop, side, cls });
             return html;
           }
           function nextRow(next, em, weight, upcoming) {

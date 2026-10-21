@@ -329,6 +329,27 @@ func runWebLyricsTests() {
         expectEqual(WebSocketFrame.decode(huge), .invalid, "网页歌词: 客户端大帧算坏连接")
     }
 
+    // ---- 系统防火墙挡不挡局域网设备(socketfilterfw 的输出) ----
+    do {
+        let F = ApplicationFirewall.self
+        expectEqual(F.globalState(from: "Firewall is blocking all non-essential incoming connections. (State = 2)"), 2,
+                    "防火墙: 阻止所有传入连接是 2")
+        expectEqual(F.globalState(from: "Firewall is enabled. (State = 1)"), 1, "防火墙: 开着是 1")
+        expectEqual(F.globalState(from: "Firewall is disabled. (State = 0)"), 0, "防火墙: 关着是 0")
+        expectEqual(F.globalState(from: "garbage"), nil, "防火墙: 认不出的输出为 nil")
+        expectEqual(F.appBlocked(from: "Incoming connection to /Applications/Lyrimuse.app/Contents/MacOS/lyrimuse is blocked."), true,
+                    "防火墙: 程序被挡")
+        expectEqual(F.appBlocked(from: "Incoming connection to /Applications/Lyrimuse.app/Contents/MacOS/lyrimuse is permitted."), false,
+                    "防火墙: 程序放行")
+        expectEqual(F.appBlocked(from: "The application is not part of the firewall"), nil, "防火墙: 不在列表里为 nil")
+        expectEqual(F.blocksIncoming(globalState: 2, appBlocked: false), true, "防火墙: 阻止所有传入时放行的程序也连不进来")
+        expectEqual(F.blocksIncoming(globalState: 1, appBlocked: true), true, "防火墙: 开着且程序被挡")
+        expectEqual(F.blocksIncoming(globalState: 1, appBlocked: false), false, "防火墙: 开着但程序放行")
+        expectEqual(F.blocksIncoming(globalState: 1, appBlocked: nil), false, "防火墙: 认不出程序状态时不报")
+        expectEqual(F.blocksIncoming(globalState: 0, appBlocked: true), false, "防火墙: 关着时不报")
+        expectEqual(F.blocksIncoming(globalState: nil, appBlocked: true), false, "防火墙: 读不出总状态时不报")
+    }
+
     // ---- 局域网链接那几行显示的地址 ----
     do {
         let link = WebLyricsLinks.url(host: "DJ-Mac.local", port: 3940, token: "abc")

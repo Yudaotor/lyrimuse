@@ -642,7 +642,7 @@ struct OnboardingView: View {
             Text(L10n.t("YouTube Music 使用哪个浏览器？"))
                 .font(.title2.bold())
                 .onboardingReveal(0)
-            Text(L10n.t("YouTube Music 在浏览器中播放，Lyrimuse 需通过所用浏览器读取播放进度。请选择常用的浏览器（可多选），随后在系统授权请求中选择「允许」。之后可在设置的「网页播放器」中更改"))
+            Text(L10n.t("YouTube Music 在浏览器中播放，Lyrimuse 需通过所用浏览器读取播放进度。请选择常用的浏览器（可多选），随后在系统授权请求中选择「允许」。之后可在设置的「播放器 › 网页版」中更改"))
                 .foregroundStyle(.secondary)
                 .onboardingReveal(1)
             if candidates.isEmpty {
@@ -684,11 +684,13 @@ struct OnboardingView: View {
             //
             // 逻辑本体在 `BrowserPairing.chooseFromApplications`(配对逻辑只允许一份,
             // selftest 有闸),这里只负责把它返回的错误文案接到下面那个 .alert 上。
+            // 玻璃胶囊按钮:链接样式的蓝字落在引导页的灰色玻璃底上看不清。
             Button(L10n.t("从应用程序中选择…")) {
                 browserPickerError = BrowserPairing.chooseFromApplications(platformID: platformID)
             }
-            .buttonStyle(.link)
-            .font(.callout)
+            .settingsGlassButtons()
+            .buttonBorderShape(.capsule)
+            .controlSize(.small)
         }
         .alert(
             L10n.t("无法使用该应用"),
@@ -1545,18 +1547,31 @@ struct OnboardingView: View {
 
     /// Last.fm:纯介绍,不收集凭据。点「去连接」直接打开设置并停在 Last.fm 详情页
     /// (见 AppActions.pendingSettingsSelection)。图标跟设置页账号卡片同一张(`lastfmBadge`)。
+    /// 已经连着(重新运行引导的老用户)时写「已连接」加账号名,不再给「前往连接」。
     private var lastfmTile: some View {
         doneTile(title: "Last.fm", detail: L10n.t("同步你的收听记录")) {
             lastfmBadge(size: 24)
                 .accessibilityHidden(true)
         } bottom: {
-            Button(L10n.t("前往连接")) {
-                AppActions.shared.requestSettings(.account(.lastfm))
-                NSApp.activate(ignoringOtherApps: true)
-                openSettings()
+            if let user = LastfmStatsService.shared.connectedUsername {
+                // 账号名单独一行:卡片只有三分之一宽,跟「已连接」挤一行时稍长的账号名就被截断。
+                VStack(alignment: .leading, spacing: 2) {
+                    Label(L10n.t("已连接"), systemImage: "checkmark.circle.fill")
+                    Text(user)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+            } else {
+                Button(L10n.t("前往连接")) {
+                    AppActions.shared.requestSettings(.account(.lastfm))
+                    NSApp.activate(ignoringOtherApps: true)
+                    openSettings()
+                }
+                .buttonStyle(.link)
+                .font(.system(size: 11, weight: .medium))
             }
-            .buttonStyle(.link)
-            .font(.system(size: 11, weight: .medium))
         }
     }
 

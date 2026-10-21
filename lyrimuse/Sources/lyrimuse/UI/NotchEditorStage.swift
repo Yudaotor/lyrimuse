@@ -1450,7 +1450,7 @@ struct NotchShowLyricsRow: View {
     var body: some View {
         SettingsRow(
             icon: "text.alignleft",
-            title: L10n.t("显示歌词"),
+            title: L10n.t("收起时显示歌词"),
             help: L10n.t("关闭后，常态下仅保留刘海高度，不显示歌词；指针悬停展开时，播放控制、进度条和下一句预览仍照常显示")
         ) {
             Toggle("", isOn: $settings.notchShowLyrics)

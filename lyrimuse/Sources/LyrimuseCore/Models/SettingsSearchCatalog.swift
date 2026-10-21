@@ -298,7 +298,7 @@ public enum SettingsSearchCatalog {
         player("permissions", "洛雪音乐开放 API", kw: ["洛雪", "LX Music", "开放 API", "Open API", "音量", "播放进度"]),
         player("permissions", "歌词引擎", kw: ["lyrimuse-engine", "collector", "launchd", "服务", "运行状态", "后台采集服务", "后台服务", "采集"]),
         player("linkage", "播放器联动", kw: ["启动", "退出", "联动"]),
-        player("linkage", "打开 Lyrimuse 时启动", kw: ["联动", "启动播放器"]),
+        player("linkage", "启动时打开播放器", kw: ["联动", "启动播放器", "打开 Lyrimuse 时启动"]),
         player("linkage", "跟随播放器启动", kw: ["联动", "自动启动"]),
         player("linkage", "跟随播放器退出", kw: ["联动", "自动退出"]),
 
@@ -362,7 +362,7 @@ public enum SettingsSearchCatalog {
         surface(.notch, "音浪", kw: ["频谱", "音条", "律动"], group: "左耳"),
         surface(.notch, "宽度", kw: ["稳态宽", "pt"]),
         surface(.notch, "展开宽度", kw: ["展开态", "pt"]),
-        surface(.notch, "显示歌词", kw: ["歌词行", "状态条"], group: "歌词行"),
+        surface(.notch, "收起时显示歌词", kw: ["显示歌词", "歌词行", "状态条"], group: "歌词行"),
         surface(.notch, "对齐方式", kw: ["居中", "左对齐", "右对齐"], group: "歌词行"),
         surface(.notch, "副行", kw: ["下一句", "译文", "读音", "罗马音", "两行"], group: "歌词行"),
         surface(.notch, "展开时预览下一句", kw: ["下一句", "预览"], group: "歌词行"),
@@ -537,7 +537,7 @@ public enum SettingsSearchCatalog {
         about("开源许可证", sub: "GPL-3.0", kw: ["GPL", "许可证", "license"], group: nil),
         about("导出诊断", sub: "打包日志、崩溃记录与运行状态，已移除账号凭据；含曲目名与本机路径，公开前请检查", kw: ["诊断", "日志", "排查", "反馈"], group: "诊断与数据"),
         about("运行日志", sub: "歌词引擎的原始日志，供自行排查", kw: ["日志", "log", "排查", "访达"], group: "诊断与数据"),
-        about("配置文件夹", sub: "纯文本格式，含账号凭据；不含外观与快捷键，完整迁移请使用「备份与迁移」", kw: ["config", "配置", "文件夹", "路径"], group: "诊断与数据"),
+        about("配置文件夹", sub: "纯文本格式，不含账号凭据、外观与快捷键；完整迁移请使用「备份与迁移」", kw: ["config", "配置", "文件夹", "路径"], group: "诊断与数据"),
 
         // ---- 账号 ----
         account("listenBrainz", path: ["ListenBrainz"], "账号信息", kw: ["ListenBrainz", "token", "令牌", "用户名", "连接"]),

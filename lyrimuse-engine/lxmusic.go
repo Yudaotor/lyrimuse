@@ -403,10 +403,30 @@ func lxMusicLyrics(ctx context.Context, id string) (lxMusicLyricSet, bool) {
 		}
 		return s, strings.TrimSpace(s.lrc) != ""
 	}
-	if s, ok := pick("edited"); ok {
-		return s, true
+	s, ok := pick("edited")
+	if !ok {
+		s, ok = pick("raw")
 	}
-	return pick("raw")
+	s.lrc, s.word = lxMusicStripMetaLines(s.lrc), lxMusicStripMetaLines(s.word)
+	return s, ok
+}
+
+// lxMusicStripMetaLines 剥掉洛雪歌词开头那两行没有冒号的元数据(「歌曲名 天天」「歌手名 陶喆」,跟咪咕同一个形状,
+// 认法同 miguMetaLineRe);逐字那份去掉 `<毫秒,时长>` 标记再认。别的行原样留着。见 08 章决策 56。
+func lxMusicStripMetaLines(text string) string {
+	if text == "" {
+		return text
+	}
+	lines := strings.Split(text, "\n")
+	kept := lines[:0]
+	for _, line := range lines {
+		bare := strings.TrimSpace(metaLineTimestampRe.ReplaceAllString(lxMusicWordRe.ReplaceAllString(line, ""), ""))
+		if bare != "" && miguMetaLineRe.MatchString(bare) {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "\n")
 }
 
 var (
@@ -602,7 +622,7 @@ func lxMusicOpenAPILyrics(ctx context.Context, artist, title string) (lxMusicLyr
 	if lxMusicOpenAPIGet(ctx, statusPath, &after) != nil || after.Name != before.Name || after.Singer != before.Singer {
 		return lxMusicLyricSet{}, lxMusicOpenAPIStatus{}, false
 	}
-	return lxMusicLyricSet{lrc: all.Lyric, tr: all.Tlyric, roma: all.Rlyric, word: all.Lxlyric}, before, true
+	return lxMusicLyricSet{lrc: lxMusicStripMetaLines(all.Lyric), tr: all.Tlyric, roma: all.Rlyric, word: lxMusicStripMetaLines(all.Lxlyric)}, before, true
 }
 
 const (

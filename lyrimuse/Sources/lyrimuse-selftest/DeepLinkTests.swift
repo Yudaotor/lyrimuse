@@ -312,7 +312,10 @@ func runDeepLinkTests() {
         expectEqual(S.section(in: "/lyrics/nope"), nil, "设置分段: 认不出的分段")
         expectEqual(S.pagePath(of: "/lyrics/manage"), "/lyrics", "设置分段: 去掉分段剩下那一页")
         expectEqual(S.pagePath(of: "/account/discord/privacy"), "/account/discord", "设置分段: 账号页去掉分段")
-        expectEqual(S.pagePath(of: "/lyrics/nope"), "/lyrics/nope", "设置分段: 认不出的分段不去掉(只叫出设置窗口)")
+        expectEqual(S.pagePath(of: "/lyrics/nope"), "/lyrics", "设置分段: 认不出的分段也去掉,翻到那一页")
+        expectEqual(S.pagePath(of: "/shortcuts/nope"), "/shortcuts", "设置分段: 没有分段的页带了一段也翻到那一页")
+        expectEqual(S.pagePath(of: "/account/lastfm"), "/account/lastfm", "设置分段: 两段的账号页本身原样")
+        expectEqual(S.pagePath(of: "/account/nope"), "/account/nope", "设置分段: 去掉一段也不是一页时原样(只叫出设置窗口)")
         expectEqual(S(path: S.pagePath(of: "/appearance/notch")), .tab("appearance"), "设置分段: 去掉分段后认得出那一页")
 
         // 表里存的值必须是 App 里各 Section 枚举真有的 rawValue:对不上的话链接翻过去落在一个不存在的分段上。
@@ -387,6 +390,8 @@ func runDeepLinkTests() {
                     "深链接线: 面板带 quick 时开着也不关,翻到那一格")
         expectEqual(router.contains("guard let success else {") && router.contains("NSWorkspace.shared.open(url)"), true,
                     "深链接线: x-callback 只往解析层放行的地址回传")
+        expectEqual(router.contains("playing: hasTrack && p.isPlayingSmoothed"), true,
+                    "深链接线: x-callback 的 playing 按在不在放算,暂停时为 0(曲目各项照样带上)")
         expectEqual(delegate.contains("DeepLinkRouter.handle(url)") && !delegate.contains("handleAuthCallback()"), true,
                     "深链接线: AppDelegate 只交给 DeepLinkRouter,不再兜底调授权回调")
         expectEqual(router.contains("let logged = (url.host ?? \"\") + url.path") && !router.contains("url.absoluteString"), true,

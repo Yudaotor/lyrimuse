@@ -498,8 +498,9 @@ struct LyricsManagerSongRow: View {
                           tint: machine ? LyricsFeatureTint.machineTranslation : LyricsFeatureTint.translation,
                           help: machine ? L10n.t("译文（机器翻译）") : L10n.t("译文（歌词源自带）"))
                 }
+                // 列表只知道存没存读音,不知道这首的语言开没开(要读正文),说成「已缓存读音」,同设置 › 歌词 › 管理那一栏。
                 if summary.hasRomanization {
-                    badge("textformat.abc", tint: LyricsFeatureTint.romanization, help: L10n.t("读音"), latin: true)
+                    badge("textformat.abc", tint: LyricsFeatureTint.romanization, help: L10n.t("已缓存读音"), latin: true)
                 }
             }
             .font(.system(size: 9.5))

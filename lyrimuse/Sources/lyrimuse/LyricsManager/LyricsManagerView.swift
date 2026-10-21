@@ -3513,8 +3513,10 @@ struct LyricsManagerView: View {
                     LyricsManagerTag(icon: "character.book.closed", text: L10n.t("译文"), tint: LyricsFeatureTint.translation)
                 }
             }
-            if summary.hasRomanization {
-                LyricsManagerTag(icon: "textformat.abc", text: L10n.t("读音"), tint: LyricsFeatureTint.romanization, latinIcon: true)
+            // 读音存着、但这首的语言没在「标注读音的语言」里开时,各处都不显示:写「已缓存读音」,别说成有读音。
+            if summary.hasRomanization || romanizationAvailable {
+                LyricsManagerTag(icon: "textformat.abc", text: romanizationAvailable ? L10n.t("读音") : L10n.t("已缓存读音"),
+                                 tint: romanizationAvailable ? LyricsFeatureTint.romanization : .secondary, latinIcon: true)
             }
             if summary.isManualOriginal {
                 LyricsManagerTag(icon: "pencil.circle.fill", text: L10n.t("人工修正"), tint: LyricsFeatureTint.manual)
@@ -3607,9 +3609,9 @@ struct LyricsManagerView: View {
         }
     }
 
+    /// 同 `LyricsCandidateDuration.clock`:不足一秒的舍去,跟歌词窗口写的时长一致。
     private static func durationText(_ seconds: Double) -> String {
-        let total = Int(seconds.rounded())
-        return String(format: "%d:%02d", total / 60, total % 60)
+        LyricsCandidateDuration.clock(seconds)
     }
 
     /// 「10 月 6 日」这种写法,不是今年的带上年份;跟界面语言走。

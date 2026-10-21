@@ -695,6 +695,43 @@ func runCoverArtTests() {
                     "coverArt 取色(红豆): 贴边界收下的结果本身仍然接近达标(90.7%),不是随手一个数")
     }
 
+    // ---- 灵动岛 coverArt 背景按亮区压暗(05 章决策 84) ----
+    // 白底封面叠固定 45% 黑后底色是灰 140:白字只有 3.4:1,半透明的未唱字 1.4:1。
+    do {
+        typealias L = LocalPlaybackSource
+        let cases: [(luma: Double, expected: Double)] = [(0.30, 0.45), (0.5, 0.45), (1.0, 0.70), (0.75, 0.60)]
+        for c in cases {
+            expectEqual(abs(L.notchCoverArtOverlayOpacity(brightLuma: c.luma) - c.expected) < 0.001, true,
+                        "灵动岛压暗: 亮区 luma \(c.luma) 压到 \(c.expected)(暗、中等亮度不变,亮的压到亮区不超过 0.30)")
+        }
+        expectEqual(L.notchCoverArtOverlayOpacity(brightLuma: 0), L.notchCoverArtOverlayOpacity,
+                    "灵动岛压暗: 亮区读不出来时用固定值")
+
+        func pixels(_ n: Int, _ color: (Int) -> (UInt8, UInt8, UInt8)) -> [UInt8] {
+            (0..<n).flatMap { i -> [UInt8] in let c = color(i); return [c.0, c.1, c.2, 255] }
+        }
+        let halfWhite = NotchBackdropTone.bright(rgba: pixels(100) { $0 < 50 ? (255, 255, 255) : (0, 0, 0) })
+        expectEqual(halfWhite.map { $0.luma > 0.99 } ?? false, true, "灵动岛压暗: 半白半黑取到的是白的那一块,不是均值的灰")
+        let gray = NotchBackdropTone.bright(rgba: pixels(100) { _ in (128, 128, 128) })
+        expectEqual(gray.map { abs($0.overlayOpacity - L.notchCoverArtOverlayOpacity) < 0.001 } ?? false, true,
+                    "灵动岛压暗: 均匀中灰封面压暗不变")
+        expectEqual(NotchBackdropTone.bright(rgba: []) == nil, true, "灵动岛压暗: 没有像素为 nil")
+
+        // 白底封面:白字对压暗后的亮区够 4.5,旧的固定压暗不够(回归依据)。
+        let white = NotchBackdropTone(r: 1, g: 1, b: 1)
+        func contrastOnBackdrop(_ text: (r: Double, g: Double, b: Double), opacity: Double) -> Double {
+            let d = 1 - opacity
+            return L.contrastRatio(L.relativeLuminance(r: text.r, g: text.g, b: text.b),
+                                   L.relativeLuminance(r: white.r * d, g: white.g * d, b: white.b * d))
+        }
+        let accent = L.accentForCoverArtBackground(r: 1, g: 1, b: 1, rawR: white.r, rawG: white.g, rawB: white.b,
+                                                   overlayOpacity: white.overlayOpacity)
+        expectEqual(contrastOnBackdrop(accent, opacity: white.overlayOpacity) >= 4.5, true,
+                    "灵动岛压暗: 白底封面按亮区压暗后,字色对背景 ≥ 4.5")
+        expectEqual(contrastOnBackdrop((1, 1, 1), opacity: L.notchCoverArtOverlayOpacity) < 4.5, true,
+                    "灵动岛压暗: 固定 45% 压暗时白字对白底封面不够 4.5(这次修的就是它)")
+    }
+
     // ---- 封面 URL:三个图源各自顶到最大那一档(网易云 / QQ+Apple) ----
     //
     // 现象是「歌词窗口里封面非常模糊」。根因是系统 Now Playing 给的封面只有

@@ -831,6 +831,18 @@ public final class LyricsSyncEngine {
                 || headerMatchVariants(of: trackArtist).map(norm).filter { !$0.isEmpty }
                     .contains { norm(String(text[a])).contains($0) }
         }
+        // 两个标签各占一行、同样可以没有冒号(洛雪、咪咕:「歌曲名 天天」「歌手名 陶喆」,起点相同、过滤完才并成一行,
+        // 所以得逐行认)。认法同上:歌名等值、歌手对得上。见 08 章决策 56。
+        if let m = singleHeaderLabelPattern.firstMatch(in: text, range: r),
+           let l = Range(m.range(at: 1), in: text), let v = Range(m.range(at: 2), in: text) {
+            let value = String(text[v])
+            if text[l].hasPrefix("歌手") {
+                return headerMatchVariants(of: trackArtist).map(norm).filter { !$0.isEmpty }
+                    .contains { norm(value).contains($0) }
+            }
+            let titles = Set(headerTitleForms(trackTitle).map(norm)).subtracting([""])
+            return titles.contains(norm(value)) || titles.contains(norm(stripBracketsForHeaderMatch(value)))
+        }
         guard let colon = text.firstIndex(where: { $0 == ":" || $0 == "：" }) else { return false }
         let label = norm(String(text[..<colon]))
         let value = String(text[text.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
@@ -849,6 +861,10 @@ public final class LyricsSyncEngine {
 
     private static let pairedHeaderLabelPattern = try! NSRegularExpression(
         pattern: #"^(?:歌曲名|歌名)[\s:：]+(.+?)[\s,，]+(?:歌手名|歌手)[\s:：]+(.+)$"#
+    )
+
+    private static let singleHeaderLabelPattern = try! NSRegularExpression(
+        pattern: #"^(歌曲名|歌名|歌手名|歌手)[\s:：]+(.+)$"#
     )
 
     /// 抬头里的歌名 / 歌手除了播放器报的,还认这份歌词自己的 `[ti:]` / `[ar:]`(`LRCParser.headerTags`):抬头是歌词源按

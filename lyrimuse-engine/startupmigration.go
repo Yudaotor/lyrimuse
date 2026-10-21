@@ -90,9 +90,10 @@ const (
 	migrationLyricEntities        = "lyric_entities"
 	migrationLyricEntitiesVersion = 1
 	// migrationLyricLineEndings:存量歌词的换行统一成 LF、去掉开头的 BOM(lyriclineendings.go)。新抓取的在 rank
-	// 那道门口统一,运行期不再产生;lyrics/ 文件夹导入进来的外来数据只在改写过的那几条上补扫一遍。
+	// 那道门口统一,运行期不再产生;lyrics/ 文件夹导入进来的外来数据只在改写过的那几条上补扫一遍。改了
+	// normalizeLyricText 去掉的字符就 +1(2:去掉控制字符)。
 	migrationLyricLineEndings        = "lyric_line_endings"
-	migrationLyricLineEndingsVersion = 1
+	migrationLyricLineEndingsVersion = 2
 	// migrationUntranslatedMachineLines:存量机翻里外文原样没动的行(untranslatedmachine.go)。新翻出来的在各级出口
 	// 就不收,运行期不再产生。改了 lineTranslated 的判据就 +1。
 	migrationUntranslatedMachineLines        = "untranslated_machine_lines"

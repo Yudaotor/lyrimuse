@@ -199,6 +199,9 @@ func lbMetaWith(s snapshot, enr map[string]string) lbTrackMeta {
 	}
 }
 
+// lbErrorBodyMaxBytes:ListenBrainz 非 200 响应最多读多少字节来找错误原因。
+const lbErrorBodyMaxBytes = 64 << 10
+
 var errListenRejected = errors.New("listen rejected by server (400/413, non-retryable)")
 
 // lbContentRejected:这个状态码说的是「这条内容 LB 不收」,重发多少次都一样。只有 400(内容不对,LB 文档里提交接口
@@ -341,7 +344,8 @@ func (c *lbClient) submitOnce(ctx context.Context, body []byte, timeout time.Dur
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		// 读整段(上限 64 KB):400 的正文先回显整条提交,读到一半解析不了,取不到后面的 "error"。
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, lbErrorBodyMaxBytes))
 		return resp.StatusCode, fmt.Errorf("status %d: %s", resp.StatusCode, httpErrorBody(resp.Header.Get("Content-Type"), b))
 	}
 	io.Copy(io.Discard, io.LimitReader(resp.Body, 512))

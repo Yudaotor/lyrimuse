@@ -518,13 +518,12 @@ struct LyricsLibraryStatsPanel: View {
                     }
                     // 不带 SF Symbol:同一行左边已经写着这一行在干什么,再叠一个 ⟳ 是往控件上
                     // 加装饰(要强调就改文字,别叠图标)。
-                    let canStart = !(retryable == 0 || running || fillSweepStarting)
+                    // 字色交给按钮自己(不可用时 .disabled 会压灰):强调色的字落在玻璃底上是浅蓝,看着像已经灰掉。
                     Button(L10n.t("开始")) {
                         if LyricsFillSweep.request(keys: []) { fillSweepStarting = true }
                     }
                         .controlSize(.small)
                         .fontWeight(.semibold)
-                        .foregroundStyle(canStart ? Color.accentColor : Color.secondary)
                         .fixedSize()
                         // 全量那一轮跑着的时候也置灰,跟「重新匹配整个歌词库」那颗「开始」对称:引擎
                         // 一次只允许一轮在跑(runLyricsFillSweep 开头那道闸),这时点下去只会被静默丢掉。
@@ -635,7 +634,7 @@ struct LyricsLibraryStatsPanel: View {
     /// 「重新匹配整个歌词库？」确认框的正文,两个入口共用。
     static func fullScanConfirmMessage(pending: Int, secondsPerTrack: Double) -> String {
         String(
-            format: L10n.plural("共 %1$@ 首，预计%2$@。已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外。可随时停止，关闭后进度不会丢失", count: pending),
+            format: L10n.plural("共 %1$@ 首，耗时%2$@。已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外。可随时停止，关闭后进度不会丢失", count: pending),
             format(pending), durationText(pending, secondsPerTrack: secondsPerTrack))
     }
 
@@ -682,20 +681,18 @@ struct LyricsLibraryStatsPanel: View {
                         }
                         // 这里只弹确认框;「正在启动」在确认框里点了「开始扫描」才置上 —— 在这里置的话,
                         // 确认框点「取消」之后按钮会一直转着、一直点不了。标签带「…」= 点了先弹确认框。
-                        let canStart = !(pending == 0 || running || fullScanStarting)
                         Button(L10n.t("开始…")) {
                             confirmFullScan = true
                         }
                             .controlSize(.small)
                             .fontWeight(.semibold)
-                            .foregroundStyle(canStart ? Color.accentColor : Color.secondary)
                             .fixedSize()
                             // 补空那一轮跑着的时候也置灰:引擎一次只允许一轮在跑
                             // (runLyricsFillSweep 开头那道闸),这时点下去只会被静默丢掉。
                             .disabled(pending == 0 || running || fullScanStarting)
                             .help(running
                                   ? L10n.t("另一轮扫描正在进行，请在完成后再试")
-                                  : String(format: L10n.t("预计%@，可随时停止"),
+                                  : String(format: L10n.t("耗时%@，可随时停止"),
                                              Self.durationText(pending, secondsPerTrack: secondsPerTrack)))
                     }
                 }

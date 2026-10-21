@@ -7,7 +7,9 @@ func TestNormalizeLyricText(t *testing.T) {
 		"\ufeff[00:01.00]a\r\n[00:02.00]b\r\n": "[00:01.00]a\n[00:02.00]b\n",
 		"\ufeff\ufeffx\ry":                     "x\ny",
 		"plain\n":                              "plain\n",
-		"a\ufeffb":                             "a\ufeffb", // 只去开头的
+		"a\ufeffb":                             "a\ufeffb",        // 只去开头的
+		"[00:01.00]a\n\x00\x00\n":              "[00:01.00]a\n\n", // 咪咕文件末尾的 NUL
+		"a\tb\x01c\x7fd":                       "a\tbcd",          // 制表符留着,别的控制字符去掉
 		"":                                     "",
 	}
 	for in, want := range cases {
@@ -39,6 +41,7 @@ func TestMigrateLyricLineEndings(t *testing.T) {
 	enrichCache["a|t|b"] = enrichEntry{Lyrics: bt(old), LyricsTr: bt("[00:01.00]tr\r\n"), LyricsYRC: bt("\ufeff[0,1](0,1,0)x\r\n"),
 		PlainLyrics: bt("p\r\n"), LyricsRoma: bt("r\r"), LyricsBG: bt("bg\r\n"), ManualPickSHA: manualPickFingerprint(old), ManualLyrics: true}
 	enrichCache["a|clean|b"] = enrichEntry{Lyrics: bt("[00:01.00]x\n")}
+	enrichCache["a|nul|b"] = enrichEntry{Lyrics: bt("[00:01.00]夜来香\n\x00\x00\n")}
 	enrichCache["a|stale-pick|b"] = enrichEntry{Lyrics: bt("[00:01.00]y\r\n"), ManualPickSHA: "deadbeef0000"}
 	enrichDirty = false
 	enrichMu.Unlock()
@@ -50,6 +53,9 @@ func TestMigrateLyricLineEndings(t *testing.T) {
 	}
 	if e.ManualPickSHA != manualPickFingerprint(e.Lyrics.String()) || !e.ManualLyrics {
 		t.Fatalf("手动选定留痕应当跟着新正文: %+v", e)
+	}
+	if !enrichCache["a|nul|b"].Lyrics.EqualString("[00:01.00]夜来香\n\n") {
+		t.Fatalf("NUL 去掉: %q", enrichCache["a|nul|b"].Lyrics.String())
 	}
 	if enrichCache["a|stale-pick|b"].ManualPickSHA != "deadbeef0000" {
 		t.Fatal("本来就对不上的留痕不动")

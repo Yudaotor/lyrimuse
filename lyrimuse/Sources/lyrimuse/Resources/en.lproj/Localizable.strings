@@ -77,7 +77,7 @@
 "%@ 秒" = "%@s";
 "%@ 秒后可跳过" = "Skippable in %@s";
 "%@ 突然不再返回歌词" = "%@ has suddenly stopped returning lyrics";
-"%@ 自动化权限" = "%@ automation permission";
+"%@ 自动化权限" = "%@ Automation";
 "%@ 行无时间戳，未写入逐字歌词" = "%@ lines without timestamps weren't added to the word-timed lyrics";
 "%@ 行无时间戳，未写入逐字歌词#one" = "%@ line without a timestamp wasn't added to the word-timed lyrics";
 "%@ 近期几乎未返回歌词" = "%@ has found almost no lyrics lately";
@@ -221,7 +221,7 @@
 "YouTube Music 使用哪个浏览器？" = "Which browser do you use for YouTube Music?";
 "YouTube Music 原名" = "Original name on YouTube Music";
 "YouTube Music 在当前网络所在地区不可用（地区限制，并非网络故障）" = "YouTube Music is not available in this network's region (a regional restriction, not a network fault)";
-"YouTube Music 在浏览器中播放，Lyrimuse 需通过所用浏览器读取播放进度。请选择常用的浏览器（可多选），随后在系统授权请求中选择「允许」。之后可在设置的「网页播放器」中更改" = "YouTube Music plays in a browser, and Lyrimuse reads the playback position through it. Choose the browsers you use (more than one is allowed), then choose Allow when macOS asks for permission. You can change this later under Web Players in Settings";
+"YouTube Music 在浏览器中播放，Lyrimuse 需通过所用浏览器读取播放进度。请选择常用的浏览器（可多选），随后在系统授权请求中选择「允许」。之后可在设置的「播放器 › 网页版」中更改" = "YouTube Music plays in a browser, and Lyrimuse reads the playback position through it. Choose the browsers you use (more than one is allowed), then choose Allow when macOS asks for permission. You can change this later in Settings › Player › Web";
 "YouTube Music 歌手页" = "YouTube Music artist page";
 "YouTube Music 歌曲页" = "YouTube Music song page";
 "YouTube Music 的浏览器" = "Browser for YouTube Music";
@@ -374,7 +374,7 @@
 "仅影响能完整显示的短句在固定宽度区域内的位置。显示不下的句子会横向滚动，对齐设置对其无效" = "Only affects lines that fit: which side of the fixed-width slot they sit on. Lines too long to fit scroll horizontally — there is no spare space, so alignment does nothing";
 "仅恢复完整尺寸的设置，迷你尺寸、网页歌词和窗口大小保持不变" = "Resets only the Full Size settings; the Mini Size, Web Lyrics and the window's dimensions stay as they are";
 "仅恢复迷你尺寸的设置，完整尺寸、网页歌词和窗口大小保持不变" = "Resets only the Mini Size settings; the Full Size, Web Lyrics and the window's dimensions stay as they are";
-"仅搜索无歌词或仅有纯文本歌词的歌曲" = "Only songs without lyrics or with plain-text lyrics only";
+"仅搜索无歌词或仅有纯文本歌词的歌曲" = "Only songs with no lyrics or plain-text lyrics";
 "仅显示所用播放器和播放进度，不发送歌名、歌手、专辑、歌词、链接和「在播放器上收听」按钮" = "Shows only the player you’re using and the progress. The title, artist, album, lyrics, links and the “Listen on Player” button aren’t sent";
 "仅有纯文本，无时间戳" = "Plain text only, no timing";
 "仅查询 %@" = "queried %@ only";
@@ -486,8 +486,8 @@
 "全部源重新查询" = "re-queried every source";
 "全部设置" = "All Settings";
 "全部设置…" = "All Settings…";
-"共 %1$@ 首，预计%2$@。已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外。可随时停止，关闭后进度不会丢失" = "%1$@ songs, about %2$@. Songs that already have lyrics are re-matched too, except manually edited, timing-calibrated and instrumental songs. You can stop at any time without losing progress";
-"共 %1$@ 首，预计%2$@。已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外。可随时停止，关闭后进度不会丢失#one" = "%1$@ song, about %2$@. Songs that already have lyrics are re-matched too, except manually edited, timing-calibrated and instrumental songs. You can stop at any time without losing progress";
+"共 %1$@ 首，耗时%2$@。已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外。可随时停止，关闭后进度不会丢失" = "%1$@ songs; takes %2$@. Songs that already have lyrics are re-matched too, except manually edited, timing-calibrated and instrumental songs. You can stop at any time without losing progress";
+"共 %1$@ 首，耗时%2$@。已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外。可随时停止，关闭后进度不会丢失#one" = "%1$@ song; takes %2$@. Songs that already have lyrics are re-matched too, except manually edited, timing-calibrated and instrumental songs. You can stop at any time without losing progress";
 "共 %1$@ 首：找到 %2$@，未找到 %3$@，跳过 %4$@" = "%1$@ songs: %2$@ found, %3$@ not found, %4$@ skipped";
 "共 %1$@ 首：找到 %2$@，未找到 %3$@，跳过 %4$@#one" = "%1$@ song: %2$@ found, %3$@ not found, %4$@ skipped";
 "共 %@ 次" = "%@ plays total";
@@ -714,6 +714,7 @@
 "启动与通知" = "Startup & Notifications";
 "启动失败（%@）。可先「暂时跳过」，之后在设置的「播放器 → 歌词引擎」中重试，该页面会显示更详细的状态" = "Couldn't start (%@). You can skip this for now and retry later under Settings → Player → Lyrics Engine, which reports a more detailed status";
 "启动时不打开窗口，仅保留菜单栏图标与歌词显示；开启后同时隐藏 Dock 图标" = "Opens no windows at launch, keeping only the menu bar icon and lyrics displays; turning it on also hides the Dock icon";
+"启动时打开播放器" = "Open Players at Launch";
 "启用" = "Enable";
 "启用失败，可能是权限或系统限制导致歌词引擎未能正常启动。导出诊断信息可查看具体原因，也便于反馈问题" = "Couldn't enable it — a permission or system restriction may have kept the lyrics engine from starting. Export Diagnostics shows the specific cause and makes it easier to report";
 "启用歌词引擎与权限" = "Engine & Permissions";
@@ -785,6 +786,7 @@
 "在访达中显示歌词文件" = "Show Lyrics File in Finder";
 "在该浏览器的开发者菜单中开启「允许 Apple 事件中的 JavaScript」" = "Turn on “Allow JavaScript from Apple Events” in this browser’s Developer menu";
 "在钉钉群中：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后拷贝 Webhook 地址。安全设置建议选择「加签」，并将生成的密钥填入下方的「加签密钥」" = "In your DingTalk group: Group Settings → Group Assistant → Add Robot → Custom, then copy the webhook URL after creating it. For security, choose “Signature” and put the generated secret in the “Signing Secret” field below";
+"在防火墙设置中允许 Lyrimuse 的传入连接后，其他设备才能打开链接" = "Allow incoming connections for Lyrimuse in Firewall settings so other devices can open the link";
 "在飞书群中：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后拷贝 Webhook 地址。如需额外校验，可开启「签名校验」，并将密钥填入下方的「签名密钥」" = "In your Feishu group: Settings → Group Bots → Add Bot → Custom Bot, then copy the webhook URL after creating it. For an extra layer of verification, enable “Signature Verification” and enter the secret in the “Signature Secret” field below";
 "地址不存在" = "URL not found";
 "均为独立匹配" = "All Matched Separately";
@@ -1141,7 +1143,7 @@
 "悬停时显示控制条" = "Controls on Hover";
 "悬停显示播放控制" = "Show Controls on Hover";
 "悬浮歌词" = "Floating Lyrics";
-"悬浮歌词、灵动岛、菜单栏和触控栏可同时开启，歌词窗口可按需打开" = "Floating Lyrics, Notch, Menu Bar and Touch Bar can run together; open the Lyrics Window when needed";
+"悬浮歌词、灵动岛、菜单栏和触控栏可同时开，歌词窗口按需打开" = "Floating Lyrics, Notch, Menu Bar and Touch Bar can run together; open the Lyrics Window when needed";
 "悬浮歌词宽度" = "Floating Lyrics Width";
 "悬浮淡化" = "Fade on Hover";
 "成立时间" = "Formed";
@@ -1165,7 +1167,6 @@
 "打开 Discord" = "Open Discord";
 "打开 Last.fm 网站，在「Spotify Scrobbling」一栏点按 Connect" = "Opens the Last.fm website: click Connect next to Spotify Scrobbling";
 "打开 Last.fm 网站，在「Spotify Scrobbling」一栏点按 Disconnect；之后仅记录这台 Mac 上播放的 Spotify" = "Opens the Last.fm website: click Disconnect next to Spotify Scrobbling. After that, only Spotify played on this Mac is recorded";
-"打开 Lyrimuse 时启动" = "Launch When Lyrimuse Opens";
 "打开 sct.ftqq.com，使用微信扫码登录，首页将显示 SendKey。完整地址为 https://sctapi.ftqq.com/你的SendKey.send，请将完整地址填入上方" = "Go to sct.ftqq.com and log in by scanning the QR code with WeChat — your SendKey will appear on the home page. The full URL is https://sctapi.ftqq.com/YourSendKey.send; paste that whole string above";
 "打开「%@」设置" = "Open %@ settings";
 "打开备份文件夹" = "Open Backup Folder";
@@ -1182,6 +1183,7 @@
 "打开该浏览器" = "Open Browser";
 "打开软件更新" = "Open Software Update";
 "打开这首歌曲在当前播放器网站上的页面，与点按歌名效果相同。无对应页面时不显示" = "Opens this song’s page on the current player’s website, same as clicking the title. Hidden when no page is available";
+"打开防火墙设置" = "Open Firewall Settings";
 "扫描中 %1$@/%2$@" = "Scanning %1$@/%2$@";
 "扫描间隔" = "Scan Interval";
 "批量匹配" = "Batch Matching";
@@ -1305,6 +1307,7 @@
 "收听高峰" = "Busiest hour";
 "收听高峰 %@" = "Busiest %@";
 "收起" = "Collapse";
+"收起时显示歌词" = "Show Lyrics When Collapsed";
 "收起面板后生效" = "Takes effect after this panel closes";
 "改过歌词或调过时间轴偏移的歌曲" = "Songs whose lyrics you edited or whose timing offset you adjusted";
 "放大字号" = "Increase Font Size";
@@ -1496,7 +1499,7 @@
 "最近一次解析时无任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲无歌词。稍后将自动重试，也可立即重新自动匹配" = "No lyrics source responded during the last lookup, possibly because the network was unavailable; it doesn't mean the song has no lyrics. It will be retried automatically, or you can auto re-match now";
 "最近一次评估" = "Latest evaluation";
 "最近完成" = "Recently Finished";
-"最近播放" = "Recently played";
+"最近播放" = "Recently Played";
 "最近记录" = "Recent Scrobbles";
 "最近连续 %1$d 次查询中，至少两个同类曲库找到了歌词，%2$@ 均未提供；按其通常的收录情况，应提供约 %3$d 次。可能是其接口发生变化，或请求被拦截" = "In the last %1$d lookups in a row, at least two other sources of the same kind found lyrics, but %2$@ returned none; going by its usual coverage it should have returned about %3$d. Its API may have changed, or its requests are being blocked";
 "最长 %@ 天" = "Longest: %@ days";
@@ -1753,6 +1756,7 @@
 "正在播放广告" = "An ad is playing";
 "正在播放：%@" = "Now playing: %@";
 "正在收听 %@" = "Listening to %@";
+"正在更新" = "Updating";
 "正在查找歌词…" = "Finding lyrics…";
 "正在查询各个歌词源…" = "Searching lyrics sources…";
 "正在查询当天的收听记录…" = "Looking up that day’s scrobbles…";
@@ -1993,6 +1997,7 @@
 "系统自动化授权：已授权" = "System automation access: granted";
 "系统自动化授权：此浏览器未运行，无法获取当前状态" = "System automation access: this browser isn’t running, so its status can’t be read";
 "系统通知已关闭" = "Notifications are off";
+"系统防火墙挡住了其他设备" = "The macOS firewall is blocking other devices";
 "紧贴屏幕顶部的刘海显示" = "Tucked compactly beside the notch at the top of the screen";
 "累计" = "All-time";
 "累计第 %@ 次收听" = "Play #%@ overall";
@@ -2006,7 +2011,7 @@
 "约 %@ 小时" = "about %@ hours";
 "约 %@ 小时#one" = "about %@ hour";
 "纯文本" = "Plain text";
-"纯文本格式，含账号凭据；不含外观与快捷键，完整迁移请使用「备份与迁移」" = "Plain text with account credentials. Appearance and shortcuts aren’t included; to migrate everything, use Backup & Migration";
+"纯文本格式，不含账号凭据、外观与快捷键；完整迁移请使用「备份与迁移」" = "Plain text. Account credentials, appearance and shortcuts aren’t included; to migrate everything, use Backup & Migration";
 "纯文本（无时间戳）" = "Plain text (no timing)";
 "纯色" = "Solid";
 "纯音乐" = "Instrumental";
@@ -2070,6 +2075,7 @@
 "署名里的汉字段" = "Han characters in the credit";
 "翻译语言包" = "Translation Languages";
 "耗时" = "Time taken";
+"耗时%@，可随时停止" = "Takes %@; you can stop at any time";
 "联动" = "Linkage";
 "联网搜索候选歌词" = "Search Online for Lyrics";
 "联网逐首搜索，可随时停止" = "Searches online one song at a time; you can stop at any time";
@@ -2308,6 +2314,7 @@
 "还差最后几步：请完成下方标为橙色的项目" = "Almost there: complete the items marked in orange below";
 "还有 %@ 条" = "and %@ more";
 "还有未完成的项目" = "Some Items Need Attention";
+"还没唱到歌词" = "No lyric line yet";
 "还需 %@ 次" = "%@ to go";
 "这一档的数据来源" = "Data Source for This Digest";
 "这也是你最长的连续记录" = "Your longest streak yet";
@@ -2529,7 +2536,6 @@
 "预览已缩小至 %@" = "Preview scaled down to %@";
 "预览：有新版本时将在此显示更新日志" = "Preview: the release notes appear here when an update is available";
 "预解析待播曲目" = "Pre-Resolve Upcoming Tracks";
-"预计%@，可随时停止" = "Roughly %@, and you can stop any time";
 "预计还需%@" = "about %@ to go";
 "颜色" = "Color";
 "风格" = "Style";

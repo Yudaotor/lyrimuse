@@ -72,8 +72,9 @@ public enum LyricsCandidateDuration {
     }
 
     /// 「4:31」「1:02:05」。
+    /// 不足一秒的舍去,同歌词窗口、菜单栏面板的时长(那边总长 = 已播 + 剩余,四舍五入会差一秒)。
     public static func clock(_ secs: Double) -> String {
-        let total = Int(secs.rounded())
+        let total = Int(max(0, secs))
         if total >= 3600 {
             return String(format: "%d:%02d:%02d", total / 3600, total % 3600 / 60, total % 60)
         }

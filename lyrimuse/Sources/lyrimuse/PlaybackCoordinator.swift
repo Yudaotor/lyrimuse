@@ -204,6 +204,9 @@ final class PlaybackCoordinator: ObservableObject {
     /// 逐字填色/音浪/跑马灯几乎永动,GPU 每次重合成都会对同一张封面重算同一个模糊结果。
     /// 源取 highResArtworkImage ?? artworkImage;nil = 还没烘出来/没有封面,视图铺纯黑。
     @Published private(set) var blurredArtworkImage: NSImage?
+    /// 上面那张模糊图的亮区色(`NotchBackdropTone`),跟它一起烘、一起换;nil = 没有模糊图。灵动岛背景按它压暗,
+    /// `notchAccentColor` 按它做对比度检查。
+    @Published private(set) var notchBackdropTone: NotchBackdropTone?
     /// 「歌词窗口」AM 式动画背景的一套预烘焙图层(依据 Priva28 gist + AMLL 反推的 AM 架构,见 07 章
     /// 「背景取色逼近 Apple Music」):暗底 + 3 份封面**不同区域**取色的羽化光斑,视图层 lighten
     /// (变亮)混合 + 慢速 GPU 旋转——lighten 让封面亮色区变成浮在暗底上的光斑(普通
@@ -501,6 +504,8 @@ final class PlaybackCoordinator: ObservableObject {
     /// 的时机就是"点击窗口把 App 激活"本身:激活触发一次刷新,紧接着的那一下点击落在按钮上,
     /// 读数回来正好把它抹掉。读之前记下序号,回来发现序号变了就整个丢弃。
     private var favoritedActionSeq = 0
+    /// 上次由 Lyrimuse 给哪一首写「喜欢」、什么时候写的。快捷键回读时据此判断读数是不是还没跟上(`adoptsFavoriteReadback`)。
+    private var lastFavoriteWrite: (trackKey: String, at: Date)?
     private var playbackModeActionSeq = 0
     private var volumeActionSeq = 0
 
@@ -920,6 +925,8 @@ final class PlaybackCoordinator: ObservableObject {
         isFavorited = target
         favoritedActionSeq &+= 1
         let trackKey = currentTrackKey
+        let writtenAt = Date()
+        lastFavoriteWrite = (trackKey, writtenAt)
         let delay = MusicPlaybackController.favoriteWriteDelay(for: player,
                                                                sinceTrackChange: Date().timeIntervalSince(trackChangedAt))
         Task.detached(priority: .userInitiated) {
@@ -939,9 +946,21 @@ final class PlaybackCoordinator: ObservableObject {
                 await MainActor.run { [weak self] in self?.refreshFavorited() }
                 return
             }
-            // 跟播放模式同一个道理:写被接受了就别回读,Music.app 的 getter 会滞后。Kaset 没登录时不理这条命令,
+            // 跟播放模式同一个道理:写被接受了就别马上回读,Music.app 的 getter 会滞后。Kaset 没登录时不理这条命令,
             // 那时 setFavorited 回 false,照样回读纠正。
-            guard !MusicPlaybackController.setFavorited(target, for: player) else { return }
+            guard !MusicPlaybackController.setFavorited(target, for: player) else {
+                // Music.app 的写入要好几秒才生效,这期间反向再写一次会被吞掉。过了滞后期这次仍是最后一次写、还是这一首时
+                // 回读一次,跟写的不一样就补写。见 07 章决策 175。
+                guard MusicPlaybackController.reconcilesFavoriteAfterWrite(player) else { return }
+                try? await Task.sleep(for: .seconds(MusicPlaybackController.favoriteReadbackLagSeconds))
+                let stillLatest = await MainActor.run { [weak self] in
+                    self?.lastFavoriteWrite?.at == writtenAt && self?.currentTrackKey == trackKey
+                }
+                guard stillLatest, let landed = MusicPlaybackController.favoritedState(for: player), landed != target else { return }
+                logger.notice("toggleFavorited: favorite write did not stick for \(player.rawValue, privacy: .public), writing again")
+                _ = MusicPlaybackController.setFavorited(target, for: player)
+                return
+            }
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 // 读别处状态的播放器按下去没生效:多半是没登录(弹了登录窗口)、界面上找不到那颗键,这一首不再显示心、不再按。
@@ -977,7 +996,9 @@ final class PlaybackCoordinator: ObservableObject {
             let current = MusicPlaybackController.favoritedState(for: player)
             await MainActor.run { [weak self] in
                 guard let self, self.currentTrackKey == trackKey else { return }
-                if let current, current != self.isFavorited {
+                let sinceWrite = self.lastFavoriteWrite.flatMap { $0.trackKey == trackKey ? Date().timeIntervalSince($0.at) : nil }
+                if let current, MusicPlaybackController.adoptsFavoriteReadback(current, local: self.isFavorited,
+                                                                               sinceLocalWrite: sinceWrite) {
                     self.isFavorited = current
                     self.favoritedActionSeq &+= 1
                 }
@@ -1251,8 +1272,10 @@ final class PlaybackCoordinator: ObservableObject {
             // 固定的文字亮度地板量不出这种情况,文字会跟背景撞色(实测 WCAG 对比度只有 2.78;灵动岛字号
             // 9~13.5pt 够不上 WCAG 大号文字那档,门槛该是 4.5)。只在这个风格下多算一步
             // accentForCoverArtBackground,纯黑/深色渐变两种风格背景是真的暗,不需要多算。
-            Publishers.CombineLatest3(s.$artworkAverageHex, $highResAverageHex, settings.$notchCardStyle)
-                .map { systemHex, highResHex, cardStyle -> Color? in
+            // 背景亮区(`notchBackdropTone`)到了就按它查:歌词落在封面亮区时看得清看不清取决于那一块,均值会估低;
+            // 背景压暗也随亮区加深,两者配套传。还没烘出来时按均值和固定压暗查。
+            Publishers.CombineLatest4(s.$artworkAverageHex, $highResAverageHex, settings.$notchCardStyle, $notchBackdropTone)
+                .map { systemHex, highResHex, cardStyle, tone -> Color? in
                     guard let hex = highResHex ?? systemHex,
                           let ns = NSColor(hexStringWithAlpha: hex) else { return nil }
                     let rawR = ns.redComponent, rawG = ns.greenComponent, rawB = ns.blueComponent
@@ -1262,7 +1285,8 @@ final class PlaybackCoordinator: ObservableObject {
                     if cardStyle == .coverArt {
                         lifted = LocalPlaybackSource.accentForCoverArtBackground(
                             r: lifted.r, g: lifted.g, b: lifted.b,
-                            rawR: rawR, rawG: rawG, rawB: rawB)
+                            rawR: tone?.r ?? rawR, rawG: tone?.g ?? rawG, rawB: tone?.b ?? rawB,
+                            overlayOpacity: tone?.overlayOpacity ?? LocalPlaybackSource.notchCoverArtOverlayOpacity)
                     }
                     return Color(.sRGB, red: lifted.r, green: lifted.g, blue: lifted.b)
                 }
@@ -1300,6 +1324,7 @@ final class PlaybackCoordinator: ObservableObject {
                 try? await Task.sleep(nanoseconds: Self.artworkGapGraceNanos)
                 guard let self, !Task.isCancelled else { return }
                 if self.blurredArtworkImage != nil { self.blurredArtworkImage = nil }
+                if self.notchBackdropTone != nil { self.notchBackdropTone = nil }
                 if self.windowBackgroundLayers != nil { self.windowBackgroundLayers = nil }
             }
             return
@@ -1314,11 +1339,13 @@ final class PlaybackCoordinator: ObservableObject {
             // 两份一起烘(灵动岛 + 歌词窗口,参数见各自 @Published 的注释),共享一次
             // 源图解码;单次烘焙毫秒级,合在一个任务里不值得再拆。
             let baked = await Task.detached(priority: .utility) {
-                (notch: Self.bakeBackgroundBlur(cgImage: cg, targetWidth: 720, sigma: 40, saturation: nil),
-                 window: Self.bakeWindowBackgroundLayers(cgImage: cg, seed: seed))
+                let notch = Self.bakeBackgroundBlur(cgImage: cg, targetWidth: 720, sigma: 40, saturation: nil)
+                let tone = notch?.cgImage(forProposedRect: nil, context: nil, hints: nil).flatMap(NotchBackdropTone.bright(cgImage:))
+                return (notch: notch, tone: tone, window: Self.bakeWindowBackgroundLayers(cgImage: cg, seed: seed))
             }.value
             guard let self, !Task.isCancelled else { return }
             // 烘不出来(解码 / 渲染失败)也要覆盖掉:留着就是上一首的背景挂在这一首上。
+            self.notchBackdropTone = baked.tone
             self.blurredArtworkImage = baked.notch
             self.windowBackgroundLayers = baked.window
         }

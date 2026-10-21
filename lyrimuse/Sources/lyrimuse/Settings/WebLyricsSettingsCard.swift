@@ -30,6 +30,7 @@ struct LyricsWindowWebSettingsRows: View {
                     Toggle("", isOn: $settings.webLyricsAllowLAN)
                 }
                 if settings.webLyricsAllowLAN {
+                    WebLyricsFirewallRow()
                     CardDivider()
                     SettingsRow(icon: "playpause", title: L10n.t("允许远程控制"),
                                 subtitle: L10n.t("可在其他设备上控制播放、跳转歌词")) {
@@ -45,8 +46,17 @@ struct LyricsWindowWebSettingsRows: View {
                                  duplicateMessage: L10n.t("该端口已被 OBS 输出使用"), note: L10n.t("更改后需重新扫码连接"))
             }
         }
-        .onAppear { links.refresh(server) }
-        .onChange(of: settings.webLyricsAllowLAN) { _, _ in links.refresh(server) }
+        .onAppear {
+            links.refresh(server)
+            if settings.webLyricsAllowLAN { WebLyricsFirewallStatus.shared.refresh() }
+        }
+        .onChange(of: settings.webLyricsAllowLAN) { _, on in
+            links.refresh(server)
+            if on { WebLyricsFirewallStatus.shared.refresh() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            if settings.webLyricsAllowLAN { WebLyricsFirewallStatus.shared.refresh() }
+        }
         .onChange(of: settings.webLyricsToken) { _, _ in links.refresh(server) }
         .onChange(of: settings.webLyricsPort) { _, _ in links.refresh(server) }
         .onChange(of: server.state) { _, _ in links.refresh(server) }
@@ -82,6 +92,7 @@ struct OverlayObsSettingsRows: View {
                     Toggle("", isOn: $settings.obsLyricsAllowLAN)
                 }
                 if settings.obsLyricsAllowLAN {
+                    WebLyricsFirewallRow()
                     WebLyricsLANLinkRows(links: links, remoteViewers: server.remoteViewerCount, qrCaption: nil)
                     CardDivider()
                     WebLyricsRegenerateRow { settings.regenerateObsLyricsToken() }
@@ -92,8 +103,17 @@ struct OverlayObsSettingsRows: View {
                                  duplicateMessage: L10n.t("该端口已被网页歌词使用"), note: L10n.t("更改后需同步修改 OBS 中的地址"))
             }
         }
-        .onAppear { links.refresh(server) }
-        .onChange(of: settings.obsLyricsAllowLAN) { _, _ in links.refresh(server) }
+        .onAppear {
+            links.refresh(server)
+            if settings.obsLyricsAllowLAN { WebLyricsFirewallStatus.shared.refresh() }
+        }
+        .onChange(of: settings.obsLyricsAllowLAN) { _, on in
+            links.refresh(server)
+            if on { WebLyricsFirewallStatus.shared.refresh() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            if settings.obsLyricsAllowLAN { WebLyricsFirewallStatus.shared.refresh() }
+        }
         .onChange(of: settings.obsLyricsToken) { _, _ in links.refresh(server) }
         .onChange(of: settings.obsLyricsPort) { _, _ in links.refresh(server) }
         .onChange(of: server.state) { _, _ in links.refresh(server) }
@@ -257,6 +277,51 @@ private struct WebLyricsPortRow: View {
 }
 
 /// 启动失败的说明(端口被占用、跟另一个撞了、别的错误),开关关着时不显示。
+/// 这台 Mac 的应用防火墙挡不挡 Lyrimuse 的传入连接(`ApplicationFirewall`)。网页歌词、OBS 两组共用一份;局域网开关开着时,
+/// 设置页出现、开关打开、App 回到前台(用户可能刚去系统设置里改过)时各查一次,`socketfilterfw` 在后台线程跑。
+@MainActor
+final class WebLyricsFirewallStatus: ObservableObject {
+    static let shared = WebLyricsFirewallStatus()
+
+    @Published private(set) var blocksIncoming = false
+    private var checking = false
+
+    private init() {}
+
+    func refresh() {
+        guard !checking, let path = Bundle.main.executablePath else { return }
+        checking = true
+        DispatchQueue.global(qos: .utility).async {
+            let blocked = ApplicationFirewall.blocksIncoming(executablePath: path)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self.blocksIncoming = blocked
+                    self.checking = false
+                }
+            }
+        }
+    }
+}
+
+/// 局域网访问开着、系统防火墙却挡着别的设备时的那一行:别的设备连得上端口、却收不到任何回应,不说出来用户只会以为链接坏了。
+private struct WebLyricsFirewallRow: View {
+    @ObservedObject private var firewall = WebLyricsFirewallStatus.shared
+    private static let settingsURL = URL(string: "x-apple.systempreferences:com.apple.Network-Settings.extension?Firewall")!
+
+    var body: some View {
+        if firewall.blocksIncoming {
+            CardDivider()
+            SettingsRow(icon: "exclamationmark.triangle.fill", iconTint: .orange, title: L10n.t("系统防火墙挡住了其他设备"),
+                        subtitle: L10n.t("在防火墙设置中允许 Lyrimuse 的传入连接后，其他设备才能打开链接")) {
+                Button(L10n.t("打开防火墙设置")) { NSWorkspace.shared.open(Self.settingsURL) }
+                    .controlSize(.small)
+                    .settingsGlassButtons()
+                    .buttonBorderShape(.capsule)
+            }
+        }
+    }
+}
+
 private struct WebLyricsProblemRow: View {
     @ObservedObject var server: WebLyricsServer
 

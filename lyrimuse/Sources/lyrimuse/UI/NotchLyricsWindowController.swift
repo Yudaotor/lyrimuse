@@ -920,6 +920,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         scheduleRevealWait()
     }
 
+    /// 快捷键回声此刻能不能落在灵动岛上:横幅盖在歌词行上,窗口不在屏、缩进刘海、收起(暂停 / 广告),或者稳态不画歌词行
+    /// (关了「显示歌词」、无歌词收起)时都无处显示。见 14 章决策 130。
+    var showsTransientBanner: Bool {
+        lastAppliedShouldShow == true && !isVanished && !isCollapsed && showsLyricRow
+    }
+
     /// 卡片此刻放得下掉出来的歌名:窗口在屏、没缩进刘海、没被挡,不在收起 / 展开 / 报喜 / 「发现新播放器」提醒里。
     private var trackDropFits: Bool {
         lastAppliedShouldShow == true && !isVanished && isSurfaceVisible

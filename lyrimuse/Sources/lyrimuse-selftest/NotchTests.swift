@@ -642,7 +642,11 @@ func runNotchTests() {
         do {
             let v = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
                 .appendingPathComponent("lyrimuse/UI/NotchLyricsView.swift"), encoding: .utf8)) ?? ""
-            expectEqual(v.contains("NotchCrossfadeBackdrop(image: image, size: size)"), true, "封面背景契约: 模糊图走两层交叉淡入")
+            expectEqual(v.contains("NotchCrossfadeBackdrop(image: image, size: size, overlayOpacity: playback.backdropOverlayOpacity)"), true,
+                        "封面背景契约: 模糊图走两层交叉淡入,压暗按亮区算")
+            expectEqual(v.contains(".overlay(Color.black.opacity(overlayOpacity))")
+                            && !v.contains(".overlay(Color.black.opacity(LocalPlaybackSource.notchCoverArtOverlayOpacity))"), true,
+                        "封面背景契约: 每层的黑色压暗用传进来的值,不写死固定常量(05 章决策 84)")
             expectEqual(sourceHas(v, "case .solidBlack, .coverArt:\n            return AnyShapeStyle(Color.black)"), true,
                         "封面背景契约: 跟随封面没有封面时是纯黑,跟机器刘海融成一块")
             expectEqual(v.contains("case .darkGradient, .coverArt:"), false, "封面背景契约: 没有封面时不再退回深色渐变")

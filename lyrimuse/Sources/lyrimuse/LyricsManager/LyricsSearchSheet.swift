@@ -179,7 +179,9 @@ struct LyricsSearchSheet: View {
             return rows
         }
     }
-    /// 给侧栏那一行"还在搜索"提示缀的进度,形如 "（2/5）"。还没收到任何一行时是空串。
+    /// 给侧栏那一行"还在搜索"提示缀的进度,形如 "（还剩 3）"(还有几个源没回)。还没收到任何一行时是空串。
+    /// 不写成「已回 / 总数」:表头右边的徽标已经是「有结果的源 / 总数」(`sourceAvailabilityBadge`),两个分母一样的
+    /// 分数并排,读不出哪个是哪个。
     ///
     /// 轮次标识:引擎的兜底轮(首歌手变体/标题反查,见
     /// 第 09 章)每轮都重新扫全部源,进度"到 8/8 又回到 1/8"——数字回跳没有任何标注,
@@ -188,13 +190,14 @@ struct LyricsSearchSheet: View {
     /// 回跳那一刻出现,自己解释自己。
     private var searchProgressSuffix: String {
         guard sourcesTotal > 0 else { return "" }
+        let remaining = String(format: L10n.t("还剩 %@"), "\(max(0, sourcesTotal - sourcesDone))")
         // 全角括号只配中文文案;英文界面用半角,前面空一格。
         if L10n.current == "en" {
             let roundSuffix = searchRound >= 2 ? " [\(searchRound)]" : ""
-            return " (\(sourcesDone)/\(sourcesTotal))\(roundSuffix)"
+            return " (\(remaining))\(roundSuffix)"
         }
         let roundSuffix = searchRound >= 2 ? "［\(searchRound)］" : ""
-        return "（\(sourcesDone)/\(sourcesTotal)）\(roundSuffix)"
+        return "（\(remaining)）\(roundSuffix)"
     }
 
     // 歌词源的完整名单,直接读 LyricsSource.allCases(FeatureSettingsStore.swift),别在这里手抄一份。Go / Swift 两份名单
@@ -374,8 +377,7 @@ struct LyricsSearchSheet: View {
         if !found.title.isEmpty { parts.append(found.title) }
         if !found.artist.isEmpty { parts.append(found.artist) }
         if found.durationSecs > 0 {
-            let total = Int(found.durationSecs.rounded())
-            parts.append(String(format: "%d:%02d", total / 60, total % 60))
+            parts.append(LyricsCandidateDuration.clock(found.durationSecs))
         }
         guard !parts.isEmpty else { return "" }
         return String(format: L10n.t("已匹配：%@"), parts.joined(separator: " · "))

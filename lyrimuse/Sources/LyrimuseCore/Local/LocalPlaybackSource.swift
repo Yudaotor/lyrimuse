@@ -5481,6 +5481,17 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 就会跟渲染出来的背景对不上,静默失效。
     nonisolated public static let notchCoverArtOverlayOpacity: Double = 0.45
 
+    /// 亮区压暗之后的 Rec.709 luma 上限:模糊封面的亮区(`NotchBackdropTone`)叠完黑色压暗不超过这个值,唱过的字(白)
+    /// 对它的对比度 ≥ 4.5,没唱到的字(半透明)也跟深色风格下差不多看得清。
+    nonisolated public static let notchCoverArtBackdropLumaCap: Double = 0.30
+
+    /// coverArt 背景该叠多深的黑色压暗:亮区 luma 为 `brightLuma` 时压到 `notchCoverArtBackdropLumaCap`,不低于
+    /// `notchCoverArtOverlayOpacity`(暗、中等亮度的封面不变)。纯白封面是 0.70。见 05 章决策 84。
+    nonisolated public static func notchCoverArtOverlayOpacity(brightLuma: Double) -> Double {
+        guard brightLuma > 0 else { return notchCoverArtOverlayOpacity }
+        return max(notchCoverArtOverlayOpacity, 1 - notchCoverArtBackdropLumaCap / brightLuma)
+    }
+
     /// coverArt 卡片风格下,给灵动岛文字保足够对比度。
     ///
     /// `accentForDarkBackdrop` 假设灵动岛背景永远接近纯黑(纯黑/深色渐变两种风格确实是),
@@ -5502,12 +5513,14 @@ public final class LocalPlaybackSource: ObservableObject {
     ///   - rawR/rawG/rawB: 封面**原始**均值色(未经 brightenedAccent/accentForDarkBackdrop
     ///     提亮)——背景是拿这份原始色乘 `(1 - notchCoverArtOverlayOpacity)` 得出的,不能拿
     ///     已经被提亮过的文字色去算,那样估出来的背景会比实际渲染的亮得多。
+    ///   - overlayOpacity: 背景实际叠的黑色压暗,按 `NotchBackdropTone.overlayOpacity` 传;raw 传的是亮区色时两者配套。
     nonisolated public static func accentForCoverArtBackground(
         r: Double, g: Double, b: Double,
         rawR: Double, rawG: Double, rawB: Double,
+        overlayOpacity: Double = notchCoverArtOverlayOpacity,
         minContrast: Double = 4.5
     ) -> (r: Double, g: Double, b: Double) {
-        let dim = 1 - notchCoverArtOverlayOpacity
+        let dim = 1 - overlayOpacity
         return accentAgainstStroke(
             r: r, g: g, b: b,
             strokeR: rawR * dim, strokeG: rawG * dim, strokeB: rawB * dim,

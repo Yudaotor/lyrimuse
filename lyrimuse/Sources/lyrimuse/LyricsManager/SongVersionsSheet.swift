@@ -896,8 +896,7 @@ struct SongVersionsSheet: View {
 
     private func durationText(_ v: Version) -> String {
         guard let secs = v.durationSecs else { return L10n.t("未提供") }
-        let total = Int(secs.rounded())
-        return String(format: "%d:%02d", total / 60, total % 60)
+        return LyricsCandidateDuration.clock(secs)
     }
 
     private func playerName(_ bundleID: String) -> String { Self.playerDisplayName(bundleID) }

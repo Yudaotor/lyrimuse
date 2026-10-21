@@ -115,11 +115,7 @@ struct OverlayAllSettingsDrawer: View {
                 // HStack 的实际尺寸 —— 没有 Spacer 撑满宽度,命中区就缩回"三角形 + 两个字"那一小截。
                 Spacer(minLength: 12)
                 if !isExpanded {
-                    Text(Self.groupNames)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    AllSettingsGroupNames(text: Self.groupNames)
                 }
             }
             .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
@@ -202,5 +198,21 @@ struct OverlayAllSettingsDrawer: View {
                     .buttonBorderShape(.capsule)
             }
         }
+    }
+}
+
+/// 「全部设置」抽屉折起来时标题右边那一串组名(各抽屉的组名跟它展开后的卡片顺序一致),不点开也知道里面有什么。
+struct AllSettingsGroupNames: View {
+    let text: String
+
+    init(text: String) { self.text = text }
+    init(_ names: [String]) { text = names.joined(separator: " · ") }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11.5))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.tail)
     }
 }

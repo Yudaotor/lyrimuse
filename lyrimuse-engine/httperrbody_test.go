@@ -15,6 +15,10 @@ const lbBadGatewayPage = "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8
 	"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>502 Bad Gateway</title>\n<style>\n" +
 	"  body {\n    font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif;\n    max-width: 600px;\n"
 
+// ListenBrainz 的 400:按键名排序、先回显提交的附加信息,"error" 在一大段回显后面。
+var lbEchoedError = `{"accent_color":"#bba60f","apple_music_url":"https://music.apple.com/cn/album/x","code":400,` +
+	`"cover_url":"` + strings.Repeat("x", 600) + `","error":"Listen contains a null character"}`
+
 func TestHTTPErrorBody(t *testing.T) {
 	long := strings.Repeat("错误", 200)
 	for _, c := range []struct {
@@ -24,7 +28,11 @@ func TestHTTPErrorBody(t *testing.T) {
 		{"没带 Content-Type 也认得出 HTML", "", lbBadGatewayPage, "502 Bad Gateway"},
 		{"标题里的实体和换行", "text/html; charset=utf-8", "<html><title>\n  Service &amp; Gateway\n </title></html>", "Service & Gateway"},
 		{"没有标题的 HTML", "text/html", "<html><body><h1>Oops</h1></body></html>", "an HTML page"},
-		{"JSON 错误原样压成一行", "application/json", "{\n  \"code\": 400,\n  \"error\": \"Invalid listen\"\n}", "{ \"code\": 400, \"error\": \"Invalid listen\" }"},
+		{"JSON 错误只取 error", "application/json", "{\n  \"code\": 400,\n  \"error\": \"Invalid listen\"\n}", "Invalid listen"},
+		{"回显在前的 JSON 也取到排在后面的 error", "application/json", lbEchoedError, "Listen contains a null character"},
+		{"error 不是字符串时取 message", "application/json", "{\"error\": 6, \"message\": \"Track not found\"}", "Track not found"},
+		{"没有 error / message 的 JSON 原样压成一行", "application/json", "{\"code\": 500}", "{\"code\": 500}"},
+		{"不完整的 JSON 原样压成一行", "application/json", "{\"code\": 400, \"err", "{\"code\": 400, \"err"},
 		{"空响应体", "", "  \n ", ""},
 	} {
 		if got := httpErrorBody(c.contentType, []byte(c.body)); got != c.want {

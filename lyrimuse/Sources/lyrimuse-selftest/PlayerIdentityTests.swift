@@ -1273,6 +1273,17 @@ func runPlayerIdentityTests() {
                     "菜单标题喜欢: 刚换歌就点,等到标题换好")
         expectEqual(C.favoriteWriteDelay(for: .netease, sinceTrackChange: 5), 0, "菜单标题喜欢: 换歌很久了不等")
         expectEqual(C.favoriteWriteDelay(for: .appleMusic, sinceTrackChange: 0), 0, "菜单标题喜欢: 有脚本接口的不等")
+        expectEqual([C.adoptsFavoriteReadback(false, local: true, sinceLocalWrite: 3),
+                     C.adoptsFavoriteReadback(false, local: true, sinceLocalWrite: C.favoriteReadbackLagSeconds),
+                     C.adoptsFavoriteReadback(false, local: true, sinceLocalWrite: nil),
+                     C.adoptsFavoriteReadback(true, local: true, sinceLocalWrite: nil),
+                     C.adoptsFavoriteReadback(nil, local: true, sinceLocalWrite: nil),
+                     C.adoptsFavoriteReadback(true, local: nil, sinceLocalWrite: nil)],
+                    [false, true, true, false, false, true],
+                    "快捷键喜欢: 刚写过这一首时不拿回读盖本地(getter 滞后),过了滞后期、没写过才认回读")
+        expectEqual([C.reconcilesFavoriteAfterWrite(.appleMusic), C.reconcilesFavoriteAfterWrite(.netease),
+                     C.reconcilesFavoriteAfterWrite(.kaset)], [true, false, false],
+                    "喜欢对账: 只有 Apple Music 写完过了滞后期回读补写")
         expectEqual(N.bundleID, PlaybackPlayer.netease.bundleIdentifier, "网易云喜欢: 认的是网易云那个进程")
         // 按下「喜欢」之后等标题翻过来(约 1 秒才变;不等的话连点第二下读到旧标题,判成已经是这个状态不按)。
         var titleReads = 0

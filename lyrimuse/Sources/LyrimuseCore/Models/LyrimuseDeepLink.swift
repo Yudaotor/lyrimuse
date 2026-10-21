@@ -375,12 +375,14 @@ extension SettingsDeepLink {
                             ["display": "display", "buttons": "buttons", "privacy": "privacy"]),
     ]
 
-    /// 路径去掉最后一段分段之后剩下的那一页(`/lyrics/manage` → `/lyrics`);没有分段时原样。给 `init(path:)` 用。
+    /// 路径本身不是一页、去掉最后一段恰好是一页时,返回那一页(`/lyrics/manage` → `/lyrics`;认不出的分段同样翻到那一页,
+    /// 见 14 章决策 92);别的原样。给 `init(path:)` 用。
     public static func pagePath(of path: String) -> String {
-        guard section(in: path) != nil else { return path }
         var parts = path.lowercased().split(separator: "/").map(String.init)
+        guard parts.count >= 2, SettingsDeepLink(path: path) == nil else { return path }
         parts.removeLast()
-        return "/" + parts.joined(separator: "/")
+        let page = "/" + parts.joined(separator: "/")
+        return SettingsDeepLink(path: page) == nil ? path : page
     }
 
     /// 路径里带的分段;没带、或者这一页没有这个分段时是 nil。

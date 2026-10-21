@@ -123,7 +123,7 @@ Lyrimuse 会把正在播放的信息作为参数，附在 `x-success` 后面打�
 | `album` | 专辑 |
 | `lyric` | 当前这句歌词 |
 | `player` | 播放器名字 |
-| `playing` | 有歌在放是 `1`，没有是 `0`（这时前面几项都是空的） |
+| `playing` | 正在播放是 `1`，暂停或没有歌是 `0`（没有歌时前面几项都是空的） |
 
 在快捷指令里，用「打开 X-Callback URL」动作，URL 填 `lyrimuse://x-callback-url/now-playing` 即可：快捷指令会自己补上 `x-success`，回传的参数就是这个动作的结果。
 
