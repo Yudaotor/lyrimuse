@@ -206,7 +206,8 @@ final class WebLyricsObsFeed {
         } else if p.isRadioTalkBreak || p.isCurrentTrackAdBreak {
             state = .hold
         } else {
-            state = p.isPlayingNow ? .playing : .paused
+            // 锚点被暂停通知冻住时就报暂停:网页把速率 0 当没报、按 1 倍速往前推,报「在放」的话会先冲再跳回。
+            state = p.lyricsClockRunning ? .playing : .paused
         }
         let timeline = WebLyricsObsPayload.obsTimelineMs(
             timelineMs: p.lyricsTimelineMs(), bundleID: LocalPlaybackSource.shared.lastResolvedBundleID,

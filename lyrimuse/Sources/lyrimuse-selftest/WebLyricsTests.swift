@@ -732,6 +732,13 @@ func runWebLyricsTests() {
                                 contain: "lanControlEnabled: AppSettings.shared.webLyricsAllowLANControl"), true,
                     "网页歌词: 点按过控制开关")
         let screenSource = app("WebLyrics/WebLyricsScreen.swift")
+        // 暂停通知先到、锚点已冻而 isPlayingNow 还没翻:按歌词时钟停表、不再提前画、当场报暂停(19 章决策 41)。
+        expectEqual(sourceBytes(screenSource, contain: "let playing = playback.lyricsClockRunning")
+                    && sourceBytes(screenSource, contain: "let next = playing && leadMs > 0 ? PlaybackCoordinator.shared.lyricsLookahead(leadMs: leadMs) : nil")
+                    && sourceBytes(screenSource, contain: "isPlaying: playback.lyricsClockRunning, surfaceVisible: true,"),
+                    true, "网页歌词: 副屏按歌词时钟停表,锚点冻住就不再提前画、当场发现暂停")
+        expectEqual(sourceBytes(app("WebLyrics/WebLyricsObsFeed.swift"), contain: "state = p.lyricsClockRunning ? .playing : .paused"),
+                    true, "网页歌词: OBS 那条锚点冻住就报暂停(网页把速率 0 当 1 倍速往前推)")
         expectEqual(sourceBytes(screenSource, contain: "timer = DispatchSource.makeTimerSource(queue: queue)"), true,
                     "网页歌词: 副屏出帧在自己的队列上按节拍画,不挂在主线程定时器上")
         expectEqual(sourceBytes(screenSource, contain: "private let titleLayer = CATextLayer()"), false,

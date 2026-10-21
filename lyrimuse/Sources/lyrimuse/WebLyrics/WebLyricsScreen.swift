@@ -804,7 +804,8 @@ final class WebLyricsScreenRenderer {
     /// 每次提交前:提前量往目标挪一步;在播时按它重解一次歌词行,变了就重搭模型,并在下一次会变的时刻补一次提交。
     private func updateLead(_ now: CFTimeInterval) {
         let position = currentPositionMs()
-        let playing = playback.isPlayingNow
+        // 按歌词时钟算「在放」:暂停通知先到、锚点冻住时 isPlayingNow 还没翻,按它的话会接着提前画下一句、晚一拍才发现暂停。
+        let playing = playback.lyricsClockRunning
         let rate = playback.anchor.map { $0.rate > 0 ? $0.rate : 1 } ?? 1
         if let window = WebLyricsPredictionCut.window(leadMs: appliedLeadMs, previous: lastTimeline, positionMs: position,
                                                       now: now, playing: playing, rate: rate) {
@@ -822,7 +823,7 @@ final class WebLyricsScreenRenderer {
             leadMs = stepped
             dirty = true
         }
-        let next = playback.isPlayingNow && leadMs > 0 ? PlaybackCoordinator.shared.lyricsLookahead(leadMs: leadMs) : nil
+        let next = playing && leadMs > 0 ? PlaybackCoordinator.shared.lyricsLookahead(leadMs: leadMs) : nil
         if next != lookahead {
             lookahead = next
             dirty = true
@@ -1058,7 +1059,7 @@ final class WebLyricsScreenRenderer {
                 currentGapIndex: lookahead.map(\.gapIndex) ?? playback.currentGapIndex,
                 // 提前画到了下一句时,这一句刚开唱、还没填完;同一句时照用这一句填完没有
                 fillSettled: lookahead.map { $0.index == playback.currentLineIndex } ?? true ? playback.currentLineFillSettled : false,
-                isPlaying: playback.isPlayingNow, surfaceVisible: true,
+                isPlaying: playback.lyricsClockRunning, surfaceVisible: true,
                 timingEpoch: LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
                                                   offsetMs: PlaybackCoordinator.shared.currentLyricsOffsetMs + appliedLeadMs),
                 rate: playback.anchor?.rate ?? 1))
