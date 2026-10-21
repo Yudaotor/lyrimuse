@@ -504,6 +504,7 @@ func TestBatchPathsMarkBackgroundOutbound(t *testing.T) {
 		"lyricsfullscan.go":  "rescoreLyrics(withBackgroundOutbound(",
 		"albumprefetch.go":   "resolveEnrichAsync(withBackgroundOutbound(",
 		"upcoming.go":        "resolveEnrichAsync(withBackgroundOutbound(",
+		"prefetchimport.go":  "resolveEnrichAsync(withBackgroundOutbound(",
 	}
 	for file, needle := range want {
 		src, err := os.ReadFile(file)

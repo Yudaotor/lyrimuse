@@ -449,6 +449,8 @@ func main() {
 	setLyricsFillPaths()
 	// 「歌词管理」的「重新自动匹配」请求文件 + 状态文件(见 lyricsrematch.go)。
 	setLyricsRematchPaths()
+	// 导入清单 + 进度(见 prefetchimport.go)。
+	setPrefetchImportPaths()
 	// 推送记录、推送页「测一下」的请求和结果(见 notifytest.go)。
 	setNotifyPaths()
 	setDigestExtrasPaths()

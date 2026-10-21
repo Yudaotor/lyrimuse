@@ -1914,6 +1914,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	go startCoverSweeper(ctx)                         // 有词、没封面、外围字段从没补过的条目在后台各补一次,见 coversweep.go 顶部注释
 	go startNotifyTestWatcher(ctx)                    // 推送页「测一下」,见 notifytest.go
 	go startLyricsRematchWatcher(ctx)                 // 「重新自动匹配」,见 lyricsrematch.go 顶部注释
+	go startPrefetchImporter(ctx)                     // 导入清单里的歌在后台逐首解析,见 prefetchimport.go
 	go startSongEntityShadow(ctx)                     // 歌曲实体表在后台建、出诊断报告,见 songentitystore.go
 	go startAppleNamesSweep(ctx)                      // 歌曲实体阶段 2:Apple 歌曲 id 按三个区补名字,见 songentitynames.go
 	go startMBRecordingsSweep(ctx)                    // 歌曲实体阶段 2:ISRC 按 MusicBrainz 补录音,见 songentitymb.go

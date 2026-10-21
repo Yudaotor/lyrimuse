@@ -123,33 +123,10 @@ func prefetchAlbumTracks(label string, tracks []albumTrack, currentArtist, curre
 		// 表),跟播放器报的拼法天然不一致 —— 播放器给 `不散的筵席（I Miss You）`、
 		// 网易云给 `不散的筵席`,自己拼就等于每张专辑都预取出一批重复条目。
 		key := enrichKey(t.artist, t.title, album)
-		// claim=false 只看,claim=true 看完顺手占位。先只看一遍再等上一首(跳过的曲目不用等),等完在同一把锁里
-		// 重查一遍才占位:等的这段(最长 prefetchResolveMaxWait)里用户可能已经切到这首,由正常路径接手解析 ——
-		// 先占位的话正常路径看到「在途」就不起,正在播的这首要空等预取排到它,还拿不到设备封面、停不下来。
-		eligible := func(claim bool) bool {
-			enrichMu.Lock()
-			_, exists := enrichCache[key]
-			if !exists {
-				// 补上:预取是重复条目最大的产生源 —— 曲目名来自**网易云曲库**,
-				// 跟播放器报的拼法在"中英文之间加不加空格""繁体还是简体"上系统性不一致。
-				// 上面那句"走 enrichKey 而不是自己拼"只挡住了译名括号这一档,挡不住这两档。
-				// 精确没命中时再宽松找一次,已经有等价条目就不预取了(实测那 14 组重复里,
-				// 丁世光/方大同/孙燕姿那批繁简对就是这么来的)。
-				if _, found := canonicalEnrichKey(key); found {
-					exists = true
-				}
-			}
-			// 在途的也要宽松查:专辑预取一次会排一整批曲目,跟"正在播的那首"几乎同时
-			// 发起,而那首的解析这时还没写进 enrichCache —— 只查精确键会漏。
-			_, inflight := looseInflightKey(key)
-			ok := !exists && !inflight
-			if ok && claim {
-				enrichInflight[key] = true
-			}
-			enrichMu.Unlock()
-			return ok
-		}
-		if !eligible(false) {
+		// 先只看一遍再等上一首(跳过的曲目不用等),等完在同一把锁里重查一遍才占位:等的这段(最长
+		// prefetchResolveMaxWait)里用户可能已经切到这首,由正常路径接手解析 —— 先占位的话正常路径看到「在途」就不起,
+		// 正在播的这首要空等预取排到它,还拿不到设备封面、停不下来。
+		if !prefetchKeyFree(key, false) {
 			continue // 已经解析过、或者已经有别的 goroutine 在解析,不重复起
 		}
 		if prevKey != "" {
@@ -157,7 +134,7 @@ func prefetchAlbumTracks(label string, tracks []albumTrack, currentArtist, curre
 			// 不然一张大半已经解析过的专辑,光是跳过那些曲目就会被拖慢一路。
 			waitPrefetchResolved(prevKey)
 		}
-		if !eligible(true) {
+		if !prefetchKeyFree(key, true) {
 			continue
 		}
 		queued++
@@ -174,6 +151,26 @@ func prefetchAlbumTracks(label string, tracks []albumTrack, currentArtist, curre
 	// 于是"预取到底跑没跑"完全不可观测:日志里没记录,既可能是没跑、也可能是跑得好好的,
 	// 分不开。这次排查就卡在这一点上。
 	log.Printf("album prefetch: %q → %d tracks, %d queued", label, len(tracks), queued)
+}
+
+// prefetchKeyFree:预取能不能起 key 这一首 —— 缓存里没有它、也没有宽松等价的写法,也没有在途的等价写法。claim=true 时
+// 能起就顺手占位(enrichInflight),跟查在同一把锁里。
+func prefetchKeyFree(key string, claim bool) bool {
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	_, exists := enrichCache[key]
+	if !exists {
+		// 预取是重复条目最大的产生源:曲目名来自歌词平台或榜单,跟播放器报的拼法在「中英文之间加不加空格」「繁体还是
+		// 简体」上系统性不一致,enrichKey 只挡得住译名括号那一档。精确没命中时再宽松找一次,已经有等价条目就不预取。
+		_, exists = canonicalEnrichKey(key)
+	}
+	// 在途的也要宽松查:预取一次排一整批,跟「正在播的那首」几乎同时发起,那首的解析这时还没写进 enrichCache。
+	_, inflight := looseInflightKey(key)
+	ok := !exists && !inflight
+	if ok && claim {
+		enrichInflight[key] = true
+	}
+	return ok
 }
 
 type albumTrack struct {
