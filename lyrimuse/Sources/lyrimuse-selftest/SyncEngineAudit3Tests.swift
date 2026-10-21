@@ -129,7 +129,7 @@ func checkSyncEngineAudit3() {
         expectEqual(sourceBytes(coordinator, contain: "trackDurationMs: currentDurationMs.map { $0 + currentLyricsOffsetMs })"),
                     true, "最后一句时长(菜单栏配速): 曲长换到歌词时间")
         expectEqual(sourceBytes(manager, contain: ".onChange(of: offsets.revision) { _, _ in refreshShownOffset() }")
-                    && sourceHas(manager, "editedOffsetSeconds = AppSettings.formattedSeconds(ms: 0) offsetBorrowedFrom = nil"),
+                    && sourceHas(manager, "showStoredOffset(0)\n offsetBorrowedFrom = nil"),
                     true, "歌词管理: 偏移输入框跟着菜单、快捷键改的值刷新;清空全部时借用来源一起清")
         expectEqual(sourceHas(engineSrc, "let end = wordLines[index].words.map({ $0.startMs + max(0, $0.durationMs) }).max()"),
                     true, "间奏 / 提前量: 逐字行唱到几点取最晚的字,不取最后一个")

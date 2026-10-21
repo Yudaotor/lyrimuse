@@ -7,6 +7,7 @@ import Foundation
 
 @MainActor
 func runLyricsManagerTests() {
+    checkLyricsManagerAudit()
     // ---- 列表:没有 canonical_artist 的条目借同一张专辑、同一原始写法下认出来的名字(CanonicalArtistBorrow) ----
     do {
         typealias B = CanonicalArtistBorrow
@@ -707,7 +708,7 @@ func runLyricsManagerTests() {
         let view = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsManagerView.swift"),
             encoding: .utf8)) ?? ""
-        expectEqual(view.contains("rematchRunningKey != nil || fillSweepStatus?.running == true || fillSweepPending")
+        expectEqual(view.contains("rematchRunningKey != nil || rematchActivity.isRunning || fillSweepStatus?.running == true || fillSweepPending")
                     && view.contains(".disabled(rematchBlocked || editMode != .preview)"), true,
                     "重新匹配: 自动匹配 / 全量扫库跑着时按钮置灰")
     }

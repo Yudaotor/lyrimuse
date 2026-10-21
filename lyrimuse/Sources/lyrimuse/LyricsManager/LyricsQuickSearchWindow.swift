@@ -197,13 +197,13 @@ struct LyricsQuickSearchWindow: View {
             isInstrumental: cached?.instrumental ?? false)
     }
 
-    /// 指定的那一首此刻的「当前使用」来源、正文指纹和纯音乐标记,按 key 原样取:lookup 会按正在播放的快照、时长变体去认,
-    /// 同名的另一份录音在放时取到的是那一条。指纹取条目里存着的正文,标了纯音乐也照给。
+    /// 指定的那一首此刻的「当前使用」来源、正文指纹和纯音乐标记,按 key 原样从缓存取:lookup 会按正在播放的快照、时长变体去认,
+    /// 同名的另一份录音在放时取到的是那一条。指纹取条目里存着的正文,标了纯音乐也照给。别借歌词管理的内存快照
+    /// (`EnrichCacheStore.summary`):歌词管理关掉几秒后它就放了,这扇窗口照样开着;两边重读的先后也对不上。
     private static func storedMarker(key: String) -> (source: String?, fingerprint: String?, instrumental: Bool) {
-        let summary = EnrichCacheStore.shared.summary(forKey: key)
         let stored = EnrichCacheReader.storedEntry(forKey: key)
         let fingerprint = stored.map { ManualPickLock.fingerprint(lyrics: $0.lyrics) }.flatMap { $0.isEmpty ? nil : $0 }
-        return (summary?.lyricsSource, fingerprint, summary?.isInstrumental ?? stored?.instrumental ?? false)
+        return (stored?.lyricsSource, fingerprint, stored?.instrumental ?? false)
     }
 }
 

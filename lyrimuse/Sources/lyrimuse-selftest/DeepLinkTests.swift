@@ -396,7 +396,7 @@ func runDeepLinkTests() {
         let sheet = source("lyrimuse/LyricsManager/SongVersionsSheet.swift")
         expectEqual(sourceHas(manager, "songVersionsShowEvidence = request.showEvidence\n        songVersionsCompare = request.compare\n        showSongVersions = true")
                     && manager.contains(".sheet(isPresented: $showSongVersions, onDismiss: { songVersionsShowEvidence = false; songVersionsCompare = nil }) {")
-                    && sourceHas(manager, "onOpen: { other in _ = select(other) }, showEvidence: songVersionsShowEvidence,\n                                  compareKey: songVersionsCompare)")
+                    && sourceHas(manager, "onOpen: { other in revealInList(other) }, showEvidence: songVersionsShowEvidence,\n                                  compareKey: songVersionsCompare)")
                     && sheet.contains(".onChange(of: \"\\(summary.key)#\\(showEvidence)\", initial: true) { _, _ in if showEvidence { evidenceExpanded = true } }")
                     && sheet.contains(".onChange(of: \"\\(summary.key)#\\(compareKey ?? \"\")\", initial: true) { _, _ in if let compareKey { selected = compareKey } }"), true,
                     "深链接线: evidence=1 打开同曲条目就展开匹配依据、compare 选中那一条的对照,开着时换一首也照办;面板关掉后手点打开照旧")

@@ -685,6 +685,8 @@ struct LyricsManagerView: View {
     // 分开存,是因为算 LyricsOffsetStore 的 key 必须用磁盘上实际持久化的歌词内容,不能
     // 用 editedLyrics(编辑中还没保存的文本还没生效到播放端,拿它算出来的 key 会跟真正播放时用的 key 对不上)。
     @State private var editedOffsetSeconds = ""
+    /// 输入框上一次按存储回填的值(`showStoredOffset`)。
+    @State private var shownStoredOffsetMs: Int?
     @State private var persistedLyricsForOffset = ""
     @State private var persistedYRCForOffset = ""
     /// 同一首歌的其它写法:这首自己没调过时,输入框显示、加减、重置都按读穿来的值(见 LyricsOffsetSiblings)。
@@ -706,6 +708,8 @@ struct LyricsManagerView: View {
     // 所有状态都带 key:详情页的状态是 View 级 @State、靠 onChange(of: key) 重载,不带 key 的话
     // A 歌跑出来的结果会画在 B 歌的页面上。
     @State private var rematchRunningKey: String?
+    /// 「搜索歌词…」窗口那边也可能正在重新匹配(见 LyricsRematchActivity)。
+    @ObservedObject private var rematchActivity = LyricsRematchActivity.shared
     /// 在等的那一轮的请求 id,换歌时拿它叫停。
     @State private var rematchRequestID: String?
     @State private var rematchDone = 0
@@ -743,6 +747,8 @@ struct LyricsManagerView: View {
     @State private var instrumentalFollowsGroup = false
     // 「保存修改」点了之后闪一下「已保存」+ 对勾,1 秒后变回去。
     @State private var showSaveEditFeedback = false
+    /// 「保存修改」正在等盘上重读和引擎写入:这期间再按一次(⌘S 连按、保存后切歌那条)不另起一轮。
+    @State private var isSavingEdits = false
     // 整段文本编辑里「拷贝」按钮的同款反馈:拷贝一大段文本到剪贴板本身没有任何肉眼可见的变化。
     @State private var showCopyLyricsFeedback = false
     @State private var sourceFilter: SourceFilter = .all
@@ -800,6 +806,8 @@ struct LyricsManagerView: View {
     // 窗口关闭时(根视图 .onDisappear)置回 true,所以是"每次开窗定位一次"而不是"整个 App
     // 生命周期只定位一次";用它当闸也顺带挡住 List 重新 onAppear 把用户当前选中项抢走这种误伤。
     @State private var pendingAutoFocus = true
+    /// 「同曲条目」里点了「在列表中显示」:详情页不在列表的 ScrollViewReader 里,由列表那边接住、滚到这一行。
+    @State private var pendingListReveal: String?
 
     /// "这首歌正在联网搜歌词、引擎还没写出任何结论"这段窗口期的占位行。nil = 当前没有需要补的占位——
     /// 可能是没在播、也可能是缓存里已经有真实条目了。见 `refreshPlaceholder()`。
@@ -1079,7 +1087,8 @@ struct LyricsManagerView: View {
         var order: [String] = []
         var groups: [String: AlbumGroup] = [:]
         for s in base {
-            let id = s.normAlbum + "\u{1F}" + s.normPrimaryArtist
+            // MV 跟没有专辑的歌专辑都是空的,分开成两组:并在一起时组头随排在前面那首写成「MV」或「未知专辑」。
+            let id = (s.isListedMV ? "\u{1E}" : "") + s.normAlbum + "\u{1F}" + s.normPrimaryArtist
             if groups[id] == nil {
                 order.append(id)
                 let album = s.isListedMV ? L10n.t("MV")
@@ -1278,7 +1287,7 @@ struct LyricsManagerView: View {
         ) {
             Button(L10n.t("清空全部缓存"), role: .destructive) {
                 Task {
-                    await store.clearAll()
+                    guard await store.clearAll() else { return }
                     selectedKeys.removeAll()
                     dropEditorIfEntryGone()
                 }
@@ -1340,9 +1349,10 @@ struct LyricsManagerView: View {
     private var cleanupMessage: String {
         let shown = pendingCleanupKeys.prefix(6)
         var lines = [L10n.t("这些记录无歌词，且无歌手或时长超过 20 分钟，通常为广告、播客或有声书。人工修正、标为纯音乐、已校准时间轴的记录和正在播放的歌曲不包含在内；再次播放时将重新匹配"), ""]
+        // 跟列表那一行同样的歌名、歌手:要清理的多半没有键里的歌手,只列歌名分不出是哪一条。
         for key in shown {
-            let title = store.summary(forKey: key)?.title ?? ""
-            lines.append(title.isEmpty ? key : title)
+            let name = writingDisplayName(key)
+            lines.append(name.isEmpty ? key : name)
         }
         if pendingCleanupKeys.count > shown.count {
             lines.append(String(format: L10n.t("还有 %@ 条"), (pendingCleanupKeys.count - shown.count).formatted()))
@@ -1622,7 +1632,7 @@ struct LyricsManagerView: View {
         if let placeholder = placeholderSummary, candidates.contains(placeholder.key) {
             resolved = placeholder.key
         } else if let exact = candidates.first(where: { candidate in
-            store.summaries.contains(where: { $0.key == candidate })
+            store.summary(forKey: candidate) != nil
         }) {
             resolved = exact
         } else {
@@ -1796,6 +1806,11 @@ struct LyricsManagerView: View {
         }
         // 换分组、换排序之后每一行的位置都变了,滚回选中的那一首(见 11 章决策 75)。
         .onChange(of: groupByAlbum) { _, _ in revealSelection(scrollProxy: scrollProxy) }
+        .onChange(of: pendingListReveal) { _, key in
+            guard let key else { return }
+            pendingListReveal = nil
+            centerListRow(key, scrollProxy: scrollProxy)
+        }
         .onChange(of: sortOption) { _, _ in revealSelection(scrollProxy: scrollProxy) }
         .onReceive(listSelection.$keys) { keys in listSelectionChanged(keys) }
         // lyrimuse://lyrics-manager/song-versions:窗口已经开着时收 subject;开窗那一轮(pendingAutoFocus 还没放下)缓存可能还是空的,
@@ -1857,7 +1872,8 @@ struct LyricsManagerView: View {
                 pendingAutoFocus = false
                 await windowFrame.waitUntilListReady(minRows: sortedFiltered.count)
                 // 只把详情换成正在放的这首,列表停在顶上:滚到它那一行要点「正在播放」那一行的「定位」(见 11 章决策 64)。
-                focusCurrentlyPlaying(scrollProxy: scrollProxy, scroll: false)
+                // 带着没保存的修改关窗再开:详情留在正在改的那首,不换(换就是一开窗先弹「是否保存」)。
+                if !isEditorDirty { focusCurrentlyPlaying(scrollProxy: scrollProxy, scroll: false) }
                 // 开窗时 AppKit 把键盘焦点给第一个输入框(搜索框),交给列表:方向键直接换歌,⌘F 再去搜索。
                 DispatchQueue.main.async { windowFrame.focusList() }
                 // 链接带的条目排在自动定位之后,不被正在放的那首顶掉。
@@ -2056,16 +2072,19 @@ struct LyricsManagerView: View {
             Button(L10n.t("解析决策")) { openDecision(for: summary.key) }
         }
         Divider()
+        // 纯音乐标记同样:保存修改时引擎见到有词就撤掉标记,编辑中标上的会在保存那一下静默没了。
         if summary.isInstrumental {
             Button(L10n.t("取消纯音乐标记")) { Task { await store.setInstrumental(key: summary.key, false) } }
+                .disabled(editingThis)
         } else {
             Button(L10n.t("标为纯音乐")) { Task { await store.setInstrumental(key: summary.key, true) } }
+                .disabled(editingThis)
         }
         Button(L10n.t("拷贝歌名与歌手")) { copySongName(summary) }
         if summary.hasLyrics {
             Button(L10n.t("在访达中显示歌词文件")) { revealLyricsFile(summary.key) }
             Button(L10n.t("在外部编辑器中编辑歌词")) {
-                LyricsExternalEditor.shared.open(artist: summary.artist, title: summary.title, album: summary.album)
+                LyricsExternalEditor.shared.open(artist: summary.artist, title: summary.shownTitle, album: summary.album, key: summary.key)
             }
         }
         Divider()
@@ -2086,7 +2105,7 @@ struct LyricsManagerView: View {
             .disabled(fillSweepStatus?.running == true || fillSweepPending)
         }
         Button(L10n.t("全部标为纯音乐")) { markInstrumental(keys) }
-            .disabled(markingInstrumental)
+            .disabled(markingInstrumental || editingAny(keys))
         Divider()
         Button(String(format: L10n.plural("删除选中的 %@ 条", count: keys.count), keys.count.formatted()), role: .destructive) {
             requestDelete(picked)
@@ -2095,7 +2114,7 @@ struct LyricsManagerView: View {
 
     /// 「重新自动匹配」点不了的时候:一首正在匹配,或者自动匹配 / 全量扫库在跑(引擎那时不接)。
     private var rematchBlocked: Bool {
-        rematchRunningKey != nil || fillSweepStatus?.running == true || fillSweepPending
+        rematchRunningKey != nil || rematchActivity.isRunning || fillSweepStatus?.running == true || fillSweepPending
     }
 
     private func openSearch(for key: String) {
@@ -2147,6 +2166,12 @@ struct LyricsManagerView: View {
 
     private func requestFillSweep(_ keys: [String]) {
         if LyricsFillSweep.request(keys: keys) { fillSweepPending = true; fillSweepPendingIsFull = false }
+    }
+
+    /// 选中的里有正在编辑、还没退出编辑的那首:不能批量标纯音乐(保存修改会把标记撤掉,见 singleItemMenu)。
+    private func editingAny(_ keys: [String]) -> Bool {
+        guard editMode != .preview, let editingKey else { return false }
+        return keys.contains(editingKey)
     }
 
     private func markInstrumental(_ keys: [String]) {
@@ -2319,7 +2344,7 @@ struct LyricsManagerView: View {
                 LyricsOffsetStore.shared.clearAllTrackOffsets()
                 PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
                 // 详情页输入框也归零,不然还显示旧值,这时回车会把刚清掉的值写回去;借用来源一起清。
-                editedOffsetSeconds = AppSettings.formattedSeconds(ms: 0)
+                showStoredOffset(0)
                 offsetBorrowedFrom = nil
             }
             Button(L10n.t("取消"), role: .cancel) {}
@@ -2412,7 +2437,9 @@ struct LyricsManagerView: View {
         }
         // 重读之后选着的歌手 / 专辑可能已经不在了(那几首被删了、改了标签):下拉会指着一个不存在的项,
         // 列表空着也看不出为什么。回到「全部」。
+        // 关窗后快照清掉时列表也换成空的,那不算「不在了」,筛选留着等下次开窗。
         .onChange(of: store.summariesGeneration) { _, _ in
+            guard !store.summaries.isEmpty else { return }
             if let a = artistFilter, !store.distinctArtists.contains(a) { artistFilter = nil }
             if let b = albumFilter, !store.distinctAlbums.contains(b) { albumFilter = nil }
         }
@@ -2497,7 +2524,8 @@ struct LyricsManagerView: View {
     private var batchDeleteTitle: String {
         if pendingDeleteKeys.count == 1,
            let summary = store.summary(forKey: pendingDeleteKeys[0]) {
-            return String(format: L10n.t("确定要删除「%@ - %@」的本地记录吗？"), summary.artist, summary.title)
+            return String(format: L10n.t("确定要删除「%@ - %@」的本地记录吗？"),
+                          summary.shownArtist.isEmpty ? L10n.t("未知歌手") : summary.shownArtist, summary.shownTitle)
         }
         return String(format: L10n.plural("确定要删除选中的 %@ 条本地记录吗？", count: pendingDeleteKeys.count), "\(pendingDeleteKeys.count)")
     }
@@ -2622,7 +2650,7 @@ struct LyricsManagerView: View {
                     } label: {
                         Label(L10n.t("全部标为纯音乐"), systemImage: "pianokeys")
                     }
-                    .disabled(markingInstrumental)
+                    .disabled(markingInstrumental || editingAny(ordered))
                     Button(role: .destructive) {
                         requestDelete(selectedKeys)
                     } label: {
@@ -2998,7 +3026,7 @@ struct LyricsManagerView: View {
         // 「正在搜索」占位行也要能被定位到——它此刻就是这首歌在列表里**唯一**存在的样子,
         // 见 refreshPlaceholder() 的注释。占位行的 key 恒等于 normalizedKey,直接判等即可。
         if let exact = candidates.first(where: { candidate in
-            store.summaries.contains(where: { $0.key == candidate }) || placeholderSummary?.key == candidate
+            store.summary(forKey: candidate) != nil || placeholderSummary?.key == candidate
         }) {
             key = exact
         } else {
@@ -3009,6 +3037,17 @@ struct LyricsManagerView: View {
         // 之后 ⌘⌫ 删的还是之前选的一堆,极易误删。走 select():正在改的那首有没保存的改动时先问,别直接换掉。
         guard select(key), scroll else { return }
         centerListRow(key, scrollProxy: scrollProxy)
+    }
+
+    /// 选中这一条并滚到它那一行;被搜索或筛选挡住时先清掉,同「定位」。
+    private func revealInList(_ key: String) {
+        guard select(key) else { return }
+        if !sortedFiltered.contains(where: { $0.key == key }) {
+            resetFilters()
+            clearSearch()
+        }
+        // 等这一拍的筛选生效、列表换成全量之后再滚。
+        DispatchQueue.main.async { pendingListReveal = key }
     }
 
     /// 把选中的那一首滚到列表中间;多选时取当前顺序里排在最前的那一首。没选中、或者选中的不在当前列表里就不动。
@@ -3183,6 +3222,12 @@ struct LyricsManagerView: View {
             .onChange(of: store.summariesGeneration) { _, _ in
                 if editingKey == key, !isEditorDirty, !detailIncomplete { loadDetail(key: key) }
             }
+            // 设置里开关读音的文字种类:预览按盘上内容重算带读音那份。$romanizationScripts 在赋值前推送,新值要传进去。
+            .onReceive(LocalPlaybackSource.shared.$romanizationScripts.removeDuplicates().dropFirst()) { scripts in
+                guard editingKey == key else { return }
+                refreshPreviewRows(key: key, summary: summary, lyrics: loadedLyrics, tr: loadedTr, roma: loadedRoma,
+                                   scripts: scripts)
+            }
             .onChange(of: key) { _, newKey in
                 store.dismissEditError()
                 endEditing()
@@ -3266,14 +3311,14 @@ struct LyricsManagerView: View {
                 }
             }
             .sheet(isPresented: $showSongVersions, onDismiss: { songVersionsShowEvidence = false; songVersionsCompare = nil }) {
-                SongVersionsSheet(summary: summary, onOpen: { other in _ = select(other) }, showEvidence: songVersionsShowEvidence,
+                SongVersionsSheet(summary: summary, onOpen: { other in revealInList(other) }, showEvidence: songVersionsShowEvidence,
                                   compareKey: songVersionsCompare)
             }
             // 「搜索歌词…」窗口里采纳了候选:详情正开着这首、编辑框没有没保存的改动时按盘上刚落下的那份重载(内容指纹变了,
             // 偏移也跟着换),再闪一下「已保存」。有没保存的改动时不动,保存时按格合并,同 finishRematch。
             .onReceive(AppActions.shared.lyricsSearchApplied) { key in
-                guard editingKey == key else { return }
-                if !isEditorDirty { loadDetail(key: key) }
+                guard editingKey == key, !isEditorDirty else { return }
+                loadDetail(key: key)
                 flashSaveEditFeedback()
             }
             // 窗口里「重新自动匹配」有了结论:列表重读,结论挂在详情页那一行,同详情页那颗按钮。这边自己正在匹配另一首时
@@ -3354,7 +3399,7 @@ struct LyricsManagerView: View {
             }
             .disabled(rematchBlocked || editMode != .preview)
             .help(L10n.t("重新联网匹配，直接采用算法选出的结果，依据设置中的「匹配算法」"))
-            // 自动匹配飞行途中不开这个弹窗:在弹窗里采纳的那份会让这一轮作废(引擎见到期间改过就不写)。
+            // 自动匹配飞行途中不从这里开「搜索歌词…」窗口:在窗口里采纳的那份会让这一轮作废(引擎见到期间改过就不写)。
             Button {
                 openSearchWindow(summary)
             } label: {
@@ -3439,13 +3484,16 @@ struct LyricsManagerView: View {
     private func detailMoreMenu(_ summary: EnrichCacheStore.Summary) -> some View {
         // 「标为纯音乐」/「取消纯音乐标记」:有没有歌词都能标。标上之后各处不显示歌词,引擎也不再自动搜;
         // 歌词留在条目里,撤掉就回来(见 EnrichCacheStore.setInstrumental)。搜索候选歌词面板标题栏有同一对动作。
+        // 编辑中点不了:保存修改时引擎见到有词就撤掉标记。
         let groupNote = instrumentalFollowsGroup ? L10n.t("；共用歌词的同曲条目也将一并更改") : ""
         if summary.isInstrumental {
             Button(L10n.t("取消纯音乐标记")) { Task { await store.setInstrumental(key: summary.key, false) } }
                 .help(L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，无歌词的重新加入自动匹配队列") + groupNote)
+                .disabled(editMode != .preview)
         } else {
             Button(L10n.t("标为纯音乐")) { Task { await store.setInstrumental(key: summary.key, true) } }
                 .help(L10n.t("按纯音乐处理：不显示歌词，也不自动搜索；原有歌词将保留，取消标记即可恢复") + groupNote)
+                .disabled(editMode != .preview)
         }
         Button(L10n.t("拷贝歌名与歌手")) { copySongName(summary) }
         // 「同一首歌的其他写法」:这条写法有实体 id 才有(实体表开关关着、还没建过表时没有),见 18 章决策 28。
@@ -3458,7 +3506,7 @@ struct LyricsManagerView: View {
             Button(L10n.t("以文本方式编辑")) { beginTextEditing() }
                 .disabled(!(canEditLyrics || editMode == .lines))
             Button(L10n.t("在外部编辑器中编辑歌词")) {
-                LyricsExternalEditor.shared.open(artist: summary.artist, title: summary.title, album: summary.album)
+                LyricsExternalEditor.shared.open(artist: summary.artist, title: summary.shownTitle, album: summary.album, key: summary.key)
             }
             Button(L10n.t("在访达中显示歌词文件")) { revealLyricsFile(summary.key) }
         }
@@ -3678,7 +3726,8 @@ struct LyricsManagerView: View {
                     onStep: { direction in nudgeOffset(summary, direction: direction) },
                     onSubmit: { applyOffsetEdit(summary) },
                     onReset: { resetOffsetEdit(summary) })
-                    .disabled(editMode != .preview)
+                    // 正文读不回来时偏移键没有指纹,存不下,同保存那颗一起禁掉。
+                    .disabled(editMode != .preview || detailIncomplete)
                 LyricsManagerModePicker(mode: $displayMode,
                                         shown: effectiveDisplayMode(summary),
                                         isAvailable: { isDisplayModeAvailable($0, summary) },
@@ -3787,8 +3836,9 @@ struct LyricsManagerView: View {
 
     /// 预览的两份行都走播放引擎(LyricsPreviewText.rows),跟歌词窗口显示的同一批。带读音那份用缓存里存的读音,加上按设置里
     /// 开着的文字种类现算的;「原文 + 读音」能不能点就看它有没有一句读音。输入没变就不重算:列表每重读一次都会走到这里。
-    private func refreshPreviewRows(key: String, summary: EnrichCacheStore.Summary, lyrics: String, tr: String, roma: String) {
-        let scripts = LocalPlaybackSource.shared.romanizationScripts
+    private func refreshPreviewRows(key: String, summary: EnrichCacheStore.Summary, lyrics: String, tr: String, roma: String,
+                                    scripts pushed: RomanizationScripts? = nil) {
+        let scripts = pushed ?? LocalPlaybackSource.shared.romanizationScripts
         let inputs = [key, lyrics, tr, roma, String(scripts.rawValue)]
         guard inputs != previewInputs else { return }
         previewInputs = inputs
@@ -3865,6 +3915,7 @@ struct LyricsManagerView: View {
     }
 
     private func discardEdits() {
+        store.dismissEditError()
         if let key = editingKey { loadDetail(key: key) }
         endEditing()
     }
@@ -4081,7 +4132,7 @@ struct LyricsManagerView: View {
             }
             .keyboardShortcut("s", modifiers: .command)
             .settingsProminentGlassButton(tint: .accentColor)
-            .disabled(detailIncomplete || !isEditorDirty)
+            .disabled(detailIncomplete || !isEditorDirty || isSavingEdits)
         }
         .controlSize(.large)
         .padding(.horizontal, 18)
@@ -4108,11 +4159,29 @@ struct LyricsManagerView: View {
         // 用户没动的那几格交**盘上此刻**的值,不交编辑缓冲里的:编辑缓冲是打开这一页时载入的,这期间
         // 引擎可能补了机翻、重新打分换了更好的词;三格原样交回去会把那些新内容盖掉(连同译文记录)。
         // 列表快照闲时最多旧一轮轮询,先按盘上现状重读;用户改过的那几格盘上也变了就不存(LyricsEditConflict)。
+        guard !isSavingEdits else { return false }
+        isSavingEdits = true
+        defer { isSavingEdits = false }
         await store.reloadIfStale()
         let disk = store.detail(for: key)
         guard disk.complete, editingKey == key else { return false }
         let edits = LyricsEditConflict.Edits(main: editedLyrics != loadedLyrics || editedWordText != loadedWordText,
                                              tr: editedTr != loadedTr, roma: editedRoma != loadedRoma)
+        // 正文改成了空的、或者原来有时间轴改完一行时间戳都没有:整份换掉就丢了歌词或时间轴,还会置成人工修正,
+        // 同外部编辑器那条(LyricsExternalEdit.decide)不存。
+        if edits.main {
+            let edited = loadedYRC.isEmpty ? editedLyrics : editedWordText
+            let original = loadedYRC.isEmpty ? loadedLyrics : loadedWordText
+            if !LyricsExternalEdit.hasLyricText(edited), LyricsExternalEdit.hasLyricText(original) {
+                store.reportEditRejected(L10n.t("修改后没有歌词了，未保存；修改内容仍保留在编辑框中"))
+                return false
+            }
+            if !LyricsExternalEdit.hasTimedLines(edited),
+               !loadedYRC.isEmpty || LyricsExternalEdit.hasTimedLines(loadedLyrics) {
+                store.reportEditRejected(L10n.t("修改后的歌词不含任何时间戳，未保存（否则会丢失原有时间轴）；修改内容仍保留在编辑框中"))
+                return false
+            }
+        }
         guard !LyricsEditConflict.conflicts(
             loaded: LyricsEditConflict.Cells(lyrics: loadedLyrics, yrc: loadedYRC, tr: loadedTr, roma: loadedRoma),
             disk: LyricsEditConflict.Cells(lyrics: disk.lyrics, yrc: disk.yrc, tr: disk.tr, roma: disk.roma),
@@ -4455,19 +4524,28 @@ struct LyricsManagerView: View {
         editedRomaBody = romaBodyEdit.body
     }
 
-    // 跟 loadDetail 共用——"保存修改"/采纳联网候选歌词之后也要重新调这个:磁盘上的
-    // 歌词内容变了,LyricsOffsetStore 的 key(内容指纹的一部分)跟着变,输入框要显示
-    // "新内容对应的偏移值"(通常是 0,内容变了旧的校正值自然对不上、查不到),而不是
-    // 继续显示改之前那份内容的偏移值。
-    /// 按存储里此刻的值刷新详情页的偏移输入框和借用来源;正文、指纹不动(还是这一条已经落盘的那份)。
+    /// 别处改了单曲偏移(修订号变了):按存储里此刻的值刷新这一条的借用来源;这一条的值真变了才回填输入框,
+    /// 别的歌落盘时不碰它,不然框里敲到一半、还没回车的数会被冲掉。
     private func refreshShownOffset() {
         guard let key = editingKey, let summary = store.summary(forKey: key) else { return }
         let offsetKey = currentOffsetKey(summary)
         offsetBorrowedFrom = LyricsOffsetStore.shared.borrowedOffsetSource(forKey: offsetKey, siblings: offsetSiblings)
             .map { borrowedOffsetDisplayName($0, ownKey: key) }
-        editedOffsetSeconds = AppSettings.formattedSeconds(ms: LyricsOffsetStore.shared.offset(forKey: offsetKey, siblings: offsetSiblings))
+        let ms = LyricsOffsetStore.shared.offset(forKey: offsetKey, siblings: offsetSiblings)
+        guard ms != shownStoredOffsetMs else { return }
+        showStoredOffset(ms)
     }
 
+    /// 输入框回填成存储里的值,并记下来(`refreshShownOffset` 据它判断这一条有没有变)。
+    private func showStoredOffset(_ ms: Int) {
+        shownStoredOffsetMs = ms
+        editedOffsetSeconds = AppSettings.formattedSeconds(ms: ms)
+    }
+
+    // 跟 loadDetail 共用——"保存修改"/采纳联网候选歌词之后也要重新调这个:磁盘上的
+    // 歌词内容变了,LyricsOffsetStore 的 key(内容指纹的一部分)跟着变,输入框要显示
+    // "新内容对应的偏移值"(通常是 0,内容变了旧的校正值自然对不上、查不到),而不是
+    // 继续显示改之前那份内容的偏移值。
     private func refreshOffsetState(key: String, artist: String, title: String, lyrics: String, yrc: String) {
         persistedLyricsForOffset = lyrics
         persistedYRCForOffset = yrc
@@ -4475,7 +4553,7 @@ struct LyricsManagerView: View {
         let offsetKey = LyricsOffsetStore.trackKey(artist: artist, title: title, lyrics: lyrics, lyricsYRC: yrc)
         offsetBorrowedFrom = LyricsOffsetStore.shared.borrowedOffsetSource(forKey: offsetKey, siblings: offsetSiblings)
             .map { borrowedOffsetDisplayName($0, ownKey: key) }
-        editedOffsetSeconds = AppSettings.formattedSeconds(ms: LyricsOffsetStore.shared.offset(forKey: offsetKey, siblings: offsetSiblings))
+        showStoredOffset(LyricsOffsetStore.shared.offset(forKey: offsetKey, siblings: offsetSiblings))
     }
 
     /// 只改了字的保存:这首的单曲偏移从旧正文的指纹搬到新正文下(新指纹下已经有值就不动;见 LyricsOffsetStore.carryOffset)。
@@ -4494,22 +4572,22 @@ struct LyricsManagerView: View {
         // 解析不了、不是有限数或超出范围(见 LyricsOffsetInput)时不写入,输入框改回当前生效的值:别当成 0 秒,那会把手动
         // 校正过的偏移悄悄清掉;输入框弹回原来的数字,就看得出这次输入没被接受。
         guard let ms = LyricsOffsetInput.milliseconds(from: editedOffsetSeconds) else {
-            editedOffsetSeconds = AppSettings.formattedSeconds(
-                ms: LyricsOffsetStore.shared.offset(forKey: currentOffsetKey(summary), siblings: offsetSiblings))
+            showStoredOffset(LyricsOffsetStore.shared.offset(forKey: currentOffsetKey(summary), siblings: offsetSiblings))
             return
         }
         // pinKey 用 summary.key(缓存 key 本身,已归一化)—— 播放侧算的是
         // EnrichCacheKeys.normalizedKey,两边必须是同一个身份,否则在这里校准的歌跟播放时
         // 钉住的歌是两条记录(见 LocalPlaybackSource.currentPinKey 的注释)。
         LyricsOffsetStore.shared.setOffset(ms, forKey: currentOffsetKey(summary), pinKey: summary.key, siblings: offsetSiblings)
-        editedOffsetSeconds = AppSettings.formattedSeconds(ms: ms)
+        // 回填存下之后的值:正文读不回来(指纹为空)时存储不写,框里弹回原值,看得出这次没生效。
+        showStoredOffset(LyricsOffsetStore.shared.offset(forKey: currentOffsetKey(summary), siblings: offsetSiblings))
         offsetBorrowedFrom = nil
         PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
     }
 
     private func resetOffsetEdit(_ summary: EnrichCacheStore.Summary) {
         LyricsOffsetStore.shared.reset(forKey: currentOffsetKey(summary), pinKey: summary.key, siblings: offsetSiblings)
-        editedOffsetSeconds = AppSettings.formattedSeconds(ms: 0)
+        showStoredOffset(0)
         offsetBorrowedFrom = nil
         PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
     }

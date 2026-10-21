@@ -452,6 +452,8 @@
 "保持锁定" = "Keep Locked";
 "信任后与内置播放器相同：显示歌词，并计入收听记录" = "Once trusted, it works exactly like a built-in player: lyrics show up, and plays are recorded to your listening history";
 "修复文件后重新打开 Lyrimuse；或舍弃此文件，用当前界面上的值重建（原文件将重命名保留，不会删除）" = "Fix the file and reopen Lyrimuse, or discard it and rebuild it from the values shown here (the original is renamed, not deleted)";
+"修改后没有歌词了，未保存；修改内容仍保留在编辑框中" = "There are no lyrics left after your changes, so they weren't saved. They're still in the editor";
+"修改后的歌词不含任何时间戳，未保存（否则会丢失原有时间轴）；修改内容仍保留在编辑框中" = "Your edited lyrics have no timestamps at all, so they weren't saved (the existing timing would be lost). They're still in the editor";
 "修改此句的时间戳" = "Change this line’s timestamp";
 "候选" = "Candidates";
 "偏移" = "Offset";

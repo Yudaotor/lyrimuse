@@ -110,12 +110,12 @@ public enum LyricsExternalEdit {
     }
 
     /// 有没有一行剥掉开头的 `[...]`(时间戳、文件头标签)之后还有字。
-    static func hasLyricText(_ text: String) -> Bool {
+    public static func hasLyricText(_ text: String) -> Bool {
         lines(text).contains { !isBlank(String(afterBrackets($0))) }
     }
 
     /// 有没有一行是时间戳开头、后面跟着字。
-    static func hasTimedLines(_ text: String) -> Bool {
+    public static func hasTimedLines(_ text: String) -> Bool {
         lines(text).contains { line in
             let trimmed = String(line.drop { $0.isWhitespace })
             guard let stamps = LyricsWordTimingEdit.leadingStamps(trimmed) else { return false }

@@ -538,6 +538,11 @@ public final class EnrichCacheStore: ObservableObject {
         await reload()
     }
 
+    /// 保存前发现这次修改不能存(改完没有歌词了、原来有时间轴改完一行时间戳都没有),没交给引擎:同一条红字,编辑缓冲原样留着。
+    public func reportEditRejected(_ message: String) {
+        editError = message
+    }
+
     /// 保存前发现用户改过的那几格盘上也变了(LyricsEditConflict),没交给引擎:跟写入失败同一条红字,编辑缓冲原样留着。
     public func reportEditConflict() {
         editError = L10n.t("这首歌曲的歌词在编辑期间已更新，本次修改未保存；修改内容仍保留在编辑框中，放弃修改后重新编辑将打开最新版本")
@@ -1360,19 +1365,22 @@ public final class EnrichCacheStore: ObservableObject {
     /// 「缓存占用查看 + 一键清空」里的清空 —— 真删除:缓存全清,歌词目录里认得出的歌词文件全部挪进废纸篓
     /// (只认四个歌词后缀,这个目录是用户可以自己指定的,可能还放着别的东西)。包括手动编辑 / 采纳过的内容,
     /// 这份缓存没有"哪些是临时的"之分。破坏性要在 UI 侧用强提示说清楚,这里只负责执行。
-    public func clearAll() async {
+    /// 清掉了返回 true;备份没成、引擎没执行时返回 false(红字横幅已经在说),调用方别当作已清空。
+    @discardableResult
+    public func clearAll() async -> Bool {
         // 快照必须排在最前面:buildArchive 读的是磁盘上的 lyrics/ 文件族,清完就什么都读不到了。
         // 这一层是「清空全部」唯一的可恢复层(见 11 章「设计决策与已知坑」里「清空全部」那条)。
-        guard await takeAutoSnapshot(reason: "clear") else { return }
+        guard await takeAutoSnapshot(reason: "clear") else { return false }
         logger.notice("""
             clearAll: wiping \(self.raw.count, privacy: .public) entries, \
             snapshot=\(self.lastAutoSnapshotURL?.lastPathComponent ?? "none", privacy: .public)
             """)
         let result = await commit("clear_all")
-        guard result.ok else { return }
+        guard result.ok else { return false }
         // 「已校准」名单跟着一起清:名单里那些 key 对应的条目都不在了,留着就是一份孤儿名单,引擎会继续
         // 一票否决这些歌的自动重选。(这跟「清空全部时间轴校正」是两个入口:那个清校正值,这个清内容。)
         LyricsPinStore.shared.removeAll()
+        return true
     }
 
     /// 批量删除到几条起,值得先打一份自动快照。见 delete(keys:) 里那段注释。

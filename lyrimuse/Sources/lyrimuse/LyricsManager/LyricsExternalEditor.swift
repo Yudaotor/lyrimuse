@@ -51,9 +51,11 @@ final class LyricsExternalEditor {
     private init() {}
 
     /// 给这首写好工作副本、交给编辑器。已经在编辑这首、歌词也没变过,就只把编辑器叫到前面。
-    func open(artist: String, title: String, album: String) {
+    /// `key` 给了(歌词管理选中的那一条)就按它原样取条目;不给按三段找,会认正在放的那首、按时长挑变体(歌词窗口那个入口要的就是这个)。
+    func open(artist: String, title: String, album: String, key cacheKey: String? = nil) {
         guard !title.isEmpty else { return }
-        let stored = EnrichCacheReader.storedEntry(artist: artist, title: title, album: album)
+        let stored = cacheKey.map { EnrichCacheReader.storedEntry(forKey: $0) }
+            ?? EnrichCacheReader.storedEntry(artist: artist, title: title, album: album)
         if stored == nil, !EnrichCacheReader.isCurrent {
             // 歌词库正在重读(引擎刚写过、内存压力让出之后):查不到不代表这首没有记录,别给它摊一份空的。
             EnrichCacheReader.refreshIfNeeded()
@@ -64,7 +66,7 @@ final class LyricsExternalEditor {
             notes.post(.failure, title: title, text: L10n.t("暂时无法读取这首歌曲的歌词，请稍后重试"))
             return
         }
-        let key = stored?.key ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        let key = stored?.key ?? cacheKey ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         let content = Self.content(stored)
         let fresh = LyricsExternalEdit.workingCopy(content, title: title, artist: artist, album: album)
         var setAside: String?

@@ -1033,7 +1033,7 @@ struct LyricsManagerPreviewList: View {
                     }
                 }
             }
-            .modifier(LyricsManagerPauseFollowOnScroll(follow: $follow))
+            .modifier(LyricsManagerPauseFollowOnScroll(follow: $follow, isNowPlaying: isNowPlaying))
             .environment(\.frameClock, frameClock)
             .background(FrameClockHost(clock: frameClock, pausesWhenOccluded: true).frame(width: 0, height: 0))
             .onChange(of: current) { _, _ in scrollToCurrent(proxy, animated: true) }
@@ -1488,14 +1488,16 @@ private struct LyricsManagerPreviewRow: View {
     }
 }
 
-/// 手动滚动预览就暂停「跟随播放」。滚动阶段的通知是 macOS 15 才有的,更早的系统上只能点按钮关。
+/// 手动滚动正在播放那首的预览就暂停「跟随播放」;翻看别的歌时滚动不碰它(那里没有跟随按钮,关了也看不出来)。
+/// 滚动阶段的通知是 macOS 15 才有的,更早的系统上只能点按钮关。
 private struct LyricsManagerPauseFollowOnScroll: ViewModifier {
     @Binding var follow: Bool
+    let isNowPlaying: Bool
 
     func body(content: Content) -> some View {
         if #available(macOS 15.0, *) {
             content.onScrollPhaseChange { _, phase in
-                if phase == .interacting, follow { follow = false }
+                if phase == .interacting, isNowPlaying, follow { follow = false }
             }
         } else {
             content

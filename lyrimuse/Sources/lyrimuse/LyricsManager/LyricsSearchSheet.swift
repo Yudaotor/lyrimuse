@@ -14,8 +14,8 @@ import SwiftUI
 // 歌名/歌手/专辑是可编辑字段,默认沿用这首歌本身的元数据,也支持改关键词后重新联网
 // 查(比如原始元数据不准/有别名,想换个关键词试试能不能搜到更好的候选)。改这三个
 // 字段只影响"拿什么关键词去查",不影响写回哪条缓存记录——onApply 只回传选中的
-// candidate,真正决定写入 key 的是调用方 LyricsManagerView.swift 里早就捕获好的稳定
-// key,跟 artist/title/album 这三个字段无关。
+// candidate,真正决定写入 key 的是宿主(`LyricsQuickSearchWindow`)传进来的 `songKey`,
+// 跟 artist/title/album 这三个字段无关。
 struct LyricsSearchSheet: View {
     // 原始值——用来在用户改乱查询关键词之后一键恢复,也是"默认查询"这句里"默认"的
     // 具体所指(初次打开时 artist/title/album 就是从这三个值来的)。
@@ -50,9 +50,8 @@ struct LyricsSearchSheet: View {
     private static let panelInset: CGFloat = 8
     /// 侧栏的圆角。
     private static let panelCornerRadius: CGFloat = 22
-    /// 调用方真正写回缓存,回报有没有落盘。面板等它结束再决定:成功 → 挪「当前使用」徽标,
-    /// 留着的话给一条回声、关窗模式直接关;失败 → 关窗模式照旧关(调用方那边的 lastError 红字
-    /// 负责说明),留着的话在标题栏说一句、让人直接重试。
+    /// 调用方真正写回缓存,回报有没有落盘。面板等它结束再决定:成功 → 挪「当前使用」徽标、给一条回声;
+    /// 失败 → 在标题栏说一句,让人直接重试。
     let onApply: (LyricsSearchService.Candidate) async -> Bool
     /// 打开面板时这首歌是不是标成了纯音乐(宿主读缓存给的)。
     let isMarkedInstrumental: Bool
@@ -79,6 +78,8 @@ struct LyricsSearchSheet: View {
     @State private var settingInstrumental = false
     /// 「重新自动匹配」在飞:按钮禁用,标题行下面出进度;采纳、标纯音乐也置灰(期间改了条目,引擎这一轮就作废)。
     @State private var autoMatching = false
+    /// 歌词管理那边也可能正在重新匹配(见 LyricsRematchActivity)。
+    @ObservedObject private var rematchActivity = LyricsRematchActivity.shared
     @State private var autoMatchDone = 0
     @State private var autoMatchTotal = 0
     /// 上一轮自动匹配的结论,挂在标题行下面;换歌、再点一次、采纳成功时收掉。
@@ -190,14 +191,16 @@ struct LyricsSearchSheet: View {
     /// 回跳那一刻出现,自己解释自己。
     private var searchProgressSuffix: String {
         guard sourcesTotal > 0 else { return "" }
-        let remaining = String(format: L10n.t("还剩 %@"), "\(max(0, sourcesTotal - sourcesDone))")
+        let left = max(0, sourcesTotal - sourcesDone)
+        // 这一轮都回完、兜底轮还没起的那几秒不写「还剩 0」(跟前面「仍在搜索中」自相矛盾),只留轮次。
+        let remaining = left > 0 ? String(format: L10n.t("还剩 %@"), "\(left)") : nil
         // 全角括号只配中文文案;英文界面用半角,前面空一格。
         if L10n.current == "en" {
             let roundSuffix = searchRound >= 2 ? " [\(searchRound)]" : ""
-            return " (\(remaining))\(roundSuffix)"
+            return (remaining.map { " (\($0))" } ?? "") + roundSuffix
         }
         let roundSuffix = searchRound >= 2 ? "［\(searchRound)］" : ""
-        return "（\(remaining)）\(roundSuffix)"
+        return (remaining.map { "（\($0)）" } ?? "") + roundSuffix
     }
 
     // 歌词源的完整名单,直接读 LyricsSource.allCases(FeatureSettingsStore.swift),别在这里手抄一份。Go / Swift 两份名单
@@ -277,13 +280,14 @@ struct LyricsSearchSheet: View {
     // 分母是引擎报的 sourcesTotal(它只数用户开着的源,见 enrich.go lyricSearchUpdateFunc
     // 的注释),跟进度那对「(x/y)」同一个数,用户关掉一个源时两处的分母一致。还没收到第一行时先用这一轮开着的
     // 源数(availabilityDenominator)。那时分子是 0,但正下方那行写着「正在查询各个歌词源…」,读不成「零个可用」。
-    // 分子数"给过候选的源":引擎的 filterEnabledLyricSources 保证候选里没有关掉的源,不用再交集一次。
+    // 分子数"给过候选的联网歌词源":引擎的 filterEnabledLyricSources 保证候选里没有关掉的源;播放器自己的歌词(本地 .lrc、
+    // 洛雪、KKBOX 等)也会进候选,分母不数它们,分子也不数,不然会出现「16/15」。
     private var sourceAvailabilityBadge: some View {
         Button {
             showSourceAvailability = true
         } label: {
             Label {
-                Text("\(respondedSources.count)/\(availabilityDenominator)").monospacedDigit()
+                Text("\(Self.allLyricSourceNames.filter(respondedSources.contains).count)/\(availabilityDenominator)").monospacedDigit()
             } icon: {
                 Image(systemName: "antenna.radiowaves.left.and.right")
             }
@@ -567,6 +571,8 @@ struct LyricsSearchSheet: View {
             applyFeedback = nil
             instrumentalOverride = nil
             autoMatchLine = nil
+            // 上一首那一轮还在跑也不挂在这一首上;按钮由 LyricsRematchActivity 挡着,等那一轮跑完。
+            autoMatching = false
         }
         .onChange(of: currentSource) { _, value in
             host.source = value
@@ -1390,7 +1396,7 @@ struct LyricsSearchSheet: View {
             toolbarLabel(L10n.t("重新自动匹配"), systemImage: "wand.and.stars", iconOnly: iconOnly)
         }
         .help(L10n.t("重新联网匹配，直接采用算法选出的结果，依据设置中的「匹配算法」"))
-        .disabled(autoMatching || applyingSource != nil || settingInstrumental)
+        .disabled(autoMatching || rematchActivity.isRunning || applyingSource != nil || settingInstrumental)
         .settingsGlassButtons()
         .fixedSize()
     }
@@ -1422,7 +1428,7 @@ struct LyricsSearchSheet: View {
     /// 「重新自动匹配」的整条流程:等宿主跑完一轮(进度经回调写进来)。窗口留着、挂结论,改写了歌词时「当前使用」随宿主
     /// 重读挪过去,用户可以接着自己挑。等待期间换了歌,这一轮的结论不挂。
     private func runAutoMatch() async {
-        guard !autoMatching, applyingSource == nil, !settingInstrumental else { return }
+        guard !autoMatching, !rematchActivity.isRunning, applyingSource == nil, !settingInstrumental else { return }
         let subject = subjectGeneration
         autoMatching = true
         autoMatchLine = nil
@@ -1433,8 +1439,9 @@ struct LyricsSearchSheet: View {
             autoMatchDone = sourcesDone
             autoMatchTotal = sourcesTotal
         }
+        guard subject == subjectGeneration else { return }
         autoMatching = false
-        guard subject == subjectGeneration, let line else { return }
+        guard let line else { return }
         autoMatchLine = line
     }
 
@@ -2023,7 +2030,9 @@ struct LyricsSearchSheet: View {
             try await LyricsSearchService.shared.search(owner: searchOwner, artist: LyricsManagerSearch.query(artist),
                                                         title: LyricsManagerSearch.query(title),
                                                         album: LyricsManagerSearch.query(album),
-                                                        durationSecs: durationSecs) { update in
+                                                        durationSecs: durationSecs,
+                                                        // 查询词改过就不带:搜的已经不是这一条(条目里存的检索歌名不该再套上去)。
+                                                        key: isDirty ? nil : songKey) { update in
                 guard generation == searchGeneration else { return } // 已经有更新的一轮在跑,这批结果作废
                 defer { revealSelection() }
                 candidates = update.candidates

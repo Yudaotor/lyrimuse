@@ -874,6 +874,8 @@ public enum EnrichCacheReader {
         public let plainLyrics: String
         public let instrumental: Bool
         public let manualLyrics: Bool
+        /// 歌词是哪个源给的(条目的 `lyrics_source`)。
+        public let lyricsSource: String?
         /// false = 正文小文件读不回来,上面几块正文不全,别拿去存回去。
         public let complete: Bool
     }
@@ -917,7 +919,7 @@ public enum EnrichCacheReader {
         }
         return StoredEntry(key: key, lyrics: lyrics, lyricsTr: tr, lyricsRoma: roma, lyricsYRC: yrc, plainLyrics: plain,
                            instrumental: entry.instrumental ?? false, manualLyrics: entry.manualLyrics ?? false,
-                           complete: complete)
+                           lyricsSource: entry.lyricsSource, complete: complete)
     }
 
     /// 精确 key 没命中时,再按"忽略空格/大小写/繁简"找一次。

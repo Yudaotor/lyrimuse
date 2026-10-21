@@ -4441,7 +4441,7 @@ func runSourceContractSettingsTests() {
                     "歌词管理: 逐字歌词的编辑框只改字、套回逐字,只改字时单曲偏移跟着搬")
         // 预览时间列:▶ 不进排版、悬停状态在每一行自己身上;图标进排版的话悬停会来回切换停不下来(11 章决策 61)。
         let previewRow = (managerParts.components(separatedBy: "private struct LyricsManagerPreviewRow: View").dropFirst().first ?? "")
-            .components(separatedBy: "/// 手动滚动预览就暂停").first ?? ""
+            .components(separatedBy: "/// 手动滚动正在播放那首的预览就暂停").first ?? ""
         expectEqual(!previewRow.isEmpty && previewRow.contains("@State private var hovered = false")
                     && !managerParts.contains("hoveredTime"), true,
                     "歌词管理: 预览的悬停状态在每一行自己身上,不放在整张预览上")

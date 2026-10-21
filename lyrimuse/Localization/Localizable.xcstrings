@@ -53048,6 +53048,52 @@
           }
         }
       }
+    },
+    "修改后没有歌词了，未保存；修改内容仍保留在编辑框中" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There are no lyrics left after your changes, so they weren't saved. They're still in the editor"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修改后没有歌词了，未保存；修改内容仍保留在编辑框中"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修改後沒有歌詞了，未儲存；修改內容仍保留在編輯框中"
+          }
+        }
+      }
+    },
+    "修改后的歌词不含任何时间戳，未保存（否则会丢失原有时间轴）；修改内容仍保留在编辑框中" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your edited lyrics have no timestamps at all, so they weren't saved (the existing timing would be lost). They're still in the editor"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修改后的歌词不含任何时间戳，未保存（否则会丢失原有时间轴）；修改内容仍保留在编辑框中"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修改後的歌詞不含任何時間戳記，未儲存（否則會丟失原有時間軸）；修改內容仍保留在編輯框中"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

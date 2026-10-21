@@ -1,6 +1,18 @@
 import LyrimuseCore
 import SwiftUI
 
+/// 这一刻有没有一轮「重新自动匹配」在跑。引擎一次只跑一轮,新请求先停掉在跑的那一轮:歌词管理和「搜索歌词…」窗口
+/// 那两颗按钮据它互相让开,不然在一边点了会把另一边那首跑到一半的掐掉。
+@MainActor
+final class LyricsRematchActivity: ObservableObject {
+    static let shared = LyricsRematchActivity()
+    @Published private(set) var running = 0
+    var isRunning: Bool { running > 0 }
+
+    fileprivate func begin() { running += 1 }
+    fileprivate func end() { running = max(0, running - 1) }
+}
+
 /// 「重新自动匹配」的发起与结论(见 LyricsRematch):请引擎对一首跑一轮重评、轮询进度、把结论翻成一句话。
 /// 歌词管理详情页那颗按钮和搜索候选歌词面板那颗共用这一份,结论的说法只有一套。冠军按设置里的「匹配算法」
 /// 由引擎选,换不换、写哪些字段跟后台重评是同一个函数(11 章决策 46)。
@@ -11,6 +23,8 @@ enum LyricsRematchRunner {
     static func run(key: String, id: String = UUID().uuidString, isCurrent: () -> Bool = { true },
                     onProgress: (_ sourcesDone: Int, _ sourcesTotal: Int) -> Void) async -> LyricsRematch.Line? {
         guard LyricsRematch.request(id: id, key: key) else { return .failed }
+        LyricsRematchActivity.shared.begin()
+        defer { LyricsRematchActivity.shared.end() }
         let requestedAt = Date()
         while true {
             // 别写成 try?:任务被取消之后 sleep 立刻抛错,吞掉的话这个循环不再让出主线程,一直空转到引擎那一轮结束。

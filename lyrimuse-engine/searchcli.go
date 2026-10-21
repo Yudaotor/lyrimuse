@@ -43,6 +43,9 @@ func runSearchLyricsCLI(args []string) {
 	// -player:**这一刻在放的播放器** bundle id(com.apple.Music / com.tencent.QQMusicMac …)。
 	// 只喂给同源加权那一项,见下面 setNativeLyricSourcesForPlayer 那处注释。缺省=不加分。
 	player := fs.String("player", "", "bundle id of the player currently playing (for the same-source scoring term)")
+	// -key:这首在缓存里的 key 原样(歌词管理、「搜索歌词…」窗口知道它)。给各源搜的歌名是剥过结尾说明括号、时长变体位的,
+	// 拿它拼出来的 key 查不到按完整歌名建的条目(条目里存的检索歌名、YouTube Music 歌曲页、学署名都跟着丢)。缺省按三段拼。
+	cacheKey := fs.String("key", "", "the track's cache key as stored (defaults to one built from artist/title/album)")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("search-lyrics: %v", err)
 	}
@@ -141,6 +144,9 @@ func runSearchLyricsCLI(args []string) {
 	searchCtx := withManualLyricSearch(context.Background())
 	// 用 Kaset 放过的歌,lyricfind 按缓存里存的 YouTube Music 歌曲页取(ytmusicVideoLyric),跟自动解析同一个口径。
 	key := enrichKey(*artist, *title, *album)
+	if *cacheKey != "" {
+		key = *cacheKey
+	}
 	enrichMu.Lock()
 	searchCtx = withCachedYouTubeMusicVideoIDLocked(searchCtx, key)
 	storedSearchTitle := enrichCache[key].LyricsSearchTitle

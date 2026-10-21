@@ -4,9 +4,8 @@ import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "engine-control")
 
-// 统一收敛"改完共享文件、踢一脚重启引擎让它重新读盘"这件事——EnrichCacheStore
-// (歌词管理保存/删除)和 FeatureSettingsStore(功能开关保存)都要做同一件事,不各自
-// 实现一份。
+// 统一收敛"踢一脚重启引擎让它重新读盘"这件事,调用方是 EngineRestartCoordinator(各处要重启引擎都经它合并);
+// 歌词管理的保存、删除走 EnrichEditChannel,不重启引擎。
 //
 // 用 waitUntilExit()+terminationStatus 检查真实的成功/失败,不能只看 Process.run() 有
 // 没有抛异常——那只能确认 launchctl 本身起得来,报不出"命令跑完了但其实失败了"(比如

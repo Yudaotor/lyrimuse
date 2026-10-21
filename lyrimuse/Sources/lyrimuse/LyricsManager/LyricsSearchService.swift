@@ -24,7 +24,7 @@ private let searchLyricsHealthMarkers = ["rejected (code", "backing off", "cooli
 final class LyricsSearchService {
     static let shared = LyricsSearchService()
 
-    /// 一个发起方:一个搜索面板(歌词管理里的、歌词窗口弹出的小窗里的各算一个)。调用方各自在 @State 里持有一个。
+    /// 一个发起方:一个搜索面板(「搜索歌词…」窗口里的那一个)。调用方各自在 @State 里持有一个。
     ///
     /// 在跑的子进程按发起方分开记:同一个发起方起新一轮时把自己上一轮杀掉(「重新搜索」在搜索途中也放开,
     /// 不杀的话旧那一轮会把各源的兜底轮跑完,白占网络请求,结果反正被调用方的 generation 判作废),
@@ -462,9 +462,10 @@ final class LyricsSearchService {
     // 调用方(「搜索候选歌词」面板)因此能做到"谁先搜到就先展示谁,列表随后续源陆续刷新"。回调固定在
     // MainActor 上执行,调用方可以直接改 @State,不需要自己再跳线程。
     /// - owner: 发起方,见 `Owner`。
+    /// - key: 这首在缓存里的 key 原样,交给引擎查条目(见引擎 search-lyrics 的 -key);查询词被用户改过时传 nil。
     func search(
         owner: Owner,
-        artist: String, title: String, album: String, durationSecs: Double = 0,
+        artist: String, title: String, album: String, durationSecs: Double = 0, key: String? = nil,
         onUpdate: @escaping @MainActor (SearchUpdate) -> Void
     ) async throws {
         // withTaskCancellationHandler:调用方的 Task 被取消(.task 随视图消失、或 searchGeneration 换代)时顺手终结
@@ -483,7 +484,7 @@ final class LyricsSearchService {
         noteLaunch(for: owner, at: Date())
         try await withTaskCancellationHandler {
             try await performSearch(handle: handle, artist: artist, title: title, album: album,
-                                    durationSecs: durationSecs, onUpdate: onUpdate)
+                                    durationSecs: durationSecs, key: key, onUpdate: onUpdate)
         } onCancel: {
             handle.cancel()
         }
@@ -517,7 +518,7 @@ final class LyricsSearchService {
 
     private func performSearch(
         handle: RunHandle,
-        artist: String, title: String, album: String, durationSecs: Double,
+        artist: String, title: String, album: String, durationSecs: Double, key: String?,
         onUpdate: @escaping @MainActor (SearchUpdate) -> Void
     ) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -532,6 +533,7 @@ final class LyricsSearchService {
                 "-album", album,
                 "-duration", String(durationSecs),
             ]
+            if let key, !key.isEmpty { process.arguments?.append(contentsOf: ["-key", key]) }
             // 同源加权(打分里那条 +250「与当前播放器同源」)要知道**现在在放的是哪个
             // 播放器** —— 它的立论是"时间轴对着同一份音频母版",那是正在播的那个播放器的
             // 属性。这条 CLI 是独立进程,拿不到播放状态,只能由这边传。
