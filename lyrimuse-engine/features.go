@@ -75,6 +75,8 @@ const (
 	lyricSourceVibe = "vibe"
 	// Genie(지니뮤직,见 genie.go 头注)。韩国曲库;只有逐行。补的也是韩文歌,跟 VIBE 互为备份。
 	lyricSourceGenie = "genie"
+	// PetitLyrics(プチリリ,见 petitlyrics.go 头注)。日本曲库;官方同步与用户上传的逐字。补的是日文歌的逐字。
+	lyricSourcePetitLyrics = "petitlyrics"
 )
 
 const (
@@ -105,7 +107,7 @@ const (
 var lyricsSourceDefaultOrder = []string{
 	lyricSourceKugou, lyricSourceNetease, lyricSourceQQ, lyricSourceMusixmatch, lyricSourceLRCLIB,
 	lyricSourceAMLL, lyricSourceLyricFind, lyricSourceKuwo, lyricSourceMigu, lyricSourceDeezer,
-	lyricSourceAppleMusic, lyricSourceSoda, lyricSourceVibe, lyricSourceGenie,
+	lyricSourceAppleMusic, lyricSourceSoda, lyricSourceVibe, lyricSourceGenie, lyricSourcePetitLyrics,
 }
 
 // lyricsPriorityPlayerLocal:「顺序优先」顺序表(lyrics_source_order)里「播放器自带歌词」那一项,不是歌词源。App

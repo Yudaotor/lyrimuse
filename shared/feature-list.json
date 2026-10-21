@@ -16,14 +16,14 @@
         {
           "id": "lyric-sources",
           "title": {
-            "zh-Hans": "十四个歌词源自动查找",
-            "en": "Fourteen lyric sources, searched automatically",
-            "zh-Hant": "十四個歌詞來源自動查找"
+            "zh-Hans": "十五个歌词源自动查找",
+            "en": "Fifteen lyric sources, searched automatically",
+            "zh-Hant": "十五個歌詞來源自動查找"
           },
           "desc": {
-            "zh-Hans": "网易云音乐、QQ 音乐、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、汽水音乐、VIBE、Genie 和 Apple Music。每个歌词源均可单独开关、调整顺序，或测试当前是否可连接。",
-            "en": "NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie and Apple Music. Each source can be turned off, reordered, or tested to see whether it is reachable right now.",
-            "zh-Hant": "網易雲音樂、QQ 音樂、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、汽水音樂、VIBE、Genie 和 Apple Music。每個歌詞來源均可單獨開關、調整順序，或測試目前是否可連線。"
+            "zh-Hans": "网易云音乐、QQ 音乐、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、汽水音乐、VIBE、Genie、PetitLyrics 和 Apple Music。每个歌词源均可单独开关、调整顺序，或测试当前是否可连接。",
+            "en": "NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics and Apple Music. Each source can be turned off, reordered, or tested to see whether it is reachable right now.",
+            "zh-Hant": "網易雲音樂、QQ 音樂、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、汽水音樂、VIBE、Genie、PetitLyrics 和 Apple Music。每個歌詞來源均可單獨開關、調整順序，或測試目前是否可連線。"
           },
           "default": "on",
           "settings": [

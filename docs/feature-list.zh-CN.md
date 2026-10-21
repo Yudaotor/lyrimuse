@@ -63,9 +63,9 @@ Lyrimuse 是一款开源（GPL-3.0）的 macOS 逐字歌词 App，支持 macOS 1
 
 <a id="feature-lyric-sources"></a>
 
-### 十四个歌词源自动查找
+### 十五个歌词源自动查找
 
-网易云音乐、QQ 音乐、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、汽水音乐、VIBE、Genie 和 Apple Music。每个歌词源均可单独开关、调整顺序，或测试当前是否可连接。
+网易云音乐、QQ 音乐、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、汽水音乐、VIBE、Genie、PetitLyrics 和 Apple Music。每个歌词源均可单独开关、调整顺序，或测试当前是否可连接。
 
 - 默认开启
 - 设置位置：歌词 › 获取 › 歌词来源

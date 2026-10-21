@@ -2744,6 +2744,19 @@ func runSourceContractSurfaceTests() {
             expectEqual(true, false, "歌词来源悬停介绍: 读不到 FeatureSettingsStore.swift / SettingsView.swift(路径挪了?)")
         }
 
+        // lyrics_sources / lyrics_source_order 里这个版本不认识的源名(更新的版本加的)读的时候记下、写回时带上:丢掉的话装回旧版写一次盘,
+        // 那个源就从勾选里没了,新版的迁移标记又已经写过、不会再补勾。
+        if let store = read("Settings/FeatureSettingsStore.swift") {
+            expectEqual(sourceHas(store, "lyricsSources: (lyricsSources.map(\\.rawValue) + unknownLyricsSources).sorted(),")
+                        && sourceHas(store, "lyricsSourceOrder: lyricsPriorityOrder.map(\\.rawValue) + unknownLyricsOrder,"), true,
+                        "未知源名保留: 写回 lyrics_sources / lyrics_source_order 时没带上不认识的源名")
+            expectEqual(sourceHas(store, "unknownLyricsSources = Self.unknownNames(f.lyricsSources) { LyricsSource(rawValue: $0) != nil }")
+                        && sourceHas(store, "unknownLyricsOrder = Self.unknownNames(f.lyricsSourceOrder) { LyricsPriorityEntry(rawValue: $0) != nil }"), true,
+                        "未知源名保留: 读设置时没记下不认识的源名")
+        } else {
+            expectEqual(true, false, "未知源名保留: 读不到 FeatureSettingsStore.swift(路径挪了?)")
+        }
+
         // 悬停说明不能只信 onHover(App 不在前台时「离开」会丢):到点核对指针还在锚点里、弹出后轮询,
         // 量位置的 NSView 不接点击(垫在按钮背后)。
         if let help = read("HelpButton.swift") {

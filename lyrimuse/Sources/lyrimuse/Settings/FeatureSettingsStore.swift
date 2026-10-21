@@ -5,7 +5,7 @@ import SwiftUI
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "feature-settings")
 
-// 十四个歌词源——rawValue 必须跟 lyrimuse-engine/features.go 的 lyricSourceXxx 常量逐字对应,
+// 十五个歌词源——rawValue 必须跟 lyrimuse-engine/features.go 的 lyricSourceXxx 常量逐字对应,
 // 这是两侧通过共享 json 文件交换的字符串。displayName/color 直接委托给
 // LyricsManagerView.swift 已有的 sourceDisplayName/sourceColor(那两个函数也在给
 // "歌词管理"窗口的来源筛选/列表用),不重复维护第二份名字/颜色映射。
@@ -24,7 +24,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "featur
 // deezer 跟 lyricfind 数据同源(都是 LyricFind 供词),但两条管道各走各的接口:接它既是
 // 给那家版权方补条后路,也因为 Deezer 的法语曲库覆盖更好,见 lyrimuse-engine/deezer.go 头注。
 public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable {
-    case kugou, netease, qq, musixmatch, lrclib, amll, lyricfind, kuwo, migu, deezer, applemusic, soda, vibe, genie
+    case kugou, netease, qq, musixmatch, lrclib, amll, lyricfind, kuwo, migu, deezer, applemusic, soda, vibe, genie, petitlyrics
     public var id: Self { self }
     public var displayName: String { sourceDisplayName(rawValue) }
     public var color: Color { sourceColor(rawValue) }
@@ -58,6 +58,7 @@ extension LyricsSource {
         case .soda: return L10n.t("字节跳动旗下的音乐平台")
         case .vibe: return L10n.t("韩国 Naver 旗下的音乐平台")
         case .genie: return L10n.t("韩国 KT 旗下的音乐平台")
+        case .petitlyrics: return L10n.t("日本 SyncPower 运营的同步歌词服务")
         }
     }
 }
@@ -338,6 +339,7 @@ struct FeatureFlagsFile: Codable, Equatable {
     var sodaLyrics: Bool?
     var vibeLyrics: Bool?
     var genieLyrics: Bool?
+    var petitLyrics: Bool?
     var lyricsSourceMode: String?
     var lyricsSourceOrder: [String]?
     var lyricsDir: String?
@@ -411,6 +413,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case sodaLyrics = "soda_lyrics"
         case vibeLyrics = "vibe_lyrics"
         case genieLyrics = "genie_lyrics"
+        case petitLyrics = "petitlyrics_lyrics"
         case lyricsSourceMode = "lyrics_source_mode"
         case lyricsSourceOrder = "lyrics_source_order"
         case lyricsDir = "lyrics_dir"
@@ -591,6 +594,10 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var lyricsPriorityOrder: [LyricsPriorityEntry] = LyricsPriorityEntry.defaultOrder
     /// lyricsPriorityOrder 里的歌词源,按顺序。
     public var lyricsSourceOrder: [LyricsSource] { lyricsPriorityOrder.compactMap(\.source) }
+    // lyrics_sources / lyrics_source_order 里这个版本不认识的名字(更新的版本加的源),写回时原样带上、顺序表里排在末尾。
+    // 丢掉的话,装过新版、又装回旧版再写一次盘,那个源就从勾选里没了,新版的迁移标记又已经写过,不会再补勾。见 14 章决策 131。
+    private var unknownLyricsSources: [String] = []
+    private var unknownLyricsOrder: [String] = []
     // 空字符串 = 用默认位置(~/.config/lyrimuse/lyrics)。用 effectiveLyricsDir
     // 取实际生效的路径,不要直接读这个属性去拼路径。
     @Published public var lyricsDir = ""
@@ -696,7 +703,7 @@ public final class FeatureSettingsStore: ObservableObject {
             yearlyDigestSource: yearlyDigestSource.isEmpty ? nil : yearlyDigestSource,
             digestTopN: DigestTopN.resolved(digestTopN),
             notificationQuietHours: notificationQuietHours.file,
-            lyricsSources: lyricsSources.map(\.rawValue).sorted(),
+            lyricsSources: (lyricsSources.map(\.rawValue) + unknownLyricsSources).sorted(),
             // 只要保存过一次就落这个字段,值如实反映集合状态。它的作用是让上面那条
             // "老配置补 amll"的迁移**只生效一次** —— 之后用户取消勾选才不会被补回来。
             amllLyrics: lyricsSources.contains(.amll),
@@ -716,8 +723,10 @@ public final class FeatureSettingsStore: ObservableObject {
             vibeLyrics: lyricsSources.contains(.vibe),
             // 同上,genie 的迁移标记独立生效一次。
             genieLyrics: lyricsSources.contains(.genie),
+            // 同上,petitlyrics 的迁移标记独立生效一次。
+            petitLyrics: lyricsSources.contains(.petitlyrics),
             lyricsSourceMode: lyricsSourceMode.rawValue,
-            lyricsSourceOrder: lyricsPriorityOrder.map(\.rawValue),
+            lyricsSourceOrder: lyricsPriorityOrder.map(\.rawValue) + unknownLyricsOrder,
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
             lyricsTranslationLanguage: lyricsTranslationLanguage.rawValue,
             systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
@@ -817,6 +826,12 @@ public final class FeatureSettingsStore: ObservableObject {
 
     private init() {
         load()
+    }
+
+    /// 名单里这个版本不认识的名字,去重、保持原顺序。
+    static func unknownNames(_ names: [String]?, known: (String) -> Bool) -> [String] {
+        var seen = Set<String>()
+        return (names ?? []).filter { !known($0) && seen.insert($0).inserted }
     }
 
     /// 磁盘上存在、但**这个版本**的 FeatureFlagsFile 不认识的键,原样留着,写盘时再合并回去
@@ -926,6 +941,8 @@ public final class FeatureSettingsStore: ObservableObject {
         notificationQuietHours = NotificationQuietHours(file: f.notificationQuietHours)
         // 缺失/空数组(旧配置文件没这个字段,或者曾经被清空过)都按"全部启用"处理。
         let decodedSources = (f.lyricsSources ?? []).compactMap(LyricsSource.init(rawValue:))
+        unknownLyricsSources = Self.unknownNames(f.lyricsSources) { LyricsSource(rawValue: $0) != nil }
+        unknownLyricsOrder = Self.unknownNames(f.lyricsSourceOrder) { LyricsPriorityEntry(rawValue: $0) != nil }
         var enabled = Set(decodedSources)
         if enabled.isEmpty {
             enabled = Set(LyricsSource.allCases)
@@ -972,6 +989,10 @@ public final class FeatureSettingsStore: ObservableObject {
             if f.genieLyrics == nil {
                 // 同上,见 FeatureFlagsFile.genieLyrics。
                 enabled.insert(.genie)
+            }
+            if f.petitLyrics == nil {
+                // 同上,见 FeatureFlagsFile.petitLyrics。
+                enabled.insert(.petitlyrics)
             }
         }
         lyricsSources = enabled

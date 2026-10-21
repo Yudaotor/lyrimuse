@@ -51130,6 +51130,22 @@
         }
       }
     },
+    "日本 SyncPower 运营的同步歌词服务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synced lyrics service from SyncPower in Japan"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日本 SyncPower 營運的同步歌詞服務"
+          }
+        }
+      }
+    },
     "播放器自带歌词" : {
       "extractionState" : "manual",
       "localizations" : {

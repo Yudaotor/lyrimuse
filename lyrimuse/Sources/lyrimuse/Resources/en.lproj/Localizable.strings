@@ -1395,6 +1395,7 @@
 "日均 %1$@ · %2$@ 天" = "%1$@/day · %2$@ days";
 "日均 %1$@ · %2$@ 天#one" = "%1$@/day · %2$@ day";
 "日文歌词自带读音，同水平候选间优先" = "Japanese lyrics with romanization; preferred among otherwise-equal candidates";
+"日本 SyncPower 运营的同步歌词服务" = "Synced lyrics service from SyncPower in Japan";
 "日语" = "Japanese";
 "旧版评分规则" = "Older scoring rules";
 "早 %@ 秒" = "%@ s earlier";

@@ -17,20 +17,21 @@ import (
 func TestEveryLyricSourceHasAHostMapping(t *testing.T) {
 	// 每个源至少一个真实会被请求到的主机。新增源时这里也要补一条。
 	hosts := map[string][]string{
-		"netease":    {"music.163.com"},
-		"qq":         {"c.y.qq.com", "u.y.qq.com"},
-		"kugou":      {"mobilecdn.kugou.com", "lyrics.kugou.com", "krcs.kugou.com"},
-		"lrclib":     {"lrclib.net"},
-		"musixmatch": {"apic-appmobile.musixmatch.com", "apic.musixmatch.com"},
-		"amll":       {"raw.githubusercontent.com"},
-		"lyricfind":  {"music.youtube.com"},
-		"kuwo":       {"search.kuwo.cn"},
-		"migu":       {"pd.musicapp.migu.cn", "d.musicapp.migu.cn"},
-		"deezer":     {"api.deezer.com", "pipe.deezer.com", "auth.deezer.com"},
-		"applemusic": {"amp-api.music.apple.com"},
-		"vibe":       {"apis.naver.com"},
-		"genie":      {"app.genie.co.kr", "dn.genie.co.kr"},
-		"soda":       {sodaSeoTrackHost, sodaSearchHost},
+		"netease":     {"music.163.com"},
+		"qq":          {"c.y.qq.com", "u.y.qq.com"},
+		"kugou":       {"mobilecdn.kugou.com", "lyrics.kugou.com", "krcs.kugou.com"},
+		"lrclib":      {"lrclib.net"},
+		"musixmatch":  {"apic-appmobile.musixmatch.com", "apic.musixmatch.com"},
+		"amll":        {"raw.githubusercontent.com"},
+		"lyricfind":   {"music.youtube.com"},
+		"kuwo":        {"search.kuwo.cn"},
+		"migu":        {"pd.musicapp.migu.cn", "d.musicapp.migu.cn"},
+		"deezer":      {"api.deezer.com", "pipe.deezer.com", "auth.deezer.com"},
+		"applemusic":  {"amp-api.music.apple.com"},
+		"vibe":        {"apis.naver.com"},
+		"genie":       {"app.genie.co.kr", "dn.genie.co.kr"},
+		"petitlyrics": {"p1.petitlyrics.com", "p0.petitlyrics.com", "on.petitlyrics.com"},
+		"soda":        {sodaSeoTrackHost, sodaSearchHost},
 	}
 	for _, source := range lyricSourceNames {
 		hs, ok := hosts[source]

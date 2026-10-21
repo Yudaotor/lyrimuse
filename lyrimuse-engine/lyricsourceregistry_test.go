@@ -21,7 +21,7 @@ func allLyricSourceConstants() []string {
 		lyricSourceNetease, lyricSourceQQ, lyricSourceKugou,
 		lyricSourceMusixmatch, lyricSourceLRCLIB, lyricSourceAMLL, lyricSourceLyricFind,
 		lyricSourceKuwo, lyricSourceMigu, lyricSourceDeezer, lyricSourceAppleMusic,
-		lyricSourceSoda, lyricSourceVibe, lyricSourceGenie,
+		lyricSourceSoda, lyricSourceVibe, lyricSourceGenie, lyricSourcePetitLyrics,
 	}
 }
 

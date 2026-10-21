@@ -15,6 +15,8 @@ const (
 	miguHTTPTimeout  = 6 * time.Second
 	vibeHTTPTimeout  = 6 * time.Second
 	genieHTTPTimeout = 6 * time.Second
+	// petitHTTPTimeout:PetitLyrics 的搜索偶尔要五六秒(一次回二十条元数据)。
+	petitHTTPTimeout = 8 * time.Second
 	// miguAlbumInfoTimeout:咪咕按专辑 ID 取专辑信息。
 	miguAlbumInfoTimeout = 4 * time.Second
 	// ytmusicHomePageTimeout:取 YouTube Music 首页拿 VISITOR_DATA。

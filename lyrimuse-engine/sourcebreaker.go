@@ -396,6 +396,9 @@ func lyricSourceForHost(host string) string {
 		// Genie 的搜索在 app.genie.co.kr、取词在 dn.genie.co.kr(genie.go)。全仓只有这一源请求它们;封面图在
 		// image.genie.co.kr,跟歌词无关,不进来。
 		return "genie"
+	case h == "p1.petitlyrics.com" || h == "p0.petitlyrics.com" || h == "on.petitlyrics.com":
+		// PetitLyrics 轮换着用的三个主机(petitlyrics.go 的 petitClients),全仓只有这一源请求它们。
+		return "petitlyrics"
 	}
 	return ""
 }

@@ -105,7 +105,7 @@ const (
 	lyricSourceDegradedUsable = "usable" // 可用率
 )
 
-// lyricSourcePeerGroups:同类曲库。amll 按平台 ID 直取、vibe / genie 只在韩文歌上是主力,覆盖面都跟组里别的源不可比,不进任何一组;
+// lyricSourcePeerGroups:同类曲库。amll 按平台 ID 直取、vibe / genie 只在韩文歌上是主力、petitlyrics 只在日文歌上是主力,覆盖面都跟组里别的源不可比,不进任何一组;
 // 播放器本地缓存那几路(isPlayerLocalLyricSource)不是歌词源,整个不统计。
 var lyricSourcePeerGroups = [][]string{
 	{"netease", "qq", "kugou", "kuwo", "migu", "soda"},
