@@ -16,7 +16,8 @@ import (
 // 导入清单:往 prefetchImportQueuePath 写一批歌(每行一个 JSON:{"artist","title","album","duration"}),引擎在后台照同专辑预取
 // 的做法一首首解析歌词、写进缓存,不用真的播放。给批量扩充存量(各国榜单、歌单)用,没有界面入口。
 //   - 一次只跑一首,走后台优先级;缓存里已有(含宽松等价的写法)、正在解析的跳过(prefetchKeyFree)。
-//   - 起了解析的两首之间隔 prefetchImportGap。一个歌词源都没连上的那首不算数,隔 prefetchImportOfflineWait 再从它接着搜。
+//   - 起了解析的两首之间隔 prefetchImportGap;有源因为被限流(429)在冷却时,等它冷却完再起下一首:冷却期间正在播的
+//     那首也问不了这个源。一个歌词源都没连上的那首不算数,隔 prefetchImportOfflineWait 再从它接着搜。
 //   - 补空扫描 / 全量扫库在跑时让开,等下一次检查。
 //   - 进度记在 prefetchImportStatePath(清单内容的指纹 + 跑到第几行):引擎重启后接着跑,清单内容变了从头跑。
 //
@@ -46,6 +47,8 @@ var (
 	}
 	// prefetchImportRunOne 跑一首。单测换成假的。
 	prefetchImportRunOne = prefetchImportOne
+	// prefetchImportRateLimited:起下一首之前要等多久(prefetchImportRateLimitWait)。单测换成假的。
+	prefetchImportRateLimited = prefetchImportRateLimitWait
 )
 
 type prefetchImportItem struct {
@@ -122,6 +125,10 @@ func runPrefetchImport(ctx context.Context) {
 			st.Cursor++
 			continue
 		}
+		if d := prefetchImportRateLimited(); d > 0 {
+			prefetchImportWait(ctx, d)
+			continue
+		}
 		out := prefetchImportRunOne(ctx, *it)
 		if ctx.Err() != nil {
 			savePrefetchImportState(st)
@@ -160,6 +167,22 @@ func prefetchImportShouldYield() bool {
 	lyricsFillSweepMu.Lock()
 	defer lyricsFillSweepMu.Unlock()
 	return lyricsFillSweepRunning
+}
+
+// prefetchImportRateLimitWait:开着的联网歌词源里因为被限流(429)在冷却的,还要冷却多久(取最长的,熔断器封顶
+// lyricSourceBreakerRetryAfterMax);没有返回 0。别的原因(5xx、断网、反爬暂停)不等:那些跟导入的请求量无关,或者一停就是几小时。
+func prefetchImportRateLimitWait() time.Duration {
+	b := sharedLyricSourceBreaker()
+	var wait time.Duration
+	for _, src := range enabledNetworkLyricSources() {
+		if b.cooldownReason(src) != lyricSourceCooldownReasonRateLimited {
+			continue
+		}
+		if d, ok := b.coolingDown(src); ok && d > wait {
+			wait = d
+		}
+	}
+	return wait
 }
 
 // parsePrefetchImportItems:每行一首;写坏的行、缺歌手或歌名的行留 nil 占位,行号跟进度对得上。

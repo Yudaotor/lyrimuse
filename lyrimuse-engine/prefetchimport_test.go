@@ -169,3 +169,62 @@ func TestPrefetchImportOneResolves(t *testing.T) {
 		t.Fatal("已有等价写法的不该再起")
 	}
 }
+
+// 有源被限流在冷却时先等它冷却完、再起这一首,等完照旧从这一首接着跑。
+func TestRunPrefetchImportWaitsOutRateLimit(t *testing.T) {
+	var seen []string
+	setupPrefetchImportTest(t, []string{`{"artist":"A","title":"One","album":"X"}`},
+		func(_ context.Context, it prefetchImportItem) prefetchImportOutcome {
+			seen = append(seen, it.Title)
+			return prefetchImportOutcome{started: true}
+		})
+	var waits []time.Duration
+	prefetchImportWait = func(_ context.Context, d time.Duration) { waits = append(waits, d) }
+	limited := []time.Duration{40 * time.Second, 0}
+	saved := prefetchImportRateLimited
+	t.Cleanup(func() { prefetchImportRateLimited = saved })
+	prefetchImportRateLimited = func() time.Duration {
+		d := limited[0]
+		limited = limited[1:]
+		return d
+	}
+	runPrefetchImport(context.Background())
+	if len(seen) != 1 || len(waits) < 1 || waits[0] != 40*time.Second {
+		t.Fatalf("跑了 %v,等了 %v", seen, waits)
+	}
+}
+
+// 只等因为 429 在冷却的源;5xx 冷却、关着的源不等。
+func TestPrefetchImportRateLimitWait(t *testing.T) {
+	saved := sharedLyricSourceBreaker()
+	t.Cleanup(func() { setSharedLyricSourceBreaker(saved) })
+	b := newLyricSourceBreaker(time.Now)
+	setSharedLyricSourceBreaker(b)
+	savedFeatures := *featuresRef()
+	t.Cleanup(func() { setFeatures(savedFeatures) })
+	featuresRef().LyricsSources = map[string]bool{"netease": true}
+	if d := prefetchImportRateLimitWait(); d != 0 {
+		t.Fatalf("没有源在冷却时不该等,实际 %v", d)
+	}
+	b.observe("music.163.com", nil, 502, "")
+	b.observe("music.163.com", nil, 502, "")
+	if r := b.cooldownReason("netease"); r != lyricSourceCooldownReasonServerError {
+		t.Fatalf("造不出 5xx 冷却:%q", r)
+	}
+	if d := prefetchImportRateLimitWait(); d != 0 {
+		t.Fatalf("5xx 冷却不该等,实际 %v", d)
+	}
+	b = newLyricSourceBreaker(time.Now)
+	setSharedLyricSourceBreaker(b)
+	b.observe("music.163.com", nil, 429, "3600")
+	if b.cooldownReason("netease") != lyricSourceCooldownReasonRateLimited {
+		t.Fatalf("造不出 429 冷却:%q", b.cooldownReason("netease"))
+	}
+	if d := prefetchImportRateLimitWait(); d <= 0 || d > lyricSourceBreakerRetryAfterMax {
+		t.Fatalf("429 冷却该等到冷却完(熔断器封顶 5 分钟),实际 %v", d)
+	}
+	featuresRef().LyricsSources = map[string]bool{"qq": true}
+	if d := prefetchImportRateLimitWait(); d != 0 {
+		t.Fatalf("关着的源不该等,实际 %v", d)
+	}
+}
