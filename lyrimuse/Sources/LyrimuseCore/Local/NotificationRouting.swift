@@ -66,6 +66,12 @@ public enum NotificationRouting {
         return all.intersection(ids)
     }
 
+    /// 这一档勾着的渠道一个都推不了(都停用了或没填齐):引擎那边这一档整个不推(同 routedNotifyChannels),下拉上要说出来。
+    public static func noneDeliverable(event: String, channels: [NotificationChannel], routes: Routes) -> Bool {
+        let ids = selectedIDs(event: event, channels: channels, routes: routes)
+        return !channels.isEmpty && !channels.contains { ids.contains($0.id) && $0.enabled && $0.isComplete }
+    }
+
     /// 勾 / 取消一个渠道。取消的是最后一个勾着的就不动(至少保留一个);勾满了删掉这个键。列表按渠道顺序写。
     public static func toggling(_ id: String, event: String, channels: [NotificationChannel], routes: Routes) -> Routes {
         var selected = selectedIDs(event: event, channels: channels, routes: routes)

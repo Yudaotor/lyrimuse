@@ -115,24 +115,34 @@ func TestWeeklyAndMonthlyWaitForPushTime(t *testing.T) {
 	}
 }
 
-// 换了时区:系统时区链接一变,time.Local 跟着换,推送时间按新时区算。
-func TestRefreshLocalZoneFollowsSystem(t *testing.T) {
-	savedLink, savedName, savedLocal := localZoneLink, localZoneName, time.Local
-	t.Cleanup(func() { localZoneLink, localZoneName, time.Local = savedLink, savedName, savedLocal })
+// 换了时区:第一次看到的时区只记下;系统时区链接变了才重启一次,之后同一个时区不再重启;读不到链接时不动。
+func TestLocalZoneChangedRestartsOnce(t *testing.T) {
+	savedLink, savedName, savedRestart := localZoneLink, localZoneName, restartForZoneChange
+	t.Cleanup(func() { localZoneLink, localZoneName, restartForZoneChange = savedLink, savedName, savedRestart })
+	restarts := 0
+	restartForZoneChange = func() { restarts++ }
+	localZoneName = ""
 	dir := t.TempDir()
 	localZoneLink = filepath.Join(dir, "localtime")
-	for _, zone := range []string{"Asia/Tokyo", "America/New_York"} {
+	steps := []struct {
+		zone    string
+		changed bool
+	}{{"Asia/Tokyo", false}, {"Asia/Tokyo", false}, {"America/New_York", true}, {"America/New_York", false}}
+	for i, st := range steps {
 		_ = os.Remove(localZoneLink)
-		if err := os.Symlink("/var/db/timezone/zoneinfo/"+zone, localZoneLink); err != nil {
+		if err := os.Symlink("/var/db/timezone/zoneinfo/"+st.zone, localZoneLink); err != nil {
 			t.Fatal(err)
 		}
-		if loc := refreshLocalZone(); loc.String() != zone || time.Local.String() != zone {
-			t.Errorf("系统时区 %s: loc=%s time.Local=%s", zone, loc, time.Local)
+		if got := localZoneChanged(); got != st.changed {
+			t.Errorf("第 %d 步(%s): changed=%v,应为 %v", i, st.zone, got, st.changed)
 		}
 	}
 	localZoneLink = filepath.Join(dir, "missing")
-	if loc := refreshLocalZone(); loc.String() != "America/New_York" {
-		t.Errorf("读不到时区链接时维持原样: %s", loc)
+	if localZoneChanged() {
+		t.Error("读不到时区链接时不该重启")
+	}
+	if restarts != 1 {
+		t.Errorf("重启了 %d 次,应为 1", restarts)
 	}
 }
 

@@ -125,8 +125,10 @@ func (p *poller) runDigestsAsync(now time.Time) {
 }
 
 func (p *poller) runDigests(now time.Time, env digestEnv) {
-	now = now.In(refreshLocalZone()) // 换了时区的话,推送时间跟着新时区(digestschedule.go)
-	refreshArtistSourceAliases(now)  // 下面几份报告的歌手归并要用,见 artistsourcealias.go
+	if localZoneChanged() {
+		return // 换了时区,引擎重启后按新时区算(digestschedule.go)
+	}
+	refreshArtistSourceAliases(now) // 下面几份报告的歌手归并要用,见 artistsourcealias.go
 	p.weeklyDigest(now, env)
 	p.dailyDigest(now, env)
 	p.monthlyDigest(now, env)

@@ -598,6 +598,12 @@ func runSettingsInteractionTests() {
         expectEqual(routes, ["daily_digest": ["b", "c"]], "下拉: 勾上的按渠道顺序写")
         expectEqual(R.toggling("a", event: "daily_digest", channels: chs, routes: routes), [:], "下拉: 勾满了删掉键(= 全部渠道)")
         expectEqual(R.showsChoice(channelCount: 1), false, "下拉 / 默认: 一个渠道时不出现")
+        var bOff = b
+        bOff.enabled = false
+        expectEqual(R.noneDeliverable(event: "daily_digest", channels: [a, bOff], routes: ["daily_digest": ["b"]]), true,
+                    "下拉: 勾着的渠道都停用了 → 这一档实际不推,要提示")
+        expectEqual(R.noneDeliverable(event: "daily_digest", channels: [a, bOff], routes: [:]), false,
+                    "下拉: 全部渠道里还有启用且填齐的就照常")
         expectEqual(R.showsChoice(channelCount: 2), true, "下拉 / 默认: 两个渠道起出现")
 
         // 下拉上的字。

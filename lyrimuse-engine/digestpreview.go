@@ -98,9 +98,12 @@ func computeDigestPreview(ctx context.Context, cfg *config, kind string, now tim
 	case "daily":
 		midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		yesterday := midnight.AddDate(0, 0, -1)
-		cands = []candidate{
-			{midnight, now, fmt.Sprintf("🎧 今日听歌报告（%s）", now.Format("01-02")), dailyDigestPeriod(midnight, now)},
-			{yesterday, midnight, fmt.Sprintf("🎧 昨日听歌报告（%s）", yesterday.Format("01-02")), dailyDigestPeriod(yesterday, midnight)},
+		today := candidate{midnight, now, fmt.Sprintf("🎧 今日听歌报告（%s）", now.Format("01-02")), dailyDigestPeriod(midnight, now)}
+		prev := candidate{yesterday, midnight, fmt.Sprintf("🎧 昨日听歌报告（%s）", yesterday.Format("01-02")), dailyDigestPeriod(yesterday, midnight)}
+		// 跟真推送选同一种:推送时间在中午以后推当天,先看今天;在中午以前推前一天,先看昨天(dailyDigestTarget)。
+		cands = []candidate{today, prev}
+		if digestPushMinutes() < digestPushSameDayFrom {
+			cands = []candidate{prev, today}
 		}
 	case "weekly":
 		from, to, err := lastFinishedDigestWeek(ctx, cfg, source, now)
@@ -128,7 +131,7 @@ func computeDigestPreview(ctx context.Context, cfg *config, kind string, now tim
 			return res
 		}
 		if stats.TotalPlays == 0 {
-			continue // 日报:今天还没听,看昨天
+			continue // 日报:这一天没听,看另一天
 		}
 		addDigestExtras(env, source, c.period, &stats, now)
 		res.OK, res.Title, res.Digest, res.At = true, c.title, &stats, now.Unix()

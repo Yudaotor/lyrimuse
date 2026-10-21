@@ -100,6 +100,17 @@ func TestDigestPreviewDailyToday(t *testing.T) {
 	}
 }
 
+// 推送时间在中午以前(推前一天一整天):今天、昨天都听了,预览也先取昨天,跟真推送那一期一样。
+func TestDigestPreviewDailyMorningPushShowsYesterday(t *testing.T) {
+	useDigestFeatures(t, featureFlags{DigestTopN: 3, DigestPushTime: digestClock{minutes: 8 * 60, set: true}})
+	clearDigestPreviewCache(t)
+	now := time.Date(2026, 10, 21, 23, 5, 0, 0, time.Local)
+	useRangeLastfm(t, func(int64) []string { return []string{sampleTrackChart, sampleArtistChart, sampleAlbumChart} }, nil)
+	if res := computeDigestPreview(context.Background(), previewCfg, "daily", now); !res.OK || res.Title != "🎧 昨日听歌报告（10-20）" {
+		t.Fatalf("%+v", res)
+	}
+}
+
 // 周报预览:Last.fm 图表周列表里最后一个已经收官的那周。
 func TestDigestPreviewWeeklyLastFinishedChartWeek(t *testing.T) {
 	useDigestFeatures(t, featureFlags{DigestTopN: 3})

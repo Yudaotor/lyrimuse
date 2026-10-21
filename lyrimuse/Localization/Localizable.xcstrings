@@ -1,6 +1,23 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "勾选的渠道都已停用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected channels are all off"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "勾選的管道都已停用"
+          }
+        }
+      }
+    },
     "尚未获得「辅助功能」权限，自动跳过无法生效" : {
       "extractionState" : "manual",
       "localizations" : {

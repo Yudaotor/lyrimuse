@@ -5,11 +5,12 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 )
 
 // 四档听歌报告什么时候推:推送提醒页「推送时间」(features.json 的 digest_push_time,"HH:MM",缺省 22:00),四档共用。
-// 时刻按这台 Mac 当前的时区算,换了时区跟着变(refreshLocalZone)。
+// 时刻按这台 Mac 当前的时区算,换了时区引擎重启、跟着变(localZoneChanged)。
 //   - 每日:推送时间在 digestPushSameDayFrom(12:00)及以后,推当天零点到推送那一刻;在那之前(早上推),推前一天一整天。
 //     到点那次没推成(合盖、断网、推送失败)的,到下一个推送时间之前随时补推,补的是那一天一整天。
 //   - 每周 / 每月 / 年度:周期结束之后的第一个推送时间推(月报每月 1 日、年报 1 月 1 日;周报看数据源,Last.fm 图表周
@@ -111,37 +112,41 @@ func dailyDigestTarget(now time.Time, minutes int) (day string, from, to time.Ti
 // ---- 时区 ----
 
 var (
-	// localZoneLink:系统时区设置(/etc/localtime,指向 zoneinfo 下的一个时区文件)。单测置空,不碰 time.Local。
+	// localZoneLink:系统时区设置(/etc/localtime,指向 zoneinfo 下的一个时区文件)。单测置空,不看。
 	localZoneLink = "/etc/localtime"
+	// localZoneName:这个进程第一次看到的系统时区。
 	localZoneName string
+	// restartForZoneChange:时区换了以后让引擎按新时区重来 —— 给自己发 SIGTERM,走跟 launchctl kickstart -k 一样的收尾,
+	// launchd(KeepAlive)再把引擎拉起来。单测换掉。
+	restartForZoneChange = func() { _ = syscall.Kill(os.Getpid(), syscall.SIGTERM) }
 )
 
-// refreshLocalZone:Go 在进程启动时读一次系统时区存进 time.Local,之后不再跟。常驻引擎一跑几个月,用户换了时区(出差、手动改)
-// 推送时间还按旧时区算,所以每轮报告检查前看一眼系统时区换没换,换了就重载 time.Local。返回当前的 time.Local。
-func refreshLocalZone() *time.Location {
+// localZoneChanged:Go 在进程启动时读一次系统时区存进 time.Local,之后不再跟;time.Local 又不能在别的 goroutine
+// 读着的时候改(主循环、各个后台任务一直在用本地时间)。常驻引擎一跑几个月,用户换了时区(出差、手动改)之后推送时间、
+// 报告里的日期都还按旧时区算,所以每轮报告检查前看一眼系统时区换没换:换了就重启引擎(restartForZoneChange),
+// 新进程按新时区读。返回 true 表示要重启了,这一轮别往下跑。只在报告那个 goroutine 里调。
+func localZoneChanged() bool {
 	if localZoneLink == "" {
-		return time.Local
+		return false
 	}
 	target, err := os.Readlink(localZoneLink)
 	if err != nil {
-		return time.Local
+		return false
 	}
 	i := strings.Index(target, "zoneinfo/")
 	if i < 0 {
-		return time.Local
+		return false
 	}
 	name := target[i+len("zoneinfo/"):]
+	if localZoneName == "" {
+		localZoneName = name
+		return false
+	}
 	if name == localZoneName {
-		return time.Local
+		return false
 	}
-	loc, err := time.LoadLocation(name)
-	if err != nil {
-		return time.Local
-	}
-	if localZoneName != "" {
-		slog.Info("time zone changed, digest push times follow it", "from", localZoneName, "to", name)
-	}
+	slog.Info("time zone changed, restarting so digest push times follow it", "from", localZoneName, "to", name)
 	localZoneName = name
-	time.Local = loc
-	return loc
+	restartForZoneChange()
+	return true
 }

@@ -430,6 +430,7 @@ struct NotificationRoutePicker: View {
                     Text(labelText)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                        .foregroundStyle(noneDeliverable ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.primary))
                     Image(systemName: "chevron.down")
                         .font(.system(size: 8, weight: .semibold))
                         .foregroundStyle(.secondary)
@@ -451,7 +452,12 @@ struct NotificationRoutePicker: View {
         NotificationRouting.selectedIDs(event: event, channels: config.notificationChannels, routes: config.notificationRoutes)
     }
 
+    private var noneDeliverable: Bool {
+        NotificationRouting.noneDeliverable(event: event, channels: config.notificationChannels, routes: config.notificationRoutes)
+    }
+
     private var labelText: String {
+        if noneDeliverable { return L10n.t("勾选的渠道都已停用") }
         let names = config.notificationChannels.filter { selected.contains($0.id) }.map(\.displayName)
         switch NotificationRouting.label(selectedNames: names, total: config.notificationChannels.count) {
         case .all: return L10n.t("全部渠道")
