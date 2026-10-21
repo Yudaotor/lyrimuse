@@ -236,18 +236,22 @@ public enum VoxPlayerInfo {
     /// VOX 在系统那份会话里拼歌手和专辑用的分隔(前后各一个空格的 em dash)。
     public static let systemArtistSeparator = " \u{2014} "
 
-    /// 系统那份会话的锚点补成能外推的,脚本读不到时位置靠它:在放、没报位置、带着时刻的(开播、自然连播那一份,时刻就是
-    /// 开播那一刻)当 0 秒;在放、速率 0 的(恢复那一份,位置和时刻都对)当速率 1,media-control 按速率 0 外推出来的那个
-    /// 冻结值作废。暂停着的、别的播放器原样返回。纯函数,selftest 覆盖。
+    /// 系统那份会话的锚点补成能外推的,脚本读不到时位置靠它:在放、没报位置、带着时刻的(开播、自然连播那一份)按
+    /// `systemStartLeadSecs` 起算,那个时刻比真实开播晚这么多;在放、速率 0 的(恢复那一份,位置和时刻都对)当速率 1,
+    /// media-control 按速率 0 外推出来的那个冻结值作废。暂停着的、别的播放器原样返回。纯函数,selftest 覆盖。
     public static func systemAnchor(bundleID: String?, playing: Bool?, elapsed: Double?, elapsedNow: Double?,
                                     rate: Double?, hasTimestamp: Bool)
         -> (elapsed: Double?, elapsedNow: Double?, rate: Double?) {
         guard bundleID == Self.bundleID, playing == true else { return (elapsed, elapsedNow, rate) }
         if elapsed == nil {
-            return hasTimestamp ? (0, nil, rate == 0 ? 1 : rate) : (nil, elapsedNow, rate)
+            return hasTimestamp ? (systemStartLeadSecs, nil, rate == 0 ? 1 : rate) : (nil, elapsedNow, rate)
         }
         return rate == 0 ? (elapsed, nil, 1) : (elapsed, elapsedNow, rate)
     }
+
+    /// 系统那份开播、自然连播那一份的时刻比脚本播放头推出的开播时刻晚多少秒(点播 0.43~0.47、自然连播 0.60~0.64,
+    /// 见 02 章决策 153)。
+    public static let systemStartLeadSecs: Double = 0.5
 
     /// 系统那份会话的快照换成拆好的歌手、专辑:不是 VOX、已经有专辑(脚本读数)的原样返回。
     public static func splittingSystemArtist(_ snapshot: MediaControlSnapshot?) -> MediaControlSnapshot? {
@@ -310,14 +314,14 @@ public enum VoxPlayerInfo {
         return out
     }
 
-    /// 按 bundle id 单问到的那份(焦点被别的 App 占着、脚本又读不到时):在放、没报位置的按锚点时刻(开播那一刻)起算,
-    /// 进程号从锚点补上(按它找文件)。不是 VOX 的原样返回。纯函数,selftest 覆盖。
+    /// 按 bundle id 单问到的那份(焦点被别的 App 占着、脚本又读不到时):在放、没报位置的按锚点时刻起算(同 `systemAnchor`
+    /// 补上 `systemStartLeadSecs`),进程号从锚点补上(按它找文件)。不是 VOX 的原样返回。纯函数,selftest 覆盖。
     public static func probedSnapshot(_ snapshot: MediaControlSnapshot, anchorTimestamp: Double?, pid: Int32?,
                                       now: Date) -> MediaControlSnapshot {
         guard snapshot.bundleIdentifier == bundleID else { return snapshot }
         var out = snapshot
         if snapshot.playing == true, snapshot.elapsedTime == nil, let anchorTimestamp {
-            out = snapshot.withPlayerClock(max(0, now.timeIntervalSince1970 - anchorTimestamp), capturedAt: now)
+            out = snapshot.withPlayerClock(max(0, now.timeIntervalSince1970 - anchorTimestamp) + systemStartLeadSecs, capturedAt: now)
         }
         if out.processIdentifier == nil { out.processIdentifier = snapshot.processIdentifier ?? pid.map { Int($0) } }
         return out
