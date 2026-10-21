@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	neturl "net/url"
-	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -90,12 +89,6 @@ func resetManualProxyCacheForTest() {
 	manualProxyMu.Unlock()
 }
 
-func resetLocalPortProxyCacheForTest() {
-	localPortProxyMu.Lock()
-	localPortProxyValue, localPortProxyReadAt = nil, time.Time{}
-	localPortProxyMu.Unlock()
-}
-
 func TestResolveFallbackProxyURL(t *testing.T) {
 	a := &neturl.URL{Scheme: "http", Host: "127.0.0.1:1"}
 	b := &neturl.URL{Scheme: "http", Host: "127.0.0.1:2"}
@@ -168,31 +161,6 @@ func TestManualProxyURLCache(t *testing.T) {
 	manualProxyMu.Unlock()
 	if manualProxyURL(addr) != nil {
 		t.Fatal("缓存过期后重查")
-	}
-}
-
-func TestLocalPortProxyURL(t *testing.T) {
-	saved := networkProxyCommonPorts
-	t.Cleanup(func() { networkProxyCommonPorts = saved })
-	resetLocalPortProxyCacheForTest()
-	t.Cleanup(resetLocalPortProxyCacheForTest)
-	live := listenLocal(t)
-	port := func(addr string) int {
-		_, p, _ := net.SplitHostPort(addr)
-		n, _ := strconv.Atoi(p)
-		return n
-	}
-	networkProxyCommonPorts = []int{port(deadLocalAddr(t)), port(live.Addr().String())}
-	if u := localPortProxyURL(); u == nil || u.Host != live.Addr().String() || u.Scheme != "http" {
-		t.Fatalf("取第一个连得上的端口, 得到 %v", u)
-	}
-	networkProxyCommonPorts = nil
-	if u := localPortProxyURL(); u == nil {
-		t.Fatal("缓存期内不重探")
-	}
-	resetLocalPortProxyCacheForTest()
-	if u := localPortProxyURL(); u != nil {
-		t.Fatalf("没有端口连得上就没有, 得到 %v", u)
 	}
 }
 

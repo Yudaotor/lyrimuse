@@ -57,6 +57,7 @@ func TestMain(m *testing.M) {
 	// 「代理」设置自动档同理:系统代理只认用例自己设的环境变量,不探本机的常用代理端口。
 	scutilProxyURL = func() *neturl.URL { return nil }
 	networkProxyCommonPorts = nil
+	localProxyListeners = func() []localListener { return nil }
 	for _, k := range []string{"HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy"} {
 		_ = os.Unsetenv(k)
 	}

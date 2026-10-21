@@ -14,8 +14,8 @@ import (
 // ---- 「代理」设置:直连失败时经哪个代理重试 ----
 //
 // 设置 › 通用 › 网络 › 代理(features.json 的 network_proxy / network_proxy_server),三档:
-//   - auto(默认):系统代理(systemProxyURL,含环境变量)→ Clash 控制口报的端口(clashProxyURL)→ 本机
-//     networkProxyCommonPorts 里第一个连得上的端口。
+//   - auto(默认):系统代理(systemProxyURL,含环境变量)→ Clash 控制口报的端口(clashProxyURL)→ 本机代理软件
+//     监听的端口(localProxyURL:按进程名发现,再试常见默认端口,握手确认是代理才用,localproxydiscover.go)。
 //   - manual:只用填的那一个,连不上就当没有。
 //   - off:不走代理。
 //
@@ -35,14 +35,11 @@ func resolveNetworkProxy(v string) string {
 	return networkProxyAuto
 }
 
-// networkProxyCommonPorts:自动档最后试的本机端口,Clash 系客户端的默认端口。
-var networkProxyCommonPorts = []int{7890, 7897}
-
 // fallbackProxyURL:按「代理」设置算出的、现在连得上的代理,nil = 不走代理。单测换掉,免得读到本机真实的代理。
 var fallbackProxyURL = resolveFallbackProxyURL
 
 // networkProxyAutoSources:自动档按顺序试的来源。单测换掉。
-var networkProxyAutoSources = []func() *neturl.URL{systemProxyURL, clashProxyURL, localPortProxyURL}
+var networkProxyAutoSources = []func() *neturl.URL{systemProxyURL, clashProxyURL, localProxyURL}
 
 func resolveFallbackProxyURL() *neturl.URL {
 	f := features()
@@ -113,31 +110,6 @@ func manualProxyURL(server string) *neturl.URL {
 	}
 	manualProxyServer, manualProxyValue, manualProxyCheckAt = server, u, time.Now()
 	return u
-}
-
-var (
-	localPortProxyMu     sync.Mutex
-	localPortProxyValue  *neturl.URL
-	localPortProxyReadAt time.Time
-)
-
-// localPortProxyURL:networkProxyCommonPorts 里第一个连得上的本机端口,缓存 systemProxyCacheTTL。
-func localPortProxyURL() *neturl.URL {
-	localPortProxyMu.Lock()
-	defer localPortProxyMu.Unlock()
-	if !localPortProxyReadAt.IsZero() && time.Since(localPortProxyReadAt) < systemProxyCacheTTL {
-		return localPortProxyValue
-	}
-	var found *neturl.URL
-	for _, p := range networkProxyCommonPorts {
-		u := &neturl.URL{Scheme: "http", Host: net.JoinHostPort("127.0.0.1", strconv.Itoa(p))}
-		if proxyReachable(u) {
-			found = u
-			break
-		}
-	}
-	localPortProxyValue, localPortProxyReadAt = found, time.Now()
-	return found
 }
 
 // newFallbackProxyTransport:proxyFallbackTransport 里走代理那一半。拨的是代理自己的地址,目标域名交给代理去解析。
