@@ -1151,6 +1151,37 @@
           ]
         },
         {
+          "id": "hide-during-ads",
+          "title": {
+            "en": "Step aside during ads",
+            "zh-Hans": "广告时隐藏或收起",
+            "zh-Hant": "廣告時隱藏或收起"
+          },
+          "desc": {
+            "en": "While the player is playing an ad, floating lyrics can hide and the notch can shrink to its top strip; hovering over the notch still expands it. Each has its own switch.",
+            "zh-Hans": "播放器播放广告时，悬浮歌词可隐藏，灵动岛可收起为顶部窄条，悬停时仍可展开。两处各有独立开关。",
+            "zh-Hant": "播放器播放廣告時，浮動歌詞可隱藏，動態島可收起為頂部窄條，指向時仍可展開。兩處各有獨立開關。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "hideDuringAds"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "行为",
+              "广告时隐藏"
+            ],
+            [
+              "歌词显示",
+              "灵动岛",
+              "行为",
+              "广告时收起"
+            ]
+          ]
+        },
+        {
           "id": "hide-in-full-screen",
           "title": {
             "zh-Hans": "全屏时隐藏灵动岛",

@@ -88,13 +88,13 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
 
     // 收起态:卡片只留顶行那一条高度,宽度收到两只耳朵(算法在 NotchChromeSource.cardWidth 的收起分支),
     // 歌词行与展开区不渲染;hover 照样能展开出完整内容(含播放键)。
-    // 三个开关各自的作用:collapsesWhenPaused 关掉就不收;hideWhenNotPlaying 开着时暂停直接缩进刘海
-    // (isVanished)、不经过收起态;广告插播(isAdBreakNow)同样收起。
+    // 开关各自的作用:collapsesWhenPaused 关掉暂停时就不收;hideWhenNotPlaying 开着时暂停直接缩进刘海
+    // (isVanished)、不经过收起态;广告插播(isAdBreakNow)看 collapsesDuringAds。
     //
     // 必须是计算属性:hover 改 isExpanded 的那条路径(setExpandedFromWindow)不调 recomputeGeometry,
     // 存成存储属性的话暂停时 hover 不会展开。
     var isCollapsed: Bool {
-        collapsesWhenPaused && ((!isPlayingNow && !hideWhenNotPlaying) || isAdBreakNow) && !isExpanded
+        ((collapsesWhenPaused && !isPlayingNow && !hideWhenNotPlaying) || (collapsesDuringAds && isAdBreakNow)) && !isExpanded
     }
 
     /// 卡片是否顶在**宽度下限**上:稳态真实宽已经贴着宽度滑杆能拖到的下界(再小,卡片也
@@ -122,10 +122,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// Spotify 广告插播中。写入规则与 isPlayingNow 相同:只取 sink 参数值。
     @Published private(set) var isAdBreakNow: Bool = false
 
-    /// 暂停/广告时要不要收缩,真值在 `AppSettings.notchCollapsesWhenPaused`(见那边的注释)。
+    /// 暂停时要不要收缩,真值在 `AppSettings.notchCollapsesWhenPaused`(见那边的注释)。
     /// 镜像到这里是同一条性能审计纪律:`NotchWindowRoot` 只观察这个控制器、
     /// 不观察 AppSettings,别为了一个开关把整卡挂回去观察全部设置。
     @Published private(set) var collapsesWhenPaused: Bool = AppSettings.shared.notchCollapsesWhenPaused
+    /// 广告时要不要收缩(「广告时收起」),真值在 `AppSettings.notchCollapsesDuringAds`,镜像理由同上。
+    @Published private(set) var collapsesDuringAds: Bool = AppSettings.shared.notchCollapsesDuringAds
 
     /// 要不要显示播放指示条(音浪),真值在 `AppSettings.notchShowsEqualizer`。镜像到这里
     /// 是同一条性能审计纪律:`NotchWindowRoot` 只观察这个控制器、不观察
@@ -521,6 +523,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 视图重新读到新值,不需要额外重算几何(窗口恒为最大形态,收缩只是内容层的事)。
         AppSettings.shared.$notchCollapsesWhenPaused.removeDuplicates().sink { [weak self] collapses in
             self?.collapsesWhenPaused = collapses
+        }
+        .store(in: &subscriptions)
+        AppSettings.shared.$notchCollapsesDuringAds.removeDuplicates().sink { [weak self] collapses in
+            self?.collapsesDuringAds = collapses
         }
         .store(in: &subscriptions)
         // 左右耳配置。**必须重算几何**:卡片宽度的下限是这两项的函数(见 minEarWidth),

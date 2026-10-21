@@ -338,6 +338,9 @@ final class AppSettings: ObservableObject {
         static let hideWhenNoLyrics = "np:hideWhenNoLyrics"
         static let overlayHideInFullScreen = "np:overlayHideInFullScreen"
         static let notchCollapseLyricsWhenNoLyrics = "np:notchHideWhenNoLyrics"
+        // 「广告时隐藏」(悬浮歌词)/「广告时收起」(灵动岛)。灵动岛那份第一次读取时从「暂停时收起」继承(那颗开关原来连广告一起收),见 init。
+        static let hideDuringAds = "np:hideDuringAds"
+        static let notchCollapsesDuringAds = "np:notchCollapsesDuringAds"
         // 收听里程碑:灵动岛自己撑开报喜(ListenMilestoneCenter)。
         static let notchListenMilestones = "np:notchListenMilestones"
         // 换歌时显示歌名:新歌名从刘海里掉出来(NotchTrackDropStrip)。耳朵里的封面那一翻一直开,不看设置。
@@ -515,6 +518,7 @@ final class AppSettings: ObservableObject {
     static let defaultNotchHideDuringScreenCapture = false
     static let defaultNotchHideWhenNotPlaying = false
     static let defaultNotchCollapseLyricsWhenNoLyrics = false
+    static let defaultNotchCollapsesDuringAds = false
     /// 默认开:全屏 App 期间整卡隐藏(有没有刘海一样),见 `NotchVisibility.fullScreenHides`。
     static let defaultNotchHideInFullScreen = true
     /// 默认开:某首歌第 100 / 1,000…… 次、累计跨过一档时灵动岛报一次喜(连着 Last.fm 才有)。
@@ -1219,6 +1223,15 @@ final class AppSettings: ObservableObject {
     @Published var notchCollapseLyricsWhenNoLyrics: Bool {
         didSet { defaults.set(notchCollapseLyricsWhenNoLyrics, forKey: Keys.notchCollapseLyricsWhenNoLyrics) }
     }
+    /// 在放广告时(`PlaybackCoordinator.isCurrentTrackAdBreak`):悬浮歌词整个窗口隐藏(「广告时隐藏」),灵动岛收起成
+    /// 暂停时那种窄条(「广告时收起」,`NotchLyricsWindowController.isCollapsed`),悬停照常展开。两个形态各一份值,
+    /// 生效不经设置页调控制器,每个窗口实例(含灵动岛镜像副本)自己订阅。
+    @Published var hideDuringAds: Bool {
+        didSet { defaults.set(hideDuringAds, forKey: Keys.hideDuringAds) }
+    }
+    @Published var notchCollapsesDuringAds: Bool {
+        didSet { defaults.set(notchCollapsesDuringAds, forKey: Keys.notchCollapsesDuringAds) }
+    }
     /// 收听里程碑:某首歌第 100 / 1,000 / 10,000…… 次、或累计收听跨过一档时,灵动岛自己撑开报一次喜。
     /// 怎么判、怎么防打扰见 `ListenMilestoneCenter`;那边判的时候现读,不经设置页调控制器。
     @Published var notchListenMilestones: Bool {
@@ -1665,7 +1678,7 @@ final class AppSettings: ObservableObject {
     /// 上面两个 hex 的 Color 缓存(didSet 维护,别直接写)。
     private(set) var lyricsWindowBackgroundColor: Color = .black
     private(set) var lyricsWindowBackgroundColorEnd: Color = .black
-    /// 暂停(或广告插播)时灵动岛要不要缩到最小 —— 只剩贴着刘海的一小块,两只耳朵退化成
+    /// 暂停时灵动岛要不要缩到最小(广告时另有一颗 `notchCollapsesDuringAds`)—— 只剩贴着刘海的一小块,两只耳朵退化成
     /// "左封面、右音浪"的 iPhone 灵动岛式极简形态。关掉之后暂停时卡片保持暂停前的稳态/
     /// 展开尺寸不收缩,跟正常播放时一样显示歌名/歌词(位置冻结在暂停那一刻)。
     ///
@@ -2514,8 +2527,17 @@ final class AppSettings: ObservableObject {
             .flatMap(OverlayGlassIntensity.init(rawValue:)) ?? .default
         lyricsWindowMiniFontSize = (defaults.object(forKey: Keys.lyricsWindowMiniFontSize) as? Double)
             ?? Self.defaultLyricsWindowMiniFontSize
-        notchCollapsesWhenPaused = (defaults.object(forKey: Keys.notchCollapsesWhenPaused) as? Bool)
+        let collapsesWhenPaused = (defaults.object(forKey: Keys.notchCollapsesWhenPaused) as? Bool)
             ?? Self.defaultNotchCollapsesWhenPaused
+        notchCollapsesWhenPaused = collapsesWhenPaused
+        hideDuringAds = (defaults.object(forKey: Keys.hideDuringAds) as? Bool) ?? false
+        // 「暂停时收起」原来连广告一起收:没存过这一颗时照它的值,开着它的人广告时照旧收起。写回去,之后各管各的。
+        if let stored = defaults.object(forKey: Keys.notchCollapsesDuringAds) as? Bool {
+            notchCollapsesDuringAds = stored
+        } else {
+            notchCollapsesDuringAds = collapsesWhenPaused
+            defaults.set(collapsesWhenPaused, forKey: Keys.notchCollapsesDuringAds)
+        }
         notchShowsEqualizer = (defaults.object(forKey: Keys.notchShowsEqualizer) as? Bool) ?? Self.defaultNotchShowsEqualizer
         notchEqualizerEar = defaults.string(forKey: Keys.notchEqualizerEar)
             .flatMap(NotchEqualizerEar.init(rawValue:)) ?? Self.defaultNotchEqualizerEar

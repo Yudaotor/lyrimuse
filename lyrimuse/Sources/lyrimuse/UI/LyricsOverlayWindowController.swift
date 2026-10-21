@@ -69,6 +69,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     @Published private(set) var hideWhenNotPlaying: Bool = AppSettings.shared.hideWhenNotPlaying
     /// 「纯音乐/无歌词时隐藏」开着、这首没有歌词(`NoLyricsAutoHide.hides`),由 noLyricsObserver 写入。
     private var hiddenForNoLyrics = false
+    /// 「广告时隐藏」开着、这一刻在放广告(`isCurrentTrackAdBreak`),由 adObserver 写入。
+    private var hiddenForAd = false
     /// 「全屏时隐藏」开着、窗口所在屏幕的当前 Space 是全屏 App(`OverlayVisibility.fullScreenHides`),
     /// 由 applyFullScreenCover / refreshFullScreenCover 写入。
     private var coveredByFullScreen = false
@@ -98,6 +100,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private var moveDebounceTimer: Timer?
     private var isPlayingObserver: AnyCancellable?
     private var noLyricsObserver: AnyCancellable?
+    private var adObserver: AnyCancellable?
     private var fullScreenObserver: AnyCancellable?
     private var windowScreenObserver: NSObjectProtocol?
     private var shadowObserver: AnyCancellable?
@@ -666,6 +669,16 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
                 hiddenForNoLyrics = hide
                 updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
             }
+        // 「广告时隐藏」:开关和「这一刻是不是广告」同样从 sink 参数拿。
+        adObserver = AppSettings.shared.$hideDuringAds
+            .combineLatest(PlaybackCoordinator.shared.$isCurrentTrackAdBreak)
+            .map { $0 && $1 }
+            .removeDuplicates()
+            .sink { [weak self] hide in
+                guard let self else { return }
+                hiddenForAd = hide
+                updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
+            }
         // 「全屏时隐藏」:开关和全屏表两个输入同时从参数拿(同一个 willSet 坑);窗口换了屏另外重算一次。
         fullScreenObserver = AppSettings.shared.$overlayHideInFullScreen
             .combineLatest(FullScreenSpaceMonitor.shared.$fullScreenDisplays)
@@ -765,10 +778,12 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private func updateActualVisibility(isPlayingNow: Bool) {
         let shouldShow = OverlayVisibility.shouldShow(isVisible: isVisible, hiddenForNoLyrics: hiddenForNoLyrics,
                                                       coveredByFullScreen: coveredByFullScreen,
-                                                      hideWhenNotPlaying: hideWhenNotPlaying, isPlaying: isPlayingNow)
+                                                      hideWhenNotPlaying: hideWhenNotPlaying, isPlaying: isPlayingNow,
+                                                      hiddenForAd: hiddenForAd)
         shownApartFromFullScreen = OverlayVisibility.shouldShow(isVisible: isVisible, hiddenForNoLyrics: hiddenForNoLyrics,
                                                                 coveredByFullScreen: false,
-                                                                hideWhenNotPlaying: hideWhenNotPlaying, isPlaying: isPlayingNow)
+                                                                hideWhenNotPlaying: hideWhenNotPlaying, isPlaying: isPlayingNow,
+                                                                hiddenForAd: hiddenForAd)
         if shouldShow { window?.orderFront(nil) } else { window?.orderOut(nil) }
         syncActiveScreenTracking()
         refreshSurfaceVisible()

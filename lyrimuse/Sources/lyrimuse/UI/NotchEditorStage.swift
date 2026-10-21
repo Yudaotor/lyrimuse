@@ -1458,7 +1458,7 @@ struct NotchShowLyricsRow: View {
     }
 }
 
-/// 「暂停时缩到最小」开关。关掉之后暂停(或广告插播)时卡片不再收缩,保持稳态/展开尺寸,歌名/歌词照常显示(位置冻结在暂停那一刻)。
+/// 「暂停时缩到最小」开关(广告时另有「广告时收起」)。关掉之后暂停时卡片不再收缩,保持稳态/展开尺寸,歌名/歌词照常显示(位置冻结在暂停那一刻)。
 ///
 /// 跟 `NotchShowLyricsRow` 放在同一张卡里(见调用点):两者都是"暂停/播放时卡片还剩多少
 /// 内容"这一类设置,跟「风格」浮层里那四种背景不是一回事,值得分在一起但各自一行。
@@ -1647,6 +1647,7 @@ enum NotchStyleDefaults {
         settings.notchHideDuringScreenCapture = AppSettings.defaultNotchHideDuringScreenCapture
         settings.notchHideWhenNotPlaying = AppSettings.defaultNotchHideWhenNotPlaying
         settings.notchCollapseLyricsWhenNoLyrics = AppSettings.defaultNotchCollapseLyricsWhenNoLyrics
+        settings.notchCollapsesDuringAds = AppSettings.defaultNotchCollapsesDuringAds
         settings.notchHideInFullScreen = AppSettings.defaultNotchHideInFullScreen
         settings.notchListenMilestones = AppSettings.defaultNotchListenMilestones
         settings.notchShowsTrackDrop = AppSettings.defaultNotchShowsTrackDrop

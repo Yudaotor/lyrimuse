@@ -1914,6 +1914,13 @@ func runNotchTests() {
                     && controller.components(separatedBy: "applyShowsLyrics()").count - 1 == 3, true,
                     "无歌词收起契约: 卡片读的 showsLyrics 由 Core 合成,「显示歌词」开关和无歌词两路变化都重算")
         expectEqual(controller.contains("subscriptions.removeAll()"), true, "无歌词收起契约: 副本 teardown 摘掉订阅")
+        expectEqual(controller.contains("((collapsesWhenPaused && !isPlayingNow && !hideWhenNotPlaying) || (collapsesDuringAds && isAdBreakNow)) && !isExpanded")
+                    && sourceHas(controller, "AppSettings.shared.$notchCollapsesDuringAds.removeDuplicates().sink"), true,
+                    "广告时收起契约: 暂停、广告各看各的开关,每个实例自己订阅「广告时收起」")
+        let notchAppSettings = read("../Settings/AppSettings.swift")
+        expectEqual(sourceHas(notchAppSettings, "notchCollapsesDuringAds = collapsesWhenPaused\n            defaults.set(collapsesWhenPaused, forKey: Keys.notchCollapsesDuringAds)")
+                    && read("NotchEditorStage.swift").contains("settings.notchCollapsesDuringAds = AppSettings.defaultNotchCollapsesDuringAds"), true,
+                    "广告时收起契约: 没存过时继承「暂停时收起」(原来那颗连广告一起收)并写回;「恢复默认」覆盖它")
         let overlayController = read("LyricsOverlayWindowController.swift")
         expectEqual(sourceHas(overlayController, "AppSettings.shared.$hideWhenNoLyrics\n            .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)")
                     && overlayController.contains("let shouldShow = OverlayVisibility.shouldShow(isVisible: isVisible, hiddenForNoLyrics: hiddenForNoLyrics,"), true,

@@ -6,9 +6,9 @@ func checkOverlayFullScreenHide() {
     print("\n== 悬浮歌词全屏时隐藏 ==")
     typealias V = OverlayVisibility
     func show(visible: Bool = true, noLyrics: Bool = false, covered: Bool = false,
-              pausedOn: Bool = false, playing: Bool = true) -> Bool {
+              pausedOn: Bool = false, playing: Bool = true, ad: Bool = false) -> Bool {
         V.shouldShow(isVisible: visible, hiddenForNoLyrics: noLyrics, coveredByFullScreen: covered,
-                     hideWhenNotPlaying: pausedOn, isPlaying: playing)
+                     hideWhenNotPlaying: pausedOn, isPlaying: playing, hiddenForAd: ad)
     }
     expectEqual(show(), true, "悬浮歌词显示: 开着、在播、没被任何规则藏 → 显示")
     expectEqual(show(visible: false), false, "悬浮歌词显示: 用户关掉了 → 不显示")
@@ -17,6 +17,8 @@ func checkOverlayFullScreenHide() {
     expectEqual(show(pausedOn: true, playing: false), false, "悬浮歌词显示: 开着暂停时隐藏、没在播 → 不显示")
     expectEqual(show(pausedOn: false, playing: false), true, "悬浮歌词显示: 没开暂停时隐藏、没在播 → 照常显示")
     expectEqual(show(covered: true, pausedOn: true, playing: true), false, "悬浮歌词显示: 在播但全屏,照样藏")
+    expectEqual(show(ad: true), false, "悬浮歌词显示: 广告时隐藏生效 → 不显示")
+    expectEqual(show(visible: false, ad: false), false, "悬浮歌词显示: 广告时隐藏没生效、用户关掉了 → 照样不显示")
 
     expectEqual(V.fullScreenHides(enabled: false, coveredByFullScreenApp: true), false, "悬浮歌词全屏时隐藏: 开关关着,全屏也不藏")
     expectEqual(V.fullScreenHides(enabled: true, coveredByFullScreenApp: true), true, "悬浮歌词全屏时隐藏: 开着、所在屏全屏就藏")
@@ -37,6 +39,9 @@ func checkOverlayFullScreenHide() {
                 true, "悬浮歌词全屏时隐藏: 窗口换屏时重算")
     expectEqual(sourceHas(controller, "let shouldShow = OverlayVisibility.shouldShow(isVisible: isVisible, hiddenForNoLyrics: hiddenForNoLyrics,\n                                                      coveredByFullScreen: coveredByFullScreen,"),
                 true, "悬浮歌词全屏时隐藏: 显示判定走 Core,带上全屏那一项")
+    expectEqual(sourceHas(controller, "adObserver = AppSettings.shared.$hideDuringAds\n            .combineLatest(PlaybackCoordinator.shared.$isCurrentTrackAdBreak)")
+                && controller.components(separatedBy: "hiddenForAd: hiddenForAd)").count - 1 == 2, true,
+                "悬浮歌词广告时隐藏: 订阅开关和广告状态(值从 sink 参数拿),两处显示判定都带上")
     expectEqual(sourceBytes(controller, contain: "let wanted = followsActiveScreen && shownApartFromFullScreen"), true,
                 "悬浮歌词跟随当前窗口: 窗口藏着(全屏隐藏除外)时不每秒列窗口")
     expectEqual(sourceBytes(controller, contain: "let wantsPoll = wanted && NSScreen.screens.count > 1")

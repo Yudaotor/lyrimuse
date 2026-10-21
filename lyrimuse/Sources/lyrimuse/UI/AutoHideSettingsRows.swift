@@ -1,8 +1,8 @@
 import LyrimuseCore
 import SwiftUI
 
-// 「自动隐藏」三项(截屏时隐藏 / 暂停时隐藏 / 纯音乐/无歌词时隐藏)的唯一一份实现。第三项在灵动岛上是
-// 「纯音乐/无歌词时收起歌词行」:只收歌词行、不整卡隐藏,标题和 ⓘ 按形态分开写。
+// 「自动隐藏」四项(截屏时隐藏 / 暂停时隐藏 / 纯音乐/无歌词时隐藏 / 广告时隐藏)的唯一一份实现。后两项在灵动岛上是
+// 「纯音乐/无歌词时收起歌词行」「广告时收起」:不整卡隐藏,标题和 ⓘ 按形态分开写。
 //
 // 这几项放在各形态的「行为」入口里,不单独开一张「自动隐藏」卡:它们跟「行为」里那几项(锁定位置 /
 // 长按拖动 / 悬浮淡化 / 暂停时收起)是同一类东西 —— **设一次就不动、而且在编辑台上看不出任何变化**
@@ -43,6 +43,7 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
     case duringScreenCapture
     case whenNotPlaying
     case whenNoLyrics
+    case duringAds
 
     var id: String { rawValue }
 
@@ -51,6 +52,7 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
         case .duringScreenCapture: return "camera.viewfinder"
         case .whenNotPlaying: return "pause.circle"
         case .whenNoLyrics: return "text.badge.xmark"
+        case .duringAds: return "megaphone"
         }
     }
 
@@ -60,6 +62,8 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
         case (.whenNotPlaying, _): return L10n.t("暂停时隐藏")
         case (.whenNoLyrics, .desktopOverlay): return L10n.t("纯音乐/无歌词时隐藏")
         case (.whenNoLyrics, .notch): return L10n.t("纯音乐/无歌词时收起歌词行")
+        case (.duringAds, .desktopOverlay): return L10n.t("广告时隐藏")
+        case (.duringAds, .notch): return L10n.t("广告时收起")
         }
     }
 
@@ -75,6 +79,8 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
         case (.whenNoLyrics, .desktopOverlay): return L10n.t("搜索确认无歌词后才隐藏，搜索期间照常显示")
         case (.whenNoLyrics, .notch):
             return L10n.t("搜索确认无歌词后才收起，仅保留顶部窄条，悬停时仍可展开；搜索期间照常显示歌词行")
+        case (.duringAds, .desktopOverlay): return nil
+        case (.duringAds, .notch): return L10n.t("广告期间仅保留顶部窄条，悬停时仍可展开")
         }
     }
 
@@ -137,6 +143,11 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
         case (.notch, .whenNoLyrics):
             return Binding(get: { settings.notchCollapseLyricsWhenNoLyrics },
                            set: { settings.notchCollapseLyricsWhenNoLyrics = $0 })
+        // 广告这一项同无歌词:只写设置,窗口实例自己订阅。
+        case (.desktopOverlay, .duringAds):
+            return Binding(get: { settings.hideDuringAds }, set: { settings.hideDuringAds = $0 })
+        case (.notch, .duringAds):
+            return Binding(get: { settings.notchCollapsesDuringAds }, set: { settings.notchCollapsesDuringAds = $0 })
         }
     }
 }

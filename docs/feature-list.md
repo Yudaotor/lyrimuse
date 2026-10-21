@@ -43,6 +43,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Hidden from screenshots and screen sharing](#feature-hide-in-screenshots) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Screenshots |
 | [Hide or shrink when paused](#feature-hide-when-paused) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide When Paused |
 | [Hide for instrumentals and songs without lyrics](#feature-hide-when-no-lyrics) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide for Instrumentals & No Lyrics |
+| [Step aside during ads](#feature-hide-during-ads) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide During Ads |
 | [Floating lyrics step aside in full screen](#feature-overlay-hide-in-full-screen) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Full Screen |
 | [Web lyrics: a phone or tablet as a second screen, or an OBS browser source](#feature-web-lyrics) | Settings › Lyrics Display › Lyrics Window › Web Lyrics |
 | [YouTube Music and Spotify Web in your browser](#feature-web-players) | Settings › Player › Web |
@@ -442,6 +443,16 @@ When a song is instrumental, or the search is done and found no lyrics, floating
 - Settings: Lyrics Display › Notch › Behavior › Collapse Lyric Row for Instrumentals & No Lyrics
 - Settings: Lyrics Display › Touch Bar › Behavior › Collapse for Instrumentals & No Lyrics
 
+<a id="feature-hide-during-ads"></a>
+
+### Step aside during ads
+
+While the player is playing an ad, floating lyrics can hide and the notch can shrink to its top strip; hovering over the notch still expands it. Each has its own switch.
+
+- Off by default
+- Settings: Lyrics Display › Floating Lyrics › Behavior › Hide During Ads
+- Settings: Lyrics Display › Notch › Behavior › Shrink During Ads
+
 <a id="feature-hide-in-full-screen"></a>
 
 ### Notch steps aside in full screen
@@ -788,7 +799,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 274 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 276 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -914,6 +925,7 @@ Every setting in the Settings window, by where it lives: 274 in all. Type a name
 - **Hide in Screenshots**
 - **Hide When Paused**
 - **Hide for Instrumentals & No Lyrics**
+- **Hide During Ads**
 - **Hide in Full Screen**
 
 ### Lyrics Display › Notch
@@ -966,6 +978,7 @@ Every setting in the Settings window, by where it lives: 274 in all. Type a name
 - **Hide in Screenshots**
 - **Hide When Paused**
 - **Collapse Lyric Row for Instrumentals & No Lyrics**
+- **Shrink During Ads**
 - **Hide in Full Screen**
 - **Listening Milestones**
 - **Show Title on Song Change**

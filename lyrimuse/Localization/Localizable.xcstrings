@@ -42357,6 +42357,57 @@
         }
       }
     },
+    "广告时隐藏" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide During Ads"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "廣告時隱藏"
+          }
+        }
+      }
+    },
+    "广告时收起" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shrink During Ads"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "廣告時收起"
+          }
+        }
+      }
+    },
+    "广告期间仅保留顶部窄条，悬停时仍可展开" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only the top strip stays during ads; hovering still expands it"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "廣告期間僅保留頂部窄條，指向時仍可展開"
+          }
+        }
+      }
+    },
     "开始播放时自动展开" : {
       "extractionState" : "manual",
       "localizations" : {
