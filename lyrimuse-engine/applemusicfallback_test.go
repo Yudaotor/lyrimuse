@@ -285,12 +285,15 @@ func TestApplemusicFallbackSearches(t *testing.T) {
 		sf, artist, title string
 		want              []applemusicSearchVariant
 	}{
-		{"cn", "Britney Spears", "Everytime", []applemusicSearchVariant{{"cn", "en-GB"}}},
-		{"cn", "方大同", "Sorry", nil},
+		{"cn", "Britney Spears", "Everytime", []applemusicSearchVariant{{"cn", "en-GB"}, {"jp", ""}}},
+		{"cn", "方大同", "Sorry", []applemusicSearchVariant{{"jp", ""}}},
+		{"cn", "SEKAI NO OWARI", "最高到達点", []applemusicSearchVariant{{"cn", "en-GB"}, {"jp", ""}}},
+		{"cn", "MY FIRST STORY", "M.A.D", []applemusicSearchVariant{{"cn", "en-GB"}, {"jp", ""}}},
 		{"cn", "椎名林檎", "モルヒネ", []applemusicSearchVariant{{"jp", ""}}},
 		{"cn", "back number", "ハッピーエンド", []applemusicSearchVariant{{"cn", "en-GB"}, {"jp", ""}}},
 		{"cn", "IU", "밤편지", []applemusicSearchVariant{{"cn", "en-GB"}, {"kr", ""}}},
 		{"jp", "椎名林檎", "モルヒネ", nil},
+		{"kr", "아이유", "밤편지", nil},
 	} {
 		got := applemusicFallbackSearches(ctx, c.sf, c.artist, c.title, "test-dev-token")
 		if len(got) != len(c.want) {

@@ -874,7 +874,9 @@ type applemusicSearchVariant struct{ storefront, lang string }
 // (曲目 id 各区通用)。见 09 章决策 142。
 //   - 本地歌手名不含中日韩文字:同一个区按这个区支持的英文再搜。cn 这类区把外国歌手名译成本地文字,
 //     英文下回原名。
-//   - 歌名或歌手带假名 / 谚文:到 jp / kr 区搜。cn 区给不少日韩歌登记的是英文或罗马字名。
+//   - 歌名或歌手带谚文:到 kr 区搜;不带谚文的都到 jp 区搜,排在英文那次后面。cn 区给不少日韩歌登记的是
+//     英文或罗马字名;日文歌常常一个假名都没有(纯汉字或纯拉丁字母的歌名、歌手),没法按文字认,在用户所在区挑不出时
+//     一律再问一次 jp 区。见 09 章决策 315。
 func applemusicFallbackSearches(ctx context.Context, storefront, artist, title, devToken string) []applemusicSearchVariant {
 	var out []applemusicSearchVariant
 	if !containsCJKScript(artist) {
@@ -882,10 +884,11 @@ func applemusicFallbackSearches(ctx context.Context, storefront, artist, title, 
 			out = append(out, applemusicSearchVariant{storefront, tag})
 		}
 	}
-	if storefront != "jp" && containsKana(artist+title) {
+	hangul := strings.ContainsFunc(artist+title, func(r rune) bool { return unicode.Is(unicode.Hangul, r) })
+	if storefront != "jp" && !hangul {
 		out = append(out, applemusicSearchVariant{"jp", ""})
 	}
-	if storefront != "kr" && strings.ContainsFunc(artist+title, func(r rune) bool { return unicode.Is(unicode.Hangul, r) }) {
+	if storefront != "kr" && hangul {
 		out = append(out, applemusicSearchVariant{"kr", ""})
 	}
 	return out
