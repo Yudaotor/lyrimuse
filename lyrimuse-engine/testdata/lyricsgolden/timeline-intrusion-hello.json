@@ -259,7 +259,9 @@
             "points": 250
           }
         ],
-        "has_word_timing": true
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
       },
       {
         "source": "qq",
@@ -322,7 +324,9 @@
             "kind": "consensus",
             "points": 250
           }
-        ]
+        ],
+        "has_translation": true,
+        "translation_lang": "zh"
       },
       {
         "source": "migu",
@@ -385,7 +389,9 @@
             "points": -600
           }
         ],
-        "has_word_timing": true
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
       },
       {
         "source": "deezer",
@@ -407,7 +413,9 @@
             "kind": "consensus",
             "points": 250
           }
-        ]
+        ],
+        "has_translation": true,
+        "translation_lang": "zh"
       }
     ],
     "winner_fingerprint": "610254ca2e345a59"

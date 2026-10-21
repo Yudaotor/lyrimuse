@@ -282,7 +282,9 @@
             "kind": "consensus",
             "points": 250
           }
-        ]
+        ],
+        "has_translation": true,
+        "translation_lang": "zh"
       }
     ],
     "winner_fingerprint": "ca724dc513d914bc"

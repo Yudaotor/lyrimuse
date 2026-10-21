@@ -1220,7 +1220,7 @@ func songCopyMachineTranslation(dst *enrichEntry, src enrichEntry, target string
 	dst.TranslationLang, dst.TranslationTS, dst.TranslationRetryCount = target, 0, 0
 }
 
-// lyricsTrSourceMachine 是 enrichEntry.LyricsTrSource 目前唯一的非空取值。
+// lyricsTrSourceMachine 是 enrichEntry.LyricsTrSource 记机翻的取值;另一种非空取值是借来的译文(lyricsTrSourceBorrowedPrefix)。
 const lyricsTrSourceMachine = "machine"
 
 // errOnDeviceUnavailable 表示"这台机器上这条路本来就走不通"(系统太老/语言包没装/helper

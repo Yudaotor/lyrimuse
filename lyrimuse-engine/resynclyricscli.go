@@ -259,7 +259,7 @@ func applyResync(cur enrichEntry, picked *scoredLyricCandidateResult, p resyncPl
 	if !p.trSame {
 		// 译文换人了(哪怕正文没变),描述译文的两个字段必须跟着换——不然旧的
 		// "machine" 标记会让新换上来的源自带译文被误标成机翻,见 rescoreLyrics 同款注释。
-		cur.LyricsTrLang, cur.LyricsTrSource = picked.LyricsTrLang, ""
+		cur.LyricsTrLang, cur.LyricsTrSource = picked.LyricsTrLang, lyricsTrSourceFor(picked)
 	}
 	cur.SongLanguage = songLanguage
 	cur.dropHokkienRoma()

@@ -149,7 +149,7 @@ func lyricsEntryFromScored(decisionPath, artist, title, album string, durationSe
 	e.maybeGenerateJyutpingRoma()
 	// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
 	// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
-	e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
+	e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, lyricsTrSourceFor(picked)
 	return e, picked
 }
 

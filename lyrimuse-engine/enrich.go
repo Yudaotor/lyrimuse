@@ -337,7 +337,7 @@ type enrichEntry struct {
 	// 任意历史缓存条目、拿不到时长,传 0 的话弹窗里的排名跟当初真正做决定用的那组分数对不上。
 	DurationSecs float64 `json:"duration_secs,omitempty"`
 	// LyricsTrSource 记录 lyrics_tr 是哪来的:空 = 歌词源自带的社区翻译(网易云/Musixmatch),
-	// "machine" = translate.go 机翻补的。UI 据此如实标注,不让机翻冒充社区翻译 —— 跟页脚
+	// "machine" = translate.go 机翻补的,"borrowed:<源>" = 从那个源的候选借来的社区翻译(borrowtranslation.go)。UI 据此如实标注,不让机翻冒充社区翻译 —— 跟页脚
 	// "歌词来自 XX" 是同一个原则。老条目没有这个字段,读成空 = 社区翻译,正是事实。
 	LyricsTrSource string `json:"lyrics_tr_source,omitempty"`
 	// LyricsTrLang 是 lyrics_tr 实际所用的语言(ISO 639-1,可带地区)。
@@ -2246,7 +2246,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		lyricsChanged = true
 		// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
 		// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
-		e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
+		e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, lyricsTrSourceFor(picked)
 		preparedTr.applyLocked(&e)
 		if opts.manual {
 			e.ManualLyrics, e.LyricsSourceChoice = false, ""
@@ -2299,6 +2299,11 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	// 跟首次解析同一条「同一段录音、评分高的兄弟赢」(判据见 crossalbum.go),不挂的话
 	// cross-album-reuse 对齐过的组会在这两条路径上各自重选、又长出分歧。刚按纯音乐处理的不换词,同重评那条。
 	if !turnedInstrumental && adoptCrossAlbumSiblingLyrics(key, &e) {
+		lyricsChanged = true
+	}
+	// 正文没变、自己没有可用译文:这一轮同一份正文借到了译文就补上(见 applyBorrowedTranslations)。
+	if !turnedInstrumental && gainBorrowedTranslation(&e, scored) {
+		log.Printf("lyrics: %s  %s gained a translation from %s", key, e.LyricsSource, strings.TrimPrefix(e.LyricsTrSource, lyricsTrSourceBorrowedPrefix))
 		lyricsChanged = true
 	}
 	refreshSpeakers(&e, scored)
@@ -2720,7 +2725,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 			lyricsChanged = true
 			// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
 			// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
-			e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
+			e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, lyricsTrSourceFor(picked)
 			preparedTr.applyLocked(&e)
 		}
 		if e.Lyrics.EqualString(picked.Lyrics) && gainsWordTiming(e, picked) {
@@ -2756,6 +2761,11 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	// 跟首次解析同一条「同一段录音、评分高的兄弟赢」(判据见 crossalbum.go),不挂的话
 	// cross-album-reuse 对齐过的组会在这两条路径上各自重选、又长出分歧。刚按纯音乐处理的不换词。
 	if !markedInstrumental && adoptCrossAlbumSiblingLyrics(key, &e) {
+		lyricsChanged = true
+	}
+	// 正文没变、自己没有可用译文:这一轮同一份正文借到了译文就补上(见 applyBorrowedTranslations)。
+	if !markedInstrumental && gainBorrowedTranslation(&e, scored) {
+		log.Printf("lyrics: %s  %s gained a translation from %s", key, e.LyricsSource, strings.TrimPrefix(e.LyricsTrSource, lyricsTrSourceBorrowedPrefix))
 		lyricsChanged = true
 	}
 	refreshSpeakers(&e, scored)
@@ -4155,10 +4165,12 @@ func (c scoredLyricCandidateResult) hasScoreTerm(kind string) bool {
 // tags) so it doubles as the `lyrimuse-engine search-lyrics` CLI subcommand's stdout
 // format for desktop-lyrics's manual "重新搜索候选歌词" picker.
 type scoredLyricCandidateResult struct {
-	Source        string `json:"source"`
-	Lyrics        string `json:"lyrics"`
-	LyricsTr      string `json:"lyrics_tr,omitempty"`
-	LyricsTrLang  string `json:"lyrics_tr_lang,omitempty"`
+	Source       string `json:"source"`
+	Lyrics       string `json:"lyrics"`
+	LyricsTr     string `json:"lyrics_tr,omitempty"`
+	LyricsTrLang string `json:"lyrics_tr_lang,omitempty"`
+	// LyricsTrFrom:LyricsTr 是从哪个源的候选借来的(applyBorrowedTranslations),自带的是空串。写进条目时经 lyricsTrSourceFor。
+	LyricsTrFrom  string `json:"lyrics_tr_from,omitempty"`
 	LyricsRoma    string `json:"lyrics_roma,omitempty"`
 	LyricsYRC     string `json:"lyrics_yrc,omitempty"`
 	LyricsBG      string `json:"lyrics_bg,omitempty"` // 背景人声轨(YRC 语法,形状见 amllResult.bg),只有 amll / applemusic 会给。不参与打分。
@@ -4989,6 +5001,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	applyTimelineIntrusionPenalty(out, durationSecs)
 	applyWordTimingTitleOverride(out)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
+	applyBorrowedTranslations(out)
 	return out
 }
 
@@ -5644,6 +5657,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// 不稳定的排序会让同分候选的先后随运行变化,同一首歌两次解析可能选出不同的源。
 	// 稳定之后就是按 candidates 的构造顺序决胜,确定且可复现。
 	sort.SliceStable(results, func(i, j int) bool { return results[i].Score > results[j].Score })
+	applyBorrowedTranslations(results)
 	return results
 }
 

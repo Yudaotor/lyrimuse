@@ -195,7 +195,9 @@
             "kind": "consensus",
             "points": 250
           }
-        ]
+        ],
+        "has_translation": true,
+        "translation_lang": "zh"
       },
       {
         "source": "soda",
