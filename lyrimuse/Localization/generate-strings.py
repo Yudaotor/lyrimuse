@@ -5,6 +5,11 @@
     python3 Localization/generate-strings.py
 然后把 catalog 和生成的 .strings 一起提交。selftest 有守卫:两边不一致会红。
 
+加新文案别手写 Python 读写整个 catalog(默认 json.dump 会把上万行重排),用加键子命令:
+    python3 Localization/generate-strings.py --add 新键.json
+新键.json 形如 {"简体原文": {"en": "...", "zh-Hant": "..."}};要分单复数的语言写成 {"one": "...", "other": "..."}。
+新键按文件里的次序追加到 catalog 末尾、已有的键拒绝覆盖,写回用 Xcode 的排版,然后照常生成三份 .strings。
+
 为什么生成物也入库,而不是构建时现编译:
  - `swift build` 不编译 .xcstrings;能编译它的 xcstringstool 只在完整 Xcode 里、
    CLT 没有 —— 塞进 build.sh 会逼着从源码构建的用户装十几 GB 的 Xcode。
@@ -265,13 +270,76 @@ def escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
 
 
+def localization(value):
+    unit = lambda v: {"stringUnit": {"state": "translated", "value": v}}
+    if isinstance(value, dict):
+        return {"variations": {"plural": {form: unit(value[form]) for form in ("one", "other")}}}
+    return unit(value)
+
+
+def add_keys(catalog, path) -> int:
+    """--add:把新键文件里的键按次序追加到 catalog 末尾,写回 Xcode 排版。已有的键、缺语言、格式参数不对都拒绝,不写盘。"""
+    with open(path, encoding="utf-8") as f:
+        new = json.load(f)
+    if not isinstance(new, dict) or not new:
+        print(f"✗ {path} 应是非空对象 {{简体原文: {{\"en\": …, \"zh-Hant\": …}}}}", file=sys.stderr)
+        return 1
+    strings = catalog["strings"]
+    errors = []
+    for key, langs in new.items():
+        if key in strings:
+            errors.append(f"{key[:60]}:catalog 里已有这个键(改已有文案请直接编辑 catalog)")
+            continue
+        want = set(TARGETS) - {catalog["sourceLanguage"]}
+        if not isinstance(langs, dict) or set(langs) != want:
+            errors.append(f"{key[:60]}:要写且只写 {'、'.join(sorted(want))}")
+            continue
+        for lang, value in langs.items():
+            ok = isinstance(value, str) and value or (isinstance(value, dict) and set(value) == {"one", "other"}
+                                                      and all(isinstance(v, str) and v for v in value.values()))
+            if not ok:
+                errors.append(f"{key[:60]}:{lang} 要么是非空字符串,要么是 {{\"one\": …, \"other\": …}}")
+    if not errors:
+        added = {key: {"extractionState": "manual",
+                       "localizations": {**{lang: localization(v) for lang, v in langs.items()},
+                                         catalog["sourceLanguage"]: localization(key)}}
+                 for key, langs in new.items()}
+        errors = plural_problems(added, catalog["sourceLanguage"]) + format_arg_problems(added, catalog["sourceLanguage"])
+    if errors:
+        print(f"✗ --add 没有写入,{len(errors)} 处问题:", file=sys.stderr)
+        for e in errors:
+            print(f"    {e}", file=sys.stderr)
+        return 1
+    before = json.loads(json.dumps(catalog))
+    for key, entry in added.items():
+        strings[key] = {"extractionState": entry["extractionState"],
+                        "localizations": dict(sorted(entry["localizations"].items()))}
+    text = canonical_text(catalog)
+    after = json.loads(text)
+    assert {k: v for k, v in after["strings"].items() if k not in added} == before["strings"], "已有键被改动 —— 拒绝写入"
+    with open(CATALOG, "w", encoding="utf-8") as f:
+        f.write(text)
+    print(f"✓ 新增 {len(added)} 键(追加在末尾,已有的键一个没动)")
+    return 0
+
+
 def main() -> int:
     normalize = "--normalize" in sys.argv[1:]
+    add_path = None
+    if "--add" in sys.argv[1:]:
+        i = sys.argv.index("--add")
+        if i + 1 >= len(sys.argv):
+            print("用法:python3 Localization/generate-strings.py --add 新键.json", file=sys.stderr)
+            return 1
+        add_path = sys.argv[i + 1]
     with open(CATALOG, encoding="utf-8") as f:
         raw = f.read()
     catalog = json.loads(raw)
     if check_canonical_form(raw, catalog, normalize) != 0:
         return 1
+    if add_path:
+        if add_keys(catalog, add_path) != 0:
+            return 1
     if catalog.get("sourceLanguage") != "zh-Hans":
         print(f"sourceLanguage 应为 zh-Hans,实际是 {catalog.get('sourceLanguage')!r}", file=sys.stderr)
         return 1
