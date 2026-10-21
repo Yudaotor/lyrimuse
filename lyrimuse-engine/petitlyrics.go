@@ -51,6 +51,8 @@ const (
 	petitMaxCandidatesToFetch = 3
 	// petitScoreDurationTolerance 跟别的源的时长闸(match.go 的 0.25)取同一个值。
 	petitScoreDurationTolerance = 0.25
+	// petitServerArtistMaxDiffSecs:歌手对不上、靠服务端按歌手过滤收下的那条,时长最多差几秒(petitServerArtistMatch)。
+	petitServerArtistMaxDiffSecs = 1.0
 	// petitMaxDurationDiffSecs:两边时长都知道时差多少秒就不是同一版,同 vibeMaxDurationDiffSecs。
 	petitMaxDurationDiffSecs = 8.0
 	// petitOfficialMaxDiffSecs:官方同步是对着它登记的那条录音做的,时长差过这个数就不是这一条录音,官方那份不再优先。
@@ -89,6 +91,7 @@ func petitLyric(ctx context.Context, artist, title, album string, durationSecs f
 	if title == "" {
 		return petitResult{}
 	}
+	artist, title, album = originalScriptQueryFields(ctx, artist, title, album)
 	// 带上时长:选候选要过时长闸,同名的不同剪辑(~durN 变体)不能共用一份结果。
 	key := artist + "|" + title + "|" + album + "|" + strconv.Itoa(int(math.Round(durationSecs)))
 	petitMu.Lock()
@@ -342,11 +345,16 @@ func petitBuildLyrics(data string) (lrc, yrc string) {
 
 // petitPlainText 解开纯文本那一档(base64 的 UTF-8 正文,CRLF 换行)。
 func petitPlainText(data string) string {
+	return strings.TrimSpace(petitPlainLines(data))
+}
+
+// petitPlainLines:纯文本那一档解开、换行统一成 \n,首尾空白不动(结尾的空行在逐行那一档里也占时间,见 petitZipLines)。
+func petitPlainLines(data string) string {
 	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(data))
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(strings.ReplaceAll(string(raw), "\r\n", "\n"))
+	return strings.ReplaceAll(string(raw), "\r\n", "\n")
 }
 
 // 逐行那一档(lyricsType 2)的二进制:`MHDROBJT` 头 + `MLRCOBJT` 块。0x19 是换密钥开关、0x1a 是 16 位保护号、0x38 是行数、
@@ -398,15 +406,16 @@ func petitLineTimes(data string) (ms []int, ok bool) {
 	return ms, true
 }
 
-// petitZipLines 把逐行的时间跟纯文本那一档逐行配成 LRC。末尾的空行先去掉;行数对不上时返回空串(错位一行,后面每一句都挂错时间)。
-// 中间的空行照样占一个时间,写成只有时间戳的一行。纯函数,便于单测。
+// petitZipLines 把逐行的时间跟纯文本那一档逐行配成 LRC。纯文本以换行结尾时,结尾那个空行常也占一个时间(最后一句的结束点):
+// 先按原样的行数配,配不上再一行一行去掉末尾的空行重配;都对不上时返回空串(错位一行,后面每一句都挂错时间)。
+// 空行(中间的、结尾占了时间的)写成只有时间戳的一行。纯函数,便于单测。
 func petitZipLines(ms []int, text string) string {
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
-	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+	for len(lines) != len(ms) {
+		if len(lines) == 0 || strings.TrimSpace(lines[len(lines)-1]) != "" {
+			return ""
+		}
 		lines = lines[:len(lines)-1]
-	}
-	if len(lines) != len(ms) {
-		return ""
 	}
 	var b strings.Builder
 	for i, t := range ms {
@@ -421,7 +430,10 @@ var petitAltScriptTitleRe = regexp.MustCompile(`(?i)[(（\[［【]\s*(romaji|rom
 
 // petitCandidateScore 给一条搜索结果打分,越高越像本地这首;负数 = 淘汰。身份判定用跟别的源一致的函数,歌手对不上时退到
 // 三角验证。时长对得上的官方同步优先,其次是逐字。纯函数,便于单测。
-func petitCandidateScore(s petitSong, artist, title, album string, durationSecs float64) int {
+//
+// artistKeyed:这条是带着歌手搜回来的。服务端按歌手过滤时认得罗马字艺名、本名这类别名,不按任意子串匹配,乱写一个歌手
+// 一条不回;歌名逐字相同、时长差不超过 petitServerArtistMaxDiffSecs 时,歌手对不上也收。见 09 章决策 314。
+func petitCandidateScore(s petitSong, artist, title, album string, durationSecs float64, artistKeyed bool) int {
 	if s.LyricsID == "" || s.LyricsType == "" {
 		return -1
 	}
@@ -429,7 +441,7 @@ func petitCandidateScore(s petitSong, artist, title, album string, durationSecs 
 		return -1
 	}
 	d := s.durationSecs()
-	if !lyricSourceArtistMatches(s.Artist, artist) &&
+	if !lyricSourceArtistMatches(s.Artist, artist) && !petitServerArtistMatch(s, title, durationSecs, artistKeyed) &&
 		!lyricRecordingTriangleMatchesGuarded(s.Title, s.Album, s.Artist, d, title, album, artist, durationSecs) {
 		return -1
 	}
@@ -456,6 +468,16 @@ func petitCandidateScore(s petitSong, artist, title, album string, durationSecs 
 		score += 15
 	}
 	return score
+}
+
+// petitServerArtistMatch:见 petitCandidateScore 的 artistKeyed。
+func petitServerArtistMatch(s petitSong, title string, durationSecs float64, artistKeyed bool) bool {
+	d := s.durationSecs()
+	if !artistKeyed || durationSecs <= 0 || math.Abs(d-durationSecs) > petitServerArtistMaxDiffSecs {
+		return false
+	}
+	t := normLoose(s.Title)
+	return t != "" && (t == normLoose(title) || t == normLoose(lyricQueryTitle(title)))
 }
 
 // petitQueries:按顺序要用的(歌名, 歌手)两组 —— 先带第一位歌手,一条都没过闸再只按歌名(服务端认得歌手的别名,但写法
@@ -493,7 +515,7 @@ func resolvePetitLyric(ctx context.Context, artist, title, album string, duratio
 			return petitResult{}
 		}
 		for _, s := range songs {
-			if sc := petitCandidateScore(s, artist, title, album, durationSecs); sc >= 0 {
+			if sc := petitCandidateScore(s, artist, title, album, durationSecs, q[1] != ""); sc >= 0 {
 				candidates = append(candidates, scoredPetitSong{s, sc})
 			}
 		}
@@ -555,14 +577,16 @@ func resolvePetitLyric(ctx context.Context, artist, title, album string, duratio
 			return finish(r)
 		}
 	}
-	// 都没有能用的逐字:名次最高的逐行那份,时间和纯文本两趟并发取,逐行配上。配不上时它取到的纯文本留着,它就是总分第一的那份时
-	// 下面不再取一次。
+	// 都没有能用的逐字:逐行的按名次取前几份,每份时间和纯文本两趟并发取,逐行配上,配上第一份就停。配不上时总分第一的那份
+	// 取到的纯文本留着,下面不再取一次。
 	top := candidates[0].song
 	var topText string
+	lineTried := 0
 	for _, c := range candidates {
-		if c.song.LyricsType != petitTypeLine {
+		if c.song.LyricsType != petitTypeLine || lineTried == petitMaxCandidatesToFetch {
 			continue
 		}
+		lineTried++
 		lrc, text := petitFetchLineSync(ctx, c.song)
 		if lrc != "" {
 			r := result(c.song)
@@ -572,7 +596,6 @@ func resolvePetitLyric(ctx context.Context, artist, title, album string, duratio
 		if c.song.LyricsID == top.LyricsID {
 			topText = text
 		}
-		break
 	}
 	// 再没有:名次最高的那份按纯文本取。
 	text, ok := topText, topText != ""
@@ -667,9 +690,10 @@ func petitFetchPlain(ctx context.Context, id string) (string, bool) {
 // text 是取到的纯文本(没取到时为空)。
 func petitFetchLineSync(ctx context.Context, song petitSong) (lrc, text string) {
 	var (
-		wg    sync.WaitGroup
-		times []int
-		okT   bool
+		wg     sync.WaitGroup
+		times  []int
+		okT    bool
+		zipped string // 纯文本那一档原样的行(没去首尾空白),逐行配对按它数行
 	)
 	wg.Add(2)
 	go func() {
@@ -690,13 +714,20 @@ func petitFetchLineSync(ctx context.Context, song petitSong) (lrc, text string) 
 	}()
 	go func() {
 		defer wg.Done()
-		text, _ = petitFetchPlain(ctx, song.LyricsID)
+		s, ok, err := petitFetch(ctx, song.LyricsID, petitTypePlain)
+		if err != nil {
+			noteLyricSubFetchFailure(ctx)
+			return
+		}
+		if ok && s.LyricsType == petitTypePlain {
+			text, zipped = petitPlainText(s.LyricsData), petitPlainLines(s.LyricsData)
+		}
 	}()
 	wg.Wait()
 	if !okT || text == "" {
 		return "", text
 	}
-	if lrc = petitZipLines(times, text); !isTimedLRC(lrc) {
+	if lrc = petitZipLines(times, zipped); !isTimedLRC(lrc) {
 		return "", text
 	}
 	return lrc, text

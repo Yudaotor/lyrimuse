@@ -142,3 +142,20 @@ func TestLyricIdentityFieldsIsWired(t *testing.T) {
 		}
 	}
 }
+
+// 被转成简体的栏换回原文字形(折叠照做);换了身份的栏、ctx 上没记原样写法时原样不动。
+func TestOriginalScriptQueryFields(t *testing.T) {
+	artist, title, album := "米津玄師", "烏 - Raven", "烏 - Ｒａｖｅｎ - Single"
+	qa, qt, qal := searchQueryFields(artist, title, album)
+	ctx := withSearchQueryOriginal(context.Background(), artist, title, album)
+	a, ti, al := originalScriptQueryFields(ctx, qa, qt, qal)
+	if a != "米津玄師" || ti != "烏 - Raven" || al != "烏 - Raven - Single" {
+		t.Fatalf("应换回原文字形、全角照样折成半角,得到 %q %q %q", a, ti, al)
+	}
+	if a, ti, _ := originalScriptQueryFields(ctx, "Kenshi Yonezu", qt, qal); a != "Kenshi Yonezu" || ti != "烏 - Raven" {
+		t.Errorf("别名轮换上来的歌手不动、歌名照样换回,得到 %q %q", a, ti)
+	}
+	if a, ti, al := originalScriptQueryFields(context.Background(), qa, qt, qal); a != qa || ti != qt || al != qal {
+		t.Errorf("ctx 上没记原样写法时原样返回,得到 %q %q %q", a, ti, al)
+	}
+}

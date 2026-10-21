@@ -16,14 +16,39 @@ import (
 //
 // 只管发请求用的查询词;缓存 key、候选比对(normLoose 里的 toSimplified)不走这里。
 func searchQueryFields(artist, title, album string) (string, string, string) {
-	artist, title, album = foldFullwidthAlnum(artist), foldFullwidthAlnum(title), foldFullwidthAlnum(album)
-	artist, title, album = foldHanLookalikes(artist), foldHanLookalikes(title), foldHanLookalikes(album)
-	artist, title, album = foldQuoteLookalikes(artist), foldQuoteLookalikes(title), foldQuoteLookalikes(album)
-	title, album = withoutPromoTitleTail(title), withoutPromoTitleTail(album)
+	artist, title, album = searchQueryFolded(artist, title, album)
 	if containsKana(artist) || containsKana(title) || containsKana(album) {
 		return composeNFC(artist), composeNFC(title), composeNFC(album)
 	}
 	return toSimplified(artist), toSimplified(title), toSimplified(album)
+}
+
+// searchQueryFolded:searchQueryFields 里不改字形的那几步折叠。
+func searchQueryFolded(artist, title, album string) (string, string, string) {
+	artist, title, album = foldFullwidthAlnum(artist), foldFullwidthAlnum(title), foldFullwidthAlnum(album)
+	artist, title, album = foldHanLookalikes(artist), foldHanLookalikes(title), foldHanLookalikes(album)
+	artist, title, album = foldQuoteLookalikes(artist), foldQuoteLookalikes(title), foldQuoteLookalikes(album)
+	return artist, withoutPromoTitleTail(title), withoutPromoTitleTail(album)
+}
+
+// originalScriptQueryFields:手上三栏里被 searchQueryFields 转成简体的,换回原文字形(其余折叠照做)。给按原文收录日文汉字的源用:
+// 歌名是纯汉字、三栏都没有假名的日文歌转成简体之后,在日本曲库里一条都搜不到(petitlyrics.go)。
+// 这一轮换了身份的栏(别名、标题反查换上来的)对不上归一化后的写法,原样不动;ctx 上没记原样写法说明归一化没改过,也就没有要换的。
+// 见 09 章决策 314。
+func originalScriptQueryFields(ctx context.Context, artist, title, album string) (string, string, string) {
+	oa, ot, oal, _ := searchQueryOriginalFrom(ctx)
+	qa, qt, qal := searchQueryFields(oa, ot, oal)
+	ka, kt, kal := searchQueryFolded(oa, ot, oal)
+	if artist == qa {
+		artist = composeNFC(ka)
+	}
+	if title == qt {
+		title = composeNFC(kt)
+	}
+	if album == qal {
+		album = composeNFC(kal)
+	}
+	return artist, title, album
 }
 
 type searchQueryOriginalKey struct{}

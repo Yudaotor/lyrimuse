@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	neturl "net/url"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -113,7 +114,7 @@ func TestPetitCandidateScoreGates(t *testing.T) {
 			LyricsType: lyricsType, IsOfficial: official}
 	}
 	const artist, title, album, dur = "Mrs. GREEN APPLE", "ライラック", "ライラック - Single", 288.0
-	base := petitCandidateScore(song(title, artist, "ライラック", 288100, "3", "0"), artist, title, album, dur)
+	base := petitCandidateScore(song(title, artist, "ライラック", 288100, "3", "0"), artist, title, album, dur, false)
 	if base < 0 {
 		t.Fatal("同名同歌手、时长对得上应过闸")
 	}
@@ -125,23 +126,23 @@ func TestPetitCandidateScoreGates(t *testing.T) {
 		"没有 id":     {Title: title, Artist: artist, LyricsType: "3"},
 		"罗马字版":      song(title+"(romaji)", artist, "ライラック", 288100, "3", "0"),
 	} {
-		if petitCandidateScore(s, artist, title, album, dur) >= 0 {
+		if petitCandidateScore(s, artist, title, album, dur, false) >= 0 {
 			t.Errorf("%s: 应淘汰", name)
 		}
 	}
-	official := petitCandidateScore(song(title, artist, "ライラック", 288100, "3", "1"), artist, title, album, dur)
+	official := petitCandidateScore(song(title, artist, "ライラック", 288100, "3", "1"), artist, title, album, dur, false)
 	if official <= base {
 		t.Errorf("时长对得上的官方同步应排在用户上传前面: official=%d user=%d", official, base)
 	}
-	farOfficial := petitCandidateScore(song(title, artist, "ライラック", 290500, "3", "1"), artist, title, album, dur)
+	farOfficial := petitCandidateScore(song(title, artist, "ライラック", 290500, "3", "1"), artist, title, album, dur, false)
 	if farOfficial >= base {
 		t.Errorf("时长差过 1 秒的官方同步不是这一条录音,不再优先: official=%d user=%d", farOfficial, base)
 	}
-	if line := petitCandidateScore(song(title, artist, "ライラック", 288100, "2", "0"), artist, title, album, dur); line >= base {
+	if line := petitCandidateScore(song(title, artist, "ライラック", 288100, "2", "0"), artist, title, album, dur, false); line >= base {
 		t.Errorf("逐字的排在只有逐行的前面: line=%d word=%d", line, base)
 	}
-	line := petitCandidateScore(song(title, artist, "ライラック", 288100, "2", "0"), artist, title, album, dur)
-	if plain := petitCandidateScore(song(title, artist, "ライラック", 288100, "1", "0"), artist, title, album, dur); plain >= line {
+	line := petitCandidateScore(song(title, artist, "ライラック", 288100, "2", "0"), artist, title, album, dur, false)
+	if plain := petitCandidateScore(song(title, artist, "ライラック", 288100, "1", "0"), artist, title, album, dur, false); plain >= line {
 		t.Errorf("逐行的排在只有纯文本的前面: plain=%d line=%d", plain, line)
 	}
 }
@@ -177,7 +178,7 @@ func TestResolvePetitLyricPrefersOfficial(t *testing.T) {
 		return http.StatusOK, petitTestResponse(
 			petitTestSong("1", "ライラック", "Mrs. GREEN APPLE", "ライラック", 288100, "3", "0", user),
 			petitTestSong("2", "ライラック", "Mrs. GREEN APPLE", "ライラック", 288100, "3", "1", ""),
-			petitTestSong("3", "ライラック", "BLANKEY JET CITY", "ライラック", 288000, "3", "1", ""),
+			petitTestSong("3", "ライラック", "BLANKEY JET CITY", "ライラック", 290000, "3", "1", ""),
 		)
 	})
 	ctx, sub := withLyricSubFetch(qqRoundCtx())
@@ -229,7 +230,7 @@ func TestResolvePetitLyricTitleOnlyAndFailedFetch(t *testing.T) {
 	}
 }
 
-// 过闸的都只有逐行(加密的那档):名次最高的那份按纯文本再取一次,交 plainOnly。
+// 过闸的都只有逐行、都配不上:逐行的按名次各试一次,最后交名次最高那份的纯文本(plainOnly)。
 func TestResolvePetitLyricPlainFallback(t *testing.T) {
 	var types []string
 	withPetitFake(t, func(r *http.Request, target string) (int, string) {
@@ -245,8 +246,9 @@ func TestResolvePetitLyricPlainFallback(t *testing.T) {
 		)
 	})
 	r := resolvePetitLyric(qqRoundCtx(), "Number_i", "GOD_i", "GOD_i - Single", 215)
-	if len(types) != 1 || types[0] != "7:1" {
-		t.Errorf("逐行那档不按 id 取逐字,只把第一名按纯文本取一次: %v", types)
+	sort.Strings(types)
+	if strings.Join(types, ",") != "7:1,8:1,8:2" {
+		t.Errorf("逐行那档不按 id 取逐字;两份逐行都试,搜索结果自带逐行正文的那份只取纯文本: %v", types)
 	}
 	if !r.plainOnly || r.lyrics != "一行目\n二行目" {
 		t.Errorf("交纯文本: %+v", r)
@@ -433,6 +435,12 @@ func TestPetitZipLines(t *testing.T) {
 	if got := petitZipLines([]int{1000, 2000}, "一\n二\n三"); got != "" {
 		t.Errorf("行数对不上不配: %q", got)
 	}
+	if got := petitZipLines([]int{1000, 2000, 3000}, "一\r\n二\r\n"); got != "[00:01.00]一\n[00:02.00]二\n[00:03.00]\n" {
+		t.Errorf("结尾空行占了时间时写成结束点: %q", got)
+	}
+	if got := petitZipLines([]int{1000, 2000, 3000}, "一\r\n二"); got != "" {
+		t.Errorf("最后一行不是空行时不补: %q", got)
+	}
 }
 
 // 过闸的只有逐行:时间和纯文本两趟取,逐行配成 LRC;配不上(行数不同)时退成纯文本,纯文本不再取第二次。
@@ -523,5 +531,135 @@ func TestPetitPostRotatesClients(t *testing.T) {
 	reject["on.petitlyrics.com"] = "client"
 	if err := post(); err == nil || len(hits) != 3 {
 		t.Errorf("三组都不行时每组至多一次、报错: err=%v hits=%v", err, hits)
+	}
+}
+
+// 带着歌手搜回来的、歌名逐字相同、时长差不超过 1 秒的,歌手写法对不上也收(服务端认得别名);只按歌名搜回来的不收。
+func TestPetitServerArtistMatch(t *testing.T) {
+	s := petitSong{LyricsID: "1", Title: "スパークル", Artist: "幾田りら", Album: "スパークル", Duration: "213600", LyricsType: "3"}
+	if petitCandidateScore(s, "Lilas", "スパークル", "", 213.6, true) < 0 {
+		t.Fatal("带歌手搜回来的同名同长应收")
+	}
+	if petitCandidateScore(s, "Lilas", "スパークル", "", 213.6, false) >= 0 {
+		t.Error("只按歌名搜回来的歌手对不上不收")
+	}
+	if petitCandidateScore(s, "Lilas", "スパークル", "", 215, true) >= 0 {
+		t.Error("时长差 1 秒以上不收")
+	}
+	if petitCandidateScore(s, "Lilas", "スパークル", "", 0, true) >= 0 {
+		t.Error("本地曲长不知道时不收")
+	}
+	if petitCandidateScore(s, "Lilas", "スパークル (映画「ある日」主題歌)", "", 213.6, true) >= 0 {
+		t.Error("歌名不逐字相同不收")
+	}
+	if petitCandidateScore(petitSong{LyricsID: "1", Title: "スパークル", Artist: "幾田りら", LyricsType: "3"}, "Lilas", "スパークル", "", 0, true) >= 0 {
+		t.Error("两边曲长都不知道时不收")
+	}
+	raven := petitSong{LyricsID: "2", Title: "烏 - Raven", Artist: "米津玄師", Album: "烏 - Raven", Duration: "248494", LyricsType: "3"}
+	if petitCandidateScore(raven, "Kenshi Yonezu", "烏 - Raven", "", 248.5, true) < 0 {
+		t.Error("罗马字艺名搜回来的同名同长应收")
+	}
+}
+
+// 整条解析:第一轮带歌手搜回来的别名那份收下,不再只按歌名搜。
+func TestResolvePetitLyricTrustsArtistKeyedSearch(t *testing.T) {
+	var searches []string
+	withPetitFake(t, func(r *http.Request, target string) (int, string) {
+		_ = r.ParseForm()
+		searches = append(searches, r.Form.Get("key_artist"))
+		if r.Form.Get("key_artist") == "" {
+			return http.StatusOK, petitTestResponse()
+		}
+		return http.StatusOK, petitTestResponse(petitTestSong("9", "スパークル", "幾田りら", "スパークル", 213600, "3", "0", petitTestSync))
+	})
+	r := resolvePetitLyric(qqRoundCtx(), "Lilas", "スパークル", "", 213.6)
+	if r.lyrics == "" || r.artist != "幾田りら" {
+		t.Fatalf("应收下别名那份: %+v", r)
+	}
+	if len(searches) != 1 {
+		t.Errorf("第一轮有结果就不再按歌名搜: %q", searches)
+	}
+}
+
+// 流水线交来的是转成简体的三栏时,按原文字形去搜。
+func TestPetitLyricSearchesOriginalScript(t *testing.T) {
+	var titles, artists []string
+	withPetitFake(t, func(r *http.Request, target string) (int, string) {
+		_ = r.ParseForm()
+		titles, artists = append(titles, r.Form.Get("key_title")), append(artists, r.Form.Get("key_artist"))
+		if r.Form.Get("key_title") != "烏 - Raven" {
+			return http.StatusOK, petitTestResponse()
+		}
+		return http.StatusOK, petitTestResponse(petitTestSong("3", "烏 - Raven", "米津玄師", "烏 - Raven", 248494, "3", "0", petitTestSync))
+	})
+	artist, title, album := "米津玄師", "烏 - Raven", "烏 - Raven - Single"
+	qa, qt, qal := searchQueryFields(artist, title, album)
+	if qt != "乌 - Raven" {
+		t.Fatalf("前提:没有假名的三栏会转成简体,得到 %q", qt)
+	}
+	ctx := withSearchQueryOriginal(qqRoundCtx(), artist, title, album)
+	r := petitLyric(ctx, qa, qt, qal, 248.5)
+	if r.lyrics == "" || len(titles) == 0 || titles[0] != "烏 - Raven" || artists[0] != "米津玄師" {
+		t.Fatalf("应按原文字形搜: titles=%q artists=%q", titles, artists)
+	}
+}
+
+// 只按歌名搜回来的别名那份不收:服务端没替我们按歌手过滤过。
+func TestResolvePetitLyricTitleOnlyAliasRejected(t *testing.T) {
+	withPetitFake(t, func(r *http.Request, target string) (int, string) {
+		_ = r.ParseForm()
+		if r.Form.Get("key_artist") != "" {
+			return http.StatusOK, petitTestResponse()
+		}
+		return http.StatusOK, petitTestResponse(petitTestSong("9", "スパークル", "幾田りら", "スパークル", 213600, "3", "0", petitTestSync))
+	})
+	if r := resolvePetitLyric(qqRoundCtx(), "Lilas", "スパークル", "", 213.6); r.lyrics != "" {
+		t.Fatalf("只按歌名搜回来的、歌手对不上的不收: %+v", r)
+	}
+}
+
+// 第一份逐行配不上时接着试下一份,最多试 petitMaxCandidatesToFetch 份。
+func TestResolvePetitLyricTriesNextLineSync(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		goodID    string
+		wantLines int
+	}{
+		{"第二份配得上", "32", 2},
+		{"都配不上", "", 3},
+	} {
+		lineFetched := 0
+		withPetitFake(t, func(r *http.Request, target string) (int, string) {
+			_ = r.ParseForm()
+			if id := r.Form.Get("key_lyricsId"); id != "" {
+				if r.Form.Get("lyricsType") == petitTypePlain {
+					text := "一行目\r\n二行目"
+					if id == c.goodID {
+						text = "一行目\r\n二行目\r\n三行目\r\n四行目\r\n"
+					}
+					return http.StatusOK, petitTestResponse(petitTestSong(id, "GOD_i", "Number_i", "GOD_i", 215000, "1", "0",
+						base64.StdEncoding.EncodeToString([]byte(text))))
+				}
+				lineFetched++
+				return http.StatusOK, petitTestResponse(petitTestSong(id, "GOD_i", "Number_i", "GOD_i", 215000, "2", "0",
+					petitTestLineSync([]int{135, 545, 787, 1084, 1300}, 0xa4ce, true, 64)))
+			}
+			return http.StatusOK, petitTestResponse(
+				petitTestSong("31", "GOD_i", "Number_i", "GOD_i", 215000, "2", "0", ""),
+				petitTestSong("32", "GOD_i", "Number_i", "GOD_i", 215000, "2", "0", ""),
+				petitTestSong("33", "GOD_i", "Number_i", "GOD_i", 215000, "2", "0", ""),
+				petitTestSong("34", "GOD_i", "Number_i", "GOD_i", 215000, "2", "0", ""),
+			)
+		})
+		r := resolvePetitLyric(qqRoundCtx(), "Number_i", "GOD_i", "GOD_i - Single", 215)
+		if lineFetched != c.wantLines {
+			t.Errorf("%s: 逐行取了 %d 份,想要 %d", c.name, lineFetched, c.wantLines)
+		}
+		if c.goodID != "" && (r.plainOnly || !strings.HasSuffix(r.lyrics, "[00:13.00]\n")) {
+			t.Errorf("%s: 应配上第二份,结尾空行写成结束点: %+v", c.name, r)
+		}
+		if c.goodID == "" && !r.plainOnly {
+			t.Errorf("%s: 退成纯文本: %+v", c.name, r)
+		}
 	}
 }
