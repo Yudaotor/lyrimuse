@@ -586,7 +586,7 @@ func runSweepKeys(ctx context.Context, keys []string, full, retry bool, gap time
 // lyricsFillSweepOne 对一条走一次补空。进门再核一遍资格:挑候选到轮到它可能隔了几十分钟,
 // 期间它可能被播到(自己补上了)、被用户手改/删除 —— 那种情形什么都不做,也不算断网。
 func lyricsFillSweepOne(ctx context.Context, key string) lyricsSweepOutcome {
-	artist, title, album := splitEnrichKey(key)
+	artist, title, album := splitEnrichKeyForSearch(key)
 	enrichMu.Lock()
 	before, ok := enrichCache[key]
 	if !ok || !before.Lyrics.IsZero() || before.ManualLyrics || before.Instrumental || enrichInflight[key] {

@@ -63,6 +63,17 @@ func titleReverseLookup(ctx context.Context, artist, title, album string, durati
 		log.Printf("lyrics: title-reverse-lookup: artist search picked %q for pinyin title %q by duration only, but it does not read that way; not using it", searchTitle, title)
 		searchOK = false
 	}
+	// 歌名写明是翻唱:按时长挑出来的多半是这位歌手翻唱的另一首,只凭时长的两路都不用(专辑曲目表里有近似歌名佐证的照用)。
+	if titleMarkedCover(title) {
+		if searchOK {
+			log.Printf("lyrics: title-reverse-lookup: %q is marked as a cover; not using artist search pick %q chosen by duration only", title, searchTitle)
+			searchOK = false
+		}
+		if albumOK && !albumTitleBacked {
+			log.Printf("lyrics: title-reverse-lookup: %q is marked as a cover; not using album track %q chosen by duration only", title, albumTitle)
+			albumOK = false
+		}
+	}
 	// 专辑曲目表那一路没有近似标题佐证、只凭时长挑的,同样过读音这一关。
 	if albumOK && !albumTitleBacked && pinyinTitleContradicts(title, album, albumTitle, chinese) {
 		log.Printf("lyrics: title-reverse-lookup: album track %q picked for pinyin title %q by duration only, but it does not read that way; not using it", albumTitle, title)
@@ -188,6 +199,25 @@ func titleSearchContradicts(title, album, found string) bool {
 		}
 	}
 	return true
+}
+
+// titleMarkedCover:歌名写明是翻唱 —— 限定词位置(括号里、最后一个「 - 」之后)有 cover 这个词或「翻唱」「翻自」「カバー」「커버」,
+// 或者任何位置有「covered by」。整个歌名里找 cover 会把「Cover Me」「Take Cover」这种歌名本身算进去。见 09 章决策 319。
+func titleMarkedCover(title string) bool {
+	if strings.Contains(strings.ToLower(title), "covered by") {
+		return true
+	}
+	for _, seg := range titleQualifierSegments(title) {
+		if words := titleSearchWords(seg); slices.Contains(words, "cover") || slices.Contains(words, "covered") {
+			return true
+		}
+		for _, w := range []string{"翻唱", "翻自", "カバー", "커버"} {
+			if strings.Contains(seg, w) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // latinOnlyLetters:s 里有拉丁字母、没有别的文字的字母。

@@ -327,7 +327,7 @@ func runLyricsRematch(parent context.Context, req lyricsRematchRequest) {
 // runLyricsRematchOne 对 key 跑一次手动重评。时长取法同全量扫库(lyricsFullScanOne)。搜索带 withManualLyricSearch
 // (有人在等,别名补查几轮并发),不降成后台优先级。
 func runLyricsRematchOne(ctx context.Context, key string, progress func(done, total int)) lyricsRematchResult {
-	artist, title, album := splitEnrichKey(key)
+	artist, title, album := splitEnrichKeyForSearch(key)
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	busy := enrichInflight[key]

@@ -94,7 +94,7 @@ func planRecheckCover(key string) recheckCoverPlan {
 	p := recheckCoverPlan{key: key}
 	// splitEnrichKey(lyricsexport.go)只按前两个 "|" 切,专辑名里带竖线不会打乱切分;
 	// 切不出三段时它返回三个空串。
-	artist, title, album := splitEnrichKey(key)
+	artist, title, album := splitEnrichKeyForSearch(key)
 	if title == "" {
 		p.reason = `key 不是 "歌手|歌名|专辑" 三段`
 		return p
@@ -105,7 +105,7 @@ func planRecheckCover(key string) recheckCoverPlan {
 		// 跟 trackEnrichment 一样,退一步找"只差大小写/空格/繁简"的同一首歌。
 		if alt, found := canonicalEnrichKey(key); found {
 			p.key, e, exists = alt, enrichCache[alt], true
-			artist, title, album = splitEnrichKey(alt)
+			artist, title, album = splitEnrichKeyForSearch(alt)
 		}
 	}
 	enrichMu.Unlock()
@@ -238,13 +238,13 @@ func runRecheckInstrumentalCLI(args []string) {
 func runRecheckInstrumental(keys []string, apply bool) int {
 	changed, failed := 0, 0
 	for _, key := range keys {
-		artist, title, album := splitEnrichKey(key)
+		artist, title, album := splitEnrichKeyForSearch(key)
 		enrichMu.Lock()
 		e, exists := enrichCache[key]
 		if !exists {
 			if alt, found := canonicalEnrichKey(key); found {
 				key, e, exists = alt, enrichCache[alt], true
-				artist, title, album = splitEnrichKey(alt)
+				artist, title, album = splitEnrichKeyForSearch(alt)
 			}
 		}
 		enrichMu.Unlock()

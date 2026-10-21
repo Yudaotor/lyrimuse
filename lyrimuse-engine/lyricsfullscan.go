@@ -497,7 +497,7 @@ func publishLyricsFullScanPending() {
 // 进门再核一遍资格,理由同 lyricsFillSweepOne:挑候选到轮到它可能隔了几十小时,期间它可能
 // 被播到(自己升级过了)、被用户手改/删除/校准。
 func lyricsFullScanOne(ctx context.Context, key string) lyricsSweepOutcome {
-	artist, title, album := splitEnrichKey(key)
+	artist, title, album := splitEnrichKeyForSearch(key)
 	pins, content := lyricsPinSnapshot() // 读文件,拿 enrichMu 之前取(见 lyricsPinnedKeys 头注)
 	enrichMu.Lock()
 	before, ok := enrichCache[key]

@@ -73,13 +73,13 @@ func runResyncLyricsCLI(args []string) {
 func runResyncLyrics(keys []string, apply bool) int {
 	changed, unchanged, failed := 0, 0, 0
 	for _, key := range keys {
-		artist, title, album := splitEnrichKey(key)
+		artist, title, album := splitEnrichKeyForSearch(key)
 		enrichMu.Lock()
 		e, exists := enrichCache[key]
 		if !exists {
 			if alt, found := canonicalEnrichKey(key); found {
 				key, e, exists = alt, enrichCache[alt], true
-				artist, title, album = splitEnrichKey(alt)
+				artist, title, album = splitEnrichKeyForSearch(alt)
 			}
 		}
 		enrichMu.Unlock()
