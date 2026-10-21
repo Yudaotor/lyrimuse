@@ -286,6 +286,10 @@ final class PlaybackCoordinator: ObservableObject {
     /// 同 `currentLineDwellMs`,单位秒。
     var currentLineDwellSeconds: Double? { currentLineDwellMs.map { Double($0) / 1000 } }
 
+    /// 歌词时钟在不在走:在播,而且锚点没被暂停通知冻住(冻住时 isPlayingNow 要等下一次轮询才翻,按墙钟自己跑的
+    /// 逐字 / 滚动动画这段时间会先冲再跳回)。同悬浮歌词、灵动岛、歌词窗口各自那份(04 章决策 71、07 章决策 167)。
+    var lyricsClockRunning: Bool { isPlayingNow && !(anchor?.isFrozen ?? false) }
+
     /// 歌词时间轴上的此刻(毫秒):锚点外推 ?? 暂停冻结的位置,再叠歌词时间轴偏移。悬浮歌词和触控栏的
     /// 图层歌词行装动画时都读它。只给歌词用:进度条、播放位置不叠这个偏移,别拿它。
     func lyricsTimelineMs(now: Date = Date()) -> Int {

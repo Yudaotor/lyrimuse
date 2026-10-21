@@ -739,6 +739,14 @@ func runTouchBarTests() {
         // 控制器都接上了,「恢复默认」每一项都管到、不碰总开关(漏一项都不报错,只表现成拨了没反应 / 恢复不了)。
         let controller = code(appDir.appendingPathComponent("TouchBar/TouchBarLyricsController.swift")) ?? ""
         let rows = code(appDir.appendingPathComponent("UI/TouchBarSettingsRows.swift")) ?? ""
+        // 暂停通知先到、锚点已冻而 isPlayingNow 还没翻时,图层行按墙钟往前冲再跳回:歌词那一格按歌词时钟停表(17 章决策 52)。
+        let coordinatorSource = code(appDir.appendingPathComponent("PlaybackCoordinator.swift")) ?? ""
+        let previewStage = code(appDir.appendingPathComponent("UI/TouchBarPreviewStage.swift")) ?? ""
+        expectEqual(coordinatorSource.contains("var lyricsClockRunning: Bool { isPlayingNow && !(anchor?.isFrozen ?? false) }")
+                    && controller.contains("isPlaying: p.lyricsClockRunning,")
+                    && previewStage.contains("isPlaying: snapshot.lyricsClockRunning,")
+                    && previewStage.contains("lyricsClockRunning: p.lyricsClockRunning,"),
+                    true, "触控栏: 歌词那一格按歌词时钟停表(锚点冻住就停),本体和设置页预览同一份")
         func structBody(_ name: String) -> String {
             guard let from = rows.range(of: "struct \(name): View {") else { return "" }
             let to = rows.range(of: "\nstruct ", range: from.upperBound..<rows.endIndex)?.lowerBound ?? rows.endIndex

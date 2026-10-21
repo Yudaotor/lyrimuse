@@ -99,7 +99,7 @@ struct TouchBarPreviewStage: View {
                                                                   hidesControlStrip: hidesStrip, escapeKey: escapeKey,
                                                                   showsMoreKey: settings.touchBarShowsMoreKey))
         let inputs = TouchBarLyricsCell.Inputs(
-            startMs: snapshot.startMs, dwellMs: snapshot.dwellMs, isPlaying: snapshot.isPlaying,
+            startMs: snapshot.startMs, dwellMs: snapshot.dwellMs, isPlaying: snapshot.lyricsClockRunning,
             timingEpoch: snapshot.timingEpoch, rate: snapshot.rate, font: font,
             color: TouchBarLyricsCell.lyricColor(mode: settings.touchBarLyricsColorMode,
                                                  coverAccent: snapshot.coverAccent,
@@ -423,6 +423,8 @@ final class TouchBarPreviewFeed: ObservableObject {
         var startMs = 0
         var dwellMs: Int?
         var isPlaying = false
+        /// 歌词那一格的时钟(`PlaybackCoordinator.lyricsClockRunning`);`isPlaying` 只管播放键的图标。
+        var lyricsClockRunning = false
         var timingEpoch = 0
         var rate: Double = 1
         var coverAccent: NSColor?
@@ -472,6 +474,7 @@ final class TouchBarPreviewFeed: ObservableObject {
             nextLineText: p.touchBarLyrics.nextText, nextLineSide: p.touchBarLyrics.nextSide,
             startMs: start.sinceMs, dwellMs: TouchBarLyricsCell.dwellMs(p, secondary: secondary),
             isPlaying: p.isPlayingNow,
+            lyricsClockRunning: p.lyricsClockRunning,
             timingEpoch: LyricsTimingEpoch.of(anchor: p.anchor, pausedPositionMs: p.pausedPositionMs,
                                               offsetMs: p.currentLyricsOffsetMs),
             rate: p.anchor?.rate ?? 1,

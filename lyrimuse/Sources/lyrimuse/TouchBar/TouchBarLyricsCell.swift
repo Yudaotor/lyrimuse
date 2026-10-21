@@ -48,6 +48,7 @@ enum TouchBarLyricsCell {
         var startMs: Int
         /// 主行这一句会显示多久(`dwellMs(_:secondary:)`);nil = 不知道,按固定速度。
         var dwellMs: Int?
+        /// 歌词时钟在不在走(`PlaybackCoordinator.lyricsClockRunning`),不是播放键那个「在播」。
         var isPlaying: Bool
         /// 时间基准指纹(`LyricsTimingEpoch.of`)与播放速率。
         var timingEpoch: Int

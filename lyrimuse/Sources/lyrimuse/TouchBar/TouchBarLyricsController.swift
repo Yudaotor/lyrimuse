@@ -716,7 +716,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         guard bar.isVisible else { return }
         let inputs = TouchBarLyricsCell.Inputs(
             startMs: displayStart.sinceMs, dwellMs: TouchBarLyricsCell.dwellMs(p, secondary: secondary),
-            isPlaying: p.isPlayingNow,
+            isPlaying: p.lyricsClockRunning,
             timingEpoch: LyricsTimingEpoch.of(anchor: p.anchor, pausedPositionMs: p.pausedPositionMs,
                                               offsetMs: p.currentLyricsOffsetMs),
             rate: p.anchor?.rate ?? 1,
