@@ -1123,6 +1123,16 @@ public final class LyricsSyncEngine {
             .map { performerKey($0) }.contains { !$0.isEmpty && performers.contains($0) }
     }
 
+    /// 影视说明行:书名号里是作品名,后面跟「插曲 / 主题曲 / 片尾曲…」,整行可以被括号包住,书名号前后各允许一小段
+    /// (「电影」「电视剧」「月亮河 电影」)。书名号后面带「的」的不认(「我唱着《晴天》的主题曲」是句子)。
+    private static let tieInNotePattern = try! NSRegularExpression(
+        pattern: #"^[（(]?\s*[^（）()《》，。！？,!?]{0,12}《[^》]{1,40}》[^（）()《》，。！？,!?的]{0,12}(插曲|主题曲|主題曲|主题歌|主題歌|片头曲|片頭曲|片尾曲|推广曲|推廣曲|宣传曲|宣傳曲|印象曲|角色曲|人物曲|插入曲|挿入歌|OST)\s*[）)]?$"#)
+
+    public static func matchesTieInNoteLine(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespaces)
+        return tieInNotePattern.firstMatch(in: t, range: NSRange(t.startIndex..., in: t)) != nil
+    }
+
     /// 洛雪本地歌词抬头的两种标签行(「歌曲名 天天」「歌手名 陶喆」),各返回 "song" / "artist",别的返回 nil。
     private static let songArtistLabelPattern = try! NSRegularExpression(pattern: #"^(歌曲名|歌手名)[ \u3000]*[:：]?[ \u3000]*\S"#)
 
@@ -1614,6 +1624,13 @@ public final class LyricsSyncEngine {
         if texts.count > 2, Set(texts.prefix(2).compactMap(songArtistLabelKind)) == ["song", "artist"] {
             base[0] = true
             base[1] = true
+        }
+        // 开头的影视说明行(「（《致，第三者》电视剧片尾曲）」「《陆小凤之谁家天下》主题曲」):从第一行往下、跳过已判掉的行,
+        // 连着是这个形状的都删,碰到第一行别的就停。只在开头认,歌词中间同样字样的不动。见 08 章决策 58
+        for i in texts.indices {
+            if base[i] { continue }
+            guard matchesTieInNoteLine(texts[i]) else { break }
+            base[i] = true
         }
         // 抬头也会排在开头那段署名后面(「作词：陈家丽」下一行才是「张学友 - 谁想轻轻偷走我的吻」)。
         // 从头往下,前面全是署名的那一行也按抬头认;碰到第一句不是署名、也不是抬头的就停 ——

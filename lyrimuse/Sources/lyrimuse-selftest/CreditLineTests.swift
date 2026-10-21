@@ -1672,4 +1672,21 @@ func runCreditLineTests() {
         expectEqual(drops(["太阳天或下雨天", "歌曲名 天天", "歌手名 陶喆", "人挤人的咖啡店"], artist: "David Tao", title: "Close to you"),
                     [false, false, false, false], "署名: 洛雪抬头只认前两行")
     }
+
+    // ---- 开头的影视说明行 ----
+    do {
+        func drops(_ lines: [String]) -> [Bool] { LyricsSyncEngine.creditLineDropDecisions(lines) }
+        for note in ["（《致，第三者》电视剧片尾曲）", "(《后菜鸟的灿烂时代》电视剧片尾曲)", "( 电影《天机·富春山居图》主题曲)",
+                     "《陆小凤之谁家天下》主题曲", "月亮河 电影《Breakfast at Tiffany's》插曲"] {
+            expectEqual(drops([note, "第一句歌词", "第二句歌词"]), [true, false, false], "影视说明: 第一行「\(note)」删")
+        }
+        expectEqual(drops(["（《致，第三者》电视剧片尾曲）", "《幸福不二家》电视剧插曲", "第一句歌词"]), [true, true, false],
+                    "影视说明: 开头连着两行都删")
+        expectEqual(drops(["第一句歌词", "《幸福不二家》电视剧插曲", "第二句歌词"]), [false, false, false],
+                    "影视说明: 不在开头的不删")
+        expectEqual(drops(["我唱着《晴天》的主题曲", "第二句歌词", "第三句歌词"]), [false, false, false],
+                    "影视说明: 书名号后面带「的」是句子,不删")
+        expectEqual(drops(["这是我们的主题曲", "第二句歌词", "第三句歌词"]), [false, false, false],
+                    "影视说明: 没有书名号的不删")
+    }
 }
