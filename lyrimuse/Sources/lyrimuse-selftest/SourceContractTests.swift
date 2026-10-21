@@ -1940,7 +1940,7 @@ func runSourceContractSurfaceTests() {
                 expectEqual(true, false, "变形动画: 读不到 UI/LyricsWindowFormMorph.swift")
             }
             expectEqual(lwv.contains("windowController.toggleMini(animated: true)"), true, "歌词窗口: 切换键带变形动画")
-            expectEqual(lwv.contains("guard !formMorph.isRunning else { return }"), true, "歌词窗口: 动画没走完时不再切")
+            expectEqual(lwv.contains("guard !formMorph.isRunning else { return false }"), true, "歌词窗口: 动画没走完时不再切")
             expectEqual(lwv.contains("if formMorph.isRunning { formMorph.levelAfterMorph = level } else { window.level = level }"), true,
                         "歌词窗口: 动画期间置顶不直接改窗口层级")
             // 逐字填色那层必须是 overlay、不进布局链:放回布局链的话每帧一失效,SwiftUI 就把整张
@@ -2009,8 +2009,8 @@ func runSourceContractSurfaceTests() {
                         "歌词窗口背景: 别改回 SwiftUI rotationEffect + repeatForever")
             expectEqual(lwv.contains("animating: windowController.isSurfaceVisible && playback.isPlayingNow)"), true,
                         "歌词窗口背景: 窗口不可见 / 暂停播放时光斑定格")
-            expectEqual(lwv.contains("paused: !playback.isPlayingNow || !windowController.isSurfaceVisible) { now in"), true,
-                        "迷你进度条: 暂停 / 不可见时停表")
+            expectEqual(sourceHas(lwv, "paused: !playback.isPlayingNow || !windowController.isSurfaceVisible || !miniProgressBarShown) { now in"), true,
+                        "迷你进度条: 暂停 / 不可见 / 条子没显示时停表")
             // 迷你窗:红绿灯只留关闭和最小化;进迷你默认置顶,退出时置顶状态原样还回去。
             expectEqual(lwv.contains("let hide = hidden || (type == .zoomButton && isMini)"), true,
                         "迷你窗: 绿键单独藏起来,只留关闭和最小化")
@@ -2144,11 +2144,11 @@ func runSourceContractSurfaceTests() {
                         "迷你顶部宽度: 不再按两侧固定边距摆")
         }
         if let settingsView = read("SettingsView.swift") {
-            expectEqual(settingsView.contains("in: LyricsWindowMiniHeaderWidth.percentRange, step: LyricsWindowMiniHeaderWidth.percentStep)"), true,
+            expectEqual(settingsView.contains("in: LyricsWindowMiniHeaderWidth.percentRange, step: LyricsWindowMiniHeaderWidth.percentStep,"), true,
                         "迷你顶部宽度: 「顶部信息」浮层里那根滑杆的范围和步长读 Core")
             expectEqual(settingsView.contains("s.lyricsWindowMiniHeaderWidthPercent = LyricsWindowMiniHeaderWidth.defaultPercent"), true,
                         "迷你顶部宽度: 迷你「重置」把宽度一起还原")
-            expectEqual(settingsView.contains("in: LyricsWindowMiniHeaderSize.percentRange, step: LyricsWindowMiniHeaderSize.percentStep)"), true,
+            expectEqual(settingsView.contains("in: LyricsWindowMiniHeaderSize.percentRange, step: LyricsWindowMiniHeaderSize.percentStep,"), true,
                         "迷你顶部高度: 「顶部信息」浮层里那根滑杆的范围和步长读 Core")
             expectEqual(settingsView.contains("s.lyricsWindowMiniHeaderHeightPercent = LyricsWindowMiniHeaderSize.defaultPercent"), true,
                         "迷你顶部高度: 迷你「重置」把高度一起还原")
@@ -2630,8 +2630,8 @@ func runSourceContractSurfaceTests() {
                 expectEqual(sourceHas(view, "            UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)\n            return\n"), false,
                             "歌词窗口重开: 同一扇窗再次 attach 时别无条件写「开着」(关窗后保活的视图树一刷新就会写回去)")
                 if let settingsView = read("SettingsView.swift") {
-                    expectEqual(sourceHas(settingsView, "LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)\n                            AppActions.shared.openLyricsWindow?()"), true,
-                                "开窗形态: 「打开」先按预览的形态发请求,再开窗")
+                    expectEqual(sourceHas(settingsView, "if !LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini) { AppActions.shared.openLyricsWindow?() }"), true,
+                                "开窗形态: 「打开」先按预览的形态发请求,开着的窗口没当场接走才开窗")
                 }
                 if let restore = view.range(of: "restorePersistedFrame(window)\n"),
                    let enterMini = view.range(of: "DispatchQueue.main.async { [weak self] in self?.toggleMini() }") {
@@ -2677,7 +2677,7 @@ func runSourceContractSurfaceTests() {
             expectEqual(settings.contains("LyricsWindowAllSettingsDrawer(groupNames: lyricsWindowDrawerGroupNames) {"), true,
                         "歌词窗口设置: 全量配置收进「全部设置」抽屉")
             expectEqual(settings.contains("Button(lyricsWindowOpen ? L10n.t(\"显示\") : L10n.t(\"打开\")) {")
-                        && sourceHas(settings, "LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)\n                            AppActions.shared.openLyricsWindow?()"), true,
+                        && sourceHas(settings, "if !LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini) { AppActions.shared.openLyricsWindow?() }"), true,
                         "歌词窗口设置: 预览下面那张卡里有打开窗口的按钮,走 AppActions 那个统一入口(先按预览的形态发请求)")
             expectEqual(settings.contains("LyricsWindowStyleDefaults.restoreDefaults(mini: lyricsWindowPreviewShowsMini)"), true,
                         "歌词窗口设置: 工具栏「重置 ▾」只恢复当前预览的那个尺寸")

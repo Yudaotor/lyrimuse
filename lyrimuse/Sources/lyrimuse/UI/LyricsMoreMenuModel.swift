@@ -266,7 +266,10 @@ final class LyricsMoreMenuModel: ObservableObject {
             if url == nil {
                 let storefront = Locale.current.region?.identifier.lowercased() ?? "us"
                 guard let item = await MusicCatalogSearch.resolve(
-                    title: title, artist: artist, storefront: storefront) else { return }
+                    title: title, artist: artist, storefront: storefront) else {
+                    await MainActor.run { NSSound.beep() }
+                    return
+                }
                 let https: String?
                 switch target {
                 case .album: https = item.collectionViewUrl ?? item.trackViewUrl
@@ -275,7 +278,11 @@ final class LyricsMoreMenuModel: ObservableObject {
                 }
                 url = MusicCatalogSearch.musicSchemeURL(https)
             }
-            guard let url else { return }
+            // 查不到就响一声,同榜单条目:点了没反应会被当成按钮坏了。
+            guard let url else {
+                await MainActor.run { NSSound.beep() }
+                return
+            }
             // Music.app 没在跑时直接 open(music://…) 会被 LaunchServices 吞掉(冷启动走到
             // 能接 Apple Event 之前 URL 就丢了),表现成「App 打开了但停在上次退出的页面」。
             await MusicAutomationPermission.ensureMusicAppRunning()

@@ -1868,7 +1868,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 dotSize: playback.mainFontSize * 0.32, spacing: playback.mainFontSize * 0.3,
                 color: playback.displayForegroundColor,
                 isPlaying: playback.lyricsClockRunning, isVisible: surfaceVisible,
-                reduceMotion: reduceMotion, timingEpoch: playback.timingEpoch
+                reduceMotion: reduceMotion, timingEpoch: playback.timingEpoch, rate: playback.playbackRate
             ) { date in
                 (PlaybackCoordinator.shared.anchor?.extrapolatedPositionMs(now: date)
                     ?? PlaybackCoordinator.shared.pausedPositionMs ?? window.startMs)

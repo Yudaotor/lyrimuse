@@ -1769,8 +1769,8 @@ func runOverlayTests() {
         let controller = src("LyricsOverlayWindowController.swift")
         expectEqual(view.components(separatedBy: "timingEpoch: playback.timingEpoch").count - 1, 4,
                     "悬浮接线: 三处图层行和间奏三点都接时间基准指纹(拖进度 / 调偏移当场重排)")
-        expectEqual(view.components(separatedBy: "rate: playback.playbackRate").count - 1, 3,
-                    "悬浮接线: 三处图层行都按播放速率排关键帧")
+        expectEqual(view.components(separatedBy: "rate: playback.playbackRate").count - 1, 4,
+                    "悬浮接线: 三处图层行和间奏三点都按播放速率排关键帧")
         expectEqual(controller.contains("setControlCapture(nowHovered != nil)"), true,
                     "悬浮接线: 指针在按钮上时收回点击穿透,点按钮不再连带点到下层")
         expectEqual(sourceHas(controller, "isBorrowingScreen = true\n            moveDebounceTimer?.invalidate()"), true,

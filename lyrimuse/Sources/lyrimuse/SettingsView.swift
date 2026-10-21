@@ -2426,6 +2426,10 @@ private struct PrioritySourceFramesKey: PreferenceKey {
 
 private struct AppearanceSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
+    /// 歌词窗口迷你那三根滑杆拖动中节流提交(`SliderCommitThrottle`):每写一次,设置页里的预览和真窗口都重排一遍。
+    @State private var miniFontSizeThrottle = SliderCommitThrottle()
+    @State private var miniHeaderWidthThrottle = SliderCommitThrottle()
+    @State private var miniHeaderHeightThrottle = SliderCommitThrottle()
     /// 歌词窗口此刻开没开(`LyricsWindowSession.openKey`):开着时「打开」那颗键写「显示」,按下去是切到它。
     @AppStorage(LyricsWindowSession.openKey) private var lyricsWindowOpen = false
     /// 这台 Mac 此刻有没有触控栏:没有时「触控栏」那一段照样在,点进去只有一张「这台 Mac 没有触控栏」的说明卡。
@@ -2702,8 +2706,9 @@ private struct AppearanceSettingsTab: View {
                     SettingsRow(icon: "macwindow", title: L10n.t("歌词窗口")) {
                         Button(lyricsWindowOpen ? L10n.t("显示") : L10n.t("打开")) {
                             // 按预览停在哪个尺寸开:迷你预览开迷你窗,完整预览开完整窗口;窗口已经开着就当场切过去。
-                            LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)
-                            AppActions.shared.openLyricsWindow?()
+                            if !LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini) {
+                                AppActions.shared.openLyricsWindow?()
+                            }
                         }
                         .buttonBorderShape(.capsule)
                     }
@@ -3065,6 +3070,17 @@ private struct AppearanceSettingsTab: View {
         }
     }
 
+    /// 相等守卫:拖动中量化后的等值赋值不再广播。
+    private func commitMiniHeaderWidth(_ v: Double) {
+        guard v != settings.lyricsWindowMiniHeaderWidthPercent else { return }
+        settings.lyricsWindowMiniHeaderWidthPercent = v
+    }
+
+    private func commitMiniHeaderHeight(_ v: Double) {
+        guard v != settings.lyricsWindowMiniHeaderHeightPercent else { return }
+        settings.lyricsWindowMiniHeaderHeightPercent = v
+    }
+
     /// 顶部信息区的宽度 / 高度两根滑杆。
     @ViewBuilder
     private var lyricsWindowMiniHeaderSizeRows: some View {
@@ -3075,15 +3091,12 @@ private struct AppearanceSettingsTab: View {
         ) {
             HStack(spacing: 8) {
                 SteppedSlider(value: Binding(
-                    get: { settings.lyricsWindowMiniHeaderWidthPercent },
-                    // 相等守卫同「字号」那根:拖动中量化后的等值赋值不再广播。
-                    set: { v in
-                        guard v != settings.lyricsWindowMiniHeaderWidthPercent else { return }
-                        settings.lyricsWindowMiniHeaderWidthPercent = v
-                    }
-                ), in: LyricsWindowMiniHeaderWidth.percentRange, step: LyricsWindowMiniHeaderWidth.percentStep)
+                    get: { miniHeaderWidthThrottle.value(or: settings.lyricsWindowMiniHeaderWidthPercent) },
+                    set: { miniHeaderWidthThrottle.update($0, commit: commitMiniHeaderWidth) }
+                ), in: LyricsWindowMiniHeaderWidth.percentRange, step: LyricsWindowMiniHeaderWidth.percentStep,
+                   onEditingChanged: { miniHeaderWidthThrottle.editingChanged($0, commit: commitMiniHeaderWidth) })
                     .frame(width: 130)
-                Text(verbatim: "\(Int(settings.lyricsWindowMiniHeaderWidthPercent.rounded()))%")
+                Text(verbatim: "\(Int(miniHeaderWidthThrottle.value(or: settings.lyricsWindowMiniHeaderWidthPercent).rounded()))%")
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                     // 按最宽的「100%」留位,拖到两位数时滑杆不左右挪。
@@ -3098,14 +3111,12 @@ private struct AppearanceSettingsTab: View {
         ) {
             HStack(spacing: 8) {
                 SteppedSlider(value: Binding(
-                    get: { settings.lyricsWindowMiniHeaderHeightPercent },
-                    set: { v in
-                        guard v != settings.lyricsWindowMiniHeaderHeightPercent else { return }
-                        settings.lyricsWindowMiniHeaderHeightPercent = v
-                    }
-                ), in: LyricsWindowMiniHeaderSize.percentRange, step: LyricsWindowMiniHeaderSize.percentStep)
+                    get: { miniHeaderHeightThrottle.value(or: settings.lyricsWindowMiniHeaderHeightPercent) },
+                    set: { miniHeaderHeightThrottle.update($0, commit: commitMiniHeaderHeight) }
+                ), in: LyricsWindowMiniHeaderSize.percentRange, step: LyricsWindowMiniHeaderSize.percentStep,
+                   onEditingChanged: { miniHeaderHeightThrottle.editingChanged($0, commit: commitMiniHeaderHeight) })
                     .frame(width: 130)
-                Text(verbatim: "\(Int(settings.lyricsWindowMiniHeaderHeightPercent.rounded()))%")
+                Text(verbatim: "\(Int(miniHeaderHeightThrottle.value(or: settings.lyricsWindowMiniHeaderHeightPercent).rounded()))%")
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                     .frame(width: 38, alignment: .trailing)
@@ -3319,17 +3330,18 @@ private struct AppearanceSettingsTab: View {
                     ) {
                         HStack(spacing: 6) {
                             // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点。
+                            // 相等守卫:拖动中量化后的等值赋值照样广播 objectWillChange,所有观察 AppSettings 的界面跟着白跑。
+                            let commit: (Double) -> Void = { v in
+                                guard v != fontSize.wrappedValue else { return }
+                                fontSize.wrappedValue = v
+                            }
                             SteppedSlider(value: Binding(
-                                get: { fontSize.wrappedValue },
-                                // 相等守卫:拖动中每个鼠标事件都会调 set,量化后大量等值赋值照样
-                                // 广播 objectWillChange,所有观察 AppSettings 的界面跟着白跑。
-                                set: { v in
-                                    guard v != fontSize.wrappedValue else { return }
-                                    fontSize.wrappedValue = v
-                                }
-                            ), in: AppSettings.lyricsWindowMiniFontSizeRange, step: 1)
+                                get: { miniFontSizeThrottle.value(or: fontSize.wrappedValue) },
+                                set: { miniFontSizeThrottle.update($0, commit: commit) }
+                            ), in: AppSettings.lyricsWindowMiniFontSizeRange, step: 1,
+                               onEditingChanged: { miniFontSizeThrottle.editingChanged($0, commit: commit) })
                                 .frame(width: 96)
-                            Text(String(format: L10n.t("%@pt"), "\(Int(fontSize.wrappedValue))"))
+                            Text(String(format: L10n.t("%@pt"), "\(Int(miniFontSizeThrottle.value(or: fontSize.wrappedValue)))"))
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
                                 .frame(width: 36, alignment: .trailing)

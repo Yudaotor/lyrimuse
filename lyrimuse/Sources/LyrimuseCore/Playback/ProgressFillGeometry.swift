@@ -33,6 +33,16 @@ public enum ProgressFillGeometry {
         return min(containerWidth, max(minimumVisibleWidth, raw))
     }
 
+    /// 补间的上限(歌曲时间,毫秒):新一档离此刻显示的位置超过它就直接到位。正常推进时新一档跟上一段补间的终点
+    /// 几乎重合;换歌、跳转、窗口看不见期间走过的那段都远超过它,补成 1 秒滑动就是「条子滑过去、时间已经跳了」。
+    public static let tweenMaxJumpMs: Double = 2500
+
+    /// 从此刻显示的位置 `from` 换到 `to` 时要不要那 1 秒线性补间。
+    public static func tweens(from: Double, to: Double, durationMs: Int) -> Bool {
+        guard durationMs > 0 else { return false }
+        return abs(to - from) * Double(durationMs) <= tweenMaxJumpMs
+    }
+
     /// 满宽填充要往左移出多少(传给 `.offset(x: -这个值)`)。
     ///
     /// = 容器宽 - 可见宽。恒为非负:可见宽已经夹在容器宽以内。

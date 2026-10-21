@@ -315,11 +315,20 @@ enum LyricsWindowSession {
     @MainActor private static var formRequest: LyricsWindowFormRequest?
     static let formRequestNotification = Notification.Name("LyricsWindowSession.formRequest")
 
-    /// 先调这个、再调 `AppActions.openLyricsWindow`。
-    @MainActor static func requestForm(mini: Bool) {
+    /// 先调这个;返回 false 时再调 `AppActions.openLyricsWindow`。返回 true = 开着的那扇窗当场接走、已经开始切换形态,
+    /// 不用再开:再走 `open` 会激活 App、或在交接前多冒出一扇面板。
+    @discardableResult
+    @MainActor static func requestForm(mini: Bool) -> Bool {
         formRequest = LyricsWindowFormRequest(mini: mini, issuedAt: Date())
+        formSwitchStarted = false
         NotificationCenter.default.post(name: formRequestNotification, object: nil)
+        return formSwitchStarted
     }
+
+    /// 收通知的控制器当场开始切换时置位(`noteFormSwitchStarted`),`requestForm` 发完通知读一次。
+    @MainActor private static var formSwitchStarted = false
+
+    @MainActor static func noteFormSwitchStarted() { formSwitchStarted = true }
 
     @MainActor static var hasPendingFormRequest: Bool { formRequest != nil }
 
@@ -346,6 +355,12 @@ enum LyricsWindowSession {
     /// 按要的形态开(请求优先,其次上次的形态,07 章决策 133)。面板开着、请求的是完整尺寸:请求已经发了通知,
     /// 面板自己的控制器收到去切,这里不再开。`openScene` 激活 App 并开场景。
     @MainActor static func open(scene openScene: () -> Void) {
+        // 最小化着的那扇(isVisible 为 false)先还原,别另开一扇:形态请求留给它上屏那一刻由遮挡观察者取走。
+        if let minimized = [LyricsMiniPanelHost.panel, sceneWindow].compactMap({ $0 }).first(where: \.isMiniaturized) {
+            minimized.deminiaturize(nil)
+            if !hasPendingFormRequest, !(minimized is LyricsMiniPanel) { openScene() }
+            return
+        }
         if let panel = LyricsMiniPanelHost.panel, panel.isVisible {
             if formRequest.map({ !$0.mini && $0.isFresh(now: Date()) }) == true { return }
             panel.orderFrontRegardless()
@@ -445,6 +460,8 @@ private final class LyricsWindowController: ObservableObject {
     // 重新打开这个窗口都从"不置顶"开始,跟伪全屏状态同一个"只在这次打开期间有效"的
     // 处理原则,没有额外加一个 UserDefaults 存档的必要性。
     @Published private(set) var isAlwaysOnTop = false
+    /// 这扇窗每关一次加一(含切形态的交接):视图据它收起弹出来的面板,下次打开不带着上次开着的那块。
+    @Published private(set) var closeCount = 0
     /// 窗口面此刻是否真的看得见(`occlusionState` 含 `.visible`):被别的窗口**完全**遮住、
     /// 最小化、orderOut 都是 false;部分露出算可见。逐字两级时钟 / 间奏三点 / 换行滚动动画的
     /// 门控用(见已知坑 #17)。默认 true——宁可多跑也不能把看得见的窗口停表。
@@ -735,21 +752,25 @@ private final class LyricsWindowController: ObservableObject {
     /// 窗口本来就开着时(`animated`)跟点切换键一样带变形动画;刚上屏那一下不带。
     private func applyFormRequest(animated: Bool = false) {
         guard let window, window.isVisible, let requested = LyricsWindowSession.takeFormRequest() else { return }
-        if requested != isMini { toggleMini(animated: animated) }
+        guard requested != isMini else { return }
+        if toggleMini(animated: animated) { LyricsWindowSession.noteFormSwitchStarted() }
     }
 
     /// 进 / 出迷你:完整尺寸是场景那扇窗,迷你是 `LyricsMiniPanel`,切换是两扇窗交接(07 章决策 133)。`animated` 时由
     /// `formMorph` 用两扇窗的截图做变形动画盖住交接(决策 125)。别改成让真窗口自己做尺寸动画(决策 47 / 49 / 51 / 53)。
-    func toggleMini(animated: Bool = false) {
+    /// 返回这一下有没有开始切换(被下面几道闸拦下是 false)。
+    @discardableResult
+    func toggleMini(animated: Bool = false) -> Bool {
         // 变形动画没走完时这一下不理:源窗口此刻藏在桌面层级以下,临时窗上摆的是这一次的目标形态。
-        guard !formMorph.isRunning else { return }
+        guard !formMorph.isRunning else { return false }
         // 全屏(含进出的过渡)时不切,按钮那边同样置灰。
-        guard let window, !isFullScreenActive, !isNativeFullScreenTransition else { return }
+        guard let window, !isFullScreenActive, !isNativeFullScreenTransition else { return false }
         if window is LyricsMiniPanel {
             switchToFullWindow(from: window, animated: animated)
         } else {
             switchToMiniPanel(from: window, animated: animated)
         }
+        return true
     }
 
     /// 完整 → 迷你:在目标位置建好面板,关掉这扇窗。迷你窗回到上次待的位置;没存过(或那块屏不在了)就顶边钉在原位。
@@ -872,8 +893,12 @@ private final class LyricsWindowController: ObservableObject {
 
     /// 关窗时停掉的遮挡检测,同一扇窗再上屏时补回。SwiftUI 关掉场景窗后留着它、下次复用,这时 attach 不一定再走一遍,
     /// 由遮挡变化的观察者调(见 07 章决策 167)。「窗口」菜单那一项不用补:再上屏时系统自己加回,再加一次就重复。
+    /// 屏幕参数观察者只在窗口在屏时对账,关着期间插拔过屏的,上屏这一下补对一次(借屏 / 送回,决策 145)。
     private func restoreAfterReopen(_ window: NSWindow) {
-        if coverageMonitor == nil { startCoverageMonitor(window) }
+        if coverageMonitor == nil {
+            startCoverageMonitor(window)
+            reconcileScreens(window)
+        }
     }
 
     /// 窗口的 Space / 全屏属性跟着形态和置顶走:完整尺寸能进原生全屏;迷你置顶时在每个桌面都出现、能浮在别的 App 的全屏上,
@@ -1044,9 +1069,8 @@ private final class LyricsWindowController: ObservableObject {
     // 另一扇窗口时,菜单栏/Dock 会跟着继续隐藏,那扇窗口反而变得不好用(找不到菜单栏)。
     // 真全屏在这种场景下是"焦点窗口所在的那个 Space 单独隐藏菜单栏",别的窗口不受影响;这里
     // 没有真的 Space 隔离,只能退而求其次——失去焦点就整个退出伪全屏,不去做"记住哪些窗口
-    // 该保持全屏"这类更复杂的模拟。置顶状态不需要类似兜底——window.level 是这个 NSWindow
-    // 实例自己的属性,窗口一关就随实例一起没了,也不受切换焦点影响,不像 presentationOptions
-    // 那样是进程级的全局状态、需要显式清理。
+    // 该保持全屏"这类更复杂的模拟。置顶不受切换焦点影响,但 SwiftUI 关窗后复用同一扇窗,层级会留着,
+    // 由 closeObserver 在用户关窗时清掉。
     func attach(_ window: NSWindow) {
         guard self.window !== window else {
             // 同一扇窗关掉再开:关窗时遮挡检测已经停了(closeObserver),这里补回来,其余观察者都还挂着。
@@ -1227,9 +1251,14 @@ private final class LyricsWindowController: ObservableObject {
                 let handoff = self?.handingOff ?? false
                 self?.handingOff = false
                 if !AppExit.isTerminating, !handoff { UserDefaults.standard.set(false, forKey: LyricsWindowSession.openKey) }
+                // 置顶只在这次打开期间有效:用户关掉完整那扇才清(SwiftUI 复用同一扇窗和这份控制器,层级会带到下次)。
+                // 切迷你的交接不算,回到完整尺寸时照旧置顶。
+                if !handoff, !(note.object is LyricsMiniPanel) { self?.setAlwaysOnTop(false) }
+                self?.closeCount += 1
                 self?.hoverFade.windowClosed()
                 self?.chromeFade.windowClosed()
                 self?.forceExit()
+                self?.clearNativeFullScreen()
                 self?.coverageMonitor?.stop()
                 self?.coverageMonitor = nil
                 // addToWindowsMenu 手动加的那条,窗口关掉后手动摘掉——不摘的话菜单里会
@@ -1314,14 +1343,17 @@ private final class LyricsWindowController: ObservableObject {
         exitFullScreenObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didExitFullScreenNotification, object: window, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.isNativeFullScreen = false
-                if let monitor = self.nativeFullScreenEscapeMonitor {
-                    NSEvent.removeMonitor(monitor)
-                    self.nativeFullScreenEscapeMonitor = nil
-                }
-            }
+            MainActor.assumeIsolated { self?.clearNativeFullScreen() }
+        }
+    }
+
+    /// 出了原生全屏(或在全屏里直接关窗:别指望关窗时一定有 didExitFullScreen)。
+    private func clearNativeFullScreen() {
+        isNativeFullScreen = false
+        isNativeFullScreenTransition = false
+        if let monitor = nativeFullScreenEscapeMonitor {
+            NSEvent.removeMonitor(monitor)
+            nativeFullScreenEscapeMonitor = nil
         }
     }
 
@@ -1667,6 +1699,7 @@ struct LyricsWindowView: View {
     /// 迷你进度条拖动中按住的位置(0…1),没在拖就是 nil。
     /// `@GestureState` 而不是 `@State` —— 手势被取消时它自动复位,理由见 miniProgressBar。
     @GestureState private var miniScrubFraction: Double?
+    @State private var miniScrubOrigin = ScrubOrigin()
     /// 迷你进度条那一行的实测宽度,换算点击位置用。
     @State private var miniScrubWidth: CGFloat = 0
 
@@ -1716,6 +1749,15 @@ struct LyricsWindowView: View {
         // 窗口本体的不透明度跟着背景设置走。预览没有自己的窗口(也不该去动设置窗口),
         // controller 里 `window` 为 nil 时这两个调用是空操作,不用额外 gate。
         .onAppear { windowController.setBackgroundTransparent(wantsTransparentWindow) }
+        // 关窗时收起弹出来的面板:这棵视图跟窗口一起留到下次打开,不收的话重开时还挂着。
+        .onChange(of: windowController.closeCount) { _, _ in
+            showsMoreMenu = false
+            showsInfoPanel = false
+            showsChartsPanel = false
+            showsTranslationMenu = false
+            showsOutputMenu = false
+            editorialPanel = nil
+        }
         .onChange(of: wantsTransparentWindow) { _, transparent in
             windowController.setBackgroundTransparent(transparent)
         }
@@ -2319,9 +2361,10 @@ struct LyricsWindowView: View {
                     startMs: gap.startMs, endMs: gap.endMs,
                     dotSize: fontSize * 0.32, spacing: fontSize * 0.23,
                     color: miniPrimaryColor,
-                    isPlaying: playback.isPlayingNow, isVisible: windowController.isSurfaceVisible,
+                    isPlaying: playback.lyricsClockRunning, isVisible: windowController.isSurfaceVisible,
                     reduceMotion: reduceMotion,
                     timingEpoch: lyricsTimingEpoch,
+                    rate: playback.anchor?.rate ?? 1,
                     style: .window
                 ) { _ in
                     // 时间基准跟逐字填色同一套:外推位置 + 当前歌词偏移(间奏窗口是歌词原始
@@ -2415,10 +2458,11 @@ struct LyricsWindowView: View {
     private var miniProgressBar: some View {
         let total = playback.currentDurationMs ?? 0
         let thick = miniControlsVisible ? Self.miniBarHoverHeight : Self.miniBarHeight
-        // 暂停 / 窗口不可见时停表:位置不动,条子就不用每秒重画四次(暂停中拖动、seek 会改
-        // miniScrubFraction / pausedPositionMs,照样触发重算,不靠这个时钟)。
+        // 暂停 / 窗口不可见 / 条子没显示(「进度条」关着、控制条也没浮出)时停表:位置不动,条子就不用每秒重画四次
+        // (暂停中拖动、seek 会改 miniScrubFraction / pausedPositionMs,照样触发重算,不靠这个时钟)。
         return FrameTimeline(minimumInterval: 0.25,
-                             paused: !playback.isPlayingNow || !windowController.isSurfaceVisible) { now in
+                             paused: !playback.isPlayingNow || !windowController.isSurfaceVisible
+                                 || !miniProgressBarShown) { now in
             let played = total > 0
                 ? min(1, max(0, Double(miniPositionMs(now: now)) / Double(total))) : 0
             let fraction = miniScrubFraction ?? played
@@ -2459,11 +2503,12 @@ struct LyricsWindowView: View {
                     if state == nil {
                         NSHapticFeedbackManager.defaultPerformer.perform(
                             .alignment, performanceTime: .now)
+                        miniScrubOrigin.track = miniScrubTrack(total: total)
                     }
                     state = min(1, max(0, value.location.x / miniScrubWidth))
                 }
                 .onEnded { value in
-                    guard total > 0, miniScrubWidth > 0 else { return }
+                    guard total > 0, miniScrubWidth > 0, miniScrubOrigin.track == miniScrubTrack(total: total) else { return }
                     let f = min(1, max(0, value.location.x / miniScrubWidth))
                     PlaybackCoordinator.shared.seek(toMs: Int(f * Double(total)))
                 }
@@ -2484,6 +2529,11 @@ struct LyricsWindowView: View {
     ///
     /// 预览里整个不摆,同左上角那两颗窗口控件的理由:预览是设置页里的一张画,按下去会真的
     /// 切歌/改音量,而看的人以为自己只是在看效果。
+    /// 迷你进度条拖动起点的曲目标识(`ScrubOrigin`)。
+    private func miniScrubTrack(total: Int) -> String {
+        ScrubOrigin.key(title: playback.title, artist: playback.artist, durationMs: total)
+    }
+
     private var miniControlsVisible: Bool {
         playback.miniShowsControls && !previewMode && (miniHovered || miniScrubFraction != nil)
     }
@@ -3072,13 +3122,13 @@ struct LyricsWindowView: View {
                     }
                 }
                 // 音频输出面板(AirPlay 键弹出):同「⋯」菜单的窗级自绘玻璃
-                // 面板机制,锚在按钮**下方**(AM 的输出面板悬在胶囊下方)。 按钮的锚点
-                // 坐标在 safe 区坐标系里,而胶囊行被 offset 提到了真窗顶(−safeTop+6),
-                // 面板定位要做同样的换算。
+                // 面板机制,锚在按钮**下方**(AM 的输出面板悬在胶囊下方)。按钮的锚点挂在胶囊的
+                // offset 里面,取到的已经是挪到真窗顶之后的位置(同 VolumeCapsuleBoundsKey),
+                // 别再减一次 safe area:那样面板顶边贴死胶囊下沿。
                 .overlayPreferenceValue(OutputMenuButtonBoundsKey.self) { anchor in
                     if showsOutputMenu, let anchor {
                         let r = geo[anchor]
-                        let buttonBottom = r.maxY - geo.safeAreaInsets.top + 6
+                        let buttonBottom = r.maxY + 6
                         ZStack(alignment: .topLeading) {
                             Color.black.opacity(0.001)
                                 .contentShape(Rectangle())
@@ -4688,9 +4738,10 @@ struct LyricsWindowView: View {
                 dotSize: lyricFontSize * 0.32, spacing: lyricFontSize * 0.23,
                 // 三点是**歌词内容**(它顶替的是一行词),跟着「文字颜色」走,不跟 chrome。
                 color: lyricTextColor,
-                isPlaying: playback.isPlayingNow, isVisible: windowController.isSurfaceVisible,
+                isPlaying: playback.lyricsClockRunning, isVisible: windowController.isSurfaceVisible,
                 reduceMotion: reduceMotion,
                 timingEpoch: lyricsTimingEpoch,
+                rate: playback.anchor?.rate ?? 1,
                 style: .window,
                 anchor: listSide(centered: centered)
             ) { _ in
@@ -6209,6 +6260,14 @@ func amVibrantColor(layers: WindowBackgroundLayers?, satScale: Double, satCap: D
                  brightness: v)
 }
 
+/// 拖进度条按下那一拍是哪一首:拖到一半播放器自己换了歌,松手时对不上就不跳(不然新歌被跳到同一比例处)。
+/// 引用类型、存在 `@State` 里:按下时写、松手时读,不触发重画;手势被取消时下一次按下照样覆盖。
+final class ScrubOrigin {
+    var track: String?
+
+    static func key(title: String, artist: String, durationMs: Int) -> String { "\(artist)\u{1F}\(title)\u{1F}\(durationMs)" }
+}
+
 private struct WindowProgressSection: View {
     let anchor: ProgressAnchor?
     /// 窗口面看不看得见(`LyricsWindowController.isSurfaceVisible`)。看不见时停掉每秒一次的推进。
@@ -6228,6 +6287,7 @@ private struct WindowProgressSection: View {
     // 这个值而不是真实播放位置,松手才发 seek —— 见 progressBar 里的注释。
     // 用 @GestureState:手势被取消时会自动复位,不会像 @State 那样永久卡住(理由同上)。
     @GestureState private var scrubbingFraction: Double?
+    @State private var scrubOrigin = ScrubOrigin()
     // 进度条那一块的实际宽度,拖拽时换算比例用(见 progressBar 里为什么不用 GeometryReader 包)。
     @State private var scrubWidth: CGFloat = 0
     /// 进度条真正画出来的进度。跟 fraction 分开存,是为了**自己决定什么时候补间**:
@@ -6241,6 +6301,8 @@ private struct WindowProgressSection: View {
     /// 进度条轨道粗细:恒定 6。**别做"悬停变粗"** —— frame(height:) 参与布局,悬停那一下
     /// 会把上面整块内容顶起来;AM 的进度条常态就是粗的,悬停反馈只剩系统光标。
     private let scrubberHeight: CGFloat = 6
+    /// 读屏 / 键盘调进度时一次进退多少。
+    private static let accessibilitySeekStepMs = 10_000
 
     @ViewBuilder
     var body: some View {
@@ -6333,12 +6395,14 @@ private struct WindowProgressSection: View {
             }
             .frame(height: scrubberHeight)
             .onAppear {
+                fillAnimates = false
                 shownFraction = fraction
                 // 第一次渲染之后才允许补间:开窗那一下的赋值必须是瞬时的。
                 DispatchQueue.main.async { progressPrimed = true }
             }
             .onChange(of: fraction) { _, f in
                 let smooth = progressPrimed && !reduceMotion && scrubbingFraction == nil
+                    && ProgressFillGeometry.tweens(from: shownFraction, to: f, durationMs: durationMs)
                 if smooth {
                     // 正常推进:1 秒一档,配 .linear 补间在视觉上就是连续的。
                     //
@@ -6358,7 +6422,7 @@ private struct WindowProgressSection: View {
                     fillAnimates = true
                     shownFraction = min(1, max(0, f + step))
                 } else {
-                    // 冷启动 / 拖动中 / 关了动效:直接到位。拖动时补间会让进度条追着
+                    // 冷启动 / 拖动中 / 关了动效 / 换歌、跳转这类跳变:直接到位。拖动时补间会让进度条追着
                     // 手指慢慢挪,手感发黏。
                     var t = Transaction()
                     t.disablesAnimations = true
@@ -6401,17 +6465,30 @@ private struct WindowProgressSection: View {
                         if state == nil {
                             NSHapticFeedbackManager.defaultPerformer.perform(
                                 .alignment, performanceTime: .now)
+                            scrubOrigin.track = ScrubOrigin.key(title: title, artist: artist, durationMs: durationMs)
                         }
                         state = min(1, max(0, value.location.x / scrubWidth))
                     }
                     .onEnded { value in
-                        guard durationMs > 0, scrubWidth > 0 else { return }
+                        guard durationMs > 0, scrubWidth > 0,
+                              scrubOrigin.track == ScrubOrigin.key(title: title, artist: artist, durationMs: durationMs)
+                        else { return }
                         let f = min(1, max(0, value.location.x / scrubWidth))
                         PlaybackCoordinator.shared.seek(toMs: Int(f * Double(durationMs)))
                     }
             )
             // 播放器不吃外部跳转指令(Amazon Music)、或者在放广告时只显示、不能拖,见 `PlaybackCoordinator.acceptsSeek`。
             .allowsHitTesting(seekable)
+            // 自绘的没有读屏值:读成「已播 / 总长」,能跳转时一次进退 10 秒。
+            .accessibilityElement()
+            .accessibilityLabel(L10n.t("播放进度"))
+            .accessibilityValue(Text(verbatim: Self.formatTime(ms: shownMs) + " / " + Self.formatTime(ms: durationMs)))
+            .accessibilityAdjustableAction { direction in
+                let step = direction == .increment ? Self.accessibilitySeekStepMs
+                    : direction == .decrement ? -Self.accessibilitySeekStepMs : 0
+                guard seekable, durationMs > 0, step != 0 else { return }
+                PlaybackCoordinator.shared.seek(toMs: min(durationMs, max(0, positionMs + step)))
+            }
             HStack {
                 Text(Self.formatTime(ms: shownMs))
                 Spacer()
@@ -6635,6 +6712,15 @@ private struct WindowVolumeCapsule: View {
                         PlaybackCoordinator.shared.setVolume(Int((x / travel * 100).rounded()))
                     }
             )
+        }
+        // 自绘的没有读屏值:当一根可调滑杆读出来,VoiceOver / 全键盘控制一次增减 5%。
+        .accessibilityElement()
+        .accessibilityLabel(L10n.t("音量"))
+        .accessibilityValue(Text(verbatim: "\(volume)%"))
+        .accessibilityAdjustableAction { direction in
+            let step = direction == .increment ? 5 : direction == .decrement ? -5 : 0
+            guard step != 0 else { return }
+            PlaybackCoordinator.shared.setVolume(min(100, max(0, volume + step)))
         }
     }
 }
@@ -7488,8 +7574,8 @@ private struct NowPlayingCountBadge: View {
 
     var body: some View {
         // 容器必须永远在场:onAppear/onChange 是取数的唯一触发点,挂在条件内容上会
-        // 陷入"没数字→不渲染→永远不取数"的死锁。
-        Group {
+        // 陷入"没数字→不渲染→永远不取数"的死锁。别换成 Group:它的修饰符分给子视图,没有子视图时一个也不触发。
+        ZStack {
             if stats.isConnected, !title.isEmpty, let n = stats.nowPlayingCount {
                 // 点这行字直接跳设置的 Last.fm 详情页 —— 这个数字本来就来自 Last.fm scrobble 记录,
                 // 点它去看/管理那份连接是最直接的落点。跳转机制跟 OnboardingView 的"现在去设置里

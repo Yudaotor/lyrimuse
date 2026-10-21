@@ -35,13 +35,12 @@ enum LyrimuseActionRunner {
             AppActions.shared.openLyricsWindow?()
         case .toggleLyricsWindowMiniHotkey:
             // 开着就切到另一种形态,没开就直接开成迷你(07 章决策 117);`on` 给了就是「要不要迷你」。
-            // 开着时窗口控制器收 requestForm 的通知当场切。
+            // 开着时窗口控制器收 requestForm 的通知当场切,那时不再 open(不激活 App)。
             let defaults = UserDefaults.standard
             let mini = on ?? LyricsWindowMiniToggle.targetIsMini(
                 windowOpen: defaults.bool(forKey: LyricsWindowSession.openKey),
                 isMini: defaults.bool(forKey: LyricsWindowSession.miniModeKey))
-            LyricsWindowSession.requestForm(mini: mini)
-            AppActions.shared.openLyricsWindow?()
+            if !LyricsWindowSession.requestForm(mini: mini) { AppActions.shared.openLyricsWindow?() }
         case .openSettingsHotkey:
             AppActions.shared.openSettings?()
         // 播放控制三个动作:先校验自动化权限 —— 没问过就顺手弹一次系统授权对话框,已经拒绝过就不弹窗、只用

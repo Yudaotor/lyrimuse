@@ -1426,8 +1426,8 @@ func runLyricsWindowTests() {
                     "窗口收尾(契约): attach 挂的观察者 deinit 都要摘掉")
         expectEqual(view.contains("if window.isVisible { restoreAfterReopen(window) }")
                     && sourceHas(view, "guard win.isVisible else { return }\n                self?.restoreAfterReopen(win)")
-                    && sourceHas(view, "private func restoreAfterReopen(_ window: NSWindow) {\n        if coverageMonitor == nil { startCoverageMonitor(window) }\n    }"),
-                    true, "窗口收尾(契约): 同一扇窗关了再开(attach 不一定再走),遮挡检测要补回;菜单项系统自己会加回,别再加")
+                    && sourceHas(view, "private func restoreAfterReopen(_ window: NSWindow) { if coverageMonitor == nil { startCoverageMonitor(window) reconcileScreens(window) } }"),
+                    true, "窗口收尾(契约): 同一扇窗关了再开(attach 不一定再走),遮挡检测要补回、屏幕补对一次账;菜单项系统自己会加回,别再加")
         expectEqual(monitor.contains("deinit {") && monitor.contains("timer?.invalidate()"), true,
                     "窗口收尾(契约): 遮挡检测被放手时自己停表")
         expectEqual(view.contains("if let anchor, isVisible {")
@@ -1546,6 +1546,86 @@ func runLyricsWindowTests() {
                     && !sourceBytes(window, contain: "offsetMs: PlaybackCoordinator.shared.currentLyricsOffsetMs"),
                     true, "歌词偏移: 订阅合起来那份偏移,只改全局 / 播放器那档时逐字时间基准也重算")
         expectEqual(sourceBytes(window, contain: "_logChanges"), false, "主 body 不留 SwiftUI 诊断探针")
+    }
+
+    // ---- 歌词窗口第三轮审计的修复(07 章决策 179) ----
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ path: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let window = source("lyrimuse/UI/LyricsWindowView.swift")
+        let list = source("lyrimuse/UI/LyricsLayerList.swift")
+        let dots = source("lyrimuse/UI/LyricsGapDots.swift")
+        let notch = source("lyrimuse/UI/NotchLyricsView.swift")
+        let runner = source("lyrimuse/Settings/LyrimuseActionRunner.swift")
+        let settingsView = source("lyrimuse/SettingsView.swift")
+        let appSettings = source("lyrimuse/Settings/AppSettings.swift")
+        let menu = source("lyrimuse/UI/LyricsMoreMenuModel.swift")
+
+        expectEqual(window.components(separatedBy: "isPlaying: playback.lyricsClockRunning, isVisible: windowController.isSurfaceVisible,").count - 1, 2,
+                    "间奏三点: 迷你那一格和完整列表那一行都按「在播且锚点没冻」判在不在跑")
+        expectEqual(window.components(separatedBy: "rate: playback.anchor?.rate ?? 1,").count - 1 == 2
+                    && sourceBytes(dots, contain: "running: isPlaying && isVisible, rate: rate,")
+                    && sourceHas(notch, "offsetMs: playback.lyricsOffsetMs), rate: playback.playbackRate,"),
+                    true, "间奏三点: 共用视图把播放速率交给图层,歌词窗口两处、灵动岛都传")
+
+        expectEqual(sourceHas(runner, "if !LyricsWindowSession.requestForm(mini: mini) { AppActions.shared.openLyricsWindow?() }")
+                    && sourceBytes(window, contain: "if toggleMini(animated: animated) { LyricsWindowSession.noteFormSwitchStarted() }"),
+                    true, "切迷你快捷键: 开着的窗口当场接走、开始切换时不再 open(不激活 App、不多冒一扇面板)")
+        expectEqual(sourceBytes(window, contain: "first(where: \\.isMiniaturized)")
+                    && sourceBytes(window, contain: "minimized.deminiaturize(nil)"),
+                    true, "最小化时切形态: 先还原那一扇,不另开一扇")
+        expectEqual(sourceBytes(window, contain: "if !handoff, !(note.object is LyricsMiniPanel) { self?.setAlwaysOnTop(false) }"),
+                    true, "置顶: 用户关掉完整那扇时清掉,复用的窗口下次打开从不置顶开始")
+        expectEqual(sourceBytes(window, contain: "self?.closeCount += 1")
+                    && sourceHas(window, ".onChange(of: windowController.closeCount) { _, _ in showsMoreMenu = false showsInfoPanel = false showsChartsPanel = false showsTranslationMenu = false showsOutputMenu = false editorialPanel = nil }"),
+                    true, "关窗收起弹出面板: ⋯ / 简介 / 榜单 / 译文 / 输出 / 专辑简介,重开不再挂着")
+        expectEqual(sourceBytes(window, contain: "self?.forceExit()\n                self?.clearNativeFullScreen()"),
+                    true, "原生全屏里直接关窗: 关窗时清全屏状态,不靠系统一定发 didExitFullScreen")
+
+        expectEqual(sourceHas(window, "ZStack { if stats.isConnected, !title.isEmpty, let n = stats.nowPlayingCount {")
+                    && !sourceHas(window, "Group { if stats.isConnected, !title.isEmpty, let n = stats.nowPlayingCount {"),
+                    true, "收听次数徽标: 取数的 onAppear / onChange 挂在常驻容器上,不挂在条件内容的 Group 上")
+
+        expectEqual(sourceHas(window, "let smooth = progressPrimed && !reduceMotion && scrubbingFraction == nil && ProgressFillGeometry.tweens(from: shownFraction, to: f, durationMs: durationMs)"),
+                    true, "进度条: 跳变超过补间上限时直接到位")
+        expectEqual(ProgressFillGeometry.tweens(from: 0.5, to: 0.5 + 1000.0 / 200_000, durationMs: 200_000), true, "进度条补间: 每秒一档照常补间")
+        expectEqual(ProgressFillGeometry.tweens(from: 0.99, to: 0, durationMs: 200_000), false, "进度条补间: 换歌从末尾回到开头直接到位")
+        expectEqual(ProgressFillGeometry.tweens(from: 0.2, to: 0.5, durationMs: 200_000), false, "进度条补间: 跳转直接到位")
+        expectEqual(ProgressFillGeometry.tweens(from: 0.2, to: 0.2, durationMs: 0), false, "进度条补间: 没有时长不补间")
+
+        expectEqual(window.components(separatedBy: "ScrubOrigin.key(title:").count - 1 >= 3
+                    && sourceBytes(window, contain: "miniScrubOrigin.track == miniScrubTrack(total: total)")
+                    && sourceBytes(window, contain: "scrubOrigin.track == ScrubOrigin.key(title: title, artist: artist, durationMs: durationMs)"),
+                    true, "拖进度: 按下时记下是哪一首,拖到一半换了歌松手不跳(完整、迷你两条)")
+        expectEqual(sourceBytes(settingsView, contain: "miniFontSizeThrottle.update($0, commit: commit)")
+                    && sourceBytes(settingsView, contain: "miniHeaderWidthThrottle.update($0, commit: commitMiniHeaderWidth)")
+                    && sourceBytes(settingsView, contain: "miniHeaderHeightThrottle.update($0, commit: commitMiniHeaderHeight)"),
+                    true, "迷你三根滑杆: 拖动中节流提交")
+        expectEqual(sourceBody("static func openCatalogPage", in: menu).components(separatedBy: "NSSound.beep()").count - 1, 2,
+                    "前往专辑 / 歌手: 搜不到、换算不出链接都响一声")
+        expectEqual(sourceBytes(appSettings, contain: "to: LyricsWindowMiniHeaderWidth.percentRange)")
+                    && sourceBytes(appSettings, contain: "to: LyricsWindowMiniHeaderSize.percentRange)")
+                    && sourceBytes(appSettings, contain: "to: Self.lyricsWindowMiniFontSizeRange)"),
+                    true, "迷你字号、顶部宽 / 高: 读盘夹回滑杆范围")
+        expectEqual(sourceBytes(window, contain: "let buttonBottom = r.maxY + 6")
+                    && !sourceBytes(window, contain: "r.maxY - geo.safeAreaInsets.top"),
+                    true, "输出面板: 锚点已经是挪到窗顶之后的位置,别再减 safe area(面板会贴死胶囊)")
+        expectEqual(sourceBytes(window, contain: ".accessibilityLabel(L10n.t(\"播放进度\"))")
+                    && sourceBytes(window, contain: ".accessibilityLabel(L10n.t(\"音量\"))")
+                    && window.components(separatedBy: ".accessibilityAdjustableAction").count - 1 >= 2,
+                    true, "读屏: 进度条和音量滑杆有值、能增减")
+
+        expectEqual(sourceBytes(list, contain: "override func acceptsFirstMouse(for event: NSEvent?) -> Bool { window is LyricsMiniPanel }"),
+                    true, "图层列表: 迷你面板里认第一下点击,点行能跳")
+        expectEqual(sourceHas(list, "if NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0) == window.windowNumber { updateHover(at:"),
+                    true, "图层列表: 滚动时重判悬停只在指针下面最上层是这扇窗时")
+        expectEqual(sourceBytes(list, contain: "language: songwriters.isEmpty ? \"\" : L10n.current"),
+                    true, "图层列表: 有创作者那一行时建表键带界面语言,切语言当场重画")
+        expectEqual(sourceHas(list, "if force { pendingRepositionWhileHidden = false")
+                    && sourceHas(list, "pendingRepositionWhileHidden = false relayout(next, transition: transitionStyle("),
+                    true, "图层列表: 恢复可见那一拍已经滚回当前行时清掉隐藏期标记")
     }
     checkLyricsWindowFormMorph()
 }

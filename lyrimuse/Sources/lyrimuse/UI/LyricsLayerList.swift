@@ -114,6 +114,8 @@ final class LyricsLayerListView: NSView {
     private struct BuildKey: Equatable, @unchecked Sendable {
         var lines: [LyricsWindowLine]
         var songwriters: [String]
+        /// 末尾那行的「创作者：」和分隔号按建表时的界面语言画进位图:切语言要重建。
+        var language: String
         var style: LyricsLayerRowStyle
         var columnWidth: CGFloat
     }
@@ -229,8 +231,9 @@ final class LyricsLayerListView: NSView {
         guard bounds.width > 0, bounds.height > 0 else { return }
         var style = next.style
         style.scale = window?.backingScaleFactor ?? style.scale
-        let key = BuildKey(lines: next.lines, songwriters: next.style.centered ? [] : next.songwriters,
-                           style: style, columnWidth: width)
+        let songwriters = next.style.centered ? [] : next.songwriters
+        let key = BuildKey(lines: next.lines, songwriters: songwriters,
+                           language: songwriters.isEmpty ? "" : L10n.current, style: style, columnWidth: width)
         if key != builtKey, building?.key != key {
             // 拖窗口边角期间折行跟着宽度变,但别每一帧都整张重建:隔一小段才重建一次,松手那一刻再按最终宽度建一次
             let wait = Self.liveResizeRebuildInterval - (CACurrentMediaTime() - lastRebuild)
@@ -249,12 +252,15 @@ final class LyricsLayerListView: NSView {
             syncGapView(next)
         }
         if force {
+            pendingRepositionWhileHidden = false
             relayout(next, transition: .none)
         } else if gapChanged || anchorChanged {
             if !next.surfaceVisible {
                 pendingRepositionWhileHidden = true
                 relayout(next, transition: .none)
             } else {
+                // 这一拍已经滚回当前行,看不见期间记下的那笔算还掉了,不然之后再切回来会把手动翻看的位置拽回去。
+                pendingRepositionWhileHidden = false
                 relayout(next, transition: transitionStyle(previous: previous, next: next, gapChanged: gapChanged))
             }
         } else if previous?.surfaceVisible == false, next.surfaceVisible, pendingRepositionWhileHidden {
@@ -774,8 +780,12 @@ final class LyricsLayerListView: NSView {
 
     @objc private func boundsChanged() {
         updateIndicator(animated: false)
-        if let p = window?.mouseLocationOutsideOfEventStream {
-            updateHover(at: convert(p, from: nil))
+        guard let window else { return }
+        // 滚动时按指针位置重判悬停,但指针下面最上层得是这扇窗:被别的窗口挡着时那里收不到离开,一亮就不灭。
+        if NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0) == window.windowNumber {
+            updateHover(at: convert(window.mouseLocationOutsideOfEventStream, from: nil))
+        } else {
+            setHovered(nil)
         }
     }
 
@@ -951,6 +961,8 @@ final class FlippedView: NSView {
     var onMouse: ((NSEvent, MouseKind) -> Void)?
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
+    /// 迷你面板不激活 App,第一下点击不认就永远点不动(同 `LyricsMiniHostingView`);完整那扇照旧先点一下激活。
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { window is LyricsMiniPanel }
     override func mouseDown(with event: NSEvent) {
         if let onMouse { onMouse(event, .down) } else { super.mouseDown(with: event) }
     }

@@ -1961,6 +1961,11 @@ final class AppSettings: ObservableObject {
     static let defaultLyricsWindowMiniFontSize: Double = 34
     static let lyricsWindowMiniFontSizeRange: ClosedRange<Double> = 14...48
 
+    /// 读盘时把数值夹进滑杆的范围。
+    static func clamped(_ value: Double, to range: ClosedRange<Double>) -> Double {
+        min(max(value, range.lowerBound), range.upperBound)
+    }
+
     /// 自定义背景的默认配色:深蓝灰到近黑的竖向渐变。
     ///
     /// 默认档位是「跟随封面」,所以这两个值只在用户**主动切到**纯色/渐变那一刻才第一次被看到 ——
@@ -2469,12 +2474,15 @@ final class AppSettings: ObservableObject {
             .map(LyricsWindowMiniHeaderFields.init(rawValue:)) ?? .default
         // 同上那条"没存过才落默认"的写法:`bool(forKey:)` 对没存过也返回 false,会让默认变成关。
         lyricsWindowMiniShowsTime = (defaults.object(forKey: Keys.lyricsWindowMiniShowsTime) as? Bool) ?? true
-        lyricsWindowMiniHeaderWidthPercent =
+        // 这三项读盘夹回滑杆的范围(同悬浮歌词字号):手改过、导入的越界值会让读数跟实际生效的对不上。
+        lyricsWindowMiniHeaderWidthPercent = Self.clamped(
             (defaults.object(forKey: Keys.lyricsWindowMiniHeaderWidthPercent) as? Double)
-            ?? LyricsWindowMiniHeaderWidth.defaultPercent
-        lyricsWindowMiniHeaderHeightPercent =
+                ?? LyricsWindowMiniHeaderWidth.defaultPercent,
+            to: LyricsWindowMiniHeaderWidth.percentRange)
+        lyricsWindowMiniHeaderHeightPercent = Self.clamped(
             (defaults.object(forKey: Keys.lyricsWindowMiniHeaderHeightPercent) as? Double)
-            ?? LyricsWindowMiniHeaderSize.defaultPercent
+                ?? LyricsWindowMiniHeaderSize.defaultPercent,
+            to: LyricsWindowMiniHeaderSize.percentRange)
         lyricsWindowMiniShowsCover =
             (defaults.object(forKey: Keys.lyricsWindowMiniShowsCover) as? Bool) ?? true
         // 默认 .wrap:换行是迷你窗一直以来的排法,升级上来的人排版不变。
@@ -2527,8 +2535,9 @@ final class AppSettings: ObservableObject {
             .flatMap(OverlayGlassIntensity.init(rawValue:)) ?? .default
         lyricsWindowMiniGlassIntensity = defaults.string(forKey: Keys.lyricsWindowMiniGlassIntensity)
             .flatMap(OverlayGlassIntensity.init(rawValue:)) ?? .default
-        lyricsWindowMiniFontSize = (defaults.object(forKey: Keys.lyricsWindowMiniFontSize) as? Double)
-            ?? Self.defaultLyricsWindowMiniFontSize
+        lyricsWindowMiniFontSize = Self.clamped(
+            (defaults.object(forKey: Keys.lyricsWindowMiniFontSize) as? Double) ?? Self.defaultLyricsWindowMiniFontSize,
+            to: Self.lyricsWindowMiniFontSizeRange)
         let collapsesWhenPaused = (defaults.object(forKey: Keys.notchCollapsesWhenPaused) as? Bool)
             ?? Self.defaultNotchCollapsesWhenPaused
         notchCollapsesWhenPaused = collapsesWhenPaused

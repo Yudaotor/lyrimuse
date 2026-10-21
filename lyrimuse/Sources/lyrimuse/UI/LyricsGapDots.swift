@@ -35,6 +35,8 @@ struct LyricsGapDotsView: View {
     /// 时间基准的指纹(`LyricsTimingEpoch.of`):一变就按新位置重排。暂停时拖进度、重新锚定都靠它,
     /// 别的入参一个没变时位置闭包不会被重读。
     let timingEpoch: Int
+    /// 播放速率(锚点的 `rate`,没报时传 0 也按 1 倍速),动画时长与对表都按它换算。
+    var rate: Double = 1
     /// 非 nil = 三颗点各投一层阴影(灵动岛那条 `.shadow(color: .black.opacity(0.45), radius: 2, y: 1)`
     /// 的图层版 —— SwiftUI 的 `.shadow` 罩不到原生图层上)。
     var shadow: GapDotsShadow? = nil
@@ -46,7 +48,7 @@ struct LyricsGapDotsView: View {
 
     var body: some View {
         GapDotsLayer(startMs: startMs, endMs: endMs, dotSize: dotSize, spacing: spacing,
-                     color: NSColor(color), running: isPlaying && isVisible,
+                     color: NSColor(color), running: isPlaying && isVisible, rate: rate,
                      reduceMotion: reduceMotion, timingEpoch: timingEpoch, shadow: shadow, style: style, anchor: anchor,
                      currentPositionMs: currentPositionMs)
             .frame(width: CGFloat(GapDotsCurve.dotCount) * dotSize
@@ -77,6 +79,7 @@ private struct GapDotsLayer: NSViewRepresentable {
     let spacing: CGFloat
     let color: NSColor
     let running: Bool
+    let rate: Double
     let reduceMotion: Bool
     let timingEpoch: Int
     let shadow: GapDotsShadow?
@@ -89,7 +92,7 @@ private struct GapDotsLayer: NSViewRepresentable {
     func updateNSView(_ view: GapDotsNSView, context: Context) {
         view.positionProvider = currentPositionMs
         view.apply(.init(startMs: startMs, endMs: endMs, dotSize: dotSize, spacing: spacing, color: color,
-                         running: running, reduceMotion: reduceMotion, timingEpoch: timingEpoch, shadow: shadow,
+                         running: running, rate: rate, reduceMotion: reduceMotion, timingEpoch: timingEpoch, shadow: shadow,
                          style: style, anchor: anchor))
     }
 }
