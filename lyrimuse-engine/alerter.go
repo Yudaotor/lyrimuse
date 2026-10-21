@@ -95,9 +95,11 @@ func notifyEventIsDigest(event string) bool {
 func (a *alerter) push(title, body string) error { return a.send("", title, body) }
 
 // notifyMessage 是要推的一条消息。Deferred:这条报告落在静默时段里、等静默结束才推(notifyquiet.go),
-// 只进推送记录,不改推出去的内容。
+// 只进推送记录,不改推出去的内容。Digest:听歌报告的那份数,按平台排版(notifyrich.go)照它排,Body 是纯文本那一份;
+// 其余消息(测一下)为 nil。
 type notifyMessage struct {
 	Event, Title, Body string
+	Digest             *digestStats
 	Deferred           bool
 }
 
@@ -137,6 +139,21 @@ func pushToChannel(ch notifyChannel, msg notifyMessage) notifyResult {
 	if err != nil {
 		return notifyResult{Kind: notifyKindConfig, Detail: err.Error()}
 	}
+	r := pushNotifyRequest(ch, nr, start)
+	// 排过版的那份被平台说格式不对(Telegram 解析不了 HTML、Discord / Slack 卡片字段超限、飞书卡片报错…)时,
+	// 当场改推纯文本那份:报告晚一点也比丢了强。地址、密钥、限流这类问题换格式也没用,不重推。
+	if !r.OK && r.Kind == notifyKindRejected && nr.rich {
+		log.Printf("notify: %s rejected the formatted message (code=%s), sending plain text", ch.Platform, r.Code)
+		ch.PlainText = true
+		if nr, err = buildNotifyRequest(ch, msg); err == nil {
+			r = pushNotifyRequest(ch, nr, start)
+		}
+	}
+	return r
+}
+
+// pushNotifyRequest 发一个已经拼好的请求,按平台判收没收下。
+func pushNotifyRequest(ch notifyChannel, nr notifyRequest, start time.Time) notifyResult {
 	client, timeout := http.DefaultClient, alerterPushTimeout
 	if ch.Platform == platformTelegram {
 		client, timeout = telegramHTTPClient, alerterTelegramPushTimeout

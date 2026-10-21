@@ -427,7 +427,13 @@ func TestDailyDigestCatchUpYesterday(t *testing.T) {
 	if *n != 1 || !strings.Contains(*last, "昨日听歌报告（10-17）") || p.dailyState.load() != "2026-10-17" {
 		t.Fatalf("零点后应补推 10-17 那期: pushes=%d state=%q body=%s", *n, p.dailyState.load(), *last)
 	}
-	q := f.queries[len(f.queries)-1]
+	// 最后一次取这一期榜单的请求(之后还有补「报告多三样」的请求,见 digestextras.go)。
+	var q url.Values
+	for i := len(f.queries) - 1; i >= 0 && q == nil; i-- {
+		if f.queries[i].Get("method") == "user.getWeeklyTrackChart" {
+			q = f.queries[i]
+		}
+	}
 	from, to := time.Date(2026, 10, 17, 0, 0, 0, 0, time.Local), time.Date(2026, 10, 18, 0, 0, 0, 0, time.Local)
 	if q.Get("from") != strconv.FormatInt(from.Unix(), 10) || q.Get("to") != strconv.FormatInt(to.Unix(), 10) {
 		t.Errorf("补推区间应是昨天零点到今天零点: %v", q)

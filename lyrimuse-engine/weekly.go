@@ -279,6 +279,7 @@ func (p *poller) weeklyDigest(now time.Time, env digestEnv) {
 		p.weeklyState.save(to) // 这周确实没听，跳过不推送，但仍标记已处理，避免下次重查同一周
 		return
 	}
+	addDigestExtras(env, source, weeklyDigestPeriod(from, to), &stats, now)
 	if digestPush(env.alerter, notifyEventWeekly, weeklyDigestTitle(source, from, to), stats, deferred) != nil {
 		return
 	}

@@ -51875,23 +51875,6 @@
         }
       }
     },
-    "这就是会 POST 出去的内容，真正发出时是一行" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This is exactly what gets POSTed; the real request is sent on a single line"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這就是會 POST 出去的內容，實際送出時是一行"
-          }
-        }
-      }
-    },
     "外框为示意。正文与实际推送逐字一致，数据为测试数据" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -52058,6 +52041,227 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用測試資料看看推播在這個平台上的樣子"
+          }
+        }
+      }
+    },
+    "按平台排版" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Platform formatting"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "依平台排版"
+          }
+        }
+      }
+    },
+    "听歌报告带上专辑封面，点开通知跳到完整榜单；关闭后只推文字" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listening reports include the album cover, and tapping the notification opens the full chart. Turn off to send text only"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "聽歌報告附上專輯封面，點開通知跳到完整排行；關閉後只推文字"
+          }
+        }
+      }
+    },
+    "听歌报告以消息卡片发送，榜单分栏、附带查看榜单的按钮；关闭后推纯文本" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listening reports are sent as a message card with charts in columns and a button to view the full chart. Turn off to send plain text"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "聽歌報告以訊息卡片傳送，排行分欄、附帶查看排行的按鈕；關閉後推純文字"
+          }
+        }
+      }
+    },
+    "加粗、分栏、带专辑封面。旧版企业微信（4.1.36 以下）会显示成带符号的纯文本，群里有人用旧版时请关闭" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bold text, columns and the album cover. WeCom older than 4.1.36 shows it as plain text with symbols, so turn this off if anyone in the group uses an older version"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粗體、分欄、附專輯封面。舊版企業微信（4.1.36 以下）會顯示成帶符號的純文字，群組裡有人用舊版時請關閉"
+          }
+        }
+      }
+    },
+    "加粗、分栏、带专辑封面和完整榜单链接；关闭后推纯文本" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bold text, columns, the album cover and a link to the full chart. Turn off to send plain text"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粗體、分欄、附專輯封面與完整排行連結；關閉後推純文字"
+          }
+        }
+      }
+    },
+    "外框为示意，名字和头像以你在平台上的设置为准。内容与实际推送一致，数据为测试数据" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The frame is only illustrative; the name and avatar follow your settings on the platform. The content matches the real push, with sample data"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "外框為示意，名稱與頭像以你在平台上的設定為準。內容與實際推播一致，資料為測試資料"
+          }
+        }
+      }
+    },
+    "外框为示意，封面用占位图代替。内容与实际推送一致，数据为测试数据" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The frame is only illustrative and the cover is a placeholder. The content matches the real push, with sample data"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "外框為示意，封面以佔位圖代替。內容與實際推播一致，資料為測試資料"
+          }
+        }
+      }
+    },
+    "这就是会 POST 出去的内容，真正发出时是一行；真推送时 data 里还带封面地址和榜单链接" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is exactly what gets POSTed; the real request is sent on a single line, and real reports also carry the cover URL and chart link in data"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這就是會 POST 出去的內容，實際送出時是一行；真正推播時 data 裡還帶封面網址與排行連結"
+          }
+        }
+      }
+    },
+    "长按展开" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Long-press to expand"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "長按展開"
+          }
+        }
+      }
+    },
+    "点一下打开完整榜单" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap to open the full chart"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "點一下開啟完整排行"
+          }
+        }
+      }
+    },
+    "在 Last.fm 上看完整榜单" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See the full chart on Last.fm"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Last.fm 上看完整排行"
+          }
+        }
+      }
+    },
+    "数据来自 Last.fm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Data from Last.fm"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "資料來自 Last.fm"
+          }
+        }
+      }
+    },
+    "方糖 · 消息详情" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ServerChan · Message details"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "方糖 · 訊息詳情"
           }
         }
       }

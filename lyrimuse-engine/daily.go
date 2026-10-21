@@ -137,6 +137,7 @@ func (p *poller) dailyDigest(now time.Time, env digestEnv) {
 		p.dailyState.save(day) // 那天确实没听,跳过不推送,但仍标记已处理,避免反复重查
 		return
 	}
+	addDigestExtras(env, source, dailyDigestPeriod(from, to), &stats, now)
 	if digestPush(env.alerter, notifyEventDaily, title, stats, deferred) != nil {
 		return // 推送没成功,不标记已推送,下次检查再推
 	}

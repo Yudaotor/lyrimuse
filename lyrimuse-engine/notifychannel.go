@@ -23,6 +23,8 @@ type notifyChannel struct {
 	ChatID   string `json:"chat_id,omitempty"`
 	Enabled  bool   `json:"enabled"`
 	Default  bool   `json:"default,omitempty"`
+	// PlainText:编辑弹窗里「按平台排版」关掉了,推纯文本(notifyrich.go 不排)。默认排。
+	PlainText bool `json:"plain_text,omitempty"`
 }
 
 // legacyNotifyChannelID:从旧的单渠道字段拼出来的那个渠道的 id。

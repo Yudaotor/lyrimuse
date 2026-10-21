@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	neturl "net/url"
 	"sort"
@@ -51,21 +52,43 @@ func digestTopN() int {
 
 // digestTally 是某首歌/某张专辑/某个歌手在统计区间内被听了几次。
 type digestTally struct {
-	Name, Sub string // 歌曲/专辑:Name=歌名或专辑名,Sub=歌手；歌手:Name=歌手名,Sub 留空
-	Count     int
+	Name  string `json:"name"`
+	Sub   string `json:"sub,omitempty"` // 歌曲/专辑:Name=歌名或专辑名,Sub=歌手；歌手:Name=歌手名,Sub 留空
+	Count int    `json:"count"`
 }
 
 // digestStats 是一段时间范围内的统计结果，跟数据源无关——两条取数路径
 // (lastfmDigestStats/listenbrainzDigestStats)分别产出同一种形状。
+//
+// 整份原样存进推送记录(notifyLogEntry.Digest),重发时照它重新排版,所以带 json 标签。
 type digestStats struct {
-	TotalPlays      int
-	TotalDurationMs int64 // 0 表示"这个数据源给不出时长"(目前是 Last.fm 榜单接口的情况)，
+	TotalPlays      int   `json:"total_plays"`
+	TotalDurationMs int64 `json:"total_duration_ms,omitempty"` // 0 表示"这个数据源给不出时长"，
 	// 推送文案据此判断要不要显示"累计时长"这一句，不是当成"今天真的听了 0 秒"。
-	TopTracks  []digestTally
-	TopArtists []digestTally
-	TopAlbums  []digestTally
+	TopTracks  []digestTally `json:"top_tracks,omitempty"`
+	TopArtists []digestTally `json:"top_artists,omitempty"`
+	TopAlbums  []digestTally `json:"top_albums,omitempty"`
 	// Truncated:逐条翻收听记录翻到上限还没翻完,上面的数字只是最近那一部分。推送里会写明。
-	Truncated bool
+	Truncated bool `json:"truncated,omitempty"`
+
+	// 下面是报告在三份榜单之外多写的几样和排版要用的,由 digestextras.go 补;取不到就留零值,那一句不写。
+	Source string `json:"source,omitempty"` // digestSourceLastfm / digestSourceListenBrainz
+	From   string `json:"from,omitempty"`   // 这一期的起止日期(本地,含两头,YYYY-MM-DD)
+	To     string `json:"to,omitempty"`
+	// PrevPlays:上一期的播放次数,PrevLabel 是正文里怎么叫它(「前一周」「9 月」「2025 年」)。0 = 不比(日报、取不到、上一期没听)。
+	PrevPlays int    `json:"prev_plays,omitempty"`
+	PrevLabel string `json:"prev_label,omitempty"`
+	// NewArtists:这一期之前在这个账号上一次都没听过的歌手有几位;NewArtistNames 是其中这期听得最多的前几位。
+	NewArtists     int      `json:"new_artists,omitempty"`
+	NewArtistNames []string `json:"new_artist_names,omitempty"`
+	// DurationEstimated:TotalDurationMs 是按曲目时长估出来的(Last.fm 源,见 lastfmEstimateDuration)。
+	DurationEstimated bool   `json:"duration_estimated,omitempty"`
+	CoverURL          string `json:"cover_url,omitempty"` // 这一期头号专辑的封面,公网地址
+	Link              string `json:"link,omitempty"`      // 点开去看这一期完整榜单的地址
+
+	// 取数时顺手留下的原始数据,补上面几样时用,不进推送记录。
+	chartTracks, chartArtists []lastfmChartEntry
+	listens                   []lbListenEntry
 }
 
 // digestEnv 是后台定时任务(四档听歌报告、Top 歌手榜)这一轮要用的配置快照。这些任务在单独的
@@ -168,7 +191,9 @@ func lastfmDigestStats(ctx context.Context, user, apiKey string, from, to int64)
 	if err != nil {
 		return digestStats{}, err
 	}
-	return digestStatsFromCharts(tracks, artists, albums), nil
+	stats := digestStatsFromCharts(tracks, artists, albums)
+	stats.chartTracks, stats.chartArtists = tracks, artists
+	return stats, nil
 }
 
 // digestStatsFromCharts 把三份已按次数降序排好的榜单拼成统计结果。
@@ -241,7 +266,8 @@ func digestTopArtists(artists []lastfmChartEntry) []digestTally {
 type lbListenEntry struct {
 	Title, Artist, Release string // Release 可能为空(播放器没报专辑)，不计入专辑榜
 	ListenedAt             int64
-	DurationMs             int64 // 0 = 这条记录没带时长(比如 iPhone 桥接来的 playing_now 转发)，不计入总时长
+	DurationMs             int64  // 0 = 这条记录没带时长(比如 iPhone 桥接来的 playing_now 转发)，不计入总时长
+	CoverURL               string // ListenBrainz 给这条匹配到的专辑封面(Cover Art Archive),没匹配上为空
 }
 
 // lbListensMaxPages:逐条翻收听记录的页数上限(一页 100 条)。一周听上千首并不罕见(本机
@@ -298,6 +324,10 @@ func lbListensBefore(ctx context.Context, root, user string, fromUnix, maxTs int
 					AdditionalInfo struct {
 						DurationMs int64 `json:"duration_ms"`
 					} `json:"additional_info"`
+					MBIDMapping struct {
+						CAAReleaseMBID string `json:"caa_release_mbid"`
+						CAAID          int64  `json:"caa_id"`
+					} `json:"mbid_mapping"`
 				} `json:"track_metadata"`
 			} `json:"listens"`
 		} `json:"payload"`
@@ -311,6 +341,7 @@ func lbListensBefore(ctx context.Context, root, user string, fromUnix, maxTs int
 		entries = append(entries, lbListenEntry{
 			Title: l.TrackMetadata.TrackName, Artist: l.TrackMetadata.ArtistName, Release: l.TrackMetadata.ReleaseName,
 			ListenedAt: l.ListenedAt, DurationMs: l.TrackMetadata.AdditionalInfo.DurationMs,
+			CoverURL: caaCoverURL(l.TrackMetadata.MBIDMapping.CAAReleaseMBID, l.TrackMetadata.MBIDMapping.CAAID),
 		})
 		if oldest == 0 || l.ListenedAt < oldest {
 			oldest = l.ListenedAt
@@ -330,6 +361,7 @@ func listenbrainzDigestStats(ctx context.Context, root, user string, from, to in
 	}
 	stats := digestStatsFromListens(listens)
 	stats.Truncated = truncated
+	stats.listens = listens
 	return stats, nil
 }
 
@@ -392,19 +424,26 @@ func topTallies(tallies []digestTally) []digestTally {
 // digestPush 推送一条听歌报告——各 cadence 各自算好 title、拿到 stats 后调用同一份文案
 // 拼装逻辑(digestBody)。一个渠道都没收下才返回错误，调用方不记「已推送」，下次检查重推。
 // deferred:这一期是被静默时段压到现在才推的(digestQuietRelease),推送记录里标出来。
+// 正文是纯文本那一份(推送记录、纯文本平台用);按平台排版的由 notifyrich.go 照 stats 另排。
 func digestPush(a *alerter, event, title string, stats digestStats, deferred bool) error {
-	return a.sendMessage(notifyMessage{Event: event, Title: title, Body: digestBody(stats), Deferred: deferred})
+	return a.sendMessage(notifyMessage{Event: event, Title: title, Body: digestBody(stats), Digest: &stats, Deferred: deferred})
 }
 
-// digestBody 拼推送正文。顺序是歌手、专辑、歌曲；某一类只有超过 1 条时才展示(只有一条时
-// 排名没有意义)，「每类列出」设成 1 时例外：用户要的就是各类第一名。
-func digestBody(stats digestStats) string {
-	shown := func(list []digestTally) bool { return len(list) > 1 || (len(list) == 1 && digestTopN() == 1) }
+// digestShown:某一类要不要列。只有超过 1 条时才列(只有一条时排名没有意义)，「每类列出」设成 1 时例外：用户要的就是各类第一名。
+func digestShown(list []digestTally) bool {
+	return len(list) > 1 || (len(list) == 1 && digestTopN() == 1)
+}
+
+// digestSummaryLine 是正文第一行:总次数、跟上一期比、听了多久。按平台排版的也用这一行。
+func digestSummaryLine(stats digestStats) string {
 	var b strings.Builder
 	if stats.Truncated {
 		fmt.Fprintf(&b, "共播放 %d 次以上（记录太多，只统计了最近这些）", stats.TotalPlays)
 	} else {
 		fmt.Fprintf(&b, "共播放 %d 次", stats.TotalPlays)
+		if stats.PrevPlays > 0 && stats.PrevLabel != "" {
+			fmt.Fprintf(&b, "（%s %d，%s）", stats.PrevLabel, stats.PrevPlays, digestChange(stats.TotalPlays, stats.PrevPlays))
+		}
 	}
 	if stats.TotalDurationMs > 0 {
 		totalMin := stats.TotalDurationMs / 60000
@@ -414,6 +453,42 @@ func digestBody(stats digestStats) string {
 			fmt.Fprintf(&b, " · 约 %d 分", totalMin)
 		}
 	}
+	return b.String()
+}
+
+// digestChange:「↑12%」「↓32%」,四舍五入后是 0 写「持平」。
+func digestChange(cur, prev int) string {
+	pct := int(math.Round(float64(cur-prev) * 100 / float64(prev)))
+	switch {
+	case pct > 0:
+		return fmt.Sprintf("↑%d%%", pct)
+	case pct < 0:
+		return fmt.Sprintf("↓%d%%", -pct)
+	}
+	return "持平"
+}
+
+// digestNewArtistsLine:「新听了 44 位歌手：A、B、C 等」。名字列全了就不写「等」;一位都没有返回空。
+func digestNewArtistsLine(stats digestStats) string {
+	if stats.NewArtists <= 0 {
+		return ""
+	}
+	line := fmt.Sprintf("新听了 %d 位歌手", stats.NewArtists)
+	if len(stats.NewArtistNames) == 0 {
+		return line
+	}
+	line += "：" + strings.Join(stats.NewArtistNames, "、")
+	if stats.NewArtists > len(stats.NewArtistNames) {
+		line += " 等"
+	}
+	return line
+}
+
+// digestBody 拼推送正文:第一行(digestSummaryLine),然后歌手、专辑、歌曲(digestShown),最后一句新听的歌手。
+func digestBody(stats digestStats) string {
+	shown := digestShown
+	var b strings.Builder
+	b.WriteString(digestSummaryLine(stats))
 	b.WriteString("\n")
 	if shown(stats.TopArtists) {
 		b.WriteString("\nTop 歌手：\n")
@@ -432,6 +507,9 @@ func digestBody(stats digestStats) string {
 		for i, t := range stats.TopTracks {
 			fmt.Fprintf(&b, "%d. %s - %s（%d）\n", i+1, t.Sub, t.Name, t.Count)
 		}
+	}
+	if line := digestNewArtistsLine(stats); line != "" {
+		b.WriteString("\n" + line + "\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
 }

@@ -164,6 +164,7 @@ func (p *poller) calendarDigest(now time.Time, env digestEnv, kind calendarDiges
 		run.state.save(key) // 这个周期确实没听，不推送，但标记已处理
 		return
 	}
+	addDigestExtras(env, source, calendarDigestPeriod(kind, from, to, source == digestSourceListenBrainz), &stats, now)
 	if digestPush(env.alerter, event, calendarDigestTitle(kind, from), stats, deferred) != nil {
 		return
 	}
@@ -233,9 +234,11 @@ func lbStatsDigest(ctx context.Context, root, user string, kind calendarDigestKi
 	var releases struct {
 		Payload struct {
 			Releases []struct {
-				ReleaseName string `json:"release_name"`
-				ArtistName  string `json:"artist_name"`
-				ListenCount int    `json:"listen_count"`
+				ReleaseName    string `json:"release_name"`
+				ArtistName     string `json:"artist_name"`
+				ListenCount    int    `json:"listen_count"`
+				CAAReleaseMBID string `json:"caa_release_mbid"`
+				CAAID          int64  `json:"caa_id"`
 			} `json:"releases"`
 		} `json:"payload"`
 	}
@@ -249,6 +252,9 @@ func lbStatsDigest(ctx context.Context, root, user string, kind calendarDigestKi
 		}
 		if strings.TrimSpace(r.ReleaseName) == "" {
 			continue
+		}
+		if len(stats.TopAlbums) == 0 {
+			stats.CoverURL = caaCoverURL(r.CAAReleaseMBID, r.CAAID) // 头号专辑的封面(排版用,见 digestextras.go)
 		}
 		stats.TopAlbums = append(stats.TopAlbums, digestTally{Name: r.ReleaseName, Sub: r.ArtistName, Count: r.ListenCount})
 	}

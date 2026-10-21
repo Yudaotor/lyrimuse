@@ -135,7 +135,7 @@ func resendTarget(entryID string) (notifyChannel, notifyMessage, notifyResult, b
 	}
 	for _, ch := range configNotifyChannels(liveConfig()) {
 		if ch.ID == e.Channel {
-			return ch, notifyMessage{Event: e.Event, Title: e.Title, Body: e.Body}, notifyResult{}, true
+			return ch, notifyMessage{Event: e.Event, Title: e.Title, Body: e.Body, Digest: e.Digest}, notifyResult{}, true
 		}
 	}
 	return notifyChannel{}, notifyMessage{}, notifyResult{Kind: notifyKindConfig, Detail: "channel no longer exists"}, false

@@ -36,6 +36,7 @@ type notifyRequest struct {
 	body        []byte
 	contentType string
 	headers     map[string]string
+	rich        bool // 按平台排过版(notifyrich.go);被平台说格式不对时 pushToChannel 改推纯文本
 }
 
 // buildNotifyRequest 按渠道的平台拼出请求:地址(钉钉加签、Telegram 只填 Token 时在这里换)、正文、请求头。
@@ -46,13 +47,21 @@ func buildNotifyRequest(ch notifyChannel, msg notifyMessage) (notifyRequest, err
 	case platformWebhook:
 		return buildWebhookRequest(ch, msg)
 	}
-	feishuSecret := ""
-	if ch.Platform == platformFeishu {
-		feishuSecret = ch.Secret
+	payload, contentType, rich, err := []byte(nil), "", false, error(nil)
+	if !ch.PlainText {
+		payload, contentType, rich, err = buildRichPayload(ch, msg)
 	}
-	payload, contentType, err := buildNotifyPayload(ch.Platform, msg.Title, msg.Body, feishuSecret, ch.ChatID)
 	if err != nil {
 		return notifyRequest{}, err
+	}
+	if !rich {
+		feishuSecret := ""
+		if ch.Platform == platformFeishu {
+			feishuSecret = ch.Secret
+		}
+		if payload, contentType, err = buildNotifyPayload(ch.Platform, msg.Title, msg.Body, feishuSecret, ch.ChatID); err != nil {
+			return notifyRequest{}, err
+		}
 	}
 	target := ch.URL
 	switch ch.Platform {
@@ -61,7 +70,7 @@ func buildNotifyRequest(ch notifyChannel, msg notifyMessage) (notifyRequest, err
 	case platformTelegram:
 		target = telegramSendURL(ch.URL)
 	}
-	return notifyRequest{target: target, body: payload, contentType: contentType}, nil
+	return notifyRequest{target: target, body: payload, contentType: contentType, rich: rich}, nil
 }
 
 // buildNtfyRequest:ntfy 用 JSON 发布 —— 往服务器根地址 POST {"topic","title","message"}。标题放请求头的话
@@ -82,11 +91,23 @@ func buildNtfyRequest(ch notifyChannel, msg notifyMessage) (notifyRequest, error
 	if u.Path == "" {
 		u.Path = "/"
 	}
-	b, err := json.Marshal(map[string]any{"topic": topic, "title": msg.Title, "message": msg.Body, "tags": []string{"headphones"}})
+	m := map[string]any{"topic": topic, "title": msg.Title, "message": msg.Body, "tags": []string{"headphones"}}
+	// 按平台排版:正文仍是纯文本(ntfy 的 markdown 只有安卓和网页认,iPhone 上会显示一堆星号),只加封面(attach,
+	// 客户端拉下来显示成图)和点击跳转(click)。
+	rich := false
+	if d := msg.Digest; d != nil && !ch.PlainText {
+		if d.CoverURL != "" {
+			m["attach"], rich = d.CoverURL, true
+		}
+		if d.Link != "" {
+			m["click"], rich = d.Link, true
+		}
+	}
+	b, err := json.Marshal(m)
 	if err != nil {
 		return notifyRequest{}, err
 	}
-	nr := notifyRequest{target: u.String(), body: b, contentType: "application/json"}
+	nr := notifyRequest{target: u.String(), body: b, contentType: "application/json", rich: rich}
 	switch {
 	case ch.Secret == "":
 	case strings.Contains(ch.Secret, ":"):
@@ -104,6 +125,8 @@ type webhookPayload struct {
 	Title  string `json:"title"`
 	Body   string `json:"body"`
 	SentAt string `json:"sent_at"` // RFC 3339
+	// Data:听歌报告的结构化数(notifyrich.go 的 webhookDigestData),跟「按平台排版」开关无关,报告都带;其余消息没有。
+	Data *webhookDigestData `json:"data,omitempty"`
 }
 
 // buildWebhookRequest:通用 Webhook 原样 POST webhookPayload。填了 Secret 就用它对整个请求体算 HMAC-SHA256,
@@ -114,7 +137,7 @@ func buildWebhookRequest(ch notifyChannel, msg notifyMessage) (notifyRequest, er
 		event = "message"
 	}
 	b, err := json.Marshal(webhookPayload{App: "lyrimuse", Event: event, Title: msg.Title, Body: msg.Body,
-		SentAt: time.Now().UTC().Format(time.RFC3339)})
+		SentAt: time.Now().UTC().Format(time.RFC3339), Data: webhookDigest(msg.Digest)})
 	if err != nil {
 		return notifyRequest{}, err
 	}

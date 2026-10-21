@@ -99,6 +99,22 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// 编辑表单「按平台排版」开关下的说明(引擎 notifyrich.go 各平台怎么排);通用 Webhook 没有排版,为 nil。
+    public var richFormatNote: String? {
+        switch self {
+        case .bark, .ntfy:
+            return L10n.t("听歌报告带上专辑封面，点开通知跳到完整榜单；关闭后只推文字")
+        case .feishu:
+            return L10n.t("听歌报告以消息卡片发送，榜单分栏、附带查看榜单的按钮；关闭后推纯文本")
+        case .wecom:
+            return L10n.t("加粗、分栏、带专辑封面。旧版企业微信（4.1.36 以下）会显示成带符号的纯文本，群里有人用旧版时请关闭")
+        case .telegram, .discord, .slack, .dingtalk, .serverchan:
+            return L10n.t("加粗、分栏、带专辑封面和完整榜单链接；关闭后推纯文本")
+        case .webhook:
+            return nil
+        }
+    }
+
     // Picker 旁边的说明+webhook 地址输入框的 placeholder——各平台的地址形状完全不同,
     // 光看"webhook 地址"这四个字不够,给个例子避免用户填错格式。
     public var urlPlaceholder: String {

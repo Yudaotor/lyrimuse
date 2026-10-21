@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -23,14 +24,37 @@ type notifyPreviewSample struct {
 			Name  string `json:"name"`
 			Count int    `json:"count"`
 		} `json:"artists"`
-		Albums []notifyPreviewTally `json:"albums"`
-		Tracks []notifyPreviewTally `json:"tracks"`
+		Albums         []notifyPreviewTally `json:"albums"`
+		Tracks         []notifyPreviewTally `json:"tracks"`
+		PrevPlays      int                  `json:"prev_plays"`
+		PrevLabel      string               `json:"prev_label"`
+		NewArtists     int                  `json:"new_artists"`
+		NewArtistNames []string             `json:"new_artist_names"`
 	} `json:"samples"`
 	Bodies []struct {
 		Kind string `json:"kind"`
 		TopN int    `json:"top_n"`
 		Body string `json:"body"`
 	} `json:"bodies"`
+	// Rich:按平台排版时的第一行、每类各行、新听的歌手那句(App 预览画排过版的样子用)。
+	Rich []struct {
+		Kind     string `json:"kind"`
+		TopN     int    `json:"top_n"`
+		Summary  string `json:"summary"`
+		Sections []struct {
+			Heading string   `json:"heading"`
+			Lines   []string `json:"lines"`
+		} `json:"sections"`
+		NewLine string `json:"new_line"`
+	} `json:"rich"`
+	// WebhookWeekly:周报样例推到通用 Webhook 的那一行 JSON(含 data)。
+	WebhookWeekly struct {
+		From   string `json:"from"`
+		To     string `json:"to"`
+		SentAt string `json:"sent_at"`
+		TopN   int    `json:"top_n"`
+		JSON   string `json:"json"`
+	} `json:"webhook_weekly"`
 }
 
 type notifyPreviewTally struct {
@@ -72,7 +96,8 @@ func (s notifyPreviewSample) statsFor(kind string, topN int) digestStats {
 		tracks = append(tracks, digestTally{Name: a.Name, Sub: a.Sub, Count: a.Count})
 	}
 	return digestStats{TotalPlays: in.TotalPlays, TotalDurationMs: in.TotalDurationMs,
-		TopArtists: clip(artists), TopAlbums: clip(albums), TopTracks: clip(tracks)}
+		TopArtists: clip(artists), TopAlbums: clip(albums), TopTracks: clip(tracks),
+		PrevPlays: in.PrevPlays, PrevLabel: in.PrevLabel, NewArtists: in.NewArtists, NewArtistNames: in.NewArtistNames}
 }
 
 func TestNotifyPreviewSampleMatchesDigest(t *testing.T) {
@@ -94,5 +119,36 @@ func TestNotifyPreviewSampleMatchesDigest(t *testing.T) {
 		if got := digestBody(s.statsFor(b.Kind, b.TopN)); got != b.Body {
 			t.Errorf("%s top %d body =\n%s\nwant\n%s", b.Kind, b.TopN, got, b.Body)
 		}
+	}
+	if len(s.Rich) == 0 {
+		t.Fatal("样例里没有排版")
+	}
+	for _, r := range s.Rich {
+		useDigestFeatures(t, featureFlags{DigestTopN: r.TopN})
+		st := s.statsFor(r.Kind, r.TopN)
+		if got := digestSummaryLine(st); got != r.Summary {
+			t.Errorf("%s summary = %q, want %q", r.Kind, got, r.Summary)
+		}
+		if got := digestNewArtistsLine(st); got != r.NewLine {
+			t.Errorf("%s new line = %q, want %q", r.Kind, got, r.NewLine)
+		}
+		secs := richSections(&st, func(v string) string { return v })
+		if len(secs) != len(r.Sections) {
+			t.Fatalf("%s sections = %d, want %d", r.Kind, len(secs), len(r.Sections))
+		}
+		for i, sec := range secs {
+			if sec.heading != r.Sections[i].Heading || strings.Join(sec.lines, "\n") != strings.Join(r.Sections[i].Lines, "\n") {
+				t.Errorf("%s section %d = %s %v, want %s %v", r.Kind, i, sec.heading, sec.lines, r.Sections[i].Heading, r.Sections[i].Lines)
+			}
+		}
+	}
+	w := s.WebhookWeekly
+	useDigestFeatures(t, featureFlags{DigestTopN: w.TopN})
+	st := s.statsFor("weekly", w.TopN)
+	st.Source, st.From, st.To = digestSourceLastfm, w.From, w.To
+	b, err := json.Marshal(webhookPayload{App: "lyrimuse", Event: notifyEventWeekly, Title: s.WeeklyTitle, Body: digestBody(st),
+		SentAt: w.SentAt, Data: webhookDigest(&st)})
+	if err != nil || string(b) != w.JSON {
+		t.Errorf("webhook =\n%s\nwant\n%s", b, w.JSON)
 	}
 }

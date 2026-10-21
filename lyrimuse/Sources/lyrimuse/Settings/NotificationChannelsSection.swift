@@ -786,6 +786,22 @@ struct NotificationChannelEditor: View {
                     }
                 }
             }
+            // 通用 Webhook 发的是结构化 JSON,没有排版可言,不出这一行。
+            if let note = platform.richFormatNote {
+                GridRow {
+                    Text(L10n.t("按平台排版"))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle(L10n.t("按平台排版"), isOn: Binding(get: { !draft.plainText }, set: { draft.plainText = !$0 }))
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                        Text(note)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
         }
         .font(.system(size: 13))
     }
@@ -850,7 +866,7 @@ struct NotificationChannelEditor: View {
                 .help(L10n.t("用测试数据看看推送在这个平台上的样子"))
                 .popover(isPresented: $previewing, arrowEdge: .top) {
                     NotificationPreviewCard(platform: platform, senderName: cleaned.name.isEmpty ? platform.displayName : cleaned.name,
-                                            signed: !cleaned.secret.isEmpty)
+                                            signed: !cleaned.secret.isEmpty, rich: !cleaned.plainText)
                 }
             if !isNew {
                 Button(L10n.t("删除…"), role: .destructive) { confirmingDelete = true }

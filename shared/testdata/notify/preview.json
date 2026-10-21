@@ -41,7 +41,9 @@
         {"name": "至少还有你", "sub": "林忆莲", "count": 1},
         {"name": "我爱你", "sub": "卢广仲", "count": 1},
         {"name": "特别的人", "sub": "方大同", "count": 1}
-      ]
+      ],
+      "new_artists": 2,
+      "new_artist_names": ["Prince", "D'Angelo"]
     },
     "weekly": {
       "total_plays": 286,
@@ -81,13 +83,60 @@
         {"name": "爱很简单", "sub": "陶喆", "count": 5},
         {"name": "红豆", "sub": "王菲", "count": 5},
         {"name": "至少还有你", "sub": "林忆莲", "count": 4}
-      ]
+      ],
+      "prev_plays": 241,
+      "prev_label": "前一周",
+      "new_artists": 5,
+      "new_artist_names": ["D'Angelo", "林忆莲", "卢广仲"]
     }
   },
   "bodies": [
-    {"kind": "daily", "top_n": 3, "body": "共播放 42 次 · 约 2 小时 46 分\n\nTop 歌手：\n1. 周杰伦（12）\n2. 方大同（8）\n3. 陈绮贞（5）\n\nTop 专辑：\n1. 周杰伦 - 叶惠美（6）\n2. 方大同 - 15（5）\n3. 陈绮贞 - 还是会寂寞（4）\n\nTop 歌曲：\n1. 周杰伦 - 晴天（4）\n2. 方大同 - 春风吹（3）\n3. 陈绮贞 - 越洋电话（3）"},
-    {"kind": "weekly", "top_n": 10, "body": "共播放 286 次 · 约 17 小时 52 分\n\nTop 歌手：\n1. 方大同（61）\n2. 周杰伦（48）\n3. Prince（33）\n4. 陈绮贞（27）\n5. 孙燕姿（22）\n6. 陶喆（18）\n7. D'Angelo（15）\n8. 王菲（12）\n9. 林忆莲（9）\n10. 卢广仲（7）\n\nTop 专辑：\n1. 方大同 - JTW 西游记（29）\n2. 周杰伦 - 叶惠美（21）\n3. Prince - For You（17）\n4. 陈绮贞 - 还是会寂寞（14）\n5. 方大同 - 15（12）\n6. 孙燕姿 - 未完成（11）\n7. D'Angelo - Voodoo（10）\n8. 陶喆 - 黑色柳丁（9）\n9. 周杰伦 - 范特西（8）\n10. 王菲 - 只爱陌生人（7）\n\nTop 歌曲：\n1. 方大同 - NMW（11）\n2. 周杰伦 - 晴天（9）\n3. Prince - For You（8）\n4. 陈绮贞 - 越洋电话（7）\n5. 方大同 - 春风吹（7）\n6. D'Angelo - Untitled (How Does It Feel)（6）\n7. 孙燕姿 - 遇见（6）\n8. 陶喆 - 爱很简单（5）\n9. 王菲 - 红豆（5）\n10. 林忆莲 - 至少还有你（4）"},
-    {"kind": "daily", "top_n": 1, "body": "共播放 42 次 · 约 2 小时 46 分\n\nTop 歌手：\n1. 周杰伦（12）\n\nTop 专辑：\n1. 周杰伦 - 叶惠美（6）\n\nTop 歌曲：\n1. 周杰伦 - 晴天（4）"},
-    {"kind": "weekly", "top_n": 2, "body": "共播放 286 次 · 约 17 小时 52 分\n\nTop 歌手：\n1. 方大同（61）\n2. 周杰伦（48）\n\nTop 专辑：\n1. 方大同 - JTW 西游记（29）\n2. 周杰伦 - 叶惠美（21）\n\nTop 歌曲：\n1. 方大同 - NMW（11）\n2. 周杰伦 - 晴天（9）"}
-  ]
+    {"kind": "daily", "top_n": 3, "body": "共播放 42 次 · 约 2 小时 46 分\n\nTop 歌手：\n1. 周杰伦（12）\n2. 方大同（8）\n3. 陈绮贞（5）\n\nTop 专辑：\n1. 周杰伦 - 叶惠美（6）\n2. 方大同 - 15（5）\n3. 陈绮贞 - 还是会寂寞（4）\n\nTop 歌曲：\n1. 周杰伦 - 晴天（4）\n2. 方大同 - 春风吹（3）\n3. 陈绮贞 - 越洋电话（3）\n\n新听了 2 位歌手：Prince、D'Angelo"},
+    {"kind": "weekly", "top_n": 10, "body": "共播放 286 次（前一周 241，↑19%） · 约 17 小时 52 分\n\nTop 歌手：\n1. 方大同（61）\n2. 周杰伦（48）\n3. Prince（33）\n4. 陈绮贞（27）\n5. 孙燕姿（22）\n6. 陶喆（18）\n7. D'Angelo（15）\n8. 王菲（12）\n9. 林忆莲（9）\n10. 卢广仲（7）\n\nTop 专辑：\n1. 方大同 - JTW 西游记（29）\n2. 周杰伦 - 叶惠美（21）\n3. Prince - For You（17）\n4. 陈绮贞 - 还是会寂寞（14）\n5. 方大同 - 15（12）\n6. 孙燕姿 - 未完成（11）\n7. D'Angelo - Voodoo（10）\n8. 陶喆 - 黑色柳丁（9）\n9. 周杰伦 - 范特西（8）\n10. 王菲 - 只爱陌生人（7）\n\nTop 歌曲：\n1. 方大同 - NMW（11）\n2. 周杰伦 - 晴天（9）\n3. Prince - For You（8）\n4. 陈绮贞 - 越洋电话（7）\n5. 方大同 - 春风吹（7）\n6. D'Angelo - Untitled (How Does It Feel)（6）\n7. 孙燕姿 - 遇见（6）\n8. 陶喆 - 爱很简单（5）\n9. 王菲 - 红豆（5）\n10. 林忆莲 - 至少还有你（4）\n\n新听了 5 位歌手：D'Angelo、林忆莲、卢广仲 等"},
+    {"kind": "daily", "top_n": 1, "body": "共播放 42 次 · 约 2 小时 46 分\n\nTop 歌手：\n1. 周杰伦（12）\n\nTop 专辑：\n1. 周杰伦 - 叶惠美（6）\n\nTop 歌曲：\n1. 周杰伦 - 晴天（4）\n\n新听了 2 位歌手：Prince、D'Angelo"},
+    {"kind": "weekly", "top_n": 2, "body": "共播放 286 次（前一周 241，↑19%） · 约 17 小时 52 分\n\nTop 歌手：\n1. 方大同（61）\n2. 周杰伦（48）\n\nTop 专辑：\n1. 方大同 - JTW 西游记（29）\n2. 周杰伦 - 叶惠美（21）\n\nTop 歌曲：\n1. 方大同 - NMW（11）\n2. 周杰伦 - 晴天（9）\n\n新听了 5 位歌手：D'Angelo、林忆莲、卢广仲 等"}
+  ],
+  "rich": [
+    {
+      "kind": "daily",
+      "top_n": 3,
+      "summary": "共播放 42 次 · 约 2 小时 46 分",
+      "sections": [
+        {
+          "heading": "歌手",
+          "lines": ["1. 周杰伦 · 12", "2. 方大同 · 8", "3. 陈绮贞 · 5"]
+        },
+        {
+          "heading": "专辑",
+          "lines": ["1. 叶惠美 — 周杰伦 · 6", "2. 15 — 方大同 · 5", "3. 还是会寂寞 — 陈绮贞 · 4"]
+        },
+        {
+          "heading": "歌曲",
+          "lines": ["1. 晴天 — 周杰伦 · 4", "2. 春风吹 — 方大同 · 3", "3. 越洋电话 — 陈绮贞 · 3"]
+        }
+      ],
+      "new_line": "新听了 2 位歌手：Prince、D'Angelo"
+    },
+    {
+      "kind": "weekly",
+      "top_n": 3,
+      "summary": "共播放 286 次（前一周 241，↑19%） · 约 17 小时 52 分",
+      "sections": [
+        {
+          "heading": "歌手",
+          "lines": ["1. 方大同 · 61", "2. 周杰伦 · 48", "3. Prince · 33"]
+        },
+        {
+          "heading": "专辑",
+          "lines": ["1. JTW 西游记 — 方大同 · 29", "2. 叶惠美 — 周杰伦 · 21", "3. For You — Prince · 17"]
+        },
+        {
+          "heading": "歌曲",
+          "lines": ["1. NMW — 方大同 · 11", "2. 晴天 — 周杰伦 · 9", "3. For You — Prince · 8"]
+        }
+      ],
+      "new_line": "新听了 5 位歌手：D'Angelo、林忆莲、卢广仲 等"
+    }
+  ],
+  "webhook_weekly": {"from": "2026-10-12", "to": "2026-10-18", "sent_at": "1970-01-01T00:00:00Z", "top_n": 3, "json": "{\"app\":\"lyrimuse\",\"event\":\"weekly_digest\",\"title\":\"🎵 上周听歌小结（10-12~10-18）\",\"body\":\"共播放 286 次（前一周 241，↑19%） · 约 17 小时 52 分\\n\\nTop 歌手：\\n1. 方大同（61）\\n2. 周杰伦（48）\\n3. Prince（33）\\n\\nTop 专辑：\\n1. 方大同 - JTW 西游记（29）\\n2. 周杰伦 - 叶惠美（21）\\n3. Prince - For You（17）\\n\\nTop 歌曲：\\n1. 方大同 - NMW（11）\\n2. 周杰伦 - 晴天（9）\\n3. Prince - For You（8）\\n\\n新听了 5 位歌手：D'Angelo、林忆莲、卢广仲 等\",\"sent_at\":\"1970-01-01T00:00:00Z\",\"data\":{\"from\":\"2026-10-12\",\"to\":\"2026-10-18\",\"source\":\"lastfm\",\"total_plays\":286,\"previous_plays\":241,\"duration_minutes\":1072,\"top_artists\":[{\"name\":\"方大同\",\"count\":61},{\"name\":\"周杰伦\",\"count\":48},{\"name\":\"Prince\",\"count\":33}],\"top_albums\":[{\"name\":\"JTW 西游记\",\"artist\":\"方大同\",\"count\":29},{\"name\":\"叶惠美\",\"artist\":\"周杰伦\",\"count\":21},{\"name\":\"For You\",\"artist\":\"Prince\",\"count\":17}],\"top_tracks\":[{\"name\":\"NMW\",\"artist\":\"方大同\",\"count\":11},{\"name\":\"晴天\",\"artist\":\"周杰伦\",\"count\":9},{\"name\":\"For You\",\"artist\":\"Prince\",\"count\":8}],\"new_artists\":{\"count\":5,\"names\":[\"D'Angelo\",\"林忆莲\",\"卢广仲\"]}}}"}
 }

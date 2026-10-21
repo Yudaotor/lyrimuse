@@ -20,9 +20,11 @@ public struct NotificationChannel: Equatable, Identifiable, Sendable {
     /// 默认渠道:新加渠道时设成默认的,自动加进四档听歌报告的路由(`NotificationRouting.adding`);同一时间只有一个。
     /// 有两个以上渠道时界面上才出现(编辑表单里的开关、列表里的「默认」标签)。引擎不按它选渠道。
     public var isDefault: Bool
+    /// 编辑表单里「按平台排版」关掉了:推纯文本,不加粗、不分栏、不带封面(引擎 notifyChannel.PlainText)。默认排。
+    public var plainText: Bool
 
     public init(id: String = UUID().uuidString.lowercased(), name: String = "", platform: String, url: String = "",
-                secret: String = "", chatID: String = "", enabled: Bool = true, isDefault: Bool = false) {
+                secret: String = "", chatID: String = "", enabled: Bool = true, isDefault: Bool = false, plainText: Bool = false) {
         self.id = id
         self.name = name
         self.platform = platform
@@ -31,6 +33,7 @@ public struct NotificationChannel: Equatable, Identifiable, Sendable {
         self.chatID = chatID
         self.enabled = enabled
         self.isDefault = isDefault
+        self.plainText = plainText
     }
 
     /// 从旧的单渠道字段拼出来的那个渠道的 id(引擎 legacyNotifyChannelID)。
@@ -48,6 +51,7 @@ public struct NotificationChannel: Equatable, Identifiable, Sendable {
         if !Self.trim(secret).isEmpty { o["secret"] = Self.trim(secret) }
         if !Self.trim(chatID).isEmpty { o["chat_id"] = Self.trim(chatID) }
         if isDefault { o["default"] = true }
+        if plainText { o["plain_text"] = true }
         return o
     }
 
@@ -55,7 +59,8 @@ public struct NotificationChannel: Equatable, Identifiable, Sendable {
         guard let id = o["id"] as? String, !id.isEmpty else { return nil }
         self.init(id: id, name: o["name"] as? String ?? "", platform: (o["platform"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "bark",
                   url: o["url"] as? String ?? "", secret: o["secret"] as? String ?? "", chatID: o["chat_id"] as? String ?? "",
-                  enabled: o["enabled"] as? Bool ?? false, isDefault: o["default"] as? Bool ?? false)
+                  enabled: o["enabled"] as? Bool ?? false, isDefault: o["default"] as? Bool ?? false,
+                  plainText: o["plain_text"] as? Bool ?? false)
     }
 
     /// config.json 里的渠道列表;没有这个键时为 nil(还是旧配置)。认不出的项跳过。

@@ -38,6 +38,8 @@ type notifyLogEntry struct {
 	ElapsedMS   int64  `json:"elapsed_ms"`
 	// Deferred:静默时段里到点的报告,等静默结束才推(notifyquiet.go)。App 记录行写「静默时段里到的，延后到 HH:MM」。
 	Deferred bool `json:"deferred,omitempty"`
+	// Digest:听歌报告的那份数,重发时照它重新排版(notifyrich.go)。
+	Digest *digestStats `json:"digest,omitempty"`
 }
 
 type notifyLogFile struct {
@@ -67,7 +69,7 @@ func recordNotifyDelivery(ch notifyChannel, msg notifyMessage, r notifyResult) {
 	e := notifyLogEntry{
 		ID: newNotifyLogID(), At: time.Now().Unix(), Channel: ch.ID, ChannelName: ch.Name, Platform: ch.Platform,
 		Event: msg.Event, Title: msg.Title, OK: r.OK, Kind: r.Kind, Status: r.Status, Code: r.Code,
-		Body: msg.Body, Detail: r.Detail, ElapsedMS: r.Elapsed.Milliseconds(), Deferred: msg.Deferred,
+		Body: msg.Body, Detail: r.Detail, ElapsedMS: r.Elapsed.Milliseconds(), Deferred: msg.Deferred, Digest: msg.Digest,
 	}
 	f.Entries = append(f.Entries, e)
 	if n := len(f.Entries); n > notifyLogMax {

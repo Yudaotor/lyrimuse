@@ -65,7 +65,8 @@ func TestAlerterPushTelegram(t *testing.T) {
 
 	a := newAlerter(platformTelegram, srv.URL+"/botTEST/sendMessage", "", "", "42")
 	a.push("t", "b")
-	if gotPath != "/botTEST/sendMessage" || gotBody["chat_id"] != "42" || gotBody["text"] != "t\nb" {
+	// 渠道默认按平台排版:Telegram 走 HTML,标题加粗(纯文本那份见 TestRichPayloadPlainTextChannel)。
+	if gotPath != "/botTEST/sendMessage" || gotBody["chat_id"] != "42" || gotBody["text"] != "<b>t</b>\nb" || gotBody["parse_mode"] != "HTML" {
 		t.Errorf("path=%q body=%v", gotPath, gotBody)
 	}
 
@@ -143,7 +144,7 @@ func TestAlerterPushSlack(t *testing.T) {
 	if err := a.push("标题", "A <B>"); err != nil {
 		t.Fatalf("收下时不该报错: %v", err)
 	}
-	if gotPath != "/services/T0FAKE1/B0FAKE2/secret" || gotCT != "application/json" || gotBody["text"] != "*标题*\nA &lt;B&gt;" {
+	if gotPath != "/services/T0FAKE1/B0FAKE2/secret" || gotCT != "application/json" || gotBody["text"] != "标题\nA &lt;B&gt;" || gotBody["blocks"] == nil {
 		t.Errorf("path=%q ct=%q body=%v", gotPath, gotCT, gotBody)
 	}
 

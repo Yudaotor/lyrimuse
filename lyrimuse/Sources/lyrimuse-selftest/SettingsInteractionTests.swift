@@ -486,7 +486,9 @@ func runSettingsInteractionTests() {
         for kind in P.Kind.allCases {
             let s = previewSamples[kind.rawValue] ?? [:]
             let stats = P.Stats(totalPlays: s["total_plays"] as? Int ?? 0, totalDurationMs: s["total_duration_ms"] as? Int ?? 0,
-                                artists: tallies(s["artists"]), albums: tallies(s["albums"]), tracks: tallies(s["tracks"]))
+                                artists: tallies(s["artists"]), albums: tallies(s["albums"]), tracks: tallies(s["tracks"]),
+                                prevPlays: s["prev_plays"] as? Int ?? 0, prevLabel: s["prev_label"] as? String ?? "",
+                                newArtists: s["new_artists"] as? Int ?? 0, newArtistNames: s["new_artist_names"] as? [String] ?? [])
             expectEqual(P.sample(kind), stats, "渠道预览: \(kind.rawValue) 假数据同共用样例")
         }
         let bodies = preview["bodies"] as? [[String: Any]] ?? []
@@ -508,6 +510,34 @@ func runSettingsInteractionTests() {
         expectEqual(decoded, ["app": "lyrimuse", "event": "daily_digest", "title": "a<b>", "body": "x\n\"y\"", "sent_at": "1970-01-01T00:00:00Z"],
                     "渠道预览: Webhook JSON 读回来字段齐全")
         expectEqual(json.contains(#""title": "a\u003cb\u003e""#), true, "渠道预览: Webhook JSON 转义同 Go(< > 写成 \\u003c)")
+
+        // 按平台排版(15 章决策 75):第一行、每类各行、新听的歌手同引擎 richSections;Webhook 的 data 同引擎 webhookDigestData。
+        let richCases = preview["rich"] as? [[String: Any]] ?? []
+        expectEqual(richCases.count >= 2, true, "按平台排版: 共用样例里有排版")
+        for r in richCases {
+            let kind = P.Kind(rawValue: r["kind"] as? String ?? "") ?? .daily
+            let n = r["top_n"] as? Int ?? 0
+            expectEqual(P.summaryLine(P.sample(kind)), r["summary"] as? String ?? "", "按平台排版: \(kind.rawValue) 第一行同引擎")
+            expectEqual(P.newArtistsLine(P.sample(kind)), r["new_line"] as? String ?? "", "按平台排版: \(kind.rawValue) 新听的歌手同引擎")
+            let want = (r["sections"] as? [[String: Any]] ?? []).map {
+                P.RichSection(heading: $0["heading"] as? String ?? "", lines: $0["lines"] as? [String] ?? [])
+            }
+            expectEqual(P.richSections(P.sample(kind), topN: n), want, "按平台排版: \(kind.rawValue) 每类 \(n) 条各行同引擎")
+        }
+        let wh = preview["webhook_weekly"] as? [String: Any] ?? [:]
+        let whJSON = P.webhookJSON(event: "weekly_digest", title: preview["weekly_title"] as? String ?? "",
+                                   body: P.body(P.sample(.weekly), topN: wh["top_n"] as? Int ?? 3), sentAt: Date(timeIntervalSince1970: 0),
+                                   data: P.sample(.weekly),
+                                   period: P.WebhookPeriod(from: wh["from"] as? String ?? "", to: wh["to"] as? String ?? "", topN: wh["top_n"] as? Int ?? 3))
+        let mine = (try? JSONSerialization.jsonObject(with: Data(whJSON.utf8))) as? NSDictionary
+        let engine = ((wh["json"] as? String).flatMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) }) as? NSDictionary
+        expectEqual(mine != nil && mine == engine, true, "按平台排版: Webhook 预览(含 data)读回来同引擎那一行")
+        expectEqual(P.period(.weekly, now: previewNow).from, "2026-10-12", "按平台排版: data 里的起止日期同标题那一周")
+
+        var plain = NotificationChannel(id: "p", platform: "telegram", url: "1:x", chatID: "1")
+        expectEqual(plain.jsonObject["plain_text"] == nil, true, "按平台排版: 默认开,不落 plain_text")
+        plain.plainText = true
+        expectEqual(NotificationChannel(jsonObject: plain.jsonObject)?.plainText, true, "按平台排版: 关掉后落盘读回还是关的")
     }
 
     // ---- 推送提醒第二期:默认渠道、按档选渠道、静默时段、每类列出(15 章决策 72)----

@@ -451,6 +451,7 @@ func main() {
 	setLyricsRematchPaths()
 	// 推送记录、推送页「测一下」的请求和结果(见 notifytest.go)。
 	setNotifyPaths()
+	setDigestExtrasPaths()
 	weeklyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-weekly.json")
 	dailyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lb-daily.json")
 	monthlyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-monthly-digest.json")

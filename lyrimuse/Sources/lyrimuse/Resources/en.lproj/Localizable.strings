@@ -604,6 +604,8 @@
 "加拿大的歌词版权公司，经由 YouTube Music 检索" = "A Canadian lyrics licensing company, searched via YouTube Music";
 "加签密钥（可选）" = "Signing Secret (Optional)";
 "加粗" = "Bold";
+"加粗、分栏、带专辑封面。旧版企业微信（4.1.36 以下）会显示成带符号的纯文本，群里有人用旧版时请关闭" = "Bold text, columns and the album cover. WeCom older than 4.1.36 shows it as plain text with symbols, so turn this off if anyone in the group uses an older version";
+"加粗、分栏、带专辑封面和完整榜单链接；关闭后推纯文本" = "Bold text, columns, the album cover and a link to the full chart. Turn off to send plain text";
 "加载失败" = "Couldn't load";
 "加载更早的记录" = "Load older";
 "动态封面" = "Animated Artwork";
@@ -707,6 +709,8 @@
 "向指定地址 POST 一段 JSON，适用于对接 Home Assistant、n8n 或自建服务" = "POSTs JSON to a URL you choose. Suitable for Home Assistant, n8n or your own service";
 "含明文凭证；导出为设置与歌词库两个文件，导入将覆盖全部设置" = "Contains credentials in plain text; exports two files, settings and lyrics library; importing replaces all settings";
 "听歌报告" = "Listening Digests";
+"听歌报告以消息卡片发送，榜单分栏、附带查看榜单的按钮；关闭后推纯文本" = "Listening reports are sent as a message card with charts in columns and a button to view the full chart. Turn off to send plain text";
+"听歌报告带上专辑封面，点开通知跳到完整榜单；关闭后只推文字" = "Listening reports include the album cover, and tapping the notification opens the full chart. Turn off to send text only";
 "启动与通知" = "Startup & Notifications";
 "启动失败（%@）。可先「暂时跳过」，之后在设置的「播放器 → 歌词引擎」中重试，该页面会显示更详细的状态" = "Couldn't start (%@). You can skip this for now and retry later under Settings → Player → Lyrics Engine, which reports a more detailed status";
 "启动时不打开窗口，仅保留菜单栏图标与歌词显示；开启后同时隐藏 Dock 图标" = "Opens no windows at launch, keeping only the menu bar icon and lyrics displays; turning it on also hides the Dock icon";
@@ -747,6 +751,7 @@
 "在 KKBOX 中显示歌手" = "Show Artist in KKBOX";
 "在 Last.fm 上喜欢" = "Love on Last.fm";
 "在 Last.fm 上打开" = "Open on Last.fm";
+"在 Last.fm 上看完整榜单" = "See the full chart on Last.fm";
 "在 Last.fm 网站查看主页" = "View My Profile on Last.fm";
 "在 Telegram 中向 @BotFather 发送 /newbot 创建机器人，并将获得的 Token 填入「机器人 Token」。然后向机器人发送任意消息，在浏览器中打开 https://api.telegram.org/bot你的Token/getUpdates，chat 下的 id 即为 Chat ID" = "In Telegram, message @BotFather with /newbot to create a bot and paste the token it gives you into “Bot Token”. Then send your bot a message and open https://api.telegram.org/bot<your token>/getUpdates in a browser. The id under chat is your Chat ID";
 "在 api.slack.com/apps 新建应用（From scratch）并选择工作区，开启 Incoming Webhooks，点按「Add New Webhook」并选择目标频道，授权后拷贝 Webhook URL" = "Create an app at api.slack.com/apps (From scratch) and pick your workspace. Turn on Incoming Webhooks, click “Add New Webhook”, choose the channel to post to, then copy the Webhook URL";
@@ -799,7 +804,9 @@
 "复用其他专辑中的同一首歌曲" = "Reused from the same recording on another album";
 "复用同一首歌曲的其他歌手写法" = "Reused from the same song under another artist spelling";
 "外框为示意。正文与实际推送逐字一致，数据为测试数据" = "The frame is only illustrative. The text matches the real push word for word, with sample data";
+"外框为示意，名字和头像以你在平台上的设置为准。内容与实际推送一致，数据为测试数据" = "The frame is only illustrative; the name and avatar follow your settings on the platform. The content matches the real push, with sample data";
 "外框为示意，名字和头像以你在平台上的设置为准。正文与实际推送逐字一致，数据为测试数据" = "The frame is only illustrative; the name and avatar follow your settings on the platform. The text matches the real push word for word, with sample data";
+"外框为示意，封面用占位图代替。内容与实际推送一致，数据为测试数据" = "The frame is only illustrative and the cover is a placeholder. The content matches the real push, with sample data";
 "外观" = "Appearance";
 "外观与语言" = "Appearance & Language";
 "多" = "More";
@@ -1210,6 +1217,7 @@
 "按专辑分组" = "Group by Album";
 "按住 ⌘ 拖移此图标，可将其移到菜单栏中的任意位置" = "Hold ⌘ and drag this icon to move it anywhere in the menu bar";
 "按住歌词即可拖动位置" = "Hold the lyrics to reposition";
+"按平台排版" = "Platform formatting";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@" = "Based on your top %1$@ artists, %2$@ of your plays in this period";
 "按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@#one" = "Based on your top %1$@ artist, %2$@ of your plays in this period";
 "按收听最多的前 %@ 位歌手统计" = "Based on your top %@ artists";
@@ -1305,6 +1313,7 @@
 "放弃修改" = "Discard Changes";
 "数据来源" = "Data Source";
 "数据来源：%@" = "Data source: %@";
+"数据来自 Last.fm" = "Data from Last.fm";
 "整体延后 %@ 秒" = "%@ s later overall";
 "整体提前 %@ 秒" = "%@ s earlier overall";
 "整段编辑可粘贴替换、增删句子；每行开头是这一句的时间戳" = "Edit the whole text to paste, add or remove lines; each line starts with its timestamp";
@@ -1327,6 +1336,7 @@
 "新播放器提醒" = "New Player Alerts";
 "方向" = "Direction";
 "方糖 · 服务通知" = "Fangtang · Service Notification";
+"方糖 · 消息详情" = "ServerChan · Message details";
 "无 GitHub 账号时，可发送邮件至 %@；右键点按可拷贝地址" = "Without a GitHub account, email %@. Right-click to copy the address";
 "无匹配的字体" = "No matching fonts";
 "无可保存的更改" = "No changes to save";
@@ -1876,6 +1886,7 @@
 "灵动岛展开宽度" = "Notch Card Expanded Width";
 "灵动岛所在屏幕有 App 全屏时隐藏" = "Hides while an app is full screen on its display";
 "灵动岛歌词" = "Notch Lyrics";
+"点一下打开完整榜单" = "Tap to open the full chart";
 "点按「开始使用」，让歌词随旋律逐句亮起" = "Click “Get Started” and let every line light up with the music";
 "点按「拷贝修复命令」，打开「终端」，粘贴后按下 Return 键，按提示输入登录密码（输入时不显示字符），然后点按「启用」" = "Click Copy Fix Command, open Terminal, paste it and press Return, enter your login password when asked (nothing shows as you type), then click Enable";
 "点按下载" = "Click to download";
@@ -2306,7 +2317,7 @@
 "这份歌词沿用同曲条目「%@」的人工修正，该条目修改时此处同步更新；直接编辑此条目将使其成为独立的修正" = "These lyrics use the manual correction from “%@”, another entry of this song, and update when it changes. Editing this entry makes the correction its own";
 "这台 Mac 上未安装此播放器" = "This player isn't installed on this Mac";
 "这台 Mac 上未安装的播放器" = "Players not installed on this Mac";
-"这就是会 POST 出去的内容，真正发出时是一行" = "This is exactly what gets POSTed; the real request is sent on a single line";
+"这就是会 POST 出去的内容，真正发出时是一行；真推送时 data 里还带封面地址和榜单链接" = "This is exactly what gets POSTed; the real request is sent on a single line, and real reports also carry the cover URL and chart link in data";
 "这是 Lyrimuse 本身" = "That’s Lyrimuse itself";
 "这条候选歌词无译文" = "No translation in this candidate";
 "这条候选歌词无读音" = "No romanization in this candidate";
@@ -2456,6 +2467,7 @@
 "长句处理" = "Long Lines";
 "长句拆分" = "Split Long Lines";
 "长按即可拖动位置" = "Click and hold to drag";
+"长按展开" = "Long-press to expand";
 "长按或右键打开设置" = "Click and hold or right-click for settings";
 "长按拖动" = "Long-Press to Drag";
 "间奏中多出一段歌词" = "Extra lyrics in an instrumental break";
