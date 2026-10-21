@@ -4980,7 +4980,9 @@ struct LyricsWindowView: View {
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
                     }
+                    // 悬停淡底按 primary 画:封面上按深色外观画成提亮,同本窗口封面上的其它控件;只罩按钮,外层玻璃不动。
                     .buttonStyle(SettingsGlassHoverButtonStyle())
+                    .environment(\.colorScheme, .dark)
                     .clearGlassCapsule(rim: Color.white.opacity(0.28))
                     .padding(.top, 6)
                 }

@@ -4374,6 +4374,9 @@ func runSourceContractSettingsTests() {
                     && (read("MenuBar/MenuBarPanel.swift") ?? "").contains("Color.primary.opacity(enabled && hovering ? 0.06 : 0)")
                     && (read("LyricsManager/LyricsManagerParts.swift") ?? "").contains("isRunning && hoveringCard ? 0.05 : 0"), true,
                     "悬停反馈: 候选歌词行、热度图格子、引导页进度点、面板归零、自动匹配进度卡")
+        expectEqual(sourceHas(read("UI/LyricsWindowView.swift") ?? "",
+                              ".buttonStyle(SettingsGlassHoverButtonStyle()) .environment(\\.colorScheme, .dark) .clearGlassCapsule(rim:"), true,
+                    "歌词窗口: 封面上「暂无歌词」的「搜索歌词…」按深色外观画悬停,淡底是提亮不是压暗")
         expectEqual(manager.contains("title: EnrichCacheKeys.normalizedTitle(EnrichCacheKeys.strippingDurationVariantTitle(summary.title))"), true,
                     "歌词管理: 搜索候选歌词的歌名去掉时长变体位「~durN」、再按自动解析同一份归一")
         expectEqual(sheet.contains("private var effectiveCurrentSource: String? { appliedSource ?? host.source }")
