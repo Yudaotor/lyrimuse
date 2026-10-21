@@ -2752,7 +2752,9 @@ private func amazonFavoriteChecks() {
     expectEqual(LXMusicLinks.searchURL(keywords: "  "), nil, "洛雪搜索链接: 空的不给")
     // 「稍后播放」记录:样例跟引擎各读一遍;加、划掉、过期、上限。
     typealias Later = LXMusicPlayLater
-    let laterSample = Later.decode(FileIO.read(URL(fileURLWithPath: "../shared/testdata/lx-play-later.json")))
+    let laterSample = Later.decode(FileIO.read(URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("shared/testdata/lx-play-later.json")))
     expectEqual(laterSample.map(\.title), ["至少还有你", "夜空中最亮的星", "特别的人"], "稍后播放样例: 按先后解出三首")
     expectEqual(laterSample.dropFirst().first?.album == "世界" && laterSample.first?.addedAtMs == 1_792_041_200_000, true,
                 "稍后播放样例: 专辑与加入时刻(毫秒)")
