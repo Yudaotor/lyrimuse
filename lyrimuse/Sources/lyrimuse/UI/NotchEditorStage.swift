@@ -616,7 +616,8 @@ struct NotchEditorStage: View {
     /// 各拼一遍迟早漂开。
     private var fontSummary: String {
         OverlayStyleSummary.fontText(family: settings.notchFontFamilyName, weight: settings.notchFontWeight,
-                                     size: Int(settings.notchFontSize))
+                                     // 报实际画字用的字号:存的是原值、画的时候才夹(手改 / 旧版写下的越界值)。
+                                     size: Int(NotchLyricRowMetrics.clampedMainFontSize(CGFloat(settings.notchFontSize))))
     }
 
     /// 「歌词行」按钮摘要:「显示歌词」从「行为」浮层搬过来之后,这里要拼两项
@@ -733,6 +734,11 @@ struct NotchEditorStage: View {
     ) -> some View {
         Button {
             popoverMaxHeight = stageTopProbe.popoverHeightLimit(rowOffset: Self.rowOffsetAboveStage(target))
+            // 从卡片上点开的浮层还开着、直接点了工具栏:先放掉它钉住的展开。下面 onChange(of: popover) 只认卡片锚点,
+            // 锚点这一下已经换成工具栏;目标浮层相同时 popover 值都不变、根本不触发,预览会一直停在展开态。
+            if case .hotspot = popoverAnchor, popover != nil, adjustingThumb == nil {
+                chrome.setExpandedFromPreview(false)
+            }
             popoverAnchor = .toolbar
             popover = target
         } label: {
@@ -786,6 +792,14 @@ struct NotchEditorStage: View {
                     popover = nil
                 }
             })
+    }
+
+    /// 从卡片上点开的浮层挂在哪块区域的第几个矩形。区域还在、矩形少了(展开态关掉曲目信息后只剩一块)时挂到它最后一个
+    /// 矩形上;区域整个没了是 nil。
+    private var anchoredHotspot: (CardHotspot, Int)? {
+        guard case .hotspot(let kind, let index) = popoverAnchor,
+              let spot = cardHotspots.first(where: { $0.kind == kind }), !spot.rects.isEmpty else { return nil }
+        return (spot, min(index, spot.rects.count - 1))
     }
 
     /// 卡片上那一份 `.popover` 的开关(挂在 `hotspotPopoverAnchor` 上):任何一块区域点开的都走它。
@@ -1216,9 +1230,7 @@ struct NotchEditorStage: View {
         var rect = CGRect.zero
         var arrowEdge: Edge = .bottom
         var target: StagePopover?
-        if case .hotspot(let kind, let index) = popoverAnchor,
-           let spot = cardHotspots.first(where: { $0.kind == kind }),
-           index < spot.rects.count {
+        if let (spot, index) = anchoredHotspot {
             let local = spot.rects[index]
             rect = CGRect(x: stageWidth / 2 + (local.minX - cardWidth / 2) * scale,
                           y: local.minY * scale,
@@ -1231,6 +1243,10 @@ struct NotchEditorStage: View {
             .frame(width: rect.width, height: rect.height)
             .popover(isPresented: hotspotPopoverBinding, arrowEdge: arrowEdge) {
                 if let target { popoverContent(for: target) }
+            }
+            // 点开它的那块区域整个没了(关掉了它里面的几项、停了播放):收掉浮层,不留一个指向舞台左上角的空壳。
+            .onChange(of: anchoredHotspot == nil) { _, gone in
+                if gone, case .hotspot = popoverAnchor, popover != nil { popover = nil }
             }
             .padding(.leading, rect.minX)
             .padding(.top, rect.minY)
@@ -1635,6 +1651,8 @@ enum NotchStyleDefaults {
         settings.notchLyricRowArtworkPosition = AppSettings.defaultNotchLyricRowArtworkPosition
         settings.notchLyricsAlignment = AppSettings.defaultNotchLyricsAlignment
         settings.notchSecondaryLine = AppSettings.defaultNotchSecondaryLine
+        // 「卡拉OK效果」在「歌词行」浮层里,同属内容开关。
+        settings.notchLyricsKaraoke = AppSettings.defaultNotchLyricsKaraoke
         // 「字体」组三项。它们是字形、不是宽度那类结构性尺寸,按钮自报的排除范围「不含宽度和总开关」
         // 里也没有它们 —— 进重置(重置覆盖闸也会盯着这三个 defaultNotch* 常量)。
         settings.notchFontFamilyName = AppSettings.defaultNotchFontFamilyName
@@ -1823,7 +1841,7 @@ struct NotchScreenSettingsRows: View {
             SettingsRow(
                 icon: "display",
                 title: L10n.t("显示在"),
-                help: L10n.t("「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开后自动恢复为「自动」")
+                help: L10n.t("「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开时按「自动」显示，插回后回到那块屏幕")
             ) {
                 let options = screenOptions
                 SettingsGlassMenuPicker(

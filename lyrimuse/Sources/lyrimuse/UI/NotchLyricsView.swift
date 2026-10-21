@@ -58,6 +58,8 @@ private final class NotchPlayback: ObservableObject {
     @Published private(set) var hasLyricsContent = false
     @Published private(set) var isCurrentTrackInstrumental = false
     @Published private(set) var currentTrackHasNoLyrics = false
+    /// 这首只有纯文本歌词(没有时间戳):「暂无歌词」那一格改说「仅有纯文本，无时间戳」,同悬浮歌词。
+    @Published private(set) var hasPlainLyrics = false
     @Published private(set) var engineNetworkDown = false
     @Published private(set) var isCurrentTrackAdBreak = false
     /// 电台口白:这一刻在放的不是歌,台里在说话。语义与 `isCurrentTrackAdBreak` 平行。
@@ -87,6 +89,11 @@ private final class NotchPlayback: ObservableObject {
     @Published private(set) var backdropOverlayOpacity: Double = LocalPlaybackSource.notchCoverArtOverlayOpacity
     @Published private(set) var anchor: ProgressAnchor?
     @Published private(set) var pausedPositionMs: Int?
+    /// 图层版逐字 / 间奏三点按墙钟自己跑动画:暂停通知先到、锚点已冻住而 isPlayingNow 还没翻时也算停着,
+    /// 不然先按原速冲出去、等轮询报了暂停再跳回(同悬浮歌词、歌词窗口,07 章决策 167)。
+    var lyricsClockRunning: Bool { isPlayingNow && !(anchor?.isFrozen ?? false) }
+    /// 播放速率(锚点里的,读数异常时图层行自己按 1 算)。倍速播放时逐字填色、滚动、尾部渐隐都按它排。
+    var playbackRate: Double { anchor?.rate ?? 1 }
     @Published private(set) var currentDurationMs: Int?
     /// 灵动岛几乎所有前景元素的颜色:音浪、歌名、歌手、歌词(含逐字染色的调色板)、三个播放键、进度条、瞬态横幅,全卡 16 处
     /// `accentOrWhite` 都是它。取到封面主色就用,否则白(用 notchAccentColor 而非 artworkAccentColor 的理由见
@@ -312,6 +319,8 @@ private final class NotchPlayback: ObservableObject {
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
+            p.$currentTrackPlainLyrics.map { !$0.isEmpty }.removeDuplicates()
+                .sink { [weak self] in self?.hasPlainLyrics = $0 },
             p.$engineNetworkDown.removeDuplicates().sink { [weak self] in self?.engineNetworkDown = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
             YouTubeMusicAdSkipCenter.shared.$adSkipAvailable.removeDuplicates().sink { [weak self] in self?.adSkipAvailable = $0 },
@@ -1801,7 +1810,10 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         NotchLayerActiveReader { active in
             switch playback.adCountdown {
             case .own(let clock):
-                if active {
+                // 暂停时停在取样那一刻:这只表纯按墙钟外推、每次轮询重建,暂停着照推的话每秒减 1、每次轮询又跳回去。
+                if !playback.isPlayingNow {
+                    Text(adRemainingText(total: clock.durationMs, position: clock.positionMs))
+                } else if active {
                     TimelineView(.periodic(from: clock.capturedAt.addingTimeInterval(-NotchClockPhase.msSinceBoundary(
                         positionMs: Double(clock.positionMs), countdownFromMs: clock.durationMs) / 1000), by: 1)) { _ in
                         Text(adRemainingText(total: clock.durationMs, position: clock.positionMs(now: Date())))
@@ -1917,10 +1929,12 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 romaFillColor: fg,
                 strokeColor: nil,
                 alignment: side,
-                paused: !playback.isPlayingNow || playback.currentLineFillSettled || !layerActive,
+                paused: !playback.lyricsClockRunning || playback.currentLineFillSettled || !layerActive,
                 shadow: .init(color: NSColor.black.withAlphaComponent(0.45), radius: 2, offsetY: 1),
                 edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth,
-                timingEpoch: playback.lyricsOffsetMs),
+                timingEpoch: LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
+                                                  offsetMs: playback.lyricsOffsetMs),
+                rate: playback.playbackRate),
             nowMs: Self.lyricsNowMs)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement()
@@ -2035,7 +2049,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             } else if playback.currentTrackHasNoLyrics {
                 // 搜完了、确实一句都没有,同 LyricsOverlayView.mainLine 的同名分支——
                 // 必须排在下面那个"搜索歌词中…"前面。
-                Text(L10n.t("暂无歌词"))
+                Text(playback.hasPlainLyrics ? L10n.t("仅有纯文本，无时间戳") : L10n.t("暂无歌词"))
                     .foregroundStyle(accentOrWhite.opacity(0.7))
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             } else if playback.engineNetworkDown && !playback.hasLyricsContent {
@@ -2075,7 +2089,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                         dotSize: playback.mainFontSize * 0.40,
                         spacing: playback.mainFontSize * 0.375,
                         color: accentOrWhite,
-                        isPlaying: playback.isPlayingNow, isVisible: layerActive,
+                        isPlaying: playback.lyricsClockRunning, isVisible: layerActive,
                         reduceMotion: reduceMotion,
                         timingEpoch: LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
                                                           offsetMs: playback.lyricsOffsetMs),

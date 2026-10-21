@@ -469,6 +469,7 @@ final class AppSettings: ObservableObject {
     /// 悬浮歌词主字号的可调范围。设置页「文字」浮层和菜单栏面板快捷设置两根滑杆都读这一份。
     static let overlayFontSizeRange: ClosedRange<Double> = 14...64
     static let defaultOverlayLyricsKaraoke = true
+    static let defaultNotchLyricsKaraoke = true
     /// 悬浮歌词字号往大(`direction` = 1)或往小(-1)走一档(2pt)后的值,夹在 `overlayFontSizeRange` 里。
     /// ⚙ 菜单「字号」那一行和放大 / 缩小字号快捷键共用。
     static func steppedOverlayFontSize(from size: Double, direction: Int) -> Double {
@@ -2134,7 +2135,7 @@ final class AppSettings: ObservableObject {
         //  legacyHideDuringCapture 那段的写法。)
         let legacyKaraoke = defaults.object(forKey: Keys.preferWordLevelKaraoke) as? Bool
         let overlayKaraoke = (defaults.object(forKey: Keys.overlayLyricsKaraoke) as? Bool) ?? legacyKaraoke ?? Self.defaultOverlayLyricsKaraoke
-        let notchKaraoke = (defaults.object(forKey: Keys.notchLyricsKaraoke) as? Bool) ?? legacyKaraoke ?? true
+        let notchKaraoke = (defaults.object(forKey: Keys.notchLyricsKaraoke) as? Bool) ?? legacyKaraoke ?? Self.defaultNotchLyricsKaraoke
         overlayLyricsKaraoke = overlayKaraoke
         notchLyricsKaraoke = notchKaraoke
         if legacyKaraoke != nil {
@@ -2593,11 +2594,15 @@ final class AppSettings: ObservableObject {
         // 这个键的配置生效。合法区间的唯一真源是 OverlayEditorStage.widthRange(300…1400)。
         let storedWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 488
         overlayWidth = min(max(storedWidth, OverlayEditorStage.widthRange.lowerBound), OverlayEditorStage.widthRange.upperBound)
-        notchContentWidth = (defaults.object(forKey: Keys.notchContentWidth) as? Double) ?? Self.defaultNotchContentWidth
+        // 手改过、导入的越界值夹回滑杆的范围(同悬浮歌词宽度),不然窗口按它画、滑杆顶在头上。
+        let notchRange = NotchEditorStage.widthRange
+        let storedNotchWidth = (defaults.object(forKey: Keys.notchContentWidth) as? Double) ?? Self.defaultNotchContentWidth
+        notchContentWidth = min(max(storedNotchWidth, notchRange.lowerBound), notchRange.upperBound)
         // 没存过就落到 Self.defaultNotchExpandedContentWidth(前这里读的是稳态那个
         // 常量,两个键共用一份;拆开的理由见那两个常量上方的注释)。 无论如何**不读用户当前的
         // 稳态值**:那样老用户的展开宽会被钉在升级那一刻的稳态值上,以后调稳态就得再调一遍这个。
-        notchExpandedContentWidth = (defaults.object(forKey: Keys.notchExpandedContentWidth) as? Double) ?? Self.defaultNotchExpandedContentWidth
+        let storedNotchExpanded = (defaults.object(forKey: Keys.notchExpandedContentWidth) as? Double) ?? Self.defaultNotchExpandedContentWidth
+        notchExpandedContentWidth = min(max(storedNotchExpanded, notchRange.lowerBound), notchRange.upperBound)
         notchCornerRadius = (defaults.object(forKey: Keys.notchCornerRadius) as? Double) ?? Self.defaultNotchCornerRadius
         notchExpandedCornerRadius = (defaults.object(forKey: Keys.notchExpandedCornerRadius) as? Double) ?? Self.defaultNotchExpandedCornerRadius
         foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? ColorTheme.defaultTheme.foregroundColorHex

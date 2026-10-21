@@ -476,7 +476,7 @@ func runNotchTests() {
                         .contains("static let defaultNotchLyricRowHeight = Double(NotchLyricRowMetrics.minimumRowHeight)"), true,
                     "高度接线: 默认值存成最矮,实际高度刚好放得下文字")
         for rel in ["SettingsView.swift", "MenuBar/MenuBarPanelQuickSettings.swift"] {
-            expectEqual(readApp(rel).contains("set: { settings.setNotchLyricRowHeight(fromSlider: $0) }"), true,
+            expectEqual(readApp(rel).contains("settings.setNotchLyricRowHeight(fromSlider: $0) }"), true,
                         "高度接线: \(rel) 的「高度」滑杆经 setNotchLyricRowHeight(fromSlider:) 写回")
         }
     }
@@ -599,7 +599,7 @@ func runNotchTests() {
                         && sourceHas(controller, "if pinnedScreenID == nil {\n            AppSettings.shared.$notchScreenID")
                         && sourceHas(controller, ".receive(on: DispatchQueue.main)\n                .sink { [weak self] _ in self?.applyScreenSetting() }"), true,
                         "灵动岛接线: 自动隐藏两个开关、一对宽度由每个实例自己订阅(取 sink 参数),主实例另订屏幕(下一拍再读设置)")
-            expectEqual(controller.contains("if hideWhenNotPlaying != hide { hideWhenNotPlaying = hide }")
+            expectEqual(controller.contains("assignHideWhenNotPlaying(hide)")
                         && controller.contains("recomputeGeometry(animate: false, contentWidth: contentWidth, expandedContentWidth: expandedContentWidth)"), true,
                         "灵动岛接线: 自动隐藏 / 宽度变了按 sink 收到的新值用,不回读 AppSettings")
             expectEqual(!controller.contains("window?.sharingType != ")
@@ -618,9 +618,10 @@ func runNotchTests() {
                         "灵动岛接线: 没有刘海时固定主屏,不跟着键盘焦点跳")
             expectEqual(controller.contains("var hideWhenNotPlaying: Bool = AppSettings.shared.notchHideWhenNotPlaying"), true,
                         "灵动岛接线: 暂停时隐藏的初值读设置,冷启动不闪")
-            expectEqual(controller.components(separatedBy: "resetHoverAfterHide()").count - 1, 3,
-                        "灵动岛接线: 两条收走窗口的路都清悬停状态")
-            expectEqual(view.contains("p.$currentLyricsOffsetMs") && view.contains("timingEpoch: playback.lyricsOffsetMs"), true,
+            expectEqual(controller.components(separatedBy: "resetHoverAfterHide()").count - 1, 4,
+                        "灵动岛接线: 两条收走窗口的路、窗口被挡住(锁屏 / 屏保 / 熄屏)都清悬停状态")
+            expectEqual(view.contains("p.$currentLyricsOffsetMs")
+                            && view.contains("timingEpoch: LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,"), true,
                         "灵动岛接线: 订阅总偏移,偏移一变当前行重装")
             // 先算几何再建 hostingView:SwiftUI 第一次排版就拿终值,卡片不从占位窗口里那份旧版位置弹过去。见 05 章决策 64。
             let initBody = controller.components(separatedBy: "convenience init(pinnedScreenID: String?) {").last ?? ""
@@ -1179,6 +1180,35 @@ func runNotchTests() {
                         "里程碑契约: 灵动岛开着、开关开着、连着 Last.fm、不在广告里才报")
             expectEqual(centerSrc.contains("NotchLyricsWindowController.shared"), false,
                         "里程碑契约: 里程碑中心不碰灵动岛控制器的 .shared(碰一下就会建窗口)")
+            expectEqual(centerSrc.contains("guard surfaces.values.contains(where: { $0() }) else { return }")
+                        && ctrlSrc.contains("ListenMilestoneCenter.shared.registerSurface(self) { [weak self] in self?.canShowMilestone ?? false }")
+                        && ctrlSrc.contains("ListenMilestoneCenter.shared.unregisterSurface(self)"), true,
+                        "里程碑契约: 哪个实例都不在屏(全屏时隐藏、锁屏、熄屏)时不判、不记账,这一档留着以后报")
+            // 05 章审计修复的接线(04 章悬浮歌词同类问题的对照修法)。
+            let notchView = src("NotchLyricsView.swift")
+            expectEqual(notchView.contains("var lyricsClockRunning: Bool { isPlayingNow && !(anchor?.isFrozen ?? false) }")
+                        && notchView.contains("paused: !playback.lyricsClockRunning || playback.currentLineFillSettled || !layerActive,")
+                        && notchView.contains("isPlaying: playback.lyricsClockRunning, isVisible: layerActive,")
+                        && notchView.contains("rate: playback.playbackRate),"), true,
+                        "图层主行契约: 暂停通知先到、锚点已冻时也停表;倍速按速率排")
+            expectEqual(notchView.contains("if !playback.isPlayingNow {\n                    Text(adRemainingText(total: clock.durationMs, position: clock.positionMs))"), true,
+                        "广告倒计时契约: Kaset 广告暂停时停在取样那一刻,不按墙钟往下走")
+            expectEqual(notchView.contains("Text(playback.hasPlainLyrics ? L10n.t(\"仅有纯文本，无时间戳\") : L10n.t(\"暂无歌词\"))"), true,
+                        "占位文字契约: 只有纯文本歌词时同悬浮歌词说「仅有纯文本，无时间戳」")
+            expectEqual(ctrlSrc.contains("let shrinking = frame.width < window.frame.width - 0.5")
+                        && ctrlSrc.contains("DispatchQueue.main.asyncAfter(deadline: .now() + Self.windowShrinkDelay, execute: work)"), true,
+                        "几何契约: 窗口变窄等卡片的弹簧收完再缩,卡片两侧不被窗口切成直边")
+            expectEqual(sourceHas(ctrlSrc, "FullScreenSpaceMonitor.shared.$fullScreenDisplays\n            .removeDuplicates()\n            .dropFirst()"), true,
+                        "几何契约: 进出全屏 Space 重算几何,无刘海屏的黑条不停在全屏里算出的兜底高度")
+            expectEqual(ctrlSrc.contains("let fromCollapsed = hide && isCollapsed"), true,
+                        "收起契约: 暂停着已经收起时打开「暂停时隐藏」,从收起态直接缩进刘海,不先撑开")
+            expectEqual(stageSrc.contains("if gone, case .hotspot = popoverAnchor, popover != nil { popover = nil }")
+                        && stageSrc.contains("return (spot, min(index, spot.rects.count - 1))"), true,
+                        "编辑台浮层契约: 点开它的区域没了就收掉浮层,矩形少了挂到最后一个,不留空壳")
+            expectEqual(stageSrc.contains("if case .hotspot = popoverAnchor, popover != nil, adjustingThumb == nil {\n                chrome.setExpandedFromPreview(false)"), true,
+                        "编辑台浮层契约: 从卡片浮层直接点工具栏,先放掉卡片浮层钉住的展开")
+            expectEqual(src("NotchEditorialPanel.swift").contains("AppSettings.shared.$notchHideDuringScreenCapture"), true,
+                        "浮框契约: 浮框开着时改「截屏时隐藏」当场生效")
             let panelSrc = src("NotchMilestonePanel.swift")
             expectEqual(sourceHas(panelSrc, ".allowsHitTesting(false)\n        .accessibilityHidden(true)")
                         && rootSrc.contains("NotchMilestoneConfetti(milestone: controller.milestone"), true,
@@ -1914,7 +1944,7 @@ func runNotchTests() {
                     && controller.components(separatedBy: "applyShowsLyrics()").count - 1 == 3, true,
                     "无歌词收起契约: 卡片读的 showsLyrics 由 Core 合成,「显示歌词」开关和无歌词两路变化都重算")
         expectEqual(controller.contains("subscriptions.removeAll()"), true, "无歌词收起契约: 副本 teardown 摘掉订阅")
-        expectEqual(controller.contains("((collapsesWhenPaused && !isPlayingNow && !hideWhenNotPlaying) || (collapsesDuringAds && isAdBreakNow)) && !isExpanded")
+        expectEqual(sourceHas(controller, "((collapsesWhenPaused && !isPlayingNow && (!hideWhenNotPlaying || vanishesFromCollapsed))\n            || (collapsesDuringAds && isAdBreakNow)) && !isExpanded")
                     && sourceHas(controller, "AppSettings.shared.$notchCollapsesDuringAds.removeDuplicates().sink"), true,
                     "广告时收起契约: 暂停、广告各看各的开关,每个实例自己订阅「广告时收起」")
         let notchAppSettings = read("../Settings/AppSettings.swift")

@@ -1598,10 +1598,11 @@ func runMenuBarTests() {
                     "面板逐字行(契约): 有逐字时间轴的那一档走 OverlayScrollingLyricRow")
         expectEqual(sourceBytes(panel, contain: "TimelineView(.animation"), false,
                     "面板逐字行(契约): 面板里没有逐帧的 TimelineView")
-        expectEqual(sourceBytes(panel, contain: "paused: !playback.isPlayingNow || playback.currentLineFillSettled,"), true,
+        expectEqual(sourceBytes(panel, contain: "paused: !playback.lyricsClockRunning || playback.currentLineFillSettled,"), true,
                     "面板逐字行(契约): 没在放、这一行填完就停表")
-        expectEqual(sourceBytes(panel, contain: "timingEpoch: playback.lyricsOffsetMs),"), true,
-                    "面板逐字行(契约): 调了歌词偏移当场按新基准重装")
+        expectEqual(sourceBytes(panel, contain: "timingEpoch: LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,")
+                        && sourceBytes(panel, contain: "rate: playback.playbackRate),"), true,
+                    "面板逐字行(契约): 调了歌词偏移、重锚当场按新基准重装,倍速按速率排")
     }
 
     do {

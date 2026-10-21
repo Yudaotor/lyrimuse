@@ -144,6 +144,12 @@ final class NotchEditorialPanel {
                 .sink { [weak self] _ in self?.close() }
                 .store(in: &cancellables)
         }
+        // 浮框开着时改了「截屏时隐藏」:跟着改,不然要关了重开才生效。
+        AppSettings.shared.$notchHideDuringScreenCapture
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak panel] hide in panel?.sharingType = hide ? .none : .readWrite }
+            .store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification, object: owner)
             .sink { [weak self] note in
                 guard let win = note.object as? NSWindow, !win.occlusionState.contains(.visible) else { return }

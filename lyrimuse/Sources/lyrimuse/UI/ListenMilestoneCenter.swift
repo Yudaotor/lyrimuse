@@ -30,6 +30,17 @@ final class ListenMilestoneCenter: ObservableObject {
 
     private var trackObserver: AnyCancellable?
     private var checkTask: Task<Void, Never>?
+    /// 各个灵动岛实例(主实例 + 「所有屏幕」的副本)报的「此刻放不放得下报喜」(`NotchLyricsWindowController.canShowMilestone`)。
+    /// 控制器建好时登记、teardown 时摘掉;中心自己不碰 `.shared`(碰一下就会建窗口)。
+    private var surfaces: [ObjectIdentifier: () -> Bool] = [:]
+
+    func registerSurface(_ owner: AnyObject, canShow: @escaping () -> Bool) {
+        surfaces[ObjectIdentifier(owner)] = canShow
+    }
+
+    func unregisterSurface(_ owner: AnyObject) {
+        surfaces[ObjectIdentifier(owner)] = nil
+    }
     private var dismissTask: Task<Void, Never>?
 
     private init() {
@@ -65,6 +76,9 @@ final class ListenMilestoneCenter: ObservableObject {
         let playback = PlaybackCoordinator.shared
         guard enabled, playback.title == title, playback.artist == artist,
               playback.isPlayingSmoothed, !playback.isCurrentTrackAdBreak else { return }
+        // 灵动岛此刻哪块屏上都不在(全屏时隐藏、锁屏、熄屏):不判、不记账,留到下一首再判 —— 先记账再显示的话,
+        // 这一档白白记掉、以后再也不报。
+        guard surfaces.values.contains(where: { $0() }) else { return }
         let stats = LastfmStatsService.shared
         guard stats.isConnected else { return }
         var ledger = loadLedger()

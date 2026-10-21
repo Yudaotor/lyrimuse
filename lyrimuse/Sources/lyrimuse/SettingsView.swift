@@ -3823,6 +3823,8 @@ private struct LyricSecondaryLineRow: View {
 @MainActor
 private struct NotchLyricRowHeightRow: View {
     @ObservedObject private var settings = AppSettings.shared
+    /// 拖动中节流提交(`SliderCommitThrottle`):行高一变,主窗口和每个镜像都重排一次几何。
+    @State private var heightThrottle = SliderCommitThrottle()
 
     var body: some View {
         SettingsRow(
@@ -3832,11 +3834,12 @@ private struct NotchLyricRowHeightRow: View {
         ) {
             HStack(spacing: 8) {
                 SteppedSlider(value: Binding(
-                    get: { Double(settings.notchEffectiveLyricRowHeight) },
-                    set: { settings.setNotchLyricRowHeight(fromSlider: $0) }
-                ), in: settings.notchLyricRowHeightRange, step: 1)
+                    get: { heightThrottle.value(or: Double(settings.notchEffectiveLyricRowHeight)) },
+                    set: { heightThrottle.update($0, commit: { settings.setNotchLyricRowHeight(fromSlider: $0) }) }
+                ), in: settings.notchLyricRowHeightRange, step: 1,
+                   onEditingChanged: { heightThrottle.editingChanged($0, commit: { settings.setNotchLyricRowHeight(fromSlider: $0) }) })
                     .frame(width: 150)
-                Text(String(format: L10n.t("%@pt"), "\(Int(settings.notchEffectiveLyricRowHeight))"))
+                Text(String(format: L10n.t("%@pt"), "\(Int(heightThrottle.value(or: Double(settings.notchEffectiveLyricRowHeight))))"))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                     .frame(width: 46, alignment: .trailing)
@@ -3912,6 +3915,14 @@ struct NotchLyricRowSettingsRows: View {
 @MainActor
 struct NotchFontSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
+    /// 拖动中节流提交(`SliderCommitThrottle`),同悬浮歌词「字号」。
+    @State private var fontSizeThrottle = SliderCommitThrottle()
+
+    /// 相等守卫,理由同悬浮歌词「字号」那根:等值赋值会白白广播 + 重算三个派生字体。
+    private func commitFontSize(_ value: Double) {
+        guard value != settings.notchFontSize else { return }
+        settings.notchFontSize = value
+    }
 
     private var sizeRange: ClosedRange<Double> {
         Double(NotchLyricRowMetrics.mainFontSizeRange.lowerBound)...Double(NotchLyricRowMetrics.mainFontSizeRange.upperBound)
@@ -3947,15 +3958,13 @@ struct NotchFontSettingsRows: View {
                 SettingsRow(icon: "textformat.size", title: L10n.t("字号"), help: sizeHelp) {
                     HStack(spacing: 8) {
                         SteppedSlider(value: Binding(
-                            get: { settings.notchFontSize },
-                            set: { newValue in
-                                // 相等守卫,理由同悬浮歌词「字号」那根:拖动中大量等值赋值会白白广播 + 重算三个派生字体。
-                                guard newValue != settings.notchFontSize else { return }
-                                settings.notchFontSize = newValue
-                            }
-                        ), in: sizeRange, step: 1)
+                            get: { fontSizeThrottle.value(or: settings.notchFontSize) },
+                            set: { fontSizeThrottle.update($0, commit: commitFontSize) }
+                        ), in: sizeRange, step: 1,
+                           onEditingChanged: { fontSizeThrottle.editingChanged($0, commit: commitFontSize) })
                             .frame(width: 150)
-                        Text(String(format: L10n.t("%@pt"), "\(Int(settings.notchFontSize))"))
+                        // 报实际画字用的字号:存的是原值、画的时候才夹(手改 / 旧版写下的越界值)。
+                        Text(String(format: L10n.t("%@pt"), "\(Int(NotchLyricRowMetrics.clampedMainFontSize(CGFloat(fontSizeThrottle.value(or: settings.notchFontSize)))))"))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                             .frame(width: 46, alignment: .trailing)
@@ -4298,6 +4307,12 @@ struct LyricsWindowAllSettingsDrawer<Content: View>: View {
 ///   - 字体 → `NotchFontSettingsRows`(跟工具栏第二行「字体」浮层同一份;字体族 / 粗细 / 字号三行)
 private struct NotchAllSettingsDrawer: View {
     @ObservedObject private var settings = AppSettings.shared
+    /// 两根宽度滑杆拖动中节流提交(`SliderCommitThrottle`):每写一次都要广播、写盘,主窗口和每个镜像各重排一次几何。
+    @State private var widthThrottle = SliderCommitThrottle()
+    @State private var expandedWidthThrottle = SliderCommitThrottle()
+    /// 拖「宽度」那一下按下时的展开宽度。拖动中按它归一「展开 ≥ 稳态」:拖过它展开跟着顶上去,拖回来展开回到它;
+    /// 按已经写进去的展开宽度归一的话,拖过去再拖回来,展开就停在拖到过的最宽处。
+    @State private var expandedAtWidthDragStart: Double?
 
     /// 展开状态用 @State 而不是 @AppStorage,理由同 OverlayAllSettingsDrawer:设计要求
     /// "默认折叠",@AppStorage 会把上次展开的样子带到下次打开设置窗口。
@@ -4385,6 +4400,10 @@ private struct NotchAllSettingsDrawer: View {
     ///      这根滑杆,不该凭空多一套窗口。
     /// step 10(不是画布那条的 2):这里是兜底通路,旁边没有实时预览,粗一点好落值;落盘值
     /// 不是 10 的倍数也没关系,step 只约束滑杆自己产生的值,不约束模型。
+    private func commitSteadyWidth(_ value: Double) {
+        NotchEditorStage.commitWidths(steady: value, expanded: expandedAtWidthDragStart)
+    }
+
     private var widthRow: some View {
         SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
             HStack(spacing: 8) {
@@ -4395,12 +4414,17 @@ private struct NotchAllSettingsDrawer: View {
                 // 「展开 ≥ 稳态」归一(稳态拖过展开时把展开顶上去)、以及上面③那条 `notchOverlayEnabled`
                 // 守卫都在里面,这里不再各写一份。
                 SteppedSlider(value: Binding(
-                    get: { NotchEditorStage.effectiveWidth(baseWidth: settings.notchContentWidth) },
-                    set: { NotchEditorStage.commitWidths(steady: $0) }
-                ), in: NotchEditorStage.usableWidthRangeOnCurrentScreen, step: 10)
+                    get: { widthThrottle.value(or: NotchEditorStage.effectiveWidth(baseWidth: settings.notchContentWidth)) },
+                    set: { widthThrottle.update($0, commit: commitSteadyWidth) }
+                ), in: NotchEditorStage.usableWidthRangeOnCurrentScreen, step: 10,
+                   onEditingChanged: { began in
+                       if began { expandedAtWidthDragStart = settings.notchExpandedContentWidth }
+                       widthThrottle.editingChanged(began, commit: commitSteadyWidth)
+                       if !began { expandedAtWidthDragStart = nil }
+                   })
                 .frame(width: 150)
                 Text(String(format: L10n.t("%@pt"),
-                            "\(Int(NotchEditorStage.effectiveWidth(baseWidth: settings.notchContentWidth)))"))
+                            "\(Int(widthThrottle.value(or: NotchEditorStage.effectiveWidth(baseWidth: settings.notchContentWidth))))"))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                     .frame(width: 46, alignment: .trailing)
@@ -4418,12 +4442,13 @@ private struct NotchAllSettingsDrawer: View {
             HStack(spacing: 8) {
                 SteppedSlider(value: Binding(
                     get: {
-                        NotchEditorStage.effectiveExpandedWidth(
+                        expandedWidthThrottle.value(or: NotchEditorStage.effectiveExpandedWidth(
                             steadyBase: settings.notchContentWidth,
-                            expandedBase: settings.notchExpandedContentWidth)
+                            expandedBase: settings.notchExpandedContentWidth))
                     },
-                    set: { NotchEditorStage.commitWidths(expanded: $0) }
-                ), in: NotchEditorStage.usableExpandedWidthRangeOnCurrentScreen, step: 10)
+                    set: { expandedWidthThrottle.update($0, commit: { NotchEditorStage.commitWidths(expanded: $0) }) }
+                ), in: NotchEditorStage.usableExpandedWidthRangeOnCurrentScreen, step: 10,
+                   onEditingChanged: { expandedWidthThrottle.editingChanged($0, commit: { NotchEditorStage.commitWidths(expanded: $0) }) })
                 .frame(width: 150)
                 Text(String(format: L10n.t("%@pt"),
                             "\(Int(NotchEditorStage.effectiveExpandedWidth(steadyBase: settings.notchContentWidth, expandedBase: settings.notchExpandedContentWidth)))"))

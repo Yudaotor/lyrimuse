@@ -94,8 +94,13 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 必须是计算属性:hover 改 isExpanded 的那条路径(setExpandedFromWindow)不调 recomputeGeometry,
     // 存成存储属性的话暂停时 hover 不会展开。
     var isCollapsed: Bool {
-        ((collapsesWhenPaused && !isPlayingNow && !hideWhenNotPlaying) || (collapsesDuringAds && isAdBreakNow)) && !isExpanded
+        ((collapsesWhenPaused && !isPlayingNow && (!hideWhenNotPlaying || vanishesFromCollapsed))
+            || (collapsesDuringAds && isAdBreakNow)) && !isExpanded
     }
+
+    /// 这一次缩进刘海是从收起态开始的:暂停着、已经收起时才打开「暂停时隐藏」。收起判据里 `!hideWhenNotPlaying` 那一项
+    /// 一翻,卡片会先按弹簧撑回正常大小、同时又缩进刘海;这时照旧算收起,从收起的样子直接缩进去。重新露面时清掉。
+    @Published private(set) var vanishesFromCollapsed = false
 
     /// 卡片是否顶在**宽度下限**上:稳态真实宽已经贴着宽度滑杆能拖到的下界(再小,卡片也
     /// 不会再窄)。音浪独占耳朵时只有这个状态居中(见 `NotchWidthBounds.soloEqualizerInset`),
@@ -362,6 +367,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 if self?.isSurfaceVisible != visible {
                     self?.isSurfaceVisible = visible
                     Self.hoverLog.notice("surface visible=\(visible, privacy: .public)")
+                    // 看不见了(锁屏、屏保、熄屏;灵动岛在屏保层,别的窗口挡不住它):控制器这份悬停也清掉,跟视图那份
+                    // (NotchWindowRoot 里 isSurfaceVisible 的 onChange)配对。只清视图那份的话,解锁时指针已经移开,
+                    // 之后的离开事件都不算边沿,卡片一直停在展开态。
+                    if !visible { self?.resetHoverAfterHide() }
                 }
             }
         }
@@ -432,6 +441,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             self?.setMilestone(next)
         }
         .store(in: &subscriptions)
+        ListenMilestoneCenter.shared.registerSurface(self) { [weak self] in self?.canShowMilestone ?? false }
 
         // 换歌翻牌的「掉歌名」:歌名 / 歌手 / 广告 / 在不在等开播去抖 300ms(常常一前一后到)再判。存 sink 参数值,理由同上。
         // 去抖挂主队列、别挂 RunLoop.main:菜单栏菜单开着时主线程在事件跟踪模式里转,RunLoop.main 的计时器要等菜单关了才走(见 05 章决策 67)。
@@ -483,6 +493,16 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             .combineLatest(FullScreenSpaceMonitor.shared.$fullScreenDisplays)
             .sink { [weak self] enabled, displays in
                 self?.applyFullScreenCover(enabled: enabled, displays: displays)
+            }
+        .store(in: &subscriptions)
+        // 进出全屏 Space 时重算几何:无刘海屏的黑条高度按这块屏当下的菜单栏算(`menuBarHeight`),全屏 Space 里菜单栏
+        // 收起、算出来是兜底的 24;在全屏里重算过一次(装机重启、改设置、插拔屏)的话,退出全屏后黑条一直比菜单栏矮,
+        // 要等下一次屏幕参数变化。放到下一拍:切 Space 的通知到时可见区域不一定已经换好。
+        FullScreenSpaceMonitor.shared.$fullScreenDisplays
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] _ in
+                DispatchQueue.main.async { MainActor.assumeIsolated { self?.recomputeGeometry(animate: false) } }
             }
         .store(in: &subscriptions)
         // 「纯音乐/无歌词时收起歌词行」:开关和「这首有没有歌词」同时从参数拿(同一个 willSet 坑)。
@@ -721,10 +741,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
     }
 
+    /// 写「暂停时隐藏」的唯一入口。先记 `vanishesFromCollapsed` 再翻开关:两个值同一拍到视图,卡片不先撑开一下。
+    private func assignHideWhenNotPlaying(_ hide: Bool) {
+        guard hideWhenNotPlaying != hide else { return }
+        let fromCollapsed = hide && isCollapsed
+        if vanishesFromCollapsed != fromCollapsed { vanishesFromCollapsed = fromCollapsed }
+        hideWhenNotPlaying = hide
+    }
+
     // 灵动岛自己那一份"暂停/无播放时隐藏"(`AppSettings.notchHideWhenNotPlaying`),跟悬浮歌词那份是
     // 两个独立的值 —— 别把 `AppSettings.hideWhenNotPlaying`(只归悬浮歌词)接到这里。
     func setHideWhenNotPlaying(_ hide: Bool) {
-        hideWhenNotPlaying = hide
+        assignHideWhenNotPlaying(hide)
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
     }
 
@@ -932,6 +960,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         lastAppliedShouldShow == true && !isVanished && !isCollapsed && showsLyricRow
     }
 
+    /// 收听里程碑此刻有没有地方报:窗口在屏、没缩进刘海、没被挡(全屏时隐藏、锁屏、熄屏都不算)。init 里登记给
+    /// `ListenMilestoneCenter`,哪个实例都不在屏时它不判、不记账,不然这一档白白记掉、以后再也不报。
+    var canShowMilestone: Bool {
+        lastAppliedShouldShow == true && !isVanished && isSurfaceVisible
+    }
+
     /// 卡片此刻放得下掉出来的歌名:窗口在屏、没缩进刘海、没被挡,不在收起 / 展开 / 报喜 / 「发现新播放器」提醒里。
     private var trackDropFits: Bool {
         lastAppliedShouldShow == true && !isVanished && isSurfaceVisible
@@ -1063,7 +1097,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 自动隐藏两个开关、一对宽度变了(init 里那条订阅,参数是 sink 收到的新值)。宽度变化把几何整个重算一遍:灵动岛的
     /// 位置从不持久化,每次都按当前屏幕居中算。`animate: false`:平滑过渡由卡片那条弹簧负责,NSWindow 再动画会跟它打架。
     private func applyBehaviorSettings(hide: Bool, captureHidden: Bool, contentWidth: CGFloat, expandedContentWidth: CGFloat) {
-        if hideWhenNotPlaying != hide { hideWhenNotPlaying = hide }
+        assignHideWhenNotPlaying(hide)
         // sharingType 每次直接写、不判等:运行中这扇窗读回来的值不可靠(实测设成 .readWrite 后读回 0 = .none),判等会把
         // 「改成 .none」当成没变跳过,截屏时隐藏就不生效。
         window?.sharingType = captureHidden ? .none : .readWrite
@@ -1113,6 +1147,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             }
             // 先 orderFront 再翻回 false:卡片在已经可见的窗口里从刘海撑开。顺序反了动画会在看不见的窗口里播完。
             if isVanished { isVanished = false }
+            if vanishesFromCollapsed { vanishesFromCollapsed = false }
             return
         case .alreadyHidden:
             cancelPendingHide()
@@ -1325,7 +1360,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         let settings = AppSettings.shared
         let visible = notchEnabled ?? settings.notchOverlayEnabled
         if isVisible != visible { isVisible = visible }
-        if hideWhenNotPlaying != settings.notchHideWhenNotPlaying { hideWhenNotPlaying = settings.notchHideWhenNotPlaying }
+        assignHideWhenNotPlaying(settings.notchHideWhenNotPlaying)
         // sharingType 直接写、不判等,理由见 applyBehaviorSettings。
         window?.sharingType = settings.notchHideDuringScreenCapture ? .none : .readWrite
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
@@ -1345,6 +1380,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// (主实例 .shared 是有意常驻的单例、从不 teardown,不受影响。)
     func teardown() {
         cancelPendingHide()
+        ListenMilestoneCenter.shared.unregisterSurface(self)
+        pendingShrinkWork?.cancel()
+        pendingShrinkWork = nil
         window?.orderOut(nil)
         releaseCardCursor()
         subscriptions.removeAll()
@@ -1453,8 +1491,28 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         )
         // 判等同上:setFrame(display: true) 是一次同步重绘 + WindowServer 事务,几何没变
         // 时纯属白付(镜像 syncAll 的每次触达都会走到这里)。
-        if window.frame != frame { window.setFrame(frame, display: true, animate: animate) }
-        let hostFrame = NSRect(origin: .zero, size: frame.size)
-        if hostingView?.frame != hostFrame { hostingView?.frame = hostFrame }
+        pendingShrinkWork?.cancel()
+        pendingShrinkWork = nil
+        let apply: () -> Void = { [weak self, weak window] in
+            guard let self, let window else { return }
+            if window.frame != frame { window.setFrame(frame, display: true, animate: animate) }
+            let hostFrame = NSRect(origin: .zero, size: frame.size)
+            if self.hostingView?.frame != hostFrame { self.hostingView?.frame = hostFrame }
+        }
+        // 变窄晚一点再缩:卡片宽度按弹簧收回(NotchWindowRoot.cardAnimation,约 0.45 秒),窗口当场缩的话这段时间卡片比窗口宽,
+        // 两侧被窗口边界切成直边、圆角和肩膀不见。变宽当场变(卡片要往外长);窗口不在屏、减少动态效果(卡片不做动画)时也当场缩。
+        let shrinking = frame.width < window.frame.width - 0.5
+        if shrinking, window.isVisible, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            let work = DispatchWorkItem(block: apply)
+            pendingShrinkWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.windowShrinkDelay, execute: work)
+        } else {
+            apply()
+        }
     }
+
+    /// 窗口缩窄排着的那一次(见 recomputeGeometry 末尾)。下一次重算先取消它。
+    private var pendingShrinkWork: DispatchWorkItem?
+    /// 比卡片那条最慢的弹簧(收起态 response 0.45)稍长。
+    private static let windowShrinkDelay: TimeInterval = 0.5
 }

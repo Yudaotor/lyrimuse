@@ -71,6 +71,9 @@ private final class PanelPlayback: ObservableObject {
     var displayArtworkImage: NSImage? { highResArtworkThumbnail ?? highResArtworkImage ?? artworkImage }
     @Published private(set) var anchor: ProgressAnchor?
     @Published private(set) var pausedPositionMs: Int?
+    /// 逐字图层行的停表判据:暂停通知先到、锚点已冻住而 isPlayingNow 还没翻时也算停着(同灵动岛 NotchPlayback)。
+    var lyricsClockRunning: Bool { isPlayingNow && !(anchor?.isFrozen ?? false) }
+    var playbackRate: Double { anchor?.rate ?? 1 }
     @Published private(set) var currentDurationMs: Int?
     @Published private(set) var trackLyricsOffsetMs = 0
     // ---- 来自 AppSettings(只挑面板实读的五项) ----
@@ -953,8 +956,10 @@ private struct MenuBarPanelView: View {
                 romaFillColor: fg,
                 strokeColor: nil,
                 alignment: .leading,
-                paused: !playback.isPlayingNow || playback.currentLineFillSettled,
-                timingEpoch: playback.lyricsOffsetMs),
+                paused: !playback.lyricsClockRunning || playback.currentLineFillSettled,
+                timingEpoch: LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
+                                                  offsetMs: playback.lyricsOffsetMs),
+                rate: playback.playbackRate),
             nowMs: Self.lyricsNowMs)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement()
