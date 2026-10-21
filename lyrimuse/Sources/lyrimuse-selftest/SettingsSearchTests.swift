@@ -344,6 +344,11 @@ func runSettingsSearchTests() {
     let qqHits = SettingsSearchMatcher.ranked(entries, query: "QQ", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
     expectEqual(qqHits.map(\.titleKey).contains("歌词来源"), true, "目录: 搜「QQ」能落到「歌词来源」卡")
     expectEqual(qqHits.map(\.titleKey).contains("音乐 App"), true, "目录: 搜「QQ」也能落到「音乐 App」卡")
+    // 用户嫌歌词不准时多半照抱怨的原话搜,不会搜「时间轴偏移」。
+    for query in ["歌词太快", "太慢", "不同步", "out of sync"] {
+        let hits = SettingsSearchMatcher.ranked(entries, query: query, title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
+        expectEqual(hits.first?.titleKey, "时间轴偏移", "目录: 搜「\(query)」第一条是时间轴偏移")
+    }
 
     // 「歌词窗口」那一段只在一种尺寸的预览下才有的行(14 章决策 56):命中时预览先切过去。
     let lyricsWindowEntries = entries.filter { $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue }
