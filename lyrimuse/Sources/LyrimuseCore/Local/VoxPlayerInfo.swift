@@ -330,22 +330,20 @@ public enum VoxPlayerInfo {
         return out
     }
 
-    /// VOX 打开着的音频文件里,系统那份报的歌名对得上的那一个(`fileMatchesSystemTitle`)。按歌名记,找到了就不再找;
+    /// VOX 打开着的音频文件里,系统那份报的歌名对得上的那一个(`pickSystemFile`)。按歌名记,找到了就不再找;
     /// 没找到的隔 `systemFileRetry` 再找(VOX 换歌时可能还没打开新文件)。
     static func systemFile(title: String, pid: pid_t, now: Date) -> (path: String, tags: LocalAudioFileTags)? {
         if let hit = systemFiles.withLock({ $0[title] }),
            hit.found != nil || now.timeIntervalSince(hit.checkedAt) < systemFileRetry {
             return hit.found
         }
-        var found: (path: String, tags: LocalAudioFileTags)?
-        for path in ProcessOpenFiles.paths(pid: pid)
-        where PlayerTitleSplit.audioExtensions.contains(URL(fileURLWithPath: path).pathExtension.lowercased()) {
-            guard let tags = LocalAudioFileTags.read(path: path),
-                  fileMatchesSystemTitle(title, tagsTitle: tags.title, fileName: URL(fileURLWithPath: path).lastPathComponent)
-            else { continue }
-            found = (path, tags)
-            break
-        }
+        let candidates: [(path: String, tags: LocalAudioFileTags)] = ProcessOpenFiles.paths(pid: pid)
+            .filter { PlayerTitleSplit.audioExtensions.contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) }
+            .compactMap { path in LocalAudioFileTags.read(path: path).map { (path, $0) } }
+        let picked = pickSystemFile(title, candidates: candidates.map {
+            (fileName: URL(fileURLWithPath: $0.path).lastPathComponent, tagsTitle: $0.tags.title)
+        })
+        let found = picked.map { candidates[$0] }
         systemFiles.withLock { entries in
             if entries.count > 32 { entries.removeAll() }
             entries[title] = (found, now)
@@ -357,6 +355,24 @@ public enum VoxPlayerInfo {
     static let systemFileRetry: TimeInterval = 3
     private static let systemFiles = OSAllocatedUnfairLock<[String: (found: (path: String, tags: LocalAudioFileTags)?, checkedAt: Date)]>(
         initialState: [:])
+
+    /// 系统那份报的歌名是哪个打开着的文件的:先按 `fileMatchesSystemTitle` 认;都对不上时,AudioToolbox 读不出歌名(VOX 自己读得出)
+    /// 的文件只有一个就是它,再不行文件名(只留字母数字、小写)里含着这个歌名的只有一个就是它。VOX 快放完时会提前打开下一首,
+    /// 后两条都要求只有一个候选。纯函数,selftest 覆盖。
+    public static func pickSystemFile(_ title: String, candidates: [(fileName: String, tagsTitle: String)]) -> Int? {
+        if let i = candidates.firstIndex(where: { fileMatchesSystemTitle(title, tagsTitle: $0.tagsTitle, fileName: $0.fileName) }) {
+            return i
+        }
+        let untitled = candidates.indices.filter { candidates[$0].tagsTitle.isEmpty }
+        if untitled.count == 1 { return untitled[0] }
+        func letters(_ s: String) -> String { String(s.lowercased().unicodeScalars.filter(CharacterSet.alphanumerics.contains)) }
+        let key = letters(title)
+        guard !key.isEmpty else { return nil }
+        let named = candidates.indices.filter {
+            letters(PlayerTitleSplit.strippingAudioExtension(candidates[$0].fileName)).contains(key)
+        }
+        return named.count == 1 ? named[0] : nil
+    }
 
     /// 系统那份报的歌名是不是这个文件的:VOX 报的是标签里的歌名(乱码照原样),没写标签时是文件名的全小写。纯函数,selftest 覆盖。
     public static func fileMatchesSystemTitle(_ title: String, tagsTitle: String, fileName: String) -> Bool {

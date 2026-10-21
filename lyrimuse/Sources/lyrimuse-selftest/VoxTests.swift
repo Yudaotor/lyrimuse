@@ -260,6 +260,16 @@ func runVoxTests() {
         expectEqual(V.fileMatchesSystemTitle("Marjoram", tagsTitle: "Кибернетичекая эра", fileName: "next.mp3"), false,
                     "VOX 认文件: 提前打开的下一首不认")
         expectEqual(V.fileMatchesSystemTitle("", tagsTitle: "", fileName: ".mp3"), false, "VOX 认文件: 空歌名不认")
+        expectEqual(V.pickSystemFile("Marjoram", candidates: [("next.mp3", "Кибернетичекая эра"), ("m.mp3", "Marjoram")]), 1,
+                    "VOX 认文件: 几个打开着的文件里挑标签对得上的")
+        expectEqual(V.pickSystemFile("Crazy", candidates: [("2010-03-CrimsonFaced-Crazy.mp3", "")]), 0,
+                    "VOX 认文件: AudioToolbox 读不出标签、只开着这一个,就是它")
+        expectEqual(V.pickSystemFile("Crazy", candidates: [("2010-03-CrimsonFaced-Crazy.mp3", ""), ("2010-04-Next-Song.mp3", "")]), 0,
+                    "VOX 认文件: 读不出标签的有两个,按文件名里含着歌名认")
+        expectEqual(V.pickSystemFile("Crazy", candidates: [("a-Crazy.mp3", ""), ("b-Crazy-Live.mp3", "")]), nil,
+                    "VOX 认文件: 文件名都含着歌名就不猜")
+        expectEqual(V.pickSystemFile("Crazy", candidates: [("x.mp3", "Other"), ("y.mp3", "Another")]), nil,
+                    "VOX 认文件: 都读得出标签、都对不上,不认")
 
         func snap(_ json: String) -> MediaControlSnapshot {
             try! JSONDecoder().decode(MediaControlSnapshot.self, from: Data(json.utf8))
