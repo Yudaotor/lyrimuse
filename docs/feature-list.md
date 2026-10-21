@@ -278,7 +278,7 @@ A Dynamic Island-style capsule beside the notch at the top of the screen; Macs w
 
 ### Menu bar lyrics
 
-The current line right in the menu bar, scrolling when it is too long instead of being cut off. Add a second line for the next line, the translation or romanization. On displays without a notch it can also sit in the middle of the menu bar.
+The current line right in the menu bar, scrolling when it is too long instead of being cut off. Add a second line for the next line, the translation or romanization. It can also sit in the middle of the menu bar, right beside the notch on displays that have one.
 
 - Off by default
 - Settings: Lyrics Display › Menu Bar › Menu Bar Lyrics
@@ -1001,7 +1001,7 @@ Every setting in the Settings window, by where it lives: 278 in all. Type a name
 
 ### Lyrics Display › Menu Bar › Layout
 
-- **Lyrics Position**: Menu Bar Center: lyrics appear in the middle of the menu bar, clear of app menus and the icons on the right. On a display with a notch or with Notch Lyrics, they stay beside the icon
+- **Lyrics Position**: Menu Bar Center: lyrics appear in the middle of the menu bar, clear of app menus, the icons on the right and the notch. With Notch Lyrics on, they stay beside the icon
 - **Width Mode**: Fixed: every song uses the set width. Adaptive: each song gets its own width from its lyrics, up to the set width
 - **Alignment**
 - **Second Line**

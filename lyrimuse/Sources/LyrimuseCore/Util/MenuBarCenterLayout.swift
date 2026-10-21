@@ -5,7 +5,8 @@ import Foundation
 //
 // 状态栏项的位置由系统排、只能在右侧那一串里,放不到中间,所以这一档另开一扇透明窗口画在菜单栏上。
 // 菜单栏左边是前台 App 的菜单,右边是各家的状态栏图标,歌词只能放在两者之间:优先以整块屏的中线居中,
-// 一侧挤过来就往另一侧让,两侧各留 `clearance`。两侧的位置由 App 侧经辅助功能读出来(`MenuBarOccupancy`),
+// 一侧挤过来就往另一侧让,两侧各留 `clearance`。有刘海的屏正中是刘海(硬件不发光),它也算占掉的一段:
+// 歌词放到刘海左右两段里宽的那一段、紧挨着刘海。两侧的位置由 App 侧经辅助功能读出来(`MenuBarOccupancy`),
 // 读不到(没授权、还没扫到)的那一侧按屏幕边缘算。这里只管算,不碰 AppKit。
 public enum MenuBarCenterLayout {
     /// 跟两侧已有内容至少隔多远。
@@ -17,32 +18,39 @@ public enum MenuBarCenterLayout {
 
     /// 一块屏能不能放居中歌词。
     public struct ScreenCandidate: Equatable, Sendable {
-        public let hasNotch: Bool
-        /// 灵动岛在这块屏上(它占着菜单栏正中)。
+        /// 灵动岛在这块屏上(它占着菜单栏正中和刘海两侧)。
         public let islandHere: Bool
-        public init(hasNotch: Bool, islandHere: Bool) {
-            self.hasNotch = hasNotch
+        public init(islandHere: Bool) {
             self.islandHere = islandHere
         }
     }
 
-    /// 选哪块屏:主屏(第 0 块,带菜单栏的那块)能用就用它,否则第一块能用的。有刘海的屏正中就是刘海,
-    /// 灵动岛占着的屏正中已经有东西,都不算。nil = 没有能用的,歌词照旧在图标旁。
+    /// 选哪块屏:主屏(第 0 块,带菜单栏的那块)能用就用它,否则第一块能用的。灵动岛占着的屏不算。
+    /// nil = 没有能用的,歌词照旧在图标旁。
     public static func pickScreen(_ candidates: [ScreenCandidate]) -> Int? {
-        candidates.firstIndex { !$0.hasNotch && !$0.islandHere }
+        candidates.firstIndex { !$0.islandHere }
     }
 
     /// 菜单栏里能放歌词的那一段(全局横坐标)。`menusMaxX` 是前台 App 菜单的右缘,`statusItemsMinX` 是状态栏图标的左缘,
-    /// 各自 nil = 那一侧读不到、按屏幕边缘算。放不下 `minimumSpan` 时返回 nil。
+    /// 各自 nil = 那一侧读不到、按屏幕边缘算。`notch` 是刘海横跨的那一段(没有刘海 nil):去掉它后左右各剩一段,
+    /// 取宽的那段(一样宽取右边)。放不下 `minimumSpan` 时返回 nil。
     public static func usableSpan(screenMinX: CGFloat, screenMaxX: CGFloat,
-                                  menusMaxX: CGFloat?, statusItemsMinX: CGFloat?) -> ClosedRange<CGFloat>? {
+                                  menusMaxX: CGFloat?, statusItemsMinX: CGFloat?,
+                                  notch: ClosedRange<CGFloat>? = nil) -> ClosedRange<CGFloat>? {
         let lo = max(screenMinX, menusMaxX ?? screenMinX) + clearance
         let hi = min(screenMaxX, statusItemsMinX ?? screenMaxX) - clearance
-        guard hi - lo >= minimumSpan else { return nil }
-        return lo...hi
+        var segments = [(lo, hi)]
+        if let notch {
+            segments = [(lo, min(hi, notch.lowerBound - clearance)), (max(lo, notch.upperBound + clearance), hi)]
+        }
+        let fitting = segments.filter { $0.1 - $0.0 >= minimumSpan }
+        guard let best = fitting.max(by: { ($0.1 - $0.0) < ($1.1 - $1.0) || (($0.1 - $0.0) == ($1.1 - $1.0) && $0.0 < $1.0) })
+        else { return nil }
+        return best.0...best.1
     }
 
     /// 宽 `width` 的窗口左沿:以屏幕中线居中,出了 `span` 就往里推,整块不出 `span`。宽过 `span` 时按 `span` 宽算。
+    /// 有刘海时 `span` 在刘海一侧,中线落在 `span` 外,推进来就是紧挨着刘海。
     public static func originX(width: CGFloat, screenMidX: CGFloat, span: ClosedRange<CGFloat>) -> CGFloat {
         let w = min(width, span.upperBound - span.lowerBound)
         let centered = (screenMidX - w / 2).rounded()

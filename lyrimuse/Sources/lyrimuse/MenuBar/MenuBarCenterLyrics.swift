@@ -203,7 +203,7 @@ final class MenuBarCenterLyrics {
     /// 最近一次摆窗用的那一段与两侧读数,给 `debug/state` 看。
     private(set) var lastLayout: (screen: CGRect, span: ClosedRange<CGFloat>, menusMaxX: CGFloat?, statusItemsMinX: CGFloat?)?
 
-    /// 本机验证用(`debug/menubar-center?ignore-notch=1`):把有刘海的屏也当成能用的,这台只有刘海屏的开发机才验得到。
+    /// 本机验证用(`debug/menubar-center?ignore-notch=1`):当作没有刘海、直接压在正中,刘海屏的开发机才验得到无刘海屏的摆法。
     static var ignoresNotchForDebug = false
 
     var window: NSWindow? { panel }
@@ -217,9 +217,12 @@ final class MenuBarCenterLyrics {
             .sink { [weak self] _ in self?.label.appearance = MenuBarAppearanceStore.shared.appearance }
     }
 
-    /// 这块屏算不算有刘海(调试开关打开时一律不算)。
-    static func hasNotch(_ screen: NSScreen) -> Bool {
-        screen.safeAreaInsets.top > 0 && !ignoresNotchForDebug
+    /// 刘海横跨的那一段(全局横坐标,跟灵动岛量刘海同一套 API);没有刘海、或调试开关打开时 nil。
+    static func notchRange(of screen: NSScreen) -> ClosedRange<CGFloat>? {
+        guard !ignoresNotchForDebug, screen.safeAreaInsets.top > 0,
+              let left = screen.auxiliaryTopLeftArea, let right = screen.auxiliaryTopRightArea,
+              right.minX > left.maxX else { return nil }
+        return left.maxX...right.minX
     }
 
     /// 居中歌词这一刻该落在哪块屏。nil = 没有能用的,歌词照旧在图标旁。
@@ -230,7 +233,6 @@ final class MenuBarCenterLyrics {
             ? NotchLyricsWindowController.targetScreen() : nil
         let candidates = screens.map { screen in
             MenuBarCenterLayout.ScreenCandidate(
-                hasNotch: hasNotch(screen),
                 islandHere: settings.notchOverlayEnabled && (settings.notchAllScreens || screen == islandScreen))
         }
         return MenuBarCenterLayout.pickScreen(candidates).map { screens[$0] }
@@ -253,7 +255,7 @@ final class MenuBarCenterLyrics {
             menuBarHeight: Self.menuBarHeight(of: screen))
         let span = MenuBarCenterLayout.usableSpan(
             screenMinX: screen.frame.minX, screenMaxX: screen.frame.maxX,
-            menusMaxX: menusMaxX, statusItemsMinX: statusItemsMinX)
+            menusMaxX: menusMaxX, statusItemsMinX: statusItemsMinX, notch: Self.notchRange(of: screen))
         if let span { lastLayout = (screen.frame, span, menusMaxX, statusItemsMinX) }
         return span
     }

@@ -487,8 +487,8 @@ struct MenuBarLayoutRows: View {
             VStack(spacing: 0) {
                 MenuBarPlacementRow()
                 CardDivider()
-                // 放在菜单栏正中时窗口宽跟着内容走、恒居中,宽度模式与对齐方式管不到;用不上正中(屏都有刘海、
-                // 灵动岛占着)时歌词还在图标那一格,照常显示。
+                // 放在菜单栏正中时窗口宽跟着内容走、恒居中,宽度模式与对齐方式管不到;用不上正中(灵动岛占着)时
+                // 歌词还在图标那一格,照常显示。
                 if !MenuBarPlacementRow.centerInUse(settings) {
                     MenuBarWidthModeRow()
                     CardDivider()
@@ -602,7 +602,7 @@ struct MenuBarWidthModeRow: View {
 }
 
 /// 「歌词位置」行 —— 菜单栏歌词放在状态栏图标那一格,还是菜单栏正中(见 MenuBarLyricsPlacement)。
-/// 选了正中时,这一刻用不上(屏都有刘海 / 灵动岛占着)或没有辅助功能权限(读不到两侧、让不开)就在行里说一句。
+/// 选了正中时,这一刻用不上(灵动岛占着)或没有辅助功能权限(读不到两侧、让不开)就在行里说一句。
 struct MenuBarPlacementRow: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var permission = AccessibilityPermission.shared
@@ -619,13 +619,10 @@ struct MenuBarPlacementRow: View {
         }
     }
 
-    /// 选了正中、但这一刻用不上的原因。
+    /// 选了正中、但这一刻用不上的原因(只剩灵动岛占着所有屏这一种)。
     private var unavailableNote: String? {
         guard settings.menuBarLyricsPlacement == .screenCenter, MenuBarCenterLyrics.targetScreen() == nil else { return nil }
-        let notchless = NSScreen.screens.contains { !MenuBarCenterLyrics.hasNotch($0) }
-        return notchless && settings.notchOverlayEnabled
-            ? L10n.t("灵动岛占着菜单栏中间，歌词仍显示在图标旁")
-            : L10n.t("屏幕有刘海，歌词仍显示在图标旁")
+        return L10n.t("灵动岛占着菜单栏中间，歌词仍显示在图标旁")
     }
 
     private var needsPermission: Bool { Self.centerInUse(settings) && !permission.trusted }
@@ -636,7 +633,7 @@ struct MenuBarPlacementRow: View {
                 icon: "menubar.rectangle",
                 title: L10n.t("歌词位置"),
                 subtitle: unavailableNote ?? (needsPermission ? L10n.t("未获得「辅助功能」权限，可能会盖住 App 菜单") : nil),
-                help: L10n.t("菜单栏正中：歌词显示在菜单栏中间，避开 App 菜单和右侧图标。有刘海或有灵动岛的屏幕上，仍显示在图标旁"),
+                help: L10n.t("菜单栏正中：歌词显示在菜单栏中间，避开 App 菜单、右侧图标和刘海。开着灵动岛时仍显示在图标旁"),
                 subtitleTint: needsPermission && unavailableNote == nil ? .orange : nil
             ) {
                 SettingsPillSegmentedControl(

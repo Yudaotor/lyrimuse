@@ -1647,13 +1647,11 @@ func runMenuBarTests() {
     // ---- 菜单栏正中:落在哪块屏、哪一段(06 章「菜单栏正中」) ----
     do {
         typealias L = MenuBarCenterLayout
-        let plain = L.ScreenCandidate(hasNotch: false, islandHere: false)
-        let notch = L.ScreenCandidate(hasNotch: true, islandHere: false)
-        let island = L.ScreenCandidate(hasNotch: false, islandHere: true)
+        let plain = L.ScreenCandidate(islandHere: false)
+        let island = L.ScreenCandidate(islandHere: true)
         expectEqual(L.pickScreen([plain, plain]), 0, "正中选屏: 主屏能用就用主屏")
-        expectEqual(L.pickScreen([notch, plain]), 1, "正中选屏: 主屏有刘海,换到没刘海的那块")
         expectEqual(L.pickScreen([island, plain]), 1, "正中选屏: 灵动岛占着的屏不用")
-        expectEqual(L.pickScreen([notch]) == nil && L.pickScreen([]) == nil, true, "正中选屏: 只有刘海屏时不放正中")
+        expectEqual(L.pickScreen([island]) == nil && L.pickScreen([]) == nil, true, "正中选屏: 灵动岛占着唯一的屏时不放正中")
 
         let span = L.usableSpan(screenMinX: 0, screenMaxX: 1440, menusMaxX: 400, statusItemsMinX: 1000)
         expectEqual(span, 416...984, "正中区间: 两侧各让出 clearance")
@@ -1668,6 +1666,21 @@ func runMenuBarTests() {
         expectEqual(L.originX(width: 200, screenMidX: 720, span: 700...1400), 700, "正中摆位: 左边菜单挤过来就往右让")
         expectEqual(L.originX(width: 200, screenMidX: 720, span: 16...800), 600, "正中摆位: 右边图标挤过来就往左让")
         expectEqual(L.originX(width: 900, screenMidX: 720, span: 416...984), 416, "正中摆位: 比区间宽时贴着区间左缘")
+
+        // 刘海屏(1470 宽,刘海 645.5~824.5):刘海也算占掉的一段,取两侧宽的那段、紧挨着刘海。
+        let notch: ClosedRange<CGFloat> = 645.5...824.5
+        let right = L.usableSpan(screenMinX: 0, screenMaxX: 1470, menusMaxX: 371, statusItemsMinX: 1200, notch: notch)
+        expectEqual(right, 840.5...1184, "正中刘海: 右段更宽就放右段")
+        expectEqual(right.map { L.originX(width: 200, screenMidX: 735, span: $0) }, 841,
+                    "正中刘海: 中线落在刘海里,推出来紧挨着刘海右沿")
+        let left = L.usableSpan(screenMinX: 0, screenMaxX: 1470, menusMaxX: 200, statusItemsMinX: 900, notch: notch)
+        expectEqual(left, 216...629.5, "正中刘海: 左段更宽就放左段")
+        expectEqual(left.map { L.originX(width: 200, screenMidX: 735, span: $0) }, 429,
+                    "正中刘海: 放左段时紧挨着刘海左沿")
+        expectEqual(L.usableSpan(screenMinX: 0, screenMaxX: 1470, menusMaxX: 600, statusItemsMinX: 870, notch: notch), nil,
+                    "正中刘海: 刘海两侧都放不下就不放")
+        expectEqual(L.usableSpan(screenMinX: 0, screenMaxX: 1470, menusMaxX: 700, statusItemsMinX: 1100, notch: notch),
+                    840.5...1084, "正中刘海: 菜单伸过刘海时只剩右段")
 
         let screen0 = CGRect(x: 0, y: 0, width: 1440, height: 900)
         let screen1 = CGRect(x: 1440, y: 0, width: 1920, height: 1080)

@@ -1184,7 +1184,7 @@ final class MenuBarStatusItem: NSObject {
         let upcomingW = upcomingLineSlotWidth(isPlaceholder: placeholderNow)
 
         // 「菜单栏正中」:有能用的屏时歌词画进正中那扇窗口,状态栏这一格只留图标(那一格的槽宽规则、节流都不涉及)。
-        // 没有能用的屏(都有刘海、灵动岛占着)时整段跳过,照旧走下面状态栏那一格。
+        // 没有能用的屏(灵动岛占着)时整段跳过,照旧走下面状态栏那一格。
         let centerWanted = settings.showLyricsInMenuBar && settings.menuBarLyricsPlacement == .screenCenter
         MenuBarOccupancy.shared.setActive(centerWanted)
         if centerWanted, let screen = MenuBarCenterLyrics.targetScreen() {
@@ -1360,7 +1360,7 @@ final class MenuBarStatusItem: NSObject {
         if icon != nil { syncProgressClock(force: true) }
     }
 
-    /// 设置页、深链改了跟这一项有关但不走订阅的东西(调试用的「把刘海屏当无刘海」)之后补一次重算。
+    /// 设置页、深链改了跟这一项有关但不走订阅的东西(调试用的「当作没有刘海」)之后补一次重算。
     func setNeedsRefresh() { scheduleRefresh() }
 
     /// `debug/state` 里「菜单栏正中」那一段:用没用上、窗口在哪、两侧读到哪。

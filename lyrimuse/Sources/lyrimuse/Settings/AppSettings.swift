@@ -103,7 +103,7 @@ enum MenuBarLyricsIconPosition: String, Codable, Hashable, CaseIterable {
 }
 
 // 菜单栏歌词显示在哪:状态栏图标那一格(系统排在右侧那一串里),还是菜单栏正中。正中那一档另开一扇窗口画
-// (`MenuBarCenterLyrics`),只用没有刘海、灵动岛也不在的屏;一块都没有时照旧在图标那一格(06 章「菜单栏正中」)。
+// (`MenuBarCenterLyrics`),有刘海时紧挨着刘海;灵动岛占着的屏不用,一块能用的都没有时照旧在图标那一格(06 章「菜单栏正中」)。
 enum MenuBarLyricsPlacement: String, Codable, Hashable, CaseIterable {
     case statusItem
     case screenCenter

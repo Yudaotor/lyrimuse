@@ -611,9 +611,9 @@
             "zh-Hant": "選單列歌詞"
           },
           "desc": {
-            "zh-Hans": "当前歌词直接显示在菜单栏中，过长时滚动显示，不会被截断。可增加一行显示下一句、译文或读音。在没有刘海的屏幕上，也可显示在菜单栏正中。",
-            "en": "The current line right in the menu bar, scrolling when it is too long instead of being cut off. Add a second line for the next line, the translation or romanization. On displays without a notch it can also sit in the middle of the menu bar.",
-            "zh-Hant": "目前歌詞直接顯示在選單列中，過長時捲動顯示，不會被截斷。可增加一行顯示下一句、譯文或讀音。在沒有瀏海的螢幕上，也可顯示在選單列正中。"
+            "zh-Hans": "当前歌词直接显示在菜单栏中，过长时滚动显示，不会被截断。可增加一行显示下一句、译文或读音。也可显示在菜单栏中间，有刘海时紧挨着刘海。",
+            "en": "The current line right in the menu bar, scrolling when it is too long instead of being cut off. Add a second line for the next line, the translation or romanization. It can also sit in the middle of the menu bar, right beside the notch on displays that have one.",
+            "zh-Hant": "目前歌詞直接顯示在選單列中，過長時捲動顯示，不會被截斷。可增加一行顯示下一句、譯文或讀音。也可顯示在選單列中間，有瀏海時緊挨著瀏海。"
           },
           "default": "off",
           "check": {

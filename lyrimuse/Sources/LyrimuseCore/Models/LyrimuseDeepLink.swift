@@ -92,8 +92,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case saveConfig
         /// 关掉 / 接回一条来源(`debug/knockout?leg=<名字>&on=0|1`,`on=0` 关掉):验证退路撑不撑得住,见 `SourceKnockout`。
         case knockout(leg: SourceKnockout.Leg, on: Bool)
-        /// 菜单栏歌词放正中 / 放回图标旁(`center`),以及把有刘海的屏也当成能放正中的(`ignoreNotch`,不落盘,
-        /// App 重启复原):`debug/menubar-center?center=1&ignore-notch=1`,至少带一个。只有刘海屏的开发机靠它验「菜单栏正中」。
+        /// 菜单栏歌词放正中 / 放回图标旁(`center`),以及当作没有刘海、直接压在屏幕正中(`ignoreNotch`,不落盘,
+        /// App 重启复原):`debug/menubar-center?center=1&ignore-notch=1`,至少带一个。刘海屏的开发机靠它验无刘海屏的摆法。
         case menuBarCenter(center: Bool?, ignoreNotch: Bool?)
     }
 
