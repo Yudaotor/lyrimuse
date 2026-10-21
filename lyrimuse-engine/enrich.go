@@ -4202,8 +4202,8 @@ type scoredLyricCandidateResult struct {
 	// (amllCandidateDuration)。只给「搜索候选歌词」显示,不参与打分;别的源、借不到时为空。
 	BorrowedDurationSecs float64 `json:"borrowed_duration_secs,omitempty"`
 	BorrowedDurationFrom string  `json:"borrowed_duration_from,omitempty"`
-	// ISRC:源报的这条录音的 ISRC(applemusic 与 deezer 给),不参与打分。按 ISRC 补取未应答的源、取原产地曲名用,见 isrcretry.go、
-	// origintitle.go。
+	// ISRC:源报的这条录音的 ISRC(applemusic、deezer、petitlyrics 给),不参与打分。按 ISRC 补取未应答的源、取原产地曲名用(只认
+	// applemusic、deezer 的),见 isrcretry.go、origintitle.go;借封面认同一条录音也看它(applyBorrowedCovers)。
 	ISRC string `json:"isrc,omitempty"`
 	// Songwriters:词曲作者名单(amll / applemusic 的 TTML,deezer 的 Lyrics.writers)。不参与打分,
 	// 只用来写条目的 lyrics_songwriters(songwritersFromScored)。
@@ -4224,6 +4224,10 @@ type scoredLyricCandidateResult struct {
 	Artist   string `json:"artist,omitempty"`
 	Album    string `json:"album,omitempty"`
 	CoverURL string `json:"cover_url,omitempty"`
+	// BorrowedCoverURL / BorrowedCoverFrom:自己没有封面时,借同一批里ISRC 相同的那条候选的封面和它的源名
+	// (applyBorrowedCovers)。只给「搜索候选歌词」显示缩略图,不参与打分,不进歌词判决、不当条目封面。
+	BorrowedCoverURL  string `json:"borrowed_cover_url,omitempty"`
+	BorrowedCoverFrom string `json:"borrowed_cover_from,omitempty"`
 	// RetryMethod/RetriedTitle:这条候选是**标题反查改写标题之后**那一轮搜出来的。
 	// RetryMethod 是 "title-from-album" / "title-from-artist-search",RetriedTitle 是改写后
 	// 实际拿去搜的标题。两者都空 = 这条来自按本地标题的正常那一轮。
@@ -5012,6 +5016,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	applyWordTimingTitleOverride(out)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
 	applyBorrowedTranslations(out)
+	applyBorrowedCovers(out)
 	return out
 }
 
@@ -5099,7 +5104,7 @@ type lyricSourceResult struct {
 	matchTitle, matchArtist string
 	matchAlbum, matchCover  string
 	srcDur                  float64 // 源自己声明的曲长(秒),0=没给。见 lyricCandidate.sourceReportedDurationSecs
-	isrc                    string  // 源报的这条录音的 ISRC,applemusic 与 deezer 填,见 isrcretry.go
+	isrc                    string  // 源报的这条录音的 ISRC,applemusic、deezer、petitlyrics 填,见 isrcretry.go
 	// trackIDs:这一路匹配到的曲目在该平台上的 ID。只有 qq 走这里(songmid 与数字 ID,见 qqTrackIDs),amll 借封面时
 	// 跟 TTML 登记的 ID 比(amllCandidateCover);网易云的在 ne.SongID。
 	trackIDs []string
@@ -5338,11 +5343,12 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			cover: genie.matchCover, plainTextOnly: genie.plainOnly})
 	}
 	if petit.lyr != "" {
-		// 逐字(取不到时纯文本),没有译文、罗马音、封面;时长是这份歌词登记的(见 petitlyrics.go 头注)。plainOnly 口径同 vibe。
+		// 逐字(取不到时纯文本),没有译文、罗马音;封面是按 ISRC 在 Deezer 上取的,时长是这份歌词登记的(见 petitlyrics.go 头注)。
+		// plainOnly 口径同 vibe。
 		candidates = append(candidates, lyricCandidate{source: "petitlyrics", lyrics: petit.lyr,
 			wordTimingYRC: usableYRC(petit.lyr, petit.yrc), hasWordTiming: usableWordTiming(petit.lyr, petit.yrc),
 			sourceReportedDurationSecs: petit.srcDur, title: petit.matchTitle, artist: petit.matchArtist, album: petit.matchAlbum,
-			plainTextOnly: petit.plainOnly})
+			cover: petit.matchCover, plainTextOnly: petit.plainOnly, isrc: petit.isrc})
 	}
 	if kk.lyr != "" {
 		// KKBOX 本地歌词(用 KKBOX 放歌时读它自己缓存里的那份,逐行,见 kkboxlyrics.go)。只精确到整秒的那类不置
@@ -5668,6 +5674,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// 稳定之后就是按 candidates 的构造顺序决胜,确定且可复现。
 	sort.SliceStable(results, func(i, j int) bool { return results[i].Score > results[j].Score })
 	applyBorrowedTranslations(results)
+	applyBorrowedCovers(results)
 	return results
 }
 
@@ -6070,7 +6077,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		}
 		// 独立检索,同 vibe。只有纯文本时 plainOnly=true。
 		r := petitLyric(ctx, artist, srcTitle, album, durationSecs)
-		resultsCh <- lyricSourceResult{source: "petitlyrics", lyr: r.lyrics, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, srcDur: r.durationSecs, plainOnly: r.plainOnly}
+		resultsCh <- lyricSourceResult{source: "petitlyrics", lyr: r.lyrics, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly}
 	}()
 
 	// raw:目前为止到手的各源原始应答,按源名存。打分/排序全部下放给

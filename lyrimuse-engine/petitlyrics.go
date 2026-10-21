@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unicode"
 )
 
@@ -31,9 +32,13 @@ import (
 // 一个时间,空格也单独打时间;逐行是一段二进制,只带每行的时间(见 petitLineTimes),文字按同一个 lyricsId 取纯文本那一档、
 // 逐行配上。搜索只给排第一的那条带正文,别的按 key_lyricsId 另取。应答里带上传者用户名,不读、不记。
 //
+// 应答不带封面,带 ISRC:封面按 ISRC 去 Deezer 取那条录音的专辑图(petitCoverByISRC),跟取歌词并发。
+//
 // 曲库以日本发行的为主,补的是日文歌。时间轴实测见 09 章决策 309。没有公开文档,跟 kuwo.go / migu.go 同一类风险。
 type petitResult struct {
 	lyrics, yrc, title, artist, album string
+	// isrc:这份歌词登记的录音 ISRC,没给时为空;cover:按它在 Deezer 上取到的专辑封面。
+	isrc, cover string
 	// durationSecs:这份歌词登记的曲长(毫秒精度),0 = 没给。
 	durationSecs float64
 	plainOnly    bool
@@ -50,6 +55,8 @@ const (
 	petitMaxDurationDiffSecs = 8.0
 	// petitOfficialMaxDiffSecs:官方同步是对着它登记的那条录音做的,时长差过这个数就不是这一条录音,官方那份不再优先。
 	petitOfficialMaxDiffSecs = 1.0
+	// petitCoverWait:歌词取完之后封面还没回来时最多再等多久。封面跟取歌词并发,一般先到;等不到就不带封面,不拖慢歌词。
+	petitCoverWait = 1500 * time.Millisecond
 
 	petitTypePlain = "1"
 	petitTypeLine  = "2"
@@ -110,6 +117,7 @@ type petitSong struct {
 	Duration   string `xml:"duration"` // 毫秒
 	LyricsType string `xml:"lyricsType"`
 	IsOfficial string `xml:"isOfficial"`
+	ISRC       string `xml:"isrc"`
 	LyricsData string `xml:"lyricsData"`
 }
 
@@ -469,13 +477,15 @@ func petitQueries(qTitle, qArtist, raw string) [][2]string {
 	return out
 }
 
+// scoredPetitSong:过了闸的一条和它的分。
+type scoredPetitSong struct {
+	song  petitSong
+	score int
+}
+
 func resolvePetitLyric(ctx context.Context, artist, title, album string, durationSecs float64) petitResult {
-	type scoredSong struct {
-		song  petitSong
-		score int
-	}
 	qTitle := strings.TrimSpace(lyricQueryTitle(title))
-	var candidates []scoredSong
+	var candidates []scoredPetitSong
 	queries := petitQueries(qTitle, strings.TrimSpace(firstCreditedArtist(artist)), strings.TrimSpace(title))
 	for qi, q := range queries {
 		songs, err := petitSearch(ctx, q[0], q[1], durationSecs)
@@ -484,7 +494,7 @@ func resolvePetitLyric(ctx context.Context, artist, title, album string, duratio
 		}
 		for _, s := range songs {
 			if sc := petitCandidateScore(s, artist, title, album, durationSecs); sc >= 0 {
-				candidates = append(candidates, scoredSong{s, sc})
+				candidates = append(candidates, scoredPetitSong{s, sc})
 			}
 		}
 		if len(candidates) > 0 || qi == len(queries)-1 {
@@ -496,12 +506,18 @@ func resolvePetitLyric(ctx context.Context, artist, title, album string, duratio
 	}
 	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].score > candidates[j].score })
 
+	cover := petitStartCoverLookup(ctx, candidates, artist, title)
 	result := func(s petitSong) petitResult {
-		return petitResult{title: s.Title, artist: s.Artist, album: s.Album, durationSecs: s.durationSecs()}
+		return petitResult{title: s.Title, artist: s.Artist, album: s.Album, isrc: strings.TrimSpace(s.ISRC),
+			durationSecs: s.durationSecs()}
+	}
+	finish := func(r petitResult) petitResult {
+		r.cover = cover.wait(ctx, r.isrc)
+		return r
 	}
 	// 逐字只在带逐字的那几份里按名次取前几名:官方的纯文本 / 逐行常排在用户上传的逐字前面,混在一起截前几名会一份逐字都取不到。
 	// 搜索结果自带正文的那一条(排第一的)不用再取。
-	var words []scoredSong
+	var words []scoredPetitSong
 	for _, c := range candidates {
 		if c.song.LyricsType == petitTypeWord && len(words) < petitMaxCandidatesToFetch {
 			words = append(words, c)
@@ -536,7 +552,7 @@ func resolvePetitLyric(ctx context.Context, artist, title, album string, duratio
 		if lrc, yrc := petitBuildLyrics(s.LyricsData); isTimedLRC(lrc) {
 			r := result(words[rank].song)
 			r.lyrics, r.yrc = lrc, yrc
-			return r
+			return finish(r)
 		}
 	}
 	// 都没有能用的逐字:名次最高的逐行那份,时间和纯文本两趟并发取,逐行配上。配不上时它取到的纯文本留着,它就是总分第一的那份时
@@ -551,7 +567,7 @@ func resolvePetitLyric(ctx context.Context, artist, title, album string, duratio
 		if lrc != "" {
 			r := result(c.song)
 			r.lyrics = lrc
-			return r
+			return finish(r)
 		}
 		if c.song.LyricsID == top.LyricsID {
 			topText = text
@@ -568,7 +584,69 @@ func resolvePetitLyric(ctx context.Context, artist, title, album string, duratio
 	}
 	r := result(top)
 	r.lyrics, r.plainOnly = text, true
-	return r
+	return finish(r)
+}
+
+// petitCoverByISRC:按 ISRC 取一条录音,测试里换成假的。
+var petitCoverByISRC = deezerTrackByISRC
+
+// petitCoverLookup:过了闸的候选里第一个带 ISRC 的那条,它在 Deezer 上的专辑封面。isrc 为空 = 没起查询。
+type petitCoverLookup struct {
+	isrc string
+	ch   chan string
+}
+
+// petitStartCoverLookup 按名次第一个带 ISRC 的候选起一次 Deezer 查询。Deezer 源关着时不查(同 coverretry.go)。
+func petitStartCoverLookup(ctx context.Context, candidates []scoredPetitSong, artist, title string) petitCoverLookup {
+	if !lyricSourceEnabled("deezer") {
+		return petitCoverLookup{}
+	}
+	for _, c := range candidates {
+		isrc := strings.TrimSpace(c.song.ISRC)
+		if isrc == "" {
+			continue
+		}
+		l := petitCoverLookup{isrc: isrc, ch: make(chan string, 1)}
+		lookup := petitCoverByISRC
+		go func(s petitSong) {
+			t, ok := lookup(ctx, isrc)
+			if !ok || !petitCoverTrackFits(t, s, artist, title) {
+				l.ch <- ""
+				return
+			}
+			l.ch <- t.cover()
+		}(c.song)
+		return l
+	}
+	return petitCoverLookup{}
+}
+
+// wait:选中的那份歌词跟查询的是同一个 ISRC 时等封面回来,最多等 petitCoverWait。
+func (l petitCoverLookup) wait(ctx context.Context, isrc string) string {
+	if l.isrc == "" || !strings.EqualFold(l.isrc, isrc) {
+		return ""
+	}
+	timer := time.NewTimer(petitCoverWait)
+	defer timer.Stop()
+	select {
+	case c := <-l.ch:
+		return c
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+	return ""
+}
+
+// petitCoverTrackFits:按 ISRC 取回的那条录音能不能当这份歌词的封面:歌手或曲名对得上(deezerCoverTrackFits,同封面补查),
+// 两边都报了时长时差不过 petitMaxDurationDiffSecs。纯函数。
+func petitCoverTrackFits(t deezerTrack, s petitSong, artist, title string) bool {
+	if !deezerCoverTrackFits(t, []string{s.Artist, artist}, s.Title, title) {
+		return false
+	}
+	if d := s.durationSecs(); d > 0 && t.Duration > 0 && math.Abs(float64(t.Duration)-d) > petitMaxDurationDiffSecs {
+		return false
+	}
+	return true
 }
 
 // petitFetchPlain 按 lyricsId 取纯文本那一档。没问成时记一笔(noteLyricSubFetchFailure);回来的不是纯文本、或是空的,ok=false。

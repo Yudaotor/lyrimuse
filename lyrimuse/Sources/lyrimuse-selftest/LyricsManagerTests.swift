@@ -1981,6 +1981,9 @@ func runLyricsManagerTests() {
                     && service.contains("let borrowed = reported > 0 ? 0 : raw.borrowedDurationSecs ?? 0")
                     && service.contains("sourceDurationSecs: reported > 0 ? reported : borrowed,"), true,
                     "搜索候选歌词: 候选带上引擎给的源自报曲长,源自己没报时用借来的(amll),悬停写借自哪家")
+        expectEqual(service.contains("case borrowedCoverURL = \"borrowed_cover_url\"")
+                    && service.contains("coverURL: [raw.coverURL, raw.borrowedCoverURL].compactMap { $0 }.first { !$0.isEmpty }"), true,
+                    "搜索候选歌词: 候选自己没有封面时显示引擎借来的同一条录音的封面")
         let parts = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsManagerParts.swift"),
             encoding: .utf8)) ?? ""

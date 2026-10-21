@@ -739,6 +739,8 @@ private struct RawCandidate: Decodable {
     let artist: String?
     let album: String?
     let coverURL: String?
+    /// 自己没有封面时借同一条录音那条候选的(引擎 `applyBorrowedCovers`),只用来显示缩略图。
+    let borrowedCoverURL: String?
     let plainTextOnly: Bool?
     let sourceReportedDurationSecs: Double?
     let borrowedDurationSecs: Double?
@@ -754,6 +756,7 @@ private struct RawCandidate: Decodable {
         case hasWordTiming = "has_word_timing"
         case scoreTerms = "score_terms"
         case coverURL = "cover_url"
+        case borrowedCoverURL = "borrowed_cover_url"
         case plainTextOnly = "plain_text_only"
         case sourceReportedDurationSecs = "source_reported_duration_secs"
         case borrowedDurationSecs = "borrowed_duration_secs"
@@ -779,7 +782,7 @@ private extension LyricsSearchService.Candidate {
             title: raw.title ?? "",
             artist: raw.artist ?? "",
             album: raw.album ?? "",
-            coverURL: raw.coverURL.flatMap(URL.init(string:)),
+            coverURL: [raw.coverURL, raw.borrowedCoverURL].compactMap { $0 }.first { !$0.isEmpty }.flatMap(URL.init(string:)),
             isPlainTextOnly: raw.plainTextOnly ?? false,
             lineCount: LyricsSearchService.Candidate.countLines(of: raw.lyrics),
             fingerprint: ManualPickLock.fingerprint(lyrics: raw.lyrics),
