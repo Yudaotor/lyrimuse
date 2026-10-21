@@ -253,8 +253,8 @@ private func checkDiscordActivity() {
     typealias A = DiscordPresence.Application
     func app(_ player: PlaybackPlayer) -> A { DiscordPresence.application(forBundleID: player.bundleIdentifier, webPlatformID: nil) }
     expectEqual([app(.appleMusic), app(.kaset), app(.spotify), app(.qqMusic), app(.netease), app(.kugou), app(.soda),
-                 app(.kkbox), app(.amazonMusic), app(.reamp), app(.lxMusic)],
-                [.appleMusic, .youtubeMusic, .spotify, .qqMusic, .netease, .kugou, .soda, .kkbox, .amazonMusic, .reamp, .lxMusic],
+                 app(.kkbox), app(.amazonMusic), app(.reamp), app(.lxMusic), app(.vox)],
+                [.appleMusic, .youtubeMusic, .spotify, .qqMusic, .netease, .kugou, .soda, .kkbox, .amazonMusic, .reamp, .lxMusic, .vox],
                 "Discord 应用: 内置播放器各归各的应用,Kaset 归 YouTube Music")
     expectEqual(DiscordPresence.application(forBundleID: "com.apple.WebKit.GPU", webPlatformID: "youtubeMusic"), .youtubeMusic,
                 "Discord 应用: 浏览器里的 YouTube Music 归 YouTube Music")
@@ -266,7 +266,7 @@ private func checkDiscordActivity() {
                 "Discord 应用: Lyrimuse 那个的 ID")
     // 还没在 Discord 开发者后台建应用的播放器(建应用要作者过人机验证),暂时用 Lyrimuse 那个;建好之后把 ID 补进
     // DiscordPresence 再从这里拿掉。
-    let awaitingApplication: Set<PlaybackPlayer> = [.vox]
+    let awaitingApplication: Set<PlaybackPlayer> = []
     for player in awaitingApplication {
         expectEqual(DiscordPresence.applicationID(forBundleID: player.bundleIdentifier, webPlatformID: nil),
                     DiscordPresence.applicationID, "Discord 应用: \(player) 还没建应用,用 Lyrimuse 那个")
