@@ -29,6 +29,13 @@ import SwiftUI
 @MainActor
 struct OverlayTypeSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
+    @State private var fontSizeThrottle = SliderCommitThrottle()
+
+    /// 相等守卫:等值赋值照样广播 objectWillChange,didSet 还会 recomputeFonts()。
+    private func commitFontSize(_ value: Double) {
+        guard value != settings.fontSize else { return }
+        settings.fontSize = value
+    }
 
     var body: some View {
         SettingsRowGroup {
@@ -61,19 +68,15 @@ struct OverlayTypeSettingsRows: View {
                     HStack(spacing: 8) {
                         // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点
                         // (「没有意义,不好看」),量化语义一模一样。
+                        // 拖动中节流提交(SliderCommitThrottle):每写一次 fontSize,didSet 都要 recomputeFonts()
+                        // 一写五发、写盘,真窗口和编辑台各重排一次。
                         SteppedSlider(value: Binding(
-                            get: { settings.fontSize },
-                            set: { newValue in
-                                // 相等守卫:拖动中每个鼠标事件都会调 set,step 量化后大量等值
-                                // 赋值照样广播 objectWillChange,didSet 还会 recomputeFonts()
-                                // 连带重赋 4 个派生字体 @Published(一写五发)——所有观察
-                                // AppSettings 的界面跟着白跑(同三个宽度滑杆)。
-                                guard newValue != settings.fontSize else { return }
-                                settings.fontSize = newValue
-                            }
-                        ), in: AppSettings.overlayFontSizeRange, step: 1)
+                            get: { fontSizeThrottle.value(or: settings.fontSize) },
+                            set: { fontSizeThrottle.update($0, commit: commitFontSize) }
+                        ), in: AppSettings.overlayFontSizeRange, step: 1,
+                           onEditingChanged: { fontSizeThrottle.editingChanged($0, commit: commitFontSize) })
                             .frame(width: 150)
-                        Text(String(format: L10n.t("%@pt"), "\(Int(settings.fontSize))"))
+                        Text(String(format: L10n.t("%@pt"), "\(Int(fontSizeThrottle.value(or: settings.fontSize)))"))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                             .frame(width: 46, alignment: .trailing)

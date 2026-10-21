@@ -34,6 +34,7 @@ struct OverlayAllSettingsDrawer: View {
     /// 展开状态用 @State 而不是 @AppStorage:设计要求是"默认折叠",而 @AppStorage 会把
     /// 上一次展开的样子带到下一次打开设置窗口 —— 那就不再是"默认折叠"了。
     @State private var isExpanded = false
+    @State private var widthThrottle = SliderCommitThrottle()
 
     var body: some View {
         // 展开后每组各成一张卡(组名粗体卡头,组内小标题是圆角分组框,同浮层),不并成一张三屏长的卡:
@@ -144,32 +145,31 @@ struct OverlayAllSettingsDrawer: View {
     /// 区间是**跨三处的契约**(真源见 `OverlayEditorStage.widthRange`):这根滑杆、菜单栏快捷面板里的同一根、
     /// 以及编辑台调整条的 `OverlayEditorStage.widthRange`。三处必须一致:任何一处能产生别处
     /// 够不到的值,用户下次一动另一根滑杆就会被弹回去,表现是"我调好的宽度自己变了"。
+    private func commitWidth(_ value: Double) {
+        // 相等守卫:等值赋值照样广播 objectWillChange 打醒所有观察 AppSettings 的界面,didSet 还会写一次 UserDefaults。
+        guard value != settings.overlayWidth else { return }
+        settings.overlayWidth = value
+        // `LyricsOverlayWindowController.shared` 是 `static let`,光是读一下就会执行 init() 把窗口建出来 ——
+        // 悬浮歌词关着的用户,只要碰一下这根滑杆就会凭空多出一扇(不可见但已经装好监听器和观察者的)窗。宽度的
+        // 另外两个写入点(编辑台调整条 OverlayEditorStage.widthBinding / 菜单栏快捷面板 MenuBarPanelQuickSettings)
+        // 同样带这条守卫。重新打开时 setVisible 会按持久化值把几何一并应用上。
+        if settings.classicOverlayEnabled {
+            LyricsOverlayWindowController.shared.setWidth(value)
+        }
+    }
+
     private var widthRow: some View {
         SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
             HStack(spacing: 8) {
                 // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点,量化语义一模一样。
+                // 拖动中节流提交(SliderCommitThrottle):每写一次都要广播、写盘、给真窗口一次带动画的 setWidth。
                 SteppedSlider(value: Binding(
-                    get: { settings.overlayWidth },
-                    set: { newValue in
-                        // 相等守卫:Slider 拖动中会按鼠标事件频率重复调 set,值经 step
-                        // 量化后大量重复 —— @Published 是 willSet 语义,等值赋值照样
-                        // 广播 objectWillChange 打醒所有观察 AppSettings 的界面,didSet
-                        // 还会同步写一次 UserDefaults。
-                        guard newValue != settings.overlayWidth else { return }
-                        settings.overlayWidth = newValue
-                        // `LyricsOverlayWindowController.shared` 是 `static let`,光是读一下
-                        // 就会执行 init() 把窗口建出来 —— 悬浮歌词关着的用户,只要碰一下这根
-                        // 滑杆就会凭空多出一扇(不可见但已经装好监听器和观察者的)窗。宽度的
-                        // 另外两个写入点(编辑台调整条 OverlayEditorStage.widthBinding / 菜单栏快捷
-                        // 面板 MenuBarPanelQuickSettings)同样带这条守卫。重新打开时 setVisible 会按
-                        // 持久化值把几何一并应用上。
-                        if settings.classicOverlayEnabled {
-                            LyricsOverlayWindowController.shared.setWidth(newValue)
-                        }
-                    }
-                ), in: OverlayEditorStage.widthRange, step: 10)
+                    get: { widthThrottle.value(or: settings.overlayWidth) },
+                    set: { widthThrottle.update($0, commit: commitWidth) }
+                ), in: OverlayEditorStage.widthRange, step: 10,
+                   onEditingChanged: { widthThrottle.editingChanged($0, commit: commitWidth) })
                 .frame(width: 150)
-                Text(String(format: L10n.t("%@pt"), "\(Int(settings.overlayWidth))"))
+                Text(String(format: L10n.t("%@pt"), "\(Int(widthThrottle.value(or: settings.overlayWidth)))"))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                     .frame(width: 46, alignment: .trailing)

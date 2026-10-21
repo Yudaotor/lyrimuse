@@ -339,9 +339,12 @@ struct OverlayEditorStage: View {
     /// 编辑台里跑的是**真** LyricsOverlayView,每次还要重算 WrapLayout 换行、重新上报内容
     /// 高度 —— 一帧里塞这么多事,必卡。
     ///
-    /// 拖动中只动这个 `@State`:只有编辑台自己重画(它本来就要跟手),不写盘、不广播全局、
-    /// 不碰真窗口;`onEditingChanged` 收到 false 时一次性提交。
+    /// 拖动中每一格只动这个 `@State`(编辑台的窗框跟手),写回设置按 `lastWidthCommit` 节流,
+    /// `onEditingChanged` 收到 false 时补最后一次。
     @State private var draggingWidth: Double?
+    /// 拖动中上一次写回设置的时刻。卡片里跟宽度走的几何(对唱留白、长句拆开 / 短句合并的断句)读的是设置里的宽度,
+    /// 只改 draggingWidth 的话拖动中它们一直按旧宽度算、松手才跳;按真窗口拖边改宽同一个间隔(0.15 秒)跟上。
+    @State private var lastWidthCommit: CFTimeInterval = 0
 
     private var windowWidth: CGFloat { CGFloat(draggingWidth ?? settings.overlayWidth) }
 
@@ -1189,9 +1192,17 @@ struct OverlayEditorStage: View {
     private var widthBinding: Binding<Double> {
         Binding(
             get: { draggingWidth ?? settings.overlayWidth },
-            // 拖动中**只**改本地 @State,理由见 draggingWidth 的注释。落盘与通知真窗口
-            // 都推迟到 onEditingChanged 收到 false 那一下(commitWidth)。
-            set: { draggingWidth = Self.snap($0) })
+            // 拖动中改本地 @State,理由见 draggingWidth 的注释;写回设置、通知真窗口按 0.15 秒节流
+            // (见 lastWidthCommit),onEditingChanged 收到 false 那一下补最后一次(commitWidth)。
+            set: { newValue in
+                let value = Self.snap(newValue)
+                draggingWidth = value
+                let now = CACurrentMediaTime()
+                if now - lastWidthCommit >= 0.15 {
+                    lastWidthCommit = now
+                    commitWidth(value)
+                }
+            })
     }
 
     /// 松手时一次性提交。三条规则一条没变(它们跟"什么时候提交"无关,是"提交时必须做什么"):

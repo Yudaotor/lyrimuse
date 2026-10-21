@@ -42,6 +42,8 @@ private final class OverlayPlayback: ObservableObject {
     /// 下一行的逐词分组,只在 `currentLine` 为 nil(前奏/间奏「•••」下方)时用来把罗马音逐词标在
     /// 那句底下。跟 `currentLine` 同一道「卡拉OK效果」闸:关着时当前行压成整行、不带分组,这里一起清。
     @Published private(set) var nextLineWordGroups: [SyncedLyricWordGroup]?
+    /// 下一行的逐字,换句动画开着时在后台预先出主句那一份图用(`nextMainPrewarm`)。同一道「卡拉OK效果」闸。
+    @Published private(set) var nextLineWords: [SyncedLyricWord]?
     /// 当前行的显示窗口(`LyricDisplayWindow`,跟 `PlaybackCoordinator.currentLineDwellSeconds` 同一份)。
     /// 滚动模式下没有逐字时间轴的行、以及当前行的译文 / 罗马音按它配速(`OverlayScrollingLyricRow.PacedWindow`)。
     @Published private(set) var currentLineWindow: OverlayScrollingLyricRow.PacedWindow?
@@ -189,6 +191,10 @@ private final class OverlayPlayback: ObservableObject {
                 .map { groups, karaoke in karaoke ? groups : nil }
                 .removeDuplicates()
                 .sink { [weak self] in self?.nextLineWordGroups = $0 },
+            Publishers.CombineLatest(p.$overlayLyrics.map(\.nextWords), s.$overlayLyricsKaraoke)
+                .map { words, karaoke in karaoke ? words : nil }
+                .removeDuplicates()
+                .sink { [weak self] in self?.nextLineWords = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             Publishers.CombineLatest(p.$isPlayingNow, p.$anchor.map { $0?.isFrozen ?? false })
                 .map { playing, frozen in playing && !frozen }
@@ -995,27 +1001,52 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 鼠标命中走同一条路。
     private func layerWrappedKaraokeRows(words: [SyncedLyricWord]) -> some View {
         WrappedKaraokeRows(
-            spec: .init(
-                lineKey: line?.plainText ?? "",
-                words: words,
-                groups: usesPerWordRomanization ? line?.wordGroups : nil,
-                romaGap: perWordReadingGap,
-                font: playback.overlayNSFonts.main,
-                romaFont: playback.overlayNSFonts.romanization,
-                baseColor: NSColor(playback.displayKaraokeUnsungColor),
-                fillColor: NSColor(playback.displayForegroundColor),
-                romaBaseColor: NSColor(playback.displayKaraokeUnsungColor),
-                romaFillColor: NSColor(playback.displayForegroundColor.opacity(0.75)),
-                strokeColor: playback.textStrokeEnabled ? NSColor(playback.textStrokeColor) : nil,
-                rowAlignment: duetRowAlignment,
-                paused: !playback.lyricsClockRunning || playback.currentLineFillSettled || !surfaceVisible,
-                timingEpoch: playback.timingEpoch,
-                rate: playback.playbackRate),
+            spec: wrappedKaraokeSpec(lineKey: line?.plainText ?? "", words: words,
+                                     groups: usesPerWordRomanization ? line?.wordGroups : nil,
+                                     rowAlignment: duetRowAlignment),
             nowMs: Self.lyricsNowMs,
             contentRectSink: wrapContentSink,
             sinkOwner: overlayLineLayoutKey)
         .accessibilityElement()
         .accessibilityLabel(Text(verbatim: line?.plainText ?? ""))
+        .background { nextMainPrewarm }
+    }
+
+    private func wrappedKaraokeSpec(lineKey: String, words: [SyncedLyricWord], groups: [SyncedLyricWordGroup]?,
+                                    rowAlignment: WrapLayout.RowAlignment) -> WrappedKaraokeRows.Spec {
+        .init(
+            lineKey: lineKey,
+            words: words,
+            groups: groups,
+            romaGap: perWordReadingGap,
+            font: playback.overlayNSFonts.main,
+            romaFont: playback.overlayNSFonts.romanization,
+            baseColor: NSColor(playback.displayKaraokeUnsungColor),
+            fillColor: NSColor(playback.displayForegroundColor),
+            romaBaseColor: NSColor(playback.displayKaraokeUnsungColor),
+            romaFillColor: NSColor(playback.displayForegroundColor.opacity(0.75)),
+            strokeColor: playback.textStrokeEnabled ? NSColor(playback.textStrokeColor) : nil,
+            rowAlignment: rowAlignment,
+            paused: !playback.lyricsClockRunning || playback.currentLineFillSettled || !surfaceVisible,
+            timingEpoch: playback.timingEpoch,
+            rate: playback.playbackRate)
+    }
+
+    /// 换句动画开着时,按主句的样式、同样的宽度把下一句在后台先画好(看不见、不占位、不上报),图进
+    /// `WrappedKaraokeRowsView` 的出图缓存。换句那一刻新主句换了一个托管视图、里面一行图都还没有,命中缓存就
+    /// 直接装上,不在主线程当场画(04 章决策 72)。下一句跟这一句声部不同、留白不同时宽度对不上,照旧当场画。
+    @ViewBuilder private var nextMainPrewarm: some View {
+        if animatesLineChange, let words = playback.nextLineWords, !words.isEmpty, let key = playback.nextLineText {
+            WrappedKaraokeRows(
+                spec: wrappedKaraokeSpec(lineKey: key, words: words,
+                                         groups: usesPerWordRomanization ? playback.nextLineWordGroups : nil,
+                                         rowAlignment: nextLineRowAlignment),
+                nowMs: Self.lyricsNowMs,
+                prewarmOnly: true)
+            .opacity(0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
     }
 
     /// 图层行读的播放位置:跟逐字染色那条 TimelineView 逐字节一份 —— 锚点外推 ?? 暂停冻结位置,

@@ -2350,10 +2350,11 @@ func runSourceContractSurfaceTests() {
         if let hk = read("Settings/GlobalHotkeys.swift") {
             // KeyboardShortcuts 1.15.0 菜单跟踪期间的 runloop 观察者会把事件队列整个取空再塞回。
             expectEqual(hk.contains("pauseWhileMenuTracking()"), true, "全局快捷键: registerAll 里接上菜单跟踪期暂停")
-            expectEqual(hk.contains("NSMenu.didBeginTrackingNotification") && hk.contains("KeyboardShortcuts.isEnabled = false"), true,
+            expectEqual(hk.contains("NSMenu.didBeginTrackingNotification") && hk.contains("setPaused(true, for: .menuTracking)"), true,
                         "全局快捷键: 菜单开始跟踪时关掉 KeyboardShortcuts")
-            expectEqual(hk.contains("NSMenu.didEndTrackingNotification") && hk.contains("KeyboardShortcuts.isEnabled = true"), true,
-                        "全局快捷键: 菜单结束跟踪时恢复")
+            expectEqual(hk.contains("NSMenu.didEndTrackingNotification") && hk.contains("setPaused(false, for: .menuTracking)")
+                            && hk.contains("KeyboardShortcuts.isEnabled = pause.enabled"), true,
+                        "全局快捷键: 菜单结束跟踪时撤掉这一个暂停原因,录制中照旧关着")
             // 灵动岛、悬浮歌词都没开时回声另外交给触控栏和菜单栏歌词(14 章决策 60)。漏了不报错,只表现成只用这两样的人按键没回声;
             // 菜单栏那条要是走了 present 就是为一条提示重建状态项,提示期间 refresh 不早退就会被下一拍换回歌词。
             // 灵动岛开着但此刻显示不了横幅(收起、关了「显示歌词」)也要交出去,否则只开灵动岛的人暂停时按键没有任何回声;
@@ -2457,6 +2458,18 @@ func runSourceContractSurfaceTests() {
                     "后台出图: 第一次出现当场画,不换图的变化走快路径")
         expectEqual(row.contains("enum OverlayRowRaster {") && !row.contains("    private func drawText("), true,
                     "后台出图: 三张长图在不碰视图状态的 OverlayRowRaster 里画,行视图自己不再画")
+        expectEqual(wrap.contains("guard latest.isCurrent(generation) else { return }"), true,
+                    "后台出图: 排队期间又来了更新的一批时,过时的这批不画")
+        expectEqual(sourceHas(wrap, "WrappedRowImageCache.images(for: t.spec, scale: g.scale) ?? {")
+                        && sourceHas(wrap, "s.words = strip(s.words)"), true,
+                    "后台出图: 第一次出现先找出图缓存,缓存按字和样式认、不看逐字时间戳")
+        let overlayView = read("LyricsOverlayView.swift")
+        expectEqual(sourceHas(overlayView, "if animatesLineChange, let words = playback.nextLineWords")
+                        && sourceHas(overlayView, "prewarmOnly: true)")
+                        && sourceHas(overlayView, ".background { nextMainPrewarm }"), true,
+                    "换句动画: 下一句按主句的样式在后台预先出图,换句那一刻不在主线程当场画")
+        expectEqual(sourceHas(wrap, "let trailing = row.indices.last.map { geo.trailingSpaceWidths[$0] } ?? 0"), true,
+                    "换行模式: 对齐不算行尾空格,居中不左偏、靠右贴边")
     }
 
     // ---- 日文汉字修回的接线----

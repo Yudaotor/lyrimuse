@@ -598,6 +598,15 @@ func runSettingsInteractionTests() {
         expectEqual(routes, ["daily_digest": ["b", "c"]], "下拉: 勾上的按渠道顺序写")
         expectEqual(R.toggling("a", event: "daily_digest", channels: chs, routes: routes), [:], "下拉: 勾满了删掉键(= 全部渠道)")
         expectEqual(R.showsChoice(channelCount: 1), false, "下拉 / 默认: 一个渠道时不出现")
+
+        // 全局快捷键暂停:菜单跟踪、录制快捷键各管各的,都撤了才恢复。
+        var pause = HotkeyPause()
+        pause.set(.recording, paused: true)
+        pause.set(.menuTracking, paused: true)
+        pause.set(.menuTracking, paused: false)
+        expectEqual(pause.enabled, false, "快捷键暂停: 录制中开关一次菜单,菜单收起不提前恢复快捷键")
+        pause.set(.recording, paused: false)
+        expectEqual(pause.enabled, true, "快捷键暂停: 录制也结束了才恢复")
         var bOff = b
         bOff.enabled = false
         expectEqual(R.noneDeliverable(event: "daily_digest", channels: [a, bOff], routes: ["daily_digest": ["b"]]), true,

@@ -49,10 +49,13 @@ struct WrappedKaraokeRows: NSViewRepresentable {
     let nowMs: () -> Int
     var contentRectSink: WrapContentRectSink? = nil
     var sinkOwner: AnyHashable? = nil
+    /// 只在后台把这一句出好图放进 `WrappedRowImageCache`,不显示(换句动画预先画下一句,见 `LyricsOverlayView.nextMainPrewarm`)。
+    var prewarmOnly = false
 
     func makeNSView(context: Context) -> WrappedKaraokeRowsView { WrappedKaraokeRowsView() }
 
     func updateNSView(_ view: WrappedKaraokeRowsView, context: Context) {
+        view.prewarmOnly = prewarmOnly
         view.contentRectSink = contentRectSink
         view.sinkOwner = sinkOwner
         view.apply(spec: spec, nowMs: nowMs)
@@ -77,6 +80,9 @@ final class WrappedKaraokeRowsView: NSView {
         /// 每一行的条目下标(条目 = 字,或开了逐词罗马音时的一组)。
         var rows: [WrapLayoutMath.Row]
         var itemWidths: [CGFloat]
+        /// 每一项末尾空白的宽度(英文逐字歌词的词常带一个尾随空格)。一行的最后一项的尾随空白不算进对齐:
+        /// 不然居中的行左偏半个空格,靠右的行离右边缘差一个空格。
+        var trailingSpaceWidths: [CGFloat]
         var inset: CGFloat
         var pitch: CGFloat
         var wrapWidth: CGFloat
@@ -105,6 +111,13 @@ final class WrappedKaraokeRowsView: NSView {
                 widths = spec.words.map { MenuBarMarqueeRenderer.width(of: $0.text, font: spec.font) }
             }
             itemWidths = widths
+            // 按组排时一组末尾是读音那一列,不扣。
+            trailingSpaceWidths = spec.groups == nil
+                ? spec.words.map { w in
+                    let tail = String(w.text.reversed().prefix { $0.isWhitespace }.reversed())
+                    return tail.isEmpty ? 0 : MenuBarMarqueeRenderer.width(of: tail, font: spec.font)
+                }
+                : Array(repeating: 0, count: widths.count)
             let sizes = widths.map { CGSize(width: $0, height: pitch) }
             // 按组折行时一组本来就是一个词;逐字时英文按音节切,不能在词中间断(见 WrapLayoutMath.rows)。
             let breakBefore = spec.groups == nil
@@ -142,6 +155,9 @@ final class WrappedKaraokeRowsView: NSView {
     var sinkOwner: AnyHashable?
     /// 最近一次 `sizeThatFits` 收到的有限提议宽度,画的时候按它折行(见 `WrapLayoutMath.drawWidth`)。
     var sizedWidth: CGFloat?
+    var prewarmOnly = false
+    /// 预热模式下最近一次交给出图队列的各行规格:同一批不重复画。
+    private var prewarmedSpecs: [OverlayScrollingLyricRow.Spec] = []
 
     private var spec: WrappedKaraokeRows.Spec?
     private var nowMs: (() -> Int)?
@@ -213,6 +229,10 @@ final class WrappedKaraokeRowsView: NSView {
             RowTarget(frame: rowFrame(row, index: i, geo: geo, alignment: spec.rowAlignment, scale: scale),
                       spec: rowSpec(spec, row: row, index: i))
         }
+        if prewarmOnly {
+            prewarm(targets, scale: scale)
+            return
+        }
         // 每一行装着的都已经是要的长图:只更新落点与时机(暂停 / 恢复 / 重锚都靠这条重装动画)。
         if targets.count == rowViews.count, zip(rowViews, targets).allSatisfy({ $0.showsImages(of: $1.spec) }) {
             pending = nil
@@ -230,10 +250,17 @@ final class WrappedKaraokeRowsView: NSView {
             return
         }
         let geometries = targets.map { OverlayLyricScrollView.geometry(spec: $0.spec, scale: scale) }
-        // 一行都还没有(刚出现):当场画,不留一拍空白。
+        // 一行都还没有(刚出现):先找缓存(换句动画预先画好的下一句、编辑台跟真窗口显示的同一句),没有的当场画,
+        // 不留一拍空白。
         if rowViews.isEmpty {
             pending = nil
-            let images = zip(geometries, targets).map { OverlayRowRaster.render($0, spec: $1.spec) }
+            let images = zip(geometries, targets).map { g, t in
+                WrappedRowImageCache.images(for: t.spec, scale: g.scale) ?? {
+                    let rendered = OverlayRowRaster.render(g, spec: t.spec)
+                    WrappedRowImageCache.store(rendered, for: t.spec, scale: g.scale)
+                    return rendered
+                }()
+            }
             install(targets, geometries: geometries, images: images, nowMs: nowMs)
             return
         }
@@ -254,6 +281,28 @@ final class WrappedKaraokeRowsView: NSView {
         }
     }
 
+    /// 预热:缓存里还没有的行交给出图队列,画好只进缓存。
+    private func prewarm(_ targets: [RowTarget], scale: CGFloat) {
+        let specs = targets.map(\.spec)
+        if specs.count == prewarmedSpecs.count,
+           zip(specs, prewarmedSpecs).allSatisfy({ WrappedRowImageCache.sameImageKey($0, $1) }) { return }
+        prewarmedSpecs = specs
+        let missing = targets.filter { WrappedRowImageCache.images(for: $0.spec, scale: scale) == nil }
+        guard !missing.isEmpty else { return }
+        let geometries = missing.map { OverlayLyricScrollView.geometry(spec: $0.spec, scale: scale) }
+        let batch = RowRasterBatch(items: zip(geometries, missing).map { ($0, $1.spec) })
+        Self.rasterQueue.async {
+            let result = RowRasterResult(images: batch.items.map { OverlayRowRaster.render($0.0, spec: $0.1) })
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    for (item, images) in zip(batch.items, result.images) {
+                        WrappedRowImageCache.store(images, for: item.1, scale: item.0.scale)
+                    }
+                }
+            }
+        }
+    }
+
     /// 后台画好了:还是最新的那一句就整句换上,否则丢掉(更新的一句已经在画)。
     private func finishRender(generation: Int, images: [OverlayRowImages]) {
         guard let p = pending, p.generation == generation, p.targets.count == images.count else { return }
@@ -262,6 +311,9 @@ final class WrappedKaraokeRowsView: NSView {
         if let scale = window?.backingScaleFactor, p.geometries.contains(where: { $0.scale != scale }) {
             if let nowMs { layoutRows(nowMs: nowMs()) }
             return
+        }
+        for (target, (geometry, rowImages)) in zip(p.targets, zip(p.geometries, images)) {
+            WrappedRowImageCache.store(rowImages, for: target.spec, scale: geometry.scale)
         }
         install(p.targets, geometries: p.geometries, images: images, nowMs: nowMs?() ?? 0)
     }
@@ -287,7 +339,8 @@ final class WrappedKaraokeRowsView: NSView {
 
     private func rowFrame(_ row: WrapLayoutMath.Row, index: Int, geo: Geometry,
                           alignment: WrapLayoutMath.RowAlignment, scale: CGFloat) -> CGRect {
-        let slack = max(0, geo.wrapWidth - row.width)
+        let trailing = row.indices.last.map { geo.trailingSpaceWidths[$0] } ?? 0
+        let slack = max(0, geo.wrapWidth - (row.width - trailing))
         var indent: CGFloat
         switch alignment {
         case .leading: indent = 0
@@ -332,6 +385,38 @@ private struct RowRasterBatch: @unchecked Sendable {
 /// 出图队列画好的几行。
 private struct RowRasterResult: @unchecked Sendable {
     var images: [OverlayRowImages]
+}
+
+/// 换行模式的出图缓存:按「出图相关的字段」认 —— 位图只看字、字体、颜色、描边和排版,跟逐字时间戳、动画参数无关,
+/// 比较前先把时间戳抹平(`sameImages` 本身连时间戳一起比)。只留最近几行:一行三张长图,宽窗下一份就上 MB。
+@MainActor
+enum WrappedRowImageCache {
+    private static var entries: [(spec: OverlayScrollingLyricRow.Spec, scale: CGFloat, images: OverlayRowImages)] = []
+    private static let capacity = 6
+
+    static func images(for spec: OverlayScrollingLyricRow.Spec, scale: CGFloat) -> OverlayRowImages? {
+        entries.last { $0.scale == scale && sameImageKey($0.spec, spec) }?.images
+    }
+
+    static func store(_ images: OverlayRowImages, for spec: OverlayScrollingLyricRow.Spec, scale: CGFloat) {
+        entries.removeAll { $0.scale == scale && sameImageKey($0.spec, spec) }
+        entries.append((spec, scale, images))
+        if entries.count > capacity { entries.removeFirst(entries.count - capacity) }
+    }
+
+    static func sameImageKey(_ a: OverlayScrollingLyricRow.Spec, _ b: OverlayScrollingLyricRow.Spec) -> Bool {
+        OverlayLyricScrollView.sameImages(untimed(a), untimed(b))
+    }
+
+    private static func untimed(_ spec: OverlayScrollingLyricRow.Spec) -> OverlayScrollingLyricRow.Spec {
+        func strip(_ words: [SyncedLyricWord]) -> [SyncedLyricWord] {
+            words.map { SyncedLyricWord(text: $0.text, startMs: 0, durationMs: 0) }
+        }
+        var s = spec
+        s.words = strip(s.words)
+        s.groups = s.groups?.map { SyncedLyricWordGroup(id: $0.id, words: strip($0.words), romanization: $0.romanization) }
+        return s
+    }
 }
 
 /// 行视图最新一批的世代号:主线程写,出图队列读。

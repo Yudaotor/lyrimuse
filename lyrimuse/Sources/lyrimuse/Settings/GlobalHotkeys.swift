@@ -36,6 +36,13 @@ enum GlobalHotkeys {
     }
 
     private static var menuTrackingObservers: [NSObjectProtocol] = []
+    private static var pause = HotkeyPause()
+
+    /// 暂停 / 恢复全局快捷键。菜单跟踪、录制快捷键都走这里,原因都撤了才恢复(见 `HotkeyPause`)。
+    static func setPaused(_ paused: Bool, for reason: HotkeyPause.Reason) {
+        pause.set(reason, paused: paused)
+        if KeyboardShortcuts.isEnabled != pause.enabled { KeyboardShortcuts.isEnabled = pause.enabled }
+    }
 
     /// 本 App 的任何 `NSMenu` 跟踪期间(悬浮窗 ⚙ 菜单、菜单栏菜单、设置页下拉)关掉全局快捷键。
     ///
@@ -51,10 +58,10 @@ enum GlobalHotkeys {
         let center = NotificationCenter.default
         menuTrackingObservers = [
             center.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: nil) { _ in
-                MainActor.assumeIsolated { KeyboardShortcuts.isEnabled = false }
+                MainActor.assumeIsolated { setPaused(true, for: .menuTracking) }
             },
             center.addObserver(forName: NSMenu.didEndTrackingNotification, object: nil, queue: nil) { _ in
-                MainActor.assumeIsolated { KeyboardShortcuts.isEnabled = true }
+                MainActor.assumeIsolated { setPaused(false, for: .menuTracking) }
             },
         ]
     }

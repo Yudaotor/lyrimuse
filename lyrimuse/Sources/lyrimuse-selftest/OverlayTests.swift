@@ -1839,8 +1839,10 @@ func runOverlayTests() {
                     true, "悬浮接线: 拖完或拖动作废时按接管状态还原,指针还在字上就接着接住")
         expectEqual(sourceHas(controller, "controlCaptured = false\n        lyricsCaptured = false"), true,
                     "悬浮接线: 锁定时一并放掉歌词文字的接管")
-        expectEqual(sourceCount(controller, "setControlCapture(false)\n        setLyricsCapture(false)\n    }"), 2,
-                    "悬浮接线: 悬停态清零、滚轮让开时按钮和歌词文字两处接管一起还原")
+        expectEqual(sourceCount(controller, "setControlCapture(false)\n        setLyricsCapture(false)\n    }"), 1,
+                    "悬浮接线: 悬停态清零时按钮和歌词文字两处接管一起还原")
+        expectEqual(sourceHas(controller, "setControlCapture(false)\n        setLyricsCapture(false)\n        // 「调整宽度」时停在可拖的边上同理,不然停在边上每一格都被吞、下层滚不动;正拖着边改宽时不放。\n        if widthDrag == nil { releaseEdgeCapture() }"), true,
+                    "悬浮接线: 滚轮让开时按钮、歌词文字、可拖的边三处接管一起还原")
         expectEqual(sourceHas(overlayWindow, "if event.type == .scrollWheel {\n            onScrollWheel?(event)\n            return\n        }")
                     && controller.contains("panel.onScrollWheel = { [weak self] event in self?.handleScrollWheel(event) }")
                     && sourceHas(controller, "guard event.modifierFlags.contains(OverlayFontZoom.modifier), fontZoomCaptured || isPointerOnLyricsText() else {\n            yieldPointerCaptureToScroll()\n            return"),

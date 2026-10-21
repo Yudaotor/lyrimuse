@@ -3001,6 +3001,9 @@ public final class LyricsSyncEngine {
         public var nextRomanization: String?
         public var nextTranslation: String?
         public var nextWordGroups: [SyncedLyricWordGroup]?
+        /// 下一句的逐字(没有逐字时间轴时为 nil)。悬浮歌词开着换句动画时拿它在后台预先按主句的样式出图,
+        /// 换句那一刻新主句直接装上,不在主线程当场画(04 章决策 72)。
+        public var nextWords: [SyncedLyricWord]?
         /// 「要显示的那一句」(`compactLine`)的下一句:提前亮出下一句时是下下句;显示占位、还没到第一句时没有
         /// `compactLineIndex`,按正在唱的那一段数,跟 `nextText` 一样。灵动岛展开区的预览接在主行下面,
         /// 得接主行显示的那一句,见 05 章决策 77。
@@ -3266,6 +3269,7 @@ public final class LyricsSyncEngine {
             out.nextRomanization = next.romanization
             out.nextTranslation = next.translation
             out.nextWordGroups = next.wordGroups
+            out.nextWords = next.words
         }
         if let after = segmentLine(surface, (out.compactLineIndex ?? k) + 1) {
             out.compactNextText = after.plainText

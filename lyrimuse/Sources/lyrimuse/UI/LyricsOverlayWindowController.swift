@@ -272,6 +272,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private func yieldPointerCaptureToScroll() {
         setControlCapture(false)
         setLyricsCapture(false)
+        // 「调整宽度」时停在可拖的边上同理,不然停在边上每一格都被吞、下层滚不动;正拖着边改宽时不放。
+        if widthDrag == nil { releaseEdgeCapture() }
     }
 
     /// 指针停在歌词文字上、按着 ⌘ 时这扇窗收回点击穿透,⌘ + 滚轮 / 触控板双指上下滑调字号(04 章决策 62)。锁定、
@@ -900,7 +902,10 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
 
     /// 把当前位置连同翻面状态写盘;值没变就不写(CFPreferences 的一次写路径不便宜)。
     private func persistPosition(_ frame: NSRect) {
-        let value = "\(frame.origin.x),\(frame.maxY)"
+        // 「底部居中」守的是底边,顶边跟着内容高度变:按默认高度从底边折算一个顶边存,不然每次换行变高都写一笔。
+        // 预设模式下锚点只用来认在哪块屏,切回「自由」时窗口按默认高度落在原来的底边上。
+        let top = placementMode.anchorsBottom ? frame.minY + overlayDefaultHeight : frame.maxY
+        let value = "\(frame.origin.x),\(top)"
         if UserDefaults.standard.string(forKey: overlayPositionKey) != value {
             UserDefaults.standard.set(value, forKey: overlayPositionKey)
         }
@@ -976,6 +981,19 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 窗口拖走过(performDrag),那种情况必须以真实位置为准,所以动画一结束就把缓存放掉。
     private func baseFrame(of window: NSWindow) -> NSRect {
         animatingTargetFrame ?? window.frame
+    }
+
+    /// 高度动画在飞时当场落到目标(0 时长的动画把它覆盖掉),之后读到的 window.frame 就是最终尺寸。
+    /// 换屏对账、跟随焦点屏这类程序性挪窗口之前调:直接 setFrameOrigin 会被还在飞的动画拽回原处,
+    /// 它的完成回调还会把原处存盘。
+    private func settleFrameAnimation(_ window: NSWindow) {
+        guard let target = animatingTargetFrame else { return }
+        animatingTargetFrame = nil
+        frameAnimationSerial += 1
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0
+            window.animator().setFrame(target, display: true)
+        }
     }
 
     private func setFrameAnimated(_ window: NSWindow, to frame: NSRect) {
@@ -1780,6 +1798,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private func reconcilePlacementWithScreens() {
         guard let window else { return }
         dragReleaseAnchor = nil
+        settleFrameAnimation(window)
         let screens = Self.allVisibleFrames()
         // 改分辨率、切菜单栏自动隐藏、Dock 换边时窗口不一定挪,但它离菜单栏还有多远变了:控制排该放卡片上方
         // 还是下方要重判,不然可能被菜单栏盖住。(窗口真挪了的话 didMove 那边还会再判一次,判等所以无妨。)
@@ -1880,6 +1899,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
 
     /// 屏幕 / Dock 参数变了,预设模式下的对账。
     private func reconcilePresetPlacement(window: NSWindow, screens: [CGRect]) {
+        settleFrameAnimation(window)
         let current = baseFrame(of: window)
         let anchorHost = Self.homeFrame(size: current.size)
             .flatMap { OverlayPlacement.hostVisibleFrame(of: $0, screens: screens) }
@@ -1992,6 +2012,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private func followActiveScreen(force: Bool) {
         pendingActiveScreen = nil
         guard let window, let active = focusedScreen() else { return }
+        settleFrameAnimation(window)
         followedScreenID = ScreenIdentity.id(of: active)
         let target = active.visibleFrame
         let current = baseFrame(of: window)

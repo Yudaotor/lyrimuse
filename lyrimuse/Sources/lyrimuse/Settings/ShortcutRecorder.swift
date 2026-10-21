@@ -205,7 +205,7 @@ final class ShortcutRecorderButton: NSButton {
         Self.activeRecorder = self
         // 录制期间关掉全局快捷键(同 KeyboardShortcuts 库自带录制器的做法):不关的话按到已经分给别的动作的
         // 组合,那个动作会真的执行,而且 Carbon 热键可能把这次 keyDown 吞掉,下面的撞键提示就走不到。
-        KeyboardShortcuts.isEnabled = false
+        GlobalHotkeys.setPaused(true, for: .recording)
         isRecording = true
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
             guard let self else { return event }
@@ -223,7 +223,7 @@ final class ShortcutRecorderButton: NSButton {
     private func stopRecording() {
         if Self.activeRecorder === self {
             Self.activeRecorder = nil
-            KeyboardShortcuts.isEnabled = true
+            GlobalHotkeys.setPaused(false, for: .recording)
         }
         isRecording = false
         if let eventMonitor {

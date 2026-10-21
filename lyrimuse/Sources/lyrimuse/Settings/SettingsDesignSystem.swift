@@ -1720,6 +1720,39 @@ struct SettingsFlowRow: Layout {
 ///     拖到底是 1183.5,不是 1187)。这跟原生一致,是刻意保留的 —— 先夹后量化自然就是这个
 ///     结果。(实测记录:数值对拍时,这里的注释一度写反成"夹到 upperBound、
 ///     拖得到真正的最大值",被对拍脚本当场打脸。别照着直觉改这个顺序。)
+/// 滑杆拖动中的节流提交:拖的时候最多每 `interval` 秒真写一次(写设置会连带重排真窗口和编辑台,逐格写会卡,
+/// 节流后效果照样跟手),松手补写最后一个值。不在拖(键盘、VoiceOver 增减)时每次都直接写,不留没提交的尾巴。
+/// 用法:`@State` 一份,滑杆的值读 `value(or:)`,set 调 `update`,onEditingChanged 调 `editingChanged`。
+struct SliderCommitThrottle {
+    static let interval: CFTimeInterval = 0.12
+    private(set) var draft: Double?
+    private var editing = false
+    private var lastCommit: CFTimeInterval = 0
+
+    func value(or committed: Double) -> Double { draft ?? committed }
+
+    mutating func update(_ value: Double, commit: (Double) -> Void) {
+        guard editing else {
+            commit(value)
+            return
+        }
+        draft = value
+        let now = CACurrentMediaTime()
+        if now - lastCommit >= Self.interval {
+            lastCommit = now
+            commit(value)
+        }
+    }
+
+    mutating func editingChanged(_ began: Bool, commit: (Double) -> Void) {
+        editing = began
+        guard !began else { return }
+        if let draft { commit(draft) }
+        draft = nil
+        lastCommit = 0
+    }
+}
+
 struct SteppedSlider: View {
     private let value: Binding<Double>
     private let range: ClosedRange<Double>
