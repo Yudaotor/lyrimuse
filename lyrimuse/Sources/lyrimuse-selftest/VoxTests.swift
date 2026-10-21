@@ -151,6 +151,8 @@ func runVoxTests() {
         expectEqual(LocalPlaybackSource.positionSourceTier(forBundleID: b), .precise, "VOX 档位: AppleScript 位置,precise")
         expectEqual(PlaybackPlayer.vox.automationUse, .readsTrack, "VOX 权限: 曲目和位置整份靠脚本接口")
         expectEqual(TornTrackHold.arrivesWhole(bundle: b), true, "VOX 撕裂守卫: 整份读来,不按撕裂快照按住")
+        expectEqual(LocalPlaybackSource.resumeReadingNeverLeads(bundleID: b), true,
+                    "VOX 恢复: 脚本读数不会超前,恢复那一拍原样采信、不按冻结值加信号时长削")
         expectEqual(CoverArtReplacementGate.missingArtworkUsesMatchedCover(bundleID: b), true,
                     "VOX 封面: 文件没嵌封面时用匹配到的那张")
         expectEqual(CoverArtReplacementGate.systemNeverHasArtwork(bundleID: b), false, "VOX 封面: 嵌了封面系统那份带着")

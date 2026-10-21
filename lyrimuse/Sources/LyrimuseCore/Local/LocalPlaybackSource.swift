@@ -1001,9 +1001,11 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 这个播放器恢复播放那一拍的读数会不会跑到声音前面。Kaset 的位置取自它网页里 video 的 `currentTime`(或对过账的
     /// 网页时钟),暂停期间不空转,读到的只会晚、不会早:恢复(含换歌后从加载走起来)那一拍原样采信,不按
-    /// `resumeSeedSeconds` 削。别的播放器照旧削。纯函数,selftest 覆盖。
+    /// `resumeSeedSeconds` 削。VOX 的位置是它 AppleScript 报的播放头,跟真实出声差几毫秒、暂停期间不走,同样原样采信:
+    /// 恢复认得晚(没等到恢复信号、靠暂停档轮询才看到)时,上限按兜底的 2 秒算,会把准的读数削掉一截(见 02 章决策 152)。
+    /// 别的播放器照旧削。纯函数,selftest 覆盖。
     public nonisolated static func resumeReadingNeverLeads(bundleID: String?) -> Bool {
-        bundleID == PlaybackPlayer.kaset.bundleIdentifier
+        bundleID == PlaybackPlayer.kaset.bundleIdentifier || bundleID == PlaybackPlayer.vox.bundleIdentifier
     }
 
     /// 冻结检测:曲目/广告结尾 Spotify 会把 MediaRemote 锚点冻住 ——

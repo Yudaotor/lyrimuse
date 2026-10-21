@@ -298,7 +298,7 @@ func sourceColor(_ source: String) -> Color {
     // Amazon Music 本地歌词(不是歌词源:用它放歌时读它自己缓存里的那份,见 lyrimuse-engine/amazonlibrary.go)。
     // 品牌青色跟酷狗的 .cyan 分不开,系统色也没有空位,取偏蓝的浅天蓝。
     case "amazon": return Color(hue: 0.56, saturation: 0.55, brightness: 0.95)
-    // 本地歌词文件(不是歌词源:reAMP 正在放的文件同目录同名的 .lrc,见 lyrimuse-engine/localfilelyrics.go)。系统色都被占了,
+    // 本地歌词文件(不是歌词源:reAMP、VOX 正在放的文件同目录同名的 .lrc 或内嵌歌词,见 lyrimuse-engine/localfilelyrics.go)。系统色都被占了,
     // 取偏紫的灰,跟「无来源」的 .secondary 分得开。
     case "localfile": return Color(hue: 0.75, saturation: 0.25, brightness: 0.7)
     // 洛雪本地歌词(不是歌词源:用洛雪放歌时读它存下的那份原版,见 lyrimuse-engine/lxmusic.go)。品牌绿跟 QQ 音乐的 .green
