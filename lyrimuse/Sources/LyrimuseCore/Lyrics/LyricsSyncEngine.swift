@@ -1099,6 +1099,40 @@ public final class LyricsSyncEngine {
         return !parts.isEmpty && parts.allSatisfy(performers.contains)
     }
 
+    /// 不带冒号的署名:角色词后面空一格直接写名字(「作词 代岳东」「演唱 卢广仲」)。值里不能有句子标点、冒号或竖线
+    /// (「作曲 Music｜JOYCE」那种整份双语职员表另有规则)。单独一行不认,只在开头连成至少 2 行的一块里认,见 strippingCreditLines。
+    private static let spacedRoleCreditPattern = try! NSRegularExpression(
+        pattern: #"^(作词|作詞|作曲|编曲|編曲|制作人|製作人|制作|製作|监制|監製|演唱|主唱|原唱|词曲|詞曲|混音|录音|錄音|和声|和聲)[ \u3000]+([^，。！？,!?：:｜|]{1,30})$"#)
+
+    public static func matchesSpacedRoleCredit(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespaces)
+        return spacedRoleCreditPattern.firstMatch(in: t, range: NSRange(t.startIndex..., in: t)) != nil
+    }
+
+    /// 角色词后面(空格可有可无)跟着这首歌的演唱者(「演唱 郑中基」「编曲方大同」「作曲 Jae Chong&李玖哲」)。名字对上演唱者
+    /// 才认,所以单字角色词(词 / 曲 / 唱)也收,出现在哪一行都算。
+    private static let performerRoleCreditPattern = try! NSRegularExpression(
+        pattern: #"^(作词|作詞|作曲|编曲|編曲|制作人|製作人|制作|製作|监制|監製|演唱|主唱|原唱|词曲|詞曲|混音|录音|錄音|和声|和聲|词|詞|曲|唱)[ \u3000]*([^，。！？,!?：:｜|]{1,30})$"#)
+
+    static func matchesPerformerRoleCredit(_ text: String, performers: Set<String>) -> Bool {
+        guard !performers.isEmpty else { return false }
+        let t = text.trimmingCharacters(in: .whitespaces)
+        guard let m = performerRoleCreditPattern.firstMatch(in: t, range: NSRange(t.startIndex..., in: t)),
+              let r = Range(m.range(at: 2), in: t) else { return false }
+        return t[r].components(separatedBy: CharacterSet(charactersIn: "&＆/／、,，+＋"))
+            .map { performerKey($0) }.contains { !$0.isEmpty && performers.contains($0) }
+    }
+
+    /// 洛雪本地歌词抬头的两种标签行(「歌曲名 天天」「歌手名 陶喆」),各返回 "song" / "artist",别的返回 nil。
+    private static let songArtistLabelPattern = try! NSRegularExpression(pattern: #"^(歌曲名|歌手名)[ \u3000]*[:：]?[ \u3000]*\S"#)
+
+    static func songArtistLabelKind(_ text: String) -> String? {
+        let t = text.trimmingCharacters(in: .whitespaces)
+        guard let m = songArtistLabelPattern.firstMatch(in: t, range: NSRange(t.startIndex..., in: t)),
+              let r = Range(m.range(at: 1), in: t) else { return nil }
+        return t[r] == "歌曲名" ? "song" : "artist"
+    }
+
     /// 比演唱者名用的归一形式:只留字母数字、转小写(空格、点号、大小写写法不同的同一个名字比得上)。
     private static func performerKey<S: StringProtocol>(_ s: S) -> String {
         s.lowercased().filter { $0.isLetter || $0.isNumber }
@@ -1548,6 +1582,7 @@ public final class LyricsSyncEngine {
             if matchesSectionMarkerLine(text) { return true }
             // 只有演唱者名 + 冒号的一行(「歌手名：」),见 matchesLonePerformerLabel。
             if matchesLonePerformerLabel(text, performers: performers) { return true }
+            if matchesPerformerRoleCredit(text, performers: performers) { return true }
             // 抬头只在第一行认 —— 别的位置出现同样的字样多半是真歌词。
             if i == 0, titleOnlyHeader
                 || looksLikeHeaderLine(text, trackTitle: trackTitle, trackArtist: trackArtist, tags: tags) {
@@ -1563,6 +1598,22 @@ public final class LyricsSyncEngine {
             if i + 1 < texts.count, !base[i + 1], looksLikeCreditValueLine(texts[i + 1]) {
                 base[i + 1] = true
             }
+        }
+        // 开头连成一块、不带冒号的「角色词 + 空格 + 名字」(「作词 代岳东」「编曲 郑楠」),这一块至少 2 行才删:
+        // 单独一行可能是真歌词。每行都要自己长成这个形状,不是从头往下按笼统形状扩展(那样会吃掉真对白,见 08 章决策 16)。
+        // 写回 base,下面认抬头、夹心补漏都看得到。见 08 章决策 57
+        var spacedLead: [Int] = []
+        for i in texts.indices {
+            if base[i] { continue }
+            guard matchesSpacedRoleCredit(texts[i]) else { break }
+            spacedLead.append(i)
+        }
+        if spacedLead.count >= 2 { for i in spacedLead { base[i] = true } }
+        // 洛雪本地歌词开头两行「歌曲名 天天」「歌手名 陶喆」:两个标签同时在前两行时不再对值(播放器报的是外文歌名时,
+        // looksLikeLabeledHeaderLine 按值对不上)。只有一个标签的照旧交给它。见 08 章决策 57
+        if texts.count > 2, Set(texts.prefix(2).compactMap(songArtistLabelKind)) == ["song", "artist"] {
+            base[0] = true
+            base[1] = true
         }
         // 抬头也会排在开头那段署名后面(「作词：陈家丽」下一行才是「张学友 - 谁想轻轻偷走我的吻」)。
         // 从头往下,前面全是署名的那一行也按抬头认;碰到第一句不是署名、也不是抬头的就停 ——

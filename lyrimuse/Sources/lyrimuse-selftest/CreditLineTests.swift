@@ -1640,4 +1640,36 @@ func runCreditLineTests() {
         expectEqual(sourceBytes(window, contain: "if !centered, !playback.songwriters.isEmpty {"), true,
                     "创作者: 只在完整布局显示,迷你「多行」不显示")
     }
+
+    // ---- 不带冒号的署名:开头连成一块的「角色词 + 空格 + 名字」、角色词跟演唱者名、洛雪抬头 ----
+    do {
+        func drops(_ lines: [String], artist: String = "", title: String = "") -> [Bool] {
+            LyricsSyncEngine.creditLineDropDecisions(lines, trackTitle: title, trackArtist: artist)
+        }
+        expectEqual(drops(["作词 代岳东", "作曲 华晨宇", "编曲 郑楠", "制作人 郑楠", "便利店 有两只 蜗牛背着书包讨论 数学题", "它们说"],
+                          artist: "华晨宇", title: "世界是个动物园"),
+                    [true, true, true, true, false, false], "署名: 开头连成一块的「角色词 + 空格 + 名字」")
+        expectEqual(drops(["作曲 是我一生的梦", "后来我才知道", "那是我自己的歌"]), [false, false, false],
+                    "署名: 开头只有一行「角色词 + 空格」、名字也不是演唱者时不删")
+        expectEqual(drops(["从银幕下发梦 谁令世间哄动", "演唱 郑中基", "重重叠的面孔"], artist: "郑中基"), [false, true, false],
+                    "署名: 角色词 + 演唱者名,出现在第二行也删")
+        expectEqual(drops(["词方大同", "曲方大同", "编曲方大同", "我写了这首歌"], artist: "方大同"), [true, true, true, false],
+                    "署名: 角色词直接连演唱者名")
+        expectEqual(drops(["作曲 Jae Chong&李玖哲", "我是个顽皮鬼", "不想长大"], artist: "李玖哲"), [true, false, false],
+                    "署名: 名字串里有演唱者")
+        expectEqual(drops(["编曲 陶喆", "当我一踏进家门", "我就感觉怪怪的"], artist: "陶喆"), [true, false, false],
+                    "署名: 开头单独一行,名字是演唱者")
+        expectEqual(drops(["曲终人散", "词不达意", "演唱会散场的街", "唱一首歌给你"], artist: "曲婉婷"), [false, false, false, false],
+                    "署名: 角色字开头的真歌词不删")
+        expectEqual(drops(["唱 周杰伦的歌", "我们一起"], artist: "周杰伦"), [false, false],
+                    "署名: 角色词后面不只是演唱者名的不删")
+        expectEqual(LyricsSyncEngine.matchesSpacedRoleCredit("作曲 Music｜JOYCE 就以斯"), false,
+                    "署名: 带竖线的双语职员表不归这条")
+        expectEqual(drops(["歌曲名 天天", "歌手名 陶喆", "太阳天或下雨天", "人挤人的咖啡店"], artist: "David Tao", title: "Close to you"),
+                    [true, true, false, false], "署名: 洛雪抬头两个标签都在前两行时,歌名歌手对不上也删")
+        expectEqual(drops(["歌曲名 天天", "太阳天或下雨天", "人挤人的咖啡店"], artist: "David Tao", title: "Close to you"),
+                    [false, false, false], "署名: 只有一个标签、值又对不上时不删")
+        expectEqual(drops(["太阳天或下雨天", "歌曲名 天天", "歌手名 陶喆", "人挤人的咖啡店"], artist: "David Tao", title: "Close to you"),
+                    [false, false, false, false], "署名: 洛雪抬头只认前两行")
+    }
 }
