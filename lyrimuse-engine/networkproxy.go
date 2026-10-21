@@ -57,6 +57,17 @@ func resolveFallbackProxyURL() *neturl.URL {
 	return nil
 }
 
+// fallbackProxyAfterDirectFailure:直连刚失败、fallbackProxyURL 给不出代理时再找一次。只有自动档会变:本机代理软件
+// 是后台找的,刚开的或者还没找过的这里当场补上(refreshLocalProxy,守 localProxyRecheckGap)。单测换掉。
+var fallbackProxyAfterDirectFailure = fallbackProxyAfterDirectFailureImpl
+
+func fallbackProxyAfterDirectFailureImpl() *neturl.URL {
+	if resolveNetworkProxy(features().NetworkProxy) != networkProxyAuto || !refreshLocalProxy(localProxyRecheckGap) {
+		return nil
+	}
+	return fallbackProxyURL()
+}
+
 // parseProxyServer:host:port,或带 http:// / https:// / socks5:// / socks5h:// 前缀;不带前缀按 http。写错了返回 nil。
 // 用户名密码(user:pass@host:port)原样留着,Go 的 http.Transport 会带上。
 func parseProxyServer(s string) *neturl.URL {

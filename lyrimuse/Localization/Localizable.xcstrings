@@ -53025,6 +53025,29 @@
           }
         }
       }
+    },
+    "未填写时不使用代理" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No proxy is used until a server is entered"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未填写时不使用代理"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未填寫時不使用代理"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

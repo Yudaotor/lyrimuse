@@ -25,7 +25,11 @@ import (
 //  2. 常见客户端的默认端口(networkProxyCommonPorts)。
 //
 // 候选都要过握手才用(verifyLocalProxy):HTTP CONNECT 到自己开的一个本机端口回 200,或者 SOCKS5 问候回 05 00。
-// 只连本机,不往外发任何请求;代理软件的控制接口、本机别的服务都过不了。结果缓存 systemProxyCacheTTL。见 09 章决策 322。
+// 只连本机,不往外发任何请求;代理软件的控制接口、本机别的服务都过不了。
+//
+// 找一次要起 lsof / netstat、握手十几个端口,不放在请求路径上:localProxyURL 只读缓存,过期了在后台重找;找到的缓存
+// localProxyFoundTTL,没找到的缓存 localProxyMissTTL。直连刚失败、手上又没有代理时,refreshLocalProxy 当场补找一次
+// (proxyfallback.go 经 fallbackProxyAfterDirectFailure 调)。见 09 章决策 322、324。
 
 // localProxyProcessNames:进程名(转小写)里含这些词的算代理软件。调试抓包代理(Charles、Proxyman、mitmproxy)刻意不在里面。
 var localProxyProcessNames = []string{
@@ -68,10 +72,8 @@ var localProxyListeners = func() []localListener {
 func runListLocal(name string, args ...string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), localProxyListTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, name, args...).Output()
-	if err != nil {
-		return ""
-	}
+	// 退出码不是 0 也照样用已经输出的部分:lsof 碰到个别进程读不了时会带着结果返回 1。
+	out, _ := exec.CommandContext(ctx, name, args...).Output()
 	return string(out)
 }
 
@@ -161,21 +163,65 @@ func isLocalProxyProcess(name string) bool {
 	return false
 }
 
-var (
-	localProxyMu     sync.Mutex
-	localProxyValue  *neturl.URL
-	localProxyReadAt time.Time
+const (
+	localProxyFoundTTL = systemProxyCacheTTL
+	localProxyMissTTL  = 10 * time.Minute
+	// localProxyRecheckGap:两次找之间至少隔多久(后台重找、直连失败后补找都守这个间隔)。
+	localProxyRecheckGap = 15 * time.Second
 )
 
-// localProxyURL:本机代理软件监听的、握手确认过的第一个端口;没有返回 nil。缓存 systemProxyCacheTTL。
+var (
+	localProxyMu         sync.Mutex
+	localProxyValue      *neturl.URL
+	localProxyReadAt     time.Time
+	localProxyRefreshing bool
+	// localProxyDiscoverMu:同一时刻只找一次。
+	localProxyDiscoverMu sync.Mutex
+)
+
+// localProxyURL:本机代理软件监听的、握手确认过的端口,读缓存不阻塞;缓存过期了先返回旧值,在后台重找。
+// 进程里第一次调用时还没找过,返回 nil。
 func localProxyURL() *neturl.URL {
 	localProxyMu.Lock()
 	defer localProxyMu.Unlock()
-	if !localProxyReadAt.IsZero() && time.Since(localProxyReadAt) < systemProxyCacheTTL {
-		return localProxyValue
+	if localProxyStaleLocked() && !localProxyRefreshing {
+		localProxyRefreshing = true
+		go func() {
+			refreshLocalProxy(localProxyRecheckGap)
+			localProxyMu.Lock()
+			localProxyRefreshing = false
+			localProxyMu.Unlock()
+		}()
 	}
-	localProxyValue, localProxyReadAt = discoverLocalProxy(), time.Now()
 	return localProxyValue
+}
+
+func localProxyStaleLocked() bool {
+	if localProxyReadAt.IsZero() {
+		return true
+	}
+	ttl := localProxyMissTTL
+	if localProxyValue != nil {
+		ttl = localProxyFoundTTL
+	}
+	return time.Since(localProxyReadAt) >= ttl
+}
+
+// refreshLocalProxy 当场重找一次;上次找离现在不到 minAge 就不找。返回找没找。
+func refreshLocalProxy(minAge time.Duration) bool {
+	localProxyDiscoverMu.Lock()
+	defer localProxyDiscoverMu.Unlock()
+	localProxyMu.Lock()
+	recent := !localProxyReadAt.IsZero() && time.Since(localProxyReadAt) < minAge
+	localProxyMu.Unlock()
+	if recent {
+		return false
+	}
+	u := discoverLocalProxy()
+	localProxyMu.Lock()
+	localProxyValue, localProxyReadAt = u, time.Now()
+	localProxyMu.Unlock()
+	return true
 }
 
 func discoverLocalProxy() *neturl.URL {

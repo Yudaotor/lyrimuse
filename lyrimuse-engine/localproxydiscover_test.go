@@ -6,9 +6,11 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	neturl "net/url"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -153,45 +155,148 @@ func resetLocalProxyCacheForTest() {
 	localProxyMu.Unlock()
 }
 
-// 先按进程名发现,再试常见端口;都要握手过。
-func TestLocalProxyURL(t *testing.T) {
+// waitLocalProxyIdle 等后台那次重找跑完,免得它在别的用例里改缓存。
+func waitLocalProxyIdle(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		localProxyMu.Lock()
+		busy := localProxyRefreshing
+		localProxyMu.Unlock()
+		if !busy {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("后台重找一直没跑完")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func localPort(addr string) int {
+	_, p, _ := net.SplitHostPort(addr)
+	n, _ := strconv.Atoi(p)
+	return n
+}
+
+// withLocalProxyEnv 换掉监听列表和默认端口,清缓存;用完等后台跑完再还原。
+func withLocalProxyEnv(t *testing.T, listeners *[]localListener, ports []int) {
+	t.Helper()
 	shortHandshake(t)
 	savedL, savedP := localProxyListeners, networkProxyCommonPorts
-	t.Cleanup(func() { localProxyListeners, networkProxyCommonPorts = savedL, savedP })
+	localProxyListeners = func() []localListener { return *listeners }
+	networkProxyCommonPorts = ports
 	resetLocalProxyCacheForTest()
-	t.Cleanup(resetLocalProxyCacheForTest)
-	port := func(addr string) int {
-		_, p, _ := net.SplitHostPort(addr)
-		n, _ := strconv.Atoi(p)
-		return n
-	}
-	httpAddr, socksAddr := fakeHTTPProxy(t), fakeSOCKS5(t)
-	apiAddr := silentServer(t)
-	var listeners []localListener
-	localProxyListeners = func() []localListener { return listeners }
+	t.Cleanup(func() {
+		waitLocalProxyIdle(t)
+		localProxyListeners, networkProxyCommonPorts = savedL, savedP
+		resetLocalProxyCacheForTest()
+	})
+}
 
-	listeners = []localListener{
-		{host: "127.0.0.1", port: port(httpAddr), process: "Code Helper"},
-		{host: "127.0.0.1", port: port(apiAddr), process: "verge-mihomo"},
-		{host: "127.0.0.1", port: port(socksAddr), process: "sing-box"},
+// 先按进程名发现,再试常见端口;都要握手过。
+func TestDiscoverLocalProxy(t *testing.T) {
+	httpAddr, socksAddr, apiAddr := fakeHTTPProxy(t), fakeSOCKS5(t), silentServer(t)
+	listeners := []localListener{
+		{host: "127.0.0.1", port: localPort(httpAddr), process: "Code Helper"},
+		{host: "127.0.0.1", port: localPort(apiAddr), process: "verge-mihomo"},
+		{host: "127.0.0.1", port: localPort(socksAddr), process: "sing-box"},
 	}
-	networkProxyCommonPorts = []int{port(httpAddr)}
-	if u := localProxyURL(); u == nil || u.String() != "socks5://"+socksAddr {
+	withLocalProxyEnv(t, &listeners, []int{localPort(httpAddr)})
+	if u := discoverLocalProxy(); u == nil || u.String() != "socks5://"+socksAddr {
 		t.Fatalf("先用代理软件进程的、握手过的端口, 得到 %v", u)
 	}
-
 	listeners = nil
-	if u := localProxyURL(); u == nil || u.String() != "socks5://"+socksAddr {
-		t.Fatalf("缓存期内不重找, 得到 %v", u)
-	}
-	resetLocalProxyCacheForTest()
-	if u := localProxyURL(); u == nil || u.String() != "http://"+httpAddr {
+	if u := discoverLocalProxy(); u == nil || u.String() != "http://"+httpAddr {
 		t.Fatalf("进程里找不到就试常见端口, 得到 %v", u)
 	}
-
-	resetLocalProxyCacheForTest()
-	networkProxyCommonPorts = []int{port(deadLocalAddr(t)), port(apiAddr)}
-	if u := localProxyURL(); u != nil {
+	networkProxyCommonPorts = []int{localPort(deadLocalAddr(t)), localPort(apiAddr)}
+	if u := discoverLocalProxy(); u != nil {
 		t.Fatalf("没有握手过的就没有, 得到 %v", u)
+	}
+}
+
+// localProxyURL 只读缓存:第一次和过期后先返回手上的值,在后台重找;找到的和没找到的缓存时长不同。
+func TestLocalProxyURLCache(t *testing.T) {
+	httpAddr := fakeHTTPProxy(t)
+	var listeners []localListener
+	withLocalProxyEnv(t, &listeners, []int{localPort(httpAddr)})
+	want := "http://" + httpAddr
+
+	if u := localProxyURL(); u != nil {
+		t.Fatalf("还没找过时不等,先返回 nil, 得到 %v", u)
+	}
+	waitLocalProxyIdle(t)
+	if u := localProxyURL(); u == nil || u.String() != want {
+		t.Fatalf("后台找完之后读得到, 得到 %v", u)
+	}
+
+	networkProxyCommonPorts = nil
+	localProxyMu.Lock()
+	localProxyReadAt = time.Now().Add(-localProxyFoundTTL + time.Second)
+	localProxyMu.Unlock()
+	if u := localProxyURL(); u == nil || u.String() != want {
+		t.Fatalf("找到的在 localProxyFoundTTL 内不重找, 得到 %v", u)
+	}
+	localProxyMu.Lock()
+	localProxyReadAt = time.Now().Add(-localProxyFoundTTL - time.Second)
+	localProxyMu.Unlock()
+	if u := localProxyURL(); u == nil || u.String() != want {
+		t.Fatalf("过期了先返回旧值, 得到 %v", u)
+	}
+	waitLocalProxyIdle(t)
+	if u := localProxyURL(); u != nil {
+		t.Fatalf("后台重找之后换成新结果, 得到 %v", u)
+	}
+
+	networkProxyCommonPorts = []int{localPort(httpAddr)}
+	localProxyMu.Lock()
+	localProxyReadAt = time.Now().Add(-localProxyFoundTTL - time.Second)
+	localProxyMu.Unlock()
+	localProxyURL()
+	waitLocalProxyIdle(t)
+	if u := localProxyURL(); u != nil {
+		t.Fatalf("没找到的缓存 localProxyMissTTL,比找到的长, 得到 %v", u)
+	}
+}
+
+// 两次找之间至少隔 minAge;同一时刻只找一次。
+func TestRefreshLocalProxyGap(t *testing.T) {
+	var calls atomic.Int32
+	var listeners []localListener
+	withLocalProxyEnv(t, &listeners, nil)
+	localProxyListeners = func() []localListener { calls.Add(1); return nil }
+	if !refreshLocalProxy(time.Minute) || calls.Load() != 1 {
+		t.Fatalf("没找过就找, 找了 %d 次", calls.Load())
+	}
+	if refreshLocalProxy(time.Minute) || calls.Load() != 1 {
+		t.Fatalf("间隔内不再找, 找了 %d 次", calls.Load())
+	}
+	if !refreshLocalProxy(0) || calls.Load() != 2 {
+		t.Fatalf("间隔为 0 时当场找, 找了 %d 次", calls.Load())
+	}
+}
+
+// 直连刚失败时当场补找:只有自动档,守间隔。
+func TestFallbackProxyAfterDirectFailure(t *testing.T) {
+	httpAddr := fakeHTTPProxy(t)
+	var listeners []localListener
+	withLocalProxyEnv(t, &listeners, []int{localPort(httpAddr)})
+	savedF, savedS := fallbackProxyURL, networkProxyAutoSources
+	fallbackProxyURL = resolveFallbackProxyURL
+	networkProxyAutoSources = []func() *neturl.URL{localProxyURL}
+	t.Cleanup(func() { fallbackProxyURL, networkProxyAutoSources = savedF, savedS })
+	impl := fallbackProxyAfterDirectFailureImpl
+
+	withFeatures(t, featureFlags{NetworkProxy: networkProxyOff})
+	if u := impl(); u != nil {
+		t.Fatalf("不使用代理时不找, 得到 %v", u)
+	}
+	setFeatures(featureFlags{NetworkProxy: networkProxyAuto})
+	if u := impl(); u == nil || u.String() != "http://"+httpAddr {
+		t.Fatalf("自动档当场补找, 得到 %v", u)
+	}
+	if u := impl(); u != nil {
+		t.Fatalf("间隔内不再补找, 得到 %v", u)
 	}
 }

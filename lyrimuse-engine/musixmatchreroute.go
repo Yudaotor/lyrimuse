@@ -25,7 +25,8 @@ import (
 //     代理 musixmatchViaProxyAfterBlock(proxyfallback.go 的磁盘提示,常驻进程和一次性子命令都认)。
 //  2. 已经走代理(或开着 TUN、直连其实也经过 Clash):Clash 控制口(clashControllerSockets)里有 clashMusixmatchGroup
 //     这个手动选择组时,把它切到下一个活着、clashNodeBlockTTL 内没被拦过的节点,断开 Musixmatch 的旧连接。组要用户
-//     自己在 Clash 里建,并加一条规则把 musixmatch.com 指给它;没有这个组就没有这一级。
+//     自己在 Clash 里建,并加一条规则把 musixmatch.com 指给它;没有这个组就没有这一级。「代理」设成不使用、Clash 也没开
+//     TUN 时请求不经过 Clash,也没有这一级(clashTunEnabled)。
 //
 // 并发的请求同时被拦时只换一次:每次换出口出口代数 +1,请求带着发出时的代数回来,代数已经变了就直接按新出口重试。
 // 一次被拦之后最多连换 musixmatchMaxReroutes 次,数据接口正经答了一次 200 才归零,免得把节点一个个撞过去。
@@ -101,6 +102,9 @@ func musixmatchRerouteAround(ctx context.Context, sentGen int) bool {
 		}
 		log.Printf("musixmatch: blocked by its anti-bot check on this connection; sending it through %s for the next %s", via, musixmatchViaProxyAfterBlock)
 	default:
+		if resolveNetworkProxy(features().NetworkProxy) == networkProxyOff && !clashTunEnabled(ctx) {
+			return false
+		}
 		from, to, ok := clashSwitchGroupNode(ctx, clashMusixmatchGroup, "musixmatch")
 		if !ok {
 			return false
@@ -183,6 +187,22 @@ func readClashProxyURL() *neturl.URL {
 		return nil
 	}
 	return u
+}
+
+// clashTunEnabled:Clash 控制口报的 TUN 开着(本机流量都经过 Clash)。读不到算没开。
+func clashTunEnabled(ctx context.Context) bool {
+	c := clashClient()
+	if c == nil {
+		return false
+	}
+	ctx, cancel := withCancelAfter(ctx, clashRequestTimeout)
+	defer cancel()
+	var cfg struct {
+		Tun struct {
+			Enable bool `json:"enable"`
+		} `json:"tun"`
+	}
+	return clashGet(ctx, c, "/configs", &cfg) == nil && cfg.Tun.Enable
 }
 
 // clashClient:连得上的第一个控制口的 HTTP 客户端;都连不上返回 nil。

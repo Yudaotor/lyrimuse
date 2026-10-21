@@ -1538,6 +1538,7 @@
 "未在播放" = "Not Playing";
 "未在运行，无法获取当前状态" = "Not running, so its status can’t be read";
 "未在这台 Mac 上找到默认列出的浏览器（Safari、Chrome、Edge）。其他浏览器可通过下方的「从应用程序中选择…」添加" = "None of the browsers listed by default (Safari, Chrome, Edge) were found on this Mac. For any other browser, use “Choose from Applications…” below to pick it yourself";
+"未填写时不使用代理" = "No proxy is used until a server is entered";
 "未填写服务地址（可选）" = "Server URL not set yet (optional)";
 "未填写访问令牌（可选）" = "Access token not set yet (optional)";
 "未完成" = "Not done";

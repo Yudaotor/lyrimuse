@@ -27,8 +27,9 @@ type fakeClash struct {
 	conns   []string // 连接的 host,id 按下标
 	deleted []string
 	puts    []string
-	// mixedPort:/configs 报的 mixed-port。
+	// mixedPort:/configs 报的 mixed-port。tun:/configs 报的 tun.enable。
 	mixedPort int
+	tun       bool
 }
 
 func withFakeClash(t *testing.T, fc *fakeClash) {
@@ -59,7 +60,7 @@ func (fc *fakeClash) serve(w http.ResponseWriter, r *http.Request) {
 	path, _ := neturl.PathUnescape(r.URL.EscapedPath())
 	switch {
 	case r.Method == http.MethodGet && path == "/configs":
-		json.NewEncoder(w).Encode(map[string]int{"mixed-port": fc.mixedPort})
+		json.NewEncoder(w).Encode(map[string]any{"mixed-port": fc.mixedPort, "tun": map[string]bool{"enable": fc.tun}})
 	case r.Method == http.MethodGet && path == "/connections":
 		var out struct {
 			Connections []map[string]any `json:"connections"`
@@ -200,9 +201,24 @@ func TestMusixmatchRerouteAround(t *testing.T) {
 		t.Fatalf("正常答过一次之后连换次数归零,切过 %v", fc.puts)
 	}
 
+	// 「代理」设成不使用:没开 TUN 时请求不经过 Clash,不切;开着 TUN 照切。
 	resetMusixmatchRoute(t)
 	onProxy.Store(false)
 	proxyUp.Store(false)
+	withFeatures(t, featureFlags{NetworkProxy: networkProxyOff})
+	before := len(fc.puts)
+	if musixmatchRerouteAround(ctx, musixmatchRouteGeneration()) || len(fc.puts) != before {
+		t.Fatalf("不使用代理、没开 TUN:不切节点,切过 %v", fc.puts)
+	}
+	fc.mu.Lock()
+	fc.tun = true
+	fc.mu.Unlock()
+	if !musixmatchRerouteAround(ctx, musixmatchRouteGeneration()) || len(fc.puts) != before+1 {
+		t.Fatalf("不使用代理、开着 TUN:照切,切过 %v", fc.puts)
+	}
+	setFeatures(featureFlags{})
+
+	resetMusixmatchRoute(t)
 	clashControllerSockets = []string{"/nonexistent/clash.sock"}
 	if musixmatchRerouteAround(ctx, 0) {
 		t.Fatal("没有代理、也没有 Clash 控制口:换不了")

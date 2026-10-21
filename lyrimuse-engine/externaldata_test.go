@@ -58,6 +58,7 @@ func TestMain(m *testing.M) {
 	scutilProxyURL = func() *neturl.URL { return nil }
 	networkProxyCommonPorts = nil
 	localProxyListeners = func() []localListener { return nil }
+	fallbackProxyAfterDirectFailure = func() *neturl.URL { return nil }
 	for _, k := range []string{"HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy"} {
 		_ = os.Unsetenv(k)
 	}

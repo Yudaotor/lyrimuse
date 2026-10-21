@@ -48,6 +48,9 @@ const (
 	//
 	// 这是第一次的窗口;到期重新探直连又失败,窗口翻倍(proxyStickyWindow)。
 	proxyFallbackSticky = 10 * time.Minute
+	// proxyFallbackStickySlowFirst:只是建连没在预算内完成(没被拒、没解析失败)时,第一次走代理的窗口。偶尔慢一下的
+	// 主机这样很快回到直连;真被打掉的,下一次探直连还是不通,窗口照常从 proxyStickyWindow(2) 翻倍。见 09 章决策 324。
+	proxyFallbackStickySlowFirst = 2 * time.Minute
 	// proxyFallbackStickyMax:窗口翻倍的上限。直连在这台机器上是长期被打掉的(Musixmatch 一周 86 次
 	// 「直连失败、代理救回」,每次都先白等 proxyFallbackDirectBudget),固定 10 分钟就是每隔一阵再白等一次;
 	// 一直失败就越等越久,上限之后仍会定期探一次,直连恢复了照样回得来。
@@ -142,6 +145,9 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 		return nil, directErr
 	}
 	proxy := t.proxy()
+	if proxy == nil && t.proxyURL == nil {
+		proxy = fallbackProxyAfterDirectFailure()
+	}
 	if proxy == nil {
 		t.reportBlocked()
 		return nil, directErr
@@ -164,7 +170,7 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 			proxy.Host, proxyErr, time.Since(proxyStart).Round(time.Millisecond))
 		return nil, directErr
 	}
-	window := t.markSticky(host)
+	window := t.markSticky(host, errors.Is(directErr, errDirectNoConnection))
 	log.Printf("proxy: %s direct failed (%v, %s), succeeded via proxy %s (%s), using the proxy for the next %s",
 		host, directErr, directElapsed.Round(time.Millisecond), proxy.Host,
 		time.Since(proxyStart).Round(time.Millisecond), window)
@@ -236,13 +242,16 @@ func (t *proxyFallbackTransport) attemptDirect(req *http.Request, fallback bool)
 	}
 	if expired.Load() {
 		// 预算是拿 cancel 掐的,原样往上报就成了「调用方自己取消」,doHTTPTracked 会把它当成不算数的取消。
-		return nil, fmt.Errorf("no connection within %s: %w", budget, context.DeadlineExceeded)
+		return nil, fmt.Errorf("%w within %s: %w", errDirectNoConnection, budget, context.DeadlineExceeded)
 	}
 	if !hasDeadline && connected.Load() && ctx.Err() != nil {
 		return nil, fmt.Errorf("%w within %s: %w", errDirectNoResponse, limit, context.DeadlineExceeded)
 	}
 	return resp, err
 }
+
+// errDirectNoConnection:后面有代理可退时,直连没在建连预算内拿到连接。
+var errDirectNoConnection = errors.New("no connection")
 
 // errDirectNoResponse:直连连上了,但调用方没设时限、整段上限(proxyFallbackDirectCap)到了还没答完。
 var errDirectNoResponse = errors.New("direct connection made but no response")
@@ -315,9 +324,10 @@ func (t *proxyFallbackTransport) proxy() *neturl.URL {
 	return fallbackProxyURL()
 }
 
-// markSticky 记下「接下来走代理」,返回这次的窗口(按连续失败次数翻倍,见 proxyStickyWindow)。
-func (t *proxyFallbackTransport) markSticky(host string) time.Duration {
-	window := saveProxyFallbackHint(host, true)
+// markSticky 记下「接下来走代理」,返回这次的窗口(按连续失败次数翻倍,见 proxyStickyWindow;slowConnect 见
+// proxyFallbackStickySlowFirst)。
+func (t *proxyFallbackTransport) markSticky(host string, slowConnect bool) time.Duration {
+	window := writeProxyFallbackHint(host, true, slowConnect)
 	t.mu.Lock()
 	t.stickyUntil = time.Now().Add(window)
 	t.mu.Unlock()
@@ -341,6 +351,8 @@ func forceProxyFor(c *http.Client, host string, d time.Duration) {
 	if path == "" || os.MkdirAll(filepath.Dir(path), 0o700) != nil {
 		return
 	}
+	proxyFallbackHintMu.Lock()
+	defer proxyFallbackHintMu.Unlock()
 	f := readProxyFallbackHint()
 	if f.Until == nil {
 		f.Until = map[string]int64{}
@@ -438,14 +450,26 @@ func loadProxyFallbackHint(host string) bool {
 	return time.Since(time.Unix(at, 0)) < proxyFallbackSticky
 }
 
+// proxyFallbackHintMu:同一个进程里各台主机读改写提示文件排队(海外歌词源常同时出问题)。跨进程照旧不加锁,见上。
+var proxyFallbackHintMu sync.Mutex
+
 // saveProxyFallbackHint 记下 / 清掉「这个域名走代理」。useProxy 时连续失败次数 +1、按它算窗口并返回;
 // 清掉时连续次数一并清零。提示文件写不了(没有配置目录)时窗口就是 proxyFallbackSticky。
 func saveProxyFallbackHint(host string, useProxy bool) time.Duration {
+	return writeProxyFallbackHint(host, useProxy, false)
+}
+
+func writeProxyFallbackHint(host string, useProxy, slowConnect bool) time.Duration {
 	window := proxyFallbackSticky
+	if useProxy && slowConnect {
+		window = proxyFallbackStickySlowFirst
+	}
 	path := proxyFallbackHintPath()
 	if path == "" {
 		return window
 	}
+	proxyFallbackHintMu.Lock()
+	defer proxyFallbackHintMu.Unlock()
 	f := readProxyFallbackHint()
 	if f.Until == nil {
 		f.Until = map[string]int64{}
@@ -457,6 +481,9 @@ func saveProxyFallbackHint(host string, useProxy bool) time.Duration {
 		now := time.Now()
 		f.Streak[host]++
 		window = proxyStickyWindow(f.Streak[host])
+		if slowConnect && f.Streak[host] == 1 {
+			window = proxyFallbackStickySlowFirst
+		}
 		f.Hosts[host] = now.Unix()
 		f.Until[host] = now.Add(window).Unix()
 	} else {
