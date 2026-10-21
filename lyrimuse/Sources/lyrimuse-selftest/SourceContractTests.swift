@@ -4357,6 +4357,11 @@ func runSourceContractSettingsTests() {
         expectEqual(manager.contains("editMode != .preview && editorBufferDiffers")
                     && manager.components(separatedBy: "discardStalePreviewBuffer()").count - 1 >= 2, true,
                     "歌词管理: 预览状态下缓冲跟盘上不一样不算未保存的修改,进编辑前按盘上重载")
+        expectEqual([("lyrics", "lyricsBodyEdit"), ("word", "wordBodyEdit"), ("tr", "trBodyEdit"), ("roma", "romaBodyEdit")].allSatisfy {
+                        sourceHas(manager, "if editMode == .preview { logPreviewBufferWrite(\"\($0.0)\", key: key, edit: \($0.1), body: newBody) return }")
+                    }
+                    && sourceHas(manager, "guard editorBufferDiffers else { if let summary = store.summary(forKey: key) { resetBodyEdits("), true,
+                    "歌词管理: 预览时四格正文都不往完整原文写回,进编辑前按完整原文重拆正文")
         let design = read("Settings/SettingsDesignSystem.swift") ?? ""
         expectEqual(design.contains(".glassEffect(.regular.interactive(), in: Capsule())\n                .modifier(GlassMenuFeedback())")
                     && design.contains(".onHover { hovering = $0 }")

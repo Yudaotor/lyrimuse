@@ -664,9 +664,14 @@ struct LyricsManagerView: View {
         editedLyrics != loadedLyrics || editedTr != loadedTr || editedRoma != loadedRoma || editedWordText != loadedWordText
     }
 
-    /// 从预览进编辑前:缓冲跟盘上不一样就记一行(哪几格、长度),按盘上那份重载,别把意外改写的内容当成底稿带进编辑。
+    /// 从预览进编辑前:缓冲跟盘上不一样就记一行(哪几格、长度),按盘上那份重载,别把意外改写的内容当成底稿带进编辑;
+    /// 一样也把四格正文按完整原文重拆一遍,预览时没写回的旧正文不带进编辑框。
     private func discardStalePreviewBuffer() {
-        guard editMode == .preview, editorBufferDiffers, let key = editingKey else { return }
+        guard editMode == .preview, let key = editingKey else { return }
+        guard editorBufferDiffers else {
+            if let summary = store.summary(forKey: key) { resetBodyEdits(title: summary.title, artist: summary.artist) }
+            return
+        }
         editLog.notice("""
             editor buffer differs in preview, reloading: key=\(key, privacy: .public) \
             lyrics=\(editedLyrics.count, privacy: .public)/\(loadedLyrics.count, privacy: .public) \
@@ -3190,7 +3195,8 @@ struct LyricsManagerView: View {
             }
             // 编辑用的正文 ↔ 完整原文,四对两条 onChange 互不打圈,理由见 LyricsBodyEdit 头注:外部写进来的完整原文
             // (换曲 / 采纳候选 / 重新匹配)才重算正文;正文拼回去的那次(值恰好等于 reassembled)跳过,不然用户敲的
-            // 回车会被归一化吃掉。
+            // 回车会被归一化吃掉。预览时正文不往回写:编辑框不在,正文变了只会是重载那一刻留下的旧值,写回去会把盘上
+            // 刚换的完整原文改掉、两边来回翻;进编辑时按完整原文重拆(discardStalePreviewBuffer)。见 11 章决策 139。
             .onChange(of: editedLyrics, initial: true) { _, raw in
                 if raw == lyricsBodyEdit.reassembled(body: editedLyricsBody) { return }
                 lyricsBodyEdit = LyricsBodyEdit(lyrics: raw, title: summary.title, artist: summary.artist)
@@ -3198,10 +3204,12 @@ struct LyricsManagerView: View {
             }
             .onChange(of: editedLyricsBody) { _, newBody in
                 let full = lyricsBodyEdit.reassembled(body: newBody)
-                if full != editedLyrics {
-                    if editMode == .preview { logPreviewBufferWrite("lyrics", key: key, edit: lyricsBodyEdit, body: newBody) }
-                    editedLyrics = full
+                guard full != editedLyrics else { return }
+                if editMode == .preview {
+                    logPreviewBufferWrite("lyrics", key: key, edit: lyricsBodyEdit, body: newBody)
+                    return
                 }
+                editedLyrics = full
             }
             .onChange(of: editedWordText, initial: true) { _, raw in
                 if raw == wordBodyEdit.reassembled(body: editedWordBody) { return }
@@ -3210,10 +3218,12 @@ struct LyricsManagerView: View {
             }
             .onChange(of: editedWordBody) { _, newBody in
                 let full = wordBodyEdit.reassembled(body: newBody)
-                if full != editedWordText {
-                    if editMode == .preview { logPreviewBufferWrite("word", key: key, edit: wordBodyEdit, body: newBody) }
-                    editedWordText = full
+                guard full != editedWordText else { return }
+                if editMode == .preview {
+                    logPreviewBufferWrite("word", key: key, edit: wordBodyEdit, body: newBody)
+                    return
                 }
+                editedWordText = full
             }
             .onChange(of: editedTr, initial: true) { _, raw in
                 if raw == trBodyEdit.reassembled(body: editedTrBody) { return }
@@ -3222,10 +3232,12 @@ struct LyricsManagerView: View {
             }
             .onChange(of: editedTrBody) { _, newBody in
                 let full = trBodyEdit.reassembled(body: newBody)
-                if full != editedTr {
-                    if editMode == .preview { logPreviewBufferWrite("tr", key: key, edit: trBodyEdit, body: newBody) }
-                    editedTr = full
+                guard full != editedTr else { return }
+                if editMode == .preview {
+                    logPreviewBufferWrite("tr", key: key, edit: trBodyEdit, body: newBody)
+                    return
                 }
+                editedTr = full
             }
             .onChange(of: editedRoma, initial: true) { _, raw in
                 if raw == romaBodyEdit.reassembled(body: editedRomaBody) { return }
@@ -3234,10 +3246,12 @@ struct LyricsManagerView: View {
             }
             .onChange(of: editedRomaBody) { _, newBody in
                 let full = romaBodyEdit.reassembled(body: newBody)
-                if full != editedRoma {
-                    if editMode == .preview { logPreviewBufferWrite("roma", key: key, edit: romaBodyEdit, body: newBody) }
-                    editedRoma = full
+                guard full != editedRoma else { return }
+                if editMode == .preview {
+                    logPreviewBufferWrite("roma", key: key, edit: romaBodyEdit, body: newBody)
+                    return
                 }
+                editedRoma = full
             }
             .sheet(isPresented: $showDecisionSheet, onDismiss: { decisionSlots = nil }) {
                 // 按钮只在 hasDecision 时出现,两槽在 presentDecision 里解好。都解不出来(存档坏了、格式对不上)时给一页
@@ -3800,7 +3814,7 @@ struct LyricsManagerView: View {
         return summary.hasLyrics && !summary.isInstrumental
     }
 
-    /// 预览状态下正文拼回原文改写了缓冲:正常不该发生(编辑框只在编辑中出现),记下是哪一格、拆分时的底稿跟盘上对不对得上。
+    /// 预览状态下正文跟完整原文对不上(没写回):记下是哪一格、拆分时的底稿跟盘上对不对得上。
     private func logPreviewBufferWrite(_ field: String, key: String, edit: LyricsBodyEdit, body: String) {
         let loaded: String
         switch field {
@@ -3810,7 +3824,7 @@ struct LyricsManagerView: View {
         default: loaded = loadedLyrics
         }
         editLog.notice("""
-            body rewrote \(field, privacy: .public) in preview: key=\(key, privacy: .public) editingKey=\(editingKey ?? "nil", privacy: .public) \
+            body differs from split in preview, not written back: field=\(field, privacy: .public) key=\(key, privacy: .public) editingKey=\(editingKey ?? "nil", privacy: .public) \
             bodyMatchesSplit=\(body == edit.body, privacy: .public) splitMatchesDisk=\(edit.original == loaded, privacy: .public) \
             bodyLen=\(body.count, privacy: .public) splitLen=\(edit.body.count, privacy: .public)
             """)
