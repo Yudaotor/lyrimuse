@@ -1520,6 +1520,12 @@ func runOverlayTests() {
         let H = OverlayControlHitTest.self
 
         // ① 基线:开关开着时行为跟改动前逐字一致 —— 悬停且未锁定才显示。
+        expectEqual(H.isCovered(hitWindow: 9924, ownWindow: 9922, windowsAbove: [9924, 55]), true,
+                    "被盖住: 命中的是叠在悬浮窗上面的那扇(别的 App 的菜单)→ 不当成点悬浮窗")
+        expectEqual(H.isCovered(hitWindow: 55, ownWindow: 9922, windowsAbove: [9924]), false,
+                    "被盖住: 悬浮窗点击穿透时命中的是下面那扇 → 不算盖住(锁定态的解锁照常)")
+        expectEqual(H.isCovered(hitWindow: 9922, ownWindow: 9922, windowsAbove: [9924]), false, "被盖住: 命中自己")
+        expectEqual(H.isCovered(hitWindow: 0, ownWindow: 9922, windowsAbove: [0]), false, "被盖住: 读不到命中窗口时不拦")
         expectEqual(H.controlsShown(hovering: true, positionLocked: false, hoverControlsEnabled: true),
                     true, "控制排: 开关开 + 悬停 + 未锁定 → 显示")
         expectEqual(H.controlsShown(hovering: false, positionLocked: false, hoverControlsEnabled: true),

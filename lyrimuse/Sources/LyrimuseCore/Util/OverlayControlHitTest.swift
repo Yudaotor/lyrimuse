@@ -195,4 +195,14 @@ public enum OverlayControlHitTest {
     ) -> Bool {
         hoverControlsEnabled && hovering && positionLocked
     }
+
+    /// 按下这一点时,悬浮窗是不是被别的窗口盖着(别的 App 的菜单、Spotlight、自己的设置窗…)。
+    /// 鼠标监听器只给坐标:被盖住时用户点的是上面那扇窗,不该同时当成点了悬浮窗上的按钮、开始长按拖动。
+    ///
+    /// `hitWindow`:这一点上最上层、会接住点击的那扇窗(`NSWindow.windowNumber(at:belowWindowWithWindowNumber: 0)`)。
+    /// 悬浮窗点击穿透时它会跳过悬浮窗、报下面那扇,所以不能拿「命中的是不是自己」判,要看命中的那扇在不在
+    /// `windowsAbove`(叠在悬浮窗上方的窗口)里。
+    public static func isCovered(hitWindow: Int, ownWindow: Int, windowsAbove: Set<Int>) -> Bool {
+        hitWindow > 0 && hitWindow != ownWindow && windowsAbove.contains(hitWindow)
+    }
 }

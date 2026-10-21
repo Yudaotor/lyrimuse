@@ -1112,6 +1112,15 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         handleMouseEvent(type: info.type, local: local, clickCount: info.clickCount, modifiers: info.modifiers)
     }
 
+    /// 指针这一点上悬浮窗被别的窗口盖着吗(判据见 `OverlayControlHitTest.isCovered`)。只在按下时查一次。
+    private func isCovered(_ window: NSWindow) -> Bool {
+        let hit = NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0)
+        guard hit > 0, hit != window.windowNumber else { return false }
+        let above = (CGWindowListCopyWindowInfo([.optionOnScreenAboveWindow], CGWindowID(window.windowNumber))
+            as? [[String: Any]] ?? []).compactMap { $0[kCGWindowNumber as String] as? Int }
+        return OverlayControlHitTest.isCovered(hitWindow: hit, ownWindow: window.windowNumber, windowsAbove: Set(above))
+    }
+
     /// 胶囊里每个按钮的窗口本地矩形(换算见 recomputeHitRegions)。空 = 这一轮没有按钮上报。
     private var controlRectsLocal: [OverlayControlID: CGRect] = [:]
 
@@ -1265,6 +1274,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private func handleMouseEvent(type: NSEvent.EventType, local: Bool = false, clickCount: Int = 1,
                                   modifiers: NSEvent.ModifierFlags = []) {
         guard let window, !isQuickMenuOpen else { return }
+        // 按下时这一点被别的窗口盖着(别的 App 的菜单、Spotlight…):点的是上面那扇,不分发按钮、不起长按。
+        if type == .leftMouseDown || type == .rightMouseDown, window.isVisible, isCovered(window) { return }
         // 锁定位置 = 停用整套手势(悬停控制排 + 长按拖动)。两个例外都不受这条限制:
         // ① .mouseMoved——悬停态(锁定态的"解锁"提示、「指针划过时让开」)靠它维护,跟"能不能
         //    拖动窗口"无关;控制排不会因此露出来(下面 controlsShown 的判据带着 positionLocked)。
