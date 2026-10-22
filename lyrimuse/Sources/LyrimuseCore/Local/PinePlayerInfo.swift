@@ -131,10 +131,10 @@ public enum PinePlayerInfo {
         guard let snapshot, snapshot.bundleIdentifier == bundleID, let title = snapshot.title, !title.isEmpty else { return snapshot }
         let artist = snapshot.artist ?? ""
         let file = systemFile(title: title, artist: artist, pid: snapshot.processIdentifier.map { pid_t($0) }, now: now)
-        let id = file.map { identity(tags: $0.tags, fileName: URL(fileURLWithPath: $0.path).lastPathComponent) }
+        let id = file.flatMap { file in file.tags.map { identity(tags: $0, fileName: URL(fileURLWithPath: file.path).lastPathComponent) } }
             ?? identity(title: title, artist: artist)
         var out = snapshot.withTitle(id.title).withArtist(id.artist).withAlbum(id.album)
-        if let duration = VoxPlayerInfo.preciseDuration(reported: snapshot.duration, file: file?.tags.duration) {
+        if let duration = VoxPlayerInfo.preciseDuration(reported: snapshot.duration, file: file?.tags?.duration) {
             out = out.withDuration(duration)
         }
         // `with…` 副本不带这几样;解码那一拍(`PinePlayhead`)设好的在加载、补查时刻、精确读数要原样带过来。
@@ -166,29 +166,52 @@ public enum PinePlayerInfo {
         return (id.title, id.artist, nil)
     }
 
-    /// 开着的音频文件里对得上这一首的那个(`pickFile`)。只记当前这一首(歌名和歌手一栏):同一首过一阵再放,它可能开的是另一个
-    /// 目录里的同名文件,要重新挑。找到了这一首放着就不再找;没找到的隔 `fileRetry` 再找(换歌那一拍可能还没打开新文件)。
+    /// 开着的音频文件里对得上这一首的那个(`pickOpenFile`;读不出标签的那个没有标签,曲目只拆系统那份)。只记当前这一首(歌名、歌手一栏和第几次开播):同一首换了个文件再放
+    /// 要重新挑。找到了这一首放着就不再找;没找到的隔 `fileRetry` 再找(换歌那一拍可能还没打开新文件)。
     /// 没有进程号(切歌空档交回的旧快照)时只查记下的。`SourceKnockout` 关掉了这条时返回 nil。
-    static func systemFile(title: String, artist: String, pid: pid_t?, now: Date) -> (path: String, tags: LocalAudioFileTags)? {
+    static func systemFile(title: String, artist: String, pid: pid_t?, now: Date) -> (path: String, tags: LocalAudioFileTags?)? {
         guard !SourceKnockout.isOut(.pineFile) else { return nil }
-        let key = title + "\u{1F}" + artist
+        let key = title + "\u{1F}" + artist + "\u{1F}" + String(PinePlayhead.startCount)
         let hit = files.withLock { $0?.key == key ? $0 : nil }
         if let hit, hit.found != nil || now.timeIntervalSince(hit.checkedAt) < fileRetry { return hit.found }
         guard let pid else { return hit?.found }
-        let candidates: [(path: String, tags: LocalAudioFileTags)] = keepingLastOccurrence(ProcessOpenFiles.paths(pid: pid)
-            .filter { PlayerTitleSplit.audioExtensions.contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) })
-            .compactMap { path in LocalAudioFileTags.read(path: path).map { (path, $0) } }
-        let picked = pickFile(title: title, artist: artist, candidates: candidates.map {
+        let opened = keepingLastOccurrence(ProcessOpenFiles.paths(pid: pid)
+            .filter { openFileExtensions.contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) })
+            .map { (path: $0, tags: LocalAudioFileTags.read(path: $0)) }
+        let found = pickOpenFile(title: title, artist: artist, files: opened.map {
             (fileName: URL(fileURLWithPath: $0.path).lastPathComponent, tags: $0.tags)
-        })
-        let found = picked.map { candidates[$0] }
+        }).map { opened[$0] }
         files.withLock { $0 = (key, found, now) }
-        logger.notice("pine: \(found == nil ? "none" : "one", privacy: .public) of \(candidates.count, privacy: .public) open audio files matches the system title")
+        let outcome = found.map { $0.tags == nil ? "one unreadable" : "one" } ?? "none"
+        logger.notice("pine: \(outcome, privacy: .public) of \(opened.count, privacy: .public) open audio files matches the system title")
         return found
     }
 
+    /// 开着的文件(按打开先后排)里是哪一个:读得出标签的按 `pickFile`,读不出的按 `unreadableMatch`,两边都有就取后打开的那个
+    /// (同一首另有一份读得出标签的旧文件开着时,新打开的读不出标签的才是在放的)。纯函数,selftest 覆盖。
+    public static func pickOpenFile(title: String, artist: String, files: [(fileName: String, tags: LocalAudioFileTags?)]) -> Int? {
+        let tagged = files.indices.compactMap { i in files[i].tags.map { (index: i, fileName: files[i].fileName, tags: $0) } }
+        let picked = pickFile(title: title, artist: artist, candidates: tagged.map { (fileName: $0.fileName, tags: $0.tags) })
+            .map { tagged[$0].index }
+        let unreadable = files.indices.filter { files[$0].tags == nil }
+        let fallback = unreadableMatch(title: title, fileNames: unreadable.map { files[$0].fileName }).map { unreadable[$0] }
+        return [picked, fallback].compactMap { $0 }.max()
+    }
+
+    /// 读不出标签的文件里是哪一个:文件名(去掉扩展名)含这个歌名的最后一个(新打开的排在最后)。纯函数,selftest 覆盖。
+    public static func unreadableMatch(title: String, fileNames: [String]) -> Int? {
+        let wanted = PlayerTitleSplit.strippingAudioExtension(title).trimmingCharacters(in: .whitespaces)
+        guard !wanted.isEmpty else { return nil }
+        return fileNames.lastIndex { name in
+            name.range(of: wanted, options: .caseInsensitive) != nil
+        }
+    }
+
+    /// 开着的文件按扩展名筛:通用那张表加上 Pine 能放、那张表里没有的几种。
+    public static let openFileExtensions = PlayerTitleSplit.audioExtensions.union(["aifc", "amr", "bwf", "caf", "dts", "ac3", "m4r", "mka", "w64"])
+
     static let fileRetry: TimeInterval = 3
-    private static let files = OSAllocatedUnfairLock<(key: String, found: (path: String, tags: LocalAudioFileTags)?, checkedAt: Date)?>(
+    private static let files = OSAllocatedUnfairLock<(key: String, found: (path: String, tags: LocalAudioFileTags?)?, checkedAt: Date)?>(
         initialState: nil)
 
     /// 去掉重复的路径,每个留最后出现的那次(同一个文件开过两次时,后开的那个描述符才代表它最近一次被打开),顺序照旧。纯函数,selftest 覆盖。

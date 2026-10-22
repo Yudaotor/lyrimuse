@@ -129,7 +129,8 @@ public enum PinePlayhead {
     }
 
     /// 暂停锚点:停下的位置按上一段的表推到暂停锚点那一刻,夹进它报的那一秒;它跟上一段在走的锚点一模一样(停下之前先报的那份,
-    /// 位置还没更新)时推到现在、不夹。推出来离报的值太远是暂停着跳转了,补半秒。上一段不是在走的表时不推。
+    /// 位置还没更新)时推到现在、不夹。上一份锚点也是停着的,用停下时记的位置,不往后推。推出来离报的值太远是暂停着跳转了
+    /// (停在 0 秒的也一样,暂停着重开同一个文件先报这一份),补半秒。上一段不是在走的表时不推。
     static func paused(_ same: Clock?, anchor: Anchor, now: Date) -> Clock {
         let floored = anchor.elapsed >= 1
         var out = Clock(anchor: anchor, kind: .paused, base: anchor.elapsed, baseAt: anchor.at, precise: false, running: false,
@@ -141,9 +142,9 @@ public enum PinePlayhead {
         let carried = same.anchor.playing && anchor.elapsed == same.anchor.elapsed
             && abs(anchor.at.timeIntervalSince(same.anchor.at)) <= anchorJitterSecs
         let at = carried ? now : anchor.at
-        var estimate = max(0, same.base + at.timeIntervalSince(same.baseAt))
+        var estimate = same.anchor.playing ? max(0, same.base + at.timeIntervalSince(same.baseAt)) : (same.pausedPosition ?? same.base)
         if let hold = same.holdUntil, at < hold { estimate = 0 }
-        let matches = carried || !floored
+        let matches = carried
             || (estimate >= anchor.elapsed - pauseMatchSlackSecs && estimate <= anchor.elapsed + 1 + pauseMatchSlackSecs)
         guard matches else {
             out.sliderBias = seekSliderBias
@@ -213,6 +214,17 @@ public enum PinePlayhead {
     private static let sampling = OSAllocatedUnfairLock<Bool>(initialState: false)
     /// 进度条在读、读完该补查的时刻。每一拍都带上(`LocalPlaybackSource` 每来一份快照会换掉排着的补查),过了就清掉。
     private static let calibrationDue = OSAllocatedUnfairLock<Date?>(initialState: nil)
+    private static let starts = OSAllocatedUnfairLock<Int>(initialState: 0)
+
+    /// 认出过几次开播:一次开播的第一份锚点(停住等第二份的,或前面不是开播的表)加一,第二份不加。`PinePlayerInfo` 按它重挑当前文件
+    /// (同一首换了个文件再放,歌名和歌手一栏不变)。
+    public static var startCount: Int { starts.withLock { $0 } }
+
+    /// 换了这块表算不算新的一次开播。纯函数,selftest 覆盖。
+    public static func isNewStart(from previous: Clock?, to next: Clock) -> Bool {
+        guard next.kind == .start, next != previous else { return false }
+        return next.holdUntil != nil || previous?.kind != .start || previous?.anchor.track != next.anchor.track
+    }
     private static let queue = DispatchQueue(label: "lyrimuse.pine.progress-bar", qos: .userInitiated)
 
     /// 系统那份这一拍的原始锚点 → 这块表给的位置。主路径与焦点回退都走这里。没有锚点为 nil(调用方照用系统那份)。
@@ -223,6 +235,7 @@ public enum PinePlayhead {
         let anchor = Anchor(track: track, elapsed: anchorElapsed, at: anchorAt, playing: playing)
         let (clock, changed) = state.withLock { s -> (Clock, Bool) in
             let next = advance(s, anchor: anchor, now: now)
+            if isNewStart(from: s, to: next) { starts.withLock { $0 += 1 } }
             defer { s = next }
             return (next, next != s)
         }
