@@ -96,6 +96,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 以及当作没有刘海、直接压在屏幕正中(`ignoreNotch`,不落盘,App 重启复原):
         /// `debug/menubar-center?center=1&screen=all&ignore-notch=1`,至少带一个。刘海屏的开发机靠它验无刘海屏的摆法。
         case menuBarCenter(center: Bool?, ignoreNotch: Bool?, screen: String? = nil)
+        /// 日语读音标罗马字还是假名,跟设置页「日语读音」走同一条路(`debug/japanese-reading?style=romaji|kana`)。
+        case japaneseReading(JapaneseReadingStyle)
     }
 
     /// `action/` 下不对应快捷键的那几个名字(跟 `LyrimuseAction.linkName` 不能重名,selftest 核对)。
@@ -205,6 +207,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let screen = value("screen").flatMap { $0.isEmpty ? nil : $0 }
             guard center != nil || ignoreNotch != nil || screen != nil else { return nil }
             self = .debug(.menuBarCenter(center: center, ignoreNotch: ignoreNotch, screen: screen))
+        case ("debug", "/japanese-reading"):
+            guard let style = value("style").flatMap({ JapaneseReadingStyle(rawValue: $0.lowercased()) }) else { return nil }
+            self = .debug(.japaneseReading(style))
         case ("lastfm-auth-callback", _):
             self = .lastfmAuthCallback
         default:
@@ -314,6 +319,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.queryItems = (center.map { [URLQueryItem(name: "center", value: $0 ? "1" : "0")] } ?? [])
                     + (ignoreNotch.map { [URLQueryItem(name: "ignore-notch", value: $0 ? "1" : "0")] } ?? [])
                     + (screen.map { [URLQueryItem(name: "screen", value: $0)] } ?? [])
+            case let .japaneseReading(style):
+                components.path = "/japanese-reading"
+                components.queryItems = [URLQueryItem(name: "style", value: style.rawValue)]
             }
         case .lastfmAuthCallback:
             components.host = "lastfm-auth-callback"

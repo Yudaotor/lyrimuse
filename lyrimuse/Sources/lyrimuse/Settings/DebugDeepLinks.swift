@@ -69,6 +69,10 @@ enum DebugDeepLinks {
             if let screen { AppSettings.shared.menuBarCenterScreen = screen }
             MenuBarStatusItem.shared.setNeedsRefresh()
             logger.notice("debug menubar center=\(String(describing: center), privacy: .public) ignoreNotch=\(String(describing: ignoreNotch), privacy: .public)")
+        case let .japaneseReading(style):
+            AppSettings.shared.japaneseReadingStyle = style
+            LocalPlaybackSource.shared.japaneseReading = style
+            logger.notice("debug japanese reading \(style.rawValue, privacy: .public)")
         }
     }
 
