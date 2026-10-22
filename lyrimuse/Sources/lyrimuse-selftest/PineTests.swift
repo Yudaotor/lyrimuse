@@ -127,6 +127,16 @@ func runPineTests() {
         expectEqual(out?.positionIsPrecise, true, "Pine 出口: 精确读数带过去")
     }
 
+    // ---- 网络流报的无限时长 ----
+    do {
+        func snap(_ duration: String) -> MediaControlSnapshot {
+            try! JSONDecoder().decode(MediaControlSnapshot.self, from: Data("{\"title\":\"radio\",\"duration\":\(duration)}".utf8))
+        }
+        expectEqual([snap("9.223372036854776e18").trackDuration, snap("0").trackDuration, snap("-1").trackDuration],
+                    [nil, nil, nil], "无限时长: Int64 最大值那么长、0、负数都当没有时长")
+        expectEqual([snap("223.5").trackDuration, snap("36000").trackDuration], [223.5, 36000], "无限时长: 真实曲长原样给,十小时的也是")
+    }
+
     // ---- 位置:真机那一串锚点回放 ----
     do {
         let track = "Jay|稻香"
@@ -329,6 +339,9 @@ func runPineTests() {
         expectEqual(sourceHas(client, "(keyTitle, keyArtist, filePath) = PinePlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)"),
                     true, "Pine 接线: 封面的曲目标识跟快照对得上")
         expectEqual(sourceHas(client, "|| PinePlayerInfo.isNetworkRadio(snapshot)"), true, "Pine 接线: 网络电台当不是歌")
+        let local = sourceText("LyrimuseCore/Local/LocalPlaybackSource.swift")
+        expectEqual([sourceHas(local, "if playing, snapshot.trackDuration == nil {"), sourceHas(local, "if playing, let duration = snapshot.trackDuration {")],
+                    [true, true], "无限时长: 建进度锚点前按 trackDuration 判(换成毫秒整数不溢出)")
         let info = sourceText("LyrimuseCore/Local/PinePlayerInfo.swift")
         expectEqual(sourceHas(info, "guard !SourceKnockout.isOut(.pineFile) else { return nil }"), true, "Pine 接线: 文件那条腿能拔")
         expectEqual(sourceHas(info, "let key = title + \"\\u{1F}\" + artist + \"\\u{1F}\" + String(PinePlayhead.startCount)"), true,

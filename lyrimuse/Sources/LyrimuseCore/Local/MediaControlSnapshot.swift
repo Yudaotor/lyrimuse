@@ -6,6 +6,16 @@ public struct MediaControlSnapshot: Decodable {
     public let artist: String?
     public let album: String?
     public let duration: Double?
+
+    /// 报的时长是一首歌的真实长度时的它(有限、大于 0、不过 `endlessDurationSecs`),否则 nil。有的播放器给网络流报 Int64
+    /// 最大值那么长(Pine Player 放电台,9.22e18 秒),当成没有时长;换成毫秒整数时也不会溢出。
+    public var trackDuration: Double? {
+        guard let duration, duration.isFinite, duration > 0, duration < Self.endlessDurationSecs else { return nil }
+        return duration
+    }
+
+    /// 报的时长到这么多秒就不是一首歌的长度(约 115 天)。
+    public static let endlessDurationSecs: Double = 1e7
     public let elapsedTime: Double?
     public let playing: Bool?
     public let playbackRate: Double?

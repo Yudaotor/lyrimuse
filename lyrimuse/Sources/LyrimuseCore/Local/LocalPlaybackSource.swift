@@ -4248,11 +4248,12 @@ public final class LocalPlaybackSource: ObservableObject {
         // 网页探针的每首额度换歌就重开,不管这一拍在不在播、有没有时长。别挪进下面 `if playing, let duration` 那支:
         // 页面内换歌的头一拍常常还没有时长,跳过这一步,探针就还记着上一次探过的 key,A → B → A 切回来时一次都不探。
         if trackChanged { env.browserProbeTrackChanged(previousKey, key) }
-        // 在播、但这一拍没有时长(网页播放器、汽水换歌的头一两拍常这样,见 MediaControlSnapshot.duration):位置这一拍
+        // 在播、但这一拍没有时长(网页播放器、汽水换歌的头一两拍常这样,见 MediaControlSnapshot.duration;网络流报的无限长同样算没有,
+        // 见 `trackDuration`):位置这一拍
         // 算不了,也不是暂停。别落进下面的暂停分支 —— 那一支清掉锚点之后,末尾照样把 posTrackingKey / posWasPlaying 推到
         // 新曲,下一拍有了时长就被当成「同曲稳定播放」,换歌那一支(锚点滞后预置、自然切歌校正)整首都不跑。这一拍什么都
         // 不记:同一首留着原来的锚点接着外推;换了歌先拿掉上一首的锚点,等有时长的那一拍按换歌处理。
-        if playing, (snapshot.duration ?? 0) <= 0 {
+        if playing, snapshot.trackDuration == nil {
             if key != posTrackingKey, anchor != nil { anchor = nil }
             return
         }
@@ -4324,7 +4325,7 @@ public final class LocalPlaybackSource: ObservableObject {
         posPrevAnchorElapsed = snapshot.anchorElapsedTime
         let isFirstObservationSinceLaunch = !posBiasRestoreChecked
         posBiasRestoreChecked = true
-        if playing, let duration = snapshot.duration, duration > 0 {
+        if playing, let duration = snapshot.trackDuration {
             // 切歌/加载瞬间 Spotify 会短暂报 rate=0(playing 仍 true),按 1 计——与
             // 引擎的 reconcile 规则一致。不归一的话 predicted 停走,下一拍正常
             // 前进的读数会被误判成 seek 跳变,顺手把自然切歌偏置也清了(
@@ -4352,7 +4353,7 @@ public final class LocalPlaybackSource: ObservableObject {
             // `expectedDuration` 不是可选的锦上添花:探针拿它在 JS 里认"这个标签页放的
             // 是不是同一首歌"(见 `BrowserPositionProbe.pageDurationToleranceSecs`),
             // YouTube Music 插播广告、同一浏览器里开着第二个 Spotify 标签页都靠它认出来。
-            // 这里的 `duration` 已经被外层 `if playing, let duration, duration > 0` 保证 >0。
+            // 这里的 `duration` 已经被外层 `if playing, let duration = snapshot.trackDuration` 保证是有限的真实曲长。
             env.browserProbeKick(snapshot.bundleIdentifier, key, duration)
             let rawReportedForResolve: Double
             let effectiveTier: PositionSourceTier
