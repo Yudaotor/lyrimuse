@@ -519,9 +519,9 @@ Apple Music 上带动态封面的专辑，在完整尺寸的歌词窗口中封�
 
 <a id="feature-players"></a>
 
-### 十二款播放器，可多选或自动识别
+### 十三款播放器，可多选或自动识别
 
-Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、洛雪音乐、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打高解析音质的本地播放器 VOX，以及 YouTube Music 客户端 Kaset。可同时选择多个，也可保持自动识别，跟随 macOS「正在播放」中的播放器。支持 Apple Music 电台，主持人讲话时显示电台名称和台标。
+Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、洛雪音乐、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打高解析音质的本地播放器 VOX、免费的本地播放器 Pine Player，以及 YouTube Music 客户端 Kaset。可同时选择多个，也可保持自动识别，跟随 macOS「正在播放」中的播放器。支持 Apple Music 电台，主持人讲话时显示电台名称和台标。
 
 - 设置位置：播放器 › 音乐 App
 

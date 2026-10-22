@@ -95,10 +95,11 @@ public enum MediaControlClient {
         // 套在这个唯一的公开出口上,下游(trackKey、缓存查询、界面)一处都不用改。
         // 见 PlayerArtistFix。
         // 汽水非会员试听换回原曲口径(见 PlayerPreviewFix);排在署名纠正之后,比对用的署名与引擎发布时一致。
-        // 把「歌手 - 歌名」拼在标题里的播放器先拆回来(见 PlayerTitleSplit),排在最前。
+        // 把「歌手 - 歌名」拼在标题里的播放器先拆回来(见 PlayerTitleSplit),Pine Player 按它开着的文件换回歌手和专辑
+        // (见 PinePlayerInfo),排在最前。
         let fixState = PlayerArtistFix.current
         let snapshot = PlayerPreviewFix.applied(
-            to: PlayerArtistFix.applied(to: PlayerTitleSplit.applied(to: raw), state: fixState))
+            to: PlayerArtistFix.applied(to: PlayerTitleSplit.applied(to: PinePlayerInfo.adapted(raw)), state: fixState))
         guard let raw else { return (snapshot, nil) }
         let bundleID = raw.bundleIdentifier ?? ""
         let rawTitle = raw.title ?? "", rawArtist = raw.artist ?? ""
@@ -1848,6 +1849,9 @@ public enum MediaControlClient {
             let now = Date()
             snapshot = VoxPlayerInfo.systemFallback(VoxPlayerInfo.probedSnapshot(
                 probed.snapshot, anchorTimestamp: probed.anchor.timestamp, pid: probed.anchor.processIdentifier, now: now))
+            if target.bundleID == PinePlayerInfo.bundleID {
+                snapshot = pineProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
+            }
             if let reading = amazonMusicReading(
                 bundleID: target.bundleID, trackKey: probed.snapshot.trackKey, title: probed.snapshot.title,
                 metadataTimestamp: probed.anchor.timestamp.map { Date(timeIntervalSince1970: $0) },
@@ -2267,6 +2271,8 @@ public enum MediaControlClient {
         var filePath = PlayerTitleSplit.currentFilePath(bundleID: bundleID, title: raw.title)
         if bundleID == VoxPlayerInfo.bundleID {
             (keyTitle, keyArtist, filePath) = VoxPlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)
+        } else if bundleID == PinePlayerInfo.bundleID {
+            (keyTitle, keyArtist, filePath) = PinePlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)
         }
         guard !SourceKnockout.isOut(.systemArtwork), let imageData = artworkImageData(base64: raw.artworkData) else {
             // 放本地文件的播放器(reAMP、VOX)只报文件里嵌着的封面:没嵌的改用正在放的文件同目录里的那张(见 PlayerTitleSplit)。
@@ -2279,8 +2285,35 @@ public enum MediaControlClient {
                 ?? "without artwork"
             return (nil, prefix + "\(bundleID) reports \(raw.title ?? "") \(artwork)")
         }
+        // Pine Player 文件没有封面时推的是它自己的图标(登记在 KnownPlaceholderArtwork):先找正在放的文件同目录的图。
+        if bundleID == PinePlayerInfo.bundleID, KnownPlaceholderArtwork.isPlaceholder(imageData),
+           let path = filePath, let cover = PlayerTitleSplit.folderCover(forAudioFile: path) {
+            return ((cover.data, cover.mimeType,
+                     PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: keyArtist, title: keyTitle)), nil)
+        }
         return ((imageData, raw.artworkMimeType ?? "image/jpeg",
                  PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: keyArtist, title: keyTitle)), nil)
+    }
+
+    /// 按 bundle id 单问到的 Pine 那份(焦点被别的 App 占着时):位置过主路径同一块表(`PinePlayhead`);曲目在公开出口换
+    /// (`PinePlayerInfo.adapted`)。单问那份没有原始锚点时原样交回。
+    private static func pineProbedSnapshot(_ probed: MediaControlSnapshot, anchor: NowPlayingClientsProbe.SessionAnchor,
+                                           now: Date) -> MediaControlSnapshot {
+        var snapshot = probed
+        if snapshot.processIdentifier == nil { snapshot.processIdentifier = anchor.processIdentifier.map { Int($0) } }
+        if let reading = PinePlayhead.reading(
+            track: probed.trackKey, playing: probed.playing == true, anchorElapsed: probed.anchorElapsedTime,
+            anchorAt: anchor.timestamp.map { Date(timeIntervalSince1970: $0) }, duration: probed.duration,
+            pid: snapshot.processIdentifier, now: now) {
+            let pid = snapshot.processIdentifier
+            snapshot = reading.waiting
+                ? snapshot.withLXMusicClock(position: reading.position, playing: true, rate: 1, waiting: true)
+                : snapshot.withPlayerClock(reading.position, capturedAt: now)
+            snapshot.processIdentifier = pid
+            if reading.precise { snapshot.positionIsPrecise = true }
+            snapshot.republishDueBy = reading.dueBy
+        }
+        return snapshot
     }
 
     /// VOX 这首的封面,系统那份给不了时:先问它的脚本要它显示的那张,再找正在放的文件同目录的图(`tryingFolder`)。
@@ -3319,14 +3352,20 @@ public enum MediaControlClient {
             }
             amazonPosition = reading.position
         }
+        // Pine Player 的锚点只到整秒、开播连发两份:位置换成 PinePlayhead 那块表,理由同 Amazon。
+        let pine = bundleID == PinePlayerInfo.bundleID
+            ? PinePlayhead.reading(track: trackKey, playing: playing == true, anchorElapsed: raw.elapsedTime,
+                                   anchorAt: timestampDate, duration: raw.duration, pid: raw.processIdentifier, now: sampledAt)
+            : nil
+        let held = republish.hold != nil || pine?.waiting == true
         var snapshot = MediaControlSnapshot(
             title: raw.title,
             artist: raw.artist,
             album: raw.album,
             duration: raw.duration,
-            elapsedTime: amazonPosition ?? radioPosition ?? elapsed,
-            playing: republish.hold == nil ? playing : false,
-            playbackRate: republish.hold == nil ? raw.playbackRate : 0,
+            elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? elapsed,
+            playing: held ? false : playing,
+            playbackRate: held ? 0 : raw.playbackRate,
             // 复用这个字段原本的语义("这是当前选定播放器的一份有效快照",见
             // MediaControlSnapshot 注释)——调用方(fetchMediaControlSnapshot/
             // fetchAutoDetectedSnapshot)已经各自核实过 bundleID 是它关心的那个,
@@ -3340,9 +3379,10 @@ public enum MediaControlClient {
         )
         // 读到之后主线程可能要等一两百毫秒才处理(换歌那一刻加载封面 / 歌词,实测 0.21s),位置得按读到的时刻
         // 补到处理那一刻(见 MediaControlSnapshot.capturedAt)。只对实测过的播放器开(02 章决策 41)。
-        if Self.stampsCaptureTime(bundleID: bundleID) || amazonPosition != nil { snapshot.capturedAt = sampledAt }
-        if republish.hold != nil { snapshot.isWaitingToPlay = true }
-        snapshot.republishDueBy = republish.dueBy
+        if Self.stampsCaptureTime(bundleID: bundleID) || amazonPosition != nil || pine != nil { snapshot.capturedAt = sampledAt }
+        if held { snapshot.isWaitingToPlay = true }
+        if pine?.precise == true { snapshot.positionIsPrecise = true }
+        snapshot.republishDueBy = republish.dueBy ?? pine?.dueBy
         snapshot.processIdentifier = raw.processIdentifier
         return (snapshot, bundleID)
     }

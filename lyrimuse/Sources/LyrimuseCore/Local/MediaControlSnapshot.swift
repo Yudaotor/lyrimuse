@@ -152,7 +152,8 @@ public struct MediaControlSnapshot: Decodable {
             anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt)
     }
 
-    /// 位置、速度换成洛雪开放 API 推来的那份的副本(`LocalPlaybackSource.lxMusicOpenAPISnapshot`):没有锚点,在放时标精确;
+    /// 位置、速度换成洛雪开放 API 推来的那份的副本(`LocalPlaybackSource.lxMusicOpenAPISnapshot`;Pine Player 焦点回退那份停在开播
+    /// 第一份锚点上时也用它报在加载,`MediaControlClient.pineProbedSnapshot`):没有锚点,在放时标精确;
     /// `playing` 是这一拍算不算在放;`waiting` 为真时(报在放、声音还没走起来)按没在放、等着出声处理。写成显式方法,理由同 `withAlbum`。
     public func withLXMusicClock(position: Double, playing: Bool, rate: Double, waiting: Bool) -> MediaControlSnapshot {
         let advancing = playing && !waiting

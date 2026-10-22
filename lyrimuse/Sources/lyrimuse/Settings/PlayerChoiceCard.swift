@@ -85,6 +85,7 @@ struct PlayerChoiceCard: View {
         case .kaset: return L10n.t("YouTube Music 的第三方 Mac 客户端")
         case .reamp: return L10n.t("仿 Winamp 的本地音乐播放器")
         case .vox: return L10n.t("主打高解析音质的本地音乐播放器")
+        case .pinePlayer: return L10n.t("免费、格式支持很全的本地音乐播放器")
         case .lxMusic: return L10n.t("开源的音乐播放器，曲库来自国内各大平台")
         case .auto: return nil
         }

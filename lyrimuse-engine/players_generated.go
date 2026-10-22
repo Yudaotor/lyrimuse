@@ -20,6 +20,7 @@ const (
 	playerReamp       = "reamp"
 	playerLXMusic     = "lx_music"
 	playerVox         = "vox"
+	playerPinePlayer  = "pine_player"
 	playerAuto        = "auto"
 )
 
@@ -37,6 +38,7 @@ const (
 	reampBundleID        = "ru.alexfreud.ReAmp"
 	lxMusicBundleID      = "cn.toside.music.desktop"
 	voxBundleID          = "com.coppertino.Vox"
+	pinePlayerBundleID   = "com.digipine.pineplayer"
 )
 
 // allPlayerIDs 是 "players" 字段的全部合法取值(含 auto),isValidPlayerValue 用。
@@ -53,6 +55,7 @@ var allPlayerIDs = []string{
 	playerReamp,
 	playerLXMusic,
 	playerVox,
+	playerPinePlayer,
 	playerAuto,
 }
 
@@ -71,6 +74,7 @@ var playerBundleIDs = map[string]string{
 	playerReamp:       reampBundleID,
 	playerLXMusic:     lxMusicBundleID,
 	playerVox:         voxBundleID,
+	playerPinePlayer:  pinePlayerBundleID,
 }
 
 // builtinPlayerBundleIDs 是内置播放器的 bundle id 集合 —— isKnownPlayerBundleID
@@ -88,6 +92,7 @@ var builtinPlayerBundleIDs = map[string]bool{
 	reampBundleID:        true,
 	lxMusicBundleID:      true,
 	voxBundleID:          true,
+	pinePlayerBundleID:   true,
 }
 
 // playerProcessNames 是「播放器标识 → 可执行文件名」,companion-launch 的 pgrep -x 用。
@@ -105,10 +110,11 @@ var playerProcessNames = map[string]string{
 	playerReamp:       "Reamp",
 	playerLXMusic:     "lx-music-desktop",
 	playerVox:         "VOX",
+	playerPinePlayer:  "Pine Player",
 }
 
 // knownPlayerProcessNames 是上表的全部取值 —— 选了「自动识别」时盯全部。
-var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "Reamp", "lx-music-desktop", "VOX"}
+var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "Reamp", "lx-music-desktop", "VOX", "Pine Player"}
 
 // playerScrobbleLabels 是「bundle id → ListenBrainz 的 media_player 标签」。
 var playerScrobbleLabels = map[string]string{
@@ -124,6 +130,7 @@ var playerScrobbleLabels = map[string]string{
 	reampBundleID:        "reAMP (macOS)",
 	lxMusicBundleID:      "LX Music (macOS)",
 	voxBundleID:          "VOX (macOS)",
+	pinePlayerBundleID:   "Pine Player (macOS)",
 }
 
 // defaultScrobbleLabel:既不是内置播放器、也不在信任列表里时的兜底标签。
@@ -143,6 +150,7 @@ var playerNativeLyricSources = map[string]string{
 	playerReamp:       "localfile",
 	playerLXMusic:     "lxmusic",
 	playerVox:         "localfile",
+	playerPinePlayer:  "localfile",
 }
 
 // playerNeedsFullDiskAccess 是「播放器标识 → 引擎读它的客户端文件要不要

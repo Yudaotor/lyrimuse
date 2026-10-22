@@ -95,6 +95,9 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 	case voxBundleID:
 		// 脚本接口不给播放列表;列表存在它沙盒容器里,读它会弹「访问其他 App 的数据」(02 章决策 152)。
 		return nil, false
+	case pinePlayerBundleID:
+		// 没有脚本接口;列表存在它沙盒容器里。界面上的播放列表读得到,App 还没代读(02 章决策 155)。
+		return nil, false
 	case lxMusicBundleID:
 		return lxMusicUpcoming(artist, title, n)
 	}

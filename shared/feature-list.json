@@ -1374,14 +1374,14 @@
         {
           "id": "players",
           "title": {
-            "zh-Hans": "十二款播放器，可多选或自动识别",
-            "en": "Twelve players, pick several or detect automatically",
-            "zh-Hant": "十二款播放器，可多選或自動辨識"
+            "zh-Hans": "十三款播放器，可多选或自动识别",
+            "en": "Thirteen players, pick several or detect automatically",
+            "zh-Hant": "十三款播放器，可多選或自動辨識"
           },
           "desc": {
-            "zh-Hans": "Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、洛雪音乐、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打高解析音质的本地播放器 VOX，以及 YouTube Music 客户端 Kaset。可同时选择多个，也可保持自动识别，跟随 macOS「正在播放」中的播放器。支持 Apple Music 电台，主持人讲话时显示电台名称和台标。",
-            "en": "Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, the Winamp-style reAMP, the hi-res local player VOX and the YouTube Music app Kaset. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.",
-            "zh-Hant": "Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、洛雪音樂、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打高解析音質的本機播放器 VOX，以及 YouTube Music 用戶端 Kaset。可同時選擇多個，也可保持自動辨識，跟隨 macOS「正在播放」中的播放器。支援 Apple Music 電台，主持人講話時顯示電台名稱和台標。"
+            "zh-Hans": "Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、洛雪音乐、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打高解析音质的本地播放器 VOX、免费的本地播放器 Pine Player，以及 YouTube Music 客户端 Kaset。可同时选择多个，也可保持自动识别，跟随 macOS「正在播放」中的播放器。支持 Apple Music 电台，主持人讲话时显示电台名称和台标。",
+            "en": "Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, the Winamp-style reAMP, the hi-res local player VOX, the free local player Pine Player and the YouTube Music app Kaset. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.",
+            "zh-Hant": "Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、洛雪音樂、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打高解析音質的本機播放器 VOX、免費的本機播放器 Pine Player，以及 YouTube Music 用戶端 Kaset。可同時選擇多個，也可保持自動辨識，跟隨 macOS「正在播放」中的播放器。支援 Apple Music 電台，主持人講話時顯示電台名稱和台標。"
           },
           "settings": [
             [

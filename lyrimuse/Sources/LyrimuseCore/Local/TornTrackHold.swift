@@ -52,9 +52,10 @@ public struct TornTrackHold: Sendable {
     /// 另一段录音,`KasetPlayerInfo.steadyIdentity` 已经判过。按住只会让界面停在上一拍(02 章决策 84)。
     /// reAMP 也是:它把标题(「歌手 - 歌名」一个字段)和时长一起发,歌手、专辑、时长从这一份标题或它开着的那个文件来,
     /// 同专辑两首时长相同时按住只会让新歌晚 12 秒才换上(02 章决策 126)。VOX 的曲目也是 AppleScript 一次读齐的(VoxPlayerInfo)。
+    /// Pine Player 换歌时歌名、歌手一栏、时长同一份一起换,歌手和专辑另按它开着的文件认(PinePlayerInfo)。
     public static func arrivesWhole(bundle: String) -> Bool {
         bundle == PlaybackPlayer.kaset.bundleIdentifier || bundle == PlaybackPlayer.reamp.bundleIdentifier
-            || bundle == PlaybackPlayer.vox.bundleIdentifier
+            || bundle == PlaybackPlayer.vox.bundleIdentifier || bundle == PlaybackPlayer.pinePlayer.bundleIdentifier
     }
 
     public static func isTorn(current: Fields, next: Fields) -> Bool {

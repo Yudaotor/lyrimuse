@@ -941,6 +941,11 @@ struct OnboardingView: View {
             lines.append(String(format: L10n.t("辅助功能权限可显示%@的随机、循环按钮"),
                                 accessibility.playerNames(modeOnlyTargets)))
         }
+        let refinesTargets = pendingAccessibility.filter { $0.accessibilityUse == .refinesProgress }
+        if !refinesTargets.isEmpty {
+            lines.append(String(format: L10n.t("辅助功能权限可让%@拖动进度后的歌词更准，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首"),
+                                accessibility.playerNames(refinesTargets)))
+        }
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 
@@ -1609,6 +1614,7 @@ struct OnboardingView: View {
             let playback = targets.filter { $0.accessibilityUse == .controlsPlayback }
             let favorite = targets.filter { $0.accessibilityUse == .pressesFavorite }
             let modeOnly = targets.filter { $0.accessibilityUse == .pressesPlayMode }
+            let refines = targets.filter { $0.accessibilityUse == .refinesProgress }
             var lines: [String] = []
             if !progress.isEmpty && !playMode.isEmpty {
                 lines.append(String(format: L10n.t("请开启此权限，以提高%@自动连播时播放进度的准确性，并显示%@的随机、循环与喜欢按钮及失去焦点时的播放控制"),
@@ -1631,6 +1637,10 @@ struct OnboardingView: View {
             if !modeOnly.isEmpty {
                 lines.append(String(format: L10n.t("请开启此权限，以显示%@的随机、循环按钮"),
                                     accessibility.playerNames(modeOnly)))
+            }
+            if !refines.isEmpty {
+                lines.append(String(format: L10n.t("请开启此权限，以校准%@拖动进度后的播放位置，并在失去系统媒体焦点时控制播放"),
+                                    accessibility.playerNames(refines)))
             }
             return lines.joined(separator: "\n")
         case .automation(let player) where player.automationUse == .readsTrack:

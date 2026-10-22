@@ -844,7 +844,7 @@ func runSourceContractTests() {
                 // 电台放到歌也没有歌词。这一侧的 duration 只影响进度条分母,不写歌词缓存。
                 expectEqual(mcc.contains("duration: isRadio ? nil"), false,
                             "电台: App 侧不能把 duration 置空 —— 进度锚点以 duration > 0 为闸,置空等于整档没歌词")
-                expectEqual(mcc.contains("elapsedTime: amazonPosition ?? radioPosition ?? elapsed"), true,
+                expectEqual(mcc.contains("elapsedTime: amazonPosition ?? radioPosition ?? pine?.position ?? elapsed"), true,
                             "电台: 位置要用自己那块单曲表,取不到再退回原读数")
                 expectEqual(mcc.contains("guard mediaControl.isRadio != true || perTrackRadio else { return mediaControl }"), true,
                             "电台: 整档节目口径的台不能借 AppleScript 那份位置(它同样是整档节目的);只有判成单曲位置的那首才借")
@@ -921,7 +921,7 @@ func runSourceContractTests() {
             }
             if let mcc2 = text("lyrimuse/Sources/LyrimuseCore/Local/MediaControlClient.swift") {
                 expectEqual(mcc2.contains("let raw = rawSnapshot(players: players)")
-                                && mcc2.contains("PlayerArtistFix.applied(to: PlayerTitleSplit.applied(to: raw), state: fixState)")
+                                && mcc2.contains("PlayerArtistFix.applied(to: PlayerTitleSplit.applied(to: PinePlayerInfo.adapted(raw)), state: fixState)")
                                 && mcc2.contains("fetchSnapshotWithProvenance(players: players).snapshot"), true,
                             "署名纠正: 要套在取快照的唯一出口上(fetchSnapshot 也经它),漏了哪条路那条路就还是脏的")
                 // 封面是另一次独立取回的载荷。两条封面路(系统级焦点 / per-client 探针)

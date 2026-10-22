@@ -55,6 +55,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "netease-podcast", summary: "网易云播客单集:按引擎写的单集名单认出当前这一条 / 名单缓存 / 接线契约 / App 不读别家容器", run: runNeteasePodcastTests),
     TestGroup(name: "kaset", summary: "Kaset:AppleScript 读数解读 / 广告·加载·卡住 / 署名清理 / 跟系统那份的取舍 / 接线契约", run: runKasetTests),
     TestGroup(name: "vox", summary: "VOX:AppleScript 读数解读 / 没写标签的文件名·乱码·精确时长 / 换歌撕裂 / 系统那份的歌手专辑 / 循环音量 / 接线契约", run: runVoxTests),
+    TestGroup(name: "pine", summary: "Pine Player:系统那份歌手一栏的拆法 / 按开着的文件认曲目 / 整秒锚点换成准的位置 / 失焦时的菜单项 / 接线契约", run: runPineTests),
     TestGroup(name: "playback-state", summary: "播放状态文件(App 写、引擎读):契约样例(与引擎共用)/ 序号与位置 / 撕裂快照守卫 / 封面标识", run: runPlaybackStateTests),
     TestGroup(name: "player-query", summary: "App 代引擎跑的播放器查询:请求判定 / 固定脚本的守卫 / 网页队列 JS / 契约键名", run: runPlayerQueryTests),
     TestGroup(name: "player-picker", summary: "选择播放器网格:摆哪几张卡 / 「更多播放器」", run: runPlayerPickerTests),

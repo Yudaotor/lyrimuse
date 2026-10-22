@@ -31,12 +31,13 @@ public enum CoverArtReplacementGate {
     }
 
     /// 系统会话里这一首没有封面时,改用引擎按歌手 + 歌名匹配到的那张(`reason` 的 `systemNeverHasArtwork` 传它)。
-    /// 除了从不报封面的播放器,还有放本地文件的 reAMP、VOX:文件里没嵌封面就没有,匹配到的可能是同一首别的
+    /// 除了从不报封面的播放器,还有放本地文件的 reAMP、VOX、Pine Player:文件里没嵌、同目录也没有封面就没有,匹配到的可能是同一首别的
     /// 专辑版本,仍比整首占位音符强。见 02 章决策 126。洛雪:有的源给不出封面,系统会话里留着的又是上一首的、到期被清空
     /// (`LocalPlaybackSource.lxMusicArtworkIsPrevious`),见 02 章决策 135。纯函数,selftest 覆盖。
     public static func missingArtworkUsesMatchedCover(bundleID: String?) -> Bool {
         systemNeverHasArtwork(bundleID: bundleID) || bundleID == PlaybackPlayer.reamp.bundleIdentifier
             || bundleID == PlaybackPlayer.vox.bundleIdentifier || bundleID == PlaybackPlayer.lxMusic.bundleIdentifier
+            || bundleID == PlaybackPlayer.pinePlayer.bundleIdentifier
     }
 
     /// 长宽比偏离正方形的容差。

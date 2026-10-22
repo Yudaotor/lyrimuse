@@ -86,7 +86,8 @@ public enum DiscordPresence {
     /// 每个播放器一个 Discord 应用。「正在听」那一行旁边的图标是应用的图标,iOS、网页版显示的是应用的名字,都跟着应用走,
     /// 发什么内容都改不了,所以按播放器分开建,名字和图标用那个播放器的。
     public enum Application: String, CaseIterable, Sendable {
-        case lyrimuse, appleMusic, youtubeMusic, spotify, qqMusic, netease, kugou, soda, kkbox, amazonMusic, reamp, lxMusic, vox
+        case lyrimuse, appleMusic, youtubeMusic, spotify, qqMusic, netease, kugou, soda, kkbox, amazonMusic, reamp, lxMusic, vox,
+            pinePlayer
 
         /// 在开发者后台注册的名字:activity 没覆盖应用名时 Discord 显示它。
         public var registeredName: String {
@@ -104,6 +105,7 @@ public enum DiscordPresence {
             case .reamp: return "reAMP"
             case .lxMusic: return "洛雪音乐"
             case .vox: return "VOX"
+            case .pinePlayer: return "Pine Player"
             }
         }
     }
@@ -123,6 +125,7 @@ public enum DiscordPresence {
         .reamp: "1559491531205902336",
         .lxMusic: "1560190947633930310",
         .vox: "1562479448530358273",
+        .pinePlayer: "1562712928283533362",
     ]
 
     /// 这个播放器归哪个应用。网页平台优先(浏览器的 bundle id 不对应任何平台);Kaset 归 YouTube Music。
@@ -145,6 +148,7 @@ public enum DiscordPresence {
         case .reamp?: return .reamp
         case .lxMusic?: return .lxMusic
         case .vox?: return .vox
+        case .pinePlayer?: return .pinePlayer
         default: return .lyrimuse
         }
     }
@@ -231,6 +235,7 @@ public enum DiscordPresence {
         .reamp: "a3a3e9a014b9c0ee6aebe91b3c02b1bd",
         .lxMusic: "69e80c10def15752471202a9bdc2accb",
         .vox: "fef5b16e8d86f2b79542d19f83c8e675",
+        .pinePlayer: "4786bfdf85286b064e03404132f13b80",
     ]
 
     /// 这个应用的 APP 图标在 Discord 图床上的地址。

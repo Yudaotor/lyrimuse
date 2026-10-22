@@ -235,6 +235,8 @@ extension PlaybackPlayer {
         case pressesFavorite
         /// 只为随机 / 循环读、按菜单项(reAMP `ReampMenuControl`)。
         case pressesPlayMode
+        /// 读界面进度条把整秒的位置补准(Pine Player `PinePlayhead`),失焦时按播放控制菜单(`PlaybackMenuControl`)。
+        case refinesProgress
     }
 
     /// 不要这项权限的播放器为 nil(`needsAccessibilityPermission`,源头 shared/players.json)。
@@ -246,6 +248,7 @@ extension PlaybackPlayer {
         case .amazonMusic: return .calibratesProgress
         case .kugou: return .pressesFavorite
         case .reamp: return .pressesPlayMode
+        case .pinePlayer: return .refinesProgress
         default: return nil
         }
     }

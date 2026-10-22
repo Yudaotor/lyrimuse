@@ -14,6 +14,10 @@ public enum SourceKnockout {
         case streamEvents = "stream-events"
         /// 系统 Now Playing 里的封面图(含按 bundle id 单问的那份)。
         case systemArtwork = "system-artwork"
+        /// Pine Player 开着的文件(按标签认曲目、精确时长,`PinePlayerInfo`):关掉后只拆系统那份的歌手一栏。
+        case pineFile = "pine-file"
+        /// Pine Player 界面上的进度条(跳转、恢复之后补位置的小数,`PinePlayhead`):关掉后当成没授「辅助功能」权限。
+        case pineSlider = "pine-slider"
     }
 
     private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "knockout")

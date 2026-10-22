@@ -1009,9 +1009,11 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 网页时钟),暂停期间不空转,读到的只会晚、不会早:恢复(含换歌后从加载走起来)那一拍原样采信,不按
     /// `resumeSeedSeconds` 削。VOX 的位置是它 AppleScript 报的播放头,跟真实出声差几毫秒、暂停期间不走,同样原样采信:
     /// 恢复认得晚(没等到恢复信号、靠暂停档轮询才看到)时,上限按兜底的 2 秒算,会把准的读数削掉一截(见 02 章决策 152)。
+    /// Pine Player 的位置是 `PinePlayhead` 从它恢复那份锚点起算的(暂停前的位置接上,或进度条校准过),同样原样采信。
     /// 别的播放器照旧削。纯函数,selftest 覆盖。
     public nonisolated static func resumeReadingNeverLeads(bundleID: String?) -> Bool {
         bundleID == PlaybackPlayer.kaset.bundleIdentifier || bundleID == PlaybackPlayer.vox.bundleIdentifier
+            || bundleID == PlaybackPlayer.pinePlayer.bundleIdentifier
     }
 
     /// 冻结检测:曲目/广告结尾 Spotify 会把 MediaRemote 锚点冻住 ——
@@ -1542,9 +1544,11 @@ public final class LocalPlaybackSource: ObservableObject {
     ///
     /// 洛雪不走:播放中不重发锚点,第一次重发是暂停那一拍系统按上一个锚点外推的冻结值,量不出开播锚点晚了多少;
     /// 开播晚到的那一截由 `lateStartAnchorLead` / `lxMusicNaturalStartLead` 逐首补。见 02 章决策 128。
+    ///
+    /// Pine Player 不走:同洛雪,播放中不重发锚点;开播两份锚点取哪份、整秒锚点补多少都在 `PinePlayhead` 里定了。
     public nonisolated static func learnsAnchorLag(bundleID: String?) -> Bool {
         bundleID != PlaybackPlayer.kugou.bundleIdentifier && bundleID != PlaybackPlayer.reamp.bundleIdentifier
-            && bundleID != PlaybackPlayer.lxMusic.bundleIdentifier
+            && bundleID != PlaybackPlayer.lxMusic.bundleIdentifier && bundleID != PlaybackPlayer.pinePlayer.bundleIdentifier
     }
 
     /// 这个播放器播放中会持续重发准的锚点,外推只是两次重发之间的补间:KKBOX 约每 1.06s 一次、逐次一致,
@@ -1558,10 +1562,11 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 稳定播放时偏差过了 `republishedAnchorSnapSecs` 就直接对齐读数、不走 EMA 慢慢收的播放器:跟随重发锚点的(KKBOX),
     /// 加上位置是按它自己的日志算出来的 Amazon Music(读数就是干净的时钟,界面校准改提前量时一步到位,别被 EMA 拆成
-    /// 每拍半秒的几次小跳)。只管伺服这一处;暂停锚点判旧等 KKBOX 专属的规则仍只看 `followsRepublishedAnchors`。
-    /// 纯函数,selftest 直接覆盖。
+    /// 每拍半秒的几次小跳),和位置是 `PinePlayhead` 那块表的 Pine Player(进度条校准改的零点几秒要当拍到屏上)。
+    /// 只管伺服这一处;暂停锚点判旧等 KKBOX 专属的规则仍只看 `followsRepublishedAnchors`。纯函数,selftest 直接覆盖。
     public nonisolated static func snapsToReportedPosition(bundleID: String?) -> Bool {
         followsRepublishedAnchors(bundleID: bundleID) || bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier
+            || bundleID == PlaybackPlayer.pinePlayer.bundleIdentifier
     }
 
     /// 跟随重发锚点的播放器,偏差 EMA 过了这个值就对齐读数。
@@ -3510,6 +3515,8 @@ public final class LocalPlaybackSource: ObservableObject {
                 ? MediaControlClient.kasetVideoID(forTrackKey: snapshot.trackKey) : nil,
             localFile: bundleID == VoxPlayerInfo.bundleID
                 ? VoxPlayerInfo.currentFilePath(artist: snapshot.artist ?? "", title: snapshot.title ?? "")
+                : bundleID == PinePlayerInfo.bundleID
+                ? PinePlayerInfo.currentFilePath(artist: snapshot.artist ?? "", title: snapshot.title ?? "")
                 : PlayerTitleSplit.currentFilePath(bundleID: bundleID, artist: snapshot.artist ?? "",
                                                    title: snapshot.title ?? ""),
             spoken: bundleID == PlaybackPlayer.qqMusic.bundleIdentifier && spokenAudioKey == snapshot.identityKey

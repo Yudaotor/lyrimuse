@@ -92,7 +92,8 @@ public enum PlaybackStateFile {
         public var amazonTrackID: String? = nil
         /// Kaset 放这首时它报的 YouTube Music videoId(引擎拼成歌曲页存进缓存);别的播放器为 nil。
         public var youtubeMusicVideoID: String? = nil
-        /// 放本地文件的播放器正在放的文件路径(reAMP 按进程号找,`PlayerTitleSplit`;VOX 由脚本接口给,`VoxPlayerInfo`),
+        /// 放本地文件的播放器正在放的文件路径(reAMP 按进程号找,`PlayerTitleSplit`;VOX 由脚本接口给,`VoxPlayerInfo`;
+        /// Pine Player 在它开着的文件里按标签认,`PinePlayerInfo`),
         /// 引擎读同目录同名的 .lrc 和内嵌歌词;别的播放器为 nil。
         public var localFile: String? = nil
         /// QQ 音乐这一条是不是有声书 / 有声节目(`QQSpokenAudio`)。还没判出来、不是 QQ 为 nil(不写这个键,引擎按「QQ 还在判」等一会)。

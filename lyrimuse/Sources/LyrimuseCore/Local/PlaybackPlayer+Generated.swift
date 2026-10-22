@@ -32,6 +32,8 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     case lxMusic = "lx_music"
     /// Coppertino 出的本地音乐播放器,有 AppleScript 字典(Vox.sdef:歌名、歌手、专辑、专辑歌手、当前文件地址 trackUrl、位置、总时长、播放状态、音量、循环),带沙盒。免费版只放本地文件,电台和在线来源要会员。系统 Now Playing 里它那份字段不全:歌手和专辑拼成一栏「歌手 — 专辑」、专辑那栏空着,播放中不报位置和时长,只在暂停时报一次;恢复时报在放、速率却是 0。曲目与位置因此整份换成 AppleScript 那份(VoxPlayerInfo),系统那边只用来认是不是它在放。AppleScript 的位置跟真实出声差几毫秒,总时长只到整秒,精确时长按 trackUrl 读文件。没写标签的文件,歌名报成全小写、带扩展名的文件名。nativeLyricSource 填 localfile:正在放的文件同目录同名的 .lrc 与内嵌歌词(localfilelyrics.go)。processName 3 字节。
     case vox = "vox"
+    /// DigiPine 出的本地音乐播放器(Mac App Store 版,带沙盒),没有 AppleScript 字典,走 media-control。系统会话里歌手和专辑拼成一栏「歌手∙专辑」(U+2219,两边不空格)、专辑那栏空着;只有歌名时歌手一栏填的也是歌名,没写标签时歌名是带扩展名的文件名、歌手是一个空格。App 侧按进程号在它开着的音频文件里找标签对得上的那个,换回歌手、专辑和精确时长,找不到再拆这一栏(PinePlayerInfo)。位置锚点只到整秒(下取整),开播连发两份 0 秒锚点、后一份才是真起播点;位置换成 PinePlayhead 那块表:跳转、恢复之后按界面进度条跳秒的时刻补回小数(要辅助功能权限),读不到时按暂停前的位置接上或补半秒,所以归 precise。nativeLyricSource 填 localfile:正在放的文件同目录同名的 .lrc 与内嵌歌词(localfilelyrics.go)。processName 11 字节。
+    case pinePlayer = "pine_player"
     /// 不是一个具体 App——把「谁在报 Now Playing」交给系统仲裁。bundleID 空字符串是刻意的,调用方据此 no-op 掉需要具体 App 的联动。
     case auto = "auto"
 
@@ -53,6 +55,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .reamp: return "ru.alexfreud.ReAmp"
         case .lxMusic: return "cn.toside.music.desktop"
         case .vox: return "com.coppertino.Vox"
+        case .pinePlayer: return "com.digipine.pineplayer"
         case .auto: return ""
         }
     }
@@ -71,6 +74,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .reamp: return "localfile"
         case .lxMusic: return "lxmusic"
         case .vox: return "localfile"
+        case .pinePlayer: return "localfile"
         default: return nil
         }
     }
@@ -92,6 +96,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .reamp: return "cleanExtrapolated"
         case .lxMusic: return "cleanExtrapolated"
         case .vox: return "precise"
+        case .pinePlayer: return "precise"
         default: return nil
         }
     }
@@ -133,6 +138,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .soda: return true
         case .amazonMusic: return true
         case .reamp: return true
+        case .pinePlayer: return true
         default: return false
         }
     }

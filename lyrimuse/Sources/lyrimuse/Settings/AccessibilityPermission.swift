@@ -136,6 +136,11 @@ struct AccessibilityPermissionGuide: View {
             lines.append(String(format: L10n.t("授权后，Lyrimuse 将读取%@的随机和循环状态，并在你点按这两个按钮时代为操作其菜单中的对应项。未授权时其他功能照常可用，仅不提供随机和循环按钮"),
                                 model.playerNames(modeOnly)))
         }
+        let refines = players.filter { $0.accessibilityUse == .refinesProgress }
+        if !refines.isEmpty {
+            lines.append(String(format: L10n.t("%@ 报告的播放进度只精确到秒。授权后，Lyrimuse 将读取其界面上的进度条校准位置；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可使用，但拖动进度后歌词可能差半秒左右，失去焦点时也无法控制播放"),
+                                model.playerNames(refines)))
+        }
         return lines.joined(separator: "\n")
     }
 }

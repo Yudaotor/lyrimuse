@@ -214,7 +214,8 @@ func runPlayerIdentityTests() {
             expectEqual(shown(menuRoute, true, false, false), false, "播放键反馈: 菜单连按第二下按显示的翻回去")
             expectEqual(shown(menuRoute, true, false, true), true, "播放键反馈: 菜单回报前回读已到 → 跟真值,不再翻")
             expectEqual(shown(menuRoute, false, true, false), false, "播放键反馈: 回读先到的是暂停 → 跟真值")
-            expectEqual(PlaybackMenuControl.players, [.qqMusic, .netease, .soda], "失焦按界面控制: QQ 音乐、网易云按菜单,汽水按播放条")
+            expectEqual(PlaybackMenuControl.players, [.qqMusic, .netease, .soda, .pinePlayer],
+                        "失焦按界面控制: QQ 音乐、网易云、Pine Player 按菜单,汽水按播放条")
             for command in [Command.playPause, .nextTrack, .previousTrack] {
                 expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
                     focusHeldElsewhere: true, directQueryFallback: .soda, mediaControlCommand: command.rawValue),
@@ -458,6 +459,7 @@ func runPlayerIdentityTests() {
             .reamp: ("reamp", "ru.alexfreud.ReAmp"),
             .lxMusic: ("lx_music", "cn.toside.music.desktop"),
             .vox: ("vox", "com.coppertino.Vox"),
+            .pinePlayer: ("pine_player", "com.digipine.pineplayer"),
         ]
         for (player, want) in expected {
             expectEqual(player.rawValue, want.raw, "播放器契约: \(player) 的 rawValue")
@@ -956,6 +958,7 @@ func runPlayerIdentityTests() {
             .lxMusic: (nil, [.extendedControls, .favorite, .lateAnchorProbe]),
             .vox: (nil, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
                          .learnsAnchorLag, .arrivesWhole]),
+            .pinePlayer: (nil, [.snapsToReportedPosition, .arrivesWhole]),
         ]
         expectEqual(PlaybackPlayer.allCases.count, table.count + 1,
                     "决定表: 新增播放器要在这里补一行,逐项决定它走哪条路(+1 是 .auto)")
@@ -1171,14 +1174,17 @@ func runPlayerIdentityTests() {
     // 出不出现。每家要不要来自生成字段(shared/players.json),含 auto 时按超集算。
     do {
         typealias P = Set<PlaybackPlayer>
-        expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission), [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp],
-                    "辅助功能判据: 读界面的 Amazon Music、按菜单控制的 QQ 音乐/网易云/reAMP、按播放条控制的汽水、只为喜欢按界面的酷狗(改 shared/players.json 的 needsAccessibilityPermission)")
+        expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission),
+                    [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp, .pinePlayer],
+                    "辅助功能判据: 读界面的 Amazon Music / Pine Player、按菜单控制的 QQ 音乐/网易云/reAMP、按播放条控制的汽水、只为喜欢按界面的酷狗(改 shared/players.json 的 needsAccessibilityPermission)")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.accessibilityUse),
-                    [.switchesPlayMode, .controlsPlayback, .pressesFavorite, .controlsPlayback, .calibratesProgress, .pressesPlayMode],
-                    "辅助功能判据: QQ 音乐是切模式、网易云/汽水是喜欢加失焦播放、酷狗只有喜欢、Amazon Music 是读进度加随机循环、reAMP 只有随机循环,授权说明和体检提示按这个分开写")
+                    [.switchesPlayMode, .controlsPlayback, .pressesFavorite, .controlsPlayback, .calibratesProgress, .pressesPlayMode,
+                     .refinesProgress],
+                    "辅助功能判据: QQ 音乐是切模式、网易云/汽水是喜欢加失焦播放、酷狗只有喜欢、Amazon Music 是读进度加随机循环、reAMP 只有随机循环、Pine Player 是读进度条补位置加失焦播放,授权说明和体检提示按这个分开写")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.automationUse), [.refinesProgress, .refinesProgress, .readsTrack, .readsTrack],
                     "自动化判据: Apple Music、Spotify 只让进度更准,Kaset、VOX 的曲目整份靠它,引导页和设置页的说明按这个分开写")
-        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp], "辅助功能判据: 纯 auto 按超集算")
+        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp, .pinePlayer],
+                    "辅助功能判据: 纯 auto 按超集算")
         expectEqual(P([.kugou]).playersNeedingAccessibility, [.kugou], "酷狗单选也显示 AX 授权入口(喜欢键要它)")
         expectEqual(P([.netease]).playersNeedingAccessibility, [.netease], "网易云单选也显示 AX 授权入口")
         expectEqual(PlaybackPlayer.netease.accessibilityUse, .controlsPlayback, "网易云授权用途不承诺模式或进度")

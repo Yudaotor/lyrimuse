@@ -57,6 +57,7 @@
 "%@ 已下载，点按安装" = "%@ downloaded, click to install";
 "%@ 已匹配到该曲目，无歌词文本" = "%@ matched this track; no lyrics text";
 "%@ 已送达" = "Delivered %@";
+"%@ 报告的播放进度只精确到秒。授权后，Lyrimuse 将读取其界面上的进度条校准位置；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可使用，但拖动进度后歌词可能差半秒左右，失去焦点时也无法控制播放" = "%@ reports playback progress only to the second. With permission, Lyrimuse reads the progress bar in its window to calibrate the position, and can pause, resume and skip tracks while another app holds the system media focus. Without permission, lyrics may be off by about half a second after seeking, and playback can’t be controlled while focus is elsewhere";
 "%@ 拒绝了这台 Mac 的请求" = "%@ is refusing requests from this Mac";
 "%@ 更新内容" = "What’s New in %@";
 "%@ 月" = "%@";
@@ -469,6 +470,7 @@
 "允许局域网访问" = "Allow Local Network Access";
 "允许远程控制" = "Allow Remote Control";
 "光盘" = "Disc";
+"免费、格式支持很全的本地音乐播放器" = "A free local music player that plays nearly every format";
 "免费开放的社区歌词库" = "A free, open lyrics database run by its community";
 "免费开源，感谢你的 ⭐ 支持" = "Free and open source. A ⭐ means a lot — thank you!";
 "全屏时隐藏" = "Hide in Full Screen";
@@ -1588,6 +1590,7 @@
 "未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Accessibility permission is missing: %@ has no Like button, and can’t pause, resume or skip tracks without system media focus";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢按钮，失去焦点时也无法控制播放" = "No Accessibility permission; %@’s shuffle, repeat and Like buttons are hidden, and playback can’t be controlled while focus is elsewhere";
 "未获得辅助功能权限，%@ 不显示随机、循环按钮" = "Accessibility permission is missing: %@ has no shuffle or repeat buttons";
+"未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，失去焦点时也无法控制播放" = "No Accessibility permission; lyrics for %@ may be off by about half a second after seeking, and playback can’t be controlled while focus is elsewhere";
 "未获得辅助功能权限，无法校准 %@ 的播放进度" = "No Accessibility permission; %@’s progress cannot be calibrated";
 "未获授权" = "Not granted";
 "未记录" = "Not recorded";
@@ -2286,6 +2289,7 @@
 "请开启此权限，以显示%@的喜欢按钮，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首" = "Enable this permission to show the Like button for %@ and to pause, resume and skip tracks when it loses system media focus";
 "请开启此权限，以显示%@的随机、循环与喜欢按钮，并在失去系统媒体焦点时控制播放" = "Turn this on to show the shuffle, repeat and Like buttons for %@ and control playback when it loses the system media focus";
 "请开启此权限，以显示%@的随机、循环按钮" = "Enable this permission to show the shuffle and repeat buttons for %@";
+"请开启此权限，以校准%@拖动进度后的播放位置，并在失去系统媒体焦点时控制播放" = "Turn this on to calibrate the position for %@ after seeking and control playback when it loses the system media focus";
 "请打开 Discord" = "Discord needs to be open";
 "请按下快捷键…" = "Type Shortcut…";
 "请播放一首歌曲" = "Play a song to try it";
@@ -2339,6 +2343,7 @@
 "辅助功能权限可显示%@的喜欢按钮，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首" = "Accessibility permission enables liking songs for %@, and lets Lyrimuse pause, resume and skip tracks when another app holds system media focus";
 "辅助功能权限可显示%@的随机、循环与喜欢按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Accessibility permission enables the shuffle, repeat and Like buttons for %@, and lets Lyrimuse pause, resume and skip tracks through its menus while another app holds the system media focus";
 "辅助功能权限可显示%@的随机、循环按钮" = "Accessibility permission enables shuffle and repeat for %@";
+"辅助功能权限可让%@拖动进度后的歌词更准，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Accessibility permission keeps lyrics for %@ accurate after seeking, and lets Lyrimuse pause, resume and skip tracks through its menus while another app holds the system media focus";
 "过去三年的今天及前后一周均无收听记录" = "No listening on this day, or the week around it, in the past three years";
 "运行中" = "Running";
 "运行日志" = "Activity Log";

@@ -59,6 +59,8 @@ public enum NowPlayingClientsProbe {
         var title = decoded.title, artist = decoded.artist
         if bundleID == VoxPlayerInfo.bundleID {
             (title, artist, _) = VoxPlayerInfo.artworkIdentity(title: title, artist: artist)
+        } else if bundleID == PinePlayerInfo.bundleID {
+            (title, artist, _) = PinePlayerInfo.artworkIdentity(title: title, artist: artist)
         }
         return (data, decoded.artworkMimeType ?? "image/jpeg",
                 PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: artist, title: title))

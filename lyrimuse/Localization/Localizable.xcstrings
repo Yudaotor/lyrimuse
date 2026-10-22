@@ -53508,6 +53508,121 @@
           }
         }
       }
+    },
+    "免费、格式支持很全的本地音乐播放器" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A free local music player that plays nearly every format"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "免费、格式支持很全的本地音乐播放器"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "免費、格式支援很全的本機音樂播放器"
+          }
+        }
+      }
+    },
+    "%@ 报告的播放进度只精确到秒。授权后，Lyrimuse 将读取其界面上的进度条校准位置；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可使用，但拖动进度后歌词可能差半秒左右，失去焦点时也无法控制播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ reports playback progress only to the second. With permission, Lyrimuse reads the progress bar in its window to calibrate the position, and can pause, resume and skip tracks while another app holds the system media focus. Without permission, lyrics may be off by about half a second after seeking, and playback can’t be controlled while focus is elsewhere"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 报告的播放进度只精确到秒。授权后，Lyrimuse 将读取其界面上的进度条校准位置；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可使用，但拖动进度后歌词可能差半秒左右，失去焦点时也无法控制播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 回報的播放進度只精確到秒。授權後，Lyrimuse 將讀取其介面上的進度條校準位置；系統媒體焦點被其他 App 佔用時，也可暫停、恢復和切換上一首或下一首。未授權時仍可使用，但拖動進度後歌詞可能差半秒左右，失去焦點時也無法控制播放"
+          }
+        }
+      }
+    },
+    "未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，失去焦点时也无法控制播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Accessibility permission; lyrics for %@ may be off by about half a second after seeking, and playback can’t be controlled while focus is elsewhere"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，失去焦点时也无法控制播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未取得輔助使用權限，%@ 拖動進度後歌詞可能差半秒左右，失去焦點時也無法控制播放"
+          }
+        }
+      }
+    },
+    "辅助功能权限可让%@拖动进度后的歌词更准，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility permission keeps lyrics for %@ accurate after seeking, and lets Lyrimuse pause, resume and skip tracks through its menus while another app holds the system media focus"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "辅助功能权限可让%@拖动进度后的歌词更准，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輔助使用權限可讓%@拖動進度後的歌詞更準，也可在系統媒體焦點被其他 App 佔用時，透過選單暫停、恢復和切換上一首或下一首"
+          }
+        }
+      }
+    },
+    "请开启此权限，以校准%@拖动进度后的播放位置，并在失去系统媒体焦点时控制播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn this on to calibrate the position for %@ after seeking and control playback when it loses the system media focus"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请开启此权限，以校准%@拖动进度后的播放位置，并在失去系统媒体焦点时控制播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請開啟此權限，以校準%@拖動進度後的播放位置，並在失去系統媒體焦點時控制播放"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

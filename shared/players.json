@@ -325,6 +325,32 @@
       "note": "Coppertino 出的本地音乐播放器,有 AppleScript 字典(Vox.sdef:歌名、歌手、专辑、专辑歌手、当前文件地址 trackUrl、位置、总时长、播放状态、音量、循环),带沙盒。免费版只放本地文件,电台和在线来源要会员。系统 Now Playing 里它那份字段不全:歌手和专辑拼成一栏「歌手 — 专辑」、专辑那栏空着,播放中不报位置和时长,只在暂停时报一次;恢复时报在放、速率却是 0。曲目与位置因此整份换成 AppleScript 那份(VoxPlayerInfo),系统那边只用来认是不是它在放。AppleScript 的位置跟真实出声差几毫秒,总时长只到整秒,精确时长按 trackUrl 读文件。没写标签的文件,歌名报成全小写、带扩展名的文件名。nativeLyricSource 填 localfile:正在放的文件同目录同名的 .lrc 与内嵌歌词(localfilelyrics.go)。processName 3 字节。"
     },
     {
+      "id": "pine_player",
+      "swiftCase": "pinePlayer",
+      "goConst": "playerPinePlayer",
+      "bundleID": "com.digipine.pineplayer",
+      "goBundleConst": "pinePlayerBundleID",
+      "processName": "Pine Player",
+      "displayName": {"literal": "Pine Player"},
+      "scrobbleLabel": "Pine Player (macOS)",
+      "nativeLyricSource": "localfile",
+      "positionTier": "precise",
+      "republishesZeroAnchor": false,
+      "playingFromRate": false,
+      "artistArrivesLate": false,
+      "artistlessNotMusic": false,
+      "dropsSessionBetweenTracks": false,
+      "dropsSessionWhilePlaying": false,
+      "ignoresSeekCommand": false,
+      "needsAutomationPermission": false,
+      "needsFullDiskAccess": false,
+      "needsAccessibilityPermission": true,
+      "tint": {"rgb": [0.36, 0.66, 0.24]},
+      "fallbackSymbol": "music.note",
+      "bundledIcon": "PinePlayerIcon",
+      "note": "DigiPine 出的本地音乐播放器(Mac App Store 版,带沙盒),没有 AppleScript 字典,走 media-control。系统会话里歌手和专辑拼成一栏「歌手∙专辑」(U+2219,两边不空格)、专辑那栏空着;只有歌名时歌手一栏填的也是歌名,没写标签时歌名是带扩展名的文件名、歌手是一个空格。App 侧按进程号在它开着的音频文件里找标签对得上的那个,换回歌手、专辑和精确时长,找不到再拆这一栏(PinePlayerInfo)。位置锚点只到整秒(下取整),开播连发两份 0 秒锚点、后一份才是真起播点;位置换成 PinePlayhead 那块表:跳转、恢复之后按界面进度条跳秒的时刻补回小数(要辅助功能权限),读不到时按暂停前的位置接上或补半秒,所以归 precise。nativeLyricSource 填 localfile:正在放的文件同目录同名的 .lrc 与内嵌歌词(localfilelyrics.go)。processName 11 字节。"
+    },
+    {
       "id": "auto",
       "swiftCase": "auto",
       "goConst": "playerAuto",
@@ -353,8 +379,8 @@
   ],
   "displayOrder": {
     "$comment": "图标网格(引导页 + 设置页)的摆放顺序。Apple Music 恒第一、auto 恒垫底;中间按语境排。",
-    "simplifiedChinese": ["apple_music", "qq_music", "netease_music", "kugou_music", "soda_music", "lx_music", "kkbox", "spotify", "amazon_music", "kaset", "reamp", "vox", "auto"],
-    "default": ["apple_music", "spotify", "amazon_music", "kaset", "kkbox", "qq_music", "netease_music", "kugou_music", "soda_music", "lx_music", "reamp", "vox", "auto"]
+    "simplifiedChinese": ["apple_music", "qq_music", "netease_music", "kugou_music", "soda_music", "lx_music", "kkbox", "spotify", "amazon_music", "kaset", "reamp", "vox", "pine_player", "auto"],
+    "default": ["apple_music", "spotify", "amazon_music", "kaset", "kkbox", "qq_music", "netease_music", "kugou_music", "soda_music", "lx_music", "reamp", "vox", "pine_player", "auto"]
   },
   "mediaProxyOwners": {
     "$comment": "媒体进程 bundle id → 宿主 App bundle id。MediaRemote 报「现在谁在放」时,Safari 报的是替它解码播放的 WebKit GPU 进程,信任列表、Last.fm 排除名单、网页播放器配对里存的却是宿主,查这些表之前先按这张表换回宿主。Chromium 系(Arc/Chrome/Edge)报浏览器自己的 bundle id,不用登记。只登记实测见过的;为什么用别名而不是把媒体进程写进信任列表,见 LyrimuseCore/Local/TrustedPlayers.swift。",
