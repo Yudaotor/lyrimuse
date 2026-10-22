@@ -1610,8 +1610,8 @@ func runSourceContractSurfaceTests() {
             expectEqual(stage.contains("settings.menuBarSecondaryLine = AppSettings.defaultMenuBarSecondaryLine"), true,
                         "菜单栏双排: 「重置」要覆盖副行、且读默认值常量")
             // 「字号」那一行常显、副行开着时尾部换成「由副行决定」(滑杆让位),浮层与抽屉调同一份
-            // MenuBarFontRows —— 判据只在 MenuBarFontSizeRow 里出现一次。
-            expectEqual(stage.components(separatedBy: "if settings.menuBarSecondaryLine.showsSecondaryRow {").count - 1, 1,
+            // MenuBarFontRows —— 判据只在 MenuBarFontSizeRow 里出现一次。「显示内容」选了歌名时没有副行,滑杆照常。
+            expectEqual(stage.components(separatedBy: "if settings.menuBarSecondaryLine.showsSecondaryRow && settings.menuBarLyricsContent == .lyrics {").count - 1, 1,
                         "菜单栏双排: 「字号」滑杆在副行开着时让位(判据只在 MenuBarFontSizeRow 一处)")
             expectEqual(stage.components(separatedBy: "MenuBarFontRows()").count - 1, 2,
                         "菜单栏双排: 「字体」浮层与抽屉「字体」组调同一份 MenuBarFontRows(两处装配)")

@@ -188,6 +188,11 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/menubar-center?ignore-notch=0"), .debug(.menuBarCenter(center: nil, ignoreNotch: false)),
                     "debug: 只改忽略刘海")
         expectEqual(link("lyrimuse://debug/menubar-center"), nil, "debug: 菜单栏正中什么都没带不认")
+        expectEqual(link("lyrimuse://debug/menubar-display?artwork=1"),
+                    .debug(.menuBarDisplay(artwork: true, songTitle: nil)), "debug: 菜单栏图标用封面")
+        expectEqual(link("lyrimuse://debug/menubar-display?song-title=0&artwork=0"),
+                    .debug(.menuBarDisplay(artwork: false, songTitle: false)), "debug: 菜单栏显示歌词、图标不用封面")
+        expectEqual(link("lyrimuse://debug/menubar-display"), nil, "debug: 菜单栏显示什么都没带不认")
         expectEqual(link("lyrimuse://debug/menubar-center?screen=auto"),
                     .debug(.menuBarCenter(center: nil, ignoreNotch: nil, screen: "auto")), "debug: 只改正中放哪几块屏")
         expectEqual(link("lyrimuse://debug/japanese-reading?style=Kana"), .debug(.japaneseReading(.kana)),
@@ -312,6 +317,8 @@ func runDeepLinkTests() {
             .debug(.menuBarCenter(center: nil, ignoreNotch: false)),
             .debug(.menuBarCenter(center: true, ignoreNotch: nil, screen: "37D8832A-2D66-02CA-B9F7-8F30A301B230")),
             .debug(.japaneseReading(.kana)), .debug(.japaneseReading(.romaji)),
+            .debug(.menuBarDisplay(artwork: true, songTitle: nil)), .debug(.menuBarDisplay(artwork: nil, songTitle: true)),
+            .debug(.menuBarDisplay(artwork: false, songTitle: false)),
             .debug(.settingsSearch(query: "OBS 输出")),
             .setPlayMode(.list), .setPlayMode(.shuffle), .setPlayMode(.repeatAll), .setPlayMode(.repeatOne),
         ] + LyrimuseAction.allCases.map { .action($0, on: nil, stepSeconds: nil) }

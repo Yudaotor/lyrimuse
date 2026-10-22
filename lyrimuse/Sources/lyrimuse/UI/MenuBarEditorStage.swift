@@ -140,7 +140,9 @@ struct MenuBarEditorStage: View {
     private var layoutSummary: String {
         var parts = [MenuBarPlacementRow.centerInUse(settings)
             ? MenuBarPlacementRow.label(for: .screenCenter) : settings.menuBarLyricsWidthMode.displayName]
-        if settings.menuBarSecondaryLine != AppSettings.defaultMenuBarSecondaryLine {
+        if settings.menuBarLyricsContent == .songTitle {
+            parts.append(MenuBarContentRow.label(for: .songTitle))
+        } else if settings.menuBarSecondaryLine != AppSettings.defaultMenuBarSecondaryLine {
             parts.append("\(L10n.t("副行")) · \(settings.menuBarSecondaryLine.displayName)")
         }
         return parts.joined(separator: " · ")
@@ -164,7 +166,8 @@ struct MenuBarEditorStage: View {
             parts.append(FontFamilyPicker.displayName(for: settings.menuBarLyricsFontFamily))
         }
         parts.append(settings.menuBarLyricsFontWeight.displayName)
-        if !settings.menuBarSecondaryLine.showsSecondaryRow, settings.menuBarLyricsFontSize > 0 {
+        if !settings.menuBarSecondaryLine.showsSecondaryRow || settings.menuBarLyricsContent == .songTitle,
+           settings.menuBarLyricsFontSize > 0 {
             parts.append(String(format: L10n.t("%@pt"), "\(Int(MenuBarMarqueeRenderer.font.pointSize))"))
         }
         return parts.joined(separator: " ")
@@ -445,6 +448,7 @@ enum MenuBarStyleDefaults {
     static func restoreDefaults() {
         let settings = AppSettings.shared
         // 「布局」浮层
+        settings.menuBarLyricsContent = AppSettings.defaultMenuBarLyricsContent
         settings.menuBarLyricsWidthMode = AppSettings.defaultMenuBarLyricsWidthMode
         settings.menuBarLyricsAlignment = AppSettings.defaultMenuBarLyricsAlignment
         settings.menuBarSecondaryLine = AppSettings.defaultMenuBarSecondaryLine
@@ -478,6 +482,8 @@ struct MenuBarLayoutRows: View {
     var body: some View {
         SettingsRowGroup {
             VStack(spacing: 0) {
+                MenuBarContentRow()
+                CardDivider()
                 MenuBarPlacementRow()
                 CardDivider()
                 if settings.menuBarLyricsPlacement == .screenCenter {
@@ -490,10 +496,39 @@ struct MenuBarLayoutRows: View {
                     MenuBarWidthModeRow()
                     CardDivider()
                 }
-                MenuBarSecondaryLineRow()
-                CardDivider()
+                // 显示歌名时没有歌词句,副行无从谈起。
+                if settings.menuBarLyricsContent == .lyrics {
+                    MenuBarSecondaryLineRow()
+                    CardDivider()
+                }
                 MenuBarLyricsIconRow()
             }
+        }
+    }
+}
+
+/// 「显示内容」行 —— 菜单栏那一格显示歌词,还是「歌名 — 歌手」(见 MenuBarLyricsContent)。
+struct MenuBarContentRow: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    static func label(for content: MenuBarLyricsContent) -> String {
+        switch content {
+        case .lyrics: return L10n.t("歌词")
+        case .songTitle: return L10n.t("歌名")
+        }
+    }
+
+    var body: some View {
+        SettingsRow(
+            icon: "text.quote",
+            title: L10n.t("显示内容"),
+            help: L10n.t("歌名：显示「歌名 — 歌手」，不随歌词切换。暂停时仍收起为图标")
+        ) {
+            SettingsPillSegmentedControl(
+                selection: $settings.menuBarLyricsContent,
+                options: MenuBarLyricsContent.allCases,
+                label: Self.label(for:)
+            )
         }
     }
 }
@@ -829,7 +864,7 @@ struct MenuBarFontSizeRow: View {
             // 之间这一行是整行隐藏的;「副行」搬去「布局」浮层之后,这里再藏整行就成了"字号去哪了",
             // 改成行留着、尾部换一句灰字「由副行决定」指向原因(跟悬浮歌词「文字颜色」在跟随封面时的做法
             // 同款)。这是**值**的位置,不是可点的控件。
-            if settings.menuBarSecondaryLine.showsSecondaryRow {
+            if settings.menuBarSecondaryLine.showsSecondaryRow && settings.menuBarLyricsContent == .lyrics {
                 Text(L10n.t("由副行决定"))
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)

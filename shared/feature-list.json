@@ -620,9 +620,9 @@
             "zh-Hant": "選單列歌詞"
           },
           "desc": {
-            "zh-Hans": "当前歌词直接显示在菜单栏中，过长时滚动显示，不会被截断。可增加一行显示下一句、译文或读音。也可显示在菜单栏中间，有刘海时紧挨着刘海。",
-            "en": "The current line right in the menu bar, scrolling when it is too long instead of being cut off. Add a second line for the next line, the translation or romanization. It can also sit in the middle of the menu bar, right beside the notch on displays that have one.",
-            "zh-Hant": "目前歌詞直接顯示在選單列中，過長時捲動顯示，不會被截斷。可增加一行顯示下一句、譯文或讀音。也可顯示在選單列中間，有瀏海時緊挨著瀏海。"
+            "zh-Hans": "当前歌词直接显示在菜单栏中，过长时滚动显示，不会被截断。可增加一行显示下一句、译文或读音。也可显示在菜单栏中间，有刘海时紧挨着刘海；或者只显示歌名和歌手。",
+            "en": "The current line right in the menu bar, scrolling when it is too long instead of being cut off. Add a second line for the next line, the translation or romanization. It can also sit in the middle of the menu bar, right beside the notch on displays that have one, or show just the title and artist.",
+            "zh-Hant": "目前歌詞直接顯示在選單列中，過長時捲動顯示，不會被截斷。可增加一行顯示下一句、譯文或讀音。也可顯示在選單列中間，有瀏海時緊挨著瀏海；或者只顯示歌名和歌手。"
           },
           "default": "off",
           "check": {
@@ -639,6 +639,12 @@
               "菜单栏",
               "布局",
               "歌词位置"
+            ],
+            [
+              "歌词显示",
+              "菜单栏",
+              "布局",
+              "显示内容"
             ],
             [
               "歌词显示",
@@ -1984,9 +1990,9 @@
             "zh-Hant": "選單列圖像"
           },
           "desc": {
-            "zh-Hans": "提供 12 款图标，播放时随音乐律动，暂停时静止。常用操作均在其下拉菜单中。",
-            "en": "Twelve icons to choose from, moving with the music while it plays. Everyday actions live in its menu.",
-            "zh-Hant": "提供 12 款圖像，播放時隨音樂律動，暫停時靜止。常用操作均在其下拉選單中。"
+            "zh-Hans": "提供 12 款图标，播放时随音乐律动，暂停时静止；也可换成正在播放的专辑封面。常用操作均在其下拉菜单中。",
+            "en": "Twelve icons to choose from, moving with the music while it plays, or the album art of what's playing. Everyday actions live in its menu.",
+            "zh-Hant": "提供 12 款圖像，播放時隨音樂律動，暫停時靜止；也可換成正在播放的專輯封面。常用操作均在其下拉選單中。"
           },
           "default": "on",
           "check": {
@@ -1997,6 +2003,11 @@
               "通用",
               "菜单栏与 Dock",
               "菜单栏图标"
+            ],
+            [
+              "通用",
+              "菜单栏与 Dock",
+              "用封面当图标"
             ],
             [
               "通用",

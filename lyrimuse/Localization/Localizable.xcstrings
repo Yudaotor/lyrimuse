@@ -53767,6 +53767,98 @@
           }
         }
       }
+    },
+    "歌名：显示「歌名 — 歌手」，不随歌词切换。暂停时仍收起为图标" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Title shows \"Title — Artist\" instead of the lyrics. Still collapses to the icon when paused"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌名：显示「歌名 — 歌手」，不随歌词切换。暂停时仍收起为图标"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌名：顯示「歌名 — 歌手」，不隨歌詞切換。暫停時仍收起為圖像"
+          }
+        }
+      }
+    },
+    "歌名 — 歌手" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Title — Artist"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌名 — 歌手"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌名 — 歌手"
+          }
+        }
+      }
+    },
+    "用封面当图标" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use Album Art as Icon"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用封面当图标"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用封面當圖像"
+          }
+        }
+      }
+    },
+    "显示正在播放的专辑封面，没有封面时显示所选图标" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows the album art of what's playing, or the chosen icon when there is none"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示正在播放的专辑封面，没有封面时显示所选图标"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示正在播放的專輯封面，沒有封面時顯示所選圖像"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

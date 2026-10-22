@@ -36,15 +36,15 @@ enum MenuBarProgressIcon {
     /// 过渡渲染)和设置页预览都从这里取。macOS 26 起菜单栏项的宽度必须在**出生那一刻**
     /// 就是对的(事后改宽邻居不让位,见 `MenuBarStatusItem.present` 头注),各写一遍
     /// 算漏一处的后果不是"差几个点",是歌词压到邻居图标头上、而且不自愈。
-    static func reservedWidth(for style: MenuBarIconStyle?) -> CGFloat {
-        guard let style else { return 0 }
-        return MenuBarIconStyle.cachedImage(for: style).size.width + gap
+    static func reservedWidth(for icon: MenuBarScrollingLabel.IconBadge?) -> CGFloat {
+        guard let icon else { return 0 }
+        return size(of: icon).width + gap
     }
 
-    /// 这一款图标画出来多大(点)。各款不一样(「经典」20.5 × 14,SF Symbol 那几款按 15pt
-    /// 字号出图),所以宽度不能写死一个常量。
-    static func size(of style: MenuBarIconStyle) -> CGSize {
-        MenuBarIconStyle.cachedImage(for: style).size
+    /// 这枚图标占多大(点)。各款不一样(「经典」20.5 × 14,SF Symbol 那几款按 15pt
+    /// 字号出图),所以宽度不能写死一个常量;「封面当图标」开着时按 `MenuBarIconArtwork.footprint`。
+    static func size(of icon: MenuBarScrollingLabel.IconBadge) -> CGSize {
+        MenuBarIconArtwork.footprint(style: icon.style, showsArtwork: icon.showsArtwork)
     }
 
     /// 染好色的一枚图标。
@@ -69,10 +69,24 @@ enum MenuBarProgressIcon {
     /// 都是动态色,深色菜单栏上解析错就是画出一枚几乎看不见的图标)。做法见
     /// `MenuBarScrollingLabel.rebuildImage` 外面那层 `performAsCurrentDrawingAppearance`。
     /// - Parameter scale: 栅格化比例,调用方传图层所在窗口的 `menuBarBitmapScale`(不在这里猜屏)。
-    static func tinted(style: MenuBarIconStyle, color: NSColor, scale: CGFloat) -> Prepared? {
-        let image = MenuBarIconStyle.cachedImage(for: style)
-        let size = image.size
+    ///
+    /// 画封面时不染色:强调色那一张(`played`)是原样的封面,基础色那一张压淡到
+    /// `MenuBarIconArtwork.unplayedOpacity`,进度就是封面从下往上亮起来。
+    static func tinted(icon: MenuBarScrollingLabel.IconBadge, color: NSColor, played: Bool,
+                       scale: CGFloat) -> Prepared? {
+        let size = size(of: icon)
         guard Int((size.width * scale).rounded()) > 0, Int((size.height * scale).rounded()) > 0 else { return nil }
+        if let source = icon.artwork, let thumbnail = MenuBarIconArtwork.thumbnail(of: source) {
+            let alpha = played ? 1 : MenuBarIconArtwork.unplayedOpacity
+            let paint = MenuBarPainting { ctx in
+                MenuBarIconArtwork.draw(thumbnail, in: ctx, rect: MenuBarIconArtwork.tileRect(in: size), alpha: alpha)
+            }
+            return Prepared(paint: paint, scale: scale, size: size)
+        }
+        let image = MenuBarIconStyle.cachedImage(for: icon.style)
+        // 「封面当图标」开着时格子可能比字形大一圈,字形在格子里居中。
+        let glyphRect = NSRect(x: (size.width - image.size.width) / 2, y: (size.height - image.size.height) / 2,
+                               width: image.size.width, height: image.size.height)
         // 动态色在这里解析成定值,理由同 `MenuBarMarqueeRenderer.prepare`。
         let resolved = NSColor(cgColor: color.cgColor) ?? color
         let paint = MenuBarPainting { ctx in
@@ -80,7 +94,7 @@ enum MenuBarProgressIcon {
             ctx.beginTransparencyLayer(auxiliaryInfo: nil)
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
-            image.draw(in: NSRect(origin: .zero, size: size))
+            image.draw(in: glyphRect)
             resolved.set()
             NSRect(origin: .zero, size: size).fill(using: .sourceAtop)
             NSGraphicsContext.restoreGraphicsState()

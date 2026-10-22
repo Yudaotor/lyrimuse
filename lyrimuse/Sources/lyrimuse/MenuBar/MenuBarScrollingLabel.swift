@@ -90,13 +90,32 @@ final class MenuBarScrollingLabel: NSView {
 
     /// 歌词旁边那枚带播放进度的图标要不要画、画哪一款、摆哪边(nil = 关着)。
     ///
-    /// 存的是**款式枚举**而不是 NSImage:NSImage 没有值语义的相等性,放进 `Plan` 会让
+    /// 存的是**款式枚举**而不是画好的 NSImage:NSImage 没有值语义的相等性,放进 `Plan` 会让
     /// "同参数重复调用是空操作"这条失效(每次都判定成变了 → 每次重排位图 + 重启动画)。
     /// 真正的图从 `MenuBarProgressIcon`(内部走 `MenuBarIconStyle.cachedImage`)现取。
+    /// 封面原图按实例比:同一首歌的封面是同一个实例,换图才是新的。
     struct IconBadge: Equatable {
         let style: MenuBarIconStyle
         /// 只会是 `.leading` / `.trailing` —— `.off` 由调用方转成 `icon: nil`。
         let position: MenuBarLyricsIconPosition
+        /// 「封面当图标」开着没有:定占位尺寸,跟这一刻有没有封面无关(见 `MenuBarIconArtwork` 头注)。
+        var showsArtwork = false
+        /// 这一刻画的封面原图;nil = 画款式图标。
+        var artwork: NSImage?
+
+        static func == (a: IconBadge, b: IconBadge) -> Bool {
+            a.style == b.style && a.position == b.position && a.showsArtwork == b.showsArtwork
+                && a.artwork === b.artwork
+        }
+
+        /// 按此刻的设置和封面拼一枚;`position == .off` 时 nil。菜单栏本体和设置页预览都调这一份。
+        @MainActor static func current(position: MenuBarLyricsIconPosition) -> IconBadge? {
+            guard position != .off else { return nil }
+            let settings = AppSettings.shared
+            return IconBadge(style: settings.menuBarIconStyle, position: position,
+                             showsArtwork: settings.menuBarIconShowsArtwork,
+                             artwork: MenuBarIconArtwork.currentSource())
+        }
     }
 
     /// 一句歌词的滚动参数。只有它变了才重排版 + 重启动画;换颜色不动它。
@@ -631,8 +650,8 @@ final class MenuBarScrollingLabel: NSView {
         // 用的是同一个函数。这里另算一遍的后果不是"差几个点":macOS 26 起项的宽度只在出生
         // 那一刻算数,两边对不上就是歌词画到槽外、压在邻居图标上(见 MenuBarStatusItem
         // .present 头注)。
-        let iconSize = plan.icon.map { MenuBarProgressIcon.size(of: $0.style) } ?? .zero
-        let reserved = MenuBarProgressIcon.reservedWidth(for: plan.icon?.style)
+        let iconSize = plan.icon.map { MenuBarProgressIcon.size(of: $0) } ?? .zero
+        let reserved = MenuBarProgressIcon.reservedWidth(for: plan.icon)
         // 横向那一半交给 `MenuBarHoverControls.lyricsSlot` —— 悬停三键要落在**同一格**里,
         // 而它拿不到 `plan`(易失),只能从槽宽反推。两个入口共用一份算式,别在这儿再写一遍
         // (两份算式长歪,悬停三键的点击就会落到隔壁键上,见那个函数的头注)。
@@ -898,8 +917,8 @@ final class MenuBarScrollingLabel: NSView {
             // 强调色这一张跟 `plan.fillPath` **没有**关系:逐字染色关掉了(或者这首歌
             // 没有逐字数据)时,进度图标照样要染 —— 它的进度来自播放位置,不是歌词时间轴。
             if let icon = plan.icon {
-                iconBase = MenuBarProgressIcon.tinted(style: icon.style, color: color, scale: scale)
-                iconFill = MenuBarProgressIcon.tinted(style: icon.style, color: karaokeFillColor,
+                iconBase = MenuBarProgressIcon.tinted(icon: icon, color: color, played: false, scale: scale)
+                iconFill = MenuBarProgressIcon.tinted(icon: icon, color: karaokeFillColor, played: true,
                                                       scale: scale)
             }
         }

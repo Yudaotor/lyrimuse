@@ -168,6 +168,19 @@ final class MenuBarStatusItem: NSObject {
         // 「图标动画」开关拨动要立刻生效 —— 用户就是盯着菜单栏拨的。
         settings.$menuBarIconAnimates.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
+        // 「封面当图标」:开关本身,以及开着时封面到货 / 换图(高清替代是换歌后异步到的,三份都要订)。
+        settings.$menuBarIconShowsArtwork.dropFirst().receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
+        Publishers.Merge3(coordinator.$artworkImage.map { _ in () }, coordinator.$highResArtworkImage.map { _ in () },
+                          coordinator.$highResArtworkThumbnail.map { _ in () })
+            .dropFirst(3).filter { AppSettings.shared.menuBarIconShowsArtwork }.receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
+        // 「显示内容」歌词 / 歌名;歌名那一档还要跟着歌手名换(同一首歌歌手名可能晚一拍到)。
+        settings.$menuBarLyricsContent.dropFirst().receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
+        coordinator.$displayArtist.dropFirst().removeDuplicates()
+            .filter { _ in AppSettings.shared.menuBarLyricsContent == .songTitle }.receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 歌词旁那枚带进度的图标:开/关/换边要立刻看到(用户就是盯着菜单栏点的)。
         // 必须走 refresh():它改的是这一项的**槽宽**(多让出 图标宽 + 5pt),而槽宽只在
         // 项出生那一刻算数 —— refreshColors 那条只重画不重建,换过去菜单栏上会是"图标画出来
@@ -384,15 +397,11 @@ final class MenuBarStatusItem: NSObject {
 
     /// 歌词旁那枚带播放进度的图标(nil = 设置里关着)。
     ///
-    /// 款式跟"图标独占那一格"时用的是**同一个** `menuBarIconStyle` —— 那本来就是这个 App
+    /// 款式跟"图标独占那一格"时用的是**同一个** `menuBarIconStyle`(「封面当图标」也一起跟)—— 那本来就是这个 App
     /// 在菜单栏上的脸,没有理由在两个地方各挑一款。这个函数只回答"要不要画、画哪款、摆哪边";
     /// 进度画到哪儿由 syncProgressClock 那条通道管。
     private func lyricsIconBadge() -> MenuBarScrollingLabel.IconBadge? {
-        let settings = AppSettings.shared
-        let position = settings.menuBarLyricsIconPosition
-        guard position != .off else { return nil }
-        return MenuBarScrollingLabel.IconBadge(style: settings.menuBarIconStyle,
-                                               position: position)
+        MenuBarScrollingLabel.IconBadge.current(position: AppSettings.shared.menuBarLyricsIconPosition)
     }
 
     /// 菜单栏此刻显示的那一句是不是就是 currentLine —— 光比文字不够:副歌里相邻两行**同词不同时**,
@@ -524,9 +533,11 @@ final class MenuBarStatusItem: NSObject {
     /// 算出来的宽度跟真实槽宽差一截,悬停三键的点击会落到隔壁键上。
     private static let lyricsSlotPadding: CGFloat = 4
 
-    /// 图标态的槽宽:当前图标款式的图宽 + `fixedSlotPadding`。
+    /// 图标态的槽宽:当前图标款式的图宽(「封面当图标」开着时按 `MenuBarIconArtwork.footprint`)+ `fixedSlotPadding`。
     private var iconSlotLength: CGFloat {
-        MenuBarIconStyle.cachedImage(for: AppSettings.shared.menuBarIconStyle).size.width + Self.fixedSlotPadding
+        let settings = AppSettings.shared
+        return MenuBarIconArtwork.footprint(style: settings.menuBarIconStyle,
+                                            showsArtwork: settings.menuBarIconShowsArtwork).width + Self.fixedSlotPadding
     }
 
     /// 两次重建之间的最小静默间隔(见 present 头注铁律 2):实测相隔 1.1s 的两次重建就会排坏,取 3s
@@ -1056,7 +1067,7 @@ final class MenuBarStatusItem: NSObject {
         guard let slot = MenuBarHoverControls.lyricsSlot(
             buttonWidth: button.bounds.width,
             contentWidth: item.length - Self.lyricsSlotPadding,
-            reservedIconWidth: MenuBarProgressIcon.reservedWidth(for: icon?.style),
+            reservedIconWidth: MenuBarProgressIcon.reservedWidth(for: icon),
             iconLeading: icon?.position == .leading)
         else { return nil }
         // 纵向给满:22pt 高的菜单栏里再按行高抠掉上下各 2pt,只会让人觉得"边上点不中"。
@@ -1181,6 +1192,8 @@ final class MenuBarStatusItem: NSObject {
         // 副行「下一句」却还是同一句。配速(lineDwellSeconds)与提前量(恒 0)随之切成 currentLine
         // 那套 —— 跟设置页预览(它一直镜像 currentLine)同一口径。
         let secondaryKind = settings.menuBarSecondaryLine
+        // 「显示内容」选了歌名:这一格只显示「歌名 — 歌手」,不按下一句歌词定宽、不用整首的起步宽度。
+        let songTitleOnly = settings.menuBarLyricsContent == .songTitle
         let line = secondaryKind.displayedLine(compactLine: coordinator.menuBarLyrics.compactLine, currentLine: coordinator.menuBarLyrics.line)
         // 前奏/间奏占位给的是三点那个**记号串**,不是音符 —— 记号串在 scrollingLabel 那边
         // 会被换成三颗 CALayer 圆点(跟悬浮歌词/灵动岛/歌词窗口同一条 GapDotsCurve)。
@@ -1196,7 +1209,8 @@ final class MenuBarStatusItem: NSObject {
             isPlaying: coordinator.isPlayingNow, isAdBreak: coordinator.isCurrentTrackAdBreak,
             showsTitleWhenNoLyrics: settings.menuBarShowsTitleWhenNoLyrics,
             placeholderGlyph: MenuBarMarqueeRenderer.placeholderGlyph,
-            iconBesideLyrics: settings.menuBarLyricsIconPosition != .off)
+            iconBesideLyrics: settings.menuBarLyricsIconPosition != .off,
+            songTitleOnly: songTitleOnly, artist: coordinator.displayArtist)
         let text = display?.text ?? ""
         titleFallbackActive = display?.isFallback ?? false
         // 「♪ 歌名」兜底不是歌词句,没有副行可言,照旧按单行(13pt)画。
@@ -1215,7 +1229,7 @@ final class MenuBarStatusItem: NSObject {
         let lyricsActive = display != nil
         // 占位态(「♪ 歌名」兜底 / 间奏 ♪)按**即将到来的那一句**定宽。
         // 判据见 `upcomingLineSlotWidth`;非占位态恒 0,对正常歌词句零影响。
-        let placeholderNow = titleFallbackActive || MenuBarMarqueeRenderer.isPlaceholder(text)
+        let placeholderNow = !songTitleOnly && (titleFallbackActive || MenuBarMarqueeRenderer.isPlaceholder(text))
         let upcomingW = upcomingLineSlotWidth(isPlaceholder: placeholderNow)
 
         // 「菜单栏正中」:有能用的屏时歌词画进那几块屏正中的窗口,状态栏这一格只留图标(那一格的槽宽规则、节流都不涉及)。
@@ -1284,7 +1298,7 @@ final class MenuBarStatusItem: NSObject {
             // 画图标(格子小到画不出来),所以 icon 直接跟着这个条件取 nil,槽宽自然也不会
             // 白让出一块空地。
             let icon = visible == text ? lyricsIconBadge() : nil
-            let reserved = MenuBarProgressIcon.reservedWidth(for: icon?.style)
+            let reserved = MenuBarProgressIcon.reservedWidth(for: icon)
             let mainW = MenuBarMarqueeRenderer.width(of: visible, font: rowState.mainFont)
             // 双排:格宽取两行里宽的那个(副行比主行宽是常态 —— 译文往往更长),上限仍是「最大宽度」;
             // 超过上限的副行在格里尾部渐隐。单行:就是主行宽。
@@ -1301,7 +1315,7 @@ final class MenuBarStatusItem: NSObject {
             // 等的时候新的一句画在旧槽里就会滚(见 present 头注)。按宽度断句开着时起步宽度是整首最宽的一行,一首之内
             // 不变;没开时是 `MenuBarSlotPolicy.songRowQuantile` 那一行。
             let songW = MenuBarSlotPolicy.songSlotWidth(
-                naturalWidth: naturalW, songRowWidth: coordinator.menuBarSongRowWidth,
+                naturalWidth: naturalW, songRowWidth: songTitleOnly ? 0 : coordinator.menuBarSongRowWidth,
                 maxWidth: settings.menuBarLyricsWidth)
             // 占位态给槽宽兜个底:让它现在就有即将到来那一句要的宽度,那一句出现时几何
             // 已经到位、不必再改一次。判据是 Core 的纯函数(有 selftest),这里只喂数 ——
@@ -1353,7 +1367,7 @@ final class MenuBarStatusItem: NSObject {
             }
         case .fixed(let lineText, let windowWidth, let pacing):
             let icon = lyricsIconBadge()
-            let slotWidth = windowWidth + MenuBarProgressIcon.reservedWidth(for: icon?.style)
+            let slotWidth = windowWidth + MenuBarProgressIcon.reservedWidth(for: icon)
             present(class: "fixed", length: slotWidth + Self.lyricsSlotPadding, collapseDelay: 0,
                     dwellSeconds: dwell,
                     interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
@@ -1370,7 +1384,7 @@ final class MenuBarStatusItem: NSObject {
     /// 两侧挤得放不下的屏不放。`karaoke`:要不要挂逐字填色和跟唱滚动(快捷键回声不挂)。
     private func presentCenter(text: String, on screens: [NSScreen], dwell: Double?, leadIn: Double,
                                icon: MenuBarScrollingLabel.IconBadge?, karaoke: Bool) {
-        let reserved = MenuBarProgressIcon.reservedWidth(for: icon?.style)
+        let reserved = MenuBarProgressIcon.reservedWidth(for: icon)
         let mainW = MenuBarMarqueeRenderer.width(of: text, font: rowState.mainFont)
         let secondaryW = rowState.secondaryText.map {
             MenuBarMarqueeRenderer.width(of: $0, font: MenuBarMarqueeRenderer.doubleRowSecondaryFont,
@@ -1494,7 +1508,7 @@ final class MenuBarStatusItem: NSObject {
 
     /// 此刻这个歌词槽里文字能用的宽:当前槽宽扣掉内边距和图标那一块(`renderInterimLyrics`、`flashHint` 共用)。
     private func usableLyricsWidth(_ item: NSStatusItem, icon: MenuBarScrollingLabel.IconBadge?) -> CGFloat {
-        item.length - Self.lyricsSlotPadding - MenuBarProgressIcon.reservedWidth(for: icon?.style)
+        item.length - Self.lyricsSlotPadding - MenuBarProgressIcon.reservedWidth(for: icon)
     }
 
     /// 几何变化被推迟期间的过渡渲染:把**最新**这句歌词按当前(还没变的)槽宽画出来,
@@ -1548,7 +1562,13 @@ final class MenuBarStatusItem: NSObject {
         let settings = AppSettings.shared
         let style = settings.menuBarIconStyle
         let staticImage = MenuBarIconStyle.cachedImage(for: style)
-        if settings.menuBarIconAnimates, PlaybackCoordinator.shared.isPlayingNow {
+        // 「封面当图标」:有封面就贴封面(不做动画),没封面、广告期间照旧是所选款式。
+        if let source = MenuBarIconArtwork.currentSource(),
+           let cover = MenuBarIconArtwork.iconImage(
+               source: source, footprint: MenuBarIconArtwork.footprint(style: style, showsArtwork: true)) {
+            liveIconView.clear()
+            button.image = cover
+        } else if settings.menuBarIconAnimates, PlaybackCoordinator.shared.isPlayingNow {
             button.image = spacerImage(width: staticImage.size.width,
                                        height: staticImage.size.height)
             liveIconView.frame = button.bounds
@@ -1622,7 +1642,7 @@ final class MenuBarStatusItem: NSObject {
         // 图标占的那一块也算进占位图:这一项的可视内容是"图标 + 间距 + 歌词格"整块,
         // 占位图要跟它一样宽,才不会在按钮里画偏(槽宽那边加的是同一个数,见 refresh)。
         button.image = spacerImage(
-            width: windowWidth + MenuBarProgressIcon.reservedWidth(for: icon?.style),
+            width: windowWidth + MenuBarProgressIcon.reservedWidth(for: icon),
             height: MenuBarMarqueeRenderer.lineHeight)
         button.imagePosition = .imageOnly
         button.title = ""

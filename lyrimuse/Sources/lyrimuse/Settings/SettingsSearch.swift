@@ -155,6 +155,7 @@ final class SettingsSearchRouter: ObservableObject {
         case "menuBar.centerSelected": return s.menuBarLyricsPlacement == .screenCenter
         case "menuBar.centerIdle": return !MenuBarPlacementRow.centerInUse(s)
         case "menuBar.widthFixed": return s.menuBarLyricsWidthMode == .fixed
+        case "menuBar.showsLyrics": return s.menuBarLyricsContent == .lyrics
         case "menuBar.fillColorShown": return s.menuBarLyricsKaraoke || s.menuBarLyricsIconPosition != .off
         case "notch.showLyrics": return s.notchShowLyrics
         case "notch.lyricRowArtwork": return s.notchLyricRowShowsArtwork

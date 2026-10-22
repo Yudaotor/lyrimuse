@@ -113,6 +113,13 @@ enum MenuBarLyricsPlacement: String, Codable, Hashable, CaseIterable {
     case screenCenter
 }
 
+// 菜单栏那一格显示什么:歌词,还是「歌名 — 歌手」。歌名那一档不随歌词换句,暂停、广告照旧收回图标
+// (判据在 Core 的 `MenuBarSlotPolicy.displayText`)。
+enum MenuBarLyricsContent: String, Codable, Hashable, CaseIterable {
+    case lyrics
+    case songTitle
+}
+
 // 「装得下的短句靠哪边」—— 菜单栏歌词和灵动岛歌词行共用同一个类型和同一个分段控件
 // (`LyricsAlignmentSegmentedControl`)。两个展示面上三个 case 的语义**逐字相同**,而这个
 // 控件是手搓的(不用系统 segmented picker,理由见 `LyricsAlignmentSegmentedControl` 的
@@ -308,6 +315,8 @@ final class AppSettings: ObservableObject {
         static let menuBarShowsTitleWhenNoLyrics = "np:menuBarShowsTitleWhenNoLyrics"
         static let menuBarIconStyle = "np:menuBarIconStyle"
         static let menuBarIconAnimates = "np:menuBarIconAnimates"
+        static let menuBarIconShowsArtwork = "np:menuBarIconShowsArtwork"
+        static let menuBarLyricsContent = "np:menuBarLyricsContent"
         static let lyricsOffsetStepMs = "np:lyricsOffsetStepMs"
         static let manualPickLocksLyrics = "np:manualPickLocksLyrics"
         static let textStrokeEnabled = "np:textStrokeEnabled"
@@ -619,6 +628,8 @@ final class AppSettings: ObservableObject {
     static let defaultMenuBarHoverShowsControls = false
     /// 见 `menuBarShowsTitleWhenNoLyrics`。默认开:固定宽度模式下有词没词几何完全不变,这是主要收益。
     static let defaultMenuBarShowsTitleWhenNoLyrics = true
+    /// 菜单栏那一格显示歌词还是歌名。在「重置」范围内(`MenuBarStyleDefaults.restoreDefaults()`)。
+    static let defaultMenuBarLyricsContent = MenuBarLyricsContent.lyrics
     static let defaultMenuBarLyricsTextColorHex = ""
     static let defaultMenuBarLyricsFillColorHex = ""
     /// 菜单栏歌词的字体族。空串 = 跟随系统菜单栏(`FontFamilyPicker` 那套"空串 = 跟随系统"哨兵,
@@ -1170,6 +1181,15 @@ final class AppSettings: ObservableObject {
     // MenuBarLiveIconView)。暂停/无播放永远静止,这个开关只管"播放时动不动"。
     @Published var menuBarIconAnimates: Bool {
         didSet { defaults.set(menuBarIconAnimates, forKey: Keys.menuBarIconAnimates) }
+    }
+    // 菜单栏图标换成正在放的这首的专辑封面(图标独占那一格和歌词旁那枚进度图标都换);没封面、广告期间
+    // 仍是上面选的那款。见 MenuBarIconArtwork。
+    @Published var menuBarIconShowsArtwork: Bool {
+        didSet { defaults.set(menuBarIconShowsArtwork, forKey: Keys.menuBarIconShowsArtwork) }
+    }
+    // 菜单栏那一格显示歌词还是「歌名 — 歌手」。见 MenuBarLyricsContent。
+    @Published var menuBarLyricsContent: MenuBarLyricsContent {
+        didSet { defaults.set(menuBarLyricsContent.rawValue, forKey: Keys.menuBarLyricsContent) }
     }
     // 悬浮窗背景透明,文字直接叠在桌面内容上——桌面壁纸/其它窗口文字撞色时容易糊在一起,
     // 加个描边提高辨识度。纯展示开关,LyricsOverlayView 每次渲染都直接读这个值,不需要
@@ -2423,6 +2443,9 @@ final class AppSettings: ObservableObject {
         menuBarIconStyle = defaults.string(forKey: Keys.menuBarIconStyle)
             .flatMap(MenuBarIconStyle.init(rawValue:)) ?? .default
         menuBarIconAnimates = (defaults.object(forKey: Keys.menuBarIconAnimates) as? Bool) ?? true
+        menuBarIconShowsArtwork = (defaults.object(forKey: Keys.menuBarIconShowsArtwork) as? Bool) ?? false
+        menuBarLyricsContent = defaults.string(forKey: Keys.menuBarLyricsContent)
+            .flatMap(MenuBarLyricsContent.init(rawValue:)) ?? Self.defaultMenuBarLyricsContent
         // 夹进设置页 Stepper 的区间(0.05~2 秒):导入 / 手改成 0 或负数时,提前 / 延后快捷键会没反应或反过来。
         lyricsOffsetStepMs = min(max((defaults.object(forKey: Keys.lyricsOffsetStepMs) as? Int) ?? 200, 50), 2000)
         manualPickLocksLyrics = (defaults.object(forKey: Keys.manualPickLocksLyrics) as? Bool) ?? false

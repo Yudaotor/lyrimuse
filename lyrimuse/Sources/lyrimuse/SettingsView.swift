@@ -6488,6 +6488,14 @@ private struct GeneralSettingsTab: View {
             // 自绘的一行不会自动挂搜索高亮(只有 SettingsRow / SettingsCardHeader 会),手挂。
             .settingsSearchHighlight(title: L10n.t("菜单栏图标"))
             CardDivider()
+            SettingsRow(
+                icon: "photo",
+                title: L10n.t("用封面当图标"),
+                subtitle: L10n.t("显示正在播放的专辑封面，没有封面时显示所选图标")
+            ) {
+                Toggle("", isOn: $settings.menuBarIconShowsArtwork)
+            }
+            CardDivider()
             // 动画紧跟在图标后面:它改的是上面那枚图标的状态。
             SettingsRow(
                 icon: "figure.dance",

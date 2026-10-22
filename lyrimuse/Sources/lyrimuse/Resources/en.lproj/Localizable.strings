@@ -1460,6 +1460,7 @@
 "显示歌曲简介" = "Show Song Notes";
 "显示歌词" = "Show Lyrics";
 "显示歌词校准" = "Show Lyrics Calibration";
+"显示正在播放的专辑封面，没有封面时显示所选图标" = "Shows the album art of what's playing, or the chosen icon when there is none";
 "显示灵动岛歌词" = "Show Notch Lyrics";
 "显示简介" = "Show Info";
 "显示菜单栏歌词" = "Show Menu Bar Lyrics";
@@ -1691,12 +1692,14 @@
 "歌名 - 歌手" = "Title - Artist";
 "歌名 A→Z" = "Title A→Z";
 "歌名 Z→A" = "Title Z→A";
+"歌名 — 歌手" = "Title — Artist";
 "歌名、专辑名或歌词文件头标注的版本（Live / Remix / Demo / Club Mix 等）与本地歌曲不符" = "The version (Live / Remix / Demo / Club Mix …) in the title, album, or lyrics header doesn't match the local track";
 "歌名不一致：本地为「%1$@」，匹配到《%2$@》" = "Title mismatch: local title is “%1$@”, matched “%2$@”";
 "歌名别名" = "Title alias";
 "歌名卡" = "Title Card";
 "歌名始终为「%@」" = "Title was always “%@”";
 "歌名未变" = "Title unchanged";
+"歌名：显示「歌名 — 歌手」，不随歌词切换。暂停时仍收起为图标" = "Title shows \"Title — Artist\" instead of the lyrics. Still collapses to the icon when paused";
 "歌手" = "Artist";
 "歌手 - 歌名" = "Artist - Title";
 "歌手 A→Z" = "Artist A→Z";
@@ -1962,6 +1965,7 @@
 "现场版场次不符" = "Live recording from a different show";
 "玻璃浓淡" = "Glass Density";
 "用于将当前播放状态推送到网页小组件和状态徽章" = "Pushes the current playback status to the web widget and status badge";
+"用封面当图标" = "Use Album Art as Icon";
 "用当前配色覆盖" = "Overwrite with Current Colors";
 "用户名下方显示" = "Shown Under Your Name";
 "用这一期的真实数据看看推送在这个平台上的样子" = "See how a push looks on this platform, using real data from this period";

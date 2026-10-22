@@ -113,7 +113,13 @@ struct MenuBarPreviewBar<Lane: View>: View {
     @ObservedObject private var settings = AppSettings.shared
     /// 舞台整块按**真实菜单栏**的明暗渲染(见 stage 末尾那段);菜单栏由亮转暗时要重画。
     @ObservedObject private var menuBarAppearance = MenuBarAppearanceStore.shared
-    @State private var line: SyncedLyricLine?
+    @State private var currentLine: SyncedLyricLine?
+    /// 「歌名 — 歌手」(`MenuBarSlotPolicy.songTitleText`),「显示内容」选了歌名时演它。
+    @State private var songTitle: String?
+    private var songTitleOnly: Bool { settings.menuBarLyricsContent == .songTitle }
+    /// 预览演的那一句歌词。「显示内容」选了歌名时没有歌词句:染色、跟唱、副行、配速、起步宽度一律按没有歌词算,
+    /// 跟本体把歌名当兜底文字那一套同一口径。
+    private var line: SyncedLyricLine? { songTitleOnly ? nil : currentLine }
     // 逐字染色对表用的播放时钟快照。这几个跟 line 一样是
     // PlaybackCoordinator 的镜像,靠各自的 onReceive 保持新鲜 —— 不新开一份状态管理,
     // 只是把 MenuBarStatusItem.syncKaraokeClock 那套对表逻辑搬到宿主 body 里重算一遍。
@@ -125,13 +131,14 @@ struct MenuBarPreviewBar<Lane: View>: View {
     @State private var songRowWidth: CGFloat?
 
     private var fullText: String {
+        if songTitleOnly { return songTitle ?? L10n.t("歌名 — 歌手") }
         if let text = line?.plainText, !text.isEmpty { return text }
         return L10n.t("这里是一句歌词示例")
     }
 
     /// 副行档位(双排),跟本体 `MenuBarStatusItem.refresh` 同一份设置。
     private var secondaryKind: LyricSecondaryLine { settings.menuBarSecondaryLine }
-    private var twoRows: Bool { secondaryKind.showsSecondaryRow }
+    private var twoRows: Bool { secondaryKind.showsSecondaryRow && !songTitleOnly }
     /// 主行字体:双排 10pt / 单行跟设置 —— 跟本体同一个入口(`mainFont(for:twoRows:)`),测宽、排版、
     /// 逐字边界三处都用它。
     private var mainFont: NSFont { MenuBarMarqueeRenderer.mainFont(for: fullText, twoRows: twoRows) }
@@ -204,17 +211,14 @@ struct MenuBarPreviewBar<Lane: View>: View {
     }
 
     /// 歌词旁那枚带播放进度的图标(nil = 关着)。判定跟本体
-    /// `MenuBarStatusItem.lyricsIconBadge` 逐字相同:同一个开关、同一款图标。
+    /// `MenuBarStatusItem.lyricsIconBadge` 逐字相同:同一个开关、同一款图标(含「封面当图标」)。
     private var previewIconBadge: MenuBarScrollingLabel.IconBadge? {
-        let position = settings.menuBarLyricsIconPosition
-        guard position != .off else { return nil }
-        return MenuBarScrollingLabel.IconBadge(style: settings.menuBarIconStyle,
-                                               position: position)
+        MenuBarScrollingLabel.IconBadge.current(position: settings.menuBarLyricsIconPosition)
     }
 
     /// 图标额外占多宽(关着是 0)。跟真菜单栏算槽宽用的是同一个函数。
     private var reservedIconWidth: CGFloat {
-        MenuBarProgressIcon.reservedWidth(for: previewIconBadge?.style)
+        MenuBarProgressIcon.reservedWidth(for: previewIconBadge)
     }
 
     /// 进度图标的对表位置。 跟上面 `karaokePositionMs` 差的正是 `lyricsOffsetMs`:那个
@@ -341,7 +345,10 @@ struct MenuBarPreviewBar<Lane: View>: View {
                 .frame(height: SectionPreviewMetrics.captionHeight)
         }
         .frame(maxWidth: .infinity)
-        .onReceive(PlaybackCoordinator.shared.$currentLine.removeDuplicates()) { line = $0 }
+        .onReceive(PlaybackCoordinator.shared.$currentLine.removeDuplicates()) { currentLine = $0 }
+        .onReceive(PlaybackCoordinator.shared.$displayTitle.combineLatest(PlaybackCoordinator.shared.$displayArtist)) {
+            songTitle = MenuBarSlotPolicy.songTitleText(title: $0, artist: $1)
+        }
         // 逐字染色对表通道,跟 MenuBarStatusItem.syncKaraokeClock 订阅的是同四个源
         // (锚点/暂停位置/时间轴偏移/播放态),搬到这里重算是因为预览没有自己的
         // MenuBarStatusItem 实例可以复用那份订阅。
@@ -473,9 +480,14 @@ struct MenuBarPreviewBar<Lane: View>: View {
             Spacer(minLength: 12)
             // 放在菜单栏正中时歌词格挪到整条中间(下面的 overlay),这里只留状态栏那一格剩下的图标。
             if centerInUse {
-                Image(nsImage: MenuBarIconStyle.cachedImage(for: settings.menuBarIconStyle))
-                    .renderingMode(.template)
-                    .foregroundStyle(Color(nsColor: .labelColor).opacity(0.55))
+                if let source = MenuBarIconArtwork.currentSource(), let cover = MenuBarIconArtwork.iconImage(
+                    source: source, footprint: MenuBarIconArtwork.footprint(style: settings.menuBarIconStyle, showsArtwork: true)) {
+                    Image(nsImage: cover)
+                } else {
+                    Image(nsImage: MenuBarIconStyle.cachedImage(for: settings.menuBarIconStyle))
+                        .renderingMode(.template)
+                        .foregroundStyle(Color(nsColor: .labelColor).opacity(0.55))
+                }
             } else {
                 outlinedLyricsSlot(p)
             }

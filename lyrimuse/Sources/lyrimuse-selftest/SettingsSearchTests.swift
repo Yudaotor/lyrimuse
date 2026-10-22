@@ -448,6 +448,8 @@ func runSettingsSearchTests() {
                     && sourceHas(stage, "if !MenuBarPlacementRow.centerInUse(settings) {\nMenuBarWidthModeRow()")
                     && sourceHas(stage, "if settings.menuBarLyricsWidthMode == .fixed {\nCardDivider()\nMenuBarAlignmentRow()")
                     && sourceHas(stage, "if settings.menuBarLyricsKaraoke || settings.menuBarLyricsIconPosition != .off {")
+                    && sourceHas(stage, "if settings.menuBarLyricsContent == .lyrics {\nMenuBarSecondaryLineRow()")
+                    && sourceHas(search, "case \"menuBar.showsLyrics\": return s.menuBarLyricsContent == .lyrics")
                     && sourceHas(search, "case \"menuBar.centerSelected\": return s.menuBarLyricsPlacement == .screenCenter")
                     && sourceHas(search, "case \"menuBar.centerIdle\": return !MenuBarPlacementRow.centerInUse(s)")
                     && sourceHas(search, "case \"menuBar.widthFixed\": return s.menuBarLyricsWidthMode == .fixed")

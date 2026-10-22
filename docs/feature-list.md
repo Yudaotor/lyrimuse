@@ -280,11 +280,12 @@ A Dynamic Island-style capsule beside the notch at the top of the screen; Macs w
 
 ### Menu bar lyrics
 
-The current line right in the menu bar, scrolling when it is too long instead of being cut off. Add a second line for the next line, the translation or romanization. It can also sit in the middle of the menu bar, right beside the notch on displays that have one.
+The current line right in the menu bar, scrolling when it is too long instead of being cut off. Add a second line for the next line, the translation or romanization. It can also sit in the middle of the menu bar, right beside the notch on displays that have one, or show just the title and artist.
 
 - Off by default
 - Settings: Lyrics Display › Menu Bar › Menu Bar Lyrics
 - Settings: Lyrics Display › Menu Bar › Layout › Lyrics Position
+- Settings: Lyrics Display › Menu Bar › Layout › What's Shown
 - Settings: Lyrics Display › Menu Bar › Layout › Second Line
 - Settings: Keyboard Shortcuts › Show/Hide Menu Bar Lyrics
 
@@ -745,10 +746,11 @@ Type at the top of the settings sidebar to jump straight to a setting, highlight
 
 ### Menu bar icon
 
-Twelve icons to choose from, moving with the music while it plays. Everyday actions live in its menu.
+Twelve icons to choose from, moving with the music while it plays, or the album art of what's playing. Everyday actions live in its menu.
 
 - On by default
 - Settings: General › Menu Bar & Dock › Menu Bar Icon
+- Settings: General › Menu Bar & Dock › Use Album Art as Icon
 - Settings: General › Menu Bar & Dock › Animate Icon
 
 <a id="feature-dock-icon"></a>
@@ -820,7 +822,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 283 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 285 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1015,6 +1017,7 @@ Every setting in the Settings window, by where it lives: 283 in all. Type a name
 
 ### Lyrics Display › Menu Bar › Layout
 
+- **What's Shown**
 - **Lyrics Position**: Menu Bar Center: lyrics appear in the middle of the menu bar, clear of app menus, the icons on the right and the notch. With Notch Lyrics on, they stay beside the icon
 - **Display**
 - **Width Mode**: Fixed: every song uses the set width. Adaptive: each song gets its own width from its lyrics, up to the set width
@@ -1172,6 +1175,7 @@ Every setting in the Settings window, by where it lives: 283 in all. Type a name
 ### General › Menu Bar & Dock
 
 - **Menu Bar Icon**
+- **Use Album Art as Icon**
 - **Animate Icon**
 - **Show in Dock**
 

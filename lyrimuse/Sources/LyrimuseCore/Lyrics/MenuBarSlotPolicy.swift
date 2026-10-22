@@ -178,15 +178,32 @@ public enum MenuBarSlotPolicy {
     ///
     /// **这里这个音符跟那三颗点是两件事**,别一起换:这个说的是"这首歌没词",
     /// 那个说的是"有词、只是此刻在间奏";写成「••• 歌名」读起来会变成在报间奏。
+    ///
+    /// `songTitleOnly`(「显示内容」选了歌名):不看歌词,恒显示「歌名 — 歌手」(`songTitleText`),
+    /// 暂停、广告、没歌名三条边界照旧;不带 ♪ 前缀(这一格本来就是选来显示歌名的)。`isFallback` 为真:
+    /// 同样不是歌词句,配速、染色、副行都按兜底那套走。
     public static func displayText(
         lyricText: String, title: String, isPlaying: Bool, isAdBreak: Bool,
-        showsTitleWhenNoLyrics: Bool, placeholderGlyph: String, iconBesideLyrics: Bool
+        showsTitleWhenNoLyrics: Bool, placeholderGlyph: String, iconBesideLyrics: Bool,
+        songTitleOnly: Bool = false, artist: String = ""
     ) -> (text: String, isFallback: Bool)? {
         guard isPlaying else { return nil }
+        if songTitleOnly {
+            guard !isAdBreak, let text = songTitleText(title: title, artist: artist) else { return nil }
+            return (text, true)
+        }
         if !lyricText.isEmpty { return (lyricText, false) }
         guard showsTitleWhenNoLyrics, !isAdBreak else { return nil }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         return (iconBesideLyrics ? trimmed : placeholderGlyph + " " + trimmed, true)
+    }
+
+    /// 「歌名 — 歌手」;没歌手时只有歌名,没歌名时 nil。
+    public static func songTitleText(title: String, artist: String) -> String? {
+        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+        let by = artist.trimmingCharacters(in: .whitespacesAndNewlines)
+        return by.isEmpty ? name : name + " — " + by
     }
 }

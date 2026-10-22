@@ -1243,6 +1243,21 @@ func runMenuBarTests() {
         expectEqual(t("", "稻香", playing: false, icon: true) == nil, true,
                     "歌名兜底: 有图标也一样,暂停收回图标")
 
+        // 「显示内容」选了歌名:不看歌词,恒显示「歌名 — 歌手」;暂停、广告、没歌名照旧收回图标。
+        func song(_ lyric: String, _ title: String, _ artist: String, playing: Bool = true, ad: Bool = false)
+            -> (text: String, isFallback: Bool)? {
+            P.displayText(lyricText: lyric, title: title, isPlaying: playing, isAdBreak: ad,
+                          showsTitleWhenNoLyrics: false, placeholderGlyph: "♪", iconBesideLyrics: false,
+                          songTitleOnly: true, artist: artist)
+        }
+        expectEqual(song("对这个世界如果你有太多的抱怨", "稻香", "周杰伦")?.text, "稻香 — 周杰伦", "只显示歌名: 有歌词句也显示歌名")
+        expectEqual(song("", "稻香", "周杰伦")?.isFallback, true, "只显示歌名: 不是歌词句,配速按兜底")
+        expectEqual(song(dots, " 稻香 ", "  ")?.text, "稻香", "只显示歌名: 没歌手只显示歌名,去首尾空白,间奏也不换回三点")
+        expectEqual(song("有词", "稻香", "周杰伦", playing: false) == nil, true, "只显示歌名: 暂停收回图标")
+        expectEqual(song("", "Ad Title", "Brand", ad: true) == nil, true, "只显示歌名: 广告不显示")
+        expectEqual(song("有词", "", "周杰伦") == nil, true, "只显示歌名: 没歌名收回图标,不退回歌词")
+        expectEqual(P.songTitleText(title: "稻香", artist: "周杰伦"), "稻香 — 周杰伦", "只显示歌名: 歌名在前、歌手在后")
+
         // 源码契约:上面抄的那个记号串,以及「♪ 歌名」兜底与间奏三点是**两条**互不相干的路。
         let menuBar = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
