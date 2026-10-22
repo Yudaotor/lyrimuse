@@ -960,12 +960,15 @@ struct LyricsManagerStackedCovers: View {
     }
 }
 
-/// 预览换句时的过渡。当前句的颜色、逐字染色那一层的进出用 `line`;跟着当前句滚动用 `scroll`(跟歌词窗口滚动同一条曲线,
+/// 预览换句时的过渡。当前句的颜色、逐字染色那一层的退场用 `line`;跟着当前句滚动用 `scroll`(跟歌词窗口滚动同一条曲线,
 /// `LyricsWindowView.lineTransition`)。各行字重一样,当前句只换颜色:字重一变宽度就变,英文行会重新折行、整行高度跳一下,
 /// 那就没法平滑过渡。
 enum LyricsManagerPreviewMotion {
     static let line: Animation = .smooth(duration: 0.35)
     static let scroll: Animation = .smooth(duration: 0.45)
+    /// 逐字染色那一层:进场直接出现,退场淡出。别给进场也加淡入:当前句在第一个字开唱那一刻才切过来,第一个字常常只唱
+    /// 0.2～0.4 秒,整段都在淡入里,看着像跳过了第一个字(11 章决策 143)。唱完那句退场时已经染满,淡回正文色不碍事。
+    static let karaokeLayer: AnyTransition = .asymmetric(insertion: .identity, removal: .opacity)
 }
 
 /// 预览:左边时间、右边正文(开着译文 / 读音时下面再一行)。这首正在放时当前句亮起,有逐字时间的逐字染色;开着
@@ -1238,7 +1241,7 @@ private struct LyricsCompareOtherLine: View {
                 .overlay(alignment: .topLeading) {
                     if let segments = shownKaraoke {
                         LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs)
-                            .transition(.opacity)
+                            .transition(LyricsManagerPreviewMotion.karaokeLayer)
                     }
                 }
                 .animation(LyricsManagerPreviewMotion.line, value: isCurrent)
@@ -1429,8 +1432,8 @@ private struct LyricsManagerPreviewRow: View {
     private var plainColumn: some View {
         VStack(alignment: .leading, spacing: 3) {
             // 逐字染色时这一层整句画成淡的强调色,唱过的部分由 overlay 那层盖上实色;两层同一段字、同一个字号、同一个字重。
-            // 对照时对不上的字标色(当前句照旧整句强调色,不标)。换句时颜色和那一层都按 `LyricsManagerPreviewMotion.line`
-            // 过渡:唱完的那句从实色淡回正文色,不是一下子跳回去。
+            // 对照时对不上的字标色(当前句照旧整句强调色,不标)。换句时颜色按 `LyricsManagerPreviewMotion.line` 过渡;那一层
+            // 进场直接出现、退场淡出(`karaokeLayer`):唱完的那句从实色淡回正文色,不是一下子跳回去。
             Text(LyricsCompareLayout.marked(row.text, marks: isCurrent ? [] : (compare?.candidateMarks ?? [])))
                 .font(.system(size: 16))
                 .foregroundStyle(textColor)
@@ -1439,7 +1442,7 @@ private struct LyricsManagerPreviewRow: View {
                     if let segments = shownKaraoke {
                         LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs,
                                                     offsetMs: karaokeOffsetMs)
-                            .transition(.opacity)
+                            .transition(LyricsManagerPreviewMotion.karaokeLayer)
                     }
                 }
                 .animation(LyricsManagerPreviewMotion.line, value: isCurrent)

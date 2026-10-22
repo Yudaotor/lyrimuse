@@ -4495,11 +4495,13 @@ func runSourceContractSettingsTests() {
         // 换句过渡:各行同一个字重(当前句只换颜色,不重新折行),颜色和逐字染色那一层按同一条曲线淡入淡出,滚动跟歌词窗口同一条曲线。
         expectEqual(!managerParts.contains("weight: isCurrent ? .semibold : .regular")
                     && previewRow.contains(".animation(LyricsManagerPreviewMotion.line, value: isCurrent)")
-                    && sourceHas(previewRow, "offsetMs: karaokeOffsetMs)\n.transition(.opacity)")
+                    && sourceHas(previewRow, "offsetMs: karaokeOffsetMs)\n.transition(LyricsManagerPreviewMotion.karaokeLayer)")
+                    && managerParts.contains("static let karaokeLayer: AnyTransition = .asymmetric(insertion: .identity, removal: .opacity)")
+                    && !managerParts.contains("pausedMs: pausedMs)\n                            .transition(.opacity)")
                     && sourceHas(karaokeOverlay, "text\n.font(.system(size: 16))")
                     && managerParts.contains("withAnimation(LyricsManagerPreviewMotion.scroll) { proxy.scrollTo(target, anchor: anchor) }")
                     && managerParts.contains("static let scroll: Animation = .smooth(duration: 0.45)"),
-                    true, "歌词管理: 预览换句时颜色、逐字染色层淡入淡出,字重不变,滚动用平滑曲线")
+                    true, "歌词管理: 预览换句时颜色淡入淡出、逐字染色层进场直接出现(不吃掉第一个字)退场淡出,字重不变,滚动用平滑曲线")
         // 标签和小标记的颜色都读 LyricsFeatureTint,跟搜索候选歌词面板同一份,不在调用点各写一份(11 章决策 79)。
         let headerTagsSource = (manager.components(separatedBy: "private func headerTags(").dropFirst().first ?? "")
             .components(separatedBy: "private func factsRow(").first ?? ""
