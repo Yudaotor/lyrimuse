@@ -160,6 +160,9 @@ type hostGuard struct {
 	sourceHeld map[string]time.Time
 	// bgPause:歌词源主机 → 后台请求暂停到的时刻与已升到的级数,见 noteLyricSourceThrottled。
 	bgPause map[string]*lyricSourceBackgroundPause
+	// sourceBudget / sourceHits:歌词源的小时额度和窗口里发出去的请求时刻,见 sourcebudget.go。
+	sourceBudget func(source string) int
+	sourceHits   map[string][]time.Time
 }
 
 type lyricSourceBackgroundPause struct {
@@ -203,6 +206,8 @@ func newHostGuard(now func() time.Time) *hostGuard {
 		health:            map[string]*endpointHealth{},
 		sourceHeld:        map[string]time.Time{},
 		bgPause:           map[string]*lyricSourceBackgroundPause{},
+		sourceBudget:      newHostGuardSourceBudget,
+		sourceHits:        map[string][]time.Time{},
 	}
 }
 
@@ -335,6 +340,11 @@ func (g *hostGuard) admit(req *http.Request) error {
 			round.markSkippedBecause(source, lyricSourceSkipReasonPaused)
 			return errHostGuarded
 		}
+		if left, _, limited := g.sourceBudgetLeft(source, 1); limited && left <= 0 {
+			g.logHeld(host, "background requests to "+source+" used up the hourly budget")
+			round.markSkippedBecause(source, lyricSourceSkipReasonBudget)
+			return errHostGuarded
+		}
 	}
 	if source != "" && g.sourceHeldNow(source, lane) {
 		round.markSkippedBecause(source, lyricSourceSkipReasonQueued)
@@ -349,6 +359,9 @@ func (g *hostGuard) admit(req *http.Request) error {
 			}
 		}
 		return err
+	}
+	if source != "" {
+		g.noteSourceHit(source)
 	}
 	return nil
 }

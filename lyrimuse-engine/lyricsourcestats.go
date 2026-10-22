@@ -375,11 +375,11 @@ func lyricSourceOutcomeFromDecision(d *lyricsDecision, enabled, eligible func(st
 		artist:     lyricSourceArtistHash(d.QueryArtist),
 		leadArtist: lyricSourceArtistHash(firstCreditedArtist(d.QueryArtist)),
 	}
-	// 本地排队排不上的那几次没问它,也跟它好不好无关:这一轮不算它的(既不算问了,也不算跳过)。
+	// 本地排队排不上、用完本地小时额度的那几次没问它,也跟它好不好无关:这一轮不算它的(既不算问了,也不算跳过)。
 	queued := map[string]bool{}
 	if d.statsSkips != nil {
 		for s, reason := range d.statsSkips {
-			if reason == lyricSourceSkipReasonQueued {
+			if reason == lyricSourceSkipReasonQueued || reason == lyricSourceSkipReasonBudget {
 				queued[s] = true
 				continue
 			}

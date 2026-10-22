@@ -1,0 +1,111 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+)
+
+func newBudgetGuard(budget int) (*hostGuard, *guardClock) {
+	g, c := newTestGuard(hostRate{perSec: 1000, burst: 1000})
+	g.sourceBudget = func(source string) int {
+		if source == "musixmatch" {
+			return budget
+		}
+		return 0
+	}
+	return g, c
+}
+
+// 窗口里的请求数、还剩多少、要再腾出几个得等多久;滑出一小时的不算;不限额的源不记、不报。
+func TestSourceBudgetLeft(t *testing.T) {
+	g, c := newBudgetGuard(3)
+	t0 := c.t
+	for i := 0; i < 3; i++ {
+		g.noteSourceHit("musixmatch")
+		c.t = c.t.Add(10 * time.Minute)
+	}
+	// 现在是 t0+30m,三个请求在 t0、t0+10m、t0+20m。
+	left, wait, ok := g.sourceBudgetLeft("musixmatch", 2)
+	if !ok || left != 0 || wait != t0.Add(10*time.Minute+sourceBudgetWindow).Sub(c.t) {
+		t.Fatalf("left=%d wait=%v ok=%v", left, wait, ok)
+	}
+	if _, wait, _ := g.sourceBudgetLeft("musixmatch", 0); wait != 0 {
+		t.Fatalf("够用时不该等,实际 %v", wait)
+	}
+	c.t = t0.Add(sourceBudgetWindow + time.Second)
+	if left, wait, _ := g.sourceBudgetLeft("musixmatch", 2); left != 1 || wait != t0.Add(10*time.Minute+sourceBudgetWindow).Sub(c.t) {
+		t.Fatalf("滑出一个之后 left=%d wait=%v", left, wait)
+	}
+	g.noteSourceHit("qq")
+	if _, _, ok := g.sourceBudgetLeft("qq", 1); ok || len(g.sourceHits["qq"]) != 0 {
+		t.Fatal("不限额的源不该记、不该报")
+	}
+}
+
+// 额度用完后,后台请求被拦、记进本轮跳过名单(原因 budget),前台照发;前台发出去的也算进额度。
+func TestHostGuardSourceBudgetHoldsBackgroundOnly(t *testing.T) {
+	g, _ := newBudgetGuard(2)
+	const url = "https://apic-appmobile.musixmatch.com/ws/1.1/track.search?q=x"
+	fgCtx, _ := withLyricSourceRound(context.Background())
+	if err := g.admit(mustReq(t, fgCtx, "GET", url)); err != nil {
+		t.Fatal(err)
+	}
+	bgCtx, round := withLyricSourceRound(withBackgroundOutbound(context.Background()))
+	if err := g.admit(mustReq(t, bgCtx, "GET", url)); err != nil {
+		t.Fatalf("还有一个额度,后台该放行: %v", err)
+	}
+	if err := g.admit(mustReq(t, bgCtx, "GET", url)); !errors.Is(err, errHostGuarded) {
+		t.Fatalf("额度用完,后台该被拦: %v", err)
+	}
+	if got := round.statsSkips()["musixmatch"]; got != lyricSourceSkipReasonBudget {
+		t.Fatalf("跳过原因 = %q", got)
+	}
+	if err := g.admit(mustReq(t, fgCtx, "GET", url)); err != nil {
+		t.Fatalf("前台不受额度限制: %v", err)
+	}
+	if left, _, _ := g.sourceBudgetLeft("musixmatch", 1); left != -1 {
+		t.Fatalf("前台发出去的也算额度,left = %d", left)
+	}
+}
+
+// 各源近况统计:用完额度没问到的源,这一轮不算它的。
+func TestLyricSourceOutcomeIgnoresBudgetSkips(t *testing.T) {
+	all := func(string) bool { return true }
+	d := &lyricsDecision{SourcesSkipped: []string{"musixmatch"}, statsSkips: map[string]string{"musixmatch": lyricSourceSkipReasonBudget}}
+	o := lyricSourceOutcomeFromDecision(d, all, all, func(string) string { return "" })
+	if o.skipped["musixmatch"] {
+		t.Error("用完额度不算跳过")
+	}
+	for _, s := range o.enabled {
+		if s == "musixmatch" {
+			t.Error("用完额度没问它,这一轮不算它")
+		}
+	}
+}
+
+// 导入清单:有额度的源余量不够一首用时先等;只看开着的源。
+func TestPrefetchImportBudgetWait(t *testing.T) {
+	saved := sharedHostGuard()
+	t.Cleanup(func() { setSharedHostGuard(saved) })
+	g, c := newBudgetGuard(prefetchImportBudgetNeed + 2)
+	setSharedHostGuard(g)
+	savedFeatures := *featuresRef()
+	t.Cleanup(func() { setFeatures(savedFeatures) })
+	featuresRef().LyricsSources = map[string]bool{"musixmatch": true}
+	if d := prefetchImportBudgetWait(); d != 0 {
+		t.Fatalf("额度够时不该等,实际 %v", d)
+	}
+	for i := 0; i < 5; i++ {
+		g.noteSourceHit("musixmatch")
+	}
+	c.t = c.t.Add(time.Minute)
+	if d := prefetchImportBudgetWait(); d != sourceBudgetWindow-time.Minute {
+		t.Fatalf("只剩 %d 个、要等最早那批滑出窗口,实际 %v", prefetchImportBudgetNeed-3, d)
+	}
+	featuresRef().LyricsSources = map[string]bool{"qq": true}
+	if d := prefetchImportBudgetWait(); d != 0 {
+		t.Fatalf("关着的源不该等,实际 %v", d)
+	}
+}

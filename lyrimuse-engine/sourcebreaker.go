@@ -73,11 +73,13 @@ const (
 	lyricSourceEndpointHealthyWindow = time.Minute
 )
 
-// 不在熔断里、请求却没发出去的两种跳过(lyricSourceRound.skipReason)。paused:对方 503 / 429 之后后台请求暂停中;
+// 不在熔断里、请求却没发出去的三种跳过(lyricSourceRound.skipReason)。paused:对方 503 / 429 之后后台请求暂停中;
 // queued:本地限速排不上队,跟这个源好不好无关,近况统计不算它这一轮。
 const (
 	lyricSourceSkipReasonPaused = "paused"
 	lyricSourceSkipReasonQueued = "queued"
+	// budget:后台请求用完了这个源的小时额度(sourcebudget.go),同 queued 不算这个源的这一轮。
+	lyricSourceSkipReasonBudget = "budget"
 )
 
 // lyricSourceShortRetryMax:503 / 429 的 Retry-After 不超过这么久时,对方是在说「等一下再来」,不是这个源坏了:

@@ -17,7 +17,8 @@ import (
 // 的做法一首首解析歌词、写进缓存,不用真的播放。给批量扩充存量(各国榜单、歌单)用,没有界面入口。
 //   - 一次只跑一首,走后台优先级;缓存里已有(含宽松等价的写法)、正在解析的跳过(prefetchKeyFree)。
 //   - 起了解析的两首之间隔 prefetchImportGap;有源因为被限流(429)在冷却时,等它冷却完再起下一首:冷却期间正在播的
-//     那首也问不了这个源。一个歌词源都没连上的那首不算数,隔 prefetchImportOfflineWait 再从它接着搜。
+//     那首也问不了这个源。有小时额度的源(sourcebudget.go)余量不够一首用时,等窗口里腾出余量再起,不让这一首漏问它。
+//     一个歌词源都没连上的那首不算数,隔 prefetchImportOfflineWait 再从它接着搜。
 //   - 补空扫描 / 全量扫库在跑时让开,等下一次检查。
 //   - 进度记在 prefetchImportStatePath(清单内容的指纹 + 跑到第几行):引擎重启后接着跑,清单内容变了从头跑。
 //
@@ -35,6 +36,9 @@ const (
 	prefetchImportCheckInterval = time.Minute
 	prefetchImportGap           = 8 * time.Second
 	prefetchImportOfflineWait   = 5 * time.Minute
+	// prefetchImportBudgetNeed:起一首之前,有小时额度的源至少要剩这么多个请求。一首平均问 Musixmatch 四次左右,
+	// 别名轮、标题反查轮多的到八九次。
+	prefetchImportBudgetNeed = 10
 )
 
 var (
@@ -47,8 +51,10 @@ var (
 	}
 	// prefetchImportRunOne 跑一首。单测换成假的。
 	prefetchImportRunOne = prefetchImportOne
-	// prefetchImportRateLimited:起下一首之前要等多久(prefetchImportRateLimitWait)。单测换成假的。
+	// prefetchImportRateLimited / prefetchImportBudget:起下一首之前要等多久(prefetchImportRateLimitWait /
+	// prefetchImportBudgetWait)。单测换成假的。
 	prefetchImportRateLimited = prefetchImportRateLimitWait
+	prefetchImportBudget      = prefetchImportBudgetWait
 )
 
 type prefetchImportItem struct {
@@ -125,7 +131,7 @@ func runPrefetchImport(ctx context.Context) {
 			st.Cursor++
 			continue
 		}
-		if d := prefetchImportRateLimited(); d > 0 {
+		if d := max(prefetchImportRateLimited(), prefetchImportBudget()); d > 0 {
 			prefetchImportWait(ctx, d)
 			continue
 		}
@@ -179,6 +185,19 @@ func prefetchImportRateLimitWait() time.Duration {
 			continue
 		}
 		if d, ok := b.coolingDown(src); ok && d > wait {
+			wait = d
+		}
+	}
+	return wait
+}
+
+// prefetchImportBudgetWait:开着的联网歌词源里有小时额度的,要等多久才剩得下 prefetchImportBudgetNeed 个请求(取最长的);
+// 都够返回 0。
+func prefetchImportBudgetWait() time.Duration {
+	g := sharedHostGuard()
+	var wait time.Duration
+	for _, src := range enabledNetworkLyricSources() {
+		if _, d, limited := g.sourceBudgetLeft(src, prefetchImportBudgetNeed); limited && d > wait {
 			wait = d
 		}
 	}

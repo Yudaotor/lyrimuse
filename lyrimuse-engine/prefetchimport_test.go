@@ -170,7 +170,7 @@ func TestPrefetchImportOneResolves(t *testing.T) {
 	}
 }
 
-// 有源被限流在冷却时先等它冷却完、再起这一首,等完照旧从这一首接着跑。
+// 有源被限流在冷却时先等它冷却完、有源的小时额度不够一首用时先等腾出余量,再起这一首;等完照旧从这一首接着跑。
 func TestRunPrefetchImportWaitsOutRateLimit(t *testing.T) {
 	var seen []string
 	setupPrefetchImportTest(t, []string{`{"artist":"A","title":"One","album":"X"}`},
@@ -180,16 +180,22 @@ func TestRunPrefetchImportWaitsOutRateLimit(t *testing.T) {
 		})
 	var waits []time.Duration
 	prefetchImportWait = func(_ context.Context, d time.Duration) { waits = append(waits, d) }
-	limited := []time.Duration{40 * time.Second, 0}
-	saved := prefetchImportRateLimited
-	t.Cleanup(func() { prefetchImportRateLimited = saved })
+	limited := []time.Duration{40 * time.Second, 0, 0}
+	budget := []time.Duration{0, 90 * time.Second, 0}
+	savedLimited, savedBudget := prefetchImportRateLimited, prefetchImportBudget
+	t.Cleanup(func() { prefetchImportRateLimited, prefetchImportBudget = savedLimited, savedBudget })
 	prefetchImportRateLimited = func() time.Duration {
 		d := limited[0]
 		limited = limited[1:]
 		return d
 	}
+	prefetchImportBudget = func() time.Duration {
+		d := budget[0]
+		budget = budget[1:]
+		return d
+	}
 	runPrefetchImport(context.Background())
-	if len(seen) != 1 || len(waits) < 1 || waits[0] != 40*time.Second {
+	if len(seen) != 1 || len(waits) < 2 || waits[0] != 40*time.Second || waits[1] != 90*time.Second {
 		t.Fatalf("跑了 %v,等了 %v", seen, waits)
 	}
 }

@@ -103,6 +103,7 @@ func TestMain(m *testing.M) {
 	rescoreReleasedStrays = func([]string) {}
 	// 出站闸令牌给足:请求多半打到假服务器或拨号即失败,按真实速率排队只是干等。专测限速的用例自己设 rateFor。
 	newHostGuardRateFor = func(string) hostRate { return hostRate{perSec: 1000, burst: 1000} }
+	newHostGuardSourceBudget = func(string) int { return 0 }
 	setSharedHostGuard(newHostGuard(time.Now))
 	code := m.Run()
 	_ = os.RemoveAll(sandbox)
