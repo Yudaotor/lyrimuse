@@ -42,6 +42,11 @@ final class AppActions {
     /// 看到当前这首歌"。
     let quickSearchRefreshRequests = PassthroughSubject<Void, Never>()
 
+    /// 把「分享歌词」窗口叫出来(`Window(id: "lyrics-share")`,见 App.swift),在 MenuBarSceneActions.swift 的锚点视图里捕获。
+    var presentLyricShareWindow: (() -> Void)?
+    /// 窗口已经开着时再点「分享歌词…」只会把它带到前台,靠这一下按正在放的那首重取(同 `quickSearchRefreshRequests`)。
+    let lyricShareRefreshRequests = PassthroughSubject<Void, Never>()
+
     /// 「搜索歌词…」窗口要搜的那一首:歌词管理按选中那首开时是它(`openLyricsSearch(for:)`),别的入口开时是 nil = 正在放的
     /// 那首。每次打开由入口定好,窗口读的时候不清:新开的窗口 `.task` 和 `quickSearchRefreshRequests` 两条路都会读一遍,
     /// 读一次就清的话后一次读到 nil,又换回正在放的那首。

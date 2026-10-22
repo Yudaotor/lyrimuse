@@ -12,6 +12,7 @@ import Foundation
 ///     lyrics-window                 歌词窗口
 ///     lyrics-window/search          歌词窗口 + 「搜索歌词…」窗口(同 lyrics-search 那扇)
 ///     lyrics-search                 「搜索歌词…」小窗(当前这首)
+///     lyrics-share                  「分享歌词」窗口(当前这首)
 ///     menubar-panel[?quick=<格子>]   开 / 关菜单栏左键面板,带 quick 时翻到那一格的快捷设置
 ///     menubar-menu                  弹出菜单栏右键菜单(同右键点状态栏图标)
 ///     onboarding                    欢迎引导
@@ -44,6 +45,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
     case lyricsWindow
     case lyricsWindowSearch
     case lyricsSearch
+    case lyricsShare
     /// `quick` 是原样的取值(App 侧 `PanelQuickTarget(deepLinkValue:)` 认),认不出时 App 当没带。
     case menuBarPanel(quick: String?)
     case menuBarMenu
@@ -131,6 +133,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             self = .lyricsWindowSearch
         case ("lyrics-search", ""), ("lyrics-search", "/"):
             self = .lyricsSearch
+        case ("lyrics-share", ""), ("lyrics-share", "/"):
+            self = .lyricsShare
         case ("menubar-panel", ""), ("menubar-panel", "/"):
             self = .menuBarPanel(quick: value("quick")?.lowercased())
         case ("menubar-menu", ""), ("menubar-menu", "/"):
@@ -243,6 +247,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             components.path = "/search"
         case .lyricsSearch:
             components.host = "lyrics-search"
+        case .lyricsShare:
+            components.host = "lyrics-share"
         case let .menuBarPanel(quick):
             components.host = "menubar-panel"
             if let quick { components.queryItems = [URLQueryItem(name: "quick", value: quick)] }

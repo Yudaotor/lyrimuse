@@ -3933,6 +3933,12 @@ struct LyricsWindowView: View {
                     openLyricsSearch()
                 }
             }
+            if !playback.allLines.isEmpty {
+                MoreMenuRow(title: L10n.t("分享歌词…")) {
+                    closeMoreMenu()
+                    AppActions.shared.presentLyricShareWindow?()
+                }
+            }
             // 歌词时间轴微调:内联控件行,点「提前/延后」**不关菜单**(校准通常要按好几
             // 下边听边对),动作/步长/显示口径与菜单栏「歌词时间轴」子菜单完全同源。
             lyricsOffsetRow

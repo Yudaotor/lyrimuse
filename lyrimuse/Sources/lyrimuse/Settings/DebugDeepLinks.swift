@@ -218,7 +218,7 @@ enum DebugDeepLinks {
 
     /// 验证时会开、会关的那几种窗口(SwiftUI 场景)。悬浮歌词、灵动岛、菜单栏这些常驻窗口不在这里:恢复时不碰它们的窗口,
     /// 只按开关设回去。
-    private static let sceneIDs = ["settings", "lyrics-manager", "lyrics-window", "lyrics-quick-search", "onboarding"]
+    private static let sceneIDs = ["settings", "lyrics-manager", "lyrics-window", "lyrics-quick-search", "lyrics-share", "onboarding"]
 
     private static func openSceneWindows() -> [String: NSWindow] {
         var found: [String: NSWindow] = [:]

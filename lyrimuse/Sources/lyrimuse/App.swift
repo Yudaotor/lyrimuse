@@ -54,6 +54,12 @@ struct LyrimuseApp: App {
         // 标题栏透明、内容铺到顶:红绿灯落在搜索面板的浮动侧栏里(LyricsSearchSheet.sidebar 顶上那一截)。
         // 别改成在 NSWindow 上手设,理由见 SheetWindowAffordances.swift 的 EmptyUnifiedToolbar。
         .windowStyle(.hiddenTitleBar)
+        // 「分享歌词」独立窗口:歌词窗口「⋯ › 分享歌词…」和深链 lyrics-share 开它(见 LyricShareWindow 头注)。
+        Window(L10n.t("分享歌词"), id: "lyrics-share") {
+            LyricShareWindow()
+        }
+        .defaultSize(width: 860, height: 640)
+        .commandsRemoved()
         // 正经的标题栏窗口(不是悬浮歌词/灵动岛那种无边框浮层),展示完整歌词并跟随
         // 播放自动滚动——见 UI/LyricsWindowView.swift 顶部注释。不加
         // .windowResizability:跟"歌词管理"这个 Window 一样,让它跟着默认的

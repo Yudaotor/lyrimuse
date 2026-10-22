@@ -39,6 +39,8 @@ enum DeepLinkRouter {
             AppActions.shared.openLyricsQuickSearch?()
         case .lyricsSearch:
             AppActions.shared.openLyricsQuickSearch?()
+        case .lyricsShare:
+            AppActions.shared.presentLyricShareWindow?()
         case let .menuBarPanel(quick):
             // 认不出的 quick 当没带(只开面板)。
             MenuBarStatusItem.shared.togglePanelFromDeepLink(quick: quick.flatMap(PanelQuickTarget.init(deepLinkValue:)))
@@ -76,6 +78,7 @@ enum DeepLinkRouter {
         case .lyricsWindow, .action(.openLyricsWindowHotkey, _, _),
              .action(.toggleLyricsWindowMiniHotkey, _, _): return "lyrics-window"
         case .lyricsSearch, .lyricsWindowSearch, .action(.lyricsQuickSearchHotkey, _, _): return "lyrics-quick-search"
+        case .lyricsShare: return "lyrics-share"
         case .onboarding: return "onboarding"
         case .action(.openSettingsHotkey, _, _): return "settings"
         default: return nil

@@ -8,6 +8,31 @@ import Foundation
 @MainActor
 func runSyncEngineTests() {
     checkSyncEngineAudit3()
+    // ---- 分享卡片:能选哪几句、怎么选(LyricShareCard) ----
+    do {
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: "[00:01.00]君に会えない\n[00:03.00]声を聞けば\n[00:05.00]Sun will shine\n[00:07.00]It's automatic\n[00:09.00]側にいるだけで\n",
+                    lyricsTr: "[00:01.00]见不到你\n[00:05.00]阳光将会照耀\n", lyricsRoma: "", lyricsYRC: "")
+        let all = engine.allLines(idPrefix: "s")
+        let lines = LyricShareCard.lines(from: all)
+        expectEqual(lines.count, 5, "分享卡片: 每句有正文的都能选")
+        expectEqual(lines[0].translation, "见不到你", "分享卡片: 带着那一句的译文")
+        expectEqual(lines[1].translation, nil, "分享卡片: 没有译文的句子是 nil,不是空串")
+        let order = lines.map(\.id)
+        var picked = LyricShareCard.initialSelection(lines: lines, allLineIDs: all.map(\.id), currentIndex: 2)
+        expectEqual(picked, [order[2]], "分享卡片: 打开时选中歌词窗口当前那句")
+        expectEqual(LyricShareCard.initialSelection(lines: lines, allLineIDs: all.map(\.id), currentIndex: nil), [order[0]],
+                    "分享卡片: 还没唱到时选第一句")
+        for id in [order[4], order[0], order[1]] { picked = LyricShareCard.toggled(picked, id, order: order) }
+        expectEqual(picked, [order[0], order[1], order[2], order[4]], "分享卡片: 按先后排,不按点的顺序")
+        expectEqual(LyricShareCard.toggled(picked, order[3], order: order).count, LyricShareCard.maxLines,
+                    "分享卡片: 满 4 句再点别的不加")
+        expectEqual(LyricShareCard.toggled(picked, order[1], order: order), [order[0], order[2], order[4]],
+                    "分享卡片: 再点一次取消")
+        expectEqual(LyricShareCard.fileName(title: "AC/DC: Live", artist: "宇多田ヒカル"), "AC DC  Live - 宇多田ヒカル.png",
+                    "分享卡片: 文件名去掉不能用的字符")
+    }
+
     // ---- 间奏点(歌词窗口的 Apple Music 式「•••」) ----
     do {
         let engine = LyricsSyncEngine()

@@ -34,6 +34,7 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://lyrics-manager/song-versions?compare="), .lyricsManagerSongVersions(key: nil, showEvidence: false),
                     "深链: 空的 compare 当没带")
         expectEqual(link("lyrimuse://lyrics-search"), .lyricsSearch, "深链: 搜索歌词小窗")
+        expectEqual(link("lyrimuse://lyrics-share"), .lyricsShare, "深链: 分享歌词窗口")
         expectEqual(link("lyrimuse://lyrics-window/search"), .lyricsWindowSearch, "深链: 歌词窗口搜索面板")
         expectEqual(link("lyrimuse://menubar-panel"), .menuBarPanel(quick: nil), "深链: 菜单栏面板")
         expectEqual(link("lyrimuse://menubar-panel?quick=Lyrics-Manager"), .menuBarPanel(quick: "lyrics-manager"),
@@ -294,7 +295,7 @@ func runDeepLinkTests() {
             .lyricsManagerSongVersions(key: "daniel caesar & mustafa|never enough|toronto 2014", showEvidence: false),
             .lyricsManagerSongVersions(key: "方大同|为妳写的歌|橙月", showEvidence: true), .lyricsManagerSongVersions(key: nil, showEvidence: true),
             .lyricsManagerSongVersions(key: "周杰伦|那天下雨了|太阳之子", showEvidence: false, compare: "周杰倫|那天下雨了|"),
-            .lyricsWindow, .lyricsWindowSearch, .lyricsSearch,
+            .lyricsWindow, .lyricsWindowSearch, .lyricsSearch, .lyricsShare,
             .menuBarPanel(quick: nil), .menuBarPanel(quick: "overlay"), .menuBarMenu, .onboarding, .lastfmAuthCallback,
             .action(.toggleOverlay, on: true, stepSeconds: nil), .action(.lyricsAdvanceHotkey, on: nil, stepSeconds: 0.5),
             .copyLyric(includeTranslation: true), .copyLyric(includeTranslation: false),

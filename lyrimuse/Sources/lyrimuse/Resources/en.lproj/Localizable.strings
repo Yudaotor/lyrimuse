@@ -178,6 +178,7 @@
 "Lyrimuse 将向此地址 POST 一段 JSON，包含 app、event（如 weekly_digest）、title、body、sent_at，适用于对接 Home Assistant、n8n 或自建服务" = "Lyrimuse POSTs JSON to this URL with app, event (such as weekly_digest), title, body and sent_at. Suitable for Home Assistant, n8n or your own service";
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse shows lyrics for whichever app is playing. You can change this in Settings any time";
 "Lyrimuse 无法写入以下位置，歌词引擎因此无法启动：" = "Lyrimuse can't write to these locations, so the lyrics engine can't start:";
+"Lyrimuse 标识" = "Lyrimuse Logo";
 "Lyrimuse 通过此接口读取洛雪音乐的播放进度并调节其音量" = "Lyrimuse reads LX Music’s playback position and adjusts its volume through this API";
 "Lyrimuse 需要读取播放器和浏览器中正在播放的歌曲，才能显示同步歌词。" = "Lyrimuse needs to send Apple Events to media players and browsers to read the currently playing track and show synced lyrics.";
 "MV" = "Music Video";
@@ -448,6 +449,7 @@
 "保存" = "Save";
 "保存修改" = "Save Changes";
 "保存到 iCloud" = "Save to iCloud";
+"保存图片…" = "Save Image…";
 "保存备份" = "Save Backup";
 "保存失败，请重试" = "Couldn't save. Try again";
 "保存的歌词不含任何时间戳，未保存（否则会丢失原有时间轴）" = "The saved lyrics have no timestamps at all; not saved (the existing timing would be lost)";
@@ -557,6 +559,9 @@
 "减少推荐" = "Suggest Less";
 "出现「跳过」按钮时自动点按，无法跳过的广告照常播放。需要「辅助功能」权限。YouTube Music 位于后台标签页时将短暂切换至该标签页再切回，当前使用的浏览器窗口不受影响" = "Presses Skip as soon as it appears; ads that can't be skipped still play. Needs Accessibility permission. If YouTube Music is in a background tab, Lyrimuse briefly switches to it and back without touching the browser window you're using";
 "出生日期" = "Born";
+"分享…" = "Share…";
+"分享歌词" = "Share Lyrics";
+"分享歌词…" = "Share Lyrics…";
 "分差 %1$d 分（%2$@）" = "Score gap: %1$d (%2$@)";
 "分差 %d 分" = "Score gap: %d";
 "分差仅 %1$d 分（%2$@）" = "Score gap: only %1$d (%2$@)";
@@ -1216,6 +1221,7 @@
 "拷贝" = "Copy";
 "拷贝修复命令" = "Copy Fix Command";
 "拷贝名称" = "Copy Name";
+"拷贝图片" = "Copy Image";
 "拷贝当前歌词" = "Copy Current Lyric";
 "拷贝当前歌词（含译文）" = "Copy Current Lyric with Translation";
 "拷贝歌名与歌手" = "Copy Title and Artist";
@@ -2430,6 +2436,7 @@
 "选中的候选" = "Selected Candidate";
 "选择" = "Choose";
 "选择 .ttf 或 .otf 字体文件，可多选" = "Choose a .ttf or .otf font file (you can select multiple)";
+"选择 1～%d 句" = "Pick 1–%d lines";
 "选择 Lyrimuse 应视为播放器的 App" = "Choose an app for Lyrimuse to treat as a player";
 "选择…" = "Choose…";
 "选择一个会自动同步的文件夹（如 Dropbox、坚果云、OneDrive），在新 Mac 上选择同一文件夹即可恢复" = "Choose a folder that syncs automatically, such as Dropbox or OneDrive. On a new Mac, choose the same folder to restore";

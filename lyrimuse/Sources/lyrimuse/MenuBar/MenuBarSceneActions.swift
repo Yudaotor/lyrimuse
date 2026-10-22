@@ -130,6 +130,11 @@ private struct SceneActionRegistrar: View {
                     // 的注释。
                     AppActions.shared.quickSearchRefreshRequests.send()
                 }
+                AppActions.shared.presentLyricShareWindow = {
+                    WindowActivation.activateApp()
+                    openWindowAction(id: "lyrics-share")
+                    AppActions.shared.lyricShareRefreshRequests.send()
+                }
                 AppActions.shared.openOnboarding = {
                     WindowActivation.activateApp()
                     openWindowAction(id: "onboarding")
