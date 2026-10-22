@@ -531,7 +531,7 @@ Lyrics in a web browser. Web Lyrics shows exactly what the lyrics window shows; 
 
 ### Thirteen players, pick several or detect automatically
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, the Winamp-style reAMP, the hi-res local player VOX, the free local player Pine Player and the YouTube Music app Kaset. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, the Winamp-style reAMP, the lossless and hi-res local player VOX, the free local player Pine Player, which plays nearly every format, and the YouTube Music app Kaset. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.
 
 - Settings: Player › Music Apps
 

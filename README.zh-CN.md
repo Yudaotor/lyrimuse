@@ -240,7 +240,7 @@ QQ 音乐/网易云音乐/酷狗音乐/汽水音乐/KKBOX/Amazon Music/洛雪音
 能。浏览器里的视频这类 App 占着系统的「正在播放」时，系统的播放键会落到它身上；这时 Lyrimuse 改按 QQ 音乐、网易云音乐自己菜单栏里，或汽水音乐播放栏上的播放 / 暂停、上一首、下一首，播放器留在后台。这要「辅助功能」权限（设置 → 播放器），没授权时按这几颗键会打开那一页；这时拖进度条跳转不了。macOS 27 上这项权限在 **系统设置 → 隐私与安全性 → 设备控制和数据访问**，更早的版本叫 **辅助功能**。
 
 ### 只支持 Apple Music 吗，Spotify、QQ 音乐、网易云音乐能用吗？
-都能用，另外还有酷狗音乐、汽水音乐、KKBOX、Amazon Music、YouTube Music 客户端 Kaset、仿 Winamp 的 reAMP、主打高解析音质的本地播放器 VOX、免费的本地播放器 Pine Player 和开源的洛雪音乐，一共十三个播放器；也可以交给自动识别，macOS 显示哪个在「正在播放」就跟哪个。Apple Music、Spotify、Kaset 和 VOX 需要「自动化」权限（Spotify、Kaset 和 VOX 用它拿精确进度、控制播放），其它九个通过 macOS 的 MediaRemote 读取基本曲目信息，不需要权限；QQ 音乐、网易云音乐、酷狗音乐、汽水音乐和 Amazon Music 的随机、循环、喜欢这类按键，以及 reAMP 的随机、循环，要「辅助功能」权限；Pine Player 报的进度只到整秒，Lyrimuse 用这项权限读它界面上的进度条校准。用 KKBOX、Amazon Music 或洛雪音乐放歌时，它们自己存下的这首歌词也会拿来比较，Lyrimuse 不会向这几家发任何请求。
+都能用，另外还有酷狗音乐、汽水音乐、KKBOX、Amazon Music、YouTube Music 客户端 Kaset、仿 Winamp 的 reAMP、主打无损和高解析音质的本地播放器 VOX、免费且格式支持很全的本地播放器 Pine Player 和开源的洛雪音乐，一共十三个播放器；也可以交给自动识别，macOS 显示哪个在「正在播放」就跟哪个。Apple Music、Spotify、Kaset 和 VOX 需要「自动化」权限（Spotify、Kaset 和 VOX 用它拿精确进度、控制播放），其它九个通过 macOS 的 MediaRemote 读取基本曲目信息，不需要权限；QQ 音乐、网易云音乐、酷狗音乐、汽水音乐和 Amazon Music 的随机、循环、喜欢这类按键，以及 reAMP 的随机、循环，要「辅助功能」权限；Pine Player 报的进度只到整秒，Lyrimuse 用这项权限读它界面上的进度条校准。用 KKBOX、Amazon Music 或洛雪音乐放歌时，它们自己存下的这首歌词也会拿来比较，Lyrimuse 不会向这几家发任何请求。
 
 ### KKBOX、Amazon Music 在 Mac 上能显示桌面歌词吗？
 能。这两家都通过 macOS 的 MediaRemote 读取，不用给权限，歌词和其它播放器一样能显示在桌面悬浮窗、菜单栏、灵动岛胶囊和歌词窗口里。如果 KKBOX 或 Amazon Music 自己已经存了这首歌的歌词，也会拿来一起比较，并且额外加分。Lyrimuse 不登录这两家的账号，也不向它们发请求。其它歌词源照样会查，哪家的版本更好（比如带逐字时间轴），就用哪家的。

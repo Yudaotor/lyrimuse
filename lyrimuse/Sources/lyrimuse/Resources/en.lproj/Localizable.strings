@@ -349,7 +349,7 @@
 "为勾选的语言标注读音；是否显示在「歌词显示」中设置" = "Adds pronunciation for the selected languages; whether it shows is set in Lyrics Display";
 "为当前配色命名" = "Name these colors";
 "为歌手和专辑添加前缀" = "Label Artist and Album";
-"主打高解析音质的本地音乐播放器" = "A local music player built for hi-res audio";
+"主打无损和高解析音质的本地音乐播放器" = "A local music player built for lossless and hi-res audio";
 "主行的字重；副行和展开时的下一句预览比主行细一档" = "Font weight of the main line; the secondary line and the expanded next-line preview are one step lighter";
 "主题" = "Theme";
 "主题名称" = "Theme Name";
