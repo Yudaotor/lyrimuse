@@ -401,7 +401,15 @@ enum ConfigPortability {
         }
         if let importedFeatures = bundle["features"] as? [String: Any] {
             // 系统语言换成本机的再写盘:引擎看到文件变了就热重读,读到别的机器的语言会按它清机翻。
-            let featuresObj = SystemLanguage.localizingForImport(importedFeatures, local: SystemLanguage.current())
+            var featuresObj = SystemLanguage.localizingForImport(importedFeatures, local: SystemLanguage.current())
+            // 歌词文件夹是绝对路径,换了机器常常不在(别的用户名、没接的外接盘):这里建不出来就退回默认位置,
+            // 不然紧接着的歌词恢复逐个写失败,引擎也切到一个建不出的目录。
+            if var dict = featuresObj as? [String: Any], let dir = dict["lyrics_dir"] as? String, !dir.isEmpty,
+               !FileIO.createDirectory(URL(fileURLWithPath: dir)) {
+                logger.notice("importData: lyrics_dir from the bundle is not usable here, using the default location")
+                dict["lyrics_dir"] = nil
+                featuresObj = dict
+            }
             if let featuresData = try? JSONSerialization.data(withJSONObject: featuresObj, options: [.prettyPrinted]) {
                 do {
                     try featuresData.write(to: featuresURL, options: .atomic)
@@ -466,6 +474,12 @@ enum ConfigPortability {
             logger.error("clearAllConfig: clearing keychain credentials failed, nothing cleared — \(String(describing: error), privacy: .public)")
             return false
         }
+        // 先停住功能开关和偏好镜像的写盘,再删文件:删完到重启之前,内存里的旧值一写就把刚清掉的整份写回来
+        // (文件不在时 FeatureSettingsStore.load 会把内存值整份写回,退出时还会补写一次镜像)。
+        await MainActor.run {
+            FeatureSettingsStore.shared.suspendWritesForReset()
+            AppSettingsMirror.writesSuspended = true
+        }
         var ok = true
         if FileManager.default.fileExists(atPath: configURL.path) {
             do { try FileManager.default.removeItem(at: configURL) }
@@ -481,12 +495,11 @@ enum ConfigPortability {
                 ok = false
             }
         }
-        // 内存里的两份也换成刚删完的样子(空、且没有待存的改动)。不重载的话,账号页 1.2 秒防抖里还没存的
+        // 账号设置在内存里那份也换成刚删完的样子(空、且没有待存的改动)。不重载的话,账号页 1.2 秒防抖里还没存的
         // 改动会让 isDirty 为真,紧接着重启时的退出兜底(applicationShouldTerminate)把内存里整份旧凭据
         // 写回 config.json,「清除所有设置」等于白点。
         await MainActor.run {
             ConfigStore.shared.load()
-            FeatureSettingsStore.shared.load()
         }
         var clearedCount = 0
         for key in UserDefaults.standard.dictionaryRepresentation().keys {

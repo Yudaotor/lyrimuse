@@ -171,6 +171,8 @@ final class SettingsSearchRouter: ObservableObject {
         case "lyricsWindow.miniFade": return s.lyricsWindowMiniFadeOnHover
         case "lyricsWindow.miniLayoutNotList": return s.lyricsWindowMiniLyricsLayout != .list
         case "web.lan": return s.webLyricsAllowLAN
+        case "obs.lan": return s.obsLyricsAllowLAN
+        case "translation.machine": return features.lyricsMachineTranslation
         case "lastfm.mirror": return features.lastfmMirrorScrobble
         case "lastfm.matchCustom": return features.lastfmMatchMode == .custom
         case "romanization.japanese": return s.romanizationScripts.contains(.japanese)

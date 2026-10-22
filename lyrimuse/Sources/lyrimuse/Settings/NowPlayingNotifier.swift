@@ -127,12 +127,19 @@ final class NowPlayingNotifier {
            let artwork = await Self.artworkAttachment(cg) {
             content.attachments = [artwork]
         }
-        guard !Task.isCancelled else { return }
+        // 附件只有投递成功才会被系统挪走;没投出去的那份临时封面这里删掉,不然连切歌时留一堆在临时目录。
+        let attachmentURLs = content.attachments.map(\.url)
+        func discardAttachments() { attachmentURLs.forEach { try? FileManager.default.removeItem(at: $0) } }
+        guard !Task.isCancelled else {
+            discardAttachments()
+            return
+        }
         do {
             try await deliver(content, cover: cover)
         } catch let error where !content.attachments.isEmpty {
             // 附件验不过时系统连通知一起拒收;去掉封面再投一次。
             log.error("now playing announce with artwork failed: \(error.localizedDescription, privacy: .public)")
+            discardAttachments()
             content.attachments = []
             try? await deliver(content, cover: cover)
         } catch {

@@ -7,7 +7,7 @@ import LyrimuseCore
 /// 遮挡物只算**不透明的普通窗口**(layer 0、alpha ≥ 0.95):程序坞那扇是全屏透明窗(layer 20),灵动岛 /
 /// 悬浮歌词是透明的浮动窗(layer 3 / 1000),把它们算进来会让任何窗口都「被盖住」。
 ///
-/// 什么时候重算:每 2 秒一次(别的 App 挪窗口没有通知可听);另外切换前台 App、这扇窗获得 / 失去焦点、
+/// 什么时候重算:窗口在屏上时每 2 秒一次(别的 App 挪窗口没有通知可听;收起后停表);另外切换前台 App、这扇窗获得 / 失去焦点、
 /// 移动 / 缩放时立刻重算 —— 最常见的「切回来看歌词」不用等那 2 秒。一次重算是一次
 /// `CGWindowListCopyWindowInfo(.optionOnScreenAboveWindow)` + 4pt 网格采样,毫秒级。
 @MainActor
@@ -27,7 +27,10 @@ final class WindowCoverageMonitor {
                      NSWindow.didMoveNotification, NSWindow.didResizeNotification,
                      NSWindow.didChangeOcclusionStateNotification] {
             observers.append(nc.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.recompute() }
+                MainActor.assumeIsolated {
+                    self?.resumeTimerIfNeeded()
+                    self?.recompute()
+                }
             })
         }
         workspaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -35,16 +38,42 @@ final class WindowCoverageMonitor {
         ) { [weak self] _ in
             // 前台 App 刚换,窗口层级这一拍可能还没排好;晚一点再算。
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                MainActor.assumeIsolated { self?.recompute() }
+                MainActor.assumeIsolated {
+                    self?.resumeTimerIfNeeded()
+                    self?.recompute()
+                }
             }
         }
+        startTimer()
+        recompute()
+    }
+
+    private var stopped = false
+
+    private func startTimer() {
         let t = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.recompute() }
+            MainActor.assumeIsolated { self?.tick() }
         }
         t.tolerance = 0.5
         RunLoop.main.add(t, forMode: .common)
         timer = t
+    }
+
+    /// 窗口收起(设置窗口关掉只是隐藏、视图不销毁)就停表,不然一直每 2 秒醒一次到 App 退出。再露面时
+    /// 遮挡变化 / 成为焦点那几条通知会把它接上;收起前最后一次重算已经记成「盖住」,露面就被盖着时不发通知也是对的。
+    private func tick() {
+        guard let window, window.isVisible else {
+            recompute()
+            timer?.invalidate()
+            timer = nil
+            return
+        }
         recompute()
+    }
+
+    private func resumeTimerIfNeeded() {
+        guard !stopped, timer == nil, window?.isVisible == true else { return }
+        startTimer()
     }
 
     /// 持有方没调 stop 就放手时也得停:计时器挂在 RunLoop 上,不失效就一直每 2 秒空转。
@@ -55,6 +84,7 @@ final class WindowCoverageMonitor {
     }
 
     func stop() {
+        stopped = true
         timer?.invalidate()
         timer = nil
         observers.forEach { NotificationCenter.default.removeObserver($0) }

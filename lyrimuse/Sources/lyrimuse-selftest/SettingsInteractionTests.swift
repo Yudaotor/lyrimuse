@@ -1050,4 +1050,6 @@ private func runPermissionGuideContracts() {
         expectEqual(help.components(separatedBy: ".lineLimit(nil)").count - 1, 4,
                     "悬停说明(契约): 四处弹层的说明都放开行数,不被挂它那一行的 lineLimit(1) 截成一行")
     }
+
+    runSettingsAuditContracts()
 }

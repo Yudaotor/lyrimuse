@@ -236,6 +236,8 @@ private struct WebLyricsLANLinkRows: View {
 private struct WebLyricsRegenerateRow: View {
     let regenerate: () -> Void
     @State private var armed = false
+    /// 每次进入「确认重置」加一;4 秒到点时对不上就不收(期间确认过又重新点了「重置」,上一次的计时不能提前收掉新的)。
+    @State private var armToken = 0
 
     var body: some View {
         SettingsRow(icon: "arrow.triangle.2.circlepath", title: L10n.t("重置访问密钥"), subtitle: L10n.t("已分享的链接将失效")) {
@@ -245,9 +247,11 @@ private struct WebLyricsRegenerateRow: View {
                     regenerate()
                 } else {
                     armed = true
+                    armToken += 1
+                    let token = armToken
                     Task {
                         try? await Task.sleep(for: .seconds(4))
-                        armed = false
+                        if armToken == token { armed = false }
                     }
                 }
             }

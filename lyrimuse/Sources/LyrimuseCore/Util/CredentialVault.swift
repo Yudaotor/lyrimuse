@@ -243,6 +243,12 @@ public final class CredentialVaultStore: @unchecked Sendable {
         var contents = loaded
         mutate(&contents)
         contents = contents.filter { !CredentialVault.isBlank($0.value) }
+        // 内容没变就不碰钥匙串:账号页每次自动保存都会走到这里(改的多半是非凭据字段),一次写入是两趟
+        // `security` 子进程(写 + 回读核对),调用方常在主线程上。
+        if NSDictionary(dictionary: contents).isEqual(to: loaded.filter { !CredentialVault.isBlank($0.value) }) {
+            cached = contents
+            return contents
+        }
         if contents.isEmpty {
             try keychain.delete()
         } else {

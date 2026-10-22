@@ -120,7 +120,8 @@ func maybeReloadFeatures() {
 	}
 	now := time.Now().UnixNano()
 	last := featuresCheckedAt.Load()
-	if now-last < int64(featuresReloadInterval) {
+	// 墙钟往回拨过(手动改时间、NTP 大步校正)时差值是负的,当作已到期,不然拨回的那段时间里改设置都不生效。
+	if d := now - last; d >= 0 && d < int64(featuresReloadInterval) {
 		return
 	}
 	// 只让一个 goroutine 去探盘,其余这一拍用当前快照 —— 配置晚 1 秒生效无所谓,

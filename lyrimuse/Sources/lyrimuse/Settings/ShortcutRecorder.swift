@@ -20,6 +20,8 @@ import KeyboardShortcuts
 final class ShortcutRecorderButton: NSButton {
     private let shortcutName: KeyboardShortcuts.Name
     private var eventMonitor: Any?
+    /// 录制中点了这颗按钮以外的地方就收尾:本地按键监视器管整个 App,不收的话去别的输入框打字,每个字都被吞掉、响一声。
+    private var clickMonitor: Any?
     private var windowResignObserver: NSObjectProtocol?
     private var isRecording = false {
         didSet { refreshTitle() }
@@ -56,6 +58,7 @@ final class ShortcutRecorderButton: NSButton {
 
     deinit {
         if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
+        if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         if let windowResignObserver { NotificationCenter.default.removeObserver(windowResignObserver) }
     }
 
@@ -179,7 +182,12 @@ final class ShortcutRecorderButton: NSButton {
             NotificationCenter.default.removeObserver(windowResignObserver)
             self.windowResignObserver = nil
         }
-        guard let window else { return }
+        // 录到一半被移出窗口(切到别的设置页、搜索跳走):照样收尾。不收的话录制时挂上的「暂停全局快捷键」
+        // 没人撤,所有快捷键一直失效到下一次完整录完或重启。
+        guard let window else {
+            stopRecording()
+            return
+        }
         // 录制到一半切走窗口(比如 Cmd+Tab 切到别的 App)不该让按钮一直卡在"请按下
         // 快捷键…"——回来时应该看到的是正常状态,不是一个假装还在监听、其实早就
         // 收不到按键的僵死状态。
@@ -211,6 +219,14 @@ final class ShortcutRecorderButton: NSButton {
             guard let self else { return event }
             return self.handle(event)
         }
+        clickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self else { return event }
+            // 点在自己身上交给 handleClick(再点一下 = 结束录制);点在别处收尾,事件照常放行。
+            let inside = event.window === self.window
+                && self.bounds.contains(self.convert(event.locationInWindow, from: nil))
+            if !inside { self.stopRecording() }
+            return event
+        }
     }
 
     /// 可以不带修饰键单独录的键:F1–F35(同 KeyboardShortcuts 库的 `NSEvent.SpecialKey.isFunctionKey`,
@@ -229,6 +245,10 @@ final class ShortcutRecorderButton: NSButton {
         if let eventMonitor {
             NSEvent.removeMonitor(eventMonitor)
             self.eventMonitor = nil
+        }
+        if let clickMonitor {
+            NSEvent.removeMonitor(clickMonitor)
+            self.clickMonitor = nil
         }
     }
 

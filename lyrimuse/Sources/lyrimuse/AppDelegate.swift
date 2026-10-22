@@ -138,10 +138,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 并不会因此注册登录项。这里补一次,让默认值真的算数。SMAppService 的注册是幂等的,
         // 已经注册过再调一次没有副作用;用户手动关掉之后这里读到 false,也不会偷偷再打开。
         // 顺带清掉旧方案留在 ~/Library/LaunchAgents 的 plist(见 LoginItemManager 头注)。
+        //
+        // 存过这个键时先按系统的实际状态对账,再注册:用户在「系统设置 › 登录项」里移除了它,对账把开关校正成关,
+        // 不会又被注册回去。没存过(默认值)时注册之后把默认值落盘,下次启动同样走先对账那条。
+        let launchAtLoginStored = UserDefaults.standard.object(forKey: "np:launchAtLoginEnabled") != nil
+        if launchAtLoginStored { AppSettings.shared.syncLaunchAtLoginFromSystem() }
         LoginItemManager.shared.syncAtLaunch(enabled: AppSettings.shared.launchAtLoginEnabled)
+        if !launchAtLoginStored {
+            UserDefaults.standard.set(AppSettings.shared.launchAtLoginEnabled, forKey: "np:launchAtLoginEnabled")
+        }
         // 外观要赶在任何窗口建出来之前定下;init 里的赋值不触发 didSet。
         AppSettings.shared.appearanceMode.apply()
-        AppSettings.shared.syncLaunchAtLoginFromSystem()
         // 必须是这个函数的第一件事:AppSettings 在 init 里一次性把所有属性从 UserDefaults
         // 读进内存(下面第一次访问 AppSettings.shared 时发生),恢复晚了就只落了盘、这次启动
         // 的内存态还是空的。见 AppSettingsMirror.restoreIfPristine 的注释。
@@ -587,7 +594,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let cached = lastScrollDecision,
            ScrollForwardDecision.canReuse(cachedWindow: cached.windowNumber,
                                           cachedPoint: cached.point, cachedAt: cached.at,
-                                          window: win.windowNumber, point: loc, now: nowDate) {
+                                          window: win.windowNumber, point: loc, now: nowDate),
+           cached.target == nil || cached.target?.window === win {
+            // 目标得还挂在这扇窗里:0.25 秒内切了页,旧的滚动视图已经脱离窗口,再交给它就滚不动 —— 那种情况重新判。
             guard let cachedTarget = cached.target else { return event }
             cachedTarget.scrollWheel(with: event)
             return nil

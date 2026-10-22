@@ -127,9 +127,9 @@ public enum EngineServiceManager {
     // 判断会让引擎在 KeepAlive 下崩溃重启循环时,设置页一直显示绿勾"运行中";
     // 下面 install() 的自愈重试也用它当判据(`if !isRunning`)的话,bootstrap 一成功就认为
     // 大功告成,那段专门为"kickstart 静默失败"写的 LWCR 重试根本轮不到执行。
+    /// 带超时(见 `LaunchdPrintParser.query`)。
     public static var state: LaunchdJobState {
-        let (status, output) = runCapturing("/bin/launchctl", ["print", "gui/\(getuid())/\(label)"])
-        return LaunchdPrintParser.parse(printExitCode: status, printOutput: output)
+        LaunchdPrintParser.query(label: label)
     }
 
     public static var isRunning: Bool { state.isRunning }

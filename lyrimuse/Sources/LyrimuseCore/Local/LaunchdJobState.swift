@@ -52,6 +52,16 @@ extension LaunchdJobState: CustomStringConvertible {
 }
 
 public enum LaunchdPrintParser {
+    /// 问 launchd 这个 job 此刻的状态(`launchctl print gui/<uid>/<label>`),带超时:设置页、引导页、诊断导出都会问,
+    /// launchctl 卡住时不能让调用方一直等(引导页每 2 秒还会再发一次)。超时、起不来都按没注册算。
+    public static func query(label: String, timeout: TimeInterval = 5) -> LaunchdJobState {
+        guard let result = ProcessRunner.run("/bin/launchctl", ["print", "gui/\(getuid())/\(label)"], timeout: timeout),
+              !result.timedOut else {
+            return .notRegistered
+        }
+        return parse(printExitCode: result.status, printOutput: result.stdoutText)
+    }
+
     /// 解析 `launchctl print gui/<uid>/<label>` 的退出码 + stdout。
     ///
     /// 缩进是判据的一部分,不能用 `contains`。真实输出里同时存在这三种行:

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import LyrimuseCore
 import OSLog
 import UserNotifications
@@ -87,7 +88,15 @@ final class UnknownPlayerNotifier: NSObject {
         let center = UNUserNotificationCenter.current()
         center.delegate = self
         center.setNotificationCategories([category])
+        // 按钮标题只在注册这一刻按界面语言求值:在 App 里换了语言就重注册一次,不然要重启才换。
+        if languageSink == nil {
+            languageSink = AppSettings.shared.$appLanguage.dropFirst().removeDuplicates()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in self?.registerCategory() }
+        }
     }
+
+    private var languageSink: AnyCancellable?
 
     /// 开始盯。5 秒一拍 —— 只是**读**一个已经被主轮询填好的静态变量,不起子进程
     /// (记录那一笔挂在 LocalPlaybackSource 既有的 media-control 调用上)。
@@ -150,8 +159,16 @@ final class UnknownPlayerNotifier: NSObject {
             stableFor: stableFor, stableHits: pendingHits, log: loadLog())
         else { return }
 
-        Task { await announce(seen) }
+        // 上一次还没走完(第一次弹系统通知授权框,用户还没回答)就不再发:不然每 5 秒一拍又提醒一次、又记一次账。
+        guard !announcing.contains(seen.bundleID) else { return }
+        announcing.insert(seen.bundleID)
+        Task {
+            await announce(seen)
+            announcing.remove(seen.bundleID)
+        }
     }
+
+    private var announcing: Set<String> = []
 
     private func resetPending() {
         pendingBundleID = nil
@@ -382,11 +399,12 @@ extension UnknownPlayerNotifier: UNUserNotificationCenterDelegate {
         }
     }
 
-    /// 通知上那颗「加入信任列表」与灵动岛上那颗(`NotchUnknownPlayerPrompt.trust`)共用的写入路。
+    /// 通知上那颗「加入信任列表」、灵动岛上那颗(`NotchUnknownPlayerPrompt.trust`)和设置页「其他 App」发现卡共用的写入路。
     static func trust(_ bundleID: String) async {
+        // 已经信任了,通知中心里那条也该撤:撤在查重之前。
+        await MainActor.run { UnknownPlayerNotifier.shared.dismissDelivered(bundleID: bundleID) }
         // 通知可能躺了很久 —— 写之前再查一遍,别把一个已经信任(或已被内置覆盖)的再写一遍。
         guard !TrustedPlayers.isAccepted(bundleID) else { return }
         await FeatureSettingsStore.shared.trust(bundleID: bundleID)
-        await MainActor.run { UnknownPlayerNotifier.shared.dismissDelivered(bundleID: bundleID) }
     }
 }

@@ -426,6 +426,14 @@ func runSettingsSearchTests() {
         expectEqual(gate(lastfm, "歌名", false: ["lastfm.matchCustom"]), "匹配模式", "搜索门: Last.fm 歌名落到「匹配模式」")
         expectEqual(gate(lastfm, "歌名", false: ["lastfm.mirror", "lastfm.matchCustom"]), "Scrobble 规则",
                     "搜索门: Scrobble 关着时落到「Scrobble 规则」")
+        let window = ["歌词显示", "歌词窗口"]
+        let overlay = ["歌词显示", "悬浮歌词"]
+        for title in ["访问链接", "备用链接（IP 地址）", "重置访问密钥"] {
+            expectEqual(gate(window, title, false: ["web.lan"]), "允许局域网访问", "搜索门: 网页歌词「\(title)」落到「允许局域网访问」")
+            expectEqual(gate(overlay, title, false: ["obs.lan"]), "允许局域网访问", "搜索门: OBS「\(title)」落到「允许局域网访问」")
+        }
+        expectEqual(gate(["歌词", "译文"], "翻译语言包", false: ["translation.machine"]), "无译文时自动翻译",
+                    "搜索门: 语言包落到「无译文时自动翻译」")
         // 表里每一条:那一行和落点在目录里同一段都有登记(点亮得到),条件在 App 侧有对应分支(认不出的名字会被当真、门失效)。
         let search = source("Settings/SettingsSearch.swift")
         for rule in SettingsSearchCatalog.rowGates {

@@ -2287,8 +2287,11 @@ final class AppSettings: ObservableObject {
         webLyricsAllowLANControl = (defaults.object(forKey: Keys.webLyricsAllowLANControl) as? Bool) ?? false
         webLyricsPort = WebLyricsPort.clamped((defaults.object(forKey: Keys.webLyricsPort) as? Int) ?? WebLyricsPort.standard)
         // 拆开之前 OBS 跟着网页歌词的总开关走:没存过时取那个开关,升级上来的用法不变。
-        obsLyricsEnabled = (defaults.object(forKey: Keys.obsLyricsEnabled) as? Bool)
-            ?? (defaults.object(forKey: Keys.webLyricsEnabled) as? Bool) ?? false
+        let storedObs = defaults.object(forKey: Keys.obsLyricsEnabled) as? Bool
+        let obsEnabled = storedObs ?? (defaults.object(forKey: Keys.webLyricsEnabled) as? Bool) ?? false
+        obsLyricsEnabled = obsEnabled
+        // 继承来的值当场落盘(init 里的赋值不触发 didSet):不落的话之后只关网页歌词,下次启动 OBS 也跟着关了。
+        if storedObs == nil { defaults.set(obsEnabled, forKey: Keys.obsLyricsEnabled) }
         obsLyricsAllowLAN = (defaults.object(forKey: Keys.obsLyricsAllowLAN) as? Bool) ?? false
         obsSongCard = defaults.string(forKey: Keys.obsSongCard).flatMap(WebLyricsObsPayload.SongCard.init(rawValue:)) ?? .always
         obsLyricsPort = WebLyricsPort.clamped((defaults.object(forKey: Keys.obsLyricsPort) as? Int) ?? WebLyricsPort.obsStandard,
@@ -2420,7 +2423,8 @@ final class AppSettings: ObservableObject {
         menuBarIconStyle = defaults.string(forKey: Keys.menuBarIconStyle)
             .flatMap(MenuBarIconStyle.init(rawValue:)) ?? .default
         menuBarIconAnimates = (defaults.object(forKey: Keys.menuBarIconAnimates) as? Bool) ?? true
-        lyricsOffsetStepMs = (defaults.object(forKey: Keys.lyricsOffsetStepMs) as? Int) ?? 200
+        // 夹进设置页 Stepper 的区间(0.05~2 秒):导入 / 手改成 0 或负数时,提前 / 延后快捷键会没反应或反过来。
+        lyricsOffsetStepMs = min(max((defaults.object(forKey: Keys.lyricsOffsetStepMs) as? Int) ?? 200, 50), 2000)
         manualPickLocksLyrics = (defaults.object(forKey: Keys.manualPickLocksLyrics) as? Bool) ?? false
         textStrokeEnabled = (defaults.object(forKey: Keys.textStrokeEnabled) as? Bool) ?? ColorTheme.defaultTheme.textStrokeEnabled
         overlayBackgroundGlass = (defaults.object(forKey: Keys.overlayBackgroundGlass) as? Bool) ?? false
@@ -2473,7 +2477,9 @@ final class AppSettings: ObservableObject {
         notchGestures = (defaults.object(forKey: Keys.notchGestures) as? Bool) ?? Self.defaultNotchGestures
         notchShowsProgressLine = (defaults.object(forKey: Keys.notchShowsProgressLine) as? Bool)
             ?? Self.defaultNotchShowsProgressLine
-        appLanguage = defaults.string(forKey: Keys.appLanguage) ?? "system"
+        // 只认这四个值,别的(手改 / 导入的)按跟随系统:不然语言下拉一个都勾不上。
+        appLanguage = defaults.string(forKey: Keys.appLanguage)
+            .flatMap { ["system", "zh-hans", "zh-hant", "en"].contains($0) ? $0 : nil } ?? "system"
         appearanceMode = defaults.string(forKey: Keys.appearanceMode)
             .flatMap(AppAppearanceMode.init(rawValue:)) ?? .system
         hasCompletedOnboarding = (defaults.object(forKey: Keys.hasCompletedOnboarding) as? Bool)
@@ -2697,8 +2703,12 @@ final class AppSettings: ObservableObject {
         followsCoverArt = (defaults.object(forKey: Keys.followsCoverArt) as? Bool) ?? Self.defaultFollowsCoverArt
         // 没存过时:全新安装取默认值;升级上来的老用户(存过未唱色 = 启动过)沿用当时的缺省 false,
         // 否则他们的未唱色会在升级后突然改成封面色。
-        karaokeUnsungFollowsCoverArt = (defaults.object(forKey: Keys.karaokeUnsungFollowsCoverArt) as? Bool)
+        let storedUnsungFollows = defaults.object(forKey: Keys.karaokeUnsungFollowsCoverArt) as? Bool
+        let unsungFollows = storedUnsungFollows
             ?? (defaults.string(forKey: Keys.karaokeUnsungColorHex) == nil ? Self.defaultKaraokeUnsungFollowsCoverArt : false)
+        karaokeUnsungFollowsCoverArt = unsungFollows
+        // 推出来的值当场落盘:判据看的是未唱色存没存过,之后哪一处写了未唱色,下次启动就推成另一个值。
+        if storedUnsungFollows == nil { defaults.set(unsungFollows, forKey: Keys.karaokeUnsungFollowsCoverArt) }
         // 这里还不能读 foregroundColorHex 算真正的默认值——Swift 的类初始化规则是"所有
         // 存储属性都赋过值之前不能读 self 的任何属性",哪怕那个属性在**这同一个 init() 里**
         // 已经在上面赋过值了。真正的派生挪到 init() 末尾(那时所有属性都已就绪,`recomputeFonts()`

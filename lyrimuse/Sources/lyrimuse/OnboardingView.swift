@@ -34,6 +34,8 @@ struct OnboardingView: View {
     // 引擎常驻服务是否真的在跑——这一步是"软强制"的必经步骤:锁住下一步按钮,
     // 但仍然可以直接关掉整个引导窗口跳过,不禁用/隐藏关闭按钮。
     @State private var engineRunning = false
+    /// 后台那次 `launchctl print` 还没回来:2 秒一拍的轮询不再叠一个。
+    @State private var refreshingEngineRunning = false
     @State private var isTogglingEngineService = false
     /// 收尾页「放一首歌试试」那一行的输入,只订阅用得到的几个属性(理由同 `isPlayingNow`)。
     @State private var liveInput = OnboardingFlow.LiveInput(
@@ -351,7 +353,8 @@ struct OnboardingView: View {
         .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
             // 服务没跑起来的时候,用户多半正照着失败文案去设置里「播放器 → 歌词引擎」修:修好了这里要跟着变绿、
             // 放开「下一步」,收尾页点「开始使用」也要能记成走完。跑起来之后就不用再问了。
-            if (currentStep == .background || currentStep == .done), !engineRunning, !isTogglingEngineService {
+            if (currentStep == .background || currentStep == .done), !engineRunning, !isTogglingEngineService,
+               !refreshingEngineRunning {
                 Task { await refreshEngineRunning() }
             }
             switch currentStep {
@@ -1661,6 +1664,8 @@ struct OnboardingView: View {
     /// 重新读一次后台服务在不在跑。`EngineServiceManager.isRunning` 会起 `launchctl print` 子进程同步等它退出,
     /// 放到后台线程上查,不卡引导窗口。
     private func refreshEngineRunning() async {
+        refreshingEngineRunning = true
+        defer { refreshingEngineRunning = false }
         let running = await Task.detached(priority: .userInitiated) { EngineServiceManager.isRunning }.value
         if engineRunning != running { engineRunning = running }
     }

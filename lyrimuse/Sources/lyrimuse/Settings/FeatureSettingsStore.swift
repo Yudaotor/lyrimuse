@@ -604,6 +604,9 @@ public final class FeatureSettingsStore: ObservableObject {
     // 丢掉的话,装过新版、又装回旧版再写一次盘,那个源就从勾选里没了,新版的迁移标记又已经写过,不会再补勾。见 14 章决策 131。
     private var unknownLyricsSources: [String] = []
     private var unknownLyricsOrder: [String] = []
+    // players / launch_lyrimuse_on_players 里这个版本不认识的播放器(更新的版本接的),理由同上。
+    private var unknownPlayers: [String] = []
+    private var unknownLaunchPlayers: [String] = []
     // 空字符串 = 用默认位置(~/.config/lyrimuse/lyrics)。用 effectiveLyricsDir
     // 取实际生效的路径,不要直接读这个属性去拼路径。
     @Published public var lyricsDir = ""
@@ -685,7 +688,7 @@ public final class FeatureSettingsStore: ObservableObject {
     private var currentSnapshot: FeatureFlagsFile {
         FeatureFlagsFile(
             // 只写 players——player 是纯读的迁移字段(见其注释),这台机器往后不再写它。
-            players: players.map(\.rawValue).sorted(),
+            players: (players.map(\.rawValue) + unknownPlayers).sorted(),
             albumPrefetch: albumPrefetch,
             lyricsAutoUpgrade: lyricsAutoUpgrade,
             lyricsSweepGapSecs: lyricsSweepGapSecs,
@@ -739,7 +742,7 @@ public final class FeatureSettingsStore: ObservableObject {
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
             lyricsTranslationLanguage: lyricsTranslationLanguage.rawValue,
             systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
-            launchLyrimuseOnPlayers: launchLyrimuseOnPlayers.map(\.rawValue).sorted(),
+            launchLyrimuseOnPlayers: (launchLyrimuseOnPlayers.map(\.rawValue) + unknownLaunchPlayers).sorted(),
             trustedPlayers: trustedPlayers.isEmpty ? nil : trustedPlayers,
             lastfmExcludedBundles: lastfmExcludedBundles.isEmpty ? nil : lastfmExcludedBundles.sorted(),
             songEntityPhase1: songEntityPhase1,
@@ -901,6 +904,8 @@ public final class FeatureSettingsStore: ObservableObject {
         // players 缺失/空数组时退回 player(遗留单选字段)做一次性迁移;两者都没有
         // 可用值才最终兜底 {auto}。迁移结果在本函数末尾随整份写回落盘。
         let decodedPlayers = Set((f.players ?? []).compactMap(PlaybackPlayer.init(rawValue:)))
+        unknownPlayers = Self.unknownNames(f.players) { PlaybackPlayer(rawValue: $0) != nil }
+        unknownLaunchPlayers = Self.unknownNames(f.launchLyrimuseOnPlayers) { PlaybackPlayer(rawValue: $0) != nil }
         if !decodedPlayers.isEmpty {
             players = decodedPlayers
         } else if let legacy = f.player.flatMap(PlaybackPlayer.init(rawValue:)) {
@@ -1042,6 +1047,11 @@ public final class FeatureSettingsStore: ObservableObject {
         savedSnapshot = currentSnapshot
     }
 
+    /// 「清除所有设置」到重启之前不再写 features.json(`persistFile` 直接返回)。只进不出:这个进程接下来就退出。
+    private(set) var writesSuspendedForReset = false
+
+    func suspendWritesForReset() { writesSuspendedForReset = true }
+
     /// load() 把整份当前值写回文件:引擎只认文件,缺项、旧写法、系统语言都靠这一次落盘。不走 save():那条路是
     /// 给用户改设置用的,带着设置窗口状态条的提示。写失败只记日志,下一次保存照样写全。
     private func writeBack(reason: String) {
@@ -1059,6 +1069,8 @@ public final class FeatureSettingsStore: ObservableObject {
     // 一次" —— 那个保存栏已经不存在了,且本方法只被自己的 save 调用(
     // 核实)。"只重启一次"现在由 EngineRestartCoordinator 保证。
     public func persistFile() throws {
+        // 「清除所有设置」删了文件、马上重启:这期间内存里还是旧值,写下去等于把刚清掉的整份写回来。
+        guard !writesSuspendedForReset else { return }
         // 当前快照编码成字典。JSONEncoder 这一步只会因为编程错误失败,不会因为用户数据失败。
         let encoded = try JSONEncoder().encode(currentSnapshot)
         guard let fields = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] else {
@@ -1067,8 +1079,9 @@ public final class FeatureSettingsStore: ObservableObject {
         do {
             // 已知键以本次编码为准(遗留的 player / lastfm_scrobble_first_artist_only 没编码就从文件删掉,
             // 「这台机器往后不再写它」的语义靠这条),这个版本不认识的键原样保留;写成功后镜像才更新。
-            // 磁盘上那份判定为损坏时这里直接抛,一个字节不碰。features.json 不含凭据,普通原子写。
-            try document.save(fields: fields, knownKeys: FeatureFlagsFile.knownFileKeys, secure: false)
+            // 磁盘上那份判定为损坏时这里直接抛,一个字节不碰。按 0600 写:手动代理地址可以带账号密码
+            // (`user:pass@host:port`,引擎照用),普通权限同机别的账号读得到。
+            try document.save(fields: fields, knownKeys: FeatureFlagsFile.knownFileKeys, secure: true)
         } catch JSONConfigDocument.Failure.refusedCorruptFile {
             throw ConfigFileSaveError.refusedCorruptFile
         } catch JSONConfigDocument.Failure.notSerializable {

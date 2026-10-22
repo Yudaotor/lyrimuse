@@ -1260,6 +1260,8 @@ private struct LyricsSettingsTab: View {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
+        // 按界面语言排日期(同 SettingsDateText),不跟系统语言。
+        formatter.locale = L10n.locale
         let date = formatter.string(from: expiresAt)
         if appleMusic.isRejected {
             return L10n.t("Apple Music 登录已失效（已过期或被撤销），请重新连接")
@@ -2163,14 +2165,17 @@ private struct LyricsSettingsTab: View {
             : "\(AppSettings.signedSeconds(ms: scopedOffsetMs))\(L10n.t("秒"))"
         let step = 50
         let limit = 5000
+        // 跟随「全部」时从全局那档起步:这个播放器自己那档是 0(零值不落盘 = 跟随),从 0 起步的话按一下「−」
+        // 生效值从 +0.30 跳到 −0.05。
+        let base = scopeFollowsGlobal ? offsets.globalOffsetMs : scopedOffsetMs
         return HStack(spacing: 0) {
-            Button { setScopedOffset(max(-limit, scopedOffsetMs - step)) } label: {
+            Button { setScopedOffset(max(-limit, base - step)) } label: {
                 Image(systemName: "minus")
                     .font(.system(size: 10, weight: .semibold))
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
-            .disabled(scopedOffsetMs <= -limit)
+            .disabled(base <= -limit)
             .accessibilityLabel(L10n.t("延后"))
             Text(valueText)
                 .font(.system(size: 12, weight: .medium))
@@ -2179,13 +2184,13 @@ private struct LyricsSettingsTab: View {
                 .lineLimit(1)
                 .fixedSize()
                 .padding(.horizontal, 2)
-            Button { setScopedOffset(min(limit, scopedOffsetMs + step)) } label: {
+            Button { setScopedOffset(min(limit, base + step)) } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 10, weight: .semibold))
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
-            .disabled(scopedOffsetMs >= limit)
+            .disabled(base >= limit)
             .accessibilityLabel(L10n.t("提前"))
         }
         .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
@@ -4500,8 +4505,9 @@ private struct NotchAllSettingsDrawer: View {
                 ), in: NotchEditorStage.usableExpandedWidthRangeOnCurrentScreen, step: 10,
                    onEditingChanged: { expandedWidthThrottle.editingChanged($0, commit: { NotchEditorStage.commitWidths(expanded: $0) }) })
                 .frame(width: 150)
+                // 读数跟滑块同一个值(拖动中是节流器的草稿),不然每 0.12 秒才跳一次、跟滑块对不上。
                 Text(String(format: L10n.t("%@pt"),
-                            "\(Int(NotchEditorStage.effectiveExpandedWidth(steadyBase: settings.notchContentWidth, expandedBase: settings.notchExpandedContentWidth)))"))
+                            "\(Int(expandedWidthThrottle.value(or: NotchEditorStage.effectiveExpandedWidth(steadyBase: settings.notchContentWidth, expandedBase: settings.notchExpandedContentWidth))))"))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                     .frame(width: 46, alignment: .trailing)
@@ -4996,7 +5002,7 @@ private struct PlayerSettingsTab: View {
                     help: L10n.t("信任后与内置播放器相同：显示歌词，并计入收听记录")
                 ) {
                     Button(L10n.t("加入信任列表")) {
-                        Task { await FeatureSettingsStore.shared.trust(bundleID: seen.bundleID) }
+                        Task { await UnknownPlayerNotifier.trust(seen.bundleID) }
                     }
                 }
             }
@@ -5233,7 +5239,7 @@ private struct PlayerSettingsTab: View {
         case .alreadyTrusted:
             trustedPlayerPickerError = String(format: L10n.t("「%@」已在列表中"), name)
         case .addable:
-            Task { await FeatureSettingsStore.shared.trust(bundleID: bundleID) }
+            Task { await UnknownPlayerNotifier.trust(bundleID) }
         }
     }
 
@@ -6695,6 +6701,8 @@ private struct GeneralSettingsTab: View {
                 // 「测试」按钮)。别把它们藏回行尾的 ellipsis.circle 菜单:那个 ⋯ 会是整个设置页
                 // **唯一**的一个,别处卡头的菜单都带文字标签。
                 SettingsGlassActionMenu(title: L10n.t("备份文件夹…"), entries: backupFolderMenuEntries)
+                    // 正在从 iCloud 读一份备份时不许换文件夹:读完弹的确认框导入的是旧那份,导入后还会把文件夹改回去。
+                    .disabled(iCloudBusy)
             }
             // 第一行:有状态的目的地。
             //
@@ -6936,8 +6944,11 @@ private struct GeneralSettingsTab: View {
                         // 歌词必须排在 importData **之后**:歌词目录是
                         // features.lyricsDir(用户可自定义的绝对路径),而那个文件正是
                         // importData 刚写的 —— 先铺后导会铺到旧机器那个目录里去。
+                        // 歌词铺不下去(盘满、没有写权限、包解不开)也算这一次没导全,跟下面配置那几份一起报、不重启。
+                        var lyricsRestoreFailed = false
                         if let lyrics = pendingImportLyrics {
-                            await LyricsBackupStore.restore(from: lyrics)
+                            let restored = await LyricsBackupStore.restore(from: lyrics)
+                            lyricsRestoreFailed = restored == nil || (restored?.failed ?? 0) > 0
                         }
                         // 必须排在 importData 之后:备份目录这个键在导入排除表里、
                         // 不会被导入的包覆盖,但顺序反了会先被写、再被这一句改回来。
@@ -6946,7 +6957,7 @@ private struct GeneralSettingsTab: View {
                         }
                         // 有一份没写成(盘满、没有写权限):说清楚是哪部分,这次不重启 —— 重启了提示就没了,
                         // 用户会以为全部导入成功。其余部分已经生效,可以再导一次。
-                        let failed = ConfigPortability.lastImportFailures
+                        let failed = ConfigPortability.lastImportFailures + (lyricsRestoreFailed ? [L10n.t("歌词")] : [])
                         guard failed.isEmpty else {
                             configMessage = String(format: L10n.t("部分设置未能写入（%@），其余已导入。可再次导入，或检查配置文件夹的写入权限"),
                                                    failed.joined(separator: ", "))
@@ -7174,9 +7185,16 @@ private struct GeneralSettingsTab: View {
                 LyricsBackupArchive.sidecarName(forConfigName: snap.url.lastPathComponent))
             pendingImportLyrics = await ICloudConfigStore.read(sidecarURL)
             pendingImportLyricsCount = 0
+            // 解不开(损坏)就当这份备份没带歌词,同「从文件导入」那条路。
             if let lyrics = pendingImportLyrics {
-                pendingImportLyricsCount = await LyricsBackupStore.peek(lyrics)?.files ?? 0
+                if let files = await LyricsBackupStore.peek(lyrics)?.files {
+                    pendingImportLyricsCount = files
+                } else {
+                    pendingImportLyrics = nil
+                }
             }
+            // 等下载那几秒里换了备份文件夹:手上这份已经不是此刻要恢复的那份,不弹旧的确认框。
+            guard iCloudSnapshot?.url == snap.url else { return }
             showImportConfigConfirm = true
         }
     }

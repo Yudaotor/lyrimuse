@@ -140,10 +140,12 @@ public struct JSONConfigDocument {
         }
         let merged = merging(fields: fields, knownKeys: knownKeys)
         let data = try Self.serialize(merged)
+        // 原子写是「写临时文件再改名」:路径是软链接(dotfiles 仓库里那份)时,改名会把链接本身换成普通文件。写到它指向的那份。
+        let target = url.resolvingSymlinksInPath()
         if secure {
-            try data.writeSecurely(to: url)
+            try data.writeSecurely(to: target)
         } else {
-            try data.write(to: url, options: .atomic)
+            try data.write(to: target, options: .atomic)
         }
         raw = merged
         state = .loaded

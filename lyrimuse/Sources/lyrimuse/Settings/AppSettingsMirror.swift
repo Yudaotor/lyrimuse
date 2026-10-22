@@ -46,7 +46,12 @@ enum AppSettingsMirror {
     @MainActor private static var pendingWrite: Task<Void, Never>?
 
     /// 立刻写一份镜像。导入配置之后要显式调一次(见 ConfigPortability.importData)。
+    /// 「清除所有设置」之后到重启前不再写镜像:退出时那一次 `write()`(AppDelegate.applicationShouldTerminate)
+    /// 会把这期间写进去的 np: 键存下来,下次启动 `restoreIfPristine` 又恢复回去。
+    nonisolated(unsafe) static var writesSuspended = false
+
     static func write() {
+        guard !writesSuspended else { return }
         let payload = ConfigPortability.exportableAppSettings()
         guard !payload.isEmpty else { return }
         do {

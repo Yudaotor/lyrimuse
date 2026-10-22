@@ -365,20 +365,28 @@ enum DiagnosticsExporter {
     // .system 而不是 .currentProcessIdentifier:后者只能看到"这次启动之后"的记录,诊断
     // "上次为什么崩了/上次启动出的问题"这种场景必须能看到上一次进程生命周期里的记录。
     private static func recentAppLogLines(hours: Int = 24) -> [String] {
-        guard let store = try? OSLogStore(scope: .system) else {
+        // .system 在非管理员账户上可能打不开,退到只看本次启动的记录,并在报告里写明范围变小了。
+        var lines: [String] = []
+        let store: OSLogStore
+        if let system = try? OSLogStore(scope: .system) {
+            store = system
+        } else if let current = try? OSLogStore(scope: .currentProcessIdentifier) {
+            store = current
+            lines.append("(system log store unavailable; showing this launch only)")
+        } else {
             return ["(could not open log store)"]
         }
         let position = store.position(date: Date().addingTimeInterval(-Double(hours) * 3600))
         let predicate = NSPredicate(format: "subsystem == %@", "me.yudaotor.lyrimuse")
         guard let entries = try? store.getEntries(at: position, matching: predicate) else {
-            return ["(could not read log entries)"]
+            return lines + ["(could not read log entries)"]
         }
-        var lines: [String] = []
+        let header = lines.count
         for entry in entries {
             guard let logEntry = entry as? OSLogEntryLog else { continue }
             lines.append("\(logEntry.date) [\(logEntry.category)] \(logEntry.composedMessage)")
         }
-        return lines.isEmpty ? ["(no entries in the last \(hours)h)"] : lines
+        return lines.count == header ? lines + ["(no entries in the last \(hours)h)"] : lines
     }
 
     /// 最近 `days` 天内本 App 家族(App 本体 + 包内引擎)的崩溃报告摘要,每个进程最多 `perProcessLimit` 份

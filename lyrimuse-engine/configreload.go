@@ -83,7 +83,8 @@ func maybeReloadConfig() {
 	}
 	now := time.Now().UnixNano()
 	last := configCheckedAt.Load()
-	if now-last < int64(configReloadInterval) {
+	// 负差当作已到期,同 maybeReloadFeatures。
+	if d := now - last; d >= 0 && d < int64(configReloadInterval) {
 		return
 	}
 	if !configCheckedAt.CompareAndSwap(last, now) {
