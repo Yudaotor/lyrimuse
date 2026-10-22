@@ -958,7 +958,7 @@ func runPlayerIdentityTests() {
             .lxMusic: (nil, [.extendedControls, .favorite, .lateAnchorProbe]),
             .vox: (nil, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
                          .learnsAnchorLag, .arrivesWhole]),
-            .pinePlayer: (nil, [.snapsToReportedPosition, .arrivesWhole]),
+            .pinePlayer: (nil, [.extendedControls, .repeatOne, .snapsToReportedPosition, .arrivesWhole]),
         ]
         expectEqual(PlaybackPlayer.allCases.count, table.count + 1,
                     "决定表: 新增播放器要在这里补一行,逐项决定它走哪条路(+1 是 .auto)")

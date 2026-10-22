@@ -235,7 +235,8 @@ extension PlaybackPlayer {
         case pressesFavorite
         /// 只为随机 / 循环读、按菜单项(reAMP `ReampMenuControl`)。
         case pressesPlayMode
-        /// 读界面进度条把整秒的位置补准(Pine Player `PinePlayhead`),失焦时按播放控制菜单(`PlaybackMenuControl`)。
+        /// 读界面进度条把整秒的位置补准(Pine Player `PinePlayhead`),按菜单切循环(`PineMenuControl`),失焦时按播放控制菜单
+        /// (`PlaybackMenuControl`)。
         case refinesProgress
     }
 

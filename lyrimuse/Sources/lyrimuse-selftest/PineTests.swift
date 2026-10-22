@@ -170,6 +170,21 @@ func runPineTests() {
         expectEqual(H.wantsProgressBar(pausedAtStart, now: t0), false, "Pine 边界: 暂停时不读进度条")
     }
 
+    // ---- 循环:「重复模式」子菜单 ----
+    do {
+        typealias M = PineMenuControl
+        expectEqual([0, 1, 2, 3, 4].map { M.mode(checkedIndex: $0) }, [.repeatAll, .repeatAll, .repeatOne, .list, nil],
+                    "Pine 循环: 所有曲目、选中的列表都是列表循环,一首乐曲是单曲,无是关")
+        expectEqual(M.indexToPress(for: .repeatOne, checkedIndex: 0), 2, "Pine 循环: 列表循环切单曲按第三项")
+        expectEqual(M.indexToPress(for: .list, checkedIndex: 2), 3, "Pine 循环: 单曲切关按第四项")
+        expectEqual(M.indexToPress(for: .repeatAll, checkedIndex: 3), 0, "Pine 循环: 关切列表循环按「所有曲目」")
+        expectEqual(M.indexToPress(for: .repeatAll, checkedIndex: 1), nil, "Pine 循环: 「选中的列表」已经是列表循环,不按")
+        expectEqual(M.indexToPress(for: .shuffle, checkedIndex: 0), nil, "Pine 循环: 没有随机")
+        expectEqual(M.options, [.repeatAll, .repeatOne], "Pine 循环: 只给循环键,不给随机")
+        expectEqual(MusicPlaybackController.supportsExtendedControls(.pinePlayer), true, "Pine 循环: 歌词窗口出循环键")
+        expectEqual(MusicPlaybackController.supportsRepeatOne(.pinePlayer), true, "Pine 循环: 有单曲循环")
+    }
+
     // ---- 失焦时的菜单项 ----
     do {
         let none = 1 << 3
