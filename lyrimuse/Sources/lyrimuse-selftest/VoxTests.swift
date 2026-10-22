@@ -350,6 +350,12 @@ func runVoxTests() {
                     "VOX 电台: 这一首取系统那份的 ICY 标题,台标地址那栏丢掉,从标题换上来那一刻起算")
         let a2 = V.radioSnapshot(station: station, system: sys("Accident - Marjoram"), now: t0.addingTimeInterval(7))
         expectEqual(a2?.elapsedTime.map { abs($0 - 7) < 0.001 }, true, "VOX 电台: 同一个标题接着算")
+        let early = V.radioSnapshot(station: station, system: sys("Observed - Early"), now: t0.addingTimeInterval(30),
+                                    observedAt: t0.addingTimeInterval(28.4))
+        expectEqual(early?.elapsedTime.map { abs($0 - 1.6) < 0.001 }, true, "VOX 电台: 事件流看到换标题的时刻比轮询早,从那一刻起算")
+        expectEqual(V.radioTitleSince(observedAt: t0.addingTimeInterval(5), now: t0), t0, "VOX 电台: 事件流的时刻在未来不用")
+        expectEqual(V.radioTitleSince(observedAt: t0.addingTimeInterval(-11), now: t0), t0, "VOX 电台: 事件流的时刻太旧不用")
+        expectEqual(V.radioTitleSince(observedAt: nil, now: t0), t0, "VOX 电台: 没有事件流的时刻按这一拍起算")
         expectEqual(V.radioSnapshot(station: station, system: sys("Lyrimuse Test Radio"), now: t0) == nil
                     && V.radioSnapshot(station: station, system: nil, now: t0) == nil
                     && V.radioSnapshot(station: station, system: sys("Accident - Marjoram", bundle: "com.apple.Music"), now: t0) == nil,
@@ -392,7 +398,7 @@ func runVoxTests() {
         let client = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift").path, encoding: .utf8)) ?? ""
         let adapted = sourceBody("private static func adaptedSnapshot(", in: client)
         expectEqual(sourceHas(adapted, "guard VoxPlayerInfo.isRadioReading(vox) else { return vox }")
-                    && sourceHas(adapted, "if let radio = VoxPlayerInfo.radioSnapshot(station: vox, system: mediaControl, now: Date()) { return radio }")
+                    && sourceHas(adapted, "observedAt: lastTrackChangeObserved(forKey: mediaControl.trackKey)) { return radio }")
                     && sourceHas(adapted, "setSnapshotFailure(.targetNotPlayingMusic)"), true,
                     "VOX 电台接线: 主路径取系统那份的 ICY 标题,取不到算没有歌")
         expectEqual(sourceHas(sourceBody("private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {", in: client),

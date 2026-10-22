@@ -452,13 +452,15 @@ public enum VoxPlayerInfo {
 
     /// 网络电台这一拍的快照:歌名换成系统那份的 ICY 标题,位置是这个标题换上来之后过了多久(`PlayerTitleSplit` 拆歌手、
     /// 按 `streamLeadSecs(bundleID:)` 排延迟线)。系统那份不是 VOX 的、没有标题、标题就是台名或一个地址,都算这一拍没有歌,
-    /// 返回 nil,别拿台名去搜歌词。`station`:脚本读到的台名,没有脚本读数时为 nil。
-    public static func radioSnapshot(station: MediaControlSnapshot?, system: MediaControlSnapshot?, now: Date) -> MediaControlSnapshot? {
+    /// 返回 nil,别拿台名去搜歌词。`station`:脚本读到的台名,没有脚本读数时为 nil。`observedAt`:事件流看到这个标题换上来的
+    /// 那一刻(`radioTitleSince` 判用不用),没有就按这一拍第一次看到的时刻起算。
+    public static func radioSnapshot(station: MediaControlSnapshot?, system: MediaControlSnapshot?, now: Date,
+                                     observedAt: Date? = nil) -> MediaControlSnapshot? {
         guard let system, system.bundleIdentifier == bundleID,
               let raw = system.title?.trimmingCharacters(in: .whitespaces),
               isSongTitle(raw, station: station?.title) else { return nil }
         let since = radioTitles.withLock { seen -> Date in
-            if seen?.title != raw { seen = (raw, now) }
+            if seen?.title != raw { seen = (raw, radioTitleSince(observedAt: observedAt, now: now)) }
             return seen?.since ?? now
         }
         let base = station ?? system
@@ -466,6 +468,14 @@ public enum VoxPlayerInfo {
         out.processIdentifier = system.processIdentifier ?? station?.processIdentifier
         return out
     }
+
+    /// 新标题从哪一刻算起:事件流看到它换上来的那一刻比轮询准(轮询最多晚一拍),只认不晚于现在、在 `radioObservedMaxAge`
+    /// 以内的;否则用现在。纯函数,selftest 覆盖。
+    public static func radioTitleSince(observedAt: Date?, now: Date) -> Date {
+        guard let observedAt, observedAt <= now, now.timeIntervalSince(observedAt) <= radioObservedMaxAge else { return now }
+        return observedAt
+    }
+    static let radioObservedMaxAge: TimeInterval = 10
 
     /// 电台流的标题算不算一首歌:不空、不是台名、不是地址。纯函数,selftest 覆盖。
     public static func isSongTitle(_ title: String, station: String?) -> Bool {

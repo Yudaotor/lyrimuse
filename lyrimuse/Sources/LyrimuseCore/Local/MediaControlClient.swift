@@ -2204,7 +2204,9 @@ public enum MediaControlClient {
             // 放网络电台时脚本只有台名,这一首取系统那份的 ICY 标题;取不到就是这一拍没有歌,不退回台名。
             guard let vox = fetchVoxSnapshot() else { return VoxPlayerInfo.systemFallback(mediaControl) }
             guard VoxPlayerInfo.isRadioReading(vox) else { return vox }
-            if let radio = VoxPlayerInfo.radioSnapshot(station: vox, system: mediaControl, now: Date()) { return radio }
+            if let radio = VoxPlayerInfo.radioSnapshot(
+                station: vox, system: mediaControl, now: Date(),
+                observedAt: lastTrackChangeObserved(forKey: mediaControl.trackKey)) { return radio }
             setSnapshotFailure(.targetNotPlayingMusic)
             return nil
         default:
