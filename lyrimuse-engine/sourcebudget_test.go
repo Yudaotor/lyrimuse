@@ -19,7 +19,7 @@ func newBudgetGuard(budget int) (*hostGuard, *guardClock) {
 	return g, c
 }
 
-// 窗口里的请求数、还剩多少、要再腾出几个得等多久;滑出一小时的不算;不限额的源不记、不报。
+// 窗口里的请求数、还剩多少;滑出一小时的不算;不限额的源不记、不报。
 func TestSourceBudgetLeft(t *testing.T) {
 	g, c := newBudgetGuard(3)
 	t0 := c.t
@@ -28,19 +28,15 @@ func TestSourceBudgetLeft(t *testing.T) {
 		c.t = c.t.Add(10 * time.Minute)
 	}
 	// 现在是 t0+30m,三个请求在 t0、t0+10m、t0+20m。
-	left, wait, ok := g.sourceBudgetLeft("musixmatch", 2)
-	if !ok || left != 0 || wait != t0.Add(10*time.Minute+sourceBudgetWindow).Sub(c.t) {
-		t.Fatalf("left=%d wait=%v ok=%v", left, wait, ok)
-	}
-	if _, wait, _ := g.sourceBudgetLeft("musixmatch", 0); wait != 0 {
-		t.Fatalf("够用时不该等,实际 %v", wait)
+	if left, ok := g.sourceBudgetLeft("musixmatch"); !ok || left != 0 {
+		t.Fatalf("left=%d ok=%v", left, ok)
 	}
 	c.t = t0.Add(sourceBudgetWindow + time.Second)
-	if left, wait, _ := g.sourceBudgetLeft("musixmatch", 2); left != 1 || wait != t0.Add(10*time.Minute+sourceBudgetWindow).Sub(c.t) {
-		t.Fatalf("滑出一个之后 left=%d wait=%v", left, wait)
+	if left, _ := g.sourceBudgetLeft("musixmatch"); left != 1 {
+		t.Fatalf("滑出一个之后 left=%d", left)
 	}
 	g.noteSourceHit("qq")
-	if _, _, ok := g.sourceBudgetLeft("qq", 1); ok || len(g.sourceHits["qq"]) != 0 {
+	if _, ok := g.sourceBudgetLeft("qq"); ok || len(g.sourceHits["qq"]) != 0 {
 		t.Fatal("不限额的源不该记、不该报")
 	}
 }
@@ -66,7 +62,7 @@ func TestHostGuardSourceBudgetHoldsBackgroundOnly(t *testing.T) {
 	if err := g.admit(mustReq(t, fgCtx, "GET", url)); err != nil {
 		t.Fatalf("前台不受额度限制: %v", err)
 	}
-	if left, _, _ := g.sourceBudgetLeft("musixmatch", 1); left != -1 {
+	if left, _ := g.sourceBudgetLeft("musixmatch"); left != -1 {
 		t.Fatalf("前台发出去的也算额度,left = %d", left)
 	}
 }
@@ -86,31 +82,6 @@ func TestLyricSourceOutcomeIgnoresBudgetSkips(t *testing.T) {
 	}
 }
 
-// 导入清单:有额度的源余量不够一首用时先等;只看开着的源。
-func TestPrefetchImportBudgetWait(t *testing.T) {
-	saved := sharedHostGuard()
-	t.Cleanup(func() { setSharedHostGuard(saved) })
-	g, c := newBudgetGuard(prefetchImportBudgetNeed + 2)
-	setSharedHostGuard(g)
-	savedFeatures := *featuresRef()
-	t.Cleanup(func() { setFeatures(savedFeatures) })
-	featuresRef().LyricsSources = map[string]bool{"musixmatch": true}
-	if d := prefetchImportBudgetWait(); d != 0 {
-		t.Fatalf("额度够时不该等,实际 %v", d)
-	}
-	for i := 0; i < 5; i++ {
-		g.noteSourceHit("musixmatch")
-	}
-	c.t = c.t.Add(time.Minute)
-	if d := prefetchImportBudgetWait(); d != sourceBudgetWindow-time.Minute {
-		t.Fatalf("只剩 %d 个、要等最早那批滑出窗口,实际 %v", prefetchImportBudgetNeed-3, d)
-	}
-	featuresRef().LyricsSources = map[string]bool{"qq": true}
-	if d := prefetchImportBudgetWait(); d != 0 {
-		t.Fatalf("关着的源不该等,实际 %v", d)
-	}
-}
-
 // 额度跨重启接着算:记下的请求存进文件,新起的闸读回来,滑出窗口的不要;文件不在时从满额算。
 func TestSourceBudgetSurvivesRestart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "budget.json")
@@ -124,13 +95,13 @@ func TestSourceBudgetSurvivesRestart(t *testing.T) {
 	restarted, rc := newBudgetGuard(5)
 	rc.t = c.t.Add(20 * time.Minute) // 第一个已经滑出窗口
 	restarted.useSourceBudgetFile(path)
-	if left, _, _ := restarted.sourceBudgetLeft("musixmatch", 1); left != 3 {
+	if left, _ := restarted.sourceBudgetLeft("musixmatch"); left != 3 {
 		t.Fatalf("重启后应接着算(还剩 3 个),实际 %d", left)
 	}
 
 	empty, _ := newBudgetGuard(5)
 	empty.useSourceBudgetFile(filepath.Join(t.TempDir(), "missing.json"))
-	if left, _, _ := empty.sourceBudgetLeft("musixmatch", 1); left != 5 {
+	if left, _ := empty.sourceBudgetLeft("musixmatch"); left != 5 {
 		t.Fatalf("文件不在时从满额算,实际 %d", left)
 	}
 }

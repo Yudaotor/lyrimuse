@@ -345,7 +345,7 @@ func (g *hostGuard) admit(req *http.Request) error {
 			round.markSkippedBecause(source, lyricSourceSkipReasonPaused)
 			return errHostGuarded
 		}
-		if left, _, limited := g.sourceBudgetLeft(source, 1); limited && left <= 0 {
+		if left, limited := g.sourceBudgetLeft(source); limited && left <= 0 {
 			g.logHeld(host, "background requests to "+source+" used up the hourly budget")
 			round.markSkippedBecause(source, lyricSourceSkipReasonBudget)
 			return errHostGuarded

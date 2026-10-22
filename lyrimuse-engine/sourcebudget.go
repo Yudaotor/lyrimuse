@@ -12,7 +12,7 @@ import (
 // 400 多次连着两三个小时就被拦,拦下之后正在播的歌也问不了它。见 09 章决策 327。
 //
 // 被额度拦下的后台请求记进这一轮的跳过名单(lyricSourceSkipReasonBudget),跟排不上队一样,以后自动补问;
-// 各源近况统计不算它这一轮。导入清单起下一首之前先看余量(sourceBudgetLeft),不够就等,保证导入的每一首都问到这个源。
+// 各源近况统计不算它这一轮。导入清单也不等额度:用完之后这一小时导入的歌不问这个源,播到时再补问。
 //
 // 窗口里的请求时刻存进 sourceBudgetPath,启动时读回来:引擎一天被重启很多次(改设置、装新版),只记在内存里的话每次重启
 // 额度都从零算,等于没限。
@@ -88,24 +88,18 @@ func (g *hostGuard) useSourceBudgetFile(path string) {
 	}
 }
 
-// sourceBudgetLeft:这个源这一刻还剩几个请求的额度,和要再腾出 need 个还得等多久(够了是 0)。不限额的源 ok=false。
-func (g *hostGuard) sourceBudgetLeft(source string, need int) (left int, wait time.Duration, ok bool) {
+// sourceBudgetLeft:这个源这一刻还剩几个请求的额度。不限额的源 ok=false。
+func (g *hostGuard) sourceBudgetLeft(source string) (left int, ok bool) {
 	budget := g.sourceBudget(source)
 	if budget <= 0 {
-		return 0, 0, false
+		return 0, false
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	now := g.now()
 	hits := pruneSourceHits(g.sourceHits[source], now)
 	g.sourceHits[source] = hits
-	left = budget - len(hits)
-	if short := need - left; short > 0 {
-		// 最早的 short 个请求滑出窗口之后就够了。
-		i := min(short, len(hits)) - 1
-		wait = hits[i].Add(sourceBudgetWindow).Sub(now)
-	}
-	return left, wait, true
+	return budget - len(hits), true
 }
 
 // pruneSourceHits 丢掉窗口外的记录。hits 按时间先后排。

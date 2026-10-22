@@ -16,9 +16,8 @@ import (
 // 导入清单:往 prefetchImportQueuePath 写一批歌(每行一个 JSON:{"artist","title","album","duration"}),引擎在后台照同专辑预取
 // 的做法一首首解析歌词、写进缓存,不用真的播放。给批量扩充存量(各国榜单、歌单)用,没有界面入口。
 //   - 一次只跑一首,走后台优先级;缓存里已有(含宽松等价的写法)、正在解析的跳过(prefetchKeyFree)。
-//   - 起了解析的两首之间隔 prefetchImportGap;有小时额度的源(sourcebudget.go)余量不够一首用时,等窗口里腾出余量再起,
-//     不让这一首漏问它。源被 429 限流时不等:后台请求本来就由出站闸暂停(noteLyricSourceThrottled),而 Apple Music 的 429
-//     跟导入的量关系不大,等它只会让整份清单停住。
+//   - 起了解析的两首之间隔 prefetchImportGap。有小时额度的源(sourcebudget.go)用完额度、源被 429 限流时都不等:这两种情况
+//     出站闸本来就不发这一首的后台请求,记成跳过、播到时再补问;Apple Music 的 429 跟导入的量关系不大,等它只会让整份清单停住。
 //     一个歌词源都没连上的那首不算数,隔 prefetchImportOfflineWait 再从它接着搜。
 //   - 补空扫描 / 全量扫库在跑时让开,等下一次检查。
 //   - 进度记在 prefetchImportStatePath(清单内容的指纹 + 跑到第几行):引擎重启后接着跑,清单内容变了从头跑。
@@ -35,11 +34,8 @@ const (
 	prefetchImportStartDelay = 2 * time.Minute
 	// prefetchImportCheckInterval:多久看一次清单(没有清单、跑完了、让开了的都在下一次再看)。
 	prefetchImportCheckInterval = time.Minute
-	prefetchImportGap           = 8 * time.Second
+	prefetchImportGap           = 5 * time.Second
 	prefetchImportOfflineWait   = 5 * time.Minute
-	// prefetchImportBudgetNeed:起一首之前,有小时额度的源至少要剩这么多个请求。一首平均问 Musixmatch 四次左右,
-	// 别名轮、标题反查轮多的到八九次。
-	prefetchImportBudgetNeed = 10
 )
 
 var (
@@ -52,8 +48,6 @@ var (
 	}
 	// prefetchImportRunOne 跑一首。单测换成假的。
 	prefetchImportRunOne = prefetchImportOne
-	// prefetchImportBudget:起下一首之前要等多久(prefetchImportBudgetWait)。单测换成假的。
-	prefetchImportBudget = prefetchImportBudgetWait
 )
 
 type prefetchImportItem struct {
@@ -130,10 +124,6 @@ func runPrefetchImport(ctx context.Context) {
 			st.Cursor++
 			continue
 		}
-		if d := prefetchImportBudget(); d > 0 {
-			prefetchImportWait(ctx, d)
-			continue
-		}
 		out := prefetchImportRunOne(ctx, *it)
 		if ctx.Err() != nil {
 			savePrefetchImportState(st)
@@ -172,19 +162,6 @@ func prefetchImportShouldYield() bool {
 	lyricsFillSweepMu.Lock()
 	defer lyricsFillSweepMu.Unlock()
 	return lyricsFillSweepRunning
-}
-
-// prefetchImportBudgetWait:开着的联网歌词源里有小时额度的,要等多久才剩得下 prefetchImportBudgetNeed 个请求(取最长的);
-// 都够返回 0。
-func prefetchImportBudgetWait() time.Duration {
-	g := sharedHostGuard()
-	var wait time.Duration
-	for _, src := range enabledNetworkLyricSources() {
-		if _, d, limited := g.sourceBudgetLeft(src, prefetchImportBudgetNeed); limited && d > wait {
-			wait = d
-		}
-	}
-	return wait
 }
 
 // parsePrefetchImportItems:每行一首;写坏的行、缺歌手或歌名的行留 nil 占位,行号跟进度对得上。

@@ -169,27 +169,3 @@ func TestPrefetchImportOneResolves(t *testing.T) {
 		t.Fatal("已有等价写法的不该再起")
 	}
 }
-
-// 有源的小时额度不够一首用时先等腾出余量,再起这一首;等完照旧从这一首接着跑。
-func TestRunPrefetchImportWaitsForBudget(t *testing.T) {
-	var seen []string
-	setupPrefetchImportTest(t, []string{`{"artist":"A","title":"One","album":"X"}`},
-		func(_ context.Context, it prefetchImportItem) prefetchImportOutcome {
-			seen = append(seen, it.Title)
-			return prefetchImportOutcome{started: true}
-		})
-	var waits []time.Duration
-	prefetchImportWait = func(_ context.Context, d time.Duration) { waits = append(waits, d) }
-	budget := []time.Duration{90 * time.Second, 0}
-	savedBudget := prefetchImportBudget
-	t.Cleanup(func() { prefetchImportBudget = savedBudget })
-	prefetchImportBudget = func() time.Duration {
-		d := budget[0]
-		budget = budget[1:]
-		return d
-	}
-	runPrefetchImport(context.Background())
-	if len(seen) != 1 || len(waits) < 1 || waits[0] != 90*time.Second {
-		t.Fatalf("跑了 %v,等了 %v", seen, waits)
-	}
-}
