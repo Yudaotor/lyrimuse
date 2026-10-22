@@ -31,6 +31,10 @@ const (
 	lfmRetryMaxItems = 1000            // 保险丝:再多就丢最老的
 )
 
+// lfmRetryPause:一轮里两次 track.scrobble 之间停多久。授权失效几天能攒几百条,重连后那一轮不停顿就是每秒几次地连发,
+// Last.fm 条款不许持续每秒多次调用(补提交批间停 backfillBatchPause、核对逐条停 backfillLookupPause,同一个理由)。
+var lfmRetryPause = time.Second
+
 // lfmRetryItem 是一条等着重发的收听,字段就是当初 track.scrobble 的参数(歌手是上送时的写法,不是播放器原样)。
 type lfmRetryItem struct {
 	// User:入队时那把授权的账号(lastfmScrobbler.user)。重发时账号对不上就丢掉。
@@ -238,7 +242,7 @@ func processLfmRetry(ctx context.Context, now time.Time, user string, submit lfm
 	}
 	cutoff := now.Add(-backfillMaxAge).Unix()
 	done := map[string]bool{}
-	sent := 0
+	sent, attempted := 0, 0
 	for _, it := range items {
 		if ctx.Err() != nil {
 			break
@@ -257,6 +261,16 @@ func processLfmRetry(ctx context.Context, now time.Time, user string, submit lfm
 			log.Printf("lastfm retry: dropping %q - %q, deleted from the local listen log", it.Artist, it.Title)
 			continue
 		}
+		if attempted > 0 {
+			select {
+			case <-ctx.Done():
+			case <-time.After(lfmRetryPause):
+			}
+			if ctx.Err() != nil {
+				break
+			}
+		}
+		attempted++
 		err := submit(ctx, it)
 		if err == nil {
 			done[it.key()] = true

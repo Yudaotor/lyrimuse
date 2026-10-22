@@ -99,7 +99,7 @@ func seedListens(n int) []int64 {
 	out := make([]int64, n)
 	for i := range out {
 		out[i] = base + int64(i)*60
-		appendListen("Artist", "Song "+strconv.Itoa(i), "Album", out[i], 200)
+		appendListen("", "Artist", "Song "+strconv.Itoa(i), "Album", out[i], 200)
 	}
 	return out
 }
@@ -116,7 +116,7 @@ func receiptMarks() map[int64]string {
 }
 
 func pendingCount() int {
-	pending, _ := pendingBackfillListens(time.Now())
+	pending, _ := pendingBackfillListens(time.Now(), "")
 	return len(pending)
 }
 

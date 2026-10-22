@@ -73,6 +73,8 @@ func TestLastfmScrobblePointReached(t *testing.T) {
 		{"90%:179/200 没到", scrobblePoint90, 200, 179, false, false},
 		{"90%:180/200 到了", scrobblePoint90, 200, 180, false, true},
 		{"90%:10 分钟的歌,官方 240 s 早过、90% 还没到——不套 4 分钟上限", scrobblePoint90, 600, 300, false, false},
+		{"90%:淡入淡出提前接歌,已播 170/200 但放到了结尾", scrobblePoint90, 200, 170, true, true},
+		{"75%:放到了结尾", scrobblePoint75, 40, 25, true, true},
 		{"曲终:播放中永远不到", scrobblePointEnd, 200, 199, false, false},
 		{"曲终:放完了", scrobblePointEnd, 200, 100, true, true},
 		{"75%:曲长未知 → 官方规则", scrobblePoint75, 0, 10, false, true},

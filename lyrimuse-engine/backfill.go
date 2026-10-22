@@ -139,13 +139,13 @@ type backfillOutcome struct {
 }
 
 // pendingBackfillListens 折叠日志,返回"还没提交过、且在回溯窗口内"的收听,按 uts 升序。排在常驻进程 Last.fm
-// 重发队列里的不算(那边会交,两边都交就重复了)。
+// 重发队列里的不算(那边会交,两边都交就重复了);别的账号镜像失败留下的不算(user 是此刻连着的账号,没连为空)。
 //
 // 折叠规则见 foldListenLog。
 //
 // 官方指南:"Scrobbles should be sent in order, therefore cached scrobbles should be sent
 // before new scrobbles." —— 所以按 uts 升序,不是随便什么顺序。
-func pendingBackfillListens(now time.Time) (pending []listenLogLine, tooOld int) {
+func pendingBackfillListens(now time.Time, user string) (pending []listenLogLine, tooOld int) {
 	f := foldListenLog(readListenLog())
 	queued := map[int64]bool{}
 	for _, ts := range lfmRetryQueuedTimestamps() {
@@ -154,6 +154,9 @@ func pendingBackfillListens(now time.Time) (pending []listenLogLine, tooOld int)
 	cutoff := now.Add(-backfillMaxAge).Unix()
 	for uts, l := range f.listens {
 		if f.submitted[uts] || queued[uts] {
+			continue
+		}
+		if l.U != "" && !strings.EqualFold(l.U, user) {
 			continue
 		}
 		// 隔离:发出去了但没拿到回执。**跟已提交一样排除**,不在这里重发 —— 常驻进程核对过、确认没有的才解除并
@@ -467,8 +470,8 @@ func backfillBatchNeverStored(err error) bool {
 
 // stillPendingForBackfill 从一批里去掉此刻已经不需要补的:日志里已经有回执、隔离着,或者正排在常驻进程的
 // Last.fm 重发队列里(都按 pendingBackfillListens 重读一遍)。
-func stillPendingForBackfill(batch []listenLogLine, now time.Time) []listenLogLine {
-	current, _ := pendingBackfillListens(now)
+func stillPendingForBackfill(batch []listenLogLine, now time.Time, user string) []listenLogLine {
+	current, _ := pendingBackfillListens(now, user)
 	pending := make(map[int64]bool, len(current))
 	for _, l := range current {
 		pending[l.UTS] = true
@@ -494,7 +497,11 @@ func stillPendingForBackfill(batch []listenLogLine, now time.Time) []listenLogLi
 // 这个功能一次跑完不成功,用户手动再点一次就是了,不值得为它承担重复提交的风险。进了隔离的由常驻进程核对后重交。
 func runBackfill(ctx context.Context, s *lastfmScrobbler, dryRun bool) backfillOutcome {
 	now := time.Now()
-	pending, tooOld := pendingBackfillListens(now)
+	user := ""
+	if s != nil {
+		user = s.user
+	}
+	pending, tooOld := pendingBackfillListens(now, user)
 	out := backfillOutcome{Eligible: len(pending), SkippedTooOld: tooOld}
 	// dry-run 的判断必须排在 `s == nil` **之前**。空跑一个请求都不发,压根不需要
 	// scrobbler —— 而"还没连账号"恰恰是这个功能最主要的场景:界面要在那个状态下把本地
@@ -527,7 +534,7 @@ func runBackfill(ctx context.Context, s *lastfmScrobbler, dryRun bool) backfillO
 		// 这条命令一跑就是几分钟(按标签查 Last.fm 限速 1 次/秒),开头那份清单到发送这一刻可能已经过期:常驻进程的
 		// 重发队列(lfmretry.go)这期间交掉了其中几条,或者它们正排在那个队列里等下一轮。每批发送前重读一遍,
 		// 只发此刻仍然待补、又不在重发队列里的 —— 同一条收听交两次,删不掉。
-		batch := stillPendingForBackfill(pending[start:end], now)
+		batch := stillPendingForBackfill(pending[start:end], now, user)
 		advanceBackfillProgress(end - start - len(batch))
 		if len(batch) == 0 {
 			continue

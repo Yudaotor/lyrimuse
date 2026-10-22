@@ -41,13 +41,13 @@ func TestPendingBackfill_ExcludesSubmittedAndQuarantined(t *testing.T) {
 	now := time.Now()
 	fresh := now.Add(-1 * time.Hour).Unix()
 
-	appendListen("A", "unsubmitted", "al", fresh, 200)
-	appendListen("B", "already-submitted", "al", fresh+1, 200)
-	appendListen("C", "quarantined", "al", fresh+2, 200)
+	appendListen("", "A", "unsubmitted", "al", fresh, 200)
+	appendListen("", "B", "already-submitted", "al", fresh+1, 200)
+	appendListen("", "C", "quarantined", "al", fresh+2, 200)
 	markBackfilled(fresh + 1)
 	markQuarantined(fresh+2, "me")
 
-	pending, tooOld := pendingBackfillListens(now)
+	pending, tooOld := pendingBackfillListens(now, "")
 	if tooOld != 0 {
 		t.Errorf("tooOld should be 0, got %d", tooOld)
 	}
@@ -70,15 +70,15 @@ func TestPendingBackfill_SkipsTooOldAndSortsAscending(t *testing.T) {
 
 	now := time.Now()
 	// 超出 Last.fm 回溯窗口 —— 发出去只会被服务端静默忽略,还占一次尝试。
-	appendListen("Old", "way too old", "", now.Add(-30*24*time.Hour).Unix(), 200)
+	appendListen("", "Old", "way too old", "", now.Add(-30*24*time.Hour).Unix(), 200)
 	// 乱序写入,期望按 uts 升序读出(官方指南:cached scrobbles 要按顺序发)。
-	appendListen("C", "third", "", now.Add(-1*time.Hour).Unix(), 200)
-	appendListen("A", "first", "", now.Add(-3*time.Hour).Unix(), 200)
-	appendListen("B", "second", "", now.Add(-2*time.Hour).Unix(), 200)
+	appendListen("", "C", "third", "", now.Add(-1*time.Hour).Unix(), 200)
+	appendListen("", "A", "first", "", now.Add(-3*time.Hour).Unix(), 200)
+	appendListen("", "B", "second", "", now.Add(-2*time.Hour).Unix(), 200)
 	// 太短,不算一次收听 —— 日志可能被手工编辑过,读侧要自己复核一遍。
-	appendListen("Short", "tiny", "", now.Add(-30*time.Minute).Unix(), 5)
+	appendListen("", "Short", "tiny", "", now.Add(-30*time.Minute).Unix(), 5)
 
-	pending, tooOld := pendingBackfillListens(now)
+	pending, tooOld := pendingBackfillListens(now, "")
 	if tooOld != 1 {
 		t.Errorf("want 1 too-old listen, got %d", tooOld)
 	}
@@ -110,9 +110,9 @@ func TestDryRunReturnsListNewestFirst(t *testing.T) {
 	listenLogPath = filepath.Join(dir, "l.jsonl")
 
 	now := time.Now()
-	appendListen("A", "oldest", "al1", now.Add(-3*time.Hour).Unix(), 200)
-	appendListen("B", "middle", "", now.Add(-2*time.Hour).Unix(), 200)
-	appendListen("C", "newest", "al3", now.Add(-1*time.Hour).Unix(), 200)
+	appendListen("", "A", "oldest", "al1", now.Add(-3*time.Hour).Unix(), 200)
+	appendListen("", "B", "middle", "", now.Add(-2*time.Hour).Unix(), 200)
+	appendListen("", "C", "newest", "al3", now.Add(-1*time.Hour).Unix(), 200)
 
 	out := runBackfill(context.Background(), nil, true)
 	if out.Eligible != 3 || len(out.Items) != 3 {

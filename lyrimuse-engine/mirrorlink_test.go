@@ -328,7 +328,7 @@ func TestMirrorScrobbleTrackedFatalErrorIsLoggedForBackfill(t *testing.T) {
 	if !env.p.lfm.dead.Load() {
 		t.Error("error 9 应熔断")
 	}
-	pending, _ := pendingBackfillListens(time.Now())
+	pending, _ := pendingBackfillListens(time.Now(), "")
 	if len(pending) != 1 || pending[0].UTS != uts {
 		t.Errorf("这一条应出现在待补清单里,got %+v", pending)
 	}

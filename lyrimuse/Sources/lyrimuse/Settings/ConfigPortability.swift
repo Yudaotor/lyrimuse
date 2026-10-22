@@ -234,6 +234,8 @@ enum ConfigPortability {
     /// 最近一次 `importData` 里没写成的那几份(`config.json` / `features.json`)。`importData` 返回 true 只代表
     /// 「这是一份能读的备份」,不代表每一份都写进去了 —— 调用方据此说清楚哪部分没写成,别照常报成功再重启。
     nonisolated(unsafe) static var lastImportFailures: [String] = []
+    /// 最近一次 `buildExportData` 读不出钥匙串、包里没带账号凭据。调用方据此提示,别让人以为备份是完整的。
+    nonisolated(unsafe) static var lastExportOmittedCredentials = false
 
     static func suggestedFilename() -> String {
         let formatter = DateFormatter()
@@ -281,6 +283,7 @@ enum ConfigPortability {
     }
 
     static func buildExportData() -> Data? {
+        lastExportOmittedCredentials = false
         var bundle: [String: Any] = [
             "version": exportFormatVersion,
             ConfigExportMetadata.exportedAtKey: ConfigExportMetadata.exportedAtString(Date()),
@@ -294,7 +297,9 @@ enum ConfigPortability {
            let configObj = try? JSONSerialization.jsonObject(with: configData) {
             // 凭据在钥匙串的保险箱里,叠回去再导出:这份包就是要带着 token 原文换机器。
             if let fileObj = configObj as? [String: Any] {
-                bundle["config"] = CredentialVault.overlay(fileObj, vault: CredentialVaultStore.shared.load() ?? [:])
+                let vault = CredentialVaultStore.shared.load()
+                lastExportOmittedCredentials = vault == nil
+                bundle["config"] = CredentialVault.overlay(fileObj, vault: vault ?? [:])
             } else {
                 bundle["config"] = configObj
             }
@@ -372,6 +377,14 @@ enum ConfigPortability {
                 do {
                     // 含全部账号凭据 —— 走 writeSecurely 收紧到 0600,见那边的注释。
                     try configData.writeSecurely(to: configURL)
+                    // 导入的这份就是全部账号:本机钥匙串里的旧凭据清掉,否则包里没有的账号会被叠回来、照旧连着。
+                    // 清不掉(钥匙串锁着)时包里有值的照样生效(文件优先),只报这一部分没成。
+                    do {
+                        try CredentialVaultStore.shared.clearAccountCredentials()
+                    } catch {
+                        logger.error("importData: clearing keychain credentials failed — \(String(describing: error), privacy: .public)")
+                        lastImportFailures.append(L10n.t("钥匙串"))
+                    }
                     // 内存里的账号字段换成刚导入的这份,并清掉「有没保存的改动」:导入之后紧接着重启,
                     // 退出时的兜底保存(`applicationShouldTerminate`,只在 isDirty 时写)会把内存里的
                     // 旧值整份盖回 config.json。load 同时把刚写进文件的凭据挪进钥匙串。
@@ -442,8 +455,17 @@ enum ConfigPortability {
     /// 不会顺带卸载;而引擎是 KeepAlive=true 的 launchd 进程,配置在启动时读进内存,删掉 config.json 它照样拿着刚被
     /// 清除的 Last.fm session key 继续 scrobble,直到机器重启。用 setEnabledAndWait 而不是 setEnabled:后者是
     /// operationQueue.async 的 fire-and-forget,调用方下一句就是 restartApp() → NSApp.terminate,卸载多半来不及跑完。
-    @discardableResult
+    ///
+    /// 钥匙串里的账号凭据最先清,清不掉(钥匙串锁着、超时)就什么都不动、返回 false:先删了文件再清不掉保险箱,
+    /// 重启后账号会从保险箱叠回来。删文件失败只记日志,照样往下清。
     static func clearAllConfig() async -> Bool {
+        // Apple Music 令牌不算设置,留着。
+        do {
+            try CredentialVaultStore.shared.clearAccountCredentials()
+        } catch {
+            logger.error("clearAllConfig: clearing keychain credentials failed, nothing cleared — \(String(describing: error), privacy: .public)")
+            return false
+        }
         var ok = true
         if FileManager.default.fileExists(atPath: configURL.path) {
             do { try FileManager.default.removeItem(at: configURL) }
@@ -458,16 +480,6 @@ enum ConfigPortability {
                 logger.error("clearAllConfig: removing features.json failed — \(String(describing: error), privacy: .public)")
                 ok = false
             }
-        }
-        // 钥匙串里的账号凭据一起清掉(Apple Music 令牌不算设置,留着)。
-        do {
-            try CredentialVaultStore.shared.update {
-                $0[CredentialVault.configSection] = nil
-                $0[CredentialVault.channelsSection] = nil
-            }
-        } catch {
-            logger.error("clearAllConfig: clearing keychain credentials failed — \(String(describing: error), privacy: .public)")
-            ok = false
         }
         // 内存里的两份也换成刚删完的样子(空、且没有待存的改动)。不重载的话,账号页 1.2 秒防抖里还没存的
         // 改动会让 isDirty 为真,紧接着重启时的退出兜底(applicationShouldTerminate)把内存里整份旧凭据
@@ -497,7 +509,7 @@ enum ConfigPortability {
         // 操作,不回写偏好,顺序上不会把刚清掉的键又写回来。
         let state = await EngineServiceManager.setEnabledAndWait(false)
         logger.notice("clearAllConfig: engine service stopped — stillRunning=\(state.isRunning)")
-        return ok
+        return true
     }
 
     @MainActor

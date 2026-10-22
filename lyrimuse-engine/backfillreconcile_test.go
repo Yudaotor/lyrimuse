@@ -143,7 +143,7 @@ func TestPendingBackfillSkipsRetryQueue(t *testing.T) {
 	uts := seedListens(2)
 	enqueueLastfmRetry(lfmRetryItem{User: "me", Timestamp: uts[0], Artist: "Artist", Title: "Song 0"})
 
-	pending, _ := pendingBackfillListens(time.Now())
+	pending, _ := pendingBackfillListens(time.Now(), "")
 	if len(pending) != 1 || pending[0].UTS != uts[1] {
 		t.Fatalf("重发队列里的不该算待补: %+v", pending)
 	}
@@ -251,7 +251,7 @@ func TestQuarantineLinesRecordAccount(t *testing.T) {
 	live := time.Now().Add(-2 * time.Hour).Unix()
 	recordFailedMirror(fmt.Errorf("post: %w", context.DeadlineExceeded), "live-user", "A", "T", "", live, 200)
 	retried := time.Now().Add(-3 * time.Hour).Unix()
-	appendListen("A", "R", "", retried, 200)
+	appendListen("", "A", "R", "", retried, 200)
 	enqueueLastfmRetry(lfmRetryItem{User: "retry-user", Timestamp: retried, Artist: "A", Title: "R"})
 	processLfmRetry(context.Background(), time.Now(), "retry-user", func(context.Context, lfmRetryItem) error {
 		return &net.OpError{Op: "read", Net: "tcp", Err: errors.New("i/o timeout")}

@@ -601,6 +601,8 @@ struct AccountLinkingTab: View {
         .onReceive(config.objectWillChange.debounce(for: .milliseconds(1200), scheduler: DispatchQueue.main)) {
             Task { await performAutoSave() }
         }
+        // 启动那一下钥匙串没读出来时账号全显示成未连接:进这一页再读一次。
+        .onAppear { config.reloadIfVaultWasUnreadable() }
         // 兜底:防抖计时器还没到 1.2 秒、用户就切换到别的账号卡片(这个 View 会被销毁
         // 重建)或者关掉设置窗口,不能让这最后一段编辑内容悄悄丢掉不生效。
         .onDisappear {

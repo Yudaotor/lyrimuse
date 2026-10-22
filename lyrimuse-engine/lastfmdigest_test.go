@@ -797,7 +797,7 @@ func useCLIConfigDir(t *testing.T, cfg map[string]string) string {
 func TestBackfillCLIDryRunListsPendingWithoutAccount(t *testing.T) {
 	dir := useCLIConfigDir(t, map[string]string{})
 	listenLogPath = filepath.Join(dir, clientName+"-listens.jsonl")
-	appendListen("Alpha", "Song", "Album", time.Now().Add(-time.Hour).Unix(), 200)
+	appendListen("", "Alpha", "Song", "Album", time.Now().Add(-time.Hour).Unix(), 200)
 
 	out := captureStdout(t, func() { runBackfillLastfmCLI([]string{"-dry-run"}) })
 

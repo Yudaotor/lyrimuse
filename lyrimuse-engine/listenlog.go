@@ -79,8 +79,9 @@ type listenLogLine struct {
 	// 凭据判死那个窗口现在由 recordFailedMirror 兜住了:判死时照样留痕,
 	// 用户重新授权后能靠回填补回来,不必再接受「漏补一条」这个代价。
 	M int `json:"m,omitempty"`
-	// U:只在 "q" 行上写,是发出那次提交的 Last.fm 账号(lastfmScrobbler.user)。隔离核对只拿同一个账号去查、去重交
-	// (reconcileQuarantined);没有这个字段的老隔离行不知道属于哪个账号,不核对。
+	// U:发出那次提交的 Last.fm 账号(lastfmScrobbler.user),写在 "q" 行和镜像失败留痕的 "l" 行(recordFailedMirror)上。
+	// 隔离核对只拿同一个账号去查、去重交(reconcileQuarantined);没有这个字段的老隔离行不知道属于哪个账号,不核对。
+	// 补提交跳过账号不是当前这个的 "l" 行(pendingBackfillListens);没连账号时写的 "l" 没有 U,谁连上都能补。
 	U string `json:"u,omitempty"`
 }
 
@@ -135,13 +136,15 @@ func initListenLog(path string) {
 //     (已连账号的人日志里每条都被判成待补),从源头不写反而更难错。
 //
 // M 字段的**读取**逻辑保留(见 pendingBackfillListens):老版本已经写下的 m=1 行还在盘上。
-func appendListen(artist, title, album string, uts int64, durationSecs float64) {
+//
+// user:镜像失败留痕时是发那次提交的账号,没连账号时为空。
+func appendListen(user, artist, title, album string, uts int64, durationSecs float64) {
 	if uts <= 0 || title == "" {
 		return
 	}
 	appendListenLogLine(listenLogLine{
 		T: "l", V: listenLogSchemaVersion, UTS: uts,
-		AR: artist, TI: title, AL: album,
+		AR: artist, TI: title, AL: album, U: user,
 		DUR: durationSecs, AT: time.Now().Unix(),
 	})
 }

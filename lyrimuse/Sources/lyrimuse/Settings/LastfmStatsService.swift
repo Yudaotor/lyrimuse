@@ -405,6 +405,9 @@ final class LastfmStatsService: ObservableObject {
         /// 「第 N 次听」次数,范围限定在 `pages` 里实际出现过的曲目。跨重启持久化:重开 App
         /// 不必把前几页的次数再问一遍 Last.fm。老快照文件没有这个字段,解码时为 nil,视作空——不是错误。
         var playCounts: [String: Int]?
+        /// 写这份快照时次数表的口径版本(mergedCountsVersion)。对不上时 playCounts 不还原,同主快照:
+        /// 旧口径的次数并回来会一直挂到翻到那一页、标过期重取为止。老文件没有 → nil,同样当作对不上。
+        var mergedCountsVersion: Int?
         /// 已经问过、确认"那边没有次数"的曲目(同样限定在 `pages` 范围内)——没有这份
         /// 名单的话,这批曲目每次重启都要重新问一遍才能再得出同一个"没有"的结论,一样是
         /// 白白的重复请求。
@@ -458,7 +461,7 @@ final class LastfmStatsService: ObservableObject {
         // 用 merge/formUnion 而不是直接赋值:主快照(loadSnapshot,只覆盖第一页)已经
         // 先加载过,这里只补它没有的键,不拿这份(可能更旧一点的)数据倒退已经更新的值——
         // 两者理论上不会真的冲突,但这个方向的合并成本为零,不需要争论"会不会撞上"。
-        if let counts = snap.playCounts, !counts.isEmpty {
+        if snap.mergedCountsVersion == Self.mergedCountsVersion, let counts = snap.playCounts, !counts.isEmpty {
             trackPlayCounts.merge(counts) { current, _ in current }
         }
         if let unavailable = snap.playCountUnavailable, !unavailable.isEmpty {
@@ -537,6 +540,7 @@ final class LastfmStatsService: ObservableObject {
                 username: cred.user,
                 pages: Dictionary(uniqueKeysWithValues: capped.map { (String($0.key), $0.value) }),
                 playCounts: scopedCounts,
+                mergedCountsVersion: Self.mergedCountsVersion,
                 playCountUnavailable: Array(scopedUnavailable),
                 totals: Dictionary(uniqueKeysWithValues: capped.keys.compactMap { page in
                     recentPageCacheTotal[page].map { (String(page), $0) }
@@ -897,6 +901,9 @@ final class LastfmStatsService: ObservableObject {
     /// nowPlayingCountKey 的 playCountKey 形态，给 reconcileNowPlayingCount 直接查
     /// trackPlayCounts 用——避免每次都重新拼一遍、也避免两处归一化逻辑不一致。
     private var nowPlayingCountPlayCountKey = ""
+    /// nowPlayingCountKey 的写法族键(PlayCountFold.familyKey),判「这一次落库没有」用:本机写法、Last.fm 规范名
+    /// (简繁、合唱串、别名)折到同一个键上。
+    private var nowPlayingCountFamilyKey = ""
     /// 当前曲目的收听跨度(首次/上次听),歌词窗口「显示简介」的收听档案用。
     /// 数据来自 user.getTrackScrobbles(这首歌在这个账号下的全部 scrobble,带时间、可分页;
     /// 本地 listens.jsonl 靠不住 —— 它只在没连账号时才记,见 lyrimuse-engine/listenlog.go)。
@@ -1038,6 +1045,7 @@ final class LastfmStatsService: ObservableObject {
         nowPlayingCount = nil
         nowPlayingCountKey = ""
         nowPlayingCountPlayCountKey = ""
+        nowPlayingCountFamilyKey = ""
         nowPlayingSpan = nil
         nowPlayingSpanKey = ""
         onThisDay = nil
@@ -1067,6 +1075,8 @@ final class LastfmStatsService: ObservableObject {
         dailySyncing = false
         dailyFullSyncing = false
         historySyncGeneration += 1 // 在飞的那轮扫描作废,见声明处
+        truncationRescanAttempted = false
+        playCountVerifiedAt = [:]
         dailySyncFailed = false
         dailySyncProgress = nil
         todayFetched = nil
@@ -1145,12 +1155,13 @@ final class LastfmStatsService: ObservableObject {
         guard key != nowPlayingCountKey else { return }
         nowPlayingCountKey = key
         nowPlayingCountPlayCountKey = Self.playCountKey(artist: artist, title: title)
+        nowPlayingCountFamilyKey = PlayCountFold.familyKey(artist: artist, title: title)
         // 换歌那一刻先拿历史行那张表里这首歌的已知总数顶上(1 = 这一次),徽章/实时行不会
         // "先消失、等 1–9 秒再出现"(本机链路实测 p50 1.2 s、p90 6 s);
         // 下面真取回来再覆盖(通常同一个数,或只差 ±1)。表里没有这首歌时保持 nil ——
         // 那是"从未有过",占位是对的。
         nowPlayingCount = trackPlayCounts[nowPlayingCountPlayCountKey]
-            .map { displayedNowPlayingCount(total: $0, playCountKey: nowPlayingCountPlayCountKey) }
+            .map { displayedNowPlayingCount(total: $0) }
         guard !title.isEmpty, let cred = credentials else { return }
         let epoch = accountEpoch
         Task {
@@ -1175,7 +1186,13 @@ final class LastfmStatsService: ObservableObject {
                 }
                 for await (i, r) in group { results[i] = r }
             }
-            var total = results[0]?.count
+            guard nowPlayingCountKey == key, epoch == accountEpoch else { return }
+            // 本尊那一问没答上来(超时 / 限流 / 响应没带 userplaycount):孪生的合计只是半截,不写表、不改显示,
+            // 放开 key 守卫,下次打开歌词窗口或简介面板时重问。不放的话这首歌整首播放期间都不再取。
+            guard var total = results[0]?.count else {
+                nowPlayingCountKey = ""
+                return
+            }
             var identities = Set<String>()
             if let id = results[0]?.identity { identities.insert(id) }
             // 注:下面求和完之后会把这个新鲜总数写回 trackPlayCounts(见 adoptFreshTotal)
@@ -1184,21 +1201,19 @@ final class LastfmStatsService: ObservableObject {
             for i in sibs.indices {
                 guard let r = results[i + 1], let c = r.count, let id = r.identity,
                       identities.insert(id).inserted else { continue }
-                total = (total ?? 0) + c
+                total += c
             }
-            guard nowPlayingCountKey == key, epoch == accountEpoch else { return }
-            // 本尊那一问没回来(超时 / 限流):放开 key 守卫,下次打开歌词窗口或简介面板时重问。不放的话
-            // 这首歌整首播放期间都不再取,徽章一直是空的。
-            if results[0]?.count == nil, results[0]?.identity == nil { nowPlayingCountKey = "" }
-            if let total {
+            // 换歌那一刻 Last.fm 还可能答一个偏低的旧数(并账没跟上):比表里已知的小就不写表、显示照表里的,
+            // 表里那个由 resolvePlayCounts 按作废判据去纠。
+            let known = trackPlayCounts[nowPlayingCountPlayCountKey] ?? 0
+            if total >= known {
                 // 顺手把这个**新鲜的合并总数**写回历史行用的那张表(见 adoptFreshTotal)。
                 adoptFreshTotal(total, artist: artist, title: title, siblings: sibs)
-                // userplaycount 是**过去**的次数,这一次通常还没被记进去 —— 所以通常 +1。
-                // App 在歌已经播过 scrobble 门槛之后才启动/连上账号时,这一次早就落库了,
-                // 不能再 +1(见 displayedNowPlayingCount)。
-                nowPlayingCount = displayedNowPlayingCount(
-                    total: total, playCountKey: nowPlayingCountPlayCountKey)
             }
+            // userplaycount 是**过去**的次数,这一次通常还没被记进去 —— 所以通常 +1。
+            // App 在歌已经播过 scrobble 门槛之后才启动/连上账号时,这一次早就落库了,
+            // 不能再 +1(见 displayedNowPlayingCount)。
+            nowPlayingCount = displayedNowPlayingCount(total: max(total, known))
         }
     }
 
@@ -1217,7 +1232,7 @@ final class LastfmStatsService: ObservableObject {
               let fresh = freshCounts[nowPlayingCountPlayCountKey],
               let updated = PlayCountRecency.reconciledNowPlayingCount(
                 current: nowPlayingCount, freshTotal: fresh,
-                currentPlayCounted: currentPlayIsScrobbled(playCountKey: nowPlayingCountPlayCountKey))
+                currentPlayCounted: currentPlayIsScrobbled(familyKey: nowPlayingCountFamilyKey))
         else { return }
         nowPlayingCount = updated
     }
@@ -1225,29 +1240,30 @@ final class LastfmStatsService: ObservableObject {
     /// 「第 N 次听」的显示值 = 已落库的总数 +(这一次还没落库 ? 1 : 0)。三个写入点
     /// (换歌那一刻的乐观顶值、取回真实总数、reconcile 追赶)必须同一个口径,散开写的话
     /// 总有一条路会多算一次。
-    private func displayedNowPlayingCount(total: Int, playCountKey key: String) -> Int {
-        total + (currentPlayIsScrobbled(playCountKey: key) ? 0 : 1)
+    private func displayedNowPlayingCount(total: Int) -> Int {
+        total + (currentPlayIsScrobbled(familyKey: nowPlayingCountFamilyKey) ? 0 : 1)
     }
 
     /// 当前这次播放是否已经被 Last.fm 计进 userplaycount。
     ///
     /// 三道闸,缺一条就按"没入账"算(+1,宁可多算也不凭空少算):
-    ///  ① **本机正在播的就是这首**。比对 `playCountKey` 而不是只比标题:本机没在播它
+    ///  ① **本机正在播的就是这首**。比对写法族键(`PlayCountFold.familyKey`)而不是只比标题:本机没在播它
     ///     (在别的设备上播、或者刚换歌)时,下面那个开播时刻说的根本不是这首歌。这等价于
     ///     设置页实时行那条判据里的 `!live.remote`。
     ///  ② 有播放锚点 —— 开播时刻由它倒推(`fetchedAt − progressMs`),跟
     ///     `LiveScrobbleRow.absorbedRecent` 同一个算法。
-    ///  ③ 这首歌最新一条**已落库**的 scrobble 跟开播时刻对得上(纯判据在 Core,有 selftest)。
+    ///  ③ 这首歌最新一条**已落库**的 scrobble 跟开播时刻对得上(纯判据在 Core,有 selftest)。①③ 都按写法族比:
+    ///     调用方传的可能是 Last.fm 的规范名(设置页实时行),历史行也是 Last.fm 的写法,本机播放器是本机写法。
     ///     取"这首歌自己的最新一条"而不是"整个列表的最新一条":中间插进来一条别的设备的
     ///     scrobble 时,后者会把这一条挤到第二行,而它明明就是这次播放。
-    private func currentPlayIsScrobbled(playCountKey key: String) -> Bool {
+    private func currentPlayIsScrobbled(familyKey key: String) -> Bool {
         let pc = PlaybackCoordinator.shared
-        guard !key.isEmpty, Self.playCountKey(artist: pc.artist, title: pc.title) == key,
+        guard !key.isEmpty, PlayCountFold.familyKey(artist: pc.artist, title: pc.title) == key,
               let anchor = pc.anchor else { return false }
         let playStart = anchor.fetchedAt.addingTimeInterval(-Double(anchor.progressMs) / 1000)
         let newest = recent.first {
             !$0.nowPlaying && $0.date != nil
-                && Self.playCountKey(artist: $0.artist, title: $0.title) == key
+                && PlayCountFold.familyKey(artist: $0.artist, title: $0.title) == key
         }?.date
         return PlayCountRecency.currentPlayIsScrobbled(newestScrobbleAt: newest, playStart: playStart)
     }
@@ -1374,6 +1390,8 @@ final class LastfmStatsService: ObservableObject {
     /// - Parameter force: 绕过 TTL/跨天那道闸,**无条件**重取一次。只给界面上失败态那颗
     ///   「重试」按钮用。没有它的话失败态那颗按钮点了什么都不会发生:
     ///   `fetchedAt["onthisday"]` 在发请求前就写了,一次失败要占住 6 小时。
+    private var onThisDayGeneration = 0
+
     func refreshOnThisDay(force: Bool = false) {
         let now = Date()
         // 判据是 DailyRefreshGate 那个纯函数(TTL 或 跨天,取或),不是这个类里通用的
@@ -1408,6 +1426,9 @@ final class LastfmStatsService: ObservableObject {
             return
         }
         let epoch = accountEpoch
+        // 跨过零点、或重试和轮询并发时会有两轮在飞:只认最后起飞的那一轮,旧那轮晚落地不能把昨天的结果当成今天的写进来。
+        onThisDayGeneration += 1
+        let generation = onThisDayGeneration
         Task {
             // 区分「都没记录」和「请求全挂」:计划里的窗口**都**回来了才配说"都没有";有一个
             // 没回来就是"没能取到"+重试(只要任一年有响应就判 .empty 的话,慢链路上第 3 年超时时
@@ -1420,7 +1441,7 @@ final class LastfmStatsService: ObservableObject {
                             "limit": String(onThisDayPageSize)]
                 guard let first = await request(method: "user.getrecenttracks", cred: cred, extra: base)
                 else { continue }
-                guard epoch == accountEpoch else { return }
+                guard epoch == accountEpoch, generation == onThisDayGeneration else { return }
                 responses += 1
                 let total = attrTotal(first)
                 var rows = parseRecent(first).filter { $0.date != nil }
@@ -1434,7 +1455,7 @@ final class LastfmStatsService: ObservableObject {
                         guard let more = await request(method: "user.getrecenttracks", cred: cred,
                                                        extra: base.merging(["page": String(page)]) { _, new in new })
                         else { break }
-                        guard epoch == accountEpoch else { return }
+                        guard epoch == accountEpoch, generation == onThisDayGeneration else { return }
                         rows.append(contentsOf: parseRecent(more).filter { $0.date != nil })
                     }
                 }
@@ -1464,6 +1485,7 @@ final class LastfmStatsService: ObservableObject {
             //   - 一次都没回来 → 网络/限流/API 挂了,说"取不到"并给「重试」。
             //     这一支尤其要紧:失败已经占住了 6 小时 TTL(见函数开头),不给重试按钮
             //     就只能等 6 小时或重启 App,点进去一直是空白。
+            guard epoch == accountEpoch, generation == onThisDayGeneration else { return }
             if responses == windows.count {
                 onThisDay = nil // 确认没有:别让另一天的旧卡继续挂着(见上面 windows.isEmpty 那支)
                 onThisDayOutcome = .empty
@@ -1526,10 +1548,14 @@ final class LastfmStatsService: ObservableObject {
         case .failed?, nil:
             break
         }
-        guard let cred = credentials,
-              let start = Self.dayKeyFormatter.date(from: dayKey).map({ Calendar.current.startOfDay(for: $0) }),
-              let end = Calendar.current.date(byAdding: .day, value: 1, to: start)
-        else { return }
+        guard let cred = credentials else { return }
+        // 不用 dayKeyFormatter 解析:零点切夏令时的那一天它解出 nil,浮层会一直转圈。
+        guard let start = ListeningMilestones.parseDay(dayKey, calendar: .current),
+              let end = Calendar.current.date(byAdding: .day, value: 1, to: start).map({ Calendar.current.startOfDay(for: $0) })
+        else {
+            dayListens[dayKey] = .failed
+            return
+        }
         dayListens[dayKey] = .loading
         let epoch = accountEpoch
         let base = ["from": String(Int(start.timeIntervalSince1970)), "to": String(Int(end.timeIntervalSince1970)),
@@ -1645,12 +1671,20 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
+    private var dailySaveTask: Task<Void, Never>?
+
+    /// 快照在主线程上拼好,编码和写盘挪到后台(按钟点的数是天数 × 24,账号越老越大);按调用顺序串起来,
+    /// 先拼的那份不会晚写、盖掉后拼的。
     private func saveDailySnapshot() {
         guard let cred = credentials else { return }
         let snap = DailySnapshot(username: cred.user, syncedThrough: dailySyncedThrough, days: dailyCounts,
                                  hours: hourlyCounts)
-        if let data = try? JSONEncoder().encode(snap) {
-            FileIO.write(data, to: Self.dailyURL)
+        let url = Self.dailyURL
+        let previous = dailySaveTask
+        dailySaveTask = Task.detached(priority: .utility) {
+            await previous?.value
+            guard let data = try? JSONEncoder().encode(snap) else { return }
+            FileIO.write(data, to: url)
         }
     }
 
@@ -1942,6 +1976,17 @@ final class LastfmStatsService: ObservableObject {
                     saveDailySnapshot()
                     bootstrapState = .failed
                 }
+                return
+            }
+            // 到了一轮的请求上限还没扫完(某页降成小页之后,400 页只够 8 万条):按中断处理,落断点、不盖水位,
+            // 紧接着从断点再起一轮。当成扫完的话水位一盖、断点一清,最早那段历史再也扫不到。
+            if full && page <= totalPages {
+                historyCheckpoint = HistorySyncCheckpoint(
+                    username: cred.user, page: page - 1, from: from, startedAt: scanUpTo, limit: limit)
+                saveHistoryCheckpoint()
+                saveDailySnapshot()
+                logger.notice("history sync: request budget used up at page \(page, privacy: .public)/\(totalPages, privacy: .public), continuing from the checkpoint")
+                Task { @MainActor in self.syncHistoryIfNeeded() }
                 return
             }
             if !full {
@@ -3905,8 +3950,10 @@ final class LastfmStatsService: ObservableObject {
     /// 直连 `user.gettop*` 拉一档榜单并落进 `charts[key]`。专辑/歌曲榜的正常路径;歌手榜只在
     /// 引擎子命令失败时当兜底(拿到的是**未合并**的原始榜——同一个人可能拆成几条,但比
     /// 一行「重试」强得多,见 refreshMergedArtistChart)。返回 false = 请求失败。
+    /// 换过账号(accountEpoch 变了)时什么都不写、返回 true:那是上一个账号的榜,也不该给新账号记一次失败。
     private func fetchChartDirect(kind: ChartKind, period: Period, key: String,
                                   cred: (user: String, key: String)) async -> Bool {
+        let epoch = accountEpoch
         // 上一期跟本期并发取、一起落地:分两次落的话,箭头那一列会在榜单出来之后才插进来、把整行挤一下。
         let window = ChartComparison.span(forPeriod: period.rawValue)
             .map { ChartComparison.previousWindow(span: $0, now: Date()) }
@@ -3915,8 +3962,9 @@ final class LastfmStatsService: ObservableObject {
         let limit = kind == .artists ? ChartVisibleRows.fetchLimit : ChartMerge.poolLimit
         guard let json = await request(method: kind.method, cred: cred,
                                        extra: ["period": period.rawValue, "limit": String(limit)])
-        else { return false }
+        else { return epoch != accountEpoch }
         let previous = await previousChart
+        guard epoch == accountEpoch else { return true }
         let (outer, inner) = kind.listPath
         let items = (dig(json, outer, inner) as? [[String: Any]]) ?? []
         if kind == .artists {
@@ -3957,6 +4005,7 @@ final class LastfmStatsService: ObservableObject {
             chartPools[key] = pool
             let token = beginChartMerge(key)
             let merged = await Self.mergedEntriesInBackground(pool)
+            guard epoch == accountEpoch else { return true }
             // 合并途中又开了一次更新的合并(别名表变了):榜单交给它,这里只落其余几样。
             if chartMergeTokens[key] == token { charts[key] = merged }
         }
@@ -4076,6 +4125,15 @@ final class LastfmStatsService: ObservableObject {
         let enginePath = LyrimusePaths.bundledEnginePath
         chartLoadingKeys.insert(cacheKey)
         chartFailedKeys.remove(cacheKey)
+        // 一个子进程四档全拿:这个账号的那个还在跑就等它,不再起第二个(连着切时段、首次同步收尾一次刷 12 档时,
+        // 各起一个就是几个进程同时打 Last.fm,各自的限速互不相管)。
+        if mergedArtistChartRunEpoch == accountEpoch {
+            mergedArtistChartWaiting[cacheKey] = period
+            return
+        }
+        let epoch = accountEpoch
+        mergedArtistChartRunEpoch = epoch
+        mergedArtistChartWaiting = [cacheKey: period]
         Task.detached(priority: .userInitiated) {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: enginePath)
@@ -4121,16 +4179,19 @@ final class LastfmStatsService: ObservableObject {
                 // topartistscli.go 的 -mb-budget),这里是第二道保险。
                 await MainActor.run {
                     let svc = LastfmStatsService.shared
-                    Task {
-                        defer { svc.chartLoadingKeys.remove(cacheKey) }
-                        guard let cred = svc.credentials else {
-                            svc.chartFailedKeys.insert(cacheKey)
-                            svc.fetchedAt[cacheKey] = nil
-                            return
-                        }
-                        if !(await svc.fetchChartDirect(kind: .artists, period: period, key: cacheKey, cred: cred)) {
-                            svc.chartFailedKeys.insert(cacheKey)
-                            svc.fetchedAt[cacheKey] = nil
+                    guard svc.accountEpoch == epoch else { return } // 换过账号:新账号的状态 resetAll 已经清过
+                    for (key, waitingPeriod) in svc.finishMergedArtistChartRun() {
+                        Task {
+                            defer { svc.chartLoadingKeys.remove(key) }
+                            guard let cred = svc.credentials else {
+                                svc.chartFailedKeys.insert(key)
+                                svc.fetchedAt[key] = nil
+                                return
+                            }
+                            if !(await svc.fetchChartDirect(kind: .artists, period: waitingPeriod, key: key, cred: cred)) {
+                                svc.chartFailedKeys.insert(key)
+                                svc.fetchedAt[key] = nil
+                            }
                         }
                     }
                 }
@@ -4158,7 +4219,9 @@ final class LastfmStatsService: ObservableObject {
             let filledWindows = windowsByKey
             await MainActor.run {
                 let svc = LastfmStatsService.shared
-                svc.chartLoadingKeys.remove(cacheKey)
+                // 换过账号:这是上一个账号的榜(子进程起跑时读的是旧配置),不写、不落快照。
+                guard svc.accountEpoch == epoch else { return }
+                let waiting = svc.finishMergedArtistChartRun()
                 let now = Date()
                 for (key, entries) in filled {
                     svc.charts[key] = entries
@@ -4166,10 +4229,13 @@ final class LastfmStatsService: ObservableObject {
                     svc.fetchedAt[key] = now // 四档全部盖到 TTL,切时段不再各自重拉
                 }
                 svc.refreshChartAppLinks()
-                // 用户正看的时段可能不在返回里(单时段失败被 Go 侧跳过):按失败态给重试入口
-                if filled[cacheKey] == nil {
-                    svc.chartFailedKeys.insert(cacheKey)
-                    svc.fetchedAt[cacheKey] = nil
+                // 等着的时段可能不在返回里(单时段失败被 Go 侧跳过):按失败态给重试入口
+                for key in waiting.keys {
+                    svc.chartLoadingKeys.remove(key)
+                    if filled[key] == nil {
+                        svc.chartFailedKeys.insert(key)
+                        svc.fetchedAt[key] = nil
+                    }
                 }
                 // 头像只解析当前时段默认露出的前 10 行 —— 其它时段大量重合,切过去时按需补(有磁盘缓存);
                 // 「显示更多」露出的行由 ensureChartImages 补
@@ -4179,6 +4245,18 @@ final class LastfmStatsService: ObservableObject {
                 svc.scheduleSnapshotSave()
             }
         }
+    }
+
+    /// 在跑的 top-artists 子进程属于哪个账号世代(nil = 没在跑),和等它的那几档(缓存键 → 时段)。
+    private var mergedArtistChartRunEpoch: Int?
+    private var mergedArtistChartWaiting: [String: Period] = [:]
+
+    /// 子进程跑完:清掉在跑标记,交回等着的那几档。
+    private func finishMergedArtistChartRun() -> [String: Period] {
+        let waiting = mergedArtistChartWaiting
+        mergedArtistChartRunEpoch = nil
+        mergedArtistChartWaiting = [:]
+        return waiting
     }
 
     /// 「显示更多」露出新的行时补这些行的头像 / 封面。榜单到手时只补前 10 行:50 个名字一次交给

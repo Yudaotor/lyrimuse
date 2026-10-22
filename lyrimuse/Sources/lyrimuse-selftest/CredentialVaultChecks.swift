@@ -55,6 +55,19 @@ func credentialVaultChecks() {
         expectEqual(CredentialVault.hasPlaintext(parts.file), false, "明文判定: 拆完的那份没有")
         expectEqual(CredentialVault.hasPlaintext(["listenbrainz_token": "  ", "notification_webhook_urls": [String: String]()]), false,
                     "明文判定: 空白和空表不算")
+        let channels: [[String: Any]] = [["id": "a", "url": "https://ntfy.example/a", "secret": "tk"]]
+        let before: [String: Any] = ["listenbrainz_token": "t", "listenbrainz_user": "u", "notification_channels": channels]
+        expectEqual(CredentialVault.clearsCredential(from: before, to: before.merging(["listenbrainz_user": ""]) { $1 }), false,
+                    "清空判定: 改的不是凭据")
+        expectEqual(CredentialVault.clearsCredential(from: before, to: before.merging(["listenbrainz_token": " "]) { $1 }), true,
+                    "清空判定: token 写成空白")
+        expectEqual(CredentialVault.clearsCredential(from: before.merging(["listenbrainz_token": ""]) { $1 },
+                                                     to: before.merging(["listenbrainz_token": ""]) { $1 }), false,
+                    "清空判定: 本来就空")
+        expectEqual(CredentialVault.clearsCredential(from: before, to: before.merging(["notification_channels": [[String: Any]]()]) { $1 }), false,
+                    "清空判定: 整个渠道删掉不算(文件里没这个渠道,保险箱那份叠不回来)")
+        expectEqual(CredentialVault.clearsCredential(from: before, to: before.merging(["notification_channels": [["id": "a", "url": "https://ntfy.example/a"]]]) { $1 }), true,
+                    "清空判定: 留着的渠道密钥清空")
         let encoded = try? CredentialVault.encode(vault)
         expectEqual(encoded.flatMap(CredentialVault.decode).map { NSDictionary(dictionary: $0) }, NSDictionary(dictionary: vault),
                     "编码: base64 往返")
@@ -96,8 +109,21 @@ func credentialVaultChecks() {
         do { try cli.write("not base64!") } catch let failure as KeychainCLI.Failure { bad = failure } catch {}
         expectEqual(bad, .badArgument, "真钥匙串: 不是 base64 文本的值拒绝")
 
+        _ = try? fresh.update { $0[CredentialVault.channelsSection] = ["a": ["url": "u"]] }
+        let cleared = CredentialVaultStore(keychain: cli)
+        expectEqual((try? cleared.clearAccountCredentials()) != nil, true, "清账号凭据: 写入")
+        expectEqual(CredentialVaultStore(keychain: cli).load()?.keys.sorted(), [CredentialVault.mediaUserTokenKey],
+                    "清账号凭据: config 和 channels 两段去掉,Apple Music 令牌留着")
+
         _ = try? fresh.update { $0.removeAll() }
         expectEqual(credentialVaultReadOutcome(cli), "没有条目", "真钥匙串: 清空 = 删掉条目")
+
+        try? cli.write(Data("not json".utf8).base64EncodedString())
+        let corrupt = CredentialVaultStore(keychain: cli)
+        expectEqual(corrupt.load() == nil, true, "内容坏了: load 读不出")
+        expectEqual((try? corrupt.clearAccountCredentials()) != nil, true, "内容坏了: 清账号凭据把整条删掉")
+        expectEqual(credentialVaultReadOutcome(cli), "没有条目", "内容坏了: 删完没有条目")
+        expectEqual(corrupt.load().map { NSDictionary(dictionary: $0) }, NSDictionary(), "内容坏了: 删完是空保险箱")
     }
 
     do {
@@ -121,6 +147,9 @@ func credentialVaultChecks() {
         var unreadable: KeychainCLI.Failure?
         do { try store.update { $0["x"] = "y" } } catch let f as KeychainCLI.Failure { unreadable = f } catch {}
         expectEqual(unreadable, .unreadable, "读不出来: 读改写拒绝,不在不知道原内容时覆盖")
+        var clearFailure: KeychainCLI.Failure?
+        do { try store.clearAccountCredentials() } catch let f as KeychainCLI.Failure { clearFailure = f } catch {}
+        expectEqual(clearFailure, .timedOut, "读不出来: 清账号凭据也抛错,不去删条目")
     }
 }
 

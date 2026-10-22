@@ -182,16 +182,21 @@ func newLastfmScrobbler(apiKey, secret, sk string) *lastfmScrobbler {
 
 // lastfmScrobblerIfEnabled 是 newLastfmScrobbler 的唯一调用点(run() 里)，多包一层
 // features().LastfmMirrorScrobble 开关——跟凭据判断是 AND 关系,任一为否都返回 nil。
+// lastfmScrobbleUser:写入授权所属的账号(小写),没记授权账号时退回只读那个用户名。
+func lastfmScrobbleUser(cfg *config) string {
+	if u := strings.ToLower(strings.TrimSpace(cfg.LastfmScrobbleUsername)); u != "" {
+		return u
+	}
+	return strings.ToLower(strings.TrimSpace(cfg.LastfmUser))
+}
+
 func lastfmScrobblerIfEnabled(cfg *config) *lastfmScrobbler {
 	if !features().LastfmMirrorScrobble {
 		return nil
 	}
 	s := newLastfmScrobbler(cfg.LastfmScrobbleAPIKey, cfg.LastfmScrobbleSecret, cfg.LastfmScrobbleSessionKey)
 	if s != nil {
-		s.user = strings.ToLower(strings.TrimSpace(cfg.LastfmScrobbleUsername))
-		if s.user == "" {
-			s.user = strings.ToLower(strings.TrimSpace(cfg.LastfmUser))
-		}
+		s.user = lastfmScrobbleUser(cfg)
 		// 用**只读**的那把 api_key:track.getInfo 不需要签名/session key,判定这一步不碰写凭据。
 		// 三档都建(匹配器只是读了一下缓存文件),档位在 resolveScrobbleTags 里判。
 		s.catalog = newLastfmCatalogMatcher(cfg.lastfmBridgeAPIKey())

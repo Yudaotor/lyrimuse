@@ -69,6 +69,19 @@ public enum CredentialVault {
         return (file, secrets, channelSecrets)
     }
 
+    /// `after` 比 `before` 少了凭据:某个凭据键由有值变成空,或两边都在的渠道的地址 / 密钥由有值变成空。
+    public static func clearsCredential(from before: [String: Any], to after: [String: Any]) -> Bool {
+        let old = split(before), new = split(after)
+        if old.config.keys.contains(where: { new.config[$0] == nil }) { return true }
+        let kept = Set((after["notification_channels"] as? [Any] ?? []).compactMap { ($0 as? [String: Any])?["id"] as? String })
+        for (id, value) in old.channels where kept.contains(id) {
+            let was = value as? [String: String] ?? [:]
+            let now = new.channels[id] as? [String: String] ?? [:]
+            if was.keys.contains(where: { now[$0] == nil }) { return true }
+        }
+        return false
+    }
+
     /// 文件里还躺着明文凭据(旧版本写的、导入的、手改的)。
     public static func hasPlaintext(_ file: [String: Any]) -> Bool {
         let (_, config, channels) = split(file)
@@ -203,7 +216,31 @@ public final class CredentialVaultStore: @unchecked Sendable {
     public func update(_ mutate: (inout [String: Any]) -> Void) throws -> [String: Any] {
         lock.lock()
         defer { lock.unlock() }
-        guard var contents = loadLocked() else { throw KeychainCLI.Failure.unreadable }
+        guard let contents = loadLocked() else { throw KeychainCLI.Failure.unreadable }
+        return try writeLocked(contents, mutate)
+    }
+
+    /// 清掉账号凭据(`config`、`channels` 两段),Apple Music 令牌留着。条目读得出、内容解不开时整条删掉:
+    /// 坏了的内容谁也用不上,不删的话 `update` 永远写不进去。钥匙串读不出(锁着、超时)时抛错、不碰条目。
+    public func clearAccountCredentials() throws {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let contents = loadLocked() else {
+            // 读不出照旧抛;读得出才是内容坏了
+            _ = try keychain.read()
+            try keychain.delete()
+            cached = [:]
+            return
+        }
+        try writeLocked(contents) {
+            $0[CredentialVault.configSection] = nil
+            $0[CredentialVault.channelsSection] = nil
+        }
+    }
+
+    @discardableResult
+    private func writeLocked(_ loaded: [String: Any], _ mutate: (inout [String: Any]) -> Void) throws -> [String: Any] {
+        var contents = loaded
         mutate(&contents)
         contents = contents.filter { !CredentialVault.isBlank($0.value) }
         if contents.isEmpty {

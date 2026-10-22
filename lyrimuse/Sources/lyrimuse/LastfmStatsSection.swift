@@ -1465,6 +1465,8 @@ private struct LiveScrobbleRow: View {
     private struct LiveSource {
         var title: String
         var artist: String
+        /// 取「第 N 次听」用的歌手名:本机这首用本机写法,跟歌词窗口取数同一个键,两边不会轮流换键重取。
+        var countArtist: String
         /// 本机播放器现成的位图。**只是兜底** —— 列表里给得出封面时不用它,理由见下面
         /// LiveSource 的构造处和 LastfmStatsService.liveCoverURL。
         var artwork: NSImage?
@@ -1490,6 +1492,7 @@ private struct LiveScrobbleRow: View {
                                                    album: playback.album, youtubeMusicAlbum: playback.youtubeMusicAlbum))
             return LiveSource(title: playback.title,
                               artist: canonicalLiveArtist(localArtist: playback.artist),
+                              countArtist: playback.artist,
                               artwork: playback.displayArtworkImage, imageURL: listCover,
                               confirmed: serverConfirms(playback.title), remote: false)
         }
@@ -1500,7 +1503,7 @@ private struct LiveScrobbleRow: View {
         // 消失,这种情况几乎总是**我们自己**刚才播它时留下的残影(本机现在是暂停),
         // 拿它显示"正在记录"就是在撒谎。真在别的设备上放时,那首歌跟本机这首对不上。
         if let np = stats.apiNowPlaying, stats.apiNowPlayingIsFresh, !matchesLocalTrack(np.title) {
-            return LiveSource(title: np.title, artist: np.artist, artwork: nil,
+            return LiveSource(title: np.title, artist: np.artist, countArtist: np.artist, artwork: nil,
                               imageURL: stats.coverURL(for: np), confirmed: true, remote: true)
         }
         return nil
@@ -1670,13 +1673,13 @@ private struct LiveScrobbleRow: View {
             }
         }
         .onAppear {
-            if let live { stats.refreshNowPlayingCount(title: live.title, artist: live.artist) }
+            if let live { stats.refreshNowPlayingCount(title: live.title, artist: live.countArtist) }
             stats.setLiveLinksTrack(artist: live?.artist, title: live?.title)
             stats.liveAbsorbedRecentID = absorbedRecent?.id
         }
         .onChange(of: liveKey) { _, _ in
             // 本机换歌、远端换歌、来源切换都要重取"第 N 次听"
-            if let live { stats.refreshNowPlayingCount(title: live.title, artist: live.artist) }
+            if let live { stats.refreshNowPlayingCount(title: live.title, artist: live.countArtist) }
             stats.setLiveLinksTrack(artist: live?.artist, title: live?.title)
         }
         // 吸收状态是从(播放进度 × 最近记录)算出来的,两个源任何一个动了都可能翻转 ——

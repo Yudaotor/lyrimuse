@@ -127,7 +127,8 @@ public enum ListeningMilestones {
     }
 
     /// 日桶键 "yyyy-MM-dd" 与 Date(按 calendar 的时区,当天 0 点)。键的格式是建桶时定的,这里只解不造。
-    static func parseDay(_ key: String, calendar: Calendar) -> Date? {
+    /// 零点切夏令时的那一天(0 点不存在)给当天第一个存在的时刻;按格式串解析的 DateFormatter 在这一天解出 nil。
+    public static func parseDay(_ key: String, calendar: Calendar) -> Date? {
         let parts = key.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3 else { return nil }
         var comps = DateComponents()

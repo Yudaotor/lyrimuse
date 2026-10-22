@@ -102,9 +102,9 @@ func TestRecordFailedMirrorRouting(t *testing.T) {
 		if l != 1 || q != 0 {
 			t.Fatalf("want 1 listen + 0 quarantine, got l=%d q=%d", l, q)
 		}
-		pending, _ := pendingBackfillListens(time.Now())
+		pending, _ := pendingBackfillListens(time.Now(), "me")
 		if len(pending) != 1 {
-			t.Fatalf("确定没发出去的这条必须能被回填挑走, got %d pending", len(pending))
+			t.Fatalf("确定没发出去的这条必须能被同一个账号的回填挑走, got %d pending", len(pending))
 		}
 		// 存的必须是**播放器报的原始艺人名**,不是 collapse 折叠后的值 —— 回填会拿它
 		// 重新跑一遍同样的归一化,喂折叠后的值进去等于折叠两次(见 listenLogLine.AR)。
@@ -129,7 +129,7 @@ func TestRecordFailedMirrorRouting(t *testing.T) {
 			t.Fatalf("want 1 listen + 1 quarantine, got l=%d q=%d", l, q)
 		}
 		// q 的意义就是"排除且绝不自动重试" —— 重复比漏补贵得多。
-		if pending, _ := pendingBackfillListens(time.Now()); len(pending) != 0 {
+		if pending, _ := pendingBackfillListens(time.Now(), "me"); len(pending) != 0 {
 			t.Fatalf("隔离的条目绝不能被自动回填, got %d pending", len(pending))
 		}
 	})

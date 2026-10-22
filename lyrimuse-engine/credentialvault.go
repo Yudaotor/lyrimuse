@@ -95,6 +95,8 @@ var credentialVaultCache struct {
 	stamp   string
 	vault   credentialVault
 	retryAt time.Time
+	// failed:最近一次读失败,手上的是更早读到的(或空的)。
+	failed bool
 }
 
 func credentialVaultStamp() string {
@@ -126,10 +128,27 @@ func currentCredentialVault() credentialVault {
 	if err != nil {
 		log.Printf("credentials: keychain unreadable (%v), keeping the credentials read before, retry in %s", err, credentialVaultRetry)
 		c.retryAt = time.Now().Add(credentialVaultRetry)
+		c.failed = true
 		return c.vault
 	}
-	c.stamp, c.vault, c.retryAt = stamp, v, time.Time{}
+	c.stamp, c.vault, c.retryAt, c.failed = stamp, v, time.Time{}, false
 	return v
+}
+
+// credentialVaultRetryDue:上一次读保险箱失败、已到重试时刻。热重读据此在 config.json 没变时也重叠一次,
+// 否则启动那一下钥匙串锁着,之后解锁了凭据也要等下一次改设置才补上。
+func credentialVaultRetryDue() bool {
+	c := &credentialVaultCache
+	c.Lock()
+	defer c.Unlock()
+	return c.failed && !time.Now().Before(c.retryAt)
+}
+
+func credentialVaultFailed() bool {
+	c := &credentialVaultCache
+	c.Lock()
+	defer c.Unlock()
+	return c.failed
 }
 
 // overlayCredentials 把保险箱叠到 config.json 的字节上:凭据键缺失或为空时取保险箱的,渠道按 id 补地址和密钥。

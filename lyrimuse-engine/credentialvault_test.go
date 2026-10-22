@@ -237,6 +237,6 @@ func stubCredentialVault(t *testing.T, data string, err error) *credentialVaultS
 func resetCredentialVaultCache() {
 	c := &credentialVaultCache
 	c.Lock()
-	c.stamp, c.vault, c.retryAt = "", credentialVault{}, time.Time{}
+	c.stamp, c.vault, c.retryAt, c.failed = "", credentialVault{}, time.Time{}, false
 	c.Unlock()
 }

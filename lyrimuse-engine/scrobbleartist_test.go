@@ -207,12 +207,12 @@ func TestPendingBackfillListensHonorsShortTrackFlag(t *testing.T) {
 	appendListenLogLine(listenLogLine{T: "l", V: listenLogSchemaVersion, UTS: uts + 60, AR: "A", TI: "长曲", DUR: 200, AT: now.Unix()})
 
 	setFeatureForTest(t, func(f *featureFlags) { f.ScrobbleShortTracks = false })
-	pending, _ := pendingBackfillListens(now)
+	pending, _ := pendingBackfillListens(now, "")
 	if len(pending) != 1 || pending[0].TI != "长曲" {
 		t.Fatalf("开关关:应只剩长曲,got %+v", pending)
 	}
 	setFeatureForTest(t, func(f *featureFlags) { f.ScrobbleShortTracks = true })
-	pending, _ = pendingBackfillListens(now)
+	pending, _ = pendingBackfillListens(now, "")
 	if len(pending) != 2 {
 		t.Fatalf("开关开:短曲也该进待补清单,got %+v", pending)
 	}

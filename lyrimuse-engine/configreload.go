@@ -94,12 +94,14 @@ func maybeReloadConfig() {
 		return // 读不到(被换名的那一瞬间、被删掉):保留当前快照
 	}
 	mtime, size := st.ModTime().UnixNano(), st.Size()
-	if mtime == configMTime.Load() && size == configSize.Load() {
+	unchanged := func() bool { return mtime == configMTime.Load() && size == configSize.Load() }
+	if unchanged() && !credentialVaultRetryDue() {
 		return
 	}
 	configReloadMu.Lock()
 	defer configReloadMu.Unlock()
-	if mtime == configMTime.Load() && size == configSize.Load() {
+	fileUnchanged := unchanged()
+	if fileUnchanged && !credentialVaultRetryDue() {
 		return // 另一个 goroutine 刚应用过这一版
 	}
 	configMTime.Store(mtime)
@@ -115,7 +117,11 @@ func maybeReloadConfig() {
 		log.Printf("config: %s changed but is not valid JSON (%v), keeping the settings currently in effect", *pp, err)
 		return
 	}
-	next := configFromBytes(overlayCredentials(data, currentCredentialVault()))
+	vault := currentCredentialVault()
+	if fileUnchanged && credentialVaultFailed() {
+		return // 文件没变、保险箱这次还是读不出:手上那份就是该用的
+	}
+	next := configFromBytes(overlayCredentials(data, vault))
 	for _, issue := range next.loadIssues {
 		log.Printf("config: %s", issue)
 	}

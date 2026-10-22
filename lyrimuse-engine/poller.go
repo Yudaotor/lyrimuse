@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -15,10 +16,13 @@ import (
 // playSession tracks accrued playtime of the current track for the
 // half-or-4-minutes listen rule.
 type playSession struct {
-	key        string
-	meta       snapshot
-	startedAt  time.Time
-	playedSecs float64
+	key  string
+	meta snapshot
+	// startedAt:开会话(第一次看到这一首)的时刻;playStartedAt:第一次在播的那一拍,零 = 还没播过。
+	// 收听上送的开播时刻取 listenStart():会话开在暂停那一拍(登录时播放器恢复了上次那首)时,两者能差几小时。
+	startedAt     time.Time
+	playStartedAt time.Time
+	playedSecs    float64
 	// lastSeen / lastSeenPos / lastSeenHasPos:上一个计时起点(App 新读到、在播的那一拍)的时刻与位置,
 	// 收听时长从这里往后算(见 accrueListening)。lastSeen 为零 = 没在计时(暂停、还没开播)。
 	lastSeen       time.Time
@@ -143,14 +147,15 @@ const (
 //
 // 曲长拿不到(≤0)时百分比无从算起、曲终也判不了,一律退回官方规则(当场发)——不把「没有时长」
 // 变成「永远不发」。百分比档纯按已播时长(playedSecs,口径见 accrueListening:暂停不计、拖进度不灌水、
-// App 没新读到的那几拍不计)算,不套 4 分钟上限:"听了 75%" 就是字面意思。
+// App 没新读到的那几拍不计)算,不套 4 分钟上限:"听了 75%" 就是字面意思。放到了结尾(endedNaturally)的也算到点:
+// 淡入淡出提前接歌、最后一拍没读到时 playedSecs 够不着 90%,不能让更宽的档反而比「曲终」档难记上。
 func lastfmScrobblePointReached(s *playSession) bool {
 	d := s.meta.Duration
 	switch features().LastfmScrobblePoint {
 	case scrobblePoint75:
-		return d <= 0 || s.playedSecs >= 0.75*d
+		return d <= 0 || s.playedSecs >= 0.75*d || s.endedNaturally
 	case scrobblePoint90:
-		return d <= 0 || s.playedSecs >= 0.90*d
+		return d <= 0 || s.playedSecs >= 0.90*d || s.endedNaturally
 	case scrobblePointEnd:
 		return d <= 0 || s.endedNaturally
 	default:
@@ -238,7 +243,7 @@ func (p *poller) settleLastfmPending(s *playSession) bool {
 	// 本地收听日志:**只在没有在往 Last.fm 提交时**才记(见 appendListen 的注释);连着账号时
 	// 镜像失败的那条由 recordFailedMirror 留痕。
 	if p.lfm == nil {
-		appendListen(l.meta.Artist, l.meta.Title, l.meta.albumForUpload(), l.startedAt, l.meta.Duration)
+		appendListen("", l.meta.Artist, l.meta.Title, l.meta.albumForUpload(), l.startedAt, l.meta.Duration)
 	}
 	return true
 }
@@ -253,7 +258,7 @@ func (p *poller) settleLastfmPendingSync(ctx context.Context, s *playSession) {
 	s.lastfmPending, s.lastfmSettled = nil, true
 	p.mirrorScrobbleSync(withCatalogDurationUnknown(ctx, l.meta.NotAudio), l.artistName, l.meta.Title, l.meta.albumForUpload(), l.startedAt, l.meta.Artist, l.meta.Duration, l.meta.NotAudio)
 	if p.lfm == nil {
-		appendListen(l.meta.Artist, l.meta.Title, l.meta.albumForUpload(), l.startedAt, l.meta.Duration)
+		appendListen("", l.meta.Artist, l.meta.Title, l.meta.albumForUpload(), l.startedAt, l.meta.Duration)
 	}
 }
 
@@ -448,7 +453,11 @@ type recentListen struct {
 // source=iphone 的重复。这条记录只喂给"名字够像+时间够近"的兜底检查，不影响精确匹配
 // 那条路径。
 func (p *poller) recordRecentMacListen(artist, title string, uts int64) {
-	p.recentMacListens = append(p.recentMacListens, recentListen{artist: artist, title: title, uts: uts})
+	entry := recentListen{artist: artist, title: title, uts: uts}
+	if slices.Contains(p.recentMacListens, entry) {
+		return // 同一次收听 LB 失败后重试又走到一次
+	}
+	p.recentMacListens = append(p.recentMacListens, entry)
 	cutoff := uts - int64(recentMacListenRetention/time.Second)
 	kept := p.recentMacListens[:0]
 	for _, r := range p.recentMacListens {
@@ -565,7 +574,7 @@ func recordFailedMirror(err error, user, rawArtist, title, album string, timesta
 	if errors.As(err, &ignored) {
 		return // 服务端看过内容并拒收,补提交没有意义
 	}
-	appendListen(rawArtist, title, album, timestamp, durationSecs)
+	appendListen(user, rawArtist, title, album, timestamp, durationSecs)
 
 	// 走到这里都要留痕,只剩"能不能自动补"这一个问题。
 	var apiErr *lastfmAPIError
@@ -1011,6 +1020,9 @@ func (p *poller) applySubmitOutcome(r submitOutcome) {
 	// 网页推的是更早那一首、甚至「空」;待重发队列补发成功也不会再回到这里。没配 LB 的 submit 直接返回 nil,同样走到。
 	// 见 13 章决策 14。
 	p.pushScrobble(r.meta, r.startedAt, "mac")
+	// 「本机刚放过」同样不看 LB 成败:桥接靠它认出 Last.fm 上同一首的回声,LB 挂着那段时间不登记的话,回声会被当成
+	// iPhone 的收听转发,LB 恢复后待重发队列再交 Mac 这条,LB 上就有两条。
+	p.recordRecentMacListen(r.meta.Artist, r.meta.Title, r.startedAt)
 	if r.err != nil {
 		warnf("submit listen failed: %v", r.err)
 		// 会话已经结束就不会再有人重试它(播放中每拍重试只管当前会话),交给待重发队列;
@@ -1040,7 +1052,6 @@ func (p *poller) applySubmitOutcome(r submitOutcome) {
 	} else {
 		log.Printf("listen recorded: %s - %s", r.meta.Artist, r.meta.Title)
 	}
-	p.recordRecentMacListen(r.meta.Artist, r.meta.Title, r.startedAt)
 	p.pushRelayState(time.Now(), false) // 立刻把刚确认的收听/上次播放状态推给网页,不必等下一轮 5s 心跳
 }
 
@@ -1075,7 +1086,7 @@ func (p *poller) finalize(now time.Time) {
 		return
 	}
 	s.submitting = true
-	p.submitSingleAsync(s, s.meta, s.startedAt.Unix())
+	p.submitSingleAsync(s, s.meta, s.listenStart().Unix())
 }
 
 // detectAdAtSessionStart 开播时的广告判定:isAdBreak(App 的广告结论)。不是广告的 Spotify
@@ -1377,7 +1388,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
 		!tooShortToScrobble(p.sess.meta.Duration) {
 		p.sess.submitting = true
-		p.submitSingleAsync(p.sess, p.sess.meta, p.sess.startedAt.Unix())
+		p.submitSingleAsync(p.sess, p.sess.meta, p.sess.listenStart().Unix())
 	}
 }
 
@@ -1393,6 +1404,14 @@ func (p *poller) noteListeningTick(now time.Time) {
 	p.sess.accrueListening(now, p.cur)
 }
 
+// listenStart:这次收听的开播时刻(Last.fm timestamp、LB listened_at)。还没播过时退回开会话那一刻。
+func (s *playSession) listenStart() time.Time {
+	if !s.playStartedAt.IsZero() {
+		return s.playStartedAt
+	}
+	return s.startedAt
+}
+
 // accrueListening 把上一个计时起点到这一拍之间的收听计进 playedSecs,再按这一拍挪起点:在播就记下此刻与位置,
 // 暂停就停表。只拿 App 新读到的拍调用。
 func (s *playSession) accrueListening(now time.Time, cur snapshot) {
@@ -1403,6 +1422,9 @@ func (s *playSession) accrueListening(now time.Time, cur snapshot) {
 	}
 	s.gapHeld = false
 	if cur.Playing {
+		if s.playStartedAt.IsZero() {
+			s.playStartedAt = now
+		}
 		s.lastSeen, s.lastSeenPos, s.lastSeenHasPos = now, cur.Position, hasPos
 	} else {
 		s.lastSeen = time.Time{}
@@ -1812,7 +1834,7 @@ func (p *poller) flushSessionOnExit(flushCtx context.Context) {
 		p.settleLastfmPendingSync(flushCtx, p.sess)
 	}
 	if p.sess != nil && !p.sess.listenSent && !p.sess.sodaPreviewPending && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
-		!tooShortToScrobble(p.sess.meta.Duration) && !p.sess.isSpoken &&
+		!tooShortToScrobble(p.sess.meta.Duration) && !p.sess.isSpoken && !p.sess.meta.Spoken && lbMeta(p.sess.meta).ArtistName != "" &&
 		!p.sess.isAd && !isAdBreak(p.sess.meta.Bundle, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album) {
 		// Last.fm 镜像:与 LB 解耦,同样服从 scrobble 时点(默认档当场发),且必须走同步变体。
 		//
@@ -1824,22 +1846,22 @@ func (p *poller) flushSessionOnExit(flushCtx context.Context) {
 		lm := lbMeta(p.sess.meta)
 		// 按播放器排除的(lastfmExcluded)不挂 Last.fm 那条,跟 recordLastfmListen 同一道闸;LB 照发。
 		if !p.sess.lastfmSettled && p.sess.lastfmPending == nil && !p.sess.lastfmExcluded {
-			p.sess.lastfmPending = &pendingLastfmListen{artistName: lm.ArtistName, meta: p.sess.meta, startedAt: p.sess.startedAt.Unix()}
+			p.sess.lastfmPending = &pendingLastfmListen{artistName: lm.ArtistName, meta: p.sess.meta, startedAt: p.sess.listenStart().Unix()}
 		}
 		p.settleLastfmPendingSync(flushCtx, p.sess)
 		// 短曲目只发 Last.fm、不发 LB —— 跟 submitSingleAsync 同一条判据,两处都要挡。
 		if shortTrackLastfmOnly(p.sess.meta.Duration) {
-			p.recordRecentMacListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.startedAt.Unix())
-		} else if err := p.lb.submit(flushCtx, "single", p.sess.startedAt.Unix(), lm); err != nil {
+			p.recordRecentMacListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.listenStart().Unix())
+		} else if err := p.lb.submit(flushCtx, "single", p.sess.listenStart().Unix(), lm); err != nil {
 			warnf("final listen flush failed: %v", err)
 			// 进程正在退出,没有下一拍重试它了:交给 LB 待重发队列(同 applySubmitOutcome 里会话已结束那一支)。
 			if errors.Is(err, errListenRejected) {
-				keepUnsentLBListen(p.sess.startedAt.Unix(), lm, "rejected")
+				keepUnsentLBListen(p.sess.listenStart().Unix(), lm, "rejected")
 			} else {
-				enqueueLBRetry(p.sess.startedAt.Unix(), lm)
+				enqueueLBRetry(p.sess.listenStart().Unix(), lm)
 			}
 		} else {
-			p.recordRecentMacListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.startedAt.Unix())
+			p.recordRecentMacListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.listenStart().Unix())
 		}
 		// 不记「上次播放」(pushScrobble):它只活在内存里,这之后不再推中继、进程就退出了;下次启动的
 		// 「上次播放」由 seedLastListen 从 ListenBrainz 取。

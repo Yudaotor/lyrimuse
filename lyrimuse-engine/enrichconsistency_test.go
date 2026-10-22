@@ -116,15 +116,15 @@ func TestBackfillBatchClassificationAndRecheck(t *testing.T) {
 	now := time.Now()
 	base := now.Add(-time.Hour).Unix()
 	for i, title := range []string{"keep", "submitted", "queued"} {
-		appendListen("A", title, "al", base+int64(i), 200)
+		appendListen("", "A", title, "al", base+int64(i), 200)
 	}
-	batch, _ := pendingBackfillListens(now)
+	batch, _ := pendingBackfillListens(now, "")
 	markBackfilled(base + 1)
 	data, _ := json.Marshal([]lfmRetryItem{{Timestamp: base + 2, Title: "queued"}})
 	if err := os.WriteFile(lfmRetryPath, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got := stillPendingForBackfill(batch, now)
+	got := stillPendingForBackfill(batch, now, "")
 	if len(got) != 1 || got[0].TI != "keep" {
 		t.Fatalf("只该剩下 keep: %+v", got)
 	}

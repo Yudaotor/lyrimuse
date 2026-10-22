@@ -66,6 +66,8 @@ func runBackfillLastfmCLI(args []string) {
 	scrobbler := newLastfmScrobbler(
 		cfg.LastfmScrobbleAPIKey, cfg.LastfmScrobbleSecret, cfg.LastfmScrobbleSessionKey)
 	if scrobbler != nil {
+		// 隔离行、清单都按账号认(markQuarantined、pendingBackfillListens),跟常驻进程那份同一个口径。
+		scrobbler.user = lastfmScrobbleUser(cfg)
 		// 用**只读**的那把 api_key:track.getInfo 不需要签名,读写本来就是两个 key
 		// (理由见 lastfm.go 里同一处的注释)。
 		scrobbler.catalog = newLastfmCatalogMatcher(cfg.lastfmBridgeAPIKey())

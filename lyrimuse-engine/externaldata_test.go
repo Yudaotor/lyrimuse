@@ -83,6 +83,7 @@ func TestMain(m *testing.M) {
 	ytmusicQueueScript = func(string) (appQueryTracks, bool) { return appQueryTracks{}, false }
 	spotifyWebQueueScript = func(string) (appQueryTracks, bool) { return appQueryTracks{}, false }
 	browserQueueRetryDelay = 0
+	lfmRetryPause = 0
 	// 网易云、MusicBrainz 两家的请求间隔:单测里连发的是假服务器,按真实间隔等只会拖慢整套;测节流本身的用例自己设。
 	neteaseMinIntervalBetweenCalls = 0
 	musicbrainzMinIntervalBetweenCalls = 0

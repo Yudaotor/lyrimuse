@@ -6763,6 +6763,8 @@ private struct GeneralSettingsTab: View {
                     iCloudBusy = true
                     defer { iCloudBusy = false }
                     guard let data = ConfigPortability.buildExportData() else { return }
+                    let credentialNote = ConfigPortability.lastExportOmittedCredentials
+                        ? L10n.t("钥匙串当前无法读取，备份中不含账号凭证") : nil
                     let name = ConfigPortability.suggestedFilename()
                     guard ICloudConfigStore.write(data, filename: name) != nil else {
                         iCloudMessage = L10n.t("无法写入 iCloud，可使用下方的「导出…」保存为文件")
@@ -6792,6 +6794,7 @@ private struct GeneralSettingsTab: View {
                     //
                     // 写成功的反馈由按钮自己变身「已保存」承担,写法与理由见 iCloudJustSaved 声明处注释。
                     iCloudSnapshot = ICloudConfigStore.latestSnapshot()
+                    if let credentialNote { note = note.map { credentialNote + "\n" + $0 } ?? credentialNote }
                     iCloudMessage = note
                     // note 非 nil(歌词库那份没写成功)时不弹这个打勾态:那种情况
                     // 已经有一条要用户看到并处理的持久提示了(上面 iCloudMessage),
@@ -6820,6 +6823,8 @@ private struct GeneralSettingsTab: View {
             Button(L10n.t("取消"), role: .cancel) {}
             Button(L10n.t("继续导出")) {
                 guard let data = ConfigPortability.buildExportData() else { return }
+                let credentialNote = ConfigPortability.lastExportOmittedCredentials
+                    ? L10n.t("钥匙串当前无法读取，备份中不含账号凭证") : nil
                 let panel = NSSavePanel()
                 panel.nameFieldStringValue = ConfigPortability.suggestedFilename()
                 // 默认落点改成 iCloud Drive 里的 Lyrimuse 文件夹(没开 iCloud 就退回
@@ -6839,13 +6844,17 @@ private struct GeneralSettingsTab: View {
                         configMessage = String(format: L10n.t("导出失败：%@"), error.localizedDescription)
                         return
                     }
+                    configMessage = credentialNote
+                    func withCredentialNote(_ message: String) -> String {
+                        [credentialNote, message].compactMap { $0 }.joined(separator: "\n")
+                    }
                     // 歌词库那份写在**紧邻的同名文件**旁边 —— 导入时就是靠这个位置关系
                     // 找到它的(NSSavePanel 只能给一个落点,所以是"兄弟文件"而不是两次面板)。
                     Task { @MainActor in
                         guard let archive = await LyricsBackupStore.buildArchive() else {
                             // 歌词库本来就是空的(新用户)不算失败,不提示。
                             if !LyricsBackupStore.hasNoLyricsFiles() {
-                                configMessage = L10n.t("设置已导出；歌词库打包失败，仅导出了设置文件")
+                                configMessage = withCredentialNote(L10n.t("设置已导出；歌词库打包失败，仅导出了设置文件"))
                             }
                             return
                         }
@@ -6856,9 +6865,9 @@ private struct GeneralSettingsTab: View {
                             // 必须把"旁边还有第二个文件"说出来:静默写的话,用户只会拷走自己在
                             // 面板里选中的那一个 —— 到新机器导入时找不到兄弟包,按设计"一个歌词文件
                             // 都不动",于是歌词**静默全丢**。
-                            configMessage = String(format: L10n.t("已导出设置与歌词库两个文件（%@），迁移时请一并拷贝"), sidecarName)
+                            configMessage = withCredentialNote(String(format: L10n.t("已导出设置与歌词库两个文件（%@），迁移时请一并拷贝"), sidecarName))
                         } catch {
-                            configMessage = L10n.t("设置已导出；歌词库写入失败，仅导出了设置文件")
+                            configMessage = withCredentialNote(L10n.t("设置已导出；歌词库写入失败，仅导出了设置文件"))
                         }
                     }
                 }
@@ -6936,7 +6945,10 @@ private struct GeneralSettingsTab: View {
             // clearAllConfig 要等常驻服务真的卸载完才返回,不能在它之前 terminate。
             Button(L10n.t("清除并重启"), role: .destructive) {
                 Task { @MainActor in
-                    await ConfigPortability.clearAllConfig()
+                    guard await ConfigPortability.clearAllConfig() else {
+                        configMessage = L10n.t("钥匙串当前无法读取，设置未清除")
+                        return
+                    }
                     ConfigPortability.restartApp()
                 }
             }

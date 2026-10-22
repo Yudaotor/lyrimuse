@@ -53117,6 +53117,98 @@
           }
         }
       }
+    },
+    "钥匙串" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keychain"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "钥匙串"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "鑰匙圈"
+          }
+        }
+      }
+    },
+    "钥匙串当前无法读取，暂时无法清除账号凭证" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The keychain can’t be read right now, so account credentials can’t be cleared yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "钥匙串当前无法读取，暂时无法清除账号凭证"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目前無法讀取鑰匙圈，暫時無法清除帳號憑證"
+          }
+        }
+      }
+    },
+    "钥匙串当前无法读取，备份中不含账号凭证" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The keychain can’t be read right now, so this backup doesn’t include account credentials"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "钥匙串当前无法读取，备份中不含账号凭证"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目前無法讀取鑰匙圈，備份中不含帳號憑證"
+          }
+        }
+      }
+    },
+    "钥匙串当前无法读取，设置未清除" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The keychain can’t be read right now, so nothing was cleared"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "钥匙串当前无法读取，设置未清除"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目前無法讀取鑰匙圈，設定未清除"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -423,6 +423,14 @@ public final class ConfigStore: ObservableObject {
         moveFileCredentialsIntoVault()
     }
 
+    /// 这一轮钥匙串没读出来(启动那一下锁着、超时)时再读一次;读出来了、也没有待存的改动,就整份重载。
+    /// 不重载的话账号全显示成未连接,要到下次启动才恢复。
+    public func reloadIfVaultWasUnreadable() {
+        guard vaultContents == nil, !isDirty, CredentialVaultStore.shared.load() != nil else { return }
+        logger.notice("keychain readable again, reloading credentials")
+        load()
+    }
+
     /// 文件里的明文凭据挪进钥匙串:整份按现在的样子重写一遍(凭据进保险箱,文件里删掉)。
     private func moveFileCredentialsIntoVault() {
         guard vaultContents != nil, !document.isCorrupt, CredentialVault.hasPlaintext(document.raw) else { return }
@@ -443,6 +451,11 @@ public final class ConfigStore: ObservableObject {
         }
         let full = JSONConfigDocument(url: Self.fileURL, raw: credentialedRaw, state: document.state)
             .merging(fields: fields, knownKeys: knownKeys)
+        // 读不出保险箱时,文件里写空的凭据会被叠回保险箱里那份(两边都是「文件为空取保险箱」),
+        // 断开账号、清空 token 等于没做:拒绝,别让界面以为清掉了。
+        if vaultContents == nil, CredentialVault.clearsCredential(from: credentialedRaw, to: full) {
+            throw ConfigFileSaveError.keychainUnavailable
+        }
         if vaultContents != nil {
             let parts = CredentialVault.split(full)
             do {
@@ -499,6 +512,7 @@ public final class ConfigStore: ObservableObject {
         }
     }
 
+
     /// 横幅上的「放弃坏文件并重建」:把损坏的 config.json 挪到旁边(`config.json.corrupt-<时间>`,不删 ——
     /// 里面可能还有能手工抢救的凭据),然后用当前内存里的值(损坏时全是空)重建并保存。
     @discardableResult
@@ -544,6 +558,10 @@ public final class ConfigStore: ObservableObject {
             lastError = ConfigFileSaveError.refusedCorruptFile.errorDescription
             logger.notice("save refused: config.json on disk is corrupt")
             return false
+        } catch ConfigFileSaveError.keychainUnavailable {
+            lastError = ConfigFileSaveError.keychainUnavailable.errorDescription
+            logger.notice("save refused: clearing a credential while the keychain is unreadable")
+            return false
         } catch {
             lastError = String(format: L10n.t("写入 config.json 失败：%@"), error.localizedDescription)
             logger.error("write failed: \(String(describing: error), privacy: .public)")
@@ -566,11 +584,14 @@ public enum ConfigFileSaveError: LocalizedError {
     case refusedCorruptFile
     /// 内部字典序列化不了(编程错误,不是用户数据的问题)。
     case notSerializable
+    /// 钥匙串读不出时要清空某项凭据:清不掉保险箱里那份,拒绝(见 `writeSplittingCredentials`)。
+    case keychainUnavailable
 
     public var errorDescription: String? {
         switch self {
         case .refusedCorruptFile: return L10n.t("配置文件无法解析，为避免覆盖已取消保存")
         case .notSerializable: return L10n.t("内部数据不是有效的 JSON，已取消保存")
+        case .keychainUnavailable: return L10n.t("钥匙串当前无法读取，暂时无法清除账号凭证")
         }
     }
 }

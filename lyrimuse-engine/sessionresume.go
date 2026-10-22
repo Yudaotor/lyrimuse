@@ -50,7 +50,7 @@ func (p *poller) saveSessionResume(now time.Time) {
 	if sessionResumePath == "" || s == nil || p.app == nil || p.app.marks.pid == 0 || p.app.marks.key != s.key {
 		return
 	}
-	f := sessionResumeFile{Key: s.key, AppPID: p.app.marks.pid, PlaySeq: p.app.marks.playSeq, StartedAt: s.startedAt.Unix(),
+	f := sessionResumeFile{Key: s.key, AppPID: p.app.marks.pid, PlaySeq: p.app.marks.playSeq, StartedAt: s.listenStart().Unix(),
 		PlayedSecs: s.playedSecs, ListenSent: s.listenSent, LastfmSettled: s.lastfmSettled, LastfmPending: s.lastfmPending != nil,
 		SavedAt: now.UnixMilli()}
 	if !s.lastSeen.IsZero() {
@@ -103,6 +103,9 @@ func (p *poller) resumeSession(s *playSession, now time.Time) bool {
 		return false
 	}
 	s.startedAt = time.Unix(r.StartedAt, 0)
+	if r.PlayedSecs > 0 {
+		s.playStartedAt = s.startedAt
+	}
 	s.playedSecs = r.PlayedSecs
 	s.listenSent, s.lastfmSettled = r.ListenSent, r.LastfmSettled
 	if r.LastfmPending && !r.LastfmSettled && !s.lastfmExcluded {

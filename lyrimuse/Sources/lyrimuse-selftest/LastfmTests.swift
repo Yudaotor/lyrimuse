@@ -7,6 +7,8 @@ import Foundation
 
 @MainActor
 func runLastfmTests() {
+    checkScrobbleAudit()
+
     // ---- 授权成功后桥接用户名(lastfm_user)跟不跟着换 ----
     do {
         let adopt = LastfmBridgeUser.shouldAdoptAuthorized

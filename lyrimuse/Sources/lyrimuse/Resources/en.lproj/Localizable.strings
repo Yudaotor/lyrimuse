@@ -2502,6 +2502,10 @@
 "钉钉" = "DingTalk";
 "钉钉群自定义机器人：报告将发送到群聊。机器人需设置关键词或加签" = "A custom bot in a DingTalk group. Reports are posted to the group chat. The bot needs a keyword or signing";
 "钢琴键" = "Piano Keys";
+"钥匙串" = "Keychain";
+"钥匙串当前无法读取，备份中不含账号凭证" = "The keychain can’t be read right now, so this backup doesn’t include account credentials";
+"钥匙串当前无法读取，暂时无法清除账号凭证" = "The keychain can’t be read right now, so account credentials can’t be cleared yet";
+"钥匙串当前无法读取，设置未清除" = "The keychain can’t be read right now, so nothing was cleared";
 "链接" = "Link";
 "链接无效或已失效" = "This link is invalid or has expired";
 "链接需以 http:// 或 https:// 开头" = "The link must start with http:// or https://";
