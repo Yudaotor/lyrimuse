@@ -143,7 +143,8 @@ func TestPruneDeviceArtworkClearsMissingCovers(t *testing.T) {
 	gone := "file://" + filepath.Join(art, artB)
 	elsewhere := "file:///Users/someone-else/.config/lyrimuse/artwork/" + artC
 	enrichMu.Lock()
-	enrichCache["A|a|x"] = enrichEntry{CoverURL: gone, CoverSettled: elsewhere, VideoFrameURL: gone, MotionCoverFor: gone}
+	enrichCache["A|a|x"] = enrichEntry{CoverURL: gone, CoverSource: "device", CoverAlbum: "Album", AccentColor: "#112233",
+		CoverSettled: elsewhere, VideoFrameURL: gone, MotionCoverFor: gone}
 	enrichCache["B|b|x"] = enrichEntry{CoverURL: here, CoverSettled: "https://p1.music.126.net/x.jpg"}
 	enrichCache["C|c|x"] = enrichEntry{CoverURL: "file:///tmp/not-artwork/" + artD}
 	enrichMu.Unlock()
@@ -157,6 +158,9 @@ func TestPruneDeviceArtworkClearsMissingCovers(t *testing.T) {
 	enrichMu.Unlock()
 	if a.CoverURL != "" || a.CoverSettled != "" || a.VideoFrameURL != "" {
 		t.Fatalf("指向不存在的设备封面要清空: %+v", a)
+	}
+	if a.CoverSource != "" || a.CoverAlbum != "" || a.AccentColor != "" {
+		t.Fatalf("封面那张没了,来源、专辑、主色一起清(留着 device 放歌时不再取设备封面): %+v", a)
 	}
 	if a.MotionCoverFor != gone {
 		t.Fatal("核对记录字段不动:封面换了它自然作废")

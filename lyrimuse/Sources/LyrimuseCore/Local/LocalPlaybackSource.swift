@@ -5264,6 +5264,10 @@ public final class LocalPlaybackSource: ObservableObject {
                     return (result.data, result.trackKey, nil)
                 }
             }
+            // 这一轮还作数:没换歌,也没有另起一轮(A→B→A 切回来、同一首重新开播)。旧的那一轮带着过期的状态,别跟新一轮并行跑。
+            @MainActor func current() -> Bool {
+                generation == self.artworkFetchGeneration && expectedKey == self.lastKey
+            }
             func hexFor(_ data: Data?) async -> String? {
                 guard let data else { return nil }
                 return await Task.detached { Self.computeAverageHex(from: data) }.value
@@ -5285,16 +5289,16 @@ public final class LocalPlaybackSource: ObservableObject {
             // 下一首,那就直接放弃这一轮,交给新那一轮自己去取。
             var round = 0
             while !isFinal(data, payloadKey), round < Self.artworkRetryDelays.count {
-                guard expectedKey == self.lastKey else { return }
+                guard current() else { return }
                 // 把兜底清理往后推一轮,盖住这次等待和下一次取图,理由见 artworkRetryDelays 上面那段注释。
                 self.scheduleArtworkStaleTimeout(
                     forKey: expectedKey, after: Self.artworkRetryDelays[round] + Self.artworkInFlightBackstop)
                 try? await Task.sleep(for: .seconds(Self.artworkRetryDelays[round]))
-                guard expectedKey == self.lastKey else { return }
+                guard current() else { return }
                 (data, payloadKey, miss) = await attempt()
                 round += 1
             }
-            guard expectedKey == self.lastKey else { return }
+            guard current() else { return }
             // 首轮没等到这首歌能用的图,又不能断定它没有封面,就**留着当前挂着的旧封面**,交给下面的
             // 二次确认换上(到 artworkHoldLimit 那一档还等不到才清)。两种情况:
             //  - 重试打满载荷仍是别的歌的:系统侧还没切到这首(Spotify 实测常要 3~30 秒)。这张图绝不能
@@ -5329,7 +5333,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 self.artworkStaleTimeoutTask = nil
                 // 定案才取色(后台),丢弃路径一次都不算。
                 let averageHex = await hexFor(data)
-                guard expectedKey == self.lastKey else { return }
+                guard current() else { return }
                 if data != nil, self.artworkIsPlaceholder { self.artworkIsPlaceholder = false }
                 self.artworkData = data
                 self.artworkAverageHex = averageHex
@@ -5348,9 +5352,9 @@ public final class LocalPlaybackSource: ObservableObject {
             for delay in Self.artworkConfirmDelays {
                 try? await Task.sleep(for: .seconds(delay))
                 waited += delay
-                guard expectedKey == self.lastKey else { return }
+                guard current() else { return }
                 let confirm = await attempt()
-                guard expectedKey == self.lastKey else { return }
+                guard current() else { return }
                 lastMiss = Self.artworkMissDescription(data: confirm.data, payloadKey: confirm.payloadKey, miss: confirm.miss,
                                                        expectedKey: expectedKey)
                 // 留着的旧封面恰好就是这首的(同一张专辑的下一首,字节相同):等到了,别再按期限清掉。
@@ -5360,6 +5364,9 @@ public final class LocalPlaybackSource: ObservableObject {
                     if self.artworkIsPlaceholder { self.artworkIsPlaceholder = false }
                     self.artworkStaleTimeoutTask?.cancel()
                     self.artworkStaleTimeoutTask = nil
+                    // 字节没变也重新发布一次:交给引擎的设备封面按发布那一刻的 play_seq 认这首,不发布就还记在上一首名下;
+                    // 留旧封面期间按「播放器没有封面」铺上的高清图也靠这一下重新判。
+                    self.artworkData = confirmData
                     continue
                 }
                 guard let confirmData = confirm.data, let confirmKey = confirm.payloadKey,
@@ -5385,7 +5392,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 先比完字节确认真的要换,才算这一份的均值色(attempt 顺手预算的话,字节相同
                 // 丢弃的常态路径每次白算一遍取色)。
                 let confirmHex = await hexFor(confirmData)
-                guard expectedKey == self.lastKey else { return }
+                guard current() else { return }
                 logger.notice("artwork confirm pass replaced cover after \(waited, privacy: .public)s: bytes=\(confirmData.count) hadCover=\(self.artworkData != nil)")
                 // 兜底任务要一起撤:留着旧封面那条路上它还在倒数,不撤的话几秒后会把刚换上的真封面清掉。
                 self.artworkStaleTimeoutTask?.cancel()
@@ -5469,8 +5476,16 @@ public final class LocalPlaybackSource: ObservableObject {
             bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
             format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB()
         )
-        return String(
-            format: "#%02X%02X%02XFF", Int(bitmap[0]), Int(bitmap[1]), Int(bitmap[2]))
+        return averageHex(premultipliedRGBA: bitmap)
+    }
+
+    /// 把 CIAreaAverage 渲染出的那一个像素(预乘 alpha 的 RGBA8)写成不透明的 `#RRGGBBFF`。带透明区的封面(网页、同目录 PNG)
+    /// 透明的部分在预乘值里按黑算,除回 alpha 才是看得见那部分的颜色;整张都透明返回 nil。
+    public nonisolated static func averageHex(premultipliedRGBA px: [UInt8]) -> String? {
+        guard px.count >= 4, px[3] > 0 else { return nil }
+        let alpha = Int(px[3])
+        func channel(_ v: UInt8) -> Int { min(255, (Int(v) * 255 + alpha / 2) / alpha) }
+        return String(format: "#%02X%02X%02XFF", channel(px[0]), channel(px[1]), channel(px[2]))
     }
 
     /// 把封面均值色调整成"能当文字色用"的亮度。纯函数,selftest 直接覆盖。

@@ -1135,7 +1135,7 @@ final class PlaybackCoordinator: ObservableObject {
             s.$radioStationName.assign(to: \.radioStationName, on: self),
             // 台标同样在这一层解一次码,消费方直接拿 NSImage —— 理由同下面 artworkImage 那条。
             s.$radioStationArtwork
-                .map { $0.flatMap { NSImage(data: $0) } }
+                .map { $0.flatMap(ImageMemoryCache.Variant.original.decode) }
                 .assign(to: \.radioStationImage, on: self),
             s.$currentAdSlot.assign(to: \.currentAdSlot, on: self),
             s.$adCountdown.assign(to: \.adCountdown, on: self),
@@ -1160,8 +1160,10 @@ final class PlaybackCoordinator: ObservableObject {
             // 解码在这里做一次,消费方直接拿 NSImage,不在 view body 里反复解同一张图,见 artworkImage
             // 声明处的注释。@Published 的 willSet 语义让这两条订阅在同一次调用里同步跑完,artworkData 和
             // artworkImage 不会跨渲染帧不一致(SwiftUI 在这一轮 runloop 结束时才真正重绘)。
+            // 按高清替代同一档解码(≤1024px,解码时就降采样):同目录封面、洛雪自带封面是原样字节,3000² 的图整张解出来
+            // 要占几十 MB、在主线程解几十毫秒。原始字节照旧留给引擎和取色。
             s.$artworkData
-                .map { $0.flatMap { NSImage(data: $0) } }
+                .map { $0.flatMap(ImageMemoryCache.Variant.original.decode) }
                 .assign(to: \.artworkImage, on: self),
             // 高清封面:换歌或换封面之后重找一次,见 highResArtworkImage 的注释。
             //
@@ -1189,9 +1191,8 @@ final class PlaybackCoordinator: ObservableObject {
             // 没听过的歌要好几秒(开播后七八秒才写进 cover_url),换歌后 300ms 那一次必然查空;不补查的话
             // 整首歌都停在系统那张小图上(网易云只给 100×100)。
             //
-            // 必须 onlyIfMissing —— refreshHighResCover 开头会 clearHighRes(),已经拿到
-            // 高清图时再跑一遍就是"清空→重设",而 highResArtworkImage 挂着 0.5s 交叉淡入,
-            // 表现成封面每隔几秒闪一下。而引擎写缓存是常态(每解析一首歌都写)。
+            // onlyIfMissing:引擎写缓存是常态(每解析一首歌都写),铺着的高清图还在候选里就不动(不撤了重铺,0.5s 交叉淡入
+            // 会闪一下);引擎这次播放改了这首的 cover_url 才换。
             s.$enrichContentVersion
                 .dropFirst() // 启动时那一次不是"新解析出来的",换歌那条路已经覆盖
                 .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
@@ -1217,6 +1218,16 @@ final class PlaybackCoordinator: ObservableObject {
                 .sink { [weak self] _ in self?.refreshMotionCover() },
             NotificationCenter.default.publisher(for: NSNotification.Name.NSProcessInfoPowerStateDidChange)
                 .receive(on: RunLoop.main)
+                .sink { [weak self] _ in self?.refreshMotionCover() },
+            // 有地方要显示动态封面了(封面卡出现、副屏网页开始有人看):补一次。没人看时 refreshMotionCover 自己收掉。
+            NotificationCenter.default.publisher(for: MotionCoverDemand.changed)
+                .sink { [weak self] _ in self?.refreshMotionCover(onlyIfMissing: true) },
+            // @Published 在赋值前推送:推到下一拍,refreshMotionCover 读 viewerCount 才是新值。
+            WebLyricsServer.screen.$viewerCount
+                .map { $0 > 0 }
+                .removeDuplicates()
+                .dropFirst()
+                .receive(on: DispatchQueue.main)
                 .sink { [weak self] _ in self?.refreshMotionCover() },
             // Spotify 原生客户端的图床地址到了(开播 2.5s 后的位置探针顺带带回,
             // 见 LocalPlaybackSource.spotifyArtworkURL),或者系统封面字节变了(上面那条路会顺手清掉高清图,
@@ -1732,6 +1743,8 @@ final class PlaybackCoordinator: ObservableObject {
     private var highResCoverTask: Task<Void, Never>?
     /// Spotify 原生客户端「同一张图的原图档」那条替代路(见 refreshSpotifyOriginalCover)。
     private var spotifyCoverTask: Task<Void, Never>?
+    /// `spotifyCoverTask` 正在下的那个地址;下完(没被取消)清掉。
+    private var spotifyCoverTaskURL: URL?
     /// 上一次成功换上去的那个图床地址 —— 同一地址不重复下载、不闪:refreshHighResCover 因 artworkData
     /// 重发而清空高清图之后,那条路会按同一地址从内存缓存原样放回去。换歌(地址变 nil)时清。
     private var spotifyCoverAppliedURL: URL?
@@ -1743,8 +1756,10 @@ final class PlaybackCoordinator: ObservableObject {
     /// onlyIfMissing:给"缓存内容变了"那条补查路用 —— 已经拿到高清图就直接不动,别走下面
     /// 那条 clearHighRes()→重下 的路(会让封面闪一下,理由见调用点)。换歌那条路传 false:
     /// 上一首的高清图**必须**立刻撤掉。
+    /// - Parameter onlyIfMissing: 补查路(引擎写了缓存、认出占位图)用:这里铺上的高清图照常按缓存里此刻的候选核一遍
+    ///   (候选里还有它就不动,引擎这次播放改了 cover_url 就换),别的路铺上的(Spotify 原图档)不碰。
     private func refreshHighResCover(onlyIfMissing: Bool = false) {
-        if onlyIfMissing, highResArtworkImage != nil { return }
+        if onlyIfMissing, highResArtworkImage != nil, highResCoverApplied == nil { return }
         highResCoverTask?.cancel()
         highResCoverTask = nil
         // 刻意重新从数据源读,而不是用订阅回调的参数:那几个值来自 willSet 时机,
@@ -1813,7 +1828,7 @@ final class PlaybackCoordinator: ObservableObject {
                 guard !Task.isCancelled else { return }
                 guard let image = loaded else { continue }
                 // 下载期间可能已经换歌了 —— 这张是上一首的,丢掉。
-                guard LocalPlaybackSource.shared.title == title else { return }
+                guard Self.stillTrack(title, artist, album) else { return }
                 // 太小那条:拿回来的还不如系统那份大就不值得换(缓存里可能存着一张同样小的图);
                 // 形状那条:替代图自己得是张方形封面,不再拿"比系统那份宽"当门槛 —— 换的是形状
                 // 不是分辨率,否则 1280×720 的视频帧会把 600×600 的真封面挡在外面。
@@ -1834,7 +1849,7 @@ final class PlaybackCoordinator: ObservableObject {
                          Self.downscaledThumbnail(cg, maxPixel: 256))
                     }.value
                 }
-                guard !Task.isCancelled, LocalPlaybackSource.shared.title == title else { return }
+                guard !Task.isCancelled, Self.stillTrack(title, artist, album) else { return }
                 logger.debug("highres: swapped in \(image.pixelWidth, privacy: .public)px for \(title, privacy: .public) (system=\(systemSize.width, privacy: .public)x\(systemSize.height, privacy: .public)px, reason=\(String(describing: reason), privacy: .public))")
                 self?.highResArtworkImage = image
                 self?.highResArtworkThumbnail = thumbnail
@@ -1843,6 +1858,12 @@ final class PlaybackCoordinator: ObservableObject {
                 return
             }
         }
+    }
+
+    /// 下载、取色回来时还是发起那一首:歌名、歌手、专辑都没变(连着放两首同名歌,只比歌名会把上一首的图挂到下一首上)。
+    private static func stillTrack(_ title: String, _ artist: String, _ album: String) -> Bool {
+        let s = LocalPlaybackSource.shared
+        return s.title == title && s.artist == artist && s.album == album
     }
 
     /// 动态封面:查这张专辑有没有,有就把本地文件备好,跟此刻显示的封面是同一张图才叠上去。
@@ -1880,6 +1901,11 @@ final class PlaybackCoordinator: ObservableObject {
         // 该第一个让位的东西。它变化时有 NSProcessInfoPowerStateDidChange,下面订阅了。
         guard enabled ?? AppSettings.shared.motionCoverEnabled,
               !ProcessInfo.processInfo.isLowPowerModeEnabled else {
+            clear()
+            return
+        }
+        // 歌词窗口的封面卡、副屏网页歌词都没在显示:不下载、不取帧(每张新专辑几 MB 加一百多毫秒 CPU)。
+        guard MotionCoverDemand.wanted else {
             clear()
             return
         }
@@ -1944,8 +1970,12 @@ final class PlaybackCoordinator: ObservableObject {
     /// 同一地址已经换上就不再动(spotifyCoverAppliedURL),避免 artworkData 重发时清空→重设闪一下;
     /// 反过来被清空了(highResArtworkImage == nil)就按同一地址从内存缓存放回。
     private func refreshSpotifyOriginalCover(_ url: URL?) {
+        // 同一个地址的那一轮还在下(先挂上小档、接着往大档升级):让它跑完。先取消再判「已经挂上」的话,
+        // 系统封面一到货就把升级掐掉,整首停在小档。
+        if let url, spotifyCoverTask != nil, spotifyCoverTaskURL == url { return }
         spotifyCoverTask?.cancel()
         spotifyCoverTask = nil
+        spotifyCoverTaskURL = nil
         guard let url else {
             spotifyCoverAppliedURL = nil
             return
@@ -1958,7 +1988,14 @@ final class PlaybackCoordinator: ObservableObject {
         let systemWidth = artworkImage?.pixelWidth ?? 0
         let candidates = SpotifyArtworkURL.downloadCandidates(for: url)
         let ordered = systemWidth == 0 ? Array(candidates.reversed()) : candidates
+        spotifyCoverTaskURL = url
         spotifyCoverTask = Task { [weak self] in
+            defer {
+                if !Task.isCancelled {
+                    self?.spotifyCoverTask = nil
+                    self?.spotifyCoverTaskURL = nil
+                }
+            }
             var shownWidth = systemWidth
             var loadedAny = false
             for candidate in ordered {

@@ -52,10 +52,17 @@ final class MotionCoverStore {
     private var referenceRejected: Set<String> = []
     /// 终审过了的 (key, 参照图) 组合:盘上那份再跟同一张参照图比时不再解帧。
     private var referencePassed: Set<String> = []
-    /// 盘上那份读不出时长、解不出帧(`undecidable`,视频自己坏了,换张参照图也救不回来)的 (key, 文件编号):
-    /// 这一次运行里不再对它解帧。带上文件编号(不是修改时间,`touch` 每次访问都改它):文件被清掉、重新下了一份
-    /// 就是新组合。不落盘,同 `failed`。
-    private var cachedUndecidable: Set<String> = []
+    /// 网络层失败(断网、超时、5xx / 429)的 key → 退避到什么时候、连着失败了几次。退避期间不再下;每连着失败一次
+    /// 翻一倍(2、4、8… 分钟,最多 30 分钟),下成一次就清掉。不落盘,同 `failed`。
+    private var transientBackoff: [String: (until: Date, failures: Int)] = [:]
+
+    /// 下载、取清单用的会话:不进 `URLCache.shared`。mp4 已经自己落盘一份,再进共享缓存会把静态高清封面挤出去。
+    private nonisolated static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.urlCache = nil
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: config)
+    }()
 
     private var directory: URL { LyrimusePaths.cacheFile("motion-covers") }
 
@@ -94,15 +101,16 @@ final class MotionCoverStore {
             return await checkCached(hit, key: key, reference: reference)
         }
         if failed.contains(key) { return nil }
+        if let backoff = transientBackoff[key], backoff.until > Date() { return nil }
         // 同一份参照图上次就没过终审,不必再下一遍那几 MB;参照图一换就是新组合,自然重试。
         if let reference, referenceRejected.contains(Self.rejectionKey(key, reference)) { return nil }
         if let running = inflight[key] {
             let result = await running.task.value
-            // 在跑的那一轮拿的是另一张参照图(换歌那一刻参照图还是上一首的),它被终审拒了,不代表拿现在这张也会被拒:
-            // 用这张再试一次。参照图相同、或者资源本身取不到(已记进 failed),就认这个结果。
-            if result == nil, let reference, running.reference != reference, !failed.contains(key),
-               !referenceRejected.contains(Self.rejectionKey(key, reference)) {
-                return await prepare(master: master, reference: reference)
+            // 在跑的那一轮拿的是另一张参照图(换歌那一刻参照图还是上一首的,或者那一轮没带参照图):资源下好了就在盘上
+            // (终审没过也落盘),按这一张再比一次;没下成就认这个结果。参照图相同也认。
+            guard let reference, running.reference != reference else { return result }
+            if let hit = cachedFile(master: master) {
+                return await checkCached(hit, key: key, reference: reference)
             }
             return result
         }
@@ -114,6 +122,7 @@ final class MotionCoverStore {
                 self.inflight[key] = nil
                 switch outcome {
                 case .ready(let file):
+                    self.transientBackoff[key] = nil
                     if let reference {
                         self.referencePassed.insert(Self.rejectionKey(key, reference))
                     }
@@ -127,7 +136,10 @@ final class MotionCoverStore {
                     self.failed.insert(key)
                     return nil
                 case .transient:
-                    // 断网、超时这类:这一次没下成,下次换到这张专辑再试,不记进 failed(那会封到进程重启)。
+                    // 断网、超时这类:这一次没下成,退避一阵再试,不记进 failed(那会封到进程重启)。
+                    let failures = (self.transientBackoff[key]?.failures ?? 0) + 1
+                    let delay = min(120.0 * Double(1 << min(failures - 1, 4)), 1800)
+                    self.transientBackoff[key] = (Date().addingTimeInterval(delay), failures)
                     return nil
                 }
             }
@@ -142,8 +154,6 @@ final class MotionCoverStore {
         let pair = Self.rejectionKey(key, reference)
         if referencePassed.contains(pair) { return file }
         if referenceRejected.contains(pair) { return nil }
-        let broken = Self.undecidableKey(key, file)
-        if cachedUndecidable.contains(broken) { return nil }
         switch await Self.verifyMatchesReference(file, reference: reference) {
         case .pass:
             referencePassed.insert(pair)
@@ -152,14 +162,12 @@ final class MotionCoverStore {
             referenceRejected.insert(pair)
             return nil
         case .undecidable:
-            cachedUndecidable.insert(broken)
+            // 读不出时长、解不出帧:盘上这份坏了(换张参照图也救不回来)。删掉,下次换到这张专辑重下一份;
+            // 重下的那份还解不出帧,下载那一步就记进 failed。
+            logger.notice("motion cover: cached file undecodable, removing")
+            try? fm.removeItem(at: file)
             return nil
         }
-    }
-
-    private nonisolated static func undecidableKey(_ key: String, _ file: URL) -> String {
-        let inode = ((try? FileManager.default.attributesOfItem(atPath: file.path))?[.systemFileNumber] as? NSNumber)?.uint64Value
-        return "\(key)|\(inode ?? 0)"
     }
 
     /// `failed` / `referenceRejected` 两张表的键各自独立:前者按资源,后者按 (资源, 参照图)。
@@ -231,7 +239,7 @@ final class MotionCoverStore {
             // ③ 整份下下来,先落到临时文件——终审(④)要用 AVAsset 读它,得是个真实文件路径,
             // 不是内存里的 Data。落地在系统临时目录,不是最终缓存位置:没通过终审就地删掉,
             // 通过了再原子改名搬进 `directory`(⑤ store)。
-            let (data, response) = try await URLSession.shared.data(from: mediaURL)
+            let (data, response) = try await Self.session.data(from: mediaURL)
             if let http = response as? HTTPURLResponse, http.statusCode != 200 {
                 logger.notice("motion cover: \(codec, privacy: .public) media http \(http.statusCode, privacy: .public)")
                 return http.statusCode == 429 || http.statusCode >= 500 ? .transient : .unavailable
@@ -249,7 +257,13 @@ final class MotionCoverStore {
             if let reference {
                 switch await Self.verifyMatchesReference(scratch, reference: reference) {
                 case .pass: break
-                case .mismatch: return .referenceMismatch
+                case .mismatch:
+                    // 资源本身没问题,是此刻拿来比的封面不对(换歌那几秒参照图还是上一首的):照样落盘,等封面到了
+                    // 由 checkCached 按新参照图比,不必再下一遍。
+                    let final = await MainActor.run { self.fileURL(for: master) }
+                    try Self.moveIntoPlace(scratch, final: final)
+                    await MainActor.run { self.pruneIfNeeded() }
+                    return .referenceMismatch
                 // 读不出时长/取不到帧 —— 是这份视频本身的问题,跟参照图无关,按这条候选不可用算。
                 case .undecidable: return .unavailable
                 }
@@ -316,9 +330,11 @@ final class MotionCoverStore {
         return .pass
     }
 
+    /// 清单正文。429 / 5xx 抛 `URLError`(调用方按网络层失败、退避重试),别的非 200 按资源取不到。
     private nonisolated func text(from url: URL) async throws -> String {
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await Self.session.data(from: url)
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+            if http.statusCode == 429 || http.statusCode >= 500 { throw URLError(.badServerResponse) }
             throw CocoaError(.fileReadUnknown)
         }
         guard let s = String(data: data, encoding: .utf8) else { throw CocoaError(.fileReadInapplicableStringEncoding) }
@@ -414,5 +430,24 @@ final class MotionCoverStore {
             total -= f.size
             logger.info("motion cover: pruned \(f.size / 1024, privacy: .public)KB")
         }
+    }
+}
+
+/// 动态封面此刻有没有地方要显示:歌词窗口完整布局的封面卡在屏上,或副屏网页歌词有人在看。都没有就不下载、不取帧
+/// (`PlaybackCoordinator.refreshMotionCover`);有了(封面卡出现、网页开始有人看)再刷新一次。
+@MainActor
+enum MotionCoverDemand {
+    static let changed = Notification.Name("MotionCoverDemand.changed")
+    private static var cardsShown = 0
+
+    static var wanted: Bool { cardsShown > 0 || WebLyricsServer.screen.viewerCount > 0 }
+
+    static func cardAppeared() {
+        cardsShown += 1
+        if cardsShown == 1 { NotificationCenter.default.post(name: changed, object: nil) }
+    }
+
+    static func cardDisappeared() {
+        cardsShown = max(0, cardsShown - 1)
     }
 }

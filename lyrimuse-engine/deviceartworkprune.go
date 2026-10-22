@@ -116,10 +116,15 @@ func pruneDeviceArtworkIfDue(now time.Time) (cleared, removed int) {
 	return cleared, removed
 }
 
-// clearMissingDeviceArtwork 把指向本机不存在的设备封面的封面字段清空,返回有没有改。
+// clearMissingDeviceArtwork 把指向本机不存在的设备封面的封面字段清空,返回有没有改。封面那张没了时来源、专辑、主色一起清
+// (同 migrateKnownPlaceholderCovers):只清地址、来源还记着 device 的话,放歌时不再取设备封面,外围补全也换不进新封面。
 func clearMissingDeviceArtwork(e *enrichEntry) bool {
 	changed := false
-	for _, field := range []*string{&e.CoverURL, &e.CoverSettled, &e.VideoFrameURL} {
+	if deviceArtworkMissing(e.CoverURL) {
+		e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor = "", "", "", ""
+		changed = true
+	}
+	for _, field := range []*string{&e.CoverSettled, &e.VideoFrameURL} {
 		if deviceArtworkMissing(*field) {
 			*field = ""
 			changed = true

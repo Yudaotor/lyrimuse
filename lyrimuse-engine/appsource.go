@@ -299,10 +299,16 @@ func appPlaybackTrackPlay(bundleID, artist, title string) (pid int, playSeq int6
 	}
 	rec, avail := r.read(time.Now())
 	if avail != appStateAvailable || !rec.hasTrack() || rec.Player != bundleID || rec.Track.Artist != artist ||
-		rec.Track.Title != title {
+		!sameAppTrackTitle(rec.Track.Title, title) {
 		return 0, 0, false
 	}
 	return rec.AppPID, rec.Track.PlaySeq, true
+}
+
+// sameAppTrackTitle:App 报的歌名(原样)跟引擎这边的歌名是不是同一首。引擎在 trackEnrichment 里把结尾的译名 / 说明括号
+// 剥掉了(normEnrichTitle),App 那边没剥,两边都剥过再比。
+func sameAppTrackTitle(reported, title string) bool {
+	return reported == title || normEnrichTitle(reported) == normEnrichTitle(title)
 }
 
 // appPlaybackArtworkOfKind:App 交来的这一首的图和它的 kind,不分封面还是视频帧。
@@ -317,7 +323,7 @@ func appPlaybackArtworkOfKind(bundleID, artist, title string) (data []byte, mime
 	if avail != appStateAvailable {
 		return nil, "", "", false
 	}
-	if !rec.hasTrack() || rec.Player != bundleID || rec.Track.Artist != artist || rec.Track.Title != title {
+	if !rec.hasTrack() || rec.Player != bundleID || rec.Track.Artist != artist || !sameAppTrackTitle(rec.Track.Title, title) {
 		return nil, "", "", false
 	}
 	a := rec.Artwork

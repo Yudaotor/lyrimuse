@@ -82,7 +82,7 @@ func withLateDeviceCover(ctx context.Context, bundleID, artist, title string) co
 // 取图前后各核一次起播:play_seq 只增不减,取到的图属于取完时那一次起播之前的话,取完那一次核得出来。
 func lateDeviceCover(ctx context.Context, artist, title string) string {
 	t, ok := ctx.Value(lateDeviceCoverKey{}).(lateDeviceCoverTrack)
-	if !ok || t.artist != artist || t.title != title || !t.samePlay() {
+	if !ok || !t.is(artist, title) || !t.samePlay() {
 		return ""
 	}
 	url := deviceCoverURLIfFresh(ctx, true, t.bundleID, t.artist, t.title)
@@ -90,6 +90,16 @@ func lateDeviceCover(ctx context.Context, artist, title string) string {
 		return ""
 	}
 	return url
+}
+
+// is:artist / title 就是挂上的这一首。收尾那一步拿到的是转过简体、折过引号和全角的查询写法(searchQueryFields),
+// 两种写法都认。
+func (t lateDeviceCoverTrack) is(artist, title string) bool {
+	if t.artist == artist && t.title == title {
+		return true
+	}
+	qa, qt, _ := searchQueryFields(t.artist, t.title, "")
+	return qa == artist && qt == title
 }
 
 // samePlay:App 此刻报的还是挂上时那一次起播。挂上时没认出是哪一次(App 状态还没跟上)的不核。

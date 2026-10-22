@@ -56,9 +56,6 @@ import (
 //     motionCoverUnrecognizedBackoff 内不再抓,并记进 parserdrift.go 的计数。页面一改就把每张专辑都
 //     钉成「没有」的话,解析器修好之后也回不来。
 const (
-	// motionCoverStorefront:查哪个商店。跟 appleCatalogLookup 的 `country=cn` 保持一致 ——
-	// 同一台机器上这两条路描述的是同一个用户的同一个 Apple 商店,分开配只会漂。
-	motionCoverStorefront = "cn"
 	// motionCoverTimeout:抓一次专辑页的超时。页面实测 330 KB,给得比 lookup(5s)宽一档。
 	motionCoverTimeout = 12 * time.Second
 	// motionCoverMaxPageBytes:页面读取上限。正常 ~330 KB,留一个数量级余量;超了就当解析失败,
@@ -507,9 +504,20 @@ func motionCoverAlbumArtworkFor(ctx context.Context, collectionID int64) (string
 	}
 	motionCoverMu.Unlock()
 
-	art, ok := itunesCollectionArtwork(ctx, collectionID, motionCoverStorefront)
-	if !ok {
-		return "", false
+	// 先中国区、查空再美区(同 motionCoverStorefronts)。都查空只算这一轮没有、不记下:专辑页刚取到过,查空更像抖动或
+	// 只在别的区上架,记下就永久判身份核不上。
+	var art string
+	for _, sf := range motionCoverStorefronts {
+		a, ok := itunesCollectionArtwork(ctx, collectionID, sf)
+		if !ok {
+			return "", false
+		}
+		if art = a; art != "" {
+			break
+		}
+	}
+	if art == "" {
+		return "", true
 	}
 	motionCoverMu.Lock()
 	cur, still := motionCoverCache[key]
@@ -533,8 +541,11 @@ var itunesArtworkSizeRE = regexp.MustCompile(`/\d+x\d+bb\.[a-z]+$`)
 //
 // 必须核 wrapperType 与 collectionId:同一个 id 空间里还有曲目 / 艺人,拿错了就是拿别的
 // 东西的图来核身份。尾部尺寸认不出来时原样保留 —— 100px 的图对 8×8 均值哈希也够用。
+// itunesCollectionLookupURL:官方封面那次 lookup 的地址。单测换成假服务器。
+var itunesCollectionLookupURL = "https://itunes.apple.com/lookup"
+
 func itunesCollectionArtwork(ctx context.Context, collectionID int64, country string) (string, bool) {
-	u := fmt.Sprintf("https://itunes.apple.com/lookup?id=%d&country=%s", collectionID, country)
+	u := fmt.Sprintf("%s?id=%d&country=%s", itunesCollectionLookupURL, collectionID, country)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return "", false
@@ -726,9 +737,13 @@ func motionCoverWorthBackfill(e enrichEntry, artist, title, album string) bool {
 // 特殊字符时,Apple 把带名字的地址重定向回它自己,跟多少次都一样)。是确定结论,不是网络失败。
 var errAlbumPageUnavailable = errors.New("album page unavailable")
 
+// motionCoverStorefronts:专辑页、官方封面按这个顺序查,跟 appleCatalogLookup 一样先中国区、再美区 —— 目录锚点可能是
+// 美区查出来的(中国区没上架),只查中国区的话这些专辑取不到页面,被记成没有动态封面。
+var motionCoverStorefronts = []string{"cn", "us"}
+
 // motionCoverPageURL 是专辑页地址。单测换成假服务器。
-var motionCoverPageURL = func(collectionID int64) string {
-	return fmt.Sprintf("https://music.apple.com/%s/album/x/%d", motionCoverStorefront, collectionID)
+var motionCoverPageURL = func(collectionID int64, storefront string) string {
+	return fmt.Sprintf("https://music.apple.com/%s/album/x/%d", storefront, collectionID)
 }
 
 // albumPageCheckRedirect:重定向到这次已经访问过的地址,或者跳满 10 次,都按 errAlbumPageUnavailable 停下。
@@ -744,8 +759,20 @@ func albumPageCheckRedirect(req *http.Request, via []*http.Request) error {
 	return nil
 }
 
+// fetchAlbumPage 按 motionCoverStorefronts 依次取;某一区没有这一页(errAlbumPageUnavailable)才试下一区,别的失败当场返回。
 func fetchAlbumPage(collectionID int64) ([]byte, error) {
-	req, err := http.NewRequest(http.MethodGet, motionCoverPageURL(collectionID), nil)
+	var err error
+	for _, sf := range motionCoverStorefronts {
+		var page []byte
+		if page, err = fetchAlbumPageIn(collectionID, sf); !errors.Is(err, errAlbumPageUnavailable) {
+			return page, err
+		}
+	}
+	return nil, err
+}
+
+func fetchAlbumPageIn(collectionID int64, storefront string) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodGet, motionCoverPageURL(collectionID, storefront), nil)
 	if err != nil {
 		return nil, err
 	}

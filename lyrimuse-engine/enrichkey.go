@@ -267,12 +267,13 @@ func betterEnrichEntry(a, b enrichEntry, aKey, bKey string) bool {
 func mergePeripheralInto(winner, loser enrichEntry) enrichEntry {
 	// loser 的网易云封面出自 winner 判错过的那首时不收,主色跟着它(见 neteaselinkcheck.go)。
 	rejectedNeteaseCover := loser.CoverSource == "netease" && neteaseResultRejected(winner, loser)
+	// 封面、来源、封面专辑、主色是一套,一起搬;自己有封面只缺主色时,两边是同一张封面才借主色。
 	if winner.CoverURL == "" && !rejectedNeteaseCover {
 		winner.CoverURL, winner.CoverSource = loser.CoverURL, loser.CoverSource
+		winner.CoverAlbum, winner.AccentColor = loser.CoverAlbum, loser.AccentColor
 		// 设备封面在网上的同一张图跟着这张封面走(它只对记下时那张封面作数,见 enrichEntry.PublicCoverFor)。
 		winner.PublicCoverURL, winner.PublicCoverFor = loser.PublicCoverURL, loser.PublicCoverFor
-	}
-	if winner.AccentColor == "" && !rejectedNeteaseCover {
+	} else if winner.AccentColor == "" && winner.CoverURL == loser.CoverURL {
 		winner.AccentColor = loser.AccentColor
 	}
 	if winner.NeteaseRejected == "" {

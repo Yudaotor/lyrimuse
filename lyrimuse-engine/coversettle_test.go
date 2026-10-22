@@ -787,7 +787,7 @@ func TestSettledCoverIsWired(t *testing.T) {
 	for _, n := range []string{
 		"if isNewTrack && e.CoverSource != \"device\" && e.CoverSource != \"player\" && !coverSettled(e) && !enrichInflight[key] {",
 		"if !exists || provisional || existing.CoverURL == deviceCoverURL || coverSettled(existing) {",
-		"if !ok || enrichProvisional[key] || e.CoverURL == cover || coverSettled(e) {",
+		"if !ok || enrichProvisional[key] || e.CoverURL == cover || e.CoverURL != existing.CoverURL || coverSettled(e) {",
 		"if s, ok := settledAlbumCover(lookupArtist, listedAlbum); ok {\n\t\te.CoverURL, e.CoverSource, e.CoverAlbum, e.CoverSettled = s.CoverURL, s.CoverSource, s.CoverAlbum, s.CoverURL\n\t}\n\tif deviceCoverURL == \"\" {",
 		"listedAlbum := coverAlbum\n\tif listedAlbum == \"\" {\n\t\tlistedAlbum = strings.TrimSpace(e.YouTubeMusicAlbum)\n\t}\n\tif coverAlbum == \"\" {\n\t\tcoverAlbum = appleAlbumHintSync(",
 		"e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor, e.CoverSettled =\n\t\t\tfresh.CoverURL, fresh.CoverSource, fresh.CoverAlbum, fresh.AccentColor, fresh.CoverSettled",

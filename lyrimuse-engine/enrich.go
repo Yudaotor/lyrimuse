@@ -3274,6 +3274,11 @@ func settleDeviceCover(ctx context.Context, key, artist, title, album, bundleID 
 		case <-time.After(d):
 		}
 		waited += d
+		// 首次解析还没提交(条目还不在、或还是先上屏的那份):等它落定再问,不白用一档。解析要二十来秒的歌,不等的话三档
+		// 全落在提交之前,开头那张过渡图就此钉住。
+		if !waitForCommittedEntry(ctx, key) {
+			return
+		}
 		if deviceCoverUpgradePass(ctx, key, artist, title, album, bundleID) {
 			return
 		}
@@ -3284,6 +3289,35 @@ func settleDeviceCover(ctx context.Context, key, artist, title, album, bundleID 
 	if ok && e.CoverSource != "device" && e.CoverSource != "player" {
 		log.Printf("device artwork: no usable artwork from %s for %q within %s, keeping the %q cover",
 			bundleID, key, waited, e.CoverSource)
+	}
+}
+
+// deviceCoverCommitWait / deviceCoverCommitPoll:设备封面沉降那几档等首次解析提交最多等多久、多久看一次。单测调小。
+var (
+	deviceCoverCommitWait = 60 * time.Second
+	deviceCoverCommitPoll = time.Second
+)
+
+// waitForCommittedEntry:等到 key 这一条已经落盘、不是先上屏的那份(enrichProvisional)。等到了返回 true;到期还没有
+// (解析失败、条目被删)或 ctx 结束返回 false。
+func waitForCommittedEntry(ctx context.Context, key string) bool {
+	deadline := time.Now().Add(deviceCoverCommitWait)
+	for {
+		enrichMu.Lock()
+		_, ok := enrichCache[key]
+		committed := ok && !enrichProvisional[key]
+		enrichMu.Unlock()
+		if committed {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(deviceCoverCommitPoll):
+		}
 	}
 }
 
@@ -3336,9 +3370,9 @@ func deviceCoverUpgradePass(ctx context.Context, key, artist, title, album, bund
 	}
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
-	if !ok || enrichProvisional[key] || e.CoverURL == cover || coverSettled(e) {
-		// 这段等待期间条目被"歌词管理"删掉了,(竞态)另一路已经写过同一张封面,或者后台补封面刚给专辑定下了封面——
-		// 都不该再写。
+	if !ok || enrichProvisional[key] || e.CoverURL == cover || e.CoverURL != existing.CoverURL || coverSettled(e) {
+		// 这段等待期间条目被"歌词管理"删掉了,(竞态)另一路已经写过同一张封面或换了别的封面(上面是拿旧封面比的),
+		// 或者后台补封面刚给专辑定下了封面——都不该再写,换了的留给下一档按新封面再比。
 		enrichMu.Unlock()
 		return false
 	}

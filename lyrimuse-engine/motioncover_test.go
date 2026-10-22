@@ -511,7 +511,7 @@ func TestMotionCoverUnfetchablePageIsCached(t *testing.T) {
 	}))
 	defer srv.Close()
 	oldURL, oldPath := motionCoverPageURL, motionCoverPath
-	motionCoverPageURL = func(id int64) string { return fmt.Sprintf("%s/%d", srv.URL, id) }
+	motionCoverPageURL = func(id int64, _ string) string { return fmt.Sprintf("%s/%d", srv.URL, id) }
 	motionCoverMu.Lock()
 	motionCoverPath = ""
 	motionCoverUnavailableStreak = 0
@@ -554,7 +554,7 @@ func TestMotionCoverUnrecognizedPageIsNotCached(t *testing.T) {
 	}))
 	defer srv.Close()
 	oldURL, oldPath := motionCoverPageURL, motionCoverPath
-	motionCoverPageURL = func(id int64) string { return fmt.Sprintf("%s/%d", srv.URL, id) }
+	motionCoverPageURL = func(id int64, _ string) string { return fmt.Sprintf("%s/%d", srv.URL, id) }
 	motionCoverMu.Lock()
 	motionCoverPath = ""
 	delete(motionCoverCache, "7")
@@ -625,7 +625,7 @@ func TestMotionCoverUnavailableStreakStopsCachingAbsent(t *testing.T) {
 	defer srv.Close()
 	ids := []int64{41, 42, 43, 44, 45, 46, 50, 51}
 	oldURL, oldPath := motionCoverPageURL, motionCoverPath
-	motionCoverPageURL = func(id int64) string { return fmt.Sprintf("%s/%d", srv.URL, id) }
+	motionCoverPageURL = func(id int64, _ string) string { return fmt.Sprintf("%s/%d", srv.URL, id) }
 	clear := func() {
 		motionCoverMu.Lock()
 		motionCoverUnavailableStreak = 0

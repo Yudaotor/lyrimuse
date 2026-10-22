@@ -2102,11 +2102,11 @@ func runLyricsManagerTests() {
         expectEqual(channel.contains("last = max(now, last &+ 1)") && channel.contains("OSAllocatedUnfairLock(initialState: UInt64(0))"),
                     true, "改动通道: 请求 id 的时间戳单调递增")
 
-        // 动态封面:盘上那份判不出(视频自己坏了)这一次运行里记着,不每次刷新都重解帧。
+        // 动态封面:盘上那份判不出(视频自己坏了)就删掉,下次换到这张专辑重下,不留着每次刷新白解一遍。
         let motion = (try? String(contentsOf: appDir.appendingPathComponent("MotionCoverStore.swift"), encoding: .utf8)) ?? ""
-        expectEqual(motion.contains("if cachedUndecidable.contains(broken) { return nil }")
-                    && motion.contains("cachedUndecidable.insert(broken)")
-                    && motion.contains("[.systemFileNumber]"), true,
-                    "动态封面: 盘上那份判不出按 (资源, 文件编号) 记住,不按会被 touch 改掉的修改时间")
+        expectEqual(sourceHas(motion, "case .undecidable:")
+                    && sourceHas(motion, "try? fm.removeItem(at: file)\n return nil")
+                    && !motion.contains("cachedUndecidable"), true,
+                    "动态封面: 盘上那份判不出就删掉重下")
     }
 }

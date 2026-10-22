@@ -9,6 +9,7 @@ import ImageIO
 
 @MainActor
 func runCoverArtTests() {
+    checkArtworkAudit()
     // ---- 最近记录的封面兜底:合唱 credit 要能对上主歌手写法 ----
     //
     // 同一次收听以两种歌手写法存在:本机缓存 key 用播放器的逐曲 credit(`英雄联盟/Sara Skinner`),

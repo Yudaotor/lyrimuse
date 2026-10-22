@@ -3601,6 +3601,9 @@ struct LyricsWindowView: View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer(minLength: 20)
             artworkCard
+                // 动态封面只在这张卡上播:卡在不在屏上决定要不要下载、取帧(MotionCoverDemand)。
+                .onAppear { MotionCoverDemand.cardAppeared() }
+                .onDisappear { MotionCoverDemand.cardDisappeared() }
             // 三段间距 19/19/15(对拍 AM:封面底→歌名 19、歌手底→进度条 23.5(帧距≈19)、
             // 时间行→播控中心比我们短 5。22/14/20 那种逐段累积会把播控行推低 ~10pt)。
             trackInfoRow
