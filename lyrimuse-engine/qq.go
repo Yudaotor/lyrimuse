@@ -503,8 +503,8 @@ func qqSingerSuggestionsAt(ctx context.Context, host, name string) ([]qqSingerSu
 	return items, true
 }
 
-func qqSingerAvatar(name string) (string, bool) {
-	items, ok := qqSingerSuggestions(context.Background(), name)
+func qqSingerAvatar(ctx context.Context, name string) (string, bool) {
+	items, ok := qqSingerSuggestions(ctx, name)
 	if !ok {
 		return "", false
 	}
@@ -543,12 +543,17 @@ func qqSingerAvatar(name string) (string, bool) {
 // 「婉婷」的歌手,曲婉婷在第二条)。没有哪种"扫描位置"能同时躲开两类坑;只信第一条覆盖了绝大多数场景,而"查不到"会诚实地
 // 退回调用方的下一级信号(resolveGenericArtistCanonicalName 里的手工表),查错答案却会被当成确定结果写进展示字段。已知撞不上的
 // ("wanting"、"hikaru utada")留在 artistAliasTable 里。
-func qqArtistCanonicalName(rawArtist string) string {
+//
+// 第二个返回值:问成了没有(服务端正常应答,哪怕说没有)。没问成的不能缓存成「没有」。
+func qqArtistCanonicalName(rawArtist string) (string, bool) {
 	items, ok := qqSingerSuggestions(context.Background(), rawArtist)
-	if !ok || len(items) == 0 {
-		return ""
+	if !ok {
+		return "", false
 	}
-	return pickQQArtistCanonicalName(items[0].Name, rawArtist)
+	if len(items) == 0 {
+		return "", true
+	}
+	return pickQQArtistCanonicalName(items[0].Name, rawArtist), true
 }
 
 // pickQQArtistCanonicalName 是上面查询的判据部分,拆出来纯函数好测:命中的建议必须
@@ -576,8 +581,11 @@ func pickQQArtistCanonicalName(suggestion, rawArtist string) string {
 var (
 	qqArtistNameMu    sync.Mutex
 	qqArtistNameCache = map[string]string{}
-	qqArtistNamePath  string
-	qqArtistNameDirty bool
+	// qqArtistNameRetryAt:没问成(网络 / 接口故障)的名字什么时候再问。不记进 qqArtistNameCache:那份在内存里
+	// 一直有效,一次偶发超时会让这位歌手在本进程余下的时间里都拿不到中文名。
+	qqArtistNameRetryAt = map[string]time.Time{}
+	qqArtistNamePath    string
+	qqArtistNameDirty   bool
 )
 
 func loadQQArtistNameCache(path string) {
@@ -635,6 +643,9 @@ func qqArtistCanonicalNameFromCache(rawArtist string) string {
 	return qqArtistNameCache[rawArtist]
 }
 
+// qqArtistNameRetryAfter:QQ 规范名没问成之后隔多久再问。
+const qqArtistNameRetryAfter = 10 * time.Minute
+
 func cachedQQArtistCanonicalName(rawArtist string) string {
 	rawArtist = strings.TrimSpace(rawArtist)
 	if rawArtist == "" || containsHan(rawArtist) {
@@ -646,14 +657,21 @@ func cachedQQArtistCanonicalName(rawArtist string) string {
 		qqArtistNameMu.Unlock()
 		return v
 	}
+	retryAt := qqArtistNameRetryAt[rawArtist]
 	qqArtistNameMu.Unlock()
-	if artistCanonicalCacheOnly {
+	if artistCanonicalCacheOnly || time.Now().Before(retryAt) {
 		return "" // 见 musicbrainz.go artistCanonicalCacheOnly
 	}
 
-	resolved := qqArtistCanonicalName(rawArtist)
+	resolved, ok := qqArtistCanonicalName(rawArtist)
 
 	qqArtistNameMu.Lock()
+	if !ok {
+		qqArtistNameRetryAt[rawArtist] = time.Now().Add(qqArtistNameRetryAfter)
+		qqArtistNameMu.Unlock()
+		return ""
+	}
+	delete(qqArtistNameRetryAt, rawArtist)
 	qqArtistNameCache[rawArtist] = resolved
 	if resolved != "" {
 		qqArtistNameDirty = true

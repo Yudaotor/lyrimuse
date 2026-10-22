@@ -14,6 +14,7 @@ const dirWatchStopIdent = 1
 // 的原子写落盘就是一次改名,所以盯目录而不盯文件本身(改名换上来的是新文件,盯着旧文件收不到事件)。
 // out 要带缓冲;塞不进(上一个信号还没被取走)就丢,收到的一方自己去看到底哪个文件变了。
 // 打不开目录或建不起 kqueue 时返回 false,调用方照旧靠定时器。等事件时不定时醒:ctx 结束时触发一个用户事件叫它退出。
+// 目录本身被删、被改名时退出(之后描述符盯着的是已经不在原处的目录,再也收不到事件)。
 func watchDirWrites(ctx context.Context, dir string, out chan<- struct{}) bool {
 	_, ok := startDirWatch(ctx, dir, out)
 	return ok
@@ -32,7 +33,7 @@ func startDirWatch(ctx context.Context, dir string, out chan<- struct{}) (<-chan
 	}
 	var vnode, stop syscall.Kevent_t
 	syscall.SetKevent(&vnode, fd, syscall.EVFILT_VNODE, syscall.EV_ADD|syscall.EV_CLEAR)
-	vnode.Fflags = syscall.NOTE_WRITE
+	vnode.Fflags = syscall.NOTE_WRITE | syscall.NOTE_DELETE | syscall.NOTE_RENAME
 	syscall.SetKevent(&stop, dirWatchStopIdent, syscall.EVFILT_USER, syscall.EV_ADD|syscall.EV_CLEAR)
 	if _, err := syscall.Kevent(kq, []syscall.Kevent_t{vnode, stop}, nil, nil); err != nil {
 		syscall.Close(kq)
@@ -84,6 +85,10 @@ func startDirWatch(ctx context.Context, dir string, out chan<- struct{}) (<-chan
 			for _, ev := range events[:n] {
 				if ev.Filter != syscall.EVFILT_VNODE {
 					continue
+				}
+				if ev.Fflags&(syscall.NOTE_DELETE|syscall.NOTE_RENAME) != 0 {
+					warnf("dirwatch: dir=%s was moved or deleted, falling back to the timer", dir)
+					return
 				}
 				select {
 				case out <- struct{}{}:

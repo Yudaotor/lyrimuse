@@ -341,6 +341,15 @@ func TestApplyLastListenSeedKeepsRealListen(t *testing.T) {
 	}
 }
 
+// relayTickPayload:一拍的负载,只有封面这一样内容,key 带 |c 的有封面。
+func relayTickPayload(key string) map[string]any {
+	payload := map[string]any{"artwork": ""}
+	if strings.HasSuffix(key, "|c") {
+		payload["artwork"] = "https://relay/artwork/0123456789abcdef.jpg"
+	}
+	return payload
+}
+
 // relayTick 是喂给 relayShouldPush 的一拍:这一刻算出来的去重 key,有 |c 的带上封面。
 type relayTick struct {
 	at  time.Duration
@@ -351,16 +360,13 @@ type relayTick struct {
 func driveRelay(p *poller, t0 time.Time, ticks []relayTick) []string {
 	var wrote []string
 	for _, tk := range ticks {
-		payload := map[string]any{"artwork": ""}
-		if strings.HasSuffix(tk.key, "|c") {
-			payload["artwork"] = "https://relay/artwork/0123456789abcdef.jpg"
-		}
+		payload := relayTickPayload(tk.key)
 		now := t0.Add(tk.at)
 		reason, ok := p.relayShouldPush(now, tk.key, payload, false)
 		if !ok {
 			continue
 		}
-		p.applyRelayResult(relayPushResult{key: tk.key, reason: reason, at: now})
+		p.applyRelayResult(relayPushResult{key: tk.key, reason: reason, at: now, digest: relayContentDigest(payload)})
 		wrote = append(wrote, tk.key)
 	}
 	return wrote
@@ -372,7 +378,8 @@ func TestRelayShouldPushWaitsForCoverBackOnSameTrack(t *testing.T) {
 	const lit, bare = "mac|Muñeca|Andria Rose|Muñeca|c", "mac|Muñeca|Andria Rose|Muñeca"
 	t0 := time.Now()
 	fresh := func(last string) *poller {
-		return &poller{relayLastState: last, relayLastAt: t0.Add(-time.Minute), relayStateSince: t0.Add(-time.Minute)}
+		return &poller{relayLastState: last, relayLastAt: t0.Add(-time.Minute), relayStateSince: t0.Add(-time.Minute),
+			relayLastDigest: relayContentDigest(relayTickPayload(last))}
 	}
 	// 照 Muñeca 那次的实况:封面没了 2.47 秒又回来,不等的话会写「无」「有」两次。
 	p := fresh(lit)

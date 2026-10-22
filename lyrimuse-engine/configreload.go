@@ -187,6 +187,7 @@ func (p *poller) syncLiveConfig() {
 		if prev == nil || prev.StateRelayURL != next.StateRelayURL || prev.StateRelayToken != next.StateRelayToken {
 			p.resetRelayPush()
 		}
+		p.maybeSeedLastListen(prev, next)
 	}
 	// Last.fm 镜像写入还吃 features.json 的 lastfm_mirror_scrobble 开关,所以每拍都比一次,不只在
 	// config.json 变了的时候。

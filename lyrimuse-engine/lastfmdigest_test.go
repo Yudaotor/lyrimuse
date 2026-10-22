@@ -691,15 +691,15 @@ func TestTopArtistsDigestSkips(t *testing.T) {
 
 // definitive 决定空结果能不能负缓存:两条腿都正常应答说没有才算,任一条暂时故障就不算。
 func TestResolveArtistAvatarDefinitive(t *testing.T) {
-	leg := func(pic string, def bool) func(string) (string, bool) {
-		return func(string) (string, bool) { return pic, def }
+	leg := func(pic string, def bool) func(context.Context, string) (string, bool) {
+		return func(context.Context, string) (string, bool) { return pic, def }
 	}
 	dz := func(pic string, def bool) func(context.Context, string) (string, bool) {
 		return func(context.Context, string) (string, bool) { return pic, def }
 	}
 	cases := []struct {
 		name    string
-		qq      func(string) (string, bool)
+		qq      func(context.Context, string) (string, bool)
 		deezer  func(context.Context, string) (string, bool)
 		wantPic string
 		wantDef bool

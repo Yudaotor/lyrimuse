@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"hash/fnv"
 	"log"
 	"log/slog"
 	"path/filepath"
@@ -292,15 +294,23 @@ type poller struct {
 	// 自建状态中继:每轮把"网页该显示的当前状态"推到 /push(Mac 在放优先,否则 iPhone
 	// 镜像,否则上次播放)。按状态变化 + 心跳去重。remoteTrack/lastListen 由 bridge/
 	// finalize 更新。这是网页主数据源的写入端。
-	relayLastState   string
-	relayLastAt      time.Time
-	relayWrites      int           // 累计成功 KV /push 写次数(埋点:实测每日写量+定位大头)
-	relayFailKey     string        // 上次推送失败时的 key:内容变了就清退避、立即再试
-	relayFailAt      time.Time     // 上次推送失败时刻(零=当前无退避)
-	relayBackoff     time.Duration // 当前退避间隔(失败翻倍,封顶 relayBackoffMax)
-	relayStateSince  time.Time     // 最近一次推上去的 key 从什么时候起没变过(不在播放的状态据此停心跳)
-	relayDeferKey    string        // 换歌后等封面的那条 key 与开始等的时刻(见 relayShouldPush)
-	relayDeferSince  time.Time
+	relayLastState  string
+	relayLastAt     time.Time
+	relayWrites     int           // 累计成功 KV /push 写次数(埋点:实测每日写量+定位大头)
+	relayFailKey    string        // 上次推送失败时的 key:内容变了就清退避、立即再试
+	relayFailAt     time.Time     // 上次推送失败时刻(零=当前无退避)
+	relayBackoff    time.Duration // 当前退避间隔(失败翻倍,封顶 relayBackoffMax)
+	relayStateSince time.Time     // 最近一次推上去的 key 从什么时候起没变过(不在播放的状态据此停心跳)
+	relayDeferKey   string        // 换歌后等封面的那条 key 与开始等的时刻(见 relayShouldPush)
+	relayDeferSince time.Time
+	// relayLastDigest:最近一次推上去的内容摘要(relayContentDigest);relayContentDigestSeen / relayContentSince:
+	// 同一个状态里内容变了、正在等它稳定的那份摘要与开始等的时刻。
+	relayLastDigest        uint32
+	relayContentDigestSeen uint32
+	relayContentSince      time.Time
+	// relayWakeCh / relayWakeTimer:等待点到点时叫醒主循环再判一次(见 wakeRelayAfter),不干等下一个主节拍。
+	relayWakeCh      chan struct{}
+	relayWakeTimer   *time.Timer
 	relayInflight    bool                 // 有一次推送在后台飞着;结果经 relayDoneCh 回主循环
 	relayDoneCh      chan relayPushResult // 容量 1,配合 relayInflight 保证发送永不阻塞
 	lastListenSeedCh chan lastListenSeed  // 启动时从 ListenBrainz 取回的最近一条收听(见 seedLastListen)
@@ -688,13 +698,14 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	if !ok {
 		return
 	}
+	digest := relayContentDigest(payload)
 	// 推送放后台:中继一次往返中位约 0.9 秒、偶尔 6 秒超时,同步做会让主循环在换歌那一刻停住
 	// (暂停、拖进度、下一首都察觉不到)。记账在 applyRelayResult 里,仍只在主循环上改字段。
 	p.relayInflight = true
 	cfg, gen := p.cfg, p.relayGen
 	go func() {
 		err := postRelay(p.ctx, cfg, "/push", payload)
-		p.relayDoneCh <- relayPushResult{key: key, reason: reason, at: now, err: err, gen: gen}
+		p.relayDoneCh <- relayPushResult{key: key, reason: reason, at: now, err: err, gen: gen, digest: digest}
 	}()
 }
 
@@ -712,6 +723,8 @@ const (
 	relayCoverWait = 5 * time.Second
 	// 同一首从暂停到在放,等这么久再推(见 relayShouldPush)。网页 10 秒才拉一次,看不出来。
 	relayResumeSettle = time.Second
+	// 同一个状态里内容(歌词、译文、封面、主色、署名)变了,新内容稳定这么久再推(见 relayShouldPush)。
+	relayContentSettle = 3 * time.Second
 	// 引擎刚启动时最多等这么久再推(见 relayStartupPending),覆盖启动补种那次请求的整个时限。
 	relayStartupWait = relayRequestTimeout
 	// 推送失败后的退避:从 relayBackoffMin 起每失败一次翻倍,封顶 relayBackoffMax(见 applyRelayResult)。
@@ -724,6 +737,38 @@ func relayTrackOf(key string) string {
 	_, rest, _ := strings.Cut(key, "|")
 	rest = strings.TrimSuffix(rest, "|c")
 	return strings.TrimSuffix(rest, "|a")
+}
+
+// relayContentDigest:负载里网页要显示的内容(歌词四样、封面、主色、署名与来源)的摘要,不含进度。去重 key 只认
+// 状态和曲目,先上屏的那份歌词定案、译文翻好、改了歌词、换了源、封面换了一张时 key 都不变,靠它补推。nil 为 0。
+func relayContentDigest(payload map[string]any) uint32 {
+	if payload == nil {
+		return 0
+	}
+	h := fnv.New32a()
+	for _, field := range []string{"title", "artist", "album", "artwork", "accent", "lyrics", "lyricsTr", "lyricsRoma",
+		"lyricsYRC", "lyricsSource", "coverSource", "mediaPlayer"} {
+		fmt.Fprintf(h, "%v\x00", payload[field])
+	}
+	return h.Sum32()
+}
+
+// wakeRelayAfter 过 d 叫醒主循环跑一拍(relayWakeCh),给推送的等待点到点再判、在飞时挡下的变化补推用。
+// 只在主循环上调;后一次覆盖前一次,同一时刻只有一个等待点。
+func (p *poller) wakeRelayAfter(d time.Duration) {
+	if p.relayWakeCh == nil {
+		return
+	}
+	if p.relayWakeTimer != nil {
+		p.relayWakeTimer.Stop()
+	}
+	ch := p.relayWakeCh
+	p.relayWakeTimer = time.AfterFunc(max(d, 0)+10*time.Millisecond, func() {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	})
 }
 
 // relayHasProgress:这个状态的负载带进度条(Mac 正在放 / iPhone 正在放)。只有它们需要重锚。
@@ -749,9 +794,11 @@ func (p *poller) relayShouldPush(now time.Time, key string, payload map[string]a
 		relayTrackOf(key) == relayTrackOf(p.relayLastState) {
 		if key != p.relayDeferKey {
 			p.relayDeferKey, p.relayDeferSince = key, now
+			p.wakeRelayAfter(relayResumeSettle)
 			return "", false
 		}
-		if now.Sub(p.relayDeferSince) < relayResumeSettle {
+		if waited := now.Sub(p.relayDeferSince); waited < relayResumeSettle {
+			p.wakeRelayAfter(relayResumeSettle - waited)
 			return "", false
 		}
 	}
@@ -759,9 +806,11 @@ func (p *poller) relayShouldPush(now time.Time, key string, payload map[string]a
 		if cov, _ := payload["artwork"].(string); cov == "" {
 			if key != p.relayDeferKey {
 				p.relayDeferKey, p.relayDeferSince = key, now
+				p.wakeRelayAfter(relayCoverWait)
 				return "", false
 			}
-			if now.Sub(p.relayDeferSince) < relayCoverWait {
+			if waited := now.Sub(p.relayDeferSince); waited < relayCoverWait {
+				p.wakeRelayAfter(relayCoverWait - waited)
 				return "", false
 			}
 		}
@@ -772,25 +821,46 @@ func (p *poller) relayShouldPush(now time.Time, key string, payload map[string]a
 	if changed && !reanchored && strings.HasSuffix(p.relayLastState, "|c") && strings.TrimSuffix(p.relayLastState, "|c") == key {
 		if key != p.relayDeferKey {
 			p.relayDeferKey, p.relayDeferSince = key, now
+			p.wakeRelayAfter(relayCoverWait)
 			return "", false
 		}
-		if now.Sub(p.relayDeferSince) < relayCoverWait {
+		if waited := now.Sub(p.relayDeferSince); waited < relayCoverWait {
+			p.wakeRelayAfter(relayCoverWait - waited)
 			return "", false
 		}
 	}
-	if !changed && !reanchored {
+	// 同一个状态、内容变了(先上屏的那份歌词定案、译文翻好、改了歌词、换了源、封面换了一张):新内容稳定
+	// relayContentSettle 再推,接连到的几样并成一次写;来回抖的字段永远等不满,不会每拍写。重锚那一拍照推、顺带带上。
+	digest := relayContentDigest(payload)
+	contentChanged := !changed && key != "empty" && digest != p.relayLastDigest
+	if contentChanged && !reanchored {
+		if digest != p.relayContentDigestSeen {
+			p.relayContentDigestSeen, p.relayContentSince = digest, now
+			p.wakeRelayAfter(relayContentSettle)
+			return "", false
+		}
+		if waited := now.Sub(p.relayContentSince); waited < relayContentSettle {
+			p.wakeRelayAfter(relayContentSettle - waited)
+			return "", false
+		}
+	}
+	if !changed && !reanchored && !contentChanged {
 		if now.Sub(p.relayLastAt) < relayHeartbeat {
 			return "", false
 		}
-		if !progress && now.Sub(p.relayStateSince) >= relayIdleHeartbeatFor {
+		// 推送失败还没撤销时照样续心跳:停了就再没有推送,设置页那条「无法连接」网络好了也撤不掉。
+		if !progress && now.Sub(p.relayStateSince) >= relayIdleHeartbeatFor && p.relayFailingSince.IsZero() {
 			return "", false
 		}
 	}
 	reason := "heartbeat"
-	if changed {
+	switch {
+	case changed:
 		reason = "change"
-	} else if reanchored {
+	case reanchored:
 		reason = "reanchor"
+	case contentChanged:
+		reason = "content"
 	}
 	// 退避:上次推送失败(配额爆/中继挂)后别每轮硬试(否则每 5s 白烧一次 worker 请求+刷屏)。
 	// 内容变了(key 变,如换歌)→ 清退避立即再试,让 KV 恢复后尽快回主路径;同内容按退避重试。
@@ -827,7 +897,8 @@ type relayPushResult struct {
 	key, reason string
 	at          time.Time
 	err         error
-	gen         int // 发出时的 relayGen
+	gen         int    // 发出时的 relayGen
+	digest      uint32 // 推上去的内容摘要(relayContentDigest)
 }
 
 // applyRelayResult 在主循环上记账:成功更新去重锚点,失败进退避(去重锚点不动,按退避在后续 poll 重试)。
@@ -852,15 +923,22 @@ func (p *poller) applyRelayResult(r relayPushResult) {
 	if r.key != p.relayLastState {
 		p.relayStateSince = r.at
 	}
-	p.relayLastState, p.relayLastAt = r.key, r.at
+	p.relayLastState, p.relayLastAt, p.relayLastDigest = r.key, r.at, r.digest
 	p.relayWrites++
+	// 飞着的这段时间里状态可能又变了(换歌后不到一秒就暂停):马上再判一次,不等下一个主节拍。
+	p.wakeRelayAfter(0)
 	log.Printf("relay write #%d [%s] key=%q", p.relayWrites, r.reason, r.key) // 埋点:实测每日 KV 写量与来源
 }
 
 // pushScrobble 记一条完成收听。历史/今日统计由网页从 LB 合并(每条完成收听都提交给 LB,
 // 见各 lb.submit "single"),这里不写 KV /scrobble,省写额度。只更新内存 lastListen:
 // 空闲时"上次播放"显示 + pushRelayState 兜底态用。本机播放在 applySubmitOutcome 里收听一成立就调,不看 LB 的结果。
+//
+// 比手上那条更早的不换:iPhone 离线听的歌经 Last.fm 晚几小时才桥接过来(3 天以内照转),不能把更新的「上次播放」盖回去。
 func (p *poller) pushScrobble(s snapshot, listenedAt int64, device string) {
+	if p.lastListen.key() != "" && listenedAt > 0 && listenedAt < p.lastListenAt {
+		return
+	}
 	p.lastListen, p.lastListenAt, p.lastListenDev = s, listenedAt, device
 }
 
@@ -1904,6 +1982,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 		bridgeDoneCh:        make(chan bridgeFetchResult, 1),
 		bridgeForwardDoneCh: make(chan []bridgeForwardResult, 1),
 		relayDoneCh:         make(chan relayPushResult, 1),
+		relayWakeCh:         make(chan struct{}, 1),
 		lastListenSeedCh:    make(chan lastListenSeed, 1),
 	}
 	enrichNotify = make(chan struct{}, 1) // 后台 enrich 完成后触发一次重推
@@ -1949,11 +2028,20 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	// 盯不了时退回每 appStateCheckInterval 看一次。
 	appWrites := make(chan struct{}, 1)
 	var appCheck <-chan time.Time
-	if !watchDirWrites(ctx, filepath.Dir(appState.path), appWrites) {
-		warnf("playback source: cannot watch the playback state dir, checking it once a second instead")
-		appTicker := time.NewTicker(appStateCheckInterval)
-		defer appTicker.Stop()
+	var appTicker *time.Ticker
+	defer func() {
+		if appTicker != nil {
+			appTicker.Stop()
+		}
+	}()
+	startAppCheck := func() {
+		appTicker = time.NewTicker(appStateCheckInterval)
 		appCheck = appTicker.C
+	}
+	watchStopped, watching := startDirWatch(ctx, filepath.Dir(appState.path), appWrites)
+	if !watching {
+		warnf("playback source: cannot watch the playback state dir, checking it once a second instead")
+		startAppCheck()
 	}
 	var lastWritePoll time.Time
 	// 离上一轮不到 appStateMinGap 的叫醒先不跑,到点补看一次。
@@ -2011,6 +2099,14 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 			p.applyAnnounceOutcome(r)
 		case r := <-p.relayDoneCh:
 			p.applyRelayResult(r)
+		case <-p.relayWakeCh:
+			p.poll()
+		case <-watchStopped:
+			// 盯目录中途停了(目录被删、改名,kevent 出错):退回每秒看一次。
+			watchStopped = nil
+			if ctx.Err() == nil {
+				startAppCheck()
+			}
 		case r := <-p.lastListenSeedCh:
 			p.applyLastListenSeed(r)
 		case r := <-p.bridgeForwardDoneCh:

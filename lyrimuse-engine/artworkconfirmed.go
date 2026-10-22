@@ -207,15 +207,26 @@ func startArtworkSweep(parent context.Context) {
 	go sweepDeviceArtwork(ctx)
 }
 
-// switchStateRelay 在运行中换状态中继(config.json 热重读时调)。只换令牌时直接换;地址变了,
+// switchStateRelay 在运行中换状态中继(config.json 热重读时调)。只换令牌时图还在同一个中继上,已确认的留着,
+// 但拿旧令牌失败的冷却作废、在飞的上传取消,存量补传重来一轮(旧令牌被拒的那几张不然要等那首歌再放到才传);地址变了,
 // 「哪些封面已在中继上」的内存记录全都属于旧中继,清掉后按新中继重新读确认记录、重起一轮补传。
 //
 // 清记录和换地址在 artworkConfirmMu + artworkMu 之内一起做,让 flushArtworkConfirmed 不会把旧中继的
 // 确认记录记到新中继名下。锁顺序与 loadArtworkConfirmed 相同:先 artworkConfirmMu 再 artworkMu。
 func switchStateRelay(url, token string) {
-	old, _ := artworkRelayTarget()
+	old, oldToken := artworkRelayTarget()
 	if strings.TrimRight(old, "/") == strings.TrimRight(url, "/") {
+		if oldToken == token {
+			setStateRelay(url, token)
+			return
+		}
+		artworkMu.Lock()
 		setStateRelay(url, token)
+		artworkNextRetry = map[string]time.Time{}
+		artworkUploadCancel()
+		artworkUploadCtx, artworkUploadCancel = context.WithCancel(context.Background())
+		artworkMu.Unlock()
+		restartArtworkSweep()
 		return
 	}
 	artworkConfirmMu.Lock()
@@ -232,6 +243,11 @@ func switchStateRelay(url, token string) {
 	artworkConfirmMu.Unlock()
 	log.Printf("artwork relay: relay address changed without a restart, re-confirming covers against the new one")
 	loadArtworkConfirmed()
+	restartArtworkSweep()
+}
+
+// restartArtworkSweep 按启动时那一轮的父 ctx 重起存量补传;还没起过(子命令)或引擎在退出时不起。
+func restartArtworkSweep() {
 	artworkSweepMu.Lock()
 	parent := artworkSweepParent
 	artworkSweepMu.Unlock()

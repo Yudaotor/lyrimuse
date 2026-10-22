@@ -121,11 +121,12 @@ func artworkRelayConfigured() bool {
 	return u != ""
 }
 
-// setStateRelay 一次设好三个中继变量。设备封面上传和网页取色用的是同一个中继地址。
+// setStateRelay 一次设好三个中继变量。设备封面上传和网页取色用的是同一个中继地址。地址或令牌变了代次加一:
+// 在飞的上传带着旧代次,回来时不记账(拿旧令牌被拒的不进冷却)。
 func setStateRelay(url, token string) {
 	stateRelayMu.Lock()
 	defer stateRelayMu.Unlock()
-	if strings.TrimRight(artworkRelayURL, "/") != strings.TrimRight(url, "/") {
+	if strings.TrimRight(artworkRelayURL, "/") != strings.TrimRight(url, "/") || artworkRelayToken != token {
 		artworkRelayGen++
 	}
 	artworkRelayURL, artworkRelayToken, webRelayURL = url, token, url
@@ -381,14 +382,22 @@ func sweepDeviceArtwork(ctx context.Context) {
 			skipped++
 			continue
 		}
+		// 正在放的歌用的就是这张、懒上传已经排上了的,不再传一遍(两边都 HEAD 不到就各 POST 一次)。
 		artworkMu.Lock()
-		done := artworkUploaded[sha]
+		skip := artworkUploaded[sha] || artworkInflight[sha]
+		if !skip {
+			artworkInflight[sha] = true
+		}
 		artworkMu.Unlock()
-		if done {
+		if skip {
 			continue
 		}
 		base, token, gen := artworkRelayTargetGen()
-		if err := ensureArtworkUploadedTo(ctx, base, token, sha, path); err != nil {
+		err := ensureArtworkUploadedTo(ctx, base, token, sha, path)
+		artworkMu.Lock()
+		delete(artworkInflight, sha)
+		artworkMu.Unlock()
+		if err != nil {
 			failed++
 			slog.Warn("artwork relay: backfill upload failed", "sha", sha, "err", err)
 		} else {

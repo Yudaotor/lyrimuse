@@ -37,22 +37,29 @@ type avatarCacheEntry struct {
 const avatarCacheTTL = 14 * 24 * time.Hour
 const avatarTransientTTL = 30 * time.Minute
 
-func runArtistAvatarsCLI(args []string) {
-	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "artist-avatars: at least one artist name is required")
-		os.Exit(2)
-	}
-	if configDir() == "" {
-		log.Fatalf("artist-avatars: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
-	}
-	cachePath := filepath.Join(configDir(), clientName+"-artist-avatar-cache.json")
+// avatarPerNameTimeout:一个名字解析头像的总时限(QQ 那条腿只拿一半,见 avatarQQContext)。
+const avatarPerNameTimeout = 6 * time.Second
 
+func artistAvatarCachePath() string {
+	if configDir() == "" {
+		return ""
+	}
+	return filepath.Join(configDir(), clientName+"-artist-avatar-cache.json")
+}
+
+// cachedArtistAvatars 给一批歌手名取头像:先查磁盘缓存(cachePath 空 = 不用缓存),没命中的 4 路并发解析(每名
+// perName 时限),结论按 avatarVerdict 写回。返回名字 → URL(查不到为空串)。artist-avatars 命令行和后台
+// Top 歌手推送共用。
+func cachedArtistAvatars(ctx context.Context, cachePath string, names []string, perName time.Duration,
+	resolve func(context.Context, string) (string, bool)) map[string]string {
 	cache := map[string]avatarCacheEntry{}
-	if data, err := os.ReadFile(cachePath); err == nil {
-		// 解析失败就当没有缓存,重查一遍然后覆盖写 —— 缓存文件坏了不该让功能失效
-		noteFileErr("decode", cachePath, json.Unmarshal(data, &cache))
-	} else {
-		noteFileErr("read", cachePath, err)
+	if cachePath != "" {
+		if data, err := os.ReadFile(cachePath); err == nil {
+			// 解析失败就当没有缓存,重查一遍然后覆盖写 —— 缓存文件坏了不该让功能失效
+			noteFileErr("decode", cachePath, json.Unmarshal(data, &cache))
+		} else {
+			noteFileErr("read", cachePath, err)
+		}
 	}
 
 	out := map[string]string{}
@@ -62,7 +69,7 @@ func runArtistAvatarsCLI(args []string) {
 	now := time.Now()
 	// 先把缓存命中的收掉,剩下的才要打网络
 	var misses []string
-	for _, name := range args {
+	for _, name := range names {
 		if name == "" {
 			continue
 		}
@@ -78,9 +85,7 @@ func runArtistAvatarsCLI(args []string) {
 		}
 		misses = append(misses, name)
 	}
-	// 冷缓存并发解析:串行时每名最坏 6 秒,一次冷打开(10 个新歌手)能卡到一分钟 ——
-	// daemon 侧 topArtistsDigest 早为同样的理由用了 4 路并发(见那边注释),这里对齐。
-	// 顺序无关(输出是 map),cache/out 的写入用锁护住。
+	// 冷缓存并发解析,4 路:这两个都是别人的公开接口,全放开没必要。顺序无关(输出是 map),cache/out 的写入用锁护住。
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 4)
@@ -90,8 +95,8 @@ func runArtistAvatarsCLI(args []string) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
-			url, definitive := resolveArtistAvatar(ctx, name)
+			nameCtx, cancel := context.WithTimeout(ctx, perName)
+			url, definitive := resolve(nameCtx, name)
 			cancel()
 			mu.Lock()
 			defer mu.Unlock()
@@ -105,7 +110,7 @@ func runArtistAvatarsCLI(args []string) {
 	}
 	wg.Wait()
 
-	if len(updated) > 0 {
+	if len(updated) > 0 && cachePath != "" {
 		// 「重读 → 合并 → 写回」整段拿跨进程文件锁:App 连切榜单时会同时起几个 artist-avatars,各自重读完再各自写回的话,
 		// 后写的那个会盖掉前一个刚写进去的条目。
 		unlock := exclusiveFileLock(cachePath)
@@ -118,6 +123,18 @@ func runArtistAvatarsCLI(args []string) {
 			}
 		}
 	}
+	return out
+}
+
+func runArtistAvatarsCLI(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "artist-avatars: at least one artist name is required")
+		os.Exit(2)
+	}
+	if configDir() == "" {
+		log.Fatalf("artist-avatars: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
+	}
+	out := cachedArtistAvatars(context.Background(), artistAvatarCachePath(), args, avatarPerNameTimeout, resolveArtistAvatar)
 
 	enc := json.NewEncoder(os.Stdout)
 	if err := enc.Encode(out); err != nil {

@@ -208,8 +208,13 @@ type artistIdentityFn func(name, knownMbid string) mbArtistIdentity
 // cacheOnlyArtistIdentity 只读缓存、绝不联网——给所有对延迟敏感的调用方
 // (后台定时的 topArtistsDigest、App 统计页背后的 CLI 默认档)。缓存由
 // warmArtistIdentityCache / 带预算的手动导出慢慢填,归并逐日收敛。
-func cacheOnlyArtistIdentity(name, _ string) mbArtistIdentity {
+// 缓存里没有 mbid 而 Last.fm 给了(knownMbid,调用方只在单人条目时给)就用它:这是这条榜单记录自己的身份,
+// 不用等解析;缓存里那条「认不出身份」多半是同一位歌手的合唱串先查出来的。
+func cacheOnlyArtistIdentity(name, knownMbid string) mbArtistIdentity {
 	id, _ := cachedArtistIdentity(strings.TrimSpace(name))
+	if id.Mbid == "" && knownMbid != "" {
+		id.Mbid = knownMbid
+	}
 	return id
 }
 
@@ -224,14 +229,15 @@ func budgetedArtistIdentity(budget int) artistIdentityFn {
 		if name == "" {
 			return mbArtistIdentity{}
 		}
-		// 过期的「认不出身份」结论跟没缓存一样,占一份预算重查。
-		if id, ok := cachedArtistIdentity(name); ok && !artistIdentityNoneExpired(id, time.Now()) {
+		// 过期的「认不出身份」结论跟没缓存一样,占一份预算重查;缓存里认不出、这次 Last.fm 带了 mbid 的也重查,
+		// 拿这个 mbid 补中文名、写进缓存(那条结论多半是同一位歌手的合唱串先按名字查出来的)。
+		if id, ok := cachedArtistIdentity(name); ok && !artistIdentityNoneExpired(id, time.Now()) && !(id.Mbid == "" && knownMbid != "") {
 			return id
 		}
 		mu.Lock()
 		if remaining <= 0 {
 			mu.Unlock()
-			return mbArtistIdentity{}
+			return cacheOnlyArtistIdentity(name, knownMbid)
 		}
 		remaining--
 		mu.Unlock()
@@ -442,9 +448,13 @@ func resolveArtistAvatar(ctx context.Context, name string) (string, bool) {
 }
 
 // resolveArtistAvatarVia 是 resolveArtistAvatar 的两条腿可替换的版本,单测直接喂假结果。
+//
+// QQ 那条腿只给一部分时限(avatarQQContext):它要轮流试几个主机,不封住的话一慢就把整段时限用光,Deezer 当场失败。
 func resolveArtistAvatarVia(ctx context.Context, name string,
-	qq func(string) (string, bool), deezer func(context.Context, string) (string, bool)) (string, bool) {
-	qqPic, qqDef := qq(name)
+	qq func(context.Context, string) (string, bool), deezer func(context.Context, string) (string, bool)) (string, bool) {
+	qqCtx, cancel := avatarQQContext(ctx)
+	qqPic, qqDef := qq(qqCtx, name)
+	cancel()
 	if qqPic != "" {
 		return qqPic, true
 	}
@@ -454,6 +464,17 @@ func resolveArtistAvatarVia(ctx context.Context, name string,
 	}
 	// 两条腿都空:只有两边都是"正常应答查无此人"才算可负缓存的确定结论
 	return "", qqDef && dzDef
+}
+
+// avatarQQBudget:调用方没给时限时 QQ 那条腿最多用多久;给了时限就用剩下的一半。
+const avatarQQBudget = 6 * time.Second
+
+func avatarQQContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	budget := avatarQQBudget
+	if deadline, ok := ctx.Deadline(); ok {
+		budget = time.Until(deadline) / 2
+	}
+	return context.WithTimeout(ctx, budget)
 }
 
 // deezerArtistSearchURL 是 Deezer 公开歌手搜索接口。单测换成假服务器。
@@ -569,24 +590,17 @@ func (p *poller) topArtistsDigest(now time.Time, env digestEnv) {
 	// 并发度压到 4 而不是全放开:这两个都是别人的公开接口,10 个请求同时砸过去没有必要,
 	// 4 路已经把总耗时压到约四分之一。顺序必须保持(展示的是 Top10 排名),所以按下标写回
 	// 预分配好的 slice,不用 append 竞争。
+	//
+	// 头像走 App 统计页同一份磁盘缓存(cachedArtistAvatars):14 天内查过的不再打网络;这一次两条腿都暂时故障时
+	// 用缓存里的旧头像,不推一个空串上去、让网页这一天都显示占位图。
+	names := make([]string, len(merged))
+	for i, e := range merged {
+		names[i] = e.Name
+	}
+	avatars := cachedArtistAvatars(env.ctx, artistAvatarCachePath(), names, avatarPerNameTimeout, topArtistAvatar)
 	artists := make([]topArtistEntry, len(merged))
-	{
-		var wg sync.WaitGroup
-		sem := make(chan struct{}, 4)
-		for i, e := range merged {
-			wg.Add(1)
-			go func(i int, name string, playCount int) {
-				defer wg.Done()
-				sem <- struct{}{}
-				defer func() { <-sem }()
-				avatar, _ := topArtistAvatar(env.ctx, name)
-				artists[i] = topArtistEntry{
-					Name: name, PlayCount: playCount,
-					Avatar: avatar,
-				}
-			}(i, e.Name, e.PlayCount)
-		}
-		wg.Wait()
+	for i, e := range merged {
+		artists[i] = topArtistEntry{Name: e.Name, PlayCount: e.PlayCount, Avatar: avatars[e.Name]}
 	}
 	payload := map[string]any{"artists": artists, "updatedAt": now.Unix()}
 	if err := postRelay(env.ctx, env.cfg, "/top-artists", payload); err != nil {

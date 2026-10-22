@@ -211,3 +211,16 @@ func (p *poller) applyLastListenSeed(r lastListenSeed) {
 	}
 	p.pushRelayState(time.Now(), false)
 }
+
+// maybeSeedLastListen:运行中才配上中继或 ListenBrainz 用户名(热重读,不重启)时补一次「上次播放」。启动那次补种只按
+// 当时的配置发,不补的话这时 Mac 空闲、本进程又还没有收听,会一直推「空」,网页显示「还没有收听记录」。
+// 补种回来之前同样先不推「空」(relayStartupPending)。
+func (p *poller) maybeSeedLastListen(prev, next *config) {
+	ready := func(c *config) bool { return c != nil && c.StateRelayURL != "" && c.User != "" }
+	if ready(prev) || !ready(next) || p.lb == nil || p.lastListenSeeding || p.lastListen.key() != "" || p.lastListenSeedCh == nil {
+		return
+	}
+	p.lastListenSeeding = true
+	p.relayStartupUntil = time.Now().Add(relayStartupWait)
+	go seedLastListen(p.ctx, p.lb.apiRoot(), next.User, p.lastListenSeedCh)
+}

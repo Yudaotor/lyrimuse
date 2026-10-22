@@ -273,12 +273,12 @@ func TestQQSingerAvatarPicksTheMatchingName(t *testing.T) {
 	})
 	items = `{"name":"婉婷","pic":"http://y.gtimg.cn/music/photo_new/T001R150x150M000other.jpg"},` +
 		`{"name":"曲婉婷","pic":"http://y.gtimg.cn/music/photo_new/T001R150x150M000right.jpg"}`
-	pic, ok := qqSingerAvatar("曲婉婷")
+	pic, ok := qqSingerAvatar(context.Background(), "曲婉婷")
 	if !ok || !strings.Contains(pic, "M000right") {
 		t.Fatalf("应取名字对得上的第二条, got %q ok=%v", pic, ok)
 	}
 	items = `{"name":"婉婷","pic":"http://y.gtimg.cn/music/photo_new/T001R150x150M000other.jpg"}`
-	pic, ok = qqSingerAvatar("Wanting")
+	pic, ok = qqSingerAvatar(context.Background(), "Wanting")
 	if !ok || pic != "" {
 		t.Fatalf("都对不上应当成这边没有(不是故障), got %q ok=%v", pic, ok)
 	}

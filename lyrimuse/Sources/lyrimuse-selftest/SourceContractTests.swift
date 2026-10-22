@@ -5784,8 +5784,9 @@ func runSourceContractIdentityTests() {
                     && accountTab.contains("case .unreachable(let problem): return (relayPushProblemText(problem), false)"), true,
                     "网页推送: 配置错报红、一直连不上报橙")
         let pollerGo = relayEngineSource("poller.go")
-        expectEqual(pollerGo.contains("watchDirWrites(ctx, filepath.Dir(appState.path), appWrites)") && pollerGo.contains("case <-appWrites:"), true,
-                    "网页推送: 引擎盯着播放状态所在的目录,App 一写就跑一轮")
+        expectEqual(pollerGo.contains("startDirWatch(ctx, filepath.Dir(appState.path), appWrites)") && pollerGo.contains("case <-appWrites:")
+                    && pollerGo.contains("case <-watchStopped:"), true,
+                    "网页推送: 引擎盯着播放状态所在的目录,App 一写就跑一轮;盯不住了退回每秒看一次")
         if case let fnBody = sourceBody("private func writePlatformPagesWanted() {", in: stats), !fnBody.isEmpty {
             let body = fnBody
             expectEqual(body.contains("for e in chart(.albums, period) ?? [] { albums += e.spellings.map")
