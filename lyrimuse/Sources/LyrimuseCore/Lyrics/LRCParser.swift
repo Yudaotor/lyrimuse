@@ -11,9 +11,12 @@ public struct LyricLine: Equatable {
 
 // 逐行 LRC 解析,算法照抄 web/index.html 的 parseLRC():一行可能带多个时间戳(副歌重复出现),
 // 每个时间戳各生成一条;跳过纯标签/元信息行([ti:]、[by:] 等,去掉所有 [...] 后文本为空)。
+// 逐字写法(增强 LRC 的 `<mm:ss.xx>`、正文中间夹着的 `[mm:ss.xx]`)只取行首的时间戳、去掉正文里的时间标记:
+// 引擎在存进缓存前已经把它们拆成逐行 + 逐字(wordtimedlrc.go),这里兜住拆之前存下的条目。网页两份 parseLRC 收的是引擎拆过的正文,不跟。
 public enum LRCParser {
     private static let tagRegex = try! NSRegularExpression(pattern: #"\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]"#)
     private static let bracketRegex = try! NSRegularExpression(pattern: #"\[[^\]]*\]"#)
+    private static let wordTimeTagRegex = try! NSRegularExpression(pattern: #"<\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?>"#)
     /// 包了两层的段落标记(`[[Verse 1]]`,有的源还把它夹在两句中间、粘成一行):连同两侧空白整段换成一个空格。
     /// 得在 `bracketRegex` 之前剥 —— 它只认到第一个「]」,会把第二个「]」留在正文里。web 两份 parseLRC 同步改。
     private static let doubleBracketRegex = try! NSRegularExpression(pattern: #"\s*(?:\[\[[^\[\]]*\]\]\s*)+"#)
@@ -162,12 +165,14 @@ public enum LRCParser {
             let fullRange = NSRange(location: 0, length: nsLine.length)
             let matches = tagRegex.matches(in: line, range: fullRange)
             if matches.isEmpty { continue }
-            let unwrapped = doubleBracketRegex.stringByReplacingMatches(in: line, range: fullRange, withTemplate: " ")
+            let unbracketed = doubleBracketRegex.stringByReplacingMatches(in: line, range: fullRange, withTemplate: " ")
+            let unwrapped = wordTimeTagRegex.stringByReplacingMatches(
+                in: unbracketed, range: NSRange(location: 0, length: (unbracketed as NSString).length), withTemplate: "")
             let stripped = bracketRegex
                 .stringByReplacingMatches(in: unwrapped, range: NSRange(location: 0, length: (unwrapped as NSString).length),
                                           withTemplate: "")
                 .trimmingCharacters(in: .whitespaces)
-            for m in matches {
+            for m in leadingTags(matches, in: nsLine) {
                 let minutes = Int(nsLine.substring(with: m.range(at: 1))) ?? 0
                 let seconds = Int(nsLine.substring(with: m.range(at: 2))) ?? 0
                 var fracMs = 0
@@ -185,5 +190,18 @@ public enum LRCParser {
             }
         }
         return out.sorted { $0.timeMs < $1.timeMs }
+    }
+
+    /// 行首连着的那几个时间戳(中间只隔空白)。正文中间夹着的是逐字时间,不另起一行;行首一个都没有时取第一个。
+    private static func leadingTags(_ matches: [NSTextCheckingResult], in line: NSString) -> [NSTextCheckingResult] {
+        var leading: [NSTextCheckingResult] = []
+        var cursor = 0
+        for m in matches {
+            let gap = line.substring(with: NSRange(location: cursor, length: m.range.location - cursor))
+            guard gap.trimmingCharacters(in: .whitespaces).isEmpty else { break }
+            leading.append(m)
+            cursor = m.range.location + m.range.length
+        }
+        return leading.isEmpty ? Array(matches.prefix(1)) : leading
     }
 }

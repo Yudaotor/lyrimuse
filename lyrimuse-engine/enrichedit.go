@@ -348,6 +348,13 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 // applySaveEdit 是「保存编辑 / 采纳一条候选」对一条缓存记录的全部改动。规则逐条对应原先 App 侧的
 // EnrichCacheStore.saveEdit,各条的来由见 docs/features/11 章「编辑保存的字段规则」。
 func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
+	// 粘进来的正文带逐字写法:正文换成洗过的,逐字时间以正文里的为准(见 wordtimedlrc.go)。
+	if lines, yrc, ok := splitWordTimedLRC(req.Lyrics); ok {
+		req.Lyrics = lines
+		if yrc != "" {
+			req.YRC = &yrc
+		}
+	}
 	oldLyrics, oldYRC := e.Lyrics, e.LyricsYRC
 	// 译文换了内容:描述旧译文的语言、来源、机翻节流与重试计数一起清掉,别拿旧译文的记录给新内容背书。
 	if !e.LyricsTr.EqualString(req.Tr) {

@@ -33,6 +33,23 @@ func runLyricsParsingTests() {
         "LRC: 一行多个时间戳(副歌重复)各生成一条"
     )
 
+    expectEqual(
+        LRCParser.parse("[00:12.00]<00:12.00>Hello <00:12.50>world <00:13.20>\n"),
+        [LyricLine(timeMs: 12000, text: "Hello world")],
+        "LRC: 增强 LRC 的 <mm:ss.xx> 逐字时间不进正文"
+    )
+    expectEqual(
+        LRCParser.parse("[00:12.00]Hello [00:12.50]world[00:13.20]\n"),
+        [LyricLine(timeMs: 12000, text: "Hello world")],
+        "LRC: 正文中间夹着的 [mm:ss.xx] 是逐字时间,一行只出一条"
+    )
+    expectEqual(
+        LRCParser.parse("[00:10.00] [00:40.00]repeat me\n[00:20.00]I <3 you\n"),
+        [LyricLine(timeMs: 10000, text: "repeat me"), LyricLine(timeMs: 20000, text: "I <3 you"),
+         LyricLine(timeMs: 40000, text: "repeat me")],
+        "LRC: 行首隔着空白的几个时间戳仍是副歌重复;正文里的尖括号不当时间标记"
+    )
+
     // --- LRC 自带的 [offset:]  ---
     //
     // 这个字段此前全链路无人消费:parse() 把它当元信息行整个跳过,于是"歌词源明确告诉了我们

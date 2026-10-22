@@ -5288,6 +5288,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// 第一步先把各源正文里的 HTML / XML 字符实体还原(酷狗 `they&apos;re`,见 lyricentities.go)。
 	// 返回的是新 map,调用方那份原始应答不动——它每来一个源就全量重跑一次这里。
 	raw = decodeLyricSourceEntities(raw)
+	raw = splitWordTimedSourceLyrics(raw)
 	raw = dropOtherVersionInstrumentalClaims(title, album, raw)
 	ne := raw["netease"].ne
 	qq, kugou, lrclib, mx, lf, kuwo := raw["qq"], raw["kugou"], raw["lrclib"], raw["musixmatch"], raw["lyricfind"], raw["kuwo"]
@@ -5502,9 +5503,10 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		})
 	}
 	if localLRC.lyr != "" {
-		// reAMP 正在放的文件同名的 .lrc(用户自己配的,按文件认身份,见 localfilelyrics.go)。
+		// reAMP 正在放的文件同名的 .lrc(用户自己配的,按文件认身份,见 localfilelyrics.go)。逐字写法的在开头拆成了 yrc。
 		candidates = append(candidates, lyricCandidate{
 			source: localFileLyricsSource, lyrics: localLRC.lyr,
+			wordTimingYRC: usableYRC(localLRC.lyr, localLRC.yrc), hasWordTiming: usableWordTiming(localLRC.lyr, localLRC.yrc),
 			sourceReportedDurationSecs: localLRC.srcDur,
 			title:                      localLRC.matchTitle, artist: localLRC.matchArtist,
 			identityFromLocalClient: localLRC.identityFromLocalClient, plainTextOnly: localLRC.plainOnly,
