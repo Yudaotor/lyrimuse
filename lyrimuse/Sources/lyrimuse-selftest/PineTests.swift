@@ -241,6 +241,36 @@ func runPineTests() {
         expectEqual(H.wantsProgressBar(pausedAtStart, now: t0), false, "Pine 边界: 暂停时不读进度条")
     }
 
+    // ---- 位置:循环回到开头(14 秒的咔哒文件、列表只有这一首、重复所有曲目) ----
+    do {
+        let t0 = Date(timeIntervalSince1970: 1_792_676_760)
+        func anchor(_ el: Double, _ t: Double, _ playing: Bool = true) -> H.Anchor {
+            H.Anchor(track: "loop", elapsed: el, at: t0.addingTimeInterval(t), playing: playing)
+        }
+        func at(_ t: Double) -> Date { t0.addingTimeInterval(t) }
+        let first = H.advance(nil, anchor: anchor(0, 6.600), now: at(6.7), duration: 14)
+        let started = H.advance(first, anchor: anchor(0, 8.362), now: at(8.4), duration: 14)
+        expectEqual(started.holdUntil, nil, "Pine 循环开头: 开播两份锚点照旧")
+        let looped = H.advance(started, anchor: anchor(0, 22.533), now: at(22.6), duration: 14)
+        expectEqual([looped.kind == .start, looped.holdUntil == at(22.533), H.position(looped, now: at(23)).waiting], [true, true, false],
+                    "Pine 循环开头: 结尾附近只来一份 0 秒锚点是循环回来的,不停住")
+        expectEqual(H.isNewStart(from: started, to: looped), true, "Pine 循环开头: 算一次开播")
+        let loopCal = H.calibrated(looped, value: 3, at: at(25.17))
+        expectEqual(loopCal.sliderBias, H.startSliderBias, "Pine 循环开头: 开播锚点只有一份,按典型的差")
+        expectEqual(abs(loopCal.base - (3 - H.startSliderBias - 2.637)) < 0.001, true, "Pine 循环开头: 按进度条补开播位置")
+        expectEqual(H.advance(looped, anchor: anchor(0, 23.2), now: at(23.3), duration: 14).holdUntil, nil,
+                    "Pine 循环开头: 之后又来一份 0 秒锚点当第二份")
+        let oneOnly = H.advance(loopCal, anchor: anchor(1, 37.193), now: at(37.3), duration: 14)
+        expectEqual([oneOnly.kind == .seek, oneOnly.sliderBias == H.startSliderBias], [true, true],
+                    "Pine 循环开头: 只来一份 1 秒锚点照跳转算,进度条按开播那段超前")
+        let midTrack = H.advance(started, anchor: anchor(0, 13), now: at(13.1), duration: 14)
+        expectEqual(abs((midTrack.holdUntil?.timeIntervalSince(at(13)) ?? 0) - H.startHoldSecs) < 0.001, true, "Pine 循环开头: 离结尾还远的 0 秒锚点是重新开播,照旧停住")
+        let midSeek = H.advance(started, anchor: anchor(1, 13), now: at(13.1), duration: 14)
+        expectEqual(midSeek.sliderBias, H.seekSliderBias, "Pine 循环开头: 离结尾还远跳到 1 秒是跳转")
+        let fullStartCal = H.calibrated(started, value: 1, at: at(8.95))
+        expectEqual(fullStartCal.base, started.base, "Pine 循环开头: 两份开播锚点都到的那段量差不动位置")
+    }
+
     // ---- 循环:「重复模式」子菜单 ----
     do {
         typealias M = PineMenuControl

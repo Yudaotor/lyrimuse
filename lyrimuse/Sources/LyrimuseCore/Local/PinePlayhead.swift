@@ -8,8 +8,8 @@ import os
 ///   「在加载」停在 0(`holdUntil`),第二份一到从它起算;`startHoldSecs` 内没等到第二份就按第一份走。循环回到这一首开头时
 ///   第一份报的是 1 秒、0.7 秒后才是 0 秒那份:0 秒那份前面刚有这一首不到 `restartFirstAnchorMaxSecs` 的锚点,就当第二份。
 /// - 跳转、恢复的锚点是取整的。界面进度条每过一个整秒跳一格,跳格时刻跟出声差一个这一段固定的量(`sliderBias`,进度条超前为正):
-///   开播那一段约 0.24 秒,跳转之后 0~0.12 秒。开播那一段的拿准的开播锚点当场量(量出来不在合理范围里,是那两份开播锚点都不准,
-///   反过来按 `startSliderBias` 从进度条推开播位置),跳转之后按 `seekSliderBias`,中途才看到的按
+///   开播那一段约 0.24 秒,跳转之后 0~0.12 秒。开播那一段的拿准的开播锚点当场量(量出来不在合理范围里,是那两份开播锚点都不准;
+///   开播锚点只有一份的(没等到第二份、循环回到开头)也一样:反过来按 `startSliderBias` 从进度条推开播位置),跳转之后按 `seekSliderBias`,中途才看到的按
 ///   `joinedSliderBias`,暂停恢复沿用这一段的。新锚点之后读进度条等它跳一格(`ProgressBar.nextTick`),位置补成「格值 − 这段的差」。
 /// - 进度条读不到(没授「辅助功能」权限、主窗口关了、`SourceKnockout` 关掉了这条)时:恢复按暂停前的位置接上(暂停锚点的时刻比真
 ///   停下晚 0.1~0.5 秒,所以夹进它报的那一秒里),跳转和中途看到的补半秒(`flooredMidpointSecs`)。
@@ -48,7 +48,8 @@ public enum PinePlayhead {
         public var running: Bool
         /// 这一段进度条比出声超前多少秒;nil = 还没有(开播那一段等着量,中途看到的按 `joinedSliderBias`)。
         public var sliderBias: Double?
-        /// 开播第一份锚点:到这一刻之前停在 0、报在加载。
+        /// 开播第一份锚点:到这一刻之前停在 0、报在加载(循环回到开头的那份设成锚点时刻,不停)。不为 nil = 这一段的开播锚点
+        /// 只有一份(没等到第二份),进度条校准时按 `startSliderBias` 补位置。
         public var holdUntil: Date?
         public var pausedPosition: Double?
         /// 这个锚点已经读过进度条(或者读不了)。
@@ -74,6 +75,8 @@ public enum PinePlayhead {
     public static let startHoldSecs: TimeInterval = 2.2
     /// 循环回到开头时第一份锚点报的位置最多这么大(实测 1.0)。
     static let restartFirstAnchorMaxSecs: Double = 1.5
+    /// 上一段推到这份锚点时离结尾不到这么多秒,回到开头算循环(不是重新开播)。
+    static let loopEndSlackSecs: Double = 1.5
     /// 取整的锚点不知道小数时补的量(真位置在报的值和它 + 1 之间)。
     public static let flooredMidpointSecs: Double = 0.5
     /// 取整的锚点夹位置时的上沿(报的值 + 它)。
@@ -103,8 +106,8 @@ public enum PinePlayhead {
             && abs(a.at.timeIntervalSince(b.at)) <= anchorJitterSecs
     }
 
-    /// 来了一份锚点之后的表。同一份锚点(`sameAnchor`)原样交回。纯函数,selftest 覆盖。
-    public static func advance(_ clock: Clock?, anchor: Anchor, now: Date) -> Clock {
+    /// 来了一份锚点之后的表。同一份锚点(`sameAnchor`)原样交回。`duration` 用来认循环回到开头。纯函数,selftest 覆盖。
+    public static func advance(_ clock: Clock?, anchor: Anchor, now: Date, duration: Double? = nil) -> Clock {
         if let clock, sameAnchor(clock.anchor, anchor) { return clock }
         let same = clock?.anchor.track == anchor.track ? clock : nil
         guard anchor.playing else { return paused(same, anchor: anchor, now: now) }
@@ -115,8 +118,9 @@ public enum PinePlayhead {
                     && previous.anchor.elapsed <= restartFirstAnchorMaxSecs
                 return recent && ((previous.kind == .start && previous.holdUntil != nil) || restart)
             } ?? false
-            return Clock(anchor: anchor, kind: .start, base: -startAnchorEarlySecs, baseAt: anchor.at, precise: true,
-                         holdUntil: second ? nil : anchor.at.addingTimeInterval(startHoldSecs))
+            let looped = same.map { nearEnd($0, at: anchor.at, duration: duration) } ?? false
+            let hold: Date? = second ? nil : looped ? anchor.at : anchor.at.addingTimeInterval(startHoldSecs)
+            return Clock(anchor: anchor, kind: .start, base: -startAnchorEarlySecs, baseAt: anchor.at, precise: true, holdUntil: hold)
         }
         if let same, !same.anchor.playing, let stopped = same.pausedPosition,
            stopped.rounded(.down) == anchor.elapsed.rounded(.down) {
@@ -124,8 +128,15 @@ public enum PinePlayhead {
                          sliderBias: same.sliderBias)
         }
         let kind: Kind = same == nil ? .joined : .seek
+        let looped = anchor.elapsed <= restartFirstAnchorMaxSecs && (same.map { nearEnd($0, at: anchor.at, duration: duration) } ?? false)
         return Clock(anchor: anchor, kind: kind, base: anchor.elapsed + flooredMidpointSecs, baseAt: anchor.at, precise: false,
-                     sliderBias: kind == .seek ? seekSliderBias : nil)
+                     sliderBias: kind == .seek ? (looped ? startSliderBias : seekSliderBias) : nil)
+    }
+
+    /// 上一段在走、推到 `at` 时离结尾不到 `loopEndSlackSecs`:这时回到开头的锚点是循环回来的,进度条按开播那段超前。纯函数,selftest 覆盖。
+    static func nearEnd(_ clock: Clock, at: Date, duration: Double?) -> Bool {
+        guard let duration, duration > 0, clock.anchor.playing, clock.running else { return false }
+        return position(clock, now: at).position >= duration - loopEndSlackSecs
     }
 
     /// 暂停锚点:停下的位置按上一段的表推到暂停锚点那一刻,夹进它报的那一秒;它跟上一段在走的锚点一模一样(停下之前先报的那份,
@@ -172,15 +183,15 @@ public enum PinePlayhead {
         return clock.holdUntil.map { now >= $0 } ?? true
     }
 
-    /// 进度条在 `at` 跳到 `value` 之后的表:开播那一段量出这一段的差,量出来不在合理范围里就按 `startSliderBias` 把开播位置补成
-    /// 进度条推出来的;别的段把位置补成「格值 − 这一段的差」。补出的位置不在合理范围里的不采信,只记下读过。纯函数,selftest 覆盖。
+    /// 进度条在 `at` 跳到 `value` 之后的表:开播那一段(两份开播锚点都到了)量出这一段的差,量出来不在合理范围里、或开播锚点
+    /// 只有一份时按 `startSliderBias` 把开播位置补成进度条推出来的;别的段把位置补成「格值 − 这一段的差」。补出的位置不在合理范围里的不采信,只记下读过。纯函数,selftest 覆盖。
     public static func calibrated(_ clock: Clock, value: Int, at: Date) -> Clock {
         var out = clock
         out.sliderDone = true
         guard clock.anchor.playing else { return out }
         if clock.kind == .start {
             let bias = Double(value) - position(clock, now: at).position
-            if startSliderBiasRange.contains(bias) {
+            if clock.holdUntil == nil, startSliderBiasRange.contains(bias) {
                 out.sliderBias = bias
                 return out
             }
@@ -234,7 +245,7 @@ public enum PinePlayhead {
         guard let anchorElapsed, let anchorAt else { return nil }
         let anchor = Anchor(track: track, elapsed: anchorElapsed, at: anchorAt, playing: playing)
         let (clock, changed) = state.withLock { s -> (Clock, Bool) in
-            let next = advance(s, anchor: anchor, now: now)
+            let next = advance(s, anchor: anchor, now: now, duration: duration)
             if isNewStart(from: s, to: next) { starts.withLock { $0 += 1 } }
             defer { s = next }
             return (next, next != s)
