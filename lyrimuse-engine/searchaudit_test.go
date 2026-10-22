@@ -14,7 +14,7 @@ import (
 func TestLyricsEntryFromScoredDefersHelperRoma(t *testing.T) {
 	calls := 0
 	saved := onDeviceRomanizer
-	onDeviceRomanizer = func(string) (string, error) { calls++; return "[00:01.00]ni hao", nil }
+	onDeviceRomanizer = func(string, string) (string, error) { calls++; return "[00:01.00]ni hao", nil }
 	t.Cleanup(func() { onDeviceRomanizer = saved })
 
 	scored := []scoredLyricCandidateResult{{Source: "kugou", Score: 900, Lyrics: "[00:01.00]你好世界\n[00:02.00]今天天气很好"}}

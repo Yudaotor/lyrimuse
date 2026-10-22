@@ -4921,6 +4921,8 @@ public final class LocalPlaybackSource: ObservableObject {
         let songwriters: [String]
         // 演唱者标注也可能比正文晚到(正文没变、后来一轮 Musixmatch 才给出),同上。
         let speakers: LyricSpeakerTags?
+        // 借来的假名标注同理(存量条目播放时才补问)。
+        let kanaDonor: String
     }
     private var lastReloadSnapshot: LyricsReloadSnapshot?
 
@@ -4965,7 +4967,8 @@ public final class LocalPlaybackSource: ObservableObject {
             isHokkien: found?.isHokkien ?? false,
             plainLyrics: found?.plainLyrics ?? "",
             songwriters: found?.songwriters ?? [],
-            speakers: found?.speakers)
+            speakers: found?.speakers,
+            kanaDonor: found?.kanaDonor ?? "")
         if reloadSnapshot == lastReloadSnapshot {
             logger.debug("lyrics reload skipped: content unchanged (mtime-only churn)")
             // 正文没变,读穿的兄弟写法却可能变了(缓存重建完才拿得到、引擎给这条补上了实体):单独对一次。
@@ -5006,6 +5009,9 @@ public final class LocalPlaybackSource: ObservableObject {
             lyricsRoma: found?.lyricsRoma ?? "",
             lyricsYRC: variant.converted(JapaneseKanjiRepair.repair(rawYRC, japaneseSong: japaneseSong)),
             lyricsBG: variant.converted(HanCompatibility.normalized(found?.lyricsBG ?? "")),
+            // 借来的假名标注按行文字对上正文,所以跟正文做同样的变换。
+            kanaDonor: variant.converted(JapaneseKanjiRepair.repair(
+                HanCompatibility.normalized(found?.kanaDonor ?? ""), japaneseSong: japaneseSong)),
             // 用来认出歌词文件开头那行「曲名 - 歌手」抬头,见 looksLikeHeaderLine;同曲条目里别的写法的歌名、歌手也算。
             trackTitle: snapshot.title ?? "",
             trackArtist: snapshot.artist ?? "",

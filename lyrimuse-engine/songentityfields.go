@@ -36,7 +36,8 @@ var songEntityFieldClasses = map[string]songFieldClass{
 	"lyrics_scoring_revision": songFieldLyricsChoice,
 	"resolved_duration_secs":  songFieldLyricsChoice, "lyrics_speakers": songFieldLyricsChoice,
 	"lyrics_speakers_checked": songFieldLyricsChoice, "plain_lyrics": songFieldLyricsChoice,
-	"plain_lyrics_source": songFieldLyricsChoice,
+	"plain_lyrics_source": songFieldLyricsChoice, "lyrics_kana": songFieldLyricsChoice,
+	"lyrics_kana_checked": songFieldLyricsChoice,
 
 	"manual_lyrics": songFieldUserJudgment, "manual_pick_sha": songFieldUserJudgment,
 	"lyrics_source_choice": songFieldUserJudgment, "instrumental": songFieldUserJudgment,

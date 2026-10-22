@@ -43,9 +43,23 @@ public struct KanaAnnotation {
     /// 行集合不一定一一对应,用文本对得上就行。同一句重复出现时读音也一样,后写覆盖前写
     /// 没有影响。
     private let byLine: [String: [Mark]]
+    /// 从标了的行里学到的读音,给没标的行用(`learnedMarks`):键见 `learnedKeys`,值是这一段里各处标注,偏移相对段首。
+    private let learned: [String: [Mark]]
 
-    public func marks(forLine line: String) -> [Mark] { byLine[line] ?? [] }
+    private init(byLine: [String: [Mark]]) {
+        self.byLine = byLine
+        self.learned = Self.learn(byLine)
+    }
+
+    /// 这一行的标注:标注里有这一行就用它,没有就用同一首歌里学到的读音。
+    public func marks(forLine line: String) -> [Mark] { byLine[line] ?? learnedMarks(line) }
     public var isEmpty: Bool { byLine.isEmpty }
+
+    /// 正文自己带 `[kana:]` 就用它;不带、或对不齐时用引擎从别的源借来的那份(`lyrics_kana`,格式同样是一行
+    /// `[kana:]` 加若干正文行)。donor 要跟正文做过同样的文字变换(同形异码字、日文汉字修回、简繁),行文字才对得上。
+    public static func parse(lrc: String, donor: String) -> KanaAnnotation? {
+        parse(lrc: lrc) ?? (donor.isEmpty ? nil : parse(lrc: donor))
+    }
 
     /// 需要标注的字符:汉字,以及叠字符号 `々`(它不在 CJK 统一表意文字区里,单独算)。
     public static func needsAnnotation(_ c: Character) -> Bool {
@@ -130,6 +144,90 @@ public struct KanaAnnotation {
         }
         guard !byLine.isEmpty else { return nil }
         return KanaAnnotation(byLine: byLine)
+    }
+
+    // MARK: - 同一首歌里推开
+
+    /// 一段连着的待标字。start / end 是行内 UTF-16 偏移,next 是紧跟在后面的那个字符。
+    private struct Run {
+        let start: Int
+        let end: Int
+        let text: String
+        let next: Character?
+    }
+
+    private static func runs(in line: String) -> [Run] {
+        var out: [Run] = []
+        var pos = 0
+        var start = -1
+        var text = ""
+        for ch in line {
+            if needsAnnotation(ch) {
+                if start < 0 {
+                    start = pos
+                    text = ""
+                }
+                text.append(ch)
+            } else if start >= 0 {
+                out.append(Run(start: start, end: pos, text: text, next: ch))
+                start = -1
+            }
+            pos += utf16Width(ch)
+        }
+        if start >= 0 { out.append(Run(start: start, end: pos, text: text, next: nil)) }
+        return out
+    }
+
+    /// 学读音用的键,按先后查:这一段字加紧跟的平假名(送假名、助词定了读法:「光る」ひか、「光を」ひかり),
+    /// 两个字以上的再按这一段字本身记一份。单字不按本身记,否则「生きる」学到的 い 会标到「生まれ」上。
+    /// 推开的取舍和实测见 10 章决策 44。
+    private static func learnedKeys(_ run: Run) -> [String] {
+        let next = run.next.map { c in
+            c.unicodeScalars.allSatisfy { (0x3041...0x309F).contains($0.value) } ? String(c) : ""
+        } ?? ""
+        let primary = run.text + "|" + next
+        return run.text.count >= 2 ? [primary, run.text] : [primary]
+    }
+
+    /// 标了的行里,每一段待标字被标注整段盖住(没有标注跨出段外)的,按 `learnedKeys` 记下这段的标注;
+    /// 同一个键在这首歌里标得不一样的不收。
+    private static func learn(_ byLine: [String: [Mark]]) -> [String: [Mark]] {
+        var seen: [String: [Mark]] = [:]
+        var conflicted: Set<String> = []
+        for (line, marks) in byLine {
+            for run in runs(in: line) {
+                guard !marks.contains(where: {
+                    $0.utf16Start < run.end && $0.utf16End > run.start && ($0.utf16Start < run.start || $0.utf16End > run.end)
+                }) else { continue }
+                let inside = marks.filter { $0.utf16Start >= run.start && $0.utf16End <= run.end }
+                    .sorted { $0.utf16Start < $1.utf16Start }
+                guard inside.reduce(0, { $0 + $1.utf16Length }) == run.end - run.start else { continue }
+                let relative = inside.map {
+                    Mark(utf16Start: $0.utf16Start - run.start, utf16Length: $0.utf16Length, reading: $0.reading)
+                }
+                for key in learnedKeys(run) {
+                    if let prev = seen[key], prev != relative {
+                        conflicted.insert(key)
+                    } else {
+                        seen[key] = relative
+                    }
+                }
+            }
+        }
+        for key in conflicted { seen[key] = nil }
+        return seen
+    }
+
+    private func learnedMarks(_ line: String) -> [Mark] {
+        guard !learned.isEmpty else { return [] }
+        var out: [Mark] = []
+        for run in Self.runs(in: line) {
+            guard let relative = Self.learnedKeys(run).lazy.compactMap({ self.learned[$0] }).first else { continue }
+            out += relative.map {
+                Mark(utf16Start: run.start + $0.utf16Start, utf16Length: $0.utf16Length, reading: $0.reading)
+            }
+        }
+        return out
     }
 
     // MARK: - 解析细节

@@ -217,6 +217,7 @@ func applyCrossAlbumReuse(groups []crossAlbumGroup) (applied, skipped int) {
 			dst.LyricsYRC = src.LyricsYRC
 			dst.LyricsBG, dst.LyricsBGChecked = src.LyricsBG, src.LyricsBGChecked
 			dst.LyricsSpeakers, dst.LyricsSpeakersChecked = src.LyricsSpeakers, src.LyricsSpeakersChecked
+			dst.LyricsKana, dst.LyricsKanaChecked = src.LyricsKana, src.LyricsKanaChecked
 			dst.LyricsTr = src.LyricsTr
 			dst.LyricsTrSource = src.LyricsTrSource
 			dst.LyricsTrLang = src.LyricsTrLang

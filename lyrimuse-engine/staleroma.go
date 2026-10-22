@@ -28,11 +28,12 @@ var staleRomaRegenerator = onDeviceRegenerateStaleRoma
 
 // onDeviceRegenerateStaleRoma:stored 是早先预生成、已经过时的那份,就返回按现在的算法重算的读音;不是返回空串。
 // 找不到 helper、helper 没判,返回错误,迁移据此不记水位。
-func onDeviceRegenerateStaleRoma(lyrics, stored string) (string, error) {
+// kanaDonor 是条目借来的假名标注(LyricsKana),重算按它标。
+func onDeviceRegenerateStaleRoma(lyrics, stored, kanaDonor string) (string, error) {
 	if lyrics == "" || stored == "" {
 		return "", nil
 	}
-	reply, err := runLyricsRomanize(romanizeRequest{Lyrics: lyrics, StaleRoma: stored})
+	reply, err := runLyricsRomanize(romanizeRequest{Lyrics: lyrics, StaleRoma: stored, KanaDonor: kanaDonor})
 	if err != nil {
 		return "", err
 	}
@@ -83,13 +84,13 @@ func migrateStaleGeneratedRoma(ctx context.Context, scope migrationScope) int {
 	enrichMu.Lock()
 	for k, e := range scope.entries() {
 		if isStaleRomaCandidate(e) {
-			items = append(items, storedRomaItem{key: k, lyrics: e.Lyrics.String(), roma: e.LyricsRoma.String()})
+			items = append(items, storedRomaItem{key: k, lyrics: e.Lyrics.String(), roma: e.LyricsRoma.String(), kana: e.LyricsKana})
 		}
 	}
 	enrichMu.Unlock()
 	replaced, complete := regenerateStoredRoma(ctx, items, storedRomaRegeneration{
 		label:       "stale generated romanization",
-		regenerate:  func(lyrics, stored string) (string, error) { return staleRomaRegenerator(lyrics, stored) },
+		regenerate:  func(it storedRomaItem) (string, error) { return staleRomaRegenerator(it.lyrics, it.roma, it.kana) },
 		unsupported: errStaleCheckUnsupported,
 	})
 	if complete {
@@ -101,11 +102,12 @@ func migrateStaleGeneratedRoma(ctx context.Context, scope migrationScope) int {
 // storedRomaRegeneration:一道「把存着的读音交给 helper 判、该换就换」的存量迁移。
 type storedRomaRegeneration struct {
 	label       string
-	regenerate  func(lyrics, stored string) (string, error)
+	regenerate  func(storedRomaItem) (string, error)
 	unsupported error // helper 不认这道迁移的入参:后面每一条结果都一样,不再一条条白问
 }
 
-type storedRomaItem struct{ key, lyrics, roma string }
+// kana 是条目借来的假名标注;写回时它也得还是当初那份。
+type storedRomaItem struct{ key, lyrics, roma, kana string }
 
 // regenerateStoredRoma 把候选逐条交给 helper,该换的换掉,返回换了几条、是不是全部问成也存成了(调用方据此记水位)。
 // helper 是子进程,锁外调;写回时正文和读音都还是当初读到的那份才换(期间被重评分、手改过的不动)。找不到 helper、
@@ -119,7 +121,7 @@ func regenerateStoredRoma(ctx context.Context, items []storedRomaItem, m storedR
 			complete = false
 			break
 		}
-		roma, err := m.regenerate(it.lyrics, it.roma)
+		roma, err := m.regenerate(it)
 		if err != nil {
 			complete = false
 			failed++
@@ -144,7 +146,7 @@ func regenerateStoredRoma(ctx context.Context, items []storedRomaItem, m storedR
 			continue
 		}
 		e, ok := enrichCache[it.key]
-		if !ok || !e.Lyrics.EqualString(it.lyrics) || !e.LyricsRoma.EqualString(it.roma) {
+		if !ok || !e.Lyrics.EqualString(it.lyrics) || !e.LyricsRoma.EqualString(it.roma) || e.LyricsKana != it.kana {
 			continue
 		}
 		e.LyricsRoma = bt(roma)

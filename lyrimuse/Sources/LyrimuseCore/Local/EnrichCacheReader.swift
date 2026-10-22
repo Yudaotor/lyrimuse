@@ -26,6 +26,9 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     /// 每一行是谁唱的(引擎 enrichEntry.LyricsSpeakers,Musixmatch 的演唱者标注),绑着正文指纹,见 LyricSpeakerTags。
     /// 不在正文小文件里。
     let lyricsSpeakers: LyricSpeakerTags?
+    /// 从别的源借来的假名标注(引擎 enrichEntry.LyricsKana,一行 `[kana:]` 加借到的那些正文行),正文自己不带
+    /// `[kana:]` 时读音按它标,见 KanaAnnotation.parse(lrc:donor:)。不在正文小文件里。
+    let lyricsKana: String?
     let lyricsSource: String?
     let coverSource: String?
     // 引擎解析出的封面地址(网易云/QQ/Apple)。桌面这边原来只读歌词字段,封面一直
@@ -164,6 +167,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         case lyricsBG = "lyrics_bg"
         case lyricsSongwriters = "lyrics_songwriters"
         case lyricsSpeakers = "lyrics_speakers"
+        case lyricsKana = "lyrics_kana"
         case lyricsSource = "lyrics_source"
         case coverSource = "cover_source"
         case coverURL = "cover_url"
@@ -244,6 +248,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         lyricsBG = try c.decodeIfPresent(String.self, forKey: .lyricsBG)
         lyricsSongwriters = try c.decodeIfPresent([String].self, forKey: .lyricsSongwriters)
         lyricsSpeakers = try c.decodeIfPresent(LyricSpeakerTags.self, forKey: .lyricsSpeakers)
+        lyricsKana = try c.decodeIfPresent(String.self, forKey: .lyricsKana)
         lyricsSource = try c.decodeIfPresent(String.self, forKey: .lyricsSource)
         coverSource = try c.decodeIfPresent(String.self, forKey: .coverSource)
         coverURL = try c.decodeIfPresent(String.self, forKey: .coverURL)
@@ -356,6 +361,8 @@ public struct EnrichCacheLyrics {
     public let songwriters: [String]
     /// 演唱者标注(见 EnrichCacheEntry.lyricsSpeakers),没有时为 nil。
     public let speakers: LyricSpeakerTags?
+    /// 借来的假名标注(见 EnrichCacheEntry.lyricsKana),没有时为空串。
+    public let kanaDonor: String
     public let instrumental: Bool
     /// 这首歌已经被完整解析过一轮了吗(见 EnrichCacheEntry.ts)。
     /// 它为 true 而 lyrics 为空,就是"搜过了,确实没有"——UI 靠这个区别把
@@ -849,6 +856,7 @@ public enum EnrichCacheReader {
             lyricsBG: shown(bg),
             songwriters: entry.lyricsSongwriters ?? [],
             speakers: entry.lyricsSpeakers,
+            kanaDonor: shown(entry.lyricsKana ?? ""),
             instrumental: instrumental,
             resolved: (entry.ts ?? 0) > 0,
             isCantonese: entry.songLanguage == songLanguageCantonese,
@@ -872,6 +880,8 @@ public enum EnrichCacheReader {
         public let lyricsRoma: String
         public let lyricsYRC: String
         public let plainLyrics: String
+        /// 借来的假名标注(`lyrics_kana`),判引擎预生成的读音时要带上。
+        public let lyricsKana: String
         public let instrumental: Bool
         public let manualLyrics: Bool
         /// 歌词是哪个源给的(条目的 `lyrics_source`)。
@@ -918,7 +928,7 @@ public enum EnrichCacheReader {
             }
         }
         return StoredEntry(key: key, lyrics: lyrics, lyricsTr: tr, lyricsRoma: roma, lyricsYRC: yrc, plainLyrics: plain,
-                           instrumental: entry.instrumental ?? false, manualLyrics: entry.manualLyrics ?? false,
+                           lyricsKana: entry.lyricsKana ?? "", instrumental: entry.instrumental ?? false, manualLyrics: entry.manualLyrics ?? false,
                            lyricsSource: entry.lyricsSource, complete: complete)
     }
 

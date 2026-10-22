@@ -87,7 +87,7 @@ func migrateLegacyKoreanRoma(ctx context.Context, scope migrationScope) int {
 	enrichMu.Unlock()
 	replaced, complete := regenerateStoredRoma(ctx, items, storedRomaRegeneration{
 		label:       "legacy korean romanization",
-		regenerate:  func(lyrics, stored string) (string, error) { return legacyKoreanRomaRegenerator(lyrics, stored) },
+		regenerate:  func(it storedRomaItem) (string, error) { return legacyKoreanRomaRegenerator(it.lyrics, it.roma) },
 		unsupported: errLegacyCheckUnsupported,
 	})
 	if complete {

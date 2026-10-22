@@ -403,6 +403,21 @@ func runRomanizationTests() {
                     && partialRoma.lowercased().hasPrefix("t"), true,
                     "假名标注缺字时整词退回分词器,不出普通话拼音:\(partialRoma)")
 
+        // 同一首歌里推开:没标的行按学到的读音标。键是一段汉字加紧跟的平假名,两个字以上的再按汉字本身认。
+        let learned = KanaAnnotation.parse(lrc: "[00:01.00]光る星\n[00:02.00]光を\n[00:03.00]明日へ\n[kana:1ひか1ほし1ひかり2あした]")
+        expectEqual(learned?.marks(forLine: "光る夜").first?.reading, "ひか", "推开: 「光る」学到 ひか")
+        expectEqual(learned?.marks(forLine: "光を").first?.reading, "ひかり", "推开: 标了的行照旧用自己的标注")
+        expectEqual(learned?.marks(forLine: "光が").isEmpty, true, "推开: 单字后面跟的假名没见过就不推,交给分词器")
+        expectEqual(learned?.marks(forLine: "明日が来る").first.map { [$0.utf16Start, $0.utf16Length] }, [0, 2],
+                    "推开: 两个字以上的按汉字本身也认,整段盖住")
+        let conflicted = KanaAnnotation.parse(lrc: "[00:01.00]何を見る\n[00:02.00]何を言う\n[kana:1なに1み1なん1い]")
+        expectEqual(conflicted?.marks(forLine: "何を聞く").isEmpty, true, "推开: 同一个键这首歌里标得不一样就不推")
+        // 正文自己不带标注时用借来的那份,自己带就用自己的。
+        let donorOnly = KanaAnnotation.parse(lrc: "[00:01.00]明日へ", donor: "[kana:2あした]\n[00:00.00]明日へ")
+        expectEqual(donorOnly?.marks(forLine: "明日へ").first?.reading, "あした", "借来的标注: 正文不带时用它")
+        let own = KanaAnnotation.parse(lrc: "[00:01.00]明日へ\n[kana:2あす]", donor: "[kana:2あした]\n[00:00.00]明日へ")
+        expectEqual(own?.marks(forLine: "明日へ").first?.reading, "あす", "借来的标注: 正文自己带就用自己的")
+
         // 叠字符号 々 也算待标字符 —— 漏算它会从那里开始整体错位
         expectEqual(KanaAnnotation.needsAnnotation("々"), true, "々 必须算作待标字符")
         expectEqual(KanaAnnotation.needsAnnotation("明"), true, "汉字是待标字符")
@@ -1478,7 +1493,7 @@ func runRomanizationTests() {
         // 启动迁移用的「是不是我们早先预生成、按现在的算法已经过时的那份」判定。
         let ja = "[00:01.00]君の名前を呼んだ\n[00:02.00]明日はきっと晴れる\n[00:03.00]夜空に星が光る\n[00:04.00]遠くの空を見上げた\n[00:05.00]3つ数えて Honey"
         let jaFresh = LyricsRomanization.romanizeLRC(ja) ?? ""
-        let refreshed = LyricsRomanization.refreshedGeneratedRomanization
+        let refreshed = { LyricsRomanization.refreshedGeneratedRomanization($0, lyrics: $1) }
         let staleLines = jaFresh.split(separator: "\n").map(String.init)
         let stale = (staleLines.dropLast() + ["[00:05.00]3 tsu kazoe te Honey"]).joined(separator: "\n")
         expectEqual(staleLines.count == 5 && refreshed(stale, ja) == jaFresh, true,
@@ -1487,6 +1502,19 @@ func runRomanizationTests() {
         expectEqual(refreshed("[00:01.00]kimi no namae wo yonda\n[00:02.00]ashita wa kitto hareru", ja) == nil, true,
                     "过时判定: 歌词源给的(多数行写法不同)不动")
         expectEqual(refreshed("", ja) == nil, true, "过时判定: 空的不算")
+        // 借来的假名标注:读音按它标,同一首里没借到的行按学到的推开;借来的改掉了大半行,存着的不用借用的那份
+        // 照样认得出是我们生成的。
+        let borrowed = "[00:01.00]明日へ向かう\n[00:02.00]明日へ帰る"
+        let donor = "[kana:2みょうにち1む]\n[00:00.00]明日へ向かう"
+        let withDonor = LyricsRomanization.romanizeLRC(borrowed, kanaDonor: donor) ?? ""
+        expectEqual(withDonor.components(separatedBy: "myōnichi").count - 1 == 2
+                    || withDonor.components(separatedBy: "myounichi").count - 1 == 2, true,
+                    "借来的标注: 借到的那行和没借到、同样写法的那行都按它读:\(withDonor)")
+        let plainBorrowed = LyricsRomanization.romanizeLRC(borrowed) ?? ""
+        expectEqual(LyricsRomanization.refreshedGeneratedRomanization(plainBorrowed, lyrics: borrowed, kanaDonor: donor)
+                    == withDonor, true, "过时判定: 没用借来标注的预生成换成用上它的")
+        expectEqual(LyricsRomanization.sourceProvidedRomanization(withDonor, lyrics: borrowed, kanaDonor: donor), "",
+                    "存档读音: 按借来标注预生成的也不算自带")
         // 同形异码字(康熙部首)先换回标准字,跟播放侧一致。
         expectEqual(LyricsRomanization.romanizeLRC("[00:01.00]夢が\u{2F92}える"), LyricsRomanization.romanizeLRC("[00:01.00]夢が見える"),
                     "整份罗马音: 康熙部首形的「⾒」按标准字「見」读")

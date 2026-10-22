@@ -30,7 +30,7 @@ func TestIsStaleRomaCandidate(t *testing.T) {
 	}
 }
 
-func withStaleRomaFixture(t *testing.T, entries map[string]enrichEntry, regen func(lyrics, stored string) (string, error)) {
+func withStaleRomaFixture(t *testing.T, entries map[string]enrichEntry, regen func(lyrics, stored, kana string) (string, error)) {
 	t.Helper()
 	withTempLeanCache(t)
 	savedRegen := staleRomaRegenerator
@@ -57,12 +57,15 @@ func TestMigrateStaleGeneratedRomaReplacesOnlyOurs(t *testing.T) {
 	const ours, source, manual = "A|ours|X", "A|source|X", "A|manual|X"
 	asked := 0
 	withStaleRomaFixture(t, map[string]enrichEntry{
-		ours:   {Lyrics: bt("[00:01.00]3つ数えて"), LyricsRoma: bt("[00:01.00]3 tsu kazoe te")},
+		ours:   {Lyrics: bt("[00:01.00]3つ数えて"), LyricsRoma: bt("[00:01.00]3 tsu kazoe te"), LyricsKana: "[kana:1かぞ]\n[00:00.00]3つ数えて"},
 		source: {Lyrics: bt("[00:01.00]3つ数えて"), LyricsRoma: bt("[00:01.00]mittsu kazoete")},
 		manual: {Lyrics: bt("[00:01.00]3つ数えて"), LyricsRoma: bt("[00:01.00]3 tsu"), ManualLyrics: true},
-	}, func(lyrics, stored string) (string, error) {
+	}, func(lyrics, stored, kana string) (string, error) {
 		asked++
 		if stored == "[00:01.00]3 tsu kazoe te" {
+			if kana != "[kana:1かぞ]\n[00:00.00]3つ数えて" {
+				t.Errorf("重算要带上条目借来的假名标注,实得 %q", kana)
+			}
 			return "[00:01.00]mittsu kazoe te", nil
 		}
 		return "", nil
@@ -87,7 +90,7 @@ func TestMigrateStaleGeneratedRomaStopsOnOldHelper(t *testing.T) {
 	withStaleRomaFixture(t, map[string]enrichEntry{
 		"A|one|X": {Lyrics: bt("[00:01.00]君の名は"), LyricsRoma: bt("[00:01.00]kimi no na ha")},
 		"A|two|X": {Lyrics: bt("[00:01.00]我爱你"), LyricsRoma: bt("[00:01.00]wo ai ni")},
-	}, func(string, string) (string, error) {
+	}, func(string, string, string) (string, error) {
 		asked++
 		return "", errStaleCheckUnsupported
 	})
@@ -117,7 +120,7 @@ func TestStaleRomaHelperKeysAndWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, lit := range []string{`case staleRoma = "stale_roma"`, `case staleChecked = "stale_checked"`} {
+	for _, lit := range []string{`case staleRoma = "stale_roma"`, `case staleChecked = "stale_checked"`, `case kanaDonor = "kana_donor"`} {
 		if !strings.Contains(string(src), lit) {
 			t.Errorf("lyrics-romanize/main.swift 里找不到 %s,romanize.go 的 romanizeRequest / romanizeReply 要同步", lit)
 		}

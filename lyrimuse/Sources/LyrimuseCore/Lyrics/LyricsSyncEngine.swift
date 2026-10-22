@@ -1699,7 +1699,7 @@ public final class LyricsSyncEngine {
     /// load 的 7 个入参的完整快照。它们是 load 输出的**全部**输入(load 不读引擎其它
     /// 状态),快照相等 到 解析/过滤/派生状态必然相等 到 可以整段跳过。
     private struct LoadFingerprint: Equatable {
-        let lyrics, lyricsTr, lyricsRoma, lyricsYRC, lyricsBG: String
+        let lyrics, lyricsTr, lyricsRoma, lyricsYRC, lyricsBG, kanaDonor: String
         let trackTitle, trackArtist: String
         let headerAliases: [LRCParser.HeaderIdentity]
         let romanizationScripts: RomanizationScripts
@@ -1718,12 +1718,14 @@ public final class LyricsSyncEngine {
     @discardableResult
     public func load(
         lyrics: String, lyricsTr: String, lyricsRoma: String, lyricsYRC: String, lyricsBG: String = "",
+        kanaDonor: String = "",
         trackTitle: String = "", trackArtist: String = "", headerAliases: [LRCParser.HeaderIdentity] = [],
         romanizationScripts: RomanizationScripts = .default, songIsCantonese: Bool = false,
         songIsHokkien: Bool = false, lineBreaks: LineBreakOptions = .off
     ) -> Bool {
         let fingerprint = LoadFingerprint(
             lyrics: lyrics, lyricsTr: lyricsTr, lyricsRoma: lyricsRoma, lyricsYRC: lyricsYRC, lyricsBG: lyricsBG,
+            kanaDonor: kanaDonor,
             trackTitle: trackTitle, trackArtist: trackArtist, headerAliases: headerAliases,
             romanizationScripts: romanizationScripts, songIsCantonese: songIsCantonese,
             songIsHokkien: songIsHokkien, lineBreaks: lineBreaks)
@@ -1970,9 +1972,9 @@ public final class LyricsSyncEngine {
         if songScript == .chinese || songScript == .korean, songIsCantonese {
             songScript = .cantonese
         }
-        // 歌词源自带的假名标注(酷狗的 [kana:] 标签)。对不齐时 parse 返回 nil,读音自动
-        // 退回形态分析 —— 见 KanaAnnotation 顶部注释里"半对半错比不标更糟"那段。
-        kanaAnnotation = KanaAnnotation.parse(lrc: lyrics)
+        // 歌词源自带的假名标注(酷狗的 [kana:] 标签),不带时用引擎从别的源借来的那份(kanaDonor)。对不齐时
+        // parse 返回 nil,读音自动退回形态分析 —— 见 KanaAnnotation 顶部注释里"半对半错比不标更糟"那段。
+        kanaAnnotation = KanaAnnotation.parse(lrc: lyrics, donor: kanaDonor)
         // 换歌词内容清空——见 romanizationText() 的缓存注释,纯粹是内存卫生考虑(避免
         // 常年挂着的进程把每一句听过的歌词文本都无限期缓存下去),不清空也不会算错,
         // 只是没必要让它跨曲目继续增长。

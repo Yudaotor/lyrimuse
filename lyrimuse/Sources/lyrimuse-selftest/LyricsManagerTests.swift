@@ -311,7 +311,7 @@ func runLyricsManagerTests() {
         let storedSheet = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsSearchSheet.swift"),
             encoding: .utf8)) ?? ""
-        expectEqual(storedSheet.contains("LyricsRomanization.sourceProvidedRomanization(entry.lyricsRoma, lyrics: text)"), true,
+        expectEqual(sourceHas(storedSheet, "LyricsRomanization.sourceProvidedRomanization( entry.lyricsRoma, lyrics: text, kanaDonor: entry.lyricsKana)"), true,
                     "存档读音: 搜索面板里在用的那一版去掉预生成的读音再标「读音」")
     }
 

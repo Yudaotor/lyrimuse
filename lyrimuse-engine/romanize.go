@@ -42,8 +42,10 @@ import (
 const romanizeHelperTimeout = 20 * time.Second
 
 // romanizeRequest 是 lyrics-romanize 的入参。LegacyKoreanRoma、StaleRoma 只在启动迁移里带(见 koreanroma.go、staleroma.go)。
+// KanaDonor 是条目借来的假名标注(LyricsKana,见 kanadonor.go),正文自己不带 `[kana:]` 时读音按它标。
 type romanizeRequest struct {
 	Lyrics           string `json:"lyrics"`
+	KanaDonor        string `json:"kana_donor,omitempty"`
 	LegacyKoreanRoma string `json:"legacy_korean_roma,omitempty"`
 	StaleRoma        string `json:"stale_roma,omitempty"`
 }
@@ -63,11 +65,11 @@ var errRomanizeHelperMissing = errors.New("lyrics-romanize helper not found")
 
 // onDeviceRomanize 调 lyrics-romanize 把整份逐行 LRC 转成罗马音 LRC。
 // 返回空串 = 这首歌本来就没什么可注音的(纯拉丁歌词等),不是错误。
-func onDeviceRomanize(lyrics string) (string, error) {
+func onDeviceRomanize(lyrics, kanaDonor string) (string, error) {
 	if lyrics == "" {
 		return "", nil
 	}
-	reply, err := runLyricsRomanize(romanizeRequest{Lyrics: lyrics})
+	reply, err := runLyricsRomanize(romanizeRequest{Lyrics: lyrics, KanaDonor: kanaDonor})
 	if errors.Is(err, errRomanizeHelperMissing) {
 		// 静默降级成"这首没有预生成罗马音",App 侧的客户端兜底照常工作,不该因此报错刷日志。
 		return "", nil
@@ -137,7 +139,7 @@ func (e *enrichEntry) maybeGenerateHelperRoma() {
 	if !e.shouldGenerateHelperRoma() {
 		return
 	}
-	roma, err := onDeviceRomanizer(e.Lyrics.String())
+	roma, err := onDeviceRomanizer(e.Lyrics.String(), e.LyricsKana)
 	if err != nil || roma == "" {
 		return
 	}

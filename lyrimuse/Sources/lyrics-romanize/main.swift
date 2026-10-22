@@ -26,6 +26,7 @@ import LyrimuseCore
 //
 // 协议(stdin/stdout 各一行 JSON):
 //   入:  {"lyrics":"[00:12.34]君の名は\n..."}
+//        日文歌可以多带 "kana_donor"(引擎从别的源借来的假名标注 lyrics_kana),正文自己不带 [kana:] 时读音按它标。
 //        启动迁移时多带 "stale_roma"(缓存里现有的罗马音):它不是我们早先预生成、按现在的算法已经过时的那份,就回
 //        not-stale、不产出(见 LyricsRomanization.refreshedGeneratedRomanization);是就回现在该存的那份,另带
 //        "stale_checked":true。
@@ -41,11 +42,13 @@ import LyrimuseCore
 
 struct Input: Decodable {
     let lyrics: String
+    let kanaDonor: String?
     let legacyKoreanRoma: String?
     let staleRoma: String?
 
     enum CodingKeys: String, CodingKey {
         case lyrics
+        case kanaDonor = "kana_donor"
         case legacyKoreanRoma = "legacy_korean_roma"
         case staleRoma = "stale_roma"
     }
@@ -82,7 +85,9 @@ guard !input.lyrics.isEmpty else {
     emit(Output(ok: false, reason: "empty-input"))
 }
 if let stored = input.staleRoma {
-    guard let roma = LyricsRomanization.refreshedGeneratedRomanization(stored, lyrics: input.lyrics) else {
+    guard let roma = LyricsRomanization.refreshedGeneratedRomanization(
+        stored, lyrics: input.lyrics, kanaDonor: input.kanaDonor ?? "")
+    else {
         emit(Output(ok: false, reason: "not-stale"))
     }
     emit(Output(ok: true, roma: roma, staleChecked: true))
@@ -94,7 +99,7 @@ if let stored = input.legacyKoreanRoma {
     }
     legacyChecked = true
 }
-guard let roma = LyricsRomanization.romanizeLRC(input.lyrics) else {
+guard let roma = LyricsRomanization.romanizeLRC(input.lyrics, kanaDonor: input.kanaDonor ?? "") else {
     emit(Output(ok: false, reason: "no-romanization"))
 }
 emit(Output(ok: true, roma: roma, legacyChecked: legacyChecked))

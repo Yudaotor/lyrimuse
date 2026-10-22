@@ -231,6 +231,12 @@ type enrichEntry struct {
 	// LyricsSpeakersChecked:这条按哪一版演唱者标注(lyricsSpeakersVersion)问过 Musixmatch。0 = 还没有,符合条件的
 	// 条目播放到时补问一次(speakersbackfill.go)。
 	LyricsSpeakersChecked int `json:"lyrics_speakers_checked,omitempty"`
+	// LyricsKana:正文自己不带 `[kana:]` 时,从别的候选借来的假名标注(一份只含借到的那些行的小 LRC,见 kanadonor.go)。
+	// App 和 lyrics-romanize 在正文自己没有标注时用它定汉字读音。不绑正文指纹,只对文字一样的行生效。
+	LyricsKana string `json:"lyrics_kana,omitempty"`
+	// LyricsKanaChecked:这条按哪一版借假名标注(lyricsKanaVersion)问过带标注的源。0 = 还没有,日文歌播放到时补问一次
+	// (kanabackfill.go)。
+	LyricsKanaChecked int `json:"lyrics_kana_checked,omitempty"`
 	// SongLanguage 是这首歌的语种真值(songLanguageMandarin/songLanguageCantonese 之一,
 	// 见 lyricCandidate.language),取自**全部**候选里第一个给出这个信号的那个(见
 	// songLanguageFromScored),不是只看最终拿到歌词正文的那个候选——目前只有 QQ/酷狗
@@ -1119,6 +1125,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			// 存量条目补演唱者标注,只问一次 Musixmatch、不动正文(见 speakersbackfill.go)。
 			enrichInflight[key] = true
 			go backfillLyricSpeakers(key, artist, title, album, durationSecs)
+		} else if needsLyricsKanaBackfill(e) && !enrichInflight[key] && kanaBackfillOnce(key) {
+			// 日文歌补借假名标注、让生成的罗马音用上它,不动正文(见 kanabackfill.go)。
+			enrichInflight[key] = true
+			go backfillLyricsKana(key, artist, title, album, durationSecs)
 		}
 		// 机翻不排上面这条链,跟哪一路都能同时跑,理由见 translatestart.go。
 		startTranslationBackfillLocked(key, e)
@@ -2332,6 +2342,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		lyricsChanged = true
 	}
 	refreshSpeakers(&e, scored)
+	refreshKana(&e, scored)
 	if rematchClearsInstrumental(opts.manual, before, e) {
 		e.Instrumental = false
 	}
@@ -2801,6 +2812,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		lyricsChanged = true
 	}
 	refreshSpeakers(&e, scored)
+	refreshKana(&e, scored)
 	if rematchClearsInstrumental(opts.manual, before, e) {
 		e.Instrumental = false
 	}

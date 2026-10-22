@@ -124,6 +124,7 @@ func adoptCrossAlbumSiblingLyrics(key string, e *enrichEntry) bool {
 	e.LyricsYRC = src.LyricsYRC
 	e.LyricsBG, e.LyricsBGChecked = src.LyricsBG, src.LyricsBGChecked
 	e.LyricsSpeakers, e.LyricsSpeakersChecked = src.LyricsSpeakers, src.LyricsSpeakersChecked
+	e.LyricsKana, e.LyricsKanaChecked = src.LyricsKana, src.LyricsKanaChecked
 	e.LyricsTr = src.LyricsTr
 	e.LyricsTrSource = src.LyricsTrSource
 	e.LyricsTrLang = src.LyricsTrLang

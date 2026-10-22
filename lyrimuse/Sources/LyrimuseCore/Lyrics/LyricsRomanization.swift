@@ -35,9 +35,11 @@ public enum LyricsRomanization {
     ///  3. 「整首是不是日文歌」按**过滤后的正文**判 —— 按原文判会被元信息行、署名行里的日文人名带偏;
     ///  4. 每行先剥掉演唱者标签再算读音(否则读出「nán： zhōu mò」,引擎剥罗马音标签只认汉字那一形)。
     /// 少任何一步,有预生成结果的歌在播放时就跟现算的对不上(引擎优先用预生成的)。
-    public static func romanizeLRC(_ lyrics: String) -> String? {
+    ///
+    /// `kanaDonor`:引擎从别的源借来的假名标注(`lyrics_kana`),正文自己不带 `[kana:]` 时用,原样传缓存里那份。
+    public static func romanizeLRC(_ lyrics: String, kanaDonor: String = "") -> String? {
         guard !lyrics.isEmpty else { return nil }
-        let prepared = readingRows(lyrics)
+        let prepared = readingRows(lyrics, kanaDonor: kanaDonor)
         var out: [String] = []
         for (tags, body) in prepared.rows {
             guard let reading = Romanizer.lineReading(
@@ -58,8 +60,8 @@ public enum LyricsRomanization {
     /// 缓存里的 `lyrics_roma` 去掉引擎按 `romanizeLRC` 预生成的那份(跟现算逐字一致的就是预生成的),剩下的才是歌词源
     /// 自带或手改的读音;是预生成的返回空串。「搜索候选歌词」里在用的那一版据此标不标「读音」:搜到的同一份候选
     /// 不带预生成读音,两边口径要一样(见 11 章决策 104)。
-    public static func sourceProvidedRomanization(_ roma: String, lyrics: String) -> String {
-        guard !roma.isEmpty, roma != romanizeLRC(lyrics) else { return "" }
+    public static func sourceProvidedRomanization(_ roma: String, lyrics: String, kanaDonor: String = "") -> String {
+        guard !roma.isEmpty, roma != romanizeLRC(lyrics, kanaDonor: kanaDonor) else { return "" }
         return roma
     }
 
@@ -72,7 +74,7 @@ public enum LyricsRomanization {
         let stored = taggedLines(roma)
         var compared = 0
         var same = 0
-        for (tags, body) in readingRows(lyrics).rows where Romanizer.containsHangul(body) {
+        for (tags, body) in readingRows(lyrics, kanaDonor: "").rows where Romanizer.containsHangul(body) {
             guard let line = stored[tags] else { continue }
             compared += 1
             if line == body.applyingTransform(.toLatin, reverse: false) { same += 1 }
@@ -84,13 +86,19 @@ public enum LyricsRomanization {
     /// 跟现算一字不差、或者对不上(歌词源给的)返回 nil。启动迁移靠它只换掉我们自己生成的(手改过的条目
     /// 引擎那边整条跳过,不送来判)。按时间标签串逐行比:`roma` 的行里跟现算一字不差的占八成以上才算。
     /// 改了读音算法(`Romanizer`、这里的预处理)之后,引擎那边的迁移版本号加一,存量就会按新算法重算一遍。
-    public static func refreshedGeneratedRomanization(_ roma: String, lyrics: String) -> String? {
-        guard !roma.isEmpty, let fresh = romanizeLRC(lyrics), fresh != roma else { return nil }
+    /// 带 `kanaDonor` 时现算的是用上借来标注的那份;借来的标注可能改掉很多行,所以「是不是我们生成的」跟
+    /// 不用借来标注的现算也比一次,取对上多的那边。
+    public static func refreshedGeneratedRomanization(_ roma: String, lyrics: String, kanaDonor: String = "") -> String? {
+        guard !roma.isEmpty, let fresh = romanizeLRC(lyrics, kanaDonor: kanaDonor), fresh != roma else { return nil }
         let stored = taggedLines(roma)
         guard !stored.isEmpty else { return nil }
-        let current = taggedLines(fresh)
-        let same = stored.filter { current[$0.key] == $0.value }.count
-        return same * 5 >= stored.count * 4 ? fresh : nil
+        func same(_ lrc: String?) -> Int {
+            guard let lrc else { return 0 }
+            let current = taggedLines(lrc)
+            return stored.filter { current[$0.key] == $0.value }.count
+        }
+        let matched = max(same(fresh), kanaDonor.isEmpty ? 0 : same(romanizeLRC(lyrics)))
+        return matched * 5 >= stored.count * 4 ? fresh : nil
     }
 
     /// 一份 LRC 按行首时间标签串分开:标签串 → 这一行的正文。没有标签的行跳过。
@@ -114,13 +122,17 @@ public enum LyricsRomanization {
         var annotation: KanaAnnotation?
     }
 
-    private static func readingRows(_ lyrics: String) -> ReadingRows {
+    private static func readingRows(_ lyrics: String, kanaDonor: String) -> ReadingRows {
         // 同形异码字(康熙部首等)先换回标准字,同播放侧交给引擎之前那一步。
         let compatible = HanCompatibility.normalized(lyrics)
-        let repaired = JapaneseKanjiRepair.repair(compatible, japaneseSong: Romanizer.looksJapaneseSong(compatible))
+        let japaneseSong = Romanizer.looksJapaneseSong(compatible)
+        let repaired = JapaneseKanjiRepair.repair(compatible, japaneseSong: japaneseSong)
         // 酷狗那类把假名标注写进同一份 LRC 的源,读音优先用标注 —— 播放引擎也是从同一份
-        // 歌词里 `KanaAnnotation.parse(lrc:)` 出来的,这里照做才能保证两条路读音一致。
-        let annotation = KanaAnnotation.parse(lrc: repaired)
+        // 歌词里 `KanaAnnotation.parse(lrc:donor:)` 出来的,这里照做才能保证两条路读音一致。
+        // 借来的标注做跟正文一样的变换(按正文判的整首日文),行文字才对得上。
+        let annotation = KanaAnnotation.parse(
+            lrc: repaired,
+            donor: JapaneseKanjiRepair.repair(HanCompatibility.normalized(kanaDonor), japaneseSong: japaneseSong))
         // CRLF 归一化:社区上传内容(酷狗尤其常见)带 \r\n,不归一化的话按 "\n" 切出来的
         // 每一行尾部都挂着一个 \r,读音里会混进一个看不见的控制字符。见 LRCParser.parse
         // 同一处注释。

@@ -234,6 +234,7 @@ func songShareLyricsFields(dst *enrichEntry, src enrichEntry) {
 	dst.LyricsScoringVersion, dst.LyricsScoringRevision = src.LyricsScoringVersion, src.LyricsScoringRevision
 	dst.ResolvedDurationSecs = src.ResolvedDurationSecs
 	dst.LyricsSpeakers, dst.LyricsSpeakersChecked = src.LyricsSpeakers, src.LyricsSpeakersChecked
+	dst.LyricsKana, dst.LyricsKanaChecked = src.LyricsKana, src.LyricsKanaChecked
 	dst.PlainLyrics, dst.PlainLyricsSource = src.PlainLyrics, src.PlainLyricsSource
 	dst.SongLanguage = src.SongLanguage
 	dst.LyricsTrSource, dst.LyricsTrLang = src.LyricsTrSource, src.LyricsTrLang
@@ -530,6 +531,7 @@ func songShareApplyChoice(e *enrichEntry, c *scoredLyricCandidateResult, r *song
 		e.LyricsSongwriters = sw
 	}
 	refreshSpeakers(e, r.Scored)
+	refreshKana(e, r.Scored)
 	e.LyricsEntityOrigin = ""
 	e.LyricsDecisionApplied = d
 }
