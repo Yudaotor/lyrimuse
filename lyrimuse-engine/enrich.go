@@ -5351,6 +5351,9 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	var kuwoTr string
 	kuwoLyr, kuwoTr, bakedLines["kuwo"] = adoptKuwoBakedTranslation(kuwoLyr, foreignSong)
 	amll.lrc, _, amll.yrc, bakedLines["amll"] = adoptBakedTranslation(amll.lrc, "", amll.yrc, foreignSong, false)
+	// 本地 .lrc 常是下载工具导出的双语文件:每句原文下面一行同一时间戳的中文译文。不摘的话 App 同一时间戳取后一行,
+	// 只显示译文。摘出来的译文固定中文,接到译文轨(同 qq / kugou)。见 09 章决策 333。
+	localLRC.lyr, localLRC.tr, localLRC.yrc, bakedLines[localFileLyricsSource] = adoptBakedTranslation(localLRC.lyr, localLRC.tr, localLRC.yrc, foreignSong, true)
 	var candidates []lyricCandidate
 	if ne.Lyrics != "" {
 		// 网易云的社区翻译固定中文(见下面附着处的注释),usable 判定按目标语言过闸;
@@ -5504,9 +5507,11 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	}
 	if localLRC.lyr != "" {
 		// reAMP 正在放的文件同名的 .lrc(用户自己配的,按文件认身份,见 localfilelyrics.go)。逐字写法的在开头拆成了 yrc。
+		localUsableTr, _ := usableValueAdd(localLRC.lyr, localLRC.tr, "zh", "", features().LyricsTranslationLanguage)
 		candidates = append(candidates, lyricCandidate{
 			source: localFileLyricsSource, lyrics: localLRC.lyr,
 			wordTimingYRC: usableYRC(localLRC.lyr, localLRC.yrc), hasWordTiming: usableWordTiming(localLRC.lyr, localLRC.yrc),
+			hasUsableTranslation:       localUsableTr,
 			sourceReportedDurationSecs: localLRC.srcDur,
 			title:                      localLRC.matchTitle, artist: localLRC.matchArtist,
 			identityFromLocalClient: localLRC.identityFromLocalClient, plainTextOnly: localLRC.plainOnly,
@@ -5742,6 +5747,12 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			if c.hasUsableTranslation {
 				r.LyricsTr = vibe.tr
 				r.LyricsTrLang = vibeTranslationLang
+			}
+		case localFileLyricsSource:
+			// 本地 .lrc 里摘出来的烘入译文(见候选装配处),固定中文,口径同 qq。
+			if c.hasUsableTranslation {
+				r.LyricsTr = localLRC.tr
+				r.LyricsTrLang = "zh"
 			}
 		case lxMusicLocalLyricsSource:
 			// 洛雪存下的是平台原版的译文 / 音译轨(国内平台的译文固定中文),口径同 qq。
