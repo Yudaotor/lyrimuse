@@ -21,8 +21,8 @@ import (
 // ## 要修的是什么
 //
 // deviceartwork.go 会把设备直送的封面(取自 App 写的当前封面文件)落到本机
-// `~/.config/lyrimuse/artwork/<sha>.jpg`,并把 `cover_url` 写成
-// `file:///Users/<用户名>/.config/lyrimuse/artwork/<sha>.jpg`。对本机 App 这是纯升级
+// 数据目录的 `artwork/<sha>.jpg`,并把 `cover_url` 写成
+// `file://<数据目录>/artwork/<sha>.jpg`。对本机 App 这是纯升级
 // (封面身份由"读取时刻"保证,比按文字去网易云/Apple/QQ 猜准得多,见 deviceartwork.go 头注)。
 //
 // 问题在于这个值被**原样带出了这台机器**:

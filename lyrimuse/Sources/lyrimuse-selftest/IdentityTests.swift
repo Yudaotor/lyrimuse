@@ -32,8 +32,9 @@ func runIdentityTests() {
         expectEqual(LyrimusePaths.bundledEnginePath.hasSuffix("/Contents/Resources/lyrimuse-engine"), true, "路径: 包里的引擎二进制")
 
         let homePath = FileManager.default.homeDirectoryForCurrentUser.path
-        expectEqual(LyrimusePaths.configDir.path, homePath + "/.config/lyrimuse", "路径: 配置目录 = ~/.config/lyrimuse")
-        expectEqual(LyrimusePaths.configFile("config.json").path, homePath + "/.config/lyrimuse/config.json", "路径: 配置目录下的文件")
+        expectEqual(LyrimusePaths.configDir, StorageLayout.activeDataDir(LyrimusePaths.storageRoots),
+                    "路径: 数据目录按 StorageLayout 的规则选(本机搬没搬都对)")
+        expectEqual(LyrimusePaths.configFile("config.json"), LyrimusePaths.configDir.appendingPathComponent("config.json"), "路径: 数据目录下的文件")
         expectEqual(LyrimusePaths.cachesDir.path, homePath + "/Library/Caches/me.yudaotor.lyrimuse", "路径: 缓存目录 = ~/Library/Caches/<bundle id>")
         expectEqual(LyrimusePaths.cacheFile("motion-covers").path, homePath + "/Library/Caches/me.yudaotor.lyrimuse/motion-covers",
                     "路径: 缓存目录下的子目录")
@@ -42,17 +43,20 @@ func runIdentityTests() {
         expectEqual(LyrimusePaths.launchAgentPlist(label: "x.y").path, homePath + "/Library/LaunchAgents/x.y.plist", "路径: LaunchAgent plist")
         expectEqual(LyrimusePaths.defaultAppBundleURL.path, "/Applications/Lyrimuse.app", "路径: 默认安装位置")
 
-        // 传给引擎的环境变量:三个键、值就是上面的路径与 bundle id;叠在继承环境上、不丢父进程的变量、同名覆盖。
+        // 传给引擎的环境变量:四个键、值就是上面的路径与 bundle id;叠在继承环境上、不丢父进程的变量、同名覆盖。
         let env = LyrimusePaths.engineEnvironment
-        expectEqual(env["LYRIMUSE_CONFIG_DIR"], LyrimusePaths.configDir.path, "环境: LYRIMUSE_CONFIG_DIR = 配置目录")
+        expectEqual(env["LYRIMUSE_CONFIG_DIR"], LyrimusePaths.configDir.path, "环境: LYRIMUSE_CONFIG_DIR = 数据目录")
+        expectEqual(env["LYRIMUSE_CACHE_DIR"], LyrimusePaths.cachesDir.path, "环境: LYRIMUSE_CACHE_DIR = 缓存目录")
         expectEqual(env["LYRIMUSE_LOG_FILE"], LogFiles.engine.path, "环境: LYRIMUSE_LOG_FILE = 引擎日志")
         expectEqual(env["LYRIMUSE_APP_BUNDLE_ID"], LyrimuseIdentity.bundleIdentifier, "环境: LYRIMUSE_APP_BUNDLE_ID = 本 App 的 bundle id(companion launch 用)")
-        expectEqual(env.count, 3, "环境: 只传这三个,别的都让引擎自己决定")
+        expectEqual(env.count, 4, "环境: 只传这四个,别的都让引擎自己决定")
         let merged = LyrimusePaths.engineProcessEnvironment(base: ["PATH": "/usr/bin", "LYRIMUSE_CONFIG_DIR": "/stale"])
         expectEqual(merged["PATH"], "/usr/bin", "环境: 继承的变量保留")
         expectEqual(merged["LYRIMUSE_CONFIG_DIR"], LyrimusePaths.configDir.path, "环境: 同名以本 App 的为准(别让终端里残留的值把目录指去别处)")
-        expectEqual(merged.count, 4, "环境: 合并后恰好多三项")
+        expectEqual(merged.count, 5, "环境: 合并后恰好多四项")
     }
+
+    runStorageLayoutChecks()
 
     do {
         // 缓存搬家:只搬认得的扩展名,新位置已有的以新位置为准,搬空了才删旧目录;旧目录不存在什么都不做。

@@ -55,7 +55,7 @@ func runRecheckMotionCoverCLI(args []string) {
 	// 这份也必须加载。不加载的话 motionCoverFor 对每一张专辑都当"没查过",逐张
 	// 重抓 330 KB 的专辑页(还因为 motionCoverPath 为空而存不下来);而
 	// motionCoverAlbumHasKnownVideo 更是会对全表回 false,下面第②条命中条件直接哑掉。
-	loadMotionCoverCache(filepath.Join(cfgDir, clientName+"-motion-cover-cache.json"))
+	loadMotionCoverCache(cacheFilePath(clientName + "-motion-cover-cache.json"))
 	// Apple 目录锚点也要加载:不加载的话 appleCatalogAlbumIDFor 恒为 false、viaAnchor 永远不成立,核验退到
 	// apple_music_url 里那个可能对错版本的专辑 ID,-apply 可能把「没有动态封面」永久写进一条常驻进程本来能靠锚点
 	// 放行的条目。跟文件头注「全量复用生产逻辑」对齐(同 resynclyricscli.go)。

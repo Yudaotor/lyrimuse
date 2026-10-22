@@ -7585,6 +7585,9 @@ private struct GitHubStarsBadge: View {
 }
 
 private struct AboutSettingsTab: View {
+    /// 「缓存」那一行显示的大小;算完之前不显示。
+    @State private var cacheSize: Int64?
+    @State private var showClearCacheWarning = false
     // 只为更新开关和 star 数订阅 —— 这一页其余内容都是静态的。两个都是单例、不是 @StateObject:
     // 离开设置页再回来不该重读缓存、更不该重复发请求。
     @ObservedObject private var updater = SparkleUpdaterManager.shared
@@ -7894,15 +7897,35 @@ private struct AboutSettingsTab: View {
             // 会静默丢掉。
             SettingsRow(
                 icon: "folder",
-                title: L10n.t("配置文件夹"),
-                // 路径按变体显示(正式 ~/.config/lyrimuse,Dev ~/.config/lyrimuse-dev),别让 Dev 的用户对着一个错的路径找文件。
-                subtitle: "~/.config/" + LyrimuseIdentity.configDirName + " · "
+                title: L10n.t("数据文件夹"),
+                // 路径按实际用的那个显示(还没搬走、或用户把旧目录做成了软链接时是 ~/.config/lyrimuse)。
+                subtitle: (LyrimusePaths.configDir.path as NSString).abbreviatingWithTildeInPath + " · "
                     + L10n.t("纯文本格式，不含账号凭据、外观与快捷键；完整迁移请使用「备份与迁移」")
             ) {
                 Button(L10n.t("在访达中显示")) {
                     NSWorkspace.shared.activateFileViewerSelecting([ConfigPortability.configFolderURL])
                 }
                 .buttonBorderShape(.capsule)
+            }
+            CardDivider()
+            // 「清理缓存」跟「清除全部设置」(备份与迁移卡)、uninstall.sh --purge(删除全部数据)是三件事:这一行只删能重新获取的。
+            SettingsRow(
+                icon: "internaldrive",
+                title: L10n.t("缓存"),
+                subtitle: (cacheSize.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) + " · " } ?? "")
+                    + L10n.t("可重新获取的封面与查询结果")
+            ) {
+                Button(L10n.t("清理…")) { showClearCacheWarning = true }
+                    .buttonBorderShape(.capsule)
+            }
+            .task { cacheSize = await Task.detached { CacheCleaner.size() }.value }
+            .alert(L10n.t("要清理缓存吗？"), isPresented: $showClearCacheWarning) {
+                Button(L10n.t("取消"), role: .cancel) {}
+                Button(L10n.t("清理并重启")) {
+                    Task { await CacheCleaner.clearAndRestart() }
+                }
+            } message: {
+                Text(L10n.t("将删除动态封面和联网查询的缓存并立即重启，用到时会重新获取；设置、歌词与播放记录不受影响"))
             }
         }
     }

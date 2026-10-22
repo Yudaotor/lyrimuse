@@ -9,7 +9,7 @@ import os
 /// 任何网页都能拉起 `lyrimuse://`,而这里会把正在听什么、开着哪些窗口写到盘上,还能关窗、改开关。网页改不了本机偏好;
 /// 键不带 `np:` 前缀,导出配置不会把它带到别的机器上(ConfigPortability 只导 `np:` / `KeyboardShortcuts_`)。
 ///
-/// 输出都写在 `~/Library/Caches/<bundle id>/debug/`,不碰 `~/.config` 里的用户数据。
+/// 输出都写在 `~/Library/Caches/<bundle id>/debug/`,不碰数据目录里的用户数据。
 @MainActor
 enum DebugDeepLinks {
     static let enabledKey = "debug:deepLinks"

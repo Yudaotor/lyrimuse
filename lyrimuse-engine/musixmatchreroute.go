@@ -353,10 +353,10 @@ func clashCloseConnections(ctx context.Context, c *http.Client, hostKeyword stri
 // ---- 被拦过的节点(存盘:引擎常重启,不存的话每次重启都从被拦的那个节点重新撞) ----
 
 func clashNodeBlocksPath() string {
-	if configDir() == "" {
+	if cacheDir() == "" {
 		return ""
 	}
-	return filepath.Join(configDir(), clientName+"-clash-node-blocks.json")
+	return cacheFilePath(clientName + "-clash-node-blocks.json")
 }
 
 // loadClashNodeBlocks:节点名 → 被拦的 unix 秒。过了 clashNodeBlockTTL 的丢掉。

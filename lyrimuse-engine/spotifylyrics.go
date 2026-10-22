@@ -71,10 +71,10 @@ func spotifyLyricsIndexPath() string {
 	if spotifyLyricsIndexPathOverride != "" {
 		return spotifyLyricsIndexPathOverride
 	}
-	if spotifyLyricsCacheDirOverride != "" || configDir() == "" {
+	if spotifyLyricsCacheDirOverride != "" || cacheDir() == "" {
 		return ""
 	}
-	return filepath.Join(configDir(), clientName+"-spotify-lyrics-index.json")
+	return cacheFilePath(clientName + "-spotify-lyrics-index.json")
 }
 
 // spotifyLyricsIndexFile:落盘的索引。Watermark 是读过文件头的文件里最新的修改时间(纳秒),比它旧、又不在

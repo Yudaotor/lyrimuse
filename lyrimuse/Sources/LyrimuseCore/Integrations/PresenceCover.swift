@@ -1,6 +1,6 @@
 import Foundation
 
-/// 设备直送封面在网页中继上的公网地址。引擎把 `~/.config/lyrimuse/artwork/<sha>.jpg` 传到中继的 `/artwork/<sha>.jpg`
+/// 设备直送封面在网页中继上的公网地址。引擎把 数据目录里的 `artwork/<sha>.jpg` 传到中继的 `/artwork/<sha>.jpg`
 /// (lyrimuse-engine/artworkrelay.go,按图片内容寻址,播放时才传)。认法跟引擎的 `deviceArtworkRef` 一样收得紧:文件名
 /// 必须是 16 位小写十六进制、后缀 jpg / png、在 artwork 文件夹里,别的 file:// 一律不认,免得把本机路径拼进地址发出去。
 public enum RelayArtwork {

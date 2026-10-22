@@ -11,7 +11,7 @@ python3 build_dataset.py    # 歌词文件夹 ∩ ListenBrainz 真实时长 → 
 python3 run_searches.py     # 每首跑一遍 lyrimuse-engine search-lyrics → simruns/*.json
 ```
 
-- 曲目与"当前流水线选了哪个源"来自 `~/.config/lyrimuse/lyrics/*.lrc` 的 6 字段头部;
+- 曲目与"当前流水线选了哪个源"来自数据目录(`~/Library/Application Support/me.yudaotor.lyrimuse`)里 `lyrics/*.lrc` 的 6 字段头部;
 - **真实时长**取自 ListenBrainz 听歌记录里引擎自己上报的 `duration_ms`——它独立于
   任何歌词源,这是量尺不被污染的关键;
 - `run_searches.py` 限并发 3(防源站风控),已跑过的曲目会跳过,可中断续跑。

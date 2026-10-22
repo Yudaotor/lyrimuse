@@ -23,7 +23,7 @@ private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: 
 /// 而内容指纹恰恰是会变的那一半,拿它当身份等于"内容一换 pin 也失效",正好把要防的事情
 /// 放过去。
 ///
-/// 落在 `~/.config/lyrimuse/lyrimuse-lyrics-pins.json` 这份独立小文件里,**不**塞进
+/// 落在 数据目录里的 `lyrimuse-lyrics-pins.json` 这份独立小文件里,**不**塞进
 /// enrich 缓存:引擎在内存里持有整份 enrich 缓存并会整份写回,往那个 JSON 里加字段
 /// 会被下一次 saveEnrichCache 覆盖,想安全就得重启引擎(理由见 EnrichCacheStore
 /// .delete 的长注释)—— 而校正值是在菜单栏里按一下就变一次的东西,每按一次重启一遍

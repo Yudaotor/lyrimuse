@@ -135,7 +135,7 @@ func TestSearchLyricsLoadsUnsavedChanges(t *testing.T) {
 	}
 	s := string(src)
 	path := strings.Index(s, `cachePath := filepath.Join(filepath.Dir(cfgPath), clientName+"-enrich-cache.json")`)
-	words := strings.Index(s, "if loadAccentCacheWordsFile(filepath.Join(filepath.Dir(cfgPath), accentWordsFileName)) {")
+	words := strings.Index(s, "if loadAccentCacheWordsFile(cacheFilePath(accentWordsFileName)) {")
 	meta := strings.Index(s, "loadEnrichCacheMetaReadOnly(cachePath)")
 	full := strings.Index(s, "loadEnrichCacheReadOnly(cachePath)")
 	search := strings.Index(s, "scoredLyricCandidatesStreaming(searchCtx")

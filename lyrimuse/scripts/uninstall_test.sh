@@ -19,6 +19,9 @@ FAKE_HOME="$(/usr/bin/mktemp -d /tmp/lyrimuse-uninstall-test.XXXXXX)"
 KEYCHAIN_DIR="$(/usr/bin/mktemp -d /tmp/lyrimuse-uninstall-keychain.XXXXXX)"
 TEST_KEYCHAIN="$KEYCHAIN_DIR/vault.keychain-db"
 FAILURES=0
+# 数据目录名取 App 的 label,测试把 label 换成 probe,所以假数据目录也按 probe 命名;旧目录名是固定的。
+FAKE_DATA="$FAKE_HOME/Library/Application Support/$PROBE_B"
+FAKE_LEGACY="$FAKE_HOME/.config/lyrimuse"
 
 cleanup() {
   for l in "$PROBE_A" "$PROBE_B"; do
@@ -35,7 +38,10 @@ ok()   { echo "  ok   - $1" }
 fail() { echo "  FAIL - $1"; FAILURES=$((FAILURES + 1)) }
 
 # 真实的东西在测试前后都必须原样不动。
-REAL_CONFIG_BEFORE=$(/usr/bin/find "$HOME/.config/lyrimuse" -type f 2>/dev/null | /usr/bin/wc -l | /usr/bin/tr -d ' ')
+real_data_count() {
+  /usr/bin/find "$HOME/Library/Application Support/me.yudaotor.lyrimuse" "$HOME/.config/lyrimuse" -type f 2>/dev/null | /usr/bin/wc -l | /usr/bin/tr -d ' '
+}
+REAL_CONFIG_BEFORE=$(real_data_count)
 REAL_ENGINE_BEFORE=$(/bin/launchctl print "gui/$UID_/com.lyrimuse.collector" >/dev/null 2>&1 && echo yes || echo no)
 # 加：--purge 开始真的 `defaults delete` 之后，这条对账就不再是形式主义 ——
 # 脚本删的 domain 取自 $APP_LABEL，测试把它覆盖成一次性 probe label；万一哪天有人把
@@ -48,10 +54,12 @@ REAL_DEFAULTS_BEFORE=$(real_defaults_count)
 
 setup_fake_home() {
   /bin/rm -rf "$FAKE_HOME"
-  /bin/mkdir -p "$FAKE_HOME/Library/LaunchAgents" "$FAKE_HOME/.config/lyrimuse/lyrics" "$FAKE_HOME/Library/Logs"
-  echo '{}' > "$FAKE_HOME/.config/lyrimuse/config.json"
-  echo '{}' > "$FAKE_HOME/.config/lyrimuse/lyrimuse-enrich-cache.json"
-  echo '[00:01.00]假歌词' > "$FAKE_HOME/.config/lyrimuse/lyrics/测试 - 歌.lrc"
+  /bin/mkdir -p "$FAKE_HOME/Library/LaunchAgents" "$FAKE_DATA/lyrics" "$FAKE_LEGACY" "$FAKE_HOME/Library/Logs"
+  echo '{}' > "$FAKE_DATA/config.json"
+  echo '{}' > "$FAKE_DATA/lyrimuse-enrich-cache.json"
+  echo '[00:01.00]假歌词' > "$FAKE_DATA/lyrics/测试 - 歌.lrc"
+  # 旧版本留下的旧目录(降级后又升级时会出现)
+  echo '{}' > "$FAKE_LEGACY/config.json"
   /bin/mkdir -p "$FAKE_HOME/Library/Caches/$PROBE_B/motion-covers"
   echo 'mp4' > "$FAKE_HOME/Library/Caches/$PROBE_B/motion-covers/a.mp4"
   echo 'log line' > "$FAKE_HOME/Library/Logs/lyrimuse.log"
@@ -70,7 +78,7 @@ setup_fake_home() {
   /usr/bin/security delete-keychain "$TEST_KEYCHAIN" >/dev/null 2>&1
   /usr/bin/security create-keychain -p test "$TEST_KEYCHAIN" >/dev/null 2>&1
   printf 'add-generic-password -U -s "%s" -a "%s" -w e30= "%s"\n' \
-    "$PROBE_B.credentials" "$FAKE_HOME/.config/lyrimuse" "$TEST_KEYCHAIN" | /usr/bin/security -i >/dev/null 2>&1
+    "$PROBE_B.credentials" "$FAKE_LEGACY" "$TEST_KEYCHAIN" | /usr/bin/security -i >/dev/null 2>&1
   for l in "$PROBE_A" "$PROBE_B"; do
     p="$FAKE_HOME/Library/LaunchAgents/$l.plist"
     {
@@ -88,7 +96,7 @@ setup_fake_home() {
 }
 
 has_test_vault() {
-  /usr/bin/security find-generic-password -s "$PROBE_B.credentials" -a "$FAKE_HOME/.config/lyrimuse" "$TEST_KEYCHAIN" >/dev/null 2>&1
+  /usr/bin/security find-generic-password -s "$PROBE_B.credentials" -a "$FAKE_LEGACY" "$TEST_KEYCHAIN" >/dev/null 2>&1
 }
 
 run_uninstall() {
@@ -102,28 +110,29 @@ run_uninstall() {
 echo "=== 1. 只读模式什么都不该动 ==="
 setup_fake_home
 run_uninstall >/dev/null 2>&1
-[[ -f "$FAKE_HOME/.config/lyrimuse/config.json" ]] && ok "配置还在" || fail "只读模式删了配置"
+[[ -f "$FAKE_DATA/config.json" ]] && ok "配置还在" || fail "只读模式删了配置"
 /bin/launchctl print "gui/$UID_/$PROBE_A" >/dev/null 2>&1 && ok "probe job 还注册着" || fail "只读模式注销了 job"
 
 echo
 echo "=== 2. --purge 输入 no 应当取消 ==="
 echo "no" | run_uninstall --purge >/dev/null 2>&1
-[[ -f "$FAKE_HOME/.config/lyrimuse/config.json" ]] && ok "取消后配置还在" || fail "输入 no 却把数据删了"
+[[ -f "$FAKE_DATA/config.json" ]] && ok "取消后配置还在" || fail "输入 no 却把数据删了"
 has_test_vault && ok "取消后钥匙串凭据还在" || fail "输入 no 却删了钥匙串凭据"
 /bin/launchctl print "gui/$UID_/$PROBE_A" >/dev/null 2>&1 && ok "取消后 job 还在" || fail "输入 no 却注销了 job"
 
 echo
 echo "=== 3. --purge 输入回车（空）应当取消 ==="
 echo "" | run_uninstall --purge >/dev/null 2>&1
-[[ -f "$FAKE_HOME/.config/lyrimuse/config.json" ]] && ok "空输入按取消处理" || fail "空输入却把数据删了"
+[[ -f "$FAKE_DATA/config.json" ]] && ok "空输入按取消处理" || fail "空输入却把数据删了"
 
 echo
 echo "=== 4. --services 停服务但保留数据 ==="
 run_uninstall --services >/dev/null 2>&1
 /bin/launchctl print "gui/$UID_/$PROBE_A" >/dev/null 2>&1 && fail "job 没被注销" || ok "job 已注销"
 [[ -f "$FAKE_HOME/Library/LaunchAgents/$PROBE_A.plist" ]] && fail "plist 没删" || ok "plist 已删"
-[[ -f "$FAKE_HOME/.config/lyrimuse/config.json" ]] && ok "数据完好保留" || fail "--services 不该碰数据"
-[[ -f "$FAKE_HOME/.config/lyrimuse/lyrics/测试 - 歌.lrc" ]] && ok "歌词文件完好" || fail "--services 删了歌词"
+[[ -f "$FAKE_DATA/config.json" ]] && ok "数据完好保留" || fail "--services 不该碰数据"
+[[ -f "$FAKE_DATA/lyrics/测试 - 歌.lrc" ]] && ok "歌词文件完好" || fail "--services 删了歌词"
+[[ -f "$FAKE_LEGACY/config.json" ]] && ok "旧目录完好" || fail "--services 删了旧目录"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse.log.old.2" ]] && ok "日志归档完好" || fail "--services 删了日志归档"
 [[ -f "$FAKE_HOME/Library/Caches/$PROBE_B/motion-covers/a.mp4" ]] && ok "缓存目录完好" || fail "--services 删了缓存目录"
 has_test_vault && ok "钥匙串凭据完好" || fail "--services 删了钥匙串凭据"
@@ -132,7 +141,8 @@ echo
 echo "=== 5. --purge 输入 yes 才真的删 ==="
 setup_fake_home
 echo "yes" | run_uninstall --purge >/dev/null 2>&1
-[[ -d "$FAKE_HOME/.config/lyrimuse" ]] && fail "配置目录没删" || ok "配置目录已删"
+[[ -d "$FAKE_DATA" ]] && fail "数据目录没删" || ok "数据目录已删"
+[[ -d "$FAKE_LEGACY" ]] && fail "旧数据目录没删" || ok "旧数据目录已删"
 [[ -d "$FAKE_HOME/Library/Caches/$PROBE_B" ]] && fail "缓存目录没删" || ok "缓存目录已删"
 has_test_vault && fail "钥匙串凭据没删" || ok "钥匙串凭据已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse.log" ]] && fail "日志没删" || ok "日志已删"
@@ -151,8 +161,19 @@ probe_defaults_left=$(/usr/bin/defaults read "$PROBE_B" 2>/dev/null | /usr/bin/t
   && ok "偏好设置项已删" || fail "偏好设置项没删（残留: $probe_defaults_left）"
 
 echo
-echo "=== 6. 全程没碰真实环境 ==="
-REAL_CONFIG_AFTER=$(/usr/bin/find "$HOME/.config/lyrimuse" -type f 2>/dev/null | /usr/bin/wc -l | /usr/bin/tr -d ' ')
+echo "=== 6. 旧目录是软链接时 --purge 只删链接,不动它指向的目录 ==="
+setup_fake_home
+/bin/rm -rf "$FAKE_LEGACY"
+/bin/mkdir -p "$FAKE_HOME/elsewhere"
+echo '{}' > "$FAKE_HOME/elsewhere/config.json"
+/bin/ln -s "$FAKE_HOME/elsewhere" "$FAKE_LEGACY"
+echo "yes" | run_uninstall --purge >/dev/null 2>&1
+[[ -L "$FAKE_LEGACY" ]] && fail "软链接没删" || ok "软链接已删"
+[[ -f "$FAKE_HOME/elsewhere/config.json" ]] && ok "链接指向的目录完好" || fail "删到了软链接指向的目录"
+
+echo
+echo "=== 7. 全程没碰真实环境 ==="
+REAL_CONFIG_AFTER=$(real_data_count)
 REAL_ENGINE_AFTER=$(/bin/launchctl print "gui/$UID_/com.lyrimuse.collector" >/dev/null 2>&1 && echo yes || echo no)
 [[ "$REAL_CONFIG_BEFORE" == "$REAL_CONFIG_AFTER" ]] \
   && ok "真实配置文件数不变（$REAL_CONFIG_BEFORE）" \

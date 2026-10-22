@@ -41,7 +41,7 @@ type neteaseNamesFile struct {
 	Songs   map[string]neteaseCatalogName `json:"songs"`
 }
 
-func neteaseNamesPath() string { return configFilePath(clientName + "-netease-names.json") }
+func neteaseNamesPath() string { return cacheFilePath(clientName + "-netease-names.json") }
 
 // readNeteaseNames 读补扫结果;缺失、坏掉、版本对不上都返回空表。
 func readNeteaseNames(path string) map[string]neteaseCatalogName {

@@ -33,6 +33,12 @@ func TestConfigDirIsSandboxed(t *testing.T) {
 	}
 }
 
+func TestCacheDirIsSandboxed(t *testing.T) {
+	if testRealHome == "" || strings.HasPrefix(cacheDir(), testRealHome+string(filepath.Separator)) {
+		t.Fatalf("缓存目录 %s 落在真实家目录 %s 下", cacheDir(), testRealHome)
+	}
+}
+
 func TestMain(m *testing.M) {
 	// HOME 指到临时目录,配置目录(默认在 HOME 下)跟着走:没设 LYRIMUSE_CONFIG_DIR 的用例(只换了 enrichPath 的那些)
 	// 会落到真实的 ~/.config/lyrimuse,启动清理(sweepKeyedDir)会把真实的留底当孤儿删掉。别在这里设 LYRIMUSE_CONFIG_DIR:
@@ -48,6 +54,7 @@ func TestMain(m *testing.M) {
 	localZoneLink = ""
 	canonicalMemoTTL = 0 // 各用例直接换 enrichCache,不让上一个用例记下的宽松匹配漏到下一个(见 canonicalMemoTTL)
 	_ = os.Unsetenv("LYRIMUSE_CONFIG_DIR")
+	_ = os.Unsetenv("LYRIMUSE_CACHE_DIR")
 	_ = os.Setenv("HOME", sandbox)
 	missing := filepath.Join(os.TempDir(), "lyrimuse-no-such-external-app-data")
 	kugouLocalDirOverride = missing

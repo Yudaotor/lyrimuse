@@ -670,14 +670,14 @@ func runLastfmTests() {
         let mbDir = FileManager.default.temporaryDirectory.appendingPathComponent("lyrimuse-mbstamp-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: mbDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: mbDir) }
-        let empty = ArtistIdentityCaches.stamp(configDir: mbDir)
-        expectEqual(empty == ArtistIdentityCaches.stamp(configDir: mbDir), true, "别名表作废: 三份缓存都没有时前后一样")
+        let empty = ArtistIdentityCaches.stamp(directory: mbDir)
+        expectEqual(empty == ArtistIdentityCaches.stamp(directory: mbDir), true, "别名表作废: 三份缓存都没有时前后一样")
         let identity = mbDir.appendingPathComponent("lyrimuse-artist-identity-cache.json")
         try? Data(#"{"a":{"zh":"甲"}}"#.utf8).write(to: identity)
-        let written = ArtistIdentityCaches.stamp(configDir: mbDir)
+        let written = ArtistIdentityCaches.stamp(directory: mbDir)
         expectEqual(written != empty, true, "别名表作废: 引擎写出身份缓存看得出来")
         try? Data(#"{"a":{"zh":"甲"},"b":{"zh":"乙"}}"#.utf8).write(to: identity)
-        expectEqual(ArtistIdentityCaches.stamp(configDir: mbDir) != written, true, "别名表作废: 身份缓存改了内容看得出来")
+        expectEqual(ArtistIdentityCaches.stamp(directory: mbDir) != written, true, "别名表作废: 身份缓存改了内容看得出来")
         let reader = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"), encoding: .utf8)) ?? ""
         expectEqual(reader.contains("if aliasInputsChanged || (cachedAliasTables != nil && ArtistIdentityCaches.stamp() != aliasCachesStamp) {")

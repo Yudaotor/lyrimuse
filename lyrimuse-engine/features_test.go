@@ -126,7 +126,7 @@ func TestLogFeatureSnapshotSkipsUnchanged(t *testing.T) {
 		t.Error("开关变了:整行打")
 	}
 
-	path := configFilePath(featureSnapshotStateFile)
+	path := cacheFilePath(featureSnapshotStateFile)
 	var st featureSnapshotState
 	b, err := os.ReadFile(path)
 	if err != nil {

@@ -154,7 +154,7 @@ func main() {
 			return
 		}
 	}
-	// 配置目录默认 ~/.config/lyrimuse,环境变量 LYRIMUSE_CONFIG_DIR 优先(paths.go)。
+	// 数据目录的选法见 paths.go 的 configDir(),环境变量 LYRIMUSE_CONFIG_DIR 优先。
 	defaultConfigDir := configDir()
 	if defaultConfigDir == "" {
 		fatalExit(exitReasonHomeDirUnresolved, "cannot resolve home directory and LYRIMUSE_CONFIG_DIR is unset")
@@ -224,32 +224,32 @@ func main() {
 	// 见 musicbrainz.go 顶部注释。
 	// 下面这一串辅助缓存载入完合成一行日志,见 cacheload.go。
 	beginCacheLoadBatch(filepath.Dir(*cfgPath))
-	loadArtistAliasCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-artist-alias-cache.json"))
+	loadArtistAliasCache(cacheFilePath(clientName + "-artist-alias-cache.json"))
 	// 用户校准过歌词时间轴的曲目名单(App 侧写、这边只读),见 lyricspins.go。刻意不在
 	// 这里读一次就完 —— lyricsPinned 每次按 mtime 自己判断要不要重读。
 	lyricsPinsPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lyrics-pins.json")
 	// MB 主名(本名 与 艺名)那份缓存,见 musicBrainzPrimaryArtistName。
-	loadMBPrimaryNameCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-artist-primary-cache.json"))
+	loadMBPrimaryNameCache(cacheFilePath(clientName + "-artist-primary-cache.json"))
 	// Apple 目录曲目 ID → 权威元数据。ID 是不变映射,这份缓存永久有效、只落盘查到了的
 	// 条目,见 applecatalog.go。
 	loadAppleCatalogCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-catalog-cache.json"))
-	loadMotionCoverCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-motion-cover-cache.json"))
+	loadMotionCoverCache(cacheFilePath(clientName + "-motion-cover-cache.json"))
 	// "艺人|专辑" → Apple 各商店曲目署名,见 appleStorefrontArtistIdentities。
-	loadAppleStorefrontArtistCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-storefront-artist-cache.json"))
+	loadAppleStorefrontArtistCache(cacheFilePath(clientName + "-apple-storefront-artist-cache.json"))
 	// "艺人|专辑|曲名" → 这一条录音在原产地商店的曲名,见 appleStorefrontCanonicalTitle。
-	loadAppleStorefrontTitleCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-storefront-title-cache.json"))
+	loadAppleStorefrontTitleCache(cacheFilePath(clientName + "-apple-storefront-title-cache.json"))
 	// 播放器没报专辑名时从 Apple 目录反查到的专辑(key = 署名|曲名|整秒时长),见 albumhint.go appleAlbumHint。
-	loadAppleAlbumHintCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-album-hint-cache.json"))
+	loadAppleAlbumHintCache(cacheFilePath(clientName + "-apple-album-hint-cache.json"))
 	// 按歌手缓存的 QQ 音乐歌手搜索建议结果,见 qq.go 的 qqArtistCanonicalName。
-	loadQQArtistNameCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-qq-artist-name-cache.json"))
+	loadQQArtistNameCache(cacheFilePath(clientName + "-qq-artist-name-cache.json"))
 	// 汽水音频缓存库里的曲目 id → 按 id 问来的曲目信息,见 sodatrackmeta.go。
-	loadSodaTrackMeta(filepath.Join(filepath.Dir(*cfgPath), clientName+"-soda-track-cache.json"))
+	loadSodaTrackMeta(cacheFilePath(clientName + "-soda-track-cache.json"))
 	// 歌手身份缓存(mbid+中文名),给 Top 歌手榜归并当第三合并信号——见 musicbrainz.go
 	// mbArtistIdentity 注释。与 top-artists CLI 共用同一份文件。
-	loadArtistIdentityCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-artist-identity-cache.json"))
-	loadPlatformPagesCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-platform-pages-cache.json"))
+	loadArtistIdentityCache(cacheFilePath(clientName + "-artist-identity-cache.json"))
+	loadPlatformPagesCache(cacheFilePath(clientName + "-platform-pages-cache.json"))
 	// 「歌手来自哪里」的汇总与歌手 mbid → 国家代码,见 artistregions.go。
-	loadArtistRegionsCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-artist-regions.json"))
+	loadArtistRegionsCache(cacheFilePath(clientName + "-artist-regions.json"))
 	endCacheLoadBatch()
 	// 启动期存量迁移的「已完成水位」(startupmigration.go)。必须在下面那串迁移之前载入。
 	loadMigrationState(filepath.Join(filepath.Dir(*cfgPath), clientName+"-migrations.json"))
@@ -411,7 +411,7 @@ func main() {
 	initListenLog(filepath.Join(filepath.Dir(*cfgPath), clientName+"-listens.jsonl"))
 	// 「哪些设备封面已确认在中继上」的落盘记录(artworkconfirmed.go)。没有它的话每次
 	// 重启都要把 artwork/ 整个 HEAD 一遍 —— 实测一次约 700 次 KV 读。
-	artworkConfirmPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-artwork-confirmed.json")
+	artworkConfirmPath = cacheFilePath(clientName + "-artwork-confirmed.json")
 	forwardedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-forwarded.json")
 	lfmMirroredPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-mirrored.json")
 	lfmSentNPPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-sent-nowplaying.json")

@@ -177,6 +177,7 @@ enum DiagnosticsExporter {
         // 引擎要写的几处主目录位置归不归当前用户、写不写得进。不对时引擎装不上或起不来,而 launchctl 只给笼统的报错。
         lines.append(contentsOf: HomeFolderAccess.diagnosticLines(
             for: HomeFolderAccess.check(), checkedCount: HomeFolderAccess.targets.count))
+        lines.append(StorageLayout.diagnosticLine(roots: LyrimusePaths.storageRoots, active: LyrimusePaths.configDir))
         // 两份共享配置文件的三态:损坏时所有保存被拒,「设置保存不上 / 账号全空」第一个该看的原因。
         // reason 只含解析位置、键名与期望类型,不含文件内容(config.json 是凭据)。
         lines.append("config.json: \(describe(config.fileState))")

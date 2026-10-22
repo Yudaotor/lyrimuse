@@ -1,0 +1,204 @@
+import Darwin
+import Foundation
+import LyrimuseCore
+
+// 存储布局:数据目录选哪个、钥匙串账号、启动时从旧目录搬到新布局(整份改名 / 跨卷复制、改写文件里的旧路径、缓存挪进缓存目录)。
+// 全在临时目录里造家目录,不碰真实数据。由 identity 组调用。
+
+func runStorageLayoutChecks() {
+    print("\n== 存储布局 ==")
+    let fm = FileManager.default
+    let sandbox = fm.temporaryDirectory.appendingPathComponent("lyrimuse-storage-\(UUID().uuidString)")
+    defer { try? fm.removeItem(at: sandbox) }
+
+    func makeHome(_ name: String) -> (URL, StorageLayout.Roots) {
+        let home = sandbox.appendingPathComponent(name)
+        try? fm.createDirectory(at: home, withIntermediateDirectories: true)
+        return (home, StorageLayout.roots(home: home))
+    }
+    func write(_ text: String, _ url: URL, mode: Int? = nil) {
+        try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? Data(text.utf8).write(to: url)
+        if let mode { try? fm.setAttributes([.posixPermissions: mode], ofItemAtPath: url.path) }
+    }
+    func read(_ url: URL) -> String? { try? String(contentsOf: url, encoding: .utf8) }
+
+    do {
+        let (home, roots) = makeHome("paths")
+        expectEqual(roots.legacy.path, home.path + "/.config/lyrimuse", "存储布局: 旧目录 ~/.config/lyrimuse")
+        expectEqual(roots.data.path, home.path + "/Library/Application Support/me.yudaotor.lyrimuse",
+                    "存储布局: 数据目录 ~/Library/Application Support/<bundle id>")
+        expectEqual(roots.caches.path, home.path + "/Library/Caches/me.yudaotor.lyrimuse", "存储布局: 缓存目录 ~/Library/Caches/<bundle id>")
+
+        expectEqual(StorageLayout.activeDataDir(roots), roots.data, "存储布局: 全新安装直接用新目录")
+        try? fm.createDirectory(at: roots.legacy, withIntermediateDirectories: true)
+        expectEqual(StorageLayout.activeDataDir(roots), roots.legacy, "存储布局: 还没搬时照旧用旧目录")
+        expectEqual(StorageLayout.needsRootMove(roots), true, "存储布局: 旧目录在、新目录不在 = 要搬")
+        try? fm.createDirectory(at: roots.data, withIntermediateDirectories: true)
+        expectEqual(StorageLayout.activeDataDir(roots), roots.data, "存储布局: 新旧都在(降级后又升级)以新目录为准")
+        expectEqual(StorageLayout.needsRootMove(roots), false, "存储布局: 新目录已在就不搬")
+        try? fm.removeItem(at: roots.legacy)
+        let custom = home.appendingPathComponent("elsewhere")
+        try? fm.createDirectory(at: custom, withIntermediateDirectories: true)
+        try? fm.createSymbolicLink(at: roots.legacy, withDestinationURL: custom)
+        expectEqual(StorageLayout.activeDataDir(roots), roots.legacy, "存储布局: 旧目录是软链接 = 用户指定的位置,一直用它")
+        expectEqual(StorageLayout.needsRootMove(roots), false, "存储布局: 软链接不搬")
+
+        expectEqual(StorageLayout.credentialAccount(dataDir: roots.data, roots: roots), roots.legacy.path,
+                    "存储布局: 钥匙串账号在新目录下仍是旧路径串(搬目录不迁钥匙串)")
+        expectEqual(StorageLayout.credentialAccount(dataDir: roots.legacy, roots: roots), roots.legacy.path, "存储布局: 旧目录的账号不变")
+        expectEqual(StorageLayout.credentialAccount(dataDir: custom, roots: roots), custom.path, "存储布局: 另起的数据目录按自己的路径隔开")
+        expectEqual(StorageLayout.diagnosticLine(roots: roots, active: roots.data, home: home.path),
+                    "Data folder: ~/Library/Application Support/me.yudaotor.lyrimuse (old ~/.config/lyrimuse: symlink)",
+                    "存储布局: 诊断行写清用的哪个目录、旧目录的状态,家目录写成 ~")
+    }
+
+    do {
+        // 整份搬:同卷改名,文件里的旧路径换成新路径(原样与 JSON 转义两种写法),兄弟目录和歌词文本不碰,权限位保留;缓存挪走。
+        let (home, roots) = makeHome("move")
+        let old = roots.legacy.path, new = roots.data.path
+        write("{\"token\":\"x\"}", roots.legacy.appendingPathComponent("config.json"), mode: 0o600)
+        write("{\"cover_url\":\"file://\(old)/artwork/a.jpg\",\"b\":\"file://\(old)/artwork/b.jpg\",\"dir\":\"\(old)\"}",
+              roots.legacy.appendingPathComponent("lyrimuse-enrich-cache.json"))
+        let escapedOld = old.replacingOccurrences(of: "/", with: "\\/")
+        write("{\"u\":\"file:\\/\\/\(escapedOld)\\/artwork\\/c.jpg\"}", roots.legacy.appendingPathComponent("lyrimuse-song-entity-pre/1.json"))
+        write("{\"backup\":\"\(old)-backups/x.json\"}", roots.legacy.appendingPathComponent("lyrimuse-notes.json"))
+        write("[00:01.00]\(old)/artwork", roots.legacy.appendingPathComponent("lyrics/a.lrc"))
+        write("jpg", roots.legacy.appendingPathComponent("artwork/a.jpg"))
+        write("{}", roots.legacy.appendingPathComponent("x-cache.json"))
+        try? fm.createSymbolicLink(at: roots.legacy.appendingPathComponent("link"), withDestinationURL: home)
+
+        expectEqual(StorageMigration.isPending(roots, cacheNames: ["x-cache.json"]), true, "存储搬迁: 旧目录在 = 有活")
+        let outcome = StorageMigration.run(roots, cacheNames: ["x-cache.json"])
+        expectEqual(outcome.movedRoot, true, "存储搬迁: 同卷一次改名")
+        expectEqual(outcome.copiedRoot, false, "存储搬迁: 同卷不复制")
+        expectEqual(outcome.failures, [], "存储搬迁: 没有失败")
+        expectEqual(fm.fileExists(atPath: roots.legacy.path), false, "存储搬迁: 旧目录不留(也不留软链接)")
+        expectEqual(read(roots.data.appendingPathComponent("lyrimuse-enrich-cache.json")),
+                    "{\"cover_url\":\"file://\(new)/artwork/a.jpg\",\"b\":\"file://\(new)/artwork/b.jpg\",\"dir\":\"\(new)\"}",
+                    "存储搬迁: 设备封面的 file:// 地址和存成值的旧目录都换成新目录")
+        let escapedNew = new.replacingOccurrences(of: "/", with: "\\/")
+        expectEqual(read(roots.data.appendingPathComponent("lyrimuse-song-entity-pre/1.json")),
+                    "{\"u\":\"file:\\/\\/\(escapedNew)\\/artwork\\/c.jpg\"}", "存储搬迁: 子目录里、JSON 转义写法的也换")
+        expectEqual(read(roots.data.appendingPathComponent("lyrimuse-notes.json")), "{\"backup\":\"\(old)-backups/x.json\"}",
+                    "存储搬迁: 旧目录名开头的兄弟目录不碰")
+        expectEqual(read(roots.data.appendingPathComponent("lyrics/a.lrc")), "[00:01.00]\(old)/artwork", "存储搬迁: 歌词文本不看")
+        expectEqual(outcome.rewrittenFiles, 2, "存储搬迁: 只改写了含旧路径的两份")
+        let mode = (try? fm.attributesOfItem(atPath: roots.data.appendingPathComponent("config.json").path)[.posixPermissions]) as? NSNumber
+        expectEqual(mode?.intValue, 0o600, "存储搬迁: 权限位跟着走")
+        expectEqual(outcome.relocatedCaches, 1, "存储搬迁: 缓存挪进缓存目录")
+        expectEqual(fm.fileExists(atPath: roots.caches.appendingPathComponent("x-cache.json").path), true, "存储搬迁: 缓存到了缓存目录")
+        expectEqual(fm.fileExists(atPath: roots.data.appendingPathComponent("x-cache.json").path), false, "存储搬迁: 数据目录里不再有缓存")
+        expectEqual(StorageMigration.isPending(roots, cacheNames: ["x-cache.json"]), false, "存储搬迁: 搬完没活了")
+        expectEqual(StorageMigration.run(roots, cacheNames: ["x-cache.json"]).changedAnything, false, "存储搬迁: 重跑什么都不动")
+        let marker = read(roots.data.appendingPathComponent("lyrimuse-storage-migration.json")) ?? ""
+        expectEqual(marker.contains("\"rewritePending\" : false") && marker.contains(old), true, "存储搬迁: 标记文件记着从哪搬、改写已完成")
+    }
+
+    do {
+        // 改写没做完(上次中途失败)时下次启动接着改;缓存目录已有同名的以缓存目录为准。
+        let (_, roots) = makeHome("resume")
+        let old = roots.legacy.path
+        write("{\"from\":\"\(old)\",\"to\":\"\(roots.data.path)\",\"rewritePending\":true}",
+              roots.data.appendingPathComponent("lyrimuse-storage-migration.json"))
+        write("{\"u\":\"file://\(old)/artwork/a.jpg\"}", roots.data.appendingPathComponent("lyrimuse-playing-entry.json"))
+        write("stale", roots.data.appendingPathComponent("x-cache.json"))
+        write("fresh", roots.caches.appendingPathComponent("x-cache.json"))
+        expectEqual(StorageMigration.isPending(roots, cacheNames: ["x-cache.json"]), true, "存储搬迁: 改写没完成 = 有活")
+        let outcome = StorageMigration.run(roots, cacheNames: ["x-cache.json"])
+        expectEqual(outcome.movedRoot, false, "存储搬迁: 已在新目录不再搬")
+        expectEqual(read(roots.data.appendingPathComponent("lyrimuse-playing-entry.json")), "{\"u\":\"file://\(roots.data.path)/artwork/a.jpg\"}",
+                    "存储搬迁: 接着改写")
+        expectEqual(read(roots.caches.appendingPathComponent("x-cache.json")), "fresh", "存储搬迁: 缓存目录里已有的留着")
+        expectEqual(fm.fileExists(atPath: roots.data.appendingPathComponent("x-cache.json").path), false, "存储搬迁: 数据目录里那份删掉")
+        expectEqual(StorageMigration.isPending(roots, cacheNames: ["x-cache.json"]), false, "存储搬迁: 改写完成后没活了")
+    }
+
+    do {
+        // 跨卷那条路:拷进暂存目录、核对清单和大小、换上去,旧目录改名留着。
+        let (_, roots) = makeHome("copy")
+        write("{}", roots.legacy.appendingPathComponent("config.json"), mode: 0o600)
+        write("[00:01.00]词", roots.legacy.appendingPathComponent("lyrics/a.lrc"))
+        write("{\"u\":\"file://\(roots.legacy.path)/artwork/a.jpg\"}", roots.legacy.appendingPathComponent("lyrimuse-enrich-cache.json"))
+        let outcome = StorageMigration.run(roots, cacheNames: [], forceCopy: true)
+        expectEqual(outcome.copiedRoot, true, "存储搬迁(复制): 走了复制")
+        expectEqual(outcome.failures, [], "存储搬迁(复制): 没有失败")
+        expectEqual(read(roots.data.appendingPathComponent("lyrics/a.lrc")), "[00:01.00]词", "存储搬迁(复制): 内容到了新目录")
+        expectEqual(read(roots.data.appendingPathComponent("lyrimuse-enrich-cache.json")),
+                    "{\"u\":\"file://\(roots.data.path)/artwork/a.jpg\"}", "存储搬迁(复制): 也改写旧路径")
+        let kept = roots.legacy.deletingLastPathComponent().appendingPathComponent("lyrimuse.migrated")
+        expectEqual(fm.fileExists(atPath: kept.appendingPathComponent("lyrics/a.lrc").path), true, "存储搬迁(复制): 旧目录改名留着")
+        expectEqual(fm.fileExists(atPath: roots.legacy.path), false, "存储搬迁(复制): 旧名字下不再有目录,下次不会再搬")
+        expectEqual(fm.fileExists(atPath: roots.data.path + ".incoming"), false, "存储搬迁(复制): 暂存目录不留")
+    }
+
+    do {
+        // 软链接指定的位置:不搬、不改写;只有缓存要挪时才有活。
+        let (home, roots) = makeHome("symlink")
+        let custom = home.appendingPathComponent("elsewhere")
+        write("{\"u\":\"\(roots.legacy.path)/x\"}", custom.appendingPathComponent("config.json"))
+        try? fm.createDirectory(at: roots.legacy.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? fm.createSymbolicLink(at: roots.legacy, withDestinationURL: custom)
+        expectEqual(StorageMigration.isPending(roots, cacheNames: ["x-cache.json"]), false, "存储搬迁: 软链接且没有缓存要挪 = 没活")
+        write("{}", custom.appendingPathComponent("x-cache.json"))
+        let outcome = StorageMigration.run(roots, cacheNames: ["x-cache.json"])
+        expectEqual(outcome.movedRoot || outcome.copiedRoot, false, "存储搬迁: 软链接不搬")
+        expectEqual(read(custom.appendingPathComponent("config.json")), "{\"u\":\"\(roots.legacy.path)/x\"}", "存储搬迁: 软链接下不改写")
+        expectEqual(outcome.relocatedCaches, 1, "存储搬迁: 缓存照样挪进缓存目录")
+    }
+
+    do {
+        // 缓存名单对账:名单里的文件,引擎和 App 都只经缓存目录拼路径,不许再从数据目录拼。先按整篇字节筛出提到名单的文件,
+        // 再逐行看;Go 里把文件名放进常量的(`const x = "lyrimuse-…"`),用到这个常量的那一行也要走 cacheFilePath。
+        let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let names = StorageLayout.cacheFileNames.filter { !$0.hasSuffix(".lock") }
+        let stems = names.map { String($0.dropFirst("lyrimuse".count)) }
+        var offenders: [String] = []
+        var mentioned = Set<String>()
+        let dataPathMarkers = ["configFilePath(", "configDir()", "cfgPath", "cfgDir"]
+        let goDir = repoRoot.appendingPathComponent("lyrimuse-engine")
+        let goFiles = ((try? fm.contentsOfDirectory(atPath: goDir.path)) ?? []).filter { $0.hasSuffix(".go") && !$0.hasSuffix("_test.go") }
+        var goTexts: [(String, String)] = []
+        var constants: [String] = []
+        for f in goFiles {
+            guard let text = try? String(contentsOf: goDir.appendingPathComponent(f), encoding: .utf8),
+                  stems.contains(where: { sourceBytes(text, contain: $0 + "\"") }) else { continue }
+            goTexts.append((f, text))
+            for line in text.split(separator: "\n") where line.hasPrefix("const ") {
+                guard stems.contains(where: { line.contains($0 + "\"") }),
+                      let name = line.dropFirst("const ".count).split(separator: " ").first else { continue }
+                constants.append(String(name))
+            }
+        }
+        for (f, text) in goTexts {
+            for (i, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+                for (name, stem) in zip(names, stems) where line.contains(stem + "\"") {
+                    mentioned.insert(name)
+                    if dataPathMarkers.contains(where: { line.contains($0) }) { offenders.append("\(f):\(i + 1)") }
+                }
+                if constants.contains(where: { line.contains("configFilePath(\($0))") || line.contains("configDir(), \($0))") }) {
+                    offenders.append("\(f):\(i + 1)")
+                }
+            }
+        }
+        let swiftRoot = repoRoot.appendingPathComponent("lyrimuse/Sources")
+        for dir in ["LyrimuseCore", "lyrimuse"] {
+            guard let walker = fm.enumerator(atPath: swiftRoot.appendingPathComponent(dir).path) else { continue }
+            for case let rel as String in walker where rel.hasSuffix(".swift") {
+                let path = swiftRoot.appendingPathComponent(dir).appendingPathComponent(rel)
+                guard path.lastPathComponent != "StorageLayout.swift",
+                      let text = try? String(contentsOf: path, encoding: .utf8),
+                      names.contains(where: { sourceBytes(text, contain: "\"" + $0 + "\"") }) else { continue }
+                for (i, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+                    for name in names where line.contains("\"" + name + "\"") {
+                        mentioned.insert(name)
+                        if line.contains("configFile(") || line.contains("configDir") { offenders.append("\(rel):\(i + 1)") }
+                    }
+                }
+            }
+        }
+        expectEqual(offenders, [], "缓存名单: 名单里的文件不许从数据目录拼路径")
+        expectEqual(names.filter { !mentioned.contains($0) }, [], "缓存名单: 名单里每个文件代码里都还有人读写(删了文件要一起删名单)")
+    }
+}

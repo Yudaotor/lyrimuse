@@ -337,7 +337,7 @@ public final class EnrichCacheStore: ObservableObject {
         libraryDigest = Self.loadDigest()
     }
 
-    private static let digestURL = LyrimusePaths.configFile("lyrimuse-library-digest.json")
+    private static let digestURL = LyrimusePaths.cacheFile("lyrimuse-library-digest.json")
 
     private static func loadDigest() -> LibraryDigest? {
         FileIO.decodeJSON(LibraryDigest.self, from: digestURL)

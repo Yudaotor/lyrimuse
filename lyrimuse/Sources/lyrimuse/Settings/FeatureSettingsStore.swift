@@ -440,7 +440,7 @@ struct FeatureFlagsFile: Codable, Equatable {
 
 // "歌词"tab 的纯行为开关(lyrics/albumPrefetch 等)和"账号连接"tab 里各张
 // 账号卡片的开关(lastfmMirrorScrobble/weeklyDigest)共用同一份数据层——读写
-// ~/.config/lyrimuse/lyrimuse-features.json,跟
+// 数据目录里的 lyrimuse-features.json,跟
 // lyrimuse-engine/features.go 是同一份共享文件的两侧独立实现。Last.fm 桥接
 // (读 Last.fm 转发进 ListenBrainz + 喂网页"正在播放")没有独立开关——
 // Last.fm 桥接凭据 + ListenBrainz 账号都配好就自动生效,跟引擎侧
@@ -607,7 +607,7 @@ public final class FeatureSettingsStore: ObservableObject {
     // players / launch_lyrimuse_on_players 里这个版本不认识的播放器(更新的版本接的),理由同上。
     private var unknownPlayers: [String] = []
     private var unknownLaunchPlayers: [String] = []
-    // 空字符串 = 用默认位置(~/.config/lyrimuse/lyrics)。用 effectiveLyricsDir
+    // 空字符串 = 用默认位置(数据目录的 lyrics/)。用 effectiveLyricsDir
     // 取实际生效的路径,不要直接读这个属性去拼路径。
     @Published public var lyricsDir = ""
     // 只影响 Musixmatch 这个源的译文语言,详见 MusixmatchTranslationLanguage 注释。

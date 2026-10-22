@@ -23,10 +23,9 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "config
 enum ConfigPortability {
     private static let configDir = LyrimusePaths.configDir
 
-    /// 给"在访达中显示配置文件夹"用。这个 App 的配置本来就住在 `~/.config/lyrimuse`
-    /// (对一个 SwiftUI 菜单栏 App 来说不常见),对拿 dotfiles / chezmoi 管机器的人来说
-    /// 正是他们要找的东西 —— 同类里 Karabiner-Elements 的官方"导出导入配置"整页文档
-    /// 就是"打开配置文件夹、把 karabiner.json 拷过去"。
+    /// 给"在访达中显示数据文件夹"用:config.json、功能开关、偏好镜像都是纯文本,拿 dotfiles / chezmoi 管机器的人
+    /// 直接拷这个文件夹 —— 同类里 Karabiner-Elements 的官方"导出导入配置"整页文档就是"打开配置文件夹、把
+    /// karabiner.json 拷过去"。
     static var configFolderURL: URL { configDir }
     private static let configURL = configDir.appendingPathComponent("config.json")
     private static let featuresURL = configDir.appendingPathComponent("lyrimuse-features.json")

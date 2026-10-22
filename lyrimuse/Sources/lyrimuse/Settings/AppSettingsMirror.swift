@@ -8,7 +8,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "settin
 ///
 /// ## 为什么需要它
 ///
-/// 这个 App 的配置本来分裂在两处:引擎那半在 `~/.config/lyrimuse/`(config.json +
+/// 这个 App 的配置本来分裂在两处:引擎那半在数据目录(config.json +
 /// lyrimuse-features.json,纯文本),App 自己这半在 UserDefaults。导出/导入把两边合成一份
 /// 包,所以那条路是完整的;但"打开配置文件夹、把它拷到另一台机器"这条路只覆盖了引擎
 /// 那半 —— 外观、快捷键、歌词源排序会**静默丢掉**,而用户看不出少了什么。

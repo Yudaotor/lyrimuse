@@ -580,7 +580,7 @@ func TestSongEntitySharePass(t *testing.T) {
 	runSongEntitySharePass(ctx, b)
 
 	st := readSongShareState(songShareStatePath())
-	if st.FullBackup == "" || !strings.HasPrefix(st.FullBackup, filepath.Join(filepath.Dir(dir), clientName+"-backups")) {
+	if st.FullBackup == "" || !strings.HasPrefix(st.FullBackup, filepath.Join(dir, "backups")) {
 		t.Fatalf("整份备份: %+v", st)
 	}
 	if _, err := os.Stat(filepath.Join(st.FullBackup, filepath.Base(enrichPath))); err != nil {
@@ -869,7 +869,7 @@ func TestSongEntitySharePassNeedsFullBackup(t *testing.T) {
 		"C|Air|Two": {DurationSecs: 150.1, ISRCs: []string{"USAAA1100003"}, Lyrics: bt(songShareLRC("c2")), LyricsSource: "qq"},
 	}
 	dir := setUpSongShareTest(t, entries, true)
-	if err := os.WriteFile(filepath.Join(filepath.Dir(dir), clientName+"-backups"), nil, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "backups"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	b := rebuildSongEntityTable(time.Now())

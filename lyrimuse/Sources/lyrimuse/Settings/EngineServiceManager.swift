@@ -202,6 +202,17 @@ public enum EngineServiceManager {
         }
     }
 
+    /// 先停掉引擎(bootout,plist 留着),不改「后台服务」开关;给马上要重启 App 的维护操作用(清理缓存):
+    /// 重启后的 reconcileAfterLaunch 看到该跑没跑,会把它装回去。排在同一条串行队列上,跟装 / 卸互斥。
+    public static func stopForMaintenance() async {
+        await withCheckedContinuation { continuation in
+            operationQueue.async {
+                run("/bin/launchctl", ["bootout", "gui/\(getuid())/\(label)"])
+                continuation.resume()
+            }
+        }
+    }
+
     private static func install() {
         // 三条成功路径(bootstrap 直接起来 / kickstart 之后起来 / LWCR 重试之后起来)各自
         // early return,记账放 defer 里一处收口,免得漏掉哪一条。装完仍没跑起来时把状态和文件夹问题记下来,

@@ -211,7 +211,7 @@ enum LyricsBackupStore {
 
     // MARK: - 破坏性操作前的自动快照
 
-    /// 自动快照落点。放在 `~/.config/lyrimuse/` 下面而不是 iCloud 备份文件夹:这是"手滑
+    /// 自动快照落点。放在数据目录下面而不是 iCloud 备份文件夹:这是"手滑
     /// 之后马上要用"的东西,不该受"用户有没有配 iCloud / 那个目录还在不在"的影响,也不该
     /// 每次清空都往用户的云盘里塞几 MB。`uninstall.sh --purge` 删整个 CONFIG_DIR,顺带
     /// 把它收走,不用另外维护一条清理路径。

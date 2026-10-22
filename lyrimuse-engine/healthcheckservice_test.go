@@ -109,20 +109,23 @@ func TestFolderAccessHealthItem(t *testing.T) {
 	}
 }
 
-// 只有 Lyrimuse 自己的配置目录整棵改(ownsTree);共用目录(配置目录的上一层、LaunchAgents、日志目录)和单个文件不标,
+// 只有 Lyrimuse 自己的数据目录、缓存目录整棵改(ownsTree);共用目录(它们的上一层、LaunchAgents、日志目录)和单个文件不标,
 // 跟 App 的 HomeFolderAccess.targets 同一份口径。
 func TestHomeFolderTargetsMarkOwnedTree(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("LYRIMUSE_CONFIG_DIR", "")
+	t.Setenv("LYRIMUSE_CACHE_DIR", "")
 	t.Setenv("LYRIMUSE_LOG_FILE", "")
 	owns := map[string]bool{}
 	for _, target := range homeFolderTargets() {
 		owns[target.path] = target.ownsTree
 	}
 	want := map[string]bool{
-		filepath.Join(home, ".config"):                                           false,
-		filepath.Join(home, ".config", clientName):                               true,
+		filepath.Join(home, "Library/Application Support"):                       false,
+		filepath.Join(home, "Library/Application Support", appBundleID()):        true,
+		filepath.Join(home, "Library/Caches"):                                    false,
+		filepath.Join(home, "Library/Caches", appBundleID()):                     true,
 		filepath.Join(home, "Library/LaunchAgents"):                              false,
 		filepath.Join(home, "Library/Logs"):                                      false,
 		filepath.Join(home, "Library/Logs", clientName+".log"):                   false,

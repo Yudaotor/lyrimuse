@@ -6,7 +6,8 @@ import Foundation
 /// 两边都经 `/usr/bin/security` 读写(`KeychainCLI`),不用 `SecItem`:`SecItem` 建的条目只信任 App 自己,
 /// 引擎去读会弹授权框;`security` 建的条目只信任这个 Apple 签名的程序,App 更新、换签名都不弹。
 ///
-/// 条目:服务名 `<bundle id>.credentials`,账号是配置目录的绝对路径,内容是一份 JSON 的 base64:
+/// 条目:服务名 `<bundle id>.credentials`,账号见 `StorageLayout.credentialAccount`(默认位置一律是旧数据目录的路径串),
+/// 内容是一份 JSON 的 base64:
 /// `{"config": {<configKeys 里的键>: 值}, "channels": {<渠道 id>: {"url": …, "secret": …}}, "media_user_token": "…"}`。
 /// 读配置时叠到文件上(`overlay`):文件里那一项缺失或为空才取保险箱的;文件里有值(旧版本写的、手改的、刚导入的)
 /// 以文件为准,`ConfigStore` 读到时把它挪进钥匙串。叠法跟引擎 overlayCredentials 一致,两边读同一份
@@ -194,7 +195,9 @@ public struct KeychainCLI: Sendable {
 /// App 这一侧的保险箱:整份读改写。只有 App 写这个条目,读到一次之后记在内存里,不再每次起 `security`。
 public final class CredentialVaultStore: @unchecked Sendable {
     public static let shared = CredentialVaultStore(
-        keychain: KeychainCLI(service: CredentialVault.service, account: LyrimusePaths.configDir.path))
+        keychain: KeychainCLI(
+            service: CredentialVault.service,
+            account: StorageLayout.credentialAccount(dataDir: LyrimusePaths.configDir, roots: LyrimusePaths.storageRoots)))
 
     public let keychain: KeychainCLI
     private let lock = NSLock()

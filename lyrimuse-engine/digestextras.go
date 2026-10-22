@@ -269,7 +269,7 @@ var (
 )
 
 func setDigestExtrasPaths() {
-	artistTotalsPath = configFilePath(clientName + "-digest-artist-totals.json")
+	artistTotalsPath = cacheFilePath(clientName + "-digest-artist-totals.json")
 }
 
 func loadArtistTotals(source string) (artistTotalsSnapshot, bool) {

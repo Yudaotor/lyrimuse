@@ -73,7 +73,7 @@ type appleNamesFile struct {
 	Songs   map[string]appleCatalogNames `json:"songs"`
 }
 
-func appleNamesPath() string { return configFilePath(clientName + "-apple-catalog-names.json") }
+func appleNamesPath() string { return cacheFilePath(clientName + "-apple-catalog-names.json") }
 
 // readAppleNames 读补扫结果;缺失、坏掉、版本对不上都返回空表。
 func readAppleNames(path string) map[string]appleCatalogNames {

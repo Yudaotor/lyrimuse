@@ -19,7 +19,7 @@ import (
 // App 写(LyrimuseCore CredentialVault),这边只读。两边都经 /usr/bin/security 读写:条目的访问控制只信任这个
 // Apple 签名的程序,App 更新、换签名都不弹授权框;引擎不开 cgo,也只能这样读。
 //
-// 条目:服务名 `<bundle id>.credentials`,账号是配置目录的绝对路径(另起一份配置目录跑的引擎读不到正式那份),
+// 条目:服务名 `<bundle id>.credentials`,账号见 credentialVaultAccount(另起一份数据目录跑的引擎读不到正式那份),
 // 内容是一份 JSON 的 base64:
 //
 //	{"config": {<credentialConfigKeys 里的键>: 值}, "channels": {<渠道 id>: {"url": …, "secret": …}}, "media_user_token": "…"}
@@ -59,12 +59,23 @@ var (
 
 func credentialVaultService() string { return appBundleID() + ".credentials" }
 
+// credentialVaultAccount:钥匙串条目的账号。数据目录在默认位置(新的,或 App 还没搬的旧的)时一律用旧目录的路径串:它只是个名字,
+// 搬目录不改它,钥匙串就不用跟着迁;另起一份数据目录跑的按自己的路径隔开。跟 LyrimuseCore 的 StorageLayout.credentialAccount 同一条规则。
+func credentialVaultAccount(dir string) string {
+	dir = filepath.Clean(dir)
+	legacy, data, _, ok := storageRoots()
+	if ok && (dir == filepath.Clean(data) || dir == filepath.Clean(legacy)) {
+		return filepath.Clean(legacy)
+	}
+	return dir
+}
+
 func readCredentialVaultFromKeychain() ([]byte, error) {
 	dir := configDir()
 	if dir == "" {
 		return nil, nil
 	}
-	args := []string{"find-generic-password", "-s", credentialVaultService(), "-a", filepath.Clean(dir), "-w"}
+	args := []string{"find-generic-password", "-s", credentialVaultService(), "-a", credentialVaultAccount(dir), "-w"}
 	if credentialVaultKeychain != "" {
 		args = append(args, credentialVaultKeychain)
 	}

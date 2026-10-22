@@ -11,7 +11,7 @@ public final class EditorialNotesDiskCache {
     public static let maxEntries = 20_000
     static let version = 1
 
-    public static var defaultURL: URL { LyrimusePaths.configFile("lyrimuse-editorial-cache.json") }
+    public static var defaultURL: URL { LyrimusePaths.cacheFile("lyrimuse-editorial-cache.json") }
 
     struct Entry: Codable, Equatable, Sendable {
         /// 值的 JSON;nil = 明确没有。

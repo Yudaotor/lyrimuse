@@ -3,25 +3,70 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"time"
 )
 
-// configDir 是引擎一切落盘的根:config.json、features、enrich 缓存、歌词、封面、收听日志、状态文件、
-// 单实例锁全在它下面。常驻路径以 `-config` 的目录为准(默认值就是这里),全部一次性子命令直接取这里。
+// configDir 是引擎的数据目录:config.json、features、enrich 缓存、歌词、设备封面、收听日志、状态文件、单实例锁都在它下面
+// (删了只会重新联网或重算的查询缓存在 cacheDir())。常驻路径以 `-config` 的目录为准(默认值就是这里),一次性子命令直接取这里。
 //
-// 环境变量 LYRIMUSE_CONFIG_DIR(绝对路径)优先:App 侧 EngineServiceManager 写
-// launchd plist、以及 spawn 每个一次性子命令时都会传 —— 正式版传的就是这里的默认值(曾给并排安装的开发
-// 构建传另一个目录,已整体回退;机制保留,别再靠 os.UserHomeDir 自己拼路径)。Swift 侧的对应口径是 LyrimuseCore 的 LyrimusePaths。
+// 环境变量 LYRIMUSE_CONFIG_DIR(绝对路径)优先:App 侧 EngineServiceManager 写 launchd plist、以及 spawn 每个一次性子命令时
+// 都会传(机制保留,别再靠 os.UserHomeDir 自己拼路径)。没有环境变量时跟 App 同一条规则(LyrimuseCore 的 StorageLayout):
+// 旧目录 ~/.config/lyrimuse 是软链接就一直用它;新目录 ~/Library/Application Support/<bundle id> 存在、或旧目录不是目录,用新目录;
+// 否则(App 还没搬)用旧目录。见 14 章决策 136。
 //
 // 没有环境变量、又拿不到家目录时返回空串,调用方按原来的方式报错(main.go 常驻路径直接 fatalExit)。
 func configDir() string {
 	if v := os.Getenv("LYRIMUSE_CONFIG_DIR"); v != "" && filepath.IsAbs(v) {
 		return v
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
+	legacy, data, _, ok := storageRoots()
+	if !ok {
 		return ""
 	}
-	return filepath.Join(home, ".config", clientName)
+	if fi, err := os.Lstat(legacy); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return legacy
+	}
+	if _, err := os.Lstat(data); err == nil {
+		return data
+	}
+	if fi, err := os.Lstat(legacy); err == nil && fi.IsDir() {
+		return legacy
+	}
+	return data
+}
+
+// storageRoots:旧数据目录、新数据目录、缓存目录的默认位置。拿不到家目录时 ok 为 false。
+func storageRoots() (legacy, data, caches string, ok bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", "", "", false
+	}
+	return filepath.Join(home, ".config", clientName),
+		filepath.Join(home, "Library", "Application Support", appBundleID()),
+		filepath.Join(home, "Library", "Caches", appBundleID()),
+		true
+}
+
+// cacheDir 放删了只会重新联网或重算的查询缓存(名单跟 LyrimuseCore 的 StorageLayout.cacheFileNames 一致)。环境变量
+// LYRIMUSE_CACHE_DIR(绝对路径)优先,App 总会传;没传、却显式给了 LYRIMUSE_CONFIG_DIR 的(测试、另起一份数据目录排查)
+// 跟数据目录放在一起,不去碰默认的 ~/Library/Caches;都没有时是 ~/Library/Caches/<bundle id>。
+func cacheDir() string {
+	if v := os.Getenv("LYRIMUSE_CACHE_DIR"); v != "" && filepath.IsAbs(v) {
+		return v
+	}
+	if v := os.Getenv("LYRIMUSE_CONFIG_DIR"); v != "" && filepath.IsAbs(v) {
+		return v
+	}
+	_, _, caches, ok := storageRoots()
+	if !ok {
+		return ""
+	}
+	return caches
+}
+
+// cacheFilePath 是缓存目录下的一个文件。
+func cacheFilePath(name string) string {
+	return filepath.Join(cacheDir(), name)
 }
 
 // alignConfigDirWithFlag:常驻进程带了 -config、而它的目录不是 configDir() 时,让 configDir() 也指过去
@@ -34,6 +79,17 @@ func alignConfigDirWithFlag(cfgPath, defaultDir string) {
 		return
 	}
 	_ = os.Setenv("LYRIMUSE_CONFIG_DIR", dir)
+}
+
+// backupDir 是引擎动手改数据之前留的备份:数据目录下 backups/<时刻>-<用途>。放在数据目录里,别放它的上一层 ——
+// 那是 ~/Library/Application Support,别的程序也在用。旧版本写在 ~/.config/lyrimuse-backups,那里已有的不搬
+// (song-entity-share.json 里记着它们的绝对路径)。拿不到数据目录时返回空串。
+func backupDir(now time.Time, purpose string) string {
+	dir := configDir()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, "backups", now.Format("20060102-150405")+"-"+purpose)
 }
 
 // configFilePath 是配置目录下的一个文件(或子目录)。

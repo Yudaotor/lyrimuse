@@ -350,7 +350,7 @@ public enum AlbumEditorialNotes {
 /// 引擎从 music.apple.com 取来、落盘缓存的 Apple Music developer token(`applemusic.go` 的
 /// `applemusicDevTokenPath`,文件 `{"token", "expiry"}`)。App 只读,不自己去取:拿不到就当没有。
 public enum AppleMusicDeveloperToken {
-    public static var fileURL: URL { LyrimusePaths.configFile("lyrimuse-applemusic-devtoken.json") }
+    public static var fileURL: URL { LyrimusePaths.cacheFile("lyrimuse-applemusic-devtoken.json") }
 
     /// 还有效的 token;文件不在 / 读不出 / 离过期不到一分钟返回 nil。
     public static func cached(now: Date = Date()) -> String? {

@@ -243,7 +243,7 @@ func unsplitSongEdit(keys []string) (int, error) {
 
 // resolveManualConflictEdit:同一个共享组里有几份内容不同的手改原件(建表之后那一轮不替用户选,见 shareManualLocked)时,用户在
 // 歌词管理里选 key 那一份统一(请求 resolve_manual_conflict,18 章决策 31)。别的原件换成它的副本:先按 writeSongSharePre 留底,
-// 另把它们这一刻的整条存进 ~/.config/lyrimuse-backups/<时刻>-song-entity-manual/(留底只存第一次同步之前那份,这一刻的手改
+// 另把它们这一刻的整条存进数据目录的 backups/<时刻>-song-entity-manual/(留底只存第一次同步之前那份,这一刻的手改
 // 只有这里有);其余写法照手改同步跟上。开关关着、这条不是手改原件、没有实体 id 时拒绝。
 func resolveManualConflictEdit(key string, now time.Time) enrichEditOutcome {
 	if !songEntitySharing() {
@@ -332,13 +332,7 @@ func writeSongSharePresLocked(keys []string, synced string, now time.Time) error
 }
 
 // songShareManualBackupDir:统一手改时被替换的原件存在这里(跟 songShareBackupDir 同级)。
-func songShareManualBackupDir(now time.Time) string {
-	dir := configDir()
-	if dir == "" {
-		return ""
-	}
-	return filepath.Join(filepath.Dir(dir), clientName+"-backups", now.Format("20060102-150405")+"-song-entity-manual")
-}
+func songShareManualBackupDir(now time.Time) string { return backupDir(now, "song-entity-manual") }
 
 // backupManualOriginalsLocked:keys 这几条此刻的整条(当前歌词的出处带候选明细)写进 dir/entries.json(写法键 → 条目)。
 // 调用方持 enrichMu。

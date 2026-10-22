@@ -58,9 +58,9 @@ func runSongEntitiesCLI(args []string) {
 	}
 	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
 	lyricsPinsPath = filepath.Join(cfgDir, clientName+"-lyrics-pins.json")
-	loadArtistIdentityCache(filepath.Join(cfgDir, clientName+"-artist-identity-cache.json"))
-	loadArtistAliasCache(filepath.Join(cfgDir, clientName+"-artist-alias-cache.json"))
-	loadMBPrimaryNameCache(filepath.Join(cfgDir, clientName+"-artist-primary-cache.json"))
+	loadArtistIdentityCache(cacheFilePath(clientName + "-artist-identity-cache.json"))
+	loadArtistAliasCache(cacheFilePath(clientName + "-artist-alias-cache.json"))
+	loadMBPrimaryNameCache(cacheFilePath(clientName + "-artist-primary-cache.json"))
 	loadEnrichForMaintenance(cfgDir, false)
 	enrichMu.Lock()
 	snapshot := make(map[string]enrichEntry, len(enrichCache))
@@ -95,7 +95,7 @@ func runSongEntitiesCLI(args []string) {
 	}
 	namesPath := *appleNames
 	if namesPath == "" {
-		namesPath = filepath.Join(cfgDir, clientName+"-apple-catalog-names.json")
+		namesPath = cacheFilePath(clientName + "-apple-catalog-names.json")
 	}
 	if *fetchNames {
 		sweepAppleNames(context.Background(), namesPath, time.Now())
@@ -106,7 +106,7 @@ func runSongEntitiesCLI(args []string) {
 		attachAppleNames(variants, readAppleNames(namesPath))
 		nePath := *neteaseNames
 		if nePath == "" {
-			nePath = filepath.Join(cfgDir, clientName+"-netease-names.json")
+			nePath = cacheFilePath(clientName + "-netease-names.json")
 		}
 		if *fetchNetease {
 			sweepNeteaseNames(context.Background(), nePath, time.Now())
@@ -114,7 +114,7 @@ func runSongEntitiesCLI(args []string) {
 		attachNeteaseNames(variants, readNeteaseNames(nePath))
 		mbPath := *mbRecordings
 		if mbPath == "" {
-			mbPath = filepath.Join(cfgDir, clientName+"-mb-recordings.json")
+			mbPath = cacheFilePath(clientName + "-mb-recordings.json")
 		}
 		if *fetchMB {
 			sweepMBRecordings(context.Background(), mbPath, time.Now())
@@ -172,9 +172,9 @@ func runSongEntitiesCLI(args []string) {
 	case *shareEval != "":
 		// 跟 search-lyrics 加载同一组旁路缓存(searchcli.go runSearchLyricsCLI),名次才跟常驻引擎的自动决策对得上;两边一起改。
 		loadAppleCatalogCache(filepath.Join(cfgDir, clientName+"-apple-catalog-cache.json"))
-		loadAppleStorefrontArtistCache(filepath.Join(cfgDir, clientName+"-apple-storefront-artist-cache.json"))
-		loadAppleStorefrontTitleCache(filepath.Join(cfgDir, clientName+"-apple-storefront-title-cache.json"))
-		loadQQArtistNameCache(filepath.Join(cfgDir, clientName+"-qq-artist-name-cache.json"))
+		loadAppleStorefrontArtistCache(cacheFilePath(clientName + "-apple-storefront-artist-cache.json"))
+		loadAppleStorefrontTitleCache(cacheFilePath(clientName + "-apple-storefront-title-cache.json"))
+		loadQQArtistNameCache(cacheFilePath(clientName + "-qq-artist-name-cache.json"))
 		refreshAccentCacheWords()
 		var f *os.File
 		if f, err = os.Create(*shareEval); err == nil {

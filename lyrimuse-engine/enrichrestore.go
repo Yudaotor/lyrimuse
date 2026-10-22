@@ -108,6 +108,8 @@ func adoptEnrichRestore(path string) bool {
 			skipped++
 			continue
 		}
+		e.CoverURL = localDeviceArtworkURL(e.CoverURL)
+		e.VideoFrameURL = localDeviceArtworkURL(e.VideoFrameURL)
 		enrichCache[key] = e
 	}
 	if created+mergedInto > 0 {

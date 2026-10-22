@@ -107,7 +107,7 @@ type homeFolderTarget struct {
 	path string
 	// launchdPlist:除了归自己、写得进,还不许组和其他用户可写,launchd 拒收这样的 plist。
 	launchdPlist bool
-	// ownsTree:Lyrimuse 自己的目录(配置目录),修法整棵改(chown、chmod 都带 -R)。共用目录(~/.config、
+	// ownsTree:Lyrimuse 自己的目录(数据目录、缓存目录),修法整棵改(chown、chmod 都带 -R)。共用目录(它们的上一层、
 	// ~/Library/LaunchAgents、~/Library/Logs)和单个文件只改这一处 —— 共用目录里别的程序的文件不归 Lyrimuse 管。
 	// 口径跟 App 的 HomeFolderAccess.fixCommand 一致。
 	ownsTree bool
@@ -117,6 +117,9 @@ type homeFolderTarget struct {
 func homeFolderTargets() []homeFolderTarget {
 	var targets []homeFolderTarget
 	if dir := configDir(); dir != "" {
+		targets = append(targets, homeFolderTarget{path: filepath.Dir(dir)}, homeFolderTarget{path: dir, ownsTree: true})
+	}
+	if dir := cacheDir(); dir != "" {
 		targets = append(targets, homeFolderTarget{path: filepath.Dir(dir)}, homeFolderTarget{path: dir, ownsTree: true})
 	}
 	home, homeErr := os.UserHomeDir()

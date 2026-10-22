@@ -227,26 +227,26 @@ public enum LocalArtistAliases {
     }
 }
 
-/// 读引擎的三份 MusicBrainz 歌手缓存(纯读盘、解 JSON,失败给空表)。放在 Core 是因为
+/// 读引擎的三份 MusicBrainz 歌手缓存(在缓存目录里;纯读盘、解 JSON,失败给空表)。放在 Core 是因为
 /// EnrichCacheReader 同样在 Core 读盘;selftest 不测读盘,测 LocalArtistAliases.derive 的纯函数部分和 `stamp`。
 public enum ArtistIdentityCaches {
     static let aliasFileName = "lyrimuse-artist-alias-cache.json"
     static let identityFileName = "lyrimuse-artist-identity-cache.json"
     static let primaryFileName = "lyrimuse-artist-primary-cache.json"
 
-    public static func load(configDir: URL = LyrimusePaths.configDir) -> LocalArtistAliases.MusicBrainzCaches {
+    public static func load(directory: URL = LyrimusePaths.cachesDir) -> LocalArtistAliases.MusicBrainzCaches {
         var out = LocalArtistAliases.MusicBrainzCaches()
-        if let data = FileIO.read(configDir.appendingPathComponent(aliasFileName)),
-           let m = FileIO.decodeJSON([String: String].self, from: data, source: configDir.appendingPathComponent(aliasFileName)) {
+        if let data = FileIO.read(directory.appendingPathComponent(aliasFileName)),
+           let m = FileIO.decodeJSON([String: String].self, from: data, source: directory.appendingPathComponent(aliasFileName)) {
             out.aliasCache = m
         }
         struct Identity: Decodable { var zh: String? }
-        if let data = FileIO.read(configDir.appendingPathComponent(identityFileName)),
-           let m = FileIO.decodeJSON([String: Identity].self, from: data, source: configDir.appendingPathComponent(identityFileName)) {
+        if let data = FileIO.read(directory.appendingPathComponent(identityFileName)),
+           let m = FileIO.decodeJSON([String: Identity].self, from: data, source: directory.appendingPathComponent(identityFileName)) {
             out.identityZh = m.compactMapValues { $0.zh }.filter { !$0.value.isEmpty }
         }
-        if let data = FileIO.read(configDir.appendingPathComponent(primaryFileName)),
-           let m = FileIO.decodeJSON([String: [String]].self, from: data, source: configDir.appendingPathComponent(primaryFileName)) {
+        if let data = FileIO.read(directory.appendingPathComponent(primaryFileName)),
+           let m = FileIO.decodeJSON([String: [String]].self, from: data, source: directory.appendingPathComponent(primaryFileName)) {
             out.primaryAliases = m
         }
         return out
@@ -264,9 +264,9 @@ public enum ArtistIdentityCaches {
     }
 
     /// 看一眼三份缓存(三次 stat,不读内容)。
-    public static func stamp(configDir: URL = LyrimusePaths.configDir) -> Stamp {
+    public static func stamp(directory: URL = LyrimusePaths.cachesDir) -> Stamp {
         Stamp(files: [aliasFileName, identityFileName, primaryFileName].map { name in
-            guard let attrs = try? FileManager.default.attributesOfItem(atPath: configDir.appendingPathComponent(name).path),
+            guard let attrs = try? FileManager.default.attributesOfItem(atPath: directory.appendingPathComponent(name).path),
                   let modified = attrs[.modificationDate] as? Date else { return nil }
             return Stamp.File(modified: modified, size: (attrs[.size] as? NSNumber)?.intValue ?? 0)
         })

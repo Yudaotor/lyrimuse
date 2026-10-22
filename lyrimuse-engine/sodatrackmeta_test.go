@@ -328,7 +328,7 @@ func TestSodaTrackMetaWiring(t *testing.T) {
 		}
 		return string(b)
 	}
-	if !strings.Contains(read("main.go"), `loadSodaTrackMeta(filepath.Join(filepath.Dir(*cfgPath), clientName+"-soda-track-cache.json"))`) {
+	if !strings.Contains(read("main.go"), `loadSodaTrackMeta(cacheFilePath(clientName + "-soda-track-cache.json"))`) {
 		t.Error("main 载入缓存文件")
 	}
 }

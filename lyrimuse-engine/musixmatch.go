@@ -11,7 +11,6 @@ import (
 	"net/http"
 	neturl "net/url"
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -512,10 +511,10 @@ func musixmatchRejectsToken(body []byte) bool {
 // 手动搜索里就几乎从不出现。落盘之后常驻采集器和一次性 CLI 共用同一个 token,新鲜期内不管起
 // 多少个进程都只取一次。
 func musixmatchTokenPath() string {
-	if configDir() == "" {
+	if cacheDir() == "" {
 		return ""
 	}
-	return filepath.Join(configDir(), clientName+"-musixmatch-token.json")
+	return cacheFilePath(clientName + "-musixmatch-token.json")
 }
 
 type musixmatchTokenFile struct {

@@ -638,7 +638,9 @@ public enum SettingsSearchCatalog {
         about("开源许可证", sub: "GPL-3.0", kw: ["GPL", "许可证", "license"], group: nil),
         about("导出诊断", sub: "打包日志、崩溃记录与运行状态，已移除账号凭据；含曲目名与本机路径，公开前请检查", kw: ["诊断", "日志", "排查", "反馈"], group: "诊断与数据"),
         about("运行日志", sub: "歌词引擎的原始日志，供自行排查", kw: ["日志", "log", "排查", "访达"], group: "诊断与数据"),
-        about("配置文件夹", sub: "纯文本格式，不含账号凭据、外观与快捷键；完整迁移请使用「备份与迁移」", kw: ["config", "配置", "文件夹", "路径"], group: "诊断与数据"),
+        about("数据文件夹", sub: "纯文本格式，不含账号凭据、外观与快捷键；完整迁移请使用「备份与迁移」",
+              kw: ["config", "data", "配置", "数据", "文件夹", "路径", "Application Support"], group: "诊断与数据"),
+        about("缓存", sub: "可重新获取的封面与查询结果", kw: ["cache", "清理", "空间", "磁盘", "Caches"], group: "诊断与数据"),
 
         // ---- 账号 ----
         account("listenBrainz", path: ["ListenBrainz"], "账号信息", kw: ["ListenBrainz", "token", "令牌", "用户名", "连接"]),

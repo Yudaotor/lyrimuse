@@ -32,7 +32,7 @@ import (
 //     重搜时也留着自己那份。
 //   - 写法第一次被同步覆盖之前整条存进 lyrimuse-song-entity-pre/(只存一次),synced 记同步最近一次要写进去的那份;开关
 //     关掉时,歌词还是同步写进去那份的写法按它恢复(revertSongEntityShare)。第一次同步之前另把主缓存和正文小文件目录整份
-//     克隆到 ~/.config/lyrimuse-backups/<时刻>-song-entity/,备份不成就不同步。
+//     克隆到数据目录的 backups/<时刻>-song-entity/,备份不成就不同步。
 //   - 搜过的共享组记在 lyrimuse-song-entity-share.json:成员和各自的歌词都没变、打分版本也没变的,下一轮不再搜。
 
 const (
@@ -75,14 +75,8 @@ func songEntitySharing() bool {
 func songSharePreDir() string    { return configFilePath(clientName + "-song-entity-pre") }
 func songShareStatePath() string { return configFilePath(clientName + "-song-entity-share.json") }
 
-// songShareBackupDir:第一次同步之前整份备份的去处:跟配置目录同级的 lyrimuse-backups 下按时刻建。
-func songShareBackupDir(now time.Time) string {
-	dir := configDir()
-	if dir == "" {
-		return ""
-	}
-	return filepath.Join(filepath.Dir(dir), clientName+"-backups", now.Format("20060102-150405")+"-song-entity")
-}
+// songShareBackupDir:第一次同步之前整份备份的去处,见 backupDir。
+func songShareBackupDir(now time.Time) string { return backupDir(now, "song-entity") }
 
 // songShareState:lyrimuse-song-entity-share.json。FullBackup 是第一次同步之前那份整份备份的目录;Groups 按成员算的签名
 // (songShareGroupSig)记每个搜过的共享组。

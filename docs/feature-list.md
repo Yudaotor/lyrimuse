@@ -822,7 +822,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 285 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 286 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1228,7 +1228,8 @@ Every setting in the Settings window, by where it lives: 285 in all. Type a name
 
 - **Export Diagnostics**: Logs, crash reports and app state in one file, with account credentials removed. Track names and local paths stay in, so review it before posting publicly
 - **Activity Log**: The lyrics engine’s raw log, for your own troubleshooting
-- **Config Folder**: Plain text. Account credentials, appearance and shortcuts aren’t included; to migrate everything, use Backup & Migration
+- **Data Folder**: Plain text. Account credentials, appearance and shortcuts aren’t included; to migrate everything, use Backup & Migration
+- **Cache**: Covers and lookups that can be fetched again
 
 ### Labs › ListenBrainz
 

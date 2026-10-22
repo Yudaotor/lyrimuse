@@ -7,7 +7,6 @@ import (
 	"log"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
@@ -41,10 +40,10 @@ const avatarTransientTTL = 30 * time.Minute
 const avatarPerNameTimeout = 6 * time.Second
 
 func artistAvatarCachePath() string {
-	if configDir() == "" {
+	if cacheDir() == "" {
 		return ""
 	}
-	return filepath.Join(configDir(), clientName+"-artist-avatar-cache.json")
+	return cacheFilePath(clientName + "-artist-avatar-cache.json")
 }
 
 // cachedArtistAvatars 给一批歌手名取头像:先查磁盘缓存(cachePath 空 = 不用缓存),没命中的 4 路并发解析(每名

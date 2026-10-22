@@ -54,11 +54,11 @@ func runResyncLyricsCLI(args []string) {
 	// 持久化缓存的话,scoredLyricCandidates 内部的 retryArtistIdentities/艺人别名重试/
 	// 标题反查轮每次都要现查一遍 MusicBrainz,对同一批歌手反复触发 12 秒的 MusicBrainz
 	// 超时(两次查询、每次 6 秒),白白拖慢重新匹配,且拿不到已经缓存过的别名结果。
-	loadArtistAliasCache(filepath.Join(cfgDir, clientName+"-artist-alias-cache.json"))
-	loadMBPrimaryNameCache(filepath.Join(cfgDir, clientName+"-artist-primary-cache.json"))
+	loadArtistAliasCache(cacheFilePath(clientName + "-artist-alias-cache.json"))
+	loadMBPrimaryNameCache(cacheFilePath(clientName + "-artist-primary-cache.json"))
 	loadAppleCatalogCache(filepath.Join(cfgDir, clientName+"-apple-catalog-cache.json"))
-	loadAppleStorefrontArtistCache(filepath.Join(cfgDir, clientName+"-apple-storefront-artist-cache.json"))
-	loadQQArtistNameCache(filepath.Join(cfgDir, clientName+"-qq-artist-name-cache.json"))
+	loadAppleStorefrontArtistCache(cacheFilePath(clientName + "-apple-storefront-artist-cache.json"))
+	loadQQArtistNameCache(cacheFilePath(clientName + "-qq-artist-name-cache.json"))
 
 	if *apply && !ensureExclusiveForMaintenance(cfgDir) {
 		fmt.Fprintln(os.Stderr, "拒绝执行:引擎正在运行(或锁文件不可用)。")

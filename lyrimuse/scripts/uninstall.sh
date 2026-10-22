@@ -4,7 +4,7 @@
 #
 #   ./uninstall.sh              # 只看：报告装了什么，不做任何改动
 #   ./uninstall.sh --services   # 注销两个 launchd job（不碰数据，重装即可恢复）
-#   ./uninstall.sh --purge      # 注销 + 删除配置/缓存/日志 + 偏好设置项 + 钥匙串里的凭据（要输入 yes 确认）
+#   ./uninstall.sh --purge      # 注销 + 删除数据/缓存/日志 + 偏好设置项 + 钥匙串里的凭据（要输入 yes 确认）
 #
 # 为什么需要它:把 Lyrimuse.app 拖进废纸篓**不等于卸载干净**。
 # ~/Library/LaunchAgents/com.lyrimuse.collector.plist 挂的是 KeepAlive=true 的 job,
@@ -32,8 +32,11 @@ APP_LABEL="${LYRIMUSE_UNINSTALL_APP_LABEL:-me.yudaotor.lyrimuse}"
 
 ENGINE_PLIST="$PREFIX/Library/LaunchAgents/$ENGINE_LABEL.plist"
 APP_PLIST="$PREFIX/Library/LaunchAgents/$APP_LABEL.plist"
-CONFIG_DIR="$PREFIX/.config/lyrimuse"
-# 能重新下载的缓存(动态封面)和 Sparkle 的下载缓存,目录名是 bundle id(= App 的 label,见 LyrimuseCore LyrimusePaths.cachesDir)。
+# 数据目录:设置、歌词、听歌记录等,目录名是 bundle id(= App 的 label,见 LyrimuseCore StorageLayout)。
+DATA_DIR="$PREFIX/Library/Application Support/$APP_LABEL"
+# 旧版本的数据目录。没搬走的(或用户把它做成了指向别处的软链接)一起报、一起删;软链接只删链接本身。
+LEGACY_DIR="$PREFIX/.config/lyrimuse"
+# 能重新下载的缓存(动态封面、查询缓存)和 Sparkle 的下载缓存(见 LyrimuseCore LyrimusePaths.cachesDir)。
 CACHE_DIR="$PREFIX/Library/Caches/$APP_LABEL"
 LOG_FILE="$PREFIX/Library/Logs/lyrimuse.log"
 # 引擎日志的轮转归档:名字与份数同 lyrimuse-engine/logrotate.go(logArchiveName / logRotateKeepArchives),
@@ -45,13 +48,14 @@ APP_LOG_FILE="$PREFIX/Library/Logs/lyrimuse-app.log"
 APP_LOG_ARCHIVE="$APP_LOG_FILE.old"
 # App 主线程卡住时采的调用栈(见 LyrimuseCore LogFiles.mainThreadStall)。
 STALL_SAMPLE_FILE="$PREFIX/Library/Logs/lyrimuse-main-thread-stall.txt"
-# 钥匙串里的凭据保险箱:服务名 <bundle id>.credentials、账号是配置目录(见 LyrimuseCore CredentialVault)。
+# 钥匙串里的凭据保险箱:服务名 <bundle id>.credentials,账号固定是旧数据目录的路径串(见 LyrimuseCore StorageLayout.credentialAccount)。
 VAULT_SERVICE="$APP_LABEL.credentials"
+VAULT_ACCOUNT="$LEGACY_DIR"
 VAULT_KEYCHAIN=()
 [[ -n "${LYRIMUSE_UNINSTALL_KEYCHAIN:-}" ]] && VAULT_KEYCHAIN=("$LYRIMUSE_UNINSTALL_KEYCHAIN")
 # 不带 -w 只读属性,不解密、不弹授权框。
 has_vault() {
-  /usr/bin/security find-generic-password -s "$VAULT_SERVICE" -a "$CONFIG_DIR" "${VAULT_KEYCHAIN[@]}" >/dev/null 2>&1
+  /usr/bin/security find-generic-password -s "$VAULT_SERVICE" -a "$VAULT_ACCOUNT" "${VAULT_KEYCHAIN[@]}" >/dev/null 2>&1
 }
 
 MODE="report"
@@ -94,8 +98,10 @@ for label in "$ENGINE_LABEL" "$APP_LABEL"; do
     echo "  launchd job  $label  [未注册]"
   fi
 done
-for p in "$ENGINE_PLIST" "$APP_PLIST" "$CONFIG_DIR" "$CACHE_DIR" "$LOG_FILE" "${LOG_ARCHIVES[@]}" "$APP_LOG_FILE" "$APP_LOG_ARCHIVE" "$STALL_SAMPLE_FILE"; do
-  if [[ -e "$p" ]]; then
+for p in "$ENGINE_PLIST" "$APP_PLIST" "$DATA_DIR" "$LEGACY_DIR" "$CACHE_DIR" "$LOG_FILE" "${LOG_ARCHIVES[@]}" "$APP_LOG_FILE" "$APP_LOG_ARCHIVE" "$STALL_SAMPLE_FILE"; do
+  if [[ -L "$p" ]]; then
+    echo "  存在  $p  (软链接 → $(/usr/bin/readlink "$p"))"
+  elif [[ -e "$p" ]]; then
     echo "  存在  $p  ($(human_size "$p"))"
   else
     echo "  没有  $p"
@@ -106,7 +112,7 @@ if [[ "$MODE" == "report" ]]; then
   echo
   echo "只是看看，什么都没动。"
   echo "  停掉后台服务（保留数据，重装即可恢复）:  $0 --services"
-  echo "  连同配置/缓存/日志一起删除:              $0 --purge"
+  echo "  连同数据/缓存/日志一起删除:              $0 --purge"
   echo
   echo "另外还要手动做的:"
   echo "  - 把 /Applications/Lyrimuse.app 拖进废纸篓"
@@ -156,7 +162,7 @@ stop_services() {
 if [[ "$MODE" == "services" ]]; then
   stop_services
   echo
-  echo "数据一个字节都没动（$CONFIG_DIR 还在）。重新装回 App 就会重建这两个 job。"
+  echo "数据一个字节都没动（$DATA_DIR 还在）。重新装回 App 就会重建这两个 job。"
   exit 0
 fi
 
@@ -170,7 +176,8 @@ HAS_DEFAULTS=no
 has_defaults "$APP_LABEL" && HAS_DEFAULTS=yes
 HAS_VAULT=no
 has_vault && HAS_VAULT=yes
-[[ -e "$CONFIG_DIR" ]] && TO_DELETE+=("$CONFIG_DIR")
+[[ -e "$DATA_DIR" ]] && TO_DELETE+=("$DATA_DIR")
+[[ -e "$LEGACY_DIR" || -L "$LEGACY_DIR" ]] && TO_DELETE+=("$LEGACY_DIR")
 [[ -e "$CACHE_DIR" ]] && TO_DELETE+=("$CACHE_DIR")
 [[ -e "$LOG_FILE" ]] && TO_DELETE+=("$LOG_FILE")
 for p in "${LOG_ARCHIVES[@]}"; do
@@ -186,15 +193,19 @@ else
     echo "  $p  ($(human_size "$p"))"
   done
   # 歌词是这里面唯一"重建不回来"的东西：用户可能手工改过、也可能来自已经查不到的源。
-  LYRICS_DIR="$CONFIG_DIR/lyrics"
-  if [[ -d "$LYRICS_DIR" ]]; then
-    # 四个后缀一起数：*.lrc 这个 glob 能盖住 .lrc/.tr.lrc/.roma.lrc，但盖不住 .yrc(逐字
-    # 时间轴)，而逐字那份恰恰是最难重新抓到的。只报一半的数字会让人低估损失。
-    n=$(/usr/bin/find "$LYRICS_DIR" -type f \( -name '*.lrc' -o -name '*.yrc' \) 2>/dev/null | /usr/bin/wc -l | /usr/bin/tr -d ' ')
+  # 四个后缀一起数：*.lrc 这个 glob 能盖住 .lrc/.tr.lrc/.roma.lrc，但盖不住 .yrc(逐字
+  # 时间轴)，而逐字那份恰恰是最难重新抓到的。只报一半的数字会让人低估损失。软链接指向的旧目录不删内容,不算。
+  n=0
+  for lyrics_dir in "$DATA_DIR/lyrics" "$LEGACY_DIR/lyrics"; do
+    [[ -d "$lyrics_dir" ]] || continue
+    [[ "$lyrics_dir" == "$LEGACY_DIR/lyrics" && -L "$LEGACY_DIR" ]] && continue
+    n=$(( n + $(/usr/bin/find "$lyrics_dir" -type f \( -name '*.lrc' -o -name '*.yrc' \) 2>/dev/null | /usr/bin/wc -l | /usr/bin/tr -d ' ') ))
+  done
+  if (( n > 0 )); then
     echo
     echo "  ⚠️ 其中包含 $n 个已导出的歌词文件(.lrc/.tr.lrc/.roma.lrc/.yrc)。里面可能有你"
-    echo "     手工修正过的内容，删掉之后没有任何办法找回。想留着的话现在先把整个"
-    echo "     lyrics/ 目录拷走。"
+    echo "     手工修正过的内容，删掉之后没有任何办法找回。想留着的话现在先把数据目录里"
+    echo "     整个 lyrics/ 拷走。"
   fi
 fi
 if [[ "$HAS_VAULT" == "yes" ]]; then
@@ -265,9 +276,9 @@ fi
 echo
 echo "=== 删除钥匙串里的凭据 ==="
 if [[ "$HAS_VAULT" == "yes" ]]; then
-  /usr/bin/security delete-generic-password -s "$VAULT_SERVICE" -a "$CONFIG_DIR" "${VAULT_KEYCHAIN[@]}" >/dev/null 2>&1
+  /usr/bin/security delete-generic-password -s "$VAULT_SERVICE" -a "$VAULT_ACCOUNT" "${VAULT_KEYCHAIN[@]}" >/dev/null 2>&1
   if has_vault; then
-    echo "  ❌ 还在，手动执行: security delete-generic-password -s $VAULT_SERVICE -a $CONFIG_DIR"
+    echo "  ❌ 还在，手动执行: security delete-generic-password -s $VAULT_SERVICE -a $VAULT_ACCOUNT"
   else
     echo "  ✅ 已删除 $VAULT_SERVICE"
   fi

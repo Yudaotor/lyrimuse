@@ -839,7 +839,7 @@ func logFeatureSnapshot() {
 	}
 	sum := sha256.Sum256([]byte(fmt.Sprint(attrs...)))
 	fp := hex.EncodeToString(sum[:6])
-	path := configFilePath(featureSnapshotStateFile)
+	path := cacheFilePath(featureSnapshotStateFile)
 	now := time.Now()
 	var last featureSnapshotState
 	if b, err := os.ReadFile(path); err != nil {

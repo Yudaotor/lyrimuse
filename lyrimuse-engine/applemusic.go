@@ -381,10 +381,10 @@ func applemusicMarkTokenRejected(userToken string) {
 // 但仍然落盘缓存 —— 理由跟 musixmatchTokenPath 一模一样:一次性的 search-lyrics CLI
 // 每次都是新进程,只靠内存缓存等于每次都要下一个 3MB 的 JS bundle。
 func applemusicDevTokenPath() string {
-	if configDir() == "" {
+	if cacheDir() == "" {
 		return ""
 	}
-	return filepath.Join(configDir(), clientName+"-applemusic-devtoken.json")
+	return cacheFilePath(clientName + "-applemusic-devtoken.json")
 }
 
 type applemusicDevTokenFile struct {

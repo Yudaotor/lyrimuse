@@ -161,7 +161,7 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
 }
 
 // "推送账号"tab 管理引擎推送目的地凭据的数据层——读写引擎自己的
-// ~/.config/lyrimuse/config.json(见 lyrimuse-engine/config.go 的 `config`
+// 数据目录里的 config.json(见 lyrimuse-engine/config.go 的 `config`
 // struct)。照抄 EnrichCacheStore.swift 的模式:用 JSONSerialization 读写整份原始
 // 字典而不是用 Codable 精确建模——这份文件里还有 api_root 这类 UI 不管的字段,整字典读写
 // 才能保证保存时原样保留它们,不会被这里没声明的字段悄悄丢掉。

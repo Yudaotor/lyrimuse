@@ -11,7 +11,7 @@ public enum LyrimuseIdentity {
         public let displayName: String
         /// CFBundleIdentifier,同时是 App 自己那个 LaunchAgent 的 label(TCC 自动化权限、UserDefaults 域都按它认)。
         public let bundleIdentifier: String
-        /// `~/.config/<这个>`。
+        /// 旧数据目录 `~/.config/<这个>` 的名字(新位置按 bundle id 命名,见 `StorageLayout`)。
         public let configDirName: String
         public let engineLaunchdLabel: String
         /// 歌词引擎(引擎)在包里的可执行文件名,也就是活动监视器 / `ps` 里看到的进程名。内核记的进程名(p_comm)
@@ -67,22 +67,27 @@ public enum LyrimuseIdentity {
     }
 }
 
-/// 所有落盘位置的唯一口径。App 与 Core 里任何要碰 `~/.config/lyrimuse` / `~/Library/Caches` / `~/Library/Logs` / `~/Library/LaunchAgents`
-/// 的地方都从这里取,不许自己拼 `homeDirectoryForCurrentUser.appendingPathComponent(".config/lyrimuse/…")`。
+/// 所有落盘位置的唯一口径。App 与 Core 里任何要碰数据目录 / `~/Library/Caches` / `~/Library/Logs` / `~/Library/LaunchAgents`
+/// 的地方都从这里取,不许自己拼 `homeDirectoryForCurrentUser.appendingPathComponent(…)`。
 public enum LyrimusePaths {
     public static var home: URL { FileManager.default.homeDirectoryForCurrentUser }
 
-    /// `~/.config/lyrimuse`。config.json、features、enrich 缓存、歌词、封面、收听日志、
-    /// 状态文件、单实例锁全在它下面;引擎侧用同一个目录(见 `engineEnvironment`)。
-    public static var configDir: URL { home.appendingPathComponent(".config/\(LyrimuseIdentity.configDirName)") }
+    /// 数据目录的新旧位置与缓存目录(见 `StorageLayout`)。
+    public static var storageRoots: StorageLayout.Roots { StorageLayout.roots(home: home) }
 
-    /// 配置目录下的一个文件或子目录。
+    /// 数据目录,通常是 `~/Library/Application Support/<bundle id>`。config.json、features、enrich 缓存、歌词、设备封面、
+    /// 收听日志、状态文件、单实例锁都在它下面;引擎侧用同一个目录(见 `engineEnvironment`)。进程里第一次用到时定下来、之后不变:
+    /// App 的入口(`AppEntry`)先跑完搬迁再碰任何别的代码,所以 App 里拿到的一定是搬完之后的位置。
+    public static var configDir: URL { resolvedConfigDir }
+    private static let resolvedConfigDir = StorageLayout.activeDataDir(storageRoots)
+
+    /// 数据目录下的一个文件或子目录。
     public static func configFile(_ name: String) -> URL { configDir.appendingPathComponent(name) }
 
-    /// `~/Library/Caches/<bundle id>`:丢了能原样重新下载的东西(动态封面)。备份软件和清理工具按惯例跳过或清掉这里,
-    /// 所以只放真能重建的:名字带 cache、实际是权威数据的(enrich 缓存、设备封面 `artwork/`)留在配置目录。
-    /// Sparkle 的下载缓存也在这个目录里,用它自己的子目录。见 03 章决策 65。
-    public static var cachesDir: URL { home.appendingPathComponent("Library/Caches/\(LyrimuseIdentity.bundleIdentifier)") }
+    /// `~/Library/Caches/<bundle id>`:删了只会重新下载或重算的东西 —— 动态封面、Sparkle 的下载缓存(各用自己的子目录),
+    /// 以及引擎和 App 共用的查询缓存(`StorageLayout.cacheFileNames`)。名字带 cache、实际是权威数据的(enrich 缓存、
+    /// 设备封面 `artwork/`)留在数据目录。见 03 章决策 65、14 章决策 136。
+    public static var cachesDir: URL { storageRoots.caches }
 
     /// 缓存目录下的一个文件或子目录。
     public static func cacheFile(_ name: String) -> URL { cachesDir.appendingPathComponent(name) }
@@ -101,10 +106,11 @@ public enum LyrimusePaths {
     /// 传给引擎的环境变量 —— 常驻 job 的 plist(`EnvironmentVariables`)和 App spawn 的每一个一次性子命令
     /// (search-lyrics / healthcheck / backfill…)都要带上:路径以这里为准,引擎自己的默认值只是兜底。
     /// 传的值等于引擎的默认值,照样要传 —— 只留一条代码路径,两侧默认值哪天对不上也不会读到两份数据。
-    /// Go 侧的读取方是 `paths.go` 的 `configDir()` / `logFilePath()` / `appBundleID()`。
+    /// Go 侧的读取方是 `paths.go` 的 `configDir()` / `cacheDir()` / `logFilePath()` / `appBundleID()`。
     public static var engineEnvironment: [String: String] {
         [
             "LYRIMUSE_CONFIG_DIR": configDir.path,
+            "LYRIMUSE_CACHE_DIR": cachesDir.path,
             "LYRIMUSE_LOG_FILE": LogFiles.engine.path,
             // companion launch(播放器起来了顺手拉起 App)要 `open -b` 的 bundle id 也从这里下发,Go 侧不写死。
             "LYRIMUSE_APP_BUNDLE_ID": LyrimuseIdentity.bundleIdentifier,

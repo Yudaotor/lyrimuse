@@ -373,8 +373,8 @@ func sharedAMLLIndexStore() *amllIndexStore {
 		return s
 	}
 	path := ""
-	if configDir() != "" {
-		path = configFilePath(clientName + "-amll-index.json")
+	if cacheDir() != "" {
+		path = cacheFilePath(clientName + "-amll-index.json")
 	}
 	amllIndexStorePtr.CompareAndSwap(nil, newAMLLIndexStore(path, time.Now))
 	return amllIndexStorePtr.Load()

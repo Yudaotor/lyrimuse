@@ -450,7 +450,7 @@ final class LastfmStatsService: ObservableObject {
     /// 2 = track.getinfo 查无此条时回退 user.getTrackScrobbles。
     private static let playCountRuleVersion = 2
 
-    private static let recentPageCacheURL = LyrimusePaths.configFile("lyrimuse-lastfm-recent-pages.json")
+    private static let recentPageCacheURL = LyrimusePaths.cacheFile("lyrimuse-lastfm-recent-pages.json")
 
     /// 启动时加载一次(见 init),resetAll 之后用到时再补加载;按 username 校验(跟
     /// loadTitleForms/loadDailySnapshot 同一套模式),换账号不吃旧缓存。刻意**不**恢复对应的
@@ -1690,7 +1690,7 @@ final class LastfmStatsService: ObservableObject {
         var hours: [String: [Int]]?
     }
 
-    private static let dailyURL = LyrimusePaths.configFile("lyrimuse-lastfm-daily-heatmap.json")
+    private static let dailyURL = LyrimusePaths.cacheFile("lyrimuse-lastfm-daily-heatmap.json")
 
     private static let dayKeyFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -1763,7 +1763,7 @@ final class LastfmStatsService: ObservableObject {
         var limit: Int?
     }
 
-    private static let historyCheckpointURL = LyrimusePaths.configFile("lyrimuse-lastfm-history-checkpoint.json")
+    private static let historyCheckpointURL = LyrimusePaths.cacheFile("lyrimuse-lastfm-history-checkpoint.json")
     private var historyCheckpoint: HistorySyncCheckpoint?
     private var historyCheckpointLoaded = false
 
@@ -2117,7 +2117,7 @@ final class LastfmStatsService: ObservableObject {
         var lastTopUp: Date?
     }
 
-    private static let titleFormsURL = LyrimusePaths.configFile("lyrimuse-lastfm-title-forms.json")
+    private static let titleFormsURL = LyrimusePaths.cacheFile("lyrimuse-lastfm-title-forms.json")
     /// 折叠键 → 历史上真实出现过的写法族。
     private var titleForms: [String: [TitleForm]] = [:]
     /// 全量建成/增量补到的水位(uts)。0 = 从未建成,候选退回猜枚举。
@@ -2311,7 +2311,7 @@ final class LastfmStatsService: ObservableObject {
         var tables: EnrichCacheReader.LocalAliasTables
     }
 
-    private static let aliasBaselineURL = LyrimusePaths.configFile("lyrimuse-lastfm-alias-baseline.json")
+    private static let aliasBaselineURL = LyrimusePaths.cacheFile("lyrimuse-lastfm-alias-baseline.json")
 
     private static func loadAliasBaseline() -> EnrichCacheReader.LocalAliasTables? {
         guard let data = FileIO.read(aliasBaselineURL),
@@ -2554,7 +2554,7 @@ final class LastfmStatsService: ObservableObject {
         return keys
     }()
 
-    private static let snapshotURL = LyrimusePaths.configFile("lyrimuse-lastfm-stats-cache.json")
+    private static let snapshotURL = LyrimusePaths.cacheFile("lyrimuse-lastfm-stats-cache.json")
     private var snapshotSaveTask: Task<Void, Never>?
 
     private func loadSnapshot() {
@@ -3021,7 +3021,7 @@ final class LastfmStatsService: ObservableObject {
 
     /// 按文件修改时间判断,没变不读。卡片出现时读一次,之后跟着统计页每 2 分钟那一拍(refreshLocalCoversIfCacheChanged)。
     func refreshArtistRegionsIfChanged() {
-        let url = LyrimusePaths.configFile(ArtistRegions.fileName)
+        let url = LyrimusePaths.cacheFile(ArtistRegions.fileName)
         let version = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
         // 跟引擎用同一个账号名比(它按 lastfm_user 取榜单),不是 credentials 优先取的打卡账号。
         let user = ConfigStore.shared.lastfmUser
@@ -3129,7 +3129,7 @@ final class LastfmStatsService: ObservableObject {
             key + (rows[key]?.variants.map { "\u{1}" + $0.artist + "\u{2}" + $0.name }.joined() ?? "")
         }
         let cacheVersion = EnrichCacheReader.decodedContentVersion
-        let pagesURL = LyrimusePaths.configFile(PlatformPagesCache.fileName)
+        let pagesURL = LyrimusePaths.cacheFile(PlatformPagesCache.fileName)
         let pagesVersion = (try? FileManager.default.attributesOfItem(atPath: pagesURL.path))?[.modificationDate] as? Date
         if let last = chartAppLinksInputs, last.keys == keys, last.cacheVersion == cacheVersion,
            last.pagesVersion == pagesVersion, last.artistAliases == localAliasTables.artists { return }

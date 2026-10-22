@@ -190,3 +190,18 @@ func saveDeviceArtwork(data []byte, mimeType string) (string, bool) {
 	}
 	return "file://" + path, true
 }
+
+// localDeviceArtworkURL:别的数据目录写下的设备封面地址(旧版本的 ~/.config/lyrimuse/artwork/、别的机器导出的备份),同名文件在本机
+// deviceArtworkDir 里有就换成本机的地址;不是设备封面、本来就是本机的、本机没有那张图的原样返回(没有的交给 deviceArtworkMissing 那条路清)。
+// 文件按内容 sha 命名,同名就是同一张图。
+func localDeviceArtworkURL(url string) string {
+	_, path, ok := deviceArtworkRef(url)
+	if !ok || deviceArtworkDir == "" || filepath.Dir(path) == deviceArtworkDir {
+		return url
+	}
+	local := filepath.Join(deviceArtworkDir, filepath.Base(path))
+	if _, err := os.Stat(local); err != nil {
+		return url
+	}
+	return deviceArtworkURLPrefix + local
+}

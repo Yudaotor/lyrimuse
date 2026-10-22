@@ -67,28 +67,28 @@ func runSearchLyricsCLI(args []string) {
 		// retryArtistIdentities 会在没查到可用候选时拿 canonical 名再搜一次,而
 		// artistAliasPath 为空的话这份缓存既不读也不写 —— 每开一次"搜索候选歌词"
 		// 弹窗都要重新打一次 MusicBrainz(它自己还有节流,直接体现为用户多等)。
-		loadArtistAliasCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-artist-alias-cache.json"))
+		loadArtistAliasCache(cacheFilePath(clientName + "-artist-alias-cache.json"))
 		// 同理,MB 主名那份也要读 —— 这条 CLI 每次都是新进程,不读的话每开一次弹窗都要
 		// 重打一次 MusicBrainz,撞上限速(1 req/s 按 IP,而节流是进程内的)就等于这轮
 		// 别名兜底整个失效:表现是"同一首歌第一遍搜 0 条、再搜一遍就有"。
-		loadMBPrimaryNameCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-artist-primary-cache.json"))
+		loadMBPrimaryNameCache(cacheFilePath(clientName + "-artist-primary-cache.json"))
 		// Apple 目录锚点那份也读:手动搜索走的是独立进程,不读的话
 		// appleCatalogSearchIdentities 恒为空,「联网搜索候选歌词」拿不到常驻实例已经
 		// 攒下的权威署名,名次又会跟自动决策对不上(跟 nativeLyricSource 那个坑同型)。
 		loadAppleCatalogCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-apple-catalog-cache.json"))
 		// 同理,Apple 各商店曲目署名那份也要读——道理跟上面 MB 主名那段一样,这条 CLI
 		// 每次都是新进程,不读的话每次开弹窗都要重新打几次 iTunes Search。
-		loadAppleStorefrontArtistCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-apple-storefront-artist-cache.json"))
+		loadAppleStorefrontArtistCache(cacheFilePath(clientName + "-apple-storefront-artist-cache.json"))
 		// 同一次商店遍历的第二个产物(这一条录音在原产地商店的曲名)**单独一份**、也必须在这里
 		// 读 —— 这条 CLI 在 main() 里 flag.Parse() **之前**就分支走掉了(见 main.go 那个
 		// os.Args[1] == "search-lyrics" 分支),常驻那边的加载点它一行都够不到。漏了不会报错,
 		// 只会让每次开弹窗都重打两次 iTunes(就这么漏过一次,靠"缓存文件压根没生成"
 		// 才发现)。见 appleStorefrontCanonicalTitle。
-		loadAppleStorefrontTitleCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-apple-storefront-title-cache.json"))
+		loadAppleStorefrontTitleCache(cacheFilePath(clientName + "-apple-storefront-title-cache.json"))
 		// 同理,QQ 音乐歌手搜索建议那份缓存也要读——retryArtistIdentities/
 		// resolveGenericArtistCanonicalName 都会用到,不读的话每次开弹窗都要重新打一次
 		// QQ smartbox。
-		loadQQArtistNameCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-qq-artist-name-cache.json"))
+		loadQQArtistNameCache(cacheFilePath(clientName + "-qq-artist-name-cache.json"))
 		// 同理,enrich 缓存本身也要读:retryArtistIdentities 新增的
 		// learnedSourceArtistAlias 那一档,证据就在这份缓存里(同一歌手别的歌成功解析时
 		// 源那边署的名)。不读的话它在手动搜索里恒为空 —— 而"播放器把歌手名本地化了"
@@ -99,7 +99,7 @@ func runSearchLyricsCLI(args []string) {
 		// 正文不读:这条路径只用条目的元数据(判决记录里的署名、存下的搜索歌名 / 视频 id)。重音字母旁多切空格的第二级证据
 		// 读常驻引擎落盘的那份词表;没有(引擎还没跑过)才退回读正文、自己建(见 accentWordsFileName)。
 		cachePath := filepath.Join(filepath.Dir(cfgPath), clientName+"-enrich-cache.json")
-		if loadAccentCacheWordsFile(filepath.Join(filepath.Dir(cfgPath), accentWordsFileName)) {
+		if loadAccentCacheWordsFile(cacheFilePath(accentWordsFileName)) {
 			loadEnrichCacheMetaReadOnly(cachePath)
 		} else {
 			loadEnrichCacheReadOnly(cachePath)

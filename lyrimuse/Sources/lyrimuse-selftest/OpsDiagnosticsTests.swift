@@ -402,13 +402,11 @@ func runOpsDiagnosticsTests() {
 
     if ProcessInfo.processInfo.environment["LYRIMUSE_REDACT_CHECK"] == "1" {
         print("\n== 诊断脱敏真机校验 ==")
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let cfgURL = home.appendingPathComponent(".config/lyrimuse/config.json")
-        let logURL = home.appendingPathComponent("Library/Logs/lyrimuse.log")
+        let cfgURL = LyrimusePaths.configFile("config.json")
+        let logURL = LogFiles.engine
 
         // 凭据在钥匙串的保险箱里,叠回去才是全集。
-        let vault = CredentialVaultStore(keychain: KeychainCLI(service: CredentialVault.service,
-                                                                account: cfgURL.deletingLastPathComponent().path))
+        let vault = CredentialVaultStore.shared
         guard let cfgData = try? Data(contentsOf: cfgURL),
               let fileCfg = try? JSONSerialization.jsonObject(with: cfgData) as? [String: Any],
               let logText = try? String(contentsOf: logURL, encoding: .utf8) else {

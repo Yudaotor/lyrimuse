@@ -1,6 +1,6 @@
 import Foundation
 
-/// 歌词引擎要写的几处主目录位置是否归当前用户、写得进去:配置目录、LaunchAgents、日志目录、引擎日志、引擎的 plist。
+/// 歌词引擎要写的几处主目录位置是否归当前用户、写得进去:数据目录、缓存目录、LaunchAgents、日志目录、引擎日志、引擎的 plist。
 ///
 /// 任何一处不归自己或写不进,引擎就装不上或起不来,而系统给的只有一句笼统的 `Bootstrap failed: 5` 或退出码 78。
 /// 启动时记日志、诊断报告、设置页「歌词引擎」卡片都读这一份结论。见 15 章决策 31。
@@ -18,8 +18,8 @@ public enum HomeFolderAccess {
         public let path: String
         /// 是 launchd 读的 plist:除了归自己、写得进,还不许组和其他用户可写。
         public let isLaunchdPlist: Bool
-        /// 整棵都归 Lyrimuse(配置目录):修复命令连里面一起改。`~/.config`、`~/Library/Logs`、`~/Library/LaunchAgents`
-        /// 这类别的程序也在用的只改这一层,不 `-R` 动别人的文件。
+        /// 整棵都归 Lyrimuse(数据目录、缓存目录):修复命令连里面一起改。`~/Library/Application Support`、`~/Library/Caches`、
+        /// `~/Library/Logs`、`~/Library/LaunchAgents` 这类别的程序也在用的只改这一层,不 `-R` 动别人的文件。
         public let ownsTree: Bool
 
         public init(path: String, isLaunchdPlist: Bool = false, ownsTree: Bool = false) {
@@ -47,6 +47,8 @@ public enum HomeFolderAccess {
         [
             Target(path: LyrimusePaths.configDir.deletingLastPathComponent().path),
             Target(path: LyrimusePaths.configDir.path, ownsTree: true),
+            Target(path: LyrimusePaths.cachesDir.deletingLastPathComponent().path),
+            Target(path: LyrimusePaths.cachesDir.path, ownsTree: true),
             Target(path: LyrimusePaths.launchAgentsDir.path),
             Target(path: LogFiles.engine.deletingLastPathComponent().path),
             Target(path: LogFiles.engine.path),

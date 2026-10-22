@@ -445,10 +445,10 @@ type proxyFallbackHintFile struct {
 }
 
 func proxyFallbackHintPath() string {
-	if configDir() == "" {
+	if cacheDir() == "" {
 		return ""
 	}
-	return filepath.Join(configDir(), clientName+"-proxy-hint.json")
+	return cacheFilePath(clientName + "-proxy-hint.json")
 }
 
 func readProxyFallbackHint() proxyFallbackHintFile {

@@ -140,7 +140,7 @@ public enum AutomationRequestPlan {
     }
 }
 
-// 独立、轻量地读一次共享 features 文件(~/.config/lyrimuse/lyrimuse-features.json)里的
+// 独立、轻量地读一次共享 features 文件(数据目录里的 lyrimuse-features.json)里的
 // "players"/"player" 字段——不能直接复用 FeatureSettingsStore(那是 lyrimuse 主 App
 // target 的东西,LyrimuseCore 是被依赖的下层,不能反向依赖上层,见 Package.swift 的
 // 单向依赖关系)。跟 EnrichCacheReader 是同一种模式:LyrimuseCore 自己独立读一份 App

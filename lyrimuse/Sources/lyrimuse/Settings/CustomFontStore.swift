@@ -9,7 +9,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "custom
 /// 用户导入的自定义字体(.ttf / .otf):字体选择器除了系统已装字体,
 /// 还能从本地文件导入。
 ///
-/// 落盘 + 注册两件事分开:文件长期存在 `~/.config/lyrimuse/fonts/` 下(config 目录本来就是
+/// 落盘 + 注册两件事分开:文件长期存在 数据目录的 `fonts/` 下(config 目录本来就是
 /// 这个 App 所有持久数据的唯一落点,见 `LyrimuseIdentity` 头注),但 Core Text 的注册是
 /// **进程级**的(`.process` scope)——不写进系统 Font Book,不用管理员权限,卸载 App 也不会
 /// 在用户系统里留下孤儿字体;代价是每次启动都要重新注册一遍(`registerAll()`),这一步必须

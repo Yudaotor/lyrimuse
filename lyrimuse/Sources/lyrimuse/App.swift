@@ -1,6 +1,6 @@
 import SwiftUI
 
-@main
+/// 入口在 `AppEntry`(StorageMigrationRunner.swift):先搬数据目录,再调这里的 `main()`。
 struct LyrimuseApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     // 只为了让"歌词管理"这个 Window 的标题在手动切换语言时跟着重新解析——App.body

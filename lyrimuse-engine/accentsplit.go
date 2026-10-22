@@ -370,7 +370,7 @@ func refreshAccentCacheWords() {
 	accentCacheWordsMu.Unlock()
 }
 
-// accentWordsFileName:常驻引擎建好的第二级证据词表落盘的那份(配置目录下,排好序的 JSON 数组,两万来字节)。只给 search-lyrics 读:
+// accentWordsFileName:常驻引擎建好的第二级证据词表落盘的那份(缓存目录下,排好序的 JSON 数组,两万来字节)。只给 search-lyrics 读:
 // 它为了建这张表要把一万多个正文小文件全读一遍(本机约 0.4～0.8 秒),读这份就够了,主缓存只读元数据(loadEnrichCacheMetaReadOnly)。
 // 见 09 章决策 292。
 const accentWordsFileName = clientName + "-accent-words.json"
@@ -431,7 +431,7 @@ func migrateAccentSplits() {
 	refreshAccentCacheWords()
 	cached := currentAccentCacheWords()
 	if configDir() != "" {
-		writeAccentCacheWordsFile(configFilePath(accentWordsFileName), cached)
+		writeAccentCacheWordsFile(cacheFilePath(accentWordsFileName), cached)
 	}
 	enrichMu.Lock()
 	fixed := 0

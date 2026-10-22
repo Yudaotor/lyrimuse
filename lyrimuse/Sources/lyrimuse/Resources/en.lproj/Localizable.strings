@@ -696,6 +696,7 @@
 "可在快捷指令、Raycast、Alfred 等工具中打开；将指针悬停在上方的快捷键上，可拷贝对应操作的链接" = "Open these from Shortcuts, Raycast, Alfred and similar tools. Hover over a shortcut above to copy the link for that action";
 "可拖到任意位置" = "Drag it anywhere";
 "可跳过的广告出现时自动跳过" = "Skippable ads are skipped as soon as they appear";
+"可重新获取的封面与查询结果" = "Covers and lookups that can be fetched again";
 "台湾、香港常用的流媒体音乐 App" = "A music streaming app popular in Taiwan and Hong Kong";
 "右" = "Right";
 "右侧" = "Right";
@@ -886,6 +887,7 @@
 "将「Lyrimuse」拷贝到剪贴板，用作申请页中的应用名称" = "Copies “Lyrimuse” so you can paste it as the application name";
 "将删除全部 %d 条本地记录，包括手动编辑和从候选中采纳的歌词，已导出的歌词文件也会一并删除。清空前会自动备份，可通过此菜单中的「从自动备份恢复」找回。之后播放的歌曲会重新匹配歌词" = "This deletes all %d local records, including lyrics you edited or adopted from candidates, along with their exported lyrics files. A backup is made automatically first and can be restored from “Restore from Auto Backup” in this menu. Songs are matched again when they play";
 "将删除全部 %d 条本地记录，包括手动编辑和从候选中采纳的歌词，已导出的歌词文件也会一并删除。清空前会自动备份，可通过此菜单中的「从自动备份恢复」找回。之后播放的歌曲会重新匹配歌词#one" = "This deletes the %d local record, including lyrics you edited or adopted from candidates, along with its exported lyrics file. A backup is made automatically first and can be restored from “Restore from Auto Backup” in this menu. Songs are matched again when they play";
+"将删除动态封面和联网查询的缓存并立即重启，用到时会重新获取；设置、歌词与播放记录不受影响" = "Motion covers and cached lookups will be deleted and Lyrimuse will restart right away, fetching them again when needed. Settings, lyrics and listening history are kept";
 "将删除本机的全部账号凭证、密钥与个人设置，恢复为初始安装状态，下次启动时重新显示设置引导。此操作无法撤销。iCloud 中的备份与已导出的文件不受影响；如两者均无，建议先备份" = "This erases every account credential, key and personal setting on this Mac and returns Lyrimuse to a fresh install; the setup guide runs again on next launch. This can’t be undone. Backups in iCloud and exported files are kept; if you have neither, back up first";
 "将在退出 Lyrimuse 时安装" = "Will install when Lyrimuse quits";
 "将完整的决策记录拷贝到剪贴板（纯文本）" = "Copy the whole decision record to the clipboard as plain text";
@@ -1343,6 +1345,7 @@
 "放大悬浮歌词字号" = "Increase Floating Lyrics Font Size";
 "放帧余量" = "Playout buffer";
 "放弃修改" = "Discard Changes";
+"数据文件夹" = "Data Folder";
 "数据来源" = "Data Source";
 "数据来源：%@" = "Data source: %@";
 "数据来自 %@" = "Data from %@";
@@ -1909,6 +1912,8 @@
 "清理" = "Clean Up";
 "清理 %@ 条无效记录…" = "Clean Up %@ Invalid Entries…";
 "清理 %@ 条无效记录…#one" = "Clean Up %@ Invalid Entry…";
+"清理…" = "Clean Up…";
+"清理并重启" = "Clean Up and Restart";
 "清空全部时间轴校准" = "Clear All Timing Calibrations";
 "清空全部电台校准" = "Clear All Radio Calibrations";
 "清空全部缓存" = "Clear All Cache";
@@ -2087,6 +2092,7 @@
 "继续播放" = "Resume";
 "继续显示" = "Keep Showing";
 "继续编辑" = "Keep Editing";
+"缓存" = "Cache";
 "编码器" = "Encoder";
 "编辑…" = "Edit…";
 "编辑「%@」" = "Edit “%@”";
@@ -2213,6 +2219,7 @@
 "要导入此备份吗？" = "Import this backup?";
 "要导出设置吗？" = "Export settings?";
 "要放弃对歌词的修改吗？" = "Discard your changes to these lyrics?";
+"要清理缓存吗？" = "Clean up the cache?";
 "要清除全部设置吗？" = "Erase all settings?";
 "视频流" = "Video stream";
 "解析 Last.fm 响应失败" = "Couldn't read the response from Last.fm";

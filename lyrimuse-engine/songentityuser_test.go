@@ -398,7 +398,7 @@ func TestResolveManualConflictEdit(t *testing.T) {
 	if _, pre := readPreEntry(t, "A|Song|One"); !pre.Lyrics.EqualString(a) {
 		t.Errorf("被换掉的原件要留底: %+v", pre)
 	}
-	matches, _ := filepath.Glob(filepath.Join(filepath.Dir(dir), clientName+"-backups", "*-song-entity-manual", "entries.json"))
+	matches, _ := filepath.Glob(filepath.Join(dir, "backups", "*-song-entity-manual", "entries.json"))
 	if len(matches) != 1 {
 		t.Fatalf("被换掉的原件另存一份: %v", matches)
 	}

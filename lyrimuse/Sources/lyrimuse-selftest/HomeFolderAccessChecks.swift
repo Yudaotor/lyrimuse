@@ -60,8 +60,8 @@ func homeFolderAccessChecks() {
         "sudo chown -R 'a':staff '/Users/a/it'\\''s' && chmod -R u+rwX '/Users/a/it'\\''s'",
         "chmod 644 '/Users/a/Library/LaunchAgents/x.plist'",
     ], "文件夹权限: 修复命令逐行、路径加引号;只有 Lyrimuse 自己的目录整棵改,共用目录只改这一层")
-    expectEqual(A.targets.filter(\.ownsTree).map(\.path), [LyrimusePaths.configDir.path],
-                "文件夹权限: 只有配置目录算 Lyrimuse 整棵自己的(~/.config、~/Library/Logs、LaunchAgents 不 -R)")
+    expectEqual(A.targets.filter(\.ownsTree).map(\.path), [LyrimusePaths.configDir.path, LyrimusePaths.cachesDir.path],
+                "文件夹权限: 只有数据目录、缓存目录算 Lyrimuse 整棵自己的(它们的上一层、~/Library/Logs、LaunchAgents 不 -R)")
     // # 和 ! 只能出现在单引号包住的路径里:交互式 zsh 粘贴时,引号外的 ! 会触发历史展开,词首的 # 在没开
     // interactive_comments 时报错。路径本身带这两个字符时也得成立,所以拿带它们的路径生成一遍,去掉引号里的部分再查。
     let tricky = A.fixCommand(for: [
@@ -85,13 +85,14 @@ func homeFolderAccessChecks() {
 
     // 清单:跟 Go 侧 homeFolderTargets 同一份,plist 只有一处、且就是引擎那份。
     let targets = A.targets
-    expectEqual(targets.count, 6, "文件夹权限: 查 6 处")
+    expectEqual(targets.count, 8, "文件夹权限: 查 8 处")
     expectEqual(targets.filter(\.isLaunchdPlist).map(\.path),
                 [LyrimusePaths.launchAgentPlist(label: LyrimuseIdentity.engineLaunchdLabel).path], "文件夹权限: 只按 plist 查引擎那份")
     expectEqual(targets.map(\.path).contains(LyrimusePaths.configDir.path)
                 && targets.map(\.path).contains(LogFiles.engine.path)
+                && targets.map(\.path).contains(LyrimusePaths.cachesDir.path)
                 && targets.map(\.path).contains(LyrimusePaths.launchAgentsDir.path), true,
-                "文件夹权限: 配置目录、引擎日志、LaunchAgents 都在清单里")
+                "文件夹权限: 数据目录、缓存目录、引擎日志、LaunchAgents 都在清单里")
 
     // 两侧同步:Go 健康检查用的 label 跟 Swift 一致;装引擎时 plist 原子写并定成 644,bootstrap 失败记原话。
     let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()

@@ -29,7 +29,7 @@ func runDeleteListenCLI(args []string) {
 	asJSON := fs.Bool("json", true, "以 JSON 输出结果")
 	// -config 跟其它一次性子命令一个形状。存在的理由不只是对称:一个会删用户数据的
 	// 命令必须能在临时目录里被完整地端到端验证一遍,而不是只能拿真实日志试。
-	cfgPath := fs.String("config", "", "配置文件路径(默认 ~/.config/lyrimuse/config.json)")
+	cfgPath := fs.String("config", "", "配置文件路径(默认数据目录里的 config.json)")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}

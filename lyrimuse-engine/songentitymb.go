@@ -44,7 +44,7 @@ type mbRecordingsFile struct {
 	ISRCs   map[string]mbISRCRecord `json:"isrcs"`
 }
 
-func mbRecordingsPath() string { return configFilePath(clientName + "-mb-recordings.json") }
+func mbRecordingsPath() string { return cacheFilePath(clientName + "-mb-recordings.json") }
 
 // readMBRecordings 读补扫结果;缺失、坏掉、版本对不上都返回空表。
 func readMBRecordings(path string) map[string]mbISRCRecord {
