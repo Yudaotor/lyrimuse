@@ -724,12 +724,12 @@ final class AppSettings: ObservableObject {
     }()
 
     /// 歌词正文显示成简体还是繁体。默认 .off:原样显示歌词源给的写法,不做任何转换。
+    @Published var lyricsChineseVariant: ChineseVariant {
+        didSet { defaults.set(lyricsChineseVariant.rawValue, forKey: Keys.lyricsChineseVariant) }
+    }
     /// 日语读音标成罗马字还是只给汉字标平假名(`romanizationScripts` 里日语开着时才起作用)。
     @Published var japaneseReadingStyle: JapaneseReadingStyle {
         didSet { defaults.set(japaneseReadingStyle.rawValue, forKey: Keys.japaneseReadingStyle) }
-    }
-    @Published var lyricsChineseVariant: ChineseVariant {
-        didSet { defaults.set(lyricsChineseVariant.rawValue, forKey: Keys.lyricsChineseVariant) }
     }
     /// 歌词窗口(完整 / 迷你共用)显不显示读音:罗马音行与逐词注音。悬浮歌词那份是 `overlayShowRomanization`,
     /// 灵动岛 / 菜单栏 / 触控栏在各自的「副行」里选。键名 `np:showRomanization` 不带歌词窗口前缀,改名等于丢掉

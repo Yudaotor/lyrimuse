@@ -1069,6 +1069,11 @@ public final class EnrichCacheStore: ObservableObject {
         return result
     }
 
+    /// 这一条借来的假名标注(`lyrics_kana`,在索引里,不用补正文),没有时为空。
+    public func kanaDonor(for key: String) -> String {
+        raw[key]?["lyrics_kana"] as? String ?? ""
+    }
+
     /// 这一条的纯文本兜底(`plain_lyrics`,没有时间戳),没有时为空。正文要先补回来,同 `detail(for:)`。
     public func plainLyrics(for key: String) -> String {
         _ = hydrate(key)

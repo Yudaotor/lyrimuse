@@ -310,6 +310,8 @@ final class LyricsSearchService {
         let lyricsTrLang: String
         /// 译文是从哪个源借来的(引擎的 lyrics_tr_from);空 = 自带的。采纳时交给 saveEdit,条目照样记成借来的。
         var lyricsTrFrom: String = ""
+        /// 借来的假名标注(条目的 lyrics_kana),只有「当前使用」那一份带,预览读音跟播放时一致。
+        var lyricsKana: String = ""
         let hasWordTiming: Bool
         let score: Int
         /// 这个分数的构成明细;被判 -1 时只有一项,内容是原因。引擎只给机器可读的

@@ -118,7 +118,7 @@ func TestMigrateHokkienSongLanguage(t *testing.T) {
 func TestHokkienIsWired(t *testing.T) {
 	for file, needles := range map[string][]string{
 		"../lyrimuse/Sources/LyrimuseCore/Local/EnrichCacheReader.swift": {`private let songLanguageHokkien = "` + songLanguageHokkien + `"`},
-		"enrich.go":            {"preparedRoma = generatedRomaFor(picked.Lyrics, \"\", entrySongLanguage(picked.Lyrics, scored))"},
+		"enrich.go":            {"preparedRoma = generatedRomaFor(picked.Lyrics, \"\", entrySongLanguage(picked.Lyrics, scored),"},
 		"provisionallyrics.go": {"e.SongLanguage = entrySongLanguage(picked.Lyrics, scored)\n\te.dropHokkienRoma()"},
 		"main.go":              {`startupStep("migrateHokkienSongLanguage", migrateHokkienSongLanguage)`},
 		"../lyrimuse/Sources/LyrimuseCore/Lyrics/LyricsSyncEngine.swift": {"if songIsHokkien, script == .chinese { return false }"},

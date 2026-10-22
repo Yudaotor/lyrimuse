@@ -234,7 +234,7 @@ func songShareLyricsFields(dst *enrichEntry, src enrichEntry) {
 	dst.LyricsScoringVersion, dst.LyricsScoringRevision = src.LyricsScoringVersion, src.LyricsScoringRevision
 	dst.ResolvedDurationSecs = src.ResolvedDurationSecs
 	dst.LyricsSpeakers, dst.LyricsSpeakersChecked = src.LyricsSpeakers, src.LyricsSpeakersChecked
-	dst.LyricsKana, dst.LyricsKanaChecked = src.LyricsKana, src.LyricsKanaChecked
+	dst.LyricsKana, dst.LyricsKanaChecked, dst.LyricsKanaRomaFor = src.LyricsKana, src.LyricsKanaChecked, src.LyricsKanaRomaFor
 	dst.PlainLyrics, dst.PlainLyricsSource = src.PlainLyrics, src.PlainLyricsSource
 	dst.SongLanguage = src.SongLanguage
 	dst.LyricsTrSource, dst.LyricsTrLang = src.LyricsTrSource, src.LyricsTrLang
@@ -618,7 +618,8 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 	var d *lyricsDecision
 	if len(targets) > 0 {
 		if top.LyricsRoma == "" {
-			roma = generatedRomaFor(top.Lyrics, "", entrySongLanguage(top.Lyrics, round.Scored))
+			roma = generatedRomaFor(top.Lyrics, "", entrySongLanguage(top.Lyrics, round.Scored),
+				nextLyricsKana("", top.Lyrics, top.LyricsYRC, round.Scored))
 		}
 		d = buildLyricsDecision(lyricsDecisionPathSongEntityShare, round.Artist, round.Title, round.Album, round.Duration, round.Scored, top, true)
 		d.SourcesSkipped, d.statsSkips, d.QueriesTried = round.skipped, round.statsSkips, round.queries

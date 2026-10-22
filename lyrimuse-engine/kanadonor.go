@@ -15,7 +15,8 @@ import (
 // App 和 lyrics-romanize 都直接交给 KanaAnnotation.parse,不另写一套对齐。时间戳是占位,没有含义。
 // 它留在索引里、不进正文小文件:只有借到的日文歌有,条目去掉了时间,一首约 1 KB。
 //
-// 不绑正文指纹:条目只对文字一样的行生效,正文换了,对不上的行自然不用;同一首歌同一句词的读音不随版本变。
+// 不绑正文指纹,但正文换了要重新对一遍(refitLyricsKana):只留文字还一样的行,不到 kanaDonorMinLines 行就清掉。
+// App 会把借来的读音推开到同一首歌里别的行,留着另一首歌的标注会把错的读音推开。
 
 // kanaDonorMinLines:借到的行少于这么多时不借。一两行短句(「Ah」「Yeah」这类之外、带汉字的)对上的偶然性大,
 // 而这几行分词器也多半读得对。
@@ -41,12 +42,14 @@ func kanaDonorLRC(lyrics, yrc string, scored []scoredLyricCandidateResult) strin
 			continue
 		}
 		byKey := kanaEntriesByLineKey(c.Lyrics)
-		hits := 0
+		// 按归一键数:整行和逐字两种写法只差空白标点的同一句只算一行。
+		hit := map[string]bool{}
 		for _, t := range targets {
-			if _, ok := byKey[kanaLineKey(t)]; ok {
-				hits++
+			if k := kanaLineKey(t); byKey[k] != "" {
+				hit[k] = true
 			}
 		}
+		hits := len(hit)
 		if hits > bestHits {
 			best, bestHits = byKey, hits
 		}
@@ -78,6 +81,10 @@ func kanaTargetLines(lyrics, yrc string) []string {
 	add := func(t string) {
 		t = strings.TrimSpace(t)
 		if t == "" || seen[t] || !strings.ContainsFunc(t, kanaNeedsAnnotation) {
+			return
+		}
+		// 带同形异码字(康熙部首「⾒」)的行不借:App 先换回标准字再数待标字,会比这里多,整份标注对不齐作废。
+		if kanaNeedCount(normalizeHanCompat(t)) != kanaNeedCount(t) {
 			return
 		}
 		seen[t] = true
@@ -236,19 +243,30 @@ const lyricsKanaVersion = 1
 // kanaDonorSources:会在正文里带 `[kana:]` 的源。
 var kanaDonorSources = map[string]bool{"kugou": true, "qq": true, "lrclib": true}
 
-// refreshKana:一轮写完正文之后刷新借来的假名标注。正文自己带标注时清掉;这一轮借到了就换成这一轮的;没借到时
-// 原样留着(这一轮可能根本没问到带标注的源,旧的那份只对文字一样的行生效,留着无害)。这一轮有带标注的源给出过
+// nextLyricsKana:这一轮写完正文 lyrics / yrc 之后条目该带的借来标注(refreshKana 和锁外预生成罗马音共用,两边一致)。
+// 正文自己带标注时为空;这一轮借到了就用这一轮的;没借到时把旧的那份对到新正文上(这一轮可能根本没问到带标注的源)。
+func nextLyricsKana(old, lyrics, yrc string, scored []scoredLyricCandidateResult) string {
+	if strings.Contains(lyrics, "[kana:") {
+		return ""
+	}
+	if donor := kanaDonorLRC(lyrics, yrc, scored); donor != "" {
+		return donor
+	}
+	return refitLyricsKana(old, lyrics, yrc)
+}
+
+// refitLyricsKana:把已有的借来标注对到 lyrics / yrc 上,只留文字还一样的行;不到 kanaDonorMinLines 行返回空串。
+func refitLyricsKana(kana, lyrics, yrc string) string {
+	if kana == "" {
+		return ""
+	}
+	return kanaDonorLRC(lyrics, yrc, []scoredLyricCandidateResult{{Lyrics: kana}})
+}
+
+// refreshKana:一轮写完正文之后刷新借来的假名标注(规则见 nextLyricsKana)。这一轮有带标注的源给出过
 // 身份关的候选时记下 LyricsKanaChecked,存量补问(kanabackfill.go)不必再来。
 func refreshKana(e *enrichEntry, scored []scoredLyricCandidateResult) {
-	lyrics := e.Lyrics.String()
-	switch {
-	case strings.Contains(lyrics, "[kana:"):
-		e.LyricsKana = ""
-	default:
-		if donor := kanaDonorLRC(lyrics, e.LyricsYRC.String(), scored); donor != "" {
-			e.LyricsKana = donor
-		}
-	}
+	e.LyricsKana = nextLyricsKana(e.LyricsKana, e.Lyrics.String(), e.LyricsYRC.String(), scored)
 	for _, c := range scored {
 		if kanaDonorSources[c.Source] && c.Score >= 0 {
 			e.LyricsKanaChecked = lyricsKanaVersion

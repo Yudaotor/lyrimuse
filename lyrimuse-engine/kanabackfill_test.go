@@ -130,9 +130,14 @@ func TestBackfillLyricsKanaRomaOnly(t *testing.T) {
 	withKanaBackfillFakes(t, nil, func(lyrics, stored, kana string) (string, error) { return "", nil })
 	enrichCache = map[string]enrichEntry{kanaBackfillKey: e}
 	backfillLyricsKana(kanaBackfillKey, "A", "Song", "", 60)
-	if got := enrichCache[kanaBackfillKey]; !got.LyricsRoma.Equal(e.LyricsRoma) || got.LyricsKana != e.LyricsKana {
+	got := enrichCache[kanaBackfillKey]
+	if !got.LyricsRoma.Equal(e.LyricsRoma) || got.LyricsKana != e.LyricsKana {
 		t.Errorf("helper 判不是我们生成的,不该动: %+v", got)
 	}
+	if needsLyricsKanaBackfill(got) {
+		t.Error("核过一次、标注正文罗马音都没变:不再起 helper")
+	}
+	enrichCache[kanaBackfillKey] = e
 	withKanaBackfillFakes(t, nil, func(lyrics, stored, kana string) (string, error) { return "[00:01.10]kimi to\n[00:02.10]ashita e", nil })
 	backfillLyricsKana(kanaBackfillKey, "A", "Song", "", 60)
 	if got := enrichCache[kanaBackfillKey]; !got.LyricsRoma.EqualString("[00:01.10]kimi to\n[00:02.10]ashita e") {

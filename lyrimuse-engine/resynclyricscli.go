@@ -146,7 +146,8 @@ func runResyncLyrics(keys []string, apply bool) int {
 		songLanguage := entrySongLanguage(picked.Lyrics, scored)
 		var preparedRoma string
 		if !plan.lyricsSame && picked.LyricsRoma == "" {
-			preparedRoma = generatedRomaFor(picked.Lyrics, "", songLanguage)
+			preparedRoma = generatedRomaFor(picked.Lyrics, "", songLanguage,
+				nextLyricsKana(e.LyricsKana, picked.Lyrics, picked.LyricsYRC, scored))
 		}
 		enrichMu.Lock()
 		cur, still := enrichCache[key]

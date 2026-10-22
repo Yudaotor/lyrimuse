@@ -398,6 +398,13 @@ func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 		speakers.For = lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String())
 		e.LyricsSpeakers = &speakers
 	}
+	// 借来的假名标注对到新正文上,对不上的行去掉;采纳了别的候选就当没问过,播放到时再补问(kanabackfill.go)。
+	if !oldLyrics.Equal(e.Lyrics) || !oldYRC.Equal(e.LyricsYRC) {
+		e.LyricsKana = refitLyricsKana(e.LyricsKana, e.Lyrics.String(), e.LyricsYRC.String())
+		if req.FromManualPick {
+			e.LyricsKanaChecked = 0
+		}
+	}
 	e.LyricsSource = req.Source
 	// 用户直接改的这一条是原件,不再是从别的写法同步过来的副本。
 	e.LyricsEntityOrigin = ""

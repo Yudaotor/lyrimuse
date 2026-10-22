@@ -433,6 +433,14 @@ func runRomanizationTests() {
         expectEqual(kanaLine?.romanization, "あしたがぼくらをよんだって", "假名档: 整行把汉字换成标注的假名,不用源自带的罗马音")
         expectEqual(kanaLine?.wordGroups?.compactMap(\.romanization), ["あした", "ぼく", "よ"],
                     "假名档: 逐词只给汉字标,送假名剥掉")
+        let partialKana = Romanizer.kanaReading("B級の夢", segments: [
+            .init(utf16Start: 0, utf16Length: 2, latin: "B級"), .init(utf16Start: 2, utf16Length: 1, latin: "no"),
+            .init(utf16Start: 3, utf16Length: 1, latin: "yume", kana: "ゆめ")])
+        expectEqual(partialKana, "B級のゆめ", "假名档: 拿不到读音的汉字段留原文,别的照样标,不整行作废")
+        let previewKana = LyricsPreviewText.rows(
+            lyrics: "[00:01.00]明日へ", translation: "", romanizationScripts: [.japanese],
+            kanaDonor: "[kana:2あした]\n[00:00.00]明日へ", japaneseReading: .kana).first?.romanization
+        expectEqual(previewKana, "あしたへ", "假名档: 歌词管理的预览也用借来的标注和假名设置")
         let romajiEngine = LyricsSyncEngine()
         romajiEngine.load(
             lyrics: "[00:01.00]明日が僕らを呼んだって\n[kana:2あした1ぼく1よ]", lyricsTr: "", lyricsRoma: "",

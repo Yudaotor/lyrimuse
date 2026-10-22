@@ -232,13 +232,16 @@ extension LyricsPreviewText {
     /// 只交整行 LRC、译文和读音:逐字轨不交,时间列就是这份 LRC 自己的时间戳,也不会为预览打时间轴归一化的
     /// 日志。读音默认不显示(`romanizationScripts` 空集,源自带的也不挂),「歌词管理」的「原文 + 读音」传缓存里那份
     /// 和用户设置里的文字种类,跟歌词窗口显示的一样。一行都解析不出(没有时间戳的纯文本)时退回 `forPreview` 的
-    /// 原样文本,不带时间。`title` / `artist` 只用于署名过滤。
+    /// 原样文本,不带时间。`title` / `artist` 只用于署名过滤。`kanaDonor`(条目借来的假名标注)和 `japaneseReading`
+    /// 跟播放时一样传,读音才对得上歌词窗口。
     public static func rows(lyrics: String, translation: String, romanization: String = "",
                             romanizationScripts: RomanizationScripts = [],
+                            kanaDonor: String = "", japaneseReading: JapaneseReadingStyle = .romaji,
                             title: String = "", artist: String = "") -> [LyricsPreviewRow] {
         let engine = LyricsSyncEngine()
-        engine.load(lyrics: lyrics, lyricsTr: translation, lyricsRoma: romanization, lyricsYRC: "",
-                    trackTitle: title, trackArtist: artist, romanizationScripts: romanizationScripts)
+        engine.load(lyrics: lyrics, lyricsTr: translation, lyricsRoma: romanization, lyricsYRC: "", kanaDonor: kanaDonor,
+                    trackTitle: title, trackArtist: artist, romanizationScripts: romanizationScripts,
+                    japaneseReading: japaneseReading)
         let lines = engine.allLines(idPrefix: "")
         if !lines.isEmpty {
             return lines.map {

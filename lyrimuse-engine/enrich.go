@@ -237,6 +237,9 @@ type enrichEntry struct {
 	// LyricsKanaChecked:这条按哪一版借假名标注(lyricsKanaVersion)问过带标注的源。0 = 还没有,日文歌播放到时补问一次
 	// (kanabackfill.go)。
 	LyricsKanaChecked int `json:"lyrics_kana_checked,omitempty"`
+	// LyricsKanaRomaFor:kanabackfill.go 按借来的标注核过罗马音时,那一刻标注、正文、罗马音的指纹(kanaRomaFingerprint)。
+	// 三样都没变就不再起 helper 核一遍。
+	LyricsKanaRomaFor string `json:"lyrics_kana_roma_for,omitempty"`
 	// SongLanguage 是这首歌的语种真值(songLanguageMandarin/songLanguageCantonese 之一,
 	// 见 lyricCandidate.language),取自**全部**候选里第一个给出这个信号的那个(见
 	// songLanguageFromScored),不是只看最终拿到歌词正文的那个候选——目前只有 QQ/酷狗
@@ -2103,6 +2106,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	sourceChoice := opts.sourceChoice(enrichCache[key].LyricsSourceChoice)
 	startLyrics := enrichCache[key].Lyrics
 	startSource := enrichCache[key].LyricsSource
+	startKana := enrichCache[key].LyricsKana
 	listed := enrichCache[key].YouTubeMusicAlbum
 	storedSearchTitle := enrichCache[key].LyricsSearchTitle
 	stamp := enrichEditStampLocked()
@@ -2133,7 +2137,8 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	// 罗马音兜底可能要起子进程,在上锁之前算好(见 maybeGenerateRoma);只在这一轮会换正文时才算。
 	var preparedRoma string
 	if picked != nil && picked.LyricsRoma == "" && !startLyrics.EqualString(picked.Lyrics) {
-		preparedRoma = generatedRomaFor(picked.Lyrics, "", entrySongLanguage(picked.Lyrics, scored))
+		preparedRoma = generatedRomaFor(picked.Lyrics, "", entrySongLanguage(picked.Lyrics, scored),
+			nextLyricsKana(startKana, picked.Lyrics, picked.LyricsYRC, scored))
 	}
 	// 换上去会让正在播的这首丢掉能用的译文时,先把新正文翻好,跟正文同一次换上。
 	preparedTr := prepareSwapTranslation(ctx, key, artist, title, picked, func(e enrichEntry) bool {
@@ -2520,6 +2525,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	currentSource := enrichCache[key].LyricsSource
 	sourceChoice := opts.sourceChoice(enrichCache[key].LyricsSourceChoice)
 	startLyrics := enrichCache[key].Lyrics
+	startKana := enrichCache[key].LyricsKana
 	listed := enrichCache[key].YouTubeMusicAlbum
 	storedSearchTitle := enrichCache[key].LyricsSearchTitle
 	stamp := enrichEditStampLocked()
@@ -2558,7 +2564,8 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	// 罗马音兜底在上锁之前算好,同 retryLyricsUpgrade。
 	var preparedRoma string
 	if decidable && picked != nil && picked.LyricsRoma == "" && !startLyrics.EqualString(picked.Lyrics) {
-		preparedRoma = generatedRomaFor(picked.Lyrics, "", entrySongLanguage(picked.Lyrics, scored))
+		preparedRoma = generatedRomaFor(picked.Lyrics, "", entrySongLanguage(picked.Lyrics, scored),
+			nextLyricsKana(startKana, picked.Lyrics, picked.LyricsYRC, scored))
 	}
 	// 同 retryLyricsUpgrade:换正文会让正在播的这首丢掉能用的译文时先翻好。判据对着下面 default 分支换正文那一支。
 	preparedTr := prepareSwapTranslation(ctx, key, artist, title, picked, func(e enrichEntry) bool {

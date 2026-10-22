@@ -151,8 +151,10 @@ struct LyricsSearchSheet: View {
         private var inputs: [String] = []
         private var cached: PreviewRows?
 
-        func rows(_ c: LyricsSearchService.Candidate, scripts: RomanizationScripts) -> PreviewRows {
-            let inputs = [c.lyrics, c.lyricsTr, c.lyricsRoma, c.lyricsYRC, c.title, c.artist, String(scripts.rawValue)]
+        func rows(_ c: LyricsSearchService.Candidate, scripts: RomanizationScripts,
+                  reading: JapaneseReadingStyle) -> PreviewRows {
+            let inputs = [c.lyrics, c.lyricsTr, c.lyricsRoma, c.lyricsYRC, c.title, c.artist, String(scripts.rawValue),
+                          c.lyricsKana, reading.rawValue]
             if let cached, inputs == self.inputs { return cached }
             // 当前句逐字染色的字取自这条候选自己的逐字轨(见 11 章决策 101)。
             func withKaraoke(_ rows: [LyricsPreviewRow]) -> [LyricsPreviewRow] {
@@ -163,7 +165,8 @@ struct LyricsSearchSheet: View {
             let mayRomanize = c.hasRomanization || LyricsPreviewText.mayHaveRomanization(c.lyrics, scripts: scripts)
             let romanized = mayRomanize
                 ? withKaraoke(LyricsPreviewText.rows(lyrics: c.lyrics, translation: c.lyricsTr, romanization: c.lyricsRoma,
-                                                     romanizationScripts: scripts, title: c.title, artist: c.artist))
+                                                     romanizationScripts: scripts, kanaDonor: c.lyricsKana,
+                                                     japaneseReading: reading, title: c.title, artist: c.artist))
                 : []
             let hasRomanization = romanized.contains { !($0.romanization ?? "").isEmpty }
             let embedded = LRCParser.parseOffsetMs(c.lyrics)
@@ -1014,7 +1017,7 @@ struct LyricsSearchSheet: View {
         // 引擎预生成的读音不算这一版自带的(搜到的同一份候选也不带),预览的「原文 + 读音」照样按设置现算。
         let roma = plainOnly ? "" : LyricsRomanization.sourceProvidedRomanization(
             entry.lyricsRoma, lyrics: text, kanaDonor: entry.lyricsKana)
-        return LyricsSearchService.Candidate(
+        var stored = LyricsSearchService.Candidate(
             source: source, lyrics: text,
             lyricsTr: plainOnly ? "" : entry.lyricsTr, lyricsRoma: roma,
             lyricsYRC: plainOnly ? "" : entry.lyricsYRC, lyricsBG: "", lyricsTrLang: "",
@@ -1026,6 +1029,8 @@ struct LyricsSearchSheet: View {
             fingerprint: ManualPickLock.fingerprint(lyrics: text),
             timeline: LyricsCandidateDuplicates.lineTimestamps(text),
             isStored: true)
+        stored.lyricsKana = plainOnly ? "" : entry.lyricsKana
+        return stored
     }
 
     // MARK: - 右侧(标题行 + 预览 / 空状态)
@@ -1566,7 +1571,8 @@ struct LyricsSearchSheet: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 8)
             }
-            let rows = previewMemo.rows(c, scripts: LocalPlaybackSource.shared.romanizationScripts)
+            let rows = previewMemo.rows(c, scripts: LocalPlaybackSource.shared.romanizationScripts,
+                                        reading: LocalPlaybackSource.shared.japaneseReading)
             let comparison = comparison(c, rows: rows)
             if let comparison {
                 comparisonSummary(comparison.pairs)
@@ -1601,7 +1607,8 @@ struct LyricsSearchSheet: View {
 
     private func comparison(_ c: LyricsSearchService.Candidate, rows: PreviewRows) -> Comparison? {
         guard !isCurrentCandidate(c), let current = currentShown, rows.timed else { return nil }
-        let currentRows = currentPreviewMemo.rows(current, scripts: LocalPlaybackSource.shared.romanizationScripts)
+        let currentRows = currentPreviewMemo.rows(current, scripts: LocalPlaybackSource.shared.romanizationScripts,
+                                                  reading: LocalPlaybackSource.shared.japaneseReading)
         guard currentRows.timed else { return nil }
         let pairs = comparisonMemo.pairs(
             // 指纹只看词不看时间:词和行数不变、只是时间轴变了(引擎重挂时间轴、同一个源换了一条录音)时,

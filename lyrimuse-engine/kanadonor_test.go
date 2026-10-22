@@ -88,6 +88,14 @@ func TestKanaDonorLRC(t *testing.T) {
 	if got := kanaDonorLRC("[00:01.00]君と\n[00:02.00]ねえ\n", "", cands); got != "" {
 		t.Errorf("只对上一行时不借: %q", got)
 	}
+	if got := kanaDonorLRC("[00:01.00]君と\n[00:02.00]ねえ\n", "[1000,500](1000,250,0)君 (1250,250,0)と", cands); got != "" {
+		t.Errorf("整行和逐字只差空白的同一句只算一行: %q", got)
+	}
+	compat := "[kana:1きみ1ゆめ1み]\n[00:01.00]君と\n[00:02.00]夢が⾒える\n[00:03.00]見て\n"
+	if got := kanaDonorLRC("[00:01.00]君と\n[00:02.00]夢が⾒える\n[00:03.00]見て\n", "",
+		[]scoredLyricCandidateResult{{Source: "qq", Score: 1000, Lyrics: compat}}); strings.Contains(got, "⾒") {
+		t.Errorf("带康熙部首的行不借(App 换成标准字后待标字会多一个): %q", got)
+	}
 	// 逐字歌词的写法跟整行不同时,两种写法都借。
 	yrc := "[1000,500](1000,500,0)夢を(1500,500,0)見た"
 	if got := kanaDonorLRC(cur, yrc, cands); !strings.HasSuffix(got, "\n[00:00.00]夢を見た") || !strings.HasPrefix(got, "[kana:1きみ2あした1ゆめ1み]") {
@@ -119,6 +127,12 @@ func TestRefreshKana(t *testing.T) {
 	if e.LyricsKana != old || e.LyricsKanaChecked != lyricsKanaVersion {
 		t.Errorf("问到了但没借到:旧的留着、记已查: %q checked=%d", e.LyricsKana, e.LyricsKanaChecked)
 	}
+	e.Lyrics = bt("[00:01.00]別の歌です\n[00:02.00]空を見上げて\n")
+	refreshKana(&e, nil)
+	if e.LyricsKana != "" {
+		t.Errorf("正文换成别的歌、这一轮没借到:旧的对不上就清掉: %q", e.LyricsKana)
+	}
+	e.LyricsKana = old
 	e.Lyrics = bt(kanaDonorSample)
 	refreshKana(&e, []scoredLyricCandidateResult{qq})
 	if e.LyricsKana != "" {
@@ -151,15 +165,34 @@ func TestLyricsKanaIsWired(t *testing.T) {
 		"provisionallyrics.go": "refreshSpeakers(&e, scored)\n\trefreshKana(&e, scored)\n",
 		"resynclyricscli.go":   "refreshSpeakers(&cur, scored)\n\t\trefreshKana(&cur, scored)\n",
 		"songentityshare.go":   "refreshSpeakers(e, r.Scored)\n\trefreshKana(e, r.Scored)\n",
-		"backfilllyrics.go":    "e.LyricsKana, e.LyricsKanaChecked = fresh.LyricsKana, fresh.LyricsKanaChecked\n",
-		"crossalbum.go":        "e.LyricsKana, e.LyricsKanaChecked = src.LyricsKana, src.LyricsKanaChecked\n",
-		"crossalbumcli.go":     "dst.LyricsKana, dst.LyricsKanaChecked = src.LyricsKana, src.LyricsKanaChecked\n",
+		"backfilllyrics.go":    "e.LyricsKana, e.LyricsKanaChecked, e.LyricsKanaRomaFor = fresh.LyricsKana, fresh.LyricsKanaChecked, fresh.LyricsKanaRomaFor\n",
+		"crossalbum.go":        "e.LyricsKana, e.LyricsKanaChecked, e.LyricsKanaRomaFor = src.LyricsKana, src.LyricsKanaChecked, src.LyricsKanaRomaFor\n",
+		"crossalbumcli.go":     "dst.LyricsKana, dst.LyricsKanaChecked, dst.LyricsKanaRomaFor = src.LyricsKana, src.LyricsKanaChecked, src.LyricsKanaRomaFor\n",
 	} {
 		if !containsCode(read(f), s) {
 			t.Errorf("%s 缺 %q", f, s)
 		}
 	}
-	if !containsCode(read("songentityshare.go"), "dst.LyricsKana, dst.LyricsKanaChecked = src.LyricsKana, src.LyricsKanaChecked\n") {
+	if !containsCode(read("songentityshare.go"), "dst.LyricsKana, dst.LyricsKanaChecked, dst.LyricsKanaRomaFor = src.LyricsKana, src.LyricsKanaChecked, src.LyricsKanaRomaFor\n") {
 		t.Error("songentityshare.go 搬正文时缺借来的标注")
+	}
+}
+
+// 手改、采纳候选换了正文:借来的标注对到新正文上,对不上的去掉;采纳候选还要当没问过。
+func TestSaveEditRefitsLyricsKana(t *testing.T) {
+	cur := "[00:01.10]君と\n[00:02.10]明日へ\n"
+	donor := kanaDonorLRC(cur, "", []scoredLyricCandidateResult{{Source: "qq", Score: 1100, Lyrics: kanaDonorSample}})
+	e := enrichEntry{Lyrics: bt(cur), LyricsKana: donor, LyricsKanaChecked: lyricsKanaVersion}
+	if err := applySaveEdit(&e, enrichEditRequest{Lyrics: cur + "[00:03.10]ねえ\n"}); err != nil {
+		t.Fatal(err)
+	}
+	if e.LyricsKana != donor || e.LyricsKanaChecked != lyricsKanaVersion {
+		t.Errorf("只加了一行:标注照旧: %q checked=%d", e.LyricsKana, e.LyricsKanaChecked)
+	}
+	if err := applySaveEdit(&e, enrichEditRequest{Lyrics: "[00:01.00]別の歌です\n[00:02.00]空を見上げて\n", FromManualPick: true}); err != nil {
+		t.Fatal(err)
+	}
+	if e.LyricsKana != "" || e.LyricsKanaChecked != 0 {
+		t.Errorf("采纳了另一份正文:旧标注清掉、当没问过: %q checked=%d", e.LyricsKana, e.LyricsKanaChecked)
 	}
 }

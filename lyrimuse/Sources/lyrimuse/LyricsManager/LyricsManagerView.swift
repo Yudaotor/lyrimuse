@@ -3228,6 +3228,11 @@ struct LyricsManagerView: View {
                 refreshPreviewRows(key: key, summary: summary, lyrics: loadedLyrics, tr: loadedTr, roma: loadedRoma,
                                    scripts: scripts)
             }
+            .onReceive(LocalPlaybackSource.shared.$japaneseReading.removeDuplicates().dropFirst()) { reading in
+                guard editingKey == key else { return }
+                refreshPreviewRows(key: key, summary: summary, lyrics: loadedLyrics, tr: loadedTr, roma: loadedRoma,
+                                   reading: reading)
+            }
             .onChange(of: key) { _, newKey in
                 store.dismissEditError()
                 endEditing()
@@ -3837,15 +3842,19 @@ struct LyricsManagerView: View {
     /// 预览的两份行都走播放引擎(LyricsPreviewText.rows),跟歌词窗口显示的同一批。带读音那份用缓存里存的读音,加上按设置里
     /// 开着的文字种类现算的;「原文 + 读音」能不能点就看它有没有一句读音。输入没变就不重算:列表每重读一次都会走到这里。
     private func refreshPreviewRows(key: String, summary: EnrichCacheStore.Summary, lyrics: String, tr: String, roma: String,
-                                    scripts pushed: RomanizationScripts? = nil) {
+                                    scripts pushed: RomanizationScripts? = nil,
+                                    reading pushedReading: JapaneseReadingStyle? = nil) {
         let scripts = pushed ?? LocalPlaybackSource.shared.romanizationScripts
-        let inputs = [key, lyrics, tr, roma, String(scripts.rawValue)]
+        let reading = pushedReading ?? LocalPlaybackSource.shared.japaneseReading
+        let kana = store.kanaDonor(for: key)
+        let inputs = [key, lyrics, tr, roma, String(scripts.rawValue), reading.rawValue, kana]
         guard inputs != previewInputs else { return }
         previewInputs = inputs
         previewRows = LyricsPreviewText.rows(lyrics: lyrics, translation: tr, title: summary.title, artist: summary.artist)
         let mayRomanize = summary.hasRomanization || LyricsPreviewText.mayHaveRomanization(lyrics, scripts: scripts)
         romanizedRows = mayRomanize
             ? LyricsPreviewText.rows(lyrics: lyrics, translation: tr, romanization: roma, romanizationScripts: scripts,
+                                     kanaDonor: kana, japaneseReading: reading,
                                      title: summary.title, artist: summary.artist)
             : []
         romanizationAvailable = romanizedRows.contains { !($0.romanization ?? "").isEmpty }

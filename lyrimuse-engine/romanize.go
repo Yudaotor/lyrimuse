@@ -183,10 +183,10 @@ func (e *enrichEntry) maybeGenerateRoma() {
 	e.maybeGenerateHelperRoma()
 }
 
-// generatedRomaFor 按 maybeGenerateRoma 的规则给这份正文算一份罗马音(sourceRoma 非空就原样返回)。
-// 可能起 lyrics-romanize 子进程(平均几十毫秒,超时 20 秒),调用方别持 enrichMu。
-func generatedRomaFor(lyrics, sourceRoma, songLanguage string) string {
-	e := enrichEntry{Lyrics: bt(lyrics), LyricsRoma: bt(sourceRoma), SongLanguage: songLanguage}
+// generatedRomaFor 按 maybeGenerateRoma 的规则给这份正文算一份罗马音(sourceRoma 非空就原样返回)。kanaDonor 是条目
+// 写完这一轮会带的借来假名标注(nextLyricsKana)。可能起 lyrics-romanize 子进程(平均几十毫秒,超时 20 秒),调用方别持 enrichMu。
+func generatedRomaFor(lyrics, sourceRoma, songLanguage, kanaDonor string) string {
+	e := enrichEntry{Lyrics: bt(lyrics), LyricsRoma: bt(sourceRoma), SongLanguage: songLanguage, LyricsKana: kanaDonor}
 	e.maybeGenerateRoma()
 	return e.LyricsRoma.String()
 }

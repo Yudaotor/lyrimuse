@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"log"
 	"strings"
 )
@@ -53,9 +55,16 @@ func needsLyricsKanaAsk(e enrichEntry) bool {
 	return e.LyricsKanaChecked < lyricsKanaVersion && kanaSongNeedsReading(e) && len(enabledKanaDonorSources()) > 0
 }
 
-// needsKanaRomaRefresh:有借来的标注、罗马音可能是不用它生成的。
+// needsKanaRomaRefresh:有借来的标注、罗马音可能是不用它生成的,而且这份标注、正文、罗马音还没核过。
 func needsKanaRomaRefresh(e enrichEntry) bool {
-	return e.LyricsKana != "" && isStaleRomaCandidate(e)
+	return e.LyricsKana != "" && isStaleRomaCandidate(e) &&
+		e.LyricsKanaRomaFor != kanaRomaFingerprint(e.LyricsKana, e.Lyrics.String(), e.LyricsRoma.String())
+}
+
+// kanaRomaFingerprint:借来的标注、正文、罗马音合起来的指纹(SHA-256 前 12 位十六进制)。
+func kanaRomaFingerprint(kana, lyrics, roma string) string {
+	sum := sha256.Sum256([]byte(kana + "\x01" + lyrics + "\x01" + roma))
+	return hex.EncodeToString(sum[:6])
 }
 
 func needsLyricsKanaBackfill(e enrichEntry) bool {
@@ -94,12 +103,13 @@ func backfillLyricsKana(key, artist, title, album string, durationSecs float64) 
 		log.Printf("kana backfill: %s  sources=%v candidates=%d borrowed=%t", key, sources, len(scored), next.LyricsKana != e.LyricsKana)
 	}
 	var roma string
+	romaChecked := false
 	if next.LyricsKana != "" && isStaleRomaCandidate(e) {
 		r, err := staleRomaRegenerator(e.Lyrics.String(), e.LyricsRoma.String(), next.LyricsKana)
 		if err != nil {
 			warnf("kana backfill: %s  romanize helper failed: %v", key, err)
 		}
-		roma = r
+		roma, romaChecked = r, err == nil
 	}
 
 	enrichMu.Lock()
@@ -111,11 +121,20 @@ func backfillLyricsKana(key, artist, title, album string, durationSecs float64) 
 		return
 	}
 	romaChanged := roma != "" && !cur.LyricsRoma.EqualString(roma)
-	if cur.LyricsKana == next.LyricsKana && cur.LyricsKanaChecked == next.LyricsKanaChecked && !romaChanged {
+	romaFor := cur.LyricsKanaRomaFor
+	if romaChecked {
+		final := cur.LyricsRoma.String()
+		if romaChanged {
+			final = roma
+		}
+		romaFor = kanaRomaFingerprint(next.LyricsKana, cur.Lyrics.String(), final)
+	}
+	if cur.LyricsKana == next.LyricsKana && cur.LyricsKanaChecked == next.LyricsKanaChecked && !romaChanged &&
+		cur.LyricsKanaRomaFor == romaFor {
 		enrichMu.Unlock()
 		return
 	}
-	cur.LyricsKana, cur.LyricsKanaChecked = next.LyricsKana, next.LyricsKanaChecked
+	cur.LyricsKana, cur.LyricsKanaChecked, cur.LyricsKanaRomaFor = next.LyricsKana, next.LyricsKanaChecked, romaFor
 	if romaChanged {
 		cur.LyricsRoma = bt(roma)
 		log.Printf("kana backfill: %s  romanization regenerated with borrowed kana", key)

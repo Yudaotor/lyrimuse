@@ -32,12 +32,12 @@ func TestApplyPregeneratedRoma(t *testing.T) {
 
 // generatedRomaFor 跟 maybeGenerateRoma 同一套规则:源自带的原样返回,粤语走粤拼。
 func TestGeneratedRomaFor(t *testing.T) {
-	if got := generatedRomaFor("[00:01.00]我哋", "[00:01.00]src", songLanguageCantonese); got != "[00:01.00]src" {
+	if got := generatedRomaFor("[00:01.00]我哋", "[00:01.00]src", songLanguageCantonese, ""); got != "[00:01.00]src" {
 		t.Fatalf("源自带的原样返回: %q", got)
 	}
 	want := enrichEntry{Lyrics: bt("[00:01.00]我哋一齊"), SongLanguage: songLanguageCantonese}
 	want.maybeGenerateRoma()
-	if got := generatedRomaFor("[00:01.00]我哋一齊", "", songLanguageCantonese); got == "" || !want.LyricsRoma.EqualString(got) {
+	if got := generatedRomaFor("[00:01.00]我哋一齊", "", songLanguageCantonese, ""); got == "" || !want.LyricsRoma.EqualString(got) {
 		t.Fatalf("粤语歌应与 maybeGenerateRoma 一致: got %q want %q", got, want.LyricsRoma)
 	}
 }

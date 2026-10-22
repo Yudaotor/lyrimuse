@@ -262,6 +262,13 @@ public enum Romanizer {
         /// 含汉字的片段的平假名读音(整个片段的,含送假名),给读音样式选了假名时用;不含汉字、拿不到读音的为 nil。
         public var kana: String? = nil
         public var utf16End: Int { utf16Start + utf16Length }
+
+        public init(utf16Start: Int, utf16Length: Int, latin: String, kana: String? = nil) {
+            self.utf16Start = utf16Start
+            self.utf16Length = utf16Length
+            self.latin = latin
+            self.kana = kana
+        }
     }
 
     /// 用歌词源自带的假名标注拼出这个 token 的读音;这个 token 上没有标注时返回 nil,
@@ -341,21 +348,21 @@ public enum Romanizer {
         return core.isEmpty ? nil : core
     }
 
-    /// 整行的假名读音:含汉字的片段换成它的平假名读音,其余原样。跟原文一样(没有汉字)、或有含汉字的片段
-    /// 拿不到读音时返回 nil。
+    /// 整行的假名读音:含汉字的片段换成它的平假名读音,其余原样。拿不到读音的片段(分词器给不出转写的生僻字、
+    /// 跟拉丁字母连在一起的「B級」、非日文歌里换成拼音的中文片段)留原文,别的片段照样标。跟原文一样时返回 nil。
     public static func kanaReading(_ text: String, segments: [JapaneseSegment]) -> String? {
         let units = Array(text.utf16)
         var out = ""
         var cursor = 0
         for seg in segments.sorted(by: { $0.utf16Start < $1.utf16Start }) where seg.utf16End <= units.count {
             let piece = String(utf16CodeUnits: Array(units[seg.utf16Start..<seg.utf16End]), count: seg.utf16Length)
-            guard piece.contains(where: KanaAnnotation.needsAnnotation), seg.utf16Start >= cursor else { continue }
-            guard let kana = seg.kana else { return nil }
+            guard piece.contains(where: KanaAnnotation.needsAnnotation), seg.utf16Start >= cursor,
+                  let kana = seg.kana else { continue }
             out += String(utf16CodeUnits: Array(units[cursor..<seg.utf16Start]), count: seg.utf16Start - cursor) + kana
             cursor = seg.utf16End
         }
         out += String(utf16CodeUnits: Array(units[cursor...]), count: units.count - cursor)
-        return out == text || out.contains(where: KanaAnnotation.needsAnnotation) ? nil : out
+        return out == text ? nil : out
     }
 
     /// 分词器给的拉丁转写换回平假名(它本来就是从假名转出来的,换回去是确定的)。
