@@ -126,34 +126,79 @@ public enum SettingsSearchCatalog {
     /// 「快捷键」页「展开/收起触控栏歌词」那一行的标题。那一行只在有触控栏时出现,没有触控栏时设置搜索不收这一条。
     public static let touchBarHotkeyTitleKey = LyrimuseAction.toggleTouchBarLyricsHotkey.titleKey
 
-    /// 「歌词显示 › 菜单栏」那一段里随设置显隐的那几行此刻的状态,`menuBarGate` 的输入。
-    public struct MenuBarRowState: Equatable, Sendable {
-        /// 「歌词位置」选的是「菜单栏正中」。
-        public var centerSelected: Bool
-        /// 选了正中、也有能用的屏(这时宽度模式与对齐方式藏起来)。
-        public var centerInUse: Bool
-        /// 宽度模式是「固定」。
-        public var widthModeFixed: Bool
-        /// 「已唱颜色」那一行在(卡拉OK效果或歌词旁的图标开着)。
-        public var fillColorRowShown: Bool
-        public init(centerSelected: Bool, centerInUse: Bool, widthModeFixed: Bool, fillColorRowShown: Bool) {
-            self.centerSelected = centerSelected
-            self.centerInUse = centerInUse
-            self.widthModeFixed = widthModeFixed
-            self.fillColorRowShown = fillColorRowShown
+    /// 随设置显隐的一行:`condition` 为假时它不在页面上,搜到它时落到 `gate` 那一行(一起点亮、滚过去的就是那一行)。
+    /// `condition` 是名字,真假由 App 侧 `SettingsSearchRouter.rowCondition` 按此刻的设置算,写法要跟那一行自己的
+    /// 显隐同步。新加随设置显隐的行要来这里登记。
+    public struct RowGate: Equatable, Sendable {
+        /// 条目 `pathKeys` 的前缀(哪一段)。
+        public let path: [String]
+        public let title: String
+        public let condition: String
+        public let gate: String
+        public init(_ path: [String], _ title: String, _ condition: String, _ gate: String) {
+            self.path = path
+            self.title = title
+            self.condition = condition
+            self.gate = gate
         }
     }
 
-    /// 菜单栏那一段搜到的这一行此刻不在页面上时,决定它出不出现的那一行的标题(键);在页面上返回 nil。
-    /// 搜索跳转时一起高亮那一行,用户看得出要先改哪一项;不替用户改设置。
-    public static func menuBarGate(titleKey: String, state: MenuBarRowState) -> String? {
-        switch titleKey {
-        case "屏幕": return state.centerSelected ? nil : "歌词位置"
-        case "宽度模式": return state.centerInUse ? "歌词位置" : nil
-        case "对齐方式": return state.centerInUse ? "歌词位置" : (state.widthModeFixed ? nil : "宽度模式")
-        case "已唱颜色": return state.fillColorRowShown ? nil : "卡拉OK效果"
-        default: return nil
+    public static let rowGates: [RowGate] = {
+        let menuBar = ["歌词显示", "菜单栏"]
+        let notch = ["歌词显示", "灵动岛"]
+        let overlay = ["歌词显示", "悬浮歌词"]
+        let touchBar = ["歌词显示", "触控栏"]
+        let window = ["歌词显示", "歌词窗口"]
+        let lastfm = ["Last.fm", "设置"]
+        var gates: [RowGate] = [
+            RowGate(menuBar, "屏幕", "menuBar.centerSelected", "歌词位置"),
+            RowGate(menuBar, "宽度模式", "menuBar.centerIdle", "歌词位置"),
+            RowGate(menuBar, "对齐方式", "menuBar.centerIdle", "歌词位置"),
+            RowGate(menuBar, "对齐方式", "menuBar.widthFixed", "宽度模式"),
+            RowGate(menuBar, "已唱颜色", "menuBar.fillColorShown", "卡拉OK效果"),
+        ]
+        // 灵动岛「歌词行」组:收起时不显示歌词时整组藏起(`NotchLyricRowSettingsRows`)。
+        for title in ["对齐方式", "副行", "高度", "卡拉OK效果", "显示封面", "封面位置"] {
+            gates.append(RowGate(notch, title, "notch.showLyrics", "收起时显示歌词"))
         }
+        // Last.fm「Scrobble 规则」:上面的「Scrobble 到 Last.fm」关着时整组换成一句提示,落到组标题上。
+        for title in ["匹配模式", "歌名", "歌手", "Scrobble 时机", "短于 30 秒的曲目", "Scrobble 的播放器"] {
+            gates.append(RowGate(lastfm, title, "lastfm.mirror", "Scrobble 规则"))
+        }
+        gates += [
+            RowGate(notch, "封面位置", "notch.lyricRowArtwork", "显示封面"),
+            RowGate(notch, "展开时预览下一句", "notch.expandedNextLine", "副行"),
+            RowGate(overlay, "未唱颜色", "overlay.karaoke", "卡拉OK效果"),
+            RowGate(overlay, "描边颜色", "overlay.stroke", "文字描边"),
+            RowGate(overlay, "玻璃浓淡", "overlay.glass", "毛玻璃背景"),
+            RowGate(touchBar, "封面位置", "touchBar.artwork", "显示封面"),
+            RowGate(touchBar, "播放控制位置", "touchBar.controls", "显示播放控制"),
+            RowGate(window, "方向", "lyricsWindow.gradient", "背景"),
+            RowGate(window, "底部颜色", "lyricsWindow.gradient", "背景"),
+            RowGate(window, "玻璃浓淡", "lyricsWindow.glass", "背景"),
+            RowGate(window, "指定颜色", "lyricsWindow.customText", "文字颜色"),
+            RowGate(window, "淡化时点按穿透", "lyricsWindow.miniFade", "悬浮淡化"),
+            RowGate(window, "长句处理", "lyricsWindow.miniLayoutNotList", "歌词布局"),
+            RowGate(window, "允许远程控制", "web.lan", "允许局域网访问"),
+            RowGate(lastfm, "歌名", "lastfm.matchCustom", "匹配模式"),
+            RowGate(lastfm, "歌手", "lastfm.matchCustom", "匹配模式"),
+        ]
+        return gates
+    }()
+
+    /// 搜到的这一行此刻不在页面上时该落到哪一行的标题(键);在页面上返回 nil。按 `rowGates` 的顺序找第一条条件为假的;
+    /// 落点自己也藏着(灵动岛「展开时预览下一句」→「副行」→「收起时显示歌词」)就接着往上找,最多几层。
+    public static func gateTitle(path: [String], title: String, isTrue: (String) -> Bool) -> String? {
+        var current = title
+        var found: String?
+        for _ in 0..<4 {
+            guard let rule = rowGates.first(where: {
+                $0.title == current && path.starts(with: $0.path) && !isTrue($0.condition)
+            }) else { break }
+            found = rule.gate
+            current = rule.gate
+        }
+        return found
     }
 
     /// 面包屑里不是 L10n 键的品牌名(AccountDestination.title 对这几个直接返回字面量)。守卫核

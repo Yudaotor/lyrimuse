@@ -135,18 +135,46 @@ final class SettingsSearchRouter: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: drawerWork)
     }
 
-    /// 搜到的行此刻因为某项设置没显示时,把决定它出不出现的那一行也点亮(滚过去的就是那一行)。判据在 Core
-    /// `SettingsSearchCatalog.menuBarGate`,这里只喂此刻的设置;条件跟各行的显隐写法同步(`MenuBarLayoutRows`、
-    /// `MenuBarWidthModeRow`、`MenuBarColorRows`)。
+    /// 搜到的行此刻因为某项设置没显示时,把决定它出不出现的那一行也点亮(滚过去的就是那一行)。哪一行看哪个条件在 Core
+    /// `SettingsSearchCatalog.rowGates`,条件真假在 `rowCondition`。
     static func gateTitles(for entry: SettingsSearchEntry) -> Set<String> {
-        guard entry.sectionValue == LyricsSurface.menuBar.appearanceSectionRawValue else { return [] }
+        SettingsSearchCatalog.gateTitle(path: entry.pathKeys, title: entry.titleKey) { rowCondition($0, entry: entry) }
+            .map { [L10n.t($0)] } ?? []
+    }
+
+    /// `rowGates` 里各条件此刻的真假(假 = 那一行不在页面上)。每一条的写法跟那一行自己的显隐同步:菜单栏
+    /// `MenuBarLayoutRows` / `MenuBarWidthModeRow` / `MenuBarColorRows`,灵动岛 `NotchLyricRowSettingsRows`,悬浮歌词
+    /// `OverlayStyleSettingsRows`,触控栏 `TouchBarSettingsRows`,歌词窗口 `lyricsWindowRows` / `WebLyricsSettingsCard`,
+    /// Last.fm「Scrobble 规则」。歌词窗口两种尺寸各存一份:按跳过去之后预览显示的那一种算。认不出的名字当真(不加门)。
+    static func rowCondition(_ name: String, entry: SettingsSearchEntry) -> Bool {
         let s = AppSettings.shared
-        let state = SettingsSearchCatalog.MenuBarRowState(
-            centerSelected: s.menuBarLyricsPlacement == .screenCenter,
-            centerInUse: MenuBarPlacementRow.centerInUse(s),
-            widthModeFixed: s.menuBarLyricsWidthMode == .fixed,
-            fillColorRowShown: s.menuBarLyricsKaraoke || s.menuBarLyricsIconPosition != .off)
-        return SettingsSearchCatalog.menuBarGate(titleKey: entry.titleKey, state: state).map { [L10n.t($0)] } ?? []
+        let features = FeatureSettingsStore.shared
+        let mini = entry.lyricsWindowMini ?? UserDefaults.standard.bool(forKey: LyricsWindowPreviewStage.showsMiniStorageKey)
+        let windowBackground = mini ? s.lyricsWindowMiniBackgroundMode : s.lyricsWindowBackgroundMode
+        switch name {
+        case "menuBar.centerSelected": return s.menuBarLyricsPlacement == .screenCenter
+        case "menuBar.centerIdle": return !MenuBarPlacementRow.centerInUse(s)
+        case "menuBar.widthFixed": return s.menuBarLyricsWidthMode == .fixed
+        case "menuBar.fillColorShown": return s.menuBarLyricsKaraoke || s.menuBarLyricsIconPosition != .off
+        case "notch.showLyrics": return s.notchShowLyrics
+        case "notch.lyricRowArtwork": return s.notchLyricRowShowsArtwork
+        case "notch.expandedNextLine": return !s.notchSecondaryLine.hidesExpandedNextLinePreview
+        case "overlay.karaoke": return s.overlayLyricsKaraoke
+        case "overlay.stroke": return s.textStrokeEnabled
+        case "overlay.glass": return s.overlayBackgroundGlass
+        case "touchBar.artwork": return s.touchBarShowsArtwork
+        case "touchBar.controls": return s.touchBarShowsControls
+        case "lyricsWindow.gradient": return windowBackground == .gradient
+        case "lyricsWindow.glass": return windowBackground == .glass
+        case "lyricsWindow.customText":
+            return (mini ? s.lyricsWindowMiniTextColorMode : s.lyricsWindowTextColorMode).usesCustomColor
+        case "lyricsWindow.miniFade": return s.lyricsWindowMiniFadeOnHover
+        case "lyricsWindow.miniLayoutNotList": return s.lyricsWindowMiniLyricsLayout != .list
+        case "web.lan": return s.webLyricsAllowLAN
+        case "lastfm.mirror": return features.lastfmMirrorScrobble
+        case "lastfm.matchCustom": return features.lastfmMatchMode == .custom
+        default: return true
+        }
     }
 
     func consumeDrawer(_ surface: LyricsSurface) {
