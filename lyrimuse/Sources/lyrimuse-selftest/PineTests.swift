@@ -45,6 +45,17 @@ func runPineTests() {
                                artist: "\u{B4}\u{FA}\u{B8}\u{D5}\u{BA}q\u{A4}\u{E2}", candidates: leaked), 4, "Pine 挑文件: 乱码原样比得上")
         expectEqual(P.pickFile(title: "Happy Boy", artist: "Someone Else", candidates: leaked), nil,
                     "Pine 挑文件: 歌手一栏都对不上、同名的又不止一个,不猜")
+        let untagged = LocalAudioFileTags(title: "", artist: "", album: "", duration: 40)
+        let twoCopies: [(fileName: String, tags: LocalAudioFileTags)] = [
+            ("无标签 Mezzamo - Happy Boy.mp3", untagged), ("只有歌名.mp3", leaked[0].tags), ("无标签 Mezzamo - Happy Boy.mp3", untagged),
+        ]
+        expectEqual(P.pickFile(title: "无标签 Mezzamo - Happy Boy.mp3", artist: " ", candidates: twoCopies), 2,
+                    "Pine 挑文件: 两个目录里的同名文件都开着时取后打开的那个")
+        expectEqual(P.pickFile(title: "无标签 Mezzamo - Happy Boy", artist: "无标签 Mezzamo", candidates: leaked), 1,
+                    "Pine 挑文件: 没写标签、它解析过文件名之后的写法(不带扩展名、歌手一栏是「 - 」前面那段)")
+        expectEqual(P.fileMatches(title: "无标签 Mezzamo - Happy Boy", artist: "别人", tags: untagged,
+                                  fileName: "无标签 Mezzamo - Happy Boy.mp3"), false, "Pine 挑文件: 解析过的写法歌手一栏也要对上")
+        expectEqual(P.keepingLastOccurrence(["a", "b", "a", "c"]), ["b", "a", "c"], "Pine 挑文件: 同一个文件开过两次,按后开的那次排")
         expectEqual(P.pickFile(title: "Marjoram", artist: "Accident", candidates: [
             ("m.mp3", LocalAudioFileTags(title: "Marjoram", artist: "Accident", album: "Vert Bleu Noir", duration: 294)),
         ]), 0, "Pine 挑文件: 歌手一栏对不上但同名的只有一个,就是它")
@@ -70,10 +81,27 @@ func runPineTests() {
                                   fileName: "无标签 Mezzamo - Happy Boy.mp3")
         expectEqual(id(untagged), id(P.identity(title: "无标签 Mezzamo - Happy Boy.mp3", artist: " ")),
                     "Pine 身份: 没写标签两条路一样")
+        expectEqual(id(untagged), id(P.identity(title: "无标签 Mezzamo - Happy Boy", artist: "无标签 Mezzamo")),
+                    "Pine 身份: 它解析过文件名之后的写法也是同一首(中途改写不算换歌)")
+        expectEqual(id(P.identity(title: "Track08", artist: "Track08")), "|Track08|", "Pine 身份: 解析过、文件名里没有「 - 」")
         let big5 = P.identity(tags: LocalAudioFileTags(title: "\u{C1}c\u{C5}\u{E9}\u{BA}q\u{A6}W\u{B4}\u{FA}\u{B8}\u{D5}",
                                                        artist: "\u{B4}\u{FA}\u{B8}\u{D5}\u{BA}q\u{A4}\u{E2}", album: "", duration: 40),
                               fileName: "big5-a.mp3")
         expectEqual(id(big5), "測試歌手|繁體歌名測試|", "Pine 身份: 文件标签的乱码同样还原")
+    }
+
+    // ---- 出口换曲目时带过去的标记 ----
+    do {
+        let json = #"{"title":"Happy Boy","artist":"Happy Boy","duration":40,"elapsedTime":0,"playing":false,"playbackRate":0,"isMusicApp":true,"bundleIdentifier":"com.digipine.pineplayer"}"#
+        var raw = try! JSONDecoder().decode(MediaControlSnapshot.self, from: Data(json.utf8))
+        raw.isWaitingToPlay = true
+        raw.republishDueBy = Date(timeIntervalSince1970: 1_800_000_002)
+        raw.positionIsPrecise = true
+        let out = P.adapted(raw)
+        expectEqual(out?.artist, "", "Pine 出口: 曲目照换(没写歌手)")
+        expectEqual(out?.isWaitingToPlay, true, "Pine 出口: 在加载带过去(不然按暂停档 6 秒才轮询)")
+        expectEqual(out?.republishDueBy, raw.republishDueBy, "Pine 出口: 补查时刻带过去")
+        expectEqual(out?.positionIsPrecise, true, "Pine 出口: 精确读数带过去")
     }
 
     // ---- 位置:真机那一串锚点回放 ----
@@ -139,6 +167,10 @@ func runPineTests() {
         expectEqual(H.position(only, now: t0.addingTimeInterval(3.0)).waiting, false, "Pine 边界: 等不到第二份按第一份走")
         expectEqual(abs(H.position(only, now: t0.addingTimeInterval(3.0)).position - 2.95) < 0.001, true,
                     "Pine 边界: 等不到第二份时从第一份起算")
+        let looping = H.advance(H.advance(nil, anchor: anchor("e", 39, 0), now: t0), anchor: anchor("e", 1, 41), now: t0.addingTimeInterval(41))
+        let restarted = H.advance(looping, anchor: anchor("e", 0, 41.67), now: t0.addingTimeInterval(41.7))
+        expectEqual(restarted.holdUntil, nil, "Pine 边界: 循环回到开头(先报 1 秒、再报 0 秒)时 0 秒那份当第二份,不停住")
+        expectEqual(restarted.kind, .start, "Pine 边界: 循环回到开头算开播")
         let late = H.advance(only, anchor: anchor("a", 0, 30), now: t0.addingTimeInterval(30))
         expectEqual(late.holdUntil != nil, true, "Pine 边界: 隔很久又一份 0 秒锚点是重新开播(上一首、单曲循环),再停一次")
         let joined = H.advance(nil, anchor: anchor("a", 87, 0), now: t0)

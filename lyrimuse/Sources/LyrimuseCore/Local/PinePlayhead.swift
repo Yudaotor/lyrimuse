@@ -5,7 +5,8 @@ import os
 /// Pine Player 的位置。系统那份的锚点只到整秒(下取整,真位置在报的值和它 + 1 之间),这里换成准的:
 ///
 /// - 开播的 0 秒锚点连发两份:第一份比真起播早 0.5~1.9 秒,第二份早约 0.05 秒(`startAnchorEarlySecs`)。第一份到了先按
-///   「在加载」停在 0(`holdUntil`),第二份一到从它起算;`startHoldSecs` 内没等到第二份就按第一份走。
+///   「在加载」停在 0(`holdUntil`),第二份一到从它起算;`startHoldSecs` 内没等到第二份就按第一份走。循环回到这一首开头时
+///   第一份报的是 1 秒、0.7 秒后才是 0 秒那份:0 秒那份前面刚有这一首不到 `restartFirstAnchorMaxSecs` 的锚点,就当第二份。
 /// - 跳转、恢复的锚点是取整的。界面进度条每过一个整秒跳一格,跳格时刻跟出声差一个这一段固定的量(`sliderBias`,进度条超前为正):
 ///   开播那一段约 0.24 秒,跳转之后 0~0.12 秒。开播那一段的拿准的开播锚点当场量,跳转之后按 `seekSliderBias`,中途才看到的按
 ///   `joinedSliderBias`,暂停恢复沿用这一段的。新锚点之后读进度条等它跳一格(`ProgressBar.nextTick`),位置补成「格值 − 这段的差」。
@@ -70,6 +71,8 @@ public enum PinePlayhead {
     public static let startAnchorEarlySecs: Double = 0.05
     /// 开播第一份锚点之后最多等第二份这么久。实测两份隔 0.48~1.92 秒。
     public static let startHoldSecs: TimeInterval = 2.2
+    /// 循环回到开头时第一份锚点报的位置最多这么大(实测 1.0)。
+    static let restartFirstAnchorMaxSecs: Double = 1.5
     /// 取整的锚点不知道小数时补的量(真位置在报的值和它 + 1 之间)。
     public static let flooredMidpointSecs: Double = 0.5
     /// 取整的锚点夹位置时的上沿(报的值 + 它)。
@@ -93,8 +96,12 @@ public enum PinePlayhead {
         let same = clock?.anchor.track == anchor.track ? clock : nil
         guard anchor.playing else { return paused(same, anchor: anchor, now: now) }
         if anchor.elapsed <= 0 {
-            let second = same.map { $0.kind == .start && $0.holdUntil != nil && anchor.at > $0.anchor.at
-                && anchor.at.timeIntervalSince($0.anchor.at) <= startHoldSecs + 0.5 } ?? false
+            let second = same.map { previous in
+                let recent = anchor.at > previous.anchor.at && anchor.at.timeIntervalSince(previous.anchor.at) <= startHoldSecs + 0.5
+                let restart = previous.anchor.playing && previous.anchor.elapsed > 0
+                    && previous.anchor.elapsed <= restartFirstAnchorMaxSecs
+                return recent && ((previous.kind == .start && previous.holdUntil != nil) || restart)
+            } ?? false
             return Clock(anchor: anchor, kind: .start, base: -startAnchorEarlySecs, baseAt: anchor.at, precise: true,
                          holdUntil: second ? nil : anchor.at.addingTimeInterval(startHoldSecs))
         }
