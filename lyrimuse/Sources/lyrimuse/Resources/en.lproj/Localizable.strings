@@ -2349,7 +2349,6 @@
 "辅助功能权限可显示%@的随机、循环与喜欢按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Accessibility permission enables the shuffle, repeat and Like buttons for %@, and lets Lyrimuse pause, resume and skip tracks through its menus while another app holds the system media focus";
 "辅助功能权限可显示%@的随机、循环按钮" = "Accessibility permission enables shuffle and repeat for %@";
 "辅助功能权限可让%@拖动进度后的歌词更准、显示循环按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Accessibility permission keeps lyrics for %@ accurate after seeking, enables its repeat button, and lets Lyrimuse pause, resume and skip tracks through its menus while another app holds the system media focus";
-"输出设备" = "Output Device";
 "过去三年的今天及前后一周均无收听记录" = "No listening on this day, or the week around it, in the past three years";
 "运行中" = "Running";
 "运行日志" = "Activity Log";

@@ -1,4 +1,3 @@
-import AppKit
 import Combine
 import CoreAudio
 import Foundation
@@ -177,7 +176,7 @@ final class AudioOutputMonitor: ObservableObject {
 
 extension AudioOutputDeviceManager.Device {
     /// 设备类型 → 图标(AM 的输出面板每行左侧是设备形状图标)。transportType 先分大类,AirPods 系按名称再细分
-    /// (蓝牙传输层区分不出 Max / Pro)。歌词窗口的输出面板、灵动岛的输出菜单和切换横幅共用。
+    /// (蓝牙传输层区分不出 Max / Pro)。歌词窗口的输出面板和灵动岛的切换横幅共用。
     var symbolName: String {
         let lowered = name.lowercased()
         switch kind {
@@ -190,41 +189,6 @@ extension AudioOutputDeviceManager.Device {
             if lowered.contains("airpods") { return "airpods" }
             return "headphones"
         case .other: return "speaker.wave.2"
-        }
-    }
-}
-
-/// 灵动岛展开态快捷操作里那颗「输出设备」键弹出的菜单:列出能当系统默认输出的设备,勾着当前那台,点一行切过去
-/// (`AudioOutputMonitor.select`)。
-///
-/// 菜单从卡片下沿弹出:灵动岛窗口在 `.screenSaver` 层,菜单窗口层级比它低,压在卡片上的那部分会被卡片挡住。
-@MainActor
-enum AudioOutputDeviceMenu {
-    static func popUp(belowScreenY y: CGFloat?) {
-        let monitor = AudioOutputMonitor.shared
-        monitor.refresh()
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        for device in monitor.devices {
-            let item = NSMenuItem(title: device.name, action: #selector(Target.select(_:)), keyEquivalent: "")
-            item.target = Target.shared
-            item.representedObject = device.id
-            item.image = NSImage(systemSymbolName: device.symbolName, accessibilityDescription: nil)
-            item.state = device.id == monitor.defaultID ? .on : .off
-            menu.addItem(item)
-        }
-        guard !menu.items.isEmpty else { return }
-        let mouse = NSEvent.mouseLocation
-        let origin = NSPoint(x: mouse.x, y: y.map { min(mouse.y, $0 - 4) } ?? mouse.y)
-        menu.popUp(positioning: nil, at: origin, in: nil)
-    }
-
-    private final class Target: NSObject {
-        static let shared = Target()
-
-        @objc func select(_ sender: NSMenuItem) {
-            guard let id = sender.representedObject as? AudioDeviceID else { return }
-            MainActor.assumeIsolated { _ = AudioOutputMonitor.shared.select(id) }
         }
     }
 }

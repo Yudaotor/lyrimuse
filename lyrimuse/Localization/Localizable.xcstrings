@@ -53716,29 +53716,6 @@
         }
       }
     },
-    "输出设备" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Output Device"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "输出设备"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "輸出裝置"
-          }
-        }
-      }
-    },
     "临时展开灵动岛" : {
       "extractionState" : "manual",
       "localizations" : {

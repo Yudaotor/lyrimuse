@@ -2370,8 +2370,8 @@ func runNotchTests() {
         expectEqual(runner.contains("guard AppSettings.shared.notchOverlayEnabled else {")
                     && runner.contains("NotchPeekCenter.shared.toggle()"), true,
                     "灵动岛五项: 灵动岛关着时临时展开只说一句,不替用户打开")
-        expectEqual(stage.contains("var transientBannerActive: Bool { false }") && stage.contains("var cardScreenBottom: CGFloat? { nil }"),
-                    true, "灵动岛五项: 预览不长横幅条、没有屏幕坐标")
+        expectEqual(stage.contains("var transientBannerActive: Bool { false }"), true, "灵动岛五项: 预览不长横幅条")
+        expectEqual(v.contains("\"airplayaudio\""), false, "灵动岛五项: 展开态快捷操作里不放输出设备键(只在换设备时闪横幅)")
         expectEqual(stage.contains("settings.notchGestures = AppSettings.defaultNotchGestures")
                     && stage.contains("settings.notchShowsProgressLine = AppSettings.defaultNotchShowsProgressLine"), true,
                     "灵动岛五项: 两个新开关进「恢复默认」")

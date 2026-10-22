@@ -748,8 +748,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     }
 
     /// 卡片此刻在屏幕上的矩形:卡片从窗口顶边垂下来、水平居中。
-    var cardScreenBottom: CGFloat? { cardScreenFrame?.minY }
-
     private var cardScreenFrame: NSRect? {
         guard let window else { return nil }
         return NSRect(x: window.frame.midX - cardWidth / 2, y: window.frame.maxY - cardHeight,

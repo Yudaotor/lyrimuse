@@ -756,8 +756,6 @@ protocol NotchChromeSource: ObservableObject {
     /// 快捷操作里那颗 ✕:关掉「灵动岛歌词」总开关。真窗口走 `setVisible(false)`(跟设置页开关、菜单栏
     /// 面板同一个唯一入口),预览里是空实现 —— 预览卡整块 `allowsHitTesting(false)`,本来也点不到。
     func closeFromQuickAction()
-    /// 卡片下沿在屏幕坐标里的 y(真窗口);预览给 nil。展开态「输出设备」菜单从这里往下弹,压在卡片上的部分会被卡片挡住。
-    var cardScreenBottom: CGFloat? { get }
     /// 展开态头部点歌名 / 专辑名 / 歌手名:开 / 关 / 切换简介浮框(`NotchEditorialPanel`)。预览里是空实现,理由同上。
     func toggleEditorial(_ kind: EditorialCard.Kind)
 }
@@ -2445,11 +2443,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                                   dimmed: !controller.showsLyricsSetting) {
                     AppSettings.shared.notchShowLyrics.toggle()
                 }
-                // 输出设备:从卡片下沿弹出设备菜单,切系统默认输出(同歌词窗口的输出键);默认输出不是内建扬声器时点亮。
-                quickActionButton("airplayaudio", label: L10n.t("输出设备"), lit: AudioOutputMonitor.shared.isExternal) {
-                    AudioOutputDeviceMenu.popUp(belowScreenY: controller.cardScreenBottom)
-                }
-                // 分组线:左边是对这首歌、这行歌词、声音从哪出的操作,右边是"这块卡片"的操作。
+                // 分组线:前两颗是"对这首歌 / 这行歌词"的操作,后两颗是"这块卡片"的操作。
                 Rectangle()
                     .fill(accentOrWhite.opacity(0.18))
                     .frame(width: 1, height: 12)
