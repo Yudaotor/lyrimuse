@@ -2331,6 +2331,8 @@ func runNotchTests() {
         expectEqual(w.feed(dx: 0, dy: 1, phase: .none, invertedFromDevice: false), .volume(G.wheelStep),
                     "手势: 关了自然滚动,滚轮往上仍是调大")
         expectEqual(w.feed(dx: 6, dy: 0, phase: .none, invertedFromDevice: true), nil, "手势: 滚轮横向不切歌")
+        expectEqual(w.feed(dx: 0, dy: -2, phase: .none, invertedFromDevice: true, preciseDeltas: true),
+                    .volume(2 * G.volumePerPoint), "手势: 带精确位移的滚动(平滑滚动鼠标)按位移调,不按一格一档")
     }
 
     // ---- 灵动岛五项(手势、输出设备、耳朵新模块、进度线、临时展开)的接线 ----
@@ -2361,7 +2363,10 @@ func runNotchTests() {
         expectEqual(v.contains("var showsBannerStrip: Bool {\n        transientBannerActive && hasTrack && !showsLyrics && !isExpanded && !isCollapsed && milestone == nil")
                     && ctrl.contains("lastAppliedShouldShow == true && !isVanished && !isCollapsed && hasTrack\n"), true,
                     "灵动岛五项: 关着歌词行时横幅画在卡片多长的那一截里,快捷键回声随之落在灵动岛上")
-        expectEqual(ctrl.contains("if active { self.clearTrackDrop() }"), true, "灵动岛五项: 横幅一出来,换歌歌名条让开")
+        expectEqual(ctrl.contains("if active { self.clearTrackDrop() }")
+                    && ctrl.contains("&& !isCollapsed && !isExpanded && milestone == nil && !alertHold && !transientBannerActive"), true,
+                    "灵动岛五项: 横幅一出来换歌歌名条让开,横幅在时歌名不掉")
+        expectEqual(ctrl.contains("preciseDeltas: event.hasPreciseScrollingDeltas"), true, "灵动岛五项: 平滑滚动鼠标按位移调音量")
         expectEqual(v.contains("+ (!expanded && !showsLyrics && showsProgressLine ? NotchMetrics.progressLineStrip : 0)")
                     && v.contains("showsProgressLine && hasTrack && !isExpanded && !isCollapsed && milestone == nil"), true,
                     "灵动岛五项: 进度线只在没展开时画,关着歌词行时卡片为它多长一截")

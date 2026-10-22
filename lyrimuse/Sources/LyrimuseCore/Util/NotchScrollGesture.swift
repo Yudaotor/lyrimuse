@@ -10,7 +10,8 @@ import Foundation
 ///   斜着滑不会一边切歌一边调音量。
 /// - 左右滑一次最多切一首:累计过 `skipDistance` 就切,到这次滑动结束前不再切。
 /// - 惯性阶段一律不算:手指离开以后的余势既不切歌也不调音量。
-/// - 上下滑按位移连续调,`volumePerPoint`;没有阶段的滚动(鼠标滚轮)每一格按 `wheelStep` 调,不切歌。
+/// - 上下滑按位移连续调,`volumePerPoint`。没有阶段的滚动(鼠标滚轮)不切歌:一格一格的滚轮每一格按 `wheelStep` 调;
+///   带精确位移的(开了平滑滚动的鼠标,一下滚动拆成几十个小事件)跟上下滑一样按位移调,不然轻轻一滚音量就到底。
 public struct NotchScrollGesture: Equatable, Sendable {
     public enum Phase: Equatable, Sendable {
         /// 手指刚放上去开始滑。
@@ -46,8 +47,9 @@ public struct NotchScrollGesture: Equatable, Sendable {
 
     public init() {}
 
-    /// 喂一个滚动事件。`dx`/`dy` 是 `scrollingDeltaX`/`scrollingDeltaY`。
-    public mutating func feed(dx: Double, dy: Double, phase: Phase, invertedFromDevice: Bool) -> Action? {
+    /// 喂一个滚动事件。`dx`/`dy` 是 `scrollingDeltaX`/`scrollingDeltaY`,`preciseDeltas` 是 `hasPreciseScrollingDeltas`。
+    public mutating func feed(dx: Double, dy: Double, phase: Phase, invertedFromDevice: Bool,
+                              preciseDeltas: Bool = false) -> Action? {
         let fingerX = invertedFromDevice ? dx : -dx
         // 手指往上为正。
         let fingerUp = invertedFromDevice ? -dy : dy
@@ -56,6 +58,7 @@ public struct NotchScrollGesture: Equatable, Sendable {
             return nil
         case .none:
             guard fingerUp != 0, abs(fingerUp) >= abs(fingerX) else { return nil }
+            if preciseDeltas { return .volume(Float(fingerUp) * Self.volumePerPoint) }
             return .volume(fingerUp > 0 ? Self.wheelStep : -Self.wheelStep)
         case .ended:
             reset()

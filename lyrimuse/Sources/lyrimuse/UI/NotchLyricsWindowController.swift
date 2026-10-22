@@ -997,7 +997,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             return
         }
         guard let action = scrollGesture.feed(dx: Double(event.scrollingDeltaX), dy: Double(event.scrollingDeltaY),
-                                              phase: phase, invertedFromDevice: event.isDirectionInvertedFromDevice)
+                                              phase: phase, invertedFromDevice: event.isDirectionInvertedFromDevice,
+                                              preciseDeltas: event.hasPreciseScrollingDeltas)
         else { return }
         switch action {
         case .nextTrack:
@@ -1056,10 +1057,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         lastAppliedShouldShow == true && !isVanished && isSurfaceVisible
     }
 
-    /// 卡片此刻放得下掉出来的歌名:窗口在屏、没缩进刘海、没被挡,不在收起 / 展开 / 报喜 / 「发现新播放器」提醒里。
+    /// 卡片此刻放得下掉出来的歌名:窗口在屏、没缩进刘海、没被挡,不在收起 / 展开 / 报喜 / 「发现新播放器」提醒里,也没有瞬态横幅
+    /// (两样占同一个位置,横幅在时歌名不掉,见 05 章决策 88)。
     private var trackDropFits: Bool {
         lastAppliedShouldShow == true && !isVanished && isSurfaceVisible
-            && !isCollapsed && !isExpanded && milestone == nil && !alertHold
+            && !isCollapsed && !isExpanded && milestone == nil && !alertHold && !transientBannerActive
     }
 
     /// 揭晓(`NotchTrackRevealGate`):耳朵里的封面这一拍可以翻了;判成要掉的,卡片还放得下就让新歌名掉出来停
