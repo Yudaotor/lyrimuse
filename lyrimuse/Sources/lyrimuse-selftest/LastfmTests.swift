@@ -1694,6 +1694,21 @@ func runLastfmTests() {
         expectEqual(C.firstPosition(page: 1, pageSize: 20, totalAtFetch: 100, totalNow: 100), 0, "拼页: 没涨 → 原位")
         expectEqual(C.firstPosition(page: 2, pageSize: 20, totalAtFetch: 100, totalNow: 99), nil, "拼页: 总数变小(删过记录)→ 这份来源作废")
 
+        // 缺哪些位置、该补抓哪几页:feed 盖 0..49,旧第 3 页缓存(总数涨了 20)现在盖 60..79,50..59 谁都没有。
+        do {
+            let srcs = [S(firstPosition: 0, rows: Array(0 ..< 50)), S(firstPosition: 60, rows: Array(60 ..< 80))]
+            expectEqual(C.missingPositions(lo: 0, hi: 80, sources: srcs), Array(50 ..< 60), "补抓: 新记录把缓存页下推后空出的那段")
+            expectEqual(C.missingPositions(lo: 0, hi: 50, sources: srcs), [], "补抓: 前面没有空洞")
+            expectEqual(C.missingPositions(lo: 55, hi: 65, sources: srcs), Array(55 ..< 60), "补抓: 只报区间里的")
+            expectEqual(C.missingPositions(lo: 10, hi: 10, sources: srcs), [], "补抓: 空区间")
+            expectEqual(C.missingPositions(lo: 0, hi: 5, sources: [S(firstPosition: -3, rows: [1, 2, 3, 4, 5])]), [0, 1, 2, 3, 4],
+                        "补抓: 起点为负的来源作废,不算覆盖(跟 composeRange 一致)")
+            expectEqual(C.missingPositions(lo: 0, hi: 4, sources: [S(firstPosition: 0, rows: [1, 2])]), [2, 3], "补抓: 来源只盖到一半")
+            expectEqual(C.pagesCovering(positions: Array(50 ..< 60), pageSize: 20), [3], "补抓: 50..59 在第 3 页")
+            expectEqual(C.pagesCovering(positions: [19, 20, 45, 21], pageSize: 20), [1, 2, 3], "补抓: 跨页、去重、升序")
+            expectEqual(C.pagesCovering(positions: [5], pageSize: 0), [], "补抓: 页大小非法")
+        }
+
         // feed 给位置 0..49(值 0..49);一个抓取时总数 100、现在 103 的第 3 页缓存(旧位置 40..59
         // 的值 43..62,因为那时的位置 i 对应现在的记录 i+3)。要拼现在的第 3 页 = 位置 40..59。
         let feed = S(firstPosition: 0, rows: Array(0 ..< 50))

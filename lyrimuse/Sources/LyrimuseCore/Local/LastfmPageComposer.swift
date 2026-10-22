@@ -57,6 +57,24 @@ public enum LastfmPageComposer {
         return composeRange(lo: lo, hi: hi, sources: sources, identity: identity)
     }
 
+    /// 绝对位置 `[lo, hi)` 里哪些位置没有任何来源覆盖(升序)。新 scrobble 把缓存页整体下推之后,feed 和缓存页之间会空出
+    /// 一段谁都盖不住的位置,`composeRange` 因此拼不齐;调用方按这些位置算出该补抓哪几页。区间为空返回空数组。
+    public static func missingPositions<Row>(lo: Int, hi: Int, sources: [Source<Row>]) -> [Int] {
+        guard lo >= 0, lo < hi else { return [] }
+        var covered = [Bool](repeating: false, count: hi - lo)
+        for src in sources where src.firstPosition >= 0 {
+            let start = max(lo, src.firstPosition), end = min(hi, src.firstPosition + src.rows.count)
+            if start < end { for pos in start..<end { covered[pos - lo] = true } }
+        }
+        return covered.indices.filter { !covered[$0] }.map { $0 + lo }
+    }
+
+    /// 盖住这些位置要抓哪几页(1 起,升序去重)。
+    public static func pagesCovering(positions: [Int], pageSize: Int) -> [Int] {
+        guard pageSize > 0 else { return [] }
+        return Array(Set(positions.filter { $0 >= 0 }.map { $0 / pageSize + 1 })).sorted()
+    }
+
     /// 拼绝对位置 `[lo, hi)` 这一段(0 起)。拼不齐、有重复、区间为空返回 nil。`compose` 按页取的就是它;
     /// 「这一页之前的所有行」(给「第 N 次听」减掉前几页里更新的同曲收听)也用它拼,两处同一套位置模型。
     public static func composeRange<Row>(

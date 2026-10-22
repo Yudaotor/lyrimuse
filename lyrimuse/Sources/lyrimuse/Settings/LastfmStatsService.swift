@@ -200,6 +200,9 @@ final class LastfmStatsService: ObservableObject {
             // 比任何在飞的 page=1 网络响应都新:抬一代,让旧响应回来时作废。
             baselineGen += 1
             applyRecent(page1)
+        } else {
+            // 停在后面的页时进来新 scrobble:缓存页整体下推,「这一页之前」可能空出一段。
+            fillPrecedingRecentGaps()
         }
         // feed 活着 → 给轮询那道 TTL 闸盖戳,它就不会再为同一份数据发请求;feed 陈旧(引擎
         // 不在)→ 不盖,轮询在 110 s 内自然接管。`overview` 还是 nil(新账号第一次、或刚
@@ -392,6 +395,13 @@ final class LastfmStatsService: ObservableObject {
     /// 不该把每一页都构造成完整 RecentTrack(封面/次数解析是按需的,提前对几千页做这件事就是
     /// 一次性打爆请求量)。10 页覆盖"刚连上账号就随手往前翻几页看看"这个最常见的场景。
     private static let recentPagePrefetchCount = 10
+    /// 补「这一页之前」的空洞最多抓几页;缺得更多(直接跳到很深的页)就不补,那一页不显示次数。
+    private static let recentGapFillMaxPages = 5
+    /// 补完空洞、「这一页之前」的行变了时加一:`precedingRecentRows` 读的是不发布的翻页缓存,界面靠它重算「第 N 次听」。
+    @Published private(set) var recentPrecedingRevision = 0
+    /// 补空洞抓回来的页(页号、抓取时总数、原始行),只在内存里,当拼页的额外来源。不写进 `recentPageCache`:
+    /// 那里按页号只存一份,覆盖掉的旧版本此刻正顶着更后面的位置,覆盖了空洞只会往后挪。
+    private var recentGapSources: [(page: Int, total: Int, rows: [RecentTrack])] = []
     private var recentPageCacheLoaded = false
     private var recentPagesPrefetching = false
     private var recentPageCacheSaveTask: Task<Void, Never>?
@@ -670,6 +680,41 @@ final class LastfmStatsService: ObservableObject {
                                                identity: Self.recentComposeIdentity)
     }
 
+    /// 「这一页之前」有没人覆盖的位置时(新 scrobble 把缓存页整体下推,feed 和缓存页之间空出一段),这一页本身还拼得出来、
+    /// 不会联网,「第 N 次听」却一直不显示。把盖住空洞的那几页在后台抓回来,抓到了让界面重算。缺的页超过
+    /// `recentGapFillMaxPages` 不抓。见 12 章决策 92。
+    private func fillPrecedingRecentGaps() {
+        guard recentPage >= 3, let feed = lastFeed, feed.isFresh(), let cred = credentials else { return }
+        let hi = min((recentPage - 1) * Self.recentPageSize, feed.total)
+        let holes = LastfmPageComposer.missingPositions(lo: 0, hi: hi, sources: recentComposeSources(total: feed.total))
+        let pages = LastfmPageComposer.pagesCovering(positions: holes, pageSize: Self.recentPageSize)
+            .filter { !rawPageFetchesInFlight.contains($0) }
+        guard !pages.isEmpty, pages.count <= Self.recentGapFillMaxPages else { return }
+        rawPageFetchesInFlight.formUnion(pages)
+        let epoch = accountEpoch
+        Task {
+            defer { rawPageFetchesInFlight.subtract(pages) }
+            var fetched = false
+            for page in pages {
+                guard epoch == accountEpoch else { return }
+                guard let json = await request(method: "user.getrecenttracks", cred: cred,
+                                               extra: ["limit": String(Self.recentPageSize), "page": String(page)],
+                                               priority: .interactive),
+                      epoch == accountEpoch else { continue }
+                let total = attrTotal(json)
+                guard total > 0 else { continue }
+                recentGapSources.removeAll { $0.page == page && $0.total == total }
+                recentGapSources.append((page: page, total: total, rows: parseRecent(json)))
+                fetched = true
+            }
+            guard fetched, epoch == accountEpoch else { return }
+            if recentGapSources.count > Self.recentGapFillMaxPages * 2 {
+                recentGapSources.removeFirst(recentGapSources.count - Self.recentGapFillMaxPages * 2)
+            }
+            recentPrecedingRevision += 1
+        }
+    }
+
     private static func recentComposeIdentity(_ r: RecentTrack) -> String {
         "\(r.date?.timeIntervalSince1970 ?? -1)|\(r.artist)|\(r.title)"
     }
@@ -677,6 +722,7 @@ final class LastfmStatsService: ObservableObject {
     /// 深页缓存(第 3 页起)作废:它们的绝对位置是按「新增都在最上面」推的,记录插进中间(回填、手机离线补交)之后
     /// 就推错了。第 1、2 页由 feed 每次重写,不用动。
     func dropDeepRecentPageCache(reason: String) {
+        recentGapSources.removeAll()
         let deep = recentPageCache.keys.filter { $0 >= 3 }
         guard !deep.isEmpty else { return }
         for p in deep {
@@ -702,6 +748,13 @@ final class LastfmStatsService: ObservableObject {
                                                                 totalAtFetch: t, totalNow: total)
             else { continue }
             sources.append(Src(firstPosition: first, rows: rows.filter { $0.date != nil }))
+        }
+        // 补空洞抓回来的页排在最后:同一位置缓存页已经有了就用缓存页。
+        for g in recentGapSources.reversed() {
+            guard let first = LastfmPageComposer.firstPosition(page: g.page, pageSize: Self.recentPageSize,
+                                                                totalAtFetch: g.total, totalNow: total)
+            else { continue }
+            sources.append(Src(firstPosition: first, rows: g.rows.filter { $0.date != nil }))
         }
         return sources
     }
@@ -1136,6 +1189,7 @@ final class LastfmStatsService: ObservableObject {
         recentUpdatedAt = nil
         recentPageCache = [:]
         recentPageCacheTotal = [:]
+        recentGapSources = []
         feedCompletedRows = []
         recentPageCacheLoaded = false
         recentPagesPrefetching = false
@@ -3841,6 +3895,7 @@ final class LastfmStatsService: ObservableObject {
                 recentPage = target
                 applyRecent(exact)
                 prefetchNeighborPage(after: target)
+                fillPrecedingRecentGaps()
                 return
             }
         } else if let cached = recentPageCache[target] {
@@ -3877,6 +3932,7 @@ final class LastfmStatsService: ObservableObject {
             scheduleRecentPageCacheSave()
             fetchedAt["baseline"] = Date() // 刚拉过,定时器下一拍不用再拉一遍
             prefetchNeighborPage(after: target) // 顺翻下一页零等待
+            fillPrecedingRecentGaps()
         }
     }
 
