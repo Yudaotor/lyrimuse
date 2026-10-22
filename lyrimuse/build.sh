@@ -342,7 +342,7 @@ trap 'cmux_build_done $?; cleanup_build' EXIT
 
 coalesce_if_installed
 
-# 编译读的是 .build/source-snapshot 里的源码副本,不是工作树。多个会话共用这棵工作树,一次构建
+# 编译读的是源码快照(普通装机在全机共用的 ~/Library/Caches/lyrimuse-build-snapshot,其余在 .build/source-snapshot),不是工作树。多个会话共用这棵工作树,一次构建
 # 要十几分钟,期间别的会话写源码会被编进这次构建(半截改动,或者 App 和引擎取到不同时刻的源码)。
 # 快照在拿到上面的排队锁之后一次拍完(rsync,几秒),之后工作树怎么改都不影响这次构建。
 # - 快照目录固定、rsync 保留 mtime,SwiftPM 与 go 的增量编译照常生效;快照有自己的 .build。
@@ -355,12 +355,22 @@ if [ -z "${LYRIMUSE_NO_SOURCE_SNAPSHOT:-}" ] && [ -z "${LYRIMUSE_SPM_SCRATCH_PAT
     && [ -z "${LYRIMUSE_SPM_CACHE_PATH:-}" ]; then
   # 拍快照之前记时刻:排队合并拿它跟后面那几次的请求时刻比。
   SNAPSHOT_AT="$(/usr/bin/python3 -c 'import time; print("%.3f" % time.time())')"
-  SNAPSHOT_ROOT="$PWD/.build/source-snapshot"
+  # 普通装机全机共用一个快照目录(排队锁全机共用,同一时刻只有一次装机在用它):换一棵工作树装机只同步内容不同的文件,
+  # 照样增量编译,不用每棵新工作树冷编一次。按内容比对(-c)、不保留修改时间(不带 -t):两棵树的修改时间互不相干,按
+  # 「大小 + 时间」判会漏同步;变了的文件取当前时间,编译器一定看得到。锁退回各树自己的 .build 时不共用。见 15 章决策 81。
+  if [ "$PLAIN_INSTALL" = 1 ] && [ "$BUILD_LOCK" = "$HOME/Library/Caches/lyrimuse-build.sh.lock" ]; then
+    SNAPSHOT_ROOT="$HOME/Library/Caches/lyrimuse-build-snapshot"
+    SNAPSHOT_RSYNC=(-rlpgoD -c)
+  else
+    SNAPSHOT_ROOT="$PWD/.build/source-snapshot"
+    SNAPSHOT_RSYNC=(-a)
+  fi
   echo "==> snapshotting sources into $SNAPSHOT_ROOT"
   cmux_stage 0.05 "拍源码快照"
   mkdir -p "$SNAPSHOT_ROOT/lyrimuse" "$SNAPSHOT_ROOT/lyrimuse-engine"
-  rsync -a --delete --exclude=/.build/ --exclude=/dist/ --exclude=.DS_Store ./ "$SNAPSHOT_ROOT/lyrimuse/"
-  rsync -a --delete --exclude=/collector --exclude=/lyrimuse-engine --exclude=.DS_Store ../lyrimuse-engine/ "$SNAPSHOT_ROOT/lyrimuse-engine/"
+  rsync "${SNAPSHOT_RSYNC[@]}" --delete --exclude=/.build/ --exclude=/dist/ --exclude=.DS_Store ./ "$SNAPSHOT_ROOT/lyrimuse/"
+  rsync "${SNAPSHOT_RSYNC[@]}" --delete --exclude=/collector --exclude=/lyrimuse-engine --exclude=.DS_Store \
+    ../lyrimuse-engine/ "$SNAPSHOT_ROOT/lyrimuse-engine/"
   cp -p ../THIRD_PARTY_LICENSES "$SNAPSHOT_ROOT/THIRD_PARTY_LICENSES"
   if [ ! -d "$SNAPSHOT_ROOT/lyrimuse/.build" ]; then
     mkdir -p "$SNAPSHOT_ROOT/lyrimuse/.build"

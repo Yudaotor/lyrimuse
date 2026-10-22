@@ -1509,6 +1509,10 @@ func runOpsDiagnosticsTests() {
                         && compiles.allSatisfy { $0.contains("-c \"$SWIFT_CONFIG\"") }
                         && code.contains("LYRIMUSE_MEDIA_CONTROL_PREFIX LYRIMUSE_RELEASE_BUILD; do"), true,
                         "构建编法: 普通装机用调试配置加 -O,带参数或设了构建变量(含 LYRIMUSE_RELEASE_BUILD)的照旧 release(15 章决策 79)")
+            expectEqual(code.contains("if [ \"$PLAIN_INSTALL\" = 1 ] && [ \"$BUILD_LOCK\" = \"$HOME/Library/Caches/lyrimuse-build.sh.lock\" ]; then\nSNAPSHOT_ROOT=\"$HOME/Library/Caches/lyrimuse-build-snapshot\"\nSNAPSHOT_RSYNC=(-rlpgoD -c)\nelse\nSNAPSHOT_ROOT=\"$PWD/.build/source-snapshot\"\nSNAPSHOT_RSYNC=(-a)\nfi")
+                        && codeLines.filter { $0.hasPrefix("rsync ") && $0.contains("$SNAPSHOT_ROOT") || $0.hasPrefix("rsync ") && $0.hasSuffix("\\") }
+                            .allSatisfy { $0.hasPrefix("rsync \"${SNAPSHOT_RSYNC[@]}\" --delete") }, true,
+                        "源码快照: 普通装机且排队锁全机共用时共用一个快照目录、按内容比对不保留修改时间,其余各树自己的目录(15 章决策 81)")
             if let requested = code.range(of: "BUILD_REQUESTED_AT="),
                let check = code.range(of: "coalesce_if_installed() {"),
                let queue = code.range(of: "while ! mkdir \"$BUILD_LOCK\" 2>/dev/null; do\ncoalesce_if_installed\n"),
