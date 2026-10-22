@@ -8,6 +8,8 @@
 # go test 读到的模块外文件变了时怎么重跑,见下面 go test 那段。
 # verify 还给:$PRIVATE_COMMIT_TREE(这棵树的 id)、$PRIVATE_COMMIT_REPO(仓库根目录)、$PRIVATE_COMMIT_COMPILED_MARK
 # (编译走完就把树的 id 写进去,校验工具据此知道这个目录接着增量编译靠得住)。手动跑时没有这些,go test 整套重跑。
+# PRIVATE_COMMIT_LIGHT=1(轻校验:commit --retry 在 rebase 进来的提交跟这次的路径没有交集时给):只重新编译、做静态检查,
+# 不跑 selftest、原生测试和 go test,也不更新 go test 通过的记录,下一次完整校验照样把这段改动算进去。见 15 章决策 80。
 set -euo pipefail
 
 if [ ! -d lyrimuse ] || [ ! -d lyrimuse-engine ]; then
@@ -53,11 +55,16 @@ if [ -n "${PRIVATE_COMMIT_COMPILED_MARK:-}" ] && [ -n "${PRIVATE_COMMIT_TREE:-}"
   printf '%s\n' "$PRIVATE_COMMIT_TREE" > "$PRIVATE_COMMIT_COMPILED_MARK"
 fi
 
-step "selftest"
-(cd lyrimuse && swift run lyrimuse-selftest -q)
+light="${PRIVATE_COMMIT_LIGHT:-}"
+if [ -n "$light" ]; then
+  step "selftest、nowplaying-clients 原生测试:轻校验,跳过"
+else
+  step "selftest"
+  (cd lyrimuse && swift run lyrimuse-selftest -q)
 
-step "nowplaying-clients 原生测试"
-sh scripts/test-nowplaying-clients.sh
+  step "nowplaying-clients 原生测试"
+  sh scripts/test-nowplaying-clients.sh
+fi
 
 if [ -f scripts/gen-feature-list.py ]; then
   step "功能清单与数据一致"
@@ -108,43 +115,52 @@ if [ "$engine_changed" = 1 ]; then
   static_pid=$!
 fi
 
-step "go test"
-go_tested=".build/go-tested-tree"
-go_rerun="all"
-go_rerun_why="这个目录没有上一次 go test 通过的记录"
-if [ -n "${PRIVATE_COMMIT_TREE:-}" ] && [ -n "${PRIVATE_COMMIT_REPO:-}" ] && [ -s "$go_tested" ]; then
-  last_tree=""
-  read -r last_tree _ < "$go_tested" || true
-  since="$(mktemp)"
-  if [ -n "$last_tree" ] \
-      && git -C "$PRIVATE_COMMIT_REPO" diff --name-only "$last_tree" "$PRIVATE_COMMIT_TREE" > "$since" 2>/dev/null; then
-    if /usr/bin/grep -q '^lyrimuse-engine/' "$since"; then
-      go_rerun_why="引擎代码在上一次通过之后改过"
-    elif plan="$(/usr/bin/python3 "$(dirname "${BASH_SOURCE[0]}")/go-test-plan.py" --engine lyrimuse-engine "$since")"; then
-      go_rerun="$plan"
-      go_rerun_why="读到的模块外文件在上一次通过之后改过"
-    fi
+if [ -n "$light" ]; then
+  if [ "$engine_changed" = 1 ]; then
+    step "go test:轻校验,跳过(引擎的编译和类型检查由后台的 go vet 做)"
+  else
+    step "go vet:轻校验,只编译、类型检查引擎和它的测试"
+    (cd lyrimuse-engine && GOTOOLCHAIN=go1.24.4 go vet -trimpath -tags devtools ./...)
   fi
-  rm -f "$since"
-fi
-rm -f "$go_tested"
-go_shards="$(dirname "${BASH_SOURCE[0]}")/go-test-shards.py"
-case "$go_rerun" in
-  none)
-    echo "    跳过(这个目录上一次通过之后,引擎和它读的模块外文件都没改)"
-    ;;
-  all)
-    echo "    整套跑($go_rerun_why)"
-    /usr/bin/python3 -B "$go_shards" lyrimuse-engine
-    ;;
-  *)
-    echo "    只跑这几个($go_rerun_why):$go_rerun"
-    /usr/bin/python3 -B "$go_shards" lyrimuse-engine --run "$go_rerun"
-    ;;
-esac
-if [ -n "${PRIVATE_COMMIT_TREE:-}" ]; then
-  mkdir -p .build
-  printf '%s\n' "$PRIVATE_COMMIT_TREE" > "$go_tested"
+else
+  step "go test"
+  go_tested=".build/go-tested-tree"
+  go_rerun="all"
+  go_rerun_why="这个目录没有上一次 go test 通过的记录"
+  if [ -n "${PRIVATE_COMMIT_TREE:-}" ] && [ -n "${PRIVATE_COMMIT_REPO:-}" ] && [ -s "$go_tested" ]; then
+    last_tree=""
+    read -r last_tree _ < "$go_tested" || true
+    since="$(mktemp)"
+    if [ -n "$last_tree" ] \
+        && git -C "$PRIVATE_COMMIT_REPO" diff --name-only "$last_tree" "$PRIVATE_COMMIT_TREE" > "$since" 2>/dev/null; then
+      if /usr/bin/grep -q '^lyrimuse-engine/' "$since"; then
+        go_rerun_why="引擎代码在上一次通过之后改过"
+      elif plan="$(/usr/bin/python3 "$(dirname "${BASH_SOURCE[0]}")/go-test-plan.py" --engine lyrimuse-engine "$since")"; then
+        go_rerun="$plan"
+        go_rerun_why="读到的模块外文件在上一次通过之后改过"
+      fi
+    fi
+    rm -f "$since"
+  fi
+  rm -f "$go_tested"
+  go_shards="$(dirname "${BASH_SOURCE[0]}")/go-test-shards.py"
+  case "$go_rerun" in
+    none)
+      echo "    跳过(这个目录上一次通过之后,引擎和它读的模块外文件都没改)"
+      ;;
+    all)
+      echo "    整套跑($go_rerun_why)"
+      /usr/bin/python3 -B "$go_shards" lyrimuse-engine
+      ;;
+    *)
+      echo "    只跑这几个($go_rerun_why):$go_rerun"
+      /usr/bin/python3 -B "$go_shards" lyrimuse-engine --run "$go_rerun"
+      ;;
+  esac
+  if [ -n "${PRIVATE_COMMIT_TREE:-}" ]; then
+    mkdir -p .build
+    printf '%s\n' "$PRIVATE_COMMIT_TREE" > "$go_tested"
+  fi
 fi
 
 step "gofmt"
