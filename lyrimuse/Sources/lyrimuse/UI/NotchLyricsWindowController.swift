@@ -974,11 +974,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     }
 
     /// 卡片上的滚动事件(`NotchLyricsWindow.onScrollWheel`):两指左右滑切歌,上下滑调系统音量,判法在 `NotchScrollGesture`。
-    /// 「触控板手势」关着、没有曲目、指针不在卡片上时不认,这一次滑动作废。切歌走快捷键那一条(先查自动化权限);调音量后音量横幅
-    /// 由 `VolumeMonitor` 照常弹,关着歌词行时卡片为它多长一截。
+    /// 「触控板手势」关着、没有曲目、事件不落在卡片上时不认,这一次滑动作废。位置取事件自己带的(发生那一刻指针在哪),不取此刻的
+    /// `NSEvent.mouseLocation`。切歌走快捷键那一条(先查自动化权限);调音量后音量横幅由 `VolumeMonitor` 照常弹,关着歌词行时卡片为它
+    /// 多长一截。
     private func handleScrollWheel(_ event: NSEvent) {
-        guard AppSettings.shared.notchGestures, hasTrack,
-              cardScreenFrame?.contains(NSEvent.mouseLocation) ?? false else {
+        let point = event.window.map { $0.convertPoint(toScreen: event.locationInWindow) } ?? NSEvent.mouseLocation
+        guard AppSettings.shared.notchGestures, hasTrack, cardScreenFrame?.contains(point) ?? false else {
             scrollGesture = NotchScrollGesture()
             return
         }

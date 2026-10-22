@@ -2350,9 +2350,9 @@ func runNotchTests() {
         expectEqual(window.contains("if event.type == .scrollWheel { onScrollWheel?(event) }\n        super.sendEvent(event)")
                     && ctrl.contains("panel.onScrollWheel = { [weak self] event in self?.handleScrollWheel(event) }"), true,
                     "灵动岛五项: 窗口把滚动事件交给控制器,照常往下发")
-        expectEqual(ctrl.contains("guard AppSettings.shared.notchGestures, hasTrack,")
-                    && ctrl.contains("cardScreenFrame?.contains(NSEvent.mouseLocation) ?? false else {\n            scrollGesture = NotchScrollGesture()"),
-                    true, "灵动岛五项: 手势关着、没有曲目、指针不在卡片上时不认,这一次滑动作废")
+        expectEqual(sourceHas(ctrl, "let point = event.window.map { $0.convertPoint(toScreen: event.locationInWindow) } ?? NSEvent.mouseLocation")
+                    && sourceHas(ctrl, "guard AppSettings.shared.notchGestures, hasTrack, cardScreenFrame?.contains(point) ?? false else {\n scrollGesture = NotchScrollGesture()"),
+                    true, "灵动岛五项: 手势关着、没有曲目、事件不落在卡片上时不认,这一次滑动作废;位置取事件自己带的")
         expectEqual(ctrl.contains("LyrimuseActionRunner.perform(.nextTrackHotkey)")
                     && ctrl.contains("VolumeMonitor.adjustSystemVolume(by: delta)"), true,
                     "灵动岛五项: 切歌走快捷键那一条(先查自动化权限),音量调的是系统音量")
