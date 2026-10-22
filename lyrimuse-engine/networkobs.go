@@ -137,7 +137,13 @@ func doHTTPTrackedOnce(cli *http.Client, req *http.Request) (*http.Response, err
 		}
 		return resp, err
 	}
-	if !lyricSourceRetryForgiven(req.Context(), resp.StatusCode, resp.Header.Get("Retry-After")) {
+	switch {
+	case lyricSourceRetryForgiven(req.Context(), resp.StatusCode, resp.Header.Get("Retry-After")):
+	case resp.StatusCode == http.StatusTooManyRequests && isBackgroundOutbound(req.Context()):
+		// 后台请求吃到的 429 只暂停后台(下面出站闸的 noteLyricSourceThrottled),不让整个源进冷却:冷却连正在播那首、
+		// 手动搜索也一起跳过这个源。见 09 章决策 329。
+		sharedLyricSourceBreaker().observeBackgroundRateLimited(req.URL.Host)
+	default:
 		sharedLyricSourceBreaker().observeTraced(req.URL.Host, guardEndpointKey(req.URL), nil, resp.StatusCode, resp.Header.Get("Retry-After"), tr)
 	}
 	sharedHostGuard().observe(req, resp.StatusCode, resp.Header.Get("Retry-After"))

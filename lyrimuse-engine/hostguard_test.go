@@ -838,3 +838,43 @@ func TestHostGuardThrottlePauseFollowsRetryAfter(t *testing.T) {
 func (g *hostGuard) tryTakeBackground(host string) (time.Duration, bool) {
 	return g.tryTakeAbove(host, func(r hostRate) float64 { return r.reserve })
 }
+
+// 后台请求吃到 429 只暂停后台、不让整个源冷却,前台照问;前台自己吃到 429 才冷却。
+func TestBackgroundRateLimitPausesOnlyBackground(t *testing.T) {
+	savedGuard, savedBreaker := sharedHostGuard(), sharedLyricSourceBreaker()
+	c := &guardClock{t: time.Unix(1_000_000, 0)}
+	setSharedHostGuard(newHostGuard(c.now))
+	setSharedLyricSourceBreaker(newLyricSourceBreaker(c.now))
+	t.Cleanup(func() {
+		setSharedHostGuard(savedGuard)
+		setSharedLyricSourceBreaker(savedBreaker)
+	})
+	cli := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusTooManyRequests, Body: io.NopCloser(strings.NewReader("")), Request: r}, nil
+	})}
+	const search = "https://amp-api.music.apple.com/v1/catalog/cn/search"
+	get := func(ctx context.Context) {
+		t.Helper()
+		resp, err := doHTTPTracked(cli, mustReq(t, ctx, http.MethodGet, search))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+
+	get(withBackgroundOutbound(context.Background()))
+	if _, cooling := sharedLyricSourceBreaker().coolingDown("applemusic"); cooling {
+		t.Fatal("后台请求的 429 不该让整个源冷却")
+	}
+	if _, paused := sharedHostGuard().backgroundPausedUntil("amp-api.music.apple.com"); !paused {
+		t.Fatal("后台请求的 429 该暂停后台请求")
+	}
+	if err := sharedHostGuard().admit(mustReq(t, context.Background(), http.MethodGet, search)); err != nil {
+		t.Fatalf("后台被暂停时前台照发: %v", err)
+	}
+
+	get(context.Background())
+	if _, cooling := sharedLyricSourceBreaker().coolingDown("applemusic"); !cooling {
+		t.Fatal("前台请求的 429 该让源冷却")
+	}
+}

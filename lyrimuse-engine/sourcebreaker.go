@@ -27,7 +27,7 @@ import (
 // (lyricSourceForHost);跳过决策挂在 fetchScoredLyricCandidatesStreaming 每个源 goroutine 的开头(planRound)。
 //
 // 只统计两类失败:http.Client.Do 本身返回错误(DNS/连接/TLS/超时)和 5xx;429 单独按 Retry-After 处理(没给时按连着被限流
-// 几次升档,见 observeWith 的 429 那一支)。
+// 几次升档,见 observeWith 的 429 那一支)。后台请求的 429 不进这里,只由出站闸暂停后台(observeBackgroundRateLimited)。
 // 拿到响应且状态码 < 500 的请求都算一次成功,当场解除冷却(档位另算,见 lyricSourceBreakerSchedule)。
 // 4xx 一律不算:那是各源自己的业务判定(网易云 body 里的 405、Musixmatch 的 401 hint=captcha 各自处理,后者由它
 // 自己调 noteBlocked,见「反爬拦截」一节)。401/402/403 也不当长期粘性冷却的理由:对没有凭据的源,那样会让它
@@ -851,6 +851,18 @@ func classifyLyricSourceTransportFailure(err error, status int, tr transportTrac
 // 不知道端点。
 func (b *lyricSourceBreaker) observeTraced(host, endpoint string, err error, status int, retryAfter string, tr transportTrace) {
 	b.observeWith(host, endpoint, err, status, retryAfter, tr)
+}
+
+// observeBackgroundRateLimited:后台请求吃到 429。只记「这个源答了」,不进冷却、不升限流档:后台由出站闸单独暂停,
+// 前台照问,前台自己吃到 429 才冷却。
+func (b *lyricSourceBreaker) observeBackgroundRateLimited(host string) {
+	source := lyricSourceForHost(host)
+	if source == "" {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.noteTransport(source, nil, http.StatusTooManyRequests, transportTrace{})
 }
 
 // otherEndpointHealthyLocked:同源除 endpoint 以外的端点,有没有在 lyricSourceEndpointHealthyWindow
