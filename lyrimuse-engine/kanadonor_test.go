@@ -79,8 +79,8 @@ func TestKanaDonorLRC(t *testing.T) {
 	if m := kanaEntriesByLineKey(got); len(m) != 2 {
 		t.Errorf("产物要能按同一口径整份对上: %v", m)
 	}
-	if got := kanaDonorLRC("[kana:1きみ]\n"+cur, "", cands); got != "" {
-		t.Errorf("正文自带标注时不借: %q", got)
+	if got := kanaDonorLRC("[kana:1111きみ2あした1し]\n"+cur, "", cands); got != "" {
+		t.Errorf("正文自带标注对得齐时不借: %q", got)
 	}
 	if got := kanaDonorLRC("[00:01.00]君と\n[00:02.00]明日へ\n[00:03.00]"+strings.Repeat("我爱你中国", 10)+"\n", "", cands); got != "" {
 		t.Errorf("不像日文的不借: %q", got)

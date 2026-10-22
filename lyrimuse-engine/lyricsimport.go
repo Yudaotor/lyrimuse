@@ -414,6 +414,12 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 				e.LyricsRoma = bodyText{}
 			}
 		}
+		// 正文或逐字被文件换了:借来的假名标注对到新正文上,对不上的行去掉(同 applySaveEdit)。
+		if !e.Lyrics.Equal(prevLyrics) || !e.LyricsYRC.Equal(prevYRC) {
+			if kana := refitLyricsKana(e.LyricsKana, e.Lyrics.String(), e.LyricsYRC.String()); kana != e.LyricsKana {
+				e.LyricsKana, changed = kana, true
+			}
+		}
 		if e.LyricsSource != parsed.source {
 			e.LyricsSource, changed = parsed.source, true
 		}

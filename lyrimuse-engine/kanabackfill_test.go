@@ -89,7 +89,7 @@ func TestBackfillLyricsKana(t *testing.T) {
 	})
 	enrichCache = map[string]enrichEntry{kanaBackfillKey: kanaBackfillEntry()}
 	enrichInflight[kanaBackfillKey] = true
-	backfillLyricsKana(kanaBackfillKey, "A", "Song", "", 60)
+	backfillLyricsKana(context.Background(), kanaBackfillKey, "A", "Song", "", 60)
 	slices.Sort(asked)
 	if !slices.Equal(asked, []string{"kugou", "qq"}) {
 		t.Errorf("该只问开着的带标注的源: %v", asked)
@@ -110,14 +110,14 @@ func TestBackfillLyricsKana(t *testing.T) {
 func TestBackfillLyricsKanaOutcomes(t *testing.T) {
 	withKanaBackfillFakes(t, func(context.Context) []scoredLyricCandidateResult { return nil }, nil)
 	enrichCache = map[string]enrichEntry{kanaBackfillKey: kanaBackfillEntry()}
-	backfillLyricsKana(kanaBackfillKey, "A", "Song", "", 60)
+	backfillLyricsKana(context.Background(), kanaBackfillKey, "A", "Song", "", 60)
 	if e := enrichCache[kanaBackfillKey]; e.LyricsKanaChecked != 0 || e.LyricsKana != "" {
 		t.Errorf("没问到不该记成问过: %+v", e)
 	}
 	withKanaBackfillFakes(t, func(context.Context) []scoredLyricCandidateResult {
 		return []scoredLyricCandidateResult{{Source: "kugou", Score: 900, Lyrics: "[00:01.00]別の歌\n"}}
 	}, nil)
-	backfillLyricsKana(kanaBackfillKey, "A", "Song", "", 60)
+	backfillLyricsKana(context.Background(), kanaBackfillKey, "A", "Song", "", 60)
 	if e := enrichCache[kanaBackfillKey]; e.LyricsKanaChecked != lyricsKanaVersion || e.LyricsKana != "" || !e.LyricsRoma.Equal(kanaBackfillEntry().LyricsRoma) {
 		t.Errorf("问到了没借到:只记成问过: %+v", e)
 	}
@@ -129,7 +129,7 @@ func TestBackfillLyricsKanaRomaOnly(t *testing.T) {
 	e.LyricsKana, e.LyricsKanaChecked = "[kana:1きみ2あした]\n[00:00.00]君と\n[00:00.00]明日へ", lyricsKanaVersion
 	withKanaBackfillFakes(t, nil, func(lyrics, stored, kana string) (string, error) { return "", nil })
 	enrichCache = map[string]enrichEntry{kanaBackfillKey: e}
-	backfillLyricsKana(kanaBackfillKey, "A", "Song", "", 60)
+	backfillLyricsKana(context.Background(), kanaBackfillKey, "A", "Song", "", 60)
 	got := enrichCache[kanaBackfillKey]
 	if !got.LyricsRoma.Equal(e.LyricsRoma) || got.LyricsKana != e.LyricsKana {
 		t.Errorf("helper 判不是我们生成的,不该动: %+v", got)
@@ -139,7 +139,7 @@ func TestBackfillLyricsKanaRomaOnly(t *testing.T) {
 	}
 	enrichCache[kanaBackfillKey] = e
 	withKanaBackfillFakes(t, nil, func(lyrics, stored, kana string) (string, error) { return "[00:01.10]kimi to\n[00:02.10]ashita e", nil })
-	backfillLyricsKana(kanaBackfillKey, "A", "Song", "", 60)
+	backfillLyricsKana(context.Background(), kanaBackfillKey, "A", "Song", "", 60)
 	if got := enrichCache[kanaBackfillKey]; !got.LyricsRoma.EqualString("[00:01.10]kimi to\n[00:02.10]ashita e") {
 		t.Errorf("该换成重算的: %q", got.LyricsRoma.String())
 	}
@@ -156,7 +156,7 @@ func TestBackfillLyricsKanaLyricsChangedMeanwhile(t *testing.T) {
 		return []scoredLyricCandidateResult{{Source: "qq", Score: 1100, Lyrics: kanaDonorSample}}
 	}, func(lyrics, stored, kana string) (string, error) { return "[00:01.10]x", nil })
 	enrichCache = map[string]enrichEntry{kanaBackfillKey: kanaBackfillEntry()}
-	backfillLyricsKana(kanaBackfillKey, "A", "Song", "", 60)
+	backfillLyricsKana(context.Background(), kanaBackfillKey, "A", "Song", "", 60)
 	if e := enrichCache[kanaBackfillKey]; e.LyricsKana != "" || e.LyricsKanaChecked != 0 || !e.LyricsRoma.Equal(kanaBackfillEntry().LyricsRoma) {
 		t.Errorf("正文中途被换了还写了: %+v", e)
 	}
@@ -168,8 +168,8 @@ func TestLyricsKanaBackfillIsWired(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !containsCode(string(b), "} else if needsLyricsKanaBackfill(e) && !enrichInflight[key] && kanaBackfillOnce(key) {\n") ||
-		!containsCode(string(b), "go backfillLyricsKana(key, artist, title, album, durationSecs)\n") {
+	if !containsCode(string(b), "} else if needsLyricsKanaBackfill(e) && !enrichInflight[key] && kanaBackfillOnce(key, e) {\n") ||
+		!containsCode(string(b), "go backfillLyricsKana(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs)\n") {
 		t.Error("trackEnrichment 的派发链缺补借假名标注")
 	}
 }

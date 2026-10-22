@@ -1138,10 +1138,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			// 存量条目补演唱者标注,只问一次 Musixmatch、不动正文(见 speakersbackfill.go)。
 			enrichInflight[key] = true
 			go backfillLyricSpeakers(key, artist, title, album, durationSecs)
-		} else if needsLyricsKanaBackfill(e) && !enrichInflight[key] && kanaBackfillOnce(key) {
+		} else if needsLyricsKanaBackfill(e) && !enrichInflight[key] && kanaBackfillOnce(key, e) {
 			// 日文歌补借假名标注、让生成的罗马音用上它,不动正文(见 kanabackfill.go)。
 			enrichInflight[key] = true
-			go backfillLyricsKana(key, artist, title, album, durationSecs)
+			go backfillLyricsKana(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs)
 		}
 		// 机翻不排上面这条链,跟哪一路都能同时跑,理由见 translatestart.go。
 		startTranslationBackfillLocked(key, e)
@@ -4879,9 +4879,13 @@ func lyricSourcesWorthRetry(ctx context.Context, scored []scoredLyricCandidateRe
 	}
 	transport := sharedLyricSourceBreaker().transportFailureCodes()
 	skipped := lyricSourceRoundFrom(ctx).skippedSources()
+	// 外层限定了只问哪几个源(存量补假名只问带标注的源)时,补查轮只在这几个里挑:补查轮自己再套一层 withLyricSourceOnly,
+	// 会把外层的限定盖掉。
+	outer := lyricSourceOnlyFrom(ctx)
 	var out []string
 	for _, s := range lyricSourceNames {
-		if !lyricSourceEnabled(s) || usable[s] || transport[s] != "" || slices.Contains(skipped, s) || lyricDeadlineMissed(ctx, s) {
+		if !lyricSourceEnabled(s) || usable[s] || transport[s] != "" || slices.Contains(skipped, s) || lyricDeadlineMissed(ctx, s) ||
+			(outer != nil && !outer[s]) {
 			continue
 		}
 		switch s {

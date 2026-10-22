@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // 借来的假名标注:当前正文自己不带 `[kana:]`(只有酷狗 / QQ / LRCLIB 那几家给,见 qq.go splitQRCKanaLine、
@@ -28,7 +29,7 @@ const kanaTimePlaceholder = "[00:00.00]"
 // kanaDonorLRC:给 lyrics / yrc 这份正文借一份假名标注(格式见文件头注)。正文自己带 `[kana:]`、这首不像日文、
 // 没有过身份关又带标注的候选、或借到的行少于 kanaDonorMinLines 时返回空串。
 func kanaDonorLRC(lyrics, yrc string, scored []scoredLyricCandidateResult) string {
-	if lyrics == "" || strings.Contains(lyrics, "[kana:") || kanaRatio(lyrics) < kanaDonorMinKanaRatio {
+	if lyrics == "" || ownKanaAligned(lyrics) || kanaRatio(lyrics) < kanaDonorMinKanaRatio {
 		return ""
 	}
 	targets := kanaTargetLines(lyrics, yrc)
@@ -67,6 +68,12 @@ func kanaDonorLRC(lyrics, yrc string, scored []scoredLyricCandidateResult) strin
 		body.WriteString("\n" + kanaTimePlaceholder + t)
 	}
 	return "[kana:" + tag.String() + "]" + body.String()
+}
+
+// ownKanaAligned:正文自己带 `[kana:]`、而且按 App 的口径(先换回同形异码字的标准字)对得齐。对不齐的那份 App 不用、
+// 退回借来的那份(KanaAnnotation.parse(lrc:donor:)),所以照常借。
+func ownKanaAligned(lyrics string) bool {
+	return strings.Contains(lyrics, "[kana:") && kanaEntriesByLineKey(normalizeHanCompat(lyrics)) != nil
 }
 
 // kanaDonorMinKanaRatio:正文里假名占比低于这个值的不借(不像日文歌)。跟 Romanizer.looksJapaneseSong 不是同一个
@@ -138,6 +145,7 @@ func kanaEntriesByLineKey(lrc string) map[string]string {
 		carry -= take
 		n -= take
 		var b strings.Builder
+		hasReading := false
 		for n > 0 && idx < len(entries) {
 			e := entries[idx]
 			idx++
@@ -148,9 +156,11 @@ func kanaEntriesByLineKey(lrc string) map[string]string {
 				break
 			}
 			b.WriteString(e.raw)
+			hasReading = hasReading || utf8.RuneCountInString(e.raw) > 1
 			n -= e.count
 		}
-		if !clean || b.Len() == 0 {
+		// 条目全是不带读音的(酷狗给署名、曲名行的「1」):借过去不标任何字,也不该算借到一行。
+		if !clean || b.Len() == 0 || !hasReading {
 			continue
 		}
 		key := kanaLineKey(l)
@@ -246,7 +256,7 @@ var kanaDonorSources = map[string]bool{"kugou": true, "qq": true, "lrclib": true
 // nextLyricsKana:这一轮写完正文 lyrics / yrc 之后条目该带的借来标注(refreshKana 和锁外预生成罗马音共用,两边一致)。
 // 正文自己带标注时为空;这一轮借到了就用这一轮的;没借到时把旧的那份对到新正文上(这一轮可能根本没问到带标注的源)。
 func nextLyricsKana(old, lyrics, yrc string, scored []scoredLyricCandidateResult) string {
-	if strings.Contains(lyrics, "[kana:") {
+	if ownKanaAligned(lyrics) {
 		return ""
 	}
 	if donor := kanaDonorLRC(lyrics, yrc, scored); donor != "" {
@@ -266,7 +276,12 @@ func refitLyricsKana(kana, lyrics, yrc string) string {
 // refreshKana:一轮写完正文之后刷新借来的假名标注(规则见 nextLyricsKana)。这一轮有带标注的源给出过
 // 身份关的候选时记下 LyricsKanaChecked,存量补问(kanabackfill.go)不必再来。
 func refreshKana(e *enrichEntry, scored []scoredLyricCandidateResult) {
+	old := e.LyricsKana
 	e.LyricsKana = nextLyricsKana(e.LyricsKana, e.Lyrics.String(), e.LyricsYRC.String(), scored)
+	// 换上的正文对不上旧标注、整份清掉了:「问过」说的是旧正文,作废;这一轮带标注的源出过候选的话下面照样记上。
+	if old != "" && e.LyricsKana == "" {
+		e.LyricsKanaChecked = 0
+	}
 	for _, c := range scored {
 		if kanaDonorSources[c.Source] && c.Score >= 0 {
 			e.LyricsKanaChecked = lyricsKanaVersion

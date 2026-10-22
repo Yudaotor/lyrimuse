@@ -21,8 +21,8 @@ import (
 // kanaBackfillTimeout:一轮限定源的搜索,同正常解析的总截止。
 const kanaBackfillTimeout = lyricSearchDeadline
 
-// kanaBackfillTried:这一进程里已经补过的 key。调用方持 enrichMu。
-var kanaBackfillTried = map[string]bool{}
+// kanaBackfillTried:这一进程里补过的 key → 补的时候标注、正文、罗马音的指纹(kanaRomaFingerprint)。调用方持 enrichMu。
+var kanaBackfillTried = map[string]string{}
 
 // kanaBackfillSearch 是补问实际调用的搜索;测试换成假实现。
 var kanaBackfillSearch = func(ctx context.Context, artist, title, album string, durationSecs float64) []scoredLyricCandidateResult {
@@ -36,7 +36,7 @@ func kanaSongNeedsReading(e enrichEntry) bool {
 		return false
 	}
 	l := e.Lyrics.String()
-	return !strings.Contains(l, "[kana:") && kanaRatio(l) >= kanaDonorMinKanaRatio && strings.ContainsFunc(l, kanaNeedsAnnotation)
+	return !ownKanaAligned(l) && kanaRatio(l) >= kanaDonorMinKanaRatio && strings.ContainsFunc(l, kanaNeedsAnnotation)
 }
 
 // enabledKanaDonorSources:kanaDonorSources 里开着的源。
@@ -71,17 +71,20 @@ func needsLyricsKanaBackfill(e enrichEntry) bool {
 	return needsLyricsKanaAsk(e) || needsKanaRomaRefresh(e)
 }
 
-// kanaBackfillOnce:这一进程里第一次问到这个 key 时返回 true。调用方持 enrichMu。
-func kanaBackfillOnce(key string) bool {
-	if kanaBackfillTried[key] {
+// kanaBackfillOnce:这一进程里这个 key 在这份标注、正文、罗马音下第一次问到时返回 true。别的路径改了其中一样(重评分新借到
+// 标注、换了正文)之后再播到,照样补一次,罗马音按新标注重核。调用方持 enrichMu。
+func kanaBackfillOnce(key string, e enrichEntry) bool {
+	fp := kanaRomaFingerprint(e.LyricsKana, e.Lyrics.String(), e.LyricsRoma.String())
+	if prev, ok := kanaBackfillTried[key]; ok && prev == fp {
 		return false
 	}
-	kanaBackfillTried[key] = true
+	kanaBackfillTried[key] = fp
 	return true
 }
 
-// backfillLyricsKana 补借假名标注、重算罗马音,见文件头注。调用方已置 enrichInflight[key]。
-func backfillLyricsKana(key, artist, title, album string, durationSecs float64) {
+// backfillLyricsKana 补借假名标注、重算罗马音,见文件头注。base 带着用户存的检索曲名(withLyricSearchTitle)。
+// 调用方已置 enrichInflight[key]。
+func backfillLyricsKana(base context.Context, key, artist, title, album string, durationSecs float64) {
 	defer func() {
 		enrichMu.Lock()
 		delete(enrichInflight, key)
@@ -96,7 +99,7 @@ func backfillLyricsKana(key, artist, title, album string, durationSecs float64) 
 	next := enrichEntry{Lyrics: e.Lyrics, LyricsYRC: e.LyricsYRC, LyricsKana: e.LyricsKana, LyricsKanaChecked: e.LyricsKanaChecked}
 	if needsLyricsKanaAsk(e) {
 		sources := enabledKanaDonorSources()
-		ctx, cancel := withCancelAfter(withLyricSourceOnly(withBackgroundOutbound(context.Background()), sources), kanaBackfillTimeout)
+		ctx, cancel := withCancelAfter(withLyricSourceOnly(withBackgroundOutbound(base), sources), kanaBackfillTimeout)
 		scored := kanaBackfillSearch(ctx, artist, title, album, durationSecs)
 		cancel()
 		refreshKana(&next, scored)
