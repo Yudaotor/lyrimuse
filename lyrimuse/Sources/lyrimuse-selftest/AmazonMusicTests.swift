@@ -187,6 +187,8 @@ func runAmazonMusicTests() {
         let resumed = P.apply(.resumed, at: at("025800"), to: paused)
         expectEqual(resumed.audibleLead, cal!.audibleLead, "Amazon 连播: 暂停不清缓冲,恢复后提前量照扣")
         expectEqual(near(P.position(resumed, at: at("025810")), 88.7), true, "Amazon 连播: 恢复那一刻接着暂停的位置走")
+        let resumedAgain = P.apply(.resumed, at: at("025805"), to: resumed)
+        expectEqual(near(P.position(resumedAgain, at: at("025810")), 88.7), true, "Amazon 连播: 在放时又来一行恢复,走过的时间不丢")
         var stalledCal = P.apply(.stall(true), at: at("025700"), to: cal!)
         stalledCal = P.apply(.stall(false), at: at("025702"), to: stalledCal)
         expectEqual(near(P.position(stalledCal, at: at("025712")), 48.7), true,

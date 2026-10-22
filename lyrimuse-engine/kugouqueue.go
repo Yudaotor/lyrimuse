@@ -178,17 +178,21 @@ func kugouLoadQueue(artist, title string) (list []kugouQueueSong, pos int, handl
 	}
 	root, err := parsePlistXML(out)
 	if err != nil {
+		noteParserUnrecognized("kugou-play-list", err.Error())
 		return nil, -1, false
 	}
 	top, _ := root.(map[string]any)
 	parts, _ := top["userPlayList"].([]any)
 	if len(parts) == 0 {
+		noteParserUnrecognized("kugou-play-list", "userPlayList missing")
 		return nil, -1, false
 	}
 	rawList, isList := parts[0].([]any)
 	if !isList {
+		noteParserUnrecognized("kugou-play-list", "userPlayList[0] is not a list")
 		return nil, -1, false
 	}
+	noteParserRecognized("kugou-play-list")
 	// 结构认出来了,从这里往下都是 handled=true。
 	list = make([]kugouQueueSong, 0, len(rawList))
 	for _, v := range rawList {
@@ -457,7 +461,7 @@ func kugouAlbumTracks(artist, title, album string) ([]albumTrack, bool) {
 	if !isHexString(hash) {
 		return nil, false
 	}
-	ctx, cancel := withCancelAfter(context.Background(), 10*time.Second)
+	ctx, cancel := withCancelAfter(withBackgroundOutbound(context.Background()), 10*time.Second)
 	defer cancel()
 	albumID := kugouAlbumIDByHash(ctx, hash)
 	if albumID == "" {

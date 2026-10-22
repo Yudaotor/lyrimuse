@@ -234,6 +234,7 @@ func startKasetAlbumSweep(ctx context.Context) {
 		return
 	case <-time.After(kasetAlbumSweepDelay):
 	}
+	ctx = withBackgroundOutbound(ctx)
 	hl := ytmusicDisplayLanguage()
 	enrichMu.Lock()
 	keys := kasetAlbumSweepCandidatesLocked(hl)

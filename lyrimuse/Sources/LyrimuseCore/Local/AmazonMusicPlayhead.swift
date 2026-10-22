@@ -202,6 +202,8 @@ public enum AmazonMusicPlayhead {
             // 暂停后 `calibrated` 不再把起点换成系统时间戳,日志时钟的零点可能挪了不到一秒,暂停前量的区间不能再叠。
             s.leadRange = nil
         case .resumed:
+            // 在放的时候日志里又出一行恢复(重复下发的播放命令):没停过,起点不动,不然这一段走过的时间就丢了。
+            guard s.paused else { break }
             s.paused = false
             if !s.stalled { s.since = t }
         case .seek(let target):

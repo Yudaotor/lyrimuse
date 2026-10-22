@@ -42,6 +42,8 @@ type amazonLogTail struct {
 	// cloudQueue:最近一次开播走的是云端队列(电台,见 amazonPlaybackStartKind)。后面放什么由服务器边放边定,
 	// 同专辑的其它歌基本放不到。
 	cloudQueue bool
+	// file:上次读的是哪个文件。被换成新文件(轮转、重写)时,新文件读到之前就长过旧的位置的话光看大小认不出来。
+	file os.FileInfo
 }
 
 // amazonPlaybackStartKind 认日志里的开播请求:云端队列(`CQPlaybackRequestImpl … StartingCQPlayback`,电台一类:
@@ -95,9 +97,10 @@ func (t *amazonLogTail) poll() {
 		return
 	}
 	size := info.Size()
-	if size < t.offset {
+	if size < t.offset || (t.file != nil && !os.SameFile(t.file, info)) {
 		t.offset, t.partial, t.queue, t.cloudQueue = 0, nil, nil, false
 	}
+	t.file = info
 	if t.offset == 0 && size > amazonLogTailOnFirstRead {
 		if all, err := io.ReadAll(io.LimitReader(f, size)); err == nil {
 			t.offset = int64(amazonReplayStart(all, amazonLogTailOnFirstRead))

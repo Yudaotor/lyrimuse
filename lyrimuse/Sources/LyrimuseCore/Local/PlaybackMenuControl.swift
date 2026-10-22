@@ -73,9 +73,8 @@ public enum PlaybackMenuControl {
         if player == .soda { return SodaMusicControl.press(command) }
         guard player == .qqMusic || player == .netease || player == .pinePlayer else { return .menuUnavailable }
         guard AXIsProcessTrusted() else { return .notTrusted }
-        guard let running = NSRunningApplication.runningApplications(
-            withBundleIdentifier: player.bundleIdentifier).first else { return .playerNotRunning }
-        let app = AXUIElementCreateApplication(running.processIdentifier)
+        guard let pid = PlayerProcess.pid(bundleID: player.bundleIdentifier) else { return .playerNotRunning }
+        let app = AXUIElementCreateApplication(pid)
         let deadline = ProcessInfo.processInfo.systemUptime + 0.5
         func attribute(_ element: AXUIElement, _ name: String) -> AnyObject? {
             // AX 超时只属于这个对象,不会从 application 继承到新取得的菜单/菜单项。

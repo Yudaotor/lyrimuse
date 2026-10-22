@@ -3,33 +3,49 @@ import ApplicationServices
 import Foundation
 
 /// 读别的 App 菜单栏(没有脚本接口的播放器:QQ 音乐、网易云音乐、酷狗音乐)。只读它自己的菜单项、只对那一项 `AXPress`,不发全局快捷键,
-/// 不把它拉到前台;跨进程查询设 1 秒超时。没有「辅助功能」权限、它没在跑时读不到。
+/// 不把它拉到前台;跨进程查询每个元素 1 秒超时(超时只属于设它的那个元素,不会从 App 元素带到下面取到的菜单项上,
+/// 取到一个设一个)。没有「辅助功能」权限、它没在跑时读不到。
 public enum MenuBarAX {
+    static let messagingTimeout: Float = 1
+
     public static func menuBar(bundleID: String) -> AXUIElement? {
         application(bundleID: bundleID).flatMap { element($0, kAXMenuBarAttribute) }
     }
 
     /// 它的 App 元素(跨进程查询 1 秒超时);没有权限、没在跑为 nil。
     public static func application(bundleID: String) -> AXUIElement? {
-        guard AXIsProcessTrusted(),
-              let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first else { return nil }
-        let ax = AXUIElementCreateApplication(app.processIdentifier)
-        AXUIElementSetMessagingTimeout(ax, 1)
-        return ax
+        guard AXIsProcessTrusted(), let pid = PlayerProcess.pid(bundleID: bundleID) else { return nil }
+        return timed(AXUIElementCreateApplication(pid))
+    }
+
+    /// 给取到的元素设上跨进程查询超时。
+    @discardableResult
+    public static func timed(_ e: AXUIElement) -> AXUIElement {
+        AXUIElementSetMessagingTimeout(e, messagingTimeout)
+        return e
+    }
+
+    /// 按一项:灰着的(`AXEnabled` 为 false,比如 QQ 弹着会员窗时整组菜单都灰)不按、返回 false,按下去也会回成功、其实没用。
+    public static func press(_ e: AXUIElement) -> Bool {
+        var value: AnyObject?
+        if AXUIElementCopyAttributeValue(e, kAXEnabledAttribute as CFString, &value) == .success, (value as? Bool) == false {
+            return false
+        }
+        return AXUIElementPerformAction(e, kAXPressAction as CFString) == .success
     }
 
     /// 一组子元素(默认 `AXChildren`,也可以是 `AXWindows`);读不到为空。
     public static func children(_ e: AXUIElement, attribute: String = kAXChildrenAttribute) -> [AXUIElement] {
         var value: AnyObject?
         guard AXUIElementCopyAttributeValue(e, attribute as CFString, &value) == .success else { return [] }
-        return (value as? [AXUIElement]) ?? []
+        return ((value as? [AXUIElement]) ?? []).map(timed)
     }
 
     public static func element(_ e: AXUIElement, _ name: String) -> AXUIElement? {
         var value: AnyObject?
         guard AXUIElementCopyAttributeValue(e, name as CFString, &value) == .success, let value,
               CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
-        return (value as! AXUIElement)
+        return timed(value as! AXUIElement)
     }
 
     public static func string(_ e: AXUIElement, _ name: String) -> String? {
@@ -115,7 +131,7 @@ public final class MenuTitleFavorite: @unchecked Sendable {
         defer { lock.unlock() }
         guard let found = item(), let now = state(after: found) else { return false }
         if now == value { return true }
-        guard AXUIElementPerformAction(found.element, kAXPressAction as CFString) == .success else { return false }
+        guard MenuBarAX.press(found.element) else { return false }
         return MenuBarAX.waitFor(value, polls: Int(confirmWait / confirmPollInterval), interval: confirmPollInterval) {
             state(after: found)
         }

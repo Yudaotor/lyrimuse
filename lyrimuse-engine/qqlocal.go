@@ -180,6 +180,10 @@ func refreshQQLocalIndexLocked(ctx context.Context) {
 		if sqliteSchemaMismatch(err) {
 			noteParserUnrecognized("qq-local-library", sqliteErrorDetail(err))
 		}
+		// 是调用方取消了(换歌、源超时)、不是库读不了:下一次照常扫,别在 qqLocalRescanMin 里一直用旧索引。
+		if ctx.Err() != nil {
+			qqLocalScanned = time.Time{}
+		}
 		return
 	}
 	// 库的版本(mtime/size)读成功才记:先记的话,一次偶发失败之后直到库再变都不会重试。
@@ -426,21 +430,26 @@ func qqLoadPlayingList(artist, title string) (qqPlayingList, bool) {
 	}
 	root, err := parsePlistXML(out)
 	if err != nil {
+		noteParserUnrecognized("qq-playing-list", err.Error())
 		return qqPlayingList{}, false
 	}
 	rootMap, ok := root.(map[string]any)
 	if !ok {
+		noteParserUnrecognized("qq-playing-list", "root is not a dictionary")
 		return qqPlayingList{}, false
 	}
 	objs, _ := rootMap["$objects"].([]any)
 	top, _ := rootMap["$top"].(map[string]any)
 	if len(objs) == 0 || top == nil {
+		noteParserUnrecognized("qq-playing-list", "not a keyed archive")
 		return qqPlayingList{}, false
 	}
 	items, ok := qqPlistField(objs, qqPlistField(objs, qqDeref(objs, top["PlayingList"]), "ListData"), "NS.objects").([]any)
 	if !ok {
+		noteParserUnrecognized("qq-playing-list", "PlayingList.ListData missing")
 		return qqPlayingList{}, false
 	}
+	noteParserRecognized("qq-playing-list")
 	m := newQueueCurrentMatcher(artist, title)
 	hint := -1
 	if idx, ok := qqDeref(objs, top["LastPlayingIndex"]).(int64); ok && idx >= 0 && idx < int64(len(items)) {
@@ -499,7 +508,7 @@ func qqAlbumTracks(artist, title, album string) ([]albumTrack, bool) {
 	if mid == "" {
 		return nil, false
 	}
-	ctx, cancel := withCancelAfter(context.Background(), 10*time.Second)
+	ctx, cancel := withCancelAfter(withBackgroundOutbound(context.Background()), 10*time.Second)
 	defer cancel()
 	songs, err := qqAlbumSongs(ctx, mid)
 	if err != nil || len(songs) == 0 {

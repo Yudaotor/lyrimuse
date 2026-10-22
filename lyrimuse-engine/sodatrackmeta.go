@@ -180,7 +180,7 @@ func sodaTrackMetaWorker() {
 	for {
 		sodaTrackMetaMu.Lock()
 		if failures >= sodaTrackMetaMaxFailures {
-			sodaTrackMetaPaused = time.Now().Add(sodaTrackMetaPause)
+			sodaTrackMetaPaused = time.Now().Round(0).Add(sodaTrackMetaPause)
 			for _, id := range sodaTrackMetaPending {
 				delete(sodaTrackMetaQueued, id)
 			}
@@ -202,7 +202,11 @@ func sodaTrackMetaWorker() {
 		delete(sodaTrackMetaQueued, id)
 		if err != nil {
 			failures++
-			sodaTrackMetaFailed[id] = time.Now()
+			// 只有接口答了、里面没有这首才隔 sodaTrackMetaRetryAfter 再问;断网、超时这种一时没问成的只算进停手次数。
+			// 时刻只留墙钟:单调时钟在系统睡眠时不走。
+			if errors.Is(err, errSodaTrackMetaMissing) {
+				sodaTrackMetaFailed[id] = time.Now().Round(0)
+			}
 		} else {
 			failures = 0
 			delete(sodaTrackMetaFailed, id)

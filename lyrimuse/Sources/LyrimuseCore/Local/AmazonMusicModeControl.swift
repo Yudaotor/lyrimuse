@@ -170,10 +170,9 @@ public enum AmazonMusicModeControl {
         writeLock.lock()
         defer { writeLock.unlock() }
         guard AXIsProcessTrusted(),
-              let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first,
+              let pid = PlayerProcess.pid(bundleID: bundleID),
               let start = readSettings(logPath: logPath) else { return false }
-        let ax = AXUIElementCreateApplication(app.processIdentifier)
-        AXUIElementSetMessagingTimeout(ax, 1)
+        let ax = MenuBarAX.timed(AXUIElementCreateApplication(pid))
         // 整段持锁:读进度那边(`AmazonMusicUIProbe.sampleOrigin`)也切这棵树,交错时互相拆掉对方刚建好的树。
         AmazonMusicUIProbe.treeLock.lock()
         defer {

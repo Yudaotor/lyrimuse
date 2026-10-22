@@ -401,11 +401,15 @@ func (d *msgpackrDecoder) record(keys []string, depth int) (any, error) {
 	return m, nil
 }
 
+// msgpackrPreallocMax:按声明的长度预分配的上限。声明的长度只受剩余字节数约束,LMDB 旧页里的随机字节误认成一个数组 / 表时
+// 能声明出百万级,先按它分配就是白占上百 MB;超过的边解边长。
+const msgpackrPreallocMax = 64
+
 func (d *msgpackrDecoder) arrayN(n, depth int) (any, error) {
 	if n > len(d.buf)-d.pos {
 		return nil, errMsgpackr
 	}
-	out := make([]any, 0, n)
+	out := make([]any, 0, min(n, msgpackrPreallocMax))
 	for i := 0; i < n; i++ {
 		v, err := d.value(depth + 1)
 		if err != nil {
@@ -420,7 +424,7 @@ func (d *msgpackrDecoder) mapN(n, depth int) (any, error) {
 	if n > len(d.buf)-d.pos {
 		return nil, errMsgpackr
 	}
-	m := make(map[string]any, n)
+	m := make(map[string]any, min(n, msgpackrPreallocMax))
 	for i := 0; i < n; i++ {
 		k, err := d.value(depth + 1)
 		if err != nil {

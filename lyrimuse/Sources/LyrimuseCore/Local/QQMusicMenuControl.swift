@@ -60,7 +60,7 @@ public enum QQMusicMenuControl {
     /// 切到某一档,返回按没按下去。QQ 没有列表循环,传 `.repeatAll` 回 false。
     public static func setMode(_ mode: MusicPlaybackController.MusicPlaybackMode) -> Bool {
         guard let item = modeItems()?.first(where: { Self.mode(forTitle: $0.title) == mode }) else { return false }
-        return AXUIElementPerformAction(item.element, kAXPressAction as CFString) == .success
+        return MenuBarAX.press(item.element)
     }
 
     private static func menuBar() -> AXUIElement? { MenuBarAX.menuBar(bundleID: bundleID) }

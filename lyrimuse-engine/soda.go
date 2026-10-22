@@ -231,7 +231,7 @@ func sodaLyricFromHosts(ctx context.Context, hosts []string, artist, title, albu
 			return sodaResult{}, false, ""
 		}
 		sodaSearchMu.Lock()
-		sodaSearchCache[key] = sodaSearchCacheEntry{items: items, at: now, host: host}
+		sodaSearchCache[key] = sodaSearchCacheEntry{items: items, at: now.Round(0), host: host}
 		sodaSearchMu.Unlock()
 	}
 	ids := sodaRankCandidates(items, artist, title, album, durationSecs)

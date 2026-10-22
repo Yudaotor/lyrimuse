@@ -488,7 +488,7 @@ private func wiringContracts() {
     expectEqual(code("LyrimuseCore/Local/LXMusicFavoriteControl.swift").contains("guard let now = currentTrack() else { return nil }"),
                 true, "洛雪退路: 收藏按开放 API 顶上来的那首认")
     expectEqual(code("LyrimuseCore/Local/LXMusicFavoriteControl.swift")
-                    .contains("guard let result = ProcessRunner.run(\"/usr/bin/sqlite3\", [\"file:\\(databasePath)?mode=ro\", query], timeout: queryTimeout),"),
+                    .contains("guard let result = ProcessRunner.run(\"/usr/bin/sqlite3\", [\"-init\", \"/dev/null\", \"-batch\", \"file:\\(databasePath)?mode=ro\", query],\n                                             timeout: queryTimeout),"),
                 true, "洛雪收藏: 读本地库走带超时的 ProcessRunner")
     let lxAPI = code("LyrimuseCore/Local/LXMusicOpenAPI.swift")
     expectEqual(lxAPI.contains("if wasConnected { handler?(.playback) }"), true,

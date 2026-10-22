@@ -37,12 +37,26 @@ public enum PlayerTitleSplit {
         var base = strippingAudioExtension(repairingCJKMojibake(title))
         // 末尾那组括号是 reAMP 电台标题里的台名简介;VOX 的 ICY 标题没有,去掉会删掉「(Live)」这类版本标记。
         if isStream, bundleIDs.contains(bundleID) { base = strippingTrailingParenthetical(base) }
+        // 没写标签的文件名常带音轨号(「01 - Intro」「歌手 - 01 - 歌名」),去掉,别当成歌手、别留在歌名里。
+        if !isStream { base = strippingTrackNumber(base) }
         if let dash = base.range(of: " - ") {
             let left = base[..<dash.lowerBound].trimmingCharacters(in: .whitespaces)
-            let right = base[dash.upperBound...].trimmingCharacters(in: .whitespaces)
+            var right = base[dash.upperBound...].trimmingCharacters(in: .whitespaces)
+            if !isStream { right = strippingTrackNumber(right) }
             if !left.isEmpty, !right.isEmpty { return (left, right) }
         }
         return base == title ? nil : ("", base)
+    }
+
+    /// 开头的音轨号连同后面的 ` - ` 去掉:一两位数字,或者 0 开头的三位(`001`)。`311`、`702` 这种三位数的乐队名不动。
+    /// 纯函数,selftest 覆盖。
+    public static func strippingTrackNumber(_ s: String) -> String {
+        guard let dash = s.range(of: " - ") else { return s }
+        let head = s[..<dash.lowerBound]
+        guard !head.isEmpty, head.allSatisfy(\.isASCII), head.allSatisfy(\.isNumber),
+              head.count <= 2 || (head.count == 3 && head.first == "0") else { return s }
+        let rest = s[dash.upperBound...].trimmingCharacters(in: .whitespaces)
+        return rest.isEmpty ? s : rest
     }
 
     /// 换到快照上:先用正在放的文件的标签,读不到再拆标题;都不用换时原样返回。会读盘(同一首只读一次),在轮询的后台线程上调。

@@ -58,6 +58,8 @@ public enum AmazonMusicUIProbe {
     static let startPollInterval: TimeInterval = 0.25
     /// 一次重建最多等这么久。
     public static let rebuildTimeout: TimeInterval = 1
+    /// 连着几次重建都读不到时间文字就放弃这一次(`noClock`)。
+    static let emptyRebuildLimit = 2
 
     /// 一组读数推出的「这首真实起点」区间(epoch 秒,位置 = 当前时刻 − 起点)。交集为空(中途暂停、读错)返回 nil。纯函数。
     ///
@@ -141,7 +143,7 @@ public enum AmazonMusicUIProbe {
                                     isCurrent: () -> Bool = { true }) -> Result<ClosedRange<Double>, FailureBox> {
         guard AXIsProcessTrusted() else { return .failure(.init(.notTrusted, samples: 0)) }
         let durationText = duration.map { String(Int($0)) } ?? "?"
-        let app = AXUIElementCreateApplication(pid)
+        let app = MenuBarAX.timed(AXUIElementCreateApplication(pid))
         defer {
             treeLock.lock()
             AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanFalse)
@@ -152,6 +154,7 @@ public enum AmazonMusicUIProbe {
         var otherTrack: String?
         var sawZero = false
         var sampleToggles = 0
+        var emptyRebuilds = 0
         let waitDeadline = Date().addingTimeInterval(startWait)
         var deadline: Date?
         while Date() < (deadline ?? waitDeadline), isCurrent() {
@@ -170,7 +173,14 @@ public enum AmazonMusicUIProbe {
             }
             let readAt = Date()
             treeLock.unlock()
-            guard !found.isEmpty else { continue }
+            // 树里压根没有时间文字(主窗口关了、在后台放):连着几次都这样就放弃这一次,别在 startWait 里一直开关重建,
+            // 开关得越密 Amazon 越容易卡顿断音。
+            guard !found.isEmpty else {
+                emptyRebuilds += 1
+                if emptyRebuilds >= emptyRebuildLimit, samples.isEmpty { break }
+                continue
+            }
+            emptyRebuilds = 0
             let pairs = found.map(\.pair)
             // 开关之后头一次读到的偶尔还是上次那棵旧树(上一首的时间),跳过接着读,别整次放弃。
             guard let picked = pickIndex(pairs, duration: duration), case let elapsed = pairs[picked].elapsed,

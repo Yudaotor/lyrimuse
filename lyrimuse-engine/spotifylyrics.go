@@ -161,13 +161,17 @@ func spotifyScanLyricsCacheLocked(dir string) {
 		if spotifyLyricsSeenFiles[name] {
 			continue
 		}
-		spotifyLyricsSeenFiles[name] = true
 		info, err := de.Info()
-		if err != nil || info.Size() > spotifyLyricsMaxEntryBytes {
+		if err != nil {
+			continue
+		}
+		if info.Size() > spotifyLyricsMaxEntryBytes {
+			spotifyLyricsSeenFiles[name] = true
 			continue
 		}
 		// 上次读到过这个时刻,比它旧、又不在索引里的就是没有歌词的。
 		if !info.ModTime().After(spotifyLyricsWatermark) {
+			spotifyLyricsSeenFiles[name] = true
 			continue
 		}
 		head, err := readFileHead(filepath.Join(dir, name), spotifyLyricsHeadBytes)
@@ -175,13 +179,15 @@ func spotifyScanLyricsCacheLocked(dir string) {
 			continue
 		}
 		read++
-		if info.ModTime().After(watermark) {
-			watermark = info.ModTime()
-		}
 		key, ok := spotifySimpleCacheKey(head)
 		if !ok {
+			// 可能是刚建、头还没写全的条目:不记看过、不推水位,下一轮再读。
 			badMagic++
 			continue
+		}
+		spotifyLyricsSeenFiles[name] = true
+		if info.ModTime().After(watermark) {
+			watermark = info.ModTime()
 		}
 		m := spotifyLyricsKeyRe.FindStringSubmatch(key)
 		if m == nil {

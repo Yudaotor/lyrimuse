@@ -309,7 +309,7 @@ func (d lxMusicDislike) filter(list []lxMusicTrack, pos int) ([]lxMusicTrack, in
 
 // lxMusicCurrentTrack:洛雪此刻在放的这一首,连同它所在的列表和下标(不在 playInfo 那个列表里时 list 为空、pos 为 -1)。
 // playInfo 指的那一条名字对得上就是它;对不上(换歌后 playInfo 还没写盘)就在 playInfo 那个列表里按名字找;再找不到在所有
-// 列表里找,不止一条时取登记时长最接近 durationSecs 的。
+// 列表里找,登记时长对不上 durationSecs 的不认(同名的 Live、别的版本),不止一条时取最接近的。
 func lxMusicCurrentTrack(ctx context.Context, artist, title string, durationSecs float64) (track lxMusicTrack, list []lxMusicTrack, pos int, ok bool) {
 	if info, found := lxMusicReadPlayInfo(); found {
 		if tracks, err := lxMusicList(ctx, info.ListID); err == nil {
@@ -329,7 +329,7 @@ func lxMusicCurrentTrack(ctx context.Context, artist, title string, durationSecs
 	}
 	best, bestDiff := -1, 0.0
 	for i, t := range named {
-		if !lxMusicSameSong(t, artist, title) {
+		if !lxMusicSameSong(t, artist, title) || !sourceDurationFits(durationSecs, t.durationSecs()) {
 			continue
 		}
 		diff := 0.0

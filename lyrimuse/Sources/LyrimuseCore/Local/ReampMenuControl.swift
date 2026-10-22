@@ -61,15 +61,12 @@ public enum ReampMenuControl {
     public static func setMode(_ mode: MusicPlaybackController.MusicPlaybackMode, now: Date = Date()) -> Bool {
         guard let target = toggles(for: mode), let items = items() else { return false }
         let current = effective(read: marks(items), pending: pending.withLock { $0 }, now: now)
-        var pressed = true
-        if current.shuffle != target.shuffle { pressed = press(items.shuffle) && pressed }
-        if current.repeating != target.repeating { pressed = press(items.repeating) && pressed }
-        pending.withLock { $0 = (target, now) }
-        return pressed
-    }
-
-    private static func press(_ item: AXUIElement) -> Bool {
-        AXUIElementPerformAction(item, kAXPressAction as CFString) == .success
+        // 只记真按下去的那一项:没按成的也记成刚按过的话,`pendingWindow` 里回读一直报成目标档,纠正不回来。
+        var applied = current
+        if current.shuffle != target.shuffle, MenuBarAX.press(items.shuffle) { applied.shuffle = target.shuffle }
+        if current.repeating != target.repeating, MenuBarAX.press(items.repeating) { applied.repeating = target.repeating }
+        if applied != current { pending.withLock { $0 = (applied, now) } }
+        return applied == target
     }
 
     private static func marks(_ items: (shuffle: AXUIElement, repeating: AXUIElement)) -> Toggles {

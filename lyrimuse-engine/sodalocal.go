@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -444,7 +445,13 @@ func sodaUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
 	if want == "|" {
 		return nil, false
 	}
+	// 好几条队列都停在这首上时(推荐流和某个听歌模式),用最近落盘的那条:map 的遍历顺序是随机的。
+	queues := make([]sodaLocalQueue, 0, len(f))
 	for _, q := range f {
+		queues = append(queues, q)
+	}
+	sort.SliceStable(queues, func(i, j int) bool { return queues[i].SavedAt > queues[j].SavedAt })
+	for _, q := range queues {
 		if q.LastPlayedKey == "" {
 			continue
 		}

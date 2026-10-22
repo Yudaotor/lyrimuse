@@ -65,11 +65,10 @@ public enum AmazonMusicFavoriteControl {
         guard AXIsProcessTrusted(), let asin = AmazonMusicLogWatcher.shared.currentTrackASIN(),
               let now = libraryContains(asin: asin) else { return false }
         if now == value { return true }
-        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first else { return false }
-        let ax = AXUIElementCreateApplication(app.processIdentifier)
-        AXUIElementSetMessagingTimeout(ax, 1)
+        guard let pid = PlayerProcess.pid(bundleID: bundleID) else { return false }
+        let ax = MenuBarAX.timed(AXUIElementCreateApplication(pid))
         AmazonMusicUIProbe.treeLock.lock()
-        let pressed = pressAddToLibrary(ax, removing: now)
+        let pressed = pressAddToLibrary(ax, removing: now) { AmazonMusicLogWatcher.shared.currentTrackASIN() == asin }
         AXUIElementSetAttributeValue(ax, "AXEnhancedUserInterface" as CFString, kCFBooleanFalse)
         AmazonMusicUIProbe.treeLock.unlock()
         guard pressed else { return false }
@@ -92,7 +91,9 @@ public enum AmazonMusicFavoriteControl {
     }
 
     /// 打开正在播放页(没开的话)→ 按「+」→ 删除时按确认框 → 收起自己打开的页。按不下去为 false。调用方持 `treeLock`。
-    private static func pressAddToLibrary(_ ax: AXUIElement, removing: Bool) -> Bool {
+    /// `stillSame`:按「+」、按确认之前各问一次还是不是开头读的那一首。开页、重建网页树要一两秒,这期间换了歌的话按下去
+    /// 动的是下一首(删除时连确认框也会被按掉),换了就不按。
+    private static func pressAddToLibrary(_ ax: AXUIElement, removing: Bool, stillSame: () -> Bool) -> Bool {
         var opened = false
         defer {
             if opened, let close = rebuiltElement(ax, within: isNowPlayingRoot, where: { $0.contains("closeButtonWrapper") }) {
@@ -107,9 +108,10 @@ public enum AmazonMusicFavoriteControl {
             opened = true
             button = rebuiltElement(ax, within: isNowPlayingRoot, where: isAddButton)
         }
-        guard let button, AXUIElementPerformAction(button, kAXPressAction as CFString) == .success else { return false }
+        guard let button, stillSame(), AXUIElementPerformAction(button, kAXPressAction as CFString) == .success else { return false }
         // 用户在确认框里勾过「不再提示」就不弹:找不到确认键照样往下走,到没到看资料库。
         if removing, let confirm = rebuiltElement(ax, where: isDialogConfirm) {
+            guard stillSame() else { return false }
             AXUIElementPerformAction(confirm, kAXPressAction as CFString)
         }
         return true

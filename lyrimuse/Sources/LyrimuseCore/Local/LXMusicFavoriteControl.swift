@@ -48,7 +48,9 @@ public enum LXMusicFavoriteControl {
         guard FileManager.default.fileExists(atPath: databasePath) else { return nil }
         let query = "SELECT count(*) FROM my_list_music_info WHERE listId = 'love' AND name = \(sqlString(title)) "
             + "AND singer = \(sqlString(artist))"
-        guard let result = ProcessRunner.run("/usr/bin/sqlite3", ["file:\(databasePath)?mode=ro", query], timeout: queryTimeout),
+        // 不读 ~/.sqliterc:用户在里面开了 .headers 或换了输出格式,count(*) 就解析不出来。
+        guard let result = ProcessRunner.run("/usr/bin/sqlite3", ["-init", "/dev/null", "-batch", "file:\(databasePath)?mode=ro", query],
+                                             timeout: queryTimeout),
               result.succeeded,
               let count = Int(result.stdoutText.trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
         return count > 0

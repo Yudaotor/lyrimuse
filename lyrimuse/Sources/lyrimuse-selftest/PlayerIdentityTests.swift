@@ -656,6 +656,10 @@ func runPlayerIdentityTests() {
         expectEqual(split("A-Lin - 删了一百遍"), "A-Lin|删了一百遍", "拆标题: 歌手名里不带空格的 - 不受影响")
         expectEqual(split("AJR - Karma.mp3"), "AJR|Karma", "拆标题: 没有标签时报的文件名先去掉扩展名")
         expectEqual(split("track08.MP3"), "|track08", "拆标题: 拆不出歌手时只去掉扩展名")
+        expectEqual(split("01 - Intro.mp3"), "|Intro", "拆标题: 文件名开头的音轨号不当歌手")
+        expectEqual(split("周杰伦 - 07 - 晴天.flac"), "周杰伦|晴天", "拆标题: 歌名前的音轨号去掉")
+        expectEqual(split("003 - Song.mp3"), "|Song", "拆标题: 0 开头的三位也是音轨号")
+        expectEqual(split("311 - Down.mp3"), "311|Down", "拆标题: 三位数的乐队名不当音轨号")
         expectEqual(split("Maybe Man"), nil, "拆标题: 只有歌名、没什么可改")
         expectEqual(split("Mr. Brightside"), nil, "拆标题: 点号后面不是音频扩展名就不去")
         expectEqual(split(" - Intro"), nil, "拆标题: 拆出来一边是空的就不拆")
@@ -3021,5 +3025,46 @@ private func menuControlDispatchTests() {
                         true, "\(player) 菜单控制: \(outcome) 只尝试一次动作")
         }
         expectEqual(successfulCompletions, 1, "\(player) 菜单控制: 只有成功命令回报一次完成通路")
+    }
+    // ---- 播放器控制与读数的几处硬约束(16 章模块审计) ----
+    do {
+        let local = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("LyrimuseCore/Local")
+        func read(_ name: String) -> String {
+            (try? String(contentsOf: local.appendingPathComponent(name), encoding: .utf8)) ?? ""
+        }
+        let menuBar = read("MenuTitleFavorite.swift")
+        expectEqual(sourceBytes(menuBar, contain: "return ((value as? [AXUIElement]) ?? []).map(timed)")
+                    && sourceBytes(menuBar, contain: "return timed(value as! AXUIElement)")
+                    && sourceBytes(menuBar, contain: "guard MenuBarAX.press(found.element) else { return false }"), true,
+                    "播放器控制(契约): 菜单栏取到的每个元素都设超时,按「喜欢」之前看它灰没灰")
+        let reampSource = read("ReampMenuControl.swift")
+        expectEqual(sourceBytes(read("QQMusicMenuControl.swift"), contain: "return MenuBarAX.press(item.element)")
+                    && sourceBytes(reampSource, contain: "MenuBarAX.press(items.shuffle) { applied.shuffle = target.shuffle }")
+                    && sourceBytes(reampSource, contain: "if applied != current { pending.withLock { $0 = (applied, now) } }"), true,
+                    "播放器控制(契约): QQ、reAMP 的模式按之前看灰没灰,reAMP 只把真按下去的记成刚按过")
+        expectEqual(sourceBytes(read("PlaybackMenuControl.swift"), contain: "guard let pid = PlayerProcess.pid(bundleID: player.bundleIdentifier)")
+                    && sourceBytes(read("AmazonMusicFavoriteControl.swift"), contain: "guard let pid = PlayerProcess.pid(bundleID: bundleID)")
+                    && sourceBytes(read("AmazonMusicModeControl.swift"), contain: "let pid = PlayerProcess.pid(bundleID: bundleID)")
+                    && sourceBytes(menuBar, contain: "let pid = PlayerProcess.pid(bundleID: bundleID)"), true,
+                    "播放器控制(契约): 后台线程上按 bundle id 找进程都走 PlayerProcess(NSRunningApplication 偶尔返回空)")
+        let amazonFavorite = read("AmazonMusicFavoriteControl.swift")
+        expectEqual(sourceBytes(amazonFavorite, contain: "guard let button, stillSame(), AXUIElementPerformAction(button")
+                    && sourceBytes(amazonFavorite, contain: "guard stillSame() else { return false }")
+                    && sourceBytes(amazonFavorite, contain: "currentTrackASIN() == asin"), true,
+                    "播放器控制(契约): Amazon 加减资料库按下去之前核对还是同一首")
+        expectEqual(sourceBytes(read("AmazonMusicUIProbe.swift"), contain: "if emptyRebuilds >= emptyRebuildLimit, samples.isEmpty { break }"), true,
+                    "播放器读数(契约): Amazon 界面里读不到时间时不一直开关重建网页树")
+        let controller = read("MusicPlaybackController.swift")
+        expectEqual(sourceBytes(controller, contain: "musicRunningGuard + #\"tell application \"Music\" to get")
+                    && sourceBytes(controller, contain: "_ = withhold(command, reason: \"media-control binary not found\")"), true,
+                    "播放器控制(契约): 读「喜欢」不把退了的 Music 拉起来,找不到 media-control 时回报控制不可用")
+        expectEqual(sourceBytes(read("LXMusicFavoriteControl.swift"), contain: "[\"-init\", \"/dev/null\", \"-batch\""), true,
+                    "播放器读数(契约): 洛雪收藏查询不读 ~/.sqliterc")
+        expectEqual(sourceBytes(read("MediaControlStreamWatcher.swift"), contain: "guard !stopped, process != nil else { return }"), true,
+                    "播放器读数(契约): media-control 流退出之后才轮到的数据块不要")
+        let ownDir = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath().deletingLastPathComponent().path + "/"
+        expectEqual(PlayerProcess.pids(executableUnder: ownDir).contains(getpid()), true, "按可执行文件路径找得到进程(找自己)")
+        expectEqual(PlayerProcess.pid(bundleID: "me.yudaotor.lyrimuse.no-such-player"), nil, "没装的 bundle id 找不到进程")
     }
 }

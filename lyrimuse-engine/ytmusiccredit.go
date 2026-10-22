@@ -103,6 +103,10 @@ func ytmusicListedTrack(ctx context.Context, videoID, hl string) ytmusicCredit {
 		return ytmusicCredit{}
 	}
 	c = ytmusicCreditFromNext(raw, videoID)
+	// 回了 200、里面却没有这一条(风控页、地区受限、结构改了)也算没问成:记下空的,补判会把这首永久判成「没有专辑」。
+	if c.title == "" {
+		return c
+	}
 	ytmusicCreditMu.Lock()
 	ytmusicCreditCache[key] = c
 	ytmusicCreditMu.Unlock()

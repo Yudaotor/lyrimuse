@@ -641,8 +641,10 @@ func neteaseQueueAt(artist, title string) (f neteaseUpcomingFile, path string, s
 	}
 	noteLocalCacheReadable("netease")
 	if err := json.Unmarshal(raw, &f); err != nil {
+		noteParserUnrecognized("netease-playing-list", err.Error())
 		return neteaseUpcomingFile{}, path, st, -1
 	}
+	noteParserRecognized("netease-playing-list")
 	m := newQueueCurrentMatcher(artist, title)
 	pos = queueCurrentIndex(len(f.List), -1, func(i int) queueMatch {
 		return m.match(neteaseQueueArtists(f, i), f.List[i].Track.Name)

@@ -114,7 +114,7 @@ func spotifyShufflingRemembered(now time.Time) (on, ok bool) {
 	spotifyShuffleMu.Lock()
 	defer spotifyShuffleMu.Unlock()
 	if ok {
-		spotifyLastShuffle.on, spotifyLastShuffle.at = on, now
+		spotifyLastShuffle.on, spotifyLastShuffle.at = on, now.Round(0) // 只留墙钟:睡一夜醒来不当成新鲜的
 		return on, true
 	}
 	if !spotifyLastShuffle.at.IsZero() && now.Sub(spotifyLastShuffle.at) <= spotifyShuffleMemory {

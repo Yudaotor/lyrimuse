@@ -230,7 +230,8 @@ public final class MediaControlStreamWatcher {
     private var lastAnchorDuration: Double?
 
     private func consume(_ chunk: Data, arrivedAt: Date) {
-        guard !stopped else { return }
+        // 进程退了(`handleTermination` 已经清掉缓冲)之后才轮到的那块不要:半行会拼到重启后第一行前面,那一行(整份状态)解不开。
+        guard !stopped, process != nil else { return }
         buffer.append(chunk)
         // 一次回调可能带回多行,也可能只带回半行。只对**完整的**行(以 \n 结尾)做处理,
         // 剩下的半行留在 buffer 里等下一块数据。

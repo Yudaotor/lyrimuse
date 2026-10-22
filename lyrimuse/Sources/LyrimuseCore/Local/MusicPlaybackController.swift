@@ -81,8 +81,9 @@ public enum MusicPlaybackController {
     /// 会阻塞到子进程结束,**不要在主线程调用**。
     public static func favoritedState() -> Bool? {
         for name in favoritedPropertyNames {
+            // 喜欢之后十几秒的对账、换歌回读都从后台调,不查授权:Music 已经退了的话别把它拉起来。
             guard let out = runAppleScriptCapturing(
-                #"tell application "Music" to get \#(name) of current track"#
+                musicRunningGuard + #"tell application "Music" to get \#(name) of current track"#
             ) else { continue }
             switch out.trimmingCharacters(in: .whitespacesAndNewlines) {
             case "true": return true
@@ -579,6 +580,14 @@ public enum MusicPlaybackController {
     /// 都有同样的守卫,同一个理由。读不到时返回空串,上层解析不出来自然就是 nil。
     private static let spotifyRunningGuard = #"""
         if application "Spotify" is not running then
+            return ""
+        end if
+
+        """#
+
+    /// Apple Music 只读的脚本前面垫这一句,理由同 `spotifyRunningGuard`。
+    private static let musicRunningGuard = #"""
+        if application "Music" is not running then
             return ""
         end if
 
@@ -1271,7 +1280,10 @@ public enum MusicPlaybackController {
     // 二进制路径解析复用 MediaControlClient.binaryPath()(同目录,读取状态那条路径
     // 也要用这同一个二进制),不重复各写一份。
     private static func runMediaControl(_ command: String, arguments: [String] = []) {
-        guard let binaryPath = MediaControlClient.binaryPath() else { return }
+        guard let binaryPath = MediaControlClient.binaryPath() else {
+            _ = withhold(command, reason: "media-control binary not found")
+            return
+        }
         commandQueue.async {
             commandSerial &+= 1
             _ = ProcessRunner.run(binaryPath, [command] + arguments, timeout: appleScriptTimeout)
