@@ -960,6 +960,14 @@ struct LyricsManagerStackedCovers: View {
     }
 }
 
+/// 预览换句时的过渡。当前句的颜色、逐字染色那一层的进出用 `line`;跟着当前句滚动用 `scroll`(跟歌词窗口滚动同一条曲线,
+/// `LyricsWindowView.lineTransition`)。各行字重一样,当前句只换颜色:字重一变宽度就变,英文行会重新折行、整行高度跳一下,
+/// 那就没法平滑过渡。
+enum LyricsManagerPreviewMotion {
+    static let line: Animation = .smooth(duration: 0.35)
+    static let scroll: Animation = .smooth(duration: 0.45)
+}
+
 /// 预览:左边时间、右边正文(开着译文 / 读音时下面再一行)。这首正在放时当前句亮起,有逐字时间的逐字染色;开着
 /// 「跟随播放」就滚到视野里,手动滚一下就暂停跟随;指针停在时间上出现 ▶,点一下从这一句开始播放。
 /// 搜索候选歌词的预览也用它(`highlight: .ownTimeline`,当前句按候选自己的时间轴找)。
@@ -1069,7 +1077,7 @@ struct LyricsManagerPreviewList: View {
         let target = currentIndex ?? 0
         let anchor: UnitPoint = currentIndex == nil ? .top : .center
         if animated {
-            withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(target, anchor: anchor) }
+            withAnimation(LyricsManagerPreviewMotion.scroll) { proxy.scrollTo(target, anchor: anchor) }
         } else {
             proxy.scrollTo(target, anchor: anchor)
         }
@@ -1212,9 +1220,10 @@ private struct LyricsCompareOtherLine: View {
 
     var body: some View {
         if mode == .romanization, let groups = row.romanizationGroups, !groups.isEmpty {
-            LyricsRubyLine(groups: groups, marks: isCurrent ? [] : marks, weight: isCurrent ? .semibold : .regular,
+            LyricsRubyLine(groups: groups, marks: isCurrent ? [] : marks, weight: .regular,
                            color: isCurrent ? Color.accentColor : Color.primary.opacity(0.78))
                 .textSelection(.enabled)
+                .animation(LyricsManagerPreviewMotion.line, value: isCurrent)
         } else {
             plain
         }
@@ -1223,14 +1232,16 @@ private struct LyricsCompareOtherLine: View {
     private var plain: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(LyricsCompareLayout.marked(row.text, marks: isCurrent ? [] : marks))
-                .font(.system(size: 16, weight: isCurrent ? .semibold : .regular))
+                .font(.system(size: 16))
                 .foregroundStyle(textColor)
                 .fixedSize(horizontal: false, vertical: true)
                 .overlay(alignment: .topLeading) {
                     if let segments = shownKaraoke {
                         LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs)
+                            .transition(.opacity)
                     }
                 }
+                .animation(LyricsManagerPreviewMotion.line, value: isCurrent)
             if let secondary {
                 Text(secondary)
                     .font(.system(size: 13))
@@ -1406,9 +1417,10 @@ private struct LyricsManagerPreviewRow: View {
     private var mainColumn: some View {
         if mode == .romanization, let groups = row.romanizationGroups, !groups.isEmpty {
             LyricsRubyLine(groups: groups, marks: isCurrent ? [] : (compare?.candidateMarks ?? []),
-                           weight: isCurrent ? .semibold : .regular,
+                           weight: .regular,
                            color: isCurrent ? Color.accentColor : Color.primary)
                 .textSelection(.enabled)
+                .animation(LyricsManagerPreviewMotion.line, value: isCurrent)
         } else {
             plainColumn
         }
@@ -1416,18 +1428,21 @@ private struct LyricsManagerPreviewRow: View {
 
     private var plainColumn: some View {
         VStack(alignment: .leading, spacing: 3) {
-            // 逐字染色时这一层整句画成淡的强调色,唱过的部分由 overlay 那层盖上实色;两层同一段字、同一个字号。
-            // 对照时对不上的字标色(当前句照旧整句强调色,不标)。
+            // 逐字染色时这一层整句画成淡的强调色,唱过的部分由 overlay 那层盖上实色;两层同一段字、同一个字号、同一个字重。
+            // 对照时对不上的字标色(当前句照旧整句强调色,不标)。换句时颜色和那一层都按 `LyricsManagerPreviewMotion.line`
+            // 过渡:唱完的那句从实色淡回正文色,不是一下子跳回去。
             Text(LyricsCompareLayout.marked(row.text, marks: isCurrent ? [] : (compare?.candidateMarks ?? [])))
-                .font(.system(size: 16, weight: isCurrent ? .semibold : .regular))
+                .font(.system(size: 16))
                 .foregroundStyle(textColor)
                 .fixedSize(horizontal: false, vertical: true)
                 .overlay(alignment: .topLeading) {
                     if let segments = shownKaraoke {
                         LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs,
                                                     offsetMs: karaokeOffsetMs)
+                            .transition(.opacity)
                     }
                 }
+                .animation(LyricsManagerPreviewMotion.line, value: isCurrent)
             if let secondary {
                 Text(secondary)
                     .font(.system(size: 13))
@@ -1478,6 +1493,7 @@ private struct LyricsManagerPreviewRow: View {
                         }
                     }
                     .foregroundStyle(isCurrent || showsHover ? Color.accentColor : Color.secondary)
+                    .animation(LyricsManagerPreviewMotion.line, value: isCurrent)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -1532,7 +1548,7 @@ private struct LyricsManagerKaraokeOverlay: View {
             LyricsManagerKaraokeHost(clock: clock, content: AnyView(
                 FrameTimeline(minimumInterval: Self.refreshInterval, paused: !isPlaying) { date in
                     text
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 16))
                         .foregroundStyle(Color.accentColor)
                         .textRenderer(LyricsManagerKaraokeRenderer(segments: segments, ms: Self.currentMs(at: date, offsetMs: offsetMs)))
                         .fixedSize(horizontal: false, vertical: true)

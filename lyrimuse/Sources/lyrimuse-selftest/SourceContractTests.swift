@@ -4486,6 +4486,14 @@ func runSourceContractSettingsTests() {
                     && karaokeOverlay.contains(".textRenderer(LyricsManagerKaraokeRenderer(")
                     && sourceHas(karaokeOverlay, "return (coordinator.anchor?.extrapolatedPositionMs(now: date) ?? coordinator.pausedPositionMs ?? 0)\n            + (offsetMs ?? coordinator.currentLyricsOffsetMs)"),
                     true, "歌词管理: 预览当前句的逐字染色画在 overlay 里,时间基准含歌词偏移(搜索候选传它自己的偏移)")
+        // 换句过渡:各行同一个字重(当前句只换颜色,不重新折行),颜色和逐字染色那一层按同一条曲线淡入淡出,滚动跟歌词窗口同一条曲线。
+        expectEqual(!managerParts.contains("weight: isCurrent ? .semibold : .regular")
+                    && previewRow.contains(".animation(LyricsManagerPreviewMotion.line, value: isCurrent)")
+                    && sourceHas(previewRow, "offsetMs: karaokeOffsetMs)\n.transition(.opacity)")
+                    && sourceHas(karaokeOverlay, "text\n.font(.system(size: 16))")
+                    && managerParts.contains("withAnimation(LyricsManagerPreviewMotion.scroll) { proxy.scrollTo(target, anchor: anchor) }")
+                    && managerParts.contains("static let scroll: Animation = .smooth(duration: 0.45)"),
+                    true, "歌词管理: 预览换句时颜色、逐字染色层淡入淡出,字重不变,滚动用平滑曲线")
         // 标签和小标记的颜色都读 LyricsFeatureTint,跟搜索候选歌词面板同一份,不在调用点各写一份(11 章决策 79)。
         let headerTagsSource = (manager.components(separatedBy: "private func headerTags(").dropFirst().first ?? "")
             .components(separatedBy: "private func factsRow(").first ?? ""
