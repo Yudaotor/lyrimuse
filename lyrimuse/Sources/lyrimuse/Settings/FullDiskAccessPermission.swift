@@ -47,8 +47,7 @@ final class FullDiskAccessPermission: ObservableObject {
     /// 摆出来就是一行永远确认不了的状态。
     func visiblePlayers(for selection: Set<PlaybackPlayer>) -> [PlaybackPlayer] {
         selection.playersNeedingFullDiskAccess.filter { player in
-            !player.bundleIdentifier.isEmpty
-                && NSWorkspace.shared.urlForApplication(withBundleIdentifier: player.bundleIdentifier) != nil
+            PlayerBundleAliases.isInstalled(player)
         }
     }
 

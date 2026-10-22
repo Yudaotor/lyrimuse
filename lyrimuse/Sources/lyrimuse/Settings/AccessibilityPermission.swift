@@ -29,8 +29,7 @@ final class AccessibilityPermission: ObservableObject {
     /// 这套选择下要替哪几家说话:需要 ∩ 装了。没装的播放器没有界面可读。
     func visiblePlayers(for selection: Set<PlaybackPlayer>) -> [PlaybackPlayer] {
         selection.playersNeedingAccessibility.filter { player in
-            !player.bundleIdentifier.isEmpty
-                && NSWorkspace.shared.urlForApplication(withBundleIdentifier: player.bundleIdentifier) != nil
+            PlayerBundleAliases.isInstalled(player)
         }
     }
 

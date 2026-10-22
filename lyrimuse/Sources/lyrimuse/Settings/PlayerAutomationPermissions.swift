@@ -56,8 +56,7 @@ final class PlayerAutomationPermissions: ObservableObject {
 
     /// 这台机器上装了这个播放器没有。Apple Music 是系统自带,实际会被过滤掉的只有别家。
     func isInstalled(_ player: PlaybackPlayer) -> Bool {
-        guard !player.bundleIdentifier.isEmpty else { return false }
-        return NSWorkspace.shared.urlForApplication(withBundleIdentifier: player.bundleIdentifier) != nil
+        PlayerBundleAliases.isInstalled(player)
     }
 
     /// 这套选择下要摆出来的那几行:需要权限 ∩ 装了。

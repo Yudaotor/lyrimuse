@@ -50,12 +50,19 @@ public enum NowPlayingClientsProbe {
     /// 调用方照旧退回既有来源(目录高清图等)。
     public static func artwork(forBundleID bundleID: String) -> (data: Data, mimeType: String, trackKey: String)? {
         guard !bundleID.isEmpty, let paths = helperPaths() else { return nil }
-        guard let r = ProcessRunner.run(
-            "/usr/bin/perl", [paths.script, paths.library, bundleID, "artwork"], timeout: artworkTimeout),
-            r.succeeded,
-            let decoded = try? JSONDecoder().decode(ArtworkPayload.self, from: r.stdout),
-            let data = MediaControlClient.artworkImageData(base64: decoded.artworkData)
-        else { return nil }
+        // 同一个播放器的别的版本(`PlayerBundleAliases`)逐个问,在跑的先问;曲目标识照本体的 bundle id 算。
+        var found: (decoded: ArtworkPayload, data: Data)?
+        for id in PlayerBundleAliases.inProbeOrder(for: bundleID) {
+            guard let r = ProcessRunner.run(
+                "/usr/bin/perl", [paths.script, paths.library, id, "artwork"], timeout: artworkTimeout),
+                r.succeeded,
+                let decoded = try? JSONDecoder().decode(ArtworkPayload.self, from: r.stdout),
+                let data = MediaControlClient.artworkImageData(base64: decoded.artworkData)
+            else { continue }
+            found = (decoded, data)
+            break
+        }
+        guard let (decoded, data) = found else { return nil }
         var title = decoded.title, artist = decoded.artist
         if bundleID == VoxPlayerInfo.bundleID {
             (title, artist, _) = VoxPlayerInfo.artworkIdentity(title: title, artist: artist)
@@ -163,8 +170,8 @@ public enum NowPlayingClientsProbe {
         -> (snapshot: MediaControlSnapshot, anchor: SessionAnchor)? {
         guard !bundleID.isEmpty, let paths = helperPaths() else { return nil }
         let ratePlaying = PlaybackPlayer.builtin(forBundleID: bundleID)?.playingFromRate == true
-        // 同一个播放器的别的版本(`PlayerBundleAliases`)逐个问,问到的那份 bundle id 换成本体的。
-        for id in PlayerBundleAliases.all(for: bundleID) {
+        // 同一个播放器的别的版本(`PlayerBundleAliases`)逐个问,在跑的先问,问到的那份 bundle id 换成本体的。
+        for id in PlayerBundleAliases.inProbeOrder(for: bundleID) {
             var arguments = [paths.script, paths.library, id]
             if ratePlaying { arguments.append("rate-playing") }
             guard let r = snapshotServerRequest(bundleID: id, ratePlaying: ratePlaying)

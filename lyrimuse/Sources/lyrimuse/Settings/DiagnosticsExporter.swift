@@ -295,7 +295,7 @@ enum DiagnosticsExporter {
         var lines: [String] = []
         var seen: Set<String> = []
         for player in PlaybackPlayer.allCases where !player.bundleIdentifier.isEmpty && seen.insert(player.bundleIdentifier).inserted {
-            guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: player.bundleIdentifier),
+            guard let url = PlayerBundleAliases.applicationURL(forBundleID: player.bundleIdentifier),
                   let info = Bundle(url: url)?.infoDictionary else { continue }
             let short = info["CFBundleShortVersionString"] as? String ?? "?"
             let build = info["CFBundleVersion"] as? String ?? "?"

@@ -365,9 +365,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let playersToLaunch = PlayerLinkage.effective(settings.launchPlayersOnLyrimuseOpen,
                                                       selectedPlayers: FeatureSettingsStore.shared.players)
         for player in playersToLaunch where !player.bundleIdentifier.isEmpty {
-            let bundleID = player.bundleIdentifier
-            if !NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == bundleID }),
-               let playerURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            let ids = PlayerBundleAliases.all(for: player.bundleIdentifier)
+            if !NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier.map(ids.contains) ?? false }),
+               let playerURL = PlayerBundleAliases.applicationURL(forBundleID: player.bundleIdentifier) {
                 let config = NSWorkspace.OpenConfiguration()
                 config.activates = false
                 NSWorkspace.shared.openApplication(at: playerURL, configuration: config)

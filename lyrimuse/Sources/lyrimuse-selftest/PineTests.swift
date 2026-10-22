@@ -380,10 +380,15 @@ func runPineTests() {
                     true, "Pine 接线: 封面的曲目标识跟快照对得上")
         expectEqual(sourceHas(client, "|| PinePlayerInfo.isNetworkRadio(snapshot)"), true, "Pine 接线: 网络电台当不是歌")
         expectEqual([sourceHas(sourceText("LyrimuseCore/Local/PlayerProcess.swift"), "let ids = PlayerBundleAliases.all(for: bundleID)"),
-                     sourceHas(sourceText("LyrimuseCore/Local/NowPlayingClientsProbe.swift"), "for id in PlayerBundleAliases.all(for: bundleID) {"),
+                     sourceHas(sourceText("LyrimuseCore/Local/NowPlayingClientsProbe.swift"), "for id in PlayerBundleAliases.inProbeOrder(for: bundleID) {"),
                      sourceHas(sourceText("LyrimuseCore/Local/PlayerPickerLayout.swift"),
                                "PlayerBundleAliases.applicationURL(forBundleID: player.bundleIdentifier) != nil")],
                     [true, true, true], "Pine 别名: 找进程、单问会话、判装没装都把别名试一遍")
+        expectEqual([sourceHas(client, "guard let bundleID = raw.bundleIdentifier.map(PlayerBundleAliases.canonical), artworkBundleIDMatches(bundleID, players: players) else {"),
+                     sourceHas(sourceText("LyrimuseCore/Local/NowPlayingClientsProbe.swift"), "\"/usr/bin/perl\", [paths.script, paths.library, id, \"artwork\"]"),
+                     sourceHas(sourceText("lyrimuse/Settings/AccessibilityPermission.swift"), "PlayerBundleAliases.isInstalled(player)"),
+                     sourceHas(sourceText("lyrimuse/AppDelegate.swift"), "let playerURL = PlayerBundleAliases.applicationURL(forBundleID: player.bundleIdentifier)")],
+                    [true, true, true, true], "Pine 别名: 封面载荷换成本体的 id、单问封面也试别名、辅助功能那一行和启动播放器认别的版本")
         let local = sourceText("LyrimuseCore/Local/LocalPlaybackSource.swift")
         expectEqual([sourceHas(local, "if playing, snapshot.trackDuration == nil {"), sourceHas(local, "if playing, let duration = snapshot.trackDuration {")],
                     [true, true], "无限时长: 建进度锚点前按 trackDuration 判(换成毫秒整数不溢出)")

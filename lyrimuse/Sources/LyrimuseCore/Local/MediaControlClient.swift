@@ -2264,7 +2264,7 @@ public enum MediaControlClient {
         guard let raw = try? JSONDecoder().decode(ArtworkPayload.self, from: r.stdout) else {
             return (nil, prefix + "the system reports nothing")
         }
-        guard let bundleID = raw.bundleIdentifier, artworkBundleIDMatches(bundleID, players: players) else {
+        guard let bundleID = raw.bundleIdentifier.map(PlayerBundleAliases.canonical), artworkBundleIDMatches(bundleID, players: players) else {
             return (nil, prefix + "the system reports \(raw.bundleIdentifier ?? "no player"), which is not accepted")
         }
         // VOX 这份载荷的歌手是「歌手 — 专辑」、没写标签时歌名是小写文件名:换成跟快照同一份再算曲目标识(见 VoxPlayerInfo)。
