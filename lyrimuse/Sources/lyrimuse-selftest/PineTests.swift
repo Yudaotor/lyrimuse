@@ -181,6 +181,19 @@ func runPineTests() {
         let wrong = H.calibrated(joined, value: 120, at: t0.addingTimeInterval(0.7))
         expectEqual(wrong.base, joined.base, "Pine 边界: 格值离锚点太远(不是这首的进度条)不采信")
         expectEqual(wrong.sliderDone, true, "Pine 边界: 不采信也记下读过,不再读")
+        expectEqual(H.advance(joinedCal, anchor: anchor("a", 87, 0.02), now: t0.addingTimeInterval(1)), joinedCal,
+                    "Pine 边界: 同一份锚点时刻差几十毫秒(单问到的那份)算同一份,这一段量过的差不丢")
+        expectEqual(H.advance(joinedCal, anchor: anchor("a", 87, 0.3), now: t0.addingTimeInterval(1)) != joinedCal, true,
+                    "Pine 边界: 时刻差得多的是另一份锚点")
+        let misled = H.advance(H.advance(nil, anchor: anchor("f", 0, 0), now: t0), anchor: anchor("f", 0, 0.5),
+                               now: t0.addingTimeInterval(0.5))
+        let misledCal = H.calibrated(misled, value: 1, at: t0.addingTimeInterval(0.9))
+        expectEqual(misledCal.sliderBias, H.startSliderBias, "Pine 边界: 开播段量出的差不对时按典型的差")
+        expectEqual(abs(H.position(misledCal, now: t0.addingTimeInterval(0.9)).position - (1 - H.startSliderBias)) < 0.001, true,
+                    "Pine 边界: 开播锚点不准时按进度条把开播位置补过来")
+        let misledFar = H.calibrated(misled, value: 9, at: t0.addingTimeInterval(0.9))
+        expectEqual(misledFar.base, misled.base, "Pine 边界: 按进度条推出的开播位置离锚点太远不采信")
+        expectEqual(misledFar.sliderBias, nil, "Pine 边界: 不采信时不记差")
         let other = H.advance(joined, anchor: anchor("b", 0, 5), now: t0.addingTimeInterval(5))
         expectEqual(other.kind, .start, "Pine 边界: 换歌")
         expectEqual(other.sliderBias, nil, "Pine 边界: 换歌后上一首那段的差作废")

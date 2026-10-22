@@ -8,7 +8,8 @@ import os
 ///   「在加载」停在 0(`holdUntil`),第二份一到从它起算;`startHoldSecs` 内没等到第二份就按第一份走。循环回到这一首开头时
 ///   第一份报的是 1 秒、0.7 秒后才是 0 秒那份:0 秒那份前面刚有这一首不到 `restartFirstAnchorMaxSecs` 的锚点,就当第二份。
 /// - 跳转、恢复的锚点是取整的。界面进度条每过一个整秒跳一格,跳格时刻跟出声差一个这一段固定的量(`sliderBias`,进度条超前为正):
-///   开播那一段约 0.24 秒,跳转之后 0~0.12 秒。开播那一段的拿准的开播锚点当场量,跳转之后按 `seekSliderBias`,中途才看到的按
+///   开播那一段约 0.24 秒,跳转之后 0~0.12 秒。开播那一段的拿准的开播锚点当场量(量出来不在合理范围里,是那两份开播锚点都不准,
+///   反过来按 `startSliderBias` 从进度条推开播位置),跳转之后按 `seekSliderBias`,中途才看到的按
 ///   `joinedSliderBias`,暂停恢复沿用这一段的。新锚点之后读进度条等它跳一格(`ProgressBar.nextTick`),位置补成「格值 − 这段的差」。
 /// - 进度条读不到(没授「辅助功能」权限、主窗口关了、`SourceKnockout` 关掉了这条)时:恢复按暂停前的位置接上(暂停锚点的时刻比真
 ///   停下晚 0.1~0.5 秒,所以夹进它报的那一秒里),跳转和中途看到的补半秒(`flooredMidpointSecs`)。
@@ -81,8 +82,14 @@ public enum PinePlayhead {
     public static let seekSliderBias: Double = 0.05
     /// 中途才看到、这一段从哪来不知道时的估计:开播那一段的 0.24 和跳转之后的 0.05 取中间。
     public static let joinedSliderBias: Double = 0.14
-    /// 开播那一段量出的差在这个范围内才采信(实测 0.22~0.25)。
+    /// 开播那一段量出的差在这个范围内才采信(实测 0.21~0.25)。
     static let startSliderBiasRange: ClosedRange<Double> = -0.1...0.6
+    /// 开播那一段进度条超前的典型量:量出来不在合理范围里时按它从进度条推开播位置。
+    public static let startSliderBias: Double = 0.23
+    /// 按进度条推出的开播位置离开播锚点差出这么多就不采信(读到的不是这一段的进度条)。
+    static let startCorrectionMaxSecs: Double = 2.5
+    /// 同一首、同一个位置的两份锚点时刻差在这以内算同一份(按 bundle id 单问到的那份跟主路径读到的,时刻差几位小数)。
+    static let anchorJitterSecs: TimeInterval = 0.05
     /// 校准后的 `base` 离报的整秒差出这么多就不采信(读到的不是这一段的进度条)。
     static let calibrationSlackSecs: Double = 0.25
     /// 暂停锚点推出的位置离它报的整秒差出这么多,就是暂停着跳转了,不是这一段停下的位置。
@@ -90,9 +97,15 @@ public enum PinePlayhead {
 
     // MARK: 纯函数
 
-    /// 来了一份锚点之后的表。同一份锚点原样交回。纯函数,selftest 覆盖。
+    /// 两份锚点是不是同一份:同一首、同一个位置、同样在走或停着,时刻差在 `anchorJitterSecs` 以内。纯函数,selftest 覆盖。
+    public static func sameAnchor(_ a: Anchor, _ b: Anchor) -> Bool {
+        a.track == b.track && a.elapsed == b.elapsed && a.playing == b.playing
+            && abs(a.at.timeIntervalSince(b.at)) <= anchorJitterSecs
+    }
+
+    /// 来了一份锚点之后的表。同一份锚点(`sameAnchor`)原样交回。纯函数,selftest 覆盖。
     public static func advance(_ clock: Clock?, anchor: Anchor, now: Date) -> Clock {
-        if let clock, clock.anchor == anchor { return clock }
+        if let clock, sameAnchor(clock.anchor, anchor) { return clock }
         let same = clock?.anchor.track == anchor.track ? clock : nil
         guard anchor.playing else { return paused(same, anchor: anchor, now: now) }
         if anchor.elapsed <= 0 {
@@ -125,7 +138,8 @@ public enum PinePlayhead {
             if same != nil { out.sliderBias = seekSliderBias }
             return out
         }
-        let carried = same.anchor.playing && anchor.elapsed == same.anchor.elapsed && anchor.at == same.anchor.at
+        let carried = same.anchor.playing && anchor.elapsed == same.anchor.elapsed
+            && abs(anchor.at.timeIntervalSince(same.anchor.at)) <= anchorJitterSecs
         let at = carried ? now : anchor.at
         var estimate = max(0, same.base + at.timeIntervalSince(same.baseAt))
         if let hold = same.holdUntil, at < hold { estimate = 0 }
@@ -157,15 +171,22 @@ public enum PinePlayhead {
         return clock.holdUntil.map { now >= $0 } ?? true
     }
 
-    /// 进度条在 `at` 跳到 `value` 之后的表:开播那一段量出这一段的差;别的段把位置补成「格值 − 这一段的差」。
-    /// 量出的差、补出的位置不在合理范围里的不采信,只记下读过。纯函数,selftest 覆盖。
+    /// 进度条在 `at` 跳到 `value` 之后的表:开播那一段量出这一段的差,量出来不在合理范围里就按 `startSliderBias` 把开播位置补成
+    /// 进度条推出来的;别的段把位置补成「格值 − 这一段的差」。补出的位置不在合理范围里的不采信,只记下读过。纯函数,selftest 覆盖。
     public static func calibrated(_ clock: Clock, value: Int, at: Date) -> Clock {
         var out = clock
         out.sliderDone = true
         guard clock.anchor.playing else { return out }
         if clock.kind == .start {
             let bias = Double(value) - position(clock, now: at).position
-            if startSliderBiasRange.contains(bias) { out.sliderBias = bias }
+            if startSliderBiasRange.contains(bias) {
+                out.sliderBias = bias
+                return out
+            }
+            let base = Double(value) - startSliderBias - at.timeIntervalSince(clock.baseAt)
+            guard abs(base - clock.base) <= startCorrectionMaxSecs else { return out }
+            out.base = base
+            out.sliderBias = startSliderBias
             return out
         }
         let base = Double(value) - (clock.sliderBias ?? joinedSliderBias) - at.timeIntervalSince(clock.baseAt)
@@ -209,10 +230,10 @@ public enum PinePlayhead {
             logger.notice("pine clock: \(clock.kind.rawValue, privacy: .public) anchor \(anchorElapsed, format: .fixed(precision: 3)) → \(position(clock, now: now).position, format: .fixed(precision: 3)), precise \(clock.precise, privacy: .public), hold \(clock.holdUntil != nil, privacy: .public)")
         }
         if wantsProgressBar(clock, now: now) {
-            if let pid, let duration, duration > 0, startSampling(anchor: anchor, pid: pid_t(pid), duration: duration) {
+            if let pid, let duration, duration > 0, startSampling(anchor: clock.anchor, pid: pid_t(pid), duration: duration) {
                 calibrationDue.withLock { due in if due.map({ $0 <= now }) ?? true { due = now.addingTimeInterval(ProgressBar.window + 0.15) } }
             } else {
-                state.withLock { s in if s?.anchor == anchor { s?.sliderDone = true } }
+                state.withLock { s in if let c = s, sameAnchor(c.anchor, anchor) { s?.sliderDone = true } }
             }
         }
         let calibrating = calibrationDue.withLock { due -> Date? in
@@ -237,7 +258,7 @@ public enum PinePlayhead {
             let tick = ProgressBar.nextTick(pid: pid, duration: duration)
             sampling.withLock { $0 = false }
             let result = state.withLock { s -> (before: Clock, after: Clock)? in
-                guard let current = s, current.anchor == anchor else { return nil }
+                guard let current = s, sameAnchor(current.anchor, anchor) else { return nil }
                 var next = current
                 if let tick { next = calibrated(current, value: tick.value, at: tick.at) } else { next.sliderDone = true }
                 s = next
