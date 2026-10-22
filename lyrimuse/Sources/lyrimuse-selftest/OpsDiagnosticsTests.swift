@@ -1502,8 +1502,13 @@ func runOpsDiagnosticsTests() {
             let code = codeLines.joined(separator: "\n")
             expectEqual(code.contains("for product in lyrimuse lyrics-translate lyrics-romanize; do"), true,
                         "构建产品: 只编装进包的三个产品")
-            let bareBuilds = codeLines.filter { $0.hasPrefix("swift build -c release") && !$0.contains("--product") }
-            expectEqual(bareBuilds, [], "构建产品: release 的 swift build 都要带 --product(不带会连 selftest 一起编)")
+            let compiles = codeLines.filter { $0.hasPrefix("swift build -c") && !$0.contains("--show-bin-path") }
+            expectEqual(!compiles.isEmpty && compiles.allSatisfy { $0.contains("--product") }, true,
+                        "构建产品: 编译的 swift build 都要带 --product(不带会连 selftest 一起编)")
+            expectEqual(code.contains("SWIFT_CONFIG=release\nSWIFT_OPT_ARGS=()\nif [ \"$PLAIN_INSTALL\" = 1 ]; then\nSWIFT_CONFIG=debug\nSWIFT_OPT_ARGS=(-Xswiftc -O)\nfi")
+                        && compiles.allSatisfy { $0.contains("-c \"$SWIFT_CONFIG\"") }
+                        && code.contains("LYRIMUSE_MEDIA_CONTROL_PREFIX LYRIMUSE_RELEASE_BUILD; do"), true,
+                        "构建编法: 普通装机用调试配置加 -O,带参数或设了构建变量(含 LYRIMUSE_RELEASE_BUILD)的照旧 release(15 章决策 79)")
             if let requested = code.range(of: "BUILD_REQUESTED_AT="),
                let check = code.range(of: "coalesce_if_installed() {"),
                let queue = code.range(of: "while ! mkdir \"$BUILD_LOCK\" 2>/dev/null; do\ncoalesce_if_installed\n"),

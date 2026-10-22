@@ -38,9 +38,17 @@ BUILD_REQUESTED_AT="$(/usr/bin/python3 -c 'import time; print("%.3f" % time.time
 PLAIN_INSTALL=1
 if [ "$#" -gt 0 ]; then PLAIN_INSTALL=0; fi
 for v in LYRIMUSE_SIGN_ID LYRIMUSE_VERSION LYRIMUSE_NO_SOURCE_SNAPSHOT LYRIMUSE_SPM_SCRATCH_PATH \
-    LYRIMUSE_SPM_CACHE_PATH LYRIMUSE_NO_SPARKLE LYRIMUSE_GOTOOLCHAIN LYRIMUSE_MEDIA_CONTROL_PREFIX; do
+    LYRIMUSE_SPM_CACHE_PATH LYRIMUSE_NO_SPARKLE LYRIMUSE_GOTOOLCHAIN LYRIMUSE_MEDIA_CONTROL_PREFIX LYRIMUSE_RELEASE_BUILD; do
   if [ -n "${!v:-}" ]; then PLAIN_INSTALL=0; fi
 done
+# Swift 编法:普通装机用调试配置加 -O(逐文件优化、增量多核,改一个文件不再整个模块重编);带参数的(package.sh 打发布包)、
+# 设了上面任一构建变量的(LYRIMUSE_RELEASE_BUILD=1 专为本机要发布编法时用)照旧 release 整模块优化。见 15 章决策 79。
+SWIFT_CONFIG=release
+SWIFT_OPT_ARGS=()
+if [ "$PLAIN_INSTALL" = 1 ]; then
+  SWIFT_CONFIG=debug
+  SWIFT_OPT_ARGS=(-Xswiftc -O)
+fi
 
 # 同一时刻只跑一个 build.sh。多个会话共用这棵工作树,每次都会装进 /Applications 并重启 App;两次同时跑
 # 会互相拆掉对方的暂存包、或者重启到对方装了一半的版本。后到的一次在这里原地排队,会话之间不用互相询问
@@ -365,7 +373,7 @@ fi
 
 cmux_stage 0.08 "等编译名额"
 heavy_gate_acquire "build.sh${DEST:+ --dest}" install
-echo "==> building (release) [$ARCHES]"
+echo "==> building ($SWIFT_CONFIG${SWIFT_OPT_ARGS[@]+ ${SWIFT_OPT_ARGS[*]}}) [$ARCHES]"
 cmux_stage 0.1 "编译 App"
 # 每个架构单独编一次再 lipo 合并,而不是 `swift build --arch arm64 --arch x86_64` 一步
 # 出 universal —— 后者要走 xcbuild
@@ -390,11 +398,12 @@ SPM_PATH_ARGS=()
 for arch in $ARCHES; do
   # 只编装进包的三个产品。不带 --product 会把 lyrimuse-selftest 也按 release 整模块编一遍,包里用不到它。
   for product in lyrimuse lyrics-translate lyrics-romanize; do
-    swift build -c release --arch "$arch" --product "$product" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"}
+    swift build -c "$SWIFT_CONFIG" --arch "$arch" --product "$product" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"} \
+      ${SWIFT_OPT_ARGS[@]+"${SWIFT_OPT_ARGS[@]}"}
   done
   # 产物目录问 --show-bin-path,不硬编码 ".build/<arch>-apple-macosx/release"。
   # 这里必须带上同一组路径参数,否则问到的是默认 .build 而不是上面真正用的那棵。
-  BIN_PATH="$(swift build -c release --arch "$arch" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"} --show-bin-path)"
+  BIN_PATH="$(swift build -c "$SWIFT_CONFIG" --arch "$arch" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"} --show-bin-path)"
   stamp_sdk_version "$BIN_PATH/lyrimuse" "$BIN_PATH/lyrics-translate" "$BIN_PATH/lyrics-romanize"
   # **把这一轮的切片拷走再编下一个架构**,别把 $BIN_PATH 直接攒进 *_SLICES。
   #
