@@ -17,7 +17,8 @@ var (
 	wordTimedLeadingTagRe = regexp.MustCompile(`^(?:\s*\[\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?\])+`)
 	wordTimedTagRe        = regexp.MustCompile(`<(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?>|\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]`)
 	// wordTimedHintRe:正文中间出现时间标记(尖括号的,或者前面是字而不是另一个时间戳的方括号)。逐行 LRC 一处都没有。
-	wordTimedHintRe = regexp.MustCompile(`<\d{1,3}:\d|[^\]\s]\s*\[\d{1,3}:\d`)
+	// 方括号那一支只在同一行里找([ \t]*,不跨换行):跨行的话上一行以字结尾、下一行以时间戳开头的普通 LRC 全会命中。
+	wordTimedHintRe = regexp.MustCompile(`<\d{1,3}:\d|[^\]\s][ \t]*\[\d{1,3}:\d`)
 )
 
 // wordTimedTailCapMs:最后一个词没有结束时间、整行没有逐字时,延到下一行起点,最多这么长。
@@ -41,9 +42,10 @@ type wordTimedWord struct {
 }
 
 type wordTimedLine struct {
-	start int
-	text  string
-	words []wordTimedWord // 空 = 这一行没有逐字时间
+	start  int
+	text   string
+	words  []wordTimedWord // 空 = 这一行没有逐字时间
+	marker bool            // 只有时间戳没有字的空行:只当上一句的终点,不进 YRC、不算行数
 }
 
 // parseWordTimedLine 拆一行。ok=false:不是带时间戳的歌词行(元信息标签、空行),原样留着。
@@ -109,7 +111,8 @@ func parseWordTimedLine(line string) (starts []int, text string, words []wordTim
 	}
 	text = strings.TrimSpace(b.String())
 	if text == "" {
-		return nil, "", nil, false, false
+		// 只有时间标记没有字(间奏、句尾的结束标记):留一个行首时间戳的空行,不把 `<mm:ss.xx>` 留在正文里。
+		return []int{lineStart}, "", nil, true, true
 	}
 	for i := 1; i < len(words); i++ {
 		if words[i].start < words[i-1].start {
@@ -142,8 +145,16 @@ func splitWordTimedLRC(lrc string) (lines, yrc string, ok bool) {
 		} else {
 			out = append(out, line)
 		}
+		if text == "" {
+			timed = append(timed, wordTimedLine{start: starts[0], marker: true})
+			continue
+		}
 		if len(words) > 0 {
-			wordLines++
+			// 只有一个词的行(`[00:12.00]整句[00:15.00]` 这种只在行尾写结束时间的逐行写法)不算逐字行,
+			// 不然整份逐行 LRC 也会拿到逐字。
+			if len(words) > 1 {
+				wordLines++
+			}
 			timed = append(timed, wordTimedLine{start: starts[0], text: text, words: words})
 			continue
 		}
@@ -154,19 +165,32 @@ func splitWordTimedLRC(lrc string) (lines, yrc string, ok bool) {
 	if !ok {
 		return "", "", false
 	}
-	if wordLines*2 < len(timed) {
+	lyricLines := 0
+	for _, l := range timed {
+		if !l.marker {
+			lyricLines++
+		}
+	}
+	if wordLines == 0 || wordLines*2 < lyricLines {
 		return strings.Join(out, "\n"), "", true
 	}
 	sort.SliceStable(timed, func(i, j int) bool { return timed[i].start < timed[j].start })
+	// 往后找第一条起点晚于 from 的(原文和译文同一个时间戳时紧挨着的那条起点一样,只看它会越过真正的下一句)。
 	tailEnd := func(i, from int) int {
 		next := from + wordTimedTailCapMs
-		if i+1 < len(timed) && timed[i+1].start > from && timed[i+1].start < next {
-			next = timed[i+1].start
+		for j := i + 1; j < len(timed); j++ {
+			if timed[j].start > from {
+				next = min(next, timed[j].start)
+				break
+			}
 		}
 		return next
 	}
 	var b strings.Builder
 	for i, l := range timed {
+		if l.marker {
+			continue
+		}
 		words := l.words
 		if len(words) == 0 {
 			words = []wordTimedWord{{text: l.text, start: l.start, end: -1}}

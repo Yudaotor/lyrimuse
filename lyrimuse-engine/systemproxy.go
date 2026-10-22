@@ -78,7 +78,7 @@ func systemProxyURL() *neturl.URL {
 		log.Printf("proxy: system proxy %s is configured but unreachable, treating this round as no proxy", u.Host)
 		u = nil
 	}
-	systemProxyValue, systemProxyReadAt = u, time.Now()
+	systemProxyValue, systemProxyReadAt = u, time.Now().Round(0)
 	return u
 }
 
@@ -209,7 +209,11 @@ func parseSCUtilProxy(out string) *neturl.URL {
 }
 
 func proxyReachable(u *neturl.URL) bool {
-	conn, err := net.DialTimeout("tcp", u.Host, systemProxyProbeTimeout)
+	return proxyReachableWithin(u, systemProxyProbeTimeout)
+}
+
+func proxyReachableWithin(u *neturl.URL, timeout time.Duration) bool {
+	conn, err := net.DialTimeout("tcp", u.Host, timeout)
 	if err != nil {
 		return false
 	}

@@ -102,7 +102,17 @@ func musixmatchRerouteAround(ctx context.Context, sentGen int) bool {
 		}
 		log.Printf("musixmatch: blocked by its anti-bot check on this connection; sending it through %s for the next %s", via, musixmatchViaProxyAfterBlock)
 	default:
-		if resolveNetworkProxy(features().NetworkProxy) == networkProxyOff && !clashTunEnabled(ctx) {
+		// 切 Clash 节点只在请求真经过 Clash 时有用:不使用代理、或者手动档填的不是 Clash 的端口(又没开 TUN)时,
+		// 切了只是白改用户在 Clash 里的选择。
+		viaClash := true
+		switch resolveNetworkProxy(features().NetworkProxy) {
+		case networkProxyOff:
+			viaClash = false
+		case networkProxyManual:
+			m, c := manualProxyURL(features().NetworkProxyServer), clashProxyURL()
+			viaClash = m != nil && c != nil && m.Host == c.Host
+		}
+		if !viaClash && !clashTunEnabled(ctx) {
 			return false
 		}
 		from, to, ok := clashSwitchGroupNode(ctx, clashMusixmatchGroup, "musixmatch")

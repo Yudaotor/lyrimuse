@@ -369,10 +369,19 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 		changed := false
 		prevLyrics, prevTr, prevRoma, prevYRC, prevSource := e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC, e.LyricsSource
 		if v, ok := variantBody(".lrc"); ok {
+			// 用户在别处改成逐字写法的 .lrc:同各源交来的正文一样拆成逐行 + 逐字(同目录有 .yrc 时以它为准,见下面),
+			// 不然 `<mm:ss.xx>` 留在正文里、下次导出原样写回。见 09 章决策 331。
+			var splitYRC string
+			if lines, yrc, split := splitWordTimedLRC(v); split {
+				v, splitYRC = lines, yrc
+			}
 			if !e.Lyrics.EqualString(v) {
 				e.Lyrics, changed = bt(v), true
 				// 歌词文件里没有背景人声(导出不写它),正文换了就清掉,别挂在新正文下面。
 				e.LyricsBG = bodyText{}
+			}
+			if _, hasYRCFile := variantBody(".yrc"); splitYRC != "" && !hasYRCFile && !e.LyricsYRC.EqualString(splitYRC) {
+				e.LyricsYRC, changed = bt(splitYRC), true
 			}
 		}
 		if v, ok := variantBody(".tr.lrc"); ok {

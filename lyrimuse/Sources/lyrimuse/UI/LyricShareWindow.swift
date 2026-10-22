@@ -14,7 +14,24 @@ struct LyricShareWindow: View {
     @State private var showsRomanization = false
     @State private var showsBrand = true
     @State private var feedback: String?
+    /// 出好的图,按「选了哪几句 + 三个开关 + 第几份快照」记(`RenderKey`):提示文字这类不改图的状态变了不重画,
+    /// 拷贝 / 保存 / 分享用同一张。句子多时一张图几千像素高,每次重画都压在主线程上。
+    @State private var rendered: (key: RenderKey, image: NSImage?)?
+    @State private var snapshotGeneration = 0
     @ObservedObject private var languageSettings = AppLanguageObserver.shared
+
+    private struct RenderKey: Equatable {
+        let generation: Int
+        let selection: [String]
+        let showsTranslation: Bool
+        let showsRomanization: Bool
+        let showsBrand: Bool
+    }
+
+    private var renderKey: RenderKey {
+        RenderKey(generation: snapshotGeneration, selection: selection, showsTranslation: showsTranslation,
+                  showsRomanization: showsRomanization, showsBrand: showsBrand)
+    }
 
     struct Snapshot {
         let title: String
@@ -45,7 +62,8 @@ struct LyricShareWindow: View {
             lineList(snapshot)
                 .frame(width: 300)
             Divider()
-            let image = render(snapshot)
+            // 预览先用上一张(新的那张在下面的 .task 里画好就换),不然每勾一句都先闪一帧空白;拷贝 / 保存走 currentImage 取最新的。
+            let image = selection.isEmpty ? nil : rendered?.image
             VStack(spacing: 16) {
                 // 预览就是出图本身(句子多了图会变高),缩到放得下。
                 Group {
@@ -73,7 +91,8 @@ struct LyricShareWindow: View {
                 HStack(spacing: 10) {
                     Button(L10n.t("拷贝图片")) { copy(snapshot) }
                     Button(L10n.t("保存图片…")) { save(snapshot) }
-                    if let image {
+                    // 分享只给跟当前选择对得上的那张,别把上一张旧图分出去。
+                    if let image, rendered?.key == renderKey {
                         ShareLink(item: Image(nsImage: image),
                                   preview: SharePreview(snapshot.title, image: Image(nsImage: image))) {
                             Text(L10n.t("分享…"))
@@ -89,6 +108,15 @@ struct LyricShareWindow: View {
             .padding(20)
             .frame(maxWidth: .infinity)
         }
+        .task(id: renderKey) { rendered = (renderKey, render(snapshot)) }
+    }
+
+    /// 当前这份图(没出过或已经过期时现画一张)。
+    @MainActor private func currentImage(_ snapshot: Snapshot) -> NSImage? {
+        if let rendered, rendered.key == renderKey { return rendered.image }
+        let image = render(snapshot)
+        rendered = (renderKey, image)
+        return image
     }
 
     private func lineList(_ snapshot: Snapshot) -> some View {
@@ -159,14 +187,14 @@ struct LyricShareWindow: View {
     }
 
     @MainActor private func copy(_ snapshot: Snapshot) {
-        guard let image = render(snapshot) else { return }
+        guard let image = currentImage(snapshot) else { return }
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.writeObjects([image])
-        feedback = L10n.t("已拷贝")
+        // 写不进剪贴板时不说「已拷贝」。
+        feedback = NSPasteboard.general.writeObjects([image]) ? L10n.t("已拷贝") : nil
     }
 
     @MainActor private func save(_ snapshot: Snapshot) {
-        guard let image = render(snapshot), let tiff = image.tiffRepresentation,
+        guard let image = currentImage(snapshot), let tiff = image.tiffRepresentation,
               let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.png]
@@ -183,7 +211,9 @@ struct LyricShareWindow: View {
     /// 按正在放的那首取快照。开关初值跟歌词窗口当前显不显示译文、读音走;标识默认开。
     @MainActor private func load() {
         let playback = PlaybackCoordinator.shared
-        let lines = LyricShareCard.lines(from: playback.allLines) { text, timeMs in
+        // 电台口白、广告期间歌词窗口挡着歌词(`allLines` 还是上一首的),标题封面却已经换成台名台标:不给分享,显示「当前无歌词」。
+        let onHold = playback.isRadioTalkBreak || playback.isCurrentTrackAdBreak
+        let lines = onHold ? [] : LyricShareCard.lines(from: playback.allLines) { text, timeMs in
             LocalPlaybackSource.shared.romanizationGroups(lineText: text, timeMs: timeMs)
         }
         let artwork = playback.highResArtworkImage ?? playback.artworkImage
@@ -191,6 +221,7 @@ struct LyricShareWindow: View {
             ?? artwork.flatMap { LyricShareCardView.blurredBackground($0, size: LyricShareCardView.size) }
         snapshot = Snapshot(title: playback.displayTitle, artist: playback.displayArtist, artwork: artwork,
                             background: background, lines: lines)
+        snapshotGeneration += 1
         selection = LyricShareCard.initialSelection(
             lines: lines, allLineIDs: playback.allLines.map(\.id), currentIndex: playback.currentLineIndex)
         let settings = AppSettings.shared

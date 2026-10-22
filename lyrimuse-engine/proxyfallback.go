@@ -314,7 +314,7 @@ func (t *proxyFallbackTransport) reportBlocked() {
 // 内存粘性和磁盘提示任一命中即可,但都得先确认现在真有一个连得上的代理。
 func (t *proxyFallbackTransport) preferProxy(host string) bool {
 	t.mu.Lock()
-	sticky := time.Now().Before(t.stickyUntil)
+	sticky := time.Now().Round(0).Before(t.stickyUntil)
 	t.mu.Unlock()
 	if !sticky && !loadProxyFallbackHint(host) {
 		return false
@@ -352,7 +352,8 @@ func (t *proxyFallbackTransport) proxy() *neturl.URL {
 func (t *proxyFallbackTransport) markSticky(host string, slowConnect bool) time.Duration {
 	window := writeProxyFallbackHint(host, true, slowConnect)
 	t.mu.Lock()
-	t.stickyUntil = time.Now().Add(window)
+	// 粘性窗口按墙钟算(Round(0) 去掉单调读数):macOS 睡眠时单调时钟不走,合盖一夜后窗口还会剩一大半。
+	t.stickyUntil = time.Now().Round(0).Add(window)
 	t.mu.Unlock()
 	return window
 }
@@ -364,7 +365,7 @@ func forceProxyFor(c *http.Client, host string, d time.Duration) {
 	if !ok {
 		return
 	}
-	until := time.Now().Add(d)
+	until := time.Now().Round(0).Add(d)
 	t.mu.Lock()
 	if until.After(t.stickyUntil) {
 		t.stickyUntil = until
@@ -412,7 +413,7 @@ func (t *proxyFallbackTransport) hintStreakPending(host string) bool {
 func (t *proxyFallbackTransport) hadSticky() bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return !t.stickyUntil.IsZero() && !time.Now().Before(t.stickyUntil)
+	return !t.stickyUntil.IsZero() && !time.Now().Round(0).Before(t.stickyUntil)
 }
 
 func (t *proxyFallbackTransport) clearSticky(host string) {

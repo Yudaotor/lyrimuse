@@ -3933,7 +3933,8 @@ struct LyricsWindowView: View {
                     openLyricsSearch()
                 }
             }
-            if !playback.allLines.isEmpty {
+            // 口白、广告期间 allLines 还是上一首的(见 lyricsOnHold),不给分享。
+            if !playback.allLines.isEmpty, !lyricsOnHold {
                 MoreMenuRow(title: L10n.t("分享歌词…")) {
                     closeMoreMenu()
                     AppActions.shared.presentLyricShareWindow?()

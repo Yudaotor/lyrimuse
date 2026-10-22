@@ -407,4 +407,6 @@ func runVoxTests() {
         expectEqual(sourceHas(client, "snapshot = fetchVoxSnapshot().flatMap { VoxPlayerInfo.isRadioReading($0) ? nil : $0 }"), true,
                     "VOX 电台接线: 通道坏了时电台不报台名")
     }
+
+    runVoxFileCacheContracts()
 }

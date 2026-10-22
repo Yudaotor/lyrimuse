@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -62,9 +63,12 @@ func resolveFallbackProxyURL() *neturl.URL {
 var fallbackProxyAfterDirectFailure = fallbackProxyAfterDirectFailureImpl
 
 func fallbackProxyAfterDirectFailureImpl() *neturl.URL {
-	if resolveNetworkProxy(features().NetworkProxy) != networkProxyAuto || !refreshLocalProxy(localProxyRecheckGap) {
+	if resolveNetworkProxy(features().NetworkProxy) != networkProxyAuto {
 		return nil
 	}
+	// 不管这一下找没找(别的请求刚找完、守着间隔就不找)都再读一次:一批请求同时直连失败时,排在后面的那几个等的就是
+	// 前一个刚找到的代理,只看「找没找」的话只有发起查找的那一个用得上。
+	refreshLocalProxy(localProxyRecheckGap)
 	return fallbackProxyURL()
 }
 
@@ -115,18 +119,38 @@ func manualProxyURL(server string) *neturl.URL {
 	if u == nil && server != "" {
 		log.Printf("proxy: proxy server setting is not host:port, treating this round as no proxy")
 	}
-	if u != nil && !proxyReachable(u) {
+	if u != nil && !proxyReachableWithin(u, manualProxyProbeTimeout(u)) {
 		log.Printf("proxy: proxy server %s is unreachable, treating this round as no proxy", u.Host)
 		u = nil
 	}
-	manualProxyServer, manualProxyValue, manualProxyCheckAt = server, u, time.Now()
+	// 去掉单调读数:macOS 睡眠时单调时钟不走,缓存要按墙钟算。
+	manualProxyServer, manualProxyValue, manualProxyCheckAt = server, u, time.Now().Round(0)
 	return u
 }
+
+// manualProxyProbeTimeout:手动档探活等多久。本机地址只是连一下本地端口;别的(局域网里的代理、公司代理、VPS)要算上 DNS
+// 和往返,400ms 会把它间歇判成连不上、之后 60 秒都当没有代理。
+func manualProxyProbeTimeout(u *neturl.URL) time.Duration {
+	switch u.Hostname() {
+	case "127.0.0.1", "::1", "localhost":
+		return systemProxyProbeTimeout
+	}
+	return 2 * time.Second
+}
+
+// errNoFallbackProxy:走代理那一半此刻拿不到代理(缓存刚过期、重新探活失败)。报错,别让 http.Transport 悄悄改成直连、
+// 成功了还记成「经代理成功」续上粘性。
+var errNoFallbackProxy = errors.New("proxy: no proxy available for the proxied attempt")
 
 // newFallbackProxyTransport:proxyFallbackTransport 里走代理那一半。拨的是代理自己的地址,目标域名交给代理去解析。
 func newFallbackProxyTransport(tlsHandshake time.Duration) *http.Transport {
 	return &http.Transport{
-		Proxy:               func(*http.Request) (*neturl.URL, error) { return fallbackProxyURL(), nil },
+		Proxy: func(*http.Request) (*neturl.URL, error) {
+			if u := fallbackProxyURL(); u != nil {
+				return u, nil
+			}
+			return nil, errNoFallbackProxy
+		},
 		TLSHandshakeTimeout: tlsHandshake,
 		ForceAttemptHTTP2:   true,
 		IdleConnTimeout:     90 * time.Second,

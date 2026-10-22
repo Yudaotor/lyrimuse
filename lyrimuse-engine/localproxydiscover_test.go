@@ -296,7 +296,8 @@ func TestFallbackProxyAfterDirectFailure(t *testing.T) {
 	if u := impl(); u == nil || u.String() != "http://"+httpAddr {
 		t.Fatalf("自动档当场补找, 得到 %v", u)
 	}
-	if u := impl(); u != nil {
-		t.Fatalf("间隔内不再补找, 得到 %v", u)
+	// 间隔内不再找,但刚找到的那个照样给:一批请求同时直连失败时,后到的几个等的就是它。
+	if u := impl(); u == nil || u.String() != "http://"+httpAddr {
+		t.Fatalf("间隔内不再找、照样拿到刚找到的代理, 得到 %v", u)
 	}
 }

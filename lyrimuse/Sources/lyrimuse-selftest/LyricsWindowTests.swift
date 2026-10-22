@@ -1628,4 +1628,6 @@ func runLyricsWindowTests() {
                     true, "图层列表: 恢复可见那一拍已经滚回当前行时清掉隐藏期标记")
     }
     checkLyricsWindowFormMorph()
+
+    runLyricShareContracts()
 }

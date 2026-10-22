@@ -219,7 +219,7 @@ func refreshLocalProxy(minAge time.Duration) bool {
 	}
 	u := discoverLocalProxy()
 	localProxyMu.Lock()
-	localProxyValue, localProxyReadAt = u, time.Now()
+	localProxyValue, localProxyReadAt = u, time.Now().Round(0)
 	localProxyMu.Unlock()
 	return true
 }
