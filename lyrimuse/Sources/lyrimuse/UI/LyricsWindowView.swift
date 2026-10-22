@@ -5877,7 +5877,10 @@ private struct KaraokeLineText: View {
     @ViewBuilder
     private func lineContent(coarseDate: Date, coarseMs: Int) -> some View {
         // 按组排时一组就是一个词,处处能断;逐字排时英文按音节切,只在词边界断(见 WrapLayoutMath.rows)。
-        WrapLayout(rowAlignment: rowAlignment, contentKey: lineLayoutKey,
+        // 从右往左的行:布局方向设成从右往左,SwiftUI 把词从右往左摆;左右对齐对调,行仍落在原来那一侧。
+        // 从右往左的字量宽不含尾空格,词去掉尾空格画、空格的宽补成读的方向上的后边距(`.trailing`)。
+        let rightToLeft = LyricTextDirection.isRightToLeft(words.map(\.text).joined())
+        WrapLayout(rowAlignment: rightToLeft ? rowAlignment.mirrored : rowAlignment, contentKey: lineLayoutKey,
                    breakBefore: groups?.isEmpty == false
                        ? nil : WrapLayoutMath.breakOpportunities(texts: words.map(\.text))) {
             if let groups, !groups.isEmpty {
@@ -5938,7 +5941,8 @@ private struct KaraokeLineText: View {
                 let anchors = emphasisAnchors(spans)
                 let slots = LyricsWordEmphasis.glyphSlots(for: words, spans: spans)
                 ForEach(words.indices, id: \.self) { i in
-                    KaraokeWordText(word: words[i], base: base, isPlaying: isPlaying,
+                    let (word, tail) = rightToLeft ? Self.splitTrailingSpace(words[i], font: tailFont) : (words[i], 0)
+                    KaraokeWordText(word: word, base: base, isPlaying: isPlaying,
                                     isLive: isLive(words[i], atMs: coarseMs, emphasis: spans[i]), staticDate: coarseDate,
                                     fontSize: fontSize, fontFamily: fontFamily, weight: weight,
                                     reduceMotion: reduceMotion,
@@ -5954,6 +5958,7 @@ private struct KaraokeLineText: View {
                                     emphasisSlot: slots[i],
                                     pausedMs: pausedMs,
                                     fill: fill)
+                    .padding(.trailing, tail)
                 }
             }
         }
@@ -5962,6 +5967,30 @@ private struct KaraokeLineText: View {
         // 排字不把词尾空格算进对齐,带空格的词都往右挪半格 / 一整格,只有行末那个词不挪,
         // 于是最后一个词前面的空格被吃掉一截。
         .multilineTextAlignment(.leading)
+        .environment(\.layoutDirection, rightToLeft ? .rightToLeft : .leftToRight)
+    }
+
+    /// 量尾空格用的字体:跟这一行的正文同一个字体族、字号、粗细。
+    private var tailFont: NSFont { NSFont.overlayFont(familyName: fontFamily, size: fontSize, weight: weight) }
+
+    /// 去掉尾空格的词,和尾空格的宽(没有就是 0)。
+    private static func splitTrailingSpace(_ word: SyncedLyricWord, font: NSFont) -> (SyncedLyricWord, CGFloat) {
+        let body = LyricTextDirection.trimmingTrailingWhitespace(word.text)
+        guard !body.isEmpty, body.count < word.text.count else { return (word, 0) }
+        let tail = String(word.text.dropFirst(body.count))
+        return (SyncedLyricWord(text: body, startMs: word.startMs, durationMs: word.durationMs),
+                MenuBarMarqueeRenderer.measure(tail, font: font))
+    }
+}
+
+private extension WrapLayoutMath.RowAlignment {
+    /// 左右对调,居中不变。
+    var mirrored: Self {
+        switch self {
+        case .leading: return .trailing
+        case .trailing: return .leading
+        case .center: return .center
+        }
     }
 }
 

@@ -83,6 +83,8 @@ final class WrappedKaraokeRowsView: NSView {
         /// 每一项末尾空白的宽度(英文逐字歌词的词常带一个尾随空格)。一行的最后一项的尾随空白不算进对齐:
         /// 不然居中的行左偏半个空格,靠右的行离右边缘差一个空格。
         var trailingSpaceWidths: [CGFloat]
+        /// 整句从右往左排(`LyricTextDirection`):每一行的图层行镜像过,行尾空白落在左端。
+        var rightToLeft: Bool
         var inset: CGFloat
         var pitch: CGFloat
         var wrapWidth: CGFloat
@@ -97,6 +99,7 @@ final class WrappedKaraokeRowsView: NSView {
                 romaGap: spec.romaGap)
             self.inset = inset
             self.pitch = pitch
+            rightToLeft = LyricTextDirection.isRightToLeft(spec.words.map(\.text).joined())
             let widths: [CGFloat]
             if let groups = spec.groups {
                 // 列宽 = 上下两行更宽的那个;读音两侧留白、没有读音的组按一个空格占位 ——
@@ -347,6 +350,8 @@ final class WrappedKaraokeRowsView: NSView {
         case .trailing: indent = slack
         case .center: indent = slack / 2
         }
+        // 从右往左的行镜像后,行尾空白在左端:行框整体左移它的宽,露出来的字跟从左往右时落在同一处。
+        if geo.rightToLeft { indent -= trailing }
         // 行框落在整像素上,理由同 `OverlayLyricScrollView.pixelAligned`。
         indent = (indent * scale).rounded() / scale
         // 行框 = 这一行的长图(含四周描边预留)再宽 1pt:图层行判「装得下」用的是 `<=`,留 1pt

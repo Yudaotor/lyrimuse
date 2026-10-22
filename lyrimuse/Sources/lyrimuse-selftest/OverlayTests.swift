@@ -890,6 +890,18 @@ func runOverlayTests() {
                     "从右往左(契约): 菜单栏按整句判方向")
         expectEqual(sourceHas(bar, "mirrorLayer.addSublayer(contentLayer)"), true,
                     "从右往左(契约): 菜单栏的滚动内容挂在镜像层下")
+        expectEqual(sourceHas(bar, "case .leading, .automatic: alignedX = rightToLeft ? slack.rounded() : 0"), true,
+                    "从右往左(契约): 菜单栏静止对齐翻转后仍在用户选的那一侧")
+        expectEqual(sourceHas(bar, "x = rightToLeft ? slack.rounded() : 0"), true,
+                    "从右往左(契约): 菜单栏副行装不下时露出句首")
+        expectEqual(sourceHas(list, "return CGRect(x: span.minX + span.maxX - f.maxX - trailingSpace(rowY: rowY), y: f.minY,"), true,
+                    "从右往左(契约): 歌词窗口列表折行扣掉行尾空格")
+        expectEqual(sourceHas(text("UI/WrappedKaraokeRows.swift"), "if geo.rightToLeft { indent -= trailing }"), true,
+                    "从右往左(契约): 悬浮歌词换行模式行尾空格从左边扣")
+        let window = text("UI/LyricsWindowView.swift")
+        expectEqual(sourceHas(window, ".environment(\\.layoutDirection, rightToLeft ? .rightToLeft : .leftToRight)")
+                        && sourceHas(window, "WrapLayout(rowAlignment: rightToLeft ? rowAlignment.mirrored : rowAlignment"), true,
+                    "从右往左(契约): 歌词窗口 SwiftUI 逐词行按从右往左摆、对齐不变")
     }
 
     // ---- 图层行不设帧率区间(契约):设了系统按上限跑满,不设反而画得更少(04 章决策 68) ----

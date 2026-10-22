@@ -754,7 +754,11 @@ final class MenuBarScrollingLabel: NSView {
             }
             secondaryClipLayer.mask = nil
         } else {
-            x = 0
+            // 装不下时露出句首、句尾那端渐隐:从右往左的句子句首在右,贴右、渐隐在左端。
+            let rightToLeft = LyricTextDirection.isRightToLeft(plan.secondaryText ?? "")
+            x = rightToLeft ? slack.rounded() : 0
+            secondaryFadeMask.startPoint = CGPoint(x: rightToLeft ? 1 : 0, y: 0.5)
+            secondaryFadeMask.endPoint = CGPoint(x: rightToLeft ? 0 : 1, y: 0.5)
             let fade = min(MenuBarLyricRows.tailFadeWidth, clipW)
             secondaryFadeMask.frame = secondaryClipLayer.bounds
             secondaryFadeMask.locations = [
@@ -1108,11 +1112,12 @@ final class MenuBarScrollingLabel: NSView {
             // 它的**子层**(见文件头「图层结构」),跟着一起平移,填色几何一个数都不用改。
             let slack = max(0, -maxOffset)
             let alignedX: CGFloat
+            // 从右往左的句子整格翻转过(见头注),左右两档在翻转前的坐标里对调,翻回来仍在用户选的那一侧。
             switch plan.alignment {
             // `.automatic` 菜单栏不提供(见 LyricsRestingAlignment.menuBarOptions),真进来当左对齐兜底。
-            case .leading, .automatic: alignedX = 0
+            case .leading, .automatic: alignedX = rightToLeft ? slack.rounded() : 0
             case .center: alignedX = (slack / 2).rounded()
-            case .trailing: alignedX = slack.rounded()
+            case .trailing: alignedX = rightToLeft ? 0 : slack.rounded()
             }
             CATransaction.begin()
             CATransaction.setDisableActions(true)

@@ -1869,7 +1869,7 @@ func runSourceContractSurfaceTests() {
             // 逐词排版里每个词的 Text 左对齐:继承外层居中 / 靠右时词尾空格不参与对齐,行末那个词前的空格会被吃掉。
             expectEqual(sourceHas(lwv, ".font(.system(size: fontSize, weight: .bold))\n        // 每个词自己的 Text 必须左对齐"), true,
                         "逐词歌词: KaraokeLineText 在 WrapLayout 外钉 .multilineTextAlignment(.leading)")
-            expectEqual(sourceHas(lwv, "        .multilineTextAlignment(.leading)\n    }\n}\n\n/// 一个逐字填色的字"), true,
+            expectEqual(sourceHas(lwv, "        .multilineTextAlignment(.leading)\n        .environment(\\.layoutDirection, rightToLeft ? .rightToLeft : .leftToRight)\n    }\n"), true,
                         "逐词歌词: 左对齐钉在 KaraokeLineText.lineContent 的末尾(对唱靠右 / 居中行也受保护)")
             // 简介入口只接鼠标点按:报了按钮特征就得给辅助功能的「按下」,否则 VoiceOver 按不开。
             expectEqual(sourceHas(lwv, ".accessibilityHint(available ? hint : \"\")\n            // onTapGesture 不接辅助功能的「按下」"), true,

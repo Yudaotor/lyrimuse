@@ -627,17 +627,25 @@ extension LyricsLayerRowPlan {
                                                    rowAlignment: rowAlignment(side))
         // 从右往左的行:每一折行里的词在这一行占的范围内左右镜像,行的对齐不变、行内词序反过来。
         let rightToLeft = LyricTextDirection.isRightToLeft(words.map(\.text).joined())
-        var rowSpans: [CGFloat: (minX: CGFloat, maxX: CGFloat)] = [:]
+        // 一行最后那个词的尾空格镜像后落在这一行的左端,整行再往左挪掉它,行沿跟从左往右时一样齐。
+        var rowSpans: [CGFloat: (minX: CGFloat, maxX: CGFloat, lastToken: Int?)] = [:]
         if rightToLeft {
             for p in placements {
                 let maxX = p.origin.x + units[p.index].size.width
-                let span = rowSpans[p.origin.y] ?? (p.origin.x, maxX)
-                rowSpans[p.origin.y] = (min(span.minX, p.origin.x), max(span.maxX, maxX))
+                let span = rowSpans[p.origin.y] ?? (p.origin.x, maxX, nil)
+                let last = maxX >= span.maxX ? units[p.index].tokens.last : span.lastToken
+                rowSpans[p.origin.y] = (min(span.minX, p.origin.x), max(span.maxX, maxX), last)
             }
+        }
+        func trailingSpace(rowY: CGFloat) -> CGFloat {
+            guard groups?.isEmpty != false, let i = rowSpans[rowY]?.lastToken else { return 0 }
+            let tail = String(words[i].text.dropFirst(LyricTextDirection.trimmingTrailingWhitespace(words[i].text).count))
+            return tail.isEmpty ? 0 : MenuBarMarqueeRenderer.measure(tail, font: font)
         }
         func mirrored(_ f: CGRect, rowY: CGFloat) -> CGRect {
             guard let span = rowSpans[rowY] else { return f }
-            return CGRect(x: span.minX + span.maxX - f.maxX, y: f.minY, width: f.width, height: f.height)
+            return CGRect(x: span.minX + span.maxX - f.maxX - trailingSpace(rowY: rowY), y: f.minY,
+                          width: f.width, height: f.height)
         }
         var elements: [Element] = []
         for p in placements {
