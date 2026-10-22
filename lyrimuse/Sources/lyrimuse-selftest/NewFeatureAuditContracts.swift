@@ -12,6 +12,22 @@ func runVoxFileCacheContracts() {
                 "VOX 认文件: 命中时核对文件还开着,只有按歌名对上的才一直用")
 }
 
+/// 日文读音假名档审计的 App 侧源码契约,挂在 romanization 组末尾。
+func runKanaReadingContracts() {
+    let app = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("lyrimuse")
+    func read(_ path: String) -> String {
+        (try? String(contentsOf: app.appendingPathComponent(path), encoding: .utf8)) ?? ""
+    }
+    let restore = sourceBody("private static func restore()", in: read("Settings/DebugDeepLinks.swift"))
+    expectEqual(sourceHas(restore, "s.japaneseReadingStyle = saved.japaneseReading")
+                && sourceHas(restore, "LocalPlaybackSource.shared.japaneseReading = saved.japaneseReading"), true,
+                "假名档: debug/restore 把读音样式改回记下时的")
+    expectEqual(sourceHas(read("LyricsManager/LyricsSearchSheet.swift"),
+                          "previewMemo.rows(withStoredKana(c), scripts:"), true,
+                "假名档: 搜索候选预览用条目现存的借来标注,跟采纳后一样")
+}
+
 func runLyricShareContracts() {
     let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("lyrimuse/UI")

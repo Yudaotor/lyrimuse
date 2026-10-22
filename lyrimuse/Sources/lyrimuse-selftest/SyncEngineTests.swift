@@ -769,6 +769,18 @@ func runSyncEngineTests() {
         let unmatched = LyricsSegmenter.segments([romaLine("나는 너를 사랑해 Baby", "something else entirely here")],
                                                  budget: romaBudget).compactMap(\.part)
         expectEqual(unmatched.map(\.romanization), [nil, nil], "按宽度断句(罗马音): 对不上又放得下时每段显示整句")
+        let kanaText = "本当の幸せを探したときに"
+        let kanaSegs = Romanizer.japaneseSegments(kanaText)
+        let kanaRow = Romanizer.kanaReading(kanaText, segments: kanaSegs) ?? ""
+        let kanaParts = LyricsSegmenter.segments(
+            [LyricsSegmenter.Line(startMs: 1000, nextStartMs: 7000, text: kanaText, words: nil, romanization: kanaRow,
+                                  romanizationCut: Romanizer.kanaReadingCut(kanaText, segments: kanaSegs),
+                                  side: nil, sungEndMs: 7000, mergeable: true, gapAfter: false)],
+            budget: LineLayoutBudget(key: "kana-ja", main: .init(maxWidth: 70, measure: measure),
+                                     romanization: .init(maxWidth: 400, measure: measure))).compactMap(\.part)
+        expectEqual(kanaParts.map(\.text), ["本当の幸せを", "探したときに"], "按宽度断句(假名): 日文断在助词后面")
+        expectEqual(kanaParts.map(\.romanization), ["ほんとうのしあわせを", "さがしたときに"],
+                    "按宽度断句(假名): 整行假名跟着各段的字切开,不每段挂整句:\(kanaParts.map(\.romanization))")
 
         // 合并时补不补空格:日文后一句以助词 / 助动词或行首禁则字开头时连写,别的补空格。
         expectEqual(LyricsSegmenter.mergeSeparator(after: "おのおの", before: "のスマイルで", script: .japanese), "",

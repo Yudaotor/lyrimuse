@@ -448,6 +448,23 @@ func runRomanizationTests() {
             romanizationScripts: [.japanese])
         expectEqual(romajiEngine.activeLine(atMs: 1500)?.romanization?.hasPrefix("ashita ga boku"), true,
                     "罗马字档照旧:\(romajiEngine.activeLine(atMs: 1500)?.romanization ?? "")")
+        let cutSegs: [Romanizer.JapaneseSegment] = [
+            .init(utf16Start: 0, utf16Length: 1, latin: "kimi", kana: "きみ"), .init(utf16Start: 1, utf16Length: 1, latin: "no"),
+            .init(utf16Start: 2, utf16Length: 2, latin: "namae", kana: "なまえ"), .init(utf16Start: 4, utf16Length: 1, latin: "wo"),
+            .init(utf16Start: 5, utf16Length: 3, latin: "yonda", kana: "よんだ")]
+        let kanaCut = Romanizer.kanaReadingCut("君の名前を呼んだ", segments: cutSegs)
+        expectEqual([kanaCut(0), kanaCut(2), kanaCut(5), kanaCut(8), kanaCut(3)], [0, 3, 7, 10, nil],
+                    "假名档: 原文切口对到整行假名里的位置,落在换成假名的片段中间对不上")
+        let numeralKana = Romanizer.japaneseSegments("20人で").first?.kana
+        expectEqual(numeralKana != nil && !(numeralKana ?? "").contains(where: \.isWhitespace), true,
+                    "假名档: 「20人」拼起来的读音不夹空格:\(numeralKana ?? "nil")")
+        let mixedKana = LyricsSyncEngine()
+        mixedKana.load(
+            lyrics: "[00:01.00]我爱你 君の名前を呼んだ\n[00:05.00]我们一起走\n[00:09.00]今天的天气很好", lyricsTr: "", lyricsRoma: "",
+            lyricsYRC: "", romanizationScripts: [.japanese], japaneseReading: .kana)
+        let mixedRow = mixedKana.activeLine(atMs: 1500)?.romanization ?? ""
+        expectEqual(mixedRow.hasPrefix("我爱你 ") && mixedRow.hasSuffix("のなまえをよんだ"), true,
+                    "假名档: 非日文歌里的日文行也标假名,换回原文的中文片段照抄:\(mixedRow)")
 
         // 叠字符号 々 也算待标字符 —— 漏算它会从那里开始整体错位
         expectEqual(KanaAnnotation.needsAnnotation("々"), true, "々 必须算作待标字符")
@@ -1721,4 +1738,5 @@ func runRomanizationTests() {
         expectEqual(normalizeAt != nil && repairAt != nil && normalizeAt! < repairAt!, true,
                     "同形异码字(契约): 载入歌词时先换回标准字,再做日文汉字修复与简繁转换")
     }
+    runKanaReadingContracts()
 }

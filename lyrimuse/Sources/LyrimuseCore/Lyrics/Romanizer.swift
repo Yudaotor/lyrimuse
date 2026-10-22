@@ -351,26 +351,56 @@ public enum Romanizer {
     /// 整行的假名读音:含汉字的片段换成它的平假名读音,其余原样。拿不到读音的片段(分词器给不出转写的生僻字、
     /// 跟拉丁字母连在一起的「B級」、非日文歌里换成拼音的中文片段)留原文,别的片段照样标。跟原文一样时返回 nil。
     public static func kanaReading(_ text: String, segments: [JapaneseSegment]) -> String? {
+        let reading = kanaReplacements(text, segments: segments).reading
+        return reading == text ? nil : reading
+    }
+
+    /// 原文里的切口(UTF-16 下标)落在 `kanaReading` 那一行的哪一位;切口落在换成假名的片段中间返回 nil。
+    /// 长句拆开时整行假名按它跟着各段的字切,不能拿罗马音的对齐器(它靠空格和拉丁字母数估长度)。
+    public static func kanaReadingCut(_ text: String, segments: [JapaneseSegment]) -> (Int) -> Int? {
+        let spans = kanaReplacements(text, segments: segments).spans
+        return { cut in
+            var shift = 0
+            for span in spans {
+                if span.end <= cut {
+                    shift += span.kanaLength - (span.end - span.start)
+                } else if span.start < cut {
+                    return nil
+                } else {
+                    break
+                }
+            }
+            return cut + shift
+        }
+    }
+
+    /// 整行假名和被换掉的那几段(原文 UTF-16 区间、换上的假名有几个 UTF-16 单位),其余字符原样照抄。
+    private static func kanaReplacements(
+        _ text: String, segments: [JapaneseSegment]
+    ) -> (reading: String, spans: [(start: Int, end: Int, kanaLength: Int)]) {
         let units = Array(text.utf16)
         var out = ""
+        var spans: [(start: Int, end: Int, kanaLength: Int)] = []
         var cursor = 0
         for seg in segments.sorted(by: { $0.utf16Start < $1.utf16Start }) where seg.utf16End <= units.count {
             let piece = String(utf16CodeUnits: Array(units[seg.utf16Start..<seg.utf16End]), count: seg.utf16Length)
             guard piece.contains(where: KanaAnnotation.needsAnnotation), seg.utf16Start >= cursor,
                   let kana = seg.kana else { continue }
             out += String(utf16CodeUnits: Array(units[cursor..<seg.utf16Start]), count: seg.utf16Start - cursor) + kana
+            spans.append((seg.utf16Start, seg.utf16End, kana.utf16.count))
             cursor = seg.utf16End
         }
         out += String(utf16CodeUnits: Array(units[cursor...]), count: units.count - cursor)
-        return out == text ? nil : out
+        return (out, spans)
     }
 
-    /// 分词器给的拉丁转写换回平假名(它本来就是从假名转出来的,换回去是确定的)。
+    /// 分词器给的拉丁转写换回平假名(它本来就是从假名转出来的,换回去是确定的)。转写里的空格(「20人」
+    /// 这类拼起来的几个词)换完再去掉:先去掉会把词界两边连读(kin en → きねん)。
     static func kanaFromLatin(_ latin: String) -> String? {
         guard !latin.isEmpty, let kana = latin.applyingTransform(.latinToHiragana, reverse: false),
               !kana.contains(where: { $0.isASCII && $0.isLetter })
         else { return nil }
-        return kana
+        return kana.filter { !$0.isWhitespace }
     }
 
     /// 把若干个片段的读音拼成一段罗马音。跟 `japaneseReading` 用同一套促音归并规则,

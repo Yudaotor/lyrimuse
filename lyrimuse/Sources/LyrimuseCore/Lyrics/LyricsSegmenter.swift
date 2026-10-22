@@ -124,6 +124,8 @@ public enum LyricsSegmenter {
         /// 这一句的译文 / 整行罗马音(这个面显示那一行时才给)。
         public let translation: String?
         public let romanization: String?
+        /// 整行读音不是罗马音时(日文假名档),原文切口(UTF-16 下标)对到读音里的哪一位;nil = 按罗马音对齐。
+        public let romanizationCut: ((Int) -> Int?)?
         public let side: LyricDuet.Side?
         /// 唱完的时刻(逐字行含背景人声;逐行歌词是句末标记);没有是 nil。
         public let sungEndMs: Int?
@@ -139,7 +141,8 @@ public enum LyricsSegmenter {
                     groups: [SyncedLyricWordGroup]? = nil,
                     groupsFor: (([SyncedLyricWord], String) -> [SyncedLyricWordGroup]?)? = nil,
                     translation: String? = nil,
-                    romanization: String? = nil, side: LyricDuet.Side?, sungEndMs: Int?,
+                    romanization: String? = nil, romanizationCut: ((Int) -> Int?)? = nil,
+                    side: LyricDuet.Side?, sungEndMs: Int?,
                     mergeable: Bool, gapAfter: Bool, script: LyricScript? = nil) {
             self.startMs = startMs
             self.nextStartMs = nextStartMs
@@ -149,6 +152,7 @@ public enum LyricsSegmenter {
             self.groupsFor = groupsFor
             self.translation = translation
             self.romanization = romanization
+            self.romanizationCut = romanizationCut
             self.side = side
             self.sungEndMs = sungEndMs
             self.mergeable = mergeable
@@ -408,11 +412,19 @@ public enum LyricsSegmenter {
         /// 整行罗马音按主行的切口(原文 UTF-16 下标)切成各段的;对不上、或有一段放不下返回 nil。
         func alignedRomanization(_ romanization: String, cuts: [Int], row: LineLayoutBudget.Row,
                                  maxWidth: CGFloat) -> [String]? {
-            if !alignerBox.made {
-                alignerBox.made = true
-                alignerBox.aligner = Romanizer.RomanizationAligner(text: joinedText, romanization: romanization, script: script)
+            let romanCuts: [Int]
+            if let cut = line.romanizationCut {
+                let mapped = cuts.compactMap(cut)
+                guard joinedText == line.text, mapped.count == cuts.count else { return nil }
+                romanCuts = mapped
+            } else {
+                if !alignerBox.made {
+                    alignerBox.made = true
+                    alignerBox.aligner = Romanizer.RomanizationAligner(text: joinedText, romanization: romanization, script: script)
+                }
+                guard let aligned = alignerBox.aligner?.cuts(at: cuts) else { return nil }
+                romanCuts = aligned
             }
-            guard let romanCuts = alignerBox.aligner?.cuts(at: cuts) else { return nil }
             let roman = romanization as NSString
             let bounds = [0] + romanCuts + [roman.length]
             let pieces = bounds.indices.dropLast().map { k in

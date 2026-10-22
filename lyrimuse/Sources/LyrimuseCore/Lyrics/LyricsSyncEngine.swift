@@ -2036,11 +2036,10 @@ public final class LyricsSyncEngine {
     /// 本来就只在 `!songLooksJapanese` 时跑),本来就归日文开关,跟拼音无关。
     /// 粤语歌的汉字片段查粤拼那一档 —— 判据跟 `script(ofLine:song:)` 对纯汉字行的分派
     /// 一致(汉字本身分不出普通话还是粤语,只能信 songScript 这个外部信号)。
-    /// 这一行按假名标读音:读音样式选了假名、这一行走日文读音(判据同 `Romanizer.lineReading`)、
-    /// 中文片段不用换回原文。
+    /// 这一行按假名标读音:读音样式选了假名、这一行走日文读音(判据同 `Romanizer.lineReading`)。混排行里要换回原文的
+    /// 中文片段(`masksHanRuns`)不带假名,整行、逐词都照抄原文,日文片段照样标。
     private func readsAsKana(_ line: String) -> Bool {
         japaneseReading == .kana && Romanizer.readsAsJapanese(line, songLooksJapanese: songLooksJapanese)
-            && !masksHanRuns(in: line)
     }
 
     private func masksHanRuns(in line: String) -> Bool {
@@ -3174,6 +3173,7 @@ public final class LyricsSyncEngine {
         let lookupMs = usingWords ? wordLines[i].timeMs : baseLines[i].timeMs
         let text = displayLineText(i)
         let words = usingWords ? singleLineWords(i) : nil
+        let romanization = budget.romanization != nil ? romanizationText(timeMs: lookupMs, plainText: text) : nil
         let line = LyricsSegmenter.Line(
             startMs: start,
             nextStartMs: gapLineStartMs(at: i + 1),
@@ -3183,7 +3183,9 @@ public final class LyricsSyncEngine {
             groupsFor: budget.wordRomanization != nil && usingWords
                 ? { [unowned self] ws, t in wordGroups(for: ws, line: t) } : nil,
             translation: budget.translation != nil ? translationText(timeMs: lookupMs, plainText: text) : nil,
-            romanization: budget.romanization != nil ? romanizationText(timeMs: lookupMs, plainText: text) : nil,
+            romanization: romanization,
+            romanizationCut: romanization != nil && readsAsKana(text)
+                ? Romanizer.kanaReadingCut(text, segments: cachedJapaneseSegments(for: text)) : nil,
             side: displayLineSide(i),
             sungEndMs: gapLineEndMs(at: i),
             mergeable: !holds(i),

@@ -1005,6 +1005,14 @@ struct LyricsSearchSheet: View {
         proxy.scrollTo(id)
     }
 
+    /// 候选自己不带借来的标注时,预览用条目现存的那份:采纳后引擎把它对到新正文上(文字一样的行接着用),预览的假名才跟采纳后一样。
+    private func withStoredKana(_ c: LyricsSearchService.Candidate) -> LyricsSearchService.Candidate {
+        guard c.lyricsKana.isEmpty, let kana = storedCandidate?.lyricsKana, !kana.isEmpty else { return c }
+        var shown = c
+        shown.lyricsKana = kana
+        return shown
+    }
+
     /// 缓存里这首现在存着的那一版,做成一条候选(没有分数)。条目读不全、标成纯音乐、没有正文、不知道来源时没有。
     /// 只有纯文本时按纯文本候选摆。
     private func makeStoredCandidate() -> LyricsSearchService.Candidate? {
@@ -1571,7 +1579,7 @@ struct LyricsSearchSheet: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 8)
             }
-            let rows = previewMemo.rows(c, scripts: LocalPlaybackSource.shared.romanizationScripts,
+            let rows = previewMemo.rows(withStoredKana(c), scripts: LocalPlaybackSource.shared.romanizationScripts,
                                         reading: LocalPlaybackSource.shared.japaneseReading)
             let comparison = comparison(c, rows: rows)
             if let comparison {

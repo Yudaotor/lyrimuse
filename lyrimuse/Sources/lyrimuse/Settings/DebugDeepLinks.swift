@@ -212,6 +212,7 @@ enum DebugDeepLinks {
         let windowTranslation: Bool
         let overlayRomanization: Bool
         let windowRomanization: Bool
+        let japaneseReading: JapaneseReadingStyle
     }
 
     private static var checkpointSaved: Checkpoint?
@@ -236,7 +237,8 @@ enum DebugDeepLinks {
             overlay: s.classicOverlayEnabled, notch: s.notchOverlayEnabled, menuBar: s.showLyricsInMenuBar,
             lockPosition: s.lockPosition,
             overlayTranslation: s.overlayShowTranslation, windowTranslation: s.showTranslation,
-            overlayRomanization: s.overlayShowRomanization, windowRomanization: s.showRomanization)
+            overlayRomanization: s.overlayShowRomanization, windowRomanization: s.showRomanization,
+            japaneseReading: s.japaneseReadingStyle)
         logger.notice("debug checkpoint saved")
     }
 
@@ -272,6 +274,10 @@ enum DebugDeepLinks {
         if s.showTranslation != saved.windowTranslation { s.showTranslation = saved.windowTranslation }
         if s.overlayShowRomanization != saved.overlayRomanization { s.overlayShowRomanization = saved.overlayRomanization }
         if s.showRomanization != saved.windowRomanization { s.showRomanization = saved.windowRomanization }
+        if s.japaneseReadingStyle != saved.japaneseReading {
+            s.japaneseReadingStyle = saved.japaneseReading
+            LocalPlaybackSource.shared.japaneseReading = saved.japaneseReading
+        }
         checkpointSaved = nil
         logger.notice("debug restore done")
     }
