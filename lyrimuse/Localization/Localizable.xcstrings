@@ -53774,7 +53774,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Title shows \"Title — Artist\" instead of the lyrics. Still collapses to the icon when paused"
+            "value" : "Title: shows \"Title — Artist\" instead of the lyrics. Still collapses to the icon when paused"
           }
         },
         "zh-Hans" : {

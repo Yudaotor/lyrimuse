@@ -489,6 +489,13 @@ struct PanelQuickSettings: View {
                    })
             }
         case .surface(.menuBar):
+            row(L10n.t("显示内容")) {
+                SettingsPillSegmentedControl(
+                    selection: $settings.menuBarLyricsContent,
+                    options: MenuBarLyricsContent.allCases,
+                    label: MenuBarContentRow.label(for:)
+                )
+            }
             row(L10n.t("歌词位置")) {
                 SettingsPillSegmentedControl(
                     selection: $settings.menuBarLyricsPlacement,
@@ -534,7 +541,10 @@ struct PanelQuickSettings: View {
             // 「副行」「字号」补,同灵动岛那两行 —— 都是这块面板建好之后才加进设置页的
             // (副行 09-06、字号 09-03),漏回补。顺序跟设置页一致:「副行」属「布局」组(排几行是版面),
             // 「字号」属「字体」组,排在它下面正好让下面那句「由副行决定」的原因就在上一行。
-            secondaryLineRow(selection: $settings.menuBarSecondaryLine)
+            // 显示歌名时没有歌词句、没有副行,判据同设置页 `MenuBarLayoutRows`(原因在最上面「显示内容」那行)。
+            if settings.menuBarLyricsContent == .lyrics {
+                secondaryLineRow(selection: $settings.menuBarSecondaryLine)
+            }
             menuBarFontSizeRow
         case .touchBar:
             // 跟设置页「布局」卡同序(显示封面 → 显示播放控制 → 对齐方式 → 副行),「字号」在「外观」卡、排在最后,
@@ -756,7 +766,7 @@ struct PanelQuickSettings: View {
     /// 符合这块面板"停用/隐藏一个旋钮的前提是把为什么摆在它上面"那条(见菜单栏「对齐方式」处)。
     @ViewBuilder private var menuBarFontSizeRow: some View {
         row(L10n.t("字号")) {
-            if settings.menuBarSecondaryLine.showsSecondaryRow {
+            if settings.menuBarSecondaryLine.showsSecondaryRow && settings.menuBarLyricsContent == .lyrics {
                 Text(L10n.t("由副行决定"))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)

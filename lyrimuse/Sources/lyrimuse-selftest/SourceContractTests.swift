@@ -1644,6 +1644,17 @@ func runSourceContractSurfaceTests() {
         func read(_ rel: String) -> String? {
             try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)
         }
+        // 「封面当图标」的占位尺寸只看开关、不看这一刻有没有封面:封面是换歌后异步到的,尺寸跟着它变
+        // 每首歌多一次状态栏项重建(06 章决策 60)。三处算尺寸的地方都只许读开关。
+        if let art = read("MenuBar/MenuBarIconArtwork.swift"), let progress = read("MenuBar/MenuBarProgressIcon.swift"),
+           let status = read("MenuBar/MenuBarStatusItem.swift") {
+            expectEqual(art.contains("static func footprint(style: MenuBarIconStyle, showsArtwork: Bool) -> CGSize"), true,
+                        "封面当图标: 占位尺寸只由款式和开关决定")
+            expectEqual(sourceHas(progress, "MenuBarIconArtwork.footprint(style: icon.style, showsArtwork: icon.showsArtwork)"),
+                        true, "封面当图标: 进度图标的尺寸读开关,不读这一刻有没有封面")
+            expectEqual(sourceHas(status, "MenuBarIconArtwork.footprint(style: settings.menuBarIconStyle,\nshowsArtwork: settings.menuBarIconShowsArtwork)"),
+                        true, "封面当图标: 图标态槽宽读开关,不读这一刻有没有封面")
+        }
         if let panel = read("MenuBar/MenuBarPanelQuickSettings.swift") {
             // ① 两个形态都要有「副行」。共用同一个枚举、各存各的键,所以是同一个行组件传两个 Binding。
             expectEqual(panel.contains("secondaryLineRow(selection: $settings.notchSecondaryLine)"), true,
@@ -1663,8 +1674,10 @@ func runSourceContractSurfaceTests() {
                         "面板旋钮: 菜单栏字号区间读 renderer 真源(10…16 由状态栏项 22pt 高推出)")
             // ④ 菜单栏字号在副行开着时让位成一句灰字,跟设置页 MenuBarFontSizeRow 同进同出 ——
             //    两行字号由行高推出,滑杆翻了没效果;整行隐藏会变成"字号去哪了",所以是让位不是隐藏。
-            expectEqual(panel.contains("settings.menuBarSecondaryLine.showsSecondaryRow"), true,
-                        "面板旋钮: 菜单栏「字号」要跟设置页一样在副行开着时让位")
+            expectEqual(panel.contains("settings.menuBarSecondaryLine.showsSecondaryRow && settings.menuBarLyricsContent == .lyrics"), true,
+                        "面板旋钮: 菜单栏「字号」要跟设置页一样在副行开着时让位(显示歌名时没有副行,不让位)")
+            expectEqual(panel.contains("selection: $settings.menuBarLyricsContent"), true,
+                        "面板旋钮: 菜单栏那格要有「显示内容」(藏副行的原因得在面板里看得见)")
             expectEqual(panel.contains("由副行决定"), true,
                         "面板旋钮: 让位时显示的是「由副行决定」,跟设置页同一句词条")
             // ⑤ 灵动岛的字号**不跟**副行耦合:副行与展开预览固定 11pt、不随主行字号变(Core

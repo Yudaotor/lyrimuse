@@ -1702,7 +1702,7 @@
 "歌名卡" = "Title Card";
 "歌名始终为「%@」" = "Title was always “%@”";
 "歌名未变" = "Title unchanged";
-"歌名：显示「歌名 — 歌手」，不随歌词切换。暂停时仍收起为图标" = "Title shows \"Title — Artist\" instead of the lyrics. Still collapses to the icon when paused";
+"歌名：显示「歌名 — 歌手」，不随歌词切换。暂停时仍收起为图标" = "Title: shows \"Title — Artist\" instead of the lyrics. Still collapses to the icon when paused";
 "歌手" = "Artist";
 "歌手 - 歌名" = "Artist - Title";
 "歌手 A→Z" = "Artist A→Z";
