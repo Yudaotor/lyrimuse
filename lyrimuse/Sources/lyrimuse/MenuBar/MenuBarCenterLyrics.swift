@@ -30,6 +30,8 @@ final class MenuBarOccupancy {
     private var firstScanDone = false
 
     private var active = false
+    /// 每次打开 / 关掉加一。后台那一轮回来时代数对不上就丢掉:关了又开时,上一轮的结果不能算成这一轮的首轮扫描。
+    private var generation = 0
     private var timer: Timer?
     private var workspaceObservers: [NSObjectProtocol] = []
     private var pollCount = 0
@@ -45,6 +47,7 @@ final class MenuBarOccupancy {
     func setActive(_ on: Bool) {
         guard on != active else { return }
         active = on
+        generation += 1
         if on { start() } else { stop() }
     }
 
@@ -98,7 +101,8 @@ final class MenuBarOccupancy {
 
     private func poll() {
         pollCount += 1
-        if pollCount % Self.fullScanEvery == 0 {
+        // 首轮还没扫成(打开时没授权、后来才给)就按全量补:平时那一轮只复查已知有图标的几家,这时一家都不知道。
+        if pollCount % Self.fullScanEvery == 0 || !firstScanDone {
             scanAll()
         } else {
             scan(pids: Array(statusItemFrames.keys), full: false)
@@ -117,6 +121,7 @@ final class MenuBarOccupancy {
     private func scan(pids: [pid_t], full: Bool) {
         guard active, AXIsProcessTrusted(), !pids.isEmpty else { return }
         let started = Date()
+        let generation = generation
         queue.async { [weak self] in
             var found: [pid_t: [CGRect]] = [:]
             for pid in pids {
@@ -125,7 +130,7 @@ final class MenuBarOccupancy {
             let elapsed = Date().timeIntervalSince(started)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    guard let self, self.active else { return }
+                    guard let self, self.active, self.generation == generation else { return }
                     var next = self.statusItemFrames
                     if full {
                         next = found
@@ -151,11 +156,12 @@ final class MenuBarOccupancy {
     private func readFrontMenus() {
         guard active, AXIsProcessTrusted(), let app = NSWorkspace.shared.frontmostApplication else { return }
         let pid = app.processIdentifier
+        let generation = generation
         queue.async { [weak self] in
             let frames = Self.menuBarFrames(pid: pid) ?? []
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    guard let self, self.active, frames != self.frontMenuFrames else { return }
+                    guard let self, self.active, self.generation == generation, frames != self.frontMenuFrames else { return }
                     self.frontMenuFrames = frames
                     self.onChange?()
                 }

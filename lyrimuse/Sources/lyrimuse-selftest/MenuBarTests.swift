@@ -1729,7 +1729,8 @@ func runMenuBarTests() {
                     && center.contains("queue.async"), true,
                     "菜单栏正中: 辅助功能读两侧放后台队列、带超时")
         let item = src("MenuBarStatusItem.swift")
-        expectEqual(sourceHas(item, "let centerScreens = centerWanted ? MenuBarCenterLyrics.targetScreens() : []\nif !centerScreens.isEmpty {")
+        expectEqual(sourceHas(item, "let centerScreens = centerWanted ? MenuBarCenterLyrics.targetScreens() : []")
+                    && sourceHas(item, "MenuBarOccupancy.shared.setActive(!centerScreens.isEmpty)\nif !centerScreens.isEmpty {")
                     && sourceHas(item, "present(class: \"icon\", length: iconSlotLength, collapseDelay: 0)"),
                     true, "菜单栏正中: 用上时状态栏那一格只留图标")
         expectEqual(sourceHas(item, "for label in [scrollingLabel] + centerLyrics.labels {\nlabel.updateKaraokeClock(")
@@ -1739,6 +1740,10 @@ func runMenuBarTests() {
                     "菜单栏正中: 两侧第一轮读全之前不出来,免得刘海屏上先落到右边再跳到左边")
         expectEqual(sourceHas(item, "centerLyrics.keep(only: placed)"), true,
                     "菜单栏正中: 这一轮没放上的屏(换了显示在、拔了显示器、两侧放不下)当场收掉")
+        expectEqual(center.contains("if pollCount % Self.fullScanEvery == 0 || !firstScanDone {"), true,
+                    "菜单栏正中: 首轮没扫成(后来才授权)时下一轮按全量补,别等到每 15 轮那次")
+        expectEqual(center.components(separatedBy: "self.generation == generation").count - 1, 2,
+                    "菜单栏正中: 关了又开时,上一轮后台结果按代数丢掉")
         expectEqual(center.contains("hasMenuBar: separateSpaces || index == 0"), true,
                     "菜单栏正中: 关了「显示器具有单独的空间」时只有主屏有菜单栏")
     }

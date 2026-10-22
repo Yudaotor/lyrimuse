@@ -1184,8 +1184,9 @@ final class MenuBarStatusItem: NSObject {
         // 「菜单栏正中」:有能用的屏时歌词画进那几块屏正中的窗口,状态栏这一格只留图标(那一格的槽宽规则、节流都不涉及)。
         // 一块能用的屏都没有(灵动岛占着、选的那块被占)时整段跳过,照旧走下面状态栏那一格。
         let centerWanted = settings.showLyricsInMenuBar && settings.menuBarLyricsPlacement == .screenCenter
-        MenuBarOccupancy.shared.setActive(centerWanted)
         let centerScreens = centerWanted ? MenuBarCenterLyrics.targetScreens() : []
+        // 两侧读数只在真有屏要放时才扫(灵动岛占着唯一能用的屏时不白扫)。
+        MenuBarOccupancy.shared.setActive(!centerScreens.isEmpty)
         if !centerScreens.isEmpty {
             present(class: "icon", length: iconSlotLength, collapseDelay: 0) {
                 showIcon($0)
