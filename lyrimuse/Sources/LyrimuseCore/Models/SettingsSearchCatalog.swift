@@ -126,6 +126,36 @@ public enum SettingsSearchCatalog {
     /// 「快捷键」页「展开/收起触控栏歌词」那一行的标题。那一行只在有触控栏时出现,没有触控栏时设置搜索不收这一条。
     public static let touchBarHotkeyTitleKey = LyrimuseAction.toggleTouchBarLyricsHotkey.titleKey
 
+    /// 「歌词显示 › 菜单栏」那一段里随设置显隐的那几行此刻的状态,`menuBarGate` 的输入。
+    public struct MenuBarRowState: Equatable, Sendable {
+        /// 「歌词位置」选的是「菜单栏正中」。
+        public var centerSelected: Bool
+        /// 选了正中、也有能用的屏(这时宽度模式与对齐方式藏起来)。
+        public var centerInUse: Bool
+        /// 宽度模式是「固定」。
+        public var widthModeFixed: Bool
+        /// 「已唱颜色」那一行在(卡拉OK效果或歌词旁的图标开着)。
+        public var fillColorRowShown: Bool
+        public init(centerSelected: Bool, centerInUse: Bool, widthModeFixed: Bool, fillColorRowShown: Bool) {
+            self.centerSelected = centerSelected
+            self.centerInUse = centerInUse
+            self.widthModeFixed = widthModeFixed
+            self.fillColorRowShown = fillColorRowShown
+        }
+    }
+
+    /// 菜单栏那一段搜到的这一行此刻不在页面上时,决定它出不出现的那一行的标题(键);在页面上返回 nil。
+    /// 搜索跳转时一起高亮那一行,用户看得出要先改哪一项;不替用户改设置。
+    public static func menuBarGate(titleKey: String, state: MenuBarRowState) -> String? {
+        switch titleKey {
+        case "屏幕": return state.centerSelected ? nil : "歌词位置"
+        case "宽度模式": return state.centerInUse ? "歌词位置" : nil
+        case "对齐方式": return state.centerInUse ? "歌词位置" : (state.widthModeFixed ? nil : "宽度模式")
+        case "已唱颜色": return state.fillColorRowShown ? nil : "卡拉OK效果"
+        default: return nil
+        }
+    }
+
     /// 面包屑里不是 L10n 键的品牌名(AccountDestination.title 对这几个直接返回字面量)。守卫核
     /// 键是否在 catalog 里时跳过它们。
     public static let brandPathComponents: Set<String> = ["ListenBrainz", "Last.fm", "Discord"]

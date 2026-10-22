@@ -402,4 +402,42 @@ func runSettingsSearchTests() {
     let jump = block(from: "    private func openSettingsSearchHit(_ hit: SettingsSearchHit) {", to: "        searchRouter.reveal(hit)")
     expectEqual(sourceHas(jump, "if let mini = entry.lyricsWindowMini {\n            UserDefaults.standard.set(mini, forKey: LyricsWindowPreviewStage.showsMiniStorageKey)\n        }\n        switch entry.destination {"),
                 true, "歌词窗口尺寸: 命中时先切预览尺寸,再翻面板")
+
+    // 菜单栏那一段随设置显隐的行:搜到时它不在页面上,一起点亮决定它出不出现的那一行(不替用户改设置)。
+    do {
+        typealias S = SettingsSearchCatalog.MenuBarRowState
+        let base = S(centerSelected: false, centerInUse: false, widthModeFixed: true, fillColorRowShown: true)
+        func gate(_ title: String, _ state: S) -> String? { SettingsSearchCatalog.menuBarGate(titleKey: title, state: state) }
+        expectEqual(gate("屏幕", base), "歌词位置", "搜索门: 没选菜单栏正中时「显示在」落到「歌词位置」")
+        var center = base
+        center.centerSelected = true
+        center.centerInUse = true
+        expectEqual(gate("屏幕", center), nil, "搜索门: 选了菜单栏正中「显示在」就在")
+        expectEqual(gate("宽度模式", center), "歌词位置", "搜索门: 正中用着时宽度模式落到「歌词位置」")
+        expectEqual(gate("对齐方式", center), "歌词位置", "搜索门: 正中用着时对齐方式落到「歌词位置」")
+        var adaptive = base
+        adaptive.widthModeFixed = false
+        expectEqual(gate("对齐方式", adaptive), "宽度模式", "搜索门: 自适应时对齐方式落到「宽度模式」")
+        expectEqual(gate("对齐方式", base), nil, "搜索门: 固定宽度时对齐方式就在")
+        var noFill = base
+        noFill.fillColorRowShown = false
+        expectEqual(gate("已唱颜色", noFill), "卡拉OK效果", "搜索门: 已唱颜色藏着时落到「卡拉OK效果」")
+        expectEqual(gate("宽度模式", base) == nil && gate("副行", noFill) == nil, true, "搜索门: 一直在的行不加门")
+        // 门指向的行目录里都有,点亮得到。
+        let menuBarTitles = Set(entries.filter { $0.pathKeys.prefix(2) == ["歌词显示", "菜单栏"] }.map(\.titleKey))
+        expectEqual(["歌词位置", "宽度模式", "卡拉OK效果"].allSatisfy(menuBarTitles.contains), true, "搜索门: 门指向的行在目录里")
+        // 喂进去的条件跟各行自己的显隐写法同步。
+        let stage = source("UI/MenuBarEditorStage.swift")
+        let search = source("Settings/SettingsSearch.swift")
+        expectEqual(sourceHas(stage, "if settings.menuBarLyricsPlacement == .screenCenter {\nMenuBarCenterScreenRow()")
+                    && sourceHas(stage, "if !MenuBarPlacementRow.centerInUse(settings) {\nMenuBarWidthModeRow()")
+                    && sourceHas(stage, "if settings.menuBarLyricsWidthMode == .fixed {\nCardDivider()\nMenuBarAlignmentRow()")
+                    && sourceHas(stage, "if settings.menuBarLyricsKaraoke || settings.menuBarLyricsIconPosition != .off {")
+                    && sourceHas(search, "centerSelected: s.menuBarLyricsPlacement == .screenCenter,")
+                    && sourceHas(search, "centerInUse: MenuBarPlacementRow.centerInUse(s),")
+                    && sourceHas(search, "widthModeFixed: s.menuBarLyricsWidthMode == .fixed,")
+                    && sourceHas(search, "fillColorRowShown: s.menuBarLyricsKaraoke || s.menuBarLyricsIconPosition != .off)")
+                    && sourceHas(search, "highlightedTitles = hit.highlightTitles.union(Self.gateTitles(for: hit.entry))"),
+                    true, "搜索门: 各行显隐条件与搜索喂的状态同步")
+    }
 }

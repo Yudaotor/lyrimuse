@@ -123,7 +123,7 @@ final class SettingsSearchRouter: ObservableObject {
         clearHighlight?.cancel()
         clearDrawer?.cancel()
         pendingDrawer = hit.entry.drawer
-        highlightedTitles = hit.highlightTitles
+        highlightedTitles = hit.highlightTitles.union(Self.gateTitles(for: hit.entry))
 
         let highlightWork = DispatchWorkItem { [weak self] in self?.highlightedTitles = [] }
         clearHighlight = highlightWork
@@ -133,6 +133,20 @@ final class SettingsSearchRouter: ObservableObject {
         let drawerWork = DispatchWorkItem { [weak self] in self?.pendingDrawer = nil }
         clearDrawer = drawerWork
         DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: drawerWork)
+    }
+
+    /// 搜到的行此刻因为某项设置没显示时,把决定它出不出现的那一行也点亮(滚过去的就是那一行)。判据在 Core
+    /// `SettingsSearchCatalog.menuBarGate`,这里只喂此刻的设置;条件跟各行的显隐写法同步(`MenuBarLayoutRows`、
+    /// `MenuBarWidthModeRow`、`MenuBarColorRows`)。
+    static func gateTitles(for entry: SettingsSearchEntry) -> Set<String> {
+        guard entry.sectionValue == LyricsSurface.menuBar.appearanceSectionRawValue else { return [] }
+        let s = AppSettings.shared
+        let state = SettingsSearchCatalog.MenuBarRowState(
+            centerSelected: s.menuBarLyricsPlacement == .screenCenter,
+            centerInUse: MenuBarPlacementRow.centerInUse(s),
+            widthModeFixed: s.menuBarLyricsWidthMode == .fixed,
+            fillColorRowShown: s.menuBarLyricsKaraoke || s.menuBarLyricsIconPosition != .off)
+        return SettingsSearchCatalog.menuBarGate(titleKey: entry.titleKey, state: state).map { [L10n.t($0)] } ?? []
     }
 
     func consumeDrawer(_ surface: LyricsSurface) {
