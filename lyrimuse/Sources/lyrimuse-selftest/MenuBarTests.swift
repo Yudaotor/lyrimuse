@@ -298,6 +298,18 @@ func runMenuBarTests() {
         expectEqual(unknown[2].ms - unknown[1].ms, 1_500, "按时长配速: 时长未知时按基准速度")
         expectEqual(MenuBarMarquee.pacedScrollPath(startMs: 0, dwellMs: 5_000, maxOffset: 0, averageCharWidth: 10).isEmpty,
                     true, "按时长配速: 装得下不滚")
+        // 配速已经算好(状态栏那一格):开头停 headHold,按 pointsPerSecond 走完,跟按时长那条同形。
+        let given = MenuBarMarquee.ScrollPacing(pointsPerSecond: 40, headHoldSeconds: 1.5, tailHoldSeconds: 2)
+        let pacedGiven = MenuBarMarquee.pacedScrollPath(startMs: 20_000, pacing: given, maxOffset: 60)
+        expectEqual(pacedGiven.map(\.ms), [20_000, 21_500, 23_000], "按给定配速: 停 1.5 秒、走 1.5 秒")
+        expectEqual(pacedGiven.map(\.x), [0, 0, 60], "按给定配速: 从 0 走到 maxOffset")
+        expectEqual(MenuBarMarquee.followScrollOffset(atMs: 22_250, path: pacedGiven), 30,
+                    "按给定配速: 中途按播放位置取偏移(暂停就停在这里)")
+        expectEqual(MenuBarMarquee.pacedScrollPath(startMs: 0, pacing: given, maxOffset: 0).isEmpty,
+                    true, "按给定配速: 装得下不滚")
+        expectEqual(MenuBarMarquee.pacedScrollPath(
+            startMs: 0, pacing: .init(pointsPerSecond: 0, headHoldSeconds: 1, tailHoldSeconds: 1), maxOffset: 60).isEmpty,
+                    true, "按给定配速: 速度为 0 不滚")
         expectEqual(MenuBarMarquee.followScrollPath(reading: [], windowWidth: 40, textWidth: 60).isEmpty,
                     true, "跟唱偏移: 没有阅读位置不滚")
         // 锚点比例越界被钳到 [0, 1]:比例 5 → 锚点就是格子右缘,阅读位置到 40 才开始滚。
@@ -1247,8 +1259,10 @@ func runMenuBarTests() {
                     "菜单栏三点(契约): 「♪ 歌名」兜底那个音符**没有**被一起换掉 —— 它说的是「这首歌没词」,不是间奏")
         expectEqual(statusSrc.contains("coordinator.menuBarLyrics.compactPlaceholder ? MenuBarMarqueeRenderer.gapDotsToken"), true,
                     "菜单栏三点(契约): 前奏/间奏占位喂的是三点记号串,不是音符")
-        expectEqual(statusSrc.contains("PlaybackCoordinator.shared.rawGapWindow"), true,
+        expectEqual(statusSrc.contains("let raw = coordinator.rawGapWindow"), true,
                     "菜单栏三点(契约): 点亮进度走**不设门槛**的 rawGapWindow —— 门槛版会让短前奏/短间奏拿不到窗口")
+        expectEqual(sourceHas(statusSrc, "AppSettings.shared.menuBarSecondaryLine.gapDotsWindow(\nraw, compactPlaceholder: coordinator.menuBarLyrics.compactPlaceholder)"), true,
+                    "菜单栏三点(契约): 单行时下一句提前亮出来,点在那一刻走完(同灵动岛 gapDotsWindow)")
     }
 
     // ---- 间隙里不许闪图标(否则表现为「菜单栏歌词有时消失、过一会儿又回来」)----
@@ -1650,6 +1664,12 @@ func runMenuBarTests() {
         let plain = L.ScreenCandidate(islandHere: false)
         let island = L.ScreenCandidate(islandHere: true)
         let noBar = L.ScreenCandidate(islandHere: false, hasMenuBar: false)
+        expectEqual(L.showsMenuBar(separateSpaces: true, isPrimary: false, frameMaxY: 1080, visibleFrameMaxY: 1055), true,
+                    "正中选屏: 单独空间开着时副屏也有菜单栏")
+        expectEqual(L.showsMenuBar(separateSpaces: false, isPrimary: false, frameMaxY: 1080, visibleFrameMaxY: 1055), false,
+                    "正中选屏: 关了单独空间副屏没有菜单栏")
+        expectEqual(L.showsMenuBar(separateSpaces: true, isPrimary: true, frameMaxY: 1080, visibleFrameMaxY: 1080), false,
+                    "正中选屏: 菜单栏自动隐藏(visibleFrame 顶到上沿)时不算有菜单栏,歌词不悬在别的窗口上")
         expectEqual(L.pickScreens([plain, plain, plain], choice: .all), [0, 1, 2], "正中选屏: 全部屏幕每块各放一扇")
         expectEqual(L.pickScreens([island, plain, noBar], choice: .all), [1],
                     "正中选屏: 全部屏幕跳过灵动岛占着的、没有菜单栏的")
@@ -1730,21 +1750,75 @@ func runMenuBarTests() {
                     "菜单栏正中: 辅助功能读两侧放后台队列、带超时")
         let item = src("MenuBarStatusItem.swift")
         expectEqual(sourceHas(item, "let centerScreens = centerWanted ? MenuBarCenterLyrics.targetScreens() : []")
-                    && sourceHas(item, "MenuBarOccupancy.shared.setActive(!centerScreens.isEmpty)\nif !centerScreens.isEmpty {")
+                    && sourceHas(item, "MenuBarOccupancy.shared.setActive(\n!centerScreens.isEmpty && !screensHidden && (lyricsActive || centerLyrics.isShowing))\nif !centerScreens.isEmpty {")
                     && sourceHas(item, "present(class: \"icon\", length: iconSlotLength, collapseDelay: 0)"),
                     true, "菜单栏正中: 用上时状态栏那一格只留图标")
         expectEqual(sourceHas(item, "for label in [scrollingLabel] + centerLyrics.labels {\nlabel.updateKaraokeClock(")
                     && sourceHas(item, "for label in [scrollingLabel] + centerLyrics.labels {\nlabel.updateProgressClock("), true,
                     "菜单栏正中: 染色和进度时钟每一扇都喂")
-        expectEqual(sourceHas(item, "if lyricsActive, MenuBarOccupancy.shared.isReady {"), true,
-                    "菜单栏正中: 两侧第一轮读全之前不出来,免得刘海屏上先落到右边再跳到左边")
+        expectEqual(sourceHas(item, "if lyricsActive, MenuBarOccupancy.shared.isReady || centerLyrics.isShowing {"), true,
+                    "菜单栏正中: 两侧第一轮读全之前不出来,免得刘海屏上先落到右边再跳到左边;已经摆着的不因补读收回")
+        expectEqual(sourceHas(item, "if lyricsActive { MenuBarOccupancy.shared.scanIfNotReady() }"), true,
+                    "菜单栏正中: 晚授权那一刻当场补首轮扫描,不等下一次轮询")
         expectEqual(sourceHas(item, "centerLyrics.keep(only: placed)"), true,
                     "菜单栏正中: 这一轮没放上的屏(换了显示在、拔了显示器、两侧放不下)当场收掉")
         expectEqual(center.contains("if pollCount % Self.fullScanEvery == 0 || !firstScanDone {"), true,
                     "菜单栏正中: 首轮没扫成(后来才授权)时下一轮按全量补,别等到每 15 轮那次")
         expectEqual(center.components(separatedBy: "self.generation == generation").count - 1, 2,
                     "菜单栏正中: 关了又开时,上一轮后台结果按代数丢掉")
-        expectEqual(center.contains("hasMenuBar: separateSpaces || index == 0"), true,
-                    "菜单栏正中: 关了「显示器具有单独的空间」时只有主屏有菜单栏")
+        expectEqual(sourceHas(center, "hasMenuBar: MenuBarCenterLayout.showsMenuBar(\nseparateSpaces: separateSpaces, isPrimary: index == 0,"), true,
+                    "菜单栏正中: 选屏按菜单栏常不常驻(单独空间、自动隐藏)判")
+        let stop = sourceBody("private func stop()", in: center)
+        expectEqual(!stop.isEmpty && !stop.contains("statusItemFrames = [:]") && !stop.contains("firstScanDone = false"), true,
+                    "菜单栏正中: 停下时读数留着,焦点在两块屏间来回、暂停后再开不用先空等一轮扫描")
+        expectEqual(sourceHas(sourceBody("private func poll()", in: center), "if dropReadingsIfUntrusted() { return }"), true,
+                    "菜单栏正中: 撤销授权后旧读数作废")
+        expectEqual(center.contains("AXUIElementSetMessagingTimeout(barElement, messagingTimeout)")
+                    && center.contains("AXUIElementSetMessagingTimeout(item, messagingTimeout)"), true,
+                    "菜单栏正中: 往下取到的菜单栏和各项也各设超时")
+        expectEqual(sourceHas(item, "MenuBarOccupancy.shared.rescanSoon()\nself?.scheduleRefresh()"), true,
+                    "菜单栏正中: 屏幕参数变了补读两侧")
+        let rebuildTail = sourceBody("private func present(class cls: String", in: item)
+        expectEqual(sourceCount(rebuildTail, "scheduleHoverResync()") == 2
+                    && sourceHas(rebuildTail, "MenuBarOccupancy.shared.rescanSoon()"), true,
+                    "菜单栏: 重建、换形态后按指针位置重判悬停接管,重建后补读自己那一格的位置")
+        expectEqual(sourceHas(sourceBody("private func popUpFullMenu()", in: item), "if panelIsOpen { panelController.close() }"), true,
+                    "菜单栏: 面板开着时右键 / ⌃左键同一个图标先收面板")
+        expectEqual(item.contains("NSColor.systemColorsDidChangeNotification")
+                    && sourceHas(item, "for label in [self.scrollingLabel] + self.centerLyrics.labels { label.systemColorsDidChange() }"), true,
+                    "菜单栏: 换了系统强调色,状态栏那一格和正中几扇都重排")
+        expectEqual(sourceHas(item, "followPath: followReadingPath(for: lineText), clockPaced: dwell != nil, icon: icon,"), true,
+                    "菜单栏: 没有逐字时间轴的长句按播放时钟配速(状态栏那一格)")
+        expectEqual(sourceHas(item, "let clockPaced = karaoke && dwell != nil"), true,
+                    "菜单栏正中: 没有逐字时间轴的长句按播放时钟配速,快捷键回声照旧循环")
+        let label = src("MenuBarScrollingLabel.swift")
+        expectEqual(sourceHas(sourceBody("private func clockScrollPath()", in: label),
+                              "} else if plan.clockPaced, let start = pacedStart, start.text == plan.text {"), true,
+                    "菜单栏标签: 按时钟配速的路径从这一句记下的起点排")
+        expectEqual(sourceHas(sourceBody("func clear()", in: label), "pacedStart = nil"), true,
+                    "菜单栏标签: 收起后起点作废")
+        expectEqual(sourceHas(sourceBody("private func applyFollowScroll()", in: label), "guard let path = clockScrollPath() else { return false }"), true,
+                    "菜单栏标签: 跟唱和按时钟配速走同一条装动画的路")
+        let menu = src("MenuBarStatusMenu.swift")
+        expectEqual(menu.contains("if !coordinator.title.isEmpty, !coordinator.isCurrentTrackAdBreak, !coordinator.isRadioTalkBreak {"), true,
+                    "右键菜单: 广告、电台串场不给偏移和搜索歌词")
+        let quick = src("MenuBarPanelQuickSettings.swift")
+        expectEqual(quick.components(separatedBy: "= SliderCommitThrottle()").count - 1, 5,
+                    "面板快捷设置: 字号 / 宽度 / 高度五根滑杆拖动中节流提交")
+        expectEqual(sourceHas(sourceBody("override func mouseDown(with event: NSEvent)", in: quick),
+                              "if event.modifierFlags.contains(.control) {\nholdWork?.cancel()\ndispatch(press.handle(.secondaryClick))"), true,
+                    "面板钮块: ⌃左键当右键,翻出快捷设置")
+        let panel = src("MenuBarPanel.swift")
+        expectEqual(panel.contains("if let anchor, anchor.durationMs > 0, anchor.isFrozen {"), true,
+                    "面板进度条: 锚点冻住时不挂 0.5 秒一拍的重画")
+        let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        let stage = (try? String(contentsOf: ui.appendingPathComponent("UI/MenuBarEditorStage.swift"), encoding: .utf8)) ?? ""
+        expectEqual(stage.components(separatedBy: "= SliderCommitThrottle()").count - 1, 2,
+                    "菜单栏编辑台: 舞台宽度条和「最大宽度」行拖动中节流提交")
+        let settingsSrc = (try? String(contentsOf: ui.appendingPathComponent("Settings/AppSettings.swift"), encoding: .utf8)) ?? ""
+        expectEqual(settingsSrc.contains("(defaults.object(forKey: Keys.menuBarLyricsWidth) as? Double) ?? 250, to: Self.menuBarLyricsWidthRange))")
+                    && settingsSrc.contains(".flatMap { LyricsRestingAlignment.menuBarOptions.contains($0) ? $0 : nil }"), true,
+                    "菜单栏设置: 读盘时宽度夹回区间、对齐只认菜单栏三档")
     }
 }

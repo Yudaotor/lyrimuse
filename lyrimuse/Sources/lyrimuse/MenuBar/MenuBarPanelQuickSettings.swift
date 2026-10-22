@@ -251,6 +251,12 @@ struct TileMouseRouter: NSViewRepresentable {
 
         override func mouseDown(with event: NSEvent) {
             // 不调 super:默认实现把事件交给 nextResponder,那就等于没接。
+            // ⌃左键当右键(同状态栏图标):没有 menu(for:) 的视图收到 control-click 走的是这里,不会转成 rightMouseDown。
+            if event.modifierFlags.contains(.control) {
+                holdWork?.cancel()
+                dispatch(press.handle(.secondaryClick))
+                return
+            }
             dispatch(press.handle(.down))
             let work = DispatchWorkItem { [weak self] in
                 guard let self else { return }
@@ -317,6 +323,13 @@ struct PanelQuickSettings: View {
     @ObservedObject private var settings = AppSettings.shared
     /// 歌词窗口此刻开没开(`LyricsWindowSession.openKey`):开着时那颗键写「显示」,按下去是切到它。
     @AppStorage(LyricsWindowSession.openKey) private var lyricsWindowOpen = false
+    /// 字号 / 宽度 / 高度滑杆拖动中节流提交(`SliderCommitThrottle`,同设置页那几根):每写一次都要整对象广播、写盘,
+    /// 宽度和字号还会让悬浮窗重放 frame 动画、灵动岛重排几何、各展示面按新宽度整首重新断句。
+    @State private var overlayFontSizeThrottle = SliderCommitThrottle()
+    @State private var overlayWidthThrottle = SliderCommitThrottle()
+    @State private var notchFontSizeThrottle = SliderCommitThrottle()
+    @State private var notchRowHeightThrottle = SliderCommitThrottle()
+    @State private var menuBarWidthThrottle = SliderCommitThrottle()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -400,29 +413,17 @@ struct PanelQuickSettings: View {
     @ViewBuilder private var rows: some View {
         switch target {
         case .surface(.overlay):
-            // 三根滑杆都要「值没变就不写」(SteppedSlider 把守卫留给调用点,设置页 / 抽屉 / 编辑台都加了):
-            // 拖动时每个鼠标事件都会写一次,量化后多半是同一个值 —— 字号每写一次重建一轮字体,
-            // 宽度每写一次重启窗口的 frame 动画,还都整对象广播一次 AppSettings。
+            // 写入走节流 + 相等守卫(commitOverlayFontSize / commitOverlayWidth)。
             sliderRow(L10n.t("字号"), value: Binding(
-                get: { settings.fontSize },
-                set: { newValue in
-                    guard newValue != settings.fontSize else { return }
-                    settings.fontSize = newValue
-                }
-            ), range: AppSettings.overlayFontSizeRange)
+                get: { overlayFontSizeThrottle.value(or: settings.fontSize) },
+                set: { overlayFontSizeThrottle.update($0, commit: commitOverlayFontSize) }
+            ), range: AppSettings.overlayFontSizeRange,
+               onEditingChanged: { overlayFontSizeThrottle.editingChanged($0, commit: commitOverlayFontSize) })
             sliderRow(L10n.t("宽度"), value: Binding(
-                get: { settings.overlayWidth },
-                set: { newValue in
-                    guard newValue != settings.overlayWidth else { return }
-                    settings.overlayWidth = newValue
-                    // 关着的时候不碰控制器:没必要为一个看不见的窗口把它建出来
-                    // (窗口本身不存在时 setWidth 也只是空转)。重新打开时 setVisible
-                    // 会按持久化值把几何一并应用上。
-                    if settings.classicOverlayEnabled {
-                        LyricsOverlayWindowController.shared.setWidth(newValue)
-                    }
-                }
-            ), range: OverlayEditorStage.widthRange, step: 10)
+                get: { overlayWidthThrottle.value(or: settings.overlayWidth) },
+                set: { overlayWidthThrottle.update($0, commit: commitOverlayWidth) }
+            ), range: OverlayEditorStage.widthRange, step: 10,
+               onEditingChanged: { overlayWidthThrottle.editingChanged($0, commit: commitOverlayWidth) })
             // 「对齐方式」摆在宽度之后、锁定位置之前:它跟字号/宽度同属
             // "看一眼再决定"的排版旋钮,而锁定位置是窗口行为,归到最后。
             alignmentRow(selection: $settings.overlayDuetAlignmentOverride,
@@ -473,19 +474,19 @@ struct PanelQuickSettings: View {
                 // 副行与展开预览固定 11pt、不随主行字号变,这正是 Core `NotchLyricRowMetrics`
                 // 刻意的取舍(那边注释:"不跟着放大是为了让主行的字号范围不依赖副行开没开")。
                 sliderRow(L10n.t("字号"), value: Binding(
-                    get: { settings.notchFontSize },
-                    set: { newValue in
-                        // 相等守卫同设置页那根:拖动中大量等值赋值会白白广播 + 重算三个派生字体。
-                        guard newValue != settings.notchFontSize else { return }
-                        settings.notchFontSize = newValue
-                    }
-                ), range: Self.notchFontSizeRange)
+                    get: { notchFontSizeThrottle.value(or: settings.notchFontSize) },
+                    set: { notchFontSizeThrottle.update($0, commit: commitNotchFontSize) }
+                ), range: Self.notchFontSizeRange,
+                   onEditingChanged: { notchFontSizeThrottle.editingChanged($0, commit: commitNotchFontSize) })
                 // 歌词行「高度」,设置页「歌词行」组那根的第二个入口:区间(下界跟着字号和副行现算)和显示值(实际画出来的
                 // 高度)都读 AppSettings 那一份,排在字号后面 —— 字号一变,它的下界当场跟着变,挨着看得出因果。
                 sliderRow(L10n.t("高度"), value: Binding(
-                    get: { Double(settings.notchEffectiveLyricRowHeight) },
-                    set: { settings.setNotchLyricRowHeight(fromSlider: $0) }
-                ), range: settings.notchLyricRowHeightRange)
+                    get: { notchRowHeightThrottle.value(or: Double(settings.notchEffectiveLyricRowHeight)) },
+                    set: { notchRowHeightThrottle.update($0, commit: settings.setNotchLyricRowHeight(fromSlider:)) }
+                ), range: settings.notchLyricRowHeightRange,
+                   onEditingChanged: {
+                       notchRowHeightThrottle.editingChanged($0, commit: settings.setNotchLyricRowHeight(fromSlider:))
+                   })
             }
         case .surface(.menuBar):
             row(L10n.t("歌词位置")) {
@@ -513,13 +514,12 @@ struct PanelQuickSettings: View {
                 }
             }
             sliderRow(L10n.t("最大宽度"), value: Binding(
-                get: { Double(settings.menuBarLyricsWidth) },
-                set: {
-                    let quantized = CGFloat(($0 / 10).rounded() * 10)
-                    guard quantized != settings.menuBarLyricsWidth else { return }
-                    settings.menuBarLyricsWidth = quantized
-                }
-            ), range: 80...600, step: 10)
+                get: { menuBarWidthThrottle.value(or: Double(settings.menuBarLyricsWidth)) },
+                set: { menuBarWidthThrottle.update($0, commit: settings.setMenuBarLyricsWidth(fromSlider:)) }
+            ), range: AppSettings.menuBarLyricsWidthRange, step: 10,
+               onEditingChanged: {
+                   menuBarWidthThrottle.editingChanged($0, commit: settings.setMenuBarLyricsWidth(fromSlider:))
+               })
             // **只在固定宽度模式下出现**,判据跟设置页那一行一字不差
             // (`MenuBarLayoutRows` 里那个 `if`)——自适应模式下那一格的宽度就等于文字宽度,
             // 没有多余空间,三个选项画出来一模一样(完整理由见 `LyricsRestingAlignment` 头注)。
@@ -623,15 +623,38 @@ struct PanelQuickSettings: View {
     /// displayValue:读数要显示的不是设定值本身时给它(灵动岛宽度用 —— 真实宽度还要过一道
     /// "两只耳朵放得下按钮"的下限,报设定值会跟编辑台里那根条上的数字对不上,见
     /// `NotchEditorStage.effectiveWidth`)。不给就报设定值,其余两根滑杆行为一字未变。
+    // 「值没变就不写」(SteppedSlider 把守卫留给调用点):拖动中量化后多半是同一个值,字号每写一次重建一轮字体,
+    // 宽度每写一次重启窗口的 frame 动画,还都整对象广播一次 AppSettings。
+    private func commitOverlayFontSize(_ value: Double) {
+        guard value != settings.fontSize else { return }
+        settings.fontSize = value
+    }
+
+    private func commitOverlayWidth(_ value: Double) {
+        guard value != settings.overlayWidth else { return }
+        settings.overlayWidth = value
+        // 关着的时候不碰控制器:没必要为一个看不见的窗口把它建出来(窗口本身不存在时 setWidth 也只是空转)。
+        // 重新打开时 setVisible 会按持久化值把几何一并应用上。
+        if settings.classicOverlayEnabled {
+            LyricsOverlayWindowController.shared.setWidth(value)
+        }
+    }
+
+    private func commitNotchFontSize(_ value: Double) {
+        guard value != settings.notchFontSize else { return }
+        settings.notchFontSize = value
+    }
+
     private func sliderRow(_ title: String, value: Binding<Double>,
                            range: ClosedRange<Double>, step: Double = 1,
-                           displayValue: ((Double) -> Double)? = nil) -> some View {
+                           displayValue: ((Double) -> Double)? = nil,
+                           onEditingChanged: @escaping (Bool) -> Void = { _ in }) -> some View {
         row(title) {
             HStack(spacing: 6) {
                 // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点
                 // (「没有意义,不好看」)。这一根尤其明显 —— 面板总宽
                 // 只有 296pt、滑杆 128pt,宽度那两根的刻度密到直接连成一条实线。
-                SteppedSlider(value: value, in: range, step: step)
+                SteppedSlider(value: value, in: range, step: step, onEditingChanged: onEditingChanged)
                     .controlSize(.mini)
                     .frame(width: 128)
                 Text(String(format: L10n.t("%@pt"),

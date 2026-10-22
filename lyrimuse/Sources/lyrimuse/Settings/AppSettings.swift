@@ -1075,6 +1075,15 @@ final class AppSettings: ObservableObject {
     @Published var menuBarLyricsWidth: CGFloat {
         didSet { defaults.set(Double(menuBarLyricsWidth), forKey: Keys.menuBarLyricsWidth) }
     }
+    /// 「最大宽度」的区间。读盘时也夹回来:手改 / 导入的配置越界时,状态栏那一格按原值算会撑到被系统藏掉,滑杆却显示夹过的值。
+    static let menuBarLyricsWidthRange: ClosedRange<Double> = 80...600
+
+    /// 三根「最大宽度」滑杆(面板快捷设置、编辑台、抽屉)共用的写入:量化到 10 的整数倍,值没变就不写。
+    func setMenuBarLyricsWidth(fromSlider value: Double) {
+        let quantized = CGFloat((value / 10).rounded() * 10)
+        guard quantized != menuBarLyricsWidth else { return }
+        menuBarLyricsWidth = quantized
+    }
     // 上面那个宽度对**装得下的句子**意味着什么。两种模式只在"这一句比设定宽度短"时才有
     // 区别;装不下的句子两边完全一样(占满设定宽度并横向滚动)。所以这个设置真正决定的是:
     // 短句要不要把多出来的地方让出去。
@@ -2370,14 +2379,17 @@ final class AppSettings: ObservableObject {
         // 其它 App 的图标挤走。从 200 改上来 —— 用户把自己在用的这一版菜单栏
         // 配置定为默认,他的滑杆停在 250。这一项**不在「重置」范围内**(宽度是他点名要留的
         // 结构性设置),所以这个数字只对新装 / 没存过这个键的配置生效。
-        menuBarLyricsWidth = CGFloat(
-            (defaults.object(forKey: Keys.menuBarLyricsWidth) as? Double) ?? 250)
+        menuBarLyricsWidth = CGFloat(Self.clamped(
+            (defaults.object(forKey: Keys.menuBarLyricsWidth) as? Double) ?? 250, to: Self.menuBarLyricsWidthRange))
         // 默认见 Self.defaultMenuBarLyricsWidthMode:
         // 重置按钮和这里的兜底读同一份常量,不各自硬编码。
         menuBarLyricsWidthMode = defaults.string(forKey: Keys.menuBarLyricsWidthMode)
             .flatMap(MenuBarLyricsWidthMode.init(rawValue:)) ?? Self.defaultMenuBarLyricsWidthMode
+        // 只认菜单栏那三档:读到「自动」(灵动岛才有)时面板下拉、设置页分段一个都勾不上。
         menuBarLyricsAlignment = defaults.string(forKey: Keys.menuBarLyricsAlignment)
-            .flatMap(LyricsRestingAlignment.init(rawValue:)) ?? Self.defaultMenuBarLyricsAlignment
+            .flatMap(LyricsRestingAlignment.init(rawValue:))
+            .flatMap { LyricsRestingAlignment.menuBarOptions.contains($0) ? $0 : nil }
+            ?? Self.defaultMenuBarLyricsAlignment
         // 默认开:这是把"当前唱到哪"带进菜单栏的增量信息,且只在有逐字数据时出现;
         // 菜单栏歌词本身默认关着,不存在"谁都没选就改变观感"的问题。
         menuBarLyricsKaraoke = (defaults.object(forKey: Keys.menuBarLyricsKaraoke) as? Bool) ?? Self.defaultMenuBarLyricsKaraoke

@@ -21,6 +21,8 @@ import LyrimuseCore
 struct MenuBarEditorStage: View {
     @ObservedObject private var settings = AppSettings.shared
     @State private var popover: StagePopover?
+    /// 舞台宽度条拖动中节流提交(同 `MenuBarWidthRow`)。
+    @State private var widthThrottle = SliderCommitThrottle()
 
     var body: some View {
         VStack(spacing: 10) {
@@ -261,20 +263,17 @@ struct MenuBarEditorStage: View {
     ///
     /// **不要给这根 Slider 传 `step:`**。macOS 的 Slider 一旦有 step 就会画刻度线,
     /// 80...600 / step 10 是 52 个刻度、密到连成一条实线,看着像轨道下面平白多一条白杠
-    /// (见 NotchEditorStage.widthBar 同款注释)。量化不必靠它:下面 set 里自己 round 到
-    /// 10 的整数倍。
+    /// (见 NotchEditorStage.widthBar 同款注释)。量化不必靠它:`setMenuBarLyricsWidth(fromSlider:)` 里
+    /// 自己 round 到 10 的整数倍。
     private var stageWidthBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "arrow.left.and.right")
                 .font(.system(size: 10, weight: .semibold))
             Slider(value: Binding(
-                get: { Double(settings.menuBarLyricsWidth) },
-                set: {
-                    let quantized = CGFloat(($0 / 10).rounded() * 10)
-                    guard quantized != settings.menuBarLyricsWidth else { return }
-                    settings.menuBarLyricsWidth = quantized
-                }
-            ), in: 80...600)
+                get: { widthThrottle.value(or: Double(settings.menuBarLyricsWidth)) },
+                set: { widthThrottle.update($0, commit: settings.setMenuBarLyricsWidth(fromSlider:)) }
+            ), in: AppSettings.menuBarLyricsWidthRange,
+               onEditingChanged: { widthThrottle.editingChanged($0, commit: settings.setMenuBarLyricsWidth(fromSlider:)) })
             .controlSize(.small)
             .tint(.white)
             .frame(width: 150)
@@ -298,7 +297,7 @@ struct MenuBarEditorStage: View {
     }
 
     private var widthValueText: String {
-        String(format: L10n.t("%@pt"), "\(Int(settings.menuBarLyricsWidth))")
+        String(format: L10n.t("%@pt"), "\(Int(widthThrottle.value(or: Double(settings.menuBarLyricsWidth))))")
     }
 }
 
@@ -306,11 +305,11 @@ struct MenuBarEditorStage: View {
 /// `MenuBarAllSettingsDrawer`(全量兜底)共用同一份,跟灵动岛"宽度调整条和抽屉里那条是
 /// 同一份滑杆逻辑、只是外壳不同宿主"同一个模式。
 ///
-/// 没有 `NotchEditorStage.widthBar` 那套"拖动中间态 + 松手才提交"的复杂度:那边的宽度
-/// 上限依赖实时屏幕几何(`usableWidthRange(notchWidth:contentTopInset:)`),这里的区间
-/// 是写死的常量(80...600),不需要拖动防抖。
+/// 拖动中节流提交(`SliderCommitThrottle`):宽度每写一次,菜单栏这一面就按新宽度整首重新断句、重发歌词
+/// (`LineLayoutBudgets` 订着它)。
 struct MenuBarWidthRow: View {
     @ObservedObject private var settings = AppSettings.shared
+    @State private var widthThrottle = SliderCommitThrottle()
 
     var body: some View {
         SettingsRow(icon: "arrow.left.and.right", title: L10n.t("最大宽度")) {
@@ -318,19 +317,12 @@ struct MenuBarWidthRow: View {
                 // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点
                 // (「没有意义,不好看」),量化语义一模一样。
                 SteppedSlider(value: Binding(
-                    get: { Double(settings.menuBarLyricsWidth) },
-                    set: {
-                        // 量化到 10 的整数倍,理由同悬浮歌词/灵动岛宽度滑杆同款注释:相等
-                        // 守卫避免拖动中间态频繁触发无意义的 didSet。
-                        // (SteppedSlider 外面已经量化过一道,这里留着是因为 set 也可能被
-                        //  别的写入路径调到 —— 幂等,再 round 一次不改变结果。)
-                        let quantized = CGFloat(($0 / 10).rounded() * 10)
-                        guard quantized != settings.menuBarLyricsWidth else { return }
-                        settings.menuBarLyricsWidth = quantized
-                    }
-                ), in: 80...600, step: 10)
+                    get: { widthThrottle.value(or: Double(settings.menuBarLyricsWidth)) },
+                    set: { widthThrottle.update($0, commit: settings.setMenuBarLyricsWidth(fromSlider:)) }
+                ), in: AppSettings.menuBarLyricsWidthRange, step: 10,
+                   onEditingChanged: { widthThrottle.editingChanged($0, commit: settings.setMenuBarLyricsWidth(fromSlider:)) })
                 .frame(width: 150)
-                Text(String(format: L10n.t("%@pt"), "\(Int(settings.menuBarLyricsWidth))"))
+                Text(String(format: L10n.t("%@pt"), "\(Int(widthThrottle.value(or: Double(settings.menuBarLyricsWidth))))"))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                     .frame(width: 46, alignment: .trailing)

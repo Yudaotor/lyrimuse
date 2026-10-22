@@ -96,8 +96,9 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         // 能对上全局快捷键的项把用户录的那个组合显示在右侧(`shortcut:`);菜单开着时全局快捷键是停用的
         // (GlobalHotkeys.pauseWhileMenuTracking),按下去只触发菜单项这一次。
         //
-        // 没有任何曲目信息(从未播过任何曲目)时偏移和搜索歌词都不显示,不留点了也没意义的项。
-        if !coordinator.title.isEmpty {
+        // 没有任何曲目信息(从未播过任何曲目)时偏移和搜索歌词都不显示,不留点了也没意义的项;广告、电台串场也不给
+        // (口径同面板背面「歌词管理」那几项),不然偏移记在广告上、搜索对着广告标题搜。
+        if !coordinator.title.isEmpty, !coordinator.isCurrentTrackAdBreak, !coordinator.isRadioTalkBreak {
             let offset = NSMenuItem()
             // 顶层没有勾选列,标题按 16 对齐其余菜单项的文字。
             offset.view = MenuStepperRowView.lyricsOffset(titleInset: 16)

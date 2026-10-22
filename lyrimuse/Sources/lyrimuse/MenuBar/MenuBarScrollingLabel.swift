@@ -128,6 +128,10 @@ final class MenuBarScrollingLabel: NSView {
         /// (见 MenuBarMarquee.followReadingPath);而且这条**不看**卡拉OK开关 —— 不染色也要
         /// 跟着唱到的位置滚。偏移路径不在这里存:它还依赖格子宽和长图宽,装动画时现算。
         var followPath: [MenuBarMarquee.KaraokeFillPoint]?
+        /// 没有逐字时间轴、要滚的句子按播放时钟配速(`MenuBarMarquee.pacedScrollPath`,起点见 `pacedStart`):
+        /// 暂停就停、倍速跟着变、走完停在句尾不循环。false = 按墙钟循环滚(设置页预览、「♪ 歌名」兜底这类
+        /// 没有显示时长的文字)。
+        var clockPaced: Bool
         /// 歌词旁那枚带播放进度的图标(nil = 关着)。跟 fillPath 一样只描述"画什么",
         /// 进度到哪儿了是另一条时钟通道(updateProgressClock)。
         var icon: IconBadge?
@@ -169,6 +173,10 @@ final class MenuBarScrollingLabel: NSView {
     }
 
     private var karaokeClock: KaraokeClock?
+
+    /// 按播放时钟配速的那一句从哪个时刻起算(歌词时间轴毫秒)。按文字记:同一句只换槽宽、悬停接管后放回来都接着走,
+    /// 不从句首重滚;换了一句、或 `clear()` 才重记。
+    private var pacedStart: (text: String, ms: Int)?
 
     /// 整首歌的播放时钟快照(进度图标用)。跟上面那份 `KaraokeClock` 长得像但**不是**
     /// 同一份,刻意不合并:
@@ -290,9 +298,11 @@ final class MenuBarScrollingLabel: NSView {
     /// 否则每次 recompute 都会把滚动打回开头,用户永远看不到后半句。
     /// - Parameter secondaryText / secondaryKind: 副行(双排),见 Plan 里两个字段的注释。
     ///   默认 nil / .off = 单行。
+    /// - Parameter clockPaced: 见 Plan 同名字段。
     func present(text: String, windowWidth: CGFloat, pacing: MenuBarMarquee.ScrollPacing?,
                  fillPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
                  followPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
+                 clockPaced: Bool = false,
                  icon: IconBadge? = nil,
                  secondaryText: String? = nil,
                  secondaryKind: LyricSecondaryLine = .off,
@@ -304,12 +314,17 @@ final class MenuBarScrollingLabel: NSView {
                         fontWeight: AppSettings.shared.menuBarLyricsFontWeight,
                         fontSize: AppSettings.shared.menuBarLyricsFontSize,
                         fontFamily: AppSettings.shared.menuBarLyricsFontFamily,
-                        pacing: pacing, fillPath: fillPath, followPath: followPath, icon: icon,
+                        pacing: pacing, fillPath: fillPath, followPath: followPath,
+                        clockPaced: clockPaced, icon: icon,
                         secondaryText: secondaryText, secondaryKind: secondaryKind,
                         gapWindow: gapWindow)
         guard next != plan else {
             isHidden = false
             return
+        }
+        // 起点按存底时钟记;还没对过表就等 updateKaraokeClock 第一次喂进来时补记。
+        if clockPaced, pacedStart?.text != text {
+            pacedStart = karaokeClock.map { (text, $0.positionMs()) }
         }
         // 只有**位图内容会变**时才重排(PreparedLine.color 注释说的那类幂等):位图内容只由 text+解析色+
         // 要不要染色决定,几何推迟落地这类"同一句只换槽宽/配速"的调用(interim → 重建落地)不该把逐像素
@@ -336,7 +351,7 @@ final class MenuBarScrollingLabel: NSView {
         // 此刻阅读位置还没到锚点、偏移是 0,位置无跳变;跟唱模式也没有首停可以被白等。
         let scrollUnchanged = prepared != nil && (plan.map {
             $0.text == next.text && $0.windowWidth == next.windowWidth && $0.pacing == next.pacing
-                && $0.followPath == next.followPath
+                && $0.followPath == next.followPath && $0.clockPaced == next.clockPaced
                 && $0.fontWeight == next.fontWeight && $0.fontSize == next.fontSize
                 && $0.fontFamily == next.fontFamily
                 // 单双排切换主行字体从 13 变 10,滚动距离跟着变 → 算滚动参数;只换副行文字 / 在译文和
@@ -378,7 +393,13 @@ final class MenuBarScrollingLabel: NSView {
             return
         }
         let next = KaraokeClock(baseMs: positionMs, rate: rate, playing: playing, capturedAt: Date())
-        if !force, playing, let old = karaokeClock, old.playing, old.rate == rate,
+        // 按播放时钟配速、present 时还没对过表的那一句:这一刻就是它的起点,紧接着把墙钟那条换下来。
+        var startsPacedScroll = false
+        if let plan, plan.clockPaced, pacedStart?.text != plan.text {
+            pacedStart = (plan.text, positionMs)
+            startsPacedScroll = true
+        }
+        if !force, !startsPacedScroll, playing, let old = karaokeClock, old.playing, old.rate == rate,
            hasClockDrivenAnimation,
            abs(old.positionMs() - positionMs) < 250 {
             karaokeClock = next
@@ -390,11 +411,11 @@ final class MenuBarScrollingLabel: NSView {
         applyGapDots()
     }
 
-    /// 漂移门看的"动画在跑":填色那三条,或跟唱滚动那一条(卡拉OK关着时只有
+    /// 漂移门看的"动画在跑":填色那三条,或按时钟走的滚动那一条(跟唱 / 按时钟配速;卡拉OK关着时只有
     /// 后者)。两者都没有说明这一刻没有可动的东西,重装也只是把静止位置再对一遍,门开着无妨。
     private var hasClockDrivenAnimation: Bool {
         fillClipLayer.animation(forKey: Self.fillAnimationKey) != nil
-            || (plan?.followPath != nil
+            || (clockScrollPath() != nil
                 && contentLayer.animation(forKey: Self.scrollAnimationKey) != nil)
             // 三点这一档没有文字、既不染色也不滚,上面两条都判不出"有东西在动";不带它的话
             // 漂移门会一直放行重装,锚点每 ~2s 例行重发就把呼吸打回相位起点、看着一顿一顿。
@@ -445,6 +466,7 @@ final class MenuBarScrollingLabel: NSView {
         guard plan != nil || !isHidden else { return }
         plan = nil
         prepared = nil
+        pacedStart = nil
         contentLayer.removeAnimation(forKey: Self.scrollAnimationKey)
         fillClipLayer.removeAnimation(forKey: Self.fillAnimationKey)
         baseClipLayer.removeAnimation(forKey: Self.basePositionAnimationKey)
@@ -554,6 +576,15 @@ final class MenuBarScrollingLabel: NSView {
         super.viewDidChangeEffectiveAppearance()
         guard let now = currentBitmapInputs, now != lastBitmapInputs else { return }
         rebuildImage()
+    }
+
+    /// 系统强调色换了(`NSColor.systemColorsDidChangeNotification`)。跟随强调色的染色在浅色菜单栏上是动态色
+    /// `controlAccentColor`,颜色判重键、位图缓存都认不出它变了,整份作废再重排。
+    func systemColorsDidChange() {
+        lastColorKey = nil
+        lastBitmapInputs = nil
+        bitmapCache.removeAll()
+        refreshColors()
     }
 
     // MARK: - 内部
@@ -1016,8 +1047,8 @@ final class MenuBarScrollingLabel: NSView {
         contentLayer.removeAnimation(forKey: Self.scrollAnimationKey)
         guard let plan, let prepared else { return }
         let maxOffset = prepared.textWidth - plan.windowWidth
-        // 跟唱滚动优先:这句有逐字时间轴、且判定要滚,就按存底时钟装跟唱动画;
-        // 下面的时间配速只给没有逐字数据的句子兜底。
+        // 按时钟走优先:这句有逐字时间轴(跟唱)、或按播放时钟配速,且判定要滚,就按存底时钟装;
+        // 下面的墙钟循环只给不按时钟配速的文字(预览、歌名兜底)和还没对过表的那一下兜底。
         if applyFollowScroll() { return }
         guard let pacing = plan.pacing,
               let frames = MenuBarMarquee.scrollKeyframes(
@@ -1066,23 +1097,35 @@ final class MenuBarScrollingLabel: NSView {
 
     // MARK: - 跟唱滚动
 
-    /// 有逐字时间轴时按存底时钟(重新)装滚动动画:偏移是播放位置的函数(见
-    /// MenuBarMarquee.followScrollPath),所以它跟填色一样挂在 karaokeClock 上,换句 / 对表 /
-    /// 暂停都从这里重装。返回 false = 这一句不走跟唱(没有逐字数据、或判定不用滚),调用方
-    /// 回落到时间配速;此时**不碰**现有动画。
+    /// 按播放时钟走的滚动路径(歌词时间轴毫秒 → 偏移)。有逐字时间轴时跟着唱到的字走
+    /// (`MenuBarMarquee.followScrollPath`);没有时、这一句按播放时钟配速(`Plan.clockPaced`)且记下了起点,
+    /// 按配速从起点排一条(`pacedScrollPath`)。nil = 不按时钟滚。
+    private func clockScrollPath() -> [MenuBarMarquee.KaraokeFillPoint]? {
+        guard let plan, let prepared, let pacing = plan.pacing else { return nil }
+        let path: [MenuBarMarquee.KaraokeFillPoint]
+        if let reading = plan.followPath {
+            path = MenuBarMarquee.followScrollPath(
+                reading: reading, windowWidth: plan.windowWidth, textWidth: prepared.textWidth)
+        } else if plan.clockPaced, let start = pacedStart, start.text == plan.text {
+            path = MenuBarMarquee.pacedScrollPath(
+                startMs: start.ms, pacing: pacing, maxOffset: prepared.textWidth - plan.windowWidth)
+        } else {
+            return nil
+        }
+        return path.isEmpty ? nil : path
+    }
+
+    /// 按存底时钟(重新)装滚动动画(路径见 `clockScrollPath`):偏移是播放位置的函数,所以它跟填色一样
+    /// 挂在 karaokeClock 上,换句 / 对表 / 暂停都从这里重装。返回 false = 这一句不按时钟滚,调用方
+    /// 回落到墙钟循环;此时**不碰**现有动画。
     ///
-    /// 跟 restartAnimation 的时间配速那条同一个动画键:任一时刻内容层上只有一条滚动动画,
-    /// clear() / clearLyricsKeepingIcon() 摘的也是它。播放中装从"此刻"到唱完的剩余关键帧,
-    /// fillMode=forwards 停在末端不循环(唱到哪滚到哪,唱完就该换句了);暂停 / 已唱完 /
+    /// 跟 restartAnimation 的墙钟循环那条同一个动画键:任一时刻内容层上只有一条滚动动画,
+    /// clear() / clearLyricsKeepingIcon() 摘的也是它。播放中装从"此刻"到走完的剩余关键帧,
+    /// fillMode=forwards 停在末端不循环(唱到哪滚到哪,唱完就该换句了);暂停 / 已走完 /
     /// 还没对表就静置在此刻该有的偏移上。
     @discardableResult
     private func applyFollowScroll() -> Bool {
-        guard let plan, let prepared, plan.pacing != nil, let reading = plan.followPath else {
-            return false
-        }
-        let path = MenuBarMarquee.followScrollPath(
-            reading: reading, windowWidth: plan.windowWidth, textWidth: prepared.textWidth)
-        guard !path.isEmpty else { return false }
+        guard let path = clockScrollPath() else { return false }
         contentLayer.removeAnimation(forKey: Self.scrollAnimationKey)
         CATransaction.begin()
         CATransaction.setDisableActions(true)

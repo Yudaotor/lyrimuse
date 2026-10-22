@@ -149,6 +149,12 @@ public enum MenuBarMarquee {
         public let pointsPerSecond: CGFloat
         public let headHoldSeconds: Double
         public let tailHoldSeconds: Double
+
+        public init(pointsPerSecond: CGFloat, headHoldSeconds: Double, tailHoldSeconds: Double) {
+            self.pointsPerSecond = pointsPerSecond
+            self.headHoldSeconds = headHoldSeconds
+            self.tailHoldSeconds = tailHoldSeconds
+        }
     }
 
     /// 基准速度:每秒 4 个字。换过两次驱动方式都没动过。
@@ -328,6 +334,14 @@ public enum MenuBarMarquee {
         guard maxOffset > 0 else { return [] }
         let p = pacing(maxOffset: maxOffset, averageCharWidth: averageCharWidth,
                        dwellSeconds: dwellMs.map { Double($0) / 1000 })
+        return pacedScrollPath(startMs: startMs, pacing: p, maxOffset: maxOffset)
+    }
+
+    /// 同上,配速已经算好(状态栏那一格按 `MenuBarMarqueeRenderer.presentation` 给的那份)。
+    public static func pacedScrollPath(
+        startMs: Int, pacing p: ScrollPacing, maxOffset: CGFloat
+    ) -> [KaraokeFillPoint] {
+        guard maxOffset > 0, p.pointsPerSecond > 0 else { return [] }
         let moveStart = startMs + max(1, Int((p.headHoldSeconds * 1000).rounded()))
         let travelMs = max(1, Int((Double(maxOffset / p.pointsPerSecond) * 1000).rounded()))
         return [KaraokeFillPoint(ms: startMs, x: 0),

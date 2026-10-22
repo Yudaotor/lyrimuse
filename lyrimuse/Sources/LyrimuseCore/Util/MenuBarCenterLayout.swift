@@ -20,13 +20,20 @@ public enum MenuBarCenterLayout {
     public struct ScreenCandidate: Equatable, Sendable {
         /// 灵动岛在这块屏上(它占着菜单栏正中和刘海两侧)。
         public let islandHere: Bool
-        /// 这块屏有自己的菜单栏。系统设置里关了「显示器具有单独的空间」时只有主屏有,别的屏顶上画歌词就是悬在半空。
+        /// 这块屏有自己常驻的菜单栏(`showsMenuBar`)。没有时顶上画歌词就是悬在半空。
         public let hasMenuBar: Bool
         public init(islandHere: Bool, hasMenuBar: Bool = true) {
             self.islandHere = islandHere
             self.hasMenuBar = hasMenuBar
         }
         var usable: Bool { hasMenuBar && !islandHere }
+    }
+
+    /// 这块屏此刻顶上常驻着一条菜单栏:关了「显示器具有单独的空间」时只有主屏有;菜单栏设成自动隐藏(或此刻被收起)时
+    /// `visibleFrame` 顶到屏幕上沿,算没有 —— 不然菜单栏缩回去了,歌词还悬在别的窗口的标题栏上。
+    public static func showsMenuBar(separateSpaces: Bool, isPrimary: Bool,
+                                    frameMaxY: CGFloat, visibleFrameMaxY: CGFloat) -> Bool {
+        (separateSpaces || isPrimary) && visibleFrameMaxY < frameMaxY
     }
 
     /// 「显示在」那一项选的是什么。

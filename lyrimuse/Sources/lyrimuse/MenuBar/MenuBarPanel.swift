@@ -1393,7 +1393,12 @@ private struct PanelProgressSection: View {
     @State private var hoveringScrubber = false
 
     @ViewBuilder var body: some View {
-        if let anchor, anchor.durationMs > 0 {
+        if let anchor, anchor.durationMs > 0, anchor.isFrozen {
+            // 暂停通知先到、锚点冻住:位置不会动,不挂每 0.5 秒一拍的重画。
+            let current = scrubFraction.map { Int($0 * Double(anchor.durationMs)) }
+                ?? anchor.extrapolatedPositionMs(now: Date())
+            progressBar(currentMs: current, durationMs: anchor.durationMs)
+        } else if let anchor, anchor.durationMs > 0 {
             TimelineView(.periodic(from: .now, by: 0.5)) { context in
                 let current = scrubFraction.map { Int($0 * Double(anchor.durationMs)) }
                     ?? anchor.extrapolatedPositionMs(now: context.date)

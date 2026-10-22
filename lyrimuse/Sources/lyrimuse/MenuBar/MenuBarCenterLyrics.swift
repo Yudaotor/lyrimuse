@@ -13,7 +13,8 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "menuba
 /// 读状态栏项要挨个问每个 App 要 `AXExtrasMenuBar`,全量问一遍约 3 秒(一部分进程到超时才回),所以:
 /// 全量只在打开时和每 `fullScanEvery` 轮做一次、放在后台队列;平时每 `pollSeconds` 秒只复查已知有图标的那几家,
 /// 新开的 App 单独问。前台 App 的菜单每次切换前台时读一次,菜单常在激活后才换好,隔一会儿再读一次。
-/// 没授权时什么都不读,两侧按屏幕边缘算。只在「菜单栏正中」用着时运行(`setActive`)。
+/// 没授权时什么都不读、读数清空,两侧按屏幕边缘算。只在「菜单栏正中」用着、有词要显示、屏幕亮着时运行(`setActive`);
+/// 停下时读数留着,再开时先按它摆,同时后台补读一轮。
 @MainActor
 final class MenuBarOccupancy {
     static let shared = MenuBarOccupancy()
@@ -28,6 +29,9 @@ final class MenuBarOccupancy {
     /// 所以正中那几扇等它为真再出来。
     var isReady: Bool { firstScanDone || !AXIsProcessTrusted() }
     private var firstScanDone = false
+    /// 有一轮全量扫描在后台跑着(`scanIfNotReady` 不重复发)。
+    private var fullScanInFlight = false
+    private var pendingRescan: DispatchWorkItem?
 
     private var active = false
     /// 每次打开 / 关掉加一。后台那一轮回来时代数对不上就丢掉:关了又开时,上一轮的结果不能算成这一轮的首轮扫描。
@@ -85,21 +89,58 @@ final class MenuBarOccupancy {
         t.tolerance = 5
         RunLoop.main.add(t, forMode: .common)
         timer = t
+        if dropReadingsIfUntrusted() { return }
         readFrontMenus()
         scanAll()
     }
 
+    /// 只停轮询和监听,读数和 `firstScanDone` 留着:暂停、焦点在两块屏之间来回、锁屏时会频繁关了又开,
+    /// 清掉的话每次再开都要先空等一轮全量扫描(约 3 秒)。
     private func stop() {
         timer?.invalidate()
         timer = nil
         workspaceObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
         workspaceObservers = []
-        statusItemFrames = [:]
-        frontMenuFrames = []
-        firstScanDone = false
+        pendingRescan?.cancel()
+        pendingRescan = nil
+        fullScanInFlight = false
+    }
+
+    /// 首轮还没读完时当场补一轮全量(刚授权的那一刻 `isReady` 变假,别等下一次轮询)。已经有一轮在跑就不重复发。
+    func scanIfNotReady() {
+        guard active, !firstScanDone, !fullScanInFlight, AXIsProcessTrusted() else { return }
+        readFrontMenus()
+        scanAll()
+    }
+
+    /// 屏幕排列变了、自己那一格重建了:半秒后补读已知那几家(含自己)和前台菜单。系统摆好新位置要一会儿。
+    func rescanSoon() {
+        guard active else { return }
+        pendingRescan?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.pendingRescan = nil
+            self.scan(pids: Array(Set(self.statusItemFrames.keys).union([getpid()])), full: false)
+            self.readFrontMenus()
+        }
+        pendingRescan = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+
+    /// 授权被撤销:旧读数作废(不清的话一直按撤销那一刻的位置让),两侧回到按屏幕边缘算。
+    private func dropReadingsIfUntrusted() -> Bool {
+        guard !AXIsProcessTrusted() else { return false }
+        if !statusItemFrames.isEmpty || !frontMenuFrames.isEmpty || firstScanDone {
+            statusItemFrames = [:]
+            frontMenuFrames = []
+            firstScanDone = false
+            onChange?()
+        }
+        return true
     }
 
     private func poll() {
+        if dropReadingsIfUntrusted() { return }
         pollCount += 1
         // 首轮还没扫成(打开时没授权、后来才给)就按全量补:平时那一轮只复查已知有图标的几家,这时一家都不知道。
         if pollCount % Self.fullScanEvery == 0 || !firstScanDone {
@@ -122,6 +163,7 @@ final class MenuBarOccupancy {
         guard active, AXIsProcessTrusted(), !pids.isEmpty else { return }
         let started = Date()
         let generation = generation
+        if full { fullScanInFlight = true }
         queue.async { [weak self] in
             var found: [pid_t: [CGRect]] = [:]
             for pid in pids {
@@ -131,6 +173,7 @@ final class MenuBarOccupancy {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self, self.active, self.generation == generation else { return }
+                    if full { self.fullScanInFlight = false }
                     var next = self.statusItemFrames
                     if full {
                         next = found
@@ -183,10 +226,14 @@ final class MenuBarOccupancy {
         var bar: CFTypeRef?
         guard AXUIElementCopyAttributeValue(app, attribute as CFString, &bar) == .success, let bar,
               CFGetTypeID(bar) == AXUIElementGetTypeID() else { return nil }
+        // 超时只管设过的那一个元素,往下取到的菜单栏、各项都要各设一次,不然卡住的 App 每一步按系统默认等 6 秒。
+        let barElement = bar as! AXUIElement
+        AXUIElementSetMessagingTimeout(barElement, messagingTimeout)
         var children: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(bar as! AXUIElement, kAXChildrenAttribute as CFString, &children) == .success,
+        guard AXUIElementCopyAttributeValue(barElement, kAXChildrenAttribute as CFString, &children) == .success,
               let items = children as? [AXUIElement] else { return nil }
         return items.compactMap { item in
+            AXUIElementSetMessagingTimeout(item, messagingTimeout)
             var position: CFTypeRef?
             var size: CFTypeRef?
             guard AXUIElementCopyAttributeValue(item, kAXPositionAttribute as CFString, &position) == .success,
@@ -275,7 +322,9 @@ final class MenuBarCenterLyrics {
         let candidates = screens.enumerated().map { index, screen in
             MenuBarCenterLayout.ScreenCandidate(
                 islandHere: settings.notchOverlayEnabled && (settings.notchAllScreens || screen == islandScreen),
-                hasMenuBar: separateSpaces || index == 0)
+                hasMenuBar: MenuBarCenterLayout.showsMenuBar(
+                    separateSpaces: separateSpaces, isPrimary: index == 0,
+                    frameMaxY: screen.frame.maxY, visibleFrameMaxY: screen.visibleFrame.maxY))
         }
         let choice: MenuBarCenterLayout.ScreenChoice
         switch settings.menuBarCenterScreen {

@@ -71,6 +71,15 @@ final class MenuBarStatusItem: NSObject {
             .sink { [weak self] hidden in
                 self?.screensHidden = hidden
                 self?.applyAnimationPause()
+                // 「菜单栏正中」读两侧只在看得见时跑(refresh 里 setActive 那一行),亮屏后补一次重算把它接上。
+                self?.scheduleRefresh()
+            }.store(in: &cancellables)
+        // 跟随系统强调色的染色:换了强调色,状态栏这一格和正中那几扇都按新色重排。
+        NotificationCenter.default.publisher(for: NSColor.systemColorsDidChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                for label in [self.scrollingLabel] + self.centerLyrics.labels { label.systemColorsDidChange() }
             }.store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification)
             .sink { [weak self] note in
@@ -178,7 +187,11 @@ final class MenuBarStatusItem: NSObject {
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
+            .sink { [weak self] _ in
+                // 屏幕排列 / 分辨率变了,两侧读到的坐标也跟着变:补读一次,别等下一轮轮询。
+                MenuBarOccupancy.shared.rescanSoon()
+                self?.scheduleRefresh()
+            }.store(in: &cancellables)
         MenuBarOccupancy.shared.onChange = { [weak self] in self?.scheduleRefresh() }
         coordinator.$isPlayingNow.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
@@ -684,8 +697,11 @@ final class MenuBarStatusItem: NSObject {
             // 悬浮控件门控等处当"屏幕上现在是歌词槽还是图标槽"读(见那几处的 guard),停在
             // 旧值会误判。这里更新它只会让它更准 —— 上面那条 skipsResize 早退里刻意保留的
             // 陈旧是另一回事(那条连内容都还没按新形态画)。
+            let classChanged = displayClass != cls
             displayClass = cls
             if let button = statusItem?.button { render(button) }
+            // 图标槽 ↔ 歌词槽:悬停接管的第 4 条条件变了,指针没动也要重判一次。
+            if classChanged { scheduleHoverResync() }
             return
         }
 
@@ -820,6 +836,25 @@ final class MenuBarStatusItem: NSObject {
         lastRebuildAt = Date()
         rebuildStatusItem(length: length)
         if let button = statusItem?.button { render(button) }
+        // 旧按钮连着追踪区域一起拆了,不会补发「离开」,新区域装上也不报「进入」:按指针此刻的位置重判一次。
+        scheduleHoverResync()
+        // 「菜单栏正中」用着时,两侧读数里自己这一格的位置也变了(从歌词槽缩回图标),补读一次。
+        MenuBarOccupancy.shared.rescanSoon()
+    }
+
+    /// 槽位重建 / 换形态之后按指针此刻的位置重算「在不在这一项上」,再重判要不要接管。
+    /// 排到下一拍:系统要先把新按钮摆进菜单栏,按钮窗口的位置才作数。
+    private func scheduleHoverResync() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if let button = self.statusItem?.button, let window = button.window {
+                let rect = window.convertToScreen(button.convert(button.bounds, to: nil))
+                self.hoverInside = rect.contains(NSEvent.mouseLocation)
+            } else {
+                self.hoverInside = false
+            }
+            self.evaluateHoverEngagement()
+        }
     }
 
     /// 整项销毁重建(为什么必须重建而不能原地改宽度,见 present() 头注)。
@@ -920,6 +955,8 @@ final class MenuBarStatusItem: NSObject {
     /// (位置/反白/键盘导航都是系统行为),弹完立刻摘掉,不然下次左键也变成菜单。
     private func popUpFullMenu() {
         guard let item = statusItem else { return }
+        // 面板开着时右键 / ⌃左键同一个图标:面板的收起监听按按钮的位置放过了这一下,这里先收,别让菜单叠在面板上。
+        if panelIsOpen { panelController.close() }
         let menu = menuController.makeMenu(
             onHighlightChange: { [weak self] on in
                 self?.setButtonHighlighted(on)
@@ -1185,13 +1222,18 @@ final class MenuBarStatusItem: NSObject {
         // 一块能用的屏都没有(灵动岛占着、选的那块被占)时整段跳过,照旧走下面状态栏那一格。
         let centerWanted = settings.showLyricsInMenuBar && settings.menuBarLyricsPlacement == .screenCenter
         let centerScreens = centerWanted ? MenuBarCenterLyrics.targetScreens() : []
-        // 两侧读数只在真有屏要放时才扫(灵动岛占着唯一能用的屏时不白扫)。
-        MenuBarOccupancy.shared.setActive(!centerScreens.isEmpty)
+        // 两侧读数只在真有屏要放、有词要显示(或还摆着)、屏幕亮着时才扫:灵动岛占着唯一能用的屏、暂停几个小时、
+        // 锁屏都不白扫。停下时读数留着,再开就按它先摆、后台补读一轮再校正。
+        MenuBarOccupancy.shared.setActive(
+            !centerScreens.isEmpty && !screensHidden && (lyricsActive || centerLyrics.isShowing))
         if !centerScreens.isEmpty {
             present(class: "icon", length: iconSlotLength, collapseDelay: 0) {
                 showIcon($0)
             }
-            if lyricsActive, MenuBarOccupancy.shared.isReady {
+            // 首轮还没读完(刚授权、刚打开)时当场补一轮,别等下一次轮询。
+            if lyricsActive { MenuBarOccupancy.shared.scanIfNotReady() }
+            if lyricsActive, MenuBarOccupancy.shared.isReady || centerLyrics.isShowing {
+                // 已经摆着的不因为补读收回去(晚授权那一刻 isReady 会先变假),按手上的读数接着画。
                 presentCenter(text: text, on: centerScreens, dwell: dwell, leadIn: leadIn,
                               icon: lyricsIconBadge(), karaoke: true)
             } else if lyricsActive {
@@ -1317,7 +1359,7 @@ final class MenuBarStatusItem: NSObject {
                     interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
                 showFixedWidth($0, text: lineText, windowWidth: windowWidth, pacing: pacing,
                                fillPath: karaokeFillPath(for: lineText),
-                               followPath: followReadingPath(for: lineText), icon: icon,
+                               followPath: followReadingPath(for: lineText), clockPaced: dwell != nil, icon: icon,
                                gapWindow: gapWindow(for: lineText))
             }
         }
@@ -1337,6 +1379,8 @@ final class MenuBarStatusItem: NSObject {
         let fillPath = karaoke ? karaokeFillPath(for: text) : nil
         let followPath = karaoke ? followReadingPath(for: text) : nil
         let gap = gapWindow(for: text)
+        // 没有逐字时间轴的长句按播放时钟配速(暂停就停、倍速跟着变);快捷键回声、「♪ 歌名」兜底没有显示时长,照旧循环。
+        let clockPaced = karaoke && dwell != nil
         var placed: [NSScreen] = []
         for screen in screens {
             guard let span = centerLyrics.span(on: screen) else { continue }
@@ -1353,13 +1397,13 @@ final class MenuBarStatusItem: NSObject {
             placed.append(screen)
             let label = centerLyrics.show(on: screen, span: span, contentWidth: win + reserved + Self.lyricsSlotPadding)
             label.present(text: lineText, windowWidth: win, pacing: pacing,
-                          fillPath: fillPath, followPath: followPath, icon: icon,
+                          fillPath: fillPath, followPath: followPath, clockPaced: clockPaced, icon: icon,
                           secondaryText: rowState.secondaryText, secondaryKind: rowState.kind,
                           gapWindow: gap)
         }
         centerLyrics.keep(only: placed)
         // 同 showFixedWidth 末尾:换句后立刻按真实播放位置对一次表。
-        if fillPath != nil || followPath != nil || gap != nil { syncKaraokeClock(force: true) }
+        if fillPath != nil || followPath != nil || gap != nil || clockPaced { syncKaraokeClock(force: true) }
         if icon != nil { syncProgressClock(force: true) }
     }
 
@@ -1488,7 +1532,7 @@ final class MenuBarStatusItem: NSObject {
             // 不带的话每句开头 3 秒都没有染色/没有图标,槽宽落地那一刻才突然冒出来。
             showFixedWidth(button, text: lineText, windowWidth: win, pacing: pacing,
                            fillPath: karaokeFillPath(for: lineText),
-                           followPath: followReadingPath(for: lineText), icon: icon,
+                           followPath: followReadingPath(for: lineText), clockPaced: dwell != nil, icon: icon,
                            gapWindow: gapWindow(for: lineText))
         }
     }
@@ -1566,6 +1610,7 @@ final class MenuBarStatusItem: NSObject {
                                 pacing: MenuBarMarquee.ScrollPacing?,
                                 fillPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
                                 followPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
+                                clockPaced: Bool = false,
                                 icon: MenuBarScrollingLabel.IconBadge? = nil,
                                 gapWindow: MenuBarScrollingLabel.GapWindow? = nil) {
         liveIconView.clear()
@@ -1589,11 +1634,11 @@ final class MenuBarStatusItem: NSObject {
 
         scrollingLabel.frame = button.bounds
         scrollingLabel.present(text: text, windowWidth: windowWidth, pacing: pacing,
-                               fillPath: fillPath, followPath: followPath, icon: icon,
+                               fillPath: fillPath, followPath: followPath, clockPaced: clockPaced, icon: icon,
                                secondaryText: rowState.secondaryText, secondaryKind: rowState.kind,
                                gapWindow: gapWindow)
-        // 换句后立刻对一次表,填色 / 跟唱滚动从此刻的真实播放位置起步,不等下一次锚点更新(~2s)。
-        if fillPath != nil || followPath != nil { syncKaraokeClock(force: true) }
+        // 换句后立刻对一次表,填色 / 跟唱滚动 / 按时钟配速的滚动从此刻的真实播放位置起步,不等下一次锚点更新(~2s)。
+        if fillPath != nil || followPath != nil || (clockPaced && pacing != nil) { syncKaraokeClock(force: true) }
         // 三点那一档没有 fillPath/followPath,上面那条对不到它;它同样要立刻起步,
         // 否则整段间奏都停在静止帧上,直到下一次锚点更新才开始呼吸。
         if gapWindow != nil { syncKaraokeClock(force: true) }
@@ -1607,9 +1652,12 @@ final class MenuBarStatusItem: NSObject {
     /// 口径跟悬浮歌词/灵动岛同一个 `rawGapWindow`(**不设门槛**那一份):菜单栏同样没有
     /// "沿用上一行"的退路,占位一出现就得画点什么,套上 `GapRule` 的 5s/6s 门槛的话短前奏、
     /// 短句间静默全都拿不到窗口。拿不到时三颗点只呼吸、不推进点亮,不会开天窗。
+    /// 单行时下一句会提前亮出来,点要在那一刻走完,终点同灵动岛按 `gapDotsWindow` 提前(05 章决策 48)。
     private func gapWindow(for text: String) -> MenuBarScrollingLabel.GapWindow? {
-        guard text == MenuBarMarqueeRenderer.gapDotsToken,
-              let window = PlaybackCoordinator.shared.rawGapWindow else { return nil }
+        let coordinator = PlaybackCoordinator.shared
+        guard text == MenuBarMarqueeRenderer.gapDotsToken, let raw = coordinator.rawGapWindow else { return nil }
+        let window = AppSettings.shared.menuBarSecondaryLine.gapDotsWindow(
+            raw, compactPlaceholder: coordinator.menuBarLyrics.compactPlaceholder)
         return MenuBarScrollingLabel.GapWindow(startMs: window.startMs, endMs: window.endMs)
     }
 

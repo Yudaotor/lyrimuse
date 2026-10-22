@@ -476,7 +476,7 @@ func runNotchTests() {
                         .contains("static let defaultNotchLyricRowHeight = Double(NotchLyricRowMetrics.minimumRowHeight)"), true,
                     "高度接线: 默认值存成最矮,实际高度刚好放得下文字")
         for rel in ["SettingsView.swift", "MenuBar/MenuBarPanelQuickSettings.swift"] {
-            expectEqual(readApp(rel).contains("settings.setNotchLyricRowHeight(fromSlider: $0) }"), true,
+            expectEqual(readApp(rel).contains("settings.setNotchLyricRowHeight(fromSlider:"), true,
                         "高度接线: \(rel) 的「高度」滑杆经 setNotchLyricRowHeight(fromSlider:) 写回")
         }
     }
