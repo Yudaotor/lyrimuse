@@ -81,6 +81,8 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     /// 预览不报收听里程碑:那是一次性的真事件,预览里凭空撑开只会让人以为设置把它弄坏了。
     var milestone: ListenMilestone? { nil }
     var trackDrop: NotchTrackDrop? { nil }
+    var transientBannerActive: Bool { false }
+    var showsProgressLine: Bool { AppSettings.shared.notchShowsProgressLine }
     /// 预览不掉歌名,耳朵里的封面也不等揭晓。
     func revealsTrack(_ key: String) -> Bool { true }
 
@@ -164,6 +166,7 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     /// 快捷操作的 ✕ 在预览里**故意**是空实现:预览卡整块 `allowsHitTesting(false)`,点不到;真要能点到
     /// 也不该让"预览"把用户的灵动岛关掉(预览卡上的可点区域只开浮层、不产生副作用,见 05 章)。
     func closeFromQuickAction() {}
+    var cardScreenBottom: CGFloat? { nil }
     /// 同上:预览卡点不到,也不该从预览里弹一扇真浮框。
     func toggleEditorial(_ kind: EditorialCard.Kind) {}
 
@@ -686,7 +689,7 @@ struct NotchEditorStage: View {
 
     /// 「行为」浮层**跨两个枚举**:`NotchBehaviorItem.collapseWhenPaused`
     /// (`.showLyrics` 在「歌词行」浮层,见 `lyricRowSummary`)+ `AutoHideItem`
-    /// 各项 + `NotchBehaviorItem` 的全屏隐藏 / 换歌显示歌名 / 收听里程碑。
+    /// 各项 + `NotchBehaviorItem` 的全屏隐藏 / 换歌显示歌名 / 收听里程碑 / 触控板手势。
     ///
     /// **两个来源必须都算,而且要跟 `NotchBehaviorSettingsRows`(「行为」浮层和抽屉「行为」组都调它)
     /// 的内容一致**:少算自动隐藏那几项不会编译报错,
@@ -707,7 +710,9 @@ struct NotchEditorStage: View {
                    (title: NotchBehaviorItem.trackDrop.title,
                     isOn: NotchBehaviorItem.trackDrop.binding.wrappedValue),
                    (title: NotchBehaviorItem.listenMilestones.title,
-                    isOn: NotchBehaviorItem.listenMilestones.binding.wrappedValue)])
+                    isOn: NotchBehaviorItem.listenMilestones.binding.wrappedValue),
+                   (title: NotchBehaviorItem.gestures.title,
+                    isOn: NotchBehaviorItem.gestures.binding.wrappedValue)])
     }
 
     /// 「展开态」浮层里的七项(「展开时预览下一句」归「歌词行」,不在这里算)。曲目信息
@@ -1438,7 +1443,7 @@ enum NotchScreenSummary {
 
 // MARK: - 「风格」浮层
 
-/// 「✦ 风格」浮层。四种卡片背景四选一,下面两行「圆角 / 展开圆角」。
+/// 「✦ 风格」浮层。四种卡片背景四选一,下面两行「圆角 / 展开圆角」,最后一行「进度线」。
 ///
 /// 用**单选列表**而不是 `.pickerStyle(.menu)` 下拉,有两个具体理由:
 ///   ① 菜单点一次只能试一个:选中即收起,想比较四种就得开合四次。列表在浮层里点完**不关**,
@@ -1536,6 +1541,10 @@ struct NotchStyleSettingsRows: View {
                 CardDivider()
                 cornerRadiusRow(icon: "rectangle.bottomhalf.filled", title: L10n.t("展开圆角"), slot: .expanded,
                                 cardHeight: card.cardHeight(expanded: true))
+                CardDivider()
+                SettingsRow(icon: "minus", title: L10n.t("进度线"), help: L10n.t("未展开时在卡片底边显示播放进度")) {
+                    Toggle("", isOn: $settings.notchShowsProgressLine)
+                }
             }
         }
         // 拖到一半、或指针还停在行上时这一页没了(浮层被关、抽屉收起):值写回去,预览也别停在摆出来的那一态上。
@@ -1675,6 +1684,8 @@ enum NotchStyleDefaults {
         settings.notchHideInFullScreen = AppSettings.defaultNotchHideInFullScreen
         settings.notchListenMilestones = AppSettings.defaultNotchListenMilestones
         settings.notchShowsTrackDrop = AppSettings.defaultNotchShowsTrackDrop
+        settings.notchGestures = AppSettings.defaultNotchGestures
+        settings.notchShowsProgressLine = AppSettings.defaultNotchShowsProgressLine
     }
 }
 

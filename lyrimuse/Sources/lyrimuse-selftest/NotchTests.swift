@@ -1218,8 +1218,8 @@ func runNotchTests() {
             expectEqual(portabilitySrc.contains("\"np:listenMilestoneLedger\","), true,
                         "里程碑契约: 报喜记账是机器本地状态,不随配置导出")
             // 换歌翻牌:掉歌名的接线与卡片高度;左耳的翻牌连广告时的喇叭一起画。
-            expectEqual(v.contains(": (trackDrop != nil ? NotchMetrics.trackDropHeight : 0))"), true,
-                        "换歌翻牌契约: 关着歌词行时卡片为掉出来的歌名多长一截")
+            expectEqual(v.contains(": (trackDrop != nil || transientBannerActive ? NotchMetrics.trackDropHeight : 0))"), true,
+                        "换歌翻牌契约: 关着歌词行时卡片为掉出来的歌名(或瞬态横幅)多长一截")
             expectEqual(stageSrc.contains("var trackDrop: NotchTrackDrop? { nil }"), true, "换歌翻牌契约: 预览不掉歌名")
             expectEqual(ctrlSrc.contains("&& AppSettings.shared.notchShowsTrackDrop")
                         && ctrlSrc.contains("!isCollapsed && !isExpanded && milestone == nil && !alertHold")
@@ -2282,5 +2282,110 @@ func runNotchTests() {
         expectEqual(design.contains("Image(systemName: icon)") || quick.contains("Image(systemName: target.symbolName)")
                         || menu.contains("NSImage(systemSymbolName: symbol"), false,
                     "自画图标: 设置行、快捷设置头部、菜单项不再直接拿符号名画系统符号")
+    }
+
+    // ---- 触控板手势:左右滑切歌、上下滑调音量(NotchScrollGesture) ----
+    do {
+        typealias G = NotchScrollGesture
+        // 自然滚动开着时 scrollingDelta 跟手指同向:手指往左 dx < 0。
+        var g = G()
+        expectEqual(g.feed(dx: 0, dy: 0, phase: .began, invertedFromDevice: true), nil, "手势: 刚放上手指不动作")
+        expectEqual(g.feed(dx: -10, dy: 0, phase: .changed, invertedFromDevice: true), nil, "手势: 没过切歌距离不切")
+        expectEqual(g.feed(dx: -35, dy: 0, phase: .changed, invertedFromDevice: true), .nextTrack, "手势: 手指往左滑够了切下一首")
+        expectEqual(g.feed(dx: -80, dy: 0, phase: .changed, invertedFromDevice: true), nil, "手势: 一次滑动只切一首")
+        expectEqual(g.feed(dx: 0, dy: 0, phase: .ended, invertedFromDevice: true), nil, "手势: 抬手不动作")
+        _ = g.feed(dx: 0, dy: 0, phase: .began, invertedFromDevice: true)
+        expectEqual(g.feed(dx: 50, dy: 0, phase: .changed, invertedFromDevice: true), .previousTrack,
+                    "手势: 下一次滑动重新计,手指往右是上一首")
+        // 自然滚动关着:scrollingDelta 跟手指反向,手指往左 dx > 0,照样是下一首。
+        var off = G()
+        _ = off.feed(dx: 0, dy: 0, phase: .began, invertedFromDevice: false)
+        expectEqual(off.feed(dx: 45, dy: 0, phase: .changed, invertedFromDevice: false), .nextTrack,
+                    "手势: 关了自然滚动,手指往左仍是下一首")
+        // 上下滑:手指往上(自然滚动下 dy < 0)调大。
+        var v = G()
+        _ = v.feed(dx: 0, dy: 0, phase: .began, invertedFromDevice: true)
+        expectEqual(v.feed(dx: 0, dy: -10, phase: .changed, invertedFromDevice: true), .volume(10 * G.volumePerPoint),
+                    "手势: 手指往上调大音量,按位移连续调")
+        expectEqual(v.feed(dx: 0, dy: 5, phase: .changed, invertedFromDevice: true), .volume(-5 * G.volumePerPoint),
+                    "手势: 往回滑调小")
+        expectEqual(v.feed(dx: -100, dy: 0, phase: .changed, invertedFromDevice: true), nil,
+                    "手势: 认成上下滑之后,横向位移不切歌")
+        // 斜着滑:前几 pt 里哪个方向位移大就是哪个。
+        var d = G()
+        _ = d.feed(dx: 0, dy: 0, phase: .began, invertedFromDevice: true)
+        expectEqual(d.feed(dx: -5, dy: -2, phase: .changed, invertedFromDevice: true), nil, "手势: 没过认方向的距离先不动")
+        expectEqual(d.feed(dx: -4, dy: -1, phase: .changed, invertedFromDevice: true), nil, "手势: 认成左右滑、还没到切歌距离")
+        expectEqual(d.feed(dx: 0, dy: -30, phase: .changed, invertedFromDevice: true), nil, "手势: 认成左右滑之后,纵向位移不调音量")
+        expectEqual(d.feed(dx: -35, dy: 0, phase: .changed, invertedFromDevice: true), .nextTrack,
+                    "手势: 认方向前的横向位移也算进切歌距离")
+        // 惯性余势不算。
+        var m = G()
+        _ = m.feed(dx: 0, dy: 0, phase: .began, invertedFromDevice: true)
+        _ = m.feed(dx: 0, dy: 0, phase: .ended, invertedFromDevice: true)
+        expectEqual(m.feed(dx: -200, dy: 0, phase: .momentum, invertedFromDevice: true), nil, "手势: 惯性阶段不切歌")
+        expectEqual(m.feed(dx: 0, dy: -200, phase: .momentum, invertedFromDevice: true), nil, "手势: 惯性阶段不调音量")
+        // 鼠标滚轮:一格一档调音量,不切歌。
+        var w = G()
+        expectEqual(w.feed(dx: 0, dy: -3, phase: .none, invertedFromDevice: true), .volume(G.wheelStep), "手势: 滚轮往上一格调大一档")
+        expectEqual(w.feed(dx: 0, dy: 1, phase: .none, invertedFromDevice: false), .volume(G.wheelStep),
+                    "手势: 关了自然滚动,滚轮往上仍是调大")
+        expectEqual(w.feed(dx: 6, dy: 0, phase: .none, invertedFromDevice: true), nil, "手势: 滚轮横向不切歌")
+    }
+
+    // ---- 灵动岛五项(手势、输出设备、耳朵新模块、进度线、临时展开)的接线 ----
+    do {
+        let uiDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI")
+        func src(_ n: String) -> String { (try? String(contentsOf: uiDir.appendingPathComponent(n), encoding: .utf8)) ?? "" }
+        func app(_ n: String) -> String {
+            (try? String(contentsOf: uiDir.deletingLastPathComponent().appendingPathComponent(n), encoding: .utf8)) ?? ""
+        }
+        let v = src("NotchLyricsView.swift"), ctrl = src("NotchLyricsWindowController.swift")
+        let stage = src("NotchEditorStage.swift"), window = src("NotchLyricsWindow.swift")
+        let audio = app("AudioOutputDevices.swift"), delegate = app("AppDelegate.swift")
+        let runner = app("Settings/LyrimuseActionRunner.swift")
+        expectEqual(window.contains("if event.type == .scrollWheel { onScrollWheel?(event) }\n        super.sendEvent(event)")
+                    && ctrl.contains("panel.onScrollWheel = { [weak self] event in self?.handleScrollWheel(event) }"), true,
+                    "灵动岛五项: 窗口把滚动事件交给控制器,照常往下发")
+        expectEqual(ctrl.contains("guard AppSettings.shared.notchGestures, hasTrack,")
+                    && ctrl.contains("cardScreenFrame?.contains(NSEvent.mouseLocation) ?? false else {\n            scrollGesture = NotchScrollGesture()"),
+                    true, "灵动岛五项: 手势关着、没有曲目、指针不在卡片上时不认,这一次滑动作废")
+        expectEqual(ctrl.contains("LyrimuseActionRunner.perform(.nextTrackHotkey)")
+                    && ctrl.contains("VolumeMonitor.adjustSystemVolume(by: delta)"), true,
+                    "灵动岛五项: 切歌走快捷键那一条(先查自动化权限),音量调的是系统音量")
+        expectEqual(delegate.contains("VolumeMonitor.apply(enabled: notchEnabled)\n                    OutputDeviceAnnouncer.apply(enabled: notchEnabled)"),
+                    true, "灵动岛五项: 输出设备横幅跟音量横幅一起跟着灵动岛总开关启停")
+        expectEqual(audio.contains("monitor.$defaultID.removeDuplicates().dropFirst()"), true,
+                    "灵动岛五项: 只报换了设备,不报开始监听时那一台")
+        expectEqual(v.contains("var showsBannerStrip: Bool {\n        transientBannerActive && hasTrack && !showsLyrics && !isExpanded && !isCollapsed && milestone == nil")
+                    && ctrl.contains("lastAppliedShouldShow == true && !isVanished && !isCollapsed && hasTrack\n"), true,
+                    "灵动岛五项: 关着歌词行时横幅画在卡片多长的那一截里,快捷键回声随之落在灵动岛上")
+        expectEqual(ctrl.contains("if active { self.clearTrackDrop() }"), true, "灵动岛五项: 横幅一出来,换歌歌名条让开")
+        expectEqual(v.contains("+ (!expanded && !showsLyrics && showsProgressLine ? NotchMetrics.progressLineStrip : 0)")
+                    && v.contains("showsProgressLine && hasTrack && !isExpanded && !isCollapsed && milestone == nil"), true,
+                    "灵动岛五项: 进度线只在没展开时画,关着歌词行时卡片为它多长一截")
+        expectEqual(ctrl.contains("let next = hoverExpanded || alertHold || milestoneHold || peekHold"), true,
+                    "灵动岛五项: 临时展开是 isExpanded 的一个输入")
+        expectEqual(runner.contains("guard AppSettings.shared.notchOverlayEnabled else {")
+                    && runner.contains("NotchPeekCenter.shared.toggle()"), true,
+                    "灵动岛五项: 灵动岛关着时临时展开只说一句,不替用户打开")
+        expectEqual(stage.contains("var transientBannerActive: Bool { false }") && stage.contains("var cardScreenBottom: CGFloat? { nil }"),
+                    true, "灵动岛五项: 预览不长横幅条、没有屏幕坐标")
+        expectEqual(stage.contains("settings.notchGestures = AppSettings.defaultNotchGestures")
+                    && stage.contains("settings.notchShowsProgressLine = AppSettings.defaultNotchShowsProgressLine"), true,
+                    "灵动岛五项: 两个新开关进「恢复默认」")
+        let settingsSrc = app("Settings/AppSettings.swift")
+        expectEqual(sourceHas(settingsSrc, "case playCount\n    /// 正在放的播放器的图标")
+                    && sourceHas(settingsSrc, "case player\n    case none\n}"), true,
+                    "灵动岛五项: 耳朵下拉里「不显示」排最后")
+        expectEqual(v.contains("case .playCount: return NotchEarPlayCount.minWidth")
+                    && v.contains("case .player: return NotchMetrics.earAppIconSide(contentTopInset: contentTopInset)"), true,
+                    "灵动岛五项: 收听次数、播放器两个模块不跑马灯,参与宽度下限")
+        typealias T = NotchProgressLineTiming
+        expectEqual(T.interval(durationMs: 240_000, width: 200), 0.6, "进度线: 4 分钟的歌、200pt 宽,0.6 秒重画一次")
+        expectEqual(T.interval(durationMs: 10_000, width: 400), 0.25, "进度线: 重画间隔下限 0.25 秒")
+        expectEqual(T.interval(durationMs: 3_600_000, width: 100), 2, "进度线: 重画间隔上限 2 秒")
+        expectEqual(T.interval(durationMs: 0, width: 100), 2, "进度线: 时长未知按上限")
     }
 }

@@ -734,6 +734,15 @@
       "dest" : "tab:appearance",
       "path" : [
         "歌词显示",
+        "灵动岛",
+        "风格"
+      ],
+      "title" : "进度线"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
         "灵动岛"
       ],
       "title" : "屏幕"
@@ -985,6 +994,15 @@
         "行为"
       ],
       "title" : "换歌时显示歌名"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "行为"
+      ],
+      "title" : "触控板手势"
     },
     {
       "dest" : "tab:appearance",
@@ -1741,6 +1759,13 @@
         "快捷键"
       ],
       "title" : "显示/隐藏灵动岛歌词"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "临时展开灵动岛"
     },
     {
       "dest" : "tab:shortcuts",

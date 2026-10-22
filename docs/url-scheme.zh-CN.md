@@ -60,6 +60,7 @@
 |---|---|---|
 | `toggle-overlay` | 显示 / 隐藏桌面悬浮歌词 | `on` |
 | `toggle-notch` | 显示 / 隐藏灵动岛歌词 | `on` |
+| `peek-notch` | 临时展开灵动岛几秒，再执行一次提前收回 | — |
 | `toggle-menubar-lyrics` | 显示 / 隐藏菜单栏歌词 | `on` |
 | `toggle-touchbar` | 展开 / 收起触控栏歌词（只在有触控栏的 Mac 上有效） | — |
 | `toggle-all-lyrics` | 隐藏 / 恢复全部歌词：把开着的悬浮歌词、灵动岛、菜单栏歌词全部收起，再执行一次照原样恢复 | `on`（`0` 收起、`1` 恢复） |

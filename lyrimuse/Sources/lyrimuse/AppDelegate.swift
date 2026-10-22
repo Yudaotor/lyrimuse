@@ -707,6 +707,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { notchEnabled in
                 MainActor.assumeIsolated {
                     VolumeMonitor.apply(enabled: notchEnabled)
+                    OutputDeviceAnnouncer.apply(enabled: notchEnabled)
                 }
             }
             .store(in: &cancellables)

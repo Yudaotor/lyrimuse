@@ -61,6 +61,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     @Published private(set) var trackDrop: NotchTrackDrop?
     /// 换歌翻牌:最近一次揭晓的曲目(`NotchTrackDropRules.key`,见 applyReveal)。耳朵里的封面换歌后等揭晓了同一首才翻。
     @Published private(set) var revealedTrackKey: String?
+    /// 此刻有没有瞬态横幅(`NotchTransientCenter.banner` 的镜像)。关着歌词行时卡片为它多长一截(`showsBannerStrip`)。
+    @Published private(set) var transientBannerActive = false
+    /// 要不要画底边那根进度线,真值在 `AppSettings.notchShowsProgressLine`,镜像理由同 `showsEqualizer`。
+    @Published private(set) var showsProgressLine: Bool = AppSettings.shared.notchShowsProgressLine
     /// `isExpanded` 的两个输入(拆开):hover 那一路的兑现结果,和「发现新播放器」主动提醒的
     /// 撑开(`NotchUnknownPlayerPrompt.isAlerting` 的镜像)。任一为 true 卡片就是展开的,见 refreshExpanded ——
     /// 提醒期间光标进出卡片改的是 hoverExpanded,不会把提醒撑开的卡片提前收掉;提醒到点时光标还停在上面,
@@ -71,6 +75,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 收听里程碑报喜时撑开,跟 alertHold 一样只是 isExpanded 的一个输入。不进 updateActualVisibility:
     /// 灵动岛这会儿藏着(全屏、暂停隐藏)就看不到,不为它把窗口叫回来。
     private var milestoneHold = false
+    /// 「临时展开灵动岛」快捷键撑开的那几秒(`NotchPeekCenter.isPeeking` 的镜像),跟 milestoneHold 一样只是 isExpanded 的一个输入,
+    /// 不进 updateActualVisibility:藏着的灵动岛不为它叫回来。
+    private var peekHold = false
+    /// 卡片上这一次滚动手势认到哪了(`handleScrollWheel`)。
+    private var scrollGesture = NotchScrollGesture()
     /// 报喜结束时指针还停在卡片上:等它离开再收面板(refreshExpanded)。
     private var milestoneClearPending = false
     /// 「全屏时隐藏」(`NotchVisibility.fullScreenHides`)的结论,由 `applyFullScreenCover` 写入,进
@@ -355,6 +364,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         hosting.sizingOptions = []
         panel.contentView = hosting
         hostingView = hosting
+        panel.onScrollWheel = { [weak self] event in self?.handleScrollWheel(event) }
 
         // 窗口还没 orderFront 时 occlusionState 也是「不可见」,所以初值保持 true;上屏后系统会补一次通知。
         // 主实例和镜像副本都要挂:每扇窗各管各的树。
@@ -485,6 +495,24 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 是控制器订阅提示,不是提示引用控制器 —— 后者会碰 `.shared`,见文件头那条不变量。
         NotchUnknownPlayerPrompt.shared.$isAlerting.removeDuplicates().sink { [weak self] alerting in
             self?.setAlertHold(alerting)
+        }
+        .store(in: &subscriptions)
+
+        // 瞬态横幅(音量、切输出设备、快捷键回声):关着歌词行时卡片为它多长一截;横幅一出来,正停着的换歌歌名条让开
+        // (两样占同一个位置,横幅是用户刚做的事)。每个实例各自订阅同一个单例。
+        NotchTransientCenter.shared.$banner.map { $0 != nil }.removeDuplicates().sink { [weak self] active in
+            guard let self else { return }
+            if active { self.clearTrackDrop() }
+            self.transientBannerActive = active
+        }
+        .store(in: &subscriptions)
+        // 「临时展开灵动岛」快捷键:每个实例各自订阅,「所有屏幕」时每块屏一起撑开。
+        NotchPeekCenter.shared.$isPeeking.removeDuplicates().sink { [weak self] peeking in
+            self?.setPeekHold(peeking)
+        }
+        .store(in: &subscriptions)
+        AppSettings.shared.$notchShowsProgressLine.removeDuplicates().sink { [weak self] shows in
+            self?.showsProgressLine = shows
         }
         .store(in: &subscriptions)
 
@@ -720,6 +748,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     }
 
     /// 卡片此刻在屏幕上的矩形:卡片从窗口顶边垂下来、水平居中。
+    var cardScreenBottom: CGFloat? { cardScreenFrame?.minY }
+
     private var cardScreenFrame: NSRect? {
         guard let window else { return nil }
         return NSRect(x: window.frame.midX - cardWidth / 2, y: window.frame.maxY - cardHeight,
@@ -894,7 +924,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             milestoneClearPending = false
             milestone = nil
         }
-        let next = hoverExpanded || alertHold || milestoneHold
+        let next = hoverExpanded || alertHold || milestoneHold || peekHold
         let opening = next && !isExpanded
         // 回读播放模式、「喜欢」只在指针悬停展开时做:提醒、报喜撑开卡片时那几颗键被盖着,而且每块屏的副本会同时撑开。
         let hoverOpening = opening && hoverExpanded && !alertHold && !milestoneHold
@@ -938,6 +968,51 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         refreshExpanded()
     }
 
+    /// 「临时展开灵动岛」开始 / 结束(`NotchPeekCenter.isPeeking` 的 sink)。到点时指针还停在卡片上,hoverExpanded 接着撑着。
+    private func setPeekHold(_ hold: Bool) {
+        guard hold != peekHold else { return }
+        peekHold = hold
+        refreshExpanded()
+    }
+
+    /// 卡片上的滚动事件(`NotchLyricsWindow.onScrollWheel`):两指左右滑切歌,上下滑调系统音量,判法在 `NotchScrollGesture`。
+    /// 「触控板手势」关着、没有曲目、指针不在卡片上时不认,这一次滑动作废。切歌走快捷键那一条(先查自动化权限);调音量后音量横幅
+    /// 由 `VolumeMonitor` 照常弹,关着歌词行时卡片为它多长一截。
+    private func handleScrollWheel(_ event: NSEvent) {
+        guard AppSettings.shared.notchGestures, hasTrack,
+              cardScreenFrame?.contains(NSEvent.mouseLocation) ?? false else {
+            scrollGesture = NotchScrollGesture()
+            return
+        }
+        let phase: NotchScrollGesture.Phase
+        if !event.momentumPhase.isEmpty {
+            phase = .momentum
+        } else if event.phase.contains(.began) {
+            phase = .began
+        } else if event.phase.contains(.changed) {
+            phase = .changed
+        } else if event.phase.contains(.ended) || event.phase.contains(.cancelled) {
+            phase = .ended
+        } else if event.phase.isEmpty {
+            phase = .none
+        } else {
+            return
+        }
+        guard let action = scrollGesture.feed(dx: Double(event.scrollingDeltaX), dy: Double(event.scrollingDeltaY),
+                                              phase: phase, invertedFromDevice: event.isDirectionInvertedFromDevice)
+        else { return }
+        switch action {
+        case .nextTrack:
+            NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+            LyrimuseActionRunner.perform(.nextTrackHotkey)
+        case .previousTrack:
+            NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+            LyrimuseActionRunner.perform(.previousTrackHotkey)
+        case .volume(let delta):
+            VolumeMonitor.adjustSystemVolume(by: delta)
+        }
+    }
+
     /// 换歌翻牌的「掉歌名」(init 里换歌翻牌那条订阅去抖后调):换了一首(判法见 `NotchTrackDropTracker`:不是这个实例看到的
     /// 第一首、不是广告,声音还没走起来时先不判),「换歌时显示歌名」开着,卡片此刻放得下(`trackDropFits`),就判成要掉。
     /// 什么时候真掉由 `NotchTrackRevealGate` 定:这首的封面到了才揭晓,歌名掉下来和耳朵里的封面翻过来同一拍,
@@ -971,10 +1046,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         scheduleRevealWait()
     }
 
-    /// 快捷键回声此刻能不能落在灵动岛上:横幅盖在歌词行上,窗口不在屏、缩进刘海、收起(暂停 / 广告),或者稳态不画歌词行
-    /// (关了「显示歌词」、无歌词收起)时都无处显示。见 14 章决策 130。
+    /// 快捷键回声此刻能不能落在灵动岛上:横幅盖在歌词行上,关着歌词行时卡片为它多长一截(`showsBannerStrip`);窗口不在屏、
+    /// 缩进刘海、收起(暂停 / 广告)或者没有曲目时无处显示。见 14 章决策 130、05 章决策 88。
     var showsTransientBanner: Bool {
-        lastAppliedShouldShow == true && !isVanished && !isCollapsed && showsLyricRow
+        lastAppliedShouldShow == true && !isVanished && !isCollapsed && hasTrack
     }
 
     /// 收听里程碑此刻有没有地方报:窗口在屏、没缩进刘海、没被挡(全屏时隐藏、锁屏、熄屏都不算)。init 里登记给

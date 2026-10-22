@@ -77,4 +77,13 @@ final class NotchLyricsWindow: NSPanel {
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
         frameRect
     }
+
+    /// 滚动事件交给控制器认手势(`NotchLyricsWindowController.handleScrollWheel`)。卡片外的透明区收不到事件(点击、滚动
+    /// 都穿到下层窗口),落到这里的都在卡片上;照常往下发,卡片里没有会滚的东西。
+    var onScrollWheel: ((NSEvent) -> Void)?
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .scrollWheel { onScrollWheel?(event) }
+        super.sendEvent(event)
+    }
 }

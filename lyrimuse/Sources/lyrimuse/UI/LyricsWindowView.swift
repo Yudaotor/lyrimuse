@@ -4325,21 +4325,9 @@ struct LyricsWindowView: View {
         .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
     }
 
-    /// 设备类型 → 行图标(AM 的输出面板每行左侧是设备形状图标)。transportType 先分大类,
-    /// AirPods 系按名称再细分(蓝牙传输层区分不出 Max/Pro)。
+    /// 设备类型 → 行图标,见 `AudioOutputDeviceManager.Device.symbolName`。
     fileprivate static func deviceSymbol(_ device: AudioOutputDeviceManager.Device) -> String {
-        let name = device.name.lowercased()
-        switch device.kind {
-        case .builtIn: return "laptopcomputer"
-        case .airPlay: return "hifispeaker"
-        case .display: return "display"
-        case .bluetooth:
-            if name.contains("airpods max") { return "airpodsmax" }
-            if name.contains("airpods pro") { return "airpodspro" }
-            if name.contains("airpods") { return "airpods" }
-            return "headphones"
-        case .other: return "speaker.wave.2"
-        }
+        device.symbolName
     }
 
     private func circleIcon(_ name: String) -> some View {

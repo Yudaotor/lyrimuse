@@ -345,6 +345,7 @@
 "中国移动旗下的音乐平台" = "China Mobile's music service";
 "中文" = "Chinese";
 "中文歌词统一成简体或繁体" = "Show Chinese lyrics in Simplified or Traditional characters";
+"临时展开灵动岛" = "Peek at Notch Lyrics";
 "为勾选的语言标注读音；是否显示在「歌词显示」中设置" = "Adds pronunciation for the selected languages; whether it shows is set in Lyrics Display";
 "为当前配色命名" = "Name these colors";
 "为歌手和专辑添加前缀" = "Label Artist and Album";
@@ -1233,6 +1234,7 @@
 "拼音，如 你好 → nǐ hǎo" = "Pinyin, e.g. 你好 → nǐ hǎo";
 "指定显示哪些歌词" = "Choose Which Lyrics Show";
 "指定颜色" = "Custom Color";
+"指针停在灵动岛上时，双指左右滑动切歌，上下滑动调节音量" = "With the pointer over the notch, swipe left or right with two fingers to change tracks, or up and down to adjust the volume";
 "指针悬停在封面上时也显示此行" = "Also shown when hovering over the cover";
 "指针移到菜单栏歌词上时显示「上一曲 / 播放暂停 / 下一曲」三个按钮，移开后恢复。暂停后歌词收起为图标，或区域过窄放不下三个按钮时不显示。点按按钮以外的区域仍会打开面板" = "Hover over the menu bar lyrics to turn them into Previous / Play-Pause / Next; move away and the lyrics return. Doesn't take over once the lyrics shrink back to the icon after pausing, or when the slot is too narrow for three buttons. Clicking outside the three buttons still opens the panel";
 "按 %@ 秒校验" = "Validated against %@s";
@@ -1557,6 +1559,7 @@
 "未填写服务地址（可选）" = "Server URL not set yet (optional)";
 "未填写访问令牌（可选）" = "Access token not set yet (optional)";
 "未完成" = "Not done";
+"未展开时在卡片底边显示播放进度" = "Shows playback progress along the bottom edge when not expanded";
 "未应答" = "No response";
 "未开启" = "Disabled";
 "未开启 · 开启后播放进度更准确，并可调节洛雪音乐的音量" = "Off · Turn it on for more accurate timing and LX Music volume control";
@@ -1929,6 +1932,7 @@
 "灵动岛展开宽度" = "Notch Card Expanded Width";
 "灵动岛所在屏幕有 App 全屏时隐藏" = "Hides while an app is full screen on its display";
 "灵动岛歌词" = "Notch Lyrics";
+"灵动岛歌词未开启" = "Notch Lyrics is off";
 "点一下打开完整榜单" = "Tap to open the full chart";
 "点按「开始使用」，让歌词随旋律逐句亮起" = "Click “Get Started” and let every line light up with the music";
 "点按「拷贝修复命令」，打开「终端」，粘贴后按下 Return 键，按提示输入登录密码（输入时不显示字符），然后点按「启用」" = "Click Copy Fix Command, open Terminal, paste it and press Return, enter your login password when asked (nothing shows as you type), then click Enable";
@@ -2215,6 +2219,7 @@
 "解码" = "Decode";
 "解锁位置" = "Unlock Position";
 "解锁后点按将穿透到桌面；拖动方式见设置中的「长按拖动」" = "Unlocked: clicks pass through to the desktop. How dragging works is set by “Long-Press to Drag” in Settings";
+"触控板手势" = "Trackpad Gestures";
 "触控栏" = "Touch Bar";
 "触控栏右侧的亮度、音量等系统按键，可在「系统设置 › 键盘 › 触控栏设置…」中增减或调整顺序" = "Add, remove or reorder the brightness, volume and other system buttons on the right of the Touch Bar in System Settings › Keyboard › Touch Bar Settings…";
 "触控栏歌词" = "Touch Bar Lyrics";
@@ -2344,6 +2349,7 @@
 "辅助功能权限可显示%@的随机、循环与喜欢按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Accessibility permission enables the shuffle, repeat and Like buttons for %@, and lets Lyrimuse pause, resume and skip tracks through its menus while another app holds the system media focus";
 "辅助功能权限可显示%@的随机、循环按钮" = "Accessibility permission enables shuffle and repeat for %@";
 "辅助功能权限可让%@拖动进度后的歌词更准、显示循环按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" = "Accessibility permission keeps lyrics for %@ accurate after seeking, enables its repeat button, and lets Lyrimuse pause, resume and skip tracks through its menus while another app holds the system media focus";
+"输出设备" = "Output Device";
 "过去三年的今天及前后一周均无收听记录" = "No listening on this day, or the week around it, in the past three years";
 "运行中" = "Running";
 "运行日志" = "Activity Log";
@@ -2408,6 +2414,7 @@
 "进入全屏" = "Enter Full Screen";
 "进入迷你尺寸" = "Enter Mini Size";
 "进度条" = "Progress Bar";
+"进度线" = "Progress Line";
 "连接" = "Connection";
 "连接 Apple Music" = "Connect Apple Music";
 "连接 Last.fm" = "Connect Last.fm";

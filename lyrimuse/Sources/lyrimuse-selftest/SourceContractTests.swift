@@ -2362,8 +2362,8 @@ func runSourceContractSurfaceTests() {
             expectEqual(sourceHas(hk, "let notchShowsHint = settings.notchOverlayEnabled && NotchLyricsWindowController.shared.showsTransientBanner"),
                         true, "全局快捷键: 灵动岛显示不了横幅时回声照样交出去,且先判开关再读控制器")
             let notchController = read("UI/NotchLyricsWindowController.swift") ?? ""
-            expectEqual(sourceHas(notchController, "lastAppliedShouldShow == true && !isVanished && !isCollapsed && showsLyricRow"), true,
-                        "全局快捷键: 灵动岛能显示横幅 = 在屏、没缩进刘海、没收起、画着歌词行")
+            expectEqual(sourceHas(notchController, "lastAppliedShouldShow == true && !isVanished && !isCollapsed && hasTrack"), true,
+                        "全局快捷键: 灵动岛能显示横幅 = 在屏、没缩进刘海、没收起、有曲目(关着歌词行时卡片为横幅多长一截)")
             expectEqual(sourceHas(hk, "guard !notchShowsHint, !settings.classicOverlayEnabled else { return }\n"
                                     + "        TouchBarLyricsController.shared.flashHint(text, seconds: hintSeconds)\n"
                                     + "        MenuBarStatusItem.shared.flashHint(text, seconds: hintSeconds)"), true,

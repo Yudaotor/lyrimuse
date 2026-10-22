@@ -22,6 +22,7 @@ public enum LyrimuseAction: String, CaseIterable, Sendable {
     case toggleTranslationHotkey
     case toggleRomanizationHotkey
     case toggleNotchOverlayHotkey
+    case peekNotchHotkey
     case toggleMenuBarLyricsHotkey
     case toggleTouchBarLyricsHotkey
     case lyricsOffsetResetHotkey
@@ -49,6 +50,7 @@ public enum LyrimuseAction: String, CaseIterable, Sendable {
         case .toggleTranslationHotkey: return "toggle-translation"
         case .toggleRomanizationHotkey: return "toggle-romanization"
         case .toggleNotchOverlayHotkey: return "toggle-notch"
+        case .peekNotchHotkey: return "peek-notch"
         case .toggleMenuBarLyricsHotkey: return "toggle-menubar-lyrics"
         case .toggleTouchBarLyricsHotkey: return "toggle-touchbar"
         case .lyricsOffsetResetHotkey: return "lyrics-offset-reset"
@@ -104,7 +106,7 @@ public enum LyrimuseAction: String, CaseIterable, Sendable {
     /// 快捷键页每张卡里摆哪几格、什么顺序。每个动作正好出现一次(selftest 核对):设置页的格子、撞键检查、
     /// 设置搜索都按这一份来,加动作只在这个文件里登记。
     public static let shortcutLayout: [(group: ShortcutGroup, actions: [LyrimuseAction])] = [
-        (.display, [.toggleOverlay, .toggleNotchOverlayHotkey, .toggleMenuBarLyricsHotkey, .toggleTouchBarLyricsHotkey,
+        (.display, [.toggleOverlay, .toggleNotchOverlayHotkey, .peekNotchHotkey, .toggleMenuBarLyricsHotkey, .toggleTouchBarLyricsHotkey,
                     .toggleAllLyricsHotkey, .toggleLockPosition, .toggleTranslationHotkey, .toggleRomanizationHotkey,
                     .overlayFontLargerHotkey, .overlayFontSmallerHotkey]),
         (.window, [.openLyricsManagerHotkey, .openLyricsWindowHotkey, .toggleLyricsWindowMiniHotkey,
@@ -118,6 +120,7 @@ public enum LyrimuseAction: String, CaseIterable, Sendable {
         switch self {
         case .toggleOverlay: return "显示/隐藏悬浮歌词"
         case .toggleNotchOverlayHotkey: return "显示/隐藏灵动岛歌词"
+        case .peekNotchHotkey: return "临时展开灵动岛"
         case .toggleMenuBarLyricsHotkey: return "显示/隐藏菜单栏歌词"
         case .toggleTouchBarLyricsHotkey: return "展开/收起触控栏歌词"
         case .toggleAllLyricsHotkey: return "隐藏/恢复全部歌词"
@@ -147,6 +150,7 @@ public enum LyrimuseAction: String, CaseIterable, Sendable {
         switch self {
         case .toggleOverlay: return "eye"
         case .toggleNotchOverlayHotkey: return "inset.filled.topthird.square"
+        case .peekNotchHotkey: return "rectangle.expand.vertical"
         case .toggleMenuBarLyricsHotkey: return "menubar.rectangle"
         case .toggleTouchBarLyricsHotkey: return "lyrimuse.touchbar"
         case .toggleAllLyricsHotkey: return "eye.slash"
@@ -176,6 +180,7 @@ public enum LyrimuseAction: String, CaseIterable, Sendable {
         switch self {
         case .toggleOverlay: return ["悬浮歌词", "开关"]
         case .toggleNotchOverlayHotkey: return ["灵动岛", "开关"]
+        case .peekNotchHotkey: return ["灵动岛", "展开", "看一眼", "当前歌词", "peek"]
         case .toggleMenuBarLyricsHotkey: return ["菜单栏", "开关"]
         case .toggleTouchBarLyricsHotkey: return ["触控栏", "Touch Bar", "功能栏", "展开", "收起", "开关"]
         case .toggleAllLyricsHotkey: return ["全部", "隐藏", "开会", "共享屏幕", "录屏", "开关"]

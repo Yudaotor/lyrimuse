@@ -401,6 +401,8 @@ extension NotchEarModule {
         case .controls: return L10n.t("播放控制")
         case .elapsed: return L10n.t("已播时长")
         case .remaining: return L10n.t("剩余时长")
+        case .playCount: return L10n.t("收听次数")
+        case .player: return L10n.t("播放器")
         case .none: return L10n.t("不显示")
         }
     }
@@ -433,6 +435,8 @@ extension NotchEarModule {
         // 真的放得下。超过一小时的曲目("-1:23:45" 实测 50.1pt)在最窄处仍会滚:那是极少数,
         // 不值得为它把所有人的下限再抬 11pt。
         case .elapsed, .remaining: return 39
+        case .playCount: return NotchEarPlayCount.minWidth
+        case .player: return NotchMetrics.earAppIconSide(contentTopInset: contentTopInset)
         }
     }
 
@@ -596,6 +600,8 @@ enum NotchMetrics {
     static var milestoneConfettiReach: CGFloat { milestoneConfettiDrop.upperBound + 6 }
     /// 换歌翻牌:关着歌词行时,卡片为掉出来的那条歌名多长的高度(`NotchTrackDropStrip`)。
     static let trackDropHeight: CGFloat = 26
+    /// 进度线:关着歌词行时卡片为它多长的高度(线在这一截的底部,见 `NotchProgressLine`)。
+    static let progressLineStrip: CGFloat = 4
 
     // 收起态(没在播放)单侧耳宽:左耳只放音浪(约 14pt 宽)、右耳只放一枚小封面
     // (iPhone 灵动岛式极简形态,歌名/播放键都收进 hover 展开卡),
@@ -693,6 +699,11 @@ protocol NotchChromeSource: ObservableObject {
     /// 换歌翻牌里此刻掉出来的那条歌名(真窗口 = 控制器的 `trackDrop`;预览恒 nil)。关着歌词行时卡片为它多长
     /// `NotchMetrics.trackDropHeight`(`cardHeight(expanded:)`),开着时盖在歌词行上。
     var trackDrop: NotchTrackDrop? { get }
+    /// 此刻有没有瞬态横幅(真窗口 = 控制器镜像 `NotchTransientCenter.banner`;预览恒 false)。关着歌词行时卡片为它多长
+    /// `NotchMetrics.trackDropHeight`(`showsBannerStrip`),开着时横幅盖在歌词行上。
+    var transientBannerActive: Bool { get }
+    /// 要不要画底边那根进度线(`AppSettings.notchShowsProgressLine`)。关着歌词行时卡片为它多长 `NotchMetrics.progressLineStrip`。
+    var showsProgressLine: Bool { get }
     /// 换歌翻牌:`key`(`NotchTrackDropRules.key`)这一首揭晓了没有(真窗口 = 控制器最近一次揭晓的那首;预览恒 true)。
     /// 耳朵里的封面换歌后等它为 true 才翻,跟歌名掉下来同一拍。
     func revealsTrack(_ key: String) -> Bool
@@ -745,6 +756,8 @@ protocol NotchChromeSource: ObservableObject {
     /// 快捷操作里那颗 ✕:关掉「灵动岛歌词」总开关。真窗口走 `setVisible(false)`(跟设置页开关、菜单栏
     /// 面板同一个唯一入口),预览里是空实现 —— 预览卡整块 `allowsHitTesting(false)`,本来也点不到。
     func closeFromQuickAction()
+    /// 卡片下沿在屏幕坐标里的 y(真窗口);预览给 nil。展开态「输出设备」菜单从这里往下弹,压在卡片上的部分会被卡片挡住。
+    var cardScreenBottom: CGFloat? { get }
     /// 展开态头部点歌名 / 专辑名 / 歌手名:开 / 关 / 切换简介浮框(`NotchEditorialPanel`)。预览里是空实现,理由同上。
     func toggleEditorial(_ kind: EditorialCard.Kind)
 }
@@ -759,6 +772,17 @@ extension NotchChromeSource {
     /// 歌词挡视线"这个理由连累。高度预留(`cardHeight`)和实际渲染(NotchLyricsView 的
     /// `if controller.showsLyricRow`)必须用同一个值。
     var showsLyricRow: Bool { hasTrack && (showsLyrics || isExpanded) }
+
+    /// 瞬态横幅画在卡片为它多长的那一截里:关着歌词行、没展开、没收起时(开着歌词行或展开时横幅盖在歌词行上)。
+    /// 高度预留(`cardHeight(expanded:)`)和渲染读同一个值。
+    var showsBannerStrip: Bool {
+        transientBannerActive && hasTrack && !showsLyrics && !isExpanded && !isCollapsed && milestone == nil
+    }
+
+    /// 底边那根进度线此刻画不画:开着「进度线」、有曲目,没展开(展开区有自己那条进度条)、没收起、没在报喜。
+    var showsBottomProgressLine: Bool {
+        showsProgressLine && hasTrack && !isExpanded && !isCollapsed && milestone == nil
+    }
 
     /// 展开区里那行「下一句歌词预览」到底画不画 —— 只看这首歌**有没有歌词**,不受
     /// 「显示歌词」那个开关影响(关掉稳态那一条歌词行之后,指向展开的
@@ -856,8 +880,10 @@ extension NotchChromeSource {
         return contentTopInset
             // 稳态歌词行要不要留高度,同 showsLyricRow(展开时哪怕关着「显示歌词」也要留;这里已经有曲目)。
             + ((showsLyrics || expanded) ? lyricRowHeight
-               // 换歌翻牌:关着歌词行时为掉出来的歌名多长一截(开着时歌名盖在歌词行上,不用另长)。
-               : (trackDrop != nil ? NotchMetrics.trackDropHeight : 0))
+               // 换歌翻牌、瞬态横幅:关着歌词行时为掉出来的歌名 / 横幅多长一截(开着时盖在歌词行上,不用另长)。
+               : (trackDrop != nil || transientBannerActive ? NotchMetrics.trackDropHeight : 0))
+            // 进度线:关着歌词行时卡片底边就是刘海下沿,线在刘海那一段会被挡住,往下多长一截让它整根露出来。
+            + (!expanded && !showsLyrics && showsProgressLine ? NotchMetrics.progressLineStrip : 0)
             + (expanded
                ? NotchMetrics.expandedExtraHeight(
                    hasLyricPreview: showsExpandedLyricPreview,
@@ -1017,6 +1043,27 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     animated: !reduceMotion)
                     .padding(.top, controller.contentTopInset)
                     .opacity(revealContentOpacity)
+            }
+            // 瞬态横幅:关着歌词行时画在卡片为它多长的那一截里(开着时在歌词行里,见 NotchTransientHost)。
+            .overlay(alignment: .top) {
+                if controller.showsBannerStrip {
+                    NotchTransientHost(tint: accentOrWhite) { Color.clear }
+                        .frame(width: controller.steadyCardWidth, height: NotchMetrics.trackDropHeight)
+                        .padding(.top, controller.contentTopInset)
+                        .opacity(revealContentOpacity)
+                        .transition(.opacity)
+                }
+            }
+            // 进度线:贴着卡片底边,只在没展开时画。
+            .overlay(alignment: .bottom) {
+                if controller.showsBottomProgressLine {
+                    NotchProgressLine(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
+                                      durationMs: playback.currentDurationMs, tint: accentOrWhite,
+                                      active: surfaceVisible, outline: controller.cardOutline)
+                        .padding(.bottom, 1)
+                        .opacity(revealContentOpacity)
+                        .transition(.opacity)
+                }
             }
             // 展开态内容(下一句预览+进度条)本身没有另外裁一次形状——如果只让背景那一层
             // fill 是圆角、前景内容不跟着裁,内容溢出圆角边界时会带着直角"戳"出卡片轮廓。
@@ -1318,6 +1365,16 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             } else {
                 earText(clockText(module), module: module, alignment: alignment)
             }
+        case .playCount:
+            if !isIdleNoTrack, !playback.isCurrentTrackAdBreak {
+                NotchEarPlayCount(title: playback.title, artist: playback.artist, tint: accentOrWhite, alignment: alignment)
+            }
+        case .player:
+            if !isIdleNoTrack {
+                NotchEarPlayerIcon(side: NotchMetrics.earAppIconSide(contentTopInset: controller.contentTopInset),
+                                   scale: max(1, displayScale), alignment: alignment,
+                                   trackKey: "\(playback.artist)|\(playback.title)")
+            }
         case .title, .artist, .album, .none:
             earText(metadataText(module), module: module, alignment: alignment)
         }
@@ -1474,7 +1531,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         case .artist: return (isAd || station != nil) ? "" : playback.displayArtist
         case .album: return (isAd || station != nil) ? "" : playback.displayAlbum
         // 非文本模块不走这条路(见 earContent 的分发),这里只是把 switch 补齐。
-        case .artwork, .controls, .elapsed, .remaining, .none: return ""
+        case .artwork, .controls, .elapsed, .remaining, .playCount, .player, .none: return ""
         }
     }
 
@@ -2388,7 +2445,11 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                                   dimmed: !controller.showsLyricsSetting) {
                     AppSettings.shared.notchShowLyrics.toggle()
                 }
-                // 分组线:前两颗是"对这首歌 / 这行歌词"的操作,后两颗是"这块卡片"的操作。
+                // 输出设备:从卡片下沿弹出设备菜单,切系统默认输出(同歌词窗口的输出键);默认输出不是内建扬声器时点亮。
+                quickActionButton("airplayaudio", label: L10n.t("输出设备"), lit: AudioOutputMonitor.shared.isExternal) {
+                    AudioOutputDeviceMenu.popUp(belowScreenY: controller.cardScreenBottom)
+                }
+                // 分组线:左边是对这首歌、这行歌词、声音从哪出的操作,右边是"这块卡片"的操作。
                 Rectangle()
                     .fill(accentOrWhite.opacity(0.18))
                     .frame(width: 1, height: 12)

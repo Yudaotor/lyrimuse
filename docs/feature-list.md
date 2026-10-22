@@ -273,6 +273,7 @@ A Dynamic Island-style capsule beside the notch at the top of the screen; Macs w
 - Settings: Lyrics Display › Notch › Display
 - Settings: Lyrics Display › Notch › Left Ear
 - Settings: Keyboard Shortcuts › Show/Hide Notch Lyrics
+- Settings: Keyboard Shortcuts › Peek at Notch Lyrics
 - Settings: Lyrics Display › Notch › Expanded State › Quick Actions
 
 <a id="feature-menu-bar-lyrics"></a>
@@ -499,6 +500,15 @@ When a song reaches its 100th, 1,000th or 10,000th play, or your Last.fm total p
 
 - On by default
 - Settings: Lyrics Display › Notch › Behavior › Listening Milestones
+
+<a id="feature-notch-gestures"></a>
+
+### Trackpad gestures on the notch
+
+With the pointer over the notch, swipe left or right with two fingers to change tracks, or up and down to adjust the system volume.
+
+- On by default
+- Settings: Lyrics Display › Notch › Behavior › Trackpad Gestures
 
 <a id="feature-web-lyrics"></a>
 
@@ -810,7 +820,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 280 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 283 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -955,6 +965,7 @@ Every setting in the Settings window, by where it lives: 280 in all. Type a name
 
 - **Corners**
 - **Expanded Corners**
+- **Progress Line**: Shows playback progress along the bottom edge when not expanded
 
 ### Lyrics Display › Notch › Left Ear
 
@@ -994,6 +1005,7 @@ Every setting in the Settings window, by where it lives: 280 in all. Type a name
 - **Hide in Full Screen**
 - **Listening Milestones**
 - **Show Title on Song Change**
+- **Trackpad Gestures**
 
 ### Lyrics Display › Menu Bar
 
@@ -1133,6 +1145,7 @@ Every setting in the Settings window, by where it lives: 280 in all. Type a name
 - **Deep Links**: Open these from Shortcuts, Raycast, Alfred and similar tools. Hover over a shortcut above to copy the link for that action
 - **Show/Hide Floating Lyrics**
 - **Show/Hide Notch Lyrics**
+- **Peek at Notch Lyrics**
 - **Show/Hide Menu Bar Lyrics**
 - **Expand/Collapse Touch Bar Lyrics**
 - **Hide/Restore All Lyrics**

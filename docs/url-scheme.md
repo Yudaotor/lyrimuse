@@ -60,6 +60,7 @@ These are the same actions as the keyboard shortcuts in Settings › Keyboard Sh
 |---|---|---|
 | `toggle-overlay` | Shows or hides the floating lyrics | `on` |
 | `toggle-notch` | Shows or hides the notch lyrics | `on` |
+| `peek-notch` | Expands the notch lyrics for a few seconds; run it again to close early | — |
 | `toggle-menubar-lyrics` | Shows or hides the menu bar lyrics | `on` |
 | `toggle-touchbar` | Expands or collapses the Touch Bar lyrics (Macs with a Touch Bar only) | — |
 | `toggle-all-lyrics` | Hides all lyrics: whichever of the floating, notch and menu bar lyrics are on get hidden, and running it again brings back exactly those | `on` (`0` hides, `1` restores) |

@@ -51,6 +51,10 @@ enum NotchEarModule: String, Codable, Hashable, CaseIterable {
     case elapsed
     /// 剩余时长(带负号)。曲目时长未知时整块留白。
     case remaining
+    /// 这首听了第几次(Last.fm 的「第 N 次收听」,跟设置页、歌词窗口同一个数)。没连 Last.fm、还没取回来时整块留白。
+    case playCount
+    /// 正在放的播放器的图标(跟菜单栏面板那枚来源角标同一个),点它切到那个播放器。
+    case player
     case none
 }
 
@@ -355,6 +359,8 @@ final class AppSettings: ObservableObject {
         static let notchListenMilestones = "np:notchListenMilestones"
         // 换歌时显示歌名:新歌名从刘海里掉出来(NotchTrackDropStrip)。耳朵里的封面那一翻一直开,不看设置。
         static let notchShowsTrackDrop = "np:notchShowsTrackDrop"
+        static let notchGestures = "np:notchGestures"
+        static let notchShowsProgressLine = "np:notchShowsProgressLine"
         static let overlayFadeOnHover = "np:overlayFadeOnHover"
         static let overlayDragNeedsLongPress = "np:overlayDragNeedsLongPress"
         // 悬浮歌词跟不跟着当前窗口换屏,见 overlayFollowsActiveScreen。
@@ -540,6 +546,10 @@ final class AppSettings: ObservableObject {
     static let defaultNotchListenMilestones = true
     /// 默认开:换歌时新歌名从刘海里掉出来停几秒。
     static let defaultNotchShowsTrackDrop = true
+    /// 默认开:指针在灵动岛上时,两指左右滑切歌、上下滑调系统音量。
+    static let defaultNotchGestures = true
+    /// 默认关:卡片底边那根进度线。
+    static let defaultNotchShowsProgressLine = false
     /// 默认关:换歌时弹一条系统通知(歌名、「歌手 — 专辑」、封面),见 `NowPlayingNotifier`。
     static let defaultNowPlayingNotifications = false
     static let defaultNotchShowLyrics = true
@@ -1275,6 +1285,15 @@ final class AppSettings: ObservableObject {
     /// 判的时候现读。耳朵里的封面那一翻一直开,不看这一项。
     @Published var notchShowsTrackDrop: Bool {
         didSet { defaults.set(notchShowsTrackDrop, forKey: Keys.notchShowsTrackDrop) }
+    }
+    /// 触控板手势:指针在灵动岛卡片上时,两指左右滑切上一首 / 下一首,上下滑调系统音量(`NotchScrollGesture`)。
+    /// 灵动岛窗口收到滚动事件时现读。
+    @Published var notchGestures: Bool {
+        didSet { defaults.set(notchGestures, forKey: Keys.notchGestures) }
+    }
+    /// 进度线:没展开时卡片底边画一根细进度线(关着歌词行时卡片为它多长 `NotchMetrics.progressLineStrip`)。
+    @Published var notchShowsProgressLine: Bool {
+        didSet { defaults.set(notchShowsProgressLine, forKey: Keys.notchShowsProgressLine) }
     }
     // 指针划过悬浮歌词时让它淡下去,离开再恢复。**只对桌面悬浮歌词生效**(灵动岛贴在刘海
     // 上、hover 是它展开的手势,让开会互相打架)。
@@ -2439,6 +2458,9 @@ final class AppSettings: ObservableObject {
             ?? Self.defaultNotchListenMilestones
         notchShowsTrackDrop = (defaults.object(forKey: Keys.notchShowsTrackDrop) as? Bool)
             ?? Self.defaultNotchShowsTrackDrop
+        notchGestures = (defaults.object(forKey: Keys.notchGestures) as? Bool) ?? Self.defaultNotchGestures
+        notchShowsProgressLine = (defaults.object(forKey: Keys.notchShowsProgressLine) as? Bool)
+            ?? Self.defaultNotchShowsProgressLine
         appLanguage = defaults.string(forKey: Keys.appLanguage) ?? "system"
         appearanceMode = defaults.string(forKey: Keys.appearanceMode)
             .flatMap(AppAppearanceMode.init(rawValue:)) ?? .system

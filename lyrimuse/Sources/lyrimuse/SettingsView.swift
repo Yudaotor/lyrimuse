@@ -3579,6 +3579,8 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
     case listenMilestones
     /// 换歌时显示歌名(`AppSettings.notchShowsTrackDrop`)。归「行为」。耳朵里的封面那一翻一直开,不在这里管。
     case trackDrop
+    /// 触控板手势(`AppSettings.notchGestures`)。归「行为」。
+    case gestures
     case lyricRowArtwork
     case expandedNextLine
     case expandedShowsControls
@@ -3600,6 +3602,7 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         case .hideInFullScreen: return "arrow.up.left.and.arrow.down.right"
         case .listenMilestones: return "trophy"
         case .trackDrop: return "rectangle.topthird.inset.filled"
+        case .gestures: return "hand.draw"
         case .lyricRowArtwork: return "photo"
         case .expandedNextLine: return "text.bubble"
         case .expandedShowsControls: return "playpause.fill"
@@ -3620,6 +3623,7 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         case .hideInFullScreen: return L10n.t("全屏时隐藏")
         case .listenMilestones: return L10n.t("收听里程碑")
         case .trackDrop: return L10n.t("换歌时显示歌名")
+        case .gestures: return L10n.t("触控板手势")
         case .lyricRowArtwork: return L10n.t("显示封面")
         // 标题里要把"只在展开时"说出来,否则跟上一行「副行 · 下一句」读起来像同一个开关的两种写法。
         case .expandedNextLine: return L10n.t("展开时预览下一句")
@@ -3646,6 +3650,8 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
             return L10n.t("单曲收听达到 100、1,000… 次，或累计收听达到 1,000、5,000… 次时，灵动岛展开庆祝。需连接 Last.fm")
         case .trackDrop:
             return L10n.t("切歌时新歌名从刘海下方滑出，数秒后收回")
+        case .gestures:
+            return L10n.t("指针停在灵动岛上时，双指左右滑动切歌，上下滑动调节音量")
         case .expandedShowsQuickActions:
             return L10n.t("展开时在曲目信息右侧显示喜欢、搜索歌词、设置等按钮")
         default: return nil
@@ -3672,6 +3678,8 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         case .trackDrop:
             return Binding(get: { settings.notchShowsTrackDrop },
                             set: { settings.notchShowsTrackDrop = $0 })
+        case .gestures:
+            return Binding(get: { settings.notchGestures }, set: { settings.notchGestures = $0 })
         case .lyricRowArtwork:
             return Binding(get: { settings.notchLyricRowShowsArtwork },
                             set: { settings.notchLyricRowShowsArtwork = $0 })
@@ -4048,13 +4056,14 @@ struct NotchExpandedSettingsRows: View {
 
 /// 「行为」组 —— 工具栏「行为」浮层(`NotchBehaviorPopover`)与抽屉 `behaviorGroup` 同一份:
 /// 「暂停时收起」+ 自动隐藏那几行(`AutoHideSettingsRows`,跟悬浮歌词共用同一份视图、靠 `surface`
-/// 分流到灵动岛那几个键,无歌词那一行在灵动岛上是收起歌词行)+「全屏时隐藏」(只有灵动岛有,所以不进 `AutoHideItem`)+「换歌时显示歌名」+「收听里程碑」。
+/// 分流到灵动岛那几个键,无歌词那一行在灵动岛上是收起歌词行)+「全屏时隐藏」(只有灵动岛有,所以不进 `AutoHideItem`)+「换歌时显示歌名」+「收听里程碑」
+/// +「触控板手势」。
 ///
 /// 工具栏「行为」按钮的摘要(`NotchEditorStage.behaviorSummary`)要把这里每一项都算进去 ——
 /// 少算不会编译报错,只会让按钮在漏掉的那项开着时照旧显示「全部关闭」。
 @MainActor
 struct NotchBehaviorSettingsRows: View {
-    // 一组小块(三列),不分组名:先收起与隐藏(暂停时收起、自动隐藏几项、全屏时隐藏),后两项提示(换歌时显示歌名、收听里程碑)。
+    // 一组小块(三列),不分组名:先收起与隐藏(暂停时收起、自动隐藏几项、全屏时隐藏),再两项提示(换歌时显示歌名、收听里程碑),最后触控板手势。
     // 分成两组带组名时,组名和组间距多出的二十来 pt 正好让第三行出界,浮层要滚。
     var body: some View {
         SettingsTileGrid(columns: 3) {
@@ -4063,6 +4072,7 @@ struct NotchBehaviorSettingsRows: View {
             NotchBehaviorToggleTile(item: .hideInFullScreen)
             NotchBehaviorToggleTile(item: .trackDrop)
             NotchListenMilestonesTile()
+            NotchBehaviorToggleTile(item: .gestures)
         }
     }
 }

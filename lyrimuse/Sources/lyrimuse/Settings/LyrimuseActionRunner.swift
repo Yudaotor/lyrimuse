@@ -111,6 +111,13 @@ enum LyrimuseActionRunner {
             NotchLyricsWindowController.shared.setVisible(show)
             GlobalHotkeys.flashHint(icon: show ? "inset.filled.topthird.square" : "square.slash",
                                     text: show ? L10n.t("已显示灵动岛歌词") : L10n.t("已隐藏灵动岛歌词"))
+        // 灵动岛撑开几秒再自己收回,再按一下提前收回;灵动岛关着时只说一句,不替用户打开。
+        case .peekNotchHotkey:
+            guard AppSettings.shared.notchOverlayEnabled else {
+                GlobalHotkeys.flashHint(icon: "inset.filled.topthird.square", text: L10n.t("灵动岛歌词未开启"))
+                return
+            }
+            NotchPeekCenter.shared.toggle()
         // 菜单栏歌词没有独立的 WindowController(就画在状态栏那一行上),直接读写 AppSettings 就够。
         case .toggleMenuBarLyricsHotkey:
             let show = on ?? !AppSettings.shared.showLyricsInMenuBar

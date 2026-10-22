@@ -601,6 +601,10 @@
               "显示/隐藏灵动岛歌词"
             ],
             [
+              "快捷键",
+              "临时展开灵动岛"
+            ],
+            [
               "歌词显示",
               "灵动岛",
               "展开态",
@@ -1310,6 +1314,31 @@
               "灵动岛",
               "行为",
               "收听里程碑"
+            ]
+          ]
+        },
+        {
+          "id": "notch-gestures",
+          "title": {
+            "zh-Hans": "灵动岛触控板手势",
+            "en": "Trackpad gestures on the notch",
+            "zh-Hant": "動態島觸控式軌跡板手勢"
+          },
+          "desc": {
+            "zh-Hans": "指针停在灵动岛上时，双指左右滑动切歌，上下滑动调节系统音量。",
+            "en": "With the pointer over the notch, swipe left or right with two fingers to change tracks, or up and down to adjust the system volume.",
+            "zh-Hant": "指標停在動態島上時，以兩指左右滑動切換歌曲，上下滑動調整系統音量。"
+          },
+          "default": "on",
+          "check": {
+            "appSetting": "notchGestures"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "灵动岛",
+              "行为",
+              "触控板手势"
             ]
           ]
         },
