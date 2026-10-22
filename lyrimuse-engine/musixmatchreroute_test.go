@@ -314,6 +314,9 @@ func TestForceProxyFor(t *testing.T) {
 	if u, ok := f.Until["a.example"]; !ok || time.Until(time.Unix(u, 0)) < 2*time.Hour {
 		t.Fatalf("磁盘提示应写到约 3 小时后: %v", f.Until)
 	}
+	if u, ok := f.Forced["a.example"]; !ok || time.Until(time.Unix(u, 0)) < 2*time.Hour || !tr.forcedProxy("a.example") {
+		t.Fatalf("强制期应记下约 3 小时: %v", f.Forced)
+	}
 	forceProxyFor(&http.Client{}, "b.example", time.Hour)
 	if _, ok := readProxyFallbackHint().Until["b.example"]; ok {
 		t.Fatal("不是代理回退那一层的客户端时什么都不做")

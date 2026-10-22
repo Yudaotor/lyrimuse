@@ -127,18 +127,11 @@ func musixmatchHosts() []string {
 	return out
 }
 
-// musixmatchViaProxy:这两台主机现在是不是走代理。
+// musixmatchViaProxy:这两台主机现在是不是都走代理。只有一台走代理时算没走:主用主机走直连、备用主机还在代理上的时候,
+// 被拦的是直连那台,该先让它也走代理,切 Clash 节点没用。见 09 章决策 328。
 func musixmatchViaProxy() bool {
 	t, ok := musixmatchHTTPClient().Transport.(*proxyFallbackTransport)
-	if !ok {
-		return false
-	}
-	for _, h := range musixmatchHosts() {
-		if t.preferProxy(h) {
-			return true
-		}
-	}
-	return false
+	return ok && t.preferProxyAll(musixmatchHosts())
 }
 
 // ---- Clash 控制口 ----

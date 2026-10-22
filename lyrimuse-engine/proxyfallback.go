@@ -114,6 +114,12 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 		if req.Context().Err() != nil {
 			return nil, err
 		}
+		// 强制走代理的主机(直连这个出口被对方反爬拦了)不退回直连:退回去只会再被拦一次,而且清掉粘性之后
+		// 这台主机一直走直连,调用方却以为还在代理上。见 09 章决策 328。
+		if t.forcedProxy(host) {
+			log.Printf("proxy: %s failed via proxy (%v); not retrying direct, the direct route is blocked for it", host, err)
+			return nil, err
+		}
 		// 代理自己坏了(用户关掉了 / 换了端口 / 节点挂了):清掉粘性,当场回直连再试一次。
 		// 不清的话会一直往一个死代理上撞,而直连说不定早就恢复了。
 		t.clearSticky(host)
@@ -316,6 +322,23 @@ func (t *proxyFallbackTransport) preferProxy(host string) bool {
 	return t.proxy() != nil
 }
 
+// preferProxyAll:hosts 每一台都走代理(preferProxy);空名单算否。
+func (t *proxyFallbackTransport) preferProxyAll(hosts []string) bool {
+	for _, h := range hosts {
+		if !t.preferProxy(h) {
+			return false
+		}
+	}
+	return len(hosts) > 0
+}
+
+// forcedProxy:host 现在是不是在 forceProxyFor 给的强制期里(记在磁盘提示里,别的进程、一次性子命令一样认)。这段时间里
+// 直连已知不能用,代理失败也不退回直连。
+func (t *proxyFallbackTransport) forcedProxy(host string) bool {
+	at, ok := readProxyFallbackHint().Forced[host]
+	return ok && time.Now().Before(time.Unix(at, 0))
+}
+
 // proxy:现在可用的兜底代理,没有返回 nil。
 func (t *proxyFallbackTransport) proxy() *neturl.URL {
 	if t.proxyURL != nil {
@@ -357,8 +380,12 @@ func forceProxyFor(c *http.Client, host string, d time.Duration) {
 	if f.Until == nil {
 		f.Until = map[string]int64{}
 	}
+	if f.Forced == nil {
+		f.Forced = map[string]int64{}
+	}
 	f.Hosts[host] = time.Now().Unix()
 	f.Until[host] = until.Unix()
+	f.Forced[host] = until.Unix()
 	if raw, err := json.Marshal(f); err == nil {
 		_ = writeFileAtomic(path, raw)
 	}
@@ -411,6 +438,9 @@ type proxyFallbackHintFile struct {
 	Until map[string]int64 `json:"until,omitempty"`
 	// Streak: host -> 连续几次「直连失败、代理救回」,算下一次的窗口(proxyStickyWindow)。
 	Streak map[string]int `json:"streak,omitempty"`
+	// Forced: host -> forceProxyFor 给的强制期到什么时候(unix 秒)。清掉粘性(writeProxyFallbackHint 不走代理那一支)不动它,
+	// 到期自然失效。
+	Forced map[string]int64 `json:"forced,omitempty"`
 }
 
 func proxyFallbackHintPath() string {
