@@ -288,8 +288,6 @@ type poller struct {
 	resume *sessionResumeFile
 	// app:读 App 写的播放状态当这一拍的快照(见 appsource.go);nil = 不读(测试)。
 	app *appPlayback
-	// appSpotifyTrackID:这一拍 App 带来的 Spotify 曲目 ID,开会话时用(见 detectAdAtSessionStart)。
-	appSpotifyTrackID string
 
 	// 自建状态中继:每轮把"网页该显示的当前状态"推到 /push(Mac 在放优先,否则 iPhone
 	// 镜像,否则上次播放)。按状态变化 + 心跳去重。remoteTrack/lastListen 由 bridge/
@@ -1167,15 +1165,14 @@ func (p *poller) finalize(now time.Time) {
 	p.submitSingleAsync(s, s.meta, s.listenStart().Unix())
 }
 
-// detectAdAtSessionStart 开播时的广告判定:isAdBreak(App 的广告结论)。不是广告的 Spotify
-// 原生播放顺带记下这次的曲目 ID(App 带来的那个),给歌词缓存的真曲目链接与 LB 上送用。
+// detectAdAtSessionStart 开播时的广告判定:isAdBreak(App 的广告结论)。不是广告、App 带来了 Spotify 曲目 ID 的
+// (原生客户端或网页版)顺带记下这次的 ID,给歌词缓存的真曲目链接与 LB 上送用。开播时还没有的,handle 里补。
 func (p *poller) detectAdAtSessionStart() bool {
 	if isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
 		return true
 	}
-	// Spotify 曲目 ID 用 App 带来的那个(它取自 Spotify 自己的播放通知)。
-	if p.cur.Bundle == spotifyBundleID && p.appSpotifyTrackID != "" {
-		noteSpotifyTrackID(p.cur.Artist, p.cur.Title, p.cur.Album, p.appSpotifyTrackID)
+	if p.cur.SpotifyTrackID != "" {
+		noteSpotifyTrackID(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.SpotifyTrackID)
 	}
 	return false
 }
@@ -1296,6 +1293,11 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	}
 	if p.sess != nil && p.sess.key == key {
 		p.sess.sodaPreviewPending = p.cur.SodaPreviewPending
+	}
+	// Spotify 网页版的曲目 ID 要等 App 的页面探针读到,比会话起点晚几秒:同一首、不是广告时补进会话 meta 并记下。
+	if p.sess != nil && p.sess.key == key && !p.sess.isAd && p.sess.meta.SpotifyTrackID == "" && p.cur.SpotifyTrackID != "" {
+		p.sess.meta.SpotifyTrackID = p.cur.SpotifyTrackID
+		noteSpotifyTrackID(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.SpotifyTrackID)
 	}
 
 	// Player quit or another app took over: finalize and drop the session.
@@ -1868,7 +1870,6 @@ func (p *poller) readAppPlayback() (now time.Time, reanchored, loopRestart bool)
 func (p *poller) applyAppPlaybackTick(now time.Time, t appPlaybackTick) (reanchored, loopRestart bool) {
 	if !t.tracked {
 		p.curStale, p.curHeld = true, false
-		p.appSpotifyTrackID = ""
 		if p.nullStreak == 0 {
 			p.nullSince = now
 		}
@@ -1884,7 +1885,6 @@ func (p *poller) applyAppPlaybackTick(now time.Time, t appPlaybackTick) (reancho
 	p.nullStreak = 0
 	p.cur = t.snap
 	p.curStale, p.curHeld = t.holding, t.holding
-	p.appSpotifyTrackID = t.spotifyTrackID
 	noteAppReportedAd(p.cur, t.ad)
 	noteAmazonCurrentTrack(p.cur.Bundle, p.cur.Artist, p.cur.Title, t.amazonTrackID)
 	noteKasetCurrentTrack(p.cur.Bundle, p.cur.Artist, p.cur.Title, t.youtubeMusicVideoID)

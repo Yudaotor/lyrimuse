@@ -48,8 +48,8 @@ func TestAppPlaybackTickMapsAppState(t *testing.T) {
 	if d := s.Position - 86.234; d > 0.001 || d < -0.001 {
 		t.Fatalf("position should extrapolate 5s from 81.234, got %.3f", s.Position)
 	}
-	if tick.spotifyTrackID != "4iJyoBOLtHqaGxP12qzhQI" {
-		t.Fatalf("spotify track id should come through, got %q", tick.spotifyTrackID)
+	if tick.snap.SpotifyTrackID != "4iJyoBOLtHqaGxP12qzhQI" {
+		t.Fatalf("spotify track id should come through, got %q", tick.snap.SpotifyTrackID)
 	}
 	if !tick.reanchor || tick.loopRestart {
 		t.Fatalf("first state from a process: reanchor, not a loop restart: %+v", tick)

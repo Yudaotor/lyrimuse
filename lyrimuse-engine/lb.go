@@ -157,12 +157,11 @@ func lbMetaWith(s snapshot, enr map[string]string) lbTrackMeta {
 			info[k] = v
 		}
 	}
-	// Spotify 原生播放:按 ListenBrainz 的标准字段上送这次播放的曲目 —— spotify_id(官方定义就是这条录音的
-	// Spotify 曲目 URL,LB 拿它做匹配与元数据补全)、origin_url、music_service=spotify.com,形状跟 LB 自家的
-	// Spotify 导入一致(见 spotifytrack.go)。ID 是录音级身份、缓存里跨播放器共用,但「在哪个服务听的」
-	// 按当次播放的 bundle 算,所以只有 Spotify 原生播放才写这三个键;上面那个非标准的 spotify_url 照旧发,网页
-	// 中继读的是它(现在也是真链接了)。
-	for k, v := range spotifyListenFields(s.Bundle, enr["spotify_track_id"]) {
+	// 在 Spotify 上放的(原生客户端或网页版):按 ListenBrainz 的标准字段上送这次播放的曲目 —— spotify_id(官方定义
+	// 就是这条录音的 Spotify 曲目 URL,LB 拿它做匹配与元数据补全)、origin_url、music_service=spotify.com,形状跟 LB
+	// 自家的 Spotify 导入一致(见 spotifytrack.go)。ID 是录音级身份、缓存里跨播放器共用,但「在哪个服务听的」按当次
+	// 播放算,所以只有这次是在 Spotify 上放的才写这三个键;上面那个非标准的 spotify_url 照旧发,网页中继读的是它。
+	for k, v := range spotifyListenFields(s.Bundle, s.SpotifyTrackID, enr["spotify_track_id"]) {
 		info[k] = v
 	}
 	// isrc / recording_mbid:ListenBrainz 拿来直接认录音,只报写入时记了级别的号和 MusicBrainz 唯一命中的录音(18 章决策 15)。

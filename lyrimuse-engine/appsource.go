@@ -74,7 +74,7 @@ func notePlaybackIDsFromAppState(path string, now time.Time, j appPlaybackJudge)
 		return
 	}
 	tick, _ := appPlaybackTickFor(rec, appPlaybackMarks{}, now, j)
-	notePlayingSpotifyTrackID(tick.snap.Artist, tick.snap.Title, tick.snap.Album, tick.spotifyTrackID)
+	notePlayingSpotifyTrackID(tick.snap.Artist, tick.snap.Title, tick.snap.Album, tick.snap.SpotifyTrackID)
 }
 
 // liveAppFixedTrack:署名纠正,酷狗与信任播放器两套按 bundle 互斥。
@@ -129,12 +129,11 @@ type appPlaybackMarks struct {
 // appPlaybackTick:一份可用的 App 状态换成的这一拍。tracked=false = App 此刻没认下歌。holding = App 读不到播放器、
 // 按住着上一份(内容是旧的,不计收听时长)。
 type appPlaybackTick struct {
-	snap           snapshot
-	tracked        bool
-	holding        bool
-	ad             bool
-	spotifyTrackID string
-	amazonTrackID  string
+	snap          snapshot
+	tracked       bool
+	holding       bool
+	ad            bool
+	amazonTrackID string
 	// youtubeMusicVideoID:Kaset 那首的 videoId(拼歌曲页用,见 kasetlink.go)。
 	youtubeMusicVideoID string
 	// localFile:reAMP 正在放的文件(读同名 .lrc 用,见 localfilelyrics.go)。
@@ -192,7 +191,7 @@ func appPlaybackTickFor(rec appStateRecord, prev appPlaybackMarks, now time.Time
 		anchorSeq = rec.Position.AnchorSeq
 	}
 	samePID := rec.AppPID == prev.pid
-	tick := appPlaybackTick{snap: s, tracked: true, holding: rec.Holding, ad: t.Ad, spotifyTrackID: t.SpotifyTrackID,
+	tick := appPlaybackTick{snap: s, tracked: true, holding: rec.Holding, ad: t.Ad,
 		amazonTrackID: t.AmazonTrackID, youtubeMusicVideoID: t.YouTubeMusicVideoID, localFile: t.LocalFile}
 	tick.loopRestart = samePID && key == prev.key && t.PlaySeq > prev.playSeq
 	tick.reanchor = !samePID || tick.loopRestart || anchorSeq != prev.anchorSeq

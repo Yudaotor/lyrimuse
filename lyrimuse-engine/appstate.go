@@ -52,7 +52,7 @@ type appStateTrack struct {
 	MusicVideo     bool           `json:"music_video"`
 	Radio          *appStateRadio `json:"radio,omitempty"`
 	Ad             bool           `json:"ad"`
-	// SpotifyTrackID:Spotify 原生播放时 `spotify:track:` 之后那段,App 按歌名歌手核对过;没有为空。
+	// SpotifyTrackID:在 Spotify 上放(原生客户端或网页版)时 `spotify:track:` 之后那段,App 核对过是这一首;没有为空。
 	SpotifyTrackID string `json:"spotify_track_id,omitempty"`
 	// AmazonTrackID:Amazon Music 这首在它日志里的曲目标识(`asin://<ASIN>`,播客是 `podcast://…`)。App 这一拍的位置
 	// 是从日志认出这首时才有;没有为空。
@@ -237,6 +237,7 @@ func appStateSnapshot(rec appStateRecord, now time.Time) snapshot {
 		Title: t.Title, Artist: t.Artist, Album: t.Album, Bundle: rec.Player,
 		Playing: rec.State == "playing", Radio: t.Radio != nil, NotAudio: t.MusicVideo,
 		Spoken: t.Spoken != nil && *t.Spoken, SpokenPending: rec.Player == qqMusicBundleID && t.Spoken == nil,
+		SpotifyTrackID: t.SpotifyTrackID,
 	}
 	if t.DurationSecs != nil {
 		s.Duration, s.ReportedDuration = *t.DurationSecs, *t.DurationSecs

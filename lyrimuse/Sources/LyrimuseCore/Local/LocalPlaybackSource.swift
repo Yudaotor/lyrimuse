@@ -1871,6 +1871,15 @@ public final class LocalPlaybackSource: ObservableObject {
         if webPageVideoFrameURL != url { webPageVideoFrameURL = url }
     }
 
+    /// 浏览器位置探针带回 Spotify 网页版这首的曲目 ID;还是这首才收(同 noteSpotifyArtwork)。写进播放状态的
+    /// `spotify_track_id`,跟原生客户端那份同一个字段。
+    public func noteWebSpotifyTrackID(_ id: String, forKey key: String) {
+        guard let snapshot = lastSnapshot, snapshot.identityKey == key, let bundleID = snapshot.bundleIdentifier else { return }
+        guard webSpotifyTrackID?.id != id || webSpotifyTrackID?.key != key else { return }
+        webSpotifyTrackID = (key, bundleID, id)
+        logger.notice("spotify web track id: \(id, privacy: .public) for key=\(key, privacy: .public)")
+    }
+
     /// 网页播放器交出的视频身份:是 MV(`MusicVideoTimeline.isMusicVideoType`)时按 `noteMusicVideo` 换算时间轴。
     public func noteBrowserVideo(_ video: BrowserPositionProbe.VideoIdentity, forKey key: String) {
         guard MusicVideoTimeline.isMusicVideoType(video.musicVideoType) else { return }
@@ -2625,6 +2634,8 @@ public final class LocalPlaybackSource: ObservableObject {
     /// Spotify 最近一条 PlaybackStateChanged 通知里的分类提示(Track ID / Name / Artist),给换曲那一拍的
     /// 广告判定用,见 spotifyNativeAdCheckForNewTrack 与 SpotifyNotificationHint 头注。只在 apply() 里读。
     private var spotifyNotificationHint: SpotifyNotificationHint?
+    /// Spotify 网页版这首的曲目 ID(浏览器位置探针从页面播放器状态里读到,见 noteWebSpotifyTrackID),连同它属于哪个播放器的哪一首。
+    private var webSpotifyTrackID: (key: String, bundleID: String, id: String)?
     /// 最近一条「Playing、位置 ≈0」的 Spotify 通知是什么时候到的(见 spotifyJumpKind)。
     private var spotifyPlayingFromStartNoticeAt: Date?
     // media-control 的事件流(QQ 音乐/网易云没有分布式通知,靠它)。见
@@ -2890,6 +2901,10 @@ public final class LocalPlaybackSource: ObservableObject {
         // 同一次探针顺带读到的视频身份:是 MV 时按 SponsorBlock 片段换算时间轴(见 noteBrowserVideo)。
         BrowserPositionProbe.shared.setVideoSink { [weak self] key, video in
             Task { @MainActor [weak self] in self?.noteBrowserVideo(video, forKey: key) }
+        }
+        // Spotify 网页版的曲目 ID 写进播放状态(见 noteWebSpotifyTrackID)。
+        BrowserPositionProbe.shared.setSpotifyTrackIDSink { [weak self] key, id in
+            Task { @MainActor [weak self] in self?.noteWebSpotifyTrackID(id, forKey: key) }
         }
         // 探针结果一落地就补查一次,不等下一拍 2s 轮询来消费:poll() 自己会核对曲目,
         // 消费那边还有 posWasPlaying / key 两道门,多这一次查询完全无害。
@@ -3501,6 +3516,8 @@ public final class LocalPlaybackSource: ObservableObject {
                   hint.trackID.hasPrefix(trackPrefix) else { return nil }
             let id = String(hint.trackID.dropFirst(trackPrefix.count))
             return id.isEmpty ? nil : id
+        } ?? webSpotifyTrackID.flatMap { web -> String? in
+            web.key == snapshot.identityKey && web.bundleID == bundleID ? web.id : nil
         }
         let input = PlaybackStateFile.Input(
             player: bundleID, title: tags.title, artist: tags.artist, album: tags.album,
@@ -4121,6 +4138,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 if spotifyArtworkURL != nil { spotifyArtworkURL = nil }
                 if webPageArtworkURL != nil { webPageArtworkURL = nil }
                 if webPageVideoFrameURL != nil { webPageVideoFrameURL = nil }
+                webSpotifyTrackID = nil
                 if artworkIsPlaceholder { artworkIsPlaceholder = false }
                 clearMusicVideoTimeline()
             }

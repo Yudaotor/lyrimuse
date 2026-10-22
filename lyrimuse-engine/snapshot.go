@@ -41,6 +41,9 @@ type snapshot struct {
 	Spoken bool
 	// SpokenPending:QQ 音乐的这一条,App 还没给出是不是有声节目的结论(见 awaitsSpokenVerdict)。
 	SpokenPending bool
+	// SpotifyTrackID:这一首在 Spotify 上放(原生客户端或网页版)时 App 核对过的曲目 ID(appStateTrack.SpotifyTrackID);
+	// 别的播放器为空。网页版开播几秒后才有,会话 meta 在 handle 里补。
+	SpotifyTrackID string
 	// Remote:iPhone 经 Last.fm 桥接来的这一条(转发的完成收听、同步的正在播放),或启动补种从 ListenBrainz 取回的
 	// 「上次播放」(fetchLastListen)。上送时只查歌词缓存、不新建条目,见 bridgeenrich.go。
 	Remote bool

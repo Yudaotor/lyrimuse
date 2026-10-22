@@ -85,8 +85,8 @@ public enum PlaybackStateFile {
         public var musicVideo: Bool
         public var radio: Radio?
         public var ad: Bool
-        /// Spotify 原生播放时这首的曲目 ID(`spotify:track:` 之后那段),来自 Spotify 自己的播放通知、按歌名歌手核对过;
-        /// 别的播放器 / 没收到通知为 nil。
+        /// 在 Spotify 上放时这首的曲目 ID(`spotify:track:` 之后那段):原生客户端来自 Spotify 自己的播放通知、按歌名歌手核对过,
+        /// 网页版来自浏览器位置探针读到的页面播放器状态(开播后几秒才有);别的播放器 / 没拿到为 nil。
         public var spotifyTrackID: String? = nil
         /// Amazon Music 时这首在它日志里的曲目标识(`asin://…`),位置是按日志算出来的那一拍才有。
         public var amazonTrackID: String? = nil

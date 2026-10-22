@@ -674,6 +674,10 @@ func runSourceContractTests() {
             if lps.contains("if let hint { MediaControlClient.noteSpotifyNotice(hint) }") == false {
                 expectEqual(true, false, "Spotify 回退: 收到 Spotify 那条通知要记进 MediaControlClient.noteSpotifyNotice")
             }
+            expectEqual(lps.contains("BrowserPositionProbe.shared.setSpotifyTrackIDSink"), true,
+                        "网页版 Spotify 曲目 ID: 位置探针读到的 ID 要接到 noteWebSpotifyTrackID")
+            expectEqual(lps.contains("web.key == snapshot.identityKey && web.bundleID == bundleID ? web.id : nil"), true,
+                        "网页版 Spotify 曲目 ID: 只写给同一个播放器的同一首")
         } else {
             expectEqual(true, false, "Spotify 接线: 读不到 LyrimuseCore/Local/LocalPlaybackSource.swift(路径挪了?)")
         }
@@ -684,6 +688,8 @@ func runSourceContractTests() {
                         "网页版 Spotify 封面: probe() 要走 parseReading(带第三段),不能退回只解秒数的老入口")
             expectEqual(web.contains("lead < __CT_SLACK__") && web.contains(#"replacingOccurrences(of: "__CT_SLACK__""#), true,
                         "网页探针精确读数: JS 里的 currentTime 窗口占位符要在拼 AppleScript 前替换掉")
+            expectEqual(web.contains("let script = filledScript(rawScript, expectedDuration: expectedDuration)"), true,
+                        "网页探针: 拼 AppleScript 用的脚本跟 selftest 跑的 filledSiteScript 是同一份")
         } else {
             expectEqual(true, false, "Spotify 接线: 读不到 LyrimuseCore/Local/BrowserPositionProbe.swift(路径挪了?)")
         }

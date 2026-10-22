@@ -66,6 +66,11 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 差着整首歌长,远在窗口外。
     public static let currentTimeSlackSecs: Double = 1.25
 
+    /// Spotify 网页版 `getState()` 外推出的位置比页面整秒文字最多领先这么多,才算同一首、同一个钟(见 spotifyWebScript 第四段)。
+    /// 比 `currentTimeSlackSecs` 宽:Safari 后台标签页里这段文字两秒才刷一次,实测落后 1.9~3.7 秒(见 02 章「Spotify 网页版在
+    /// Safari 上」)。上一次会话留下的陈旧状态差着几十秒,落不进这个窗口。
+    public static let spotifyStateLeadSlackSecs: Double = 5
+
     /// 精确读数(`currentTime`)跟我们的外推差多少以内不动(见 `LocalPlaybackSource.groundTruthSnapToleranceSecs`,
     /// 那个 0.30 是给整秒读数的)。实测 Safari 里 media-control 外推与 `currentTime` 逐拍差 0.001s。
     public static let preciseSnapToleranceSecs: Double = 0.1
@@ -304,9 +309,16 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// (`ab67616d0000e1a3…`,webp),同一 hash 换成 `82c1` 就是 2000×2000 的原图,是页面上唯一一份身份精确的封面来源(Safari 经
     /// MediaSession 交给系统的那份是 640×640、同一张图,但没有地址)。地址随读数一起回传,`parseReading` 解析、`setArtworkSink`
     /// 交出去,跟原生客户端 `SpotifyPositionProbe` 的 `artwork url` 走同一条下游(`LocalPlaybackSource.spotifyArtworkURL`)。
-    /// 曲目 ID 页面上拿不到:`context-item-link` 指向 `/album/<id>`、`context-item-info-artist` 指向 `/artist/<id>`,没有
-    /// `/track/` 链接,所以真曲目链接 / LB 字段那一路只覆盖原生客户端。YouTube Music 的脚本第三段是页面 mediaSession 里的专辑图
-    /// (见 youtubeMusicScript 头注),解析按"有就用、没有就 nil"处理。
+    ///
+    /// 第四段:精确读数 `@<秒>,<Date.now() 毫秒>`,格式与 youtubeMusicScript 第四段相同。取自网页播放器组件树上 `playerAPI`
+    /// 的 `getState()`(定位方式同 `PlayerQueryServer.spotifyWebQueueJS`):`positionAsOfTimestamp` 是 `timestamp` 那一刻的
+    /// 毫秒位置,播放中按 `speed` 外推到 `Date.now()`。只在四件事都成立时交出:页面判在播、状态里不是暂停、不在缓冲、`speed` 不为 0
+    /// (音频没起来时状态会报「在播、不缓冲」但 `speed` 是 0、文字停在 0:00)、状态里的
+    /// 时长跟 `__EXPECT__` 对得上、外推值比整秒文字领先 `[0, spotifyStateLeadSlackSecs)`。暂停过的标签页里状态会停在上一次会话的
+    /// 值,后两道把它挡掉,退回整秒读数。
+    ///
+    /// 第五段:曲目 URI `spotify:track:<id>`,只在第四段交出时一起交(同一份状态、已核对过是这一首);广告、播客单集不交。
+    /// 页面 DOM 上没有 `/track/` 链接,曲目 ID 只有这一处来源。
     private static let spotifyWebScript = """
     (function(){
       function toSecs(s) {
@@ -333,7 +345,33 @@ public final class BrowserPositionProbe: @unchecked Sendable {
       var paused = document.title.indexOf(sep) < 0;
       var img = document.querySelector('[data-testid=now-playing-widget] img[data-testid=cover-art-image]');
       var art = img ? (img.currentSrc || img.src || '') : '';
-      return cur + '|' + (paused ? '1' : '0') + '|' + art;
+      if (art.indexOf('|') >= 0) art = '';
+      var precise = '', tid = '';
+      try {
+        var w = document.querySelector('[data-testid=now-playing-widget]');
+        var fk = w ? Object.keys(w).filter(function(k){ return k.indexOf('__reactFiber') === 0; })[0] : null;
+        var f = fk ? w[fk] : null, api = null;
+        while (f) {
+          var mp = f.memoizedProps;
+          if (mp && mp.playerAPI && typeof mp.playerAPI.getState === 'function') { api = mp.playerAPI; break; }
+          f = f.return;
+        }
+        var st = api ? api.getState() : null;
+        var rate = (st && typeof st.speed === 'number') ? st.speed : 1;
+        if (st && !paused && !st.isPaused && !st.isBuffering && rate > 0
+            && typeof st.positionAsOfTimestamp === 'number' && typeof st.timestamp === 'number'
+            && !(__EXPECT__ > 0 && typeof st.duration === 'number' && Math.abs(st.duration / 1000 - __EXPECT__) > __TOL__)) {
+          var now = Date.now();
+          var pos = (st.positionAsOfTimestamp + (now - st.timestamp) * rate) / 1000;
+          var lead = pos - cur;
+          if (lead >= 0 && lead < __SP_SLACK__) {
+            precise = '@' + pos.toFixed(3) + ',' + now;
+            var uri = String((st.item && st.item.uri) || '');
+            if (uri.indexOf('spotify:track:') === 0) tid = uri;
+          }
+        }
+      } catch (e) {}
+      return cur + '|' + (paused ? '1' : '0') + '|' + art + '|' + precise + '|' + tid;
     })()
     """
 
@@ -430,6 +468,16 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     public func setVideoSink(_ sink: @escaping @Sendable (_ key: String, _ video: VideoIdentity) -> Void) {
         lock.lock()
         videoSink = sink
+        lock.unlock()
+    }
+
+    /// Spotify 网页版这首的曲目 ID 的去向(见 spotifyWebScript 第五段)。同 artworkSink:由 LocalPlaybackSource
+    /// 启动时挂上,没挂就丢掉,同一把锁下读写。
+    private var spotifyTrackIDSink: (@Sendable (_ key: String, _ id: String) -> Void)?
+
+    public func setSpotifyTrackIDSink(_ sink: @escaping @Sendable (_ key: String, _ id: String) -> Void) {
+        lock.lock()
+        spotifyTrackIDSink = sink
         lock.unlock()
     }
 
@@ -853,6 +901,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
             pageVideoFrameSink?(key, frame)
         }
         if let video = hit.video { videoSink?(key, video) }
+        if hit.platformID == "spotifyWeb", let id = hit.spotifyTrackID { spotifyTrackIDSink?(key, id) }
     }
 
     // MARK: - 探测实现(全程跑在后台线程,调用方必须走 Task.detached)
@@ -996,6 +1045,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         let video: VideoIdentity?
         /// 没有封面地址、放的是视频时这支视频的截图(见 `Reading.videoFrameURL`)。
         let videoFrameURL: URL?
+        let spotifyTrackID: String?
     }
 
     /// 探测最常见的两种落空(一个标签页都没读到 / 第二拍没读到)。按曲目各记一次,见 `noteMissOnce`。
@@ -1068,7 +1118,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
             if let reading = probe(bundleID: bundleID, family: family, rule: rule, expectedDuration: expectedDuration) {
                 return ProbeHit(seconds: reading.seconds, platformID: rule.platformID,
                                 artworkURL: reading.artworkURL, precise: reading.precise, video: reading.video,
-                                videoFrameURL: reading.videoFrameURL)
+                                videoFrameURL: reading.videoFrameURL, spotifyTrackID: reading.spotifyTrackID)
             }
         }
         return nil
@@ -1101,14 +1151,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         bundleID: String, family: BrowserAutomationPermission.Family, urlContains: String,
         script rawScript: String, expectedDuration: Double
     ) -> String {
-        // 占位符替换必须发生在**拼进 AppleScript 之前**(见 `SiteRule` 头注)。期望时长
-        // 未知(<=0)时传 0 进去,JS 那边看见 0 就整条跳过时长检查 —— 失败方向是"退回没有
-        // 这道检查的样子",不是"什么都探不到"。
-        let expect = expectedDuration > 0 ? Int(expectedDuration.rounded()) : 0
-        let script = rawScript
-            .replacingOccurrences(of: "__EXPECT__", with: String(expect))
-            .replacingOccurrences(of: "__TOL__", with: String(Int(pageDurationToleranceSecs)))
-            .replacingOccurrences(of: "__CT_SLACK__", with: String(currentTimeSlackSecs))
+        let script = filledScript(rawScript, expectedDuration: expectedDuration)
         let activeTab = activeTabExpression(family: family, windowIndex: "wi")
         let executeLine: String
         let executeActiveLine: String
@@ -1158,6 +1201,22 @@ public final class BrowserPositionProbe: @unchecked Sendable {
             return "NOTFOUND"
         end tell
         """
+    }
+
+    /// 占位符替换必须发生在**拼进 AppleScript 之前**(见 `SiteRule` 头注)。期望时长未知(<=0)时传 0 进去,JS 那边看见 0
+    /// 就整条跳过时长检查 —— 失败方向是"退回没有这道检查的样子",不是"什么都探不到"。
+    private static func filledScript(_ rawScript: String, expectedDuration: Double) -> String {
+        let expect = expectedDuration > 0 ? Int(expectedDuration.rounded()) : 0
+        return rawScript
+            .replacingOccurrences(of: "__EXPECT__", with: String(expect))
+            .replacingOccurrences(of: "__TOL__", with: String(Int(pageDurationToleranceSecs)))
+            .replacingOccurrences(of: "__CT_SLACK__", with: String(currentTimeSlackSecs))
+            .replacingOccurrences(of: "__SP_SLACK__", with: String(spotifyStateLeadSlackSecs))
+    }
+
+    /// 某个平台填好占位符的页面脚本,跟 `buildAppleScript` 拼进去的是同一份。给 selftest 在 JavaScriptCore 里跑。
+    public static func filledSiteScript(platformID: String, expectedDuration: Double) -> String? {
+        siteRules.first(where: { $0.platformID == platformID }).map { filledScript($0.script, expectedDuration: expectedDuration) }
     }
 
     private static func writeTempScript(_ source: String) -> URL? {
@@ -1268,13 +1327,16 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         /// 没有封面地址(放的是视频,第三段是视频截图)、又认出了视频身份时,这支视频的截图(`KasetPlayerInfo.videoFrameURL`),
         /// 只给 Discord 状态兜底。
         public let videoFrameURL: URL?
+        /// Spotify 网页版这首的曲目 ID(`spotify:track:` 之后那段,见 spotifyWebScript 第五段)。
+        public let spotifyTrackID: String?
         public init(seconds: Double, artworkURL: URL?, precise: PreciseReading? = nil, video: VideoIdentity? = nil,
-                    videoFrameURL: URL? = nil) {
+                    videoFrameURL: URL? = nil, spotifyTrackID: String? = nil) {
             self.seconds = seconds
             self.artworkURL = artworkURL
             self.precise = precise
             self.video = video
             self.videoFrameURL = videoFrameURL
+            self.spotifyTrackID = spotifyTrackID
         }
     }
 
@@ -1299,7 +1361,16 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         return VideoIdentity(videoID: id, musicVideoType: type)
     }
 
-    /// 页面媒体元素的 `currentTime` 和读它那一刻的墙钟(见 youtubeMusicScript 第四段)。
+    /// 解析 Spotify 网页版第五段 `spotify:track:<id>`。ID 形状闸同 `PlatformLinks.spotifyTrackURL`:22 位 base62,别的一律不认。
+    public static func parseSpotifyTrackID(_ raw: Substring) -> String? {
+        let prefix = "spotify:track:"
+        guard raw.hasPrefix(prefix) else { return nil }
+        let id = String(raw.dropFirst(prefix.count))
+        guard id.count == 22, id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else { return nil }
+        return id
+    }
+
+    /// 页面播放位置的精确读数和读它那一刻的墙钟(见 youtubeMusicScript、spotifyWebScript 第四段)。
     public struct PreciseReading: Equatable, Sendable {
         public let seconds: Double
         public let readAt: Date
@@ -1309,11 +1380,11 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         }
     }
 
-    /// 解析规则(从 parseSeconds 扩出来):`<seconds>|<pausedFlag>[|<artworkURL>[|@<currentTime>,<epochMs>[|#<videoId>,<type>]]]`。
+    /// 解析规则(从 parseSeconds 扩出来):`<seconds>|<pausedFlag>[|<artworkURL>[|@<秒>,<epochMs>[|#<videoId>,<type> 或 spotify:track:<id>]]]`。
     /// 第二段非 "0"(暂停 / "NOTFOUND")整条作废、不猜;第三段可选,只认 Spotify 图床形状的地址
     /// (`SpotifyArtworkURL.parse`)和 YouTube Music 曲库的方形专辑图(`KasetPlayerInfo.coverArtworkURL`),别的一律 nil(不是专辑图、
-    /// 又认出了第五段的视频身份时,另给这支视频的截图 `videoFrameURL`,只给 Discord 状态兜底);第四段可选,是 YouTube Music 的精确读数,形状不对就当没有、
-    /// 整秒读数照旧成立。纯函数,selftest 直接覆盖。
+    /// 又认出了第五段的视频身份时,另给这支视频的截图 `videoFrameURL`,只给 Discord 状态兜底);第四段可选,是精确读数,形状不对就当没有、
+    /// 整秒读数照旧成立;第五段是 YouTube Music 的视频身份或 Spotify 网页版的曲目 URI,形状不对一样当没有。纯函数,selftest 直接覆盖。
     public static func parseReading(fromOsascriptOutput raw: String) -> Reading? {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.hasPrefix("\""), text.hasSuffix("\""), text.count >= 2 {
@@ -1333,9 +1404,11 @@ public final class BrowserPositionProbe: @unchecked Sendable {
             }
         }
         let video = parts.count >= 5 ? parseVideoIdentity(parts[4]) : nil
+        let spotifyTrackID = parts.count >= 5 ? parseSpotifyTrackID(parts[4]) : nil
         let frame = artwork == nil && video != nil
             ? KasetPlayerInfo.videoFrameURL(videoID: video?.videoID, reportedArtwork: parts.count >= 3 ? String(parts[2]) : nil)
             : nil
-        return Reading(seconds: seconds, artworkURL: artwork, precise: precise, video: video, videoFrameURL: frame)
+        return Reading(seconds: seconds, artworkURL: artwork, precise: precise, video: video, videoFrameURL: frame,
+                       spotifyTrackID: spotifyTrackID)
     }
 }

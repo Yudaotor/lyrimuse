@@ -99,15 +99,22 @@ func TestSpotifyTrackIDHintCap(t *testing.T) {
 }
 
 func TestSpotifyListenFields(t *testing.T) {
-	got := spotifyListenFields(spotifyBundleID, "7HuBDWi18s4aJM8UFnNheH")
-	want := "https://open.spotify.com/track/7HuBDWi18s4aJM8UFnNheH"
+	const id, other = "7HuBDWi18s4aJM8UFnNheH", "4uLU6hMCjMI75M1A2tKUQC"
+	want := "https://open.spotify.com/track/" + id
+	got := spotifyListenFields(spotifyBundleID, "", id)
 	if got["spotify_id"] != want || got["origin_url"] != want || got["music_service"] != "spotify.com" || len(got) != 3 {
 		t.Fatalf("Spotify 原生播放要给三个标准字段: %v", got)
 	}
-	if spotifyListenFields("com.apple.Music", "7HuBDWi18s4aJM8UFnNheH") != nil {
+	if got := spotifyListenFields(spotifyBundleID, id, other); got["spotify_id"] != want {
+		t.Fatalf("这次报来的 ID 优先于缓存里的: %v", got)
+	}
+	if got := spotifyListenFields("com.apple.Safari", id, ""); got["spotify_id"] != want || got["music_service"] != "spotify.com" {
+		t.Fatalf("网页版 Spotify 报了 ID,同样是在 spotify.com 听的: %v", got)
+	}
+	if spotifyListenFields("com.apple.Music", "", id) != nil || spotifyListenFields("com.apple.Safari", "", id) != nil {
 		t.Fatal("别的播放器放同一首歌,不能说是在 spotify.com 听的")
 	}
-	if spotifyListenFields(spotifyBundleID, "") != nil {
+	if spotifyListenFields(spotifyBundleID, "", "") != nil {
 		t.Fatal("没有 ID 就一个键都不写")
 	}
 }

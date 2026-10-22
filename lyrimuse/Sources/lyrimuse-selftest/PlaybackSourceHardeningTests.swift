@@ -14,6 +14,7 @@ func runPlaybackSourceHardeningTests() {
     recentListensTests()
     browserProbeTests()
     webProbeTitleGuardTests()
+    spotifyWebProbeScriptTests()
     libraryAndCacheTests()
     replayNoDurationFirstTick()
     wiringContracts()
@@ -947,6 +948,126 @@ private func runPageJS(_ js: String, mediaTitle: String?, documentTitle: String,
     };
     """)
     return ctx.evaluateScript(js)?.toString()
+}
+
+// ---- Spotify 网页版位置探针:页面播放器状态给出的精确读数与曲目 ID ----
+// 在 JavaScriptCore 里跑真正注入的那段 JS(`filledSiteScript`),页面 DOM 和 React 组件树上的 `playerAPI` 用桩对象。
+
+private struct SpotifyWebPageStub {
+    var positionText = "0:45"
+    var durationText = "3:35"
+    var documentTitle = "Song " + "\u{2022}" + " Artist"
+    var hasPlayerAPI = true
+    var statePositionMs = 45_300.0
+    var stateAgeMs = 200.0
+    var stateDurationMs = 215_000.0
+    var stateIsPaused = false
+    var stateSpeed = 1.0
+    var uri = "spotify:track:4uLU6hMCjMI75M1A2tKUQC"
+}
+
+private func runSpotifyWebProbeJS(_ js: String, _ page: SpotifyWebPageStub) -> String? {
+    guard let ctx = JSContext() else { return nil }
+    ctx.setObject(page.positionText, forKeyedSubscript: "__POS" as NSString)
+    ctx.setObject(page.durationText, forKeyedSubscript: "__DUR" as NSString)
+    ctx.setObject(page.documentTitle, forKeyedSubscript: "__DT" as NSString)
+    ctx.setObject(page.hasPlayerAPI, forKeyedSubscript: "__HAS_API" as NSString)
+    ctx.setObject(page.statePositionMs, forKeyedSubscript: "__SPOS" as NSString)
+    ctx.setObject(page.stateAgeMs, forKeyedSubscript: "__SAGE" as NSString)
+    ctx.setObject(page.stateDurationMs, forKeyedSubscript: "__SDUR" as NSString)
+    ctx.setObject(page.stateIsPaused, forKeyedSubscript: "__SPAUSED" as NSString)
+    ctx.setObject(page.stateSpeed, forKeyedSubscript: "__SSPEED" as NSString)
+    ctx.setObject(page.uri, forKeyedSubscript: "__URI" as NSString)
+    ctx.evaluateScript("""
+    var __api = { getState: function() {
+      return { isPaused: __SPAUSED, isBuffering: false, positionAsOfTimestamp: __SPOS, timestamp: Date.now() - __SAGE,
+               duration: __SDUR, speed: __SSPEED, item: { uri: __URI } };
+    } };
+    var __fiber = { memoizedProps: { children: null }, return: { memoizedProps: __HAS_API ? { playerAPI: __api } : {}, return: null } };
+    var __widget = { __reactFiber$stub: __fiber };
+    var document = {
+      title: __DT,
+      querySelector: function(q) {
+        if (q === '[data-testid=playback-position]') return { textContent: __POS };
+        if (q === '[data-testid=playback-duration]') return { textContent: __DUR };
+        if (q === '[data-testid=now-playing-widget]') return __widget;
+        return null;
+      }
+    };
+    """)
+    return ctx.evaluateScript(js)?.toString()
+}
+
+@MainActor
+private func spotifyWebProbeScriptTests() {
+    typealias P = BrowserPositionProbe
+    guard let js = P.filledSiteScript(platformID: "spotifyWeb", expectedDuration: 215.4) else {
+        expectEqual(true, false, "Spotify 网页版探针: 站点规则里没有 spotifyWeb")
+        return
+    }
+    expectEqual(js.contains("\""), false, "Spotify 网页版探针: 脚本要拼进 AppleScript 字符串,不许有双引号")
+    expectEqual(["__EXPECT__", "__TOL__", "__CT_SLACK__", "__SP_SLACK__"].contains { js.contains($0) }, false,
+                "Spotify 网页版探针: 占位符都填掉了")
+    func read(_ page: SpotifyWebPageStub) -> BrowserPositionProbe.Reading? {
+        runSpotifyWebProbeJS(js, page).flatMap { P.parseReading(fromOsascriptOutput: $0) }
+    }
+
+    let playing = read(SpotifyWebPageStub())
+    expectEqual(playing?.seconds, 45, "Spotify 网页版探针: 整秒文字照旧交出")
+    expectEqual(playing.flatMap { $0.precise.map { abs($0.seconds - 45.5) < 0.1 } }, true,
+                "Spotify 网页版探针: 播放器状态外推出毫秒位置(45.3 秒 + 状态过去的 0.2 秒)")
+    expectEqual(playing.flatMap { $0.precise.map { abs($0.readAt.timeIntervalSinceNow) < 5 } }, true,
+                "Spotify 网页版探针: 精确读数带读它那一刻的墙钟")
+    expectEqual(playing?.spotifyTrackID, "4uLU6hMCjMI75M1A2tKUQC", "Spotify 网页版探针: 交出曲目 ID")
+
+    var backgroundTab = SpotifyWebPageStub()
+    backgroundTab.statePositionMs = 48_300
+    expectEqual(read(backgroundTab).flatMap { $0.precise.map { abs($0.seconds - 48.5) < 0.1 } }, true,
+                "Spotify 网页版探针: 后台标签页文字落后 3.5 秒,精确读数照样交出")
+
+    var stale = SpotifyWebPageStub()
+    stale.statePositionMs = 120_000
+    expectEqual(read(stale)?.precise, nil, "Spotify 网页版探针: 状态跟页面文字对不上(上一次会话留下的)不交精确读数")
+    expectEqual(read(stale)?.spotifyTrackID, nil, "Spotify 网页版探针: 对不上时也不交曲目 ID")
+    expectEqual(read(stale)?.seconds, 45, "Spotify 网页版探针: 对不上时退回整秒读数")
+
+    var behind = SpotifyWebPageStub()
+    behind.statePositionMs = 44_000
+    expectEqual(read(behind)?.precise, nil, "Spotify 网页版探针: 状态比页面文字还落后,不是同一个钟")
+
+    var otherSong = SpotifyWebPageStub()
+    otherSong.stateDurationMs = 300_000
+    expectEqual(read(otherSong)?.precise, nil, "Spotify 网页版探针: 状态里的时长跟这首对不上")
+    expectEqual(read(otherSong)?.spotifyTrackID, nil, "Spotify 网页版探针: 时长对不上不交曲目 ID")
+
+    var statePaused = SpotifyWebPageStub()
+    statePaused.stateIsPaused = true
+    expectEqual(read(statePaused)?.precise, nil, "Spotify 网页版探针: 播放器状态说暂停就不外推")
+
+    var stalled = SpotifyWebPageStub()
+    stalled.stateSpeed = 0
+    expectEqual(read(stalled)?.precise, nil, "Spotify 网页版探针: 状态说在播但 speed 是 0(音频没起来),不外推")
+
+    var episode = SpotifyWebPageStub()
+    episode.uri = "spotify:episode:4uLU6hMCjMI75M1A2tKUQC"
+    expectEqual(read(episode)?.precise != nil, true, "Spotify 网页版探针: 播客单集照样有精确读数")
+    expectEqual(read(episode)?.spotifyTrackID, nil, "Spotify 网页版探针: 播客单集不是曲目,不交 ID")
+
+    var noAPI = SpotifyWebPageStub()
+    noAPI.hasPlayerAPI = false
+    let fallback = read(noAPI)
+    expectEqual(fallback?.seconds == 45 && fallback?.precise == nil && fallback?.spotifyTrackID == nil, true,
+                "Spotify 网页版探针: 找不到播放器接口时退回只有整秒文字")
+
+    var pausedPage = SpotifyWebPageStub()
+    pausedPage.documentTitle = "Spotify - Web Player: Music for everyone"
+    expectEqual(runSpotifyWebProbeJS(js, pausedPage)?.contains("|1|"), true, "Spotify 网页版探针: 标题没有分隔符判暂停")
+    expectEqual(read(pausedPage) == nil, true, "Spotify 网页版探针: 暂停的页面整条不采信")
+
+    expectEqual(P.parseReading(fromOsascriptOutput: "45|0||@45.5,1790000000000|spotify:track:short")?.spotifyTrackID, nil,
+                "Spotify 网页版探针: ID 不是 22 位 base62 就不认")
+    expectEqual(P.parseReading(fromOsascriptOutput: "57|0|||#e-ORhEE9VVg,MUSIC_VIDEO_TYPE_OMV")?.spotifyTrackID, nil,
+                "Spotify 网页版探针: YouTube Music 的第五段不当成曲目 ID")
 }
 
 @MainActor

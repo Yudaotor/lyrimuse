@@ -4,8 +4,8 @@ import "strings"
 
 // Spotify 原生客户端这一次播放的**真曲目 ID**。
 //
-// 来路:App 播放状态里的 `track.spotify_track_id`(App 按歌名歌手核对过),换曲那一拍由 detectAdAtSessionStart
-// 记下。做两件事:
+// 来路:App 播放状态里的 `track.spotify_track_id`(原生客户端取自 Spotify 的播放通知、按歌名歌手核对过;网页版取自
+// 页面播放器状态,开播几秒后才到),换曲那一拍由 detectAdAtSessionStart 记下,晚到的由 handle 补记。做两件事:
 //
 //  1. 歌词缓存条目的 spotify_url 从本地拼的**搜索页**链接(open.spotify.com/search/歌手 歌名)换成
 //     真曲目链接 open.spotify.com/track/<id> —— 网页中继那排「平台跳转」里的 Spotify 按钮点开就是这首;
@@ -18,7 +18,7 @@ import "strings"
 //
 // 边界:广告(`spotify:ad:`)、本地文件(`spotify:local:`)、播客(`spotify:episode:`)都不是曲目,取不出 ID,
 // 什么都不记。ID 是录音级身份:同一条目之后在 Apple Music 上再放,链接照样可用;但「在哪个服务听的」按当次
-// 播放的 bundle 算,所以 LB 那三个键只在 Spotify 原生播放时写(lb.go)。
+// 播放算,所以 LB 那三个键只在这次是在 Spotify 上放的时写(lb.go)。
 var spotifyTrackIDHints = map[string]string{}
 
 // spotifyTrackIDLastKey 是最近一次换曲记下的那条的 key(见 spotifyTrackIDHintFor)。受 enrichMu 保护。
@@ -102,11 +102,16 @@ func applySpotifyTrackIDHintLocked(key string, e *enrichEntry) bool {
 
 // spotifyListenFields 给 ListenBrainz 的 additional_info 补标准字段。纯函数,单测直接覆盖。
 //
-// 只在**这次播放来自 Spotify 原生客户端**且有 ID 时给:spotify_id 官方定义是「这条录音的 Spotify 曲目 URL」,
+// 只在**这次播放是在 Spotify 上**时给:playID 是 App 这次报来的 ID(原生客户端或网页版),有就用它;原生客户端
+// 这次没报(通知没收到)时退回缓存里的 cachedID。spotify_id 官方定义是「这条录音的 Spotify 曲目 URL」,
 // origin_url 是「这条录音在网上的位置」,music_service 是「听的服务的规范域名」—— 三个键的形状跟 LB 自家的
 // Spotify 导入一致。别的播放器放同一首歌时缓存里也有这个 ID,但那时「在 spotify.com 听的」就不成立了,一个都不写。
-func spotifyListenFields(bundleID, trackID string) map[string]string {
-	if bundleID != spotifyBundleID || trackID == "" {
+func spotifyListenFields(bundleID, playID, cachedID string) map[string]string {
+	trackID := playID
+	if trackID == "" && bundleID == spotifyBundleID {
+		trackID = cachedID
+	}
+	if trackID == "" {
 		return nil
 	}
 	u := spotifyTrackURL(trackID)

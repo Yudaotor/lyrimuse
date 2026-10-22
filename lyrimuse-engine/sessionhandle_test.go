@@ -265,11 +265,12 @@ func TestHandleBackfillsSessionMeta(t *testing.T) {
 	}
 }
 
-// Spotify 原生播放开会话时,记下 App 带来的曲目 ID(歌词缓存的真曲目链接、上送都用它);别的播放器、广告不记。
+// 开会话时记下 App 带来的 Spotify 曲目 ID(歌词缓存的真曲目链接、上送都用它);没带 ID 的、广告不记。
 func TestHandleNotesSpotifyTrackIDAtSessionStart(t *testing.T) {
 	at := handleClock()
 	song, ad := handleSong("Spotify Song", 0, at(0)), handleSong("Spotify Ad", 0, at(20))
 	song.Bundle, ad.Bundle = spotifyBundleID, spotifyBundleID
+	song.SpotifyTrackID, ad.SpotifyTrackID = "4uLU6hMCjMI75M1A2tKUQC", "7HuBDWi18s4aJM8UFnNheH"
 	other := handleSong("Music Song", 0, at(10))
 	p := handleTestPoller(t, song, other, ad)
 	enrichMu.Lock()
@@ -286,12 +287,45 @@ func TestHandleNotesSpotifyTrackIDAtSessionStart(t *testing.T) {
 		defer enrichMu.Unlock()
 		return spotifyTrackIDHints[enrichKey(s.Artist, s.Title, s.Album)]
 	}
-	p.appSpotifyTrackID = "4uLU6hMCjMI75M1A2tKUQC"
 	handleTick(p, at(0), song)
 	handleTick(p, at(10), other)
 	noteAppReportedAd(ad, true)
 	handleTick(p, at(20), ad)
 	if hint(song) != "4uLU6hMCjMI75M1A2tKUQC" || hint(other) != "" || hint(ad) != "" {
 		t.Fatalf("只给 Spotify 的歌记曲目 ID: song=%q other=%q ad=%q", hint(song), hint(other), hint(ad))
+	}
+}
+
+// 网页版 Spotify 的曲目 ID 比会话起点晚几拍才到:同一首补进会话 meta(LB 上送按它认「在 spotify.com 听的」)并记下;
+// 换了歌之后才到的不往上一首的会话里补。
+func TestHandleBackfillsLateSpotifyWebTrackID(t *testing.T) {
+	at := handleClock()
+	song := handleSong("Web Song", 0, at(0))
+	song.Bundle = "com.apple.WebKit.GPU"
+	p := handleTestPoller(t, song)
+	enrichMu.Lock()
+	savedHints, savedLast := spotifyTrackIDHints, spotifyTrackIDLastKey
+	spotifyTrackIDHints = map[string]string{}
+	enrichMu.Unlock()
+	t.Cleanup(func() {
+		enrichMu.Lock()
+		spotifyTrackIDHints, spotifyTrackIDLastKey = savedHints, savedLast
+		enrichMu.Unlock()
+	})
+	handleTick(p, at(0), song)
+	if p.sess.meta.SpotifyTrackID != "" {
+		t.Fatalf("开播那一拍还没有 ID: %q", p.sess.meta.SpotifyTrackID)
+	}
+	late := song
+	late.SpotifyTrackID = "4uLU6hMCjMI75M1A2tKUQC"
+	handleTick(p, at(3), late)
+	enrichMu.Lock()
+	got := spotifyTrackIDHints[enrichKey(song.Artist, song.Title, song.Album)]
+	enrichMu.Unlock()
+	if p.sess.meta.SpotifyTrackID != late.SpotifyTrackID || got != late.SpotifyTrackID {
+		t.Fatalf("晚到的 ID 要补进会话并记下: meta=%q hint=%q", p.sess.meta.SpotifyTrackID, got)
+	}
+	if lbMetaWith(p.sess.meta, map[string]string{}).AdditionalInfo["music_service"] != "spotify.com" {
+		t.Fatal("补上 ID 的网页版播放,LB 上送要带 music_service")
 	}
 }
