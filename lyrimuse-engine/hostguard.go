@@ -160,9 +160,10 @@ type hostGuard struct {
 	sourceHeld map[string]time.Time
 	// bgPause:歌词源主机 → 后台请求暂停到的时刻与已升到的级数,见 noteLyricSourceThrottled。
 	bgPause map[string]*lyricSourceBackgroundPause
-	// sourceBudget / sourceHits:歌词源的小时额度和窗口里发出去的请求时刻,见 sourcebudget.go。
+	// sourceBudget / sourceHits / budgetPath:歌词源的小时额度、窗口里发出去的请求时刻和存盘的位置,见 sourcebudget.go。
 	sourceBudget func(source string) int
 	sourceHits   map[string][]time.Time
+	budgetPath   string
 }
 
 type lyricSourceBackgroundPause struct {

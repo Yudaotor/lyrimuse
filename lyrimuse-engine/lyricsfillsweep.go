@@ -199,6 +199,8 @@ func setLyricsFillPaths() {
 	setPlayerPreviewFixPath(configFilePath(clientName + "-player-preview.json"))
 	// App 与引擎共享的限流窗口(sharedcooldown.go),App 侧读写同名文件。
 	setSharedCooldownPath(configFilePath(clientName + "-outbound-cooldowns.json"))
+	// 歌词源小时额度跨重启接着算(sourcebudget.go)。
+	sharedHostGuard().useSourceBudgetFile(configFilePath(clientName + "-source-budget.json"))
 }
 
 // startLyricsFillSweeper 由 run() 单开一个 goroutine(跟 startEnrichCancelWatcher 同款),

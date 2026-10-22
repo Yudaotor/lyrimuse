@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -107,5 +108,29 @@ func TestPrefetchImportBudgetWait(t *testing.T) {
 	featuresRef().LyricsSources = map[string]bool{"qq": true}
 	if d := prefetchImportBudgetWait(); d != 0 {
 		t.Fatalf("关着的源不该等,实际 %v", d)
+	}
+}
+
+// 额度跨重启接着算:记下的请求存进文件,新起的闸读回来,滑出窗口的不要;文件不在时从满额算。
+func TestSourceBudgetSurvivesRestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "budget.json")
+	g, c := newBudgetGuard(5)
+	g.useSourceBudgetFile(path)
+	g.noteSourceHit("musixmatch")
+	c.t = c.t.Add(50 * time.Minute)
+	g.noteSourceHit("musixmatch")
+	g.noteSourceHit("musixmatch")
+
+	restarted, rc := newBudgetGuard(5)
+	rc.t = c.t.Add(20 * time.Minute) // 第一个已经滑出窗口
+	restarted.useSourceBudgetFile(path)
+	if left, _, _ := restarted.sourceBudgetLeft("musixmatch", 1); left != 3 {
+		t.Fatalf("重启后应接着算(还剩 3 个),实际 %d", left)
+	}
+
+	empty, _ := newBudgetGuard(5)
+	empty.useSourceBudgetFile(filepath.Join(t.TempDir(), "missing.json"))
+	if left, _, _ := empty.sourceBudgetLeft("musixmatch", 1); left != 5 {
+		t.Fatalf("文件不在时从满额算,实际 %d", left)
 	}
 }
