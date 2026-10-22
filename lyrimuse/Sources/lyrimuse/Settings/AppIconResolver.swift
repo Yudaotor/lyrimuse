@@ -1,4 +1,5 @@
 import AppKit
+import LyrimuseCore
 import SwiftUI
 
 /// 按 bundle identifier 查真实 App 图标——NSWorkspace 找到 .app 再取图标,最好认,还不用
@@ -20,7 +21,7 @@ enum AppIconResolver {
     static func icon(forBundleID bundleID: String) -> NSImage? {
         guard !bundleID.isEmpty else { return nil }
         if let cached = cache[bundleID] { return cached }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        guard let url = PlayerBundleAliases.applicationURL(forBundleID: bundleID) else { return nil }
         let icon = fullBleedLegacyIcon(appURL: url).map(fittedToIconGrid)
             ?? NSWorkspace.shared.icon(forFile: url.path)
         cache[bundleID] = icon

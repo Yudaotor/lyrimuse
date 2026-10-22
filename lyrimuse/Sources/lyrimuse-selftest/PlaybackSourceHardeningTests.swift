@@ -850,7 +850,7 @@ private func scriptServerTests() {
                 "常驻 helper: 带空白或空的 bundle id 走起子进程")
     let probeSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("LyrimuseCore/Local/NowPlayingClientsProbe.swift"), encoding: .utf8)) ?? ""
-    expectEqual(sourceBytes(probeSource, contain: ".flatMap({ snapshotServer.request($0, timeout: timeout) })\n                ?? ProcessRunner.run(\"/usr/bin/perl\", arguments, timeout: timeout),"), true,
+    expectEqual(sourceHas(probeSource, ".flatMap({ snapshotServer.request($0, timeout: timeout) }) ?? ProcessRunner.run(\"/usr/bin/perl\", arguments, timeout: timeout),"), true,
                 "常驻 helper(契约): 单问那一份先问常驻进程,用不上再起 perl")
     let installedHelper = "/Applications/Lyrimuse.app/Contents/Resources/nowplaying-clients/libnowplaying-clients.dylib"
     if FileManager.default.isReadableFile(atPath: installedHelper) {

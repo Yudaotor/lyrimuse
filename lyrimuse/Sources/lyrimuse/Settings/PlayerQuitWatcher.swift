@@ -51,7 +51,8 @@ final class PlayerQuitWatcher {
     }
 
     private static func bundleID(from note: Notification) -> String? {
-        (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
+        ((note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier)
+            .map(PlayerBundleAliases.canonical)
     }
 
     /// 此刻真正生效的绑定(用户勾的 ∩ 当前候选),换成 bundle id。
@@ -62,7 +63,7 @@ final class PlayerQuitWatcher {
     }
 
     private static var runningBundleIDs: Set<String> {
-        Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
+        Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier).map(PlayerBundleAliases.canonical))
     }
 
     private func playerTerminated(_ bundleID: String) {

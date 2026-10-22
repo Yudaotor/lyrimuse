@@ -141,6 +141,20 @@ func runPineTests() {
         expectEqual(out?.positionIsPrecise, true, "Pine 出口: 精确读数带过去")
     }
 
+    // ---- 别的版本按本体认 ----
+    do {
+        let pro = "com.digipine.pineplayer.pro", origin = "com.digipine.pineplayer.origin"
+        expectEqual([PlayerBundleAliases.canonical(pro), PlayerBundleAliases.canonical(origin)], [P.bundleID, P.bundleID],
+                    "Pine 别名: Pro、Pro the Origin 的 bundle id 换成免费版的")
+        expectEqual(PlayerBundleAliases.canonical(PlaybackPlayer.spotify.bundleIdentifier), PlaybackPlayer.spotify.bundleIdentifier,
+                    "Pine 别名: 别家原样不动")
+        expectEqual(PlayerBundleAliases.all(for: P.bundleID), [P.bundleID, origin, pro], "Pine 别名: 找进程时本体在前、别名跟着")
+        expectEqual(PlayerBundleAliases.all(for: pro), [P.bundleID, origin, pro], "Pine 别名: 从别名查也是同一组")
+        expectEqual(PlayerBundleAliases.all(for: PlaybackPlayer.vox.bundleIdentifier), [PlaybackPlayer.vox.bundleIdentifier],
+                    "Pine 别名: 没有别名的播放器只有它自己")
+        expectEqual(MediaControlClient.reportingPlayerBundleID(pro, owner: nil), P.bundleID, "Pine 别名: 系统报上来的 Pro 一进来就当免费版")
+    }
+
     // ---- 网络流报的无限时长 ----
     do {
         func snap(_ duration: String) -> MediaControlSnapshot {
@@ -365,6 +379,11 @@ func runPineTests() {
         expectEqual(sourceHas(client, "(keyTitle, keyArtist, filePath) = PinePlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)"),
                     true, "Pine 接线: 封面的曲目标识跟快照对得上")
         expectEqual(sourceHas(client, "|| PinePlayerInfo.isNetworkRadio(snapshot)"), true, "Pine 接线: 网络电台当不是歌")
+        expectEqual([sourceHas(sourceText("LyrimuseCore/Local/PlayerProcess.swift"), "let ids = PlayerBundleAliases.all(for: bundleID)"),
+                     sourceHas(sourceText("LyrimuseCore/Local/NowPlayingClientsProbe.swift"), "for id in PlayerBundleAliases.all(for: bundleID) {"),
+                     sourceHas(sourceText("LyrimuseCore/Local/PlayerPickerLayout.swift"),
+                               "PlayerBundleAliases.applicationURL(forBundleID: player.bundleIdentifier) != nil")],
+                    [true, true, true], "Pine 别名: 找进程、单问会话、判装没装都把别名试一遍")
         let local = sourceText("LyrimuseCore/Local/LocalPlaybackSource.swift")
         expectEqual([sourceHas(local, "if playing, snapshot.trackDuration == nil {"), sourceHas(local, "if playing, let duration = snapshot.trackDuration {")],
                     [true, true], "无限时长: 建进度锚点前按 trackDuration 判(换成毫秒整数不溢出)")

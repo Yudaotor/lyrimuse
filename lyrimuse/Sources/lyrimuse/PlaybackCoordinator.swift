@@ -389,7 +389,7 @@ final class PlaybackCoordinator: ObservableObject {
             logger.notice("openResolvedPlayerApp: no resolved player")
             return
         }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else {
+        guard let url = PlayerBundleAliases.applicationURL(forBundleID: id) else {
             logger.notice("openResolvedPlayerApp: no app for \(id, privacy: .public)")
             return
         }

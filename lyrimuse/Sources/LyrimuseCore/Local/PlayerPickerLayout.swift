@@ -31,12 +31,12 @@ public enum PlayerPickerLayout {
         return Tiles(main: main, more: concrete.filter { !shown.contains($0) })
     }
 
-    /// 这台 Mac 上装了哪些内置播放器。按 bundle id 问 LaunchServices,装在哪个目录都算。
+    /// 这台 Mac 上装了哪些内置播放器。按 bundle id 问 LaunchServices,装在哪个目录都算;只装了别的版本(`PlayerBundleAliases`)也算。
     public static func installedPlayers() -> Set<PlaybackPlayer> {
         Set(PlaybackPlayer.allCases.filter { player in
             player != .auto
                 && !player.bundleIdentifier.isEmpty
-                && NSWorkspace.shared.urlForApplication(withBundleIdentifier: player.bundleIdentifier) != nil
+                && PlayerBundleAliases.applicationURL(forBundleID: player.bundleIdentifier) != nil
         })
     }
 }

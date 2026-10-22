@@ -163,14 +163,19 @@ public enum NowPlayingClientsProbe {
         -> (snapshot: MediaControlSnapshot, anchor: SessionAnchor)? {
         guard !bundleID.isEmpty, let paths = helperPaths() else { return nil }
         let ratePlaying = PlaybackPlayer.builtin(forBundleID: bundleID)?.playingFromRate == true
-        var arguments = [paths.script, paths.library, bundleID]
-        if ratePlaying { arguments.append("rate-playing") }
-        guard let r = snapshotServerRequest(bundleID: bundleID, ratePlaying: ratePlaying)
-                .flatMap({ snapshotServer.request($0, timeout: timeout) })
-                ?? ProcessRunner.run("/usr/bin/perl", arguments, timeout: timeout),
-            r.succeeded
-        else { return nil }
-        return decodeSnapshot(r.stdout)
+        // 同一个播放器的别的版本(`PlayerBundleAliases`)逐个问,问到的那份 bundle id 换成本体的。
+        for id in PlayerBundleAliases.all(for: bundleID) {
+            var arguments = [paths.script, paths.library, id]
+            if ratePlaying { arguments.append("rate-playing") }
+            guard let r = snapshotServerRequest(bundleID: id, ratePlaying: ratePlaying)
+                    .flatMap({ snapshotServer.request($0, timeout: timeout) })
+                    ?? ProcessRunner.run("/usr/bin/perl", arguments, timeout: timeout),
+                r.succeeded, var found = decodeSnapshot(r.stdout)
+            else { continue }
+            found.snapshot.bundleIdentifier = found.snapshot.bundleIdentifier.map(PlayerBundleAliases.canonical)
+            return found
+        }
+        return nil
     }
 
     // MARK: - 常驻 helper(见 02 章决策 146)

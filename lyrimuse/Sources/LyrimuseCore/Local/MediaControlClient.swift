@@ -3469,7 +3469,7 @@ public enum MediaControlClient {
     /// 记成 Kaset,别的照报上来的记(Safari 自己那份再经 `mediaProxyOwners` 换回 Safari)。见 02 章决策 91。纯函数,selftest 覆盖。
     public static func reportingPlayerBundleID(_ reported: String, owner: String?) -> String {
         reported == safariMediaProcessBundleID && owner == PlaybackPlayer.kaset.bundleIdentifier
-            ? PlaybackPlayer.kaset.bundleIdentifier : reported
+            ? PlaybackPlayer.kaset.bundleIdentifier : PlayerBundleAliases.canonical(reported)
     }
 
     private typealias ResponsiblePIDFunction = @convention(c) (pid_t) -> pid_t
