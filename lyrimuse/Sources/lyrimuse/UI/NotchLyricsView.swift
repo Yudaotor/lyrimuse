@@ -1056,7 +1056,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             .overlay(alignment: .bottom) {
                 if controller.showsBottomProgressLine {
                     NotchProgressLine(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
-                                      durationMs: playback.currentDurationMs, tint: accentOrWhite,
+                                      // 有锚点时用锚点自己的时长,跟外推的位置同一次采样(同展开区的 NotchScrubber),换歌那一拍不跳。
+                                      durationMs: (playback.anchor?.durationMs).flatMap { $0 > 0 ? $0 : nil }
+                                          ?? playback.currentDurationMs, tint: accentOrWhite,
                                       active: surfaceVisible, outline: controller.cardOutline)
                         .padding(.bottom, 1)
                         .opacity(revealContentOpacity)
@@ -1364,7 +1366,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 earText(clockText(module), module: module, alignment: alignment)
             }
         case .playCount:
-            if !isIdleNoTrack, !playback.isCurrentTrackAdBreak {
+            // 广告、电台口白期间没有「这首」可数(口白时歌名耳朵已换成台名)。
+            if !isIdleNoTrack, !playback.isCurrentTrackAdBreak, radioTalkStation == nil {
                 NotchEarPlayCount(title: playback.title, artist: playback.artist, tint: accentOrWhite, alignment: alignment)
             }
         case .player:

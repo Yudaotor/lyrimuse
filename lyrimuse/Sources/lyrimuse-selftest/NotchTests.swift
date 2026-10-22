@@ -2319,6 +2319,17 @@ func runNotchTests() {
         expectEqual(d.feed(dx: 0, dy: -30, phase: .changed, invertedFromDevice: true), nil, "手势: 认成左右滑之后,纵向位移不调音量")
         expectEqual(d.feed(dx: -35, dy: 0, phase: .changed, invertedFromDevice: true), .nextTrack,
                     "手势: 认方向前的横向位移也算进切歌距离")
+        // 中途作废(换歌那一下没曲目、指针离开卡片)之后剩下的位移不算,等下一个 began:一次快速滑动不会连切两首。
+        var inv = G()
+        _ = inv.feed(dx: 0, dy: 0, phase: .began, invertedFromDevice: true)
+        expectEqual(inv.feed(dx: -45, dy: 0, phase: .changed, invertedFromDevice: true), .nextTrack, "手势作废: 先切一首")
+        inv.invalidate()
+        expectEqual(inv.feed(dx: -60, dy: 0, phase: .changed, invertedFromDevice: true), nil, "手势作废: 作废后剩下的位移不再切")
+        expectEqual(inv.feed(dx: 0, dy: -20, phase: .changed, invertedFromDevice: true), nil, "手势作废: 也不调音量")
+        _ = inv.feed(dx: 0, dy: 0, phase: .began, invertedFromDevice: true)
+        expectEqual(inv.feed(dx: -45, dy: 0, phase: .changed, invertedFromDevice: true), .nextTrack, "手势作废: 下一次 began 照常认")
+        var noBegin = G()
+        expectEqual(noBegin.feed(dx: -60, dy: 0, phase: .changed, invertedFromDevice: true), nil, "手势: 没见过 began 的滑动不认")
         // 惯性余势不算。
         var m = G()
         _ = m.feed(dx: 0, dy: 0, phase: .began, invertedFromDevice: true)
@@ -2351,7 +2362,7 @@ func runNotchTests() {
                     && ctrl.contains("panel.onScrollWheel = { [weak self] event in self?.handleScrollWheel(event) }"), true,
                     "灵动岛五项: 窗口把滚动事件交给控制器,照常往下发")
         expectEqual(sourceHas(ctrl, "let point = event.window.map { $0.convertPoint(toScreen: event.locationInWindow) } ?? NSEvent.mouseLocation")
-                    && sourceHas(ctrl, "guard AppSettings.shared.notchGestures, hasTrack, cardScreenFrame?.contains(point) ?? false else {\n scrollGesture = NotchScrollGesture()"),
+                    && sourceHas(ctrl, "guard AppSettings.shared.notchGestures, hasTrack, cardScreenFrame?.contains(point) ?? false else {\n scrollGesture.invalidate()"),
                     true, "灵动岛五项: 手势关着、没有曲目、事件不落在卡片上时不认,这一次滑动作废;位置取事件自己带的")
         expectEqual(ctrl.contains("LyrimuseActionRunner.perform(.nextTrackHotkey)")
                     && ctrl.contains("VolumeMonitor.adjustSystemVolume(by: delta)"), true,
@@ -2367,6 +2378,21 @@ func runNotchTests() {
                     && ctrl.contains("&& !isCollapsed && !isExpanded && milestone == nil && !alertHold && !transientBannerActive"), true,
                     "灵动岛五项: 横幅一出来换歌歌名条让开,横幅在时歌名不掉")
         expectEqual(ctrl.contains("preciseDeltas: event.hasPreciseScrollingDeltas"), true, "灵动岛五项: 平滑滚动鼠标按位移调音量")
+        expectEqual(ctrl.contains("if event.phase.isEmpty, event.momentumPhase.isEmpty, !cardHovered { return }"), true,
+                    "灵动岛五项: 鼠标滚轮要指针真的移到过卡片上才调音量")
+        let volume = app("Settings/VolumeMonitor.swift")
+        expectEqual(volume.contains("if let burst = adjustBurst, burst.device == device, now.timeIntervalSince(burst.at) < 0.4 {")
+                    && volume.contains("adjustBurst = (device, next, now)"), true,
+                    "灵动岛五项: 一次滑动里音量在上一次写下的目标上累加,不每次重读设备(粗分档设备慢滑会不动)")
+        let ears = app("UI/NotchEarExtras.swift")
+        expectEqual(ears.contains(".task(id: \"\\(artist)|\\(title)\") {\n            try? await Task.sleep(for: .milliseconds(300))"), true,
+                    "灵动岛五项: 收听次数耳朵换歌放稳 0.3 秒再取数")
+        expectEqual(ears.contains(".id(\"\\(trackKey)|\\(sourceKey ?? \"\")\")"), true,
+                    "灵动岛五项: 播放器耳朵按来源刷新,不只按曲目")
+        expectEqual(v.contains("if !isIdleNoTrack, !playback.isCurrentTrackAdBreak, radioTalkStation == nil {\n                NotchEarPlayCount("), true,
+                    "灵动岛五项: 电台口白期间不显示收听次数")
+        expectEqual(v.contains("durationMs: (playback.anchor?.durationMs).flatMap { $0 > 0 ? $0 : nil }"), true,
+                    "灵动岛五项: 进度线有锚点时用锚点的时长")
         expectEqual(v.contains("+ (!expanded && !showsLyrics && showsProgressLine ? NotchMetrics.progressLineStrip : 0)")
                     && v.contains("showsProgressLine && hasTrack && !isExpanded && !isCollapsed && milestone == nil"), true,
                     "灵动岛五项: 进度线只在没展开时画,关着歌词行时卡片为它多长一截")

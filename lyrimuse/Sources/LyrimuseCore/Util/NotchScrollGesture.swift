@@ -10,6 +10,8 @@ import Foundation
 ///   斜着滑不会一边切歌一边调音量。
 /// - 左右滑一次最多切一首:累计过 `skipDistance` 就切,到这次滑动结束前不再切。
 /// - 惯性阶段一律不算:手指离开以后的余势既不切歌也不调音量。
+/// - 只认从 `.began` 开始的那一次滑动:中途被判作废(`invalidate`,没曲目、指针不在卡片上)之后剩下的位移不算,
+///   不然一次快速滑动在换歌那一下作废、重计,可能连切两首。
 /// - 上下滑按位移连续调,`volumePerPoint`。没有阶段的滚动(鼠标滚轮)不切歌:一格一格的滚轮每一格按 `wheelStep` 调;
 ///   带精确位移的(开了平滑滚动的鼠标,一下滚动拆成几十个小事件)跟上下滑一样按位移调,不然轻轻一滚音量就到底。
 public struct NotchScrollGesture: Equatable, Sendable {
@@ -44,6 +46,8 @@ public struct NotchScrollGesture: Equatable, Sendable {
     private var lockY: Double = 0
     private var accumX: Double = 0
     private var skipped = false
+    /// 这次滑动从 `.began` 起、没被作废。
+    private var active = false
 
     public init() {}
 
@@ -65,8 +69,9 @@ public struct NotchScrollGesture: Equatable, Sendable {
             return nil
         case .began:
             reset()
+            active = true
         case .changed:
-            break
+            guard active else { return nil }
         }
         if axis == nil {
             lockX += abs(fingerX)
@@ -92,7 +97,13 @@ public struct NotchScrollGesture: Equatable, Sendable {
         }
     }
 
+    /// 这一次滑动作废,等下一个 `.began` 再认。
+    public mutating func invalidate() {
+        reset()
+    }
+
     private mutating func reset() {
+        active = false
         axis = nil
         lockX = 0
         lockY = 0

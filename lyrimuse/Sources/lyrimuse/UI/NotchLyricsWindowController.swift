@@ -980,9 +980,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private func handleScrollWheel(_ event: NSEvent) {
         let point = event.window.map { $0.convertPoint(toScreen: event.locationInWindow) } ?? NSEvent.mouseLocation
         guard AppSettings.shared.notchGestures, hasTrack, cardScreenFrame?.contains(point) ?? false else {
-            scrollGesture = NotchScrollGesture()
+            scrollGesture.invalidate()
             return
         }
+        // 鼠标滚轮每一格各自发给指针下面的窗口:卡片在不动的指针下面长大(掉歌名、横幅、临时展开)时,用户本来在滚下层的 App,
+        // 后面几格就落到卡片上调了音量。要求指针真的移到过卡片上(`cardHovered` 只随指针移动更新)。
+        if event.phase.isEmpty, event.momentumPhase.isEmpty, !cardHovered { return }
         let phase: NotchScrollGesture.Phase
         if !event.momentumPhase.isEmpty {
             phase = .momentum

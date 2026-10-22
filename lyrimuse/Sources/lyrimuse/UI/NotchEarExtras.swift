@@ -29,8 +29,12 @@ struct NotchEarPlayCount: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
-        .onAppear { refresh() }
-        .onChange(of: "\(artist)|\(title)") { refresh() }
+        // 换歌时歌名、歌手常常一前一后到:等 0.3 秒放稳了再取(同 ListenMilestoneCenter),不拿「新歌名|旧歌手」白问一轮。
+        .task(id: "\(artist)|\(title)") {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            refresh()
+        }
         .accessibilityElement(children: .combine)
     }
 
@@ -47,13 +51,14 @@ struct NotchEarPlayCount: View {
 /// (`PlaybackCoordinator.resolvedPlayerIcon`,网页平台画平台图标)。点它切到那个播放器(`openResolvedPlayer`,网页平台翻到正在放的
 /// 那个标签页)。认不出来时整块留白。
 ///
-/// 图标按像素预先光栅化(`NotchIdleAppIcon.bitmap`),跟没有曲目时左耳那枚 App 图标同一个尺寸和做法。来源不单独发布:换播放器必然
-/// 伴随曲目变化,`trackKey` 一变这一格就重算。
+/// 图标按像素预先光栅化(`NotchIdleAppIcon.bitmap`),跟没有曲目时左耳那枚 App 图标同一个尺寸和做法。来源由父视图每次重画时现读、
+/// 当输入传进来(`sourceKey`):同一首里网页平台晚几秒才认出来、同一首歌换了个播放器接着放,`trackKey` 都不变。
 struct NotchEarPlayerIcon: View {
     let side: CGFloat
     let scale: CGFloat
     let alignment: Alignment
     let trackKey: String
+    var sourceKey: String? = NotchEarPlayerIcon.cacheKey
 
     var body: some View {
         let coordinator = PlaybackCoordinator.shared
@@ -71,11 +76,11 @@ struct NotchEarPlayerIcon: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
-        .id(trackKey)
+        .id("\(trackKey)|\(sourceKey ?? "")")
     }
 
     /// 位图缓存按来源分:网页平台按平台,别的按播放器的 bundle id。
-    private static var cacheKey: String? {
+    static var cacheKey: String? {
         if let platform = PlaybackCoordinator.shared.resolvedWebPlatformID { return "web:\(platform)" }
         return LocalPlaybackSource.shared.lastResolvedBundleID
     }

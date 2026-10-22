@@ -187,8 +187,15 @@ final class VolumeMonitor {
         var settable: DarwinBoolean = false
         guard AudioObjectIsPropertySettable(device, &addr, &settable) == noErr, settable.boolValue else { return }
         var value = Float32(0)
-        size = UInt32(MemoryLayout<Float32>.size)
-        guard AudioObjectGetPropertyData(device, &addr, 0, nil, &size, &value) == noErr else { return }
+        let now = Date()
+        // 一串连着的调节(一次滑动)在上一次写下的目标上累加,不每次重读:蓝牙、按 dB 粗分档的设备会把小步取整回原值,
+        // 读回来还是原值,慢慢滑就一直不动。隔久了或换了设备再按设备上的值起算。
+        if let burst = adjustBurst, burst.device == device, now.timeIntervalSince(burst.at) < 0.4 {
+            value = burst.target
+        } else {
+            size = UInt32(MemoryLayout<Float32>.size)
+            guard AudioObjectGetPropertyData(device, &addr, 0, nil, &size, &value) == noErr else { return }
+        }
         if delta > 0, var mute = muteAddress(for: device) {
             var muted = UInt32(0)
             var muteSize = UInt32(MemoryLayout<UInt32>.size)
@@ -198,10 +205,13 @@ final class VolumeMonitor {
             }
         }
         var next = min(1, max(0, value + delta))
+        adjustBurst = (device, next, now)
         guard next != value else { return }
         let status = AudioObjectSetPropertyData(device, &addr, 0, nil, UInt32(MemoryLayout<Float32>.size), &next)
         if status != noErr { logger.error("set volume failed: \(status)") }
     }
+
+    private static var adjustBurst: (device: AudioObjectID, target: Float32, at: Date)?
 
     // MARK: - 属性地址
 
