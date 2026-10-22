@@ -147,6 +147,25 @@ public enum PinePlayerInfo {
         return out
     }
 
+    /// 报的时长过这么多秒就是网络流(约 115 天,没有这么长的本地文件)。
+    static let streamDurationFloorSecs: Double = 1e7
+
+    /// 网络电台(`radioShaped`,开着的文件里也找不到它:流走的是网络连接):Pine 不读流里的 ICY 标题,歌名只是地址最后一段,
+    /// 这一拍算不是歌,不拿去搜歌词。形状对上时才列开着的文件(同一首只找一次)。
+    static func isNetworkRadio(_ snapshot: MediaControlSnapshot, now: Date = Date()) -> Bool {
+        guard radioShaped(bundleID: snapshot.bundleIdentifier, title: snapshot.title, artist: snapshot.artist,
+                          duration: snapshot.duration), let title = snapshot.title else { return false }
+        return systemFile(title: title, artist: snapshot.artist ?? "", pid: snapshot.processIdentifier.map { pid_t($0) }, now: now) == nil
+    }
+
+    /// 系统那份像网络电台:Pine、歌名不空、歌手一栏空(没写标签那种写法)、没有时长(它给网络流报 Int64 最大值那么长,
+    /// 过 `streamDurationFloorSecs` 的也算)。本地文件都报真实时长。纯函数,selftest 覆盖。
+    public static func radioShaped(bundleID: String?, title: String?, artist: String?, duration: Double?) -> Bool {
+        let endless = PlayerTitleSplit.isStream(duration: duration) || (duration ?? 0) >= streamDurationFloorSecs
+        guard bundleID == self.bundleID, let title, !title.isEmpty, endless else { return false }
+        return (artist ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     /// 换过之后的这首(歌手、歌名)对上最近一次换好的那首时,它的文件(不读盘)。写播放状态(`local_file`)用。
     public static func currentFilePath(artist: String, title: String) -> String? {
         current.withLock { entry in

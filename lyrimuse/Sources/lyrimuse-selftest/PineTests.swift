@@ -72,6 +72,15 @@ func runPineTests() {
         expectEqual(P.pickOpenFile(title: "天际线", artist: "天际的红日\u{2219}天际线",
                                    files: [("别的.mp3", LocalAudioFileTags(title: "别的", artist: "谁", album: "", duration: 3)), ("无关.wma", nil)]), nil,
                     "Pine 挑文件: 都对不上不认")
+        expectEqual([P.radioShaped(bundleID: P.bundleID, title: "radio", artist: " ", duration: nil),
+                     P.radioShaped(bundleID: P.bundleID, title: "radio", artist: " ", duration: 0),
+                     P.radioShaped(bundleID: P.bundleID, title: "radio", artist: " ", duration: 9.223372036854776e18),
+                     P.radioShaped(bundleID: P.bundleID, title: "环境音", artist: " ", duration: 36_000),
+                     P.radioShaped(bundleID: P.bundleID, title: "pine-http-test.mp3", artist: " ", duration: 14),
+                     P.radioShaped(bundleID: P.bundleID, title: "稻香", artist: "周杰伦\u{2219}魔杰座", duration: nil),
+                     P.radioShaped(bundleID: "com.coppertino.Vox", title: "radio", artist: " ", duration: nil)],
+                    [true, true, true, false, false, false, false],
+                    "Pine 网络电台: 歌手一栏空、没有时长(或报 Int64 最大值)的像电台;十小时的本地文件、网络上的文件、写了歌手的、别家的都不算")
         expectEqual(P.openFileExtensions.isSuperset(of: ["mka", "caf", "wma", "ape"]), true, "Pine 挑文件: 它能放的 mka、caf 也算音频文件")
     }
 
@@ -319,6 +328,7 @@ func runPineTests() {
                     "Pine 接线: 焦点回退那份同样换")
         expectEqual(sourceHas(client, "(keyTitle, keyArtist, filePath) = PinePlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)"),
                     true, "Pine 接线: 封面的曲目标识跟快照对得上")
+        expectEqual(sourceHas(client, "|| PinePlayerInfo.isNetworkRadio(snapshot)"), true, "Pine 接线: 网络电台当不是歌")
         let info = sourceText("LyrimuseCore/Local/PinePlayerInfo.swift")
         expectEqual(sourceHas(info, "guard !SourceKnockout.isOut(.pineFile) else { return nil }"), true, "Pine 接线: 文件那条腿能拔")
         expectEqual(sourceHas(info, "let key = title + \"\\u{1F}\" + artist + \"\\u{1F}\" + String(PinePlayhead.startCount)"), true,
