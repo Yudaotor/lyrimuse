@@ -135,8 +135,19 @@ func computeDigestPreview(ctx context.Context, cfg *config, kind string, now tim
 		}
 		addDigestExtras(env, source, c.period, &stats, now)
 		res.OK, res.Title, res.Digest, res.At = true, c.title, &stats, now.Unix()
+		// 缓存里只留要显示的那些:原始收听、榜单原始行(ListenBrainz 周报最多几千条)用完就不要了。键带着这一期的
+		// 起点,每天都会多一条,写的时候顺手删掉过期的,常驻进程里不越攒越多。
+		kept := *res.Digest
+		kept.listens, kept.chartTracks, kept.chartArtists = nil, nil, nil
+		cached := res
+		cached.Digest = &kept
 		digestPreviewMu.Lock()
-		digestPreviewCache[key] = res
+		for k, v := range digestPreviewCache {
+			if now.Sub(time.Unix(v.At, 0)) >= digestPreviewTTL {
+				delete(digestPreviewCache, k)
+			}
+		}
+		digestPreviewCache[key] = cached
 		digestPreviewMu.Unlock()
 		return res
 	}

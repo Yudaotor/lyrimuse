@@ -100,8 +100,10 @@ func archiveAndReopen(path string) (*os.File, bool) {
 }
 
 // logArchiveName:第 i 代归档的文件名,0 是最近的一份(`<path>.old`),数字越大越旧。
-// redirectStderrTo 把 fd 2 指到 f。只给常驻模式用(子命令的 stderr 是终端)。
+// redirectStderrTo 把 fd 2 指到 f,fd 1 也一起:launchd 把两个都开在启动那一刻的日志上,fd 1 不跟着换的话,那份文件
+// 轮转删掉之后空间要到进程重启才放出来。只给常驻模式用(子命令的输出是终端或调用方的管道)。
 func redirectStderrTo(f *os.File) {
+	_ = syscall.Dup2(int(f.Fd()), 1)
 	_ = syscall.Dup2(int(f.Fd()), 2)
 }
 

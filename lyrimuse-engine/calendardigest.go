@@ -237,10 +237,17 @@ func lbStatsDigest(ctx context.Context, root, user string, kind calendarDigestKi
 				CAAReleaseMBID string `json:"caa_release_mbid"`
 				CAAID          int64  `json:"caa_id"`
 			} `json:"releases"`
+			FromTS int64 `json:"from_ts"`
 		} `json:"payload"`
 	}
-	if _, err := lbStatsGet(ctx, root, user, "releases", rng, 0, &releases); err != nil {
+	// 专辑榜、歌曲榜跟歌手榜各自重算:歌手已经换到这一期、这两样还停在上一期时,同一份报告里会混着两期的数。
+	// 对不上就当这一期还没出,下次再查。
+	found, err := lbStatsGet(ctx, root, user, "releases", rng, 0, &releases)
+	if err != nil {
 		return digestStats{}, false, err
+	}
+	if found && releases.Payload.FromTS != 0 && lbStatsPeriodKey(releases.Payload.FromTS, kind) != wantKey {
+		return digestStats{}, false, nil
 	}
 	topN := digestTopN()
 	for _, r := range releases.Payload.Releases {
@@ -263,10 +270,15 @@ func lbStatsDigest(ctx context.Context, root, user string, kind calendarDigestKi
 				ArtistName  string `json:"artist_name"`
 				ListenCount int    `json:"listen_count"`
 			} `json:"recordings"`
+			FromTS int64 `json:"from_ts"`
 		} `json:"payload"`
 	}
-	if _, err := lbStatsGet(ctx, root, user, "recordings", rng, 0, &recordings); err != nil {
+	found, err = lbStatsGet(ctx, root, user, "recordings", rng, 0, &recordings)
+	if err != nil {
 		return digestStats{}, false, err
+	}
+	if found && recordings.Payload.FromTS != 0 && lbStatsPeriodKey(recordings.Payload.FromTS, kind) != wantKey {
+		return digestStats{}, false, nil
 	}
 	for i, r := range recordings.Payload.Recordings {
 		if i >= topN {

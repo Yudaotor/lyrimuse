@@ -145,9 +145,19 @@ func pushToChannel(ch notifyChannel, msg notifyMessage) notifyResult {
 	return r
 }
 
+// notifyHTTPClient:推送用的 client。重定向只跟 307 / 308:301 / 302 / 303 会把 POST 改成 GET、丢掉正文,跟过去拿到的
+// 200 是那个地址的网页,不是收下了这条推送;不跟的话按 3xx 报成地址要改(classifyNotifyResponse)。
+var notifyHTTPClient = &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	if len(via) < 10 && req.Response != nil && (req.Response.StatusCode == http.StatusTemporaryRedirect ||
+		req.Response.StatusCode == http.StatusPermanentRedirect) {
+		return nil
+	}
+	return http.ErrUseLastResponse
+}}
+
 // pushNotifyRequest 发一个已经拼好的请求,按平台判收没收下。
 func pushNotifyRequest(ch notifyChannel, nr notifyRequest, start time.Time) notifyResult {
-	client, timeout := http.DefaultClient, alerterPushTimeout
+	client, timeout := notifyHTTPClient, alerterPushTimeout
 	if ch.Platform == platformTelegram {
 		client, timeout = telegramHTTPClient, alerterTelegramPushTimeout
 	}

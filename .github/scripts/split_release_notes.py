@@ -66,6 +66,16 @@ MIN_EN_CHARS = 200
 MIN_ZH_CHARS = 80
 
 
+def is_shared_line(stripped: str) -> bool:
+    """两种语言都原样带上的行:下载表、Full Changelog、裸链接。"""
+    return stripped.startswith("|") or stripped.startswith("**Full Changelog**") or stripped.startswith("http")
+
+
+def own_text(lines: list[str]) -> str:
+    """一边自己的正文(去掉 is_shared_line 那几类)。哨兵按它量:下载表一节就有几百字,算进去的话只写了一种语言的日志也够长。"""
+    return "\n".join(line for line in lines if line.strip() and not is_shared_line(line.strip()))
+
+
 def split_notes_by_marker(text: str):
     """AGENTS.md「发布」一节约定的显式标记格式：标题行 + <!-- lang:en --> 英文整块 +
     <!-- lang:zh-Hans --> 中文整块。有标记时优先走这里——作者拆的永远比启发式准。
@@ -104,7 +114,7 @@ def split_notes(text: str):
             zh_lines.append("")
             continue
 
-        if stripped.startswith("|") or stripped.startswith("**Full Changelog**") or stripped.startswith("http"):
+        if is_shared_line(stripped):
             flush_bullet_zh()
             in_bullet = False
             en_lines.append(line)
@@ -290,8 +300,8 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     by_marker = split_notes_by_marker(src)
     en_lines, zh_lines = by_marker if by_marker else split_notes(src)
-    en_plain = "\n".join(en_lines)
-    zh_plain = "\n".join(zh_lines)
+    en_plain = own_text(en_lines)
+    zh_plain = own_text(zh_lines)
     # 哨兵：两边都必须有实质内容——一边太短就说明输入不是双语对照格式（或者拆分
     # 逻辑坏了），此时拒绝输出。构建前的 check_release_tag.sh 据此拒发；appcast 那步据此退回单份。
     if len(en_plain) < MIN_EN_CHARS or len(zh_plain) < MIN_ZH_CHARS:

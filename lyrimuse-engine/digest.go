@@ -81,7 +81,8 @@ type digestStats struct {
 	// NewArtists:这一期之前在这个账号上一次都没听过的歌手有几位;NewArtistNames 是其中这期听得最多的前几位。
 	NewArtists     int      `json:"new_artists,omitempty"`
 	NewArtistNames []string `json:"new_artist_names,omitempty"`
-	// DurationEstimated:TotalDurationMs 是按曲目时长估出来的(Last.fm 源,见 lastfmEstimateDuration)。
+	// DurationEstimated:TotalDurationMs 是估出来的:Last.fm 源按曲目时长估(lastfmEstimateDuration),ListenBrainz 源
+	// 有一部分收听没带时长、按带了的平均补(digestStatsFromListens)。
 	DurationEstimated bool   `json:"duration_estimated,omitempty"`
 	CoverURL          string `json:"cover_url,omitempty"` // 这一期头号专辑的封面,公网地址
 	Link              string `json:"link,omitempty"`      // 点开去看这一期完整榜单的地址
@@ -374,8 +375,13 @@ func digestStatsFromListens(listens []lbListenEntry) digestStats {
 	stats.TotalPlays = len(listens)
 	trackIndex, artistIndex, albumIndex := map[string]int{}, map[string]int{}, map[string]int{}
 	var trackTallies, artistTallies, albumTallies []digestTally
+	var knownMs int64
+	knownPlays := 0
 	for _, l := range listens {
-		stats.TotalDurationMs += l.DurationMs
+		if l.DurationMs > 0 {
+			knownMs += l.DurationMs
+			knownPlays++
+		}
 		tk := l.Title + "|" + l.Artist
 		if idx, ok := trackIndex[tk]; ok {
 			trackTallies[idx].Count++
@@ -412,6 +418,12 @@ func digestStatsFromListens(listens []lbListenEntry) digestStats {
 	stats.TopTracks = topTallies(trackTallies)
 	stats.TopArtists = topTallies(artistTallies)
 	stats.TopAlbums = topTallies(albumTallies)
+	// 时长:没带时长的收听(iPhone 桥接来的等)按带了的平均补上;带时长的不到三成就不写,同 Last.fm 那一路的估法
+	// (lastfmEstimateDuration),不然「约 X 小时」只算了一部分、明显偏小。
+	if knownPlays > 0 && float64(knownPlays) >= float64(len(listens))*lastfmEstimateDurationMinShare {
+		stats.TotalDurationMs = knownMs * int64(len(listens)) / int64(knownPlays)
+		stats.DurationEstimated = knownPlays < len(listens)
+	}
 	return stats
 }
 

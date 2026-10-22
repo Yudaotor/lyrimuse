@@ -105,12 +105,20 @@ func startDirWatch(ctx context.Context, dir string, out chan<- struct{}) (<-chan
 const requestWatchFallback = 10 * time.Second
 
 // requestWakeups:请求文件循环的两个叫醒来源。盯着 dir,目录一变就从返回的通道收到信号;另配一个定时器,
-// 盯得了时每 requestWatchFallback 一次,盯不了时按 poll。调用方负责 Stop 定时器。
+// 盯得了时每 requestWatchFallback 一次,盯不了时按 poll,盯到一半停了(目录被删、改名)也退回按 poll。
+// 调用方负责 Stop 定时器。
 func requestWakeups(ctx context.Context, dir string, poll time.Duration) (<-chan struct{}, *time.Ticker) {
 	writes := make(chan struct{}, 1)
-	interval := poll
-	if watchDirWrites(ctx, dir, writes) {
-		interval = requestWatchFallback
+	stopped, ok := startDirWatch(ctx, dir, writes)
+	if !ok {
+		return writes, time.NewTicker(poll)
 	}
-	return writes, time.NewTicker(interval)
+	ticker := time.NewTicker(requestWatchFallback)
+	go func() {
+		<-stopped
+		if ctx.Err() == nil {
+			ticker.Reset(poll)
+		}
+	}()
+	return writes, ticker
 }

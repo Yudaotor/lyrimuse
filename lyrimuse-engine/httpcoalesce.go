@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"sort"
@@ -50,6 +51,8 @@ func httpCoalesceKey(req *http.Request) (string, bool) {
 		return "", false
 	}
 	var b strings.Builder
+	// 带上出站档位:前台请求不跟着后台 / 补查那一个排出站闸的队(那边最长等 30 秒,前台这一轮可能先到期)。
+	fmt.Fprintf(&b, "%d\x00", outboundLaneOf(req.Context()))
 	b.WriteString(req.URL.String())
 	names := make([]string, 0, len(req.Header))
 	for k := range req.Header {

@@ -76,8 +76,8 @@ func TestFolderAccessHealthItem(t *testing.T) {
 	all := folderAccessHealthItem([]homeFolderTarget{
 		{path: okDir},
 		{path: filepath.Join(dir, "missing")},
-		{path: readOnly},
-		{path: "/", shared: true},
+		{path: readOnly, ownsTree: true},
+		{path: "/"},
 		{path: plist, launchdPlist: true},
 	}, uid, "someone")
 	if all.Status != healthFail {
@@ -87,10 +87,10 @@ func TestFolderAccessHealthItem(t *testing.T) {
 		readOnly + " 没有写入权限",
 		"/ 属于 ",
 		"其他用户也可写(666)",
-		"sudo chown -R 'someone':staff '" + readOnly + "' && chmod u+rwX '" + readOnly + "'",
+		"sudo chown -R 'someone':staff '" + readOnly + "' && chmod -R u+rwX '" + readOnly + "'",
 		"chmod 644 '" + plist + "'",
 		// 共用目录只改它本身,不递归改里面别的程序的文件。
-		"sudo chown 'someone':staff '/' && chmod u+rwx '/'",
+		"sudo chown 'someone':staff '/' && chmod u+rwX '/'",
 	} {
 		if !strings.Contains(all.Detail, want) {
 			t.Errorf("detail %q misses %q", all.Detail, want)
@@ -109,30 +109,31 @@ func TestFolderAccessHealthItem(t *testing.T) {
 	}
 }
 
-// 共用目录(配置目录的上一层、LaunchAgents、日志目录)标成 shared,Lyrimuse 自己的目录和文件不标。
-func TestHomeFolderTargetsMarkSharedFolders(t *testing.T) {
+// 只有 Lyrimuse 自己的配置目录整棵改(ownsTree);共用目录(配置目录的上一层、LaunchAgents、日志目录)和单个文件不标,
+// 跟 App 的 HomeFolderAccess.targets 同一份口径。
+func TestHomeFolderTargetsMarkOwnedTree(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("LYRIMUSE_CONFIG_DIR", "")
 	t.Setenv("LYRIMUSE_LOG_FILE", "")
-	shared := map[string]bool{}
+	owns := map[string]bool{}
 	for _, target := range homeFolderTargets() {
-		shared[target.path] = target.shared
+		owns[target.path] = target.ownsTree
 	}
 	want := map[string]bool{
-		filepath.Join(home, ".config"):                                           true,
-		filepath.Join(home, ".config", clientName):                               false,
-		filepath.Join(home, "Library/LaunchAgents"):                              true,
-		filepath.Join(home, "Library/Logs"):                                      true,
+		filepath.Join(home, ".config"):                                           false,
+		filepath.Join(home, ".config", clientName):                               true,
+		filepath.Join(home, "Library/LaunchAgents"):                              false,
+		filepath.Join(home, "Library/Logs"):                                      false,
 		filepath.Join(home, "Library/Logs", clientName+".log"):                   false,
 		filepath.Join(home, "Library/LaunchAgents", engineLaunchdLabel+".plist"): false,
 	}
-	if len(shared) != len(want) {
-		t.Fatalf("targets = %v, want %v", shared, want)
+	if len(owns) != len(want) {
+		t.Fatalf("targets = %v, want %v", owns, want)
 	}
-	for path, isShared := range want {
-		if got, ok := shared[path]; !ok || got != isShared {
-			t.Errorf("%s: shared=%v (present %v), want %v", path, got, ok, isShared)
+	for path, isOwned := range want {
+		if got, ok := owns[path]; !ok || got != isOwned {
+			t.Errorf("%s: ownsTree=%v (present %v), want %v", path, got, ok, isOwned)
 		}
 	}
 }

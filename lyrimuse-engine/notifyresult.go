@@ -63,6 +63,16 @@ type notifyBusinessFields struct {
 	Error       string          `json:"error"`
 }
 
+// notifyRepliesJSON:收下推送时一定回一个 JSON 的平台。Discord(204 空)、Slack(纯文本 ok)、自定义 Webhook 不在里面。
+// 只拿它判「回了网页」:空正文、别的纯文本照旧算收下,宁可偶尔误报送达也不把真收下的判成失败、重推一份。
+func notifyRepliesJSON(platform string) bool {
+	switch platform {
+	case platformFeishu, platformDingtalk, platformWecom, platformTelegram, platformBark, platformServerChan, platformNtfy:
+		return true
+	}
+	return false
+}
+
 // rawCode 把数字或字符串形式的错误码统一成字符串;字段不在时返回空串。
 func rawCode(raw json.RawMessage) string {
 	s := strings.Trim(strings.TrimSpace(string(raw)), `"`)
@@ -84,6 +94,10 @@ func classifyNotifyResponse(platform string, status int, body []byte) notifyResu
 			r.Detail = notifyDetail(t)
 		}
 	}
+	if status >= 300 && status < 400 {
+		r.Kind, r.Detail = notifyKindConfig, "the address redirects; use the address it points to (usually https)"
+		return r
+	}
 	if status < 200 || status >= 300 {
 		r.Kind = notifyKindForStatus(status)
 		if platform == platformTelegram && f.ErrorCode != 0 {
@@ -98,6 +112,11 @@ func classifyNotifyResponse(platform string, status int, body []byte) notifyResu
 		return r
 	}
 	if !parsed {
+		// 这几家收下时一定回 JSON:2xx 却回了一张网页,多半是代理、门户页或跳转落地页,不算收下。
+		if notifyRepliesJSON(platform) && strings.HasPrefix(strings.TrimSpace(string(body)), "<") {
+			r.Kind, r.Detail = notifyKindServer, "unexpected response"
+			return r
+		}
 		r.OK, r.Kind, r.Detail = true, notifyKindOK, ""
 		return r
 	}

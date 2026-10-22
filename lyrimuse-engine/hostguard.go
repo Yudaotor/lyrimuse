@@ -164,6 +164,8 @@ type hostGuard struct {
 	sourceBudget func(source string) int
 	sourceHits   map[string][]time.Time
 	budgetPath   string
+	// budgetSaveMu:额度存盘串行。取快照和写文件都在它里面,后取的快照不会被先取的那份盖掉。
+	budgetSaveMu sync.Mutex
 }
 
 type lyricSourceBackgroundPause struct {
@@ -195,9 +197,11 @@ var endpointCooldownSchedule = []time.Duration{time.Minute, 5 * time.Minute, 15 
 // newHostGuardRateFor:newHostGuard 建出来的闸按哪张速率表放行。单测在 TestMain 里换成令牌给足的,专测限速的用例自己设 rateFor。
 var newHostGuardRateFor = hostRateFor
 
+// 时刻一律按墙钟(Round(0) 去掉单调读数):macOS 上单调时钟在睡眠时不走,合盖前跳闸的端点、用光的小时额度醒来后
+// 还要再停满一整段清醒时间。令牌桶按两次读数的差回填,墙钟往回调时差是负的,那里已经挡了。
 func newHostGuard(now func() time.Time) *hostGuard {
 	return &hostGuard{
-		now:               now,
+		now:               func() time.Time { return now().Round(0) },
 		rateFor:           newHostGuardRateFor,
 		maxWait:           hostGuardMaxWait,
 		backgroundMaxWait: hostGuardBackgroundMaxWait,

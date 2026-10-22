@@ -302,6 +302,7 @@ public enum NotificationTest {
     /// 预览要取账号全部歌手(判新听的歌手),第一次一二十秒;等这么久还没有结果就当没取到。
     public static let previewTimeout: TimeInterval = 60
 
-    /// 引擎每 0.5 秒看一次请求;Telegram 走代理回退一次最长二十来秒。过了这么久还没有结果就当引擎没接手(没在跑)。
-    public static let timeout: TimeInterval = 30
+    /// 引擎每 0.5 秒看一次请求;Telegram 一次推送走代理回退最长十几秒,排过版的被拒还要再推一次纯文本,前后能到三十秒。
+    /// 过了这么久还没有结果就当引擎没接手(没在跑)。
+    public static let timeout: TimeInterval = 45
 }

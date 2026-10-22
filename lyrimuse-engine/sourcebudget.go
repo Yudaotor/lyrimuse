@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"slices"
 	"time"
 )
 
@@ -32,6 +33,8 @@ func (g *hostGuard) noteSourceHit(source string) {
 	if g.sourceBudget(source) <= 0 {
 		return
 	}
+	g.budgetSaveMu.Lock()
+	defer g.budgetSaveMu.Unlock()
 	g.mu.Lock()
 	now := g.now()
 	g.sourceHits[source] = append(pruneSourceHits(g.sourceHits[source], now), now)
@@ -70,11 +73,17 @@ func (g *hostGuard) useSourceBudgetFile(path string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.budgetPath = path
+	// 比此刻还晚的不要(上一个进程写的时候墙钟偏快、之后被校正回来):它要等墙钟追上再过一小时才剪得掉,一直占着额度。
+	// 剩下的排好序,pruneSourceHits 遇到第一条没过期的就停。
+	now := g.now()
 	for src, ms := range saved {
 		hits := make([]time.Time, 0, len(ms))
 		for _, m := range ms {
-			hits = append(hits, time.UnixMilli(m))
+			if t := time.UnixMilli(m); !t.After(now) {
+				hits = append(hits, t)
+			}
 		}
+		slices.SortFunc(hits, func(a, b time.Time) int { return a.Compare(b) })
 		g.sourceHits[src] = hits
 	}
 }

@@ -67,7 +67,8 @@ func readSharedCooldownFile(path string) map[string]float64 {
 		return nil
 	}
 	var f sharedCooldownFile
-	if json.Unmarshal(data, &f) != nil {
+	if err := json.Unmarshal(data, &f); err != nil {
+		noteFileErr("decode", path, err)
 		return nil
 	}
 	return f.Endpoints

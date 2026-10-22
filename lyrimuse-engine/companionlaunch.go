@@ -64,7 +64,7 @@ type companionWatch struct {
 func startCompanionLaunchWatcher(ctx context.Context, appAvailable func() bool) {
 	// 盯播放状态文件所在的配置目录(同 poller.go 那份监听)。
 	writes := make(chan struct{}, 1)
-	watched := watchDirWrites(ctx, configDir(), writes)
+	watchStopped, watched := startDirWatch(ctx, configDir(), writes)
 	interval := companionCheckInterval
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -77,6 +77,10 @@ func startCompanionLaunchWatcher(ctx context.Context, appAvailable func() bool) 
 		case now = <-ticker.C:
 		case <-writes:
 			now = time.Now()
+		case <-watchStopped:
+			// 盯到一半停了:往后只靠定时器,空闲时也按常规节拍看。
+			watchStopped, watched = nil, false
+			continue
 		}
 		w.check(now, appAvailable())
 		// sampledAt 非零 = 这一轮要盯(见 step)。

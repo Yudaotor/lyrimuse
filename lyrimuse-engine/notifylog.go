@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -96,7 +97,7 @@ func findNotifyLogEntry(id string) (notifyLogEntry, bool) {
 	return notifyLogEntry{}, false
 }
 
-// notifyDeliveredSince:推送记录里有没有 since(unix 秒)及以后推到 channel、同一事件同一标题、推成了的一条。
+// notifyDeliveredSince:推送记录里有没有 since(unix 秒)及以后推到 channel、同一事件同一期(digestTitleKey)、推成了的一条。
 func notifyDeliveredSince(channel, event, title string, since int64) bool {
 	notifyLogMu.Lock()
 	defer notifyLogMu.Unlock()
@@ -104,11 +105,17 @@ func notifyDeliveredSince(channel, event, title string, since int64) bool {
 		return false
 	}
 	for _, e := range readNotifyLog(notifyLogPath).Entries {
-		if e.OK && e.At >= since && e.Channel == channel && e.Event == event && e.Title == title {
+		if e.OK && e.At >= since && e.Channel == channel && e.Event == event && digestTitleKey(e.Title) == digestTitleKey(title) {
 			return true
 		}
 	}
 	return false
+}
+
+// digestTitleKey:去重时认「同一期」用的标题。日报按推的那一刻写「今日 / 昨日」(digestDailyPeriod),过了零点同一期
+// 就换了写法;去掉这两个字再比,失败后补推和手动重发才认得出是同一份。
+func digestTitleKey(title string) string {
+	return strings.NewReplacer("今日", "", "昨日", "").Replace(title)
 }
 
 func newNotifyLogID() string {

@@ -216,6 +216,10 @@ if [[ "$answer" != "yes" ]]; then
 fi
 
 stop_services
+# 注销登录项那一步起过一次 App(辅助模式),它可能刚轮转 / 新建了 App 日志:清单是在那之前列的,补上。
+for p in "$APP_LOG_FILE" "$APP_LOG_ARCHIVE"; do
+  [[ -e "$p" ]] && (( ! ${TO_DELETE[(Ie)$p]} )) && TO_DELETE+=("$p")
+done
 echo
 echo "=== 删除数据 ==="
 for p in "${TO_DELETE[@]}"; do

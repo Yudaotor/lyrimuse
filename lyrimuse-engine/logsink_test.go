@@ -167,9 +167,14 @@ func TestIsDaemonInvocation(t *testing.T) {
 	}
 }
 
-// 常驻模式下 fd 2 跟着轮转换到新文件:Go 运行时的 panic 直接写 fd 2,要落在当前日志里而不是 .old。
+// 常驻模式下 fd 2(连同 fd 1)跟着轮转换到新文件:Go 运行时的 panic 直接写 fd 2,要落在当前日志里而不是 .old;
+// fd 1 不跟着换的话,launchd 开的那份删掉之后空间放不出来。
 func TestRotatingLogFile_StderrFollowsRotation(t *testing.T) {
 	saved, err := syscall.Dup(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	savedOut, err := syscall.Dup(1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +182,9 @@ func TestRotatingLogFile_StderrFollowsRotation(t *testing.T) {
 	restore := func() {
 		if !restored {
 			_ = syscall.Dup2(saved, 2)
+			_ = syscall.Dup2(savedOut, 1)
 			_ = syscall.Close(saved)
+			_ = syscall.Close(savedOut)
 			restored = true
 		}
 	}
@@ -194,12 +201,16 @@ func TestRotatingLogFile_StderrFollowsRotation(t *testing.T) {
 	_, _ = r.Write([]byte("second line pushes past the cap\n"))
 	// 直接写 fd 2:go test -json 下 os.Stderr 不经 fd 2,探针写它就测不到重定向。
 	_, _ = syscall.Write(2, []byte("stderr probe after rotation\n"))
+	_, _ = syscall.Write(1, []byte("stdout probe after rotation\n"))
 	restore()
 
 	cur, _ := os.ReadFile(path)
 	old, _ := os.ReadFile(path + ".old")
 	if !strings.Contains(string(cur), "stderr probe after rotation") || strings.Contains(string(old), "stderr probe") {
 		t.Fatalf("fd 2 应跟到新文件: cur=%q old=%q", cur, old)
+	}
+	if !strings.Contains(string(cur), "stdout probe after rotation") || strings.Contains(string(old), "stdout probe") {
+		t.Fatalf("fd 1 也应跟到新文件: cur=%q old=%q", cur, old)
 	}
 }
 

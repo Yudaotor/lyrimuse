@@ -579,11 +579,12 @@ codesign --force --sign "$SIGN_ID" "$NPC_DST/libnowplaying-clients.dylib"
 if [ -n "${LYRIMUSE_MEDIA_CONTROL_PREFIX:-}" ]; then
   MEDIA_CONTROL_PREFIX="$LYRIMUSE_MEDIA_CONTROL_PREFIX"
 else
-  MEDIA_CONTROL_PREFIX="$(brew --prefix media-control 2>/dev/null)"
+  # `|| true`:没装 Homebrew 时 brew 返回 127,set -e 下这一行会让脚本无声退出。
+  MEDIA_CONTROL_PREFIX="$(brew --prefix media-control 2>/dev/null || true)"
   if [ ! -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ] && command -v brew >/dev/null 2>&1; then
     echo "==> media-control not found, installing via Homebrew (QQ 音乐支持)"
     brew install media-control || echo "!! brew install media-control 失败——继续构建,这次的包只剩 Apple Music / Spotify 读得到" >&2
-    MEDIA_CONTROL_PREFIX="$(brew --prefix media-control 2>/dev/null)"
+    MEDIA_CONTROL_PREFIX="$(brew --prefix media-control 2>/dev/null || true)"
   fi
 fi
 if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
@@ -733,7 +734,11 @@ fi
 # artifacts 落在 SwiftPM 的 scratch 目录下,默认是 ./.build,被上面那组路径参数重定向过
 # 就跟着走(包管理器构建会这么做)。
 SPM_SCRATCH="${LYRIMUSE_SPM_SCRATCH_PATH:-.build}"
-SPARKLE_FW_SRC="$(find "$SPM_SCRATCH/artifacts" -type d -name "Sparkle.framework" -path "*/Sparkle.xcframework/*" 2>/dev/null | head -1)"
+# 目录不在时 find 返回 1,pipefail + set -e 会让脚本在下面「跳过 Sparkle」的判断之前就无声退出:先判目录。
+SPARKLE_FW_SRC=""
+if [ -d "$SPM_SCRATCH/artifacts" ]; then
+  SPARKLE_FW_SRC="$(find "$SPM_SCRATCH/artifacts" -type d -name "Sparkle.framework" -path "*/Sparkle.xcframework/*" 2>/dev/null | head -1 || true)"
+fi
 # Sparkle 不在依赖里就整段跳过:包管理器(MacPorts / Homebrew)装的应用不该自更新,升级
 # 走它们自己的通道——此时没有 framework 可嵌,不是错误。
 #
@@ -935,12 +940,15 @@ PLIST
 # 同一个 App，自动化权限(控制 Music.app 播放)重新弹了一次系统授权对话框——那是那次
 # 迁移唯一一次性的代价，同意一次之后往后重新构建/重启都不会再弹。
 codesign -s "$SIGN_ID" --force --identifier "$LABEL" "$APP_DIR"
-codesign -v "$APP_DIR" && echo "    signature valid"
+# 单独一行:写成 `codesign -v … && echo` 时 set -e 不管 && 左边的失败,验不过照样往下换包。
+codesign -v "$APP_DIR"
+echo "    signature valid"
 # 引擎已经在上面 lipo 之后显式 ad-hoc 签过一次(见那一步的注释:lipo 会让 go build
 # 产物自带的那份签名失效,所以不能再像以前那样只验证不签)——最外层这行 codesign 没加
 # --deep，只签 .app 这一个代码对象，不会动内层这个独立二进制自己的签名；这里显式验证
 # 一遍，而不是假设。
-codesign -v "$APP_DIR/Contents/Resources/$ENGINE_NAME" && echo "    $ENGINE_NAME signature valid"
+codesign -v "$APP_DIR/Contents/Resources/$ENGINE_NAME"
+echo "    $ENGINE_NAME signature valid"
 
 # 架构自检:把包里每个 Mach-O 的架构列出来,并在"要求 universal 却有文件只剩一个架构"时
 # 明确报出来。加这一步的直接原因是 v1.0.0~v1.2.0 三个版本都在没人察觉的情况下发成了
@@ -1023,6 +1031,7 @@ if [ -n "$STAGE" ]; then
   # 不重启(--no-restart)时没人拉起它,不卸。
   if [ "$NO_RESTART" != 1 ] && [ -e "$FINAL_APP_DIR" ] && launchctl list "$ENGINE_LABEL" >/dev/null 2>&1; then
     launchctl bootout "gui/$(id -u)/$ENGINE_LABEL" 2>/dev/null || true
+    ENGINE_BOOTED_OUT=1
     for _ in $(seq 1 20); do
       pgrep -f "$FINAL_APP_DIR/$ENGINE_PATH_PATTERN" >/dev/null 2>&1 || break
       sleep 0.5
@@ -1103,8 +1112,18 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
   [ -n "$pid" ] && break
   sleep 1
 done
+# 换包前卸过引擎(见上面换包那段),又走不到下面的重装段时(App 没起来、旧实例没退)把它装回去:
+# App 的对账只在它自己启动时跑,不装回去的话歌词、推送一直停着,比装机之前还糟。
+restore_engine_job() {
+  [ "${ENGINE_BOOTED_OUT:-0}" = 1 ] || return 0
+  local plist="$HOME/Library/LaunchAgents/$ENGINE_LABEL.plist"
+  [ -f "$plist" ] || return 0
+  launchctl bootstrap "gui/$(id -u)" "$plist" 2>/dev/null || true
+  echo "!! 歌词引擎换包前卸掉过,已重新装回;App 这次没换上,重跑 build.sh。" >&2
+}
 if [ -z "$pid" ]; then
   echo "!! $APP_NAME not running — check $LOG_FILE" >&2
+  restore_engine_job
   exit 1
 fi
 # pid 没变 = 上面那次 kill 没能把旧实例送走,`open -g` 撞上 LaunchServices 单实例只是把它
@@ -1124,6 +1143,7 @@ if [ -n "$OLD_PIDS" ] && [ "$pid" = "$OLD_PIDS" ]; then
   echo "!! 最常见的原因:App 有 modal sheet 开着(设置 / 解析决策 / 搜索候选歌词 等弹窗)," >&2
   echo "!! AppKit 会把 terminate 整个取消掉,等多久都没用 —— 关掉那张面板再跑一次就行。" >&2
   echo "!! 想确认是不是这个原因:/usr/bin/log show --last 5m --predicate 'process == \"lyrimuse\"' | grep 'blocked by'" >&2
+  restore_engine_job
   exit 1
 fi
 echo "==> $APP_NAME running, pid ${pid% }"
@@ -1168,14 +1188,17 @@ if [ -f "$ENGINE_PLIST" ]; then
     sleep 1
     launchctl bootstrap "gui/$(id -u)" "$ENGINE_PLIST" 2>/dev/null || true
   fi
+  # 认 launchd 记下的这个 job 的 pid,不按命令行 pgrep:App 这期间起的引擎子命令(version、歌词搜索、统计)也匹配得上,
+  # 手动装的旧 plist 指着别的路径时又匹配不上。
   cpid=""
   for _ in $(seq 1 60); do
-    for p in $(pgrep -f "$ENGINE_BIN" 2>/dev/null || true); do
+    p="$(launchctl print "gui/$(id -u)/$ENGINE_LABEL" 2>/dev/null | awk '$1 == "pid" && $2 == "=" { print $3; exit }' || true)"
+    if [ -n "$p" ]; then
       case " $OLD_ENGINE_PIDS " in
         *" $p "*) ;;
         *) cpid="$p" ;;
       esac
-    done
+    fi
     [ -n "$cpid" ] && break
     sleep 1
   done

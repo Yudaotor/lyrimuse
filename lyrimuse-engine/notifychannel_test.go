@@ -178,6 +178,11 @@ func TestClassifyNotifyResponse(t *testing.T) {
 		{"ntfy 限流", platformNtfy, 429, `{"code":42901,"http":429,"error":"limit reached: too many requests"}`, false, notifyKindRateLimited, "42901"},
 		{"ntfy 要令牌", platformNtfy, 403, `{"code":40301,"http":403,"error":"forbidden"}`, false, notifyKindAuth, "40301"},
 		{"Webhook 500", platformWebhook, 502, `<html>Bad Gateway</html>`, false, notifyKindServer, ""},
+		{"地址重定向", platformNtfy, 301, `<html>Moved</html>`, false, notifyKindConfig, ""},
+		{"飞书回了网页", platformFeishu, 200, `<html>portal</html>`, false, notifyKindServer, ""},
+		{"ntfy 回了网页", platformNtfy, 200, `<!doctype html><html>`, false, notifyKindServer, ""},
+		{"Bark 空正文照算收下", platformBark, 200, ``, true, notifyKindOK, ""},
+		{"Webhook 回纯文本照算收下", platformWebhook, 200, `thanks`, true, notifyKindOK, ""},
 	}
 	for _, c := range cases {
 		r := classifyNotifyResponse(c.platform, c.status, []byte(c.body))
