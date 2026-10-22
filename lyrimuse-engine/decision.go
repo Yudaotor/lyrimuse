@@ -60,6 +60,8 @@ type lyricsDecision struct {
 	// statsSkips:给各源近况统计的本轮没问到名单(lyricSourceRound.statsSkips),不落盘。nil = 这份决策不是从一轮
 	// 现查里来的,统计退回按 SourcesSkipped 算。
 	statsSkips map[string]string
+	// skipStats:被取消(用户点停止搜索、引擎退出)的那一轮,没问完,不进各源近况统计。不落盘。
+	skipStats bool
 	// 胜者的源名;空 = 这一轮没选出任何可用候选。
 	Winner string `json:"winner,omitempty"`
 	// 这次评估的结果有没有真的落到 Lyrics 字段上。upgrade/rescore 评估完维持现状时是

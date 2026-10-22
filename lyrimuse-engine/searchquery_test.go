@@ -112,14 +112,14 @@ func TestLyricIdentityFieldsIsWired(t *testing.T) {
 	for file, needles := range map[string][]string{
 		"enrich.go": {
 			"idArtist, idTitle, idAlbum := lyricIdentityFields(ctx, artist, title, album)",
-			"appleCatalogID, spotifyTrackID := playbackTrackIDsFor(idArtist, idTitle, idAlbum)",
-			"appleID, spotifyID := musixmatchTrackIDsFor(idArtist, idTitle, idAlbum)",
-			"appleID, _ := playbackTrackIDsFor(idArtist, idTitle, idAlbum)",
+			"appleCatalogID, spotifyTrackID := playbackTrackIDsForRound(ctx, idArtist, idTitle, idAlbum)",
+			"appleID, spotifyID := musixmatchTrackIDsFor(ctx, idArtist, idTitle, idAlbum)",
+			"appleID, _ := playbackTrackIDsForRound(ctx, idArtist, idTitle, idAlbum)",
 			"kkboxLocalLyricsFor(idArtist, idTitle, durationSecs)",
 			"spotifyLocalLyricsFor(idArtist, idTitle, idAlbum)",
 			"amazonLocalLyricsFor(idArtist, idTitle, idAlbum)",
 		},
-		"isrcretry.go":  {"playbackISRC(lyricIdentityFields(ctx, artist, title, album))"},
+		"isrcretry.go":  {"a, t, al := lyricIdentityFields(ctx, artist, title, album)\n\tif code := playbackISRCForRound(ctx, a, t, al); code != \"\" {"},
 		"applemusic.go": {"applemusicLocalLyric(catalogID, idArtist, idTitle, idAlbum, durationSecs)"},
 	} {
 		b, err := os.ReadFile(file)

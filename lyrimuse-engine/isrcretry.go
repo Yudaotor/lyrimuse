@@ -27,7 +27,8 @@ func withRecordingISRC(ctx context.Context, isrc string) context.Context {
 // lyricSourceISRC:发给 deezer / musixmatch / applemusic / amll 的 ISRC。播放器给的优先(按原样标签查,见
 // lyricIdentityFields),其次是 ctx 上挂的(补取那一轮不问 applemusic,所以它拿到的只会是播放器给的)。
 func lyricSourceISRC(ctx context.Context, artist, title, album string) string {
-	if code := playbackISRC(lyricIdentityFields(ctx, artist, title, album)); code != "" {
+	a, t, al := lyricIdentityFields(ctx, artist, title, album)
+	if code := playbackISRCForRound(ctx, a, t, al); code != "" {
 		return code
 	}
 	code, _ := ctx.Value(recordingISRCKey{}).(string)

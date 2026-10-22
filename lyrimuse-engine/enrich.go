@@ -883,6 +883,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	playerCover := playerCoverURLFor(bundleID, artist, title, album, durationSecs, kkboxInfo)
 	ytmVerdict, ytmSettled := kasetAlbumVerdictFor(kasetVideoID, durationSecs, artist, title)
 	playingSongID := playingSongIDFor(bundleID, anchorLink, catalogIDs)
+	pins, pinContent := lyricsPinSnapshot() // 读文件,拿 enrichMu 之前取
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	if !ok {
@@ -958,6 +959,15 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			}
 		} else {
 			delete(durationVariantSeen, key)
+			// 同一次播放里时长先稳定在另一档、「正在播」挪到了变体上,现在又回到这一档:挪回来。留在变体上的话这条的提交不写
+			// 单条快照,App 按快照认定已经按时长挑过变体,一直显示变体那份录音的歌词到换歌。
+			if cur := enrichPlayingKey.Load(); cur != nil && *cur != key {
+				if base, variant := durationVariantBaseKey(*cur); variant && base == key {
+					back := key
+					enrichPlayingKey.Store(&back)
+					movedPlaying = true
+				}
+			}
 		}
 	}
 	if ok {
@@ -1047,7 +1057,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 用户校准过这首歌的歌词时间轴吗(自己钉着,或者在读穿同一首歌的一份校准,见 lyricsCalibratedLocked)—— 两条
 		// "自动重选歌词源"的路径共用这一次判定(见 lyricspins.go)。放在这里而不是各自函数里面:那两个判定要保持纯函数,
 		// 好让单测不碰文件系统就能覆盖"被 pin 住就不重选"。
-		pinned := lyricsCalibratedLocked(key)
+		pinned := lyricsCalibratedLocked(key, pins, pinContent)
 		// 「时长对不上」的原始观察值先过稳定性去抖再交给重试判定 —— 换曲/预载窗口里的
 		// 混合快照(当前标题 + 下一首的时长)是一次性的脏值,直接当真会白烧重试预算、
 		// 还把决策记录盖掉,见 observeWrongDuration。每次进来都要喂一口(包括时长又对上
@@ -2146,6 +2156,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	})
 	// 播放器给的 ISRC 在上锁之前取:取它要拿 enrichMu(经 amazonCachedASIN),别挪进锁里。
 	sourceISRC := lyricSourceISRC(ctx, artist, title, album)
+	pins, pinContent := lyricsPinSnapshot() // 读文件,拿 enrichMu 之前取
 
 	enrichMu.Lock()
 	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读
@@ -2200,6 +2211,11 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	if (e.ManualLyrics && !opts.manual) || enrichEditedSinceLocked(key, stamp) {
 		// 重搜这几秒里用户刚好在"歌词管理"里改了这条(手改、采纳候选、标纯音乐……)—— 进来时的
 		// 快照已经过期,以拿锁这一刻的实际状态为准(跟 rescoreLyrics 里同一道判断)。
+		opts.report(lyricsRematchEdited)
+		return
+	}
+	// 搜的这几秒里用户校准了这首(App 直接写校准名单,不推进改动序号):换了词,校准的偏移就对着另一份歌词了。
+	if !opts.manual && lyricsCalibratedLocked(key, pins, pinContent) {
 		opts.report(lyricsRematchEdited)
 		return
 	}
@@ -2577,6 +2593,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	markedInstrumental := false
 	// 同 retryLyricsUpgradeWith:播放器给的 ISRC 在上锁之前取。
 	sourceISRC := lyricSourceISRC(ctx, artist, title, album)
+	pins, pinContent := lyricsPinSnapshot() // 读文件,拿 enrichMu 之前取
 
 	enrichMu.Lock()
 	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读
@@ -2630,6 +2647,11 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	// 以拿锁这一刻的实际状态为准,不能用几秒前的判断结果去覆盖用户刚做的改动。采纳候选在开关
 	// 关着时不置 ManualLyrics,所以还要看改动序号。手动重新匹配照跑人工修正过的条目(见 lyricsRescoreOpts)。
 	if (e.ManualLyrics && !opts.manual) || enrichEditedSinceLocked(key, stamp) {
+		opts.report(lyricsRematchEdited)
+		return false
+	}
+	// 同 retryLyricsUpgradeWith:搜的这几秒里用户校准了这首,不换。
+	if !opts.manual && lyricsCalibratedLocked(key, pins, pinContent) {
 		opts.report(lyricsRematchEdited)
 		return false
 	}
@@ -3746,6 +3768,12 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	shownMu.Unlock()
 	e, picked := lyricsEntryFromScored(decisionPath, artist, title, searchAlbum, durationSecs, ne, scored,
 		round.skippedSources(), queries.queries(), false, provisionalSource, lastShown)
+	if e.LyricsDecision != nil {
+		// 跟重试、重评那几条路径同一个口径(statsSkips):排队、额度、后台暂停跳过的不算这个源的这一轮,原名那一轮问到过的
+		// 不算跳过。不带的话导入清单、首次解析里被额度挡下的几千轮全记成跳过,设置页报这个源「连续出错」。
+		e.LyricsDecision.statsSkips = round.statsSkips()
+		e.LyricsDecision.skipStats = roundCtx.Err() != nil
+	}
 	e.LyricsListedAlbum = listedAlbum
 	e.LyricsSourcesEnabled = round.enabledSources()
 	recordISRCs(&e, recordingISRCsFromScored(lyricSourceISRC(ctx, artist, title, searchAlbum), scored, durationSecs, title, album))
@@ -4497,7 +4525,7 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			identitiesFrom(titleSearchIdentities, lyricQueryOriginAppleTitle),
 			retryIdentities)
 		if rescue {
-			isrc := trustedRecordingISRC(artist, title, album, durationSecs, results)
+			isrc := trustedRecordingISRC(ctx, artist, title, album, durationSecs, results)
 			titleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results),
 				isrc, titleReverseSungInChinese(results, isrc))
 		}
@@ -4713,7 +4741,7 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 		// 写法,专辑 / 歌手反查两条兜底会全部落空。原串和别名哪个是网易云索引用的写法不能预先假定,只能都试、留误差更小的那个。
 		// 反查那一步见 titleReverseLookup;救急时它已经跟别名轮同时提前跑过(titleSpec),样本没变就直接用。
 		samples := lyricSamplesForStorefront(results)
-		isrc := trustedRecordingISRC(artist, title, album, durationSecs, results)
+		isrc := trustedRecordingISRC(ctx, artist, title, album, durationSecs, results)
 		chinese := titleReverseSungInChinese(results, isrc)
 		var correctedTitle, retryMethod, titleArtist string
 		spec := titleSpec.take(samples, chinese)
@@ -6012,7 +6040,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		}
 		// Apple / Spotify 的曲目 ID 由播放侧顺带记下(见 platformtrackid.go),这里只读。
 		// 别名轮 / 拆分身份轮传的是改写过的署名,那时必然落空、退回只用上面两个 ID。
-		appleCatalogID, spotifyTrackID := playbackTrackIDsFor(idArtist, idTitle, idAlbum)
+		appleCatalogID, spotifyTrackID := playbackTrackIDsForRound(ctx, idArtist, idTitle, idAlbum)
 		resultsCh <- lyricSourceResult{source: "amll", amll: amllLyric(ctx, amllQuery{
 			neteaseID: neteaseID, qqID: qqID, appleCatalogID: appleCatalogID, spotifyTrackID: spotifyTrackID,
 			isrc: lyricSourceISRC(ctx, artist, title, album), artist: artist, title: srcTitle, album: album,
@@ -6068,7 +6096,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// 只在首轮取:补查轮换的是歌手别名,key 本来就对不上,按 ID 那一次首轮也已经试过。
 		mxCtx := ctx
 		if lyricQueryReasonFrom(ctx) == lyricQueryReasonPrimary {
-			appleID, spotifyID := musixmatchTrackIDsFor(idArtist, idTitle, idAlbum)
+			appleID, spotifyID := musixmatchTrackIDsFor(ctx, idArtist, idTitle, idAlbum)
 			mxCtx = withMusixmatchPlaybackIDs(ctx, appleID, spotifyID)
 		}
 		r := musixmatchLyric(mxCtx, artist, srcTitle, durationSecs, features().LyricsTranslationLanguage, lyricSourceISRC(ctx, artist, title, album))
@@ -6125,7 +6153,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// Apple 目录 id 由播放侧顺带记下(platformtrackid.go,同 amll 那路);有它就能先问
 		// Music.app 自己的歌词缓存,拿到官方逐字 + 官方译文,见 applemusiclocal.go。
 		// isrc 有值时(同 deezer 那路)先按 ISRC 直取这条录音,再按名字搜。
-		appleID, _ := playbackTrackIDsFor(idArtist, idTitle, idAlbum)
+		appleID, _ := playbackTrackIDsForRound(ctx, idArtist, idTitle, idAlbum)
 		r := applemusicLyric(ctx, artist, srcTitle, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))
 		// 正在用 Apple Music 放、它自己没给这一条的歌词时,问一次这条录音有没有人声(播放器自己的信号,见 playerInstrumentalSource)。
 		appleNoVocals := forPlaying && r.lyrics == "" && appleID != "" && playingPlayer() == playerAppleMusic && applemusicCatalogNoVocals(ctx, appleID)

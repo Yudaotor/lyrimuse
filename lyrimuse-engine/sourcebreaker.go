@@ -249,9 +249,11 @@ type lyricSourceBreaker struct {
 	blocksPath string
 }
 
+// 时刻一律按墙钟(Round(0) 去掉单调读数):macOS 上单调时钟在睡眠时不走,合盖前暂停了两小时的源醒来还要再停近两小时,
+// 而重启后按存盘的墙钟读回就恢复了(同出站闸,15 章决策 78)。
 func newLyricSourceBreaker(now func() time.Time) *lyricSourceBreaker {
 	return &lyricSourceBreaker{
-		now:        now,
+		now:        func() time.Time { return now().Round(0) },
 		state:      map[string]*lyricSourceBreakerState{},
 		transport:  map[string]*lyricSourceTransportState{},
 		endpointOK: map[string]map[string]time.Time{},

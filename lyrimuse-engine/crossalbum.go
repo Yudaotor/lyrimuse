@@ -51,7 +51,8 @@ func crossAlbumSiblingLyrics(cache map[string]enrichEntry, key string, self enri
 	best, bestScore := "", self.LyricsScore
 	// 正文可能退回在小文件里(bodytext.go):先用元数据筛,最后才取正文,别让每次都把全库正文读一遍。
 	for k, e := range cache {
-		if k == key || e.Lyrics.IsZero() || e.DurationSecs <= 0 {
+		// 标了纯音乐的兄弟,词还留在条目里、分数照旧(重评判出「这份是别的版本的」时也这样标),不搬。
+		if k == key || e.Lyrics.IsZero() || e.DurationSecs <= 0 || e.Instrumental {
 			continue
 		}
 		if e.LyricsScore <= bestScore || e.lyricsScoring() != self.lyricsScoring() {

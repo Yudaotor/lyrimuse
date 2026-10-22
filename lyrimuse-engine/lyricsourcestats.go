@@ -375,11 +375,12 @@ func lyricSourceOutcomeFromDecision(d *lyricsDecision, enabled, eligible func(st
 		artist:     lyricSourceArtistHash(d.QueryArtist),
 		leadArtist: lyricSourceArtistHash(firstCreditedArtist(d.QueryArtist)),
 	}
-	// 本地排队排不上、用完本地小时额度的那几次没问它,也跟它好不好无关:这一轮不算它的(既不算问了,也不算跳过)。
+	// 本地排队排不上、用完本地小时额度、对方 429 之后后台请求暂停中(前台照问,见 09 章决策 329)的那几次没问它,也跟它
+	// 好不好无关:这一轮不算它的(既不算问了,也不算跳过)。
 	queued := map[string]bool{}
 	if d.statsSkips != nil {
 		for s, reason := range d.statsSkips {
-			if reason == lyricSourceSkipReasonQueued || reason == lyricSourceSkipReasonBudget {
+			if reason == lyricSourceSkipReasonQueued || reason == lyricSourceSkipReasonBudget || reason == lyricSourceSkipReasonPaused {
 				queued[s] = true
 				continue
 			}
@@ -855,7 +856,7 @@ func stopLyricSourceStats() {
 // 进程里时是空操作。
 func noteLyricSourceDecision(d *lyricsDecision) {
 	s := lyricSourceStatsShared.Load()
-	if s == nil || d == nil || !lyricSourceStatsCountsPath(d.Path) {
+	if s == nil || d == nil || d.skipStats || !lyricSourceStatsCountsPath(d.Path) {
 		return
 	}
 	// 冷却原因在 s.mu 外面问:熔断器是持着自己的锁调 noteLyricSourceTrip 进来的,持着 s.mu 再去拿它的锁会反过来。

@@ -126,14 +126,18 @@ func coverSweepSaveDeferred(ctx context.Context) bool {
 
 // startCoverSweeper 由 run() 单开一个 goroutine,ctx 取消时退出。
 func startCoverSweeper(ctx context.Context) {
-	delay := coverSweepInitialDelay
+	timer := newWallTimer(coverSweepInitialDelay)
+	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(delay):
+		case <-timer.C:
 		}
-		delay = coverSweepInterval
+		if !timer.Due(time.Now()) {
+			continue
+		}
+		delay := coverSweepInterval
 		offline := runCoverSweep(ctx).offline
 		if !offline {
 			offline = coverSweepRecheckStaleMotion(ctx).offline
@@ -141,6 +145,7 @@ func startCoverSweeper(ctx context.Context) {
 		if offline {
 			delay = coverSweepOfflineRetry
 		}
+		timer.Reset(delay)
 	}
 }
 
@@ -188,7 +193,7 @@ func coverSweepRecheckStaleMotion(ctx context.Context) coverSweepMotionPass {
 		if ctx.Err() != nil {
 			break
 		}
-		rctx, round := coverSweepNetworkRound(ctx)
+		rctx, round := coverSweepNetworkRound(withBackgroundOutbound(ctx))
 		wrote := coverSweepRecheckMotion(rctx, s.key, s.title, s.album)
 		attempts, failures := round()
 		switch {

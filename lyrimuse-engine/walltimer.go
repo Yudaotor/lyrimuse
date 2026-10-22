@@ -35,4 +35,15 @@ func (w *wallTimer) Reset(d time.Duration) {
 	w.t.Reset(min(d, wallTimerStep))
 }
 
+// Restart:不管 C 收没收过,从现在起 d 之后到点(先停掉、排空 C 再重设)。
+func (w *wallTimer) Restart(d time.Duration) {
+	if !w.t.Stop() {
+		select {
+		case <-w.t.C:
+		default:
+		}
+	}
+	w.Reset(d)
+}
+
 func (w *wallTimer) Stop() { w.t.Stop() }

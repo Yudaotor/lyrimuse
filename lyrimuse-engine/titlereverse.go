@@ -204,8 +204,12 @@ func titleSearchContradicts(title, album, found string) bool {
 // titleMarkedCover:歌名写明是翻唱 —— 限定词位置(括号里、最后一个「 - 」之后)有 cover 这个词或「翻唱」「翻自」「カバー」「커버」,
 // 或者任何位置有「covered by」。整个歌名里找 cover 会把「Cover Me」「Take Cover」这种歌名本身算进去。见 09 章决策 319。
 func titleMarkedCover(title string) bool {
-	if strings.Contains(strings.ToLower(title), "covered by") {
-		return true
+	// 按词认「covered by」:找子串会把「Rediscovered By You」算进去。不用 titleSearchWords,它把 by 当停用词去掉了。
+	words := strings.FieldsFunc(strings.ToLower(title), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	for i := 0; i+1 < len(words); i++ {
+		if words[i] == "covered" && words[i+1] == "by" {
+			return true
+		}
 	}
 	for _, seg := range titleQualifierSegments(title) {
 		if words := titleSearchWords(seg); slices.Contains(words, "cover") || slices.Contains(words, "covered") {

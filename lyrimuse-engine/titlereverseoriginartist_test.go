@@ -86,7 +86,7 @@ func TestTrustedRecordingISRCFallsBackToDeezer(t *testing.T) {
 		{"Deezer 被判掉", []scoredLyricCandidateResult{rejected}, ""},
 		{"Deezer 时长对不上", []scoredLyricCandidateResult{far}, ""},
 	} {
-		if got := trustedRecordingISRC("Official胡子男dism", "115 Million Kilometer Film", "Escaparade", 324.7, c.results); got != c.want {
+		if got := trustedRecordingISRC(context.Background(), "Official胡子男dism", "115 Million Kilometer Film", "Escaparade", 324.7, c.results); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
 		}
 	}

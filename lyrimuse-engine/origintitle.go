@@ -78,7 +78,9 @@ func recordingOrigins(ctx context.Context, artist, title, album string, duration
 	}
 	appleID := ""
 	if isrc == "" {
-		appleID, _ = playbackTrackIDsFor(artist, title, album)
+		// 提示表按原样标签记,这里传进来的是改写过的查询词:先换回原样(同 lyricSourceISRC)。
+		a, t, al := lyricIdentityFields(ctx, artist, title, album)
+		appleID, _ = playbackTrackIDsForRound(ctx, a, t, al)
 	}
 	if isrc == "" && appleID == "" {
 		return nil, ""
@@ -237,8 +239,8 @@ func chineseOriginStorefronts(samples ...string) []string {
 // 最后是缓存里这首记着的(confidentISRC:播放器报过或核对过的号;检索配的不算)。手动搜索是另起的进程、没有播放状态,
 // 罗马字曲名这一轮又常常一个候选都没有,只剩缓存这一条能去原产地商店查原名,见 09 章决策 245。
 // 都没有返回空。调用方不能持有 enrichMu。
-func trustedRecordingISRC(artist, title, album string, durationSecs float64, results []scoredLyricCandidateResult) string {
-	if code := playbackISRC(artist, title, album); code != "" {
+func trustedRecordingISRC(ctx context.Context, artist, title, album string, durationSecs float64, results []scoredLyricCandidateResult) string {
+	if code := lyricSourceISRC(ctx, artist, title, album); code != "" {
 		return code
 	}
 	if code := acceptedAppleMusicISRC(results, durationSecs); code != "" {
@@ -414,7 +416,7 @@ func originTitleRound(ctx context.Context, artist, title, album string, duration
 		return ne, results
 	}
 	origin := lyricOriginRecording(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results),
-		trustedRecordingISRC(artist, title, album, durationSecs, results))
+		trustedRecordingISRC(ctx, artist, title, album, durationSecs, results))
 	if origin.title == "" {
 		return ne, results
 	}
@@ -434,7 +436,7 @@ func titleReverseOriginArtistRound(ctx context.Context, artist, title, album str
 	if len(lyricSourcesWorthAliasRetry(ctx, results)) == 0 {
 		return ne, results
 	}
-	origins, isrc := recordingOrigins(ctx, artist, title, album, durationSecs, samples, trustedRecordingISRC(artist, title, album, durationSecs, results))
+	origins, isrc := recordingOrigins(ctx, artist, title, album, durationSecs, samples, trustedRecordingISRC(ctx, artist, title, album, durationSecs, results))
 	origin := originRecordingByISRC(ctx, title, isrc, origins, durationSecs)
 	if origin.artist == "" || normLoose(origin.artist) == normLoose(artist) || normLoose(origin.title) != normLoose(correctedTitle) {
 		return ne, results

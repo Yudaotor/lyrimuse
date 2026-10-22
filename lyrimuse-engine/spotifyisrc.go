@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"path/filepath"
@@ -282,6 +283,14 @@ func spotifyLocalTrackMetas(trackIDs []string, useful func(v []byte) bool) map[s
 		}
 	}
 	return out
+}
+
+// playbackISRCForRound:同 playbackISRC,别的歌那一轮不给(理由见 playbackTrackIDsForRound)。
+func playbackISRCForRound(ctx context.Context, artist, title, album string) string {
+	if isOtherTrackRound(ctx) {
+		return ""
+	}
+	return playbackISRC(artist, title, album)
 }
 
 // playbackISRC 是给歌词源用的入口:「这次播放的这首歌」的 ISRC,没有就返回空串。

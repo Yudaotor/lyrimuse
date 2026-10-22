@@ -130,9 +130,15 @@ func lyricsFileFold(key string) string {
 	return v
 }
 
+// lyricsExportMu:导出从取快照到写完整段串行。同一首几乎同时导两次(换词那次和机翻回填那次)时,先取到旧快照的那次可能
+// 后写完、把新词盖回旧词;运行期写下的文件状态只在内存里,下次启动导入会认定文件被改过,把缓存改回旧词。
+var lyricsExportMu sync.Mutex
+
 // exportLyricsFilesMatching:onlyFolds 为 nil 时导出全部条目,否则只对分组键在其中的条目读写文件。
 // 碰撞分组始终按全部条目计算。
 func exportLyricsFilesMatching(onlyFolds map[string]bool) {
+	lyricsExportMu.Lock()
+	defer lyricsExportMu.Unlock()
 	dir := lyricsDir()
 	if dir == "" {
 		return

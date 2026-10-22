@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"strconv"
 	"sync"
 )
@@ -90,6 +91,16 @@ func notePlaybackTrackID(key string, set func(*playbackTrackIDs)) {
 		playbackTrackIDHints = map[string]playbackTrackIDs{}
 	}
 	playbackTrackIDHints[key] = next
+}
+
+// playbackTrackIDsForRound:同 playbackTrackIDsFor,别的歌那一轮(isOtherTrackRound:后台重搜不在播的那首)不给。提示表按
+// 「歌手|歌名|专辑」记、不带时长:同名的另一段录音(时长变体)后台重搜时按去掉变体位的歌名查,会撞上这次播放记下的那一条,
+// 拿它的目录 id 取词、把它的 ISRC 按「播放器给的」记进条目。
+func playbackTrackIDsForRound(ctx context.Context, artist, title, album string) (appleCatalogID, spotifyTrackID string) {
+	if isOtherTrackRound(ctx) {
+		return "", ""
+	}
+	return playbackTrackIDsFor(artist, title, album)
 }
 
 // playbackTrackIDsFor 读回这首歌的两个 ID。没记过就给两个空串,调用方据此跳过对应的直取。

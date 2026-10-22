@@ -62,8 +62,8 @@ func TestTitleReverseSpecIsWired(t *testing.T) {
 	src := string(data)
 	for _, n := range []string{
 		"defer func() { titleSpec.stop() }()",
-		"if rescue {\n\t\t\tisrc := trustedRecordingISRC(artist, title, album, durationSecs, results)\n\t\t\ttitleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results),\n\t\t\t\tisrc, titleReverseSungInChinese(results, isrc))",
-		"isrc := trustedRecordingISRC(artist, title, album, durationSecs, results)\n\t\tchinese := titleReverseSungInChinese(results, isrc)",
+		"if rescue {\n\t\t\tisrc := trustedRecordingISRC(ctx, artist, title, album, durationSecs, results)\n\t\t\ttitleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results),\n\t\t\t\tisrc, titleReverseSungInChinese(results, isrc))",
+		"isrc := trustedRecordingISRC(ctx, artist, title, album, durationSecs, results)\n\t\tchinese := titleReverseSungInChinese(results, isrc)",
 		"spec := titleSpec.take(samples, chinese)",
 		"correctedTitle, retryMethod, titleArtist = titleReverseLookup(ctx, artist, title, album, durationSecs, samples, isrc, chinese)",
 		"if spec != nil && spec.fetched {",

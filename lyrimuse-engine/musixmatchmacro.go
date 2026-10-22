@@ -268,8 +268,8 @@ func musixmatchPlaybackIDsFrom(ctx context.Context) musixmatchTrackIDs {
 
 // musixmatchTrackIDsFor:这一拍播放器给的 ID 优先(platformtrackid.go playbackTrackIDsFor,只对正在播的那首
 // 有),都没有再取缓存条目里存的(musixmatchCachedTrackIDs)。
-func musixmatchTrackIDsFor(artist, title, album string) (appleCatalogID, spotifyTrackID string) {
-	if a, s := playbackTrackIDsFor(artist, title, album); a != "" || s != "" {
+func musixmatchTrackIDsFor(ctx context.Context, artist, title, album string) (appleCatalogID, spotifyTrackID string) {
+	if a, s := playbackTrackIDsForRound(ctx, artist, title, album); a != "" || s != "" {
 		return a, s
 	}
 	return musixmatchCachedTrackIDs(artist, title, album)

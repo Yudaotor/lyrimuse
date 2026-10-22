@@ -980,7 +980,7 @@ func TestSharePinnedPass(t *testing.T) {
 	enrichMu.Lock()
 	calibrated := map[string]bool{}
 	for k := range entries {
-		calibrated[k] = lyricsCalibratedLocked(k)
+		calibrated[k] = calibratedNow(k)
 	}
 	enrichMu.Unlock()
 	for k, want := range map[string]bool{
@@ -1002,7 +1002,7 @@ func TestSharePinnedPass(t *testing.T) {
 
 	setFeatures(featureFlags{SongEntityShadow: true})
 	enrichMu.Lock()
-	held := lyricsCalibratedLocked("P|Song|Two")
+	held := calibratedNow("P|Song|Two")
 	enrichMu.Unlock()
 	if held {
 		t.Error("开关关着时只认自己钉着的")
@@ -1076,7 +1076,7 @@ func TestSharePinnedGroupLiveChecks(t *testing.T) {
 // 后台自动换词的几道闸认读穿来的校准(lyricsCalibratedLocked):播放时起的重试 / 重评、全量扫库逐条那一步。
 func TestLyricsCalibratedGatesWired(t *testing.T) {
 	for file, needles := range map[string][]string{
-		"enrich.go": {"\t\tpinned := lyricsCalibratedLocked(key)\n"},
+		"enrich.go": {"\t\tpinned := lyricsCalibratedLocked(key, pins, pinContent)\n"},
 		"lyricsfullscan.go": {
 			"\tcalibrated := pins[key] || songShareCalibrationsLocked(pins, content).holds(before)\n\tenrichMu.Unlock()\n",
 			"\tif calibrated {\n\t\treturn lyricsSweepOutcome{skipped: true}\n\t}\n",
@@ -1098,7 +1098,7 @@ func TestSongShareCalibrationsNeedEntity(t *testing.T) {
 	setUpSongShareTest(t, map[string]enrichEntry{"X|A|1": {Lyrics: bt(x)}, "X|A|2": {Lyrics: bt(x)}}, true)
 	writeSongSharePins(t, map[string]string{"X|A|1": songOffsetFingerprint(x, "")})
 	enrichMu.Lock()
-	own, other := lyricsCalibratedLocked("X|A|1"), lyricsCalibratedLocked("X|A|2")
+	own, other := calibratedNow("X|A|1"), calibratedNow("X|A|2")
 	enrichMu.Unlock()
 	if !own || other {
 		t.Errorf("自己钉着的算、没有实体 id 的同词写法不算: %v %v", own, other)
@@ -1131,7 +1131,7 @@ func TestSharePassKeepsInheritedCalibration(t *testing.T) {
 		t.Fatalf("前提: One 单独一组, Two、Three 一组: %v", b.shareOf)
 	}
 	enrichMu.Lock()
-	held := lyricsCalibratedLocked("Singer|Tune|Two")
+	held := calibratedNow("Singer|Tune|Two")
 	enrichMu.Unlock()
 	if !held {
 		t.Error("别的共享组里校准对着的那份歌词也护着")
@@ -1461,4 +1461,10 @@ func TestShareLatestDecisionMigrationIsWired(t *testing.T) {
 	if step < 0 || externalize < 0 || step > externalize {
 		t.Error("main.go 要在 externalizeDecisions 之前跑 migrateShareLatestDecisions")
 	}
+}
+
+// calibratedNow:按此刻的校准名单判 lyricsCalibratedLocked(调用方持 enrichMu)。
+func calibratedNow(key string) bool {
+	pins, content := lyricsPinSnapshot()
+	return lyricsCalibratedLocked(key, pins, content)
 }

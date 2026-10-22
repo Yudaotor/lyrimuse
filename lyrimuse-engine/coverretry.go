@@ -57,7 +57,7 @@ func fillMissingCover(ctx context.Context, e *enrichEntry, scored []scoredLyricC
 		}
 	}
 	var isrcs []string
-	if isrc := trustedRecordingISRC(artist, title, album, durationSecs, scored); isrc != "" {
+	if isrc := trustedRecordingISRC(ctx, artist, title, album, durationSecs, scored); isrc != "" {
 		isrcs = []string{isrc}
 	}
 	r, ok := retryMissingCover(ctx, coverRetry, coverArtist, coverTitle, coverAlbum, coverDuration,

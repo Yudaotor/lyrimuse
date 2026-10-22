@@ -238,7 +238,7 @@ func startLyricsFillSweeper(ctx context.Context) {
 	}
 	// 上一个进程有一轮全量扫库没跑完的话,第一发定时器提前到 lyricsFullScanResumeDelay ——
 	// 那一轮是用户点出来的,不该陪着自动补空一起等 10 分钟。见 lyricsfullscan.go「跨重启续跑」。
-	next := time.NewTimer(lyricsFillSweepFirstDelay(lyricsFullScanActive()))
+	next := newWallTimer(lyricsFillSweepFirstDelay(lyricsFullScanActive()))
 	defer next.Stop()
 	writes, poll := requestWakeups(ctx, filepath.Dir(lyricsFillRequestPath), lyricsFillRequestCheckInterval)
 	defer poll.Stop()
@@ -247,6 +247,9 @@ func startLyricsFillSweeper(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-next.C:
+			if !next.Due(time.Now()) {
+				continue
+			}
 			req := lyricsFillRequest{}
 			// **每一发**都重新看盘上那个标记,而不是启动时读一次就消费掉:这一发万一正好
 			// 撞上别的一轮在跑(runLyricsFillSweep 开头那道闸会把它拒掉、且不碰标记),
@@ -260,13 +263,7 @@ func startLyricsFillSweeper(ctx context.Context) {
 			go runLyricsFillSweep(ctx, req)
 			next.Reset(lyricsFillSweepInterval)
 		case d := <-lyricsFillSweepReschedule:
-			if !next.Stop() {
-				select {
-				case <-next.C:
-				default:
-				}
-			}
-			next.Reset(d)
+			next.Restart(d)
 		case <-writes:
 			handleLyricsFillRequest(ctx)
 		case <-poll.C:

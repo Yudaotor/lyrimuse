@@ -425,8 +425,9 @@ func musixmatchEnsureToken(ctx context.Context) string {
 	musixmatchTokenMu.Lock()
 	if t != "" {
 		musixmatchFetchFailedAt = time.Time{}
-	} else if ctx.Err() == nil {
-		musixmatchFetchFailedAt = time.Now()
+	} else if ctx.Err() == nil && !isBackgroundOutbound(ctx) {
+		// 后台那一路要不到(多半是额度用完、后台暂停被出站闸拦下)不让前台跟着等:冷却只记前台的失败。
+		musixmatchFetchFailedAt = time.Now().Round(0)
 	}
 	musixmatchTokenMu.Unlock()
 	if t == "" && stale != "" {

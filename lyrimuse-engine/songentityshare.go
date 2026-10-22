@@ -1216,8 +1216,7 @@ func (c songShareCalibrations) holds(e enrichEntry) bool {
 
 // lyricsCalibratedLocked:key 这条写法换了词会丢掉一份校准:自己钉着,或者在读穿同一首歌的一份(songShareCalibrations)。
 // 后台自动换词的各道闸认它。调用方持 enrichMu。
-func lyricsCalibratedLocked(key string) bool {
-	pins, content := lyricsPinSnapshot()
+func lyricsCalibratedLocked(key string, pins map[string]bool, content map[string]string) bool {
 	return pins[key] || songShareCalibrationsLocked(pins, content).holds(enrichCache[key])
 }
 

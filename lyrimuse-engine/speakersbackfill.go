@@ -68,7 +68,7 @@ func backfillLyricSpeakers(key, artist, title, album string, durationSecs float6
 	}
 	ctx, cancel := withCancelAfter(withBackgroundOutbound(context.Background()), speakersBackfillTimeout)
 	defer cancel()
-	appleID, spotifyID := musixmatchTrackIDsFor(artist, title, album)
+	appleID, spotifyID := musixmatchTrackIDsFor(ctx, artist, title, album)
 	m, ok, _ := musixmatchMacroByID(ctx, musixmatchTrackIDs{appleCatalogID: appleID, spotifyTrackID: spotifyID}, artist, title, durationSecs)
 	if !ok {
 		m, ok = musixmatchMacroByName(ctx, artist, title, "", durationSecs)

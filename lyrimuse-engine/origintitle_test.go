@@ -252,10 +252,10 @@ func TestTrustedRecordingISRC(t *testing.T) {
 		{Source: "applemusic", Score: 900, ISRC: "JPPO02100112", SourceReportedDurationSecs: 277},
 		{Source: "qq", Score: 950, ISRC: "NOTAPPLE", SourceReportedDurationSecs: 277},
 	}
-	if got := trustedRecordingISRC("nobody", "nothing", "", 277, results); got != "JPPO02100112" {
+	if got := trustedRecordingISRC(context.Background(), "nobody", "nothing", "", 277, results); got != "JPPO02100112" {
 		t.Errorf("got %q", got)
 	}
-	if got := trustedRecordingISRC("nobody", "nothing", "", 277, results[:2]); got != "" {
+	if got := trustedRecordingISRC(context.Background(), "nobody", "nothing", "", 277, results[:2]); got != "" {
 		t.Errorf("判废的、时长对不上的不算: %q", got)
 	}
 }
@@ -269,21 +269,21 @@ func TestTrustedRecordingISRCFallsBackToCachedEntry(t *testing.T) {
 		key:         {ISRCs: []string{"TWA479820001"}, ISRCLevels: map[string]string{"TWA479820001": isrcLevelVerified}},
 		searchedKey: {ISRCs: []string{"TWA479899999"}, ISRCLevels: map[string]string{"TWA479899999": isrcLevelSearched}},
 	})
-	if got := trustedRecordingISRC("Leehom Wang", "Gong Zhuan Zi Zhuan", "Revolution", 256, nil); got != "TWA479820001" {
+	if got := trustedRecordingISRC(context.Background(), "Leehom Wang", "Gong Zhuan Zi Zhuan", "Revolution", 256, nil); got != "TWA479820001" {
 		t.Errorf("没有候选时取缓存里核对过的号: got %q", got)
 	}
-	if got := trustedRecordingISRC("Leehom Wang", "Searched Only", "Revolution", 256, nil); got != "" {
+	if got := trustedRecordingISRC(context.Background(), "Leehom Wang", "Searched Only", "Revolution", 256, nil); got != "" {
 		t.Errorf("检索配的号不算: got %q", got)
 	}
 	am := []scoredLyricCandidateResult{{Source: "applemusic", Score: 900, ISRC: "USX111111111", SourceReportedDurationSecs: 256}}
-	if got := trustedRecordingISRC("Leehom Wang", "Gong Zhuan Zi Zhuan", "Revolution", 256, am); got != "USX111111111" {
+	if got := trustedRecordingISRC(context.Background(), "Leehom Wang", "Gong Zhuan Zi Zhuan", "Revolution", 256, am); got != "USX111111111" {
 		t.Errorf("这一轮认下的候选优先: got %q", got)
 	}
 	dz := []scoredLyricCandidateResult{{Source: "deezer", Score: 700, ISRC: "USX222222222", SourceReportedDurationSecs: 256}}
-	if got := trustedRecordingISRC("Leehom Wang", "Gong Zhuan Zi Zhuan", "Revolution", 256, dz); got != "USX222222222" {
+	if got := trustedRecordingISRC(context.Background(), "Leehom Wang", "Gong Zhuan Zi Zhuan", "Revolution", 256, dz); got != "USX222222222" {
 		t.Errorf("这一轮认下的 Deezer 候选也排在缓存前面: got %q", got)
 	}
-	if got := trustedRecordingISRC("Leehom Wang", "Other Song", "Revolution", 256, nil); got != "" {
+	if got := trustedRecordingISRC(context.Background(), "Leehom Wang", "Other Song", "Revolution", 256, nil); got != "" {
 		t.Errorf("缓存里没有这首: got %q", got)
 	}
 }
@@ -483,7 +483,7 @@ func TestOriginTitleRoundIsWired(t *testing.T) {
 	src := string(b)
 	for _, n := range []string{
 		"\t} else {\n\t\t// 可用源已经够数、走不到上面的标题反查时,缺着的源可能只是拿罗马字的本地曲名搜不到原文登记的这首歌,见 originTitleRound。\n\t\tne, results = originTitleRound(ctx, artist, title, album, durationSecs, ne, results, onUpdate)\n\t}\n\t// 还缺着的源换一种曲名写法再问一次",
-		"isrc := trustedRecordingISRC(artist, title, album, durationSecs, results)\n\t\t\ttitleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results),\n\t\t\t\tisrc, titleReverseSungInChinese(results, isrc))",
+		"isrc := trustedRecordingISRC(ctx, artist, title, album, durationSecs, results)\n\t\t\ttitleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results),\n\t\t\t\tisrc, titleReverseSungInChinese(results, isrc))",
 	} {
 		if !containsCode(src, n) {
 			t.Errorf("enrich.go 缺 %q", n)

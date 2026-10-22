@@ -195,7 +195,8 @@ func prefetchImportOne(ctx context.Context, it prefetchImportItem) prefetchImpor
 	if !prefetchKeyFree(key, true) {
 		return prefetchImportOutcome{}
 	}
-	roundCtx, round := withLyricSourceRound(ctx)
+	// 不跟着进程退出取消:取消了的首次解析会当场落定成「暂无歌词」,续跑时这首又因为已经有条目被跳过。进程退出时它跟着结束、什么都不写。
+	roundCtx, round := withLyricSourceRound(context.WithoutCancel(ctx))
 	resolveEnrichAsync(withBackgroundOutbound(withLyricSearchTitle(roundCtx, lyricSearchTitle(it.Title))), key, it.Artist, normEnrichTitle(it.Title), it.Album, "", it.Duration, false)
 	enrichMu.Lock()
 	e := enrichCache[key]

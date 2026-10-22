@@ -49,8 +49,8 @@ func TestDurationVariantSteadyIsWired(t *testing.T) {
 		"(durationMismatch(e.ResolvedDurationSecs, durationSecs) || lyricsOutrunPlayback(e.Lyrics.String(), e.ResolvedDurationSecs, durationSecs)) &&\n\t\t\t\t!sameRecordingStay, durationSecs",
 		"case sameRecording:\n\t\t\t\t// 时长稳定成另一个值",
 		"correctDuration, sameRecordingStay = true, true",
-		"playingSongID := playingSongIDFor(bundleID, anchorLink, catalogIDs)\n\tenrichMu.Lock()",
-		"} else {\n\t\t\tdelete(durationVariantSeen, key)\n\t\t}",
+		"playingSongID := playingSongIDFor(bundleID, anchorLink, catalogIDs)\n\tpins, pinContent := lyricsPinSnapshot() // 读文件,拿 enrichMu 之前取\n\tenrichMu.Lock()",
+		"} else {\n\t\t\tdelete(durationVariantSeen, key)\n",
 	} {
 		if !containsCode(string(b), n) {
 			t.Errorf("enrich.go 缺 %q", n)

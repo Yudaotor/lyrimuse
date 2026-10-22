@@ -203,7 +203,7 @@ func TestMusixmatchTrackIDsFallBackToCache(t *testing.T) {
 	enrichCache = map[string]enrichEntry{enrichKey(artist, title, album): {
 		AppleURL: "https://music.apple.com/us/album/x/1?i=777", SpotifyTrackID: "4uLU6hMCjMI75M1A2tKUQC"}}
 	enrichMu.Unlock()
-	apple, spotify := musixmatchTrackIDsFor(artist, title, album)
+	apple, spotify := musixmatchTrackIDsFor(context.Background(), artist, title, album)
 	if apple != "777" || spotify != "4uLU6hMCjMI75M1A2tKUQC" {
 		t.Fatalf("没有播放提示时应取缓存里的 ID: apple=%q spotify=%q", apple, spotify)
 	}
