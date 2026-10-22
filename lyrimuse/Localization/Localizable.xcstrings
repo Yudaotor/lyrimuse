@@ -53486,29 +53486,6 @@
         }
       }
     },
-    "选择 1～%d 句" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pick 1–%d lines"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择 1～%d 句"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "選擇 1～%d 句"
-          }
-        }
-      }
-    },
     "免费、格式支持很全的本地音乐播放器" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -53620,6 +53597,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "請開啟此權限，以校準%@拖動進度後的播放位置、顯示循環按鈕，並在失去系統媒體焦點時控制播放"
+          }
+        }
+      }
+    },
+    "选择要分享的句子" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick the lines to share"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择要分享的句子"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇要分享的句子"
           }
         }
       }

@@ -260,6 +260,11 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public var japaneseReading: JapaneseReadingStyle = .romaji {
         didSet { reloadCurrentLyrics() }
     }
+
+    /// 当前这首里一句的读音按字分组(`LyricsSyncEngine.romanizationGroups`),给分享卡片把读音对到字上。
+    public func romanizationGroups(lineText: String, timeMs: Int) -> [SyncedLyricWordGroup]? {
+        syncEngine.romanizationGroups(lineText: lineText, timeMs: timeMs)
+    }
     /// 歌词正文的简繁偏好。改了立刻重新加载当前这首 —— 转换发生在**送进解析引擎之前**,
     /// 缓存里存的原文一个字节都不动,切回来是无损的。
     @Published public var chineseVariant: ChineseVariant = .off {

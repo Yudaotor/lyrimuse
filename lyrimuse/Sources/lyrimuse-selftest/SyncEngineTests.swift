@@ -25,12 +25,26 @@ func runSyncEngineTests() {
                     "分享卡片: 还没唱到时选第一句")
         for id in [order[4], order[0], order[1]] { picked = LyricShareCard.toggled(picked, id, order: order) }
         expectEqual(picked, [order[0], order[1], order[2], order[4]], "分享卡片: 按先后排,不按点的顺序")
-        expectEqual(LyricShareCard.toggled(picked, order[3], order: order).count, LyricShareCard.maxLines,
-                    "分享卡片: 满 4 句再点别的不加")
+        expectEqual(LyricShareCard.toggled(picked, order[3], order: order), order,
+                    "分享卡片: 不限句数,整首都能选")
+        expectEqual([1, 4, 5, 8, 9, 40].map { LyricShareCard.fontSize(lineCount: $0) }, [31, 31, 26, 26, 22, 22],
+                    "分享卡片: 句子越多字越小")
         expectEqual(LyricShareCard.toggled(picked, order[1], order: order), [order[0], order[2], order[4]],
                     "分享卡片: 再点一次取消")
         expectEqual(LyricShareCard.fileName(title: "AC/DC: Live", artist: "宇多田ヒカル"), "AC DC  Live - 宇多田ヒカル.png",
                     "分享卡片: 文件名去掉不能用的字符")
+        let roma = LyricsSyncEngine()
+        roma.load(lyrics: "[00:01.00]側にいるだけで\n[00:03.00]体中が熱く\n", lyricsTr: "",
+                  lyricsRoma: "", lyricsYRC: "", romanizationScripts: [.japanese])
+        let romaAll = roma.allLines(idPrefix: "r")
+        let ruby = LyricShareCard.lines(from: romaAll) { roma.romanizationGroups(lineText: $0, timeMs: $1) }
+        expectEqual(ruby.first?.rubyGroups?.map(\.text).joined(), "側にいるだけで", "分享卡片: 读音按字分组,拼起来是原句")
+        expectEqual(ruby.first?.rubyGroups?.contains { $0.text.contains("側") && $0.romanization != nil }, true,
+                    "分享卡片: 汉字那组带读音")
+        let mismatched = LyricShareCard.lines(from: romaAll) { _, timeMs in
+            [SyncedLyricWordGroup(id: 0, words: [SyncedLyricWord(text: "x", startMs: timeMs, durationMs: 1)], romanization: "x")]
+        }
+        expectEqual(mismatched.first?.rubyGroups == nil, true, "分享卡片: 分组拼不回原句就不用,读音整句放下面")
     }
 
     // ---- 间奏点(歌词窗口的 Apple Music 式「•••」) ----

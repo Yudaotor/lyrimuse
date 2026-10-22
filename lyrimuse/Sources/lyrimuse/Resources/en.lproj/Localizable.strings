@@ -2441,7 +2441,6 @@
 "选中的候选" = "Selected Candidate";
 "选择" = "Choose";
 "选择 .ttf 或 .otf 字体文件，可多选" = "Choose a .ttf or .otf font file (you can select multiple)";
-"选择 1～%d 句" = "Pick 1–%d lines";
 "选择 Lyrimuse 应视为播放器的 App" = "Choose an app for Lyrimuse to treat as a player";
 "选择…" = "Choose…";
 "选择一个会自动同步的文件夹（如 Dropbox、坚果云、OneDrive），在新 Mac 上选择同一文件夹即可恢复" = "Choose a folder that syncs automatically, such as Dropbox or OneDrive. On a new Mac, choose the same folder to restore";
@@ -2450,6 +2449,7 @@
 "选择播放器" = "Choose Players";
 "选择歌词显示方式" = "Choose Where Lyrics Appear";
 "选择用于播放此网站的浏览器" = "Pick the browser you use for this site";
+"选择要分享的句子" = "Pick the lines to share";
 "透明" = "Transparent";
 "逐字" = "Word-timed";
 "逐字填色时已唱部分使用此颜色；未唱部分和其他行仍使用文字颜色。关闭「卡拉OK效果」时无效" = "The part already sung takes this color as lyrics fill word by word. Unsung words and other lines keep the text color. Has no effect when Karaoke Effect is off";

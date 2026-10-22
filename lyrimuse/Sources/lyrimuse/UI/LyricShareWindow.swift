@@ -4,9 +4,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 // 「分享歌词」独立窗口(`Window(id: "lyrics-share")`,见 App.swift):歌词窗口「⋯ › 分享歌词…」和深链 `lyrics-share` 开它。
-// 左边勾 1～4 句(`LyricShareCard`),右边是卡片预览,底下三个开关(译文 / 读音 / Lyrimuse 标识)和拷贝、保存、分享。
+// 左边勾要分享的句子(`LyricShareCard`,不限句数),右边是出图的预览,底下三个开关(译文 / 读音 / Lyrimuse 标识)和拷贝、保存、分享。
 // 打开时按正在放的那首取一份快照,开着期间不跟着换歌;再点一次「分享歌词…」重取(`AppActions.lyricShareRefreshRequests`)。
-// 卡片背景是歌词窗口那套封面图层画成的一帧(`WindowBackgroundLayers.stillImage`),出图 1080×1350。见 07 章决策 180。
+// 卡片背景是歌词窗口那套封面图层画成的一帧(`WindowBackgroundLayers.stillImage`),出图 1080 宽、至少 1350 高。见 07 章决策 180。
 struct LyricShareWindow: View {
     @State private var snapshot: Snapshot?
     @State private var selection: [String] = []
@@ -45,13 +45,23 @@ struct LyricShareWindow: View {
             lineList(snapshot)
                 .frame(width: 300)
             Divider()
+            let image = render(snapshot)
             VStack(spacing: 16) {
-                LyricShareCardView(card: card(snapshot))
-                    .frame(width: LyricShareCardView.size.width, height: LyricShareCardView.size.height)
-                    .scaleEffect(0.62)
-                    .frame(width: LyricShareCardView.size.width * 0.62, height: LyricShareCardView.size.height * 0.62)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+                // 预览就是出图本身(句子多了图会变高),缩到放得下。
+                Group {
+                    if let image {
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+                    } else {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.secondary.opacity(0.08))
+                            .aspectRatio(LyricShareCardView.size, contentMode: .fit)
+                    }
+                }
+                .frame(maxWidth: 360, maxHeight: .infinity)
                 HStack(spacing: 14) {
                     Toggle(L10n.t("译文"), isOn: $showsTranslation)
                         .disabled(!snapshot.lines.contains { $0.translation != nil })
@@ -63,7 +73,7 @@ struct LyricShareWindow: View {
                 HStack(spacing: 10) {
                     Button(L10n.t("拷贝图片")) { copy(snapshot) }
                     Button(L10n.t("保存图片…")) { save(snapshot) }
-                    if let image = render(snapshot) {
+                    if let image {
                         ShareLink(item: Image(nsImage: image),
                                   preview: SharePreview(snapshot.title, image: Image(nsImage: image))) {
                             Text(L10n.t("分享…"))
@@ -83,7 +93,7 @@ struct LyricShareWindow: View {
 
     private func lineList(_ snapshot: Snapshot) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(String(format: L10n.t("选择 1～%d 句"), LyricShareCard.maxLines))
+            Text(L10n.t("选择要分享的句子"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 14)
@@ -108,7 +118,6 @@ struct LyricShareWindow: View {
 
     private func lineRow(_ line: LyricShareCard.Line, order: [String]) -> some View {
         let on = selection.contains(line.id)
-        let full = !on && selection.count >= LyricShareCard.maxLines
         return Button {
             selection = LyricShareCard.toggled(selection, line.id, order: order)
             feedback = nil
@@ -131,7 +140,6 @@ struct LyricShareWindow: View {
             .background(RoundedRectangle(cornerRadius: 6).fill(on ? Color.accentColor.opacity(0.12) : .clear))
         }
         .buttonStyle(.plain)
-        .opacity(full ? 0.45 : 1)
     }
 
     private func card(_ snapshot: Snapshot) -> LyricShareCardView.Card {
@@ -144,9 +152,9 @@ struct LyricShareWindow: View {
 
     @MainActor private func render(_ snapshot: Snapshot) -> NSImage? {
         guard !selection.isEmpty else { return nil }
-        let renderer = ImageRenderer(content: LyricShareCardView(card: card(snapshot))
-            .frame(width: LyricShareCardView.size.width, height: LyricShareCardView.size.height))
-        renderer.scale = LyricShareCard.pixelSize.width / LyricShareCardView.size.width
+        let renderer = ImageRenderer(content: LyricShareCardView(card: card(snapshot)))
+        renderer.proposedSize = ProposedViewSize(width: LyricShareCardView.size.width, height: nil)
+        renderer.scale = LyricShareCard.pixelWidth / LyricShareCardView.size.width
         return renderer.nsImage
     }
 
@@ -175,7 +183,9 @@ struct LyricShareWindow: View {
     /// 按正在放的那首取快照。开关初值跟歌词窗口当前显不显示译文、读音走;标识默认开。
     @MainActor private func load() {
         let playback = PlaybackCoordinator.shared
-        let lines = LyricShareCard.lines(from: playback.allLines)
+        let lines = LyricShareCard.lines(from: playback.allLines) { text, timeMs in
+            LocalPlaybackSource.shared.romanizationGroups(lineText: text, timeMs: timeMs)
+        }
         let artwork = playback.highResArtworkImage ?? playback.artworkImage
         let background = playback.windowBackgroundLayers?.stillImage(size: LyricShareCardView.size)
             ?? artwork.flatMap { LyricShareCardView.blurredBackground($0, size: LyricShareCardView.size) }
@@ -191,7 +201,8 @@ struct LyricShareWindow: View {
     }
 }
 
-/// 分享卡片本体:4:5,封面和歌名歌手在上,选中的几句在中间,标识在右下。按点排版、出图时放大到 1080 宽。
+/// 分享卡片本体:封面和歌名歌手在上,选中的几句在中间,标识在右下。按 540 点宽排版、出图时放大到 1080 宽;高度至少
+/// 675 点(4:5),句子多了按内容加高,不截断。
 struct LyricShareCardView: View {
     static let size = CGSize(width: 540, height: 675)
 
@@ -209,23 +220,23 @@ struct LyricShareCardView: View {
     let card: Card
 
     var body: some View {
-        ZStack {
-            backgroundLayer
-            Color.black.opacity(0.12)
-            VStack(alignment: .leading, spacing: 0) {
-                header
-                Spacer(minLength: 24)
-                ViewThatFits(in: .vertical) {
-                    ForEach([31.0, 27.0, 23.0, 20.0], id: \.self) { size in
-                        lyricBlock(fontSize: size)
-                    }
-                }
-                Spacer(minLength: 24)
-                brand
-            }
-            .padding(48)
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            Spacer(minLength: 40)
+            lyricBlock(fontSize: LyricShareCard.fontSize(lineCount: card.lines.count))
+            Spacer(minLength: 40)
+            brand
         }
-        .frame(width: Self.size.width, height: Self.size.height)
+        .padding(48)
+        .frame(width: Self.size.width)
+        .frame(minHeight: Self.size.height)
+        .background {
+            ZStack {
+                backgroundLayer
+                Color.black.opacity(0.12)
+            }
+        }
+        .clipped()
         .environment(\.colorScheme, .dark)
     }
 
@@ -263,13 +274,17 @@ struct LyricShareCardView: View {
         VStack(alignment: .leading, spacing: fontSize * 0.85) {
             ForEach(card.lines) { line in
                 VStack(alignment: .leading, spacing: fontSize * 0.2) {
-                    Text(line.text)
-                        .font(.system(size: fontSize, weight: .bold))
-                        .foregroundStyle(.white)
-                    if card.showsRomanization, let roma = line.romanization {
-                        Text(roma)
-                            .font(.system(size: fontSize * 0.5))
-                            .foregroundStyle(.white.opacity(0.72))
+                    if card.showsRomanization, let groups = line.rubyGroups {
+                        rubyLine(groups, fontSize: fontSize)
+                    } else {
+                        Text(line.text)
+                            .font(.system(size: fontSize, weight: .bold))
+                            .foregroundStyle(.white)
+                        if card.showsRomanization, let roma = line.romanization {
+                            Text(roma)
+                                .font(.system(size: fontSize * 0.5))
+                                .foregroundStyle(.white.opacity(0.72))
+                        }
                     }
                     if card.showsTranslation, let tr = line.translation {
                         Text(tr)
@@ -281,6 +296,23 @@ struct LyricShareCardView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 读音标在对应的字下面:一组字一列,字在上、读音在下,放不下时整组折行(同歌词管理预览的 `LyricsRubyLine`)。
+    private func rubyLine(_ groups: [LyricsRubyGroup], fontSize: CGFloat) -> some View {
+        WrapLayout(horizontalSpacing: fontSize * 0.12, verticalSpacing: fontSize * 0.3, rowAlignment: .leading) {
+            ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
+                VStack(alignment: .center, spacing: fontSize * 0.1) {
+                    Text(group.text)
+                        .font(.system(size: fontSize, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text(group.romanization ?? " ")
+                        .font(.system(size: fontSize * 0.45))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+                .fixedSize()
+            }
+        }
     }
 
     private var brand: some View {
