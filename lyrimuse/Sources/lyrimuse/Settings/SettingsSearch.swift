@@ -173,6 +173,7 @@ final class SettingsSearchRouter: ObservableObject {
         case "web.lan": return s.webLyricsAllowLAN
         case "lastfm.mirror": return features.lastfmMirrorScrobble
         case "lastfm.matchCustom": return features.lastfmMatchMode == .custom
+        case "romanization.japanese": return s.romanizationScripts.contains(.japanese)
         default: return true
         }
     }

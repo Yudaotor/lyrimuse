@@ -1703,6 +1703,7 @@ public final class LyricsSyncEngine {
         let trackTitle, trackArtist: String
         let headerAliases: [LRCParser.HeaderIdentity]
         let romanizationScripts: RomanizationScripts
+        let japaneseReading: JapaneseReadingStyle
         let songIsCantonese: Bool
         let songIsHokkien: Bool
         let lineBreaks: LineBreakOptions
@@ -1720,18 +1721,20 @@ public final class LyricsSyncEngine {
         lyrics: String, lyricsTr: String, lyricsRoma: String, lyricsYRC: String, lyricsBG: String = "",
         kanaDonor: String = "",
         trackTitle: String = "", trackArtist: String = "", headerAliases: [LRCParser.HeaderIdentity] = [],
-        romanizationScripts: RomanizationScripts = .default, songIsCantonese: Bool = false,
+        romanizationScripts: RomanizationScripts = .default, japaneseReading: JapaneseReadingStyle = .romaji,
+        songIsCantonese: Bool = false,
         songIsHokkien: Bool = false, lineBreaks: LineBreakOptions = .off
     ) -> Bool {
         let fingerprint = LoadFingerprint(
             lyrics: lyrics, lyricsTr: lyricsTr, lyricsRoma: lyricsRoma, lyricsYRC: lyricsYRC, lyricsBG: lyricsBG,
             kanaDonor: kanaDonor,
             trackTitle: trackTitle, trackArtist: trackArtist, headerAliases: headerAliases,
-            romanizationScripts: romanizationScripts, songIsCantonese: songIsCantonese,
+            romanizationScripts: romanizationScripts, japaneseReading: japaneseReading, songIsCantonese: songIsCantonese,
             songIsHokkien: songIsHokkien, lineBreaks: lineBreaks)
         if fingerprint == loadedFingerprint { return false }
         loadedFingerprint = fingerprint
         self.romanizationScripts = romanizationScripts
+        self.japaneseReading = japaneseReading
         self.songIsHokkien = songIsHokkien
         self.lineBreaks = lineBreaks
         // 逐字时间轴先过一遍合法性归一化(LyricTimelineNormalizer):字起点早于行首 /
@@ -2006,6 +2009,7 @@ public final class LyricsSyncEngine {
     /// 不留(见 lyrimuse-engine/hokkien.go),这里管的是客户端现算那一路。日文 / 韩文行照常。
     private var songIsHokkien = false
     private var romanizationScripts: RomanizationScripts = .default
+    private var japaneseReading: JapaneseReadingStyle = .romaji
 
     /// 这一行该不该标罗马音:由它的文字种类和用户开关共同决定。`.other`(拉丁/泰文/西里尔…)不受管辖,始终允许。
     ///
@@ -2032,6 +2036,13 @@ public final class LyricsSyncEngine {
     /// 本来就只在 `!songLooksJapanese` 时跑),本来就归日文开关,跟拼音无关。
     /// 粤语歌的汉字片段查粤拼那一档 —— 判据跟 `script(ofLine:song:)` 对纯汉字行的分派
     /// 一致(汉字本身分不出普通话还是粤语,只能信 songScript 这个外部信号)。
+    /// 这一行按假名标读音:读音样式选了假名、这一行走日文读音(判据同 `Romanizer.lineReading`)、
+    /// 中文片段不用换回原文。
+    private func readsAsKana(_ line: String) -> Bool {
+        japaneseReading == .kana && Romanizer.readsAsJapanese(line, songLooksJapanese: songLooksJapanese)
+            && !masksHanRuns(in: line)
+    }
+
     private func masksHanRuns(in line: String) -> Bool {
         guard !songLooksJapanese, Romanizer.looksJapanese(line), Romanizer.containsHan(line)
         else { return false }
@@ -2265,6 +2276,13 @@ public final class LyricsSyncEngine {
         // Apple Music 给韩英混唱歌的整首音译连英文行也配了一行(照抄原文,有的还带上背景人声的括号),
         // 不拦的话英文句子底下会多出一行几乎一样的英文。
         guard lineNeedsRomanization(plainText) else { return nil }
+        // 读音样式选了假名:日文行一律现算假名,源自带 / 预生成的那份是罗马字,不用。
+        if readsAsKana(plainText) {
+            if let cached = romanizerFallbackCache[plainText] { return cached }
+            let result = Romanizer.kanaReading(plainText, segments: cachedJapaneseSegments(for: plainText))
+            romanizerFallbackCache[plainText] = result
+            return result
+        }
         // 混排行要把中文片段换回原文时,源自带/预生成那份整行罗马音用不了:它是**完整版**
         // (生成侧一律按拼音渲染中文片段、不看开关 —— 开关随时能改,按开关生成的话用户
         // 一打开拼音,存量几千首就得全部回补),而且是拼好的一整个字符串,事后切不出
@@ -2391,7 +2409,7 @@ public final class LyricsSyncEngine {
             words: words, line: line, japanese: allowed,
             marks: kanaAnnotation?.marks(forLine: line) ?? [],
             segments: segments, hanRomanization: hanRoma, koreanRomanization: koreanRoma,
-            songLooksJapanese: songLooksJapanese)
+            songLooksJapanese: songLooksJapanese, kana: readsAsKana(line))
         wordGroupCache[key] = result
         return result
     }
@@ -2417,13 +2435,14 @@ public final class LyricsSyncEngine {
         segments: [Romanizer.JapaneseSegment]? = nil,
         hanRomanization: String? = nil,
         koreanRomanization: String? = nil,
-        songLooksJapanese: Bool = true
+        songLooksJapanese: Bool = true,
+        kana: Bool = false
     ) -> [SyncedLyricWordGroup]? {
         if japanese, Romanizer.looksJapanese(line) {
             // segments 非 nil 时是调用方(引擎的 segmentsCache)预分好的同一行结果,别再分一遍。
             let segs = segments ?? Romanizer.japaneseSegments(
                 line, marks: marks, songLooksJapanese: songLooksJapanese)
-            return mergeSegmentsIntoWordGroups(words: words, segs: segs)
+            return mergeSegmentsIntoWordGroups(words: words, segs: segs, kana: kana)
         }
         if let hanRomanization, !hanRomanization.isEmpty {
             let tokens = hanRomanization.split(separator: " ", omittingEmptySubsequences: true)
@@ -2459,8 +2478,10 @@ public final class LyricsSyncEngine {
     /// 可能横跨好几个逐字词。所以一个片段跨过这一组的右边界时就把下一个词也吃进来
     /// (下面那段罗马音标在整组底下);反过来一个词里落进好几个片段时,把这些片段的
     /// 读音拼起来给这一个词。
+    /// `kana`:读音样式选了假名 —— 每组标它里面含汉字的片段去掉送假名的平假名(`Romanizer.furigana`),
+    /// 不含汉字的组不标。
     private static func mergeSegmentsIntoWordGroups(
-        words: [SyncedLyricWord], segs: [Romanizer.JapaneseSegment]
+        words: [SyncedLyricWord], segs: [Romanizer.JapaneseSegment], kana: Bool = false
     ) -> [SyncedLyricWordGroup]? {
         guard !segs.isEmpty else { return nil }
 
@@ -2471,6 +2492,7 @@ public final class LyricsSyncEngine {
             cursor += w.text.utf16.count
         }
 
+        let lineUnits = kana ? Array(words.map(\.text).joined().utf16) : []
         var groups: [SyncedLyricWordGroup] = []
         var i = 0
         while i < words.count {
@@ -2489,7 +2511,20 @@ public final class LyricsSyncEngine {
                 }
             }
             let start = starts[i]
-            let latins = segs.filter { $0.utf16Start < end && $0.utf16End > start }.map(\.latin)
+            let inGroup = segs.filter { $0.utf16Start < end && $0.utf16End > start }
+            if kana {
+                let readings = inGroup.compactMap { seg -> String? in
+                    guard let k = seg.kana, seg.utf16End <= lineUnits.count else { return nil }
+                    let piece = String(utf16CodeUnits: Array(lineUnits[seg.utf16Start..<seg.utf16End]), count: seg.utf16Length)
+                    return Romanizer.furigana(piece, reading: k)
+                }
+                groups.append(SyncedLyricWordGroup(
+                    id: groups.count, words: Array(words[i...j]),
+                    romanization: readings.isEmpty ? nil : readings.joined()))
+                i = j + 1
+                continue
+            }
+            let latins = inGroup.map(\.latin)
             let joined = latins.isEmpty ? nil : Romanizer.joinLatin(latins)
             // 组里混进的纯拉丁词(中日韩歌词夹的英文单词)读音就是它自己 —— 跟原文一模一样
             // 没有信息增量,不该占一行重复自己。这条判据在整行罗马音那一层本来就有

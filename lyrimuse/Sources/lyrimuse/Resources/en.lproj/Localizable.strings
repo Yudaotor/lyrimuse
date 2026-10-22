@@ -458,6 +458,7 @@
 "修改后的歌词不含任何时间戳，未保存（否则会丢失原有时间轴）；修改内容仍保留在编辑框中" = "Your edited lyrics have no timestamps at all, so they weren't saved (the existing timing would be lost). They're still in the editor";
 "修改此句的时间戳" = "Change this line’s timestamp";
 "候选" = "Candidates";
+"假名" = "Kana";
 "偏移" = "Offset";
 "停止" = "Stop";
 "停止搜索" = "Stop Searching";
@@ -679,6 +680,7 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ more song had no source response · Auto-Match All";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d more couldn't be written to the lyrics folder. Check write access and disk space";
 "只显示歌词" = "Lyrics only";
+"只给汉字标注平假名" = "Hiragana for kanji only";
 "可以直接粘贴完整地址，会自动识别是哪个平台" = "Paste the full address and the platform is recognized automatically";
 "可同时开启多项" = "You can turn on more than one";
 "可在任意 App 中触发，需包含 ⌘、⌥ 或 ⌃ 之一" = "Works in any app; must include ⌘, ⌥ or ⌃";
@@ -1336,6 +1338,7 @@
 "数据来自 %@" = "Data from %@";
 "整体延后 %@ 秒" = "%@ s later overall";
 "整体提前 %@ 秒" = "%@ s earlier overall";
+"整句标注罗马字" = "Romaji for the whole line";
 "整段编辑可粘贴替换、增删句子；每行开头是这一句的时间戳" = "Edit the whole text to paste, add or remove lines; each line starts with its timestamp";
 "整行" = "Line-timed";
 "整行时间轴" = "Line timing";
@@ -1409,6 +1412,7 @@
 "日文歌词自带读音，同水平候选间优先" = "Japanese lyrics with romanization; preferred among otherwise-equal candidates";
 "日本 SyncPower 运营的同步歌词服务" = "Synced lyrics service from SyncPower in Japan";
 "日语" = "Japanese";
+"日语读音" = "Japanese Reading";
 "旧版评分规则" = "Older scoring rules";
 "早 %@ 秒" = "%@ s earlier";
 "时长" = "Duration";
@@ -1647,6 +1651,7 @@
 "查询词：%@" = "Query: %@";
 "标为纯音乐" = "Mark as Instrumental";
 "标注的语言" = "Languages";
+"标注罗马字，或只给汉字标注平假名" = "Romaji, or hiragana for kanji only";
 "标注读音的语言" = "Romanization Languages";
 "标点、空格写法不同" = "punctuation and spacing differ";
 "标题反查：Apple 原产地商店" = "Title lookup: Apple home storefront";
@@ -2098,6 +2103,7 @@
 "网页播放器不会主动报告精确进度，开启此选项可在切歌后立即校准。" = "Web players don't report precise position; this switch lets Lyrimuse recalibrate right after a track change.";
 "网页歌词" = "Web Lyrics";
 "网页版" = "Web";
+"罗马字" = "Romaji";
 "罗马字，如 こんにちは → konnichiwa" = "Romaji, e.g. こんにちは → konnichiwa";
 "罗马字，如 안녕하세요 → annyeonghaseyo" = "Romanization, e.g. 안녕하세요 → annyeonghaseyo";
 "置于最顶层" = "Always on Top";

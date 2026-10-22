@@ -182,6 +182,7 @@ public enum SettingsSearchCatalog {
             RowGate(window, "允许远程控制", "web.lan", "允许局域网访问"),
             RowGate(lastfm, "歌名", "lastfm.matchCustom", "匹配模式"),
             RowGate(lastfm, "歌手", "lastfm.matchCustom", "匹配模式"),
+            RowGate(["歌词", "调整"], "日语读音", "romanization.japanese", "标注读音的语言"),
         ]
         return gates
     }()
@@ -343,6 +344,7 @@ public enum SettingsSearchCatalog {
         lyrics("display", "繁简转换", sub: "中文歌词统一成简体或繁体", kw: ["繁体", "简体", "OpenCC"]),
         lyrics("display", "标注读音的语言", alt: ["标注的语言"], sub: "为勾选的语言标注读音；是否显示在「歌词显示」中设置",
                kw: ["日语", "韩语", "普通话", "粤语", "中文", "拼音", "粤拼", "读音", "罗马音", "罗马字", "注音", "发音"]),
+        lyrics("display", "日语读音", sub: "标注罗马字，或只给汉字标注平假名", kw: ["假名", "平假名", "振假名", "furigana", "罗马字", "罗马音", "汉字读音", "注音"]),
         lyrics("display", "长句拆分", sub: "单行无法完整显示时，拆分为多段依次显示", kw: ["长句", "拆分", "断句", "换行", "折行", "滚动", "跑马灯", "宽度", "悬浮歌词", "灵动岛", "菜单栏", "触控栏"]),
         lyrics("display", "短句合并", sub: "相邻短句可容纳于一行时合并显示", kw: ["短句", "合并", "断句", "频繁", "闪", "宽度", "悬浮歌词", "灵动岛", "菜单栏", "触控栏"]),
         lyrics("display", "时间轴偏移", sub: "正值歌词提前，负值延后",

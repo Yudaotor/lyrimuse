@@ -256,6 +256,10 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public var romanizationScripts: RomanizationScripts = .default {
         didSet { reloadCurrentLyrics() }
     }
+    /// 日语读音标罗马字还是假名,同上改了立刻重新加载。
+    @Published public var japaneseReading: JapaneseReadingStyle = .romaji {
+        didSet { reloadCurrentLyrics() }
+    }
     /// 歌词正文的简繁偏好。改了立刻重新加载当前这首 —— 转换发生在**送进解析引擎之前**,
     /// 缓存里存的原文一个字节都不动,切回来是无损的。
     @Published public var chineseVariant: ChineseVariant = .off {
@@ -4912,6 +4916,7 @@ public final class LocalPlaybackSource: ObservableObject {
         let lineBreaks: LineBreakOptions
         let variant: ChineseVariant
         let romanizationScripts: RomanizationScripts
+        let japaneseReading: JapaneseReadingStyle
         let isCantonese: Bool
         let isHokkien: Bool
         // 没有时间戳的纯文本兜底(见 currentTrackPlainLyrics 头注)跟 lyrics 一样参与这道内容等值闸:不然采纳/更换
@@ -4963,6 +4968,7 @@ public final class LocalPlaybackSource: ObservableObject {
             lineBreaks: lineBreaks,
             variant: chineseVariant,
             romanizationScripts: romanizationScripts,
+            japaneseReading: japaneseReading,
             isCantonese: found?.isCantonese ?? false,
             isHokkien: found?.isHokkien ?? false,
             plainLyrics: found?.plainLyrics ?? "",
@@ -5018,6 +5024,7 @@ public final class LocalPlaybackSource: ObservableObject {
             headerAliases: EnrichCacheReader.headerAliases(
                 artist: snapshot.artist ?? "", title: snapshot.title ?? "", album: snapshot.album ?? ""),
             romanizationScripts: romanizationScripts,
+            japaneseReading: japaneseReading,
             songIsCantonese: found?.isCantonese ?? false,
             songIsHokkien: found?.isHokkien ?? false,
             lineBreaks: lineBreaks

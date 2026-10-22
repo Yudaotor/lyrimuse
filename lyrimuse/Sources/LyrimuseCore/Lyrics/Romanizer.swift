@@ -238,7 +238,8 @@ public enum Romanizer {
                let reading = numeralReading(head + tail)
             {
                 out.append(JapaneseSegment(
-                    utf16Start: seg.utf16Start, utf16Length: seg.utf16Length + segments[i + 1].utf16Length, latin: reading))
+                    utf16Start: seg.utf16Start, utf16Length: seg.utf16Length + segments[i + 1].utf16Length, latin: reading,
+                    kana: kanaFromLatin(reading)))
                 i += 2
                 continue
             }
@@ -258,6 +259,8 @@ public enum Romanizer {
         public let utf16Start: Int
         public let utf16Length: Int
         public let latin: String
+        /// 含汉字的片段的平假名读音(整个片段的,含送假名),给读音样式选了假名时用;不含汉字、拿不到读音的为 nil。
+        public var kana: String? = nil
         public var utf16End: Int { utf16Start + utf16Length }
     }
 
@@ -271,6 +274,20 @@ public enum Romanizer {
     /// 都要调进来,原来每个 token 各自 `Array(text.utf16)` 重新物化整行(性能
     /// 审计,只在带假名标注的酷狗日文歌上生效)。不传时自己物化,行为不变。
     static func annotatedReading(
+        in text: String, utf16Start: Int, utf16Length: Int, marks: [KanaAnnotation.Mark],
+        unitsHint: [UTF16.CodeUnit]? = nil
+    ) -> String? {
+        guard let kana = annotatedKana(
+            in: text, utf16Start: utf16Start, utf16Length: utf16Length, marks: marks, unitsHint: unitsHint),
+            let latin = kana.applyingTransform(.toLatin, reverse: false),
+            latin != kana
+        else { return nil }
+        return latin.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// 这个 token 按标注拼出来的假名读音(`annotatedReading` 转罗马字之前那一步);没有标注、标注跨出 token、
+    /// 有汉字没盖住时返回 nil。
+    static func annotatedKana(
         in text: String, utf16Start: Int, utf16Length: Int, marks: [KanaAnnotation.Mark],
         unitsHint: [UTF16.CodeUnit]? = nil
     ) -> String? {
@@ -297,12 +314,56 @@ public enum Romanizer {
             kana += String(utf16CodeUnits: Array(units[cursor..<end]), count: end - cursor)
         }
         // 标注没盖住这个词里的每个汉字(那几个字没给读音):剩下的汉字交给 .toLatin 会读成普通话拼音,整个词退回分词器。
-        guard !kana.contains(where: KanaAnnotation.needsAnnotation),
-              !kana.isEmpty,
-            let latin = kana.applyingTransform(.toLatin, reverse: false),
-            latin != kana
+        guard !kana.contains(where: KanaAnnotation.needsAnnotation), !kana.isEmpty else { return nil }
+        return kana
+    }
+
+    // MARK: - 假名读音(读音样式选了假名)
+
+    /// 片假名换成平假名,其余字符不动。
+    public static func hiragana(_ s: String) -> String {
+        String(String.UnicodeScalarView(s.unicodeScalars.map { u in
+            (0x30A1...0x30F6).contains(u.value) ? Unicode.Scalar(u.value - 0x60)! : u
+        }))
+    }
+
+    /// 标在一组字底下的假名:读音去掉跟原文首尾相同的假名(送假名、夹在前面的假名),只留对着汉字的那段
+    /// (「呼ん」よん → よ)。原文里没有汉字、剥完是空的返回 nil。
+    public static func furigana(_ text: String, reading: String) -> String? {
+        guard text.contains(where: KanaAnnotation.needsAnnotation) else { return nil }
+        let t = Array(hiragana(text)), r = Array(hiragana(reading))
+        var head = 0
+        while head < t.count, head < r.count, t[head] == r[head], !KanaAnnotation.needsAnnotation(t[head]) { head += 1 }
+        var tail = 0
+        while tail < t.count - head, tail < r.count - head, t[t.count - 1 - tail] == r[r.count - 1 - tail],
+              !KanaAnnotation.needsAnnotation(t[t.count - 1 - tail]) { tail += 1 }
+        let core = String(r[head ..< r.count - tail])
+        return core.isEmpty ? nil : core
+    }
+
+    /// 整行的假名读音:含汉字的片段换成它的平假名读音,其余原样。跟原文一样(没有汉字)、或有含汉字的片段
+    /// 拿不到读音时返回 nil。
+    public static func kanaReading(_ text: String, segments: [JapaneseSegment]) -> String? {
+        let units = Array(text.utf16)
+        var out = ""
+        var cursor = 0
+        for seg in segments.sorted(by: { $0.utf16Start < $1.utf16Start }) where seg.utf16End <= units.count {
+            let piece = String(utf16CodeUnits: Array(units[seg.utf16Start..<seg.utf16End]), count: seg.utf16Length)
+            guard piece.contains(where: KanaAnnotation.needsAnnotation), seg.utf16Start >= cursor else { continue }
+            guard let kana = seg.kana else { return nil }
+            out += String(utf16CodeUnits: Array(units[cursor..<seg.utf16Start]), count: seg.utf16Start - cursor) + kana
+            cursor = seg.utf16End
+        }
+        out += String(utf16CodeUnits: Array(units[cursor...]), count: units.count - cursor)
+        return out == text || out.contains(where: KanaAnnotation.needsAnnotation) ? nil : out
+    }
+
+    /// 分词器给的拉丁转写换回平假名(它本来就是从假名转出来的,换回去是确定的)。
+    static func kanaFromLatin(_ latin: String) -> String? {
+        guard !latin.isEmpty, let kana = latin.applyingTransform(.latinToHiragana, reverse: false),
+              !kana.contains(where: { $0.isASCII && $0.isLetter })
         else { return nil }
-        return latin.trimmingCharacters(in: .whitespaces)
+        return kana
     }
 
     /// 把若干个片段的读音拼成一段罗马音。跟 `japaneseReading` 用同一套促音归并规则,
@@ -339,13 +400,18 @@ public enum Romanizer {
         songLooksJapanese: Bool,
         segments: @autoclosure () -> [JapaneseSegment]
     ) -> String? {
-        // 带谚文的行是韩文(夹的汉字是汉字词):不进日语分词器,谚文走 KoreanRomanization。
-        if looksJapanese(line) || (songLooksJapanese && containsHan(line) && !containsHangul(line)),
+        if readsAsJapanese(line, songLooksJapanese: songLooksJapanese),
             let reading = readingFromSegments(segments(), original: line)
         {
             return reading
         }
         return romanize(line, japanese: false)
+    }
+
+    /// 这一行走日文读音:有假名,或者整首像日文、有汉字、没有谚文(带谚文的行是韩文,夹的汉字是汉字词,
+    /// 谚文走 KoreanRomanization)。
+    public static func readsAsJapanese(_ line: String, songLooksJapanese: Bool) -> Bool {
+        looksJapanese(line) || (songLooksJapanese && containsHan(line) && !containsHangul(line))
     }
 
     public static func readingFromSegments(
@@ -710,12 +776,16 @@ public enum Romanizer {
                     tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String ?? ""
                 if let numeral = numeralReading(piece) { latin = numeral }
                 // 歌词源自带的假名标注优先于分词器 —— 多音词该念哪个,标注说了算。
-                if let annotated = annotatedReading(
+                let annotatedKanaText = marks.isEmpty ? nil : annotatedKana(
                     in: text, utf16Start: r.location, utf16Length: r.length, marks: marks,
                     unitsHint: units)
+                if let kana = annotatedKanaText, let annotated = kana.applyingTransform(.toLatin, reverse: false),
+                   annotated != kana
                 {
-                    latin = annotated
+                    latin = annotated.trimmingCharacters(in: .whitespaces)
                 }
+                let kana = piece.contains(where: KanaAnnotation.needsAnnotation)
+                    ? (annotatedKanaText.map(hiragana) ?? kanaFromLatin(latin)) : nil
                 if let fixed = particleLatin(for: piece) { latin = fixed }
                 if latin.isEmpty {
                     // 拿不到读音的(标点/拉丁词本身)原样留着 —— 但纯空白不值得占一个片段。
@@ -725,7 +795,7 @@ public enum Romanizer {
                 // ICU 对促音「っ」会吐出字面的 "~tsu",单片段里也要按双写辅音归并
                 // (mergeSokuon 是按片段序列做的,这里先各自留着,拼接时再交给它)。
                 out.append(JapaneseSegment(
-                    utf16Start: r.location, utf16Length: r.length, latin: latin))
+                    utf16Start: r.location, utf16Length: r.length, latin: latin, kana: kana))
             }
             return out
         } ?? []
@@ -977,6 +1047,13 @@ public enum LyricScript: String, Sendable, CaseIterable {
 /// 为什么要分语言:同一个人对不同语言的需求是相反的 —— 听日文歌想要罗马字才跟得上,
 /// 听中文歌却完全不需要拼音(对中文读者是纯噪声,就是因为这个才把中文歌的
 /// 客户端兜底整个关掉的)。原来只有一个总开关,表达不了这件事。
+/// 日文读音标成什么:罗马音,或者只给汉字标平假名(`Romanizer.furigana` / `Romanizer.kanaReading`)。
+/// 只管日文,开不开日文读音仍由 `RomanizationScripts.japanese` 管。
+public enum JapaneseReadingStyle: String, Sendable, CaseIterable {
+    case romaji
+    case kana
+}
+
 public struct RomanizationScripts: OptionSet, Sendable, Codable {
     public let rawValue: Int
     public init(rawValue: Int) { self.rawValue = rawValue }

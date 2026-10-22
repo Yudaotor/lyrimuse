@@ -217,6 +217,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 启动时不推一次的话它会一直用默认值,用户的选择要等到下次在设置页里改动才生效。
         LocalPlaybackSource.shared.chineseVariant = settings.lyricsChineseVariant
         LocalPlaybackSource.shared.romanizationScripts = settings.romanizationScripts
+        LocalPlaybackSource.shared.japaneseReading = settings.japaneseReadingStyle
         LocalPlaybackSource.shared.splitsLongLyricLines = settings.splitLongLyricLines
         LocalPlaybackSource.shared.mergesShortLyricLines = settings.mergeShortLyricLines
         LineLayoutBudgets.shared.start()

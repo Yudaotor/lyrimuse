@@ -211,6 +211,7 @@ Japanese romaji, Korean romanization, Mandarin pinyin and Cantonese Jyutping, wo
 
 - On by default
 - Settings: Lyrics › Adjust › Romanization Languages
+- Settings: Lyrics › Adjust › Japanese Reading
 - Settings: Lyrics Display › Floating Lyrics › Content › Romanization
 - Settings: Keyboard Shortcuts › Show/Hide Romanization
 
@@ -809,7 +810,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 279 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 280 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -830,6 +831,7 @@ Every setting in the Settings window, by where it lives: 279 in all. Type a name
 
 - **Chinese Script**: Show Chinese lyrics in Simplified or Traditional characters
 - **Romanization Languages**: Adds pronunciation for the selected languages; whether it shows is set in Lyrics Display
+- **Japanese Reading**: Romaji, or hiragana for kanji only
 - **Split Long Lines**: Lines too long to fit are split and shown in parts
 - **Join Short Lines**: Adjacent short lines are merged when they fit on one line
 - **Timing Offset**: Positive shows lyrics earlier, negative later

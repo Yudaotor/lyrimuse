@@ -1990,6 +1990,34 @@ private struct LyricsSettingsTab: View {
                     }
                     .padding(.bottom, 4)
                 }
+                // 日语勾着才有得选;跟语言格子同样双写。
+                if settings.romanizationScripts.contains(.japanese) {
+                    CardDivider()
+                    SettingsRow(
+                        icon: "character.ja",
+                        title: L10n.t("日语读音"),
+                        subtitle: settings.japaneseReadingStyle == .kana
+                            ? L10n.t("只给汉字标注平假名") : L10n.t("整句标注罗马字")
+                    ) {
+                        SettingsGlassTabPicker(
+                            selection: Binding(
+                                get: { settings.japaneseReadingStyle },
+                                set: { newValue in
+                                    settings.japaneseReadingStyle = newValue
+                                    local.japaneseReading = newValue
+                                }
+                            ),
+                            options: JapaneseReadingStyle.allCases,
+                            label: { style in
+                                switch style {
+                                case .romaji: return L10n.t("罗马字")
+                                case .kana: return L10n.t("假名")
+                                }
+                            },
+                            compact: true
+                        )
+                    }
+                }
             }
             // 下面两项跟繁简 / 罗马音同样双写:AppSettings 持久化,LocalPlaybackSource 让当前这首立刻重新加载。
             // 卡头的适用范围就是这两项生效的展示面;触控栏合并另有「合计不超过 5 秒」一条,写在 04 章,不进副标题。

@@ -418,6 +418,29 @@ func runRomanizationTests() {
         let own = KanaAnnotation.parse(lrc: "[00:01.00]明日へ\n[kana:2あす]", donor: "[kana:2あした]\n[00:00.00]明日へ")
         expectEqual(own?.marks(forLine: "明日へ").first?.reading, "あす", "借来的标注: 正文自己带就用自己的")
 
+        // 读音样式选了假名:逐词只给汉字标平假名(去掉送假名),整行把汉字换成假名;源自带的罗马音不用。
+        expectEqual(Romanizer.furigana("呼ん", reading: "よん"), "よ", "假名档: 送假名剥掉")
+        expectEqual(Romanizer.furigana("取り扱い", reading: "とりあつかい"), "とりあつか", "假名档: 词中间夹的假名留着")
+        expectEqual(Romanizer.furigana("が", reading: "が"), nil, "假名档: 没有汉字不标")
+        expectEqual(Romanizer.furigana("光", reading: "ヒカリ"), "ひかり", "假名档: 片假名读音换成平假名")
+        let kanaEngine = LyricsSyncEngine()
+        kanaEngine.load(
+            lyrics: "[00:01.00]明日が僕らを呼んだって\n[kana:2あした1ぼく1よ]", lyricsTr: "",
+            lyricsRoma: "[00:01.00]asu ga bokura wo yon datte",
+            lyricsYRC: "[1000,3000](1000,300,0)明日(1300,200,0)が(1500,300,0)僕(1800,200,0)ら(2000,200,0)を(2200,300,0)呼ん(2500,500,0)だって",
+            romanizationScripts: [.japanese], japaneseReading: .kana)
+        let kanaLine = kanaEngine.activeLine(atMs: 1500)
+        expectEqual(kanaLine?.romanization, "あしたがぼくらをよんだって", "假名档: 整行把汉字换成标注的假名,不用源自带的罗马音")
+        expectEqual(kanaLine?.wordGroups?.compactMap(\.romanization), ["あした", "ぼく", "よ"],
+                    "假名档: 逐词只给汉字标,送假名剥掉")
+        let romajiEngine = LyricsSyncEngine()
+        romajiEngine.load(
+            lyrics: "[00:01.00]明日が僕らを呼んだって\n[kana:2あした1ぼく1よ]", lyricsTr: "", lyricsRoma: "",
+            lyricsYRC: "[1000,3000](1000,300,0)明日(1300,200,0)が(1500,300,0)僕(1800,200,0)ら(2000,200,0)を(2200,300,0)呼ん(2500,500,0)だって",
+            romanizationScripts: [.japanese])
+        expectEqual(romajiEngine.activeLine(atMs: 1500)?.romanization?.hasPrefix("ashita ga boku"), true,
+                    "罗马字档照旧:\(romajiEngine.activeLine(atMs: 1500)?.romanization ?? "")")
+
         // 叠字符号 々 也算待标字符 —— 漏算它会从那里开始整体错位
         expectEqual(KanaAnnotation.needsAnnotation("々"), true, "々 必须算作待标字符")
         expectEqual(KanaAnnotation.needsAnnotation("明"), true, "汉字是待标字符")

@@ -208,6 +208,7 @@ final class AppSettings: ObservableObject {
         static let overlayLyricsKaraoke = "np:overlayLyricsKaraoke"
         static let notchLyricsKaraoke = "np:notchLyricsKaraoke"
         static let lyricsChineseVariant = "np:lyricsChineseVariant"
+        static let japaneseReadingStyle = "np:japaneseReadingStyle"
         static let hasSeenChineseLyrics = "np:hasSeenChineseLyrics"
         static let hasShownMenuBarPositionHint = "np:hasShownMenuBarPositionHint"
         static let showRomanization = "np:showRomanization"
@@ -723,6 +724,10 @@ final class AppSettings: ObservableObject {
     }()
 
     /// 歌词正文显示成简体还是繁体。默认 .off:原样显示歌词源给的写法,不做任何转换。
+    /// 日语读音标成罗马字还是只给汉字标平假名(`romanizationScripts` 里日语开着时才起作用)。
+    @Published var japaneseReadingStyle: JapaneseReadingStyle {
+        didSet { defaults.set(japaneseReadingStyle.rawValue, forKey: Keys.japaneseReadingStyle) }
+    }
     @Published var lyricsChineseVariant: ChineseVariant {
         didSet { defaults.set(lyricsChineseVariant.rawValue, forKey: Keys.lyricsChineseVariant) }
     }
@@ -2179,6 +2184,8 @@ final class AppSettings: ObservableObject {
             defaults.set(overlayKaraoke, forKey: Keys.overlayLyricsKaraoke)
             defaults.set(notchKaraoke, forKey: Keys.notchLyricsKaraoke)
         }
+        japaneseReadingStyle = defaults.string(forKey: Keys.japaneseReadingStyle)
+            .flatMap(JapaneseReadingStyle.init(rawValue:)) ?? .romaji
         lyricsChineseVariant = defaults.string(forKey: Keys.lyricsChineseVariant)
             .flatMap(ChineseVariant.init(rawValue:)) ?? .off
         hasSeenChineseLyrics = defaults.bool(forKey: Keys.hasSeenChineseLyrics)
