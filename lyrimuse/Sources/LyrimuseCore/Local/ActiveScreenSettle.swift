@@ -18,12 +18,26 @@ public struct ActiveScreenSettle: Sendable {
 
     /// 上一次跟过去的焦点屏;nil = 还没跟过(刚打开开关 / 刚启动,下一次无论在哪块屏都跟)。
     public private(set) var followedID: String?
+    /// 这会儿在不在盯。没在盯时 `observe` 一律不动:关掉跟随、宿主藏起来之前排下的复查到点了也不搬。
+    public private(set) var isTracking = false
     private var pending: (id: String, since: Date)?
 
     public init() {}
 
+    /// 开始盯:之前等着的那块作废。
+    public mutating func start() {
+        isTracking = true
+        pending = nil
+    }
+
+    /// 停止盯。
+    public mutating func stop() {
+        isTracking = false
+    }
+
     /// 看到焦点屏是 `id`(时刻 `now`)。
     public mutating func observe(_ id: String, at now: Date) -> Decision {
+        guard isTracking else { return .none }
         guard id != followedID else {
             pending = nil
             return .none
@@ -44,11 +58,6 @@ public struct ActiveScreenSettle: Sendable {
     /// 忘掉跟过的屏和等着的那块(刚打开开关)。
     public mutating func reset() {
         followedID = nil
-        pending = nil
-    }
-
-    /// 只丢掉等着的那块(停止盯焦点屏时)。
-    public mutating func dropPending() {
         pending = nil
     }
 }

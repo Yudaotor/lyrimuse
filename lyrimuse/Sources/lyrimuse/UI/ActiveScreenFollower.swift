@@ -25,6 +25,7 @@ final class ActiveScreenFollower {
         guard wanted != (appObserver != nil) || wantsPoll != (timer != nil) else { return }
         stop()
         guard wanted else { return }
+        settle.start()
         appObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -48,7 +49,6 @@ final class ActiveScreenFollower {
 
     /// 当场跟一次焦点屏。前台 App 此刻没有在屏的普通窗口(只剩桌面)时不动。
     func follow(force: Bool) {
-        settle.dropPending()
         guard let screen = Self.focusedScreen(), let id = ScreenIdentity.id(of: screen) else { return }
         settle.followed(id)
         onFollow(screen, force)
@@ -76,7 +76,7 @@ final class ActiveScreenFollower {
             NSWorkspace.shared.notificationCenter.removeObserver(appObserver)
             self.appObserver = nil
         }
-        settle.dropPending()
+        settle.stop()
     }
 
     /// 焦点屏:前台 App 最前面那扇普通窗口(layer 0)跟哪块屏重叠最多。别换回 `NSScreen.main`:Lyrimuse 不在前台时

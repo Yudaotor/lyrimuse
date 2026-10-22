@@ -5251,7 +5251,9 @@ func runSourceContractIdentityTests() {
                         && follower.contains("guard let screen = Self.focusedScreen(), let id = ScreenIdentity.id(of: screen) else { return }")
                         && follower.contains("OverlayPlacement.screenIndex(ofWindowBounds: bounds, screens: screens.map(\\.frame))")
                         && follower.contains("NSWorkspace.shared.frontmostApplication?.processIdentifier")
-                        && follower.contains("switch settle.observe(id, at: Date())"), true,
+                        && follower.contains("switch settle.observe(id, at: Date())")
+                        && follower.contains("guard wanted else { return }\n        settle.start()")
+                        && follower.contains("self.appObserver = nil\n        }\n        settle.stop()"), true,
                     "跟随当前窗口: 焦点屏按前台 App 最前面那扇窗口认,不用 NSScreen.main;换屏判据走 Core")
         expectEqual(overlayController.contains("private let activeScreen = ActiveScreenFollower()")
                         && overlayController.contains("activeScreen.canMove = { [weak self] in self.map { !$0.isDragArmed } ?? false }")

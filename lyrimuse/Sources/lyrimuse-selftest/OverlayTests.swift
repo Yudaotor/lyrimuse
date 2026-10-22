@@ -1317,6 +1317,8 @@ func runOverlayTests() {
             var settle = ActiveScreenSettle()
             let t0 = Date(timeIntervalSince1970: 1_000_000)
             let half = ActiveScreenSettle.delay / 2
+            expectEqual(settle.observe("A", at: t0), .none, "换屏判据: 还没开始盯时看到什么都不动")
+            settle.start()
             expectEqual(settle.observe("A", at: t0), .wait, "换屏判据: 还没跟过时看到一块屏,先等")
             expectEqual(settle.observe("A", at: t0.addingTimeInterval(half)), .none, "换屏判据: 没稳定够久不跟")
             expectEqual(settle.observe("A", at: t0.addingTimeInterval(ActiveScreenSettle.delay)), .follow, "换屏判据: 稳定够久了跟过去")
@@ -1332,8 +1334,11 @@ func runOverlayTests() {
             settle.followed("C")
             expectEqual(settle.observe("D", at: t0.addingTimeInterval(10 + ActiveScreenSettle.delay + 1)), .wait,
                         "换屏判据: 当场跟过一次(屏幕参数变了)之后,等着的那块从头计时")
-            settle.dropPending()
-            expectEqual(settle.observe("D", at: t0.addingTimeInterval(21)), .wait, "换屏判据: 停止盯之后等着的那块作废,再看到从头等")
+            settle.stop()
+            expectEqual(settle.observe("D", at: t0.addingTimeInterval(21)), .none,
+                        "换屏判据: 停止盯之后(关掉跟随、宿主藏起来),之前排下的复查到点了也不搬")
+            settle.start()
+            expectEqual(settle.observe("D", at: t0.addingTimeInterval(22)), .wait, "换屏判据: 重新开始盯,等着的那块作废、从头等")
             settle.followed("C")
             settle.reset()
             expectEqual(settle.followedID, nil, "换屏判据: 重新打开开关忘掉跟过的屏")
