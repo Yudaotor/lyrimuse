@@ -214,13 +214,27 @@ public enum PinePlayerInfo {
         return [picked, fallback].compactMap { $0 }.max()
     }
 
-    /// 读不出标签的文件里是哪一个:文件名(去掉扩展名)含这个歌名的最后一个(新打开的排在最后)。纯函数,selftest 覆盖。
+    /// 读不出标签的文件里是哪一个:文件名(去掉扩展名和开头的曲号)跟歌名一方含另一方的最后一个(新打开的排在最后);
+    /// 统一 Unicode 写法、不分大小写,文件名不到 `unreadableNameMinChars` 个字的只认它含歌名。纯函数,selftest 覆盖。
     public static func unreadableMatch(title: String, fileNames: [String]) -> Int? {
-        let wanted = PlayerTitleSplit.strippingAudioExtension(title).trimmingCharacters(in: .whitespaces)
+        let wanted = comparable(PlayerTitleSplit.strippingAudioExtension(title))
         guard !wanted.isEmpty else { return nil }
         return fileNames.lastIndex { name in
-            name.range(of: wanted, options: .caseInsensitive) != nil
+            let base = comparable(strippingTrackNumber(PlayerTitleSplit.strippingAudioExtension(name)))
+            return base.contains(wanted) || (base.count >= unreadableNameMinChars && wanted.contains(base))
         }
+    }
+
+    static let unreadableNameMinChars = 3
+
+    static func comparable(_ text: String) -> String {
+        text.precomposedStringWithCanonicalMapping.lowercased().trimmingCharacters(in: .whitespaces)
+    }
+
+    /// 文件名开头的曲号(「05. 」「01 - 」「3_」)去掉。
+    static func strippingTrackNumber(_ base: String) -> String {
+        guard let range = base.range(of: #"^\d{1,3}\s*[.\-_]?\s+|^\d{1,3}[.\-_]"#, options: .regularExpression) else { return base }
+        return String(base[range.upperBound...])
     }
 
     /// 开着的文件按扩展名筛:通用那张表加上 Pine 能放、那张表里没有的几种。

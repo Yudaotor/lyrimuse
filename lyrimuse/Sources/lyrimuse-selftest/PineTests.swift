@@ -63,6 +63,11 @@ func runPineTests() {
                     "Pine 挑文件: 读不出标签的按文件名含歌名认,取后开的")
         expectEqual(P.unreadableMatch(title: "未命名.wma", fileNames: ["未命名.wma"]), 0, "Pine 挑文件: 没写标签那种写法(带扩展名)照样认")
         expectEqual(P.unreadableMatch(title: "Skyline", fileNames: ["天际线-wma.wma"]), nil, "Pine 挑文件: 文件名不含歌名的不认")
+        expectEqual(P.unreadableMatch(title: "4 Bits Cúbicos [Jeremy Flagelo - Diego Psardi]", fileNames: ["05. 4 Bits Cúbicos.dsf"]), 0,
+                    "Pine 挑文件: 歌名比文件名长(后面挂着参演者),去掉曲号的文件名在歌名里也算")
+        expectEqual(P.unreadableMatch(title: "Cu\u{0301}bicos", fileNames: ["03 - Cúbicos.ape"]), 0, "Pine 挑文件: Unicode 写法不同照样认")
+        expectEqual(P.unreadableMatch(title: "Intro", fileNames: ["01 - INTRO.ape"]), 0, "Pine 挑文件: 不分大小写")
+        expectEqual(P.unreadableMatch(title: "Abc Song", fileNames: ["ab.ape", "07.ape"]), nil, "Pine 挑文件: 太短的文件名、只有曲号的不拿来套歌名")
         let sky = LocalAudioFileTags(title: "天际线", artist: "天际的红日", album: "天际线", duration: 20)
         expectEqual(P.pickOpenFile(title: "天际线", artist: "天际的红日\u{2219}天际线",
                                    files: [("天际线-alac.m4a", sky), ("天际线-wma.wma", nil)]), 1,
@@ -249,6 +254,9 @@ func runPineTests() {
         expectEqual(pausedToFloor.running, false, "Pine 边界: 暂停着跳转后不算在走的那段")
         let pausedRunning = H.advance(joinedCal, anchor: anchor("a", 90, 3, false), now: t0.addingTimeInterval(3))
         expectEqual(pausedRunning.running, true, "Pine 边界: 正常暂停之后还是这一段的表")
+        let pausedAgain = H.advance(pausedRunning, anchor: anchor("a", 90, 10, false), now: t0.addingTimeInterval(10))
+        expectEqual([abs((pausedAgain.pausedPosition ?? 0) - (pausedRunning.pausedPosition ?? 0)) < 0.001, pausedAgain.running], [true, true],
+                    "Pine 边界: 停着隔几秒又来一份同一秒的暂停锚点,停下的位置不往后推、还是这一段")
         let reopened = H.advance(pausedRunning, anchor: anchor("a", 0, 500, false), now: t0.addingTimeInterval(500))
         expectEqual(reopened.pausedPosition, 0, "Pine 边界: 暂停着重开同一个文件先报的那份停在 0 秒,不按上一段往后推")
         let pausedEarly = H.advance(only, anchor: anchor("a", 0, 0.8, false), now: t0.addingTimeInterval(0.8))
