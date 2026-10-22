@@ -58,8 +58,9 @@ public enum PinePlayerInfo {
     }
 
     /// 开着的文件里是哪一个:歌名和歌手一栏都对上的最后一个(候选按文件描述符排,它放过的文件不关,新打开的排在最后:同一首放在
-    /// 两个目录里时,后打开的才是在放的);没有的话,只有歌名对上的恰好一个就是它。纯函数,selftest 覆盖。
-    public static func pickFile(title: String, artist: String,
+    /// 两个目录里时,后打开的才是在放的);没有的话,只有歌名对上、时长也对上(`duration` 是系统报的,有才比)的恰好一个就是它:
+    /// 候选是这次运行里放过的全部文件,别的歌手的同名歌也在里面。纯函数,selftest 覆盖。
+    public static func pickFile(title: String, artist: String, duration: Double? = nil,
                                 candidates: [(fileName: String, tags: LocalAudioFileTags)]) -> Int? {
         if let i = candidates.lastIndex(where: { fileMatches(title: title, artist: artist, tags: $0.tags, fileName: $0.fileName) }) {
             return i
@@ -67,7 +68,7 @@ public enum PinePlayerInfo {
         let titled = candidates.indices.filter {
             sameText(title, systemFields(tags: candidates[$0].tags, fileName: candidates[$0].fileName).title)
                 || (candidates[$0].tags.title.isEmpty && title == PlayerTitleSplit.strippingAudioExtension(candidates[$0].fileName))
-        }
+        }.filter { duration == nil || VoxPlayerInfo.preciseDuration(reported: duration, file: candidates[$0].tags.duration) != nil }
         return titled.count == 1 ? titled[0] : nil
     }
 
@@ -130,7 +131,8 @@ public enum PinePlayerInfo {
     public static func adapted(_ snapshot: MediaControlSnapshot?, now: Date = Date()) -> MediaControlSnapshot? {
         guard let snapshot, snapshot.bundleIdentifier == bundleID, let title = snapshot.title, !title.isEmpty else { return snapshot }
         let artist = snapshot.artist ?? ""
-        let file = systemFile(title: title, artist: artist, pid: snapshot.processIdentifier.map { pid_t($0) }, now: now)
+        let file = systemFile(title: title, artist: artist, duration: snapshot.duration,
+                              pid: snapshot.processIdentifier.map { pid_t($0) }, now: now)
         let id = file.flatMap { file in file.tags.map { identity(tags: $0, fileName: URL(fileURLWithPath: file.path).lastPathComponent) } }
             ?? identity(title: title, artist: artist)
         var out = snapshot.withTitle(id.title).withArtist(id.artist).withAlbum(id.album)
@@ -152,7 +154,8 @@ public enum PinePlayerInfo {
     static func isNetworkRadio(_ snapshot: MediaControlSnapshot, now: Date = Date()) -> Bool {
         guard radioShaped(bundleID: snapshot.bundleIdentifier, title: snapshot.title, artist: snapshot.artist,
                           duration: snapshot.duration), let title = snapshot.title else { return false }
-        return systemFile(title: title, artist: snapshot.artist ?? "", pid: snapshot.processIdentifier.map { pid_t($0) }, now: now) == nil
+        return systemFile(title: title, artist: snapshot.artist ?? "", duration: snapshot.duration,
+                          pid: snapshot.processIdentifier.map { pid_t($0) }, now: now) == nil
     }
 
     /// 系统那份像网络电台:Pine、歌名不空、歌手一栏空(没写标签那种写法)、没有时长(它给网络流报 Int64 最大值那么长,
@@ -185,7 +188,8 @@ public enum PinePlayerInfo {
     /// 开着的音频文件里对得上这一首的那个(`pickOpenFile`;读不出标签的那个没有标签,曲目只拆系统那份)。只记当前这一首(歌名、歌手一栏和第几次开播):同一首换了个文件再放
     /// 要重新挑。找到了这一首放着就不再找;没找到的隔 `fileRetry` 再找(换歌那一拍可能还没打开新文件)。
     /// 没有进程号(切歌空档交回的旧快照)时只查记下的。`SourceKnockout` 关掉了这条时返回 nil。
-    static func systemFile(title: String, artist: String, pid: pid_t?, now: Date) -> (path: String, tags: LocalAudioFileTags?)? {
+    static func systemFile(title: String, artist: String, duration: Double?, pid: pid_t?,
+                           now: Date) -> (path: String, tags: LocalAudioFileTags?)? {
         guard !SourceKnockout.isOut(.pineFile) else { return nil }
         let key = title + "\u{1F}" + artist + "\u{1F}" + String(PinePlayhead.startCount)
         let hit = files.withLock { $0?.key == key ? $0 : nil }
@@ -193,8 +197,8 @@ public enum PinePlayerInfo {
         guard let pid else { return hit?.found }
         let opened = keepingLastOccurrence(ProcessOpenFiles.paths(pid: pid)
             .filter { openFileExtensions.contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) })
-            .map { (path: $0, tags: LocalAudioFileTags.read(path: $0)) }
-        let found = pickOpenFile(title: title, artist: artist, files: opened.map {
+            .map { (path: $0, tags: cachedTags(path: $0)) }
+        let found = pickOpenFile(title: title, artist: artist, duration: duration, files: opened.map {
             (fileName: URL(fileURLWithPath: $0.path).lastPathComponent, tags: $0.tags)
         }).map { opened[$0] }
         files.withLock { $0 = (key, found, now) }
@@ -205,9 +209,11 @@ public enum PinePlayerInfo {
 
     /// 开着的文件(按打开先后排)里是哪一个:读得出标签的按 `pickFile`,读不出的按 `unreadableMatch`,两边都有就取后打开的那个
     /// (同一首另有一份读得出标签的旧文件开着时,新打开的读不出标签的才是在放的)。纯函数,selftest 覆盖。
-    public static func pickOpenFile(title: String, artist: String, files: [(fileName: String, tags: LocalAudioFileTags?)]) -> Int? {
+    public static func pickOpenFile(title: String, artist: String, duration: Double? = nil,
+                                    files: [(fileName: String, tags: LocalAudioFileTags?)]) -> Int? {
         let tagged = files.indices.compactMap { i in files[i].tags.map { (index: i, fileName: files[i].fileName, tags: $0) } }
-        let picked = pickFile(title: title, artist: artist, candidates: tagged.map { (fileName: $0.fileName, tags: $0.tags) })
+        let picked = pickFile(title: title, artist: artist, duration: duration,
+                              candidates: tagged.map { (fileName: $0.fileName, tags: $0.tags) })
             .map { tagged[$0].index }
         let unreadable = files.indices.filter { files[$0].tags == nil }
         let fallback = unreadableMatch(title: title, fileNames: unreadable.map { files[$0].fileName }).map { unreadable[$0] }
@@ -215,17 +221,33 @@ public enum PinePlayerInfo {
     }
 
     /// 读不出标签的文件里是哪一个:文件名(去掉扩展名和开头的曲号)跟歌名一方含另一方的最后一个(新打开的排在最后);
-    /// 统一 Unicode 写法、不分大小写,文件名不到 `unreadableNameMinChars` 个字的只认它含歌名。纯函数,selftest 覆盖。
+    /// 统一 Unicode 写法、不分大小写,文件名不到 `unreadableNameMinChars` 个字的只认它含歌名;歌名不到 `unreadableWholeTitleChars`
+    /// 个字的要在文件名里整段出现(前后不挨着字母数字),「Hi」不认成「Highway」。纯函数,selftest 覆盖。
     public static func unreadableMatch(title: String, fileNames: [String]) -> Int? {
         let wanted = comparable(PlayerTitleSplit.strippingAudioExtension(title))
         guard !wanted.isEmpty else { return nil }
         return fileNames.lastIndex { name in
             let base = comparable(strippingTrackNumber(PlayerTitleSplit.strippingAudioExtension(name)))
-            return base.contains(wanted) || (base.count >= unreadableNameMinChars && wanted.contains(base))
+            let contains = wanted.count >= unreadableWholeTitleChars ? base.contains(wanted) : containsWhole(base, wanted)
+            return contains || (base.count >= unreadableNameMinChars && wanted.contains(base))
         }
     }
 
     static let unreadableNameMinChars = 3
+    static let unreadableWholeTitleChars = 5
+
+    /// `part` 在 `text` 里有一处前后都不挨着字母、数字。
+    static func containsWhole(_ text: String, _ part: String) -> Bool {
+        func joins(_ c: Character?) -> Bool { c.map { $0.isLetter || $0.isNumber } ?? false }
+        var from = text.startIndex
+        while let r = text.range(of: part, range: from..<text.endIndex) {
+            let before = r.lowerBound == text.startIndex ? nil : text[text.index(before: r.lowerBound)]
+            let after = r.upperBound == text.endIndex ? nil : text[r.upperBound]
+            if !joins(before), !joins(after) { return true }
+            from = text.index(after: r.lowerBound)
+        }
+        return false
+    }
 
     static func comparable(_ text: String) -> String {
         text.precomposedStringWithCanonicalMapping.lowercased().trimmingCharacters(in: .whitespaces)
@@ -241,6 +263,22 @@ public enum PinePlayerInfo {
     public static let openFileExtensions = PlayerTitleSplit.audioExtensions.union(["aifc", "amr", "bwf", "caf", "dts", "ac3", "m4r", "mka", "w64"])
 
     static let fileRetry: TimeInterval = 3
+
+    /// 按路径和修改时间记的标签:它放过的文件一直开着,每次重挑不再挨个重读。
+    private static let tagCache = OSAllocatedUnfairLock<[String: (modified: Int?, tags: LocalAudioFileTags?)]>(initialState: [:])
+    private static let tagCacheLimit = 512
+
+    static func cachedTags(path: String) -> LocalAudioFileTags? {
+        var info = stat()
+        let modified = stat(path, &info) == 0 ? Int(info.st_mtimespec.tv_sec) : nil
+        if let hit = tagCache.withLock({ $0[path] }), hit.modified == modified { return hit.tags }
+        let tags = LocalAudioFileTags.read(path: path)
+        tagCache.withLock { cache in
+            if cache.count >= tagCacheLimit { cache.removeAll() }
+            cache[path] = (modified, tags)
+        }
+        return tags
+    }
     private static let files = OSAllocatedUnfairLock<(key: String, found: (path: String, tags: LocalAudioFileTags?)?, checkedAt: Date)?>(
         initialState: nil)
 

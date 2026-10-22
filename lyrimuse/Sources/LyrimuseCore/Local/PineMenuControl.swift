@@ -41,7 +41,7 @@ public enum PineMenuControl {
     public static func setMode(_ mode: MusicPlaybackController.MusicPlaybackMode) -> Bool {
         guard mode != .shuffle, let sub = submenu(), let checked = checkedIndex(sub) else { return false }
         guard let index = indexToPress(for: mode, checkedIndex: checked) else { return true }
-        return AXUIElementPerformAction(sub[index], kAXPressAction as CFString) == .success
+        return MenuBarAX.press(sub[index])
     }
 
     private static func checkedIndex(_ items: [AXUIElement]) -> Int? {

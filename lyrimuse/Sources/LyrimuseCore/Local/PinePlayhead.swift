@@ -77,6 +77,8 @@ public enum PinePlayhead {
     static let restartFirstAnchorMaxSecs: Double = 1.5
     /// 上一段推到这份锚点时离结尾不到这么多秒,回到开头算循环(不是重新开播)。
     static let loopEndSlackSecs: Double = 1.5
+    /// 上一段推出来超过结尾这么多就不是刚放完的(没收到暂停锚点就断了的旧表),不认循环。
+    static let loopOverrunSecs: Double = 5
     /// 取整的锚点不知道小数时补的量(真位置在报的值和它 + 1 之间)。
     public static let flooredMidpointSecs: Double = 0.5
     /// 取整的锚点夹位置时的上沿(报的值 + 它)。
@@ -111,6 +113,12 @@ public enum PinePlayhead {
         if let clock, sameAnchor(clock.anchor, anchor) { return clock }
         let same = clock?.anchor.track == anchor.track ? clock : nil
         guard anchor.playing else { return paused(same, anchor: anchor, now: now) }
+        // 第一秒里停下、再恢复:恢复报的是下取整的 0,按恢复接着走,别当成重新开播停在 0。
+        if anchor.elapsed <= 0, let same, !same.anchor.playing, same.running, let stopped = same.pausedPosition,
+           stopped > 0, stopped < 1 {
+            return Clock(anchor: anchor, kind: .resume, base: stopped, baseAt: anchor.at, precise: same.precise,
+                         sliderBias: same.sliderBias)
+        }
         if anchor.elapsed <= 0 {
             let second = same.map { previous in
                 let recent = anchor.at > previous.anchor.at && anchor.at.timeIntervalSince(previous.anchor.at) <= startHoldSecs + 0.5
@@ -133,10 +141,11 @@ public enum PinePlayhead {
                      sliderBias: kind == .seek ? (looped ? startSliderBias : seekSliderBias) : nil)
     }
 
-    /// 上一段在走、推到 `at` 时离结尾不到 `loopEndSlackSecs`:这时回到开头的锚点是循环回来的,进度条按开播那段超前。纯函数,selftest 覆盖。
+    /// 上一段在走、推到 `at` 时离结尾不到 `loopEndSlackSecs`(也没超过结尾 `loopOverrunSecs`):这时回到开头的锚点是循环回来的,进度条按开播那段超前。纯函数,selftest 覆盖。
     static func nearEnd(_ clock: Clock, at: Date, duration: Double?) -> Bool {
         guard let duration, duration > 0, clock.anchor.playing, clock.running else { return false }
-        return position(clock, now: at).position >= duration - loopEndSlackSecs
+        let pushed = position(clock, now: at).position
+        return pushed >= duration - loopEndSlackSecs && pushed <= duration + loopOverrunSecs
     }
 
     /// 暂停锚点:停下的位置按上一段的表推到暂停锚点那一刻,夹进它报的那一秒;它跟上一段在走的锚点一模一样(停下之前先报的那份,
@@ -254,7 +263,7 @@ public enum PinePlayhead {
             logger.notice("pine clock: \(clock.kind.rawValue, privacy: .public) anchor \(anchorElapsed, format: .fixed(precision: 3)) → \(position(clock, now: now).position, format: .fixed(precision: 3)), precise \(clock.precise, privacy: .public), hold \(clock.holdUntil != nil, privacy: .public)")
         }
         if wantsProgressBar(clock, now: now) {
-            if let pid, let duration, duration > 0, startSampling(anchor: clock.anchor, pid: pid_t(pid), duration: duration) {
+            if let pid, let duration, duration > 0, duration < ProgressBar.maxDuration, startSampling(anchor: clock.anchor, pid: pid_t(pid), duration: duration) {
                 calibrationDue.withLock { due in if due.map({ $0 <= now }) ?? true { due = now.addingTimeInterval(ProgressBar.window + 0.15) } }
             } else {
                 state.withLock { s in if let c = s, sameAnchor(c.anchor, anchor) { s?.sliderDone = true } }
@@ -280,7 +289,8 @@ public enum PinePlayhead {
         }) else { return true }
         queue.async {
             let tick = ProgressBar.nextTick(pid: pid, duration: duration)
-            sampling.withLock { $0 = false }
+            // 先写回结果再放开:夹在中间的一拍看到还没读过,会对同一份锚点再读一轮、再校准一次。
+            defer { sampling.withLock { $0 = false } }
             let result = state.withLock { s -> (before: Clock, after: Clock)? in
                 guard let current = s, sameAnchor(current.anchor, anchor) else { return nil }
                 var next = current
@@ -313,12 +323,16 @@ public enum PinePlayhead {
         static let interval: TimeInterval = 0.02
         /// 进度条最大值跟这首时长差这么多以内才认(另一根滑块是音量,最大值 1)。
         static let durationSlack: Double = 1.5
+        /// 时长到这么长不去找进度条(网络电台报的时长是 Int64 上限)。
+        static let maxDuration: Double = 1e7
 
         /// 等进度条跳下一格:跳到的格值和那一刻。找不到进度条、读不到、窗口里没有跳格的返回 nil。阻塞最多 `window`。
         static func nextTick(pid: pid_t, duration: Double) -> (value: Int, at: Date)? {
             let app = AXUIElementCreateApplication(pid)
             AXUIElementSetMessagingTimeout(app, 0.25)
-            guard let bar = find(in: app, duration: duration), var last = value(bar) else { return nil }
+            guard let bar = find(in: app, duration: duration) else { return nil }
+            AXUIElementSetMessagingTimeout(bar, 0.25)
+            guard var last = value(bar) else { return nil }
             let end = Date().addingTimeInterval(window)
             while Date() < end {
                 Thread.sleep(forTimeInterval: interval)
@@ -347,7 +361,7 @@ public enum PinePlayhead {
         }
 
         static func value(_ element: AXUIElement) -> Int? {
-            (attribute(element, kAXValueAttribute) as? NSNumber).map { Int($0.doubleValue.rounded()) }
+            (attribute(element, kAXValueAttribute) as? NSNumber).flatMap { Int(exactly: $0.doubleValue.rounded()) }
         }
 
         private static func attribute(_ element: AXUIElement, _ name: String) -> AnyObject? {

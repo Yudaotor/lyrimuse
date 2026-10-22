@@ -59,6 +59,15 @@ func runPineTests() {
         expectEqual(P.pickFile(title: "Marjoram", artist: "Accident", candidates: [
             ("m.mp3", LocalAudioFileTags(title: "Marjoram", artist: "Accident", album: "Vert Bleu Noir", duration: 294)),
         ]), 0, "Pine 挑文件: 歌手一栏对不上但同名的只有一个,就是它")
+        let marjoram: [(fileName: String, tags: LocalAudioFileTags)] = [
+            ("m.mp3", LocalAudioFileTags(title: "Marjoram", artist: "Accident", album: "Vert Bleu Noir", duration: 294)),
+        ]
+        expectEqual([P.pickFile(title: "Marjoram", artist: "Accident", duration: 294, candidates: marjoram),
+                     P.pickFile(title: "Marjoram", artist: "Someone", duration: 180, candidates: marjoram)], [0, nil],
+                    "Pine 挑文件: 只按歌名对上时时长也要对上,别的歌手的同名歌(放过的文件还开着)不认")
+        expectEqual([P.unreadableMatch(title: "Hi", fileNames: ["Highway.wma"]), P.unreadableMatch(title: "Hi", fileNames: ["03 - Hi.wma"]),
+                     P.unreadableMatch(title: "晴天", fileNames: ["周杰伦 - 晴天.wv"]), P.unreadableMatch(title: "晴天", fileNames: ["晴天娃娃.wv"])],
+                    [nil, 0, 0, nil], "Pine 挑文件: 短歌名要在文件名里整段出现")
         expectEqual(P.unreadableMatch(title: "天际线", fileNames: ["天际线-wma.wma", "别的.ape", "天际线-tta.tta"]), 2,
                     "Pine 挑文件: 读不出标签的按文件名含歌名认,取后开的")
         expectEqual(P.unreadableMatch(title: "未命名.wma", fileNames: ["未命名.wma"]), 0, "Pine 挑文件: 没写标签那种写法(带扩展名)照样认")
@@ -263,6 +272,12 @@ func runPineTests() {
         expectEqual(pausedEarly.pausedPosition, 0, "Pine 边界: 开播还在停住时暂停,停在 0 秒")
         let pausedInFirstSecond = H.advance(pairSecond, anchor: anchor("a", 0, 1.6, false), now: t0.addingTimeInterval(1.6))
         expectEqual(abs((pausedInFirstSecond.pausedPosition ?? 0) - 0.55) < 0.001, true, "Pine 边界: 第一秒里暂停,按这一段推")
+        let resumedInFirstSecond = H.advance(pausedInFirstSecond, anchor: anchor("a", 0, 4), now: t0.addingTimeInterval(4))
+        expectEqual([resumedInFirstSecond.kind == .resume, resumedInFirstSecond.holdUntil == nil,
+                     abs(H.position(resumedInFirstSecond, now: t0.addingTimeInterval(5)).position - 1.55) < 0.001], [true, true, true],
+                    "Pine 边界: 第一秒里暂停再恢复(报 0 秒)接着停下的位置走,不当重新开播停住")
+        expectEqual(H.advance(reopened, anchor: anchor("a", 0, 501), now: t0.addingTimeInterval(501)).kind, .start,
+                    "Pine 边界: 暂停着重开同一个文件再开播,照旧算开播")
         let pausedAtStart = H.advance(nil, anchor: anchor("c", 0, 0, false), now: t0)
         expectEqual(H.position(pausedAtStart, now: t0).position, 0, "Pine 边界: 停在开头的暂停锚点不补半秒")
         expectEqual(H.wantsProgressBar(pausedAtStart, now: t0), false, "Pine 边界: 暂停时不读进度条")
@@ -292,6 +307,9 @@ func runPineTests() {
                     "Pine 循环开头: 只来一份 1 秒锚点照跳转算,进度条按开播那段超前")
         let midTrack = H.advance(started, anchor: anchor(0, 13), now: at(13.1), duration: 14)
         expectEqual(abs((midTrack.holdUntil?.timeIntervalSince(at(13)) ?? 0) - H.startHoldSecs) < 0.001, true, "Pine 循环开头: 离结尾还远的 0 秒锚点是重新开播,照旧停住")
+        let stale = H.advance(started, anchor: anchor(0, 130), now: at(130.1), duration: 14)
+        expectEqual(abs((stale.holdUntil?.timeIntervalSince(at(130)) ?? 0) - H.startHoldSecs) < 0.001, true,
+                    "Pine 循环开头: 早就放完、没收到暂停锚点的旧表不认循环,照旧停住")
         let midSeek = H.advance(started, anchor: anchor(1, 13), now: at(13.1), duration: 14)
         expectEqual(midSeek.sliderBias, H.seekSliderBias, "Pine 循环开头: 离结尾还远跳到 1 秒是跳转")
         let fullStartCal = H.calibrated(started, value: 1, at: at(8.95))
@@ -352,10 +370,21 @@ func runPineTests() {
                     [true, true], "无限时长: 建进度锚点前按 trackDuration 判(换成毫秒整数不溢出)")
         let info = sourceText("LyrimuseCore/Local/PinePlayerInfo.swift")
         expectEqual(sourceHas(info, "guard !SourceKnockout.isOut(.pineFile) else { return nil }"), true, "Pine 接线: 文件那条腿能拔")
+        expectEqual(sourceHas(info, ".map { (path: $0, tags: cachedTags(path: $0)) }")
+                    && sourceHas(info, "pickOpenFile(title: title, artist: artist, duration: duration, files:"), true,
+                    "Pine 接线: 开着的文件按路径和修改时间缓存标签,挑文件带上系统报的时长")
+        expectEqual(sourceHas(sourceText("LyrimuseCore/Local/PineMenuControl.swift"), "return MenuBarAX.press(sub[index])"), true,
+                    "Pine 接线: 循环菜单项灰着时不按、不报成功")
         expectEqual(sourceHas(info, "let key = title + \"\\u{1F}\" + artist + \"\\u{1F}\" + String(PinePlayhead.startCount)"), true,
                     "Pine 接线: 同一首换了文件再放要重挑")
         let head = sourceText("LyrimuseCore/Local/PinePlayhead.swift")
         expectEqual(sourceHas(head, "if isNewStart(from: s, to: next) { starts.withLock { $0 += 1 } }"), true, "Pine 接线: 每次开播记一次")
+        expectEqual(sourceHas(head, "(attribute(element, kAXValueAttribute) as? NSNumber).flatMap { Int(exactly: $0.doubleValue.rounded()) }")
+                    && sourceHas(head, "duration > 0, duration < ProgressBar.maxDuration, startSampling("), true,
+                    "Pine 接线: 进度条读到 NaN / 超大值不 trap,电台那种时长不去找进度条")
+        expectEqual(sourceHas(head, "defer { sampling.withLock { $0 = false } }")
+                    && sourceHas(head, "AXUIElementSetMessagingTimeout(bar, 0.25)"), true,
+                    "Pine 接线: 读完写回再放开采样;滑块元素也设短超时")
         expectEqual(sourceHas(head, "guard !SourceKnockout.isOut(.pineSlider), AXIsProcessTrusted() else { return false }"), true,
                     "Pine 接线: 进度条那条腿能拔、没权限不读")
         let probe = sourceText("LyrimuseCore/Local/NowPlayingClientsProbe.swift")
