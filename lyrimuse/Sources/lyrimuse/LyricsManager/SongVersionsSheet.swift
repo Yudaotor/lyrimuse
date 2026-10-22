@@ -1047,8 +1047,10 @@ struct SongVersionsSheet: View {
         var out: [Version] = []
         if let current = makeVersion(key, .current, mergeKeys: [], against: nil, aliases: aliases) {
             out.append(current)
+            // 设置里关了「同曲条目共用歌词」时谁都不跟,同组的也按独立匹配显示(同 syncOverview)。
+            let sharing = EnrichCacheReader.sharesEntityLyrics
             for row in listing?.rows ?? [] {
-                if let v = makeVersion(row.key, row.sharesLyrics ? .shared : .own, mergeKeys: [], against: current, aliases: aliases) {
+                if let v = makeVersion(row.key, row.sharesLyrics && sharing ? .shared : .own, mergeKeys: [], against: current, aliases: aliases) {
                     out.append(v)
                 }
             }

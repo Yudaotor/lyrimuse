@@ -4928,6 +4928,8 @@ public final class LocalPlaybackSource: ObservableObject {
         let speakers: LyricSpeakerTags?
         // 借来的假名标注同理(存量条目播放时才补问)。
         let kanaDonor: String
+        // 认歌词开头抬头用的同曲条目歌名、歌手:引擎在缓存落盘几秒后才给新写法记上实体,正文没变、这一份变了也得重载。
+        let headerAliases: [LRCParser.HeaderIdentity]
     }
     private var lastReloadSnapshot: LyricsReloadSnapshot?
 
@@ -4974,7 +4976,9 @@ public final class LocalPlaybackSource: ObservableObject {
             plainLyrics: found?.plainLyrics ?? "",
             songwriters: found?.songwriters ?? [],
             speakers: found?.speakers,
-            kanaDonor: found?.kanaDonor ?? "")
+            kanaDonor: found?.kanaDonor ?? "",
+            headerAliases: EnrichCacheReader.headerAliases(
+                artist: snapshot.artist ?? "", title: snapshot.title ?? "", album: snapshot.album ?? ""))
         if reloadSnapshot == lastReloadSnapshot {
             logger.debug("lyrics reload skipped: content unchanged (mtime-only churn)")
             // 正文没变,读穿的兄弟写法却可能变了(缓存重建完才拿得到、引擎给这条补上了实体):单独对一次。
@@ -5021,8 +5025,7 @@ public final class LocalPlaybackSource: ObservableObject {
             // 用来认出歌词文件开头那行「曲名 - 歌手」抬头,见 looksLikeHeaderLine;同曲条目里别的写法的歌名、歌手也算。
             trackTitle: snapshot.title ?? "",
             trackArtist: snapshot.artist ?? "",
-            headerAliases: EnrichCacheReader.headerAliases(
-                artist: snapshot.artist ?? "", title: snapshot.title ?? "", album: snapshot.album ?? ""),
+            headerAliases: reloadSnapshot.headerAliases,
             romanizationScripts: romanizationScripts,
             japaneseReading: japaneseReading,
             songIsCantonese: found?.isCantonese ?? false,

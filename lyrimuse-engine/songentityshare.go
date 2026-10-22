@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -92,12 +93,13 @@ type songShareState struct {
 }
 
 // songShareGroupState:一个共享组上一次搜完的样子。Members 是写法键 → 那之后的歌词指纹(没词为空);RetryAfter 非零时
-// 到点再搜一次。
+// 到点再搜一次;HeldNoUpgrade:有写法因为关着「随匹配算法更新重新选择」留着,这个开关打开之后再搜一次。
 type songShareGroupState struct {
-	At         int64             `json:"at"`
-	Scoring    string            `json:"scoring"`
-	Members    map[string]string `json:"members"`
-	RetryAfter int64             `json:"retry_after,omitempty"`
+	At            int64             `json:"at"`
+	Scoring       string            `json:"scoring"`
+	Members       map[string]string `json:"members"`
+	RetryAfter    int64             `json:"retry_after,omitempty"`
+	HeldNoUpgrade bool              `json:"held_no_upgrade,omitempty"`
 }
 
 // songShareGroupSig:一组写法的签名,成员变了签名就变。
@@ -111,7 +113,7 @@ func songShareGroupSig(keys []string) string {
 // due:这个组这一轮要不要搜。fps 是各写法现在的歌词指纹;成员变了签名就变,没有记录。
 func (st *songShareState) due(sig string, fps map[string]string, now time.Time) bool {
 	g, ok := st.Groups[sig]
-	if !ok || g.Scoring != currentLyricsScoring.String() {
+	if !ok || g.Scoring != currentLyricsScoring.String() || (g.HeldNoUpgrade && features().LyricsAutoUpgrade) {
 		return true
 	}
 	for k, fp := range fps {
@@ -245,6 +247,12 @@ func songShareLyricsFields(dst *enrichEntry, src enrichEntry) {
 	dst.LyricsDecisionApplied = src.LyricsDecisionApplied
 }
 
+// songShareOwnLyrics:这条写法的词是用户自己给的(手改过或者采纳的那一份还在),不是同步过来的副本。标 / 撤纯音乐整组跟时
+// 跳过它:用户给了词,就不是纯音乐;手改副本照样跟。
+func songShareOwnLyrics(e enrichEntry) bool {
+	return e.LyricsEntityOrigin == "" && (e.ManualLyrics || songSharePickHeld(e))
+}
+
 // songShareManualOriginal:手改原件:手改过或者采纳的那一份还在,有正文,不是同步出去的副本。
 func songShareManualOriginal(e enrichEntry) bool {
 	return e.LyricsEntityOrigin == "" && strings.TrimSpace(e.Lyrics.String()) != "" && (e.ManualLyrics || songSharePickHeld(e))
@@ -277,7 +285,7 @@ func songShareCopyPinned(dst *enrichEntry, src enrichEntry, origin string, now t
 // 原件只有一份内容才跟,两份不同的不替用户选(conflict)。组里一个原件都没有时:原件已经不在缓存里的副本,挑键最小的一条
 // 升成原件,其余照它同步;原件还在、却不在这个组里的副本(分到了别的组或别的实体),按留底恢复(releaseStaleCopiesLocked)。
 // 返回改了的写法。调用方持 enrichMu。
-func shareManualLocked(keys []string, from string, pins map[string]bool, now time.Time) (changed []string, conflict bool) {
+func shareManualLocked(keys []string, from string, pins map[string]bool, now time.Time) (changed, restored []string, conflict bool) {
 	// 建表之后那一轮(from 为空)是自动改写,过翻转保险;用户自己的保存、统一两份手改不算。
 	allow := func(string) bool { return true }
 	if from == "" {
@@ -299,7 +307,8 @@ func shareManualLocked(keys []string, from string, pins map[string]bool, now tim
 		switch len(contents) {
 		case 0:
 			if origin = promoteOrphanCopyLocked(keys, allow); origin == "" {
-				return releaseStaleCopiesLocked(keys, allow), false
+				changed, restored = releaseStaleCopiesLocked(keys, allow)
+				return changed, restored, false
 			}
 			changed = append(changed, origin)
 		case 1:
@@ -307,12 +316,13 @@ func shareManualLocked(keys []string, from string, pins map[string]bool, now tim
 				origin = k
 			}
 		default:
-			return nil, true
+			return nil, nil, true
 		}
 	}
+	// 标了纯音乐的原件不往外同步:用户说这首没有词,后来才挂进组里的写法不该拿到它的手改词。
 	src := enrichCache[origin]
-	if !songShareManualOriginal(src) {
-		return changed, false
+	if !songShareManualOriginal(src) || src.Instrumental {
+		return changed, nil, false
 	}
 	fp := songOffsetFingerprint(src.Lyrics.String(), src.LyricsYRC.String())
 	for _, k := range keys {
@@ -331,7 +341,7 @@ func shareManualLocked(keys []string, from string, pins map[string]bool, now tim
 		enrichCache[k] = e
 		changed = append(changed, k)
 	}
-	return changed, false
+	return changed, nil, false
 }
 
 // promoteOrphanCopyLocked:原件已经不在缓存里(被删了)的副本里挑键最小的一条升成原件,返回它;没有这种副本时返回空串。
@@ -359,9 +369,8 @@ func promoteOrphanCopyLocked(keys []string, allow func(key string) bool) string 
 
 // releaseStaleCopiesLocked:keys 这个实体里已经没有手改原件,剩下的副本(原件还在、却改回了自动匹配,或者分到了别的实体)
 // 不再跟着谁:歌词还是同步写进去那份的按留底恢复、删掉留底;没有能用的留底时只去掉副本标记和手改标记,词留着、交回自动
-// 流程。allow 不让改的跳过(nil 时都改)。返回改了的写法。调用方持 enrichMu。
-func releaseStaleCopiesLocked(keys []string, allow func(key string) bool) []string {
-	var changed []string
+// 流程。allow 不让改的跳过(nil 时都改)。返回改了的写法,和其中按留底恢复的。调用方持 enrichMu。
+func releaseStaleCopiesLocked(keys []string, allow func(key string) bool) (changed, restored []string) {
 	for _, k := range keys {
 		e := enrichCache[k]
 		if e.LyricsEntityOrigin == "" || (allow != nil && !allow(k)) {
@@ -370,13 +379,18 @@ func releaseStaleCopiesLocked(keys []string, allow func(key string) bool) []stri
 		if pre, ok := songShareRestorable(k, e); ok {
 			songShareRestore(&e, pre)
 			noteFileErr("remove", songSharePrePath(k), removeIfExists(songSharePrePath(k)))
+			restored = append(restored, k)
 		} else {
 			e.LyricsEntityOrigin, e.ManualLyrics, e.ManualPickSHA = "", false, ""
+			// 出处也不再是同步:留着的话这条一直被当成跟着别人的(songShareFollower、songShareAutoCopyOf)。
+			if d := e.LyricsDecisionApplied; d != nil && d.Path == lyricsDecisionPathSongEntityShare {
+				e.LyricsDecisionApplied = nil
+			}
 		}
 		enrichCache[k] = e
 		changed = append(changed, k)
 	}
-	return changed
+	return changed, restored
 }
 
 // removeSongSharePre:条目删掉时把它的同步留底一起删。留底只写一次,留着的话这条写法再放回来、又被同步时会沿用删之前那份,
@@ -425,8 +439,12 @@ func releaseStrayAutoCopiesLocked(keys []string, now time.Time) []string {
 	return changed
 }
 
-// songShareRestorable:key 这条写法有留底,而且歌词还是同步写进去的那一份,返回留底里的条目。
+// songShareRestorable:key 这条写法有留底,而且歌词还是同步写进去的那一份,返回留底里的条目。用户自己改过的(手改原件:
+// 同步之后在歌词管理里只改了译文、罗马音,或者原样采纳了同一份)正文指纹没变,也不算:恢复会把用户改的连同手改标记一起换掉。
 func songShareRestorable(key string, e enrichEntry) (enrichEntry, bool) {
+	if songShareManualOriginal(e) {
+		return enrichEntry{}, false
+	}
 	p, err := readSongSharePre(songSharePrePath(key))
 	if err != nil || p.Key != key || p.Synced != songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) {
 		return enrichEntry{}, false
@@ -458,7 +476,7 @@ func shareManualEditLocked(key string, now time.Time) []string {
 		}
 	}
 	sort.Strings(keys)
-	changed, _ := shareManualLocked(keys, key, lyricsPinnedKeys(), now)
+	changed, _, _ := shareManualLocked(keys, key, lyricsPinnedKeys(), now)
 	for _, k := range changed {
 		cancelInFlightEnrichLocked(k)
 	}
@@ -536,12 +554,21 @@ func songShareApplyChoice(e *enrichEntry, c *scoredLyricCandidateResult, r *song
 	e.LyricsDecisionApplied = d
 }
 
-// removeStagedSongSharePres:stageSongSharePre 这一轮新建的留底里,没有换成(不在 applied 里)的删掉。
-func removeStagedSongSharePres(created, applied map[string]bool) {
+// removeStagedSongSharePresLocked:stageSongSharePre 这一轮新建的留底里,没有换成(不在 applied 里)的删掉。开搜之后别的路径
+// (存手改、跟上重新匹配)可能已经接手了这份留底、把它们同步的词写进了条目(synced 对得上条目现在的歌词),这种留着:删了那条
+// 写法就成了没有留底的副本,关开关、拆开都恢复不了。调用方持 enrichMu。
+func removeStagedSongSharePresLocked(created, applied map[string]bool) {
 	for k := range created {
-		if !applied[k] {
-			noteFileErr("remove", songSharePrePath(k), os.Remove(songSharePrePath(k)))
+		if applied[k] {
+			continue
 		}
+		path := songSharePrePath(k)
+		if p, err := readSongSharePre(path); err == nil {
+			if e := enrichCache[k]; p.Synced == songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) {
+				continue
+			}
+		}
+		noteFileErr("remove", path, os.Remove(path))
 	}
 }
 
@@ -586,6 +613,7 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 	}
 	fp := songOffsetFingerprint(top.Lyrics, top.LyricsYRC)
 	retry := !round.complete()
+	heldNoUpgrade := false
 	var targets []int
 	created := map[string]bool{}
 	for _, l := range shareEvalPlan(keys, snap, own, round.Scored, top, features().LyricsAutoUpgrade) {
@@ -594,6 +622,7 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 		case l.action == "留":
 			out.kept++
 			retry = retry || l.why == songKeepUndecidable
+			heldNoUpgrade = heldNoUpgrade || l.why == songKeepNoUpgrade
 			continue
 		case snap[i].Instrumental:
 			continue
@@ -635,8 +664,8 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 			e.Instrumental != snap[i].Instrumental || e.ManualLyrics != snap[i].ManualLyrics || e.ManualPickSHA != snap[i].ManualPickSHA ||
 			e.ManualLyrics || songSharePickHeld(e) ||
 			songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) != songOffsetFingerprint(snap[i].Lyrics.String(), snap[i].LyricsYRC.String()) {
+			removeStagedSongSharePresLocked(created, nil)
 			enrichMu.Unlock()
-			removeStagedSongSharePres(created, nil)
 			return songShareGroupOutcome{}
 		}
 	}
@@ -645,6 +674,7 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 	for _, i := range targets {
 		k := keys[i]
 		if !songShareAutoWriteAllowedLocked(k, now) {
+			retry = true
 			continue
 		}
 		e := enrichCache[k]
@@ -678,9 +708,10 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 		retryAt = now.Add(songShareRetryIncomplete)
 	}
 	out.state = songShareGroupStateLocked(keys, now, retryAt)
-	enrichMu.Unlock()
+	out.state.HeldNoUpgrade = heldNoUpgrade
 	// 翻转保险挡下、没换成的:这一轮新建的留底删掉,不留一份 synced 对着没写进去的歌词的。
-	removeStagedSongSharePres(created, applied)
+	removeStagedSongSharePresLocked(created, applied)
+	enrichMu.Unlock()
 	if len(changed) > 0 {
 		flushShareChanges(changed)
 		slog.Info("song entities: shared group lyrics", "searched", round.Key, "winner", top.Source, "score", top.Score,
@@ -787,6 +818,10 @@ type songShareTally struct {
 // runSongEntitySharePass:建完表、开关开着时跑一轮(见文件头)。先同步手改(不联网),再逐组重搜;ctx 取消、开关中途关掉、
 // 拆开或恢复合并请了马上重建(songShareRebuildPending)、连着几组一个歌词源都连不上时停在两组之间,没轮到的下一轮再搜。
 func runSongEntitySharePass(ctx context.Context, b *songEntityBuild) {
+	// 建表期间用户拆开或恢复合并了(请了重建):这次的分组已经旧了,按它同步会把手改又同步进刚拆出去的写法。等重建完那一轮。
+	if songShareRebuildPending() {
+		return
+	}
 	start := time.Now()
 	statePath := songShareStatePath()
 	st := readSongShareState(statePath)
@@ -933,6 +968,7 @@ func songShareAutoWriteAllowedLocked(key string, now time.Time) bool {
 	if songShareFlapStopped[key] {
 		return false
 	}
+	now = now.Round(0) // 按墙钟比:单调时钟在系统睡眠时不走,睡前的几次醒来后还会算在这一小时里
 	recent := songShareFlaps[key][:0]
 	for _, at := range songShareFlaps[key] {
 		if now.Sub(at) < songShareFlapWindow {
@@ -977,7 +1013,7 @@ func (b *songEntityBuild) shareManualPass(pins map[string]bool, now time.Time, t
 			enrichMu.Unlock()
 			continue
 		}
-		changed, conflict := shareManualLocked(keys, "", pins, now)
+		changed, restored, conflict := shareManualLocked(keys, "", pins, now)
 		strays := releaseStrayAutoCopiesLocked(keys, now)
 		if len(changed)+len(strays) > 0 {
 			markEnrichEditedLocked(false, append(slices.Clone(changed), strays...)...)
@@ -994,13 +1030,15 @@ func (b *songEntityBuild) shareManualPass(pins map[string]bool, now time.Time, t
 		}
 		t.strays += len(strays)
 		all = append(all, strays...)
+		released = append(released, restored...)
 		released = append(released, strays...)
 	}
 	flushShareChanges(all)
 	rescoreReleasedStrays(released)
 }
 
-// rescoreReleasedStrays:散落的自动副本按留底恢复之后(releaseStrayAutoCopiesLocked),后台按现行规则各重评一次。留底是同步之前
+// rescoreReleasedStrays:散落的自动副本、原件改回自动或分到了别处的手改副本按留底恢复之后(releaseStrayAutoCopiesLocked、
+// releaseStaleCopiesLocked),后台按现行规则各重评一次。留底是同步之前
 // 那份歌词,当时选它的规则和证据都旧了,还可能本来就是错的 —— 正是它跟原件的正文对不上,这两条写法才被分出这一组(分组的证据看的
 // 就是这份留底,见 songOwnLyricsEntry)。不重评要等这首歌下次被播到,期间一直显示这份。逐条串行,走全量扫库那一支
 // (lyricsFullScanOne:进门再核资格、不碰扫库进度);关了「自动跟进算法升级」不跑。见 18 章决策 76。测试换成不联网的。
@@ -1216,7 +1254,7 @@ func songShareFullBackup(now time.Time) (string, error) {
 // 被用户或别的路径改过的留着现在的,只去掉副本标记。存盘成功后删掉留底和组的记录;没有留底也没有组的记录时什么都不做。
 func revertSongEntityShare() {
 	dir, statePath := songSharePreDir(), songShareStatePath()
-	names, _ := os.ReadDir(dir)
+	names, err := os.ReadDir(dir)
 	_, stateErr := os.Stat(statePath)
 	if len(names) == 0 && stateErr != nil {
 		return
@@ -1228,17 +1266,25 @@ func revertSongEntityShare() {
 	}
 	var pres []decodedPre
 	var files []string
+	if err != nil {
+		noteFileErr("read", dir, err)
+	}
 	for _, n := range names {
 		if n.IsDir() || !strings.HasSuffix(n.Name(), ".json") {
 			continue
 		}
 		path := filepath.Join(dir, n.Name())
-		files = append(files, path)
 		p, err := readSongSharePre(path)
 		if err != nil {
 			noteFileErr("read", path, err)
+			// 读不出来(权限、磁盘出错)的留着,下一次再恢复;解不开的本来就用不了,照常删。
+			var pathErr *fs.PathError
+			if !errors.As(err, &pathErr) {
+				files = append(files, path)
+			}
 			continue
 		}
+		files = append(files, path)
 		d := decodedPre{key: p.Key, synced: p.Synced}
 		if err := json.Unmarshal(p.Entry, &d.entry); err != nil {
 			continue
@@ -1249,7 +1295,7 @@ func revertSongEntityShare() {
 	enrichMu.Lock()
 	for _, p := range pres {
 		e, ok := enrichCache[p.key]
-		if !ok || p.synced != songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) {
+		if !ok || songShareManualOriginal(e) || p.synced != songOffsetFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) {
 			continue
 		}
 		songShareRestore(&e, p.entry)

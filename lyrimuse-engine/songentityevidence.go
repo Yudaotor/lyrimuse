@@ -409,7 +409,7 @@ func (b *songEdgeBuilder) bareEdges() {
 }
 
 // lyricsEdges:时长 + 歌词(E2)。同一位主歌手(artistMatchKey 相同)名下,两种写法满足:都有时长且按精度分档接近
-// (songDurationsClose)、各自的歌词可信、主标题之外不带版本尾巴、跨文字或只差一个字(songOneCharVariant)、正文对得上
+// (songDurationsClose)、各自的歌词可信、纯音乐标记相同、主标题之外不带版本尾巴、跨文字或只差一个字(songOneCharVariant)、正文对得上
 // (songLyricsMatch),而且两份歌词各自独立得来(songLyricsIndependent)。正文只在前几样都过了的那一对上才剥:
 // 全库每条都剥一遍是几秒 CPU,真要比的只有极少数。
 func (b *songEdgeBuilder) lyricsEdges() {
@@ -417,7 +417,7 @@ func (b *songEdgeBuilder) lyricsEdges() {
 	var keys []string
 	for i := range b.vs {
 		v := &b.vs[i]
-		if v.durationSecs <= 0 || v.tailed || v.primary == "" || !v.evTrusted || v.instrumental {
+		if v.durationSecs <= 0 || v.tailed || v.primary == "" || !v.evTrusted {
 			continue
 		}
 		k := artistMatchKey(v.primary)
@@ -432,7 +432,7 @@ func (b *songEdgeBuilder) lyricsEdges() {
 		for i := 0; i < len(ms); i++ {
 			for j := i + 1; j < len(ms); j++ {
 				x, y := &b.vs[ms[i]], &b.vs[ms[j]]
-				if x.family == y.family || (x.han == y.han && !songOneCharVariant(x.family, y.family)) {
+				if x.family == y.family || (x.han == y.han && !songOneCharVariant(x.family, y.family)) || x.instrumental != y.instrumental {
 					continue
 				}
 				if !songDurationsClose(x.durationSecs, y.durationSecs) {
@@ -488,8 +488,11 @@ func songLyricsFromMismatchedCandidate(v *songVariant) bool {
 	return !ok && !cross
 }
 
-// songIndependentLyricsMatch:两条写法的歌词各自独立得来、正文又对得上。给检索 id 当独立旁证用。
+// songIndependentLyricsMatch:两条写法的歌词各自独立得来、正文又对得上,纯音乐标记相同。给检索 id 当独立旁证用。
 func songIndependentLyricsMatch(x, y *songVariant, dir string) bool {
+	if x.instrumental != y.instrumental {
+		return false
+	}
 	sx, _ := x.lyricsShingles()
 	sy, _ := y.lyricsShingles()
 	return sx != nil && sy != nil && songLyricsMatch(sx, sy) && songLyricsIndependent(x, y, dir)

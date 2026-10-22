@@ -1050,9 +1050,11 @@ public final class EnrichCacheStore: ObservableObject {
     ///
     /// `complete == false`:这一条的正文补不回来(正文小文件缺了 / 坏了,主缓存里也是精简的),返回的四份都是空的 ——
     /// 调用方别拿它去填编辑框再存回去,那会把盘上的歌词、译文、罗马音一起清掉。
-    public func detail(for key: String) -> (lyrics: String, tr: String, roma: String, yrc: String, complete: Bool) {
+    /// fallbackToMainCache:正文小文件读不回来时要不要解整份主缓存补(见 hydrate)。同一首歌别的写法(同曲条目、两份手改)传
+    /// false:那几条不是用户在看的这一条,没有「补不回来就别再试」那道挡,主缓存每重写一次就在主线程上整份解一遍。
+    public func detail(for key: String, fallbackToMainCache: Bool = true) -> (lyrics: String, tr: String, roma: String, yrc: String, complete: Bool) {
         let t0 = CFAbsoluteTimeGetCurrent()
-        let complete = hydrate(key)
+        let complete = hydrate(key, fallbackToMainCache: fallbackToMainCache)
         let entry = raw[key] ?? [:]
         let result = (
             entry["lyrics"] as? String ?? "",
@@ -1242,7 +1244,7 @@ public final class EnrichCacheStore: ObservableObject {
         var members: [SongVersions.ManualCandidate] = []
         // 手改只在同一个共享组里同步(18 章决策 58),两份手改也只在组里算冲突。
         for k in keys.sorted() where songMembership(forKey: k) == own {
-            let d = detail(for: k)
+            let d = detail(for: k, fallbackToMainCache: k == key)
             guard d.complete, let entry = raw[k] else { continue }
             members.append(SongVersions.ManualCandidate(
                 key: k, manual: entry["manual_lyrics"] as? Bool ?? false,
@@ -1266,10 +1268,10 @@ public final class EnrichCacheStore: ObservableObject {
         let complete: Bool
     }
 
-    /// 正文按需从小文件补(只补这首歌的几条);缓存里没有这条时 nil。
+    /// 正文按需从小文件补(只补这首歌的几条),补不回来时不解整份主缓存;缓存里没有这条时 nil。
     func versionFacts(forKey key: String) -> VersionFacts? {
         guard raw.contains(key) else { return nil }
-        let d = detail(for: key)
+        let d = detail(for: key, fallbackToMainCache: false)
         guard let entry = raw[key] else { return nil }
         let p = SongVersions.players(entry: entry)
         return VersionFacts(players: p.bundleIDs, playersInferred: p.inferred,

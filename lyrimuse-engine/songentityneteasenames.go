@@ -167,13 +167,16 @@ func neteaseSongDetails(ctx context.Context, ids []string) (map[string]neteaseCa
 // startNeteaseNamesSweep 由 poller 单开一个 goroutine:启动后 neteaseNamesDelay 补一次,之后每 neteaseNamesInterval 一次;
 // 补到了新结果、实体表开着,就重建一次实体表。
 func startNeteaseNamesSweep(ctx context.Context) {
-	timer := time.NewTimer(neteaseNamesDelay)
+	timer := newWallTimer(neteaseNamesDelay)
 	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
+		}
+		if !timer.Due(time.Now()) {
+			continue
 		}
 		next := neteaseNamesInterval
 		if features().SongEntityPhase2 {

@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"sort"
@@ -113,7 +115,7 @@ func songEntityUserPath() string   { return configFilePath(clientName + "-song-e
 
 // startSongEntityShadow 由 poller 单开一个 goroutine,ctx 取消时退出。
 func startSongEntityShadow(ctx context.Context) {
-	timer := time.NewTimer(songEntityBuildDelay)
+	timer := newWallTimer(songEntityBuildDelay)
 	defer timer.Stop()
 	check := time.NewTicker(songShareCheckInterval)
 	defer check.Stop()
@@ -169,6 +171,9 @@ func startSongEntityShadow(ctx context.Context) {
 			}
 			continue
 		case <-timer.C:
+			if !timer.Due(time.Now()) {
+				continue
+			}
 			timer.Reset(songEntityRebuildInterval)
 			started, rebuild = true, true
 		case <-check.C:
@@ -226,7 +231,11 @@ func rebuildSongEntityTableWith(now time.Time, compare bool) *songEntityBuild {
 	songEntityRebuildMu.Lock()
 	defer songEntityRebuildMu.Unlock()
 	start := time.Now()
-	src := songEntityLiveSource(songEntityPrepare())
+	src, err := songEntityLiveSource(songEntityPrepare())
+	if err != nil {
+		slog.Error("song entities: not rebuilding", "err", err)
+		return nil
+	}
 	seed := songEntityTableUnsaved
 	songEntityTableUnsaved = nil
 	if seed == nil {
@@ -239,7 +248,7 @@ func rebuildSongEntityTableWith(now time.Time, compare bool) *songEntityBuild {
 		prev = nil
 	}
 	songEntityLive = nil
-	if keys := writeBackSongEntityIDs(table); len(keys) > 0 {
+	if keys := writeBackSongEntityIDs(table, src.cache); len(keys) > 0 {
 		saveSongEntityIDs(keys)
 		slog.Info("song entities: wrote song ids", "variants", len(keys))
 	}
@@ -308,7 +317,11 @@ func updateSongEntityTable(now time.Time) (b *songEntityBuild, full bool) {
 		return nil, false
 	}
 	start := time.Now()
-	up, err := st.update(songEntityLiveSource(st.prepare), now)
+	src, err := songEntityLiveSource(st.prepare)
+	if err != nil {
+		return nil, false
+	}
+	up, err := st.update(src, now)
 	if err != nil {
 		songEntityLive = nil
 		return nil, true
@@ -316,7 +329,7 @@ func updateSongEntityTable(now time.Time) (b *songEntityBuild, full bool) {
 	if up == nil {
 		return nil, false
 	}
-	if keys := writeBackSongEntityIDs(up.table); len(keys) > 0 {
+	if keys := writeBackSongEntityIDs(up.table, src.cache); len(keys) > 0 {
 		saveSongEntityIDs(keys)
 	}
 	songEntityTableUnsaved = up.table
@@ -447,17 +460,28 @@ func readSongEntityTable(path string) *songEntityTableFile {
 	return &t
 }
 
-// readSongEntityUserSplits 读用户拆开过的写法对(songPairKey);文件不存在或解不开时没有。
+// readSongEntityUserSplits 读用户拆开过的写法对(songPairKey);文件不存在或解不开时没有。只读命令用。
 func readSongEntityUserSplits(path string) map[string]bool {
-	data, err := os.ReadFile(path)
+	splits, err := readSongEntityUserSplitsChecked(path)
 	if err != nil {
-		noteFileErr("read", path, err)
 		return nil
+	}
+	return splits
+}
+
+// readSongEntityUserSplitsChecked:同 readSongEntityUserSplits,只有文件不存在才算没有拆开;读出错、解不开返回错误。
+// 常驻进程拿它建表:按「没有拆开」建,拆开过的写法会被合回去、歌词也跟着同步。
+func readSongEntityUserSplitsChecked(path string) (map[string]bool, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	var f songEntityUserFile
 	if err := json.Unmarshal(data, &f); err != nil {
-		noteFileErr("decode", path, err)
-		return nil
+		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	out := map[string]bool{}
 	for _, p := range f.UserSplits {
@@ -465,12 +489,13 @@ func readSongEntityUserSplits(path string) map[string]bool {
 			out[songPairKey(p[0], p[1])] = true
 		}
 	}
-	return out
+	return out, nil
 }
 
 // writeBackSongEntityIDs 把实体表里每条写法的实体 id 写进条目的 `song`、共享组编号写进 `song_share`,返回改了的写法。
-// 缓存里已经没有的写法跳过。
-func writeBackSongEntityIDs(t *songEntityTableFile) []string {
+// 缓存里已经没有的写法跳过;snap 是建表读的那份缓存,条目上的 `song` / `song_share` 在那之后被改过(建表期间用户拆开了)的
+// 也跳过,不拿旧快照建出来的 id 盖回去(拆开那边已经请了重建)。
+func writeBackSongEntityIDs(t *songEntityTableFile, snap map[string]enrichEntry) []string {
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
 	var changed []string
@@ -482,6 +507,9 @@ func writeBackSongEntityIDs(t *songEntityTableFile) []string {
 			}
 			e, ok := enrichCache[k]
 			if !ok || (e.Song == id && e.SongShare == share) {
+				continue
+			}
+			if was := snap[k]; e.Song != was.Song || e.SongShare != was.SongShare {
 				continue
 			}
 			e.Song, e.SongShare = id, share

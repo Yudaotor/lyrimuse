@@ -670,13 +670,24 @@ func songEntityPrepare() func(vs []songVariant) {
 	}
 }
 
-// songEntityLiveSource:常驻进程这一刻的建表输入。持锁只复制缓存。
-func songEntityLiveSource(prepare func(vs []songVariant)) *songEntitySource {
+// songEntityLiveSource:常驻进程这一刻的建表输入。持锁只复制缓存。这一场主缓存没读进来(refuseEnrichSavesThisRun:内存里只有
+// 从歌词文件夹补回来的那些)、用户拆开记录读不出来时返回错误,这一轮不建:拿残缺的输入建,会把盘上完好的实体表连同重定向、
+// 建立时刻盖掉,或者把拆开过的写法合回去。
+func songEntityLiveSource(prepare func(vs []songVariant)) (*songEntitySource, error) {
 	enrichMu.Lock()
+	if enrichLoadFailed {
+		enrichMu.Unlock()
+		return nil, errEnrichCacheNotLoaded
+	}
 	snapshot := maps.Clone(enrichCache)
 	enrichMu.Unlock()
-	return &songEntitySource{cache: snapshot, pins: lyricsPinnedKeys(), splits: readSongEntityUserSplits(songEntityUserPath()),
-		dir: decisionSidecarDir(), prepare: prepare}
+	path := songEntityUserPath()
+	splits, err := readSongEntityUserSplitsChecked(path)
+	if err != nil {
+		noteFileErr("read", path, err)
+		return nil, err
+	}
+	return &songEntitySource{cache: snapshot, pins: lyricsPinnedKeys(), splits: splits, dir: decisionSidecarDir(), prepare: prepare}, nil
 }
 
 // songEntitySongs:写法键 → 条目上的 `song`、`song_share`(没有实体 id 的不在里面),给 id、组号延续当种子。

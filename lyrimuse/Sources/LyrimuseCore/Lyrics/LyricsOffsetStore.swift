@@ -401,12 +401,13 @@ public final class LyricsOffsetStore: ObservableObject {
     }
 
     /// 只改了字、时间轴没动的保存:这条写法的单曲偏移从旧正文的 key 搬到新正文下(新正文下自己已经有值就不动)。旧正文下的
-    /// 值是从同一首歌别的写法读穿来的,照样记到这条写法新正文下,别的写法那条不动。
+    /// 值是从同一首歌别的写法读穿来的,照样记到这条写法新正文下,别的写法那条不动。旧正文下自己那条在有同一首歌别的写法时
+    /// 留着:它们还用着那份歌词、正借着这个值,删了就悄悄差回去。
     public func carryOffset(from oldKey: String, to newKey: String, pinKey: String, siblings: LyricsOffsetSiblings) {
         let own = offset(forKey: oldKey)
         let ms = offset(forKey: oldKey, siblings: siblings)
         guard ms != 0, oldKey != newKey, offset(forKey: newKey) == 0 else { return }
-        if own != 0 { set(0, forKey: oldKey, pinKey: "", siblings: .none) }
+        if own != 0, siblings.names.isEmpty { set(0, forKey: oldKey, pinKey: "", siblings: .none) }
         set(ms, forKey: newKey, pinKey: pinKey, siblings: siblings)
     }
 
@@ -429,12 +430,12 @@ public final class LyricsOffsetStore: ObservableObject {
     /// 内容下的校正值 —— 钉住期间引擎不自动换源,内容还是变了只可能是它自己的无损改写(清洗 YRC 空白、
     /// 修 QRC 残留、重挂时间轴),时间轴跟着没变,那条校正值照样对得上。挪过来,pin 也就保住了;不挪的话这里读到
     /// 0 会顺手解钉,pin 本来要保护的东西反倒被拆掉。用户亲手归零时那条记录已经删掉,没有可挪的,照常解钉;
-    /// 同一首歌有两条以上候选时猜不出是哪一份,不动。
+    /// 同一首歌有两条以上候选时挪钉住记着的那一份,没记或不在其中时猜不出,不动。
     public func syncPinToOffset(forKey key: String, pinKey: String) {
         // 指纹段为空 = 这一刻还拿不到正文:查出来的 0 不代表「校正值没了」,钉住状态先不动,等内容到了再对。
         guard !pinKey.isEmpty, key.last != "|" else { return }
         if offset(forKey: key) == 0, LyricsPinStore.shared.isPinned(pinKey) {
-            carryOverOffset(to: key)
+            carryOverOffset(to: key, pinnedContent: LyricsPinStore.shared.content(forKey: pinKey))
         }
         LyricsPinStore.shared.setPinned(offset(forKey: key) != 0, forKey: pinKey, content: Self.fingerprint(ofKey: key))
     }
@@ -459,13 +460,18 @@ public final class LyricsOffsetStore: ObservableObject {
         }
     }
 
-    private func carryOverOffset(to key: String) {
+    /// 有几份候选时,钉住记着校准对着的那份(pinnedContent)在里面就挪它:改字时旧正文下那条为同一首歌别的写法留着(carryOffset),
+    /// 钉住记的是新正文。
+    private func carryOverOffset(to key: String, pinnedContent: String?) {
         // 指纹段为空 = 这一刻还拿不到正文(换歌那一下缓存正好在重建):不是内容变了,别把真正那条挪到空指纹上。
         guard isValid(key), key.last != "|", let lastSep = key.lastIndex(of: "|") else { return }
         let prefix = key[...lastSep]
         // 同一首歌 = 前两段(歌手|歌名)相同、只有第三段指纹不同。
-        let candidates = offsets.keys.filter {
+        var candidates = offsets.keys.filter {
             $0 != key && $0.hasPrefix(prefix) && !$0.dropFirst(prefix.count).contains("|") && offsets[$0] != 0
+        }
+        if candidates.count > 1, let pinnedContent, !pinnedContent.isEmpty {
+            candidates = candidates.filter { Self.fingerprint(ofKey: $0) == pinnedContent }
         }
         guard candidates.count == 1, let old = candidates.first, let value = offsets[old] else { return }
         offsets[key] = value

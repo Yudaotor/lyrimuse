@@ -413,13 +413,15 @@ func songContainsHanLike(s string) bool {
 	return false
 }
 
-// songLyricsShingles:这条写法正文的三元组与词元集合,第一次用到时才剥。正文不可信或太短时两个都是 nil。
+// songLyricsShingles:这条写法正文的三元组与词元集合,第一次用到时才剥。正文不可信或太短时两个都是 nil。标了纯音乐的照样剥:
+// 纯音乐标记在共享组里整组跟着标(18 章决策 32),要是因此不看正文,只靠歌词连着的一组标完就散了,撤标时也找不回组里别的写法。
+// 一边标了、一边没标的那一对不拿歌词作证(lyricsEdges、songIndependentLyricsMatch)。
 func (v *songVariant) lyricsShingles() (songHashSet, songHashSet) {
 	if v.shinglesDone {
 		return v.shingles, v.words
 	}
 	v.shinglesDone = true
-	if !v.evTrusted || v.instrumental {
+	if !v.evTrusted {
 		return nil, nil
 	}
 	tokens := songLyricsTokens(songLyricsBody(v.evLyrics.String()))
@@ -434,7 +436,7 @@ func (v *songVariant) lyricsShingles() (songHashSet, songHashSet) {
 func (v *songVariant) displayedLines() []timelineLine {
 	if !v.timelineDone {
 		v.timelineDone = true
-		if v.evTrusted && !v.instrumental {
+		if v.evTrusted {
 			v.timeline = displayedTimeline(v.evLyrics.String(), v.evYRC.String())
 		}
 	}

@@ -377,5 +377,16 @@ func runSongVersionsTests() {
                     && sourceBytes(sheet, contain: "statusDot(lyricsSymbol(v), lyricsColor(v), size: 10, label: nil)")
                     && !sourceBytes(sheet, contain: "Circle().fill("), true,
                     "其他写法(契约): 列表、一览表的状态点带形状(勾 / 等号 / 叉 / 横杠),不只靠颜色")
+        expectEqual(sourceBytes(sheet, contain: "row.sharesLyrics && sharing ? .shared : .own")
+                    && sourceBytes(sheet, contain: "let sharing = EnrichCacheReader.sharesEntityLyrics"), true,
+                    "其他写法(契约): 关了歌词同步时同组的那几条也按独立匹配显示")
+        expectEqual(sourceBytes(sourceBody("func versionFacts(forKey key: String)", in: store), contain: "detail(for: key, fallbackToMainCache: false)")
+                    && sourceBytes(sourceBody("func manualConflict(forKey key: String)", in: store), contain: "detail(for: k, fallbackToMainCache: k == key)")
+                    && sourceBytes(store, contain: "let complete = hydrate(key, fallbackToMainCache: fallbackToMainCache)"), true,
+                    "其他写法(契约): 同曲条目、两份手改读别的写法的正文时补不回来不解整份主缓存")
+        let playbackSource = read(sources, "LyrimuseCore/Local/LocalPlaybackSource.swift")
+        expectEqual(sourceBytes(sourceBody("private struct LyricsReloadSnapshot", in: playbackSource), contain: "let headerAliases: [LRCParser.HeaderIdentity]")
+                    && sourceBytes(playbackSource, contain: "headerAliases: reloadSnapshot.headerAliases,"), true,
+                    "其他写法(契约): 同曲条目的抬头别名变了(实体晚到)也重载歌词")
     }
 }

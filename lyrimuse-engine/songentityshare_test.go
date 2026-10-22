@@ -225,7 +225,8 @@ func TestShareManualLocked(t *testing.T) {
 		sort.Strings(keys)
 		enrichMu.Lock()
 		defer enrichMu.Unlock()
-		return shareManualLocked(keys, "", nil, now)
+		changed, _, conflict := shareManualLocked(keys, "", nil, now)
+		return changed, conflict
 	}
 
 	t.Run("one", func(t *testing.T) {
@@ -1262,7 +1263,7 @@ func TestShareManualPassStopsFlappingVersion(t *testing.T) {
 	now := time.Unix(6_000_000, 0)
 	enrichMu.Lock()
 	songShareFlapStopped["A|Song|Two"] = true
-	changed, _ := shareManualLocked([]string{"A|Song|One", "A|Song|Two"}, "", nil, now)
+	changed, _, _ := shareManualLocked([]string{"A|Song|One", "A|Song|Two"}, "", nil, now)
 	enrichMu.Unlock()
 	if len(changed) != 0 {
 		t.Errorf("停手的写法建表之后那一轮不改: %v", changed)

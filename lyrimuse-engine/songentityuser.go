@@ -189,7 +189,7 @@ func songSplitSidesLocked(keys []string) (string, []string, error) {
 // songSplitRestoreLocked:拆出去的写法里,歌词是同步写进去那份的按留底恢复、删掉留底;手改副本没有能用的留底时只去掉副本
 // 标记(同 releaseStaleCopiesLocked)。它们自己的手改、校准不动。返回歌词变了的写法。调用方持 enrichMu。
 func songSplitRestoreLocked(keys []string) []string {
-	restored := releaseStaleCopiesLocked(keys, nil)
+	restored, _ := releaseStaleCopiesLocked(keys, nil)
 	done := map[string]bool{}
 	for _, k := range restored {
 		done[k] = true
@@ -283,7 +283,7 @@ func resolveManualConflictEdit(key string, now time.Time) enrichEditOutcome {
 		songShareCopyManual(&e, src, key, now)
 		enrichCache[k] = e
 	}
-	more, _ := shareManualLocked(keys, key, pins, now)
+	more, _, _ := shareManualLocked(keys, key, pins, now)
 	changed = append(changed, more...)
 	for _, k := range changed {
 		cancelInFlightEnrichLocked(k)
@@ -383,7 +383,7 @@ func withShareGroupMatesLocked(keys []string) []string {
 	}
 	var extra []string
 	for k, e := range enrichCache {
-		if !seen[k] && e.Song != "" && groups[group{e.Song, e.SongShare}] && !e.ManualLyrics && !songSharePickHeld(e) {
+		if !seen[k] && e.Song != "" && groups[group{e.Song, e.SongShare}] && !songShareOwnLyrics(e) {
 			extra = append(extra, k)
 		}
 	}

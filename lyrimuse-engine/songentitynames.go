@@ -202,13 +202,16 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 // startAppleNamesSweep 由 poller 单开一个 goroutine:启动后 appleNamesDelay 补一次,之后每 appleNamesInterval 一次(这一轮没问完就
 // catalogSweepRetry 之后接着问),只问到期的 id;补到了新结果、实体表开着,就重建一次实体表,不等它每天那一次。
 func startAppleNamesSweep(ctx context.Context) {
-	timer := time.NewTimer(appleNamesDelay)
+	timer := newWallTimer(appleNamesDelay)
 	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
+		}
+		if !timer.Due(time.Now()) {
+			continue
 		}
 		next := appleNamesInterval
 		if features().SongEntityPhase2 {

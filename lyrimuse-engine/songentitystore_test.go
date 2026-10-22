@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -193,7 +194,7 @@ func TestWriteBackSongEntityIDs(t *testing.T) {
 	})
 	n := len(writeBackSongEntityIDs(&songEntityTableFile{Songs: map[string]songEntityRecord{
 		"s_000000000001": {Variants: []string{"A|Song|One", "A|Song|Two", "A|Song|Gone"}},
-	}}))
+	}}, maps.Clone(enrichCache)))
 	if n != 1 || enrichCache["A|Song|Two"].Song != "s_000000000001" || !enrichDirty {
 		t.Errorf("n=%d song=%q dirty=%v", n, enrichCache["A|Song|Two"].Song, enrichDirty)
 	}
@@ -203,12 +204,12 @@ func TestWriteBackSongEntityIDs(t *testing.T) {
 	enrichDirty = false
 	if n := len(writeBackSongEntityIDs(&songEntityTableFile{Songs: map[string]songEntityRecord{
 		"s_000000000001": {Variants: []string{"A|Song|One", "A|Song|Two"}},
-	}})); n != 0 || enrichDirty {
+	}}, maps.Clone(enrichCache))); n != 0 || enrichDirty {
 		t.Errorf("没变的不改、不标脏: n=%d dirty=%v", n, enrichDirty)
 	}
 	n = len(writeBackSongEntityIDs(&songEntityTableFile{Songs: map[string]songEntityRecord{
 		"s_000000000001": {Variants: []string{"A|Song|One", "A|Song|Two"}, Share: []int{0, 1}},
-	}}))
+	}}, maps.Clone(enrichCache)))
 	if n != 1 || enrichCache["A|Song|One"].SongShare != 0 || enrichCache["A|Song|Two"].SongShare != 1 {
 		t.Errorf("共享组编号要跟实体表 share 一致: n=%d one=%d two=%d", n, enrichCache["A|Song|One"].SongShare, enrichCache["A|Song|Two"].SongShare)
 	}

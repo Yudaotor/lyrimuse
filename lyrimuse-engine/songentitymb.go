@@ -160,13 +160,16 @@ func fetchMBRecordings(ctx context.Context, codes []string, have map[string]mbIS
 // startMBRecordingsSweep 由 poller 单开一个 goroutine:启动后 mbRecordingsDelay 补一次,之后每 mbRecordingsInterval 一次,
 // 没问完就隔 mbRecordingsRetry 接着问;补到了新结果、实体表开着,就重建一次实体表。
 func startMBRecordingsSweep(ctx context.Context) {
-	timer := time.NewTimer(mbRecordingsDelay)
+	timer := newWallTimer(mbRecordingsDelay)
 	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
+		}
+		if !timer.Due(time.Now()) {
+			continue
 		}
 		next := mbRecordingsInterval
 		if features().SongEntityPhase2 {

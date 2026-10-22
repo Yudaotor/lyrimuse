@@ -55,8 +55,11 @@ func shareFollowWriting(key string, now time.Time) []string {
 
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
+	// 两次持锁之间这一条可能被存成手改、采纳、标了纯音乐或者拆开了:照抄的话手改标记会被抄给组里别的写法(它们成了假的原件),
+	// 或者把词同步进已经不在一个实体里的写法。
 	live, ok := enrichCache[key]
-	if !ok || songOffsetFingerprint(live.Lyrics.String(), live.LyricsYRC.String()) != to.fp || live.SongShare != src.SongShare {
+	if !ok || songOffsetFingerprint(live.Lyrics.String(), live.LyricsYRC.String()) != to.fp || live.Song != src.Song ||
+		live.SongShare != src.SongShare || live.Instrumental || live.ManualLyrics || songSharePickHeld(live) {
 		return nil
 	}
 	var changed []string
@@ -134,7 +137,9 @@ func shareImportedEditsLocked(keys []string, now time.Time) []string {
 	if len(keys) == 0 || !songEntitySharing() {
 		return nil
 	}
-	var changed []string
+	// 先把改过的几条全部标成原件,再逐条同步:边标边同步的话,同一组里改成不同内容的两条,后一条还没标上就被前一条盖掉,
+	// 轮到它时已经是前一条的副本,用户对它的修改就没了。两条都是原件时互相跳过,留成两份手改交给用户选(决策 31)。
+	var edited []string
 	for _, k := range keys {
 		e, ok := enrichCache[k]
 		if !ok || e.Song == "" || strings.TrimSpace(e.Lyrics.String()) == "" {
@@ -145,6 +150,10 @@ func shareImportedEditsLocked(keys []string, now time.Time) []string {
 			enrichCache[k] = e
 			enrichDirty = true
 		}
+		edited = append(edited, k)
+	}
+	var changed []string
+	for _, k := range edited {
 		changed = append(changed, shareManualEditLocked(k, now)...)
 	}
 	if len(changed) > 0 {

@@ -490,6 +490,22 @@ func runLyricsOffsetTests() {
         expectEqual(pins.content(forKey: pinTheirs), fingerprint(theirsOther), "补记: 已经记了的不改")
 
         store.clearAllTrackOffsets()
+        let ownerSiblings = LyricsOffsetSiblings(names: ["读穿歌手|读穿歌名"])
+        store.setOffset(500, forKey: theirs, pinKey: pinTheirs, siblings: ownerSiblings)
+        let theirsEdited = LyricsOffsetStore.trackKey(artist: "Inherit Artist", title: "Inherit Title", lyrics: "[00:01.00]读穿测试改字\n", lyricsYRC: "")
+        store.carryOffset(from: theirs, to: theirsEdited, pinKey: pinTheirs, siblings: ownerSiblings)
+        expectEqual(store.offset(forKey: theirsEdited), 500, "改字: 自己调过的值搬到新正文下")
+        expectEqual(store.offset(forKey: mine, siblings: siblings), 500, "改字: 别的写法还用着旧正文,照样借得到")
+        let theirsRewritten = LyricsOffsetStore.trackKey(artist: "Inherit Artist", title: "Inherit Title", lyrics: "[00:01.00]读穿测试改字 \n", lyricsYRC: "")
+        store.syncPinToOffset(forKey: theirsRewritten, pinKey: pinTheirs)
+        expectEqual(store.offset(forKey: theirsRewritten), 500, "接管: 几份歌词下都有值时挪钉住记的那份")
+        expectEqual(pins.isPinned(pinTheirs), true, "接管: 挪过来之后照旧钉着")
+        let thirdEdited = LyricsOffsetStore.trackKey(artist: "第三写法", title: "第三歌名", lyrics: "[00:01.00]读穿测试改字\n", lyricsYRC: "")
+        store.setOffset(-100, forKey: third, pinKey: "", siblings: .none)
+        store.carryOffset(from: third, to: thirdEdited, pinKey: "", siblings: .none)
+        expectEqual(store.offset(forKey: third), 0, "改字: 没有别的写法时旧正文下那条删掉")
+
+        store.clearAllTrackOffsets()
     }
 
     // ---- 读穿的顺序:同一个实体的写法,手改副本的原件排最前,其余按写法键;按「歌手|歌名」去重,不列自己 ----
