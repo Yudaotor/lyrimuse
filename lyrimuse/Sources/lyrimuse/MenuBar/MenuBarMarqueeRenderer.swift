@@ -178,10 +178,15 @@ enum MenuBarMarqueeRenderer {
     }
 
     /// 量宽本身(不查不记 `widthMemo`),哪个线程都能调:歌词窗口的图层列表在后台排整首歌时用它。
+    /// 从右往左的字,行尾空白不算进排版宽度:单独量上补回来,逐词排时词与词之间的空格才不丢。
     nonisolated static func measure(_ text: String, font: NSFont, translation: Bool = false) -> CGFloat {
         guard !text.isEmpty else { return 0 }
-        return (text as NSString).size(
-            withAttributes: LyricTypesetting.attributes([.font: font], for: text, translation: translation)).width
+        let attrs = LyricTypesetting.attributes([.font: font], for: text, translation: translation)
+        let width = (text as NSString).size(withAttributes: attrs).width
+        let body = LyricTextDirection.trimmingTrailingWhitespace(text)
+        guard body.count < text.count, LyricTextDirection.isRightToLeft(text) else { return width }
+        let trailing = String(text.dropFirst(body.count))
+        return width + (trailing as NSString).size(withAttributes: attrs).width
     }
 
     private struct WidthKey: Hashable {
@@ -406,9 +411,15 @@ final class MenuBarDrawnLayer: CALayer {
         actions = ["contents": NSNull()]
     }
 
+    /// 左右镜像着画(从右往左的句子,配合 `MenuBarScrollingLabel` 的镜像层把字翻回正向)。
+    var mirrored = false {
+        didSet { if mirrored != oldValue, painter != nil { setNeedsDisplay() } }
+    }
+
     override init(layer: Any) {
         super.init(layer: layer)
         painter = (layer as? MenuBarDrawnLayer)?.painter
+        mirrored = (layer as? MenuBarDrawnLayer)?.mirrored ?? false
     }
 
     @available(*, unavailable)
@@ -418,6 +429,10 @@ final class MenuBarDrawnLayer: CALayer {
         if contentsAreFlipped() {
             ctx.translateBy(x: 0, y: bounds.height)
             ctx.scaleBy(x: 1, y: -1)
+        }
+        if mirrored {
+            ctx.translateBy(x: bounds.width, y: 0)
+            ctx.scaleBy(x: -1, y: 1)
         }
         painter?.draw(ctx)
     }

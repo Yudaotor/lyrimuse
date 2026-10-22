@@ -862,6 +862,36 @@ func runOverlayTests() {
                     true, "倍率回调(契约): 换上长图时记下它按哪个倍率画的")
     }
 
+    // ---- 从右往左的句子(契约):逐词画的三条路都按 LyricTextDirection 镜像 ----
+    do {
+        let src = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func text(_ path: String) -> String {
+            (try? String(contentsOf: src.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let row = text("UI/OverlayScrollingLyricRow.swift")
+        expectEqual(sourceHas(row, "rightToLeft: LyricTextDirection.isRightToLeft(spec.words.map(\\.text).joined())"), true,
+                    "从右往左(契约): 图层行按整行文字判方向")
+        expectEqual(sourceHas(row, "mirrorLayer.addSublayer(contentLayer)"), true,
+                    "从右往左(契约): 图层行的内容挂在镜像层下")
+        expectEqual(sourceHas(row, "ctx.scaleBy(x: -1, y: 1)"), true, "从右往左(契约): 图层行逐词镜像着画")
+        let list = text("UI/LyricsLayerListRow.swift")
+        expectEqual(sourceHas(list, "let rightToLeft = LyricTextDirection.isRightToLeft(words.map(\\.text).joined())"), true,
+                    "从右往左(契约): 歌词窗口列表行按整行文字判方向")
+        expectEqual(sourceHas(list, "CGFloat(rightToLeft ? 1 - center : center) * frame.width - gradientWidth / 2"), true,
+                    "从右往左(契约): 歌词窗口列表行的填色从词的右端走")
+        expectEqual(sourceHas(list, "word = SyncedLyricWord(text: body, startMs: word.startMs, durationMs: word.durationMs)"), true,
+                    "从右往左(契约): 歌词窗口列表行的词元素不含尾空格")
+        let renderer = text("MenuBar/MenuBarMarqueeRenderer.swift")
+        expectEqual(sourceHas(renderer, "guard body.count < text.count, LyricTextDirection.isRightToLeft(text) else { return width }"),
+                    true, "从右往左(契约): 量宽把从右往左的尾空格补回来")
+        let bar = text("MenuBar/MenuBarScrollingLabel.swift")
+        expectEqual(sourceHas(bar, "rightToLeft = LyricTextDirection.isRightToLeft(plan.text)"), true,
+                    "从右往左(契约): 菜单栏按整句判方向")
+        expectEqual(sourceHas(bar, "mirrorLayer.addSublayer(contentLayer)"), true,
+                    "从右往左(契约): 菜单栏的滚动内容挂在镜像层下")
+    }
+
     // ---- 图层行不设帧率区间(契约):设了系统按上限跑满,不设反而画得更少(04 章决策 68) ----
     do {
         let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()

@@ -30,6 +30,8 @@ final class LyricsLayerElement {
     private let restColors: [CGColor]
     private let activeColors: [CGColor]
     private var showsActiveColors = false
+    /// 填色从右往左走:渐变反着排,软边中心按 1 − 进度摆。
+    private let rightToLeft: Bool
 
     static let fillKey = "lyrimuse.layer-list.fill"
     static let liftKey = "lyrimuse.layer-list.lift"
@@ -42,6 +44,7 @@ final class LyricsLayerElement {
         fillDurationMs = plan.fillDurationMs
         motion = plan.motion
         anchor = plan.anchor
+        rightToLeft = plan.rightToLeft
         restColors = [plan.sung, plan.sung, plan.unsung, plan.unsung]
         activeColors = [plan.activeSung, plan.activeSung, plan.unsung, plan.unsung]
         let pad = LyricsLayerListText.pad
@@ -62,8 +65,8 @@ final class LyricsLayerElement {
         fill.mask = mask
         gradient.actions = noActions
         gradient.anchorPoint = .zero
-        gradient.startPoint = CGPoint(x: 0, y: 0.5)
-        gradient.endPoint = CGPoint(x: 1, y: 0.5)
+        gradient.startPoint = CGPoint(x: plan.rightToLeft ? 1 : 0, y: 0.5)
+        gradient.endPoint = CGPoint(x: plan.rightToLeft ? 0 : 1, y: 0.5)
         let band = KaraokeFill.wordEdgeSoftenBand * Double(frame.width) / Double(gradientWidth)
         gradient.colors = restColors
         gradient.locations = [0, NSNumber(value: 0.5 - band), NSNumber(value: 0.5 + band), 1]
@@ -104,7 +107,7 @@ final class LyricsLayerElement {
 
     /// 软边中心在词宽里的位置 → 渐变层的 x:渐变正中那条过渡带对准中心。
     private func gradientX(center: Double) -> CGFloat {
-        CGFloat(center) * frame.width - gradientWidth / 2
+        CGFloat(rightToLeft ? 1 - center : center) * frame.width - gradientWidth / 2
     }
 
     func setFill(center: Double) {
@@ -295,6 +298,8 @@ struct LyricsLayerRowPlan: @unchecked Sendable {
         var anchor: CGPoint
         /// 逐词读音里没有读音的那一组:占位、不显示。
         var hidden: Bool
+        /// 从右往左的词:填色从词的右端往左走(见 `LyricTextDirection`)。
+        var rightToLeft = false
     }
 
     /// 整段画成一张图的(没有逐字时间轴的正文、整行读音、译文、创作者行),框含四周的 `LyricsLayerListText.pad`。
@@ -620,20 +625,53 @@ extension LyricsLayerRowPlan {
                                                    bounds: CGRect(x: origin.x, y: origin.y, width: width, height: .greatestFiniteMagnitude),
                                                    horizontalSpacing: 0, verticalSpacing: LyricsLayerRowStyle.wrapRowSpacing,
                                                    rowAlignment: rowAlignment(side))
+        // 从右往左的行:每一折行里的词在这一行占的范围内左右镜像,行的对齐不变、行内词序反过来。
+        let rightToLeft = LyricTextDirection.isRightToLeft(words.map(\.text).joined())
+        var rowSpans: [CGFloat: (minX: CGFloat, maxX: CGFloat)] = [:]
+        if rightToLeft {
+            for p in placements {
+                let maxX = p.origin.x + units[p.index].size.width
+                let span = rowSpans[p.origin.y] ?? (p.origin.x, maxX)
+                rowSpans[p.origin.y] = (min(span.minX, p.origin.x), max(span.maxX, maxX))
+            }
+        }
+        func mirrored(_ f: CGRect, rowY: CGFloat) -> CGRect {
+            guard let span = rowSpans[rowY] else { return f }
+            return CGRect(x: span.minX + span.maxX - f.maxX, y: f.minY, width: f.width, height: f.height)
+        }
         var elements: [Element] = []
         for p in placements {
             let unit = units[p.index]
             var x = p.origin.x
             for i in unit.tokens {
                 let m = wordMetrics[i]
-                let frame = CGRect(x: x, y: p.origin.y + (unit.mainHeight - m.height) / 2, width: m.width, height: m.height)
-                elements += tokenElements(words[i], metrics: m, frame: frame, font: font, sung: color, unsung: unsung,
+                // 从右往左的行,元素只盖字本身(不含尾空格)、排在这一格左段,镜像后尾空格落在字的左边。
+                var word = words[i]
+                var inkMetrics = m
+                if rightToLeft {
+                    let body = LyricTextDirection.trimmingTrailingWhitespace(word.text)
+                    if !body.isEmpty, body.count < word.text.count {
+                        word = SyncedLyricWord(text: body, startMs: word.startMs, durationMs: word.durationMs)
+                        inkMetrics = LyricsLayerListText.metrics(body, font: font)
+                    }
+                }
+                let frame = mirrored(CGRect(x: x, y: p.origin.y + (unit.mainHeight - inkMetrics.height) / 2,
+                                            width: inkMetrics.width, height: inkMetrics.height),
+                                     rowY: p.origin.y)
+                elements += tokenElements(word, metrics: inkMetrics, frame: frame, font: font, sung: color, unsung: unsung,
                                           activeSung: activeColor, rises: rises, emphasis: spans[i], slot: slots[i], anchor: anchors[i], style: style,
-                                          silhouettes: silhouettes)
+                                          silhouettes: silhouettes).map { e in
+                    var e = e
+                    e.rightToLeft = rightToLeft
+                    if rightToLeft { e.anchor.x = 1 - e.anchor.x }
+                    return e
+                }
                 x += m.width
             }
             if let roma = unit.roma {
-                let frame = CGRect(x: p.origin.x + 2, y: p.origin.y + unit.mainHeight, width: roma.metrics.width, height: roma.metrics.height)
+                let unitFrame = mirrored(CGRect(x: p.origin.x, y: p.origin.y, width: unit.size.width, height: unit.size.height),
+                                         rowY: p.origin.y)
+                let frame = CGRect(x: unitFrame.minX + 2, y: p.origin.y + unit.mainHeight, width: roma.metrics.width, height: roma.metrics.height)
                 elements.append(Element(
                     frame: frame,
                     silhouette: LyricsLayerListText.silhouette(roma.text, font: romaFont, translation: false,

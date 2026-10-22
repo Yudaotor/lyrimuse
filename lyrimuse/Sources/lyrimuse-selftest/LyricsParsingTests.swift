@@ -7,6 +7,25 @@ import Foundation
 
 @MainActor
 func runLyricsParsingTests() {
+    // ---- LyricTextDirection:整行从右往左还是从左往右 ----
+
+    expectEqual(LyricTextDirection.isRightToLeft("\u{0627}\u{0646}\u{0627} \u{0628}\u{062D}\u{0628}\u{0643}"), true,
+                "文字方向: 阿拉伯字母开头从右往左")
+    expectEqual(LyricTextDirection.isRightToLeft("\u{05E9}\u{05DC}\u{05D5}\u{05DD}"), true, "文字方向: 希伯来字母从右往左")
+    expectEqual(LyricTextDirection.isRightToLeft("\u{FEFB}"), true, "文字方向: 阿拉伯展示形式也认")
+    expectEqual(LyricTextDirection.isRightToLeft("(\u{0661}\u{0662}) \u{0627}"), true,
+                "文字方向: 括号、阿拉伯-印度数字、空白跳过,看第一个字母")
+    expectEqual(LyricTextDirection.isRightToLeft("Habibi \u{062D}\u{0628}\u{064A}\u{0628}\u{064A}"), false,
+                "文字方向: 拉丁字母在前按从左往右")
+    expectEqual(LyricTextDirection.isRightToLeft("\u{4F60}\u{597D} \u{0627}"), false, "文字方向: 汉字在前按从左往右")
+    expectEqual(LyricTextDirection.isRightToLeft("\u{C548}\u{B155}"), false, "文字方向: 韩文从左往右")
+    expectEqual(LyricTextDirection.isRightToLeft("123 ... !"), false, "文字方向: 没有字母按从左往右")
+    expectEqual(LyricTextDirection.isRightToLeft(""), false, "文字方向: 空串按从左往右")
+    expectEqual(LyricTextDirection.trimmingTrailingWhitespace("\u{0639}\u{0646} \u{3000}"), "\u{0639}\u{0646}",
+                "文字方向: 去尾空白含全角空格")
+    expectEqual(LyricTextDirection.trimmingTrailingWhitespace(" a b"), " a b", "文字方向: 开头和中间的空白不动")
+    expectEqual(LyricTextDirection.trimmingTrailingWhitespace("   "), "", "文字方向: 全是空白去成空串")
+
     // ---- LRCParser ----
 
     expectEqual(

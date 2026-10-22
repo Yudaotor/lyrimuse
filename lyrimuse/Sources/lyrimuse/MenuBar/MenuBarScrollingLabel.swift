@@ -22,11 +22,12 @@ import SwiftUI
 //
 //   self.layer
 //     ├ clipLayer   (masksToBounds,尺寸/位置 = NSStatusBarButton 画 image 的那一块)
-//     │    └ contentLayer  (滚动动画动的是它的 position.x)
-//     │         ├ baseClipLayer  (masksToBounds,只露出**未唱**区 [边界, 句尾])
-//     │         │    └ textLayer      (MenuBarDrawnLayer,现画整句,基础色)
-//     │         └ fillClipLayer  (masksToBounds,只露出**已唱**区 [0, 边界])
-//     │              └ fillTextLayer (同一句的强调色版)
+//     │    └ mirrorLayer  (从右往左的句子左右翻转整格,其余时候恒等)
+//     │         └ contentLayer  (滚动动画动的是它的 position.x)
+//     │              ├ baseClipLayer  (masksToBounds,只露出**未唱**区 [边界, 句尾])
+//     │              │    └ textLayer      (MenuBarDrawnLayer,现画整句,基础色)
+//     │              └ fillClipLayer  (masksToBounds,只露出**已唱**区 [0, 边界])
+//     │                   └ fillTextLayer (同一句的强调色版)
 //     └ iconHostLayer (歌词旁那枚带播放进度的图标;关掉时整层 isHidden)
 //          ├ iconBaseClipLayer (masksToBounds,只露出**还没放到**的那截 [边界, 顶])
 //          │    └ iconBaseLayer (图标模板图,基础色)
@@ -52,6 +53,9 @@ import SwiftUI
 // position.x/bounds,共享 beginTime/keyTimes,按逐字时间轴生成,见
 // MenuBarMarquee.karaokeFillKeyframes),装好后主线程一帧都不碰,跟滚动同一哲学。
 // 两个裁剪层都挂在 contentLayer 里,滚动时天然跟文字焊在一起。
+//
+// 从右往左的句子(`LyricTextDirection`):两张长图各自左右镜像着画,mirrorLayer 再把整格翻回来。
+// 字形翻两次是正的,句首落在格子右端,填色、滚动、对齐的算式一行不改就都变成从右往左。
 @MainActor
 final class MenuBarScrollingLabel: NSView {
     private static let scrollAnimationKey = "lyrimuse.marquee"
@@ -68,7 +72,10 @@ final class MenuBarScrollingLabel: NSView {
     private static let gapDotsSampleCount = 48
 
     private let clipLayer = CALayer()
+    private let mirrorLayer = CALayer()
     private let contentLayer = CALayer()
+    /// 当前这句从右往左排(见头注「从右往左的句子」)。
+    private var rightToLeft = false
     private let baseClipLayer = CALayer()
     private let textLayer = MenuBarDrawnLayer()
     private let fillClipLayer = CALayer()
@@ -235,6 +242,7 @@ final class MenuBarScrollingLabel: NSView {
         // baseClipLayer 靠"position.x = bounds.origin.x = 边界"这组关系露出 [边界, 句尾]
         // 而让里面的 textLayer 在 contentLayer 坐标系里纹丝不动(见 applyKaraokeFill)。
         clipLayer.anchorPoint = .zero
+        mirrorLayer.anchorPoint = .zero
         contentLayer.anchorPoint = .zero
         baseClipLayer.anchorPoint = .zero
         textLayer.anchorPoint = .zero
@@ -257,7 +265,8 @@ final class MenuBarScrollingLabel: NSView {
             gapDotLayers.append(dot)
         }
         contentLayer.addSublayer(gapDotsHostLayer)
-        clipLayer.addSublayer(contentLayer)
+        mirrorLayer.addSublayer(contentLayer)
+        clipLayer.addSublayer(mirrorLayer)
         layer?.addSublayer(clipLayer)
         // 进度图标那一支。几何关系跟上面那对裁剪层**逐条对称**,只是把横向换成纵向:
         // fillClip 露出 [底, 边界]、baseClip 露出 [边界, 顶](下→上,像水位涨上来)。
@@ -705,6 +714,12 @@ final class MenuBarScrollingLabel: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         clipLayer.frame = geometry.lyrics
+        mirrorLayer.position = .zero
+        mirrorLayer.bounds = CGRect(origin: .zero, size: geometry.lyrics.size)
+        mirrorLayer.transform = rightToLeft
+            ? CATransform3DConcat(CATransform3DMakeScale(-1, 1, 1),
+                                  CATransform3DMakeTranslation(geometry.lyrics.width, 0, 0))
+            : CATransform3DIdentity
         // 只写 y。x 由滚动动画接管(动的是 contentLayer),这里碰它会跟滚动打架。
         contentLayer.position = CGPoint(x: contentLayer.position.x, y: 0)
         if let secondary = geometry.secondary {
@@ -947,6 +962,9 @@ final class MenuBarScrollingLabel: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layoutGapDots(boxWidth: built.textWidth, boxHeight: built.pointHeight, color: dotCGColor)
+        rightToLeft = LyricTextDirection.isRightToLeft(plan.text)
+        textLayer.mirrored = rightToLeft
+        fillTextLayer.mirrored = rightToLeft
         textLayer.painter = built.paint
         textLayer.contentsScale = built.scale
         // 用 bounds 而不是 frame:frame 会连 position 一起写,那就把动画的落点冲掉了。

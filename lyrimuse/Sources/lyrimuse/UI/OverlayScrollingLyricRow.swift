@@ -9,13 +9,17 @@ import SwiftUI
 // 主线程打满、滚动一顿一顿。完整论证见 docs/features/04-desktop-overlay.md「长句处理」。
 //
 //     self.layer (masksToBounds,可视窗)
-//       └ contentLayer                                     滚动 = 平移这一层
-//           ├ strokeLayer                                   描边(已唱 / 未唱同色,不参与裁剪)
-//           ├ baseClipLayer (只露未唱区) └ baseTextLayer    基础色长图
-//           └ fillClipLayer (只露已唱区) └ fillTextLayer    强调色长图
+//       └ mirrorLayer                                      从右往左的行整体水平翻转,别的行恒等
+//           └ contentLayer                                 滚动 = 平移这一层
+//               ├ strokeLayer                               描边(已唱 / 未唱同色,不参与裁剪)
+//               ├ baseClipLayer (只露未唱区) └ baseTextLayer 基础色长图
+//               └ fillClipLayer (只露已唱区) └ fillTextLayer 强调色长图
 //
 // 已唱 / 未唱必须**互补裁剪**,别改成强调色那张叠在基础色上面:叠画时字形边缘的半透明像素会让
 // 底下那张透出来,深底上镶一圈白边。
+// 从右往左的行(`LyricTextDirection`):排版、填色、滚动都照从左往右算,长图里每个词、每段读音在自己的格子里
+// 镜像着画,再由 mirrorLayer 把整行翻回来 —— 两次镜像抵消,字是正的,词序、填色、滚动方向一起变成从右往左。
+// 尾部渐隐和对齐方式按视觉位置跟着镜像(见 `place`)。
 // 描边必须跟换行模式(`OptionalTextStroke`)同一个算法、同一组参数(`LyricsTextStrokeMetrics`):
 // 剪影高斯模糊 σ = width,再按 alphaRamp 拉成实心轮廓。别换成 AppKit 的 `.strokeWidth` ——
 // 那是沿轮廓居中描的细线,粗细和形状都跟换行模式对不上。
@@ -107,6 +111,7 @@ final class OverlayLyricScrollView: NSView {
     /// 重装动画的漂移门(毫秒):动画在跑、且"动画此刻推到哪"与新时钟之差小于它时不打断。
     private static let resyncToleranceMs = 250
 
+    private let mirrorLayer = CALayer()
     private let contentLayer = CALayer()
     private let strokeLayer = CALayer()
     private let baseClipLayer = CALayer()
@@ -146,6 +151,8 @@ final class OverlayLyricScrollView: NSView {
     private var flatWords: [SyncedLyricWord] = []
     private var mainHeight: CGFloat = 0
     private var romaHeight: CGFloat = 0
+    /// 这一行按从右往左排(`OverlayRowGeometry.rightToLeft`)。
+    private var rightToLeft = false
     /// `Spec.romaGap`,没有逐词读音时为 0。
     private var romaGap: CGFloat = 0
     private var readingPath: [MenuBarMarquee.KaraokeFillPoint] = []
@@ -159,7 +166,7 @@ final class OverlayLyricScrollView: NSView {
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.masksToBounds = true
-        for l in [contentLayer, strokeLayer, baseClipLayer, baseTextLayer, fillClipLayer, fillTextLayer] {
+        for l in [mirrorLayer, contentLayer, strokeLayer, baseClipLayer, baseTextLayer, fillClipLayer, fillTextLayer] {
             l.anchorPoint = .zero
             l.actions = ["position": NSNull(), "bounds": NSNull(), "contents": NSNull()]
         }
@@ -170,7 +177,9 @@ final class OverlayLyricScrollView: NSView {
         contentLayer.addSublayer(strokeLayer)
         contentLayer.addSublayer(baseClipLayer)
         contentLayer.addSublayer(fillClipLayer)
-        layer?.addSublayer(contentLayer)
+        mirrorLayer.actions = ["position": NSNull(), "bounds": NSNull(), "transform": NSNull()]
+        mirrorLayer.addSublayer(contentLayer)
+        layer?.addSublayer(mirrorLayer)
         for l in [fadeMask, fadeSolid, fadeRamp, fadeCover] {
             l.anchorPoint = .zero
             l.actions = ["position": NSNull(), "bounds": NSNull(), "opacity": NSNull()]
@@ -312,7 +321,8 @@ final class OverlayLyricScrollView: NSView {
             boxWidth: r.boxWidth, boxHeight: alignedUp(blockHeight + 2 * inset, scale: scale),
             imageWidth: alignedUp(r.boxWidth, scale: scale),
             wordStartXs: r.wordStartXs, wordEndXs: r.wordEndXs, romaPlacements: r.romaPlacements,
-            flatWords: r.flatWords, readingPath: readingPath)
+            flatWords: r.flatWords, readingPath: readingPath,
+            rightToLeft: LyricTextDirection.isRightToLeft(spec.words.map(\.text).joined()))
     }
 
     /// 换上排好、画好的一行。不动动画,摆位交给 `place`。
@@ -331,6 +341,7 @@ final class OverlayLyricScrollView: NSView {
         romaPlacements = g.romaPlacements
         flatWords = g.flatWords
         readingPath = g.readingPath
+        rightToLeft = g.rightToLeft
         baseTextLayer.contents = images.base
         fillTextLayer.contents = images.fill
         strokeLayer.contents = images.stroke
@@ -397,6 +408,11 @@ final class OverlayLyricScrollView: NSView {
         let offset = MenuBarMarquee.karaokeFillX(atMs: nowMs, path: scrollPath)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        mirrorLayer.position = .zero
+        mirrorLayer.bounds = CGRect(x: 0, y: 0, width: viewW, height: bounds.height)
+        mirrorLayer.transform = rightToLeft
+            ? CATransform3DConcat(CATransform3DMakeScale(-1, 1, 1), CATransform3DMakeTranslation(viewW, 0, 0))
+            : CATransform3DIdentity
         contentLayer.bounds = CGRect(x: 0, y: 0, width: imageWidth, height: boxHeight)
         contentLayer.position = CGPoint(x: restingX - pixelAligned(offset), y: restingY)
         // 配速行、静止行整行都是"已唱"那张(fillColor),不走填色边界。
@@ -418,11 +434,12 @@ final class OverlayLyricScrollView: NSView {
     /// 长图在视图里垂直居中的落点,对齐到整像素。
     private var restingY: CGFloat { pixelAligned((bounds.height - boxHeight) / 2) }
 
+    /// 从右往左的行在翻转过的坐标里摆,左右对调,落在用户选的那一侧。
     private func restingOriginX(viewWidth: CGFloat, layoutWidth: CGFloat) -> CGFloat {
         switch spec?.alignment ?? .center {
-        case .leading: return 0
+        case .leading: return rightToLeft ? viewWidth - layoutWidth : 0
         case .center: return (viewWidth - layoutWidth) / 2
-        case .trailing: return viewWidth - layoutWidth
+        case .trailing: return rightToLeft ? 0 : viewWidth - layoutWidth
         }
     }
 
@@ -441,8 +458,11 @@ final class OverlayLyricScrollView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         fadeMask.frame = bounds
-        fadeSolid.frame = CGRect(x: 0, y: 0, width: viewWidth - band, height: h)
-        fadeRamp.frame = CGRect(x: viewWidth - band, y: 0, width: band, height: h)
+        // 渐隐带在行尾那一侧:从右往左的行在左端。
+        fadeSolid.frame = CGRect(x: rightToLeft ? band : 0, y: 0, width: viewWidth - band, height: h)
+        fadeRamp.frame = CGRect(x: rightToLeft ? 0 : viewWidth - band, y: 0, width: band, height: h)
+        fadeRamp.startPoint = CGPoint(x: rightToLeft ? 1 : 0, y: 0.5)
+        fadeRamp.endPoint = CGPoint(x: rightToLeft ? 0 : 1, y: 0.5)
         fadeCover.frame = fadeRamp.frame
         let atStart = offset <= 0.5
         fadeCover.opacity = atStart ? 0 : 1
@@ -533,6 +553,8 @@ struct OverlayRowGeometry {
     var romaPlacements: [OverlayRowLayout.RomaPlacement]
     var flatWords: [SyncedLyricWord]
     var readingPath: [MenuBarMarquee.KaraokeFillPoint]
+    /// 整行按从右往左排:每个词、每段读音镜像着画,视图再整行翻回来(见文件头注)。
+    var rightToLeft = false
 }
 
 /// 一行的三张长图。
@@ -595,15 +617,30 @@ enum OverlayRowRaster {
         }
         // 排字语言逐词判、跟上面量宽度同一口径(见 `LyricTypesetting`)。
         for (i, w) in g.flatWords.enumerated() where i < g.wordStartXs.count {
-            (w.text as NSString).draw(at: NSPoint(x: g.wordStartXs[i], y: mainY),
-                                      withAttributes: LyricTypesetting.attributes(mainAttrs, for: w.text,
-                                                                                  translation: spec.translation))
+            let attrs = LyricTypesetting.attributes(mainAttrs, for: w.text, translation: spec.translation)
+            draw(w.text, at: NSPoint(x: g.wordStartXs[i], y: mainY), attrs: attrs, in: ctx, mirrored: g.rightToLeft)
         }
         for r in g.romaPlacements {
-            (r.text as NSString).draw(at: NSPoint(x: r.x, y: romaY), withAttributes: romaAttrs)
+            draw(r.text, at: NSPoint(x: r.x, y: romaY), attrs: romaAttrs, in: ctx, mirrored: g.rightToLeft)
         }
         NSGraphicsContext.restoreGraphicsState()
         return ctx.makeImage()
+    }
+
+    /// 画一段字。`mirrored`:在字本身(不含尾空格)占的那一格里水平镜像着画(从右往左的行,见文件头注),
+    /// 尾空格留在格子右边,整行翻回来后落在字的左边、也就是读的方向上字的后面。
+    private static func draw(_ text: String, at point: NSPoint,
+                             attrs: [NSAttributedString.Key: Any], in ctx: CGContext, mirrored: Bool) {
+        guard mirrored else {
+            (text as NSString).draw(at: point, withAttributes: attrs)
+            return
+        }
+        let width = (LyricTextDirection.trimmingTrailingWhitespace(text) as NSString).size(withAttributes: attrs).width
+        ctx.saveGState()
+        ctx.translateBy(x: point.x + width, y: 0)
+        ctx.scaleBy(x: -1, y: 1)
+        (text as NSString).draw(at: NSPoint(x: 0, y: point.y), withAttributes: attrs)
+        ctx.restoreGState()
     }
 
     /// 描边:剪影高斯模糊 σ = width,透明度按 `LyricsTextStrokeMetrics.alphaRamp` 拉成实心轮廓、
