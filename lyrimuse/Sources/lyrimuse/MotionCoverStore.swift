@@ -6,8 +6,8 @@ import OSLog
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "motion-cover")
 
-/// 动态封面的**下载与落盘**:Apple Music 的(HLS master),以及 QQ 音乐的专辑动态封面(`qqmv:<vid>`,下载时现换 mp4 地址,
-/// 见 `QQMotionCover`)。
+/// 动态封面的**下载与落盘**:Apple Music 的(HLS master),以及 QQ 音乐的专辑动态封面(`qqmv:<vid>`)、网易云的歌曲动态封面
+/// (`ncmv:<歌曲 id>`),后两种下载时现换 mp4 地址(见 `QQMotionCover`、`NeteaseMotionCover`)。
 ///
 /// 分工:发现在引擎(`motioncover.go`、`motioncoverqq.go`,把地址记进 enrich 缓存)、清单推导在 Core
 /// (`MotionCoverManifest`,纯函数、selftest 钉着)、播放在 `MotionCoverLayer`,这一层只干三件事:
@@ -99,7 +99,7 @@ final class MotionCoverStore {
         let key = cacheKey(for: master)
         if let hit = cachedFile(master: master) {
             guard let reference else { return hit }
-            return await checkCached(hit, key: key, reference: reference)
+            return await checkCached(hit, master: master, key: key, reference: reference)
         }
         if failed.contains(key) { return nil }
         if let backoff = transientBackoff[key], backoff.until > Date() { return nil }
@@ -111,7 +111,7 @@ final class MotionCoverStore {
             // (终审没过也落盘),按这一张再比一次;没下成就认这个结果。参照图相同也认。
             guard let reference, running.reference != reference else { return result }
             if let hit = cachedFile(master: master) {
-                return await checkCached(hit, key: key, reference: reference)
+                return await checkCached(hit, master: master, key: key, reference: reference)
             }
             return result
         }
@@ -151,11 +151,11 @@ final class MotionCoverStore {
 
     /// 盘上那份跟参照图比一次:视频中段那一帧,同下载时的终审(`verifyMatchesReference`)。动画只叠在跟它是同一张图的封面上,
     /// 盘上的那份是对着别的封面下的(同一张专辑在别的条目上、引擎后来换了这条的封面)也得比。结果按 (资源, 参照图) 记着。
-    private func checkCached(_ file: URL, key: String, reference: CoverFingerprint.Reference) async -> URL? {
+    private func checkCached(_ file: URL, master: URL, key: String, reference: CoverFingerprint.Reference) async -> URL? {
         let pair = Self.rejectionKey(key, reference)
         if referencePassed.contains(pair) { return file }
         if referenceRejected.contains(pair) { return nil }
-        switch await Self.verifyMatchesReference(file, reference: reference) {
+        switch await Self.verifyMatchesReference(file, reference: reference, firstFrameToo: Self.comparesFirstFrameToo(master)) {
         case .pass:
             referencePassed.insert(pair)
             return file
@@ -197,6 +197,9 @@ final class MotionCoverStore {
     private nonisolated func download(master: URL, reference: CoverFingerprint.Reference?) async -> DownloadOutcome {
         if let vid = QQMotionCover.vid(from: master) {
             return await downloadQQ(vid: vid, master: master, reference: reference)
+        }
+        if let songID = NeteaseMotionCover.songID(from: master) {
+            return await downloadNetease(songID: songID, master: master, reference: reference)
         }
         // ① master → 按顺序排好的候选档位。
         let variants: [MotionCoverManifest.Variant]
@@ -245,6 +248,21 @@ final class MotionCoverStore {
         return sawTransient ? .transient : .unavailable
     }
 
+    /// 网易云的歌曲动态封面:带游客身份换 mp4 地址(带签名、约半小时过期,所以每次现换),只有一档。没问成(网络、没有游客身份)
+    /// 按网络层失败算,问成了没有算资源取不到。
+    private nonisolated func downloadNetease(songID: String, master: URL,
+                                             reference: CoverFingerprint.Reference?) async -> DownloadOutcome {
+        switch await NeteaseGuestSession.shared.lookup(songID: songID, session: Self.session) {
+        case .video(let url):
+            return await fetchMedia(url, master: master, reference: reference, label: "netease")
+        case .none:
+            return .unavailable
+        case .loggedOut, .failed:
+            logger.notice("motion cover: netease video url not answered")
+            return .transient
+        }
+    }
+
     /// 下一条候选:variant 清单 → 承载全部分片的单文件,再交给 `fetchMedia`。
     private nonisolated func fetch(_ picked: MotionCoverManifest.Variant, master: URL,
                                    reference: CoverFingerprint.Reference?) async -> DownloadOutcome {
@@ -290,7 +308,8 @@ final class MotionCoverStore {
             // ④ 终审:视频中段的真实一帧跟当前封面像不像。没有参照图(专辑身份已核验)时终审跳过,
             // 也得确认这份文件真解得出画面 —— 解不出就接着试下一条候选,别把一份放不了的存下来。
             if let reference {
-                switch await Self.verifyMatchesReference(scratch, reference: reference) {
+                switch await Self.verifyMatchesReference(scratch, reference: reference,
+                                                         firstFrameToo: Self.comparesFirstFrameToo(master)) {
                 case .pass: break
                 case .mismatch:
                     // 资源本身没问题,是此刻拿来比的封面不对(换歌那几秒参照图还是上一首的):照样落盘,等封面到了
@@ -348,22 +367,32 @@ final class MotionCoverStore {
         case undecidable
     }
 
+    ///
+    /// `firstFrameToo`:中段帧对不上时再比第一帧,两帧有一帧对上就算(网易云那种,见 `comparesFirstFrameToo`)。
     private nonisolated static func verifyMatchesReference(
-        _ file: URL, reference: CoverFingerprint.Reference
+        _ file: URL, reference: CoverFingerprint.Reference, firstFrameToo: Bool = false
     ) async -> VerifyResult {
         let asset = AVURLAsset(url: file)
         guard let duration = try? await asset.load(.duration), duration.seconds > 0 else { return .undecidable }
-        let midpoint = CMTime(seconds: duration.seconds * 0.5, preferredTimescale: duration.timescale)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        guard let raw = try? await generator.image(at: midpoint).image else { return .undecidable }
-        // 竖幅的(QQ 动态封面)比中间那块正方形:卡上铺满裁中间,能看到的就是它。
-        let (distance, same) = CoverFingerprint.matches(CoverFingerprint.centerSquare(raw), reference: reference)
-        if !same {
-            logger.notice("motion cover: mid-video frame distance \(distance, privacy: .public), skipping")
-            return .mismatch
+        var closest = Int.max
+        for fraction in firstFrameToo ? [0.5, 0] : [0.5] {
+            let instant = CMTime(seconds: duration.seconds * fraction, preferredTimescale: duration.timescale)
+            guard let raw = try? await generator.image(at: instant).image else { return .undecidable }
+            // 竖幅的(QQ 动态封面)比中间那块正方形:卡上铺满裁中间,能看到的就是它。
+            let (distance, same) = CoverFingerprint.matches(CoverFingerprint.centerSquare(raw), reference: reference)
+            if same { return .pass }
+            closest = min(closest, distance)
         }
-        return .pass
+        logger.notice("motion cover: video frame distance \(closest, privacy: .public), skipping")
+        return .mismatch
+    }
+
+    /// 网易云的动态封面中段帧对不上时再比第一帧:它的正式动画常是首尾两帧就是封面、中间换成别的画面。Apple 的照旧只比中段帧
+    /// (它的片头常有揭幕特效,第一帧跟封面不像)。
+    private nonisolated static func comparesFirstFrameToo(_ master: URL) -> Bool {
+        NeteaseMotionCover.songID(from: master) != nil
     }
 
     /// 清单正文。429 / 5xx 抛 `URLError`(调用方按网络层失败、退避重试),别的非 200 按资源取不到。

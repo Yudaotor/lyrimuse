@@ -829,9 +829,9 @@
             "zh-Hant": "動態封面"
           },
           "desc": {
-            "en": "Albums with animated artwork on Apple Music or QQ Music move in the full-size lyrics window too. It pauses in Low Power Mode or with Reduce Motion on. You can see how much space the downloaded animations take and clear them.",
-            "zh-Hans": "Apple Music 或 QQ 音乐上带动态封面的专辑，在完整尺寸的歌词窗口中封面也会动态播放。低电量模式或开启「减弱动态效果」时自动停止。可查看已下载的动态封面占用的空间，并可清除。",
-            "zh-Hant": "Apple Music 或 QQ 音樂上帶動態封面的專輯，在完整尺寸的歌詞視窗中封面也會動態播放。低電量模式或開啟「減少動態效果」時自動停止。可查看已下載的動態封面佔用的空間，並可清除。"
+            "en": "Albums with animated artwork on Apple Music, QQ Music or NetEase Cloud Music move in the full-size lyrics window too. It pauses in Low Power Mode or with Reduce Motion on. You can see how much space the downloaded animations take and clear them.",
+            "zh-Hans": "Apple Music、QQ 音乐或网易云音乐上带动态封面的专辑，在完整尺寸的歌词窗口中封面也会动态播放。低电量模式或开启「减弱动态效果」时自动停止。可查看已下载的动态封面占用的空间，并可清除。",
+            "zh-Hant": "Apple Music、QQ 音樂或網易雲音樂上帶動態封面的專輯，在完整尺寸的歌詞視窗中封面也會動態播放。低電量模式或開啟「減少動態效果」時自動停止。可查看已下載的動態封面佔用的空間，並可清除。"
           },
           "default": "on",
           "check": {

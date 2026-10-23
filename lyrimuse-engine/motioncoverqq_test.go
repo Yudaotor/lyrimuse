@@ -158,9 +158,9 @@ func TestQQMotionCoverIsWired(t *testing.T) {
 		"if albumID <= 0 {\n\t\treturn e.motionVerdictFromQQ(ctx, false)\n\t}",
 		"if mc.Master == \"\" {\n\t\treturn e.motionVerdictFromQQ(ctx, true)\n\t}",
 		"case motionDecisionReject:\n\t\treturn e.motionVerdictFromQQ(ctx, true)",
-		"if motionVerdictCurrent(*e) && !qqMotionCoverUnasked(*e) {",
-		"if !ok || (motionVerdictCurrent(e) && !qqMotionCoverUnasked(e)) {",
-		"} else if (motionVerdictStale(e) || qqMotionCoverUnasked(e)) && !motionRecheckTried[key] && !enrichInflight[key] {",
+		"if motionVerdictCurrent(*e) && !motionCoverFallbackUnasked(*e) {",
+		"if !ok || (motionVerdictCurrent(e) && !motionCoverFallbackUnasked(e)) {",
+		"} else if (motionVerdictStale(e) || motionCoverFallbackUnasked(e)) && !motionRecheckTried[key] && !enrichInflight[key] {",
 	} {
 		if !containsCode(src, want) {
 			t.Errorf("enrich.go 缺 %q", strings.SplitN(want, "\n", 2)[0])

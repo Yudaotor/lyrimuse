@@ -133,26 +133,20 @@ func qqMotionCoverIdentity(ctx context.Context, mid, coverURL string) motionCove
 	return motionIdentityConfirmed
 }
 
-// motionVerdictFromQQ:Apple 那支没有给这条动态封面时按 QQ 专辑再核,返回有没有定论(同 motionVerdictFromAlbum)。
-// appleChecked:Apple 那支核出了「没有」(而不是根本没有专辑 ID 可核)—— QQ 这边也没有 mid 可核时,前者记「核过、没有」,
-// 后者照旧整组清掉。
+// motionVerdictFromQQ:Apple 那支没有给这条动态封面时按 QQ 专辑再核,返回有没有定论(同 motionVerdictFromAlbum)。QQ 这边
+// 也没给出(没有 mid、没有动态封面、身份对不上)时再按网易云歌曲核(motionVerdictFromNetease)。
+// appleChecked:Apple 那支核出了「没有」(而不是根本没有专辑 ID 可核),原样交给网易云那支。
 func (e *enrichEntry) motionVerdictFromQQ(ctx context.Context, appleChecked bool) bool {
 	mid := e.QQAlbumMid
 	if !qqAlbumMidShape.MatchString(mid) {
-		if appleChecked {
-			e.recordMotionVerdict("", "", false)
-		} else {
-			e.clearMotionVerdict()
-		}
-		return true
+		return e.motionVerdictFromNetease(ctx, appleChecked)
 	}
 	master, done := qqMotionCoverFor(ctx, mid)
 	if !done {
 		return false
 	}
 	if master == "" {
-		e.recordMotionVerdict("", "", false)
-		return true
+		return e.motionVerdictFromNetease(ctx, true)
 	}
 	switch qqMotionCoverIdentity(ctx, mid, e.CoverURL) {
 	case motionIdentityUndecided:
@@ -160,7 +154,7 @@ func (e *enrichEntry) motionVerdictFromQQ(ctx context.Context, appleChecked bool
 	case motionIdentityConfirmed:
 		e.recordMotionVerdict(master, "", true)
 	default:
-		e.recordMotionVerdict("", "", false)
+		return e.motionVerdictFromNetease(ctx, true)
 	}
 	return true
 }

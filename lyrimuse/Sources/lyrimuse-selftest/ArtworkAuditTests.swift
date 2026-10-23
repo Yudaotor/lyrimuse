@@ -55,7 +55,7 @@ func checkArtworkAudit() {
                     && sourceHas(coordinator, "WebLyricsServer.screen.$viewerCount\n .map { $0 > 0 }\n .removeDuplicates()\n .dropFirst()\n .receive(on: DispatchQueue.main)")
                     && sourceHas(window, "artworkCard\n // 动态封面只在这张卡上播:卡在不在屏上决定要不要下载、取帧(MotionCoverDemand)。\n .onAppear { MotionCoverDemand.cardAppeared() }\n .onDisappear { MotionCoverDemand.cardDisappeared() }"),
                     true, "动态封面: 歌词窗口封面卡、副屏网页都没在显示时不下载不取帧,出现了再补")
-        expectEqual(sourceHas(store, "guard let reference, running.reference != reference else { return result }\n if let hit = cachedFile(master: master) {\n return await checkCached(hit, key: key, reference: reference)"),
+        expectEqual(sourceHas(store, "guard let reference, running.reference != reference else { return result }\n if let hit = cachedFile(master: master) {\n return await checkCached(hit, master: master, key: key, reference: reference)"),
                     true, "动态封面: 加入别的参照图在跑的那一轮,下好了按自己的参照图再比一次")
         expectEqual(sourceHas(store, "case .mismatch:\n // 资源本身没问题")
                     && sourceHas(store, "try Self.moveIntoPlace(scratch, final: final)\n await MainActor.run { self.pruneIfNeeded() }\n return .referenceMismatch"),

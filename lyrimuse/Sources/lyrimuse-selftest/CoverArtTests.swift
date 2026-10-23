@@ -1276,6 +1276,87 @@ func runCoverArtTests() {
             }
         }
 
+        // 网易云歌曲动态封面(03 章决策 68):`ncmv:<id>` 下载时带游客身份现换 mp4 地址;身份跟引擎共用一份文件,被拒就换一个再问。
+        do {
+            typealias N = NeteaseMotionCover
+            expectEqual(N.songID(from: URL(string: "ncmv:186016")!), "186016", "网易云动态封面: ncmv 地址取出歌曲 id")
+            expectEqual(N.songID(from: URL(string: "qqmv:013nB0VB44pnzC")!), nil, "网易云动态封面: QQ 的不认")
+            expectEqual(N.songID(from: URL(string: "ncmv:12a")!), nil, "网易云动态封面: id 形状不对不认")
+            expectEqual(N.guestUsername(deviceID: "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123"),
+                        "MDEyMzQ1Njc4OUFCQ0RFRjAxMjM0NTY3ODlBQkNERUYwMTIzNDU2Nzg5QUJDREVGMDEyMyBYa2pIc2o5dnlXcTVRNDdCdXYyVWNnPT0=",
+                        "网易云游客: username 跟引擎同一组向量")
+            let reg = N.registerURL(deviceID: "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123")?.absoluteString ?? ""
+            expectEqual(reg.hasSuffix("dXYyVWNnPT0%3D") && !reg.dropFirst(reg.count - 30).contains("="), true,
+                        "网易云游客: username 里的 = 转义")
+            let now = Date(timeIntervalSince1970: 1_800_000_000)
+            let regURL = URL(string: "https://music.163.com/api/register/anonimous")!
+            let ok = Data(#"{"code":200,"userId":1}"#.utf8)
+            let withAge = ["Set-Cookie": "NMTID=n; Path=/, MUSIC_A=tok; Max-Age=15552000; Path=/; Domain=.music.163.com"]
+            expectEqual(N.guest(status: 200, body: ok, setCookie: withAge, url: regURL, now: now)?.musicA, "tok",
+                        "网易云游客: 从 Set-Cookie 取 MUSIC_A")
+            let noAge = N.guest(status: 200, body: ok, setCookie: ["Set-Cookie": "MUSIC_A=tok; Path=/"], url: regURL, now: now)
+            expectEqual(noAge?.expires, Int64(now.timeIntervalSince1970) + 150 * 86_400, "网易云游客: 没写有效期按 150 天")
+            expectEqual(N.guest(status: 200, body: Data(#"{"code":400}"#.utf8), setCookie: withAge, url: regURL, now: now), nil,
+                        "网易云游客: code 400 是没注册成")
+            expectEqual(N.guest(status: 200, body: ok, setCookie: ["Set-Cookie": "NMTID=n; Path=/"], url: regURL, now: now), nil,
+                        "网易云游客: 没发 MUSIC_A 是没注册成")
+            expectEqual(N.guest(status: 503, body: ok, setCookie: withAge, url: regURL, now: now), nil, "网易云游客: HTTP 不是 200")
+            expectEqual(N.Guest(musicA: "a", expires: Int64(now.timeIntervalSince1970) + 3600).usable(now: now), false,
+                        "网易云游客: 一天内过期的不用")
+            expectEqual(N.lookup(fromResponse: Data(#"{"code":200,"data":{"videoPlayUrl":"http://dcover.music.126.net/a/b.mp4?wsSecret=x&wsTime=1"}}"#.utf8)),
+                        .video(URL(string: "https://dcover.music.126.net/a/b.mp4?wsSecret=x&wsTime=1")!), "网易云动态封面: 地址换成 https")
+            expectEqual(N.lookup(fromResponse: Data(#"{"code":200,"data":{}}"#.utf8)), .none, "网易云动态封面: 这首没有")
+            expectEqual(N.lookup(fromResponse: Data(#"{"code":200,"data":{"videoPlayUrl":"http://evil.example/a.mp4"}}"#.utf8)), .none,
+                        "网易云动态封面: 不是网易云视频主机的不认")
+            expectEqual(N.lookup(fromResponse: Data(#"{"code":301,"data":null}"#.utf8)), .loggedOut, "网易云动态封面: 301 是身份无效")
+            expectEqual(N.lookup(fromResponse: Data(#"{"code":405}"#.utf8)), .failed, "网易云动态封面: 限流是没问成")
+            expectEqual(N.lookup(fromResponse: Data("<html>".utf8)), .failed, "网易云动态封面: 形状不对是没问成")
+            expectEqual(storeSource.contains("if let songID = NeteaseMotionCover.songID(from: master) {"), true,
+                        "网易云动态封面: 下载按 ncmv 地址分到网易云那条")
+            expectEqual(sourceHas(storeSource, "for fraction in firstFrameToo ? [0.5, 0] : [0.5] {")
+                        && sourceHas(storeSource, "NeteaseMotionCover.songID(from: master) != nil\n    }")
+                        && storeSource.components(separatedBy: "firstFrameToo: Self.comparesFirstFrameToo(master)").count == 3, true,
+                        "网易云动态封面: 终审中段帧对不上再比第一帧,下载和盘上那份两处都按它")
+
+            final class Box: @unchecked Sendable {
+                var registers = 0, asks: [String] = [], failRegister = false, answers: [N.Lookup] = []
+                var results: [String?] = [], lookup: N.Lookup = .failed
+            }
+            let box = Box()
+            let file = FileManager.default.temporaryDirectory
+                .appendingPathComponent("lyrimuse-selftest-netease-guest-\(ProcessInfo.processInfo.processIdentifier).json")
+            defer { try? FileManager.default.removeItem(at: file) }
+            let session = NeteaseGuestSession(file: file, attempts: 2, gap: .zero, cooldown: 600) {
+                box.registers += 1
+                return box.failRegister ? nil : N.Guest(musicA: "g\(box.registers)", expires: Int64(Date().timeIntervalSince1970) + 100 * 86_400)
+            }
+            let sem = DispatchSemaphore(value: 0)
+            Task.detached {
+                box.results.append(await session.guest())
+                box.results.append(await session.guest())
+                await session.forget("g1")
+                try? JSONEncoder().encode(N.Guest(musicA: "engine", expires: Int64(Date().timeIntervalSince1970) + 30 * 86_400))
+                    .write(to: file)
+                box.results.append(await session.guest())
+                box.answers = [.loggedOut, .video(URL(string: "https://dcover.music.126.net/x.mp4")!)]
+                box.lookup = await session.lookup(songID: "186016", session: .shared) { id, guest in
+                    box.asks.append("\(id)@\(guest)")
+                    return box.answers.removeFirst()
+                }
+                try? FileManager.default.removeItem(at: file)
+                await session.forget("g2")
+                box.failRegister = true
+                box.results.append(await session.guest())
+                box.results.append(await session.guest())
+                sem.signal()
+            }
+            sem.wait()
+            expectEqual(box.results, ["g1", "g1", "engine", nil, nil], "网易云游客: 注册一次后用内存的;盘上引擎那份直接用;注册不成为 nil")
+            expectEqual(box.asks, ["186016@engine", "186016@g2"], "网易云游客: 身份被拒就丢掉、换一个再问一次")
+            expectEqual(box.lookup, .video(URL(string: "https://dcover.music.126.net/x.mp4")!), "网易云游客: 换了身份问成")
+            expectEqual(box.registers, 4, "网易云游客: 注册不成连试两次,之后冷却期间不再注册")
+        }
+
         // variant 清单 → 承载全部分片的那个单文件(EXT-X-MAP 的 URI)。
         let variant = """
         #EXTM3U
@@ -2217,7 +2298,7 @@ func runCoverArtTests() {
                         && coordinator.contains(".sink { [weak self] _ in self?.refreshMotionCover() },"), true,
                     "动态封面(契约): 盘上已有的也要跟显示的封面比;高清替代换了重新比")
         let store = src("lyrimuse/MotionCoverStore.swift")
-        expectEqual(sourceHas(store, "if let hit = cachedFile(master: master) {\n            guard let reference else { return hit }\n            return await checkCached(hit, key: key, reference: reference)"), true,
+        expectEqual(sourceHas(store, "if let hit = cachedFile(master: master) {\n            guard let reference else { return hit }\n            return await checkCached(hit, master: master, key: key, reference: reference)"), true,
                     "动态封面(契约): 命中盘上那份时按参照图比一次")
         expectEqual(src("LyrimuseCore/Local/EnrichCacheReader.swift")
                         .contains("guard let entry, motionCoverCurrent(entry), let s = entry.motionCoverURL"), true,
