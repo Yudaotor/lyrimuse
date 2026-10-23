@@ -20,7 +20,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     case soda = "soda_music"
     /// Electron 应用,走 media-control,没有 AppleScript 字典、没有沙盒。播放中约每 1.06 秒重发一次锚点,位置精确到微秒、跟墙钟一致(实测 92 秒累计偏差 0.8 毫秒),归 cleanExtrapolated —— 跟它此前作为信任播放器走的是同一档,内置化不改变位置行为。开播先发一帧只有歌名的(歌手空、时长 0、rate 0),约半秒后才补齐,所以 artistArrivesLate;开播那个 0 锚点没见过原样重发。切歌时会先撤掉 Now Playing(多数 4~5 秒,刚开播一张专辑后的第一次切歌实测有过 19 秒),暂停着点开新列表加载时也撤,所以 dropsSessionBetweenTracks。歌手名取每首歌自己的 artist_roles,同一个歌手也时有时无括号里的译名(`Taylor Swift` / `Taylor Swift (泰勒絲)`、`周杰倫` / `周杰倫 (Jay Chou)`)。nativeLyricSource 填 kkbox:不是歌词源(接入走不通,见 kkboxlyrics.go 头注),是用它放歌时读它自己缓存里的那份歌词,享受同源加权。processName 5 字节。
     case kkbox = "kkbox"
-    /// 自己有 AppleScript 字典,曲目与播放位置都走它直问 Spotify.app(跟 Apple Music 同一条路);media-control 只负责回答「现在是谁在放」,以及 AppleScript 不可达时兜底。duration 那边是毫秒,Music.app 是秒。
+    /// 自己有 AppleScript 字典,曲目与播放位置都走它直问 Spotify.app(跟 Apple Music 同一条路);media-control 只负责回答「现在是谁在放」,以及 AppleScript 不可达时兜底。duration 那边是毫秒,Music.app 是秒。nativeLyricSource 填 musixmatch:Spotify 显示的歌词就是 Musixmatch 给的,按它给的曲目 ID 取到的那条(track_spotify_id)算同源。
     case spotify = "spotify"
     /// CEF 桌面客户端(x86_64,在 Apple 芯片上走 Rosetta),走 media-control,没有 AppleScript 字典、没有沙盒。系统 Now Playing 里**没有 elapsedTime**:时间戳是这首真正出声(缓冲完)的时刻,暂停只翻 playing、playbackRate 恒为 1、时间戳不动,拖动进度什么都不报,media-control 的 seek 命令它也不响应。所以位置不取系统值,由 AmazonMusicPlayhead 按它自己的日志(开播 / 暂停 / 恢复 / 拖动 / 缓冲卡顿)重放,读不到日志时退回按开播时刻加暂停记时;换上去的是干净锚点,归 cleanExtrapolated。切歌不撤会话,开播的 0 锚点不重发,歌手不晚到。刚开播时偶尔先发一帧上一次会话的旧曲目(旧时间戳、playing 为真),约 3 秒后才换成真的。播客歌手、专辑为空、时长大于 0。多个歌手用 ` & ` 连,专辑名常带 ` [Explicit]`。nativeLyricSource 填 amazon:不是歌词源,是用它放歌时读它自己缓存里的那份歌词(逐行、毫秒,按 ASIN 认身份,见 amazonlibrary.go),享受同源加权。processName 12 字节。
     case amazonMusic = "amazon_music"
@@ -69,6 +69,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .kugou: return "kugou"
         case .soda: return "soda"
         case .kkbox: return "kkbox"
+        case .spotify: return "musixmatch"
         case .amazonMusic: return "amazon"
         case .kaset: return "lyricfind"
         case .reamp: return "localfile"

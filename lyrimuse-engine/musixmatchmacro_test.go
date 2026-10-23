@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -320,5 +321,42 @@ func TestMusixmatchCacheKeyIncludesDuration(t *testing.T) {
 	}
 	if len(calls) != 2 || calls[0] != 216 || calls[1] != 200 {
 		t.Fatalf("216 秒与 200 秒各问一次、216.3 秒命中 216 秒那份,实际问了 %v", calls)
+	}
+}
+
+// 按 Spotify 客户端给的曲目 ID 认出的那条才算 Spotify 同源(bySpotifyID → identityFromLocalClient);按 Apple ID、按歌名的不算。
+func TestMusixmatchBySpotifyIDIsNativeForSpotify(t *testing.T) {
+	withMxmFake(t, func(action string, r *http.Request) string {
+		switch action {
+		case "macro.subtitles.get":
+			if r.URL.Query().Get("track_spotify_id") != "" || r.URL.Query().Get("track_itunes_id") != "" {
+				return mxmMacroFixture(t, "Gomenne", "Kenshi Yonezu", 212, 0, 200)
+			}
+			return mxmEmpty404
+		case "crowd.track.translations.get":
+			return mxmTranslations(nil)
+		}
+		return mxmEmpty404
+	})
+	r := resolveMusixmatchLyric(withMusixmatchPlaybackIDs(context.Background(), "", "4uLU6hMCjMI75M1A2tKUQC"), "米津玄师", "ごめんね", 212, "", "")
+	if r.lrc == "" || !r.bySpotifyID {
+		t.Errorf("按 Spotify 曲目 ID 认出的应标 bySpotifyID: %+v", r)
+	}
+	r = resolveMusixmatchLyric(withMusixmatchPlaybackIDs(context.Background(), "1234", ""), "米津玄师", "ごめんね", 212, "", "")
+	if r.lrc == "" || r.bySpotifyID {
+		t.Errorf("按 Apple ID 认出的不标: %+v", r)
+	}
+
+	setNativeLyricSourcesForPlayer(spotifyBundleID)
+	t.Cleanup(func() { setNativeLyricSourcesForPlayer("") })
+	if !isNativeLyricSource(lyricSourceMusixmatch) {
+		t.Error("用 Spotify 放时 Musixmatch 是它自家的源")
+	}
+	src, err := os.ReadFile("enrich.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsCode(string(src), "performers: r.performers, identityFromLocalClient: r.bySpotifyID}") {
+		t.Error("Musixmatch 候选的本机身份按 bySpotifyID 给")
 	}
 }

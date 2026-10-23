@@ -793,9 +793,9 @@ func setNativeLyricSourcesForPlayer(bundleID string) {
 		return
 	}
 	want := map[string]bool{src: true}
-	if player == playerAppleMusic {
-		// 放资料库里的本地文件时,文件旁的 .lrc、文件标签里的歌词就是它自己显示的那份(localfilelyrics.go);放流媒体时
-		// 没有这一份候选,不影响别的源。
+	if player == playerAppleMusic || player == playerLXMusic {
+		// 放资料库(洛雪:本地列表)里的本地文件时,文件旁的 .lrc、文件标签里的歌词就是它自己显示的那份
+		// (localfilelyrics.go);放流媒体时没有这一份候选,不影响别的源。
 		want[localFileLyricsSource] = true
 	}
 	if maps.Equal(nativeLyricSources, want) {
@@ -845,8 +845,8 @@ func playerForBundleID(bundleID string) string {
 
 // playerNativeLyricSource 把播放器映射成它自家的歌词源。
 //
-// Spotify 不在此列 —— 它**不是**这套里的歌词源,没有"同源"可言。auto 同理:识别不出用户
-// 在用哪个播放器,就不该瞎猜。Apple Music 对的是 applemusic 源(Music.app 本地 TTML /
+// Spotify 对的是 musixmatch 源:它显示的歌词由 Musixmatch 提供,按 Spotify 曲目 ID 取到的那条才算同源
+// (musixmatchResult.bySpotifyID)。auto 不在此列:识别不出用户在用哪个播放器,就不该瞎猜。Apple Music 对的是 applemusic 源(Music.app 本地 TTML /
 // amp-api),汽水音乐对的是 soda 源(seo_track);后者尤其贴这条加权的立论 —— 它的曲目 id
 // 就取自汽水客户端正在播的那一条,时间轴天然对着用户耳朵里的那个母版。
 func playerNativeLyricSource(player string) string {

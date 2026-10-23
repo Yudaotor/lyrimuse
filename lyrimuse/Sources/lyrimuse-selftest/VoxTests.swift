@@ -320,6 +320,14 @@ func runVoxTests() {
         expectEqual(L.pollsFastWhilePaused(bundleID: vox, pausedFor: L.fastPausedPollWindow + 1), false, "VOX 暂停轮询: 停久了退回暂停档")
         expectEqual(L.pollsFastWhilePaused(bundleID: vox, pausedFor: nil), false, "VOX 暂停轮询: 没在暂停")
         expectEqual(L.pollsFastWhilePaused(bundleID: "com.apple.Music", pausedFor: 5), false, "VOX 暂停轮询: 别的播放器有自己的通知,不动")
+        for player in [PlaybackPlayer.reamp, .pinePlayer, .soda, .kkbox] {
+            expectEqual(L.pollsFastWhilePaused(bundleID: player.bundleIdentifier, pausedFor: 5), true,
+                        "暂停轮询: \(player.rawValue) 也只有事件流一条恢复信号,刚暂停按播放档问")
+        }
+        for player in [PlaybackPlayer.qqMusic, .netease, .spotify] {
+            expectEqual(L.pollsFastWhilePaused(bundleID: player.bundleIdentifier, pausedFor: 5), false,
+                        "暂停轮询: \(player.rawValue) 不在名单里")
+        }
     }
 
     // ---- 网络流:网络上的音频文件、网络电台 ----

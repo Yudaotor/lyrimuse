@@ -70,8 +70,8 @@ func TestPlayerNativeLyricSource(t *testing.T) {
 		// 汽水音乐对的是 soda 源(见 lyrimuse-engine/soda.go)——它的曲目 id 直接取自汽水客户端
 		// 正在播的那一条,是这条加权里"时间轴对着同一份母版"最硬的一例。
 		playerSoda: "soda",
-		// Spotify 不是这套里的歌词源,没有"同源"可言；auto 识别不出播放器，不该瞎猜。
-		playerSpotify: "", playerAuto: "", "": "",
+		// Spotify 显示的歌词由 Musixmatch 提供;auto 识别不出播放器,不该瞎猜。
+		playerSpotify: "musixmatch", playerAuto: "", "": "",
 	}
 	for player, want := range cases {
 		if got := playerNativeLyricSource(player); got != want {
@@ -142,10 +142,10 @@ func TestSetNativeLyricSourcesForPlayer(t *testing.T) {
 		t.Errorf("换到酷狗之后应当恰好只剩 kugou,got %v", nativeLyricSources)
 	}
 
-	// Spotify 跟 Apple Music 同类:接进来了,但不是这套里的歌词源,没有"同源"可言。
+	// Spotify 对的是 musixmatch(只有按它的曲目 ID 认出的那条带本机身份,见 musixmatchResult.bySpotifyID)。
 	setNativeLyricSourcesForPlayer(spotifyBundleID)
-	if hasNativeLyricSource() {
-		t.Errorf("放 Spotify 时不该有任何同源加权,got %v", nativeLyricSources)
+	if !isNativeLyricSource("musixmatch") || isNativeLyricSource("kugou") {
+		t.Errorf("放 Spotify 时恰好只有 musixmatch,got %v", nativeLyricSources)
 	}
 
 	// 认不出的 bundle id(浏览器网页版等)同样是空集,不能兜底成某个源。
@@ -255,5 +255,18 @@ func TestNativeSourcesForAppleMusicIncludeLocalFile(t *testing.T) {
 	setNativeLyricSourcesForPlayer(reampBundleID)
 	if !isNativeLyricSource(localFileLyricsSource) || isNativeLyricSource(lyricSourceAppleMusic) {
 		t.Error("reAMP 只有本地文件")
+	}
+}
+
+// 放 Spotify 时 musixmatch 落选不算「同源落选」:按歌名搜到的那条不带本机身份,重搜结论不变。
+func TestNeedsLyricsRetry_SpotifyMusixmatchNotMissedOut(t *testing.T) {
+	setNativeLyricSourcesForPlayer(spotifyBundleID)
+	t.Cleanup(func() { setNativeLyricSourcesForPlayer("") })
+	e := enrichEntry{
+		Lyrics: bt("[00:01.00]x"), LyricsYRC: bt("[1,2](1,1,0)x"),
+		LyricsSource: "netease", LyricsSourcesSeen: []string{"netease", "musixmatch", "lrclib"},
+	}
+	if needsLyricsRetry(e, false, false, true) {
+		t.Error("Spotify 下 musixmatch 落选不该触发重搜")
 	}
 }

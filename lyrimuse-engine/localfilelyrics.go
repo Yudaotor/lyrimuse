@@ -33,10 +33,11 @@ var (
 )
 
 // playsLocalFiles:这个播放器会放用户自己的文件:players.json 里 nativeLyricSource 填 localfile 的(reAMP、VOX、Pine),
-// 加上放资料库里本地文件的 Apple Music。
+// 加上放资料库里本地文件的 Apple Music、放本地列表的洛雪(文件路径由引擎从洛雪的列表读,lxMusicLocalFilePath)。
 func playsLocalFiles(bundleID string) bool {
 	player := playerForBundleID(bundleID)
-	return player != "" && (playerNativeLyricSources[player] == localFileLyricsSource || player == playerAppleMusic)
+	return player != "" && (playerNativeLyricSources[player] == localFileLyricsSource || player == playerAppleMusic ||
+		player == playerLXMusic)
 }
 
 // noteLocalFileCurrentTrack:每拍读到 App 的播放状态时记下当前曲目的文件。不是放本地文件的播放器或没有文件时清掉。

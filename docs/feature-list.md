@@ -120,7 +120,7 @@ Reads your player's queue and finds lyrics for the next few songs ahead of time;
 
 ### Use the lyrics your player already saved
 
-Lyrics that Apple Music, Spotify, Kugou, KKBOX, Amazon Music and LX Music already saved on this Mac can be used directly: the same version the player shows, and faster (for Apple Music and Spotify, only songs whose lyrics the player has shown). For QQ Music and NetEase Cloud Music, the song is recognized from the player's local library, so that exact version is fetched without searching. For reAMP, VOX and Pine Player, and with Apple Music when it plays a local file from your library, the lyrics inside the playing file or a .lrc file of the same name are used. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for Lyrimuse in System Settings; without it lyrics are still found online.
+Lyrics that Apple Music, Spotify, Kugou, KKBOX, Amazon Music and LX Music already saved on this Mac can be used directly: the same version the player shows, and faster (for Apple Music and Spotify, only songs whose lyrics the player has shown). For QQ Music and NetEase Cloud Music, the song is recognized from the player's local library, so that exact version is fetched without searching. For reAMP, VOX and Pine Player, and with Apple Music or LX Music when it plays a local file from your library or local list, the lyrics inside the playing file or a .lrc file of the same name are used. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for Lyrimuse in System Settings; without it lyrics are still found online.
 
 - Off by default
 - Settings: Player › Permissions & Services › Full Disk Access

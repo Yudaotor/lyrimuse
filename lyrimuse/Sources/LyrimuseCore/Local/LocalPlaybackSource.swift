@@ -3150,10 +3150,16 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 暂停时也按播放档轮询的那一段有多长。
     public nonisolated static let fastPausedPollWindow: TimeInterval = 600
 
-    /// 刚暂停的这一段要不要按播放档(2 秒)轮询:恢复播放只有 media-control 事件流一条即时信号的播放器(VOX 的通知只在换歌时发)
-    /// 才这样,事件流漏了也在 2 秒内认出恢复,不用等暂停档的 6 秒;停得久了退回暂停档。纯函数,selftest 覆盖。
+    /// 恢复播放只有 media-control 事件流一条即时信号的播放器:VOX 的通知只在换歌时发,reAMP、Pine、汽水、KKBOX 不发
+    /// 分布式通知(16 章第 21 节各自的 A4)。见 02 章决策 179。
+    nonisolated static let singleResumeSignalBundleIDs: Set<String> = [
+        PlaybackPlayer.vox, .reamp, .pinePlayer, .soda, .kkbox,
+    ].reduce(into: []) { $0.insert($1.bundleIdentifier) }
+
+    /// 刚暂停的这一段要不要按播放档(2 秒)轮询:只对 `singleResumeSignalBundleIDs`,事件流漏了也在 2 秒内认出恢复,
+    /// 不用等暂停档的 6 秒;停得久了退回暂停档。纯函数,selftest 覆盖。
     public nonisolated static func pollsFastWhilePaused(bundleID: String?, pausedFor: TimeInterval?) -> Bool {
-        guard bundleID == PlaybackPlayer.vox.bundleIdentifier, let pausedFor, pausedFor >= 0 else { return false }
+        guard let bundleID, singleResumeSignalBundleIDs.contains(bundleID), let pausedFor, pausedFor >= 0 else { return false }
         return pausedFor < fastPausedPollWindow
     }
 

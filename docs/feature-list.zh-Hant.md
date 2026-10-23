@@ -120,7 +120,7 @@ Lyrimuse 是一款開源（GPL-3.0）的 macOS 逐字歌詞 App，支援 macOS 1
 
 ### 直接使用播放器儲存在本機的歌詞
 
-Apple Music、Spotify、酷狗音樂、KKBOX、Amazon Music 和洛雪音樂儲存在本機的歌詞可直接使用，與播放器顯示的版本一致，速度也更快（Apple Music 和 Spotify 只有在播放器中顯示過歌詞的歌曲才有）；QQ 音樂和網易雲音樂依本機曲庫認出正在播放的是哪一首，省去搜尋，直接取用同一版本的歌詞；reAMP、VOX 和 Pine Player 播放時，以及 Apple Music 播放資料庫中的本機檔案時，使用檔案內嵌的歌詞或同名 .lrc 檔案。QQ 音樂、網易雲音樂、酷狗音樂需要在系統設定中為 Lyrimuse 開啟「完整磁碟取用權限」；未授權時仍可連線尋找歌詞。
+Apple Music、Spotify、酷狗音樂、KKBOX、Amazon Music 和洛雪音樂儲存在本機的歌詞可直接使用，與播放器顯示的版本一致，速度也更快（Apple Music 和 Spotify 只有在播放器中顯示過歌詞的歌曲才有）；QQ 音樂和網易雲音樂依本機曲庫認出正在播放的是哪一首，省去搜尋，直接取用同一版本的歌詞；reAMP、VOX 和 Pine Player 播放時，以及 Apple Music 播放資料庫中的本機檔案、洛雪音樂播放本機列表中的歌曲時，使用檔案內嵌的歌詞或同名 .lrc 檔案。QQ 音樂、網易雲音樂、酷狗音樂需要在系統設定中為 Lyrimuse 開啟「完整磁碟取用權限」；未授權時仍可連線尋找歌詞。
 
 - 預設關閉
 - 設定位置：播放器 › 權限與服務 › 完整磁碟取用權限

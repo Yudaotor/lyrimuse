@@ -177,7 +177,7 @@
       "processName": "Spotify",
       "displayName": {"literal": "Spotify"},
       "scrobbleLabel": "Spotify (macOS)",
-      "nativeLyricSource": null,
+      "nativeLyricSource": "musixmatch",
       "positionTier": "precise",
       "republishesZeroAnchor": true,
       "playingFromRate": false,
@@ -192,7 +192,7 @@
       "tint": {"rgb": [0.11, 0.73, 0.33]},
       "fallbackSymbol": "music.note",
       "bundledIcon": "SpotifyIcon",
-      "note": "自己有 AppleScript 字典,曲目与播放位置都走它直问 Spotify.app(跟 Apple Music 同一条路);media-control 只负责回答「现在是谁在放」,以及 AppleScript 不可达时兜底。duration 那边是毫秒,Music.app 是秒。"
+      "note": "自己有 AppleScript 字典,曲目与播放位置都走它直问 Spotify.app(跟 Apple Music 同一条路);media-control 只负责回答「现在是谁在放」,以及 AppleScript 不可达时兜底。duration 那边是毫秒,Music.app 是秒。nativeLyricSource 填 musixmatch:Spotify 显示的歌词就是 Musixmatch 给的,按它给的曲目 ID 取到的那条(track_spotify_id)算同源。"
     },
     {
       "id": "amazon_music",

@@ -684,3 +684,67 @@ func TestLXMusicStripMetaLines(t *testing.T) {
 		t.Fatal("没有元数据行的原样")
 	}
 }
+
+// 洛雪本地列表里的歌:引擎按列表条目的 meta.filePath 认出文件,交给 localfile 那条路;洛雪库里没改过的那份是它按歌名搜来的,
+// 不当本机身份,改过的照旧算。
+func TestLXMusicLocalFile(t *testing.T) {
+	ctx := context.Background()
+	lyrics := []lxTestLyric{
+		{"local_1", "raw", "lyric", "[00:01.00]搜来的第一句\n[00:02.00]搜来的第二句"},
+		{"local_2", "raw", "lyric", "[00:01.00]搜来的"},
+		{"local_2", "edited", "lyric", "[00:01.00]改过的"},
+	}
+	withLXMusicData(t, lxTestList, lyrics, "temp", 2, "")
+	lxTestSQL(t, `INSERT INTO my_list_music_info VALUES ('local_1','temp','本地歌','某人','local','03:20','{"filePath":"/Users/x/Music/某人 - 本地歌.flac","albumName":"本地专辑"}');`+
+		`INSERT INTO my_list_music_info_order VALUES ('temp','local_1',4);`+
+		`INSERT INTO my_list_music_info VALUES ('local_2','temp','改过词','某人','local','03:00','{"filePath":"/Users/x/Music/改过词.mp3"}');`+
+		`INSERT INTO my_list_music_info_order VALUES ('temp','local_2',5);`+
+		`INSERT INTO my_list_music_info VALUES ('local_3','temp','相对路径','某人','local','03:00','{"filePath":"Music/相对.mp3"}');`+
+		`INSERT INTO my_list_music_info_order VALUES ('temp','local_3',6);`+
+		`INSERT INTO my_list_music_info VALUES ('kw_8','temp','在线带路径','某人','kw','03:00','{"songId":"8","filePath":"/Users/x/Music/在线.mp3"}');`+
+		`INSERT INTO my_list_music_info_order VALUES ('temp','kw_8',7);`)
+	lxMusicLocalFileMu.Lock()
+	lxMusicLocalFileMemo.key, lxMusicLocalFileMemo.path = "", ""
+	lxMusicLocalFileMu.Unlock()
+
+	if got := lxMusicLocalFilePath("某人", "本地歌", 200); got != "/Users/x/Music/某人 - 本地歌.flac" {
+		t.Errorf("本地歌的文件: %q", got)
+	}
+	if got := lxMusicLocalFilePath("徐佳莹", "一样的月光", 240); got != "" {
+		t.Errorf("在线来源的歌没有文件: %q", got)
+	}
+	if got := lxMusicLocalFilePath("某人", "在线带路径", 180); got != "" {
+		t.Errorf("不是本地列表来源的不认,哪怕 meta 里带着路径: %q", got)
+	}
+	if got := lxMusicLocalFilePath("某人", "相对路径", 180); got != "" {
+		t.Errorf("不是绝对路径的不认: %q", got)
+	}
+
+	if !playsLocalFiles(lxMusicBundleID) {
+		t.Error("洛雪算放本地文件的播放器")
+	}
+	setNativeLyricSourcesForPlayer(lxMusicBundleID)
+	t.Cleanup(func() { setNativeLyricSourcesForPlayer("") })
+	if !isNativeLyricSource(localFileLyricsSource) || !isNativeLyricSource(lxMusicLocalLyricsSource) {
+		t.Error("用洛雪放时文件旁的歌词、洛雪库里的歌词都是它自家的")
+	}
+	r, ok := lxMusicLocalLyricsFor(ctx, "某人", "本地歌", 200)
+	if !ok || r.identityFromLocalClient || !strings.Contains(r.lyr, "搜来的第一句") {
+		t.Errorf("本地歌没改过的那份是搜来的,不当本机身份: %+v ok=%v", r, ok)
+	}
+	r, ok = lxMusicLocalLyricsFor(ctx, "某人", "改过词", 180)
+	if !ok || !r.identityFromLocalClient || !strings.Contains(r.lyr, "改过的") {
+		t.Errorf("本地歌用户改过的那份照旧算: %+v ok=%v", r, ok)
+	}
+	r, ok = lxMusicLocalLyricsFor(ctx, "徐佳莹", "一样的月光", 240)
+	if ok && r.identityFromLocalClient == false {
+		t.Errorf("在线来源的歌照旧算本机身份: %+v", r)
+	}
+	src, err := os.ReadFile("poller.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsCode(string(src), "localFile = lxMusicLocalFilePath(p.cur.Artist, p.cur.Title, p.cur.Duration)") {
+		t.Error("每拍记当前文件时,洛雪的文件由引擎从它的列表读")
+	}
+}

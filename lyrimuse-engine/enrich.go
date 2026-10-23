@@ -2000,10 +2000,12 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bo
 	// 就是结论(它只有逐行,输给逐字源是常态),走这条会让每首用 KKBOX 放的歌都白白全源重搜到次数上限。它什么时候值得
 	// 重来一次由 kkboxLyricsWorthRecheck 管。lyricfind 在条目记下按 videoId 问过它(LyricsNativeVideoID)之后同理:那一轮
 	// 已经带着同源加权比过,再搜结论不变;什么时候值得再按 videoId 问一次由 kasetLyricsWorthRecheck 管。
+	// musixmatch(Spotify 的自家源)同样不走:只有按 Spotify 曲目 ID 认出的那条带同源加权,按歌名搜到的落选了再搜还是落选,
+	// 缓存里用 Spotify 放过的歌会一首首白白重搜到次数上限。
 	nativeMissedOut := hasNativeLyricSource() && !isNativeLyricSource(e.LyricsSource) &&
 		slices.ContainsFunc(e.LyricsSourcesSeen, func(s string) bool {
 			return isNativeLyricSource(s) && s != kkboxLocalLyricsSource && s != amazonLocalLyricsSource &&
-				s != localFileLyricsSource && s != lxMusicLocalLyricsSource &&
+				s != localFileLyricsSource && s != lxMusicLocalLyricsSource && s != lyricSourceMusixmatch &&
 				(s != lyricSourceLyricFind || e.LyricsNativeVideoID == "")
 		})
 	// 版本时长对不上(预取用了另一个版本的时长做校验)跟"同源落选"一样,本身就是重来
@@ -6142,7 +6144,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			mxCtx = withMusixmatchPlaybackIDs(ctx, appleID, spotifyID)
 		}
 		r := musixmatchLyric(mxCtx, artist, srcTitle, durationSecs, features().LyricsTranslationLanguage, lyricSourceISRC(ctx, artist, title, album))
-		resultsCh <- lyricSourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: musixmatchResultCover(ctx, r), srcDur: r.durationSecs, plainOnly: r.plainOnly, instrumental: r.instrumental, performers: r.performers}
+		resultsCh <- lyricSourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: musixmatchResultCover(ctx, r), srcDur: r.durationSecs, plainOnly: r.plainOnly, instrumental: r.instrumental, performers: r.performers, identityFromLocalClient: r.bySpotifyID}
 	}()
 	go func() {
 		if skipSource("lyricfind") {

@@ -71,6 +71,9 @@ type musixmatchResult struct {
 	instrumental bool
 	// performers:演唱者标注(只有 macro.subtitles.get 那条路取得到,见 musixmatchMacro.performers)。
 	performers []musixmatchPerformerSpan
+	// bySpotifyID:按 Spotify 客户端给的曲目 ID 认出的(track_spotify_id)。Spotify 显示的歌词就是 Musixmatch 给它的
+	// 这一条,用 Spotify 放时算同源。见 09 章决策 339。
+	bySpotifyID bool
 }
 
 var (
@@ -234,7 +237,9 @@ func resolveMusixmatchLyric(ctx context.Context, artist, title string, durationS
 	ids.isrc = isrc
 	m, ok, rejectedTrackID := musixmatchMacroByID(ctx, ids, artist, title, durationSecs)
 	if ok {
-		return musixmatchFinishMacro(ctx, m, trLang)
+		r := musixmatchFinishMacro(ctx, m, trLang)
+		r.bySpotifyID = ids.spotifyTrackID != ""
+		return r
 	}
 	var match musixmatchTrackMatch
 	if isrc != "" {

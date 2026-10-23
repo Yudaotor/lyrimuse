@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	neturl "net/url"
 	"os"
@@ -100,6 +101,55 @@ func (t lxMusicTrack) durationSecs() float64 {
 		total = total*60 + v
 	}
 	return float64(total)
+}
+
+// localFilePath:本地列表里的歌(source = local)的音频文件,meta.filePath;不是本地歌或路径不像本机绝对路径为 ""。
+// 见 02 章决策 180。
+func (t lxMusicTrack) localFilePath() string {
+	if t.Source != "local" {
+		return ""
+	}
+	var m struct {
+		FilePath string `json:"filePath"`
+	}
+	if json.Unmarshal([]byte(t.Meta), &m) != nil || !filepath.IsAbs(m.FilePath) {
+		return ""
+	}
+	return filepath.Clean(m.FilePath)
+}
+
+// lxMusicLocalFileMemo:上一次查过的那首(歌手 + 歌名 + 整秒时长)和它的文件,同一首每拍都问,不每拍查库。查到空路径的
+// 过 lxMusicLocalFileRetry 再查一次:列表条目可能在开播之后才写盘。
+var (
+	lxMusicLocalFileMu   sync.Mutex
+	lxMusicLocalFileMemo struct {
+		key, path string
+		at        time.Time
+	}
+)
+
+const lxMusicLocalFileRetry = 30 * time.Second
+
+// lxMusicLocalFilePath:洛雪正在放的这首是本地歌时它的文件(见 localFilePath),否则 ""。
+func lxMusicLocalFilePath(artist, title string, durationSecs float64) string {
+	key := artist + "\x00" + title + "\x00" + strconv.Itoa(int(math.Round(durationSecs)))
+	now := time.Now()
+	lxMusicLocalFileMu.Lock()
+	m := lxMusicLocalFileMemo
+	lxMusicLocalFileMu.Unlock()
+	if m.key == key && (m.path != "" || now.Sub(m.at) < lxMusicLocalFileRetry) {
+		return m.path
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	path := ""
+	if t, _, _, ok := lxMusicCurrentTrack(ctx, artist, title, durationSecs); ok {
+		path = t.localFilePath()
+	}
+	lxMusicLocalFileMu.Lock()
+	lxMusicLocalFileMemo.key, lxMusicLocalFileMemo.path, lxMusicLocalFileMemo.at = key, path, now
+	lxMusicLocalFileMu.Unlock()
+	return path
 }
 
 // songPages:这一条在它所属平台的歌曲页。只给 QQ(tx,songId 是 songmid)和网易云(wy,数字 id):别的平台在条目里没有
@@ -368,6 +418,8 @@ func lxMusicAwaitsDuration(bundleID string, durationSecs float64) bool {
 // lxMusicLyricSet 是 lyric 表里一首的几份歌词(已解开 base64)。
 type lxMusicLyricSet struct {
 	lrc, tr, roma, word string
+	// edited:取的是用户在洛雪里改过的那一套(lyric 表 source = edited)。
+	edited bool
 }
 
 // lxMusicLyrics 取一首放过的歌的歌词;用户改过的(edited)整套优先。
@@ -404,6 +456,7 @@ func lxMusicLyrics(ctx context.Context, id string) (lxMusicLyricSet, bool) {
 		return s, strings.TrimSpace(s.lrc) != ""
 	}
 	s, ok := pick("edited")
+	s.edited = ok
 	if !ok {
 		s, ok = pick("raw")
 	}
@@ -509,10 +562,13 @@ func lxMusicLocalLyricsFor(ctx context.Context, artist, title string, durationSe
 	defer cancel()
 	if t, _, _, ok := lxMusicCurrentTrack(ctx, artist, title, durationSecs); ok {
 		if set, found := lxMusicLyrics(ctx, t.ID); found {
+			// 本地歌没改过的那份是洛雪按歌名联网搜来的,不是这个文件的;文件旁的 .lrc、文件里的歌词(localfile 源)才是。
+			// 洛雪自己的顺序同样是改过的 → 文件里的 → 搜来的(core/music/local.ts getLyricInfo)。
+			local := t.Source == "local"
 			return lyricSourceResult{
 				source: lxMusicLocalLyricsSource, lyr: set.lrc, yrc: lxMusicWordsToYRC(set.word), tr: set.tr, roma: set.roma,
 				matchTitle: t.Name, matchArtist: t.Singer, matchAlbum: t.album(), srcDur: t.durationSecs(),
-				identityFromLocalClient: true,
+				identityFromLocalClient: !local || set.edited,
 			}, true
 		}
 	}
