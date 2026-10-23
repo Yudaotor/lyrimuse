@@ -887,12 +887,24 @@ func runRomanizationTests() {
         expectEqual(romanization(lyrics: koLyrics, roma: "", scripts: [.japanese]), nil,
                     "开关: 韩文关 → 没有罗马音")
 
-        // 拉丁/其它文字不受这三个开关管辖，行为跟历来一致（这里原文就是拉丁，
-        // romanize 会因为"音译结果等于原文"返回 nil，不该因为开关而改变）。
+        // 拉丁/其它文字不受语言开关管辖：源自带的读音照常显示，本地不现算。
         expectEqual(romanization(lyrics: "[00:01.00]Hello", roma: "", scripts: []), nil,
                     "开关: 拉丁原文本来就没有罗马音")
         expectEqual(romanization(lyrics: "[00:01.00]Привет", roma: "[00:01.00]Privet", scripts: []),
                     "Privet", "开关: other 文字不受三个语言开关管辖")
+        let otherScripts = ["มันเริ่มจากการทักทาย", "Привет мир", "إنت حبيبي", "Καλημέρα", "नमस्ते"]
+        for line in otherScripts {
+            expectEqual(romanization(lyrics: "[00:01.00]\(line)", roma: "", scripts: .default), nil,
+                        "开关: 设置里没有的文字本地不现算读音(Any-Latin 只是逐字母转写):\(line)")
+            expectEqual(Romanizer.lineReading(line, songLooksJapanese: false, segments: []), nil,
+                        "整行读音: 设置里没有的文字不出读音,预生成同口径:\(line)")
+        }
+        expectEqual(romanization(lyrics: "[00:01.00]إنت حبيبي", roma: "[00:01.00]Enta habibi", scripts: .default),
+                    "Enta habibi", "开关: 设置里没有的文字照常显示源自带的读音(Apple Music 给阿拉伯语歌的音译)")
+        expectEqual(LyricsRomanization.romanizeLRC("[00:01.00]มันเริ่มจากการทักทาย\n[00:02.00]你好"),
+                    "[00:02.00]nǐ hǎo", "整份罗马音: 泰文行不产出,同一首里的汉字行照常")
+        expectEqual(romanization(lyrics: "[00:01.00]사랑해 Привет", roma: "", scripts: .default) != nil, true,
+                    "开关: 谚文行夹着别的文字照常现算")
         expectEqual(romanization(lyrics: "[00:01.00]Hello", roma: "[00:01.00]Hello", scripts: []),
                     nil, "开关: 拉丁原文即使源自带罗马音也不标(只是原文再抄一遍)")
 

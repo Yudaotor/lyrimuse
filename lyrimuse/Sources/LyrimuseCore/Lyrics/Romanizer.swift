@@ -75,8 +75,8 @@ public enum Romanizer {
     /// 但日文行里夹着的汉字照样走 Any-Latin,于是假名出罗马字、汉字出拼音,混在一行里。
     ///
     /// 韩文同样不能直接交给 Any-Latin:它是逐字母转写,不按读音(사랑해 → salanghae、없어 → eobs-eo),
-    /// 所以谚文先由 `KoreanRomanization` 按读音转(saranghae、eopseo),剩下的字符再走 Any-Latin。
-    /// 泰文、西里尔字母这类跟汉字没有交集的文字照旧只走 Any-Latin。见 10 章决策 33。
+    /// 所以谚文先由 `KoreanRomanization` 按读音转(saranghae、eopseo),剩下的字符再走 Any-Latin。见 10 章决策 33。
+    /// 泰文、西里尔字母这类行在 `lineReading` 里就挡掉了,不会走到这里,见 10 章决策 48。
     public static func romanize(
         _ text: String, japanese: Bool = false,
         marks: [KanaAnnotation.Mark] = []
@@ -429,6 +429,10 @@ public enum Romanizer {
     /// 写成 `songLooksJapanese && (looksJapanese || containsHan)` 的话,中文歌一旦被整首
     /// 判成日文,它的**纯中文行**就靠 containsHan 一路走进日语形态分析。
     ///
+    /// 只给含假名、谚文或汉字的行出读音。泰文、西里尔字母、阿拉伯字母这些行 Any-Latin 给的是逐字母
+    /// 转写(คน → khn、ใจ → cı),不是读音,设置里也没有它们的开关;这类行只显示歌词源自带的读音。
+    /// 见 10 章决策 48。
+    ///
     /// - Parameter segments: 用 `@autoclosure` 收 —— 只有走进日语分支时才需要分词
     ///   (CFStringTokenizer 不便宜),而调用方常常持有按行缓存的分词结果。求值必须是惰性的,
     ///   否则纯英文歌的每一行都要白分一次词。
@@ -437,6 +441,7 @@ public enum Romanizer {
         songLooksJapanese: Bool,
         segments: @autoclosure () -> [JapaneseSegment]
     ) -> String? {
+        guard looksJapanese(line) || containsHangul(line) || containsHan(line) else { return nil }
         if readsAsJapanese(line, songLooksJapanese: songLooksJapanese),
             let reading = readingFromSegments(segments(), original: line)
         {
@@ -1044,9 +1049,8 @@ public enum Romanizer {
         return kanaPattern.firstMatch(in: text, range: range) != nil
     }
 
-    // 含汉字的行是"中文拼音 vs 日文罗马字"这个混淆的唯一来源——韩文谚文/泰文/西里尔
-    // 字母等其它非拉丁文字系统跟汉字毫无交集,不需要这层额外判断,ICU 音译对它们
-    // 本来就是正确、无歧义的罗马化展示。
+    // 含汉字的行是"中文拼音 vs 日文罗马字"这个混淆的唯一来源——谚文跟汉字没有交集,
+    // 不需要这层额外判断。
     private static let hanPattern = try! NSRegularExpression(pattern: #"\p{Han}"#)
 
     public static func containsHan(_ text: String) -> Bool {
@@ -1064,8 +1068,8 @@ public enum LyricScript: String, Sendable, CaseIterable {
     /// EnrichCacheLyrics.isCantonese)分派,不能像日语假名/韩语谚文那样靠文字本身
     /// 判定。加,拼音/粤拼两个开关分开之后才需要区分。
     case cantonese
-    /// 拉丁字母、泰文、西里尔字母等等。这些跟汉字没有交集,音译无歧义,历来是无条件
-    /// 允许的,不纳入按语言开关的管辖 —— 用户提的是"汉语/韩语/日语"三选。
+    /// 拉丁字母、泰文、西里尔字母等等。本地不现算读音(见 `Romanizer.lineReading`),
+    /// 只显示歌词源自带的那份,不纳入按语言开关的管辖。
     case other
 
     var option: RomanizationScripts? {
