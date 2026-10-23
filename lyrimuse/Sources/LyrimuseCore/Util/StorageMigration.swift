@@ -107,7 +107,7 @@ public enum StorageMigration {
             }
         }
         let legacyWins = !StorageLayout.exists(roots.data.appendingPathComponent(markerName))
-        let replaced = roots.data.appendingPathComponent("backups/\(stamp(Date()))\(backupSuffix)-replaced")
+        let replaced = roots.data.appendingPathComponent("backups/\(stamp(Date()))\(backupSuffix)\(replacedSuffix)")
         mergeTree(from: roots.legacy, into: roots.data, relative: "", legacyWins: legacyWins ? replaced : nil, &outcome)
         writeMarker(pending, in: roots.data, &outcome)
         pruneEmptyDirectories(roots.legacy)
@@ -295,6 +295,9 @@ public enum StorageMigration {
 
     /// 改写前原件那份快照的目录名后缀;前面是 `yyyyMMdd-HHmmss`。
     static let backupSuffix = "-storage-migration"
+
+    /// 合并时被换下来的那份的目录名再加的后缀(`StorageLayout.replacedBackups` 按它认),不按 `backupRetention` 清。
+    static let replacedSuffix = "-replaced"
 
     /// 快照保留多久。过了就在启动时删掉(`pruneRewriteBackups`)。
     static let backupRetention: TimeInterval = 30 * 24 * 3600

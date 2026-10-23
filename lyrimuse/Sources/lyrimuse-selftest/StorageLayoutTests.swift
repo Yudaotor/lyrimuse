@@ -313,6 +313,10 @@ func runStorageLayoutChecks() {
         expectEqual(outcome.keptLeftover, nil, "存储搬迁(带来的旧目录): 不留 leftover")
         expectEqual(StorageMigration.pruneRewriteBackups(in: roots.data, now: Date().addingTimeInterval(90 * 24 * 3600)), 0,
                     "存储搬迁(带来的旧目录): 被换下来的那份不按 30 天清")
+        expectEqual(StorageLayout.replacedBackups(in: roots.data).map(\.path), replaced.map { [$0.path] } ?? [],
+                    "存储搬迁(带来的旧目录): 认得出被换下来的那份")
+        expectEqual(StorageLayout.diagnosticLine(roots: roots, active: roots.data).contains("-storage-migration-replaced"), true,
+                    "存储搬迁(带来的旧目录): 诊断行报出被换下来的那份")
     }
 
     do {

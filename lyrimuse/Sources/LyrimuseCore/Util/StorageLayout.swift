@@ -101,9 +101,17 @@ public enum StorageLayout {
     public static func diagnosticLine(roots: Roots, active: URL, home: String = NSHomeDirectory()) -> String {
         let legacy = isSymlink(roots.legacy) ? "symlink" : isDirectory(roots.legacy) ? "present" : "absent"
         let display: (URL) -> String = { HomeFolderAccess.displayPath($0.path, home: home) }
-        let kept = keptOldFolders(roots)
+        let kept = keptOldFolders(roots) + replacedBackups(in: active)
         let keptText = kept.isEmpty ? "" : "; kept from migration: " + kept.map { display($0) }.joined(separator: ", ")
         return "Data folder: \(display(active)) (old \(display(roots.legacy)): \(legacy)\(keptText))"
+    }
+
+    /// 合并时数据目录里被用户带来的旧目录换下来的那些文件(`backups/<时刻>-storage-migration-replaced`)。
+    public static func replacedBackups(in dataDir: URL) -> [URL] {
+        let backups = dataDir.appendingPathComponent("backups")
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: backups.path)) ?? []
+        return names.filter { $0.hasSuffix(StorageMigration.backupSuffix + StorageMigration.replacedSuffix) }.sorted()
+            .map { backups.appendingPathComponent($0) }
     }
 
     /// 搬迁留下没删的旧目录:跨卷复制后改名的 `<旧目录名>.migrated`、合并时有冲突改名的 `<旧目录名>.leftover-<时刻>`。
