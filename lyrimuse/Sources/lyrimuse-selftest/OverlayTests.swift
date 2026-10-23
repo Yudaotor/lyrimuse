@@ -904,6 +904,37 @@ func runOverlayTests() {
                     "从右往左(契约): 歌词窗口 SwiftUI 逐词行按从右往左摆、对齐不变")
     }
 
+    // ---- 字形出框:带组合附加符号的行按实际墨迹加高长图,可视窗只在左右裁 ----
+    do {
+        expectEqual(LyricInkExtent.mayOverflow("เท่านั้น"), true, "字形出框: 泰文声调符号要量")
+        expectEqual(LyricInkExtent.mayOverflow("بِسْمِ"), true, "字形出框: 阿拉伯文元音符号要量")
+        expectEqual(LyricInkExtent.mayOverflow("ཀྲྀ"), true, "字形出框: 藏文下加字要量")
+        expectEqual(LyricInkExtent.mayOverflow("e\u{0301}"), true, "字形出框: 拉丁字母加组合重音要量")
+        expectEqual(LyricInkExtent.mayOverflow("我们生来就是孤独"), false, "字形出框: 中文不量")
+        expectEqual(LyricInkExtent.mayOverflow("Once more, you open the door"), false, "字形出框: 英文不量")
+        expectEqual(LyricInkExtent.mayOverflow("Người không những"), false, "字形出框: 预组合的越南文不量")
+        expectEqual(LyricInkExtent.mayOverflow("한글 노래"), false, "字形出框: 韩文不量")
+        let inBox = LyricInkExtent.pads(inkBottom: 3, inkTop: 30, boxHeight: 35, inset: 2.4, scale: 2)
+        expectEqual(inBox.top == 0 && inBox.bottom == 0, true, "字形出框: 墨迹在预留圈以内不加高")
+        let over = LyricInkExtent.pads(inkBottom: 1, inkTop: 34.2, boxHeight: 35, inset: 2.4, scale: 2)
+        expectEqual(over.top, 2, "字形出框: 顶上超出预留圈 1.6pt,2x 屏对齐到 2pt")
+        expectEqual(over.bottom, 1.5, "字形出框: 底下超出预留圈 1.4pt,2x 屏对齐到 1.5pt")
+        expectEqual(LyricInkExtent.pads(inkBottom: 0, inkTop: 36.2, boxHeight: 35, inset: 0, scale: 1).top, 2,
+                    "字形出框: 没有描边时以长图边沿为界,1x 屏对齐到整点")
+        let row = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI/OverlayScrollingLyricRow.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(row, "let pads = OverlayRowRaster.inkPads(g, spec: spec)"), true,
+                    "字形出框(契约): 排版时量墨迹、加高长图")
+        expectEqual(sourceHas(row, "let mainY = g.inset + g.inkPadBottom + g.romaHeight + g.romaGap + 1"), true,
+                    "字形出框(契约): 出图时字往上挪底下加高的那一截")
+        expectEqual(sourceHas(row, "clipLayer.masksToBounds = true") && !sourceHas(row, "layer?.masksToBounds = true"), true,
+                    "字形出框(契约): 可视窗交给 clipLayer,视图自己的图层不裁")
+        expectEqual(sourceHas(row, "height: bounds.height + inkPadTop + inkPadBottom)"), true,
+                    "字形出框(契约): 可视窗上下让出加高的部分")
+        expectEqual(sourceHas(row, "if clipLayer.mask !== fadeMask { clipLayer.mask = fadeMask }"), true,
+                    "字形出框(契约): 尾部渐隐遮罩挂在可视窗上")
+    }
+
     // ---- 图层行不设帧率区间(契约):设了系统按上限跑满,不设反而画得更少(04 章决策 68) ----
     do {
         let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -926,7 +957,7 @@ func runOverlayTests() {
         let wrapped = src("WrappedKaraokeRows.swift")
         expectEqual([view, scroll, wrapped].allSatisfy { $0.contains("OverlayRowLayout.blockHeight(") }, true,
                     "行间距接线: 位图高、换行模式行距、滚动模式行框都按 blockHeight 算")
-        expectEqual(scroll.contains("let mainY = g.inset + g.romaHeight + g.romaGap + 1"), true,
+        expectEqual(scroll.contains("let mainY = g.inset + g.inkPadBottom + g.romaHeight + g.romaGap + 1"), true,
                     "行间距接线: 图层行的主行跟读音之间隔出读音间距")
         expectEqual(view.contains("VStack(alignment: duetAlignment, spacing: 0)"), true,
                     "行间距接线: 卡片的 VStack 不加间距,不然跟各行自己的间距叠在一起")

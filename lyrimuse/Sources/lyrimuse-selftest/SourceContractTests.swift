@@ -2333,7 +2333,7 @@ func runSourceContractSurfaceTests() {
                         && row.contains("imageWidth: alignedUp(r.boxWidth, scale: scale)")
                         && row.contains("Int((g.imageWidth * g.scale).rounded(.up))"), true,
                         "图层滚动行: 位图宽高对齐到整像素,贴图不拉伸")
-            expectEqual(row.contains("let restingX = pixelAligned(") && row.contains("pixelAligned((bounds.height - boxHeight) / 2)"), true,
+            expectEqual(row.contains("let restingX = pixelAligned(") && row.contains("pixelAligned((bounds.height - (boxHeight - inkPadTop - inkPadBottom)) / 2) - inkPadBottom"), true,
                         "图层滚动行: 静置落点对齐到整像素")
             // 停 / 走、显示窗口只影响动画,不重画长图。
             expectEqual(row.contains("a.paused = b.paused") && row.contains("a.pacedWindow = b.pacedWindow"), true,

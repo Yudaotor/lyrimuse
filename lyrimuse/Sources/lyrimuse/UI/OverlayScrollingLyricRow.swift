@@ -8,12 +8,17 @@ import SwiftUI
 // 别改回 SwiftUI(`MarqueeText` + 30Hz `TimelineView` 整行重建):在悬浮窗的字号 / 行宽下那条会把
 // 主线程打满、滚动一顿一顿。完整论证见 docs/features/04-desktop-overlay.md「长句处理」。
 //
-//     self.layer (masksToBounds,可视窗)
-//       └ mirrorLayer                                      从右往左的行整体水平翻转,别的行恒等
-//           └ contentLayer                                 滚动 = 平移这一层
-//               ├ strokeLayer                               描边(已唱 / 未唱同色,不参与裁剪)
-//               ├ baseClipLayer (只露未唱区) └ baseTextLayer 基础色长图
-//               └ fillClipLayer (只露已唱区) └ fillTextLayer 强调色长图
+//     self.layer
+//       └ clipLayer (masksToBounds,可视窗)                   左右按视图宽裁;上下比视图多出字形出框的那一截
+//           └ mirrorLayer                                  从右往左的行整体水平翻转,别的行恒等
+//               └ contentLayer                             滚动 = 平移这一层
+//                   ├ strokeLayer                           描边(已唱 / 未唱同色,不参与裁剪)
+//                   ├ baseClipLayer (只露未唱区) └ baseTextLayer 基础色长图
+//                   └ fillClipLayer (只露已唱区) └ fillTextLayer 强调色长图
+//
+// 长图按字体的上下沿开高,带组合附加符号的行(泰文叠起来的声调符号等)按实际墨迹再往上下加高
+// (`OverlayRowGeometry.inkPadTop` / `inkPadBottom`);加高的部分画进行与行之间的空白,不改行高、不挪字。
+// 所以可视窗只能在左右方向裁,别把 `self.layer` 改回 masksToBounds,见 04 章决策 74。
 //
 // 已唱 / 未唱必须**互补裁剪**,别改成强调色那张叠在基础色上面:叠画时字形边缘的半透明像素会让
 // 底下那张透出来,深底上镶一圈白边。
@@ -111,6 +116,7 @@ final class OverlayLyricScrollView: NSView {
     /// 重装动画的漂移门(毫秒):动画在跑、且"动画此刻推到哪"与新时钟之差小于它时不打断。
     private static let resyncToleranceMs = 250
 
+    private let clipLayer = CALayer()
     private let mirrorLayer = CALayer()
     private let contentLayer = CALayer()
     private let strokeLayer = CALayer()
@@ -123,6 +129,9 @@ final class OverlayLyricScrollView: NSView {
     /// 长图(= contentLayer)的点宽 / 点高。描边开着时四周各含一圈 `inset`。
     private var boxWidth: CGFloat = 0
     private var boxHeight: CGFloat = 0
+    /// 长图为装下出框的字形在上 / 下多开的高度(`OverlayRowGeometry.inkPadTop` / `inkPadBottom`),已含在 `boxHeight` 里。
+    private var inkPadTop: CGFloat = 0
+    private var inkPadBottom: CGFloat = 0
     /// 长图位图的点宽 = `boxWidth` 向上对齐到整像素。放不放得下、滚多远照旧按 `boxWidth` 算;
     /// 位图和贴它的图层都用这个宽,像素数正好等于点宽 × 比例,贴图时不被拉伸重采样。
     private var imageWidth: CGFloat = 0
@@ -165,8 +174,8 @@ final class OverlayLyricScrollView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.masksToBounds = true
-        for l in [mirrorLayer, contentLayer, strokeLayer, baseClipLayer, baseTextLayer, fillClipLayer, fillTextLayer] {
+        clipLayer.masksToBounds = true
+        for l in [clipLayer, mirrorLayer, contentLayer, strokeLayer, baseClipLayer, baseTextLayer, fillClipLayer, fillTextLayer] {
             l.anchorPoint = .zero
             l.actions = ["position": NSNull(), "bounds": NSNull(), "contents": NSNull()]
         }
@@ -179,7 +188,8 @@ final class OverlayLyricScrollView: NSView {
         contentLayer.addSublayer(fillClipLayer)
         mirrorLayer.actions = ["position": NSNull(), "bounds": NSNull(), "transform": NSNull()]
         mirrorLayer.addSublayer(contentLayer)
-        layer?.addSublayer(mirrorLayer)
+        clipLayer.addSublayer(mirrorLayer)
+        layer?.addSublayer(clipLayer)
         for l in [fadeMask, fadeSolid, fadeRamp, fadeCover] {
             l.anchorPoint = .zero
             l.actions = ["position": NSNull(), "bounds": NSNull(), "opacity": NSNull()]
@@ -315,7 +325,7 @@ final class OverlayLyricScrollView: NSView {
         let readingPath = spec.pacedWindow != nil ? [] : MenuBarMarquee.followReadingPath(
             words: r.flatWords, wordEndXs: r.fillEndXs.map { $0 - inset })
             .map { MenuBarMarquee.KaraokeFillPoint(ms: $0.ms, x: $0.x + inset) }
-        return OverlayRowGeometry(
+        var g = OverlayRowGeometry(
             scale: scale, bleed: bleed, inset: inset,
             mainHeight: mainHeight, romaHeight: romaHeight, romaGap: romaGap,
             boxWidth: r.boxWidth, boxHeight: alignedUp(blockHeight + 2 * inset, scale: scale),
@@ -323,6 +333,11 @@ final class OverlayLyricScrollView: NSView {
             wordStartXs: r.wordStartXs, wordEndXs: r.wordEndXs, romaPlacements: r.romaPlacements,
             flatWords: r.flatWords, readingPath: readingPath,
             rightToLeft: LyricTextDirection.isRightToLeft(spec.words.map(\.text).joined()))
+        let pads = OverlayRowRaster.inkPads(g, spec: spec)
+        g.inkPadTop = pads.top
+        g.inkPadBottom = pads.bottom
+        g.boxHeight += pads.top + pads.bottom
+        return g
     }
 
     /// 换上排好、画好的一行。不动动画,摆位交给 `place`。
@@ -335,6 +350,8 @@ final class OverlayLyricScrollView: NSView {
         romaGap = g.romaGap
         boxWidth = g.boxWidth
         boxHeight = g.boxHeight
+        inkPadTop = g.inkPadTop
+        inkPadBottom = g.inkPadBottom
         imageWidth = g.imageWidth
         wordStartXs = g.wordStartXs
         wordEndXs = g.wordEndXs
@@ -408,7 +425,10 @@ final class OverlayLyricScrollView: NSView {
         let offset = MenuBarMarquee.karaokeFillX(atMs: nowMs, path: scrollPath)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        mirrorLayer.position = .zero
+        // 可视窗上下各多让出长图加高的那一截,mirrorLayer 往上挪回来,里面的坐标仍跟视图一致。
+        clipLayer.frame = CGRect(x: 0, y: -inkPadBottom, width: viewW,
+                                 height: bounds.height + inkPadTop + inkPadBottom)
+        mirrorLayer.position = CGPoint(x: 0, y: inkPadBottom)
         mirrorLayer.bounds = CGRect(x: 0, y: 0, width: viewW, height: bounds.height)
         mirrorLayer.transform = rightToLeft
             ? CATransform3DConcat(CATransform3DMakeScale(-1, 1, 1), CATransform3DMakeTranslation(viewW, 0, 0))
@@ -431,8 +451,11 @@ final class OverlayLyricScrollView: NSView {
         installScroll(nowMs: nowMs, restingX: restingX)
     }
 
-    /// 长图在视图里垂直居中的落点,对齐到整像素。
-    private var restingY: CGFloat { pixelAligned((bounds.height - boxHeight) / 2) }
+    /// 长图在视图里垂直居中的落点,对齐到整像素。按不含出框加高的高度居中、再往下挪 `inkPadBottom`:
+    /// 加高不挪字,字跟同一行没加高时落在同一处。
+    private var restingY: CGFloat {
+        pixelAligned((bounds.height - (boxHeight - inkPadTop - inkPadBottom)) / 2) - inkPadBottom
+    }
 
     /// 从右往左的行在翻转过的坐标里摆,左右对调,落在用户选的那一侧。
     private func restingOriginX(viewWidth: CGFloat, layoutWidth: CGFloat) -> CGFloat {
@@ -450,14 +473,14 @@ final class OverlayLyricScrollView: NSView {
                                nowMs: Int, running: Bool) {
         let configured = spec?.edgeFadeWidth ?? 0
         guard configured > 0, layoutWidth > viewWidth else {
-            if layer?.mask != nil { layer?.mask = nil }
+            if clipLayer.mask != nil { clipLayer.mask = nil }
             return
         }
         let band = min(configured, viewWidth / 2)
-        let h = bounds.height
+        let h = clipLayer.bounds.height
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        fadeMask.frame = bounds
+        fadeMask.frame = clipLayer.bounds
         // 渐隐带在行尾那一侧:从右往左的行在左端。
         fadeSolid.frame = CGRect(x: rightToLeft ? band : 0, y: 0, width: viewWidth - band, height: h)
         fadeRamp.frame = CGRect(x: rightToLeft ? 0 : viewWidth - band, y: 0, width: band, height: h)
@@ -467,7 +490,7 @@ final class OverlayLyricScrollView: NSView {
         let atStart = offset <= 0.5
         fadeCover.opacity = atStart ? 0 : 1
         CATransaction.commit()
-        if layer?.mask !== fadeMask { layer?.mask = fadeMask }
+        if clipLayer.mask !== fadeMask { clipLayer.mask = fadeMask }
         // 路径点之间是线性插值:真正离开起点的是「第一个非零点」的前一个点(还在 0 的最后一刻)。
         guard running, atStart,
               let firstMoving = scrollPath.firstIndex(where: { $0.x > 0.5 }) else { return }
@@ -555,6 +578,9 @@ struct OverlayRowGeometry {
     var readingPath: [MenuBarMarquee.KaraokeFillPoint]
     /// 整行按从右往左排:每个词、每段读音镜像着画,视图再整行翻回来(见文件头注)。
     var rightToLeft = false
+    /// 字形画出按字体上下沿开的框时,长图在上 / 下多开的高度(`OverlayRowRaster.inkPads`),已含在 `boxHeight` 里。
+    var inkPadTop: CGFloat = 0
+    var inkPadBottom: CGFloat = 0
 }
 
 /// 一行的三张长图。
@@ -600,9 +626,9 @@ enum OverlayRowRaster {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
         // flipped: false → 原点在左下、y 向上。主行在上、罗马音在下(同 SwiftUI 那边 VStack 的顺序),中间隔
-        // `romaGap`;各自在自己那一格里底部留 1pt;整块再往里让出一圈 inset。
-        let mainY = g.inset + g.romaHeight + g.romaGap + 1
-        let romaY = g.inset + 1
+        // `romaGap`;各自在自己那一格里底部留 1pt;整块再往里让出一圈 inset,底下再垫出框加高的那一截。
+        let mainY = g.inset + g.inkPadBottom + g.romaHeight + g.romaGap + 1
+        let romaY = g.inset + g.inkPadBottom + 1
         var mainAttrs: [NSAttributedString.Key: Any] = [.font: spec.font, .foregroundColor: main]
         var romaAttrs: [NSAttributedString.Key: Any] = [.font: spec.romaFont, .foregroundColor: roma]
         if withShadow, let s = spec.shadow {
@@ -615,6 +641,15 @@ enum OverlayRowRaster {
             mainAttrs[.shadow] = shadow
             romaAttrs[.shadow] = shadow
         }
+        drawWords(g, spec: spec, mainAttrs: mainAttrs, romaAttrs: romaAttrs, mainY: mainY, romaY: romaY, in: ctx)
+        NSGraphicsContext.restoreGraphicsState()
+        return ctx.makeImage()
+    }
+
+    /// 逐词画主行、逐段画读音。出图(`drawText`)和量墨迹(`inkPads`)共用,两边画法必须一致。
+    private static func drawWords(_ g: OverlayRowGeometry, spec: OverlayScrollingLyricRow.Spec,
+                                  mainAttrs: [NSAttributedString.Key: Any], romaAttrs: [NSAttributedString.Key: Any],
+                                  mainY: CGFloat, romaY: CGFloat, in ctx: CGContext) {
         // 排字语言逐词判、跟上面量宽度同一口径(见 `LyricTypesetting`)。
         for (i, w) in g.flatWords.enumerated() where i < g.wordStartXs.count {
             let attrs = LyricTypesetting.attributes(mainAttrs, for: w.text, translation: spec.translation)
@@ -623,8 +658,45 @@ enum OverlayRowRaster {
         for r in g.romaPlacements {
             draw(r.text, at: NSPoint(x: r.x, y: romaY), attrs: romaAttrs, in: ctx, mirrored: g.rightToLeft)
         }
+    }
+
+    /// 字形超出长图上下沿多少:按 `drawText` 的画法在上下各多留一个字号的只有透明度的位图里画一遍,扫出墨迹的
+    /// 最高、最低一行,换算成要加高的点数(`LyricInkExtent.pads`)。别改成拿 CoreText 的字形边界估:天城文、
+    /// 藏文这类回退字体在 `NSString.draw` 里的基线跟 CTLine 算的对不上。不含组合附加符号的行
+    /// (`LyricInkExtent.mayOverflow`)不量,直接 0。`g` 是还没加高的排版。
+    static func inkPads(_ g: OverlayRowGeometry, spec: OverlayScrollingLyricRow.Spec) -> (top: CGFloat, bottom: CGFloat) {
+        let text = g.flatWords.map(\.text).joined() + g.romaPlacements.map(\.text).joined()
+        guard LyricInkExtent.mayOverflow(text) else { return (0, 0) }
+        let margin = ceil(max(spec.font.pointSize, spec.romaFont.pointSize))
+        let pxW = Int((g.imageWidth * g.scale).rounded(.up))
+        let pxH = Int(((g.boxHeight + 2 * margin) * g.scale).rounded(.up))
+        guard pxW > 0, pxH > 0,
+              let ctx = CGContext(data: nil, width: pxW, height: pxH, bitsPerComponent: 8, bytesPerRow: pxW,
+                                  space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue),
+              let data = ctx.data
+        else { return (0, 0) }
+        ctx.scaleBy(x: g.scale, y: g.scale)
+        ctx.translateBy(x: 0, y: margin)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        drawWords(g, spec: spec,
+                  mainAttrs: [.font: spec.font, .foregroundColor: NSColor.black],
+                  romaAttrs: [.font: spec.romaFont, .foregroundColor: NSColor.black],
+                  mainY: g.inset + g.romaHeight + g.romaGap + 1, romaY: g.inset + 1, in: ctx)
         NSGraphicsContext.restoreGraphicsState()
-        return ctx.makeImage()
+        // 内存里第 0 行是位图最上面一行。透明度过 8/255 才算墨迹,抗锯齿的毛边不算。
+        let px = data.bindMemory(to: UInt8.self, capacity: pxW * pxH)
+        func hasInk(_ row: Int) -> Bool {
+            let start = row * pxW
+            for i in start..<(start + pxW) where px[i] > 8 { return true }
+            return false
+        }
+        guard let topRow = (0..<pxH).first(where: hasInk),
+              let bottomRow = (0..<pxH).reversed().first(where: hasInk) else { return (0, 0) }
+        let inkTop = CGFloat(pxH - topRow) / g.scale - margin
+        let inkBottom = CGFloat(pxH - 1 - bottomRow) / g.scale - margin
+        return LyricInkExtent.pads(inkBottom: inkBottom, inkTop: inkTop, boxHeight: g.boxHeight,
+                                   inset: g.inset, scale: g.scale)
     }
 
     /// 画一段字。`mirrored`:在字本身(不含尾空格)占的那一格里水平镜像着画(从右往左的行,见文件头注),
