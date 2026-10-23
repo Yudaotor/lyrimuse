@@ -559,7 +559,9 @@ final class WebLyricsScreenRenderer {
         frames?.renderNow()
     }
 
-    private var lyricsPaneVisible: Bool { !lyricsHidden || arrangement == .compact }
+    private var lyricsPaneVisible: Bool { !lyricsHidden || isPhone }
+    /// 手机的两种排法:不画音量胶囊、不给「隐藏歌词」。
+    private var isPhone: Bool { arrangement == .compact || arrangement == .phoneStacked }
 
     private func target(at p: CGPoint, chromeShown: Bool) -> Drag {
         if menu != .none {
@@ -706,6 +708,13 @@ final class WebLyricsScreenRenderer {
     private var stackedSide: CGFloat { max(24, (width * 0.06).rounded()) }
     private var stackedCover: CGFloat { min(width * 0.28, 280).rounded() }
     private static let stackedTop: CGFloat = 64
+    /// 手机竖放时顶上那一列(同歌词窗口左栏):封面边长取宽的 0.56 和高的 0.3 里小的,下面的歌词至少留四成高;
+    /// 整列水平居中、离上缘 16,高按 `WebLyricsPlayerPane.columnHeight` 算,歌词从它下面 16 开始。
+    private var phoneStackedPaneRect: CGRect {
+        let side = min(width * 0.56, height * 0.3).rounded()
+        return CGRect(x: ((width - side) / 2).rounded(), y: 16 + safeTop, width: side,
+                      height: WebLyricsPlayerPane.columnHeight(width: side))
+    }
     private var listX: CGFloat { width * 0.111 + coverWidth }
     /// 左栏在画面里的框(左上为原点,y 向下,同指针坐标);设给图层时经 `wrapperFrame` 翻一次。
     private var paneRect: CGRect = .zero
@@ -722,6 +731,9 @@ final class WebLyricsScreenRenderer {
         case .stacked:
             let top = Self.stackedTop + safeTop + stackedCover + 24
             return CGRect(x: 0, y: top, width: width, height: height - top)
+        case .phoneStacked:
+            let top = phoneStackedPaneRect.maxY + 16
+            return CGRect(x: 0, y: top, width: width, height: height - top)
         case .compact:
             let top = WebLyricsPlayerPane.compactHeaderBottom + safeTop + 12
             return CGRect(x: 0, y: top, width: width, height: height - top)
@@ -731,14 +743,14 @@ final class WebLyricsScreenRenderer {
         switch arrangement {
         case .columns: return max(24, width * 0.515 - (width * 0.111 + coverWidth))
         case .stacked: return stackedSide + safeLeft
-        case .compact: return WebLyricsPlayerPane.compactSide + safeLeft
+        case .phoneStacked, .compact: return WebLyricsPlayerPane.compactSide + safeLeft
         }
     }
     private var listTrailing: CGFloat {
         switch arrangement {
         case .columns: return max(32, width * 0.06) + safeRight
         case .stacked: return stackedSide + safeRight
-        case .compact: return WebLyricsPlayerPane.compactSide + safeRight
+        case .phoneStacked, .compact: return WebLyricsPlayerPane.compactSide + safeRight
         }
     }
     /// 字号按歌词那一栏的宽算;竖排、手机时那一栏是整宽,扣掉左右边距再算,不然平板竖放时字比横放还大一圈。
@@ -750,6 +762,7 @@ final class WebLyricsScreenRenderer {
         switch arrangement {
         case .columns: return .column
         case .stacked: return lyricsPaneVisible ? .row : .column
+        case .phoneStacked: return .column
         case .compact: return .compact
         }
     }
@@ -997,7 +1010,9 @@ final class WebLyricsScreenRenderer {
                     : resolved(.primary).withAlphaComponent(0.85),
                 shadowOpacity: onArtwork ? 0.45 : 0.2,
                 isPlaying: playback.isPlayingSmoothed,
-                height: height, verticalOffset: Self.paneVerticalOffset, safeArea: viewport.safeArea,
+                // 手机竖放时那一列只占顶上一块,按这一块的高排、不往上挪(整组正好填满,见 `phoneStackedPaneRect`)。
+                height: arrangement == .phoneStacked ? paneRect.height : height,
+                verticalOffset: arrangement == .phoneStacked ? 0 : Self.paneVerticalOffset, safeArea: viewport.safeArea,
                 controls: .init(
                     shuffleShown: playback.playbackMode != nil && playback.playbackModeOptions.contains(.shuffle),
                     shuffleActive: playback.playbackMode == .shuffle,
@@ -1016,11 +1031,11 @@ final class WebLyricsScreenRenderer {
         let primary = onArtwork ? NSColor.white : resolved(.primary)
         chrome.apply(.init(
             onArtwork: onArtwork, primary: primary, darkPanels: onArtwork || isDarkAppearance,
-            volume: isIdle || arrangement == .compact ? nil : PlaybackCoordinator.shared.soundVolume,
+            volume: isIdle || isPhone ? nil : PlaybackCoordinator.shared.soundVolume,
             showsTranslationButton: !isIdle && playback.hasLyricsContent && (hasTranslation || hasRomanization)
                 && lyricsPaneVisible,
             translationActive: playback.showTranslation && hasTranslation,
-            showsLyricsToggle: !isIdle && arrangement != .compact,
+            showsLyricsToggle: !isIdle && !isPhone,
             lyricsShown: !lyricsHidden,
             menu: menu, hasTranslation: hasTranslation, hasRomanization: hasRomanization,
             showTranslation: playback.showTranslation, showRomanization: playback.showRomanization,
@@ -1207,7 +1222,8 @@ final class WebLyricsScreenRenderer {
     }
 
     /// 左右两栏:左缘显示歌词时 0.111W;隐藏歌词时封面挪到正中,沿 `.smooth(duration: 0.35)` 那条弹簧过去(同歌词窗口)。
-    /// 平板竖放:顶上那一块;隐藏歌词时换成歌词窗口那种封面在上的一列,摆在正中、封面放大。手机:铺满整幅。
+    /// 平板竖放:顶上那一块;隐藏歌词时换成歌词窗口那种封面在上的一列,摆在正中、封面放大。手机竖放:顶上居中的一列。
+    /// 手机不够高:铺满整幅。
     private func placePane() {
         switch arrangement {
         case .columns:
@@ -1218,6 +1234,11 @@ final class WebLyricsScreenRenderer {
                 ? CGRect(x: stackedSide + safeLeft, y: Self.stackedTop + safeTop,
                          width: width - stackedSide * 2 - safeLeft - safeRight, height: stackedCover)
                 : CGRect(x: ((width - side) / 2).rounded(), y: 0, width: side, height: height)
+            pane.frame = wrapperFrame(paneRect)
+            paneX = paneRect.minX
+            return
+        case .phoneStacked:
+            paneRect = phoneStackedPaneRect
             pane.frame = wrapperFrame(paneRect)
             paneX = paneRect.minX
             return
@@ -1659,7 +1680,7 @@ final class WebLyricsFrameEncoder: @unchecked Sendable {
 /// 整组跟歌词窗口一样垂直居中。暂停时封面缩到 0.732,弹簧 0.5s / 阻尼 0.72。
 ///
 /// 竖着的画面另有两种排法(`Style`,见 `WebLyricsViewport.Arrangement`):平板竖放时封面在左、信息在右的一块;
-/// 手机上顶上一行小封面 + 歌名,进度和播放键是底部一块圆角底,跟着控件闲置收起。
+/// 手机不够高时顶上一行小封面 + 歌名,进度和播放键是底部一块圆角底,跟着控件闲置收起。手机竖放用的就是 `column` 这一列。
 @MainActor
 final class WebLyricsPlayerPane: CALayer {
     /// `column` 歌词窗口左栏(封面在上);`row` 封面在左、歌名 / 进度 / 播放键在右;`compact` 顶上一行 + 底部播放条。
@@ -1817,12 +1838,21 @@ final class WebLyricsPlayerPane: CALayer {
         applyTransportOpacity(animated: false)
     }
 
+    /// 「封面在上」那一列整组多高:封面 + 歌名两行 + 进度、时间 + 播放键,间距照歌词窗口左栏。`layoutColumn` 和手机竖放时
+    /// 顶上那一块的高都按它,两处不各算一遍。
+    static func columnHeight(width w: CGFloat) -> CGFloat {
+        w + 19 + 41 + 19 + 6 + 5 + 13 + 17 + columnControlsHeight(width: w)
+    }
+
+    private static func columnControlsHeight(width w: CGFloat) -> CGFloat {
+        (min(33, max(17, w * 0.079)) * 1.21).rounded()
+    }
+
     /// 歌词窗口左栏:封面在上,下面歌名、进度、播放键,整组竖直居中。
     private func layoutColumn(_ next: Content, scale: CGFloat) {
         let w = bounds.width
-        let play = min(33, max(17, w * 0.079))
-        let controlsHeight = (play * 1.21).rounded()
-        let total = w + 19 + 41 + 19 + 6 + 5 + 13 + 17 + controlsHeight
+        let controlsHeight = Self.columnControlsHeight(width: w)
+        let total = Self.columnHeight(width: w)
         let top = ((next.height - total) / 2 - next.verticalOffset).rounded()
         placeCover(next, side: w, origin: CGPoint(x: 0, y: top), small: false)
         var y = top + w + 19

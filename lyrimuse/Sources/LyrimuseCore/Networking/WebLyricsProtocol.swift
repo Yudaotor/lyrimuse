@@ -385,11 +385,19 @@ public struct WebLyricsViewport: Hashable, Sendable {
     public var showsPlayerPane: Bool { width >= 640 }
 
     /// 画面怎么排。`columns`:照歌词窗口左右两栏;`stacked`:够宽但竖着(平板竖放),播放器在上、整宽歌词在下;
-    /// `compact`:窄于 640(手机),顶上一行小封面 + 歌名,整宽歌词,进度和播放键在底部、跟着控件闲置收起。见 19 章决策 18。
-    public enum Arrangement: Equatable, Sendable { case columns, stacked, compact }
+    /// `phoneStacked`:窄于 640 且竖着够高(手机竖放),顶上一列居中的封面、歌名、进度、播放键(同歌词窗口左栏),整宽歌词在下;
+    /// `compact`:窄于 640 又不够高(手机横放、方形小窗),顶上一行小封面 + 歌名,整宽歌词,进度和播放键在底部、跟着控件闲置收起。
+    /// 见 19 章决策 18、43。
+    public enum Arrangement: Equatable, Sendable { case columns, stacked, phoneStacked, compact }
+
+    /// 窄画面高至少是宽的这么多倍才用 `phoneStacked`:常见手机竖放 2.1 上下、iPhone SE 1.78、带浏览器工具栏 1.7 左右;
+    /// 再矮的话顶上那一列占掉一半以上,歌词只剩几行。
+    public static let phoneStackedMinAspect = 1.5
 
     public var arrangement: Arrangement {
-        guard showsPlayerPane else { return .compact }
+        guard showsPlayerPane else {
+            return Double(height) >= Double(width) * Self.phoneStackedMinAspect ? .phoneStacked : .compact
+        }
         return height > width ? .stacked : .columns
     }
 }

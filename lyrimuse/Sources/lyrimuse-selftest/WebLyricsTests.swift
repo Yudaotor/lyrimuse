@@ -424,8 +424,18 @@ func runWebLyricsTests() {
                     "网页歌词: 够宽又横着的照歌词窗口左右两栏(手机横放也是)")
         expectEqual([arrangement(820, 1180), arrangement(744, 1133), arrangement(1024, 1366)], [.stacked, .stacked, .stacked],
                     "网页歌词: 够宽但竖着(平板竖放)播放器在上、歌词在下")
-        expectEqual([arrangement(390, 844), arrangement(430, 932), arrangement(600, 400)], [.compact, .compact, .compact],
-                    "网页歌词: 窄于 640 是手机那种排法(顶上一行歌名、底部播放条)")
+        expectEqual([arrangement(390, 844), arrangement(430, 932), arrangement(375, 667), arrangement(390, 600)],
+                    [.phoneStacked, .phoneStacked, .phoneStacked, .phoneStacked],
+                    "网页歌词: 手机竖放(高至少是宽的 1.5 倍)顶上一列封面、歌名、播放键,歌词在下")
+        expectEqual([arrangement(600, 400), arrangement(500, 600), arrangement(390, 580)], [.compact, .compact, .compact],
+                    "网页歌词: 窄于 640 又不够高(手机横放、方形小窗)是顶上一行歌名、底部播放条")
+        let screenSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/WebLyrics/WebLyricsScreen.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(screenSource, "case .phoneStacked: return .column")
+                        && sourceHas(screenSource, "height: WebLyricsPlayerPane.columnHeight(width: side))")
+                        && sourceHas(screenSource, "let top = phoneStackedPaneRect.maxY + 16")
+                        && sourceHas(screenSource, "let total = Self.columnHeight(width: w)"), true,
+                    "网页歌词: 手机竖放顶上那一块用歌词窗口左栏那一列,块高和那一列整组高同一个函数,歌词从它下面开始")
         expectEqual(arrangement(640, 640), .columns, "网页歌词: 正方形按横着算(高大于宽才算竖)")
         let laptop = WebLyricsViewport(query: ["w": "1512", "h": "900", "dpr": "2"])
         expectEqual([laptop.pixelWidth, laptop.pixelHeight], [3024, 1800], "网页歌词: 笔记本全屏浏览器照样 2x")
