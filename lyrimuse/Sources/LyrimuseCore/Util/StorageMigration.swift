@@ -540,9 +540,13 @@ public enum StorageMigration {
         }
         guard current != original else { return }
         let backupRoot = data.appendingPathComponent("backups/\(stamp(Date()))\(backupSuffix)")
-        guard backupOriginal(state, relativePath: state.lastPathComponent, into: backupRoot), replaceFile(state, with: current) else {
-            outcome.failures.append("rewrite \(state.lastPathComponent)")
+        guard backupOriginal(state, relativePath: state.lastPathComponent, into: backupRoot) else {
+            outcome.failures.append("back up \(state.lastPathComponent) before rewriting")
             return
+        }
+        outcome.rewriteBackup = backupRoot.path
+        if !replaceFile(state, with: current) {
+            outcome.failures.append("write \(state.lastPathComponent)")
         }
     }
 

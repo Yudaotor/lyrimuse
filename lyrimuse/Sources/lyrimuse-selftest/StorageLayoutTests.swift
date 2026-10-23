@@ -298,6 +298,8 @@ func runStorageLayoutChecks() {
         expectEqual(read(side.appendingPathComponent("notes/keep.txt")), "mine", "引擎留底: 那个目录里别的东西不碰")
         expectEqual(read(roots.data.appendingPathComponent("lyrimuse-song-entity-share.json")),
                     "{\n  \"full_backup\": \"\(backups.path)/20261011-174931-song-entity\"\n}", "引擎留底: 同步状态里记着的路径换成新位置")
+        expectEqual(outcome.rewriteBackup.flatMap { read(URL(fileURLWithPath: $0).appendingPathComponent("lyrimuse-song-entity-share.json")) },
+                    "{\n  \"full_backup\": \"\(first.path)\"\n}", "引擎留底: 改写之前原件存进 backups/,结果里报出位置")
         expectEqual(StorageMigration.isPending(roots, cacheNames: []), false, "引擎留底: 挪完没活了")
 
         let (_, only) = makeHome("enginebackups-only")
