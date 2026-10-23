@@ -35,19 +35,30 @@
 
   // Only surfaces that are on screen, and on the selected tab of their stage, get painted.
   const onScreen = new Set();
-  const liveIO = new IntersectionObserver((es) => es.forEach((e) => (e.isIntersecting ? onScreen.add(e.target) : onScreen.delete(e.target))));
+  // A section below the first screen is not laid out until it comes near (content-visibility), so anything measured
+  // inside it before then read zeros: place its lists and measure its lines again once it is on screen.
+  const liveIO = new IntersectionObserver((es) => es.forEach((e) => {
+    if (!e.isIntersecting) { onScreen.delete(e.target); return; }
+    onScreen.add(e.target);
+    let inside = false;
+    for (const L of lists) if (L.root === e.target && L.at >= 0) { place(L, false); inside = true; }
+    if (inside || mains.some((m) => m.root === e.target && m.run)) measure();
+  }));
   lives.forEach((el) => liveIO.observe(el));
   const surface = (el) => ({ el, root: el.closest('.live'), view: el.closest('.view') });
   const shown = (s) => onScreen.has(s.root) && (!s.view || s.view.classList.contains('on'));
+  // With reduced motion nothing ticks, so every surface is filled in once up front.
+  const live = (s) => reduce || shown(s);
 
   const mains = [...document.querySelectorAll('[data-l="main"]')]
     .map((el) => Object.assign(surface(el), { scroll: el.hasAttribute('data-scroll'), paint: el.dataset.paint !== '0' }));
-  const nexts = [...document.querySelectorAll('[data-l="next"]')];
+  const all = (sel) => [...document.querySelectorAll(sel)].map(surface);
+  const nexts = all('[data-l="next"]');
   const eqs = [...document.querySelectorAll('.eq')].map((el) => Object.assign(surface(el), { bars: [...el.children] }));
-  const progs = [...document.querySelectorAll('[data-l="prog"]')];
-  const curs = [...document.querySelectorAll('[data-l="cur"]')];
-  const rems = [...document.querySelectorAll('[data-l="rem"]')];
-  const dcurs = [...document.querySelectorAll('[data-l="dcur"]')];
+  const progs = all('[data-l="prog"]');
+  const curs = all('[data-l="cur"]');
+  const rems = all('[data-l="rem"]');
+  const dcurs = all('[data-l="dcur"]');
   const mmss = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
   // Discord writes the minutes with two digits (01:24)
   const mmss2 = (ms) => mmss(ms).padStart(5, '0');
@@ -97,7 +108,7 @@
     for (let c = 0; c < COPIES; c++) {
       LINES.forEach((l) => { const p = document.createElement('p'); p.className = 'lw-row'; p.textContent = l.text; track.appendChild(p); rows.push(p); });
     }
-    return Object.assign(surface(el), { track, rows, at: -1, spans: [], placed: false });
+    return Object.assign(surface(el), { track, rows, at: -1, spans: [], placed: false, ver: 0 });
   });
   const mark = (L) => L.rows.forEach((r, j) => { r.dataset.d = String(Math.min(3, Math.abs(j - L.at))); });
   function place(L, animate) {
@@ -127,7 +138,7 @@
   // Layout is read once per line (and on resize), never inside the animation frame.
   function measure() {
     for (const m of mains) {
-      if (!m.run) continue;
+      if (!m.run || !live(m)) continue;
       m.cw = m.el.clientWidth;
       m.sw = m.run.scrollWidth;
       m.left = m.spans.map((s) => s.offsetLeft);
@@ -135,18 +146,38 @@
     }
   }
 
-  let idx = 0, line = null, t0 = performance.now(), loopStart = 0;
+  let idx = 0, line = null, t0 = performance.now(), loopStart = 0, ver = 0, nextText = '';
   const loopMs = LINES.reduce((a, l) => a + l.ms, 0);
 
   function show(i) {
     const cur = LINES[i % LINES.length], nxt = LINES[(i + 1) % LINES.length];
     line = layout(cur.text, cur.ms);
-    mains.forEach((m) => render(m, line));
-    nexts.forEach((el) => { el.textContent = nxt.text; });
-    lists.forEach((L) => listShow(L, i, line));
+    nextText = nxt.text;
+    ver++;
     loopStart = LINES.slice(0, i % LINES.length).reduce((a, l) => a + l.ms, 0);
     t0 = performance.now();
-    measure();
+    sync();
+  }
+
+  // Brings the surfaces on screen up to the current line. The rest catch up on the frame they come into view, so a
+  // line change never rebuilds or measures what nobody can see (each measure lays out the whole page).
+  function sync() {
+    let remeasure = false;
+    for (const m of mains) {
+      const on = live(m);
+      if (on && m.ver !== ver) { render(m, line); m.ver = ver; remeasure = true; }
+      if (on && !m.was) remeasure = true;
+      m.was = on;
+    }
+    for (const s of nexts) if (s.ver !== ver && live(s)) { s.el.textContent = nextText; s.ver = ver; }
+    for (const L of lists) {
+      if (L.ver === ver || !live(L)) continue;
+      // one line behind: advance with the usual scroll; further behind: start over at the current line, unanimated
+      if (L.ver !== ver - 1 && L.at >= 0) { L.rows[L.at].textContent = LINES[L.at % LINES.length].text; L.at = -1; L.placed = false; }
+      listShow(L, idx, line);
+      L.ver = ver;
+    }
+    if (remeasure) measure();
   }
 
   // Reading position = where the fill has reached; keep it at 45% of the box.
@@ -189,10 +220,12 @@
   function clock(t) {
     const played = DEMO.startMs + ((loopStart + Math.min(t, line.cycle)) % loopMs);
     const w = (played / DEMO.songMs * 100).toFixed(2) + '%';
-    progs.forEach((el) => { el.style.width = w; });
-    curs.forEach((el) => { el.textContent = mmss(played); });
-    rems.forEach((el) => { el.textContent = '-' + mmss(DEMO.songMs - played); });
-    dcurs.forEach((el) => { el.textContent = mmss2(played); });
+    // only what is on screen, and only when the value changes: the readouts change once a second
+    const put = (list, v, set) => { for (const s of list) if (s.v !== v && live(s)) { set(s.el, v); s.v = v; } };
+    put(progs, w, (el, v) => { el.style.width = v; });
+    put(curs, mmss(played), (el, v) => { el.textContent = v; });
+    put(rems, '-' + mmss(DEMO.songMs - played), (el, v) => { el.textContent = v; });
+    put(dcurs, mmss2(played), (el, v) => { el.textContent = v; });
   }
 
   show(0);
@@ -203,6 +236,7 @@
     const tick = (now) => {
       if (onScreen.size && line) {
         const t = now - t0;
+        sync();
         paint(t);
         eq(now, t);
         clock(t);
@@ -212,7 +246,7 @@
     };
     requestAnimationFrame(tick);
   }
-  window.addEventListener('resize', () => { measure(); lists.forEach((L) => place(L, false)); });
+  window.addEventListener('resize', () => { measure(); lists.forEach((L) => { if (L.at >= 0) place(L, false); }); });
   document.querySelectorAll('.island').forEach((el) => el.addEventListener('transitionend', (e) => { if (e.propertyName === 'width') measure(); }));
 
   // Hover the hero notch to expand it, with the app's intent delays (0.12s in, 0.1s out).
