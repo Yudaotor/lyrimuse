@@ -361,6 +361,10 @@ func parenBGYRCLine(line string) (mainLine, bgLine, mainKey, bgKey string, ok bo
 			if k == wj {
 				at := m[1] - starts[wj]
 				rest := words[wj].text[at:]
+				// 下一段的左括号粘在这个词条末尾(「right?) (」):那是下一段的开头,不是这一段之后剩下的标点。
+				if i := strings.IndexAny(rest, "(（"); i >= 0 {
+					rest = rest[:i]
+				}
 				if parenBGHasWord(rest) {
 					return "", "", "", "", false
 				}

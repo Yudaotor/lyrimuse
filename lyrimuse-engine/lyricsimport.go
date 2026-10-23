@@ -368,7 +368,13 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 		}
 		changed := false
 		prevLyrics, prevTr, prevRoma, prevYRC, prevSource := e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC, e.LyricsSource
-		if v, ok := variantBody(".lrc"); ok {
+		// 括号里拆出来的背景人声,导出时接回了正文 / 逐字(parenBGFileForm):文件还是导出的那一份就是没改。
+		var fileLRC, fileYRC string
+		hasFileForm := !e.LyricsBG.IsZero() && parenBGSources[e.LyricsSource]
+		if hasFileForm {
+			fileLRC, fileYRC = parenBGFileForm(e.LyricsSource, e.Lyrics.String(), e.LyricsYRC.String(), e.LyricsBG.String())
+		}
+		if v, ok := variantBody(".lrc"); ok && !(hasFileForm && v == fileLRC) {
 			// 用户在别处改成逐字写法的 .lrc:同各源交来的正文一样拆成逐行 + 逐字(同目录有 .yrc 时以它为准,见下面),
 			// 不然 `<mm:ss.xx>` 留在正文里、下次导出原样写回。见 09 章决策 331。
 			var splitYRC string
@@ -377,7 +383,8 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 			}
 			if !e.Lyrics.EqualString(v) {
 				e.Lyrics, changed = bt(v), true
-				// 歌词文件里没有背景人声(导出不写它),正文换了就清掉,别挂在新正文下面。
+				// 歌词文件里没有背景人声这一项,正文换了就清掉,别挂在新正文下面。括号里拆出来的那种跟着正文写在文件里,
+				// 启动迁移会再拆。
 				e.LyricsBG = bodyText{}
 			}
 			if _, hasYRCFile := variantBody(".yrc"); splitYRC != "" && !hasYRCFile && !e.LyricsYRC.EqualString(splitYRC) {
@@ -397,7 +404,7 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 				e.LyricsRoma, changed = bt(v), true
 			}
 		}
-		if v, ok := variantBody(".yrc"); ok {
+		if v, ok := variantBody(".yrc"); ok && !(hasFileForm && v == fileYRC) {
 			if !e.LyricsYRC.EqualString(v) {
 				e.LyricsYRC, changed = bt(v), true
 				e.LyricsBG = bodyText{}

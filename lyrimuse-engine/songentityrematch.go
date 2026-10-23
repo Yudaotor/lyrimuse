@@ -127,7 +127,13 @@ func importPredatesSongShare(key string, e enrichEntry, body func(suffix string)
 	if !hasLRC && !hasYRC {
 		return false
 	}
-	return (!hasLRC || pre.Lyrics.EqualString(lrc)) && (!hasYRC || pre.LyricsYRC.EqualString(yrc)) && (lrc != "" || yrc != "")
+	// 括号背景人声接回去的写法(parenBGFileForm)同样算那一份。
+	fileLRC, fileYRC := pre.Lyrics.String(), pre.LyricsYRC.String()
+	if !pre.LyricsBG.IsZero() {
+		fileLRC, fileYRC = parenBGFileForm(pre.LyricsSource, fileLRC, fileYRC, pre.LyricsBG.String())
+	}
+	return (!hasLRC || pre.Lyrics.EqualString(lrc) || lrc == fileLRC) && (!hasYRC || pre.LyricsYRC.EqualString(yrc) || yrc == fileYRC) &&
+		(lrc != "" || yrc != "")
 }
 
 // shareImportedEditsLocked:歌词同步开着时,歌词文件夹里被用户改过的那几条(导入时状态记录确认导出之后改过、正文或逐字真的变了)

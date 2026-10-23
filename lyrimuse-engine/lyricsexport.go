@@ -150,6 +150,9 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		manual               bool
 		variants             [4]string // 对应 lyricsFileSuffixes,空串表示这个变体没有内容
 		bodies               [4]bodyText
+		bg                   bodyText
+		// cached:缓存里原样的正文 / 逐字。背景人声接回去之后跟 variants 不同(parenBGFileForm)。
+		cached [4]string
 	}
 	// 只导出几个分组时,不在 onlyFolds 里的条目连拷都不拷:碰撞分组只对要导出的分组有意义,而同一分组的 key 分组键相同、
 	// 必然都在 onlyFolds 里,整组照样算全。只遍历 key,条目约 1.4 KB,按值遍历会把整个缓存拷一遍。见 15 章决策 53。
@@ -177,7 +180,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		jobs = append(jobs, entryJob{
 			key: key, artist: artist, title: title, album: album,
 			source: e.LyricsSource, manual: e.ManualLyrics,
-			bodies: [4]bodyText{e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC},
+			bodies: [4]bodyText{e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC}, bg: e.LyricsBG,
 		})
 	}
 	enrichMu.Unlock()
@@ -195,6 +198,13 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			}
 			jobs[i].variants[v] = s
 		}
+		bg, err := jobs[i].bg.load()
+		if err != nil {
+			slog.Error("lyrics export: skipped this round, a lyrics body could not be read back", "key", jobs[i].key)
+			return
+		}
+		jobs[i].cached = jobs[i].variants
+		jobs[i].variants[0], jobs[i].variants[3] = parenBGFileForm(jobs[i].source, jobs[i].variants[0], jobs[i].variants[3], bg)
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		noteFileErr("mkdir", dir, err)
@@ -310,12 +320,15 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 					continue
 				}
 			}
+			// 盘上这份是背景人声接回去之前的写法、内容没别的变化:改写后修改时间留原样,歌词管理按更新时间排时不跳到最前。
+			keepTime := false
 			if info != nil {
 				existing, err := os.ReadFile(path)
 				if err == nil && string(existing) == string(full) {
 					recordLyricsFile(dir, name, info, sum)
 					continue
 				}
+				keepTime = err == nil && content != j.cached[k] && string(existing) == header+j.cached[k]
 				// 盘上这份认不出头部:导入没采纳它(见 importLyricsFrom 的 variantBody),这里要拿缓存里的内容
 				// 盖掉它 —— 先挪进废纸篓留一份。
 				if err == nil && !parseLyricsBytes(existing).ok {
@@ -325,6 +338,9 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			if err := writeLyricsFileAtomic(path, full); err != nil {
 				slog.Error("lyrics export: write failed", "file", name, "err", err)
 				continue
+			}
+			if keepTime {
+				_ = os.Chtimes(path, info.ModTime(), info.ModTime())
 			}
 			if st, err := os.Lstat(path); err == nil {
 				recordLyricsFile(dir, name, st, sum)
