@@ -284,6 +284,14 @@ public struct PlatformLinks: Sendable, Equatable {
         isCatalogID(id[...], length: 22...22, extra: []) ? URL(string: "https://open.spotify.com/artist/" + id) : nil
     }
 
+    /// `spotifyArtistURL` 拼出来的歌手页 → 歌手 ID;别的地址为 nil。
+    public static func spotifyArtistID(fromPage url: URL?) -> String? {
+        guard let url, url.host == "open.spotify.com" else { return nil }
+        let parts = url.pathComponents
+        guard parts.count == 3, parts[1] == "artist", isCatalogID(parts[2][...], length: 22...22, extra: []) else { return nil }
+        return parts[2]
+    }
+
     /// YouTube Music 专辑页 `https://music.youtube.com/browse/<MPREb_…>` / 歌手页 `https://music.youtube.com/channel/<UC…>`。
     /// 形状闸与引擎的 `ytmusicBrowseIDOK` 同源:以 `MPREb_` / `UC` 开头,后面只有字母数字和 `-` `_`。
     public static func youtubeMusicAlbumURL(browseID: String) -> URL? {

@@ -2217,8 +2217,8 @@ func runNotchTests() {
                     "专辑简介契约: 只在换歌 / 消费方来要时取,不轮询")
         expectEqual(store.contains("guard demand > 0, !track.title.isEmpty else {"), true,
                     "专辑简介契约: 没有消费方挂着时一个请求都不发")
-        expectEqual(store.components(separatedBy: "guard self.currentKey == track.key else { return self.refreshCurrent() }").count - 1, 10,
-                    "简介契约: 专辑页 / 同歌手专辑页 / 歌手页 / Last.fm / 网易云歌手介绍 / 网易云专辑介绍 / QQ 歌曲简介 / 汽水 / YouTube Music 歌手介绍(问通、问不通各一处)回来时已经换歌,都按当前曲目重查(同专辑连切时新歌不会整首拿不到)")
+        expectEqual(store.components(separatedBy: "guard self.currentKey == track.key else { return self.refreshCurrent() }").count - 1, 11,
+                    "简介契约: 专辑页 / 同歌手专辑页 / 歌手页 / Last.fm / 网易云歌手介绍 / 网易云专辑介绍 / QQ 歌曲简介 / 汽水 / Spotify 歌手简介 / YouTube Music 歌手介绍(问通、问不通各一处)回来时已经换歌,都按当前曲目重查(同专辑连切时新歌不会整首拿不到)")
         expectEqual(sourceHas(store, "guard self.currentKey == track.key else { return self.refreshCurrent() }\n            self.artist = card"), true,
                     "简介契约: 歌手页回来时已经换歌,同样按当前曲目重查")
         expectEqual(store.contains("appleAlbumRefs(forArtist: track.artist, limit: 3)")

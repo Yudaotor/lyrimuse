@@ -304,6 +304,12 @@ func runIdlePageTests() {
         expectEqual(P.spotifyArtistURL(id: "72NhFAGG5Pt91VbheJeEPG")?.absoluteString,
                     "https://open.spotify.com/artist/72NhFAGG5Pt91VbheJeEPG", "Spotify 歌手页 URL")
         expectEqual(P.spotifyArtistURL(id: "72NhFAGG5Pt91VbheJeEP") == nil, true, "Spotify id:21 位挡掉")
+        expectEqual(P.spotifyArtistID(fromPage: P.spotifyArtistURL(id: "72NhFAGG5Pt91VbheJeEPG")), "72NhFAGG5Pt91VbheJeEPG",
+                    "Spotify 歌手页 → 歌手 ID")
+        expectEqual(P.spotifyArtistID(fromPage: P.spotifyAlbumURL(id: "72NhFAGG5Pt91VbheJeEPG")), nil, "Spotify 专辑页不当歌手")
+        expectEqual(P.spotifyArtistID(fromPage: URL(string: "https://example.com/artist/72NhFAGG5Pt91VbheJeEPG")), nil,
+                    "别的站点不认")
+        expectEqual(P.spotifyArtistID(fromPage: nil), nil, "没有歌手页")
         expectEqual(P.youtubeMusicAlbumURL(browseID: "MPREb_OUh6Wf3kq7x")?.absoluteString,
                     "https://music.youtube.com/browse/MPREb_OUh6Wf3kq7x", "YouTube Music 专辑页 URL")
         expectEqual(P.youtubeMusicArtistURL(channelID: "UCZONOh3FvcD-a_b")?.absoluteString,

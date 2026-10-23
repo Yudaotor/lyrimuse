@@ -20,9 +20,9 @@ struct EditorialCard: Equatable, Codable {
     }
 
     /// 正文从哪来。Last.fm 的是 CC BY-SA 授权的用户百科,YouTube Music 给的是维基百科条目(同样 CC BY-SA),网易云、QQ 音乐、
-    /// 汽水音乐的是它们家的介绍,这几种卡片底部都注明出处。
+    /// 汽水音乐、Spotify 的是它们家的介绍,这几种卡片底部都注明出处。
     enum Source: Equatable, Codable {
-        case appleMusic, lastfm, netease, qqMusic, soda, youtubeMusic
+        case appleMusic, lastfm, netease, qqMusic, soda, spotify, youtubeMusic
 
         /// 卡片底部那一行出处;Apple Music 的不注明。YouTube Music 那一路的正文是维基百科的,注明维基百科。
         var attribution: String? {
@@ -32,6 +32,7 @@ struct EditorialCard: Equatable, Codable {
             case .netease: return L10n.t("来自网易云音乐")
             case .qqMusic: return L10n.t("来自 QQ 音乐")
             case .soda: return L10n.t("来自汽水音乐")
+            case .spotify: return L10n.t("来自 Spotify")
             case .youtubeMusic: return L10n.t("来自维基百科")
             }
         }
@@ -343,8 +344,9 @@ final class EditorialNotesStore: ObservableObject {
 
     // MARK: - 兜底(Apple Music 明确没有时)
 
-    /// Apple Music 明确没有这张专辑 / 这位歌手的简介:中文界面依次问汽水、网易云、YouTube Music、Last.fm;别的界面问
-    /// YouTube Music、Last.fm(汽水、网易云的介绍只有中文,`NeteaseEditorialInfo.isUsable`;YouTube Music 按界面语言给)。
+    /// Apple Music 明确没有这张专辑 / 这位歌手的简介:中文界面依次问汽水、网易云、Spotify、YouTube Music、Last.fm;别的界面问
+    /// Spotify、YouTube Music、Last.fm(汽水、网易云的介绍只有中文,`NeteaseEditorialInfo.isUsable`;YouTube Music 按界面语言给;
+    /// Spotify 只有歌手、只在本机缓存里有,见 `spotifyArtist`)。
     /// 歌曲简介没有 Apple 那一档:中文界面先问 QQ 音乐、
     /// 再问 Last.fm;别的界面只问 Last.fm(QQ 的简介同样只有中文)。
     private func fallback(_ kind: EditorialCard.Kind, _ track: Track) {
@@ -353,7 +355,7 @@ final class EditorialNotesStore: ObservableObject {
         switch kind {
         case .album, .artist:
             order = NeteaseEditorialInfo.isUsable(uiLanguage: language)
-                ? [.soda, .netease, .youtubeMusic, .lastfm] : [.youtubeMusic, .lastfm]
+                ? [.soda, .netease, .spotify, .youtubeMusic, .lastfm] : [.spotify, .youtubeMusic, .lastfm]
         case .song:
             order = QQSongInfo.isUsable(uiLanguage: language) ? [.qqMusic, .lastfm] : [.lastfm]
         }
@@ -386,10 +388,64 @@ final class EditorialNotesStore: ObservableObject {
         case (.soda, .artist): sodaArtist(track, then: next)
         case (.youtubeMusic, .album): youtubeMusicAlbum(track, then: next)
         case (.youtubeMusic, .artist): youtubeMusicArtist(track, then: next)
-        // 这一类在这个来源上没有(网易云、汽水、YouTube Music 不给单曲写介绍,QQ 这一路只问歌曲),Apple Music 在兜底链之前就问过了。
-        case (.netease, .song), (.soda, .song), (.youtubeMusic, .song), (.qqMusic, .album), (.qqMusic, .artist), (.appleMusic, _):
+        case (.spotify, .artist): spotifyArtist(track, then: next)
+        // 这一类在这个来源上没有(网易云、汽水、YouTube Music 不给单曲写介绍,QQ 这一路只问歌曲,Spotify 本机只有歌手简介),
+        // Apple Music 在兜底链之前就问过了。
+        case (.netease, .song), (.soda, .song), (.youtubeMusic, .song), (.qqMusic, .album), (.qqMusic, .artist),
+             (.spotify, .album), (.spotify, .song), (.appleMusic, _):
             fallback(kind, track, via: sources.dropFirst())
         }
+    }
+
+    // MARK: - Spotify
+
+    /// Spotify 客户端本机缓存里的歌手简介,按这首记下的 Spotify 歌手 ID 让引擎读(`spotify-artist-bio`,只在 Spotify 里看过的
+    /// 歌手才有)。按歌手 ID 记结论,"" = 本机没有。见 05 章决策 91。
+    private let spotifyBios = EditorialMemo<String, String>("spotify", missing: { $0.isEmpty })
+    private var spotifyInFlight: Set<String> = []
+
+    private func spotifyArtist(_ track: Track, then: @escaping (EditorialCard?) -> Void) {
+        let links = EnrichCacheReader.platformLinks(artist: track.artist, title: track.title, album: track.album)
+        guard let id = PlatformLinks.spotifyArtistID(fromPage: links?.spotifyArtist) else { return then(nil) }
+        let make = { (bio: String) -> EditorialCard? in
+            bio.isEmpty ? nil : EditorialCard(kind: .artist, title: track.artist, subtitle: "", facts: [], text: bio, source: .spotify)
+        }
+        if let known = spotifyBios[id] { return then(make(known ?? "")) }
+        guard !spotifyInFlight.contains(id) else { return }
+        spotifyInFlight.insert(id)
+        let enginePath = LyrimusePaths.bundledEnginePath
+        Task { [weak self] in
+            let bio = await Task.detached(priority: .utility) { Self.runSpotifyArtistBio(id: id, enginePath: enginePath) }.value
+            guard let self else { return }
+            self.spotifyInFlight.remove(id)
+            guard let bio else { return }
+            self.spotifyBios[id] = .some(bio)
+            Self.logger.notice("spotify artist bio: \(bio.isEmpty ? "none" : "\(bio.count) chars", privacy: .public)")
+            guard self.currentKey == track.key else { return self.refreshCurrent() }
+            then(make(bio))
+        }
+    }
+
+    /// 跑一次引擎子命令。nil = 没跑成(起不来、超时、输出不是那个形状);"" = 本机没有。
+    nonisolated static func runSpotifyArtistBio(id: String, enginePath: String) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: enginePath)
+        // 子命令必须跟本 App 同一份配置目录 / 日志文件,见 LyrimusePaths.engineEnvironment。
+        process.environment = LyrimusePaths.engineProcessEnvironment()
+        process.arguments = ["spotify-artist-bio", id]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        do { try process.run() } catch { return nil }
+        // 只读本机文件,几百毫秒内完事;10 秒兜底防卡死。
+        let watchdog = DispatchWorkItem { if process.isRunning { process.terminate() } }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 10, execute: watchdog)
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        watchdog.cancel()
+        guard process.terminationStatus == 0,
+              let map = try? JSONSerialization.jsonObject(with: data) as? [String: String] else { return nil }
+        return map["bio"] ?? ""
     }
 
     // MARK: - Last.fm

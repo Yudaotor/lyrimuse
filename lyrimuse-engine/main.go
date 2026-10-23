@@ -107,6 +107,11 @@ func main() {
 		runArtistAvatarsCLI(os.Args[2:])
 		return
 	}
+	// `lyrimuse-engine spotify-artist-bio <歌手 ID>`:Spotify 本机缓存里的歌手简介,给 App 的歌手简介卡(见 spotifyartistbio.go)。
+	if len(os.Args) > 1 && os.Args[1] == "spotify-artist-bio" {
+		runSpotifyArtistBioCLI(os.Args[2:])
+		return
+	}
 	// `lyrimuse-engine backfill-lastfm [-dry-run]`:把本地收听日志里还没提交过的收听补到
 	// Last.fm(见 backfillcli.go / backfill.go)。跟上面几个一样是一次性子命令。
 	if len(os.Args) > 1 && os.Args[1] == "backfill-lastfm" {
