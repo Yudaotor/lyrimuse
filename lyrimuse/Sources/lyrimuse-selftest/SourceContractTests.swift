@@ -5309,9 +5309,8 @@ func runSourceContractIdentityTests() {
                         && notchController.contains("if AppSettings.shared.notchFollowsActiveScreen && !AppSettings.shared.notchAllScreens {")
                         && notchController.contains("self?.refreshFullScreenCover()\n                    self?.syncActiveScreenTracking()"), true,
                     "灵动岛跟随当前窗口: 主实例盯焦点屏(跟全部屏幕互斥、藏着时不盯),targetScreen 贴跟到的那块,插拔屏幕重判")
-        expectEqual(stripComments(code("MenuBar/MenuBarStatusItem.swift")).contains("NotchFollowedScreen.shared.$id.map { _ in () }")
-                        && stripComments(code("UI/NotchEditorStage.swift")).contains("NotchFollowedScreen.shared.$id.removeDuplicates().map { _ in () }"),
-                    true, "灵动岛跟随当前窗口: 跟到的屏换了,菜单栏正中和编辑台预览跟着重排")
+        expectEqual(stripComments(code("UI/NotchEditorStage.swift")).contains("NotchFollowedScreen.shared.$id.removeDuplicates().map { _ in () }"),
+                    true, "灵动岛跟随当前窗口: 跟到的屏换了,编辑台预览跟着重排")
         let notchStage = stripComments(code("UI/NotchEditorStage.swift"))
         expectEqual(notchStage.contains("(Self.followActiveTag, L10n.t(\"跟随当前窗口\"))")
                         && notchStage.contains("if settings.notchFollowsActiveScreen != follows {")

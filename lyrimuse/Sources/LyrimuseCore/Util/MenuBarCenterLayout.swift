@@ -16,17 +16,14 @@ public enum MenuBarCenterLayout {
     /// 读不到菜单栏高度时的兜底(菜单栏自动隐藏、全屏 Space 里 `visibleFrame` 顶到屏幕上沿),跟灵动岛同一个数。
     public static let fallbackMenuBarHeight: CGFloat = 24
 
-    /// 一块屏能不能放居中歌词。
+    /// 一块屏能不能放居中歌词。灵动岛在不在这块屏上不管:开着灵动岛也照放,被它盖住的那一截就看不见(06 章决策 65)。
     public struct ScreenCandidate: Equatable, Sendable {
-        /// 灵动岛在这块屏上(它占着菜单栏正中和刘海两侧)。
-        public let islandHere: Bool
         /// 这块屏有自己常驻的菜单栏(`showsMenuBar`)。没有时顶上画歌词就是悬在半空。
         public let hasMenuBar: Bool
-        public init(islandHere: Bool, hasMenuBar: Bool = true) {
-            self.islandHere = islandHere
+        public init(hasMenuBar: Bool = true) {
             self.hasMenuBar = hasMenuBar
         }
-        var usable: Bool { hasMenuBar && !islandHere }
+        var usable: Bool { hasMenuBar }
     }
 
     /// 这块屏此刻顶上常驻着一条菜单栏:关了「显示器具有单独的空间」时只有主屏有;菜单栏设成自动隐藏(或此刻被收起)时
@@ -46,8 +43,8 @@ public enum MenuBarCenterLayout {
         case specific(Int?)
     }
 
-    /// 放哪几块屏(按下标,升序)。灵动岛占着的、没有菜单栏的屏不算;空 = 一块都不放,歌词照旧在图标旁。
-    /// 指定的屏接着但不能用(灵动岛在那儿)时也是空,不挪到别的屏。
+    /// 放哪几块屏(按下标,升序)。没有常驻菜单栏的屏不算;空 = 一块都不放,歌词照旧在图标旁。
+    /// 指定的屏接着但不能用时也是空,不挪到别的屏。
     public static func pickScreens(_ candidates: [ScreenCandidate], choice: ScreenChoice) -> [Int] {
         switch choice {
         case .all:

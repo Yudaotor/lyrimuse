@@ -1215,6 +1215,7 @@
 "所有已启用的歌词源请求均失败，可能是网络连接问题，并不代表这首歌曲无歌词。请检查网络后点按下方的「重试」" = "None of the enabled lyrics sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below";
 "所有歌词源均无法连接" = "None of the lyrics sources could be reached";
 "所有链接、参数和设置页路径" = "Every link, parameter and settings path";
+"所选屏幕没有常驻的菜单栏，歌词仍显示在图标旁" = "The selected display has no menu bar that stays visible, so lyrics stay beside the icon";
 "所选条目" = "Selected Entry";
 "所选条目无逐字时间轴" = "The selected entry has no word timing";
 "手动" = "Manual";
@@ -1975,7 +1976,6 @@
 "演唱：%@" = "by %@";
 "灵动岛" = "Notch";
 "灵动岛、菜单栏和触控栏歌词在播放时显示" = "Notch, menu bar and Touch Bar lyrics show up during playback";
-"灵动岛占着菜单栏中间，歌词仍显示在图标旁" = "Notch Lyrics are using the middle of the menu bar, so lyrics stay beside the icon";
 "灵动岛和菜单栏歌词在播放时显示" = "Notch and menu bar lyrics show up during playback";
 "灵动岛宽度" = "Notch Card Width";
 "灵动岛展开宽度" = "Notch Card Expanded Width";
@@ -2246,7 +2246,7 @@
 "菜单栏歌词" = "Menu Bar Lyrics";
 "菜单栏歌词的字重。「常规」即系统菜单栏的默认字重；中文只加粗不加宽，英文字重越大宽度略增" = "How heavy the menu bar lyrics are drawn. Regular is exactly the system default weight. Chinese only gets bolder, Latin text also gets slightly wider";
 "菜单栏正中" = "Menu Bar Center";
-"菜单栏正中：歌词显示在菜单栏中间，避开 App 菜单、右侧图标和刘海。开着灵动岛时仍显示在图标旁" = "Menu Bar Center: lyrics appear in the middle of the menu bar, clear of app menus, the icons on the right and the notch. With Notch Lyrics on, they stay beside the icon";
+"菜单栏正中：歌词显示在菜单栏中间，避开 App 菜单、右侧图标和刘海" = "Menu Bar Center: lyrics appear in the middle of the menu bar, clear of app menus, the icons on the right and the notch";
 "落后 %d 分" = "Behind by %d";
 "薄" = "Thin";
 "行上按 %1$@ 次计，明细合计 %2$@ 次" = "The row counts %1$@, the breakdown totals %2$@";

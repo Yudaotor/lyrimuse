@@ -52849,29 +52849,6 @@
         }
       }
     },
-    "灵动岛占着菜单栏中间，歌词仍显示在图标旁" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notch Lyrics are using the middle of the menu bar, so lyrics stay beside the icon"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "灵动岛占着菜单栏中间，歌词仍显示在图标旁"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "動態島佔用選單列中間，歌詞仍顯示在圖像旁"
-          }
-        }
-      }
-    },
     "未获得「辅助功能」权限，可能会盖住 App 菜单" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -52914,29 +52891,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未填寫時不使用代理"
-          }
-        }
-      }
-    },
-    "菜单栏正中：歌词显示在菜单栏中间，避开 App 菜单、右侧图标和刘海。开着灵动岛时仍显示在图标旁" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Menu Bar Center: lyrics appear in the middle of the menu bar, clear of app menus, the icons on the right and the notch. With Notch Lyrics on, they stay beside the icon"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "菜单栏正中：歌词显示在菜单栏中间，避开 App 菜单、右侧图标和刘海。开着灵动岛时仍显示在图标旁"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "選單列正中：歌詞顯示在選單列中間，避開 App 選單、右側圖像和瀏海。開著動態島時仍顯示在圖像旁"
           }
         }
       }
@@ -55122,6 +55076,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Android"
+          }
+        }
+      }
+    },
+    "所选屏幕没有常驻的菜单栏，歌词仍显示在图标旁" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The selected display has no menu bar that stays visible, so lyrics stay beside the icon"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所选屏幕没有常驻的菜单栏，歌词仍显示在图标旁"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所選螢幕沒有常駐的選單列，歌詞仍顯示在圖像旁"
+          }
+        }
+      }
+    },
+    "菜单栏正中：歌词显示在菜单栏中间，避开 App 菜单、右侧图标和刘海" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Menu Bar Center: lyrics appear in the middle of the menu bar, clear of app menus, the icons on the right and the notch"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "菜单栏正中：歌词显示在菜单栏中间，避开 App 菜单、右侧图标和刘海"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選單列正中：歌詞顯示在選單列中間，避開 App 選單、右側圖像和瀏海"
           }
         }
       }

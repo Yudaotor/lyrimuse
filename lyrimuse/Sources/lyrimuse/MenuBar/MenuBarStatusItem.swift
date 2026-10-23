@@ -195,16 +195,11 @@ final class MenuBarStatusItem: NSObject {
         // 了但格子没变宽",歌词右边被挤出去(见 present 头注两条铁律)。
         settings.$menuBarLyricsIconPosition.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        // 「菜单栏正中」:位置本身、能不能用(灵动岛占着哪块屏、插拔显示器)、两侧让多少(前台 App 的菜单、
+        // 「菜单栏正中」:位置本身、能不能用(插拔显示器)、两侧让多少(前台 App 的菜单、
         // 状态栏图标)变了都要重摆。
         settings.$menuBarLyricsPlacement.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         settings.$menuBarCenterScreen.dropFirst().receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        Publishers.Merge5(settings.$notchOverlayEnabled.map { _ in () }, settings.$notchAllScreens.map { _ in () },
-                          settings.$notchScreenID.map { _ in () }, settings.$notchFollowsActiveScreen.map { _ in () },
-                          NotchFollowedScreen.shared.$id.map { _ in () })
-            .dropFirst(5).receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
             .receive(on: DispatchQueue.main)
@@ -1332,11 +1327,10 @@ final class MenuBarStatusItem: NSObject {
         let upcomingW = upcomingLineSlotWidth(isPlaceholder: placeholderNow)
 
         // 「菜单栏正中」:有能用的屏时歌词画进那几块屏正中的窗口,状态栏这一格只留图标(那一格的槽宽规则、节流都不涉及)。
-        // 一块能用的屏都没有(灵动岛占着、选的那块被占)时整段跳过,照旧走下面状态栏那一格。
+        // 一块能用的屏都没有(菜单栏不常驻)时整段跳过,照旧走下面状态栏那一格。
         let centerWanted = settings.showLyricsInMenuBar && settings.menuBarLyricsPlacement == .screenCenter
         let centerScreens = centerWanted ? MenuBarCenterLyrics.targetScreens() : []
-        // 两侧读数只在真有屏要放、有词要显示(或还摆着)、屏幕亮着时才扫:灵动岛占着唯一能用的屏、暂停几个小时、
-        // 锁屏都不白扫。停下时读数留着,再开就按它先摆、后台补读一轮再校正。
+        // 两侧读数只在真有屏要放、有词要显示(或还摆着)、屏幕亮着时才扫:暂停几个小时、锁屏都不白扫。停下时读数留着,再开就按它先摆、后台补读一轮再校正。
         MenuBarOccupancy.shared.setActive(
             !centerScreens.isEmpty && !screensHidden && (lyricsActive || centerLyrics.isShowing))
         if !centerScreens.isEmpty {

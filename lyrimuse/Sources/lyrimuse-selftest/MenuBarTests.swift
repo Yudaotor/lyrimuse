@@ -1676,9 +1676,8 @@ func runMenuBarTests() {
     // ---- 菜单栏正中:落在哪块屏、哪一段(06 章「菜单栏正中」) ----
     do {
         typealias L = MenuBarCenterLayout
-        let plain = L.ScreenCandidate(islandHere: false)
-        let island = L.ScreenCandidate(islandHere: true)
-        let noBar = L.ScreenCandidate(islandHere: false, hasMenuBar: false)
+        let plain = L.ScreenCandidate()
+        let noBar = L.ScreenCandidate(hasMenuBar: false)
         expectEqual(L.showsMenuBar(separateSpaces: true, isPrimary: false, frameMaxY: 1080, visibleFrameMaxY: 1055), true,
                     "正中选屏: 单独空间开着时副屏也有菜单栏")
         expectEqual(L.showsMenuBar(separateSpaces: false, isPrimary: false, frameMaxY: 1080, visibleFrameMaxY: 1055), false,
@@ -1686,16 +1685,20 @@ func runMenuBarTests() {
         expectEqual(L.showsMenuBar(separateSpaces: true, isPrimary: true, frameMaxY: 1080, visibleFrameMaxY: 1080), false,
                     "正中选屏: 菜单栏自动隐藏(visibleFrame 顶到上沿)时不算有菜单栏,歌词不悬在别的窗口上")
         expectEqual(L.pickScreens([plain, plain, plain], choice: .all), [0, 1, 2], "正中选屏: 全部屏幕每块各放一扇")
-        expectEqual(L.pickScreens([island, plain, noBar], choice: .all), [1],
-                    "正中选屏: 全部屏幕跳过灵动岛占着的、没有菜单栏的")
+        expectEqual(L.pickScreens([noBar, plain, noBar], choice: .all), [1],
+                    "正中选屏: 全部屏幕跳过没有菜单栏的")
         expectEqual(L.pickScreens([plain, plain], choice: .auto), [0], "正中选屏: 自动用主屏")
-        expectEqual(L.pickScreens([island, plain], choice: .auto), [1], "正中选屏: 自动时主屏被灵动岛占着换下一块")
+        expectEqual(L.pickScreens([noBar, plain], choice: .auto), [1], "正中选屏: 自动时主屏没有菜单栏换下一块")
         expectEqual(L.pickScreens([plain, plain], choice: .specific(1)), [1], "正中选屏: 指定哪块放哪块")
-        expectEqual(L.pickScreens([plain, island], choice: .specific(1)), [], "正中选屏: 指定的屏被灵动岛占着不挪到别的屏")
-        expectEqual(L.pickScreens([island, plain], choice: .specific(nil)), [1], "正中选屏: 指定的屏没接着按自动")
+        expectEqual(L.pickScreens([plain, noBar], choice: .specific(1)), [], "正中选屏: 指定的屏没有菜单栏不挪到别的屏")
+        expectEqual(L.pickScreens([noBar, plain], choice: .specific(nil)), [1], "正中选屏: 指定的屏没接着按自动")
         expectEqual(L.pickScreens([plain], choice: .specific(3)), [], "正中选屏: 下标越界不放")
-        expectEqual(L.pickScreens([island], choice: .all).isEmpty && L.pickScreens([], choice: .auto).isEmpty, true,
-                    "正中选屏: 灵动岛占着唯一的屏时不放正中")
+        expectEqual(L.pickScreens([noBar], choice: .all).isEmpty && L.pickScreens([], choice: .auto).isEmpty, true,
+                    "正中选屏: 唯一的屏没有菜单栏时不放正中")
+        let center = (try? String(contentsOfFile: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/MenuBar/MenuBarCenterLyrics.swift").path, encoding: .utf8)) ?? ""
+        expectEqual(!center.isEmpty && !center.contains("notchOverlayEnabled") && !center.contains("NotchLyricsWindowController"), true,
+                    "正中选屏: 开着灵动岛也照放,不看灵动岛在哪块屏")
 
         let span = L.usableSpan(screenMinX: 0, screenMaxX: 1440, menusMaxX: 400, statusItemsMinX: 1000)
         expectEqual(span, 416...984, "正中区间: 两侧各让出 clearance")

@@ -1040,7 +1040,7 @@ Every setting in the Settings window, by where it lives: 290 in all. Type a name
 ### Lyrics Display › Menu Bar › Layout
 
 - **What's Shown**
-- **Lyrics Position**: Menu Bar Center: lyrics appear in the middle of the menu bar, clear of app menus, the icons on the right and the notch. With Notch Lyrics on, they stay beside the icon
+- **Lyrics Position**: Menu Bar Center: lyrics appear in the middle of the menu bar, clear of app menus, the icons on the right and the notch
 - **Display**
 - **Width Mode**: Fixed: every song uses the set width. Adaptive: each song gets its own width from its lyrics, up to the set width
 - **Alignment**

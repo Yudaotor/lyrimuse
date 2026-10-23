@@ -350,12 +350,9 @@ final class MenuBarCenterLyrics {
     static func targetScreens() -> [NSScreen] {
         let screens = NSScreen.screens
         let settings = AppSettings.shared
-        let islandScreen: NSScreen? = settings.notchOverlayEnabled && !settings.notchAllScreens
-            ? NotchLyricsWindowController.targetScreen() : nil
         let separateSpaces = NSScreen.screensHaveSeparateSpaces
         let candidates = screens.enumerated().map { index, screen in
             MenuBarCenterLayout.ScreenCandidate(
-                islandHere: settings.notchOverlayEnabled && (settings.notchAllScreens || screen == islandScreen),
                 hasMenuBar: MenuBarCenterLayout.showsMenuBar(
                     separateSpaces: separateSpaces, isPrimary: index == 0,
                     frameMaxY: screen.frame.maxY, visibleFrameMaxY: screen.visibleFrame.maxY))
