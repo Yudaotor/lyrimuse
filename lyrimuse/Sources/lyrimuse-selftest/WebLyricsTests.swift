@@ -434,7 +434,9 @@ func runWebLyricsTests() {
         expectEqual(sourceHas(screenSource, "case .phoneStacked: return .column")
                         && sourceHas(screenSource, "height: WebLyricsPlayerPane.columnHeight(width: side))")
                         && sourceHas(screenSource, "let top = phoneStackedPaneRect.maxY + 16")
-                        && sourceHas(screenSource, "let total = Self.columnHeight(width: w)"), true,
+                        && sourceHas(screenSource, "let total = Self.columnHeight(width: w)")
+                        && sourceHas(screenSource, "centered: arrangement == .phoneStacked, wordRise: true,")
+                        && sourceHas(screenSource, "showsScrollIndicator: arrangement != .phoneStacked,"), true,
                     "网页歌词: 手机竖放顶上那一块用歌词窗口左栏那一列,块高和那一列整组高同一个函数,歌词从它下面开始")
         expectEqual(arrangement(640, 640), .columns, "网页歌词: 正方形按横着算(高大于宽才算竖)")
         let laptop = WebLyricsViewport(query: ["w": "1512", "h": "900", "dpr": "2"])
