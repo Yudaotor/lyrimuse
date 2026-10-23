@@ -310,6 +310,27 @@ func runIdlePageTests() {
         expectEqual(P.spotifyArtistID(fromPage: URL(string: "https://example.com/artist/72NhFAGG5Pt91VbheJeEPG")), nil,
                     "别的站点不认")
         expectEqual(P.spotifyArtistID(fromPage: nil), nil, "没有歌手页")
+        do {
+            typealias K = KuwoEditorialInfo
+            expectEqual(K.songID(fromSongPage: URL(string: "https://www.kuwo.cn/play_detail/359236703")), "359236703", "酷我歌曲页 → 曲目 id")
+            expectEqual(K.songID(fromSongPage: URL(string: "https://www.kuwo.cn/album_detail/50024405")), nil, "酷我专辑页不当歌曲页")
+            expectEqual(K.songID(fromSongPage: URL(string: "https://example.com/play_detail/1")), nil, "别的站点不认")
+            let dc = #"[{"id":"359236703","name":"LIKE THAT","artistid":"12261004","albumid":"50024405"},{"id":"1","albumid":"0"}]"#
+            expectEqual(K.ids(fromDatacenter: Data(dc.utf8), songID: "359236703"), K.IDs(albumID: "50024405", artistID: "12261004"),
+                        "酷我数据中心: 按曲目 id 取专辑 id、歌手 id")
+            expectEqual(K.ids(fromDatacenter: Data(dc.utf8), songID: "1"), K.IDs(albumID: nil, artistID: nil), "酷我数据中心: id 是 0 当没有")
+            expectEqual(K.ids(fromDatacenter: Data(dc.utf8), songID: "2"), K.IDs(albumID: nil, artistID: nil), "酷我数据中心: 没有这首 → 都没有")
+            expectEqual(K.ids(fromDatacenter: Data("<html>".utf8), songID: "1") == nil, true, "酷我数据中心: 解不开 → 没问成")
+            let info = #"{'albumid':'50024405','info':'作为全球游戏规则改变者\n\n发行了《Stuck&nbsp;In&nbsp;The&nbsp;Middle》\'先行曲\' &amp; &#x4E2D;&#25991;','name':'x'}"#
+            expectEqual(K.info(fromResponse: Data(info.utf8)), "作为全球游戏规则改变者\n\n发行了《Stuck In The Middle》'先行曲' & 中文",
+                        "酷我简介: 转义换行、实体还原、单引号转义")
+            expectEqual(K.info(fromResponse: Data(#"{'info':'','name':'x'}"#.utf8)), "", "酷我简介: 空的是没有")
+            expectEqual(K.info(fromResponse: Data("forbidden".utf8)) == nil, true, "酷我简介: 没有 info → 没问成")
+            expectEqual(K.infoURL(.artist, id: "12261004")?.absoluteString, "https://search.kuwo.cn/r.s?stype=artistinfo&artistid=12261004",
+                        "酷我简介: 歌手地址")
+            expectEqual(K.infoURL(.album, id: "abc") == nil, true, "酷我简介: id 不是数字不拼")
+            expectEqual(K.decodeEntities("A &unknown; B &amp"), "A &unknown; B &amp", "酷我简介: 认不出的实体原样留着")
+        }
         expectEqual(P.youtubeMusicAlbumURL(browseID: "MPREb_OUh6Wf3kq7x")?.absoluteString,
                     "https://music.youtube.com/browse/MPREb_OUh6Wf3kq7x", "YouTube Music 专辑页 URL")
         expectEqual(P.youtubeMusicArtistURL(channelID: "UCZONOh3FvcD-a_b")?.absoluteString,

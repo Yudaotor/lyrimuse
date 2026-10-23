@@ -1587,8 +1587,8 @@ func runCoverArtTests() {
         expectEqual(sourceHas(store, "Self.logger.debug(\"siblings: enrich cache not loaded yet\")\n            artist = nil\n            return"), true,
                     "简介兜底契约: enrich 缓存还没加载好不算「没有」,不退 Last.fm")
         expectEqual(sourceHas(store, "if let attribution = card.source.attribution {\n                Text(attribution)")
-                    && sourceHas(store, "case .appleMusic: return nil\n            case .lastfm: return L10n.t(\"来自 Last.fm\")\n            case .netease: return L10n.t(\"来自网易云音乐\")\n            case .qqMusic: return L10n.t(\"来自 QQ 音乐\")\n            case .soda: return L10n.t(\"来自汽水音乐\")\n            case .spotify: return L10n.t(\"来自 Spotify\")\n            case .youtubeMusic: return L10n.t(\"来自维基百科\")"),
-                    true, "简介兜底契约: Last.fm(CC BY-SA)、网易云、QQ 音乐、汽水、Spotify 的卡片注明出处,YouTube Music 那一路注明维基百科,Apple Music 的不注")
+                    && sourceHas(store, "case .appleMusic: return nil\n            case .kuwo: return L10n.t(\"来自酷我音乐\")\n            case .lastfm: return L10n.t(\"来自 Last.fm\")\n            case .netease: return L10n.t(\"来自网易云音乐\")\n            case .qqMusic: return L10n.t(\"来自 QQ 音乐\")\n            case .soda: return L10n.t(\"来自汽水音乐\")\n            case .spotify: return L10n.t(\"来自 Spotify\")\n            case .youtubeMusic: return L10n.t(\"来自维基百科\")"),
+                    true, "简介兜底契约: Last.fm(CC BY-SA)、网易云、QQ 音乐、汽水、Spotify、酷我的卡片注明出处,YouTube Music 那一路注明维基百科,Apple Music 的不注")
         expectEqual(service.contains("return await requestDetailed(method: method, cred: cred, extra: extra, priority: .interactive)"), true,
                     "简介兜底契约: 查询走 LastfmStatsService 那条带限速与退避的通道")
     }
@@ -1679,8 +1679,11 @@ func runCoverArtTests() {
         let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let store = (try? String(contentsOf: ui.appendingPathComponent("lyrimuse/UI/EditorialNotes.swift"), encoding: .utf8)) ?? ""
         for (needle, label) in [
-            ("? [.soda, .netease, .spotify, .youtubeMusic, .lastfm] : [.spotify, .youtubeMusic, .lastfm]",
-             "中文界面汽水、网易云、Spotify、YouTube Music 排在 Last.fm 前面,别的界面不问汽水和网易云"),
+            ("? [.soda, .netease, .kuwo, .spotify, .youtubeMusic, .lastfm] : [.spotify, .youtubeMusic, .lastfm]",
+             "中文界面汽水、网易云、酷我、Spotify、YouTube Music 排在 Last.fm 前面,别的界面不问汽水、网易云和酷我"),
+            ("case (.kuwo, .album): kuwoIntro(.album, track, then: next)\n        case (.kuwo, .artist): kuwoIntro(.artist, track, then: next)",
+             "专辑、歌手都有酷我这一路"),
+            ("guard let songID = KuwoEditorialInfo.songID(fromSongPage: links?.kuwoSong),", "酷我只按缓存里的酷我歌曲页问,不按名字搜"),
             ("case (.spotify, .artist): spotifyArtist(track, then: next)", "歌手有 Spotify 这一路(本机缓存)"),
             ("guard let id = PlatformLinks.spotifyArtistID(fromPage: links?.spotifyArtist) else { return then(nil) }",
              "Spotify 歌手只按缓存里的歌手 ID 问,不按名字搜"),
@@ -1756,7 +1759,7 @@ func runCoverArtTests() {
             ("order = QQSongInfo.isUsable(uiLanguage: language) ? [.qqMusic, .lastfm] : [.lastfm]", "中文界面 QQ 排在 Last.fm 前面,别的界面不问 QQ"),
             ("case (.qqMusic, .song): qqSong(track, then: next)", "歌曲有 QQ 这一路"),
             ("case (.lastfm, .song): lastfmSong(track, then: next)", "歌曲有 Last.fm 这一路"),
-            ("case (.netease, .song), (.soda, .song), (.youtubeMusic, .song), (.qqMusic, .album), (.qqMusic, .artist),\n             (.spotify, .album), (.spotify, .song), (.appleMusic, _):\n            fallback(kind, track, via: sources.dropFirst())",
+            ("case (.netease, .song), (.soda, .song), (.youtubeMusic, .song), (.qqMusic, .album), (.qqMusic, .artist),\n             (.spotify, .album), (.spotify, .song), (.kuwo, .song), (.appleMusic, _):\n            fallback(kind, track, via: sources.dropFirst())",
              "某一类在某个来源上没有就直接问下一个"),
             ("guard let mid = links?.qqSong.flatMap({ PlatformLinks.qqSongMID(songPage: $0.absoluteString) }) else { return then(nil) }",
              "QQ 只按缓存里这首的歌曲页问(搜索页兜底不算),没有就交给下一个来源"),

@@ -20,14 +20,15 @@ struct EditorialCard: Equatable, Codable {
     }
 
     /// 正文从哪来。Last.fm 的是 CC BY-SA 授权的用户百科,YouTube Music 给的是维基百科条目(同样 CC BY-SA),网易云、QQ 音乐、
-    /// 汽水音乐、Spotify 的是它们家的介绍,这几种卡片底部都注明出处。
+    /// 汽水音乐、Spotify、酷我音乐的是它们家的介绍,这几种卡片底部都注明出处。
     enum Source: Equatable, Codable {
-        case appleMusic, lastfm, netease, qqMusic, soda, spotify, youtubeMusic
+        case appleMusic, kuwo, lastfm, netease, qqMusic, soda, spotify, youtubeMusic
 
         /// 卡片底部那一行出处;Apple Music 的不注明。YouTube Music 那一路的正文是维基百科的,注明维基百科。
         var attribution: String? {
             switch self {
             case .appleMusic: return nil
+            case .kuwo: return L10n.t("来自酷我音乐")
             case .lastfm: return L10n.t("来自 Last.fm")
             case .netease: return L10n.t("来自网易云音乐")
             case .qqMusic: return L10n.t("来自 QQ 音乐")
@@ -344,8 +345,8 @@ final class EditorialNotesStore: ObservableObject {
 
     // MARK: - 兜底(Apple Music 明确没有时)
 
-    /// Apple Music 明确没有这张专辑 / 这位歌手的简介:中文界面依次问汽水、网易云、Spotify、YouTube Music、Last.fm;别的界面问
-    /// Spotify、YouTube Music、Last.fm(汽水、网易云的介绍只有中文,`NeteaseEditorialInfo.isUsable`;YouTube Music 按界面语言给;
+    /// Apple Music 明确没有这张专辑 / 这位歌手的简介:中文界面依次问汽水、网易云、酷我、Spotify、YouTube Music、Last.fm;别的界面问
+    /// Spotify、YouTube Music、Last.fm(汽水、网易云、酷我的介绍只有中文,`NeteaseEditorialInfo.isUsable`;YouTube Music 按界面语言给;
     /// Spotify 只有歌手、只在本机缓存里有,见 `spotifyArtist`)。
     /// 歌曲简介没有 Apple 那一档:中文界面先问 QQ 音乐、
     /// 再问 Last.fm;别的界面只问 Last.fm(QQ 的简介同样只有中文)。
@@ -355,7 +356,7 @@ final class EditorialNotesStore: ObservableObject {
         switch kind {
         case .album, .artist:
             order = NeteaseEditorialInfo.isUsable(uiLanguage: language)
-                ? [.soda, .netease, .spotify, .youtubeMusic, .lastfm] : [.spotify, .youtubeMusic, .lastfm]
+                ? [.soda, .netease, .kuwo, .spotify, .youtubeMusic, .lastfm] : [.spotify, .youtubeMusic, .lastfm]
         case .song:
             order = QQSongInfo.isUsable(uiLanguage: language) ? [.qqMusic, .lastfm] : [.lastfm]
         }
@@ -389,11 +390,74 @@ final class EditorialNotesStore: ObservableObject {
         case (.youtubeMusic, .album): youtubeMusicAlbum(track, then: next)
         case (.youtubeMusic, .artist): youtubeMusicArtist(track, then: next)
         case (.spotify, .artist): spotifyArtist(track, then: next)
-        // 这一类在这个来源上没有(网易云、汽水、YouTube Music 不给单曲写介绍,QQ 这一路只问歌曲,Spotify 本机只有歌手简介),
+        case (.kuwo, .album): kuwoIntro(.album, track, then: next)
+        case (.kuwo, .artist): kuwoIntro(.artist, track, then: next)
+        // 这一类在这个来源上没有(网易云、汽水、YouTube Music、酷我不给单曲写介绍,QQ 这一路只问歌曲,Spotify 本机只有歌手简介),
         // Apple Music 在兜底链之前就问过了。
         case (.netease, .song), (.soda, .song), (.youtubeMusic, .song), (.qqMusic, .album), (.qqMusic, .artist),
-             (.spotify, .album), (.spotify, .song), (.appleMusic, _):
+             (.spotify, .album), (.spotify, .song), (.kuwo, .song), (.appleMusic, _):
             fallback(kind, track, via: sources.dropFirst())
+        }
+    }
+
+    // MARK: - 酷我
+
+    /// 酷我的专辑、歌手介绍:按这首的酷我歌曲页(洛雪里来自酷我的歌才有,`PlatformLinks.kuwoSong`)换专辑 / 歌手 id 再取
+    /// (`KuwoEditorialInfo`),不按名字搜。id 按曲目记,介绍按专辑 / 歌手 id 记,"" = 酷我没有。见 05 章决策 92。
+    private let kuwoIDs = EditorialMemo<String, KuwoEditorialInfo.IDs>("kuwo-ids")
+    private let kuwoInfos = EditorialMemo<String, String>("kuwo", missing: { $0.isEmpty })
+    private var kuwoInFlight: Set<String> = []
+
+    private func kuwoIntro(_ kind: KuwoEditorialInfo.Kind, _ track: Track, then: @escaping (EditorialCard?) -> Void) {
+        let links = EnrichCacheReader.platformLinks(artist: track.artist, title: track.title, album: track.album)
+        guard let songID = KuwoEditorialInfo.songID(fromSongPage: links?.kuwoSong),
+              kind == .artist || !track.album.isEmpty else { return then(nil) }
+        withKuwoIDs(songID, for: track) { [weak self] ids in
+            guard let self, let id = kind == .album ? ids.albumID : ids.artistID else { return then(nil) }
+            self.withKuwoInfo(kind, id: id, for: track) { text in
+                guard !text.isEmpty else { return then(nil) }
+                then(kind == .album
+                     ? EditorialCard(kind: .album, title: track.album, subtitle: track.artist, facts: [], text: text, source: .kuwo)
+                     : EditorialCard(kind: .artist, title: track.artist, subtitle: "", facts: [], text: text, source: .kuwo))
+            }
+        }
+    }
+
+    /// 这首在酷我的专辑 id、歌手 id:记过就地回调;没有就问一次。回来时已经换歌,按当前曲目重查。
+    private func withKuwoIDs(_ songID: String, for track: Track, _ body: @escaping (KuwoEditorialInfo.IDs) -> Void) {
+        if let known = kuwoIDs.value(songID) { return body(known) }
+        let flight = "ids:" + songID
+        guard !kuwoInFlight.contains(flight) else { return }
+        kuwoInFlight.insert(flight)
+        Task { [weak self] in
+            let fetched = await Task.detached(priority: .utility) { await KuwoEditorialInfo.fetchIDs(songID: songID) }.value
+            guard let self else { return }
+            self.kuwoInFlight.remove(flight)
+            guard let fetched else { return }
+            self.kuwoIDs[songID] = .some(fetched)
+            guard self.currentKey == track.key else { return self.refreshCurrent() }
+            body(fetched)
+        }
+    }
+
+    /// 专辑 / 歌手的介绍:记过就地回调;没有就问一次,繁体界面转成繁体。回来时已经换歌,按当前曲目重查。
+    private func withKuwoInfo(_ kind: KuwoEditorialInfo.Kind, id: String, for track: Track, _ body: @escaping (String) -> Void) {
+        let key = (kind == .album ? "album:" : "artist:") + id
+        if let known = kuwoInfos[key] { return body(known ?? "") }
+        guard !kuwoInFlight.contains(key) else { return }
+        kuwoInFlight.insert(key)
+        let language = L10n.current
+        Self.logger.notice("kuwo intro \(key, privacy: .public)")
+        Task { [weak self] in
+            let fetched = await Task.detached(priority: .utility) { await KuwoEditorialInfo.fetchInfo(kind, id: id) }.value
+            guard let self else { return }
+            self.kuwoInFlight.remove(key)
+            guard let fetched else { return }
+            let text = KuwoEditorialInfo.localized(fetched, uiLanguage: language)
+            self.kuwoInfos[key] = .some(text)
+            Self.logger.notice("kuwo intro \(key, privacy: .public): \(text.isEmpty ? "none" : "\(text.count) chars", privacy: .public)")
+            guard self.currentKey == track.key else { return self.refreshCurrent() }
+            body(text)
         }
     }
 
