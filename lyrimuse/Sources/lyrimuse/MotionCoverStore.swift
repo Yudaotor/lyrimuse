@@ -6,9 +6,10 @@ import OSLog
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "motion-cover")
 
-/// Apple Music 动态封面的**下载与落盘**。
+/// 动态封面的**下载与落盘**:Apple Music 的(HLS master),以及 QQ 音乐的专辑动态封面(`qqmv:<vid>`,下载时现换 mp4 地址,
+/// 见 `QQMotionCover`)。
 ///
-/// 分工:发现在引擎(`motioncover.go`,把 master m3u8 记进 enrich 缓存)、清单推导在 Core
+/// 分工:发现在引擎(`motioncover.go`、`motioncoverqq.go`,把地址记进 enrich 缓存)、清单推导在 Core
 /// (`MotionCoverManifest`,纯函数、selftest 钉着)、播放在 `MotionCoverLayer`,这一层只干三件事:
 /// 拼出该下哪个文件、把它下下来、按 LRU 管住磁盘。
 ///
@@ -194,6 +195,9 @@ final class MotionCoverStore {
     private static let maxCandidateAttempts = 3
 
     private nonisolated func download(master: URL, reference: CoverFingerprint.Reference?) async -> DownloadOutcome {
+        if let vid = QQMotionCover.vid(from: master) {
+            return await downloadQQ(vid: vid, master: master, reference: reference)
+        }
         // ① master → 按顺序排好的候选档位。
         let variants: [MotionCoverManifest.Variant]
         do {
@@ -221,7 +225,27 @@ final class MotionCoverStore {
         return sawTransient ? .transient : .unavailable
     }
 
-    /// 下一条候选:variant 清单 → 承载全部分片的单文件 → 临时文件 → 终审(或至少解得出帧)→ 落盘。
+    /// QQ 音乐的专辑动态封面:先换 mp4 地址(带签名、几小时就过期,所以每次现换),按清晰度逐档试,同 HLS 那条一样最多 3 条。
+    /// 换地址没问成按网络层失败算(退避后再试);问成了一档都没有算资源取不到。
+    private nonisolated func downloadQQ(vid: String, master: URL, reference: CoverFingerprint.Reference?) async -> DownloadOutcome {
+        guard let urls = await QQMotionCover.fetchCandidates(vid: vid, targetWidth: Self.targetPixelWidth,
+                                                            session: Self.session) else {
+            logger.notice("motion cover: qq video urls not answered")
+            return .transient
+        }
+        var sawTransient = false
+        for url in urls.prefix(Self.maxCandidateAttempts) {
+            switch await fetchMedia(url, master: master, reference: reference, label: "qq") {
+            case .ready(let file): return .ready(file)
+            case .referenceMismatch: return .referenceMismatch
+            case .transient: sawTransient = true
+            case .unavailable: continue
+            }
+        }
+        return sawTransient ? .transient : .unavailable
+    }
+
+    /// 下一条候选:variant 清单 → 承载全部分片的单文件,再交给 `fetchMedia`。
     private nonisolated func fetch(_ picked: MotionCoverManifest.Variant, master: URL,
                                    reference: CoverFingerprint.Reference?) async -> DownloadOutcome {
         let codec = picked.isHEVC ? "hevc" : "h264"
@@ -236,6 +260,17 @@ final class MotionCoverStore {
                 logger.notice("motion cover: \(codec, privacy: .public) variant has no EXT-X-MAP single file")
                 return .unavailable
             }
+            return await fetchMedia(mediaURL, master: master, reference: reference, label: "\(picked.width)px \(codec)")
+        } catch {
+            logger.notice("motion cover: \(codec, privacy: .public) variant fetch failed — \(error.localizedDescription, privacy: .public)")
+            return error is URLError ? .transient : .unavailable
+        }
+    }
+
+    /// 一个 mp4 → 临时文件 → 终审(或至少解得出帧)→ 落盘(按 master 定文件名)。`label` 只进日志。
+    private nonisolated func fetchMedia(_ mediaURL: URL, master: URL, reference: CoverFingerprint.Reference?,
+                                        label codec: String) async -> DownloadOutcome {
+        do {
             // ③ 整份下下来,先落到临时文件——终审(④)要用 AVAsset 读它,得是个真实文件路径,
             // 不是内存里的 Data。落地在系统临时目录,不是最终缓存位置:没通过终审就地删掉,
             // 通过了再原子改名搬进 `directory`(⑤ store)。
@@ -275,7 +310,7 @@ final class MotionCoverStore {
             // 主线程只做一次改名)。
             let final = await MainActor.run { self.fileURL(for: master) }
             try Self.moveIntoPlace(scratch, final: final)
-            logger.info("motion cover: stored \(picked.width, privacy: .public)px \(codec, privacy: .public) \(data.count / 1024, privacy: .public)KB")
+            logger.info("motion cover: stored \(codec, privacy: .public) \(data.count / 1024, privacy: .public)KB")
             await MainActor.run { self.pruneIfNeeded() }
             return .ready(final)
         } catch {
@@ -321,8 +356,9 @@ final class MotionCoverStore {
         let midpoint = CMTime(seconds: duration.seconds * 0.5, preferredTimescale: duration.timescale)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        guard let frame = try? await generator.image(at: midpoint).image else { return .undecidable }
-        let (distance, same) = CoverFingerprint.matches(frame, reference: reference)
+        guard let raw = try? await generator.image(at: midpoint).image else { return .undecidable }
+        // 竖幅的(QQ 动态封面)比中间那块正方形:卡上铺满裁中间,能看到的就是它。
+        let (distance, same) = CoverFingerprint.matches(CoverFingerprint.centerSquare(raw), reference: reference)
         if !same {
             logger.notice("motion cover: mid-video frame distance \(distance, privacy: .public), skipping")
             return .mismatch

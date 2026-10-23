@@ -1233,6 +1233,49 @@ func runCoverArtTests() {
         expectEqual(settingsSource.contains("keeping: PlaybackCoordinator.shared.motionCoverFile)"), true,
                     "动态封面缓存: 清除时留下歌词窗口正在播的那一份")
 
+        // QQ 音乐专辑动态封面(03 章决策 67):`qqmv:<vid>` 下载时现换 mp4 地址,按清晰度排档;竖幅那一帧比中间那块正方形。
+        do {
+            typealias Q = QQMotionCover
+            expectEqual(Q.vid(from: URL(string: "qqmv:013nB0VB44pnzC")!), "013nB0VB44pnzC", "QQ 动态封面: qqmv 地址取出 vid")
+            expectEqual(Q.vid(from: URL(string: "https://example.com/a.m3u8")!), nil, "QQ 动态封面: Apple 的 master 不认")
+            expectEqual(Q.vid(from: URL(string: "qqmv:a/b")!), nil, "QQ 动态封面: vid 形状不对不认")
+            expectEqual(Q.preferenceOrder(targetWidth: 920), [40, 30, 20, 10, 60], "QQ 动态封面: 先不窄于目标的最窄一档,再由宽到窄,最后更宽的")
+            expectEqual(Q.preferenceOrder(targetWidth: 300), [10, 20, 30, 40, 60], "QQ 动态封面: 目标很窄时从最窄起")
+            let answer = """
+            {"code":0,"req":{"code":0,"data":{"V1":{"mp4":[
+            {"filetype":0,"freeflow_url":[]},
+            {"filetype":30,"freeflow_url":["http://opi.stream.tencentmusic.com/x.f120030.mp4?dis_k=a&dis_t=1"]},
+            {"filetype":40,"freeflow_url":["https://opi.stream.tencentmusic.com/x.f140030.mp4?dis_k=b&dis_t=1"]},
+            {"filetype":50,"freeflow_url":[]},
+            {"filetype":60,"freeflow_url":["https://opi.stream.tencentmusic.com/x.f160030.mp4"]}]}}}}
+            """
+            let urls = Q.candidates(fromResponse: Data(answer.utf8), vid: "V1", targetWidth: 920)
+            expectEqual(urls?.map { $0.absoluteString } ?? [], [
+                "https://opi.stream.tencentmusic.com/x.f140030.mp4?dis_k=b&dis_t=1",
+                "https://opi.stream.tencentmusic.com/x.f120030.mp4?dis_k=a&dis_t=1",
+                "https://opi.stream.tencentmusic.com/x.f160030.mp4",
+            ], "QQ 动态封面: 按档排、一律 https、没地址和不认的档跳过")
+            expectEqual(Q.candidates(fromResponse: Data(#"{"code":0,"req":{"code":0,"data":{}}}"#.utf8), vid: "V1", targetWidth: 920),
+                        [], "QQ 动态封面: 问成了但没有这个 vid → 空")
+            expectEqual(Q.candidates(fromResponse: Data(#"{"code":0,"req":{"code":1000}}"#.utf8), vid: "V1", targetWidth: 920) == nil,
+                        true, "QQ 动态封面: 业务码不是 0 → 没问成")
+            expectEqual(storeSource.contains("if let vid = QQMotionCover.vid(from: master) {"), true,
+                        "QQ 动态封面: 下载按 qqmv 地址分到 QQ 那条")
+            expectEqual(storeSource.contains("CoverFingerprint.matches(CoverFingerprint.centerSquare(raw), reference: reference)"), true,
+                        "QQ 动态封面: 终审比中间那块正方形")
+            if let ctx = CGContext(data: nil, width: 30, height: 40, bitsPerComponent: 8, bytesPerRow: 0,
+                                   space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+               let tall = ctx.makeImage() {
+                let sq = CoverFingerprint.centerSquare(tall)
+                expectEqual([sq.width, sq.height], [30, 30], "中间正方形: 3:4 竖幅取 30×30")
+            }
+            if let ctx = CGContext(data: nil, width: 50, height: 50, bitsPerComponent: 8, bytesPerRow: 0,
+                                   space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+               let sq = ctx.makeImage() {
+                expectEqual(CoverFingerprint.centerSquare(sq) === sq, true, "中间正方形: 本来就是正方形原样交回")
+            }
+        }
+
         // variant 清单 → 承载全部分片的那个单文件(EXT-X-MAP 的 URI)。
         let variant = """
         #EXTM3U

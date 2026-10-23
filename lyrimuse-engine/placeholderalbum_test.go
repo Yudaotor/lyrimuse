@@ -196,7 +196,7 @@ func TestMotionVerdictAndPlaceholderWiring(t *testing.T) {
 		t.Error("换上设备封面之后照新封面重核动态封面")
 	}
 	track := body("func trackEnrichment(")
-	if !strings.Contains(track, "} else if motionVerdictStale(e) && !motionRecheckTried[key] && !enrichInflight[key] {") ||
+	if !strings.Contains(track, "} else if (motionVerdictStale(e) || qqMotionCoverUnasked(e)) && !motionRecheckTried[key] && !enrichInflight[key] {") ||
 		!strings.Contains(track, "go recheckPlayingMotionCover(key, title, album)") {
 		t.Error("播到结论作废的歌时重核一次")
 	}

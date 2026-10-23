@@ -115,6 +115,15 @@ public enum CoverFingerprint {
         return c <= croppedMaxDistance ? (c, true) : (d, false)
     }
 
+    /// 不是正方形的取中间那块正方形(QQ 的动态封面是 3:4 竖幅,中间是方形的封面),正方形原样。封面卡按 1:1 铺满裁中间,
+    /// 比的就是卡上能看到的那块。
+    public static func centerSquare(_ image: CGImage) -> CGImage {
+        let side = min(image.width, image.height)
+        guard image.width != image.height, side > 0 else { return image }
+        let rect = CGRect(x: (image.width - side) / 2, y: (image.height - side) / 2, width: side, height: side)
+        return image.cropping(to: rect) ?? image
+    }
+
     /// 取中心那块。裁不出来(尺寸太小)时回 nil,调用方退回整图 —— 那时第二道退化成跟
     /// 第一道同一个结果,不会把"判不了"错当成"同一张"。
     private static func cropBorder(_ image: CGImage) -> CGImage? {

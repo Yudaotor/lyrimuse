@@ -1101,8 +1101,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			enrichInflight[key] = true
 			go upgradeSmallDeviceCover(withPlayerCover(context.Background(), playerCover), key, e.CoverURL,
 				artist, title, album, durationSecs)
-		} else if motionVerdictStale(e) && !motionRecheckTried[key] && !enrichInflight[key] {
-			// 动态封面结论是对着别的封面核的(封面后来换过):按现在这张重核。每个条目每次启动只试一次,没查成的留给后台补封面那一遍。
+		} else if (motionVerdictStale(e) || qqMotionCoverUnasked(e)) && !motionRecheckTried[key] && !enrichInflight[key] {
+			// 动态封面结论是对着别的封面核的(封面后来换过),或者核出「没有」时 QQ 那支还没问过:按现在这张重核。每个条目每次
+			// 启动只试一次,没查成的留给后台补封面那一遍。
 			motionRecheckTried[key] = true
 			enrichInflight[key] = true
 			go recheckPlayingMotionCover(key, title, album)
@@ -3452,7 +3453,7 @@ func recheckMotionCoverAgainstCurrentCover(ctx context.Context, key, title, albu
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	enrichMu.Unlock()
-	if !ok || motionVerdictCurrent(e) {
+	if !ok || (motionVerdictCurrent(e) && !qqMotionCoverUnasked(e)) {
 		return false
 	}
 	had := e.MotionCoverURL != ""
@@ -4030,7 +4031,7 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 // 现在认的专辑给不出动画、而这条原来挂着一段时,再拿那段的首帧跟现在这张封面比一次,还是同一张图就留着它:Apple 链接、
 // 目录锚点会换成同一张专辑的别的版本(标准版 / 加长版),那个版本不一定有动画。
 func (e *enrichEntry) fillMotionCover(ctx context.Context, artist, title, album string) bool {
-	if motionVerdictCurrent(*e) {
+	if motionVerdictCurrent(*e) && !qqMotionCoverUnasked(*e) {
 		return true
 	}
 	before := *e
@@ -4058,23 +4059,21 @@ func (e *enrichEntry) fillMotionCover(ctx context.Context, artist, title, album 
 // 专辑 ID 两条来路,按可信度排:① 已校验的目录锚点(App 状态里的目录曲目 ID → iTunes lookup),只有 Apple Music 播的目录
 // 曲目才有;② 这条记下的 apple_music_url 里那个 ID,覆盖所有播放器,但来自文字匹配,可能指向另一个版本的专辑(03 章决策 16)。
 // ② 敢用全靠两道图像校验(首帧比对 / 专辑身份核验,并联,见 decideMotionCover):错的专辑给出的首帧和官方封面跟这条的
-// 封面都不会是同一张。两条来路都没有专辑 ID 时整组清掉:没有可以核的东西。
+// 封面都不会是同一张。Apple 这边没有给出动态封面时再按 QQ 专辑核(motionVerdictFromQQ);两边都没有可以核的东西时整组清掉。
 func (e *enrichEntry) motionVerdictFromAlbum(ctx context.Context, artist, title, album string) bool {
 	albumID, viaAnchor := appleCatalogAlbumIDFor(artist, title, album)
 	if !viaAnchor {
 		albumID = motionCoverAlbumIDFromAppleURL(e.AppleURL)
 	}
 	if albumID <= 0 {
-		e.clearMotionVerdict()
-		return true
+		return e.motionVerdictFromQQ(ctx, false)
 	}
 	mc, done := motionCoverFor(albumID)
 	if !done {
 		return false
 	}
 	if mc.Master == "" {
-		e.recordMotionVerdict("", "", false)
-		return true
+		return e.motionVerdictFromQQ(ctx, true)
 	}
 	// 取图失败(网络抖动 / CDN 限流 / 解码失败)跟「真的比过、两张图确实不是同一张」必须分开:前者不落结论,
 	// 不然一次纯网络问题会被钉成「这条没有动态封面」。
@@ -4091,7 +4090,7 @@ func (e *enrichEntry) motionVerdictFromAlbum(ctx context.Context, artist, title,
 	case motionDecisionPending:
 		return false
 	case motionDecisionReject:
-		e.recordMotionVerdict("", "", false)
+		return e.motionVerdictFromQQ(ctx, true)
 	case motionDecisionAcceptIdentity:
 		e.recordMotionVerdict(mc.Master, mc.PreviewFrame, true)
 	default:
