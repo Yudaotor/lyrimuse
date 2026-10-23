@@ -165,6 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 不等设置页、引导页打开才记。见 14 章决策 67。
         AccessibilityPermission.shared.refresh()
         FullDiskAccessPermission.shared.refresh()
+        KeychainUnlockWatcher.start()
         // 启动后把 Last.fm 信息页那批小图(头像/封面)提前解码进内存:那一页是用户点进
         // 设置才打开的,启动到点进去之间有充足的空窗,预热完再打开就不会闪占位符了
         // (触发点是 LastfmStatsService 首次实例化 → loadSnapshot → prewarm)。

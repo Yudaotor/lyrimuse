@@ -31,10 +31,11 @@ public enum StorageLayout {
             caches: home.appendingPathComponent("Library/Caches/\(LyrimuseIdentity.bundleIdentifier)"))
     }
 
-    /// 当前该用的数据目录:旧目录是软链接 → 旧目录;旧目录不是目录 → 新目录;新目录搬过(有搬迁标记)→ 新目录(旧目录是
-    /// 之后又冒出来的残留,下次启动合并进来);旧目录有数据、新目录没有 → 旧目录(还没搬);其余 → 新目录。
+    /// 当前该用的数据目录:旧目录是指向新目录的软链接(搬迁留给旧版本的,`isCompatLink`)→ 新目录;是别的软链接(用户自己指到
+    /// 别处的)→ 旧目录;旧目录不是目录 → 新目录;新目录搬过(有搬迁标记)→ 新目录(旧目录是之后又冒出来的残留,下次启动
+    /// 合并进来);旧目录有数据、新目录没有 → 旧目录(还没搬);其余 → 新目录。
     public static func activeDataDir(_ roots: Roots) -> URL {
-        if isSymlink(roots.legacy) { return roots.legacy }
+        if isSymlink(roots.legacy) { return isCompatLink(roots) ? roots.data : roots.legacy }
         guard isDirectory(roots.legacy) else { return roots.data }
         if exists(roots.data.appendingPathComponent(StorageMigration.markerName)) { return roots.data }
         if hasLyrimuseData(roots.legacy) && !hasLyrimuseData(roots.data) { return roots.legacy }
@@ -44,6 +45,17 @@ public enum StorageLayout {
     /// 旧位置有个真目录(不是软链接)要收进数据目录:还没搬,或者搬完之后又被旧版本、旧进程写出来的残留。
     public static func hasLegacyToAbsorb(_ roots: Roots) -> Bool {
         !isSymlink(roots.legacy) && isDirectory(roots.legacy)
+    }
+
+    /// 旧位置是指向数据目录的软链接:搬迁留下的,装回旧版本时它照样读写同一份数据(`StorageMigration.compatLinkRetention`
+    /// 之后删掉)。链接内容就是数据目录的路径,或解析到同一个目录都算。引擎 `paths.go` 的 `isCompatLink` 同一条规则。
+    public static func isCompatLink(_ roots: Roots) -> Bool {
+        guard isSymlink(roots.legacy) else { return false }
+        if let target = try? FileManager.default.destinationOfSymbolicLink(atPath: roots.legacy.path),
+           URL(fileURLWithPath: target).standardizedFileURL.path == roots.data.standardizedFileURL.path {
+            return true
+        }
+        return roots.legacy.resolvingSymlinksInPath().path == roots.data.resolvingSymlinksInPath().path
     }
 
     /// 认 Lyrimuse 数据的几个文件:搬迁标记、账号配置、功能开关、偏好镜像、歌词主缓存、听歌记录,有一个就算(刚装好、
@@ -105,7 +117,8 @@ public enum StorageLayout {
 
     /// 诊断导出里的一行:用的是哪个数据目录,旧目录还在不在(没搬成、降级后又升级都会留下它)。
     public static func diagnosticLine(roots: Roots, active: URL, home: String = NSHomeDirectory()) -> String {
-        let legacy = isSymlink(roots.legacy) ? "symlink" : isDirectory(roots.legacy) ? "present" : "absent"
+        let legacy = isCompatLink(roots) ? "link to the data folder"
+            : isSymlink(roots.legacy) ? "symlink" : isDirectory(roots.legacy) ? "present" : "absent"
         let display: (URL) -> String = { HomeFolderAccess.displayPath($0.path, home: home) }
         let kept = keptOldFolders(roots) + replacedBackups(in: active)
         let keptText = kept.isEmpty ? "" : "; kept from migration: " + kept.map { display($0) }.joined(separator: ", ")

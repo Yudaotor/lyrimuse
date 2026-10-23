@@ -6,7 +6,7 @@ import Foundation
 /// 两边都经 `/usr/bin/security` 读写(`KeychainCLI`),不用 `SecItem`:`SecItem` 建的条目只信任 App 自己,
 /// 引擎去读会弹授权框;`security` 建的条目只信任这个 Apple 签名的程序,App 更新、换签名都不弹。
 ///
-/// 条目:服务名 `<bundle id>.credentials`,账号见 `StorageLayout.credentialAccount`(默认位置一律是旧数据目录的路径串),
+/// 条目:服务名 `<bundle id>.credentials`,账号见 `StorageLayout.credentialAccount`(默认位置是数据目录的路径串),
 /// 内容是一份 JSON 的 base64:
 /// `{"config": {<configKeys 里的键>: 值}, "channels": {<渠道 id>: {"url": …, "secret": …}}, "media_user_token": "…"}`。
 /// 读配置时叠到文件上(`overlay`):文件里那一项缺失或为空才取保险箱的;文件里有值(旧版本写的、手改的、刚导入的)
@@ -128,6 +128,8 @@ public struct KeychainCLI: Sendable {
         case readBackMismatch
         /// 读改写时原内容读不出来。
         case unreadable
+        /// 钥匙串锁着(`lockCheck`),没起 `security`:起了就会弹要钥匙串密码的框。
+        case locked
     }
 
     /// `security -i` 一行的安全上限(实测 4096 处截断)。
@@ -141,6 +143,8 @@ public struct KeychainCLI: Sendable {
     public var keychain: String?
     public var executable = "/usr/bin/security"
     public var timeout: TimeInterval = 5
+    /// 每次起 `security` 之前问一次,返回 true(锁着)就抛 `.locked`。默认钥匙串用 `KeychainLock.check`;为 nil 不查。
+    public var lockCheck: (@Sendable () -> Bool)?
 
     public init(service: String, account: String, keychain: String? = nil) {
         self.service = service
@@ -184,6 +188,7 @@ public struct KeychainCLI: Sendable {
     }
 
     private func run(_ arguments: [String], input: Data? = nil) throws -> ProcessRunner.Result {
+        if lockCheck?() == true { throw Failure.locked }
         guard let result = ProcessRunner.run(executable, arguments, timeout: timeout, input: input) else {
             throw Failure.notLaunched
         }
@@ -194,11 +199,16 @@ public struct KeychainCLI: Sendable {
 
 /// App 这一侧的保险箱:整份读改写。只有 App 写这个条目,读到一次之后记在内存里,不再每次起 `security`。
 public final class CredentialVaultStore: @unchecked Sendable {
-    public static let shared = CredentialVaultStore(
-        keychain: KeychainCLI(
+    public static let shared: CredentialVaultStore = {
+        let dataDir = LyrimusePaths.configDir
+        var keychain = KeychainCLI(
             service: CredentialVault.service,
-            account: StorageLayout.credentialAccount(dataDir: LyrimusePaths.configDir, roots: LyrimusePaths.storageRoots)),
-        previousAccount: StorageLayout.previousCredentialAccount(dataDir: LyrimusePaths.configDir, roots: LyrimusePaths.storageRoots))
+            account: StorageLayout.credentialAccount(dataDir: dataDir, roots: LyrimusePaths.storageRoots))
+        keychain.lockCheck = { KeychainLock.check(hintIn: dataDir) }
+        return CredentialVaultStore(
+            keychain: keychain,
+            previousAccount: StorageLayout.previousCredentialAccount(dataDir: dataDir, roots: LyrimusePaths.storageRoots))
+    }()
 
     public let keychain: KeychainCLI
     /// 同一服务名下以前用过的账号上的条目:新账号上没有条目时,第一次读把它搬过来(写到新账号、回读核对,再删掉它)。
@@ -209,7 +219,12 @@ public final class CredentialVaultStore: @unchecked Sendable {
     public init(keychain: KeychainCLI, previousAccount: String? = nil) {
         self.keychain = keychain
         previous = previousAccount.flatMap { account in
-            account == keychain.account ? nil : KeychainCLI(service: keychain.service, account: account, keychain: keychain.keychain)
+            guard account != keychain.account else { return nil }
+            var cli = KeychainCLI(service: keychain.service, account: account, keychain: keychain.keychain)
+            cli.executable = keychain.executable
+            cli.timeout = keychain.timeout
+            cli.lockCheck = keychain.lockCheck
+            return cli
         }
     }
 

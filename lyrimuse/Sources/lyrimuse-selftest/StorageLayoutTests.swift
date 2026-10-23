@@ -85,7 +85,11 @@ func runStorageLayoutChecks() {
         expectEqual(outcome.movedRoot, true, "存储搬迁: 同卷一次改名")
         expectEqual(outcome.copiedRoot, false, "存储搬迁: 同卷不复制")
         expectEqual(outcome.failures, [], "存储搬迁: 没有失败")
-        expectEqual(fm.fileExists(atPath: roots.legacy.path), false, "存储搬迁: 旧目录不留(也不留软链接)")
+        expectEqual(outcome.madeCompatLink, true, "存储搬迁: 旧位置留一个软链接")
+        expectEqual(try? fm.destinationOfSymbolicLink(atPath: roots.legacy.path), roots.data.path,
+                    "存储搬迁: 软链接指向数据目录(装回旧版本照样读写同一份数据)")
+        expectEqual(StorageLayout.hasLegacyToAbsorb(roots), false, "存储搬迁: 软链接不算要收的旧目录")
+        expectEqual(StorageLayout.activeDataDir(roots), roots.data, "存储搬迁: 有软链接时照样用数据目录")
         expectEqual(read(roots.data.appendingPathComponent("lyrimuse-enrich-cache.json")),
                     "{\"cover_url\":\"file://\(new)/artwork/a.jpg\",\"b\":\"file://\(new)/artwork/b.jpg\",\"dir\":\"\(new)\"}",
                     "存储搬迁: 设备封面的 file:// 地址和存成值的旧目录都换成新目录")
@@ -148,7 +152,8 @@ func runStorageLayoutChecks() {
                     "{\"u\":\"file://\(roots.data.path)/artwork/a.jpg\"}", "存储搬迁(复制): 也改写旧路径")
         let kept = roots.legacy.deletingLastPathComponent().appendingPathComponent("lyrimuse.migrated")
         expectEqual(fm.fileExists(atPath: kept.appendingPathComponent("lyrics/a.lrc").path), true, "存储搬迁(复制): 旧目录改名留着")
-        expectEqual(fm.fileExists(atPath: roots.legacy.path), false, "存储搬迁(复制): 旧名字下不再有目录,下次不会再搬")
+        expectEqual(StorageLayout.hasLegacyToAbsorb(roots), false, "存储搬迁(复制): 旧名字下不再是目录,下次不会再搬")
+        expectEqual(StorageLayout.isCompatLink(roots), true, "存储搬迁(复制): 旧名字下是指向数据目录的软链接")
         expectEqual(fm.fileExists(atPath: roots.data.path + ".incoming"), false, "存储搬迁(复制): 暂存目录不留")
     }
 
@@ -182,7 +187,7 @@ func runStorageLayoutChecks() {
         expectEqual(read(roots.data.appendingPathComponent("other.bin")), "foreign", "存储搬迁(新目录已有别的东西): 原来的东西不动")
         expectEqual(read(roots.data.appendingPathComponent("lyrimuse-enrich-cache.json")),
                     "{\"u\":\"file://\(roots.data.path)/artwork/a.jpg\"}", "存储搬迁(新目录已有别的东西): 合并进来的也改写旧路径")
-        expectEqual(fm.fileExists(atPath: roots.legacy.path), false, "存储搬迁(新目录已有别的东西): 旧目录收空删掉")
+        expectEqual(StorageLayout.isCompatLink(roots), true, "存储搬迁(新目录已有别的东西): 旧目录收空,换成指向数据目录的软链接")
         expectEqual(StorageLayout.activeDataDir(roots), roots.data, "存储搬迁(新目录已有别的东西): 之后用新目录")
     }
 
@@ -202,6 +207,8 @@ func runStorageLayoutChecks() {
         let (_, roots) = makeHome("leftover")
         write("{}", roots.legacy.appendingPathComponent("config.json"))
         _ = StorageMigration.run(roots, cacheNames: [])
+        // 软链接在的时候旧版本写进的就是数据目录;这里造的是软链接删掉之后又冒出来的真目录。
+        unlink(roots.legacy.path)
         write("{\"v\":\"new\"}", roots.data.appendingPathComponent("config.json"))
         write("{\"v\":\"old\"}", roots.legacy.appendingPathComponent("config.json"))
         write("same", roots.data.appendingPathComponent("lyrimuse-lyrics-pins.json"))
@@ -219,13 +226,71 @@ func runStorageLayoutChecks() {
         expectEqual(read(roots.data.appendingPathComponent("lyrics/b.lrc")), "[00:02.00]新", "存储搬迁(残留): 子目录里的新文件收进来")
         expectEqual(read(roots.data.appendingPathComponent("lyrimuse-enrich-restore.json")),
                     "{\"u\":\"file://\(roots.data.path)/artwork/b.jpg\"}", "存储搬迁(残留): 收进来的也改写旧路径")
-        expectEqual(fm.fileExists(atPath: roots.legacy.path), false, "存储搬迁(残留): 旧名字下不再有目录")
+        expectEqual(StorageLayout.hasLegacyToAbsorb(roots), false, "存储搬迁(残留): 旧名字下不再有目录")
+        expectEqual(StorageLayout.isCompatLink(roots), true, "存储搬迁(残留): 残留改名后旧位置也换成软链接")
         let kept = outcome.keptLeftover.map { URL(fileURLWithPath: $0) }
         expectEqual(kept.flatMap { read($0.appendingPathComponent("config.json")) }, "{\"v\":\"old\"}",
                     "存储搬迁(残留): 冲突的旧版本留在改名后的目录里,不删")
         expectEqual(kept.map { fm.fileExists(atPath: $0.appendingPathComponent("lyrimuse-lyrics-pins.json").path) }, false,
                     "存储搬迁(残留): 同内容的旧文件删掉")
         expectEqual(StorageMigration.isPending(roots, cacheNames: []), false, "存储搬迁(残留): 收完没活了")
+    }
+
+    do {
+        // 留给旧版本的软链接:30 天内不动;到期删掉,删之前把装回旧版本期间经软链接写进文件的旧路径改写成数据目录的。
+        let (home, roots) = makeHome("compat")
+        write("{}", roots.legacy.appendingPathComponent("config.json"))
+        _ = StorageMigration.run(roots, cacheNames: [])
+        let old = roots.legacy.path
+        write("{\"u\":\"file://\(old)/artwork/a.jpg\"}", roots.legacy.appendingPathComponent("lyrimuse-enrich-cache.json"))
+        expectEqual(read(roots.data.appendingPathComponent("lyrimuse-enrich-cache.json")), "{\"u\":\"file://\(old)/artwork/a.jpg\"}",
+                    "软链接: 旧版本经软链接写的落在数据目录里")
+        expectEqual(StorageLayout.diagnosticLine(roots: roots, active: roots.data, home: home.path).contains(
+            "old ~/.config/lyrimuse: link to the data folder"), true, "软链接: 诊断行认得出")
+        expectEqual(StorageMigration.isPending(roots, cacheNames: [], now: Date().addingTimeInterval(29 * 24 * 3600)), false,
+                    "软链接: 没到 30 天没活")
+        let later = Date().addingTimeInterval(31 * 24 * 3600)
+        expectEqual(StorageMigration.isPending(roots, cacheNames: [], now: later), true, "软链接: 过了 30 天有活")
+        let outcome = StorageMigration.run(roots, cacheNames: [], now: later)
+        expectEqual(outcome.failures, [], "软链接: 到期删除没有失败")
+        expectEqual(outcome.removedCompatLink, true, "软链接: 到期删掉")
+        expectEqual(try? fm.destinationOfSymbolicLink(atPath: roots.legacy.path), nil, "软链接: 旧位置不再有软链接")
+        expectEqual(read(roots.data.appendingPathComponent("lyrimuse-enrich-cache.json")),
+                    "{\"u\":\"file://\(roots.data.path)/artwork/a.jpg\"}", "软链接: 旧版本写进去的旧路径改写成数据目录的")
+        expectEqual(StorageMigration.isPending(roots, cacheNames: [], now: later), false, "软链接: 删完没活了")
+        expectEqual(StorageLayout.activeDataDir(roots), roots.data, "软链接: 删完照样用数据目录")
+
+        let (_, other) = makeHome("compat-elsewhere")
+        let custom = other.data.deletingLastPathComponent().appendingPathComponent("elsewhere")
+        write("{}", custom.appendingPathComponent("config.json"))
+        try? fm.createDirectory(at: other.legacy.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? fm.createSymbolicLink(at: other.legacy, withDestinationURL: custom)
+        expectEqual(StorageLayout.isCompatLink(other), false, "软链接: 用户自己指到别处的不算")
+        let (_, dangling) = makeHome("compat-dangling")
+        try? fm.createDirectory(at: dangling.legacy.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? fm.createSymbolicLink(atPath: dangling.legacy.path, withDestinationPath: dangling.data.path)
+        expectEqual(StorageLayout.activeDataDir(dangling), dangling.data, "软链接: 数据目录被删了、软链接悬空,照样用数据目录")
+        expectEqual(StorageMigration.isPending(other, cacheNames: [], now: later), false, "软链接: 用户自己的软链接不到期、不删")
+    }
+
+    do {
+        // 搬迁接连 3 次没做完:一天之内不再试;做完了清掉记录。
+        let (_, roots) = makeHome("attempts")
+        try? fm.createDirectory(at: roots.caches, withIntermediateDirectories: true)
+        let t0 = Date()
+        expectEqual(StorageMigration.shouldSkipAttempt(caches: roots.caches, now: t0), false, "接连失败: 没有记录照常做")
+        StorageMigration.recordAttemptStart(caches: roots.caches, now: t0)
+        StorageMigration.recordAttemptEnd(caches: roots.caches, succeeded: false)
+        StorageMigration.recordAttemptStart(caches: roots.caches, now: t0)
+        expectEqual(StorageMigration.shouldSkipAttempt(caches: roots.caches, now: t0), false, "接连失败: 两次还照常做")
+        StorageMigration.recordAttemptStart(caches: roots.caches, now: t0)
+        expectEqual(StorageMigration.shouldSkipAttempt(caches: roots.caches, now: t0.addingTimeInterval(60)), true,
+                    "接连失败: 3 次没做完(出错、或做到一半进程没了)之后跳过")
+        expectEqual(StorageMigration.shouldSkipAttempt(caches: roots.caches, now: t0.addingTimeInterval(25 * 3600)), false,
+                    "接连失败: 过了一天再试")
+        StorageMigration.recordAttemptEnd(caches: roots.caches, succeeded: true)
+        expectEqual(StorageMigration.shouldSkipAttempt(caches: roots.caches, now: t0.addingTimeInterval(60)), false,
+                    "接连失败: 做完一次就清掉记录")
     }
 
     do {
@@ -311,7 +376,7 @@ func runStorageLayoutChecks() {
                     "存储搬迁(带来的旧目录): 被换下来的新装版本留在 backups 里")
         expectEqual(replaced.flatMap { read($0.appendingPathComponent("lyrics/a.lrc")) }, "[00:01.00]新装",
                     "存储搬迁(带来的旧目录): 子目录里被换下来的按相对路径留")
-        expectEqual(fm.fileExists(atPath: roots.legacy.path), false, "存储搬迁(带来的旧目录): 旧目录收空删掉")
+        expectEqual(StorageLayout.isCompatLink(roots), true, "存储搬迁(带来的旧目录): 旧目录收空,换成指向数据目录的软链接")
         expectEqual(outcome.keptLeftover, nil, "存储搬迁(带来的旧目录): 不留 leftover")
         expectEqual(StorageMigration.pruneRewriteBackups(in: roots.data, now: Date().addingTimeInterval(90 * 24 * 3600)), 0,
                     "存储搬迁(带来的旧目录): 被换下来的那份不按 30 天清")

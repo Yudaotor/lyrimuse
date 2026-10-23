@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -46,13 +47,15 @@ type credentialVaultChannel struct {
 	Secret string `json:"secret,omitempty"`
 }
 
-// 钥匙串锁着时 security 会等用户解锁、一直不返回,所以读要限时;读不到就沿用上一次读到的,过一阵再试。
+// 钥匙串锁着时 security 会让系统弹出要钥匙串密码的框、一直不返回,所以读要限时;读不到就沿用上一次读到的,过一阵再试,
+// 接连失败时间隔逐次翻倍到 credentialVaultMaxRetry。App 查得到锁没锁(KeychainLock),锁着时留提示文件,这边看到就不起 security。
 var (
 	credentialVaultSecurity = "/usr/bin/security"
 	// credentialVaultKeychain 为空读默认搜索列表(登录钥匙串);测试指到临时钥匙串文件。
 	credentialVaultKeychain = ""
 	credentialVaultTimeout  = 5 * time.Second
 	credentialVaultRetry    = time.Minute
+	credentialVaultMaxRetry = time.Hour
 	// credentialVaultRead 取保险箱的 JSON 字节,没有条目返回 nil, nil。测试换成假的(TestMain)。
 	credentialVaultRead = readCredentialVaultFromKeychain
 )
@@ -84,10 +87,37 @@ func isDefaultDataDir(dir string) bool {
 	return ok && (dir == filepath.Clean(data) || dir == filepath.Clean(legacy))
 }
 
+// keychainLockedHintName:App 查到钥匙串锁着时写的提示文件(LyrimuseCore KeychainLock.hintFileName),内容是写它的 App 的 pid。
+const keychainLockedHintName = clientName + "-keychain-locked.json"
+
+// errKeychainLocked:App 留了「钥匙串锁着」的提示,没起 security(起了会弹框)。
+var errKeychainLocked = errors.New("keychain is locked (reported by the app)")
+
+// keychainLockedHint:有提示文件、写它的那个 App 进程还在。进程没了的提示(App 崩了、被强退留下的)不算。
+func keychainLockedHint() bool {
+	path := configFilePath(keychainLockedHintName)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		noteFileErr("read", path, err)
+		return false
+	}
+	var hint struct {
+		PID int `json:"pid"`
+	}
+	if json.Unmarshal(data, &hint) != nil || hint.PID <= 0 {
+		return false
+	}
+	err = syscall.Kill(hint.PID, 0)
+	return err == nil || errors.Is(err, syscall.EPERM)
+}
+
 func readCredentialVaultFromKeychain() ([]byte, error) {
 	dir := configDir()
 	if dir == "" {
 		return nil, nil
+	}
+	if keychainLockedHint() {
+		return nil, errKeychainLocked
 	}
 	data, err := readCredentialVaultAccount(credentialVaultAccount(dir))
 	if data != nil || err != nil {
@@ -132,8 +162,14 @@ var credentialVaultCache struct {
 	stamp   string
 	vault   credentialVault
 	retryAt time.Time
+	// attemptAt:最近一次起 security 的时刻。
+	attemptAt time.Time
 	// failed:最近一次读失败,手上的是更早读到的(或空的)。
 	failed bool
+	// failures:接连失败(不算 App 报锁着)的次数,定下一次重试的间隔。
+	failures int
+	// locked:最近一次是因为 App 报钥匙串锁着才没读。
+	locked bool
 }
 
 func credentialVaultStamp() string {
@@ -148,28 +184,54 @@ func credentialVaultStamp() string {
 	return b.String()
 }
 
-// currentCredentialVault 取这一刻的保险箱。读失败(钥匙串锁着、超时)时沿用上一次读到的,credentialVaultRetry 之后再试。
+// currentCredentialVault 取这一刻的保险箱。读失败(钥匙串锁着、超时)时沿用上一次读到的,到重试时刻再读;间隔见
+// credentialVaultRetryDelay,App 报锁着时一直是 credentialVaultRetry(只读提示文件,不起 security)。重试之前 config.json
+// 或令牌文件变了、离上一次读也过了 credentialVaultRetry,提前读。
 func currentCredentialVault() credentialVault {
 	stamp := credentialVaultStamp()
 	c := &credentialVaultCache
 	c.Lock()
 	defer c.Unlock()
-	if stamp == c.stamp || time.Now().Before(c.retryAt) {
+	now := time.Now()
+	if stamp == c.stamp && !c.failed {
 		return c.vault
 	}
+	if c.failed && now.Before(c.retryAt) && (stamp == c.stamp || now.Before(c.attemptAt.Add(credentialVaultRetry))) {
+		return c.vault
+	}
+	c.attemptAt = now
 	data, err := credentialVaultRead()
 	var v credentialVault
 	if err == nil && data != nil {
 		err = json.Unmarshal(data, &v)
 	}
 	if err != nil {
-		log.Printf("credentials: keychain unreadable (%v), keeping the credentials read before, retry in %s", err, credentialVaultRetry)
-		c.retryAt = time.Now().Add(credentialVaultRetry)
-		c.failed = true
+		delay := credentialVaultRetry
+		if errors.Is(err, errKeychainLocked) {
+			if !c.locked {
+				log.Printf("credentials: the app reports the keychain is locked, keeping the credentials read before until it is unlocked")
+			}
+			c.locked = true
+		} else {
+			c.locked = false
+			c.failures++
+			delay = credentialVaultRetryDelay(c.failures)
+			log.Printf("credentials: keychain unreadable (%v), keeping the credentials read before, retry in %s", err, delay)
+		}
+		c.stamp, c.retryAt, c.failed = stamp, now.Add(delay), true
 		return c.vault
 	}
-	c.stamp, c.vault, c.retryAt, c.failed = stamp, v, time.Time{}, false
+	c.stamp, c.vault, c.retryAt, c.failed, c.failures, c.locked = stamp, v, time.Time{}, false, 0, false
 	return v
+}
+
+// credentialVaultRetryDelay:接连第 n 次读失败之后等多久再读。从 credentialVaultRetry 起逐次翻倍,封顶 credentialVaultMaxRetry。
+func credentialVaultRetryDelay(n int) time.Duration {
+	delay := credentialVaultRetry
+	for i := 1; i < n && delay < credentialVaultMaxRetry; i++ {
+		delay *= 2
+	}
+	return min(delay, credentialVaultMaxRetry)
 }
 
 // credentialVaultRetryDue:上一次读保险箱失败、已到重试时刻。热重读据此在 config.json 没变时也重叠一次,

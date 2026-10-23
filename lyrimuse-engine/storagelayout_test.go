@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// 数据目录的选法跟 App 的 StorageLayout.activeDataDir 一致:环境变量 > 旧目录是软链接 > 新目录存在或旧目录不是目录 > 旧目录。
+// 数据目录的选法跟 App 的 StorageLayout.activeDataDir 一致:环境变量 > 旧目录是软链接(指向新目录的用新目录)> 新目录存在或旧目录不是目录 > 旧目录。
 func TestConfigDirFollowsStorageLayout(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -57,9 +57,45 @@ func TestConfigDirFollowsStorageLayout(t *testing.T) {
 	if got := configDir(); got != legacy {
 		t.Fatalf("旧目录是软链接: got %s, want %s", got, legacy)
 	}
+	if err := os.Remove(legacy); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(data, legacy); err != nil {
+		t.Fatal(err)
+	}
+	if got := configDir(); got != data {
+		t.Fatalf("旧目录是搬迁留下的、指向新目录的软链接: got %s, want %s", got, data)
+	}
+	if err := os.Remove(legacy); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(data+"/", legacy); err != nil {
+		t.Fatal(err)
+	}
+	if got := configDir(); got != data {
+		t.Fatalf("指向新目录的软链接(带尾斜杠): got %s, want %s", got, data)
+	}
 	t.Setenv("LYRIMUSE_CONFIG_DIR", custom)
 	if got := configDir(); got != custom {
 		t.Fatalf("环境变量: got %s, want %s", got, custom)
+	}
+}
+
+// 数据目录被删了、留给旧版本的软链接还在(悬空):照样认成新目录(用的时候再建),不去用悬空的旧路径。
+func TestConfigDirDanglingCompatLink(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("LYRIMUSE_CONFIG_DIR", "")
+	legacy := filepath.Join(home, ".config", clientName)
+	data := filepath.Join(home, "Library", "Application Support", appBundleID())
+	if err := os.MkdirAll(filepath.Dir(legacy), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(data, legacy); err != nil {
+		t.Fatal(err)
+	}
+	if got := configDir(); got != data {
+		t.Fatalf("悬空的软链接: got %s, want %s", got, data)
 	}
 }
 

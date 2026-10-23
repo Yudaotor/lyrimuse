@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -124,6 +125,88 @@ func TestCurrentCredentialVaultCachesAndKeepsLastGoodOnFailure(t *testing.T) {
 	writeConfigForTest(t, path, `{"a":3}`)
 	if token(); stub.calls != 3 {
 		t.Errorf("读失败后 %s 内不该再起 security,读了 %d 次", credentialVaultRetry, stub.calls)
+	}
+}
+
+// 接连读失败时重试间隔逐次翻倍、封顶;重试之前 config.json 变了、离上一次读也过了一个基本间隔就提前读。
+func TestCredentialVaultBacksOffOnRepeatedFailures(t *testing.T) {
+	if got := []time.Duration{credentialVaultRetryDelay(1), credentialVaultRetryDelay(2), credentialVaultRetryDelay(3), credentialVaultRetryDelay(40)}; got[0] != credentialVaultRetry || got[1] != 2*credentialVaultRetry || got[2] != 4*credentialVaultRetry || got[3] != credentialVaultMaxRetry {
+		t.Fatalf("间隔 = %v", got)
+	}
+	dir := t.TempDir()
+	t.Setenv("LYRIMUSE_CONFIG_DIR", dir)
+	stub := stubCredentialVault(t, "", errors.New("timed out"))
+	path := filepath.Join(dir, "config.json")
+	writeConfigForTest(t, path, `{}`)
+	for i := 0; i < 3; i++ {
+		currentCredentialVault()
+		setCredentialVaultRetryAtForTest(time.Now().Add(-time.Second))
+	}
+	c := &credentialVaultCache
+	if c.failures != 3 || stub.calls != 3 {
+		t.Fatalf("接连失败 3 次: failures=%d calls=%d", c.failures, stub.calls)
+	}
+	currentCredentialVault()
+	if wait := time.Until(c.retryAt); wait < 7*credentialVaultRetry || wait > 8*credentialVaultRetry {
+		t.Errorf("第 4 次失败后应等 8 个基本间隔,等 %s", wait)
+	}
+	writeConfigForTest(t, path, `{"a":1}`)
+	currentCredentialVault()
+	if stub.calls != 4 {
+		t.Errorf("刚读过就不因文件变了再读,读了 %d 次", stub.calls)
+	}
+	c.attemptAt = time.Now().Add(-credentialVaultRetry - time.Second)
+	stub.err = nil
+	stub.data = `{"config":{"listenbrainz_token":"t"}}`
+	if got := string(currentCredentialVault().Config["listenbrainz_token"]); got != `"t"` || c.failures != 0 {
+		t.Errorf("文件变了、离上次读过了基本间隔应提前读: token=%s failures=%d", got, c.failures)
+	}
+}
+
+// App 报钥匙串锁着(提示文件、写它的进程还在)时不起 security;提示是已经没了的进程留下的不算。
+func TestKeychainLockedHintSkipsSecurity(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("LYRIMUSE_CONFIG_DIR", dir)
+	saved := credentialVaultSecurity
+	credentialVaultSecurity = filepath.Join(dir, "no-such-security")
+	t.Cleanup(func() { credentialVaultSecurity = saved })
+	hint := filepath.Join(dir, keychainLockedHintName)
+	if err := os.WriteFile(hint, []byte(fmt.Sprintf(`{"pid":%d}`, os.Getpid())), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readCredentialVaultFromKeychain(); !errors.Is(err, errKeychainLocked) {
+		t.Fatalf("有提示、进程还在: err = %v,应为 errKeychainLocked", err)
+	}
+	gone := exec.Command("/usr/bin/true")
+	if err := gone.Run(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(hint, []byte(fmt.Sprintf(`{"pid":%d}`, gone.Process.Pid)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readCredentialVaultFromKeychain(); errors.Is(err, errKeychainLocked) || err == nil {
+		t.Fatalf("进程已经没了的提示不算,应去起 security(这里是个不存在的路径,报错),得到 %v", err)
+	}
+
+	stub := stubCredentialVault(t, "", errKeychainLocked)
+	writeConfigForTest(t, filepath.Join(dir, "config.json"), `{}`)
+	for i := 0; i < 3; i++ {
+		currentCredentialVault()
+		setCredentialVaultRetryAtForTest(time.Now().Add(-time.Second))
+	}
+	if c := &credentialVaultCache; c.failures != 0 || !c.locked || stub.calls != 3 {
+		t.Errorf("锁着不算失败、不加长间隔: failures=%d locked=%v calls=%d", c.failures, c.locked, stub.calls)
+	}
+}
+
+// 提示文件名跟 App 那边(KeychainLock.hintFileName)一致。
+func TestKeychainLockedHintNameMatchesApp(t *testing.T) {
+	src, err := os.ReadFile("../lyrimuse/Sources/LyrimuseCore/Util/KeychainLock.swift")
+	if err != nil {
+		t.Skipf("读不到 App 源码: %v", err)
+	}
+	if !strings.Contains(string(src), `hintFileName = "`+keychainLockedHintName+`"`) {
+		t.Errorf("KeychainLock.hintFileName 不是 %q", keychainLockedHintName)
 	}
 }
 
@@ -275,6 +358,6 @@ func stubCredentialVault(t *testing.T, data string, err error) *credentialVaultS
 func resetCredentialVaultCache() {
 	c := &credentialVaultCache
 	c.Lock()
-	c.stamp, c.vault, c.retryAt, c.failed = "", credentialVault{}, time.Time{}, false
+	c.stamp, c.vault, c.retryAt, c.attemptAt, c.failed, c.failures, c.locked = "", credentialVault{}, time.Time{}, time.Time{}, false, 0, false
 	c.Unlock()
 }

@@ -41,6 +41,10 @@ func checkScrobbleAudit() {
                               "guard vaultContents == nil, !isDirty, CredentialVaultStore.shared.load() != nil else { return }"),
                     true, "账号凭据: 钥匙串之前没读出、现在读得出、没有待存改动才重载")
         expectEqual(sourceHas(accounts, ".onAppear { config.reloadIfVaultWasUnreadable() }"), true, "账号凭据: 进账号页补读一次")
+        expectEqual(sourceHas(source("LyrimuseCore/Util/CredentialVault.swift"), "keychain.lockCheck = { KeychainLock.check(hintIn: dataDir) }"),
+                    true, "账号凭据: 正式那份保险箱起 security 之前先查钥匙串锁没锁")
+        expectEqual(sourceHas(source("lyrimuse/AppDelegate.swift"), "KeychainUnlockWatcher.start()"), true,
+                    "账号凭据: 启动时开始等钥匙串解锁")
         let clear = sourceBody("static func clearAllConfig() async -> Bool", in: portability)
         let vaultAt = clear.range(of: "try CredentialVaultStore.shared.clearAccountCredentials()")?.lowerBound
         let fileAt = clear.range(of: "removeItem(at: configURL)")?.lowerBound

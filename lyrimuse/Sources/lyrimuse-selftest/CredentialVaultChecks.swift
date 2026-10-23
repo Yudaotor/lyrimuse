@@ -166,6 +166,25 @@ func credentialVaultChecks() {
         var clearFailure: KeychainCLI.Failure?
         do { try store.clearAccountCredentials() } catch let f as KeychainCLI.Failure { clearFailure = f } catch {}
         expectEqual(clearFailure, .timedOut, "读不出来: 清账号凭据也抛错,不去删条目")
+
+        var locked = KeychainCLI(service: "s", account: "a")
+        locked.executable = dir.appendingPathComponent("no-such-security").path
+        locked.lockCheck = { true }
+        var lockFailure: KeychainCLI.Failure?
+        do { _ = try locked.read() } catch let f as KeychainCLI.Failure { lockFailure = f } catch {}
+        expectEqual(lockFailure, .locked, "钥匙串锁着: 不起 security(起了会弹要钥匙串密码的框),直接报锁着")
+        var writeFailure: KeychainCLI.Failure?
+        do { try locked.write("YQ==") } catch let f as KeychainCLI.Failure { writeFailure = f } catch {}
+        expectEqual(writeFailure, .locked, "钥匙串锁着: 写也不起 security")
+        let lockedStore = CredentialVaultStore(keychain: locked, previousAccount: "b")
+        expectEqual(lockedStore.load() == nil, true, "钥匙串锁着: load 当读不出(凭据照旧留在文件里)")
+        expectEqual(lockedStore.previous?.lockCheck?(), true, "钥匙串锁着: 以前账号那条也先问锁没锁")
+
+        KeychainLock.record(locked: true, hintIn: dir, pid: 4242)
+        let hint = dir.appendingPathComponent(KeychainLock.hintFileName)
+        expectEqual((try? String(contentsOf: hint, encoding: .utf8)) ?? "", "{\"pid\":4242}", "钥匙串锁着: 提示文件记着 App 的 pid")
+        KeychainLock.record(locked: false, hintIn: dir)
+        expectEqual(FileManager.default.fileExists(atPath: hint.path), false, "钥匙串解锁: 提示文件删掉")
     }
 }
 

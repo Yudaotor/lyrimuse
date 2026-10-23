@@ -21,6 +21,10 @@ public enum StorageMigration {
         public var rewriteBackup: String?
         public var rewrittenFiles = 0
         public var relocatedCaches = 0
+        /// 这次在旧位置建了指向数据目录的软链接。
+        public var madeCompatLink = false
+        /// 这次删掉了到期的软链接。
+        public var removedCompatLink = false
         public var failures: [String] = []
 
         public init() {}
@@ -42,8 +46,10 @@ public enum StorageMigration {
     }
 
     /// 有没有要做的。启动路径上每次都调:几十次 lstat 加一次小文件读。
-    public static func isPending(_ roots: StorageLayout.Roots, cacheNames: [String] = StorageLayout.cacheFileNames) -> Bool {
-        if StorageLayout.hasLegacyToAbsorb(roots) { return true }
+    public static func isPending(
+        _ roots: StorageLayout.Roots, cacheNames: [String] = StorageLayout.cacheFileNames, now: Date = Date()
+    ) -> Bool {
+        if StorageLayout.hasLegacyToAbsorb(roots) || compatLinkExpired(roots, now: now) { return true }
         let data = StorageLayout.activeDataDir(roots)
         if pendingRewrite(in: data) != nil { return true }
         return cacheNames.contains { StorageLayout.exists(data.appendingPathComponent($0)) }
@@ -51,9 +57,13 @@ public enum StorageMigration {
 
     /// `forceCopy` 只给 selftest 走跨卷那条路用。
     public static func run(
-        _ roots: StorageLayout.Roots, cacheNames: [String] = StorageLayout.cacheFileNames, forceCopy: Bool = false
+        _ roots: StorageLayout.Roots, cacheNames: [String] = StorageLayout.cacheFileNames, forceCopy: Bool = false,
+        now: Date = Date()
     ) -> Outcome {
         var outcome = Outcome()
+        if compatLinkExpired(roots, now: now) {
+            removeCompatLink(roots, &outcome)
+        }
         if StorageLayout.hasLegacyToAbsorb(roots) {
             absorbLegacy(roots, forceCopy: forceCopy, &outcome)
         }
@@ -81,8 +91,8 @@ public enum StorageMigration {
     /// 数据目录里还没有 Lyrimuse 的数据(不存在、空的、或只有别的东西):空的先删掉,整份改名过去;同卷一次 `rename(2)`,
     /// 跨卷(`~/.config` 被链到别的盘)先拷进旁边的暂存目录、核对文件清单和大小再换上去,旧目录改名留着。数据目录已经有数据时
     /// 逐项合并(`mergeTree`),冲突听谁的看数据目录搬没搬过:搬过(有标记)→ 旧目录是之后又冒出来的残留,听数据目录的;没搬过
-    /// → 数据目录是新版本新装出来的,旧目录是用户带来的(换机器时拷过来、dotfiles 工具铺的),听旧目录的。失败的那一步不动旧目录,
-    /// 下次启动重试。
+    /// → 数据目录是新版本新装出来的,旧目录是用户带来的(换机器时拷过来、dotfiles 工具铺的),听旧目录的。旧位置空出来后
+    /// 留一个指向数据目录的软链接(`makeCompatLink`)。失败的那一步不动旧目录,下次启动重试。
     static func absorbLegacy(_ roots: StorageLayout.Roots, forceCopy: Bool, _ outcome: inout Outcome) {
         guard FileIO.createDirectory(roots.data.deletingLastPathComponent()) else {
             outcome.failures.append("create \(roots.data.deletingLastPathComponent().path)")
@@ -103,6 +113,7 @@ public enum StorageMigration {
                 if (outcome.movedRoot || outcome.copiedRoot), readMarker(in: roots.data) == nil {
                     writeMarker(pending, in: roots.data, &outcome)
                 }
+                makeCompatLink(roots, &outcome)
                 return
             }
         }
@@ -111,14 +122,50 @@ public enum StorageMigration {
         mergeTree(from: roots.legacy, into: roots.data, relative: "", legacyWins: legacyWins ? replaced : nil, &outcome)
         writeMarker(pending, in: roots.data, &outcome)
         pruneEmptyDirectories(roots.legacy)
-        guard StorageLayout.exists(roots.legacy) else { return }
-        let kept = roots.legacy.deletingLastPathComponent()
-            .appendingPathComponent(roots.legacy.lastPathComponent + ".leftover-" + stamp(Date()))
-        if rename(roots.legacy.path, kept.path) == 0 {
+        if StorageLayout.exists(roots.legacy) {
+            let kept = roots.legacy.deletingLastPathComponent()
+                .appendingPathComponent(roots.legacy.lastPathComponent + ".leftover-" + stamp(Date()))
+            guard rename(roots.legacy.path, kept.path) == 0 else {
+                outcome.failures.append("rename leftover: \(String(cString: strerror(errno)))")
+                return
+            }
             outcome.keptLeftover = kept.path
-        } else {
-            outcome.failures.append("rename leftover: \(String(cString: strerror(errno)))")
         }
+        makeCompatLink(roots, &outcome)
+    }
+
+    // MARK: - 留给旧版本的软链接
+
+    /// 搬完之后旧位置留一个指向数据目录的软链接,保留这么久:这段时间里装回旧版本(只认旧位置),读写的还是同一份数据。
+    /// 到期在启动时删掉(`removeCompatLink`)。
+    static let compatLinkRetention: TimeInterval = 30 * 24 * 3600
+
+    /// 旧位置空出来时建软链接,内容是数据目录的绝对路径。建不成只记一条,不影响搬迁本身。
+    static func makeCompatLink(_ roots: StorageLayout.Roots, _ outcome: inout Outcome) {
+        guard !StorageLayout.exists(roots.legacy) else { return }
+        if symlink(roots.data.path, roots.legacy.path) == 0 {
+            outcome.madeCompatLink = true
+        } else {
+            outcome.failures.append("link \(roots.legacy.path): \(String(cString: strerror(errno)))")
+        }
+    }
+
+    /// 软链接建了超过 `compatLinkRetention`(按链接本身的修改时刻,建好就不再变)。
+    static func compatLinkExpired(_ roots: StorageLayout.Roots, now: Date) -> Bool {
+        var st = stat()
+        guard StorageLayout.isCompatLink(roots), lstat(roots.legacy.path, &st) == 0 else { return false }
+        return now.timeIntervalSince1970 - TimeInterval(st.st_mtimespec.tv_sec) > compatLinkRetention
+    }
+
+    /// 删掉到期的软链接。装回过旧版本的话,它这段时间写进文件的路径(设备封面地址、歌词文件夹)是经软链接的旧路径,
+    /// 删之前把改写重新挂上,接着的改写换成数据目录的;没装回过就是扫一遍、什么都不改。
+    static func removeCompatLink(_ roots: StorageLayout.Roots, _ outcome: inout Outcome) {
+        writeMarker(Marker(from: roots.legacy.path, to: roots.data.path, rewritePending: true), in: roots.data, &outcome)
+        guard unlink(roots.legacy.path) == 0 else {
+            outcome.failures.append("unlink \(roots.legacy.path): \(String(cString: strerror(errno)))")
+            return
+        }
+        outcome.removedCompatLink = true
     }
 
     /// 把 `source` 里数据目录没有的条目挪过去(整个子目录不在就整个挪);两边都有的子目录往里递归;两边都有的文件内容一样就删掉旧的。
@@ -425,6 +472,40 @@ public enum StorageMigration {
                 outcome.failures.append("relocate \(name)")
             }
         }
+    }
+
+    // MARK: - 接连失败
+
+    /// 启动时的搬迁接连没做完(有一步出错,或做到一半进程没了)的次数,记在缓存目录。接连 `maxAttempts` 次之后
+    /// `attemptRetryInterval` 内不再试、也不停引擎,App 照常用 `StorageLayout.activeDataDir` 选出的目录:搬迁碰上没想到的情况时
+    /// 不至于每次启动都卡在同一处。
+    struct Attempts: Codable, Equatable {
+        var count: Int
+        var last: Date
+    }
+
+    static let attemptsName = "storage-migration-attempts.json"
+    static let maxAttempts = 3
+    static let attemptRetryInterval: TimeInterval = 24 * 3600
+
+    public static func shouldSkipAttempt(caches: URL, now: Date = Date()) -> Bool {
+        guard let attempts = FileIO.decodeJSON(Attempts.self, from: caches.appendingPathComponent(attemptsName)) else { return false }
+        return attempts.count >= maxAttempts && now.timeIntervalSince(attempts.last) < attemptRetryInterval
+    }
+
+    /// 动手之前记一次;做完 `recordAttemptEnd`。中途进程没了,这一次就留在记录里。
+    public static func recordAttemptStart(caches: URL, now: Date = Date()) {
+        let url = caches.appendingPathComponent(attemptsName)
+        let count = (FileIO.decodeJSON(Attempts.self, from: url)?.count ?? 0) + 1
+        guard let data = try? JSONEncoder().encode(Attempts(count: count, last: now)) else { return }
+        _ = FileIO.write(data, to: url)
+    }
+
+    /// 做完了(没有出错的步骤)清掉记录;出错的留着,算一次没做完。
+    public static func recordAttemptEnd(caches: URL, succeeded: Bool) {
+        let url = caches.appendingPathComponent(attemptsName)
+        guard succeeded, StorageLayout.exists(url) else { return }
+        _ = FileIO.remove(url)
     }
 
     // MARK: - 标记文件

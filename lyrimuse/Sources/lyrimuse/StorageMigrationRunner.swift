@@ -18,7 +18,8 @@ enum AppEntry {
 /// 只有一个在搬,另一个等它搬完再看),再请走比自己早启动的 App 实例(升级时旧版本可能还在跑,它退出时还要存一次设置,得等它存完、
 /// 退干净),然后 bootout 引擎的 launchd job、拿到旧目录和数据目录里两把引擎单实例锁(`collector.lock`,引擎活着时一直攥着)
 /// 才动手;拿不到就这次不搬、照旧用原来的目录,下次启动再试。搬过东西就清掉引擎的安装指纹,随后的 `EngineServiceManager.reconcileAfterLaunch` 按新目录重写 plist、
-/// 把引擎装回去;这次没搬成时引擎已经停了,同一次对账照样按「该跑没跑」装回去。
+/// 把引擎装回去;这次没搬成时引擎已经停了,同一次对账照样按「该跑没跑」装回去。接连几次没做完(`StorageMigration.shouldSkipAttempt`)
+/// 就隔一天再试,这期间不停引擎、不动别的进程。
 enum StorageMigrationRunner {
     private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "storage-migration")
 
@@ -37,6 +38,10 @@ enum StorageMigrationRunner {
         defer { if migrationLock >= 0 { close(migrationLock) } }
         // 等锁的时候别的实例可能已经搬完了。
         guard StorageMigration.isPending(roots) else { return }
+        guard !StorageMigration.shouldSkipAttempt(caches: roots.caches) else {
+            logger.error("storage migration skipped: the last attempts did not finish, trying again after a day")
+            return
+        }
         terminateOlderInstances(timeout: 10)
         _ = ProcessRunner.run(
             "/bin/launchctl", ["bootout", "gui/\(getuid())/\(LyrimuseIdentity.engineLaunchdLabel)"], timeout: 15)
@@ -50,12 +55,15 @@ enum StorageMigrationRunner {
             engineLocks.append(fd)
         }
 
+        StorageMigration.recordAttemptStart(caches: roots.caches)
         let outcome = StorageMigration.run(roots)
+        StorageMigration.recordAttemptEnd(caches: roots.caches, succeeded: outcome.failures.isEmpty)
         logger.notice("""
             storage migration: movedRoot=\(outcome.movedRoot, privacy: .public) copiedRoot=\(outcome.copiedRoot, privacy: .public) \
             merged=\(outcome.mergedItems, privacy: .public) conflicts=\(outcome.conflicts, privacy: .public) \
             leftover=\(outcome.keptLeftover ?? "-", privacy: .public) backup=\(outcome.rewriteBackup ?? "-", privacy: .public) \
             rewrittenFiles=\(outcome.rewrittenFiles, privacy: .public) relocatedCaches=\(outcome.relocatedCaches, privacy: .public) \
+            compatLink=\(outcome.madeCompatLink ? "made" : outcome.removedCompatLink ? "removed" : "-", privacy: .public) \
             data=\(StorageLayout.activeDataDir(roots).path, privacy: .public)
             """)
         for failure in outcome.failures {

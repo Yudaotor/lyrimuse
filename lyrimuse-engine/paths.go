@@ -11,8 +11,9 @@ import (
 //
 // 环境变量 LYRIMUSE_CONFIG_DIR(绝对路径)优先:App 侧 EngineServiceManager 写 launchd plist、以及 spawn 每个一次性子命令时
 // 都会传(机制保留,别再靠 os.UserHomeDir 自己拼路径)。没有环境变量时跟 App 同一条规则(LyrimuseCore 的 StorageLayout.activeDataDir):
-// 旧目录 ~/.config/lyrimuse 是软链接就一直用它;不是目录就用新目录 ~/Library/Application Support/<bundle id>;新目录有搬迁标记
-// 就用新目录;旧目录有数据、新目录没有(App 还没搬)用旧目录;其余用新目录。见 14 章决策 136。
+// 旧目录 ~/.config/lyrimuse 是指向新目录 ~/Library/Application Support/<bundle id> 的软链接(搬迁留给旧版本的,isCompatLink)
+// 用新目录,是别的软链接就一直用它;不是目录就用新目录;新目录有搬迁标记就用新目录;旧目录有数据、新目录没有(App 还没搬)
+// 用旧目录;其余用新目录。见 14 章决策 136。
 //
 // 没有环境变量、又拿不到家目录时返回空串,调用方按原来的方式报错(main.go 常驻路径直接 fatalExit)。
 func configDir() string {
@@ -25,6 +26,9 @@ func configDir() string {
 	}
 	fi, err := os.Lstat(legacy)
 	if err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		if isCompatLink(legacy, data) {
+			return data
+		}
 		return legacy
 	}
 	if err != nil || !fi.IsDir() {
@@ -37,6 +41,16 @@ func configDir() string {
 		return legacy
 	}
 	return data
+}
+
+// isCompatLink:旧目录这个软链接的内容就是新目录的路径,或解析到同一个目录。跟 StorageLayout.isCompatLink 同一条规则。
+func isCompatLink(legacy, data string) bool {
+	if target, err := os.Readlink(legacy); err == nil && filepath.Clean(target) == filepath.Clean(data) {
+		return true
+	}
+	a, errA := filepath.EvalSymlinks(legacy)
+	b, errB := filepath.EvalSymlinks(data)
+	return errA == nil && errB == nil && a == b
 }
 
 // storageMigrationMarker:App 搬迁时写的标记(LyrimuseCore StorageMigration.markerName)。
