@@ -124,7 +124,7 @@ func runLyricsRomanize(req romanizeRequest) (romanizeReply, error) {
 var onDeviceRomanizer = onDeviceRomanize
 
 // maybeGenerateHelperRoma:这一轮没有任何源给出罗马音、粤拼也没接手时,交给 helper 生成
-// 一份(日文/韩文/中文)。
+// 一份(日文/韩文/中文,以及 worldroma.go 那几种文字)。
 //
 // 只在 LyricsRoma **原本为空**时补 —— 跟 maybeGenerateJyutpingRoma 同一条规矩:绝不
 // 覆盖任何源自己给出的罗马音,哪怕语种判断这次翻车,也不会把已经可用的内容换掉。
@@ -163,13 +163,16 @@ func (e *enrichEntry) shouldGenerateHelperRoma() bool {
 	}
 	// 英文行占多数的韩文歌:主体文字判成拉丁(有假名的 dominantScript 已经判成日文),带谚文的那几行照样要读音
 	// (导出的 .roma.lrc)。只有汉字不算:英文歌里一行中文署名不值得起子进程。
-	return strings.ContainsFunc(e.Lyrics.String(), func(r rune) bool { return unicode.Is(unicode.Hangul, r) })
+	if strings.ContainsFunc(e.Lyrics.String(), func(r rune) bool { return unicode.Is(unicode.Hangul, r) }) {
+		return true
+	}
+	return hasWorldReadingScript(e.Lyrics.String())
 }
 
 // maybeGenerateRoma 是罗马音兜底的**唯一入口**,顺序固定:
 //
 //	① 粤拼(纯查表,本进程算得出,只认粤语);
-//	② helper(日/韩/中,要 Apple 系统能力)。
+//	② helper(日/韩/中和 worldroma.go 那几种文字,要 Apple 系统能力)。
 //
 // 顺序不能反。粤拼带数字声调、是专门为粤语做的词典查表,质量高于 helper 那条通用
 // ICU 音译(粤语汉字走 .toLatin 会出普通话拼音,完全不对)。两个函数都只在 LyricsRoma
