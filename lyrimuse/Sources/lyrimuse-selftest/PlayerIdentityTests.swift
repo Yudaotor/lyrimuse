@@ -2940,7 +2940,12 @@ private func amazonFavoriteChecks() {
     // 洛雪的歌来自哪个平台看它本地库里的曲目 id 前缀,简介面板给那家的歌曲页。
     expectEqual([PlatformLinks.lxMusicPlatform(songID: "tx_003cSLOO35W3yP"), PlatformLinks.lxMusicPlatform(songID: "wy_28403111"),
                  PlatformLinks.lxMusicPlatform(songID: "kw_4100778"), PlatformLinks.lxMusicPlatform(songID: nil)],
-                [.qqMusic, .netease, nil, nil], "洛雪平台: tx_ 是 QQ、wy_ 是网易云,别的没有歌曲页")
+                [.qqMusic, .netease, .kuwo, nil], "洛雪平台: tx_ 是 QQ、wy_ 是网易云、kw_ 是酷我")
+    expectEqual(PlatformLinks.lxMusicPlatform(songID: "kg_abc"), nil, "洛雪平台: 酷狗、咪咕等没有能直接拼的歌曲页")
+    expectEqual(PlatformLinks.kuwoSongURL(lxSongID: "kw_4100778"), URL(string: "https://www.kuwo.cn/play_detail/4100778"),
+                "酷我歌曲页: kw_ 后面的数字拼进 play_detail")
+    expectEqual(["kw_", "kw_12a", "tx_4100778", "kw_" + String(repeating: "9", count: 21)].map { PlatformLinks.kuwoSongURL(lxSongID: $0) },
+                [nil, nil, nil, nil], "酷我歌曲页: 空的、带字母的、别家前缀、过长的不拼")
     let qqPage = URL(string: "https://y.qq.com/n/ryqq/songDetail/003cSLOO35W3yP")!
     let nePage = URL(string: "https://music.163.com/song?id=28403111")!
     func lxLinks(_ platform: PlatformLinks.Platform?) -> PlatformLinks {
@@ -2949,7 +2954,13 @@ private func amazonFavoriteChecks() {
     let lxBundle = PlaybackPlayer.lxMusic.bundleIdentifier
     expectEqual(lxLinks(.qqMusic).songLink(forPlayerBundleID: lxBundle)?.url, qqPage, "洛雪歌曲页: 来自 QQ 给 QQ 那页")
     expectEqual(lxLinks(.netease).songLink(forPlayerBundleID: lxBundle)?.url, nePage, "洛雪歌曲页: 来自网易云给网易云那页")
-    expectEqual(lxLinks(nil).songLink(forPlayerBundleID: lxBundle) == nil, true, "洛雪歌曲页: 来自酷我等别的平台不拿别家顶上")
+    expectEqual(lxLinks(nil).songLink(forPlayerBundleID: lxBundle) == nil, true, "洛雪歌曲页: 来自酷狗等别的平台不拿别家顶上")
+    let kwPage = URL(string: "https://www.kuwo.cn/play_detail/4100778")!
+    let kwLinks = PlatformLinks(appleMusic: nil, qqSong: qqPage, qqAlbum: nil, qqArtist: nil, neteaseSong: nePage,
+                                lxMusicPlatform: .kuwo, kuwoSong: kwPage)
+    expectEqual(kwLinks.songLink(forPlayerBundleID: lxBundle)?.url, kwPage, "洛雪歌曲页: 来自酷我给酷我那页")
+    expectEqual(kwLinks.songWebLink(forPlayerBundleID: lxBundle), kwPage, "洛雪歌曲页: 给 App 外面(Discord)的也是酷我那页")
+    expectEqual(kwLinks.songLink(forPlayerBundleID: PlaybackPlayer.qqMusic.bundleIdentifier)?.url, qqPage, "酷我那页只给洛雪,别的播放器照旧")
 }
 
 /// 用闸门让 AX 桩停在后台,由主线程的一次事件放行。验证响应与失败契约,不按耗时阈值判断、不操作真实播放器。
