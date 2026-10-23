@@ -25,6 +25,8 @@ enum StorageMigrationRunner {
         // uninstall.sh 起的注销登录项辅助进程:只注销就退出,不碰数据。
         guard !CommandLine.arguments.contains("--unregister-login-item") else { return }
         let roots = LyrimusePaths.storageRoots
+        let pruned = StorageMigration.pruneRewriteBackups(in: StorageLayout.activeDataDir(roots))
+        if pruned > 0 { logger.notice("storage migration: removed \(pruned, privacy: .public) old rewrite backup(s)") }
         guard StorageMigration.isPending(roots) else { return }
         terminateOtherInstances(timeout: 10)
         let lockDir = StorageLayout.activeDataDir(roots)
@@ -40,7 +42,7 @@ enum StorageMigrationRunner {
         logger.notice("""
             storage migration: movedRoot=\(outcome.movedRoot, privacy: .public) copiedRoot=\(outcome.copiedRoot, privacy: .public) \
             merged=\(outcome.mergedItems, privacy: .public) conflicts=\(outcome.conflicts, privacy: .public) \
-            leftover=\(outcome.keptLeftover ?? "-", privacy: .public) \
+            leftover=\(outcome.keptLeftover ?? "-", privacy: .public) backup=\(outcome.rewriteBackup ?? "-", privacy: .public) \
             rewrittenFiles=\(outcome.rewrittenFiles, privacy: .public) relocatedCaches=\(outcome.relocatedCaches, privacy: .public) \
             data=\(StorageLayout.activeDataDir(roots).path, privacy: .public)
             """)

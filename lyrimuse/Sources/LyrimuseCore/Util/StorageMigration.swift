@@ -14,6 +14,8 @@ public enum StorageMigration {
         public var conflicts = 0
         /// 合并完旧目录还剩东西时,改名到的位置。
         public var keptLeftover: String?
+        /// 改写旧路径之前,被改写的那些文件的原件存到了哪(`backups/<时刻>-storage-migration`)。
+        public var rewriteBackup: String?
         public var rewrittenFiles = 0
         public var relocatedCaches = 0
         public var failures: [String] = []
@@ -94,11 +96,8 @@ public enum StorageMigration {
         mergeTree(from: roots.legacy, into: roots.data, &outcome)
         pruneEmptyDirectories(roots.legacy)
         guard StorageLayout.exists(roots.legacy) else { return }
-        let stamp = DateFormatter()
-        stamp.locale = Locale(identifier: "en_US_POSIX")
-        stamp.dateFormat = "yyyyMMdd-HHmmss"
         let kept = roots.legacy.deletingLastPathComponent()
-            .appendingPathComponent(roots.legacy.lastPathComponent + ".leftover-" + stamp.string(from: Date()))
+            .appendingPathComponent(roots.legacy.lastPathComponent + ".leftover-" + stamp(Date()))
         if rename(roots.legacy.path, kept.path) == 0 {
             outcome.keptLeftover = kept.path
         } else {
@@ -209,8 +208,8 @@ public enum StorageMigration {
     // MARK: - 文件里存着的旧路径
 
     /// 不进去看的子目录:歌词文本、正文小文件、决策留痕、设备封面、字体。里面不存数据目录的路径,文件却占了绝大多数
-    /// (本机 7 万个文件里 6.8 万个),一份份读要一分多钟。
-    static let skippedDirectories: Set<String> = ["lyrics", "lyrimuse-lyrics-bodies", "lyrimuse-decisions", "artwork", "fonts"]
+    /// (本机 7 万个文件里 6.8 万个),一份份读要一分多钟。`backups/` 是快照(含改写前的原件),原样留着。
+    static let skippedDirectories: Set<String> = ["lyrics", "lyrimuse-lyrics-bodies", "lyrimuse-decisions", "artwork", "fonts", "backups"]
 
     /// 不看的扩展名:图片、视频、字体、歌词文本、崩溃报告、锁文件,里面不会存数据目录的路径;另有引擎一次性迁移留的
     /// `.bak`(几百 MB,30 天后引擎自己删,没有代码读它)。
@@ -221,9 +220,11 @@ public enum StorageMigration {
 
     /// 设备封面的 `file://` 地址、自定义歌词目录这类存成绝对路径的值,在 enrich 缓存、歌曲实体、留底和备份里都有。
     /// 只换「旧目录 + `/`」和「旧目录 + `"`」两种写法(外加 JSON 把 `/` 转义成 `\/` 的写法),
-    /// 别的以旧目录名开头的兄弟目录(如 `~/.config/lyrimuse-backups`)不碰。每份文件改完原子换上去、保留权限。
+    /// 别的以旧目录名开头的兄弟目录(如 `~/.config/lyrimuse-backups`)不碰。每份文件改写之前先把原件克隆进
+    /// `backups/<时刻>-storage-migration/`(同一相对路径,APFS 上不占空间),克隆不成就不改这一份、留到下次;改完原子换上去、保留权限。
     static func rewritePaths(in dir: URL, from old: String, to new: String, _ outcome: inout Outcome) -> Bool {
         let pairs = replacementPairs(from: old, to: new)
+        let backupRoot = dir.appendingPathComponent("backups/\(stamp(Date()))\(backupSuffix)")
         let keys: [URLResourceKey] = [.isRegularFileKey, .isDirectoryKey, .fileSizeKey]
         guard let walker = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: keys) else {
             outcome.failures.append("enumerate \(dir.path)")
@@ -246,6 +247,13 @@ public enum StorageMigration {
                 continue
             }
             guard let rewritten = replacingAll(in: data, pairs) else { continue }
+            let relative = url.pathComponents.suffix(walker.level).joined(separator: "/")
+            guard backupOriginal(url, relativePath: relative, into: backupRoot) else {
+                outcome.failures.append("back up \(url.lastPathComponent) before rewriting")
+                ok = false
+                continue
+            }
+            outcome.rewriteBackup = backupRoot.path
             if replaceFile(url, with: rewritten) {
                 outcome.rewrittenFiles += 1
             } else {
@@ -254,6 +262,48 @@ public enum StorageMigration {
             }
         }
         return ok
+    }
+
+    /// 改写前原件那份快照的目录名后缀;前面是 `yyyyMMdd-HHmmss`。
+    static let backupSuffix = "-storage-migration"
+
+    /// 快照保留多久。过了就在启动时删掉(`pruneRewriteBackups`)。
+    static let backupRetention: TimeInterval = 30 * 24 * 3600
+
+    /// 把 `url` 克隆到 `root` 下的 `relativePath`;那里已经有一份(同一轮里更早存的原件)就留着它。
+    static func backupOriginal(_ url: URL, relativePath: String, into root: URL) -> Bool {
+        guard !relativePath.isEmpty else { return false }
+        let target = root.appendingPathComponent(relativePath)
+        if StorageLayout.exists(target) { return true }
+        guard FileIO.createDirectory(target.deletingLastPathComponent()) else { return false }
+        if clonefile(url.path, target.path, 0) == 0 { return true }
+        return FileIO.attempt("copy", url) { try FileManager.default.copyItem(at: url, to: target) }
+    }
+
+    /// 删掉数据目录 `backups/` 里超过 `backupRetention` 的改写前快照(按目录名里的时刻算,认不出时刻的不动)。
+    /// 每次启动都调,不用停引擎:引擎和 App 都不碰这些目录。
+    @discardableResult
+    public static func pruneRewriteBackups(in dataDir: URL, now: Date = Date()) -> Int {
+        let backups = dataDir.appendingPathComponent("backups")
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: backups.path) else { return 0 }
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.dateFormat = "yyyyMMdd-HHmmss"
+        var removed = 0
+        for name in names where name.hasSuffix(backupSuffix) {
+            guard let date = parser.date(from: String(name.dropLast(backupSuffix.count))),
+                  now.timeIntervalSince(date) > backupRetention,
+                  FileIO.remove(backups.appendingPathComponent(name)) else { continue }
+            removed += 1
+        }
+        return removed
+    }
+
+    static func stamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter.string(from: date)
     }
 
     static func replacementPairs(from old: String, to new: String) -> [(Data, Data)] {

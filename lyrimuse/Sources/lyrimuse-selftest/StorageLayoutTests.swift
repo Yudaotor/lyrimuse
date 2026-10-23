@@ -94,6 +94,14 @@ func runStorageLayoutChecks() {
                     "存储搬迁: 旧目录名开头的兄弟目录不碰")
         expectEqual(read(roots.data.appendingPathComponent("lyrics/a.lrc")), "[00:01.00]\(old)/artwork", "存储搬迁: 歌词文本不看")
         expectEqual(outcome.rewrittenFiles, 2, "存储搬迁: 只改写了含旧路径的两份")
+        let backup = outcome.rewriteBackup.map { URL(fileURLWithPath: $0) }
+        expectEqual(backup.flatMap { read($0.appendingPathComponent("lyrimuse-enrich-cache.json")) },
+                    "{\"cover_url\":\"file://\(old)/artwork/a.jpg\",\"b\":\"file://\(old)/artwork/b.jpg\",\"dir\":\"\(old)\"}",
+                    "存储搬迁: 改写之前原件存进 backups/<时刻>-storage-migration(内容是改写前的)")
+        expectEqual(backup.map { fm.fileExists(atPath: $0.appendingPathComponent("lyrimuse-song-entity-pre/1.json").path) }, true,
+                    "存储搬迁: 子目录里的原件按相对路径存")
+        expectEqual(backup.map { $0.deletingLastPathComponent().path }, roots.data.appendingPathComponent("backups").path,
+                    "存储搬迁: 快照在数据目录的 backups/ 下")
         let mode = (try? fm.attributesOfItem(atPath: roots.data.appendingPathComponent("config.json").path)[.posixPermissions]) as? NSNumber
         expectEqual(mode?.intValue, 0o600, "存储搬迁: 权限位跟着走")
         expectEqual(outcome.relocatedCaches, 1, "存储搬迁: 缓存挪进缓存目录")
@@ -216,6 +224,26 @@ func runStorageLayoutChecks() {
         expectEqual(kept.map { fm.fileExists(atPath: $0.appendingPathComponent("lyrimuse-lyrics-pins.json").path) }, false,
                     "存储搬迁(残留): 同内容的旧文件删掉")
         expectEqual(StorageMigration.isPending(roots, cacheNames: []), false, "存储搬迁(残留): 收完没活了")
+    }
+
+    do {
+        // 改写前快照只留 30 天:过期的启动时删,新的、认不出时刻的、别的备份不动。
+        let (_, roots) = makeHome("prune")
+        let backups = roots.data.appendingPathComponent("backups")
+        let now = Date()
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let oldName = formatter.string(from: now.addingTimeInterval(-40 * 24 * 3600)) + "-storage-migration"
+        let freshName = formatter.string(from: now.addingTimeInterval(-2 * 24 * 3600)) + "-storage-migration"
+        for name in [oldName, freshName, "junk-storage-migration", "20200101-000000-song-entity"] {
+            write("x", backups.appendingPathComponent(name).appendingPathComponent("f.json"))
+        }
+        expectEqual(StorageMigration.pruneRewriteBackups(in: roots.data, now: now), 1, "改写前快照: 只删一份过期的")
+        expectEqual(fm.fileExists(atPath: backups.appendingPathComponent(oldName).path), false, "改写前快照: 40 天前的删掉")
+        expectEqual(fm.fileExists(atPath: backups.appendingPathComponent(freshName).path), true, "改写前快照: 2 天前的留着")
+        expectEqual(fm.fileExists(atPath: backups.appendingPathComponent("junk-storage-migration").path), true, "改写前快照: 认不出时刻的不动")
+        expectEqual(fm.fileExists(atPath: backups.appendingPathComponent("20200101-000000-song-entity").path), true, "改写前快照: 引擎的别的备份不动")
     }
 
     do {
