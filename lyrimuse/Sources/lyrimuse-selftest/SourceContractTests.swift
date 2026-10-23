@@ -1644,6 +1644,14 @@ func runSourceContractSurfaceTests() {
         func read(_ rel: String) -> String? {
             try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)
         }
+        // 「歌词旁的图标」下面那行「图标样式 ›」跳到 通用 ›「菜单栏与 Dock」:按目录里的标题键找那一行,改那一行的标题要连着改这里。
+        if let stage = read("UI/MenuBarEditorStage.swift") {
+            expectEqual(stage.contains(#"SettingsSearchRouter.shared.revealEntry(titleKey: "菜单栏图标", alsoHighlighting: ["用封面当图标"])"#),
+                        true, "图标样式链接: 跳到「菜单栏图标」并点亮「用封面当图标」")
+            expectEqual(SettingsSearchCatalog.entries.contains { $0.titleKey == "菜单栏图标" }
+                            && SettingsSearchCatalog.entries.contains { $0.titleKey == "用封面当图标" },
+                        true, "图标样式链接: 两个标题键都在设置目录里(找不到就跳不过去、点不亮)")
+        }
         // 「封面当图标」的占位尺寸只看开关、不看这一刻有没有封面:封面是换歌后异步到的,尺寸跟着它变
         // 每首歌多一次状态栏项重建(06 章决策 60)。三处算尺寸的地方都只许读开关。
         if let art = read("MenuBar/MenuBarIconArtwork.swift"), let progress = read("MenuBar/MenuBarProgressIcon.swift"),

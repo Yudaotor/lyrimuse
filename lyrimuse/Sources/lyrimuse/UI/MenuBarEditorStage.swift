@@ -368,6 +368,31 @@ struct MenuBarLyricsIconRow: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
+        VStack(spacing: 0) {
+            iconRow
+            // 图标长什么样(12 款、用不用封面)在 通用 ›「菜单栏与 Dock」设,这里只给一个跳过去的入口:
+            // 那枚图标没在显示歌词时也在(菜单栏歌词关着时只剩它),设置留在一处,不在这里再放一份开关。
+            SettingsSubRow(title: L10n.t("图标样式")) {
+                Button {
+                    SettingsSearchRouter.shared.revealEntry(titleKey: "菜单栏图标", alsoHighlighting: ["用封面当图标"])
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(styleSummary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                }
+                .buttonStyle(.link)
+            }
+        }
+    }
+
+    /// 用着封面时报「封面」,否则报所选那款的名字。
+    private var styleSummary: String {
+        settings.menuBarIconShowsArtwork ? L10n.t("封面") : settings.menuBarIconStyle.displayName
+    }
+
+    private var iconRow: some View {
         SettingsRow(
             icon: "chart.bar.fill",
             title: L10n.t("歌词旁的图标"),

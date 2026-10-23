@@ -606,7 +606,7 @@ public enum SettingsSearchCatalog {
     ] + shortcutEntries + [
 
         // ---- 通用 ----
-        general("菜单栏图标", kw: ["图标", "状态栏", "12 款"], group: "菜单栏与 Dock"),
+        general("菜单栏图标", kw: ["图标", "状态栏", "12 款", "图标样式"], group: "菜单栏与 Dock"),
         general("用封面当图标", kw: ["封面", "专辑封面", "图标"], group: "菜单栏与 Dock"),
         general("图标动画", kw: ["动画", "图标", "律动"], group: "菜单栏与 Dock"),
         general("在 Dock 中显示", kw: ["Dock", "程序坞", "图标"], group: "菜单栏与 Dock"),

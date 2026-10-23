@@ -755,6 +755,7 @@
 "固定：所有歌曲使用设定的宽度。\n自适应：按每首歌曲的歌词确定宽度，不超过设定宽度" = "Fixed: every song uses the set width.\nAdaptive: each song gets its own width from its lyrics, up to the set width";
 "图标动画" = "Animate Icon";
 "图标旁" = "Beside Icon";
+"图标样式" = "Icon Style";
 "圆角" = "Corners";
 "在 %@ 上收听" = "Listen on %@";
 "在 %@ 上看完整榜单" = "See the full chart on %@";
