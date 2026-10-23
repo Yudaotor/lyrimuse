@@ -215,6 +215,7 @@
 "https://sctapi.ftqq.com/你的SendKey.send" = "https://sctapi.ftqq.com/你的SendKey.send";
 "iCloud 备份" = "iCloud 备份";
 "iPhone 推送 App：安装后首页即显示专属地址，报告将直接推送到 iPhone。免费且开源" = "iPhone 推送 App：安装后首页即显示专属地址，报告将直接推送到 iPhone。免费且开源";
+"iPhone、iPad" = "iPhone、iPad";
 "macOS 自带的音乐 App" = "macOS 自带的音乐 App";
 "mode 可选 list、shuffle、repeat-all、repeat-one" = "mode 可选 list、shuffle、repeat-all、repeat-one";
 "ms 单位为毫秒，正值提前、负值延后，范围为 ±10000" = "ms 单位为毫秒，正值提前、负值延后，范围为 ±10000";
@@ -826,6 +827,7 @@
 "字节跳动旗下的音乐平台" = "字节跳动旗下的音乐平台";
 "存在差异" = "存在差异";
 "存在标题更吻合的候选，撤销逐字加分" = "存在标题更吻合的候选，撤销逐字加分";
+"安卓" = "安卓";
 "安装并登录后将自动连接；网页版和手机版不支持连接" = "安装并登录后将自动连接；网页版和手机版不支持连接";
 "完全一致" = "完全一致";
 "完全同名 120 · 仅括号差异 60 · 中英双语同名 30" = "完全同名 120 · 仅括号差异 60 · 中英双语同名 30";

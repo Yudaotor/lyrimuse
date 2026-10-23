@@ -196,6 +196,9 @@ struct WebLyricsLANLinks {
 
 /// 局域网链接那几行:访问链接(可带二维码)和备用链接(IP 地址)。行上只显示地址不带密钥(OBS 那一组在「全部设置」里
 /// 常驻显示,直播、录屏时会拍进画面),访问链接那一行后面带上别的设备连进来几个页面。
+///
+/// 两个链接都有时二维码并排两个:主机名那个地址不随网络变,但不少安卓浏览器解析不了 `.local`,扫了打不开;IP 那个安卓也能开。
+/// 按设备标(iPhone、iPad / 安卓),扫的人不用懂两种链接的区别。只有 IP 时就一个、不标。
 private struct WebLyricsLANLinkRows: View {
     let links: WebLyricsLANLinks
     let remoteViewers: Int
@@ -208,14 +211,12 @@ private struct WebLyricsLANLinkRows: View {
                         ?? L10n.t("未连接局域网")) {
             if let host = links.host { CopyLinkButton(url: host) }
         }
-        if let qrCaption, let host = links.host, let qr = WebLyricsQRCode.image(for: host.absoluteString) {
+        if let qrCaption, let host = links.host {
             VStack(spacing: 6) {
-                Image(nsImage: qr)
-                    .interpolation(.none)
-                    .resizable()
-                    .frame(width: 120, height: 120)
-                    .padding(8)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                HStack(alignment: .top, spacing: 24) {
+                    qrTile(host, label: links.ip == nil ? nil : L10n.t("iPhone、iPad"))
+                    if let ip = links.ip { qrTile(ip, label: L10n.t("安卓")) }
+                }
                 Text(qrCaption)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -227,6 +228,27 @@ private struct WebLyricsLANLinkRows: View {
             CardDivider()
             SettingsRow(icon: "network", title: L10n.t("备用链接（IP 地址）"), subtitle: WebLyricsLANSummary.address(ip)) {
                 CopyLinkButton(url: ip)
+            }
+        }
+    }
+}
+
+extension WebLyricsLANLinkRows {
+    @ViewBuilder
+    private func qrTile(_ url: URL, label: String?) -> some View {
+        if let qr = WebLyricsQRCode.image(for: url.absoluteString) {
+            VStack(spacing: 4) {
+                Image(nsImage: qr)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: 120, height: 120)
+                    .padding(8)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                if let label {
+                    Text(label)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
             }
         }
     }
@@ -407,17 +429,20 @@ private struct WebLyricsOpenButton: View {
 /// 链接的二维码(纠错 M 档,按整数倍放大成位图,显示时不插值)。
 @MainActor
 enum WebLyricsQRCode {
-    private static var cache: (text: String, image: NSImage)?
+    /// 按链接各存一份:访问链接、备用链接两个二维码并排画,只存一张的话每次重画两张互相挤掉、都要重算。
+    /// 链接只在换网络、换端口、重置密钥时变,攒到 8 张就清空重来。
+    private static var cache: [String: NSImage] = [:]
 
     static func image(for text: String) -> NSImage? {
-        if let cache, cache.text == text { return cache.image }
+        if let cached = cache[text] { return cached }
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(text.utf8)
         filter.correctionLevel = "M"
         guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 8, y: 8)),
               let cg = CIContext().createCGImage(output, from: output.extent) else { return nil }
         let image = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
-        cache = (text, image)
+        if cache.count >= 8 { cache.removeAll() }
+        cache[text] = image
         return image
     }
 }

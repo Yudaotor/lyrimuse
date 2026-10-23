@@ -802,6 +802,11 @@ func runWebLyricsTests() {
                         && sourceHas(app("SettingsView.swift"), "summary: settings.webLyricsEnabled ? L10n.t(\"已开启\") : L10n.t(\"未开启\"), beta: true)")
                         && sourceHas(app("SettingsView.swift"), "SettingsPopoverShell(title: L10n.t(\"网页歌词\"), beta: true, width: 460) {"), true,
                     "网页歌词: 设置行、全部设置的分组、编辑台工具栏按钮、浮层标题四处入口都标 Beta")
+        let webCard = app("Settings/WebLyricsSettingsCard.swift")
+        expectEqual(sourceHas(webCard, "qrTile(host, label: links.ip == nil ? nil : L10n.t(\"iPhone、iPad\"))")
+                        && sourceHas(webCard, "if let ip = links.ip { qrTile(ip, label: L10n.t(\"安卓\")) }")
+                        && sourceHas(webCard, "private static var cache: [String: NSImage] = [:]"), true,
+                    "网页歌词: 有 IP 链接时二维码并排两个(主机名给 iPhone、IP 给安卓),按链接各缓存一张")
         expectEqual(sourceHas(pagesSource, "<canvas id=\"gl\" width=\"0\" height=\"0\" style=\"display: none; pointer-events: none\"></canvas>")
                         && sourceHas(pagesSource, "if (!glPaint(src, w, h)) ctx.drawImage(src, 0, 0);")
                         && sourceBytes(pagesSource, contain: "ctx.drawImage(item.frame") == false

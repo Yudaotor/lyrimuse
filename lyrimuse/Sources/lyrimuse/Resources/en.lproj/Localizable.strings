@@ -240,6 +240,7 @@
 "https://sctapi.ftqq.com/你的SendKey.send" = "https://sctapi.ftqq.com/YourSendKey.send";
 "iCloud 备份" = "iCloud Backup";
 "iPhone 推送 App：安装后首页即显示专属地址，报告将直接推送到 iPhone。免费且开源" = "A push app for iPhone. Its home screen shows your own URL, and reports are pushed straight to your iPhone. Free and open source";
+"iPhone、iPad" = "iPhone, iPad";
 "macOS 自带的音乐 App" = "The music app built into macOS";
 "mode 可选 list、shuffle、repeat-all、repeat-one" = "mode can be list, shuffle, repeat-all or repeat-one";
 "ms 单位为毫秒，正值提前、负值延后，范围为 ±10000" = "ms is in milliseconds: positive moves lyrics earlier, negative later, within ±10000";
@@ -876,6 +877,7 @@
 "字节跳动旗下的音乐平台" = "ByteDance's music service";
 "存在差异" = "Different";
 "存在标题更吻合的候选，撤销逐字加分" = "A candidate matches the title better, so the word-timing bonus is withdrawn";
+"安卓" = "Android";
 "安装并登录后将自动连接；网页版和手机版不支持连接" = "Connects automatically once it's installed and you're signed in. The web and mobile apps can't connect";
 "完全一致" = "Identical";
 "完全同名 120 · 仅括号差异 60 · 中英双语同名 30" = "Exact title 120 · parenthetical-only difference 60 · bilingual same name 30";
