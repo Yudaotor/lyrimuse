@@ -90,21 +90,25 @@ func TestCacheDirRules(t *testing.T) {
 	}
 }
 
-// 默认位置(新的或还没搬的旧的)用同一个钥匙串账号,搬目录不用迁钥匙串;另起的数据目录按自己的路径隔开。
-func TestCredentialVaultAccountStaysOnLegacyPath(t *testing.T) {
+// 默认位置(新的或还没搬的旧的)的钥匙串账号是新数据目录的路径串,以前的账号是旧目录的;另起的数据目录按自己的路径隔开、没有以前的账号。
+func TestCredentialVaultAccountUsesDataPath(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	legacy := filepath.Join(home, ".config", clientName)
 	data := filepath.Join(home, "Library", "Application Support", appBundleID())
-	cases := map[string]string{
-		data:                         legacy,
-		data + "/":                   legacy,
-		legacy:                       legacy,
-		filepath.Join(home, "other"): filepath.Join(home, "other"),
+	other := filepath.Join(home, "other")
+	cases := map[string][2]string{
+		data:       {data, legacy},
+		data + "/": {data, legacy},
+		legacy:     {data, legacy},
+		other:      {other, ""},
 	}
 	for dir, want := range cases {
-		if got := credentialVaultAccount(dir); got != want {
-			t.Errorf("credentialVaultAccount(%s) = %s, want %s", dir, got, want)
+		if got := credentialVaultAccount(dir); got != want[0] {
+			t.Errorf("credentialVaultAccount(%s) = %s, want %s", dir, got, want[0])
+		}
+		if got := previousCredentialVaultAccount(dir); got != want[1] {
+			t.Errorf("previousCredentialVaultAccount(%s) = %q, want %q", dir, got, want[1])
 		}
 	}
 }

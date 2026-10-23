@@ -75,10 +75,13 @@ setup_fake_home() {
   # cfprefs），所以这里种的必须是 probe label 而不是真实 bundle id，cleanup 里也要删掉。
   /usr/bin/defaults write "$PROBE_B" probeKey -string probeValue 2>/dev/null
   # 凭据保险箱种在一份临时钥匙串里(不进搜索列表),--purge 删的是它,碰不到登录钥匙串。
+  # 数据目录账号上一条,旧目录账号(以前的账号,App 没搬走的)上一条,两条都该删。
   /usr/bin/security delete-keychain "$TEST_KEYCHAIN" >/dev/null 2>&1
   /usr/bin/security create-keychain -p test "$TEST_KEYCHAIN" >/dev/null 2>&1
-  printf 'add-generic-password -U -s "%s" -a "%s" -w e30= "%s"\n' \
-    "$PROBE_B.credentials" "$FAKE_LEGACY" "$TEST_KEYCHAIN" | /usr/bin/security -i >/dev/null 2>&1
+  for account in "$FAKE_DATA" "$FAKE_LEGACY"; do
+    printf 'add-generic-password -U -s "%s" -a "%s" -w e30= "%s"\n' \
+      "$PROBE_B.credentials" "$account" "$TEST_KEYCHAIN" | /usr/bin/security -i >/dev/null 2>&1
+  done
   for l in "$PROBE_A" "$PROBE_B"; do
     p="$FAKE_HOME/Library/LaunchAgents/$l.plist"
     {
@@ -95,8 +98,14 @@ setup_fake_home() {
   done
 }
 
+# 两条都在才算「在」,任何一条还在都算「没删」。
 has_test_vault() {
-  /usr/bin/security find-generic-password -s "$PROBE_B.credentials" -a "$FAKE_LEGACY" "$TEST_KEYCHAIN" >/dev/null 2>&1
+  /usr/bin/security find-generic-password -s "$PROBE_B.credentials" -a "$FAKE_DATA" "$TEST_KEYCHAIN" >/dev/null 2>&1 &&
+    /usr/bin/security find-generic-password -s "$PROBE_B.credentials" -a "$FAKE_LEGACY" "$TEST_KEYCHAIN" >/dev/null 2>&1
+}
+any_test_vault() {
+  /usr/bin/security find-generic-password -s "$PROBE_B.credentials" -a "$FAKE_DATA" "$TEST_KEYCHAIN" >/dev/null 2>&1 ||
+    /usr/bin/security find-generic-password -s "$PROBE_B.credentials" -a "$FAKE_LEGACY" "$TEST_KEYCHAIN" >/dev/null 2>&1
 }
 
 run_uninstall() {
@@ -144,7 +153,7 @@ echo "yes" | run_uninstall --purge >/dev/null 2>&1
 [[ -d "$FAKE_DATA" ]] && fail "数据目录没删" || ok "数据目录已删"
 [[ -d "$FAKE_LEGACY" ]] && fail "旧数据目录没删" || ok "旧数据目录已删"
 [[ -d "$FAKE_HOME/Library/Caches/$PROBE_B" ]] && fail "缓存目录没删" || ok "缓存目录已删"
-has_test_vault && fail "钥匙串凭据没删" || ok "钥匙串凭据已删"
+any_test_vault && fail "钥匙串凭据没删" || ok "钥匙串凭据已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse.log" ]] && fail "日志没删" || ok "日志已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse-main-thread-stall.txt" ]] && fail "主线程卡顿采样没删" || ok "主线程卡顿采样已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse-app.log" ]] && fail "App 日志没删" || ok "App 日志已删"

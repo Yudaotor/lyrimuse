@@ -54,10 +54,12 @@ func runStorageLayoutChecks() {
         expectEqual(mapped(roots.legacy.path + "-backups/x"), roots.legacy.path + "-backups/x", "存储布局: 兄弟目录不换")
         expectEqual(mapped("/Volumes/X/lyrics"), "/Volumes/X/lyrics", "存储布局: 别处的路径不换")
 
-        expectEqual(StorageLayout.credentialAccount(dataDir: roots.data, roots: roots), roots.legacy.path,
-                    "存储布局: 钥匙串账号在新目录下仍是旧路径串(搬目录不迁钥匙串)")
-        expectEqual(StorageLayout.credentialAccount(dataDir: roots.legacy, roots: roots), roots.legacy.path, "存储布局: 旧目录的账号不变")
+        expectEqual(StorageLayout.credentialAccount(dataDir: roots.data, roots: roots), roots.data.path, "存储布局: 钥匙串账号是新数据目录的路径串")
+        expectEqual(StorageLayout.credentialAccount(dataDir: roots.legacy, roots: roots), roots.data.path, "存储布局: 还没搬的旧目录也用新账号")
         expectEqual(StorageLayout.credentialAccount(dataDir: custom, roots: roots), custom.path, "存储布局: 另起的数据目录按自己的路径隔开")
+        expectEqual(StorageLayout.previousCredentialAccount(dataDir: roots.data, roots: roots), roots.legacy.path,
+                    "存储布局: 默认位置以前的账号是旧目录的路径串")
+        expectEqual(StorageLayout.previousCredentialAccount(dataDir: custom, roots: roots), nil, "存储布局: 另起的数据目录没有以前的账号")
         expectEqual(StorageLayout.diagnosticLine(roots: roots, active: roots.data, home: home.path),
                     "Data folder: ~/Library/Application Support/me.yudaotor.lyrimuse (old ~/.config/lyrimuse: symlink)",
                     "存储布局: 诊断行写清用的哪个目录、旧目录的状态,家目录写成 ~")

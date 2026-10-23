@@ -59,15 +59,29 @@ var (
 
 func credentialVaultService() string { return appBundleID() + ".credentials" }
 
-// credentialVaultAccount:钥匙串条目的账号。数据目录在默认位置(新的,或 App 还没搬的旧的)时一律用旧目录的路径串:它只是个名字,
-// 搬目录不改它,钥匙串就不用跟着迁;另起一份数据目录跑的按自己的路径隔开。跟 LyrimuseCore 的 StorageLayout.credentialAccount 同一条规则。
+// credentialVaultAccount:钥匙串条目的账号。数据目录在默认位置(新的,或 App 还没搬的旧的)时一律用新数据目录的路径串;
+// 另起一份数据目录跑的按自己的路径隔开。跟 LyrimuseCore 的 StorageLayout.credentialAccount 同一条规则。
 func credentialVaultAccount(dir string) string {
 	dir = filepath.Clean(dir)
-	legacy, data, _, ok := storageRoots()
-	if ok && (dir == filepath.Clean(data) || dir == filepath.Clean(legacy)) {
-		return filepath.Clean(legacy)
+	if _, data, _, ok := storageRoots(); ok && isDefaultDataDir(dir) {
+		return filepath.Clean(data)
 	}
 	return dir
+}
+
+// previousCredentialVaultAccount:默认位置以前用过的账号(旧目录的路径串),另起的数据目录返回空串。新账号上没有条目时
+// 读它:App 第一次读保险箱时才把那条搬到新账号,引擎可能先起来。跟 StorageLayout.previousCredentialAccount 同一条规则。
+func previousCredentialVaultAccount(dir string) string {
+	dir = filepath.Clean(dir)
+	if legacy, _, _, ok := storageRoots(); ok && isDefaultDataDir(dir) {
+		return filepath.Clean(legacy)
+	}
+	return ""
+}
+
+func isDefaultDataDir(dir string) bool {
+	legacy, data, _, ok := storageRoots()
+	return ok && (dir == filepath.Clean(data) || dir == filepath.Clean(legacy))
 }
 
 func readCredentialVaultFromKeychain() ([]byte, error) {
@@ -75,7 +89,19 @@ func readCredentialVaultFromKeychain() ([]byte, error) {
 	if dir == "" {
 		return nil, nil
 	}
-	args := []string{"find-generic-password", "-s", credentialVaultService(), "-a", credentialVaultAccount(dir), "-w"}
+	data, err := readCredentialVaultAccount(credentialVaultAccount(dir))
+	if data != nil || err != nil {
+		return data, err
+	}
+	if previous := previousCredentialVaultAccount(dir); previous != "" {
+		return readCredentialVaultAccount(previous)
+	}
+	return nil, nil
+}
+
+// readCredentialVaultAccount 读一个账号上的条目,没有条目返回 nil, nil。
+func readCredentialVaultAccount(account string) ([]byte, error) {
+	args := []string{"find-generic-password", "-s", credentialVaultService(), "-a", account, "-w"}
 	if credentialVaultKeychain != "" {
 		args = append(args, credentialVaultKeychain)
 	}

@@ -124,6 +124,22 @@ func credentialVaultChecks() {
         expectEqual((try? corrupt.clearAccountCredentials()) != nil, true, "内容坏了: 清账号凭据把整条删掉")
         expectEqual(credentialVaultReadOutcome(cli), "没有条目", "内容坏了: 删完没有条目")
         expectEqual(corrupt.load().map { NSDictionary(dictionary: $0) }, NSDictionary(), "内容坏了: 删完是空保险箱")
+
+        let previous = KeychainCLI(service: cli.service, account: "/tmp/with space/previous", keychain: keychainPath)
+        try? previous.write(try CredentialVault.encode([CredentialVault.mediaUserTokenKey: "old"]))
+        let adopting = CredentialVaultStore(keychain: cli, previousAccount: previous.account)
+        expectEqual(adopting.load()?[CredentialVault.mediaUserTokenKey] as? String, "old", "以前的账号: 新账号没有条目时读到旧条目")
+        expectEqual(credentialVaultReadOutcome(previous), "没有条目", "以前的账号: 搬完删掉旧条目")
+        expectEqual(CredentialVaultStore(keychain: cli).load()?[CredentialVault.mediaUserTokenKey] as? String, "old",
+                    "以前的账号: 内容写到了新账号")
+        try? previous.write(try CredentialVault.encode([CredentialVault.mediaUserTokenKey: "stale"]))
+        expectEqual(CredentialVaultStore(keychain: cli, previousAccount: previous.account).load()?[CredentialVault.mediaUserTokenKey] as? String,
+                    "old", "以前的账号: 新账号有条目时只认新的")
+        let clearing = CredentialVaultStore(keychain: cli, previousAccount: previous.account)
+        _ = try? clearing.update { $0.removeAll() }
+        expectEqual(CredentialVaultStore(keychain: cli, previousAccount: previous.account).load().map { NSDictionary(dictionary: $0) },
+                    NSDictionary(), "以前的账号: 清空时连残留的旧条目一起删,下次不再搬回来")
+        expectEqual(credentialVaultReadOutcome(previous), "没有条目", "以前的账号: 清空后旧账号上没有条目")
     }
 
     do {

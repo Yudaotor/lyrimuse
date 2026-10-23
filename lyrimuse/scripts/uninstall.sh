@@ -48,14 +48,19 @@ APP_LOG_FILE="$PREFIX/Library/Logs/lyrimuse-app.log"
 APP_LOG_ARCHIVE="$APP_LOG_FILE.old"
 # App 主线程卡住时采的调用栈(见 LyrimuseCore LogFiles.mainThreadStall)。
 STALL_SAMPLE_FILE="$PREFIX/Library/Logs/lyrimuse-main-thread-stall.txt"
-# 钥匙串里的凭据保险箱:服务名 <bundle id>.credentials,账号固定是旧数据目录的路径串(见 LyrimuseCore StorageLayout.credentialAccount)。
+# 钥匙串里的凭据保险箱:服务名 <bundle id>.credentials,账号是数据目录的路径串;旧目录的路径串是以前的账号,
+# App 第一次读时搬走,没搬的也一起删(见 LyrimuseCore StorageLayout.credentialAccount / previousCredentialAccount)。
 VAULT_SERVICE="$APP_LABEL.credentials"
-VAULT_ACCOUNT="$LEGACY_DIR"
+VAULT_ACCOUNTS=("$DATA_DIR" "$LEGACY_DIR")
 VAULT_KEYCHAIN=()
 [[ -n "${LYRIMUSE_UNINSTALL_KEYCHAIN:-}" ]] && VAULT_KEYCHAIN=("$LYRIMUSE_UNINSTALL_KEYCHAIN")
 # 不带 -w 只读属性,不解密、不弹授权框。
 has_vault() {
-  /usr/bin/security find-generic-password -s "$VAULT_SERVICE" -a "$VAULT_ACCOUNT" "${VAULT_KEYCHAIN[@]}" >/dev/null 2>&1
+  local account
+  for account in "${VAULT_ACCOUNTS[@]}"; do
+    /usr/bin/security find-generic-password -s "$VAULT_SERVICE" -a "$account" "${VAULT_KEYCHAIN[@]}" >/dev/null 2>&1 && return 0
+  done
+  return 1
 }
 
 MODE="report"
@@ -286,9 +291,11 @@ fi
 echo
 echo "=== 删除钥匙串里的凭据 ==="
 if [[ "$HAS_VAULT" == "yes" ]]; then
-  /usr/bin/security delete-generic-password -s "$VAULT_SERVICE" -a "$VAULT_ACCOUNT" "${VAULT_KEYCHAIN[@]}" >/dev/null 2>&1
+  for account in "${VAULT_ACCOUNTS[@]}"; do
+    /usr/bin/security delete-generic-password -s "$VAULT_SERVICE" -a "$account" "${VAULT_KEYCHAIN[@]}" >/dev/null 2>&1
+  done
   if has_vault; then
-    echo "  ❌ 还在，手动执行: security delete-generic-password -s $VAULT_SERVICE -a $VAULT_ACCOUNT"
+    echo "  ❌ 还在，手动执行: security delete-generic-password -s $VAULT_SERVICE -a \"$DATA_DIR\""
   else
     echo "  ✅ 已删除 $VAULT_SERVICE"
   fi

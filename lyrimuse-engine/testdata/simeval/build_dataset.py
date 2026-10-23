@@ -7,9 +7,10 @@ def norm(s):
     return ''.join(ch for ch in s if ch.isalnum())
 
 # 数据目录:新位置(~/Library/Application Support/<bundle id>),还没搬的机器上是旧的 ~/.config/lyrimuse。
-# 钥匙串凭据条目的账号固定是旧目录的路径串(LyrimuseCore StorageLayout.credentialAccount)。
+# 钥匙串凭据条目的账号是新位置的路径串,以前的账号是旧目录的(LyrimuseCore StorageLayout.credentialAccount)。
 LEGACY_DIR = os.path.expanduser('~/.config/lyrimuse')
-DATA_DIR = os.path.expanduser('~/Library/Application Support/me.yudaotor.lyrimuse')
+NEW_DATA_DIR = os.path.expanduser('~/Library/Application Support/me.yudaotor.lyrimuse')
+DATA_DIR = NEW_DATA_DIR
 if not os.path.isdir(DATA_DIR):
     DATA_DIR = LEGACY_DIR
 
@@ -36,11 +37,13 @@ print('lyrics folder tracks:', len(tracks))
 cfg = json.load(io.open(os.path.join(DATA_DIR, 'config.json')))
 
 def vault_token():
-    r = subprocess.run(['/usr/bin/security', 'find-generic-password', '-s', 'me.yudaotor.lyrimuse.credentials',
-                        '-a', LEGACY_DIR, '-w'], capture_output=True, text=True, timeout=10)
-    if r.returncode != 0:
-        return ''
-    return json.loads(base64.b64decode(r.stdout.strip())).get('config', {}).get('listenbrainz_token', '')
+    # App 还没把以前账号上的那条搬过来时读那条
+    for account in (NEW_DATA_DIR, LEGACY_DIR):
+        r = subprocess.run(['/usr/bin/security', 'find-generic-password', '-s', 'me.yudaotor.lyrimuse.credentials',
+                            '-a', account, '-w'], capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            return json.loads(base64.b64decode(r.stdout.strip())).get('config', {}).get('listenbrainz_token', '')
+    return ''
 
 tok = (cfg.get('listenbrainz_token') or '').strip() or vault_token()
 lbuser = cfg.get('listenbrainz_user', '')

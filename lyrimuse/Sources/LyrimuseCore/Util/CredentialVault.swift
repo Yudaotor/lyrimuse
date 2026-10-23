@@ -197,14 +197,20 @@ public final class CredentialVaultStore: @unchecked Sendable {
     public static let shared = CredentialVaultStore(
         keychain: KeychainCLI(
             service: CredentialVault.service,
-            account: StorageLayout.credentialAccount(dataDir: LyrimusePaths.configDir, roots: LyrimusePaths.storageRoots)))
+            account: StorageLayout.credentialAccount(dataDir: LyrimusePaths.configDir, roots: LyrimusePaths.storageRoots)),
+        previousAccount: StorageLayout.previousCredentialAccount(dataDir: LyrimusePaths.configDir, roots: LyrimusePaths.storageRoots))
 
     public let keychain: KeychainCLI
+    /// 同一服务名下以前用过的账号上的条目:新账号上没有条目时,第一次读把它搬过来(写到新账号、回读核对,再删掉它)。
+    public let previous: KeychainCLI?
     private let lock = NSLock()
     private var cached: [String: Any]?
 
-    public init(keychain: KeychainCLI) {
+    public init(keychain: KeychainCLI, previousAccount: String? = nil) {
         self.keychain = keychain
+        previous = previousAccount.flatMap { account in
+            account == keychain.account ? nil : KeychainCLI(service: keychain.service, account: account, keychain: keychain.keychain)
+        }
     }
 
     /// 保险箱内容;没有条目是空字典。读不出来(钥匙串锁着、超时、内容坏了)返回 nil,下次再读。
@@ -232,6 +238,7 @@ public final class CredentialVaultStore: @unchecked Sendable {
             // 读不出照旧抛;读得出才是内容坏了
             _ = try keychain.read()
             try keychain.delete()
+            try previous?.delete()
             cached = [:]
             return
         }
@@ -257,6 +264,8 @@ public final class CredentialVaultStore: @unchecked Sendable {
         } else {
             try keychain.write(try CredentialVault.encode(contents))
         }
+        // 旧账号上残留的(搬的时候没删掉)不能留:新账号清空后下次读会把它当成没搬过的再搬回来。
+        try? previous?.delete()
         cached = contents
         return contents
     }
@@ -265,11 +274,24 @@ public final class CredentialVaultStore: @unchecked Sendable {
         if let cached { return cached }
         let text: String?
         do { text = try keychain.read() } catch { return nil }
-        guard let text else {
+        guard let text else { return adoptPreviousLocked() }
+        guard let contents = CredentialVault.decode(text) else { return nil }
+        cached = contents
+        return contents
+    }
+
+    /// 新账号上没有条目:旧账号上有就搬过来。旧条目读不出(锁着、超时)返回 nil,跟新条目读不出一样不让人覆盖;
+    /// 旧条目内容坏了当没有。写新账号失败时照样用旧条目的内容、旧条目留着,下次读再搬。
+    private func adoptPreviousLocked() -> [String: Any]? {
+        let text: String?
+        do { text = try previous?.read() } catch { return nil }
+        guard let text, let contents = CredentialVault.decode(text) else {
             cached = [:]
             return [:]
         }
-        guard let contents = CredentialVault.decode(text) else { return nil }
+        if (try? keychain.write(text)) != nil {
+            try? previous?.delete()
+        }
         cached = contents
         return contents
     }

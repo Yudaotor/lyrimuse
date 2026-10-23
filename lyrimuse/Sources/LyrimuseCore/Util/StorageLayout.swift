@@ -66,15 +66,21 @@ public enum StorageLayout {
         return dataDir.path + path.dropFirst(legacy.count)
     }
 
-    /// 钥匙串保险箱条目的账号。数据目录在默认位置(新的或还没搬的旧的)时一律用旧目录的路径串:它只是个名字,
-    /// 搬目录不改它,钥匙串就不用跟着迁,旧版本也读得到;另起一份数据目录跑的(测试、排查)按自己的路径隔开。
-    /// 引擎侧 `credentialvault.go` 的 `credentialVaultAccount()` 同一条规则。
+    /// 钥匙串保险箱条目的账号(钥匙串访问里「账户」那一栏)。数据目录在默认位置(新的或还没搬的旧的)时一律用新数据目录的路径串;
+    /// 另起一份数据目录跑的(测试、排查)按自己的路径隔开。引擎侧 `credentialvault.go` 的 `credentialVaultAccount()` 同一条规则。
     public static func credentialAccount(dataDir: URL, roots: Roots) -> String {
         let path = dataDir.standardizedFileURL.path
-        if path == roots.data.standardizedFileURL.path || path == roots.legacy.standardizedFileURL.path {
-            return roots.legacy.standardizedFileURL.path
-        }
-        return path
+        return isDefaultDataDir(path, roots: roots) ? roots.data.standardizedFileURL.path : path
+    }
+
+    /// 默认位置以前用过的账号(旧目录的路径串):那里有条目就搬到 `credentialAccount`。另起的数据目录没有。见 15 章决策 73。
+    /// 引擎侧 `previousCredentialVaultAccount()` 同一条规则。
+    public static func previousCredentialAccount(dataDir: URL, roots: Roots) -> String? {
+        isDefaultDataDir(dataDir.standardizedFileURL.path, roots: roots) ? roots.legacy.standardizedFileURL.path : nil
+    }
+
+    private static func isDefaultDataDir(_ path: String, roots: Roots) -> Bool {
+        path == roots.data.standardizedFileURL.path || path == roots.legacy.standardizedFileURL.path
     }
 
     /// 只放在缓存目录里的文件:删掉只会重新联网查一次或重算一遍,没有用户输入、历史、待发队列,也不是 App 与引擎之间的

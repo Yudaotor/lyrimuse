@@ -188,6 +188,44 @@ func TestReadCredentialVaultFromRealKeychain(t *testing.T) {
 	}
 }
 
+// 默认位置的新账号上没有条目时读以前的账号(App 还没把它搬过来);新账号上有就只认新的。
+func TestReadCredentialVaultFallsBackToPreviousAccount(t *testing.T) {
+	if _, err := os.Stat("/usr/bin/security"); err != nil {
+		t.Skip("没有 /usr/bin/security")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	data := filepath.Join(home, "Library", "Application Support", appBundleID())
+	t.Setenv("LYRIMUSE_CONFIG_DIR", data)
+	keychain := filepath.Join(t.TempDir(), "vault-test.keychain-db")
+	if out, err := exec.Command("/usr/bin/security", "create-keychain", "-p", "test", keychain).CombinedOutput(); err != nil {
+		t.Skipf("建不了临时钥匙串: %v %s", err, out)
+	}
+	t.Cleanup(func() { _ = exec.Command("/usr/bin/security", "delete-keychain", keychain).Run() })
+	old := credentialVaultKeychain
+	credentialVaultKeychain = keychain
+	t.Cleanup(func() { credentialVaultKeychain = old })
+	write := func(account, payload string) {
+		t.Helper()
+		line := `add-generic-password -U -s "` + credentialVaultService() + `" -a "` + account + `" -w ` +
+			base64.StdEncoding.EncodeToString([]byte(payload)) + ` "` + keychain + `"` + "\n"
+		cmd := exec.Command("/usr/bin/security", "-i")
+		cmd.Stdin = strings.NewReader(line)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("写条目失败: %v %s", err, out)
+		}
+	}
+
+	write(filepath.Join(home, ".config", clientName), `{"config":{"listenbrainz_token":"old"}}`)
+	if data, err := readCredentialVaultFromKeychain(); err != nil || string(data) != `{"config":{"listenbrainz_token":"old"}}` {
+		t.Errorf("新账号没有条目时应读到以前账号的,得到 %q %v", data, err)
+	}
+	write(data, `{"config":{"listenbrainz_token":"new"}}`)
+	if got, err := readCredentialVaultFromKeychain(); err != nil || string(got) != `{"config":{"listenbrainz_token":"new"}}` {
+		t.Errorf("新账号有条目时应只认新的,得到 %q %v", got, err)
+	}
+}
+
 // 钥匙串锁着时 security 会一直等用户解锁:限时到了就放弃,不卡住调用方。
 func TestReadCredentialVaultTimesOut(t *testing.T) {
 	script := filepath.Join(t.TempDir(), "security")
