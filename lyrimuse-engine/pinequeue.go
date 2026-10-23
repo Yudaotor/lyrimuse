@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -26,7 +27,10 @@ type pineQueueTrack struct {
 	Artist   string  `json:"artist"`
 	Album    string  `json:"album"`
 	Duration float64 `json:"duration"`
-	File     string  `json:"file"`
+	// File:Pine 是文件名,reAMP 是完整路径。
+	File string `json:"file"`
+	// path:这一行的本地文件(交给待播,见 upcomingTrack.path);App 不交,调用方按 File 补。
+	path string
 }
 
 // pineQueueAsk 让 App 读一次列表。单测替换它。
@@ -61,8 +65,23 @@ func pineUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
 	if q.Repeating == "one" || q.Repeating == "stop" {
 		return nil, true
 	}
+	pineFillPaths(q.Tracks, localFileCurrentPath(artist, title))
 	shuffled := pineObservePosition(pineQueueID(q.Tracks), pos, len(q.Tracks))
 	return pineListUpcoming(q.Tracks, pos, n, shuffled, q.Repeating == "all")
+}
+
+// pineFillPaths:Pine 的表里只有文件名,按当前这首所在的目录拼(一个文件夹拖进去的列表都在同一处;拼错的由
+// neteaseFileKeySong 的时长核对挡住)。不知道当前文件时不拼。纯函数。
+func pineFillPaths(tracks []pineQueueTrack, current string) {
+	if current == "" {
+		return
+	}
+	dir := filepath.Dir(current)
+	for i := range tracks {
+		if f := tracks[i].File; f != "" && !strings.ContainsRune(f, '/') {
+			tracks[i].path = filepath.Join(dir, f)
+		}
+	}
 }
 
 // pineCurrentIndex:文件名对得上的恰好一行;没有文件名、对不上或不止一行时按歌名歌手。纯函数。
@@ -114,7 +133,7 @@ func pineObservePosition(list string, pos, size int) (shuffled bool) {
 func pineListUpcoming(tracks []pineQueueTrack, pos, n int, shuffled, wrap bool) ([]upcomingTrack, bool) {
 	at := func(i int) (upcomingTrack, bool) {
 		t := tracks[i]
-		return upcomingTrack{artist: t.Artist, title: t.Title, album: t.Album, duration: t.Duration}, t.Title != "" && t.Artist != ""
+		return upcomingTrack{artist: t.Artist, title: t.Title, album: t.Album, duration: t.Duration, path: t.path}, t.Title != "" && t.Artist != ""
 	}
 	if shuffled {
 		return shuffleCandidates(len(tracks), pos, at), true

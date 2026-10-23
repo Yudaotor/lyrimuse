@@ -253,10 +253,10 @@ func runPlayerQueryTests() {
                     "reAMP 列表: 最多读 maxTracks 首")
         let tagged = LocalAudioFileTags(title: "稻香", artist: "周杰伦", album: "魔杰座", duration: 223.5)
         expectEqual(R.track(path: "/m/x.mp3", tags: tagged),
-                    PinePlaylist.Track(title: "稻香", artist: "周杰伦", album: "魔杰座", duration: 223.5, file: "x.mp3"),
-                    "reAMP 列表: 有标签用标签,带精确时长和文件名")
+                    PinePlaylist.Track(title: "稻香", artist: "周杰伦", album: "魔杰座", duration: 223.5, file: "/m/x.mp3"),
+                    "reAMP 列表: 有标签用标签,带精确时长和完整路径")
         let untagged = R.track(path: "/m/AJR - Karma.mp3", tags: LocalAudioFileTags(title: "", artist: "", album: "", duration: 200))
-        expectEqual([untagged.artist, untagged.title, untagged.file], ["AJR", "Karma", "AJR - Karma.mp3"],
+        expectEqual([untagged.artist, untagged.title, untagged.file], ["AJR", "Karma", "/m/AJR - Karma.mp3"],
                     "reAMP 列表: 没写歌名的按文件名拆(同 reAMP 报文件名时的拆法)")
         expectEqual(R.track(path: "/m/track08.mp3", tags: nil).title, "track08", "reAMP 列表: 读不出标签、拆不出歌手时歌名是去掉扩展名的文件名")
         expectEqual([.shuffle, .repeatAll, .list, .repeatOne, nil].map(R.repeating), ["shuffle", "all", "off", nil, nil],

@@ -831,6 +831,11 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 		fromLocalClient = true
 		// 置空查询词让下面的循环整个跳过 —— queries 在该循环之后不再被使用。
 		queries = nil
+	} else if keyed, ok := neteaseFileKeySong(ctx, artist, title, durationSecs); ok {
+		// 本地文件标签里网易云记下的这首(neteasefilekey.go),同样不经搜索。
+		chosen = &keyed
+		fromLocalClient = true
+		queries = nil
 	}
 	// allSongs:各条查询词搜回来的全部结果,身份挑不出时给 neteaseLyricOnlyPick 用。
 	var allSongs []neSong

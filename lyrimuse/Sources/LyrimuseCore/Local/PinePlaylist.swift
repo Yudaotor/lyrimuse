@@ -31,6 +31,7 @@ public enum PinePlaylist {
         public var album: String
         /// 秒,0 = 读不出。
         public var duration: Double
+        /// Pine 是文件名,reAMP(`ReampPlaylist`)是完整路径。
         public var file: String
 
         public init(title: String, artist: String, album: String, duration: Double, file: String) {

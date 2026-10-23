@@ -193,10 +193,11 @@ func voxCurrentIndex(rows []voxUpcomingRow, currentPath, artist, title string) i
 
 // voxRowTrack:一行换成预取的曲目;猜不准的(见 voxPickUpcoming 头注)ok=false。
 func voxRowTrack(r voxUpcomingRow) (upcomingTrack, bool) {
-	if voxRowPath(r.URL) == "" || r.Name == "" || r.Artist == "" || looksLatin1Mojibake(r.Name+r.Artist+r.Album) {
+	path := voxRowPath(r.URL)
+	if path == "" || r.Name == "" || r.Artist == "" || looksLatin1Mojibake(r.Name+r.Artist+r.Album) {
 		return upcomingTrack{}, false
 	}
-	return upcomingTrack{artist: r.Artist, title: r.Name, album: r.Album, duration: r.Dur}, true
+	return upcomingTrack{artist: r.Artist, title: r.Name, album: r.Album, duration: r.Dur, path: path}, true
 }
 
 // voxRowPath:库里的文件地址(`file:///…`,百分号编码)换成路径;不是本地文件为 ""。

@@ -169,7 +169,7 @@ func TestTranslationStartIsWired(t *testing.T) {
 	}
 	upcoming := read("upcoming.go")
 	for _, needle := range []string{
-		"go resolveEnrichAsync(withBackgroundOutbound(withPlayerQueueTrack(withLyricSearchTitle(withTranslateAfterResolve(withYouTubeMusicVideoID(context.Background(), t.videoID)), lyricSearchTitle(t.title)))), key,",
+		"ctx := withLocalFilePath(withYouTubeMusicVideoID(context.Background(), t.videoID), t.path)\n\t\tgo resolveEnrichAsync(withBackgroundOutbound(withPlayerQueueTrack(withLyricSearchTitle(withTranslateAfterResolve(ctx), lyricSearchTitle(t.title)))), key,",
 		"} else if exists && !claim {\n\t\t\t\t// 解析过、但还没译文的",
 	} {
 		if !containsCode(upcoming, needle) {

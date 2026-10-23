@@ -32,6 +32,12 @@ func id3Tag(version byte, frames ...[]byte) []byte {
 	return append(header, tag...)
 }
 
+// embeddedLyricsFromID3:只看 tagsFromID3 里的歌词。
+func embeddedLyricsFromID3(header, tag []byte) (string, bool) {
+	t := tagsFromID3(header, tag)
+	return t.lyrics, t.hasLyrics
+}
+
 func usltBody(enc byte, text []byte) []byte {
 	body := []byte{enc, 'c', 'h', 'i', 0}
 	return append(body, text...)
@@ -89,6 +95,10 @@ func TestEmbeddedLyricsSYLT(t *testing.T) {
 	want := "[00:01.00]第一句\n[01:05.23]第二句\n"
 	if !ok || got != want {
 		t.Fatalf("SYLT 换成 LRC:得到 %q,想要 %q", got, want)
+	}
+	before := id3Tag(3, id3Frame(3, "USLT", usltBody(3, []byte(embeddedLRC))), id3Frame(3, "SYLT", body))
+	if got, ok := embeddedLyricsFromID3(before[:10], before[10:]); !ok || got != want {
+		t.Errorf("SYLT 压过排在它前面、写成 LRC 的 USLT:得到 %q", got)
 	}
 }
 

@@ -134,14 +134,13 @@ func localFileLyrics(artist, title string) (string, bool) {
 	return strings.ReplaceAll(text, "\r\n", "\n"), true
 }
 
-// localFileEmbeddedMemoMax:标签歌词的结论最多记几个文件。
+// localFileEmbeddedMemoMax:标签的结论最多记几个文件。待播预取会一次问好几首,别小于预取的首数。
 const localFileEmbeddedMemoMax = 16
 
 type localFileEmbeddedVerdict struct {
 	modTime time.Time
 	size    int64
-	text    string
-	ok      bool
+	tags    localFileTags
 }
 
 var (
@@ -149,27 +148,33 @@ var (
 	localFileEmbeddedMemoed = map[string]localFileEmbeddedVerdict{}
 )
 
-// localFileEmbeddedLyricsMemo:同 localFileEmbeddedLyrics,结论按路径记下,文件的修改时间和大小没变就不再读。标签区要整块读
-// (最多 16MB,常带封面),播放期间反复问、文件又可能在 NAS / 外置盘上,不能每次都读一遍;只 stat 一下。
+// localFileEmbeddedLyricsMemo:同 localFileEmbeddedLyrics,结论记在 localFileTagsMemo 里。
 func localFileEmbeddedLyricsMemo(path string) (string, bool) {
+	t := localFileTagsMemo(path)
+	return t.lyrics, t.hasLyrics
+}
+
+// localFileTagsMemo:同 readLocalFileTags,结论按路径记下,文件的修改时间和大小没变就不再读。标签区要整块读
+// (最多 16MB,常带封面),播放期间反复问、文件又可能在 NAS / 外置盘上,不能每次都读一遍;只 stat 一下。
+func localFileTagsMemo(path string) localFileTags {
 	info, err := os.Stat(path)
 	if err != nil {
-		return "", false
+		return localFileTags{}
 	}
 	localFileEmbeddedMemoMu.Lock()
 	m, seen := localFileEmbeddedMemoed[path]
 	localFileEmbeddedMemoMu.Unlock()
 	if seen && m.size == info.Size() && m.modTime.Equal(info.ModTime()) {
-		return m.text, m.ok
+		return m.tags
 	}
-	text, ok := localFileEmbeddedLyrics(path)
+	tags := readLocalFileTags(path)
 	localFileEmbeddedMemoMu.Lock()
 	if _, had := localFileEmbeddedMemoed[path]; !had && len(localFileEmbeddedMemoed) >= localFileEmbeddedMemoMax {
 		clear(localFileEmbeddedMemoed)
 	}
-	localFileEmbeddedMemoed[path] = localFileEmbeddedVerdict{modTime: info.ModTime(), size: info.Size(), text: text, ok: ok}
+	localFileEmbeddedMemoed[path] = localFileEmbeddedVerdict{modTime: info.ModTime(), size: info.Size(), tags: tags}
 	localFileEmbeddedMemoMu.Unlock()
-	return text, ok
+	return tags
 }
 
 func readLocalLyricsFile(path string) (string, bool) {

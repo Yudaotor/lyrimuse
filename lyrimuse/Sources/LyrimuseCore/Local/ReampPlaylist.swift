@@ -30,15 +30,16 @@ public enum ReampPlaylist {
         return out
     }
 
-    /// 一个文件 → 曲目:标签里有歌名的用标签(乱码还原);没有的照 reAMP 报文件名的样子拆。`tags` 为 nil = 读不出。纯函数,selftest 覆盖。
+    /// 一个文件 → 曲目:标签里有歌名的用标签(乱码还原);没有的照 reAMP 报文件名的样子拆。`file` 交完整路径:引擎按它认当前这首,
+    /// 也按它读待播文件的标签(`neteasefilekey.go`)。`tags` 为 nil = 读不出。纯函数,selftest 覆盖。
     public static func track(path: String, tags: LocalAudioFileTags?) -> PinePlaylist.Track {
         let fileName = URL(fileURLWithPath: path).lastPathComponent
         if let tags, let id = PlayerTitleSplit.identity(from: tags) {
-            return PinePlaylist.Track(title: id.title, artist: id.artist, album: id.album, duration: id.duration ?? 0, file: fileName)
+            return PinePlaylist.Track(title: id.title, artist: id.artist, album: id.album, duration: id.duration ?? 0, file: path)
         }
         let split = PlayerTitleSplit.split(bundleID: PlaybackPlayer.reamp.bundleIdentifier, title: fileName, artist: nil)
         return PinePlaylist.Track(title: split?.title ?? fileName, artist: split?.artist ?? "", album: "",
-                                  duration: tags?.duration ?? 0, file: fileName)
+                                  duration: tags?.duration ?? 0, file: path)
     }
 
     /// 菜单里的档 → 交给引擎的写法:开着随机交 `shuffle`(随机优先,这时读不出循环),列表循环 `all`,都关 `off`;读不出为 nil。

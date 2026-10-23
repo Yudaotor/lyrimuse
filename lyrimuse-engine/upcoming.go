@@ -60,6 +60,9 @@ type upcomingTrack struct {
 	duration float64
 	// videoID:YouTube Music 的 videoId(Kaset 的队列给);别家为空。解析时挂到 ctx 上,换名重搜能问到原名(ytmusiccredit.go)。
 	videoID string
+	// path:放本地文件的播放器(reAMP、VOX、Pine Player)待播的那个文件;别家为空。解析时挂到 ctx 上,网易云那条源按文件
+	// 标签里的曲目 id 取(neteasefilekey.go)。
+	path string
 }
 
 // upcomingFromQueue 取这个播放器接下来会播的几首。
@@ -328,8 +331,9 @@ func queueUpcomingEnrich(tracks []upcomingTrack, gen uint64) {
 		// 曲名先过 normEnrichTitle,跟 trackEnrichment 发起搜索用同一份查询词:key 里剥掉的尾括号
 		// (「（合作音乐人:X）」这类)原样发给歌词源会全部落空,落下的空条目正好占着播放时的 key。
 		// 解析完接着排机翻,播到时译文已经在缓存里(见 translatestart.go)。videoId 只有 Kaset 的待播带,
-		// 换名重搜时用它问 YouTube Music 登记的原名(见 ytmusiccredit.go)。
-		go resolveEnrichAsync(withBackgroundOutbound(withPlayerQueueTrack(withLyricSearchTitle(withTranslateAfterResolve(withYouTubeMusicVideoID(context.Background(), t.videoID)), lyricSearchTitle(t.title)))), key, t.artist, normEnrichTitle(t.title), t.album, "", t.duration, false)
+		// 换名重搜时用它问 YouTube Music 登记的原名(见 ytmusiccredit.go);本地文件的路径只有放本地文件的播放器的待播带。
+		ctx := withLocalFilePath(withYouTubeMusicVideoID(context.Background(), t.videoID), t.path)
+		go resolveEnrichAsync(withBackgroundOutbound(withPlayerQueueTrack(withLyricSearchTitle(withTranslateAfterResolve(ctx), lyricSearchTitle(t.title)))), key, t.artist, normEnrichTitle(t.title), t.album, "", t.duration, false)
 	}
 	// 正常路径也打一行 —— 同专辑那条路当初只在"超上限被跳过"时打日志,于是"预取到底跑没跑"
 	// 完全不可观测,排查时卡在过这一点上。
