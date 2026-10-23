@@ -1061,11 +1061,13 @@ final class WebLyricsScreenRenderer {
                 fontSize: fs, romaFontSize: fs * 0.54, translationFontSize: fs * 0.57,
                 fontFamily: playback.lyricsFontFamily, textColor: text, secondaryColor: secondary,
                 showRomanization: playback.showRomanization, showTranslation: playback.showTranslation,
-                // 手机竖放时上面那一列居中,歌词也居中(同迷你「多行」:对唱照样分边,末尾创作者不画),不画滚动指示条。
-                centered: arrangement == .phoneStacked, wordRise: true,
+                centered: false, wordRise: true,
                 reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
                 duetInsetUnit: LyricDuetLayout.insets(for: .leading, availableWidth: columnWidth, fontSize: fs).trailing,
-                scale: CGFloat(viewport.scale))
+                scale: CGFloat(viewport.scale),
+                // 对齐跟歌词窗口完整尺寸的「对齐方式」走
+                forcedSide: playback.fullAlignment.forcedDuetSide)
+            // 手机竖放不画滚动指示条:上面那一列居中,右缘一根条跟它不搭
             list.apply(LyricsLayerList.Spec(
                 lines: playback.allLines, gapMarkers: playback.lyricsGapMarkersByIndex, songwriters: playback.songwriters,
                 style: style, lineSpacing: fs * 0.98, showsScrollIndicator: arrangement != .phoneStacked,
