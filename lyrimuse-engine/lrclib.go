@@ -192,8 +192,7 @@ func lrclibRequest(ctx context.Context, url string, timeout time.Duration, out a
 		if err != nil {
 			return false
 		}
-		// LRCLIB 的使用规范要求带上能标识调用方的 User-Agent。
-		req.Header.Set("User-Agent", clientName+"/"+clientVersion+" (+https://github.com/Yudaotor/desktop-lyrics-suite)")
+		req.Header.Set("User-Agent", lrclibUserAgent())
 		resp, err := doHTTPTracked(lyricHTTPClient(timeout), req)
 		if err != nil {
 			noteLyricSubFetchFailure(ctx)
@@ -220,6 +219,11 @@ func lrclibRequest(ctx context.Context, url string, timeout time.Duration, out a
 			return false // 404(未收录)或其它错误放弃;下次 enrich 短 TTL 到期自然再试
 		}
 	}
+}
+
+// lrclibUserAgent:LRCLIB 的使用规范要求带上能标识调用方的 User-Agent,链接指向项目现在的仓库。
+func lrclibUserAgent() string {
+	return clientName + "/" + clientVersion + " (+https://github.com/Yudaotor/lyrimuse)"
 }
 
 // lrclibRetryWait:重发前等多久。后台请求还要等本地的后台暂停结束(第一次 503 / 429 刚把它暂停了,见

@@ -110,6 +110,29 @@ func TestLRCLIBGetSendsDuration(t *testing.T) {
 	}
 }
 
+// 每个请求都带 User-Agent,写明客户端名和现在的仓库地址。
+func TestLRCLIBSendsUserAgent(t *testing.T) {
+	var mu sync.Mutex
+	var agents []string
+	withLRCLIBFake(t, func(r *http.Request) (int, http.Header, string) {
+		mu.Lock()
+		agents = append(agents, r.Header.Get("User-Agent"))
+		mu.Unlock()
+		return http.StatusOK, nil, `{"trackName":"Song","artistName":"Artist","duration":200,"syncedLyrics":"` + lrclibSyncedFixture + `"}`
+	})
+	resolveLRCLIBLyric(qqRoundCtx(), "Artist", "Song", "", 200)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(agents) == 0 {
+		t.Fatal("没有发出请求")
+	}
+	for _, ua := range agents {
+		if !strings.HasPrefix(ua, clientName+"/") || !strings.Contains(ua, "https://github.com/Yudaotor/lyrimuse)") {
+			t.Errorf("User-Agent = %q,应以 %s/ 开头并带现在的仓库地址", ua, clientName)
+		}
+	}
+}
+
 // 本地时长未知:不带 duration,跟原来一样按名字查。
 func TestLRCLIBGetWithoutKnownDuration(t *testing.T) {
 	f := withLRCLIBFake(t, func(r *http.Request) (int, http.Header, string) {
