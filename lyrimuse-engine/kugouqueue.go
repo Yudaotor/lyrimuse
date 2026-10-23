@@ -423,7 +423,8 @@ func kugouPlayingSong(artist, title string, durationSecs float64) (mixID, albumI
 	}
 	mixID, albumID = rawDigitsID(rows[0].Mix), rawDigitsID(rows[0].Album)
 	if mixID != "" && albumID == "" {
-		ctx, cancel := withCancelAfter(withBackgroundOutbound(context.Background()), 5*time.Second)
+		// 为正在放的这首问,按前台发:后台请求要给存量导入、预取让路,5 秒内常排不上。
+		ctx, cancel := withCancelAfter(context.Background(), 5*time.Second)
 		defer cancel()
 		albumID = kugouAlbumIDByHash(ctx, h)
 	}
@@ -483,7 +484,8 @@ func kugouAlbumTracks(artist, title, album string) ([]albumTrack, bool) {
 	return tracks, true
 }
 
-// kugouAlbumIDByHash 按文件 hash 问这首属于哪张专辑。查不到返回 ""。
+// kugouAlbumIDByHash 按文件 hash 问这首属于哪张专辑。查不到返回 ""。问成了的结论按 hash 记住(没有专辑也记,不反复问);
+// 没问成的不记,下次再问。
 func kugouAlbumIDByHash(ctx context.Context, hash string) string {
 	kugouAlbumMu.Lock()
 	if id, ok := kugouAlbumIDCache[hash]; ok {
@@ -499,8 +501,8 @@ func kugouAlbumIDByHash(ctx context.Context, hash string) string {
 		return ""
 	}
 	id := out.AlbumID.String()
-	if id == "" || id == "0" {
-		return ""
+	if id == "0" {
+		id = ""
 	}
 	kugouAlbumMu.Lock()
 	kugouAlbumIDCache[hash] = id

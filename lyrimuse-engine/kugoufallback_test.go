@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -192,5 +193,70 @@ func TestKugouAlbumIDByHashFallsBackToHTTPS(t *testing.T) {
 	})
 	if id := kugouAlbumIDByHash(qqRoundCtx(), "abc"); id != "968210" {
 		t.Fatalf("该从 https 拿到专辑 id: %q", id)
+	}
+}
+
+// 按 hash 问专辑:问成了的结论记住(没有专辑也记,不反复问),没问成的不记;认出歌曲、专辑 id 还空着的按没读到算,隔 20 秒再问。
+func TestKugouAlbumIDByHashRemembersAnswers(t *testing.T) {
+	f := withKugouFakeReq(t, func(r *http.Request, target string) (int, string) {
+		switch r.URL.Query().Get("hash") {
+		case "HASALB":
+			return 200, `{"albumid":966846}`
+		case "NOALB":
+			return 200, `{"albumid":0}`
+		}
+		return 500, ""
+	})
+	kugouAlbumMu.Lock()
+	saved := kugouAlbumIDCache
+	kugouAlbumIDCache = map[string]string{}
+	kugouAlbumMu.Unlock()
+	t.Cleanup(func() {
+		kugouAlbumMu.Lock()
+		kugouAlbumIDCache = saved
+		kugouAlbumMu.Unlock()
+	})
+	ctx := context.Background()
+	hits := func() int {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		n := 0
+		for _, v := range f.hits {
+			n += v
+		}
+		return n
+	}
+	if got := kugouAlbumIDByHash(ctx, "HASALB"); got != "966846" {
+		t.Errorf("有专辑: %q", got)
+	}
+	if got := kugouAlbumIDByHash(ctx, "NOALB"); got != "" {
+		t.Errorf("albumid 0 是没有专辑: %q", got)
+	}
+	before := hits()
+	kugouAlbumIDByHash(ctx, "HASALB")
+	kugouAlbumIDByHash(ctx, "NOALB")
+	if hits() != before {
+		t.Errorf("问成了的结论(含没有专辑)不再问,多发了 %d 次", hits()-before)
+	}
+	kugouAlbumIDByHash(ctx, "FAIL")
+	kugouAlbumMu.Lock()
+	_, remembered := kugouAlbumIDCache["FAIL"]
+	kugouAlbumMu.Unlock()
+	if remembered {
+		t.Error("没问成的不记,下次再问")
+	}
+
+	if (playerCatalogAt{ids: playerCatalogIDs{songID: "65176349"}}).ttl() != playerCatalogMissTTL {
+		t.Error("认出歌曲、专辑 id 空着的按没读到算")
+	}
+	if (playerCatalogAt{ids: playerCatalogIDs{songID: "65176349", songAlbum: "966846"}}).ttl() != playerCatalogHitTTL {
+		t.Error("歌曲、专辑都有的按读到算")
+	}
+	src, err := os.ReadFile("kugouqueue.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsCode(string(src), "ctx, cancel := withCancelAfter(context.Background(), 5*time.Second)\n\t\tdefer cancel()\n\t\talbumID = kugouAlbumIDByHash(ctx, h)") {
+		t.Error("为正在放的这首问专辑按前台发")
 	}
 }

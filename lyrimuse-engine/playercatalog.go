@@ -33,7 +33,8 @@ import (
 // 专辑页、歌手页只有 App 用,跟 QQAlbumMid 一样不进 fields()。
 
 // 同一首多久再读一次:trackEnrichment 在同一首歌的播放期间每几秒进来一次,本机数据不必每次都读;客户端开播后才把
-// 这首写进去(Spotify 的曲目 id 也是换曲那一拍才记下),没读到的隔一会儿再试。
+// 这首写进去(Spotify 的曲目 id 也是换曲那一拍才记下),没读到的隔一会儿再试。认出了歌曲、专辑 id 还空着的也按没读到算
+// (酷狗的专辑 id 要联网问,开播那会儿可能没问成)。
 const (
 	playerCatalogHitTTL  = 10 * time.Minute
 	playerCatalogMissTTL = 20 * time.Second
@@ -57,7 +58,7 @@ type playerCatalogAt struct {
 }
 
 func (m playerCatalogAt) ttl() time.Duration {
-	if m.ids == (playerCatalogIDs{}) {
+	if m.ids == (playerCatalogIDs{}) || (m.ids.songID != "" && m.ids.songAlbum == "") {
 		return playerCatalogMissTTL
 	}
 	return playerCatalogHitTTL
