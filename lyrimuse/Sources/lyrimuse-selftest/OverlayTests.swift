@@ -904,27 +904,27 @@ func runOverlayTests() {
                     "从右往左(契约): 歌词窗口 SwiftUI 逐词行按从右往左摆、对齐不变")
     }
 
-    // ---- 字形出框:带组合附加符号的行按实际墨迹加高长图,可视窗只在左右裁 ----
+    // ---- 字形出框:每一行按实际墨迹补长图,上下加高、左右加宽出血,可视窗跟着让出 ----
     do {
-        expectEqual(LyricInkExtent.mayOverflow("เท่านั้น"), true, "字形出框: 泰文声调符号要量")
-        expectEqual(LyricInkExtent.mayOverflow("بِسْمِ"), true, "字形出框: 阿拉伯文元音符号要量")
-        expectEqual(LyricInkExtent.mayOverflow("ཀྲྀ"), true, "字形出框: 藏文下加字要量")
-        expectEqual(LyricInkExtent.mayOverflow("e\u{0301}"), true, "字形出框: 拉丁字母加组合重音要量")
-        expectEqual(LyricInkExtent.mayOverflow("我们生来就是孤独"), false, "字形出框: 中文不量")
-        expectEqual(LyricInkExtent.mayOverflow("Once more, you open the door"), false, "字形出框: 英文不量")
-        expectEqual(LyricInkExtent.mayOverflow("Người không những"), false, "字形出框: 预组合的越南文不量")
-        expectEqual(LyricInkExtent.mayOverflow("한글 노래"), false, "字形出框: 韩文不量")
-        let inBox = LyricInkExtent.pads(inkBottom: 3, inkTop: 30, boxHeight: 35, inset: 2.4, scale: 2)
-        expectEqual(inBox.top == 0 && inBox.bottom == 0, true, "字形出框: 墨迹在预留圈以内不加高")
-        let over = LyricInkExtent.pads(inkBottom: 1, inkTop: 34.2, boxHeight: 35, inset: 2.4, scale: 2)
-        expectEqual(over.top, 2, "字形出框: 顶上超出预留圈 1.6pt,2x 屏对齐到 2pt")
-        expectEqual(over.bottom, 1.5, "字形出框: 底下超出预留圈 1.4pt,2x 屏对齐到 1.5pt")
-        expectEqual(LyricInkExtent.pads(inkBottom: 0, inkTop: 36.2, boxHeight: 35, inset: 0, scale: 1).top, 2,
+        func over(_ l: CGFloat, _ r: CGFloat, _ b: CGFloat, _ t: CGFloat, inset: CGFloat = 2.4, scale: CGFloat = 2) -> LyricInkExtent.Overflow {
+            LyricInkExtent.overflow(inkLeft: l, inkRight: r, inkBottom: b, inkTop: t,
+                                    boxWidth: 200, boxHeight: 35, inset: inset, scale: scale)
+        }
+        expectEqual(over(3, 197, 3, 30), .none, "字形出框: 墨迹在预留圈以内不补")
+        let tall = over(3, 197, 1, 34.2)
+        expectEqual(tall.top, 2, "字形出框: 顶上超出预留圈 1.6pt,2x 屏对齐到 2pt")
+        expectEqual(tall.bottom, 1.5, "字形出框: 底下超出预留圈 1.4pt,2x 屏对齐到 1.5pt")
+        expectEqual(tall.side, 0, "字形出框: 只出上下时不加宽")
+        expectEqual(over(1.4, 197, 3, 30).side, 1, "字形出框: 首字往左超出 1pt,两侧出血各加 1pt")
+        expectEqual(over(3, 199.1, 3, 30).side, 1.5, "字形出框: 末字往右超出 1.5pt,取两边较大的")
+        expectEqual(over(1.9, 198.8, 3, 30).side, 1.5, "字形出框: 两边都出时取较大的一边")
+        expectEqual(over(0, 200, 0, 36.2, inset: 0, scale: 1), LyricInkExtent.Overflow(top: 2, bottom: 0, side: 0),
                     "字形出框: 没有描边时以长图边沿为界,1x 屏对齐到整点")
         let row = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse/UI/OverlayScrollingLyricRow.swift"), encoding: .utf8)) ?? ""
-        expectEqual(sourceHas(row, "let pads = OverlayRowRaster.inkPads(g, spec: spec)"), true,
-                    "字形出框(契约): 排版时量墨迹、加高长图")
+        expectEqual(sourceHas(row, "let ink = OverlayRowRaster.inkOverflow(first, spec: spec)")
+                        && sourceHas(row, "var g = ink.side > 0 ? layout(spec: spec, scale: scale, extraBleed: ink.side) : first"), true,
+                    "字形出框(契约): 排版后量墨迹,左右出框的加宽出血重排")
         expectEqual(sourceHas(row, "let mainY = g.inset + g.inkPadBottom + g.romaHeight + g.romaGap + 1"), true,
                     "字形出框(契约): 出图时字往上挪底下加高的那一截")
         expectEqual(sourceHas(row, "clipLayer.masksToBounds = true") && !sourceHas(row, "layer?.masksToBounds = true"), true,
@@ -933,6 +933,8 @@ func runOverlayTests() {
                     "字形出框(契约): 可视窗上下让出加高的部分")
         expectEqual(sourceHas(row, "if clipLayer.mask !== fadeMask { clipLayer.mask = fadeMask }"), true,
                     "字形出框(契约): 尾部渐隐遮罩挂在可视窗上")
+        expectEqual(sourceHas(row, "let sideRoom = layoutW <= viewW ? bleed : 0"), true,
+                    "字形出框(契约): 装得下时可视窗左右让出出血,滚动时不让")
     }
 
     // ---- 图层行不设帧率区间(契约):设了系统按上限跑满,不设反而画得更少(04 章决策 68) ----
