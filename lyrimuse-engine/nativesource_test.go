@@ -240,3 +240,20 @@ func TestNeedsLyricsRetry_DurationMismatch(t *testing.T) {
 		t.Error("手改过的歌词绝不能被时长错配重搜")
 	}
 }
+
+// Apple Music 的同源目标除了它自家的源,还有放本地文件时那份文件里的歌词;别家不带上本地文件。
+func TestNativeSourcesForAppleMusicIncludeLocalFile(t *testing.T) {
+	t.Cleanup(func() { setNativeLyricSourcesForPlayer("") })
+	setNativeLyricSourcesForPlayer(appleMusicBundleID)
+	if !isNativeLyricSource(lyricSourceAppleMusic) || !isNativeLyricSource(localFileLyricsSource) {
+		t.Error("Apple Music:自家源和本地文件都算同源")
+	}
+	setNativeLyricSourcesForPlayer(spotifyBundleID)
+	if isNativeLyricSource(localFileLyricsSource) || isNativeLyricSource(lyricSourceAppleMusic) {
+		t.Error("换到 Spotify 要整份换掉")
+	}
+	setNativeLyricSourcesForPlayer(reampBundleID)
+	if !isNativeLyricSource(localFileLyricsSource) || isNativeLyricSource(lyricSourceAppleMusic) {
+		t.Error("reAMP 只有本地文件")
+	}
+}

@@ -3539,6 +3539,9 @@ public final class LocalPlaybackSource: ObservableObject {
                 ? VoxPlayerInfo.currentFilePath(artist: snapshot.artist ?? "", title: snapshot.title ?? "")
                 : bundleID == PinePlayerInfo.bundleID
                 ? PinePlayerInfo.currentFilePath(artist: snapshot.artist ?? "", title: snapshot.title ?? "")
+                : bundleID == PlaybackPlayer.appleMusic.bundleIdentifier
+                ? AppleMusicLocalFile.currentFilePath(artist: snapshot.artist ?? "", title: snapshot.title ?? "",
+                                                      catalogTrackID: provenance?.identifiers?.catalogTrackID)
                 : PlayerTitleSplit.currentFilePath(bundleID: bundleID, artist: snapshot.artist ?? "",
                                                    title: snapshot.title ?? ""),
             spoken: bundleID == PlaybackPlayer.qqMusic.bundleIdentifier && spokenAudioKey == snapshot.identityKey

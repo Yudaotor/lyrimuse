@@ -12,11 +12,13 @@ import (
 	"unicode/utf16"
 )
 
-// 放本地文件的播放器(reAMP、VOX)正在放的那首,同目录同名的 .lrc —— 用户自己给这个文件配的歌词。App 找到正在放的文件
-// (reAMP 按进程号找开着的文件,VOX 由脚本接口直接给),把路径写进播放状态(local_file,只对这两家填);只在正用它放这首时读。
+// 放本地文件的播放器正在放的那首,同目录同名的 .lrc —— 用户自己给这个文件配的歌词。App 找到正在放的文件
+// (reAMP 按进程号找开着的文件,VOX 由脚本接口直接给,Pine 读界面,Apple Music 换歌时问一次脚本的 location),把路径写进
+// 播放状态(local_file);只在正用它放这首时读。
 //
-// 不是歌词源:不进源清单,同 KKBOX 本地歌词(16 章 4.3)。players.json 里这两家的 nativeLyricSource 填它
-// (`playsLocalFiles` 按它认),按文件认这首、不靠搜,置 identityFromLocalClient 享受同源加权。见 02 章决策 126。
+// 不是歌词源:不进源清单,同 KKBOX 本地歌词(16 章 4.3)。players.json 里 reAMP、VOX、Pine 的 nativeLyricSource 填它
+// (`playsLocalFiles` 按它认);Apple Music 自家源是 applemusic,另外记在 `playsLocalFiles` 和同源加权的目标里
+// (setNativeLyricSourcesForPlayer)。按文件认这首、不靠搜,置 identityFromLocalClient 享受同源加权。见 02 章决策 126、178。
 
 // localFileLyricsSource:同名 .lrc 那份候选的来源名(歌词缓存的 lyrics_source、决策记录、界面上的来源都用它)。
 const localFileLyricsSource = "localfile"
@@ -30,10 +32,11 @@ var (
 	localFileCurrent struct{ artist, title, path string }
 )
 
-// playsLocalFiles:这个播放器放的是用户自己的文件(players.json 里 nativeLyricSource 填 localfile 的:reAMP、VOX)。
+// playsLocalFiles:这个播放器会放用户自己的文件:players.json 里 nativeLyricSource 填 localfile 的(reAMP、VOX、Pine),
+// 加上放资料库里本地文件的 Apple Music。
 func playsLocalFiles(bundleID string) bool {
 	player := playerForBundleID(bundleID)
-	return player != "" && playerNativeLyricSources[player] == localFileLyricsSource
+	return player != "" && (playerNativeLyricSources[player] == localFileLyricsSource || player == playerAppleMusic)
 }
 
 // noteLocalFileCurrentTrack:每拍读到 App 的播放状态时记下当前曲目的文件。不是放本地文件的播放器或没有文件时清掉。

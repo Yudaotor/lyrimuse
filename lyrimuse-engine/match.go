@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
+	"maps"
 	"math"
 	"regexp"
 	"slices"
@@ -791,10 +792,16 @@ func setNativeLyricSourcesForPlayer(bundleID string) {
 		nativeLyricSources = nil
 		return
 	}
-	if len(nativeLyricSources) == 1 && nativeLyricSources[src] {
+	want := map[string]bool{src: true}
+	if player == playerAppleMusic {
+		// 放资料库里的本地文件时,文件旁的 .lrc、文件标签里的歌词就是它自己显示的那份(localfilelyrics.go);放流媒体时
+		// 没有这一份候选,不影响别的源。
+		want[localFileLyricsSource] = true
+	}
+	if maps.Equal(nativeLyricSources, want) {
 		return // 没变,不重建 map
 	}
-	nativeLyricSources = map[string]bool{src: true}
+	nativeLyricSources = want
 }
 
 // isNativeLyricSource / hasNativeLyricSource 是读侧的唯一入口 —— 直接索引那个 map 会跟

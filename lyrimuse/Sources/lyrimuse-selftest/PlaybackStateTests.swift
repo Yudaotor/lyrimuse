@@ -233,6 +233,30 @@ func runPlaybackStateTests() {
                              "guard heartbeat == nil || heartbeatEvery != interval else { return }"), true,
                 "保活: 每次发布按当前状态对一次计时器,换档时重建")
 
+    // ---- Apple Music 放资料库里的本地文件:换歌时问一次脚本的 location,写进 local_file(02 章决策 178)----
+    do {
+        typealias A = AppleMusicLocalFile
+        expectEqual(A.parse("稻香\t/Users/x/Music/稻香.m4a\n", title: "稻香"), "/Users/x/Music/稻香.m4a", "Apple Music 本地文件: 歌名对上交路径")
+        expectEqual(A.parse("夜曲\t/Users/x/Music/夜曲.m4a", title: "稻香"), nil, "Apple Music 本地文件: 问的时候已经换歌,不认")
+        expectEqual(A.parse("", title: "稻香"), nil, "Apple Music 本地文件: 不是 file track 回空串")
+        expectEqual(A.parse("稻香\tMacintosh HD:Users:x", title: "稻香"), nil, "Apple Music 本地文件: 不是 POSIX 路径不认")
+        expectEqual(A.parse("A\tB\t/m/a\tb.mp3", title: "A\tB"), nil, "Apple Music 本地文件: 按第一个 tab 分,歌名里不该有 tab")
+        expectEqual(A.shouldAsk(title: "稻香", catalogTrackID: nil) && A.shouldAsk(title: "稻香", catalogTrackID: 0), true,
+                    "Apple Music 本地文件: 没有目录 ID 才问")
+        expectEqual(A.shouldAsk(title: "稻香", catalogTrackID: 1440841426), false, "Apple Music 本地文件: 带目录 ID(流媒体)不问")
+        expectEqual(A.shouldAsk(title: "稻香", catalogTrackID: -2274568625394189619), true,
+                    "Apple Music 本地文件: 负数是资料库 persistent ID(本地文件也报),照样问")
+        expectEqual(A.shouldAsk(title: "", catalogTrackID: nil), false, "Apple Music 本地文件: 没歌名不问")
+        expectEqual(sourceHas(A.script, #"if application "Music" is not running then return """#)
+                    && sourceHas(A.script, "if player state is stopped then return")
+                    && sourceHas(A.script, "if class of t is not file track then return"), true,
+                    "Apple Music 本地文件: 脚本不拉起 Music、停着不问、只认 file track")
+        let localSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/LocalPlaybackSource.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(localSource, "bundleID == PlaybackPlayer.appleMusic.bundleIdentifier ? AppleMusicLocalFile.currentFilePath("),
+                    true, "Apple Music 本地文件: 播放状态的 local_file 接上")
+    }
+
     // ---- 放歌时持有系统活动(防 App Nap 推迟保活),别的状态不持有(02 章决策 89)----
     expectEqual(PlaybackStatePublisher.holdsActivity(for: .playing), true, "防节能: 放歌时持有活动")
     for state in [F.State.paused, .idle, .exiting] {

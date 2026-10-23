@@ -83,6 +83,10 @@ func TestLocalFileLyricsOnlyForCurrentTrack(t *testing.T) {
 	if _, ok := localFileLyrics("Hawk Nelson", "Sold Out"); !ok {
 		t.Error("VOX 也放本地文件,同样读同名 .lrc")
 	}
+	noteLocalFileCurrentTrack(appleMusicBundleID, "Hawk Nelson", "Sold Out", audio)
+	if _, ok := localFileLyrics("Hawk Nelson", "Sold Out"); !ok {
+		t.Error("Apple Music 放资料库里的本地文件,同样读同名 .lrc")
+	}
 	noteLocalFileCurrentTrack(kkboxBundleID, "Hawk Nelson", "Sold Out", audio)
 	if _, ok := localFileLyrics("Hawk Nelson", "Sold Out"); ok {
 		t.Error("只对放本地文件的播放器记当前文件")
@@ -97,7 +101,7 @@ func TestPlaysLocalFiles(t *testing.T) {
 		{reampBundleID, true},
 		{voxBundleID, true},
 		{pinePlayerBundleID, true},
-		{appleMusicBundleID, false},
+		{appleMusicBundleID, true},
 		{kkboxBundleID, false},
 		{"com.example.player", false},
 		{"", false},
