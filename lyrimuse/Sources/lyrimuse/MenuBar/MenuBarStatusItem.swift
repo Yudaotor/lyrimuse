@@ -53,13 +53,18 @@ final class MenuBarStatusItem: NSObject {
         // (macOS 26 只认出生宽度,见 present 头注)。先建一个、再让 refresh 拆掉重建,
         // 启动就白白多一次邻居重排。
         panelController.onVisibilityChange = { [weak self] on in
-            self?.setButtonHighlighted(on)
-            self?.scrollingLabel.setHighlighted(on)
-            self?.liveIconView.setHighlighted(on)
-            self?.hoverControls.setHighlighted(on)
-            self?.setPanelOpen(on)
+            guard let self else { return }
+            // 挂在「菜单栏正中」那一扇下面时状态栏这一格不反白:点的不是它。
+            let highlighted = on && self.panelController.isAnchored(to: self.statusItem?.button)
+            self.setButtonHighlighted(highlighted)
+            self.scrollingLabel.setHighlighted(highlighted)
+            self.liveIconView.setHighlighted(highlighted)
+            self.hoverControls.setHighlighted(highlighted)
+            self.setPanelOpen(on)
         }
         hoverControls.onHoverChange = { [weak self] inside in self?.handleHoverChange(inside) }
+        centerLyrics.onHoverChange = { [weak self] _ in self?.evaluateCenterHoverEngagement() }
+        centerLyrics.onClick = { [weak self] click, view, point in self?.centerLyricsClicked(click, view: view, at: point) }
         positionHintController.onVisibilityChange = { [weak self] open in
             self?.positionHintIsOpen = open
             if !open { self?.refresh() }
@@ -223,7 +228,10 @@ final class MenuBarStatusItem: NSObject {
         //
         // ① 开关本身 —— 拨掉的时候如果正接管着,要立刻把歌词放回来(用户就是盯着菜单栏拨的)。
         settings.$menuBarHoverShowsControls.dropFirst().receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.evaluateHoverEngagement() }.store(in: &cancellables)
+            .sink { [weak self] _ in
+                self?.evaluateHoverEngagement()
+                self?.evaluateCenterHoverEngagement()
+            }.store(in: &cancellables)
         // ② 中间那个键画 ⏸ 还是 ▶。用**观感层** isPlayingSmoothed 而不是 isPlayingNow:
         // 这三个键最典型的用法就是"点一下暂停",而真实链路(命令→播放器切状态→分布式通知→
         // poll→apply)实测 0.5~1s,等真值回读图标才翻,手指还压在键上却看着像没生效
@@ -231,10 +239,16 @@ final class MenuBarStatusItem: NSObject {
         // 这条**不能**走 refresh():接管期间 refresh 是早退的(见它开头那道 guard),
         // 图标要在接管期间照样跟得上,所以直接推给那一层自己重画。
         coordinator.$isPlayingSmoothed.removeDuplicates().receive(on: DispatchQueue.main)
-            .sink { [weak self] on in self?.hoverControls.setPlaying(on) }.store(in: &cancellables)
+            .sink { [weak self] on in
+                self?.hoverControls.setPlaying(on)
+                self?.centerLyrics.setHoverPlaying(on)
+            }.store(in: &cancellables)
         // 播放控制此刻会被拦下就把那三个字形画淡(见 PlaybackCoordinator.playbackControlsWithheldReason)。
         coordinator.$playbackControlsWithheldReason.map { $0 != nil }.removeDuplicates().receive(on: DispatchQueue.main)
-            .sink { [weak self] on in self?.hoverControls.setWithheld(on) }.store(in: &cancellables)
+            .sink { [weak self] on in
+                self?.hoverControls.setWithheld(on)
+                self?.centerLyrics.setHoverWithheld(on)
+            }.store(in: &cancellables)
         // 逐字染色开关:用户就是盯着菜单栏拨的,当前句要立刻上色/褪色。
         settings.$menuBarLyricsKaraoke.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
@@ -610,6 +624,7 @@ final class MenuBarStatusItem: NSObject {
         // 面板收 = 指针大概率还停在这一项上,补一次判定把三键接回来。
         // 顺序在 refresh() 之后:接管态的进/出各自要一次内容重画,合在一起会互相盖。
         evaluateHoverEngagement()
+        evaluateCenterHoverEngagement()
     }
     /// 这一轮收缩观察窗的起点。必须记住起点而不是每次给满窗:推迟的重跑走的还是
     /// refresh() → present(),不记起点的话每次重算都重新发满一个观察窗,收缩被无限
@@ -969,6 +984,37 @@ final class MenuBarStatusItem: NSObject {
         }
     }
 
+    /// 点了「菜单栏正中」那一扇:手势跟状态栏那一格一样 —— 左键弹面板(挂在这一扇下面),悬停三键接管着时点在键上
+    /// 是播放控制;右键 / ⌃左键弹完整菜单。
+    private func centerLyricsClicked(_ click: MenuBarCenterLyrics.Click, view: NSView, at point: NSPoint) {
+        switch click {
+        case .menu:
+            popUpFullMenu(in: view, at: point)
+        case .primary:
+            if let control = centerLyrics.hoverControl(in: view, at: point) {
+                performTransportControl(control)
+                return
+            }
+            panelController.toggle(relativeTo: view)
+        }
+    }
+
+    /// 完整菜单在「菜单栏正中」那一扇上弹出:左上角落在点击处、菜单栏下沿,跟菜单栏里别的菜单一样往下展开。
+    /// 不反白:那一扇没有菜单栏那种选中底色,换成选中文字色反而看不清。
+    private func popUpFullMenu(in view: NSView, at point: NSPoint) {
+        guard !statusMenuIsOpen else { return }
+        if panelIsOpen { panelController.close() }
+        let menu = menuController.makeMenu(onHighlightChange: { _ in })
+        centerMenu = menu
+        statusMenuIsOpen = true
+        // 落点是第一项的上沿,菜单窗口顶上还有一圈留白;不扣掉的话顶边伸进菜单栏,被截掉一截、出滚动箭头(06 章决策 64)。
+        menu.popUp(positioning: nil, at: NSPoint(x: point.x, y: view.bounds.minY - Self.menuTopInset), in: view) // 菜单追踪期间阻塞在这里
+        statusMenuIsOpen = false
+        refresh()
+    }
+
+    private static let menuTopInset: CGFloat = 6
+
     /// 把完整菜单按老样子弹出来:临时挂到 item.menu 上借 performClick 的原生弹出
     /// (位置/反白/键盘导航都是系统行为),弹完立刻摘掉,不然下次左键也变成菜单。
     private func popUpFullMenu() {
@@ -1058,6 +1104,51 @@ final class MenuBarStatusItem: NSObject {
             refresh()
         }
     }
+
+    /// 「菜单栏正中」那几扇的悬停三键。条件同状态栏那一格(`evaluateHoverEngagement`):指针在某一扇上、开关开着、
+    /// 面板没开、那一扇的歌词格装得下三个键。接管期间 `refresh()` 早退、窗口不动,退出时补一次。
+    private func evaluateCenterHoverEngagement() {
+        let want = centerLyrics.isHovered && AppSettings.shared.menuBarHoverShowsControls && !panelIsOpen
+        guard want != centerLyrics.hoverEngaged else { return }
+        if want {
+            let coordinator = PlaybackCoordinator.shared
+            guard centerLyrics.engageHoverControls(
+                icon: lyricsIconBadge(), slotPadding: Self.lyricsSlotPadding,
+                playing: coordinator.isPlayingSmoothed, withheld: coordinator.playbackControlsWithheldReason != nil)
+            else { return }
+            logger.notice("center hover controls engaged")
+        } else {
+            centerLyrics.releaseHoverControls()
+            logger.notice("center hover controls released")
+            refresh()
+        }
+    }
+
+    /// 正中那一扇上弹着的完整菜单(给调试点击到点收起用)。
+    private weak var centerMenu: NSMenu?
+
+    /// `debug/menubar-center?hover=…&click=…`:当作指针进出、点了正中第一扇。右键那一下推迟到链接处理返回之后再弹
+    /// (同 `popUpMenuFromDeepLink`),菜单 `debugMenuSeconds` 秒后自己收,验证时不用去点。
+    func debugCenterInput(hover: Bool?, click: MenuBarCenterLyrics.Click?) {
+        if let hover { centerLyrics.debugHover(hover) }
+        guard let click else { return }
+        guard click == .menu else {
+            centerLyrics.debugClick(click)
+            return
+        }
+        let open = Timer(timeInterval: 0, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                let close = Timer(timeInterval: Self.debugMenuSeconds, repeats: false) { _ in
+                    MainActor.assumeIsolated { self?.centerMenu?.cancelTracking() }
+                }
+                RunLoop.main.add(close, forMode: .common)
+                self?.centerLyrics.debugClick(.menu)
+            }
+        }
+        RunLoop.main.add(open, forMode: .common)
+    }
+
+    private static let debugMenuSeconds: TimeInterval = 3
 
     /// 歌词那一格在按钮里的位置(纵向给满)。三个键就排在这一格里。
     ///
@@ -1184,7 +1275,7 @@ final class MenuBarStatusItem: NSObject {
         // 把这段时间的变化一次性落地(跟面板开着期间挡下几何变化同一个模型)。
         // 中间那个键的 ⏸/▶ 不靠这条路更新 —— 它有自己的订阅(isPlayingSmoothed)。
         // 快捷键回声占着歌词槽时同理,到点 `flashHint` 那边补一次。
-        guard !hoverControlsEngaged, !hintActive else { return }
+        guard !hoverControlsEngaged, !centerLyrics.hoverEngaged, !hintActive else { return }
         let settings = AppSettings.shared
         let coordinator = PlaybackCoordinator.shared
         // 单行展示面取 compactLine(唱完就切走,见 CompactLyricLead)。
@@ -1443,6 +1534,9 @@ final class MenuBarStatusItem: NSObject {
         out["screenSetting"] = AppSettings.shared.menuBarCenterScreen
         out["targetScreens"] = MenuBarCenterLyrics.targetScreens().map { ScreenIdentity.id(of: $0) ?? "" }
         out["slots"] = centerLyrics.debugSlots
+        out["hovered"] = centerLyrics.isHovered
+        out["hoverEngaged"] = centerLyrics.hoverEngaged
+        out["panelAnchoredHere"] = centerLyrics.windows.contains { panelController.isAnchored(to: $0.contentView) }
         return out
     }
 
@@ -1482,6 +1576,7 @@ final class MenuBarStatusItem: NSObject {
     func flashHint(_ text: String, seconds: TimeInterval) {
         // 「菜单栏正中」正显示着歌词时回声画在那里(状态栏那一格此刻只有图标)。
         if centerLyrics.isShowing, case let screens = MenuBarCenterLyrics.targetScreens(), !screens.isEmpty {
+            guard !centerLyrics.hoverEngaged else { return }
             hintActive = true
             rowState = RowState(kind: .off, secondaryText: nil,
                                 mainFont: MenuBarMarqueeRenderer.mainFont(for: text, twoRows: false))

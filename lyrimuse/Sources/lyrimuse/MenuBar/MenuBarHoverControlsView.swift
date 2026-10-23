@@ -46,8 +46,12 @@ final class MenuBarHoverControlsView: NSView {
 
     private weak var trackingHost: NSView?
     private var installedArea: NSTrackingArea?
+    /// 把菜单栏明暗报给 `MenuBarAppearanceStore`。只有状态栏按钮上那一份报;「菜单栏正中」那几扇里的不报,
+    /// 它们的明暗由那个 store 喂进来。
+    private let reportsAppearance: Bool
 
-    init() {
+    init(reportsAppearance: Bool = true) {
+        self.reportsAppearance = reportsAppearance
         super.init(frame: .zero)
         wantsLayer = true
         isHidden = true
@@ -73,6 +77,7 @@ final class MenuBarHoverControlsView: NSView {
         host.addTrackingArea(area)
         trackingHost = host
         installedArea = area
+        guard reportsAppearance else { return }
         // 顺带把"菜单栏此刻是深是浅"的观察点登记成这颗按钮:这一层只存在于**真**菜单栏上
         // (预览里没有),是这个 App 里唯一能可靠回答这个问题的地方。设置页的色块和预览都按它
         // 解析「跟随系统」,见 MenuBarAppearanceStore 头注。
@@ -187,7 +192,7 @@ final class MenuBarHoverControlsView: NSView {
         // 解析「跟随系统」。这一层是真菜单栏上的常驻视图,拿它当唯一的观察点。
         // 只报信、不当场读:状态栏项重建时这个回调在 6ms 内连发七次、其中六次是错的
         // (时间线见 MenuBarAppearanceStore 头注),store 会等它坐稳再读。
-        MenuBarAppearanceStore.shared.hostAppearanceDidChange()
+        if reportsAppearance { MenuBarAppearanceStore.shared.hostAppearanceDidChange() }
         if engaged { needsDisplay = true }
     }
 

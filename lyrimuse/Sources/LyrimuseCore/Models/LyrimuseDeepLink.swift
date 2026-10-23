@@ -97,12 +97,15 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 菜单栏歌词放正中 / 放回图标旁(`center`)、正中放哪几块屏(`screen`:all / auto / 屏幕身份串,同设置页「显示在」),
         /// 以及当作没有刘海、直接压在屏幕正中(`ignoreNotch`,不落盘,App 重启复原):
         /// `debug/menubar-center?center=1&screen=all&ignore-notch=1`,至少带一个。刘海屏的开发机靠它验无刘海屏的摆法。
-        case menuBarCenter(center: Bool?, ignoreNotch: Bool?, screen: String? = nil)
+        /// `hover=1|0`、`click=left|right`:当作指针进出、在正中第一扇正中点了一下(左键 / 右键),不动真鼠标验交互;
+        /// 右键弹出的菜单 3 秒后自己收。
+        case menuBarCenter(center: Bool?, ignoreNotch: Bool?, screen: String? = nil, hover: Bool? = nil, click: String? = nil)
         /// 菜单栏图标用不用封面(`artwork`)、那一格显示什么(`content`:lyrics / title / titleArtist,同设置页
         /// 「显示内容」三档)、图标大小(`icon-size`:small / standard / large)、图标款式(`icon-style`:
-        /// `MenuBarIconStyle` 的 rawValue),跟设置页走同一个设置:
-        /// `debug/menubar-display?artwork=1&content=title&icon-size=large&icon-style=vinyl`,至少带一个。
-        case menuBarDisplay(artwork: Bool?, content: String?, iconSize: String? = nil, iconStyle: String? = nil)
+        /// `MenuBarIconStyle` 的 rawValue)、悬停显示播放控制(`hover-controls`),跟设置页走同一个设置:
+        /// `debug/menubar-display?artwork=1&content=title&icon-size=large&icon-style=vinyl&hover-controls=1`,至少带一个。
+        case menuBarDisplay(artwork: Bool?, content: String?, iconSize: String? = nil, iconStyle: String? = nil,
+                            hoverControls: Bool? = nil)
         /// 日语读音标罗马字还是假名,跟设置页「日语读音」走同一条路(`debug/japanese-reading?style=romaji|kana`)。
         case japaneseReading(JapaneseReadingStyle)
     }
@@ -214,15 +217,20 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let center = value("center").flatMap(Self.parseBool)
             let ignoreNotch = value("ignore-notch").flatMap(Self.parseBool)
             let screen = value("screen").flatMap { $0.isEmpty ? nil : $0 }
-            guard center != nil || ignoreNotch != nil || screen != nil else { return nil }
-            self = .debug(.menuBarCenter(center: center, ignoreNotch: ignoreNotch, screen: screen))
+            let hover = value("hover").flatMap(Self.parseBool)
+            let click = value("click").map { $0.lowercased() }
+            if let click, click != "left", click != "right" { return nil }
+            guard center != nil || ignoreNotch != nil || screen != nil || hover != nil || click != nil else { return nil }
+            self = .debug(.menuBarCenter(center: center, ignoreNotch: ignoreNotch, screen: screen, hover: hover, click: click))
         case ("debug", "/menubar-display"):
             let artwork = value("artwork").flatMap(Self.parseBool)
             let content = value("content").flatMap { $0.isEmpty ? nil : $0 }
             let iconSize = value("icon-size").flatMap { $0.isEmpty ? nil : $0 }
             let iconStyle = value("icon-style").flatMap { $0.isEmpty ? nil : $0 }
-            guard artwork != nil || content != nil || iconSize != nil || iconStyle != nil else { return nil }
-            self = .debug(.menuBarDisplay(artwork: artwork, content: content, iconSize: iconSize, iconStyle: iconStyle))
+            let hoverControls = value("hover-controls").flatMap(Self.parseBool)
+            guard artwork != nil || content != nil || iconSize != nil || iconStyle != nil || hoverControls != nil else { return nil }
+            self = .debug(.menuBarDisplay(artwork: artwork, content: content, iconSize: iconSize, iconStyle: iconStyle,
+                                          hoverControls: hoverControls))
         case ("debug", "/japanese-reading"):
             guard let style = value("style").flatMap({ JapaneseReadingStyle(rawValue: $0.lowercased()) }) else { return nil }
             self = .debug(.japaneseReading(style))
@@ -332,17 +340,20 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .knockout(leg, on):
                 components.path = "/knockout"
                 components.queryItems = [URLQueryItem(name: "leg", value: leg.rawValue), URLQueryItem(name: "on", value: on ? "1" : "0")]
-            case let .menuBarCenter(center, ignoreNotch, screen):
+            case let .menuBarCenter(center, ignoreNotch, screen, hover, click):
                 components.path = "/menubar-center"
                 components.queryItems = (center.map { [URLQueryItem(name: "center", value: $0 ? "1" : "0")] } ?? [])
                     + (ignoreNotch.map { [URLQueryItem(name: "ignore-notch", value: $0 ? "1" : "0")] } ?? [])
                     + (screen.map { [URLQueryItem(name: "screen", value: $0)] } ?? [])
-            case let .menuBarDisplay(artwork, content, iconSize, iconStyle):
+                    + (hover.map { [URLQueryItem(name: "hover", value: $0 ? "1" : "0")] } ?? [])
+                    + (click.map { [URLQueryItem(name: "click", value: $0)] } ?? [])
+            case let .menuBarDisplay(artwork, content, iconSize, iconStyle, hoverControls):
                 components.path = "/menubar-display"
                 components.queryItems = (artwork.map { [URLQueryItem(name: "artwork", value: $0 ? "1" : "0")] } ?? [])
                     + (content.map { [URLQueryItem(name: "content", value: $0)] } ?? [])
                     + (iconSize.map { [URLQueryItem(name: "icon-size", value: $0)] } ?? [])
                     + (iconStyle.map { [URLQueryItem(name: "icon-style", value: $0)] } ?? [])
+                    + (hoverControls.map { [URLQueryItem(name: "hover-controls", value: $0 ? "1" : "0")] } ?? [])
             case let .japaneseReading(style):
                 components.path = "/japanese-reading"
                 components.queryItems = [URLQueryItem(name: "style", value: style.rawValue)]

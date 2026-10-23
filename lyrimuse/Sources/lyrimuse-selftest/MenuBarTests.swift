@@ -1357,8 +1357,8 @@ func runMenuBarTests() {
             // 反推内容宽的两处必须跟申请用**同一个**常量,差一截就是
             // 「点暂停生效上一首」的形状。
             let lyricsUses = text.components(separatedBy: "Self.lyricsSlotPadding").count - 1
-            expectEqual(lyricsUses, 6,
-                        "内边距: 歌词态六处(text 申请 / fixed 申请 / 两处反推 / 菜单栏正中两处)同源,实际 \(lyricsUses)")
+            expectEqual(lyricsUses, 7,
+                        "内边距: 歌词态七处(text 申请 / fixed 申请 / 两处反推 / 菜单栏正中两处 / 正中悬停三键反推)同源,实际 \(lyricsUses)")
             let iconUses = text.components(separatedBy: "Self.fixedSlotPadding").count - 1
             expectEqual(iconUses, 1, "内边距: 图标态只剩那一处申请,实际 \(iconUses)")
         } else {
@@ -1755,10 +1755,21 @@ func runMenuBarTests() {
             (try? String(contentsOfFile: menuBar.appendingPathComponent(name).path, encoding: .utf8)) ?? ""
         }
         let center = src("MenuBarCenterLyrics.swift")
-        expectEqual(center.contains("panel.ignoresMouseEvents = true")
+        expectEqual(center.contains("panel.ignoresMouseEvents = false")
                     && center.contains("panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]")
                     && !center.contains("fullScreenAuxiliary"), true,
-                    "菜单栏正中: 窗口不接点击、不进全屏 Space")
+                    "菜单栏正中: 窗口明说接点击(字缝里也点得中)、不进全屏 Space")
+        expectEqual(sourceHas(center, "override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }")
+                    && sourceHas(center, "override func rightMouseDown(with event: NSEvent) { onMouseDown?(self, event) }")
+                    && sourceHas(center, "let menu = event.type == .rightMouseDown || flags.contains(.control)"), true,
+                    "菜单栏正中: 第一下点击就算数,右键和⌃左键都弹菜单")
+        let engage = sourceBody("func engageHoverControls(", in: center)
+        expectEqual(sourceHas(engage, "guard slot.hoverControls.fitsControls else {")
+                    && sourceHas(engage, "pendingHide?.cancel()\npendingHide = nil")
+                    && sourceHas(engage, "if slot.label.showsIconBadge {\nslot.label.clearLyricsKeepingIcon()"), true,
+                    "菜单栏正中悬停三键: 装不下不换、收起倒计时作废、歌词旁的图标留着")
+        expectEqual(sourceHas(sourceBody("private func forgetPointer(on key: String)", in: center), "engagedKey = nil"), true,
+                    "菜单栏正中悬停三键: 那一扇收掉时接管记录一起作废,refresh 不会一直早退")
         expectEqual(center.contains("label.alignmentOverride = .center"), true, "菜单栏正中: 标签固定居中,不读对齐设置")
         expectEqual(center.contains("AXUIElementSetMessagingTimeout(app, messagingTimeout)")
                     && center.contains("queue.async"), true,
@@ -1788,6 +1799,18 @@ func runMenuBarTests() {
                     "菜单栏正中: 停下时读数留着,焦点在两块屏间来回、暂停后再开不用先空等一轮扫描")
         expectEqual(sourceHas(sourceBody("private func poll()", in: center), "if dropReadingsIfUntrusted() { return }"), true,
                     "菜单栏正中: 撤销授权后旧读数作废")
+        let clicked = sourceBody("private func centerLyricsClicked(", in: item)
+        expectEqual(sourceHas(clicked, "if let control = centerLyrics.hoverControl(in: view, at: point) {\nperformTransportControl(control)\nreturn\n}\npanelController.toggle(relativeTo: view)")
+                    && sourceHas(clicked, "case .menu:\npopUpFullMenu(in: view, at: point)")
+                    && sourceHas(item, "at: NSPoint(x: point.x, y: view.bounds.minY - Self.menuTopInset), in: view)"), true,
+                    "菜单栏正中: 左键弹面板(挂在这一扇下面)、点在三键上是播放控制,右键弹完整菜单")
+        expectEqual(sourceHas(item, "guard !hoverControlsEngaged, !centerLyrics.hoverEngaged, !hintActive else { return }")
+                    && sourceHas(item, "let want = centerLyrics.isHovered && AppSettings.shared.menuBarHoverShowsControls && !panelIsOpen"), true,
+                    "菜单栏正中悬停三键: 接管期间 refresh 早退,面板开着不接管")
+        expectEqual(sourceHas(item, "let highlighted = on && self.panelController.isAnchored(to: self.statusItem?.button)"), true,
+                    "菜单栏正中: 面板挂在正中时状态栏那一格不反白")
+        expectEqual(sourceHas(src("MenuBarPanel.swift"), "func toggle(relativeTo anchor: NSView, quick: PanelQuickTarget? = nil) {"), true,
+                    "菜单栏面板: 能挂在任意视图下面")
         expectEqual(center.contains("AXUIElementSetMessagingTimeout(barElement, messagingTimeout)")
                     && center.contains("AXUIElementSetMessagingTimeout(item, messagingTimeout)"), true,
                     "菜单栏正中: 往下取到的菜单栏和各项也各设超时")

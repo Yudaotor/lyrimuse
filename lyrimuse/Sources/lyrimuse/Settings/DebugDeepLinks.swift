@@ -63,17 +63,20 @@ enum DebugDeepLinks {
         case let .knockout(leg, on):
             SourceKnockout.set(leg, out: !on)
             LocalPlaybackSource.shared.simulationChanged()
-        case let .menuBarCenter(center, ignoreNotch, screen):
+        case let .menuBarCenter(center, ignoreNotch, screen, hover, click):
             if let ignoreNotch { MenuBarCenterLyrics.ignoresNotchForDebug = ignoreNotch }
             if let center { AppSettings.shared.menuBarLyricsPlacement = center ? .screenCenter : .statusItem }
             if let screen { AppSettings.shared.menuBarCenterScreen = screen }
             MenuBarStatusItem.shared.setNeedsRefresh()
+            MenuBarStatusItem.shared.debugCenterInput(
+                hover: hover, click: click.map { $0 == "right" ? MenuBarCenterLyrics.Click.menu : .primary })
             logger.notice("debug menubar center=\(String(describing: center), privacy: .public) ignoreNotch=\(String(describing: ignoreNotch), privacy: .public)")
-        case let .menuBarDisplay(artwork, content, iconSize, iconStyle):
+        case let .menuBarDisplay(artwork, content, iconSize, iconStyle, hoverControls):
             if let artwork { AppSettings.shared.menuBarIconShowsArtwork = artwork }
             if let value = content.flatMap(MenuBarLyricsContent.init(rawValue:)) { AppSettings.shared.menuBarLyricsContent = value }
             if let value = iconSize.flatMap(MenuBarIconSize.init(rawValue:)) { AppSettings.shared.menuBarIconSize = value }
             if let value = iconStyle.flatMap(MenuBarIconStyle.init(rawValue:)) { AppSettings.shared.menuBarIconStyle = value }
+            if let hoverControls { AppSettings.shared.menuBarHoverShowsControls = hoverControls }
             logger.notice("debug menubar display artwork=\(String(describing: artwork), privacy: .public) content=\(content ?? "-", privacy: .public) iconSize=\(iconSize ?? "-", privacy: .public) iconStyle=\(iconStyle ?? "-", privacy: .public)")
         case let .japaneseReading(style):
             AppSettings.shared.japaneseReadingStyle = style

@@ -188,6 +188,10 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/menubar-center?ignore-notch=0"), .debug(.menuBarCenter(center: nil, ignoreNotch: false)),
                     "debug: 只改忽略刘海")
         expectEqual(link("lyrimuse://debug/menubar-center"), nil, "debug: 菜单栏正中什么都没带不认")
+        expectEqual(link("lyrimuse://debug/menubar-center?hover=1&click=Right"),
+                    .debug(.menuBarCenter(center: nil, ignoreNotch: nil, hover: true, click: "right")),
+                    "debug: 当作指针停在正中、右键点一下")
+        expectEqual(link("lyrimuse://debug/menubar-center?click=middle"), nil, "debug: 认不出的点法不认")
         expectEqual(link("lyrimuse://debug/menubar-display?artwork=1"),
                     .debug(.menuBarDisplay(artwork: true, content: nil)), "debug: 菜单栏图标用封面")
         expectEqual(link("lyrimuse://debug/menubar-display?content=titleArtist&artwork=0"),
@@ -196,6 +200,8 @@ func runDeepLinkTests() {
                     .debug(.menuBarDisplay(artwork: nil, content: nil, iconSize: "large")), "debug: 只改菜单栏图标大小")
         expectEqual(link("lyrimuse://debug/menubar-display?icon-style=vinyl"),
                     .debug(.menuBarDisplay(artwork: nil, content: nil, iconStyle: "vinyl")), "debug: 只改菜单栏图标款式")
+        expectEqual(link("lyrimuse://debug/menubar-display?hover-controls=1"),
+                    .debug(.menuBarDisplay(artwork: nil, content: nil, hoverControls: true)), "debug: 只开悬停显示播放控制")
         expectEqual(link("lyrimuse://debug/menubar-display"), nil, "debug: 菜单栏显示什么都没带不认")
         expectEqual(link("lyrimuse://debug/menubar-center?screen=auto"),
                     .debug(.menuBarCenter(center: nil, ignoreNotch: nil, screen: "auto")), "debug: 只改正中放哪几块屏")
@@ -320,11 +326,13 @@ func runDeepLinkTests() {
             .debug(.menuBarCenter(center: true, ignoreNotch: true)), .debug(.menuBarCenter(center: false, ignoreNotch: nil)),
             .debug(.menuBarCenter(center: nil, ignoreNotch: false)),
             .debug(.menuBarCenter(center: true, ignoreNotch: nil, screen: "37D8832A-2D66-02CA-B9F7-8F30A301B230")),
+            .debug(.menuBarCenter(center: nil, ignoreNotch: nil, hover: false, click: "left")),
             .debug(.japaneseReading(.kana)), .debug(.japaneseReading(.romaji)),
             .debug(.menuBarDisplay(artwork: true, content: nil)), .debug(.menuBarDisplay(artwork: nil, content: "title")),
             .debug(.menuBarDisplay(artwork: false, content: "lyrics")),
             .debug(.menuBarDisplay(artwork: nil, content: nil, iconSize: "small")),
             .debug(.menuBarDisplay(artwork: nil, content: nil, iconSize: "large", iconStyle: "classic")),
+            .debug(.menuBarDisplay(artwork: nil, content: nil, hoverControls: false)),
             .debug(.settingsSearch(query: "OBS 输出")),
             .setPlayMode(.list), .setPlayMode(.shuffle), .setPlayMode(.repeatAll), .setPlayMode(.repeatOne),
         ] + LyrimuseAction.allCases.map { .action($0, on: nil, stepSeconds: nil) }

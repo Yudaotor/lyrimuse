@@ -249,9 +249,21 @@ final class MenuBarOccupancy {
     }
 }
 
-/// 「菜单栏正中」那一档的窗口:每块要放的屏一扇,透明、不接点击、钉在那块屏的菜单栏上,里面各是一份跟状态栏项同款的
+/// 正中那一扇的内容视图,收这一扇上的点击:歌词标签和悬停三键那一层都 `hitTest -> nil`,点击全落到这里。
+@MainActor
+final class MenuBarCenterContentView: NSView {
+    var onMouseDown: ((MenuBarCenterContentView, NSEvent) -> Void)?
+
+    // 不激活的面板当不了 key,第一下点击就要算数。
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func mouseDown(with event: NSEvent) { onMouseDown?(self, event) }
+    override func rightMouseDown(with event: NSEvent) { onMouseDown?(self, event) }
+}
+
+/// 「菜单栏正中」那一档的窗口:每块要放的屏一扇,透明、钉在那块屏的菜单栏上,里面各是一份跟状态栏项同款的
 /// `MenuBarScrollingLabel`。画什么由 `MenuBarStatusItem.refresh()` 决定(同一套断句、配速、染色、副行),
-/// 这里只管放哪几块屏、每扇多宽、摆在哪、显隐。
+/// 这里只管放哪几块屏、每扇多宽、摆在哪、显隐,以及这一扇上的点击与悬停(怎么响应由 `MenuBarStatusItem` 定)。
+/// 窗口只盖住两侧之间那段空着的菜单栏,收点击不挡别家的菜单和图标。
 ///
 /// 全屏 Space 里菜单栏收起,这扇窗也不跟进去:collectionBehavior 不带全屏辅助那一项。
 @MainActor
@@ -260,13 +272,31 @@ final class MenuBarCenterLyrics {
     @MainActor
     final class Slot {
         let label = MenuBarScrollingLabel()
+        let content = MenuBarCenterContentView()
+        let hoverControls = MenuBarHoverControlsView(reportsAppearance: false)
         let panel: NSPanel
         var animationsPaused = false
 
         init(panel: NSPanel) { self.panel = panel }
     }
 
+    enum Click {
+        /// 左键:弹面板,悬停三键接管着时点在键上就是播放控制。
+        case primary
+        /// 右键 / ⌃左键:弹完整菜单。
+        case menu
+    }
+
+    /// 点了某一扇。`view` 是那一扇的内容视图(面板、菜单挂在它下面),`point` 在它的坐标里。
+    var onClick: ((Click, NSView, NSPoint) -> Void)?
+    /// 指针进 / 出正中那几扇(参数是此刻在不在任何一扇上)。
+    var onHoverChange: ((Bool) -> Void)?
+
     private var slots: [String: Slot] = [:]
+    /// 指针停在哪一扇上。
+    private var hoveredKey: String?
+    /// 哪一扇正换成悬停三键。
+    private var engagedKey: String?
     /// 每块屏最近一次算出的那一段与两侧读数,给 `debug/state` 看。
     private var readings: [String: (span: ClosedRange<CGFloat>, menusMaxX: CGFloat?, statusItemsMinX: CGFloat?)] = [:]
     private var pendingHide: DispatchWorkItem?
@@ -299,8 +329,12 @@ final class MenuBarCenterLyrics {
         appearanceSink = MenuBarAppearanceStore.shared.$isDark.removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
+                guard let self else { return }
                 let appearance = MenuBarAppearanceStore.shared.appearance
-                self?.labels.forEach { $0.appearance = appearance }
+                for slot in self.slots.values {
+                    slot.label.appearance = appearance
+                    slot.hoverControls.appearance = appearance
+                }
             }
     }
 
@@ -367,6 +401,7 @@ final class MenuBarCenterLyrics {
         for (id, slot) in slots where !wanted.contains(id) {
             slot.panel.orderOut(nil)
             slot.label.clear()
+            forgetPointer(on: id)
             slots[id] = nil
             logger.notice("center lyrics dropped screen \(id, privacy: .public)")
         }
@@ -387,6 +422,8 @@ final class MenuBarCenterLyrics {
         let labelHeight = min(NSStatusBar.system.thickness, barHeight)
         let labelFrame = NSRect(x: 0, y: ((barHeight - labelHeight) / 2).rounded(), width: width, height: labelHeight)
         if slot.label.frame != labelFrame { slot.label.frame = labelFrame }
+        let controlsFrame = NSRect(x: 0, y: 0, width: width, height: barHeight)
+        if slot.hoverControls.frame != controlsFrame { slot.hoverControls.frame = controlsFrame }
         if !slot.panel.isVisible {
             slot.panel.orderFrontRegardless()
             logger.notice("center lyrics shown screen=\(key, privacy: .public) x=\(frame.minX, privacy: .public) w=\(frame.width, privacy: .public)")
@@ -424,9 +461,10 @@ final class MenuBarCenterLyrics {
         pendingHide?.cancel()
         pendingHide = nil
         var hidden = false
-        for slot in slots.values where slot.panel.isVisible {
+        for (id, slot) in slots where slot.panel.isVisible {
             slot.panel.orderOut(nil)
             slot.label.clear()
+            forgetPointer(on: id)
             hidden = true
         }
         if hidden { logger.notice("center lyrics hidden") }
@@ -439,20 +477,116 @@ final class MenuBarCenterLyrics {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.ignoresMouseEvents = true
+        // 明说 false:不设时全透明的像素照样把点击漏给底下,字缝里点不中。
+        panel.ignoresMouseEvents = false
         panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.animationBehavior = .none
-        let content = NSView()
+        let slot = Slot(panel: panel)
+        let content = slot.content
         content.wantsLayer = true
         panel.contentView = content
-        let slot = Slot(panel: panel)
         slot.label.alignmentOverride = .center
         slot.label.appearance = MenuBarAppearanceStore.shared.appearance
         content.addSubview(slot.label)
+        slot.hoverControls.appearance = MenuBarAppearanceStore.shared.appearance
+        content.addSubview(slot.hoverControls)
+        slot.hoverControls.installTracking(on: content)
+        slot.hoverControls.onHoverChange = { [weak self] inside in self?.pointerMoved(on: key, inside: inside) }
+        content.onMouseDown = { [weak self] view, event in
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let menu = event.type == .rightMouseDown || flags.contains(.control)
+            self?.onClick?(menu ? .menu : .primary, view, view.convert(event.locationInWindow, from: nil))
+        }
         slots[key] = slot
         return slot
+    }
+
+    // MARK: - 悬停三键
+
+    /// 指针停在某一扇上。
+    var isHovered: Bool { hoveredKey != nil }
+    /// 有一扇正换成悬停三键。
+    var hoverEngaged: Bool { engagedKey != nil }
+
+    private func pointerMoved(on key: String, inside: Bool) {
+        if inside {
+            hoveredKey = key
+        } else if hoveredKey == key {
+            hoveredKey = nil
+        }
+        onHoverChange?(isHovered)
+    }
+
+    /// 那一扇收起、拆掉时:指针和三键的记录一起作废(不回调,下一次 `refresh()` 照常画)。
+    private func forgetPointer(on key: String) {
+        if hoveredKey == key { hoveredKey = nil }
+        guard engagedKey == key, let slot = slots[key] else { return }
+        engagedKey = nil
+        slot.hoverControls.setEngaged(false)
+        slot.hoverControls.setSlot(nil)
+    }
+
+    /// 指针停着的那一扇换成三个键:歌词收掉(歌词旁的图标留着),三个键排在歌词那一格,纵向给满。
+    /// 那一格装不下三个键就不换、返回 false。窗口一点不动;收起的倒计时作废,退出时调用方补一次重算再定收不收。
+    /// 歌词格的算式跟状态栏那一格同一份(`MenuBarHoverControls.lyricsSlot`),内容宽按窗口宽减 `slotPadding` 反推。
+    func engageHoverControls(icon: MenuBarScrollingLabel.IconBadge?, slotPadding: CGFloat,
+                             playing: Bool, withheld: Bool) -> Bool {
+        guard engagedKey == nil, let key = hoveredKey, let slot = slots[key], slot.panel.isVisible else { return false }
+        let bounds = slot.content.bounds
+        guard let lyrics = MenuBarHoverControls.lyricsSlot(
+            buttonWidth: bounds.width, contentWidth: bounds.width - slotPadding,
+            reservedIconWidth: MenuBarProgressIcon.reservedWidth(for: icon), iconLeading: icon?.position == .leading)
+        else { return false }
+        slot.hoverControls.setSlot(CGRect(x: lyrics.x, y: bounds.minY, width: lyrics.width, height: bounds.height))
+        guard slot.hoverControls.fitsControls else {
+            slot.hoverControls.setSlot(nil)
+            return false
+        }
+        pendingHide?.cancel()
+        pendingHide = nil
+        if slot.label.showsIconBadge {
+            slot.label.clearLyricsKeepingIcon()
+        } else {
+            slot.label.clear()
+        }
+        slot.hoverControls.setPlaying(playing)
+        slot.hoverControls.setWithheld(withheld)
+        slot.hoverControls.setEngaged(true)
+        engagedKey = key
+        return true
+    }
+
+    func releaseHoverControls() {
+        guard let key = engagedKey else { return }
+        engagedKey = nil
+        slots[key]?.hoverControls.setEngaged(false)
+        slots[key]?.hoverControls.setSlot(nil)
+    }
+
+    /// 这一下点在三个键里的哪一个。没接管、或点的不是接管着的那一扇时 nil。三键那一层铺满内容视图,坐标通用。
+    func hoverControl(in view: NSView, at point: NSPoint) -> MenuBarTransportControl? {
+        guard let key = engagedKey, let slot = slots[key], slot.content === view else { return nil }
+        return slot.hoverControls.control(at: point)
+    }
+
+    func setHoverPlaying(_ on: Bool) { slots.values.forEach { $0.hoverControls.setPlaying(on) } }
+    func setHoverWithheld(_ on: Bool) { slots.values.forEach { $0.hoverControls.setWithheld(on) } }
+
+    // MARK: - 调试(`debug/menubar-center?hover=…&click=…`)
+
+    /// 当作指针进 / 出第一扇摆着的窗口。
+    func debugHover(_ inside: Bool) {
+        guard let key = slots.first(where: { $0.value.panel.isVisible })?.key else { return }
+        pointerMoved(on: key, inside: inside)
+    }
+
+    /// 当作在第一扇摆着的窗口正中点了一下。悬停三键接管着时正中是播放 / 暂停。
+    func debugClick(_ click: Click) {
+        guard let slot = slots.values.first(where: { $0.panel.isVisible }) else { return }
+        let bounds = slot.content.bounds
+        onClick?(click, slot.content, NSPoint(x: bounds.midX, y: bounds.midY))
     }
 }

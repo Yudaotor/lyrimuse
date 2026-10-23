@@ -156,8 +156,8 @@ private final class PanelPlayback: ObservableObject {
 @MainActor
 final class MenuBarPanelController {
     private var panel: MenuBarPanelWindow?
-    /// 面板挂在哪颗状态栏按钮下面。内容变高时按它重新定位(顶边不动、往下长)。
-    private weak var anchorButton: NSStatusBarButton?
+    /// 面板挂在谁下面:状态栏按钮,或「菜单栏正中」那一扇的内容视图。内容变高时按它重新定位(顶边不动、往下长)。
+    private weak var anchorView: NSView?
     /// 「点到别的 App 上」的收起路径:全局监视器只收得到**别的 App** 的事件。
     private var outsideClickMonitor: Any?
     /// 「点到本 App 别的窗口上」的收起路径(相当于 NSPopover .transient 管的那一半)。
@@ -171,12 +171,12 @@ final class MenuBarPanelController {
     var onVisibilityChange: ((Bool) -> Void)?
 
     /// `quick`:打开就翻到那一格的快捷设置(lyrimuse://menubar-panel?quick=…),nil = 正常的钮块网格。
-    func toggle(relativeTo button: NSStatusBarButton, quick: PanelQuickTarget? = nil) {
+    func toggle(relativeTo anchor: NSView, quick: PanelQuickTarget? = nil) {
         if panel != nil {
             close()
             return
         }
-        anchorButton = button
+        anchorView = anchor
         let window = MenuBarPanelWindow()
         window.onCancel = { [weak self] in self?.close() }
         let content = MenuBarPanelRoot(
@@ -198,6 +198,11 @@ final class MenuBarPanelController {
         if !WindowActivation.isBackground { window.makeKey() }
     }
 
+    /// 面板开着、而且挂在 `view` 下面。
+    func isAnchored(to view: NSView?) -> Bool {
+        panel != nil && view != nil && anchorView === view
+    }
+
     func close() {
         guard let window = panel else { return }
         MenuBarPanelDebugState.quickTarget = nil
@@ -209,12 +214,12 @@ final class MenuBarPanelController {
         onVisibilityChange?(false)
     }
 
-    /// 顶边贴着状态栏按钮下沿(留 4pt)、水平居中在按钮下面,再钳进屏幕可用区。内容变高时只往下长。
+    /// 顶边贴着锚点下沿(留 4pt)、水平居中在锚点下面,再钳进屏幕可用区。内容变高时只往下长。
     private func place(size: CGSize) {
         guard let window = panel, size.width > 0, size.height > 0 else { return }
-        guard let button = anchorButton, let buttonWindow = button.window else { return }
-        let buttonRect = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
-        let visible = (buttonWindow.screen ?? NSScreen.main)?.visibleFrame ?? buttonRect
+        guard let anchor = anchorView, let anchorWindow = anchor.window else { return }
+        let buttonRect = anchorWindow.convertToScreen(anchor.convert(anchor.bounds, to: nil))
+        let visible = (anchorWindow.screen ?? NSScreen.main)?.visibleFrame ?? buttonRect
         let margin: CGFloat = 8
         let x = min(max(buttonRect.midX - size.width / 2, visible.minX + margin), visible.maxX - size.width - margin)
         let top = min(buttonRect.minY - 4, visible.maxY)
@@ -230,10 +235,10 @@ final class MenuBarPanelController {
         }
     }
 
-    /// 状态栏按钮在屏幕上的矩形。
-    private var anchorButtonScreenRect: NSRect? {
-        guard let button = anchorButton, let buttonWindow = button.window else { return nil }
-        return buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
+    /// 锚点在屏幕上的矩形。
+    private var anchorScreenRect: NSRect? {
+        guard let anchor = anchorView, let anchorWindow = anchor.window else { return nil }
+        return anchorWindow.convertToScreen(anchor.convert(anchor.bounds, to: nil))
     }
 
     private func installDismissWatchers(for window: MenuBarPanelWindow) {
@@ -244,7 +249,7 @@ final class MenuBarPanelController {
             Task { @MainActor in
                 // 点状态栏按钮那一下也会先到这里(macOS 26 上状态栏的点击先当作别的进程的事件发出来),
                 // 在这里收的话按钮的 toggle 紧接着又把面板打开。开关交给 toggle。
-                guard let self, self.anchorButtonScreenRect?.contains(location) != true else { return }
+                guard let self, self.anchorScreenRect?.contains(location) != true else { return }
                 self.close()
             }
         }
@@ -256,8 +261,8 @@ final class MenuBarPanelController {
             // 面板自己、面板里下拉菜单的菜单窗口(level ≥ popUpMenu)都不算「点到外面」。
             if target === window { return event }
             if let level = target?.level, level >= .popUpMenu { return event }
-            // 状态栏按钮也不算:它的点击走 toggle,在这里先收的话 toggle 紧接着又把面板打开。按点击位置认。
-            if self.anchorButtonScreenRect?.contains(NSEvent.mouseLocation) == true { return event }
+            // 锚点也不算:它的点击走 toggle,在这里先收的话 toggle 紧接着又把面板打开。按点击位置认。
+            if self.anchorScreenRect?.contains(NSEvent.mouseLocation) == true { return event }
             self.close()
             return event
         }

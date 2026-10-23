@@ -2410,7 +2410,7 @@ func runSourceContractSurfaceTests() {
             let menuHint = sourceBody("func flashHint(_ text: String, seconds: TimeInterval) {", in: menuBar)
             expectEqual(!menuHint.isEmpty && !menuHint.contains("present(")
                             && menuHint.contains("showFixedWidth(button, text: lineText, windowWidth: win, pacing: pacing, icon: icon)")
-                            && menuBar.contains("guard !hoverControlsEngaged, !hintActive else { return }"), true,
+                            && menuBar.contains("guard !hoverControlsEngaged, !centerLyrics.hoverEngaged, !hintActive else { return }"), true,
                         "全局快捷键: 菜单栏回声按此刻的槽宽画、不重建状态项,提示期间 refresh 早退")
         }
         // 字号范围只有一份:设置页浮层和菜单栏面板两根滑杆都读它。
