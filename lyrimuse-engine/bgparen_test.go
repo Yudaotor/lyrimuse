@@ -73,6 +73,22 @@ func TestParenBGYRCLine(t *testing.T) {
 			"[60150,4470](60150,390,0)girl (61470,0,0)（(61470,1320,0)I'm (62790,300,0)that (63090,420,0)girl(63510,0,0)）(63510,0,0), (63510,180,0)it's",
 			"[60150,4470](60150,390,0)girl(63510,0,0), (63510,180,0)it's",
 			"[60150,4470](61470,1320,0)I'm (62790,300,0)that (63090,420,0)girl"},
+		{"左括号粘在主句词条末尾(QQ / 酷狗)",
+			"[0,1200](0,300,0)Double (300,300,0)the (600,300,0)hype ((900,300,0)Right)",
+			"[0,1200](0,300,0)Double (300,300,0)the (600,300,0)hype",
+			"[0,1200](900,300,0)Right"},
+		{"左括号紧贴主句词条、行中,后面的空格补回主句",
+			"[0,1500](0,300,0)Turn (300,300,0)now((600,300,0)loud) (900,300,0)and (1200,300,0)go",
+			"[0,1500](0,300,0)Turn (300,300,0)now (900,300,0)and (1200,300,0)go",
+			"[0,1500](600,300,0)loud"},
+		{"左括号紧贴主句词条,右括号后的标点并回这个词条",
+			"[0,1500](0,300,0)Turn (300,300,0)now((600,300,0)loud), (900,300,0)and (1200,300,0)go",
+			"[0,1500](0,300,0)Turn (300,300,0)now, (900,300,0)and (1200,300,0)go",
+			"[0,1500](600,300,0)loud"},
+		{"中文,左括号粘在词条末尾",
+			"[0,1200](0,300,0)给(300,300,0)我（(600,300,0)为何(900,300,0)尊敬）",
+			"[0,1200](0,300,0)给(300,300,0)我",
+			"[0,1200](600,300,0)为何(900,300,0)尊敬"},
 		{"行首",
 			"[1000,900](1000,300,0)(Yeah) (1300,300,0)Pray (1600,300,0)away",
 			"[1000,900](1300,300,0)Pray (1600,300,0)away",
@@ -84,7 +100,7 @@ func TestParenBGYRCLine(t *testing.T) {
 		}
 	}
 	for _, in := range []string{
-		"[0,1000](0,500,0)sweet(So (500,500,0)sweet)",               // 左括号不在词条开头
+		"[0,1000](0,500,0)sweet(So (500,500,0)sweet)",               // 左括号在词条中间、后面还有字
 		"[0,1000](0,300,0)Laugh (300,300,0)(ha)(600,400,0)ha",       // 右括号后紧跟字(规则那一层就拒)
 		"[0,1000](0,300,0)Laugh (300,300,0)(ha)ha (600,400,0)yes",   // 同一词条里右括号后还有字
 		"[0,600](0,300,0)(Ho-o-oh, (300,300,0)ho)",                  // 整行
@@ -223,7 +239,7 @@ func TestMigrateParenBackground(t *testing.T) {
 		"a|split|":    {LyricsSource: "netease", Lyrics: bt(lrc), LyricsYRC: bt(yrc), LyricsTr: bt(tr)},
 		"b|manual|":   {LyricsSource: "netease", Lyrics: bt(lrc), LyricsYRC: bt(yrc), ManualLyrics: true},
 		"c|apple|":    {LyricsSource: "applemusic", Lyrics: bt(lrc), LyricsYRC: bt(yrc)},
-		"d|has-bg|":   {LyricsSource: "netease", Lyrics: bt(lrc), LyricsYRC: bt(yrc), LyricsBG: bt("[1000,800](1600,200,0)x\n")},
+		"d|has-bg|":   {LyricsSource: "netease", Lyrics: bt(lrc), LyricsYRC: bt(yrc), LyricsBG: bt("[5000,600](5400,200,0)here\n")},
 		"e|no-yrc|":   {LyricsSource: "netease", Lyrics: bt(lrc)},
 		"f|speakers|": {LyricsSource: "musixmatch", Lyrics: bt(lrc), LyricsYRC: bt(yrc), LyricsSpeakers: &lyricSpeakers{For: lyricSpeakersFingerprint(lrc, yrc), LRC: []string{"v1", "v2"}}},
 		"g|picked|":   {LyricsSource: "qq", Lyrics: bt(lrc), LyricsYRC: bt(yrc), ManualPickSHA: manualPickFingerprint(lrc)},
@@ -245,13 +261,14 @@ func TestMigrateParenBackground(t *testing.T) {
 		!a.LyricsTr.EqualString("[00:01.00]慢慢杀死我\n[00:05.00]这里没有括号") || strings.Contains(parenBGYRCPlain(a.LyricsYRC.String()), "(") {
 		t.Errorf("存量没拆: %+v", a)
 	}
-	for _, k := range []string{"b|manual|", "c|apple|", "d|has-bg|", "e|no-yrc|", "h|instr|", "i|local|"} {
+	for _, k := range []string{"b|manual|", "c|apple|", "e|no-yrc|", "h|instr|", "i|local|"} {
 		if e := enrichCache[k]; !e.Lyrics.EqualString(lrc) {
 			t.Errorf("%s 不该动: %q", k, e.Lyrics)
 		}
 	}
-	if e := enrichCache["d|has-bg|"]; !e.LyricsBG.EqualString("[1000,800](1600,200,0)x\n") {
-		t.Errorf("已有背景人声的不动: %q", e.LyricsBG)
+	if e := enrichCache["d|has-bg|"]; !e.Lyrics.EqualString("[00:01.00]Kills me slowly\n[00:05.00]No parens here") ||
+		!e.LyricsBG.EqualString("[1000,800](1600,200,0)slowly\n[5000,600](5400,200,0)here\n") {
+		t.Errorf("已有背景人声的,剩下的括号行拆出来按行头并进去: %q / %q", e.Lyrics, e.LyricsBG)
 	}
 	if e := enrichCache["f|speakers|"]; e.LyricsSpeakers.For != lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) ||
 		strings.Join(e.LyricsSpeakers.LRC, ",") != "v1,v2" {

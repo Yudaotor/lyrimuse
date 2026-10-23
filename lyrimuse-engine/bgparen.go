@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -212,8 +213,8 @@ type parenBGYRCWord struct {
 	text   string
 }
 
-// parenBGYRCLine 按 parenBGLine 的规矩拆一行逐字:括号段必须从某个词条的开头起(前面只有空白)、在某个词条里结束,
-// 右括号后面只剩标点和空白(那段并回前一个主句词条)。返回主句那一行、背景人声那一行(行头相同)、两边的配对键。
+// parenBGYRCLine 按 parenBGLine 的规矩拆一行逐字:括号段从某个词条的开头起(前面只有空白),或者左括号粘在前一个词条的
+// 末尾(后面只剩空白);在某个词条里结束,右括号后面只剩标点和空白(那段并回前一个主句词条)。返回主句那一行、背景人声那一行(行头相同)、两边的配对键。
 // 背景人声那一行每段各自去掉首尾括号、丢掉只剩括号的词条:App 显示时只剥整行首尾的一对括号,一行几段时中间的
 // 括号会留下来(「a) (b」)。
 func parenBGYRCLine(line string) (mainLine, bgLine, mainKey, bgKey string, ok bool) {
@@ -253,27 +254,38 @@ func parenBGYRCLine(line string) (mainLine, bgLine, mainKey, bgKey string, ok bo
 	var bgWords []parenBGYRCWord
 	tails := map[int]string{} // 括号段之后、同一词条里剩下的标点:并到这个下标之前最近的主句词条
 	after := map[int]bool{}   // 紧跟在括号段后面的词条下标:它以标点开头时,前一个主句词条末尾的空白去掉
+	gaps := map[int]string{}  // 括号段之后、同一词条里剩下的空白:前一个主句词条末尾没有空白时补上
+	cut := map[int]string{}   // 左括号粘在末尾的主句词条:去掉括号之后的文字
 	for _, m := range parenBGSegRe.FindAllStringIndex(text, -1) {
 		wi, wj := wordAt(m[0]), wordAt(m[1]-1)
+		first := wi
 		if strings.TrimSpace(text[starts[wi]:m[0]]) != "" {
-			return "", "", "", "", false
+			// 左括号粘在一个主句词条的末尾(「hype (」「now(」),后面只剩空白:那个词条去掉括号留在主句,背景人声从下一个词条起。
+			_, size := utf8.DecodeRuneInString(text[m[0]:])
+			if wj == wi || strings.TrimSpace(text[m[0]+size:starts[wi]+len(words[wi].text)]) != "" {
+				return "", "", "", "", false
+			}
+			cut[wi] = text[starts[wi]:m[0]]
+			first = wi + 1
 		}
 		var seg []parenBGYRCWord
-		for k := wi; k <= wj; k++ {
+		for k := first; k <= wj; k++ {
 			isBG[k] = true
 			w := words[k]
 			if k == wj {
-				cut := m[1] - starts[wj]
-				rest := words[wj].text[cut:]
+				at := m[1] - starts[wj]
+				rest := words[wj].text[at:]
 				if parenBGHasWord(rest) {
 					return "", "", "", "", false
 				}
-				w.text = w.text[:cut]
+				w.text = w.text[:at]
 				if strings.TrimSpace(rest) != "" {
-					tails[wi] = rest
+					tails[first] = rest
+				} else if rest != "" {
+					gaps[first] = rest
 				}
 			}
-			if k == wi {
+			if k == first {
 				w.text = strings.TrimLeft(strings.TrimLeftFunc(w.text, unicode.IsSpace), "(（")
 			}
 			if k == wj {
@@ -295,6 +307,13 @@ func parenBGYRCLine(line string) (mainLine, bgLine, mainKey, bgKey string, ok bo
 		if tail, ok := tails[k]; ok && len(mainWords) > 0 {
 			p := &mainWords[len(mainWords)-1]
 			p.text = strings.TrimRightFunc(p.text, unicode.IsSpace) + tail
+		} else if gap, ok := gaps[k]; ok && len(mainWords) > 0 {
+			if p := &mainWords[len(mainWords)-1]; strings.TrimRightFunc(p.text, unicode.IsSpace) == p.text {
+				p.text += gap
+			}
+		}
+		if c, ok := cut[k]; ok {
+			w.text = c
 		}
 		if !isBG[k] {
 			if first, _ := utf8.DecodeRuneInString(w.text); after[k] && len(mainWords) > 0 && first != utf8.RuneError &&
@@ -528,17 +547,18 @@ func splitCandidateParenBackground(candidates []lyricCandidate) {
 	}
 }
 
-// migrateParenBackground 把存量条目按同一套规矩拆一遍。只动 parenBGSources 选出的、有逐字、还没有背景人声、没锁定
-// (手改或采纳时锁上的)的条目。演唱者标注按行记,拆分不增删行:原先对得上正文的,指纹跟着换;原样采纳的指纹同理,
+// migrateParenBackground 把存量条目按同一套规矩拆一遍。只动 parenBGSources 选出的、有逐字、没锁定(手改或采纳时锁上的)
+// 的条目。这些源的背景人声只会是拆出来的,已经有的也再拆一遍:拆过的行不带括号了,剩下的行规矩改了能拆时并进来,
+// 跟新解析出来的候选一次拆完的结果相同,不然两边正文对不上,重评时当前这份永远不在候选里(rescoreKeepsCurrent)。演唱者标注按行记,拆分不增删行:原先对得上正文的,指纹跟着换;原样采纳的指纹同理,
 // 同 migrateAccentSplits。
 //
-// 位置(main.go):migrateAccentSplits 之后、exportLyricsFiles 之前,导出的文件跟着拆过的正文写。不加水位:拆过的
-// 条目已有背景人声,下次直接跳过;没拆成的每次启动重判一遍,只是逐行扫正则。
+// 位置(main.go):migrateAccentSplits 之后、exportLyricsFiles 之前,导出的文件跟着拆过的正文写。不加水位:每次启动
+// 重判一遍,只扫还带括号的行。
 func migrateParenBackground() {
 	enrichMu.Lock()
 	fixed := 0
 	for k, e := range enrichCache {
-		if e.ManualLyrics || e.Instrumental || !parenBGSources[e.LyricsSource] || e.LyricsYRC.IsZero() || !e.LyricsBG.IsZero() {
+		if e.ManualLyrics || e.Instrumental || !parenBGSources[e.LyricsSource] || e.LyricsYRC.IsZero() {
 			continue
 		}
 		lrc, yrc := e.Lyrics.String(), e.LyricsYRC.String()
@@ -554,7 +574,7 @@ func migrateParenBackground() {
 		if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(lrc) {
 			e.ManualPickSHA = manualPickFingerprint(sp.lrc)
 		}
-		e.Lyrics, e.LyricsYRC, e.LyricsBG = bt(sp.lrc), bt(sp.yrc), bt(sp.bg)
+		e.Lyrics, e.LyricsYRC, e.LyricsBG = bt(sp.lrc), bt(sp.yrc), bt(mergeParenBGTracks(e.LyricsBG.String(), sp.bg))
 		if tr := e.LyricsTr.String(); tr != "" {
 			e.LyricsTr = bt(stripParenBackgroundAux(tr, sp.stamps))
 		}
@@ -572,4 +592,33 @@ func migrateParenBackground() {
 		log.Printf("paren background vocals: split %d entries", fixed)
 		saveEnrichCache()
 	}
+}
+
+// mergeParenBGTracks 把新拆出来的背景人声行并进已有的,按行头的起点排序(同一起点保持原有在前)。两边来自逐字的不同行。
+func mergeParenBGTracks(old, add string) string {
+	if old == "" {
+		return add
+	}
+	type line struct {
+		start int
+		text  string
+	}
+	var lines []line
+	for _, part := range []string{old, add} {
+		for _, l := range strings.Split(part, "\n") {
+			m := yrcLineHeadFullRe.FindStringSubmatch(l)
+			if m == nil {
+				continue
+			}
+			st, _ := strconv.Atoi(m[1])
+			lines = append(lines, line{st, l})
+		}
+	}
+	sort.SliceStable(lines, func(i, j int) bool { return lines[i].start < lines[j].start })
+	var b strings.Builder
+	for _, l := range lines {
+		b.WriteString(l.text)
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
