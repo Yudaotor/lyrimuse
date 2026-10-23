@@ -3915,8 +3915,8 @@ private struct NotchLyricRowHeightRow: View {
 ///
 /// 「展开时预览下一句」从属于「副行」(`SettingsSubRow`):副行选了「下一句」时稳态就常显下一句,
 /// 展开再画一行是重复,这颗开关翻了也没有效果 —— 没有意义的开关不显示(判据只有 Core 一份
-/// `LyricSecondaryLine.hidesExpandedNextLinePreview`,跟真窗口 / 编辑台画不画那行同源)。工具栏
-/// 「歌词行」按钮的摘要按同一判据决定列不列它(`NotchEditorStage.lyricRowSummary`)。
+/// `LyricSecondaryLine.hidesExpandedNextLinePreview`,跟真窗口 / 编辑台画不画那行同源)。开着「多行歌词」时同理不显示:
+/// 展开时那一行让给了列表。工具栏「歌词行」按钮的摘要按同样的判据决定列不列它(`NotchEditorStage.lyricRowSummary`)。
 ///
 /// `@ObservedObject` 不是样板:浮层宿主 `NotchLyricRowPopover` 自己不观察 `AppSettings`,
 /// 这里的条件显隐要靠它自己刷新。
@@ -3933,7 +3933,7 @@ struct NotchLyricRowSettingsRows: View {
                     NotchBehaviorToggleTile(item: .karaoke)
                     NotchBehaviorToggleTile(item: .lyricRowArtwork)
                 }
-                if !settings.notchSecondaryLine.hidesExpandedNextLinePreview {
+                if !settings.notchSecondaryLine.hidesExpandedNextLinePreview, !settings.notchExpandedLyricList {
                     NotchBehaviorToggleTile(item: .expandedNextLine)
                 }
             }
@@ -4042,6 +4042,7 @@ struct NotchFontSettingsRows: View {
 struct NotchExpandedSettingsRows: View {
     var body: some View {
         SettingsRowGroupStack {
+            NotchExpandedLyricListRows()
             SettingsTileGrid(columns: 3) {
                 NotchBehaviorToggleTile(item: .expandedShowsControls)
                 NotchBehaviorToggleTile(item: .expandedShowsLyricsOffset)
@@ -4054,6 +4055,33 @@ struct NotchExpandedSettingsRows: View {
                 NotchBehaviorToggleTile(item: .expandedShowsTrackTitle)
                 NotchBehaviorToggleTile(item: .expandedShowsArtist)
                 NotchBehaviorToggleTile(item: .expandedShowsAlbum)
+            }
+        }
+    }
+}
+
+/// 「多行歌词」+ 从属的「行数」(只在开着时出现)。展开时歌词那一格换成多行列表(`NotchExpandedLyricList`);
+/// 开着时「歌词行」组里的「展开时预览下一句」不显示(列表里本来就有下一句)。
+/// `@ObservedObject` 必需:子行的显隐要跟着开关刷新,宿主浮层不观察 `AppSettings`。
+@MainActor
+private struct NotchExpandedLyricListRows: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        SettingsRowGroup {
+            VStack(spacing: 0) {
+                SettingsRow(icon: "text.justify.left", title: L10n.t("多行歌词"),
+                            help: L10n.t("展开时显示多行歌词，当前句逐字高亮")) {
+                    Toggle("", isOn: $settings.notchExpandedLyricList)
+                }
+                if settings.notchExpandedLyricList {
+                    CardDivider()
+                    SettingsSubRow(title: L10n.t("行数")) {
+                        SettingsGlassTabPicker(selection: $settings.notchExpandedLyricListLines,
+                                               options: NotchExpandedMetrics.lyricListLineCounts,
+                                               label: { "\($0)" }, compact: true)
+                    }
+                }
             }
         }
     }

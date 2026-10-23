@@ -168,7 +168,9 @@ public enum SettingsSearchCatalog {
         }
         gates += [
             RowGate(notch, "封面位置", "notch.lyricRowArtwork", "显示封面"),
+            RowGate(notch, "展开时预览下一句", "notch.lyricListOff", "多行歌词"),
             RowGate(notch, "展开时预览下一句", "notch.expandedNextLine", "副行"),
+            RowGate(notch, "行数", "notch.lyricList", "多行歌词"),
             RowGate(overlay, "未唱颜色", "overlay.karaoke", "卡拉OK效果"),
             RowGate(overlay, "描边颜色", "overlay.stroke", "文字描边"),
             RowGate(overlay, "玻璃浓淡", "overlay.glass", "毛玻璃背景"),
@@ -465,6 +467,8 @@ public enum SettingsSearchCatalog {
         surface(.notch, "字体", kw: ["字体族", "font"], group: "字体"),
         surface(.notch, "粗细", kw: ["字重", "weight"], group: "字体"),
         surface(.notch, "字号", kw: ["大小", "font size"], group: "字体"),
+        surface(.notch, "多行歌词", kw: ["多行", "歌词列表", "几行", "展开", "逐字"], group: "展开态"),
+        surface(.notch, "行数", kw: ["多行歌词", "几行", "3 行", "5 行", "7 行"], group: "展开态"),
         surface(.notch, "显示播放控制", kw: ["播放", "暂停", "上一首", "下一首", "三键"], group: "展开态"),
         surface(.notch, "显示歌词校准", kw: ["偏移", "校准", "时间轴"], group: "展开态"),
         surface(.notch, "快捷操作", kw: ["搜索歌词", "设置", "关闭", "图标键"], group: "展开态"),

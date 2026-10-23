@@ -126,6 +126,7 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     var expandedTrackInfoShowsArtist: Bool { AppSettings.shared.notchExpandedShowsArtist }
     var expandedTrackInfoShowsAlbum: Bool { AppSettings.shared.notchExpandedShowsAlbum }
     var expandedShowsQuickActions: Bool { AppSettings.shared.notchExpandedShowsQuickActions }
+    var expandedLyricListHeight: CGFloat { AppSettings.shared.notchExpandedLyricListHeight }
 
     init() {
         refreshGeometry()
@@ -391,9 +392,11 @@ struct NotchEditorStage: View {
     /// 钉死的话舞台留白跟真窗口对不上。
     /// 歌词行这一截**按上限**(`NotchLyricRowMetrics.rowHeight`)留,不跟「行高」走:那是一根滑杆,舞台跟着它变高变矮
     /// 的话,拖动时下面整页上下跳,「全部设置」抽屉里的那根滑杆还会从指针底下溜走。卡片在舞台里照样按实际行高画。
+    /// 开着「多行歌词」时歌词那一格按列表和歌词行上限里高的那个留(行数是选出来的、不是滑杆,跟着变没关系),「下一句」预览不留。
     private var cardAreaHeight: CGFloat {
-        chrome.contentTopInset + NotchLyricRowMetrics.rowHeight + NotchMetrics.expandedExtraHeightMax(
-            hasLyricPreviewPossible: chrome.expandedShowsNextLine,
+        chrome.contentTopInset + max(NotchLyricRowMetrics.rowHeight, chrome.expandedLyricListHeight)
+            + NotchMetrics.expandedExtraHeightMax(
+            hasLyricPreviewPossible: chrome.expandedShowsNextLine && chrome.expandedLyricListHeight == 0,
             hasControlsPossible: chrome.expandedShowsControls,
             trackInfoHeight: NotchMetrics.expandedTrackInfoHeight(
                 showsArtwork: chrome.expandedTrackInfoShowsArtwork,
@@ -649,7 +652,8 @@ struct NotchEditorStage: View {
         }
         // 「展开时预览下一句」(从「展开态」搬来):副行选「下一句」时它被顶掉、浮层里也不显示
         // (`NotchLyricRowSettingsRows`),摘要跟浮层说同一套话;没被顶掉就按"只列开着的"。
-        if !settings.notchSecondaryLine.hidesExpandedNextLinePreview, settings.notchExpandedShowsNextLine {
+        if !settings.notchSecondaryLine.hidesExpandedNextLinePreview, !settings.notchExpandedLyricList,
+           settings.notchExpandedShowsNextLine {
             parts.append(NotchBehaviorItem.expandedNextLine.title)
         }
         // 「高度」同「对齐方式」那条规则:只在不是默认(刚好放得下文字)时报,报实际画出来的高度,写成「高度 44pt」。
@@ -714,13 +718,17 @@ struct NotchEditorStage: View {
                     isOn: NotchBehaviorItem.gestures.binding.wrappedValue)])
     }
 
-    /// 「展开态」浮层里的七项(「展开时预览下一句」归「歌词行」,不在这里算)。曲目信息
+    /// 「展开态」浮层里的八项(「展开时预览下一句」归「歌词行」,不在这里算)。曲目信息
     /// 那四项的标题是光秃秃的名词(封面 / 歌名 / 歌手 / 专辑),摘要里读作「显示播放控制、封面、歌名」。
+    /// 「多行歌词」排在最前,开着时带上行数(「多行歌词 5 行」)。
     private var expandedSummary: String {
-        behaviorLikeSummary([
+        let list = "\(L10n.t("多行歌词")) \(String(format: L10n.t("%@ 行"), "\(settings.notchExpandedLyricListLines)"))"
+        let items: [NotchBehaviorItem] = [
             .expandedShowsControls, .expandedShowsLyricsOffset, .expandedShowsQuickActions, .expandedShowsArtwork,
             .expandedShowsTrackTitle, .expandedShowsArtist, .expandedShowsAlbum,
-        ])
+        ]
+        return toggleSummary([(title: list, isOn: settings.notchExpandedLyricList)]
+            + items.map { (title: $0.title, isOn: $0.binding.wrappedValue) })
     }
 
     /// 「左耳」/「右耳」按钮摘要:这只耳朵的模块名,音浪贴在这一侧时再带上「音浪」。
@@ -1655,6 +1663,8 @@ enum NotchStyleDefaults {
         settings.notchEqualizerEar = AppSettings.defaultNotchEqualizerEar
         settings.notchExpandedShowsNextLine = AppSettings.defaultNotchExpandedShowsNextLine
         settings.notchExpandedShowsControls = AppSettings.defaultNotchExpandedShowsControls
+        settings.notchExpandedLyricList = AppSettings.defaultNotchExpandedLyricList
+        settings.notchExpandedLyricListLines = AppSettings.defaultNotchExpandedLyricListLines
         settings.notchExpandedShowsLyricsOffset = AppSettings.defaultNotchExpandedShowsLyricsOffset
         settings.notchExpandedShowsArtwork = AppSettings.defaultNotchExpandedShowsArtwork
         settings.notchExpandedShowsTrackTitle = AppSettings.defaultNotchExpandedShowsTrackTitle

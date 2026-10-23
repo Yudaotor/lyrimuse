@@ -752,6 +752,9 @@ protocol NotchChromeSource: ObservableObject {
     /// 头部右侧那排「快捷操作」(搜索歌词 / 显示歌词 │ 设置 / 关闭)要不要画。
     /// 跟头部四项同一条链路:它参与头部高度(`max` 里的第三块),所以必须走"镜像 + 重算几何"。
     var expandedShowsQuickActions: Bool { get }
+    /// 展开时多行歌词那一格的高度(`AppSettings.notchExpandedLyricListHeight`),关着「多行歌词」时为 0。
+    /// 决定展开区高度,走"镜像 + 重算几何"那条链路(同 `lyricRowHeight`)。
+    var expandedLyricListHeight: CGFloat { get }
     func setExpanded(_ expanded: Bool)
     /// 快捷操作里那颗 ✕:关掉「灵动岛歌词」总开关。真窗口走 `setVisible(false)`(跟设置页开关、菜单栏
     /// 面板同一个唯一入口),预览里是空实现 —— 预览卡整块 `allowsHitTesting(false)`,本来也点不到。
@@ -792,7 +795,19 @@ extension NotchChromeSource {
     /// `expandedShowsNextLine` 是用户开关、`expandedShowsLyricPreview` 是曲目级数据,两者都成立才画。别把它塞进
     /// `NotchMetrics.expandedExtraHeight` 的入参列表:那会让"这一段到底该不该占高度"有两个真源(一个在这里判、一个在 height()
     /// 里判),这里判完的结果才是 height() 该吃的唯一输入。
-    var showsExpandedLyricPreview: Bool { expandedShowsLyricPreview && expandedShowsNextLine }
+    ///
+    /// 开着「多行歌词」时这一行不画:列表里本来就有下一句(见 `showsExpandedLyricList`)。
+    var showsExpandedLyricPreview: Bool {
+        expandedShowsLyricPreview && expandedShowsNextLine && expandedLyricListHeight == 0
+    }
+
+    /// 展开时歌词那一格(当前句那一行 + 下一句预览)换成多行列表:开着「多行歌词」、这首有歌词、不在放广告。
+    /// 「有歌词」跟下一句预览是同一个曲目级信号(`expandedShowsLyricPreview`),一首歌里不变,卡片不会唱着唱着跳一下。
+    /// 不看「收起时显示歌词」:展开是用户主动选的动作,同 `showsLyricRow`。高度预留(`cardHeight(expanded:)`)和渲染
+    /// (`NotchLyricsView.cardBodyLayer`)读这同一个值。
+    var showsExpandedLyricList: Bool {
+        expandedLyricListHeight > 0 && hasTrack && expandedShowsLyricPreview && !isAdBreakNow
+    }
 
     /// 头部那四项曲目字段(封面/歌名/歌手/专辑)此刻能不能画:广告期间一律不画,头部只剩
     /// 快捷操作那排键(见 `isAdBreakNow`)。高度算术(`expandedTrackInfoHeight`)和渲染
@@ -877,7 +892,8 @@ extension NotchChromeSource {
         }
         return contentTopInset
             // 稳态歌词行要不要留高度,同 showsLyricRow(展开时哪怕关着「显示歌词」也要留;这里已经有曲目)。
-            + ((showsLyrics || expanded) ? lyricRowHeight
+            // 展开且开着多行歌词时,这一格换成列表的高度(`showsExpandedLyricList`)。
+            + ((showsLyrics || expanded) ? (expanded && showsExpandedLyricList ? expandedLyricListHeight : lyricRowHeight)
                // 换歌翻牌、瞬态横幅:关着歌词行时为掉出来的歌名 / 横幅多长一截(开着时盖在歌词行上,不用另长)。
                : (trackDrop != nil || transientBannerActive ? NotchMetrics.trackDropHeight : 0))
             // 进度线:关着歌词行时卡片底边就是刘海下沿,线在刘海那一段会被挡住,往下多长一截让它整根露出来。
@@ -1703,6 +1719,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         // 两者都为零时两份逐像素重合,淡出淡入必须同步进行(错开会白闪一下);只要有一样不为零,
         // 就必须错开,否则两个错位的半透明副本会被看成「歌词斜着滑过去」。见头注那条。
         let staggered = headerHeight > 0 || controller.expandedCardWidth != controller.steadyCardWidth
+        let showsList = controller.showsExpandedLyricList
         // 必须是**显式**的 ZStack(alignment: .top),不能让 @ViewBuilder 直接吐一个 TupleView 再在外面套
         // .opacity:套了修饰符的 TupleView 是一个视图,里面几块按**居中**叠,外面 overlay 的 .top 只管这一个整体
         // —— 那样稳态下最高的那块(展开区)会把整体撑到 220pt、居中后歌词行被顶到卡片上方裁没了,
@@ -1726,15 +1743,23 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     // 换歌翻牌的歌名盖在这一行上时让开(见 body 里那条 NotchTrackDropStrip)。
                     .modifier(NotchCardLayerActive(active: !expanded && shownTrackDrop == nil, staggered: staggered))
             }
+            // 开着多行歌词时展开那份歌词行让给列表,但照样建着、只是藏着(停表):「显示歌词」关着时按宽度断句报的是它。
             lyricRow(reportsWidth: reportsLineLayout && !controller.showsLyrics)
                 .frame(width: controller.expandedCardWidth, height: controller.lyricRowHeight)
                 .padding(.top, top + headerHeight)
-                .modifier(NotchCardLayerActive(active: expanded, staggered: staggered))
+                .modifier(NotchCardLayerActive(active: expanded && !showsList, staggered: staggered))
+            if showsList {
+                NotchExpandedLyricList(tint: accentOrWhite)
+                    .frame(width: controller.expandedCardWidth, height: controller.expandedLyricListHeight)
+                    .padding(.top, top + headerHeight)
+                    .modifier(NotchCardLayerActive(active: expanded, staggered: staggered))
+            }
             // 展开区**完全不**受「显示歌词」开关影响:它是够到播放控制和进度条的唯一入口,
             // 而且用户主动指向展开这个动作本身就说明他现在想看更多 —— 连里面那行下一句预览也照常画。
             expandedContent
                 .frame(width: controller.expandedCardWidth)
-                .padding(.top, top + headerHeight + controller.lyricRowHeight)
+                .padding(.top, top + headerHeight
+                         + (showsList ? controller.expandedLyricListHeight : controller.lyricRowHeight))
                 .modifier(NotchCardLayerActive(active: expanded, staggered: staggered))
         }
     }

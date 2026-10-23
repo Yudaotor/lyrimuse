@@ -114,6 +114,37 @@ public enum NotchExpandedMetrics {
         return max(artworkHeight, textHeight, actionsHeight)
     }
 
+    // MARK: - 多行歌词
+
+    /// 「多行歌词」可选的行数(`AppSettings.notchExpandedLyricListLines`)。
+    public static let lyricListLineCounts = [3, 5, 7]
+    public static let defaultLyricListLineCount = 5
+    /// 列表的字号固定,不跟「字号」走:那一项只调主行,展开区「下一句」预览也是固定的。译文 / 读音同副行 11pt。
+    public static let lyricListFontSize: CGFloat = 13
+    /// 行与行之间的距离。
+    public static let lyricListLineSpacing: CGFloat = 7
+    /// 正文一行(13pt)、译文 / 读音一行(11pt)的行高,系统字体实测 16 / 13。
+    static let lyricListMainLineHeight: CGFloat = 16
+    static let lyricListSecondaryLineHeight: CGFloat = 13
+    /// 正文与译文 / 读音之间:块间距 6 + 译文前多留 0.12 个正文字号(同歌词窗口图层列表的行排法),往上取整。
+    static let lyricListSecondaryGap: CGFloat = 8
+
+    /// 每一行占的高度(含行距)。带译文 / 读音时每行多一行小字。
+    public static func lyricListPitch(secondaryRow: Bool) -> CGFloat {
+        lyricListMainLineHeight + lyricListLineSpacing
+            + (secondaryRow ? lyricListSecondaryGap + lyricListSecondaryLineHeight : 0)
+    }
+
+    /// 存下来的行数不在可选的几档里时,取最近的一档(一样近取小的)。
+    public static func clampedLyricListLineCount(_ count: Int) -> Int {
+        lyricListLineCounts.min { abs($0 - count) < abs($1 - count) } ?? defaultLyricListLineCount
+    }
+
+    /// 列表那一格的高度:行数 × 每行高度。长句折成两行时这一格放得下的句数会少一句,高度不跟着变。
+    public static func lyricListHeight(lineCount: Int, secondaryRow: Bool) -> CGFloat {
+        CGFloat(clampedLyricListLineCount(lineCount)) * lyricListPitch(secondaryRow: secondaryRow)
+    }
+
     // MARK: - 没有曲目时的空闲面板
 
     /// 空闲面板离卡片**底边**的间距。它是展开态最下面(也是唯一)的一块,不像曲目信息头部

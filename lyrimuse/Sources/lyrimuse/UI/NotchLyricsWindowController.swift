@@ -186,6 +186,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 头部右侧那排「快捷操作」,真值在 `AppSettings.notchExpandedShowsQuickActions`。
     /// 跟头部四项同一条链路:参与头部高度(`max` 的第三块),四项全关时它一个人撑起 22pt。
     @Published private(set) var expandedShowsQuickActions: Bool = AppSettings.shared.notchExpandedShowsQuickActions
+    /// 展开时多行歌词那一格的高度(关着「多行歌词」为 0),由三项设置合成(`AppSettings.notchExpandedLyricListHeight`)。
+    /// 窗口高度跟着它:订阅里先写镜像、再重算几何,`recomputeGeometry` 读镜像(同 `lyricRowHeight`)。
+    @Published private(set) var expandedLyricListHeight: CGFloat = AppSettings.shared.notchExpandedLyricListHeight
 
     /// 此刻有没有一首曲目 —— 决定歌词行整行占不占高度(见协议 NotchChromeSource.hasTrack)。
     /// 由 CombineLatest3 一次给全三个值,不存在"回头读存储属性拿到旧值"那个坑。
@@ -294,9 +297,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         let trackInfoHeight = NotchMetrics.expandedTrackInfoHeight(
             showsArtwork: showsArtwork, showsTitle: showsTitle, showsArtist: showsArtist, showsAlbum: showsAlbum,
             showsActions: showsActions)
+        // 开着多行歌词时「下一句」预览不会出现(`NotchChromeSource.showsExpandedLyricPreview`),不留它那一截。
         return NotchMetrics.expandedExtraHeightMax(
-            hasLyricPreviewPossible: expandedShowsNextLine ?? LyricSecondaryLine.expandedNextLinePreviewVisible(
-                userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: AppSettings.shared.notchSecondaryLine),
+            hasLyricPreviewPossible: (expandedShowsNextLine ?? LyricSecondaryLine.expandedNextLinePreviewVisible(
+                userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: AppSettings.shared.notchSecondaryLine))
+                && expandedLyricListHeight == 0,
             hasControlsPossible: expandedShowsControls ?? AppSettings.shared.notchExpandedShowsControls,
             trackInfoHeight: trackInfoHeight)
     }
@@ -675,6 +680,19 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             if self.lyricRowHeight != row.height { self.lyricRowHeight = row.height }
             self.recomputeGeometry(animate: false, expandedShowsNextLine: LyricSecondaryLine.expandedNextLinePreviewVisible(
                 userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: row.secondary))
+        }
+        .store(in: &subscriptions)
+        // 多行歌词那一格的高度:开关、行数、副行(带译文 / 读音时每行高一截)。同上先写镜像再重算几何,三个值都取 sink 参数。
+        Publishers.CombineLatest3(
+            AppSettings.shared.$notchExpandedLyricList, AppSettings.shared.$notchExpandedLyricListLines,
+            AppSettings.shared.$notchSecondaryLine
+        )
+        .map { AppSettings.notchExpandedLyricListHeight(enabled: $0, lines: $1, secondary: $2) }
+        .removeDuplicates()
+        .sink { [weak self] height in
+            guard let self else { return }
+            if self.expandedLyricListHeight != height { self.expandedLyricListHeight = height }
+            self.recomputeGeometry(animate: false)
         }
         .store(in: &subscriptions)
         $isVisible
@@ -1605,7 +1623,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 可能比展开态还高,取两者大的;多出来的是透明区,点击穿透。
         let size = NSSize(
             width: expandedCardWidth,
-            height: max(geo.notchHeight + lyricRowHeight + self.expandedExtraHeight(
+            // 歌词那一格按两种排法里高的那种留:这首有歌词、开着多行歌词时是列表,别的歌照旧是一行歌词。
+            height: max(geo.notchHeight + max(lyricRowHeight, expandedLyricListHeight) + self.expandedExtraHeight(
                 expandedShowsNextLine: expandedShowsNextLine,
                 expandedShowsControls: expandedShowsControls,
                 expandedTrackInfoShowsArtwork: expandedTrackInfoShowsArtwork,

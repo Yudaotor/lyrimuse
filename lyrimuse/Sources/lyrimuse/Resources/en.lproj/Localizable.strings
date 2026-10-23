@@ -79,6 +79,7 @@
 "%@ 秒后可跳过" = "Skippable in %@s";
 "%@ 突然不再返回歌词" = "%@ has suddenly stopped returning lyrics";
 "%@ 自动化权限" = "%@ Automation";
+"%@ 行" = "%@ lines";
 "%@ 行无时间戳，未写入逐字歌词" = "%@ lines without timestamps weren't added to the word-timed lyrics";
 "%@ 行无时间戳，未写入逐字歌词#one" = "%@ line without a timestamp wasn't added to the word-timed lyrics";
 "%@ 近期几乎未返回歌词" = "%@ has found almost no lyrics lately";
@@ -838,6 +839,7 @@
 "多 %@ 句" = "%@ extra lines";
 "多 %@ 句#one" = "%@ extra line";
 "多行" = "Multi-Line";
+"多行歌词" = "Multi-Line Lyrics";
 "夜幕卡片" = "Night Card";
 "大小写/空格" = "Case/spacing";
 "好" = "OK";
@@ -935,6 +937,7 @@
 "展开时在曲目信息右侧显示喜欢、搜索歌词、设置等按钮" = "When expanded, shows buttons such as Favorite, Search Lyrics, and Settings to the right of the track info";
 "展开时在歌词行上方显示曲目信息，四项可分别开启或关闭；全部关闭时不占用空间" = "When expanded, shows a track-info block above the lyric row. Each of the four items can be turned on or off; with all of them off, the block takes no space";
 "展开时在进度条上方显示下一句要唱的歌词" = "Shows the next lyric line above the progress bar when expanded";
+"展开时显示多行歌词，当前句逐字高亮" = "Shows several lines of lyrics when expanded, with the current line lighting up word by word";
 "展开时隐藏功能栏" = "Hide Control Strip While Expanded";
 "展开时预览下一句" = "Preview Next Line When Expanded";
 "左" = "Left";

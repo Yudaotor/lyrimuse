@@ -1555,8 +1555,8 @@ func runSourceContractSurfaceTests() {
                         "副行: 副行选「下一句」时「展开时预览下一句」开关要隐藏(翻了也没效果的开关不显示)")
         }
         if let stage = read("UI/NotchEditorStage.swift") {
-            expectEqual(stage.contains("!settings.notchSecondaryLine.hidesExpandedNextLinePreview, settings.notchExpandedShowsNextLine"), true,
-                        "副行: 「歌词行」按钮摘要列「展开时预览下一句」要按同一判据(被顶掉时不列)")
+            expectEqual(sourceHas(stage, "!settings.notchSecondaryLine.hidesExpandedNextLinePreview, !settings.notchExpandedLyricList,\n settings.notchExpandedShowsNextLine"), true,
+                        "副行: 「歌词行」按钮摘要列「展开时预览下一句」要按同一判据(被副行或多行歌词顶掉时不列)")
         }
     }
 

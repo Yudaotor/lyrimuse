@@ -180,6 +180,8 @@ final class SettingsSearchRouter: ObservableObject {
         case "notch.showLyrics": return s.notchShowLyrics
         case "notch.lyricRowArtwork": return s.notchLyricRowShowsArtwork
         case "notch.expandedNextLine": return !s.notchSecondaryLine.hidesExpandedNextLinePreview
+        case "notch.lyricList": return s.notchExpandedLyricList
+        case "notch.lyricListOff": return !s.notchExpandedLyricList
         case "overlay.karaoke": return s.overlayLyricsKaraoke
         case "overlay.stroke": return s.textStrokeEnabled
         case "overlay.glass": return s.overlayBackgroundGlass

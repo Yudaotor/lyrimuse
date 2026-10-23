@@ -1349,6 +1349,37 @@
           ]
         },
         {
+          "id": "notch-multiline-lyrics",
+          "title": {
+            "zh-Hans": "灵动岛展开时显示多行歌词",
+            "en": "Multi-line lyrics in the expanded notch",
+            "zh-Hant": "動態島展開時顯示多行歌詞"
+          },
+          "desc": {
+            "zh-Hans": "指针移到灵动岛上展开时，歌词那一格换成 3、5 或 7 行的歌词列表，当前句逐字高亮，换句时整段往上滚。平时关着歌词行的话，灵动岛仍是一条状态栏，展开才看歌词。",
+            "en": "When the notch expands under the pointer, the lyric area becomes a list of 3, 5 or 7 lines, with the current line lighting up word by word and the list scrolling up at each new line. If the lyric row is turned off, the notch stays a slim status strip and only shows lyrics when expanded.",
+            "zh-Hant": "指標移到動態島上展開時，歌詞那一格換成 3、5 或 7 行的歌詞清單，目前句逐字高亮，換句時整段往上捲動。平時關閉歌詞行的話，動態島仍是一條狀態列，展開才看歌詞。"
+          },
+          "default": "on",
+          "check": {
+            "appSetting": "notchExpandedLyricList"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "灵动岛",
+              "展开态",
+              "多行歌词"
+            ],
+            [
+              "歌词显示",
+              "灵动岛",
+              "展开态",
+              "行数"
+            ]
+          ]
+        },
+        {
           "id": "web-lyrics",
           "title": {
             "zh-Hans": "网页歌词：用手机、平板作为副屏，或作为 OBS 浏览器源",

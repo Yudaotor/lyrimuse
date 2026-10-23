@@ -31,6 +31,9 @@ public enum LyricSecondaryLine: String, CaseIterable, Sendable {
     /// 副行那一行到底画不画 —— `.off` 时歌词行回到改动前"一行"的排法,逐像素不变。
     public var showsSecondaryRow: Bool { self != .off }
 
+    /// 灵动岛展开态的多行歌词每句下面跟不跟一行小字:选译文 / 读音时跟;「下一句」在列表里本来就看得到,不跟。
+    public var showsLyricListSecondary: Bool { self == .translation || self == .romanization }
+
     /// 副行要显示的文字:下一句 / 当前句译文 / 当前句罗马音,首尾空白剔掉、空的算没有(nil)。
     /// 灵动岛(`NotchPlayback.secondaryText`)和菜单栏(`MenuBarStatusItem.refresh`)都调这一份,
     /// 两处各写一遍 switch 迟早漂开(比如一边 trim 一边不 trim)。

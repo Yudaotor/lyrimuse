@@ -511,6 +511,16 @@ With the pointer over the notch, swipe left or right with two fingers to change 
 - On by default
 - Settings: Lyrics Display › Notch › Behavior › Trackpad Gestures
 
+<a id="feature-notch-multiline-lyrics"></a>
+
+### Multi-line lyrics in the expanded notch
+
+When the notch expands under the pointer, the lyric area becomes a list of 3, 5 or 7 lines, with the current line lighting up word by word and the list scrolling up at each new line. If the lyric row is turned off, the notch stays a slim status strip and only shows lyrics when expanded.
+
+- On by default
+- Settings: Lyrics Display › Notch › Expanded State › Multi-Line Lyrics
+- Settings: Lyrics Display › Notch › Expanded State › Lines
+
 <a id="feature-web-lyrics"></a>
 
 ### Web lyrics: a phone or tablet as a second screen, or an OBS browser source
@@ -822,7 +832,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 286 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 288 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -992,6 +1002,8 @@ Every setting in the Settings window, by where it lives: 286 in all. Type a name
 
 ### Lyrics Display › Notch › Expanded State
 
+- **Multi-Line Lyrics**: Shows several lines of lyrics when expanded, with the current line lighting up word by word
+- **Lines**
 - **Show Playback Controls**
 - **Show Lyrics Calibration**
 - **Quick Actions**

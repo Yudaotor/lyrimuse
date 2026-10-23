@@ -444,6 +444,8 @@ final class AppSettings: ObservableObject {
         static let notchEqualizerEar = "np:notchEqualizerEar"
         static let notchExpandedShowsNextLine = "np:notchExpandedShowsNextLine"
         static let notchExpandedShowsControls = "np:notchExpandedShowsControls"
+        static let notchExpandedLyricList = "np:notchExpandedLyricList"
+        static let notchExpandedLyricListLines = "np:notchExpandedLyricListLines"
         static let notchExpandedShowsLyricsOffset = "np:notchExpandedShowsLyricsOffset"
         static let notchExpandedShowsArtwork = "np:notchExpandedShowsArtwork"
         static let notchExpandedShowsTrackTitle = "np:notchExpandedShowsTrackTitle"
@@ -581,6 +583,9 @@ final class AppSettings: ObservableObject {
     static let defaultNotchEqualizerEar = NotchEqualizerEar.right
     static let defaultNotchExpandedShowsNextLine = true
     static let defaultNotchExpandedShowsControls = true
+    /// 默认开:展开时歌词那一格换成多行列表。
+    static let defaultNotchExpandedLyricList = true
+    static let defaultNotchExpandedLyricListLines = NotchExpandedMetrics.defaultLyricListLineCount
     /// 展开卡片里的歌词微调 + 歌名 + 歌手 + 专辑四项默认开,展开态默认高度因此多出这四行 —— 展开态本来就是
     /// "hover 之后看详细信息"的那一面。`defaultNotchExpandedShowsArtwork` 默认关。
     static let defaultNotchExpandedShowsLyricsOffset = true
@@ -1813,6 +1818,15 @@ final class AppSettings: ObservableObject {
     @Published var notchExpandedShowsControls: Bool {
         didSet { defaults.set(notchExpandedShowsControls, forKey: Keys.notchExpandedShowsControls) }
     }
+    /// 「多行歌词」:展开时歌词那一格(当前句 + 下一句预览)换成一段多行列表,行数见 `notchExpandedLyricListLines`。
+    /// 决定展开区高度,走 `NotchChromeSource.expandedLyricListHeight` 那条镜像 + 重算几何的链路。
+    @Published var notchExpandedLyricList: Bool {
+        didSet { defaults.set(notchExpandedLyricList, forKey: Keys.notchExpandedLyricList) }
+    }
+    /// 「多行歌词」的行数,只取 `NotchExpandedMetrics.lyricListLineCounts` 里的几档(读的时候夹回)。
+    @Published var notchExpandedLyricListLines: Int {
+        didSet { defaults.set(notchExpandedLyricListLines, forKey: Keys.notchExpandedLyricListLines) }
+    }
     /// 展开区进度条下面那行时间数字中间要不要显示"歌词时间轴微调"——跟菜单栏面板里那颗「− 歌词±0.5s +」
     /// 是同一份功能(`PlaybackCoordinator.nudgeLyricsOffset`/`resetLyricsOffset`),只是多了一个灵动岛入口。
     /// 默认值见 `defaultNotchExpandedShowsLyricsOffset`。
@@ -1915,6 +1929,14 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(notchLyricRowHeight, forKey: Keys.notchLyricRowHeight) }
     }
     /// 歌词行实际画多高:设定值夹到装得下当前字号和副行为止(`NotchLyricRowMetrics.effectiveRowHeight`)。
+    /// 展开时多行歌词那一格的高度,关着「多行歌词」时为 0。列表跟着「副行」带译文 / 读音时每行高一截。
+    static func notchExpandedLyricListHeight(enabled: Bool, lines: Int, secondary: LyricSecondaryLine) -> CGFloat {
+        enabled ? NotchExpandedMetrics.lyricListHeight(lineCount: lines, secondaryRow: secondary.showsLyricListSecondary) : 0
+    }
+    var notchExpandedLyricListHeight: CGFloat {
+        Self.notchExpandedLyricListHeight(enabled: notchExpandedLyricList, lines: notchExpandedLyricListLines,
+                                          secondary: notchSecondaryLine)
+    }
     var notchEffectiveLyricRowHeight: CGFloat {
         NotchLyricRowMetrics.effectiveRowHeight(
             setting: CGFloat(notchLyricRowHeight), fontSize: CGFloat(notchFontSize),
@@ -2665,6 +2687,10 @@ final class AppSettings: ObservableObject {
             ?? Self.defaultNotchExpandedShowsNextLine
         notchExpandedShowsControls = (defaults.object(forKey: Keys.notchExpandedShowsControls) as? Bool)
             ?? Self.defaultNotchExpandedShowsControls
+        notchExpandedLyricList = (defaults.object(forKey: Keys.notchExpandedLyricList) as? Bool)
+            ?? Self.defaultNotchExpandedLyricList
+        notchExpandedLyricListLines = NotchExpandedMetrics.clampedLyricListLineCount(
+            (defaults.object(forKey: Keys.notchExpandedLyricListLines) as? Int) ?? Self.defaultNotchExpandedLyricListLines)
         notchExpandedShowsLyricsOffset = (defaults.object(forKey: Keys.notchExpandedShowsLyricsOffset) as? Bool)
             ?? Self.defaultNotchExpandedShowsLyricsOffset
         notchExpandedShowsArtwork = (defaults.object(forKey: Keys.notchExpandedShowsArtwork) as? Bool)

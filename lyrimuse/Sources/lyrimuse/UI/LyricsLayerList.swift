@@ -44,12 +44,15 @@ struct LyricsLayerList: NSViewRepresentable {
     /// 此刻的播放位置(歌词时间轴毫秒,含歌词偏移)。装动画、对表时各读一次。
     let nowMs: () -> Int
     let onTapLine: (Int) -> Void
+    /// 只看不点:不认悬停、点按和滚轮,鼠标事件落到底下的视图(灵动岛的多行歌词,滚轮归它的触控板手势)。
+    var interactive = true
 
     func makeNSView(context: Context) -> LyricsLayerListView { LyricsLayerListView() }
 
     func updateNSView(_ view: LyricsLayerListView, context: Context) {
         view.nowProvider = nowMs
         view.onTapLine = onTapLine
+        view.interactive = interactive
         view.bindChromeFade(chromeFade)
         view.apply(spec)
     }
@@ -61,6 +64,14 @@ final class LyricsLayerListView: NSView {
     var onTapLine: ((Int) -> Void)?
     /// 不挂窗口、交给离屏渲染画(网页歌词的副屏,19 章);传给间奏点,让它们没有窗口也装动画。
     var rendersDetached = false
+    /// 见 `LyricsLayerList.interactive`。关着时 `hitTest` 返回 nil、不挂跟踪区。
+    var interactive = true {
+        didSet {
+            guard interactive != oldValue else { return }
+            if !interactive { setHovered(nil) }
+            updateTrackingAreas()
+        }
+    }
 
     private let clip = FlippedView()
     private let scrollView = NSScrollView()
@@ -181,6 +192,8 @@ final class LyricsLayerListView: NSView {
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
 
+    override func hitTest(_ point: NSPoint) -> NSView? { interactive ? super.hitTest(point) : nil }
+
     override func layout() {
         super.layout()
         clip.frame = bounds
@@ -216,6 +229,8 @@ final class LyricsLayerListView: NSView {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let trackingArea { removeTrackingArea(trackingArea) }
+        trackingArea = nil
+        guard interactive else { return }
         let area = NSTrackingArea(rect: bounds, options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
                                   owner: self, userInfo: nil)
         addTrackingArea(area)

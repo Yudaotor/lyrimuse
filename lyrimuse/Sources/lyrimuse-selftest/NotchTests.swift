@@ -455,13 +455,13 @@ func runNotchTests() {
                     "展开区进度条: 满宽填充按 offset 移出、按胶囊裁,不每帧改布局宽度")
         expectEqual(controller.contains(
             "AppSettings.shared.$notchLyricRowHeight, AppSettings.shared.$notchFontSize, AppSettings.shared.$notchSecondaryLine")
-                    && controller.contains("height: max(geo.notchHeight + lyricRowHeight + self.expandedExtraHeight("), true,
+                    && controller.contains("height: max(geo.notchHeight + max(lyricRowHeight, expandedLyricListHeight) + self.expandedExtraHeight("), true,
                     "高度接线: 真窗口订阅行高、字号、副行三项,窗口高度用实际行高")
         expectEqual(view.contains("var lyricRowHeight: CGFloat { get }")
-                    && view.contains("+ ((showsLyrics || expanded) ? lyricRowHeight"), true,
+                    && view.contains("+ ((showsLyrics || expanded) ? (expanded && showsExpandedLyricList ? expandedLyricListHeight : lyricRowHeight)"), true,
                     "高度接线: chrome 给实际行高,卡片高度公式读它")
         expectEqual(stage.contains("var lyricRowHeight: CGFloat { AppSettings.shared.notchEffectiveLyricRowHeight }")
-                    && stage.contains("chrome.contentTopInset + NotchLyricRowMetrics.rowHeight + NotchMetrics.expandedExtraHeightMax("),
+                    && sourceHas(stage, "chrome.contentTopInset + max(NotchLyricRowMetrics.rowHeight, chrome.expandedLyricListHeight)\n + NotchMetrics.expandedExtraHeightMax("),
                     true, "高度接线: 编辑台替身现读实际行高,舞台按上限留高度(拖滑杆时整页不跳)")
         for (name, source) in [("NotchLyricsView", view), ("NotchEditorStage", stage), ("NotchLyricsWindowController", controller)] {
             expectEqual(source.isEmpty, false, "高度接线: 读到 \(name).swift")
@@ -2418,5 +2418,45 @@ func runNotchTests() {
         expectEqual(T.interval(durationMs: 10_000, width: 400), 0.25, "进度线: 重画间隔下限 0.25 秒")
         expectEqual(T.interval(durationMs: 3_600_000, width: 100), 2, "进度线: 重画间隔上限 2 秒")
         expectEqual(T.interval(durationMs: 0, width: 100), 2, "进度线: 时长未知按上限")
+    }
+
+    // ---- 展开态多行歌词 ----
+    do {
+        typealias M = NotchExpandedMetrics
+        expectEqual(M.lyricListPitch(secondaryRow: false), 23, "多行歌词: 一行 16 + 行距 7")
+        expectEqual(M.lyricListPitch(secondaryRow: true), 44, "多行歌词: 带译文 / 读音每行再加 8 + 13")
+        expectEqual(M.lyricListHeight(lineCount: 5, secondaryRow: false), 115, "多行歌词: 5 行高 115")
+        expectEqual(M.lyricListHeight(lineCount: 3, secondaryRow: false), 69, "多行歌词: 3 行高 69")
+        expectEqual(M.lyricListHeight(lineCount: 7, secondaryRow: true), 308, "多行歌词: 7 行带译文高 308")
+        expectEqual([0, 4, 6, 100].map(M.clampedLyricListLineCount), [3, 3, 5, 7],
+                    "多行歌词: 存下的行数不在 3 / 5 / 7 里时取最近一档,一样近取小的")
+        expectEqual(LyricSecondaryLine.allCases.map(\.showsLyricListSecondary), [false, false, true, true],
+                    "多行歌词: 副行选译文 / 读音时每句下面跟一行小字,「下一句」不跟")
+
+        let uiDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI")
+        func src(_ n: String) -> String { (try? String(contentsOf: uiDir.appendingPathComponent(n), encoding: .utf8)) ?? "" }
+        let v = src("NotchLyricsView.swift"), ctrl = src("NotchLyricsWindowController.swift")
+        let stage = src("NotchEditorStage.swift"), list = src("NotchExpandedLyricList.swift")
+        expectEqual(sourceHas(v, "var showsExpandedLyricList: Bool {\n expandedLyricListHeight > 0 && hasTrack && expandedShowsLyricPreview && !isAdBreakNow")
+                    && sourceHas(v, "expandedShowsLyricPreview && expandedShowsNextLine && expandedLyricListHeight == 0"), true,
+                    "多行歌词: 这首有歌词、不在广告时才换成列表,开着时不画下一句预览")
+        expectEqual(sourceHas(v, "+ ((showsLyrics || expanded) ? (expanded && showsExpandedLyricList ? expandedLyricListHeight : lyricRowHeight)")
+                    && sourceHas(v, "+ (showsList ? controller.expandedLyricListHeight : controller.lyricRowHeight))"), true,
+                    "多行歌词: 卡片高度和展开区落点读同一个判据")
+        expectEqual(sourceHas(v, ".modifier(NotchCardLayerActive(active: expanded && !showsList, staggered: staggered))"), true,
+                    "多行歌词: 展开那份歌词行让给列表时藏着停表")
+        expectEqual(sourceHas(ctrl, "height: max(geo.notchHeight + max(lyricRowHeight, expandedLyricListHeight) + self.expandedExtraHeight(")
+                    && sourceHas(ctrl, "&& expandedLyricListHeight == 0,"), true,
+                    "多行歌词: 窗口按列表和歌词行里高的那个留,开着时不留下一句预览那一截")
+        expectEqual(sourceHas(stage, "chrome.contentTopInset + max(NotchLyricRowMetrics.rowHeight, chrome.expandedLyricListHeight)")
+                    && sourceHas(stage, "settings.notchExpandedLyricList = AppSettings.defaultNotchExpandedLyricList")
+                    && sourceHas(stage, "settings.notchExpandedLyricListLines = AppSettings.defaultNotchExpandedLyricListLines"), true,
+                    "多行歌词: 编辑台舞台按列表留高度,两项进「恢复默认」")
+        expectEqual(sourceHas(list, "interactive: false)") && sourceHas(list, "suspendsBlur: true,")
+                    && sourceHas(list, "surfaceVisible: layerActive,"), true,
+                    "多行歌词: 只看不点、不做景深模糊、所在那一层看不见时停表")
+        expectEqual(sourceHas(src("LyricsLayerList.swift"), "override func hitTest(_ point: NSPoint) -> NSView? { interactive ? super.hitTest(point) : nil }"),
+                    true, "多行歌词: 列表只看不点时不接鼠标,滚轮落到灵动岛的手势上")
     }
 }
