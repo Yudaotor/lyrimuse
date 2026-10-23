@@ -447,7 +447,8 @@ extension LyricsLayerRowPlan {
             textFrame = CGRect(x: blockX, y: y, width: blockW, height: para.text.height)
             y += para.text.height
         }
-        if style.wordRise, let bg = backgroundDisplayWords(line.backgroundWords), line.words == nil {
+        let backgroundShown = style.wordRise ? SyncedLyricLine.backgroundDisplayWords(line.backgroundWords) : nil
+        if let bg = backgroundShown, line.words == nil {
             // 整行形态(「卡拉OK效果」关着):背景人声整句静态画,同正文那一行;淡的那一层直接压进颜色。
             y += LyricsLayerRowStyle.blockSpacing
             let faded = ink.text.copy(alpha: ink.text.alpha * CGFloat(LyricsLayerRowStyle.backgroundOpacity)) ?? ink.text
@@ -456,7 +457,7 @@ extension LyricsLayerRowPlan {
                 pictures += placed(para, x: blockX, y: y)
                 y += para.text.height
             }
-        } else if style.wordRise, let bg = backgroundDisplayWords(line.backgroundWords) {
+        } else if let bg = backgroundShown {
             y += LyricsLayerRowStyle.blockSpacing
             let block = wordBlock(words: bg, groups: nil, font: ink.background, romaFont: ink.roma, color: ink.text,
                                   activeColor: ink.text, rises: false, origin: CGPoint(x: blockX, y: y), width: blockW, side: side, style: style,
@@ -467,6 +468,16 @@ extension LyricsLayerRowPlan {
         if style.showRomanization, !perWordRoma, let roma = line.romanization, !roma.isEmpty,
            let para = paragraph(roma, font: ink.roma, color: ink.secondary, translation: false, width: blockW,
                                 side: side, scale: style.scale) {
+            y += LyricsLayerRowStyle.blockSpacing
+            pictures += placed(para, x: blockX, y: y)
+            y += para.text.height
+        }
+        // 背景人声的读音排在主句读音下面,跟背景人声一样淡(同 SwiftUI 版 `LyricsLineRow`)。
+        if style.showRomanization, backgroundShown != nil, let roma = line.backgroundRomanization, !roma.isEmpty,
+           let para = paragraph(roma, font: ink.roma,
+                                color: ink.secondary.copy(alpha: ink.secondary.alpha * CGFloat(LyricsLayerRowStyle.backgroundOpacity))
+                                    ?? ink.secondary,
+                                translation: false, width: blockW, side: side, scale: style.scale) {
             y += LyricsLayerRowStyle.blockSpacing
             pictures += placed(para, x: blockX, y: y)
             y += para.text.height
@@ -545,22 +556,6 @@ extension LyricsLayerRowPlan {
         case .trailing: return .right
         case .center: return .center
         }
-    }
-
-    /// 背景人声显示用的词:去掉整段首尾的括号、去掉空白词(同 SwiftUI 版 `LyricsLineRow.backgroundDisplayWords`)。
-    private static func backgroundDisplayWords(_ raw: [SyncedLyricWord]?) -> [SyncedLyricWord]? {
-        guard var words = raw, !words.isEmpty else { return nil }
-        func replaced(_ w: SyncedLyricWord, _ text: String) -> SyncedLyricWord {
-            SyncedLyricWord(text: text, startMs: w.startMs, durationMs: w.durationMs)
-        }
-        if let first = words.first, let c = first.text.first, c == "(" || c == "（" {
-            words[0] = replaced(first, String(first.text.dropFirst()))
-        }
-        if let last = words.last, let c = last.text.last, c == ")" || c == "）" {
-            words[words.count - 1] = replaced(last, String(last.text.dropLast()))
-        }
-        words.removeAll { $0.text.trimmingCharacters(in: .whitespaces).isEmpty }
-        return words.isEmpty ? nil : words
     }
 
     /// 一种颜色的一段字:画成遮罩、`tint` 是那个颜色;含彩色字形时画成 RGBA、`tint` 为 nil。

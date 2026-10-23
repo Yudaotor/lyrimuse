@@ -1069,8 +1069,11 @@ func runLyricsWindowTests() {
         let window = source("lyrimuse/UI/LyricsWindowView.swift")
         let layerRows = source("lyrimuse/UI/LyricsLayerListRow.swift")
         expectEqual(sourceBytes(window, contain: "if let bgWords = backgroundDisplayWords, item.line.words == nil {")
-                    && sourceBytes(layerRows, contain: "let bg = backgroundDisplayWords(line.backgroundWords), line.words == nil {"),
+                    && sourceBytes(layerRows, contain: "if let bg = backgroundShown, line.words == nil {"),
                     true, "背景人声: 两版列表在整行形态下都画背景人声(静态)")
+        expectEqual(sourceBytes(window, contain: "if showRomanization, backgroundDisplayWords != nil, let bgRoma = item.line.backgroundRomanization {")
+                    && sourceBytes(layerRows, contain: "if style.showRomanization, backgroundShown != nil, let roma = line.backgroundRomanization"),
+                    true, "背景人声读音: 两版列表都在显示背景人声、开着读音时画它")
         expectEqual(sourceHas(window, "rises: false,\n                    weight: weight\n"), true,
                     "背景人声: SwiftUI 版逐字的背景人声也跟「粗细」走")
         expectEqual(OverlayFontWeight.bold.lighter(by: OverlayFontWeight.lyricsWindowPlainLyricsSteps), .regular,

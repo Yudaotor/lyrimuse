@@ -5261,21 +5261,10 @@ private struct LyricsLineRow: View, Equatable {
     // 景深的模糊半径;过渡见 RowDepth。
     private var lineBlur: CGFloat { LyricsWindowDepth.blurRadius(distance: distance, fontSize: fontSize) }
 
-    /// 背景人声显示用的词:去掉整段首尾的括号(源里写成「(What you doing?)」,Apple Music 显示时不带)。
-    /// 只在完整布局显示,迷你「多行」字小行紧、不上浮,不显示。
+    /// 背景人声显示用的词(`SyncedLyricLine.backgroundDisplayWords`)。只在完整布局显示,迷你「多行」字小行紧、不上浮,不显示。
     private var backgroundDisplayWords: [SyncedLyricWord]? {
-        guard wordRise, var words = item.line.backgroundWords, !words.isEmpty else { return nil }
-        func replaced(_ w: SyncedLyricWord, _ text: String) -> SyncedLyricWord {
-            SyncedLyricWord(text: text, startMs: w.startMs, durationMs: w.durationMs)
-        }
-        if let first = words.first, let c = first.text.first, c == "(" || c == "（" {
-            words[0] = replaced(first, String(first.text.dropFirst()))
-        }
-        if let last = words.last, let c = last.text.last, c == ")" || c == "）" {
-            words[words.count - 1] = replaced(last, String(last.text.dropLast()))
-        }
-        words.removeAll { $0.text.trimmingCharacters(in: .whitespaces).isEmpty }
-        return words.isEmpty ? nil : words
+        guard wordRise else { return nil }
+        return SyncedLyricLine.backgroundDisplayWords(item.line.backgroundWords)
     }
 
     var body: some View {
@@ -5318,6 +5307,14 @@ private struct LyricsLineRow: View, Equatable {
                     .font(.overlayFont(familyName: fontFamily, size: romaFontSize,
                                        weight: weight.lighter(by: OverlayFontWeight.lyricsWindowRomanizationSteps)))
                     .foregroundStyle(secondaryTextColor)
+            }
+            // 背景人声的读音排在主句读音下面,跟背景人声一样淡:正文、背景人声、两行读音按同一个先后。
+            if showRomanization, backgroundDisplayWords != nil, let bgRoma = item.line.backgroundRomanization {
+                Text(bgRoma)
+                    .font(.overlayFont(familyName: fontFamily, size: romaFontSize,
+                                       weight: weight.lighter(by: OverlayFontWeight.lyricsWindowRomanizationSteps)))
+                    .foregroundStyle(secondaryTextColor)
+                    .opacity(Self.backgroundVocalsOpacity)
             }
             if showTranslation, let tr = item.line.translation {
                 Text(tr)

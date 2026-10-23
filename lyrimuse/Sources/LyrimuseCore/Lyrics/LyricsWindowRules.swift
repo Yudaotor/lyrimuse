@@ -166,7 +166,7 @@ public enum MiniLyricsSelection {
         guard let background = line.backgroundWords, flat.backgroundWords == nil else { return flat }
         return SyncedLyricLine(romanization: flat.romanization, translation: flat.translation, mainText: flat.mainText,
                                words: nil, wordGroups: nil, side: flat.side, plainText: flat.plainText,
-                               backgroundWords: background)
+                               backgroundWords: background, backgroundRomanization: line.backgroundRomanization)
     }
 
     /// 当前行:引擎给的下标有效才有。

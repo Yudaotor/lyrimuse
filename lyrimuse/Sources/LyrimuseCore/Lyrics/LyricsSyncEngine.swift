@@ -53,8 +53,11 @@ public struct SyncedLyricLine: Equatable {
     /// 默认排版兜底(歌词窗口 `?? .leading`、悬浮窗 `?? .center`)。
     public var side: LyricDuet.Side?
     /// 挂在这一句下面的背景人声(和声 / 回声),逐字,词带自己的时间,常常唱到主句结束之后。
-    /// 只有 Apple Music / AMLL 的歌词有,没有时为 nil。
+    /// Apple Music / AMLL 自带的,或引擎从别的源主句括号里拆出来的(09 章决策 337);没有时为 nil。
     public let backgroundWords: [SyncedLyricWord]?
+    /// 背景人声那一行的整行读音,按 `backgroundDisplayWords` 的文字现算,只有歌词窗口画。用户关了这种文字的罗马音、
+    /// 这一行本来就是拉丁字母时为 nil。
+    public let backgroundRomanization: String?
 
     // 不关心逐字填色进度、只要这一行的纯文本时用(比如状态栏显示)——mainText/words
     // 两种形态只会有一个非空,按判断顺序(有逐字数据优先逐字)取值。
@@ -67,7 +70,7 @@ public struct SyncedLyricLine: Equatable {
     public init(romanization: String?, translation: String?, mainText: String?,
                 words: [SyncedLyricWord]?, wordGroups: [SyncedLyricWordGroup]?,
                 side: LyricDuet.Side?, plainText: String? = nil,
-                backgroundWords: [SyncedLyricWord]? = nil) {
+                backgroundWords: [SyncedLyricWord]? = nil, backgroundRomanization: String? = nil) {
         self.romanization = romanization
         self.translation = translation
         self.mainText = mainText
@@ -75,6 +78,7 @@ public struct SyncedLyricLine: Equatable {
         self.wordGroups = wordGroups
         self.side = side
         self.backgroundWords = backgroundWords
+        self.backgroundRomanization = backgroundRomanization
         // 显式传入的空串退回推导链:引擎对 words==[] 的行(对唱标记单独成词被整个删掉)
         // 预拼出来是 "",而旧计算属性对这种行返回 nil —— 灵动岛的 `plainText ?? "♪"`
         // 靠 nil 才能显示占位音符(对抗审查抓出的口径差)。
@@ -87,6 +91,23 @@ public struct SyncedLyricLine: Equatable {
         } else {
             self.plainText = nil
         }
+    }
+
+    /// 背景人声显示用的词:去掉整段首尾的括号(源里写成「(What you doing?)」,Apple Music 显示时不带)、去掉空白词。
+    /// 歌词窗口两版列表都按它画,背景人声的读音也按它算。
+    public static func backgroundDisplayWords(_ raw: [SyncedLyricWord]?) -> [SyncedLyricWord]? {
+        guard var words = raw, !words.isEmpty else { return nil }
+        func replaced(_ w: SyncedLyricWord, _ text: String) -> SyncedLyricWord {
+            SyncedLyricWord(text: text, startMs: w.startMs, durationMs: w.durationMs)
+        }
+        if let first = words.first, let c = first.text.first, c == "(" || c == "（" {
+            words[0] = replaced(first, String(first.text.dropFirst()))
+        }
+        if let last = words.last, let c = last.text.last, c == ")" || c == "）" {
+            words[words.count - 1] = replaced(last, String(last.text.dropLast()))
+        }
+        words.removeAll { $0.text.trimmingCharacters(in: .whitespaces).isEmpty }
+        return words.isEmpty ? nil : words
     }
 
     /// 这一行的**整行**形态:逐字数据抹掉、正文落到 `mainText`,译文 / 罗马音 / 声部原样保留。
@@ -2277,12 +2298,7 @@ public final class LyricsSyncEngine {
         // 不拦的话英文句子底下会多出一行几乎一样的英文。
         guard lineNeedsRomanization(plainText) else { return nil }
         // 读音样式选了假名:日文行一律现算假名,源自带 / 预生成的那份是罗马字,不用。
-        if readsAsKana(plainText) {
-            if let cached = romanizerFallbackCache[plainText] { return cached }
-            let result = Romanizer.kanaReading(plainText, segments: cachedJapaneseSegments(for: plainText))
-            romanizerFallbackCache[plainText] = result
-            return result
-        }
+        if readsAsKana(plainText) { return computedReading(plainText) }
         // 混排行要把中文片段换回原文时,源自带/预生成那份整行罗马音用不了:它是**完整版**
         // (生成侧一律按拼音渲染中文片段、不看开关 —— 开关随时能改,按开关生成的话用户
         // 一打开拼音,存量几千首就得全部回补),而且是拼好的一整个字符串,事后切不出
@@ -2307,10 +2323,27 @@ public final class LyricsSyncEngine {
         }
         // 不在这里替用户决定"中文不要拼音":那是用户自己的开关(上面的 romanizationAllowed,中文默认关)。绝大多数中文歌没有
         // 服务端 lyrics_roma,用户打开中文罗马音时,能出拼音的唯一途径就是这里的客户端兜底。
-        //
+        return computedReading(plainText)
+    }
+
+    /// 背景人声那一行的读音:只现算。源自带 / 预生成的罗马音按主句的时间挂,同一个时间点取到的是主句那一行。
+    private func backgroundRomanizationText(_ background: [SyncedLyricWord]?) -> String? {
+        guard let words = SyncedLyricLine.backgroundDisplayWords(background) else { return nil }
+        let text = words.map(\.text).joined().trimmingCharacters(in: .whitespaces)
+        guard romanizationAllowed(for: text), lineNeedsRomanization(text) else { return nil }
+        return computedReading(text)
+    }
+
+    /// 客户端现算的整行读音:读音样式选了假名的日文行出假名,其余走 `Romanizer.lineReading`。按行文本缓存。
+    private func computedReading(_ plainText: String) -> String? {
+        if let cached = romanizerFallbackCache[plainText] { return cached }
+        if readsAsKana(plainText) {
+            let result = Romanizer.kanaReading(plainText, segments: cachedJapaneseSegments(for: plainText))
+            romanizerFallbackCache[plainText] = result
+            return result
+        }
         // songLooksJapanese 仍然要传进去:它决定走日语形态分析还是 ICU 音译(汉字在两种语言里读音完全不同,见 Romanizer.romanize
         // 的注释)。
-        if let cached = romanizerFallbackCache[plainText] { return cached }
         // 日文行的整行读音从 segmentsCache 派生,与 wordGroups 共用同一次分词。读音优先级跟 Romanizer.romanize 一致
         // (particleLatin > 假名标注 > 分词器转写 > 原文,尾部同走 mergeSokuon,见 Romanizer.readingFromSegments),selftest 有
         // 两者一致的断言。派生不出读音(整行拉丁/读音等于原文)时退到 ICU 音译。
@@ -2936,6 +2969,7 @@ public final class LyricsSyncEngine {
             return wordLines.enumerated().map { i, ln in
                 let words = self.windowWords(at: i)
                 let joined = words.map(\.text).joined()
+                let background = self.backgroundWords(forLineAt: ln.timeMs)
                 let line = SyncedLyricLine(
                     romanization: romanizationText(timeMs: ln.timeMs, plainText: joined),
                     translation: translationText(timeMs: ln.timeMs, plainText: joined),
@@ -2944,12 +2978,14 @@ public final class LyricsSyncEngine {
                     wordGroups: wordGroups(for: words, line: joined, lineTimeMs: ln.timeMs),
                     side: self.wordSides.indices.contains(i) ? self.wordSides[i] : nil,
                     plainText: joined,
-                    backgroundWords: self.backgroundWords(forLineAt: ln.timeMs)
+                    backgroundWords: background,
+                    backgroundRomanization: backgroundRomanizationText(background)
                 )
                 return LyricsWindowLine(id: "\(idPrefix)#\(i)", timeMs: ln.timeMs, line: line)
             }
         }
         return baseLines.enumerated().map { i, ln in
+            let background = self.backgroundWords(forLineAt: ln.timeMs)
             let line = SyncedLyricLine(
                 romanization: romanizationText(timeMs: ln.timeMs, plainText: ln.text),
                 translation: translationText(timeMs: ln.timeMs, plainText: ln.text),
@@ -2958,7 +2994,8 @@ public final class LyricsSyncEngine {
                 wordGroups: nil,
                 side: self.baseSides.indices.contains(i) ? self.baseSides[i] : nil,
                 plainText: ln.text,
-                backgroundWords: self.backgroundWords(forLineAt: ln.timeMs)
+                backgroundWords: background,
+                backgroundRomanization: backgroundRomanizationText(background)
             )
             return LyricsWindowLine(id: "\(idPrefix)#\(i)", timeMs: ln.timeMs, line: line)
         }

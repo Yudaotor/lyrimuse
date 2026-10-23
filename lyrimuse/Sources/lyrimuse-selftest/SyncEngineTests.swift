@@ -273,6 +273,34 @@ func runSyncEngineTests() {
         expectEqual(plain.tickQuery(atMs: 14600).scrollIndex, 1, "背景人声: 没有背景人声时照旧一唱完就滚")
     }
 
+    // ---- 背景人声的读音:按去掉首尾括号的文字现算,不取源自带那份(那份按主句时间挂);跟主句同一套开关 ----
+    do {
+        let yrc = "[1000,800](1000,800,0)사랑해\n[3000,800](3000,800,0)Hold me\n[5000,800](5000,800,0)君が好き\n"
+        let bg = "[1000,800](1900,400,0)(사랑해)\n[3000,800](3900,400,0)(oh yeah)\n[5000,800](5900,400,0)(ずっと)\n"
+        let roma = "[00:01.00]sa rang hae\n[00:05.00]kimi ga suki\n"
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: roma, lyricsYRC: yrc, lyricsBG: bg,
+                    romanizationScripts: [.korean, .japanese])
+        let lines = engine.allLines(idPrefix: "r")
+        let korean = Romanizer.lineReading("사랑해", songLooksJapanese: false, segments: [])
+        expectEqual(korean != nil && lines[0].line.backgroundRomanization == korean, true, "背景人声读音: 谚文现算")
+        expectEqual(lines[0].line.romanization, "sa rang hae", "背景人声读音: 主句照旧用源自带那份")
+        expectEqual(lines[1].line.backgroundRomanization == nil, true, "背景人声读音: 拉丁字母不标")
+        expectEqual(lines[2].line.backgroundRomanization?.contains("zutto"), true, "背景人声读音: 假名出罗马字")
+        expectEqual(MiniLyricsSelection.lineLevelKeepingBackground(lines[0].line).backgroundRomanization, korean,
+                    "背景人声读音: 压成整行时跟背景人声一起留着")
+
+        let off = LyricsSyncEngine()
+        off.load(lyrics: "", lyricsTr: "", lyricsRoma: roma, lyricsYRC: yrc, lyricsBG: bg, romanizationScripts: [.japanese])
+        expectEqual(off.allLines(idPrefix: "o")[0].line.backgroundRomanization == nil, true, "背景人声读音: 关了韩文罗马音不标")
+
+        let kana = LyricsSyncEngine()
+        kana.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, lyricsBG: bg,
+                  romanizationScripts: [.korean, .japanese], japaneseReading: .kana)
+        expectEqual(kana.allLines(idPrefix: "k")[2].line.backgroundRomanization == nil, true,
+                    "背景人声读音: 读音选假名时全是假名的那行不再抄一遍")
+    }
+
     // ---- 两行同时在唱(对唱重叠):歌词窗口一起点亮,单行展示面照旧按下一行起点换行 ----
     do {
         // 第一句声明行长 2600,末字 3000 才开口,比第二句的起点 2000 晚 1 秒:真重叠(《于是》的形状)。
