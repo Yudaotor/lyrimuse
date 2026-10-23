@@ -3859,7 +3859,7 @@ struct LyricsManagerView: View {
             : []
         romanizationAvailable = romanizedRows.contains { !($0.romanization ?? "").isEmpty }
         romanizationOffInSettings = !romanizationAvailable && (summary.hasRomanization
-            || LyricsPreviewText.mayHaveRomanization(lyrics, scripts: [.japanese, .korean, .chinese, .cantonese]))
+            || LyricsPreviewText.mayHaveRomanization(lyrics, scripts: .default))
     }
 
     /// 从这一句开始播放。减去当前歌词偏移:引擎判定当前句时把偏移加到播放位置上,不减回去跳过去会落在隔壁行(同歌词窗口点一行)。

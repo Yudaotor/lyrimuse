@@ -175,7 +175,7 @@ struct LyricsSearchSheet: View {
                 hasTranslation: plain.contains { !($0.translation ?? "").isEmpty },
                 hasRomanization: hasRomanization,
                 romanizationOffInSettings: !hasRomanization && (c.hasRomanization
-                    || LyricsPreviewText.mayHaveRomanization(c.lyrics, scripts: [.japanese, .korean, .chinese, .cantonese])),
+                    || LyricsPreviewText.mayHaveRomanization(c.lyrics, scripts: .default)),
                 timed: plain.contains { $0.timeMs != nil },
                 embeddedOffsetMs: embedded != 0 ? embedded : LRCParser.parseOffsetMs(c.lyricsYRC))
             self.inputs = inputs

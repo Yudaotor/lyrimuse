@@ -52,7 +52,7 @@ brew install --cask lyrimuse
 ### 逐字同步歌词，自动匹配对的版本
 - **逐字高亮**，跟着歌一起走。
 - **十五个歌词源，自动帮你查**：网易云音乐、QQ 音乐、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind（经 YouTube Music）、Deezer、AMLL（人工校对的逐字歌词库）、汽水音乐（官方逐字）、VIBE 和 Genie（韩文歌多）、PetitLyrics（日文歌多）、Apple Music 自己的歌词（在设置里连上账号才有）。Apple Music 的歌词需要订阅，很多歌还带逐字时间轴。你不用自己去搜。
-- **翻译和读音**显示在原文下面。歌词源自带社区翻译就用它的；没有的话，可以在设置里打开「系统兜底翻译」（默认关）：由你的 Mac 用 Apple 系统翻译来翻，歌词不出本机，本机翻不了再用联网翻译。译文有 17 种语言可选。读音是一行一行判断的：中文歌里夹了一句日文，就只给那一句标读音，不会给整首歌标上拼音；粤语歌会按词标粤拼。
+- **翻译和读音**显示在原文下面。歌词源自带社区翻译就用它的；没有的话，可以在设置里打开「系统兜底翻译」（默认关）：由你的 Mac 用 Apple 系统翻译来翻，歌词不出本机，本机翻不了再用联网翻译。译文有 17 种语言可选。读音是一行一行判断的：中文歌里夹了一句日文，就只给那一句标读音，不会给整首歌标上拼音；粤语歌会按词标粤拼。俄语、泰语、希腊语、印地语等十三种语言也能标读音，按联合国推荐的罗马化体系或 ISO 标准写。
 - **对唱按歌手分开显示**。只要歌词源（或 AMLL）标了哪句是谁唱的，两个人的词就不会挤成一团。
 - **歌词窗口里有 Apple Music 那些细节**：和声单独一行放在主句下面，对唱里重叠的两句一起亮到唱完，英文拖长音的词会像 Apple Music 那样放大、发光。
 - **歌词可以单独切简体或繁体**，跟 App 界面用什么语言无关。
@@ -289,7 +289,7 @@ macOS 14 Sonoma 及以上（Sequoia、Tahoe 以及更新的版本都行），App
 本来就存着。每首找到歌词的歌都有一份逐行时间的 `.lrc`；有译文、读音的，另外还有 `.tr.lrc` 和 `.roma.lrc`。逐字时间轴单独存成 `.yrc`，用的是网易云的 YRC 格式，大多数别的播放器读不了。文件放在 `~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/`，位置可以在设置里改。
 
 ### LyricsX 还在维护吗？Lyrimuse 和 LyricsX、Lyric Fever 有什么区别？
-LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3，支持 macOS 10.11 及以上，能配合 Apple Music、Spotify 和几个老牌播放器用。Lyric Fever 主要做 Spotify 和 Apple Music，需要 macOS 15 及以上。Lyrimuse 需要 macOS 14 及以上，另外支持 QQ 音乐、网易云音乐、酷狗、汽水音乐、KKBOX、Amazon Music、Kaset、reAMP、VOX、Pine Player、洛雪音乐和浏览器里的播放器，能逐行标拼音、粤拼和日文、韩文的罗马音，还能打卡到 Last.fm / ListenBrainz，并在本地统计你的听歌数据。逐项核实过的对照表见[对比页](docs/lyrics-apps-comparison.zh-CN.md)。
+LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3，支持 macOS 10.11 及以上，能配合 Apple Music、Spotify 和几个老牌播放器用。Lyric Fever 主要做 Spotify 和 Apple Music，需要 macOS 15 及以上。Lyrimuse 需要 macOS 14 及以上，另外支持 QQ 音乐、网易云音乐、酷狗、汽水音乐、KKBOX、Amazon Music、Kaset、reAMP、VOX、Pine Player、洛雪音乐和浏览器里的播放器，能逐行标拼音、粤拼、日文和韩文的罗马音，以及俄语、泰语等另外十三种语言的读音，还能打卡到 Last.fm / ListenBrainz，并在本地统计你的听歌数据。逐项核实过的对照表见[对比页](docs/lyrics-apps-comparison.zh-CN.md)。
 ## 许可与版权说明
 
 - **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授权。** 随 App 一起分发的开源组件与词典数据（media-control、Sparkle、KeyboardShortcuts、OpenCC 与 rime-cantonese 词典）各自保留原许可证，全文见 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；这个文件也打进了 App 包里，**设置 → 关于 → 第三方许可**能直接打开。

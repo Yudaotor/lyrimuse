@@ -158,9 +158,16 @@
 "Discord 未打开" = "Discord isn't open";
 "Discord 社区" = "Discord Community";
 "Discord 频道 Webhook：报告将发送到你服务器中的指定频道" = "A Discord channel webhook. Reports are posted to a channel on your server";
+"ELOT 743（联合国推荐），如 Καλημέρα → Kaliméra" = "ELOT 743 (UN-recommended), e.g. Καλημέρα → Kaliméra";
+"GOST 1983（联合国推荐），如 Привет → Privet" = "GOST 1983 (UN-recommended), e.g. Привет → Privet";
 "GPL-3.0" = "GPL-3.0";
 "GitHub Star 数" = "GitHub stars";
 "HDR 高亮" = "HDR Highlight";
+"ISO 15919，如 नमस्ते → namaste" = "ISO 15919, e.g. नमस्ते → namaste";
+"ISO 15919，如 ਸਤਿ ਸ੍ਰੀ → sati srī" = "ISO 15919, e.g. ਸਤਿ ਸ੍ਰੀ → sati srī";
+"ISO 15919，如 வணக்கம் → vaṇakkam" = "ISO 15919, e.g. வணக்கம் → vaṇakkam";
+"ISO 15919，如 ආයුබෝවන් → āyubōvan" = "ISO 15919, e.g. ආයුබෝවන් → āyubōvan";
+"ISO 9，如 Сәлем → Sa̋lem" = "ISO 9, e.g. Сәлем → Sa̋lem";
 "ISRC 一致" = "Same ISRC";
 "KKBOX 歌曲 ID 一致" = "Same KKBOX song ID";
 "KKBOX、Spotify、Amazon Music、洛雪音乐自己缓存的歌词" = "Lyrics cached by KKBOX, Spotify, Amazon Music and LX Music themselves";
@@ -363,6 +370,8 @@
 "之前手动选定的 %@ 首歌曲，歌词已被自动更新，不再是当初选定的版本，因此未锁定#one" = "The %@ song you picked earlier has since been updated automatically — it is no longer the version you chose, so it was not locked";
 "之前的自动决策" = "Earlier Automatic Decision";
 "之前的自定义" = "Previous custom";
+"乌克兰国家体系（联合国推荐），如 Привіт → Pryvit" = "Ukrainian national system (UN-recommended), e.g. Привіт → Pryvit";
+"乌克兰语" = "Ukrainian";
 "五" = "F";
 "亚马逊的流媒体音乐 App" = "Amazon's music streaming app";
 "人工修正" = "Manually Edited";
@@ -450,6 +459,9 @@
 "使用求助" = "Get Help";
 "使用相机扫描二维码" = "Scan the QR code with a camera";
 "例如 https://yourdomain.com/api/state" = "e.g. https://yourdomain.com/api/state";
+"俄语" = "Russian";
+"保加利亚国家体系（联合国推荐），如 Здравей → Zdravey" = "Bulgarian national system (UN-recommended), e.g. Здравей → Zdravey";
+"保加利亚语" = "Bulgarian";
 "保存" = "Save";
 "保存修改" = "Save Changes";
 "保存到 iCloud" = "Save to iCloud";
@@ -470,6 +482,7 @@
 "停止搜索" = "Stop Searching";
 "停止自动匹配" = "Stop Auto-Matching";
 "停止重新匹配" = "Stop Re-matching";
+"僧伽罗语" = "Sinhala";
 "允许局域网访问" = "Allow Local Network Access";
 "允许远程控制" = "Allow Remote Control";
 "光盘" = "Disc";
@@ -651,6 +664,7 @@
 "占用空间：%@" = "Storage used: %@";
 "卡拉OK" = "Karaoke";
 "卡拉OK效果" = "Karaoke Effect";
+"印地语" = "Hindi";
 "即将完成" = "almost done";
 "即将导入：%@" = "About to import: %@";
 "厚" = "Thick";
@@ -690,6 +704,7 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ more song had no source response · Auto-Match All";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d more couldn't be written to the lyrics folder. Check write access and disk space";
 "只显示歌词" = "Lyrics only";
+"只显示歌词源自带的读音" = "Shows only romanization supplied by the lyrics source";
 "只给汉字标注平假名" = "Hiragana for kanji only";
 "可以直接粘贴完整地址，会自动识别是哪个平台" = "Paste the full address and the platform is recognized automatically";
 "可同时开启多项" = "You can turn on more than one";
@@ -743,6 +758,7 @@
 "启用失败，可能是权限或系统限制导致歌词引擎未能正常启动。导出诊断信息可查看具体原因，也便于反馈问题" = "Couldn't enable it — a permission or system restriction may have kept the lyrics engine from starting. Export Diagnostics shows the specific cause and makes it easier to report";
 "启用歌词引擎与权限" = "Engine & Permissions";
 "咪咕音乐" = "Migu Music";
+"哈萨克语" = "Kazakh";
 "唯一的差异在于「%@」一项" = "The only difference is on “%@”";
 "唯一的差异是胜者在「%1$@」一项多 %2$d 分" = "The only difference: the winner scored %2$d more on “%1$@”";
 "喜欢" = "Favorite";
@@ -819,6 +835,8 @@
 "均衡器" = "Equalizer";
 "域名解析失败（DNS），请求未能发出。常见于 VPN 或公司网络接管 DNS 的情况；浏览器能打开网页并不代表此处可以连接" = "DNS lookup failed, so no request was ever sent. Common when a VPN or corporate network takes over DNS; a browser loading pages doesn't mean this can get through";
 "域名解析失败（DNS）：%@" = "DNS lookup failed: %@";
+"塞尔维亚语" = "Serbian";
+"塞尔维亚语拉丁字母（联合国推荐），如 Љубав → Ljubav" = "Serbian Latin alphabet (UN-recommended), e.g. Љубав → Ljubav";
 "填写后，每次请求将附带 X-Lyrimuse-Signature: sha256=…（使用此密钥对请求体计算的 HMAC-SHA256），接收端可据此校验来源" = "When set, every request carries X-Lyrimuse-Signature: sha256=… (an HMAC-SHA256 of the body with this secret) so the receiver can verify where it came from";
 "墨字白边" = "Ink Outline";
 "声波" = "Waveform";
@@ -1087,6 +1105,7 @@
 "已隐藏，%@ 恢复" = "Hidden until %@";
 "已静音" = "Muted";
 "布局" = "Layout";
+"希腊语" = "Greek";
 "带逐字（卡拉 OK）时间轴，是衡量歌词质量最直接的依据" = "Has word-by-word (karaoke) timing, the most direct evidence of quality";
 "帧/秒" = "fps";
 "帮助" = "Help";
@@ -1379,6 +1398,7 @@
 "方向" = "Direction";
 "方糖 · 服务通知" = "Fangtang · Service Notification";
 "方糖 · 消息详情" = "ServerChan · Message details";
+"旁遮普语" = "Punjabi";
 "无 GitHub 账号时，可发送邮件至 %@；右键点按可拷贝地址" = "Without a GitHub account, email %@. Right-click to copy the address";
 "无匹配的字体" = "No matching fonts";
 "无可保存的更改" = "No changes to save";
@@ -1887,6 +1907,8 @@
 "沿用同曲条目的人工修正" = "Uses the manual correction from another entry of this song";
 "沿用同曲条目的修正" = "From Another Entry";
 "法国的流媒体音乐平台，歌词由 LyricFind 提供" = "A French music streaming service with lyrics from LyricFind";
+"泰米尔语" = "Tamil";
+"泰语" = "Thai";
 "洛雪音乐" = "LX Music";
 "洛雪音乐开放 API" = "LX Music Open API";
 "浅色" = "Light";
@@ -1988,9 +2010,12 @@
 "界面语言" = "Language";
 "登录中…" = "Signing In…";
 "登录已过期，请重新连接" = "Sign-in has expired; reconnect to continue";
+"白俄罗斯国家体系（联合国推荐），如 Прывітанне → Pryvitannie" = "Belarusian national system (UN-recommended), e.g. Прывітанне → Pryvitannie";
+"白俄罗斯语" = "Belarusian";
 "白字描边" = "White Text with Outline";
 "白色" = "White";
 "白色、跟随封面或自定义颜色" = "White, cover art color or a custom color";
+"皇家学术院转写（RTGS），如 สวัสดี → sawatdi" = "Royal Thai General System (RTGS), e.g. สวัสดี → sawatdi";
 "直连失败时，经下方代理服务器重试" = "If a direct connection fails, retry through the proxy server below";
 "直连失败时，经系统代理或本机检测到的代理重试" = "If a direct connection fails, retry through the system proxy or a proxy detected on this Mac";
 "相邻短句可容纳于一行时合并显示" = "Adjacent short lines are merged when they fit on one line";
@@ -2143,6 +2168,7 @@
 "耗时" = "Time taken";
 "耗时%@，可随时停止" = "Takes %@; you can stop at any time";
 "联动" = "Linkage";
+"联合国推荐体系，如 Љубов → Ljubov" = "UN-recommended system, e.g. Љубов → Ljubov";
 "联网搜索候选歌词" = "Search Online for Lyrics";
 "联网逐首搜索，可随时停止" = "Searches online one song at a time; you can stop at any time";
 "背景" = "Background";
@@ -2565,6 +2591,7 @@
 "长按拖动" = "Long-Press to Drag";
 "间奏中多出一段歌词" = "Extra lyrics in an instrumental break";
 "间距" = "Spacing";
+"阿拉伯语" = "Arabic";
 "附带当前译文语言的可用译文，同等候选中优先" = "Comes with a usable translation in your translation language; preferred among otherwise-equal candidates";
 "除 %@ 外" = "All except %@";
 "随匹配算法更新重新选择" = "Re-Pick After Algorithm Updates";
@@ -2630,6 +2657,7 @@
 "首次收听" = "First listened";
 "首次解析" = "First resolution";
 "首轮" = "First round";
+"马其顿语" = "Macedonian";
 "高亮当前句并保持在可见范围内；手动滚动时暂停，再次点按可恢复" = "Highlights the current line and keeps it in view; scrolling by hand pauses it, click again to resume";
 "高可信" = "High confidence";
 "高度" = "Height";

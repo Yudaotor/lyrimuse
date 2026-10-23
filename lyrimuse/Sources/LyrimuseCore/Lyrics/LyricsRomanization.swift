@@ -45,6 +45,7 @@ public enum LyricsRomanization {
             guard let reading = Romanizer.lineReading(
                 body,
                 songLooksJapanese: prepared.songLooksJapanese,
+                songScript: prepared.songScript,
                 segments: Romanizer.japaneseSegments(
                     body, marks: prepared.annotation?.marks(forLine: body) ?? [],
                     songLooksJapanese: prepared.songLooksJapanese)),
@@ -119,6 +120,7 @@ public enum LyricsRomanization {
     private struct ReadingRows {
         var rows: [(tags: String, body: String)]
         var songLooksJapanese: Bool
+        var songScript: LyricScript
         var annotation: KanaAnnotation?
     }
 
@@ -160,11 +162,13 @@ public enum LyricsRomanization {
         let speakers = LyricDuet.speakers(in: bodies)
         let dropped = LyricsSyncEngine.strippingCreditLines(bodies, speakerExemptions: speakers)
         let kept = zip(rows, dropped).filter { !$0.1 }.map(\.0)
-        let songLooksJapanese = Romanizer.looksJapaneseSong(kept.map(\.body).joined(separator: "\n"))
+        let keptText = kept.map(\.body).joined(separator: "\n")
+        let songLooksJapanese = Romanizer.looksJapaneseSong(keptText)
         let readable = kept.compactMap { tags, rawBody -> (tags: String, body: String)? in
             let body = LyricDuet.strippingKnownLabel(rawBody, speakers: speakers)
             return body.isEmpty ? nil : (tags, body)
         }
-        return ReadingRows(rows: readable, songLooksJapanese: songLooksJapanese, annotation: annotation)
+        return ReadingRows(rows: readable, songLooksJapanese: songLooksJapanese,
+                           songScript: Romanizer.songScript(of: keptText), annotation: annotation)
     }
 }

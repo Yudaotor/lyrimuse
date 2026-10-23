@@ -1968,15 +1968,16 @@ private struct LyricsSettingsTab: View {
                 // 按语言分别开关 —— 同一个人对不同语言的需求常常是相反的:听日文歌要罗马字
                 // 才跟得上,听中文歌完全不需要拼音。这一行只决定哪些语言产出读音、所有展示面共用;
                 // 显不显示读音是各展示面自己的开关,在「歌词显示」里(04 章决策 42)。
-                // 四个选项一律写**语言名**(标题问的就是语言),标成什么方案(罗马字 / 拼音 / 粤拼)
+                // 选项一律写**语言名**(标题问的就是语言),标成什么方案(罗马字 / 拼音 / 粤拼 / 哪个标准)
                 // 放在各自的悬停说明里 —— 语言名和方案名混排,读的人得先分清哪几个是语言、哪几个是写法。
+                // 日 / 韩 / 中以外的语言按 10 章决策 49 的标准写;阿拉伯语只管歌词源自带的读音。
                 SettingsRow(
                     icon: "textformat.alt",
                     title: L10n.t("标注读音的语言"),
                     subtitle: L10n.t("为勾选的语言标注读音；是否显示在「歌词显示」中设置")
                 )
                 SettingsRawRow(insetToText: true) {
-                    HStack(spacing: 6) {
+                    SettingsEqualColumns(columns: 4, spacing: 6) {
                         romanizationTile(
                             L10n.t("日语"), .japanese,
                             help: L10n.t("罗马字，如 こんにちは → konnichiwa"))
@@ -1989,6 +1990,48 @@ private struct LyricsSettingsTab: View {
                         romanizationTile(
                             L10n.t("粤语"), .cantonese,
                             help: L10n.t("粤拼（Jyutping），如 你好 → nei5 hou2"))
+                        romanizationTile(
+                            L10n.t("俄语"), .russian,
+                            help: L10n.t("GOST 1983（联合国推荐），如 Привет → Privet"))
+                        romanizationTile(
+                            L10n.t("乌克兰语"), .ukrainian,
+                            help: L10n.t("乌克兰国家体系（联合国推荐），如 Привіт → Pryvit"))
+                        romanizationTile(
+                            L10n.t("保加利亚语"), .bulgarian,
+                            help: L10n.t("保加利亚国家体系（联合国推荐），如 Здравей → Zdravey"))
+                        romanizationTile(
+                            L10n.t("白俄罗斯语"), .belarusian,
+                            help: L10n.t("白俄罗斯国家体系（联合国推荐），如 Прывітанне → Pryvitannie"))
+                        romanizationTile(
+                            L10n.t("塞尔维亚语"), .serbian,
+                            help: L10n.t("塞尔维亚语拉丁字母（联合国推荐），如 Љубав → Ljubav"))
+                        romanizationTile(
+                            L10n.t("马其顿语"), .macedonian,
+                            help: L10n.t("联合国推荐体系，如 Љубов → Ljubov"))
+                        romanizationTile(
+                            L10n.t("哈萨克语"), .kazakh,
+                            help: L10n.t("ISO 9，如 Сәлем → Sa̋lem"))
+                        romanizationTile(
+                            L10n.t("希腊语"), .greek,
+                            help: L10n.t("ELOT 743（联合国推荐），如 Καλημέρα → Kaliméra"))
+                        romanizationTile(
+                            L10n.t("泰语"), .thai,
+                            help: L10n.t("皇家学术院转写（RTGS），如 สวัสดี → sawatdi"))
+                        romanizationTile(
+                            L10n.t("印地语"), .hindi,
+                            help: L10n.t("ISO 15919，如 नमस्ते → namaste"))
+                        romanizationTile(
+                            L10n.t("旁遮普语"), .punjabi,
+                            help: L10n.t("ISO 15919，如 ਸਤਿ ਸ੍ਰੀ → sati srī"))
+                        romanizationTile(
+                            L10n.t("泰米尔语"), .tamil,
+                            help: L10n.t("ISO 15919，如 வணக்கம் → vaṇakkam"))
+                        romanizationTile(
+                            L10n.t("僧伽罗语"), .sinhala,
+                            help: L10n.t("ISO 15919，如 ආයුබෝවන් → āyubōvan"))
+                        romanizationTile(
+                            L10n.t("阿拉伯语"), .arabic,
+                            help: L10n.t("只显示歌词源自带的读音"))
                     }
                     .padding(.bottom, 4)
                 }

@@ -392,6 +392,7 @@ final class AppSettings: ObservableObject {
         static let hasCompletedOnboarding = "np:hasCompletedOnboarding"
         /// 罗马音默认值改为跟界面语言走时,老用户保留四项全开的那次迁移做过没有。机器状态,不随配置导出。
         static let romanizationDefaultMigrated = "np:romanizationDefaultMigrated"
+        static let romanizationWorldMigrated = "np:romanizationWorldMigrated"
         static let hasOfferedICloudImport = "np:hasOfferedICloudImport"
         static let overlayStyle = "np:overlayStyle" // 已废弃,只在 init() 里读一次做迁移
         static let classicOverlayEnabled = "np:classicOverlayEnabled"
@@ -2279,6 +2280,12 @@ final class AppSettings: ObservableObject {
             defaults.set(keep.rawValue, forKey: Keys.romanizationScripts)
         }
         if !romanizationMigrated { defaults.set(true, forKey: Keys.romanizationDefaultMigrated) }
+        let worldMigrated = defaults.bool(forKey: Keys.romanizationWorldMigrated)
+        if let merged = RomanizationScripts.addingWorldLanguages(
+            storedRaw: defaults.object(forKey: Keys.romanizationScripts) as? Int, migrated: worldMigrated) {
+            defaults.set(merged.rawValue, forKey: Keys.romanizationScripts)
+        }
+        if !worldMigrated { defaults.set(true, forKey: Keys.romanizationWorldMigrated) }
         romanizationScripts = (defaults.object(forKey: Keys.romanizationScripts) as? Int)
             .map(RomanizationScripts.init(rawValue:))
             ?? RomanizationScripts.defaultScripts(chineseUI: L10n.current.hasPrefix("zh"))

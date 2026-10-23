@@ -77,6 +77,7 @@ enum ConfigPortability {
     private static let machineLocalDefaultsKeys: Set<String> = [
         "np:hasCompletedOnboarding",
         "np:romanizationDefaultMigrated",
+        "np:romanizationWorldMigrated",
         "np:hasShownAutomationOnboarding",
         "np:hasOfferedICloudImport",
         "np:hasShownOverlayDragHint",

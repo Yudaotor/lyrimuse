@@ -297,6 +297,15 @@ extension LyricsPreviewText {
             case 0x3040...0x30FF: if scripts.contains(.japanese) { return true }
             case 0x1100...0x11FF, 0x3130...0x318F, 0xAC00...0xD7AF: if scripts.contains(.korean) { return true }
             case 0x3400...0x4DBF, 0x4E00...0x9FFF: if wantsHan { return true }
+            case 0x0370...:
+                // 日 / 韩 / 中以外会现算读音的文字(阿拉伯字母只有源自带的,不算);西里尔字母不细分语言。
+                guard let family = WorldRomanization.Family.allCases.first(where: { $0.contains(scalar) }),
+                    family != .arabic
+                else { continue }
+                let wanted: RomanizationScripts = family == .cyrillic
+                    ? [.russian, .ukrainian, .bulgarian, .belarusian, .serbian, .macedonian, .kazakh]
+                    : WorldRomanization.script(of: family, text: "", song: .other).option ?? []
+                if !scripts.isDisjoint(with: wanted) { return true }
             default: continue
             }
         }

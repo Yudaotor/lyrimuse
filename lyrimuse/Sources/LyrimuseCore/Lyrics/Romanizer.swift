@@ -76,10 +76,10 @@ public enum Romanizer {
     ///
     /// 韩文同样不能直接交给 Any-Latin:它是逐字母转写,不按读音(사랑해 → salanghae、없어 → eobs-eo),
     /// 所以谚文先由 `KoreanRomanization` 按读音转(saranghae、eopseo),剩下的字符再走 Any-Latin。见 10 章决策 33。
-    /// 泰文、西里尔字母这类行在 `lineReading` 里就挡掉了,不会走到这里,见 10 章决策 48。
+    /// 泰文、西里尔字母这类片段在这之前先由 `WorldRomanization` 按各自的标准转,见 10 章决策 49。
     public static func romanize(
         _ text: String, japanese: Bool = false,
-        marks: [KanaAnnotation.Mark] = []
+        marks: [KanaAnnotation.Mark] = [], songScript: LyricScript = .other
     ) -> String? {
         guard !text.isEmpty else { return nil }
         // 日文歌里夹的纯英文行不要送进分词器:它会按词边界重新加空格,产出一份跟原文只差
@@ -91,7 +91,8 @@ public enum Romanizer {
         }
         // 输出等于输入(原文本来就是拉丁字母,音译是无操作)时返回 nil——不展示一份跟原文
         // 一模一样的"读音",那对用户没有任何信息增量,徒增一行重复文字。
-        let korean = containsHangul(text) ? KoreanRomanization.romanize(text) : text
+        let world = WorldRomanization.romanize(text, song: songScript)
+        let korean = containsHangul(world) ? KoreanRomanization.romanize(world) : world
         guard let transformed = korean.applyingTransform(.toLatin, reverse: false),
             transformed != text
         else { return nil }
@@ -429,25 +430,31 @@ public enum Romanizer {
     /// 写成 `songLooksJapanese && (looksJapanese || containsHan)` 的话,中文歌一旦被整首
     /// 判成日文,它的**纯中文行**就靠 containsHan 一路走进日语形态分析。
     ///
-    /// 只给含假名、谚文或汉字的行出读音。泰文、西里尔字母、阿拉伯字母这些行 Any-Latin 给的是逐字母
-    /// 转写(คน → khn、ใจ → cı),不是读音,设置里也没有它们的开关;这类行只显示歌词源自带的读音。
-    /// 见 10 章决策 48。
+    /// 不含假名、谚文、汉字的行交给 `WorldRomanization`(泰文、西里尔字母、希腊字母、印度系文字各按各的标准);
+    /// 不交给 Any-Latin:它对这些文字是逐字母转写(คน → khn),不是读音(10 章决策 48)。阿拉伯字母、希伯来字母
+    /// 这些不转,只显示歌词源自带的读音。含假名、谚文、汉字的行里夹着上面几种文字时,那几段先按各自的标准转,
+    /// 剩下的再走原来的路。见 10 章决策 49。
     ///
     /// - Parameter segments: 用 `@autoclosure` 收 —— 只有走进日语分支时才需要分词
     ///   (CFStringTokenizer 不便宜),而调用方常常持有按行缓存的分词结果。求值必须是惰性的,
     ///   否则纯英文歌的每一行都要白分一次词。
+    /// - Parameter songScript: 整首歌的文字种类,西里尔字母按它认出的语言转(App 和 helper 都按 `songScript(of:)` 算)。
     public static func lineReading(
         _ line: String,
         songLooksJapanese: Bool,
+        songScript: LyricScript = .other,
         segments: @autoclosure () -> [JapaneseSegment]
     ) -> String? {
-        guard looksJapanese(line) || containsHangul(line) || containsHan(line) else { return nil }
+        guard looksJapanese(line) || containsHangul(line) || containsHan(line) else {
+            let reading = WorldRomanization.romanize(line, song: songScript)
+            return reading == line ? nil : reading
+        }
         if readsAsJapanese(line, songLooksJapanese: songLooksJapanese),
             let reading = readingFromSegments(segments(), original: line)
         {
             return reading
         }
-        return romanize(line, japanese: false)
+        return romanize(line, japanese: false, songScript: songScript)
     }
 
     /// 这一行走日文读音:有假名,或者整首像日文、有汉字、没有谚文(带谚文的行是韩文,夹的汉字是汉字词,
@@ -1068,8 +1075,18 @@ public enum LyricScript: String, Sendable, CaseIterable {
     /// EnrichCacheLyrics.isCantonese)分派,不能像日语假名/韩语谚文那样靠文字本身
     /// 判定。加,拼音/粤拼两个开关分开之后才需要区分。
     case cantonese
-    /// 拉丁字母、泰文、西里尔字母等等。本地不现算读音(见 `Romanizer.lineReading`),
-    /// 只显示歌词源自带的那份,不纳入按语言开关的管辖。
+    /// 用西里尔字母写的几种语言,按 `CyrillicRomanization.detectLanguage` 整首歌认一次。
+    case russian, ukrainian, bulgarian, belarusian, serbian, macedonian, kazakh
+    case greek, thai
+    /// 天城文(印地语,也包括马拉地语、尼泊尔语这些同用天城文的,读音都按 ISO 15919)。
+    case hindi
+    /// 古木基文。
+    case punjabi
+    case tamil, sinhala
+    /// 阿拉伯字母。不现算读音,开关只管歌词源自带的那份(见 `WorldRomanization`)。
+    case arabic
+    /// 拉丁字母、希伯来字母、认不出的西里尔语言等等。本地不现算读音,只显示歌词源自带的那份,
+    /// 不纳入按语言开关的管辖。
     case other
 
     var option: RomanizationScripts? {
@@ -1078,7 +1095,46 @@ public enum LyricScript: String, Sendable, CaseIterable {
         case .korean: return .korean
         case .chinese: return .chinese
         case .cantonese: return .cantonese
+        case .russian: return .russian
+        case .ukrainian: return .ukrainian
+        case .bulgarian: return .bulgarian
+        case .belarusian: return .belarusian
+        case .serbian: return .serbian
+        case .macedonian: return .macedonian
+        case .kazakh: return .kazakh
+        case .greek: return .greek
+        case .thai: return .thai
+        case .hindi: return .hindi
+        case .punjabi: return .punjabi
+        case .tamil: return .tamil
+        case .sinhala: return .sinhala
+        case .arabic: return .arabic
         case .other: return nil
+        }
+    }
+
+    init(cyrillic: CyrillicLanguage) {
+        switch cyrillic {
+        case .russian: self = .russian
+        case .ukrainian: self = .ukrainian
+        case .bulgarian: self = .bulgarian
+        case .belarusian: self = .belarusian
+        case .serbian: self = .serbian
+        case .macedonian: self = .macedonian
+        case .kazakh: self = .kazakh
+        }
+    }
+
+    var cyrillicLanguage: CyrillicLanguage? {
+        switch self {
+        case .russian: return .russian
+        case .ukrainian: return .ukrainian
+        case .bulgarian: return .bulgarian
+        case .belarusian: return .belarusian
+        case .serbian: return .serbian
+        case .macedonian: return .macedonian
+        case .kazakh: return .kazakh
+        default: return nil
         }
     }
 }
@@ -1108,16 +1164,37 @@ public struct RomanizationScripts: OptionSet, Sendable, Codable {
     /// 粤语(粤拼/Jyutping)。加——此前粤拼罗马音只在服务端无条件生成,
     /// 客户端完全没有开关能控制显不显示。
     public static let cantonese = RomanizationScripts(rawValue: 1 << 3)
+    // 日 / 韩 / 中以外的语言(10 章决策 49)。位一旦落盘就不能改。
+    public static let russian = RomanizationScripts(rawValue: 1 << 4)
+    public static let ukrainian = RomanizationScripts(rawValue: 1 << 5)
+    public static let bulgarian = RomanizationScripts(rawValue: 1 << 6)
+    public static let belarusian = RomanizationScripts(rawValue: 1 << 7)
+    public static let serbian = RomanizationScripts(rawValue: 1 << 8)
+    public static let macedonian = RomanizationScripts(rawValue: 1 << 9)
+    public static let kazakh = RomanizationScripts(rawValue: 1 << 10)
+    public static let greek = RomanizationScripts(rawValue: 1 << 11)
+    public static let thai = RomanizationScripts(rawValue: 1 << 12)
+    public static let hindi = RomanizationScripts(rawValue: 1 << 13)
+    public static let punjabi = RomanizationScripts(rawValue: 1 << 14)
+    public static let tamil = RomanizationScripts(rawValue: 1 << 15)
+    public static let sinhala = RomanizationScripts(rawValue: 1 << 16)
+    public static let arabic = RomanizationScripts(rawValue: 1 << 17)
 
-    /// 四项全开。只作 Core 内部的占位初值(`LocalPlaybackSource` / `LyricsSyncEngine` 启动时
+    /// 日 / 韩 / 中以外的全部语言。升级上来的人第一次带着它们启动时一并打开(`AppSettings`)。
+    public static let world: RomanizationScripts = [
+        .russian, .ukrainian, .bulgarian, .belarusian, .serbian, .macedonian, .kazakh, .greek, .thai,
+        .hindi, .punjabi, .tamil, .sinhala, .arabic,
+    ]
+
+    /// 全开。只作 Core 内部的占位初值(`LocalPlaybackSource` / `LyricsSyncEngine` 启动时
     /// 会被 App 的设置覆盖);用户没手动改过时的默认值走 `defaultScripts(chineseUI:)`。
-    public static let `default`: RomanizationScripts = [.japanese, .korean, .chinese, .cantonese]
+    public static let `default`: RomanizationScripts = RomanizationScripts([.japanese, .korean, .chinese, .cantonese])
+        .union(.world)
 
     /// 用户没手动改过时的默认值,跟界面语言走:中文界面(简体 / 繁体)不标普通话拼音 ——
-    /// 对认字的人是噪声;日文、韩文、粤拼照开。其它界面语言四项全开,「显示罗马音」
-    /// 一打开就看得到东西。
+    /// 对认字的人是噪声;其余语言照开。其它界面语言全开,「显示罗马音」一打开就看得到东西。
     public static func defaultScripts(chineseUI: Bool) -> RomanizationScripts {
-        chineseUI ? [.japanese, .korean, .cantonese] : .default
+        chineseUI ? RomanizationScripts.default.subtracting(.chinese) : .default
     }
 
     /// 按界面语言取默认值只给新装的人:升级上来、从没手动改过(`storedRaw == nil`)、已经走完过引导的老用户,
@@ -1127,6 +1204,13 @@ public struct RomanizationScripts: OptionSet, Sendable, Codable {
                                                migrated: Bool) -> RomanizationScripts? {
         guard !migrated, storedRaw == nil, completedOnboarding else { return nil }
         return .default
+    }
+
+    /// 日 / 韩 / 中以外的语言默认开:手动改过(落了盘)的人,第一次带着这些语言启动时把它们并进已存的值,
+    /// 返回要落盘的值;没落过盘的人默认值里本来就有,返回 nil。只判一次(`migrated` 为真后不再判)。
+    public static func addingWorldLanguages(storedRaw: Int?, migrated: Bool) -> RomanizationScripts? {
+        guard !migrated, let storedRaw else { return nil }
+        return RomanizationScripts(rawValue: storedRaw).union(.world)
     }
 }
 
@@ -1208,7 +1292,11 @@ extension Romanizer {
         if looksJapaneseSong(text) { return .japanese }
         if containsHangul(text) { return .korean }
         if containsHan(text) { return .chinese }
-        return .other
+        guard let family = WorldRomanization.dominantFamily(text) else { return .other }
+        if family == .cyrillic {
+            return CyrillicRomanization.detectLanguage(text).map(LyricScript.init(cyrillic:)) ?? .other
+        }
+        return WorldRomanization.script(of: family, text: text, song: .other)
     }
 
     /// **一行**的文字种类。行内有假名/谚文就按行自己算(确证);只有纯汉字行才有
@@ -1223,6 +1311,7 @@ extension Romanizer {
             if song == .cantonese { return .cantonese }
             return .chinese
         }
-        return .other
+        guard let family = WorldRomanization.dominantFamily(line) else { return .other }
+        return WorldRomanization.script(of: family, text: line, song: song)
     }
 }

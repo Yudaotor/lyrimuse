@@ -52,7 +52,7 @@ brew install --cask lyrimuse
 ### 逐字同步歌詞，自動配對正確的版本
 - **逐字填色**，跟著歌一起走。
 - **十五個歌詞來源，自動幫你查**：網易雲音樂、QQ 音樂、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind（經 YouTube Music）、Deezer、AMLL（人工校對的逐字歌詞庫）、汽水音樂（官方逐字）、VIBE 和 Genie（韓文歌多）、PetitLyrics（日文歌多）、Apple Music 自己的歌詞（在設定裡連上帳號才有）。Apple Music 的歌詞需要訂閱，很多歌還帶逐字時間軸。你不用自己去搜尋。
-- **翻譯和讀音**顯示在原文下面。歌詞來源自帶社群翻譯就用它的；沒有的話，可以在設定裡打開「系統備用翻譯」（預設關閉）：由你的 Mac 用 Apple 系統翻譯來翻，歌詞不出本機，本機翻不了再用線上翻譯。譯文有 17 種語言可選。讀音是一行一行判斷的：中文歌裡夾了一句日文，就只給那一句標讀音，不會給整首歌標上拼音；粵語歌會按詞標粵拼。
+- **翻譯和讀音**顯示在原文下面。歌詞來源自帶社群翻譯就用它的；沒有的話，可以在設定裡打開「系統備用翻譯」（預設關閉）：由你的 Mac 用 Apple 系統翻譯來翻，歌詞不出本機，本機翻不了再用線上翻譯。譯文有 17 種語言可選。讀音是一行一行判斷的：中文歌裡夾了一句日文，就只給那一句標讀音，不會給整首歌標上拼音；粵語歌會按詞標粵拼。俄文、泰文、希臘文、印地文等十三種語言也能標讀音，按聯合國推薦的羅馬化體系或 ISO 標準寫。
 - **對唱按歌手分開顯示**。只要歌詞來源（或 AMLL）標了哪句是誰唱的，兩個人的詞就不會擠成一團。
 - **歌詞視窗裡有 Apple Music 那些細節**：和聲單獨一行放在主句下方，對唱裡重疊的兩句一起亮到唱完，英文拖長音的字會像 Apple Music 那樣放大、發光。
 - **歌詞可以單獨切換簡體或繁體**，跟 App 介面用什麼語言無關。
@@ -287,7 +287,7 @@ macOS 14 Sonoma 以上（Sequoia、Tahoe 以及更新的版本都可以），App
 本來就存著。每首找到歌詞的歌都有一份逐行時間的 `.lrc`；有譯文、讀音的，另外還有 `.tr.lrc` 和 `.roma.lrc`。逐字時間軸單獨存成 `.yrc`，用的是網易雲的 YRC 格式，大多數其他播放器讀不了。檔案放在 `~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/`，位置可以在設定裡改。
 
 ### LyricsX 還在維護嗎？Lyrimuse 和 LyricsX、Lyric Fever 有什麼差別？
-LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3，支援 macOS 10.11 以上，能搭配 Apple Music、Spotify 和幾個老牌播放器使用。Lyric Fever 主要做 Spotify 和 Apple Music，需要 macOS 15 以上。Lyrimuse 需要 macOS 14 以上，另外支援 QQ 音樂、網易雲音樂、酷狗、汽水音樂、KKBOX、Amazon Music、Kaset、reAMP、VOX、Pine Player、洛雪音樂和瀏覽器裡的播放器，能逐行標拼音、粵拼和日文、韓文的羅馬拼音，還能把播放記錄（scrobble）送到 Last.fm / ListenBrainz，並在本機統計你的聆聽數據。逐項查證過的對照表見[對比頁](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文）。
+LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3，支援 macOS 10.11 以上，能搭配 Apple Music、Spotify 和幾個老牌播放器使用。Lyric Fever 主要做 Spotify 和 Apple Music，需要 macOS 15 以上。Lyrimuse 需要 macOS 14 以上，另外支援 QQ 音樂、網易雲音樂、酷狗、汽水音樂、KKBOX、Amazon Music、Kaset、reAMP、VOX、Pine Player、洛雪音樂和瀏覽器裡的播放器，能逐行標拼音、粵拼、日文和韓文的羅馬拼音，以及俄文、泰文等另外十三種語言的讀音，還能把播放記錄（scrobble）送到 Last.fm / ListenBrainz，並在本機統計你的聆聽數據。逐項查證過的對照表見[對比頁](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文）。
 ## 授權與版權說明
 
 - **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授權。** 隨 App 一起發佈的開源元件與詞典資料（media-control、Sparkle、KeyboardShortcuts、OpenCC 與 rime-cantonese 詞典）各自保留原授權條款，全文見 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；這個檔案也打進了 App 包裡，**設定 → 關於 → 第三方授權**能直接打開。

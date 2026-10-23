@@ -353,3 +353,19 @@ SOFTWARE.
 
 Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)
 https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+
+================================================================================
+8. Wiktionary 泰语词条的皇家学术院转写(RTGS)
+   https://en.wiktionary.org/  (经 https://kaikki.org/dictionary/Thai/ 导出,2026-10-23 下载)
+   英文 Wiktionary 泰语词条里「Royal Institute」那一栏的读音(约一万七千条),由
+   scripts/gen-thai-rtgs.py 生成进 App 与 lyrics-romanize(LyrimuseCore/Lyrics/ThaiRTGSTable.swift),
+   用于泰语歌词的读音。只取了词条和这一栏读音,改动:每个词只留第一种读法、去掉只在复合词里
+   出现的连接形和单个字母的字母名。kaikki.org 的导出工具是 wiktextract(Tatu Ylonen)。
+================================================================================
+
+Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+https://creativecommons.org/licenses/by-sa/4.0/legalcode
+
+数据版权归 Wiktionary 的各位贡献者所有(逐条的编辑历史见 Wiktionary 各词条页面),依据
+CC BY-SA 4.0 授权。ThaiRTGSTable.swift 这份改编数据同样按 CC BY-SA 4.0 提供。CC BY-SA 4.0
+是 GPL-3.0 的单向兼容许可证(Creative Commons 2015 年公告),可以随本项目以 GPL-3.0 分发。

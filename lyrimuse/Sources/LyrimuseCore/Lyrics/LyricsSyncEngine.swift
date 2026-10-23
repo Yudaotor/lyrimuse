@@ -1975,6 +1975,7 @@ public final class LyricsSyncEngine {
         if songScript == .chinese || songScript == .korean, songIsCantonese {
             songScript = .cantonese
         }
+        if songScript == .thai { ThaiRomanization.prewarm() }
         // 歌词源自带的假名标注(酷狗的 [kana:] 标签),不带时用引擎从别的源借来的那份(kanaDonor)。对不齐时
         // parse 返回 nil,读音自动退回形态分析 —— 见 KanaAnnotation 顶部注释里"半对半错比不标更糟"那段。
         kanaAnnotation = KanaAnnotation.parse(lrc: lyrics, donor: kanaDonor)
@@ -2298,9 +2299,10 @@ public final class LyricsSyncEngine {
             if let adopted = romaFallback.adopted[timeMs], adopted.key == key { return adopted.text }
             if romaFallback.suppressed[timeMs] == key { return nil }
             if let fromSource = nearestText(romaLines, timeMs) { return fromSource }
-            // 中文 / 粤语歌的读音轨只管汉字行(粤拼查不到假名、谚文),里面一行日文 / 韩文没有对应,照常现算。
+            // 中文 / 粤语歌的读音轨只管汉字行(粤拼查不到假名、谚文),里面一行日文 / 韩文 / 泰文这些没有对应,照常现算。
             let foreignLine = (songScript == .cantonese || songScript == .chinese)
-                && (Romanizer.looksJapanese(plainText) || Romanizer.containsHangul(plainText))
+                && (Romanizer.looksJapanese(plainText) || Romanizer.containsHangul(plainText)
+                    || (!Romanizer.containsHan(plainText) && WorldRomanization.dominantFamily(plainText) != nil))
             guard romaLines.isEmpty || foreignLine else { return nil }
         }
         // 不在这里替用户决定"中文不要拼音":那是用户自己的开关(上面的 romanizationAllowed,中文默认关)。绝大多数中文歌没有
@@ -2319,6 +2321,7 @@ public final class LyricsSyncEngine {
         let result = Romanizer.lineReading(
             plainText,
             songLooksJapanese: songLooksJapanese,
+            songScript: songScript,
             segments: cachedJapaneseSegments(for: plainText))
         romanizerFallbackCache[plainText] = result
         return result
