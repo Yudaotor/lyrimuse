@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -358,5 +359,26 @@ func TestMusixmatchBySpotifyIDIsNativeForSpotify(t *testing.T) {
 	}
 	if !containsCode(string(src), "performers: r.performers, identityFromLocalClient: r.bySpotifyID}") {
 		t.Error("Musixmatch 候选的本机身份按 bySpotifyID 给")
+	}
+
+	// 一路传到打分:候选带着本机身份,拿到同源那一项。
+	lrc := "[00:05.00]line one\n[00:15.00]line two\n[00:25.00]line three\n[00:35.00]line four\n[00:45.00]line five\n[02:50.00]line six"
+	for _, native := range []bool{true, false} {
+		raw := map[string]lyricSourceResult{"musixmatch": {source: "musixmatch", lyr: lrc, matchTitle: "Song", matchArtist: "Artist",
+			srcDur: 180, identityFromLocalClient: native}}
+		found := false
+		for _, c := range rankLyricSourceResults("Artist", "Song", "", 180, raw) {
+			if c.Source != "musixmatch" {
+				continue
+			}
+			found = true
+			got := slices.ContainsFunc(c.ScoreTerms, func(term scoreTerm) bool { return term.Kind == scoreTermNativeSource })
+			if c.IdentityFromLocalClient != native || got != native {
+				t.Errorf("native=%v: 候选身份 %v,同源项 %v", native, c.IdentityFromLocalClient, got)
+			}
+		}
+		if !found {
+			t.Fatalf("native=%v: 没有 musixmatch 候选", native)
+		}
 	}
 }

@@ -5403,7 +5403,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	}
 	if mxLyr != "" {
 		mxUsableTr, mxUsableRoma := usableValueAdd(mxLyr, mxTr, features().LyricsTranslationLanguage, mxRoma, features().LyricsTranslationLanguage)
-		candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: usableYRC(mxLyr, mxYRC), hasWordTiming: usableWordTiming(mxLyr, mxYRC), hasUsableTranslation: mxUsableTr, hasUsableRomanization: mxUsableRoma, sourceReportedDurationSecs: mxDur, title: mxTitle, artist: mxArtist, album: mxAlbum, cover: mxCover, plainTextOnly: mxPlainOnly})
+		candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: usableYRC(mxLyr, mxYRC), hasWordTiming: usableWordTiming(mxLyr, mxYRC), hasUsableTranslation: mxUsableTr, hasUsableRomanization: mxUsableRoma, sourceReportedDurationSecs: mxDur, title: mxTitle, artist: mxArtist, album: mxAlbum, cover: mxCover, plainTextOnly: mxPlainOnly, identityFromLocalClient: mx.identityFromLocalClient})
 	}
 	if lrclibLyr != "" {
 		// 罗马音来自 lyricsfile 的音译(lyricsfile.go),可用性跟别的源同一道 usableValueAdd;没有译文。
