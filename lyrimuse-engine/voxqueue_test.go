@@ -47,9 +47,17 @@ func withVoxPlaylistDB(t *testing.T, tracks []voxFixtureTrack) {
 	t.Cleanup(func() { voxUpcomingOverride = saved })
 }
 
-// withVoxRepeating 把问循环档换成固定答案;calls 记问了几次。
+// resetVoxOrder 清掉顺序 / 随机的证据(每个场景从头攒)。
+func resetVoxOrder() {
+	voxPlayOrderMu.Lock()
+	voxPlayOrderLast = queueOrder{}
+	voxPlayOrderMu.Unlock()
+}
+
+// withVoxRepeating 把问循环档换成固定答案,清掉顺序证据;calls 记问了几次。
 func withVoxRepeating(t *testing.T, mode string, ok bool) *int {
 	t.Helper()
+	resetVoxOrder()
 	calls := 0
 	saved := voxRepeating
 	voxRepeating = func() (string, bool) { calls++; return mode, ok }
@@ -123,6 +131,7 @@ func TestVoxUpcomingFollowsRepeatMode(t *testing.T) {
 	if *calls != 1 {
 		t.Errorf("每次换歌问一次循环档: %d", *calls)
 	}
+	resetVoxOrder()
 	if res, ok := voxUpcoming("乙", "B", 5); !ok || strings.Join(voxTitles(res), ",") != "丙/C,丁/D,甲/A" {
 		t.Errorf("绕一圈到当前这首为止: ok=%v %v", ok, voxTitles(res))
 	}
@@ -143,9 +152,52 @@ func TestVoxUpcomingFollowsRepeatMode(t *testing.T) {
 		if _, ok := voxUpcoming("丁", "D", 5); ok {
 			t.Errorf("循环档 %q(问到=%v)时最后一首后面没有,退回同专辑预取", c.mode, c.ok)
 		}
+		resetVoxOrder()
 		if res, ok := voxUpcoming("乙", "B", 5); !ok || strings.Join(voxTitles(res), ",") != "丙/C,丁/D" {
 			t.Errorf("循环档 %q(问到=%v)时到最后为止: %v", c.mode, c.ok, voxTitles(res))
 		}
+	}
+}
+
+// 随机开着时库里的列表顺序不变、跳着放:相邻两次换歌跳了位置就按随机交整份候选,又顺着走就翻回来;
+// 列表循环从最后一首接回第一首不算随机。
+func TestVoxUpcomingInfersShuffle(t *testing.T) {
+	withVoxPlaylistDB(t, []voxFixtureTrack{
+		{pk: 10, fok: 2048, url: voxFileURL("a.mp3"), name: "A", artist: "甲", inDefault: true},
+		{pk: 11, fok: 3072, url: voxFileURL("b.mp3"), name: "B", artist: "乙", inDefault: true},
+		{pk: 12, fok: 4096, url: voxFileURL("c.mp3"), name: "C", artist: "丙", inDefault: true},
+		{pk: 13, fok: 5120, url: voxFileURL("d.mp3"), name: "D", artist: "丁", inDefault: true},
+	})
+	withVoxRepeating(t, "all", true)
+	step := func(artist, title string) string {
+		t.Helper()
+		res, ok := voxUpcoming(artist, title, 2)
+		if !ok {
+			t.Fatalf("%s: 没取到", title)
+		}
+		return strings.Join(voxTitles(res), ",")
+	}
+	if got := step("甲", "A"); got != "乙/B,丙/C" {
+		t.Errorf("头一次没有证据,按列表: %q", got)
+	}
+	if got := step("丙", "C"); got != "丁/D,甲/A,乙/B" {
+		t.Errorf("从第 1 首跳到第 3 首按随机,交整份(不含当前): %q", got)
+	}
+	if got := step("丁", "D"); got != "甲/A,乙/B" {
+		t.Errorf("又顺着走了,翻回按列表: %q", got)
+	}
+	if got := step("甲", "A"); got != "乙/B,丙/C" {
+		t.Errorf("列表循环从最后一首接回第一首不算随机: %q", got)
+	}
+	// 列表换了一首(行数没变):之前的证据不带过来,跳到第 3 首也先按列表。
+	withVoxPlaylistDB(t, []voxFixtureTrack{
+		{pk: 10, fok: 2048, url: voxFileURL("a.mp3"), name: "A", artist: "甲", inDefault: true},
+		{pk: 11, fok: 3072, url: voxFileURL("b.mp3"), name: "B", artist: "乙", inDefault: true},
+		{pk: 12, fok: 4096, url: voxFileURL("c.mp3"), name: "C", artist: "丙", inDefault: true},
+		{pk: 14, fok: 6144, url: voxFileURL("e.mp3"), name: "E", artist: "戊", inDefault: true},
+	})
+	if got := step("丙", "C"); got != "戊/E,甲/A" {
+		t.Errorf("换了一份列表重新攒证据: %q", got)
 	}
 }
 

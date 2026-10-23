@@ -39,6 +39,14 @@ func (o *queueOrder) observe(list string, pos int) (shuffled, flipped bool) {
 	return shuffled, shuffled && !prev.shuffled
 }
 
+// observeWrapping 同 observe,但从列表最后一首到第一首算顺序(列表循环接回开头),size 是列表长度。
+func (o *queueOrder) observeWrapping(list string, pos, size int) (shuffled, flipped bool) {
+	if o.list == list && pos == 0 && o.pos == size-1 {
+		o.pos = -1
+	}
+	return o.observe(list, pos)
+}
+
 // shuffleCandidates 是随机播放时交出去预解析的那一批(规则见 queueShuffleWholeListMax 头注)。
 // at(i) 取列表第 i 首,ok=false 的跳过。顺序从当前往后、到末尾接回开头,当前这首不在里面。
 func shuffleCandidates(size, pos int, at func(i int) (upcomingTrack, bool)) []upcomingTrack {

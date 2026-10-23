@@ -100,11 +100,8 @@ func pineQueueID(tracks []pineQueueTrack) string {
 func pineObservePosition(list string, pos, size int) (shuffled bool) {
 	pinePlayOrderMu.Lock()
 	defer pinePlayOrderMu.Unlock()
-	if pinePlayOrderLast.list == list && pos == 0 && pinePlayOrderLast.pos == size-1 {
-		pinePlayOrderLast.pos = -1
-	}
 	prevPos := pinePlayOrderLast.pos
-	shuffled, flipped := pinePlayOrderLast.observe(list, pos)
+	shuffled, flipped := pinePlayOrderLast.observeWrapping(list, pos, size)
 	if flipped {
 		log.Printf("pine upcoming: moved from position %d to %d in the playlist, treating playback as shuffled and prefetching from the whole list", prevPos, pos)
 	}
