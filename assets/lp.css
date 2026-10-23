@@ -404,14 +404,14 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
 @keyframes nudge { 50% { transform: translateY(-3px); } }
 
 /* player icons floating around the laptop: they pop in once the lid is open, then bob;
-   the script adds depth (pointer) and drift (scroll) through transform */
+   the script adds depth (pointer) and drift (scroll) through transform.
+   The images are requested after the page has been parsed; one that arrives after its pop has played gets the pop again */
 .floaters { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
 .fl {
   position: absolute; width: 76px; height: 76px; filter: drop-shadow(0 14px 22px rgba(60, 20, 50, .22));
   animation: flpop .7s cubic-bezier(.3, 1.45, .5, 1) backwards, bob 6s ease-in-out infinite;
   animation-delay: calc(.25s + var(--k, 0) * 35ms), var(--bd, 0s);
-}
-.fl-1 { left: -54px; top: 16%; transform: rotate(-8deg); --bd: -1s; }
+}.fl-1 { left: -54px; top: 16%; transform: rotate(-8deg); --bd: -1s; }
 .fl-2 { left: -30px; top: 62%; width: 64px; height: 64px; --bd: -3s; }
 .fl-3 { right: -48px; top: 12%; width: 70px; height: 70px; --bd: -2s; }
 .fl-4 { right: -60px; top: 55%; width: 78px; height: 78px; --bd: -4s; }
