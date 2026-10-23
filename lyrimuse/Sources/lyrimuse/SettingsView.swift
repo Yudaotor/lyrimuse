@@ -6561,8 +6561,8 @@ private struct GeneralSettingsTab: View {
             CardDivider()
             SettingsRow(
                 icon: "photo",
-                title: L10n.t("用封面当图标"),
-                subtitle: L10n.t("显示正在播放的专辑封面，没有封面时显示所选图标")
+                title: L10n.t("图标换成专辑封面"),
+                subtitle: L10n.t("没有封面时显示所选图标")
             ) {
                 Toggle("", isOn: $settings.menuBarIconShowsArtwork)
             }

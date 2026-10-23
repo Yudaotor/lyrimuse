@@ -53700,52 +53700,6 @@
         }
       }
     },
-    "用封面当图标" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Use Album Art as Icon"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用封面当图标"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用封面當圖像"
-          }
-        }
-      }
-    },
-    "显示正在播放的专辑封面，没有封面时显示所选图标" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Shows the album art of what's playing, or the chosen icon when there is none"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示正在播放的专辑封面，没有封面时显示所选图标"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "顯示正在播放的專輯封面，沒有封面時顯示所選圖像"
-          }
-        }
-      }
-    },
     "数据文件夹" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -54961,6 +54915,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "大"
+          }
+        }
+      }
+    },
+    "图标换成专辑封面" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use Album Art as Icon"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图标换成专辑封面"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "圖像換成專輯封面"
+          }
+        }
+      }
+    },
+    "没有封面时显示所选图标" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows the chosen icon when there is no album art"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有封面时显示所选图标"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒有封面時顯示所選圖像"
           }
         }
       }

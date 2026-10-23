@@ -1646,10 +1646,10 @@ func runSourceContractSurfaceTests() {
         }
         // 「歌词旁的图标」下面那行「图标样式 ›」跳到 通用 ›「菜单栏与 Dock」:按目录里的标题键找那一行,改那一行的标题要连着改这里。
         if let stage = read("UI/MenuBarEditorStage.swift") {
-            expectEqual(stage.contains(#"SettingsSearchRouter.shared.revealEntry(titleKey: "菜单栏图标", alsoHighlighting: ["用封面当图标"])"#),
-                        true, "图标样式链接: 跳到「菜单栏图标」并点亮「用封面当图标」")
+            expectEqual(stage.contains(#"SettingsSearchRouter.shared.revealEntry(titleKey: "菜单栏图标", alsoHighlighting: ["图标换成专辑封面"])"#),
+                        true, "图标样式链接: 跳到「菜单栏图标」并点亮「图标换成专辑封面」")
             expectEqual(SettingsSearchCatalog.entries.contains { $0.titleKey == "菜单栏图标" }
-                            && SettingsSearchCatalog.entries.contains { $0.titleKey == "用封面当图标" },
+                            && SettingsSearchCatalog.entries.contains { $0.titleKey == "图标换成专辑封面" },
                         true, "图标样式链接: 两个标题键都在设置目录里(找不到就跳不过去、点不亮)")
         }
         // 「封面当图标」的占位尺寸只看开关、不看这一刻有没有封面:封面是换歌后异步到的,尺寸跟着它变

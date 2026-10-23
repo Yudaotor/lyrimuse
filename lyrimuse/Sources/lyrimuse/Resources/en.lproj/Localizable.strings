@@ -772,6 +772,7 @@
 "固定：所有歌曲使用设定的宽度。\n自适应：按每首歌曲的歌词确定宽度，不超过设定宽度" = "Fixed: every song uses the set width.\nAdaptive: each song gets its own width from its lyrics, up to the set width";
 "图标动画" = "Animate Icon";
 "图标大小" = "Icon Size";
+"图标换成专辑封面" = "Use Album Art as Icon";
 "图标旁" = "Beside Icon";
 "图标样式" = "Icon Style";
 "圆角" = "Corners";
@@ -1492,7 +1493,6 @@
 "显示歌曲简介" = "Show Song Notes";
 "显示歌词" = "Show Lyrics";
 "显示歌词校准" = "Show Lyrics Calibration";
-"显示正在播放的专辑封面，没有封面时显示所选图标" = "Shows the album art of what's playing, or the chosen icon when there is none";
 "显示灵动岛歌词" = "Show Notch Lyrics";
 "显示简介" = "Show Info";
 "显示菜单栏歌词" = "Show Menu Bar Lyrics";
@@ -1906,6 +1906,7 @@
 "汽水音乐歌曲 ID 一致" = "Same Soda Music song ID";
 "汽水音乐歌曲页" = "Soda Music song page";
 "汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更），并非这首歌曲无歌词，通常将在后续版本中修复" = "Soda Music’s lyrics API returned unrecognized content (the API may have changed). This doesn’t mean the song has no lyrics; a later update usually fixes it";
+"没有封面时显示所选图标" = "Shows the chosen icon when there is no album art";
 "没能取到真实数据（网络或后台服务未响应），先用测试数据示意" = "Couldn't fetch real data (network or background service not responding), so sample data is shown";
 "沿用同曲条目「%@」的时间轴校准，在此调整后将保存到当前条目" = "Uses the timing calibration from “%@”, another entry of this song. Adjusting it here saves it to this entry";
 "沿用同曲条目的人工修正" = "Uses the manual correction from another entry of this song";
@@ -2004,7 +2005,6 @@
 "现场版场次不符" = "Live recording from a different show";
 "玻璃浓淡" = "Glass Density";
 "用于将当前播放状态推送到网页小组件和状态徽章" = "Pushes the current playback status to the web widget and status badge";
-"用封面当图标" = "Use Album Art as Icon";
 "用当前配色覆盖" = "Overwrite with Current Colors";
 "用户名下方显示" = "Shown Under Your Name";
 "用这一期的真实数据看看推送在这个平台上的样子" = "See how a push looks on this platform, using real data from this period";

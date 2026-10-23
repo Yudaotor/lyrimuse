@@ -374,7 +374,7 @@ struct MenuBarLyricsIconRow: View {
             // 那枚图标没在显示歌词时也在(菜单栏歌词关着时只剩它),设置留在一处,不在这里再放一份开关。
             SettingsSubRow(title: L10n.t("图标样式")) {
                 Button {
-                    SettingsSearchRouter.shared.revealEntry(titleKey: "菜单栏图标", alsoHighlighting: ["用封面当图标"])
+                    SettingsSearchRouter.shared.revealEntry(titleKey: "菜单栏图标", alsoHighlighting: ["图标换成专辑封面"])
                 } label: {
                     HStack(spacing: 3) {
                         Text(styleSummary)
