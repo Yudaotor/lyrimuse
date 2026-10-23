@@ -214,8 +214,8 @@ type enrichEntry struct {
 	// 精简快照,列表上「逐字 / 译文 / 罗马音 / 纯文本」四个标记靠它,不必去读几千个正文小文件。
 	BodyFields uint8    `json:"body_fields,omitempty"`
 	LyricsYRC  bodyText `json:"lyrics_yrc,omitzero"` // 逐字(词级，网易云 yrc 格式)
-	// LyricsBG:背景人声轨(YRC 语法,每行行头是所属主句的起止,见 amllResult.bg),只有 amll / applemusic
-	// 胜出时才有。它跟 Lyrics / LyricsYRC 是一组:从新的解析结果成套写歌词字段的地方都要带上它,
+	// LyricsBG:背景人声轨(YRC 语法,每行行头是所属主句的起止,见 amllResult.bg):amll / applemusic 自带的,
+	// 或别的源有逐字时从括号里拆出来的(bgparen.go)。它跟 Lyrics / LyricsYRC 是一组:从新的解析结果成套写歌词字段的地方都要带上它,
 	// 正文或逐字被替换、它又没有跟着换的地方要清掉,漏一处就是把上一份歌词的和声挂在新歌词下面。
 	LyricsBG bodyText `json:"lyrics_bg,omitzero"`
 	// LyricsBGChecked:这条的歌词已经按哪一版 TTML 附属内容解析器取过(lyricsBGParserVersion)。0 = 还没有,
@@ -4287,7 +4287,7 @@ type scoredLyricCandidateResult struct {
 	LyricsTrFrom  string `json:"lyrics_tr_from,omitempty"`
 	LyricsRoma    string `json:"lyrics_roma,omitempty"`
 	LyricsYRC     string `json:"lyrics_yrc,omitempty"`
-	LyricsBG      string `json:"lyrics_bg,omitempty"` // 背景人声轨(YRC 语法,形状见 amllResult.bg),只有 amll / applemusic 会给。不参与打分。
+	LyricsBG      string `json:"lyrics_bg,omitempty"` // 背景人声轨(YRC 语法,形状见 amllResult.bg):amll / applemusic 自带的,或从括号里拆出来的(bgparen.go)。不参与打分。
 	HasWordTiming bool   `json:"has_word_timing"`
 	Score         int    `json:"score"`
 	// ScoreTerms 是这个分数的构成明细(或者被判 -1 时的唯一那条原因),给"搜索候选歌词"
@@ -4989,6 +4989,7 @@ func lyricCandidateFromScored(r scoredLyricCandidateResult) lyricCandidate {
 		language:                   r.Language,
 		plainTextOnly:              r.PlainTextOnly,
 		identityFromLocalClient:    r.IdentityFromLocalClient,
+		parenBG:                    r.LyricsBG,
 	}
 }
 
@@ -5086,6 +5087,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	}
 	// 重音字母旁多切的空格,同 rankLyricSourceResults(见 accentsplit.go)。修的是 cands,下面打分时写回结果。
 	repairCandidateAccentSplits(cands)
+	splitCandidateParenBackground(cands)
 	// v15:批级语种判决,跟下面两个批级步骤同一位置(理由见 match.go applyLanguageVersionVerdicts)。
 	applyLanguageVersionVerdicts(title, album, durationSecs, cands)
 	applyVerifiedTitleVersion(title, album, durationSecs, verifiedRecordingTitle(base, extra), cands)
@@ -5100,6 +5102,11 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	for i, s := range ordered {
 		r := chosen[s]
 		r.Lyrics, r.LyricsYRC = cands[i].lyrics, cands[i].wordTimingYRC
+		if len(cands[i].parenBGStamps) > 0 {
+			r.LyricsBG = cands[i].parenBG
+			r.LyricsTr = stripParenBackgroundAux(r.LyricsTr, cands[i].parenBGStamps)
+			r.LyricsRoma = stripParenBackgroundAux(r.LyricsRoma, cands[i].parenBGStamps)
+		}
 		r.Score, r.ScoreTerms = scoreLyricCandidateDetailed(
 			artist, title, album, durationSecs, cands[i], corroborated[s], len(consensusPeers[s]))
 		r.ConsensusPeers = consensusPeers[s]
@@ -5554,6 +5561,8 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	}
 	// 重音字母旁多切的空格,拿整批候选与缓存里见过的拼法证实之后删掉(见 accentsplit.go)。只删空格、不动时间轴。
 	repairCandidateAccentSplits(candidates)
+	// 括号里的背景人声拆成背景人声轨(见 bgparen.go)。在重挂时间轴与打分之前:打分看到的是拆过的正文。
+	splitCandidateParenBackground(candidates)
 	// 时间轴自洽修复:候选自带的行级 LRC 与逐字轴打架时,以逐字轴为准重挂行时间戳
 	// (见 lyricstimeline.go 的完整来龙去脉)。**必须在这里**而不是选完冠军之后 ——
 	// corroboratedEndings / contentConsensusPeers / scoreLyricCandidateDetailed 的
@@ -5775,6 +5784,12 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 				r.LyricsTrLang = features().LyricsTranslationLanguage
 			}
 			r.Songwriters = dz.songwriters
+		}
+		// 括号里拆出来的背景人声(bgparen.go):写进结果,译文 / 罗马音同一行的括号段去掉。时间戳是重挂之前的,所以排在搬时间轴之前。
+		if len(c.parenBGStamps) > 0 {
+			r.LyricsBG = c.parenBG
+			r.LyricsTr = stripParenBackgroundAux(r.LyricsTr, c.parenBGStamps)
+			r.LyricsRoma = stripParenBackgroundAux(r.LyricsRoma, c.parenBGStamps)
 		}
 		// 正文时间轴被重挂过就把附属歌词一起搬过去。放在 switch **之后** —— 各源的
 		// r.LyricsTr/r.LyricsRoma 到这里才赋完值,搬早了搬的是空串。

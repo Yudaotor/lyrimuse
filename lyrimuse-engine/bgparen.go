@@ -1,0 +1,575 @@
+package main
+
+import (
+	"log"
+	"regexp"
+	"strconv"
+	"strings"
+	"unicode"
+	"unicode/utf8"
+)
+
+// 括号里的背景人声:除 AMLL / Apple Music 外的歌词源没有背景人声的结构化标记,和声、回声写在主句的括号里
+// (「Kills me slowly (slowly)」)。有逐字歌词的,行尾 / 行中 / 行首的括号段拆成背景人声轨(lyrics_bg,形状同
+// amllResult.bg:行头是所属主句的起止,词带自己的时间),正文与逐字里去掉这一段;译文、罗马音同一行里的括号段一起去掉。
+// 整行都在括号里的不拆:App 按主句挂背景人声,主句空了这一行就不显示。拿不准的整行不拆。见 09 章决策 337。
+
+// parenBGSources:拆括号背景人声的源。amll / applemusic 自带结构化的背景人声,正文里剩下的括号是它们判成主唱的部分,
+// 而且存量回填(bgbackfill.go)会整份换掉它们的 lyrics_bg;本机文件、各客户端缓存里的用户歌词不动。
+var parenBGSources = map[string]bool{
+	"netease": true, "qq": true, "kugou": true, "lrclib": true, "musixmatch": true, "lyricfind": true, "kuwo": true,
+	"migu": true, "deezer": true, "soda": true, "vibe": true, "genie": true, "petitlyrics": true,
+	lxMusicLocalLyricsSource: true,
+}
+
+// parenBGPairToleranceMs:逐行歌词的一行跟逐字的一行按文字配对时,两边行首时间最多差这么多。拆分在时间轴重挂之前做,
+// 同一行两边的时间戳可能差几百毫秒;文字已经要求逐字相同,这里只防同一句副歌配到隔得很远的另一遍。
+const parenBGPairToleranceMs = 3000
+
+var (
+	parenBGSegRe      = regexp.MustCompile(`[(（]([^()（）]*)[)）]`)
+	parenBGDuetRe     = regexp.MustCompile(`^(?:v[1-8]|合|男|女)[:：]\s*`)
+	parenBGCountRe    = regexp.MustCompile(`(?i)^(?:[x×*]\s*\d+|\d+\s*[x×*]|repeat|rep|bis)$`)
+	parenBGNoteRe     = regexp.MustCompile(`(?i)^(?:live|explicit|clean|remix|pt\.?\s*\d+|part\s*\d+|.*\bversion|ver\.?|.*\bedit|.*\bmix|instrumental|acoustic|demo|remaster(?:ed)?|intro|outro|chorus|verse.*|bridge|hook|pre-chorus|refrain|interlude|skit|spoken(?: word)?|laughs?|laughing|whispers?|whispering|(?:feat|ft|prod)\..*)$`)
+	parenBGNoteZhRe   = regexp.MustCompile(`伴奏|现场|現場|电影|電影|电视剧|電視劇|插曲|主题曲|主題曲|片尾|片头|片頭|翻唱|原唱|版$`)
+	yrcLineHeadFullRe = regexp.MustCompile(`^\[(\d+),(\d+)\]`)
+	// parenBGCreditZhRe:中文署名行里的职务词。
+	parenBGCreditZhRe = regexp.MustCompile(`制作|製作|作词|作詞|作曲|编曲|編曲|监制|監製|混音|录音|錄音|出品|发行|發行`)
+	// parenBGCreditEnRe:英文署名行与版权行。
+	parenBGCreditEnRe = regexp.MustCompile(`(?i)\b(?:recorded|mixed|mastered|produced|engineered|programm(?:ed|ing)|arranged|written|composed|strings|vocals)\s+by\b|©|℗|all rights reserved|\bpublishing\b`)
+	// parenBGCJKHyphenRe:紧挨着中日韩字的「-」,标题行「歌手-歌名」的写法。
+	parenBGCJKHyphenRe = regexp.MustCompile(`[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]-|-[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]`)
+)
+
+// parenBGRoleLabels:括号里写的是谁在唱(「(男)他们告诉我」「（合）不忍心」),不是和声。比对前转小写。
+var parenBGRoleLabels = map[string]bool{
+	"男": true, "女": true, "合": true, "合唱": true, "齐唱": true, "齊唱": true, "伴唱": true, "和声": true, "和聲": true,
+	"独白": true, "獨白": true, "念白": true, "白": true, "说唱": true, "說唱": true, "旁白": true, "童声": true, "童聲": true,
+	"男声": true, "女声": true, "男聲": true, "女聲": true, "男女": true, "rap": true, "all": true, "both": true,
+	"国": true, "國": true, "粤": true, "粵": true, "国语": true, "國語": true, "粤语": true, "粵語": true, "台语": true, "台語": true,
+}
+
+type parenBGScript int
+
+const (
+	parenBGScriptOther parenBGScript = iota
+	parenBGScriptLatin
+	parenBGScriptCJK
+)
+
+func parenBGRuneScript(r rune) parenBGScript {
+	switch {
+	case unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul):
+		return parenBGScriptCJK
+	case unicode.Is(unicode.Latin, r):
+		return parenBGScriptLatin
+	}
+	return parenBGScriptOther
+}
+
+// parenBGTextScript:一段文字的文字系统,有中日韩字就算中日韩。
+func parenBGTextScript(s string) parenBGScript {
+	out := parenBGScriptOther
+	for _, r := range s {
+		switch parenBGRuneScript(r) {
+		case parenBGScriptCJK:
+			return parenBGScriptCJK
+		case parenBGScriptLatin:
+			out = parenBGScriptLatin
+		}
+	}
+	return out
+}
+
+func parenBGHasKana(s string) bool {
+	for _, r := range s {
+		if unicode.In(r, unicode.Hiragana, unicode.Katakana) {
+			return true
+		}
+	}
+	return false
+}
+
+func parenBGHasWord(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// parenBGNormKey:配对用的键,只留字母和数字、转小写。
+func parenBGNormKey(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(unicode.ToLower(r))
+		}
+	}
+	return b.String()
+}
+
+// parenBGBalanced:括号成对、不嵌套。
+func parenBGBalanced(s string) bool {
+	depth := 0
+	for _, r := range s {
+		switch r {
+		case '(', '（':
+			depth++
+			if depth > 1 {
+				return false
+			}
+		case ')', '）':
+			depth--
+			if depth < 0 {
+				return false
+			}
+		}
+	}
+	return depth == 0
+}
+
+// parenBGLine:一行歌词(不含时间戳)里能拆的括号段。返回去掉括号段后的主句和按顺序的括号段(带括号);有一段拿不准
+// 整行就不拆。looseGlue 给译文 / 音译用:那一行的正文已经拆过,括号紧贴前一个字、换了文字的也认成背景人声的译文。
+//
+// 不拆:标签行、署名行与标题行(以 `[` 开头、带冒号、带「 - 」「 – 」「 — 」或紧挨中日韩字的「-」、带中英文职务词或版权字样)、括号不配对或嵌套、
+// 括号里没有字母或带「/」(人名清单)、是演唱者 / 语言 / 重复次数 / 版本与段落标注、行首括号里只有不超过 4 个中日韩字(多半是演唱者名字)、括号紧贴前一个字而且换了文字(注释,
+// 如「Einstein(愛因斯坦)」;带假名的行紧贴就不拆,日文的读音注释是同一种文字)、右括号后面紧跟着字或「-」、拆完主句没有字。
+func parenBGLine(text string, looseGlue bool) (main string, segs []string, ok bool) {
+	prefix := parenBGDuetRe.FindString(text)
+	body := text[len(prefix):]
+	if body == "" || strings.HasPrefix(body, "[") || strings.Contains(body, " - ") || strings.Contains(body, " – ") ||
+		strings.Contains(body, " — ") || strings.ContainsAny(body, ":：") || parenBGCreditZhRe.MatchString(body) ||
+		parenBGCreditEnRe.MatchString(body) || parenBGCJKHyphenRe.MatchString(body) {
+		return "", nil, false
+	}
+	if !parenBGBalanced(body) {
+		return "", nil, false
+	}
+	ms := parenBGSegRe.FindAllStringSubmatchIndex(body, -1)
+	if len(ms) == 0 {
+		return "", nil, false
+	}
+	kana := parenBGHasKana(body)
+	var b strings.Builder
+	last := 0
+	for _, m := range ms {
+		content := strings.TrimSpace(body[m[2]:m[3]])
+		if !strings.ContainsFunc(content, unicode.IsLetter) || strings.Contains(content, "/") {
+			return "", nil, false
+		}
+		lower := strings.ToLower(content)
+		if parenBGRoleLabels[lower] || parenBGCountRe.MatchString(lower) || parenBGNoteRe.MatchString(lower) || parenBGNoteZhRe.MatchString(content) {
+			return "", nil, false
+		}
+		before := body[:m[0]]
+		if strings.TrimSpace(before) == "" {
+			if parenBGTextScript(content) == parenBGScriptCJK && !strings.ContainsFunc(content, func(r rune) bool { return unicode.Is(unicode.Latin, r) }) &&
+				utf8.RuneCountInString(content) <= 4 && strings.TrimSpace(body[m[1]:]) != "" {
+				return "", nil, false
+			}
+		} else if prev, _ := utf8.DecodeLastRuneInString(before); !unicode.IsSpace(prev) && !looseGlue {
+			if kana || parenBGRuneScript(prev) != parenBGTextScript(content) {
+				return "", nil, false
+			}
+		}
+		if next, _ := utf8.DecodeRuneInString(body[m[1]:]); unicode.IsLetter(next) || unicode.IsDigit(next) || next == '-' {
+			return "", nil, false
+		}
+		segs = append(segs, body[m[0]:m[1]])
+		// 去掉括号段连同它前面的空白;在行首时去掉它后面的空白。
+		kept := body[last:m[0]]
+		if strings.TrimSpace(b.String()+kept) == "" {
+			b.Reset()
+			kept = ""
+		} else {
+			kept = strings.TrimRightFunc(kept, unicode.IsSpace)
+		}
+		b.WriteString(kept)
+		last = m[1]
+		if strings.TrimSpace(b.String()) == "" {
+			for last < len(body) {
+				r, size := utf8.DecodeRuneInString(body[last:])
+				if !unicode.IsSpace(r) {
+					break
+				}
+				last += size
+			}
+		}
+	}
+	b.WriteString(body[last:])
+	main = strings.TrimSpace(b.String())
+	if !parenBGHasWord(main) {
+		return "", nil, false
+	}
+	return prefix + main, segs, true
+}
+
+// parenBGYRCWord:YRC 一行里的一个词条。
+type parenBGYRCWord struct {
+	timing string // `(起点,时长,0)` 原样
+	text   string
+}
+
+// parenBGYRCLine 按 parenBGLine 的规矩拆一行逐字:括号段必须从某个词条的开头起(前面只有空白)、在某个词条里结束,
+// 右括号后面只剩标点和空白(那段并回前一个主句词条)。返回主句那一行、背景人声那一行(行头相同)、两边的配对键。
+// 背景人声那一行每段各自去掉首尾括号、丢掉只剩括号的词条:App 显示时只剥整行首尾的一对括号,一行几段时中间的
+// 括号会留下来(「a) (b」)。
+func parenBGYRCLine(line string) (mainLine, bgLine, mainKey, bgKey string, ok bool) {
+	head := yrcLineHeadFullRe.FindString(line)
+	if head == "" {
+		return "", "", "", "", false
+	}
+	locs := yrcWordTokenRe.FindAllStringIndex(line, -1)
+	if len(locs) == 0 || locs[0][0] != len(head) {
+		return "", "", "", "", false
+	}
+	words := make([]parenBGYRCWord, len(locs))
+	var full strings.Builder
+	starts := make([]int, len(locs))
+	for i, m := range locs {
+		end := len(line)
+		if i+1 < len(locs) {
+			end = locs[i+1][0]
+		}
+		words[i] = parenBGYRCWord{timing: line[m[0]:m[1]], text: line[m[1]:end]}
+		starts[i] = full.Len()
+		full.WriteString(words[i].text)
+	}
+	text := full.String()
+	mainText, segs, ok := parenBGLine(text, false)
+	if !ok {
+		return "", "", "", "", false
+	}
+	wordAt := func(pos int) int {
+		k := 0
+		for k+1 < len(starts) && starts[k+1] <= pos {
+			k++
+		}
+		return k
+	}
+	isBG := make([]bool, len(words))
+	var bgWords []parenBGYRCWord
+	tails := map[int]string{} // 括号段之后、同一词条里剩下的标点:并到这个下标之前最近的主句词条
+	after := map[int]bool{}   // 紧跟在括号段后面的词条下标:它以标点开头时,前一个主句词条末尾的空白去掉
+	for _, m := range parenBGSegRe.FindAllStringIndex(text, -1) {
+		wi, wj := wordAt(m[0]), wordAt(m[1]-1)
+		if strings.TrimSpace(text[starts[wi]:m[0]]) != "" {
+			return "", "", "", "", false
+		}
+		var seg []parenBGYRCWord
+		for k := wi; k <= wj; k++ {
+			isBG[k] = true
+			w := words[k]
+			if k == wj {
+				cut := m[1] - starts[wj]
+				rest := words[wj].text[cut:]
+				if parenBGHasWord(rest) {
+					return "", "", "", "", false
+				}
+				w.text = w.text[:cut]
+				if strings.TrimSpace(rest) != "" {
+					tails[wi] = rest
+				}
+			}
+			if k == wi {
+				w.text = strings.TrimLeft(strings.TrimLeftFunc(w.text, unicode.IsSpace), "(（")
+			}
+			if k == wj {
+				w.text = strings.TrimRight(w.text, ")）")
+			}
+			if strings.TrimSpace(w.text) != "" {
+				seg = append(seg, w)
+			}
+		}
+		if len(seg) == 0 {
+			return "", "", "", "", false
+		}
+		seg[len(seg)-1].text = strings.TrimRightFunc(seg[len(seg)-1].text, unicode.IsSpace) + " "
+		bgWords = append(bgWords, seg...)
+		after[wj+1] = true
+	}
+	var mainWords []parenBGYRCWord
+	for k, w := range words {
+		if tail, ok := tails[k]; ok && len(mainWords) > 0 {
+			p := &mainWords[len(mainWords)-1]
+			p.text = strings.TrimRightFunc(p.text, unicode.IsSpace) + tail
+		}
+		if !isBG[k] {
+			if first, _ := utf8.DecodeRuneInString(w.text); after[k] && len(mainWords) > 0 && first != utf8.RuneError &&
+				!unicode.IsLetter(first) && !unicode.IsDigit(first) && !unicode.IsSpace(first) {
+				p := &mainWords[len(mainWords)-1]
+				p.text = strings.TrimRightFunc(p.text, unicode.IsSpace)
+			}
+			mainWords = append(mainWords, w)
+		}
+	}
+	if len(mainWords) == 0 || len(bgWords) == 0 {
+		return "", "", "", "", false
+	}
+	mainWords[len(mainWords)-1].text = strings.TrimRightFunc(mainWords[len(mainWords)-1].text, unicode.IsSpace)
+	bgWords[len(bgWords)-1].text = strings.TrimRightFunc(bgWords[len(bgWords)-1].text, unicode.IsSpace)
+	join := func(ws []parenBGYRCWord) (string, string) {
+		var l, t strings.Builder
+		l.WriteString(head)
+		for _, w := range ws {
+			l.WriteString(w.timing)
+			l.WriteString(w.text)
+			t.WriteString(w.text)
+		}
+		return l.String(), t.String()
+	}
+	mainLine, mainPlain := join(mainWords)
+	bgLine, bgPlain := join(bgWords)
+	if parenBGNormKey(mainPlain) != parenBGNormKey(mainText) || parenBGNormKey(bgPlain) != parenBGNormKey(strings.Join(segs, "")) {
+		return "", "", "", "", false
+	}
+	return mainLine, bgLine, parenBGNormKey(mainPlain), parenBGNormKey(bgPlain), true
+}
+
+// parenBGSplit:splitParenBackground 的结果。stamps 是拆过的逐行歌词行的时间戳(毫秒),译文 / 罗马音按它找同一行。
+type parenBGSplit struct {
+	lrc, yrc, bg string
+	stamps       map[int]bool
+}
+
+// splitParenBackground 把一份歌词的括号背景人声拆出来。逐行与逐字各按 parenBGLine 拆,再按文字配对:逐行的一行
+// (每个时间戳)都要配上一行拆得开、主句与括号段文字都相同、时间相近的逐字,两边才一起拆;配不上的两边都不动。
+// 没有逐字、或一行都没拆时 ok 为假。
+func splitParenBackground(lrc, yrc string) (parenBGSplit, bool) {
+	if yrc == "" || !strings.ContainsAny(lrc, "(（") {
+		return parenBGSplit{}, false
+	}
+	type lSplit struct {
+		idx, end   int
+		stamps     []int
+		main       string
+		mainK, bgK string
+	}
+	llines := strings.Split(lrc, "\n")
+	var ls []lSplit
+	for i, line := range llines {
+		if !strings.ContainsAny(line, "(（") {
+			continue
+		}
+		stamps, end := parenBGLRCStamps(line)
+		if len(stamps) == 0 {
+			continue
+		}
+		mainText, segs, ok := parenBGLine(strings.TrimSpace(line[end:]), false)
+		if !ok {
+			continue
+		}
+		ls = append(ls, lSplit{idx: i, end: end, stamps: stamps, main: mainText,
+			mainK: parenBGNormKey(mainText), bgK: parenBGNormKey(strings.Join(segs, ""))})
+	}
+	if len(ls) == 0 {
+		return parenBGSplit{}, false
+	}
+	type ySplit struct {
+		idx, start           int
+		main, bg, mainK, bgK string
+		used                 bool
+	}
+	ylines := strings.Split(yrc, "\n")
+	var heads []int
+	for _, line := range ylines {
+		if m := yrcLineHeadFullRe.FindStringSubmatch(line); m != nil {
+			h, _ := strconv.Atoi(m[1])
+			heads = append(heads, h)
+		}
+	}
+	var ys []*ySplit
+	for i, line := range ylines {
+		mainLine, bgLine, mk, bk, ok := parenBGYRCLine(line)
+		if !ok {
+			continue
+		}
+		start, _ := strconv.Atoi(yrcLineHeadFullRe.FindStringSubmatch(line)[1])
+		if parenBGHeadCrowded(heads, start) {
+			continue
+		}
+		ys = append(ys, &ySplit{idx: i, start: start, main: mainLine, bg: bgLine, mainK: mk, bgK: bk})
+	}
+	stamps := map[int]bool{}
+	split := 0
+	for _, l := range ls {
+		var picked []*ySplit
+		for _, t := range l.stamps {
+			var best *ySplit
+			for _, y := range ys {
+				if y.used || y.mainK != l.mainK || y.bgK != l.bgK || parenBGAbs(y.start-t) > parenBGPairToleranceMs {
+					continue
+				}
+				if best == nil || parenBGAbs(y.start-t) < parenBGAbs(best.start-t) {
+					best = y
+				}
+			}
+			if best == nil {
+				break
+			}
+			best.used = true
+			picked = append(picked, best)
+		}
+		if len(picked) != len(l.stamps) {
+			for _, y := range picked {
+				y.used = false
+			}
+			continue
+		}
+		llines[l.idx] = llines[l.idx][:l.end] + l.main
+		for _, t := range l.stamps {
+			stamps[t] = true
+		}
+		split++
+	}
+	if split == 0 {
+		return parenBGSplit{}, false
+	}
+	var bg strings.Builder
+	for _, y := range ys {
+		if !y.used {
+			continue
+		}
+		ylines[y.idx] = y.main
+		bg.WriteString(y.bg)
+		bg.WriteByte('\n')
+	}
+	return parenBGSplit{lrc: strings.Join(llines, "\n"), yrc: strings.Join(ylines, "\n"), bg: bg.String(), stamps: stamps}, true
+}
+
+// parenBGHeadCrowded:还有别的逐字行的行首跟 start 相差不超过背景人声挂行的容差(App 按行首 ±30ms 把背景人声挂到主句上,
+// 见 bgBackfillAlignToleranceMs)。这样的行拆出来的背景人声会挂错行或挂两遍。heads 含 start 自己那一行。
+func parenBGHeadCrowded(heads []int, start int) bool {
+	n := 0
+	for _, h := range heads {
+		if parenBGAbs(h-start) <= bgBackfillAlignToleranceMs {
+			n++
+		}
+	}
+	return n > 1
+}
+
+// parenBGLRCStamps:一行逐行歌词开头连着的时间戳(毫秒)和它们结束的位置;不以时间戳开头时为空。
+func parenBGLRCStamps(line string) ([]int, int) {
+	end := 0
+	var out []int
+	for _, l := range lrcTimestampCaptureRe.FindAllStringSubmatchIndex(line, -1) {
+		if l[0] != end {
+			break
+		}
+		end = l[1]
+		out = append(out, lrcStampMs([]string{line[l[0]:l[1]], line[l[2]:l[3]], line[l[4]:l[5]], parenBGGroup(line, l, 6)}))
+	}
+	return out, end
+}
+
+func parenBGGroup(s string, loc []int, g int) string {
+	if loc[g] < 0 {
+		return ""
+	}
+	return s[loc[g]:loc[g+1]]
+}
+
+func parenBGAbs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+// stripParenBackgroundAux:译文 / 罗马音里,时间戳全在 stamps 里的行去掉括号段(规矩同 parenBGLine,括号紧贴也认)。
+// stamps 跟着正文那份的时间戳走:候选阶段是重挂时间轴之前的,存量迁移是缓存里的。
+func stripParenBackgroundAux(aux string, stamps map[int]bool) string {
+	if aux == "" || len(stamps) == 0 || !strings.ContainsAny(aux, "(（") {
+		return aux
+	}
+	lines := strings.Split(aux, "\n")
+	changed := false
+	for i, line := range lines {
+		ms, end := parenBGLRCStamps(line)
+		if len(ms) == 0 {
+			continue
+		}
+		all := true
+		for _, t := range ms {
+			if !stamps[t] {
+				all = false
+			}
+		}
+		if !all {
+			continue
+		}
+		if mainText, _, ok := parenBGLine(strings.TrimSpace(line[end:]), true); ok {
+			lines[i] = line[:end] + mainText
+			changed = true
+		}
+	}
+	if !changed {
+		return aux
+	}
+	return strings.Join(lines, "\n")
+}
+
+// splitCandidateParenBackground 就地拆一批候选。调用时机同 repairCandidateAccentSplits(候选装配完、重挂时间轴与
+// 打分之前)。已经带背景人声的(parenBG 非空,合并轮从打好分的结果还原时带过来)不再拆。
+func splitCandidateParenBackground(candidates []lyricCandidate) {
+	for i := range candidates {
+		c := &candidates[i]
+		if !parenBGSources[c.source] || c.plainTextOnly || c.wordTimingYRC == "" || c.parenBG != "" {
+			continue
+		}
+		sp, ok := splitParenBackground(c.lyrics, c.wordTimingYRC)
+		if !ok {
+			continue
+		}
+		c.lyrics, c.wordTimingYRC, c.parenBG, c.parenBGStamps = sp.lrc, sp.yrc, sp.bg, sp.stamps
+	}
+}
+
+// migrateParenBackground 把存量条目按同一套规矩拆一遍。只动 parenBGSources 选出的、有逐字、还没有背景人声、没锁定
+// (手改或采纳时锁上的)的条目。演唱者标注按行记,拆分不增删行:原先对得上正文的,指纹跟着换;原样采纳的指纹同理,
+// 同 migrateAccentSplits。
+//
+// 位置(main.go):migrateAccentSplits 之后、exportLyricsFiles 之前,导出的文件跟着拆过的正文写。不加水位:拆过的
+// 条目已有背景人声,下次直接跳过;没拆成的每次启动重判一遍,只是逐行扫正则。
+func migrateParenBackground() {
+	enrichMu.Lock()
+	fixed := 0
+	for k, e := range enrichCache {
+		if e.ManualLyrics || e.Instrumental || !parenBGSources[e.LyricsSource] || e.LyricsYRC.IsZero() || !e.LyricsBG.IsZero() {
+			continue
+		}
+		lrc, yrc := e.Lyrics.String(), e.LyricsYRC.String()
+		sp, ok := splitParenBackground(lrc, yrc)
+		if !ok {
+			continue
+		}
+		if s := e.LyricsSpeakers; s != nil && s.For == lyricSpeakersFingerprint(lrc, yrc) {
+			moved := *s
+			moved.For = lyricSpeakersFingerprint(sp.lrc, sp.yrc)
+			e.LyricsSpeakers = &moved
+		}
+		if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(lrc) {
+			e.ManualPickSHA = manualPickFingerprint(sp.lrc)
+		}
+		e.Lyrics, e.LyricsYRC, e.LyricsBG = bt(sp.lrc), bt(sp.yrc), bt(sp.bg)
+		if tr := e.LyricsTr.String(); tr != "" {
+			e.LyricsTr = bt(stripParenBackgroundAux(tr, sp.stamps))
+		}
+		if roma := e.LyricsRoma.String(); roma != "" {
+			e.LyricsRoma = bt(stripParenBackgroundAux(roma, sp.stamps))
+		}
+		enrichCache[k] = e
+		fixed++
+	}
+	if fixed > 0 {
+		enrichDirty = true // 同 migrateAccentSplits:不置脏 saveEnrichCache 不写盘
+	}
+	enrichMu.Unlock()
+	if fixed > 0 {
+		log.Printf("paren background vocals: split %d entries", fixed)
+		saveEnrichCache()
+	}
+}

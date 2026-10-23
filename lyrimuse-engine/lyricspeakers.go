@@ -254,6 +254,15 @@ func musixmatchLineOwners(lines []string, spans []musixmatchPerformerSpan) [][]s
 			p = speakerIndexRunes(flat, rs, 0)
 		}
 		if p < 0 {
+			// 正文里括号的背景人声拆走了(bgparen.go),片段里还带着:去掉括号里的字再找。
+			rs, inParen = speakerRunesOutsideParens(rs, inParen)
+			if len(rs) > 0 {
+				if p = speakerIndexRunes(flat, rs, cursor); p < 0 {
+					p = speakerIndexRunes(flat, rs, 0)
+				}
+			}
+		}
+		if p < 0 {
 			continue
 		}
 		for k := range rs {
@@ -268,6 +277,17 @@ func musixmatchLineOwners(lines []string, spans []musixmatchPerformerSpan) [][]s
 		out[lineOf[k]] = append(out[lineOf[k]], speakerChar{r: r, key: keys[k], bg: bgs[k]})
 	}
 	return out
+}
+
+// speakerRunesOutsideParens:speakerRunes 的结果里只留括号外的字。
+func speakerRunesOutsideParens(rs []rune, inParen []bool) ([]rune, []bool) {
+	var out []rune
+	for i, r := range rs {
+		if !inParen[i] {
+			out = append(out, r)
+		}
+	}
+	return out, make([]bool, len(out))
 }
 
 // speakerIndexRunes:needle 在 hay[from:] 里第一次出现的下标,没有返回 -1。

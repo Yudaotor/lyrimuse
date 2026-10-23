@@ -304,7 +304,7 @@ final class LyricsSearchService {
         let lyricsTr: String
         let lyricsRoma: String
         let lyricsYRC: String
-        /// 背景人声轨(引擎的 lyrics_bg,只有 amll / applemusic 给)与译文语言(lyrics_tr_lang)。不展示,
+        /// 背景人声轨(引擎的 lyrics_bg)与译文语言(lyrics_tr_lang)。不展示,
         /// 采纳时原样交给 saveEdit,条目跟自动选中这条候选时写的一样。
         let lyricsBG: String
         let lyricsTrLang: String

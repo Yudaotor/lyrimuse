@@ -306,6 +306,10 @@ type lyricCandidate struct {
 	// lyricstimeline.go)。译文/罗马音的时间戳是照原文 LRC 抄的,附着到冠军上时要用
 	// 这份映射一起搬过去,否则相对正文错位。没重挂过就是 nil。
 	timelineRemap map[int]int
+	// parenBG / parenBGStamps:从括号里拆出来的背景人声轨与拆过的行的时间戳(见 bgparen.go)。parenBG 在合并轮从打好分的
+	// 结果还原时也带上已有的背景人声,拆分据此跳过。
+	parenBG       string
+	parenBGStamps map[int]bool
 	// hasUsableTranslation/hasUsableRomanization:这份候选自带**可用的**增值内容(社区
 	// 译文语言与目标语言一致且时间轴/覆盖率过闸、罗马音配日文形态歌词)。在候选构造时由
 	// usableValueAdd 算好(那里能拿到 features 里的目标语言),打分函数保持纯函数。v3 起
