@@ -356,3 +356,20 @@ func TestParenBGLRCStampsMatchesRegexp(t *testing.T) {
 		}
 	}
 }
+
+// 正文带 `[kana:]` 时,括号里有汉字的行不拆(标注按整份正文的汉字对齐,少几个字整份作废);括号里没有汉字的照拆。
+func TestSplitParenBackgroundKeepsKanaAligned(t *testing.T) {
+	lrc := "[kana:1あい1おも]\n[00:01.00]Love you (愛)\n[00:05.00]想い (yeah)"
+	yrc := yrcLine(1000, "Love you (愛)") + "\n" + yrcLine(5000, "想い (yeah)")
+	sp, ok := splitParenBackground(lrc, yrc)
+	if want := "[kana:1あい1おも]\n[00:01.00]Love you (愛)\n[00:05.00]想い"; !ok || sp.lrc != want {
+		t.Fatalf("lrc = %q ok=%v, want %q", sp.lrc, ok, want)
+	}
+	if !strings.Contains(sp.bg, "yeah") || strings.Contains(sp.bg, "愛") {
+		t.Errorf("bg = %q", sp.bg)
+	}
+	// 不带标注的同样两行,括号里的汉字照拆。
+	if sp, ok := splitParenBackground("[00:01.00]Love you (愛)", yrcLine(1000, "Love you (愛)")); !ok || sp.lrc != "[00:01.00]Love you" {
+		t.Errorf("没有标注时照拆: %+v %v", sp, ok)
+	}
+}

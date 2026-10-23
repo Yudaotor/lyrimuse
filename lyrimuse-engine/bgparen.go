@@ -454,6 +454,9 @@ func splitParenBackground(lrc, yrc string) (parenBGSplit, bool) {
 		mainK, bgK       string
 	}
 	var ls []lSplit
+	// 正文自带 `[kana:]` 假名标注时,括号里有待标汉字的行不拆:标注按整份正文的汉字逐个对齐(KanaAnnotation.parse、
+	// kanaEntriesByLineKey),移走几个汉字总数就对不上,整份标注作废、退回分词器猜读音。
+	hasKana := strings.Contains(lrc, "[kana:")
 	for from := 0; from <= len(lrc); {
 		to := strings.IndexByte(lrc[from:], '\n')
 		if to < 0 {
@@ -472,7 +475,7 @@ func splitParenBackground(lrc, yrc string) (parenBGSplit, bool) {
 			continue
 		}
 		mainText, segs, ok := parenBGLine(strings.TrimSpace(line[end:]))
-		if !ok {
+		if !ok || (hasKana && strings.ContainsFunc(strings.Join(segs, ""), kanaNeedsAnnotation)) {
 			continue
 		}
 		ls = append(ls, lSplit{from: lineFrom, textAt: lineFrom + end, to: to, stamps: stamps, main: mainText,
