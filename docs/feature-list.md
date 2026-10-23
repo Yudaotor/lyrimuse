@@ -515,7 +515,7 @@ With the pointer over the notch, swipe left or right with two fingers to change 
 
 ### Multi-line lyrics in the expanded notch
 
-When the notch expands under the pointer, the lyric area becomes a list of 3, 5 or 7 lines, with the current line lighting up word by word and the list scrolling up at each new line. If the lyric row is turned off, the notch stays a slim status strip and only shows lyrics when expanded.
+When the notch expands under the pointer, the lyric area becomes a list of 3, 5 or 7 lines, with the current line lighting up word by word and the list scrolling up at each new line; click a line to jump to it. If the lyric row is turned off, the notch stays a slim status strip and only shows lyrics when expanded.
 
 - On by default
 - Settings: Lyrics Display › Notch › Expanded State › Multi-Line Lyrics

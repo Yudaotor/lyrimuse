@@ -2453,13 +2453,20 @@ func runNotchTests() {
                     && sourceHas(stage, "settings.notchExpandedLyricList = AppSettings.defaultNotchExpandedLyricList")
                     && sourceHas(stage, "settings.notchExpandedLyricListLines = AppSettings.defaultNotchExpandedLyricListLines"), true,
                     "多行歌词: 编辑台舞台按列表留高度,两项进「恢复默认」")
-        expectEqual(sourceHas(list, "interactive: false,\n minimumEdgePadding: 0)")
+        expectEqual(sourceHas(list, "scrollsWithWheel: false,\n minimumEdgePadding: 0)")
                     && sourceHas(src("LyricsLayerList.swift"), "var y = max(minimumEdgePadding, viewport * 0.395)"), true,
                     "多行歌词: 列表留白不套歌词窗口那条 88pt 下限,没有当前句时第一句不掉到视口下沿")
         expectEqual(sourceHas(list, "suspendsBlur: true,")
                     && sourceHas(list, "surfaceVisible: layerActive,"), true,
-                    "多行歌词: 只看不点、不做景深模糊、所在那一层看不见时停表")
-        expectEqual(sourceHas(src("LyricsLayerList.swift"), "override func hitTest(_ point: NSPoint) -> NSView? { interactive ? super.hitTest(point) : nil }"),
-                    true, "多行歌词: 列表只看不点时不接鼠标,滚轮落到灵动岛的手势上")
+                    "多行歌词: 不做景深模糊、所在那一层看不见时停表")
+        expectEqual(sourceHas(list, "guard PlaybackCoordinator.shared.acceptsSeek, lines.indices.contains(index) else { return }")
+                    && sourceHas(list, "toMs: max(0, lines[index].timeMs - PlaybackCoordinator.shared.currentLyricsOffsetMs))")
+                    && sourceHas(list, "interactive: PlaybackCoordinator.shared.acceptsSeek,"), true,
+                    "多行歌词: 点一句跳过去(减回歌词偏移),播放器不能挪进度时只看不点")
+        let layerList = src("LyricsLayerList.swift")
+        expectEqual(sourceHas(layerList, "override func hitTest(_ point: NSPoint) -> NSView? { interactive ? super.hitTest(point) : nil }")
+                    && sourceHas(layerList, "if scrollsWithWheel { super.scrollWheel(with: event) } else { nextResponder?.scrollWheel(with: event) }")
+                    && sourceHas(layerList, "window is LyricsMiniPanel || window is NotchLyricsWindow"), true,
+                    "多行歌词: 列表不滚滚轮、交给灵动岛手势;灵动岛不激活 App,第一下点击也认")
     }
 }

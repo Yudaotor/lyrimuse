@@ -7,8 +7,9 @@ import SwiftUI
 /// 间奏「•••」都是装给 Core Animation 的动画,主线程只在换句那一刻装一次。换成灵动岛的字体族、粗细、强调色和对齐方式,
 /// 字号固定(`NotchExpandedMetrics.lyricListFontSize`)。
 ///
-/// 只看不点(`interactive: false`):不悬停高亮、不点句跳转、不接滚轮 —— 滚轮归灵动岛的触控板手势。不做景深模糊:
-/// 13pt 的字一模糊就糊成一片。所在那一层看不见时(没展开、窗口藏着)按 `notchCardLayerActive` 停表。
+/// 点一句跳到那一句(同歌词窗口,减回歌词偏移),指针停在哪句哪句变亮;播放器不能挪进度时(`acceptsSeek`)只看不点。
+/// 滚轮不滚列表,归灵动岛的触控板手势。不做景深模糊:13pt 的字一模糊就糊成一片。所在那一层看不见时(没展开、窗口藏着)
+/// 按 `notchCardLayerActive` 停表。
 ///
 /// 订阅挂在自己的 `NotchLyricListFeed` 上:换句只失效这一块,不打醒整卡(同 `NotchPlayback` 那条纪律)。
 struct NotchExpandedLyricList: View {
@@ -26,8 +27,14 @@ struct NotchExpandedLyricList: View {
             LyricsLayerList(
                 spec: spec(width: proxy.size.width),
                 nowMs: { PlaybackCoordinator.shared.lyricsTimelineMs() },
-                onTapLine: { _ in },
-                interactive: false,
+                onTapLine: { index in
+                    let lines = feed.lines
+                    guard PlaybackCoordinator.shared.acceptsSeek, lines.indices.contains(index) else { return }
+                    PlaybackCoordinator.shared.seek(
+                        toMs: max(0, lines[index].timeMs - PlaybackCoordinator.shared.currentLyricsOffsetMs))
+                },
+                interactive: PlaybackCoordinator.shared.acceptsSeek,
+                scrollsWithWheel: false,
                 minimumEdgePadding: 0)
         }
         .accessibilityElement(children: .contain)
