@@ -51,6 +51,36 @@ func TestApplemusicTransliteration(t *testing.T) {
 	}
 }
 
+// Apple 把背景人声的译文 / 音译写成 <text> 里一段带 ttm:role="x-bg" 的 span,不该拼进主行。
+func TestApplemusicKeyedLRCDropsBackgroundVocals(t *testing.T) {
+	bg := `<span xmlns:ttm="http://www.w3.org/ns/ttml#metadata" ttm:role="x-bg" xmlns="http://www.w3.org/ns/ttml">`
+	doc := `<tt xmlns="http://www.w3.org/ns/ttml" xmlns:itunes="http://music.apple.com/lyric-ttml-internal" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xml:lang="en">` +
+		`<head><metadata><iTunesMetadata xmlns="http://music.apple.com/lyric-ttml-internal">` +
+		`<translations><translation type="subtitle" xml:lang="zh-Hans">` +
+		`<text for="L1">噢 你是如此甜美 ` + bg + `(如此甜美)</span></text>` +
+		`<text for="L2">` + bg + `(是的)</span> 上下起伏</text>` +
+		`<text for="L3">` + bg + `(啊 哈)</span></text>` +
+		`</translation></translations>` +
+		`<transliterations><transliteration xml:lang="ko-Latn">` +
+		`<text for="L1"><span begin="1" end="2">ooh</span> ` + bg + `<span begin="2" end="3">(so</span> <span begin="3" end="4">sweet)</span></span></text>` +
+		`</transliteration></transliterations></iTunesMetadata></metadata></head>` +
+		`<body><div>` +
+		`<p begin="1.000" end="4.000" itunes:key="L1"><span begin="1" end="2">Ooh</span></p>` +
+		`<p begin="5.000" end="6.000" itunes:key="L2"><span begin="5" end="6">Move</span></p>` +
+		`<p begin="7.000" end="8.000" itunes:key="L3"><span begin="7" end="8">Bite</span></p>` +
+		`</div></body></tt>`
+	p, ok := applemusicParseTTML(doc)
+	if !ok {
+		t.Fatal("解析失败")
+	}
+	if p.tr != "[00:01.00]噢 你是如此甜美\n[00:05.00]上下起伏\n" {
+		t.Fatalf("译文 = %q", p.tr)
+	}
+	if p.roma != "[00:01.00]ooh\n" {
+		t.Fatalf("音译 = %q", p.roma)
+	}
+}
+
 func TestMusixmatchRomaLanguage(t *testing.T) {
 	cases := map[string]string{
 		"[00:01.00]夢ならばどれほどよかったでしょう":  "rj",

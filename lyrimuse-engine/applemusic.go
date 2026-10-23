@@ -1153,6 +1153,8 @@ var (
 	amAttrBeginRe = regexp.MustCompile(`\bbegin="([^"]+)"`)
 	amAttrKeyRe   = regexp.MustCompile(`\bitunes:key="([^"]+)"`)
 	amAnyTagRe    = regexp.MustCompile(`<[^>]*>`)
+	amSpanTagRe   = regexp.MustCompile(`</?span\b[^>]*>`)
+	amRoleAttrRe  = regexp.MustCompile(`\b(?:ttm:)?role="`)
 )
 
 // applemusicSubtitleTranslation 从 Apple 的 TTML 里取译文,拼成一份跟正文同轴的 LRC。
@@ -1224,7 +1226,7 @@ func applemusicKeyedLRC(ttml, block string) string {
 			continue // 对不上正文的行直接丢,不猜时间
 		}
 		// 译文本身也可能是逐字的(一串 <span>),去掉标签取纯文本。
-		txt := strings.TrimSpace(html.UnescapeString(amAnyTagRe.ReplaceAllString(m[2], "")))
+		txt := strings.TrimSpace(html.UnescapeString(amAnyTagRe.ReplaceAllString(applemusicDropRoleSpans(m[2]), "")))
 		if txt == "" {
 			continue
 		}
@@ -1239,6 +1241,44 @@ func applemusicKeyedLRC(ttml, block string) string {
 		b.WriteString(formatLRCTime(l.ms))
 		b.WriteString(l.text)
 		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+// applemusicDropRoleSpans 去掉带角色的 span 连同里面套的 span:背景人声那段的译文 / 音译不是这一行的,
+// 跟 AMLL 那一路一致,见 09 章决策 335。
+func applemusicDropRoleSpans(s string) string {
+	if !amRoleAttrRe.MatchString(s) {
+		return s
+	}
+	var b strings.Builder
+	depth, skipFrom, last := 0, -1, 0
+	for _, m := range amSpanTagRe.FindAllStringIndex(s, -1) {
+		if skipFrom < 0 {
+			b.WriteString(s[last:m[0]])
+		}
+		last = m[1]
+		tag := s[m[0]:m[1]]
+		switch {
+		case strings.HasPrefix(tag, "</"):
+			depth--
+			if depth == skipFrom {
+				skipFrom = -1
+				continue
+			}
+		case strings.HasSuffix(tag, "/>"):
+		default:
+			if skipFrom < 0 && amRoleAttrRe.MatchString(tag) {
+				skipFrom = depth
+			}
+			depth++
+		}
+		if skipFrom < 0 {
+			b.WriteString(tag)
+		}
+	}
+	if skipFrom < 0 {
+		b.WriteString(s[last:])
 	}
 	return b.String()
 }
