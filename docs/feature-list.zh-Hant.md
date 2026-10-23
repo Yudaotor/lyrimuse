@@ -602,7 +602,7 @@ Apple Music、Spotify、Kaset 和 VOX 需要「自動化」權限才能讀取播
 
 ### 一鍵打開歌曲頁面
 
-在「⋯」選單中按一下，即可打開目前歌曲、所屬專輯或歌手在該平台上的頁面。Apple Music 和 KKBOX 在各自的 App 中打開，Spotify 的歌曲在其 App 中打開；其他均打開網頁：Spotify 的專輯和歌手、QQ 音樂、汽水音樂、Amazon Music 和 YouTube Music。網易雲音樂僅提供歌曲頁，酷狗音樂不提供。
+在「⋯」選單中按一下，即可打開目前歌曲、所屬專輯或歌手在該平台上的頁面。Apple Music 和 KKBOX 在各自的 App 中打開，Spotify 的歌曲在其 App 中打開；其他均打開網頁：Spotify 的專輯和歌手、QQ 音樂、汽水音樂、Amazon Music 和 YouTube Music。網易雲音樂和酷狗音樂僅提供歌曲頁。
 
 <a id="feature-about-panels"></a>
 

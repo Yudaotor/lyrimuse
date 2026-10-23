@@ -55010,6 +55010,29 @@
           }
         }
       }
+    },
+    "酷狗音乐歌曲页" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kugou Music song page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "酷狗音乐歌曲页"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "酷狗音樂歌曲頁"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

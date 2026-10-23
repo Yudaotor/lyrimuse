@@ -963,7 +963,7 @@ func runPlayerIdentityTests() {
                                         .favorite, .resume, .learnsAnchorLag, .spatialAudioOffset]),
             .qqMusic: (.qqMusic, [.extendedControls, .repeatOne, .favorite, .learnsAnchorLag, .catalogMenuRows]),
             .netease: (.netease, [.favorite, .learnsAnchorLag, .pausedAnchorStartsOnPlay, .catalogMenuRows]),
-            .kugou: (nil, [.favorite, .lateAnchorProbe, .resetAnchorCorrection, .stampsCaptureTime]),
+            .kugou: (nil, [.favorite, .lateAnchorProbe, .resetAnchorCorrection, .stampsCaptureTime, .catalogMenuRows]),
             .soda: (.soda, [.favorite, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .catalogMenuRows]),
             .kkbox: (.kkbox, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .followsRepublishedAnchors,
                               .snapsToReportedPosition, .stampsCaptureTime, .catalogMenuRows]),
@@ -2977,6 +2977,22 @@ private func amazonFavoriteChecks() {
     expectEqual(kwLinks.songLink(forPlayerBundleID: lxBundle)?.url, kwPage, "洛雪歌曲页: 来自酷我给酷我那页")
     expectEqual(kwLinks.songWebLink(forPlayerBundleID: lxBundle), kwPage, "洛雪歌曲页: 给 App 外面(Discord)的也是酷我那页")
     expectEqual(kwLinks.songLink(forPlayerBundleID: PlaybackPlayer.qqMusic.bundleIdentifier)?.url, qqPage, "酷我那页只给洛雪,别的播放器照旧")
+
+    let kgRaw = "https://www.kugou.com/mixsong/j2sek95.html"
+    expectEqual(PlatformLinks.kugouSongURL(kgRaw), URL(string: kgRaw), "酷狗歌曲页: 引擎存的网页歌曲页原样给出")
+    expectEqual(["http://www.kugou.com/mixsong/j2sek95.html", "https://www.kugou.com/mixsong/J2SEK95.html",
+                 "https://www.kugou.com/mixsong/j2.html", "https://www.kugou.com/mixsong/../x/abcd.html",
+                 "https://www.kugou.com/song/j2sek95.html", ""].map { PlatformLinks.kugouSongURL($0) },
+                [nil, nil, nil, nil, nil, nil], "酷狗歌曲页: 不是 https、大写、太短、带路径、别的页、空的不认")
+    let kgLinks = PlatformLinks(appleMusic: nil, qqSong: qqPage, qqAlbum: nil, qqArtist: nil, neteaseSong: nil,
+                                kugouSong: URL(string: kgRaw))
+    let kgBundle = PlaybackPlayer.kugou.bundleIdentifier
+    expectEqual(kgLinks.songLink(forPlayerBundleID: kgBundle)?.platform, .kugou, "酷狗在放给酷狗那页")
+    expectEqual(kgLinks.songWebLink(forPlayerBundleID: kgBundle), URL(string: kgRaw), "酷狗歌曲页: 给 App 外面(Discord)的也是它")
+    expectEqual(PlatformLinks(appleMusic: nil, qqSong: nil, qqAlbum: nil, qqArtist: nil, neteaseSong: nil, kugouSong: URL(string: kgRaw)).isEmpty,
+                false, "只有酷狗歌曲页也不算空")
+    expectEqual(PlatformLinks(appleMusic: nil, qqSong: qqPage, qqAlbum: nil, qqArtist: nil, neteaseSong: nil)
+                    .songLink(forPlayerBundleID: kgBundle) == nil, true, "酷狗没找到歌曲页不拿 QQ 顶上")
 }
 
 /// 用闸门让 AX 桩停在后台,由主线程的一次事件放行。验证响应与失败契约,不按耗时阈值判断、不操作真实播放器。

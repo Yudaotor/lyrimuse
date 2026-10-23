@@ -351,6 +351,11 @@ func mergePeripheralInto(winner, loser enrichEntry) enrichEntry {
 			notePlayerSongLocked(&winner, b, loser.PlayerSongIDs[b], loser.PlayerAlbumIDs[b])
 		}
 	}
+	// 酷狗网页歌曲页是按酷狗报的歌曲 id 找的,胜者记的酷狗 id 是另一个时不带。
+	if winner.KugouURL == "" && (winner.PlayerSongIDs[kugouMusicBundleID] == "" ||
+		winner.PlayerSongIDs[kugouMusicBundleID] == loser.PlayerSongIDs[kugouMusicBundleID]) {
+		winner.KugouURL = loser.KugouURL
+	}
 	// 两条都放过的播放器合在一起,上面补过来的 id 对应的播放器也记上。
 	winner.Players = slices.Clone(winner.Players)
 	for _, p := range loser.Players {

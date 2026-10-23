@@ -997,6 +997,11 @@ func runLastfmTests() {
                     "实体链接: 自己有的不被别的写法盖掉")
         let alone = EnrichCacheReader.platformLinks(for: apple, siblings: [])
         expectEqual(alone?.spotifySong == nil && alone?.amazonSong == nil && alone?.appleMusicWeb != nil, true, "实体链接: 没有其它写法时只用自己的")
+        let kugou = entry(#"{"song":"s_1","kugou_url":"https://www.kugou.com/mixsong/j2sek95.html"}"#)
+        expectEqual(EnrichCacheReader.platformLinks(for: apple, siblings: [apple, kugou])?.kugouSong?.absoluteString,
+                    "https://www.kugou.com/mixsong/j2sek95.html", "实体链接: 酷狗网页歌曲页解码出来,缺的时候向同一首借")
+        let kugouBad = entry(#"{"song":"s_1","kugou_url":"https://www.kugou.com/song/x.html"}"#)
+        expectEqual(EnrichCacheReader.platformLinks(for: kugouBad, siblings: [kugouBad])?.kugouSong == nil, true, "实体链接: 酷狗形状不对不认")
         let mvOwn = EnrichCacheReader.platformLinks(for: amazonMV, siblings: [youtube])
         expectEqual(mvOwn?.youtubeMusicSong?.absoluteString.contains("mvmvmvmvmv1"), true, "实体链接: 自己那条是 MV 的照旧用自己的")
         let reader = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()

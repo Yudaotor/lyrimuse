@@ -141,7 +141,7 @@ func lbMetaWith(s snapshot, enr map[string]string) lbTrackMeta {
 		info["progress_ts"] = s.AnchorTS.UnixMilli()
 		info["playback_rate"] = rate
 	}
-	for _, k := range []string{"cover_url", "accent_color", "netease_url", "apple_music_url", "qq_music_url", "spotify_url", "kkbox_url", "amazon_url", "youtube_music_url", "soda_url", "cover_source", "lyrics_source"} {
+	for _, k := range []string{"cover_url", "accent_color", "netease_url", "apple_music_url", "qq_music_url", "spotify_url", "kkbox_url", "amazon_url", "youtube_music_url", "soda_url", "kugou_url", "cover_source", "lyrics_source"} {
 		v := enr[k]
 		if k == "cover_url" {
 			// 这份 info 是**要离开这台机器**的(ListenBrainz 的 additional_info,

@@ -175,11 +175,13 @@ type enrichEntry struct {
 	// 时那一档;页面路由见 qqSongCatalogMids)。
 	// 刻意**不进** fields() —— 那张 map 是发给 relay/LB 的载荷、有字节预算,而桌面端
 	// 直接读这份缓存文件,不需要经它绕一圈。
-	QQAlbumMid  string   `json:"qq_album_mid,omitempty"`
-	QQSingerMid string   `json:"qq_singer_mid,omitempty"`
-	SpotifyURL  string   `json:"spotify_url,omitempty"`
-	Lyrics      bodyText `json:"lyrics,omitzero"`
-	LyricsTr    bodyText `json:"lyrics_tr,omitzero"` // 中文翻译(逐行 LRC)
+	QQAlbumMid  string `json:"qq_album_mid,omitempty"`
+	QQSingerMid string `json:"qq_singer_mid,omitempty"`
+	// KugouURL:酷狗网页歌曲页(用酷狗放这首时按它报的 mixId 找的,kugousongpage.go)。
+	KugouURL   string   `json:"kugou_url,omitempty"`
+	SpotifyURL string   `json:"spotify_url,omitempty"`
+	Lyrics     bodyText `json:"lyrics,omitzero"`
+	LyricsTr   bodyText `json:"lyrics_tr,omitzero"` // 中文翻译(逐行 LRC)
 	// 罗马音(逐行 LRC)。三条来路,优先级见 maybeGenerateRoma:
 	//   ① 源自带(网易云 romalrc / QQ roma / 酷狗 KRC);
 	//   ② 粤语粤拼,引擎纯查表自算(maybeGenerateJyutpingRoma);
@@ -567,6 +569,7 @@ func (e enrichEntry) fields() map[string]string {
 	put("amazon_url", e.AmazonURL)
 	put("youtube_music_url", e.YouTubeMusicURL)
 	put("soda_url", e.SodaURL)
+	put("kugou_url", e.KugouURL)
 	put("youtube_music_album", e.YouTubeMusicAlbum)
 	put("isrc", e.confidentISRC())
 	// 标了纯音乐就不交歌词,网页和 ListenBrainz 都不显示;歌词还在条目里,撤掉标记就回来。App 读缓存同一口径
@@ -1052,6 +1055,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		if !enrichInflight[key] {
 			if job, ok := playbackISRCJobLocked(key, e, bundleID, anchorLink, time.Now()); ok {
 				go runPlaybackISRCJob(job)
+			}
+			if job, ok := kugouSongPageJobLocked(key, e, bundleID, artist, title); ok {
+				go runKugouSongPageJob(job)
 			}
 		}
 		// 用户校准过这首歌的歌词时间轴吗(自己钉着,或者在读穿同一首歌的一份校准,见 lyricsCalibratedLocked)—— 两条
@@ -6553,6 +6559,7 @@ func notePlayerSongIDLocked(e *enrichEntry, bundleID, id string) bool {
 
 // notePlayerSongLocked:bundleID 这个播放器报的这一首,歌曲 id 记进 PlayerSongIDs,同一拍读到的专辑 id 记进 PlayerAlbumIDs。
 // 两张表成对:歌曲 id 换了、没给新的专辑 id 时,旧的专辑 id 跟着删;同一首这一拍没读到专辑的,记下的留着。空的歌曲 id 不记。
+// 酷狗的歌曲 id 换了,按旧 id 找的网页歌曲页(KugouURL)跟着删。
 // 返回改没改。换整张表、不原地改:条目是值拷贝,表跟落盘那份快照共用。调用方持 enrichMu。
 func notePlayerSongLocked(e *enrichEntry, bundleID, songID, albumID string) bool {
 	if bundleID == "" || songID == "" {
@@ -6563,6 +6570,9 @@ func notePlayerSongLocked(e *enrichEntry, bundleID, songID, albumID string) bool
 		e.PlayerSongIDs = withBundleValue(e.PlayerSongIDs, bundleID, songID)
 		if albumID == "" && e.PlayerAlbumIDs[bundleID] != "" {
 			e.PlayerAlbumIDs = withBundleValue(e.PlayerAlbumIDs, bundleID, "")
+		}
+		if bundleID == kugouMusicBundleID {
+			e.KugouURL = ""
 		}
 		changed = true
 	}

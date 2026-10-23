@@ -56,6 +56,7 @@ var songEntityFieldClasses = map[string]songFieldClass{
 	"apple_music_url": songFieldTrackID, "netease_url": songFieldTrackID, "qq_music_url": songFieldTrackID,
 	"spotify_url": songFieldTrackID, "spotify_track_id": songFieldTrackID, "kkbox_url": songFieldTrackID,
 	"amazon_url": songFieldTrackID, "youtube_music_url": songFieldTrackID, "soda_url": songFieldTrackID,
+	"kugou_url":   songFieldTrackID,
 	"isrc_lookup": songFieldTrackID, "player_song_ids": songFieldTrackID,
 
 	"cover_url": songFieldAlbum, "cover_source": songFieldAlbum, "cover_album": songFieldAlbum, "accent_color": songFieldAlbum,

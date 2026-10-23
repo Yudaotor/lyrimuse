@@ -29,6 +29,7 @@ var upstreamIdentities = []upstreamIdentity{
 	{"Musixmatch app_id", "musixmatch.go musixmatchAppID", "mac-ios-v2.0", "2026-09-28", "拿不到 usertoken 或回 captcha,整源暂停"},
 	{"咪咕 jadeite 签名盐", "migu.go miguJadeiteSignSalt", "yyapp2d1", "2026-10-01", "备用搜索签名不过,回落主搜索"},
 	{"汽水音乐搜索 aid", "soda.go sodaSearchAID", "386088", "2026-09-21", "搜索回空,回落分享页"},
+	{"酷狗网页版搜索签名盐", "kugousongpage.go kugouSearchSignSalt", "NVPh5oo7", "2026-10-23", "签名搜索回 status 0,酷狗在放的歌没有网页歌曲页"},
 }
 
 // upstreamIdentityStaleAfter:登记的值多久没核对就在 healthcheck 里提一句。

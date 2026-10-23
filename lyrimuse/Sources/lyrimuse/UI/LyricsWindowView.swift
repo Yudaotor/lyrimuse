@@ -4312,6 +4312,7 @@ struct LyricsWindowView: View {
         case .youtubeMusic: return "YouTube Music"
         case .soda: return L10n.t("汽水音乐")
         case .kuwo: return L10n.t("酷我音乐")
+        case .kugou: return L10n.t("酷狗音乐")
         }
     }
 

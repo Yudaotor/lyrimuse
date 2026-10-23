@@ -75,6 +75,8 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     let qqSingerMid: String?
     // 汽水音乐歌曲页(引擎的 enrichEntry.SodaURL,用汽水放这首时按它本机数据里的曲目 id 拼的)。只喂 PlatformLinks.sodaSong。
     let sodaURL: String?
+    // 酷狗网页歌曲页(引擎的 enrichEntry.KugouURL,用酷狗放这首时按它报的 mixId 找的)。只喂 PlatformLinks.kugouSong。
+    let kugouURL: String?
     // 各播放器报的这一首的曲目 id(引擎的 enrichEntry.PlayerSongIDs,键是 bundle id)。只用洛雪那一项,喂
     // PlatformLinks.lxMusicPlatform。
     let playerSongIDs: [String: String]?
@@ -184,6 +186,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         case qqAlbumMid = "qq_album_mid"
         case qqSingerMid = "qq_singer_mid"
         case sodaURL = "soda_url"
+        case kugouURL = "kugou_url"
         case playerSongIDs = "player_song_ids"
         case sodaAlbumID = "soda_album_id"
         case sodaArtistID = "soda_artist_id"
@@ -265,6 +268,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         qqAlbumMid = try c.decodeIfPresent(String.self, forKey: .qqAlbumMid)
         qqSingerMid = try c.decodeIfPresent(String.self, forKey: .qqSingerMid)
         sodaURL = try c.decodeIfPresent(String.self, forKey: .sodaURL)
+        kugouURL = try? c.decodeIfPresent(String.self, forKey: .kugouURL)
         playerSongIDs = try? c.decodeIfPresent([String: String].self, forKey: .playerSongIDs)
         sodaAlbumID = try c.decodeIfPresent(String.self, forKey: .sodaAlbumID)
         sodaArtistID = try c.decodeIfPresent(String.self, forKey: .sodaArtistID)
@@ -617,7 +621,7 @@ public enum EnrichCacheReader {
     }
 
     /// 拼这首歌在各平台的跳转目标。siblings 是同一首歌的其它写法:当前这条缺某一家的歌曲页时,从第一条有的写法借,
-    /// 同一家的专辑页、歌手页自己没有的跟着从那条借。播放器给的那几家(Spotify、Amazon Music、KKBOX、YouTube Music、汽水,
+    /// 同一家的专辑页、歌手页自己没有的跟着从那条借。播放器给的那几家(Spotify、Amazon Music、KKBOX、YouTube Music、汽水、酷狗,
     /// id 只在用那个播放器放时写进来)整个实体里借,YouTube Music 不借 MV 那一版(18 章决策 10);检索配的 Apple、网易云、QQ
     /// 只在同一个共享组(`song_share` 相同)里借(决策 12)。
     public nonisolated static func platformLinks(for entry: EnrichCacheEntry, siblings: [EnrichCacheEntry]) -> PlatformLinks? {
@@ -638,6 +642,7 @@ public enum EnrichCacheReader {
         let am = lender { PlatformLinks.amazonTrackURL($0.amazonURL ?? "") != nil }
         let yt = lender({ PlatformLinks.youtubeMusicWatchURL($0.youtubeMusicURL ?? "") != nil }, borrowable: { $0.youtubeMusicMV != true })
         let so = lender { PlatformLinks.sodaTrackURL($0.sodaURL ?? "") != nil }
+        let kg = lender { PlatformLinks.kugouSongURL($0.kugouURL ?? "") != nil }
         let rawQQ = qq.qqMusicURL ?? ""
         // 搜索兜底链接不当"歌曲页"给出去,理由见 PlatformLinks.isQQSearchFallback
         let qqSong = (!rawQQ.isEmpty && !PlatformLinks.isQQSearchFallback(rawQQ))
@@ -671,7 +676,8 @@ public enum EnrichCacheReader {
                 ? nil : kk.kkboxURL.flatMap { URL(string: $0) },
             kkboxArtistWeb: PlatformLinks.kkboxArtistWebURL(songPage: kk.kkboxURL ?? "", artistID: own(entry.kkboxArtistID, kk.kkboxArtistID)),
             lxMusicPlatform: PlatformLinks.lxMusicPlatform(songID: entry.playerSongIDs?[PlaybackPlayer.lxMusic.bundleIdentifier]),
-            kuwoSong: PlatformLinks.kuwoSongURL(lxSongID: entry.playerSongIDs?[PlaybackPlayer.lxMusic.bundleIdentifier]))
+            kuwoSong: PlatformLinks.kuwoSongURL(lxSongID: entry.playerSongIDs?[PlaybackPlayer.lxMusic.bundleIdentifier]),
+            kugouSong: PlatformLinks.kugouSongURL(kg.kugouURL ?? ""))
         return links.isEmpty ? nil : links
     }
 

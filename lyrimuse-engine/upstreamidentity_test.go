@@ -24,6 +24,7 @@ func TestUpstreamIdentitiesMatchCode(t *testing.T) {
 		"musixmatch.go musixmatchAppID":         musixmatchAppID,
 		"migu.go miguJadeiteSignSalt":           miguJadeiteSignSalt[:8],
 		"soda.go sodaSearchAID":                 sodaSearchAID,
+		"kugousongpage.go kugouSearchSignSalt":  kugouSearchSignSalt[:8],
 		"qqfallback.go qqLyricDownloadAt":       "",
 		"qq.go qqSmartboxAt":                    "",
 	}

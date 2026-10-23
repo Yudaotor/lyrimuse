@@ -602,7 +602,7 @@ Play, pause, skip and drag the progress bar from the lyrics window or the expand
 
 ### Open the song's page in one click
 
-One click in the ⋯ menu opens the song, its album or its artist on the platform you are playing from. Apple Music and KKBOX open in their own apps, and Spotify jumps to the song in its app; the rest open on the web: Spotify albums and artists, QQ Music, Soda Music, Amazon Music and YouTube Music. NetEase Cloud Music has the song page only; Kugou has none.
+One click in the ⋯ menu opens the song, its album or its artist on the platform you are playing from. Apple Music and KKBOX open in their own apps, and Spotify jumps to the song in its app; the rest open on the web: Spotify albums and artists, QQ Music, Soda Music, Amazon Music and YouTube Music. NetEase Cloud Music and Kugou have the song page only.
 
 <a id="feature-about-panels"></a>
 
