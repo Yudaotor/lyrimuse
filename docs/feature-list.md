@@ -207,7 +207,7 @@ When no source has a translation, the lyrics are translated by machine. On macOS
 
 ### Romanization
 
-Japanese romaji, Korean romanization, Mandarin pinyin and Cantonese Jyutping, word by word above the lyrics, plus thirteen more languages such as Russian, Thai, Greek and Hindi under UN-recommended systems or ISO standards. Language is judged line by line, so a Japanese line inside a Chinese song is the only one marked. Choose which languages to mark here; with a Chinese interface, pinyin starts off. Each display decides whether to show them.
+Japanese romaji, Korean romanization, Mandarin pinyin and Cantonese Jyutping, word by word above the lyrics, plus thirteen more languages such as Russian, Thai, Greek and Hindi under each language's official system or an ISO standard. Language is judged line by line, so a Japanese line inside a Chinese song is the only one marked. Choose which languages to mark here; with a Chinese interface, pinyin starts off. Each display decides whether to show them.
 
 - On by default
 - Settings: Lyrics › Adjust › Romanization Languages

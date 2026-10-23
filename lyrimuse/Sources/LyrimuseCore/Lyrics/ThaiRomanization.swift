@@ -7,11 +7,11 @@ import Foundation
 /// 所以先查词典(`ThaiRTGSTable`,Wiktionary 的皇家学术院写法),查不到的按词典里的词切开,
 /// 再查不到的才按联合国文件里的声母 / 韵尾 / 元音表逐个音节拼。
 ///
-/// 输出规则同联合国文件(UNGEGN WGRS 泰语报告 4.0 版)的注:
+/// 输出规则同联合国文件(UNGEGN WGRS 泰语报告 4.0 版)的注和皇家学术院的写词规则:
 ///   - 音节之间要分开读的加连字符:前一音节以元音结尾、后一音节以 ng 开头;前一音节以 ng
 ///     结尾、后一音节以元音开头;后一音节以元音开头(สะอาด sa-at、บังอร bang-on)。
 ///   - ๆ 把前一个词按读音再写一遍(บ่อยๆ boi boi)。
-///   - 词与词之间用空格;非泰文字符原样保留。
+///   - 词与词之间用空格,一个词里的音节连写(复合词、人名也连写);非泰文字符原样保留。
 /// 见 10 章决策 49。
 public enum ThaiRomanization {
     /// 一行里的泰文片段换成 RTGS,其余字符原样保留。不含泰文时原样返回。
@@ -107,19 +107,26 @@ public enum ThaiRomanization {
         joinWords(segment(Array(word.unicodeScalars), excluding: word))
     }
 
-    /// 一段泰文切成若干片,每片是词典里的一个词(读音来自词典)或按规则拼出的一个音节。按 Unicode 标量切:
-    /// 泰文的元音、声调符号是组合字符,按 Character 会跟前面的辅音并成一个。
+    /// 切出来的一片:词典里的一个词(`words` 是它读音里按空格分开的几个词,每个词音节间带连字符),
+    /// 或者按规则拼出的一个音节。
+    struct Piece {
+        let text: [Unicode.Scalar]
+        let words: [String]
+        let fromDictionary: Bool
+    }
+
+    /// 一段泰文切成若干片。按 Unicode 标量切:泰文的元音、声调符号是组合字符,按 Character 会跟前面的辅音并成一个。
     /// 代价最小的切法胜出:词典词记 1、规则音节记 3、单独一个辅音补 a 的记 5,读不出的标量记 100、不出读音。
     private static func segment(
         _ chars: [Unicode.Scalar], useDictionary: Bool = true, excluding: String? = nil
-    ) -> [[String]] {
+    ) -> [Piece] {
         let n = chars.count
-        var best = [(cost: Int, pieces: [[String]])?](repeating: nil, count: n + 1)
+        var best = [(cost: Int, pieces: [Piece])?](repeating: nil, count: n + 1)
         best[0] = (0, [])
         let table = dictionary
         for i in 0..<n {
             guard let here = best[i] else { continue }
-            func offer(_ end: Int, _ cost: Int, _ piece: [String]?) {
+            func offer(_ end: Int, _ cost: Int, _ piece: Piece?) {
                 let total = here.cost + cost
                 if let current = best[end], current.cost <= total { return }
                 best[end] = (total, piece.map { here.pieces + [$0] } ?? here.pieces)
@@ -129,25 +136,31 @@ public enum ThaiRomanization {
                 for j in i..<min(n, i + table.maxLength) {
                     key.append(chars[j])
                     let piece = String(key)
-                    if piece != excluding, let reading = table.words[piece] { offer(j + 1, 1, reading) }
+                    if piece != excluding, let reading = table.words[piece] {
+                        offer(j + 1, 1, Piece(text: Array(chars[i...j]), words: reading, fromDictionary: true))
+                    }
                 }
             }
             for syllable in ThaiSyllable.parse(chars, at: i) {
-                offer(i + syllable.length, syllable.cost, [syllable.reading])
+                let text = Array(chars[i..<(i + syllable.length)])
+                offer(i + syllable.length, syllable.cost, Piece(text: text, words: [syllable.reading], fromDictionary: false))
             }
             offer(i + 1, 100, nil)
         }
         return best[n]?.pieces ?? []
     }
 
-    /// 片与片接起来:词典里带空格的短语原样分词,其余音节按 RTGS 注 1 决定要不要加连字符。
-    private static func joinWords(_ pieces: [[String]]) -> String {
-        var words: [[String]] = [[]]
-        for piece in pieces {
-            for (k, word) in piece.enumerated() {
-                if k > 0 { words.append([]) }
-                words[words.count - 1].append(word)
-            }
+    /// 片与片接起来。RTGS 的写法是词与词之间空格、一个词(含复合词和人名)里的音节连写(ลูกเสือ luksuea)。
+    /// 一个词典词就是一个词,读音里带空格的(Wiktionary 皇家学术院那一栏把短语写成 mai tong)按空格分;分词器切出的
+    /// 一段由几个词典词组成时各写各的;里面有按规则拼的音节,说明这是词典不认识的一个词,整体连写
+    /// (สำอาง = 词典的 สำ + 规则拼的 อาง → sam-ang)。别把词典里的复合词再按组成的词拆开(หัวใจ 是 huachai,
+    /// 不是 hua chai;拆的话 โลมา 这种单纯词也会被拆成 lo ma)。词内音节按 RTGS 注 1 决定要不要加连字符。
+    private static func joinWords(_ pieces: [Piece]) -> String {
+        var words: [[String]] = []
+        if pieces.allSatisfy(\.fromDictionary) {
+            for piece in pieces { for word in piece.words { words.append([word]) } }
+        } else {
+            words = [pieces.flatMap(\.words)]
         }
         return words.filter { !$0.isEmpty }
             .map { joinSyllables($0.flatMap { $0.split(separator: "-").map(String.init) }) }

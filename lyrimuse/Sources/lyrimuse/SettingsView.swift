@@ -1970,7 +1970,7 @@ private struct LyricsSettingsTab: View {
                 // 显不显示读音是各展示面自己的开关,在「歌词显示」里(04 章决策 42)。
                 // 选项一律写**语言名**(标题问的就是语言),标成什么方案(罗马字 / 拼音 / 粤拼 / 哪个标准)
                 // 放在各自的悬停说明里 —— 语言名和方案名混排,读的人得先分清哪几个是语言、哪几个是写法。
-                // 日 / 韩 / 中以外的语言按 10 章决策 49 的标准写;阿拉伯语只管歌词源自带的读音。
+                // 日 / 韩 / 中以外的语言按 10 章决策 49、10 章决策 51 的标准写;阿拉伯语只管歌词源自带的读音。
                 SettingsRow(
                     icon: "textformat.alt",
                     title: L10n.t("标注读音的语言"),
@@ -2007,10 +2007,10 @@ private struct LyricsSettingsTab: View {
                             help: L10n.t("塞尔维亚语拉丁字母（联合国推荐），如 Љубав → Ljubav"))
                         romanizationTile(
                             L10n.t("马其顿语"), .macedonian,
-                            help: L10n.t("联合国推荐体系，如 Љубов → Ljubov"))
+                            help: L10n.t("北马其顿官方证件写法，如 Ѓорѓи → Gjorgji"))
                         romanizationTile(
                             L10n.t("哈萨克语"), .kazakh,
-                            help: L10n.t("ISO 9，如 Сәлем → Sa̋lem"))
+                            help: L10n.t("哈萨克斯坦官方拉丁字母（2021），如 Сәлем → Sälem"))
                         romanizationTile(
                             L10n.t("希腊语"), .greek,
                             help: L10n.t("ELOT 743（联合国推荐），如 Καλημέρα → Kaliméra"))
@@ -2019,7 +2019,7 @@ private struct LyricsSettingsTab: View {
                             help: L10n.t("皇家学术院转写（RTGS），如 สวัสดี → sawatdi"))
                         romanizationTile(
                             L10n.t("印地语"), .hindi,
-                            help: L10n.t("ISO 15919，如 नमस्ते → namaste"))
+                            help: L10n.t("ISO 15919，如 नमस्ते → namastē"))
                         romanizationTile(
                             L10n.t("旁遮普语"), .punjabi,
                             help: L10n.t("ISO 15919，如 ਸਤਿ ਸ੍ਰੀ → sati srī"))
@@ -2028,7 +2028,7 @@ private struct LyricsSettingsTab: View {
                             help: L10n.t("ISO 15919，如 வணக்கம் → vaṇakkam"))
                         romanizationTile(
                             L10n.t("僧伽罗语"), .sinhala,
-                            help: L10n.t("ISO 15919，如 ආයුබෝවන් → āyubōvan"))
+                            help: L10n.t("斯里兰卡国家体系，如 ලංකා → laṅkā"))
                         romanizationTile(
                             L10n.t("阿拉伯语"), .arabic,
                             help: L10n.t("只显示歌词源自带的读音"))

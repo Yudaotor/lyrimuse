@@ -111,11 +111,15 @@ const (
 	// migrationStaleGeneratedRoma:存量里早先预生成、读音算法改过之后已经过时的读音按现在的算法重算(staleroma.go)。
 	// 改了读音算法(Swift 的 Romanizer、LyricsRomanization 的预处理)就 +1。
 	migrationStaleGeneratedRoma        = "stale_generated_roma"
-	migrationStaleGeneratedRomaVersion = 4
+	migrationStaleGeneratedRomaVersion = 5
 	// migrationWorldRoma:存量里日 / 韩 / 中以外几种文字的歌补预生成读音(worldroma.go)。运行期新解析的在
 	// maybeGenerateHelperRoma 就生成,不再产生。改了 hasWorldReadingScript 的判据就 +1。
 	migrationWorldRoma        = "world_roma"
 	migrationWorldRomaVersion = 1
+	// migrationRefreshedWorldRoma:存量里早先预生成的这几种文字的读音,写法改过之后按现在的重算(worldroma.go)。
+	// 改了这几种文字的读音规则(Swift 的 WorldRomanization 那几个文件)就 +1。
+	migrationRefreshedWorldRoma        = "refreshed_world_roma"
+	migrationRefreshedWorldRomaVersion = 1
 	// migrationTonelessCantoneseRoma:存量粤语歌里没标声调的罗马音换成带声调的粤拼(jyutping.go)。运行期在源头
 	// 已经这样做,不再产生。改了 lacksJyutpingTones 的判据就 +1。
 	migrationTonelessCantoneseRoma        = "toneless_cantonese_roma"

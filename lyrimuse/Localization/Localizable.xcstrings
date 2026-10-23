@@ -54620,52 +54620,6 @@
         }
       }
     },
-    "联合国推荐体系，如 Љубов → Ljubov" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "UN-recommended system, e.g. Љубов → Ljubov"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "联合国推荐体系，如 Љубов → Ljubov"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "聯合國推薦體系，如 Љубов → Ljubov"
-          }
-        }
-      }
-    },
-    "ISO 9，如 Сәлем → Sa̋lem" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ISO 9, e.g. Сәлем → Sa̋lem"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ISO 9，如 Сәлем → Sa̋lem"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ISO 9，如 Сәлем → Sa̋lem"
-          }
-        }
-      }
-    },
     "ELOT 743（联合国推荐），如 Καλημέρα → Kaliméra" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -54712,29 +54666,6 @@
         }
       }
     },
-    "ISO 15919，如 नमस्ते → namaste" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ISO 15919, e.g. नमस्ते → namaste"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ISO 15919，如 नमस्ते → namaste"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ISO 15919，如 नमस्ते → namaste"
-          }
-        }
-      }
-    },
     "ISO 15919，如 ਸਤਿ ਸ੍ਰੀ → sati srī" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -54777,29 +54708,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ISO 15919，如 வணக்கம் → vaṇakkam"
-          }
-        }
-      }
-    },
-    "ISO 15919，如 ආයුබෝවන් → āyubōvan" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ISO 15919, e.g. ආයුබෝවන් → āyubōvan"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ISO 15919，如 ආයුබෝවන් → āyubōvan"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ISO 15919，如 ආයුබෝවන් → āyubōvan"
           }
         }
       }
@@ -55030,6 +54938,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "酷狗音樂歌曲頁"
+          }
+        }
+      }
+    },
+    "哈萨克斯坦官方拉丁字母（2021），如 Сәлем → Sälem" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kazakhstan's official Latin alphabet (2021), e.g. Сәлем → Sälem"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "哈萨克斯坦官方拉丁字母（2021），如 Сәлем → Sälem"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "哈薩克官方拉丁字母（2021），如 Сәлем → Sälem"
+          }
+        }
+      }
+    },
+    "北马其顿官方证件写法，如 Ѓорѓи → Gjorgji" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "North Macedonia's official-document spelling, e.g. Ѓорѓи → Gjorgji"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "北马其顿官方证件写法，如 Ѓорѓи → Gjorgji"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "北馬其頓官方證件寫法，如 Ѓорѓи → Gjorgji"
+          }
+        }
+      }
+    },
+    "ISO 15919，如 नमस्ते → namastē" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ISO 15919, e.g. नमस्ते → namastē"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ISO 15919，如 नमस्ते → namastē"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ISO 15919，如 नमस्ते → namastē"
+          }
+        }
+      }
+    },
+    "斯里兰卡国家体系，如 ලංකා → laṅkā" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sri Lanka's national system, e.g. ලංකා → laṅkā"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "斯里兰卡国家体系，如 ලංකා → laṅkā"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "斯里蘭卡國家體系，如 ලංකා → laṅkā"
           }
         }
       }

@@ -6,14 +6,17 @@ public enum CyrillicLanguage: String, Sendable, CaseIterable {
     case russian, ukrainian, bulgarian, belarusian, serbian, macedonian, kazakh
 }
 
-/// 西里尔字母读音:按联合国地名标准化会议推荐的各国体系写,没有联合国体系的用 ISO 9:1995。
-/// 表逐条照 UNGEGN 罗马化工作组《联合国罗马化体系现状报告》各语言那一份:
-///   - 俄语:1987 年 V/18 决议,GOST 1983(GOST 16876-71)。
+/// 西里尔字母读音:每种语言按它自己国家现行的官方体系写。前四种同时是联合国推荐体系,表逐条照 UNGEGN 罗马化工作组
+/// 《联合国罗马化体系现状报告》各语言那一份:
+///   - 俄语:1987 年 V/18 决议,GOST 1983(GOST 16876-71)。软音符、硬音符写修饰字母 ʹ ʺ(U+02B9、U+02BA,
+///     算字母、不断词),别写成撇号标点 ′ ″。
 ///   - 乌克兰语:2012 年 X/9 决议,乌克兰政府 2010 年体系。
-///   - 保加利亚语:2012 年 X/7 决议,2009 年《音译法》体系。
+///   - 保加利亚语:2012 年 X/7 决议,2009 年《音译法》体系(含法里国名 България 固定写 Bulgaria 的例外)。
 ///   - 白俄罗斯语:2012 年 X/6 决议,2007 年国家体系。
-///   - 塞尔维亚语、马其顿语:1977 年 III/11 决议。
-///   - 哈萨克语:联合国没有推荐体系、哈萨克斯坦也没有国家体系(报告 4.0 版),用 ISO 9:1995。
+///   - 塞尔维亚语:1977 年 III/11 决议,即塞尔维亚语的官方拉丁字母。
+///   - 马其顿语:北马其顿 2008 年起护照、身份证这些官方证件用的无附加符号写法(ѓ gj、ќ kj、ж zh、ш sh、ч ch、
+///     џ dj、ѕ dz,ICAO Doc 9303 那一套),不用联合国 1977 年那套。
+///   - 哈萨克语:哈萨克斯坦 2021 年定的官方拉丁字母(ә ä、ғ ğ、қ q、ң ñ、ө ö、ұ ū、ү ü、і ı、и й i、ш ş、ж j)。
 /// 字母大小写跟原文走:大写字母转成多个拉丁字母时,后面跟着小写就只大写第一个(Щ → Šč),
 /// 整词大写就全大写。见 10 章决策 49。
 public enum CyrillicRomanization {
@@ -34,7 +37,7 @@ public enum CyrillicRomanization {
     public static func detectLanguage(_ text: String) -> CyrillicLanguage? {
         var counts: [Character: Int] = [:]
         var total = 0
-        for ch in text.lowercased() where ch.unicodeScalars.allSatisfy(isCyrillic) {
+        for ch in text.precomposedStringWithCanonicalMapping.lowercased() where ch.unicodeScalars.allSatisfy(isCyrillic) {
             counts[ch, default: 0] += 1
             total += 1
         }
@@ -91,7 +94,9 @@ public enum CyrillicRomanization {
     /// 一行里的西里尔字母按 `language` 的体系换成拉丁字母,其余字符原样保留。
     public static func romanize(_ text: String, language: CyrillicLanguage) -> String {
         guard containsCyrillic(text) else { return text }
-        let chars = Array(text)
+        // 先合成:й ё 这类字母有的歌词存成「и / е + 组合符」,不合成就查不到表。
+        let composed = text.precomposedStringWithCanonicalMapping
+        let chars = Array(language == .bulgarian ? bulgarianCountryName(composed) : composed)
         var out = ""
         for i in chars.indices {
             let ch = chars[i]
@@ -111,7 +116,12 @@ public enum CyrillicRomanization {
                 continue
             }
             if latin.isEmpty { continue }
-            out += cased(latin, original: ch, neighbours: (i > 0 ? chars[i - 1] : nil, next != nil ? chars[i + 1] : nil))
+            var latinCased = cased(latin, original: ch, neighbours: (i > 0 ? chars[i - 1] : nil, next != nil ? chars[i + 1] : nil))
+            // 哈萨克语的 i(и й,以及 ё ю я 开头的 i)大写是带点的 İ;`uppercased()` 只给 I。ı 的大写本来就是 I。
+            if language == .kazakh, latin.hasPrefix("i"), latinCased.hasPrefix("I") {
+                latinCased = "İ" + latinCased.dropFirst()
+            }
+            out += latinCased
         }
         // 白俄罗斯语的 ь 写成前一个字母上的锐音符(нь → ń),这里把「字母 + 组合锐音符」合成预组字符。
         return out.precomposedStringWithCanonicalMapping
@@ -143,16 +153,16 @@ public enum CyrillicRomanization {
         case .belarusian: return belarusian(c, context)
         case .serbian: return serbian[c]
         case .macedonian: return macedonian(c, context)
-        case .kazakh: return iso9[c]
+        case .kazakh: return kazakh[c]
         }
     }
 
-    /// 俄语,GOST 1983(联合国 1987)。ъ、ь 是双撇和单撇(U+2033、U+2032)。
+    /// 俄语,GOST 1983(联合国 1987)。ъ、ь 是修饰字母双撇、单撇(U+02BA、U+02B9)。
     static let russian: [Character: String] = [
         "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "ë", "ж": "ž", "з": "z",
         "и": "i", "й": "j", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r",
         "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "c", "ч": "č", "ш": "š", "щ": "šč",
-        "ъ": "\u{2033}", "ы": "y", "ь": "\u{2032}", "э": "è", "ю": "ju", "я": "ja",
+        "ъ": "\u{02BA}", "ы": "y", "ь": "\u{02B9}", "э": "è", "ю": "ju", "я": "ja",
     ]
 
     /// 乌克兰语,2010 年体系(联合国 2012)。є ї й ю я 在词首写 ye yi y yu ya、其余位置写 ie i i iu ia;
@@ -180,6 +190,20 @@ public enum CyrillicRomanization {
     private static func bulgarian(_ c: Character, _ ctx: Context) -> String? {
         if c == "я", ctx.previous == "и", ctx.wordFinal { return "a" }
         return bulgarianFixed[c]
+    }
+
+    /// 《音译法》第 6 条:国名 България 固定写 Bulgaria(按字母转是 Balgaria)。只认这一个词本身。
+    private static let bulgariaWord = try! NSRegularExpression(pattern: "(?<![\\p{L}])(България|БЪЛГАРИЯ)(?![\\p{L}])")
+
+    private static func bulgarianCountryName(_ text: String) -> String {
+        let ns = text as NSString
+        var out = text
+        for m in bulgariaWord.matches(in: text, range: NSRange(location: 0, length: ns.length)).reversed() {
+            let word = ns.substring(with: m.range)
+            let latin = word == "БЪЛГАРИЯ" ? "BULGARIA" : "Bulgaria"
+            out = (out as NSString).replacingCharacters(in: m.range, with: latin)
+        }
+        return out
     }
 
     private static let bulgarianFixed: [Character: String] = [
@@ -220,25 +244,28 @@ public enum CyrillicRomanization {
         "ч": "č", "џ": "dž", "ш": "š",
     ]
 
-    /// 马其顿语(联合国 1977)。ѓ ќ 在 е и 前写 g k、其余位置写 đ ć;撇号原样。
+    /// 马其顿语,官方证件的无附加符号写法。撇号原样。
     private static func macedonian(_ c: Character, _ ctx: Context) -> String? {
-        let beforeFront = ctx.next == "е" || ctx.next == "и"
         switch c {
-        case "ѓ": return beforeFront ? "g" : "đ"
-        case "ќ": return beforeFront ? "k" : "ć"
-        case "ѕ": return "dz"
         case "'", "’", "ʼ": return "’"
-        default: return serbian[c]
+        default: return macedonianTable[c]
         }
     }
 
-    /// ISO 9:1995(哈萨克语用)。组合附加符号写成「字母 + 组合符」,最后统一合成预组字符。
-    static let iso9: [Character: String] = [
-        "а": "a", "ә": "a\u{030B}", "б": "b", "в": "v", "г": "g", "ғ": "ġ", "д": "d", "е": "e",
-        "ё": "ë", "ж": "ž", "з": "z", "и": "i", "й": "j", "к": "k", "қ": "k\u{0326}", "л": "l",
-        "м": "m", "н": "n", "ң": "n\u{0326}", "о": "o", "ө": "ô", "п": "p", "р": "r", "с": "s",
-        "т": "t", "у": "u", "ұ": "u\u{0307}", "ү": "ù", "ф": "f", "х": "h", "һ": "ḥ", "ц": "c",
-        "ч": "č", "ш": "š", "щ": "ŝ", "ъ": "\u{02BA}", "ы": "y", "і": "ì", "ь": "\u{02B9}", "э": "è",
-        "ю": "û", "я": "â",
+    private static let macedonianTable: [Character: String] = [
+        "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "ѓ": "gj", "е": "e", "ж": "zh", "з": "z",
+        "ѕ": "dz", "и": "i", "ј": "j", "к": "k", "л": "l", "љ": "lj", "м": "m", "н": "n", "њ": "nj",
+        "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "ќ": "kj", "у": "u", "ф": "f", "х": "h",
+        "ц": "c", "ч": "ch", "џ": "dj", "ш": "sh",
+    ]
+
+    /// 哈萨克语,2021 年官方拉丁字母。ё ю я 写 io iu ia,ц ч щ 写 ts tş ştş,ъ ь 不写;
+    /// и й 大写是带点的 İ,і 是不带点的 ı(大写 I),大小写在 `romanize` 里处理。
+    static let kazakh: [Character: String] = [
+        "а": "a", "ә": "ä", "б": "b", "в": "v", "г": "g", "ғ": "ğ", "д": "d", "е": "e", "ё": "io",
+        "ж": "j", "з": "z", "и": "i", "й": "i", "к": "k", "қ": "q", "л": "l", "м": "m", "н": "n",
+        "ң": "ñ", "о": "o", "ө": "ö", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u", "ұ": "ū",
+        "ү": "ü", "ф": "f", "х": "h", "һ": "h", "ц": "ts", "ч": "tş", "ш": "ş", "щ": "ştş", "ъ": "",
+        "ы": "y", "і": "ı", "ь": "", "э": "e", "ю": "iu", "я": "ia",
     ]
 }
