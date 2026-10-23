@@ -7,11 +7,11 @@ import os
 /// 引擎写一份带类型的请求(`lyrimuse-player-query-request.json`:种类 + 参数,不带脚本),这里只跑自己内置的
 /// 几段只读脚本和系统待播队列那次查询(`NowPlayingClientsProbe.queue`),把输出整理成结构、以 JSON 写回
 /// `lyrimuse-player-query-reply.json`:一串曲目的那几种是 `PlayerQueryTracks`,Spotify 随机状态是 `PlayerQueryShuffle`,
-/// VOX 循环档是 `PlayerQueryRepeat`,Pine 的播放列表是 `PinePlaylist.QueueReply`,某一家此刻的播放模式是 `PlayerQueryMode`,
+/// VOX 循环档是 `PlayerQueryRepeat`,Pine 与 reAMP 的播放列表是 `PinePlaylist.QueueReply`,某一家此刻的播放模式是 `PlayerQueryMode`,
 /// Kaset 的队列是 `KasetPlayerInfo.QueueReply`。引擎只解 JSON(`appquery.go`);契约两边各钉一份:selftest
 /// 「player-query」组、Go `appquery_test.go`(读这个文件对账),样例在 shared/testdata/player-query/。
 ///
-/// 只认这九种查询,参数逐项校验;网页队列那种只对用户把这个平台配对给了的浏览器跑。请求写出超过 `requestMaxAge`
+/// 只认这十种查询,参数逐项校验;网页队列那种只对用户把这个平台配对给了的浏览器跑。请求写出超过 `requestMaxAge`
 /// 才看到就不答(引擎那边早不等了)。一次只处理一份请求,引擎那边也一次只发一份。
 /// 只在以 Lyrimuse.app 身份运行时启动:selftest 与 `swift run` 共用配置目录,同 `PlaybackStatePublisher`。
 ///
@@ -53,6 +53,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
         case voxRepeat = "vox_repeat"
         case pineQueue = "pine_queue"
         case playbackMode = "playback_mode"
+        case reampQueue = "reamp_queue"
     }
 
     public struct Request: Codable, Equatable, Sendable {
@@ -123,6 +124,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
         case pineQueue
         /// 某个播放器此刻的播放模式(`MusicPlaybackController.playbackMode(for:)`,跟歌词窗口那两颗键同一个读法)。
         case playbackMode(PlaybackPlayer)
+        /// reAMP 上次退出时存的播放列表连同菜单里的档(`ReampPlaylist`)。
+        case reampQueue
     }
 
     public enum Decision: Equatable, Sendable {
@@ -172,6 +175,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
                   MusicPlaybackController.supportsExtendedControls(player)
             else { return .fail("unsupported player") }
             return .run(.playbackMode(player))
+        case .reampQueue:
+            return .run(.reampQueue)
         }
     }
 
@@ -467,6 +472,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
         case .playbackMode(let player):
             return makeReply(id: id, output: MusicPlaybackController.playbackMode(for: player).flatMap { Self.encodedReply(PlayerQueryMode(mode: $0.mode.rawValue)) },
                              error: "mode unavailable")
+        case .reampQueue:
+            return makeReply(id: id, output: ReampPlaylist.queueReply().flatMap { Self.encodedReply($0) }, error: "playlist unavailable")
         }
     }
 

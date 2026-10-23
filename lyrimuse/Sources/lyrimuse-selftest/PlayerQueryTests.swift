@@ -17,7 +17,7 @@ func runPlayerQueryTests() {
     let quote = String(UnicodeScalar(UInt8(34)))
     let newline = String(UnicodeScalar(UInt8(10)))
 
-    // ---- 判请求:只认九种,参数逐项校验;契约版本不认识、没有 id、过期的不答 ----
+    // ---- 判请求:只认十种,参数逐项校验;契约版本不认识、没有 id、过期的不答 ----
     expectEqual(S.decide(request("apple_music_queue", count: 5), now: now), .run(.appleMusicQueue(count: 5)),
                 "查询: Music 系统待播队列 5 首")
     for bad in [0, 21] {
@@ -44,6 +44,7 @@ func runPlayerQueryTests() {
     expectEqual(S.decide(request("pine_queue"), now: now), .run(.pineQueue), "查询: Pine 播放列表")
     expectEqual(S.decide(request("playback_mode", bundle: PlaybackPlayer.qqMusic.bundleIdentifier), now: now),
                 .run(.playbackMode(.qqMusic)), "查询: 某一家的播放模式")
+    expectEqual(S.decide(request("reamp_queue"), now: now), .run(.reampQueue), "查询: reAMP 播放列表")
     for bad in [nil, "com.example.none", PlaybackPlayer.kugou.bundleIdentifier, PlaybackPlayer.auto.bundleIdentifier] {
         expectEqual(S.decide(request("playback_mode", bundle: bad), now: now), .fail("unsupported player"),
                     "查询: 播放模式只问认得、能读模式的播放器(\(bad ?? "nil"))")
@@ -107,10 +108,11 @@ func runPlayerQueryTests() {
                        "output.flatMap(PlayerQueryRepeat.parseVox)", "Self.osascript(Self.voxRepeatScript, timeout: Self.shuffleTimeout)",
                        "PinePlaylist.queueReply().flatMap { Self.encodedReply($0) }",
                        "MusicPlaybackController.playbackMode(for: player).flatMap { Self.encodedReply(PlayerQueryMode(mode: $0.mode.rawValue)) }",
+                       "ReampPlaylist.queueReply().flatMap { Self.encodedReply($0) }",
                        "output.map(site.parse)", "KasetPlayerInfo.queueReply(fromScriptOutput:"] {
             expectEqual(server.contains(needle), true, "查询(契约): 输出整理成结构再交(\(needle))")
         }
-        expectEqual(S.Kind.allCases.count, 9, "查询: 九种,跟引擎的 appQuery 常量一一对应")
+        expectEqual(S.Kind.allCases.count, 10, "查询: 十种,跟引擎的 appQuery 常量一一对应")
     }
 
     // ---- 盯配置目录:原子写(临时文件改名)触发回调;目录本身删掉报告失效(09 章决策 175)----
@@ -241,6 +243,24 @@ func runPlayerQueryTests() {
                     "VOX 循环档: 交给引擎的 JSON")
         expectEqual(S.encodedReply(PlayerQueryMode(mode: "repeatOne")), "{" + quote + "mode" + quote + ":" + quote + "repeatOne" + quote + "}",
                     "播放模式: 交给引擎的 JSON")
+        // reAMP 播放列表:上次退出时存的 m3u,每个文件按认当前这首那一套换身份。
+        typealias R = ReampPlaylist
+        let m3u = ["#EXTM3U", "#EXTINF:60,Lyrimuse Test - Bilingual Lines", "/Users/x/Music/a.mp3", "", "  /Users/x/Music/b c.flac  ",
+                   "file:///Users/x/Music/%E6%AD%8C.mp3", "http://radio.example/stream", "# 注释"].joined(separator: "\n")
+        expectEqual(R.paths(m3u: m3u), ["/Users/x/Music/a.mp3", "/Users/x/Music/b c.flac", "/Users/x/Music/歌.mp3"],
+                    "reAMP 列表: 绝对路径和 file:// 地址,注释、空行、网络地址跳过")
+        expectEqual(R.paths(m3u: Array(repeating: "/a.mp3", count: R.maxTracks + 5).joined(separator: "\n")).count, R.maxTracks,
+                    "reAMP 列表: 最多读 maxTracks 首")
+        let tagged = LocalAudioFileTags(title: "稻香", artist: "周杰伦", album: "魔杰座", duration: 223.5)
+        expectEqual(R.track(path: "/m/x.mp3", tags: tagged),
+                    PinePlaylist.Track(title: "稻香", artist: "周杰伦", album: "魔杰座", duration: 223.5, file: "x.mp3"),
+                    "reAMP 列表: 有标签用标签,带精确时长和文件名")
+        let untagged = R.track(path: "/m/AJR - Karma.mp3", tags: LocalAudioFileTags(title: "", artist: "", album: "", duration: 200))
+        expectEqual([untagged.artist, untagged.title, untagged.file], ["AJR", "Karma", "AJR - Karma.mp3"],
+                    "reAMP 列表: 没写歌名的按文件名拆(同 reAMP 报文件名时的拆法)")
+        expectEqual(R.track(path: "/m/track08.mp3", tags: nil).title, "track08", "reAMP 列表: 读不出标签、拆不出歌手时歌名是去掉扩展名的文件名")
+        expectEqual([.shuffle, .repeatAll, .list, .repeatOne, nil].map(R.repeating), ["shuffle", "all", "off", nil, nil],
+                    "reAMP 列表: 菜单的档换成 shuffle / all / off")
         expectEqual(MusicPlaybackController.MusicPlaybackMode.allCases.map(\.rawValue), ["list", "shuffle", "repeatOne", "repeatAll"],
                     "播放模式: 原值就是交给引擎的写法(引擎 playerModeValues 一起改)")
     }

@@ -34,6 +34,7 @@ import (
 //                   开着随机时按 shuffleCandidates 交一批。
 //   VOX          —— 读它沙盒容器里的播放列表库(见 voxqueue.go)。
 //   Pine Player  —— App 经辅助功能读它界面上的播放列表(见 pinequeue.go);随机开没开读不出,从换歌行为推断。
+//   reAMP        —— App 读它退出时存的 playlist.m3u(见 reampqueue.go),当前这首不在里面就退回。
 //
 // 所以队列路径拿不到时**退回同专辑预取**,而不是什么都不做:这些情况恰恰会从"有预取"
 // 退成"没有"。系统层面也没有兜底 —— MediaRemote 的导出符号里,队列相关的全是
@@ -92,8 +93,8 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 	case kasetBundleID:
 		return kasetUpcoming(artist, title, n)
 	case reampBundleID:
-		// 没有脚本接口,本地数据里也没有播放列表,读不到接下来放什么(02 章决策 126)。
-		return nil, false
+		// 列表在它退出时存的 playlist.m3u 里,App 代读(reampqueue.go)。
+		return reampUpcoming(artist, title, n)
 	case voxBundleID:
 		// 脚本接口不给播放列表,读它沙盒容器里的库(voxqueue.go)。
 		return voxUpcoming(artist, title, n)

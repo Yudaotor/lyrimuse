@@ -139,7 +139,7 @@ func TestAppQueryContractMatchesTheApp(t *testing.T) {
 		`"` + appQueryAppleMusicQueue + `"`, `"` + appQueryAppleMusicUpcoming + `"`, `"` + appQueryAppleMusicAlbumTracks + `"`,
 		// 系统待播队列问的是 Music.app。
 		`NowPlayingClientsProbe.queue(forBundleID: PlaybackPlayer.appleMusic.bundleIdentifier`,
-		`"` + appQuerySpotifyShuffle + `"`, `"` + appQueryBrowserQueue + `"`, `"` + appQueryKasetQueue + `"`, `"` + appQueryVoxRepeat + `"`, `"` + appQueryPineQueue + `"`, `"` + appQueryPlaybackMode + `"`,
+		`"` + appQuerySpotifyShuffle + `"`, `"` + appQueryBrowserQueue + `"`, `"` + appQueryKasetQueue + `"`, `"` + appQueryVoxRepeat + `"`, `"` + appQueryPineQueue + `"`, `"` + appQueryPlaybackMode + `"`, `"` + appQueryReampQueue + `"`,
 		// Kaset 队列:JXA 一次取回队列与播放状态,App 整理成 kasetQueueReply 那份(键名见下面 KasetPlayerInfo.swift 那段)。
 		`return JSON.stringify({ queue: K.getPlayQueue(), info: K.getPlayerInfo() });`,
 		`case bundleID = "bundle_id"`, `case writtenAtMs = "written_at_ms"`,
