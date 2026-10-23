@@ -151,7 +151,7 @@ final class PlayerHealthMonitor: ObservableObject {
             }
             return parts.joined(separator: L10n.t("；"))
         case .accessibilityMissing:
-            // 按用途分开说(`accessibilityUse`):读进度的那几家校准不了,按菜单项的那几家不显示随机、循环、喜欢键,只按喜欢的那几家没有喜欢键,只按模式的那几家没有随机、循环键。
+            // 按用途分开说(`accessibilityUse`):读进度的那几家校准不了,按菜单项的那几家不显示随机、循环、喜欢键,只按喜欢的那几家没有喜欢键,reAMP 没有随机、循环键、失焦时也控制不了。
             var parts: [String] = []
             let progress = accessibilityMissingPlayers.filter { $0.accessibilityUse == .calibratesProgress }
             if !progress.isEmpty {
@@ -171,7 +171,7 @@ final class PlayerHealthMonitor: ObservableObject {
             }
             let modeOnly = accessibilityMissingPlayers.filter { $0.accessibilityUse == .pressesPlayMode }
             if !modeOnly.isEmpty {
-                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环按钮"), names(modeOnly)))
+                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首"), names(modeOnly)))
             }
             let refines = accessibilityMissingPlayers.filter { $0.accessibilityUse == .refinesProgress }
             if !refines.isEmpty {

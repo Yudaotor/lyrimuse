@@ -214,8 +214,24 @@ func runPlayerIdentityTests() {
             expectEqual(shown(menuRoute, true, false, false), false, "播放键反馈: 菜单连按第二下按显示的翻回去")
             expectEqual(shown(menuRoute, true, false, true), true, "播放键反馈: 菜单回报前回读已到 → 跟真值,不再翻")
             expectEqual(shown(menuRoute, false, true, false), false, "播放键反馈: 回读先到的是暂停 → 跟真值")
-            expectEqual(PlaybackMenuControl.players, [.qqMusic, .netease, .soda, .pinePlayer],
-                        "失焦按界面控制: QQ 音乐、网易云、Pine Player 按菜单,汽水按播放条")
+            expectEqual(PlaybackMenuControl.players, [.qqMusic, .netease, .soda, .pinePlayer, .reamp],
+                        "失焦按界面控制: QQ 音乐、网易云、Pine Player、reAMP 按菜单,汽水按播放条")
+            for command in [Command.playPause, .nextTrack, .previousTrack] {
+                expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                    focusHeldElsewhere: true, directQueryFallback: .reamp, mediaControlCommand: command.rawValue),
+                    Route.menuAccessibility(.reamp, command), "reAMP 失焦: \(command.rawValue) 按它的 Play 菜单")
+            }
+            expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                focusHeldElsewhere: true, directQueryFallback: .reamp, mediaControlCommand: "seek"),
+                Route.withheld, "reAMP 失焦: 跳转没有通路")
+            for (t, command) in [("Pause", Command.playPause), ("Пауза", .playPause), ("Next", .nextTrack),
+                                 ("Следующий", .nextTrack), ("Previous", .previousTrack), ("Предыдущий", .previousTrack)] {
+                expectEqual(PlaybackMenuControl.command(forMenuTitle: t, player: .reamp), command, "reAMP 菜单: \(t)(语言包里的标题)")
+            }
+            for t in ["Play", "Воспроизвести", "Stop", "Shuffle", "Repeat"] {
+                expectEqual(PlaybackMenuControl.command(forMenuTitle: t, player: .reamp), nil,
+                            "reAMP 菜单: \(t) 不认(播放 / 暂停只按「暂停」那一项)")
+            }
             for command in [Command.playPause, .nextTrack, .previousTrack] {
                 expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
                     focusHeldElsewhere: true, directQueryFallback: .soda, mediaControlCommand: command.rawValue),

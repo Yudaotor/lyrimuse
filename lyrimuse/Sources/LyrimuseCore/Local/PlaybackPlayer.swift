@@ -233,7 +233,8 @@ extension PlaybackPlayer {
         case controlsPlayback
         /// 只为「喜欢」读、按界面上的项(酷狗 `KugouMenuControl`)。
         case pressesFavorite
-        /// 只为随机 / 循环读、按菜单项(reAMP `ReampMenuControl`)。
+        /// 读、按菜单栏 Play 里的随机 / 循环(reAMP `ReampMenuControl`),失焦时按同一个菜单里的暂停、上一首、下一首
+        /// (`PlaybackMenuControl`)。
         case pressesPlayMode
         /// 读界面进度条把整秒的位置补准(Pine Player `PinePlayhead`),读播放列表给预解析(`PinePlaylist`),按菜单切循环(`PineMenuControl`),
         /// 失焦时按播放控制菜单(`PlaybackMenuControl`)。

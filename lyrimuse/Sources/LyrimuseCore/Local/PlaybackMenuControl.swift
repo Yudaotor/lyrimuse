@@ -2,11 +2,11 @@ import AppKit
 import ApplicationServices
 import Foundation
 
-/// QQ / 网易云 / Pine Player 失去系统媒体焦点时,只按目标进程菜单栏里的播放 / 暂停、上一首、下一首;汽水的菜单栏里没有这几项,
+/// QQ / 网易云 / Pine Player / reAMP 失去系统媒体焦点时,只按目标进程菜单栏里的播放 / 暂停、上一首、下一首;汽水的菜单栏里没有这几项,
 /// 按它底部播放条上的键(`SodaMusicControl.press`)。不激活 App、不模拟按键,不回落到全局媒体控制,没有跳转。
 public enum PlaybackMenuControl {
     /// 失焦时能这样控制的播放器。路由(`MusicPlaybackController.controlRoute`)和 `press` 都按它,selftest 覆盖。
-    public static let players: Set<PlaybackPlayer> = [.qqMusic, .netease, .soda, .pinePlayer]
+    public static let players: Set<PlaybackPlayer> = [.qqMusic, .netease, .soda, .pinePlayer, .reamp]
 
     public enum Command: String, Equatable, Sendable {
         case playPause = "toggle-play-pause"
@@ -24,7 +24,8 @@ public enum PlaybackMenuControl {
     }
 
     /// 菜单项标题 → 哪个控制。播放 / 暂停是同一项,标题随状态变,按下去都是切换。QQ 只有中文界面(简繁两套),
-    /// 网易云只有简体和英文两套,标题取自它自己的语言包。纯函数,selftest 覆盖。
+    /// 网易云只有简体和英文两套,标题取自它自己的语言包。reAMP(英文、俄文两套)的播放和暂停是两项:「暂停」在放着和暂停着时
+    /// 按下去都是切换,播放 / 暂停只按它,不认「播放」。纯函数,selftest 覆盖。
     public static func command(forMenuTitle title: String, player: PlaybackPlayer) -> Command? {
         let title = title.trimmingCharacters(in: .whitespaces)
         switch player {
@@ -40,6 +41,13 @@ public enum PlaybackMenuControl {
             case "播放", "暂停", "播放/暂停", "Play", "Pause", "Play/Pause": return .playPause
             case "下一个", "Next": return .nextTrack
             case "上一个", "Previous": return .previousTrack
+            default: return nil
+            }
+        case .reamp:
+            switch title {
+            case "Pause", "Пауза": return .playPause
+            case "Next", "Следующий": return .nextTrack
+            case "Previous", "Предыдущий": return .previousTrack
             default: return nil
             }
         default:
@@ -71,7 +79,7 @@ public enum PlaybackMenuControl {
     /// 单次 AX 消息 0.1s(含按下动作);最多再等一条已经发出的消息,不重试动作。
     public static func press(_ command: Command, for player: PlaybackPlayer) -> Outcome {
         if player == .soda { return SodaMusicControl.press(command) }
-        guard player == .qqMusic || player == .netease || player == .pinePlayer else { return .menuUnavailable }
+        guard player == .qqMusic || player == .netease || player == .pinePlayer || player == .reamp else { return .menuUnavailable }
         guard AXIsProcessTrusted() else { return .notTrusted }
         guard let pid = PlayerProcess.pid(bundleID: player.bundleIdentifier) else { return .playerNotRunning }
         let app = AXUIElementCreateApplication(pid)
