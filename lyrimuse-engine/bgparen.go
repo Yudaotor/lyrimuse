@@ -141,8 +141,7 @@ func parenBGLine(text string, looseGlue bool) (main string, segs []string, ok bo
 	prefix := parenBGDuetRe.FindString(text)
 	body := text[len(prefix):]
 	if body == "" || strings.HasPrefix(body, "[") || strings.Contains(body, " - ") || strings.Contains(body, " – ") ||
-		strings.Contains(body, " — ") || strings.ContainsAny(body, ":：") || parenBGCreditZhRe.MatchString(body) ||
-		parenBGCreditEnRe.MatchString(body) || parenBGCJKHyphenRe.MatchString(body) {
+		strings.Contains(body, " — ") || (strings.Contains(body, ":") || strings.Contains(body, "：")) {
 		return "", nil, false
 	}
 	if !parenBGBalanced(body) {
@@ -201,10 +200,66 @@ func parenBGLine(text string, looseGlue bool) (main string, segs []string, ok bo
 	}
 	b.WriteString(body[last:])
 	main = strings.TrimSpace(b.String())
-	if !parenBGHasWord(main) {
+	if !parenBGHasWord(main) || parenBGCreditLine(body) {
 		return "", nil, false
 	}
 	return prefix + main, segs, true
+}
+
+// parenBGCreditLine:署名行、版权行、标题行「歌手-歌名」。几个正则放在 parenBGLine 最后、各带一道子串前筛:启动迁移每次
+// 都要把带括号的行全判一遍,多数行在前面就被拒了。
+func parenBGCreditLine(body string) bool {
+	if parenBGCreditZhRe.MatchString(body) {
+		return true
+	}
+	if lower := strings.ToLower(body); (strings.Contains(lower, "by") || strings.Contains(lower, "reserved") || strings.Contains(lower, "publishing") ||
+		strings.Contains(body, "©") || strings.Contains(body, "℗")) && parenBGCreditEnRe.MatchString(body) {
+		return true
+	}
+	return strings.Contains(body, "-") && parenBGCJKHyphenRe.MatchString(body)
+}
+
+// parenBGYRCMayHaveParen:逐字一行的歌词文字里可能有括号 —— 有全角左括号,或者有不是词条时间 `(起点,时长,0)` 开头的半角左括号。
+// 只是前筛,判错了的行照样交给 parenBGYRCLine。
+func parenBGYRCMayHaveParen(line string) bool {
+	if strings.Contains(line, "（") {
+		return true
+	}
+	for i := 0; i < len(line); i++ {
+		if line[i] == '(' && !parenBGTimingAt(line, i) {
+			return true
+		}
+	}
+	return false
+}
+
+// parenBGTimingAt:line[i:] 以 `(数字,数字,数字)` 开头。
+func parenBGTimingAt(line string, i int) bool {
+	j := i + 1
+	for n := 0; n < 3; n++ {
+		k := j
+		for j < len(line) && line[j] >= '0' && line[j] <= '9' {
+			j++
+		}
+		if j == k || j >= len(line) {
+			return false
+		}
+		want := byte(',')
+		if n == 2 {
+			want = ')'
+		}
+		if line[j] != want {
+			return false
+		}
+		j++
+	}
+	return true
+}
+
+// parenBGHasParen:有半角或全角左括号。别写成 strings.ContainsAny(s, "(（"):字符集里有非 ASCII 字符时它逐字比,
+// 启动迁移要把全库歌词扫一遍,慢几倍。
+func parenBGHasParen(s string) bool {
+	return strings.Contains(s, "(") || strings.Contains(s, "（")
 }
 
 // parenBGYRCWord:YRC 一行里的一个词条。
@@ -357,7 +412,7 @@ type parenBGSplit struct {
 // (每个时间戳)都要配上一行拆得开、主句与括号段文字都相同、时间相近的逐字,两边才一起拆;配不上的两边都不动。
 // 没有逐字、或一行都没拆时 ok 为假。
 func splitParenBackground(lrc, yrc string) (parenBGSplit, bool) {
-	if yrc == "" || !strings.ContainsAny(lrc, "(（") {
+	if yrc == "" || !parenBGHasParen(lrc) {
 		return parenBGSplit{}, false
 	}
 	type lSplit struct {
@@ -369,7 +424,7 @@ func splitParenBackground(lrc, yrc string) (parenBGSplit, bool) {
 	llines := strings.Split(lrc, "\n")
 	var ls []lSplit
 	for i, line := range llines {
-		if !strings.ContainsAny(line, "(（") {
+		if !parenBGHasParen(line) {
 			continue
 		}
 		stamps, end := parenBGLRCStamps(line)
@@ -401,6 +456,9 @@ func splitParenBackground(lrc, yrc string) (parenBGSplit, bool) {
 	}
 	var ys []*ySplit
 	for i, line := range ylines {
+		if !parenBGYRCMayHaveParen(line) {
+			continue
+		}
 		mainLine, bgLine, mk, bk, ok := parenBGYRCLine(line)
 		if !ok {
 			continue
@@ -501,7 +559,7 @@ func parenBGAbs(x int) int {
 // stripParenBackgroundAux:译文 / 罗马音里,时间戳全在 stamps 里的行去掉括号段(规矩同 parenBGLine,括号紧贴也认)。
 // stamps 跟着正文那份的时间戳走:候选阶段是重挂时间轴之前的,存量迁移是缓存里的。
 func stripParenBackgroundAux(aux string, stamps map[int]bool) string {
-	if aux == "" || len(stamps) == 0 || !strings.ContainsAny(aux, "(（") {
+	if aux == "" || len(stamps) == 0 || !parenBGHasParen(aux) {
 		return aux
 	}
 	lines := strings.Split(aux, "\n")
