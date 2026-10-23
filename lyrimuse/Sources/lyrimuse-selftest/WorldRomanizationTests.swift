@@ -33,6 +33,8 @@ func checkWorldRomanization() {
     expectEqual(cyr("Гу\u{0301}ска, ќе", .macedonian), "Guska, kje", "马其顿语: ќ 不被当成 к 加重音符")
     expectEqual(CyrillicRomanization.detectLanguage(String(repeating: "Казах ѝ, че те обичам. ", count: 4)), .bulgarian,
                 "认语言: ѝ 不算外来字母")
+    expectEqual(CyrillicRomanization.detectLanguage("Казах ѝ, че те обичам\nТи си моята любов и щастие"), .bulgarian,
+                "认语言: 短的保加利亚歌靠 ѝ 跟俄语分开")
     for (bg, latin) in [("София", "Sofia"), ("Пловдив", "Plovdiv"), ("Търговище", "Targovishte"),
                         ("Илиянци", "Iliyantsi"), ("Ямбол", "Yambol"), ("Хасково", "Haskovo")] {
         expectEqual(cyr(bg, .bulgarian), latin, "保加利亚语: \(bg) → \(latin)")

@@ -29,16 +29,17 @@ public enum CyrillicRomanization {
     /// 查表前的规范化:先合成(有的歌词把 й ё ї ѓ ќ 存成「字母 + 组合符」),再去掉合成后仍单独跟在
     /// 西里尔字母后面的重音符(U+0300 钝音、U+0301 锐音,标重音的元音 а́ 没有预组字符),ѐ ѝ(保加利亚语、
     /// 马其顿语常用,不在各国转写表里)按 е и 查。别先分解再去重音符:ѓ ќ 分解出来就是 г к 加 U+0301。
-    static func normalized(_ text: String) -> String {
+    /// 认语言时 `keepingGrave` 留着 ѐ ѝ:俄语没有这两个字母,短的保加利亚歌全靠它们跟俄语分开。
+    static func normalized(_ text: String, keepingGrave: Bool = false) -> String {
         var out = String.UnicodeScalarView()
         var previousCyrillic = false
         for scalar in text.precomposedStringWithCanonicalMapping.unicodeScalars {
             if previousCyrillic, scalar.value == 0x0300 || scalar.value == 0x0301 { continue }
             switch scalar.value {
-            case 0x0450: out.append("е")
-            case 0x045D: out.append("и")
-            case 0x0400: out.append("Е")
-            case 0x040D: out.append("И")
+            case 0x0450 where !keepingGrave: out.append("е")
+            case 0x045D where !keepingGrave: out.append("и")
+            case 0x0400 where !keepingGrave: out.append("Е")
+            case 0x040D where !keepingGrave: out.append("И")
             default: out.append(scalar)
             }
             if !(0x0300...0x036F).contains(scalar.value) { previousCyrillic = isCyrillic(scalar) }
@@ -57,7 +58,7 @@ public enum CyrillicRomanization {
     public static func detectLanguage(_ text: String) -> CyrillicLanguage? {
         var counts: [Character: Int] = [:]
         var total = 0
-        for ch in normalized(text).lowercased() where ch.unicodeScalars.allSatisfy(isCyrillic) {
+        for ch in normalized(text, keepingGrave: true).lowercased() where ch.unicodeScalars.allSatisfy(isCyrillic) {
             counts[ch, default: 0] += 1
             total += 1
         }
@@ -96,10 +97,10 @@ public enum CyrillicRomanization {
     private static let alphabets: [CyrillicLanguage: Set<Character>] = [
         .russian: Set("абвгдеёжзийклмнопрстуфхцчшщъыьэюя"),
         .ukrainian: Set("абвгґдеєжзиіїйклмнопрстуфхцчшщьюя"),
-        .bulgarian: Set("абвгдежзийклмнопрстуфхцчшщъьюя"),
+        .bulgarian: Set("абвгдежзийклмнопрстуфхцчшщъьюяѐѝ"),
         .belarusian: Set("абвгдеёжзійклмнопрстуўфхцчшыьэюя"),
         .serbian: Set("абвгдђежзијклљмнњопрстћуфхцчџш"),
-        .macedonian: Set("абвгдѓежзѕијклљмнњопрстќуфхцчџш"),
+        .macedonian: Set("абвгдѓежзѕијклљмнњопрстќуфхцчџшѐѝ"),
         .kazakh: Set("аәбвгғдеёжзийкқлмнңоөпрстуұүфхһцчшщъыіьэюя"),
     ]
 
