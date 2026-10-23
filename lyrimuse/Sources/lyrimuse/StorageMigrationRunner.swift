@@ -64,6 +64,7 @@ enum StorageMigrationRunner {
             leftover=\(outcome.keptLeftover ?? "-", privacy: .public) backup=\(outcome.rewriteBackup ?? "-", privacy: .public) \
             rewrittenFiles=\(outcome.rewrittenFiles, privacy: .public) relocatedCaches=\(outcome.relocatedCaches, privacy: .public) \
             compatLink=\(outcome.madeCompatLink ? "made" : outcome.removedCompatLink ? "removed" : "-", privacy: .public) \
+            engineBackups=\(outcome.movedEngineBackups, privacy: .public) \
             data=\(StorageLayout.activeDataDir(roots).path, privacy: .public)
             """)
         for failure in outcome.failures {

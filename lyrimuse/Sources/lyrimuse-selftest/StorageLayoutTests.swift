@@ -274,6 +274,43 @@ func runStorageLayoutChecks() {
     }
 
     do {
+        // 旧版本引擎在旧目录旁边留的歌曲实体留底:挪进数据目录 backups/,同步状态里记着的路径一起换;那个目录里别的东西不碰。
+        let (_, roots) = makeHome("enginebackups")
+        let side = roots.legacy.deletingLastPathComponent().appendingPathComponent("lyrimuse-backups")
+        write("{}", roots.legacy.appendingPathComponent("config.json"))
+        let first = side.appendingPathComponent("20261011-174931-song-entity")
+        write("full", first.appendingPathComponent("lyrimuse-enrich-cache.json"))
+        write("manual", side.appendingPathComponent("20261012-080000-song-entity-manual/entry.json"))
+        write("mine", side.appendingPathComponent("20261012-080000-song-entity-x/keep.txt"))
+        write("mine", side.appendingPathComponent("notes/keep.txt"))
+        write("{\n  \"full_backup\": \"\(first.path)\"\n}", roots.legacy.appendingPathComponent("lyrimuse-song-entity-share.json"))
+        expectEqual(StorageMigration.isEngineBackupName("20261011-174931-song-entity"), true, "引擎留底: 认得出整份留底")
+        expectEqual(StorageMigration.isEngineBackupName("2026101-1749310-song-entity"), false, "引擎留底: 时刻格式不对的不认")
+        let outcome = StorageMigration.run(roots, cacheNames: [])
+        expectEqual(outcome.failures, [], "引擎留底: 没有失败")
+        expectEqual(outcome.movedEngineBackups, 2, "引擎留底: 两份都挪了")
+        let backups = roots.data.appendingPathComponent("backups")
+        expectEqual(read(backups.appendingPathComponent("20261011-174931-song-entity/lyrimuse-enrich-cache.json")), "full",
+                    "引擎留底: 整份留底到了数据目录 backups/")
+        expectEqual(read(backups.appendingPathComponent("20261012-080000-song-entity-manual/entry.json")), "manual",
+                    "引擎留底: 手改留底也到了")
+        expectEqual(read(side.appendingPathComponent("20261012-080000-song-entity-x/keep.txt")), "mine", "引擎留底: 名字对不上的不碰")
+        expectEqual(read(side.appendingPathComponent("notes/keep.txt")), "mine", "引擎留底: 那个目录里别的东西不碰")
+        expectEqual(read(roots.data.appendingPathComponent("lyrimuse-song-entity-share.json")),
+                    "{\n  \"full_backup\": \"\(backups.path)/20261011-174931-song-entity\"\n}", "引擎留底: 同步状态里记着的路径换成新位置")
+        expectEqual(StorageMigration.isPending(roots, cacheNames: []), false, "引擎留底: 挪完没活了")
+
+        let (_, only) = makeHome("enginebackups-only")
+        let onlySide = only.legacy.deletingLastPathComponent().appendingPathComponent("lyrimuse-backups")
+        write("x", onlySide.appendingPathComponent("20261011-174931-song-entity/f.json"))
+        write("", onlySide.appendingPathComponent(".DS_Store"))
+        write("{}", only.data.appendingPathComponent("lyrimuse-storage-migration.json"))
+        expectEqual(StorageMigration.isPending(only, cacheNames: []), true, "引擎留底: 搬过之后只剩旁边的留底也算有活")
+        _ = StorageMigration.run(only, cacheNames: [])
+        expectEqual(fm.fileExists(atPath: onlySide.path), false, "引擎留底: 挪空了删掉旁边那个目录")
+    }
+
+    do {
         // 搬迁接连 3 次没做完:一天之内不再试;做完了清掉记录。
         let (_, roots) = makeHome("attempts")
         try? fm.createDirectory(at: roots.caches, withIntermediateDirectories: true)

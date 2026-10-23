@@ -185,9 +185,14 @@ echo "=== 7. 搬迁留下的旧目录只报不删 ==="
 setup_fake_home
 /bin/mkdir -p "$FAKE_HOME/.config/lyrimuse.leftover-20261023-120000"
 echo '{}' > "$FAKE_HOME/.config/lyrimuse.leftover-20261023-120000/config.json"
-run_uninstall 2>&1 | /usr/bin/grep -q "lyrimuse.leftover-20261023-120000" && ok "报出了留下的旧目录" || fail "没报留下的旧目录"
+/bin/mkdir -p "$FAKE_HOME/.config/lyrimuse-backups/20261011-174931-song-entity"
+echo '{}' > "$FAKE_HOME/.config/lyrimuse-backups/20261011-174931-song-entity/lyrimuse-enrich-cache.json"
+REPORT=$(run_uninstall 2>&1)
+echo "$REPORT" | /usr/bin/grep -q "lyrimuse.leftover-20261023-120000" && ok "报出了留下的旧目录" || fail "没报留下的旧目录"
+echo "$REPORT" | /usr/bin/grep -q "20261011-174931-song-entity" && ok "报出了旧版本引擎留的备份" || fail "没报旧版本引擎留的备份"
 echo "yes" | run_uninstall --purge >/dev/null 2>&1
 [[ -f "$FAKE_HOME/.config/lyrimuse.leftover-20261023-120000/config.json" ]] && ok "留下的旧目录不自动删" || fail "删了留下的旧目录"
+[[ -f "$FAKE_HOME/.config/lyrimuse-backups/20261011-174931-song-entity/lyrimuse-enrich-cache.json" ]] && ok "旧版本引擎留的备份不自动删" || fail "删了旧版本引擎留的备份"
 
 echo
 echo "=== 8. 全程没碰真实环境 ==="

@@ -122,6 +122,10 @@ done
 for p in "${KEPT_OLD[@]}"; do
   echo "  存在  $p  ($(human_size "$p"))  搬迁时留下的旧数据,不会自动删"
 done
+# 旧版本引擎在旧目录旁边留的歌曲实体留底(新版本启动时挪进数据目录,见 LyrimuseCore StorageMigration.legacyEngineBackups),同样只报。
+for p in "$PREFIX/.config/lyrimuse-backups"/<->-<->-song-entity(N/) "$PREFIX/.config/lyrimuse-backups"/<->-<->-song-entity-manual(N/); do
+  echo "  存在  $p  ($(human_size "$p"))  旧版本留的备份,不会自动删"
+done
 
 if [[ "$MODE" == "report" ]]; then
   echo

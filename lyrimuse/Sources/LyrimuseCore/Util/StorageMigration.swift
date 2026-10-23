@@ -25,6 +25,8 @@ public enum StorageMigration {
         public var madeCompatLink = false
         /// 这次删掉了到期的软链接。
         public var removedCompatLink = false
+        /// 从旧目录旁边的 `<旧目录名>-backups/` 挪进数据目录 `backups/` 的引擎留底个数。
+        public var movedEngineBackups = 0
         public var failures: [String] = []
 
         public init() {}
@@ -50,6 +52,7 @@ public enum StorageMigration {
         _ roots: StorageLayout.Roots, cacheNames: [String] = StorageLayout.cacheFileNames, now: Date = Date()
     ) -> Bool {
         if StorageLayout.hasLegacyToAbsorb(roots) || compatLinkExpired(roots, now: now) { return true }
+        if !legacyEngineBackups(roots).isEmpty { return true }
         let data = StorageLayout.activeDataDir(roots)
         if pendingRewrite(in: data) != nil { return true }
         return cacheNames.contains { StorageLayout.exists(data.appendingPathComponent($0)) }
@@ -74,6 +77,7 @@ public enum StorageMigration {
             }
             writeMarker(pending, in: data, &outcome)
         }
+        absorbLegacyEngineBackups(roots, into: data, &outcome)
         relocateCaches(from: data, to: roots.caches, names: cacheNames, &outcome)
         return outcome
     }
@@ -471,6 +475,74 @@ public enum StorageMigration {
             } else {
                 outcome.failures.append("relocate \(name)")
             }
+        }
+    }
+
+    // MARK: - 旧版本引擎在旁边留的备份
+
+    /// 旧版本的引擎把歌曲实体同步前的留底放在旧目录旁边的 `<旧目录名>-backups/`(`<时刻>-song-entity`、
+    /// `<时刻>-song-entity-manual`),现在的放数据目录的 `backups/`。只认这两种名字,那个目录里别的东西不碰。
+    static func legacyBackupsDir(_ roots: StorageLayout.Roots) -> URL {
+        roots.legacy.deletingLastPathComponent().appendingPathComponent(roots.legacy.lastPathComponent + "-backups")
+    }
+
+    public static func isEngineBackupName(_ name: String) -> Bool {
+        for suffix in ["-song-entity", "-song-entity-manual"] where name.hasSuffix(suffix) {
+            let stamp = Array(name.dropLast(suffix.count))
+            return stamp.count == 15 && stamp[8] == "-"
+                && stamp.enumerated().allSatisfy { $0.offset == 8 || ("0"..."9").contains($0.element) }
+        }
+        return false
+    }
+
+    static func legacyEngineBackups(_ roots: StorageLayout.Roots) -> [String] {
+        let dir = legacyBackupsDir(roots)
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        return names.filter { isEngineBackupName($0) && StorageLayout.isDirectory(dir.appendingPathComponent($0)) }.sorted()
+    }
+
+    /// 把旧版本引擎的留底挪进数据目录 `backups/`(那里已有同名的就加 `-old` 后缀),挪空了删掉那个目录。
+    /// 同步状态文件 `lyrimuse-song-entity-share.json` 里记着第一份留底的路径,一起换成新位置(引擎只看它空不空,
+    /// 不读那里的东西;换之前原件照样存一份)。
+    static func absorbLegacyEngineBackups(_ roots: StorageLayout.Roots, into data: URL, _ outcome: inout Outcome) {
+        let names = legacyEngineBackups(roots)
+        guard !names.isEmpty else { return }
+        let source = legacyBackupsDir(roots)
+        let target = data.appendingPathComponent("backups")
+        guard FileIO.createDirectory(target) else {
+            outcome.failures.append("create \(target.path)")
+            return
+        }
+        var moved: [(from: String, to: String)] = []
+        for name in names {
+            let from = source.appendingPathComponent(name)
+            var to = target.appendingPathComponent(name)
+            if StorageLayout.exists(to) { to = target.appendingPathComponent(name + "-old") }
+            if StorageLayout.exists(to) {
+                outcome.failures.append("move backup \(name): already in \(target.path)")
+            } else if rename(from.path, to.path) == 0 {
+                moved.append((from.path, to.path))
+            } else if errno == EXDEV, FileIO.attempt("copy", from, { try FileManager.default.copyItem(at: from, to: to) }),
+                      treeListing(from) == treeListing(to) {
+                _ = FileIO.remove(from)
+                moved.append((from.path, to.path))
+            } else {
+                outcome.failures.append("move backup \(name): \(String(cString: strerror(errno)))")
+            }
+        }
+        outcome.movedEngineBackups = moved.count
+        removeIfEffectivelyEmpty(source)
+        let state = data.appendingPathComponent("lyrimuse-song-entity-share.json")
+        guard !moved.isEmpty, let original = FileIO.read(state) else { return }
+        var current = original
+        for pair in moved {
+            current = replacingAll(in: current, replacementPairs(from: pair.from, to: pair.to)) ?? current
+        }
+        guard current != original else { return }
+        let backupRoot = data.appendingPathComponent("backups/\(stamp(Date()))\(backupSuffix)")
+        guard backupOriginal(state, relativePath: state.lastPathComponent, into: backupRoot), replaceFile(state, with: current) else {
+            outcome.failures.append("rewrite \(state.lastPathComponent)")
+            return
         }
     }
 
