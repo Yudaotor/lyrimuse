@@ -41,27 +41,25 @@ import (
 // 下一轮解析会自然再试一次。
 const romanizeHelperTimeout = 20 * time.Second
 
-// romanizeRequest 是 lyrics-romanize 的入参。LegacyKoreanRoma、StaleRoma、WorldRoma 只在启动迁移里带(见 koreanroma.go、
-// staleroma.go、worldroma.go)。
+// romanizeRequest 是 lyrics-romanize 的入参。LegacyKoreanRoma、StaleRoma 只在启动迁移里带(见 koreanroma.go、staleroma.go)。
 // KanaDonor 是条目借来的假名标注(LyricsKana,见 kanadonor.go),正文自己不带 `[kana:]` 时读音按它标。
 type romanizeRequest struct {
 	Lyrics           string `json:"lyrics"`
 	KanaDonor        string `json:"kana_donor,omitempty"`
 	LegacyKoreanRoma string `json:"legacy_korean_roma,omitempty"`
 	StaleRoma        string `json:"stale_roma,omitempty"`
-	WorldRoma        string `json:"world_roma,omitempty"`
 }
 
 // romanizeReply 是 lyrics-romanize 的回包。ok:false 时原因在 Reason(no-romanization / empty-input / not-legacy
-// 都是正常结论,不是故障);LegacyChecked 只在带了 legacy_korean_roma、判过是旧版时为真,StaleChecked、WorldChecked
-// 同理对 stale_roma、world_roma。
+// 都是正常结论,不是故障);LegacyChecked 只在带了 legacy_korean_roma、判过是旧版时为真,StaleChecked 同理对 stale_roma。
+// WorldReadings:helper 会出日 / 韩 / 中以外那几种文字的读音(每个回包都带),补存量那道靠它认旧 helper(worldroma.go)。
 type romanizeReply struct {
 	OK            bool   `json:"ok"`
 	Roma          string `json:"roma"`
 	Reason        string `json:"reason"`
 	LegacyChecked bool   `json:"legacy_checked"`
 	StaleChecked  bool   `json:"stale_checked"`
-	WorldChecked  bool   `json:"world_checked"`
+	WorldReadings bool   `json:"world_readings"`
 }
 
 // errRomanizeHelperMissing:没走 build.sh 打包(直接 go build 跑引擎)时找不到 helper。

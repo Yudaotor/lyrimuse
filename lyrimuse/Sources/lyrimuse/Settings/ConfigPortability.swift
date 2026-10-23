@@ -279,6 +279,13 @@ enum ConfigPortability {
             UserDefaults.standard.set(value, forKey: key)
             applied += 1
         }
+        // 日 / 韩 / 中以外的语言加进来之前导出的配置,标注读音的语言里没有它们:并进去(默认开),
+        // 不然导入一份旧配置就把它们全关了。键名同 AppSettings.Keys。
+        if let raw = appSettings["np:romanizationScripts"] as? Int {
+            let exportedWithWorld = appSettings["np:romanizationScriptsWorldAware"] as? Bool ?? false
+            let value = RomanizationScripts.importedValue(raw: raw, exportedWithWorld: exportedWithWorld)
+            UserDefaults.standard.set(value.rawValue, forKey: "np:romanizationScripts")
+        }
         return applied
     }
 

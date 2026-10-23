@@ -8,16 +8,17 @@ public enum WorldRomanization {
     enum Family: CaseIterable {
         case cyrillic, greek, thai, devanagari, gurmukhi, tamil, sinhala, arabic
 
+        /// 各文字的范围以各自转写模块为准,这里只转一手。
         func contains(_ s: Unicode.Scalar) -> Bool {
             let v = s.value
             switch self {
-            case .cyrillic: return (0x0400...0x052F).contains(v)
-            case .greek: return (0x0370...0x03FF).contains(v) || (0x1F00...0x1FFF).contains(v)
-            case .thai: return (0x0E01...0x0E4F).contains(v) || (0x0E5A...0x0E5B).contains(v)
-            case .devanagari: return (0x0900...0x097F).contains(v)
-            case .gurmukhi: return (0x0A00...0x0A7F).contains(v)
-            case .tamil: return (0x0B80...0x0BFF).contains(v)
-            case .sinhala: return (0x0D80...0x0DFF).contains(v)
+            case .cyrillic: return CyrillicRomanization.isCyrillic(s)
+            case .greek: return GreekRomanization.isGreek(s)
+            case .thai: return ThaiRomanization.isThai(s)
+            case .devanagari: return IndicScript.devanagari.range.contains(v)
+            case .gurmukhi: return IndicScript.gurmukhi.range.contains(v)
+            case .tamil: return IndicScript.tamil.range.contains(v)
+            case .sinhala: return IndicScript.sinhala.range.contains(v)
             case .arabic:
                 return (0x0600...0x06FF).contains(v) || (0x0750...0x077F).contains(v)
                     || (0xFB50...0xFDFF).contains(v) || (0xFE70...0xFEFF).contains(v)
@@ -34,12 +35,13 @@ public enum WorldRomanization {
         return counts.max { $0.value < $1.value }?.key
     }
 
-    /// 文字种类 → 归哪个开关。西里尔字母要看语言:整首歌已经认出是哪种西里尔语言就用它,
-    /// 否则按这段文字自己认(中文歌里夹的一句俄语)。认不出(不支持的语言)返回 `.other`。
+    /// 文字种类 → 归哪个开关。西里尔字母要看语言:整首歌已经认出是哪种西里尔语言就用它;整首认成不支持的
+    /// 西里尔语言就不出读音;整首不是西里尔字母时按这段文字自己认(中文歌里夹的一句俄语)。认不出返回 `.other`。
     static func script(of family: Family, text: String, song: LyricScript) -> LyricScript {
         switch family {
         case .cyrillic:
             if song.cyrillicLanguage != nil { return song }
+            if song == .unsupportedCyrillic { return .other }
             return lineCyrillic.value(for: text) { line in
                 CyrillicRomanization.detectLanguage(line).map(LyricScript.init(cyrillic:)) ?? .other
             }

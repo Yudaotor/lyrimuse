@@ -116,10 +116,6 @@ const (
 	// maybeGenerateHelperRoma 就生成,不再产生。改了 hasWorldReadingScript 的判据就 +1。
 	migrationWorldRoma        = "world_roma"
 	migrationWorldRomaVersion = 1
-	// migrationRefreshedWorldRoma:存量里早先预生成的这几种文字的读音,写法改过之后按现在的重算(worldroma.go)。
-	// 改了这几种文字的读音规则(Swift 的 WorldRomanization 那几个文件)就 +1。
-	migrationRefreshedWorldRoma        = "refreshed_world_roma"
-	migrationRefreshedWorldRomaVersion = 1
 	// migrationTonelessCantoneseRoma:存量粤语歌里没标声调的罗马音换成带声调的粤拼(jyutping.go)。运行期在源头
 	// 已经这样做,不再产生。改了 lacksJyutpingTones 的判据就 +1。
 	migrationTonelessCantoneseRoma        = "toneless_cantonese_roma"

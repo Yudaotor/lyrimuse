@@ -836,6 +836,11 @@ public enum Romanizer {
                 let kana = piece.contains(where: KanaAnnotation.needsAnnotation)
                     ? (annotatedKanaText.map(hiragana) ?? kanaFromLatin(latin)) : nil
                 if let fixed = particleLatin(for: piece) { latin = fixed }
+                // 日文行里夹的西里尔、泰文这些片段,分词器给的是逐字母转写,换成各自标准的写法
+                // (跟中文行里夹的同一套,见 10 章决策 49)。
+                if let family = WorldRomanization.dominantFamily(piece), family != .arabic {
+                    latin = WorldRomanization.romanize(piece, song: .other)
+                }
                 if latin.isEmpty {
                     // 拿不到读音的(标点/拉丁词本身)原样留着 —— 但纯空白不值得占一个片段。
                     guard !piece.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
@@ -1085,7 +1090,10 @@ public enum LyricScript: String, Sendable, CaseIterable {
     case tamil, sinhala
     /// 阿拉伯字母。不现算读音,开关只管歌词源自带的那份(见 `WorldRomanization`)。
     case arabic
-    /// 拉丁字母、希伯来字母、认不出的西里尔语言等等。本地不现算读音,只显示歌词源自带的那份,
+    /// 整首是西里尔字母、却认不出是支持的哪种语言(吉尔吉斯语、蒙古语等)。不现算读音,也别再逐行去认:
+    /// 短行没有独有字母,逐行认会被当成俄语。
+    case unsupportedCyrillic
+    /// 拉丁字母、希伯来字母等等。本地不现算读音,只显示歌词源自带的那份,
     /// 不纳入按语言开关的管辖。
     case other
 
@@ -1109,33 +1117,17 @@ public enum LyricScript: String, Sendable, CaseIterable {
         case .tamil: return .tamil
         case .sinhala: return .sinhala
         case .arabic: return .arabic
-        case .other: return nil
+        case .unsupportedCyrillic, .other: return nil
         }
     }
 
+    /// 西里尔语言那几档的 rawValue 跟 `CyrillicLanguage` 一一相同。
     init(cyrillic: CyrillicLanguage) {
-        switch cyrillic {
-        case .russian: self = .russian
-        case .ukrainian: self = .ukrainian
-        case .bulgarian: self = .bulgarian
-        case .belarusian: self = .belarusian
-        case .serbian: self = .serbian
-        case .macedonian: self = .macedonian
-        case .kazakh: self = .kazakh
-        }
+        self = LyricScript(rawValue: cyrillic.rawValue)!
     }
 
     var cyrillicLanguage: CyrillicLanguage? {
-        switch self {
-        case .russian: return .russian
-        case .ukrainian: return .ukrainian
-        case .bulgarian: return .bulgarian
-        case .belarusian: return .belarusian
-        case .serbian: return .serbian
-        case .macedonian: return .macedonian
-        case .kazakh: return .kazakh
-        default: return nil
-        }
+        CyrillicLanguage(rawValue: rawValue)
     }
 }
 
@@ -1180,11 +1172,14 @@ public struct RomanizationScripts: OptionSet, Sendable, Codable {
     public static let sinhala = RomanizationScripts(rawValue: 1 << 16)
     public static let arabic = RomanizationScripts(rawValue: 1 << 17)
 
-    /// 日 / 韩 / 中以外的全部语言。升级上来的人第一次带着它们启动时一并打开(`AppSettings`)。
-    public static let world: RomanizationScripts = [
-        .russian, .ukrainian, .bulgarian, .belarusian, .serbian, .macedonian, .kazakh, .greek, .thai,
-        .hindi, .punjabi, .tamil, .sinhala, .arabic,
+    /// 用西里尔字母写的那几种语言。
+    public static let cyrillic: RomanizationScripts = [
+        .russian, .ukrainian, .bulgarian, .belarusian, .serbian, .macedonian, .kazakh,
     ]
+
+    /// 日 / 韩 / 中以外的全部语言。升级上来的人第一次带着它们启动时一并打开(`AppSettings`)。
+    public static let world: RomanizationScripts = RomanizationScripts.cyrillic
+        .union([.greek, .thai, .hindi, .punjabi, .tamil, .sinhala, .arabic])
 
     /// 全开。只作 Core 内部的占位初值(`LocalPlaybackSource` / `LyricsSyncEngine` 启动时
     /// 会被 App 的设置覆盖);用户没手动改过时的默认值走 `defaultScripts(chineseUI:)`。
@@ -1211,6 +1206,13 @@ public struct RomanizationScripts: OptionSet, Sendable, Codable {
     public static func addingWorldLanguages(storedRaw: Int?, migrated: Bool) -> RomanizationScripts? {
         guard !migrated, let storedRaw else { return nil }
         return RomanizationScripts(rawValue: storedRaw).union(.world)
+    }
+
+    /// 导入配置时要落盘的值。这几种语言加进来之前导出的配置(不带 `np:romanizationScriptsWorldAware`)里的值
+    /// 一个新语言位都没有,并上 `.world`,跟升级时 `addingWorldLanguages` 同一个口径;带着这个标记的照原样。
+    public static func importedValue(raw: Int, exportedWithWorld: Bool) -> RomanizationScripts {
+        let value = RomanizationScripts(rawValue: raw)
+        return exportedWithWorld ? value : value.union(.world)
     }
 }
 
@@ -1294,7 +1296,7 @@ extension Romanizer {
         if containsHan(text) { return .chinese }
         guard let family = WorldRomanization.dominantFamily(text) else { return .other }
         if family == .cyrillic {
-            return CyrillicRomanization.detectLanguage(text).map(LyricScript.init(cyrillic:)) ?? .other
+            return CyrillicRomanization.detectLanguage(text).map(LyricScript.init(cyrillic:)) ?? .unsupportedCyrillic
         }
         return WorldRomanization.script(of: family, text: text, song: .other)
     }

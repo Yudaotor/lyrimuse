@@ -160,88 +160,32 @@ func TestWorldRomaGeneratorReportsMissingHelper(t *testing.T) {
 	}
 }
 
-func TestIsRefreshedWorldRomaCandidate(t *testing.T) {
-	cases := []struct {
-		name string
-		e    enrichEntry
-		want bool
-	}{
-		{"有读音的泰语歌", enrichEntry{Lyrics: bt(thaiLine), LyricsRoma: bt("[00:01.00]wanthi")}, true},
-		{"没有读音(归补存量那道)", enrichEntry{Lyrics: bt(thaiLine)}, false},
-		{"用户手改过", enrichEntry{Lyrics: bt(thaiLine), LyricsRoma: bt("[00:01.00]x"), ManualLyrics: true}, false},
-		{"日文歌(归 stale_generated_roma)", enrichEntry{Lyrics: bt("[00:01.00]君の名は"), LyricsRoma: bt("[00:01.00]kimi")}, false},
-	}
-	for _, c := range cases {
-		if got := isRefreshedWorldRomaCandidate(c.e); got != c.want {
-			t.Errorf("%s: isRefreshedWorldRomaCandidate = %v, want %v", c.name, got, c.want)
-		}
-	}
-}
-
-func withRefreshedWorldRomaFixture(t *testing.T, entries map[string]enrichEntry, refresh func(lyrics, stored, kana string) (string, error)) {
-	t.Helper()
-	withWorldRomaFixture(t, entries, nil)
-	saved := worldRomaRefresher
-	t.Cleanup(func() { worldRomaRefresher = saved })
-	worldRomaRefresher = refresh
-}
-
-func runRefreshedWorldRoma() int {
-	return refreshWorldRoma(context.Background(), migrationScopeOf(migrationRefreshedWorldRoma, migrationRefreshedWorldRomaVersion))
-}
-
-// helper 判是旧写法预生成的才换;歌词源给的(helper 回空)不动;全部问成记水位。
-func TestRefreshWorldRomaReplacesOnlyOurs(t *testing.T) {
-	const ours, source = "A|ours|X", "A|source|X"
-	withRefreshedWorldRomaFixture(t, map[string]enrichEntry{
-		ours:   {Lyrics: bt(thaiLine), LyricsRoma: bt("[00:01.00]wanthi khao")},
-		source: {Lyrics: bt("[00:01.00]Ты танцуешь, будто сумасшедшая"), LyricsRoma: bt("[00:01.00]something else")},
-	}, func(lyrics, stored, kana string) (string, error) {
-		if stored == "[00:01.00]wanthi khao" {
-			return "[00:01.00]wan thi khao", nil
-		}
-		return "", nil
-	})
-	if n := runRefreshedWorldRoma(); n != 1 {
-		t.Fatalf("应换 1 条,实换 %d", n)
-	}
-	if got := enrichCache[ours].LyricsRoma; !got.EqualString("[00:01.00]wan thi khao") {
-		t.Errorf("旧写法预生成的应换成现在的,实得 %q", got)
-	}
-	if got := enrichCache[source].LyricsRoma; !got.EqualString("[00:01.00]something else") {
-		t.Errorf("歌词源给的不动,实得 %q", got)
-	}
-	if !migrationDone(migrationRefreshedWorldRoma, migrationRefreshedWorldRomaVersion) {
-		t.Error("全部问成、存成了应记水位")
-	}
-}
-
-// helper 比引擎旧(不认 world_roma,照常回一份):一条不换、不记水位,第一条就停。
-func TestRefreshWorldRomaStopsOnOldHelper(t *testing.T) {
-	asked := 0
-	withRefreshedWorldRomaFixture(t, map[string]enrichEntry{
-		"A|one|X": {Lyrics: bt(thaiLine), LyricsRoma: bt("[00:01.00]wanthi")},
-		"A|two|X": {Lyrics: bt("[00:01.00]Ты танцуешь, будто сумасшедшая"), LyricsRoma: bt("[00:01.00]Ty")},
-	}, func(string, string, string) (string, error) {
-		asked++
-		return "", errWorldCheckUnsupported
-	})
-	if n := runRefreshedWorldRoma(); n != 0 || asked != 1 {
-		t.Fatalf("应只问 1 条就停、一条不换,实问 %d、换 %d", asked, n)
-	}
-	if migrationDone(migrationRefreshedWorldRoma, migrationRefreshedWorldRomaVersion) {
-		t.Error("没问成不该记水位")
-	}
-}
-
 func TestWorldRomaFromReply(t *testing.T) {
-	if roma, err := worldRomaFromReply(romanizeReply{OK: true, Roma: "[00:01.00]x", WorldChecked: true}); roma != "[00:01.00]x" || err != nil {
-		t.Errorf("判过是旧写法:交回新读音,实得 %q, %v", roma, err)
+	if roma, err := worldRomaFromReply(romanizeReply{OK: true, Roma: "[00:01.00]x", WorldReadings: true}); roma != "[00:01.00]x" || err != nil {
+		t.Errorf("新 helper 出了读音:交回,实得 %q, %v", roma, err)
 	}
-	if roma, err := worldRomaFromReply(romanizeReply{OK: false, Reason: "not-world-stale"}); roma != "" || err != nil {
-		t.Errorf("不是旧写法:空串、不是错误,实得 %q, %v", roma, err)
+	if roma, err := worldRomaFromReply(romanizeReply{OK: false, Reason: "no-romanization", WorldReadings: true}); roma != "" || err != nil {
+		t.Errorf("新 helper 说没什么可注音的:空串、不是错误,实得 %q, %v", roma, err)
 	}
-	if _, err := worldRomaFromReply(romanizeReply{OK: true, Roma: "[00:01.00]x"}); !errors.Is(err, errWorldCheckUnsupported) {
-		t.Errorf("没带 world_checked 应报 errWorldCheckUnsupported,实得 %v", err)
+	if _, err := worldRomaFromReply(romanizeReply{OK: false, Reason: "no-romanization"}); !errors.Is(err, errWorldReadingsUnsupported) {
+		t.Errorf("旧 helper(不带 world_readings)应报 errWorldReadingsUnsupported,实得 %v", err)
+	}
+}
+
+// helper 比引擎旧:第一条就停、一条不补、不记水位(换上新 helper 后下次启动再补)。
+func TestBackfillWorldRomaStopsOnOldHelper(t *testing.T) {
+	asked := 0
+	withWorldRomaFixture(t, map[string]enrichEntry{
+		"A|one|X": {Lyrics: bt(thaiLine)},
+		"A|two|X": {Lyrics: bt("[00:01.00]Ты танцуешь, будто сумасшедшая")},
+	}, func(string, string) (string, error) {
+		asked++
+		return "", errWorldReadingsUnsupported
+	})
+	if n := runWorldRomaBackfill(); n != 0 || asked != 1 {
+		t.Fatalf("应只问 1 条就停、一条不补,实问 %d、补 %d", asked, n)
+	}
+	if migrationDone(migrationWorldRoma, migrationWorldRomaVersion) {
+		t.Error("旧 helper 时不该记水位")
 	}
 }

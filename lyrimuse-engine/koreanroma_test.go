@@ -48,7 +48,7 @@ func TestLyricsRomanizeHelperKeysMatchSwift(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, lit := range []string{`case legacyKoreanRoma = "legacy_korean_roma"`, `case legacyChecked = "legacy_checked"`,
-		`case worldRoma = "world_roma"`, `case worldChecked = "world_checked"`} {
+		`case worldReadings = "world_readings"`} {
 		if !strings.Contains(string(src), lit) {
 			t.Errorf("lyrics-romanize/main.swift 里找不到 %s —— 改了键名,romanize.go 的 romanizeRequest / romanizeReply 要同步", lit)
 		}

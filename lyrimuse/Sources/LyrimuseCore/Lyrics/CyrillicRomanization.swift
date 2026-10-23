@@ -26,6 +26,26 @@ public enum CyrillicRomanization {
 
     static func isCyrillic(_ s: Unicode.Scalar) -> Bool { (0x0400...0x052F).contains(s.value) }
 
+    /// 查表前的规范化:先合成(有的歌词把 й ё ї ѓ ќ 存成「字母 + 组合符」),再去掉合成后仍单独跟在
+    /// 西里尔字母后面的重音符(U+0300 钝音、U+0301 锐音,标重音的元音 а́ 没有预组字符),ѐ ѝ(保加利亚语、
+    /// 马其顿语常用,不在各国转写表里)按 е и 查。别先分解再去重音符:ѓ ќ 分解出来就是 г к 加 U+0301。
+    static func normalized(_ text: String) -> String {
+        var out = String.UnicodeScalarView()
+        var previousCyrillic = false
+        for scalar in text.precomposedStringWithCanonicalMapping.unicodeScalars {
+            if previousCyrillic, scalar.value == 0x0300 || scalar.value == 0x0301 { continue }
+            switch scalar.value {
+            case 0x0450: out.append("е")
+            case 0x045D: out.append("и")
+            case 0x0400: out.append("Е")
+            case 0x040D: out.append("И")
+            default: out.append(scalar)
+            }
+            if !(0x0300...0x036F).contains(scalar.value) { previousCyrillic = isCyrillic(scalar) }
+        }
+        return String(out)
+    }
+
     // MARK: - 认语言
 
     /// 整首歌是哪种语言。没有西里尔字母,或认出来是不支持的语言(吉尔吉斯语、蒙古语等)时返回 nil。
@@ -37,7 +57,7 @@ public enum CyrillicRomanization {
     public static func detectLanguage(_ text: String) -> CyrillicLanguage? {
         var counts: [Character: Int] = [:]
         var total = 0
-        for ch in text.precomposedStringWithCanonicalMapping.lowercased() where ch.unicodeScalars.allSatisfy(isCyrillic) {
+        for ch in normalized(text).lowercased() where ch.unicodeScalars.allSatisfy(isCyrillic) {
             counts[ch, default: 0] += 1
             total += 1
         }
@@ -94,8 +114,7 @@ public enum CyrillicRomanization {
     /// 一行里的西里尔字母按 `language` 的体系换成拉丁字母,其余字符原样保留。
     public static func romanize(_ text: String, language: CyrillicLanguage) -> String {
         guard containsCyrillic(text) else { return text }
-        // 先合成:й ё 这类字母有的歌词存成「и / е + 组合符」,不合成就查不到表。
-        let composed = text.precomposedStringWithCanonicalMapping
+        let composed = normalized(text)
         let chars = Array(language == .bulgarian ? bulgarianCountryName(composed) : composed)
         var out = ""
         for i in chars.indices {

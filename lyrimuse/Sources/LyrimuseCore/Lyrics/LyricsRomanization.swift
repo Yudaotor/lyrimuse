@@ -102,49 +102,6 @@ public enum LyricsRomanization {
         return matched * 5 >= stored.count * 4 ? fresh : nil
     }
 
-    /// `roma` 是早先按旧写法预生成、日 / 韩 / 中以外几种文字的读音规则改过之后过时的那份时,返回现在该存的那份;
-    /// 跟现算一字不差、或者看着不像同一种转写(歌词源给的别的东西)返回 nil。启动迁移靠它换掉我们自己生成的(手改过的
-    /// 条目引擎那边整条跳过,不送来判)。这几种文字换标准时整行写法都会变(哈萨克语 ISO 9 → 官方拉丁字母),
-    /// `refreshedGeneratedRomanization` 那种「八成行一字不差」认不出来,所以只看这几种文字的行、按宽松口径比:
-    /// 两边各自去掉附加符号、大小写、空格连字符和标点后,编辑距离不超过较长那边的四分之一就算同一种转写,
-    /// 这样的行占八成以上才算我们生成的。
-    public static func refreshedWorldRomanization(_ roma: String, lyrics: String, kanaDonor: String = "") -> String? {
-        guard !roma.isEmpty, let fresh = romanizeLRC(lyrics, kanaDonor: kanaDonor), fresh != roma else { return nil }
-        let stored = taggedLines(roma)
-        let current = taggedLines(fresh)
-        var compared = 0
-        var similar = 0
-        for (tags, body) in readingRows(lyrics, kanaDonor: kanaDonor).rows {
-            guard WorldRomanization.dominantFamily(body) != nil, WorldRomanization.dominantFamily(body) != .arabic,
-                  !Romanizer.looksJapanese(body), !Romanizer.containsHangul(body), !Romanizer.containsHan(body),
-                  let old = stored[tags], let new = current[tags]
-            else { continue }
-            compared += 1
-            if looseSameTransliteration(old, new) { similar += 1 }
-        }
-        return compared > 0 && similar * 5 >= compared * 4 ? fresh : nil
-    }
-
-    static func looseSameTransliteration(_ a: String, _ b: String) -> Bool {
-        func fold(_ s: String) -> [Unicode.Scalar] {
-            s.decomposedStringWithCanonicalMapping.lowercased().unicodeScalars
-                .filter { $0.properties.isAlphabetic && !$0.properties.isDiacritic }
-                .map { $0 == "ı" ? "i" : $0 }
-        }
-        let x = fold(a), y = fold(b)
-        let longest = max(x.count, y.count)
-        guard !x.isEmpty, !y.isEmpty else { return longest == 0 }
-        var row = Array(0...y.count)
-        for i in 1...x.count {
-            var next = [i] + Array(repeating: 0, count: y.count)
-            for j in 1...y.count {
-                next[j] = min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (x[i - 1] == y[j - 1] ? 0 : 1))
-            }
-            row = next
-        }
-        return row[y.count] * 4 <= longest
-    }
-
     /// 一份 LRC 按行首时间标签串分开:标签串 → 这一行的正文。没有标签的行跳过。
     private static func taggedLines(_ lrc: String) -> [String: String] {
         var out: [String: String] = [:]

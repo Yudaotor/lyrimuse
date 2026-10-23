@@ -26,6 +26,13 @@ func checkWorldRomanization() {
     expectEqual(cyr("Обичам България", .bulgarian), "Obicham Bulgaria", "保加利亚语: 国名按《音译法》例外写 Bulgaria")
     expectEqual(cyr("БЪЛГАРИЯ", .bulgarian), "BULGARIA", "保加利亚语: 国名例外整词大写")
     expectEqual(cyr("българин", .bulgarian), "balgarin", "保加利亚语: 只有国名本身例外")
+    expectEqual(cyr("Казах ѝ, ѐ така", .bulgarian), "Kazah i, e taka", "保加利亚语: ѝ ѐ 按 и е 转")
+    expectEqual(cyr("за́мок, мо\u{0301}ре", .russian), "zamok, more", "俄语: 标重音的元音去掉重音再转")
+    expectEqual(cyr("Йод, Київ", .ukrainian), "Yod, Kyiv", "乌克兰语: й ї 的短音符、分音符不去")
+    expectEqual(cyr("И\u{0306}од, Киі\u{0308}в", .ukrainian), "Yod, Kyiv", "乌克兰语: 存成「字母 + 组合符」的 й ї 先合成")
+    expectEqual(cyr("Гу\u{0301}ска, ќе", .macedonian), "Guska, kje", "马其顿语: ќ 不被当成 к 加重音符")
+    expectEqual(CyrillicRomanization.detectLanguage(String(repeating: "Казах ѝ, че те обичам. ", count: 4)), .bulgarian,
+                "认语言: ѝ 不算外来字母")
     for (bg, latin) in [("София", "Sofia"), ("Пловдив", "Plovdiv"), ("Търговище", "Targovishte"),
                         ("Илиянци", "Iliyantsi"), ("Ямбол", "Yambol"), ("Хасково", "Haskovo")] {
         expectEqual(cyr(bg, .bulgarian), latin, "保加利亚语: \(bg) → \(latin)")
@@ -132,19 +139,6 @@ func checkWorldRomanization() {
     expectEqual(reading("[00:01.00]Καλημέρα"), "Kaliméra", "接入: 希腊语歌按 ELOT 743 现算")
     expectEqual(reading("[00:01.00]नमस्ते"), "namastē", "接入: 天城文按 ISO 15919 现算")
 
-    // ---- 存量重算的认法:旧写法预生成的认得出、不像同一种转写的不动 ----
-    let kkLyrics = "[00:01.00]Көздерің сенің әп-әдемі\n[00:02.00]Шын бақыт кешкенмен"
-    let oldISO9 = "[00:01.00]Kôzderìn\u{0326} senìn\u{0326} a\u{030B}p-a\u{030B}demì\n[00:02.00]Šyn bak\u{0326}yt keškenmen"
-    expectEqual(LyricsRomanization.refreshedWorldRomanization(oldISO9, lyrics: kkLyrics),
-                "[00:01.00]Közderıñ senıñ äp-ädemı\n[00:02.00]Şyn baqyt keşkenmen", "存量重算: 哈萨克语 ISO 9 认作旧写法、换成 2021 官方")
-    expectEqual(LyricsRomanization.refreshedWorldRomanization(
-        "[00:01.00]my eyes are beautiful\n[00:02.00]true happiness", lyrics: kkLyrics), nil,
-                "存量重算: 不像同一种转写(歌词源给的译文之类)不动")
-    expectEqual(LyricsRomanization.refreshedWorldRomanization(
-        "[00:01.00]Közderıñ senıñ äp-ädemı\n[00:02.00]Şyn baqyt keşkenmen", lyrics: kkLyrics), nil,
-                "存量重算: 已经是现在的写法不重算")
-    expectEqual(LyricsRomanization.refreshedWorldRomanization("[00:01.00]ty tancuesh′", lyrics: "[00:01.00]Ты танцуешь")
-                    != nil, true, "存量重算: 俄语软音符换字符这种小改也认得出")
     // 用系统 Any-Latin 跟 GOST 写法不同的词(Щука:ICU 给 Ŝuka),才看得出是不是先按标准转了。
     let mixed = Romanizer.lineReading("我爱你 Щука", songLooksJapanese: false, segments: []) ?? ""
     expectEqual(mixed.contains("wǒ ài nǐ") && mixed.contains("Ščuka"), true,
@@ -157,7 +151,15 @@ func checkWorldRomanization() {
     expectEqual(Romanizer.songScript(of: "Ты танцуешь, будто сумасшедшая"), .russian, "整首: 俄语歌")
     expectEqual(Romanizer.songScript(of: "วันที่เขาอ่านเธอ"), .thai, "整首: 泰语歌")
     expectEqual(Romanizer.songScript(of: "Καλημέρα"), .greek, "整首: 希腊语歌")
-    expectEqual(Romanizer.songScript(of: "Ошол күнү сенден"), .other, "整首: 不支持的西里尔语言归 other")
+    expectEqual(Romanizer.songScript(of: "Ошол күнү сенден"), .unsupportedCyrillic, "整首: 不支持的西里尔语言单独一档")
+    expectEqual(reading("[00:01.00]Ошол күнү сенден уялганымдан\n[00:02.00]Сен менин жаным", at: 2000), nil,
+                "接入: 整首是吉尔吉斯语时,没有独有字母的短行也不按俄语转")
+    let jaCyrillic = Romanizer.lineReading("ロシア Щука", songLooksJapanese: true,
+                                           segments: Romanizer.japaneseSegments("ロシア Щука")) ?? ""
+    expectEqual(jaCyrillic.contains("Ščuka"), true, "接入: 日文行里夹的西里尔字母按标准转:\(jaCyrillic)")
+    let jaThai = Romanizer.lineReading("ありがとう สะอาด", songLooksJapanese: true,
+                                       segments: Romanizer.japaneseSegments("ありがとう สะอาด")) ?? ""
+    expectEqual(jaThai.contains("sa-at"), true, "接入: 日文行里夹的泰文按 RTGS 转:\(jaThai)")
 
     // ---- 默认值与升级 ----
     expectEqual(RomanizationScripts.defaultScripts(chineseUI: true).isSuperset(of: .world), true,
@@ -171,6 +173,10 @@ func checkWorldRomanization() {
                                                          migrated: true), nil, "升级: 只判一次")
     expectEqual(RomanizationScripts.addingWorldLanguages(storedRaw: nil, migrated: false), nil,
                 "升级: 没落过盘的人默认值里本来就有")
+    expectEqual(RomanizationScripts.importedValue(raw: RomanizationScripts.japanese.rawValue, exportedWithWorld: false),
+                RomanizationScripts.japanese.union(.world), "导入: 加新语言之前导出的配置,新语言一并打开")
+    expectEqual(RomanizationScripts.importedValue(raw: RomanizationScripts.japanese.rawValue, exportedWithWorld: true),
+                .japanese, "导入: 认得新语言的版本导出的,照原样(用户关掉的不再打开)")
 
     // ---- 「这份歌词可能标出读音吗」 ----
     expectEqual(LyricsPreviewText.mayHaveRomanization("Привет", scripts: [.russian]), true, "可能有读音: 俄语开着")

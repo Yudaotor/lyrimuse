@@ -39,25 +39,19 @@ import LyrimuseCore
 //        {"ok":false,"reason":"not-legacy"}
 //        {"ok":true,"roma":"...","stale_checked":true}
 //        {"ok":false,"reason":"not-stale"}
-//        或者多带 "world_roma"(缓存里现有的读音):它不是早先按旧写法预生成的日 / 韩 / 中以外几种文字的读音,就回
-//        not-world-stale、不产出(见 LyricsRomanization.refreshedWorldRomanization);是就回现在该存的那份,另带
-//        "world_checked":true。
-//        {"ok":true,"roma":"...","world_checked":true}
-//        {"ok":false,"reason":"not-world-stale"}
+//        每个回包都多带 "world_readings":true(这个 helper 会出日 / 韩 / 中以外那几种文字的读音)。
 
 struct Input: Decodable {
     let lyrics: String
     let kanaDonor: String?
     let legacyKoreanRoma: String?
     let staleRoma: String?
-    let worldRoma: String?
 
     enum CodingKeys: String, CodingKey {
         case lyrics
         case kanaDonor = "kana_donor"
         case legacyKoreanRoma = "legacy_korean_roma"
         case staleRoma = "stale_roma"
-        case worldRoma = "world_roma"
     }
 }
 
@@ -67,13 +61,14 @@ struct Output: Encodable {
     var reason: String?
     var legacyChecked: Bool?
     var staleChecked: Bool?
-    var worldChecked: Bool?
+    /// 每个回包都带:这个 helper 会出日 / 韩 / 中以外那几种文字的读音,引擎补存量时靠它认出旧 helper。
+    var worldReadings: Bool? = true
 
     enum CodingKeys: String, CodingKey {
         case ok, roma, reason
         case legacyChecked = "legacy_checked"
         case staleChecked = "stale_checked"
-        case worldChecked = "world_checked"
+        case worldReadings = "world_readings"
     }
 }
 
@@ -100,14 +95,6 @@ if let stored = input.staleRoma {
         emit(Output(ok: false, reason: "not-stale"))
     }
     emit(Output(ok: true, roma: roma, staleChecked: true))
-}
-if let stored = input.worldRoma {
-    guard let roma = LyricsRomanization.refreshedWorldRomanization(
-        stored, lyrics: input.lyrics, kanaDonor: input.kanaDonor ?? "")
-    else {
-        emit(Output(ok: false, reason: "not-world-stale"))
-    }
-    emit(Output(ok: true, roma: roma, worldChecked: true))
 }
 var legacyChecked: Bool?
 if let stored = input.legacyKoreanRoma {

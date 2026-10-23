@@ -303,7 +303,7 @@ extension LyricsPreviewText {
                     family != .arabic
                 else { continue }
                 let wanted: RomanizationScripts = family == .cyrillic
-                    ? [.russian, .ukrainian, .bulgarian, .belarusian, .serbian, .macedonian, .kazakh]
+                    ? .cyrillic
                     : WorldRomanization.script(of: family, text: "", song: .other).option ?? []
                 if !scripts.isDisjoint(with: wanted) { return true }
             default: continue
