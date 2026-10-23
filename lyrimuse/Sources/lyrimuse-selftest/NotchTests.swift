@@ -2453,6 +2453,8 @@ func runNotchTests() {
                     && sourceHas(stage, "settings.notchExpandedLyricList = AppSettings.defaultNotchExpandedLyricList")
                     && sourceHas(stage, "settings.notchExpandedLyricListLines = AppSettings.defaultNotchExpandedLyricListLines"), true,
                     "多行歌词: 编辑台舞台按列表留高度,两项进「恢复默认」")
+        expectEqual(sourceHas(stage, "if chrome.isExpanded, chrome.showsExpandedLyricList {\n lyricHeight = chrome.expandedLyricListHeight"),
+                    true, "多行歌词: 编辑台预览卡上「歌词行」那块可点区域框整段列表,「展开态」那块从列表下面开始")
         expectEqual(sourceHas(list, "interactive: false,\n minimumEdgePadding: 0,\n handle: listHandle)")
                     && sourceHas(src("LyricsLayerList.swift"), "var y = max(minimumEdgePadding, viewport * 0.395)"), true,
                     "多行歌词: 列表留白不套歌词窗口那条 88pt 下限,没有当前句时第一句不掉到视口下沿")

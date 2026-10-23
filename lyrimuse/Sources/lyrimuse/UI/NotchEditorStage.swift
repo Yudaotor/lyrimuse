@@ -1155,6 +1155,10 @@ struct NotchEditorStage: View {
             if chrome.isExpanded, chrome.showsExpandedLyricPreview {
                 lyricHeight += NotchExpandedMetrics.lyricPreviewBlock
             }
+            // 展开且换成多行歌词时,这一块框的是整段列表(同 `cardHeight(expanded:)` 里那一格);它的对齐、副行、填色都归「歌词行」浮层管。
+            if chrome.isExpanded, chrome.showsExpandedLyricList {
+                lyricHeight = chrome.expandedLyricListHeight
+            }
             spots.append(CardHotspot(kind: .lyricRow,
                                      rects: [CGRect(x: 0, y: y, width: width, height: lyricHeight)],
                                      target: .lyricRow, title: L10n.t("歌词行"), arrowEdge: .trailing))
