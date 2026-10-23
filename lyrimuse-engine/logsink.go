@@ -44,6 +44,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -333,6 +334,12 @@ var logSink struct {
 func installLogSink(daemon bool) {
 	var base io.Writer = os.Stderr
 	if daemon {
+		// 日志目录可能还没有(App 启动时建;launchd 的 StandardErrorPath 和下面的打开都不建上一层)。
+		if path := logFilePath(); path != "" {
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				fmt.Fprintf(os.Stderr, "log: create %s: %v\n", filepath.Dir(path), err)
+			}
+		}
 		// 先不轮转:这时还没抢单实例锁(main 里晚得多)。部署期间新旧实例短暂共存,第二个实例一打开就轮转的话,
 		// 正在跑的那个被切去写 .old,当前日志里只剩第二个实例那几行退出记录。拿到锁之后由 releaseLogRotation 放开。
 		if f := openRotatingLogFileHeld(logFilePath(), logRotateMaxBytes, true); f != nil {

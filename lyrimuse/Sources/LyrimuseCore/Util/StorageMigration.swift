@@ -27,12 +27,15 @@ public enum StorageMigration {
         public var removedCompatLink = false
         /// 从旧目录旁边的 `<旧目录名>-backups/` 挪进数据目录 `backups/` 的引擎留底个数。
         public var movedEngineBackups = 0
+        /// 从 `~/Library/Logs/` 挪进 `~/Library/Logs/Lyrimuse/` 的日志文件个数。
+        public var relocatedLogs = 0
         public var failures: [String] = []
 
         public init() {}
 
         public var changedAnything: Bool {
             movedRoot || copiedRoot || mergedItems > 0 || keptLeftover != nil || rewrittenFiles > 0 || relocatedCaches > 0
+                || relocatedLogs > 0
         }
     }
 
@@ -49,10 +52,11 @@ public enum StorageMigration {
 
     /// 有没有要做的。启动路径上每次都调:几十次 lstat 加一次小文件读。
     public static func isPending(
-        _ roots: StorageLayout.Roots, cacheNames: [String] = StorageLayout.cacheFileNames, now: Date = Date()
+        _ roots: StorageLayout.Roots, cacheNames: [String] = StorageLayout.cacheFileNames,
+        logNames: [String] = LogFiles.fileNames, now: Date = Date()
     ) -> Bool {
         if StorageLayout.hasLegacyToAbsorb(roots) || compatLinkExpired(roots, now: now) { return true }
-        if !legacyEngineBackups(roots).isEmpty { return true }
+        if !legacyEngineBackups(roots).isEmpty || !legacyLogs(roots, names: logNames).isEmpty { return true }
         let data = StorageLayout.activeDataDir(roots)
         if pendingRewrite(in: data) != nil { return true }
         return cacheNames.contains { StorageLayout.exists(data.appendingPathComponent($0)) }
@@ -61,7 +65,7 @@ public enum StorageMigration {
     /// `forceCopy` 只给 selftest 走跨卷那条路用。
     public static func run(
         _ roots: StorageLayout.Roots, cacheNames: [String] = StorageLayout.cacheFileNames, forceCopy: Bool = false,
-        now: Date = Date()
+        logNames: [String] = LogFiles.fileNames, now: Date = Date()
     ) -> Outcome {
         var outcome = Outcome()
         if compatLinkExpired(roots, now: now) {
@@ -79,6 +83,7 @@ public enum StorageMigration {
         }
         absorbLegacyEngineBackups(roots, into: data, &outcome)
         relocateCaches(from: data, to: roots.caches, names: cacheNames, &outcome)
+        relocateLogs(roots, names: logNames, &outcome)
         return outcome
     }
 
@@ -548,6 +553,60 @@ public enum StorageMigration {
         if !replaceFile(state, with: current) {
             outcome.failures.append("write \(state.lastPathComponent)")
         }
+    }
+
+    // MARK: - 日志
+
+    /// 旧位置(`~/Library/Logs/`)还在的日志文件名。那是共用目录,只认 `names` 里的普通文件。
+    static func legacyLogs(_ roots: StorageLayout.Roots, names: [String]) -> [String] {
+        names.filter { StorageLayout.isRegularFile(roots.legacyLogs.appendingPathComponent($0)) }
+    }
+
+    /// 挪进日志目录。那边已有同名的(装回过旧版本、又升级回来)以那边为准,旧位置那份改名成 `<名字>.previous-version`
+    /// 放进去(盖掉更早的一份)。引擎这时已经停了;正写着的文件挪走也不丢,写的人下次打开才换到新位置。
+    static func relocateLogs(_ roots: StorageLayout.Roots, names: [String], _ outcome: inout Outcome) {
+        let present = legacyLogs(roots, names: names)
+        guard !present.isEmpty else { return }
+        guard FileIO.createDirectory(roots.logs) else {
+            outcome.failures.append("create \(roots.logs.path)")
+            return
+        }
+        for name in present {
+            let source = roots.legacyLogs.appendingPathComponent(name)
+            var target = roots.logs.appendingPathComponent(name)
+            if StorageLayout.exists(target) {
+                target = roots.logs.appendingPathComponent(name + ".previous-version")
+                if StorageLayout.exists(target) { _ = FileIO.remove(target) }
+            }
+            if rename(source.path, target.path) == 0 {
+                outcome.relocatedLogs += 1
+            } else {
+                outcome.failures.append("relocate log \(name): \(String(cString: strerror(errno)))")
+            }
+        }
+    }
+
+    // MARK: - 不进 Time Machine
+
+    /// 数据目录里的备份不让 Time Machine 再备份一遍:`backups/`(改写前原件、歌曲实体留底、合并时换下来的)和顶层引擎迁移留的
+    /// `*.bak`。它们是 APFS 克隆、本机不占空间,Time Machine 却当成完整文件各拷一份;真要找回,Time Machine 里本来就有
+    /// 当时的原件。每次启动调,已经标过的不再写。
+    @discardableResult
+    public static func excludeBackupsFromTimeMachine(in dataDir: URL) -> Int {
+        var targets: [URL] = []
+        let backups = dataDir.appendingPathComponent("backups")
+        if StorageLayout.isDirectory(backups) { targets.append(backups) }
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: dataDir.path)) ?? []
+        targets += names.filter { $0.hasSuffix(".bak") }.map { dataDir.appendingPathComponent($0) }
+            .filter { StorageLayout.isRegularFile($0) }
+        var marked = 0
+        for var url in targets {
+            guard (try? url.resourceValues(forKeys: [.isExcludedFromBackupKey]))?.isExcludedFromBackup != true else { continue }
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            if FileIO.attempt("exclude from backup", url, { try url.setResourceValues(values) }) { marked += 1 }
+        }
+        return marked
     }
 
     // MARK: - 接连失败

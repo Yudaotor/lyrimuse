@@ -99,6 +99,24 @@ func TestConfigDirDanglingCompatLink(t *testing.T) {
 	}
 }
 
+// 日志默认在 ~/Library/Logs/Lyrimuse/ 下(跟 App 的 LogFiles 一致);常驻进程打开日志之前先建这一层目录,
+// launchd 的 StandardErrorPath 和轮转打开都不建。
+func TestLogFilePathDefaultsToLyrimuseFolder(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("LYRIMUSE_LOG_FILE", "")
+	if got, want := logFilePath(), filepath.Join(home, "Library", "Logs", "Lyrimuse", clientName+".log"); got != want {
+		t.Fatalf("logFilePath() = %s, want %s", got, want)
+	}
+	src, err := os.ReadFile("logsink.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsCode(string(src), "os.MkdirAll(filepath.Dir(path), 0o755)") {
+		t.Error("installLogSink 打开日志之前没建日志目录")
+	}
+}
+
 func TestCacheDirRules(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

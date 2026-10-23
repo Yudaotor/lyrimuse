@@ -6,6 +6,7 @@ import Foundation
 /// - 数据目录 `~/Library/Application Support/<bundle id>`:config.json、功能开关、设置镜像、歌词与手改、锁定、听歌记录、
 ///   待提交队列、备份、App 与引擎之间的请求 / 状态文件、单实例锁。
 /// - 缓存目录 `~/Library/Caches/<bundle id>`:删了只会重新联网或重算的东西(`cacheFileNames`),另有动态封面和 Sparkle 的下载缓存。
+/// - 日志目录 `~/Library/Logs/Lyrimuse`(`LogFiles`);旧版本直接放在 `~/Library/Logs/` 下。
 /// - 旧目录 `~/.config/lyrimuse`:里面有数据、新目录里没有时(还没搬成)照旧用它,`StorageMigration` 在 App 启动时搬走或合并进来;
 ///   它是软链接时当成用户自己指定的位置,一直用、不搬。判断看目录里有没有 Lyrimuse 的数据,不看目录在不在:新目录可能是空的、
 ///   或被别的东西先建了出来。
@@ -16,11 +17,16 @@ public enum StorageLayout {
         public let legacy: URL
         public let data: URL
         public let caches: URL
+        public let logs: URL
+        /// 旧版本放日志的地方(`~/Library/Logs`,共用目录,只认 `LogFiles.fileNames` 里那几个名字)。
+        public let legacyLogs: URL
 
-        public init(legacy: URL, data: URL, caches: URL) {
+        public init(legacy: URL, data: URL, caches: URL, logs: URL, legacyLogs: URL) {
             self.legacy = legacy
             self.data = data
             self.caches = caches
+            self.logs = logs
+            self.legacyLogs = legacyLogs
         }
     }
 
@@ -28,7 +34,9 @@ public enum StorageLayout {
         Roots(
             legacy: home.appendingPathComponent(".config/\(LyrimuseIdentity.configDirName)"),
             data: home.appendingPathComponent("Library/Application Support/\(LyrimuseIdentity.bundleIdentifier)"),
-            caches: home.appendingPathComponent("Library/Caches/\(LyrimuseIdentity.bundleIdentifier)"))
+            caches: home.appendingPathComponent("Library/Caches/\(LyrimuseIdentity.bundleIdentifier)"),
+            logs: home.appendingPathComponent("Library/Logs/\(LyrimuseIdentity.displayName)"),
+            legacyLogs: home.appendingPathComponent("Library/Logs"))
     }
 
     /// 当前该用的数据目录:旧目录是指向新目录的软链接(搬迁留给旧版本的,`isCompatLink`)→ 新目录;是别的软链接(用户自己指到

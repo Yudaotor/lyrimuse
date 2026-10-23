@@ -11,7 +11,7 @@ import (
 
 // 日志轮转。
 //
-// 起因:~/Library/Logs/lyrimuse.log 由 launchd 通过 StandardOutPath/StandardErrorPath
+// 起因:~/Library/Logs/Lyrimuse/lyrimuse.log 由 launchd 通过 StandardOutPath/StandardErrorPath
 // 直接打开、引擎进程继承这个 fd 写下去,从来没有轮转过——`lyricstrace.go` 的注释
 // 早就点名过这一点("lyrimuse.log 也没有轮转 —— 这两个先例都别学"),实测这台机器上这个
 // 文件已经涨到 13.5MB。做成"引擎启动时自查文件大小,超过阈值就截断/

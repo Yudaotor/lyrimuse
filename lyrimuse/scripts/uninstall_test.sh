@@ -22,6 +22,7 @@ FAILURES=0
 # 数据目录名取 App 的 label,测试把 label 换成 probe,所以假数据目录也按 probe 命名;旧目录名是固定的。
 FAKE_DATA="$FAKE_HOME/Library/Application Support/$PROBE_B"
 FAKE_LEGACY="$FAKE_HOME/.config/lyrimuse"
+FAKE_LOGS="$FAKE_HOME/Library/Logs/Lyrimuse"
 
 cleanup() {
   for l in "$PROBE_A" "$PROBE_B"; do
@@ -62,13 +63,18 @@ setup_fake_home() {
   echo '{}' > "$FAKE_LEGACY/config.json"
   /bin/mkdir -p "$FAKE_HOME/Library/Caches/$PROBE_B/motion-covers"
   echo 'mp4' > "$FAKE_HOME/Library/Caches/$PROBE_B/motion-covers/a.mp4"
-  echo 'log line' > "$FAKE_HOME/Library/Logs/lyrimuse.log"
+  # 日志目录 ~/Library/Logs/Lyrimuse;旧版本直接放在 ~/Library/Logs 下的留两份;别的程序的日志不许碰。
+  /bin/mkdir -p "$FAKE_LOGS"
+  echo 'log line' > "$FAKE_LOGS/lyrimuse.log"
   for a in lyrimuse.log.old lyrimuse.log.old.1 lyrimuse.log.old.2; do
-    echo 'archived log line' > "$FAKE_HOME/Library/Logs/$a"
+    echo 'archived log line' > "$FAKE_LOGS/$a"
   done
-  echo 'Sampling process' > "$FAKE_HOME/Library/Logs/lyrimuse-main-thread-stall.txt"
-  echo 'app stderr' > "$FAKE_HOME/Library/Logs/lyrimuse-app.log"
-  echo 'archived app stderr' > "$FAKE_HOME/Library/Logs/lyrimuse-app.log.old"
+  echo 'Sampling process' > "$FAKE_LOGS/lyrimuse-main-thread-stall.txt"
+  echo 'app stderr' > "$FAKE_LOGS/lyrimuse-app.log"
+  echo 'archived app stderr' > "$FAKE_LOGS/lyrimuse-app.log.old"
+  echo 'old location' > "$FAKE_HOME/Library/Logs/lyrimuse.log.old.2"
+  echo 'old location' > "$FAKE_HOME/Library/Logs/lyrimuse-app.log"
+  echo 'someone else' > "$FAKE_HOME/Library/Logs/other-app.log"
   # probe 偏好域：--purge 会对 $APP_LABEL(= $PROBE_B) 跑 defaults delete，先种一个进去，
   # 否则 HAS_DEFAULTS 恒为 no、那条分支根本走不到，等于没测。
   # defaults 的 domain 不受 LYRIMUSE_UNINSTALL_PREFIX 管辖（它写的是真实用户的
@@ -142,7 +148,7 @@ run_uninstall --services >/dev/null 2>&1
 [[ -f "$FAKE_DATA/config.json" ]] && ok "数据完好保留" || fail "--services 不该碰数据"
 [[ -f "$FAKE_DATA/lyrics/测试 - 歌.lrc" ]] && ok "歌词文件完好" || fail "--services 删了歌词"
 [[ -f "$FAKE_LEGACY/config.json" ]] && ok "旧目录完好" || fail "--services 删了旧目录"
-[[ -f "$FAKE_HOME/Library/Logs/lyrimuse.log.old.2" ]] && ok "日志归档完好" || fail "--services 删了日志归档"
+[[ -f "$FAKE_LOGS/lyrimuse.log.old.2" ]] && ok "日志归档完好" || fail "--services 删了日志归档"
 [[ -f "$FAKE_HOME/Library/Caches/$PROBE_B/motion-covers/a.mp4" ]] && ok "缓存目录完好" || fail "--services 删了缓存目录"
 has_test_vault && ok "钥匙串凭据完好" || fail "--services 删了钥匙串凭据"
 
@@ -154,13 +160,10 @@ echo "yes" | run_uninstall --purge >/dev/null 2>&1
 [[ -d "$FAKE_LEGACY" ]] && fail "旧数据目录没删" || ok "旧数据目录已删"
 [[ -d "$FAKE_HOME/Library/Caches/$PROBE_B" ]] && fail "缓存目录没删" || ok "缓存目录已删"
 any_test_vault && fail "钥匙串凭据没删" || ok "钥匙串凭据已删"
-[[ -f "$FAKE_HOME/Library/Logs/lyrimuse.log" ]] && fail "日志没删" || ok "日志已删"
-[[ -f "$FAKE_HOME/Library/Logs/lyrimuse-main-thread-stall.txt" ]] && fail "主线程卡顿采样没删" || ok "主线程卡顿采样已删"
-[[ -f "$FAKE_HOME/Library/Logs/lyrimuse-app.log" ]] && fail "App 日志没删" || ok "App 日志已删"
-[[ -f "$FAKE_HOME/Library/Logs/lyrimuse-app.log.old" ]] && fail "App 日志归档没删" || ok "App 日志归档已删"
-for a in lyrimuse.log.old lyrimuse.log.old.1 lyrimuse.log.old.2; do
-  [[ -f "$FAKE_HOME/Library/Logs/$a" ]] && fail "日志归档 $a 没删" || ok "日志归档 $a 已删"
-done
+[[ -d "$FAKE_LOGS" ]] && fail "日志目录没删" || ok "日志目录(日志、归档、App 日志、卡顿采样)已删"
+[[ -f "$FAKE_HOME/Library/Logs/lyrimuse.log.old.2" ]] && fail "旧位置的日志归档没删" || ok "旧位置的日志归档已删"
+[[ -f "$FAKE_HOME/Library/Logs/lyrimuse-app.log" ]] && fail "旧位置的 App 日志没删" || ok "旧位置的 App 日志已删"
+[[ -f "$FAKE_HOME/Library/Logs/other-app.log" ]] && ok "别的程序的日志不碰" || fail "删了别的程序的日志"
 /bin/launchctl print "gui/$UID_/$PROBE_A" >/dev/null 2>&1 && fail "job 没注销" || ok "job 已注销"
 # purge 必须连偏好设置项一起删 —— 不删的话重装会走进"引导不弹 + 服务没装"的死路
 # （见 uninstall.sh 里那段注释）。

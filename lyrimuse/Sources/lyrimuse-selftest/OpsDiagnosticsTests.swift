@@ -1057,8 +1057,9 @@ func runOpsDiagnosticsTests() {
         let rotate = redirect.range(of: "FileIO.move(url, to: archiveURL)")
         let open = redirect.range(of: "let fd = open(url.path, O_WRONLY | O_APPEND | O_CREAT, 0o644)")
         expectEqual(rotate != nil && open != nil && rotate!.lowerBound < open!.lowerBound
-                    && uninstall.contains(#"APP_LOG_ARCHIVE="$APP_LOG_FILE.old""#), true,
-                    "App 日志: 打开之前超过上限先挪成 .old,卸载脚本一并清理")
+                    && uninstall.contains(#"[[ -e "$LOG_DIR" ]] && TO_DELETE+=("$LOG_DIR")"#)
+                    && uninstall.contains(#""$OLD_LOGS/lyrimuse-app.log.old""#), true,
+                    "App 日志: 打开之前超过上限先挪成 .old,卸载脚本连日志目录和旧位置那份一并清理")
 
         var tracker = W.Tracker()
         expectEqual(tracker.shouldProbe(now: 100), true, "卡顿探针: 没有在等的探测就投一个")

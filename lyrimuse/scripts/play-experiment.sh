@@ -11,7 +11,7 @@
 #      开跑前用户自己就在放的那个不动。
 #   4. 暂停完再核对两样,不对就用「!!」开头的行报出来:各播放器会话里还有没有开跑前没在放、现在报在放的;
 #      再录 2 秒系统声音,开跑前安静、现在有声,就是还有东西在放(播放器自己报的状态跟不上时只有这一条能看出来)。
-#   5. 列出这段时间引擎记下的收听(~/Library/Logs/lyrimuse.log 里的 `listen recorded`),用来核对实验有没有放过头。
+#   5. 列出这段时间引擎记下的收听(~/Library/Logs/Lyrimuse/lyrimuse.log 里的 `listen recorded`),用来核对实验有没有放过头。
 #
 # 退出码 = <命令> 的退出码,超时是 142;收尾还听得到声音时一律是 145,优先于前两种。
 #
@@ -32,7 +32,7 @@ fi
 
 MC=/Applications/Lyrimuse.app/Contents/Resources/media-control/bin/media-control
 NPC=/Applications/Lyrimuse.app/Contents/Resources/nowplaying-clients
-LOG="$HOME/Library/Logs/lyrimuse.log"
+LOG="$HOME/Library/Logs/Lyrimuse/lyrimuse.log"
 here=$(cd "$(dirname "$0")" && pwd)
 started=$(date -u +%Y-%m-%dT%H:%M:%S)
 

@@ -16,7 +16,7 @@ import (
 //
 // 起因:HTTP 失败几乎都是 `log.Printf("...: %v", err)` 打出来的,而 Go 的 *url.Error
 // 在 Error() 里**带上完整请求 URL**。Last.fm 的只读接口把 api_key 放在 query string
-// 里,于是一次超时/取消就在 ~/Library/Logs/lyrimuse.log 里留下一行:
+// 里,于是一次超时/取消就在 ~/Library/Logs/Lyrimuse/lyrimuse.log 里留下一行:
 //
 //	lastfmRecent: request failed: Get "https://ws.audioscrobbler.com/2.0/?...&api_key=<明文>&...": context canceled
 //

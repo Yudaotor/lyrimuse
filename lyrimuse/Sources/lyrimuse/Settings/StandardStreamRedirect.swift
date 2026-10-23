@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 import LyrimuseCore
 
-/// 把本进程的 stdout / stderr 追加到 `LogFiles.appStderr`(~/Library/Logs/lyrimuse-app.log)。
+/// 把本进程的 stdout / stderr 追加到 `LogFiles.appStderr`(~/Library/Logs/Lyrimuse/lyrimuse-app.log)。
 ///
 /// 之前这件事由 LaunchAgent plist 的 StandardOutPath / StandardErrorPath 替我们做;
 /// 「开机启动」改成系统登录项(LoginItemManager 头注)后 App 由 LaunchServices 起,launchd 不再接管这两个

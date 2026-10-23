@@ -5017,7 +5017,7 @@ func runSourceContractIdentityTests() {
             let name = path.split(separator: "/").last.map(String.init) ?? path
             if name == "LyrimuseIdentity.swift" { continue }
             // 整个文件一个字面量都没有就不用逐行切(下面每一条都要求行里含其中之一)。
-            let markers = [".config/lyrimuse", "Library/Logs/lyrimuse", "\"com.lyrimuse.collector",
+            let markers = [".config/lyrimuse", "Library/Logs/lyrimuse", "Library/Logs/Lyrimuse", "\"com.lyrimuse.collector",
                            "\"me.yudaotor.lyrimuse\"", "/Applications/Lyrimuse.app",
                            "Contents/Resources/collector", "Contents/Resources/lyrimuse-engine"]
             guard let whole = try? String(contentsOfFile: path, encoding: .utf8),
@@ -5025,7 +5025,9 @@ func runSourceContractIdentityTests() {
             for (n, code) in codeLines(path) {
                 if code.contains("L10n.t(") { continue }   // 面向用户的文案里写路径是给人看的,不是取值
                 if code.contains(".config/lyrimuse") { offenders.append("\(name):\(n) .config/lyrimuse") }
-                if code.contains("Library/Logs/lyrimuse") { offenders.append("\(name):\(n) Library/Logs/lyrimuse") }
+                if code.contains("Library/Logs/lyrimuse") || code.contains("Library/Logs/Lyrimuse") {
+                    offenders.append("\(name):\(n) 日志路径字面量(走 LogFiles)")
+                }
                 if code.contains("\"com.lyrimuse.collector") { offenders.append("\(name):\(n) 引擎 label 字面量") }
                 if code.contains("\"me.yudaotor.lyrimuse\""), !code.contains("subsystem"), !code.contains("DispatchQueue(label:") {
                     offenders.append("\(name):\(n) bundle id 字面量(只许 Logger subsystem / 队列名用)")

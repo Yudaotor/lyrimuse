@@ -313,6 +313,51 @@ func runStorageLayoutChecks() {
     }
 
     do {
+        // 旧版本放在 ~/Library/Logs 下的日志挪进 ~/Library/Logs/Lyrimuse;那边已有同名的以那边为准,旧的存成 .previous-version;
+        // ~/Library/Logs 是共用目录,别的程序的日志不碰。
+        let (home, roots) = makeHome("logs")
+        expectEqual(roots.logs.path, home.path + "/Library/Logs/Lyrimuse", "日志: 目录 ~/Library/Logs/Lyrimuse")
+        let names = ["lyrimuse.log", "lyrimuse.log.old", "lyrimuse-app.log"]
+        write("old engine", roots.legacyLogs.appendingPathComponent("lyrimuse.log"))
+        write("old archive", roots.legacyLogs.appendingPathComponent("lyrimuse.log.old"))
+        write("old app", roots.legacyLogs.appendingPathComponent("lyrimuse-app.log"))
+        write("new app", roots.logs.appendingPathComponent("lyrimuse-app.log"))
+        write("other", roots.legacyLogs.appendingPathComponent("other-app.log"))
+        expectEqual(StorageMigration.isPending(roots, cacheNames: [], logNames: names), true, "日志: 旧位置还有日志 = 有活")
+        let outcome = StorageMigration.run(roots, cacheNames: [], logNames: names)
+        expectEqual(outcome.failures, [], "日志: 没有失败")
+        expectEqual(outcome.relocatedLogs, 3, "日志: 三份都挪了")
+        expectEqual(read(roots.logs.appendingPathComponent("lyrimuse.log")), "old engine", "日志: 引擎日志到了新目录")
+        expectEqual(read(roots.logs.appendingPathComponent("lyrimuse.log.old")), "old archive", "日志: 归档也到了")
+        expectEqual(read(roots.logs.appendingPathComponent("lyrimuse-app.log")), "new app", "日志: 新目录已有同名的以它为准")
+        expectEqual(read(roots.logs.appendingPathComponent("lyrimuse-app.log.previous-version")), "old app",
+                    "日志: 旧的那份存成 .previous-version")
+        expectEqual(read(roots.legacyLogs.appendingPathComponent("other-app.log")), "other", "日志: 别的程序的日志不碰")
+        expectEqual(outcome.changedAnything, true, "日志: 挪过日志算搬过东西(引擎 plist 要按新路径重写)")
+        expectEqual(StorageMigration.isPending(roots, cacheNames: [], logNames: names), false, "日志: 挪完没活了")
+        let runner = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/StorageMigrationRunner.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(sourceBody("static func runAtLaunch()", in: runner), "_ = FileIO.createDirectory(roots.logs)"), true,
+                    "日志: App 启动最早处先建日志目录(stdout 重定向、卡顿采样、launchd 给引擎开日志都不建上一层)")
+    }
+
+    do {
+        // 数据目录里的备份(backups/、顶层 *.bak)标成不进 Time Machine;别的文件不动;标过的不再写。
+        let (_, roots) = makeHome("tmexclude")
+        write("x", roots.data.appendingPathComponent("backups/20261024-000000-storage-migration/f.json"))
+        write("bak", roots.data.appendingPathComponent("lyrimuse-enrich-cache.json.pre-keynorm.bak"))
+        write("{}", roots.data.appendingPathComponent("config.json"))
+        func excluded(_ path: String) -> Bool? {
+            (try? roots.data.appendingPathComponent(path).resourceValues(forKeys: [.isExcludedFromBackupKey]))?.isExcludedFromBackup
+        }
+        expectEqual(StorageMigration.excludeBackupsFromTimeMachine(in: roots.data), 2, "不进 Time Machine: 标了 backups/ 和 .bak 两处")
+        expectEqual(excluded("backups"), true, "不进 Time Machine: backups/ 整个目录")
+        expectEqual(excluded("lyrimuse-enrich-cache.json.pre-keynorm.bak"), true, "不进 Time Machine: 引擎迁移留的 .bak")
+        expectEqual(excluded("config.json"), false, "不进 Time Machine: 数据文件照常备份")
+        expectEqual(StorageMigration.excludeBackupsFromTimeMachine(in: roots.data), 0, "不进 Time Machine: 标过的不再写")
+    }
+
+    do {
         // 搬迁接连 3 次没做完:一天之内不再试;做完了清掉记录。
         let (_, roots) = makeHome("attempts")
         try? fm.createDirectory(at: roots.caches, withIntermediateDirectories: true)

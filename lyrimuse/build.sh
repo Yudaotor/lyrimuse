@@ -250,7 +250,7 @@ ENGINE_LABEL="com.lyrimuse.collector"
 # 旧进程可能还叫 collector:等旧进程退出、记旧 pid 这两处按 ENGINE_PATH_PATTERN 两个名字都认。
 ENGINE_NAME="lyrimuse-engine"
 ENGINE_PATH_PATTERN="Contents/Resources/(collector|$ENGINE_NAME)"
-LOG_FILE="$HOME/Library/Logs/lyrimuse.log"
+LOG_FILE="$HOME/Library/Logs/Lyrimuse/lyrimuse.log"
 # 展示版本(CFBundleShortVersionString)= tag 去掉 v:X.Y.Z 或 X.Y.Z-alpha|beta|rc.N。更新检查走 Sparkle
 # (SparkleUpdaterManager.swift;旧的 UpdateChecker.swift 已删),它比大小用的是 CFBundleVersion,由下面的
 # scripts/build-version.sh 另算成四段纯数字(原因见那个脚本头注)。CI(release.yml)在真正打 tag 触发时会

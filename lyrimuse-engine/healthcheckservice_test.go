@@ -128,7 +128,8 @@ func TestHomeFolderTargetsMarkOwnedTree(t *testing.T) {
 		filepath.Join(home, "Library/Caches", appBundleID()):                     true,
 		filepath.Join(home, "Library/LaunchAgents"):                              false,
 		filepath.Join(home, "Library/Logs"):                                      false,
-		filepath.Join(home, "Library/Logs", clientName+".log"):                   false,
+		filepath.Join(home, "Library/Logs/Lyrimuse"):                             true,
+		filepath.Join(home, "Library/Logs/Lyrimuse", clientName+".log"):          false,
 		filepath.Join(home, "Library/LaunchAgents", engineLaunchdLabel+".plist"): false,
 	}
 	if len(owns) != len(want) {

@@ -38,8 +38,8 @@ func runIdentityTests() {
         expectEqual(LyrimusePaths.cachesDir.path, homePath + "/Library/Caches/me.yudaotor.lyrimuse", "路径: 缓存目录 = ~/Library/Caches/<bundle id>")
         expectEqual(LyrimusePaths.cacheFile("motion-covers").path, homePath + "/Library/Caches/me.yudaotor.lyrimuse/motion-covers",
                     "路径: 缓存目录下的子目录")
-        expectEqual(LogFiles.engine.path, homePath + "/Library/Logs/lyrimuse.log", "路径: 引擎日志")
-        expectEqual(LogFiles.appStderr.path, homePath + "/Library/Logs/lyrimuse-app.log", "路径: App stderr 日志")
+        expectEqual(LogFiles.engine.path, homePath + "/Library/Logs/Lyrimuse/lyrimuse.log", "路径: 引擎日志")
+        expectEqual(LogFiles.appStderr.path, homePath + "/Library/Logs/Lyrimuse/lyrimuse-app.log", "路径: App stderr 日志")
         expectEqual(LyrimusePaths.launchAgentPlist(label: "x.y").path, homePath + "/Library/LaunchAgents/x.y.plist", "路径: LaunchAgent plist")
         expectEqual(LyrimusePaths.defaultAppBundleURL.path, "/Applications/Lyrimuse.app", "路径: 默认安装位置")
 

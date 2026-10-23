@@ -154,8 +154,8 @@ func appBundleID() string {
 	return "me.yudaotor.lyrimuse"
 }
 
-// logFilePath 是常驻进程日志文件:launchd 的 StandardOutPath/StandardErrorPath 指向它,引擎自己也打开它写
-// 并按大小轮转(logsink.go / logrotate.go)。环境变量 LYRIMUSE_LOG_FILE(绝对路径)优先,理由同上;Swift 侧对应
+// logFilePath 是常驻进程日志文件 ~/Library/Logs/Lyrimuse/lyrimuse.log:launchd 的 StandardOutPath/StandardErrorPath 指向它,
+// 引擎自己也打开它写并按大小轮转(logsink.go / logrotate.go)。环境变量 LYRIMUSE_LOG_FILE(绝对路径)优先,理由同上;Swift 侧对应
 // LyrimuseCore 的 LogFiles.engine。拿不到家目录时返回空串,调用方据此放弃轮转、退回 stderr,不阻塞启动。
 func logFilePath() string {
 	if v := os.Getenv("LYRIMUSE_LOG_FILE"); v != "" && filepath.IsAbs(v) {
@@ -165,5 +165,5 @@ func logFilePath() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, "Library/Logs", clientName+".log")
+	return filepath.Join(home, "Library/Logs/Lyrimuse", clientName+".log")
 }

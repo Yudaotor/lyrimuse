@@ -5,7 +5,7 @@ import AppKit
 import Darwin
 import SwiftUI
 
-// 诊断导出:引擎日志(~/Library/Logs/lyrimuse.log)+ App 侧 os.Logger 日志 + 关键状态(权限 / 常驻服务 /
+// 诊断导出:引擎日志(~/Library/Logs/Lyrimuse/lyrimuse.log)+ App 侧 os.Logger 日志 + 关键状态(权限 / 常驻服务 /
 // 各功能是否已配置)打成一个 zip,给用户附到 issue 里。它是用户遇到问题时唯一会发过来的东西,要覆盖网络 / 逻辑 /
 // UI / 交互 / 系统兼容几个层面。
 //
@@ -452,7 +452,7 @@ enum DiagnosticsExporter {
     /// 抽象本身就不对症:一首歌的歌词是哪一次解析定下来的,可能是几周前的事,而缓存永久
     /// 保留、日志会轮转。实测本机 first-resolve 决策的年龄 p90 是 7.2 天。
     ///
-    /// 为什么导出时还要再脱敏一遍,而不是让用户直接把 ~/Library/Logs/lyrimuse.log 发出来:引擎
+    /// 为什么导出时还要再脱敏一遍,而不是让用户直接把 ~/Library/Logs/Lyrimuse/lyrimuse.log 发出来:引擎
     /// 写日志时已经过一道凭据脱敏(logscrub.go 的 secretScrubber),这里再用 LogRedactor 按当前配置里的
     /// 凭据原文和正则兜一遍,两道是纵深关系,别因为源头有了就删掉这一道。导出还带上 App 侧日志和运行状态,
     /// 原始文件里没有这些。包里每个文件最后再把本机家目录换成 `~`(用户名是个人信息);曲名原样保留。

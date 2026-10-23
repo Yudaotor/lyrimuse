@@ -14,7 +14,7 @@ import (
 
 // `lyrimuse-engine healthcheck`:一次性子命令,回答"歌词为什么不出来"。
 //
-// 排查这件事以前只有两条路:翻 ~/Library/Logs/lyrimuse.log,或者猜。而链路上能坏的地方
+// 排查这件事以前只有两条路:翻 ~/Library/Logs/Lyrimuse/lyrimuse.log,或者猜。而链路上能坏的地方
 // 分散在好几层——配置解析、功能开关、缓存文件、歌词导出目录的写权限、各歌词源各自的
 // 可达性、网络本身。这个子命令把它们一次性问一遍。
 //

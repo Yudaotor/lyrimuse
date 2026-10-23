@@ -17,11 +17,11 @@ public enum LyrimuseIdentity {
         /// 歌词引擎(引擎)在包里的可执行文件名,也就是活动监视器 / `ps` 里看到的进程名。内核记的进程名(p_comm)
         /// 最多 16 字节,超了 `pgrep -x` 就对不上。
         public let engineExecutableName: String
-        /// `~/Library/Logs/<这个>`:引擎常驻进程的日志。
+        /// `~/Library/Logs/<displayName>/<这个>`:引擎常驻进程的日志。
         public let logFileName: String
-        /// `~/Library/Logs/<这个>`:App 进程由 launchd 拉起时的 stdout / stderr。
+        /// `~/Library/Logs/<displayName>/<这个>`:App 进程的 stdout / stderr。
         public let appLogFileName: String
-        /// `~/Library/Logs/<这个>`:App 主线程卡住时采的调用栈(MainThreadWatchdog,覆盖写)。
+        /// `~/Library/Logs/<displayName>/<这个>`:App 主线程卡住时采的调用栈(MainThreadWatchdog,覆盖写)。
         public let mainThreadStallFileName: String
         /// build.sh 默认装到哪(LoginItemManager 在拿不到运行中 bundle 路径时的兜底)。
         public let defaultAppBundlePath: String
@@ -126,10 +126,21 @@ public enum LyrimusePaths {
     }
 }
 
-/// 两侧日志文件的落点。唯一口径:LoginItemManager / EngineServiceManager 写 plist、DiagnosticsExporter 读文件、
-/// 引擎侧经环境变量 LYRIMUSE_LOG_FILE 拿到的都是这一份;uninstall.sh 的清理列表(那边是 shell)手工同步。
+/// 两侧日志文件的落点:`~/Library/Logs/Lyrimuse/`(`StorageLayout.Roots.logs`)。唯一口径:EngineServiceManager 写 plist、
+/// DiagnosticsExporter 读文件、引擎侧经环境变量 LYRIMUSE_LOG_FILE 拿到的都是这一份;引擎不带环境变量时的默认值在
+/// `lyrimuse-engine/paths.go` 的 `logFilePath()`,uninstall.sh 的清理列表(那边是 shell)手工同步。旧版本直接放在
+/// `~/Library/Logs/` 下,`StorageMigration` 启动时挪进来。
 public enum LogFiles {
-    private static var logsDir: URL { LyrimusePaths.home.appendingPathComponent("Library/Logs") }
+    public static var directory: URL { LyrimusePaths.storageRoots.logs }
+    private static var logsDir: URL { directory }
+
+    /// 搬家时要挪的文件:引擎日志和它的三份轮转归档(名字同 `lyrimuse-engine/logrotate.go`)、App 的 stderr 和归档、主线程卡顿采样。
+    public static var fileNames: [String] {
+        let engine = LyrimuseIdentity.current.logFileName
+        let app = LyrimuseIdentity.current.appLogFileName
+        return [engine, engine + ".old", engine + ".old.1", engine + ".old.2", app, app + ".old",
+                LyrimuseIdentity.current.mainThreadStallFileName]
+    }
 
     /// 引擎常驻进程的日志(launchd 的 StandardErrorPath,也是引擎自己打开并按大小轮转的那份)。
     public static var engine: URL { logsDir.appendingPathComponent(LyrimuseIdentity.current.logFileName) }

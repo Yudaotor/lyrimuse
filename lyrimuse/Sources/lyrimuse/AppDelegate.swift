@@ -23,7 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
-        // stdout / stderr 落到 ~/Library/Logs/lyrimuse-app.log(在进程内自己重定向):App 作为登录项由
+        // stdout / stderr 落到 ~/Library/Logs/Lyrimuse/lyrimuse-app.log(在进程内自己重定向):App 作为登录项由
         // LaunchServices 起,没有 launchd 替我们接管这两个流。第一件事就做,后面任何一行 Swift 运行时的报错都别漏。
         StandardStreamRedirect.installIfNeeded()
         // 退出原因日志(见 AppExit):SIGTERM 要在这里就接住,不然 launchctl kickstart -k

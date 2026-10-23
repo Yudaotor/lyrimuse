@@ -27,8 +27,11 @@ enum StorageMigrationRunner {
         // uninstall.sh 起的注销登录项辅助进程:只注销就退出,不碰数据。
         guard !CommandLine.arguments.contains("--unregister-login-item") else { return }
         let roots = LyrimusePaths.storageRoots
+        // 日志目录先建好:App 的 stdout 重定向、主线程卡顿采样、launchd 给引擎开的 StandardErrorPath 都不建上一层目录。
+        _ = FileIO.createDirectory(roots.logs)
         let pruned = StorageMigration.pruneRewriteBackups(in: StorageLayout.activeDataDir(roots))
         if pruned > 0 { logger.notice("storage migration: removed \(pruned, privacy: .public) old rewrite backup(s)") }
+        StorageMigration.excludeBackupsFromTimeMachine(in: StorageLayout.activeDataDir(roots))
         guard StorageMigration.isPending(roots) else { return }
         _ = FileIO.createDirectory(roots.caches)
         guard let migrationLock = acquireLock(at: roots.caches.appendingPathComponent("storage-migration.lock"), timeout: 120) else {
@@ -64,7 +67,7 @@ enum StorageMigrationRunner {
             leftover=\(outcome.keptLeftover ?? "-", privacy: .public) backup=\(outcome.rewriteBackup ?? "-", privacy: .public) \
             rewrittenFiles=\(outcome.rewrittenFiles, privacy: .public) relocatedCaches=\(outcome.relocatedCaches, privacy: .public) \
             compatLink=\(outcome.madeCompatLink ? "made" : outcome.removedCompatLink ? "removed" : "-", privacy: .public) \
-            engineBackups=\(outcome.movedEngineBackups, privacy: .public) \
+            engineBackups=\(outcome.movedEngineBackups, privacy: .public) logs=\(outcome.relocatedLogs, privacy: .public) \
             data=\(StorageLayout.activeDataDir(roots).path, privacy: .public)
             """)
         for failure in outcome.failures {

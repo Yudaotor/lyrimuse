@@ -38,16 +38,16 @@ DATA_DIR="$PREFIX/Library/Application Support/$APP_LABEL"
 LEGACY_DIR="$PREFIX/.config/lyrimuse"
 # 能重新下载的缓存(动态封面、查询缓存)和 Sparkle 的下载缓存(见 LyrimuseCore LyrimusePaths.cachesDir)。
 CACHE_DIR="$PREFIX/Library/Caches/$APP_LABEL"
-LOG_FILE="$PREFIX/Library/Logs/lyrimuse.log"
-# 引擎日志的轮转归档:名字与份数同 lyrimuse-engine/logrotate.go(logArchiveName / logRotateKeepArchives),
-# 改那边的份数要一起改这里(uninstallarchives_test.go 对账)。
+# 日志目录(见 LyrimuseCore LogFiles):整个目录归 Lyrimuse,连目录一起删。
+LOG_DIR="$PREFIX/Library/Logs/Lyrimuse"
+# 旧版本直接放在 ~/Library/Logs 下的日志(新版本启动时挪进日志目录,见 LogFiles.fileNames),没挪走的逐个删:
+# 引擎日志和它的轮转归档(名字与份数同 lyrimuse-engine/logrotate.go 的 logArchiveName / logRotateKeepArchives,
+# 改那边的份数要一起改这里,uninstallarchives_test.go 对账)、App 的 stderr 和归档、主线程卡顿采样。
+OLD_LOGS="$PREFIX/Library/Logs"
+LOG_FILE="$OLD_LOGS/lyrimuse.log"
 LOG_ARCHIVES=("$LOG_FILE.old" "$LOG_FILE.old.1" "$LOG_FILE.old.2")
-# App 进程的 launchd stdout/stderr(单独一份,见 LyrimuseCore LogFiles.appStderr)。
-APP_LOG_FILE="$PREFIX/Library/Logs/lyrimuse-app.log"
-# 它在 App 启动时超过上限就挪成这一份(见 StandardStreamRedirect.archiveURL)。
-APP_LOG_ARCHIVE="$APP_LOG_FILE.old"
-# App 主线程卡住时采的调用栈(见 LyrimuseCore LogFiles.mainThreadStall)。
-STALL_SAMPLE_FILE="$PREFIX/Library/Logs/lyrimuse-main-thread-stall.txt"
+OLD_LOG_FILES=("$LOG_FILE" "${LOG_ARCHIVES[@]}" "$OLD_LOGS/lyrimuse-app.log" "$OLD_LOGS/lyrimuse-app.log.old"
+  "$OLD_LOGS/lyrimuse-main-thread-stall.txt")
 # 钥匙串里的凭据保险箱:服务名 <bundle id>.credentials,账号是数据目录的路径串;旧目录的路径串是以前的账号,
 # App 第一次读时搬走,没搬的也一起删(见 LyrimuseCore StorageLayout.credentialAccount / previousCredentialAccount)。
 VAULT_SERVICE="$APP_LABEL.credentials"
@@ -103,7 +103,11 @@ for label in "$ENGINE_LABEL" "$APP_LABEL"; do
     echo "  launchd job  $label  [未注册]"
   fi
 done
-for p in "$ENGINE_PLIST" "$APP_PLIST" "$DATA_DIR" "$LEGACY_DIR" "$CACHE_DIR" "$LOG_FILE" "${LOG_ARCHIVES[@]}" "$APP_LOG_FILE" "$APP_LOG_ARCHIVE" "$STALL_SAMPLE_FILE"; do
+OLD_LOGS_PRESENT=()
+for p in "${OLD_LOG_FILES[@]}"; do
+  [[ -e "$p" ]] && OLD_LOGS_PRESENT+=("$p")
+done
+for p in "$ENGINE_PLIST" "$APP_PLIST" "$DATA_DIR" "$LEGACY_DIR" "$CACHE_DIR" "$LOG_DIR" "${OLD_LOGS_PRESENT[@]}"; do
   if [[ -L "$p" ]]; then
     echo "  存在  $p  (软链接 → $(/usr/bin/readlink "$p"))"
   elif [[ -e "$p" ]]; then
@@ -198,13 +202,10 @@ has_vault && HAS_VAULT=yes
 [[ -e "$DATA_DIR" ]] && TO_DELETE+=("$DATA_DIR")
 [[ -e "$LEGACY_DIR" || -L "$LEGACY_DIR" ]] && TO_DELETE+=("$LEGACY_DIR")
 [[ -e "$CACHE_DIR" ]] && TO_DELETE+=("$CACHE_DIR")
-[[ -e "$LOG_FILE" ]] && TO_DELETE+=("$LOG_FILE")
-for p in "${LOG_ARCHIVES[@]}"; do
+[[ -e "$LOG_DIR" ]] && TO_DELETE+=("$LOG_DIR")
+for p in "${OLD_LOG_FILES[@]}"; do
   [[ -e "$p" ]] && TO_DELETE+=("$p")
 done
-[[ -e "$APP_LOG_FILE" ]] && TO_DELETE+=("$APP_LOG_FILE")
-[[ -e "$APP_LOG_ARCHIVE" ]] && TO_DELETE+=("$APP_LOG_ARCHIVE")
-[[ -e "$STALL_SAMPLE_FILE" ]] && TO_DELETE+=("$STALL_SAMPLE_FILE")
 if (( ${#TO_DELETE[@]} == 0 )); then
   echo "  （没有数据文件）"
 else
@@ -246,10 +247,8 @@ if [[ "$answer" != "yes" ]]; then
 fi
 
 stop_services
-# 注销登录项那一步起过一次 App(辅助模式),它可能刚轮转 / 新建了 App 日志:清单是在那之前列的,补上。
-for p in "$APP_LOG_FILE" "$APP_LOG_ARCHIVE"; do
-  [[ -e "$p" ]] && (( ! ${TO_DELETE[(Ie)$p]} )) && TO_DELETE+=("$p")
-done
+# 注销登录项那一步起过一次 App(辅助模式),它可能刚建了日志目录、写了 App 日志:清单是在那之前列的,补上。
+[[ -e "$LOG_DIR" ]] && (( ! ${TO_DELETE[(Ie)$LOG_DIR]} )) && TO_DELETE+=("$LOG_DIR")
 echo
 echo "=== 删除数据 ==="
 for p in "${TO_DELETE[@]}"; do
