@@ -7,10 +7,11 @@ import os
 /// 引擎写一份带类型的请求(`lyrimuse-player-query-request.json`:种类 + 参数,不带脚本),这里只跑自己内置的
 /// 几段只读脚本和系统待播队列那次查询(`NowPlayingClientsProbe.queue`),把输出整理成结构、以 JSON 写回
 /// `lyrimuse-player-query-reply.json`:一串曲目的那几种是 `PlayerQueryTracks`,Spotify 随机状态是 `PlayerQueryShuffle`,
+/// VOX 循环档是 `PlayerQueryRepeat`,
 /// Kaset 的队列是 `KasetPlayerInfo.QueueReply`。引擎只解 JSON(`appquery.go`);契约两边各钉一份:selftest
 /// 「player-query」组、Go `appquery_test.go`(读这个文件对账),样例在 shared/testdata/player-query/。
 ///
-/// 只认这六种查询,参数逐项校验;网页队列那种只对用户把这个平台配对给了的浏览器跑。请求写出超过 `requestMaxAge`
+/// 只认这七种查询,参数逐项校验;网页队列那种只对用户把这个平台配对给了的浏览器跑。请求写出超过 `requestMaxAge`
 /// 才看到就不答(引擎那边早不等了)。一次只处理一份请求,引擎那边也一次只发一份。
 /// 只在以 Lyrimuse.app 身份运行时启动:selftest 与 `swift run` 共用配置目录,同 `PlaybackStatePublisher`。
 ///
@@ -35,7 +36,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
     public static let requestMaxAge: TimeInterval = 10
     /// 跑 Music / 浏览器脚本、读系统待播队列的进程级超时。引擎那边的等待按它留了余量,两边一起改。
     public static let scriptTimeout: TimeInterval = 6
-    /// 问 Spotify 随机状态的进程级超时(引擎那边等 4 秒)。
+    /// 问 Spotify 随机状态、VOX 循环档的进程级超时(引擎那边等 4 秒)。
     public static let shuffleTimeout: TimeInterval = 2
     /// 浏览器脚本里单条 AppleEvent 的 `with timeout` 秒数。
     public static let browserEventTimeoutSeconds = 4
@@ -49,6 +50,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
         case spotifyShuffle = "spotify_shuffle"
         case browserQueue = "browser_queue"
         case kasetQueue = "kaset_queue"
+        case voxRepeat = "vox_repeat"
     }
 
     public struct Request: Codable, Equatable, Sendable {
@@ -114,6 +116,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
         case browserQueue(bundleID: String, platformID: String)
         /// Kaset 的待播队列连同循环模式,整理成 `KasetPlayerInfo.QueueReply` 的 JSON。
         case kasetQueue
+        case voxRepeat
     }
 
     public enum Decision: Equatable, Sendable {
@@ -153,6 +156,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
             return .run(.browserQueue(bundleID: bundleID, platformID: platform))
         case .kasetQueue:
             return .run(.kasetQueue)
+        case .voxRepeat:
+            return .run(.voxRepeat)
         }
     }
 
@@ -263,6 +268,9 @@ public final class PlayerQueryServer: @unchecked Sendable {
 
     /// Spotify 有没有开随机:输出 `true` / `false`;没在跑时输出空,不拉起它。
     public static let spotifyShuffleScript = #"if application "Spotify" is running then tell application "Spotify" to return shuffling"#
+
+    /// VOX 的循环档:输出 `repeat state`(0 / 1 / 2);没在跑时输出空,不拉起它。
+    public static let voxRepeatScript = #"if application "VOX" is running then tell application "VOX" to return repeat state"#
 
     /// YouTube Music 页面的待播队列:读 `ytmusic-player-queue-item` 的 `data`(InnerTube playlistPanelVideoRenderer)。
     /// 每首一条记录,记录之间 RS(0x1e)、字段之间 US(0x1f),字段顺序 selected(0/1)、title、artist、album、lengthText、
@@ -436,6 +444,10 @@ public final class PlayerQueryServer: @unchecked Sendable {
                 KasetVideoKind.prefetch(Self.kasetKindPrefetchIDs(currentIndex: reply.currentIndex, videoIDs: reply.tracks.map(\.videoID)))
             }
             return makeReply(id: id, output: reply.flatMap(Self.encodedQueueReply), error: "queue unavailable")
+        case .voxRepeat:
+            let output = Self.osascript(Self.voxRepeatScript, timeout: Self.shuffleTimeout)
+            return makeReply(id: id, output: output.flatMap(PlayerQueryRepeat.parseVox).flatMap { Self.encodedReply($0) },
+                             error: "script failed")
         }
     }
 

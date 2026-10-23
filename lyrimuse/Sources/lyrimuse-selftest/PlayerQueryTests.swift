@@ -2,7 +2,7 @@ import Foundation
 import LyrimuseCore
 
 /// 引擎预解析要的播放器查询由 App 代跑(`PlayerQueryServer`):请求怎么判、几段固定脚本长什么样、输出怎么整理成
-/// 结构(`PlayerQueryTracks` / `PlayerQueryShuffle`)、契约键名。整理好的 JSON 交给引擎,键名两边一起钉
+/// 结构(`PlayerQueryTracks` / `PlayerQueryShuffle` / `PlayerQueryRepeat`)、契约键名。整理好的 JSON 交给引擎,键名两边一起钉
 /// (样例 shared/testdata/player-query/,Go 侧 appquery_test.go 读源码对账)。
 func runPlayerQueryTests() {
     typealias S = PlayerQueryServer
@@ -17,7 +17,7 @@ func runPlayerQueryTests() {
     let quote = String(UnicodeScalar(UInt8(34)))
     let newline = String(UnicodeScalar(UInt8(10)))
 
-    // ---- 判请求:只认五种,参数逐项校验;契约版本不认识、没有 id、过期的不答 ----
+    // ---- 判请求:只认七种,参数逐项校验;契约版本不认识、没有 id、过期的不答 ----
     expectEqual(S.decide(request("apple_music_queue", count: 5), now: now), .run(.appleMusicQueue(count: 5)),
                 "查询: Music 系统待播队列 5 首")
     for bad in [0, 21] {
@@ -40,6 +40,7 @@ func runPlayerQueryTests() {
     }
     expectEqual(S.decide(request("spotify_shuffle"), now: now), .run(.spotifyShuffle), "查询: Spotify 随机")
     expectEqual(S.decide(request("kaset_queue"), now: now), .run(.kasetQueue), "查询: Kaset 待播队列")
+    expectEqual(S.decide(request("vox_repeat"), now: now), .run(.voxRepeat), "查询: VOX 循环档")
     for platform in ["youtubeMusic", "spotifyWeb"] {
         expectEqual(S.decide(request("browser_queue", bundle: "com.apple.Safari", platform: platform), now: now),
                     .run(.browserQueue(bundleID: "com.apple.Safari", platformID: platform)), "查询: \(platform) 网页队列")
@@ -79,6 +80,8 @@ func runPlayerQueryTests() {
     }
     expectEqual(S.spotifyShuffleScript.hasPrefix("if application " + quote + "Spotify" + quote + " is running then"), true,
                 "Spotify 随机: 先判 running,不把它拉起来")
+    expectEqual(S.voxRepeatScript.hasPrefix("if application " + quote + "VOX" + quote + " is running then")
+                && S.voxRepeatScript.hasSuffix("return repeat state"), true, "VOX 循环档: 先判 running,不把它拉起来")
 
     // ---- 每种查询的输出都先整理成结构再交;系统待播队列问的是 Music.app(源码契约)----
     do {
@@ -94,10 +97,11 @@ func runPlayerQueryTests() {
                     "系统待播队列(契约): 加载器带 queue=N,输出交回给 PlayerQueryTracks 整理")
         for needle in ["output.map(PlayerQueryTracks.appleMusicSystemQueue)", "output.map(PlayerQueryTracks.appleMusicUpcoming)",
                        "output.map(PlayerQueryTracks.appleMusicAlbumTracks)", "output.flatMap(PlayerQueryShuffle.parse)",
+                       "output.flatMap(PlayerQueryRepeat.parseVox)", "Self.osascript(Self.voxRepeatScript, timeout: Self.shuffleTimeout)",
                        "output.map(site.parse)", "KasetPlayerInfo.queueReply(fromScriptOutput:"] {
             expectEqual(server.contains(needle), true, "查询(契约): 输出整理成结构再交(\(needle))")
         }
-        expectEqual(S.Kind.allCases.count, 6, "查询: 六种,跟引擎的 appQuery 常量一一对应")
+        expectEqual(S.Kind.allCases.count, 7, "查询: 七种,跟引擎的 appQuery 常量一一对应")
     }
 
     // ---- 盯配置目录:原子写(临时文件改名)触发回调;目录本身删掉报告失效(09 章决策 175)----
@@ -219,6 +223,13 @@ func runPlayerQueryTests() {
         expectEqual(PlayerQueryShuffle.parse(""), nil, "Spotify 随机: 没在跑(空输出)问不到")
         expectEqual(S.encodedReply(PlayerQueryShuffle(shuffling: true)), "{" + quote + "shuffling" + quote + ":true}",
                     "Spotify 随机: 交给引擎的 JSON")
+
+        expectEqual(["0", "1\n", "2"].map { PlayerQueryRepeat.parseVox($0)?.repeating }, ["off", "one", "all"],
+                    "VOX 循环档: repeat state 0 / 1 / 2 → off / one / all")
+        expectEqual(["", "3", "x"].map { PlayerQueryRepeat.parseVox($0) }, [nil, nil, nil],
+                    "VOX 循环档: 没在跑(空输出)、认不出的值问不到")
+        expectEqual(S.encodedReply(PlayerQueryRepeat(repeating: "all")), "{" + quote + "repeating" + quote + ":" + quote + "all" + quote + "}",
+                    "VOX 循环档: 交给引擎的 JSON")
     }
 
     // ---- 契约:文件名与 JSON 键名跟引擎的 json tag 一致 ----

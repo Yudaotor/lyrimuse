@@ -139,7 +139,7 @@ func TestAppQueryContractMatchesTheApp(t *testing.T) {
 		`"` + appQueryAppleMusicQueue + `"`, `"` + appQueryAppleMusicUpcoming + `"`, `"` + appQueryAppleMusicAlbumTracks + `"`,
 		// 系统待播队列问的是 Music.app。
 		`NowPlayingClientsProbe.queue(forBundleID: PlaybackPlayer.appleMusic.bundleIdentifier`,
-		`"` + appQuerySpotifyShuffle + `"`, `"` + appQueryBrowserQueue + `"`, `"` + appQueryKasetQueue + `"`,
+		`"` + appQuerySpotifyShuffle + `"`, `"` + appQueryBrowserQueue + `"`, `"` + appQueryKasetQueue + `"`, `"` + appQueryVoxRepeat + `"`,
 		// Kaset 队列:JXA 一次取回队列与播放状态,App 整理成 kasetQueueReply 那份(键名见下面 KasetPlayerInfo.swift 那段)。
 		`return JSON.stringify({ queue: K.getPlayQueue(), info: K.getPlayerInfo() });`,
 		`case bundleID = "bundle_id"`, `case writtenAtMs = "written_at_ms"`,
@@ -153,9 +153,10 @@ func TestAppQueryContractMatchesTheApp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// appQueryTrack / appQueryTracks 与 Spotify 随机状态的键名。
+	// appQueryTrack / appQueryTracks 与 Spotify 随机状态、VOX 循环档的键名。
 	for _, want := range []string{`case title, artist, album, duration, selected, uri`, `case videoID = "video_id"`,
-		`case musicVideo = "music_video"`, `public var current: Track?`, `public var tracks: [Track]`, `public var shuffling: Bool`} {
+		`case musicVideo = "music_video"`, `public var current: Track?`, `public var tracks: [Track]`, `public var shuffling: Bool`,
+		`public var repeating: String`} {
 		if !strings.Contains(string(tracks), want) {
 			t.Errorf("PlayerQueryTracks.swift 里找不到 %q(appQueryTrack 的键名两边一起改)", want)
 		}

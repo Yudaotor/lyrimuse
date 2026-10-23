@@ -207,3 +207,25 @@ public struct PlayerQueryShuffle: Codable, Equatable, Sendable {
         }
     }
 }
+
+/// 循环档(`off` / `one` / `all`,跟 Kaset 队列那份的 `repeating` 同一套词)。VOX 的从 `PlayerQueryServer.voxRepeatScript`
+/// 的输出(`repeat state`)换来,没在跑(空输出)或认不出的值当问不到。
+public struct PlayerQueryRepeat: Codable, Equatable, Sendable {
+    public var repeating: String
+
+    public init(repeating: String) {
+        self.repeating = repeating
+    }
+
+    public static func parseVox(_ output: String) -> PlayerQueryRepeat? {
+        guard let state = Int(output.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let mode = MusicPlaybackController.voxPlaybackMode(repeatState: state)
+        else { return nil }
+        switch mode {
+        case .list: return PlayerQueryRepeat(repeating: "off")
+        case .repeatOne: return PlayerQueryRepeat(repeating: "one")
+        case .repeatAll: return PlayerQueryRepeat(repeating: "all")
+        case .shuffle: return nil
+        }
+    }
+}
