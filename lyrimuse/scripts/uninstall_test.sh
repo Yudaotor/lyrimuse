@@ -172,7 +172,16 @@ echo "yes" | run_uninstall --purge >/dev/null 2>&1
 [[ -f "$FAKE_HOME/elsewhere/config.json" ]] && ok "链接指向的目录完好" || fail "删到了软链接指向的目录"
 
 echo
-echo "=== 7. 全程没碰真实环境 ==="
+echo "=== 7. 搬迁留下的旧目录只报不删 ==="
+setup_fake_home
+/bin/mkdir -p "$FAKE_HOME/.config/lyrimuse.leftover-20261023-120000"
+echo '{}' > "$FAKE_HOME/.config/lyrimuse.leftover-20261023-120000/config.json"
+run_uninstall 2>&1 | /usr/bin/grep -q "lyrimuse.leftover-20261023-120000" && ok "报出了留下的旧目录" || fail "没报留下的旧目录"
+echo "yes" | run_uninstall --purge >/dev/null 2>&1
+[[ -f "$FAKE_HOME/.config/lyrimuse.leftover-20261023-120000/config.json" ]] && ok "留下的旧目录不自动删" || fail "删了留下的旧目录"
+
+echo
+echo "=== 8. 全程没碰真实环境 ==="
 REAL_CONFIG_AFTER=$(real_data_count)
 REAL_ENGINE_AFTER=$(/bin/launchctl print "gui/$UID_/com.lyrimuse.collector" >/dev/null 2>&1 && echo yes || echo no)
 [[ "$REAL_CONFIG_BEFORE" == "$REAL_CONFIG_AFTER" ]] \

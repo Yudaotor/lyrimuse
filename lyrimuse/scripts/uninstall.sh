@@ -108,6 +108,16 @@ for p in "$ENGINE_PLIST" "$APP_PLIST" "$DATA_DIR" "$LEGACY_DIR" "$CACHE_DIR" "$L
   fi
 done
 
+# 搬迁留下没删的旧目录(<旧目录>.migrated、<旧目录>.leftover-<时刻>,见 LyrimuseCore StorageLayout.keptOldFolders)。
+# 名字带时刻、数不准,按「删除的每个路径都硬编码」的约定只报出来,不自动删。
+KEPT_OLD=()
+for p in "$PREFIX/.config/lyrimuse.migrated" "$PREFIX/.config"/lyrimuse.leftover-*(N); do
+  [[ -e "$p" ]] && KEPT_OLD+=("$p")
+done
+for p in "${KEPT_OLD[@]}"; do
+  echo "  存在  $p  ($(human_size "$p"))  搬迁时留下的旧数据,不会自动删"
+done
+
 if [[ "$MODE" == "report" ]]; then
   echo
   echo "只是看看，什么都没动。"

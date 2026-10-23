@@ -42,9 +42,13 @@ func configDir() string {
 // storageMigrationMarker:App 搬迁时写的标记(LyrimuseCore StorageMigration.markerName)。
 const storageMigrationMarker = "lyrimuse-storage-migration.json"
 
-// hasLyrimuseData:目录里有搬迁标记、账号配置、功能开关、歌词主缓存之一。跟 StorageLayout.dataSignatureFiles 同一份名单。
+// hasLyrimuseData:目录里有搬迁标记、账号配置、功能开关、偏好镜像、歌词主缓存、听歌记录之一。跟 StorageLayout.dataSignatureFiles
+// 同一份名单。
 func hasLyrimuseData(dir string) bool {
-	for _, name := range []string{storageMigrationMarker, "config.json", clientName + "-features.json", clientName + "-enrich-cache.json"} {
+	for _, name := range []string{
+		storageMigrationMarker, "config.json", clientName + "-features.json", clientName + "-app-settings.json",
+		clientName + "-enrich-cache.json", clientName + "-listens.jsonl",
+	} {
 		if _, err := os.Lstat(filepath.Join(dir, name)); err == nil {
 			return true
 		}

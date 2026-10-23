@@ -247,6 +247,46 @@ func runStorageLayoutChecks() {
     }
 
     do {
+        // 整份改名失败(新目录的上一层写不进):旧目录原样留着照旧用,里面存的路径一字不改(标记里的目的地不是它)。
+        let (_, roots) = makeHome("renamefail")
+        let old = roots.legacy.path
+        write("{\"u\":\"file://\(old)/artwork/a.jpg\"}", roots.legacy.appendingPathComponent("lyrimuse-enrich-cache.json"))
+        let parent = roots.data.deletingLastPathComponent()
+        try? fm.createDirectory(at: parent, withIntermediateDirectories: true)
+        try? fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: parent.path)
+        let outcome = StorageMigration.run(roots, cacheNames: [])
+        try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: parent.path)
+        expectEqual(outcome.movedRoot || outcome.copiedRoot, false, "存储搬迁(改名失败): 没搬成")
+        expectEqual(outcome.failures.isEmpty, false, "存储搬迁(改名失败): 记了失败")
+        expectEqual(StorageLayout.activeDataDir(roots), roots.legacy, "存储搬迁(改名失败): 照旧用旧目录")
+        expectEqual(read(roots.legacy.appendingPathComponent("lyrimuse-enrich-cache.json")), "{\"u\":\"file://\(old)/artwork/a.jpg\"}",
+                    "存储搬迁(改名失败): 旧目录里的路径不改成新目录的")
+        expectEqual(outcome.rewrittenFiles, 0, "存储搬迁(改名失败): 一份都没改写")
+        let retry = StorageMigration.run(roots, cacheNames: [])
+        expectEqual(retry.movedRoot, true, "存储搬迁(改名失败): 下次能写了就搬成")
+        expectEqual(read(roots.data.appendingPathComponent("lyrimuse-enrich-cache.json")),
+                    "{\"u\":\"file://\(roots.data.path)/artwork/a.jpg\"}", "存储搬迁(改名失败): 搬成之后才改写")
+    }
+
+    do {
+        // 刚装好、只有偏好镜像的旧目录也算有数据;诊断行列出搬迁留下的旧目录。
+        let (home, roots) = makeHome("signature")
+        write("{}", roots.legacy.appendingPathComponent("lyrimuse-app-settings.json"))
+        write("x", roots.data.appendingPathComponent("unrelated"))
+        expectEqual(StorageLayout.activeDataDir(roots), roots.legacy, "存储布局: 只有偏好镜像的旧目录也算有数据")
+        try? fm.removeItem(at: roots.legacy)
+        try? fm.createDirectory(at: roots.legacy.deletingLastPathComponent().appendingPathComponent("lyrimuse.leftover-20261023-120000"),
+                                withIntermediateDirectories: true)
+        try? fm.createDirectory(at: roots.legacy.deletingLastPathComponent().appendingPathComponent("lyrimuse-backups"),
+                                withIntermediateDirectories: true)
+        expectEqual(StorageLayout.keptOldFolders(roots).map(\.lastPathComponent), ["lyrimuse.leftover-20261023-120000"],
+                    "存储布局: 认得出搬迁留下的旧目录,不把兄弟目录算进去")
+        expectEqual(StorageLayout.diagnosticLine(roots: roots, active: roots.data, home: home.path).hasSuffix(
+            "(old ~/.config/lyrimuse: absent; kept from migration: ~/.config/lyrimuse.leftover-20261023-120000)"), true,
+                    "存储布局: 诊断行报出留下的旧目录")
+    }
+
+    do {
         // 缓存名单对账:名单里的文件,引擎和 App 都只经缓存目录拼路径,不许再从数据目录拼。先按整篇字节筛出提到名单的文件,
         // 再逐行看;Go 里把文件名放进常量的(`const x = "lyrimuse-…"`),用到这个常量的那一行也要走 cacheFilePath。
         let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()

@@ -71,10 +71,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func terminateOlderInstances() {
         let me = NSRunningApplication.current
         guard let myID = me.bundleIdentifier,
-              let myStart = Self.processStartTime(getpid()) else { return }
+              let myStart = StorageMigrationRunner.processStartTime(getpid()) else { return }
         for other in NSWorkspace.shared.runningApplications
         where other.bundleIdentifier == myID && other.processIdentifier != me.processIdentifier {
-            guard let theirStart = Self.processStartTime(other.processIdentifier),
+            guard let theirStart = StorageMigrationRunner.processStartTime(other.processIdentifier),
                   theirStart < myStart else { continue }
             // 走 lifecycle 分类的 Logger 不走 NSLog:诊断导出按 subsystem 查,NSLog 查不到。
             AppExit.logTerminatingOlderInstance(pid: other.processIdentifier, forced: false)
@@ -101,19 +101,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dockMenuController.makeMenu()
     }
 
-    /// 进程启动时间(Unix 秒),取自内核的 kinfo_proc。任何来路的进程都有,不像
-    /// NSRunningApplication.launchDate 只对经 LaunchServices 启动的有效。
-    private static func processStartTime(_ pid: pid_t) -> TimeInterval? {
-        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
-        var info = kinfo_proc()
-        var size = MemoryLayout<kinfo_proc>.stride
-        let rc = mib.withUnsafeMutableBufferPointer { buf in
-            sysctl(buf.baseAddress, UInt32(buf.count), &info, &size, nil, 0)
-        }
-        guard rc == 0, size > 0 else { return nil }
-        let tv = info.kp_proc.p_starttime
-        return TimeInterval(tv.tv_sec) + TimeInterval(tv.tv_usec) / 1_000_000
-    }
 
     @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
         guard let urlString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,

@@ -27,8 +27,9 @@ public enum StorageMigration {
         }
     }
 
-    /// 搬迁标记:记着从哪搬到哪、文件里的旧路径改写完没有。动手之前就写好(整份改名时写进旧目录、跟着一起走;合并时写进
-    /// 数据目录),中途崩溃下次启动照样接着改写。它也是「这个数据目录搬过」的凭据(`StorageLayout.activeDataDir`)。
+    /// 搬迁标记:记着从哪搬到哪、文件里的旧路径改写完没有。整份改名时动手之前写进旧目录、跟着一起走,中途崩溃下次启动照样
+    /// 接着改写;合并时合并完再写进数据目录(合并没做完旧目录还在,下次启动会再合并一遍、再写)。它也是「这个数据目录搬过」的
+    /// 凭据(`StorageLayout.activeDataDir`)。
     static let markerName = "lyrimuse-storage-migration.json"
 
     struct Marker: Codable, Equatable {
@@ -41,7 +42,7 @@ public enum StorageMigration {
     public static func isPending(_ roots: StorageLayout.Roots, cacheNames: [String] = StorageLayout.cacheFileNames) -> Bool {
         if StorageLayout.hasLegacyToAbsorb(roots) { return true }
         let data = StorageLayout.activeDataDir(roots)
-        if readMarker(in: data)?.rewritePending == true { return true }
+        if pendingRewrite(in: data) != nil { return true }
         return cacheNames.contains { StorageLayout.exists(data.appendingPathComponent($0)) }
     }
 
@@ -54,7 +55,7 @@ public enum StorageMigration {
             absorbLegacy(roots, forceCopy: forceCopy, &outcome)
         }
         let data = StorageLayout.activeDataDir(roots)
-        if var pending = readMarker(in: data), pending.rewritePending {
+        if var pending = pendingRewrite(in: data) {
             if rewritePaths(in: data, from: pending.from, to: pending.to, &outcome) {
                 pending.rewritePending = false
             }
@@ -62,6 +63,14 @@ public enum StorageMigration {
         }
         relocateCaches(from: data, to: roots.caches, names: cacheNames, &outcome)
         return outcome
+    }
+
+    /// 这个目录里还没做完的改写。标记写的目的地不是它(整份改名没成、标记还留在旧目录里)时不算:那时数据还在旧目录,
+    /// 把里面的路径改成新目录的就全指错了。
+    static func pendingRewrite(in data: URL) -> Marker? {
+        guard let marker = readMarker(in: data), marker.rewritePending,
+              URL(fileURLWithPath: marker.to).standardizedFileURL.path == data.standardizedFileURL.path else { return nil }
+        return marker
     }
 
     // MARK: - 旧目录
@@ -92,8 +101,8 @@ public enum StorageMigration {
                 return
             }
         }
-        writeMarker(pending, in: roots.data, &outcome)
         mergeTree(from: roots.legacy, into: roots.data, &outcome)
+        writeMarker(pending, in: roots.data, &outcome)
         pruneEmptyDirectories(roots.legacy)
         guard StorageLayout.exists(roots.legacy) else { return }
         let kept = roots.legacy.deletingLastPathComponent()

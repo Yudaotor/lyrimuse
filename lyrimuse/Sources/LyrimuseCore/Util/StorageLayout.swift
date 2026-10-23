@@ -46,10 +46,11 @@ public enum StorageLayout {
         !isSymlink(roots.legacy) && isDirectory(roots.legacy)
     }
 
-    /// 认 Lyrimuse 数据的几个文件:搬迁标记、账号配置、功能开关、歌词主缓存,有一个就算。引擎 `paths.go` 的
-    /// `hasLyrimuseData` 同一份名单。
+    /// 认 Lyrimuse 数据的几个文件:搬迁标记、账号配置、功能开关、偏好镜像、歌词主缓存、听歌记录,有一个就算(刚装好、
+    /// 没连账号也没放过歌的,至少有偏好镜像)。引擎 `paths.go` 的 `hasLyrimuseData` 同一份名单。
     public static let dataSignatureFiles = [
-        StorageMigration.markerName, "config.json", "lyrimuse-features.json", "lyrimuse-enrich-cache.json",
+        StorageMigration.markerName, "config.json", "lyrimuse-features.json", "lyrimuse-app-settings.json",
+        "lyrimuse-enrich-cache.json", "lyrimuse-listens.jsonl",
     ]
 
     public static func hasLyrimuseData(_ dir: URL) -> Bool {
@@ -100,7 +101,18 @@ public enum StorageLayout {
     public static func diagnosticLine(roots: Roots, active: URL, home: String = NSHomeDirectory()) -> String {
         let legacy = isSymlink(roots.legacy) ? "symlink" : isDirectory(roots.legacy) ? "present" : "absent"
         let display: (URL) -> String = { HomeFolderAccess.displayPath($0.path, home: home) }
-        return "Data folder: \(display(active)) (old \(display(roots.legacy)): \(legacy))"
+        let kept = keptOldFolders(roots)
+        let keptText = kept.isEmpty ? "" : "; kept from migration: " + kept.map { display($0) }.joined(separator: ", ")
+        return "Data folder: \(display(active)) (old \(display(roots.legacy)): \(legacy)\(keptText))"
+    }
+
+    /// 搬迁留下没删的旧目录:跨卷复制后改名的 `<旧目录名>.migrated`、合并时有冲突改名的 `<旧目录名>.leftover-<时刻>`。
+    public static func keptOldFolders(_ roots: Roots) -> [URL] {
+        let parent = roots.legacy.deletingLastPathComponent()
+        let name = roots.legacy.lastPathComponent
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: parent.path)) ?? []
+        return names.filter { $0 == name + ".migrated" || $0.hasPrefix(name + ".leftover-") }.sorted()
+            .map { parent.appendingPathComponent($0) }
     }
 
     static func exists(_ url: URL) -> Bool {
@@ -108,7 +120,7 @@ public enum StorageLayout {
         return lstat(url.path, &st) == 0
     }
 
-    static func isDirectory(_ url: URL) -> Bool {
+    public static func isDirectory(_ url: URL) -> Bool {
         var st = stat()
         return lstat(url.path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFDIR
     }
