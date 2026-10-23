@@ -8,13 +8,15 @@ import SwiftUI
 /// 字号固定(`NotchExpandedMetrics.lyricListFontSize`)。
 ///
 /// 点一句跳到那一句(同歌词窗口,减回歌词偏移),指针停在哪句哪句变亮;播放器不能挪进度时(`acceptsSeek`)只看不点。
-/// 滚轮不滚列表,归灵动岛的触控板手势。不做景深模糊:13pt 的字一模糊就糊成一片。所在那一层看不见时(没展开、窗口藏着)
-/// 按 `notchCardLayerActive` 停表。
+/// 鼠标由这一层的 SwiftUI 接住、再按位置问列表是哪一行:卡片同一个宿主视图里有 SwiftUI 交互视图(悬停判定、按钮),
+/// 里面的 AppKit 列表收不到点击和悬停,所以列表本身 `interactive: false`,滚轮照旧归触控板手势。不做景深模糊:13pt 的字
+/// 一模糊就糊成一片。所在那一层看不见时(没展开、窗口藏着)按 `notchCardLayerActive` 停表。
 ///
 /// 订阅挂在自己的 `NotchLyricListFeed` 上:换句只失效这一块,不打醒整卡(同 `NotchPlayback` 那条纪律)。
 struct NotchExpandedLyricList: View {
     let tint: Color
     @StateObject private var feed = NotchLyricListFeed()
+    @State private var listHandle = LyricsLayerListHandle()
     @Environment(\.notchCardLayerActive) private var layerActive
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.displayScale) private var displayScale
@@ -27,17 +29,36 @@ struct NotchExpandedLyricList: View {
             LyricsLayerList(
                 spec: spec(width: proxy.size.width),
                 nowMs: { PlaybackCoordinator.shared.lyricsTimelineMs() },
-                onTapLine: { index in
-                    let lines = feed.lines
-                    guard PlaybackCoordinator.shared.acceptsSeek, lines.indices.contains(index) else { return }
-                    PlaybackCoordinator.shared.seek(
-                        toMs: max(0, lines[index].timeMs - PlaybackCoordinator.shared.currentLyricsOffsetMs))
-                },
-                interactive: PlaybackCoordinator.shared.acceptsSeek,
-                scrollsWithWheel: false,
-                minimumEdgePadding: 0)
+                onTapLine: { _ in },
+                interactive: false,
+                minimumEdgePadding: 0,
+                handle: listHandle)
+        }
+        .overlay {
+            if PlaybackCoordinator.shared.acceptsSeek {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active(let point): listHandle.view?.hoverLine(at: point)
+                        case .ended: listHandle.view?.hoverLine(at: nil)
+                        }
+                    }
+                    .gesture(SpatialTapGesture().onEnded { value in
+                        guard let index = listHandle.view?.lineIndex(at: value.location) else { return }
+                        seek(toLine: index)
+                    })
+            }
         }
         .accessibilityElement(children: .contain)
+    }
+
+    /// 减回歌词偏移,理由同歌词窗口点行跳转。
+    private func seek(toLine index: Int) {
+        let lines = feed.lines
+        guard PlaybackCoordinator.shared.acceptsSeek, lines.indices.contains(index) else { return }
+        PlaybackCoordinator.shared.seek(
+            toMs: max(0, lines[index].timeMs - PlaybackCoordinator.shared.currentLyricsOffsetMs))
     }
 
     private func spec(width: CGFloat) -> LyricsLayerList.Spec {

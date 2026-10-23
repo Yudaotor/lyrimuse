@@ -1617,8 +1617,8 @@ func runLyricsWindowTests() {
                     && window.components(separatedBy: ".accessibilityAdjustableAction").count - 1 >= 2,
                     true, "读屏: 进度条和音量滑杆有值、能增减")
 
-        expectEqual(sourceBytes(list, contain: "override func acceptsFirstMouse(for event: NSEvent?) -> Bool { window is LyricsMiniPanel || window is NotchLyricsWindow }"),
-                    true, "图层列表: 迷你面板、灵动岛里认第一下点击,点行能跳")
+        expectEqual(sourceBytes(list, contain: "override func acceptsFirstMouse(for event: NSEvent?) -> Bool { window is LyricsMiniPanel }"),
+                    true, "图层列表: 迷你面板里认第一下点击,点行能跳")
         expectEqual(sourceHas(list, "if NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0) == window.windowNumber { updateHover(at:"),
                     true, "图层列表: 滚动时重判悬停只在指针下面最上层是这扇窗时")
         expectEqual(sourceBytes(list, contain: "language: songwriters.isEmpty ? \"\" : L10n.current"),

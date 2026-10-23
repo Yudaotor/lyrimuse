@@ -44,13 +44,14 @@ struct LyricsLayerList: NSViewRepresentable {
     /// 此刻的播放位置(歌词时间轴毫秒,含歌词偏移)。装动画、对表时各读一次。
     let nowMs: () -> Int
     let onTapLine: (Int) -> Void
-    /// 只看不点:不认悬停、点按和滚轮,鼠标事件落到底下的视图(灵动岛上的播放器不能挪进度时)。
+    /// 自己不接鼠标:不认悬停、点按和滚轮,鼠标事件落到底下的视图。灵动岛的多行歌词这样用:那一层里有 SwiftUI 交互视图,
+    /// AppKit 视图本来就收不到鼠标,悬停和点按由宿主接住,再经 `handle` 问是哪一行、点亮哪一行;滚轮归它的触控板手势。
     var interactive = true
-    /// 滚轮滚不滚列表。关着时滚轮交给上一层、列表不动(灵动岛:滚轮归它的触控板手势)。
-    var scrollsWithWheel = true
     /// 列表上下留白的下限(留白本身按视口比例算,见 `LyricsLayerListView.relayout`)。88 是给歌词窗口这种大视口的;
     /// 视口只有一百来 pt 的(灵动岛)传 0,不然还没有当前句时第一句落在视口下沿。
     var minimumEdgePadding: CGFloat = 88
+    /// 宿主自己接鼠标时拿它找到列表视图(`interactive` 那条)。
+    var handle: LyricsLayerListHandle? = nil
 
     func makeNSView(context: Context) -> LyricsLayerListView { LyricsLayerListView() }
 
@@ -58,7 +59,7 @@ struct LyricsLayerList: NSViewRepresentable {
         view.nowProvider = nowMs
         view.onTapLine = onTapLine
         view.interactive = interactive
-        view.scrollsWithWheel = scrollsWithWheel
+        handle?.view = view
         view.minimumEdgePadding = minimumEdgePadding
         view.bindChromeFade(chromeFade)
         view.apply(spec)
@@ -71,11 +72,6 @@ final class LyricsLayerListView: NSView {
     var onTapLine: ((Int) -> Void)?
     /// 不挂窗口、交给离屏渲染画(网页歌词的副屏,19 章);传给间奏点,让它们没有窗口也装动画。
     var rendersDetached = false
-    /// 见 `LyricsLayerList.scrollsWithWheel`。
-    var scrollsWithWheel: Bool {
-        get { scrollView.scrollsWithWheel }
-        set { scrollView.scrollsWithWheel = newValue }
-    }
     /// 见 `LyricsLayerList.minimumEdgePadding`。
     var minimumEdgePadding: CGFloat = 88
     /// 见 `LyricsLayerList.interactive`。关着时 `hitTest` 返回 nil、不挂跟踪区。
@@ -88,7 +84,7 @@ final class LyricsLayerListView: NSView {
     }
 
     private let clip = FlippedView()
-    private let scrollView = LyricsLayerScrollView()
+    private let scrollView = NSScrollView()
     private let document = FlippedView()
     private let rowsLayer = CALayer()
     private let fadeMask = CAGradientLayer()
@@ -918,6 +914,11 @@ final class LyricsLayerListView: NSView {
         return nil
     }
 
+    /// 宿主接住悬停时按位置点亮那一行,nil = 指针离开。坐标是列表自己的(左上原点)。
+    func hoverLine(at point: NSPoint?) {
+        setHovered(point.flatMap { line(at: $0) })
+    }
+
     private func updateHover(at point: NSPoint) {
         setHovered(line(at: point))
     }
@@ -990,8 +991,8 @@ final class FlippedView: NSView {
     var onMouse: ((NSEvent, MouseKind) -> Void)?
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
-    /// 迷你面板、灵动岛不激活 App,第一下点击不认就永远点不动(同 `LyricsMiniHostingView`);完整那扇照旧先点一下激活。
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { window is LyricsMiniPanel || window is NotchLyricsWindow }
+    /// 迷你面板不激活 App,第一下点击不认就永远点不动(同 `LyricsMiniHostingView`);完整那扇照旧先点一下激活。
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { window is LyricsMiniPanel }
     override func mouseDown(with event: NSEvent) {
         if let onMouse { onMouse(event, .down) } else { super.mouseDown(with: event) }
     }
@@ -1000,13 +1001,10 @@ final class FlippedView: NSView {
     }
 }
 
-/// 列表的滚动容器:不吃滚轮时(`LyricsLayerList.scrollsWithWheel`)交给上一层。
-private final class LyricsLayerScrollView: NSScrollView {
-    var scrollsWithWheel = true
-
-    override func scrollWheel(with event: NSEvent) {
-        if scrollsWithWheel { super.scrollWheel(with: event) } else { nextResponder?.scrollWheel(with: event) }
-    }
+/// 宿主自己接鼠标时拿到列表视图的那根线(`LyricsLayerList.handle`)。
+@MainActor
+final class LyricsLayerListHandle {
+    fileprivate(set) weak var view: LyricsLayerListView?
 }
 
 /// 一次后台建表的作废标记:主线程置位,后台每画一行前看一眼。
