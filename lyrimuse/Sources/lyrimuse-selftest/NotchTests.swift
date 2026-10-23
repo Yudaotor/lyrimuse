@@ -2453,7 +2453,10 @@ func runNotchTests() {
                     && sourceHas(stage, "settings.notchExpandedLyricList = AppSettings.defaultNotchExpandedLyricList")
                     && sourceHas(stage, "settings.notchExpandedLyricListLines = AppSettings.defaultNotchExpandedLyricListLines"), true,
                     "多行歌词: 编辑台舞台按列表留高度,两项进「恢复默认」")
-        expectEqual(sourceHas(list, "interactive: false)") && sourceHas(list, "suspendsBlur: true,")
+        expectEqual(sourceHas(list, "interactive: false,\n minimumEdgePadding: 0)")
+                    && sourceHas(src("LyricsLayerList.swift"), "var y = max(minimumEdgePadding, viewport * 0.395)"), true,
+                    "多行歌词: 列表留白不套歌词窗口那条 88pt 下限,没有当前句时第一句不掉到视口下沿")
+        expectEqual(sourceHas(list, "suspendsBlur: true,")
                     && sourceHas(list, "surfaceVisible: layerActive,"), true,
                     "多行歌词: 只看不点、不做景深模糊、所在那一层看不见时停表")
         expectEqual(sourceHas(src("LyricsLayerList.swift"), "override func hitTest(_ point: NSPoint) -> NSView? { interactive ? super.hitTest(point) : nil }"),

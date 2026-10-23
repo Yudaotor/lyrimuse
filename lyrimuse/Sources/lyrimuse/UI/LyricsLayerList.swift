@@ -46,6 +46,9 @@ struct LyricsLayerList: NSViewRepresentable {
     let onTapLine: (Int) -> Void
     /// 只看不点:不认悬停、点按和滚轮,鼠标事件落到底下的视图(灵动岛的多行歌词,滚轮归它的触控板手势)。
     var interactive = true
+    /// 列表上下留白的下限(留白本身按视口比例算,见 `LyricsLayerListView.relayout`)。88 是给歌词窗口这种大视口的;
+    /// 视口只有一百来 pt 的(灵动岛)传 0,不然还没有当前句时第一句落在视口下沿。
+    var minimumEdgePadding: CGFloat = 88
 
     func makeNSView(context: Context) -> LyricsLayerListView { LyricsLayerListView() }
 
@@ -53,6 +56,7 @@ struct LyricsLayerList: NSViewRepresentable {
         view.nowProvider = nowMs
         view.onTapLine = onTapLine
         view.interactive = interactive
+        view.minimumEdgePadding = minimumEdgePadding
         view.bindChromeFade(chromeFade)
         view.apply(spec)
     }
@@ -64,6 +68,8 @@ final class LyricsLayerListView: NSView {
     var onTapLine: ((Int) -> Void)?
     /// 不挂窗口、交给离屏渲染画(网页歌词的副屏,19 章);传给间奏点,让它们没有窗口也装动画。
     var rendersDetached = false
+    /// 见 `LyricsLayerList.minimumEdgePadding`。
+    var minimumEdgePadding: CGFloat = 88
     /// 见 `LyricsLayerList.interactive`。关着时 `hitTest` 返回 nil、不挂跟踪区。
     var interactive = true {
         didSet {
@@ -412,7 +418,7 @@ final class LyricsLayerListView: NSView {
         laidOutGap = gapView?.index
         let fontSize = s.style.fontSize
         // 顶 / 底留白按视口比例(同 SwiftUI 版 VStack 的 padding):offset 0 就是开场版式,最后一句也能锚到 41%。
-        var y = max(88, viewport * 0.395)
+        var y = max(minimumEdgePadding, viewport * 0.395)
         var placed = false
         func next(_ h: CGFloat) -> CGFloat {
             if placed { y += s.lineSpacing }
@@ -430,7 +436,7 @@ final class LyricsLayerListView: NSView {
             return top
         }
         if let footer { footerY = next(footer.size.height) }
-        contentHeight = y + max(88, viewport * 0.55)
+        contentHeight = y + max(minimumEdgePadding, viewport * 0.55)
         let target = targetScroll(s, viewport: viewport)
         // 滑块此刻画在哪(滚动一落位它就被同步到新位置,得在那之前记下)
         let thumbFrom = thumb.presentation()?.position.y ?? thumb.position.y

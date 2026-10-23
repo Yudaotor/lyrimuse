@@ -27,7 +27,8 @@ struct NotchExpandedLyricList: View {
                 spec: spec(width: proxy.size.width),
                 nowMs: { PlaybackCoordinator.shared.lyricsTimelineMs() },
                 onTapLine: { _ in },
-                interactive: false)
+                interactive: false,
+                minimumEdgePadding: 0)
         }
         .accessibilityElement(children: .contain)
     }
