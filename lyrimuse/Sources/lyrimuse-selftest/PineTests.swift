@@ -363,6 +363,30 @@ func runPineTests() {
             mediaControlCommand: "next-track"), .menuAccessibility(.pinePlayer, .nextTrack), "Pine 菜单: 焦点被占时下一首走菜单")
     }
 
+    // ---- 播放列表(给引擎预解析)----
+    do {
+        typealias L = PinePlaylist
+        expectEqual(L.track(.init(title: "The City (Firecracker)", artistAlbum: "Unwoman ∙ Unremembered", duration: "04:44",
+                                  fileName: "2011-09-unwoman-theCityfirecracker.mp3")),
+                    .init(title: "The City (Firecracker)", artist: "Unwoman", album: "Unremembered", duration: 284,
+                          file: "2011-09-unwoman-theCityfirecracker.mp3"),
+                    "Pine 列表: 「歌手 ∙ 专辑」拆开(两边带空格),时长换成秒,文件名带上")
+        expectEqual(L.track(.init(title: "你的答案", artistAlbum: "阿冗", duration: "03:39", fileName: "阿冗 - 你的答案.mp3")).artist, "阿冗",
+                    "Pine 列表: 没有专辑时整栏是歌手")
+        let untagged = L.track(.init(title: "周杰伦 - 稻香.mp3", artistAlbum: " ", duration: "03:43", fileName: "周杰伦 - 稻香.mp3"))
+        let parsed = L.track(.init(title: "周杰伦 - 稻香", artistAlbum: "周杰伦", duration: "03:43", fileName: "周杰伦 - 稻香.mp3"))
+        expectEqual([untagged.title, untagged.artist, parsed.title, parsed.artist], ["稻香", "周杰伦", "稻香", "周杰伦"],
+                    "Pine 列表: 没写标签的(解析文件名前后两种写法)按文件名拆,跟放到时一样")
+        expectEqual(["03:39", "1:02:03", "0:07", "", "3", "a:b", "1:2:3:4"].map(L.duration), [219, 3723, 7, nil, nil, nil, nil],
+                    "Pine 列表: 时长 mm:ss / h:mm:ss,别的认不出")
+        expectEqual([.list, .repeatOne, .repeatAll, .shuffle, nil].map(L.repeating), ["off", "one", "all", nil, nil],
+                    "Pine 列表: 循环档换成 off / one / all,读不出不报")
+        let reply = L.QueueReply(tracks: [.init(title: "A", artist: "B", album: "", duration: 1, file: "a.mp3")], repeating: "all")
+        expectEqual(PlayerQueryServer.encodedReply(reply),
+                    #"{"repeating":"all","tracks":[{"album":"","artist":"B","duration":1,"file":"a.mp3","title":"A"}]}"#,
+                    "Pine 列表: 交给引擎的 JSON(键名跟 pinequeue.go 一起改)")
+    }
+
     // ---- 接线契约 ----
     do {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()

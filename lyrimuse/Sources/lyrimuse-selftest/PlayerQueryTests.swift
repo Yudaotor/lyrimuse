@@ -17,7 +17,7 @@ func runPlayerQueryTests() {
     let quote = String(UnicodeScalar(UInt8(34)))
     let newline = String(UnicodeScalar(UInt8(10)))
 
-    // ---- 判请求:只认七种,参数逐项校验;契约版本不认识、没有 id、过期的不答 ----
+    // ---- 判请求:只认八种,参数逐项校验;契约版本不认识、没有 id、过期的不答 ----
     expectEqual(S.decide(request("apple_music_queue", count: 5), now: now), .run(.appleMusicQueue(count: 5)),
                 "查询: Music 系统待播队列 5 首")
     for bad in [0, 21] {
@@ -41,6 +41,7 @@ func runPlayerQueryTests() {
     expectEqual(S.decide(request("spotify_shuffle"), now: now), .run(.spotifyShuffle), "查询: Spotify 随机")
     expectEqual(S.decide(request("kaset_queue"), now: now), .run(.kasetQueue), "查询: Kaset 待播队列")
     expectEqual(S.decide(request("vox_repeat"), now: now), .run(.voxRepeat), "查询: VOX 循环档")
+    expectEqual(S.decide(request("pine_queue"), now: now), .run(.pineQueue), "查询: Pine 播放列表")
     for platform in ["youtubeMusic", "spotifyWeb"] {
         expectEqual(S.decide(request("browser_queue", bundle: "com.apple.Safari", platform: platform), now: now),
                     .run(.browserQueue(bundleID: "com.apple.Safari", platformID: platform)), "查询: \(platform) 网页队列")
@@ -98,10 +99,11 @@ func runPlayerQueryTests() {
         for needle in ["output.map(PlayerQueryTracks.appleMusicSystemQueue)", "output.map(PlayerQueryTracks.appleMusicUpcoming)",
                        "output.map(PlayerQueryTracks.appleMusicAlbumTracks)", "output.flatMap(PlayerQueryShuffle.parse)",
                        "output.flatMap(PlayerQueryRepeat.parseVox)", "Self.osascript(Self.voxRepeatScript, timeout: Self.shuffleTimeout)",
+                       "PinePlaylist.queueReply().flatMap { Self.encodedReply($0) }",
                        "output.map(site.parse)", "KasetPlayerInfo.queueReply(fromScriptOutput:"] {
             expectEqual(server.contains(needle), true, "查询(契约): 输出整理成结构再交(\(needle))")
         }
-        expectEqual(S.Kind.allCases.count, 7, "查询: 七种,跟引擎的 appQuery 常量一一对应")
+        expectEqual(S.Kind.allCases.count, 8, "查询: 八种,跟引擎的 appQuery 常量一一对应")
     }
 
     // ---- 盯配置目录:原子写(临时文件改名)触发回调;目录本身删掉报告失效(09 章决策 175)----

@@ -32,6 +32,8 @@ import (
 //                   整理好(见 kasetqueue.go)。
 //   洛雪音乐     —— 本地库里有各列表的曲目和顺序,记着在放哪个列表的第几首(见 lxmusic.go);「稍后播放」不落盘。
 //                   开着随机时按 shuffleCandidates 交一批。
+//   VOX          —— 读它沙盒容器里的播放列表库(见 voxqueue.go)。
+//   Pine Player  —— App 经辅助功能读它界面上的播放列表(见 pinequeue.go);随机开没开读不出,从换歌行为推断。
 //
 // 所以队列路径拿不到时**退回同专辑预取**,而不是什么都不做:这些情况恰恰会从"有预取"
 // 退成"没有"。系统层面也没有兜底 —— MediaRemote 的导出符号里,队列相关的全是
@@ -96,8 +98,8 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 		// 脚本接口不给播放列表,读它沙盒容器里的库(voxqueue.go)。
 		return voxUpcoming(artist, title, n)
 	case pinePlayerBundleID:
-		// 没有脚本接口;列表存在它沙盒容器里。界面上的播放列表读得到,App 还没代读(02 章决策 155)。
-		return nil, false
+		// 没有脚本接口、列表不落盘,App 经辅助功能读它界面上的播放列表(pinequeue.go)。
+		return pineUpcoming(artist, title, n)
 	case lxMusicBundleID:
 		return lxMusicUpcoming(artist, title, n)
 	}

@@ -11,12 +11,12 @@ import (
 )
 
 // 预解析要的那几样播放器查询交给 App 代跑:Music.app 的系统待播队列与当前列表往后几首、Music.app 资料库里某张专辑的曲目、
-// Spotify 有没有开随机、VOX 的循环档、浏览器里 YouTube Music / Spotify 网页版的待播队列、Kaset 的待播队列。引擎自己不发 AppleEvent,
+// Spotify 有没有开随机、VOX 的循环档、Pine 的播放列表、浏览器里 YouTube Music / Spotify 网页版的待播队列、Kaset 的待播队列。引擎自己不发 AppleEvent,
 // 系统设置「自动化」里只剩 Lyrimuse 一条,授权框也只可能来自 App。
 //
 // 通道是一对共享文件:引擎写一份带类型的请求(`lyrimuse-player-query-request.json`,种类 + 参数,不带脚本),
 // App 只跑自己内置的那几段只读脚本,把输出整理成结构、以 JSON 写回 `lyrimuse-player-query-reply.json`(App 侧
-// PlayerQueryServer):一串曲目的那几种是 appQueryTracks(App 侧 PlayerQueryTracks),Spotify 随机状态是 {"shuffling":…},VOX 循环档是 {"repeating":…}(voxqueue.go),
+// PlayerQueryServer):一串曲目的那几种是 appQueryTracks(App 侧 PlayerQueryTracks),Spotify 随机状态是 {"shuffling":…},VOX 循环档是 {"repeating":…}(voxqueue.go),Pine 的列表是 pineQueueReply(pinequeue.go),
 // Kaset 的队列是 kasetQueueReply(kasetqueue.go)。脚本、加载器、网页 JS 的原始输出怎么认全在 App;这边只解 JSON,
 // 做「当前这首对不对得上、往后取几首」。键名两边一起改,样例在 shared/testdata/player-query/。
 // 一次只有一个请求在途,按 id 认应答。App 不可用(没在跑、退出中)时不发,直接当查不到,调用方照旧退回同专辑预取。
@@ -29,6 +29,7 @@ const (
 	appQueryBrowserQueue          = "browser_queue"
 	appQueryKasetQueue            = "kaset_queue"
 	appQueryVoxRepeat             = "vox_repeat"
+	appQueryPineQueue             = "pine_queue"
 
 	appQuerySchema = 2
 

@@ -7,11 +7,11 @@ import os
 /// 引擎写一份带类型的请求(`lyrimuse-player-query-request.json`:种类 + 参数,不带脚本),这里只跑自己内置的
 /// 几段只读脚本和系统待播队列那次查询(`NowPlayingClientsProbe.queue`),把输出整理成结构、以 JSON 写回
 /// `lyrimuse-player-query-reply.json`:一串曲目的那几种是 `PlayerQueryTracks`,Spotify 随机状态是 `PlayerQueryShuffle`,
-/// VOX 循环档是 `PlayerQueryRepeat`,
+/// VOX 循环档是 `PlayerQueryRepeat`,Pine 的播放列表是 `PinePlaylist.QueueReply`,
 /// Kaset 的队列是 `KasetPlayerInfo.QueueReply`。引擎只解 JSON(`appquery.go`);契约两边各钉一份:selftest
 /// 「player-query」组、Go `appquery_test.go`(读这个文件对账),样例在 shared/testdata/player-query/。
 ///
-/// 只认这七种查询,参数逐项校验;网页队列那种只对用户把这个平台配对给了的浏览器跑。请求写出超过 `requestMaxAge`
+/// 只认这八种查询,参数逐项校验;网页队列那种只对用户把这个平台配对给了的浏览器跑。请求写出超过 `requestMaxAge`
 /// 才看到就不答(引擎那边早不等了)。一次只处理一份请求,引擎那边也一次只发一份。
 /// 只在以 Lyrimuse.app 身份运行时启动:selftest 与 `swift run` 共用配置目录,同 `PlaybackStatePublisher`。
 ///
@@ -51,6 +51,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
         case browserQueue = "browser_queue"
         case kasetQueue = "kaset_queue"
         case voxRepeat = "vox_repeat"
+        case pineQueue = "pine_queue"
     }
 
     public struct Request: Codable, Equatable, Sendable {
@@ -117,6 +118,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
         /// Kaset 的待播队列连同循环模式,整理成 `KasetPlayerInfo.QueueReply` 的 JSON。
         case kasetQueue
         case voxRepeat
+        /// Pine 的播放列表连同循环档,经辅助功能读(`PinePlaylist`)。
+        case pineQueue
     }
 
     public enum Decision: Equatable, Sendable {
@@ -158,6 +161,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
             return .run(.kasetQueue)
         case .voxRepeat:
             return .run(.voxRepeat)
+        case .pineQueue:
+            return .run(.pineQueue)
         }
     }
 
@@ -448,6 +453,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
             let output = Self.osascript(Self.voxRepeatScript, timeout: Self.shuffleTimeout)
             return makeReply(id: id, output: output.flatMap(PlayerQueryRepeat.parseVox).flatMap { Self.encodedReply($0) },
                              error: "script failed")
+        case .pineQueue:
+            return makeReply(id: id, output: PinePlaylist.queueReply().flatMap { Self.encodedReply($0) }, error: "playlist unavailable")
         }
     }
 
