@@ -280,7 +280,7 @@ A Dynamic Island-style capsule beside the notch at the top of the screen; Macs w
 
 ### Menu bar lyrics
 
-The current line right in the menu bar, scrolling when it is too long instead of being cut off. Add a second line for the next line, the translation or romanization. It can also sit in the middle of the menu bar, right beside the notch on displays that have one, or show just the title and artist.
+The current line right in the menu bar, scrolling when it is too long instead of being cut off. Add a second line for the next line, the translation or romanization. It can also sit in the middle of the menu bar, right beside the notch on displays that have one, or show just the title, with or without the artist.
 
 - Off by default
 - Settings: Lyrics Display › Menu Bar › Menu Bar Lyrics

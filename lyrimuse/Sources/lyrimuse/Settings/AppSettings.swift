@@ -113,11 +113,15 @@ enum MenuBarLyricsPlacement: String, Codable, Hashable, CaseIterable {
     case screenCenter
 }
 
-// 菜单栏那一格显示什么:歌词,还是「歌名 — 歌手」。歌名那一档不随歌词换句,暂停、广告照旧收回图标
+// 菜单栏那一格显示什么:歌词、只有歌名,还是「歌名 — 歌手」。后两档不随歌词换句,暂停、广告照旧收回图标
 // (判据在 Core 的 `MenuBarSlotPolicy.displayText`)。
 enum MenuBarLyricsContent: String, Codable, Hashable, CaseIterable {
     case lyrics
-    case songTitle
+    case title
+    case titleArtist
+
+    /// 显示的是歌名(带不带歌手都算),不是歌词。
+    var showsSongTitle: Bool { self != .lyrics }
 }
 
 // 「装得下的短句靠哪边」—— 菜单栏歌词和灵动岛歌词行共用同一个类型和同一个分段控件

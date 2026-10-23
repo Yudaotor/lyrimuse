@@ -175,11 +175,11 @@ final class MenuBarStatusItem: NSObject {
                           coordinator.$highResArtworkThumbnail.map { _ in () })
             .dropFirst(3).filter { AppSettings.shared.menuBarIconShowsArtwork }.receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        // 「显示内容」歌词 / 歌名;歌名那一档还要跟着歌手名换(同一首歌歌手名可能晚一拍到)。
+        // 「显示内容」歌词 / 歌名 / 歌名和歌手;带歌手那一档还要跟着歌手名换(同一首歌歌手名可能晚一拍到)。
         settings.$menuBarLyricsContent.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         coordinator.$displayArtist.dropFirst().removeDuplicates()
-            .filter { _ in AppSettings.shared.menuBarLyricsContent == .songTitle }.receive(on: DispatchQueue.main)
+            .filter { _ in AppSettings.shared.menuBarLyricsContent == .titleArtist }.receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 歌词旁那枚带进度的图标:开/关/换边要立刻看到(用户就是盯着菜单栏点的)。
         // 必须走 refresh():它改的是这一项的**槽宽**(多让出 图标宽 + 5pt),而槽宽只在
@@ -1192,8 +1192,8 @@ final class MenuBarStatusItem: NSObject {
         // 副行「下一句」却还是同一句。配速(lineDwellSeconds)与提前量(恒 0)随之切成 currentLine
         // 那套 —— 跟设置页预览(它一直镜像 currentLine)同一口径。
         let secondaryKind = settings.menuBarSecondaryLine
-        // 「显示内容」选了歌名:这一格只显示「歌名 — 歌手」,不按下一句歌词定宽、不用整首的起步宽度。
-        let songTitleOnly = settings.menuBarLyricsContent == .songTitle
+        // 「显示内容」选了歌名(带不带歌手):这一格只显示歌名,不按下一句歌词定宽、不用整首的起步宽度。
+        let songTitleOnly = settings.menuBarLyricsContent.showsSongTitle
         let line = secondaryKind.displayedLine(compactLine: coordinator.menuBarLyrics.compactLine, currentLine: coordinator.menuBarLyrics.line)
         // 前奏/间奏占位给的是三点那个**记号串**,不是音符 —— 记号串在 scrollingLabel 那边
         // 会被换成三颗 CALayer 圆点(跟悬浮歌词/灵动岛/歌词窗口同一条 GapDotsCurve)。
@@ -1210,7 +1210,8 @@ final class MenuBarStatusItem: NSObject {
             showsTitleWhenNoLyrics: settings.menuBarShowsTitleWhenNoLyrics,
             placeholderGlyph: MenuBarMarqueeRenderer.placeholderGlyph,
             iconBesideLyrics: settings.menuBarLyricsIconPosition != .off,
-            songTitleOnly: songTitleOnly, artist: coordinator.displayArtist)
+            songTitleOnly: songTitleOnly,
+            artist: settings.menuBarLyricsContent == .titleArtist ? coordinator.displayArtist : "")
         let text = display?.text ?? ""
         titleFallbackActive = display?.isFallback ?? false
         // 「♪ 歌名」兜底不是歌词句,没有副行可言,照旧按单行(13pt)画。

@@ -53745,29 +53745,6 @@
         }
       }
     },
-    "歌名：显示「歌名 — 歌手」，不随歌词切换。暂停时仍收起为图标" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Title: shows \"Title — Artist\" instead of the lyrics. Still collapses to the icon when paused"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌名：显示「歌名 — 歌手」，不随歌词切换。暂停时仍收起为图标"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌名：顯示「歌名 — 歌手」，不隨歌詞切換。暫停時仍收起為圖像"
-          }
-        }
-      }
-    },
     "歌名 — 歌手" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -54086,6 +54063,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 回報的播放進度只精確到秒。授權後，Lyrimuse 將讀取其介面上的進度條校準位置、讀取播放清單以預先解析即將播放的歌曲，並操作其選單以控制循環；系統媒體焦點被其他 App 佔用時，也可暫停、恢復和切換上一首或下一首。未授權時仍可使用，但拖動進度後歌詞可能差半秒左右，不提供循環按鈕，失去焦點時也無法控制播放"
+          }
+        }
+      }
+    },
+    "歌名和歌手" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Title & Artist"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌名和歌手"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌名和歌手"
+          }
+        }
+      }
+    },
+    "歌名、歌名和歌手：不随歌词切换，暂停时仍收起为图标" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Title and Title & Artist don't follow the lyrics, and still collapse to the icon when paused"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌名、歌名和歌手：不随歌词切换，暂停时仍收起为图标"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌名、歌名和歌手：不隨歌詞切換，暫停時仍收起為圖像"
           }
         }
       }

@@ -114,9 +114,15 @@ struct MenuBarPreviewBar<Lane: View>: View {
     /// 舞台整块按**真实菜单栏**的明暗渲染(见 stage 末尾那段);菜单栏由亮转暗时要重画。
     @ObservedObject private var menuBarAppearance = MenuBarAppearanceStore.shared
     @State private var currentLine: SyncedLyricLine?
-    /// 「歌名 — 歌手」(`MenuBarSlotPolicy.songTitleText`),「显示内容」选了歌名时演它。
-    @State private var songTitle: String?
-    private var songTitleOnly: Bool { settings.menuBarLyricsContent == .songTitle }
+    /// 正在放的歌名和歌手,「显示内容」选了歌名(带不带歌手)时按 `MenuBarSlotPolicy.songTitleText` 拼出来演。
+    @State private var songTitleParts: (title: String, artist: String) = ("", "")
+    private var songTitleOnly: Bool { settings.menuBarLyricsContent.showsSongTitle }
+    private var songTitleShown: String {
+        let withArtist = settings.menuBarLyricsContent == .titleArtist
+        return MenuBarSlotPolicy.songTitleText(title: songTitleParts.title,
+                                               artist: withArtist ? songTitleParts.artist : "")
+            ?? (withArtist ? L10n.t("歌名 — 歌手") : L10n.t("歌名"))
+    }
     /// 预览演的那一句歌词。「显示内容」选了歌名时没有歌词句:染色、跟唱、副行、配速、起步宽度一律按没有歌词算,
     /// 跟本体把歌名当兜底文字那一套同一口径。
     private var line: SyncedLyricLine? { songTitleOnly ? nil : currentLine }
@@ -131,7 +137,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
     @State private var songRowWidth: CGFloat?
 
     private var fullText: String {
-        if songTitleOnly { return songTitle ?? L10n.t("歌名 — 歌手") }
+        if songTitleOnly { return songTitleShown }
         if let text = line?.plainText, !text.isEmpty { return text }
         return L10n.t("这里是一句歌词示例")
     }
@@ -347,7 +353,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
         .frame(maxWidth: .infinity)
         .onReceive(PlaybackCoordinator.shared.$currentLine.removeDuplicates()) { currentLine = $0 }
         .onReceive(PlaybackCoordinator.shared.$displayTitle.combineLatest(PlaybackCoordinator.shared.$displayArtist)) {
-            songTitle = MenuBarSlotPolicy.songTitleText(title: $0, artist: $1)
+            songTitleParts = ($0, $1)
         }
         // 逐字染色对表通道,跟 MenuBarStatusItem.syncKaraokeClock 订阅的是同四个源
         // (锚点/暂停位置/时间轴偏移/播放态),搬到这里重算是因为预览没有自己的

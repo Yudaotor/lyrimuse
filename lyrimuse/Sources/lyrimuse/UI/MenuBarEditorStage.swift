@@ -140,8 +140,8 @@ struct MenuBarEditorStage: View {
     private var layoutSummary: String {
         var parts = [MenuBarPlacementRow.centerInUse(settings)
             ? MenuBarPlacementRow.label(for: .screenCenter) : settings.menuBarLyricsWidthMode.displayName]
-        if settings.menuBarLyricsContent == .songTitle {
-            parts.append(MenuBarContentRow.label(for: .songTitle))
+        if settings.menuBarLyricsContent.showsSongTitle {
+            parts.append(MenuBarContentRow.label(for: settings.menuBarLyricsContent))
         } else if settings.menuBarSecondaryLine != AppSettings.defaultMenuBarSecondaryLine {
             parts.append("\(L10n.t("副行")) · \(settings.menuBarSecondaryLine.displayName)")
         }
@@ -166,7 +166,7 @@ struct MenuBarEditorStage: View {
             parts.append(FontFamilyPicker.displayName(for: settings.menuBarLyricsFontFamily))
         }
         parts.append(settings.menuBarLyricsFontWeight.displayName)
-        if !settings.menuBarSecondaryLine.showsSecondaryRow || settings.menuBarLyricsContent == .songTitle,
+        if !settings.menuBarSecondaryLine.showsSecondaryRow || settings.menuBarLyricsContent.showsSongTitle,
            settings.menuBarLyricsFontSize > 0 {
             parts.append(String(format: L10n.t("%@pt"), "\(Int(MenuBarMarqueeRenderer.font.pointSize))"))
         }
@@ -507,14 +507,15 @@ struct MenuBarLayoutRows: View {
     }
 }
 
-/// 「显示内容」行 —— 菜单栏那一格显示歌词,还是「歌名 — 歌手」(见 MenuBarLyricsContent)。
+/// 「显示内容」行 —— 菜单栏那一格显示歌词、歌名,还是「歌名 — 歌手」(见 MenuBarLyricsContent)。
 struct MenuBarContentRow: View {
     @ObservedObject private var settings = AppSettings.shared
 
     static func label(for content: MenuBarLyricsContent) -> String {
         switch content {
         case .lyrics: return L10n.t("歌词")
-        case .songTitle: return L10n.t("歌名")
+        case .title: return L10n.t("歌名")
+        case .titleArtist: return L10n.t("歌名和歌手")
         }
     }
 
@@ -522,7 +523,7 @@ struct MenuBarContentRow: View {
         SettingsRow(
             icon: "text.quote",
             title: L10n.t("显示内容"),
-            help: L10n.t("歌名：显示「歌名 — 歌手」，不随歌词切换。暂停时仍收起为图标")
+            help: L10n.t("歌名、歌名和歌手：不随歌词切换，暂停时仍收起为图标")
         ) {
             SettingsPillSegmentedControl(
                 selection: $settings.menuBarLyricsContent,

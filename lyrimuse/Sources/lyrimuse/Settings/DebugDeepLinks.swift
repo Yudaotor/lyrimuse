@@ -69,10 +69,10 @@ enum DebugDeepLinks {
             if let screen { AppSettings.shared.menuBarCenterScreen = screen }
             MenuBarStatusItem.shared.setNeedsRefresh()
             logger.notice("debug menubar center=\(String(describing: center), privacy: .public) ignoreNotch=\(String(describing: ignoreNotch), privacy: .public)")
-        case let .menuBarDisplay(artwork, songTitle):
+        case let .menuBarDisplay(artwork, content):
             if let artwork { AppSettings.shared.menuBarIconShowsArtwork = artwork }
-            if let songTitle { AppSettings.shared.menuBarLyricsContent = songTitle ? .songTitle : .lyrics }
-            logger.notice("debug menubar display artwork=\(String(describing: artwork), privacy: .public) songTitle=\(String(describing: songTitle), privacy: .public)")
+            if let value = content.flatMap(MenuBarLyricsContent.init(rawValue:)) { AppSettings.shared.menuBarLyricsContent = value }
+            logger.notice("debug menubar display artwork=\(String(describing: artwork), privacy: .public) content=\(content ?? "-", privacy: .public)")
         case let .japaneseReading(style):
             AppSettings.shared.japaneseReadingStyle = style
             LocalPlaybackSource.shared.japaneseReading = style
