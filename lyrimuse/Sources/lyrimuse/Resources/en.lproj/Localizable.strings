@@ -1693,6 +1693,7 @@
 "来自维基百科" = "From Wikipedia";
 "来自网易云音乐" = "From NetEase Cloud Music";
 "来自酷我音乐" = "From Kuwo Music";
+"来自酷狗音乐" = "From Kugou Music";
 "查找更优歌词" = "Search for better lyrics";
 "查看、编辑和重新搜索已缓存的歌词" = "View, edit and re-search cached lyrics";
 "查看「%@」" = "Show “%@”";
@@ -2557,6 +2558,7 @@
 "配色主题" = "Color Theme";
 "酷我音乐" = "Kuwo Music";
 "酷狗音乐" = "Kugou Music";
+"酷狗音乐专辑页" = "Kugou Music album page";
 "酷狗音乐播放的歌曲 ID 一致" = "Same Kugou Music song ID from playback";
 "酷狗音乐歌曲页" = "Kugou Music song page";
 "采用此候选" = "Use This Candidate";

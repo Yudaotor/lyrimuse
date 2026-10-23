@@ -1651,9 +1651,9 @@
             "zh-Hant": "歌曲、專輯和歌手簡介"
           },
           "desc": {
-            "en": "Click the title, artist or album in the lyrics window or the expanded notch to read about it. Album and artist notes come from Apple Music first; failing that, from Soda Music and NetEase Cloud Music (Chinese interface only), then Wikipedia via YouTube Music, then Last.fm. Song notes come from QQ Music (Chinese interface only) or Last.fm. Last.fm needs your account connected.",
-            "zh-Hans": "在歌词窗口或展开的灵动岛上点按歌名、歌手名或专辑名即可查看简介。专辑和歌手简介优先取自 Apple Music；没有时，中文界面依次查找汽水音乐、网易云音乐，然后是 YouTube Music 上的维基百科介绍，最后是 Last.fm。歌曲简介在中文界面优先取自 QQ 音乐，其次是 Last.fm。使用 Last.fm 来源需要连接 Last.fm 账号。",
-            "zh-Hant": "在歌詞視窗或展開的動態島上按一下歌名、歌手名或專輯名即可查看簡介。專輯和歌手簡介優先取自 Apple Music；沒有時，中文介面依次尋找汽水音樂、網易雲音樂，然後是 YouTube Music 上的維基百科介紹，最後是 Last.fm。歌曲簡介在中文介面優先取自 QQ 音樂，其次是 Last.fm。使用 Last.fm 來源需要連線至 Last.fm 帳號。"
+            "en": "Click the title, artist or album in the lyrics window or the expanded notch to read about it. Album and artist notes come from Apple Music first; failing that, from Soda Music, Kugou Music and NetEase Cloud Music (Chinese interface only), then Wikipedia via YouTube Music, then Last.fm. Song notes come from QQ Music (Chinese interface only) or Last.fm. Last.fm needs your account connected.",
+            "zh-Hans": "在歌词窗口或展开的灵动岛上点按歌名、歌手名或专辑名即可查看简介。专辑和歌手简介优先取自 Apple Music；没有时，中文界面依次查找汽水音乐、酷狗音乐、网易云音乐，然后是 YouTube Music 上的维基百科介绍，最后是 Last.fm。歌曲简介在中文界面优先取自 QQ 音乐，其次是 Last.fm。使用 Last.fm 来源需要连接 Last.fm 账号。",
+            "zh-Hant": "在歌詞視窗或展開的動態島上按一下歌名、歌手名或專輯名即可查看簡介。專輯和歌手簡介優先取自 Apple Music；沒有時，中文介面依次尋找汽水音樂、酷狗音樂、網易雲音樂，然後是 YouTube Music 上的維基百科介紹，最後是 Last.fm。歌曲簡介在中文介面優先取自 QQ 音樂，其次是 Last.fm。使用 Last.fm 來源需要連線至 Last.fm 帳號。"
           },
           "settings": []
         },

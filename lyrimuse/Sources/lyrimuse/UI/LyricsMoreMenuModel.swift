@@ -154,6 +154,7 @@ final class LyricsMoreMenuModel: ObservableObject {
             if let u = links.sodaArtist { out.append(.init(id: "soda-artist", title: L10n.t("汽水音乐歌手页"), url: u)) }
         } else if bundleID == PlaybackPlayer.kugou.bundleIdentifier {
             if let u = links.kugouSong { out.append(.init(id: "kugou-song", title: L10n.t("酷狗音乐歌曲页"), url: u)) }
+            if let u = links.kugouAlbum { out.append(.init(id: "kugou-album", title: L10n.t("酷狗音乐专辑页"), url: u)) }
         } else if bundleID == PlaybackPlayer.kkbox.bundleIdentifier {
             // KKBOX 的是进 App 的深链(见 PlatformLinks.kkboxAlbumAppURL),文案跟上面几条浏览器页不同。这首歌本身走菜单里
             // 「在 KKBOX 中显示」那一行(有歌曲深链时打开它),别在这里再加一行同名的。

@@ -617,7 +617,7 @@ Apple Music、Spotify、Kaset 和 VOX 需要「自动化」权限才能读取播
 
 ### 歌曲、专辑和歌手简介
 
-在歌词窗口或展开的灵动岛上点按歌名、歌手名或专辑名即可查看简介。专辑和歌手简介优先取自 Apple Music；没有时，中文界面依次查找汽水音乐、网易云音乐，然后是 YouTube Music 上的维基百科介绍，最后是 Last.fm。歌曲简介在中文界面优先取自 QQ 音乐，其次是 Last.fm。使用 Last.fm 来源需要连接 Last.fm 账号。
+在歌词窗口或展开的灵动岛上点按歌名、歌手名或专辑名即可查看简介。专辑和歌手简介优先取自 Apple Music；没有时，中文界面依次查找汽水音乐、酷狗音乐、网易云音乐，然后是 YouTube Music 上的维基百科介绍，最后是 Last.fm。歌曲简介在中文界面优先取自 QQ 音乐，其次是 Last.fm。使用 Last.fm 来源需要连接 Last.fm 账号。
 
 <a id="feature-player-linkage"></a>
 

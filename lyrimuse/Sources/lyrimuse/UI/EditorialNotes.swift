@@ -20,14 +20,15 @@ struct EditorialCard: Equatable, Codable {
     }
 
     /// 正文从哪来。Last.fm 的是 CC BY-SA 授权的用户百科,YouTube Music 给的是维基百科条目(同样 CC BY-SA),网易云、QQ 音乐、
-    /// 汽水音乐、Spotify、酷我音乐的是它们家的介绍,这几种卡片底部都注明出处。
+    /// 汽水音乐、酷狗音乐、Spotify、酷我音乐的是它们家的介绍,这几种卡片底部都注明出处。
     enum Source: Equatable, Codable {
-        case appleMusic, kuwo, lastfm, netease, qqMusic, soda, spotify, youtubeMusic
+        case appleMusic, kugou, kuwo, lastfm, netease, qqMusic, soda, spotify, youtubeMusic
 
         /// 卡片底部那一行出处;Apple Music 的不注明。YouTube Music 那一路的正文是维基百科的,注明维基百科。
         var attribution: String? {
             switch self {
             case .appleMusic: return nil
+            case .kugou: return L10n.t("来自酷狗音乐")
             case .kuwo: return L10n.t("来自酷我音乐")
             case .lastfm: return L10n.t("来自 Last.fm")
             case .netease: return L10n.t("来自网易云音乐")
@@ -68,8 +69,9 @@ struct EditorialCard: Equatable, Codable {
 /// 专辑介绍(专辑要跟正在放的对得上)。只在中文界面问(它的介绍只有中文),排在 Last.fm 前面;前一个明确没有才问下一个,
 /// 没问成就停在那儿,下次再试。按歌曲 ID、歌手 ID、专辑 ID 记结论。
 /// **还有汽水音乐、YouTube Music 两路**:用汽水放过的歌,缓存里有汽水给的专辑 / 歌手 ID,直接取它的介绍(`SodaEditorialInfo`,
-/// 只在中文界面问、排在网易云前面);YouTube Music 的专辑 / 歌手介绍是维基百科条目,按界面语言给、没有时退英文
-/// (`YouTubeMusicEditorialInfo`),所有界面语言都问,排在 Last.fm 前面。中文界面:汽水 → 网易云 → YouTube Music → Last.fm;
+/// 只在中文界面问、排在网易云前面;用酷狗放过的歌同理,按酷狗专辑 id 取,`KugouEditorialInfo`);YouTube Music 的专辑 / 歌手
+/// 介绍是维基百科条目,按界面语言给、没有时退英文
+/// (`YouTubeMusicEditorialInfo`),所有界面语言都问,排在 Last.fm 前面。中文界面:汽水 → 酷狗 → 网易云 → YouTube Music → Last.fm;
 /// 别的界面:YouTube Music → Last.fm。按分享页地址、专辑 ID / 「歌手|专辑」、频道 ID 记结论。
 /// **歌曲简介没有 Apple 那一档**(Apple Music 不给单曲写介绍):中文界面先问 QQ 音乐(`QQSongInfo`,这首在缓存里的
 /// QQ 歌曲页 → 歌曲详情里的「简介」),再问 Last.fm `track.getInfo`;别的界面只问 Last.fm。按 songmid、「歌手|歌名」记结论。
@@ -345,8 +347,8 @@ final class EditorialNotesStore: ObservableObject {
 
     // MARK: - 兜底(Apple Music 明确没有时)
 
-    /// Apple Music 明确没有这张专辑 / 这位歌手的简介:中文界面依次问汽水、网易云、酷我、Spotify、YouTube Music、Last.fm;别的界面问
-    /// Spotify、YouTube Music、Last.fm(汽水、网易云、酷我的介绍只有中文,`NeteaseEditorialInfo.isUsable`;YouTube Music 按界面语言给;
+    /// Apple Music 明确没有这张专辑 / 这位歌手的简介:中文界面依次问汽水、酷狗、网易云、酷我、Spotify、YouTube Music、Last.fm;别的界面问
+    /// Spotify、YouTube Music、Last.fm(汽水、酷狗、网易云、酷我的介绍只有中文,`NeteaseEditorialInfo.isUsable`;YouTube Music 按界面语言给;
     /// Spotify 只有歌手、只在本机缓存里有,见 `spotifyArtist`)。
     /// 歌曲简介没有 Apple 那一档:中文界面先问 QQ 音乐、
     /// 再问 Last.fm;别的界面只问 Last.fm(QQ 的简介同样只有中文)。
@@ -356,7 +358,7 @@ final class EditorialNotesStore: ObservableObject {
         switch kind {
         case .album, .artist:
             order = NeteaseEditorialInfo.isUsable(uiLanguage: language)
-                ? [.soda, .netease, .kuwo, .spotify, .youtubeMusic, .lastfm] : [.spotify, .youtubeMusic, .lastfm]
+                ? [.soda, .kugou, .netease, .kuwo, .spotify, .youtubeMusic, .lastfm] : [.spotify, .youtubeMusic, .lastfm]
         case .song:
             order = QQSongInfo.isUsable(uiLanguage: language) ? [.qqMusic, .lastfm] : [.lastfm]
         }
@@ -390,13 +392,94 @@ final class EditorialNotesStore: ObservableObject {
         case (.youtubeMusic, .album): youtubeMusicAlbum(track, then: next)
         case (.youtubeMusic, .artist): youtubeMusicArtist(track, then: next)
         case (.spotify, .artist): spotifyArtist(track, then: next)
+        case (.kugou, .album): kugouAlbum(track, then: next)
+        case (.kugou, .artist): kugouArtist(track, then: next)
         case (.kuwo, .album): kuwoIntro(.album, track, then: next)
         case (.kuwo, .artist): kuwoIntro(.artist, track, then: next)
-        // 这一类在这个来源上没有(网易云、汽水、YouTube Music、酷我不给单曲写介绍,QQ 这一路只问歌曲,Spotify 本机只有歌手简介),
-        // Apple Music 在兜底链之前就问过了。
-        case (.netease, .song), (.soda, .song), (.youtubeMusic, .song), (.qqMusic, .album), (.qqMusic, .artist),
+        // 这一类在这个来源上没有(网易云、汽水、酷狗、YouTube Music、酷我不给单曲写介绍,QQ 这一路只问歌曲,Spotify 本机只有
+        // 歌手简介),Apple Music 在兜底链之前就问过了。
+        case (.netease, .song), (.soda, .song), (.kugou, .song), (.youtubeMusic, .song), (.qqMusic, .album), (.qqMusic, .artist),
              (.spotify, .album), (.spotify, .song), (.kuwo, .song), (.appleMusic, _):
             fallback(kind, track, via: sources.dropFirst())
+        }
+    }
+
+    // MARK: - 酷狗
+
+    /// 酷狗的专辑、歌手介绍:按这首的酷狗专辑页(用酷狗放过才有,专辑 id 是引擎按它正在放的文件记的,`PlatformLinks.kugouAlbum`)
+    /// 取专辑介绍和专辑歌手(`KugouEditorialInfo`),歌手介绍按专辑歌手的 id 再取,不按名字搜。按专辑 id、歌手 id 记结论。
+    private let kugouAlbums = EditorialMemo<String, KugouEditorialInfo.Album>("kugou-album") { $0.text == nil }
+    private let kugouSingers = EditorialMemo<String, KugouEditorialInfo.Singer>("kugou-singer") { $0.text == nil }
+    private var kugouInFlight: Set<String> = []
+
+    /// 专辑:卡片标题、副标题用播放器报的专辑名和歌手。没有酷狗专辑页、酷狗没有介绍都算明确没有。
+    private func kugouAlbum(_ track: Track, then: @escaping (EditorialCard?) -> Void) {
+        let links = EnrichCacheReader.platformLinks(artist: track.artist, title: track.title, album: track.album)
+        guard let id = KugouEditorialInfo.albumID(fromAlbumPage: links?.kugouAlbum), !track.album.isEmpty else { return then(nil) }
+        withKugouAlbum(id, for: track) { album in
+            then(album.text.map {
+                EditorialCard(kind: .album, title: track.album, subtitle: track.artist, facts: [], text: $0, source: .kugou)
+            })
+        }
+    }
+
+    /// 歌手:专辑署名的歌手跟正在放的对得上(`YouTubeMusicEditorialInfo.artistMatches`)才取他的介绍;合辑、别人的专辑算没有。
+    /// 卡片标题用酷狗写的歌手名。
+    private func kugouArtist(_ track: Track, then: @escaping (EditorialCard?) -> Void) {
+        let links = EnrichCacheReader.platformLinks(artist: track.artist, title: track.title, album: track.album)
+        guard let id = KugouEditorialInfo.albumID(fromAlbumPage: links?.kugouAlbum) else { return then(nil) }
+        withKugouAlbum(id, for: track) { [weak self] album in
+            guard let self, let singerID = album.singerID,
+                  YouTubeMusicEditorialInfo.artistMatches(album.singerName ?? "", playingArtist: track.artist) else { return then(nil) }
+            self.withKugouSinger(singerID, for: track) { singer in
+                then(singer.text.map {
+                    EditorialCard(kind: .artist, title: singer.name ?? track.artist, subtitle: "", facts: [], text: $0, source: .kugou)
+                })
+            }
+        }
+    }
+
+    /// 一张专辑的介绍和专辑歌手:记过就地回调;没有就问一次,繁体界面转成繁体。回来时已经换歌,按当前曲目重查。
+    private func withKugouAlbum(_ id: String, for track: Track, _ body: @escaping (KugouEditorialInfo.Album) -> Void) {
+        if let known = kugouAlbums.value(id) { return body(known) }
+        let flight = "album:" + id
+        guard !kugouInFlight.contains(flight) else { return }
+        kugouInFlight.insert(flight)
+        let language = L10n.current
+        Self.logger.notice("kugou album intro \(id, privacy: .public)")
+        Task { [weak self] in
+            let fetched = await Task.detached(priority: .utility) { await KugouEditorialInfo.fetchAlbum(id: id) }.value
+            guard let self else { return }
+            self.kugouInFlight.remove(flight)
+            guard let fetched else { return }
+            let album = KugouEditorialInfo.Album(text: fetched.text.map { KugouEditorialInfo.localized($0, uiLanguage: language) },
+                                                 singerID: fetched.singerID, singerName: fetched.singerName)
+            self.kugouAlbums[id] = .some(album)
+            Self.logger.notice("kugou album intro \(id, privacy: .public): \(album.text.map { "\($0.count) chars" } ?? "none", privacy: .public)")
+            guard self.currentKey == track.key else { return self.refreshCurrent() }
+            body(album)
+        }
+    }
+
+    /// 一位歌手的名字和介绍:记过就地回调;没有就问一次,繁体界面转成繁体。回来时已经换歌,按当前曲目重查。
+    private func withKugouSinger(_ id: String, for track: Track, _ body: @escaping (KugouEditorialInfo.Singer) -> Void) {
+        if let known = kugouSingers.value(id) { return body(known) }
+        let flight = "singer:" + id
+        guard !kugouInFlight.contains(flight) else { return }
+        kugouInFlight.insert(flight)
+        let language = L10n.current
+        Self.logger.notice("kugou singer intro \(id, privacy: .public)")
+        Task { [weak self] in
+            let fetched = await Task.detached(priority: .utility) { await KugouEditorialInfo.fetchSinger(id: id) }.value
+            guard let self else { return }
+            self.kugouInFlight.remove(flight)
+            guard let fetched else { return }
+            let singer = KugouEditorialInfo.Singer(name: fetched.name,
+                                                   text: fetched.text.map { KugouEditorialInfo.localized($0, uiLanguage: language) })
+            self.kugouSingers[id] = .some(singer)
+            Self.logger.notice("kugou singer intro \(id, privacy: .public): \(singer.text.map { "\($0.count) chars" } ?? "none", privacy: .public)")
+            guard self.currentKey == track.key else { return self.refreshCurrent() }
+            body(singer)
         }
     }
 

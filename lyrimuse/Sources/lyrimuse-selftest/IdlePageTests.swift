@@ -331,6 +331,43 @@ func runIdlePageTests() {
             expectEqual(K.infoURL(.album, id: "abc") == nil, true, "酷我简介: id 不是数字不拼")
             expectEqual(K.decodeEntities("A &unknown; B &amp"), "A &unknown; B &amp", "酷我简介: 认不出的实体原样留着")
         }
+        do {
+            typealias G = KugouEditorialInfo
+            expectEqual(P.kugouAlbumURL(id: "966846")?.absoluteString, "https://www.kugou.com/album/info/966846/", "酷狗专辑页 URL")
+            expectEqual(P.kugouAlbumURL(id: "-1") == nil, true, "酷狗专辑页: 本机曲库的 -1 不拼")
+            expectEqual(P.kugouAlbumURL(id: nil) == nil, true, "酷狗专辑页: 没有专辑 id")
+            expectEqual(G.albumID(fromAlbumPage: P.kugouAlbumURL(id: "966846")), "966846", "酷狗专辑页 → 专辑 id")
+            expectEqual(G.albumID(fromAlbumPage: URL(string: "https://www.kugou.com/mixsong/abcd12.html")), nil, "酷狗歌曲页不当专辑页")
+            expectEqual(G.albumID(fromAlbumPage: URL(string: "https://example.com/album/info/1/")), nil, "别的站点不认")
+            expectEqual(G.albumInfoURL(id: "966846")?.absoluteString, "https://mobileservice.kugou.com/api/v3/album/info?albumid=966846",
+                        "酷狗专辑介绍走 https 的 mobileservice")
+            expectEqual(G.singerInfoURL(id: "x1") == nil, true, "酷狗歌手介绍: id 不是数字不拼")
+            let album = #"{"status":1,"errcode":0,"data":{"albumname":"叶惠美","intro":"⊙历经一年企划\r\n\r\n杰伦 2003 最新专辑","singerid":3520,"singername":" 周杰伦 "}}"#
+            expectEqual(G.album(fromResponse: Data(album.utf8)),
+                        G.Album(text: "⊙历经一年企划\n\n杰伦 2003 最新专辑", singerID: "3520", singerName: "周杰伦"),
+                        "酷狗专辑: 介绍保留分行、取专辑歌手")
+            expectEqual(G.album(fromResponse: Data(#"{"status":1,"errcode":0,"data":null}"#.utf8)),
+                        G.Album(text: nil, singerID: nil, singerName: nil), "酷狗专辑: data 为 null = 没有这张(实测)")
+            expectEqual(G.album(fromResponse: Data(#"{"status":1,"data":{"intro":"","singerid":0}}"#.utf8)),
+                        G.Album(text: nil, singerID: nil, singerName: nil), "酷狗专辑: 空介绍是没有,歌手 id 0 不算")
+            expectEqual(G.album(fromResponse: Data(#"{"status":0,"error":"参数不合法"}"#.utf8)) == nil, true, "酷狗专辑: status 0 = 没问成")
+            expectEqual(G.album(fromResponse: Data("<html>".utf8)) == nil, true, "酷狗专辑: 解不开 = 没问成")
+            let singer = #"{"status":1,"data":{"singername":"周杰伦","intro":"周杰伦，英文名字JayChou。"}}"#
+            expectEqual(G.singer(fromResponse: Data(singer.utf8)), G.Singer(name: "周杰伦", text: "周杰伦，英文名字JayChou。"),
+                        "酷狗歌手: 名字和介绍")
+            expectEqual(G.singer(fromResponse: Data(#"{"status":0,"errcode":0,"error":"参数不合法"}"#.utf8)) == nil, true,
+                        "酷狗歌手: status 0 = 没问成")
+            expectEqual(G.isUsable(uiLanguage: "en"), false, "酷狗简介: 只在中文界面问")
+            let menu = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("lyrimuse/UI/LyricsMoreMenuModel.swift"), encoding: .utf8)) ?? ""
+            expectEqual(sourceHas(menu, #"if let u = links.kugouAlbum { out.append(.init(id: "kugou-album", title: L10n.t("酷狗音乐专辑页"), url: u)) }"#),
+                        true, "「⋯」菜单: 用酷狗放时给酷狗专辑页")
+            let reader = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"), encoding: .utf8)) ?? ""
+            expectEqual(sourceHas(reader, "kugouAlbum: PlatformLinks.kugouAlbumURL(id: entry.playerAlbumIDs?[PlaybackPlayer.kugou.bundleIdentifier]))")
+                        && sourceHas(reader, #"case playerAlbumIDs = "player_album_ids""#), true,
+                        "酷狗专辑页: 按缓存里引擎记的 player_album_ids 拼")
+        }
         expectEqual(P.youtubeMusicAlbumURL(browseID: "MPREb_OUh6Wf3kq7x")?.absoluteString,
                     "https://music.youtube.com/browse/MPREb_OUh6Wf3kq7x", "YouTube Music 专辑页 URL")
         expectEqual(P.youtubeMusicArtistURL(channelID: "UCZONOh3FvcD-a_b")?.absoluteString,

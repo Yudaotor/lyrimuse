@@ -81,6 +81,9 @@ public struct PlatformLinks: Sendable, Equatable {
     /// 酷狗网页歌曲页 `https://www.kugou.com/mixsong/<EMixSongID>.html`(浏览器)。引擎用酷狗放这首时按它报的 mixId 找的,
     /// 形状闸见 `kugouSongURL`。
     public let kugouSong: URL?
+    /// 酷狗网页专辑页 `https://www.kugou.com/album/info/<id>/`(浏览器)。引擎用酷狗放这首时按它正在放的文件记的专辑 id
+    /// (`player_album_ids`),形状闸见 `kugouAlbumURL`。
+    public let kugouAlbum: URL?
 
     public var isEmpty: Bool {
         appleMusic == nil && qqSong == nil && qqAlbum == nil && qqArtist == nil && neteaseSong == nil && spotifySong == nil
@@ -88,7 +91,7 @@ public struct PlatformLinks: Sendable, Equatable {
             && sodaSong == nil && sodaAlbum == nil && sodaArtist == nil && kkboxAlbum == nil && kkboxArtist == nil
             && amazonAlbum == nil && amazonArtist == nil && spotifyAlbum == nil && spotifyArtist == nil
             && youtubeMusicAlbum == nil && youtubeMusicArtist == nil
-            && kkboxArtistWeb == nil && kuwoSong == nil && kugouSong == nil
+            && kkboxArtistWeb == nil && kuwoSong == nil && kugouSong == nil && kugouAlbum == nil
     }
 
     public init(appleMusic: URL?, qqSong: URL?, qqAlbum: URL?, qqArtist: URL?, neteaseSong: URL?, spotifySong: URL? = nil,
@@ -98,7 +101,8 @@ public struct PlatformLinks: Sendable, Equatable {
                 spotifyAlbum: URL? = nil, spotifyArtist: URL? = nil,
                 youtubeMusicAlbum: URL? = nil, youtubeMusicArtist: URL? = nil,
                 appleMusicWeb: URL? = nil, kkboxWeb: URL? = nil,
-                kkboxArtistWeb: URL? = nil, lxMusicPlatform: Platform? = nil, kuwoSong: URL? = nil, kugouSong: URL? = nil) {
+                kkboxArtistWeb: URL? = nil, lxMusicPlatform: Platform? = nil, kuwoSong: URL? = nil, kugouSong: URL? = nil,
+                kugouAlbum: URL? = nil) {
         self.appleMusic = appleMusic
         self.qqSong = qqSong
         self.qqAlbum = qqAlbum
@@ -125,6 +129,7 @@ public struct PlatformLinks: Sendable, Equatable {
         self.lxMusicPlatform = lxMusicPlatform
         self.kuwoSong = kuwoSong
         self.kugouSong = kugouSong
+        self.kugouAlbum = kugouAlbum
     }
 
     /// 歌曲页所在的平台 —— 给「简介」面板那行选文案用(名字在 App 层本地化,这里只给身份)。
@@ -260,6 +265,12 @@ public struct PlatformLinks: Sendable, Equatable {
     }
 
     /// 汽水音乐专辑页 / 歌手页(网页分享页)。id 的形状同 `sodaTrackURL`(引擎的 `playerCatalogIDOK`):一串数字。
+    /// 酷狗专辑 id 是一串数字(引擎 playerSongIDOK 同一道闸)。
+    public static func kugouAlbumURL(id: String?) -> URL? {
+        guard let id, isCatalogID(id[...], length: 1...20, extra: [], digitsOnly: true) else { return nil }
+        return URL(string: "https://www.kugou.com/album/info/\(id)/")
+    }
+
     public static func sodaAlbumURL(id: String) -> URL? {
         isCatalogID(id[...], length: 1...32, extra: [], digitsOnly: true)
             ? URL(string: "https://music.douyin.com/qishui/share/album?album_id=" + id) : nil

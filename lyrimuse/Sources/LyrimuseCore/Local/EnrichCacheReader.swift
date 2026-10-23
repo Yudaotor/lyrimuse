@@ -82,6 +82,8 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     // 各播放器报的这一首的曲目 id(引擎的 enrichEntry.PlayerSongIDs,键是 bundle id)。只用洛雪那一项,喂
     // PlatformLinks.lxMusicPlatform。
     let playerSongIDs: [String: String]?
+    /// 跟 `playerSongIDs` 成对:那一首所在的专辑 id,键同样是 bundle id(引擎 `enrichEntry.PlayerAlbumIDs`)。
+    let playerAlbumIDs: [String: String]?
     // 各播放器自己给这首记下的专辑 id、第一位歌手的 id(引擎的 enrichEntry.SodaAlbumID 那一组,见
     // lyrimuse-engine/playercatalog.go;YouTube Music 的跟专辑一起判,见 kasetalbum.go)。只喂 PlatformLinks 的专辑页、歌手页。
     let sodaAlbumID: String?
@@ -191,6 +193,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         case sodaURL = "soda_url"
         case kugouURL = "kugou_url"
         case playerSongIDs = "player_song_ids"
+        case playerAlbumIDs = "player_album_ids"
         case sodaAlbumID = "soda_album_id"
         case sodaArtistID = "soda_artist_id"
         case kkboxAlbumID = "kkbox_album_id"
@@ -274,6 +277,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         sodaURL = try c.decodeIfPresent(String.self, forKey: .sodaURL)
         kugouURL = try? c.decodeIfPresent(String.self, forKey: .kugouURL)
         playerSongIDs = try? c.decodeIfPresent([String: String].self, forKey: .playerSongIDs)
+        playerAlbumIDs = try? c.decodeIfPresent([String: String].self, forKey: .playerAlbumIDs)
         sodaAlbumID = try c.decodeIfPresent(String.self, forKey: .sodaAlbumID)
         sodaArtistID = try c.decodeIfPresent(String.self, forKey: .sodaArtistID)
         kkboxAlbumID = try c.decodeIfPresent(String.self, forKey: .kkboxAlbumID)
@@ -681,7 +685,8 @@ public enum EnrichCacheReader {
             kkboxArtistWeb: PlatformLinks.kkboxArtistWebURL(songPage: kk.kkboxURL ?? "", artistID: own(entry.kkboxArtistID, kk.kkboxArtistID)),
             lxMusicPlatform: PlatformLinks.lxMusicPlatform(songID: entry.playerSongIDs?[PlaybackPlayer.lxMusic.bundleIdentifier]),
             kuwoSong: PlatformLinks.kuwoSongURL(lxSongID: entry.playerSongIDs?[PlaybackPlayer.lxMusic.bundleIdentifier]),
-            kugouSong: PlatformLinks.kugouSongURL(kg.kugouURL ?? ""))
+            kugouSong: PlatformLinks.kugouSongURL(kg.kugouURL ?? ""),
+            kugouAlbum: PlatformLinks.kugouAlbumURL(id: entry.playerAlbumIDs?[PlaybackPlayer.kugou.bundleIdentifier]))
         return links.isEmpty ? nil : links
     }
 

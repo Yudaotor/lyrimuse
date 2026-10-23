@@ -403,7 +403,9 @@ type kugouLibraryRow struct {
 
 // kugouPlayingSong:酷狗此刻在放的这首(「此刻在播」那份 plist 里当前曲目的 strFileHash)在客户端曲库里的歌曲 id(mixId)与
 // 专辑 id(18 章决策 69)。plist 记的要跟播放器报的是同一首(歌名一致、署名对得上),两边时长都知道时要对得上;认不出、曲库里
-// 没有这个 hash 返回空串。要起 plutil、sqlite3 子进程,调用方不能持着 enrichMu。
+// 没有这个 hash 返回空串。曲库的专辑 id 一律是 -1(本机曲库不记专辑),这时按这个文件的 hash 问酷狗一次它属于哪张专辑
+// (kugouAlbumIDByHash,按 hash 记住),专辑简介、专辑页用它(05 章决策 93)。要起 plutil、sqlite3 子进程、可能联网,
+// 调用方不能持着 enrichMu。
 func kugouPlayingSong(artist, title string, durationSecs float64) (mixID, albumID string) {
 	path := kugouNowPlayingPath()
 	if path == "" {
@@ -419,7 +421,13 @@ func kugouPlayingSong(artist, title string, durationSecs float64) (mixID, albumI
 		len(rows) == 0 || (rows[0].Time > 0 && durationSecs > 0 && !sourceDurationFits(durationSecs, rows[0].Time)) {
 		return "", ""
 	}
-	return rawDigitsID(rows[0].Mix), rawDigitsID(rows[0].Album)
+	mixID, albumID = rawDigitsID(rows[0].Mix), rawDigitsID(rows[0].Album)
+	if mixID != "" && albumID == "" {
+		ctx, cancel := withCancelAfter(withBackgroundOutbound(context.Background()), 5*time.Second)
+		defer cancel()
+		albumID = kugouAlbumIDByHash(ctx, h)
+	}
+	return mixID, albumID
 }
 
 // kugouCreditMatches:播放器报的署名是不是酷狗记的这首的歌手(singerName),或者在它的全署名(musicName 的「歌手 - 」那一半)里。

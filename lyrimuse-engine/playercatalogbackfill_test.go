@@ -472,3 +472,25 @@ func TestKugouLibraryDBPath(t *testing.T) {
 		t.Errorf("两份都在,新位置的改得晚: %s", got)
 	}
 }
+
+// 本机曲库的专辑 id 一律是 -1:按这个文件的 hash 问酷狗它属于哪张专辑(这里预先放好 hash → 专辑 id,不连网),成对记进条目。
+func TestKugouPlayingSongAlbumByHash(t *testing.T) {
+	env := newTestKugouPlistEnv(t)
+	env.writeQueue([]testKugouPlistSong{{"甲 - 第一首", "甲", "BBBB01", 200}}, 0)
+	old := kugouNowPlayingOverride
+	kugouNowPlayingOverride = kugouQueuePlistOverride
+	t.Cleanup(func() { kugouNowPlayingOverride = old })
+	writeTestKugouLibrary(t, []testKugouLibRow{{"甲 - 第一首", "甲", "bbbb01", 200, "586000009", -1, 3}})
+	kugouAlbumMu.Lock()
+	oldIDs := kugouAlbumIDCache
+	kugouAlbumIDCache = map[string]string{"BBBB01": "966846"}
+	kugouAlbumMu.Unlock()
+	t.Cleanup(func() {
+		kugouAlbumMu.Lock()
+		kugouAlbumIDCache = oldIDs
+		kugouAlbumMu.Unlock()
+	})
+	if mix, album := kugouPlayingSong("甲", "第一首", 200); mix != "586000009" || album != "966846" {
+		t.Errorf("曲库专辑 id 是 -1 时按 hash 取: %q %q", mix, album)
+	}
+}

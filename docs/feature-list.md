@@ -617,7 +617,7 @@ One click in the ⋯ menu opens the song, its album or its artist on the platfor
 
 ### Song, album and artist notes
 
-Click the title, artist or album in the lyrics window or the expanded notch to read about it. Album and artist notes come from Apple Music first; failing that, from Soda Music and NetEase Cloud Music (Chinese interface only), then Wikipedia via YouTube Music, then Last.fm. Song notes come from QQ Music (Chinese interface only) or Last.fm. Last.fm needs your account connected.
+Click the title, artist or album in the lyrics window or the expanded notch to read about it. Album and artist notes come from Apple Music first; failing that, from Soda Music, Kugou Music and NetEase Cloud Music (Chinese interface only), then Wikipedia via YouTube Music, then Last.fm. Song notes come from QQ Music (Chinese interface only) or Last.fm. Last.fm needs your account connected.
 
 <a id="feature-player-linkage"></a>
 
