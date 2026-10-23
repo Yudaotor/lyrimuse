@@ -387,6 +387,8 @@ func qqObservePosition(list string, pos int) (shuffled bool) {
 // 当前这首先看 LastPlayingIndex 那一条,对不上再在整份列表里按歌名歌手找(归档只在开播时写,
 // 换过歌之后 LastPlayingIndex 必然过期)。列表里找不到 = 这份文件是上一次播放留下的(用户切去
 // 别的播放器听、或者刚启动还没播),返回 ok=false,让调用方退回同专辑预取。
+// 播放模式先请 App 读它菜单里打勾的那一档(playerPlaybackMode):单曲循环时没有要预取的;读得到就按它判随机,
+// 读不到才按换歌行为推断(qqObservePosition)。
 // 推断为随机播放时交出的是「可能随机到的」那一批(见 queueShuffleWholeListMax 头注),n 不适用;
 // 那一批里全都解析过了也返回 ok=true(交给队列这一层处理过了,不必再退回同专辑预取)。
 // qqPlayingList 是解开的播放列表归档,以及此刻在播的这首在里面的位置。
@@ -476,7 +478,15 @@ func qqUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
 	if st, err := os.Stat(path); err == nil {
 		list = fmt.Sprintf("%s/%d/%d", path, st.ModTime().UnixNano(), len(items))
 	}
-	if qqObservePosition(list, pos) {
+	mode, modeOK := playerPlaybackMode(qqMusicBundleID)
+	if modeOK && mode == playerModeRepeatOne {
+		return nil, true
+	}
+	shuffled := qqObservePosition(list, pos)
+	if modeOK {
+		shuffled = mode == playerModeShuffle
+	}
+	if shuffled {
 		return qqShuffleCandidates(objs, items, pos), true
 	}
 	res := make([]upcomingTrack, 0, n)

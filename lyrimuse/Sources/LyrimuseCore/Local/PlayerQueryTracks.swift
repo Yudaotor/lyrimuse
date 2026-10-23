@@ -229,3 +229,13 @@ public struct PlayerQueryRepeat: Codable, Equatable, Sendable {
         }
     }
 }
+
+/// 某个播放器此刻的播放模式(`MusicPlaybackController.MusicPlaybackMode` 的原值:`list` / `shuffle` / `repeatOne` / `repeatAll`)。
+/// 随机优先:开着随机时读不出循环档。
+public struct PlayerQueryMode: Codable, Equatable, Sendable {
+    public var mode: String
+
+    public init(mode: String) {
+        self.mode = mode
+    }
+}

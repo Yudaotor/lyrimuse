@@ -389,3 +389,61 @@ func TestQQUpcomingPrefersExactOverLooseIndex(t *testing.T) {
 		t.Fatalf("得到 %+v,期望之后", got)
 	}
 }
+
+// withPlayerMode 把问播放模式换成固定答案。
+func withPlayerMode(t *testing.T, mode string, ok bool) {
+	t.Helper()
+	saved := playerPlaybackMode
+	playerPlaybackMode = func(string) (string, bool) { return mode, ok }
+	t.Cleanup(func() { playerPlaybackMode = saved })
+}
+
+// 读得到 QQ 的播放模式时按它来:单曲循环不预取;随机第一首就交整份;顺序播放时手动跳着点也照列表取。
+func TestQQUpcomingFollowsPlaybackMode(t *testing.T) {
+	writeTestQQArchive(t, 0, testQQSongs(20))
+	withPlayerMode(t, playerModeRepeatOne, true)
+	if got, ok := qqUpcoming("甲", "第3首", 5); !ok || len(got) != 0 {
+		t.Errorf("单曲循环:不预取、也不退回同专辑: ok=%v %d 首", ok, len(got))
+	}
+	withPlayerMode(t, playerModeShuffle, true)
+	if got, ok := qqUpcoming("甲", "第3首", 5); !ok || len(got) != 19 {
+		t.Errorf("读到随机:开播第一首就交整份列表: ok=%v %d 首", ok, len(got))
+	}
+	writeTestQQArchive(t, 0, testQQSongs(20))
+	withPlayerMode(t, playerModeList, true)
+	qqUpcoming("甲", "第0首", 5)
+	if got, ok := qqUpcoming("甲", "第9首", 5); !ok || len(got) != 5 || got[0].title != "第10首" {
+		t.Errorf("读到顺序:跳着点也照列表往后取: ok=%v %+v", ok, got)
+	}
+}
+
+// 播放模式由 App 代读:请求种类 playback_mode、带 bundle id;只认 App 那边 MusicPlaybackMode 的四个原值。
+func TestPlayerPlaybackModeAsksTheApp(t *testing.T) {
+	reqPath, repPath := useAppQueryChannel(t, true)
+	answer := `{"mode":"repeatOne"}`
+	seen := fakePlayerQueryApp(t, reqPath, repPath, func(r appQueryRequest) *appQueryReply {
+		return &appQueryReply{Schema: appQuerySchema, ID: r.ID, OK: true, Output: answer}
+	})
+	if mode, ok := playerPlaybackMode(qqMusicBundleID); !ok || mode != playerModeRepeatOne {
+		t.Fatalf("应拿到 App 交回的模式: %q %v", mode, ok)
+	}
+	req := <-seen
+	if req.Kind != appQueryPlaybackMode || req.BundleID != qqMusicBundleID {
+		t.Errorf("请求: %+v", req)
+	}
+	for _, out := range []string{`{"mode":"one"}`, `{}`, `oops`} {
+		answer = out
+		if mode, ok := playerPlaybackMode(qqMusicBundleID); ok {
+			t.Errorf("认不出的应答 %s 当读不到: %q", out, mode)
+		}
+	}
+	src, err := os.ReadFile("../lyrimuse/Sources/LyrimuseCore/Local/MusicPlaybackController.swift")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range []string{playerModeList, playerModeShuffle, playerModeRepeatOne, playerModeRepeatAll} {
+		if !strings.Contains(string(src), "case "+v+"\n") {
+			t.Errorf("MusicPlaybackMode 里找不到 case %s(两边一起改)", v)
+		}
+	}
+}

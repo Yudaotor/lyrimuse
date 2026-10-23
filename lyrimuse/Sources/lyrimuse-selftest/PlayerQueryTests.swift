@@ -17,7 +17,7 @@ func runPlayerQueryTests() {
     let quote = String(UnicodeScalar(UInt8(34)))
     let newline = String(UnicodeScalar(UInt8(10)))
 
-    // ---- 判请求:只认八种,参数逐项校验;契约版本不认识、没有 id、过期的不答 ----
+    // ---- 判请求:只认九种,参数逐项校验;契约版本不认识、没有 id、过期的不答 ----
     expectEqual(S.decide(request("apple_music_queue", count: 5), now: now), .run(.appleMusicQueue(count: 5)),
                 "查询: Music 系统待播队列 5 首")
     for bad in [0, 21] {
@@ -42,6 +42,12 @@ func runPlayerQueryTests() {
     expectEqual(S.decide(request("kaset_queue"), now: now), .run(.kasetQueue), "查询: Kaset 待播队列")
     expectEqual(S.decide(request("vox_repeat"), now: now), .run(.voxRepeat), "查询: VOX 循环档")
     expectEqual(S.decide(request("pine_queue"), now: now), .run(.pineQueue), "查询: Pine 播放列表")
+    expectEqual(S.decide(request("playback_mode", bundle: PlaybackPlayer.qqMusic.bundleIdentifier), now: now),
+                .run(.playbackMode(.qqMusic)), "查询: 某一家的播放模式")
+    for bad in [nil, "com.example.none", PlaybackPlayer.kugou.bundleIdentifier, PlaybackPlayer.auto.bundleIdentifier] {
+        expectEqual(S.decide(request("playback_mode", bundle: bad), now: now), .fail("unsupported player"),
+                    "查询: 播放模式只问认得、能读模式的播放器(\(bad ?? "nil"))")
+    }
     for platform in ["youtubeMusic", "spotifyWeb"] {
         expectEqual(S.decide(request("browser_queue", bundle: "com.apple.Safari", platform: platform), now: now),
                     .run(.browserQueue(bundleID: "com.apple.Safari", platformID: platform)), "查询: \(platform) 网页队列")
@@ -100,10 +106,11 @@ func runPlayerQueryTests() {
                        "output.map(PlayerQueryTracks.appleMusicAlbumTracks)", "output.flatMap(PlayerQueryShuffle.parse)",
                        "output.flatMap(PlayerQueryRepeat.parseVox)", "Self.osascript(Self.voxRepeatScript, timeout: Self.shuffleTimeout)",
                        "PinePlaylist.queueReply().flatMap { Self.encodedReply($0) }",
+                       "MusicPlaybackController.playbackMode(for: player).flatMap { Self.encodedReply(PlayerQueryMode(mode: $0.mode.rawValue)) }",
                        "output.map(site.parse)", "KasetPlayerInfo.queueReply(fromScriptOutput:"] {
             expectEqual(server.contains(needle), true, "查询(契约): 输出整理成结构再交(\(needle))")
         }
-        expectEqual(S.Kind.allCases.count, 8, "查询: 八种,跟引擎的 appQuery 常量一一对应")
+        expectEqual(S.Kind.allCases.count, 9, "查询: 九种,跟引擎的 appQuery 常量一一对应")
     }
 
     // ---- 盯配置目录:原子写(临时文件改名)触发回调;目录本身删掉报告失效(09 章决策 175)----
@@ -232,6 +239,10 @@ func runPlayerQueryTests() {
                     "VOX 循环档: 没在跑(空输出)、认不出的值问不到")
         expectEqual(S.encodedReply(PlayerQueryRepeat(repeating: "all")), "{" + quote + "repeating" + quote + ":" + quote + "all" + quote + "}",
                     "VOX 循环档: 交给引擎的 JSON")
+        expectEqual(S.encodedReply(PlayerQueryMode(mode: "repeatOne")), "{" + quote + "mode" + quote + ":" + quote + "repeatOne" + quote + "}",
+                    "播放模式: 交给引擎的 JSON")
+        expectEqual(MusicPlaybackController.MusicPlaybackMode.allCases.map(\.rawValue), ["list", "shuffle", "repeatOne", "repeatAll"],
+                    "播放模式: 原值就是交给引擎的写法(引擎 playerModeValues 一起改)")
     }
 
     // ---- 契约:文件名与 JSON 键名跟引擎的 json tag 一致 ----
