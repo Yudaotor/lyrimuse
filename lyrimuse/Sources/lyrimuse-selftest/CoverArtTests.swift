@@ -2226,5 +2226,36 @@ func runCoverArtTests() {
                         && src("LyrimuseCore/Local/LXMusicOpenAPI.swift").contains("let url = Self.ownCoverURL(state) else { return nil }")
                         && src("lyrimuse/Settings/DiscordPresenceController.swift").contains("LXMusicOpenAPI.ownCoverURL($0)"), true,
                     "占位专辑名(契约): 洛雪自带封面、开放 API 取图、Discord 都走滤过占位专辑的入口")
+
+        // ---- Spotify Canvas 当歌词窗口背景(07 章决策 183) ----
+        let canvas = "https://canvaz.scdn.co/upload/licensor/7JGwF0zhX9oItt9901OvB5/video/3c536bc079704182813b8f636922489c.cnvs.mp4"
+        expectEqual(SpotifyCanvas.videoURL(canvas)?.absoluteString, canvas, "Canvas 地址: canvaz.scdn.co 上的 .cnvs.mp4 收")
+        expectEqual([canvas.replacingOccurrences(of: "https:", with: "http:"),
+                     canvas.replacingOccurrences(of: "canvaz.scdn.co", with: "canvaz.scdn.co.evil.com"),
+                     canvas + "?x=1",
+                     canvas.replacingOccurrences(of: ".cnvs.mp4", with: ".jpg"),
+                     "https://canvaz.scdn.co/other/a.cnvs.mp4",
+                     "https://canvaz.scdn.co/upload/../a.cnvs.mp4", ""].map { SpotifyCanvas.videoURL($0) == nil },
+                    Array(repeating: true, count: 7), "Canvas 地址: 不是 https、别的主机、带参数、不是视频、不在 upload 下、带 ..、空的不收")
+        func canvasEntry(_ json: String) -> EnrichCacheEntry { try! JSONDecoder().decode(EnrichCacheEntry.self, from: Data(json.utf8)) }
+        expectEqual(EnrichCacheReader.spotifyCanvasURL(canvasEntry(#"{"spotify_canvas_url":"\#(canvas)"}"#))?.absoluteString, canvas,
+                    "Canvas 地址: 从缓存条目 spotify_canvas_url 解码")
+        expectEqual(EnrichCacheReader.spotifyCanvasURL(canvasEntry(#"{"spotify_canvas_url":"https://example.com/a.cnvs.mp4"}"#)) == nil
+                        && EnrichCacheReader.spotifyCanvasURL(canvasEntry("{}")) == nil, true, "Canvas 地址: 形状不对、没有的不给")
+        let canvasRefresh = sourceBody("private func refreshSpotifyCanvas(onlyIfMissing: Bool = false, enabled: Bool? = nil) {", in: coordinator)
+        expectEqual(sourceHas(canvasRefresh, "enabled ?? AppSettings.shared.spotifyCanvasEnabled")
+                        && sourceHas(canvasRefresh, "AppSettings.shared.lyricsWindowBackgroundMode == .artwork")
+                        && sourceHas(canvasRefresh, "!ProcessInfo.processInfo.isLowPowerModeEnabled, MotionCoverDemand.cardShown")
+                        && sourceHas(canvasRefresh, "guard !Task.isCancelled, LocalPlaybackSource.shared.title == title else { return }"), true,
+                    "Canvas(契约): 开关、封面背景、低电量、封面卡在屏上四道闸;下完换了歌不挂")
+        expectEqual(sourceHas(coordinator, "self?.refreshMotionCover()\n                    self?.refreshSpotifyCanvas()")
+                        && sourceHas(coordinator, ".sink { [weak self] enabled in self?.refreshSpotifyCanvas(enabled: enabled) },")
+                        && sourceHas(coordinator, "self?.refreshMotionCover(onlyIfMissing: true)\n                    self?.refreshSpotifyCanvas(onlyIfMissing: true)"), true,
+                    "Canvas(契约): 换歌、引擎写缓存、开关变化都重算")
+        let window = src("lyrimuse/UI/LyricsWindowView.swift")
+        expectEqual(sourceHas(sourceBody("private var spotifyCanvasBackground: URL? {", in: window), "guard !showsMiniLayout, !reduceMotion else { return nil }")
+                        && sourceHas(window, "case .artwork:\n            if let canvas = spotifyCanvasBackground {")
+                        && sourceHas(window, "|| playback.windowBackgroundLayers != nil || spotifyCanvasBackground != nil"), true,
+                    "Canvas(契约): 只在完整尺寸、没开减弱动态效果时顶替封面背景,文字按暗背景配色")
     }
 }

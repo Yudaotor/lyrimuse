@@ -55033,6 +55033,52 @@
           }
         }
       }
+    },
+    "Spotify Canvas" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify Canvas"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify Canvas"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify Canvas"
+          }
+        }
+      }
+    },
+    "用这首歌在 Spotify 上的循环短片当背景；仅限在 Spotify 中放过的歌曲" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the song's looping Spotify video as the background; only for songs you've played in Spotify"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用这首歌在 Spotify 上的循环短片当背景；仅限在 Spotify 中放过的歌曲"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用這首歌在 Spotify 上的循環短片當背景；僅限在 Spotify 中播過的歌曲"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

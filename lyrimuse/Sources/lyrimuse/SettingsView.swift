@@ -3270,6 +3270,7 @@ private struct AppearanceSettingsTab: View {
                     get: { settings.lyricsWindowKaraokeFillColor },
                     set: { settings.lyricsWindowKaraokeFillColorHex = $0.hexStringWithAlpha }),
                 hdrHighlight: $settings.lyricsWindowHDRHighlight,
+                spotifyCanvas: $settings.spotifyCanvasEnabled,
                 alignment: $settings.lyricsWindowLyricsAlignment)
         }
     }
@@ -3301,6 +3302,8 @@ private struct AppearanceSettingsTab: View {
         karaokeFillColor: Binding<Color>? = nil,
         /// 只有完整尺寸传:「HDR 高亮」(07 章决策 165)。
         hdrHighlight: Binding<Bool>? = nil,
+        /// 只有完整尺寸传:「Spotify Canvas」(07 章决策 183)。
+        spotifyCanvas: Binding<Bool>? = nil,
         /// 只有完整尺寸传:迷你单行 / 双行居中、多行是完整布局那份列表的迷你版,不给对齐。
         alignment: Binding<LyricsRestingAlignment>? = nil
     ) -> some View {
@@ -3313,6 +3316,17 @@ private struct AppearanceSettingsTab: View {
                             selection: mode,
                             options: LyricsWindowBackgroundMode.allCases,
                             label: lyricsWindowBackgroundModeName)
+                    }
+                }
+                if mode.wrappedValue == .artwork, let spotifyCanvas {
+                    SettingsRowGroup {
+                        SettingsRow(
+                            icon: "play.rectangle",
+                            title: L10n.t("Spotify Canvas"),
+                            help: L10n.t("用这首歌在 Spotify 上的循环短片当背景；仅限在 Spotify 中放过的歌曲")
+                        ) {
+                            Toggle("", isOn: spotifyCanvas)
+                        }
                     }
                 }
                 // 下面几格都是「背景」的**从属项** —— 选了哪一档才出现哪一格,排成背景那一框下面的一组小块。
@@ -4321,6 +4335,7 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowLyricsAlignment = .automatic
             s.lyricsWindowHDRHighlight = false
             s.motionCoverEnabled = AppSettings.defaultMotionCoverEnabled
+            s.spotifyCanvasEnabled = AppSettings.defaultSpotifyCanvasEnabled
         }
     }
 }

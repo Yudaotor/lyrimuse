@@ -351,6 +351,9 @@ func mergePeripheralInto(winner, loser enrichEntry) enrichEntry {
 			notePlayerSongLocked(&winner, b, loser.PlayerSongIDs[b], loser.PlayerAlbumIDs[b])
 		}
 	}
+	if winner.SpotifyCanvasURL == "" {
+		winner.SpotifyCanvasURL = loser.SpotifyCanvasURL
+	}
 	// 酷狗网页歌曲页是按酷狗报的歌曲 id 找的,胜者记的酷狗 id 是另一个时不带。
 	if winner.KugouURL == "" && (winner.PlayerSongIDs[kugouMusicBundleID] == "" ||
 		winner.PlayerSongIDs[kugouMusicBundleID] == loser.PlayerSongIDs[kugouMusicBundleID]) {

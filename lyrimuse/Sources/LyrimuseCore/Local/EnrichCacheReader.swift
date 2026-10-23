@@ -39,6 +39,8 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     /// 空 = 没有 / 核对没过。选档、下载、播放在 `MotionCoverManifest` / `MotionCoverStore` /
     /// `MotionCoverLayer`。
     let motionCoverURL: String?
+    // Spotify Canvas 短片地址(引擎从 Spotify 本机缓存读的,lyrimuse-engine/spotifycanvas.go)。只喂 `spotifyCanvas(artist:title:album:)`。
+    let spotifyCanvasURL: String?
     /// 同一份资源的静态首帧模板(尾部 `{w}x{h}bb.{f}`)。动态封面还没下好时先铺它;它本身也是
     /// 一张按专辑 ID 精确定位的高清静态图(实测 3840²),比按歌名匹配来的更权威。
     let motionPreviewURL: String?
@@ -174,6 +176,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         case coverSource = "cover_source"
         case coverURL = "cover_url"
         case motionCoverURL = "motion_cover_url"
+        case spotifyCanvasURL = "spotify_canvas_url"
         case motionPreviewURL = "motion_preview_url"
         case motionCoverIdentityVerified = "motion_cover_identity_verified"
         case motionCoverFor = "motion_cover_for"
@@ -256,6 +259,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         coverSource = try c.decodeIfPresent(String.self, forKey: .coverSource)
         coverURL = try c.decodeIfPresent(String.self, forKey: .coverURL)
         motionCoverURL = try c.decodeIfPresent(String.self, forKey: .motionCoverURL)
+        spotifyCanvasURL = try? c.decodeIfPresent(String.self, forKey: .spotifyCanvasURL)
         motionPreviewURL = try c.decodeIfPresent(String.self, forKey: .motionPreviewURL)
         motionCoverIdentityVerified = try c.decodeIfPresent(Bool.self, forKey: .motionCoverIdentityVerified)
         motionCoverFor = try c.decodeIfPresent(String.self, forKey: .motionCoverFor)
@@ -1307,6 +1311,24 @@ public enum EnrichCacheReader {
         }
         guard let entry, motionCoverCurrent(entry), let s = entry.motionCoverURL, let url = URL(string: s) else { return nil }
         return (url, entry.motionPreviewURL, entry.motionCoverIdentityVerified ?? false, entry.coverURL.flatMap(URL.init(string:)))
+    }
+
+    /// 这一行的 Spotify Canvas 短片地址(过 `SpotifyCanvas` 的形状闸)。查法同 `albumMatchedMotionCover`:不退到忽略专辑那一级。
+    public static func spotifyCanvas(artist: String, title: String, album: String) -> URL? {
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        let entry: EnrichCacheEntry?
+        if let fresh = freshPlayingEntry(forKey: key) {
+            entry = fresh
+        } else {
+            guard let all = loadEntries() else { return nil }
+            entry = matchedEntry(key, in: all)
+        }
+        return entry.flatMap(spotifyCanvasURL)
+    }
+
+    /// 条目里的 Canvas 短片地址,过 `SpotifyCanvas` 的形状闸。纯函数,selftest 覆盖。
+    public nonisolated static func spotifyCanvasURL(_ entry: EnrichCacheEntry) -> URL? {
+        SpotifyCanvas.videoURL(entry.spotifyCanvasURL)
     }
 
     /// 条目上的动态封面结论还作不作数:引擎记下的对照封面(`motion_cover_for`)就是这一条现在的封面。封面后来换过的不用,等引擎

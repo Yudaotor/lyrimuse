@@ -1463,6 +1463,17 @@
     },
     {
       "dest" : "tab:appearance",
+      "lyricsWindowMini" : false,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "背景"
+      ],
+      "subtitle" : "用这首歌在 Spotify 上的循环短片当背景；仅限在 Spotify 中放过的歌曲",
+      "title" : "Spotify Canvas"
+    },
+    {
+      "dest" : "tab:appearance",
       "path" : [
         "歌词显示",
         "歌词窗口",

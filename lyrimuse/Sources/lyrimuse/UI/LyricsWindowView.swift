@@ -67,6 +67,8 @@ final class WindowPlayback: ObservableObject {
     /// 动态封面的本地文件。nil = 这张专辑没有 / 还没下好 / 被总闸拦了,
     /// 三种情况在这张卡上都是"只铺静态图"。
     @Published private(set) var motionCoverFile: URL?
+    /// Spotify Canvas 的本地文件(完整尺寸「封面」背景下当背景)。
+    @Published private(set) var spotifyCanvasFile: URL?
     @Published private(set) var windowBackgroundLayers: WindowBackgroundLayers?
     @Published private(set) var anchor: ProgressAnchor?
     @Published private(set) var pausedPositionMs: Int?
@@ -196,6 +198,8 @@ final class WindowPlayback: ObservableObject {
                 .sink { [weak self] in self?.highResArtworkImage = $0 },
             p.$motionCoverFile.removeDuplicates()
                 .sink { [weak self] in self?.motionCoverFile = $0 },
+            p.$spotifyCanvasFile.removeDuplicates()
+                .sink { [weak self] in self?.spotifyCanvasFile = $0 },
             p.$windowBackgroundLayers.removeDuplicates(by: { $0 === $1 })
                 .sink { [weak self] in self?.windowBackgroundLayers = $0 },
             p.$anchor.sink { [weak self] in self?.anchor = $0 },
@@ -4803,7 +4807,7 @@ struct LyricsWindowView: View {
             // 只看系统那份的话暗背景上会配深色字。背景图层也要看:换歌的空档里封面先清空、上一首的
             // 背景还挂着(见 PlaybackCoordinator.rebakeBlurredArtwork),这时字要跟着背景保持浅色。
             return playback.artworkData != nil || playback.highResArtworkImage != nil
-                || playback.windowBackgroundLayers != nil
+                || playback.windowBackgroundLayers != nil || spotifyCanvasBackground != nil
         case .solid:
             return LyricsWindowBackgroundLuma.prefersLightText(
                 hexes: [activeBackgroundColorHex], darkAppearance: colorScheme == .dark,
@@ -4818,6 +4822,13 @@ struct LyricsWindowView: View {
             // 自适应(浅材质上转深、深材质上转浅),比我们钉死一个白或黑都准。
             return false
         }
+    }
+
+    /// 这扇窗此刻用不用 Spotify Canvas 当背景:完整尺寸、没开「减弱动态效果」、有下好的那份(其余几道闸在
+    /// `PlaybackCoordinator.refreshSpotifyCanvas`)。
+    private var spotifyCanvasBackground: URL? {
+        guard !showsMiniLayout, !reduceMotion else { return nil }
+        return playback.spotifyCanvasFile
     }
 
     // Apple Music 歌词页最标志性的元素:当前封面模糊放大铺满、压一层半透明黑提升文字
@@ -4840,7 +4851,14 @@ struct LyricsWindowView: View {
         // 遮罩只留 0.15 的可读性保底:主要压暗已在暗底烘焙(EV −1.9)里完成。
         switch activeBackgroundMode {
         case .artwork:
-            if let layers = playback.windowBackgroundLayers {
+            if let canvas = spotifyCanvasBackground {
+                // Spotify Canvas:竖版短片铺满(两边裁掉),压暗到歌词照样看得清。窗口不可见 / 暂停时定格。
+                MotionCoverView(file: canvas, isPlaying: windowController.isSurfaceVisible && playback.isPlayingNow)
+                    .id(canvas)
+                    .overlay(Color.black.opacity(0.62))
+                    .clipped()
+                    .transition(.opacity)
+            } else if let layers = playback.windowBackgroundLayers {
                 // 窗口不可见 / 暂停播放时背景定格:没人看、或者画面上别的都不动,光斑还在转纯属耗电。
                 WindowAnimatedBackground(
                     layers: layers,

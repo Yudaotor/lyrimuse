@@ -188,6 +188,7 @@
 "SendKey 无效" = "SendKey 無效";
 "Server酱" = "Server酱";
 "Slack Incoming Webhook：报告将发送到工作区中的指定频道" = "Slack Incoming Webhook：報告將傳送到工作區中的指定頻道";
+"Spotify Canvas" = "Spotify Canvas";
 "Spotify 上播放的歌曲未记录到 Last.fm" = "Spotify 上播放的歌曲未記錄到 Last.fm";
 "Spotify 专辑页" = "Spotify 專輯頁";
 "Spotify 曲目 ID 一致" = "Spotify 曲目 ID 一致";
@@ -1936,6 +1937,7 @@
 "用当前配色覆盖" = "用目前配色覆蓋";
 "用户名下方显示" = "使用者名稱下方顯示";
 "用这一期的真实数据看看推送在这个平台上的样子" = "以這一期的真實資料看看推播在這個平台上的樣子";
+"用这首歌在 Spotify 上的循环短片当背景；仅限在 Spotify 中放过的歌曲" = "用這首歌在 Spotify 上的循環短片當背景；僅限在 Spotify 中播過的歌曲";
 "由副行决定" = "由副行決定";
 "申请页只需填写「应用名称」，其余可留空。提交后页面将显示 API Key 和 Shared Secret；Secret 仅显示一次，之后无法找回，遗失时请重新创建应用" = "申請頁只需填寫「應用程式名稱」，其餘可留空。提交後頁面將顯示 API Key 和 Shared Secret；Secret 僅顯示一次，之後無法找回，遺失時請重新建立應用程式";
 "画帧" = "繪製";

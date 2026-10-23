@@ -351,6 +351,15 @@ Albums with animated artwork on Apple Music or QQ Music move in the full-size ly
 - Settings: Lyrics Display › Lyrics Window › Artwork › Animated Artwork
 - Settings: Lyrics Display › Lyrics Window › Artwork › Animated Artwork Cache
 
+<a id="feature-spotify-canvas"></a>
+
+### Spotify Canvas background
+
+When a song has a looping Canvas video on Spotify, the full-size lyrics window plays it as the background instead of the artwork blur. Only videos Spotify has already saved on this Mac are used, so songs you have played in Spotify get one, also when you play them in another player. It pauses in Low Power Mode or with Reduce Motion on.
+
+- On by default
+- Settings: Lyrics Display › Lyrics Window › Background › Spotify Canvas
+
 <a id="feature-idle-overview"></a>
 
 ### Listening overview between songs
@@ -833,7 +842,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 289 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 290 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1108,6 +1117,7 @@ Every setting in the Settings window, by where it lives: 289 in all. Type a name
 
 - **Background**: The lyrics window's background: follow artwork, solid, gradient, or frosted glass
 - **Direction**
+- **Spotify Canvas** (full size only): Uses the song's looping Spotify video as the background; only for songs you've played in Spotify
 - **Glass Density**: Frosted glass material density (five levels)
 - **Bottom Color**
 

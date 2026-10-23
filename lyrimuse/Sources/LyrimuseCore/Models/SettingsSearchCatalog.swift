@@ -115,8 +115,8 @@ public enum SettingsSearchCatalog {
         "字号", "歌词布局", "长句处理", "悬浮淡化", "淡化时点按穿透", "暂停时隐藏",
         "全屏时隐藏", "歌名", "歌手", "专辑", "封面", "时间", "宽度", "高度", "进度条",
     ]
-    /// 只在完整预览下才有的行:「封面」那一组、「布局」里的对齐方式、「文字」里的 HDR 高亮。
-    public static let lyricsWindowFullOnlyTitles: Set<String> = ["动态封面", "动态封面缓存", "对齐方式", "HDR 高亮"]
+    /// 只在完整预览下才有的行:「封面」那一组、「布局」里的对齐方式、「文字」里的 HDR 高亮、「背景」里的 Spotify Canvas。
+    public static let lyricsWindowFullOnlyTitles: Set<String> = ["动态封面", "动态封面缓存", "对齐方式", "HDR 高亮", "Spotify Canvas"]
 
     /// 「歌词显示」页「触控栏」那一段的分段取值(`AppearanceSettingsTab.Section.touchBar`)。跟歌词窗口一样
     /// 不是一个 `LyricsSurface`(见 `touchBar(_:sub:kw:)`),单独定义一份。
@@ -550,6 +550,8 @@ public enum SettingsSearchCatalog {
                      kw: ["背景", "跟随封面", "纯色", "渐变", "颜色", "不透明度", "透明"],
                      group: "背景"),
         lyricsWindow("方向", kw: ["渐变", "背景", "从上到下", "从左到右", "横向", "竖向"], group: "背景"),
+        lyricsWindow("Spotify Canvas", sub: "用这首歌在 Spotify 上的循环短片当背景；仅限在 Spotify 中放过的歌曲",
+                     kw: ["Canvas", "Spotify", "短片", "视频", "动态背景", "背景", "完整"], group: "背景"),
         lyricsWindow("玻璃浓淡", sub: "毛玻璃的材质浓淡（五档）",
                      kw: ["毛玻璃", "玻璃", "模糊", "透明", "材质", "背景", "浓淡"], group: "背景"),
         lyricsWindow("字号", sub: "迷你尺寸的歌词字号上限",

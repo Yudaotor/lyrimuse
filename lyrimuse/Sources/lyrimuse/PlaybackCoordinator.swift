@@ -227,6 +227,9 @@ final class PlaybackCoordinator: ObservableObject {
     /// 动态封面只在它之上再叠一层会动的画面,拿不到就退回静态图。所以这里**不**参与均值取色 ——
     /// 强调色仍旧按静态图算,不然同一张专辑会因为"动画播到哪一帧"而颜色抖动。
     @Published private(set) var motionCoverFile: URL?
+    /// Spotify Canvas 的本地文件(歌词窗口完整尺寸「封面」背景下当背景)。nil = 这首没有 / 没下好 / 被总闸拦了。
+    @Published private(set) var spotifyCanvasFile: URL?
+    private var spotifyCanvasTask: Task<Void, Never>?
     private var motionCoverTask: Task<Void, Never>?
     // 从封面均值算出来的动态高亮色,**桌面悬浮歌词专用**(已经从 LocalPlaybackSource
     // 转发的十六进制字符串转成 Color——LyrimuseCore 那一层不引入 SwiftUI,转换只能在
@@ -1180,6 +1183,7 @@ final class PlaybackCoordinator: ObservableObject {
                     // 动态封面挂同一个时机、同一个理由(避开 willSet、300ms 用户无感),
                     // 不另起一条 debounce。
                     self?.refreshMotionCover()
+                    self?.refreshSpotifyCanvas()
                 },
             // 认出占位图那一刻封面字节不一定变(上一首本来就没有封面),上面那条不会触发:这里补查一次(见 03 章决策 32)。
             s.$artworkIsPlaceholder
@@ -1202,7 +1206,17 @@ final class PlaybackCoordinator: ObservableObject {
                     // 动态封面同样需要这条补查路 —— 它读的是引擎写的同一份 enrich 缓存,
                     // 第一次听的歌在换歌后 300ms 那一次必然查空(解析要好几秒)。
                     self?.refreshMotionCover(onlyIfMissing: true)
+                    self?.refreshSpotifyCanvas(onlyIfMissing: true)
                 },
+            // Spotify Canvas 的开关、窗口背景档位变了立刻重算。@Published 在 willSet 时发布:开关用发布出来的值,背景档位推到下一拍再读。
+            settings.$spotifyCanvasEnabled
+                .dropFirst()
+                .sink { [weak self] enabled in self?.refreshSpotifyCanvas(enabled: enabled) },
+            settings.$lyricsWindowBackgroundMode
+                .dropFirst()
+                .removeDuplicates()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in self?.refreshSpotifyCanvas() },
             // 动态封面的两个总闸变化时立刻重算:用户拨了开关、或者系统进出低电量模式。
             // 关掉要当场停下(而不是等下一首),打开也该当场生效。
             // @Published 在 willSet 时发布:回调里再读 AppSettings.shared.motionCoverEnabled 拿到的是旧值,
@@ -1218,10 +1232,16 @@ final class PlaybackCoordinator: ObservableObject {
                 .sink { [weak self] _ in self?.refreshMotionCover() },
             NotificationCenter.default.publisher(for: NSNotification.Name.NSProcessInfoPowerStateDidChange)
                 .receive(on: RunLoop.main)
-                .sink { [weak self] _ in self?.refreshMotionCover() },
+                .sink { [weak self] _ in
+                    self?.refreshMotionCover()
+                    self?.refreshSpotifyCanvas()
+                },
             // 有地方要显示动态封面了(封面卡出现、副屏网页开始有人看):补一次。没人看时 refreshMotionCover 自己收掉。
             NotificationCenter.default.publisher(for: MotionCoverDemand.changed)
-                .sink { [weak self] _ in self?.refreshMotionCover(onlyIfMissing: true) },
+                .sink { [weak self] _ in
+                    self?.refreshMotionCover(onlyIfMissing: true)
+                    self?.refreshSpotifyCanvas(onlyIfMissing: true)
+                },
             // @Published 在赋值前推送:推到下一拍,refreshMotionCover 读 viewerCount 才是新值。
             WebLyricsServer.screen.$viewerCount
                 .map { $0 > 0 }
@@ -1948,6 +1968,38 @@ final class PlaybackCoordinator: ObservableObject {
             } else if self?.motionCoverFile != nil {
                 self?.motionCoverFile = nil
             }
+        }
+    }
+
+    /// 这首的 Spotify Canvas:引擎从 Spotify 本机缓存里读出地址记进条目(lyrimuse-engine/spotifycanvas.go),这里下载、交给歌词
+    /// 窗口当背景。几道闸:开关、窗口背景是「封面」那档、不在低电量模式、完整尺寸那张封面卡在屏上(`MotionCoverDemand.cardShown`)。
+    /// 「减弱动态效果」是视图环境值,在 `LyricsWindowView.artworkBackground` 里判。见 07 章决策 183。
+    private func refreshSpotifyCanvas(onlyIfMissing: Bool = false, enabled: Bool? = nil) {
+        if onlyIfMissing, spotifyCanvasFile != nil { return }
+        spotifyCanvasTask?.cancel()
+        spotifyCanvasTask = nil
+        let s = LocalPlaybackSource.shared
+        let (title, artist, album) = (s.title, s.artist, s.album)
+        func clear() {
+            if spotifyCanvasFile != nil { spotifyCanvasFile = nil }
+        }
+        guard !title.isEmpty, enabled ?? AppSettings.shared.spotifyCanvasEnabled,
+              AppSettings.shared.lyricsWindowBackgroundMode == .artwork,
+              !ProcessInfo.processInfo.isLowPowerModeEnabled, MotionCoverDemand.cardShown,
+              let remote = EnrichCacheReader.spotifyCanvas(artist: artist, title: title, album: album) else {
+            clear()
+            return
+        }
+        if let hit = SpotifyCanvasStore.shared.cachedFile(remote) {
+            if spotifyCanvasFile != hit { spotifyCanvasFile = hit }
+            return
+        }
+        clear()
+        spotifyCanvasTask = Task { [weak self] in
+            let file = await SpotifyCanvasStore.shared.prepare(remote)
+            // 下载这段时间换歌了 —— 这份是上一首的。
+            guard !Task.isCancelled, LocalPlaybackSource.shared.title == title else { return }
+            if self?.spotifyCanvasFile != file { self?.spotifyCanvasFile = file }
         }
     }
 

@@ -452,6 +452,8 @@ type enrichEntry struct {
 	// 只在本次播放确实来自 Spotify 时上送(lb.go)。
 	// 单独成段放在这里(不挤进上面链接那一组)是为了不动那一组的 gofmt 对齐列。
 	SpotifyTrackID string `json:"spotify_track_id,omitempty"`
+	// SpotifyCanvasURL:这首在 Spotify 上的 Canvas 短片地址(只从 Spotify 本机缓存里读,spotifycanvas.go)。不是歌曲页,不进 fields()。
+	SpotifyCanvasURL string `json:"spotify_canvas_url,omitempty"`
 
 	// ISRCs:这条录音的 ISRC(一份录音可能被不同发行商各登记一个),App 合并收听写法时按它认同一首,来路和时长闸见
 	// recordingisrc.go。ISRCLevels:号 → 来路级别(player / verified / searched,recordISRCs 写),没记的号不知道来路。
@@ -1058,6 +1060,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			}
 			if job, ok := kugouSongPageJobLocked(key, e, bundleID, artist, title); ok {
 				go runKugouSongPageJob(job)
+			}
+			if spotifyCanvasJobLocked(key, e, time.Now()) {
+				go runSpotifyCanvasJob(key)
 			}
 		}
 		// 用户校准过这首歌的歌词时间轴吗(自己钉着,或者在读穿同一首歌的一份校准,见 lyricsCalibratedLocked)—— 两条

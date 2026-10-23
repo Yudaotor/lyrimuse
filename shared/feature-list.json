@@ -853,6 +853,31 @@
           ]
         },
         {
+          "id": "spotify-canvas",
+          "title": {
+            "zh-Hans": "Spotify Canvas 背景",
+            "en": "Spotify Canvas background",
+            "zh-Hant": "Spotify Canvas 背景"
+          },
+          "desc": {
+            "en": "When a song has a looping Canvas video on Spotify, the full-size lyrics window plays it as the background instead of the artwork blur. Only videos Spotify has already saved on this Mac are used, so songs you have played in Spotify get one, also when you play them in another player. It pauses in Low Power Mode or with Reduce Motion on.",
+            "zh-Hans": "歌曲在 Spotify 上有循环短片（Canvas）时，完整尺寸歌词窗口的背景换成这段短片。只使用 Spotify 已保存在本机的短片，在 Spotify 中放过的歌曲才有，用其他播放器播放同一首歌时也能用上。低电量模式或开启「减弱动态效果」时不播放。",
+            "zh-Hant": "歌曲在 Spotify 上有循環短片（Canvas）時，完整尺寸歌詞視窗的背景換成這段短片。只使用 Spotify 已儲存在本機的短片，在 Spotify 中播過的歌曲才有，用其他播放器播放同一首歌時也能用上。低電量模式或開啟「減少動態效果」時不播放。"
+          },
+          "default": "on",
+          "check": {
+            "appSetting": "spotifyCanvasEnabled"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "歌词窗口",
+              "背景",
+              "Spotify Canvas"
+            ]
+          ]
+        },
+        {
           "id": "idle-overview",
           "title": {
             "zh-Hans": "未播放时的收听总览",

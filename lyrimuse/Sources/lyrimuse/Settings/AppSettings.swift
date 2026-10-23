@@ -426,6 +426,7 @@ final class AppSettings: ObservableObject {
         static let notchCardStyle = "np:notchCardStyle"
         static let notchShowLyrics = "np:notchShowLyrics"
         static let motionCoverEnabled = "np:motionCoverEnabled"
+        static let spotifyCanvasEnabled = "np:spotifyCanvasEnabled"
         static let lyricsWindowBackgroundMode = "np:lyricsWindowBackgroundMode"
         static let lyricsWindowBackgroundColorHex = "np:lyricsWindowBackgroundColorHex"
         static let lyricsWindowBackgroundColorEndHex = "np:lyricsWindowBackgroundColorEndHex"
@@ -604,6 +605,8 @@ final class AppSettings: ObservableObject {
     /// (`LyricsWindowView.artworkCard`,视图环境值只能在视图里判);④ 之后唯一的
     /// 消费面是歌词窗口那张按需打开的卡,窗口没开就完全不存在这回事。
     static let defaultMotionCoverEnabled = true
+    /// Spotify Canvas 当背景:默认开。只有 Spotify 本机缓存里有短片的歌才换,别的照旧。
+    static let defaultSpotifyCanvasEnabled = true
     /// 暂停时是否收起成一条:默认不收,暂停时卡片留在原地比缩回去更容易接着看。
     static let defaultNotchCollapsesWhenPaused = false
     static let defaultNotchShowsEqualizer = true
@@ -1557,6 +1560,11 @@ final class AppSettings: ObservableObject {
     /// (`LyricsWindowView.artworkCard`)两道。整条链路见 `MotionCoverStore` 头注。
     @Published var motionCoverEnabled: Bool {
         didSet { defaults.set(motionCoverEnabled, forKey: Keys.motionCoverEnabled) }
+    }
+
+    /// 歌词窗口完整尺寸「封面」背景下,有 Spotify Canvas 的歌用它的短片当背景(`PlaybackCoordinator.refreshSpotifyCanvas`)。
+    @Published var spotifyCanvasEnabled: Bool {
+        didSet { defaults.set(spotifyCanvasEnabled, forKey: Keys.spotifyCanvasEnabled) }
     }
 
     /// 歌词窗口的背景。默认 `.artwork`。
@@ -2615,6 +2623,7 @@ final class AppSettings: ObservableObject {
             .flatMap(NotchCardStyle.init(rawValue:)) ?? Self.defaultNotchCardStyle
         notchShowLyrics = (defaults.object(forKey: Keys.notchShowLyrics) as? Bool) ?? Self.defaultNotchShowLyrics
         motionCoverEnabled = (defaults.object(forKey: Keys.motionCoverEnabled) as? Bool) ?? Self.defaultMotionCoverEnabled
+        spotifyCanvasEnabled = (defaults.object(forKey: Keys.spotifyCanvasEnabled) as? Bool) ?? Self.defaultSpotifyCanvasEnabled
         lyricsWindowBackgroundMode = defaults.string(forKey: Keys.lyricsWindowBackgroundMode)
             .flatMap(LyricsWindowBackgroundMode.init(rawValue:)) ?? .artwork
         lyricsWindowBackgroundColorHex = defaults.string(forKey: Keys.lyricsWindowBackgroundColorHex)

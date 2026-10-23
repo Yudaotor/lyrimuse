@@ -477,6 +477,8 @@ enum MotionCoverDemand {
     private static var cardsShown = 0
 
     static var wanted: Bool { cardsShown > 0 || WebLyricsServer.screen.viewerCount > 0 }
+    /// 歌词窗口完整尺寸那张封面卡在屏上(Spotify Canvas 背景只在这时下载、播放)。
+    static var cardShown: Bool { cardsShown > 0 }
 
     static func cardAppeared() {
         cardsShown += 1
