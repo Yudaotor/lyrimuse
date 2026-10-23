@@ -48,6 +48,10 @@ struct NotchExpandedLyricList: View {
                         guard let index = listHandle.view?.lineIndex(at: value.location) else { return }
                         seek(toLine: index)
                     })
+                    // 这一层撤掉时(换到不能挪进度的播放器)收不到「指针离开」,自己把点亮的那句放掉。
+                    .onDisappear { listHandle.view?.hoverLine(at: nil) }
+                    // 只接鼠标、没有内容;各句读屏由列表自己给。
+                    .accessibilityHidden(true)
             }
         }
         .accessibilityElement(children: .contain)

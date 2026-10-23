@@ -2468,6 +2468,9 @@ func runNotchTests() {
         expectEqual(sourceHas(list, "case .active(let point): listHandle.view?.hoverLine(at: point)")
                     && sourceHas(list, "guard let index = listHandle.view?.lineIndex(at: value.location) else { return }"), true,
                     "多行歌词: 悬停和点按由 SwiftUI 接住,再按位置问列表是哪一行(同层 AppKit 视图收不到鼠标)")
+        expectEqual(sourceHas(list, ".onDisappear { listHandle.view?.hoverLine(at: nil) }")
+                    && sourceHas(list, ".accessibilityHidden(true)"), true,
+                    "多行歌词: 接鼠标那一层撤掉时放掉点亮的那句,对读屏隐藏")
         expectEqual(sourceHas(src("LyricsLayerList.swift"), "override func hitTest(_ point: NSPoint) -> NSView? { interactive ? super.hitTest(point) : nil }"),
                     true, "多行歌词: 列表自己不接鼠标,滚轮落到灵动岛的手势上")
     }
