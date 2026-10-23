@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,10 +23,12 @@ import (
 // KKBOX 是 Electron 应用,界面是跑在本机 localhost 上的网页。打乱之后的播放顺序只在网页的内存里,不落盘;落盘的是
 // 两样东西,拼起来够用:
 //   - Local Storage(LevelDB):`wp:pref:<账号>:now_playing` 是播放上下文
-//     `kkbox:<类型>:<id>:<序号>:<?>?track=<曲目 id>`,`…:is_shuffle` 是随机开关;
+//     `kkbox:<类型>:<id>:<序号>:<?>?track=<曲目 id>`,`…:is_shuffle` 是随机开关,`…:repeat_mode` 是循环档
+//     (0 不循环、1 列表循环、2 单曲循环,取值见 KKBOX 前端上报统计时的对照);
 //   - Chromium 的 HTTP 磁盘缓存:打开那个歌单 / 专辑时拉的接口响应
 //     (`api-webapps.kkbox.*/v2/tracks-set|albums|playlists/<id>`,gzip 过的 JSON),里面是整份曲目表。
-// 顺序播放取当前这首后面几首;随机播放下一首猜不出来,按 shuffleCandidates 的规则交一批(见 queueorder.go)。
+// 顺序播放取当前这首后面几首,列表循环到末尾接回开头;随机播放下一首猜不出来,按 shuffleCandidates 的规则交一批
+// (见 queueorder.go);单曲循环不预取。
 //
 // 歌手名必须跟 KKBOX 报给系统的**逐字一致**,不然预解析写进缓存的 key 对不上、白解析一遍。KKBOX 前端
 // (ArtistNameHelper)的规则:有 artist_roles 就是 main_artists + featured_artists 用 ", " 连起来,没有才用
@@ -184,6 +187,10 @@ func kkboxUpcomingOnce(artist, title string, n int) (tracks []upcomingTrack, ok 
 		kkboxUpcomingNote("listen-with:"+ctx.id, "kkbox upcoming: listen-with channel, the host picks the next track and there is no local queue; skipping prefetch")
 		return nil, true, ""
 	}
+	if pb.repeat == kkboxRepeatOne {
+		// 一直放这一首:有队列、后面没有要预取的,也不退回同专辑预取(同 Kaset、VOX)。
+		return nil, true, ""
+	}
 	endpoint, ok := kkboxContextEndpoints[ctx.kind]
 	if !ok {
 		kkboxUpcomingNote("kind:"+ctx.kind, "kkbox upcoming: playing from a %q context, which has no cached track list; falling back to album prefetch", ctx.kind)
@@ -234,23 +241,43 @@ func kkboxUpcomingOnce(artist, title string, n int) (tracks []upcomingTrack, ok 
 		}
 		return q.picked(idx), true, ""
 	}
-	if pos+1 >= len(q.tracks) {
+	wrap := pb.repeat == kkboxRepeatAll
+	if pos+1 >= len(q.tracks) && !wrap {
 		return nil, false, ""
 	}
 	// 取接下来 n 首**叫得出名字的**:先截 n 首再滤,详情没进缓存的那几首会把后面叫得出名字的一起挤掉。
 	// 一首也没有时仍交出(没名字的)那几首,由 kkboxUpcoming 判「读到了却一首也解析不了」、退回同专辑预取。
+	// 列表循环到末尾接回开头,绕到当前这首为止。
+	order := kkboxFollowing(pos, len(q.tracks), wrap)
 	var idx []int
-	for i := pos + 1; i < len(q.tracks) && len(idx) < n; i++ {
+	for _, i := range order {
+		if len(idx) == n {
+			break
+		}
 		if q.tracks[i].title != "" {
 			idx = append(idx, i)
 		}
 	}
 	if len(idx) == 0 {
-		for i := pos + 1; i < min(pos+1+n, len(q.tracks)); i++ {
-			idx = append(idx, i)
-		}
+		idx = order[:min(n, len(order))]
 	}
 	return q.picked(idx), true, ""
+}
+
+// kkboxFollowing:当前这首之后的位置,按播放顺序;wrap 时到末尾接回开头、绕到当前这首之前为止。纯函数。
+func kkboxFollowing(pos, total int, wrap bool) []int {
+	var out []int
+	for k := 1; k < total; k++ {
+		i := pos + k
+		if i >= total {
+			if !wrap {
+				break
+			}
+			i -= total
+		}
+		out = append(out, i)
+	}
+	return out
 }
 
 // kkboxCurrentPosition 找播放器报的这首在曲目表里的位置;找不到返回 -1。
@@ -286,7 +313,14 @@ func kkboxCurrentPosition(q kkboxQueue, trackID, artist, title string) int {
 type kkboxPlayback struct {
 	context string
 	shuffle bool
+	repeat  int
 }
+
+// KKBOX 的循环档(`repeat_mode`),0 是不循环。
+const (
+	kkboxRepeatAll = 1
+	kkboxRepeatOne = 2
+)
 
 // kkboxPrefPrefix 是 Local Storage key 里「源」之后的那一段:`_<源>\x00\x01wp:pref:<账号>:<名字>`。
 var kkboxPrefPrefix = []byte("\x00\x01wp:pref:")
@@ -305,16 +339,18 @@ func kkboxPrefKey(k []byte) (account, name string, ok bool) {
 	return rest[:j], rest[j+1:], true
 }
 
-// kkboxReadPlayback 读播放上下文与随机开关。登录过的账号各有一份,取 now_playing 最后写的那个账号。
+// kkboxReadPlayback 读播放上下文、随机开关与循环档。登录过的账号各有一份,取 now_playing 最后写的那个账号。
+// 循环档没写过或认不出按不循环。
 func kkboxReadPlayback(dir string) (kkboxPlayback, bool) {
 	vals := ldbScan(dir, func(k []byte) bool {
 		_, name, ok := kkboxPrefKey(k)
-		return ok && (name == "now_playing" || name == "is_shuffle")
+		return ok && (name == "now_playing" || name == "is_shuffle" || name == "repeat_mode")
 	})
 	type account struct {
 		context string
 		seq     uint64
 		shuffle bool
+		repeat  int
 	}
 	accounts := map[string]*account{}
 	for k, v := range vals {
@@ -336,6 +372,10 @@ func kkboxReadPlayback(dir string) (kkboxPlayback, bool) {
 			}
 		case "is_shuffle":
 			a.shuffle = strings.TrimSpace(text) == "true"
+		case "repeat_mode":
+			if m, err := strconv.Atoi(strings.TrimSpace(text)); err == nil {
+				a.repeat = m
+			}
 		}
 	}
 	var best *account
@@ -350,7 +390,7 @@ func kkboxReadPlayback(dir string) (kkboxPlayback, bool) {
 	if best == nil {
 		return kkboxPlayback{}, false
 	}
-	return kkboxPlayback{context: best.context, shuffle: best.shuffle}, true
+	return kkboxPlayback{context: best.context, shuffle: best.shuffle, repeat: best.repeat}, true
 }
 
 // chromiumLocalStorageString 解 Chromium Local Storage 的值:首字节 0 = 其后是 UTF-16LE,1 = Latin-1。

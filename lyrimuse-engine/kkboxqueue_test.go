@@ -89,6 +89,53 @@ func withTestKKBOX(t *testing.T, context string, shuffle bool) {
 	testChromiumCacheEntry(t, cache, "cccc_0", "https://api-webapps.kkbox.com.tw/v2/tracks/T1?terr=tw", `{"data":{}}`)
 }
 
+// withTestKKBOXRepeat 在 withTestKKBOX 写的 Local Storage 里补上循环档(值照 KKBOX 存的那样是 Latin-1 的数字)。
+func withTestKKBOXRepeat(t *testing.T, mode string) {
+	t.Helper()
+	testWriteLog(t, filepath.Join(kkboxLocalStorageOverride, "000004.log"), [][]testLDBEntry{
+		{{key: testKKBOXPrefKey("me@example.com", "repeat_mode"), seq: 12, value: "\x01" + mode}},
+	})
+}
+
+// 列表循环放到末尾接回开头;单曲循环有队列、不预取;不循环、写着认不出的值都按到末尾为止。
+func TestKKBOXUpcomingFollowsRepeatMode(t *testing.T) {
+	withTestKKBOX(t, "kkbox:song-list:LIST==:0:0?track=T4", false)
+	withTestKKBOXRepeat(t, "1")
+	got, ok := kkboxUpcoming("Taylor Swift", "Speak Now", 2)
+	if !ok || !reflect.DeepEqual(titlesOf(got), []string{"Love Story", "End Game"}) {
+		t.Errorf("列表循环接回开头: ok=%v %v", ok, titlesOf(got))
+	}
+	withTestKKBOX(t, "kkbox:song-list:LIST==:0:0?track=T3", false)
+	withTestKKBOXRepeat(t, "1")
+	if got, _ := kkboxUpcoming("Taylor Swift", "willow", 5); !reflect.DeepEqual(titlesOf(got), []string{"Speak Now", "Love Story", "End Game"}) {
+		t.Errorf("列表循环绕到当前这首为止: %v", titlesOf(got))
+	}
+	withTestKKBOX(t, "kkbox:song-list:LIST==:0:0?track=T1", false)
+	withTestKKBOXRepeat(t, "2")
+	if got, ok := kkboxUpcoming("Taylor Swift", "Love Story", 5); !ok || len(got) != 0 {
+		t.Errorf("单曲循环不预取、也不退回: ok=%v %v", ok, titlesOf(got))
+	}
+	for _, mode := range []string{"0", "7"} {
+		withTestKKBOX(t, "kkbox:song-list:LIST==:0:0?track=T4", false)
+		withTestKKBOXRepeat(t, mode)
+		if _, ok := kkboxUpcoming("Taylor Swift", "Speak Now", 5); ok {
+			t.Errorf("循环档 %s:最后一首后面没有,退回同专辑预取", mode)
+		}
+	}
+}
+
+func TestKKBOXFollowing(t *testing.T) {
+	if got := kkboxFollowing(2, 4, false); !reflect.DeepEqual(got, []int{3}) {
+		t.Errorf("不循环: %v", got)
+	}
+	if got := kkboxFollowing(2, 4, true); !reflect.DeepEqual(got, []int{3, 0, 1}) {
+		t.Errorf("列表循环: %v", got)
+	}
+	if got := kkboxFollowing(0, 1, true); len(got) != 0 {
+		t.Errorf("只有一首: %v", got)
+	}
+}
+
 func titlesOf(ts []upcomingTrack) []string {
 	var out []string
 	for _, t := range ts {
