@@ -165,6 +165,9 @@ func TestPrefetchImportOneResolves(t *testing.T) {
 	if !ok || !e.Lyrics.EqualString(rescoreTestNewBody) || inflight {
 		t.Fatalf("条目 %v / 在途 %v", ok, inflight)
 	}
+	if e.LyricsDecision == nil || !e.LyricsDecision.skipStats {
+		t.Error("导入的那一轮不进各源近况统计")
+	}
 	if out := prefetchImportOne(context.Background(), prefetchImportItem{Artist: rescoreTestArtist, Title: "IMPORT SONG", Album: "Import Album"}); out.started {
 		t.Fatal("已有等价写法的不该再起")
 	}

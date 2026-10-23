@@ -3778,7 +3778,7 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 		// 跟重试、重评那几条路径同一个口径(statsSkips):排队、额度、后台暂停跳过的不算这个源的这一轮,原名那一轮问到过的
 		// 不算跳过。不带的话导入清单、首次解析里被额度挡下的几千轮全记成跳过,设置页报这个源「连续出错」。
 		e.LyricsDecision.statsSkips = round.statsSkips()
-		e.LyricsDecision.skipStats = roundCtx.Err() != nil
+		e.LyricsDecision.skipStats = roundCtx.Err() != nil || lyricSourceStatsOff(roundCtx)
 	}
 	e.LyricsListedAlbum = listedAlbum
 	e.LyricsSourcesEnabled = round.enabledSources()

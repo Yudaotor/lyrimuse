@@ -852,6 +852,19 @@ func stopLyricSourceStats() {
 	s.save()
 }
 
+type lyricSourceStatsOffKey struct{}
+
+// withoutLyricSourceStats:这一轮的决策不进各源近况统计。给导入清单用:清单里的歌跟用户平时听的构成不同,
+// 「比平时少」「质量下降」的基线对不上,见 09 章决策 338。
+func withoutLyricSourceStats(ctx context.Context) context.Context {
+	return context.WithValue(ctx, lyricSourceStatsOffKey{}, true)
+}
+
+func lyricSourceStatsOff(ctx context.Context) bool {
+	v, _ := ctx.Value(lyricSourceStatsOffKey{}).(bool)
+	return v
+}
+
 // noteLyricSourceDecision:一轮决策定下来时记一笔(traceLyricsDecision 开头调)。不是现查、或者不在常驻
 // 进程里时是空操作。
 func noteLyricSourceDecision(d *lyricsDecision) {

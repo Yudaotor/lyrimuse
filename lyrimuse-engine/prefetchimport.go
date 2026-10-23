@@ -21,6 +21,7 @@ import (
 //     一个歌词源都没连上的那首不算数,隔 prefetchImportOfflineWait 再从它接着搜。
 //   - 补空扫描 / 全量扫库在跑时让开,等下一次检查。
 //   - 进度记在 prefetchImportStatePath(清单内容的指纹 + 跑到第几行):引擎重启后接着跑,清单内容变了从头跑。
+//   - 这些轮不进各源近况统计(withoutLyricSourceStats)。
 //
 // 见 09 章决策 326。
 
@@ -196,7 +197,7 @@ func prefetchImportOne(ctx context.Context, it prefetchImportItem) prefetchImpor
 		return prefetchImportOutcome{}
 	}
 	// 不跟着进程退出取消:取消了的首次解析会当场落定成「暂无歌词」,续跑时这首又因为已经有条目被跳过。进程退出时它跟着结束、什么都不写。
-	roundCtx, round := withLyricSourceRound(context.WithoutCancel(ctx))
+	roundCtx, round := withLyricSourceRound(withoutLyricSourceStats(context.WithoutCancel(ctx)))
 	resolveEnrichAsync(withBackgroundOutbound(withLyricSearchTitle(roundCtx, lyricSearchTitle(it.Title))), key, it.Artist, normEnrichTitle(it.Title), it.Album, "", it.Duration, false)
 	enrichMu.Lock()
 	e := enrichCache[key]
