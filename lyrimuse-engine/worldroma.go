@@ -7,13 +7,14 @@ import (
 	"unicode"
 )
 
-// 日 / 韩 / 中以外几种文字(西里尔、希腊、泰文、天城文、古木基文、泰米尔文、僧伽罗文)的读音也预生成进
+// 日 / 韩 / 中以外几种文字(西里尔、希腊、泰文和九种印度系文字)的读音也预生成进
 // lyrics_roma,导出的 .roma.lrc 才有它们。读音本体在 lyrics-romanize(LyrimuseCore 的 WorldRomanization,
-// 各按官方体系或 ISO 标准写),这里只管哪些条目要问、存量怎么补。见 10 章决策 50、10 章决策 51、10 章决策 52。
+// 各按官方体系或 ISO 标准写),这里只管哪些条目要问、存量怎么补。见 10 章决策 50、10 章决策 51、10 章决策 52、10 章决策 53。
 
 // worldReadingScripts:helper 会按标准出读音的文字。阿拉伯字母、希伯来字母不在里面(不写短元音,只用源自带的)。
 var worldReadingScripts = []*unicode.RangeTable{
-	unicode.Cyrillic, unicode.Greek, unicode.Thai, unicode.Devanagari, unicode.Gurmukhi, unicode.Tamil, unicode.Sinhala,
+	unicode.Cyrillic, unicode.Greek, unicode.Thai, unicode.Devanagari, unicode.Bengali, unicode.Gurmukhi,
+	unicode.Gujarati, unicode.Tamil, unicode.Telugu, unicode.Kannada, unicode.Malayalam, unicode.Sinhala,
 }
 
 // worldReadingMinLetters:这些文字的字母少于这个数不起 helper —— 英文歌里一个希腊字母当装饰不值得起子进程。
@@ -36,8 +37,8 @@ func hasWorldReadingScript(lyrics string) bool {
 // worldRomaDelay:启动后等这么久再补,排在另外两道读音迁移后面。
 const worldRomaDelay = 4 * time.Minute
 
-// errWorldReadingsUnsupported:helper 回包没带 world_readings —— 它比引擎旧、还不会出这几种文字的读音,
-// 回的「没什么可注音的」不能当真。
+// errWorldReadingsUnsupported:helper 回包的 world_readings 比 migrationWorldRomaVersion 小 —— 它比引擎旧、
+// 不会出(全部)这几种文字的读音,回的「没什么可注音的」不能当真。
 var errWorldReadingsUnsupported = errors.New("lyrics-romanize does not romanize the world scripts")
 
 // worldRomaGenerator 是补存量时实际调用的 helper;测试换成假实现。跟 onDeviceRomanize 不同,找不到 helper、
@@ -50,9 +51,9 @@ var worldRomaGenerator = func(lyrics, kana string) (string, error) {
 	return worldRomaFromReply(reply)
 }
 
-// worldRomaFromReply:不带 world_readings 是 errWorldReadingsUnsupported;ok:false(这首没什么可注音的)是空串。
+// worldRomaFromReply:world_readings 不够新是 errWorldReadingsUnsupported;ok:false(这首没什么可注音的)是空串。
 func worldRomaFromReply(reply romanizeReply) (string, error) {
-	if !reply.WorldReadings {
+	if reply.WorldReadings < migrationWorldRomaVersion {
 		return "", errWorldReadingsUnsupported
 	}
 	if !reply.OK {

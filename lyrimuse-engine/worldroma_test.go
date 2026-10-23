@@ -19,6 +19,8 @@ func TestHasWorldReadingScript(t *testing.T) {
 		{"俄语", "[00:01.00]Ты танцуешь, будто сумасшедшая", true},
 		{"希腊语", "[00:01.00]Στάζει φωτιά στα χείλη το αντίο", true},
 		{"天城文", "[00:01.00]सीने में दिल ये धड़कता हुआ", true},
+		{"孟加拉文", "[00:01.00]আমি তোমারে সঁপেছি প্রাণ", true},
+		{"马拉雅拉姆文", "[00:01.00]നടക്കടാ അങ്ങോട്ട് പോകാം", true},
 		{"英文歌里一个希腊字母当装饰", "[00:01.00]Ω love you baby tonight", false},
 		{"阿拉伯字母只用源自带的", "[00:01.00]إنت حبيبي وانت عمري يا حبيبي يا حبيبي", false},
 		{"纯英文", "[00:01.00]I'll be there for you", false},
@@ -161,14 +163,18 @@ func TestWorldRomaGeneratorReportsMissingHelper(t *testing.T) {
 }
 
 func TestWorldRomaFromReply(t *testing.T) {
-	if roma, err := worldRomaFromReply(romanizeReply{OK: true, Roma: "[00:01.00]x", WorldReadings: true}); roma != "[00:01.00]x" || err != nil {
+	if roma, err := worldRomaFromReply(romanizeReply{OK: true, Roma: "[00:01.00]x", WorldReadings: migrationWorldRomaVersion}); roma != "[00:01.00]x" || err != nil {
 		t.Errorf("新 helper 出了读音:交回,实得 %q, %v", roma, err)
 	}
-	if roma, err := worldRomaFromReply(romanizeReply{OK: false, Reason: "no-romanization", WorldReadings: true}); roma != "" || err != nil {
+	if roma, err := worldRomaFromReply(romanizeReply{OK: false, Reason: "no-romanization", WorldReadings: migrationWorldRomaVersion}); roma != "" || err != nil {
 		t.Errorf("新 helper 说没什么可注音的:空串、不是错误,实得 %q, %v", roma, err)
 	}
 	if _, err := worldRomaFromReply(romanizeReply{OK: false, Reason: "no-romanization"}); !errors.Is(err, errWorldReadingsUnsupported) {
 		t.Errorf("旧 helper(不带 world_readings)应报 errWorldReadingsUnsupported,实得 %v", err)
+	}
+	old := romanizeReply{OK: false, Reason: "no-romanization", WorldReadings: migrationWorldRomaVersion - 1}
+	if _, err := worldRomaFromReply(old); !errors.Is(err, errWorldReadingsUnsupported) {
+		t.Errorf("world_readings 比引擎旧(还不会出新加的文字)应报 errWorldReadingsUnsupported,实得 %v", err)
 	}
 }
 

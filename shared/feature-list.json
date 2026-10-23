@@ -393,9 +393,9 @@
             "zh-Hant": "讀音標註"
           },
           "desc": {
-            "en": "Japanese romaji, Korean romanization, Mandarin pinyin and Cantonese Jyutping, word by word above the lyrics, plus thirteen more languages such as Russian, Thai, Greek and Hindi under each language's official system or an ISO standard. Language is judged line by line, so a Japanese line inside a Chinese song is the only one marked. Choose which languages to mark here; with a Chinese interface, pinyin starts off. Each display decides whether to show them.",
-            "zh-Hans": "日语罗马音、韩语罗马字、普通话拼音、粤语粤拼，逐词标注在歌词上方；俄语、泰语、希腊语、印地语等十三种语言按各语言的官方体系或 ISO 标准标注。按行判断语言：中文歌曲中夹有一句日文时，只为该句标注。标注哪些语言可在此处选择，中文界面默认不标注普通话拼音。各显示位置可分别设置是否显示。",
-            "zh-Hant": "日文羅馬拼音、韓文羅馬字、國語拼音、粵語粵拼，逐詞標註在歌詞上方；俄文、泰文、希臘文、印地文等十三種語言按各語言的官方體系或 ISO 標準標註。逐行判斷語言：中文歌曲中夾有一句日文時，只為該句標註。標註哪些語言可在此處選擇，中文介面預設不標註國語拼音。各顯示位置可分別設定是否顯示。"
+            "en": "Japanese romaji, Korean romanization, Mandarin pinyin and Cantonese Jyutping, word by word above the lyrics, plus eighteen more languages such as Russian, Thai, Greek and Hindi under each language's official system or an ISO standard. Language is judged line by line, so a Japanese line inside a Chinese song is the only one marked. Choose which languages to mark here; with a Chinese interface, pinyin starts off. Each display decides whether to show them.",
+            "zh-Hans": "日语罗马音、韩语罗马字、普通话拼音、粤语粤拼，逐词标注在歌词上方；俄语、泰语、希腊语、印地语等十八种语言按各语言的官方体系或 ISO 标准标注。按行判断语言：中文歌曲中夹有一句日文时，只为该句标注。标注哪些语言可在此处选择，中文界面默认不标注普通话拼音。各显示位置可分别设置是否显示。",
+            "zh-Hant": "日文羅馬拼音、韓文羅馬字、國語拼音、粵語粵拼，逐詞標註在歌詞上方；俄文、泰文、希臘文、印地文等十八種語言按各語言的官方體系或 ISO 標準標註。逐行判斷語言：中文歌曲中夾有一句日文時，只為該句標註。標註哪些語言可在此處選擇，中文介面預設不標註國語拼音。各顯示位置可分別設定是否顯示。"
           },
           "default": "on",
           "check": {

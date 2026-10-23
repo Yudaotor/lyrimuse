@@ -1085,9 +1085,11 @@ public enum LyricScript: String, Sendable, CaseIterable {
     case greek, thai
     /// 天城文(印地语,也包括马拉地语、尼泊尔语这些同用天城文的,读音都按 ISO 15919)。
     case hindi
+    /// 孟加拉文(也包括阿萨姆语)。
+    case bengali
     /// 古木基文。
     case punjabi
-    case tamil, sinhala
+    case gujarati, tamil, telugu, kannada, malayalam, sinhala
     /// 阿拉伯字母。不现算读音,开关只管歌词源自带的那份(见 `WorldRomanization`)。
     case arabic
     /// 整首是西里尔字母、却认不出是支持的哪种语言(吉尔吉斯语、蒙古语等)。不现算读音,也别再逐行去认:
@@ -1097,7 +1099,7 @@ public enum LyricScript: String, Sendable, CaseIterable {
     /// 不纳入按语言开关的管辖。
     case other
 
-    var option: RomanizationScripts? {
+    public var option: RomanizationScripts? {
         switch self {
         case .japanese: return .japanese
         case .korean: return .korean
@@ -1113,8 +1115,13 @@ public enum LyricScript: String, Sendable, CaseIterable {
         case .greek: return .greek
         case .thai: return .thai
         case .hindi: return .hindi
+        case .bengali: return .bengali
         case .punjabi: return .punjabi
+        case .gujarati: return .gujarati
         case .tamil: return .tamil
+        case .telugu: return .telugu
+        case .kannada: return .kannada
+        case .malayalam: return .malayalam
         case .sinhala: return .sinhala
         case .arabic: return .arabic
         case .unsupportedCyrillic, .other: return nil
@@ -1171,15 +1178,22 @@ public struct RomanizationScripts: OptionSet, Sendable, Codable {
     public static let tamil = RomanizationScripts(rawValue: 1 << 15)
     public static let sinhala = RomanizationScripts(rawValue: 1 << 16)
     public static let arabic = RomanizationScripts(rawValue: 1 << 17)
+    public static let bengali = RomanizationScripts(rawValue: 1 << 18)
+    public static let gujarati = RomanizationScripts(rawValue: 1 << 19)
+    public static let telugu = RomanizationScripts(rawValue: 1 << 20)
+    public static let kannada = RomanizationScripts(rawValue: 1 << 21)
+    public static let malayalam = RomanizationScripts(rawValue: 1 << 22)
 
     /// 用西里尔字母写的那几种语言。
     public static let cyrillic: RomanizationScripts = [
         .russian, .ukrainian, .bulgarian, .belarusian, .serbian, .macedonian, .kazakh,
     ]
 
-    /// 日 / 韩 / 中以外的全部语言。升级上来的人第一次带着它们启动时一并打开(`AppSettings`)。
-    public static let world: RomanizationScripts = RomanizationScripts.cyrillic
-        .union([.greek, .thai, .hindi, .punjabi, .tamil, .sinhala, .arabic])
+    /// 日 / 韩 / 中以外的全部语言。
+    public static let world: RomanizationScripts = RomanizationScripts.cyrillic.union([
+        .greek, .thai, .hindi, .bengali, .punjabi, .gujarati, .tamil, .telugu, .kannada, .malayalam, .sinhala,
+        .arabic,
+    ])
 
     /// 全开。只作 Core 内部的占位初值(`LocalPlaybackSource` / `LyricsSyncEngine` 启动时
     /// 会被 App 的设置覆盖);用户没手动改过时的默认值走 `defaultScripts(chineseUI:)`。
@@ -1201,18 +1215,18 @@ public struct RomanizationScripts: OptionSet, Sendable, Codable {
         return .default
     }
 
-    /// 日 / 韩 / 中以外的语言默认开:手动改过(落了盘)的人,第一次带着这些语言启动时把它们并进已存的值,
-    /// 返回要落盘的值;没落过盘的人默认值里本来就有,返回 nil。只判一次(`migrated` 为真后不再判)。
-    public static func addingWorldLanguages(storedRaw: Int?, migrated: Bool) -> RomanizationScripts? {
-        guard !migrated, let storedRaw else { return nil }
-        return RomanizationScripts(rawValue: storedRaw).union(.world)
-    }
+    /// 这一版认得的全部语言。跟设置值一起记在 `np:romanizationScriptsKnown`(随配置导出)。
+    public static let known: RomanizationScripts = .default
 
-    /// 导入配置时要落盘的值。这几种语言加进来之前导出的配置(不带 `np:romanizationScriptsWorldAware`)里的值
-    /// 一个新语言位都没有,并上 `.world`,跟升级时 `addingWorldLanguages` 同一个口径;带着这个标记的照原样。
-    public static func importedValue(raw: Int, exportedWithWorld: Bool) -> RomanizationScripts {
-        let value = RomanizationScripts(rawValue: raw)
-        return exportedWithWorld ? value : value.union(.world)
+    /// 没记过认得哪些语言的设置值(只认得日 / 韩 / 中的版本存的)。
+    public static let legacyKnown: RomanizationScripts = [.japanese, .korean, .chinese, .cantonese]
+
+    /// 新加的语言默认开:已存的值(本机落过盘的,或导入的配置里的)并上存它那时还不认得、这一版认得的语言。
+    /// 存它那时认得的语言照原样,用户关掉的不会被重新打开。`knownRaw` 是跟这个值一起记下的认得范围,
+    /// 没记过按 `legacyKnown`。见 10 章决策 53。
+    public static func addingNewLanguages(storedRaw: Int, knownRaw: Int?) -> RomanizationScripts {
+        let knownThen = knownRaw.map(RomanizationScripts.init(rawValue:)) ?? .legacyKnown
+        return RomanizationScripts(rawValue: storedRaw).union(known.subtracting(knownThen))
     }
 }
 

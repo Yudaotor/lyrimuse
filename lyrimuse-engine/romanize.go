@@ -52,14 +52,15 @@ type romanizeRequest struct {
 
 // romanizeReply 是 lyrics-romanize 的回包。ok:false 时原因在 Reason(no-romanization / empty-input / not-legacy
 // 都是正常结论,不是故障);LegacyChecked 只在带了 legacy_korean_roma、判过是旧版时为真,StaleChecked 同理对 stale_roma。
-// WorldReadings:helper 会出日 / 韩 / 中以外那几种文字的读音(每个回包都带),补存量那道靠它认旧 helper(worldroma.go)。
+// WorldReadings:helper 会出读音的那套日 / 韩 / 中以外文字的版本(每个回包都带,跟 migrationWorldRomaVersion 是同一个数),
+// 补存量那道靠它认旧 helper(worldroma.go)。
 type romanizeReply struct {
 	OK            bool   `json:"ok"`
 	Roma          string `json:"roma"`
 	Reason        string `json:"reason"`
 	LegacyChecked bool   `json:"legacy_checked"`
 	StaleChecked  bool   `json:"stale_checked"`
-	WorldReadings bool   `json:"world_readings"`
+	WorldReadings int    `json:"world_readings"`
 }
 
 // errRomanizeHelperMissing:没走 build.sh 打包(直接 go build 跑引擎)时找不到 helper。

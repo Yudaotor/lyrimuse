@@ -77,7 +77,6 @@ enum ConfigPortability {
     private static let machineLocalDefaultsKeys: Set<String> = [
         "np:hasCompletedOnboarding",
         "np:romanizationDefaultMigrated",
-        "np:romanizationWorldMigrated",
         "np:hasShownAutomationOnboarding",
         "np:hasOfferedICloudImport",
         "np:hasShownOverlayDragHint",
@@ -207,6 +206,9 @@ enum ConfigPortability {
         // 菜单栏歌词滚动、灵动岛显示封面这两个开关(v1.3.0),开关撤掉了。
         "np:menuBarLyricsScroll",
         "np:notchShowArtwork",
+        // 「标注读音的语言」的两个一次性标记:新加的语言要不要默认打开,由 np:romanizationScriptsKnown 判。
+        "np:romanizationWorldMigrated",
+        "np:romanizationScriptsWorldAware",
     ]
 
     /// 导出/导入都要跳过的键 = 机器专属的 + 已经死掉的。
@@ -279,11 +281,11 @@ enum ConfigPortability {
             UserDefaults.standard.set(value, forKey: key)
             applied += 1
         }
-        // 日 / 韩 / 中以外的语言加进来之前导出的配置,标注读音的语言里没有它们:并进去(默认开),
-        // 不然导入一份旧配置就把它们全关了。键名同 AppSettings.Keys。
+        // 导出那一版还不认得的语言,配置里的值没有它们:并进去(默认开),不然导入一份旧配置就把它们全关了。
+        // 键名同 AppSettings.Keys。
         if let raw = appSettings["np:romanizationScripts"] as? Int {
-            let exportedWithWorld = appSettings["np:romanizationScriptsWorldAware"] as? Bool ?? false
-            let value = RomanizationScripts.importedValue(raw: raw, exportedWithWorld: exportedWithWorld)
+            let value = RomanizationScripts.addingNewLanguages(
+                storedRaw: raw, knownRaw: appSettings["np:romanizationScriptsKnown"] as? Int)
             UserDefaults.standard.set(value.rawValue, forKey: "np:romanizationScripts")
         }
         return applied

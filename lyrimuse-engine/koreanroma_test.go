@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,6 +53,9 @@ func TestLyricsRomanizeHelperKeysMatchSwift(t *testing.T) {
 		if !strings.Contains(string(src), lit) {
 			t.Errorf("lyrics-romanize/main.swift 里找不到 %s —— 改了键名,romanize.go 的 romanizeRequest / romanizeReply 要同步", lit)
 		}
+	}
+	if lit := fmt.Sprintf("var worldReadings: Int? = %d", migrationWorldRomaVersion); !strings.Contains(string(src), lit) {
+		t.Errorf("lyrics-romanize/main.swift 里找不到 %s —— world_readings 要跟 migrationWorldRomaVersion 同一个数", lit)
 	}
 }
 

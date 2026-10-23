@@ -164,8 +164,13 @@
 "GitHub Star 数" = "GitHub stars";
 "HDR 高亮" = "HDR Highlight";
 "ISO 15919，如 नमस्ते → namastē" = "ISO 15919, e.g. नमस्ते → namastē";
+"ISO 15919，如 ভালোবাসা → bhālōbāsā" = "ISO 15919, e.g. ভালোবাসা → bhālōbāsā";
 "ISO 15919，如 ਸਤਿ ਸ੍ਰੀ → sati srī" = "ISO 15919, e.g. ਸਤਿ ਸ੍ਰੀ → sati srī";
+"ISO 15919，如 નમસ્તે → namastē" = "ISO 15919, e.g. નમસ્તે → namastē";
 "ISO 15919，如 வணக்கம் → vaṇakkam" = "ISO 15919, e.g. வணக்கம் → vaṇakkam";
+"ISO 15919，如 నమస్కారం → namaskāraṁ" = "ISO 15919, e.g. నమస్కారం → namaskāraṁ";
+"ISO 15919，如 ನಮಸ್ಕಾರ → namaskāra" = "ISO 15919, e.g. ನಮಸ್ಕಾರ → namaskāra";
+"ISO 15919，如 നമസ്കാരം → namaskāraṁ" = "ISO 15919, e.g. നമസ്കാരം → namaskāraṁ";
 "ISRC 一致" = "Same ISRC";
 "KKBOX 歌曲 ID 一致" = "Same KKBOX song ID";
 "KKBOX、Spotify、Amazon Music、洛雪音乐自己缓存的歌词" = "Lyrics cached by KKBOX, Spotify, Amazon Music and LX Music themselves";
@@ -665,6 +670,7 @@
 "占用空间：%@" = "Storage used: %@";
 "卡拉OK" = "Karaoke";
 "卡拉OK效果" = "Karaoke Effect";
+"卡纳达语" = "Kannada";
 "印地语" = "Hindi";
 "即将完成" = "almost done";
 "即将导入：%@" = "About to import: %@";
@@ -697,6 +703,7 @@
 "取消选择" = "Deselect All";
 "取消静音" = "Unmute";
 "口白" = "Spoken";
+"古吉拉特语" = "Gujarati";
 "另一时长" = "Other length";
 "另一轮扫描正在进行，请在完成后再试" = "Another scan is in progress. Try again when it finishes";
 "另外两项均开启时不显示" = "Hidden when the other two are on";
@@ -877,6 +884,7 @@
 "字节跳动旗下的音乐平台" = "ByteDance's music service";
 "存在差异" = "Different";
 "存在标题更吻合的候选，撤销逐字加分" = "A candidate matches the title better, so the word-timing bonus is withdrawn";
+"孟加拉语" = "Bangla";
 "安卓" = "Android";
 "安装并登录后将自动连接；网页版和手机版不支持连接" = "Connects automatically once it's installed and you're signed in. The web and mobile apps can't connect";
 "完全一致" = "Identical";
@@ -1919,6 +1927,7 @@
 "沿用同曲条目的人工修正" = "Uses the manual correction from another entry of this song";
 "沿用同曲条目的修正" = "From Another Entry";
 "法国的流媒体音乐平台，歌词由 LyricFind 提供" = "A French music streaming service with lyrics from LyricFind";
+"泰卢固语" = "Telugu";
 "泰米尔语" = "Tamil";
 "泰语" = "Thai";
 "洛雪音乐" = "LX Music";
@@ -2669,6 +2678,7 @@
 "首次解析" = "First resolution";
 "首轮" = "First round";
 "马其顿语" = "Macedonian";
+"马拉雅拉姆语" = "Malayalam";
 "高亮当前句并保持在可见范围内；手动滚动时暂停，再次点按可恢复" = "Highlights the current line and keeps it in view; scrolling by hand pauses it, click again to resume";
 "高可信" = "High confidence";
 "高度" = "Height";

@@ -2021,11 +2021,26 @@ private struct LyricsSettingsTab: View {
                             L10n.t("印地语"), .hindi,
                             help: L10n.t("ISO 15919，如 नमस्ते → namastē"))
                         romanizationTile(
+                            L10n.t("孟加拉语"), .bengali,
+                            help: L10n.t("ISO 15919，如 ভালোবাসা → bhālōbāsā"))
+                        romanizationTile(
                             L10n.t("旁遮普语"), .punjabi,
                             help: L10n.t("ISO 15919，如 ਸਤਿ ਸ੍ਰੀ → sati srī"))
                         romanizationTile(
+                            L10n.t("古吉拉特语"), .gujarati,
+                            help: L10n.t("ISO 15919，如 નમસ્તે → namastē"))
+                        romanizationTile(
                             L10n.t("泰米尔语"), .tamil,
                             help: L10n.t("ISO 15919，如 வணக்கம் → vaṇakkam"))
+                        romanizationTile(
+                            L10n.t("泰卢固语"), .telugu,
+                            help: L10n.t("ISO 15919，如 నమస్కారం → namaskāraṁ"))
+                        romanizationTile(
+                            L10n.t("卡纳达语"), .kannada,
+                            help: L10n.t("ISO 15919，如 ನಮಸ್ಕಾರ → namaskāra"))
+                        romanizationTile(
+                            L10n.t("马拉雅拉姆语"), .malayalam,
+                            help: L10n.t("ISO 15919，如 നമസ്കാരം → namaskāraṁ"))
                         romanizationTile(
                             L10n.t("僧伽罗语"), .sinhala,
                             help: L10n.t("斯里兰卡国家体系，如 ලංකා → laṅkā"))

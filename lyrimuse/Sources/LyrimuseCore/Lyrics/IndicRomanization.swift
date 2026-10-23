@@ -1,24 +1,31 @@
 import Foundation
 
-/// 印度系文字读音。天城文、古木基文、泰米尔文按 ISO 15919:2001;联合国 1977 年给印地语、旁遮普语、泰米尔语推荐过
+/// 印度系文字读音。天城文、孟加拉文、古木基文、古吉拉特文、泰米尔文、泰卢固文、卡纳达文、马拉雅拉姆文按 ISO 15919:2001;联合国 1977 年给印地语、旁遮普语、泰米尔语推荐过
 /// 一套体系,UNGEGN 报告(4.0 版)写明印度、斯里兰卡和国际制图都没有在用。ISO 15919 留给使用方选的写法:
-///   - 长短 e / o 一律按标准默认的统一写法:ए ओ 写 ē ō(天城文、古木基文没有短 e / o,也照写长音符)。
+///   - 长短 e / o 一律按标准默认的统一写法:ए ओ 写 ē ō(天城文、孟加拉文、古木基文、古吉拉特文没有短 e / o,也照写长音符)。
 ///   - 随韵(anusvāra)一律写 ṁ(标准的简化选项),古木基文的 tippi、bindi 同样写 ṁ。
 ///   - 鼻化符(candrabindu)写成前一个元音上的波浪号(非梵语文本的写法)。
 ///   - 辅音不带元音符号、也没有消音符时写出固有元音 a(ISO 15919 是逐字转写,不删 schwa)。
 /// 僧伽罗文按斯里兰卡测绘局的国家体系(2018 年内阁批准,之后修订;UNGEGN 报告 5.0 版收录的现行修订版):
 /// 在 ISO 15919 上改了几个字母(随韵 ං ṅ、ච ch、ෂ sh、ඣ q、ඨ ṯ、ඞ ṁ、ඹ ḅ、ඓ ĩ、ඍ ṛ)。报告里 ඞ 的辅音表写 ṁa、
 /// 加消音符的特殊形写 ṅ,前后不一,按辅音表。
-/// 先做 NFC:泰米尔文、僧伽罗文的两段式元音(ோ = ெ + ா 这类)有的歌词按两个字符存,不合成就会读成两个元音。
-/// 数字换成阿拉伯数字,单竖线 । 写「.」、双竖线 ॥ 写「..」。见 10 章决策 51。
+/// 马拉雅拉姆文的独立辅音(chillu,ൻ ർ ൽ 这些)不带固有元音;词尾的消音符(saṁvr̥tōkāram,കണ്ണ്)写 ŭ,
+/// 老写法 ു് 同样写 ŭ;后面跟着零宽连接符的是老式 chillu,照消音符转。
+/// 先做 NFC:泰米尔文、僧伽罗文、卡纳达文、马拉雅拉姆文的两段式元音(ோ = ெ + ா 这类)有的歌词按两个字符存,不合成就会读成两个元音。
+/// 数字换成阿拉伯数字,单竖线 । 写「.」、双竖线 ॥ 写「..」。见 10 章决策 51、53。
 public enum IndicScript: String, Sendable, CaseIterable {
-    case devanagari, gurmukhi, tamil, sinhala
+    case devanagari, bengali, gurmukhi, gujarati, tamil, telugu, kannada, malayalam, sinhala
 
     var range: ClosedRange<UInt32> {
         switch self {
         case .devanagari: return 0x0900...0x097F
+        case .bengali: return 0x0980...0x09FF
         case .gurmukhi: return 0x0A00...0x0A7F
+        case .gujarati: return 0x0A80...0x0AFF
         case .tamil: return 0x0B80...0x0BFF
+        case .telugu: return 0x0C00...0x0C7F
+        case .kannada: return 0x0C80...0x0CFF
+        case .malayalam: return 0x0D00...0x0D7F
         case .sinhala: return 0x0D80...0x0DFF
         }
     }
@@ -70,7 +77,17 @@ public enum IndicRomanization {
                 continue
             }
             if v == table.virama {
-                if let at = pendingInherent { out.remove(at: at) }
+                let wordFinal = i + 1 == scalars.count || !script.range.contains(scalars[i + 1].value)
+                    && scalars[i + 1].value != 0x200D
+                if script == .malayalam, wordFinal {
+                    if let at = pendingInherent {
+                        out[at] = "ŭ"
+                    } else if out.last == "u" {
+                        out[out.count - 1] = "ŭ"
+                    }
+                } else if let at = pendingInherent {
+                    out.remove(at: at)
+                }
                 pendingInherent = nil
                 i += 1
                 continue
@@ -127,8 +144,13 @@ public enum IndicRomanization {
         let zero: UInt32
         switch script {
         case .devanagari: zero = 0x0966
+        case .bengali: zero = 0x09E6
         case .gurmukhi: zero = 0x0A66
+        case .gujarati: zero = 0x0AE6
         case .tamil: zero = 0x0BE6
+        case .telugu: zero = 0x0C66
+        case .kannada: zero = 0x0CE6
+        case .malayalam: zero = 0x0D66
         case .sinhala: zero = 0x0DE6
         }
         return (zero...zero + 9).contains(v) ? Int(v - zero) : nil
@@ -153,7 +175,8 @@ public enum IndicRomanization {
     }
 
     static let tables: [IndicScript: Table] = [
-        .devanagari: devanagari, .gurmukhi: gurmukhi, .tamil: tamil, .sinhala: sinhala,
+        .devanagari: devanagari, .bengali: bengali, .gurmukhi: gurmukhi, .gujarati: gujarati, .tamil: tamil,
+        .telugu: telugu, .kannada: kannada, .malayalam: malayalam, .sinhala: sinhala,
     ]
 
     private static let devanagari: Table = {
@@ -239,6 +262,138 @@ public enum IndicRomanization {
             ("\u{0BD7}", ""),
         ])
         t.virama = 0x0BCD
+        return t
+    }()
+
+    private static let bengali: Table = {
+        var t = Table()
+        t.consonants = map([
+            ("ক", "k"), ("খ", "kh"), ("গ", "g"), ("ঘ", "gh"), ("ঙ", "ṅ"), ("চ", "c"), ("ছ", "ch"), ("জ", "j"),
+            ("ঝ", "jh"), ("ঞ", "ñ"), ("ট", "ṭ"), ("ঠ", "ṭh"), ("ড", "ḍ"), ("ঢ", "ḍh"), ("ণ", "ṇ"), ("ত", "t"),
+            ("থ", "th"), ("দ", "d"), ("ধ", "dh"), ("ন", "n"), ("প", "p"), ("ফ", "ph"), ("ব", "b"), ("ভ", "bh"),
+            ("ম", "m"), ("য", "y"), ("র", "r"), ("ল", "l"), ("শ", "ś"), ("ষ", "ṣ"), ("স", "s"), ("হ", "h"),
+            // 阿萨姆语的 ৰ ৱ;带点字母的预组形式(NFC 不合成)。
+            ("\u{09F0}", "r"), ("\u{09F1}", "v"), ("\u{09DC}", "ṛ"), ("\u{09DD}", "ṛh"), ("\u{09DF}", "ẏ"),
+        ])
+        t.nuktaForms = map([("ড", "ṛ"), ("ঢ", "ṛh"), ("য", "ẏ")])
+        t.vowelSigns = map([
+            ("\u{09BE}", "ā"), ("\u{09BF}", "i"), ("\u{09C0}", "ī"), ("\u{09C1}", "u"), ("\u{09C2}", "ū"),
+            ("\u{09C3}", "r̥"), ("\u{09C4}", "r̥̄"), ("\u{09E2}", "l̥"), ("\u{09E3}", "l̥̄"), ("\u{09C7}", "ē"),
+            ("\u{09C8}", "ai"), ("\u{09CB}", "ō"), ("\u{09CC}", "au"),
+        ])
+        t.others = map([
+            ("অ", "a"), ("আ", "ā"), ("ই", "i"), ("ঈ", "ī"), ("উ", "u"), ("ঊ", "ū"), ("ঋ", "r̥"), ("ৠ", "r̥̄"),
+            ("ঌ", "l̥"), ("ৡ", "l̥̄"), ("এ", "ē"), ("ঐ", "ai"), ("ও", "ō"), ("ঔ", "au"), ("\u{0982}", "ṁ"),
+            ("\u{0983}", "ḥ"), ("ঽ", "’"), ("\u{09CE}", "t"), ("\u{09BC}", ""), ("\u{09D7}", ""),
+        ])
+        t.virama = 0x09CD
+        t.nukta = 0x09BC
+        t.candrabindu = 0x0981
+        return t
+    }()
+
+    private static let gujarati: Table = {
+        var t = Table()
+        t.consonants = map([
+            ("ક", "k"), ("ખ", "kh"), ("ગ", "g"), ("ઘ", "gh"), ("ઙ", "ṅ"), ("ચ", "c"), ("છ", "ch"), ("જ", "j"),
+            ("ઝ", "jh"), ("ઞ", "ñ"), ("ટ", "ṭ"), ("ઠ", "ṭh"), ("ડ", "ḍ"), ("ઢ", "ḍh"), ("ણ", "ṇ"), ("ત", "t"),
+            ("થ", "th"), ("દ", "d"), ("ધ", "dh"), ("ન", "n"), ("પ", "p"), ("ફ", "ph"), ("બ", "b"), ("ભ", "bh"),
+            ("મ", "m"), ("ય", "y"), ("ર", "r"), ("લ", "l"), ("ળ", "ḷ"), ("વ", "v"), ("શ", "ś"), ("ષ", "ṣ"),
+            ("સ", "s"), ("હ", "h"),
+        ])
+        t.nuktaForms = map([
+            ("ક", "q"), ("ખ", "k͟h"), ("ગ", "ġ"), ("જ", "z"), ("ડ", "ṛ"), ("ઢ", "ṛh"), ("ફ", "f"),
+        ])
+        t.vowelSigns = map([
+            ("\u{0ABE}", "ā"), ("\u{0ABF}", "i"), ("\u{0AC0}", "ī"), ("\u{0AC1}", "u"), ("\u{0AC2}", "ū"),
+            ("\u{0AC3}", "r̥"), ("\u{0AC4}", "r̥̄"), ("\u{0AE2}", "l̥"), ("\u{0AE3}", "l̥̄"), ("\u{0AC5}", "ê"),
+            ("\u{0AC7}", "ē"), ("\u{0AC8}", "ai"), ("\u{0AC9}", "ô"), ("\u{0ACB}", "ō"), ("\u{0ACC}", "au"),
+        ])
+        t.others = map([
+            ("અ", "a"), ("આ", "ā"), ("ઇ", "i"), ("ઈ", "ī"), ("ઉ", "u"), ("ઊ", "ū"), ("ઋ", "r̥"), ("ૠ", "r̥̄"),
+            ("ઌ", "l̥"), ("ૡ", "l̥̄"), ("ઍ", "ê"), ("એ", "ē"), ("ઐ", "ai"), ("ઑ", "ô"), ("ઓ", "ō"), ("ઔ", "au"),
+            ("\u{0A82}", "ṁ"), ("\u{0A83}", "ḥ"), ("ઽ", "’"), ("ૐ", "om"), ("\u{0ABC}", ""),
+        ])
+        t.virama = 0x0ACD
+        t.nukta = 0x0ABC
+        t.candrabindu = 0x0A81
+        return t
+    }()
+
+    private static let telugu: Table = {
+        var t = Table()
+        t.consonants = map([
+            ("క", "k"), ("ఖ", "kh"), ("గ", "g"), ("ఘ", "gh"), ("ఙ", "ṅ"), ("చ", "c"), ("ఛ", "ch"), ("జ", "j"),
+            ("ఝ", "jh"), ("ఞ", "ñ"), ("ట", "ṭ"), ("ఠ", "ṭh"), ("డ", "ḍ"), ("ఢ", "ḍh"), ("ణ", "ṇ"), ("త", "t"),
+            ("థ", "th"), ("ద", "d"), ("ధ", "dh"), ("న", "n"), ("ప", "p"), ("ఫ", "ph"), ("బ", "b"), ("భ", "bh"),
+            ("మ", "m"), ("య", "y"), ("ర", "r"), ("ఱ", "ṟ"), ("ల", "l"), ("ళ", "ḷ"), ("ఴ", "ḻ"), ("వ", "v"),
+            ("శ", "ś"), ("ష", "ṣ"), ("స", "s"), ("హ", "h"),
+        ])
+        t.vowelSigns = map([
+            ("\u{0C3E}", "ā"), ("\u{0C3F}", "i"), ("\u{0C40}", "ī"), ("\u{0C41}", "u"), ("\u{0C42}", "ū"),
+            ("\u{0C43}", "r̥"), ("\u{0C44}", "r̥̄"), ("\u{0C62}", "l̥"), ("\u{0C63}", "l̥̄"), ("\u{0C46}", "e"),
+            ("\u{0C47}", "ē"), ("\u{0C48}", "ai"), ("\u{0C4A}", "o"), ("\u{0C4B}", "ō"), ("\u{0C4C}", "au"),
+        ])
+        t.others = map([
+            ("అ", "a"), ("ఆ", "ā"), ("ఇ", "i"), ("ఈ", "ī"), ("ఉ", "u"), ("ఊ", "ū"), ("ఋ", "r̥"), ("ౠ", "r̥̄"),
+            ("ఌ", "l̥"), ("ౡ", "l̥̄"), ("ఎ", "e"), ("ఏ", "ē"), ("ఐ", "ai"), ("ఒ", "o"), ("ఓ", "ō"), ("ఔ", "au"),
+            ("\u{0C02}", "ṁ"), ("\u{0C03}", "ḥ"), ("ఽ", "’"), ("\u{0C55}", ""), ("\u{0C56}", ""),
+        ])
+        t.virama = 0x0C4D
+        t.candrabindu = 0x0C01
+        return t
+    }()
+
+    private static let kannada: Table = {
+        var t = Table()
+        t.consonants = map([
+            ("ಕ", "k"), ("ಖ", "kh"), ("ಗ", "g"), ("ಘ", "gh"), ("ಙ", "ṅ"), ("ಚ", "c"), ("ಛ", "ch"), ("ಜ", "j"),
+            ("ಝ", "jh"), ("ಞ", "ñ"), ("ಟ", "ṭ"), ("ಠ", "ṭh"), ("ಡ", "ḍ"), ("ಢ", "ḍh"), ("ಣ", "ṇ"), ("ತ", "t"),
+            ("ಥ", "th"), ("ದ", "d"), ("ಧ", "dh"), ("ನ", "n"), ("ಪ", "p"), ("ಫ", "ph"), ("ಬ", "b"), ("ಭ", "bh"),
+            ("ಮ", "m"), ("ಯ", "y"), ("ರ", "r"), ("ಱ", "ṟ"), ("ಲ", "l"), ("ಳ", "ḷ"), ("ೞ", "ḻ"), ("ವ", "v"),
+            ("ಶ", "ś"), ("ಷ", "ṣ"), ("ಸ", "s"), ("ಹ", "h"),
+        ])
+        t.nuktaForms = map([("ಜ", "z"), ("ಫ", "f")])
+        t.vowelSigns = map([
+            ("\u{0CBE}", "ā"), ("\u{0CBF}", "i"), ("\u{0CC0}", "ī"), ("\u{0CC1}", "u"), ("\u{0CC2}", "ū"),
+            ("\u{0CC3}", "r̥"), ("\u{0CC4}", "r̥̄"), ("\u{0CE2}", "l̥"), ("\u{0CE3}", "l̥̄"), ("\u{0CC6}", "e"),
+            ("\u{0CC7}", "ē"), ("\u{0CC8}", "ai"), ("\u{0CCA}", "o"), ("\u{0CCB}", "ō"), ("\u{0CCC}", "au"),
+        ])
+        t.others = map([
+            ("ಅ", "a"), ("ಆ", "ā"), ("ಇ", "i"), ("ಈ", "ī"), ("ಉ", "u"), ("ಊ", "ū"), ("ಋ", "r̥"), ("ೠ", "r̥̄"),
+            ("ಌ", "l̥"), ("ೡ", "l̥̄"), ("ಎ", "e"), ("ಏ", "ē"), ("ಐ", "ai"), ("ಒ", "o"), ("ಓ", "ō"), ("ಔ", "au"),
+            ("\u{0C82}", "ṁ"), ("\u{0C83}", "ḥ"), ("ಽ", "’"), ("\u{0CBC}", ""), ("\u{0CD5}", ""), ("\u{0CD6}", ""),
+        ])
+        t.virama = 0x0CCD
+        t.nukta = 0x0CBC
+        t.candrabindu = 0x0C81
+        return t
+    }()
+
+    private static let malayalam: Table = {
+        var t = Table()
+        t.consonants = map([
+            ("ക", "k"), ("ഖ", "kh"), ("ഗ", "g"), ("ഘ", "gh"), ("ങ", "ṅ"), ("ച", "c"), ("ഛ", "ch"), ("ജ", "j"),
+            ("ഝ", "jh"), ("ഞ", "ñ"), ("ട", "ṭ"), ("ഠ", "ṭh"), ("ഡ", "ḍ"), ("ഢ", "ḍh"), ("ണ", "ṇ"), ("ത", "t"),
+            ("ഥ", "th"), ("ദ", "d"), ("ധ", "dh"), ("ന", "n"), ("പ", "p"), ("ഫ", "ph"), ("ബ", "b"), ("ഭ", "bh"),
+            ("മ", "m"), ("യ", "y"), ("ര", "r"), ("റ", "ṟ"), ("ല", "l"), ("ള", "ḷ"), ("ഴ", "ḻ"), ("വ", "v"),
+            ("ശ", "ś"), ("ഷ", "ṣ"), ("സ", "s"), ("ഹ", "h"),
+        ])
+        t.vowelSigns = map([
+            ("\u{0D3E}", "ā"), ("\u{0D3F}", "i"), ("\u{0D40}", "ī"), ("\u{0D41}", "u"), ("\u{0D42}", "ū"),
+            ("\u{0D43}", "r̥"), ("\u{0D44}", "r̥̄"), ("\u{0D62}", "l̥"), ("\u{0D63}", "l̥̄"), ("\u{0D46}", "e"),
+            ("\u{0D47}", "ē"), ("\u{0D48}", "ai"), ("\u{0D4A}", "o"), ("\u{0D4B}", "ō"), ("\u{0D4C}", "au"),
+            ("\u{0D57}", "au"),
+        ])
+        t.others = map([
+            ("അ", "a"), ("ആ", "ā"), ("ഇ", "i"), ("ഈ", "ī"), ("ഉ", "u"), ("ഊ", "ū"), ("ഋ", "r̥"), ("ൠ", "r̥̄"),
+            ("ഌ", "l̥"), ("ൡ", "l̥̄"), ("എ", "e"), ("ഏ", "ē"), ("ഐ", "ai"), ("ഒ", "o"), ("ഓ", "ō"), ("ഔ", "au"),
+            ("\u{0D02}", "ṁ"), ("\u{0D03}", "ḥ"), ("ഽ", "’"),
+            ("\u{0D7A}", "ṇ"), ("\u{0D7B}", "n"), ("\u{0D7C}", "r"), ("\u{0D7D}", "l"), ("\u{0D7E}", "ḷ"),
+            ("\u{0D7F}", "k"), ("\u{0D4E}", "r"),
+        ])
+        t.virama = 0x0D4D
+        t.candrabindu = 0x0D01
         return t
     }()
 

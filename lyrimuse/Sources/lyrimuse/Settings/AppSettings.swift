@@ -418,9 +418,8 @@ final class AppSettings: ObservableObject {
         static let hasCompletedOnboarding = "np:hasCompletedOnboarding"
         /// 罗马音默认值改为跟界面语言走时,老用户保留四项全开的那次迁移做过没有。机器状态,不随配置导出。
         static let romanizationDefaultMigrated = "np:romanizationDefaultMigrated"
-        static let romanizationWorldMigrated = "np:romanizationWorldMigrated"
-        /// 随配置导出:这份 `romanizationScripts` 是认得日 / 韩 / 中以外语言的版本存的(`ConfigPortability` 导入时看它)。
-        static let romanizationScriptsWorldAware = "np:romanizationScriptsWorldAware"
+        /// 随配置导出:存 `romanizationScripts` 的那一版认得哪些语言(`RomanizationScripts.addingNewLanguages`)。
+        static let romanizationScriptsKnown = "np:romanizationScriptsKnown"
         static let hasOfferedICloudImport = "np:hasOfferedICloudImport"
         static let overlayStyle = "np:overlayStyle" // 已废弃,只在 init() 里读一次做迁移
         static let classicOverlayEnabled = "np:classicOverlayEnabled"
@@ -2320,13 +2319,12 @@ final class AppSettings: ObservableObject {
             defaults.set(keep.rawValue, forKey: Keys.romanizationScripts)
         }
         if !romanizationMigrated { defaults.set(true, forKey: Keys.romanizationDefaultMigrated) }
-        let worldMigrated = defaults.bool(forKey: Keys.romanizationWorldMigrated)
-        if let merged = RomanizationScripts.addingWorldLanguages(
-            storedRaw: defaults.object(forKey: Keys.romanizationScripts) as? Int, migrated: worldMigrated) {
-            defaults.set(merged.rawValue, forKey: Keys.romanizationScripts)
+        if let stored = defaults.object(forKey: Keys.romanizationScripts) as? Int {
+            let merged = RomanizationScripts.addingNewLanguages(
+                storedRaw: stored, knownRaw: defaults.object(forKey: Keys.romanizationScriptsKnown) as? Int)
+            if merged.rawValue != stored { defaults.set(merged.rawValue, forKey: Keys.romanizationScripts) }
         }
-        if !worldMigrated { defaults.set(true, forKey: Keys.romanizationWorldMigrated) }
-        defaults.set(true, forKey: Keys.romanizationScriptsWorldAware)
+        defaults.set(RomanizationScripts.known.rawValue, forKey: Keys.romanizationScriptsKnown)
         romanizationScripts = (defaults.object(forKey: Keys.romanizationScripts) as? Int)
             .map(RomanizationScripts.init(rawValue:))
             ?? RomanizationScripts.defaultScripts(chineseUI: L10n.current.hasPrefix("zh"))

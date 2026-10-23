@@ -96,7 +96,15 @@ func checkWorldRomanization() {
                           ("ஓடு", "ōṭu"), ("ய\u{0BC7}\u{0BBE}மகேஷ", "yōmakēṣa"),
                           ("ආයුබෝවන්", "āyubōvan"), ("ශ්\u{200D}රී ලංකා", "śrī laṅkā"), ("අම්මා", "ammā"),
                           ("කැමති", "kæmati"), ("චන්ද්\u{200D}ර", "chandra"), ("ෂෝ", "shō"), ("ක\u{0DD9}\u{0DCF}", "ko"),
-                          ("ඹ", "ḅa"), ("ෛ", "ĩ")] {
+                          ("ඹ", "ḅa"), ("ෛ", "ĩ"),
+                          ("ভালোবাসা", "bhālōbāsā"), ("আমার সোনার বাংলা", "āmāra sōnāra bāṁlā"), ("সঁপেছি", "sãpēchi"),
+                          ("ব\u{09A1}\u{09BC}", "baṛa"), ("ব\u{09DC}", "baṛa"), ("উৎসব", "utsaba"), ("অসমৰ", "asamara"),
+                          ("નમસ્તે", "namastē"), ("ગુજરાતી", "gujarātī"),
+                          ("నమస్కారం", "namaskāraṁ"), ("తెలుగు", "telugu"), ("ప్రేమ", "prēma"),
+                          ("ನಮಸ್ಕಾರ", "namaskāra"), ("ಕನ್ನಡ", "kannaḍa"), ("ಕ\u{0CC6}\u{0CD5}", "kē"),
+                          ("നമസ്കാരം", "namaskāraṁ"), ("എന്റെ", "enṟe"), ("ഞാൻ", "ñān"), ("മലയാളം", "malayāḷaṁ"),
+                          ("കണ്ണ്", "kaṇṇŭ"), ("കണ്ണ് നീ", "kaṇṇŭ nī"), ("പറഞ്ഞു\u{0D4D}", "paṟaññŭ"),
+                          ("ന\u{0D4D}\u{200D}", "n")] {
         expectEqual(IndicRomanization.romanize(text), latin.precomposedStringWithCanonicalMapping,
                     "ISO 15919: \(text) → \(latin)")
     }
@@ -140,6 +148,8 @@ func checkWorldRomanization() {
     expectEqual(reading("[00:01.00]สะอาด"), "sa-at", "接入: 泰语歌按 RTGS 现算")
     expectEqual(reading("[00:01.00]Καλημέρα"), "Kaliméra", "接入: 希腊语歌按 ELOT 743 现算")
     expectEqual(reading("[00:01.00]नमस्ते"), "namastē", "接入: 天城文按 ISO 15919 现算")
+    expectEqual(reading("[00:01.00]നമസ്കാരം"), "namaskāraṁ", "接入: 马拉雅拉姆文按 ISO 15919 现算")
+    expectEqual(reading("[00:01.00]নমস্কার", scripts: [.hindi]), nil, "接入: 孟加拉文归孟加拉语开关,不归印地语")
 
     // 用系统 Any-Latin 跟 GOST 写法不同的词(Щука:ICU 给 Ŝuka),才看得出是不是先按标准转了。
     let mixed = Romanizer.lineReading("我爱你 Щука", songLooksJapanese: false, segments: []) ?? ""
@@ -168,17 +178,20 @@ func checkWorldRomanization() {
                 "默认: 中文界面新语言也全开")
     expectEqual(RomanizationScripts.defaultScripts(chineseUI: true).contains(.chinese), false,
                 "默认: 中文界面照旧不标拼音")
-    expectEqual(RomanizationScripts.addingWorldLanguages(storedRaw: RomanizationScripts.japanese.rawValue,
-                                                         migrated: false),
-                RomanizationScripts.japanese.union(.world), "升级: 手动改过的人保留原来的选择、新语言一并打开")
-    expectEqual(RomanizationScripts.addingWorldLanguages(storedRaw: RomanizationScripts.japanese.rawValue,
-                                                         migrated: true), nil, "升级: 只判一次")
-    expectEqual(RomanizationScripts.addingWorldLanguages(storedRaw: nil, migrated: false), nil,
-                "升级: 没落过盘的人默认值里本来就有")
-    expectEqual(RomanizationScripts.importedValue(raw: RomanizationScripts.japanese.rawValue, exportedWithWorld: false),
-                RomanizationScripts.japanese.union(.world), "导入: 加新语言之前导出的配置,新语言一并打开")
-    expectEqual(RomanizationScripts.importedValue(raw: RomanizationScripts.japanese.rawValue, exportedWithWorld: true),
-                .japanese, "导入: 认得新语言的版本导出的,照原样(用户关掉的不再打开)")
+    let japanese = RomanizationScripts.japanese.rawValue
+    let indicAdded: RomanizationScripts = [.bengali, .gujarati, .telugu, .kannada, .malayalam]
+    expectEqual(RomanizationScripts.addingNewLanguages(storedRaw: japanese, knownRaw: nil),
+                RomanizationScripts.japanese.union(.world), "升级: 只认得日 / 韩 / 中的版本存的值,保留原来的选择、新语言一并打开")
+    let knownBefore = RomanizationScripts.legacyKnown.union(RomanizationScripts.world.subtracting(indicAdded))
+    expectEqual(RomanizationScripts.addingNewLanguages(storedRaw: japanese, knownRaw: knownBefore.rawValue),
+                RomanizationScripts.japanese.union(indicAdded), "升级: 存值那时已认得、关着的语言不再打开,只开之后新加的")
+    expectEqual(RomanizationScripts.addingNewLanguages(storedRaw: japanese, knownRaw: RomanizationScripts.known.rawValue),
+                .japanese, "导入: 这一版导出的照原样(用户关掉的不再打开)")
+    for script in LyricScript.allCases {
+        if let option = script.option {
+            expectEqual(RomanizationScripts.known.contains(option), true, "认得的语言: \(script) 的开关位在 known 里")
+        }
+    }
 
     // ---- 「这份歌词可能标出读音吗」 ----
     expectEqual(LyricsPreviewText.mayHaveRomanization("Привет", scripts: [.russian]), true, "可能有读音: 俄语开着")

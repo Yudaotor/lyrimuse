@@ -39,7 +39,7 @@ import LyrimuseCore
 //        {"ok":false,"reason":"not-legacy"}
 //        {"ok":true,"roma":"...","stale_checked":true}
 //        {"ok":false,"reason":"not-stale"}
-//        每个回包都多带 "world_readings":true(这个 helper 会出日 / 韩 / 中以外那几种文字的读音)。
+//        每个回包都多带 "world_readings":<版本>(这个 helper 会出读音的那套日 / 韩 / 中以外文字的版本)。
 
 struct Input: Decodable {
     let lyrics: String
@@ -61,8 +61,9 @@ struct Output: Encodable {
     var reason: String?
     var legacyChecked: Bool?
     var staleChecked: Bool?
-    /// 每个回包都带:这个 helper 会出日 / 韩 / 中以外那几种文字的读音,引擎补存量时靠它认出旧 helper。
-    var worldReadings: Bool? = true
+    /// 每个回包都带:这个 helper 会出读音的那套日 / 韩 / 中以外文字的版本,引擎补存量时靠它认出旧 helper。
+    /// 加了文字就 +1,跟引擎的 migrationWorldRomaVersion 同一个数。
+    var worldReadings: Int? = 2
 
     enum CodingKeys: String, CodingKey {
         case ok, roma, reason
