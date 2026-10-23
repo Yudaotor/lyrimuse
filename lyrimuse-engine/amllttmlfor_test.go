@@ -168,6 +168,15 @@ func TestParseAMLLTTMLForHeadTransliteration(t *testing.T) {
 		t.Errorf("原文 span 之间的空白照原文: %q", r.roma)
 	}
 
+	bg := amllHeadTTML(`<transliterations><transliteration><text for="L1">`+
+		`<span begin="1.0" end="1.5">haru</span> <span begin="1.5" end="2.0">o</span> `+
+		`<span ttm:role="x-bg">(<span begin="2.0" end="2.5">fuyu</span><span begin="2.5" end="3.0">o</span>)</span></text></transliteration></transliterations>`,
+		`<p begin="1.000" end="3.000" itunes:key="L1"><span begin="1.0" end="1.5">春</span><span begin="1.5" end="2.0">を</span>`+
+			`<span ttm:role="x-bg"><span begin="2.0" end="2.5">冬</span><span begin="2.5" end="3.0">を</span></span></p>`)
+	if r, _ := parseAMLLTTMLFor(bg, "zh"); r.roma != "[00:01.00]haru o\n" {
+		t.Errorf("背景人声那段的音译不拼进这一行: %q", r.roma)
+	}
+
 	inline := amllHeadTTML(`<transliterations><transliteration><text for="L1"><span begin="1.0" end="2.0">head</span></text></transliteration></transliterations>`,
 		`<p begin="1.000" end="2.000" itunes:key="L1"><span begin="1.0" end="2.0">夢</span><span ttm:role="x-roman">yume</span></p>`)
 	if r, _ := parseAMLLTTMLFor(inline, "zh"); r.roma != "[00:01.00]yume\n" {

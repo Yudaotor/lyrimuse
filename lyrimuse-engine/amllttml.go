@@ -952,7 +952,7 @@ func ttmlKeyedLRC(texts []ttmlKeyedText, lines []ttmlParsedLine, line func(t *tt
 // amllRomanLine 把一行音译(一串 span)拼成整行。AMLL 的音译 span 跟正文的逐字 span 一一对应(起点相同),多数不写词间
 // 空白,词的分界要从正文里看:span 之间(或 span 首尾)原文有空白就留一个空格;没有空白时,正文里同一起点的那个词后面
 // 带空白(词的分界),或者正文是中文(perSyllable,一个字一个音节),也补一个空格。span 中间的空白隔开的是同一个字的
-// 几个音节,去掉。
+// 几个音节,去掉。带角色的 span(背景人声那段的音译)不是这一行的,跳过,见 09 章决策 334。
 func amllRomanLine(kids []ttmlNode, words []ttmlWord, perSyllable bool) string {
 	gapAfter := map[int]bool{}
 	for _, w := range words {
@@ -964,6 +964,9 @@ func amllRomanLine(kids []ttmlNode, words []ttmlWord, perSyllable bool) string {
 	var b strings.Builder
 	space, prev := false, -1
 	for _, k := range kids {
+		if k.Span != nil && k.Span.Role != "" {
+			continue
+		}
 		raw := k.Text
 		if k.Span != nil {
 			raw = ttmlLiteralText(k.Span.Kids)
