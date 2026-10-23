@@ -233,6 +233,7 @@ public enum EngineServiceManager {
         } catch {
             logger.error("install: creating the config folder failed: \(String(describing: error), privacy: .public)")
         }
+        _ = FileIO.createDirectory(LyrimusePaths.cachesDir)
 
         let logPath = LogFiles.engine.path
         let plist: [String: Any] = [

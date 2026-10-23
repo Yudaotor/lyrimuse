@@ -175,7 +175,7 @@ From the lyrics window's ⋯ menu, search for other lyrics, run matching again, 
 
 ### Works offline; lyrics are plain .lrc files
 
-Every lyric found is cached on your Mac and shows without a connection. Each song has an .lrc file, plus .tr.lrc and .roma.lrc for translations and romanization, and word timing in .yrc. They live in ~/.config/lyrimuse/lyrics/ by default, and the folder can be moved.
+Every lyric found is cached on your Mac and shows without a connection. Each song has an .lrc file, plus .tr.lrc and .roma.lrc for translations and romanization, and word timing in .yrc. They live in ~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/ by default, and the folder can be moved.
 
 - Settings: Lyrics › Library › Lyrics Folder
 

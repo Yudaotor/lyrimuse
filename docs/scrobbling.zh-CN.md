@@ -87,7 +87,7 @@ ListenBrainz 那一路、以及 Last.fm 的「全部」和「只发第一位」�
 ## 4. 匹配模式
 
 设置 → 账号 → Last.fm → *Scrobble* → **匹配模式**
-（`~/.config/lyrimuse/lyrimuse-features.json` 里的 `lastfm_match_mode`）：
+（`~/Library/Application Support/me.yudaotor.lyrimuse/lyrimuse-features.json` 里的 `lastfm_match_mode`）：
 
 | 档位 | 值 | 效果 |
 |---|---|---|
@@ -147,7 +147,7 @@ MBID、没有专辑、时长 0、听众只有你一个。实测陶喆《那个�
 | `PRINCE / Walk Don't Walk (2023 Remaster)` | `Prince / Walk Don't Walk` | 231 → 16,178 |
 
 查询失败（网络、限流、应答不对、曲目表拉不动）一律原样发、不写缓存，一次抽风不会变成永久决定。
-判定结果连同依据存在 `~/.config/lyrimuse/lyrimuse-lastfm-catalog.json`，删掉这个文件就全部重判。
+判定结果连同依据存在 `~/Library/Application Support/me.yudaotor.lyrimuse/lyrimuse-lastfm-catalog.json`，删掉这个文件就全部重判。
 
 旧的键仍然会读、但不再写，迁移后行为逐字不变：`lastfm_scrobble_artist_mode` 的
 `smart`→智能、`all`→原始、`first`→自定义且只开「合唱只发第一位」；更早的布尔开关

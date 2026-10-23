@@ -153,3 +153,20 @@ func TestClearMissingDeviceArtworkRepairsMovedPaths(t *testing.T) {
 		t.Errorf("本机也没有的照旧清掉: %+v", gone)
 	}
 }
+
+// 新装的机器上缓存目录还不存在:进程起来时建好,不然 writeFileAtomic 写不进去。
+func TestEnsureCacheDirCreatesMissingFolder(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "Library", "Caches", "x")
+	t.Setenv("LYRIMUSE_CACHE_DIR", dir)
+	ensureCacheDir()
+	if err := writeFileAtomic(cacheFilePath("probe.json"), []byte("{}")); err != nil {
+		t.Fatalf("缓存目录建好后应能写入: %v", err)
+	}
+	src, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsCode(string(src), "installLogSink(isDaemonInvocation(os.Args))\n\tensureCacheDir()") {
+		t.Error("main 一开头(子命令分流之前)就要建缓存目录")
+	}
+}

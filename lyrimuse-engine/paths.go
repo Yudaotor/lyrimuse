@@ -85,6 +85,18 @@ func cacheDir() string {
 	return caches
 }
 
+// ensureCacheDir 在进程起来时把缓存目录建好:写缓存走 writeFileAtomic,它不建上一层目录,新装的机器上缓存目录
+// (~/Library/Caches/<bundle id>)可能还不存在,不建的话所有查询缓存都静默写不进去。数据目录由 App 建。
+func ensureCacheDir() {
+	dir := cacheDir()
+	if dir == "" {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		noteFileErr("mkdir", dir, err)
+	}
+}
+
 // cacheFilePath 是缓存目录下的一个文件。
 func cacheFilePath(name string) string {
 	return filepath.Join(cacheDir(), name)

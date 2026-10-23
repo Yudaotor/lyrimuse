@@ -97,7 +97,7 @@ Why there is no external lookup to "canonicalise" names by default:
 ## 4. Matching mode
 
 Settings → Accounts → Last.fm → *Scrobble* → **Matching Mode**
-(`lastfm_match_mode` in `~/.config/lyrimuse/lyrimuse-features.json`):
+(`lastfm_match_mode` in `~/Library/Application Support/me.yudaotor.lyrimuse/lyrimuse-features.json`):
 
 | Mode | Value | Effect |
 |---|---|---|
@@ -171,7 +171,7 @@ Measured over 240 real tracks: 33 rewritten, 162 sent as-is, 45 undecidable. Exa
 
 Any lookup failure (network, rate limit, malformed answer, unreachable track list) sends the tags as
 reported and caches nothing, so a hiccup never becomes a permanent decision. Decisions live in
-`~/.config/lyrimuse/lyrimuse-lastfm-catalog.json` with the evidence that produced them; delete the
+`~/Library/Application Support/me.yudaotor.lyrimuse/lyrimuse-lastfm-catalog.json` with the evidence that produced them; delete the
 file to re-decide everything.
 
 The legacy keys are still read but no longer written, and migrate without changing behaviour:

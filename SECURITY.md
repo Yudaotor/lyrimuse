@@ -43,8 +43,8 @@ Worth knowing before you look for issues:
 - **Credentials sit in your login Keychain.** The Last.fm, ListenBrainz, web
   relay and push-channel tokens and the Apple Music user token are stored in one
   generic-password item, which both the app and the helper read and write through
-  `/usr/bin/security`. They don't travel with copies or backups of
-  `~/.config/lyrimuse/`. The item trusts that Apple-signed tool, so any process
+  `/usr/bin/security`. They don't travel with copies or backups of the data
+  folder (`~/Library/Application Support/me.yudaotor.lyrimuse/`). The item trusts that Apple-signed tool, so any process
   running as your user can read it through `security` without a prompt. If your
   machine is compromised, revoke those tokens at the services you connected.
   Exported settings files carry the tokens in plain text on purpose, so they can

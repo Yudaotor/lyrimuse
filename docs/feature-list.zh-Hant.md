@@ -175,7 +175,7 @@ Apple Music、Spotify、酷狗音樂、KKBOX、Amazon Music 和洛雪音樂儲�
 
 ### 離線可用，歌詞以 .lrc 檔案儲存
 
-已找到的歌詞均快取在本機，離線時也能顯示。每首歌曲儲存一份 .lrc，有譯文、讀音時另存 .tr.lrc 和 .roma.lrc，逐字時間軸存為 .yrc。預設位於 ~/.config/lyrimuse/lyrics/，位置可更改。
+已找到的歌詞均快取在本機，離線時也能顯示。每首歌曲儲存一份 .lrc，有譯文、讀音時另存 .tr.lrc 和 .roma.lrc，逐字時間軸存為 .yrc。預設位於 ~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/，位置可更改。
 
 - 設定位置：歌詞 › 管理 › 歌詞檔案夾
 

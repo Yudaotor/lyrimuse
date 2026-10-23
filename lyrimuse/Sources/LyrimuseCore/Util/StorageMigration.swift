@@ -10,8 +10,11 @@ public enum StorageMigration {
         public var copiedRoot = false
         /// 合并时挪进数据目录的条目数(整个子目录挪过去算一条)。
         public var mergedItems = 0
-        /// 合并时两边都有、内容不同的条目数:以数据目录为准,旧的那份留在 `keptLeftover` 里。
+        /// 合并时两边都有、内容不同的条目数。数据目录搬过(有标记)时以它为准,旧的那份留在 `keptLeftover` 里;没搬过(新装的)
+        /// 时以旧目录为准,数据目录里被换下来的那份挪进 `replacedBackup`。
         public var conflicts = 0
+        /// 合并时数据目录里被旧目录换下来的那些文件存到了哪(`backups/<时刻>-storage-migration-replaced`)。
+        public var replacedBackup: String?
         /// 合并完旧目录还剩东西时,改名到的位置。
         public var keptLeftover: String?
         /// 改写旧路径之前,被改写的那些文件的原件存到了哪(`backups/<时刻>-storage-migration`)。
@@ -76,8 +79,10 @@ public enum StorageMigration {
     // MARK: - 旧目录
 
     /// 数据目录里还没有 Lyrimuse 的数据(不存在、空的、或只有别的东西):空的先删掉,整份改名过去;同卷一次 `rename(2)`,
-    /// 跨卷(`~/.config` 被链到别的盘)先拷进旁边的暂存目录、核对文件清单和大小再换上去,旧目录改名留着。数据目录已经有数据
-    /// (搬过之后旧目录又冒出来,或新目录里先被放了东西)时逐项合并(`mergeTree`)。失败的那一步不动旧目录,下次启动重试。
+    /// 跨卷(`~/.config` 被链到别的盘)先拷进旁边的暂存目录、核对文件清单和大小再换上去,旧目录改名留着。数据目录已经有数据时
+    /// 逐项合并(`mergeTree`),冲突听谁的看数据目录搬没搬过:搬过(有标记)→ 旧目录是之后又冒出来的残留,听数据目录的;没搬过
+    /// → 数据目录是新版本新装出来的,旧目录是用户带来的(换机器时拷过来、dotfiles 工具铺的),听旧目录的。失败的那一步不动旧目录,
+    /// 下次启动重试。
     static func absorbLegacy(_ roots: StorageLayout.Roots, forceCopy: Bool, _ outcome: inout Outcome) {
         guard FileIO.createDirectory(roots.data.deletingLastPathComponent()) else {
             outcome.failures.append("create \(roots.data.deletingLastPathComponent().path)")
@@ -101,7 +106,9 @@ public enum StorageMigration {
                 return
             }
         }
-        mergeTree(from: roots.legacy, into: roots.data, &outcome)
+        let legacyWins = !StorageLayout.exists(roots.data.appendingPathComponent(markerName))
+        let replaced = roots.data.appendingPathComponent("backups/\(stamp(Date()))\(backupSuffix)-replaced")
+        mergeTree(from: roots.legacy, into: roots.data, relative: "", legacyWins: legacyWins ? replaced : nil, &outcome)
         writeMarker(pending, in: roots.data, &outcome)
         pruneEmptyDirectories(roots.legacy)
         guard StorageLayout.exists(roots.legacy) else { return }
@@ -114,9 +121,10 @@ public enum StorageMigration {
         }
     }
 
-    /// 把 `source` 里数据目录没有的条目挪过去(整个子目录不在就整个挪);两边都有的子目录往里递归;两边都有的文件内容一样就删掉旧的,
-    /// 不一样就以数据目录为准、旧的原地留着。`.DS_Store` 和锁文件不算内容,冲突时直接删旧的。
-    static func mergeTree(from source: URL, into target: URL, _ outcome: inout Outcome) {
+    /// 把 `source` 里数据目录没有的条目挪过去(整个子目录不在就整个挪);两边都有的子目录往里递归;两边都有的文件内容一样就删掉旧的。
+    /// 不一样时:`legacyWins` 为 nil 以数据目录为准、旧的原地留着;否则把数据目录那份挪进 `legacyWins` 下同一相对路径、旧的挪进来,
+    /// 挪不走就当冲突留着。`.DS_Store` 和锁文件不算内容,冲突时直接删旧的。
+    static func mergeTree(from source: URL, into target: URL, relative: String, legacyWins: URL?, _ outcome: inout Outcome) {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: source.path) else {
             outcome.failures.append("list \(source.path)")
             return
@@ -135,11 +143,23 @@ public enum StorageMigration {
                     outcome.failures.append("merge \(name): \(String(cString: strerror(errno)))")
                 }
             } else if StorageLayout.isDirectory(from), StorageLayout.isDirectory(to) {
-                mergeTree(from: from, into: to, &outcome)
+                let sub = relative.isEmpty ? name : relative + "/" + name
+                mergeTree(from: from, into: to, relative: sub, legacyWins: legacyWins, &outcome)
             } else if name == ".DS_Store" || name.hasSuffix(".lock") || sameContents(from, to) {
                 _ = FileIO.remove(from)
             } else {
                 outcome.conflicts += 1
+                guard let replaced = legacyWins else { continue }
+                let aside = replaced.appendingPathComponent(relative.isEmpty ? name : relative + "/" + name)
+                guard FileIO.createDirectory(aside.deletingLastPathComponent()), rename(to.path, aside.path) == 0 else {
+                    outcome.failures.append("move aside \(name): \(String(cString: strerror(errno)))")
+                    continue
+                }
+                outcome.replacedBackup = replaced.path
+                if rename(from.path, to.path) != 0 {
+                    outcome.failures.append("merge \(name): \(String(cString: strerror(errno)))")
+                    _ = rename(aside.path, to.path)
+                }
             }
         }
     }

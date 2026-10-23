@@ -186,6 +186,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 假设这个目录已经存在，但谁都不会在写之前 createDirectory——这里无条件、幂等
         // 地建一次，不依赖引导流程是否跑完，第一次启动就先把这个目录建好。
         FileIO.createDirectory(LyrimusePaths.configDir)
+        // 缓存目录同理:App 和引擎写缓存都不先建目录,新装的机器上它可能还不存在(14 章决策 136)。
+        FileIO.createDirectory(LyrimusePaths.cachesDir)
 
         // 引擎的 launchd job 对账。必须在启动路径上跑,这是 Sparkle 自动更新 /
         // Homebrew cask upgrade / 手动拖 .app 覆盖这三条路唯一的兜底 —— 它们都不经过

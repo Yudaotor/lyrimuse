@@ -85,6 +85,7 @@ func main() {
 	// 的 +0000 对得上表)/ 等级 / 脱敏 / 重复折叠 / 轮转全在那条链上(slog 桥接,log 包自己
 	// 不打时间前缀)。常驻模式写自己打开的日志文件,子命令写 stderr。
 	installLogSink(isDaemonInvocation(os.Args))
+	ensureCacheDir()
 	// `lyrimuse-engine version`:一次性子命令,只打印 clientVersion 就退出——App 侧设置页
 	// "后台采集服务"卡片靠它检测"App 本体版本"跟"实际打包进这份 App 的引擎版本"
 	// 是否一致。这是唯一能让用户/开发者看见两者不一致的地方(版本号注入失效、或 App 里

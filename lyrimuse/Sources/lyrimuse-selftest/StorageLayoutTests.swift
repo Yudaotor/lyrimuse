@@ -287,6 +287,35 @@ func runStorageLayoutChecks() {
     }
 
     do {
+        // 新机器上先装了新版本(数据目录新装出来、没有搬迁标记),之后用户把旧机器的 ~/.config/lyrimuse 拷了过来:冲突听旧目录的,
+        // 数据目录里被换下来的那份挪进 backups/<时刻>-storage-migration-replaced,不删。
+        let (_, roots) = makeHome("brought")
+        write("{\"v\":\"fresh\"}", roots.data.appendingPathComponent("lyrimuse-app-settings.json"))
+        write("fresh-only", roots.data.appendingPathComponent("lyrimuse-feature-flags.json"))
+        write("{\"v\":\"mine\"}", roots.legacy.appendingPathComponent("lyrimuse-app-settings.json"))
+        write("{\"token\":\"t\"}", roots.legacy.appendingPathComponent("config.json"))
+        write("[00:01.00]旧", roots.legacy.appendingPathComponent("lyrics/a.lrc"))
+        write("[00:01.00]新装", roots.data.appendingPathComponent("lyrics/a.lrc"))
+        let outcome = StorageMigration.run(roots, cacheNames: [])
+        expectEqual(outcome.failures, [], "存储搬迁(带来的旧目录): 没有失败")
+        expectEqual(outcome.conflicts, 2, "存储搬迁(带来的旧目录): 两处冲突")
+        expectEqual(read(roots.data.appendingPathComponent("lyrimuse-app-settings.json")), "{\"v\":\"mine\"}",
+                    "存储搬迁(带来的旧目录): 冲突听旧目录的(用户带来的才是他的数据)")
+        expectEqual(read(roots.data.appendingPathComponent("lyrics/a.lrc")), "[00:01.00]旧", "存储搬迁(带来的旧目录): 子目录里的冲突也听旧目录的")
+        expectEqual(read(roots.data.appendingPathComponent("config.json")), "{\"token\":\"t\"}", "存储搬迁(带来的旧目录): 只在旧目录的收进来")
+        expectEqual(read(roots.data.appendingPathComponent("lyrimuse-feature-flags.json")), "fresh-only", "存储搬迁(带来的旧目录): 只在新目录的留着")
+        let replaced = outcome.replacedBackup.map { URL(fileURLWithPath: $0) }
+        expectEqual(replaced.flatMap { read($0.appendingPathComponent("lyrimuse-app-settings.json")) }, "{\"v\":\"fresh\"}",
+                    "存储搬迁(带来的旧目录): 被换下来的新装版本留在 backups 里")
+        expectEqual(replaced.flatMap { read($0.appendingPathComponent("lyrics/a.lrc")) }, "[00:01.00]新装",
+                    "存储搬迁(带来的旧目录): 子目录里被换下来的按相对路径留")
+        expectEqual(fm.fileExists(atPath: roots.legacy.path), false, "存储搬迁(带来的旧目录): 旧目录收空删掉")
+        expectEqual(outcome.keptLeftover, nil, "存储搬迁(带来的旧目录): 不留 leftover")
+        expectEqual(StorageMigration.pruneRewriteBackups(in: roots.data, now: Date().addingTimeInterval(90 * 24 * 3600)), 0,
+                    "存储搬迁(带来的旧目录): 被换下来的那份不按 30 天清")
+    }
+
+    do {
         // 缓存名单对账:名单里的文件,引擎和 App 都只经缓存目录拼路径,不许再从数据目录拼。先按整篇字节筛出提到名单的文件,
         // 再逐行看;Go 里把文件名放进常量的(`const x = "lyrimuse-…"`),用到这个常量的那一行也要走 cacheFilePath。
         let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
