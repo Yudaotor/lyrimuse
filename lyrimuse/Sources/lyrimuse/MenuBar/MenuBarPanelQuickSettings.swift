@@ -490,10 +490,12 @@ struct PanelQuickSettings: View {
             }
         case .surface(.menuBar):
             row(L10n.t("显示内容")) {
+                // 三档里「歌名和歌手」最长,按设置页的每档 52pt 下限排,英文标题在 296pt 宽的面板里只剩一截;按字宽排。
                 SettingsPillSegmentedControl(
                     selection: $settings.menuBarLyricsContent,
                     options: MenuBarLyricsContent.allCases,
-                    label: MenuBarContentRow.label(for:)
+                    label: MenuBarContentRow.label(for:),
+                    minWidth: 0
                 )
             }
             row(L10n.t("歌词位置")) {
@@ -870,7 +872,8 @@ struct PanelQuickSettings: View {
 }
 
 /// 快捷设置里的一行:标题在左、控件在右,32pt 高、淡底。分组框由调用方套(行与行之间留 1pt 缝当分隔线)。
-/// 比设置页那套 SettingsRow 紧得多 —— 这里总宽只有 296pt。
+/// 比设置页那套 SettingsRow 紧得多 —— 这里总宽只有 296pt。控件不让位,标题差一点放不下时先缩字(到 90%)再截断。
+/// 别改成折两行:分组框第一行的标题折行后整行发白(离屏渲染实测)。
 struct PanelQuickRow<Control: View>: View {
     let title: String
     var help: String?
@@ -887,6 +890,7 @@ struct PanelQuickRow<Control: View>: View {
             Text(title)
                 .font(.system(size: 11.5))
                 .lineLimit(1)
+                .minimumScaleFactor(0.9)
             Spacer(minLength: 6)
             control
         }
