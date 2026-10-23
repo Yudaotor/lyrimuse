@@ -132,12 +132,12 @@ func parenBGBalanced(s string) bool {
 }
 
 // parenBGLine:一行歌词(不含时间戳)里能拆的括号段。返回去掉括号段后的主句和按顺序的括号段(带括号);有一段拿不准
-// 整行就不拆。looseGlue 给译文 / 音译用:那一行的正文已经拆过,括号紧贴前一个字、换了文字的也认成背景人声的译文。
+// 整行就不拆。译文 / 音译走 parenBGAuxLine。
 //
 // 不拆:标签行、署名行与标题行(以 `[` 开头、带冒号、带「 - 」「 – 」「 — 」或紧挨中日韩字的「-」、带中英文职务词或版权字样)、括号不配对或嵌套、
 // 括号里没有字母或带「/」(人名清单)、是演唱者 / 语言 / 重复次数 / 版本与段落标注、行首括号里只有不超过 4 个中日韩字(多半是演唱者名字)、括号紧贴前一个字而且换了文字(注释,
 // 如「Einstein(愛因斯坦)」;带假名的行紧贴就不拆,日文的读音注释是同一种文字)、右括号后面紧跟着字或「-」、拆完主句没有字。
-func parenBGLine(text string, looseGlue bool) (main string, segs []string, ok bool) {
+func parenBGLine(text string) (main string, segs []string, ok bool) {
 	prefix := parenBGDuetRe.FindString(text)
 	body := text[len(prefix):]
 	if body == "" || strings.HasPrefix(body, "[") || strings.Contains(body, " - ") || strings.Contains(body, " – ") ||
@@ -152,8 +152,6 @@ func parenBGLine(text string, looseGlue bool) (main string, segs []string, ok bo
 		return "", nil, false
 	}
 	kana := parenBGHasKana(body)
-	var b strings.Builder
-	last := 0
 	for _, m := range ms {
 		content := strings.TrimSpace(body[m[2]:m[3]])
 		if !strings.ContainsFunc(content, unicode.IsLetter) || strings.Contains(content, "/") {
@@ -169,7 +167,7 @@ func parenBGLine(text string, looseGlue bool) (main string, segs []string, ok bo
 				utf8.RuneCountInString(content) <= 4 && strings.TrimSpace(body[m[1]:]) != "" {
 				return "", nil, false
 			}
-		} else if prev, _ := utf8.DecodeLastRuneInString(before); !unicode.IsSpace(prev) && !looseGlue {
+		} else if prev, _ := utf8.DecodeLastRuneInString(before); !unicode.IsSpace(prev) {
 			if kana || parenBGRuneScript(prev) != parenBGTextScript(content) {
 				return "", nil, false
 			}
@@ -178,7 +176,19 @@ func parenBGLine(text string, looseGlue bool) (main string, segs []string, ok bo
 			return "", nil, false
 		}
 		segs = append(segs, body[m[0]:m[1]])
-		// 去掉括号段连同它前面的空白;在行首时去掉它后面的空白。
+	}
+	main = parenBGRemoveSegs(body, ms)
+	if !parenBGHasWord(main) || parenBGCreditLine(body) {
+		return "", nil, false
+	}
+	return prefix + main, segs, true
+}
+
+// parenBGRemoveSegs:去掉 body 里的这几段括号(parenBGSegRe 的匹配位置),连同每段前面的空白;在行首时去掉它后面的空白。
+func parenBGRemoveSegs(body string, ms [][]int) string {
+	var b strings.Builder
+	last := 0
+	for _, m := range ms {
 		kept := body[last:m[0]]
 		if strings.TrimSpace(b.String()+kept) == "" {
 			b.Reset()
@@ -199,11 +209,32 @@ func parenBGLine(text string, looseGlue bool) (main string, segs []string, ok bo
 		}
 	}
 	b.WriteString(body[last:])
-	main = strings.TrimSpace(b.String())
-	if !parenBGHasWord(main) || parenBGCreditLine(body) {
-		return "", nil, false
+	return strings.TrimSpace(b.String())
+}
+
+// parenBGAuxLine:译文 / 音译里同一行的括号段整段去掉。这一行的正文已经按 parenBGLine 拆过,括号里是背景人声的译文 / 音译,
+// 正文那套标签、署名、紧贴、紧跟字的规矩不再适用(中文译文括号前后本来就不留空格)。只要括号配对、每段有字母、
+// 去掉之后还有字;整行都在括号里的不动,这一行的译文就是背景人声的,去掉就空了。
+func parenBGAuxLine(text string) (string, bool) {
+	prefix := parenBGDuetRe.FindString(text)
+	body := text[len(prefix):]
+	if !parenBGBalanced(body) {
+		return "", false
 	}
-	return prefix + main, segs, true
+	ms := parenBGSegRe.FindAllStringSubmatchIndex(body, -1)
+	if len(ms) == 0 {
+		return "", false
+	}
+	for _, m := range ms {
+		if !strings.ContainsFunc(body[m[2]:m[3]], unicode.IsLetter) {
+			return "", false
+		}
+	}
+	main := parenBGRemoveSegs(body, ms)
+	if !parenBGHasWord(main) {
+		return "", false
+	}
+	return prefix + main, true
 }
 
 // parenBGCreditLine:署名行、版权行、标题行「歌手-歌名」。几个正则放在 parenBGLine 最后、各带一道子串前筛:启动迁移每次
@@ -294,7 +325,7 @@ func parenBGYRCLine(line string) (mainLine, bgLine, mainKey, bgKey string, ok bo
 		full.WriteString(words[i].text)
 	}
 	text := full.String()
-	mainText, segs, ok := parenBGLine(text, false)
+	mainText, segs, ok := parenBGLine(text)
 	if !ok {
 		return "", "", "", "", false
 	}
@@ -440,7 +471,7 @@ func splitParenBackground(lrc, yrc string) (parenBGSplit, bool) {
 		if len(stamps) == 0 {
 			continue
 		}
-		mainText, segs, ok := parenBGLine(strings.TrimSpace(line[end:]), false)
+		mainText, segs, ok := parenBGLine(strings.TrimSpace(line[end:]))
 		if !ok {
 			continue
 		}
@@ -604,8 +635,9 @@ func parenBGAbs(x int) int {
 	return x
 }
 
-// stripParenBackgroundAux:译文 / 罗马音里,时间戳全在 stamps 里的行去掉括号段(规矩同 parenBGLine,括号紧贴也认)。
-// stamps 跟着正文那份的时间戳走:候选阶段是重挂时间轴之前的,存量迁移是缓存里的。
+// stripParenBackgroundAux:译文 / 罗马音里,时间戳都跟 stamps 里某一个相差不超过 bgBackfillAlignToleranceMs 的行去掉括号段
+// (parenBGAuxLine)。候选阶段的 stamps 是拆过的逐行歌词行的时间戳(重挂时间轴之前);存量迁移是背景人声各行的行头 ——
+// 不知道当初拆的是哪几行,挂着背景人声的就是拆过的。译文的时间戳常跟正文差几十毫秒,所以不要求相等。
 func stripParenBackgroundAux(aux string, stamps map[int]bool) string {
 	if aux == "" || len(stamps) == 0 || !parenBGHasParen(aux) {
 		return aux
@@ -619,14 +651,14 @@ func stripParenBackgroundAux(aux string, stamps map[int]bool) string {
 		}
 		all := true
 		for _, t := range ms {
-			if !stamps[t] {
+			if !parenBGNearStamp(stamps, t) {
 				all = false
 			}
 		}
 		if !all {
 			continue
 		}
-		if mainText, _, ok := parenBGLine(strings.TrimSpace(line[end:]), true); ok {
+		if mainText, ok := parenBGAuxLine(strings.TrimSpace(line[end:])); ok {
 			lines[i] = line[:end] + mainText
 			changed = true
 		}
@@ -635,6 +667,30 @@ func stripParenBackgroundAux(aux string, stamps map[int]bool) string {
 		return aux
 	}
 	return strings.Join(lines, "\n")
+}
+
+func parenBGNearStamp(stamps map[int]bool, t int) bool {
+	if stamps[t] {
+		return true
+	}
+	for s := range stamps {
+		if parenBGAbs(s-t) <= bgBackfillAlignToleranceMs {
+			return true
+		}
+	}
+	return false
+}
+
+// parenBGHeadStamps:背景人声各行的行头(毫秒)。
+func parenBGHeadStamps(bg string) map[int]bool {
+	out := map[int]bool{}
+	for _, l := range strings.Split(bg, "\n") {
+		if m := yrcLineHeadFullRe.FindStringSubmatch(l); m != nil {
+			h, _ := strconv.Atoi(m[1])
+			out[h] = true
+		}
+	}
+	return out
 }
 
 // splitCandidateParenBackground 就地拆一批候选。调用时机同 repairCandidateAccentSplits(候选装配完、重挂时间轴与
@@ -668,24 +724,40 @@ func migrateParenBackground() {
 			continue
 		}
 		lrc, yrc := e.Lyrics.String(), e.LyricsYRC.String()
-		sp, ok := splitParenBackground(lrc, yrc)
-		if !ok {
+		changed := false
+		stamps := map[int]bool{}
+		if sp, ok := splitParenBackground(lrc, yrc); ok {
+			if s := e.LyricsSpeakers; s != nil && s.For == lyricSpeakersFingerprint(lrc, yrc) {
+				moved := *s
+				moved.For = lyricSpeakersFingerprint(sp.lrc, sp.yrc)
+				e.LyricsSpeakers = &moved
+			}
+			if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(lrc) {
+				e.ManualPickSHA = manualPickFingerprint(sp.lrc)
+			}
+			e.Lyrics, e.LyricsYRC, e.LyricsBG = bt(sp.lrc), bt(sp.yrc), bt(mergeParenBGTracks(e.LyricsBG.String(), sp.bg))
+			stamps = sp.stamps
+			changed = true
+		}
+		if e.LyricsBG.IsZero() {
 			continue
 		}
-		if s := e.LyricsSpeakers; s != nil && s.For == lyricSpeakersFingerprint(lrc, yrc) {
-			moved := *s
-			moved.For = lyricSpeakersFingerprint(sp.lrc, sp.yrc)
-			e.LyricsSpeakers = &moved
+		// 译文 / 罗马音按挂着背景人声的那几行清:以前拆过的行这一轮不再出现在 sp.stamps 里。
+		for h := range parenBGHeadStamps(e.LyricsBG.String()) {
+			stamps[h] = true
 		}
-		if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(lrc) {
-			e.ManualPickSHA = manualPickFingerprint(sp.lrc)
-		}
-		e.Lyrics, e.LyricsYRC, e.LyricsBG = bt(sp.lrc), bt(sp.yrc), bt(mergeParenBGTracks(e.LyricsBG.String(), sp.bg))
 		if tr := e.LyricsTr.String(); tr != "" {
-			e.LyricsTr = bt(stripParenBackgroundAux(tr, sp.stamps))
+			if fixedTr := stripParenBackgroundAux(tr, stamps); fixedTr != tr {
+				e.LyricsTr, changed = bt(fixedTr), true
+			}
 		}
 		if roma := e.LyricsRoma.String(); roma != "" {
-			e.LyricsRoma = bt(stripParenBackgroundAux(roma, sp.stamps))
+			if fixedRoma := stripParenBackgroundAux(roma, stamps); fixedRoma != roma {
+				e.LyricsRoma, changed = bt(fixedRoma), true
+			}
+		}
+		if !changed {
+			continue
 		}
 		enrichCache[k] = e
 		fixed++
@@ -695,7 +767,7 @@ func migrateParenBackground() {
 	}
 	enrichMu.Unlock()
 	if fixed > 0 {
-		log.Printf("paren background vocals: split %d entries", fixed)
+		log.Printf("paren background vocals: updated %d entries", fixed)
 		saveEnrichCache()
 	}
 }

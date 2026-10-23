@@ -17,7 +17,7 @@ func TestParenBGLine(t *testing.T) {
 		{"v1：She really that A-list girl (A-list girl)", "v1：She really that A-list girl"},
 		{"（Hot Space）...Let's go !", "...Let's go !"},
 	} {
-		got, _, ok := parenBGLine(c.in, false)
+		got, _, ok := parenBGLine(c.in)
 		if !ok || got != c.want {
 			t.Errorf("%q: got %q ok=%v, want %q", c.in, got, ok, c.want)
 		}
@@ -47,15 +47,32 @@ func TestParenBGLine(t *testing.T) {
 		"林峯-原罪（来吧）",                     // 「-」紧挨中日韩字
 		"监制 张三（李四）",                     // 中文职务词
 	} {
-		if got, _, ok := parenBGLine(in, false); ok {
+		if got, _, ok := parenBGLine(in); ok {
 			t.Errorf("%q 不该拆: %q", in, got)
 		}
 	}
-	if _, _, ok := parenBGLine("你呈給我的只有謊言(yeah)", false); ok {
+	if _, _, ok := parenBGLine("你呈給我的只有謊言(yeah)"); ok {
 		t.Error("正文里紧贴、换了文字的不拆")
 	}
-	if got, _, ok := parenBGLine("你呈給我的只有謊言(yeah)", true); !ok || got != "你呈給我的只有謊言" {
-		t.Errorf("译文里紧贴也拆: %q %v", got, ok)
+}
+
+// 译文 / 音译:正文那一行已经拆过,紧贴、紧跟字、带连字符的括号段都去掉;整行都在括号里、括号里没有字母的不动。
+func TestParenBGAuxLine(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"你呈給我的只有謊言(yeah)", "你呈給我的只有謊言"},
+		{"让我摆脱这个（摆脱这个），我需要自信（自信）给我自己", "让我摆脱这个，我需要自信给我自己"},
+		{"传闻说（传闻-传闻）", "传闻说"},
+		{"(警察) 多少枪", "多少枪"},
+		{"ze 't ta i de ( zu 't to )", "ze 't ta i de"},
+	} {
+		if got, ok := parenBGAuxLine(c.in); !ok || got != c.want {
+			t.Errorf("%q: got %q %v, want %q", c.in, got, ok, c.want)
+		}
+	}
+	for _, in := range []string{"（无论我在哪里）", "第 (2) 段", "没有括号", "半个(括号", "你好（嗯）再见)"} {
+		if got, ok := parenBGAuxLine(in); ok {
+			t.Errorf("%q 不该动: %q", in, got)
+		}
 	}
 }
 
@@ -181,6 +198,11 @@ func TestStripParenBackgroundAux(t *testing.T) {
 	if got := stripParenBackgroundAux(tr, nil); got != tr {
 		t.Errorf("没有拆过的行不动: %q", got)
 	}
+	// 译文的时间戳常跟正文差几十毫秒:在背景人声挂行的容差之内算同一行,超出不算。
+	near := "[00:01.02]回来了（我回来了）\n[00:05.031]如此犹豫（总是微笑）"
+	if got := stripParenBackgroundAux(near, map[int]bool{1000: true, 5000: true}); got != "[00:01.02]回来了\n[00:05.031]如此犹豫（总是微笑）" {
+		t.Errorf("容差: %q", got)
+	}
 }
 
 func TestParenBGCandidates(t *testing.T) {
@@ -245,6 +267,9 @@ func TestMigrateParenBackground(t *testing.T) {
 		"g|picked|":   {LyricsSource: "qq", Lyrics: bt(lrc), LyricsYRC: bt(yrc), ManualPickSHA: manualPickFingerprint(lrc)},
 		"h|instr|":    {LyricsSource: "qq", Lyrics: bt(lrc), LyricsYRC: bt(yrc), Instrumental: true},
 		"i|local|":    {LyricsSource: localFileLyricsSource, Lyrics: bt(lrc), LyricsYRC: bt(yrc)},
+		"j|old-split|": {LyricsSource: "deezer", Lyrics: bt("[00:01.00]Kills me slowly\n[00:05.00]No parens here"),
+			LyricsYRC: bt(yrcLine(1000, "Kills me slowly") + "\n" + yrcLine(5000, "No parens here")),
+			LyricsBG:  bt("[1000,600](1600,200,0)slowly\n"), LyricsTr: bt("[00:01.02]慢慢杀死我（慢慢）\n[00:05.00]这里（没有）")},
 	})
 	enrichMu.Lock()
 	savedPath, savedDirty := enrichPath, enrichDirty
@@ -273,6 +298,9 @@ func TestMigrateParenBackground(t *testing.T) {
 	if e := enrichCache["f|speakers|"]; e.LyricsSpeakers.For != lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String()) ||
 		strings.Join(e.LyricsSpeakers.LRC, ",") != "v1,v2" {
 		t.Errorf("对唱标注的指纹要跟着换: %+v", e.LyricsSpeakers)
+	}
+	if e := enrichCache["j|old-split|"]; !e.LyricsTr.EqualString("[00:01.02]慢慢杀死我\n[00:05.00]这里（没有）") {
+		t.Errorf("以前拆过的条目:挂着背景人声的那行译文去掉括号段,别的行不动: %q", e.LyricsTr)
 	}
 	if e := enrichCache["g|picked|"]; e.ManualPickSHA != manualPickFingerprint(e.Lyrics.String()) || e.Lyrics.EqualString(lrc) {
 		t.Errorf("原样采纳的指纹要跟着换: %+v", e)
