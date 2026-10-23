@@ -124,6 +124,31 @@ enum MenuBarLyricsContent: String, Codable, Hashable, CaseIterable {
     var showsSongTitle: Bool { self != .lyrics }
 }
 
+// 菜单栏图标的大小:图标独占那一格、歌词旁那枚进度图标、封面方块、播放时的动画一起按 `scale` 缩放。
+// 设置页图标网格、首启引导、Touch Bar 不跟。上限受菜单栏高度约束(`NSStatusBar.system.thickness` 22pt):
+// 最宽的「经典」放大后 24.6 × 16.8,封面方块 19.2。
+enum MenuBarIconSize: String, Codable, Hashable, CaseIterable {
+    case small
+    case standard
+    case large
+
+    var scale: CGFloat {
+        switch self {
+        case .small: return 0.85
+        case .standard: return 1
+        case .large: return 1.2
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .small: return L10n.t("小")
+        case .standard: return L10n.t("标准")
+        case .large: return L10n.t("大")
+        }
+    }
+}
+
 // 「装得下的短句靠哪边」—— 菜单栏歌词和灵动岛歌词行共用同一个类型和同一个分段控件
 // (`LyricsAlignmentSegmentedControl`)。两个展示面上三个 case 的语义**逐字相同**,而这个
 // 控件是手搓的(不用系统 segmented picker,理由见 `LyricsAlignmentSegmentedControl` 的
@@ -320,6 +345,7 @@ final class AppSettings: ObservableObject {
         static let menuBarIconStyle = "np:menuBarIconStyle"
         static let menuBarIconAnimates = "np:menuBarIconAnimates"
         static let menuBarIconShowsArtwork = "np:menuBarIconShowsArtwork"
+        static let menuBarIconSize = "np:menuBarIconSize"
         static let menuBarLyricsContent = "np:menuBarLyricsContent"
         static let lyricsOffsetStepMs = "np:lyricsOffsetStepMs"
         static let manualPickLocksLyrics = "np:manualPickLocksLyrics"
@@ -1196,6 +1222,10 @@ final class AppSettings: ObservableObject {
     // 仍是上面选的那款。见 MenuBarIconArtwork。
     @Published var menuBarIconShowsArtwork: Bool {
         didSet { defaults.set(menuBarIconShowsArtwork, forKey: Keys.menuBarIconShowsArtwork) }
+    }
+    // 菜单栏图标的大小。见 MenuBarIconSize。
+    @Published var menuBarIconSize: MenuBarIconSize {
+        didSet { defaults.set(menuBarIconSize.rawValue, forKey: Keys.menuBarIconSize) }
     }
     // 菜单栏那一格显示歌词还是「歌名 — 歌手」。见 MenuBarLyricsContent。
     @Published var menuBarLyricsContent: MenuBarLyricsContent {
@@ -2477,6 +2507,8 @@ final class AppSettings: ObservableObject {
             .flatMap(MenuBarIconStyle.init(rawValue:)) ?? .default
         menuBarIconAnimates = (defaults.object(forKey: Keys.menuBarIconAnimates) as? Bool) ?? true
         menuBarIconShowsArtwork = (defaults.object(forKey: Keys.menuBarIconShowsArtwork) as? Bool) ?? false
+        menuBarIconSize = defaults.string(forKey: Keys.menuBarIconSize)
+            .flatMap(MenuBarIconSize.init(rawValue:)) ?? .standard
         menuBarLyricsContent = defaults.string(forKey: Keys.menuBarLyricsContent)
             .flatMap(MenuBarLyricsContent.init(rawValue:)) ?? Self.defaultMenuBarLyricsContent
         // 夹进设置页 Stepper 的区间(0.05~2 秒):导入 / 手改成 0 或负数时,提前 / 延后快捷键会没反应或反过来。

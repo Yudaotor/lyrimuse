@@ -487,10 +487,10 @@ struct MenuBarPreviewBar<Lane: View>: View {
             // 放在菜单栏正中时歌词格挪到整条中间(下面的 overlay),这里只留状态栏那一格剩下的图标。
             if centerInUse {
                 if let source = MenuBarIconArtwork.currentSource(), let cover = MenuBarIconArtwork.iconImage(
-                    source: source, footprint: MenuBarIconArtwork.footprint(style: settings.menuBarIconStyle, showsArtwork: true)) {
+                    source: source, style: settings.menuBarIconStyle, size: settings.menuBarIconSize) {
                     Image(nsImage: cover)
                 } else {
-                    Image(nsImage: MenuBarIconStyle.cachedImage(for: settings.menuBarIconStyle))
+                    Image(nsImage: MenuBarIconStyle.cachedImage(for: settings.menuBarIconStyle, size: settings.menuBarIconSize))
                         .renderingMode(.template)
                         .foregroundStyle(Color(nsColor: .labelColor).opacity(0.55))
                 }

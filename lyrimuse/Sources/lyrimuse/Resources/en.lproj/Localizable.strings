@@ -771,6 +771,7 @@
 "固定在菜单栏下方正中，无法拖动" = "Pinned centered below the menu bar; can't be dragged";
 "固定：所有歌曲使用设定的宽度。\n自适应：按每首歌曲的歌词确定宽度，不超过设定宽度" = "Fixed: every song uses the set width.\nAdaptive: each song gets its own width from its lyrics, up to the set width";
 "图标动画" = "Animate Icon";
+"图标大小" = "Icon Size";
 "图标旁" = "Beside Icon";
 "图标样式" = "Icon Style";
 "圆角" = "Corners";
@@ -859,6 +860,7 @@
 "多行" = "Multi-Line";
 "多行歌词" = "Multi-Line Lyrics";
 "夜幕卡片" = "Night Card";
+"大" = "Large";
 "大小写/空格" = "Case/spacing";
 "好" = "OK";
 "始终停留在所放置的屏幕" = "Stays on the screen you placed it on";
@@ -926,6 +928,7 @@
 "将覆盖当前全部设置，包括已连接的账号与播放记录的发送地址。完成后 Lyrimuse 将立即重启" = "This replaces all current settings, including connected accounts and where playback data is sent. Lyrimuse then restarts right away";
 "将覆盖当前全部设置，包括已连接的账号与播放记录的发送地址，并恢复备份中的 %@ 个歌词文件（同名文件将被覆盖）。完成后 Lyrimuse 将立即重启" = "This replaces all current settings, including connected accounts and where playback data is sent, and restores the %@ lyrics files in the backup (files with the same names are overwritten). Lyrimuse then restarts right away";
 "将覆盖当前全部设置，包括已连接的账号与播放记录的发送地址，并恢复备份中的 %@ 个歌词文件（同名文件将被覆盖）。完成后 Lyrimuse 将立即重启#one" = "This replaces all current settings, including connected accounts and where playback data is sent, and restores the %@ lyrics file in the backup (a file with the same name is overwritten). Lyrimuse then restarts right away";
+"小" = "Small";
 "少" = "Less";
 "少 %@ 句" = "%@ missing lines";
 "少 %@ 句#one" = "%@ missing line";
@@ -1693,6 +1696,7 @@
 "查询中" = "Looking up";
 "查询词：%@" = "Query: %@";
 "标为纯音乐" = "Mark as Instrumental";
+"标准" = "Standard";
 "标注的语言" = "Languages";
 "标注罗马字，或只给汉字标注平假名" = "Romaji, or hiragana for kanji only";
 "标注读音的语言" = "Romanization Languages";

@@ -42,9 +42,9 @@ enum MenuBarProgressIcon {
     }
 
     /// 这枚图标占多大(点)。各款不一样(「经典」20.5 × 14,SF Symbol 那几款按 15pt
-    /// 字号出图),所以宽度不能写死一个常量;「封面当图标」开着时按 `MenuBarIconArtwork.footprint`。
+    /// 字号出图,再乘「图标大小」),所以宽度不能写死一个常量;「封面当图标」开着时按 `MenuBarIconArtwork.footprint`。
     static func size(of icon: MenuBarScrollingLabel.IconBadge) -> CGSize {
-        MenuBarIconArtwork.footprint(style: icon.style, showsArtwork: icon.showsArtwork)
+        MenuBarIconArtwork.footprint(style: icon.style, showsArtwork: icon.showsArtwork, size: icon.size)
     }
 
     /// 染好色的一枚图标。
@@ -79,11 +79,12 @@ enum MenuBarProgressIcon {
         if let source = icon.artwork, let thumbnail = MenuBarIconArtwork.thumbnail(of: source) {
             let alpha = played ? 1 : MenuBarIconArtwork.unplayedOpacity
             let paint = MenuBarPainting { ctx in
-                MenuBarIconArtwork.draw(thumbnail, in: ctx, rect: MenuBarIconArtwork.tileRect(in: size), alpha: alpha)
+                MenuBarIconArtwork.draw(thumbnail, in: ctx, rect: MenuBarIconArtwork.tileRect(in: size, size: icon.size),
+                                        alpha: alpha)
             }
             return Prepared(paint: paint, scale: scale, size: size)
         }
-        let image = MenuBarIconStyle.cachedImage(for: icon.style)
+        let image = MenuBarIconStyle.cachedImage(for: icon.style, size: icon.size)
         // 「封面当图标」开着时格子可能比字形大一圈,字形在格子里居中。
         let glyphRect = NSRect(x: (size.width - image.size.width) / 2, y: (size.height - image.size.height) / 2,
                                width: image.size.width, height: image.size.height)

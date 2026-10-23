@@ -29,7 +29,14 @@ final class MenuBarLiveIconView: NSView {
     private static let animationKey = "lyrimuse.liveicon"
 
     private var currentStyle: MenuBarIconStyle?
+    private var currentSize = MenuBarIconSize.standard
     private var highlighted = false
+
+    /// 自绘图层全挂在这一层下面,按「图标大小」整体缩放(`MenuBarIconSize.scale`):各款的几何常量都按
+    /// 标准大小写,摆位在 `stageBounds` 里算。位图按放大后的像素灌(`setTinted`),不糊。
+    /// imageView(声波、音叉)不在这里:它直接拿按大小出的符号图,符号动效要靠真的符号图。
+    private let stage = CALayer()
+    private var iconScale: CGFloat { currentSize.scale }
 
     // ---- 呈现体:一个 imageView(声波、音叉微颤)+ 自绘图层(音条、摇摆、黑胶双层…) ----
     private let imageView = NSImageView()
@@ -70,9 +77,12 @@ final class MenuBarLiveIconView: NSView {
         for _ in 0 ..< 3 {
             equalizerBars.append(Self.roundedBar(width: Self.barWidth))
         }
+        stage.anchorPoint = .zero
+        stage.position = .zero
+        layer?.addSublayer(stage)
         equalizerBars.forEach {
             $0.isHidden = true
-            layer?.addSublayer($0)
+            stage.addSublayer($0)
         }
         for _ in 0 ..< 4 {
             let key = CALayer()
@@ -95,7 +105,7 @@ final class MenuBarLiveIconView: NSView {
         // (此前写死 2);纯色层(pressKeys / 均衡器条)不需要它。
         for l in [movingPart, classicLinesHost, staticPart] + pressKeys {
             l.isHidden = true
-            layer?.addSublayer(l)
+            stage.addSublayer(l)
         }
         applyColor()
         isHidden = true
@@ -122,11 +132,18 @@ final class MenuBarLiveIconView: NSView {
 
     /// 让这一款动起来。同款重复调用是空操作(refresh 会因换句/进度反复走到这里,
     /// 不能每次都把动画打回相位起点)。调用方保证只在"开关开着 × 正在播放"时才调。
-    func present(style: MenuBarIconStyle) {
+    func present(style: MenuBarIconStyle, size: MenuBarIconSize) {
         isHidden = false
-        guard style != currentStyle else { return }
+        guard style != currentStyle || size != currentSize else { return }
         teardown()
+        // 经典款的蒙版平时只灌一次,换大小要按新像素重灌。
+        if size != currentSize { classicLinesMask.contents = nil }
         currentStyle = style
+        currentSize = size
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        stage.setAffineTransform(CGAffineTransform(scaleX: iconScale, y: iconScale))
+        CATransaction.commit()
         switch style {
         case .equalizer: buildEqualizer()
         case .waveform: buildWaveform()
@@ -170,8 +187,10 @@ final class MenuBarLiveIconView: NSView {
     private var tintCache: [String: CGImage] = [:]
 
     /// contents 与 contentsScale 必须是同一个比例,所以永远一起设(见 NSView.menuBarBitmapScale)。
+    /// 挂在 `stage` 下的图层被整体放大 `iconScale` 倍,位图按放大后的像素灌。
     private func setTinted(_ target: CALayer, key: String, _ artwork: () -> NSImage) {
-        let scale = menuBarBitmapScale
+        let base = menuBarBitmapScale
+        let scale = base * iconScale
         let cacheKey = "\(key)|\(scale)|\(effectiveAppearance.name.rawValue)|\(highlighted)"
         let image: CGImage?
         if let hit = tintCache[cacheKey] {
@@ -184,7 +203,7 @@ final class MenuBarLiveIconView: NSView {
         target.contentsScale = scale
         // 同一张就不换:换 contents 会让状态项副本再重绘一轮,又把外观回调叫回来。
         if (target.contents as CFTypeRef?) !== image { target.contents = image }
-        lastBitmapScale = scale
+        lastBitmapScale = base
     }
 
     // 状态项在不同 DPI 的显示器之间迁移 / 首次挂进窗口:比例变了就把当前款的位图按新比例重灌。
@@ -241,7 +260,7 @@ final class MenuBarLiveIconView: NSView {
 
     private func buildWaveform() {
         imageView.isHidden = false
-        imageView.image = MenuBarIconStyle.cachedImage(for: .waveform)
+        imageView.image = MenuBarIconStyle.cachedImage(for: .waveform, size: currentSize)
         applyColor()
         if !animationsPaused { addWaveformEffect() }
     }
@@ -341,11 +360,12 @@ final class MenuBarLiveIconView: NSView {
     /// 音叉:高频微颤(±0.6pt 横向,0.18s 一个来回)—— 它在振动,不是在摇。
     private func buildVibrate() {
         imageView.isHidden = false
-        imageView.image = MenuBarIconStyle.cachedImage(for: .tuningfork)
+        imageView.image = MenuBarIconStyle.cachedImage(for: .tuningfork, size: currentSize)
         applyColor()
+        let amplitude = 0.6 * iconScale
         imageView.layer?.add(
             Self.sampledAnimation(keyPath: "transform.translation.x", duration: 0.18) { t in
-                CGFloat(sin(2 * Double.pi * t) * 0.6)
+                CGFloat(sin(2 * Double.pi * t)) * amplitude
             }, forKey: Self.animationKey)
     }
 
@@ -425,57 +445,60 @@ final class MenuBarLiveIconView: NSView {
 
     // MARK: - 摆位 / 颜色
 
+    /// 把 `size` 大小的图稿居中摆进 `stage`,返回左下角(stage 坐标)。取整在放大后的点上做,
+    /// 左下角落在真实的整点上(同静态帧的摆法)。
+    private func centeredOrigin(_ size: CGSize) -> CGPoint {
+        let s = iconScale
+        return CGPoint(x: ((bounds.width - size.width * s) / 2).rounded() / s,
+                       y: ((bounds.height - size.height * s) / 2).rounded() / s)
+    }
+
     override func layout() {
         super.layout()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        stage.bounds = CGRect(x: 0, y: 0, width: bounds.width / iconScale, height: bounds.height / iconScale)
         switch currentStyle {
         case .equalizer:
-            let x0 = ((bounds.width - Self.equalizerGlyphSize.width) / 2).rounded()
-            let y0 = ((bounds.height - Self.equalizerGlyphSize.height) / 2).rounded()
+            let o = centeredOrigin(Self.equalizerGlyphSize)
             for (i, bar) in equalizerBars.enumerated() {
                 // 只摆位置,高度归动画管。
-                bar.position = CGPoint(x: x0 + CGFloat(i) * (Self.barWidth + Self.barGap), y: y0)
+                bar.position = CGPoint(x: o.x + CGFloat(i) * (Self.barWidth + Self.barGap), y: o.y)
             }
         case .vinyl:
             let canvas = MenuBarIconStyle.vinylCanvas
-            let x0 = ((bounds.width - canvas.width) / 2).rounded()
-            let y0 = ((bounds.height - canvas.height) / 2).rounded()
+            let o = centeredOrigin(canvas)
             // 两层的 anchor 都是默认的中心:唱臂盖满整个画布,唱盘钉在它的圆心位。
-            staticPart.position = CGPoint(x: x0 + canvas.width / 2, y: y0 + canvas.height / 2)
-            movingPart.position = CGPoint(x: x0 + MenuBarIconStyle.vinylDiscCenter.x,
-                                          y: y0 + MenuBarIconStyle.vinylDiscCenter.y)
+            staticPart.position = CGPoint(x: o.x + canvas.width / 2, y: o.y + canvas.height / 2)
+            movingPart.position = CGPoint(x: o.x + MenuBarIconStyle.vinylDiscCenter.x,
+                                          y: o.y + MenuBarIconStyle.vinylDiscCenter.y)
         case .disc:
-            movingPart.position = CGPoint(x: bounds.width / 2, y: bounds.height / 2)
+            movingPart.position = CGPoint(x: stage.bounds.width / 2, y: stage.bounds.height / 2)
         case .metronome:
             let canvas = MenuBarIconStyle.metronomeCanvas
-            let x0 = ((bounds.width - canvas.width) / 2).rounded()
-            let y0 = ((bounds.height - canvas.height) / 2).rounded()
-            staticPart.position = CGPoint(x: x0 + canvas.width / 2, y: y0 + canvas.height / 2)
+            let o = centeredOrigin(canvas)
+            staticPart.position = CGPoint(x: o.x + canvas.width / 2, y: o.y + canvas.height / 2)
             // 动件的 anchor 已设在支点上,position 直接钉到支点的画布坐标。
-            movingPart.position = CGPoint(x: x0 + MenuBarIconStyle.metronomePivot.x,
-                                          y: y0 + MenuBarIconStyle.metronomePivot.y)
+            movingPart.position = CGPoint(x: o.x + MenuBarIconStyle.metronomePivot.x,
+                                          y: o.y + MenuBarIconStyle.metronomePivot.y)
         case .pianokeys:
             let canvas = MenuBarIconStyle.pianoCanvas
-            let x0 = ((bounds.width - canvas.width) / 2).rounded()
-            let y0 = ((bounds.height - canvas.height) / 2).rounded()
-            staticPart.position = CGPoint(x: x0 + canvas.width / 2, y: y0 + canvas.height / 2)
+            let o = centeredOrigin(canvas)
+            staticPart.position = CGPoint(x: o.x + canvas.width / 2, y: o.y + canvas.height / 2)
             for (i, rect) in MenuBarIconStyle.pianoPressRects.enumerated() {
-                pressKeys[i].position = CGPoint(x: x0 + rect.midX, y: y0 + rect.midY)
+                pressKeys[i].position = CGPoint(x: o.x + rect.midX, y: o.y + rect.midY)
             }
         case .classic:
             let canvas = MenuBarIconStyle.classicCanvas
-            let x0 = ((bounds.width - canvas.width) / 2).rounded()
-            let y0 = ((bounds.height - canvas.height) / 2).rounded()
-            let center = CGPoint(x: x0 + canvas.width / 2, y: y0 + canvas.height / 2)
+            let o = centeredOrigin(canvas)
+            let center = CGPoint(x: o.x + canvas.width / 2, y: o.y + canvas.height / 2)
             staticPart.position = center
             classicLinesHost.position = center
         case let style? where Self.swings(style):
-            // 左下角落在整点上(同静态帧的摆法),anchor 在中心,position 就是图标中心。
+            // anchor 在中心,position 就是图标中心。
             let size = movingPart.bounds.size
-            let x0 = ((bounds.width - size.width) / 2).rounded()
-            let y0 = ((bounds.height - size.height) / 2).rounded()
-            movingPart.position = CGPoint(x: x0 + size.width / 2, y: y0 + size.height / 2)
+            let o = centeredOrigin(size)
+            movingPart.position = CGPoint(x: o.x + size.width / 2, y: o.y + size.height / 2)
         default:
             if let image = imageView.image {
                 imageView.frame = NSRect(

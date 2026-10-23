@@ -171,6 +171,9 @@ final class MenuBarStatusItem: NSObject {
         // 「封面当图标」:开关本身,以及开着时封面到货 / 换图(高清替代是换歌后异步到的,三份都要订)。
         settings.$menuBarIconShowsArtwork.dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
+        // 「图标大小」改的是槽宽,同样走 refresh 重建。
+        settings.$menuBarIconSize.dropFirst().receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         Publishers.Merge3(coordinator.$artworkImage.map { _ in () }, coordinator.$highResArtworkImage.map { _ in () },
                           coordinator.$highResArtworkThumbnail.map { _ in () })
             .dropFirst(3).filter { AppSettings.shared.menuBarIconShowsArtwork }.receive(on: DispatchQueue.main)
@@ -533,11 +536,13 @@ final class MenuBarStatusItem: NSObject {
     /// 算出来的宽度跟真实槽宽差一截,悬停三键的点击会落到隔壁键上。
     private static let lyricsSlotPadding: CGFloat = 4
 
-    /// 图标态的槽宽:当前图标款式的图宽(「封面当图标」开着时按 `MenuBarIconArtwork.footprint`)+ `fixedSlotPadding`。
+    /// 图标态的槽宽:当前图标款式按「图标大小」出的图宽(「封面当图标」开着时按 `MenuBarIconArtwork.footprint`)
+    /// + `fixedSlotPadding`。
     private var iconSlotLength: CGFloat {
         let settings = AppSettings.shared
         return MenuBarIconArtwork.footprint(style: settings.menuBarIconStyle,
-                                            showsArtwork: settings.menuBarIconShowsArtwork).width + Self.fixedSlotPadding
+                                            showsArtwork: settings.menuBarIconShowsArtwork,
+                                            size: settings.menuBarIconSize).width + Self.fixedSlotPadding
     }
 
     /// 两次重建之间的最小静默间隔(见 present 头注铁律 2):实测相隔 1.1s 的两次重建就会排坏,取 3s
@@ -790,7 +795,9 @@ final class MenuBarStatusItem: NSObject {
         if statusItem != nil {
             let now = Date()
             let observeRemaining: TimeInterval
-            if collapseDelay > 0 {
+            // 已经是图标槽、只是图标宽度变了(换款式 / 大小 / 封面开关):没有要等的歌词间隙,不开收缩观察窗,
+            // 只受重建节流约束。
+            if collapseDelay > 0, displayClass != "icon" {
                 let began = collapseObserveBegan ?? now
                 collapseObserveBegan = began
                 observeRemaining = max(0, collapseDelay - now.timeIntervalSince(began))
@@ -1562,18 +1569,18 @@ final class MenuBarStatusItem: NSObject {
         scrollingLabel.clear()
         let settings = AppSettings.shared
         let style = settings.menuBarIconStyle
-        let staticImage = MenuBarIconStyle.cachedImage(for: style)
+        let size = settings.menuBarIconSize
+        let staticImage = MenuBarIconStyle.cachedImage(for: style, size: size)
         // 「封面当图标」:有封面就贴封面(不做动画),没封面、广告期间照旧是所选款式。
         if let source = MenuBarIconArtwork.currentSource(),
-           let cover = MenuBarIconArtwork.iconImage(
-               source: source, footprint: MenuBarIconArtwork.footprint(style: style, showsArtwork: true)) {
+           let cover = MenuBarIconArtwork.iconImage(source: source, style: style, size: size) {
             liveIconView.clear()
             button.image = cover
         } else if settings.menuBarIconAnimates, PlaybackCoordinator.shared.isPlayingNow {
             button.image = spacerImage(width: staticImage.size.width,
                                        height: staticImage.size.height)
             liveIconView.frame = button.bounds
-            liveIconView.present(style: style)
+            liveIconView.present(style: style, size: size)
         } else {
             liveIconView.clear()
             button.image = staticImage

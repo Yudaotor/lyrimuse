@@ -132,7 +132,7 @@ func runSourceContractTests() {
             expectEqual(true, false, "图标摇摆: 读不到 buildSway(改名了?)")
         }
         expectEqual(live.contains("case .note, .noteList, .quarternotes, .mic: return true")
-                        && sourceHas(live, "case let style? where Self.swings(style):\n// 左下角落在整点上(同静态帧的摆法),anchor 在中心,position 就是图标中心。")
+                        && sourceHas(live, "case let style? where Self.swings(style):\n// anchor 在中心,position 就是图标中心。")
                         && live.contains("setTinted(movingPart, key: \"sway-\\(style.rawValue)\")"), true,
                     "图标摇摆: 四款摇摆的图层按中心摆位、现染模板图")
         expectEqual(live.components(separatedBy: "imageView.layer?.add(").count - 1, 1,
@@ -1653,15 +1653,22 @@ func runSourceContractSurfaceTests() {
                         true, "图标样式链接: 两个标题键都在设置目录里(找不到就跳不过去、点不亮)")
         }
         // 「封面当图标」的占位尺寸只看开关、不看这一刻有没有封面:封面是换歌后异步到的,尺寸跟着它变
-        // 每首歌多一次状态栏项重建(06 章决策 60)。三处算尺寸的地方都只许读开关。
+        // 每首歌多一次状态栏项重建(06 章决策 60)。三处算尺寸的地方都只许读开关和「图标大小」。
         if let art = read("MenuBar/MenuBarIconArtwork.swift"), let progress = read("MenuBar/MenuBarProgressIcon.swift"),
            let status = read("MenuBar/MenuBarStatusItem.swift") {
-            expectEqual(art.contains("static func footprint(style: MenuBarIconStyle, showsArtwork: Bool) -> CGSize"), true,
-                        "封面当图标: 占位尺寸只由款式和开关决定")
-            expectEqual(sourceHas(progress, "MenuBarIconArtwork.footprint(style: icon.style, showsArtwork: icon.showsArtwork)"),
+            expectEqual(art.contains("static func footprint(style: MenuBarIconStyle, showsArtwork: Bool, size: MenuBarIconSize) -> CGSize"),
+                        true, "封面当图标: 占位尺寸只由款式、开关和图标大小决定")
+            expectEqual(sourceHas(progress, "MenuBarIconArtwork.footprint(style: icon.style, showsArtwork: icon.showsArtwork, size: icon.size)"),
                         true, "封面当图标: 进度图标的尺寸读开关,不读这一刻有没有封面")
-            expectEqual(sourceHas(status, "MenuBarIconArtwork.footprint(style: settings.menuBarIconStyle,\nshowsArtwork: settings.menuBarIconShowsArtwork)"),
+            expectEqual(sourceHas(status, "MenuBarIconArtwork.footprint(style: settings.menuBarIconStyle,\nshowsArtwork: settings.menuBarIconShowsArtwork,\nsize: settings.menuBarIconSize)"),
                         true, "封面当图标: 图标态槽宽读开关,不读这一刻有没有封面")
+            // 「图标大小」改的是槽宽,槽宽只在项出生时算数:必须走 refresh 重建,且进度图标的位图判定要带上它。
+            expectEqual(sourceHas(status, "settings.$menuBarIconSize.dropFirst().receive(on: DispatchQueue.main)\n.sink { [weak self] _ in self?.scheduleRefresh() }"),
+                        true, "图标大小: 改了立刻走 refresh")
+            expectEqual(sourceHas(status, "if collapseDelay > 0, displayClass != \"icon\" {"),
+                        true, "图标大小: 已经是图标槽时换宽度不开收缩观察窗(否则暂停时要 8 秒才变宽)")
+            expectEqual(sourceHas(read("MenuBar/MenuBarScrollingLabel.swift") ?? "", "&& a.artwork === b.artwork && a.size == b.size"),
+                        true, "图标大小: 进度图标的相等判定带上大小,不然换大小要等下一句才重出位图")
         }
         if let panel = read("MenuBar/MenuBarPanelQuickSettings.swift") {
             // ① 两个形态都要有「副行」。共用同一个枚举、各存各的键,所以是同一个行组件传两个 Binding。

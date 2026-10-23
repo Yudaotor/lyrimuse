@@ -6567,6 +6567,15 @@ private struct GeneralSettingsTab: View {
                 Toggle("", isOn: $settings.menuBarIconShowsArtwork)
             }
             CardDivider()
+            SettingsRow(icon: "arrow.up.left.and.arrow.down.right", title: L10n.t("图标大小")) {
+                SettingsGlassTabPicker(
+                    selection: $settings.menuBarIconSize,
+                    options: MenuBarIconSize.allCases,
+                    label: \.displayName,
+                    compact: true
+                )
+            }
+            CardDivider()
             // 动画紧跟在图标后面:它改的是上面那枚图标的状态。
             SettingsRow(
                 icon: "figure.dance",

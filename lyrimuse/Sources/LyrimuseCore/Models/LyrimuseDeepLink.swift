@@ -99,8 +99,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// `debug/menubar-center?center=1&screen=all&ignore-notch=1`,至少带一个。刘海屏的开发机靠它验无刘海屏的摆法。
         case menuBarCenter(center: Bool?, ignoreNotch: Bool?, screen: String? = nil)
         /// 菜单栏图标用不用封面(`artwork`)、那一格显示什么(`content`:lyrics / title / titleArtist,同设置页
-        /// 「显示内容」三档),跟设置页走同一个设置:`debug/menubar-display?artwork=1&content=title`,至少带一个。
-        case menuBarDisplay(artwork: Bool?, content: String?)
+        /// 「显示内容」三档)、图标大小(`icon-size`:small / standard / large),跟设置页走同一个设置:
+        /// `debug/menubar-display?artwork=1&content=title&icon-size=large`,至少带一个。
+        case menuBarDisplay(artwork: Bool?, content: String?, iconSize: String? = nil)
         /// 日语读音标罗马字还是假名,跟设置页「日语读音」走同一条路(`debug/japanese-reading?style=romaji|kana`)。
         case japaneseReading(JapaneseReadingStyle)
     }
@@ -217,8 +218,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/menubar-display"):
             let artwork = value("artwork").flatMap(Self.parseBool)
             let content = value("content").flatMap { $0.isEmpty ? nil : $0 }
-            guard artwork != nil || content != nil else { return nil }
-            self = .debug(.menuBarDisplay(artwork: artwork, content: content))
+            let iconSize = value("icon-size").flatMap { $0.isEmpty ? nil : $0 }
+            guard artwork != nil || content != nil || iconSize != nil else { return nil }
+            self = .debug(.menuBarDisplay(artwork: artwork, content: content, iconSize: iconSize))
         case ("debug", "/japanese-reading"):
             guard let style = value("style").flatMap({ JapaneseReadingStyle(rawValue: $0.lowercased()) }) else { return nil }
             self = .debug(.japaneseReading(style))
@@ -333,10 +335,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.queryItems = (center.map { [URLQueryItem(name: "center", value: $0 ? "1" : "0")] } ?? [])
                     + (ignoreNotch.map { [URLQueryItem(name: "ignore-notch", value: $0 ? "1" : "0")] } ?? [])
                     + (screen.map { [URLQueryItem(name: "screen", value: $0)] } ?? [])
-            case let .menuBarDisplay(artwork, content):
+            case let .menuBarDisplay(artwork, content, iconSize):
                 components.path = "/menubar-display"
                 components.queryItems = (artwork.map { [URLQueryItem(name: "artwork", value: $0 ? "1" : "0")] } ?? [])
                     + (content.map { [URLQueryItem(name: "content", value: $0)] } ?? [])
+                    + (iconSize.map { [URLQueryItem(name: "icon-size", value: $0)] } ?? [])
             case let .japaneseReading(style):
                 components.path = "/japanese-reading"
                 components.queryItems = [URLQueryItem(name: "style", value: style.rawValue)]

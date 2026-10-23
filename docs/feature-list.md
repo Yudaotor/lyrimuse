@@ -756,11 +756,12 @@ Type at the top of the settings sidebar to jump straight to a setting, highlight
 
 ### Menu bar icon
 
-Twelve icons to choose from, moving with the music while it plays, or the album art of what's playing. Everyday actions live in its menu.
+Twelve icons in three sizes, moving with the music while it plays, or the album art of what's playing. Everyday actions live in its menu.
 
 - On by default
 - Settings: General › Menu Bar & Dock › Menu Bar Icon
 - Settings: General › Menu Bar & Dock › Use Album Art as Icon
+- Settings: General › Menu Bar & Dock › Icon Size
 - Settings: General › Menu Bar & Dock › Animate Icon
 
 <a id="feature-dock-icon"></a>
@@ -832,7 +833,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 288 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 289 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1188,6 +1189,7 @@ Every setting in the Settings window, by where it lives: 288 in all. Type a name
 
 - **Menu Bar Icon**
 - **Use Album Art as Icon**
+- **Icon Size**
 - **Animate Icon**
 - **Show in Dock**
 

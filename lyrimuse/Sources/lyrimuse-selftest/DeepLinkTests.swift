@@ -192,6 +192,8 @@ func runDeepLinkTests() {
                     .debug(.menuBarDisplay(artwork: true, content: nil)), "debug: 菜单栏图标用封面")
         expectEqual(link("lyrimuse://debug/menubar-display?content=titleArtist&artwork=0"),
                     .debug(.menuBarDisplay(artwork: false, content: "titleArtist")), "debug: 菜单栏显示歌名和歌手、图标不用封面")
+        expectEqual(link("lyrimuse://debug/menubar-display?icon-size=large"),
+                    .debug(.menuBarDisplay(artwork: nil, content: nil, iconSize: "large")), "debug: 只改菜单栏图标大小")
         expectEqual(link("lyrimuse://debug/menubar-display"), nil, "debug: 菜单栏显示什么都没带不认")
         expectEqual(link("lyrimuse://debug/menubar-center?screen=auto"),
                     .debug(.menuBarCenter(center: nil, ignoreNotch: nil, screen: "auto")), "debug: 只改正中放哪几块屏")
@@ -319,6 +321,7 @@ func runDeepLinkTests() {
             .debug(.japaneseReading(.kana)), .debug(.japaneseReading(.romaji)),
             .debug(.menuBarDisplay(artwork: true, content: nil)), .debug(.menuBarDisplay(artwork: nil, content: "title")),
             .debug(.menuBarDisplay(artwork: false, content: "lyrics")),
+            .debug(.menuBarDisplay(artwork: nil, content: nil, iconSize: "small")),
             .debug(.settingsSearch(query: "OBS 输出")),
             .setPlayMode(.list), .setPlayMode(.shuffle), .setPlayMode(.repeatAll), .setPlayMode(.repeatOne),
         ] + LyrimuseAction.allCases.map { .action($0, on: nil, stepSeconds: nil) }

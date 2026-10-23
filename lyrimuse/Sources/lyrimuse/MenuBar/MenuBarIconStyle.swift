@@ -69,38 +69,62 @@ enum MenuBarIconStyle: String, CaseIterable, Codable, Hashable, Identifiable {
     /// 两个调用方都需要它:状态栏本体(refresh 是换句就调一次的热路径)和设置页那个
     /// 图标网格(每次 body 求值都会把全部款式过一遍)。重画一次要过 SF Symbol 配置 +
     /// 一次离屏绘制,不缓存的话设置页光是滚动就在反复重画整个网格。
+    ///
+    /// `size` 只给菜单栏本体(图标那一格、歌词旁的进度图标、活体动画)用;设置网格、引导、Touch Bar 取原尺寸。
     @MainActor
-    static func cachedImage(for style: MenuBarIconStyle) -> NSImage {
-        if let hit = cache[style] { return hit }
-        let built = style.makeImage()
-        cache[style] = built
+    static func cachedImage(for style: MenuBarIconStyle, size: MenuBarIconSize = .standard) -> NSImage {
+        let key = CacheKey(style: style, size: size)
+        if let hit = cache[key] { return hit }
+        let built = style.makeImage(scale: size.scale)
+        cache[key] = built
         return built
     }
 
-    @MainActor private static var cache: [MenuBarIconStyle: NSImage] = [:]
+    private struct CacheKey: Hashable {
+        let style: MenuBarIconStyle
+        let size: MenuBarIconSize
+    }
+
+    @MainActor private static var cache: [CacheKey: NSImage] = [:]
 
     /// 构建这一款的模板图。失败(理论上不会:用到的符号都从 macOS 11 就在)时返回一张
     /// 空图,不让状态栏那个位置崩掉。
-    func makeImage() -> NSImage {
+    ///
+    /// `scale` ≠ 1 时 SF 款按放大后的字号重新出符号(仍是符号图,声波的 variable-color 动效要靠它),
+    /// 自绘款把原尺寸那张按比例重画进新画布(绘制闭包按目标像素重跑,不糊)。
+    func makeImage(scale: CGFloat = 1) -> NSImage {
+        let pt = Self.pointSize * scale
         let image: NSImage? = {
             switch self {
-            case .note: return Self.symbol("music.note")
-            case .noteList: return Self.symbol("music.note.list")
-            case .quarternotes: return Self.symbol("music.quarternote.3")
-            case .waveform: return Self.symbol("waveform")
+            case .note: return Self.symbol("music.note", pointSize: pt)
+            case .noteList: return Self.symbol("music.note.list", pointSize: pt)
+            case .quarternotes: return Self.symbol("music.quarternote.3", pointSize: pt)
+            case .waveform: return Self.symbol("waveform", pointSize: pt)
             // 静置帧(设置网格里那张 / 暂停时定格的那张)。跳动的那份在 MenuBarLiveIconView.buildEqualizer。
-            case .equalizer: return Self.equalizerImage(heights: [0.55, 0.85, 0.40])
-            case .mic: return Self.symbol("music.mic")
-            case .metronome: return Self.metronomeArtwork()
-            case .pianokeys: return Self.pianoKeysArtwork()
-            case .tuningfork: return Self.symbol("tuningfork")
-            case .disc: return Self.discArtwork()
-            case .vinyl: return Self.vinylArtwork()
-            case .classic: return Self.classicArtwork()
+            case .equalizer: return Self.scaled(Self.equalizerImage(heights: [0.55, 0.85, 0.40]), by: scale)
+            case .mic: return Self.symbol("music.mic", pointSize: pt)
+            case .metronome: return Self.scaled(Self.metronomeArtwork(), by: scale)
+            case .pianokeys: return Self.scaled(Self.pianoKeysArtwork(), by: scale)
+            case .tuningfork: return Self.symbol("tuningfork", pointSize: pt)
+            case .disc: return Self.scaled(Self.discArtwork(), by: scale)
+            case .vinyl: return Self.scaled(Self.vinylArtwork(), by: scale)
+            case .classic: return Self.classicArtwork().map { Self.scaled($0, by: scale) }
             }
         }()
-        let result = image ?? NSImage(size: NSSize(width: 16, height: 16))
+        let result = image ?? NSImage(size: NSSize(width: 16 * scale, height: 16 * scale))
         result.isTemplate = true
+        return result
+    }
+
+    /// 把一张自绘图稿按比例重画进新画布;比例为 1 原样返回。
+    static func scaled(_ image: NSImage, by scale: CGFloat) -> NSImage {
+        guard scale != 1 else { return image }
+        let size = NSSize(width: image.size.width * scale, height: image.size.height * scale)
+        let result = NSImage(size: size, flipped: false) { rect in
+            image.draw(in: rect)
+            return true
+        }
+        result.isTemplate = image.isTemplate
         return result
     }
 

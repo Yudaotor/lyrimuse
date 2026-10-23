@@ -2021,9 +2021,9 @@
             "zh-Hant": "選單列圖像"
           },
           "desc": {
-            "zh-Hans": "提供 12 款图标，播放时随音乐律动，暂停时静止；也可换成正在播放的专辑封面。常用操作均在其下拉菜单中。",
-            "en": "Twelve icons to choose from, moving with the music while it plays, or the album art of what's playing. Everyday actions live in its menu.",
-            "zh-Hant": "提供 12 款圖像，播放時隨音樂律動，暫停時靜止；也可換成正在播放的專輯封面。常用操作均在其下拉選單中。"
+            "zh-Hans": "提供 12 款图标，播放时随音乐律动，暂停时静止；也可换成正在播放的专辑封面，大小可调。常用操作均在其下拉菜单中。",
+            "en": "Twelve icons in three sizes, moving with the music while it plays, or the album art of what's playing. Everyday actions live in its menu.",
+            "zh-Hant": "提供 12 款圖像，播放時隨音樂律動，暫停時靜止；也可換成正在播放的專輯封面，大小可調。常用操作均在其下拉選單中。"
           },
           "default": "on",
           "check": {
@@ -2039,6 +2039,11 @@
               "通用",
               "菜单栏与 Dock",
               "用封面当图标"
+            ],
+            [
+              "通用",
+              "菜单栏与 Dock",
+              "图标大小"
             ],
             [
               "通用",

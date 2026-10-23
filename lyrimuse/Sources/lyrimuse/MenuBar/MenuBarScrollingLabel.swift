@@ -109,10 +109,12 @@ final class MenuBarScrollingLabel: NSView {
         var showsArtwork = false
         /// 这一刻画的封面原图;nil = 画款式图标。
         var artwork: NSImage?
+        /// 「图标大小」。
+        var size: MenuBarIconSize = .standard
 
         static func == (a: IconBadge, b: IconBadge) -> Bool {
             a.style == b.style && a.position == b.position && a.showsArtwork == b.showsArtwork
-                && a.artwork === b.artwork
+                && a.artwork === b.artwork && a.size == b.size
         }
 
         /// 按此刻的设置和封面拼一枚;`position == .off` 时 nil。菜单栏本体和设置页预览都调这一份。
@@ -121,7 +123,7 @@ final class MenuBarScrollingLabel: NSView {
             let settings = AppSettings.shared
             return IconBadge(style: settings.menuBarIconStyle, position: position,
                              showsArtwork: settings.menuBarIconShowsArtwork,
-                             artwork: MenuBarIconArtwork.currentSource())
+                             artwork: MenuBarIconArtwork.currentSource(), size: settings.menuBarIconSize)
         }
     }
 

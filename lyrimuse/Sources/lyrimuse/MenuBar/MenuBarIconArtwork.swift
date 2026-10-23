@@ -6,10 +6,10 @@ import AppKit
 //
 // 占位尺寸只跟开关有关、跟这一刻有没有封面无关:封面是换歌后异步到的,尺寸跟着变的话每首歌多一次
 // 状态栏项重建(见 `MenuBarStatusItem.present` 头注)。开着时这一格按款式图标和封面方块两者取大,
-// 两种内容都在里面居中。
+// 两种内容都在里面居中。「图标大小」(`MenuBarIconSize`)对字形和封面方块按同一比例缩放。
 @MainActor
 enum MenuBarIconArtwork {
-    /// 封面方块边长,跟 SF 款 15pt 的字形、旁边系统图标一个量级。
+    /// 「标准」大小下封面方块的边长,跟 SF 款 15pt 的字形、旁边系统图标一个量级。
     static let side: CGFloat = 16
     static let cornerRadius: CGFloat = 3.5
     /// 歌词旁那枚进度图标里还没放到的那一截封面的不透明度。
@@ -26,21 +26,24 @@ enum MenuBarIconArtwork {
     }
 
     /// 图标那一格的尺寸。关着时就是款式图标自己的尺寸。
-    static func footprint(style: MenuBarIconStyle, showsArtwork: Bool) -> CGSize {
-        let glyph = MenuBarIconStyle.cachedImage(for: style).size
+    static func footprint(style: MenuBarIconStyle, showsArtwork: Bool, size: MenuBarIconSize) -> CGSize {
+        let glyph = MenuBarIconStyle.cachedImage(for: style, size: size).size
         guard showsArtwork else { return glyph }
-        return CGSize(width: max(glyph.width, side), height: max(glyph.height, side))
+        let tile = side * size.scale
+        return CGSize(width: max(glyph.width, tile), height: max(glyph.height, tile))
     }
 
     /// 封面方块在 `canvas` 里的位置(居中)。
-    static func tileRect(in canvas: CGSize) -> CGRect {
-        CGRect(x: (canvas.width - side) / 2, y: (canvas.height - side) / 2, width: side, height: side)
+    static func tileRect(in canvas: CGSize, size: MenuBarIconSize) -> CGRect {
+        let tile = side * size.scale
+        return CGRect(x: (canvas.width - tile) / 2, y: (canvas.height - tile) / 2, width: tile, height: tile)
     }
 
-    /// 把封面画进 `rect`(圆角裁切)。`ctx` 是不翻转的坐标系。
+    /// 把封面画进 `rect`(圆角裁切,圆角随方块边长等比)。`ctx` 是不翻转的坐标系。
     static func draw(_ thumbnail: CGImage, in ctx: CGContext, rect: CGRect, alpha: CGFloat) {
+        let radius = cornerRadius * rect.width / side
         ctx.saveGState()
-        ctx.addPath(CGPath(roundedRect: rect, cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil))
+        ctx.addPath(CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
         ctx.clip()
         ctx.setAlpha(alpha)
         ctx.interpolationQuality = .high
@@ -50,19 +53,21 @@ enum MenuBarIconArtwork {
 
     /// 图标独占那一格贴的整张图(彩色,不是模板图):`footprint` 大小,封面居中。缓存最近一张:
     /// refresh 换句就跑一次,每次给按钮一张新图等于每句重画一次。
-    static func iconImage(source: NSImage, footprint: CGSize) -> NSImage? {
-        if let cachedIcon, cachedIcon.source === source, cachedIcon.footprint == footprint { return cachedIcon.image }
+    static func iconImage(source: NSImage, style: MenuBarIconStyle, size: MenuBarIconSize) -> NSImage? {
+        let footprint = footprint(style: style, showsArtwork: true, size: size)
+        if let cachedIcon, cachedIcon.source === source, cachedIcon.footprint == footprint,
+           cachedIcon.size == size { return cachedIcon.image }
         guard let thumbnail = thumbnail(of: source) else { return nil }
         let image = NSImage(size: footprint, flipped: false) { _ in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return true }
-            draw(thumbnail, in: ctx, rect: tileRect(in: footprint), alpha: 1)
+            draw(thumbnail, in: ctx, rect: tileRect(in: footprint, size: size), alpha: 1)
             return true
         }
-        cachedIcon = (source, footprint, image)
+        cachedIcon = (source, footprint, size, image)
         return image
     }
 
-    private static var cachedIcon: (source: NSImage, footprint: CGSize, image: NSImage)?
+    private static var cachedIcon: (source: NSImage, footprint: CGSize, size: MenuBarIconSize, image: NSImage)?
 
     /// 封面裁成正方形(按短边居中)、缩到 `thumbnailPixels`。只缓存最近一张:换歌才换图,
     /// 而原图可能是 1400~3000px 的高清图,每次重画都从它缩不划算。
