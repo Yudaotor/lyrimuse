@@ -3,7 +3,7 @@ import Foundation
 
 /// Pine Player 的播放列表,给引擎预解析(`PlayerQueryServer` 的 `pine_queue`,引擎侧 `pinequeue.go`)。它没有脚本接口、列表不落盘,
 /// 只有主窗口里那张表:每行一格,格里依次是歌名(`AXHelp` 是文件名)、「歌手 ∙ 专辑」、封面、时长。看不见的行辅助功能树里照样有、
-/// 文字齐全。随机开着时列表不重排、跳着放,开没开读不出,由引擎按换歌行为推断;循环档读菜单的勾(`PineMenuControl`)。
+/// 文字齐全。随机开着时列表不重排、跳着放,开没开读不出,由引擎按换歌行为推断;循环档读菜单的勾(`PineMenuControl`,四项的意思见它头注)。
 /// 每行的歌名歌手按系统那份的拆法换(`PinePlayerInfo.identity(title:artist:)`),跟这首真播到时写进播放状态的是同一份。
 /// 跨进程读一行约 3 毫秒、占它的主线程,最多读 `maxRows` 行、到 `readBudget` 为止。见 02 章决策 168。
 public enum PinePlaylist {
@@ -42,7 +42,7 @@ public enum PinePlaylist {
         }
     }
 
-    /// 交给引擎的那份;`repeating` 是 `off` / `one` / `all`(同 `PlayerQueryRepeat`),读不出为 nil。
+    /// 交给引擎的那份;`repeating` 是 `off` / `one` / `all`(同 `PlayerQueryRepeat`),另有 `stop`(「无」:放完当前这首就停),读不出为 nil。
     public struct QueueReply: Codable, Equatable, Sendable {
         public var tracks: [Track]
         public var repeating: String?
@@ -71,20 +71,22 @@ public enum PinePlaylist {
         return Double(total)
     }
 
-    /// 档位 → 交给引擎的写法。纯函数,selftest 覆盖。
-    public static func repeating(_ mode: MusicPlaybackController.MusicPlaybackMode?) -> String? {
-        switch mode {
-        case .list: return "off"
-        case .repeatOne: return "one"
-        case .repeatAll: return "all"
-        case .shuffle, nil: return nil
+    /// 「重复模式」子菜单打勾的那一项(`PineMenuControl.readCheckedIndex`)→ 交给引擎的写法:列表循环 / 放一遍就停 / 单曲循环 /
+    /// 放完当前这首就停。纯函数,selftest 覆盖。
+    public static func repeating(checkedIndex: Int?) -> String? {
+        switch checkedIndex {
+        case 0: return "all"
+        case 1: return "off"
+        case 2: return "one"
+        case 3: return "stop"
+        default: return nil
         }
     }
 
     /// 读列表与循环档;Pine 没在跑、没有辅助功能权限、找不到那张表时为 nil。会阻塞跨进程查询,别在主线程调。
     public static func queueReply() -> QueueReply? {
         guard let rows = readRows() else { return nil }
-        return QueueReply(tracks: rows.map(track), repeating: repeating(PineMenuControl.readMode()))
+        return QueueReply(tracks: rows.map(track), repeating: repeating(checkedIndex: PineMenuControl.readCheckedIndex()))
     }
 
     /// 主窗口里那张表的行(格里至少三段文字的那张;侧栏的列表表每格只有一段)。

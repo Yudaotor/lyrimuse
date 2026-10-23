@@ -12,7 +12,8 @@ import (
 // Pine Player 的播放列表:没有脚本接口、列表不落盘,App 经辅助功能读它主窗口里那张表(看不见的行也读得到),连同菜单里的循环档
 // 一起交过来(App 侧 PinePlaylist,歌名歌手已按系统那份的拆法换好,跟这首真播到时写进播放状态的一字不差)。
 // 随机开着时列表不重排、跳着放,开没开读不出:跟 QQ / 酷狗一样从换歌行为推断(queueOrder),随机时按 shuffleCandidates 交一批。
-// 单曲循环时下一首还是这首,没有要预取的;列表循环(所有曲目 / 选中的列表)放到最后接回开头。见 02 章决策 168。
+// 单曲循环时下一首还是这首、「无」(stop)放完当前这首就停,都没有要预取的;只有列表循环(所有曲目)放到最后接回开头,
+// 第二项是列表放一遍就停(off)。见 02 章决策 168、174。
 
 // pineQueueReply 是 App 交来的那份,键名跟 PinePlaylist.QueueReply 两边一起改。
 type pineQueueReply struct {
@@ -57,7 +58,7 @@ func pineUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
 	if pos < 0 {
 		return nil, false
 	}
-	if q.Repeating == "one" {
+	if q.Repeating == "one" || q.Repeating == "stop" {
 		return nil, true
 	}
 	shuffled := pineObservePosition(pineQueueID(q.Tracks), pos, len(q.Tracks))

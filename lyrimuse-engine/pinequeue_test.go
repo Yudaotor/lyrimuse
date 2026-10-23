@@ -73,9 +73,11 @@ func TestPineUpcomingFollowsPlaylist(t *testing.T) {
 
 // 单曲循环不预取(也不退回);列表循环在最后接回开头、绕一圈不含当前这首;读不出循环档时到最后为止。
 func TestPineUpcomingFollowsRepeatMode(t *testing.T) {
-	withPineQueue(t, "one", pineTracks("A", "B", "C"))
-	if res, ok := pineUpcoming("歌手B", "B", 5); !ok || len(res) != 0 {
-		t.Errorf("单曲循环: ok=%v %q", ok, pineGot(res))
+	for _, mode := range []string{"one", "stop"} {
+		withPineQueue(t, mode, pineTracks("A", "B", "C"))
+		if res, ok := pineUpcoming("歌手B", "B", 5); !ok || len(res) != 0 {
+			t.Errorf("%s(单曲循环 / 放完这首就停): ok=%v %q", mode, ok, pineGot(res))
+		}
 	}
 	withPineQueue(t, "all", pineTracks("A", "B", "C", "D"))
 	if res, ok := pineUpcoming("歌手D", "D", 2); !ok || pineGot(res) != "A,B" {

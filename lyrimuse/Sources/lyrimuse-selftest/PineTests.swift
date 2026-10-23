@@ -333,12 +333,14 @@ func runPineTests() {
     // ---- 循环:「重复模式」子菜单 ----
     do {
         typealias M = PineMenuControl
-        expectEqual([0, 1, 2, 3, 4].map { M.mode(checkedIndex: $0) }, [.repeatAll, .repeatAll, .repeatOne, .list, nil],
-                    "Pine 循环: 所有曲目、选中的列表都是列表循环,一首乐曲是单曲,无是关")
+        expectEqual([0, 1, 2, 3, 4].map { M.mode(checkedIndex: $0) }, [.repeatAll, .list, .repeatOne, .list, nil],
+                    "Pine 循环: 所有曲目是列表循环,第二项(列表放一遍就停)和无都显示成关,一首乐曲是单曲")
         expectEqual(M.indexToPress(for: .repeatOne, checkedIndex: 0), 2, "Pine 循环: 列表循环切单曲按第三项")
-        expectEqual(M.indexToPress(for: .list, checkedIndex: 2), 3, "Pine 循环: 单曲切关按第四项")
+        expectEqual(M.indexToPress(for: .list, checkedIndex: 2), 1, "Pine 循环: 单曲切关按第二项(放一遍就停),不按「无」(放完这首就停)")
+        expectEqual(M.indexToPress(for: .list, checkedIndex: 0), 1, "Pine 循环: 列表循环切关同样按第二项")
+        expectEqual(M.indexToPress(for: .list, checkedIndex: 3), nil, "Pine 循环: 已经是「无」也算关,不按")
         expectEqual(M.indexToPress(for: .repeatAll, checkedIndex: 3), 0, "Pine 循环: 关切列表循环按「所有曲目」")
-        expectEqual(M.indexToPress(for: .repeatAll, checkedIndex: 1), nil, "Pine 循环: 「选中的列表」已经是列表循环,不按")
+        expectEqual(M.indexToPress(for: .repeatAll, checkedIndex: 1), 0, "Pine 循环: 第二项不是列表循环,切列表循环要按「所有曲目」")
         expectEqual(M.indexToPress(for: .shuffle, checkedIndex: 0), nil, "Pine 循环: 没有随机")
         expectEqual(M.options, [.repeatAll, .repeatOne], "Pine 循环: 只给循环键,不给随机")
         expectEqual(MusicPlaybackController.supportsExtendedControls(.pinePlayer), true, "Pine 循环: 歌词窗口出循环键")
@@ -379,8 +381,8 @@ func runPineTests() {
                     "Pine 列表: 没写标签的(解析文件名前后两种写法)按文件名拆,跟放到时一样")
         expectEqual(["03:39", "1:02:03", "0:07", "", "3", "a:b", "1:2:3:4"].map(L.duration), [219, 3723, 7, nil, nil, nil, nil],
                     "Pine 列表: 时长 mm:ss / h:mm:ss,别的认不出")
-        expectEqual([.list, .repeatOne, .repeatAll, .shuffle, nil].map(L.repeating), ["off", "one", "all", nil, nil],
-                    "Pine 列表: 循环档换成 off / one / all,读不出不报")
+        expectEqual([0, 1, 2, 3, 4, nil].map(L.repeating(checkedIndex:)), ["all", "off", "one", "stop", nil, nil],
+                    "Pine 列表: 四项依次换成 all / off(放一遍就停)/ one / stop(「无」,放完这首就停),读不出不报")
         let reply = L.QueueReply(tracks: [.init(title: "A", artist: "B", album: "", duration: 1, file: "a.mp3")], repeating: "all")
         expectEqual(PlayerQueryServer.encodedReply(reply),
                     #"{"repeating":"all","tracks":[{"album":"","artist":"B","duration":1,"file":"a.mp3","title":"A"}]}"#,
