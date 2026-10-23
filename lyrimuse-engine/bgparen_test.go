@@ -291,3 +291,40 @@ func TestMusixmatchLineOwnersAfterParenSplit(t *testing.T) {
 		t.Errorf("owners = %v / %v", speakerLineKey(owners[0]), speakerLineKey(owners[1]))
 	}
 }
+
+// 手写的时间戳解析跟 lrcTimestampCaptureRe 从行首连着匹配的结果一致。
+func TestParenBGLRCStampsMatchesRegexp(t *testing.T) {
+	viaRegexp := func(line string) ([]int, int) {
+		end := 0
+		var out []int
+		for _, l := range lrcTimestampCaptureRe.FindAllStringSubmatchIndex(line, -1) {
+			if l[0] != end {
+				break
+			}
+			frac := ""
+			if l[6] >= 0 {
+				frac = line[l[6]:l[7]]
+			}
+			end = l[1]
+			out = append(out, lrcStampMs([]string{line[l[0]:l[1]], line[l[2]:l[3]], line[l[4]:l[5]], frac}))
+		}
+		return out, end
+	}
+	for _, line := range []string{
+		"", "abc", "[00:01.00]a", "[00:01.00][00:10.5]a (b)", "[1:02]x", "[01:02.123]x", "[01:02.1234]x", "[01:02:45]x",
+		"[123:02]x", "[01:2]x", "[01:02.]x", "[01:02", "[ar:Somebody]", "x[00:01.00]y", "[00:01.00]x[00:02.00]y",
+		"[00:01.00] [00:02.00]x", "[99:59.999]x", "[0:00]", "[00:01.00][bad]", "[00:01.00][00:02.00",
+	} {
+		gs, ge := parenBGLRCStamps(line)
+		ws, we := viaRegexp(line)
+		if ge != we || len(gs) != len(ws) {
+			t.Errorf("%q: got %v,%d want %v,%d", line, gs, ge, ws, we)
+			continue
+		}
+		for i := range gs {
+			if gs[i] != ws[i] {
+				t.Errorf("%q: got %v want %v", line, gs, ws)
+			}
+		}
+	}
+}

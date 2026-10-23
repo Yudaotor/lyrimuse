@@ -415,15 +415,24 @@ func splitParenBackground(lrc, yrc string) (parenBGSplit, bool) {
 	if yrc == "" || !parenBGHasParen(lrc) {
 		return parenBGSplit{}, false
 	}
+	// 逐行歌词按位置扫,不先切成数组:启动迁移每次把全库带括号的歌词判一遍,多数一行都拆不了。
 	type lSplit struct {
-		idx, end   int
-		stamps     []int
-		main       string
-		mainK, bgK string
+		from, textAt, to int // 这一行在 lrc 里的起止,textAt 是时间戳之后
+		stamps           []int
+		main             string
+		mainK, bgK       string
 	}
-	llines := strings.Split(lrc, "\n")
 	var ls []lSplit
-	for i, line := range llines {
+	for from := 0; from <= len(lrc); {
+		to := strings.IndexByte(lrc[from:], '\n')
+		if to < 0 {
+			to = len(lrc)
+		} else {
+			to += from
+		}
+		line := lrc[from:to]
+		lineFrom := from
+		from = to + 1
 		if !parenBGHasParen(line) {
 			continue
 		}
@@ -435,7 +444,7 @@ func splitParenBackground(lrc, yrc string) (parenBGSplit, bool) {
 		if !ok {
 			continue
 		}
-		ls = append(ls, lSplit{idx: i, end: end, stamps: stamps, main: mainText,
+		ls = append(ls, lSplit{from: lineFrom, textAt: lineFrom + end, to: to, stamps: stamps, main: mainText,
 			mainK: parenBGNormKey(mainText), bgK: parenBGNormKey(strings.Join(segs, ""))})
 	}
 	if len(ls) == 0 {
@@ -470,7 +479,8 @@ func splitParenBackground(lrc, yrc string) (parenBGSplit, bool) {
 		ys = append(ys, &ySplit{idx: i, start: start, main: mainLine, bg: bgLine, mainK: mk, bgK: bk})
 	}
 	stamps := map[int]bool{}
-	split := 0
+	var newLRC strings.Builder
+	prev, split := 0, 0
 	for _, l := range ls {
 		var picked []*ySplit
 		for _, t := range l.stamps {
@@ -495,7 +505,9 @@ func splitParenBackground(lrc, yrc string) (parenBGSplit, bool) {
 			}
 			continue
 		}
-		llines[l.idx] = llines[l.idx][:l.end] + l.main
+		newLRC.WriteString(lrc[prev:l.textAt])
+		newLRC.WriteString(l.main)
+		prev = l.to
 		for _, t := range l.stamps {
 			stamps[t] = true
 		}
@@ -504,6 +516,7 @@ func splitParenBackground(lrc, yrc string) (parenBGSplit, bool) {
 	if split == 0 {
 		return parenBGSplit{}, false
 	}
+	newLRC.WriteString(lrc[prev:])
 	var bg strings.Builder
 	for _, y := range ys {
 		if !y.used {
@@ -513,7 +526,7 @@ func splitParenBackground(lrc, yrc string) (parenBGSplit, bool) {
 		bg.WriteString(y.bg)
 		bg.WriteByte('\n')
 	}
-	return parenBGSplit{lrc: strings.Join(llines, "\n"), yrc: strings.Join(ylines, "\n"), bg: bg.String(), stamps: stamps}, true
+	return parenBGSplit{lrc: newLRC.String(), yrc: strings.Join(ylines, "\n"), bg: bg.String(), stamps: stamps}, true
 }
 
 // parenBGHeadCrowded:还有别的逐字行的行首跟 start 相差不超过背景人声挂行的容差(App 按行首 ±30ms 把背景人声挂到主句上,
@@ -529,24 +542,59 @@ func parenBGHeadCrowded(heads []int, start int) bool {
 }
 
 // parenBGLRCStamps:一行逐行歌词开头连着的时间戳(毫秒)和它们结束的位置;不以时间戳开头时为空。
+//
+// 手写解析,跟 lrcTimestampCaptureRe(`\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]`)从行首连着匹配的结果一致,
+// 省掉每行一次的正则分配(TestParenBGLRCStampsMatchesRegexp 对拍)。
 func parenBGLRCStamps(line string) ([]int, int) {
 	end := 0
 	var out []int
-	for _, l := range lrcTimestampCaptureRe.FindAllStringSubmatchIndex(line, -1) {
-		if l[0] != end {
-			break
+	for {
+		ms, next, ok := parenBGStampAt(line, end)
+		if !ok {
+			return out, end
 		}
-		end = l[1]
-		out = append(out, lrcStampMs([]string{line[l[0]:l[1]], line[l[2]:l[3]], line[l[4]:l[5]], parenBGGroup(line, l, 6)}))
+		out = append(out, ms)
+		end = next
 	}
-	return out, end
 }
 
-func parenBGGroup(s string, loc []int, g int) string {
-	if loc[g] < 0 {
-		return ""
+// parenBGStampAt:line[i:] 开头的一个 `[mm:ss]` / `[mm:ss.xx]` 时间戳,返回毫秒和它之后的位置。
+func parenBGStampAt(line string, i int) (int, int, bool) {
+	digits := func(j, max int) int {
+		n := 0
+		for j+n < len(line) && n < max && line[j+n] >= '0' && line[j+n] <= '9' {
+			n++
+		}
+		return n
 	}
-	return s[loc[g]:loc[g+1]]
+	if i >= len(line) || line[i] != '[' {
+		return 0, 0, false
+	}
+	j := i + 1
+	mmN := digits(j, 2)
+	if mmN == 0 || j+mmN >= len(line) || line[j+mmN] != ':' {
+		return 0, 0, false
+	}
+	mm, _ := strconv.Atoi(line[j : j+mmN])
+	j += mmN + 1
+	if digits(j, 2) != 2 {
+		return 0, 0, false
+	}
+	ss, _ := strconv.Atoi(line[j : j+2])
+	j += 2
+	frac := ""
+	if j < len(line) && (line[j] == '.' || line[j] == ':') {
+		fN := digits(j+1, 3)
+		if fN == 0 {
+			return 0, 0, false
+		}
+		frac = line[j+1 : j+1+fN]
+		j += 1 + fN
+	}
+	if j >= len(line) || line[j] != ']' {
+		return 0, 0, false
+	}
+	return (mm*60+ss)*1000 + lrcFracMs(frac), j + 1, true
 }
 
 func parenBGAbs(x int) int {
