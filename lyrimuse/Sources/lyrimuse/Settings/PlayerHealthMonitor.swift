@@ -139,7 +139,17 @@ final class PlayerHealthMonitor: ObservableObject {
             return String(format: L10n.t("%@ 的自动化权限未开启，播放状态可能不准确"), names(automationMissingPlayers))
         case .engineNotRunning: return L10n.t("歌词引擎未运行，歌词不会更新")
         case .fullDiskAccessDenied:
-            return String(format: L10n.t("未获得完全磁盘访问权限，无法读取 %@ 的本机歌词"), names(fullDiskAccessDeniedPlayers))
+            // 按用途分开说(`fullDiskAccessUse`):读歌词缓存的那几家读不到本机歌词,只读队列的那几家读不到播放队列。
+            var parts: [String] = []
+            let lyrics = fullDiskAccessDeniedPlayers.filter { $0.fullDiskAccessUse == .readsLyricsAndQueue }
+            if !lyrics.isEmpty {
+                parts.append(String(format: L10n.t("未获得完全磁盘访问权限，无法读取 %@ 的本机歌词"), names(lyrics)))
+            }
+            let queue = fullDiskAccessDeniedPlayers.filter { $0.fullDiskAccessUse == .readsQueue }
+            if !queue.isEmpty {
+                parts.append(String(format: L10n.t("未获得完全磁盘访问权限，无法读取 %@ 的播放队列"), names(queue)))
+            }
+            return parts.joined(separator: L10n.t("；"))
         case .accessibilityMissing:
             // 按用途分开说(`accessibilityUse`):读进度的那几家校准不了,按菜单项的那几家不显示随机、循环、喜欢键,只按喜欢的那几家没有喜欢键,只按模式的那几家没有随机、循环键。
             var parts: [String] = []

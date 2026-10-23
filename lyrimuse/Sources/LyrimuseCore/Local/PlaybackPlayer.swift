@@ -235,8 +235,8 @@ extension PlaybackPlayer {
         case pressesFavorite
         /// 只为随机 / 循环读、按菜单项(reAMP `ReampMenuControl`)。
         case pressesPlayMode
-        /// 读界面进度条把整秒的位置补准(Pine Player `PinePlayhead`),按菜单切循环(`PineMenuControl`),失焦时按播放控制菜单
-        /// (`PlaybackMenuControl`)。
+        /// 读界面进度条把整秒的位置补准(Pine Player `PinePlayhead`),读播放列表给预解析(`PinePlaylist`),按菜单切循环(`PineMenuControl`),
+        /// 失焦时按播放控制菜单(`PlaybackMenuControl`)。
         case refinesProgress
     }
 
@@ -252,6 +252,26 @@ extension PlaybackPlayer {
         case .pinePlayer: return .refinesProgress
         default: return nil
         }
+    }
+
+    /// 「完全磁盘访问」替这个播放器做什么。授权说明、体检提示、引导页按它分开写。
+    public enum FullDiskAccessUse: Sendable {
+        /// 读它私有容器里的歌词缓存(QQ 音乐、网易云音乐是曲库里的曲目 id)和播放队列(QQ 音乐、网易云音乐、酷狗音乐)。
+        case readsLyricsAndQueue
+        /// 只读播放队列,给预解析用(汽水音乐、VOX)。
+        case readsQueue
+    }
+
+    /// 不要这项权限的播放器为 nil(`needsFullDiskAccess`,源头 shared/players.json)。
+    public var fullDiskAccessUse: FullDiskAccessUse? {
+        guard needsFullDiskAccess else { return nil }
+        return self == .soda || self == .vox ? .readsQueue : .readsLyricsAndQueue
+    }
+
+    /// 引擎本机数据访问状态里这家的来源名(`localcacheprobe.go` `localCacheClientPaths` 的键):有自家歌词源的就是歌词源的名字,
+    /// VOX 只读播放列表、用 `vox`。
+    public var localCacheSource: String? {
+        self == .vox ? "vox" : nativeLyricSource
     }
 
     /// 「自动化」权限替这个播放器做什么。引导页、设置页那张卡的说明按它分开写。

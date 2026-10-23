@@ -915,8 +915,16 @@ struct OnboardingView: View {
                                 automation.playerNames(trackTargets)))
         }
         if !fdaTargets.isEmpty, fullDiskAccess.grant(fdaTargets) != .granted {
-            lines.append(String(format: L10n.t("完全磁盘访问权限可让%@直接使用本机已有的歌词，仅读取其歌词缓存和播放队列"),
-                                fullDiskAccess.playerNames(fdaTargets)))
+            let lyrics = fdaTargets.filter { $0.fullDiskAccessUse == .readsLyricsAndQueue }
+            if !lyrics.isEmpty {
+                lines.append(String(format: L10n.t("完全磁盘访问权限可让%@直接使用本机已有的歌词，仅读取其歌词缓存和播放队列"),
+                                    fullDiskAccess.playerNames(lyrics)))
+            }
+            let queue = fdaTargets.filter { $0.fullDiskAccessUse == .readsQueue }
+            if !queue.isEmpty {
+                lines.append(String(format: L10n.t("完全磁盘访问权限可让%@预先解析即将播放的歌曲，仅读取其播放队列"),
+                                    fullDiskAccess.playerNames(queue)))
+            }
         }
         let pendingAccessibility = accessibility.trusted ? [] : axTargets
         let progressTargets = pendingAccessibility.filter { $0.accessibilityUse == .calibratesProgress }

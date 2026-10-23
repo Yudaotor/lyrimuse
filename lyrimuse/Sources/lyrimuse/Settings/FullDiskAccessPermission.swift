@@ -51,9 +51,9 @@ final class FullDiskAccessPermission: ObservableObject {
         }
     }
 
-    /// 这几家合起来的结论。状态文件里的来源名就是各家的 `nativeLyricSource`。
+    /// 这几家合起来的结论。状态文件里的来源名见 `PlaybackPlayer.localCacheSource`。
     func grant(_ players: [PlaybackPlayer]) -> LocalCacheAccess.Grant {
-        LocalCacheAccess.grant(for: players.compactMap(\.nativeLyricSource), state: state)
+        LocalCacheAccess.grant(for: players.compactMap(\.localCacheSource), state: state)
     }
 
     /// 重读引擎发布的状态(按 mtime 缓存,很便宜,可以定时调)。
@@ -180,11 +180,22 @@ struct FullDiskAccessGuide: View {
         }
     }
 
-    /// 「为什么要这项授权」那一句,引导页正文也用它。
+    /// 「为什么要这项授权」那一句,引导页正文也用它;按用途(`PlaybackPlayer.fullDiskAccessUse`)各说一句。
     @MainActor
     static func reason(_ players: [PlaybackPlayer]) -> String {
-        String(format: L10n.t("%@ 的歌词缓存和播放队列位于受保护的目录中。授权后可直接使用本机已有的歌词，并预先解析即将播放的歌曲；未授权时仍可联网查找歌词"),
-               FullDiskAccessPermission.shared.playerNames(players))
+        let model = FullDiskAccessPermission.shared
+        var lines: [String] = []
+        let lyrics = players.filter { $0.fullDiskAccessUse == .readsLyricsAndQueue }
+        if !lyrics.isEmpty {
+            lines.append(String(format: L10n.t("%@ 的歌词缓存和播放队列位于受保护的目录中。授权后可直接使用本机已有的歌词，并预先解析即将播放的歌曲；未授权时仍可联网查找歌词"),
+                                model.playerNames(lyrics)))
+        }
+        let queue = players.filter { $0.fullDiskAccessUse == .readsQueue }
+        if !queue.isEmpty {
+            lines.append(String(format: L10n.t("%@ 的播放队列位于受保护的目录中。授权后可预先解析即将播放的歌曲；未授权时改为预先解析同一专辑中的其他歌曲"),
+                                model.playerNames(queue)))
+        }
+        return lines.joined(separator: "\n")
     }
 
     private var actions: some View {

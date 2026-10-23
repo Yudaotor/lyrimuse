@@ -124,6 +124,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .netease: return true
         case .kugou: return true
         case .soda: return true
+        case .vox: return true
         default: return false
         }
     }

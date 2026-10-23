@@ -57,7 +57,7 @@
 "%@ 已下载，点按安装" = "%@ downloaded, click to install";
 "%@ 已匹配到该曲目，无歌词文本" = "%@ matched this track; no lyrics text";
 "%@ 已送达" = "Delivered %@";
-"%@ 报告的播放进度只精确到秒。授权后，Lyrimuse 将读取其界面上的进度条校准位置，并操作其菜单以控制循环；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可使用，但拖动进度后歌词可能差半秒左右，不提供循环按钮，失去焦点时也无法控制播放" = "%@ reports playback progress only to the second. With permission, Lyrimuse reads the progress bar in its window to calibrate the position and uses its menus to control repeat, and can pause, resume and skip tracks while another app holds the system media focus. Without permission, lyrics may be off by about half a second after seeking, the repeat button is unavailable, and playback can’t be controlled while focus is elsewhere";
+"%@ 报告的播放进度只精确到秒。授权后，Lyrimuse 将读取其界面上的进度条校准位置、读取播放列表以预先解析即将播放的歌曲，并操作其菜单以控制循环；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可使用，但拖动进度后歌词可能差半秒左右，不提供循环按钮，失去焦点时也无法控制播放" = "%@ reports playback progress only to the second. With permission, Lyrimuse reads the progress bar in its window to calibrate the position, reads its playlist to resolve upcoming tracks in advance and uses its menus to control repeat; it can also pause, resume and skip tracks while another app holds the system media focus. Without permission, lyrics may be off by about half a second after seeking, the repeat button is unavailable, and playback can’t be controlled while focus is elsewhere";
 "%@ 拒绝了这台 Mac 的请求" = "%@ is refusing requests from this Mac";
 "%@ 更新内容" = "What’s New in %@";
 "%@ 月" = "%@";
@@ -68,6 +68,7 @@
 "%@ 次收听" = "%@ plays";
 "%@ 次收听#one" = "%@ play";
 "%@ 点" = "%@:00";
+"%@ 的播放队列位于受保护的目录中。授权后可预先解析即将播放的歌曲；未授权时改为预先解析同一专辑中的其他歌曲" = "%@ keeps its play queue in a protected folder. With access, upcoming tracks are resolved in advance; without it, other songs from the same album are resolved instead";
 "%@ 的歌词缓存位于受系统保护的目录中。授予「完全磁盘访问权限」后，可直接使用本机已有的逐字歌词，无需每次联网搜索" = "%@ keeps its lyrics cache inside a system-protected folder. Grant Full Disk Access and the word-by-word lyrics already on this Mac can be used straight away, with no online search";
 "%@ 的歌词缓存和播放队列位于受保护的目录中。授权后可直接使用本机已有的歌词，并预先解析即将播放的歌曲；未授权时仍可联网查找歌词" = "%@ stores its lyrics cache and play queue in protected folders. With access, lyrics already on this Mac are used directly and upcoming tracks are resolved in advance; without it, lyrics are still found online";
 "%@ 的自动化权限未开启…" = "%@ Automation Access Is Off…";
@@ -855,6 +856,7 @@
 "完全同名 120 · 仅括号差异 60 · 中英双语同名 30" = "Exact title 120 · parenthetical-only difference 60 · bilingual same name 30";
 "完全磁盘访问权限" = "Full Disk Access";
 "完全磁盘访问权限可让%@直接使用本机已有的歌词，仅读取其歌词缓存和播放队列" = "Full Disk Access lets %@ use lyrics already on this Mac; it only reads their lyrics cache and play queue";
+"完全磁盘访问权限可让%@预先解析即将播放的歌曲，仅读取其播放队列" = "Full Disk Access lets upcoming tracks in %@ be resolved in advance; it only reads their play queue";
 "完成" = "Done";
 "完成调整宽度" = "Done Adjusting Width";
 "完成，开始 Scrobble" = "Done — Start Scrobbling";
@@ -1592,6 +1594,7 @@
 "未能跳过此广告" = "Couldn't skip this ad";
 "未获取" = "Not loaded";
 "未获得「辅助功能」权限，可能会盖住 App 菜单" = "Without Accessibility permission, lyrics may cover app menus";
+"未获得完全磁盘访问权限，无法读取 %@ 的播放队列" = "No Full Disk Access; %@’s play queue cannot be read";
 "未获得完全磁盘访问权限，无法读取 %@ 的本机歌词" = "No Full Disk Access; %@’s local lyrics cannot be read";
 "未获得辅助功能权限，%@ 不显示喜欢按钮" = "Accessibility permission is missing: %@ has no Like button";
 "未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" = "Accessibility permission is missing: %@ has no Like button, and can’t pause, resume or skip tracks without system media focus";
