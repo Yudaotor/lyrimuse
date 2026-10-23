@@ -32,17 +32,27 @@ func runStorageLayoutChecks() {
 
         expectEqual(StorageLayout.activeDataDir(roots), roots.data, "存储布局: 全新安装直接用新目录")
         try? fm.createDirectory(at: roots.legacy, withIntermediateDirectories: true)
+        expectEqual(StorageLayout.activeDataDir(roots), roots.data, "存储布局: 旧目录是空的就用新目录")
+        expectEqual(StorageLayout.hasLegacyToAbsorb(roots), true, "存储布局: 旧位置有真目录 = 要收")
+        write("{}", roots.legacy.appendingPathComponent("config.json"))
         expectEqual(StorageLayout.activeDataDir(roots), roots.legacy, "存储布局: 还没搬时照旧用旧目录")
-        expectEqual(StorageLayout.needsRootMove(roots), true, "存储布局: 旧目录在、新目录不在 = 要搬")
-        try? fm.createDirectory(at: roots.data, withIntermediateDirectories: true)
-        expectEqual(StorageLayout.activeDataDir(roots), roots.data, "存储布局: 新旧都在(降级后又升级)以新目录为准")
-        expectEqual(StorageLayout.needsRootMove(roots), false, "存储布局: 新目录已在就不搬")
+        write("x", roots.data.appendingPathComponent("unrelated"))
+        expectEqual(StorageLayout.activeDataDir(roots), roots.legacy,
+                    "存储布局: 新目录先被别的东西建了出来、里面没有数据,照旧用旧目录(看内容,不看目录在不在)")
+        write("{}", roots.data.appendingPathComponent("lyrimuse-storage-migration.json"))
+        expectEqual(StorageLayout.activeDataDir(roots), roots.data, "存储布局: 新目录搬过(有标记),旧目录是残留,用新目录")
         try? fm.removeItem(at: roots.legacy)
+        expectEqual(StorageLayout.hasLegacyToAbsorb(roots), false, "存储布局: 旧目录没了就没东西要收")
         let custom = home.appendingPathComponent("elsewhere")
         try? fm.createDirectory(at: custom, withIntermediateDirectories: true)
         try? fm.createSymbolicLink(at: roots.legacy, withDestinationURL: custom)
         expectEqual(StorageLayout.activeDataDir(roots), roots.legacy, "存储布局: 旧目录是软链接 = 用户指定的位置,一直用它")
-        expectEqual(StorageLayout.needsRootMove(roots), false, "存储布局: 软链接不搬")
+        expectEqual(StorageLayout.hasLegacyToAbsorb(roots), false, "存储布局: 软链接不搬")
+        let mapped = { StorageLayout.mappingLegacyPath($0, roots: roots, dataDir: roots.data) }
+        expectEqual(mapped(roots.legacy.path + "/lyrics"), roots.data.path + "/lyrics", "存储布局: 旧目录里的路径换成数据目录里同一个位置")
+        expectEqual(mapped(roots.legacy.path), roots.data.path, "存储布局: 旧目录本身换成数据目录")
+        expectEqual(mapped(roots.legacy.path + "-backups/x"), roots.legacy.path + "-backups/x", "存储布局: 兄弟目录不换")
+        expectEqual(mapped("/Volumes/X/lyrics"), "/Volumes/X/lyrics", "存储布局: 别处的路径不换")
 
         expectEqual(StorageLayout.credentialAccount(dataDir: roots.data, roots: roots), roots.legacy.path,
                     "存储布局: 钥匙串账号在新目录下仍是旧路径串(搬目录不迁钥匙串)")
@@ -145,6 +155,67 @@ func runStorageLayoutChecks() {
         expectEqual(outcome.movedRoot || outcome.copiedRoot, false, "存储搬迁: 软链接不搬")
         expectEqual(read(custom.appendingPathComponent("config.json")), "{\"u\":\"\(roots.legacy.path)/x\"}", "存储搬迁: 软链接下不改写")
         expectEqual(outcome.relocatedCaches, 1, "存储搬迁: 缓存照样挪进缓存目录")
+    }
+
+    do {
+        // 新目录先被别的东西建了出来(里面有别的文件):不能当成「搬过了」,把旧目录逐项合并进去,一份不丢。
+        let (_, roots) = makeHome("foreign")
+        write("{\"t\":1}", roots.legacy.appendingPathComponent("config.json"))
+        write("[00:01.00]词", roots.legacy.appendingPathComponent("lyrics/a.lrc"))
+        write("{\"u\":\"file://\(roots.legacy.path)/artwork/a.jpg\"}", roots.legacy.appendingPathComponent("lyrimuse-enrich-cache.json"))
+        write("foreign", roots.data.appendingPathComponent("other.bin"))
+        let outcome = StorageMigration.run(roots, cacheNames: [])
+        expectEqual(outcome.failures, [], "存储搬迁(新目录已有别的东西): 没有失败")
+        expectEqual(outcome.movedRoot, false, "存储搬迁(新目录已有别的东西): 走合并,不整份改名")
+        expectEqual(read(roots.data.appendingPathComponent("config.json")), "{\"t\":1}", "存储搬迁(新目录已有别的东西): 配置到了")
+        expectEqual(read(roots.data.appendingPathComponent("lyrics/a.lrc")), "[00:01.00]词", "存储搬迁(新目录已有别的东西): 歌词到了")
+        expectEqual(read(roots.data.appendingPathComponent("other.bin")), "foreign", "存储搬迁(新目录已有别的东西): 原来的东西不动")
+        expectEqual(read(roots.data.appendingPathComponent("lyrimuse-enrich-cache.json")),
+                    "{\"u\":\"file://\(roots.data.path)/artwork/a.jpg\"}", "存储搬迁(新目录已有别的东西): 合并进来的也改写旧路径")
+        expectEqual(fm.fileExists(atPath: roots.legacy.path), false, "存储搬迁(新目录已有别的东西): 旧目录收空删掉")
+        expectEqual(StorageLayout.activeDataDir(roots), roots.data, "存储搬迁(新目录已有别的东西): 之后用新目录")
+    }
+
+    do {
+        // 新目录是个空目录:跟不存在一样,整份改名过去。
+        let (_, roots) = makeHome("emptydata")
+        write("{}", roots.legacy.appendingPathComponent("config.json"))
+        try? fm.createDirectory(at: roots.data, withIntermediateDirectories: true)
+        write("", roots.data.appendingPathComponent(".DS_Store"))
+        let outcome = StorageMigration.run(roots, cacheNames: [])
+        expectEqual(outcome.movedRoot, true, "存储搬迁(新目录是空的): 一次改名")
+        expectEqual(fm.fileExists(atPath: roots.data.appendingPathComponent("config.json").path), true, "存储搬迁(新目录是空的): 配置到了")
+    }
+
+    do {
+        // 搬完之后旧目录又冒出来(旧版本、旧进程写的):新文件收进来;同名同内容的删掉;同名不同内容以数据目录为准,旧的连目录改名留着。
+        let (_, roots) = makeHome("leftover")
+        write("{}", roots.legacy.appendingPathComponent("config.json"))
+        _ = StorageMigration.run(roots, cacheNames: [])
+        write("{\"v\":\"new\"}", roots.data.appendingPathComponent("config.json"))
+        write("{\"v\":\"old\"}", roots.legacy.appendingPathComponent("config.json"))
+        write("same", roots.data.appendingPathComponent("lyrimuse-lyrics-pins.json"))
+        write("same", roots.legacy.appendingPathComponent("lyrimuse-lyrics-pins.json"))
+        write("{\"u\":\"file://\(roots.legacy.path)/artwork/b.jpg\"}", roots.legacy.appendingPathComponent("lyrimuse-enrich-restore.json"))
+        write("[00:02.00]新", roots.legacy.appendingPathComponent("lyrics/b.lrc"))
+        write("", roots.legacy.appendingPathComponent("collector.lock"))
+        write("", roots.data.appendingPathComponent("collector.lock"))
+        expectEqual(StorageLayout.activeDataDir(roots), roots.data, "存储搬迁(残留): 有残留时仍用数据目录")
+        expectEqual(StorageMigration.isPending(roots, cacheNames: []), true, "存储搬迁(残留): 有残留 = 有活")
+        let outcome = StorageMigration.run(roots, cacheNames: [])
+        expectEqual(outcome.failures, [], "存储搬迁(残留): 没有失败")
+        expectEqual(outcome.conflicts, 1, "存储搬迁(残留): 只有内容不同的那份算冲突")
+        expectEqual(read(roots.data.appendingPathComponent("config.json")), "{\"v\":\"new\"}", "存储搬迁(残留): 冲突以数据目录为准")
+        expectEqual(read(roots.data.appendingPathComponent("lyrics/b.lrc")), "[00:02.00]新", "存储搬迁(残留): 子目录里的新文件收进来")
+        expectEqual(read(roots.data.appendingPathComponent("lyrimuse-enrich-restore.json")),
+                    "{\"u\":\"file://\(roots.data.path)/artwork/b.jpg\"}", "存储搬迁(残留): 收进来的也改写旧路径")
+        expectEqual(fm.fileExists(atPath: roots.legacy.path), false, "存储搬迁(残留): 旧名字下不再有目录")
+        let kept = outcome.keptLeftover.map { URL(fileURLWithPath: $0) }
+        expectEqual(kept.flatMap { read($0.appendingPathComponent("config.json")) }, "{\"v\":\"old\"}",
+                    "存储搬迁(残留): 冲突的旧版本留在改名后的目录里,不删")
+        expectEqual(kept.map { fm.fileExists(atPath: $0.appendingPathComponent("lyrimuse-lyrics-pins.json").path) }, false,
+                    "存储搬迁(残留): 同内容的旧文件删掉")
+        expectEqual(StorageMigration.isPending(roots, cacheNames: []), false, "存储搬迁(残留): 收完没活了")
     }
 
     do {

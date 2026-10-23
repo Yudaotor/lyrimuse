@@ -1,3 +1,4 @@
+import AppKit
 import Darwin
 import Foundation
 import LyrimuseCore
@@ -13,9 +14,9 @@ enum AppEntry {
     }
 }
 
-/// 启动时的存储布局搬迁(Core `StorageMigration`,14 章决策 136)。有要做的才停引擎:先 bootout 它的 launchd job,
-/// 再拿到引擎的单实例锁(数据目录里的 `collector.lock`,引擎活着时一直攥着)才动手;拿不到就这次不搬、照旧用旧目录,
-/// 下次启动再试。搬过东西就清掉引擎的安装指纹,随后的 `EngineServiceManager.reconcileAfterLaunch` 按新目录重写 plist、
+/// 启动时的存储布局搬迁(Core `StorageMigration`,14 章决策 136)。有要做的才动别的进程:先请走还开着的其它 App 实例
+/// (升级时旧版本可能还在跑,它退出时还要存一次设置,得等它存完、退干净),再 bootout 引擎的 launchd job、拿到引擎的单实例锁
+/// (数据目录里的 `collector.lock`,引擎活着时一直攥着)才动手;拿不到就这次不搬、照旧用旧目录,下次启动再试。搬过东西就清掉引擎的安装指纹,随后的 `EngineServiceManager.reconcileAfterLaunch` 按新目录重写 plist、
 /// 把引擎装回去;这次没搬成时引擎已经停了,同一次对账照样按「该跑没跑」装回去。
 enum StorageMigrationRunner {
     private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "storage-migration")
@@ -25,6 +26,7 @@ enum StorageMigrationRunner {
         guard !CommandLine.arguments.contains("--unregister-login-item") else { return }
         let roots = LyrimusePaths.storageRoots
         guard StorageMigration.isPending(roots) else { return }
+        terminateOtherInstances(timeout: 10)
         let lockDir = StorageLayout.activeDataDir(roots)
         _ = ProcessRunner.run(
             "/bin/launchctl", ["bootout", "gui/\(getuid())/\(LyrimuseIdentity.engineLaunchdLabel)"], timeout: 15)
@@ -37,6 +39,8 @@ enum StorageMigrationRunner {
         let outcome = StorageMigration.run(roots)
         logger.notice("""
             storage migration: movedRoot=\(outcome.movedRoot, privacy: .public) copiedRoot=\(outcome.copiedRoot, privacy: .public) \
+            merged=\(outcome.mergedItems, privacy: .public) conflicts=\(outcome.conflicts, privacy: .public) \
+            leftover=\(outcome.keptLeftover ?? "-", privacy: .public) \
             rewrittenFiles=\(outcome.rewrittenFiles, privacy: .public) relocatedCaches=\(outcome.relocatedCaches, privacy: .public) \
             data=\(StorageLayout.activeDataDir(roots).path, privacy: .public)
             """)
@@ -46,6 +50,30 @@ enum StorageMigrationRunner {
         if outcome.changedAnything {
             UserDefaults.standard.removeObject(forKey: EngineServiceManager.installedFingerprintKey)
         }
+    }
+
+    /// 同一个 bundle id 的其它 App 进程(多半是升级前的旧版本):请它退出,等到真退了;超时就强退再等一小会儿。这时还没有
+    /// 运行循环,不能靠 `NSRunningApplication.isTerminated`(它靠运行循环更新),按 pid 用 `kill(pid, 0)` 查。
+    static func terminateOtherInstances(timeout: TimeInterval) {
+        let others = NSWorkspace.shared.runningApplications.filter {
+            $0.bundleIdentifier == LyrimuseIdentity.bundleIdentifier && $0.processIdentifier != getpid()
+        }
+        guard !others.isEmpty else { return }
+        func alive(_ app: NSRunningApplication) -> Bool { kill(app.processIdentifier, 0) == 0 }
+        func wait(_ seconds: TimeInterval) {
+            let deadline = Date().addingTimeInterval(seconds)
+            while others.contains(where: alive), Date() < deadline { usleep(100_000) }
+        }
+        for app in others {
+            logger.notice("storage migration: asking pid \(app.processIdentifier, privacy: .public) to quit first")
+            app.terminate()
+        }
+        wait(timeout)
+        for app in others where alive(app) {
+            logger.error("storage migration: pid \(app.processIdentifier, privacy: .public) did not quit, forcing")
+            app.forceTerminate()
+        }
+        wait(3)
     }
 
     /// 拿引擎的单实例锁(跟 `lyrimuse-engine/singleinstance.go` 同一把 flock),等到拿到或超时。目录里没有锁文件、

@@ -1,22 +1,32 @@
 import Darwin
 import Foundation
 
-/// 把旧布局搬成 `StorageLayout` 的新布局:旧目录整份搬到数据目录、改写文件里存着的旧绝对路径、把缓存文件挪进缓存目录。
-/// App 启动最早处调(`StorageMigrationRunner`),调用方保证引擎这时没在跑。每一步都能重跑,没做完的下次启动接着做。见 14 章决策 136。
+/// 把旧布局搬成 `StorageLayout` 的新布局:旧目录收进数据目录、改写文件里存着的旧绝对路径、把缓存文件挪进缓存目录。
+/// App 启动最早处调(`StorageMigrationRunner`),调用方保证引擎和别的 App 实例这时都没在跑。每一步都能重跑,没做完的下次启动接着做;
+/// 任何时候都不删一份内容跟数据目录里不一样的旧文件。见 14 章决策 136。
 public enum StorageMigration {
     public struct Outcome: Equatable, Sendable {
         public var movedRoot = false
         public var copiedRoot = false
+        /// 合并时挪进数据目录的条目数(整个子目录挪过去算一条)。
+        public var mergedItems = 0
+        /// 合并时两边都有、内容不同的条目数:以数据目录为准,旧的那份留在 `keptLeftover` 里。
+        public var conflicts = 0
+        /// 合并完旧目录还剩东西时,改名到的位置。
+        public var keptLeftover: String?
         public var rewrittenFiles = 0
         public var relocatedCaches = 0
         public var failures: [String] = []
 
         public init() {}
 
-        public var changedAnything: Bool { movedRoot || copiedRoot || rewrittenFiles > 0 || relocatedCaches > 0 }
+        public var changedAnything: Bool {
+            movedRoot || copiedRoot || mergedItems > 0 || keptLeftover != nil || rewrittenFiles > 0 || relocatedCaches > 0
+        }
     }
 
-    /// 搬完根目录后写在数据目录里:记着从哪搬到哪、文件里的旧路径改写完没有。改写没完成时下次启动接着改。
+    /// 搬迁标记:记着从哪搬到哪、文件里的旧路径改写完没有。动手之前就写好(整份改名时写进旧目录、跟着一起走;合并时写进
+    /// 数据目录),中途崩溃下次启动照样接着改写。它也是「这个数据目录搬过」的凭据(`StorageLayout.activeDataDir`)。
     static let markerName = "lyrimuse-storage-migration.json"
 
     struct Marker: Codable, Equatable {
@@ -27,7 +37,7 @@ public enum StorageMigration {
 
     /// 有没有要做的。启动路径上每次都调:几十次 lstat 加一次小文件读。
     public static func isPending(_ roots: StorageLayout.Roots, cacheNames: [String] = StorageLayout.cacheFileNames) -> Bool {
-        if StorageLayout.needsRootMove(roots) { return true }
+        if StorageLayout.hasLegacyToAbsorb(roots) { return true }
         let data = StorageLayout.activeDataDir(roots)
         if readMarker(in: data)?.rewritePending == true { return true }
         return cacheNames.contains { StorageLayout.exists(data.appendingPathComponent($0)) }
@@ -38,13 +48,11 @@ public enum StorageMigration {
         _ roots: StorageLayout.Roots, cacheNames: [String] = StorageLayout.cacheFileNames, forceCopy: Bool = false
     ) -> Outcome {
         var outcome = Outcome()
-        var marker: Marker?
-        if StorageLayout.needsRootMove(roots) {
-            marker = moveRoot(roots, forceCopy: forceCopy, &outcome)
+        if StorageLayout.hasLegacyToAbsorb(roots) {
+            absorbLegacy(roots, forceCopy: forceCopy, &outcome)
         }
         let data = StorageLayout.activeDataDir(roots)
-        if marker == nil { marker = readMarker(in: data) }
-        if var pending = marker, pending.rewritePending {
+        if var pending = readMarker(in: data), pending.rewritePending {
             if rewritePaths(in: data, from: pending.from, to: pending.to, &outcome) {
                 pending.rewritePending = false
             }
@@ -54,27 +62,101 @@ public enum StorageMigration {
         return outcome
     }
 
-    // MARK: - 根目录
+    // MARK: - 旧目录
 
-    /// 同卷一次 `rename(2)`;跨卷(`~/.config` 被链到别的盘)时先整份拷进旁边的暂存目录、核对文件清单和大小,再换上去,
-    /// 旧目录改名留着不删。任何一步失败都不动旧目录,返回 nil,下次启动重试。
-    static func moveRoot(_ roots: StorageLayout.Roots, forceCopy: Bool, _ outcome: inout Outcome) -> Marker? {
+    /// 数据目录里还没有 Lyrimuse 的数据(不存在、空的、或只有别的东西):空的先删掉,整份改名过去;同卷一次 `rename(2)`,
+    /// 跨卷(`~/.config` 被链到别的盘)先拷进旁边的暂存目录、核对文件清单和大小再换上去,旧目录改名留着。数据目录已经有数据
+    /// (搬过之后旧目录又冒出来,或新目录里先被放了东西)时逐项合并(`mergeTree`)。失败的那一步不动旧目录,下次启动重试。
+    static func absorbLegacy(_ roots: StorageLayout.Roots, forceCopy: Bool, _ outcome: inout Outcome) {
         guard FileIO.createDirectory(roots.data.deletingLastPathComponent()) else {
             outcome.failures.append("create \(roots.data.deletingLastPathComponent().path)")
-            return nil
+            return
         }
-        if !forceCopy, rename(roots.legacy.path, roots.data.path) == 0 {
-            outcome.movedRoot = true
-        } else if forceCopy || errno == EXDEV {
-            guard copyRoot(roots, &outcome) else { return nil }
-            outcome.copiedRoot = true
+        let pending = Marker(from: roots.legacy.path, to: roots.data.path, rewritePending: true)
+        if !StorageLayout.hasLyrimuseData(roots.data) {
+            if StorageLayout.isDirectory(roots.data) { removeIfEffectivelyEmpty(roots.data) }
+            if !StorageLayout.exists(roots.data) {
+                writeMarker(pending, in: roots.legacy, &outcome)
+                if !forceCopy, rename(roots.legacy.path, roots.data.path) == 0 {
+                    outcome.movedRoot = true
+                } else if forceCopy || errno == EXDEV {
+                    outcome.copiedRoot = copyRoot(roots, &outcome)
+                } else {
+                    outcome.failures.append("rename \(roots.legacy.path): \(String(cString: strerror(errno)))")
+                }
+                if (outcome.movedRoot || outcome.copiedRoot), readMarker(in: roots.data) == nil {
+                    writeMarker(pending, in: roots.data, &outcome)
+                }
+                return
+            }
+        }
+        writeMarker(pending, in: roots.data, &outcome)
+        mergeTree(from: roots.legacy, into: roots.data, &outcome)
+        pruneEmptyDirectories(roots.legacy)
+        guard StorageLayout.exists(roots.legacy) else { return }
+        let stamp = DateFormatter()
+        stamp.locale = Locale(identifier: "en_US_POSIX")
+        stamp.dateFormat = "yyyyMMdd-HHmmss"
+        let kept = roots.legacy.deletingLastPathComponent()
+            .appendingPathComponent(roots.legacy.lastPathComponent + ".leftover-" + stamp.string(from: Date()))
+        if rename(roots.legacy.path, kept.path) == 0 {
+            outcome.keptLeftover = kept.path
         } else {
-            outcome.failures.append("rename \(roots.legacy.path): \(String(cString: strerror(errno)))")
-            return nil
+            outcome.failures.append("rename leftover: \(String(cString: strerror(errno)))")
         }
-        let marker = Marker(from: roots.legacy.path, to: roots.data.path, rewritePending: true)
-        writeMarker(marker, in: roots.data, &outcome)
-        return marker
+    }
+
+    /// 把 `source` 里数据目录没有的条目挪过去(整个子目录不在就整个挪);两边都有的子目录往里递归;两边都有的文件内容一样就删掉旧的,
+    /// 不一样就以数据目录为准、旧的原地留着。`.DS_Store` 和锁文件不算内容,冲突时直接删旧的。
+    static func mergeTree(from source: URL, into target: URL, _ outcome: inout Outcome) {
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: source.path) else {
+            outcome.failures.append("list \(source.path)")
+            return
+        }
+        for name in names {
+            let from = source.appendingPathComponent(name)
+            let to = target.appendingPathComponent(name)
+            if !StorageLayout.exists(to) {
+                if rename(from.path, to.path) == 0 {
+                    outcome.mergedItems += 1
+                } else if errno == EXDEV, FileIO.attempt("copy", from, { try FileManager.default.copyItem(at: from, to: to) }),
+                          treeListing(from) == treeListing(to) {
+                    _ = FileIO.remove(from)
+                    outcome.mergedItems += 1
+                } else {
+                    outcome.failures.append("merge \(name): \(String(cString: strerror(errno)))")
+                }
+            } else if StorageLayout.isDirectory(from), StorageLayout.isDirectory(to) {
+                mergeTree(from: from, into: to, &outcome)
+            } else if name == ".DS_Store" || name.hasSuffix(".lock") || sameContents(from, to) {
+                _ = FileIO.remove(from)
+            } else {
+                outcome.conflicts += 1
+            }
+        }
+    }
+
+    static func sameContents(_ a: URL, _ b: URL) -> Bool {
+        guard StorageLayout.isRegularFile(a), StorageLayout.isRegularFile(b),
+              let x = FileIO.read(a, options: .alwaysMapped), let y = FileIO.read(b, options: .alwaysMapped) else { return false }
+        return x == y
+    }
+
+    /// 自底向上删掉空目录(只剩 `.DS_Store` 的也算空)。
+    static func pruneEmptyDirectories(_ dir: URL) {
+        guard StorageLayout.isDirectory(dir), !StorageLayout.isSymlink(dir),
+              let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return }
+        for name in names where name != ".DS_Store" {
+            pruneEmptyDirectories(dir.appendingPathComponent(name))
+        }
+        removeIfEffectivelyEmpty(dir)
+    }
+
+    static func removeIfEffectivelyEmpty(_ dir: URL) {
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path),
+              names.allSatisfy({ $0 == ".DS_Store" }) else { return }
+        for name in names { _ = FileIO.remove(dir.appendingPathComponent(name)) }
+        rmdir(dir.path)
     }
 
     static func copyRoot(_ roots: StorageLayout.Roots, _ outcome: inout Outcome) -> Bool {

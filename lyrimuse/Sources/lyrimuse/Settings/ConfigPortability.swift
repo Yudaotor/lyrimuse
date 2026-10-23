@@ -401,6 +401,12 @@ enum ConfigPortability {
         if let importedFeatures = bundle["features"] as? [String: Any] {
             // 系统语言换成本机的再写盘:引擎看到文件变了就热重读,读到别的机器的语言会按它清机翻。
             var featuresObj = SystemLanguage.localizingForImport(importedFeatures, local: SystemLanguage.current())
+            // 旧版本导出的包里,指在旧数据目录 ~/.config/lyrimuse 里的歌词文件夹换成数据目录里同一个位置:原样建出来
+            // 会把旧目录建回去,下次启动又被当成残留合并(14 章决策 136)。
+            if var dict = featuresObj as? [String: Any], let dir = dict["lyrics_dir"] as? String, !dir.isEmpty {
+                dict["lyrics_dir"] = StorageLayout.mappingLegacyPath(dir, roots: LyrimusePaths.storageRoots, dataDir: configDir)
+                featuresObj = dict
+            }
             // 歌词文件夹是绝对路径,换了机器常常不在(别的用户名、没接的外接盘):这里建不出来就退回默认位置,
             // 不然紧接着的歌词恢复逐个写失败,引擎也切到一个建不出的目录。
             if var dict = featuresObj as? [String: Any], let dir = dict["lyrics_dir"] as? String, !dir.isEmpty,

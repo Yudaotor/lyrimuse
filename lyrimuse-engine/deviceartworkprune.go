@@ -110,7 +110,7 @@ func pruneDeviceArtworkIfDue(now time.Time) (cleared, removed int) {
 	}
 	_ = writeFileAtomic(stamp, nil)
 	if cleared > 0 || removed > 0 {
-		log.Printf("device artwork: cleared %d field(s) pointing to missing files, removed %d unreferenced file(s), freed %d KB",
+		log.Printf("device artwork: fixed %d entry(ies) pointing to moved or missing files, removed %d unreferenced file(s), freed %d KB",
 			cleared, removed, freed/1024)
 	}
 	return cleared, removed
@@ -118,8 +118,15 @@ func pruneDeviceArtworkIfDue(now time.Time) (cleared, removed int) {
 
 // clearMissingDeviceArtwork 把指向本机不存在的设备封面的封面字段清空,返回有没有改。封面那张没了时来源、专辑、主色一起清
 // (同 migrateKnownPlaceholderCovers):只清地址、来源还记着 device 的话,放歌时不再取设备封面,外围补全也换不进新封面。
+// 清之前先按文件名找本机 artwork/ 里的同一张(数据目录搬过家、旧地址没改写到的),找得到就把地址改成本机的,不算缺。
 func clearMissingDeviceArtwork(e *enrichEntry) bool {
 	changed := false
+	for _, field := range []*string{&e.CoverURL, &e.CoverSettled, &e.VideoFrameURL} {
+		if local := localDeviceArtworkURL(*field); local != *field {
+			*field = local
+			changed = true
+		}
+	}
 	if deviceArtworkMissing(e.CoverURL) {
 		e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor = "", "", "", ""
 		changed = true

@@ -20,14 +20,29 @@ func TestConfigDirFollowsStorageLayout(t *testing.T) {
 	if err := os.MkdirAll(legacy, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if got := configDir(); got != data {
+		t.Fatalf("旧目录是空的: got %s, want %s", got, data)
+	}
+	if err := os.WriteFile(filepath.Join(legacy, "config.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if got := configDir(); got != legacy {
 		t.Fatalf("还没搬: got %s, want %s", got, legacy)
 	}
 	if err := os.MkdirAll(data, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(data, "unrelated"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := configDir(); got != legacy {
+		t.Fatalf("新目录先被别的东西建了出来、没有数据: got %s, want %s", got, legacy)
+	}
+	if err := os.WriteFile(filepath.Join(data, storageMigrationMarker), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if got := configDir(); got != data {
-		t.Fatalf("新旧都在: got %s, want %s", got, data)
+		t.Fatalf("搬过之后旧目录又冒出来: got %s, want %s", got, data)
 	}
 	if err := os.RemoveAll(legacy); err != nil {
 		t.Fatal(err)
@@ -114,5 +129,27 @@ func TestLocalDeviceArtworkURL(t *testing.T) {
 		if got := localDeviceArtworkURL(in); got != want {
 			t.Errorf("localDeviceArtworkURL(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// 数据目录搬过家、旧地址没改写到的条目:清理那一轮按文件名换成本机 artwork/ 里的同一张,来源、主色都留着;本机也没有的才清。
+func TestClearMissingDeviceArtworkRepairsMovedPaths(t *testing.T) {
+	dir := t.TempDir()
+	saved := deviceArtworkDir
+	deviceArtworkDir = dir
+	t.Cleanup(func() { deviceArtworkDir = saved })
+	if err := os.WriteFile(filepath.Join(dir, "0123456789abcdef.jpg"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	moved := enrichEntry{CoverURL: "file:///Users/x/.config/lyrimuse/artwork/0123456789abcdef.jpg", CoverSource: "device", AccentColor: "#112233"}
+	if !clearMissingDeviceArtwork(&moved) {
+		t.Fatal("搬过家的地址要算改动")
+	}
+	if want := "file://" + filepath.Join(dir, "0123456789abcdef.jpg"); moved.CoverURL != want || moved.CoverSource != "device" || moved.AccentColor != "#112233" {
+		t.Errorf("换成本机地址、别的字段留着: %+v", moved)
+	}
+	gone := enrichEntry{CoverURL: "file:///Users/x/.config/lyrimuse/artwork/fedcba9876543210.jpg", CoverSource: "device"}
+	if !clearMissingDeviceArtwork(&gone) || gone.CoverURL != "" || gone.CoverSource != "" {
+		t.Errorf("本机也没有的照旧清掉: %+v", gone)
 	}
 }

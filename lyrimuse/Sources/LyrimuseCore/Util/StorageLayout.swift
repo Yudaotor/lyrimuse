@@ -6,8 +6,9 @@ import Foundation
 /// - 数据目录 `~/Library/Application Support/<bundle id>`:config.json、功能开关、设置镜像、歌词与手改、锁定、听歌记录、
 ///   待提交队列、备份、App 与引擎之间的请求 / 状态文件、单实例锁。
 /// - 缓存目录 `~/Library/Caches/<bundle id>`:删了只会重新联网或重算的东西(`cacheFileNames`),另有动态封面和 Sparkle 的下载缓存。
-/// - 旧目录 `~/.config/lyrimuse`:还是真目录、新目录又不存在时(还没搬成)照旧用它,`StorageMigration` 在 App 启动时整份搬走;
-///   它是软链接时当成用户自己指定的位置,一直用、不搬。
+/// - 旧目录 `~/.config/lyrimuse`:里面有数据、新目录里没有时(还没搬成)照旧用它,`StorageMigration` 在 App 启动时搬走或合并进来;
+///   它是软链接时当成用户自己指定的位置,一直用、不搬。判断看目录里有没有 Lyrimuse 的数据,不看目录在不在:新目录可能是空的、
+///   或被别的东西先建了出来。
 ///
 /// 引擎侧同一套规则在 `lyrimuse-engine/paths.go`(`configDir()` / `cacheDir()`),App 经环境变量把算好的两个目录传过去。
 public enum StorageLayout {
@@ -30,16 +31,38 @@ public enum StorageLayout {
             caches: home.appendingPathComponent("Library/Caches/\(LyrimuseIdentity.bundleIdentifier)"))
     }
 
-    /// 当前该用的数据目录。
+    /// 当前该用的数据目录:旧目录是软链接 → 旧目录;旧目录不是目录 → 新目录;新目录搬过(有搬迁标记)→ 新目录(旧目录是
+    /// 之后又冒出来的残留,下次启动合并进来);旧目录有数据、新目录没有 → 旧目录(还没搬);其余 → 新目录。
     public static func activeDataDir(_ roots: Roots) -> URL {
         if isSymlink(roots.legacy) { return roots.legacy }
-        if exists(roots.data) || !isDirectory(roots.legacy) { return roots.data }
-        return roots.legacy
+        guard isDirectory(roots.legacy) else { return roots.data }
+        if exists(roots.data.appendingPathComponent(StorageMigration.markerName)) { return roots.data }
+        if hasLyrimuseData(roots.legacy) && !hasLyrimuseData(roots.data) { return roots.legacy }
+        return roots.data
     }
 
-    /// 旧目录还没搬:是真目录(不是软链接),新目录也不存在。
-    public static func needsRootMove(_ roots: Roots) -> Bool {
-        !isSymlink(roots.legacy) && isDirectory(roots.legacy) && !exists(roots.data)
+    /// 旧位置有个真目录(不是软链接)要收进数据目录:还没搬,或者搬完之后又被旧版本、旧进程写出来的残留。
+    public static func hasLegacyToAbsorb(_ roots: Roots) -> Bool {
+        !isSymlink(roots.legacy) && isDirectory(roots.legacy)
+    }
+
+    /// 认 Lyrimuse 数据的几个文件:搬迁标记、账号配置、功能开关、歌词主缓存,有一个就算。引擎 `paths.go` 的
+    /// `hasLyrimuseData` 同一份名单。
+    public static let dataSignatureFiles = [
+        StorageMigration.markerName, "config.json", "lyrimuse-features.json", "lyrimuse-enrich-cache.json",
+    ]
+
+    public static func hasLyrimuseData(_ dir: URL) -> Bool {
+        dataSignatureFiles.contains { exists(dir.appendingPathComponent($0)) }
+    }
+
+    /// 存成值的绝对路径如果指在旧目录里(旧版本导出的备份、手写的配置),换成数据目录里同一个相对位置;别的原样返回。
+    public static func mappingLegacyPath(_ path: String, roots: Roots, dataDir: URL) -> String {
+        let legacy = roots.legacy.standardizedFileURL.path
+        guard dataDir.standardizedFileURL.path != legacy else { return path }
+        if path == legacy { return dataDir.path }
+        guard path.hasPrefix(legacy + "/") else { return path }
+        return dataDir.path + path.dropFirst(legacy.count)
     }
 
     /// 钥匙串保险箱条目的账号。数据目录在默认位置(新的或还没搬的旧的)时一律用旧目录的路径串:它只是个名字,
@@ -88,6 +111,11 @@ public enum StorageLayout {
     static func isDirectory(_ url: URL) -> Bool {
         var st = stat()
         return lstat(url.path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFDIR
+    }
+
+    static func isRegularFile(_ url: URL) -> Bool {
+        var st = stat()
+        return lstat(url.path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG
     }
 
     static func isSymlink(_ url: URL) -> Bool {

@@ -10,9 +10,9 @@ import (
 // (删了只会重新联网或重算的查询缓存在 cacheDir())。常驻路径以 `-config` 的目录为准(默认值就是这里),一次性子命令直接取这里。
 //
 // 环境变量 LYRIMUSE_CONFIG_DIR(绝对路径)优先:App 侧 EngineServiceManager 写 launchd plist、以及 spawn 每个一次性子命令时
-// 都会传(机制保留,别再靠 os.UserHomeDir 自己拼路径)。没有环境变量时跟 App 同一条规则(LyrimuseCore 的 StorageLayout):
-// 旧目录 ~/.config/lyrimuse 是软链接就一直用它;新目录 ~/Library/Application Support/<bundle id> 存在、或旧目录不是目录,用新目录;
-// 否则(App 还没搬)用旧目录。见 14 章决策 136。
+// 都会传(机制保留,别再靠 os.UserHomeDir 自己拼路径)。没有环境变量时跟 App 同一条规则(LyrimuseCore 的 StorageLayout.activeDataDir):
+// 旧目录 ~/.config/lyrimuse 是软链接就一直用它;不是目录就用新目录 ~/Library/Application Support/<bundle id>;新目录有搬迁标记
+// 就用新目录;旧目录有数据、新目录没有(App 还没搬)用旧目录;其余用新目录。见 14 章决策 136。
 //
 // 没有环境变量、又拿不到家目录时返回空串,调用方按原来的方式报错(main.go 常驻路径直接 fatalExit)。
 func configDir() string {
@@ -23,16 +23,33 @@ func configDir() string {
 	if !ok {
 		return ""
 	}
-	if fi, err := os.Lstat(legacy); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+	fi, err := os.Lstat(legacy)
+	if err == nil && fi.Mode()&os.ModeSymlink != 0 {
 		return legacy
 	}
-	if _, err := os.Lstat(data); err == nil {
+	if err != nil || !fi.IsDir() {
 		return data
 	}
-	if fi, err := os.Lstat(legacy); err == nil && fi.IsDir() {
+	if _, err := os.Lstat(filepath.Join(data, storageMigrationMarker)); err == nil {
+		return data
+	}
+	if hasLyrimuseData(legacy) && !hasLyrimuseData(data) {
 		return legacy
 	}
 	return data
+}
+
+// storageMigrationMarker:App 搬迁时写的标记(LyrimuseCore StorageMigration.markerName)。
+const storageMigrationMarker = "lyrimuse-storage-migration.json"
+
+// hasLyrimuseData:目录里有搬迁标记、账号配置、功能开关、歌词主缓存之一。跟 StorageLayout.dataSignatureFiles 同一份名单。
+func hasLyrimuseData(dir string) bool {
+	for _, name := range []string{storageMigrationMarker, "config.json", clientName + "-features.json", clientName + "-enrich-cache.json"} {
+		if _, err := os.Lstat(filepath.Join(dir, name)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // storageRoots:旧数据目录、新数据目录、缓存目录的默认位置。拿不到家目录时 ok 为 false。
