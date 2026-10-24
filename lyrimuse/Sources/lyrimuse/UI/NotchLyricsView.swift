@@ -3394,14 +3394,22 @@ struct NotchCardLayerActive: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        content
-            // 与外层的值取「与」,不覆盖:外层是窗口看不看得见(NotchWindowRoot 给)。
-            .transformEnvironment(\.notchCardLayerActive) { $0 = $0 && active }
-            .opacity(active ? 1 : 0)
-            // 必须挂在 .opacity **之后** —— 它要管的就是上面那一行的变化。
-            .animation(fade, value: active)
-            .allowsHitTesting(active)
-            .accessibilityHidden(!active)
+        // 与外层的值取「与」,不覆盖:外层是窗口看不看得见(NotchWindowRoot 给)。
+        let gated = content.transformEnvironment(\.notchCardLayerActive) { $0 = $0 && active }
+        Group {
+            if waitsForResize {
+                // 曲线只套在透明度上,位置照跟卡片那条弹簧:淡入前那段延迟里若也盖掉弹簧,这一块会停在收起时的横向位置上,
+                // 一露出来就从左边滑进来。见 05 章决策 94。
+                gated.animation(fade) { $0.opacity(active ? 1 : 0) }
+            } else {
+                gated
+                    .opacity(active ? 1 : 0)
+                    // 必须挂在 .opacity **之后** —— 它要管的就是上面那一行的变化。
+                    .animation(fade, value: active)
+            }
+        }
+        .allowsHitTesting(active)
+        .accessibilityHidden(!active)
     }
 }
 

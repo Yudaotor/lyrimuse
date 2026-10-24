@@ -2403,8 +2403,10 @@ func runNotchTests() {
                     "进度线: 开着时常驻、只切透明度,藏着时停表")
         expectEqual(sourceHas(v, "NotchExpandedLyricList(tint: accentOrWhite)")
                     && sourceHas(v, ".modifier(NotchCardLayerActive(active: expanded, staggered: staggered, waitsForResize: true))")
-                    && sourceHas(v, "if waitsForResize { return curve.delay(Self.resizeSettleDelay) }"), true,
-                    "多行歌词: 展开时等卡片长得差不多再淡入,收回时快速淡掉")
+                    && sourceHas(v, "if waitsForResize { return curve.delay(Self.resizeSettleDelay) }")
+                    && sourceHas(v, "if waitsForResize {\n // 曲线只套在透明度上")
+                    && sourceHas(v, "gated.animation(fade) { $0.opacity(active ? 1 : 0) }"), true,
+                    "多行歌词: 展开时等卡片长得差不多再淡入,收回时快速淡掉;曲线只管透明度,位置跟卡片弹簧")
         expectEqual(ctrl.contains("let next = hoverExpanded || alertHold || milestoneHold || peekHold"), true,
                     "灵动岛五项: 临时展开是 isExpanded 的一个输入")
         expectEqual(runner.contains("guard AppSettings.shared.notchOverlayEnabled else {")
