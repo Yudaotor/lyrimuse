@@ -1089,7 +1089,7 @@ func runPlayerIdentityTests() {
             .amazonMusic: (.amazonMusic, [.extendedControls, .repeatOne, .favorite, .learnsAnchorLag, .snapsToReportedPosition,
                                           .catalogMenuRows]),
             .kaset: (.youtubeMusic, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
-                                     .favorite, .resume, .learnsAnchorLag, .arrivesWhole, .adSharesTrackIdentity,
+                                     .favorite, .learnsAnchorLag, .arrivesWhole, .adSharesTrackIdentity,
                                      .systemNeverHasArtwork, .catalogMenuRows]),
             .reamp: (nil, [.extendedControls, .gaplessLead, .lateAnchorProbe, .arrivesWhole]),
             .lxMusic: (nil, [.extendedControls, .favorite, .resume, .lateAnchorProbe]),

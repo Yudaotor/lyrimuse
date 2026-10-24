@@ -541,12 +541,6 @@ public enum MediaControlClient {
 
     /// 问一次 Kaset。拿不到(没在跑、没有当前曲目、没授「自动化」权限、超时)返回 nil,不记失败原因:
     /// 两个调用方各自决定这算不算这一拍的失败。
-    /// Kaset 此刻在不在放(问它的脚本);没开着、问不到为 nil。只读,不记这一拍问过它(轮询那边照常问)。会阻塞,别在主线程调。
-    public static func kasetIsPlaying() -> Bool? {
-        guard let r = runPlayerScript("kaset", source: kasetScript), r.succeeded,
-              let read = KasetPlayerInfo.parseScriptOutput(r.stdout, now: Date()) else { return nil }
-        return read.reading.isPlaying
-    }
 
     private static func readKasetSnapshot() -> MediaControlSnapshot? {
         kasetLock.lock()

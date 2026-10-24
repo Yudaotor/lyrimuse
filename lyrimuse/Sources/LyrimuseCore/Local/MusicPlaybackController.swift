@@ -251,13 +251,6 @@ public enum MusicPlaybackController {
         runAppleScriptCapturing(#"tell application "Spotify" to play"#) != nil
     }
 
-    /// Kaset 的「继续播放」:开着时发脚本 `play`;没开着不发(脚本会把它拉起来、带到前台,调用方先后台启动它)。
-    /// 脚本跑成了为 true,不代表一定放起来了。不要在主线程调用。
-    public static func resumeKasetPlayback() -> Bool {
-        runAppleScriptCapturing(kasetRunningGuard + #"tell application "Kaset" to play"# + "\nreturn \"ok\"")?
-            .trimmingCharacters(in: .whitespacesAndNewlines) == "ok"
-    }
-
     /// 「减少推荐」。UI 里的 Suggest Less 就是老的 Dislike,AppleScript 属性一直叫
     /// `disliked`(iTunes 12.5 起,实机验证可写)。Apple Music 专属,
     /// 调用方约定同上;不要在主线程调用。
