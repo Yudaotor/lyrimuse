@@ -72,6 +72,17 @@ public enum SourceReadingResidue {
         return String(out)
     }
 
+    /// 源给这一行的读音里有拼音的二、三、四声符号(ǎ à á 这类,日文罗马字、韩文罗马字都不用),而原文里没有。
+    /// 带假名、谚文的行出现这种读音,是源把汉字按普通话读了,或者给的是中文谐音。
+    public static func readsAsPinyin(_ reading: String, original: String) -> Bool {
+        let marked = reading.precomposedStringWithCanonicalMapping.unicodeScalars.filter { pinyinToneMarks.contains($0) }
+        guard !marked.isEmpty else { return false }
+        let own = Set(original.precomposedStringWithCanonicalMapping.unicodeScalars)
+        return marked.contains { !own.contains($0) }
+    }
+
+    private static let pinyinToneMarks = Set("ǎǐǒǔǚàèìòùǜáéíóúǘ".unicodeScalars)
+
     private static func isMark(_ s: Unicode.Scalar) -> Bool {
         switch s.properties.generalCategory {
         case .nonspacingMark, .spacingMark, .enclosingMark: return true

@@ -243,6 +243,29 @@ func checkWorldRomanization() {
     expectEqual(sourceReading("[00:01.00]我哋一齊行", roma: "[00:01.00]ngo5 dei6 一 cai4 hang4", cantonese: true),
                 "ngo5 dei6 一 cai4 hang4", "接入: 粤语歌的汉字不补(现算出来是普通话拼音)")
 
+    // 带假名、谚文的行,源给的是普通话拼音时整行现算(10 章决策 57)。
+    expectEqual(R.readsAsPinyin("yǔ ga furiyan da", original: "雨が降り止んだ"), true, "源拼音: 日文行里的拼音声调")
+    expectEqual(R.readsAsPinyin("Melody wa Frére Jacques", original: "MelodyはFrére Jacques"), false,
+                "源拼音: 原文自己带的重音符号不算")
+    expectEqual(R.readsAsPinyin("ame ga furi yan da", original: "雨が降り止んだ"), false, "源拼音: 罗马字的长音横线不算")
+    let jaPinyin = sourceReading("[00:01.00]雨が降り止んだ\n[00:02.00]味の無いサイダー",
+                                 roma: "[00:01.00]yǔ ga furiyan da\n[00:02.00]wèi no nai saidā")
+    expectEqual(jaPinyin.map { !$0.contains("yǔ") && $0.contains("ame") }, true, "源拼音: 日文行整行现算:\(jaPinyin ?? "")")
+    let shortJa = sourceReading("[00:01.00]愛とはなんだ\n[00:02.00]雨が降り止んだ",
+                                roma: "[00:01.00]ài to wa nan da\n[00:02.00]ame ga furi yan da")
+    expectEqual(shortJa.map { !$0.contains("ài") && $0.hasPrefix("ai") }, true,
+                "源拼音: 日文歌里的短句也整行现算:\(shortJa ?? "")")
+    let koPinyin = sourceReading("[00:01.00]망가져 갈 이유가 많네", roma: "[00:01.00]máng gā jiào gā yī yō gā mǎn nèi")
+    expectEqual(koPinyin.map { $0.hasPrefix("manggajyeo") }, true, "源拼音: 韩文行的中文谐音整行现算:\(koPinyin ?? "")")
+    let koHomophone = sourceReading("[00:01.00]망가져 갈 이유가 많네", roma: "[00:01.00]茫嘎叫 嘎 一哟嘎 满内")
+    expectEqual(koHomophone.map { $0.hasPrefix("manggajyeo") }, true, "源拼音: 韩文行的中文谐音字整行现算:\(koHomophone ?? "")")
+    expectEqual(sourceReading("[00:01.00]苦等着あなた两年三个月", roma: "[00:01.00]kǔ děng zhe anata liǎng nián sān gè yuè"),
+                "kǔ děng zhe anata liǎng nián sān gè yuè", "源拼音: 中日混排行的拼音照源给的")
+    expectEqual(sourceReading("[00:01.00]안녕하세요 雄喜", roma: "[00:01.00]annyeong haseyo xióng xǐ"),
+                "annyeong haseyo xióng xǐ", "源拼音: 中韩混排行的拼音照源给的")
+    expectEqual(sourceReading("[00:01.00]我爱你中国", roma: "[00:01.00]wǒ ài nǐ zhōng guó"), "wǒ ài nǐ zhōng guó",
+                "源拼音: 汉字行的拼音照源给的")
+
     // 分词器读不出的简体字按繁体读;古木基文、天城文没有带点写法的点不出字。
     expectEqual(sourceReading("[00:01.00]つかめ! 描いた梦を\n[00:02.00]空", roma: ""), "tsukame ! egai ta yume o",
                 "现算: 日文歌里分词器读不出的简体字按繁体读")

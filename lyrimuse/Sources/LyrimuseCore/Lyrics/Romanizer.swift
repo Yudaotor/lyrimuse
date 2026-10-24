@@ -464,6 +464,43 @@ public enum Romanizer {
             || (songLooksJapanese && containsHan(line) && !containsHangul(line) && !looksChineseWritten(line))
     }
 
+    /// 这一行的汉字是不是都在日文字集(JIS X 0208)里。
+    public static func kanjiAllJapanese(_ line: String) -> Bool {
+        line.allSatisfy { ch in
+            ch.unicodeScalars.count != 1 || !ch.unicodeScalars.first!.properties.isIdeographic
+                || JapaneseKanjiRepair.isJapaneseKanjiCached(ch)
+        }
+    }
+
+    /// 这一行是不是一整句日文:汉字全在日文字集(JIS X 0208)里,假名不比汉字少,汉字后面紧跟平假名(送假名、助词:
+    /// 手に、触れた)至少两处。非日文歌里的这种行不做混排兜底(`applyCodeSwitchFallback`),行首、空格旁的汉字照日文读;
+    /// 中日混排的行照旧兜底:「三更半夜 さびし的我」汉字多,「只听见おじさん」有日文里没有的字,「我的あなた」是中文词
+    /// 拼在日文名词前面、汉字后面紧跟平假名只有一处。见 10 章决策 57。
+    public static func looksJapaneseSentence(_ line: String) -> Bool {
+        var kana = 0
+        var han = 0
+        var inflected = 0
+        var previousIsHan = false
+        for ch in line {
+            guard ch.unicodeScalars.count == 1, let s = ch.unicodeScalars.first else {
+                previousIsHan = false
+                continue
+            }
+            if (0x3040...0x30FF).contains(s.value) {
+                kana += 1
+                if previousIsHan, s.value <= 0x309F { inflected += 1 }
+                previousIsHan = false
+            } else if s.properties.isIdeographic {
+                guard JapaneseKanjiRepair.isJapaneseKanjiCached(ch) else { return false }
+                han += 1
+                previousIsHan = true
+            } else {
+                previousIsHan = false
+            }
+        }
+        return inflected >= 2 && kana >= han
+    }
+
     /// 没有假名的这一行是不是中文写的:日文字集(JIS X 0208,跟 `JapaneseKanjiRepair` 同一个判据)里没有的汉字
     /// 至少 2 个,或者占这一行汉字的四分之一以上。日文歌里源加的中文译名、翻译行、现场对白靠它跟日文的纯汉字行
     /// (「未開拓領域」)分开;只有一个字敲成简体的日文行(「美丽星辰」)不算。全是 JIS 字的中文句认不出。
@@ -871,7 +908,7 @@ public enum Romanizer {
         } ?? []
         out = readingUnreadKanji(out, in: text)
         out = mergingNumeralCounters(out, in: text)
-        guard !songLooksJapanese else { return out }
+        guard !songLooksJapanese, !looksJapaneseSentence(text) else { return out }
         return applyCodeSwitchFallback(to: out, in: text, reading: hanRuns)
     }
 

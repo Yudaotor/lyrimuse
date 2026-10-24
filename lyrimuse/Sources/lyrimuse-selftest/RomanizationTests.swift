@@ -961,6 +961,36 @@ func runRomanizationTests() {
         expectEqual(Romanizer.looksChineseWritten("优しさに说"), false, "中文行: 有假名的不算")
         expectEqual(Romanizer.script(ofLine: "妈妈听见了说", song: .japanese), .chinese, "中文行: 日文歌里归中文")
         expectEqual(Romanizer.script(ofLine: "未開拓領域", song: .japanese), .japanese, "中文行: 日文的纯汉字行仍归日文")
+        // 非日文歌里一整句日文的行不做混排兜底(10 章决策 57)。
+        expectEqual(Romanizer.looksJapaneseSentence("手に触れた さよなら"), true, "整句日文: 假名多、汉字都是日文字")
+        expectEqual(Romanizer.looksJapaneseSentence("三更半夜 さびし的我"), false, "整句日文: 汉字比假名多不算")
+        expectEqual(Romanizer.looksJapaneseSentence("只听见おじさん骑着单车卖着馒头"), false, "整句日文: 有日文里没有的字不算")
+        expectEqual(Romanizer.looksJapaneseSentence("未開拓領域"), false, "整句日文: 没有假名不算")
+        expectEqual(Romanizer.looksJapaneseSentence("我的あなた"), false, "整句日文: 中文词拼在日文名词前面不算")
+        expectEqual(Romanizer.looksJapaneseSentence("今日もいっぱい可愛い女の子を見た"), true, "整句日文: 汉字后面跟着送假名、助词")
+        let sentenceInZh = Romanizer.japaneseSegments("手に触れた さよなら", songLooksJapanese: false)
+            .map(\.latin).joined(separator: " ")
+        expectEqual(sentenceInZh.hasPrefix("te ni"), true, "整句日文: 中文歌里行首的汉字照日文读:\(sentenceInZh)")
+        let mixedInZh = Romanizer.japaneseSegments("三更半夜 さびし的我", songLooksJapanese: false)
+            .map(\.latin).joined(separator: " ")
+        expectEqual(mixedInZh.hasPrefix("sān gèng"), true, "整句日文: 混排行照旧兜底成拼音:\(mixedInZh)")
+        let zhSong = ["[00:01.00]我们的城市吹着热带的风", "[00:02.00]怪不得你会点起火来", "[00:03.00]手に触れた さよなら",
+                      "[00:04.00]希望一直沉睡"].joined(separator: "\n")
+        let pinyinOff = LyricsSyncEngine()
+        pinyinOff.load(lyrics: zhSong, lyricsTr: "", lyricsRoma: "", lyricsYRC: "",
+                       romanizationScripts: RomanizationScripts.default.subtracting(.chinese))
+        expectEqual(pinyinOff.activeLine(atMs: 3100)?.romanization?.hasPrefix("te ni"), true,
+                    "整句日文: 拼音开关关着,整句日文的汉字也照标日文读音")
+        expectEqual(Romanizer.looksJapaneseSentence("永遠不変愛情の歌を"), false, "整句日文: 汉字比假名多不算")
+        expectEqual(Romanizer.looksJapaneseSentence("说して聞いてた"), false, "整句日文: 有日文字集里没有的字不算")
+        expectEqual(Romanizer.looksJapaneseSentence("日本ドラマ中国アニメ"), false, "整句日文: 汉字后面跟片假名不算送假名")
+        let zhSongRoma = ["[00:01.00]wo men de cheng shi", "[00:02.00]guai bu de", "[00:03.00]te ni fureta sayonara",
+                          "[00:04.00]xi wang"].joined(separator: "\n")
+        let pinyinOffSource = LyricsSyncEngine()
+        pinyinOffSource.load(lyrics: zhSong, lyricsTr: "", lyricsRoma: zhSongRoma, lyricsYRC: "",
+                             romanizationScripts: RomanizationScripts.default.subtracting(.chinese))
+        expectEqual(pinyinOffSource.activeLine(atMs: 3100)?.romanization, "te ni fureta sayonara",
+                    "整句日文: 拼音开关关着,整句日文照用源给的读音")
         let zhInJa = Romanizer.lineReading("妈妈听见了说", songLooksJapanese: true,
                                            segments: Romanizer.japaneseSegments("妈妈听见了说")) ?? ""
         expectEqual(zhInJa, "mā mā tīng jiàn le shuō", "中文行: 日文歌里按拼音读,不进日文分词器")
