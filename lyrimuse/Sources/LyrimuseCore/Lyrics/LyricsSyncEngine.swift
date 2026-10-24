@@ -2331,7 +2331,7 @@ public final class LyricsSyncEngine {
     }
 
     /// 源给这一行的读音:照源给的,补上没转的原文片段。没有中文成分的日文、韩文行(没有汉字;带假名的行在日文歌里
-    /// 且汉字都是日文字集里的,或者是一整句日文),补完是普通话拼音(`SourceReadingResidue.readsAsPinyin`:源把汉字按普通话读了,或者给的是中文谐音字)时整行现算。
+    /// 且汉字都是日文字集里的,或者是一整句日文),补完是按中文给的(`SourceReadingResidue.readsAsChinese`:源把汉字按普通话读了,或者给的是中文谐音字)时整行现算。
     /// 中日、中韩混排的行里中文部分本来就标拼音,照源给的。见 10 章决策 57。
     private func sourceReading(_ source: String, for line: String) -> String? {
         let filled = fillingResidue(source)
@@ -2339,7 +2339,7 @@ public final class LyricsSyncEngine {
             ? !Romanizer.containsHan(line) || (songLooksJapanese && Romanizer.kanjiAllJapanese(line))
                 || Romanizer.looksJapaneseSentence(line)
             : Romanizer.containsHangul(line) && !Romanizer.containsHan(line)
-        if noChinese, SourceReadingResidue.readsAsPinyin(filled, original: line),
+        if noChinese, SourceReadingResidue.readsAsChinese(filled, original: line),
             let computed = computedReading(line)
         {
             return computed

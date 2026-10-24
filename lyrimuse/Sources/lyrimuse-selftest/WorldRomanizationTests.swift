@@ -228,6 +228,9 @@ func checkWorldRomanization() {
                 "接入: 源读音里的简体字,原文显示的是修过的日文汉字,按原文分词读")
     expectEqual(sourceReading("[00:01.00]つかめ! 描いた梦を\n[00:02.00]空", roma: jaRoma), "tsukame ! egai ta yume o",
                 "接入: 原文也是简体字,转繁体再读")
+    expectEqual(sourceReading("[00:01.00]つかめ! 描いた梦を\n[00:02.00]空", roma: jaRoma,
+                              scripts: RomanizationScripts.default.subtracting(.chinese)),
+                "tsukame ! egai ta yume o", "接入: 拼音开关关着,日文歌源读音里的简体字照样按日文补")
     expectEqual(sourceReading("[00:01.00]В очите ѝ тогава ще ме припознаеш",
                               roma: "[00:01.00]V ochite ѝ togava shte me pripoznaesh"),
                 "V ochite i togava shte me pripoznaesh", "接入: 源读音里没转的西里尔字母按整首认出的语言补")
@@ -244,10 +247,12 @@ func checkWorldRomanization() {
                 "ngo5 dei6 一 cai4 hang4", "接入: 粤语歌的汉字不补(现算出来是普通话拼音)")
 
     // 带假名、谚文的行,源给的是普通话拼音时整行现算(10 章决策 57)。
-    expectEqual(R.readsAsPinyin("yǔ ga furiyan da", original: "雨が降り止んだ"), true, "源拼音: 日文行里的拼音声调")
-    expectEqual(R.readsAsPinyin("Melody wa Frére Jacques", original: "MelodyはFrére Jacques"), false,
+    expectEqual(R.readsAsChinese("yǔ ga furiyan da", original: "雨が降り止んだ"), true, "源拼音: 日文行里的拼音声调")
+    expectEqual(R.readsAsChinese("Melody wa Frére Jacques", original: "MelodyはFrére Jacques"), false,
                 "源拼音: 原文自己带的重音符号不算")
-    expectEqual(R.readsAsPinyin("ame ga furi yan da", original: "雨が降り止んだ"), false, "源拼音: 罗马字的长音横线不算")
+    expectEqual(R.readsAsChinese("ame ga furi yan da", original: "雨が降り止んだ"), false, "源拼音: 罗马字的长音横线不算")
+    expectEqual(R.readsAsChinese("茫嘎叫 嘎", original: "망가져 갈"), true, "源拼音: 原文里没有的汉字")
+    expectEqual(R.readsAsChinese("tsukame ! egai ta 梦 o", original: "つかめ! 描いた梦を"), false, "源拼音: 原文里有的汉字不算")
     let jaPinyin = sourceReading("[00:01.00]雨が降り止んだ\n[00:02.00]味の無いサイダー",
                                  roma: "[00:01.00]yǔ ga furiyan da\n[00:02.00]wèi no nai saidā")
     expectEqual(jaPinyin.map { !$0.contains("yǔ") && $0.contains("ame") }, true, "源拼音: 日文行整行现算:\(jaPinyin ?? "")")
@@ -259,6 +264,10 @@ func checkWorldRomanization() {
     expectEqual(koPinyin.map { $0.hasPrefix("manggajyeo") }, true, "源拼音: 韩文行的中文谐音整行现算:\(koPinyin ?? "")")
     let koHomophone = sourceReading("[00:01.00]망가져 갈 이유가 많네", roma: "[00:01.00]茫嘎叫 嘎 一哟嘎 满内")
     expectEqual(koHomophone.map { $0.hasPrefix("manggajyeo") }, true, "源拼音: 韩文行的中文谐音字整行现算:\(koHomophone ?? "")")
+    let koHomophoneNoPinyin = sourceReading("[00:01.00]망가져 갈 이유가 많네", roma: "[00:01.00]茫嘎叫 嘎 一哟嘎 满内",
+                                            scripts: RomanizationScripts.default.subtracting(.chinese))
+    expectEqual(koHomophoneNoPinyin.map { $0.hasPrefix("manggajyeo") }, true,
+                "源拼音: 拼音开关关着,韩文行的中文谐音字也整行现算:\(koHomophoneNoPinyin ?? "")")
     expectEqual(sourceReading("[00:01.00]苦等着あなた两年三个月", roma: "[00:01.00]kǔ děng zhe anata liǎng nián sān gè yuè"),
                 "kǔ děng zhe anata liǎng nián sān gè yuè", "源拼音: 中日混排行的拼音照源给的")
     expectEqual(sourceReading("[00:01.00]안녕하세요 雄喜", roma: "[00:01.00]annyeong haseyo xióng xǐ"),
