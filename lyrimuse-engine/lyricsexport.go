@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unicode/utf8"
 )
 
@@ -364,8 +365,9 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			}
 		}
 		// put:把 full 写成 name。盘上那份内容一样(same)就只记状态;是背景人声接回去之前的写法、内容没别的变化(oldForm)时
-		// 改写后修改时间留原样,歌词管理按更新时间排时不跳到最前;认不出是这边导出的(recognized 为 false)先挪进废纸篓。
-		put := func(name string, info fs.FileInfo, full []byte, fileSrc uint32, same, oldForm, recognized func([]byte) bool) {
+		// 改写后修改时间留原样,歌词管理按更新时间排时不跳到最前;inherit 给出非零时间时改写后用它当修改时间(内容没变、只换了
+		// 格式的逐字文件);认不出是这边导出的(recognized 为 false)先挪进废纸篓。
+		put := func(name string, info fs.FileInfo, full []byte, fileSrc uint32, same, oldForm, recognized func([]byte) bool, inherit func() time.Time) {
 			path := filepath.Join(dir, name)
 			sum := lyricsCRC(full)
 			if useState && info != nil {
@@ -394,6 +396,10 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			}
 			if keepTime {
 				_ = os.Chtimes(path, info.ModTime(), info.ModTime())
+			} else if inherit != nil {
+				if t := inherit(); !t.IsZero() {
+					_ = os.Chtimes(path, t, t)
+				}
 			}
 			if st, err := os.Lstat(path); err == nil {
 				recordLyricsFileFrom(dir, name, st, sum, fileSrc)
@@ -422,18 +428,35 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			put(name, info, full, fileSrc,
 				func(b []byte) bool { return string(b) == string(full) },
 				func(b []byte) bool { return j.variants[k] != j.cached[k] && string(b) == header+j.cached[k] },
-				func(b []byte) bool { return parseLyricsBytes(b).ok })
+				func(b []byte) bool { return parseLyricsBytes(b).ok }, nil)
 		}
 		// 逐字按设置写成一种或几种格式(lyricswordformat.go),设置里没有的格式的文件删掉。每份文件记下写它时缓存内容的指纹,
-		// 文件没动过、指纹也一样就不再编码(QRC 那层 3DES 每首都算一遍太慢)。
+		// 文件没动过、指纹也一样就不再编码(QRC 那层 3DES 每首都算一遍太慢)。先写后删:写一种格式时,别的格式那份按记录
+		// 还是照同样的缓存内容写的(没动过、指纹对得上),新写的这份修改时间就沿用它的 —— 换格式时整库的更新时间不跳到这一刻。
+		win := wordInputOf(j)
+		inheritWordTime := func(f lyricsWordFormat) func() time.Time {
+			return func() time.Time {
+				var t time.Time
+				for _, g := range lyricsWordFormatsAll {
+					sname := base + g.suffix()
+					sinfo := statOf(sname)
+					if g == f || !useState || sinfo == nil || !sinfo.ModTime().After(t) {
+						continue
+					}
+					if lyricsFileUnchangedFrom(dir, sname, sinfo, lyricsWordFileSource(g, header, win)) {
+						t = sinfo.ModTime()
+					}
+				}
+				return t
+			}
+		}
 		for _, f := range lyricsWordFormatsAll {
 			name := base + f.suffix()
 			if j.cached[3] == "" || !slices.Contains(wordFormats, f) {
-				remove(name)
 				continue
 			}
 			info := statOf(name)
-			wsrc := lyricsWordFileSource(f, header, wordInputOf(j))
+			wsrc := lyricsWordFileSource(f, header, win)
 			if useState && info != nil && lyricsFileUnchangedFrom(dir, name, info, wsrc) {
 				continue
 			}
@@ -444,7 +467,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			}
 			if !ok {
 				form()
-				in := wordInputOf(j)
+				in := win
 				in.yrc = j.variants[3]
 				enc = encodeLyricsWordFile(f, in)
 			}
@@ -454,7 +477,12 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 				func(b []byte) bool {
 					return f == lyricsWordYRC && j.variants[3] != j.cached[3] && string(b) == header+j.cached[3]
 				},
-				func(b []byte) bool { return lyricsWordFileRecognized(f, b) })
+				func(b []byte) bool { return lyricsWordFileRecognized(f, b) }, inheritWordTime(f))
+		}
+		for _, f := range lyricsWordFormatsAll {
+			if j.cached[3] == "" || !slices.Contains(wordFormats, f) {
+				remove(base + f.suffix())
+			}
 		}
 	}
 	if present != nil && useState {

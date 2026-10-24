@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func withLyricsWordFormats(t *testing.T, fs ...lyricsWordFormat) {
@@ -153,6 +154,48 @@ func TestLyricsWordFilesSkipUnchanged(t *testing.T) {
 	enrichMu.Unlock()
 	if n := encodes(exportLyricsFiles); n != 1 {
 		t.Errorf("只改译文时只重写 TTML: %d", n)
+	}
+}
+
+// 换格式时内容没变的逐字文件沿用原来那份的修改时间(歌词管理按它排「更新时间」),先写新的再删旧的;缓存内容变了的是新时间。
+func TestLyricsWordFormatSwitchKeepsModTime(t *testing.T) {
+	sample := lyricsWordFilesSample()
+	dir := withLyricsFileStateEnv(t)
+	key := "A|Song|"
+	withEnrichCache(t, map[string]enrichEntry{key: sample})
+	withLyricsWordFormats(t, lyricsWordYRC)
+	exportLyricsFiles()
+	base := filepath.Join(dir, sanitizeLyricsFilename(key))
+	old := time.Date(2026, 1, 2, 3, 4, 5, 0, time.Local)
+	if err := os.Chtimes(base+".yrc", old, old); err != nil {
+		t.Fatal(err)
+	}
+	exportLyricsFiles() // 内容一样,只把这个修改时间记进状态
+	mtime := func(suffix string) time.Time {
+		st, err := os.Stat(base + suffix)
+		if err != nil {
+			return time.Time{}
+		}
+		return st.ModTime()
+	}
+	withLyricsWordFormats(t, lyricsWordQRC, lyricsWordTTML)
+	exportLyricsFiles()
+	if !mtime(".qrc").Equal(old) || !mtime(".ttml").Equal(old) {
+		t.Errorf("内容没变、只换了格式,沿用 .yrc 的修改时间: qrc %v ttml %v", mtime(".qrc"), mtime(".ttml"))
+	}
+	if !mtime(".yrc").IsZero() {
+		t.Errorf("设置里没有 YRC 了,.yrc 要删掉")
+	}
+
+	enrichMu.Lock()
+	e := enrichCache[key]
+	e.LyricsYRC = bt(strings.Replace(e.LyricsYRC.String(), "早", "晚", 1))
+	enrichCache[key] = e
+	enrichMu.Unlock()
+	withLyricsWordFormats(t, lyricsWordKRC)
+	exportLyricsFiles()
+	if m := mtime(".krc"); m.IsZero() || m.Equal(old) {
+		t.Errorf("缓存内容变了,新写的是新时间: %v", m)
 	}
 }
 
