@@ -173,7 +173,7 @@ func runHealthcheckCLI(args []string) {
 			n := 0
 			if entries, err := os.ReadDir(dir); err == nil {
 				for _, e := range entries {
-					if strings.HasSuffix(strings.ToLower(e.Name()), ".lrc") {
+					if lyricsFileSuffixOf(e.Name()) == ".lrc" {
 						n++
 					}
 				}

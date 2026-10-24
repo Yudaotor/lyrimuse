@@ -543,7 +543,7 @@ func trashFile(path string) {
 	_ = os.Remove(path)
 }
 
-// trashAllLyricsFiles 把歌词目录里认得出的歌词文件(四个后缀)全部挪进废纸篓。只认后缀:这个目录是用户
+// trashAllLyricsFiles 把歌词目录里认得出的歌词文件(lyricsAllFileSuffixes 那些后缀)全部挪进废纸篓。只认后缀:这个目录是用户
 // 可以自己指定的,可能还放着别的东西。
 func trashAllLyricsFiles() {
 	dir := lyricsDir()
@@ -560,7 +560,7 @@ func trashAllLyricsFiles() {
 		}
 		// 只挪头部认得出的(这边导出的):目录可以是用户自己指定的,同后缀的别的文件不归「清空」管。
 		path := filepath.Join(dir, ent.Name())
-		if data, err := os.ReadFile(path); err != nil || !parseLyricsBytes(data).ok {
+		if data, err := os.ReadFile(path); err != nil || !lyricsFileRecognized(ent.Name(), data) {
 			continue
 		}
 		trashFile(path)

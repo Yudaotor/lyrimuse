@@ -519,7 +519,7 @@ func isLyricsTempFile(name string) bool {
 
 // lyricsTempFilePattern writeLyricsFileAtomic 的临时文件名(`X.lrc.tmp.123456`:歌词后缀 + `.tmp.` + CreateTemp 填的
 // 一段随机串)。只认这一种:歌词目录可以是用户自己指定的,「名字里带 .tmp.」的别的文件不归这边删。
-var lyricsTempFilePattern = regexp.MustCompile(`^.+\.(lrc|yrc)\.tmp\.[A-Za-z0-9]+$`)
+var lyricsTempFilePattern = regexp.MustCompile(`^.+\.(lrc|yrc|ttml|qrc|krc)\.tmp\.[A-Za-z0-9]+$`)
 
 // sanitizeLyricsFilename turns a "艺人|歌名|专辑" cache key into a safe,
 // readable filename: "|" becomes " - ", then filesystem-unsafe characters are

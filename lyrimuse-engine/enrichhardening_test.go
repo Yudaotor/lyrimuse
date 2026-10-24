@@ -6,6 +6,7 @@ import (
 	neturl "net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -126,24 +127,33 @@ func TestLyricsDirOnlyTouchesOwnFiles(t *testing.T) {
 	crlf := strings.ReplaceAll(lyricsFileHeader("歌手", "歌名", "专辑", "netease", false)+"[00:01.00]x", "\n", "\r\n")
 	own := filepath.Join(dir, sanitizeLyricsFilename(key)+".lrc")
 	foreign := filepath.Join(dir, "somebody else.lrc")
-	for p, content := range map[string]string{own: crlf, foreign: "not ours"} {
+	// 别的逐字格式(加密的 QRC、TTML)同样认得出是这边写的,清空时一起挪走,不然下次启动又导回来。
+	in := lyricsWordFileInput{artist: "歌手", title: "歌名", album: "专辑", source: "netease", yrc: "[1000,500](1000,500,0)x", nativeYRC: "[1000,500](1000,500,0)x"}
+	ownQRC := filepath.Join(dir, sanitizeLyricsFilename(key)+".qrc")
+	ownTTML := filepath.Join(dir, sanitizeLyricsFilename(key)+".ttml")
+	for p, content := range map[string]string{own: crlf, foreign: "not ours",
+		ownQRC:  string(sealLyricsWordFile(lyricsWordQRC, encodeLyricsWordText(lyricsWordQRC, in))),
+		ownTTML: encodeLyricsWordText(lyricsWordTTML, in)} {
 		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if got := lyricsFilesOwnedBy(key); len(got) != 1 || got[0] != own {
-		t.Fatalf("CRLF 的文件也是这首的: %v", got)
+	if got := lyricsFilesOwnedBy(key); len(got) != 3 || !slices.Contains(got, own) {
+		t.Fatalf("CRLF 的文件、各种逐字格式的文件都是这首的: %v", got)
 	}
 	trashAllLyricsFiles()
 	if _, err := os.Stat(foreign); err != nil {
 		t.Fatal("认不出头部的文件不该被清空挪走")
 	}
-	if _, err := os.Stat(own); !os.IsNotExist(err) {
-		t.Fatal("认得出的文件应当进废纸篓")
+	for _, p := range []string{own, ownQRC, ownTTML} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Fatalf("认得出的文件应当进废纸篓: %s", filepath.Base(p))
+		}
 	}
 	for name, want := range map[string]bool{
-		"歌 - 名.lrc.tmp.123456": true, "歌 - 名.yrc.tmp.9": true,
-		"notes.tmp.txt": false, "backup.tmp.2024.zip": false, "歌 - 名.lrc": false,
+		"歌 - 名.lrc.tmp.123456": true, "歌 - 名.yrc.tmp.9": true, "歌 - 名.qrc.tmp.7": true, "歌 - 名.ttml.tmp.x1": true,
+		"歌 - 名.krc.tmp.42": true,
+		"notes.tmp.txt":    false, "backup.tmp.2024.zip": false, "歌 - 名.lrc": false,
 	} {
 		if got := isLyricsTempFile(name); got != want {
 			t.Errorf("isLyricsTempFile(%q) = %v, want %v", name, got, want)
