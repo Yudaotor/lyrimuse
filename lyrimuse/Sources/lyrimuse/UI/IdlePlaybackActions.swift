@@ -21,10 +21,14 @@ enum IdlePlaybackActions {
         return .appleMusic
     }
 
-    /// 有没有真的「继续播放」可给:AM / Spotify 有 AppleScript(AM = 三段式,Spotify 自带恢复上下文);酷狗按菜单
-    /// 「播放/暂停」,冷启动后按也从上次停下的地方接着放;QQ / 网易云没有,只能「打开」。
+    /// 有没有真的「继续播放」可给:AM / Spotify 有 AppleScript(AM = 三段式,Spotify 自带恢复上下文);酷狗、QQ、网易云、
+    /// Pine 按它菜单里的播放 / 暂停,冷启动后按也放上次那首(`resumeViaMenu`)。reAMP 冷启动会自己跳到前台,不给;
+    /// 别的只能「打开」。
     static func canResume(_ player: PlaybackPlayer) -> Bool {
-        player == .appleMusic || player == .spotify || player == .kugou
+        switch player {
+        case .appleMusic, .spotify, .kugou, .qqMusic, .netease, .pinePlayer: true
+        default: false
+        }
     }
 
     /// 「继续播放」:AM 走三段式(裸 play → 上次那首 → 都不行),Spotify 自带恢复;任何失败都兜底把
@@ -43,7 +47,7 @@ enum IdlePlaybackActions {
                 }
             case .spotify:
                 ok = MusicPlaybackController.resumeSpotifyPlayback()
-            case .kugou:
+            case .kugou, .qqMusic, .netease, .pinePlayer:
                 ok = await resumeViaMenu(player)
             default:
                 ok = false
@@ -54,8 +58,9 @@ enum IdlePlaybackActions {
         }
     }
 
-    /// 没开着就后台启动(不激活、隐藏窗口),等菜单出现再按播放 / 暂停。冷启动到菜单出现约 6 秒,最多等 15 秒。
-    /// 停播页说明它这时没在放,按一下就是开播。
+    /// 没开着就后台启动(不激活、隐藏窗口),等菜单出现再按播放 / 暂停。冷启动到菜单出现:Pine 约 2 秒、QQ 约 4 秒、酷狗约
+    /// 6 秒、网易云约 12 秒,最多等 25 秒。停播页说明它这时没在放,按一下就是开播。标题随状态变的(QQ、网易云)按完读回标题确认
+    /// 放起来了:网易云菜单刚出现时按了常不接,隔 2 秒还没放就再按,最多按 4 次。
     nonisolated static func resumeViaMenu(_ player: PlaybackPlayer) async -> Bool {
         if PlayerProcess.pid(bundleID: player.bundleIdentifier) == nil {
             guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: player.bundleIdentifier) else {
@@ -68,10 +73,25 @@ enum IdlePlaybackActions {
                 return false
             }
         }
-        let deadline = Date().addingTimeInterval(15)
+        let deadline = Date().addingTimeInterval(25)
+        var presses = 0
+        func playing() -> Bool? {
+            PlaybackMenuControl.playPauseTitle(for: player).flatMap { PlaybackMenuControl.showsPlaying(menuTitle: $0, player: player) }
+        }
         while true {
+            if presses > 0 {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                switch playing() {
+                case false?: guard presses < 4, Date() < deadline else { return false }
+                default: return true
+                }
+            }
             let outcome = PlaybackMenuControl.press(.playPause, for: player)
-            if outcome == .pressed { return true }
+            if outcome == .pressed {
+                guard PlaybackMenuControl.titleShowsState(player) else { return true }
+                presses += 1
+                continue
+            }
             guard outcome == .playerNotRunning || outcome == .menuUnavailable, Date() < deadline else { return false }
             try? await Task.sleep(nanoseconds: 300_000_000)
         }

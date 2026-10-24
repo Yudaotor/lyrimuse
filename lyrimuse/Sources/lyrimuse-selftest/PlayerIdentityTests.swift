@@ -230,6 +230,16 @@ func runPlayerIdentityTests() {
             for t in ["播放", "暂停", "下一首", "上一首", "下一个", "喜欢歌曲", "音量加"] {
                 expectEqual(PlaybackMenuControl.command(forMenuTitle: t, player: .kugou), nil, "酷狗菜单: \(t) 不认")
             }
+            // 停播页「继续播放」按完读回标题:QQ、网易云在放时是「暂停」;标题固定的不拿它判。
+            for (player, t, playing) in [(PlaybackPlayer.qqMusic, "暂停", true as Bool?), (.qqMusic, "暫停", true), (.qqMusic, "播放", false),
+                                         (.netease, "暂停", true), (.netease, "Pause", true), (.netease, "播放", false),
+                                         (.netease, "Play", false), (.netease, "播放/暂停", nil), (.qqMusic, "播放模式", nil),
+                                         (.kugou, "播放/暂停", nil), (.kugou, "暂停", nil), (.pinePlayer, "播放", nil)] {
+                expectEqual(PlaybackMenuControl.showsPlaying(menuTitle: t, player: player), playing,
+                            "菜单标题看在不在放: \(player) 「\(t)」")
+            }
+            expectEqual(PlaybackPlayer.allCases.filter(PlaybackMenuControl.titleShowsState), [.qqMusic, .netease],
+                        "菜单标题看在不在放: 只有 QQ、网易云的标题随状态变")
             for command in [Command.playPause, .nextTrack, .previousTrack] {
                 expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
                     focusHeldElsewhere: true, directQueryFallback: .reamp, mediaControlCommand: command.rawValue),
@@ -975,8 +985,8 @@ func runPlayerIdentityTests() {
         let table: [PlaybackPlayer: (songLink: PlatformLinks.Platform?, on: Set<On>)] = [
             .appleMusic: (.appleMusic, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
                                         .favorite, .resume, .learnsAnchorLag, .spatialAudioOffset]),
-            .qqMusic: (.qqMusic, [.extendedControls, .repeatOne, .favorite, .learnsAnchorLag, .catalogMenuRows]),
-            .netease: (.netease, [.favorite, .learnsAnchorLag, .pausedAnchorStartsOnPlay, .catalogMenuRows]),
+            .qqMusic: (.qqMusic, [.extendedControls, .repeatOne, .favorite, .resume, .learnsAnchorLag, .catalogMenuRows]),
+            .netease: (.netease, [.favorite, .resume, .learnsAnchorLag, .pausedAnchorStartsOnPlay, .catalogMenuRows]),
             .kugou: (nil, [.favorite, .resume, .lateAnchorProbe, .resetAnchorCorrection, .stampsCaptureTime, .catalogMenuRows]),
             .soda: (.soda, [.favorite, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .catalogMenuRows]),
             .kkbox: (.kkbox, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .followsRepublishedAnchors,
@@ -992,7 +1002,7 @@ func runPlayerIdentityTests() {
             .lxMusic: (nil, [.extendedControls, .favorite, .lateAnchorProbe]),
             .vox: (nil, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
                          .learnsAnchorLag, .arrivesWhole]),
-            .pinePlayer: (nil, [.extendedControls, .repeatOne, .snapsToReportedPosition, .arrivesWhole]),
+            .pinePlayer: (nil, [.extendedControls, .repeatOne, .resume, .snapsToReportedPosition, .arrivesWhole]),
         ]
         expectEqual(PlaybackPlayer.allCases.count, table.count + 1,
                     "决定表: 新增播放器要在这里补一行,逐项决定它走哪条路(+1 是 .auto)")
