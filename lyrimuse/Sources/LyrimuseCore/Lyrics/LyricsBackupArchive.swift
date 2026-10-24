@@ -147,15 +147,19 @@ public enum LyricsBackupArchive {
         /// 代价是 base64 的 33% 膨胀(9.7 MB → 12.9 MB),但压缩后只差 0.65 MB
         /// (0.60 → 1.25 MB),换这份"字段无关、永不需要跟着改"的解耦是划算的。
         public var meta: Data?
+        /// 文件名 → 原样字节:不是 UTF-8 文本的歌词文件(QQ 音乐、酷狗客户端那种加密的 `.qrc` / `.krc`)。nil = 没有。
+        /// 放不进 `files`(那边是文本);不认这个键的旧版本恢复时只是少了这几份。
+        public var bin: [String: Data]?
 
         public init(v: Int = LyricsBackupArchive.payloadVersion, at: String, device: String,
-                    files: [String: String], pins: [String: Int], meta: Data? = nil) {
+                    files: [String: String], pins: [String: Int], meta: Data? = nil, bin: [String: Data]? = nil) {
             self.v = v
             self.at = at
             self.device = device
             self.files = files
             self.pins = pins
             self.meta = meta
+            self.bin = bin
         }
     }
 

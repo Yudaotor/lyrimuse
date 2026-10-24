@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -442,11 +443,14 @@ func TestStaleExportKeysAlwaysDropsLosers(t *testing.T) {
 }
 
 func TestEnrichExportedFileNamesCoversBothForms(t *testing.T) {
-	// 普通名 4 个 + 带消歧哈希后缀 4 个。漏了带后缀那半,迁移删不掉落选条目的文件,
+	// 普通名、带消歧哈希后缀的各配全部后缀(含每种逐字格式)。漏了带后缀那半,迁移删不掉落选条目的文件,
 	// importLyricsFromFiles 会把它又导回来 —— 的"删了又自己回来"就是这个坑。
 	names := enrichExportedFileNames("丁世光|不散的筵席|神經志 The Journal")
-	if len(names) != 8 {
-		t.Fatalf("want 8 candidate names, got %d: %v", len(names), names)
+	if want := 2 * len(lyricsAllFileSuffixes()); len(names) != want {
+		t.Fatalf("want %d candidate names, got %d: %v", want, len(names), names)
+	}
+	if !slices.Contains(names, "丁世光 - 不散的筵席 - 神經志 The Journal.ttml") {
+		t.Errorf("逐字的别的格式也要列上: %v", names)
 	}
 	var plain, hashed int
 	for _, n := range names {

@@ -2274,6 +2274,19 @@ private struct LyricsSettingsTab: View {
         LyricsLibraryStatsPanel()
         SettingsCard(cornerRadius: 18) {
             lyricsFolderRow
+            CardDivider()
+            lyricsWordFormatRow
+            // 另外多存了几种格式时多出一条从属行:说明还存着哪些副本,并给出删掉的入口。
+            if features.lyricsWordFormats.count > 1 {
+                CardDivider()
+                SettingsSubRow(title: String(format: L10n.t("另存副本：%@"),
+                                             features.lyricsWordFormats.dropFirst().map(Self.lyricsWordFormatName).joined(separator: "、"))) {
+                    Button(L10n.t("删除副本")) {
+                        applyLyricsWordFormats(Array(features.lyricsWordFormats.prefix(1)), backup: true)
+                    }
+                    .buttonStyle(.link)
+                }
+            }
             // 只在偏离默认位置时多出一条从属行:既说明了状态(你现在不在默认位置),又给出退路。
             // 放在默认状态下也摆一颗"恢复默认"是在给一个点了什么都不会变的按钮占位。
             if !features.lyricsDir.isEmpty {
@@ -2360,6 +2373,78 @@ private struct LyricsSettingsTab: View {
             }
             .settingsGlassButtons()
             .buttonBorderShape(.capsule)
+        }
+    }
+
+    /// 「逐字歌词格式」行:歌词文件夹里逐字歌词写成哪种格式。副标题只说当前选中的那种。
+    private var lyricsWordFormatRow: some View {
+        let primary = features.lyricsWordFormats.first ?? .yrc
+        return SettingsRow(
+            icon: "doc.text",
+            title: L10n.t("逐字歌词格式"),
+            subtitle: Self.lyricsWordFormatDetail(primary)
+        ) {
+            SettingsGlassPopoverMenu(
+                title: Self.lyricsWordFormatName(primary),
+                items: LyricsWordFormat.allCases,
+                itemLabel: Self.lyricsWordFormatName,
+                isChecked: { $0 == primary },
+                height: 28
+            ) { pickLyricsWordFormat($0) }
+            .fixedSize()
+        }
+    }
+
+    static func lyricsWordFormatName(_ f: LyricsWordFormat) -> String {
+        switch f {
+        case .yrc: "YRC"
+        case .ttml: "TTML"
+        case .qrc: "QRC"
+        case .krc: "KRC"
+        case .enhancedLRC: L10n.t("增强 LRC")
+        }
+    }
+
+    static func lyricsWordFormatDetail(_ f: LyricsWordFormat) -> String {
+        switch f {
+        case .yrc: L10n.t("网易云音乐的逐字格式")
+        case .ttml: L10n.t("Apple Music 使用的标准格式，可存背景人声")
+        case .qrc: L10n.t("QQ 音乐客户端的本地格式")
+        case .krc: L10n.t("酷狗音乐客户端的本地格式")
+        case .enhancedLRC: L10n.t("在逐行 LRC 里给每个字加上时间")
+        }
+    }
+
+    /// 换主格式:原来那几种留作副本,或删掉(删之前先打一份自动快照,设置里能恢复)。
+    private func pickLyricsWordFormat(_ picked: LyricsWordFormat) {
+        let current = features.lyricsWordFormats
+        guard picked != current.first else { return }
+        let alert = NSAlert()
+        alert.messageText = String(format: L10n.t("把逐字歌词改存为 %@？"), Self.lyricsWordFormatName(picked))
+        alert.informativeText = String(format: L10n.t("原来的 %@ 文件可以留作副本，删除前会先自动备份"),
+                                       current.filter { $0 != picked }.map(Self.lyricsWordFormatName).joined(separator: "、"))
+        alert.addButton(withTitle: L10n.t("保留副本"))
+        alert.addButton(withTitle: L10n.t("删除原文件"))
+        alert.addButton(withTitle: L10n.t("取消"))
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            applyLyricsWordFormats([picked] + current.filter { $0 != picked }, backup: false)
+        case .alertSecondButtonReturn:
+            applyLyricsWordFormats([picked], backup: true)
+        default:
+            return
+        }
+    }
+
+    /// 写进 features.json,引擎热重读后先按旧格式导入、再整份按新格式导出(lyricsdirswitch.go 的 switchLyricsWordFormats)。
+    /// backup:会删掉文件时先打一份自动快照。
+    private func applyLyricsWordFormats(_ formats: [LyricsWordFormat], backup: Bool) {
+        Task {
+            if backup {
+                _ = await LyricsBackupStore.writeAutoSnapshot(reason: "word-format")
+            }
+            features.lyricsWordFormats = formats
+            await features.save()
         }
     }
 

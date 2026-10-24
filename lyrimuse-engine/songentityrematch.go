@@ -117,7 +117,9 @@ func songShareFollower(e enrichEntry) bool {
 
 // importPredatesSongShare:导入歌词文件夹、状态记录作废时用。key 这条写法的歌词还是同步写进去那份(有留底、指纹对得上),
 // 文件夹里这组文件的正文、逐字跟留底里同步之前那份一样:是同步之前导出、之后没更新过的旧文件,不导入。调用方持 enrichMu。
-func importPredatesSongShare(key string, e enrichEntry, body func(suffix string) (string, bool)) bool {
+//
+// wordSame:逐字文件是不是按 pre 这份导出的(各种格式比明文,见 importedWordFileUnchanged)。
+func importPredatesSongShare(key string, e enrichEntry, body func(suffix string) (string, bool), wordSame func(pre enrichEntry, fileYRC string) bool) bool {
 	pre, ok := songShareRestorable(key, e)
 	if !ok {
 		return false
@@ -132,7 +134,8 @@ func importPredatesSongShare(key string, e enrichEntry, body func(suffix string)
 	if !pre.LyricsBG.IsZero() {
 		fileLRC, fileYRC = parenBGFileForm(pre.LyricsSource, fileLRC, fileYRC, pre.LyricsBG.String())
 	}
-	return (!hasLRC || pre.Lyrics.EqualString(lrc) || lrc == fileLRC) && (!hasYRC || pre.LyricsYRC.EqualString(yrc) || yrc == fileYRC) &&
+	return (!hasLRC || pre.Lyrics.EqualString(lrc) || lrc == fileLRC) &&
+		(!hasYRC || pre.LyricsYRC.EqualString(yrc) || yrc == fileYRC || wordSame(pre, fileYRC)) &&
 		(lrc != "" || yrc != "")
 }
 

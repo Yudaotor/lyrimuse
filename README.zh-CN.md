@@ -286,7 +286,7 @@ macOS 14 Sonoma 及以上（Sequoia、Tahoe 以及更新的版本都行），App
 时间对不上，就给这首歌调个偏移，以后再放这首都会记住。歌词不对或者版本不对，就打开手动搜索，所有歌词源的结果连同分数都列在那儿；你选中的那份会被锁定，自动匹配不会再换掉它。任何一首歌的歌词也都能在「歌词管理」里自己改。
 
 ### 能把歌词存成 .lrc 文件吗？
-本来就存着。每首找到歌词的歌都有一份逐行时间的 `.lrc`；有译文、读音的，另外还有 `.tr.lrc` 和 `.roma.lrc`。逐字时间轴单独存成 `.yrc`，用的是网易云的 YRC 格式，大多数别的播放器读不了。文件放在 `~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/`，位置可以在设置里改。
+本来就存着。每首找到歌词的歌都有一份逐行时间的 `.lrc`；有译文、读音的，另外还有 `.tr.lrc` 和 `.roma.lrc`。逐字时间轴单独存一份，默认是 `.yrc`（网易云的 YRC 格式）；可以在设置里改成 TTML、增强 LRC、QRC 或 KRC，方便别的播放器读，也可以几种同时存。文件放在 `~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/`，位置可以在设置里改。
 
 ### LyricsX 还在维护吗？Lyrimuse 和 LyricsX、Lyric Fever 有什么区别？
 LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3，支持 macOS 10.11 及以上，能配合 Apple Music、Spotify 和几个老牌播放器用。Lyric Fever 主要做 Spotify 和 Apple Music，需要 macOS 15 及以上。Lyrimuse 需要 macOS 14 及以上，另外支持 QQ 音乐、网易云音乐、酷狗、汽水音乐、KKBOX、Amazon Music、Kaset、reAMP、VOX、Pine Player、洛雪音乐和浏览器里的播放器，能逐行标拼音、粤拼、日文和韩文的罗马音，以及俄语、泰语等另外十八种语言的读音，还能打卡到 Last.fm / ListenBrainz，并在本地统计你的听歌数据。逐项核实过的对照表见[对比页](docs/lyrics-apps-comparison.zh-CN.md)。

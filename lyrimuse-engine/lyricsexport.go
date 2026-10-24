@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -152,8 +153,9 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		bodies               [4]bodyText
 		bg                   bodyText
 		// cached:缓存里原样的正文 / 逐字。背景人声接回去之后跟 variants 不同(parenBGFileForm)。
-		cached [4]string
-		bgText string
+		cached       [4]string
+		bgText       string
+		durationSecs float64
 	}
 	// 只导出几个分组时,不在 onlyFolds 里的条目连拷都不拷:碰撞分组只对要导出的分组有意义,而同一分组的 key 分组键相同、
 	// 必然都在 onlyFolds 里,整组照样算全。只遍历 key,条目约 1.4 KB,按值遍历会把整个缓存拷一遍。见 15 章决策 53。
@@ -182,6 +184,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			key: key, artist: artist, title: title, album: album,
 			source: e.LyricsSource, manual: e.ManualLyrics,
 			bodies: [4]bodyText{e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC}, bg: e.LyricsBG,
+			durationSecs: e.DurationSecs,
 		})
 	}
 	enrichMu.Unlock()
@@ -214,6 +217,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 	// 上次之后没人动过、要写的内容也没变的文件不读不写(见 lyricsfilestate.go)。全量导出先把目录列一遍,
 	// 「在不在、动没动」都从这份列表里查,不再对每个可能的文件名逐个 stat / 删除;单首导出只碰那几个文件,直接 stat。
 	useState := lyricsFileStateEnabled(dir)
+	wordFormats := lyricsWordFormatsInUse()
 	var present map[string]fs.FileInfo
 	if onlyFolds == nil {
 		present = listLyricsDir(dir)
@@ -229,15 +233,26 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		return info
 	}
 	remove := func(name string) {
+		var info fs.FileInfo
 		if present != nil {
-			if _, ok := present[name]; !ok {
+			p, ok := present[name]
+			if !ok {
 				return
 			}
+			info = p
 			delete(present, name)
 		}
 		path := filepath.Join(dir, name)
+		// 状态记录里有、之后没动过的就是这边写出的那份,不用读出来认头部(换逐字格式时整库的旧格式文件都要删,一份份解开太慢)。
+		if useState && info != nil {
+			if _, same := lyricsFileUnchanged(dir, name, info); same {
+				_ = os.Remove(path)
+				forgetLyricsFile(dir, name)
+				return
+			}
+		}
 		// 认不出头部的文件(用户手改坏了、别的程序写的同名文件)不是这边导出的那份,不直接删:挪进废纸篓。
-		if data, err := os.ReadFile(path); err == nil && !parseLyricsBytes(data).ok {
+		if data, err := os.ReadFile(path); err == nil && !lyricsFileRecognized(name, data) {
 			trashFile(path)
 		} else {
 			_ = os.Remove(path) // 忽略"文件本来就不存在"的错误,这是预期情况
@@ -270,7 +285,30 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		}
 	}
 
-	formsBefore := parenBGFileForms.Load()
+	formsBefore, encodesBefore := parenBGFileForms.Load(), lyricsWordFileEncodes.Load()
+	// 要重写的逐字文件先并行编好(换格式时整库都要重编,QRC 那层 3DES 一首几毫秒),下面的循环按顺序写。
+	var preEncoded []lyricsWordPreEncoded
+	if onlyFolds == nil {
+		preEncoded = preEncodeLyricsWordFiles(len(jobs), wordFormats, func(i int) (lyricsWordJob, bool) {
+			j := jobs[i]
+			if j.cached[3] == "" {
+				return lyricsWordJob{}, false
+			}
+			base, ok := disambiguated[i]
+			if !ok {
+				base = sanitizeLyricsFilename(j.key)
+			}
+			return lyricsWordJob{
+				base: base, header: lyricsFileHeader(j.artist, j.title, j.album, j.source, j.manual),
+				in: lyricsWordFileInput{artist: j.artist, title: j.title, album: j.album, source: j.source, manual: j.manual,
+					nativeYRC: j.cached[3], bg: j.bgText, durationSecs: j.durationSecs},
+				lrc: j.cached[0],
+			}, true
+		}, func(name string, src uint32) bool {
+			info := statOf(name)
+			return useState && info != nil && lyricsFileUnchangedFrom(dir, name, info, src)
+		})
+	}
 	for i, j := range jobs {
 		if onlyFolds != nil && !onlyFolds[folds[i]] {
 			continue
@@ -281,7 +319,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			// 碰撞组缩回这一个 key 之后,它当初那份带哈希后缀的文件没人管了:导入按头部认身份,状态记录一失效
 			// 就可能拿这份旧内容把新写的顶掉。名字是按这个 key 算的,确定是它自己的。
 			hashed := lyricsDisambiguatedBase(j.key)
-			for _, suffix := range lyricsFileSuffixes {
+			for _, suffix := range lyricsAllFileSuffixes() {
 				remove(hashed + suffix)
 			}
 		} else {
@@ -289,7 +327,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			// 残留的旧文件:那个文件名现在同时"属于"碰撞组里好几个 key,内容早晚会被
 			// 其中某一个的写入弄乱,留着只是一份意义不明的孤儿文件。
 			plainBase := sanitizeLyricsFilename(j.key)
-			for _, suffix := range lyricsFileSuffixes {
+			for _, suffix := range lyricsAllFileSuffixes() {
 				remove(plainBase + suffix)
 			}
 		}
@@ -299,7 +337,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		// 是按**文件头部标签**重建 key 的、不看文件名,所以这份旧内容下次启动会被当成
 		// 用户文件读回来,把新写的那份顶掉。
 		if untruncated := sanitizeLyricsFilenameUntruncated(j.key); untruncated != sanitizeLyricsFilename(j.key) {
-			for _, suffix := range lyricsFileSuffixes {
+			for _, suffix := range lyricsAllFileSuffixes() {
 				// 名字本身超过 255 字节时 Remove 会返回 ENAMETOOLONG,那正说明它不可能
 				// 存在过,和"文件不存在"一样忽略掉。
 				remove(untruncated + suffix)
@@ -310,53 +348,44 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		// 文件没动过、记录里的缓存原文指纹也一样就跳过。
 		src := parenBGFileSource(header, j.source, j.cached[0], j.cached[3], j.bgText)
 		formed := src == 0
-		for k, suffix := range lyricsFileSuffixes {
-			name := base + suffix
-			path := filepath.Join(dir, name)
-			if j.cached[k] == "" {
-				remove(name)
-				continue
-			}
-			info := statOf(name)
-			fileForm := src != 0 && (k == 0 || k == 3)
-			if fileForm && useState && info != nil && lyricsFileUnchangedFrom(dir, name, info, src) {
-				continue
-			}
-			if fileForm && !formed {
+		if preEncoded != nil && preEncoded[i].formed {
+			j.variants[0], j.variants[3] = preEncoded[i].fileLRC, preEncoded[i].fileYRC
+			formed = true
+		}
+		form := func() {
+			if !formed {
 				j.variants[0], j.variants[3] = parenBGFileForm(j.source, j.cached[0], j.cached[3], j.bgText)
 				formed = true
 			}
-			content := j.variants[k]
-			fileSrc := uint32(0)
-			if fileForm {
-				fileSrc = src
-			}
-			full := []byte(header + content)
+		}
+		// put:把 full 写成 name。盘上那份内容一样(same)就只记状态;是背景人声接回去之前的写法、内容没别的变化(oldForm)时
+		// 改写后修改时间留原样,歌词管理按更新时间排时不跳到最前;认不出是这边导出的(recognized 为 false)先挪进废纸篓。
+		put := func(name string, info fs.FileInfo, full []byte, fileSrc uint32, same, oldForm, recognized func([]byte) bool) {
+			path := filepath.Join(dir, name)
 			sum := lyricsCRC(full)
 			if useState && info != nil {
-				if recorded, same := lyricsFileUnchanged(dir, name, info); same && recorded == sum {
+				if recorded, unchanged := lyricsFileUnchanged(dir, name, info); unchanged && recorded == sum {
 					recordLyricsFileFrom(dir, name, info, sum, fileSrc)
-					continue
+					return
 				}
 			}
-			// 盘上这份是背景人声接回去之前的写法、内容没别的变化:改写后修改时间留原样,歌词管理按更新时间排时不跳到最前。
 			keepTime := false
 			if info != nil {
 				existing, err := os.ReadFile(path)
-				if err == nil && string(existing) == string(full) {
-					recordLyricsFileFrom(dir, name, info, sum, fileSrc)
-					continue
+				if err == nil && same(existing) {
+					recordLyricsFileFrom(dir, name, info, lyricsCRC(existing), fileSrc)
+					return
 				}
-				keepTime = err == nil && content != j.cached[k] && string(existing) == header+j.cached[k]
+				keepTime = err == nil && oldForm(existing)
 				// 盘上这份认不出头部:导入没采纳它(见 importLyricsFrom 的 variantBody),这里要拿缓存里的内容
 				// 盖掉它 —— 先挪进废纸篓留一份。
-				if err == nil && !parseLyricsBytes(existing).ok {
+				if err == nil && !recognized(existing) {
 					trashFile(path)
 				}
 			}
 			if err := writeLyricsFileAtomic(path, full); err != nil {
 				slog.Error("lyrics export: write failed", "file", name, "err", err)
-				continue
+				return
 			}
 			if keepTime {
 				_ = os.Chtimes(path, info.ModTime(), info.ModTime())
@@ -368,12 +397,69 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 				}
 			}
 		}
+		for k, suffix := range lyricsFileSuffixes[:3] {
+			name := base + suffix
+			if j.cached[k] == "" {
+				remove(name)
+				continue
+			}
+			info := statOf(name)
+			fileForm := src != 0 && k == 0
+			if fileForm && useState && info != nil && lyricsFileUnchangedFrom(dir, name, info, src) {
+				continue
+			}
+			fileSrc := uint32(0)
+			if fileForm {
+				form()
+				fileSrc = src
+			}
+			full := []byte(header + j.variants[k])
+			put(name, info, full, fileSrc,
+				func(b []byte) bool { return string(b) == string(full) },
+				func(b []byte) bool { return j.variants[k] != j.cached[k] && string(b) == header+j.cached[k] },
+				func(b []byte) bool { return parseLyricsBytes(b).ok })
+		}
+		// 逐字按设置写成一种或几种格式(lyricswordformat.go),设置里没有的格式的文件删掉。每份文件记下写它时缓存内容的指纹,
+		// 文件没动过、指纹也一样就不再编码(QRC 那层 3DES 每首都算一遍太慢)。
+		for _, f := range lyricsWordFormatsAll {
+			name := base + f.suffix()
+			if j.cached[3] == "" || !slices.Contains(wordFormats, f) {
+				remove(name)
+				continue
+			}
+			info := statOf(name)
+			wsrc := lyricsWordFileSource(f, header, j.source, j.cached[0], j.cached[3], j.bgText, j.durationSecs)
+			if useState && info != nil && lyricsFileUnchangedFrom(dir, name, info, wsrc) {
+				continue
+			}
+			var enc lyricsWordEncoded
+			ok := false
+			if preEncoded != nil {
+				enc, ok = preEncoded[i].files[f]
+			}
+			if !ok {
+				form()
+				in := lyricsWordFileInput{artist: j.artist, title: j.title, album: j.album, source: j.source, manual: j.manual,
+					yrc: j.variants[3], nativeYRC: j.cached[3], bg: j.bgText, durationSecs: j.durationSecs}
+				enc = encodeLyricsWordFile(f, in)
+			}
+			plain := enc.plain
+			put(name, info, enc.sealed, wsrc,
+				func(b []byte) bool { p, ok := openLyricsWordFile(f, b); return ok && p == plain },
+				func(b []byte) bool {
+					return f == lyricsWordYRC && j.variants[3] != j.cached[3] && string(b) == header+j.cached[3]
+				},
+				func(b []byte) bool { return lyricsWordFileRecognized(f, b) })
+		}
 	}
 	if present != nil && useState {
 		saveLyricsFileState(dir, present)
 	}
 	if n := parenBGFileForms.Load() - formsBefore; n > 0 && onlyFolds == nil {
 		slog.Info("lyrics export: wrote background vocals back into lyrics files", "entries", n)
+	}
+	if n := lyricsWordFileEncodes.Load() - encodesBefore; n > 0 && onlyFolds == nil {
+		slog.Info("lyrics export: encoded word-timed lyrics files", "files", n, "formats", wordFormats)
 	}
 }
 

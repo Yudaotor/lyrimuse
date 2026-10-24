@@ -230,3 +230,26 @@ func qm3DESDecrypt(key, data []byte) []byte {
 	}
 	return out
 }
+
+// qm3DESEncrypt 是 qm3DESDecrypt 的逆运算(E(k1)→D(k2)→E(k3)),写 QQ 音乐本地 .qrc 用。data 长度要是 8 的倍数,
+// 末尾不足 8 字节的部分不加密(调用方先补齐)。
+func qm3DESEncrypt(key, data []byte) []byte {
+	if len(key) != 24 {
+		return nil
+	}
+	sched := [3][16]qmRoundKey{
+		qmKeySchedule(key[0:8], qmEncrypt),
+		qmKeySchedule(key[8:16], qmDecrypt),
+		qmKeySchedule(key[16:24], qmEncrypt),
+	}
+	out := make([]byte, len(data))
+	for off := 0; off+8 <= len(data); off += 8 {
+		block := data[off : off+8]
+		for _, s := range sched {
+			b := qmCrypt(block, s)
+			block = b[:]
+		}
+		copy(out[off:off+8], block)
+	}
+	return out
+}

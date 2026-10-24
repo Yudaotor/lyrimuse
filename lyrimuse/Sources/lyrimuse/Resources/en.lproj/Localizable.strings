@@ -139,6 +139,7 @@
 "Amazon Music 歌手页" = "Amazon Music artist page";
 "Amazon Music 歌曲页" = "Amazon Music song page";
 "Apple Music" = "Apple Music";
+"Apple Music 使用的标准格式，可存背景人声" = "The standard format Apple Music uses, with room for background vocals";
 "Apple Music 播放的曲目 ID 一致" = "Same Apple Music track ID from playback";
 "Apple Music 检索结果为同一曲目" = "Same track found by Apple Music search";
 "Apple Music 登录已失效（已过期或被撤销），请重新连接" = "Your Apple Music sign-in is no longer valid (expired or revoked). Reconnect to continue";
@@ -204,6 +205,7 @@
 "POST 到你填的地址" = "POST to the address you entered";
 "QQ 音乐" = "QQ Music";
 "QQ 音乐专辑页" = "QQ Music album page";
+"QQ 音乐客户端的本地格式" = "The local file format of the QQ Music app";
 "QQ 音乐播放的歌曲 ID 一致" = "Same QQ Music song ID from playback";
 "QQ 音乐检索结果为同一曲目" = "Same track found by QQ Music search";
 "QQ 音乐歌手建议" = "QQ Music artist suggestion";
@@ -475,6 +477,7 @@
 "保存失败，请重试" = "Couldn't save. Try again";
 "保存的歌词不含任何时间戳，未保存（否则会丢失原有时间轴）" = "The saved lyrics have no timestamps at all; not saved (the existing timing would be lost)";
 "保持锁定" = "Keep Locked";
+"保留副本" = "Keep Copies";
 "信任后与内置播放器相同：显示歌词，并计入收听记录" = "Once trusted, it works exactly like a built-in player: lyrics show up, and plays are recorded to your listening history";
 "修复文件后重新打开 Lyrimuse；或舍弃此文件，用当前界面上的值重建（原文件将重命名保留，不会删除）" = "Fix the file and reopen Lyrimuse, or discard it and rebuild it from the values shown here (the original is renamed, not deleted)";
 "修改后没有歌词了，未保存；修改内容仍保留在编辑框中" = "There are no lyrics left after your changes, so they weren't saved. They're still in the editor";
@@ -613,6 +616,8 @@
 "删除「%@」？" = "Delete “%@”?";
 "删除「%@」？删除后无法恢复" = "Delete “%@”? This can’t be undone";
 "删除中…" = "Removing…";
+"删除副本" = "Delete Copies";
+"删除原文件" = "Delete Old Files";
 "删除后不再推送到这个渠道，推送记录会保留" = "Pushes to this channel stop after it's deleted; the delivery history is kept";
 "删除失败" = "Couldn't Remove";
 "删除本地记录…" = "Delete Saved Lyrics…";
@@ -680,6 +685,7 @@
 "原文" = "Original";
 "原文 + 译文" = "Original + Translation";
 "原文 + 读音" = "Original + Romanization";
+"原来的 %@ 文件可以留作副本，删除前会先自动备份" = "Keep the existing %@ files as copies, or delete them. A backup is made before deleting";
 "去年今日收听 %@ 次，以下为循环最多的歌曲" = "A year ago today: %@ plays, most on repeat";
 "去年今日收听 %@ 次，以下为循环最多的歌曲#one" = "A year ago today: %@ play, most on repeat";
 "去年这一周收听 %@ 次，循环最多的是以下歌曲" = "This week last year: %@ plays, most on repeat";
@@ -707,6 +713,7 @@
 "另一时长" = "Other length";
 "另一轮扫描正在进行，请在完成后再试" = "Another scan is in progress. Try again when it finishes";
 "另外两项均开启时不显示" = "Hidden when the other two are on";
+"另存副本：%@" = "Also saved as: %@";
 "另有 %@ 条记录过旧，Last.fm 不再接受" = "%@ more are too old for Last.fm to accept";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ more songs had no source response · Auto-Match All";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ more song had no source response · Auto-Match All";
@@ -838,6 +845,7 @@
 "在访达中显示" = "Show in Finder";
 "在访达中显示歌词文件" = "Show Lyrics File in Finder";
 "在该浏览器的开发者菜单中开启「允许 Apple 事件中的 JavaScript」" = "Turn on “Allow JavaScript from Apple Events” in this browser’s Developer menu";
+"在逐行 LRC 里给每个字加上时间" = "Line-by-line LRC with a timestamp on every word";
 "在钉钉群中：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后拷贝 Webhook 地址。安全设置建议选择「加签」，并将生成的密钥填入下方的「加签密钥」" = "In your DingTalk group: Group Settings → Group Assistant → Add Robot → Custom, then copy the webhook URL after creating it. For security, choose “Signature” and put the generated secret in the “Signing Secret” field below";
 "在防火墙设置中允许 Lyrimuse 的传入连接后，其他设备才能打开链接" = "Allow incoming connections for Lyrimuse in Firewall settings so other devices can open the link";
 "在飞书群中：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后拷贝 Webhook 地址。如需额外校验，可开启「签名校验」，并将密钥填入下方的「签名密钥」" = "In your Feishu group: Settings → Group Bots → Add Bot → Custom Bot, then copy the webhook URL after creating it. For an extra layer of verification, enable “Signature Verification” and enter the secret in the “Signature Secret” field below";
@@ -849,6 +857,7 @@
 "塞尔维亚语" = "Serbian";
 "塞尔维亚语拉丁字母（联合国推荐），如 Љубав → Ljubav" = "Serbian Latin alphabet (UN-recommended), e.g. Љубав → Ljubav";
 "填写后，每次请求将附带 X-Lyrimuse-Signature: sha256=…（使用此密钥对请求体计算的 HMAC-SHA256），接收端可据此校验来源" = "When set, every request carries X-Lyrimuse-Signature: sha256=… (an HMAC-SHA256 of the body with this secret) so the receiver can verify where it came from";
+"增强 LRC" = "Enhanced LRC";
 "墨字白边" = "Ink Outline";
 "声波" = "Waveform";
 "备份与迁移" = "Backup & Migration";
@@ -1259,6 +1268,7 @@
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Found %1$@ · Not found %2$@ · Skipped %3$@";
 "找到 %@ 首" = "%@ Found";
 "把听歌报告推到手机、群聊或你自己的服务" = "Send listening reports to your phone, group chats or your own service";
+"把逐字歌词改存为 %@？" = "Save Word-by-Word Lyrics as %@?";
 "拆分" = "Split";
 "拆分…" = "Split…";
 "拆分「%@」？" = "Split “%@”?";
@@ -2161,6 +2171,7 @@
 "网易云音乐播放的歌曲 ID 一致" = "Same NetEase Cloud Music song ID from playback";
 "网易云音乐检索结果为同一曲目" = "Same track found by NetEase Cloud Music search";
 "网易云音乐歌曲页" = "NetEase Cloud Music song page";
+"网易云音乐的逐字格式" = "NetEase Cloud Music's word-by-word format";
 "网易旗下的音乐 App" = "NetEase's music app";
 "网易旗下的音乐平台" = "NetEase's music service";
 "网络" = "Network";
@@ -2525,6 +2536,7 @@
 "逐字歌词" = "Word-by-word";
 "逐字歌词仅修改文字，时间保持不变" = "Word-timed lyrics: only the words change, not the timing";
 "逐字歌词仅修改文字，每个字保留原有时间；新增或修改了时间戳的句子按字数分配时间" = "Word-timed lyrics: edit the text only. Every word keeps its timing; new lines and lines with a changed timestamp get their time split evenly by length";
+"逐字歌词格式" = "Word-by-Word Lyrics Format";
 "逐字歌词随演唱逐字高亮；无逐字数据的歌曲整行高亮" = "Word-by-word lyrics: each word lights up as it is sung. Songs without word timings highlight the whole line";
 "逐帧 JPEG" = "Per-frame JPEG";
 "逐行" = "Line-by-line";
@@ -2555,6 +2567,7 @@
 "酷我音乐" = "Kuwo Music";
 "酷狗音乐" = "Kugou Music";
 "酷狗音乐专辑页" = "Kugou Music album page";
+"酷狗音乐客户端的本地格式" = "The local file format of the Kugou Music app";
 "酷狗音乐播放的歌曲 ID 一致" = "Same Kugou Music song ID from playback";
 "酷狗音乐歌曲页" = "Kugou Music song page";
 "采用此候选" = "Use This Candidate";

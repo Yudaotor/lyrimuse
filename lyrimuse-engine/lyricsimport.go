@@ -150,7 +150,7 @@ func parseLyricsBytes(data []byte) parsedLyricsFile {
 // 而这条规则一旦回退就会**静默毁数据**(不报错、不崩,只是原文被译文替换),必须有测试兜住。
 func lyricsFileSuffixOf(name string) string {
 	var suffix string
-	for _, s := range lyricsFileSuffixes {
+	for _, s := range lyricsAllFileSuffixes() {
 		if strings.HasSuffix(name, s) && len(s) > len(suffix) {
 			suffix = s
 		}
@@ -309,25 +309,36 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 			continue
 		}
 		// 组里每个文件只读一次:认身份的头部与各变体的正文都从这一份里取,读的时候顺手记下它的状态。
+		// 逐字文件(各种格式,lyricswordformat.go)解开、转成 YRC 语法放进 bodies,明文和背景人声另记在 words 里。
 		bodies := make(map[string]parsedLyricsFile, len(g.files))
+		words := map[lyricsWordFormat]importedWordFile{}
 		for suffix, path := range g.files {
 			data, err := os.ReadFile(path)
 			if err != nil {
 				noteFileErr("read", path, err)
 				continue
 			}
-			if !utf8.Valid(data) {
-				slog.Warn("lyrics import: file is not UTF-8, converting it", "file", filepath.Base(path))
+			if f, ok := lyricsWordFormatOfSuffix(suffix); ok {
+				plain, opened := openLyricsWordFile(f, data)
+				if opened {
+					w := decodeLyricsWordText(f, plain)
+					bodies[suffix] = w.parsedLyricsFile
+					words[f] = importedWordFile{plain: plain, parsed: w}
+				}
+			} else {
+				if !utf8.Valid(data) {
+					slog.Warn("lyrics import: file is not UTF-8, converting it", "file", filepath.Base(path))
+				}
+				bodies[suffix] = parseLyricsBytes(data)
 			}
-			bodies[suffix] = parseLyricsBytes(data)
 			if info, ok := g.infos[suffix]; ok {
 				recordLyricsFile(dir, filepath.Base(path), info, lyricsCRC(data))
 			}
 		}
-		// 4 个后缀里随便挑一个能解析出头部的文件即可——同一组里的头部理应完全一致
+		// 组里随便挑一个能解析出头部的文件即可——同一组里的头部理应完全一致
 		// (都是同一次 exportLyricsFiles 写出来的)。
 		var parsed parsedLyricsFile
-		for _, suffix := range lyricsFileSuffixes {
+		for _, suffix := range lyricsAllFileSuffixes() {
 			if p, ok := bodies[suffix]; ok && p.ok {
 				parsed = p
 				break
@@ -362,7 +373,15 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 		}
 
 		e := enrichCache[key] // 不存在时是 enrichEntry{} 零值,TS 自然留 0
-		if !trusted && !restoreAll && !restoreKeys[key] && importPredatesSongShare(key, e, variantBody) {
+		// 逐字取哪一份:设置里的主格式那份在就以它为准,不在就按 lyricsWordFormatsAll 的先后取文件夹里有的(比如自己放进来的 .ttml)。
+		wordFormat, hasWordFile := pickImportedWordFile(words, variantBody)
+		if hasWordFile && wordFormat != lyricsWordYRC {
+			variantBody = withWordBodyAsYRC(variantBody, wordFormat.suffix())
+		}
+		wordSame := func(pre enrichEntry, fileYRC string) bool {
+			return hasWordFile && importedWordFileUnchanged(words[wordFormat], wordFormat, key, pre, fileYRC, true)
+		}
+		if !trusted && !restoreAll && !restoreKeys[key] && importPredatesSongShare(key, e, variantBody, wordSame) {
 			predated = append(predated, key)
 			continue
 		}
@@ -387,7 +406,7 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 				// 启动迁移会再拆。
 				e.LyricsBG = bodyText{}
 			}
-			if _, hasYRCFile := variantBody(".yrc"); splitYRC != "" && !hasYRCFile && !e.LyricsYRC.EqualString(splitYRC) {
+			if splitYRC != "" && !hasWordFile && !e.LyricsYRC.EqualString(splitYRC) {
 				e.LyricsYRC, changed = bt(splitYRC), true
 			}
 		}
@@ -404,10 +423,17 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 				e.LyricsRoma, changed = bt(v), true
 			}
 		}
-		if v, ok := variantBody(".yrc"); ok && !(hasFileForm && v == fileYRC) {
+		if v, ok := variantBody(".yrc"); ok && !importedWordFileUnchanged(words[wordFormat], wordFormat, key, e, fileYRC, hasFileForm) {
+			w := words[wordFormat].parsed
 			if !e.LyricsYRC.EqualString(v) {
 				e.LyricsYRC, changed = bt(v), true
-				e.LyricsBG = bodyText{}
+				if !w.hasBG {
+					e.LyricsBG = bodyText{}
+				}
+			}
+			// TTML 自己带背景人声这一项:照文件里的来。
+			if w.hasBG && !e.LyricsBG.EqualString(w.bg) {
+				e.LyricsBG, changed = bt(w.bg), true
 			}
 		}
 		// 正文被文件换了、译文 / 罗马音那两个文件却没动:它们描述的是旧正文(同歌词管理保存那条规则,见 applySaveEdit)。

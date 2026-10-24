@@ -205,9 +205,8 @@ func trimTrailingBrackets(title string, keep func(inner string) bool) string {
 	}
 }
 
-// enrichExportedFileNames 列出一个 key 在 lyrics/ 下**可能**占用的全部文件名:普通名 4 个
-// + 带消歧哈希后缀的 4 个。跟 Swift 侧 EnrichCacheKeys.exportedFileNames 逐一对应,理由见
-// 那边注释(碰撞组里的 key 在磁盘上只有带后缀的那份)。
+// enrichExportedFileNames 列出一个 key 在 lyrics/ 下**可能**占用的全部文件名:普通名、带消歧哈希后缀的,各配全部后缀
+// (lyricsAllFileSuffixes)。两种名字都要列:碰撞组里的 key 在磁盘上只有带后缀的那份。
 func enrichExportedFileNames(key string) []string {
 	plain := sanitizeLyricsFilename(key)
 	hashed := fmt.Sprintf("%s~%06x", plain, crc32.ChecksumIEEE([]byte(key))&0xFFFFFF)
@@ -217,9 +216,10 @@ func enrichExportedFileNames(key string) []string {
 	if untruncated := sanitizeLyricsFilenameUntruncated(key); untruncated != plain {
 		bases = append(bases, untruncated)
 	}
-	names := make([]string, 0, len(lyricsFileSuffixes)*len(bases))
+	suffixes := lyricsAllFileSuffixes()
+	names := make([]string, 0, len(suffixes)*len(bases))
 	for _, b := range bases {
-		for _, suffix := range lyricsFileSuffixes {
+		for _, suffix := range suffixes {
 			names = append(names, b+suffix)
 		}
 	}

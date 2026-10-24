@@ -343,6 +343,8 @@ struct FeatureFlagsFile: Codable, Equatable {
     var lyricsSourceMode: String?
     var lyricsSourceOrder: [String]?
     var lyricsDir: String?
+    // 歌词文件夹里逐字歌词写成哪几种格式(LyricsWordFormat 的值),第一个是主格式。nil = 只写 YRC。
+    var lyricsWordFormats: [String]?
     // "auto"(跟随系统语言,默认)或具体 ISO 639-1 代码("en"/"zh"/"ja"...)——见
     // MusixmatchTranslationLanguage 注释,引擎侧负责把 "auto" 解析成具体代码。
     var lyricsTranslationLanguage: String?
@@ -421,6 +423,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case lyricsSourceMode = "lyrics_source_mode"
         case lyricsSourceOrder = "lyrics_source_order"
         case lyricsDir = "lyrics_dir"
+        case lyricsWordFormats = "lyrics_word_formats"
         case lyricsTranslationLanguage = "lyrics_translation_language"
         case systemLanguage = "system_language"
         case launchLyrimuseOnMusicOpen = "launch_lyrimuse_on_music_open"
@@ -610,6 +613,8 @@ public final class FeatureSettingsStore: ObservableObject {
     // 空字符串 = 用默认位置(数据目录的 lyrics/)。用 effectiveLyricsDir
     // 取实际生效的路径,不要直接读这个属性去拼路径。
     @Published public var lyricsDir = ""
+    /// 歌词文件夹里逐字歌词的格式,至少一个,第一个是主格式(见 LyricsWordFormat)。
+    @Published public var lyricsWordFormats: [LyricsWordFormat] = [.yrc]
     // 只影响 Musixmatch 这个源的译文语言,详见 MusixmatchTranslationLanguage 注释。
     @Published public var lyricsTranslationLanguage: MusixmatchTranslationLanguage = .auto
     /// 本机系统语言,每次 load() 读一遍(见 FeatureFlagsFile.systemLanguage)。「翻译语言包」那一行按它算
@@ -740,6 +745,7 @@ public final class FeatureSettingsStore: ObservableObject {
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsPriorityOrder.map(\.rawValue) + unknownLyricsOrder,
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
+            lyricsWordFormats: lyricsWordFormats == [.yrc] ? nil : lyricsWordFormats.map(\.rawValue),
             lyricsTranslationLanguage: lyricsTranslationLanguage.rawValue,
             systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
             launchLyrimuseOnPlayers: (launchLyrimuseOnPlayers.map(\.rawValue) + unknownLaunchPlayers).sorted(),
@@ -1033,6 +1039,7 @@ public final class FeatureSettingsStore: ObservableObject {
         networkProxy = f.networkProxy.flatMap(NetworkProxyMode.init(rawValue:)) ?? .auto
         networkProxyServer = f.networkProxyServer ?? ""
         lyricsDir = f.lyricsDir ?? ""
+        lyricsWordFormats = LyricsWordFormat.resolve(f.lyricsWordFormats)
         lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
         if let raw = f.launchLyrimuseOnPlayers {
             launchLyrimuseOnPlayers = Set(raw.compactMap(PlaybackPlayer.init(rawValue:)))

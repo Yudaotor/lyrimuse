@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -156,6 +157,13 @@ func maybeReloadFeatures() {
 		go func() {
 			defer featuresReloadWork.Done()
 			switchLyricsDir(next.LyricsDir)
+		}()
+	}
+	if prev != nil && !slices.Equal(prev.LyricsWordFormats, next.LyricsWordFormats) {
+		featuresReloadWork.Add(1)
+		go func() {
+			defer featuresReloadWork.Done()
+			switchLyricsWordFormats(next.LyricsWordFormats)
 		}()
 	}
 	// 「扫描间隔」换了:下一首起就按新档等(lyricsFillSweepPace 每首现读),这里只把界面上的预计时长按新档重写。

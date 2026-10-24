@@ -175,9 +175,10 @@ From the lyrics window's ⋯ menu, search for other lyrics, run matching again, 
 
 ### Works offline; lyrics are plain .lrc files
 
-Every lyric found is cached on your Mac and shows without a connection. Each song has an .lrc file, plus .tr.lrc and .roma.lrc for translations and romanization, and word timing in .yrc. They live in ~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/ by default, and the folder can be moved.
+Every lyric found is cached on your Mac and shows without a connection. Each song has an .lrc file, plus .tr.lrc and .roma.lrc for translations and romanization. Word timing is saved as .yrc by default, or as TTML, Enhanced LRC, QRC or KRC. They live in ~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/ by default, and the folder can be moved.
 
 - Settings: Lyrics › Library › Lyrics Folder
+- Settings: Lyrics › Library › Word-by-Word Lyrics Format
 
 <a id="section-text"></a>
 
@@ -842,7 +843,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 290 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 291 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -875,6 +876,7 @@ Every setting in the Settings window, by where it lives: 290 in all. Type a name
 - **Re-Match Whole Library**: Songs that already have lyrics are re-matched too; manually edited, calibrated and instrumental songs are left unchanged
 - **Scan Interval**: Seconds between songs; at least 2 seconds is recommended to avoid rate limits
 - **Lyrics Folder**: Existing files stay where they are when you change the location
+- **Word-by-Word Lyrics Format**
 
 ### Player
 

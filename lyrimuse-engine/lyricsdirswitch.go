@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -58,8 +59,33 @@ func switchLyricsDir(setting string) {
 	log.Printf("lyrics dir: switched without a restart adopted=%d took=%s", adopted, time.Since(start).Round(10*time.Millisecond))
 }
 
-// enableLyricsDirSwitch 放开热切换,并补上启动期间可能漏掉的那次改动(没改过就是空操作)。
+// enableLyricsDirSwitch 放开热切换,并补上启动期间可能漏掉的那次改动(没改过就是空操作)。逐字格式同理。
 func enableLyricsDirSwitch() {
 	lyricsDirSwitchReady.Store(true)
 	switchLyricsDir(features().LyricsDir)
+	switchLyricsWordFormats(features().LyricsWordFormats)
+}
+
+// switchLyricsWordFormats 把歌词文件夹里的逐字换成 next 这几种格式。先按眼下的格式把文件夹导入一遍(主格式文件里的手改
+// 先收进缓存,换了主格式之后它就只是副本、不再被读),再换、整份导出:新格式写出来,不在 next 里的格式的文件删掉。
+// next 已经不是当前设置(期间又改过)时什么都不做,交给最新那一趟。
+func switchLyricsWordFormats(next []lyricsWordFormat) {
+	if !lyricsDirSwitchReady.Load() {
+		return
+	}
+	lyricsDirSwitchMu.Lock()
+	defer lyricsDirSwitchMu.Unlock()
+	if !slices.Equal(features().LyricsWordFormats, next) {
+		return
+	}
+	cur := lyricsWordFormatsInUse()
+	if slices.Equal(cur, next) {
+		lyricsWordFormatsApplied.Store(&next)
+		return
+	}
+	start := time.Now()
+	adopted := len(importLyricsFromDir(lyricsDir()))
+	lyricsWordFormatsApplied.Store(&next)
+	exportLyricsFiles()
+	log.Printf("lyrics files: word formats switched from=%v to=%v adopted=%d took=%s", cur, next, adopted, time.Since(start).Round(10*time.Millisecond))
 }

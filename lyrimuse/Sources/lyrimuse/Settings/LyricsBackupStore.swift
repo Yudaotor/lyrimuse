@@ -67,13 +67,18 @@ enum LyricsBackupStore {
                 return nil
             }
             var files: [String: String] = [:]
+            var bin: [String: Data] = [:]
             for name in names {
-                guard LyricsBackupArchive.sanitizedFileName(name) != nil else { continue }
-                guard let text = FileIO.readString(dir.appendingPathComponent(name))
-                else { continue }
-                files[name] = text
+                guard LyricsBackupArchive.sanitizedFileName(name) != nil,
+                      let data = FileIO.read(dir.appendingPathComponent(name)) else { continue }
+                // 加密的 .qrc / .krc 不是文本,按字节另放(Payload.bin)。
+                if let text = String(data: data, encoding: .utf8) {
+                    files[name] = text
+                } else {
+                    bin[name] = data
+                }
             }
-            guard !files.isEmpty else { return nil }
+            guard !files.isEmpty || !bin.isEmpty else { return nil }
             // enrich 缓存剥掉六个歌词字段之后的那一份(见 LyricsBackupArchive
             // 头注:决策存档/纯文本采纳/手动选定凭据/打分版本这几类**不是**可重新解析的
             // 派生数据)。读+解析 42 MB JSON 也在这条 detached 路径上,不碰主线程。
@@ -99,10 +104,11 @@ enum LyricsBackupStore {
                 device: ConfigPortability.computerName,
                 files: files,
                 pins: pins,
-                meta: meta
+                meta: meta,
+                bin: bin.isEmpty ? nil : bin
             )
             let out = LyricsBackupArchive.encode(payload)
-            logger.notice("buildArchive: \(files.count) files, meta \(meta?.count ?? 0) bytes → \(out?.count ?? 0) bytes")
+            logger.notice("buildArchive: \(files.count) files, \(bin.count) binary, meta \(meta?.count ?? 0) bytes → \(out?.count ?? 0) bytes")
             return out
         }.value
     }
@@ -112,7 +118,7 @@ enum LyricsBackupStore {
     static func peek(_ data: Data) async -> (files: Int, pins: Int)? {
         await Task.detached(priority: .userInitiated) { () -> (files: Int, pins: Int)? in
             guard let payload = LyricsBackupArchive.decode(data) else { return nil }
-            return (payload.files.count, payload.pins.count)
+            return (payload.files.count + (payload.bin?.count ?? 0), payload.pins.count)
         }.value
     }
 
@@ -151,7 +157,8 @@ enum LyricsBackupStore {
             var result = RestoreResult()
             FileIO.createDirectory(dir)
             let existing = Set((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [])
-            let plan = LyricsBackupArchive.plan(incoming: Array(payload.files.keys), existing: existing)
+            let binFiles = payload.bin ?? [:]
+            let plan = LyricsBackupArchive.plan(incoming: Array(payload.files.keys) + Array(binFiles.keys), existing: existing)
             result.rejected = plan.rejected.count
             if !plan.rejected.isEmpty {
                 logger.error("restore: rejected \(plan.rejected.count) unsafe names, first=\(plan.rejected[0], privacy: .public)")
@@ -159,14 +166,15 @@ enum LyricsBackupStore {
             // 落盘前的最后一道闸(`LyricsBackupArchive.restoreTarget`):解析后的父目录必须还是
             // 歌词目录本身。名字规则(sanitizedFileName)是第一道,这一道兜住"规则里没想到的形态"。
             for (name, isNew) in plan.added.map({ ($0, true) }) + plan.overwritten.map({ ($0, false) }) {
-                guard let text = payload.files[name] else { continue }
+                let content = payload.files[name].map { Data($0.utf8) } ?? binFiles[name]
+                guard let content else { continue }
                 guard let target = LyricsBackupArchive.restoreTarget(named: name, in: dir) else {
                     result.rejected += 1
                     logger.error("restore: path escapes lyrics dir, refused: \(name, privacy: .public)")
                     continue
                 }
                 do {
-                    try text.write(to: target, atomically: true, encoding: .utf8)
+                    try content.write(to: target, options: .atomic)
                     if isNew { result.added += 1 } else { result.overwritten += 1 }
                 } catch {
                     result.failed += 1

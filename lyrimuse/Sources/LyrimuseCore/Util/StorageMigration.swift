@@ -300,7 +300,7 @@ public enum StorageMigration {
     /// `.bak`(几百 MB,30 天后引擎自己删,没有代码读它)。
     static let skippedExtensions: Set<String> = [
         "jpg", "jpeg", "png", "heic", "webp", "gif", "mp4", "mov", "ttf", "otf", "ttc", "woff", "woff2",
-        "lrc", "yrc", "ips", "lock", "bak",
+        "lrc", "yrc", "ttml", "qrc", "krc", "ips", "lock", "bak",
     ]
 
     /// 设备封面的 `file://` 地址、自定义歌词目录这类存成绝对路径的值,在 enrich 缓存、歌曲实体、留底和备份里都有。

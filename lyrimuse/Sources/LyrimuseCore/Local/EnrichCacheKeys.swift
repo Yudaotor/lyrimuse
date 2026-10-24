@@ -9,8 +9,8 @@ import Foundation
 // 真实行为写断言(见 main.swift 里对应分节)。
 
 public enum EnrichCacheKeys {
-    // 跟 lyrimuse-engine/lyricsexport.go 的同名变量逐一对应。
-    public static let lyricsFileSuffixes = [".lrc", ".tr.lrc", ".roma.lrc", ".yrc"]
+    // 歌词文件夹里会有的全部后缀:逐行三种 + 每种逐字格式。跟 lyrimuse-engine 的 lyricsAllFileSuffixes 逐一对应,`.lrc` 排第一。
+    public static let lyricsFileSuffixes = [".lrc", ".tr.lrc", ".roma.lrc"] + LyricsWordFormat.allCases.map(\.fileSuffix)
 
     // ---- 缓存 key 的归一化:跟 lyrimuse-engine/enrichkey.go 逐条对应 ----
     //

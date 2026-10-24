@@ -7,6 +7,19 @@ import Foundation
 
 @MainActor
 func runCacheKeyTests() {
+    // ---- 歌词文件夹的后缀表 / 逐字格式名:跟引擎 lyricsAllFileSuffixes / resolveLyricsWordFormats 同一份 ----
+    do {
+        // 引擎 lyricswordformat_test.go 的 TestLyricsWordFormatSuffixes 钉着同一份字面量。
+        expectEqual(EnrichCacheKeys.lyricsFileSuffixes,
+                    [".lrc", ".tr.lrc", ".roma.lrc", ".yrc", ".ttml", ".qrc", ".krc", ".enhanced.lrc"],
+                    "歌词文件后缀: 逐行三种 + 每种逐字格式,跟引擎同序")
+        expectEqual(LyricsWordFormat.allCases.map(\.rawValue), ["yrc", "ttml", "qrc", "krc", "enhanced-lrc"],
+                    "逐字格式名: features.json 里存的值跟引擎一致")
+        expectEqual(LyricsWordFormat.resolve(nil), [.yrc], "逐字格式: 没设置只写 YRC")
+        expectEqual(LyricsWordFormat.resolve(["future", "ttml", "ttml", "qrc"]), [.ttml, .qrc], "逐字格式: 认不得的、重复的去掉")
+        expectEqual(LyricsWordFormat.resolve(["future"]), [.yrc], "逐字格式: 一个都认不得时只写 YRC")
+    }
+
     // ---- 正文小文件(引擎 enrichindex.go 的 enrichBody)解码:两边字段名逐字一致 ----
     do {
         let json = #"{"crc":3735928559,"lyrics":"[00:01.00]hi","lyrics_tr":"[00:01.00]你好","lyrics_roma":"[00:01.00]ni hao","lyrics_yrc":"[0,100](0,100,0)hi","plain_lyrics":"hi"}"#

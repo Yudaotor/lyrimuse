@@ -191,6 +191,9 @@ type featureFlagsFile struct {
 	// LyricsDir：歌词文件夹("歌词文件夹作为权威源"读写的那个文件夹)的自定义位置。
 	// 留空则用默认位置(config.json 同目录下的 lyrics/,main.go 里兜底)。
 	LyricsDir string `json:"lyrics_dir,omitempty"`
+	// LyricsWordFormats:歌词文件夹里逐字歌词写成哪几种格式(lyricsWordFormat 的值),第一个是主格式(文件夹里以它为准),
+	// 其余是另外多存的副本。缺失 / 一个都认不得时只写 YRC。
+	LyricsWordFormats []string `json:"lyrics_word_formats,omitempty"`
 	// LyricsTranslationLanguage："auto"(跟随系统语言,默认)或 ISO 639-1 两位小写代码
 	// (如"en"/"es"/"ja")——Musixmatch 译文(crowd.track.translations.get)的目标语言。
 	// 网易云/QQ 音乐的译文固定是中文,只有 Musixmatch 这个源支持指定任意语言。
@@ -314,6 +317,8 @@ type featureFlags struct {
 	// LyricsDir 空字符串表示"用默认位置",由 main.go 里设置包级变量 lyricsDir() 时兜底,
 	// 不在这里(loadFeatureFlags)展开成绝对路径——那时候 *cfgPath 还没解析完。
 	LyricsDir string
+	// LyricsWordFormats 已经去掉认不得的、重复的,至少有一个(主格式在最前)。见 resolveLyricsWordFormats。
+	LyricsWordFormats []lyricsWordFormat
 	// LyricsTranslationLanguage 是已经解析过的具体 ISO 639-1 代码(不会是"auto"或空值,
 	// 见 resolveLyricsTranslationLanguage)。三处读取,含义都是"译文要什么语言":
 	// musixmatchTranslationLRC(musixmatch.go)向 Musixmatch 索取该语言的社区译文;
@@ -454,6 +459,7 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
 		LyricsDir:                 f.LyricsDir,
+		LyricsWordFormats:         resolveLyricsWordFormats(f.LyricsWordFormats),
 		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage, f.SystemLanguage),
 		SystemLanguage:            strings.ToLower(strings.TrimSpace(f.SystemLanguage)),
 		LyricsMachineTranslation:  boolOr(f.LyricsMachineTranslation, false),

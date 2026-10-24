@@ -304,15 +304,20 @@
             "zh-Hant": "離線可用，歌詞以 .lrc 檔案儲存"
           },
           "desc": {
-            "zh-Hans": "已找到的歌词均缓存在本机，离线时也能显示。每首歌曲保存一份 .lrc，有译文、读音时另存 .tr.lrc 和 .roma.lrc，逐字时间轴存为 .yrc。默认位于 ~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/，位置可更改。",
-            "en": "Every lyric found is cached on your Mac and shows without a connection. Each song has an .lrc file, plus .tr.lrc and .roma.lrc for translations and romanization, and word timing in .yrc. They live in ~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/ by default, and the folder can be moved.",
-            "zh-Hant": "已找到的歌詞均快取在本機，離線時也能顯示。每首歌曲儲存一份 .lrc，有譯文、讀音時另存 .tr.lrc 和 .roma.lrc，逐字時間軸存為 .yrc。預設位於 ~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/，位置可更改。"
+            "zh-Hans": "已找到的歌词均缓存在本机，离线时也能显示。每首歌曲保存一份 .lrc，有译文、读音时另存 .tr.lrc 和 .roma.lrc，逐字时间轴默认存为 .yrc，也可改存 TTML、增强 LRC、QRC 或 KRC。默认位于 ~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/，位置可更改。",
+            "en": "Every lyric found is cached on your Mac and shows without a connection. Each song has an .lrc file, plus .tr.lrc and .roma.lrc for translations and romanization. Word timing is saved as .yrc by default, or as TTML, Enhanced LRC, QRC or KRC. They live in ~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/ by default, and the folder can be moved.",
+            "zh-Hant": "已找到的歌詞均快取在本機，離線時也能顯示。每首歌曲儲存一份 .lrc，有譯文、讀音時另存 .tr.lrc 和 .roma.lrc，逐字時間軸預設存為 .yrc，也可改存 TTML、增強 LRC、QRC 或 KRC。預設位於 ~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/，位置可更改。"
           },
           "settings": [
             [
               "歌词",
               "管理",
               "歌词文件夹"
+            ],
+            [
+              "歌词",
+              "管理",
+              "逐字歌词格式"
             ]
           ]
         }

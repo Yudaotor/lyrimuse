@@ -173,6 +173,14 @@
       "title" : "歌词文件夹"
     },
     {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "管理"
+      ],
+      "title" : "逐字歌词格式"
+    },
+    {
       "dest" : "tab:player",
       "path" : [
         "播放器"

@@ -34,6 +34,9 @@ type lyricsFileStamp struct {
 type lyricsFileStateFile struct {
 	Dir   string                     `json:"dir"`
 	Files map[string]lyricsFileStamp `json:"files"`
+	// WordFormats:落盘那一刻文件夹里逐字按哪几种格式写的(lyricsWordFormatsInUse)。设置在引擎没跑的时候改了,启动时先按这个
+	// 导入、再换成设置里的(switchLyricsWordFormats),主格式换了也不丢旧主格式文件里的手改。
+	WordFormats []string `json:"word_formats,omitempty"`
 }
 
 var (
@@ -69,6 +72,10 @@ func lyricsFileStateEnabled(dir string) bool {
 	var f lyricsFileStateFile
 	if raw, err := os.ReadFile(path); err == nil && json.Unmarshal(raw, &f) == nil && f.Dir == dir && f.Files != nil {
 		lyricsFileStateFiles, lyricsFileStateTrusted = f.Files, true
+		if len(f.WordFormats) > 0 && lyricsWordFormatsApplied.Load() == nil {
+			applied := resolveLyricsWordFormats(f.WordFormats)
+			lyricsWordFormatsApplied.Store(&applied)
+		}
 	}
 	return true
 }
@@ -150,6 +157,9 @@ func saveLyricsFileState(dir string, present map[string]fs.FileInfo) {
 		return
 	}
 	out := lyricsFileStateFile{Dir: dir, Files: make(map[string]lyricsFileStamp, len(lyricsFileStateFiles))}
+	for _, f := range lyricsWordFormatsInUse() {
+		out.WordFormats = append(out.WordFormats, string(f))
+	}
 	for name, s := range lyricsFileStateFiles {
 		if _, ok := present[name]; ok {
 			out.Files[name] = s

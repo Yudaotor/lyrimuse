@@ -368,6 +368,7 @@ public enum SettingsSearchCatalog {
         lyrics("manage", "扫描间隔", sub: "每首歌曲之间的间隔秒数；建议不少于 2 秒，以免被限流",
                kw: ["速度", "间隔", "限流", "风控", "并发", "快", "慢"]),
         lyrics("manage", "歌词文件夹", sub: "更改位置后，已有文件不会随之移动", kw: ["lyrics", "自定义位置", "目录", "lrc"]),
+        lyrics("manage", "逐字歌词格式", kw: ["TTML", "QRC", "KRC", "YRC", "增强 LRC", "enhanced lrc", "逐字", "格式", "副本"]),
 
         // ---- 播放器 ----
         player("players", "音乐 App", alt: ["选择播放器"],

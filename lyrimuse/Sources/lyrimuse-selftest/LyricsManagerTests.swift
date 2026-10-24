@@ -492,6 +492,13 @@ func runLyricsManagerTests() {
         expectEqual(A.decode(raw), payload, "歌词备份: 未压缩的归档同样能读")
         // 完全不是归档的数据不能崩,返回 nil。
         expectEqual(A.decode(Data("not an archive".utf8)) == nil, true, "歌词备份: 垃圾数据返回 nil")
+        // 加密的 .qrc / .krc 不是文本,按字节放在 bin 里,往返不变;没有 bin 的旧包照样解。
+        let withBin = A.Payload(at: "2026-10-24T00:00:00Z", device: "Mac", files: ["a.lrc": "[00:01.00]x"], pins: [:],
+                                bin: ["a.qrc": Data([0x98, 0x25, 0xb0, 0x00, 0xff])])
+        expectEqual(A.encode(withBin).flatMap(A.decode), withBin, "歌词备份: 二进制歌词文件往返不变")
+        expectEqual(A.decode(try! JSONEncoder().encode(payload))?.bin == nil, true, "歌词备份: 没有 bin 的旧包照样解")
+        expectEqual(A.sanitizedFileName("周杰伦 - 枫.qrc"), "周杰伦 - 枫.qrc", "歌词备份: 各种逐字格式的文件都收")
+        expectEqual(A.sanitizedFileName("周杰伦 - 枫.enhanced.lrc"), "周杰伦 - 枫.enhanced.lrc", "歌词备份: 增强 LRC 的文件也收")
 
         // ---- enrich 缓存的非歌词字段(meta)----
         //
