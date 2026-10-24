@@ -900,6 +900,7 @@ extension SettingsToggleTile where Accessory == EmptyView {
 /// 语言网格(「标注读音的语言」「翻译语言包」)里的一格:圆形状态 + 语言名,两处都排 `SettingsEqualColumns(columns: 4)`。
 /// 开着 / 装好了是玻璃底 + 强调色实心勾,没开 / 没装只剩细线、圆变空心(没装的空心圆里画下载箭头)。两处长一个样,只在这里改。
 /// 能点的那一格外面套 `SettingsGlassHoverButtonStyle(cornerRadius: SettingsLanguageTile.cornerRadius)`。
+/// `detail` 是语言名下面的一行小字(「标注读音的语言」常用四种的转写示例),给了的格子排两列。
 struct SettingsLanguageTile: View {
     enum Mark: Equatable { case on, off, download, progress }
 
@@ -908,21 +909,32 @@ struct SettingsLanguageTile: View {
 
     let title: String
     let mark: Mark
+    var detail: String?
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
         HStack(spacing: 6) {
             indicator
                 .frame(width: 15, height: 15)
-            // 英文语言名在四分之一卡宽里可能装不下:先缩一点,再不够单行 + 尾部省略号(同「歌词来源」网格)
-            Text(title)
-                .font(.system(size: 12.5))
-                .foregroundStyle(mark == .on ? Color.primary : Color.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .truncationMode(.tail)
+            VStack(alignment: .leading, spacing: 1) {
+                // 英文语言名在四分之一卡宽里可能装不下:先缩一点,再不够单行 + 尾部省略号(同「歌词来源」网格)
+                Text(title)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(mark == .on ? Color.primary : Color.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .truncationMode(.tail)
+                if let detail {
+                    Text(detail)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
         }
         .padding(.horizontal, 9)
+        .padding(.vertical, detail == nil ? 0 : 6)
         .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
         .background {
             if mark == .on {

@@ -316,8 +316,10 @@
 "不含内容、排版、行为、位置、OBS 和宽度" = "Content, layout, behavior, position, OBS and width are left alone";
 "不含宽度和总开关" = "Width and the master toggle are left alone";
 "不含总开关" = "The master toggle is left alone";
+"不含播放时实时生成的读音" = "Excludes romanization generated during playback";
 "不含时间戳" = "No timestamps";
 "不显示" = "None";
+"不标注读音" = "No romanization";
 "不足 1 分钟" = "under a minute";
 "不转换" = "As-is";
 "不透明度" = "Opacity";
@@ -352,6 +354,8 @@
 "中文" = "Chinese";
 "中文歌词统一成简体或繁体" = "Show Chinese lyrics in Simplified or Traditional characters";
 "临时展开灵动岛" = "Peek at Notch Lyrics";
+"为其他播放器单独设置" = "Set for Another Player";
+"为勾选的语言标注读音" = "Adds romanization for the languages you check";
 "为勾选的语言标注读音；是否显示在「歌词显示」中设置" = "Adds pronunciation for the selected languages; whether it shows is set in Lyrics Display";
 "为当前配色命名" = "Name these colors";
 "为歌手和专辑添加前缀" = "Label Artist and Album";
@@ -554,6 +558,7 @@
 "其他 App 正占用播放焦点，暂时无法控制「%@」" = "Can’t control “%@” while another app holds the playback focus";
 "其他 App 正占用播放焦点，暂时无法控制播放" = "Can’t control playback while another app holds the playback focus";
 "其他折叠规则" = "Other fold rule";
+"其他文字" = "Other Scripts";
 "其他歌词源仍在搜索中…" = "Still searching other sources…";
 "其他歌词源标注的曲目时长与本地一致，该源标注的时长却相差 5% 以上，可能是现场版、混音版等其他录音" = "Other lyric sources report the same track length as the local one, but this source's differs by more than 5%; likely another recording such as a live version or remix";
 "其余 %@ 个源" = "%@ other sources";
@@ -661,6 +666,7 @@
 "单行" = "One Line";
 "单行无法完整显示时，拆分为多段依次显示" = "Lines too long to fit are split and shown in parts";
 "单行：仅显示当前句。\n双行：显示当前句和下一句。\n多行：与完整尺寸相同，整页滚动显示歌词" = "One Line: only the current line.\nTwo Lines: the current line and the next one.\nMulti-Line: a scrolling page of lyrics, like the full size";
+"南亚与东南亚" = "South & Southeast Asian";
 "占用空间：%@" = "Storage used: %@";
 "卡拉OK" = "Karaoke";
 "卡拉OK效果" = "Karaoke Effect";
@@ -730,6 +736,7 @@
 "各播放器中收听的歌曲均会记录" = "Plays from every supported player are logged";
 "合唱署名" = "Artist credit";
 "合并明细" = "Play Breakdown";
+"同一录音在不同播放器和专辑版本下共用一份，手动修改一并同步" = "One copy for the same recording across players and album versions; edits sync too";
 "同一网络中的设备可通过带密钥的链接访问" = "Devices on the same network can connect with a link that includes an access key";
 "同名但时长不同，作为另一录音单独保存歌词" = "Same title but a different length, so its lyrics are saved separately as another recording";
 "同时存为：%@" = "Also saved as: %@";
@@ -808,6 +815,7 @@
 "在 iCloud 中发现 Lyrimuse 备份" = "Found a Lyrimuse backup in iCloud";
 "在 iPhone 上安装 Bark App，首页即显示专属推送地址，拷贝后粘贴到此处即可，无需额外设置" = "Install the Bark app on your iPhone — the home screen shows your personal push URL. Just copy and paste it here; no extra setup needed";
 "在「Scrobble 的播放器」中取消勾选 Spotify；在手机等其他设备上收听的 Spotify 仍会照常记录" = "Unchecks Spotify in Players to Scrobble. Spotify plays on your other devices are still recorded";
+"在「歌词显示」中选择译文和读音的显示位置" = "Choose where translations and romanization appear in Lyrics Display";
 "在「系统设置 › 隐私与安全性 › %@」中开启 Lyrimuse。若列表中没有，请通过「+」添加当前运行的 Lyrimuse.app；若已开启但仍无效，请移除旧条目并重新添加，然后重启 Lyrimuse" = "Turn on Lyrimuse in System Settings › Privacy & Security › %@. If it isn’t listed, use “+” to add the Lyrimuse.app you’re running. If it’s already on but still has no effect, remove the old entry, add it again, then restart Lyrimuse";
 "在主歌词下方增加一行。译文和读音对应当前句，「下一句」显示即将演唱的歌词，选择后展开区不再重复显示下一句预览。空间不足时歌词行自动增高" = "Adds a line under the main lyric. Translation and Romanization match the current line; Next Line shows the upcoming one, and the expanded area then no longer repeats the next-line preview. The lyric row grows when space runs short";
 "在主歌词下方增加一行，高度不变（两行分别为 10pt / 9pt，「字号」不生效）。译文和读音对应当前句，「下一句」显示即将演唱的歌词；开启副行时，主行不再提前切换到下一句。副行不滚动，空间不足时末尾渐隐" = "Adds a second line under the lyric without changing the item’s height (10pt / 9pt; Font Size has no effect). Translation and Romanization show the current line; Next Line shows the upcoming one. With a second line on, the main line no longer switches early. The second line doesn’t scroll; its end fades out when it doesn’t fit";
@@ -879,6 +887,7 @@
 "字形" = "Type";
 "字节跳动旗下的音乐 App" = "ByteDance's music app";
 "字节跳动旗下的音乐平台" = "ByteDance's music service";
+"存储" = "Storage";
 "存在差异" = "Different";
 "存在标题更吻合的候选，撤销逐字加分" = "A candidate matches the title better, so the word-timing bonus is withdrawn";
 "孟加拉语" = "Bangla";
@@ -1026,6 +1035,7 @@
 "已展开触控栏歌词" = "Touch Bar lyrics expanded";
 "已应用编辑器中的修改" = "Applied the changes from the editor";
 "已开启" = "Enabled";
+"已开启 %@ / %@" = "%@ of %@ on";
 "已开启 %@ 项" = "%@ on";
 "已开启「隐藏歌曲信息」" = "“Hide Song Details” is on";
 "已开启「隐藏歌曲信息」，与歌曲相关的选项暂不生效" = "“Hide Song Details” is on, so the song-related options have no effect for now";
@@ -1225,6 +1235,7 @@
 "所选条目无逐字时间轴" = "The selected entry has no word timing";
 "手动" = "Manual";
 "手动调整" = "Manually Adjusted";
+"手动选定的歌词不再被自动匹配换掉" = "Auto-matching never replaces lyrics you picked";
 "手动重新匹配" = "Manual re-match";
 "打包日志、崩溃记录与运行状态，已移除账号凭据；含曲目名与本机路径，公开前请检查" = "Logs, crash reports and app state in one file, with account credentials removed. Track names and local paths stay in, so review it before posting publicly";
 "打开" = "Open";
@@ -1330,6 +1341,7 @@
 "描边颜色" = "Stroke Color";
 "提前" = "Advance";
 "提前 %@ 秒显示" = "Show %@s earlier";
+"提前为接下来要播的歌找好歌词" = "Finds lyrics for upcoming tracks ahead of time";
 "提前画" = "Draw ahead";
 "提醒" = "Alerts";
 "搜索" = "Search";
@@ -1377,6 +1389,7 @@
 "收起" = "Collapse";
 "收起时显示歌词" = "Show Lyrics When Collapsed";
 "收起面板后生效" = "Takes effect after this panel closes";
+"改回跟随「全部播放器」" = "Follow “All players” Again";
 "改过歌词或调过时间轴偏移的歌曲" = "Songs whose lyrics you edited or whose timing offset you adjusted";
 "放大字号" = "Increase Font Size";
 "放大悬浮歌词字号" = "Increase Floating Lyrics Font Size";
@@ -1474,6 +1487,7 @@
 "时长吻合" = "Duration match";
 "时长明显不符，且无其他源印证" = "Duration clearly off, not corroborated";
 "时间" = "Time";
+"时间与断句" = "Timing";
 "时间轴" = "Timing";
 "时间轴偏移" = "Timing Offset";
 "时间轴整体偏移" = "Whole timeline offset";
@@ -1584,6 +1598,7 @@
 "未列出的 App 会在检测到时提示添加。此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用" = "Apps not listed here are suggested when detected. They aren't specifically supported, so compatibility isn't guaranteed and some features may be unavailable";
 "未发现无效记录" = "No Invalid Entries";
 "未启用" = "Not Enabled";
+"未启用的来源" = "Sources that are off";
 "未唱部分与副行的亮度" = "Brightness of unsung words and the second line";
 "未唱颜色" = "Unsung Color";
 "未在上方列出的 App 也可作为播放器：添加后将显示其正在播放的歌曲，并计入收听记录。点按图标即可移除" = "Apps not listed above can be used as players too: once added, their songs show lyrics and count toward your listening history. Click a tile to remove it";
@@ -1649,6 +1664,7 @@
 "本机学到的署名" = "Credit learned on this Mac";
 "本机已记录 %@ 首" = "%@ plays saved on this Mac";
 "本机已记录 %@ 首#one" = "%@ play saved on this Mac";
+"本机翻译要用到的系统语言包" = "System languages used for on-device translation";
 "本轮「%@」未应答，为避免误降级未作更换，可稍后重试" = "“%@” didn't respond this round, so nothing was changed to avoid a downgrade. Try again later";
 "本轮候选明细已不可用" = "This round's candidate details are no longer available";
 "本轮共查询 %d 组" = "%d query sets this round";
@@ -1799,6 +1815,7 @@
 "歌词源标注的曲目时长，这首歌曲时长 %@" = "Track length reported by the lyrics source. This song is %@";
 "歌词源自带的读音。无此标记的歌词也将按设置中的「标注读音的语言」自动标注" = "Romanization supplied by the lyrics source. Lyrics without this tag are still romanized for the languages chosen in Settings › Romanization Languages";
 "歌词独立匹配，不随当前条目更换；手动修改也不会同步" = "Lyrics are matched independently and won't change with the current entry; manual edits don't sync either";
+"歌词确定后，后台是否还会更换" = "Whether settled lyrics can still be replaced in the background";
 "歌词窗口" = "Lyrics Window";
 "歌词窗口…" = "Lyrics Window…";
 "歌词窗口的文字颜色；「自动」根据背景亮度在浅色与深色之间切换" = "The lyrics window's text color. Auto switches between light and dark based on the background's brightness";
@@ -1817,6 +1834,7 @@
 "歌词（逐字）" = "Lyrics (Word-Timed)";
 "正值提前显示，负值延后显示" = "Positive = show earlier, negative = show later";
 "正值歌词提前，负值延后" = "Positive shows lyrics earlier, negative later";
+"正值歌词提前，负值延后；可按播放器单独设置" = "Positive shows lyrics earlier, negative later; each player can have its own";
 "正在下载…" = "Downloading…";
 "正在从 iCloud 下载此备份，完成后请再次点按「恢复此备份」" = "Downloading this backup from iCloud. Click Restore This Backup again when it finishes";
 "正在准备安装…" = "Preparing to install…";
@@ -2045,6 +2063,7 @@
 "确认无歌词后才收起，找到歌词后自动展开；搜索期间照常显示" = "Collapses only after confirming there are no lyrics, and expands again once lyrics are found. Stays shown while searching";
 "确认重置" = "Confirm Reset";
 "磨砂玻璃" = "Frosted";
+"示例" = "Example";
 "社区人工校对的逐字歌词库" = "Word-by-word lyrics checked by hand by its community";
 "秒" = "s";
 "移除" = "Remove";
@@ -2074,6 +2093,7 @@
 "签名有误" = "Incorrect signature";
 "简体" = "Simplified";
 "简体中文" = "简体中文";
+"算法更新后在后台重新评估，可能换成更合适的版本" = "Re-evaluated in the background after updates; may switch to a better version";
 "管理" = "Library";
 "管理…" = "Manage…";
 "类型" = "Genre";
@@ -2257,6 +2277,8 @@
 "补交中 %@/%@" = "Submitting %@ of %@";
 "补交未完成，请稍后重试" = "Backfill didn't finish. Try again later";
 "补全曲目信息" = "Track info backfill";
+"西里尔字母、希腊字母、南亚与东南亚文字、阿拉伯字母" = "Cyrillic, Greek, South & Southeast Asian and Arabic scripts";
+"西里尔字母与希腊字母" = "Cyrillic & Greek";
 "要保存到 iCloud 吗？" = "Save your settings to iCloud?";
 "要保存备份吗？" = "Save a backup?";
 "要同时解锁之前锁定的歌曲吗？" = "Unlock the songs locked earlier?";
@@ -2376,6 +2398,7 @@
 "资料卡「正在收听 ××」中的 ××。iOS 版和网页版 Discord 不支持此项，仍显示播放器名\n选择歌名或歌手时，用户名下方无法再选择「播放器」" = "The “××” in “Listening to ××” on your profile. Discord on iOS and the web ignores this and keeps showing the player\nWith Title or Artist here, “Shown Under Your Name” can’t show the player";
 "超薄" = "Ultra Thin";
 "足迹" = "Footprint";
+"跟随「全部播放器」" = "Following “All players”";
 "跟随「全部播放器」：%@" = "Following “All players”: %@";
 "跟随刘海" = "Match Notch";
 "跟随封面" = "Follow Cover Art";
@@ -2496,6 +2519,7 @@
 "退出码 %@" = "exit code %@";
 "退出迷你尺寸" = "Exit Mini Size";
 "选中的候选" = "Selected Candidate";
+"选定之后" = "Once Picked";
 "选择" = "Choose";
 "选择 .ttf 或 .otf 字体文件，可多选" = "Choose a .ttf or .otf font file (you can select multiple)";
 "选择 Lyrimuse 应视为播放器的 App" = "Choose an app for Lyrimuse to treat as a player";
@@ -2602,6 +2626,7 @@
 "长按拖动" = "Long-Press to Drag";
 "间奏中多出一段歌词" = "Extra lyrics in an instrumental break";
 "间距" = "Spacing";
+"阿拉伯字母" = "Arabic";
 "阿拉伯语" = "Arabic";
 "附带当前译文语言的可用译文，同等候选中优先" = "Comes with a usable translation in your translation language; preferred among otherwise-equal candidates";
 "除 %@ 外" = "All except %@";

@@ -361,7 +361,11 @@ func runDeepLinkTests() {
     do {
         typealias S = SettingsDeepLink
         expectEqual(S.section(in: "/lyrics/manage"), .init(storageKey: SettingsSearchCatalog.lyricsSectionKey, value: "manage"),
-                    "设置分段: 歌词 › 管理")
+                    "设置分段: 歌词 › 歌词库")
+        for (alias, value) in [("sources", "fetch"), ("language", "translation"), ("timing", "display"), ("library", "manage")] {
+            expectEqual(S.section(in: "/lyrics/\(alias)"), .init(storageKey: SettingsSearchCatalog.lyricsSectionKey, value: value),
+                        "设置分段: 歌词页按显示名的别名 \(alias) 落到 \(value)")
+        }
         expectEqual(S.section(in: "/appearance/menu-bar"), .init(storageKey: LyricsSurface.appearanceSectionStorageKey, value: "menuBar"),
                     "设置分段: 连字符写法换成 rawValue")
         expectEqual(S.section(in: "/account/lastfm/on-this-day"), .init(storageKey: SettingsSearchCatalog.lastfmSectionKey, value: "onThisDay"),

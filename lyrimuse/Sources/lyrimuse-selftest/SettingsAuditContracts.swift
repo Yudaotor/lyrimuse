@@ -54,9 +54,9 @@ func runSettingsAuditContracts() {
 
     // ---- 设置窗口与各页 ----
     let view = app("SettingsView.swift")
-    expectEqual(sourceHas(view, "let base = scopeFollowsGlobal ? offsets.globalOffsetMs : scopedOffsetMs")
-                && sourceHas(view, "Button { setScopedOffset(max(-limit, base - step)) } label: {")
-                && sourceHas(view, "Button { setScopedOffset(min(limit, base + step)) } label: {"), true,
+    expectEqual(sourceHas(view, "let base = follows ? offsets.globalOffsetMs : storedOffsetMs(scope)")
+                && sourceHas(view, "Button { setOffset(max(-limit, base - step), scope: scope) } label: {")
+                && sourceHas(view, "Button { setOffset(min(limit, base + step), scope: scope) } label: {"), true,
                 "按播放器偏移: 跟随「全部」时 ± 从全局值起步")
     expectEqual(sourceHas(view, "lyricsRestoreFailed = restored == nil || (restored?.failed ?? 0) > 0")
                 && sourceHas(view, "let failed = ConfigPortability.lastImportFailures + (lyricsRestoreFailed ? [L10n.t(\"歌词\")] : [])"), true,

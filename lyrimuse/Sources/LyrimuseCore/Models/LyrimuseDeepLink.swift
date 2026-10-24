@@ -454,7 +454,8 @@ extension SettingsDeepLink {
     /// 每一页的分段:链接里的名字 → 存的值。
     public static let sectionTable: [String: (key: String, values: [String: String])] = [
         "lyrics": (SettingsSearchCatalog.lyricsSectionKey,
-                   ["fetch": "fetch", "translation": "translation", "display": "display", "manage": "manage"]),
+                   ["fetch": "fetch", "translation": "translation", "display": "display", "manage": "manage",
+                    "sources": "fetch", "language": "translation", "timing": "display", "library": "manage"]),
         "player": (SettingsSearchCatalog.playerSectionKey,
                    ["players": "players", "linkage": "linkage", "permissions": "permissions"]),
         "appearance": (LyricsSurface.appearanceSectionStorageKey,

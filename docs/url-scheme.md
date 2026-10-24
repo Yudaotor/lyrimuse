@@ -33,7 +33,7 @@ The common ones can be copied from **Deep Links** at the bottom of Settings › 
 
 | Path | Page | Sections |
 |---|---|---|
-| `/lyrics` | Lyrics | `/fetch` Sources, `/translation` Translation, `/display` Adjust, `/manage` Library |
+| `/lyrics` | Lyrics | `/fetch` or `/sources` Source, `/translation` or `/language` Language, `/display` or `/timing` Timing, `/manage` or `/library` Lyrics Library |
 | `/player` | Player | `/players` Player, `/linkage` Linkage, `/permissions` Permissions & Services |
 | `/appearance` | Lyrics Display | `/overlay` Floating Lyrics, `/notch` Notch, `/menu-bar` Menu Bar, `/touch-bar` Touch Bar, `/lyrics-window` Lyrics Window |
 | `/shortcuts` | Keyboard Shortcuts | — |

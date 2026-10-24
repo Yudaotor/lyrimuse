@@ -27,11 +27,11 @@ These features stay off after you install. Turn them on in Settings first (some 
 
 | Feature | Where to turn it on |
 |---|---|
-| [Apple Music's own lyrics](#feature-apple-music-lyrics) | Settings › Lyrics › Sources › Lyrics Sources |
+| [Apple Music's own lyrics](#feature-apple-music-lyrics) | Settings › Lyrics › Source › Lyrics Sources |
 | [Use the lyrics your player already saved](#feature-player-local-lyrics) | Settings › Player › Permissions & Services › Full Disk Access |
-| [Lock hand-picked lyrics](#feature-lock-hand-picked) | Settings › Lyrics › Sources › Lock Hand-Picked Lyrics |
-| [Translate when none is provided](#feature-machine-translation) | Settings › Lyrics › Translation › Translate When None Is Provided |
-| [Split long lines, join short ones](#feature-split-join-lines) | Settings › Lyrics › Adjust › Split Long Lines |
+| [Lock hand-picked lyrics](#feature-lock-hand-picked) | Settings › Lyrics › Source › Lock Hand-Picked Lyrics |
+| [Translate when none is provided](#feature-machine-translation) | Settings › Lyrics › Language › Translate When None Is Provided |
+| [Split long lines, join short ones](#feature-split-join-lines) | Settings › Lyrics › Timing › Split Long Lines |
 | [Notch lyrics](#feature-notch-lyrics) | Settings › Lyrics Display › Notch › Notch Lyrics |
 | [Menu bar lyrics](#feature-menu-bar-lyrics) | Settings › Lyrics Display › Menu Bar › Menu Bar Lyrics |
 | [Touch Bar lyrics](#feature-touch-bar-lyrics) | Settings › Lyrics Display › Touch Bar › Touch Bar Lyrics |
@@ -69,7 +69,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music, VIBE, Genie, PetitLyrics and Apple Music. Each source can be turned off, reordered, or tested to see whether it is reachable right now.
 
 - On by default
-- Settings: Lyrics › Sources › Lyrics Sources
+- Settings: Lyrics › Source › Lyrics Sources
 
 <a id="feature-network-proxy"></a>
 
@@ -87,7 +87,7 @@ When an overseas lyric source can't be reached directly, Lyrimuse retries throug
 Connect your Apple Music account under Lyrics Sources to use Apple Music's own lyrics, many of them timed word by word. Needs an Apple Music subscription.
 
 - Off by default
-- Settings: Lyrics › Sources › Lyrics Sources
+- Settings: Lyrics › Source › Lyrics Sources
 
 <a id="feature-matching"></a>
 
@@ -95,7 +95,7 @@ Connect your Apple Music account under Lyrics Sources to use Apple Music's own l
 
 By default every result is scored on title, artist, length and version (live, instrumental and so on), and the best fit for the song that is playing wins. You can switch to source order instead: no scoring, the first source in your order that has lyrics is used.
 
-- Settings: Lyrics › Sources › Matching Algorithm
+- Settings: Lyrics › Source › Matching Algorithm
 
 <a id="feature-auto-upgrade"></a>
 
@@ -104,7 +104,7 @@ By default every result is scored on title, artist, length and version (live, in
 When a new version improves matching or scoring, lyrics you already have are re-checked in the background and replaced if a better version turns up. Turn it off to keep lyrics once they are chosen.
 
 - On by default
-- Settings: Lyrics › Sources › Re-Pick After Algorithm Updates
+- Settings: Lyrics › Source › Re-Pick After Algorithm Updates
 
 <a id="feature-prefetch"></a>
 
@@ -113,7 +113,7 @@ When a new version improves matching or scoring, lyrics you already have are re-
 Reads your player's queue and finds lyrics for the next few songs ahead of time; when there is no queue to read, it works through the rest of the album. QQ Music, NetEase Cloud Music, Kugou, Soda Music and VOX need Full Disk Access for this.
 
 - On by default
-- Settings: Lyrics › Sources › Pre-Resolve Upcoming Tracks
+- Settings: Lyrics › Source › Pre-Resolve Upcoming Tracks
 - Settings: Player › Permissions & Services › Full Disk Access
 
 <a id="feature-player-local-lyrics"></a>
@@ -132,7 +132,7 @@ Lyrics that Apple Music, Spotify, Kugou, KKBOX, Amazon Music and LX Music alread
 When on, lyrics you pick by hand from search results are locked, so later automatic matching and re-matching never replace them.
 
 - Off by default
-- Settings: Lyrics › Sources › Lock Hand-Picked Lyrics
+- Settings: Lyrics › Source › Lock Hand-Picked Lyrics
 
 <a id="feature-lyrics-manager"></a>
 
@@ -140,11 +140,11 @@ When on, lyrics you pick by hand from search results are locked, so later automa
 
 Browse, edit, delete or search again for any song's lyrics, delete in bulk, and clear out the empty entries ads and podcasts leave behind. Give a single song its own timing offset. Retry every song that has no lyrics yet in one go, or re-match the whole library under the current rules, with an adjustable pause between songs; anything you edited by hand is left alone.
 
-- Settings: Lyrics › Library › Lyrics Library
-- Settings: Lyrics › Library › Auto-Match Missing Lyrics
-- Settings: Lyrics › Library › Re-Match Whole Library
+- Settings: Lyrics › Lyrics Library › Lyrics Library
+- Settings: Lyrics › Lyrics Library › Auto-Match Missing Lyrics
+- Settings: Lyrics › Lyrics Library › Re-Match Whole Library
 - Settings: Keyboard Shortcuts › Open Lyrics Manager
-- Settings: Lyrics › Library › Scan Interval
+- Settings: Lyrics › Lyrics Library › Scan Interval
 
 <a id="feature-song-entries"></a>
 
@@ -153,7 +153,7 @@ Browse, edit, delete or search again for any song's lyrics, delete in bulk, and 
 The same song played in different players or from different releases is recognized as one song: its entries share one set of lyrics, hand edits and timing fixes carry over, and play counts are added up. In Lyrics Manager, Entries for This Song compares each entry's lyrics line by line, and an entry matched by mistake can be split off and merged back later. Turn the sharing off to have each entry matched on its own.
 
 - On by default
-- Settings: Lyrics › Sources › Share Lyrics Across Entries of a Song
+- Settings: Lyrics › Source › Share Lyrics Across Entries of a Song
 
 <a id="feature-fix-lyrics"></a>
 
@@ -169,8 +169,8 @@ From the lyrics window's ⋯ menu, search for other lyrics, run matching again, 
 
 Every lyric found is cached on your Mac and shows without a connection. Each song has an .lrc file, plus .tr.lrc and .roma.lrc for translations and romanization. Word timing is saved as .yrc by default, or as TTML, Enhanced LRC, QRC or KRC. They live in ~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/ by default, and the folder can be moved.
 
-- Settings: Lyrics › Library › Lyrics Folder
-- Settings: Lyrics › Library › Word-by-Word Lyrics Format
+- Settings: Lyrics › Lyrics Library › Lyrics Folder
+- Settings: Lyrics › Lyrics Library › Word-by-Word Lyrics Format
 
 <a id="section-text"></a>
 
@@ -182,7 +182,7 @@ Every lyric found is cached on your Mac and shows without a connection. Each son
 
 Translations that come with the lyrics appear under each line. NetEase Cloud Music, QQ Music and Kugou translate into Chinese; Musixmatch and machine translation follow the translation language you pick, from 17. Floating lyrics, the lyrics window, the notch, the menu bar and the Touch Bar each decide whether to show them. Shown by default when your Mac's languages include Chinese.
 
-- Settings: Lyrics › Translation › Translation Language
+- Settings: Lyrics › Language › Translation Language
 - Settings: Lyrics Display › Floating Lyrics › Content › Translation
 - Settings: Keyboard Shortcuts › Show/Hide Translation
 
@@ -193,8 +193,8 @@ Translations that come with the lyrics appear under each line. NetEase Cloud Mus
 When no source has a translation, the lyrics are translated by machine. On macOS 15 or later with the language downloaded, Apple Translation does it on your Mac and the lyrics stay there; otherwise the lines to translate are sent to Google Translate, then MyMemory. Translation languages are downloaded from the same card.
 
 - Off by default
-- Settings: Lyrics › Translation › Translate When None Is Provided
-- Settings: Lyrics › Translation › Translation Languages
+- Settings: Lyrics › Language › Translate When None Is Provided
+- Settings: Lyrics › Language › Translation Languages
 
 <a id="feature-romanization"></a>
 
@@ -203,8 +203,8 @@ When no source has a translation, the lyrics are translated by machine. On macOS
 Japanese romaji, Korean romanization, Mandarin pinyin and Cantonese Jyutping, word by word above the lyrics, plus eighteen more languages such as Russian, Thai, Greek and Hindi under each language's official system or an ISO standard. Language is judged line by line, so a Japanese line inside a Chinese song is the only one marked. Choose which languages to mark here; with a Chinese interface, pinyin starts off. Each display decides whether to show them.
 
 - On by default
-- Settings: Lyrics › Adjust › Romanization Languages
-- Settings: Lyrics › Adjust › Japanese Reading
+- Settings: Lyrics › Language › Romanization Languages
+- Settings: Lyrics › Language › Japanese Reading
 - Settings: Lyrics Display › Floating Lyrics › Content › Romanization
 - Settings: Keyboard Shortcuts › Show/Hide Romanization
 
@@ -214,7 +214,7 @@ Japanese romaji, Korean romanization, Mandarin pinyin and Cantonese Jyutping, wo
 
 Shows all Chinese lyrics in Simplified or Traditional characters, whatever language the app itself is in.
 
-- Settings: Lyrics › Adjust › Chinese Script
+- Settings: Lyrics › Language › Chinese Script
 
 <a id="feature-split-join-lines"></a>
 
@@ -223,8 +223,8 @@ Shows all Chinese lyrics in Simplified or Traditional characters, whatever langu
 Floating lyrics, the notch, the menu bar and the Touch Bar split lines too long for their width and join lines that flash by too quickly, each by its own width. The lyrics window keeps one line per line. Two separate switches.
 
 - Off by default
-- Settings: Lyrics › Adjust › Split Long Lines
-- Settings: Lyrics › Adjust › Join Short Lines
+- Settings: Lyrics › Timing › Split Long Lines
+- Settings: Lyrics › Timing › Join Short Lines
 
 <a id="feature-timing-offset"></a>
 
@@ -232,7 +232,7 @@ Floating lyrics, the notch, the menu bar and the Touch Bar split lines too long 
 
 Move all lyrics earlier or later, optionally for one player only. Single songs get their own offset in the Lyrics Manager, and shortcuts can advance, delay or reset it on the fly.
 
-- Settings: Lyrics › Adjust › Timing Offset
+- Settings: Lyrics › Timing › Timing Offset
 - Settings: Keyboard Shortcuts › Advance Lyrics
 - Settings: Keyboard Shortcuts › Delay Lyrics
 - Settings: Keyboard Shortcuts › Reset Lyrics Offset
@@ -837,31 +837,31 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 Every setting in the Settings window, by where it lives: 291 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
-### Lyrics › Sources
+### Lyrics › Source
 
 - **Lyrics Sources**
 - **Matching Algorithm**
-- **Re-Pick After Algorithm Updates**: On (default): when the matching algorithm or scoring rules change, existing lyrics are re-evaluated in the background and may be swapped for a better match Off: once chosen, lyrics are never swapped automatically; first-time lookups, manual re-searches and manual edits are unaffected
-- **Share Lyrics Across Entries of a Song**: On (default): entries of the same song from different players or album editions that are confirmed to be the same recording use the same lyrics, and manual edits apply to all of them Off: each entry is matched on its own, and entries that were synced go back to their original lyrics
-- **Pre-Resolve Upcoming Tracks**
-- **Lock Hand-Picked Lyrics**: Off (default): replaces the lyrics this time only; later automatic searches or scoring changes may replace them again On: locks this song’s lyrics so automatic matching no longer changes them Turning it on also locks songs you chose manually before (except those already replaced automatically)
+- **Re-Pick After Algorithm Updates**: Re-evaluated in the background after updates; may switch to a better version
+- **Share Lyrics Across Entries of a Song**: One copy for the same recording across players and album versions; edits sync too
+- **Lock Hand-Picked Lyrics**: Auto-matching never replaces lyrics you picked
+- **Pre-Resolve Upcoming Tracks**: Finds lyrics for upcoming tracks ahead of time
 
-### Lyrics › Translation
+### Lyrics › Language
 
-- **Translation Language**: Whether each place shows translations is set in Lyrics Display
+- **Translation Language**
 - **Translate When None Is Provided**: Translates on this Mac first, and online when that isn’t possible
-- **Translation Languages**: Only languages that can be translated into your translation language are listed, so there may be fewer than in System Settings. Click a language that isn’t downloaded to download it
-
-### Lyrics › Adjust
-
+- **Translation Languages**: System languages used for on-device translation
 - **Chinese Script**: Show Chinese lyrics in Simplified or Traditional characters
-- **Romanization Languages**: Adds pronunciation for the selected languages; whether it shows is set in Lyrics Display
+- **Romanization Languages**: Adds romanization for the languages you check
 - **Japanese Reading**: Romaji, or hiragana for kanji only
+
+### Lyrics › Timing
+
 - **Split Long Lines**: Lines too long to fit are split and shown in parts
 - **Join Short Lines**: Adjacent short lines are merged when they fit on one line
-- **Timing Offset**: Positive shows lyrics earlier, negative later
+- **Timing Offset**: Positive shows lyrics earlier, negative later; each player can have its own
 
-### Lyrics › Library
+### Lyrics › Lyrics Library
 
 - **Lyrics Library**
 - **Auto-Match Missing Lyrics**: Only songs with no lyrics or plain-text lyrics

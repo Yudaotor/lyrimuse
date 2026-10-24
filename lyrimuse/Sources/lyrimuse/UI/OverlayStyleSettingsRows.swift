@@ -202,7 +202,7 @@ struct OverlayColorSettingsRows: View {
 /// 「内容」那一组:主行下面画哪几行 —— 读音 / 译文 / 下一句,按卡片里从上到下的顺序。
 ///
 /// 读音、译文是悬浮歌词自己那一份(`overlayShowRomanization` / `overlayShowTranslation`),不连带歌词窗口;
-/// 给哪些语言标读音是歌词内容本身的设置、所有展示面共用,只在「歌词 › 调整 › 标注读音的语言」里设,这里不放
+/// 给哪些语言标读音是歌词内容本身的设置、所有展示面共用,只在「歌词 › 语言 › 标注读音的语言」里设,这里不放
 /// (04 章决策 47)。「下一句」归这里不归「排版」:它讲的是显示哪些内容,不是怎么排。见 04 章决策 42。
 @MainActor
 struct OverlayContentSettingsRows: View {

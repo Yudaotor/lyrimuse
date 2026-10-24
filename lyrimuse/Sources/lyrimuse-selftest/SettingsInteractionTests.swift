@@ -839,8 +839,8 @@ func runSettingsInteractionTests() {
         expectEqual(sourceHas(packRow, "SettingsEqualColumns(columns: SettingsLanguageTile.columns, spacing: 6)")
                     && sourceHas(packRow, "SettingsLanguageTile(title: name, mark: isDownloading ? .progress : .download)")
                     && sourceHas(settingsView, "SettingsEqualColumns(columns: SettingsLanguageTile.columns, spacing: 6)")
-                    && sourceHas(settingsView, "SettingsLanguageTile(title: title, mark: on ? .on : .off)"), true,
-                    "语言网格: 「标注读音的语言」和「翻译语言包」用同一个格子、同样的列数")
+                    && sourceHas(settingsView, "SettingsLanguageTile(title: language.title, mark: on ? .on : .off, detail: language.example)"), true,
+                    "语言网格: 「标注读音的语言」(其他文字那几组)和「翻译语言包」用同一个格子、同样的列数")
         expectEqual(store.contains("case systemLanguage = \"\(L.featuresKey)\""), true,
                     "系统语言(契约): features.json 的键名用 SystemLanguage.featuresKey")
         expectEqual(store.contains("systemLanguage = SystemLanguage.current()")

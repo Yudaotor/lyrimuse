@@ -282,4 +282,16 @@ func checkWorldRomanization() {
     expectEqual(unreadBoth.map { $0.contains("们") && !$0.contains("們") }, true, "现算: 繁体也读不出就照原样留着")
     expectEqual(IndicRomanization.romanize("ਢਾਕੜ\u{0A3C}"), "ḍhākaṛa", "ISO 15919: 古木基文多余的点不出字")
     expectEqual(IndicRomanization.romanize("म\u{093C}"), "ma", "ISO 15919: 天城文多余的点不出字")
+
+    // 设置页「歌词 › 语言 › 文字」的示例:三句样句按设置现算,跟播放时同一套函数。
+    typealias Sample = LyricsReadingSample
+    let defaults = Sample.lines(scripts: .default, japaneseReading: .romaji, chineseVariant: .off)
+    expectEqual(defaults.map(\.reading), ["kimi no namae o yobu", "saranghaeyo", "hòu lái de wǒ men"], "示例: 默认设置的三句读音")
+    let kana = Sample.lines(scripts: .default, japaneseReading: .kana, chineseVariant: .off)
+    expectEqual(kana.first?.reading, "きみのなまえをよぶ", "示例: 日语读音选假名")
+    let trad = Sample.lines(scripts: RomanizationScripts.default.subtracting(.chinese), japaneseReading: .romaji,
+                            chineseVariant: .traditional)
+    expectEqual(trad.last, Sample.Line(original: "後來的我們", reading: nil), "示例: 转繁体、普通话没勾就不标")
+    expectEqual(Sample.lines(scripts: [], japaneseReading: .romaji, chineseVariant: .off).map(\.reading), [nil, nil, nil],
+                "示例: 一种都没勾就都不标")
 }

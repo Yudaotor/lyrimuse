@@ -1675,7 +1675,7 @@ func runMenuBarTests() {
         expectEqual(quick.contains("case \"lyrics-manager\": self = .lyricsManager")
                     && quick.contains("PanelLyricsManagerRows(close: close)")
                     && quick.contains("UserDefaults.standard.set(SettingsSearchCatalog.lyricsManageSectionValue,"), true,
-                    "歌词管理背面: 深链取值、两组行、「全部设置…」翻到「歌词 › 管理」")
+                    "歌词管理背面: 深链取值、两组行、「全部设置…」翻到「歌词 › 歌词库」")
         expectEqual(SettingsSearchCatalog.lyricsManageSectionValue == "manage"
                     && settingsView.contains("case fetch, translation, display, manage"), true,
                     "歌词管理背面: 「管理」分段的取值跟设置页枚举对得上")

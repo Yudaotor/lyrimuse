@@ -33,7 +33,7 @@
 
 | 路径 | 页面 | 分段 |
 |---|---|---|
-| `/lyrics` | 歌词 | `/fetch` 获取、`/translation` 译文、`/display` 调整、`/manage` 管理 |
+| `/lyrics` | 歌词 | `/fetch` 或 `/sources` 来源、`/translation` 或 `/language` 语言、`/display` 或 `/timing` 时间与断句、`/manage` 或 `/library` 歌词库 |
 | `/player` | 播放器 | `/players` 播放器、`/linkage` 联动、`/permissions` 权限与服务 |
 | `/appearance` | 歌词显示 | `/overlay` 悬浮歌词、`/notch` 灵动岛、`/menu-bar` 菜单栏、`/touch-bar` 触控栏、`/lyrics-window` 歌词窗口 |
 | `/shortcuts` | 快捷键 | — |

@@ -136,34 +136,27 @@ final class LanguagePackStatusStore: ObservableObject {
     }
 }
 
-/// 「翻译语言包」设置行:右边一个读数「已下载 6 / 18」+ 一颗「管理…」,点开在卡里展开一块
-/// 4 列的语言网格(✓ 已下载 / ⭳ 未下载、点一下让系统下载 / 转轴 下载中;格子同「标注读音的语言」),网格下面一条说明
-/// 告诉人语言包归 macOS 管、要删去系统设置。
+/// 「翻译语言包」:「歌词 › 语言 › 译文」卡里的一行,右边一个读数「已下载 6 / 18」,点这一行在卡里展开
+/// 4 列的语言网格(✓ 已下载 / ⭳ 未下载、点一下让系统下载 / 转轴 下载中;格子同「标注读音的语言」),网格上面一句
+/// 读数的口径,下面一条说明告诉人语言包归 macOS 管、要删去系统设置。
 ///
 /// 为什么这一行必须在 App 里、而不是交给采集器:系统的语言包下载会弹一个系统 UI,只有
 /// SwiftUI 的 `.translationTask` 建出来的 `TranslationSession` 才有权拉起它
 /// (`canRequestDownloads`)。采集器调的那个 `lyrics-translate` 是无界面子进程,自己触发
 /// 下载会弹出没头没尾的窗口,所以它只负责如实回报"语言包没装",引导落在这里。
 ///
-/// **从下拉菜单改成展开网格**。下拉那版的
-/// 问题不在样子而在隐喻:下拉是"从几个值里选一个",而这里点一项的后果是**触发一次下载**
-/// (系统会弹一张确认下载的 sheet),动词跟控件对不上——菜单项写的是「法语 · 未下载」,
-/// 看不出"点它就会下载";已装的那些点了什么都不发生;下载期间整个菜单的项全部置灰、却没
-/// 有任何地方解释为什么。网格把每种语言的状态摆在明处,只有没装的那些是按钮(悬停有底色、
-/// 提示写「点击下载」),装好的就是一个实心勾,下载中的那一格自己转圈——每个状态各占一个
-/// 格子,不用再靠一串菜单文字去猜。
+/// 网格而不是下拉菜单:点一项的后果是**触发一次下载**(系统会弹一张确认下载的 sheet),下拉"从几个值里选一个"
+/// 的隐喻对不上。网格把每种语言的状态摆在明处,只有没装的那些是按钮,装好的就是一个实心勾,下载中的那一格自己转圈。
 ///
 /// 展开而不是 popover:下载确认是系统弹在**设置窗口**上的 sheet,popover 在它弹出时会被
-/// 收掉,用户下载完还得再点开一次才看得到结果;留在卡里就没有这层折腾。 展开状态是
-/// @State 不是 @AppStorage:默认折叠(跟「全部设置」抽屉同一条理由),不把上次展开的样子
-/// 带到下次打开设置。
+/// 收掉,用户下载完还得再点开一次才看得到结果。展开状态是 @State 不是 @AppStorage:默认收起,
+/// 不把上次展开的样子带到下次打开设置。
 ///
 /// 读数「已下载 6 / 18」按**当前译文语言**统计"能翻成它的语言对",不是系统设置里
 /// "下载了几种语言"——译文语言自己(简体中文)和同语系的繁体中文在这一对里是 unsupported,
-/// 会被过滤掉,所以系统设置显示 8 种、这里是 6 / 18 是**正常的**(用户觉得
-/// "感觉有 bug",进程外探针对过:系统真值就是这 6 个)。help 气泡里把这条写明了。
+/// 会被过滤掉,所以系统设置显示 8 种、这里是 6 / 18 是**正常的**。展开后的那句口径把这条写明了。
 @available(macOS 15.0, *)
-struct LanguagePackCard: View {
+struct LanguagePackSection: View {
     @ObservedObject private var features = FeatureSettingsStore.shared
     @ObservedObject private var store = LanguagePackStatusStore.shared
     @State private var pending: TranslationSession.Configuration?
@@ -174,6 +167,8 @@ struct LanguagePackCard: View {
     ///   2. 看门狗 `.task(id: downloadNonce)` 靠它重新计时。
     /// 两处都需要「每次请求必然变化的键」,而 `downloading` 在连点同一个语言时值不变。
     @State private var downloadNonce = 0
+    @State private var expanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 译文的目标语言,跟采集器交给本机翻译的一致(translate.go `appleLangCode` 套在
     /// `resolveLyricsTranslationLanguage` 的结果上):
@@ -195,34 +190,53 @@ struct LanguagePackCard: View {
     }
 
     var body: some View {
-        // 下面挂的 .task / .onReceive / .translationTask 必须挂在**一个**视图上(这张卡),别套在 Group 上:
+        // 下面挂的 .task / .onReceive / .translationTask 必须挂在**一个**视图上(这个 VStack),别套在 Group 上:
         // 会被转发给每一个子视图 —— 刷新跑两遍还只是浪费,translationTask 跑两遍就是弹两张下载 sheet。
-        SettingsCard(cornerRadius: 18) {
-            SettingsCardHeader(
+        VStack(spacing: 0) {
+            SettingsRow(
+                icon: "arrow.down.circle",
                 title: L10n.t("翻译语言包"),
-                help: L10n.t("仅列出可翻译为当前译文语言的语言，因此可能少于「系统设置」中的数量。点按未下载的语言即可下载")
+                subtitle: L10n.t("本机翻译要用到的系统语言包")
             ) {
-                // 首次读取有可见延迟(进程刚起时 translationd 冷启动还会先误报全零、
-                // 等 5 秒复查,见 LanguagePackStatusStore.refresh),这段时间明说
-                // "检查中",而不是让人以为一个都没装。
-                Text(summaryText)
-                    .font(.system(size: 11))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            }
-            SettingsRawRow(insetToText: true) { packGrid }
-            SettingsNote {
-                Text(L10n.t("删除语言包：系统设置 › 通用 › 语言与地区 › 翻译语言"))
-                Button(L10n.t("打开系统设置")) {
-                    // 语言与地区面板;「翻译语言…」是那一页底部的一颗按钮,系统没给它
-                    // 单独的深链,只能开到这一层。
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension") {
-                        NSWorkspace.shared.open(url)
-                    }
+                HStack(spacing: 8) {
+                    // 首次读取有可见延迟(进程刚起时 translationd 冷启动还会先误报全零、
+                    // 等 5 秒复查,见 LanguagePackStatusStore.refresh),这段时间明说
+                    // "检查中",而不是让人以为一个都没装。
+                    Text(summaryText)
+                        .font(.system(size: 11))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
                 }
-                .controlSize(.small)
-                .settingsGlassButtons()
-                .buttonBorderShape(.capsule)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { expanded.toggle() }
+            }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { expanded.toggle() }
+            if expanded {
+                SettingsNote {
+                    Text(L10n.t("仅列出可翻译为当前译文语言的语言，因此可能少于「系统设置」中的数量。点按未下载的语言即可下载"))
+                }
+                SettingsRawRow(insetToText: true) { packGrid }
+                SettingsNote {
+                    Text(L10n.t("删除语言包：系统设置 › 通用 › 语言与地区 › 翻译语言"))
+                    Button(L10n.t("打开系统设置")) {
+                        // 语言与地区面板;「翻译语言…」是那一页底部的一颗按钮,系统没给它
+                        // 单独的深链,只能开到这一层。
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .controlSize(.small)
+                    .settingsGlassButtons()
+                    .buttonBorderShape(.capsule)
+                }
+                .padding(.bottom, 4)
             }
         }
         // 出现时刷新一次;目标语言改了要按新目标重算 —— 可用性是**按语言对**算的,换了目标

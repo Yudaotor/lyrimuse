@@ -785,25 +785,20 @@ private struct LyricsSettingsTab: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 这一页的四个分段。四段各 2–4 项,一屏放得下,而且分法本身就是语义:
-    /// 「怎么找到这首歌的歌词」「译文怎么来」「歌词长什么样」「已经存下来的怎么管」。
+    /// 这一页的四个分段,一段回答一个问题:歌词从哪来(来源)、读成什么语言(语言:译文、繁简、读音)、
+    /// 什么时候出现和怎么断(时间与断句)、存了些什么(歌词库)。
     ///
-    /// 不拆成两个侧边栏条目:那样侧边栏会从 6 项变 7 项,而这四段里真正常用的只有前两段,
-    /// 把「显示」「管理」也提到侧边栏是把不常用的东西抬得更高。
+    /// rawValue 是存进 `settings:lyricsSection` 和深链分段名的值,显示名改了也别动它们。
+    /// 别叫「显示」——侧边栏另有一个「歌词显示」分类(管各展示面的开关和样式)。见 14 章决策 139。
     private enum Section: String, CaseIterable, Identifiable {
         case fetch, translation, display, manage
         var id: Self { self }
         var title: String {
             switch self {
-            case .fetch: return L10n.t("获取")
-            case .translation: return L10n.t("译文")
-            // 叫「调整」:这一段只放改歌词内容本身的几项(繁简 / 罗马音 / 时间轴偏移),四个展示面看到
-            // 的是同一份结果。别叫「显示」——侧边栏另有一个「歌词显示」分类(管各展示面的开关和样式),
-            // 同一个词出现在两层,想调字体的人会先来这里扑空;也别叫「效果」——听起来像卡拉OK、动画
-            // 这类视觉效果,而那些都在「歌词显示」里。rawValue 仍是 display,@AppStorage 存的是
-            // rawValue,改显示名不动持久化。
-            case .display: return L10n.t("调整")
-            case .manage: return L10n.t("管理")
+            case .fetch: return L10n.t("来源")
+            case .translation: return L10n.t("语言")
+            case .display: return L10n.t("时间与断句")
+            case .manage: return L10n.t("歌词库")
             }
         }
     }
@@ -863,12 +858,10 @@ private struct LyricsSettingsTab: View {
 
     // MARK: - 时间轴偏移那一行的「作用于哪个播放器」
 
-    /// 空串 = 「全部播放器」(就是既有的全局那层,存储上没有"全部"这个哨兵);否则是某个播放器
-    /// 的 bundle id。**故意只是 @State、不持久化**:绝大多数人只需要动「全部」那一档,每次打开
-    /// 设置页从它开始最省事;落进 @AppStorage 还会多一个 np: 键(而 np: 前缀是配置导出的白
-    /// 名单,等于把一个纯界面状态搬去新机器)。
-    @State private var offsetScope = ""
-    /// 下拉里标「正在播放」用。**必须拿播放态兜一道**:LocalPlaybackSource 从不清 lastSnapshot,
+    /// 「时间轴偏移」卡里这次在「为其他播放器单独设置」菜单里刚加的播放器。只是界面状态:偏移为 0 不落盘
+    /// (`LyricsOffsetStore.setPlayerOffset`),调过一次才真的存下来。
+    @State private var addedOffsetPlayers: [String] = []
+    /// 标「正在播放」用。**必须拿播放态兜一道**:LocalPlaybackSource 从不清 lastSnapshot,
     /// 停播之后 lastResolvedBundleID 是"陈旧但非 nil"的,直接用会一直指着最后那个播放器说
     /// 它正在放。
     @State private var nowPlayingBundleID: String?
@@ -878,7 +871,7 @@ private struct LyricsSettingsTab: View {
         nowPlayingBundleID = coordinator.isPlayingSmoothed ? coordinator.resolvedPlayerBundleID : nil
     }
 
-    /// 下拉框的候选,四组并集(顺序即展示顺序):
+    /// 能单独设偏移的播放器,四组并集(顺序即展示顺序):
     ///  1. 内置播放器,按 `PlaybackPlayer.displayOrder`(按系统语言排,跟"选择播放器"图标
     ///     网格同一套顺序)—— **不含「自动识别」**:它的 bundleIdentifier 是空串,存进去会被
     ///     `setPlayerOffset` 静默丢掉;"自动"这层语义本来就由「全部播放器」承担。
@@ -886,31 +879,25 @@ private struct LyricsSettingsTab: View {
     ///  3. **已经配过偏移的** —— 哪怕它已经不在信任名单里(取消信任了、App 卸了)也必须列出来,
     ///     否则那个非零偏移会变成看不见、改不动的隐形值(见 LyricsOffsetStore.playerOffsets 注释)。
     ///  4. 此刻正在放的那个 —— 可能是还没加进信任名单的 App,用户往往正是为它才来调这个。
-    private var offsetScopeOptions: [String] {
-        // 并集/去重/排序的规则连同那三条不变量都在 LyrimuseCore.LyricsOffsetScope 里(纯函数,
-        // selftest 覆盖)—— 混在 View 里的话,「配过偏移但已不在信任名单」这类只在特定用户状态
-        // 下才暴露的分支除了肉眼盯下拉框以外没法验证。
-        //
-        // builtInOrder 传 PlaybackPlayer.displayOrder —— 跟"选择播放器"图标网格用同一套按系统语言
-        // 排的顺序,同一批播放器在这个下拉框里不该是另一个顺序。LyricsOffsetScope 自己在
-        // LyrimuseCore,够不到 displayOrder(它在 App target 里依赖 AppSettings),所以顺序从这里
-        // 传进去,见该函数参数注释。
-        let options = LyricsOffsetScope.options(
+    /// 并集 / 去重 / 排序的规则在 LyrimuseCore.LyricsOffsetScope 里(纯函数,selftest 覆盖);displayOrder 在
+    /// App target 里,所以从这里传进去。
+    private var offsetPlayerCandidates: [String] {
+        LyricsOffsetScope.options(
             builtInOrder: PlaybackPlayer.displayOrder,
             trusted: features.trustedPlayers,
             configured: Set(offsets.playerOffsets.keys),
             nowPlaying: nowPlayingBundleID
         )
-        // 当前选中的那个也得在候选里:「正在播放」那组跟着 2 秒一次的轮询变,选中一个没信任、偏移为 0 的
-        // 正在播放的 App 之后一暂停,它就从候选里掉出去 —— Picker 找不到选中值的 tag,下拉显示空白,
-        // 旁边的 Stepper 却还在改这个看不见的播放器。
-        guard !offsetScope.isEmpty, !options.contains(offsetScope) else { return options }
-        return options + [offsetScope]
     }
 
-    /// 选中的播放器没有单独配过偏移:这时实际生效的是「全部播放器」那档(二选一,见 LyricsOffsetStore.baseOffsetMs)。
-    private var scopeFollowsGlobal: Bool {
-        !offsetScope.isEmpty && offsets.playerOffsets[offsetScope] == nil
+    /// 卡里逐行列出来的播放器:单独配过的、此刻正在放的、刚在菜单里加的。配过的一个不漏,
+    /// 看得见才改得动。刚加的那个不在候选里时(候选跟着 2 秒一次的轮询变)照样留着,不然调到一半那一行没了。
+    private var offsetPlayerRows: [String] {
+        let configured = Set(offsets.playerOffsets.keys)
+        let shown = offsetPlayerCandidates.filter {
+            configured.contains($0) || $0 == nowPlayingBundleID || addedOffsetPlayers.contains($0)
+        }
+        return shown + addedOffsetPlayers.filter { !shown.contains($0) }
     }
 
     /// bundle id → 人看得懂的名字。内置的用枚举自带的显示名,信任项用当初存下来的那份(空串时
@@ -923,31 +910,25 @@ private struct LyricsSettingsTab: View {
         return FeatureSettingsStore.appDisplayName(forBundleID: bundleID) ?? bundleID
     }
 
-    /// 下拉项的文字:名字 + 一个状态后缀。「已调」那个后缀是为了让"哪些播放器配过"一眼可见 ——
-    /// 不然用户得逐个点开才知道,而看不见的非零偏移正是这层要避免的事。
-    private func offsetScopeLabel(_ bundleID: String) -> String {
-        let name = playerDisplayName(bundleID)
-        if bundleID == nowPlayingBundleID { return name + L10n.t("（正在播放）") }
-        if offsets.playerOffset(forBundleID: bundleID) != 0 { return name + L10n.t("（已调）") }
-        return name
+    /// 某一档自己存的值,空串是「全部播放器」。两档各读各的存储:别把一档的数带到另一档去改,
+    /// 那等于往两层各写一份、相加成双倍校正。
+    private func storedOffsetMs(_ scope: String) -> Int {
+        scope.isEmpty ? offsets.globalOffsetMs : offsets.playerOffset(forBundleID: scope)
     }
 
-    /// 当前作用域那一档的值。两个作用域各读各的存储,切换下拉时数字**不跟着带过去** ——
-    /// 那会让人以为在改同一个数,实际是往两层各写一份、相加成双倍校正。
-    private var scopedOffsetMs: Int {
-        offsetScope.isEmpty ? offsets.globalOffsetMs : offsets.playerOffset(forBundleID: offsetScope)
+    /// 这个播放器没有单独配过:生效的是「全部播放器」那档(二选一,见 LyricsOffsetStore.baseOffsetMs)。
+    private func offsetFollowsGlobal(_ scope: String) -> Bool {
+        !scope.isEmpty && offsets.playerOffsets[scope] == nil
     }
 
-    private func setScopedOffset(_ ms: Int) {
-        if offsetScope.isEmpty {
+    private func setOffset(_ ms: Int, scope: String) {
+        if scope.isEmpty {
             PlaybackCoordinator.shared.setGlobalLyricsOffset(ms)
         } else {
-            PlaybackCoordinator.shared.setPlayerLyricsOffset(ms, forBundleID: offsetScope)
+            PlaybackCoordinator.shared.setPlayerLyricsOffset(ms, forBundleID: scope)
         }
     }
 
-    // 标题/副标题/help 都是**固定文案**,不跟着下拉框选中项变 —— 每换一次选中项整行文案跳
-    // 一次;而且这一项的语义是二选一,不是"额外叠加"。
     @AppStorage("settings:lyricsSection") private var sectionRaw = Section.fetch.rawValue
     private var section: Section { Section(rawValue: sectionRaw) ?? .fetch }
 
@@ -993,24 +974,21 @@ private struct LyricsSettingsTab: View {
     private var currentSection: some View {
         switch section {
         case .fetch:
-            // 两张卡:第一张只回答「从哪儿找」—— 来源网格 + 测试;第二张回答「找到之后怎么定」
-            // —— 匹配算法、顺序、后台许不许换、预取、手动锁定。卡名「歌词来源」只对第一样成立,
-            // 所以第二张**不给卡名**,跟「译文」「效果」两张卡同一个做法(卡里第一行的标题已经
-            // 说明白这张卡管什么)。
+            // 三张卡:「歌词来源」先说怎么用(匹配算法)再列来源,顺序优先时来源本身排成有序列表;
+            // 「选定之后」是歌词定下来以后后台还换不换的三项;预解析是无感优化,单独一行排最后。
             //
-            // 预取排在决策项(选来源、挑算法)后面:它是无感优化,不该压在真正要动的决策上面。
-            //
-            // 间距跟 SettingsPage 的卡间距(14)一致:两张卡包一层只为挂同一片背景光。
+            // 间距跟 SettingsPage 的卡间距(14)一致:包一层只为挂同一片背景光。
             VStack(spacing: 14) {
                 sourcesCard
-                matchingCard
+                afterPickCard
+                prefetchCard
             }
             // 玻璃要背后有东西才看得出来,跟 Last.fm 各段同一份淡色光(12 章决策 63)。
             .background { LastfmGlassGlow() }
         case .translation:
-            translationCard
+            languageSection
         case .display:
-            displayCard
+            timingSection
         case .manage:
             managementCard
         }
@@ -1030,59 +1008,94 @@ private struct LyricsSettingsTab: View {
                     testAllSourcesButton
                 }
             }
-            // 固定 4 列的网格,不用 WrapLayout 按可用宽度贪心折行 —— 那样折行位置完全由译文长度
-            // 决定("网易云音乐"5 个字、英文界面下 "NetEase Cloud Music" 20 个字符,同一张卡在两种
-            // 语言下从两行变三行)。固定列数下行数只取决于「来源数 ÷ 4」,跟语言、译文长短无关,
-            // 以后加新源最多只多一行。单格文字太长先缩一点、再被 sourceCheckbox 内部的 .lineLimit(1) 截断,
-            // 不会像 WrapLayout 那样把整张卡的折行结构带歪。
-            SettingsRawRow(insetToText: true) {
-                LazyVGrid(
-                    columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4),
-                    alignment: .leading, spacing: 6
-                ) {
-                    ForEach(LyricsSource.settingsDisplayOrder) { source in
-                        // 测试按钮/结果状态放在每一格尾部。
-                        //
-                        // **别把它 `.overlay` 叠回 sourceCheckbox 上面**:两个 Button 叠在一起会抢
-                        // 同一次 mouseDown,这层竞争发生在 AppKit 的 hit-test 阶段,SwiftUI 手势优先级
-                        // (`.highPriorityGesture`)根本没有机会介入 —— 它只能调解 SwiftUI **自己**手势
-                        // 系统内部的优先级,管不到"外层这个 Button 的 mouseDown 被 AppKit 判给了它自己"。
-                        // (悬停不受影响:悬停走 NSTrackingArea,两个叠在一起的区域各自独立、互不冲突,
-                        // 所以这个坑只在点击上暴露。)正确做法是让两个控件在布局上就不重叠、变成平级
-                        // 兄弟节点(HStack + Spacer):sourceCheckbox 因此不自己占满整格宽度,这里的
-                        // HStack 补上"占满整格"的职责,Spacer 把测试小图标推到真正的尾部。
-                        HStack(spacing: 4) {
-                            sourceCheckbox(source)
-                            Spacer(minLength: 0)
-                            localCacheAccessory(source)
-                            appleMusicConnectionAccessory(source)
-                            sourceTestAccessory(source)
+            // 先说怎么用这些来源(匹配算法),再列来源。顺序优先时来源本身排成有序列表(可拖动、上下移),
+            // 没开的收在下面,不再另起一份顺序列表把同一批来源画第二遍。
+            matchingModeRow
+            CardDivider()
+            if features.lyricsSourceMode == .priority {
+                let visible = orderedEnabledSources
+                ForEach(Array(visible.enumerated()), id: \.element) { index, source in
+                    if index > 0 { CardDivider() }
+                    priorityRow(index: index, source: source, visible: visible)
+                }
+                let disabled = LyricsSource.settingsDisplayOrder.filter { !features.lyricsSources.contains($0) }
+                if !disabled.isEmpty {
+                    CardDivider()
+                    SettingsRawRow(insetToText: true) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(L10n.t("未启用的来源"))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                            sourceGrid(disabled)
                         }
-                        .padding(.leading, 2)
-                        .padding(.trailing, 5)
-                        .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-                        .background { sourceTileBackground(source) }
-                        // 在整行(复选框+空白+图标)上补一层独立的悬停追踪,专门喂给 hoveredRow:
-                        // sourceCheckbox 自己的悬停范围紧贴内容(不占满整格,见上面那段),跟测试小图标
-                        // 之间隔着 Spacer 撑出来的一段空白,指针走在那段空白里时两边的悬停信号都不成立。
-                        // 这一层只用来决定测试图标要不要露出来,跟 sourceCheckbox 那层驱动高亮底色 /
-                        // 悬停说明的 hoveredSource 是两件不同的事,不合并。
-                        .contentShape(Rectangle())
-                        .onHover { hovering in
-                            hoveredRow = hovering ? source : (hoveredRow == source ? nil : hoveredRow)
-                        }
+                        .padding(.bottom, 4)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 4)
+            } else {
+                SettingsRawRow(insetToText: true) {
+                    sourceGrid(LyricsSource.settingsDisplayOrder)
+                        .padding(.bottom, 4)
+                }
             }
         }
+        // 顺序列表拖拽排序的几何基础(见 priorityRow / priorityDragGesture):行中线与指针位移都在这个命名坐标
+        // 空间里量;行数或匹配模式一变就丢掉进行中的拖拽,避免 offset 残留在一份已经不同的列表上。
+        .coordinateSpace(name: Self.priorityListSpace)
+        .onPreferenceChange(PrioritySourceFramesKey.self) { priorityRowFrames = $0 }
+        .onChange(of: orderedEnabledSources.count) { _, _ in sourceDrag = nil }
+        .onChange(of: features.lyricsSourceMode) { _, _ in sourceDrag = nil }
         .onAppear { appleMusic.refresh() }
         // 这个状态只在用户改授权时才变,5 秒一次绰绰有余;`LocalCacheAccess.current` 自己按
         // mtime 缓存,没变过的一拍只花一次 stat。视图消失即取消,没有常驻计时器。
         .settingsPolling(every: 5, runsOnAppear: true) {
             let state = LocalCacheAccess.current
             if state != localCacheAccess { localCacheAccess = state }
+        }
+    }
+
+    /// 来源格子:固定 4 列,不用 WrapLayout 按可用宽度贪心折行 —— 那样折行位置完全由译文长度
+    /// 决定("网易云音乐"5 个字、英文界面下 "NetEase Cloud Music" 20 个字符,同一张卡在两种
+    /// 语言下从两行变三行)。固定列数下行数只取决于「来源数 ÷ 4」,跟语言、译文长短无关。
+    /// 单格文字太长先缩一点、再被 sourceCheckbox 内部的 .lineLimit(1) 截断。
+    private func sourceGrid(_ sources: [LyricsSource]) -> some View {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4),
+            alignment: .leading, spacing: 6
+        ) {
+            ForEach(sources) { source in
+                sourceTile(source)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 一个来源:勾选 + 尾部的状态(客户端缓存、Apple Music 连接、测试)。网格和顺序列表共用。
+    ///
+    /// **别把尾部那几颗 `.overlay` 叠回 sourceCheckbox 上面**:两个 Button 叠在一起会抢同一次 mouseDown,
+    /// 这层竞争发生在 AppKit 的 hit-test 阶段,SwiftUI 手势优先级(`.highPriorityGesture`)管不到。两个控件在布局上
+    /// 不重叠、做平级兄弟节点(HStack + Spacer):sourceCheckbox 不自己占满整格,这里的 HStack 补上占满的职责。
+    private func sourceTile(_ source: LyricsSource) -> some View {
+        sourceTileContent(source)
+            .padding(.leading, 2)
+            .padding(.trailing, 5)
+            .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+            .background { sourceTileBackground(source) }
+    }
+
+    private func sourceTileContent(_ source: LyricsSource) -> some View {
+        HStack(spacing: 4) {
+            sourceCheckbox(source)
+            Spacer(minLength: 0)
+            localCacheAccessory(source)
+            appleMusicConnectionAccessory(source)
+            sourceTestAccessory(source)
+        }
+        // 在整行(复选框+空白+图标)上补一层独立的悬停追踪,专门喂给 hoveredRow:sourceCheckbox 自己的悬停范围
+        // 紧贴内容,跟测试小图标之间隔着 Spacer 撑出来的一段空白,指针走在那段空白里时两边的悬停信号都不成立。
+        // 这一层只决定测试图标要不要露出来,跟驱动高亮底色 / 悬停说明的 hoveredSource 是两件事,不合并。
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            hoveredRow = hovering ? source : (hoveredRow == source ? nil : hoveredRow)
         }
     }
 
@@ -1254,53 +1267,36 @@ private struct LyricsSettingsTab: View {
         }
     }
 
-    /// 第二张卡:找到来源之后"怎么定"—— 匹配算法、(顺序优先时的)手排顺序、后台许不许换、
-    /// 预取、手动锁定。为什么跟来源网格分开成两张卡,见 currentSection 里 `.fetch` 分支的注释。
-    private var matchingCard: some View {
+    /// 「匹配算法」:二选一用玻璃分段(同 Last.fm「Scrobble 规则」卡的匹配模式),副标题随选中项变
+    /// (matchingModeSubtitle),不另给「?」气泡。在「歌词来源」卡里排在来源前面。
+    private var matchingModeRow: some View {
+        SettingsRow(
+            icon: "slider.horizontal.3",
+            title: L10n.t("匹配算法"),
+            subtitle: matchingModeSubtitle
+        ) {
+            SettingsGlassTabPicker(
+                selection: Binding(
+                    get: { features.lyricsSourceMode },
+                    set: { features.lyricsSourceMode = $0; Task { await features.save() } }
+                ),
+                options: LyricsSourceMode.allCases,
+                label: \.displayName,
+                compact: true
+            )
+        }
+    }
+
+    /// 「选定之后」:歌词定下来以后,后台还换不换。三项的说明都常显一句,不用「?」悬停。
+    private var afterPickCard: some View {
         SettingsCard(cornerRadius: 18) {
-            // 二选一用玻璃分段(同 Last.fm「Scrobble 规则」卡的匹配模式),副标题随选中项变
-            // (matchingModeSubtitle),不另给「?」气泡。
-            SettingsRow(
-                icon: "slider.horizontal.3",
-                title: L10n.t("匹配算法"),
-                subtitle: matchingModeSubtitle
-            ) {
-                SettingsGlassTabPicker(
-                    selection: Binding(
-                        get: { features.lyricsSourceMode },
-                        set: { features.lyricsSourceMode = $0; Task { await features.save() } }
-                    ),
-                    options: LyricsSourceMode.allCases,
-                    label: \.displayName,
-                    compact: true
-                )
-            }
-            if features.lyricsSourceMode == .priority {
-                // 顺序列表支持把手拖拽排序:每行左侧一个 line.3.horizontal 把手,挂 DragGesture;
-                // 上下箭头**保留**,是键盘 / VoiceOver 的通路(把手对 VoiceOver 不可操作)。拖拽期间
-                // 从本地 sourceDrag 渲染让位与跟随、不碰 store;松手一次 move + 一次 save()。算法
-                // (滞回 / 让位槛距 / 写回完整排列)在 Core ReorderDrag,这里只做手势与几何。
-                let visible = orderedEnabledSources
-                ForEach(Array(visible.enumerated()), id: \.element) { index, source in
-                    CardDivider()
-                    priorityRow(index: index, source: source, visible: visible)
-                }
-            }
-            CardDivider()
-            // 「自动跟进算法升级」:控制后台会不会按最新版本的算法自动调整已经选定的歌词。
-            //
-            // 紧挨着「匹配算法」放:这两项回答的是同一个问题的两半 —— 前者是"怎么选",这个是
-            // "选完之后还许不许后台改主意"。分开摆的话,用户在别处看到歌词被换掉,想不到要回
-            // 这一段来关。
-            //
-            // 它**只管"换掉已经选定的那份"**:首次填充(一条歌词都没有)、封面/译文回填、
-            // 用户自己点「重新自动匹配」都不受它影响。闸门落在引擎的
-            // needsLyricsRescore / needsLyricsRetry 两处(见 features.go LyricsAutoUpgrade),
-            // 这行 help 的两句就是照那两处的真实行为写的,改那边记得回来改这里。
+            SettingsCardHeader(title: L10n.t("选定之后"), subtitle: L10n.t("歌词确定后，后台是否还会更换"))
+            // 只管"换掉已经选定的那份":首次填充、封面 / 译文回填、用户自己点「重新自动匹配」都不受它影响。
+            // 闸门在引擎的 needsLyricsRescore / needsLyricsRetry(features.go LyricsAutoUpgrade),副标题照那两处的行为写。
             SettingsRow(
                 icon: "arrow.triangle.2.circlepath",
                 title: L10n.t("随匹配算法更新重新选择"),
-                help: L10n.t("开（默认）：匹配算法或评分规则更新后，会在后台重新评估已有歌词，并可能更换为更合适的版本\n关：歌词确定后不再自动更换；首次解析、手动重新搜索和手动编辑不受影响")
+                subtitle: L10n.t("算法更新后在后台重新评估，可能换成更合适的版本")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.lyricsAutoUpgrade },
@@ -1308,12 +1304,12 @@ private struct LyricsSettingsTab: View {
                 ))
             }
             CardDivider()
-            // 「同曲条目共用歌词」:歌曲实体的歌词同步(features.json 的 song_entity_share_lyrics,18 章决策 56)。跟上一行同属
-            // 「后台会不会换掉已有歌词」,紧挨着放。关掉时引擎按留底把同步过的条目恢复、后来又改过的留着,help 第二行照这个写。
+            // 歌曲实体的歌词同步(features.json 的 song_entity_share_lyrics,18 章决策 56)。关掉时引擎按留底把
+            // 同步过的条目恢复、后来又改过的留着。
             SettingsRow(
                 icon: "rectangle.on.rectangle",
                 title: L10n.t("同曲条目共用歌词"),
-                help: L10n.t("开（默认）：同一首歌在不同播放器、不同专辑版本下、可确认为同一录音的条目使用同一份歌词，手动修改一并同步\n关：各条目分别匹配歌词，已同步的条目恢复为原来的歌词")
+                subtitle: L10n.t("同一录音在不同播放器和专辑版本下共用一份，手动修改一并同步")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.songEntityShareLyrics },
@@ -1321,48 +1317,14 @@ private struct LyricsSettingsTab: View {
                 ))
             }
             CardDivider()
-            // "解析"(而非"预取")避免被误读成预先加载音频本身,这个开关从不碰音频。
-            SettingsRow(
-                icon: "square.stack",
-                // 不给 ? 提示:预取本来就是无感的(成功与否用户都看不见),标题本身已经说清楚这个
-                // 开关做什么,为它常驻一个 ? 是拿噪声换不了任何决策。
-                //
-                // 标题只说"待播",不说具体从哪来:能读到播放器队列时就是队列里的下几首,读不到
-                // 退回同一张专辑里的其它曲目(见 lyrimuse-engine/upcoming.go)。哪条路走得通取决于用的是
-                // 哪个播放器、此刻在播什么,摆进标题只会让用户以为自己能选。
-                //
-                // 「待播」取自系统音乐 App 的 Up Next(繁中/英文界面也照这个词对齐),不是自造词;
-                // 「解析」而非"预取/预载",理由见上面那行 —— 这个开关从不碰音频。
-                title: L10n.t("预解析待播曲目")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { features.albumPrefetch },
-                    set: { features.albumPrefetch = $0; Task { await features.save() } }
-                ))
-            }
-            CardDivider()
-            // 「采纳候选要不要顺带锁定这首歌」的开关 —— 见 LyricsQuickSearchWindow「采纳候选」调用点的 markManual
-            // 参数注释(`LyricsSearchSheet(` 只有那一处调用)。默认关,纯本地
-            // UI 偏好,不需要引擎知道,存进 AppSettings 而不是 FeatureSettingsStore。
-            //
-            // 这是整个设置页唯一一个**会去改歌词缓存**的开关(其余全是显示偏好):翻面时
-            // 要追溯处理存量(见下面 Toggle 的 setter)。追溯逻辑刻意留在这里而不是
-            // AppSettings 的 didSet —— 它需要弹确认框、需要给回执,那是 View 的事;而且
-            // didSet 会被配置导入那条路径顺带触发,那时候整份歌词缓存本来就是跟着一起换的,
-            // 不该再自作主张改一遍锁定状态。
+            // 「采纳候选要不要顺带锁定这首歌」—— 见 LyricsQuickSearchWindow「采纳候选」调用点的 markManual 参数注释。
+            // 纯本地 UI 偏好,存进 AppSettings 而不是 FeatureSettingsStore。这是整个设置页唯一一个**会去改歌词缓存**
+            // 的开关:翻面时要追溯处理存量(下面 Toggle 的 setter)。追溯逻辑留在这里而不是 AppSettings 的 didSet ——
+            // 它要弹确认框、要给回执;didSet 还会被配置导入那条路径顺带触发,那时整份歌词缓存本来就跟着一起换。
             SettingsRow(
                 icon: "lock.circle",
                 title: L10n.t("锁定手选歌词"),
-                // 文案按"开/关各一行"写(跟上面「匹配方式」那条 help 同一个格式):这个开关唯一要
-                // 回答的问题就是"开跟关差在哪",两行对照比一整段散文快得多。**格式别动** —— 开/关
-                // 各一行的对照结构是这条 help 的骨架,散文化会让"开跟关差在哪"重新变难读。
-                //
-                // 刻意不提"等同于直接编辑歌词":那是实现口径(markManual),读的人不知道"直接编辑
-                // 歌词"背后也是一次冻结,拿它当类比等于用一个更陌生的东西解释。
-                //
-                // 这行字必须跟 `manualPickLocksLyrics` 的真实两态逐字对得上。以后改这个开关的
-                // 行为,这行字要一起改。
-                help: L10n.t("关（默认）：仅替换本次歌词，之后的自动搜索或评分变化仍可能再次替换\n开：锁定这首歌曲的歌词，自动匹配不再更改\n开启后，此前手动选定的歌曲一并锁定（已被自动替换的除外）")
+                subtitle: L10n.t("手动选定的歌词不再被自动匹配换掉")
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.manualPickLocksLyrics },
@@ -1421,12 +1383,24 @@ private struct LyricsSettingsTab: View {
                 format: L10n.plural("有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定", count: pendingManualUnlockCount),
                 "\(pendingManualUnlockCount)"))
         }
-        // 顺序列表拖拽排序的几何基础(见 priorityRow / priorityDragGesture):行中线与指针位移都在这个命名坐标
-        // 空间里量;行数或匹配模式一变就丢掉进行中的拖拽,避免 offset 残留在一份已经不同的列表上。
-        .coordinateSpace(name: Self.priorityListSpace)
-        .onPreferenceChange(PrioritySourceFramesKey.self) { priorityRowFrames = $0 }
-        .onChange(of: orderedEnabledSources.count) { _, _ in sourceDrag = nil }
-        .onChange(of: features.lyricsSourceMode) { _, _ in sourceDrag = nil }
+    }
+
+    /// 「预解析待播曲目」:无感优化,单独一行排在最后。"解析"而非"预取 / 预载":这个开关从不碰音频。
+    /// 标题只说"待播"、不说从哪来:读得到播放器队列时是队列里的下几首,读不到退回同一张专辑里的其它曲目
+    /// (见 lyrimuse-engine/upcoming.go),走哪条取决于播放器和此刻在播什么,摆进标题会让人以为能选。
+    private var prefetchCard: some View {
+        SettingsCard(cornerRadius: 18) {
+            SettingsRow(
+                icon: "square.stack",
+                title: L10n.t("预解析待播曲目"),
+                subtitle: L10n.t("提前为接下来要播的歌找好歌词")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { features.albumPrefetch },
+                    set: { features.albumPrefetch = $0; Task { await features.save() } }
+                ))
+            }
+        }
     }
 
     /// 翻「手动选定歌词后锁定」这个开关之后的追溯扫描 + 回执。
@@ -1827,17 +1801,42 @@ private struct LyricsSettingsTab: View {
         }
     }
 
-    private var translationCard: some View {
-        // 间距同 SettingsPage 的卡间距(14):包一层只为挂同一片背景光,同「获取」那一段。
+    // 「语言」这一段:歌词读成什么语言、写成什么字 —— 译文、繁简、读音,所有展示面看到的是同一份结果。
+    // 各展示面显不显示译文和读音是它们自己的开关,在「歌词显示」里(04 章决策 42):这一段顶上用一颗链接说一次,
+    // 不在每一行的副标题里重复。
+    private var languageSection: some View {
+        // 间距同 SettingsPage 的卡间距(14):包一层只为挂同一片背景光,同「来源」那一段。
         VStack(spacing: 14) {
+            displayPlacementLink
+            translationCard
+            textCard
+        }
+        // 玻璃要背后有东西才看得出来,跟 Last.fm 各段同一份淡色光(12 章决策 63)。
+        .background { LastfmGlassGlow() }
+    }
+
+    private var displayPlacementLink: some View {
+        Button {
+            AppActions.shared.requestSettings(.tab(.appearance))
+        } label: {
+            HStack(spacing: 4) {
+                Text(L10n.t("在「歌词显示」中选择译文和读音的显示位置"))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .font(.system(size: 11.5))
+        }
+        .controlSize(.small)
+        .settingsGlassButtons()
+        .buttonBorderShape(.capsule)
+    }
+
+    private var translationCard: some View {
         SettingsCard(cornerRadius: 18) {
-            // 顺序是一条链:要哪种语言 → 没有译文时兜底 → 兜底要的语言包。显不显示译文是各展示面自己的开关,
-            // 在「歌词显示」里(04 章决策 42)。两行的说明常显在副标题里;搜索目录登记同一句(功能清单从那里取)。
-            SettingsRow(
-                icon: "globe",
-                title: L10n.t("译文语言"),
-                subtitle: L10n.t("各处是否显示译文，在「歌词显示」中设置")
-            ) {
+            SettingsCardHeader(title: L10n.t("译文"))
+            // 顺序是一条链:要哪种语言 → 没有译文时兜底 → 兜底要的语言包。
+            SettingsRow(icon: "globe", title: L10n.t("译文语言")) {
                 SettingsGlassMenuPicker(
                     selection: Binding(
                         get: { features.lyricsTranslationLanguage },
@@ -1860,7 +1859,6 @@ private struct LyricsSettingsTab: View {
                     set: { features.lyricsMachineTranslation = $0; Task { await features.save() } }
                 ))
             }
-        }
             // 系统翻译按语言分别下载语言包,没装的语言(日语/韩语默认就没装)只能退回联网翻译。
             // 下载弹窗是系统 UI,只有 SwiftUI 的 .translationTask 建出来的 session 才有权拉起它 ——
             // 采集器那个子进程即使在 macOS 15…25 上挂了离屏视图也**刻意不碰**语言包下载
@@ -1870,301 +1868,376 @@ private struct LyricsSettingsTab: View {
             // 端上翻译在 15…25 上同样能跑(见 lyrics-translate/main.swift)。这里卡 26 的话,
             // 那批系统的用户装不了语言包,端上那条路就永远是 notInstalled。
             //
-            // 语言包单独一张卡、直接摊开全部语言(不再折在「管理…」后面);兜底关着时整张不出现。
+            // 默认收起成一行「已下载 n / m」,点开在卡里摊开全部语言;兜底关着时整段不出现。
             if #available(macOS 15.0, *), features.lyricsMachineTranslation {
-                LanguagePackCard()
+                CardDivider()
+                LanguagePackSection()
             }
         }
-        // 玻璃要背后有东西才看得出来,跟 Last.fm 各段同一份淡色光(12 章决策 63)。
-        .background { LastfmGlassGlow() }
     }
 
-    // 「调整」这一段只放**改歌词内容本身**的三项:繁简 / 罗马音 / 时间轴偏移 —— 四个展示面
-    // 看到的是同一份结果。「卡拉OK效果」不在这里:它讲的是"某个面怎么画",按「歌词显示」那一页
-    // "按形态分"的结构拆成悬浮歌词 / 灵动岛 / 菜单栏各一颗(`overlayLyricsKaraoke` /
-    // `notchLyricsKaraoke` / `menuBarLyricsKaraoke`),歌词窗口迷你尺寸另有一颗、完整尺寸始终逐字。「双行显示」同理,
-    // 在悬浮歌词的「排版」里。
-    private var displayCard: some View {
-        // 按意思分三张卡:「文字」(繁简 / 读音)、「断句」(长句拆分 / 短句合并)、「时间轴偏移」。
-        // 间距同 SettingsPage 的卡间距(14):包一层只为挂同一片背景光,同「获取」「译文」两段。
-        VStack(spacing: 14) {
-            SettingsCard(cornerRadius: 18) {
-                SettingsCardHeader(title: L10n.t("文字"))
-                // 这一项对完全不听中文歌的人是纯噪声,按系统首选语言收起来 —— 设置页已有
-                // 同类先例(按来源模式/按跟随封面显示的那几行)。
-                //
-                // `|| 已经不是默认值` 这半边是必须的,不是保险起见:万一判据没覆盖到某个
-                // 真实用户(比如系统语言列表里没加中文、但确实在听中文歌),而他之前已经打开过
-                // 这个开关,收起来就等于**歌词正在被转换、而那个开关不见了** —— 那是最糟的
-                // 一种状态,用户根本无从找回。只要它还在起作用,就一定看得见。
-                //
-                // 它是卡里卡头下的**第一行**,分隔线要跟着条件走:这一行不显示时下一行不能顶着一条
-                // 孤零零的分隔线。
-                if AppSettings.userReadsChinese || settings.hasSeenChineseLyrics
-                    || settings.lyricsChineseVariant != .off
-                {
-                    SettingsRow(
-                        icon: "character.bubble",
-                        title: L10n.t("繁简转换"),
-                        subtitle: L10n.t("中文歌词统一成简体或繁体")
-                    ) {
-                        SettingsGlassTabPicker(
-                            selection: Binding(
-                                get: { settings.lyricsChineseVariant },
-                                set: { newValue in
-                                    settings.lyricsChineseVariant = newValue
-                                    local.chineseVariant = newValue
-                                }
-                            ),
-                            options: ChineseVariant.allCases,
-                            label: { variant in
-                                switch variant {
-                                case .off: return L10n.t("不转换")
-                                case .simplified: return L10n.t("简体")
-                                case .traditional: return L10n.t("繁体")
-                                }
-                            },
-                            compact: true
-                        )
-                    }
-                    CardDivider()
-                }
-                // 按语言分别开关 —— 同一个人对不同语言的需求常常是相反的:听日文歌要罗马字
-                // 才跟得上,听中文歌完全不需要拼音。这一行只决定哪些语言产出读音、所有展示面共用;
-                // 显不显示读音是各展示面自己的开关,在「歌词显示」里(04 章决策 42)。
-                // 选项一律写**语言名**(标题问的就是语言),标成什么方案(罗马字 / 拼音 / 粤拼 / 哪个标准)
-                // 放在各自的悬停说明里 —— 语言名和方案名混排,读的人得先分清哪几个是语言、哪几个是写法。
-                // 日 / 韩 / 中以外的语言按 10 章决策 49、10 章决策 51 的标准写;阿拉伯语只管歌词源自带的读音。
-                SettingsRow(
-                    icon: "textformat.alt",
-                    title: L10n.t("标注读音的语言"),
-                    subtitle: L10n.t("为勾选的语言标注读音；是否显示在「歌词显示」中设置")
+    /// 繁简转换对完全不听中文歌的人是纯噪声,按系统首选语言收起来。`|| 已经不是默认值` 这半边是必须的:
+    /// 判据没覆盖到的真实用户(系统语言里没加中文、但确实在听中文歌)之前打开过它的话,收起来就等于
+    /// **歌词正在被转换、而那个开关不见了**。只要它还在起作用,就一定看得见。
+    private var showsChineseVariant: Bool {
+        AppSettings.userReadsChinese || settings.hasSeenChineseLyrics || settings.lyricsChineseVariant != .off
+    }
+
+    /// 「文字」卡:示例 → 繁简 → 标注读音的语言(常用四种 + 其他文字)→ 日语读音。示例按这张卡此刻的设置现算,
+    /// 改一项立刻看到结果。
+    private var textCard: some View {
+        SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("文字"))
+            SettingsRawRow(insetToText: true) {
+                LyricsTextSample(
+                    scripts: settings.romanizationScripts,
+                    japaneseReading: settings.japaneseReadingStyle,
+                    chineseVariant: showsChineseVariant ? settings.lyricsChineseVariant : .off
                 )
-                SettingsRawRow(insetToText: true) {
-                    SettingsEqualColumns(columns: SettingsLanguageTile.columns, spacing: 6) {
-                        romanizationTile(
-                            L10n.t("日语"), .japanese,
-                            help: L10n.t("罗马字，如 こんにちは → konnichiwa"))
-                        romanizationTile(
-                            L10n.t("韩语"), .korean,
-                            help: L10n.t("罗马字，如 안녕하세요 → annyeonghaseyo"))
-                        romanizationTile(
-                            L10n.t("普通话"), .chinese,
-                            help: L10n.t("拼音，如 你好 → nǐ hǎo"))
-                        romanizationTile(
-                            L10n.t("粤语"), .cantonese,
-                            help: L10n.t("粤拼（Jyutping），如 你好 → nei5 hou2"))
-                        romanizationTile(
-                            L10n.t("俄语"), .russian,
-                            help: L10n.t("GOST 1983（联合国推荐），如 Привет → Privet"))
-                        romanizationTile(
-                            L10n.t("乌克兰语"), .ukrainian,
-                            help: L10n.t("乌克兰国家体系（联合国推荐），如 Привіт → Pryvit"))
-                        romanizationTile(
-                            L10n.t("保加利亚语"), .bulgarian,
-                            help: L10n.t("保加利亚国家体系（联合国推荐），如 Здравей → Zdravey"))
-                        romanizationTile(
-                            L10n.t("白俄罗斯语"), .belarusian,
-                            help: L10n.t("白俄罗斯国家体系（联合国推荐），如 Прывітанне → Pryvitannie"))
-                        romanizationTile(
-                            L10n.t("塞尔维亚语"), .serbian,
-                            help: L10n.t("塞尔维亚语拉丁字母（联合国推荐），如 Љубав → Ljubav"))
-                        romanizationTile(
-                            L10n.t("马其顿语"), .macedonian,
-                            help: L10n.t("北马其顿官方证件写法，如 Ѓорѓи → Gjorgji"))
-                        romanizationTile(
-                            L10n.t("哈萨克语"), .kazakh,
-                            help: L10n.t("哈萨克斯坦官方拉丁字母（2021），如 Сәлем → Sälem"))
-                        romanizationTile(
-                            L10n.t("希腊语"), .greek,
-                            help: L10n.t("ELOT 743（联合国推荐），如 Καλημέρα → Kaliméra"))
-                        romanizationTile(
-                            L10n.t("泰语"), .thai,
-                            help: L10n.t("皇家学术院转写（RTGS），如 สวัสดี → sawatdi"))
-                        romanizationTile(
-                            L10n.t("印地语"), .hindi,
-                            help: L10n.t("ISO 15919，如 नमस्ते → namastē"))
-                        romanizationTile(
-                            L10n.t("孟加拉语"), .bengali,
-                            help: L10n.t("ISO 15919，如 ভালোবাসা → bhālōbāsā"))
-                        romanizationTile(
-                            L10n.t("旁遮普语"), .punjabi,
-                            help: L10n.t("ISO 15919，如 ਸਤਿ ਸ੍ਰੀ → sati srī"))
-                        romanizationTile(
-                            L10n.t("古吉拉特语"), .gujarati,
-                            help: L10n.t("ISO 15919，如 નમસ્તે → namastē"))
-                        romanizationTile(
-                            L10n.t("泰米尔语"), .tamil,
-                            help: L10n.t("ISO 15919，如 வணக்கம் → vaṇakkam"))
-                        romanizationTile(
-                            L10n.t("泰卢固语"), .telugu,
-                            help: L10n.t("ISO 15919，如 నమస్కారం → namaskāraṁ"))
-                        romanizationTile(
-                            L10n.t("卡纳达语"), .kannada,
-                            help: L10n.t("ISO 15919，如 ನಮಸ್ಕಾರ → namaskāra"))
-                        romanizationTile(
-                            L10n.t("马拉雅拉姆语"), .malayalam,
-                            help: L10n.t("ISO 15919，如 നമസ്കാരം → namaskāraṁ"))
-                        romanizationTile(
-                            L10n.t("僧伽罗语"), .sinhala,
-                            help: L10n.t("斯里兰卡国家体系，如 ලංකා → laṅkā"))
-                        romanizationTile(
-                            L10n.t("阿拉伯语"), .arabic,
-                            help: L10n.t("只显示歌词源自带的读音"))
-                    }
-                    .padding(.bottom, 4)
-                }
-                // 日语勾着才有得选;跟语言格子同样双写。
-                if settings.romanizationScripts.contains(.japanese) {
-                    CardDivider()
-                    SettingsRow(
-                        icon: "character.ja",
-                        title: L10n.t("日语读音"),
-                        subtitle: settings.japaneseReadingStyle == .kana
-                            ? L10n.t("只给汉字标注平假名") : L10n.t("整句标注罗马字")
-                    ) {
-                        SettingsGlassTabPicker(
-                            selection: Binding(
-                                get: { settings.japaneseReadingStyle },
-                                set: { newValue in
-                                    settings.japaneseReadingStyle = newValue
-                                    local.japaneseReading = newValue
-                                }
-                            ),
-                            options: JapaneseReadingStyle.allCases,
-                            label: { style in
-                                switch style {
-                                case .romaji: return L10n.t("罗马字")
-                                case .kana: return L10n.t("假名")
-                                }
-                            },
-                            compact: true
-                        )
-                    }
-                }
+                .padding(.bottom, 6)
             }
-            // 下面两项跟繁简 / 罗马音同样双写:AppSettings 持久化,LocalPlaybackSource 让当前这首立刻重新加载。
-            // 卡头的适用范围就是这两项生效的展示面;触控栏合并另有「合计不超过 5 秒」一条,写在 04 章,不进副标题。
-            SettingsCard(cornerRadius: 18) {
-                SettingsCardHeader(title: L10n.t("断句"), subtitle: L10n.t("仅用于悬浮歌词、灵动岛、菜单栏和触控栏"))
-                SettingsRow(
-                    icon: "rectangle.split.2x1",
-                    title: L10n.t("长句拆分"),
-                    subtitle: L10n.t("单行无法完整显示时，拆分为多段依次显示")
-                ) {
-                    Toggle("", isOn: Binding(
-                        get: { settings.splitLongLyricLines },
-                        set: { settings.splitLongLyricLines = $0; local.splitsLongLyricLines = $0 }
-                    ))
-                }
+            if showsChineseVariant {
                 CardDivider()
                 SettingsRow(
-                    icon: "rectangle.compress.vertical",
-                    title: L10n.t("短句合并"),
-                    subtitle: L10n.t("相邻短句可容纳于一行时合并显示")
+                    icon: "character.bubble",
+                    title: L10n.t("繁简转换"),
+                    subtitle: L10n.t("中文歌词统一成简体或繁体")
                 ) {
-                    Toggle("", isOn: Binding(
-                        get: { settings.mergeShortLyricLines },
-                        set: { settings.mergeShortLyricLines = $0; local.mergesShortLyricLines = $0 }
-                    ))
+                    SettingsGlassTabPicker(
+                        selection: Binding(
+                            get: { settings.lyricsChineseVariant },
+                            set: { newValue in
+                                settings.lyricsChineseVariant = newValue
+                                local.chineseVariant = newValue
+                            }
+                        ),
+                        options: ChineseVariant.allCases,
+                        label: { variant in
+                            switch variant {
+                            case .off: return L10n.t("不转换")
+                            case .simplified: return L10n.t("简体")
+                            case .traditional: return L10n.t("繁体")
+                            }
+                        },
+                        compact: true
+                    )
                 }
             }
-            SettingsCard(cornerRadius: 18) {
-                timelineOffsetRow
+            CardDivider()
+            // 按语言分别开关 —— 同一个人对不同语言的需求常常是相反的:听日文歌要罗马字才跟得上,听中文歌完全
+            // 不需要拼音。这一行只决定哪些语言产出读音、所有展示面共用。选项一律写**语言名**(标题问的就是语言),
+            // 标成什么方案放在各自的悬停说明里;常用四种的格子里再写一个转写示例。
+            SettingsRow(
+                icon: "textformat.alt",
+                title: L10n.t("标注读音的语言"),
+                subtitle: L10n.t("为勾选的语言标注读音")
+            ) {
+                Text(String(format: L10n.t("已开启 %@ / %@"),
+                            "\(Self.allReadings.filter { settings.romanizationScripts.contains($0.option) }.count)",
+                            "\(Self.allReadings.count)"))
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            SettingsRawRow(insetToText: true) {
+                SettingsEqualColumns(columns: 2, spacing: 6) {
+                    ForEach(Self.commonReadings) { romanizationTile($0) }
+                }
+                .padding(.bottom, 4)
+            }
+            // 日语勾着才有得选;跟语言格子同样双写。
+            if settings.romanizationScripts.contains(.japanese) {
+                CardDivider()
+                SettingsRow(
+                    icon: "character.ja",
+                    title: L10n.t("日语读音"),
+                    subtitle: settings.japaneseReadingStyle == .kana
+                        ? L10n.t("只给汉字标注平假名") : L10n.t("整句标注罗马字")
+                ) {
+                    SettingsGlassTabPicker(
+                        selection: Binding(
+                            get: { settings.japaneseReadingStyle },
+                            set: { newValue in
+                                settings.japaneseReadingStyle = newValue
+                                local.japaneseReading = newValue
+                            }
+                        ),
+                        options: JapaneseReadingStyle.allCases,
+                        label: { style in
+                            switch style {
+                            case .romaji: return L10n.t("罗马字")
+                            case .kana: return L10n.t("假名")
+                            }
+                        },
+                        compact: true
+                    )
+                }
+            }
+            CardDivider()
+            otherScriptsRow
+            if showOtherScripts {
+                ForEach(Self.otherReadingGroups, id: \.title) { group in
+                    readingGroupBlock(group)
+                }
             }
         }
-        // 玻璃要背后有东西才看得出来,跟 Last.fm 各段同一份淡色光(12 章决策 63)。
-        .background { LastfmGlassGlow() }
     }
 
-    /// 「标注读音的语言」那一排里的一格(`SettingsLanguageTile`,同「翻译语言包」的格子)。
-    /// 跟繁简那一行一样**双写**:AppSettings 负责持久化,LocalPlaybackSource 负责让当前这首歌立刻重新解析
-    /// (它的 didSet 会 reload)。只写一边的话,要么关了 App 就忘,要么改了要等下一首歌才生效。
-    private func romanizationTile(_ title: String, _ option: RomanizationScripts, help: String) -> some View {
-        let on = settings.romanizationScripts.contains(option)
+    /// 读音语言的一格。日 / 韩 / 中以外的语言按 10 章决策 49、10 章决策 51 的标准写;阿拉伯语只管歌词源自带的读音。
+    private struct ReadingLanguage: Identifiable {
+        let title: String
+        let option: RomanizationScripts
+        let help: String
+        var example: String?
+        var id: Int { option.rawValue }
+    }
+
+    private struct ReadingGroup {
+        let title: String
+        var note: String?
+        let languages: [ReadingLanguage]
+    }
+
+    /// 常用的四种:做成两列、格子里带转写示例。固定这四种,不按歌词库里出现过的语言挑:挑出来的会随库变,
+    /// 同一个设置在不同时候出现在不同地方。示例是写死的样例,不随界面语言变。
+    private static var commonReadings: [ReadingLanguage] {
+        [
+            ReadingLanguage(title: L10n.t("日语"), option: .japanese,
+                            help: L10n.t("罗马字，如 こんにちは → konnichiwa"), example: "こんにちは → konnichiwa"),
+            ReadingLanguage(title: L10n.t("韩语"), option: .korean,
+                            help: L10n.t("罗马字，如 안녕하세요 → annyeonghaseyo"), example: "안녕하세요 → annyeonghaseyo"),
+            ReadingLanguage(title: L10n.t("普通话"), option: .chinese,
+                            help: L10n.t("拼音，如 你好 → nǐ hǎo"), example: "你好 → nǐ hǎo"),
+            ReadingLanguage(title: L10n.t("粤语"), option: .cantonese,
+                            help: L10n.t("粤拼（Jyutping），如 你好 → nei5 hou2"), example: "你好 → nei5 hou2"),
+        ]
+    }
+
+    /// 其余十九种按文字分组,收在「其他文字」里。
+    private static var otherReadingGroups: [ReadingGroup] {
+        [
+            ReadingGroup(title: L10n.t("西里尔字母与希腊字母"), languages: [
+                ReadingLanguage(title: L10n.t("俄语"), option: .russian,
+                                help: L10n.t("GOST 1983（联合国推荐），如 Привет → Privet")),
+                ReadingLanguage(title: L10n.t("乌克兰语"), option: .ukrainian,
+                                help: L10n.t("乌克兰国家体系（联合国推荐），如 Привіт → Pryvit")),
+                ReadingLanguage(title: L10n.t("保加利亚语"), option: .bulgarian,
+                                help: L10n.t("保加利亚国家体系（联合国推荐），如 Здравей → Zdravey")),
+                ReadingLanguage(title: L10n.t("白俄罗斯语"), option: .belarusian,
+                                help: L10n.t("白俄罗斯国家体系（联合国推荐），如 Прывітанне → Pryvitannie")),
+                ReadingLanguage(title: L10n.t("塞尔维亚语"), option: .serbian,
+                                help: L10n.t("塞尔维亚语拉丁字母（联合国推荐），如 Љубав → Ljubav")),
+                ReadingLanguage(title: L10n.t("马其顿语"), option: .macedonian,
+                                help: L10n.t("北马其顿官方证件写法，如 Ѓорѓи → Gjorgji")),
+                ReadingLanguage(title: L10n.t("哈萨克语"), option: .kazakh,
+                                help: L10n.t("哈萨克斯坦官方拉丁字母（2021），如 Сәлем → Sälem")),
+                ReadingLanguage(title: L10n.t("希腊语"), option: .greek,
+                                help: L10n.t("ELOT 743（联合国推荐），如 Καλημέρα → Kaliméra")),
+            ]),
+            ReadingGroup(title: L10n.t("南亚与东南亚"), languages: [
+                ReadingLanguage(title: L10n.t("泰语"), option: .thai,
+                                help: L10n.t("皇家学术院转写（RTGS），如 สวัสดี → sawatdi")),
+                ReadingLanguage(title: L10n.t("印地语"), option: .hindi,
+                                help: L10n.t("ISO 15919，如 नमस्ते → namastē")),
+                ReadingLanguage(title: L10n.t("孟加拉语"), option: .bengali,
+                                help: L10n.t("ISO 15919，如 ভালোবাসা → bhālōbāsā")),
+                ReadingLanguage(title: L10n.t("旁遮普语"), option: .punjabi,
+                                help: L10n.t("ISO 15919，如 ਸਤਿ ਸ੍ਰੀ → sati srī")),
+                ReadingLanguage(title: L10n.t("古吉拉特语"), option: .gujarati,
+                                help: L10n.t("ISO 15919，如 નમસ્તે → namastē")),
+                ReadingLanguage(title: L10n.t("泰米尔语"), option: .tamil,
+                                help: L10n.t("ISO 15919，如 வணக்கம் → vaṇakkam")),
+                ReadingLanguage(title: L10n.t("泰卢固语"), option: .telugu,
+                                help: L10n.t("ISO 15919，如 నమస్కారం → namaskāraṁ")),
+                ReadingLanguage(title: L10n.t("卡纳达语"), option: .kannada,
+                                help: L10n.t("ISO 15919，如 ನಮಸ್ಕಾರ → namaskāra")),
+                ReadingLanguage(title: L10n.t("马拉雅拉姆语"), option: .malayalam,
+                                help: L10n.t("ISO 15919，如 നമസ്കാരം → namaskāraṁ")),
+                ReadingLanguage(title: L10n.t("僧伽罗语"), option: .sinhala,
+                                help: L10n.t("斯里兰卡国家体系，如 ලංකා → laṅkā")),
+            ]),
+            ReadingGroup(title: L10n.t("阿拉伯字母"), note: L10n.t("只显示歌词源自带的读音"), languages: [
+                ReadingLanguage(title: L10n.t("阿拉伯语"), option: .arabic,
+                                help: L10n.t("只显示歌词源自带的读音")),
+            ]),
+        ]
+    }
+
+    private static var allReadings: [ReadingLanguage] {
+        commonReadings + otherReadingGroups.flatMap(\.languages)
+    }
+
+    /// 「其他文字」展开没有。只是界面状态,每次打开设置都收着。
+    @State private var showOtherScripts = false
+
+    private var otherScriptsRow: some View {
+        let others = Self.otherReadingGroups.flatMap(\.languages)
+        return SettingsRow(
+            icon: "globe.europe.africa",
+            title: L10n.t("其他文字"),
+            subtitle: L10n.t("西里尔字母、希腊字母、南亚与东南亚文字、阿拉伯字母")
+        ) {
+            HStack(spacing: 8) {
+                Text(String(format: L10n.t("已开启 %@ / %@"),
+                            "\(others.filter { settings.romanizationScripts.contains($0.option) }.count)",
+                            "\(others.count)"))
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(showOtherScripts ? 90 : 0))
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { showOtherScripts.toggle() }
+        }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { showOtherScripts.toggle() }
+    }
+
+    private func readingGroupBlock(_ group: ReadingGroup) -> some View {
+        let allOn = group.languages.allSatisfy { settings.romanizationScripts.contains($0.option) }
+        return SettingsRawRow(insetToText: true) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text(group.title)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    if let note = group.note {
+                        Text(note)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
+                    }
+                    Spacer(minLength: 8)
+                    if group.languages.count > 1 {
+                        Button(allOn ? L10n.t("全部关闭") : L10n.t("全部开启")) {
+                            setReadings(group.languages.map(\.option), on: !allOn)
+                        }
+                        .buttonStyle(.link)
+                        .font(.system(size: 11))
+                    }
+                }
+                SettingsEqualColumns(columns: SettingsLanguageTile.columns, spacing: 6) {
+                    ForEach(group.languages) { romanizationTile($0) }
+                }
+            }
+            .padding(.bottom, 6)
+        }
+    }
+
+    private func romanizationTile(_ language: ReadingLanguage) -> some View {
+        let on = settings.romanizationScripts.contains(language.option)
         return Button {
-            var next = settings.romanizationScripts
-            if on { next.remove(option) } else { next.insert(option) }
-            settings.romanizationScripts = next
-            local.romanizationScripts = next
+            setReadings([language.option], on: !on)
         } label: {
-            SettingsLanguageTile(title: title, mark: on ? .on : .off)
+            SettingsLanguageTile(title: language.title, mark: on ? .on : .off, detail: language.example)
         }
         .buttonStyle(SettingsGlassHoverButtonStyle(cornerRadius: SettingsLanguageTile.cornerRadius))
-        .help(help)
+        .help(language.help)
         .accessibilityAddTraits(on ? [.isSelected] : [])
     }
 
-    /// 时间轴偏移。跟菜单栏「歌词时间轴」那个单曲微调是两档:这里校的是设备侧的固定延迟
-    /// (跟哪首歌无关,换首歌照样偏),那里校的是某一份歌词自己的时间轴不准。两者相加才是
-    /// 实际生效的值,见 LyricsOffsetStore.globalOffsetMs。
-    ///
-    /// 步长固定 0.05 秒,刻意不复用「快捷键」页那个「调整步长」:那个是"每按一次键跳多少",
-    /// 属于手感;这里是一次性把设备延迟校准到位,要的是精度。绑在一起的话,把步长调到 1 秒
-    /// 的人在这里就没法微调了。
-    ///
-    /// 「作用于哪个播放器」那个下拉框真正需要它的是**浏览器**:Arc/Chrome 这类只在切歌时报
-    /// 一次播放位置,之后 elapsedTime 再也不刷新,只能按墙钟外推
-    /// (PositionSourceTier.cleanExtrapolated),进度会系统性偏慢;而 Apple Music 那条路径是
-    /// 精确的、一点都不该补。偏差落在"播放器"这个维度上,不在"歌"上。
-    ///
-    /// 两档是**二选一、不相加**:单独配过的播放器只用自己那档,「全部播放器」对它不生效;
-    /// 调回 0 就撤掉单独设置、重新跟随「全部」。合成规则在 LyricsOffsetStore.baseOffsetMs,
-    /// selftest 有断言钉住(含一条变异测试验证过的"不许退回相加")。
-    ///
-    /// 标题/副标题都是**固定文案**、不跟着下拉框选中项变;副标题只留"符号往哪边走"这一句。
-    /// 「两档二选一、调回 0 就跟随全部」这些规则**界面上不写** —— 它们记在
-    /// LyricsOffsetStore.baseOffsetMs 的注释和 docs/features/08 里。别再往这一行加解释性文案。
-    /// 标题不带「全局」:右边的下拉框能单选某个播放器,「全局」跟它自相矛盾。也不提
-    /// 蓝牙耳机 —— 蓝牙延迟跟输出设备走,这里只能按播放器分,提了会让人以为切耳机时它会跟着变。
-    private var timelineOffsetRow: some View {
-        SettingsRow(
-            icon: "timer",
-            title: L10n.t("时间轴偏移"),
-            subtitle: L10n.t("正值歌词提前，负值延后")
-        ) {
-            HStack(spacing: 8) {
-                // 「全部播放器」= 既有的全局那层,值用空串(bundle id 不可能是空串)。
-                SettingsGlassMenuPicker(
-                    selection: $offsetScope,
-                    options: [""] + offsetScopeOptions,
-                    label: { $0.isEmpty ? L10n.t("全部播放器") : offsetScopeLabel($0) },
-                    compact: true
-                )
-                offsetStepper
-                // 只在真的偏移过时才给「重置」:值为 0 时摆一个点了什么都不会变的
-                // 按钮,跟菜单里那个「重置」同一个道理。
-                if scopedOffsetMs != 0 {
-                    Button(L10n.t("重置")) { setScopedOffset(0) }
-                        .buttonStyle(.link)
-                        .fixedSize()
+    /// 读音语言开关双写:AppSettings 持久化,LocalPlaybackSource 让当前这首立刻重新加载。
+    private func setReadings(_ options: [RomanizationScripts], on: Bool) {
+        var next = settings.romanizationScripts
+        for option in options {
+            if on { next.insert(option) } else { next.remove(option) }
+        }
+        settings.romanizationScripts = next
+        local.romanizationScripts = next
+    }
+
+    // 「时间与断句」这一段:歌词什么时候出现(时间轴偏移)、一句怎么断(断句)。
+    private var timingSection: some View {
+        VStack(spacing: 14) {
+            offsetCard
+            lineBreakCard
+        }
+        .background { LastfmGlassGlow() }
+    }
+
+    /// 时间轴偏移:「全部播放器」一行,单独配过的、正在放的、刚加的播放器各一行。每个播放器的偏移都摆在明面上,
+    /// 不藏在下拉菜单里 —— 看不见的非零偏移正是这一项要避免的事。
+    private var offsetCard: some View {
+        SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("时间轴偏移"), subtitle: L10n.t("正值歌词提前，负值延后；可按播放器单独设置"))
+            SettingsRow(icon: "timer", title: L10n.t("全部播放器")) {
+                HStack(spacing: 8) {
+                    if offsets.globalOffsetMs != 0 {
+                        Button(L10n.t("重置")) { setOffset(0, scope: "") }
+                            .buttonStyle(.link)
+                            .fixedSize()
+                    }
+                    offsetStepper(scope: "")
+                }
+            }
+            ForEach(offsetPlayerRows, id: \.self) { bundleID in
+                CardDivider()
+                playerOffsetRow(bundleID)
+            }
+            let rows = offsetPlayerRows
+            let addable = offsetPlayerCandidates.filter { !rows.contains($0) }
+            if !addable.isEmpty {
+                CardDivider()
+                SettingsRawRow(insetToText: true) {
+                    SettingsGlassActionMenu(
+                        title: L10n.t("为其他播放器单独设置"),
+                        systemImage: "plus",
+                        entries: addable.map { bundleID in
+                            .action(playerDisplayName(bundleID)) { addedOffsetPlayers.append(bundleID) }
+                        }
+                    )
+                    .padding(.vertical, 8)
                 }
             }
         }
-        // 「正在播放」那个标记要跟着播放状态走。2 秒一跳,跟这个设置页里其它几处轮询同一个
-        // 节奏;读的是存储属性而不是订阅 —— 这个 Tab 刻意不订阅 local/coordinator(每轮播放
-        // 轮询都推,会让整页白重渲染,见文件顶部 `local` 那条注释)。
         .settingsPolling(every: 2) {
             refreshNowPlayingPlayer()
         }
         .onAppear { refreshNowPlayingPlayer() }
     }
 
-    /// 偏移量的「− 数值 +」玻璃胶囊。范围 ±5 秒、步长 0.05 秒。
-    /// 选中的播放器没单独配过时,数值写成「跟随「全部播放器」:+x 秒」—— 写「0 秒」会被读成
-    /// 「这个播放器不偏移」,而它其实跟着全局在偏。数值用正常文字颜色,只在值为 0 时淡一档。
-    private var offsetStepper: some View {
-        let valueText = scopeFollowsGlobal
-            ? String(format: L10n.t("跟随「全部播放器」：%@"),
-                     "\(AppSettings.signedSeconds(ms: offsets.globalOffsetMs))\(L10n.t("秒"))")
-            : "\(AppSettings.signedSeconds(ms: scopedOffsetMs))\(L10n.t("秒"))"
+    /// 一个播放器的偏移。没单独配过时显示「跟随「全部播放器」」,步进器里是「全部播放器」那档的值(灰字),
+    /// 按一下就从那个值起改成它自己的一档;单独配过的尾部多一颗 ×,改回跟随。
+    private func playerOffsetRow(_ bundleID: String) -> some View {
+        let follows = offsetFollowsGlobal(bundleID)
+        let name = playerDisplayName(bundleID)
+        return SettingsRow(
+            icon: "app",
+            iconImage: AppIconResolver.icon(forBundleID: bundleID),
+            title: bundleID == nowPlayingBundleID ? name + L10n.t("（正在播放）") : name,
+            subtitle: follows ? L10n.t("跟随「全部播放器」") : nil
+        ) {
+            HStack(spacing: 8) {
+                if !follows {
+                    Button {
+                        setOffset(0, scope: bundleID)
+                        addedOffsetPlayers.removeAll { $0 == bundleID }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .buttonStyle(.glassIcon())
+                    .help(L10n.t("改回跟随「全部播放器」"))
+                    .accessibilityLabel(L10n.t("改回跟随「全部播放器」"))
+                }
+                offsetStepper(scope: bundleID)
+            }
+        }
+    }
+
+    /// 「− 数值 +」玻璃胶囊,±5 秒、步长 0.05 秒,到头那颗按钮变灰。跟随「全部播放器」时数值是那一档的(灰字),
+    /// 从它起改。
+    private func offsetStepper(scope: String) -> some View {
+        let follows = offsetFollowsGlobal(scope)
+        let base = follows ? offsets.globalOffsetMs : storedOffsetMs(scope)
         let step = 50
         let limit = 5000
-        // 跟随「全部」时从全局那档起步:这个播放器自己那档是 0(零值不落盘 = 跟随),从 0 起步的话按一下「−」
-        // 生效值从 +0.30 跳到 −0.05。
-        let base = scopeFollowsGlobal ? offsets.globalOffsetMs : scopedOffsetMs
         return HStack(spacing: 0) {
-            Button { setScopedOffset(max(-limit, base - step)) } label: {
+            Button { setOffset(max(-limit, base - step), scope: scope) } label: {
                 Image(systemName: "minus")
                     .font(.system(size: 10, weight: .semibold))
                     .frame(width: 28, height: 28)
@@ -2172,14 +2245,14 @@ private struct LyricsSettingsTab: View {
             }
             .disabled(base <= -limit)
             .accessibilityLabel(L10n.t("延后"))
-            Text(valueText)
+            Text("\(AppSettings.signedSeconds(ms: base))\(L10n.t("秒"))")
                 .font(.system(size: 12, weight: .medium))
                 .monospacedDigit()
-                .foregroundStyle(scopedOffsetMs == 0 ? Color.secondary : Color.primary)
+                .foregroundStyle(base == 0 || follows ? Color.secondary : Color.primary)
                 .lineLimit(1)
-                .fixedSize()
+                .frame(minWidth: 52)
                 .padding(.horizontal, 2)
-            Button { setScopedOffset(min(limit, base + step)) } label: {
+            Button { setOffset(min(limit, base + step), scope: scope) } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 10, weight: .semibold))
                     .frame(width: 28, height: 28)
@@ -2196,20 +2269,50 @@ private struct LyricsSettingsTab: View {
         .accessibilityLabel(L10n.t("时间轴偏移"))
     }
 
-    // 「管理」段拆成两张卡:「歌词库」(库里有什么 + 缺的怎么补)和一张单行卡「歌词文件夹」
-    // (库在哪)。三条规则贯穿:
+    // 两项跟繁简 / 罗马音同样双写:AppSettings 持久化,LocalPlaybackSource 让当前这首立刻重新加载。
+    // 卡头的适用范围就是这两项生效的展示面;触控栏合并另有「合计不超过 5 秒」一条,写在 04 章,不进副标题。
+    private var lineBreakCard: some View {
+        SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("断句"), subtitle: L10n.t("仅用于悬浮歌词、灵动岛、菜单栏和触控栏"))
+            SettingsRow(
+                icon: "rectangle.split.2x1",
+                title: L10n.t("长句拆分"),
+                subtitle: L10n.t("单行无法完整显示时，拆分为多段依次显示")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.splitLongLyricLines },
+                    set: { settings.splitLongLyricLines = $0; local.splitsLongLyricLines = $0 }
+                ))
+            }
+            CardDivider()
+            SettingsRow(
+                icon: "rectangle.compress.vertical",
+                title: L10n.t("短句合并"),
+                subtitle: L10n.t("相邻短句可容纳于一行时合并显示")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.mergeShortLyricLines },
+                    set: { settings.mergeShortLyricLines = $0; local.mergesShortLyricLines = $0 }
+                ))
+            }
+        }
+    }
+
+    // 「歌词库」段:「歌词库」(库里有什么)、「批量匹配」(缺的怎么补)、「存储」(存在哪、存成什么格式)。
+    // 三条规则贯穿:
     //   1. 每个动作都落在它所属那一行的**尾部**,不设独立的按钮行;
     //   2. 卡名行右侧只放"这张卡的入口动作"(跟「歌词来源」卡右上角的「测试」同一语法);
     //   3. 统计块的读法照系统设置「储存空间」:总数 + 一条比例条 + 图例,不用六格平级数字。
     @ViewBuilder
     private var managementCard: some View {
-        // 三张卡:「歌词库」(只读统计)、「批量匹配」(两轮扫描)、「歌词文件夹」。前两张由
+        // 三张卡:「歌词库」(只读统计)、「批量匹配」(两轮扫描)、「存储」。前两张由
         // LyricsLibraryStatsPanel 自己画 —— 两张卡共用同一份扫描状态和同一个轮询循环,拆到这里会变成两份。
         // 它自己订阅 store、自己在 .task 里 reload(onlyIfChanged:),不把 @ObservedObject 挂到这一页上。
         // 间距同 SettingsPage 的卡间距(14):包一层只为挂同一片背景光,同前三段。
         VStack(spacing: 14) {
         LyricsLibraryStatsPanel()
         SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("存储"))
             lyricsFolderRow
             CardDivider()
             lyricsWordFormatRow
@@ -2419,7 +2522,7 @@ private struct LyricsSettingsTab: View {
         var rowMidYs: [CGFloat]
     }
 
-    /// 顺序列表里的一行:把手 + 序号 + 色点 + 名称 + 上下箭头。拖拽期间被拖行跟着指针走(不动画),其余行按
+    /// 顺序列表里的一行:把手 + 序号 + 来源(勾选、状态图标,同网格那一格)+ 上下箭头。拖拽期间被拖行跟着指针走(不动画),其余行按
     /// Core 算出的让位位移挪(0.15s 让位动画;reduceMotion 时不动画)。frame 收集放在 .offset **之后**,量到的
     /// 才是静止位置而不是挪动中的位置。
     private func priorityRow(index: Int, source: LyricsPriorityEntry, visible: [LyricsPriorityEntry]) -> some View {
@@ -2444,11 +2547,20 @@ private struct LyricsSettingsTab: View {
                 Text("\(index + 1)")
                     .font(.caption).monospacedDigit().foregroundStyle(.secondary)
                     .frame(width: 14, alignment: .trailing)
-                Circle().fill(source.source?.color ?? Color.secondary).frame(width: 8, height: 8)
-                Text(source.source?.displayName ?? L10n.t("播放器自带歌词"))
-                    .font(.system(size: 13))
-                    .help(source.source == nil ? L10n.t("KKBOX、Spotify、Amazon Music、洛雪音乐自己缓存的歌词") : "")
-                Spacer()
+                // 顺序优先时这份列表就是来源本身:勾掉一个来源,它落到下面「未启用的来源」里。
+                if let lyricsSource = source.source {
+                    sourceTileContent(lyricsSource)
+                } else {
+                    Image(systemName: "play.rectangle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 15, height: 15)
+                        .padding(.leading, 6)
+                    Text(L10n.t("播放器自带歌词"))
+                        .font(.system(size: 12.5))
+                        .hoverNote(L10n.t("KKBOX、Spotify、Amazon Music、洛雪音乐自己缓存的歌词"))
+                    Spacer()
+                }
                 // 箭头保留:键盘 / VoiceOver 的通路。把手是 Image 不是按钮,VoiceOver 操作不了它。
                 Button {
                     moveEnabledSource(source, direction: -1)
@@ -3144,7 +3256,7 @@ private struct AppearanceSettingsTab: View {
 
     /// 「内容」那几行(工具栏浮层与抽屉同一份):歌词窗口完整、迷你共用这一份读音 / 译文
     /// (`showRomanization` / `showTranslation`),跟悬浮歌词那份各管各的,见 04 章决策 42。
-    /// 给哪些语言标读音只在「歌词 › 调整 › 标注读音的语言」里设,这里不放(04 章决策 47)。
+    /// 给哪些语言标读音只在「歌词 › 语言 › 标注读音的语言」里设,这里不放(04 章决策 47)。
     @ViewBuilder
     private var lyricsWindowContentRows: some View {
         SettingsTileGrid {

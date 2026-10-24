@@ -89,7 +89,7 @@ public enum SettingsSearchCatalog {
     /// 设置窗的前进 / 后退拿它还原「还没换过分段」那个位置 —— 跟那边对不上,表现是后退之后
     /// 停在另一个分段。selftest 按源码里的枚举首个 case 钉着它。
     public static let lyricsSectionDefault = "fetch"
-    /// 「歌词」页「管理」那一段的取值(`LyricsSettingsTab.Section.manage`)。菜单栏面板「歌词管理」那一格的
+    /// 「歌词」页「歌词库」那一段的取值(`LyricsSettingsTab.Section.manage`)。菜单栏面板「歌词管理」那一格的
     /// 「全部设置…」拿它翻页;selftest 按源码里的枚举钉着它。
     public static let lyricsManageSectionValue = "manage"
     /// Last.fm 账号页分段的 @AppStorage 键(AccountLinkingTab.swift)。它带 `np:` 前缀是历史原因,
@@ -189,10 +189,10 @@ public enum SettingsSearchCatalog {
             RowGate(overlay, "访问链接", "obs.lan", "允许局域网访问"),
             RowGate(overlay, "备用链接（IP 地址）", "obs.lan", "允许局域网访问"),
             RowGate(overlay, "重置访问密钥", "obs.lan", "允许局域网访问"),
-            RowGate(["歌词", "译文"], "翻译语言包", "translation.machine", "无译文时自动翻译"),
+            RowGate(["歌词", "语言"], "翻译语言包", "translation.machine", "无译文时自动翻译"),
             RowGate(lastfm, "歌名", "lastfm.matchCustom", "匹配模式"),
             RowGate(lastfm, "歌手", "lastfm.matchCustom", "匹配模式"),
-            RowGate(["歌词", "调整"], "日语读音", "romanization.japanese", "标注读音的语言"),
+            RowGate(["歌词", "语言"], "日语读音", "romanization.japanese", "标注读音的语言"),
         ]
         return gates
     }()
@@ -222,10 +222,10 @@ public enum SettingsSearchCatalog {
                                kw: [String] = [], group: String? = nil) -> SettingsSearchEntry {
         let sectionTitle: String
         switch section {
-        case "fetch": sectionTitle = "获取"
-        case "translation": sectionTitle = "译文"
-        case "display": sectionTitle = "调整"
-        default: sectionTitle = "管理"
+        case "fetch": sectionTitle = "来源"
+        case "translation": sectionTitle = "语言"
+        case "display": sectionTitle = "时间与断句"
+        default: sectionTitle = "歌词库"
         }
         return SettingsSearchEntry(destination: .tab("lyrics"), sectionKey: lyricsSectionKey, sectionValue: section,
                                    titleKey: title, alternateTitleKeys: alt, subtitleKey: sub, keywords: kw,
@@ -336,32 +336,36 @@ public enum SettingsSearchCatalog {
     // MARK: - 目录本体
 
     public static let entries: [SettingsSearchEntry] = [
-        // ---- 歌词 › 获取 ----
+        // ---- 歌词 › 来源 ----
         lyrics("fetch", "歌词来源", kw: ["歌词源", "网易云音乐", "QQ音乐", "酷狗音乐", "Musixmatch", "LRCLIB", "AMLL",
                                       "LyricFind", "酷我音乐", "咪咕音乐", "Deezer", "Apple Music", "汽水音乐",
                                       "测试", "顺序"]),
         lyrics("fetch", "匹配算法", kw: ["智能", "顺序优先", "打分"]),
-        lyrics("fetch", "随匹配算法更新重新选择", kw: ["重打分", "自动升级"]),
-        lyrics("fetch", "同曲条目共用歌词", kw: ["同曲条目", "同一首歌", "歌词同步", "共享歌词", "歌曲实体"]),
-        lyrics("fetch", "预解析待播曲目", kw: ["预解析", "提前解析", "待播", "专辑", "队列", "播放列表", "下一首"]),
-        lyrics("fetch", "锁定手选歌词", kw: ["手动选定", "锁定"]),
-        // ---- 歌词 › 译文 ----
-        lyrics("translation", "译文语言", sub: "各处是否显示译文，在「歌词显示」中设置", kw: ["翻译", "语言"]),
+        lyrics("fetch", "随匹配算法更新重新选择", sub: "算法更新后在后台重新评估，可能换成更合适的版本",
+               kw: ["重打分", "自动升级"]),
+        lyrics("fetch", "同曲条目共用歌词", sub: "同一录音在不同播放器和专辑版本下共用一份，手动修改一并同步",
+               kw: ["同曲条目", "同一首歌", "歌词同步", "共享歌词", "歌曲实体"]),
+        lyrics("fetch", "锁定手选歌词", sub: "手动选定的歌词不再被自动匹配换掉", kw: ["手动选定", "锁定"]),
+        lyrics("fetch", "预解析待播曲目", sub: "提前为接下来要播的歌找好歌词",
+               kw: ["预解析", "提前解析", "待播", "专辑", "队列", "播放列表", "下一首"]),
+        // ---- 歌词 › 语言 ----
+        lyrics("translation", "译文语言", kw: ["翻译", "语言"]),
         lyrics("translation", "无译文时自动翻译", alt: ["系统兜底翻译"], sub: "优先在本机翻译，无法翻译时再联网翻译",
                kw: ["机翻", "Google", "MyMemory", "翻译"]),
-        lyrics("translation", "翻译语言包", kw: ["下载", "语言包", "Apple 翻译"]),
-        // ---- 歌词 › 调整 ----
-        lyrics("display", "繁简转换", sub: "中文歌词统一成简体或繁体", kw: ["繁体", "简体", "OpenCC"]),
-        lyrics("display", "标注读音的语言", alt: ["标注的语言"], sub: "为勾选的语言标注读音；是否显示在「歌词显示」中设置",
-               kw: ["日语", "韩语", "普通话", "粤语", "中文", "拼音", "粤拼", "读音", "罗马音", "罗马字", "注音", "发音"]),
-        lyrics("display", "日语读音", sub: "标注罗马字，或只给汉字标注平假名", kw: ["假名", "平假名", "振假名", "furigana", "罗马字", "罗马音", "汉字读音", "注音"]),
+        lyrics("translation", "翻译语言包", sub: "本机翻译要用到的系统语言包", kw: ["下载", "语言包", "Apple 翻译"]),
+        lyrics("translation", "繁简转换", sub: "中文歌词统一成简体或繁体", kw: ["繁体", "简体", "OpenCC"]),
+        lyrics("translation", "标注读音的语言", alt: ["标注的语言"], sub: "为勾选的语言标注读音",
+               kw: ["日语", "韩语", "普通话", "粤语", "中文", "拼音", "粤拼", "读音", "罗马音", "罗马字", "注音", "发音",
+                    "俄语", "希腊语", "泰语", "印地语", "阿拉伯语", "其他文字"]),
+        lyrics("translation", "日语读音", sub: "标注罗马字，或只给汉字标注平假名", kw: ["假名", "平假名", "振假名", "furigana", "罗马字", "罗马音", "汉字读音", "注音"]),
+        // ---- 歌词 › 时间与断句 ----
         lyrics("display", "长句拆分", sub: "单行无法完整显示时，拆分为多段依次显示", kw: ["长句", "拆分", "断句", "换行", "折行", "滚动", "跑马灯", "宽度", "悬浮歌词", "灵动岛", "菜单栏", "触控栏"]),
         lyrics("display", "短句合并", sub: "相邻短句可容纳于一行时合并显示", kw: ["短句", "合并", "断句", "频繁", "闪", "宽度", "悬浮歌词", "灵动岛", "菜单栏", "触控栏"]),
-        lyrics("display", "时间轴偏移", sub: "正值歌词提前，负值延后",
+        lyrics("display", "时间轴偏移", sub: "正值歌词提前，负值延后；可按播放器单独设置",
                kw: ["全局", "歌词偏移", "提前", "延后", "校准", "同步", "延迟",
                     "歌词太快", "歌词太慢", "歌词快了", "歌词慢了", "歌词不同步", "歌词对不上",
                     "out of sync", "too early", "too late"]),
-        // ---- 歌词 › 管理 ----
+        // ---- 歌词 › 歌词库 ----
         lyrics("manage", "歌词库", kw: ["歌词管理", "统计", "缓存"]),
         lyrics("manage", "自动匹配缺失歌词", sub: "仅搜索无歌词或仅有纯文本歌词的歌曲", kw: ["重新扫描", "重搜", "补空", "没有歌词", "暂无", "缺失"]),
         lyrics("manage", "重新匹配整个歌词库", sub: "已有歌词的歌曲也重新选择；手动修改、已校准和纯音乐的歌曲保持不变", kw: ["重新扫描", "重搜", "全量", "扫库", "升级", "跟进算法"]),

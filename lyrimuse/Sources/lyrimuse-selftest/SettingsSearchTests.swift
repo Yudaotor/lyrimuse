@@ -188,8 +188,11 @@ func runSettingsSearchTests() {
         // 「封面」同「背景」:迷你「顶部信息」里有一行真的叫这个名字、已登记在目录里,
         // 所以完整尺寸那张同名卡头顺带被目录覆盖,不能再留在白名单里(两者必须不相交)。
         "顶部信息", "布局",                                       // 歌词显示 › 歌词窗口 的卡头
-        "断句",                                                   // 歌词 › 调整 的卡头(同段的「文字」卡头见上一行)
-        "批量匹配",                                         // 歌词 › 管理 的卡头
+        "断句",                                                   // 歌词 › 时间与断句 的卡头(歌词 › 语言 的「文字」卡头见上一行)
+        "批量匹配", "存储",                                 // 歌词 › 歌词库 的卡头
+        "选定之后",                                         // 歌词 › 来源 的卡头(歌词 › 语言 的「译文」卡头跟悬浮歌词「内容」里那一行同名,已登记)
+        "其他文字",                                         // 歌词 › 语言:读音语言收起来的那一行,语言名在「标注读音的语言」的关键词里
+        "全部播放器",                                       // 歌词 › 时间与断句「时间轴偏移」卡里的第一行,卡头已登记
         "权限与服务",                                       // 播放器 › 权限与服务 的卡头(跟分段同名,分段本身已可搜到这一页)
         "歌词行", "展开态",                                 // 歌词显示 › 灵动岛「全部设置」抽屉的卡头(跟工具栏入口同名)
         "配色",                                             // 歌词显示 › 菜单栏「全部设置」抽屉的卡头(跟工具栏入口同名)
@@ -269,7 +272,7 @@ func runSettingsSearchTests() {
                 "设置搜索: 源码里每个设置行标题都在目录里(新加了行就到 Core SettingsSearchCatalog 登记,或写进白名单)")
     let staleAllowlist = intentionallyUnindexed.filter { scannedTitles[$0] == nil }.sorted()
     expectEqual(staleAllowlist, [], "设置搜索: 白名单里的每一项都还真的存在于源码里")
-    // 两处「内容」浮层不放标读音的语言:那是所有展示面共用的设置,只在「歌词 › 调整 › 标注读音的语言」设(04 章决策 47)。
+    // 两处「内容」浮层不放标读音的语言:那是所有展示面共用的设置,只在「歌词 › 语言 › 标注读音的语言」设(04 章决策 47)。
     func memberBody(_ text: String, after marker: String) -> String {
         sourceBody(marker, in: text)
     }
@@ -433,7 +436,7 @@ func runSettingsSearchTests() {
             expectEqual(gate(window, title, false: ["web.lan"]), "允许局域网访问", "搜索门: 网页歌词「\(title)」落到「允许局域网访问」")
             expectEqual(gate(overlay, title, false: ["obs.lan"]), "允许局域网访问", "搜索门: OBS「\(title)」落到「允许局域网访问」")
         }
-        expectEqual(gate(["歌词", "译文"], "翻译语言包", false: ["translation.machine"]), "无译文时自动翻译",
+        expectEqual(gate(["歌词", "语言"], "翻译语言包", false: ["translation.machine"]), "无译文时自动翻译",
                     "搜索门: 语言包落到「无译文时自动翻译」")
         // 表里每一条:那一行和落点在目录里同一段都有登记(点亮得到),条件在 App 侧有对应分支(认不出的名字会被当真、门失效)。
         let search = source("Settings/SettingsSearch.swift")

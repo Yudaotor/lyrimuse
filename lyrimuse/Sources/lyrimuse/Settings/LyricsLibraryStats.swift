@@ -384,34 +384,31 @@ struct LyricsLibraryStatsPanel: View {
                 }
             }
             SettingsFlowRow(spacing: 16) {
-                // 两档译文合成一个数,细分进 ⓘ:这一排要跟上面的图例读法一致(一个标签配一个数),
+                // 两档译文合成一个数,细分写在下面一行小字里:这一排要跟上面的图例读法一致(一个标签配一个数),
                 // 「2,078 首源自带 · 532 首机翻」在这个位置是三段文字对两段,一排就歪了。
                 // 合计数还能直接跟总数对读("六千多首里两千多首有译文"),那是分开写时读不出来的。
                 metricItem(
                     label: L10n.t("译文"),
                     value: counts.communityTranslation + counts.machineTranslation,
-                    help: String(format: L10n.t("%1$@ 首来自歌词源，%2$@ 首为机器翻译"),
+                    caption: String(format: L10n.t("%1$@ 首来自歌词源，%2$@ 首为机器翻译"),
                                  Self.format(counts.communityTranslation),
                                  Self.format(counts.machineTranslation)))
                 // 标题直接写「已缓存」:这个数**不是**"有多少首歌看得到罗马音"——App 侧 Romanizer 有
                 // 客户端现算兜底,缓存里没有的照样会在渲染时现算(见 Counts.bundledRomanization 头注)。
-                // ⓘ 只留两句:这个数在数什么、没被数的去哪了。
+                // 小字只说没被数的去哪了。
                 metricItem(
                     label: L10n.t("已缓存读音"),
                     value: counts.bundledRomanization,
-                    help: L10n.t("仅统计已存入缓存、随歌词文件导出的读音；播放时实时生成的读音不计入"))
+                    caption: L10n.t("不含播放时实时生成的读音"))
             }
             .padding(.top, 2)
         }
     }
 
-    /// 第二排的一项:标签 + 数字 + 玻璃 ⓘ(`GlassInfoButton`)。跟 `legendItem` 同一种读法(标签 secondary、数字 semibold
-    /// 等宽),**不带色板** —— 理由见 `statsBlock` 的第三条约束。
-    ///
-    /// ⓘ 必须留在 `accessibilityElement(children: .combine)` **外面**:合并会把它一起吞掉,
-    /// 旁白用户就再也够不到那段说明了(而这两项的说明恰恰是数字本身讲不清的那部分)。
-    private func metricItem(label: String, value: Int, help: String) -> some View {
-        HStack(spacing: 4) {
+    /// 第二排的一项:标签 + 数字,下面一行常显的小字说口径。跟 `legendItem` 同一种读法(标签 secondary、数字 semibold
+    /// 等宽),**不带色板** —— 理由见 `statsBlock` 的第三条约束。口径是数字本身讲不清的那部分,常显、不藏进 ⓘ。
+    private func metricItem(label: String, value: Int, caption: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 5) {
                 Text(label)
                     .font(.system(size: 11))
@@ -420,12 +417,13 @@ struct LyricsLibraryStatsPanel: View {
                     .font(.system(size: 11, weight: .semibold))
                     .monospacedDigit()
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(label)：\(Self.format(value))")
-            GlassInfoButton(text: help)
+            Text(caption)
+                .font(.system(size: 10.5))
+                .foregroundStyle(.tertiary)
         }
         .lineLimit(1)
         .fixedSize()
+        .accessibilityElement(children: .combine)
     }
 
     /// 「共 3,669 首」:数字 20pt semibold、前后的字 13pt。三种语言各自决定数字前后写什么(英文是
