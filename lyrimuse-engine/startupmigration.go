@@ -115,7 +115,7 @@ const (
 	// migrationStaleGeneratedRoma:存量里早先预生成、读音算法改过之后已经过时的读音按现在的算法重算(staleroma.go)。
 	// 改了读音算法(Swift 的 Romanizer、LyricsRomanization 的预处理)就 +1。
 	migrationStaleGeneratedRoma        = "stale_generated_roma"
-	migrationStaleGeneratedRomaVersion = 6
+	migrationStaleGeneratedRomaVersion = 7
 	// migrationWorldRoma:存量里日 / 韩 / 中以外几种文字的歌补预生成读音(worldroma.go)。运行期新解析的在
 	// maybeGenerateHelperRoma 就生成,不再产生。改了 hasWorldReadingScript 的判据就 +1,lyrics-romanize 回包的
 	// world_readings 改成同一个数(补存量认旧 helper 靠它)。

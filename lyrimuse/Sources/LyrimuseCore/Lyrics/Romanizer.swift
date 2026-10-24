@@ -458,9 +458,25 @@ public enum Romanizer {
     }
 
     /// 这一行走日文读音:有假名,或者整首像日文、有汉字、没有谚文(带谚文的行是韩文,夹的汉字是汉字词,
-    /// 谚文走 KoreanRomanization)。
+    /// 谚文走 KoreanRomanization)、不是中文写的(`looksChineseWritten`)。
     public static func readsAsJapanese(_ line: String, songLooksJapanese: Bool) -> Bool {
-        looksJapanese(line) || (songLooksJapanese && containsHan(line) && !containsHangul(line))
+        looksJapanese(line)
+            || (songLooksJapanese && containsHan(line) && !containsHangul(line) && !looksChineseWritten(line))
+    }
+
+    /// 没有假名的这一行是不是中文写的:日文字集(JIS X 0208,跟 `JapaneseKanjiRepair` 同一个判据)里没有的汉字
+    /// 至少 2 个,或者占这一行汉字的四分之一以上。日文歌里源加的中文译名、翻译行、现场对白靠它跟日文的纯汉字行
+    /// (「未開拓領域」)分开;只有一个字敲成简体的日文行(「美丽星辰」)不算。全是 JIS 字的中文句认不出。
+    /// 见 10 章决策 56。
+    public static func looksChineseWritten(_ line: String) -> Bool {
+        guard !looksJapanese(line) else { return false }
+        var han = 0
+        var foreign = 0
+        for ch in line where ch.unicodeScalars.count == 1 && ch.unicodeScalars.first!.properties.isIdeographic {
+            han += 1
+            if !JapaneseKanjiRepair.isJapaneseKanjiCached(ch) { foreign += 1 }
+        }
+        return foreign >= 2 || (foreign > 0 && foreign * 4 >= han)
     }
 
     public static func readingFromSegments(
@@ -1342,7 +1358,7 @@ extension Romanizer {
         if looksJapanese(line) { return .japanese }
         if containsHangul(line) { return .korean }
         if containsHan(line) {
-            if song == .japanese { return .japanese }
+            if song == .japanese { return looksChineseWritten(line) ? .chinese : .japanese }
             if song == .cantonese { return .cantonese }
             return .chinese
         }

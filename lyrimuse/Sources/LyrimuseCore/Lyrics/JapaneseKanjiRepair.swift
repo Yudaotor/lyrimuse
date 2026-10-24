@@ -55,6 +55,18 @@ public enum JapaneseKanjiRepair {
         String(ch).data(using: japaneseEncoding) != nil
     }
 
+    nonisolated(unsafe) private static var jisMemo: [Character: Bool] = [:]
+
+    /// `isJapaneseKanji` 加单字缓存:读音和排版按行判中日文时逐字问,同一首歌里来回是那几百个字。
+    static func isJapaneseKanjiCached(_ ch: Character) -> Bool {
+        memoLock.lock()
+        defer { memoLock.unlock() }
+        if let known = jisMemo[ch] { return known }
+        let known = isJapaneseKanji(ch)
+        jisMemo[ch] = known
+        return known
+    }
+
     /// 单字规则:该换成哪个字;nil = 不动。
     static func repaired(_ ch: Character) -> Character? {
         // 单一码位的表意文字才谈得上简繁;组合序列 / 假名 / 标点 / 数字直接放过。

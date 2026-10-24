@@ -952,6 +952,26 @@ func runRomanizationTests() {
             + Array(repeating: "你对我笑一次", count: 4) + ["サヨナラ"]).joined(separator: "\n")
         expectEqual(Romanizer.looksJapaneseSong(englishChineseWithJa), false, "整首: 中英混唱夹一行日文仍不算日文歌")
 
+        // 日文歌里中文写的行(源加的翻译、译名、对白)按中文读、归拼音开关管(10 章决策 56)。
+        expectEqual(Romanizer.looksChineseWritten("我爷爷再跟邻居大伯聊天"), true, "中文行: 好几个日文字集里没有的字")
+        expectEqual(Romanizer.looksChineseWritten("改变自己"), true, "中文行: 一个字但占四分之一")
+        expectEqual(Romanizer.looksChineseWritten("那么 感谢大家的支持"), true, "中文行: 两个字,不到四分之一也算")
+        expectEqual(Romanizer.looksChineseWritten("努力 未来 美丽星辰"), false, "中文行: 日文行里一个字敲成简体不算")
+        expectEqual(Romanizer.looksChineseWritten("未開拓領域"), false, "中文行: 日文的纯汉字行不算")
+        expectEqual(Romanizer.looksChineseWritten("优しさに说"), false, "中文行: 有假名的不算")
+        expectEqual(Romanizer.script(ofLine: "妈妈听见了说", song: .japanese), .chinese, "中文行: 日文歌里归中文")
+        expectEqual(Romanizer.script(ofLine: "未開拓領域", song: .japanese), .japanese, "中文行: 日文的纯汉字行仍归日文")
+        let zhInJa = Romanizer.lineReading("妈妈听见了说", songLooksJapanese: true,
+                                           segments: Romanizer.japaneseSegments("妈妈听见了说")) ?? ""
+        expectEqual(zhInJa, "mā mā tīng jiàn le shuō", "中文行: 日文歌里按拼音读,不进日文分词器")
+        let jaWithZh = ["[00:01.00]妹は「ねえ、かあちゃん」", "[00:02.00]妹妹说“呐，妈妈”", "[00:03.00]父はそう言った",
+                        "[00:04.00]みんな笑っていた"].joined(separator: "\n")
+        let zhOff = LyricsSyncEngine()
+        zhOff.load(lyrics: jaWithZh, lyricsTr: "", lyricsRoma: "", lyricsYRC: "",
+                   romanizationScripts: RomanizationScripts.default.subtracting(.chinese))
+        expectEqual(zhOff.activeLine(atMs: 2100)?.romanization, nil, "中文行: 拼音开关关着就不标")
+        expectEqual(zhOff.activeLine(atMs: 3100)?.romanization?.isEmpty, false, "中文行: 同一首的日文行照常标")
+
         // 阿拉伯数字连着汉字的词按汉字数字读:分词器对「2人」给拼音、对「２人」逐字硬读。
         expectEqual(Romanizer.japaneseSegments("2人だけの世界").first?.latin, "futari", "数字+汉字: 2人 读 futari")
         expectEqual(Romanizer.japaneseSegments("２人は一つに").first?.latin, "futari", "数字+汉字: 全角 ２人 也读 futari")
