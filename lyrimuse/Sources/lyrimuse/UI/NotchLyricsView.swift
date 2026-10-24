@@ -1030,8 +1030,11 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 压根没有曲目时歌词行是**全空**的,44pt 白占着就是纯粹占用空间。一处改一处不改的表现是
             // "行不见了高度还留着"或反过来把行裁掉半截。
             .overlay(alignment: .top) {
-                if !controller.isCollapsed, controller.hasTrack {
+                if controller.hasTrack {
                     cardBodyLayer
+                        // 收起时不摘、只藏:收起态里悬停展开时整块新插进来的话,决策 94 的延迟淡入、错开都不起作用,
+                        // 多行歌词还要现建(05 章决策 101)。
+                        .modifier(NotchCardLayerActive(active: !controller.isCollapsed))
                         // 出场动画的内容淡入:值来自 NotchWindowRoot 的 keyframeAnimator,平时恒为 1。
                         // 报收听里程碑时整块让给报喜面板(下面那个 overlay)。
                         .opacity(controller.milestone == nil ? revealContentOpacity : 0)
@@ -3048,6 +3051,10 @@ private struct NotchPillButton: View {
 
 /// 歌词行上「瞬态横幅盖歌词」这层壳,单独订阅 NotchTransientCenter:banner 只被这一行消费,订阅挂在 NotchLyricsView 根上的话,
 /// 音量连调时每档一次的 @Published 变化会打醒整卡 body(含封面背景/跑马灯/音浪)。下沉之后横幅出现/消失只失效这一行。
+///
+/// 歌词行常驻,横幅盖上来时只藏起来(`NotchCardLayerActive`:透明、停表、对读屏隐藏),别写回 `if let banner … else` 换视图:
+/// 那样每弹一次横幅歌词行就拆掉重建,长句跑马灯从句首重来,逐字行重画整行位图。横幅自己的淡入淡出单独包一层,
+/// `.animation(_:value:)` 的作用域不罩到歌词行上(05 章决策 101)。
 private struct NotchTransientHost<Fallback: View>: View {
     @ObservedObject private var transients = NotchTransientCenter.shared
     let tint: Color
@@ -3060,15 +3067,16 @@ private struct NotchTransientHost<Fallback: View>: View {
 
     var body: some View {
         ZStack {
-            if let banner = transients.banner {
-                NotchTransientRow(banner: banner, tint: tint)
-                    .transition(.opacity)
-            } else {
-                fallback()
-                    .transition(.opacity)
+            fallback()
+                .modifier(NotchCardLayerActive(active: transients.banner == nil))
+            ZStack {
+                if let banner = transients.banner {
+                    NotchTransientRow(banner: banner, tint: tint)
+                        .transition(.opacity)
+                }
             }
+            .animation(.easeInOut(duration: 0.18), value: transients.banner)
         }
-        .animation(.easeInOut(duration: 0.18), value: transients.banner)
     }
 }
 

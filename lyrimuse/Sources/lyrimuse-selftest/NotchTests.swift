@@ -628,6 +628,12 @@ func runNotchTests() {
                         "灵动岛接线: 耳朵里的歌名 / 歌手走图层跑马灯、按窗口可见性停(05 章决策 99)")
             expectEqual(sourceBytes(view, contain: "MarqueeText("), false,
                         "灵动岛接线: 灵动岛里不再有 SwiftUI 跑马灯 —— 逐帧 SwiftUI 动画每帧带整窗布局、提交(05 章决策 99)")
+            expectEqual(sourceHas(view, "fallback()\n .modifier(NotchCardLayerActive(active: transients.banner == nil))")
+                        && !sourceHas(view, "NotchTransientRow(banner: banner, tint: tint)\n .transition(.opacity)\n } else {"), true,
+                        "灵动岛接线: 横幅盖上来时歌词行常驻、只藏起来,不拆掉重建(05 章决策 101)")
+            expectEqual(sourceHas(view, "if controller.hasTrack {\n cardBodyLayer\n")
+                        && sourceHas(view, ".modifier(NotchCardLayerActive(active: !controller.isCollapsed))"), true,
+                        "灵动岛接线: 收起时顶行以下那一块常驻、只藏起来,收起态里悬停展开时照样错开淡入(05 章决策 101)")
             // 订阅统一存进一个集合,teardown 一行清掉;不再单独开 AnyCancellable 字段(漏配一行清理就泄漏)。
             expectEqual(!controller.contains(": AnyCancellable?")
                         && sourceCount(controller, "\n        .store(in: &subscriptions)") >= 28
