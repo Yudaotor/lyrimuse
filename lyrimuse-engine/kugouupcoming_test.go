@@ -16,6 +16,7 @@ type testKugouSong struct {
 	album     string
 	singers   []string // 空 = singerInfo 写成坏串,覆盖"解不开就退回 musicName 前缀"那一支
 	seconds   float64
+	extra     map[string]any // 再写进 songInfo 的字段(mixId、payAlbumID、albumImgUrl……)
 }
 
 // writeTestKugouQueue 造一份跟真实 currentPlayList.sqlite 同构的队列库。
@@ -47,6 +48,9 @@ func writeTestKugouQueue(t *testing.T, songs []testKugouSong) string {
 		}
 		if s.showName != "" {
 			fields["showName"] = s.showName
+		}
+		for k, v := range s.extra {
+			fields[k] = v
 		}
 		info, err := json.Marshal(fields)
 		if err != nil {
@@ -258,5 +262,58 @@ func TestKugouUpcomingSameTitleOtherSingerIsStale(t *testing.T) {
 	})
 	if got, ok := kugouUpcoming("甲", "当前", 5); ok {
 		t.Errorf("歌手对不上时该退回兜底,却返回了 %+v", got)
+	}
+}
+
+// 推荐流:「此刻在播」那份 plist 读不到,当前这首在 sqlite 那份队列里,条目自带歌曲 id、专辑 id(payAlbumID)和专辑图。
+func TestKugouPlayingSongFromQueue(t *testing.T) {
+	writeTestKugouQueue(t, []testKugouSong{
+		{musicName: "甲 - 别的歌", album: "甲", singers: []string{"甲"}, seconds: 200,
+			extra: map[string]any{"mixId": 1, "payAlbumID": 2}},
+		{musicName: "Katy Perry、Nicki Minaj - Swish Swish (Clean)", album: "Swish Swish", singers: []string{"Katy Perry", "Nicki Minaj"},
+			seconds: 242.233, extra: map[string]any{"mixId": 65176349, "payAlbumID": 2654569,
+				"albumImgUrl": "http://imge.kugou.com/stdmusic/{size}/20170519/20170519125446468568.jpg"}},
+		{musicName: "aespa - UP", showName: "UP (KARINA Solo)", album: "UP", singers: []string{"aespa"}, seconds: 170,
+			extra: map[string]any{"mixId": "700", "payAlbumID": "800"}},
+	})
+	old := kugouNowPlayingOverride
+	kugouNowPlayingOverride = filepath.Join(t.TempDir(), "no-userCurrentPlayList.plist")
+	t.Cleanup(func() { kugouNowPlayingOverride = old })
+
+	if mix, album := kugouPlayingSong("Katy Perry、Nicki Minaj", "Swish Swish (Clean)", 242.186); mix != "65176349" || album != "2654569" {
+		t.Errorf("从队列取歌曲 id、专辑 id: %q %q", mix, album)
+	}
+	if mix, _ := kugouPlayingSong("Katy Perry", "Swish Swish (Clean)", 242.186); mix != "65176349" {
+		t.Errorf("署名是全署名里的一位也认: %q", mix)
+	}
+	if mix, album := kugouPlayingSong("aespa", "UP (KARINA Solo)", 170); mix != "700" || album != "800" {
+		t.Errorf("歌名按 showName 认: %q %q", mix, album)
+	}
+	for name, c := range map[string]struct {
+		artist, title string
+		dur           float64
+	}{
+		"歌名不同": {"甲", "不在队列", 200}, "署名对不上": {"丙", "别的歌", 200}, "时长对不上": {"甲", "别的歌", 300},
+	} {
+		if mix, _ := kugouPlayingSong(c.artist, c.title, c.dur); mix != "" {
+			t.Errorf("%s 不认: %q", name, mix)
+		}
+	}
+	if got := kugouPlayingCoverURL("Katy Perry、Nicki Minaj", "Swish Swish (Clean)", 242.186); got != "https://imge.kugou.com/stdmusic/800/20170519/20170519125446468568.jpg" {
+		t.Errorf("专辑图填上 800 档、换成 https: %q", got)
+	}
+	if got := kugouPlayingCoverURL("甲", "别的歌", 200); got != "" {
+		t.Errorf("没有专辑图: %q", got)
+	}
+	for _, raw := range []string{"http://example.com/stdmusic/{size}/a.jpg", "http://imge.kugou.com/stdmusic/480/a.jpg", ""} {
+		if got := kugouCoverURL(raw); got != "" {
+			t.Errorf("%q 不给: %q", raw, got)
+		}
+	}
+	playerCoverMu.Lock()
+	playerCoverMemo = map[string]playerCoverAt{}
+	playerCoverMu.Unlock()
+	if got := playerCoverURLFor(kugouMusicBundleID, "Katy Perry、Nicki Minaj", "Swish Swish (Clean)", "Swish Swish", 242.186, kkboxPlayingInfo{}); !strings.HasPrefix(got, "https://imge.kugou.com/stdmusic/800/") {
+		t.Errorf("播放器封面走酷狗那一支: %q", got)
 	}
 }

@@ -19,7 +19,8 @@ import (
 //   - QQ 音乐:播放列表归档里当前这首的 albumInfo.albumMid,按 qqAlbumCoverURL 拼;
 //   - KKBOX:客户端缓存的单曲详情里的专辑图 600 档(kkboxPlayingInfo.cover);
 //   - Amazon Music:目录缓存里这首(按 ASIN)的 album.image,换成同尺寸的 JPEG;
-//   - 洛雪音乐:列表里这一首的 meta.picUrl(放过才有),换成 https(lxMusicCoverURL)。
+//   - 洛雪音乐:列表里这一首的 meta.picUrl(放过才有),换成 https(lxMusicCoverURL);
+//   - 酷狗:推荐流时 sqlite 那份队列里当前这首的 albumImgUrl,填上尺寸、换成 https(kugouPlayingCoverURL)。
 // Spotify、Kaset、YouTube Music 网页版的封面地址 App 自己读得到,不经这里。
 
 // 同一首多久再读一次:trackEnrichment 在同一首歌的播放期间每几秒进来一次,本机数据(sqlite、plist、LevelDB)
@@ -57,7 +58,7 @@ func playerCoverURLFor(bundleID, artist, title, album string, durationSecs float
 	switch bundleID {
 	case kkboxBundleID:
 		return kkbox.cover
-	case neteaseMusicBundleID, qqMusicBundleID, amazonMusicBundleID, lxMusicBundleID:
+	case neteaseMusicBundleID, qqMusicBundleID, amazonMusicBundleID, lxMusicBundleID, kugouMusicBundleID:
 	default:
 		return ""
 	}
@@ -76,6 +77,8 @@ func playerCoverURLFor(bundleID, artist, title, album string, durationSecs float
 	playerCoverMu.Unlock()
 	var cover string
 	switch bundleID {
+	case kugouMusicBundleID:
+		cover = kugouPlayingCoverURL(artist, title, durationSecs)
 	case neteaseMusicBundleID:
 		cover = neteaseLocalCoverURL(artist, title, album, durationSecs)
 	case qqMusicBundleID:

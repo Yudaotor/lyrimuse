@@ -407,19 +407,32 @@ type kugouLibraryRow struct {
 // (kugouAlbumIDByHash,按 hash 记住),专辑简介、专辑页用它(05 章决策 93)。要起 plutil、sqlite3 子进程、可能联网,
 // 调用方不能持着 enrichMu。
 func kugouPlayingSong(artist, title string, durationSecs float64) (mixID, albumID string) {
+	if mixID, albumID, ok := kugouPlayingSongFromPlist(artist, title, durationSecs); ok {
+		return mixID, albumID
+	}
+	// 推荐流:plist 被清空,当前这首在 sqlite 那份队列里,条目自带歌曲 id 和专辑 id(payAlbumID)。见 05 章决策 93。
+	if s, ok := kugouPlayingQueueSong(artist, title, durationSecs); ok {
+		return rawDigitsID(s.Mix), rawDigitsID(s.Album)
+	}
+	return "", ""
+}
+
+// kugouPlayingSongFromPlist:「此刻在播」那份 plist 里当前曲目是这首、曲库里查得到它的 hash 时的歌曲 id 与专辑 id;
+// 否则 ok 为 false。
+func kugouPlayingSongFromPlist(artist, title string, durationSecs float64) (mixID, albumID string, ok bool) {
 	path := kugouNowPlayingPath()
 	if path == "" {
-		return "", ""
+		return "", "", false
 	}
-	t, ok := kugouReadNowPlaying(path)
+	t, read := kugouReadNowPlaying(path)
 	h := strings.ToUpper(strings.TrimSpace(t.hash))
-	if !ok || !isHexString(h) || normLoose(t.title) != normLoose(title) || !kugouCreditMatches(t.credit, t.artist, artist) {
-		return "", ""
+	if !read || !isHexString(h) || normLoose(t.title) != normLoose(title) || !kugouCreditMatches(t.credit, t.artist, artist) {
+		return "", "", false
 	}
 	var rows []kugouLibraryRow
 	if !kugouLibraryQuery("SELECT ifnull(musictime, 0) AS t, mixId AS m, albumId AS a FROM Allmusic WHERE upper(musichash) = '"+h+"' LIMIT 1", &rows) ||
 		len(rows) == 0 || (rows[0].Time > 0 && durationSecs > 0 && !sourceDurationFits(durationSecs, rows[0].Time)) {
-		return "", ""
+		return "", "", false
 	}
 	mixID, albumID = rawDigitsID(rows[0].Mix), rawDigitsID(rows[0].Album)
 	if mixID != "" && albumID == "" {
@@ -428,7 +441,86 @@ func kugouPlayingSong(artist, title string, durationSecs float64) (mixID, albumI
 		defer cancel()
 		albumID = kugouAlbumIDByHash(ctx, h)
 	}
-	return mixID, albumID
+	return mixID, albumID, true
+}
+
+// kugouQueueSongSQL:sqlite 那份队列里每首认当前这首要用的字段,以及它自带的歌曲 id、专辑 id、专辑图。
+const kugouQueueSongSQL = `SELECT
+  json_extract(cast(songInfo as text),'$.musicName') AS n,
+  json_extract(cast(songInfo as text),'$.showName') AS sn,
+  json_extract(cast(songInfo as text),'$.musicTime') AS d,
+  json_extract(cast(songInfo as text),'$.mixId') AS m,
+  json_extract(cast(songInfo as text),'$.payAlbumID') AS a,
+  json_extract(cast(songInfo as text),'$.albumImgUrl') AS c
+FROM CurrentSongList ORDER BY songIndex LIMIT 2000`
+
+// kugouQueueSongRow 是 kugouQueueSongSQL 的一行。payAlbumID 就是酷狗的专辑 id(实测跟 getSongInfo 回的 albumid 一致)。
+type kugouQueueSongRow struct {
+	Name     string          `json:"n"`
+	ShowName string          `json:"sn"`
+	Dur      float64         `json:"d"`
+	Mix      json.RawMessage `json:"m"`
+	Album    json.RawMessage `json:"a"`
+	Cover    string          `json:"c"`
+}
+
+// kugouPlayingQueueSong:sqlite 那份队列(推荐流时酷狗写在这里)里正在放的这首:歌名(showName,没有时 musicName 的后半)一致、
+// 署名对得上、两边时长都知道时对得上。不止一条时取第一条(同一首在队列里出现两次,id 是同一套)。读不了、没有为 false。
+func kugouPlayingQueueSong(artist, title string, durationSecs float64) (kugouQueueSongRow, bool) {
+	path := kugouUpcomingPath()
+	if path == "" {
+		return kugouQueueSongRow{}, false
+	}
+	if _, err := os.Stat(path); err != nil {
+		return kugouQueueSongRow{}, false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), kugouUpcomingQueryTimeout)
+	defer cancel()
+	uri := (&neturl.URL{Scheme: "file", Path: path, RawQuery: "mode=ro"}).String()
+	out, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", uri, kugouQueueSongSQL).Output()
+	if err != nil {
+		return kugouQueueSongRow{}, false
+	}
+	var rows []kugouQueueSongRow
+	if trimmed := bytes.TrimSpace(out); len(trimmed) == 0 || json.Unmarshal(trimmed, &rows) != nil {
+		return kugouQueueSongRow{}, false
+	}
+	for _, r := range rows {
+		credit, t := kugouUpcomingSplit(r.Name)
+		if r.ShowName != "" {
+			t = r.ShowName
+		}
+		if normLoose(t) != normLoose(title) || !kugouCreditMatches(credit, credit, artist) {
+			continue
+		}
+		if r.Dur > 0 && durationSecs > 0 && !sourceDurationFits(durationSecs, r.Dur) {
+			continue
+		}
+		return r, true
+	}
+	return kugouQueueSongRow{}, false
+}
+
+// kugouCoverURL:酷狗记的专辑图地址(`http://imge.kugou.com/stdmusic/{size}/…`)填上 800 档、换成 https(实测同一路径
+// https 下 150~1000 档都给图)。别的图床、没有尺寸占位的不给。
+func kugouCoverURL(raw string) string {
+	u, err := neturl.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Host != "imge.kugou.com" || !strings.Contains(u.Path, "/{size}/") {
+		return ""
+	}
+	u.Scheme = "https"
+	u.Path = strings.Replace(u.Path, "/{size}/", "/800/", 1)
+	u.RawPath = ""
+	return u.String()
+}
+
+// kugouPlayingCoverURL:酷狗正在放的这首在它本机数据里记的专辑图(推荐流时 sqlite 那份队列里的 albumImgUrl)。没有为 ""。
+func kugouPlayingCoverURL(artist, title string, durationSecs float64) string {
+	s, ok := kugouPlayingQueueSong(artist, title, durationSecs)
+	if !ok {
+		return ""
+	}
+	return kugouCoverURL(s.Cover)
 }
 
 // kugouCreditMatches:播放器报的署名是不是酷狗记的这首的歌手(singerName),或者在它的全署名(musicName 的「歌手 - 」那一半)里。
