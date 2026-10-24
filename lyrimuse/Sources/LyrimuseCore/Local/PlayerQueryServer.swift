@@ -271,12 +271,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
     /// Kaset 的播放队列与播放状态一次取回(JXA,两段原样的 JSON 串);没在跑时回空串,不拉起它。
     public static let kasetQueueScript = """
     (() => {
-        const K = Application("Kaset");
-        try {
-            if (!K.running()) return "";
-        } catch (e) {
-            return "";
-        }
+        \(JXARunningApp.attach("K", player: .kaset, notRunning: "\"\""))
         try {
             return JSON.stringify({ queue: K.getPlayQueue(), info: K.getPlayerInfo() });
         } catch (e) {

@@ -30,12 +30,7 @@ public enum VoxPlayerInfo {
     /// 字典里的 `trackUrl` 在 JXA 里叫 `trackurl`(写成 `trackUrl` 报 -1708);`player volume` 实际是 0~100。
     public static let script = """
     (() => {
-        const V = Application("VOX");
-        try {
-            if (!V.running()) return JSON.stringify(null);
-        } catch (e) {
-            return JSON.stringify(null);
-        }
+        \(JXARunningApp.attach("V", player: .vox, notRunning: "JSON.stringify(null)"))
         try {
             const state = V.playerState();
             if (state !== 0 && state !== 1) return JSON.stringify(null);

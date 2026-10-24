@@ -497,8 +497,7 @@ public enum MusicPlaybackController {
     private static func runKasetJXACapturing(_ body: String) -> String? {
         let script = """
             (() => {
-                const K = Application("Kaset");
-                if (!K.running()) return "";
+                \(JXARunningApp.attach("K", player: .kaset, notRunning: "\"\""))
             \(body)
             })()
             """

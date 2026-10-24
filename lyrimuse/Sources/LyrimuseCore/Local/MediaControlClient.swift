@@ -315,12 +315,7 @@ public enum MediaControlClient {
 
     private static let script = """
     (() => {
-        const Music = Application("Music");
-        try {
-            if (!Music.running()) return JSON.stringify(null);
-        } catch (e) {
-            return JSON.stringify(null);
-        }
+        \(JXARunningApp.attach("Music", player: .appleMusic, notRunning: "JSON.stringify(null)"))
         let state;
         try {
             state = Music.playerState();
@@ -428,12 +423,7 @@ public enum MediaControlClient {
     /// duration 是毫秒(296533 = 4:56),Music.app 那份是秒:这里除 1000,别照抄上面。
     private static let spotifyScript = """
     (() => {
-        const S = Application("Spotify");
-        try {
-            if (!S.running()) return JSON.stringify(null);
-        } catch (e) {
-            return JSON.stringify(null);
-        }
+        \(JXARunningApp.attach("S", player: .spotify, notRunning: "JSON.stringify(null)"))
         let state;
         try {
             state = S.playerState();
@@ -482,12 +472,7 @@ public enum MediaControlClient {
     /// `KasetPlayerInfo.parseScriptOutput`)。没在跑时回空串,不会把它拉起来。
     private static let kasetScript = """
     (() => {
-        const K = Application("Kaset");
-        try {
-            if (!K.running()) return "";
-        } catch (e) {
-            return "";
-        }
+        \(JXARunningApp.attach("K", player: .kaset, notRunning: "\"\""))
         try {
             const info = K.getPlayerInfo();
             return JSON.stringify({ readAtMs: Date.now(), info: info });
@@ -501,12 +486,7 @@ public enum MediaControlClient {
     /// (`KasetPlayerInfo.queueFirstReport`)。没在跑时回空串,不会把它拉起来。
     private static let kasetPlayQueueScript = """
     (() => {
-        const K = Application("Kaset");
-        try {
-            if (!K.running()) return "";
-        } catch (e) {
-            return "";
-        }
+        \(JXARunningApp.attach("K", player: .kaset, notRunning: "\"\""))
         try {
             return K.getPlayQueue();
         } catch (e) {

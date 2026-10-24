@@ -890,6 +890,44 @@ private func scriptServerTests() {
         expectEqual(true, false, "常驻 osascript: 起得来")
     }
 
+    // 读数脚本按进程号找播放器(不发 Apple Event,免得要自动化授权):没在跑回 notRunning、不往下走;在跑的拿得到进程号。
+    func runJXA(_ body: String) -> String? {
+        ProcessRunner.run("/usr/bin/osascript", ["-l", "JavaScript", "-e", "(() => {\n\(body)\n})()"], timeout: 10)
+            .map { $0.stdoutText.trimmingCharacters(in: .whitespacesAndNewlines) }
+    }
+    expectEqual(runJXA(JXARunningApp.attach("X", bundleID: "me.yudaotor.selftest.not-installed", notRunning: "\"absent\"")
+                       + "\nreturn \"reached\";"), "absent", "按进程号找播放器: 没在跑回 notRunning,不往下走")
+    expectEqual(runJXA(JXARunningApp.attach("D", bundleID: "com.apple.dock", notRunning: "\"absent\"")
+                       + "\nreturn String(Number(DRunning.objectAtIndex(0).processIdentifier) > 0);"), "true",
+                "按进程号找播放器: 在跑的拿得到进程号")
+    expectEqual(sourceHas(JXARunningApp.attach("K", player: .kaset, notRunning: "\"\""),
+                          "runningApplicationsWithBundleIdentifier(\"com.sertacozercan.Kaset\")"), true,
+                "按进程号找播放器: 按那家的 bundle id 找")
+    let attachKaset = JXARunningApp.attach("K", player: .kaset, notRunning: "\"\"")
+    expectEqual(sourceHas(attachKaset, "const K = Application(Number(KRunning.objectAtIndex(0).processIdentifier));")
+                && !sourceHas(attachKaset, "Application(\""), true, "按进程号找播放器: 按进程号建对象,不按名字")
+    expectEqual(sourceHas(JXARunningApp.attach("K", player: .kaset, notRunning: "\"\""),
+                          "if (!globalThis.lyrimuseAppKit) { ObjC.import('AppKit');"), true,
+                "按进程号找播放器: AppKit 同一个 osascript 里只 import 一次(每次约 90 毫秒)")
+    let kasetQueueCompile = ProcessRunner.run("/usr/bin/osacompile", ["-l", "JavaScript", "-o",
+        NSTemporaryDirectory() + "lyrimuse-selftest-\(getpid()).scpt", "-e", PlayerQueryServer.kasetQueueScript], timeout: 10)
+    try? FileManager.default.removeItem(atPath: NSTemporaryDirectory() + "lyrimuse-selftest-\(getpid()).scpt")
+    expectEqual(kasetQueueCompile?.succeeded, true, "按进程号找播放器: 代问 Kaset 队列的脚本编得过")
+    // 按名字找(`Application("…")`)在判完在跑、发事件之前播放器退掉会把它重新启动,源码里一处都不许有。
+    do {
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        var byName: [String] = []
+        for dir in ["lyrimuse", "LyrimuseCore"] {
+            let root = sources.appendingPathComponent(dir)
+            guard let walker = FileManager.default.enumerator(atPath: root.path) else { continue }
+            for case let rel as String in walker where rel.hasSuffix(".swift") && !rel.hasSuffix("JXARunningApp.swift") {
+                guard let text = try? String(contentsOfFile: root.appendingPathComponent(rel).path, encoding: .utf8) else { continue }
+                if sourceBytes(text, contain: "Application(\"") { byName.append("\(dir)/\(rel)") }
+            }
+        }
+        expectEqual(byName, [], "按进程号找播放器: JXA 不按名字找播放器")
+    }
+
     // perl 那份脚本至少要编得过(真加载适配框架要打包后的 App,不在这里跑)。
     let syntax = ProcessRunner.run("/usr/bin/perl", ["-c", "-e", MediaControlClient.getServerScript],
                                    timeout: 10, captureStderr: true)
