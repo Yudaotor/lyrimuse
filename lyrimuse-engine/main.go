@@ -366,6 +366,8 @@ func main() {
 	// 存量台语歌补记 SongLanguage、清掉普通话拼音(见 hokkien.go)。夹在 import 与 export 之间:清掉的罗马音由
 	// exportLyricsFiles 同步成删掉 .roma.lrc;排在 migrateManualPickMarks 之前,那一步按最终内容算指纹。
 	startupStep("migrateHokkienSongLanguage", migrateHokkienSongLanguage)
+	// 存量里歌词是粤语口语的歌补记粤语、普通话拼音换成粤拼(见 cantoneselyrics.go)。位置跟上一步同一个理由。
+	startupStep("migrateCantoneseSongLanguage", migrateCantoneseSongLanguage)
 	// 存量粤语歌没标声调的罗马音换成带声调的粤拼(见 jyutping.go)。位置跟上一步同一个理由:换掉的罗马音由
 	// exportLyricsFiles 同步成新的 .roma.lrc,排在 migrateManualPickMarks 之前。
 	startupStep("migrateTonelessCantoneseRoma", migrateTonelessCantoneseRoma)

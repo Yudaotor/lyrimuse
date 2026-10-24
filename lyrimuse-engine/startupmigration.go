@@ -81,6 +81,10 @@ const (
 	// 改了 lyricsLookHokkien 的判据就 +1。
 	migrationHokkienSongLanguage        = "hokkien_song_language"
 	migrationHokkienSongLanguageVersion = 2
+	// migrationCantoneseSongLanguage:存量里歌词是粤语口语的歌补记 SongLanguage、换成粤拼(cantoneselyrics.go)。
+	// 改了 lyricsLookCantonese 的判据就 +1。
+	migrationCantoneseSongLanguage        = "cantonese_song_language"
+	migrationCantoneseSongLanguageVersion = 1
 	// migrationNeteaseCoverURLs:存量网易云封面 `?param=WxH` 换成 neteaseCoverQuery(netease.go)。
 	// 改 neteaseCoverQuery 的写法就 +1。
 	migrationNeteaseCoverURLs        = "netease_cover_urls"

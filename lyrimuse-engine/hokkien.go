@@ -48,15 +48,7 @@ var (
 // lyricsLookHokkien:这份歌词是不是台语歌。判据与阈值是拿本机 4371 首汉字歌词的缓存标定的,见 10 章决策 24。
 // 只看正文:时间戳标签和带冒号的署名行(作词:/ 编曲:)去掉。
 func lyricsLookHokkien(lyrics string) bool {
-	var body strings.Builder
-	for _, line := range strings.Split(lrcTagRe.ReplaceAllString(lyrics, ""), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.ContainsAny(line, ":：") {
-			continue
-		}
-		body.WriteString(line)
-	}
-	text := body.String()
+	text := strings.Join(lyricsBodyLines(lyrics), "")
 	han, kana, canto := 0, 0, 0
 	for _, r := range text {
 		switch {
@@ -90,10 +82,13 @@ func lyricsLookHokkien(lyrics string) bool {
 	return false
 }
 
-// entrySongLanguage:条目的 SongLanguage。源上报了粤语就是粤语;否则歌词像台语就记台语(源上报的「普通话」
-// 压不过它:平台常把台语歌标成国语);再否则照源上报的。
+// entrySongLanguage:条目的 SongLanguage。源上报了粤语、或者歌词是粤语口语(lyricsLookCantonese)就是粤语;
+// 否则歌词像台语就记台语;再否则照源上报的。歌词判出来的压过源上报的「普通话」:平台常把台语歌、粤语独白标成国语。
 func entrySongLanguage(lyrics string, scored []scoredLyricCandidateResult) string {
 	lang := songLanguageFromScored(scored)
+	if lang != songLanguageCantonese && lyricsLookCantonese(lyrics) {
+		return songLanguageCantonese
+	}
 	if lang != songLanguageCantonese && lyricsLookHokkien(lyrics) {
 		return songLanguageHokkien
 	}
