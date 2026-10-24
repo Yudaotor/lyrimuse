@@ -1343,6 +1343,13 @@ func runSourceContractTests() {
         if let view = code(sourcesRoot.appendingPathComponent("lyrimuse/SettingsView.swift")) {
             expectEqual(count(view, "listenHistoryCard") + count(view, "historyExcludedBundles"), 0,
                         "Last.fm 播放器排除: 播放器页不该再有「收听历史」卡(这项设置只属于 Last.fm 页)")
+            // 换逐字格式时删文件之前的自动快照没写成(盘满、打包失败),不能照删:确认框承诺了先备份。
+            let apply = sourceBody("private func applyLyricsWordFormats", in: view)
+            let guardAt = apply.range(of: "hasNoLyricsFiles()")?.lowerBound
+            let writeAt = apply.range(of: "features.lyricsWordFormats = formats")?.lowerBound
+            expectEqual(apply.contains("writeAutoSnapshot(reason: \"word-format\") == nil") && guardAt != nil && writeAt != nil
+                        && guardAt! < writeAt! && sourceHas(apply, "return\n            }\n            features.lyricsWordFormats"), true,
+                        "逐字歌词格式: 备份没写成、又有歌词文件时要在改设置之前返回")
         } else {
             expectEqual(true, false, "Last.fm 播放器排除: 读不到 lyrimuse/SettingsView.swift(路径挪了?)")
         }

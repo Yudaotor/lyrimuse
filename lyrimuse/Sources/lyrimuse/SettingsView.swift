@@ -2410,11 +2410,16 @@ private struct LyricsSettingsTab: View {
     }
 
     /// 写进 features.json,引擎热重读后先按旧格式导入、再整份按新格式导出(lyricsdirswitch.go 的 switchLyricsWordFormats)。
-    /// backup:会删掉文件时先打一份自动快照。
+    /// backup:会删掉文件时先打一份自动快照;有歌词文件却没备份成就不改,同歌词管理的 takeAutoSnapshot。
     private func applyLyricsWordFormats(_ formats: [LyricsWordFormat], backup: Bool) {
         Task {
-            if backup {
-                _ = await LyricsBackupStore.writeAutoSnapshot(reason: "word-format")
+            if backup, await LyricsBackupStore.writeAutoSnapshot(reason: "word-format") == nil,
+               !LyricsBackupStore.hasNoLyricsFiles() {
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = L10n.t("自动备份失败，为避免数据无法恢复，本次未执行删除。请检查磁盘空间和配置文件夹的写入权限后重试")
+                alert.runModal()
+                return
             }
             features.lyricsWordFormats = formats
             await features.save()
