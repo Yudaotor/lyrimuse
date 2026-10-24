@@ -191,6 +191,13 @@ func runVoxTests() {
         expectEqual(sourceHas(sourceBody("private static func readVox() -> VoxPlayerInfo.Reading? {", in: client),
                               "guard !SourceKnockout.isOut(.voxScript) else { return nil }"), true,
                     "VOX 接线: 拔腿开关能关掉脚本读数")
+        expectEqual(sourceHas(sourceBody("private static func fetchAppleMusicSnapshot() -> MediaControlSnapshot? {", in: client),
+                              "guard !SourceKnockout.isOut(.appleMusicScript), let r = runPlayerScript(")
+                    && sourceHas(sourceBody("private static func fetchSpotifySnapshot() -> MediaControlSnapshot? {", in: client),
+                                 "guard !SourceKnockout.isOut(.spotifyScript), let r = runPlayerScript(")
+                    && sourceHas(sourceBody("private static func readKasetSnapshot() -> MediaControlSnapshot? {", in: client),
+                                 "guard !SourceKnockout.isOut(.kasetScript), let r = runPlayerScript("), true,
+                    "拔腿接线: Apple Music、Spotify、Kaset 的脚本读数各有开关")
         let decode = sourceBody("init(from decoder: Decoder) throws {", in: sourceBody("private struct RawPayload: Decodable {", in: client))
         expectEqual(sourceHas(decode, "let anchor = VoxPlayerInfo.systemAnchor(")
                     && sourceHas(decode, "elapsedTime = anchor.elapsed") && sourceHas(decode, "elapsedTimeNow = anchor.elapsedNow")

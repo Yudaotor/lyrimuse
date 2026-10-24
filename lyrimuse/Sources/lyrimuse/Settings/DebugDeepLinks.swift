@@ -49,6 +49,9 @@ enum DebugDeepLinks {
         case .toggleFavorite:
             PlaybackCoordinator.shared.toggleFavorited()
             logger.notice("debug favorite toggle")
+        case let .seek(seconds):
+            PlaybackCoordinator.shared.seek(toMs: Int((seconds * 1000).rounded()))
+            logger.notice("debug seek \(seconds, privacy: .public)")
         case .idleResume:
             let player = IdlePlaybackActions.player
             guard IdlePlaybackActions.canResume(player) else {

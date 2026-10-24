@@ -361,7 +361,7 @@ public enum MediaControlClient {
     // 没有权限时 osascript 会返回非零退出码(而不是抛出 Swift 异常),同样落进
     // `guard terminationStatus == 0` 这条分支,不需要单独处理。
     private static func fetchAppleMusicSnapshot() -> MediaControlSnapshot? {
-        guard let r = runPlayerScript("music", source: script), r.succeeded
+        guard !SourceKnockout.isOut(.appleMusicScript), let r = runPlayerScript("music", source: script), r.succeeded
         else {
             setSnapshotFailure(.appleScriptUnavailable)
             return nil
@@ -461,7 +461,7 @@ public enum MediaControlClient {
     """
 
     private static func fetchSpotifySnapshot() -> MediaControlSnapshot? {
-        guard let r = runPlayerScript("spotify", source: spotifyScript), r.succeeded
+        guard !SourceKnockout.isOut(.spotifyScript), let r = runPlayerScript("spotify", source: spotifyScript), r.succeeded
         else {
             setSnapshotFailure(.appleScriptUnavailable)
             return nil
@@ -572,7 +572,7 @@ public enum MediaControlClient {
         kasetLock.lock()
         kasetAskedThisRound = true
         kasetLock.unlock()
-        guard let r = runPlayerScript("kaset", source: kasetScript), r.succeeded,
+        guard !SourceKnockout.isOut(.kasetScript), let r = runPlayerScript("kaset", source: kasetScript), r.succeeded,
             let (raw, readAt) = KasetPlayerInfo.parseScriptOutput(r.stdout, now: Date())
         else { return nil }
         // 不是一首歌:开播时的占位、播客单集(还没问到类型的这一条先按住,见 KasetVideoKind)。这一拍不报它。

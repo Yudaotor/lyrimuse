@@ -232,6 +232,13 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/simulate?artist=x"), nil, "模拟播放: 没给歌名认不出")
         expectEqual(link("lyrimuse://debug/favorite"), .debug(.toggleFavorite), "debug: 翻转喜欢")
         expectEqual(link("lyrimuse://debug/idle-resume"), .debug(.idleResume), "debug: 停播页继续播放")
+        expectEqual(link("lyrimuse://debug/seek?seconds=99.7"), .debug(.seek(seconds: 99.7)), "debug: 跳转")
+        expectEqual([link("lyrimuse://debug/seek?seconds=-1"), link("lyrimuse://debug/seek"), link("lyrimuse://debug/seek?seconds=nan")]
+                        .allSatisfy { $0 == nil }, true, "debug: 跳转负数、没带、不是数都认不出")
+        for leg in ["apple-music-script", "spotify-script", "kaset-script"] {
+            expectEqual(link("lyrimuse://debug/knockout?leg=\(leg)&on=0").map { "\($0)" }?.contains("knockout") ?? false, true,
+                        "debug: 拔腿开关认得 \(leg)")
+        }
         expectEqual(link("lyrimuse://debug/volume?percent=35"), .debug(.volume(percent: 35)), "debug: 音量")
         expectEqual(link("lyrimuse://debug/volume?percent=101") == nil && link("lyrimuse://debug/volume") == nil, true,
                     "debug: 音量超出 0…100、没带取值都认不出")
@@ -325,7 +332,9 @@ func runDeepLinkTests() {
             .debug(.simulate(title: "x", artist: "y", album: "z", duration: nil, position: 0, playing: true)), .debug(.simulateOff),
             .debug(.simulate(title: "x", artist: "", album: "", duration: 30, position: 0, playing: true, ad: true)),
             .debug(.simulateIdle),
-            .debug(.toggleFavorite), .debug(.idleResume), .debug(.saveConfig), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
+            .debug(.toggleFavorite), .debug(.idleResume), .debug(.seek(seconds: 99.7)), .debug(.seek(seconds: 0)),
+            .debug(.knockout(leg: .appleMusicScript, on: false)), .debug(.knockout(leg: .spotifyScript, on: true)),
+            .debug(.knockout(leg: .kasetScript, on: false)), .debug(.saveConfig), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
             .debug(.stall(ms: 1)), .debug(.stall(ms: 2000)),
             .debug(.knockout(leg: .voxScript, on: false)), .debug(.knockout(leg: .systemArtwork, on: true)),
             .debug(.menuBarCenter(center: true, ignoreNotch: true)), .debug(.menuBarCenter(center: false, ignoreNotch: nil)),

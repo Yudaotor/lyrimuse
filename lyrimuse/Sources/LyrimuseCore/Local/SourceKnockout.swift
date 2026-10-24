@@ -8,6 +8,12 @@ public enum SourceKnockout {
     public enum Leg: String, CaseIterable, Sendable {
         /// VOX 的 AppleScript 读数(曲目、位置、当前文件、封面):关掉后当成没授「自动化」权限。
         case voxScript = "vox-script"
+        /// Apple Music 的脚本读数(只勾了它时的主路、焦点被占 / 通道坏了时的第一级):关掉后当成没授「自动化」权限。
+        case appleMusicScript = "apple-music-script"
+        /// Spotify 的脚本读数(焦点被占 / 通道坏了时的第一级):关掉后当成没授「自动化」权限。
+        case spotifyScript = "spotify-script"
+        /// Kaset 的脚本读数(系统那份不对时顶替、焦点被占时的第一级):关掉后当成没授「自动化」权限。
+        case kasetScript = "kaset-script"
         /// VOX 换歌时发的分布式通知(`com.coppertino.Vox.trackChanged`)。
         case voxNotice = "vox-notice"
         /// media-control 事件流(暂停、恢复、换歌的即时信号):关掉后只剩轮询和各播放器自己的通知。
