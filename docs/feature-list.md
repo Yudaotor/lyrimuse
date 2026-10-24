@@ -345,7 +345,7 @@ The mini window can disappear while paused or idle and come back when playback s
 
 ### Animated artwork
 
-Albums with animated artwork on Apple Music, QQ Music or NetEase Cloud Music move in the full-size lyrics window too. It pauses in Low Power Mode or with Reduce Motion on. You can see how much space the downloaded animations take and clear them.
+Albums with animated artwork on Apple Music, QQ Music or NetEase Cloud Music move in the full-size lyrics window too, as do albums whose animated artwork Kugou Music saved when you played them there. It pauses in Low Power Mode or with Reduce Motion on. You can see how much space the downloaded animations take and clear them.
 
 - On by default
 - Settings: Lyrics Display › Lyrics Window › Artwork › Animated Artwork

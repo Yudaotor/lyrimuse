@@ -149,26 +149,26 @@ func neteaseMotionCoverUnasked(e enrichEntry) bool {
 	return !asked
 }
 
-// motionCoverFallbackUnasked:QQ、网易云两支里有一支对这条还没问过(见 qqMotionCoverUnasked、neteaseMotionCoverUnasked)。
+// motionCoverFallbackUnasked:QQ、网易云两支里有一支对这条还没问过(见 qqMotionCoverUnasked、neteaseMotionCoverUnasked),
+// 或者酷狗本机后来有了这张专辑的动态封面(kugouMotionCoverUnasked)。
 func motionCoverFallbackUnasked(e enrichEntry) bool {
-	return qqMotionCoverUnasked(e) || neteaseMotionCoverUnasked(e)
+	return qqMotionCoverUnasked(e) || neteaseMotionCoverUnasked(e) || kugouMotionCoverUnasked(e)
 }
 
 // motionVerdictFromNetease:Apple、QQ 两支都没给出动态封面时按网易云歌曲再核,返回有没有定论(同 motionVerdictFromAlbum)。
-// checked:前面那两支核出了「没有」(而不是根本没有可核的东西)—— 这边也没有歌曲 id 时,前者记「核过、没有」,后者整组清掉。
+// 网易云这边也没给出(没有歌曲 id、没有动态封面)时看酷狗本机那份(motionVerdictFromKugou)。
+// checked:前面那两支核出了「没有」(而不是根本没有可核的东西),原样交给酷狗那支。
 func (e *enrichEntry) motionVerdictFromNetease(ctx context.Context, checked bool) bool {
 	id := neteaseSongIDFromURL(e.NeteaseURL)
 	if !neteaseSongIDShape.MatchString(id) {
-		if checked {
-			e.recordMotionVerdict("", "", false)
-		} else {
-			e.clearMotionVerdict()
-		}
-		return true
+		return e.motionVerdictFromKugou(checked)
 	}
 	master, done := neteaseMotionCoverFor(ctx, id)
 	if !done {
 		return false
+	}
+	if master == "" {
+		return e.motionVerdictFromKugou(true)
 	}
 	e.recordMotionVerdict(master, "", false)
 	return true

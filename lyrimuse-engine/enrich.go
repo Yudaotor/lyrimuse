@@ -1108,7 +1108,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			go upgradeSmallDeviceCover(withPlayerCover(context.Background(), playerCover), key, e.CoverURL,
 				artist, title, album, durationSecs)
 		} else if (motionVerdictStale(e) || motionCoverFallbackUnasked(e)) && !motionRecheckTried[key] && !enrichInflight[key] {
-			// 动态封面结论是对着别的封面核的(封面后来换过),或者核出「没有」时 QQ / 网易云那支还没问过:按现在这张重核。每个条目每次
+			// 动态封面结论是对着别的封面核的(封面后来换过),或者核出「没有」时 QQ / 网易云那支还没问过、酷狗本机后来有了:按现在这张重核。每个条目每次
 			// 启动只试一次,没查成的留给后台补封面那一遍。
 			motionRecheckTried[key] = true
 			enrichInflight[key] = true
@@ -4067,7 +4067,7 @@ func (e *enrichEntry) fillMotionCover(ctx context.Context, artist, title, album 
 // 专辑 ID 两条来路,按可信度排:① 已校验的目录锚点(App 状态里的目录曲目 ID → iTunes lookup),只有 Apple Music 播的目录
 // 曲目才有;② 这条记下的 apple_music_url 里那个 ID,覆盖所有播放器,但来自文字匹配,可能指向另一个版本的专辑(03 章决策 16)。
 // ② 敢用全靠两道图像校验(首帧比对 / 专辑身份核验,并联,见 decideMotionCover):错的专辑给出的首帧和官方封面跟这条的
-// 封面都不会是同一张。Apple 这边没有给出动态封面时再按 QQ 专辑、网易云歌曲核(motionVerdictFromQQ);都没有可以核的东西时整组清掉。
+// 封面都不会是同一张。Apple 这边没有给出动态封面时再按 QQ 专辑、网易云歌曲、酷狗本机那份核(motionVerdictFromQQ);都没有可以核的东西时整组清掉。
 func (e *enrichEntry) motionVerdictFromAlbum(ctx context.Context, artist, title, album string) bool {
 	albumID, viaAnchor := appleCatalogAlbumIDFor(artist, title, album)
 	if !viaAnchor {

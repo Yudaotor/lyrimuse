@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -306,5 +307,134 @@ func TestNeteaseGuestFileSharedWithApp(t *testing.T) {
 	}
 	if !containsCode(string(core), `public static let guestFileName = "`+neteaseGuestFileName+`"`) {
 		t.Errorf("App 那份的文件名不是 %s", neteaseGuestFileName)
+	}
+}
+
+// 酷狗本机那份:前面几支都没给出时,这条记着的酷狗专辑 id 在本机有动态封面视频就拷进缓存目录、记 `kgmv:<id>`,身份交给 App 核;
+// 没有文件、id 形状不对照旧记「没有」或整组清掉;拷不过来时没有定论。文件后来才有、拷过来的被删了,播到时值得补核。
+func TestMotionVerdictFromKugou(t *testing.T) {
+	dir := t.TempDir()
+	old := kugouDynamicArtworkOverride
+	kugouDynamicArtworkOverride = dir
+	t.Cleanup(func() { kugouDynamicArtworkOverride = old })
+	caches := t.TempDir()
+	t.Setenv("LYRIMUSE_CACHE_DIR", caches)
+	video := []byte("kugou-mp4")
+	if err := os.WriteFile(filepath.Join(dir, "969063.mp4"), video, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "2654569.jpg"), []byte("jpg"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// id 形状不核的话,「../escape」会读到酷狗那个目录外面去。
+	if err := os.WriteFile(filepath.Join(filepath.Dir(dir), "escape.mp4"), video, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	staged := filepath.Join(caches, "kugou-motion-covers", "969063.mp4")
+	ids := func(id string) map[string]string { return map[string]string{kugouMusicBundleID: id} }
+	ctx := context.Background()
+
+	e := enrichEntry{CoverURL: "c", PlayerAlbumIDs: ids("969063")}
+	if !e.motionVerdictFromNetease(ctx, true) || e.MotionCoverURL != "kgmv:969063" || e.MotionCoverIdentityVerified ||
+		!e.MotionCoverChecked || e.MotionCoverFor != "c" {
+		t.Errorf("没有网易云 id、酷狗本机有: %+v", e)
+	}
+	if b, err := os.ReadFile(staged); err != nil || string(b) != string(video) {
+		t.Errorf("拷进缓存目录: %q %v", b, err)
+	}
+	none := `{"code":200,"data":{}}`
+	withNeteaseMotion(t, "186016", &none)
+	e = enrichEntry{CoverURL: "c", NeteaseURL: "https://music.163.com/song?id=186016", PlayerAlbumIDs: ids("969063")}
+	if !e.motionVerdictFromNetease(ctx, false) || e.MotionCoverURL != "kgmv:969063" {
+		t.Errorf("网易云没有时转到酷狗: %+v", e)
+	}
+	e = enrichEntry{CoverURL: "c", PlayerAlbumIDs: ids("969063")}
+	if !e.motionVerdictFromQQ(ctx, false) || e.MotionCoverURL != "kgmv:969063" {
+		t.Errorf("一路转到酷狗: %+v", e)
+	}
+	for name, id := range map[string]string{"只有首帧没有视频": "2654569", "本机没有": "1", "id 形状不对": "../escape"} {
+		e = enrichEntry{CoverURL: "c", MotionCoverURL: "old", PlayerAlbumIDs: ids(id)}
+		if !e.motionVerdictFromKugou(true) || e.MotionCoverURL != "" || !e.MotionCoverChecked {
+			t.Errorf("%s:前面核过没有,记没有 %+v", name, e)
+		}
+	}
+	e = enrichEntry{CoverURL: "c", MotionCoverURL: "old", MotionCoverChecked: true}
+	if !e.motionVerdictFromKugou(false) || e.MotionCoverURL != "" || e.MotionCoverChecked {
+		t.Errorf("没有 id、前面也没核:整组清掉 %+v", e)
+	}
+
+	base := enrichEntry{CoverURL: "c", MotionCoverChecked: true, MotionCoverFor: "c", PlayerAlbumIDs: ids("969063")}
+	if !kugouMotionCoverUnasked(base) || !motionCoverFallbackUnasked(base) {
+		t.Error("核过没有、酷狗本机后来有了:补核")
+	}
+	recorded := enrichEntry{CoverURL: "c", MotionCoverChecked: true, MotionCoverFor: "c", MotionCoverURL: "kgmv:969063",
+		PlayerAlbumIDs: ids("969063")}
+	for name, e := range map[string]enrichEntry{
+		"拷过来的还在": recorded,
+		"别家的地址":  {CoverURL: "c", MotionCoverChecked: true, MotionCoverFor: "c", MotionCoverURL: "x", PlayerAlbumIDs: ids("969063")},
+		"没核过":    {CoverURL: "c", PlayerAlbumIDs: ids("969063")},
+		"对着别的封面": {CoverURL: "c", MotionCoverChecked: true, MotionCoverFor: "old", PlayerAlbumIDs: ids("969063")},
+		"本机没有":   {CoverURL: "c", MotionCoverChecked: true, MotionCoverFor: "c", PlayerAlbumIDs: ids("2654569")},
+	} {
+		if kugouMotionCoverUnasked(e) {
+			t.Errorf("%s 不该补核", name)
+		}
+	}
+	if err := os.Remove(staged); err != nil {
+		t.Fatal(err)
+	}
+	if !kugouMotionCoverUnasked(recorded) {
+		t.Error("拷过来的被删了:补核、再拷一次")
+	}
+	if !recorded.fillMotionCover(ctx, "", "", "") || recorded.MotionCoverURL != "kgmv:969063" {
+		t.Errorf("补核记回酷狗那份: %+v", recorded)
+	}
+	if _, err := os.Stat(staged); err != nil {
+		t.Errorf("补核时再拷一次: %v", err)
+	}
+
+	kugouDynamicArtworkOverride = filepath.Join(dir, "missing")
+	e = enrichEntry{CoverURL: "c", PlayerAlbumIDs: ids("969063")}
+	if !e.motionVerdictFromKugou(true) || e.MotionCoverURL != "" {
+		t.Errorf("酷狗那个目录读不了当没有: %+v", e)
+	}
+}
+
+// 拷过来的多于上限时按修改时间删最旧的。
+func TestPruneKugouMotionStage(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now()
+	for i, n := range []string{"1.mp4", "2.mp4", "3.mp4", "note.txt"} {
+		p := filepath.Join(dir, n)
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		mod := now.Add(time.Duration(i) * time.Minute)
+		if err := os.Chtimes(p, mod, mod); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pruneKugouMotionStage(dir, 2)
+	var left []string
+	ents, _ := os.ReadDir(dir)
+	for _, e := range ents {
+		left = append(left, e.Name())
+	}
+	if strings.Join(left, ",") != "2.mp4,3.mp4,note.txt" {
+		t.Errorf("删最旧的那份、别的文件不动: %v", left)
+	}
+}
+
+// 拷过来的目录名、地址前缀跟 App 那边同一份。
+func TestKugouMotionCoverSharedWithApp(t *testing.T) {
+	core, err := os.ReadFile(filepath.Join("..", "lyrimuse", "Sources", "LyrimuseCore", "Local", "KugouMotionCover.swift"))
+	if err != nil {
+		t.Skip("没有 App 源码")
+	}
+	for _, want := range []string{`public static let stageDirName = "` + kugouMotionStageDirName + `"`,
+		`public static let scheme = "` + strings.TrimSuffix(kugouMotionCoverScheme, ":") + `"`} {
+		if !containsCode(string(core), want) {
+			t.Errorf("App 那份缺 %s", want)
+		}
 	}
 }

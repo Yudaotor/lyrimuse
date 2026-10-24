@@ -1276,6 +1276,23 @@ func runCoverArtTests() {
             }
         }
 
+        // 酷狗本机缓存的专辑动态封面(03 章决策 69):`kgmv:<专辑 id>` 读引擎拷进缓存目录的那份,中段帧、首帧有一帧对上封面才用。
+        do {
+            typealias K = KugouMotionCover
+            expectEqual(K.albumID(from: URL(string: "kgmv:969063")!), "969063", "酷狗动态封面: kgmv 地址取出专辑 id")
+            expectEqual([URL(string: "ncmv:969063")!, URL(string: "kgmv:12a")!, URL(string: "kgmv:")!, URL(string: "kgmv:..%2Fa")!]
+                            .map { K.albumID(from: $0) == nil }, [true, true, true, true],
+                        "酷狗动态封面: 别家的、id 形状不对、空的不认")
+            expectEqual(K.stagedFile(albumID: "969063", cachesDir: URL(fileURLWithPath: "/c")).path, "/c/kugou-motion-covers/969063.mp4",
+                        "酷狗动态封面: 读缓存目录里引擎拷过来的那份")
+            let store = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("lyrimuse/MotionCoverStore.swift"), encoding: .utf8)) ?? ""
+            expectEqual(sourceHas(store, "if let albumID = KugouMotionCover.albumID(from: master) {\n return await loadKugou(albumID: albumID, master: master, reference: reference)")
+                            && store.contains("return await storeMedia(data, master: master, reference: reference, label: \"kugou\")")
+                            && store.contains("NeteaseMotionCover.songID(from: master) != nil || KugouMotionCover.albumID(from: master) != nil"), true,
+                        "酷狗动态封面(契约): 读本机文件、跟下载来的走同一道终审,中段帧对不上再比首帧")
+        }
+
         // 网易云歌曲动态封面(03 章决策 68):`ncmv:<id>` 下载时带游客身份现换 mp4 地址;身份跟引擎共用一份文件,被拒就换一个再问。
         do {
             typealias N = NeteaseMotionCover
@@ -1314,7 +1331,7 @@ func runCoverArtTests() {
             expectEqual(storeSource.contains("if let songID = NeteaseMotionCover.songID(from: master) {"), true,
                         "网易云动态封面: 下载按 ncmv 地址分到网易云那条")
             expectEqual(sourceHas(storeSource, "for fraction in firstFrameToo ? [0.5, 0] : [0.5] {")
-                        && sourceHas(storeSource, "NeteaseMotionCover.songID(from: master) != nil\n    }")
+                        && sourceHas(storeSource, "NeteaseMotionCover.songID(from: master) != nil || KugouMotionCover.albumID(from: master) != nil\n    }")
                         && storeSource.components(separatedBy: "firstFrameToo: Self.comparesFirstFrameToo(master)").count == 3, true,
                         "网易云动态封面: 终审中段帧对不上再比第一帧,下载和盘上那份两处都按它")
 

@@ -7,7 +7,8 @@ import OSLog
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "motion-cover")
 
 /// 动态封面的**下载与落盘**:Apple Music 的(HLS master),以及 QQ 音乐的专辑动态封面(`qqmv:<vid>`)、网易云的歌曲动态封面
-/// (`ncmv:<歌曲 id>`),后两种下载时现换 mp4 地址(见 `QQMotionCover`、`NeteaseMotionCover`)。
+/// (`ncmv:<歌曲 id>`),后两种下载时现换 mp4 地址(见 `QQMotionCover`、`NeteaseMotionCover`);酷狗的(`kgmv:<专辑 id>`)
+/// 读引擎从酷狗本机拷过来的那份(`KugouMotionCover`)。
 ///
 /// 分工:发现在引擎(`motioncover.go`、`motioncoverqq.go`,把地址记进 enrich 缓存)、清单推导在 Core
 /// (`MotionCoverManifest`,纯函数、selftest 钉着)、播放在 `MotionCoverLayer`,这一层只干三件事:
@@ -201,6 +202,9 @@ final class MotionCoverStore {
         if let songID = NeteaseMotionCover.songID(from: master) {
             return await downloadNetease(songID: songID, master: master, reference: reference)
         }
+        if let albumID = KugouMotionCover.albumID(from: master) {
+            return await loadKugou(albumID: albumID, master: master, reference: reference)
+        }
         // ① master → 按顺序排好的候选档位。
         let variants: [MotionCoverManifest.Variant]
         do {
@@ -263,6 +267,16 @@ final class MotionCoverStore {
         }
     }
 
+    /// 酷狗的专辑动态封面:引擎从酷狗本机拷过来的那份,直接读文件。读不到(被删旧的删掉了,引擎下次播到时再拷)按资源取不到算。
+    private nonisolated func loadKugou(albumID: String, master: URL,
+                                       reference: CoverFingerprint.Reference?) async -> DownloadOutcome {
+        guard let data = FileIO.read(KugouMotionCover.stagedFile(albumID: albumID)) else {
+            logger.notice("motion cover: kugou local video unreadable")
+            return .unavailable
+        }
+        return await storeMedia(data, master: master, reference: reference, label: "kugou")
+    }
+
     /// 下一条候选:variant 清单 → 承载全部分片的单文件,再交给 `fetchMedia`。
     private nonisolated func fetch(_ picked: MotionCoverManifest.Variant, master: URL,
                                    reference: CoverFingerprint.Reference?) async -> DownloadOutcome {
@@ -285,18 +299,29 @@ final class MotionCoverStore {
         }
     }
 
-    /// 一个 mp4 → 临时文件 → 终审(或至少解得出帧)→ 落盘(按 master 定文件名)。`label` 只进日志。
+    /// 一个 mp4 → 整份下下来,交给 `storeMedia`。`label` 只进日志。
     private nonisolated func fetchMedia(_ mediaURL: URL, master: URL, reference: CoverFingerprint.Reference?,
                                         label codec: String) async -> DownloadOutcome {
         do {
-            // ③ 整份下下来,先落到临时文件——终审(④)要用 AVAsset 读它,得是个真实文件路径,
-            // 不是内存里的 Data。落地在系统临时目录,不是最终缓存位置:没通过终审就地删掉,
-            // 通过了再原子改名搬进 `directory`(⑤ store)。
+            // ③ 整份下下来。
             let (data, response) = try await Self.session.data(from: mediaURL)
             if let http = response as? HTTPURLResponse, http.statusCode != 200 {
                 logger.notice("motion cover: \(codec, privacy: .public) media http \(http.statusCode, privacy: .public)")
                 return http.statusCode == 429 || http.statusCode >= 500 ? .transient : .unavailable
             }
+            return await storeMedia(data, master: master, reference: reference, label: codec)
+        } catch {
+            logger.notice("motion cover: \(codec, privacy: .public) fetch failed — \(error.localizedDescription, privacy: .public)")
+            return error is URLError ? .transient : .unavailable
+        }
+    }
+
+    /// 一份 mp4 → 临时文件 → 终审(或至少解得出帧)→ 落盘(按 master 定文件名)。先落到临时文件:终审(④)要用 AVAsset 读它,
+    /// 得是个真实文件路径,不是内存里的 Data。落地在系统临时目录,不是最终缓存位置:没通过终审就地删掉,通过了再原子改名搬进
+    /// `directory`(⑤ store)。`label` 只进日志。
+    private nonisolated func storeMedia(_ data: Data, master: URL, reference: CoverFingerprint.Reference?,
+                                        label codec: String) async -> DownloadOutcome {
+        do {
             guard Self.looksLikeMP4(data) else {
                 logger.notice("motion cover: \(codec, privacy: .public) payload is not an mp4 (\(data.count, privacy: .public) bytes)")
                 return .unavailable
@@ -333,8 +358,8 @@ final class MotionCoverStore {
             await MainActor.run { self.pruneIfNeeded() }
             return .ready(final)
         } catch {
-            logger.notice("motion cover: \(codec, privacy: .public) fetch failed — \(error.localizedDescription, privacy: .public)")
-            return error is URLError ? .transient : .unavailable
+            logger.notice("motion cover: \(codec, privacy: .public) store failed — \(error.localizedDescription, privacy: .public)")
+            return .unavailable
         }
     }
 
@@ -380,7 +405,7 @@ final class MotionCoverStore {
         for fraction in firstFrameToo ? [0.5, 0] : [0.5] {
             let instant = CMTime(seconds: duration.seconds * fraction, preferredTimescale: duration.timescale)
             guard let raw = try? await generator.image(at: instant).image else { return .undecidable }
-            // 竖幅的(QQ 动态封面)比中间那块正方形:卡上铺满裁中间,能看到的就是它。
+            // 竖幅的(QQ、酷狗动态封面)比中间那块正方形:卡上铺满裁中间,能看到的就是它。
             let (distance, same) = CoverFingerprint.matches(CoverFingerprint.centerSquare(raw), reference: reference)
             if same { return .pass }
             closest = min(closest, distance)
@@ -389,10 +414,10 @@ final class MotionCoverStore {
         return .mismatch
     }
 
-    /// 网易云的动态封面中段帧对不上时再比第一帧:它的正式动画常是首尾两帧就是封面、中间换成别的画面。Apple 的照旧只比中段帧
-    /// (它的片头常有揭幕特效,第一帧跟封面不像)。
+    /// 网易云的动态封面中段帧对不上时再比第一帧:它的正式动画常是首尾两帧就是封面、中间换成别的画面;酷狗的同理(动画常在中段
+    /// 推近)。Apple 的照旧只比中段帧(它的片头常有揭幕特效,第一帧跟封面不像)。
     private nonisolated static func comparesFirstFrameToo(_ master: URL) -> Bool {
-        NeteaseMotionCover.songID(from: master) != nil
+        NeteaseMotionCover.songID(from: master) != nil || KugouMotionCover.albumID(from: master) != nil
     }
 
     /// 清单正文。429 / 5xx 抛 `URLError`(调用方按网络层失败、退避重试),别的非 200 按资源取不到。
