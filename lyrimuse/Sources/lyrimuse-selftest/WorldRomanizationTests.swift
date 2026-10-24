@@ -219,6 +219,8 @@ func checkWorldRomanization() {
     expectEqual(R.patched("ī ya ー yahayaha") { _ in "x" }, "ī ya ー yahayaha", "残留: 单独的长音记号是源写的,不算")
     expectEqual(R.patched("habibi حبيبي") { _ in "x" }, "habibi حبيبي", "残留: 阿拉伯字母本地不现算,不算")
     expectEqual(R.patched("(എടാ മോനെ)") { $0 == "എടാ" ? "eṭā" : "mōne" }, "(eṭā mōne)", "残留: 印度系的元音符号跟着字母走")
+    expectEqual(R.patched("ē iśka\u{0A3C} haka\u{0A3C}īka\u{0A3C}ī jō") { _ in "x" }, "ē iśka hakaīkaī jō",
+                "残留: 挂在拉丁字母后面的附加符号去掉")
     expectEqual(R.patched("a ラーメン b") { $0 == "ラーメン" ? "rāmen" : nil }, "a ramen b", "残留: 片段里的长音跟着片段走")
 
     let jaRoma = "[00:01.00]tsukame ! egai ta 梦 o\n[00:02.00]sora"

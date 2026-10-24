@@ -34,7 +34,7 @@ public enum SourceReadingResidue {
 
     /// `reading` 给一段残留的读音,给不出(开关关着、现算不了)返回 nil,那一段照原样留着。
     /// 源那一行有拉丁字母、除残留以外全是 ASCII(不标声调的拼音、不标长音的罗马字)时,补进去的读音也去掉附加符号。
-    /// 补进去的读音跟前后的字母、数字之间隔一个空格。
+    /// 补进去的读音跟前后的字母、数字之间隔一个空格。只有附加符号的一段(挂在拉丁字母后面的点、元音符号)没有读音,去掉。
     public static func patched(_ source: String, reading: (String) -> String?) -> String {
         let scalars = Array(source.unicodeScalars)
         guard scalars.contains(where: isResidue) else { return source }
@@ -52,6 +52,10 @@ public enum SourceReadingResidue {
             while j < scalars.count, continuesResidue(scalars[j]) { j += 1 }
             var run = String.UnicodeScalarView()
             run.append(contentsOf: scalars[i..<j])
+            if run.allSatisfy(isMark) {
+                i = j
+                continue
+            }
             let original = String(run)
             if var latin = reading(original)?.trimmingCharacters(in: .whitespaces), !latin.isEmpty,
                 !containsResidue(latin)
@@ -66,6 +70,13 @@ public enum SourceReadingResidue {
             i = j
         }
         return String(out)
+    }
+
+    private static func isMark(_ s: Unicode.Scalar) -> Bool {
+        switch s.properties.generalCategory {
+        case .nonspacingMark, .spacingMark, .enclosingMark: return true
+        default: return false
+        }
     }
 
     private static func isWordCharacter(_ s: Unicode.Scalar) -> Bool {
