@@ -43,6 +43,15 @@ public enum NotchWidthBounds {
         return max(0, (earWidth - barsWidth - cardPadding + shoulder) / 2)
     }
 
+    /// 顶行(两只耳朵)两侧的内边距。非展开态是 `cardPadding`;展开态收到 `contentInset`(下面那一列内容 —— 曲目信息头部、
+    /// 歌词、进度条、控制键 —— 的左右边界),左耳的左沿、右耳的右沿跟它们对齐。展开宽比稳态宽多出来的不够两侧各收这一份时,
+    /// 只收多出来的那一半:耳朵在展开时不比稳态窄(稳态刚好装下的模块展开后照样装得下),两值相等时跟稳态一样。见 05 章决策 96。
+    public static func topRowPadding(expanded: Bool, steadyWidth: CGFloat, expandedWidth: CGFloat,
+                                     cardPadding: CGFloat, contentInset: CGFloat) -> CGFloat {
+        guard expanded else { return cardPadding }
+        return cardPadding + min(max(0, contentInset - cardPadding), max(0, (expandedWidth - steadyWidth) / 2))
+    }
+
     /// 展开态卡片的**真实**宽度:展开设定值和稳态真实宽取大者。
     ///
     /// `steady` 传的是已经过耳朵下限的稳态真实宽(`NotchLyricsWindowController.contentWidth` 的结果),

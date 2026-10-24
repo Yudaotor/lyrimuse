@@ -1130,14 +1130,15 @@ struct NotchEditorStage: View {
 
     private var cardHotspots: [CardHotspot] {
         let width = cardWidth
-        let earWidth = max(0, (width - chrome.notchWidth - NotchMetrics.cardHorizontalPadding * 2) / 2)
+        let padding = chrome.topRowPadding
+        let earWidth = max(0, (width - chrome.notchWidth - padding * 2) / 2)
         let top = chrome.contentTopInset
         var spots: [CardHotspot] = [
             CardHotspot(kind: .leftEar,
-                        rects: [CGRect(x: NotchMetrics.cardHorizontalPadding, y: 0, width: earWidth, height: top)],
+                        rects: [CGRect(x: padding, y: 0, width: earWidth, height: top)],
                         target: .leftEar, title: L10n.t("左耳"), arrowEdge: .leading),
             CardHotspot(kind: .rightEar,
-                        rects: [CGRect(x: width - NotchMetrics.cardHorizontalPadding - earWidth, y: 0,
+                        rects: [CGRect(x: width - padding - earWidth, y: 0,
                                        width: earWidth, height: top)],
                         target: .rightEar, title: L10n.t("右耳"), arrowEdge: .trailing),
         ]

@@ -324,6 +324,15 @@ func runNotchTests() {
                     "宽度对: 老用户稳态调到过 420、展开还是默认 360 → hover 不变窄也不多长")
         expectEqual(B.expandedWidth(steady: 360, expandedSetting: 360), 360,
                     "宽度对: 两值相等 = 展开不加宽(升级前的观感)")
+        // 展开态顶行收到下面那一列内容的边界(16pt),左耳左沿、右耳右沿跟歌词 / 进度条对齐;展开宽不够时只收多出来的一半,耳朵不比稳态窄。
+        expectEqual(B.topRowPadding(expanded: false, steadyWidth: 256, expandedWidth: 468, cardPadding: 10, contentInset: 16), 10,
+                    "顶行边距: 稳态 / 收起照旧 10pt")
+        expectEqual(B.topRowPadding(expanded: true, steadyWidth: 256, expandedWidth: 468, cardPadding: 10, contentInset: 16), 16,
+                    "顶行边距: 展开宽够时收到内容那一列的 16pt")
+        expectEqual(B.topRowPadding(expanded: true, steadyWidth: 360, expandedWidth: 366, cardPadding: 10, contentInset: 16), 13,
+                    "顶行边距: 展开只宽 6pt 时两侧各收 3pt,耳宽跟稳态一样")
+        expectEqual(B.topRowPadding(expanded: true, steadyWidth: 360, expandedWidth: 360, cardPadding: 10, contentInset: 16), 10,
+                    "顶行边距: 两值相等时展开跟稳态一样")
         expectEqual(B.normalized(steady: 400, expanded: 360) == (400, 400), true,
                     "宽度对: 稳态拖过展开,落盘前把展开顶上去")
         expectEqual(B.normalized(steady: 300, expanded: 360) == (300, 360), true,
@@ -1080,6 +1089,11 @@ func runNotchTests() {
             // 四处外形都从 chrome 的 cardOutline + NotchCornerLive 拼同一个形状。
             expectEqual(liveSrc.contains(".card(notchHeight: notchHeight, corner: corner(live))"), true, "外轮廓契约: 外形统一由 NotchCardOutline 拼成 .card")
             expectEqual(v.contains("content.clipShape(outline.shape(live))"), true, "外轮廓契约: 卡片自己那道裁剪用 .card")
+            expectEqual(sourceHas(v, "let earWidth = max(0, (proxy.size.width - controller.notchWidth\n - controller.topRowPadding * 2) / 2)")
+                        && v.contains(".padding(.horizontal, controller.topRowPadding)")
+                        && v.contains("cardPadding: controller.topRowPadding,")
+                        && sourceHas(stageSrc, "let padding = chrome.topRowPadding\n let earWidth = max(0, (width - chrome.notchWidth - padding * 2) / 2)"), true,
+                        "顶行边距契约: 顶行的 padding、耳宽公式、音浪居中、编辑台耳朵热区读同一个 topRowPadding")
             expectEqual(v.contains("NotchCardClip(enabled: !hostClipsCard, outline: controller.cardOutline)"), true,
                         "外轮廓契约: 卡片裁剪的肩膀按这块屏的刘海高度、圆角按设置")
             expectEqual(v.contains("NotchCardOutlineReader(outline: controller.cardOutline) { $0.fill(playback.notchCardStyle.fill) }"), true,

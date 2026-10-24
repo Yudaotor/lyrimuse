@@ -629,6 +629,9 @@ enum NotchMetrics {
     /// 这是单侧值。三处按它算:那两句 padding、耳宽公式 `(卡片宽 − 刘海宽 − 2×它) / 2`、以及宽度下限
     /// `NotchLyricsWindowController.contentWidth`。下限要跟着耳朵配置现算,各写一份字面量必然漂。
     static let cardHorizontalPadding: CGFloat = 10
+    /// 展开态那一列内容(曲目信息头部、歌词行 / 多行歌词、进度条、控制键)的左右内边距。展开态顶行也收到这里,两只耳朵的外沿跟它们
+    /// 对齐(`NotchChromeSource.topRowPadding`)。
+    static let expandedContentInset: CGFloat = 16
     /// 耳朵里「可配模块」与外缘那簇音浪之间的间距(音浪贴哪只耳朵可配,两只耳朵都用得到)。同样要进宽度下限的账(见 `minEarWidth`)。
     static let earWaveSpacing: CGFloat = 5
     /// 耳朵里那枚封面的边长(收起态右耳那枚、稳态耳朵配成「封面」时那枚,同一档)。
@@ -859,6 +862,14 @@ extension NotchChromeSource {
         return height > 0 ? height + NotchMetrics.trackInfoTopSpacing + NotchMetrics.trackInfoSpacing : 0
     }
 
+    /// 顶行两侧此刻的内边距:稳态 / 收起 `cardHorizontalPadding`,展开态收到 `expandedContentInset`(展开宽够时),规则见
+    /// `NotchWidthBounds.topRowPadding`。顶行的 padding、耳宽公式、编辑台的耳朵热区都读它。
+    var topRowPadding: CGFloat {
+        NotchWidthBounds.topRowPadding(expanded: isExpanded, steadyWidth: steadyCardWidth, expandedWidth: expandedCardWidth,
+                                       cardPadding: NotchMetrics.cardHorizontalPadding,
+                                       contentInset: NotchMetrics.expandedContentInset)
+    }
+
     /// 卡片外形要的几何(两个圆角设置另由 `NotchCornerLive` 给)。卡片自裁、纯色底、出场裁剪、编辑台虚线框四处都传这一个。
     var cardOutline: NotchCardOutline {
         NotchCardOutline(notchHeight: contentTopInset, collapsedHeight: cardHeight(expanded: false),
@@ -959,7 +970,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 的底部圆角才会显示为直角(圆角计算本身没错,只是形状宽度比窗口多算了一截,
             // 超出边界的部分被窗口硬裁掉,裁到的正好是圆弧那一小段)。
             let earWidth = max(0, (proxy.size.width - controller.notchWidth
-                                   - NotchMetrics.cardHorizontalPadding * 2) / 2)
+                                   - controller.topRowPadding * 2) / 2)
             ZStack(alignment: .top) {
                 backgroundLayer(size: proxy.size)
                 // 这几种时候铺一层纯黑盖住卡片样式自己的底,底色只剩"像不像刘海"一个标准:
@@ -1280,7 +1291,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         let soloEqualizerRight = equalizerOnRight && rightModule == .none
         let soloInset = NotchWidthBounds.soloEqualizerInset(
             earWidth: earWidth, barsWidth: EqualizerBars.width,
-            cardPadding: NotchMetrics.cardHorizontalPadding,
+            cardPadding: controller.topRowPadding,
             shoulder: NotchOutline.shoulderRadius(notchHeight: controller.contentTopInset),
             expanded: controller.isExpanded,
             atMinimumWidth: controller.isCardAtMinimumWidth)
@@ -1346,7 +1357,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             .padding(.leading, NotchMetrics.earNotchInset) // 理由同左耳,见 earNotchInset
             .frame(width: earWidth)
         }
-        .padding(.horizontal, NotchMetrics.cardHorizontalPadding)
+        // 展开态收到跟下面那一列内容同一条边界(见 topRowPadding),跟卡片同一条弹簧过去。
+        .padding(.horizontal, controller.topRowPadding)
     }
 
     // MARK: - 耳朵里的可配模块
@@ -2369,9 +2381,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 .modifier(QuickActionTooltipOverlay(hovered: hoveredQuickAction,
                                                     shown: $shownQuickActionTooltip,
                                                     tint: accentOrWhite, edge: .bottom))
-                // 左内边距跟下面歌词行的首字对齐,不跟上面 topRow 对齐:跟 lyricRowContent/expandedContent 同一个 16pt(那两处也是这个
-                // 字面量,都在描述"歌词那一列文字的左边界")。跟 topRow 的 NotchMetrics.cardHorizontalPadding(10pt)差 6pt,是有意的。
-                .padding(.horizontal, 16)
+                // 左右内边距是展开态那一列内容的边界(歌词首字、进度条、控制键同一条),展开态的顶行也收到这里(topRowPadding)。
+                .padding(.horizontal, NotchMetrics.expandedContentInset)
                 // 顶部间距:头部紧挨在 topRow 下面,没有它标题首行会贴到上面边。这份间距已经在 `expandedTrackInfoHeaderHeight`/
                 // `NotchExpandedMetrics.height` 的高度算术里算过(`trackInfoSpacing * 2`,一份在上一份在下),这里只是把"上面那份"
                 // 实现成看得见的留白;`.frame(alignment: .top)` 会把这段 padding 之后的内容继续钉在分配到的那块高度顶部。
