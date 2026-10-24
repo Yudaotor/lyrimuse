@@ -663,7 +663,7 @@ func runNotchTests() {
             expectEqual(v.contains(".overlay(Color.black.opacity(overlayOpacity))")
                             && !v.contains(".overlay(Color.black.opacity(LocalPlaybackSource.notchCoverArtOverlayOpacity))"), true,
                         "封面背景契约: 每层的黑色压暗用传进来的值,不写死固定常量(05 章决策 84)")
-            expectEqual(sourceHas(v, "case .solidBlack, .coverArt:\n            return AnyShapeStyle(Color.black)"), true,
+            expectEqual(sourceHas(v, "case .solidBlack, .coverArt:\n Color.black\n case .frostedGlass:"), true,
                         "封面背景契约: 跟随封面没有封面时是纯黑,跟机器刘海融成一块")
             expectEqual(v.contains("case .darkGradient, .coverArt:"), false, "封面背景契约: 没有封面时不再退回深色渐变")
             expectEqual(v.contains(".animation(.easeInOut(duration: 0.5), value: playback.blurredArtworkImage)"), false,
@@ -1102,8 +1102,9 @@ func runNotchTests() {
                         "顶行边距契约: 顶行的 padding、耳宽公式、音浪居中、编辑台耳朵热区读同一个 topRowPadding")
             expectEqual(v.contains("NotchCardClip(enabled: !hostClipsCard, outline: controller.cardOutline)"), true,
                         "外轮廓契约: 卡片裁剪的肩膀按这块屏的刘海高度、圆角按设置")
-            expectEqual(v.contains("NotchCardOutlineReader(outline: controller.cardOutline) { $0.fill(playback.notchCardStyle.fill) }"), true,
-                        "外轮廓契约: 纯色底用 .card")
+            expectEqual(v.contains("        } else {\n            playback.notchCardStyle.backdrop\n")
+                        && !v.contains("$0.fill(playback.notchCardStyle"), true,
+                        "背景契约: 卡片风格的底是不套形状的整块视图,圆角交给外层裁剪(05 章决策 98)")
             expectEqual(reveal.contains("return NotchHangingShape.card(notchHeight: notchHeight, corner: corner).path(in: visible)"), true,
                         "外轮廓契约: 出场裁剪终态与卡片同形(真窗口里只留这一道)")
             expectEqual(reveal.contains("notchHeight: outline.notchHeight, corner: outline.corner(live))"), true,

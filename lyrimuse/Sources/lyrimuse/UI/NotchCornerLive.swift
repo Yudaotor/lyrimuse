@@ -118,7 +118,7 @@ struct NotchCardOutline: Equatable {
     }
 }
 
-/// 按 `NotchCornerLive` 此刻的两个设置拼出卡片外形交给 `content`(纯色底、编辑台虚线框用)。
+/// 按 `NotchCornerLive` 此刻的两个设置拼出卡片外形交给 `content`(编辑台虚线框用)。
 /// 圆角变时只重算这一小块。
 struct NotchCardOutlineReader<Content: View>: View {
     var outline: NotchCardOutline

@@ -105,7 +105,7 @@ private final class NotchPlayback: ObservableObject {
     /// `.coverArt` 背景在没有封面时退回纯黑是同一种兜底。
     @Published private(set) var accent: Color = .white
     // ---- 来自 AppSettings ----
-    // 灵动岛只读这一项:它既决定卡片背景(见 NotchCardStyle.fill / backgroundLayer),
+    // 灵动岛只读这一项:它既决定卡片背景(见 NotchCardStyle.backdrop / backgroundLayer),
     // 也决定前景取不取封面主色(折进上面的 accent)。
     @Published private(set) var notchCardStyle: NotchCardStyle = .coverArt
     /// 稳态/展开那一行两只耳朵各显示什么(见 NotchEarModule)。
@@ -479,28 +479,29 @@ extension NotchCardStyle {
     }
 
     // .coverArt 的真实渲染(封面模糊图)是在 NotchLyricsView.backgroundLayer 里单独
-    // 处理的(ShapeStyle 表达不了 .blur()/.overlay() 这类 View 修饰符,没法塞进这个
-    // AnyShapeStyle 里),这里给它的返回值只是"没有封面数据时的兜底":纯黑,跟机器刘海
-    // 融成一块。不代表 .coverArt 的实际效果,不要在其它地方依赖这条分支来渲染 .coverArt。
-    var fill: AnyShapeStyle {
+    // 处理的,这里给它的只是"没有封面数据时的兜底":纯黑,跟机器刘海融成一块。不代表
+    // .coverArt 的实际效果,不要在其它地方依赖这条分支来渲染 .coverArt。
+    //
+    // 三种都是不套形状的整块视图,圆角交给外层那道统一的裁剪:形状填充是 CG 路径光栅化,卡片每变一次尺寸
+    // 就重画整卡;纯色、渐变、材质视图尺寸变了只改图层边界(05 章决策 98)。
+    @ViewBuilder
+    var backdrop: some View {
         switch self {
         case .solidBlack, .coverArt:
-            return AnyShapeStyle(Color.black)
+            Color.black
         case .frostedGlass:
-            return AnyShapeStyle(.thickMaterial)
+            Rectangle().fill(.thickMaterial)
         case .darkGradient:
             // 从左上到右下过渡,比纯黑多一点点冷色调层次感,又不像磨砂玻璃那样会透出
             // 桌面背景色。
-            return AnyShapeStyle(
-                LinearGradient(
-                    colors: [
-                        Color(hexWithAlpha: "#1C1A24FF", fallback: .black),
-                        Color(hexWithAlpha: "#14212AFF", fallback: .black),
-                        Color(hexWithAlpha: "#10161CFF", fallback: .black),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+            LinearGradient(
+                colors: [
+                    Color(hexWithAlpha: "#1C1A24FF", fallback: .black),
+                    Color(hexWithAlpha: "#14212AFF", fallback: .black),
+                    Color(hexWithAlpha: "#10161CFF", fallback: .black),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
         }
     }
@@ -1129,11 +1130,11 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     }
 
     // 「跟随封面」背景:跟"歌词窗口"的 artworkBackground(LyricsWindowView.swift)同一套效果(封面整图放大、高斯模糊、压一层
-    // 半透明黑),缩小到灵动岛胶囊尺寸。ShapeStyle(NotchCardStyle.fill)表达不了模糊这类效果,所以 .coverArt 不走"给
-    // NotchHangingShape 填色"这条路,在背景层直接铺 PlaybackCoordinator 预烘焙好的模糊图(`blurredArtworkImage`,烘焙参数见
+    // 半透明黑),缩小到灵动岛胶囊尺寸。模糊图要等烘焙好才有,所以 .coverArt 不走 `NotchCardStyle.backdrop`,
+    // 在背景层直接铺 PlaybackCoordinator 预烘焙好的模糊图(`blurredArtworkImage`,烘焙参数见
     // `rebakeBlurredArtwork`),裁剪边界的约束见 NotchCrossfadeBackdrop 的头注。
     //
-    // 没有封面数据(这首歌还没解析出封面/引擎还没查到/本来就没有)时退回纯黑(`NotchCardStyle.coverArt.fill`),跟机器刘海融成一块。
+    // 没有封面数据(这首歌还没解析出封面/引擎还没查到/本来就没有)时退回纯黑(`NotchCardStyle.coverArt.backdrop`),跟机器刘海融成一块。
     @ViewBuilder
     private func backgroundLayer(size: CGSize) -> some View {
         // 优先用高清替代(highResArtworkImage):系统那份对网易云永远只有 100×100,云盘没匹配上的歌还是灰底音符占位图,缓存里
@@ -1158,7 +1159,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 NotchCrossfadeBackdrop(image: image, size: size, overlayOpacity: playback.backdropOverlayOpacity)
             }
         } else {
-            NotchCardOutlineReader(outline: controller.cardOutline) { $0.fill(playback.notchCardStyle.fill) }
+            playback.notchCardStyle.backdrop
         }
     }
 
