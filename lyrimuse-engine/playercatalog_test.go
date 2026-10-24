@@ -345,7 +345,7 @@ func TestPlayerCatalogWiredIntoTrackEnrichment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"catalogIDs := playerCatalogIDsFor(bundleID, artist, title, album, durationSecs)",
+	for _, want := range []string{"catalogIDs := playerCatalogIDsFor(bundleID, artist, reported.Title, album, durationSecs)",
 		"if applyPlayerCatalogIDsLocked(&e, bundleID, catalogIDs) {"} {
 		if !strings.Contains(string(src), want) {
 			t.Errorf("enrich.go 缺 %q", want)

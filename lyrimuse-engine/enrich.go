@@ -876,8 +876,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	}
 	// Spotify 缓存里现在有没有这首的词:同理放在锁外(记忆 30 秒,见 spotifyLocalLyricsAvailable)。
 	spotifyLyricsAvail := bundleID == spotifyBundleID && spotifyLocalLyricsAvailable(artist, title)
-	// 播放器自己给这首记下的专辑、歌手 id(汽水还有歌曲页):读它本机的数据,放在锁外(见 playercatalog.go)。
-	catalogIDs := playerCatalogIDsFor(bundleID, artist, title, album, durationSecs)
+	// 播放器自己给这首记下的专辑、歌手 id(汽水还有歌曲页):读它本机的数据,放在锁外(见 playercatalog.go)。这条和下面的封面
+	// 按它原样报的歌名比对:它本机记的就是这一份,归一化剥掉的括号(如「(Clean)」)会让它对不上(18 章决策 80)。
+	catalogIDs := playerCatalogIDsFor(bundleID, artist, reported.Title, album, durationSecs)
 	// Amazon Music 曲目页:它的时钟那一拍记下的 ASIN,另一把锁,同样放在锁外取。
 	amazonURL := amazonTrackURLFor(bundleID, artist, title)
 	amazonLyricsAvail := amazonLocalLyricsAvailable(bundleID, artist, title, album)
@@ -885,7 +886,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	localFileLyricsAvail := localFileLyricsAvailable(bundleID, artist, title)
 	youtubeMusicURL := youtubeMusicWatchURL(kasetVideoID)
 	// 播放器自己给这首记下的封面地址:读它本机的数据,同样放在锁外(见 playercover.go)。
-	playerCover := playerCoverURLFor(bundleID, artist, title, album, durationSecs, kkboxInfo)
+	playerCover := playerCoverURLFor(bundleID, artist, reported.Title, album, durationSecs, kkboxInfo)
 	ytmVerdict, ytmSettled := kasetAlbumVerdictFor(kasetVideoID, durationSecs, artist, title)
 	playingSongID := playingSongIDFor(bundleID, anchorLink, catalogIDs)
 	pins, pinContent := lyricsPinSnapshot() // 读文件,拿 enrichMu 之前取

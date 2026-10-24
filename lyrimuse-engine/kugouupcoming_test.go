@@ -317,3 +317,38 @@ func TestKugouPlayingSongFromQueue(t *testing.T) {
 		t.Errorf("播放器封面走酷狗那一支: %q", got)
 	}
 }
+
+// 酷狗记的歌名带「(Clean)」这种归一化会剥掉的括号:这首的专辑 id、专辑图仍按它原样报的歌名在队列里认出来,记进条目。
+func TestTrackEnrichmentReadsKugouIDsByReportedTitle(t *testing.T) {
+	key := enrichKey("Katy Perry、Nicki Minaj", "Swish Swish (Clean)", "Swish Swish")
+	setUpEnrichEditTest(t, map[string]enrichEntry{key: {
+		Lyrics: bt("[00:01.00]line"), LyricsSource: "kugou", LyricsScore: 900, CoverURL: "https://example.invalid/c.jpg",
+		PlayerSongIDs: map[string]string{kugouMusicBundleID: "65176349"},
+	}})
+	writeTestKugouQueue(t, []testKugouSong{
+		{musicName: "Katy Perry、Nicki Minaj - Swish Swish (Clean)", album: "Swish Swish", singers: []string{"Katy Perry", "Nicki Minaj"},
+			seconds: 242.233, extra: map[string]any{"mixId": 65176349, "payAlbumID": 2654569,
+				"albumImgUrl": "http://imge.kugou.com/stdmusic/{size}/20170519/20170519125446468568.jpg"}},
+	})
+	old := kugouNowPlayingOverride
+	kugouNowPlayingOverride = filepath.Join(t.TempDir(), "no-userCurrentPlayList.plist")
+	t.Cleanup(func() { kugouNowPlayingOverride = old })
+	playerCatalogMu.Lock()
+	savedMemo := playerCatalogMemo
+	playerCatalogMemo = map[string]playerCatalogAt{}
+	playerCatalogMu.Unlock()
+	t.Cleanup(func() {
+		playerCatalogMu.Lock()
+		playerCatalogMemo = savedMemo
+		playerCatalogMu.Unlock()
+	})
+
+	trackEnrichment("Katy Perry、Nicki Minaj", "Swish Swish (Clean)", "Swish Swish", kugouMusicBundleID, 242.186, true, false)
+	e, ok := cacheEntry(t, key)
+	if !ok || e.PlayerAlbumIDs[kugouMusicBundleID] != "2654569" {
+		t.Errorf("专辑 id 按原样歌名认出: ok=%v %v", ok, e.PlayerAlbumIDs)
+	}
+	if got := e.PlayerCovers[kugouMusicBundleID]; got != "https://imge.kugou.com/stdmusic/800/20170519/20170519125446468568.jpg" {
+		t.Errorf("专辑图按原样歌名认出: %q", got)
+	}
+}
