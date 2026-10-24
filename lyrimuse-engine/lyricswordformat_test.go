@@ -150,3 +150,59 @@ func TestLyricsWordFormatSuffixes(t *testing.T) {
 		t.Errorf("增强 LRC 的文件要认成 .enhanced.lrc,不能认成 .lrc: %q", lyricsFileSuffixOf("A - B.enhanced.lrc"))
 	}
 }
+
+// TTML 把译文、罗马音挂到逐字各行上:逐行的时间戳跟逐字差两秒也按文字配得上;文字对不上的行不挂。
+func TestLyricsWordTTMLCarriesTranslation(t *testing.T) {
+	in := lyricsWordSampleInput()
+	in.lrc = "[00:03.00]你好吗\n[00:06.00]早了\n[00:10.00]别的行"
+	in.tr = "[00:03.00]How are you\n[00:06.00]Too early\n[00:10.00]Other"
+	in.roma = "[00:03.00]ni hao ma"
+	in.trLang = "en"
+	plain := encodeLyricsWordText(lyricsWordTTML, in)
+	if !strings.Contains(plain, `>吗</span><span ttm:role="x-bg">`) ||
+		!strings.Contains(plain, `<span ttm:role="x-translation" xml:lang="en">How are you</span><span ttm:role="x-roman">ni hao ma</span></p>`) {
+		t.Errorf("第二行(你好吗)要带译文和罗马音: %s", plain)
+	}
+	if !strings.Contains(plain, `>了</span><span ttm:role="x-translation" xml:lang="en">Too early</span></p>`) {
+		t.Errorf("第三行(早了)带译文: %s", plain)
+	}
+	if strings.Contains(plain, "Other") || !strings.Contains(plain, "&amp; go</span></p>") {
+		t.Errorf("对不上的行不挂译文: %s", plain)
+	}
+	r, ok := parseTTMLLyrics(plain, "", false)
+	if !ok || !strings.Contains(r.tr, "How are you") || !strings.Contains(r.roma, "ni hao ma") {
+		t.Errorf("TTML 读回来认得出译文和罗马音: %q / %q", r.tr, r.roma)
+	}
+	if p := decodeLyricsWordText(lyricsWordTTML, plain); lyricsWordTimedLines(p.body)[1] != lyricsWordTimedLines(in.yrc)[1] {
+		t.Errorf("逐字不受译文影响: %q", p.body)
+	}
+}
+
+// 配对:同一句挨着唱两遍,各配各的译文(配过的那行不再配);同一句隔着十秒的不配。
+func TestLyricsWordLineAuxPairing(t *testing.T) {
+	lines := parseYRCDoc("[4000,500](4000,500,0)早了\n[5000,500](5000,500,0)早了\n[30000,500](30000,500,0)走了")
+	aux := lyricsWordLineAux(lines, "[00:06.00]早了\n[00:07.50]早了\n[00:40.00]走了", "[00:06.00]A\n[00:07.50]B\n[00:40.00]C", "")
+	if aux[0][0] != "A" || aux[1][0] != "B" {
+		t.Errorf("挨着的两遍各配各的: %v", aux)
+	}
+	if _, ok := aux[2]; ok {
+		t.Errorf("隔着十秒的不配: %v", aux)
+	}
+	// 译文多写一位毫秒(`[00:04.681]` 对逐行的 `[00:04.68]`),逐字起点又离得远,只能靠逐行那一行配上。
+	aux = lyricsWordLineAux(parseYRCDoc("[2000,500](2000,500,0)Yo this song"), "[00:04.68]Yo this song", "[00:04.681]哟，这首歌", "")
+	if aux[0][0] != "哟，这首歌" {
+		t.Errorf("译文时间戳差 1 毫秒也算逐行那一行: %v", aux)
+	}
+}
+
+// 译文跟着逐字的时间走、配不上逐行的那一行时,按逐字行起点 700 毫秒以内最近的找。
+func TestLyricsWordLineAuxFallsBackToWordTiming(t *testing.T) {
+	lines := parseYRCDoc("[962,4263](962,4263,0)I'm a woman\n[5350,3112](5350,3112,0)Lord knows")
+	aux := lyricsWordLineAux(lines, "[00:00.67]I'm a woman\n[00:04.84]Lord knows", "[00:00.96]我是个女人\n[00:06.20]上帝知道", "")
+	if aux[0][0] != "我是个女人" {
+		t.Errorf("逐行配上了但时间戳对不上逐行,按逐字起点找: %v", aux)
+	}
+	if _, ok := aux[1]; ok {
+		t.Errorf("离逐字起点超过 700 毫秒的不挂: %v", aux)
+	}
+}

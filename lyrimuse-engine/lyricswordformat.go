@@ -93,6 +93,8 @@ type lyricsWordFileInput struct {
 	yrc string
 	// nativeYRC / bg:缓存原样的逐字和背景人声轨,TTML 用 —— 它有背景人声这一项,用不着接回括号。
 	nativeYRC, bg string
+	// lrc / tr / roma / trLang:缓存里的逐行正文、译文、罗马音和译文语言。TTML 把译文、罗马音挂在逐字各行上(lyricsWordLineAux)。
+	lrc, tr, roma, trLang string
 	// durationSecs:整首时长,QRC 的 SaveTime 写它(QQ 音乐本地文件就是这么写的)。
 	durationSecs float64
 }
@@ -335,7 +337,13 @@ func encodeTTMLWordText(in lyricsWordFileInput) string {
 			fmt.Fprintf(&b, "<span begin=\"%s\" end=\"%s\">%s</span>", ttmlClockTime(w.start), ttmlClockTime(w.start+w.dur), ttmlEscape(w.text))
 		}
 	}
-	for _, l := range parseYRCDoc(in.nativeYRC) {
+	lines := parseYRCDoc(in.nativeYRC)
+	aux := lyricsWordLineAux(lines, in.lrc, in.tr, in.roma)
+	langAttr := ""
+	if in.trLang != "" {
+		langAttr = fmt.Sprintf(` xml:lang="%s"`, ttmlEscape(in.trLang))
+	}
+	for i, l := range lines {
 		ws := l.wordsWithLead()
 		if !l.timed || len(ws) == 0 {
 			continue
@@ -346,6 +354,12 @@ func encodeTTMLWordText(in lyricsWordFileInput) string {
 			b.WriteString(`<span ttm:role="x-bg">`)
 			writeSpans(bg)
 			b.WriteString(`</span>`)
+		}
+		if t := aux[i][0]; t != "" {
+			fmt.Fprintf(&b, `<span ttm:role="x-translation"%s>%s</span>`, langAttr, ttmlEscape(t))
+		}
+		if r := aux[i][1]; r != "" {
+			fmt.Fprintf(&b, `<span ttm:role="x-roman">%s</span>`, ttmlEscape(r))
 		}
 		b.WriteString("</p>\n")
 	}
@@ -636,18 +650,22 @@ func lyricsFileRecognized(name string, data []byte) bool {
 
 // lyricsWordFileFormatVersion:各格式写法的版本,算进 lyricsWordFileSource。encode* 改了、同样的缓存会写出不一样的文件时加一,
 // 不然文件状态记录里旧的指纹还对得上,文件不会重写。
-const lyricsWordFileFormatVersion = 1
+const lyricsWordFileFormatVersion = 2
 
-// lyricsWordFileSource:写格式 f 的逐字文件时用的缓存内容的指纹(恒不为 0)。括号背景人声接回的写法(parenBGFileFormVersion)
-// 也算进来:它变了,接回之后的逐字跟着变。
-func lyricsWordFileSource(f lyricsWordFormat, header, source, lrc, yrc, bg string, durationSecs float64) uint32 {
+// lyricsWordFileSource:按 in 写格式 f 的逐字文件时用的缓存内容的指纹(恒不为 0;in.yrc 不算,它由别的几项推出)。
+// 括号背景人声接回的写法(parenBGFileFormVersion)也算进来:它变了,接回之后的逐字跟着变。
+func lyricsWordFileSource(f lyricsWordFormat, header string, in lyricsWordFileInput) uint32 {
 	c := crc32.ChecksumIEEE([]byte{lyricsWordFileFormatVersion, parenBGFileFormVersion})
-	for _, s := range []string{string(f), header, source, lrc, yrc, bg} {
+	parts := []string{string(f), header, in.source, in.lrc, in.nativeYRC, in.bg}
+	if f == lyricsWordTTML {
+		parts = append(parts, in.tr, in.roma, in.trLang)
+	}
+	for _, s := range parts {
 		c = crc32.Update(c, crc32.IEEETable, []byte(s))
 		c = crc32.Update(c, crc32.IEEETable, []byte{0})
 	}
 	if f == lyricsWordQRC {
-		c = crc32.Update(c, crc32.IEEETable, []byte(strconv.Itoa(int(durationSecs+0.5))))
+		c = crc32.Update(c, crc32.IEEETable, []byte(strconv.Itoa(int(in.durationSecs+0.5))))
 	}
 	if c == 0 {
 		c = 1
@@ -720,7 +738,8 @@ func importedWordFileUnchanged(w importedWordFile, f lyricsWordFormat, key strin
 func lyricsWordInputOf(key string, e enrichEntry, fileYRC string) lyricsWordFileInput {
 	artist, title, album := splitEnrichKey(key)
 	return lyricsWordFileInput{artist: artist, title: title, album: album, source: e.LyricsSource, manual: e.ManualLyrics,
-		yrc: fileYRC, nativeYRC: e.LyricsYRC.String(), bg: e.LyricsBG.String(), durationSecs: e.DurationSecs}
+		yrc: fileYRC, nativeYRC: e.LyricsYRC.String(), bg: e.LyricsBG.String(), durationSecs: e.DurationSecs,
+		lrc: e.Lyrics.String(), tr: e.LyricsTr.String(), roma: e.LyricsRoma.String(), trLang: e.LyricsTrLang}
 }
 
 // lyricsFileIdentity:按后缀把一份歌词文件的头部读出来(逐字各格式先解开)。
@@ -750,8 +769,8 @@ func encodeLyricsWordFile(f lyricsWordFormat, in lyricsWordFileInput) lyricsWord
 
 // lyricsWordJob:并行预编码时一条要导出的歌词。in.yrc 留空,由预编码按 lrc / nativeYRC / bg 接回括号背景人声再填。
 type lyricsWordJob struct {
-	base, header, lrc string
-	in                lyricsWordFileInput
+	base, header string
+	in           lyricsWordFileInput
 }
 
 // lyricsWordPreEncoded:一条歌词预编好的逐字文件,和顺带算出的括号背景人声接回之后的正文 / 逐字(formed 为 true 时有)。
@@ -783,12 +802,12 @@ func preEncodeLyricsWordFiles(n int, formats []lyricsWordFormat, jobAt func(int)
 				}
 				p := &out[i]
 				for _, f := range formats {
-					src := lyricsWordFileSource(f, job.header, job.in.source, job.lrc, job.in.nativeYRC, job.in.bg, job.in.durationSecs)
+					src := lyricsWordFileSource(f, job.header, job.in)
 					if unchanged(job.base+f.suffix(), src) {
 						continue
 					}
 					if !p.formed {
-						p.fileLRC, p.fileYRC = parenBGFileForm(job.in.source, job.lrc, job.in.nativeYRC, job.in.bg)
+						p.fileLRC, p.fileYRC = parenBGFileForm(job.in.source, job.in.lrc, job.in.nativeYRC, job.in.bg)
 						p.formed = true
 						p.files = map[lyricsWordFormat]lyricsWordEncoded{}
 					}
@@ -799,5 +818,98 @@ func preEncodeLyricsWordFiles(n int, formats []lyricsWordFormat, jobAt func(int)
 		}()
 	}
 	wg.Wait()
+	return out
+}
+
+// lyricsWordLineAux:逐字各行(按 lines 的下标)配上的译文和罗马音。译文、罗马音的时间戳跟着逐行 LRC,逐字的行头跟它不是同一套
+// 时间(网易云差 0.7～3 秒),所以先按文字找回逐行那一行 —— 文字相同、时间相差不超过 parenBGPairToleranceMs 里最近的、
+// 还没被配过的 —— 再取那一行时间戳上的译文 / 罗马音(译文的时间戳可能多写一位毫秒,`[00:04.681]` 对 `[00:04.68]`,
+// 按 lyricsWordAuxStampToleranceMs 以内最近的取)。配不上逐行的行(或者译文本来就跟着逐字的时间走),退回按逐字行起点找
+// lyricsWordAuxNearestMs 以内最近的 —— 跟 App 给逐字行贴译文是同一套先后(08 章决策 14)。都找不到的行不挂。
+// lyricsWordAuxStampToleranceMs:译文 / 罗马音的时间戳跟逐行正文那一行差多少以内算同一行。lyricsWordAuxNearestMs:
+// 退回按逐字行起点找时的容差,同 App 的 nearestText。
+const (
+	lyricsWordAuxStampToleranceMs = 100
+	lyricsWordAuxNearestMs        = 700
+)
+
+func lyricsWordLineAux(lines []yrcDocLine, lrc, tr, roma string) map[int][2]string {
+	if tr == "" && roma == "" {
+		return nil
+	}
+	byStamp := func(text string) map[int]string {
+		out := map[int]string{}
+		for _, l := range strings.Split(text, "\n") {
+			ms, end := parenBGLRCStamps(l)
+			body := strings.TrimSpace(l[end:])
+			for _, t := range ms {
+				if _, dup := out[t]; !dup && body != "" {
+					out[t] = body
+				}
+			}
+		}
+		return out
+	}
+	trs, romas := byStamp(tr), byStamp(roma)
+	near := func(m map[int]string, ms, tol int) string {
+		best, text := tol+1, ""
+		for t, s := range m {
+			if d := parenBGAbs(t - ms); d < best || d == best && s < text {
+				best, text = d, s
+			}
+		}
+		return text
+	}
+	type stamp struct {
+		ms   int
+		key  string
+		used bool
+	}
+	var stamps []stamp
+	for _, l := range strings.Split(lrc, "\n") {
+		ms, end := parenBGLRCStamps(l)
+		key := parenBGNormKey(l[end:])
+		for _, t := range ms {
+			stamps = append(stamps, stamp{ms: t, key: key})
+		}
+	}
+	out := map[int][2]string{}
+	for i, l := range lines {
+		if !l.timed {
+			continue
+		}
+		var text strings.Builder
+		for _, w := range l.wordsWithLead() {
+			text.WriteString(w.text)
+		}
+		key := parenBGNormKey(text.String())
+		if key == "" {
+			continue
+		}
+		best := -1
+		for si := range stamps {
+			s := &stamps[si]
+			if s.used || s.key != key || parenBGAbs(s.ms-l.start) > parenBGPairToleranceMs {
+				continue
+			}
+			if best < 0 || parenBGAbs(s.ms-l.start) < parenBGAbs(stamps[best].ms-l.start) {
+				best = si
+			}
+		}
+		var a [2]string
+		if best >= 0 {
+			stamps[best].used = true
+			a = [2]string{near(trs, stamps[best].ms, lyricsWordAuxStampToleranceMs), near(romas, stamps[best].ms, lyricsWordAuxStampToleranceMs)}
+		}
+		if a[0] == "" {
+			a[0] = near(trs, l.start, lyricsWordAuxNearestMs)
+		}
+		if a[1] == "" {
+			a[1] = near(romas, l.start, lyricsWordAuxNearestMs)
+		}
+		if a != ([2]string{}) {
+			out[i] = a
+		}
+	}
 	return out
 }

@@ -156,6 +156,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		cached       [4]string
 		bgText       string
 		durationSecs float64
+		trLang       string
 	}
 	// 只导出几个分组时,不在 onlyFolds 里的条目连拷都不拷:碰撞分组只对要导出的分组有意义,而同一分组的 key 分组键相同、
 	// 必然都在 onlyFolds 里,整组照样算全。只遍历 key,条目约 1.4 KB,按值遍历会把整个缓存拷一遍。见 15 章决策 53。
@@ -184,7 +185,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			key: key, artist: artist, title: title, album: album,
 			source: e.LyricsSource, manual: e.ManualLyrics,
 			bodies: [4]bodyText{e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC}, bg: e.LyricsBG,
-			durationSecs: e.DurationSecs,
+			durationSecs: e.DurationSecs, trLang: e.LyricsTrLang,
 		})
 	}
 	enrichMu.Unlock()
@@ -209,6 +210,12 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		}
 		jobs[i].cached = jobs[i].variants
 		jobs[i].bgText = bg
+	}
+	// wordInputOf:写逐字文件要用的缓存内容(yrc 留空,由调用方填括号背景人声接回之后的那份)。
+	wordInputOf := func(j entryJob) lyricsWordFileInput {
+		return lyricsWordFileInput{artist: j.artist, title: j.title, album: j.album, source: j.source, manual: j.manual,
+			nativeYRC: j.cached[3], bg: j.bgText, durationSecs: j.durationSecs,
+			lrc: j.cached[0], tr: j.cached[1], roma: j.cached[2], trLang: j.trLang}
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		noteFileErr("mkdir", dir, err)
@@ -300,9 +307,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			}
 			return lyricsWordJob{
 				base: base, header: lyricsFileHeader(j.artist, j.title, j.album, j.source, j.manual),
-				in: lyricsWordFileInput{artist: j.artist, title: j.title, album: j.album, source: j.source, manual: j.manual,
-					nativeYRC: j.cached[3], bg: j.bgText, durationSecs: j.durationSecs},
-				lrc: j.cached[0],
+				in: wordInputOf(j),
 			}, true
 		}, func(name string, src uint32) bool {
 			info := statOf(name)
@@ -428,7 +433,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 				continue
 			}
 			info := statOf(name)
-			wsrc := lyricsWordFileSource(f, header, j.source, j.cached[0], j.cached[3], j.bgText, j.durationSecs)
+			wsrc := lyricsWordFileSource(f, header, wordInputOf(j))
 			if useState && info != nil && lyricsFileUnchangedFrom(dir, name, info, wsrc) {
 				continue
 			}
@@ -439,8 +444,8 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			}
 			if !ok {
 				form()
-				in := lyricsWordFileInput{artist: j.artist, title: j.title, album: j.album, source: j.source, manual: j.manual,
-					yrc: j.variants[3], nativeYRC: j.cached[3], bg: j.bgText, durationSecs: j.durationSecs}
+				in := wordInputOf(j)
+				in.yrc = j.variants[3]
 				enc = encodeLyricsWordFile(f, in)
 			}
 			plain := enc.plain

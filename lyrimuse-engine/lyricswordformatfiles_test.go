@@ -145,6 +145,15 @@ func TestLyricsWordFilesSkipUnchanged(t *testing.T) {
 	if !strings.Contains(plain, "晚(4000,550)") {
 		t.Errorf("重写成新内容: %q", plain)
 	}
+	// 只改译文:TTML 带着译文要重写,QRC 不带译文、不动。
+	enrichMu.Lock()
+	e = enrichCache[key]
+	e.LyricsTr = bt("[00:01.00]How are you")
+	enrichCache[key] = e
+	enrichMu.Unlock()
+	if n := encodes(exportLyricsFiles); n != 1 {
+		t.Errorf("只改译文时只重写 TTML: %d", n)
+	}
 }
 
 func keysOf(m map[string]string) []string {
