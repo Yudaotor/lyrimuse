@@ -99,7 +99,7 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
            pauseObservedAt <= now { observedAt = pauseObservedAt }
         timer = AmazonMusicPlayhead.advance(timer, trackKey: trackKey, metadataTimestamp: metadataTimestamp,
                                             playing: playing, observedAt: observedAt)
-        let log = fileAvailable && seenEvent ? state : nil
+        let log = fileAvailable && seenEvent && !SourceKnockout.isOut(.amazonLog) ? state : nil
         let r = AmazonMusicPlayhead.reading(log: log, timer: timer!, metadataTimestamp: metadataTimestamp, now: now)
         lastLogTrack = r.source == .log && !r.staleMetadata ? state.trackID.map { (trackKey, $0) } : nil
         if !r.staleMetadata, r.source != lastSource {
@@ -127,7 +127,7 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
         queue.sync { drain(live: true) }
         lock.lock()
         defer { lock.unlock() }
-        guard fileAvailable, seenEvent, let id = state.trackID, id.hasPrefix("asin://") else { return nil }
+        guard !SourceKnockout.isOut(.amazonLog), fileAvailable, seenEvent, let id = state.trackID, id.hasPrefix("asin://") else { return nil }
         let asin = String(id.dropFirst("asin://".count))
         return asin.isEmpty ? nil : asin
     }
@@ -155,7 +155,7 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
     /// (卡顿行照样出现在日志里,只是认不出是哪一首)。对上就把自记时整个换成界面给的位置。
     private func scheduleTimerCalibrationLocked(pid: pid_t, duration: Double?, trackKey: String, now: Date) {
         if timerSeen?.key != trackKey { timerSeen = (trackKey, now) }
-        guard !calibrating, let seen = timerSeen, now.timeIntervalSince(seen.at) >= Self.calibrationDelay,
+        guard !SourceKnockout.isOut(.amazonScreen), !calibrating, let seen = timerSeen, now.timeIntervalSince(seen.at) >= Self.calibrationDelay,
               AmazonMusicPlayhead.mayStartCalibration(state, now: now, settle: Self.stallSettleDelay) else { return }
         let key = "timer:" + trackKey + "#" + String(max(state.lastStallAt?.timeIntervalSince1970 ?? 0, seen.at.timeIntervalSince1970))
         guard timerCalibratedKey != key, mayAttemptLocked(key, now: now) else { return }
@@ -192,7 +192,7 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
 
     private func scheduleCalibrationLocked(pid: pid_t, duration: Double?, metadataTimestamp: Date?, now: Date) {
         let refining = AmazonMusicPlayhead.needsLeadRefinement(state, now: now)
-        guard !calibrating, AmazonMusicPlayhead.needsLeadCalibration(state) || refining, let id = state.trackID,
+        guard !SourceKnockout.isOut(.amazonScreen), !calibrating, AmazonMusicPlayhead.needsLeadCalibration(state) || refining, let id = state.trackID,
               let startedAt = state.trackStartedAt, now.timeIntervalSince(startedAt) >= Self.calibrationDelay,
               AmazonMusicPlayhead.mayStartCalibration(state, now: now, settle: Self.stallSettleDelay) else { return }
         // 卡顿之后的那次重新校准、首次校准之后再叠的那次,都另算次数(键带上最近一次卡顿的时刻、叠到第几次)。
@@ -338,7 +338,7 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
             events.append(event)
         }
         lock.unlock()
-        guard live, !events.isEmpty, let onPlaybackEvent = Self.onPlaybackEvent else { return }
+        guard live, !events.isEmpty, !SourceKnockout.isOut(.amazonLog), let onPlaybackEvent = Self.onPlaybackEvent else { return }
         onPlaybackEvent(events.contains(.paused) || events.contains(.stall(true)))
     }
 }

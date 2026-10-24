@@ -408,6 +408,38 @@ func runAmazonMusicTests() {
                     "Amazon 暂停: 停表位置跟播放中同一个起点(按日志起点算会多出 0.4 秒,暂停那一下就跳)")
     }
 
+    // ---- 拔腿:日志那条腿关掉后位置落到自记时、不报 ASIN,接回来照旧按日志 ----
+    do {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("lyrimuse-amazon-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let log = dir.appendingPathComponent("AmazonMusic.log")
+        let start = "260928:025134      Browser INFO in Harley : DT:M [TrackPreFetcher.cpp:74] new track playing : asin://B0TESTAAA1:13:87015\n"
+        try? start.write(to: log, atomically: false, encoding: .utf8)
+        let watcher = AmazonMusicLogWatcher(path: log.path)
+        watcher.ensureStarted()
+        let ts = at("025134", 0.9)
+        SourceKnockout.set(.amazonLog, out: true)
+        let out = watcher.reading(trackKey: "k", metadataTimestamp: ts, playing: true, pauseObservedAt: nil, now: at("025200"))
+        let asinOut = watcher.currentTrackASIN()
+        SourceKnockout.set(.amazonLog, out: false)
+        expectEqual(out.source, .selfTimer, "Amazon 拔腿: 日志关掉后位置落到自记时")
+        expectEqual(asinOut == nil, true, "Amazon 拔腿: 日志关掉后不报当前曲目的 ASIN")
+        let back = watcher.reading(trackKey: "k", metadataTimestamp: ts, playing: true, pauseObservedAt: nil, now: at("025201"))
+        expectEqual(back.source, .log, "Amazon 拔腿: 接回来照旧按日志")
+        expectEqual(watcher.currentTrackASIN(), "B0TESTAAA1", "Amazon 拔腿: 接回来照旧报 ASIN")
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let watcherSource = (try? String(contentsOfFile: root.appendingPathComponent("LyrimuseCore/Local/AmazonMusicLogWatcher.swift").path,
+                                         encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(watcherSource, "guard live, !events.isEmpty, !SourceKnockout.isOut(.amazonLog), let onPlaybackEvent"), true,
+                    "Amazon 拔腿: 日志关掉后不再发即时信号")
+        expectEqual(sourceHas(sourceBody("private func scheduleTimerCalibrationLocked(", in: watcherSource),
+                              "guard !SourceKnockout.isOut(.amazonScreen), !calibrating,")
+                    && sourceHas(sourceBody("private func scheduleCalibrationLocked(", in: watcherSource),
+                                 "guard !SourceKnockout.isOut(.amazonScreen), !calibrating,"), true,
+                    "Amazon 拔腿: 界面那条腿关掉后两种对表都不做")
+    }
+
     // ---- 焦点被占时按 bundle id 单问的那份:没有进度,锚点时刻与进程要带回来,位置换成日志时钟 ----
     do {
         // helper 对 Amazon 的真机输出:没有 elapsedTime。
