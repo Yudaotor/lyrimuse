@@ -2252,7 +2252,7 @@ private struct LyricsSettingsTab: View {
             // 另外多存了几种格式时多出一条从属行:说明还存着哪些副本,并给出删掉的入口。
             if features.lyricsWordFormats.count > 1 {
                 CardDivider()
-                SettingsSubRow(title: String(format: L10n.t("另存副本：%@"),
+                SettingsSubRow(title: String(format: L10n.t("同时存为：%@"),
                                              L10n.list(features.lyricsWordFormats.dropFirst().map(Self.lyricsWordFormatName)))) {
                     Button(L10n.t("删除副本")) {
                         applyLyricsWordFormats(Array(features.lyricsWordFormats.prefix(1)), backup: true)
@@ -2380,11 +2380,11 @@ private struct LyricsSettingsTab: View {
 
     static func lyricsWordFormatDetail(_ f: LyricsWordFormat) -> String {
         switch f {
-        case .yrc: L10n.t("网易云音乐的逐字格式")
-        case .ttml: L10n.t("Apple Music 使用的标准格式，可存背景人声")
-        case .qrc: L10n.t("QQ 音乐客户端的本地格式")
-        case .krc: L10n.t("酷狗音乐客户端的本地格式")
-        case .enhancedLRC: L10n.t("在逐行 LRC 里给每个字加上时间")
+        case .yrc: L10n.t("网易云音乐的格式")
+        case .ttml: L10n.t("Apple Music 等使用的标准格式，可带背景人声和译文")
+        case .qrc: L10n.t("QQ 音乐的加密格式")
+        case .krc: L10n.t("酷狗音乐的加密格式，可带译文")
+        case .enhancedLRC: L10n.t("每个字带时间的 LRC，另存为 .enhanced.lrc")
         }
     }
 
@@ -2393,7 +2393,7 @@ private struct LyricsSettingsTab: View {
         let current = features.lyricsWordFormats
         guard picked != current.first else { return }
         let alert = NSAlert()
-        alert.messageText = String(format: L10n.t("把逐字歌词改存为 %@？"), Self.lyricsWordFormatName(picked))
+        alert.messageText = String(format: L10n.t("逐字歌词改存为「%@」？"), Self.lyricsWordFormatName(picked))
         alert.informativeText = String(format: L10n.t("原来的 %@ 文件可以留作副本，删除前会先自动备份"),
                                        L10n.list(current.filter { $0 != picked }.map(Self.lyricsWordFormatName)))
         alert.addButton(withTitle: L10n.t("保留副本"))

@@ -139,12 +139,12 @@
 "Amazon Music 歌手页" = "Amazon Music artist page";
 "Amazon Music 歌曲页" = "Amazon Music song page";
 "Apple Music" = "Apple Music";
-"Apple Music 使用的标准格式，可存背景人声" = "The standard format Apple Music uses, with room for background vocals";
 "Apple Music 播放的曲目 ID 一致" = "Same Apple Music track ID from playback";
 "Apple Music 检索结果为同一曲目" = "Same track found by Apple Music search";
 "Apple Music 登录已失效（已过期或被撤销），请重新连接" = "Your Apple Music sign-in is no longer valid (expired or revoked). Reconnect to continue";
 "Apple Music 的官方歌词，连接账号后可用" = "Apple Music's own lyrics, available after you connect your account";
 "Apple Music 的登录已过期或被吊销（有效期 6 个月，Apple 不提供自动续期），请在「歌词来源」卡片底部重新连接" = "The Apple Music sign-in has expired or been revoked (it lasts 6 months and Apple issues no renewable token) — reconnect at the bottom of the Lyrics Sources card";
+"Apple Music 等使用的标准格式，可带背景人声和译文" = "The standard format used by Apple Music and others, can carry background vocals and translations";
 "Apple Music 账号连接" = "Apple Music Account Connection";
 "Apple 各地商店署名" = "Apple storefront credit";
 "Apple 按曲名反查" = "Apple lookup by title";
@@ -205,12 +205,12 @@
 "POST 到你填的地址" = "POST to the address you entered";
 "QQ 音乐" = "QQ Music";
 "QQ 音乐专辑页" = "QQ Music album page";
-"QQ 音乐客户端的本地格式" = "The local file format of the QQ Music app";
 "QQ 音乐播放的歌曲 ID 一致" = "Same QQ Music song ID from playback";
 "QQ 音乐检索结果为同一曲目" = "Same track found by QQ Music search";
 "QQ 音乐歌手建议" = "QQ Music artist suggestion";
 "QQ 音乐歌手页" = "QQ Music artist page";
 "QQ 音乐歌曲页" = "QQ Music song page";
+"QQ 音乐的加密格式" = "QQ Music's encrypted format";
 "Remaster/feat. 等标注" = "Remaster/feat. tags";
 "Safari 的此选项位于设置中：先在「Safari 浏览器 › 设置 › 高级」中勾选「显示网页开发者功能」，设置中将出现「开发者」面板，再在其中勾选「允许Apple事件中的JavaScript」" = "In Safari, open Safari › Settings › Advanced and select “Show features for web developers”. A Developer pane then appears in Settings; select “Allow JavaScript from Apple Events” there";
 "Scrobble 到 Last.fm" = "Scrobble to Last.fm";
@@ -713,7 +713,6 @@
 "另一时长" = "Other length";
 "另一轮扫描正在进行，请在完成后再试" = "Another scan is in progress. Try again when it finishes";
 "另外两项均开启时不显示" = "Hidden when the other two are on";
-"另存副本：%@" = "Also saved as: %@";
 "另有 %@ 条记录过旧，Last.fm 不再接受" = "%@ more are too old for Last.fm to accept";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ more songs had no source response · Auto-Match All";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ more song had no source response · Auto-Match All";
@@ -744,6 +743,7 @@
 "合并明细" = "Play Breakdown";
 "同一网络中的设备可通过带密钥的链接访问" = "Devices on the same network can connect with a link that includes an access key";
 "同名但时长不同，作为另一录音单独保存歌词" = "Same title but a different length, so its lyrics are saved separately as another recording";
+"同时存为：%@" = "Also saved as: %@";
 "同曲条目" = "Entries for This Song";
 "同曲条目 %d" = "%d Entries for This Song";
 "同曲条目…" = "Entries for This Song…";
@@ -845,7 +845,6 @@
 "在访达中显示" = "Show in Finder";
 "在访达中显示歌词文件" = "Show Lyrics File in Finder";
 "在该浏览器的开发者菜单中开启「允许 Apple 事件中的 JavaScript」" = "Turn on “Allow JavaScript from Apple Events” in this browser’s Developer menu";
-"在逐行 LRC 里给每个字加上时间" = "Line-by-line LRC with a timestamp on every word";
 "在钉钉群中：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后拷贝 Webhook 地址。安全设置建议选择「加签」，并将生成的密钥填入下方的「加签密钥」" = "In your DingTalk group: Group Settings → Group Assistant → Add Robot → Custom, then copy the webhook URL after creating it. For security, choose “Signature” and put the generated secret in the “Signing Secret” field below";
 "在防火墙设置中允许 Lyrimuse 的传入连接后，其他设备才能打开链接" = "Allow incoming connections for Lyrimuse in Firewall settings so other devices can open the link";
 "在飞书群中：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后拷贝 Webhook 地址。如需额外校验，可开启「签名校验」，并将密钥填入下方的「签名密钥」" = "In your Feishu group: Settings → Group Bots → Add Bot → Custom Bot, then copy the webhook URL after creating it. For an extra layer of verification, enable “Signature Verification” and enter the secret in the “Signature Secret” field below";
@@ -1268,7 +1267,6 @@
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Found %1$@ · Not found %2$@ · Skipped %3$@";
 "找到 %@ 首" = "%@ Found";
 "把听歌报告推到手机、群聊或你自己的服务" = "Send listening reports to your phone, group chats or your own service";
-"把逐字歌词改存为 %@？" = "Save Word-by-Word Lyrics as %@?";
 "拆分" = "Split";
 "拆分…" = "Split…";
 "拆分「%@」？" = "Split “%@”?";
@@ -1901,6 +1899,7 @@
 "此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用" = "These apps aren't specifically supported, so compatibility isn't guaranteed and some features may be unavailable";
 "此设置仅在本次打开窗口期间有效，重新打开后恢复默认" = "Applies only while this window is open; reopening resets it";
 "步长" = "Step";
+"每个字带时间的 LRC，另存为 .enhanced.lrc" = "LRC with a time on every word, saved as .enhanced.lrc";
 "每周听歌小结" = "Weekly Listening Digest";
 "每周小结" = "Weekly Digest";
 "每天 %@ 推送前一天的报告" = "Pushed at %@ every day with the previous day's listening";
@@ -2171,7 +2170,7 @@
 "网易云音乐播放的歌曲 ID 一致" = "Same NetEase Cloud Music song ID from playback";
 "网易云音乐检索结果为同一曲目" = "Same track found by NetEase Cloud Music search";
 "网易云音乐歌曲页" = "NetEase Cloud Music song page";
-"网易云音乐的逐字格式" = "NetEase Cloud Music's word-by-word format";
+"网易云音乐的格式" = "NetEase Cloud Music's format";
 "网易旗下的音乐 App" = "NetEase's music app";
 "网易旗下的音乐平台" = "NetEase's music service";
 "网络" = "Network";
@@ -2536,6 +2535,7 @@
 "逐字歌词" = "Word-by-word";
 "逐字歌词仅修改文字，时间保持不变" = "Word-timed lyrics: only the words change, not the timing";
 "逐字歌词仅修改文字，每个字保留原有时间；新增或修改了时间戳的句子按字数分配时间" = "Word-timed lyrics: edit the text only. Every word keeps its timing; new lines and lines with a changed timestamp get their time split evenly by length";
+"逐字歌词改存为「%@」？" = "Save Word-by-Word Lyrics as %@?";
 "逐字歌词格式" = "Word-by-Word Lyrics Format";
 "逐字歌词随演唱逐字高亮；无逐字数据的歌曲整行高亮" = "Word-by-word lyrics: each word lights up as it is sung. Songs without word timings highlight the whole line";
 "逐帧 JPEG" = "Per-frame JPEG";
@@ -2567,9 +2567,9 @@
 "酷我音乐" = "Kuwo Music";
 "酷狗音乐" = "Kugou Music";
 "酷狗音乐专辑页" = "Kugou Music album page";
-"酷狗音乐客户端的本地格式" = "The local file format of the Kugou Music app";
 "酷狗音乐播放的歌曲 ID 一致" = "Same Kugou Music song ID from playback";
 "酷狗音乐歌曲页" = "Kugou Music song page";
+"酷狗音乐的加密格式，可带译文" = "Kugou Music's encrypted format, can carry translations";
 "采用此候选" = "Use This Candidate";
 "采用的并非得分最高的候选" = "The applied candidate is not the highest-scoring one";
 "采纳为静态文本" = "Adopt as Static Text";
