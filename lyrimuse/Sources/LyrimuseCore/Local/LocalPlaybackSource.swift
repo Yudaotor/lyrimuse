@@ -3549,7 +3549,9 @@ public final class LocalPlaybackSource: ObservableObject {
                 ? AppleMusicLocalFile.currentFilePath(artist: snapshot.artist ?? "", title: snapshot.title ?? "",
                                                       catalogTrackID: provenance?.identifiers?.catalogTrackID)
                 : PlayerTitleSplit.currentFilePath(bundleID: bundleID, artist: snapshot.artist ?? "",
-                                                   title: snapshot.title ?? ""),
+                                                   title: snapshot.title ?? "")
+                    ?? PlayerOpenFile.currentFilePath(bundleID: bundleID, artist: snapshot.artist ?? "",
+                                                      title: snapshot.title ?? ""),
             spoken: bundleID == PlaybackPlayer.qqMusic.bundleIdentifier && spokenAudioKey == snapshot.identityKey
                 ? spokenAudioVerdict : nil)
         PlaybackStatePublisher.shared.publish(input, now: now)

@@ -927,7 +927,7 @@ func runSourceContractTests() {
             }
             if let mcc2 = text("lyrimuse/Sources/LyrimuseCore/Local/MediaControlClient.swift") {
                 expectEqual(mcc2.contains("let raw = rawSnapshot(players: players)")
-                                && mcc2.contains("PlayerArtistFix.applied(to: PlayerTitleSplit.applied(to: PinePlayerInfo.adapted(raw)), state: fixState)")
+                                && mcc2.contains("PlayerArtistFix.applied(to: PlayerOpenFile.applied(to: PlayerTitleSplit.applied(to: PinePlayerInfo.adapted(raw))), state: fixState)")
                                 && mcc2.contains("fetchSnapshotWithProvenance(players: players).snapshot"), true,
                             "署名纠正: 要套在取快照的唯一出口上(fetchSnapshot 也经它),漏了哪条路那条路就还是脏的")
                 // 封面是另一次独立取回的载荷。两条封面路(系统级焦点 / per-client 探针)

@@ -258,6 +258,23 @@ func TestNativeSourcesForAppleMusicIncludeLocalFile(t *testing.T) {
 	}
 }
 
+// QQ 音乐、网易云、酷狗用「打开文件」放本机文件时,文件里的歌词跟它自家的源一样算同源。
+func TestNativeSourcesForStreamingClientsIncludeLocalFile(t *testing.T) {
+	t.Cleanup(func() { setNativeLyricSourcesForPlayer("") })
+	for _, c := range []struct{ bundleID, own string }{
+		{qqMusicBundleID, lyricSourceQQ}, {neteaseMusicBundleID, lyricSourceNetease}, {kugouMusicBundleID, lyricSourceKugou},
+	} {
+		setNativeLyricSourcesForPlayer(c.bundleID)
+		if !isNativeLyricSource(c.own) || !isNativeLyricSource(localFileLyricsSource) {
+			t.Errorf("%s:自家源和本地文件都算同源", c.bundleID)
+		}
+	}
+	setNativeLyricSourcesForPlayer(kkboxBundleID)
+	if isNativeLyricSource(localFileLyricsSource) {
+		t.Error("KKBOX 不放本机文件,不带本地文件")
+	}
+}
+
 // 放 Spotify 时 musixmatch 落选不算「同源落选」:按歌名搜到的那条不带本机身份,重搜结论不变。
 func TestNeedsLyricsRetry_SpotifyMusixmatchNotMissedOut(t *testing.T) {
 	setNativeLyricSourcesForPlayer(spotifyBundleID)

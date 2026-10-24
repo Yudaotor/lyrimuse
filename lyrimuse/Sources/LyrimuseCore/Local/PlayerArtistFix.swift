@@ -179,7 +179,11 @@ public enum PlayerArtistFix {
     public static func correctedTrackKey(
         bundle: String?, artist rawArtist: String?, title: String?, state: State? = current
     ) -> String {
-        // 标题里拼着歌手的播放器:独立取回的载荷还没换,先换成跟快照一样的歌手和歌名(见 PlayerTitleSplit)。
+        // 放本机文件时换成标签的播放器、标题里拼着歌手的播放器:独立取回的载荷还没换,先换成跟快照一样的歌手和歌名
+        // (见 PlayerOpenFile、PlayerTitleSplit)。
+        if let file = PlayerOpenFile.identity(bundleID: bundle, rawArtist: rawArtist, rawTitle: title) {
+            return MediaControlSnapshot.trackKey(artist: file.artist.isEmpty ? rawArtist : file.artist, title: file.title)
+        }
         if let parts = PlayerTitleSplit.identityParts(bundleID: bundle, title: title, artist: rawArtist) {
             return MediaControlSnapshot.trackKey(artist: parts.artist.isEmpty ? rawArtist : parts.artist, title: parts.title)
         }

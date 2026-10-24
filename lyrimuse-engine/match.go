@@ -793,9 +793,9 @@ func setNativeLyricSourcesForPlayer(bundleID string) {
 		return
 	}
 	want := map[string]bool{src: true}
-	if player == playerAppleMusic || player == playerLXMusic {
-		// 放资料库(洛雪:本地列表)里的本地文件时,文件旁的 .lrc、文件标签里的歌词就是它自己显示的那份
-		// (localfilelyrics.go);放流媒体时没有这一份候选,不影响别的源。
+	if playsLocalFilesBesidesStreaming(player) {
+		// 放本地文件时文件旁的 .lrc、文件标签里的歌词就是它自己的那份(localfilelyrics.go);放流媒体时没有这一份候选,
+		// 不影响别的源。
 		want[localFileLyricsSource] = true
 	}
 	if maps.Equal(nativeLyricSources, want) {

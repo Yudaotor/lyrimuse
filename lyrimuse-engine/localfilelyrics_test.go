@@ -102,7 +102,11 @@ func TestPlaysLocalFiles(t *testing.T) {
 		{voxBundleID, true},
 		{pinePlayerBundleID, true},
 		{appleMusicBundleID, true},
+		{qqMusicBundleID, true},
+		{neteaseMusicBundleID, true},
+		{kugouMusicBundleID, true},
 		{kkboxBundleID, false},
+		{spotifyBundleID, false},
 		{"com.example.player", false},
 		{"", false},
 	} {

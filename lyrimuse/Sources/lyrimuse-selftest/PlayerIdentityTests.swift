@@ -883,6 +883,85 @@ func runPlayerIdentityTests() {
         let mayday = Tags(title: "\u{AD}\u{CF}\u{B1}j", artist: "\u{A4}\u{AD}\u{A4}\u{EB}\u{A4}\u{D1}", album: "", duration: 254)
         expectEqual(P.identity(from: mayday).map { "\($0.artist)|\($0.title)" }, "五月天|倔強",
                     "文件标签: 分开判的话「五月天」按 GBK 是成串假名,连上歌名一起判才是 Big5")
+
+        // QQ 音乐、网易云、酷狗用「打开文件」放本机文件:三种报法都认得出是哪个文件(报法见 02 章决策 188)。
+        do {
+            typealias O = PlayerOpenFile
+            let tagged = Tags(title: "Tag Title", artist: "Tag Artist", album: "Tag Album", duration: 90.04)
+            let file = "Name Artist - Name Song.mp3"
+            func open(_ artist: String, _ title: String, _ duration: Double?, _ tags: Tags?, file name: String = file) -> Bool {
+                O.fileMatches(reportedArtist: artist, reportedTitle: title, reportedDuration: duration, tags: tags, fileName: name)
+            }
+            expectEqual(open("Tag Artist", "Tag Title", 90, tagged), true, "开着的文件: QQ 报标签里的歌手歌名")
+            expectEqual(open("别人", "Tag Title", 90, tagged), false, "开着的文件: 歌名一样、歌手不同不是这首")
+            expectEqual(open("Tag Artist", file, 90.25, tagged), true, "开着的文件: 网易云把带扩展名的文件名报成歌名")
+            expectEqual(open("Name Artist", "Name Song", 90, tagged), true, "开着的文件: 酷狗按文件名拆歌手歌名")
+            expectEqual(open("c4", "probe", 90, tagged, file: "c4-probe.mp3"), true, "开着的文件: 酷狗拆不带空格的「-」")
+            expectEqual(open("Tag Artist", "Tag Title", 60, tagged), false, "开着的文件: 时长差太多不是这首")
+            expectEqual(open("Milky Day", "Let Me", 185, tagged), false, "开着的文件: 在线放的别的歌对不上")
+            expectEqual(open("", "Name Artist - Name Song", nil, nil), true, "开着的文件: 读不出标签时按文件名对")
+            let named = O.fileNameIdentity(reportedArtist: "", reportedTitle: "01 - 方大同 - Love Song.mp3",
+                                           fileName: "01 - 方大同 - Love Song.mp3", duration: 250)
+            expectEqual(named.map { "\($0.artist)|\($0.title)|\($0.duration ?? 0)" }, "方大同|Love Song|250.0",
+                        "文件名身份: 去掉扩展名和音轨号,按 ` - ` 拆")
+            expectEqual(O.fileNameIdentity(reportedArtist: "报的歌手", reportedTitle: "A - B.flac", fileName: "A - B.flac",
+                                           duration: nil).map { "\($0.artist)|\($0.title)" }, "报的歌手|B",
+                        "文件名身份: 播放器报了歌手就用它的")
+            expectEqual(O.fileNameIdentity(reportedArtist: "Name Artist", reportedTitle: "Name Song", fileName: file,
+                                           duration: nil) == nil, true, "文件名身份: 不是把文件名报成歌名的(酷狗)不动")
+
+            // 真走一遍按进程号找文件:本进程开着一个没写标签的 WAV,当成网易云 / 酷狗报的那一首。
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("lyrimuse-openfile-\(UUID().uuidString)")
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let wav = dir.appendingPathComponent("Open Artist - Open Song.wav")
+            func resolved(_ path: String?) -> String? { path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path } }
+            var header = Data("RIFF".utf8)
+            func le32(_ v: UInt32) -> Data { withUnsafeBytes(of: v.littleEndian) { Data($0) } }
+            func le16(_ v: UInt16) -> Data { withUnsafeBytes(of: v.littleEndian) { Data($0) } }
+            let samples = Data(count: 16000)
+            let parts: [Data] = [le32(36 + UInt32(samples.count)), Data("WAVEfmt ".utf8), le32(16), le16(1), le16(1),
+                                 le32(8000), le32(16000), le16(2), le16(16), Data("data".utf8), le32(UInt32(samples.count))]
+            for part in parts { header.append(part) }
+            try? (header + samples).write(to: wav)
+            let handle = try? FileHandle(forReadingFrom: wav)
+            defer { try? handle?.close() }
+            let kugou = PlaybackPlayer.kugou.bundleIdentifier, netease = PlaybackPlayer.netease.bundleIdentifier
+            var snap = MediaControlSnapshot.forReplay(title: "Open Song", artist: "Open Artist", duration: 1, elapsedTime: 0,
+                                                      playing: true, bundleIdentifier: kugou, anchorElapsedTime: 0)
+            snap.processIdentifier = Int(getpid())
+            let kept = O.applied(to: snap)
+            expectEqual(kept?.title == "Open Song" && kept?.artist == "Open Artist", true, "开着的文件: 没写标签的酷狗报法原样留着")
+            expectEqual(resolved(O.currentFilePath(bundleID: kugou, artist: "Open Artist", title: "Open Song")), resolved(wav.path),
+                        "开着的文件: 找到的路径交给播放状态(local_file)")
+            var neSnap = MediaControlSnapshot.forReplay(title: "Open Artist - Open Song.wav", artist: "", duration: 1,
+                                                        elapsedTime: 0, playing: true, bundleIdentifier: netease,
+                                                        anchorElapsedTime: 0)
+            neSnap.processIdentifier = Int(getpid())
+            let fixedNE = O.applied(to: neSnap)
+            expectEqual(fixedNE.map { "\($0.artist ?? "")|\($0.title ?? "")" }, "Open Artist|Open Song",
+                        "开着的文件: 网易云报的文件名换成拆好的歌手歌名")
+            expectEqual(PlayerArtistFix.correctedTrackKey(bundle: netease, artist: "", title: "Open Artist - Open Song.wav",
+                                                          state: nil), fixedNE?.identityKey,
+                        "开着的文件: 封面载荷的身份跟换过的快照一致")
+            expectEqual(resolved(O.currentFilePath(bundleID: netease, artist: "Open Artist", title: "Open Song")), resolved(wav.path),
+                        "开着的文件: 换过身份后照样交出路径")
+            expectEqual(O.currentFilePath(bundleID: PlaybackPlayer.spotify.bundleIdentifier, artist: "Open Artist",
+                                          title: "Open Song") == nil, true, "开着的文件: 别家不找")
+
+            let local = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("LyrimuseCore/Local")
+            func text(_ name: String) -> String {
+                (try? String(contentsOfFile: local.appendingPathComponent(name).path, encoding: .utf8)) ?? ""
+            }
+            let client = text("MediaControlClient.swift")
+            expectEqual(sourceBytes(client, contain: "to: PlayerOpenFile.applied(to: PlayerTitleSplit.applied(to: PinePlayerInfo.adapted(raw))), state: fixState))")
+                        && sourceBytes(client, contain: "?? PlayerOpenFile.currentFilePath(bundleID: bundleID, rawArtist: raw.artist, rawTitle: raw.title)"),
+                        true, "开着的文件 接线: 快照公开出口换身份、封面按它找同目录的图")
+            expectEqual(sourceBytes(text("LocalPlaybackSource.swift"),
+                                    contain: "?? PlayerOpenFile.currentFilePath(bundleID: bundleID, artist: snapshot.artist ?? \"\","),
+                        true, "开着的文件 接线: 路径写进播放状态(local_file)")
+        }
         let mixed = Tags(title: "\u{B5}\u{BE}\u{CF}\u{E3}", artist: "周杰伦", album: "", duration: 223.5)
         expectEqual(P.identity(from: mixed).map { "\($0.artist)|\($0.title)" }, "周杰伦|稻香",
                     "文件标签: 本来就是中文的标签不参与判断、原样留着")
