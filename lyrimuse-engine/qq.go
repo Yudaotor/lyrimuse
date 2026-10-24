@@ -2139,11 +2139,22 @@ func qqQRCLyric(ctx context.Context, mid, artist, title, album string, durationS
 	if meta.id == 0 {
 		return qqQRCResult{}
 	}
+	// QQ 客户端放过的歌本机有同一份密文(qqrrcache.go);接口不给罗马音的语种先用它,省一趟请求。
+	localFirst := qqLocalLyricsFirst(meta.language)
+	if localFirst {
+		if res, ok := qqLocalQRC(meta.id); ok {
+			return res
+		}
+	}
 	if res, ok := qqPlayLyricInfo(ctx, meta, artist, title, album, durationSecs); ok {
 		return res
 	}
 	// 网关没问成(拿不到匿名会话,或几个主机都没问成):退到网页接口取同一份,见 qqLyricDownload。
-	return qqLyricDownload(ctx, meta.id)
+	if res := qqLyricDownload(ctx, meta.id); res != (qqQRCResult{}) || localFirst {
+		return res
+	}
+	res, _ := qqLocalQRC(meta.id)
+	return res
 }
 
 // qqPlayLyricInfo 走网关 GetPlayLyricInfo 取 QRC / 译文 / 罗马音。ok=false 只表示没问成(没有匿名会话、请求没成、
