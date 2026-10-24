@@ -165,10 +165,6 @@ final class PlayerHealthMonitor: ObservableObject {
             if !playback.isEmpty {
                 parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首"), names(playback)))
             }
-            let favorite = accessibilityMissingPlayers.filter { $0.accessibilityUse == .pressesFavorite }
-            if !favorite.isEmpty {
-                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示喜欢按钮"), names(favorite)))
-            }
             let modeOnly = accessibilityMissingPlayers.filter { $0.accessibilityUse == .pressesPlayMode }
             if !modeOnly.isEmpty {
                 parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首"), names(modeOnly)))

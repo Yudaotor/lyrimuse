@@ -21,10 +21,10 @@ enum IdlePlaybackActions {
         return .appleMusic
     }
 
-    /// 有没有真的「继续播放」可给:AM / Spotify 有 AppleScript(AM = 三段式,Spotify 自带恢复上下文);
-    /// QQ / 网易云 / 酷狗没有,只能「打开」。
+    /// 有没有真的「继续播放」可给:AM / Spotify 有 AppleScript(AM = 三段式,Spotify 自带恢复上下文);酷狗按菜单
+    /// 「播放/暂停」,冷启动后按也从上次停下的地方接着放;QQ / 网易云没有,只能「打开」。
     static func canResume(_ player: PlaybackPlayer) -> Bool {
-        player == .appleMusic || player == .spotify
+        player == .appleMusic || player == .spotify || player == .kugou
     }
 
     /// 「继续播放」:AM 走三段式(裸 play → 上次那首 → 都不行),Spotify 自带恢复;任何失败都兜底把
@@ -43,12 +43,37 @@ enum IdlePlaybackActions {
                 }
             case .spotify:
                 ok = MusicPlaybackController.resumeSpotifyPlayback()
+            case .kugou:
+                ok = await resumeViaMenu(player)
             default:
                 ok = false
             }
             if !ok {
                 await MainActor.run { openPlayerApp(player) }
             }
+        }
+    }
+
+    /// 没开着就后台启动(不激活、隐藏窗口),等菜单出现再按播放 / 暂停。冷启动到菜单出现约 6 秒,最多等 15 秒。
+    /// 停播页说明它这时没在放,按一下就是开播。
+    nonisolated static func resumeViaMenu(_ player: PlaybackPlayer) async -> Bool {
+        if PlayerProcess.pid(bundleID: player.bundleIdentifier) == nil {
+            guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: player.bundleIdentifier) else {
+                return false
+            }
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = false
+            configuration.hides = true
+            guard (try? await NSWorkspace.shared.openApplication(at: url, configuration: configuration)) != nil else {
+                return false
+            }
+        }
+        let deadline = Date().addingTimeInterval(15)
+        while true {
+            let outcome = PlaybackMenuControl.press(.playPause, for: player)
+            if outcome == .pressed { return true }
+            guard outcome == .playerNotRunning || outcome == .menuUnavailable, Date() < deadline else { return false }
+            try? await Task.sleep(nanoseconds: 300_000_000)
         }
     }
 

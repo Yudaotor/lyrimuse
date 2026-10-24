@@ -942,11 +942,6 @@ struct OnboardingView: View {
             lines.append(String(format: L10n.t("辅助功能权限可显示%@的喜欢按钮，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首"),
                                 accessibility.playerNames(playbackTargets)))
         }
-        let favoriteTargets = pendingAccessibility.filter { $0.accessibilityUse == .pressesFavorite }
-        if !favoriteTargets.isEmpty {
-            lines.append(String(format: L10n.t("辅助功能权限可显示%@的喜欢按钮"),
-                                accessibility.playerNames(favoriteTargets)))
-        }
         let modeOnlyTargets = pendingAccessibility.filter { $0.accessibilityUse == .pressesPlayMode }
         if !modeOnlyTargets.isEmpty {
             lines.append(String(format: L10n.t("辅助功能权限可显示%@的随机、循环按钮，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首"),
@@ -1623,7 +1618,6 @@ struct OnboardingView: View {
             let progress = targets.filter { $0.accessibilityUse == .calibratesProgress }
             let playMode = targets.filter { $0.accessibilityUse == .switchesPlayMode }
             let playback = targets.filter { $0.accessibilityUse == .controlsPlayback }
-            let favorite = targets.filter { $0.accessibilityUse == .pressesFavorite }
             let modeOnly = targets.filter { $0.accessibilityUse == .pressesPlayMode }
             let refines = targets.filter { $0.accessibilityUse == .refinesProgress }
             var lines: [String] = []
@@ -1640,10 +1634,6 @@ struct OnboardingView: View {
             if !playback.isEmpty {
                 lines.append(String(format: L10n.t("请开启此权限，以显示%@的喜欢按钮，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首"),
                                     accessibility.playerNames(playback)))
-            }
-            if !favorite.isEmpty {
-                lines.append(String(format: L10n.t("请开启此权限，以显示%@的喜欢按钮"),
-                                    accessibility.playerNames(favorite)))
             }
             if !modeOnly.isEmpty {
                 lines.append(String(format: L10n.t("请开启此权限，以显示%@的随机、循环按钮，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首"),

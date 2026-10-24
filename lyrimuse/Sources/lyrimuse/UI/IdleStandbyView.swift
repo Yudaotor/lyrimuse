@@ -508,7 +508,7 @@ private struct IdleLastTrackHero: View {
     /// (coverURL 第三级本来就忽略专辑)。
     private var lastAlbum: String { UserDefaults.standard.string(forKey: "np:lastTrackAlbum") ?? "" }
 
-    private var canResume: Bool { player == .appleMusic || player == .spotify }
+    private var canResume: Bool { IdlePlaybackActions.canResume(player) }
     private var trackKey: String { lastArtist + "|" + lastTitle + "|" + lastAlbum }
 
     var body: some View {

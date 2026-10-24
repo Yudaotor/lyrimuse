@@ -1094,7 +1094,7 @@ public enum MusicPlaybackController {
         case kasetScript
         case voxScript
         case mediaControl
-        /// QQ / 网易云 / Pine Player / reAMP 失焦时只按目标进程的播放菜单,汽水按它播放条上的键;跳转不走这条。
+        /// QQ / 网易云 / 酷狗 / Pine Player / reAMP 失焦时只按目标进程的播放菜单,汽水按它播放条上的键;跳转不走这条。
         case menuAccessibility(PlaybackPlayer, PlaybackMenuControl.Command)
         /// 跳转定向发给 Kaset 本体那份会话(`NowPlayingClientsProbe.sendSeek`),不发给系统当前会话。只有跳转走这条,见 `seekRoute`。
         case kasetDirect
@@ -1107,7 +1107,7 @@ public enum MusicPlaybackController {
         case withheld
     }
 
-    /// 按实际回退目标决定控制通路。QQ / 网易云 / 汽水 / Pine Player / reAMP 直查回退只允许三个已验证的 AX 动作;
+    /// 按实际回退目标决定控制通路。QQ / 网易云 / 酷狗 / 汽水 / Pine Player / reAMP 直查回退只允许三个已验证的 AX 动作;
     /// 其它无定向通路的命令仍不发。选择列表和前台窗口不能充当回退目标。
     public static func controlRoute(exclusivelyAppleMusic: Bool, focusFallback: PlaybackPlayer?,
                                     focusHeldElsewhere: Bool = false, directQueryFallback: PlaybackPlayer? = nil,
@@ -1211,7 +1211,7 @@ public enum MusicPlaybackController {
         return route
     }
 
-    /// QQ / 网易云 / 汽水的三个动作与已有控制共用串行队列。press 是 AX 边界,selftest 用阻塞桩验证主线程仍可服务和失败回报。
+    /// 菜单 / 播放条通路的三个动作与已有控制共用串行队列。press 是 AX 边界,selftest 用阻塞桩验证主线程仍可服务和失败回报。
     public static func dispatchMenuAccessibility(
         _ command: PlaybackMenuControl.Command, for player: PlaybackPlayer,
         press: @escaping @Sendable (PlaybackMenuControl.Command, PlaybackPlayer) -> PlaybackMenuControl.Outcome = { PlaybackMenuControl.press($0, for: $1) },

@@ -228,11 +228,10 @@ extension PlaybackPlayer {
         case calibratesProgress
         /// QQ 读取、点按模式与喜欢菜单(`QQMusicMenuControl`),失焦时也按播放控制菜单(`PlaybackMenuControl`)。
         case switchesPlayMode
-        /// 网易云读、按菜单栏里的「喜欢歌曲」(`NetEaseMenuControl`),失焦时按播放控制菜单(`PlaybackMenuControl`);
-        /// 汽水读、按底部播放条上那颗心,失焦时按同一条播放条上的三颗播放键(`SodaMusicControl`)。都没有模式键。
+        /// 网易云读、按菜单栏里的「喜欢歌曲」(`NetEaseMenuControl`),酷狗按同名菜单项、读播放条那颗心(`KugouMenuControl`),
+        /// 两家失焦时都按播放控制菜单(`PlaybackMenuControl`);汽水读、按底部播放条上那颗心,失焦时按同一条播放条上的三颗
+        /// 播放键(`SodaMusicControl`)。都没有模式键。
         case controlsPlayback
-        /// 只为「喜欢」读、按界面上的项(酷狗 `KugouMenuControl`)。
-        case pressesFavorite
         /// 读、按菜单栏 Play 里的随机 / 循环(reAMP `ReampMenuControl`),失焦时按同一个菜单里的暂停、上一首、下一首
         /// (`PlaybackMenuControl`)。
         case pressesPlayMode
@@ -246,9 +245,8 @@ extension PlaybackPlayer {
         guard needsAccessibilityPermission else { return nil }
         switch self {
         case .qqMusic: return .switchesPlayMode
-        case .netease, .soda: return .controlsPlayback
+        case .netease, .kugou, .soda: return .controlsPlayback
         case .amazonMusic: return .calibratesProgress
-        case .kugou: return .pressesFavorite
         case .reamp: return .pressesPlayMode
         case .pinePlayer: return .refinesProgress
         default: return nil

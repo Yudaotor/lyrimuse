@@ -214,8 +214,22 @@ func runPlayerIdentityTests() {
             expectEqual(shown(menuRoute, true, false, false), false, "播放键反馈: 菜单连按第二下按显示的翻回去")
             expectEqual(shown(menuRoute, true, false, true), true, "播放键反馈: 菜单回报前回读已到 → 跟真值,不再翻")
             expectEqual(shown(menuRoute, false, true, false), false, "播放键反馈: 回读先到的是暂停 → 跟真值")
-            expectEqual(PlaybackMenuControl.players, [.qqMusic, .netease, .soda, .pinePlayer, .reamp],
-                        "失焦按界面控制: QQ 音乐、网易云、Pine Player、reAMP 按菜单,汽水按播放条")
+            expectEqual(PlaybackMenuControl.players, [.qqMusic, .netease, .kugou, .soda, .pinePlayer, .reamp],
+                        "失焦按界面控制: QQ 音乐、网易云、酷狗、Pine Player、reAMP 按菜单,汽水按播放条")
+            for command in [Command.playPause, .nextTrack, .previousTrack] {
+                expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                    focusHeldElsewhere: true, directQueryFallback: .kugou, mediaControlCommand: command.rawValue),
+                    Route.menuAccessibility(.kugou, command), "酷狗失焦: \(command.rawValue) 按它的「播放控制」菜单")
+            }
+            expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                focusHeldElsewhere: true, directQueryFallback: .kugou, mediaControlCommand: "seek"),
+                Route.withheld, "酷狗失焦: 跳转没有通路")
+            for (t, command) in [("播放/暂停", Command.playPause), ("下一曲", .nextTrack), ("上一曲", .previousTrack)] {
+                expectEqual(PlaybackMenuControl.command(forMenuTitle: t, player: .kugou), command, "酷狗菜单: \(t)")
+            }
+            for t in ["播放", "暂停", "下一首", "上一首", "下一个", "喜欢歌曲", "音量加"] {
+                expectEqual(PlaybackMenuControl.command(forMenuTitle: t, player: .kugou), nil, "酷狗菜单: \(t) 不认")
+            }
             for command in [Command.playPause, .nextTrack, .previousTrack] {
                 expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
                     focusHeldElsewhere: true, directQueryFallback: .reamp, mediaControlCommand: command.rawValue),
@@ -963,7 +977,7 @@ func runPlayerIdentityTests() {
                                         .favorite, .resume, .learnsAnchorLag, .spatialAudioOffset]),
             .qqMusic: (.qqMusic, [.extendedControls, .repeatOne, .favorite, .learnsAnchorLag, .catalogMenuRows]),
             .netease: (.netease, [.favorite, .learnsAnchorLag, .pausedAnchorStartsOnPlay, .catalogMenuRows]),
-            .kugou: (nil, [.favorite, .lateAnchorProbe, .resetAnchorCorrection, .stampsCaptureTime, .catalogMenuRows]),
+            .kugou: (nil, [.favorite, .resume, .lateAnchorProbe, .resetAnchorCorrection, .stampsCaptureTime, .catalogMenuRows]),
             .soda: (.soda, [.favorite, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .catalogMenuRows]),
             .kkbox: (.kkbox, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .followsRepublishedAnchors,
                               .snapsToReportedPosition, .stampsCaptureTime, .catalogMenuRows]),
@@ -1090,6 +1104,12 @@ func runPlayerIdentityTests() {
                     "决定表(源码): snapshotWhileChannelBroken 的 switch(连同 default 问的那一家)就是表里「\(On.channelFallback.rawValue)」那几家")
         expectEqual(named(sourceBody("static func canResume(_ player: PlaybackPlayer) -> Bool {", in: idle)), players(.resume),
                     "决定表(源码): IdlePlaybackActions.canResume 点名的就是表里「\(On.resume.rawValue)」那几家")
+        for path in ["lyrimuse/UI/LyricsWindowView.swift", "lyrimuse/UI/IdleStandbyView.swift", "lyrimuse/UI/MiniIdleStandby.swift",
+                     "lyrimuse/UI/NotchLyricsView.swift", "lyrimuse/MenuBar/MenuBarPanel.swift"] {
+            let text = code(path)
+            expectEqual(text.contains("IdlePlaybackActions.canResume(") && !text.contains("player == .appleMusic || player == .spotify"),
+                        true, "决定表(源码): \(path) 的「继续播放」按 IdlePlaybackActions.canResume 给,不自己点名播放器")
+        }
         expectEqual(named(sourceBody("var platformRows: [PlatformRow] {", in: code("lyrimuse/UI/LyricsMoreMenuModel.swift"))),
                     players(.catalogMenuRows),
                     "决定表(源码): LyricsMoreMenuModel.platformRows 点名的就是表里「\(On.catalogMenuRows.rawValue)」那几家")
@@ -1198,16 +1218,16 @@ func runPlayerIdentityTests() {
         typealias P = Set<PlaybackPlayer>
         expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission),
                     [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp, .pinePlayer],
-                    "辅助功能判据: 读界面的 Amazon Music / Pine Player、按菜单控制的 QQ 音乐/网易云/reAMP、按播放条控制的汽水、只为喜欢按界面的酷狗(改 shared/players.json 的 needsAccessibilityPermission)")
+                    "辅助功能判据: 读界面的 Amazon Music / Pine Player、按菜单控制的 QQ 音乐/网易云/酷狗/reAMP、按播放条控制的汽水(改 shared/players.json 的 needsAccessibilityPermission)")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.accessibilityUse),
-                    [.switchesPlayMode, .controlsPlayback, .pressesFavorite, .controlsPlayback, .calibratesProgress, .pressesPlayMode,
+                    [.switchesPlayMode, .controlsPlayback, .controlsPlayback, .controlsPlayback, .calibratesProgress, .pressesPlayMode,
                      .refinesProgress],
-                    "辅助功能判据: QQ 音乐是切模式、网易云/汽水是喜欢加失焦播放、酷狗只有喜欢、Amazon Music 是读进度加随机循环、reAMP 只有随机循环、Pine Player 是读进度条补位置加失焦播放,授权说明和体检提示按这个分开写")
+                    "辅助功能判据: QQ 音乐是切模式、网易云/酷狗/汽水是喜欢加失焦播放、Amazon Music 是读进度加随机循环、reAMP 只有随机循环、Pine Player 是读进度条补位置加失焦播放,授权说明和体检提示按这个分开写")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.automationUse), [.refinesProgress, .refinesProgress, .readsTrack, .readsTrack],
                     "自动化判据: Apple Music、Spotify 只让进度更准,Kaset、VOX 的曲目整份靠它,引导页和设置页的说明按这个分开写")
         expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp, .pinePlayer],
                     "辅助功能判据: 纯 auto 按超集算")
-        expectEqual(P([.kugou]).playersNeedingAccessibility, [.kugou], "酷狗单选也显示 AX 授权入口(喜欢键要它)")
+        expectEqual(P([.kugou]).playersNeedingAccessibility, [.kugou], "酷狗单选也显示 AX 授权入口(喜欢键、失焦播放控制要它)")
         expectEqual(P([.netease]).playersNeedingAccessibility, [.netease], "网易云单选也显示 AX 授权入口")
         expectEqual(PlaybackPlayer.netease.accessibilityUse, .controlsPlayback, "网易云授权用途不承诺模式或进度")
         expectEqual(PlaybackPlayer.soda.accessibilityUse, .controlsPlayback, "汽水授权用途: 喜欢加失焦时按播放条控制播放")

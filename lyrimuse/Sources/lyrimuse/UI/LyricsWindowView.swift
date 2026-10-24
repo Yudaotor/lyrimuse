@@ -4899,14 +4899,13 @@ struct LyricsWindowView: View {
     private var idlePlayer: PlaybackPlayer { IdlePlaybackActions.player }
 
     /// 停播欢迎态:居中 hero(呼吸光晕音符 + 文案 + 按钮),替换整套没有内容的双列骨架。
-    /// 按钮按播放器能力给:AM/Spotify 有 AppleScript 能真「继续播放」(AM=三段式,见
-    /// resumePlayback 注释;Spotify 自带恢复上下文),失败兜底激活 App——点击永远有可见
-    /// 反应;QQ/网易云/酷狗没有 AppleScript,只给「打开」。
+    /// 按钮按播放器能力给(`IdlePlaybackActions.canResume`):能真「继续播放」的给它,失败兜底激活 App——点击永远有可见
+    /// 反应;别的只给「打开」。
     /// 呼吸:图标+光晕 2.6s 往复缩放,reduceMotion 下静止。
     private var idleWelcomeView: some View {
         let player = idlePlayer
         let playerName = player.displayName
-        let canResume = player == .appleMusic || player == .spotify
+        let canResume = IdlePlaybackActions.canResume(player)
         return VStack(spacing: 0) {
             // 呼吸交给 Core Animation(`LayerBreathing`,主线程不参与);原来的 SwiftUI `.repeatForever`
             // 是主线程逐帧推进的。看不见时照样停(那一侧省的是渲染服务的合成)。

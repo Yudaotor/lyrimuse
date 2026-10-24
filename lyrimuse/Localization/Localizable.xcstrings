@@ -46619,23 +46619,6 @@
         }
       }
     },
-    "授权后，Lyrimuse 将读取%@的喜欢状态，并在你点按喜欢按钮时代为操作其界面中的对应控件。未授权时其他功能照常可用，仅不提供喜欢按钮" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "With permission, Lyrimuse reads whether the current song is liked in %@ and uses the matching control in its window when you click Like. Everything else works without permission; only the Like button is unavailable"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "授權後，Lyrimuse 將讀取%@的喜歡狀態，並在你按一下喜歡按鈕時代為操作其介面中的對應控制項。未授權時其他功能照常可用，僅不提供喜歡按鈕"
-          }
-        }
-      }
-    },
     "辅助功能权限可显示%@的喜欢按钮，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -46649,23 +46632,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "輔助使用權限可顯示%@的喜歡按鈕，也可在系統媒體焦點被其他 App 佔用時控制暫停、恢復和切換上一首或下一首"
-          }
-        }
-      }
-    },
-    "辅助功能权限可显示%@的喜欢按钮" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Accessibility permission enables liking songs for %@"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "輔助使用權限可顯示%@的喜歡按鈕"
           }
         }
       }
@@ -46687,23 +46653,6 @@
         }
       }
     },
-    "请开启此权限，以显示%@的喜欢按钮" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enable this permission to show the Like button for %@"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請開啟此權限，以顯示%@的喜歡按鈕"
-          }
-        }
-      }
-    },
     "未获得辅助功能权限，%@ 不显示喜欢按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -46717,23 +46666,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未取得輔助使用權限，%@ 不顯示喜歡按鈕，失去系統媒體焦點時也無法控制暫停、恢復和切換上一首或下一首"
-          }
-        }
-      }
-    },
-    "未获得辅助功能权限，%@ 不显示喜欢按钮" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Accessibility permission is missing: %@ has no Like button"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未取得輔助使用權限，%@ 不顯示喜歡按鈕"
           }
         }
       }
