@@ -1977,7 +1977,7 @@ private struct LyricsSettingsTab: View {
                     subtitle: L10n.t("为勾选的语言标注读音；是否显示在「歌词显示」中设置")
                 )
                 SettingsRawRow(insetToText: true) {
-                    SettingsEqualColumns(columns: 4, spacing: 6) {
+                    SettingsEqualColumns(columns: SettingsLanguageTile.columns, spacing: 6) {
                         romanizationTile(
                             L10n.t("日语"), .japanese,
                             help: L10n.t("罗马字，如 こんにちは → konnichiwa"))
@@ -2113,47 +2113,20 @@ private struct LyricsSettingsTab: View {
         .background { LastfmGlassGlow() }
     }
 
-    /// 「标注读音的语言」那一排里的一格,样式同「歌词来源」的格子:开着是玻璃底 + 勾,关着只剩细线、勾变空心。
+    /// 「标注读音的语言」那一排里的一格(`SettingsLanguageTile`,同「翻译语言包」的格子)。
     /// 跟繁简那一行一样**双写**:AppSettings 负责持久化,LocalPlaybackSource 负责让当前这首歌立刻重新解析
     /// (它的 didSet 会 reload)。只写一边的话,要么关了 App 就忘,要么改了要等下一首歌才生效。
     private func romanizationTile(_ title: String, _ option: RomanizationScripts, help: String) -> some View {
         let on = settings.romanizationScripts.contains(option)
-        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
         return Button {
             var next = settings.romanizationScripts
             if on { next.remove(option) } else { next.insert(option) }
             settings.romanizationScripts = next
             local.romanizationScripts = next
         } label: {
-            HStack(spacing: 6) {
-                ZStack {
-                    Circle()
-                        .fill(on ? Color.accentColor : .clear)
-                        .overlay(Circle().strokeBorder(on ? .clear : Color.secondary.opacity(0.4), lineWidth: 1.5))
-                    if on {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                }
-                .frame(width: 15, height: 15)
-                Text(title)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(on ? Color.primary : Color.secondary)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 9)
-            .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
-            .background {
-                if on {
-                    Color.clear.settingsCardBackground(cornerRadius: 10)
-                } else {
-                    shape.strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
-                }
-            }
-            .contentShape(shape)
+            SettingsLanguageTile(title: title, mark: on ? .on : .off)
         }
-        .buttonStyle(SettingsGlassHoverButtonStyle(cornerRadius: 10))
+        .buttonStyle(SettingsGlassHoverButtonStyle(cornerRadius: SettingsLanguageTile.cornerRadius))
         .help(help)
         .accessibilityAddTraits(on ? [.isSelected] : [])
     }

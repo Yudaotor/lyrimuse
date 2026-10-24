@@ -137,7 +137,7 @@ final class LanguagePackStatusStore: ObservableObject {
 }
 
 /// 「翻译语言包」设置行:右边一个读数「已下载 6 / 18」+ 一颗「管理…」,点开在卡里展开一块
-/// 3 列的语言网格(✓ 已下载 / ⭳ 未下载、点一下让系统下载 / 转轴 下载中),网格下面一条说明
+/// 4 列的语言网格(✓ 已下载 / ⭳ 未下载、点一下让系统下载 / 转轴 下载中;格子同「标注读音的语言」),网格下面一条说明
 /// 告诉人语言包归 macOS 管、要删去系统设置。
 ///
 /// 为什么这一行必须在 App 里、而不是交给采集器:系统的语言包下载会弹一个系统 UI,只有
@@ -150,7 +150,7 @@ final class LanguagePackStatusStore: ObservableObject {
 /// (系统会弹一张确认下载的 sheet),动词跟控件对不上——菜单项写的是「法语 · 未下载」,
 /// 看不出"点它就会下载";已装的那些点了什么都不发生;下载期间整个菜单的项全部置灰、却没
 /// 有任何地方解释为什么。网格把每种语言的状态摆在明处,只有没装的那些是按钮(悬停有底色、
-/// 提示写「点击下载」),装好的就是一个绿勾,下载中的那一格自己转圈——每个状态各占一个
+/// 提示写「点击下载」),装好的就是一个实心勾,下载中的那一格自己转圈——每个状态各占一个
 /// 格子,不用再靠一串菜单文字去猜。
 ///
 /// 展开而不是 popover:下载确认是系统弹在**设置窗口**上的 sheet,popover 在它弹出时会被
@@ -168,19 +168,12 @@ struct LanguagePackCard: View {
     @ObservedObject private var store = LanguagePackStatusStore.shared
     @State private var pending: TranslationSession.Configuration?
     @State private var downloading: String?
-    /// 鼠标悬在哪一格上(只为悬停底色,跟「歌词来源」网格的 hoveredSource 同一个用法)。
-    @State private var hoveredCode: String?
     /// 每发起一次下载 +1。两处靠它:
     ///   1. 下面那个**隐形 carrier** 的 `.id(downloadNonce)` —— 这是「再点同一个语言一直转圈」
     ///      的真正解药(见 requestDownload 的头注);
     ///   2. 看门狗 `.task(id: downloadNonce)` 靠它重新计时。
     /// 两处都需要「每次请求必然变化的键」,而 `downloading` 在连点同一个语言时值不变。
     @State private var downloadNonce = 0
-
-    /// 网格固定 3 列(理由跟「歌词来源」网格固定 4 列相同:行数只取决于语言数,不随译名
-    /// 长短折行;18 种正好 6 行)。3 而不是 4 是因为英文译名更长——“Chinese, Traditional”
-    /// 这类在 4 列的格宽下要截断。
-    private static let columns = 3
 
     /// 译文的目标语言,跟采集器交给本机翻译的一致(translate.go `appleLangCode` 套在
     /// `resolveLyricsTranslationLanguage` 的结果上):
@@ -333,19 +326,12 @@ struct LanguagePackCard: View {
         downloadNonce += 1
     }
 
-    /// 语言网格。写死列数的 `Grid`(不是 LazyVGrid):格子数是语言数、不需要按内容自适应,
-    /// 而 Lazy 容器在窗口不可见时不铺格子(「通用」页的图标网格踩过,见 MenuBarIconPicker)。
-    /// 最后一行不满 3 格时 Grid 自己会留空,不用补占位。
+    /// 语言网格,跟「标注读音的语言」同一个排法(`SettingsEqualColumns`,不是 LazyVGrid:Lazy 容器在
+    /// 窗口不可见时不铺格子,「通用」页的图标网格踩过,见 MenuBarIconPicker)。
     private var packGrid: some View {
-        let codes = store.codes
-        return Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 6) {
-            ForEach(Array(stride(from: 0, to: codes.count, by: Self.columns)), id: \.self) { start in
-                GridRow {
-                    ForEach(codes[start ..< min(start + Self.columns, codes.count)], id: \.self) { code in
-                        packCell(code)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
+        SettingsEqualColumns(columns: SettingsLanguageTile.columns, spacing: 6) {
+            ForEach(store.codes, id: \.self) { code in
+                packCell(code)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -353,70 +339,33 @@ struct LanguagePackCard: View {
         .accessibilityLabel(L10n.t("翻译语言包"))
     }
 
-    /// 一格 = 状态图标 + 语言名,三种形态各自说话:
-    /// - 已下载:绿色实心勾 + 主色文字,**不是按钮**(系统对已装的语言不会重复下载,点了
+    /// 一格(`SettingsLanguageTile`,同「标注读音的语言」的格子),三种形态各自说话:
+    /// - 已下载:玻璃底 + 实心勾,**不是按钮**(系统对已装的语言不会重复下载,点了
     ///   什么都不发生,那就别让它看起来能点);删除走系统设置,网格下面那句说明指了路。
-    /// - 未下载:空心下载圈 + 次要色文字,是按钮:悬停给一层极淡的底色说明"能点",提示
-    ///   写「点击下载」;点了把这一格交给 translationTask,系统弹 sheet 问要不要下载。
-    /// - 下载中:小转轴代替图标。系统的下载 sheet 是模态的,这个态实际上只在 sheet 弹出前
+    /// - 未下载:细线 + 空心圈里一个下载箭头,是按钮;点了把这一格交给 translationTask,系统弹 sheet 问要不要下载。
+    /// - 下载中:小转轴代替圆圈。系统的下载 sheet 是模态的,这个态实际上只在 sheet 弹出前
     ///   后各露一瞬,但没有它,从点下到 sheet 出现之间就是一段"点了没反应"。
-    ///
-    /// 视觉上跟「歌词来源」网格是一家(圆角小格:有的是玻璃底,没有的只剩细线;圆形状态图标 15pt),读的人
-    /// 不用再学一套。区别只在语义:那边的勾是"启用了",这边的勾是"装好了"。
     @ViewBuilder
     private func packCell(_ code: String) -> some View {
         let installed = store.statuses[code] == .installed
         let isDownloading = downloading == code
         let name = LanguagePackStatusStore.displayName(code)
-        let label = HStack(spacing: 6) {
-            Group {
-                if isDownloading {
-                    ProgressView().controlSize(.mini)
-                } else if installed {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.green)
-                } else {
-                    Image(systemName: "arrow.down.circle")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(width: 15, height: 15)
-            Text(name)
-                .font(.system(size: 12.5))
-                .foregroundStyle(installed ? Color.primary : Color.secondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-        }
-        .padding(.horizontal, 9)
-        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
-        let tile = RoundedRectangle(cornerRadius: 10, style: .continuous)
 
         if installed {
-            label
-                .background { Color.clear.settingsCardBackground(cornerRadius: 10) }
+            SettingsLanguageTile(title: name, mark: .on)
                 .help(L10n.t("已下载"))
                 .accessibilityLabel(String(format: L10n.t("%@，已下载"), name))
         } else {
-            let hovered = hoveredCode == code
             Button {
                 requestDownload(code)
             } label: {
-                label
-                    .background {
-                        tile.fill(Color.primary.opacity(hovered ? 0.05 : 0))
-                        tile.strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
-                    }
-                    .contentShape(tile)
+                SettingsLanguageTile(title: name, mark: isDownloading ? .progress : .download)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SettingsGlassHoverButtonStyle(cornerRadius: SettingsLanguageTile.cornerRadius))
             // 一次只下一个:系统 sheet 本来就是模态的,这里置灰只是把"为什么现在点不动"
             // 画出来。转圈的那一格不置灰,不然转轴也跟着变淡。
             .disabled(downloading != nil && !isDownloading)
             .help(isDownloading ? L10n.t("下载中…") : L10n.t("点按下载"))
-            .onHover { hoveredCode = $0 ? code : (hoveredCode == code ? nil : hoveredCode) }
-            .animation(.easeOut(duration: 0.12), value: hovered)
             .accessibilityLabel(String(format: L10n.t("%@，点按下载"), name))
         }
     }

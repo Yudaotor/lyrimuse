@@ -897,6 +897,67 @@ extension SettingsToggleTile where Accessory == EmptyView {
     }
 }
 
+/// 语言网格(「标注读音的语言」「翻译语言包」)里的一格:圆形状态 + 语言名,两处都排 `SettingsEqualColumns(columns: 4)`。
+/// 开着 / 装好了是玻璃底 + 强调色实心勾,没开 / 没装只剩细线、圆变空心(没装的空心圆里画下载箭头)。两处长一个样,只在这里改。
+/// 能点的那一格外面套 `SettingsGlassHoverButtonStyle(cornerRadius: SettingsLanguageTile.cornerRadius)`。
+struct SettingsLanguageTile: View {
+    enum Mark: Equatable { case on, off, download, progress }
+
+    static let cornerRadius: CGFloat = 10
+    static let columns = 4
+
+    let title: String
+    let mark: Mark
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+        HStack(spacing: 6) {
+            indicator
+                .frame(width: 15, height: 15)
+            // 英文语言名在四分之一卡宽里可能装不下:先缩一点,再不够单行 + 尾部省略号(同「歌词来源」网格)
+            Text(title)
+                .font(.system(size: 12.5))
+                .foregroundStyle(mark == .on ? Color.primary : Color.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .truncationMode(.tail)
+        }
+        .padding(.horizontal, 9)
+        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+        .background {
+            if mark == .on {
+                Color.clear.settingsCardBackground(cornerRadius: Self.cornerRadius)
+            } else {
+                shape.strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+            }
+        }
+        .contentShape(shape)
+    }
+
+    @ViewBuilder
+    private var indicator: some View {
+        switch mark {
+        case .progress:
+            ProgressView().controlSize(.mini)
+        case .on, .off, .download:
+            ZStack {
+                Circle()
+                    .fill(mark == .on ? Color.accentColor : .clear)
+                    .overlay(Circle().strokeBorder(mark == .on ? .clear : Color.secondary.opacity(0.4), lineWidth: 1.5))
+                if mark == .on {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.white)
+                } else if mark == .download {
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 7.5, weight: .bold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+}
+
 /// 子视图按顺序排进等宽的 `columns` 列,一行的高度取这一行里最高的那个,每格都撑满自己那一行。
 /// 不用 LazyVGrid:Lazy 容器在窗口不可见时不铺格子(同 MenuBarIconPicker 的取舍)。
 struct SettingsEqualColumns: Layout {
