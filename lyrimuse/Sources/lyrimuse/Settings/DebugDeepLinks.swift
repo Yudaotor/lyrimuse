@@ -55,6 +55,9 @@ enum DebugDeepLinks {
         case let .settingsSearch(query):
             NotificationCenter.default.post(name: settingsSearchNotification, object: query)
             logger.notice("debug settings search \(query, privacy: .public)")
+        case let .stall(ms):
+            logger.notice("debug stall: blocking main thread \(ms, privacy: .public) ms")
+            usleep(UInt32(ms) * 1000)
         case .saveConfig:
             Task { @MainActor in
                 let ok = await ConfigStore.shared.save()

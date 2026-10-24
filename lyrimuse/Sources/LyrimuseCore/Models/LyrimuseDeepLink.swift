@@ -108,7 +108,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                             hoverControls: Bool? = nil)
         /// 日语读音标罗马字还是假名,跟设置页「日语读音」走同一条路(`debug/japanese-reading?style=romaji|kana`)。
         case japaneseReading(JapaneseReadingStyle)
+        /// 主线程原地睡这么多毫秒(`debug/stall?ms=`,1…`maxStallMs`):造出「别的窗口把主线程占住」那一下,验动画扛不扛得住。
+        case stall(ms: Int)
     }
+
+    /// `debug/stall` 的上限(毫秒)。再长就是把 App 卡死了。
+    public static let maxStallMs = 2_000
 
     /// `action/` 下不对应快捷键的那几个名字(跟 `LyrimuseAction.linkName` 不能重名,selftest 核对)。
     public static let extraActionNames = ["copy-lyric", "surfaces", "lyrics-offset", "play-mode"]
@@ -206,6 +211,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             self = .debug(.volume(percent: percent))
         case ("debug", "/config-save"):
             self = .debug(.saveConfig)
+        case ("debug", "/stall"):
+            guard let ms = value("ms").flatMap(Int.init), (1...Self.maxStallMs).contains(ms) else { return nil }
+            self = .debug(.stall(ms: ms))
         case ("debug", "/settings-search"):
             guard let query = value("q")?.trimmingCharacters(in: .whitespaces), !query.isEmpty else { return nil }
             self = .debug(.settingsSearch(query: query))
@@ -337,6 +345,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.path = "/settings-search"
                 components.queryItems = [URLQueryItem(name: "q", value: query)]
             case .saveConfig: components.path = "/config-save"
+            case let .stall(ms):
+                components.path = "/stall"
+                components.queryItems = [URLQueryItem(name: "ms", value: String(ms))]
             case let .knockout(leg, on):
                 components.path = "/knockout"
                 components.queryItems = [URLQueryItem(name: "leg", value: leg.rawValue), URLQueryItem(name: "on", value: on ? "1" : "0")]
