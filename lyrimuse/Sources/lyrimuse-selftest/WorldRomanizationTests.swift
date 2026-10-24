@@ -198,4 +198,54 @@ func checkWorldRomanization() {
     expectEqual(LyricsPreviewText.mayHaveRomanization("Привет", scripts: [.thai]), false, "可能有读音: 只开泰语")
     expectEqual(LyricsPreviewText.mayHaveRomanization("إنت حبيبي", scripts: .default), false,
                 "可能有读音: 阿拉伯字母不现算")
+
+    // ---- 源自带读音里没转的原文片段(10 章决策 54) ----
+    func sourceReading(_ lyrics: String, roma: String, scripts: RomanizationScripts = .default,
+                       cantonese: Bool = false, at ms: Int = 1000) -> String? {
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: lyrics, lyricsTr: "", lyricsRoma: roma, lyricsYRC: "", romanizationScripts: scripts,
+                    songIsCantonese: cantonese)
+        return engine.activeLine(atMs: ms)?.romanization
+    }
+    let R = SourceReadingResidue.self
+    expectEqual(R.patched("tsukame ! egai ta 梦 o") { $0 == "梦" ? "yume" : nil }, "tsukame ! egai ta yume o",
+                "残留: 没转的汉字换成读音")
+    expectEqual(R.patched("Shì huì 謊yán") { _ in "huǎng" }, "Shì huì huǎng yán", "残留: 紧贴字母的补一个空格")
+    expectEqual(R.patched("zi you (zi you 自由)") { _ in "zì yóu" }, "zi you (zi you zi you)",
+                "残留: 源那一行不标声调,补进去的也不标")
+    expectEqual(R.patched("a 梦 b") { _ in nil }, "a 梦 b", "残留: 给不出读音的照原样")
+    expectEqual(R.patched("a 梦 b") { _ in "梦x" }, "a 梦 b", "残留: 给回来的还带着原文就不换")
+    expectEqual(R.patched("nǐ謊yán") { _ in "huǎng" }, "nǐ huǎng yán", "残留: 前后紧贴字母都补空格")
+    expectEqual(R.patched("ī ya ー yahayaha") { _ in "x" }, "ī ya ー yahayaha", "残留: 单独的长音记号是源写的,不算")
+    expectEqual(R.patched("habibi حبيبي") { _ in "x" }, "habibi حبيبي", "残留: 阿拉伯字母本地不现算,不算")
+    expectEqual(R.patched("(എടാ മോനെ)") { $0 == "എടാ" ? "eṭā" : "mōne" }, "(eṭā mōne)", "残留: 印度系的元音符号跟着字母走")
+    expectEqual(R.patched("a ラーメン b") { $0 == "ラーメン" ? "rāmen" : nil }, "a ramen b", "残留: 片段里的长音跟着片段走")
+
+    let jaRoma = "[00:01.00]tsukame ! egai ta 梦 o\n[00:02.00]sora"
+    expectEqual(sourceReading("[00:01.00]つかめ! 描いた夢を\n[00:02.00]空", roma: jaRoma), "tsukame ! egai ta yume o",
+                "接入: 源读音里的简体字,原文显示的是修过的日文汉字,按原文分词读")
+    expectEqual(sourceReading("[00:01.00]つかめ! 描いた梦を\n[00:02.00]空", roma: jaRoma), "tsukame ! egai ta yume o",
+                "接入: 原文也是简体字,转繁体再读")
+    expectEqual(sourceReading("[00:01.00]В очите ѝ тогава ще ме припознаеш",
+                              roma: "[00:01.00]V ochite ѝ togava shte me pripoznaesh"),
+                "V ochite i togava shte me pripoznaesh", "接入: 源读音里没转的西里尔字母按整首认出的语言补")
+    expectEqual(sourceReading("[00:01.00]В очите ѝ тогава ще ме припознаеш",
+                              roma: "[00:01.05]V ochite ѝ togava shte me pripoznaesh"),
+                "V ochite i togava shte me pripoznaesh", "接入: 时间没对齐、按就近挂上的源读音同样补")
+    let taLyrics = "[00:01.00]இசையாலே இன்ப நிலை காண வந்தாயோ (എടാ മോനെ)"
+    let taRoma = "[00:01.00]icaiyālē iṉpa nilai kāṇa vantāyō (എടാ മോനെ)"
+    expectEqual(sourceReading(taLyrics, roma: taRoma), "icaiyālē iṉpa nilai kāṇa vantāyō (eṭā mōne)",
+                "接入: 泰米尔歌源读音里夹的马拉雅拉姆文补上")
+    expectEqual(sourceReading(taLyrics, roma: taRoma, scripts: RomanizationScripts.default.subtracting(.malayalam)),
+                taRoma.replacingOccurrences(of: "[00:01.00]", with: ""), "接入: 那种文字的开关关着就不补")
+    expectEqual(sourceReading("[00:01.00]我哋一齊行", roma: "[00:01.00]ngo5 dei6 一 cai4 hang4", cantonese: true),
+                "ngo5 dei6 一 cai4 hang4", "接入: 粤语歌的汉字不补(现算出来是普通话拼音)")
+
+    // 分词器读不出的简体字按繁体读;古木基文、天城文没有带点写法的点不出字。
+    expectEqual(sourceReading("[00:01.00]つかめ! 描いた梦を\n[00:02.00]空", roma: ""), "tsukame ! egai ta yume o",
+                "现算: 日文歌里分词器读不出的简体字按繁体读")
+    let unreadBoth = sourceReading("[00:01.00]僕们の歌を\n[00:02.00]空", roma: "")
+    expectEqual(unreadBoth.map { $0.contains("们") && !$0.contains("們") }, true, "现算: 繁体也读不出就照原样留着")
+    expectEqual(IndicRomanization.romanize("ਢਾਕੜ\u{0A3C}"), "ḍhākaṛa", "ISO 15919: 古木基文多余的点不出字")
+    expectEqual(IndicRomanization.romanize("म\u{093C}"), "ma", "ISO 15919: 天城文多余的点不出字")
 }

@@ -853,9 +853,28 @@ public enum Romanizer {
             }
             return out
         } ?? []
+        out = readingUnreadKanji(out, in: text)
         out = mergingNumeralCounters(out, in: text)
         guard !songLooksJapanese else { return out }
         return applyCodeSwitchFallback(to: out, in: text, reading: hanRuns)
+    }
+
+    /// 分词器没读出来、原样吐回的汉字(日文歌里混的简体字、异体字:梦、尘、铃木)按繁体再分词读一次,
+    /// 读出来了才换。繁体是 ICU 的简繁转换,跟 `JapaneseKanjiRepair` 同一个来源。见 10 章决策 54。
+    private static func readingUnreadKanji(_ segs: [JapaneseSegment], in text: String) -> [JapaneseSegment] {
+        guard segs.contains(where: { containsHan($0.latin) }) else { return segs }
+        let ns = text as NSString
+        return segs.map { seg in
+            guard containsHan(seg.latin) else { return seg }
+            let piece = ns.substring(with: NSRange(location: seg.utf16Start, length: seg.utf16Length))
+            guard let variant = piece.applyingTransform(StringTransform("Hans-Hant"), reverse: false),
+                variant != piece
+            else { return seg }
+            let read = joinLatin(japaneseSegments(variant).map(\.latin))
+            guard !read.isEmpty, !containsHan(read) else { return seg }
+            let kana = piece.contains(where: KanaAnnotation.needsAnnotation) ? kanaFromLatin(read) : nil
+            return JapaneseSegment(utf16Start: seg.utf16Start, utf16Length: seg.utf16Length, latin: read, kana: kana)
+        }
     }
 
     // MARK: - 行内中日无缝拼接

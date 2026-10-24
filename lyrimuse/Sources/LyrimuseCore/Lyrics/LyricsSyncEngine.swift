@@ -2004,6 +2004,7 @@ public final class LyricsSyncEngine {
         // 常年挂着的进程把每一句听过的歌词文本都无限期缓存下去),不清空也不会算错,
         // 只是没必要让它跨曲目继续增长。
         romanizerFallbackCache.removeAll()
+        residueCache.removeAll()
         wordGroupCache.removeAll()
         segmentsCache.removeAll()
         needsRomanizationCache.removeAll()
@@ -2310,11 +2311,13 @@ public final class LyricsSyncEngine {
             // romaTextByPlainText 的建法,对称处理)。
             let key = Self.contentMatchKey(plainText)
             if let byContent = romaTextByPlainText[key] {
-                return byContent
+                return fillingResidue(byContent)
             }
-            if let adopted = romaFallback.adopted[timeMs], adopted.key == key { return adopted.text }
+            if let adopted = romaFallback.adopted[timeMs], adopted.key == key {
+                return fillingResidue(adopted.text)
+            }
             if romaFallback.suppressed[timeMs] == key { return nil }
-            if let fromSource = nearestText(romaLines, timeMs) { return fromSource }
+            if let fromSource = nearestText(romaLines, timeMs) { return fillingResidue(fromSource) }
             // 中文 / 粤语歌的读音轨只管汉字行(粤拼查不到假名、谚文),里面一行日文 / 韩文 / 泰文这些没有对应,照常现算。
             let foreignLine = (songScript == .cantonese || songScript == .chinese)
                 && (Romanizer.looksJapanese(plainText) || Romanizer.containsHangul(plainText)
@@ -2324,6 +2327,21 @@ public final class LyricsSyncEngine {
         // 不在这里替用户决定"中文不要拼音":那是用户自己的开关(上面的 romanizationAllowed,中文默认关)。绝大多数中文歌没有
         // 服务端 lyrics_roma,用户打开中文罗马音时,能出拼音的唯一途径就是这里的客户端兜底。
         return computedReading(plainText)
+    }
+
+    /// 源读音里没转的原文片段按现算补上(`SourceReadingResidue`)。按源读音行缓存:每一拍都调。
+    private var residueCache: [String: String] = [:]
+
+    private func fillingResidue(_ source: String) -> String {
+        if let cached = residueCache[source] { return cached }
+        let patched = SourceReadingResidue.patched(source) { residue in
+            guard romanizationAllowed(for: residue) else { return nil }
+            // 客户端没有粤拼,粤语歌的汉字现算出来是普通话拼音。
+            if songScript == .cantonese, Romanizer.containsHan(residue) { return nil }
+            return computedReading(residue)
+        }
+        residueCache[source] = patched
+        return patched
     }
 
     /// 背景人声那一行的读音:只现算。源自带 / 预生成的罗马音按主句的时间挂,同一个时间点取到的是主句那一行。
