@@ -360,6 +360,16 @@ func runPineTests() {
         expectEqual(PlaybackMenuControl.command(forMenuKey: " ", modifiers: 0, player: .pinePlayer), nil, "Pine 菜单: 带 ⌘ 的不认")
         expectEqual(PlaybackMenuControl.command(forMenuKey: " ", modifiers: none, player: .qqMusic), nil, "Pine 菜单: 别的播放器不按快捷键认")
         expectEqual(PlaybackMenuControl.players.contains(.pinePlayer), true, "Pine 菜单: 失焦时走菜单")
+        // 音量:主窗口里取值正好 0~1 的那根滑块(另一根是进度条,最大值是整秒时长)。
+        typealias PV = PineVolume
+        let bar = PV.Slider(min: 0, max: 245, value: 12), volume = PV.Slider(min: 0, max: 1, value: 0.62)
+        expectEqual(PV.volumeIndex([bar, volume]), 1, "Pine 音量: 认 0~1 那根")
+        expectEqual(PV.volumeIndex([bar]), nil, "Pine 音量: 只有进度条认不出")
+        expectEqual(PV.volumeIndex([PV.Slider(min: 0, max: 1, value: 0), volume]), nil, "Pine 音量: 两根都是 0~1(这首 1 秒长)不猜")
+        expectEqual(PV.volumeIndex([PV.Slider(min: 0, max: 100, value: 50)]), nil, "Pine 音量: 0~100 的不认")
+        expectEqual(PV.volumeIndex([PV.Slider(min: -1, max: 1, value: 0)]), nil, "Pine 音量: 最小值不是 0 的不认")
+        expectEqual([PV.percent(0.62), PV.percent(0.005), PV.percent(1.2), PV.percent(-0.1)], [62, 1, 100, 0],
+                    "Pine 音量: 滑块值换成 0~100,四舍五入、越界夹住")
         expectEqual(MusicPlaybackController.controlRoute(
             exclusivelyAppleMusic: false, focusFallback: nil, focusHeldElsewhere: true, directQueryFallback: .pinePlayer,
             mediaControlCommand: "next-track"), .menuAccessibility(.pinePlayer, .nextTrack), "Pine 菜单: 焦点被占时下一首走菜单")

@@ -236,7 +236,7 @@ extension PlaybackPlayer {
         /// (`PlaybackMenuControl`)。
         case pressesPlayMode
         /// 读界面进度条把整秒的位置补准(Pine Player `PinePlayhead`),读播放列表给预解析(`PinePlaylist`),按菜单切循环(`PineMenuControl`),
-        /// 失焦时按播放控制菜单(`PlaybackMenuControl`)。
+        /// 读写音量滑块(`PineVolume`),失焦时按播放控制菜单(`PlaybackMenuControl`)。
         case refinesProgress
     }
 

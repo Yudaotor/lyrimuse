@@ -53310,75 +53310,6 @@
         }
       }
     },
-    "未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，不显示循环按钮，失去焦点时也无法控制播放" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Accessibility permission; lyrics for %@ may be off by about half a second after seeking, the repeat button is hidden, and playback can’t be controlled while focus is elsewhere"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，不显示循环按钮，失去焦点时也无法控制播放"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未取得輔助使用權限，%@ 拖動進度後歌詞可能差半秒左右，不顯示循環按鈕，失去焦點時也無法控制播放"
-          }
-        }
-      }
-    },
-    "辅助功能权限可让%@拖动进度后的歌词更准、显示循环按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Accessibility permission keeps lyrics for %@ accurate after seeking, enables its repeat button, and lets Lyrimuse pause, resume and skip tracks through its menus while another app holds the system media focus"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "辅助功能权限可让%@拖动进度后的歌词更准、显示循环按钮，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "輔助使用權限可讓%@拖動進度後的歌詞更準、顯示循環按鈕，也可在系統媒體焦點被其他 App 佔用時，透過選單暫停、恢復和切換上一首或下一首"
-          }
-        }
-      }
-    },
-    "请开启此权限，以校准%@拖动进度后的播放位置、显示循环按钮，并在失去系统媒体焦点时控制播放" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn this on to calibrate the position for %@ after seeking, show its repeat button and control playback when it loses the system media focus"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请开启此权限，以校准%@拖动进度后的播放位置、显示循环按钮，并在失去系统媒体焦点时控制播放"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請開啟此權限，以校準%@拖動進度後的播放位置、顯示循環按鈕，並在失去系統媒體焦點時控制播放"
-          }
-        }
-      }
-    },
     "选择要分享的句子" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -53812,29 +53743,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未取得完整磁碟取用權限，無法讀取 %@ 的播放佇列"
-          }
-        }
-      }
-    },
-    "%@ 报告的播放进度只精确到秒。授权后，Lyrimuse 将读取其界面上的进度条校准位置、读取播放列表以预先解析即将播放的歌曲，并操作其菜单以控制循环；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可使用，但拖动进度后歌词可能差半秒左右，不提供循环按钮，失去焦点时也无法控制播放" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ reports playback progress only to the second. With permission, Lyrimuse reads the progress bar in its window to calibrate the position, reads its playlist to resolve upcoming tracks in advance and uses its menus to control repeat; it can also pause, resume and skip tracks while another app holds the system media focus. Without permission, lyrics may be off by about half a second after seeking, the repeat button is unavailable, and playback can’t be controlled while focus is elsewhere"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 报告的播放进度只精确到秒。授权后，Lyrimuse 将读取其界面上的进度条校准位置、读取播放列表以预先解析即将播放的歌曲，并操作其菜单以控制循环；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可使用，但拖动进度后歌词可能差半秒左右，不提供循环按钮，失去焦点时也无法控制播放"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 回報的播放進度只精確到秒。授權後，Lyrimuse 將讀取其介面上的進度條校準位置、讀取播放清單以預先解析即將播放的歌曲，並操作其選單以控制循環；系統媒體焦點被其他 App 佔用時，也可暫停、恢復和切換上一首或下一首。未授權時仍可使用，但拖動進度後歌詞可能差半秒左右，不提供循環按鈕，失去焦點時也無法控制播放"
           }
         }
       }
@@ -55330,6 +55238,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "酷狗音樂專輯頁"
+          }
+        }
+      }
+    },
+    "未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，不显示循环按钮和音量调节，失去焦点时也无法控制播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Accessibility permission; lyrics for %@ may be off by about half a second after seeking, the repeat button and volume control are hidden, and playback can’t be controlled while focus is elsewhere"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，不显示循环按钮和音量调节，失去焦点时也无法控制播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未取得輔助使用權限，%@ 拖動進度後歌詞可能差半秒左右，不顯示循環按鈕和音量調節，失去焦點時也無法控制播放"
+          }
+        }
+      }
+    },
+    "辅助功能权限可让%@拖动进度后的歌词更准、显示循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility permission keeps lyrics for %@ accurate after seeking, enables its repeat button and volume control, and lets Lyrimuse pause, resume and skip tracks through its menus while another app holds the system media focus"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "辅助功能权限可让%@拖动进度后的歌词更准、显示循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时，通过菜单暂停、恢复和切换上一首或下一首"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輔助使用權限可讓%@拖動進度後的歌詞更準、顯示循環按鈕和音量調節，也可在系統媒體焦點被其他 App 佔用時，透過選單暫停、恢復和切換上一首或下一首"
+          }
+        }
+      }
+    },
+    "请开启此权限，以校准%@拖动进度后的播放位置、显示循环按钮和音量调节，并在失去系统媒体焦点时控制播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn this on to calibrate the position for %@ after seeking, show its repeat button and volume control, and control playback when it loses the system media focus"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请开启此权限，以校准%@拖动进度后的播放位置、显示循环按钮和音量调节，并在失去系统媒体焦点时控制播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請開啟此權限，以校準%@拖動進度後的播放位置、顯示循環按鈕和音量調節，並在失去系統媒體焦點時控制播放"
+          }
+        }
+      }
+    },
+    "%@ 报告的播放进度只精确到秒。授权后，Lyrimuse 将读取其界面上的进度条校准位置、读取播放列表以预先解析即将播放的歌曲，操作其菜单以控制循环，并读取和调节其音量；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可使用，但拖动进度后歌词可能差半秒左右，不提供循环按钮和音量调节，失去焦点时也无法控制播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ reports playback progress only to the second. With permission, Lyrimuse reads the progress bar in its window to calibrate the position, reads its playlist to resolve upcoming tracks in advance, uses its menus to control repeat and reads and sets its volume; it can also pause, resume and skip tracks while another app holds the system media focus. Without permission, lyrics may be off by about half a second after seeking, the repeat button and volume control are unavailable, and playback can’t be controlled while focus is elsewhere"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 报告的播放进度只精确到秒。授权后，Lyrimuse 将读取其界面上的进度条校准位置、读取播放列表以预先解析即将播放的歌曲，操作其菜单以控制循环，并读取和调节其音量；系统媒体焦点被其他 App 占用时，也可暂停、恢复和切换上一首或下一首。未授权时仍可使用，但拖动进度后歌词可能差半秒左右，不提供循环按钮和音量调节，失去焦点时也无法控制播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 回報的播放進度只精確到秒。授權後，Lyrimuse 將讀取其介面上的進度條校準位置、讀取播放清單以預先解析即將播放的歌曲，操作其選單以控制循環，並讀取和調整其音量；系統媒體焦點被其他 App 佔用時，也可暫停、恢復和切換上一首或下一首。未授權時仍可使用，但拖動進度後歌詞可能差半秒左右，不提供循環按鈕和音量調節，失去焦點時也無法控制播放"
           }
         }
       }

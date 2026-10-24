@@ -171,7 +171,7 @@ final class PlayerHealthMonitor: ObservableObject {
             }
             let refines = accessibilityMissingPlayers.filter { $0.accessibilityUse == .refinesProgress }
             if !refines.isEmpty {
-                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，不显示循环按钮，失去焦点时也无法控制播放"), names(refines)))
+                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 拖动进度后歌词可能差半秒左右，不显示循环按钮和音量调节，失去焦点时也无法控制播放"), names(refines)))
             }
             return parts.joined(separator: L10n.t("；"))
         }
