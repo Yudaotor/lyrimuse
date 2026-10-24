@@ -167,7 +167,7 @@ final class PlayerHealthMonitor: ObservableObject {
             }
             let modeOnly = accessibilityMissingPlayers.filter { $0.accessibilityUse == .pressesPlayMode }
             if !modeOnly.isEmpty {
-                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环按钮，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首"), names(modeOnly)))
+                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环按钮和音量调节，失去系统媒体焦点时也无法控制暂停、恢复和切换上一首或下一首"), names(modeOnly)))
             }
             let refines = accessibilityMissingPlayers.filter { $0.accessibilityUse == .refinesProgress }
             if !refines.isEmpty {

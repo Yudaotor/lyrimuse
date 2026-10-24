@@ -973,8 +973,10 @@ public enum MusicPlaybackController {
         case .qqMusic:
             // QQ 菜单栏只有一档一档的「音量加 / 音量减」,当前值要另读它的偏好,不接:那颗胶囊对 QQ 不出现。
             return nil
-        case .amazonMusic, .reamp: // 这几家只接了随机 / 循环,音量不接。
+        case .amazonMusic: // 只接了随机 / 循环,音量不接。
             return nil
+        case .reamp:
+            return ReampVolume.read()
         case .pinePlayer:
             return PineVolume.read()
         case .vox:
@@ -1002,8 +1004,10 @@ public enum MusicPlaybackController {
                 spotifyRunningGuard + #"tell application "Spotify" to set sound volume to \#(v)"#) != nil
         case .kaset:
             return runKasetJXACapturing("        K.setVolume(\(v));\n        return \"ok\";") == "ok"
-        case .qqMusic, .amazonMusic, .reamp: // 同 soundVolume(for:):这几家不接音量。
+        case .qqMusic, .amazonMusic: // 同 soundVolume(for:):这几家不接音量。
             return false
+        case .reamp:
+            return ReampVolume.set(v)
         case .pinePlayer:
             return PineVolume.set(v)
         case .vox:

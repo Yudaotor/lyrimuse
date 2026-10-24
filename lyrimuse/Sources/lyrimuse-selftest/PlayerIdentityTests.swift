@@ -981,6 +981,20 @@ func runPlayerIdentityTests() {
         }
         try? FileManager.default.removeItem(at: probe)
 
+        // 音量:窗口里取值正好 0~100 的那根滑块(均衡器 0~63,左右声道 −100~100)。
+        typealias RV = ReampVolume
+        let eq = PineVolume.Slider(min: 0, max: 63, value: 32), balance = PineVolume.Slider(min: -100, max: 100, value: 0)
+        let level = PineVolume.Slider(min: 0, max: 100, value: 50)
+        expectEqual(RV.volumeIndex([eq, eq, level, balance]), 2, "reAMP 音量: 认 0~100 那根")
+        expectEqual(RV.volumeIndex([eq, balance]), nil, "reAMP 音量: 只有均衡器和左右声道认不出")
+        expectEqual(RV.volumeIndex([level, level]), nil, "reAMP 音量: 两根 0~100 不猜")
+        expectEqual([RV.percent(49.6), RV.percent(120), RV.percent(-3)], [50, 100, 0], "reAMP 音量: 四舍五入、越界夹住")
+        let controller = (try? String(contentsOfFile: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("LyrimuseCore/Local/MusicPlaybackController.swift").path, encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(controller, contain: "case .reamp:\n            return ReampVolume.read()")
+                    && sourceBytes(controller, contain: "case .reamp:\n            return ReampVolume.set(v)"),
+                    true, "reAMP 音量 接线: 读写都走滑块")
+
         // 随机 / 循环:菜单栏 Play 里两个独立开关,收成一个档位;按完勾要过一两秒才变,刚按过的以按下去的结果为准。
         typealias R = ReampMenuControl
         expectEqual([R.mode(.init(shuffle: false, repeating: false)), R.mode(.init(shuffle: false, repeating: true)),

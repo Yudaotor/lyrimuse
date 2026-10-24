@@ -232,8 +232,8 @@ extension PlaybackPlayer {
         /// 两家失焦时都按播放控制菜单(`PlaybackMenuControl`);汽水读、按底部播放条上那颗心,失焦时按同一条播放条上的三颗
         /// 播放键(`SodaMusicControl`)。都没有模式键。
         case controlsPlayback
-        /// 读、按菜单栏 Play 里的随机 / 循环(reAMP `ReampMenuControl`),失焦时按同一个菜单里的暂停、上一首、下一首
-        /// (`PlaybackMenuControl`)。
+        /// 读、按菜单栏 Play 里的随机 / 循环(reAMP `ReampMenuControl`),读写音量滑块(`ReampVolume`),失焦时按同一个菜单里的
+        /// 暂停、上一首、下一首(`PlaybackMenuControl`)。
         case pressesPlayMode
         /// 读界面进度条把整秒的位置补准(Pine Player `PinePlayhead`),读播放列表给预解析(`PinePlaylist`),按菜单切循环(`PineMenuControl`),
         /// 读写音量滑块(`PineVolume`),失焦时按播放控制菜单(`PlaybackMenuControl`)。

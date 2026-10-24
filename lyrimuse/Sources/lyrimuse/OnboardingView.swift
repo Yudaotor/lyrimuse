@@ -944,7 +944,7 @@ struct OnboardingView: View {
         }
         let modeOnlyTargets = pendingAccessibility.filter { $0.accessibilityUse == .pressesPlayMode }
         if !modeOnlyTargets.isEmpty {
-            lines.append(String(format: L10n.t("辅助功能权限可显示%@的随机、循环按钮，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首"),
+            lines.append(String(format: L10n.t("辅助功能权限可显示%@的随机、循环按钮和音量调节，也可在系统媒体焦点被其他 App 占用时控制暂停、恢复和切换上一首或下一首"),
                                 accessibility.playerNames(modeOnlyTargets)))
         }
         let refinesTargets = pendingAccessibility.filter { $0.accessibilityUse == .refinesProgress }
@@ -1636,7 +1636,7 @@ struct OnboardingView: View {
                                     accessibility.playerNames(playback)))
             }
             if !modeOnly.isEmpty {
-                lines.append(String(format: L10n.t("请开启此权限，以显示%@的随机、循环按钮，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首"),
+                lines.append(String(format: L10n.t("请开启此权限，以显示%@的随机、循环按钮和音量调节，并在失去系统媒体焦点时控制暂停、恢复和切换上一首或下一首"),
                                     accessibility.playerNames(modeOnly)))
             }
             if !refines.isEmpty {
