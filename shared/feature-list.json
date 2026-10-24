@@ -171,26 +171,6 @@
           ]
         },
         {
-          "id": "source-health",
-          "title": {
-            "zh-Hans": "歌词源异常提醒",
-            "en": "Warns you when a lyric source misbehaves",
-            "zh-Hant": "歌詞來源異常提醒"
-          },
-          "desc": {
-            "zh-Hans": "某个歌词源近期几乎找不到歌词、命中率明显低于平时、频繁出错或无法连接时，「歌词来源」中该源旁会显示提醒，点按可查看判断依据的次数和比例。其他歌词源照常搜索，统计仅在本机进行。",
-            "en": "When a lyric source has lately found almost nothing, far less than usual, or keeps failing or timing out, a warning appears next to it under Lyrics Sources; click it for the numbers behind it. The other sources keep searching, and the counting happens only on your Mac.",
-            "zh-Hant": "某個歌詞來源近期幾乎找不到歌詞、命中率明顯低於平時、頻繁出錯或無法連線時，「歌詞來源」中該來源旁會顯示提醒，按一下可查看判斷依據的次數和比例。其他歌詞來源照常搜尋，統計僅在本機進行。"
-          },
-          "settings": [
-            [
-              "歌词",
-              "获取",
-              "歌词来源"
-            ]
-          ]
-        },
-        {
           "id": "lock-hand-picked",
           "title": {
             "zh-Hans": "锁定手选歌词",

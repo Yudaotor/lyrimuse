@@ -17,7 +17,7 @@ import (
 )
 
 // 歌词源的按天统计:每个源在现查里被问了几次、交出候选几次、胜出几次、因熔断被跳过几次,以及按「同类源」
-// 条件算的命中率。落盘时顺带算出每个源的摘要和判定,给设置页「歌词来源」卡和 healthcheck 用。判定规则
+// 条件算的命中率。落盘时顺带算出每个源的摘要和判定,给 healthcheck 用。判定规则
 // 与阈值的依据见 09 章决策 147、202。
 //
 // 只认 first-resolve / refill / upgrade 三条现查路径:批量重打分不一定发新请求,别把它数进来。只有常驻
@@ -36,7 +36,7 @@ const (
 	// lyricSourceStatsFlushEvery:多久落一次盘。没有新数据时每小时也重写一次,让摘要跟着日期滚动。
 	lyricSourceStatsFlushEvery = time.Minute
 	lyricSourceStatsRefreshAge = time.Hour
-	// lyricSourceStatsStaleAfter:摘要多久没更新算停了。App 侧 LyricSourceHealth.staleAfter 是同一个数,两处一起改。
+	// lyricSourceStatsStaleAfter:摘要多久没更新算停了。
 	lyricSourceStatsStaleAfter = 48 * time.Hour
 	lyricSourceStatsDayLayout  = "2006-01-02"
 	// lyricSourceStatsStaleTempAge:启动时清掉多久以前的写盘临时文件。只有常驻进程写这份文件,一次写盘是毫秒级,
@@ -85,7 +85,7 @@ const (
 	lyricSourceQualityPerArtist = 3
 )
 
-// 判定结果(写进摘要的 alert 字段,App 侧 LyricSourceHealth.Alert 是同一套取值)。
+// 判定结果(写进摘要的 alert 字段)。
 const (
 	lyricSourceAlertBarely     = "barely"
 	lyricSourceAlertBelowUsual = "below_usual"
@@ -214,7 +214,7 @@ type lyricSourceRecentRound struct {
 	Artist uint32 `json:"a,omitempty"`
 }
 
-// lyricSourceStatsSummary:一个源的摘要,落盘时现算。App 只读这一段。
+// lyricSourceStatsSummary:一个源的摘要,落盘时现算。
 type lyricSourceStatsSummary struct {
 	Source  string `json:"source"`
 	Enabled bool   `json:"enabled"`

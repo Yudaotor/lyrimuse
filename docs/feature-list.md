@@ -125,14 +125,6 @@ Lyrics that Apple Music, Spotify, Kugou, KKBOX, Amazon Music and LX Music alread
 - Off by default
 - Settings: Player › Permissions & Services › Full Disk Access
 
-<a id="feature-source-health"></a>
-
-### Warns you when a lyric source misbehaves
-
-When a lyric source has lately found almost nothing, far less than usual, or keeps failing or timing out, a warning appears next to it under Lyrics Sources; click it for the numbers behind it. The other sources keep searching, and the counting happens only on your Mac.
-
-- Settings: Lyrics › Sources › Lyrics Sources
-
 <a id="feature-lock-hand-picked"></a>
 
 ### Lock hand-picked lyrics
