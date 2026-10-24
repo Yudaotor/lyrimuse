@@ -231,6 +231,7 @@ func runDeepLinkTests() {
                     "播放模式: 认不出的取值、没带取值都认不出")
         expectEqual(link("lyrimuse://debug/simulate?artist=x"), nil, "模拟播放: 没给歌名认不出")
         expectEqual(link("lyrimuse://debug/favorite"), .debug(.toggleFavorite), "debug: 翻转喜欢")
+        expectEqual(link("lyrimuse://debug/idle-resume"), .debug(.idleResume), "debug: 停播页继续播放")
         expectEqual(link("lyrimuse://debug/volume?percent=35"), .debug(.volume(percent: 35)), "debug: 音量")
         expectEqual(link("lyrimuse://debug/volume?percent=101") == nil && link("lyrimuse://debug/volume") == nil, true,
                     "debug: 音量超出 0…100、没带取值都认不出")
@@ -324,7 +325,7 @@ func runDeepLinkTests() {
             .debug(.simulate(title: "x", artist: "y", album: "z", duration: nil, position: 0, playing: true)), .debug(.simulateOff),
             .debug(.simulate(title: "x", artist: "", album: "", duration: 30, position: 0, playing: true, ad: true)),
             .debug(.simulateIdle),
-            .debug(.toggleFavorite), .debug(.saveConfig), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
+            .debug(.toggleFavorite), .debug(.idleResume), .debug(.saveConfig), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
             .debug(.stall(ms: 1)), .debug(.stall(ms: 2000)),
             .debug(.knockout(leg: .voxScript, on: false)), .debug(.knockout(leg: .systemArtwork, on: true)),
             .debug(.menuBarCenter(center: true, ignoreNotch: true)), .debug(.menuBarCenter(center: false, ignoreNotch: nil)),

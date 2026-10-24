@@ -22,11 +22,11 @@ enum IdlePlaybackActions {
     }
 
     /// 有没有真的「继续播放」可给:AM / Spotify 有 AppleScript(AM = 三段式,Spotify 自带恢复上下文);酷狗、QQ、网易云、
-    /// Pine 按它菜单里的播放 / 暂停,冷启动后按也放上次那首(`resumeViaMenu`)。reAMP 冷启动会自己跳到前台,不给;
-    /// 别的只能「打开」。
+    /// Pine 按它菜单里的播放 / 暂停,冷启动后按也放上次那首(`resumeViaMenu`);VOX、Kaset 后台启动后发脚本 `play`
+    /// (`resumeViaScript`);洛雪直接发给它本体。reAMP 冷启动会自己跳到前台,不给;别的只能「打开」。
     static func canResume(_ player: PlaybackPlayer) -> Bool {
         switch player {
-        case .appleMusic, .spotify, .kugou, .qqMusic, .netease, .pinePlayer: true
+        case .appleMusic, .spotify, .kugou, .qqMusic, .netease, .pinePlayer, .vox, .kaset, .lxMusic: true
         default: false
         }
     }
@@ -49,6 +49,10 @@ enum IdlePlaybackActions {
                 ok = MusicPlaybackController.resumeSpotifyPlayback()
             case .kugou, .qqMusic, .netease, .pinePlayer:
                 ok = await resumeViaMenu(player)
+            case .vox, .kaset:
+                ok = await resumeViaScript(player)
+            case .lxMusic:
+                ok = LXMusicOpenAPI.shared.sendDirect("play", arguments: [])
             default:
                 ok = false
             }
@@ -62,17 +66,7 @@ enum IdlePlaybackActions {
     /// 6 秒、网易云约 12 秒,最多等 25 秒。停播页说明它这时没在放,按一下就是开播。标题随状态变的(QQ、网易云)按完读回标题确认
     /// 放起来了:网易云菜单刚出现时按了常不接,隔 2 秒还没放就再按,最多按 4 次。
     nonisolated static func resumeViaMenu(_ player: PlaybackPlayer) async -> Bool {
-        if PlayerProcess.pid(bundleID: player.bundleIdentifier) == nil {
-            guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: player.bundleIdentifier) else {
-                return false
-            }
-            let configuration = NSWorkspace.OpenConfiguration()
-            configuration.activates = false
-            configuration.hides = true
-            guard (try? await NSWorkspace.shared.openApplication(at: url, configuration: configuration)) != nil else {
-                return false
-            }
-        }
+        guard await launchHiddenIfNeeded(player) else { return false }
         let deadline = Date().addingTimeInterval(25)
         var presses = 0
         func playing() -> Bool? {
@@ -95,6 +89,27 @@ enum IdlePlaybackActions {
             guard outcome == .playerNotRunning || outcome == .menuUnavailable, Date() < deadline else { return false }
             try? await Task.sleep(nanoseconds: 300_000_000)
         }
+    }
+
+    /// VOX、Kaset:没开着就后台启动,脚本答得上来就发 `play`,最多等 15 秒。
+    nonisolated static func resumeViaScript(_ player: PlaybackPlayer) async -> Bool {
+        guard await launchHiddenIfNeeded(player) else { return false }
+        let deadline = Date().addingTimeInterval(15)
+        while true {
+            if MusicPlaybackController.resumeScriptPlayback(player) { return true }
+            guard Date() < deadline else { return false }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
+    }
+
+    /// 没开着就后台启动(不激活、隐藏窗口)。开着、启动成了为 true。
+    nonisolated static func launchHiddenIfNeeded(_ player: PlaybackPlayer) async -> Bool {
+        guard PlayerProcess.pid(bundleID: player.bundleIdentifier) == nil else { return true }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: player.bundleIdentifier) else { return false }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        configuration.hides = true
+        return (try? await NSWorkspace.shared.openApplication(at: url, configuration: configuration)) != nil
     }
 
     static func openPlayerApp(_ player: PlaybackPlayer) {

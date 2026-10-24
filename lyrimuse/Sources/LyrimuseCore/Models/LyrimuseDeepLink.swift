@@ -85,6 +85,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case simulateOff
         /// 翻转当前曲目的「喜欢」,跟点歌词窗口那颗心走同一条路(`debug/favorite`)。
         case toggleFavorite
+        /// 停播页的「继续播放」,跟点那颗键走同一条路、对停播页此刻指的那家播放器(`debug/idle-resume`)。
+        case idleResume
         /// 把播放器音量设成 0…100,跟拖歌词窗口的音量条走同一条路(`debug/volume?percent=`)。
         case volume(percent: Int)
         /// 设置窗口里搜这个词、打开第一条结果:翻页、切分段、展开抽屉,把那一行高亮并滚进可见区
@@ -206,6 +208,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             }
         case ("debug", "/favorite"):
             self = .debug(.toggleFavorite)
+        case ("debug", "/idle-resume"):
+            self = .debug(.idleResume)
         case ("debug", "/volume"):
             guard let percent = value("percent").flatMap(Int.init), (0...100).contains(percent) else { return nil }
             self = .debug(.volume(percent: percent))
@@ -338,6 +342,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.path = "/simulate"
                 components.queryItems = [URLQueryItem(name: "off", value: "1")]
             case .toggleFavorite: components.path = "/favorite"
+            case .idleResume: components.path = "/idle-resume"
             case let .volume(percent):
                 components.path = "/volume"
                 components.queryItems = [URLQueryItem(name: "percent", value: String(percent))]

@@ -49,6 +49,14 @@ enum DebugDeepLinks {
         case .toggleFavorite:
             PlaybackCoordinator.shared.toggleFavorited()
             logger.notice("debug favorite toggle")
+        case .idleResume:
+            let player = IdlePlaybackActions.player
+            guard IdlePlaybackActions.canResume(player) else {
+                logger.notice("debug idle resume: \(player.rawValue, privacy: .public) has no resume")
+                return
+            }
+            IdlePlaybackActions.resume(player: player)
+            logger.notice("debug idle resume \(player.rawValue, privacy: .public)")
         case let .volume(percent):
             PlaybackCoordinator.shared.setVolume(percent)
             logger.notice("debug volume \(percent, privacy: .public)")
