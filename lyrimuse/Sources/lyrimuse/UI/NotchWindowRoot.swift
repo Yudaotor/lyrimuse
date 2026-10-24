@@ -122,7 +122,10 @@ struct NotchWindowRoot: View {
 
     var body: some View {
         // prompt 只有真窗口传 `.shared`(「发现新播放器」提示);编辑台预览拿默认的惰性替身。广告门槛轮询也只有真窗口登记。
-        NotchLyricsView(controller: controller, prompt: .shared, reportsLineLayout: true, drivesAdSkipGate: true)
+        // 「按宽度断句」的宽度只让主实例报:副本在别的屏上卡片宽可能不同,几份会互相覆盖,副本拆掉后也撤不回。
+        // 别写成跟 `NotchLyricsWindowController.shared` 比身份:这个视图在 `.shared` 自己的 init 里就会求值,回头读它是递归初始化,启动即崩。
+        NotchLyricsView(controller: controller, prompt: .shared,
+                        reportsLineLayout: controller.reportsLineLayoutWidth, drivesAdSkipGate: true)
             // 卡片外形的裁剪由下面 keyframeAnimator 里那道 NotchRevealShape 统一负责(终态与
             // NotchHangingShape.card 重合,见 NotchRevealShape 头注),NotchLyricsView 自己那道
             // 就不再裁了 —— 两道 clipShape 是两层 mask,尺寸动画期间每帧都要各重设一次路径

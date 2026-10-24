@@ -156,14 +156,6 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     private var cornerSubscription: AnyCancellable?
     private var trackSubscription: AnyCancellable?
 
-    /// 视图内部那个 .onHover 打进来的调用,预览里**故意忽略**(空实现)。
-    ///
-    /// (NotchLyricsView 自己不挂 .onHover,真窗口的命中判定在 NotchWindowRoot;这个空实现保留是因为它是协议成员,而且"预览不该
-    /// 产生任何副作用"这条本身仍然成立,同 OverlayPreviewChrome.controlsDidBecomeVisible。)
-    ///
-    /// 编辑台里真正生效的那条路是下面的 setExpandedFromPreview:宿主拿精确坐标跟卡片矩形
-    /// 直接比,不吃隐式的 hover 范围(那个范围实测比肉眼看到的卡片大一圈)。
-    func setExpanded(_ expanded: Bool) {}
     /// 快捷操作的 ✕ 在预览里**故意**是空实现:预览卡整块 `allowsHitTesting(false)`,点不到;真要能点到
     /// 也不该让"预览"把用户的灵动岛关掉(预览卡上的可点区域只开浮层、不产生副作用,见 05 章)。
     func closeFromQuickAction() {}

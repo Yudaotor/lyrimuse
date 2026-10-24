@@ -759,7 +759,6 @@ protocol NotchChromeSource: ObservableObject {
     /// 展开时多行歌词那一格的高度(`AppSettings.notchExpandedLyricListHeight`),关着「多行歌词」时为 0。
     /// 决定展开区高度,走"镜像 + 重算几何"那条链路(同 `lyricRowHeight`)。
     var expandedLyricListHeight: CGFloat { get }
-    func setExpanded(_ expanded: Bool)
     /// 快捷操作里那颗 ✕:关掉「灵动岛歌词」总开关。真窗口走 `setVisible(false)`(跟设置页开关、菜单栏
     /// 面板同一个唯一入口),预览里是空实现 —— 预览卡整块 `allowsHitTesting(false)`,本来也点不到。
     func closeFromQuickAction()

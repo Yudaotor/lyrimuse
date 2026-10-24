@@ -334,6 +334,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// hover/播放订阅,只是钉在别的屏上。多加一个"这是副本"的布尔就会诱使后面的人写
     /// `if isMirror { ... }` 的分支,那正是两套行为慢慢分叉的起点。
     private var pinnedScreenID: String?
+    /// 「按宽度断句」的歌词列宽度由这个实例报(只有主实例报,见 `NotchWindowRoot.body`)。
+    var reportsLineLayoutWidth: Bool { pinnedScreenID == nil }
 
     /// pinnedScreenID **必须**在这里传进来,不能等构造完再赋值:init() 一开头就会
     /// recomputeGeometry() 一次、随后订阅播放状态(订阅那一瞬间就会触发一次
@@ -846,12 +848,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private static let hoverEnterDelay: TimeInterval = 0.12
     private static let hoverExitDelay: TimeInterval = 0.1
     private var pendingHoverWork: DispatchWorkItem?
-
-    /// 协议里那条 hover 入口,窗口这边**故意空实现** —— 跟 NotchPreviewChrome 同一个理由:NotchLyricsView
-    /// 里那个 .onHover 覆盖的范围比卡片本身大一圈,而窗口常驻最大尺寸,卡片下面有几十 pt 的透明区,鼠标划过
-    /// 那片空白(实际是在用户自己的窗口上面)灵动岛就会展开(实测:光标停在卡片下方 24pt 的透明处,卡片照样
-    /// 展开)。所以命中判定由 NotchWindowRoot 拿精确坐标跟卡片矩形直接比,走 setExpandedFromWindow。
-    func setExpanded(_ expanded: Bool) {}
 
     func setExpandedFromWindow(_ expanded: Bool) {
         cardHovered = expanded
@@ -1661,8 +1657,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         }
         // 变窄晚一点再缩:卡片宽度按弹簧收回(NotchWindowRoot.cardAnimation,约 0.45 秒),窗口当场缩的话这段时间卡片比窗口宽,
         // 两侧被窗口边界切成直边、圆角和肩膀不见。变宽当场变(卡片要往外长);窗口不在屏、减少动态效果(卡片不做动画)时也当场缩。
+        // 只有原地变窄才等:换屏、挪位置的那一次要当场到位,不跟着晚半秒。
         let shrinking = frame.width < window.frame.width - 0.5
-        if shrinking, window.isVisible, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+        let inPlace = abs(frame.midX - window.frame.midX) < 1.5 && abs(frame.maxY - window.frame.maxY) < 1.5
+        if shrinking, inPlace, window.isVisible, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             let work = DispatchWorkItem(block: apply)
             pendingShrinkWork = work
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.windowShrinkDelay, execute: work)

@@ -634,6 +634,16 @@ func runNotchTests() {
             expectEqual(sourceHas(view, "if controller.hasTrack {\n cardBodyLayer\n")
                         && sourceHas(view, ".modifier(NotchCardLayerActive(active: !controller.isCollapsed))"), true,
                         "灵动岛接线: 收起时顶行以下那一块常驻、只藏起来,收起态里悬停展开时照样错开淡入(05 章决策 101)")
+            expectEqual(sourceHas(src("NotchWindowRoot.swift"), "reportsLineLayout: controller.reportsLineLayoutWidth")
+                        && sourceHas(controller, "var reportsLineLayoutWidth: Bool { pinnedScreenID == nil }")
+                        && !src("NotchWindowRoot.swift").contains("=== NotchLyricsWindowController.shared"), true,
+                        "灵动岛接线: 「按宽度断句」的宽度只让主实例报,副本不覆盖;别在视图里跟 .shared 比身份,那是 .shared 自己 init 里的递归初始化、启动即崩(05 章决策 102)")
+            expectEqual(sourceHas(controller, "if shrinking, inPlace, window.isVisible"), true,
+                        "灵动岛接线: 只有原地变窄才晚半秒缩窗,换屏、挪位置当场到位(05 章决策 102)")
+            expectEqual(sourceBytes(view, contain: "func setExpanded(_ expanded: Bool)")
+                        || sourceBytes(stage, contain: "func setExpanded(_ expanded: Bool)")
+                        || sourceBytes(controller, contain: "func setExpanded(_ expanded: Bool)"), false,
+                        "灵动岛接线: 协议里没人调用的 setExpanded(_:) 已删,别加回空实现(05 章决策 102)")
             // 订阅统一存进一个集合,teardown 一行清掉;不再单独开 AnyCancellable 字段(漏配一行清理就泄漏)。
             expectEqual(!controller.contains(": AnyCancellable?")
                         && sourceCount(controller, "\n        .store(in: &subscriptions)") >= 28
@@ -1507,7 +1517,7 @@ func runNotchTests() {
         expectEqual(view.contains(".onAppear { playback.syncAdSkipGate(adBreak: drivesAdSkipGate && controller.isAdBreakNow) }"), true,
                     "广告态契约: 窗口出现时已经在放广告也要起轮询(onChange 只认变化)")
         let root = (try? String(contentsOfFile: ui.appendingPathComponent("NotchWindowRoot.swift").path, encoding: .utf8)) ?? ""
-        expectEqual(root.contains("reportsLineLayout: true, drivesAdSkipGate: true)") && !stage.contains("drivesAdSkipGate: true"), true,
+        expectEqual(sourceHas(root, "drivesAdSkipGate: true)") && !stage.contains("drivesAdSkipGate: true"), true,
                     "广告态契约: 只有真窗口替门槛轮询登记,编辑台预览不传")
         expectEqual(view.contains(".onDisappear { playback.syncAdSkipGate(adBreak: false) }"), true,
                     "广告态契约: 窗口没了要撤掉需求,不然灵动岛关了轮询还在跑")
