@@ -1000,7 +1000,7 @@ func runPlayerIdentityTests() {
                                      .systemNeverHasArtwork, .catalogMenuRows]),
             .reamp: (nil, [.extendedControls, .gaplessLead, .lateAnchorProbe, .arrivesWhole]),
             .lxMusic: (nil, [.extendedControls, .favorite, .resume, .lateAnchorProbe]),
-            .vox: (nil, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne, .resume,
+            .vox: (nil, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
                          .learnsAnchorLag, .arrivesWhole]),
             .pinePlayer: (nil, [.extendedControls, .repeatOne, .resume, .snapsToReportedPosition, .arrivesWhole]),
         ]

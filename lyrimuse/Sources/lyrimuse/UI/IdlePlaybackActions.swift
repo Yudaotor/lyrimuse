@@ -22,11 +22,11 @@ enum IdlePlaybackActions {
     }
 
     /// 有没有真的「继续播放」可给:AM / Spotify 有 AppleScript(AM = 三段式,Spotify 自带恢复上下文);酷狗、QQ、网易云、
-    /// Pine 按它菜单里的播放 / 暂停,冷启动后按也放上次那首(`resumeViaMenu`);VOX、Kaset 后台启动后发脚本 `play`
-    /// (`resumeViaScript`);洛雪直接发给它本体。reAMP 冷启动会自己跳到前台,不给;别的只能「打开」。
+    /// Pine 按它菜单里的播放 / 暂停,冷启动后按也放上次那首(`resumeViaMenu`);Kaset 后台启动后发脚本 `play`
+    /// (`resumeKaset`);洛雪直接发给它本体。reAMP、VOX、汽水一启动就自己跳到前台,不给;别的只能「打开」。
     static func canResume(_ player: PlaybackPlayer) -> Bool {
         switch player {
-        case .appleMusic, .spotify, .kugou, .qqMusic, .netease, .pinePlayer, .vox, .kaset, .lxMusic: true
+        case .appleMusic, .spotify, .kugou, .qqMusic, .netease, .pinePlayer, .kaset, .lxMusic: true
         default: false
         }
     }
@@ -49,8 +49,8 @@ enum IdlePlaybackActions {
                 ok = MusicPlaybackController.resumeSpotifyPlayback()
             case .kugou, .qqMusic, .netease, .pinePlayer:
                 ok = await resumeViaMenu(player)
-            case .vox, .kaset:
-                ok = await resumeViaScript(player)
+            case .kaset:
+                ok = await resumeKaset()
             case .lxMusic:
                 ok = LXMusicOpenAPI.shared.sendDirect("play", arguments: [])
             default:
@@ -91,15 +91,23 @@ enum IdlePlaybackActions {
         }
     }
 
-    /// VOX、Kaset:没开着就后台启动,脚本答得上来就发 `play`,最多等 15 秒。
-    nonisolated static func resumeViaScript(_ player: PlaybackPlayer) async -> Bool {
-        guard await launchHiddenIfNeeded(player) else { return false }
-        let deadline = Date().addingTimeInterval(15)
-        while true {
-            if MusicPlaybackController.resumeScriptPlayback(player) { return true }
-            guard Date() < deadline else { return false }
-            try? await Task.sleep(nanoseconds: 500_000_000)
+    /// Kaset:没开着就后台启动,脚本答得上来就发 `play`,隔 2 秒问它在不在放,没放起来再发(它脚本答得上来时内嵌的网页播放器
+    /// 可能还没好,那一下会落空;`play` 不是切换,重发不会把它停掉),最多发 4 次、等 25 秒。
+    nonisolated static func resumeKaset() async -> Bool {
+        guard await launchHiddenIfNeeded(.kaset) else { return false }
+        let deadline = Date().addingTimeInterval(25)
+        var sent = 0
+        while Date() < deadline {
+            if MusicPlaybackController.resumeKasetPlayback() {
+                sent += 1
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                if MediaControlClient.kasetIsPlaying() == true { return true }
+                guard sent < 4 else { return false }
+            } else {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
         }
+        return false
     }
 
     /// 没开着就后台启动(不激活、隐藏窗口)。开着、启动成了为 true。
