@@ -613,7 +613,8 @@ public final class FeatureSettingsStore: ObservableObject {
     // 空字符串 = 用默认位置(数据目录的 lyrics/)。用 effectiveLyricsDir
     // 取实际生效的路径,不要直接读这个属性去拼路径。
     @Published public var lyricsDir = ""
-    /// 歌词文件夹里逐字歌词的格式,至少一个,第一个是主格式(见 LyricsWordFormat)。
+    /// 歌词文件夹里逐字歌词的格式,至少一个,第一个是主格式(见 LyricsWordFormat)。全新装机、歌词文件夹还空着时
+    /// load() 写成 TTML;老配置缺这个键照旧是 YRC(11 章决策 144)。
     @Published public var lyricsWordFormats: [LyricsWordFormat] = [.yrc]
     // 只影响 Musixmatch 这个源的译文语言,详见 MusixmatchTranslationLanguage 注释。
     @Published public var lyricsTranslationLanguage: MusixmatchTranslationLanguage = .auto
@@ -896,7 +897,11 @@ public final class FeatureSettingsStore: ObservableObject {
             // `decoded != nil` 说明文件在、能解析,这台机器必是老的。
             // 文件损坏:维持初值、不写(persistFile 也会拒绝),等用户在横幅里修或放弃。
             if case .missing = document.state {
-                if Self.isFreshInstall { lastfmMatchMode = .smart }
+                if Self.isFreshInstall {
+                    lastfmMatchMode = .smart
+                    // 文件夹里已有歌词文件(配置删了、数据还在)就不换:换主格式会把它们整份改写。
+                    if LyricsBackupStore.hasNoLyricsFiles(in: effectiveLyricsDir) { lyricsWordFormats = [.ttml] }
+                }
                 writeBack(reason: "missing")
             }
             savedSnapshot = currentSnapshot

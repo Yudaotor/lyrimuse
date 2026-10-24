@@ -52,7 +52,11 @@ enum LyricsBackupStore {
     /// 歌词文件夹里一个能打包的歌词文件都没有(新用户、还没播过歌)。跟 `buildArchive` 用同一条筛法,只列目录不读内容。
     /// 两个导出入口靠它区分「没有可打包的」和「打包失败」:前者不是错误,不该报「没打包成功」。
     static func hasNoLyricsFiles() -> Bool {
-        let dir = FeatureSettingsStore.shared.effectiveLyricsDir
+        hasNoLyricsFiles(in: FeatureSettingsStore.shared.effectiveLyricsDir)
+    }
+
+    /// `FeatureSettingsStore.load()` 里用这个:那时 `shared` 还没初始化完。
+    static func hasNoLyricsFiles(in dir: URL) -> Bool {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return true }
         return !names.contains { LyricsBackupArchive.sanitizedFileName($0) != nil }
     }

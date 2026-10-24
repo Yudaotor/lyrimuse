@@ -1350,6 +1350,14 @@ func runSourceContractTests() {
             expectEqual(apply.contains("writeAutoSnapshot(reason: \"word-format\") == nil") && guardAt != nil && writeAt != nil
                         && guardAt! < writeAt! && sourceHas(apply, "return\n            }\n            features.lyricsWordFormats"), true,
                         "逐字歌词格式: 备份没写成、又有歌词文件时要在改设置之前返回")
+            // 新装机默认 TTML 只能落在「文件不存在 + isFreshInstall + 文件夹还空」这一支:老配置缺这个键要照旧是 YRC。
+            let store = code(sourcesRoot.appendingPathComponent("lyrimuse/Settings/FeatureSettingsStore.swift")) ?? ""
+            let load = sourceBody("public func load()", in: store)
+            let fresh = sourceBody("if Self.isFreshInstall", in: load)
+            expectEqual(count(store, "lyricsWordFormats = [.ttml]") == 1
+                        && fresh.contains("hasNoLyricsFiles(in: effectiveLyricsDir) { lyricsWordFormats = [.ttml] }")
+                        && sourceHas(store, "@Published public var lyricsWordFormats: [LyricsWordFormat] = [.yrc]"), true,
+                        "逐字歌词格式: 只有全新装机、歌词文件夹还空时默认 TTML,初值仍是 YRC")
             expectEqual(count(view, "joined(separator: \"、\")"), 0,
                         "设置页列表拼接: 用 L10n.list(按界面语言拼),写死「、」英文界面会显示成 YRC、TTML")
         } else {
