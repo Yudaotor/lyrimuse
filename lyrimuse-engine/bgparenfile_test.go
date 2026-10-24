@@ -172,3 +172,38 @@ func TestImportSkipsPredatingFileWithParenBackground(t *testing.T) {
 		t.Errorf("旧文件不导入: %q keys=%v", two.Lyrics, keys)
 	}
 }
+
+// 文件没动过、缓存原文指纹也一样时不再算接回去的写法(要把整首再拆一次);指纹记在文件状态记录里,重启后照样认得。
+func TestLyricsExportSkipsUnchangedParenBackground(t *testing.T) {
+	sp := parenBGFileSample(t)
+	dir := withLyricsFileStateEnv(t)
+	key := "a|kills|"
+	withEnrichCache(t, map[string]enrichEntry{key: {LyricsSource: "netease", Lyrics: bt(sp.lrc), LyricsYRC: bt(sp.yrc), LyricsBG: bt(sp.bg)}})
+	forms := func(f func()) int64 {
+		before := parenBGFileForms.Load()
+		f()
+		return parenBGFileForms.Load() - before
+	}
+	if n := forms(exportLyricsFiles); n != 1 {
+		t.Fatalf("第一次导出按条目算一次: %d", n)
+	}
+	if n := forms(exportLyricsFiles); n != 0 {
+		t.Errorf("没变的不再算: %d", n)
+	}
+	resetLyricsFileStateForTest()
+	if n := forms(exportLyricsFiles); n != 0 {
+		t.Errorf("重启后从记录里认得: %d", n)
+	}
+	enrichMu.Lock()
+	e := enrichCache[key]
+	e.ManualLyrics = true
+	enrichCache[key] = e
+	enrichMu.Unlock()
+	if n := forms(exportLyricsFiles); n != 1 {
+		t.Errorf("文件头变了重新算: %d", n)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, sanitizeLyricsFilename(key)+".lrc"))
+	if err != nil || !strings.Contains(string(got), "[manual:1]") || !strings.Contains(string(got), "(slowly)") {
+		t.Errorf("重写成新的文件头 + 接回去的写法: %q", got)
+	}
+}

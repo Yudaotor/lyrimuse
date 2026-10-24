@@ -1,12 +1,17 @@
 package main
 
 import (
+	"hash/crc32"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"unicode"
 )
+
+// parenBGFileForms:parenBGFileForm 真的接回、核对过的条目数。全量导出结束时有就记一行日志。
+var parenBGFileForms atomic.Int64
 
 // parenBGFileForm:写进歌词文件夹的正文 / 逐字。从括号里拆出来的背景人声(bgparen.go)接回所属主句的行尾,写成「 (和声)」。
 // 歌词文件里没有背景人声这一项,不接回去的话这段和声只在缓存里:清空后从文件恢复、换一台 Mac 读这个文件夹都会丢,
@@ -17,6 +22,7 @@ func parenBGFileForm(source, lrc, yrc, bg string) (string, string) {
 	if bg == "" || yrc == "" || !parenBGSources[source] {
 		return lrc, yrc
 	}
+	parenBGFileForms.Add(1)
 	bgByHead := map[string]string{}
 	for _, l := range strings.Split(bg, "\n") {
 		if head := yrcLineHeadFullRe.FindString(l); head != "" {
@@ -120,6 +126,26 @@ func parenBGFileForm(source, lrc, yrc, bg string) (string, string) {
 		}
 	}
 	return lrc, yrc
+}
+
+// parenBGFileFormVersion:接回写法的版本,算进 parenBGFileSource。parenBGFileForm 或拆分规则改了、同样的缓存原文
+// 会写出不一样的文件时加一,不然文件状态记录里旧的指纹还对得上,文件不会重写。
+const parenBGFileFormVersion = 1
+
+// parenBGFileSource:这份缓存原文(文件头、正文、逐字、背景人声)的指纹。不用接回去(没有背景人声、不是 parenBGSources)为 0。
+func parenBGFileSource(header, source, lrc, yrc, bg string) uint32 {
+	if bg == "" || yrc == "" || !parenBGSources[source] {
+		return 0
+	}
+	c := crc32.ChecksumIEEE([]byte{parenBGFileFormVersion})
+	for _, s := range []string{header, lrc, yrc, bg} {
+		c = crc32.Update(c, crc32.IEEETable, []byte(s))
+		c = crc32.Update(c, crc32.IEEETable, []byte{0})
+	}
+	if c == 0 {
+		c = 1
+	}
+	return c
 }
 
 // parenBGSameTrack:两份背景人声轨的行一样(不管先后、空行):存量迁移并进来的按行头排过序,拆分出来的按逐字的行序。

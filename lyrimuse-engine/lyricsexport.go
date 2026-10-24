@@ -153,6 +153,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		bg                   bodyText
 		// cached:缓存里原样的正文 / 逐字。背景人声接回去之后跟 variants 不同(parenBGFileForm)。
 		cached [4]string
+		bgText string
 	}
 	// 只导出几个分组时,不在 onlyFolds 里的条目连拷都不拷:碰撞分组只对要导出的分组有意义,而同一分组的 key 分组键相同、
 	// 必然都在 onlyFolds 里,整组照样算全。只遍历 key,条目约 1.4 KB,按值遍历会把整个缓存拷一遍。见 15 章决策 53。
@@ -204,7 +205,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			return
 		}
 		jobs[i].cached = jobs[i].variants
-		jobs[i].variants[0], jobs[i].variants[3] = parenBGFileForm(jobs[i].source, jobs[i].variants[0], jobs[i].variants[3], bg)
+		jobs[i].bgText = bg
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		noteFileErr("mkdir", dir, err)
@@ -269,6 +270,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		}
 	}
 
+	formsBefore := parenBGFileForms.Load()
 	for i, j := range jobs {
 		if onlyFolds != nil && !onlyFolds[folds[i]] {
 			continue
@@ -304,19 +306,36 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			}
 		}
 		header := lyricsFileHeader(j.artist, j.title, j.album, j.source, j.manual)
+		// 括号里拆出来的背景人声接回正文 / 逐字再写(parenBGFileForm)。算一遍要把整首再拆一次核对,只在文件得重新比对时算:
+		// 文件没动过、记录里的缓存原文指纹也一样就跳过。
+		src := parenBGFileSource(header, j.source, j.cached[0], j.cached[3], j.bgText)
+		formed := src == 0
 		for k, suffix := range lyricsFileSuffixes {
 			name := base + suffix
 			path := filepath.Join(dir, name)
-			content := j.variants[k]
-			if content == "" {
+			if j.cached[k] == "" {
 				remove(name)
 				continue
 			}
+			info := statOf(name)
+			fileForm := src != 0 && (k == 0 || k == 3)
+			if fileForm && useState && info != nil && lyricsFileUnchangedFrom(dir, name, info, src) {
+				continue
+			}
+			if !formed {
+				j.variants[0], j.variants[3] = parenBGFileForm(j.source, j.cached[0], j.cached[3], j.bgText)
+				formed = true
+			}
+			content := j.variants[k]
+			fileSrc := uint32(0)
+			if fileForm {
+				fileSrc = src
+			}
 			full := []byte(header + content)
 			sum := lyricsCRC(full)
-			info := statOf(name)
 			if useState && info != nil {
 				if recorded, same := lyricsFileUnchanged(dir, name, info); same && recorded == sum {
+					recordLyricsFileFrom(dir, name, info, sum, fileSrc)
 					continue
 				}
 			}
@@ -325,7 +344,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			if info != nil {
 				existing, err := os.ReadFile(path)
 				if err == nil && string(existing) == string(full) {
-					recordLyricsFile(dir, name, info, sum)
+					recordLyricsFileFrom(dir, name, info, sum, fileSrc)
 					continue
 				}
 				keepTime = err == nil && content != j.cached[k] && string(existing) == header+j.cached[k]
@@ -343,7 +362,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 				_ = os.Chtimes(path, info.ModTime(), info.ModTime())
 			}
 			if st, err := os.Lstat(path); err == nil {
-				recordLyricsFile(dir, name, st, sum)
+				recordLyricsFileFrom(dir, name, st, sum, fileSrc)
 				if present != nil {
 					present[name] = st
 				}
@@ -352,6 +371,9 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 	}
 	if present != nil && useState {
 		saveLyricsFileState(dir, present)
+	}
+	if n := parenBGFileForms.Load() - formsBefore; n > 0 && onlyFolds == nil {
+		slog.Info("lyrics export: wrote background vocals back into lyrics files", "entries", n)
 	}
 }
 

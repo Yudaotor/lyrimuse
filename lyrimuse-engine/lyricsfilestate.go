@@ -26,6 +26,9 @@ type lyricsFileStamp struct {
 	Size  int64  `json:"s"`
 	ModNs int64  `json:"m"`
 	CRC   uint32 `json:"c"`
+	// Src:写出这份内容时用的缓存原文的指纹,只有要把背景人声接回去的文件记(parenBGFileSource)。文件没动过、指纹也一样,
+	// 导出就不用再算一遍接回去的写法。
+	Src uint32 `json:"r,omitempty"`
 }
 
 type lyricsFileStateFile struct {
@@ -101,11 +104,30 @@ func lyricsFileUnchanged(dir, name string, info fs.FileInfo) (uint32, bool) {
 }
 
 func recordLyricsFile(dir, name string, info fs.FileInfo, crc uint32) {
+	recordLyricsFileFrom(dir, name, info, crc, 0)
+}
+
+func recordLyricsFileFrom(dir, name string, info fs.FileInfo, crc, src uint32) {
 	lyricsFileStateMu.Lock()
 	defer lyricsFileStateMu.Unlock()
 	if lyricsFileStateReady && lyricsFileStateDir == dir && info != nil {
-		lyricsFileStateFiles[lyricsStateName(name)] = lyricsStampOf(info, crc)
+		s := lyricsStampOf(info, crc)
+		s.Src = src
+		lyricsFileStateFiles[lyricsStateName(name)] = s
 	}
+}
+
+// lyricsFileUnchangedFrom:name 跟记录一致,而且记录的是按指纹 src 那份缓存原文写出的。src 为 0 时一律不算。
+func lyricsFileUnchangedFrom(dir, name string, info fs.FileInfo, src uint32) bool {
+	if src == 0 {
+		return false
+	}
+	if _, same := lyricsFileUnchanged(dir, name, info); !same {
+		return false
+	}
+	lyricsFileStateMu.Lock()
+	defer lyricsFileStateMu.Unlock()
+	return lyricsFileStateFiles[lyricsStateName(name)].Src == src
 }
 
 func forgetLyricsFile(dir, name string) {
