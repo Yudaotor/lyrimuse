@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"compress/zlib"
+	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"hash/crc32"
@@ -219,10 +221,48 @@ func encodeQRCWordText(in lyricsWordFileInput) string {
 		int(in.durationSecs+0.5), b.String())
 }
 
+// krcLanguageLineFor:逐字各行配上的译文写成酷狗的 `[language:]` 行(type 1 一轨,每条带逐字的计时行一项,配不上的留空,
+// 格式见 kugou.go krcLanguageTracks)。配法同 TTML(lyricsWordLineAux),配在缓存原样的逐字上:接回括号背景人声的那份
+// 文字对不上逐行,两份行序、行头一样。罗马音不写:酷狗那一轨是逐词的,我们只有整行的。一行都没配上就不写。
+func krcLanguageLineFor(in lyricsWordFileInput, lines []yrcDocLine) string {
+	if in.tr == "" {
+		return ""
+	}
+	native := parseYRCDoc(in.nativeYRC)
+	if len(native) != len(lines) {
+		native = lines
+	}
+	aux := lyricsWordLineAux(native, in.lrc, in.tr, "")
+	content, hit := [][]string{}, false
+	for i, l := range lines {
+		if !l.timed || len(l.words) == 0 {
+			continue
+		}
+		t := aux[i][0]
+		hit = hit || t != ""
+		content = append(content, []string{t})
+	}
+	if !hit {
+		return ""
+	}
+	raw, err := json.Marshal(map[string]any{
+		"content": []map[string]any{{"language": 0, "type": 1, "lyricContent": content}},
+		"version": 1,
+	})
+	if err != nil {
+		return ""
+	}
+	return "[language:" + base64.StdEncoding.EncodeToString(raw) + "]"
+}
+
 func encodeKRCWordText(in lyricsWordFileInput) string {
 	var b strings.Builder
 	b.WriteString(in.header())
-	for i, l := range parseYRCDoc(in.yrc) {
+	lines := parseYRCDoc(in.yrc)
+	if lang := krcLanguageLineFor(in, lines); lang != "" {
+		b.WriteString(lang + "\n")
+	}
+	for i, l := range lines {
 		if i > 0 {
 			b.WriteString("\n")
 		}
@@ -482,6 +522,9 @@ func decodeLyricsWordText(f lyricsWordFormat, plain string) lyricsWordFileParsed
 		return lyricsWordFileParsed{parsedLyricsFile: p}
 	case lyricsWordKRC:
 		p := parseLyricsBytes([]byte(plain))
+		if b64, rest := splitKRCLanguageLine(p.body); b64 != "" {
+			p.body = rest // 译文轨不进逐字;导入的译文只认 .tr.lrc
+		}
 		p.body = krcToYRC(p.body)
 		return lyricsWordFileParsed{parsedLyricsFile: p}
 	case lyricsWordELRC:
@@ -657,8 +700,11 @@ const lyricsWordFileFormatVersion = 2
 func lyricsWordFileSource(f lyricsWordFormat, header string, in lyricsWordFileInput) uint32 {
 	c := crc32.ChecksumIEEE([]byte{lyricsWordFileFormatVersion, parenBGFileFormVersion})
 	parts := []string{string(f), header, in.source, in.lrc, in.nativeYRC, in.bg}
-	if f == lyricsWordTTML {
+	switch f {
+	case lyricsWordTTML:
 		parts = append(parts, in.tr, in.roma, in.trLang)
+	case lyricsWordKRC:
+		parts = append(parts, in.tr)
 	}
 	for _, s := range parts {
 		c = crc32.Update(c, crc32.IEEETable, []byte(s))

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"regexp"
 	"slices"
 	"strings"
@@ -175,6 +176,50 @@ func TestLyricsWordTTMLCarriesTranslation(t *testing.T) {
 	}
 	if p := decodeLyricsWordText(lyricsWordTTML, plain); lyricsWordTimedLines(p.body)[1] != lyricsWordTimedLines(in.yrc)[1] {
 		t.Errorf("逐字不受译文影响: %q", p.body)
+	}
+}
+
+// KRC 把译文写成酷狗的 [language:] 轨:酷狗那套读法(krcLanguageTracks)按行序号对得上,配不上的行留空项占位;
+// 罗马音不写;读回来的逐字里没有这一行;没有译文就不写这一行。指纹跟着译文变(YRC 不受影响)。
+func TestLyricsWordKRCCarriesTranslation(t *testing.T) {
+	in := lyricsWordSampleInput()
+	in.lrc = "[00:01.00]Say \"hi\" & go\n[00:03.00]你好吗\n[00:06.00]早了\n[00:20.00]别的行"
+	in.tr = "[00:01.00]说声嗨就走\n[00:03.00]How are you\n[00:06.00]Too early\n[00:20.00]Other"
+	in.roma = "[00:03.00]ni hao ma"
+	// 没有词的计时行不占项;写进文件的逐字接回了括号和声,配译文按缓存原样的那份。
+	in.nativeYRC += "\n[12000,500]"
+	in.yrc = strings.Replace(in.nativeYRC, "(8500,500,0)了", "(8500,500,0)了 (ooh)", 1)
+	plain := encodeLyricsWordText(lyricsWordKRC, in)
+	p := parseLyricsBytes([]byte(plain))
+	b64, rest := splitKRCLanguageLine(p.body)
+	tr, roma := krcLanguageTracks(b64, rest)
+	if want := "[00:01.000]说声嗨就走\n[00:04.000]How are you\n[00:08.000]Too early"; tr != want || roma != "" {
+		t.Errorf("酷狗读法读回来的译文 / 罗马音不对\n got  %q / %q\n want %q", tr, roma, want)
+	}
+	if d := decodeLyricsWordText(lyricsWordKRC, plain); strings.Contains(d.body, "[language:") ||
+		strings.Join(lyricsWordTimedLines(d.body), "\n") != strings.Join(lyricsWordTimedLines(in.yrc), "\n") {
+		t.Errorf("读回来的逐字带着译文行,或逐字变了: %q", d.body)
+	}
+
+	partial := in
+	partial.tr = "[00:03.00]How are you"
+	b64, _ = splitKRCLanguageLine(parseLyricsBytes([]byte(encodeLyricsWordText(lyricsWordKRC, partial))).body)
+	raw, _ := base64.StdEncoding.DecodeString(b64)
+	if !strings.Contains(string(raw), `"lyricContent":[[""],["How are you"],[""]]`) {
+		t.Errorf("每条计时行一项,配不上的留空: %s", raw)
+	}
+
+	bare := in
+	bare.tr = ""
+	far := in
+	far.tr = "[00:50.00]远处"
+	if strings.Contains(encodeLyricsWordText(lyricsWordKRC, bare), "[language:") ||
+		strings.Contains(encodeLyricsWordText(lyricsWordKRC, far), "[language:") {
+		t.Errorf("没有译文、或一行都没配上,不写 [language:] 行")
+	}
+	if lyricsWordFileSource(lyricsWordKRC, "", in) == lyricsWordFileSource(lyricsWordKRC, "", bare) ||
+		lyricsWordFileSource(lyricsWordYRC, "", in) != lyricsWordFileSource(lyricsWordYRC, "", bare) {
+		t.Errorf("KRC 的指纹要跟着译文变,YRC 的不变")
 	}
 }
 
