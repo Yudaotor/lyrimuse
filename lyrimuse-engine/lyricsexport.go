@@ -322,7 +322,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 			if fileForm && useState && info != nil && lyricsFileUnchangedFrom(dir, name, info, src) {
 				continue
 			}
-			if !formed {
+			if fileForm && !formed {
 				j.variants[0], j.variants[3] = parenBGFileForm(j.source, j.cached[0], j.cached[3], j.bgText)
 				formed = true
 			}

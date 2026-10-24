@@ -178,7 +178,8 @@ func TestLyricsExportSkipsUnchangedParenBackground(t *testing.T) {
 	sp := parenBGFileSample(t)
 	dir := withLyricsFileStateEnv(t)
 	key := "a|kills|"
-	withEnrichCache(t, map[string]enrichEntry{key: {LyricsSource: "netease", Lyrics: bt(sp.lrc), LyricsYRC: bt(sp.yrc), LyricsBG: bt(sp.bg)}})
+	// 带一份翻译:翻译 / 罗马音文件不用接回去,写它们时也不该算接回去的写法。
+	withEnrichCache(t, map[string]enrichEntry{key: {LyricsSource: "netease", Lyrics: bt(sp.lrc), LyricsTr: bt("[00:01.00]译文"), LyricsYRC: bt(sp.yrc), LyricsBG: bt(sp.bg)}})
 	forms := func(f func()) int64 {
 		before := parenBGFileForms.Load()
 		f()
