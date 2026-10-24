@@ -856,6 +856,31 @@ func runMenuBarTests() {
             let quarter = c.distance / 4
             expectEqual(near(Double(c.offset(at: c.resumeTime(forOffset: quarter))), Double(quarter)), true,
                         "周期: 中途停住,接着播从同一个偏移起")
+            // 只滚一遍(灵动岛 / 悬浮歌词的歌词行)
+            expectEqual(near(c.singlePassEnd, 2.2 + c.travel), true, "只滚一遍: 首轮滚到底那一刻停住")
+            expectEqual(c.singlePassOffsets, [0, 0, c.distance], "只滚一遍: 开头静止、滚到底")
+            expectEqual(near(c.singlePassKeyTimes[1] * (1.1 + c.travel), 1.1) && c.singlePassKeyTimes.last == 1, true,
+                        "只滚一遍: 开头停 1.1 秒才起滚,末帧就是滚到底")
+            let single = c.singlePassFadeKeyframes(leading: 24, trailing: 32)
+            expectEqual(single.leading, [0, 0, 24, 24], "只滚一遍渐隐: 左端开头为 0、滚出 24 点长满")
+            expectEqual(single.trailing.first == 32 && single.trailing.last == 0 && single.keyTimes.last == 1, true,
+                        "只滚一遍渐隐: 右端开头满宽、滚到底为 0,没有末尾停顿那一帧")
+            expectEqual(near(single.keyTimes[2] * (1.1 + c.travel), 1.1 + c.travel * 24 / Double(c.distance)), true,
+                        "只滚一遍渐隐: 左端在滚出 24 点那一刻长满")
+            // 宿主变宽变窄时换周期接着播
+            if let wider = M.cycle(contentWidth: 607.5, containerWidth: 414.25) {
+                expectEqual(near(c.carry(c.firstCycleTimeOffset + 0.5, to: wider), c.firstCycleTimeOffset + 0.5), true,
+                            "换周期: 开头停着时保留已经停了多久")
+                let mid = 2.2 + 100.0 / 24
+                expectEqual(near(Double(wider.offset(at: c.carry(mid, to: wider))), 100), true, "换周期: 滚动中按此刻的偏移接上")
+                let deep = 2.2 + 250.0 / 24
+                expectEqual(near(c.carry(deep, to: wider), wider.singlePassEnd), true, "换周期: 已滚过新距离就落到末尾停顿起点")
+                expectEqual(near(c.carry(c.singlePassEnd + 0.4, to: wider), wider.singlePassEnd + 0.4), true,
+                            "换周期: 末尾停着时保留已经停了多久")
+                expectEqual(near(c.carry(c.period + mid, to: wider), c.carry(mid, to: wider)), true, "换周期: 按周期取模")
+            } else {
+                expectEqual(true, false, "换周期: 变宽后仍装不下应该有周期")
+            }
         } else {
             expectEqual(true, false, "周期: 装不下应该有周期")
         }

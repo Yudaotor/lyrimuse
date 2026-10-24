@@ -120,7 +120,7 @@ private final class NotchPlayback: ObservableObject {
     /// 卡片高度/宽度,理由同 `notchCardStyle`/`leftEar`/`rightEar`(那几个也只影响渲染)。
     @Published private(set) var lyricRowShowsArtwork: Bool = true
     @Published private(set) var lyricRowArtworkPosition: NotchLyricRowArtworkPosition = .right
-    /// 装得下的短句靠哪边。同上走这里现读:它只改 `MarqueeText` 静止时的
+    /// 装得下的短句靠哪边。同上走这里现读:它只改跑马灯静止时的
     /// 对齐锚点和展开态「下一句」那一行的 frame 对齐,不影响卡片任何一个尺寸。
     /// 初值必须是 `AppSettings.defaultNotchLyricsAlignment`,不能另写一个字面量 ——
     /// 这个 `@Published` 的初值和 `AppSettings.init()` 的 fallback 是同一件事,写两份就会
@@ -1610,6 +1610,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     }
 
     /// 耳朵里那一行字。跑马灯的 id 用**显示串**本身 —— 换了内容才重新测量/重新开始滚动。
+    /// 跑马灯走图层(`LayerMarquee`),按窗口可见性停(05 章决策 99)。
     ///
     /// 等宽数字**只给时间类**。给歌名/歌手/专辑也套上的话,带数字的名字("M83"、
     /// "24K Magic")字形会被静默改掉 —— 而前提是"默认配置逐像素稳定"。
@@ -1621,7 +1622,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 的分支本来就先换了,子树无论如何都要重建。)
     private func earText(_ text: String, module: NotchEarModule, alignment: Alignment) -> some View {
         let base = Font.system(size: 11.5, weight: module.isPrimary ? .semibold : .medium)
-        return MarqueeText(id: text, restingAlignment: alignment) {
+        return LayerMarquee(id: text, restingAlignment: alignment, isActive: surfaceVisible) {
             Text(text)
                 .font(module.isClock ? base.monospacedDigit() : base)
                 .foregroundStyle(accentOrWhite.opacity(module.isPrimary ? 0.85 : 0.6))
@@ -1721,8 +1722,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 没有任何一块的 frame 在动画里改值;各块相对卡片的横向偏移随卡片宽变,跟卡片同一条弹簧走、正好抵掉卡片自己的位移,所以屏幕上没有平移。
     ///
     /// 守则:① 藏着的那份**必须**停表 —— 逐字填色与迷你进度条的 TimelineView 都按环境值
-    /// `notchCardLayerActive` 暂停,否则 30Hz 热路径翻倍(性能审计盯住的那条);跑马灯只是一个
-    /// 睡着的 Task,不管。② 藏着的一律 `allowsHitTesting(false)`(里面有封面按钮、播放键、校准键)且对读屏
+    /// `notchCardLayerActive` 暂停,否则 30Hz 热路径翻倍(性能审计盯住的那条);跑马灯是图层动画、不占主线程,
+    /// 只按窗口可见性停(见 `mainLyricLine`)。② 藏着的一律 `allowsHitTesting(false)`(里面有封面按钮、播放键、校准键)且对读屏
     /// 隐藏 —— 都收在 `NotchCardLayerActive` 这一个修饰器里。③ 两个宽度从 chrome 拿(协议
     /// `steadyCardWidth` / `expandedCardWidth`),不能用 GeometryReader 的现值。④ 「显示歌词」关着时稳态
     /// 那份歌词行不建(那时稳态本来没有歌词行,`showsLyricRow` 的语义),展开那份照常。⑤ 这一层里**不准**
@@ -1800,12 +1801,12 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 默认开:升级上来的人不能发现封面凭空挪位或消失。
             if playback.lyricRowArtworkPosition == .left { lyricRowArtwork }
             // restingAlignment = 「对齐方式」。只管**装得下**的短句靠哪边:
-            // 溢出的句子 MarqueeText 一律按 .leading 起滚(理由见那个参数的注释,靠右摆等于
+            // 溢出的句子跑马灯一律按 .leading 起滚(理由见 `MarqueeText.restingAlignment` 的注释,靠右摆等于
             // 一上来就把开头几个字挂在容器外面),所以这一项在长句上天然无效果 —— 跟菜单栏
             // 同名设置是同一条语义,help 文案里说明了。
             //
             // 对齐的参照系是**歌词这一格**,不是整张卡:封面是这个 HStack 的兄弟,它占掉的
-            // 那 42pt(32 封面 + 10 间距)不在 MarqueeText 的容器里。所以开着封面选「居中」时,
+            // 那 42pt(32 封面 + 10 间距)不在跑马灯的容器里。所以开着封面选「居中」时,
             // 文字是在"除封面之外的剩余宽度"里居中、相对整卡略偏封面对侧。这是刻意的 ——
             // 要相对整卡居中就得把封面改成 overlay 叠在歌词上,那会直接违反上面那段
             // `.animation(nil, value)` 治的"封面遮挡歌词"。
@@ -1819,10 +1820,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     lyricTextColumn
                 }
             }
-            // MarqueeText 内层是 GeometryReader(没有固有尺寸、能吃下任何被提议的宽度),
-            // HStack 会先给定尺寸的封面分配它那 32pt,剩下的宽度都留给歌词。这里仍然显式
-            // 写一次 maxWidth: .infinity 把"歌词吃掉剩余宽度"这个意图钉死,不依赖
-            // GeometryReader 在 stack 里的隐式伸缩行为。
+            // 跑马灯按被提议的宽度定尺寸(能吃下任何宽度),HStack 会先给定尺寸的封面分配它那 32pt,
+            // 剩下的宽度都留给歌词。这里仍然显式写一次 maxWidth: .infinity 把"歌词吃掉剩余宽度"
+            // 这个意图钉死,不依赖它在 stack 里的隐式伸缩行为。
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
                 if reportsWidth { LineLayoutWidthReporter() }
@@ -1834,7 +1834,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         //
         // 机制:封面是这个 HStack 的**条件兄弟**。它从不在场变在场时,SwiftUI 把它当结构性
         // 插入 —— 新插入的视图**一帧就落在终态位置**;而歌词那一侧的 frame(以及跟着 frame
-        // 走的 MarqueeText 内部那个 .clipped() 边界)是被**动画平滑收缩**的,要花整条弹簧
+        // 走的跑马灯裁剪边界)是被**动画平滑收缩**的,要花整条弹簧
         // 才从"没有封面时"的宽度收到"有封面时"的宽度。这段时间里歌词被裁到更靠右的旧边界,
         // 那一截字正好画在已经就位的封面**底下** —— HStack 里靠后的兄弟盖在前面的上面。
         //
@@ -1960,7 +1960,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         }
     }
 
-    /// 歌词这一格:副行关着就是改动前那一行 `MarqueeText`(逐像素不变);副行开着(
+    /// 歌词这一格:副行关着就是改动前那一行跑马灯(逐像素不变);副行开着(
     /// 方案二)就在它下面再放一行 11pt 的副行,两行 + 3pt 间距 = 31pt,竖直居中塞进
     /// 44pt 的行里,**行高不变** —— 这是选方案二而不是叠行方案的全部理由:不动 `cardHeight`、
     /// 编辑台舞台常量、出场动画这片高度体系(05 章决策 22)。
@@ -1981,19 +1981,24 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         }
     }
 
-    /// 主行本体,从 `lyricRowContent` 拆出来给副行让位。用这一行纯文本(不含逐字填色进度)当 MarqueeText 的 id:换到新的一句才重新
+    /// 主行本体,从 `lyricRowContent` 拆出来给副行让位。用这一行纯文本(不含逐字填色进度)当跑马灯的 id:换到新的一句才重新
     /// 测量/重新开始滚动,同一句内部逐字变色的高频刷新不打断正在进行的滚动。
     /// restingAlignment 与 edgeFadeWidth 的理由见 `lyricRowContent` 里紧挨着 `lyricTextColumn` 的那段注释。
+    ///
+    /// 没有逐字时间的行走图层跑马灯(`LayerMarquee`),只按窗口可见性停、不按所在那一层停:稳态 / 展开两份靠透明度轮流显示,
+    /// 按层停会让长句在悬停展开时跳回开头;藏着那份的图层动画不占主线程。它的内容不继承这里的环境,字体要在里面再写一次(05 章决策 99)。
     private var mainLyricLine: some View {
         NotchLayerActiveReader { layerActive in
             if let words = playback.displayLine?.words, !words.isEmpty {
                 layerKaraokeLine(words: words, layerActive: layerActive)
             } else {
-                MarqueeText(id: playback.displayLine?.plainText ?? "",
-                            restingAlignment: playback.mainLyricAlignment,
-                            edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth,
-                            loops: false) {
+                LayerMarquee(id: playback.displayLine?.plainText ?? "",
+                             edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth,
+                             restingAlignment: playback.mainLyricAlignment,
+                             loops: false,
+                             isActive: surfaceVisible) {
                     lyricContent(layerActive: layerActive)
+                        .font(playback.mainFont)
                 }
             }
         }

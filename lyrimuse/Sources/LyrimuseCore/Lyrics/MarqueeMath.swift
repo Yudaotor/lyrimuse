@@ -106,17 +106,50 @@ public struct MarqueeCycle: Equatable {
 
     /// 比滚动那四帧多一帧:左端在滚出 `leading` 那一刻长满、之后不变。只按四帧线性插值的话,左端要到滚到底才长满。
     public func fadeKeyframes(leading: CGFloat, trailing: CGFloat) -> FadeKeyframes {
-        var times: [Double] = [0, startHold]
+        fadeFrames(lead: startHold, tail: hold, leading: leading, trailing: trailing)
+    }
+
+    /// 只滚一遍时停住的那一刻(周期里的时间):首轮从 `firstCycleTimeOffset` 起播,滚到底就不再动。
+    public var singlePassEnd: Double { startHold + travel }
+    /// 只滚一遍的关键帧位置(0…1 对应首轮起点到 `singlePassEnd`):起点、起滚、滚到底。
+    public var singlePassKeyTimes: [Double] { [0, hold / (hold + travel), 1] }
+    /// 同上三个时刻往左滚了多少(点)。
+    public var singlePassOffsets: [CGFloat] { [0, 0, distance] }
+
+    /// 只滚一遍时两端渐隐的关键帧,时间线同 `singlePassKeyTimes`,规则同 `fadeKeyframes`。
+    public func singlePassFadeKeyframes(leading: CGFloat, trailing: CGFloat) -> FadeKeyframes {
+        fadeFrames(lead: hold, tail: 0, leading: leading, trailing: trailing)
+    }
+
+    /// 开头停 `lead` 秒 → 滚到底 → 末尾停 `tail` 秒,左端在滚出 `leading` 那一刻多一帧。
+    private func fadeFrames(lead: Double, tail: Double, leading: CGFloat, trailing: CGFloat) -> FadeKeyframes {
+        var times: [Double] = [0, lead]
         var offsets: [CGFloat] = [0, 0]
         if leading > 0, leading < distance {
-            times.append(startHold + travel * Double(leading / distance))
+            times.append(lead + travel * Double(leading / distance))
             offsets.append(leading)
         }
-        times += [startHold + travel, period]
-        offsets += [distance, distance]
-        return FadeKeyframes(keyTimes: times.map { period > 0 ? $0 / period : 0 },
+        times.append(lead + travel)
+        offsets.append(distance)
+        if tail > 0 {
+            times.append(lead + travel + tail)
+            offsets.append(distance)
+        }
+        let total = lead + travel + tail
+        return FadeKeyframes(keyTimes: times.map { total > 0 ? $0 / total : 0 },
                              leading: offsets.map { leadingFade(forOffset: $0, full: leading) },
                              trailing: offsets.map { trailingFade(forOffset: $0, full: trailing) })
+    }
+
+    /// 周期里的时刻 `time` 换到另一个周期 `other` 上接着播的时刻(宿主变宽变窄、要滚的距离变了时用):
+    /// 开头停着时保留已经停了多久,末尾停着时同理;滚动中按此刻的偏移接上,偏移超过 `other` 的距离就落到它末尾停顿的起点。
+    public func carry(_ time: Double, to other: MarqueeCycle) -> Double {
+        let t = phase(time)
+        if t <= startHold { return min(t, other.startHold) }
+        if t >= startHold + travel { return other.singlePassEnd + min(t - singlePassEnd, other.hold) }
+        let shown = distance * CGFloat((t - startHold) / travel)
+        if shown >= other.distance { return other.singlePassEnd }
+        return other.startHold + other.travel * Double(shown / other.distance)
     }
 
     /// 周期里某一刻(秒,按周期取模)往左滚了多少。

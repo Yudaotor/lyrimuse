@@ -720,6 +720,14 @@ func runLyricsWindowTests() {
                     "图层跑马灯(契约): 两端渐隐按周期关键帧走,左端随滚动长出来")
         expectEqual(sourceBytes(marquee, contain: "cycle.leadingFade(forOffset: offset, full: leadingFadeWidth)"), true,
                     "图层跑马灯(契约): 悬停停住时左端渐隐按停住的偏移算")
+        expectEqual(sourceHas(marquee, "if abs(bounds.width - laidOutWidth) > 0.5 {\n refit()")
+                    && sourceHas(marquee, "install(next, from: old.carry(phase, to: next))"), true,
+                    "图层跑马灯(契约): 宽度变了从此刻的位置换到新周期接着播,不从头来(05 章决策 99)")
+        expectEqual(sourceHas(marquee, "let measured = hosting.fittingSize"), true,
+                    "图层跑马灯(契约): 每次更新都量内容尺寸,同一个 id 下内容变宽变窄也跟上")
+        expectEqual(sourceHas(marquee, "move.beginTime = (scroller.layer?.convertTime(now, from: nil) ?? now) - played")
+                    && sourceHas(marquee, "animation.isRemovedOnCompletion = false"), true,
+                    "图层跑马灯(契约): 只滚一遍时往前拨 beginTime、停在末帧,不用 timeOffset(会从头补上跳过的那段)")
     }
 
     // MARK: - 迷你两行选取

@@ -228,7 +228,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 回读 AppSettings 拿到的是旧值),再重算几何。
     @Published private(set) var lyricRowHeight: CGFloat = AppSettings.shared.notchEffectiveLyricRowHeight
     // 宽度是固定值,不随当前歌词文字宽度动态变化。默认值和用户可调的设置项都在 AppSettings.notchContentWidth
-    // (这里不重复放一份、避免两处数字不同步)。超长歌词交给 NotchLyricsView 的 MarqueeText 来回滚动展示,
+    // (这里不重复放一份、避免两处数字不同步)。超长歌词交给 NotchLyricsView 的跑马灯滚动展示,
     // 不靠加宽窗口解决。
     /// 顶行一只"耳朵"的最低可用宽度。算卡片宽度下限时要把**两只**耳朵 + 刘海本身宽度 +
     /// 左右 padding 都算进去(见 `contentWidth`)。

@@ -622,8 +622,12 @@ func runNotchTests() {
                         "灵动岛接线: 全部屏幕的副本下一拍再算,不在 willSet 里读到旧的屏幕设置")
             expectEqual(sourceHas(controller, "guard pinnedScreenID != nil else {\n setVisible(false)\n return\n }\n NotchLyricsWindowController.shared.setVisible(false)"), true,
                         "灵动岛接线: 副本上的 ✕ 转给主实例关,主实例和副本一起收掉")
-            expectEqual(sourceHas(view, "edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth,\n loops: false) {"), true,
-                        "灵动岛接线: 没有逐字时间的歌词行滚到句尾就停,不跳回句首")
+            expectEqual(sourceHas(view, "LayerMarquee(id: playback.displayLine?.plainText ?? \"\",\n edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth,\n restingAlignment: playback.mainLyricAlignment,\n loops: false,\n isActive: surfaceVisible) {\n lyricContent(layerActive: layerActive)\n .font(playback.mainFont)"), true,
+                        "灵动岛接线: 没有逐字时间的歌词行走图层跑马灯、滚到句尾就停,按窗口可见性停,字体在里面再写一次(05 章决策 99)")
+            expectEqual(sourceHas(view, "return LayerMarquee(id: text, restingAlignment: alignment, isActive: surfaceVisible) {"), true,
+                        "灵动岛接线: 耳朵里的歌名 / 歌手走图层跑马灯、按窗口可见性停(05 章决策 99)")
+            expectEqual(sourceBytes(view, contain: "MarqueeText("), false,
+                        "灵动岛接线: 灵动岛里不再有 SwiftUI 跑马灯 —— 逐帧 SwiftUI 动画每帧带整窗布局、提交(05 章决策 99)")
             // 订阅统一存进一个集合,teardown 一行清掉;不再单独开 AnyCancellable 字段(漏配一行清理就泄漏)。
             expectEqual(!controller.contains(": AnyCancellable?")
                         && sourceCount(controller, "\n        .store(in: &subscriptions)") >= 28
