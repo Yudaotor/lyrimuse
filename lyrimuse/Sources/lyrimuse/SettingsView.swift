@@ -2253,7 +2253,7 @@ private struct LyricsSettingsTab: View {
             if features.lyricsWordFormats.count > 1 {
                 CardDivider()
                 SettingsSubRow(title: String(format: L10n.t("另存副本：%@"),
-                                             features.lyricsWordFormats.dropFirst().map(Self.lyricsWordFormatName).joined(separator: "、"))) {
+                                             L10n.list(features.lyricsWordFormats.dropFirst().map(Self.lyricsWordFormatName)))) {
                     Button(L10n.t("删除副本")) {
                         applyLyricsWordFormats(Array(features.lyricsWordFormats.prefix(1)), backup: true)
                     }
@@ -2395,7 +2395,7 @@ private struct LyricsSettingsTab: View {
         let alert = NSAlert()
         alert.messageText = String(format: L10n.t("把逐字歌词改存为 %@？"), Self.lyricsWordFormatName(picked))
         alert.informativeText = String(format: L10n.t("原来的 %@ 文件可以留作副本，删除前会先自动备份"),
-                                       current.filter { $0 != picked }.map(Self.lyricsWordFormatName).joined(separator: "、"))
+                                       L10n.list(current.filter { $0 != picked }.map(Self.lyricsWordFormatName)))
         alert.addButton(withTitle: L10n.t("保留副本"))
         alert.addButton(withTitle: L10n.t("删除原文件"))
         alert.addButton(withTitle: L10n.t("取消"))

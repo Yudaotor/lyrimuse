@@ -1350,6 +1350,8 @@ func runSourceContractTests() {
             expectEqual(apply.contains("writeAutoSnapshot(reason: \"word-format\") == nil") && guardAt != nil && writeAt != nil
                         && guardAt! < writeAt! && sourceHas(apply, "return\n            }\n            features.lyricsWordFormats"), true,
                         "逐字歌词格式: 备份没写成、又有歌词文件时要在改设置之前返回")
+            expectEqual(count(view, "joined(separator: \"、\")"), 0,
+                        "设置页列表拼接: 用 L10n.list(按界面语言拼),写死「、」英文界面会显示成 YRC、TTML")
         } else {
             expectEqual(true, false, "Last.fm 播放器排除: 读不到 lyrimuse/SettingsView.swift(路径挪了?)")
         }
