@@ -53,7 +53,7 @@ func TestWriteLyricsFileAtomicFailsCleanly(t *testing.T) {
 	}
 }
 
-// 临时文件名不以四个歌词后缀收尾——导入分组、Swift 侧扫描与备份归档都按后缀过滤,会自动
+// 临时文件名不以任何歌词后缀收尾——导入分组、Swift 侧扫描与备份归档都按后缀过滤,会自动
 // 忽略它;反过来用户自己命名成 "xx.tmp.lrc" 的正常文件绝不能被当垃圾。
 func TestIsLyricsTempFile(t *testing.T) {
 	cases := map[string]bool{

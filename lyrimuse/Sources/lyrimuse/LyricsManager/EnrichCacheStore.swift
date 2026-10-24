@@ -115,7 +115,7 @@ public final class EnrichCacheStore: ObservableObject {
         // 才被消费,别在 rebuild 时对每条都做一轮 JSONSerialization.data + JSONDecoder 双重编解码。
         let hasDecision: Bool
         /// 这条的歌词内容上次真的变过是什么时候 —— 取自**导出的歌词文件的 mtime**
-        /// (`lyrics/` 下 `.lrc`/`.tr.lrc`/`.roma.lrc`/`.yrc` 四个里最新的那个),
+        /// (`lyrics/` 下这一条的逐行、译文、音译和各种逐字格式文件里最新的那个),
         /// nil = 磁盘上一个歌词文件都没有(压根没歌词的条目,export 会跳过它们)。
         ///
         /// 用文件 mtime 而不是缓存里的时间戳字段:缓存里**没有**一个真正表达"更新时间"的字段 ——
@@ -124,7 +124,8 @@ public final class EnrichCacheStore: ObservableObject {
         /// 权威源,**所有**写入路径都经过它(都是引擎的导出,App 的改动也经它),只有没歌词的条目缺。
         ///
         /// 关键前提:`exportLyricsFiles` 写盘前会比对全文、逐字节相同就 `continue`
-        /// (lyricsexport.go),所以 mtime 不会被"每次引擎启动都重写一遍"冲掉。
+        /// (lyricsexport.go),所以 mtime 不会被"每次引擎启动都重写一遍"冲掉;只换逐字格式时,新写的
+        /// 格式文件沿用旧格式文件的 mtime(lyricsexport.go 的 `inheritWordTime`,11 章决策 144)。
         /// 哪天那个跳过逻辑被去掉,这个字段就会集体失真(全变成最后一次启动时间),
         /// 而且**表现是静默的** —— 排序看着还在工作,只是结果全错。
         let lyricsUpdatedAt: Date?
@@ -817,7 +818,7 @@ public final class EnrichCacheStore: ObservableObject {
         return true
     }
 
-    /// 扫一遍歌词目录,得到「折叠后的文件基名 → 该组四个文件里最新的 mtime」。
+    /// 扫一遍歌词目录,得到「折叠后的文件基名 → 该组各个文件里最新的 mtime」。
     ///
     /// **一次目录枚举、批量取属性**,不逐条 stat:后者要么 O(n) 次系统调用,要么(如果按
     /// key 现推文件名)撞上「这个 key 有没有别的 key 折叠后同名」那个每次都扫全 `raw.keys` 的 O(n²)。

@@ -121,7 +121,7 @@ func parseLyricsBytes(data []byte) parsedLyricsFile {
 // 缓存字段,下次 export 还会把它重新写回来——这是刻意的取舍,不是遗漏。
 //
 // 算法:
-//  1. 扫 lyricsDir(),按去掉后缀的文件名前缀分组(同一首歌的 .lrc/.tr.lrc/.roma.lrc/.yrc)。
+//  1. 扫 lyricsDir(),按去掉后缀的文件名前缀分组(同一首歌的 .lrc/.tr.lrc/.roma.lrc 和各种逐字格式)。
 //  2. 组内挑一个能解析出头部的文件还原 (artist,title,album)——文件名本身不可信
 //     (sanitizeLyricsFilename 是单向有损转换,见 lyricsexport.go),头部标签才是权威
 //     身份信息。整组都缺头(老版本文件)就跳过,沿用 JSON 里的旧值。
@@ -132,8 +132,8 @@ func parseLyricsBytes(data []byte) parsedLyricsFile {
 //
 // 必须挑**最长**的匹配后缀,不能"首次命中就 break"。
 //
-// lyricsFileSuffixes 是 [".lrc", ".tr.lrc", ".roma.lrc", ".yrc"],而 ".lrc" 是
-// ".tr.lrc"/".roma.lrc" 的真后缀 —— 按数组顺序首次命中,"X.tr.lrc" 会被判成主歌词、
+// 候选后缀(lyricsAllFileSuffixes)里 ".lrc" 是 ".tr.lrc"/".roma.lrc"/".enhanced.lrc"
+// 的真后缀 —— 按数组顺序首次命中,"X.tr.lrc" 会被判成主歌词、
 // base 被截成 "X.tr",生成一个幻影分组。而分组的缓存 key 是按**文件头标签**
 // ([ar:]/[ti:]/[al:])重建的(见本文件算法说明第 2 步),幻影组的标签跟本尊一模一样,
 // 于是译文被当成主歌词写回 lyrics 字段,把原文永久覆盖。

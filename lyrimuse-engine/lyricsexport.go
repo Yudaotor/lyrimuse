@@ -61,18 +61,19 @@ func lyricsFileHeader(artist, title, album, source string, manual bool) string {
 	return b.String()
 }
 
-// lyricsFileSuffixes 是这个 key 可能对应的最多 4 个文件后缀,顺序跟 enrichEntry 里
-// 歌词家族字段的语义一一对应。
+// lyricsFileSuffixes 是逐行、译文、音译、逐字四格各自的后缀,顺序跟 enrichEntry 里
+// 歌词家族字段的语义一一对应。逐字那一格实际写成哪几种格式由设置定(lyricswordformat.go),
+// 歌词文件夹里会出现的全部后缀见 lyricsAllFileSuffixes。
 var lyricsFileSuffixes = [4]string{".lrc", ".tr.lrc", ".roma.lrc", ".yrc"}
 
 // exportLyricsFiles writes/updates the standalone lyrics-family file group
-// (<base>.lrc/.tr.lrc/.roma.lrc/.yrc,只在对应字段非空时才写)per entry that
+// (<base>.lrc/.tr.lrc/.roma.lrc 和设置里选的逐字格式,只在对应字段非空时才写)per entry that
 // currently has lyrics, one level outside enrichCache. Full sweep over
 // enrichCache every call.
 //
 // 是"歌词部分以 lyrics/ 文件夹为权威源"里 Go 侧的主写入路径(配合 importLyricsFromFiles
-// 做启动时的调和)。对每个 key 的 4 个可能后缀都显式做"该有就写、不该有就删"——比如某
-// 条目的逐字时间轴被 removeWordTiming 清空了,这里要把之前导出的 .yrc 文件一并删掉,
+// 做启动时的调和)。对每个 key 的每个可能后缀都显式做"该有就写、不该有就删"——比如某
+// 条目的逐字时间轴被 removeWordTiming 清空了,这里要把之前导出的逐字文件一并删掉,
 // 否则下次启动 importLyricsFromFiles 会把这个残留文件当成"文件夹里有数据"重新读回来,
 // 悄悄撤销刚做的"移除逐字时间轴"操作。
 //
@@ -81,7 +82,7 @@ var lyricsFileSuffixes = [4]string{".lrc", ".tr.lrc", ".roma.lrc", ".yrc"}
 // 只负责清理仍存在条目的*过期变体文件*(如上)。
 //
 // 全量导出在常驻进程里只读比记录对不上的文件(见 lyricsfilestate.go),没有记录时(CLI、单测)每个条目逐个读比
-// 4 个文件,条目上千时是秒级的磁盘 IO;运行期只改了个别条目的路径用 exportLyricsFilesFor。
+// 它的每个文件,条目上千时是秒级的磁盘 IO;运行期只改了个别条目的路径用 exportLyricsFilesFor。
 func exportLyricsFiles() {
 	exportLyricsFilesMatching(nil)
 }
@@ -508,7 +509,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 // 导出同时写同一个文件时 WriteFile 会互相截断交错;各写各的临时文件再改名,最后改名的赢、
 // 内容完整。
 //
-// 临时文件名 `<base>.lrc.tmp.随机`:不以四个歌词后缀收尾,所以导入分组(lyricsFileSuffixOf)、
+// 临时文件名 `<base>.lrc.tmp.随机`:不以任何歌词后缀收尾,所以导入分组(lyricsFileSuffixOf)、
 // Swift 侧目录扫描与备份归档(都按 EnrichCacheKeys.lyricsFileSuffixes 过滤)都会自动忽略它;
 // 崩溃残留由 importLyricsFromFiles 启动时清扫(isLyricsTempFile)。权限显式补成 0644——
 // os.CreateTemp 默认 0600,不补的话用户在 Finder / 编辑器里打开自己的歌词文件会比以前多一层
@@ -544,7 +545,7 @@ func writeLyricsFileAtomic(path string, data []byte) error {
 }
 
 // isLyricsTempFile 认 writeLyricsFileAtomic 留下的临时文件(`X.lrc.tmp.123456`):名字里带
-// `.tmp.` 且不以四个歌词后缀收尾——后一条是为了绝不把用户自己命名成 "xx.tmp.lrc" 的正常
+// `.tmp.` 且不以任何歌词后缀收尾——后一条是为了绝不把用户自己命名成 "xx.tmp.lrc" 的正常
 // 歌词文件当垃圾扫掉。
 func isLyricsTempFile(name string) bool {
 	return lyricsTempFilePattern.MatchString(name)
