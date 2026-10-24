@@ -18,6 +18,13 @@ struct NotchProgressLine: View {
 
     static let thickness: CGFloat = 1.5
 
+    /// 线显隐的透明度曲线。线不跟着卡片底边动,停在稳态底边的高度上:藏起来(展开、收起)不补间、立刻藏;露出来(回到稳态)
+    /// 等卡片快收完再淡入,不横在还没收完的内容上。
+    static func fade(showing: Bool, reduceMotion: Bool) -> Animation? {
+        guard showing, !reduceMotion else { return nil }
+        return .easeOut(duration: 0.14).delay(0.2)
+    }
+
     var body: some View {
         GeometryReader { proxy in
             let inset = bottomCornerRadius + 2

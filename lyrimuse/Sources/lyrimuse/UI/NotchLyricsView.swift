@@ -1068,17 +1068,24 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                         .transition(.opacity)
                 }
             }
-            // 进度线:贴着卡片底边,只在没展开时画。
+            // 进度线:贴着稳态卡片底边,只在没展开时可见。开着「进度线」时常驻、只切透明度,透明度用自己那条曲线
+            // (`NotchProgressLine.fade`,只套在 opacity 上),别写成 if + transition 交给卡片那条尺寸弹簧:线停在稳态底边的高度上,
+            // 跟着弹簧慢慢淡出 / 淡入时会横在正在变形的卡片中间。见 05 章决策 94。
             .overlay(alignment: .bottom) {
-                if controller.showsBottomProgressLine {
+                if controller.showsProgressLine {
+                    let shows = controller.showsBottomProgressLine
                     NotchProgressLine(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
                                       // 有锚点时用锚点自己的时长,跟外推的位置同一次采样(同展开区的 NotchScrubber),换歌那一拍不跳。
                                       durationMs: (playback.anchor?.durationMs).flatMap { $0 > 0 ? $0 : nil }
                                           ?? playback.currentDurationMs, tint: accentOrWhite,
-                                      active: surfaceVisible, outline: controller.cardOutline)
+                                      active: surfaceVisible && shows, outline: controller.cardOutline)
                         .padding(.bottom, 1)
+                        .animation(NotchProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {
+                            $0.opacity(shows ? 1 : 0)
+                        }
                         .opacity(revealContentOpacity)
-                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(!shows)
                 }
             }
             // 展开态内容(下一句预览+进度条)本身没有另外裁一次形状——如果只让背景那一层
@@ -1752,7 +1759,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 NotchExpandedLyricList(tint: accentOrWhite)
                     .frame(width: controller.expandedCardWidth, height: controller.expandedLyricListHeight)
                     .padding(.top, top + headerHeight)
-                    .modifier(NotchCardLayerActive(active: expanded, staggered: staggered))
+                    .modifier(NotchCardLayerActive(active: expanded, staggered: staggered, waitsForResize: true))
             }
             // 展开区**完全不**受「显示歌词」开关影响:它是够到播放控制和进度条的唯一入口,
             // 而且用户主动指向展开这个动作本身就说明他现在想看更多 —— 连里面那行下一句预览也照常画。
@@ -3364,10 +3371,15 @@ struct NotchCardLayerActive: ViewModifier {
     var active: Bool
     /// 顶替这一块的那一份是不是落在别处。默认 false:空闲面板那类"压根没有对家"的块用不上错开。
     var staggered: Bool = false
+    /// 这一块半透明地压在正在变形的卡片上时合成跟不上(多行歌词:几十行、几百个字块的图层树):淡入等卡片长得差不多了
+    /// 再开始,淡出缩短,让它可见的那几帧跟尺寸弹簧的大段行程错开。见 05 章决策 94。
+    var waitsForResize: Bool = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let fadeOutDuration: TimeInterval = 0.10
     static let fadeInDuration: TimeInterval = 0.14
+    static let resizeSettleDelay: TimeInterval = 0.22
+    static let quickFadeOutDuration: TimeInterval = 0.05
 
     /// `.animation(_:value:)` 用变化**后**的新状态求值,所以这里按 `active` 分出入场两条
     /// (同 `NotchWindowRoot.cardAnimation` 的写法)。
@@ -3375,9 +3387,10 @@ struct NotchCardLayerActive: ViewModifier {
         if reduceMotion { return nil }
         if active {
             let curve = Animation.easeOut(duration: Self.fadeInDuration)
+            if waitsForResize { return curve.delay(Self.resizeSettleDelay) }
             return staggered ? curve.delay(Self.fadeOutDuration) : curve
         }
-        return .easeIn(duration: Self.fadeOutDuration)
+        return .easeIn(duration: waitsForResize ? Self.quickFadeOutDuration : Self.fadeOutDuration)
     }
 
     func body(content: Content) -> some View {

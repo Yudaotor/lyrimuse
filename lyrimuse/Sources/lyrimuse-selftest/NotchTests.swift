@@ -2396,6 +2396,15 @@ func runNotchTests() {
         expectEqual(v.contains("+ (!expanded && !showsLyrics && showsProgressLine ? NotchMetrics.progressLineStrip : 0)")
                     && v.contains("showsProgressLine && hasTrack && !isExpanded && !isCollapsed && milestone == nil"), true,
                     "灵动岛五项: 进度线只在没展开时画,关着歌词行时卡片为它多长一截")
+        expectEqual(sourceHas(v, "if controller.showsProgressLine {\n let shows = controller.showsBottomProgressLine")
+                    && sourceHas(v, "active: surfaceVisible && shows, outline: controller.cardOutline)")
+                    && sourceHas(v, ".animation(NotchProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {\n $0.opacity(shows ? 1 : 0)\n }")
+                    && !v.contains("if controller.showsBottomProgressLine {"), true,
+                    "进度线: 开着时常驻、只切透明度,藏着时停表")
+        expectEqual(sourceHas(v, "NotchExpandedLyricList(tint: accentOrWhite)")
+                    && sourceHas(v, ".modifier(NotchCardLayerActive(active: expanded, staggered: staggered, waitsForResize: true))")
+                    && sourceHas(v, "if waitsForResize { return curve.delay(Self.resizeSettleDelay) }"), true,
+                    "多行歌词: 展开时等卡片长得差不多再淡入,收回时快速淡掉")
         expectEqual(ctrl.contains("let next = hoverExpanded || alertHold || milestoneHold || peekHold"), true,
                     "灵动岛五项: 临时展开是 isExpanded 的一个输入")
         expectEqual(runner.contains("guard AppSettings.shared.notchOverlayEnabled else {")
