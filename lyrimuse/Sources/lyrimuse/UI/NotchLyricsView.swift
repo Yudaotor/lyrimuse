@@ -1715,9 +1715,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 靠左的歌词 / 歌名一路向左滑一百多 pt,头部插进来时歌词行还同时往下滑);if/else 直接放 VStack、放进定宽 overlay 容器、只把
     /// 歌词行挪出来,正在过渡的那份或新插进来的那份也都跟着卡片左沿滑。SwiftUI 对进出场视图怎么摆,跟持久视图不是一套规则,而且
     /// 不透明;持久视图被居中对齐这件事刘海胶囊(notchSeam)验证过:卡片怎么长,中心一像素不动。所以全部做成持久视图,位置交给
-    /// 居中布局(overlay alignment .top = 顶部居中),自己只动 opacity(跟卡片同一条弹簧)。竖直位置各自写死为常量:头部贴顶行;
+    /// 居中布局(overlay alignment .top = 顶部居中),自己只动 opacity(曲线在 `NotchCardLayerActive`)。竖直位置各自写死为常量:头部贴顶行;
     /// 稳态歌词行贴顶行,展开歌词行再往下让出头部高度(`expandedTrackInfoHeaderHeight`,没头部时为 0);展开区在展开歌词行之下。
-    /// 没有任何一块的 frame 在动画里改值,所以没有平移。
+    /// 没有任何一块的 frame 在动画里改值;各块相对卡片的横向偏移随卡片宽变,跟卡片同一条弹簧走、正好抵掉卡片自己的位移,所以屏幕上没有平移。
     ///
     /// 守则:① 藏着的那份**必须**停表 —— 逐字填色与迷你进度条的 TimelineView 都按环境值
     /// `notchCardLayerActive` 暂停,否则 30Hz 热路径翻倍(性能审计盯住的那条);跑马灯只是一个
@@ -1726,9 +1726,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// `steadyCardWidth` / `expandedCardWidth`),不能用 GeometryReader 的现值。④ 「显示歌词」关着时稳态
     /// 那份歌词行不建(那时稳态本来没有歌词行,`showsLyricRow` 的语义),展开那份照常。⑤ 这一层里**不准**
     /// 出现**随时间反复触发**的隐式动画 —— 音浪那次(EqualizerBars 头注)证明它会在卡片尺寸弹簧中途把
-    /// 作用域里的位置也接管走。`NotchCardLayerActive` 里那条 `.animation(_:value: active)` 是唯一的例外,
-    /// 判据是它只在展开 / 收起的**边沿**翻一次(不是按时间反复变),而且这一层每一块的 frame 都是常量、
-    /// 没有几何可供它接管 —— 它接管的正是那一块 opacity,这就是加它的目的。⑥ 高度算术仍以 NotchChromeSource.cardHeight /
+    /// 作用域里的位置也接管走。`NotchCardLayerActive` 那条透明度曲线是唯一的例外:它只在展开 / 收起的**边沿**翻一次,
+    /// 而且用 `.animation(_:body:)` 只套在 opacity 上 —— 上面那份横向偏移一旦被别的曲线接走,这一块就会横着滑(05 章决策 94)。
+    /// ⑥ 高度算术仍以 NotchChromeSource.cardHeight /
     /// NotchMetrics.expandedExtraHeight 为唯一真源,这里的 y 只是把同一组量按顺序加起来。
     private var cardBodyLayer: some View {
         let expanded = controller.isExpanded
@@ -1990,7 +1990,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             } else {
                 MarqueeText(id: playback.displayLine?.plainText ?? "",
                             restingAlignment: playback.mainLyricAlignment,
-                            edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth) {
+                            edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth,
+                            loops: false) {
                     lyricContent(layerActive: layerActive)
                 }
             }
@@ -3368,8 +3369,9 @@ enum NotchTimeFormat {
 /// 这里的透明度**自带曲线,刻意不跟卡片那条尺寸弹簧**(`NotchWindowRoot.cardAnimation`)。弹簧驱动
 /// opacity 的问题是尾巴长:0.38s 的行程里有相当一段淡出的那份和淡入的那份都停在 0.4~0.6,而两份分别
 /// 落在相差一个展开头部高度(纵向)、相差两个卡片宽(横向)的位置上 —— 屏幕上同时挂着同一句歌词的两个
-/// 错位半透明副本,视觉系统会把它积分成「一个东西斜着滑过去」。内层 `.animation(_:value:)` 会在同一次
-/// 更新里**盖掉**外层那条弹簧对本作用域的接管,这正是要的效果。
+/// 错位半透明副本,视觉系统会把它积分成「一个东西斜着滑过去」。这条曲线用 `.animation(_:body:)` 只套在透明度上,
+/// 位置仍跟弹簧、跟卡片边缘同步走。别换成 `.animation(_:value:)`:那会把位置也一起从弹簧手里接走(连同延迟),
+/// 卡片变宽变窄时这一块停在旧的横向位置上,一露出来就横着滑一下(05 章决策 94)。
 ///
 /// `staggered` = 顶替我的那一份落在别处(判据见 cardBodyLayer 里那行)。为真时淡入要等淡出走完再开始,
 /// 任何一刻画面上只有一份歌词,位移感消失;为假时两份逐像素重合,同步淡化本来就看不出来,再错开反而
@@ -3406,21 +3408,11 @@ struct NotchCardLayerActive: ViewModifier {
 
     func body(content: Content) -> some View {
         // 与外层的值取「与」,不覆盖:外层是窗口看不看得见(NotchWindowRoot 给)。
-        let gated = content.transformEnvironment(\.notchCardLayerActive) { $0 = $0 && active }
-        Group {
-            if waitsForResize {
-                // 曲线只套在透明度上,位置照跟卡片那条弹簧:淡入前那段延迟里若也盖掉弹簧,这一块会停在收起时的横向位置上,
-                // 一露出来就从左边滑进来。见 05 章决策 94。
-                gated.animation(fade) { $0.opacity(active ? 1 : 0) }
-            } else {
-                gated
-                    .opacity(active ? 1 : 0)
-                    // 必须挂在 .opacity **之后** —— 它要管的就是上面那一行的变化。
-                    .animation(fade, value: active)
-            }
-        }
-        .allowsHitTesting(active)
-        .accessibilityHidden(!active)
+        content
+            .transformEnvironment(\.notchCardLayerActive) { $0 = $0 && active }
+            // 曲线只套在透明度上,位置照跟卡片那条弹簧(见头注)。
+            .animation(fade) { $0.opacity(active ? 1 : 0) }
+                .accessibilityHidden(!active)
     }
 }
 

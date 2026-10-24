@@ -28,11 +28,12 @@ enum NotchMirrorManager {
         started = true
 
         let settings = AppSettings.shared
-        // 每个 sink 都用**参数值**,不在闭包里回头读 AppSettings:@Published 在 willSet
-        // 时机发布,那一刻属性还是旧值(本项目已实测踩过)。所以下面不是简单地
-        // `.sink { _ in refresh() }`,而是把新值显式传给 refresh(enabled:)。
+        // 放到主队列下一拍再算:@Published 在 willSet 时机发布,refresh 里 `targetScreen()` 要读 `notchAllScreens`、
+        // `notchFollowsActiveScreen`,同一拍读到的是旧值,算出的主实例那块屏不对,副本会建在主实例要去的那块屏上、
+        // 叠成两扇。开关值照样用参数传下去。
         settings.$notchAllScreens
             .combineLatest(settings.$notchOverlayEnabled)
+            .receive(on: DispatchQueue.main)
             .sink { allScreens, notchEnabled in
                 MainActor.assumeIsolated {
                     refresh(enabled: allScreens && notchEnabled, notchEnabled: notchEnabled)
@@ -53,8 +54,7 @@ enum NotchMirrorManager {
     }
 
     /// 建立/销毁副本,使副本集合恰好等于「所有屏幕 − 主实例占的那块」。
-    /// notchEnabled:触发源是开关 sink 时传参数值(willSet 窗口内回读是旧值,见 start()
-    /// 里的注释);屏幕插拔那条路(通知回调,不在任何 willSet 窗口)回读即可传 nil。
+    /// notchEnabled:触发源是开关 sink 时传参数值;屏幕插拔那条路(通知回调,不在任何 willSet 窗口)回读即可传 nil。
     static func refresh(enabled: Bool, notchEnabled: Bool? = nil) {
         guard enabled else {
             teardownAll()

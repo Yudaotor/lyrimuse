@@ -751,9 +751,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
 
     /// 展开态头部快捷操作里那颗 ✕:关掉「灵动岛歌词」总开关。只是 `setVisible(false)`
     /// 的一个入口,不另起状态 —— 跟悬浮歌词那颗 ✕(`LyricsOverlayWindowController` 的 `.closeOverlay`)
-    /// 完全对称。
+    /// 完全对称。副本上的 ✕ 转给主实例关:主实例不订阅总开关,只有它自己的 `setVisible` 能把它藏起来;
+    /// 总开关一关,副本由 `NotchMirrorManager` 拆掉。
     func closeFromQuickAction() {
-        setVisible(false)
+        guard pinnedScreenID != nil else {
+            setVisible(false)
+            return
+        }
+        NotchLyricsWindowController.shared.setVisible(false)
     }
 
     /// 展开态头部点歌名 / 专辑名 / 歌手名。卡片从屏幕顶边垂下来、水平居中,所以卡片在屏幕上的矩形按窗口顶边与

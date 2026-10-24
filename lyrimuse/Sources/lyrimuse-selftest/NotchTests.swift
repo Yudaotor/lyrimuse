@@ -618,6 +618,12 @@ func runNotchTests() {
             expectEqual(!stage.contains("NotchLyricsWindowController.shared.") && !autoHide.contains("NotchLyricsWindowController.shared.")
                         && !mirrorSrc.contains("settings.$notchHideWhenNotPlaying"), true,
                         "灵动岛接线: 恢复默认、宽度、屏幕、自动隐藏这些写入口只写设置,不再手动同步主实例;镜像管理器不另订一份")
+            expectEqual(sourceHas(mirrorSrc, ".combineLatest(settings.$notchOverlayEnabled)\n .receive(on: DispatchQueue.main)\n .sink { allScreens, notchEnabled in"), true,
+                        "灵动岛接线: 全部屏幕的副本下一拍再算,不在 willSet 里读到旧的屏幕设置")
+            expectEqual(sourceHas(controller, "guard pinnedScreenID != nil else {\n setVisible(false)\n return\n }\n NotchLyricsWindowController.shared.setVisible(false)"), true,
+                        "灵动岛接线: 副本上的 ✕ 转给主实例关,主实例和副本一起收掉")
+            expectEqual(sourceHas(view, "edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth,\n loops: false) {"), true,
+                        "灵动岛接线: 没有逐字时间的歌词行滚到句尾就停,不跳回句首")
             // 订阅统一存进一个集合,teardown 一行清掉;不再单独开 AnyCancellable 字段(漏配一行清理就泄漏)。
             expectEqual(!controller.contains(": AnyCancellable?")
                         && sourceCount(controller, "\n        .store(in: &subscriptions)") >= 28
@@ -2418,9 +2424,10 @@ func runNotchTests() {
         expectEqual(sourceHas(v, "NotchExpandedLyricList(tint: accentOrWhite)")
                     && sourceHas(v, ".modifier(NotchCardLayerActive(active: expanded, staggered: staggered, waitsForResize: true))")
                     && sourceHas(v, "if waitsForResize { return curve.delay(Self.resizeSettleDelay) }")
-                    && sourceHas(v, "if waitsForResize {\n // 曲线只套在透明度上")
-                    && sourceHas(v, "gated.animation(fade) { $0.opacity(active ? 1 : 0) }"), true,
-                    "多行歌词: 展开时等卡片长得差不多再淡入,收回时快速淡掉;曲线只管透明度,位置跟卡片弹簧")
+                    && sourceHas(v, ".transformEnvironment(\\.notchCardLayerActive) { $0 = $0 && active }\n // 曲线只套在透明度上")
+                    && sourceHas(v, ".animation(fade) { $0.opacity(active ? 1 : 0) }")
+                    && !v.contains(".animation(fade, value: active)"), true,
+                    "多行歌词: 展开时等卡片长得差不多再淡入,收回时快速淡掉;各块的曲线都只管透明度,位置跟卡片弹簧")
         expectEqual(ctrl.contains("let next = hoverExpanded || alertHold || milestoneHold || peekHold"), true,
                     "灵动岛五项: 临时展开是 isExpanded 的一个输入")
         expectEqual(runner.contains("guard AppSettings.shared.notchOverlayEnabled else {")
