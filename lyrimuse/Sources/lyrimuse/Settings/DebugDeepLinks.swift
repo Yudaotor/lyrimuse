@@ -69,6 +69,13 @@ enum DebugDeepLinks {
         case let .stall(ms):
             logger.notice("debug stall: blocking main thread \(ms, privacy: .public) ms")
             usleep(UInt32(ms) * 1000)
+        case let .notchBehavior(collapse, hide):
+            if let collapse { AppSettings.shared.notchCollapsesWhenPaused = collapse }
+            if let hide { AppSettings.shared.notchHideWhenNotPlaying = hide }
+            logger.notice("debug notch behavior collapse=\(String(describing: collapse), privacy: .public) hide=\(String(describing: hide), privacy: .public)")
+        case .milestonePreview:
+            ListenMilestoneCenter.shared.preview()
+            logger.notice("debug milestone preview")
         case .saveConfig:
             Task { @MainActor in
                 let ok = await ConfigStore.shared.save()

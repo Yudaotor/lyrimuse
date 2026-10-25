@@ -640,6 +640,13 @@ func runNotchTests() {
                         "灵动岛接线: 「按宽度断句」的宽度只让主实例报,副本不覆盖;别在视图里跟 .shared 比身份,那是 .shared 自己 init 里的递归初始化、启动即崩(05 章决策 102)")
             expectEqual(sourceHas(controller, "if shrinking, inPlace, window.isVisible"), true,
                         "灵动岛接线: 只有原地变窄才晚半秒缩窗,换屏、挪位置当场到位(05 章决策 102)")
+            expectEqual(sourceHas(src("NotchWindowRoot.swift"), ".animation(vanishAnimation) {\n $0.scaleEffect(controller.isVanished ? 0.001 : 1, anchor: .top)")
+                        && !sourceBytes(src("NotchWindowRoot.swift"), contain: ".animation(vanishAnimation, value:"), true,
+                        "灵动岛接线: 缩进刘海的缩放只套自己那条动画,回场跟卡片尺寸同一拍变时不被尺寸弹簧接管、不过冲(05 章决策 103)")
+            expectEqual(sourceHas(src("NotchMilestonePanel.swift"), "DispatchQueue.main.asyncAfter(deadline: .now() + Self.startDelay) {\n if generation == round { fire(round: round) }"), true,
+                        "灵动岛接线: 报喜碎屑等卡片长到报喜那一档再落,不悬在卡片外(05 章决策 103)")
+            expectEqual(sourceBytes(view, contain: ".scale(scale: 0.94, anchor: .top)"), false,
+                        "灵动岛接线: 顶行那块不带条件,挂 transition 永远不会播(05 章决策 103)")
             expectEqual(sourceBytes(view, contain: "func setExpanded(_ expanded: Bool)")
                         || sourceBytes(stage, contain: "func setExpanded(_ expanded: Bool)")
                         || sourceBytes(controller, contain: "func setExpanded(_ expanded: Bool)"), false,

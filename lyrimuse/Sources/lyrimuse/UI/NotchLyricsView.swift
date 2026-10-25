@@ -993,13 +993,6 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 notchSeam
                     .frame(height: controller.contentTopInset)
                     .opacity(revealContentOpacity)
-                // 收起态(没在播放、没 hover)卡片缩到刘海大小,这里把常显内容整套摘掉而不是
-                // 指望卡片太小自然裁掉——避免文字/按钮在收缩过程中被挤压变形,收起就是纯粹
-                // 一块背景,跟真实刘海融为一体。
-                //
-                // 但"摘掉"不能是硬切:没有 transition 的话,内容在收起的第一帧就整块消失,而卡片还要再花 0.45 秒缩回去,观感是
-                // "字先没了,黑块才慢慢收"。加一个跟卡片同一条弹簧驱动的淡出 + 轻微上缩(anchor 在顶部,因为卡片是从顶边往上收的),
-                // 内容就跟着卡片一起"被吸回刘海"。
                 VStack(spacing: 0) {
                     // 顶行占菜单栏那一条高度,收起后跟菜单栏齐平、不额外占屏。两种形态:
                     // 收起(没在播放)= iPhone 灵动岛式极简(左耳封面、右耳音浪,
@@ -1015,8 +1008,6 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // 出场动画的内容淡入:值来自 NotchWindowRoot 的 keyframeAnimator,
                 // 平时恒为 1;背景层不套它,所以卡片形状先长出来、字后到。
                 .opacity(revealContentOpacity)
-                // 卷进顶行:锚点放顶部,内容一边淡出一边往上缩,跟卡片高度收缩同一条弹簧。
-                .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
             }
             // 顶行以下的内容(曲目信息头部 / 两份歌词行变体 / 展开区)作为 ZStack 的 **overlay**、顶部居中,
             // 理由见 cardBodyLayer。

@@ -114,6 +114,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case japaneseReading(JapaneseReadingStyle)
         /// 主线程原地睡这么多毫秒(`debug/stall?ms=`,1…`maxStallMs`):造出「别的窗口把主线程占住」那一下,验动画扛不扛得住。
         case stall(ms: Int)
+        /// 灵动岛摆一次报喜,跟设置页「收听里程碑」旁那颗「试用」走同一条路(`debug/milestone-preview`)。
+        case milestonePreview
+        /// 灵动岛「暂停时收起」「暂停时隐藏」,跟设置页那两颗开关走同一个设置:
+        /// `debug/notch-behavior?collapse-when-paused=1&hide-when-not-playing=0`,至少带一个。
+        case notchBehavior(collapseWhenPaused: Bool?, hideWhenNotPlaying: Bool?)
     }
 
     /// `debug/stall` 的上限(毫秒)。再长就是把 App 卡死了。
@@ -223,6 +228,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/stall"):
             guard let ms = value("ms").flatMap(Int.init), (1...Self.maxStallMs).contains(ms) else { return nil }
             self = .debug(.stall(ms: ms))
+        case ("debug", "/milestone-preview"):
+            self = .debug(.milestonePreview)
         case ("debug", "/settings-search"):
             guard let query = value("q")?.trimmingCharacters(in: .whitespaces), !query.isEmpty else { return nil }
             self = .debug(.settingsSearch(query: query))
@@ -248,6 +255,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             guard artwork != nil || content != nil || iconSize != nil || iconStyle != nil || hoverControls != nil else { return nil }
             self = .debug(.menuBarDisplay(artwork: artwork, content: content, iconSize: iconSize, iconStyle: iconStyle,
                                           hoverControls: hoverControls))
+        case ("debug", "/notch-behavior"):
+            let collapse = value("collapse-when-paused").flatMap(Self.parseBool)
+            let hide = value("hide-when-not-playing").flatMap(Self.parseBool)
+            guard collapse != nil || hide != nil else { return nil }
+            self = .debug(.notchBehavior(collapseWhenPaused: collapse, hideWhenNotPlaying: hide))
         case ("debug", "/japanese-reading"):
             guard let style = value("style").flatMap({ JapaneseReadingStyle(rawValue: $0.lowercased()) }) else { return nil }
             self = .debug(.japaneseReading(style))
@@ -361,6 +373,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .stall(ms):
                 components.path = "/stall"
                 components.queryItems = [URLQueryItem(name: "ms", value: String(ms))]
+            case .milestonePreview: components.path = "/milestone-preview"
             case let .knockout(leg, on):
                 components.path = "/knockout"
                 components.queryItems = [URLQueryItem(name: "leg", value: leg.rawValue), URLQueryItem(name: "on", value: on ? "1" : "0")]
@@ -378,6 +391,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                     + (iconSize.map { [URLQueryItem(name: "icon-size", value: $0)] } ?? [])
                     + (iconStyle.map { [URLQueryItem(name: "icon-style", value: $0)] } ?? [])
                     + (hoverControls.map { [URLQueryItem(name: "hover-controls", value: $0 ? "1" : "0")] } ?? [])
+            case let .notchBehavior(collapse, hide):
+                components.path = "/notch-behavior"
+                components.queryItems = (collapse.map { [URLQueryItem(name: "collapse-when-paused", value: $0 ? "1" : "0")] } ?? [])
+                    + (hide.map { [URLQueryItem(name: "hide-when-not-playing", value: $0 ? "1" : "0")] } ?? [])
             case let .japaneseReading(style):
                 components.path = "/japanese-reading"
                 components.queryItems = [URLQueryItem(name: "style", value: style.rawValue)]

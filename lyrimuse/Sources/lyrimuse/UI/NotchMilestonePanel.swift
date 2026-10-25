@@ -94,6 +94,10 @@ struct NotchMilestoneConfetti: View {
         let delay: Double
     }
 
+    /// 报喜那一拍卡片才开始往报喜高度长(展开弹簧,response 0.38),碎屑按终态卡高摆:先等卡片长到位再落,
+    /// 不然头一两百毫秒碎屑悬在卡片外面。
+    static let startDelay: Double = 0.3
+
     private static let colors: [Color] = [
         Color(red: 0.93, green: 0.82, blue: 0.56),
         Color(red: 1.0, green: 0.95, blue: 0.81),
@@ -117,13 +121,16 @@ struct NotchMilestoneConfetti: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
         .onChange(of: milestone) { _, next in
-            if next != nil, !reduceMotion { fire() }
+            guard next != nil, !reduceMotion else { return }
+            generation += 1
+            let round = generation
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.startDelay) {
+                if generation == round { fire(round: round) }
+            }
         }
     }
 
-    private func fire() {
-        generation += 1
-        let round = generation
+    private func fire(round: Int) {
         falling = false
         let span = max(1, cardWidth - 60)
         pieces = (0..<18).map { i in

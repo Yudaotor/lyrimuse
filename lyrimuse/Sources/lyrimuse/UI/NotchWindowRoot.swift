@@ -94,8 +94,10 @@ struct NotchWindowRoot: View {
     private var cardHeight: CGFloat { controller.cardHeight }
 
     /// 退场/回场动画:缩进刘海用 ease-in(vanishDuration);**回场瞬时,不做动画**。
-    /// `.animation(_:value:)` 用变化后的新值求值,所以 isVanished 刚翻 true 走前者、
-    /// 刚翻 false 走后者。reduceMotion 下一律 nil(控制器那边也不会进这条路)。
+    /// 按变化后的新值求值,所以 isVanished 刚翻 true 走前者、刚翻 false 走后者。reduceMotion 下一律 nil
+    /// (控制器那边也不会进这条路)。只套在缩放和透明度这两个修饰符上(`.animation(_:body:)`):回场常和卡片尺寸
+    /// 同一拍变(从收起态缩进去、恢复播放时卡片撑回稳态),写成整棵子树的 `.animation(_:value:)` 的话,
+    /// 外层尺寸弹簧会接管这次缩放,带过冲地从 0.001 长到 1。
     ///
     /// **回场不能用 spring 驱动的 `scaleEffect`**:`.coverArt` 风格的卡片背景是
     /// 封面模糊图,spring 缩放期间封面会跟着卡片一起被重新缩放/裁切,观感是"封面平移
@@ -178,8 +180,10 @@ struct NotchWindowRoot: View {
             // 「暂停/无播放时隐藏」的退场态:整卡以顶边中点(=刘海中心)为锚缩到无、同时透明,
             // 看起来是被吸进刘海;不取 0 而取 0.001,避开退化变换。尺寸(frame)不参与——
             // isCollapsed 在这个开关开着时不算暂停,卡片保持稳态尺寸,只有这个缩放在动。
-            .scaleEffect(controller.isVanished ? 0.001 : 1, anchor: .top)
-            .opacity(controller.isVanished ? 0 : 1)
+            .animation(vanishAnimation) {
+                $0.scaleEffect(controller.isVanished ? 0.001 : 1, anchor: .top)
+                    .opacity(controller.isVanished ? 0 : 1)
+            }
             // 命中形状显式钉成卡片这个矩形,hover 判定就挂在**卡片本身**上。
             //
             // 两条都是实测出来的,别改回去:
@@ -215,7 +219,6 @@ struct NotchWindowRoot: View {
             .animation(cardAnimation, value: cardWidth)
             // 收起/弹出时内容整块淡入淡出,由同一条弹簧驱动,跟尺寸变化同步。
             .animation(cardAnimation, value: controller.isCollapsed)
-            .animation(vanishAnimation, value: controller.isVanished)
             .onChange(of: controller.isExpanded) { _, expanded in wasExpanded = expanded }
             .onChange(of: controller.trackDrop != nil) { _, dropping in wasDropping = dropping }
             // 窗口收走(看不见)时把边沿记忆也清掉,跟控制器那边的 resetHoverAfterHide 配对:不清的话下次露面

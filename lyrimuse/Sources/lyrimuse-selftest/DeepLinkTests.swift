@@ -206,6 +206,9 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/menubar-display?hover-controls=1"),
                     .debug(.menuBarDisplay(artwork: nil, content: nil, hoverControls: true)), "debug: 只开悬停显示播放控制")
         expectEqual(link("lyrimuse://debug/menubar-display"), nil, "debug: 菜单栏显示什么都没带不认")
+        expectEqual(link("lyrimuse://debug/notch-behavior?hide-when-not-playing=1"),
+                    .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: true)), "debug: 只开灵动岛暂停时隐藏")
+        expectEqual(link("lyrimuse://debug/notch-behavior"), nil, "debug: 灵动岛行为什么都没带不认")
         expectEqual(link("lyrimuse://debug/menubar-center?screen=auto"),
                     .debug(.menuBarCenter(center: nil, ignoreNotch: nil, screen: "auto")), "debug: 只改正中放哪几块屏")
         expectEqual(link("lyrimuse://debug/japanese-reading?style=Kana"), .debug(.japaneseReading(.kana)),
@@ -335,7 +338,9 @@ func runDeepLinkTests() {
             .debug(.toggleFavorite), .debug(.idleResume), .debug(.seek(seconds: 99.7)), .debug(.seek(seconds: 0)),
             .debug(.knockout(leg: .appleMusicScript, on: false)), .debug(.knockout(leg: .spotifyScript, on: true)),
             .debug(.knockout(leg: .kasetScript, on: false)), .debug(.saveConfig), .debug(.volume(percent: 0)), .debug(.volume(percent: 100)),
-            .debug(.stall(ms: 1)), .debug(.stall(ms: 2000)),
+            .debug(.stall(ms: 1)), .debug(.stall(ms: 2000)), .debug(.milestonePreview),
+            .debug(.notchBehavior(collapseWhenPaused: true, hideWhenNotPlaying: nil)),
+            .debug(.notchBehavior(collapseWhenPaused: false, hideWhenNotPlaying: true)),
             .debug(.knockout(leg: .voxScript, on: false)), .debug(.knockout(leg: .systemArtwork, on: true)),
             .debug(.menuBarCenter(center: true, ignoreNotch: true)), .debug(.menuBarCenter(center: false, ignoreNotch: nil)),
             .debug(.menuBarCenter(center: nil, ignoreNotch: false)),
