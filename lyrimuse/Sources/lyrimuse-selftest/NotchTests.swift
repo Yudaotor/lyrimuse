@@ -2408,6 +2408,10 @@ func runNotchTests() {
                     "专辑简介契约: 只在换歌 / 消费方来要时取,不轮询")
         expectEqual(store.contains("guard demand > 0, !track.title.isEmpty else {"), true,
                     "专辑简介契约: 没有消费方挂着时一个请求都不发")
+        expectEqual(["album", "artist", "song"].allSatisfy {
+                        store.contains("private(set) var \($0): EditorialCard? { didSet { scheduleAnnounce() } }")
+                    } && store.contains("guard now != announced else { return }"), true,
+                    "简介契约: 三张卡终值跟上次广播时一样就不发变更,重查原样填回时歌词窗口、菜单栏面板不跟着重算(18 章决策 81)")
         expectEqual(store.components(separatedBy: "guard self.currentKey == track.key else { return self.refreshCurrent() }").count - 1, 15,
                     "简介契约: 专辑页 / 同歌手专辑页 / 歌手页 / Last.fm / 网易云歌手介绍 / 网易云专辑介绍 / QQ 歌曲简介 / 汽水 / 酷狗专辑与歌手介绍 / Spotify 歌手简介 / 酷我 id 与介绍 / YouTube Music 歌手介绍(问通、问不通各一处)回来时已经换歌,都按当前曲目重查(同专辑连切时新歌不会整首拿不到)")
         expectEqual(sourceHas(store, "guard self.currentKey == track.key else { return self.refreshCurrent() }\n            self.artist = card"), true,

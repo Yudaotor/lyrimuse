@@ -87,9 +87,32 @@ final class EditorialNotesStore: ObservableObject {
     private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "editorial")
 
     /// 当前曲目的专辑 / 歌手 / 歌曲简介。nil = 没有 / 还没取到;入口可不可点只看它。
-    @Published private(set) var album: EditorialCard?
-    @Published private(set) var artist: EditorialCard?
-    @Published private(set) var song: EditorialCard?
+    ///
+    /// 别改回 `@Published`:重查(`refresh`,灵动岛每次展开、「⋯」菜单打开都叫)先清空再按记住的结论原样填回,
+    /// 每次赋值都广播的话,终值没变也会让整页订阅它的歌词窗口、菜单栏面板重算 body。赋值只记一笔,同一轮里的几次
+    /// 合并到下一拍,三张卡跟上次广播时比真变了才发 `objectWillChange`(18 章决策 81)。
+    private(set) var album: EditorialCard? { didSet { scheduleAnnounce() } }
+    private(set) var artist: EditorialCard? { didSet { scheduleAnnounce() } }
+    private(set) var song: EditorialCard? { didSet { scheduleAnnounce() } }
+    /// 上一次广播时的三张卡。
+    private var announced: [EditorialCard?] = [nil, nil, nil]
+    private var announcePending = false
+
+    private func scheduleAnnounce() {
+        guard !announcePending else { return }
+        announcePending = true
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.announceIfChanged() }
+        }
+    }
+
+    private func announceIfChanged() {
+        announcePending = false
+        let now = [album, artist, song]
+        guard now != announced else { return }
+        announced = now
+        objectWillChange.send()
+    }
 
     func card(_ kind: EditorialCard.Kind) -> EditorialCard? {
         switch kind {
