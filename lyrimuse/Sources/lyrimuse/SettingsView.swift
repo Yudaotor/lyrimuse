@@ -2671,7 +2671,7 @@ private struct AppearanceSettingsTab: View {
     @AppStorage(LyricsWindowSession.openKey) private var lyricsWindowOpen = false
     /// 这台 Mac 此刻有没有触控栏:没有时「触控栏」那一段照样在,点进去只有一张「这台 Mac 没有触控栏」的说明卡。
     @ObservedObject private var touchBar = TouchBarAvailability.shared
-    // (灵动岛「显示于」的选项快照和「所有屏幕」哨兵 tag 在 NotchEditorStage.swift
+    // (灵动岛「显示于」的选项快照和「所有屏幕」哨兵 tag 在 NotchSettingsRows.swift
     //  的 NotchScreenSettingsRows —— 只有那一处在用。)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -3759,7 +3759,7 @@ private struct AppearanceSettingsTab: View {
     // 编辑台几个浮层用的同一份。别在这里重新长出一张同名的卡:这一段有工具栏浮层和抽屉两个
     // 宿主,多一份实现就多两处会漂的地方(理由见那两个文件顶部)。
 
-    // 「灵动岛歌词」那张配置卡(风格 / 宽度 / 显示在哪块屏幕)在 NotchEditorStage.swift ——
+    // 「灵动岛歌词」那张配置卡(风格 / 宽度 / 显示在哪块屏幕)在编辑台(NotchEditorStage.swift,浮层里的行在 NotchSettingsRows.swift)——
     // 前两项在编辑台工具栏的两个浮层和舞台里那条宽度调整条,屏幕那一项在「屏幕」浮层。别在
     // 这里重新长出一张同名的卡:那一段只有编辑台一个宿主,多一份实现就多一处会漂的地方。
 
@@ -3789,7 +3789,7 @@ private struct AppearanceSettingsTab: View {
 /// 不随 UI 挪动迁移)。
 ///
 /// 「显示音浪」**不在这个枚举里**:它带一个从属的"贴靠的一侧",宿主是左右耳浮层顶部那行开关
-/// (`NotchEarSettingsRows`,`NotchEditorStage.swift`),不要顺手挪进来。
+/// (`NotchEarSettingsRows`,`NotchSettingsRows.swift`),不要顺手挪进来。
 enum NotchBehaviorItem: String, CaseIterable, Identifiable {
     case showLyrics
     /// 歌词行要不要按逐字时间轴填色(灵动岛这一份见 AppSettings.notchLyricsKaraoke)。
@@ -4797,7 +4797,7 @@ private struct NotchAllSettingsDrawer: View {
 }
 
 // 「显示音浪」在设置页里的唯一入口是左右耳浮层 / 抽屉左右耳组顶部那一行开关
-// (`NotchEarSettingsRows`,`NotchEditorStage.swift`)。别在这里另起一张合并了开关 +
+// (`NotchEarSettingsRows`,`NotchSettingsRows.swift`)。别在这里另起一张合并了开关 +
 // 「贴靠的一侧」分段选择器的卡 —— 那是同一对状态(`notchShowsEqualizer` /
 // `notchEqualizerEar`)的第二种控件、第二个位置。落点的来龙去脉见 05 章「编辑台改造」。
 

@@ -1473,7 +1473,7 @@ func runSourceContractSurfaceTests() {
         // ② 编辑台的「重置 ▾」要恢复这一项。漏了的表现是"点了重置,对齐没回到左对齐"——
         //    这个仓库给灵动岛加重置按钮时定过纪律:init() 的 fallback 和重置按钮读**同一份**
         //    `AppSettings.defaultXxx` 常量,不各自硬编码。
-        if let stage = read("UI/NotchEditorStage.swift") {
+        if let stage = notchStageSourceIfReadable({ read("UI/" + $0) }) {
             expectEqual(stage.contains("settings.notchLyricsAlignment = AppSettings.defaultNotchLyricsAlignment"),
                         true, "灵动岛对齐: NotchStyleDefaults.restoreDefaults() 要覆盖这一项、且读默认值常量")
         } else {
@@ -1558,13 +1558,13 @@ func runSourceContractSurfaceTests() {
         }
         let rule = "LyricSecondaryLine.expandedNextLinePreviewVisible("
         for rel in ["UI/NotchLyricsWindowController.swift", "UI/NotchEditorStage.swift"] {
-            if let text = read(rel) {
+            if let text = rel.hasSuffix("/NotchEditorStage.swift") ? notchStageSourceIfReadable({ read("UI/" + $0) }) : read(rel) {
                 expectEqual(text.contains(rule), true, "副行: \(rel) 的展开区预览判据要调 Core 那一份,不许手写 &&")
             } else {
                 expectEqual(true, false, "副行: 读不到 \(rel)(路径挪了?)")
             }
         }
-        if let stage = read("UI/NotchEditorStage.swift") {
+        if let stage = notchStageSourceIfReadable({ read("UI/" + $0) }) {
             expectEqual(stage.contains("settings.notchSecondaryLine = AppSettings.defaultNotchSecondaryLine"), true,
                         "副行: NotchStyleDefaults.restoreDefaults() 要覆盖这一项、且读默认值常量")
         }
@@ -1573,7 +1573,7 @@ func runSourceContractSurfaceTests() {
             expectEqual(settingsView.contains("!settings.notchSecondaryLine.hidesExpandedNextLinePreview"), true,
                         "副行: 副行选「下一句」时「展开时预览下一句」开关要隐藏(翻了也没效果的开关不显示)")
         }
-        if let stage = read("UI/NotchEditorStage.swift") {
+        if let stage = notchStageSourceIfReadable({ read("UI/" + $0) }) {
             expectEqual(sourceHas(stage, "!settings.notchSecondaryLine.hidesExpandedNextLinePreview, !settings.notchExpandedLyricList,\n settings.notchExpandedShowsNextLine"), true,
                         "副行: 「歌词行」按钮摘要列「展开时预览下一句」要按同一判据(被副行或多行歌词顶掉时不列)")
         }
@@ -3507,7 +3507,7 @@ func runSourceContractSettingsTests() {
 
         let settingsPath = sourcesDir.appendingPathComponent("lyrimuse/Settings/AppSettings.swift").path
         if let settings = try? String(contentsOfFile: settingsPath, encoding: .utf8),
-           let notchBody = restoreDefaultsBody("lyrimuse/UI/NotchEditorStage.swift"),
+           let notchBody = restoreDefaultsBody("lyrimuse/UI/NotchSettingsRows.swift"),
            let menuBarBody = restoreDefaultsBody("lyrimuse/UI/MenuBarEditorStage.swift") {
             var notchConsts: [String] = []
             var menuBarConsts: [String] = []
@@ -3537,7 +3537,7 @@ func runSourceContractSettingsTests() {
                         "重置覆盖闸: 菜单栏的默认值常量都在 MenuBarStyleDefaults.restoreDefaults() 里被赋值")
         } else {
             expectEqual(true, false,
-                        "重置覆盖闸: 读不到 AppSettings.swift / NotchEditorStage.swift / MenuBarEditorStage.swift,或里面找不到 restoreDefaults()(文件挪了或函数改名了?)")
+                        "重置覆盖闸: 读不到 AppSettings.swift / NotchSettingsRows.swift / MenuBarEditorStage.swift,或里面找不到 restoreDefaults()(文件挪了或函数改名了?)")
         }
     }
 
@@ -3629,7 +3629,7 @@ func runSourceContractSettingsTests() {
 
         let overlayStage = code("lyrimuse/UI/OverlayEditorStage.swift")
         let overlayDrawerFile = code("lyrimuse/UI/OverlayAllSettingsDrawer.swift")
-        let notchStage = code("lyrimuse/UI/NotchEditorStage.swift")
+        let notchStage = notchStageSource { code("lyrimuse/UI/" + $0) }
         let menuBarStage = code("lyrimuse/UI/MenuBarEditorStage.swift")
         let settingsView = code("lyrimuse/SettingsView.swift")
         expectEqual([overlayStage, overlayDrawerFile, notchStage, menuBarStage, settingsView].filter(\.isEmpty).count, 0,
@@ -5330,9 +5330,9 @@ func runSourceContractIdentityTests() {
                         && notchController.contains("if AppSettings.shared.notchFollowsActiveScreen && !AppSettings.shared.notchAllScreens {")
                         && notchController.contains("self?.refreshFullScreenCover()\n                    self?.syncActiveScreenTracking()"), true,
                     "灵动岛跟随当前窗口: 主实例盯焦点屏(跟全部屏幕互斥、藏着时不盯),targetScreen 贴跟到的那块,插拔屏幕重判")
-        expectEqual(stripComments(code("UI/NotchEditorStage.swift")).contains("NotchFollowedScreen.shared.$id.removeDuplicates().map { _ in () }"),
+        expectEqual(stripComments(notchStageSource { code("UI/" + $0) }).contains("NotchFollowedScreen.shared.$id.removeDuplicates().map { _ in () }"),
                     true, "灵动岛跟随当前窗口: 跟到的屏换了,编辑台预览跟着重排")
-        let notchStage = stripComments(code("UI/NotchEditorStage.swift"))
+        let notchStage = stripComments(notchStageSource { code("UI/" + $0) })
         expectEqual(notchStage.contains("(Self.followActiveTag, L10n.t(\"跟随当前窗口\"))")
                         && notchStage.contains("if settings.notchFollowsActiveScreen != follows {")
                         && notchStage.contains("settings.notchFollowsActiveScreen = AppSettings.defaultNotchFollowsActiveScreen"), true,
@@ -6069,6 +6069,19 @@ func notchCardSource(_ read: (String) -> String) -> String {
 func notchCardSourceIfReadable(_ read: (String) -> String?) -> String? {
     guard read(notchCardViewFiles[0]) != nil else { return nil }
     return notchCardViewFiles.compactMap(read).joined(separator: "\n")
+}
+
+/// 灵动岛设置页编辑台那一组文件(编辑台 `NotchEditorStage.swift`、预览替身、工具栏浮层与「全部设置」抽屉共用的设置行)。
+/// 用法同 `notchCardSource`。
+let notchStageViewFiles = ["NotchEditorStage.swift", "NotchPreviewChrome.swift", "NotchSettingsRows.swift"]
+
+func notchStageSource(_ read: (String) -> String) -> String {
+    notchStageViewFiles.map(read).joined(separator: "\n")
+}
+
+func notchStageSourceIfReadable(_ read: (String) -> String?) -> String? {
+    guard read(notchStageViewFiles[0]) != nil else { return nil }
+    return notchStageViewFiles.compactMap(read).joined(separator: "\n")
 }
 
 func sourceBytes(_ text: String, contain needle: String) -> Bool {
