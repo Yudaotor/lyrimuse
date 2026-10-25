@@ -253,47 +253,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             + NotchMetrics.earNotchInset
         return max(left, right)
     }
-    // hover 展开时在 contentSize 之外额外撑出的高度,放(可选的)曲目信息头部 + 下一句歌词预览 + 迷你进度条 +
-    // 播放控制键这几样补充信息。歌词行末尾那枚封面不在这一块:它在歌词行里,不需要 hover 才出现,也不占额外高度。
-    // 同上,单一来源在 NotchMetrics。
-    // 窗口恒按**最大**形态开(卡片在里面自己变大变小,见 NotchWindowRoot)——所以这里
-    // 用 Max,不用那个按内容算的函数。用后者会让"没歌词的歌"把窗口也缩掉,而窗口一缩,
-    // 后面换到有歌词的歌时卡片就没地方长了(会被窗口边界硬裁)。
-    ///
-    /// 展开区高度的入参分两类:曲目级数据(`hasLyricPreview`/`hasScrubber`)和**用户设置**(下一句预览、
-    /// 播放控制键、曲目信息头部四项、快捷操作),后者会主动触发重算(见 `NotchExpandedMetrics.maxHeight`
-    /// 的注释)。这些入参跟 `minEarWidth` 那组同一个规矩:非 nil = 调用方正处于对应 `@Published` 的
-    /// willSet 窗口,必须用传入值;nil = 回读存储值。**以后再往这个函数加一个入参,就得同时在 init 里加一条
-    /// 对应订阅**,漏了的表现是"改完设置卡片高度纹丝不动,直到下次触发别的几何重算才追上"。
-    ///
-    /// 歌词行末尾那枚封面开关(`notchLyricRowShowsArtwork`)**不在入参里**——它只影响歌词行内部排列,
-    /// 不影响这个函数算的高度。头部**自己**的封面开关(`expandedTrackInfoShowsArtwork`)则**在**入参里——
-    /// 它固定贴文字块左边、按 `max(封面, 文字)` 参与头部高度,必须跟其它几项一样走"传值+重算几何"这条路。
-    private func expandedExtraHeight(
-        expandedShowsNextLine: Bool? = nil,
-        expandedShowsControls: Bool? = nil,
-        expandedTrackInfoShowsArtwork: Bool? = nil,
-        expandedTrackInfoShowsTitle: Bool? = nil,
-        expandedTrackInfoShowsArtist: Bool? = nil,
-        expandedTrackInfoShowsAlbum: Bool? = nil,
-        expandedShowsQuickActions: Bool? = nil
-    ) -> CGFloat {
-        let showsArtwork = expandedTrackInfoShowsArtwork ?? AppSettings.shared.notchExpandedShowsArtwork
-        let showsTitle = expandedTrackInfoShowsTitle ?? AppSettings.shared.notchExpandedShowsTrackTitle
-        let showsArtist = expandedTrackInfoShowsArtist ?? AppSettings.shared.notchExpandedShowsArtist
-        let showsAlbum = expandedTrackInfoShowsAlbum ?? AppSettings.shared.notchExpandedShowsAlbum
-        let showsActions = expandedShowsQuickActions ?? AppSettings.shared.notchExpandedShowsQuickActions
-        let trackInfoHeight = NotchExpandedMetrics.trackInfoHeight(
-            showsArtwork: showsArtwork, showsTitle: showsTitle, showsArtist: showsArtist, showsAlbum: showsAlbum,
-            showsActions: showsActions)
-        // 开着多行歌词时「下一句」预览不会出现(`NotchChromeSource.showsExpandedLyricPreview`),不留它那一截。
-        return NotchExpandedMetrics.maxHeight(
-            hasLyricPreviewPossible: (expandedShowsNextLine ?? LyricSecondaryLine.expandedNextLinePreviewVisible(
-                userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: AppSettings.shared.notchSecondaryLine))
-                && expandedLyricListHeight == 0,
-            hasControlsPossible: expandedShowsControls ?? AppSettings.shared.notchExpandedShowsControls,
-            trackInfoHeight: trackInfoHeight)
-    }
+    /// 几何重算(`recomputeGeometry`)读的设置里,不是 chrome 属性的那几项的镜像。跟 `showsEqualizer`、`expandedShows*`、
+    /// `lyricRowHeight` 这些 chrome 镜像同一条规矩:订阅的 sink 先写镜像、再无参重算。`@Published` 在 willSet 时机派发,
+    /// sink 里回读 AppSettings 拿到的是旧值;只读镜像就没有「哪条路径该传新值」这回事。新加一项影响几何的设置,
+    /// 加一个镜像和一条「写镜像、重算」的订阅,漏了订阅的表现是改完设置卡片纹丝不动,直到别的几何重算才追上。
+    private var baseContentWidth = CGFloat(AppSettings.shared.notchContentWidth)
+    private var baseExpandedContentWidth = CGFloat(AppSettings.shared.notchExpandedContentWidth)
+    private var leftEarModule = AppSettings.shared.notchLeftEar
+    private var rightEarModule = AppSettings.shared.notchRightEar
 
     /// init 里建的全部 Combine 订阅;`teardown` 一次清掉,新加订阅一律 `.store(in: &subscriptions)`,别再单独开字段。
     private var subscriptions = Set<AnyCancellable>()
@@ -578,38 +545,31 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 换一个模块就可能把卡片顶宽(配成控制键)或者放开(配成不显示)。漏了这两条订阅的表现是
         // "选了播放控制、三个键被裁掉半个,直到下次拖宽度才恢复"。
         //
-        // 两条都把 sink 的**参数值**显式传下去,不让下游回读 AppSettings:@Published 是
-        // willSet 时机派发,此刻存储属性还是旧值(同一个坑见 NotchMirrorManager.start())。
-        // 每次只有一只耳朵在变,另一只回读是安全的。
+        // 先写镜像再重算(见 `leftEarModule` 头注)。
         AppSettings.shared.$notchLeftEar.removeDuplicates().sink { [weak self] module in
-            self?.recomputeGeometry(animate: false, leftEar: module)
+            self?.leftEarModule = module
+            self?.recomputeGeometry(animate: false)
         }
         .store(in: &subscriptions)
         AppSettings.shared.$notchRightEar.removeDuplicates().sink { [weak self] module in
-            self?.recomputeGeometry(animate: false, rightEar: module)
+            self?.rightEarModule = module
+            self?.recomputeGeometry(animate: false)
         }
         .store(in: &subscriptions)
-        // 音浪开关/贴哪只耳朵:同一个 willSet 坑同一个修法——存 sink 参数值、
-        // 并且必须重算几何(下限公式 minEarWidth 依赖这两个值,见那边的注释)。
+        // 音浪开关/贴哪只耳朵:先写镜像再重算几何(下限公式 minEarWidth 依赖这两个值)。
         AppSettings.shared.$notchShowsEqualizer.removeDuplicates().sink { [weak self] shows in
             self?.showsEqualizer = shows
-            self?.recomputeGeometry(animate: false, showsEqualizer: shows)
+            self?.recomputeGeometry(animate: false)
         }
         .store(in: &subscriptions)
         AppSettings.shared.$notchEqualizerEar.removeDuplicates().sink { [weak self] ear in
             self?.equalizerEar = ear
-            self?.recomputeGeometry(animate: false, equalizerEar: ear)
+            self?.recomputeGeometry(animate: false)
         }
         .store(in: &subscriptions)
 
-        // 展开态那一组:同一个 willSet 坑同一个修法——存 sink 参数值、并且
-        // 必须重算几何(展开区高度公式 expandedExtraHeight 依赖这几个值,见那边的注释)。
-        // 宽度不受影响,所以这几条订阅只把新值传进 recomputeGeometry 对应的高度类入参,
-        // 不碰 contentWidth/leftEar/rightEar/showsEqualizer/equalizerEar 那几个。歌词行
-        // 末尾那枚封面开关/位置不影响高度,不在这一组;头部**自己**的封面开关在这一组
-        // (`expandedTrackInfoShowsArtwork`),理由见 `expandedTrackInfoShowsArtwork` 上面
-        // 那条提醒。播放控制键开关(`expandedShowsControls`)同样在这一组——它不是曲目级
-        // 数据信号,是纯用户设置,跟 `expandedShowsNextLine` 同一个性质。
+        // 展开态那一组:先写镜像再重算几何(窗口高度按 `expandedExtraHeightMax` 留,它读这几项)。歌词行末尾那枚封面
+        // 开关/位置不影响高度,不在这一组;头部**自己**的封面开关在(按 `max(封面, 文字)` 参与头部高度)。
         // 「下一句歌词预览」最终画不画 = 用户开关 && 没被歌词行「副行」顶掉(副行选「下一句」
         // 时展开区再画一行同一句是重复)。判据只有 Core 那一份 `LyricSecondaryLine.expandedNextLinePreviewVisible`,
         // 设置页替身 `NotchPreviewChrome` 调的也是它;两个输入任一变化都要重算展开区高度上限。
@@ -620,43 +580,42 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         .removeDuplicates()
         .sink { [weak self] shows in
             self?.expandedShowsNextLine = shows
-            self?.recomputeGeometry(animate: false, expandedShowsNextLine: shows)
+            self?.recomputeGeometry(animate: false)
         }
         .store(in: &subscriptions)
         AppSettings.shared.$notchExpandedShowsControls.removeDuplicates().sink { [weak self] shows in
             self?.expandedShowsControls = shows
-            self?.recomputeGeometry(animate: false, expandedShowsControls: shows)
+            self?.recomputeGeometry(animate: false)
         }
         .store(in: &subscriptions)
         AppSettings.shared.$notchExpandedShowsArtwork.removeDuplicates().sink { [weak self] shows in
             self?.expandedTrackInfoShowsArtwork = shows
-            self?.recomputeGeometry(animate: false, expandedTrackInfoShowsArtwork: shows)
+            self?.recomputeGeometry(animate: false)
         }
         .store(in: &subscriptions)
         AppSettings.shared.$notchExpandedShowsTrackTitle.removeDuplicates().sink { [weak self] shows in
             self?.expandedTrackInfoShowsTitle = shows
-            self?.recomputeGeometry(animate: false, expandedTrackInfoShowsTitle: shows)
+            self?.recomputeGeometry(animate: false)
         }
         .store(in: &subscriptions)
         AppSettings.shared.$notchExpandedShowsArtist.removeDuplicates().sink { [weak self] shows in
             self?.expandedTrackInfoShowsArtist = shows
-            self?.recomputeGeometry(animate: false, expandedTrackInfoShowsArtist: shows)
+            self?.recomputeGeometry(animate: false)
         }
         .store(in: &subscriptions)
         AppSettings.shared.$notchExpandedShowsAlbum.removeDuplicates().sink { [weak self] shows in
             self?.expandedTrackInfoShowsAlbum = shows
-            self?.recomputeGeometry(animate: false, expandedTrackInfoShowsAlbum: shows)
+            self?.recomputeGeometry(animate: false)
         }
         .store(in: &subscriptions)
         AppSettings.shared.$notchExpandedShowsQuickActions.removeDuplicates().sink { [weak self] shows in
             self?.expandedShowsQuickActions = shows
-            self?.recomputeGeometry(animate: false, expandedShowsQuickActions: shows)
+            self?.recomputeGeometry(animate: false)
         }
         .store(in: &subscriptions)
         // 歌词行高度:设定值、字号、副行三项合成实际高度(设定值夹到装得下当前文字为止)。窗口高度跟着它,
-        // 必须重算几何;三个值都取 sink 参数(同一个 willSet 坑),先写镜像,recomputeGeometry 再读镜像。
-        // 副行同时决定展开区留不留「下一句」那一行,也按 sink 参数传进去:不传的话 recomputeGeometry 回退去读
-        // AppSettings 里还没改完的旧副行。
+        // 先写镜像再重算几何;三个值都取 sink 参数。副行同时决定展开区留不留「下一句」那一行,这里把那个镜像也按新副行写好,
+        // 不等「下一句」那条订阅(两条谁先到不一定)。
         Publishers.CombineLatest3(
             AppSettings.shared.$notchLyricRowHeight, AppSettings.shared.$notchFontSize, AppSettings.shared.$notchSecondaryLine
         )
@@ -669,8 +628,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         .sink { [weak self] row in
             guard let self else { return }
             if self.lyricRowHeight != row.height { self.lyricRowHeight = row.height }
-            self.recomputeGeometry(animate: false, expandedShowsNextLine: LyricSecondaryLine.expandedNextLinePreviewVisible(
-                userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: row.secondary))
+            let nextLine = LyricSecondaryLine.expandedNextLinePreviewVisible(
+                userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: row.secondary)
+            if self.expandedShowsNextLine != nextLine { self.expandedShowsNextLine = nextLine }
+            self.recomputeGeometry(animate: false)
         }
         .store(in: &subscriptions)
         // 多行歌词那一格的高度:开关、行数、副行(带译文 / 读音时每行高一截)。同上先写镜像再重算几何,三个值都取 sink 参数。
@@ -1206,7 +1167,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 「改成 .none」当成没变跳过,截屏时隐藏就不生效。
         window?.sharingType = captureHidden ? .none : .readWrite
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
-        recomputeGeometry(animate: false, contentWidth: contentWidth, expandedContentWidth: expandedContentWidth)
+        baseContentWidth = contentWidth
+        baseExpandedContentWidth = expandedContentWidth
+        recomputeGeometry(animate: false)
     }
 
     /// 上一次实际执行的显隐动作,updateActualVisibility 的判等守卫用。nil = 还没执行过。
@@ -1563,25 +1526,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 刘海高度 + 内容行高度(hover 展开时再加 expandedExtraHeight)、宽度 = 展开宽(稳态宽见
     // contentWidth(baseWidth:notchWidth:),展开宽在它之上再取 NotchWidthBounds.expandedWidth)。
     // 这个函数跟播放状态无关(isCollapsed 是计算属性,见那边的注释)。
-    /// 几何入参:非 nil = 调用方正处于对应那个 `@Published` 的 willSet 窗口(镜像 sink 那条路、左右耳/
-    /// 音浪/展开态那几条 sink),必须用传入值;nil = 回读存储值(设置页滑杆对 .shared 的
-    /// 调用发生在赋值语句之后,以及 init/屏幕插拔这些时机,存储值都是稳定的)。contentWidth /
-    /// expandedContentWidth / leftEar / rightEar / showsEqualizer / equalizerEar 只影响宽度
-    /// (`Self.contentWidth(...)` 与 `NotchWidthBounds.expandedWidth`),`expandedShows*` /
-    /// `expandedTrackInfoShows*` 只影响 `self.expandedExtraHeight(...)`(高度),两组互不相干,别混着传。
-    private func recomputeGeometry(animate: Bool, contentWidth: CGFloat? = nil,
-                                   expandedContentWidth: CGFloat? = nil,
-                                   leftEar: NotchEarModule? = nil,
-                                   rightEar: NotchEarModule? = nil,
-                                   showsEqualizer: Bool? = nil,
-                                   equalizerEar: NotchEqualizerEar? = nil,
-                                   expandedShowsNextLine: Bool? = nil,
-                                   expandedShowsControls: Bool? = nil,
-                                   expandedTrackInfoShowsArtwork: Bool? = nil,
-                                   expandedTrackInfoShowsTitle: Bool? = nil,
-                                   expandedTrackInfoShowsArtist: Bool? = nil,
-                                   expandedTrackInfoShowsAlbum: Bool? = nil,
-                                   expandedShowsQuickActions: Bool? = nil) {
+    /// 只读镜像(`leftEarModule` 那组和 chrome 的设置镜像),不回读 AppSettings,见 `leftEarModule` 头注。
+    private func recomputeGeometry(animate: Bool) {
         guard let window, let screen = resolvedScreen() else { return }
         let geo = Self.geometry(for: screen)
         // 四个 @Published 全部判等再写:这个函数挂在设置同步/屏幕插拔/镜像
@@ -1593,12 +1539,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // "窗口还在但已经缩成刘海"或反过来的错配。
         // isCollapsed 是从 isPlayingNow/isExpanded 现算的计算属性,这里不算。几何重算只管刘海尺寸和卡片宽度。
         let newSteady = Self.contentWidth(
-            baseWidth: contentWidth ?? AppSettings.shared.notchContentWidth,
+            baseWidth: baseContentWidth,
             notchWidth: geo.notchWidth,
-            leftEar: leftEar ?? AppSettings.shared.notchLeftEar,
-            rightEar: rightEar ?? AppSettings.shared.notchRightEar,
-            showsEqualizer: showsEqualizer ?? AppSettings.shared.notchShowsEqualizer,
-            equalizerEar: equalizerEar ?? AppSettings.shared.notchEqualizerEar,
+            leftEar: leftEarModule,
+            rightEar: rightEarModule,
+            showsEqualizer: showsEqualizer,
+            equalizerEar: equalizerEar,
             contentTopInset: geo.notchHeight)
         if steadyCardWidth != newSteady { steadyCardWidth = newSteady }
         // 展开宽 = max(稳态真实宽, 展开设定)。稳态已经过耳朵下限,所以展开这边
@@ -1606,7 +1552,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 用户在快捷面板把稳态拖过展开也不会出现"hover 反而变窄"。
         let newExpanded = NotchWidthBounds.expandedWidth(
             steady: newSteady,
-            expandedSetting: expandedContentWidth ?? CGFloat(AppSettings.shared.notchExpandedContentWidth))
+            expandedSetting: baseExpandedContentWidth)
         if expandedCardWidth != newExpanded { expandedCardWidth = newExpanded }
         // 窗口恒为**最大**形态(展开态)的尺寸,不随收起/稳态/展开三种形态改:三种形态是卡片在这个
         // 固定窗口里自己变大变小(NotchWindowRoot),窗口只在屏幕几何或宽度设置变化时才动。
@@ -1624,14 +1570,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         let size = NSSize(
             width: expandedCardWidth,
             // 歌词那一格按两种排法里高的那种留:这首有歌词、开着多行歌词时是列表,别的歌照旧是一行歌词。
-            height: max(geo.notchHeight + max(lyricRowHeight, expandedLyricListHeight) + self.expandedExtraHeight(
-                expandedShowsNextLine: expandedShowsNextLine,
-                expandedShowsControls: expandedShowsControls,
-                expandedTrackInfoShowsArtwork: expandedTrackInfoShowsArtwork,
-                expandedTrackInfoShowsTitle: expandedTrackInfoShowsTitle,
-                expandedTrackInfoShowsArtist: expandedTrackInfoShowsArtist,
-                expandedTrackInfoShowsAlbum: expandedTrackInfoShowsAlbum,
-                expandedShowsQuickActions: expandedShowsQuickActions),
+            height: max(geo.notchHeight + max(lyricRowHeight, expandedLyricListHeight) + expandedExtraHeightMax,
                         geo.notchHeight + NotchMetrics.milestonePanelHeight + NotchMetrics.milestoneConfettiReach))
         // 必须先取成整点,规则跟 AppKit 自己对窗口 frame 做的一致(实测:原点向下取整、宽高
         // 向上取整)。刘海高度 `safeAreaInsets.top` 在部分机型 / 缩放档下带小数(如 33.5),

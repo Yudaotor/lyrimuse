@@ -267,6 +267,19 @@ extension NotchChromeSource {
             showsActions: expandedShowsQuickActions)
     }
 
+    /// 展开区按当前设置**最多**占多高(曲目级数据 —— 这首有没有下一句、有没有时长 —— 一律按「有」算)。真窗口常驻最大形态,
+    /// 窗口高度按它留(换到有歌词的歌时卡片才有地方长);编辑台舞台里卡片那一格也按它留。不看广告态:广告只是此刻少画四项。
+    /// 开着多行歌词时「下一句」预览不会出现(`showsExpandedLyricPreview`),不留它那一截。
+    var expandedExtraHeightMax: CGFloat {
+        NotchExpandedMetrics.maxHeight(
+            hasLyricPreviewPossible: expandedShowsNextLine && expandedLyricListHeight == 0,
+            hasControlsPossible: expandedShowsControls,
+            trackInfoHeight: NotchExpandedMetrics.trackInfoHeight(
+                showsArtwork: expandedTrackInfoShowsArtwork, showsTitle: expandedTrackInfoShowsTitle,
+                showsArtist: expandedTrackInfoShowsArtist, showsAlbum: expandedTrackInfoShowsAlbum,
+                showsActions: expandedShowsQuickActions))
+    }
+
     /// 曲目信息头部要占的**总**高度(内容本身 + 上下各一份间距)——头部现在是独立渲染在
     /// 歌词行**之上**的一块("新字段都在最上面,歌词行/下一句挪到
     /// 最下面"),不再是 `expandedContent` 内部的第一个子视图,所以它自己的 `.frame(height:)`

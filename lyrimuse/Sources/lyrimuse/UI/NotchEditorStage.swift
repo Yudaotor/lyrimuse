@@ -146,24 +146,14 @@ struct NotchEditorStage: View {
     /// 它随 `contentTopInset` 变,而那个值只在插拔显示器/换屏时才变(刘海让位高度是屏幕的
     /// 函数)—— 跟悬浮歌词编辑台那条"高度不许依赖 overlayWidth"的纪律不冲突:这里的高度跟
     /// **宽度**没有任何关系,拖调整条时舞台一个像素都不动。
-    /// `expandedExtraHeightMax` 不再是无参常量,吃"下一句预览开关"+
-    /// "播放控制键开关"+"曲目信息头部现算高度"三个设置维度(见该函数注释)——这里从
-    /// `chrome` 现读,不是钉常量:预览来这儿就是让用户看清楚"这些设置会让展开区变多高",
-    /// 钉死的话舞台留白跟真窗口对不上。
+    /// 展开区上限读 chrome 的 `expandedExtraHeightMax`,跟真窗口的窗口高度同一份公式:它随展开态那几个开关变,
+    /// 预览就是要让用户看清这些设置会让展开区变多高。
     /// 歌词行这一截**按上限**(`NotchLyricRowMetrics.rowHeight`)留,不跟「行高」走:那是一根滑杆,舞台跟着它变高变矮
     /// 的话,拖动时下面整页上下跳,「全部设置」抽屉里的那根滑杆还会从指针底下溜走。卡片在舞台里照样按实际行高画。
     /// 开着「多行歌词」时歌词那一格按列表和歌词行上限里高的那个留(行数是选出来的、不是滑杆,跟着变没关系),「下一句」预览不留。
     private var cardAreaHeight: CGFloat {
         chrome.contentTopInset + max(NotchLyricRowMetrics.rowHeight, chrome.expandedLyricListHeight)
-            + NotchExpandedMetrics.maxHeight(
-            hasLyricPreviewPossible: chrome.expandedShowsNextLine && chrome.expandedLyricListHeight == 0,
-            hasControlsPossible: chrome.expandedShowsControls,
-            trackInfoHeight: NotchExpandedMetrics.trackInfoHeight(
-                showsArtwork: chrome.expandedTrackInfoShowsArtwork,
-                showsTitle: chrome.expandedTrackInfoShowsTitle,
-                showsArtist: chrome.expandedTrackInfoShowsArtist,
-                showsAlbum: chrome.expandedTrackInfoShowsAlbum,
-                showsActions: chrome.expandedShowsQuickActions))
+            + chrome.expandedExtraHeightMax
     }
 
     /// 编辑台画布区的高度 = 卡片那一格 + 调整条通道。

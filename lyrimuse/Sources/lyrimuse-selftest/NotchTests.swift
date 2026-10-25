@@ -474,13 +474,13 @@ func runNotchTests() {
                     "展开区进度条: 满宽填充按 offset 移出、按胶囊裁,不每帧改布局宽度")
         expectEqual(controller.contains(
             "AppSettings.shared.$notchLyricRowHeight, AppSettings.shared.$notchFontSize, AppSettings.shared.$notchSecondaryLine")
-                    && controller.contains("height: max(geo.notchHeight + max(lyricRowHeight, expandedLyricListHeight) + self.expandedExtraHeight("), true,
+                    && controller.contains("height: max(geo.notchHeight + max(lyricRowHeight, expandedLyricListHeight) + expandedExtraHeightMax,"), true,
                     "高度接线: 真窗口订阅行高、字号、副行三项,窗口高度用实际行高")
         expectEqual(view.contains("var lyricRowHeight: CGFloat { get }")
                     && view.contains("+ ((showsLyrics || expanded) ? (expanded && showsExpandedLyricList ? expandedLyricListHeight : lyricRowHeight)"), true,
                     "高度接线: chrome 给实际行高,卡片高度公式读它")
         expectEqual(stage.contains("var lyricRowHeight: CGFloat { AppSettings.shared.notchEffectiveLyricRowHeight }")
-                    && sourceHas(stage, "chrome.contentTopInset + max(NotchLyricRowMetrics.rowHeight, chrome.expandedLyricListHeight)\n + NotchExpandedMetrics.maxHeight("),
+                    && sourceHas(stage, "chrome.contentTopInset + max(NotchLyricRowMetrics.rowHeight, chrome.expandedLyricListHeight)\n + chrome.expandedExtraHeightMax"),
                     true, "高度接线: 编辑台替身现读实际行高,舞台按上限留高度(拖滑杆时整页不跳)")
         for (name, source) in [("NotchLyricsView", view), ("NotchEditorStage", stage), ("NotchLyricsWindowController", controller)] {
             expectEqual(source.isEmpty, false, "高度接线: 读到 \(name).swift")
@@ -619,8 +619,13 @@ func runNotchTests() {
                         && sourceHas(controller, ".receive(on: DispatchQueue.main)\n                .sink { [weak self] _ in self?.applyScreenSetting() }"), true,
                         "灵动岛接线: 自动隐藏两个开关、一对宽度由每个实例自己订阅(取 sink 参数),主实例另订屏幕(下一拍再读设置)")
             expectEqual(controller.contains("assignHideWhenNotPlaying(hide)")
-                        && controller.contains("recomputeGeometry(animate: false, contentWidth: contentWidth, expandedContentWidth: expandedContentWidth)"), true,
-                        "灵动岛接线: 自动隐藏 / 宽度变了按 sink 收到的新值用,不回读 AppSettings")
+                        && sourceHas(controller, "baseContentWidth = contentWidth\n baseExpandedContentWidth = expandedContentWidth\n recomputeGeometry(animate: false)"), true,
+                        "灵动岛接线: 自动隐藏 / 宽度变了按 sink 收到的新值写镜像,不回读 AppSettings")
+            let geometryBody = sourceBody("private func recomputeGeometry(animate: Bool) {", in: controller)
+            expectEqual(!geometryBody.isEmpty && !geometryBody.contains("AppSettings.shared")
+                        && sourceHas(controller, "self?.leftEarModule = module\n self?.recomputeGeometry(animate: false)")
+                        && sourceHas(controller, "self?.rightEarModule = module\n self?.recomputeGeometry(animate: false)"), true,
+                        "灵动岛接线: 几何重算只读镜像、没有覆盖参数,各条订阅先写镜像再重算(05 章决策 107)")
             expectEqual(!controller.contains("window?.sharingType != ")
                         && controller.contains("window?.sharingType = captureHidden ? .none : .readWrite"), true,
                         "灵动岛接线: 截屏时隐藏直接写 sharingType、不判等(运行中读回来的值不可靠,判等会跳过改成 .none)")
@@ -2074,7 +2079,7 @@ func runNotchTests() {
                     "卡片宽度契约: 收起态宽度只有 NotchChromeSource.cardWidth 一份,光标判定用的屏幕矩形也读它")
         // 歌词行高度那条订阅按副行的 sink 参数算展开区要不要留「下一句」。
         expectEqual(controller.contains(".removeDuplicates { $0.height == $1.height }")
-                    && sourceHas(controller, "self.recomputeGeometry(animate: false, expandedShowsNextLine: LyricSecondaryLine.expandedNextLinePreviewVisible(\n                userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: row.secondary))"), true,
+                    && sourceHas(controller, "userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: row.secondary)\n if self.expandedShowsNextLine != nextLine { self.expandedShowsNextLine = nextLine }\n self.recomputeGeometry(animate: false)"), true,
                     "willSet 契约: 改副行时重算窗口高度用新副行判「下一句」那一行,不回退去读 AppSettings 里的旧值")
 
         // 主行取句的规则只有 Core 一份。
@@ -2518,8 +2523,8 @@ func runNotchTests() {
                     "多行歌词: 卡片高度和展开区落点读同一个判据")
         expectEqual(sourceHas(v, ".modifier(NotchCardLayerActive(active: expanded && !showsList, staggered: staggered))"), true,
                     "多行歌词: 展开那份歌词行让给列表时藏着停表")
-        expectEqual(sourceHas(ctrl, "height: max(geo.notchHeight + max(lyricRowHeight, expandedLyricListHeight) + self.expandedExtraHeight(")
-                    && sourceHas(ctrl, "&& expandedLyricListHeight == 0,"), true,
+        expectEqual(sourceHas(ctrl, "height: max(geo.notchHeight + max(lyricRowHeight, expandedLyricListHeight) + expandedExtraHeightMax,")
+                    && sourceHas(v, "hasLyricPreviewPossible: expandedShowsNextLine && expandedLyricListHeight == 0,"), true,
                     "多行歌词: 窗口按列表和歌词行里高的那个留,开着时不留下一句预览那一截")
         expectEqual(sourceHas(stage, "chrome.contentTopInset + max(NotchLyricRowMetrics.rowHeight, chrome.expandedLyricListHeight)")
                     && sourceHas(stage, "settings.notchExpandedLyricList = AppSettings.defaultNotchExpandedLyricList")
