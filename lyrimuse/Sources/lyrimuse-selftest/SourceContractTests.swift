@@ -6057,7 +6057,8 @@ func runSourceContractIdentityTests() {
 /// 逐字符比,debug 构建下比逐行切还慢;按字节找得到的一定包含按字符找得到的,筛的时候不会漏。
 /// 灵动岛卡片视图那一组文件(主视图 `NotchLyricsView.swift` 和按类型拆出去的几份,都在 `lyrimuse/UI/` 下)。源码契约查
 /// 「整张卡片里有没有某种写法」时用 `notchCardSource` 拼起来读,不钉某段代码落在哪个文件里。
-let notchCardViewFiles = ["NotchLyricsView.swift", "NotchPlayback.swift", "NotchModuleDisplay.swift", "NotchChromeSource.swift",
+let notchCardViewFiles = ["NotchLyricsView.swift", "NotchLyricsView+TopRow.swift", "NotchLyricsView+LyricRow.swift",
+                          "NotchLyricsView+Expanded.swift", "NotchPlayback.swift", "NotchModuleDisplay.swift", "NotchChromeSource.swift",
                           "NotchQuickActions.swift", "NotchButtons.swift", "NotchScrubber.swift", "NotchCardModifiers.swift"]
 
 /// `read` 按文件名(`notchCardViewFiles` 里的一项)读一份源码。

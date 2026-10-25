@@ -2080,7 +2080,7 @@ func runNotchTests() {
         // 只看 NotchLyricsView 结构体本身:NotchScrubber 这类独立子视图在自己的属性上读是对的。
         let viewStruct: String = {
             guard let a = view.range(of: "struct NotchLyricsView<"),
-                  let b = view.range(of: "private struct NotchTransientHost", range: a.upperBound..<view.endIndex)
+                  let b = view.range(of: "\nstruct NotchTransientHost", range: a.upperBound..<view.endIndex)
             else { return "" }
             return String(view[a.lowerBound..<b.lowerBound])
         }()
