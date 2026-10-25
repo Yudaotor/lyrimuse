@@ -1126,7 +1126,8 @@ func runSourceContractTests() {
                                 ("lyrimuse/Sources/lyrimuse/UI/LyricsOverlayView.swift", "桌面悬浮歌词"),
                                 ("lyrimuse/Sources/lyrimuse/UI/LyricsWindowView.swift", "歌词窗口"),
                                 ("lyrimuse/Sources/lyrimuse/MenuBar/MenuBarPanel.swift", "菜单栏面板")] {
-                if let face_text = text(rel) {
+                if let face_text = rel.hasSuffix("/NotchLyricsView.swift")
+                    ? notchCardSourceIfReadable({ text("lyrimuse/Sources/lyrimuse/UI/" + $0) }) : text(rel) {
                     expectEqual(face_text.contains("L10n.t(\"口白\")"), true, "电台: \(face)要显示「口白」")
                     // 歌词窗口有**三条**独立分支:元数据行(lyricsKind)、空状态(emptyStateSpec),
                     // 以及整段歌词列表那一栏(rightPane)。每漏一条都出过一次现象是障:
@@ -1403,8 +1404,9 @@ func runSourceContractSurfaceTests() {
         let appSources = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse")
-        if let notch = try? String(contentsOfFile: appSources.appendingPathComponent("UI/NotchLyricsView.swift").path,
-                                   encoding: .utf8) {
+        if let notch = notchCardSourceIfReadable({
+            try? String(contentsOfFile: appSources.appendingPathComponent("UI/" + $0).path, encoding: .utf8)
+        }) {
             let code = notch.split(separator: "\n", omittingEmptySubsequences: false)
                 .map(String.init).filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
             func count(_ needle: String) -> Int { code.components(separatedBy: needle).count - 1 }
@@ -1452,7 +1454,7 @@ func runSourceContractSurfaceTests() {
         //    加「自动」后三处各读一个**解析过声部**的值(`NotchPlayback.mainLyricAlignment` /
         //    `secondaryLyricAlignment` / `nextLineAlignment`),不许再直接读 `lyricsAlignment.swiftUIAlignment`
         //    ——直接读的话「自动」会退化成左对齐、且不报错。
-        if let notch = read("UI/NotchLyricsView.swift") {
+        if let notch = notchCardSourceIfReadable({ read("UI/" + $0) }) {
             let code = notch.split(separator: "\n", omittingEmptySubsequences: false)
                 .map(String.init).filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
             expectEqual(code.components(separatedBy: "playback.lyricsAlignment.swiftUIAlignment").count - 1, 0,
@@ -1543,7 +1545,7 @@ func runSourceContractSurfaceTests() {
         func read(_ rel: String) -> String? {
             try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)
         }
-        if let notch = read("UI/NotchLyricsView.swift") {
+        if let notch = notchCardSourceIfReadable({ read("UI/" + $0) }) {
             expectEqual(notch.components(separatedBy: "playback.compactLine").count - 1, 0,
                         "副行: NotchLyricsView 不许再直接读 playback.compactLine,主行读合成后的 displayLine")
             expectEqual(notch.contains("secondary.displayedLine(compactLine: compact, currentLine: current)"), true,
@@ -1633,7 +1635,7 @@ func runSourceContractSurfaceTests() {
             expectEqual(stage.components(separatedBy: "MenuBarFontRows()").count - 1, 2,
                         "菜单栏双排: 「字体」浮层与抽屉「字体」组调同一份 MenuBarFontRows(两处装配)")
         }
-        if let notch = read("UI/NotchLyricsView.swift") {
+        if let notch = notchCardSourceIfReadable({ read("UI/" + $0) }) {
             expectEqual(notch.contains("secondary.secondaryText(currentLine: current, nextLineText: next)"), true,
                         "菜单栏双排: 灵动岛副行取值走 Core 共享规则,不再自己 switch")
         }
@@ -2345,7 +2347,7 @@ func runSourceContractSurfaceTests() {
             expectEqual(true, false, "悬浮调宽: 读不到 UI/LyricsOverlayWindowController.swift")
         }
         // 灵动岛展开区的随机 / 循环键只在这个播放器此刻随机、循环都能切时出现;模式与能切哪几档必须一起赋值。
-        if let notch = read("UI/NotchLyricsView.swift"), let coordinator = read("PlaybackCoordinator.swift") {
+        if let notch = notchCardSourceIfReadable({ read("UI/" + $0) }), let coordinator = read("PlaybackCoordinator.swift") {
             expectEqual(notch.contains(".map { mode, options in options.contains(.shuffle) && options.canRepeat ? mode : nil }"),
                         true, "灵动岛模式键: 只在随机、循环都能切时给出播放模式")
             expectEqual(coordinator.components(separatedBy: "playbackMode = ").count - 1, 1,
@@ -6053,6 +6055,22 @@ func runSourceContractIdentityTests() {
 
 /// 整个源文件里有没有这段文字,按 UTF-8 字节找。拿来先筛掉不相干的文件:`String.contains` 对整个文件
 /// 逐字符比,debug 构建下比逐行切还慢;按字节找得到的一定包含按字符找得到的,筛的时候不会漏。
+/// 灵动岛卡片视图那一组文件(主视图 `NotchLyricsView.swift` 和按类型拆出去的几份,都在 `lyrimuse/UI/` 下)。源码契约查
+/// 「整张卡片里有没有某种写法」时用 `notchCardSource` 拼起来读,不钉某段代码落在哪个文件里。
+let notchCardViewFiles = ["NotchLyricsView.swift", "NotchPlayback.swift", "NotchModuleDisplay.swift", "NotchChromeSource.swift",
+                          "NotchQuickActions.swift", "NotchButtons.swift", "NotchScrubber.swift", "NotchCardModifiers.swift"]
+
+/// `read` 按文件名(`notchCardViewFiles` 里的一项)读一份源码。
+func notchCardSource(_ read: (String) -> String) -> String {
+    notchCardViewFiles.map(read).joined(separator: "\n")
+}
+
+/// 同上,读不到主视图那份时返回 nil(给 `if let` 式的读法用)。
+func notchCardSourceIfReadable(_ read: (String) -> String?) -> String? {
+    guard read(notchCardViewFiles[0]) != nil else { return nil }
+    return notchCardViewFiles.compactMap(read).joined(separator: "\n")
+}
+
 func sourceBytes(_ text: String, contain needle: String) -> Bool {
     var hay = text, pattern = needle
     return hay.withUTF8 { h in

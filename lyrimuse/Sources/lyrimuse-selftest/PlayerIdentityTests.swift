@@ -358,7 +358,7 @@ func runPlayerIdentityTests() {
                         "跳转核对(契约): 发出去之后记日志、排一次核对")
             for (path, label) in [("lyrimuse/UI/NotchLyricsView.swift", "灵动岛"), ("lyrimuse/MenuBar/MenuBarPanel.swift", "菜单栏面板"),
                                   ("lyrimuse/UI/LyricsWindowView.swift", "歌词窗口")] {
-                let s = src(path)
+                let s = path.hasSuffix("/NotchLyricsView.swift") ? notchCardSource { src("lyrimuse/UI/" + $0) } : src(path)
                 expectEqual(s.contains(".allowsHitTesting(seekable)") && s.contains("seekable: PlaybackCoordinator.shared.acceptsSeek"), true,
                             "拖进度(契约): \(label)的进度条子视图由父视图传入能不能拖")
             }
@@ -1209,7 +1209,7 @@ func runPlayerIdentityTests() {
                     "决定表(源码): IdlePlaybackActions.canResume 点名的就是表里「\(On.resume.rawValue)」那几家")
         for path in ["lyrimuse/UI/LyricsWindowView.swift", "lyrimuse/UI/IdleStandbyView.swift", "lyrimuse/UI/MiniIdleStandby.swift",
                      "lyrimuse/UI/NotchLyricsView.swift", "lyrimuse/MenuBar/MenuBarPanel.swift"] {
-            let text = code(path)
+            let text = path.hasSuffix("/NotchLyricsView.swift") ? notchCardSource { code("lyrimuse/UI/" + $0) } : code(path)
             expectEqual(text.contains("IdlePlaybackActions.canResume(") && !text.contains("player == .appleMusic || player == .spotify"),
                         true, "决定表(源码): \(path) 的「继续播放」按 IdlePlaybackActions.canResume 给,不自己点名播放器")
         }

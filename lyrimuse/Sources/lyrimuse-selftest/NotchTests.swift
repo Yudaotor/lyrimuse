@@ -466,7 +466,7 @@ func runNotchTests() {
             (try? String(contentsOfFile: ui.appendingPathComponent(name).path, encoding: .utf8)) ?? ""
         }
         let controller = read("NotchLyricsWindowController.swift")
-        let view = read("NotchLyricsView.swift")
+        let view = notchCardSource(read)
         let stage = read("NotchEditorStage.swift")
         let scrubber = sourceBody("private func scrubberAndTimes(", in: view)
         expectEqual(scrubber.contains(".offset(x: -ProgressFillGeometry.leadingOffset(") && scrubber.contains(".clipShape(Capsule())")
@@ -611,7 +611,7 @@ func runNotchTests() {
             }
             let controller = src("NotchLyricsWindowController.swift")
             let stage = src("NotchEditorStage.swift")
-            let view = src("NotchLyricsView.swift")
+            let view = notchCardSource(src)
             expectEqual(src("NotchLyricsWindow.swift").contains("becomesKeyOnlyIfNeeded = true"), true,
                         "灵动岛接线: 点按钮不抢键盘焦点")
             expectEqual(sourceHas(controller, "AppSettings.shared.$notchHideWhenNotPlaying, AppSettings.shared.$notchHideDuringScreenCapture,\n            AppSettings.shared.$notchContentWidth, AppSettings.shared.$notchExpandedContentWidth\n        )\n        .dropFirst()\n        .sink { [weak self] hide, captureHidden, width, expandedWidth in")
@@ -693,8 +693,10 @@ func runNotchTests() {
         // 跟随封面背景:换图两层交叉淡入,旧图不透明地留在下面 —— 直接换 Image 内容会让旧图当场消失、
         // 露出打底色,同一首歌换上高清封面时整卡暗一下再亮回来(真机逐帧:均值 −7.6 再 +7.7)。
         do {
-            let v = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-                .appendingPathComponent("lyrimuse/UI/NotchLyricsView.swift"), encoding: .utf8)) ?? ""
+            let v = notchCardSource {
+                (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                    .appendingPathComponent("lyrimuse/UI/" + $0), encoding: .utf8)) ?? ""
+            }
             expectEqual(v.contains("NotchCrossfadeBackdrop(image: image, size: size, overlayOpacity: playback.backdropOverlayOpacity)"), true,
                         "封面背景契约: 模糊图走两层交叉淡入,压暗按亮区算")
             expectEqual(v.contains(".overlay(Color.black.opacity(overlayOpacity))")
@@ -1127,7 +1129,7 @@ func runNotchTests() {
             let uiDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
                 .appendingPathComponent("lyrimuse/UI")
             func src(_ n: String) -> String { (try? String(contentsOf: uiDir.appendingPathComponent(n), encoding: .utf8)) ?? "" }
-            let v = src("NotchLyricsView.swift"), reveal = src("NotchRevealShape.swift"), stageSrc = src("NotchEditorStage.swift")
+            let v = notchCardSource(src), reveal = src("NotchRevealShape.swift"), stageSrc = src("NotchEditorStage.swift")
             let rootSrc = src("NotchWindowRoot.swift"), liveSrc = src("NotchCornerLive.swift")
             // 四处外形都从 chrome 的 cardOutline + NotchCornerLive 拼同一个形状。
             expectEqual(liveSrc.contains(".card(notchHeight: notchHeight, corner: corner(live))"), true, "外轮廓契约: 外形统一由 NotchCardOutline 拼成 .card")
@@ -1244,7 +1246,7 @@ func runNotchTests() {
                         && ctrlSrc.contains("ListenMilestoneCenter.shared.unregisterSurface(self)"), true,
                         "里程碑契约: 哪个实例都不在屏(全屏时隐藏、锁屏、熄屏)时不判、不记账,这一档留着以后报")
             // 05 章审计修复的接线(04 章悬浮歌词同类问题的对照修法)。
-            let notchView = src("NotchLyricsView.swift")
+            let notchView = notchCardSource(src)
             expectEqual(notchView.contains("var lyricsClockRunning: Bool { isPlayingNow && !(anchor?.isFrozen ?? false) }")
                         && notchView.contains("paused: !playback.lyricsClockRunning || playback.currentLineFillSettled || !layerActive,")
                         && notchView.contains("isPlaying: playback.lyricsClockRunning, isVisible: layerActive,")
@@ -1488,8 +1490,7 @@ func runNotchTests() {
         let ui = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse/UI")
-        let view = (try? String(contentsOfFile: ui.appendingPathComponent("NotchLyricsView.swift").path,
-                                encoding: .utf8)) ?? ""
+        let view = notchCardSource { (try? String(contentsOfFile: ui.appendingPathComponent($0).path, encoding: .utf8)) ?? "" }
         let stage = (try? String(contentsOfFile: ui.appendingPathComponent("NotchEditorStage.swift").path,
                                  encoding: .utf8)) ?? ""
         let center = (try? String(contentsOfFile: ui.appendingPathComponent("YouTubeMusicAdSkipCenter.swift").path,
@@ -1718,8 +1719,7 @@ func runNotchTests() {
         let ui = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse/UI")
-        let viewSrc = (try? String(contentsOf: ui.appendingPathComponent("NotchLyricsView.swift"),
-                                   encoding: .utf8)) ?? ""
+        let viewSrc = notchCardSource { (try? String(contentsOf: ui.appendingPathComponent($0), encoding: .utf8)) ?? "" }
         let barsSrc = (try? String(contentsOf: ui.appendingPathComponent("EqualizerBars.swift"),
                                    encoding: .utf8)) ?? ""
         expectEqual(viewSrc.isEmpty, false, "音浪居中(契约): 读到 NotchLyricsView.swift")
@@ -1841,9 +1841,10 @@ func runNotchTests() {
             expectEqual(last.compactNextText, nil, "下一句预览: 最后一句没有下一句")
         }
         do {
-            let view = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-                .deletingLastPathComponent().appendingPathComponent("lyrimuse/UI/NotchLyricsView.swift"),
-                encoding: .utf8)) ?? ""
+            let view = notchCardSource {
+                (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                    .deletingLastPathComponent().appendingPathComponent("lyrimuse/UI/" + $0), encoding: .utf8)) ?? ""
+            }
             expectEqual(view.contains("secondary.expandedNextLine(next: lyrics.nextText, afterCompact: lyrics.compactNextText)")
                         && view.contains("secondary.expandedNextLine(next: lyrics.nextSide, afterCompact: lyrics.compactNextSide)"), true,
                         "下一句预览接线: 文字和声部都按主行显示的那句取")
@@ -1903,7 +1904,7 @@ func runNotchTests() {
         func read(_ name: String) -> String {
             (try? String(contentsOf: ui.appendingPathComponent(name), encoding: .utf8)) ?? ""
         }
-        let view = read("NotchLyricsView.swift")
+        let view = notchCardSource(read)
         let root = read("NotchWindowRoot.swift")
         let controller = read("NotchLyricsWindowController.swift")
         for (name, text) in [("NotchLyricsView", view), ("NotchWindowRoot", root),
@@ -1950,7 +1951,7 @@ func runNotchTests() {
         // 只看 NotchLyricsView 结构体本身:NotchScrubber 这类独立子视图在自己的属性上读是对的。
         let viewStruct: String = {
             guard let a = view.range(of: "struct NotchLyricsView<"),
-                  let b = view.range(of: "private struct QuickActionHint", range: a.upperBound..<view.endIndex)
+                  let b = view.range(of: "private struct NotchTransientHost", range: a.upperBound..<view.endIndex)
             else { return "" }
             return String(view[a.lowerBound..<b.lowerBound])
         }()
@@ -2201,7 +2202,7 @@ func runNotchTests() {
         func read(_ name: String) -> String {
             (try? String(contentsOf: ui.appendingPathComponent(name), encoding: .utf8)) ?? ""
         }
-        let view = read("NotchLyricsView.swift"), stage = read("NotchEditorStage.swift")
+        let view = notchCardSource(read), stage = read("NotchEditorStage.swift")
         let controller = read("NotchLyricsWindowController.swift"), window = read("LyricsWindowView.swift")
         let store = read("EditorialNotes.swift")
         for (name, text) in [("NotchLyricsView", view), ("NotchEditorStage", stage), ("NotchLyricsWindowController", controller),
@@ -2414,7 +2415,7 @@ func runNotchTests() {
         func app(_ n: String) -> String {
             (try? String(contentsOf: uiDir.deletingLastPathComponent().appendingPathComponent(n), encoding: .utf8)) ?? ""
         }
-        let v = src("NotchLyricsView.swift"), ctrl = src("NotchLyricsWindowController.swift")
+        let v = notchCardSource(src), ctrl = src("NotchLyricsWindowController.swift")
         let stage = src("NotchEditorStage.swift"), window = src("NotchLyricsWindow.swift")
         let audio = app("AudioOutputDevices.swift"), delegate = app("AppDelegate.swift")
         let runner = app("Settings/LyrimuseActionRunner.swift")
@@ -2508,7 +2509,7 @@ func runNotchTests() {
         let uiDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse/UI")
         func src(_ n: String) -> String { (try? String(contentsOf: uiDir.appendingPathComponent(n), encoding: .utf8)) ?? "" }
-        let v = src("NotchLyricsView.swift"), ctrl = src("NotchLyricsWindowController.swift")
+        let v = notchCardSource(src), ctrl = src("NotchLyricsWindowController.swift")
         let stage = src("NotchEditorStage.swift"), list = src("NotchExpandedLyricList.swift")
         expectEqual(sourceHas(v, "var showsExpandedLyricList: Bool {\n expandedLyricListHeight > 0 && hasTrack && expandedShowsLyricPreview && !isAdBreakNow")
                     && sourceHas(v, "expandedShowsLyricPreview && expandedShowsNextLine && expandedLyricListHeight == 0"), true,

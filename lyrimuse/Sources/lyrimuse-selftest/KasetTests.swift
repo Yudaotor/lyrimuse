@@ -740,7 +740,7 @@ func runKasetTests() {
         expectEqual(src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(
                         "isAdBreak: nextAd, sharesIdentity: Self.adSharesTrackIdentity(bundleID: snapshot.bundleIdentifier),")
                         && src("lyrimuse/PlaybackCoordinator.swift").contains(#"s.$adCountdown.assign(to: \.adCountdown, on: self),"#)
-                        && src("lyrimuse/UI/NotchLyricsView.swift").contains("switch playback.adCountdown {"), true,
+                        && notchCardSource { src("lyrimuse/UI/" + $0) }.contains("switch playback.adCountdown {"), true,
                     "Kaset 契约: 广告倒计时按播放源给的来源画(Kaset 用广告自己的表)")
         expectEqual(client.contains("? kasetWebClockPosition(reading, at: readAt) : nil")
                         && sourceHas(src("LyrimuseCore/Local/LocalPlaybackSource.swift"), "if snapshot.positionIsPrecise == true {\n                    usedBrowserProbe = true\n                    browserProbePrecise = true"), true,
@@ -778,7 +778,7 @@ func runKasetTests() {
                     "Kaset 契约: 歌词管理的列表行、详情、搜歌词预填、占位行用给人看的专辑")
         expectEqual(src("lyrimuse/LyricsManager/LyricsDecisionSheet.swift").contains(
             "if !summary.displayAlbum.isEmpty { lines.append(summary.displayAlbum) }"), true, "Kaset 契约: 决策面板表头用给人看的专辑")
-        expectEqual(src("lyrimuse/UI/NotchLyricsView.swift").contains(
+        expectEqual(notchCardSource { src("lyrimuse/UI/" + $0) }.contains(
             "tappable: !playback.album.isEmpty || !playback.youtubeMusicAlbum.isEmpty"), true,
                     "Kaset 契约: 灵动岛专辑行有登记的专辑时也可点开简介")
         expectEqual(src("LyrimuseCore/Local/EnrichCacheReader.swift").contains(#"case youtubeMusicMV = "youtube_music_mv""#)

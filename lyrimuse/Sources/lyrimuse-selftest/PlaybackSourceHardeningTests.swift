@@ -558,7 +558,7 @@ private func wiringContracts() {
         ("lyrimuse/MenuBar/MenuBarStatusItem.swift", ["self?.hoverControls.setWithheld(on)"]),
         ("lyrimuse/TouchBar/TouchBarLyricsController.swift", ["updateTransportEnabled(p.playbackControlsWithheldReason == nil)"]),
     ] {
-        let text = code(file)
+        let text = file.hasSuffix("/NotchLyricsView.swift") ? notchCardSource { code("lyrimuse/UI/" + $0) } : code(file)
         expectEqual(needles.allSatisfy { text.contains($0) }, true, "拦下置灰: \(file) 接上了")
     }
     let windowText = code("lyrimuse/UI/LyricsWindowView.swift")

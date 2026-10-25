@@ -653,8 +653,7 @@ func runLyricsWindowTests() {
                     "窗口三点(契约): 图层版按这排点靠的那一侧张开 —— 靠左时涨满不越过正文左缘")
         expectEqual(sourceHas(windowView, "style: .window,\n                anchor: listSide(centered: centered)"), true,
                     "窗口三点(契约): SwiftUI 版同上")
-        let notch = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/NotchLyricsView.swift"),
-                                 encoding: .utf8)) ?? ""
+        let notch = notchCardSource { (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/" + $0), encoding: .utf8)) ?? "" }
         expectEqual(dots.components(separatedBy: "reduceMotion: reduceMotion, timingEpoch: timingEpoch, shadow: shadow,").count - 1, 2,
                     "三点(契约): 时间基准指纹一路传进配置 —— 暂停时拖进度,别的入参都没变,不进配置就不重排")
         expectEqual(sourceHas(layerList, "timingEpoch: s.timingEpoch,\n              shadow: nil, style: .window,"), true,
@@ -1568,7 +1567,7 @@ func runLyricsWindowTests() {
         let window = source("lyrimuse/UI/LyricsWindowView.swift")
         let list = source("lyrimuse/UI/LyricsLayerList.swift")
         let dots = source("lyrimuse/UI/LyricsGapDots.swift")
-        let notch = source("lyrimuse/UI/NotchLyricsView.swift")
+        let notch = notchCardSource { source("lyrimuse/UI/" + $0) }
         let runner = source("lyrimuse/Settings/LyrimuseActionRunner.swift")
         let settingsView = source("lyrimuse/SettingsView.swift")
         let appSettings = source("lyrimuse/Settings/AppSettings.swift")
