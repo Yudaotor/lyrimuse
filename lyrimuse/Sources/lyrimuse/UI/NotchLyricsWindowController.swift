@@ -111,17 +111,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 一翻,卡片会先按弹簧撑回正常大小、同时又缩进刘海;这时照旧算收起,从收起的样子直接缩进去。重新露面时清掉。
     @Published private(set) var vanishesFromCollapsed = false
 
-    /// 卡片是否顶在**宽度下限**上:稳态真实宽已经贴着宽度滑杆能拖到的下界(再小,卡片也
-    /// 不会再窄)。音浪独占耳朵时只有这个状态居中(见 `NotchWidthBounds.soloEqualizerInset`),
-    /// 更宽一律贴外缘。下界跟编辑台/快捷面板那两根滑杆用同一份 `usableWidthRange` 现算,
-    /// 量化取整(拖到最底那一格的落点可以比裸耳朵下限高一个 step)已经算在里面;
-    /// 写成计算属性跟 isCollapsed 同一个理由:两个输入哪个变它都跟着变,不存在"忘了重算"。
-    /// 0.5 只是浮点余量。
-    var isCardAtMinimumWidth: Bool {
-        steadyCardWidth <= NotchEditorStage.usableWidthRange(
-            notchWidth: notchWidth, contentTopInset: contentTopInset).lowerBound + 0.5
-    }
-
     /// 「暂停/无播放时隐藏」的退场态:true 时 NotchWindowRoot 把整卡缩到刘海里
     /// (scale→0 + 透明),动画走完再 orderOut;恢复播放时先 orderFront 再翻回 false,卡片从
     /// 刘海里弹出来。窗口隐藏期间保持 true,这样下次露面一定是从无到有,而不是先满幅一帧。
@@ -272,7 +261,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 后面换到有歌词的歌时卡片就没地方长了(会被窗口边界硬裁)。
     ///
     /// 展开区高度的入参分两类:曲目级数据(`hasLyricPreview`/`hasScrubber`)和**用户设置**(下一句预览、
-    /// 播放控制键、曲目信息头部四项、快捷操作),后者会主动触发重算(见 `NotchMetrics.expandedExtraHeightMax`
+    /// 播放控制键、曲目信息头部四项、快捷操作),后者会主动触发重算(见 `NotchExpandedMetrics.maxHeight`
     /// 的注释)。这些入参跟 `minEarWidth` 那组同一个规矩:非 nil = 调用方正处于对应 `@Published` 的
     /// willSet 窗口,必须用传入值;nil = 回读存储值。**以后再往这个函数加一个入参,就得同时在 init 里加一条
     /// 对应订阅**,漏了的表现是"改完设置卡片高度纹丝不动,直到下次触发别的几何重算才追上"。
@@ -294,11 +283,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         let showsArtist = expandedTrackInfoShowsArtist ?? AppSettings.shared.notchExpandedShowsArtist
         let showsAlbum = expandedTrackInfoShowsAlbum ?? AppSettings.shared.notchExpandedShowsAlbum
         let showsActions = expandedShowsQuickActions ?? AppSettings.shared.notchExpandedShowsQuickActions
-        let trackInfoHeight = NotchMetrics.expandedTrackInfoHeight(
+        let trackInfoHeight = NotchExpandedMetrics.trackInfoHeight(
             showsArtwork: showsArtwork, showsTitle: showsTitle, showsArtist: showsArtist, showsAlbum: showsAlbum,
             showsActions: showsActions)
         // 开着多行歌词时「下一句」预览不会出现(`NotchChromeSource.showsExpandedLyricPreview`),不留它那一截。
-        return NotchMetrics.expandedExtraHeightMax(
+        return NotchExpandedMetrics.maxHeight(
             hasLyricPreviewPossible: (expandedShowsNextLine ?? LyricSecondaryLine.expandedNextLinePreviewVisible(
                 userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: AppSettings.shared.notchSecondaryLine))
                 && expandedLyricListHeight == 0,
@@ -555,7 +544,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
 
         // 展开区的两个"要不要留高度"标志(没歌词时展开卡不该留一大片空白)。
         // 刻意订阅**曲目级**信号而不是"此刻有没有下一句"——理由见
-        // NotchMetrics.expandedExtraHeight 的注释(后者会让最后一句唱完时卡片抽动)。
+        // NotchExpandedMetrics.height 的注释(后者会让最后一句唱完时卡片抽动)。
         // 同一个 willSet 坑同一个修法:存 sink 参数值。写入 @Published 即生效,窗口尺寸
         // 不用重算(窗口恒为最大形态,卡片高度是内容层的事)。
         PlaybackCoordinator.shared.$hasLyricsContent.sink { [weak self] has in
@@ -1417,6 +1406,16 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                      showsEqualizer: AppSettings.shared.notchShowsEqualizer,
                      equalizerEar: AppSettings.shared.notchEqualizerEar,
                      contentTopInset: contentTopInset)
+    }
+
+    /// 宽度滑杆真正能拖的区间:下界是这块屏、当前耳朵配置下的耳朵下限(设定值取存储层下界时的真实宽),规则在
+    /// `NotchWidthBounds.usableRange(earFloor:)`。下界是屏幕和耳朵配置两者的函数(两只耳朵只配文字时约 252,配封面 256 / 296,
+    /// 无刘海屏落到 200),每次现算;调用点要跟着耳朵配置重新求值(编辑台、菜单栏快捷面板观察 AppSettings,真窗口靠
+    /// `$notchLeftEar` / `$notchRightEar` 那两条订阅)。耳朵配置现读设置,`@Published` 的 willSet 窗口里别用。
+    static func usableWidthRange(notchWidth: CGFloat, contentTopInset: CGFloat) -> ClosedRange<Double> {
+        NotchWidthBounds.usableRange(earFloor: Double(contentWidth(
+            baseWidth: CGFloat(NotchWidthBounds.storageRange.lowerBound), notchWidth: notchWidth,
+            contentTopInset: contentTopInset)))
     }
 
     // 灵动岛贴哪块屏。

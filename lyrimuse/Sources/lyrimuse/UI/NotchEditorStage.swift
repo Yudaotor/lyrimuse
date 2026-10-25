@@ -19,7 +19,7 @@ import SwiftUI
 // 卡片宽,这样 hover 展开时比例不跳、稳态和展开态在同一把尺子下。别改成"居中裁切 + 两端渐隐":要的是看全,不是知道被裁了。
 // 缩放的是「屏幕顶端」整组(仿菜单栏条 + 卡片 + 刘海),三者描述的是同一块屏幕,只缩卡片会让刘海空当和菜单栏高度对不上;壁纸
 // 不缩(它只是背景)。缩了就在 caption 写一句「预览已缩小至 NN%」,免得用户把缩过的尺寸当真。卡片宽度上限就是
-// `widthRange.upperBound`(耳朵下限最高的一档 ≈ notchWidth + 150 ≈ 330–350,够不着,封顶的是区间本身)。
+// `NotchWidthBounds.storageRange.upperBound`(耳朵下限最高的一档 ≈ notchWidth + 150 ≈ 330–350,够不着,封顶的是区间本身)。
 //
 // 舞台放不下 800:舞台宽 = 卡片列宽 = min(600, 设置窗内容区 − 40)。侧边栏能拉到最宽(中文 240,英文固定 250)、窗口能拖到最窄
 // (侧栏最宽 + 540,`SettingsSidebarWidth.windowMinWidth`;SettingsWindowConfigurator 往 styleMask 里插了 `.resizable`),两样推到
@@ -99,16 +99,9 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     /// (`NotchLyricsView.topRow`)和卡片宽度下限(`NotchLyricsWindowController.minEarWidth`
     /// 要按"哪只耳朵挂音浪"留出 `EqualizerBars.width + earWaveSpacing`)。钉死的话编辑台那根
     /// 宽度调整条的下界会跟真窗口对不上 —— 而"设定值和真实宽度之间不许有歧义"正是这块画布
-    /// 改造的出发点(见 widthValueText / usableWidthRange)。
+    /// 改造的出发点(见 widthValueText / `NotchLyricsWindowController.usableWidthRange`)。
     var showsEqualizer: Bool { AppSettings.shared.notchShowsEqualizer }
     var equalizerEar: NotchEqualizerEar { AppSettings.shared.notchEqualizerEar }
-    /// 卡片是否顶在宽度下限上 —— 与真窗口同一个判据(`usableWidthRange` 现算滑杆下界,
-    /// 跟推进来的 `steadyCardWidth` 比),预览里的音浪才跟真窗口落在同一档位置。
-    var isCardAtMinimumWidth: Bool {
-        steadyCardWidth <= NotchEditorStage.usableWidthRange(
-            notchWidth: notchWidth, contentTopInset: contentTopInset).lowerBound + 0.5
-    }
-
     /// 展开态那一组同上,一律现读设置——它们决定的正是"展开态"浮层里那几个
     /// 开关此刻要不要生效,预览必须如实反映。不含歌词行末尾那枚封面的开关/位置——那两项
     /// 走 `NotchPlayback` 而不是这个协议;但**含**头部自己的封面开关
@@ -260,82 +253,19 @@ struct NotchEditorStage: View {
     private static let toolbarHeight: CGFloat = 26
     private static let toolbarSpacing: CGFloat = 10
 
-    /// 宽度的合法区间。
-    ///
-    /// 这里是三处的唯一真源:编辑台这根调整条、菜单栏快捷面板里的同一根,以及以后任何第三处。不要在任何一处另写字面量:一处能
-    /// 产生别处够不到的值,用户下次一动另一根滑杆就会被弹回去,表现是"我调好的宽度自己变了"(悬浮歌词那边的
-    /// `OverlayEditorStage.widthRange` 就是为这件事立的规矩)。
-    ///
-    /// 下界 200 是几何硬底:卡片再窄也不能窄过刘海本身,否则它整个躲进刘海里(这台机器 `179 + 左右各 10 = 199`)。耳朵下限跟配置走
-    /// (见 `NotchLyricsWindowController.minEarWidth`),两只耳朵都配成「不显示」时下限约 251,存储层的下界不能卡在它上面。上界 800:
-    /// 两只滑块(稳态 / 展开)共用这一个区间,稳态也能到 800,超宽的代价(编辑台舞台放不下)由"整体缩小到刚好放下"兜着
-    /// (`previewScale`,见文件头)。800 ≈ 14 吋 MBP 逻辑宽 1512 的一半,两侧菜单栏各还剩三百多 pt。
-    /// 两端必须是 `widthStep`(2) 的整数倍(`snap()` 先夹后量化,不是倍数会把值顶出界);200/800 都满足。
-    ///
-    /// 这是**存储层**的区间,不是滑杆能拖的区间 —— 后者见下面的 `usableWidthRange`,
-    /// 下界会被这台机器的"耳朵下限"抬上去。两个宽度入口的读数则**一律报真实宽度、不报设定值**
-    /// (编辑台见 widthValueText,菜单栏快捷面板见 effectiveWidth 的调用点):正常情况下两者
-    /// 相等,而历史上落盘过的、低于耳朵下限的旧值(下界抬上去之前存的)靠这条口径仍然显示得对。
-    static let widthRange: ClosedRange<Double> = 200 ... 800
-
-    /// 滑杆真正能拖的区间:下界抬到这台机器当前配置下的"耳朵下限"。真实宽度要跟耳朵下限取大者
-    /// (`NotchLyricsWindowController.contentWidth`),下界不抬的话,低于耳朵下限的那一段拖了卡片纹丝不动。
-    ///
-    /// 下界是屏幕和耳朵配置两者的函数,不是常量:同一台机器上,两只耳朵都只配文字或「不显示」的(含默认的歌名/歌手)下界都是 252,
-    /// 那时撑着下限的只剩右耳外缘那簇音浪;配上封面会到 256(左)/ 296(右),播放控制 308,时长 330。没有真刘海的屏(外接显示器)
-    /// `notchWidth == 0`,耳朵下限只剩一百出头,`max` 之后是存储层的 200。所以这里必须每次现算,不能写死一个数,也不能只按屏幕
-    /// 缓存一次。
-    ///
-    /// 现算的前提是调用点会跟着耳朵配置重新求值:编辑台和菜单栏快捷面板都 `@ObservedObject`
-    /// 了 `AppSettings`,改模块会重画;真窗口那一侧靠
-    /// `NotchLyricsWindowController` 里订阅 `$notchLeftEar` / `$notchRightEar` 的那两条。
-    ///
-    /// 三条护栏一条都不能少:
-    ///   ① 下界**向上**取整到 `widthStep` 的倍数。否则 `snap` 的"先夹后量化"可能把值量化到
-    ///      下界**以下**(例如下限 340.9 → 夹到 340.9 → 量化成 340,比下限还小 0.9pt)。
-    ///   ② 下界不许越过上界:真刘海宽到 `notchWidth > 348` 时耳朵下限会超过 498(下限最高的
-    ///      那一档 = 某只耳朵配成时长,单耳 65pt;现实里的
-    ///      MacBook 刘海约 180pt,够不着,但这里不赌)。留出至少一个 `widthStep`,免得 Slider
-    ///      拿到一个长度为 0 的区间。
-    ///   ③ 存储层的 `widthRange` **不随屏幕/配置变**(200…800):它才是"这个值合不合法"的判据,
-    ///      而合法性不该随插了哪块屏、耳朵配成什么而变 —— 配置导出/导入要跨机器,`notchScreenID`
-    ///      那种机器本地键才不迁移,宽度是要迁移的。低于当前下界的旧值不会被改写,只是渲染时
-    ///      被 `contentWidth` 顶上去;换回窄的耳朵配置,那个值原样回来。
-    static func usableWidthRange(notchWidth: CGFloat,
-                                 contentTopInset: CGFloat) -> ClosedRange<Double> {
-        let earFloor = Double(NotchLyricsWindowController.contentWidth(
-            baseWidth: CGFloat(widthRange.lowerBound), notchWidth: notchWidth,
-            contentTopInset: contentTopInset))
-        let ceiled = (earFloor / widthStep).rounded(.up) * widthStep          // 护栏 ①
-        let lower = min(ceiled, widthRange.upperBound - widthStep)            // 护栏 ②
-        return lower ... widthRange.upperBound
-    }
-
-    /// 同上,但**自己现读屏幕** —— 给构造不出这个 View 的调用点用(菜单栏快捷面板那根滑杆)。
-    /// `targetScreen()` / `geometry(for:)` 都是 static、不碰 `NotchLyricsWindowController.shared`。
+    /// 宽度滑杆能拖的区间(`NotchLyricsWindowController.usableWidthRange`),**自己现读屏幕** —— 给构造不出这个 View 的调用点用
+    /// (菜单栏快捷面板、「全部设置」抽屉)。`targetScreen()` / `geometry(for:)` 都是 static、不碰 `NotchLyricsWindowController.shared`。
     static var usableWidthRangeOnCurrentScreen: ClosedRange<Double> {
         let geo = NotchLyricsWindowController.targetScreen()
             .map { NotchLyricsWindowController.geometry(for: $0) }
-        return usableWidthRange(notchWidth: geo?.notchWidth ?? 0,
-                                contentTopInset: geo?.notchHeight ?? 0)
+        return NotchLyricsWindowController.usableWidthRange(notchWidth: geo?.notchWidth ?? 0,
+                                                            contentTopInset: geo?.notchHeight ?? 0)
     }
 
-    /// **展开宽**那根单滑块(抽屉 / 菜单栏快捷面板)能拖的区间:下界 = 稳态**真实**宽(展开不许
-    /// 比稳态窄,见 `NotchWidthBounds`),上界同 `widthRange`。编辑台自己的双滑块不用这个 ——
-    /// 它两只滑块共用 `usableWidthRange`,"不越过对方"由 `NotchWidthRangeDrag` 管。
-    ///
-    /// 护栏跟 `usableWidthRange` 同一套:下界向上取整到 `widthStep`(SteppedSlider 的栅格锚在
-    /// 下界,这里主要是为了跟编辑台那根 step 2 的落值对得上);下界不许越过上界(稳态拉满 800
-    /// 时展开只剩 800 这一个值,给 Slider 一个零长区间会算出 nan)。
-    static func usableExpandedWidthRange(steadyWidth: Double) -> ClosedRange<Double> {
-        let ceiled = (steadyWidth / widthStep).rounded(.up) * widthStep
-        let lower = min(max(ceiled, widthRange.lowerBound), widthRange.upperBound - widthStep)
-        return lower ... widthRange.upperBound
-    }
-
-    /// 同上,稳态真实宽**自己现读设置和屏幕**(给构造不出这个 View 的调用点用)。
+    /// 展开宽那根单滑块能拖的区间(`NotchWidthBounds.usableExpandedRange`),稳态真实宽**自己现读设置和屏幕**(给构造不出这个
+    /// View 的调用点用)。
     static var usableExpandedWidthRangeOnCurrentScreen: ClosedRange<Double> {
-        usableExpandedWidthRange(steadyWidth: effectiveWidth(baseWidth: AppSettings.shared.notchContentWidth))
+        NotchWidthBounds.usableExpandedRange(steadyWidth: effectiveWidth(baseWidth: AppSettings.shared.notchContentWidth))
     }
 
     /// 三个写入口(编辑台调整条 / 抽屉 / 快捷面板)**唯一**的落盘路径。
@@ -362,14 +292,6 @@ struct NotchEditorStage: View {
         }
     }
 
-    /// 宽度调整条的步长(pt)。
-    ///
-    /// 2pt 而不是菜单栏快捷面板那根的 10pt:那根是兜底通路、旁边没有实时预览,粗一点反而好
-    /// 落值;编辑台这根紧挨着那张跟着实时变宽变窄的卡片,10pt 一格看得出来是在跳。落盘的值
-    /// 因此可能不是 10 的整数倍,那根 10pt 的滑杆照样显示得出来:step 只约束滑杆自己产生的
-    /// 值,不约束模型。
-    static let widthStep: Double = 2
-
     /// 卡片那一格的高度 = 展开态卡片的全高(刘海让位 + 稳态歌词行 + 展开区上限)。
     ///
     /// **必须按展开态留**:hover 展开时卡片长高 76pt,这一格要是按稳态留,展开出来的
@@ -387,10 +309,10 @@ struct NotchEditorStage: View {
     /// 开着「多行歌词」时歌词那一格按列表和歌词行上限里高的那个留(行数是选出来的、不是滑杆,跟着变没关系),「下一句」预览不留。
     private var cardAreaHeight: CGFloat {
         chrome.contentTopInset + max(NotchLyricRowMetrics.rowHeight, chrome.expandedLyricListHeight)
-            + NotchMetrics.expandedExtraHeightMax(
+            + NotchExpandedMetrics.maxHeight(
             hasLyricPreviewPossible: chrome.expandedShowsNextLine && chrome.expandedLyricListHeight == 0,
             hasControlsPossible: chrome.expandedShowsControls,
-            trackInfoHeight: NotchMetrics.expandedTrackInfoHeight(
+            trackInfoHeight: NotchExpandedMetrics.trackInfoHeight(
                 showsArtwork: chrome.expandedTrackInfoShowsArtwork,
                 showsTitle: chrome.expandedTrackInfoShowsTitle,
                 showsArtist: chrome.expandedTrackInfoShowsArtist,
@@ -1123,7 +1045,7 @@ struct NotchEditorStage: View {
     private var cardHotspots: [CardHotspot] {
         let width = cardWidth
         let padding = chrome.topRowPadding
-        let earWidth = max(0, (width - chrome.notchWidth - padding * 2) / 2)
+        let earWidth = chrome.earWidth(cardWidth: width)
         let top = chrome.contentTopInset
         var spots: [CardHotspot] = [
             CardHotspot(kind: .leftEar,
@@ -1334,9 +1256,9 @@ struct NotchEditorStage: View {
             // 稳态"由 RangeSlider 内部的 NotchWidthRangeDrag 管,不靠区间。量化 step 2,不画刻度。
             RangeSlider(
                 lower: baseWidth, upper: expandedBaseWidth,
-                range: Self.usableWidthRange(notchWidth: chrome.notchWidth,
-                                             contentTopInset: chrome.contentTopInset),
-                step: Self.widthStep, tint: .white,
+                range: NotchLyricsWindowController.usableWidthRange(notchWidth: chrome.notchWidth,
+                                                                    contentTopInset: chrome.contentTopInset),
+                step: NotchWidthBounds.step, tint: .white,
                 lowerLabel: L10n.t("灵动岛宽度"), upperLabel: L10n.t("灵动岛展开宽度"),
                 valueText: { String(format: L10n.t("%@pt"), "\(Int($0))") },
                 onChange: { steady, expanded in

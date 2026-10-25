@@ -2790,7 +2790,7 @@ final class AppSettings: ObservableObject {
         let storedWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 488
         overlayWidth = min(max(storedWidth, OverlayEditorStage.widthRange.lowerBound), OverlayEditorStage.widthRange.upperBound)
         // 手改过、导入的越界值夹回滑杆的范围(同悬浮歌词宽度),不然窗口按它画、滑杆顶在头上。
-        let notchRange = NotchEditorStage.widthRange
+        let notchRange = NotchWidthBounds.storageRange
         let storedNotchWidth = (defaults.object(forKey: Keys.notchContentWidth) as? Double) ?? Self.defaultNotchContentWidth
         notchContentWidth = min(max(storedNotchWidth, notchRange.lowerBound), notchRange.upperBound)
         // 没存过就落到 Self.defaultNotchExpandedContentWidth(前这里读的是稳态那个

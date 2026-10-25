@@ -32,7 +32,7 @@ public enum NotchExpandedMetrics {
     /// `trackInfoHeight`(「曲目信息头部」——展开区里可选的歌名/歌手/专辑
     /// 那一块)是第三个维度,但**性质跟前两个不一样**:前两个是曲目级数据信号,这个是
     /// **用户设置**的派生值(见 `trackInfoHeight(showsArtwork:showsTitle:showsArtist:showsAlbum:)`)。
-    /// 调用方(`NotchMetrics.expandedTrackInfoHeight`)按当前设置现算好传进来,这个函数不
+    /// 调用方(`NotchExpandedMetrics.trackInfoHeight`)按当前设置现算好传进来,这个函数不
     /// 关心它是怎么来的,只管加不加、加多少 —— 跟 `hasLyricPreview`/`hasScrubber` 一样是
     /// "只加一次、且这次的间距已经包含在值里"的一整块,0 表示这块完全不占地方(不渲染)。
     ///

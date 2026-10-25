@@ -72,6 +72,6 @@ struct NotchTransientRow: View {
                 Spacer(minLength: 0)
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, NotchMetrics.expandedContentInset)
     }
 }

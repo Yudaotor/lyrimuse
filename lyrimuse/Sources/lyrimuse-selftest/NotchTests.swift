@@ -333,6 +333,16 @@ func runNotchTests() {
                     "顶行边距: 展开只宽 6pt 时两侧各收 3pt,耳宽跟稳态一样")
         expectEqual(B.topRowPadding(expanded: true, steadyWidth: 360, expandedWidth: 360, cardPadding: 10, contentInset: 16), 10,
                     "顶行边距: 两值相等时展开跟稳态一样")
+        // 滑杆能拖的区间:下界抬到耳朵下限、向上取整到步长,不越过上界(05 章决策 104)。
+        expectEqual(B.usableRange(earFloor: 340.9), 342 ... 800, "宽度区间: 耳朵下限 340.9 向上取整到 342,不量化到下限以下")
+        expectEqual(B.usableRange(earFloor: 252), 252 ... 800, "宽度区间: 下限正好是步长倍数时原样")
+        expectEqual(B.usableRange(earFloor: 900), 798 ... 800, "宽度区间: 下限越过上界时留一个步长,不给零长区间")
+        expectEqual(B.usableExpandedRange(steadyWidth: 361), 362 ... 800, "宽度区间: 展开滑杆下界 = 稳态真实宽向上取整")
+        expectEqual(B.usableExpandedRange(steadyWidth: 120), 200 ... 800, "宽度区间: 展开滑杆下界不低于存储层下界")
+        expectEqual(B.usableExpandedRange(steadyWidth: 800), 798 ... 800, "宽度区间: 稳态拉满时展开留一个步长")
+        expectEqual(B.storageRange.lowerBound.truncatingRemainder(dividingBy: B.step) == 0
+                    && B.storageRange.upperBound.truncatingRemainder(dividingBy: B.step) == 0, true,
+                    "宽度区间: 存储层两端是步长的整数倍(snap 先夹后量化)")
         expectEqual(B.normalized(steady: 400, expanded: 360) == (400, 400), true,
                     "宽度对: 稳态拖过展开,落盘前把展开顶上去")
         expectEqual(B.normalized(steady: 300, expanded: 360) == (300, 360), true,
@@ -470,7 +480,7 @@ func runNotchTests() {
                     && view.contains("+ ((showsLyrics || expanded) ? (expanded && showsExpandedLyricList ? expandedLyricListHeight : lyricRowHeight)"), true,
                     "高度接线: chrome 给实际行高,卡片高度公式读它")
         expectEqual(stage.contains("var lyricRowHeight: CGFloat { AppSettings.shared.notchEffectiveLyricRowHeight }")
-                    && sourceHas(stage, "chrome.contentTopInset + max(NotchLyricRowMetrics.rowHeight, chrome.expandedLyricListHeight)\n + NotchMetrics.expandedExtraHeightMax("),
+                    && sourceHas(stage, "chrome.contentTopInset + max(NotchLyricRowMetrics.rowHeight, chrome.expandedLyricListHeight)\n + NotchExpandedMetrics.maxHeight("),
                     true, "高度接线: 编辑台替身现读实际行高,舞台按上限留高度(拖滑杆时整页不跳)")
         for (name, source) in [("NotchLyricsView", view), ("NotchEditorStage", stage), ("NotchLyricsWindowController", controller)] {
             expectEqual(source.isEmpty, false, "高度接线: 读到 \(name).swift")
@@ -1122,10 +1132,11 @@ func runNotchTests() {
             // 四处外形都从 chrome 的 cardOutline + NotchCornerLive 拼同一个形状。
             expectEqual(liveSrc.contains(".card(notchHeight: notchHeight, corner: corner(live))"), true, "外轮廓契约: 外形统一由 NotchCardOutline 拼成 .card")
             expectEqual(v.contains("content.clipShape(outline.shape(live))"), true, "外轮廓契约: 卡片自己那道裁剪用 .card")
-            expectEqual(sourceHas(v, "let earWidth = max(0, (proxy.size.width - controller.notchWidth\n - controller.topRowPadding * 2) / 2)")
+            expectEqual(v.contains("max(0, (cardWidth - notchWidth - topRowPadding * 2) / 2)")
+                        && v.contains("let earWidth = controller.earWidth(cardWidth: proxy.size.width)")
                         && v.contains(".padding(.horizontal, controller.topRowPadding)")
                         && v.contains("cardPadding: controller.topRowPadding,")
-                        && sourceHas(stageSrc, "let padding = chrome.topRowPadding\n let earWidth = max(0, (width - chrome.notchWidth - padding * 2) / 2)"), true,
+                        && sourceHas(stageSrc, "let padding = chrome.topRowPadding\n let earWidth = chrome.earWidth(cardWidth: width)"), true,
                         "顶行边距契约: 顶行的 padding、耳宽公式、音浪居中、编辑台耳朵热区读同一个 topRowPadding")
             expectEqual(v.contains("NotchCardClip(enabled: !hostClipsCard, outline: controller.cardOutline)"), true,
                         "外轮廓契约: 卡片裁剪的肩膀按这块屏的刘海高度、圆角按设置")
@@ -1597,7 +1608,8 @@ func runNotchTests() {
         // (`trackInfoShowsTrackFields`,上面已有断言),它是被那条覆盖的。
         expectEqual(view.contains("adBreakArtworkTile(side:"), true,
                     "广告态契约: 灵动岛歌词行末尾那枚封面在广告期间换成替代方块")
-        expectEqual(sourceHas(view, "controller.isAdBreakNow\n                || (radioTalkStation?.image ?? playback.highResArtworkImage ?? playback.artworkImage) != nil"),
+        expectEqual(sourceHas(view, "controller.isAdBreakNow\n || displayedArtworkImage != nil")
+                    && view.contains("radioTalkStation?.image ?? playback.highResArtworkImage ?? playback.artworkImage"),
                     true, "广告态契约: 替代方块照样算「这一格占着位置」,别放行多余的布局动画(电台口白的台标也算)")
         let window = (try? String(contentsOfFile: ui.appendingPathComponent("LyricsWindowView.swift").path,
                                   encoding: .utf8)) ?? ""
@@ -2057,7 +2069,7 @@ func runNotchTests() {
                     "展开回读契约: 只在指针悬停展开时回读播放模式 / 喜欢,提醒、报喜撑开时不读")
         // 卡片宽度只有协议扩展一份公式,真窗口和控制器算屏幕矩形都读它。
         expectEqual(root.contains("private var cardWidth: CGFloat { controller.cardWidth }")
-                    && view.contains("return min(steadyCardWidth, notchWidth + 2 * NotchMetrics.collapsedEarWidth + 20)")
+                    && view.contains("return min(steadyCardWidth, notchWidth + 2 * NotchMetrics.collapsedEarWidth + 2 * NotchMetrics.cardHorizontalPadding)")
                     && controller.contains("return NSRect(x: window.frame.midX - cardWidth / 2"), true,
                     "卡片宽度契约: 收起态宽度只有 NotchChromeSource.cardWidth 一份,光标判定用的屏幕矩形也读它")
         // 歌词行高度那条订阅按副行的 sink 参数算展开区要不要留「下一句」。

@@ -67,6 +67,42 @@ public enum NotchWidthBounds {
     public static func normalized(steady: Double, expanded: Double) -> (steady: Double, expanded: Double) {
         (steady, max(steady, expanded))
     }
+
+    /// 宽度设定值的合法区间(存储层),两只滑块(稳态 / 展开)、三个写入口和读盘时的夹值都用这一份。别在任何一处另写字面量:
+    /// 一处能产生别处够不到的值,用户下次一动另一根滑杆就会被弹回去(悬浮歌词那边 `OverlayEditorStage.widthRange` 是同一条规矩)。
+    ///
+    /// 下界 200 是几何硬底:卡片再窄也不能窄过刘海本身(约 179 + 左右各 10)。耳朵下限跟配置走,两只耳朵都配成「不显示」时约 251,
+    /// 存储层的下界不能卡在它上面。上界 800 ≈ 14 吋 MBP 逻辑宽 1512 的一半,两侧菜单栏各还剩三百多 pt;超宽时编辑台舞台放不下,
+    /// 由「整体缩小到刚好放下」兜着(`NotchEditorStage.previewScale`)。两端必须是 `step` 的整数倍(`snap()` 先夹后量化,不是倍数会
+    /// 把值顶出界)。
+    ///
+    /// 这是存储层的区间,不随屏幕、耳朵配置变:合法性要能跨机器导出导入。滑杆真正能拖的区间见 `usableRange(earFloor:)`;
+    /// 低于当前下界的旧值不改写,渲染时被耳朵下限顶上去,换回窄的耳朵配置原样回来。宽度入口的读数一律报真实宽度、不报设定值。
+    public static let storageRange: ClosedRange<Double> = 200 ... 800
+
+    /// 编辑台宽度调整条的步长(pt)。比菜单栏快捷面板那根的 10pt 细:编辑台这根紧挨着实时变宽变窄的卡片,10pt 一格看得出在跳。
+    /// 落盘的值因此可能不是 10 的整数倍,10pt 的滑杆照样显示得出来:step 只约束滑杆自己产生的值,不约束模型。
+    public static let step: Double = 2
+
+    /// 滑杆真正能拖的区间:下界抬到「耳朵下限」(`earFloor`,稳态真实宽在设定值取存储层下界时的值),上界同 `storageRange`。
+    /// 下界不抬的话,低于耳朵下限的那一段拖了卡片纹丝不动。
+    ///
+    /// 两条护栏:① 下界**向上**取整到 `step` 的倍数,否则 `snap` 的「先夹后量化」可能把值量化到下界以下(下限 340.9 → 340);
+    /// ② 下界不许越过上界,留出至少一个 `step`,免得滑杆拿到长度为 0 的区间(刘海宽到 348 以上才会碰到,这里不赌)。
+    public static func usableRange(earFloor: Double) -> ClosedRange<Double> {
+        let ceiled = (earFloor / step).rounded(.up) * step
+        let lower = min(ceiled, storageRange.upperBound - step)
+        return lower ... storageRange.upperBound
+    }
+
+    /// 展开宽那根单滑块(「全部设置」抽屉 / 菜单栏快捷面板)能拖的区间:下界 = 稳态**真实**宽(展开不许比稳态窄),上界同
+    /// `storageRange`。护栏同 `usableRange(earFloor:)`;稳态拉满 800 时展开只剩 800 这一个值,给滑杆零长区间会算出 nan。
+    /// 编辑台的双滑块不用它:两只滑块共用 `usableRange`,「不越过对方」由 `dragging` 管。
+    public static func usableExpandedRange(steadyWidth: Double) -> ClosedRange<Double> {
+        let ceiled = (steadyWidth / step).rounded(.up) * step
+        let lower = min(max(ceiled, storageRange.lowerBound), storageRange.upperBound - step)
+        return lower ... storageRange.upperBound
+    }
 }
 
 /// 编辑台那根**双滑块**宽度调整条的交互规则(纯函数,UI 在 App 侧 `RangeSlider`)。
