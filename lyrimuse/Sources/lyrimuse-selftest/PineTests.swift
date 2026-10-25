@@ -98,6 +98,60 @@ func runPineTests() {
         expectEqual(P.openFileExtensions.isSuperset(of: ["mka", "caf", "wma", "ape"]), true, "Pine 挑文件: 它能放的 mka、caf 也算音频文件")
     }
 
+    // ---- 视频 ----
+    do {
+        expectEqual([P.videoShaped(bundleID: P.bundleID, title: "Apple Widgets Edu.mov", artist: nil),
+                     P.videoShaped(bundleID: P.bundleID, title: "Movie.MKV", artist: " "),
+                     P.videoShaped(bundleID: P.bundleID, title: "周杰伦 - 晴天 (MV).mp4", artist: nil),
+                     P.videoShaped(bundleID: P.bundleID, title: "稻香.flac", artist: " "),
+                     P.videoShaped(bundleID: P.bundleID, title: "Blu-ray.m2ts", artist: nil),
+                     P.videoShaped(bundleID: P.bundleID, title: "Clip.mov", artist: "周杰伦"),
+                     P.videoShaped(bundleID: "com.coppertino.Vox", title: "Clip.mov", artist: nil)],
+                    [true, true, nil, false, false, false, false],
+                    "Pine 视频: 歌手一栏空、歌名是只会是视频的扩展名才算;.mp4 要看文件;m2ts 它登记成蓝光音频、写了歌手的、别家的都不算")
+
+        func box(_ type: String, _ payload: [UInt8]) -> [UInt8] {
+            let size = UInt32(8 + payload.count)
+            return [UInt8(size >> 24), UInt8(size >> 16 & 0xff), UInt8(size >> 8 & 0xff), UInt8(size & 0xff)] + Array(type.utf8) + payload
+        }
+        func trak(_ handler: String) -> [UInt8] {
+            box("trak", box("tkhd", [UInt8](repeating: 0, count: 20)) + box("mdia", box("mdhd", [0, 0, 0, 0]) + box("hdlr", [0, 0, 0, 0, 0, 0, 0, 0] + Array(handler.utf8) + [0, 0, 0, 0])))
+        }
+        let videoMoov = box("mvhd", [0, 0, 0, 0]) + trak("soun") + trak("vide")
+        let audioMoov = box("mvhd", [0, 0, 0, 0]) + trak("soun")
+        expectEqual([MP4VideoTrack.moovHasVideo(videoMoov), MP4VideoTrack.moovHasVideo(audioMoov),
+                     MP4VideoTrack.moovHasVideo(box("trak", box("hdlr", [0, 0, 0, 0, 0, 0, 0, 0] + Array("vide".utf8)))),
+                     MP4VideoTrack.moovHasVideo(Array(videoMoov.prefix(videoMoov.count - 3)))],
+                    [true, false, false, false],
+                    "MP4 画面轨: 有一条轨的 hdlr 是 vide 才算;只有声音轨、hdlr 不在 mdia 里、截断的都不算")
+        let large: [UInt8] = [0, 0, 0, 1] + Array("mdat".utf8) + [0, 0, 0, 0, 0, 0, 0, 24] + [UInt8](repeating: 7, count: 8)
+        let big = MP4VideoTrack.header(large, remaining: 24)
+        expectEqual("\(big?.size ?? 0)|\(big?.type ?? "")|\(big?.headerSize ?? 0)", "24|mdat|16", "MP4 盒子头: 大小为 1 时读后面的 64 位大小")
+        expectEqual(MP4VideoTrack.header([0, 0, 0, 0] + Array("mdat".utf8), remaining: 100)?.size, 100, "MP4 盒子头: 大小为 0 时到尾")
+        expectEqual(MP4VideoTrack.header([0, 0, 0, 200] + Array("mdat".utf8), remaining: 100) == nil, true, "MP4 盒子头: 超出剩下的长度不认")
+
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("lyrimuse-mp4-\(ProcessInfo.processInfo.processIdentifier)-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let mdat = box("mdat", [UInt8](repeating: 1, count: 64))
+        let files: [(String, [UInt8])] = [("v.mp4", box("ftyp", Array("isom".utf8)) + mdat + box("moov", videoMoov)),
+                                          ("a.mp4", box("ftyp", Array("M4A ".utf8)) + box("moov", audioMoov) + mdat),
+                                          ("x.mp4", Array("not a movie".utf8))]
+        for (name, bytes) in files { try? Data(bytes).write(to: dir.appendingPathComponent(name)) }
+        expectEqual(files.map { MP4VideoTrack.present(path: dir.appendingPathComponent($0.0).path) }, [true, false, false],
+                    "MP4 画面轨: 跳过 mdat 找到放在末尾的 moov;只有声音轨的、不是 MP4 的不算")
+        expectEqual(MP4VideoTrack.present(path: dir.appendingPathComponent("missing.mp4").path), false, "MP4 画面轨: 文件不在不算")
+
+        let L = PinePlaylist.self
+        expectEqual([L.videoByName("a.MOV"), L.videoByName("b.mp4"), L.videoByName("c.flac")], [true, nil, false],
+                    "Pine 列表视频: 按扩展名认,.mp4 要看文件")
+        let mv = PinePlaylist.Row(title: "晴天", artistAlbum: "MP4", duration: "00:40", fileName: "周杰伦 - 晴天 (MV).mp4")
+        expectEqual([L.track(mv, video: true).artist, L.track(mv).artist], ["", "MP4"], "Pine 列表视频: 视频那一行歌手留空,引擎预取跳过")
+        expectEqual([L.isVideo(mv, directory: dir.path), L.isVideo(PinePlaylist.Row(title: "v", artistAlbum: "", duration: "", fileName: "v.mp4"), directory: dir.path),
+                     L.isVideo(PinePlaylist.Row(title: "v", artistAlbum: "", duration: "", fileName: "v.mp4"), directory: nil)],
+                    [false, true, false], "Pine 列表视频: .mp4 按当前目录拼出路径看画面轨,不知道目录当不是")
+    }
+
     // ---- 身份 ----
     do {
         func id(_ r: (title: String, artist: String, album: String)) -> String { "\(r.artist)|\(r.title)|\(r.album)" }
@@ -415,6 +469,9 @@ func runPineTests() {
         expectEqual(sourceHas(client, "(keyTitle, keyArtist, filePath) = PinePlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)"),
                     true, "Pine 接线: 封面的曲目标识跟快照对得上")
         expectEqual(sourceHas(client, "|| PinePlayerInfo.isNetworkRadio(snapshot)"), true, "Pine 接线: 网络电台当不是歌")
+        expectEqual(sourceHas(client, "|| PinePlayerInfo.isVideo(snapshot)"), true, "Pine 接线: 视频当不是歌")
+        expectEqual(sourceHas(sourceText("LyrimuseCore/Local/PinePlaylist.swift"),
+                              "rows.map { track($0, video: isVideo($0, directory: directory)) }"), true, "Pine 接线: 列表里的视频行不预取")
         expectEqual([sourceHas(sourceText("LyrimuseCore/Local/PlayerProcess.swift"), "let ids = PlayerBundleAliases.all(for: bundleID)"),
                      sourceHas(sourceText("LyrimuseCore/Local/NowPlayingClientsProbe.swift"), "for id in PlayerBundleAliases.inProbeOrder(for: bundleID) {"),
                      sourceHas(sourceText("LyrimuseCore/Local/PlayerPickerLayout.swift"),

@@ -166,6 +166,46 @@ public enum PinePlayerInfo {
         return (artist ?? "").trimmingCharacters(in: .whitespaces).isEmpty
     }
 
+    // MARK: 视频
+
+    /// 它 Info.plist 里登记成视频、音频不会用的扩展名。`mp4` 也登记成视频,但音频也用,看文件里有没有画面轨(`isVideo`)。
+    public static let videoExtensions: Set<String> = ["3gp", "avi", "mkv", "mov", "mpg", "webm", "wmv"]
+
+    /// 系统那份按写法像不像在放视频:Pine 放视频时歌名一栏是带扩展名的文件名(视频文件的标签它不读),歌手一栏空着。
+    /// `.mp4` 定不了,为 nil。纯函数,selftest 覆盖。
+    public static func videoShaped(bundleID: String?, title: String?, artist: String?) -> Bool? {
+        guard bundleID == self.bundleID, let title, !title.isEmpty,
+              (artist ?? "").trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        let ext = URL(fileURLWithPath: title).pathExtension.lowercased()
+        if videoExtensions.contains(ext) { return true }
+        return ext == "mp4" ? nil : false
+    }
+
+    /// 在放视频(`videoShaped`;`.mp4` 看它开着的、文件名就是这个歌名的那个文件里有没有画面轨):这一拍算不是歌,不拿片名去搜
+    /// 歌词,MV 也一样。Pine 放视频时系统报的位置不走、放完了还报在放,对不上歌词。同一个歌名只看一次文件。见 02 章决策 191。
+    static func isVideo(_ snapshot: MediaControlSnapshot) -> Bool {
+        if let shaped = videoShaped(bundleID: snapshot.bundleIdentifier, title: snapshot.title, artist: snapshot.artist) {
+            return shaped
+        }
+        guard let title = snapshot.title, let pid = snapshot.processIdentifier else { return false }
+        if let known = videoFiles.withLock({ $0[title] }) { return known }
+        guard let path = ProcessOpenFiles.paths(pid: pid_t(pid)).last(where: { URL(fileURLWithPath: $0).lastPathComponent == title })
+        else { return false }
+        let video = MP4VideoTrack.present(path: path)
+        videoFiles.withLock { cache in
+            if cache.count >= videoFilesLimit { cache.removeAll() }
+            cache[title] = video
+        }
+        return video
+    }
+
+    /// `.mp4` 歌名 → 那个文件里有没有画面轨。
+    private static let videoFiles = OSAllocatedUnfairLock<[String: Bool]>(initialState: [:])
+    private static let videoFilesLimit = 64
+
+    /// 最近一次换好的那首的文件(没找到为 nil)。不读盘。
+    static var currentPath: String? { current.withLock { $0?.path } }
+
     /// 换过之后的这首(歌手、歌名)对上最近一次换好的那首时,它的文件(不读盘)。写播放状态(`local_file`)用。
     public static func currentFilePath(artist: String, title: String) -> String? {
         current.withLock { entry in

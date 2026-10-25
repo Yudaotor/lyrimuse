@@ -1,5 +1,6 @@
 import ApplicationServices
 import Foundation
+import os
 
 /// Pine Player 的播放列表,给引擎预解析(`PlayerQueryServer` 的 `pine_queue`,引擎侧 `pinequeue.go`)。它没有脚本接口、列表不落盘,
 /// 只有主窗口里那张表:每行一格,格里依次是歌名(`AXHelp` 是文件名)、「歌手 ∙ 专辑」、封面、时长。看不见的行辅助功能树里照样有、
@@ -54,11 +55,36 @@ public enum PinePlaylist {
         }
     }
 
-    /// 一行换成曲目。纯函数,selftest 覆盖。
-    public static func track(_ row: Row) -> Track {
+    /// 一行换成曲目。视频那一行歌手留空:引擎预取跳过歌手空的行(`pinequeue.go` 的 `pineListUpcoming`),行号不动;视频那一格
+    /// 显示的不是歌手(真机见过「MP4」)。纯函数,selftest 覆盖。
+    public static func track(_ row: Row, video: Bool = false) -> Track {
         let id = PinePlayerInfo.identity(title: row.title, artist: row.artistAlbum)
-        return Track(title: id.title, artist: id.artist, album: id.album, duration: duration(row.duration) ?? 0, file: row.fileName)
+        return Track(title: id.title, artist: video ? "" : id.artist, album: id.album, duration: duration(row.duration) ?? 0,
+                     file: row.fileName)
     }
+
+    /// 这一行的文件按扩展名一定是视频(`PinePlayerInfo.videoExtensions`)为 true;`.mp4` 定不了,为 nil。纯函数,selftest 覆盖。
+    public static func videoByName(_ fileName: String) -> Bool? {
+        let ext = URL(fileURLWithPath: fileName).pathExtension.lowercased()
+        if PinePlayerInfo.videoExtensions.contains(ext) { return true }
+        return ext == "mp4" ? nil : false
+    }
+
+    /// 这一行是不是视频:`.mp4` 按当前这首所在的目录拼出路径看有没有画面轨(同引擎 `pineFillPaths` 的拼法),不知道目录时当不是。
+    public static func isVideo(_ row: Row, directory: String?) -> Bool {
+        if let known = videoByName(row.fileName) { return known }
+        guard let directory, !row.fileName.isEmpty else { return false }
+        let path = (directory as NSString).appendingPathComponent(row.fileName)
+        if let hit = mp4Videos.withLock({ $0[path] }) { return hit }
+        let video = MP4VideoTrack.present(path: path)
+        mp4Videos.withLock { cache in
+            if cache.count >= maxRows { cache.removeAll() }
+            cache[path] = video
+        }
+        return video
+    }
+
+    private static let mp4Videos = OSAllocatedUnfairLock<[String: Bool]>(initialState: [:])
 
     /// 「03:39」「1:02:03」→ 秒。纯函数,selftest 覆盖。
     public static func duration(_ text: String) -> Double? {
@@ -87,7 +113,9 @@ public enum PinePlaylist {
     /// 读列表与循环档;Pine 没在跑、没有辅助功能权限、找不到那张表时为 nil。会阻塞跨进程查询,别在主线程调。
     public static func queueReply() -> QueueReply? {
         guard let rows = readRows() else { return nil }
-        return QueueReply(tracks: rows.map(track), repeating: repeating(checkedIndex: PineMenuControl.readCheckedIndex()))
+        let directory = PinePlayerInfo.currentPath.map { ($0 as NSString).deletingLastPathComponent }
+        return QueueReply(tracks: rows.map { track($0, video: isVideo($0, directory: directory)) },
+                          repeating: repeating(checkedIndex: PineMenuControl.readCheckedIndex()))
     }
 
     /// 主窗口里那张表的行(格里至少三段文字的那张;侧栏的列表表每格只有一段)。
