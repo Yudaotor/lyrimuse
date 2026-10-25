@@ -311,6 +311,130 @@ func runNotchTests() {
                     "出场: 比退场 0.2s 长但不拖沓")
     }
 
+    // ---- NotchCardLayout:卡片宽高、各块画不画、收起判据(真窗口和编辑台读同一份,05 章决策 109)----
+    //
+    // 数字按 NotchExpandedMetrics 现行尺寸手算:展开区满配 = 三键 35 + 下一句 17 + 进度条 24 = 76;头部三行字 14+12+11+2、
+    // 封面 32、快捷操作 22,上 12 下 4 两份间距;空闲面板 = 27 + 12 + 10 = 49。
+    do {
+        typealias L = NotchCardLayout
+        let m = L.Metrics(cardPadding: 10, contentInset: 16, collapsedEarWidth: 34,
+                          milestonePanelHeight: 76, trackDropHeight: 26, progressLineStrip: 4)
+        let base = L(metrics: m, isCollapsed: false, isExpanded: false, notchWidth: 180, contentTopInset: 32,
+                     steadyCardWidth: 360, expandedCardWidth: 468, lyricRowHeight: 44, expandedLyricListHeight: 0,
+                     hasTrack: true, isAdBreak: false, hasMilestone: false, hasTrackDrop: false, transientBannerActive: false,
+                     showsProgressLine: false, showsLyrics: true, trackHasLyricPreview: true, trackHasScrubber: true,
+                     expandedShowsNextLine: true, expandedShowsControls: true, trackInfoShowsArtwork: false,
+                     trackInfoShowsTitle: false, trackInfoShowsArtist: false, trackInfoShowsAlbum: false,
+                     expandedShowsQuickActions: false)
+        func with(_ change: (inout L) -> Void) -> L { var l = base; change(&l); return l }
+        let expanded = with { $0.isExpanded = true }
+        expectEqual(base.cardHeight, 76, "卡片布局: 稳态 = 顶行 + 歌词行")
+        expectEqual(base.cardWidth, 360, "卡片布局: 稳态宽")
+        expectEqual(expanded.cardHeight, 152, "卡片布局: 展开 = 顶行 + 歌词行 + 展开区满配 76")
+        expectEqual(expanded.cardWidth, 468, "卡片布局: 展开宽")
+        let collapsed = with { $0.isCollapsed = true }
+        expectEqual(collapsed.cardHeight, 32, "卡片布局: 收起只留顶行")
+        expectEqual(collapsed.cardWidth, 268, "卡片布局: 收起宽 = 刘海 + 两只收起耳朵 + 两侧内边距")
+        expectEqual(with { $0.isCollapsed = true; $0.steadyCardWidth = 250 }.cardWidth, 250, "卡片布局: 收起宽不比稳态宽")
+        expectEqual(with { $0.hasMilestone = true }.cardHeight, 108, "卡片布局: 报喜 = 顶行 + 报喜面板")
+        expectEqual(with { $0.hasMilestone = true; $0.isCollapsed = true }.cardHeight, 32, "卡片布局: 收起优先于报喜")
+        // 没有曲目:稳态只剩顶行,展开只长出空闲面板。
+        let idle = with { $0.hasTrack = false }
+        expectEqual(idle.cardHeight, 32, "卡片布局: 没曲目时稳态只剩顶行")
+        expectEqual(idle.cardHeight(expanded: true), 81, "卡片布局: 没曲目时展开只长出空闲面板 49")
+        expectEqual(idle.showsLyricRow || idle.showsExpandedTrackInfo, false, "卡片布局: 没曲目时歌词行、头部都不画")
+        // 关着「显示歌词」:稳态退成状态栏,掉歌名 / 横幅 / 进度线各多长一截;展开照常留歌词行。
+        let noLyrics = with { $0.showsLyrics = false }
+        expectEqual(noLyrics.cardHeight, 32, "卡片布局: 关着歌词行时稳态只剩顶行")
+        expectEqual(noLyrics.showsLyricRow, false, "卡片布局: 关着歌词行时稳态不画歌词行")
+        expectEqual(with { $0.showsLyrics = false; $0.isExpanded = true }.showsLyricRow, true, "卡片布局: 关着歌词行时展开照常画当前行")
+        expectEqual(with { $0.showsLyrics = false; $0.isExpanded = true }.cardHeight, 152, "卡片布局: 关着歌词行时展开照常留歌词行")
+        expectEqual(with { $0.showsLyrics = false; $0.hasTrackDrop = true }.cardHeight, 58, "卡片布局: 关着歌词行时为掉出来的歌名多长 26")
+        expectEqual(with { $0.showsLyrics = false; $0.transientBannerActive = true }.cardHeight, 58, "卡片布局: 关着歌词行时为横幅多长 26")
+        expectEqual(with { $0.hasTrackDrop = true }.cardHeight, 76, "卡片布局: 开着歌词行时掉歌名盖在歌词行上,不另长")
+        expectEqual(with { $0.showsLyrics = false; $0.showsProgressLine = true }.cardHeight, 36, "卡片布局: 关着歌词行时进度线多长 4")
+        expectEqual(with { $0.showsLyrics = false; $0.showsProgressLine = true; $0.hasTrackDrop = true }.cardHeight, 62,
+                    "卡片布局: 掉歌名和进度线两截叠加")
+        expectEqual(with { $0.showsProgressLine = true }.cardHeight, 76, "卡片布局: 开着歌词行时进度线不另长")
+        expectEqual(with { $0.showsLyrics = false; $0.showsProgressLine = true; $0.isExpanded = true }.cardHeight, 152,
+                    "卡片布局: 展开时不为进度线多长(展开区有自己那条进度条)")
+        // 横幅、进度线画不画。
+        expectEqual(with { $0.showsLyrics = false; $0.transientBannerActive = true }.showsBannerStrip, true, "卡片布局: 关着歌词行时横幅画在多长的那截")
+        expectEqual(with { $0.transientBannerActive = true }.showsBannerStrip, false, "卡片布局: 开着歌词行时横幅盖在歌词行上,不画那截")
+        expectEqual(with { $0.showsLyrics = false; $0.transientBannerActive = true; $0.isExpanded = true }.showsBannerStrip, false,
+                    "卡片布局: 展开时不画横幅那截")
+        expectEqual(with { $0.showsLyrics = false; $0.transientBannerActive = true; $0.hasMilestone = true }.showsBannerStrip, false,
+                    "卡片布局: 报喜时不画横幅那截")
+        expectEqual(with { $0.showsProgressLine = true }.showsBottomProgressLine, true, "卡片布局: 稳态画底边进度线")
+        expectEqual(with { $0.showsProgressLine = true; $0.isExpanded = true }.showsBottomProgressLine, false, "卡片布局: 展开不画底边进度线")
+        expectEqual(with { $0.showsProgressLine = true; $0.isCollapsed = true }.showsBottomProgressLine, false, "卡片布局: 收起不画底边进度线")
+        // 多行歌词:展开时歌词那一格换成列表,不画下一句预览;广告时退回一行歌词。
+        let list = with { $0.isExpanded = true; $0.expandedLyricListHeight = 120 }
+        expectEqual(list.showsExpandedLyricList, true, "卡片布局: 开着多行歌词时展开换成列表")
+        expectEqual(list.showsExpandedLyricPreview, false, "卡片布局: 开着多行歌词时不画下一句预览")
+        expectEqual(list.cardHeight, 211, "卡片布局: 列表 120 + 三键 35 + 进度条 24")
+        expectEqual(with { $0.expandedLyricListHeight = 120 }.cardHeight, 76, "卡片布局: 列表只在展开时占高度")
+        expectEqual(with { $0.isExpanded = true; $0.expandedLyricListHeight = 120; $0.isAdBreak = true }.cardHeight, 135,
+                    "卡片布局: 广告时不换列表,也不画下一句")
+        expectEqual(with { $0.isExpanded = true; $0.expandedLyricListHeight = 120; $0.trackHasLyricPreview = false }.showsExpandedLyricList,
+                    false, "卡片布局: 这首没歌词时不换列表")
+        expectEqual(with { $0.isExpanded = true; $0.trackHasLyricPreview = false; $0.trackHasScrubber = false }.cardHeight, 111,
+                    "卡片布局: 没下一句、没时长的歌展开区只剩三键")
+        // 展开头部:按开关现算,广告期间只剩快捷操作。
+        let header = with { $0.isExpanded = true; $0.trackInfoShowsArtwork = true; $0.trackInfoShowsTitle = true; $0.trackInfoShowsArtist = true }
+        expectEqual(header.expandedTrackInfoHeight, 32, "卡片布局: 头部高 = max(封面 32, 两行字 27)")
+        expectEqual(header.expandedTrackInfoHeaderHeight, 48, "卡片布局: 头部总高 = 内容 + 上 12 下 4")
+        expectEqual(header.cardHeight, 200, "卡片布局: 展开区满配 76 + 头部 48")
+        let adHeader = with { $0.isExpanded = true; $0.trackInfoShowsTitle = true; $0.isAdBreak = true }
+        expectEqual(adHeader.showsExpandedTrackInfo, false, "卡片布局: 广告期间四项曲目字段不画,头部整块不画")
+        expectEqual(with { $0.isExpanded = true; $0.trackInfoShowsTitle = true; $0.isAdBreak = true; $0.expandedShowsQuickActions = true }
+                        .expandedTrackInfoHeaderHeight, 38, "卡片布局: 广告期间头部只剩快捷操作那排 22")
+        // 展开区上限:按设置留,不看这首有没有下一句、有没有时长,不看广告。
+        expectEqual(base.expandedExtraHeightMax, 76, "卡片布局: 展开区上限满配 76")
+        expectEqual(with { $0.trackHasLyricPreview = false; $0.trackHasScrubber = false }.expandedExtraHeightMax, 76,
+                    "卡片布局: 展开区上限不看曲目级数据")
+        expectEqual(with { $0.expandedShowsNextLine = false }.expandedExtraHeightMax, 59, "卡片布局: 关掉下一句预览省 17")
+        expectEqual(with { $0.expandedLyricListHeight = 120 }.expandedExtraHeightMax, 59, "卡片布局: 开着多行歌词不留下一句那截")
+        expectEqual(with { $0.trackInfoShowsArtwork = true; $0.isAdBreak = true }.expandedExtraHeightMax, 124,
+                    "卡片布局: 展开区上限不看广告态")
+        // 顶行内边距与耳宽。
+        expectEqual(base.topRowPadding, 10, "卡片布局: 稳态顶行内边距 10")
+        expectEqual(expanded.topRowPadding, 16, "卡片布局: 展开宽够时顶行收到内容那一列的 16")
+        expectEqual(base.earWidth(cardWidth: 360), 80, "卡片布局: 耳宽 = (卡宽 − 刘海 − 2×内边距) / 2")
+        expectEqual(expanded.earWidth(cardWidth: 468), 128, "卡片布局: 展开耳宽按展开内边距算")
+        expectEqual(base.earWidth(cardWidth: 150), 0, "卡片布局: 卡片比刘海窄时耳宽夹到 0")
+        // 收起判据。
+        func collapse(paused: Bool = true, collapses: Bool = true, hide: Bool = false, fromCollapsed: Bool = false,
+                      adCollapses: Bool = false, ad: Bool = false, expanded: Bool = false) -> Bool {
+            L.isCollapsed(collapsesWhenPaused: collapses, isPlaying: !paused, hideWhenNotPlaying: hide,
+                          vanishesFromCollapsed: fromCollapsed, collapsesDuringAds: adCollapses, isAdBreak: ad, isExpanded: expanded)
+        }
+        expectEqual(collapse(), true, "收起判据: 开着「暂停时收起」暂停就收")
+        expectEqual(collapse(paused: false), false, "收起判据: 在播不收")
+        expectEqual(collapse(collapses: false), false, "收起判据: 关着「暂停时收起」暂停也不收")
+        expectEqual(collapse(hide: true), false, "收起判据: 开着「暂停时隐藏」时暂停直接缩进刘海,不经过收起态")
+        expectEqual(collapse(hide: true, fromCollapsed: true), true, "收起判据: 从收起的样子缩进去的那一次照旧算收起")
+        expectEqual(collapse(paused: false, collapses: false, adCollapses: true, ad: true), true, "收起判据: 广告看「广告时收起」")
+        expectEqual(collapse(paused: false, collapses: true, adCollapses: false, ad: true), false, "收起判据: 「暂停时收起」不连广告一起收")
+        expectEqual(collapse(expanded: true), false, "收起判据: 展开时一律不算收起")
+    }
+    do {
+        let chrome = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI/NotchChromeSource.swift"), encoding: .utf8)) ?? ""
+        let wiring = sourceBody("var cardLayout: NotchCardLayout {", in: chrome)
+        let pairs = ["metrics: NotchMetrics.cardLayout", "isCollapsed: isCollapsed", "isExpanded: isExpanded", "notchWidth: notchWidth",
+                     "contentTopInset: contentTopInset", "steadyCardWidth: steadyCardWidth", "expandedCardWidth: expandedCardWidth",
+                     "lyricRowHeight: lyricRowHeight", "expandedLyricListHeight: expandedLyricListHeight", "hasTrack: hasTrack",
+                     "isAdBreak: isAdBreakNow", "hasMilestone: milestone != nil", "hasTrackDrop: trackDrop != nil",
+                     "transientBannerActive: transientBannerActive", "showsProgressLine: showsProgressLine", "showsLyrics: showsLyrics",
+                     "trackHasLyricPreview: expandedShowsLyricPreview", "trackHasScrubber: expandedShowsScrubber",
+                     "expandedShowsNextLine: expandedShowsNextLine", "expandedShowsControls: expandedShowsControls",
+                     "trackInfoShowsArtwork: expandedTrackInfoShowsArtwork", "trackInfoShowsTitle: expandedTrackInfoShowsTitle",
+                     "trackInfoShowsArtist: expandedTrackInfoShowsArtist", "trackInfoShowsAlbum: expandedTrackInfoShowsAlbum",
+                     "expandedShowsQuickActions: expandedShowsQuickActions"]
+        expectEqual(pairs.filter { !wiring.contains($0) }, [], "卡片布局接线: 承载方每一项状态填进 NotchCardLayout 对应的参数(05 章决策 109)")
+    }
+
     // ---- NotchWidthBounds / NotchWidthRangeDrag:稳态宽 / 展开宽这一对的不变量 ----
     //
     // 「配置宽度的时候可以设置一个上限和一个下限,下限就是正常状态的宽度,上限就是悬浮展开
@@ -477,7 +601,7 @@ func runNotchTests() {
                     && controller.contains("height: max(geo.notchHeight + max(lyricRowHeight, expandedLyricListHeight) + expandedExtraHeightMax,"), true,
                     "高度接线: 真窗口订阅行高、字号、副行三项,窗口高度用实际行高")
         expectEqual(view.contains("var lyricRowHeight: CGFloat { get }")
-                    && view.contains("+ ((showsLyrics || expanded) ? (expanded && showsExpandedLyricList ? expandedLyricListHeight : lyricRowHeight)"), true,
+                    && view.contains("lyricRowHeight: lyricRowHeight,"), true,
                     "高度接线: chrome 给实际行高,卡片高度公式读它")
         expectEqual(stage.contains("var lyricRowHeight: CGFloat { AppSettings.shared.notchEffectiveLyricRowHeight }")
                     && sourceHas(stage, "chrome.contentTopInset + max(NotchLyricRowMetrics.rowHeight, chrome.expandedLyricListHeight)\n + chrome.expandedExtraHeightMax"),
@@ -1139,7 +1263,7 @@ func runNotchTests() {
             // 四处外形都从 chrome 的 cardOutline + NotchCornerLive 拼同一个形状。
             expectEqual(liveSrc.contains(".card(notchHeight: notchHeight, corner: corner(live))"), true, "外轮廓契约: 外形统一由 NotchCardOutline 拼成 .card")
             expectEqual(v.contains("content.clipShape(outline.shape(live))"), true, "外轮廓契约: 卡片自己那道裁剪用 .card")
-            expectEqual(v.contains("max(0, (cardWidth - notchWidth - topRowPadding * 2) / 2)")
+            expectEqual(v.contains("func earWidth(cardWidth: CGFloat) -> CGFloat { cardLayout.earWidth(cardWidth: cardWidth) }")
                         && v.contains("let earWidth = controller.earWidth(cardWidth: proxy.size.width)")
                         && v.contains(".padding(.horizontal, controller.topRowPadding)")
                         && v.contains("cardPadding: controller.topRowPadding,")
@@ -1237,8 +1361,8 @@ func runNotchTests() {
             expectEqual(confettiSrc.contains("dy: .random(in: NotchMetrics.milestoneConfettiDrop)")
                         && confettiSrc.contains("dx: .random(in: max(-60, -x)...min(60, max(0, cardWidth - size - x)))"), true,
                         "里程碑契约: 碎屑落多远跟窗口留的地方同一个常量,横向落点不出卡片")
-            expectEqual(v.contains("if milestone != nil { return contentTopInset + NotchMetrics.milestonePanelHeight }"), true,
-                        "里程碑契约: 报喜时卡片高度换成报喜面板那一档")
+            expectEqual(v.contains("hasMilestone: milestone != nil,"), true,
+                        "里程碑契约: 报喜状态交给 NotchCardLayout,卡片高度换成报喜面板那一档(数值见「卡片布局」)")
             expectEqual(stageSrc.contains("var milestone: ListenMilestone? { nil }"), true, "里程碑契约: 预览不报里程碑")
             expectEqual(centerSrc.contains("settings.notchOverlayEnabled && settings.notchListenMilestones")
                         && centerSrc.contains("!playback.isCurrentTrackAdBreak")
@@ -1284,7 +1408,7 @@ func runNotchTests() {
             expectEqual(portabilitySrc.contains("\"np:listenMilestoneLedger\","), true,
                         "里程碑契约: 报喜记账是机器本地状态,不随配置导出")
             // 换歌翻牌:掉歌名的接线与卡片高度;左耳的翻牌连广告时的喇叭一起画。
-            expectEqual(v.contains(": (trackDrop != nil || transientBannerActive ? NotchMetrics.trackDropHeight : 0))"), true,
+            expectEqual(v.contains("hasTrackDrop: trackDrop != nil,"), true,
                         "换歌翻牌契约: 关着歌词行时卡片为掉出来的歌名(或瞬态横幅)多长一截")
             expectEqual(stageSrc.contains("var trackDrop: NotchTrackDrop? { nil }"), true, "换歌翻牌契约: 预览不掉歌名")
             expectEqual(ctrlSrc.contains("&& AppSettings.shared.notchShowsTrackDrop")
@@ -1504,11 +1628,12 @@ func runNotchTests() {
         expectEqual(view.contains("var isAdBreakNow: Bool { get }"), true, "广告态契约: NotchChromeSource 声明 isAdBreakNow")
         // 广告期间头部只剩快捷操作那排键:四项曲目字段被 trackInfoShowsTrackFields 挡掉,快捷操作不受它管。
         // 高度算术与渲染两侧都得读这个值,漏一侧就是留一截空白或裁掉半截。
-        expectEqual(view.contains("var trackInfoShowsTrackFields: Bool { !isAdBreakNow }"), true,
+        expectEqual(view.contains("var trackInfoShowsTrackFields: Bool { cardLayout.trackInfoShowsTrackFields }")
+                    && view.contains("isAdBreak: isAdBreakNow,"), true,
                     "广告态契约: 头部四项曲目字段在广告期间不画")
-        expectEqual(view.contains("|| expandedShowsQuickActions)"), true,
+        expectEqual(view.contains("expandedShowsQuickActions: expandedShowsQuickActions)"), true,
                     "广告态契约: 快捷操作不受广告态挡(广告期间头部照样画那四颗键)")
-        expectEqual(view.contains("showsArtwork: fields && expandedTrackInfoShowsArtwork"), true,
+        expectEqual(view.contains("var expandedTrackInfoHeight: CGFloat { cardLayout.expandedTrackInfoHeight }"), true,
                     "广告态契约: 头部高度算术按广告态去掉四项曲目字段")
         expectEqual(view.contains("if controller.trackInfoShowsTrackFields, controller.expandedTrackInfoShowsArtwork"), true,
                     "广告态契约: 头部封面渲染读同一个判据")
@@ -2009,7 +2134,8 @@ func runNotchTests() {
                     && controller.components(separatedBy: "applyShowsLyrics()").count - 1 == 3, true,
                     "无歌词收起契约: 卡片读的 showsLyrics 由 Core 合成,「显示歌词」开关和无歌词两路变化都重算")
         expectEqual(controller.contains("subscriptions.removeAll()"), true, "无歌词收起契约: 副本 teardown 摘掉订阅")
-        expectEqual(sourceHas(controller, "((collapsesWhenPaused && !isPlayingNow && (!hideWhenNotPlaying || vanishesFromCollapsed))\n            || (collapsesDuringAds && isAdBreakNow)) && !isExpanded")
+        expectEqual(sourceHas(controller, "NotchCardLayout.isCollapsed(collapsesWhenPaused: collapsesWhenPaused, isPlaying: isPlayingNow,")
+                    && sourceHas(controller, "collapsesDuringAds: collapsesDuringAds, isAdBreak: isAdBreakNow, isExpanded: isExpanded)")
                     && sourceHas(controller, "AppSettings.shared.$notchCollapsesDuringAds.removeDuplicates().sink"), true,
                     "广告时收起契约: 暂停、广告各看各的开关,每个实例自己订阅「广告时收起」")
         let notchAppSettings = read("../Settings/AppSettings.swift")
@@ -2074,7 +2200,7 @@ func runNotchTests() {
                     "展开回读契约: 只在指针悬停展开时回读播放模式 / 喜欢,提醒、报喜撑开时不读")
         // 卡片宽度只有协议扩展一份公式,真窗口和控制器算屏幕矩形都读它。
         expectEqual(root.contains("private var cardWidth: CGFloat { controller.cardWidth }")
-                    && view.contains("return min(steadyCardWidth, notchWidth + 2 * NotchMetrics.collapsedEarWidth + 2 * NotchMetrics.cardHorizontalPadding)")
+                    && view.contains("var cardWidth: CGFloat { cardLayout.cardWidth }")
                     && controller.contains("return NSRect(x: window.frame.midX - cardWidth / 2"), true,
                     "卡片宽度契约: 收起态宽度只有 NotchChromeSource.cardWidth 一份,光标判定用的屏幕矩形也读它")
         // 歌词行高度那条订阅按副行的 sink 参数算展开区要不要留「下一句」。
@@ -2436,7 +2562,7 @@ func runNotchTests() {
                     true, "灵动岛五项: 输出设备横幅跟音量横幅一起跟着灵动岛总开关启停")
         expectEqual(audio.contains("monitor.$defaultID.removeDuplicates().dropFirst()"), true,
                     "灵动岛五项: 只报换了设备,不报开始监听时那一台")
-        expectEqual(v.contains("var showsBannerStrip: Bool {\n        transientBannerActive && hasTrack && !showsLyrics && !isExpanded && !isCollapsed && milestone == nil")
+        expectEqual(v.contains("var showsBannerStrip: Bool { cardLayout.showsBannerStrip }")
                     && ctrl.contains("lastAppliedShouldShow == true && !isVanished && !isCollapsed && hasTrack\n"), true,
                     "灵动岛五项: 关着歌词行时横幅画在卡片多长的那一截里,快捷键回声随之落在灵动岛上")
         expectEqual(ctrl.contains("if active { self.clearTrackDrop() }")
@@ -2458,8 +2584,8 @@ func runNotchTests() {
                     "灵动岛五项: 电台口白期间不显示收听次数")
         expectEqual(v.contains("durationMs: (playback.anchor?.durationMs).flatMap { $0 > 0 ? $0 : nil }"), true,
                     "灵动岛五项: 进度线有锚点时用锚点的时长")
-        expectEqual(v.contains("+ (!expanded && !showsLyrics && showsProgressLine ? NotchMetrics.progressLineStrip : 0)")
-                    && v.contains("showsProgressLine && hasTrack && !isExpanded && !isCollapsed && milestone == nil"), true,
+        expectEqual(v.contains("showsProgressLine: showsProgressLine,")
+                    && v.contains("var showsBottomProgressLine: Bool { cardLayout.showsBottomProgressLine }"), true,
                     "灵动岛五项: 进度线只在没展开时画,关着歌词行时卡片为它多长一截")
         expectEqual(sourceHas(v, "if controller.showsProgressLine {\n let shows = controller.showsBottomProgressLine")
                     && sourceHas(v, "active: surfaceVisible && shows, outline: controller.cardOutline)")
@@ -2515,16 +2641,16 @@ func runNotchTests() {
         func src(_ n: String) -> String { (try? String(contentsOf: uiDir.appendingPathComponent(n), encoding: .utf8)) ?? "" }
         let v = notchCardSource(src), ctrl = src("NotchLyricsWindowController.swift")
         let stage = notchStageSource(src), list = src("NotchExpandedLyricList.swift")
-        expectEqual(sourceHas(v, "var showsExpandedLyricList: Bool {\n expandedLyricListHeight > 0 && hasTrack && expandedShowsLyricPreview && !isAdBreakNow")
-                    && sourceHas(v, "expandedShowsLyricPreview && expandedShowsNextLine && expandedLyricListHeight == 0"), true,
+        expectEqual(sourceHas(v, "var showsExpandedLyricList: Bool { cardLayout.showsExpandedLyricList }")
+                    && sourceHas(v, "var showsExpandedLyricPreview: Bool { cardLayout.showsExpandedLyricPreview }"), true,
                     "多行歌词: 这首有歌词、不在广告时才换成列表,开着时不画下一句预览")
-        expectEqual(sourceHas(v, "+ ((showsLyrics || expanded) ? (expanded && showsExpandedLyricList ? expandedLyricListHeight : lyricRowHeight)")
+        expectEqual(sourceHas(v, "func cardHeight(expanded: Bool) -> CGFloat { cardLayout.cardHeight(expanded: expanded) }")
                     && sourceHas(v, "+ (showsList ? controller.expandedLyricListHeight : controller.lyricRowHeight))"), true,
                     "多行歌词: 卡片高度和展开区落点读同一个判据")
         expectEqual(sourceHas(v, ".modifier(NotchCardLayerActive(active: expanded && !showsList, staggered: staggered))"), true,
                     "多行歌词: 展开那份歌词行让给列表时藏着停表")
         expectEqual(sourceHas(ctrl, "height: max(geo.notchHeight + max(lyricRowHeight, expandedLyricListHeight) + expandedExtraHeightMax,")
-                    && sourceHas(v, "hasLyricPreviewPossible: expandedShowsNextLine && expandedLyricListHeight == 0,"), true,
+                    && sourceHas(v, "var expandedExtraHeightMax: CGFloat { cardLayout.expandedExtraHeightMax }"), true,
                     "多行歌词: 窗口按列表和歌词行里高的那个留,开着时不留下一句预览那一截")
         expectEqual(sourceHas(stage, "chrome.contentTopInset + max(NotchLyricRowMetrics.rowHeight, chrome.expandedLyricListHeight)")
                     && sourceHas(stage, "settings.notchExpandedLyricList = AppSettings.defaultNotchExpandedLyricList")

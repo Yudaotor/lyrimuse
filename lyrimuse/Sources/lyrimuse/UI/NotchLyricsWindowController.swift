@@ -95,16 +95,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 单独存一份而不是每次现读,是为了让下面的 isCollapsed 能写成计算属性。
     @Published private(set) var isPlayingNow: Bool = false
 
-    // 收起态:卡片只留顶行那一条高度,宽度收到两只耳朵(算法在 NotchChromeSource.cardWidth 的收起分支),
-    // 歌词行与展开区不渲染;hover 照样能展开出完整内容(含播放键)。
-    // 开关各自的作用:collapsesWhenPaused 关掉暂停时就不收;hideWhenNotPlaying 开着时暂停直接缩进刘海
-    // (isVanished)、不经过收起态;广告插播(isAdBreakNow)看 collapsesDuringAds。
-    //
-    // 必须是计算属性:hover 改 isExpanded 的那条路径(setExpandedFromWindow)不调 recomputeGeometry,
-    // 存成存储属性的话暂停时 hover 不会展开。
+    /// 收起态,判据在 `NotchCardLayout.isCollapsed`。必须是计算属性:hover 改 isExpanded 的那条路径(setExpandedFromWindow)
+    /// 不调 recomputeGeometry,存成存储属性的话暂停时 hover 不会展开。
     var isCollapsed: Bool {
-        ((collapsesWhenPaused && !isPlayingNow && (!hideWhenNotPlaying || vanishesFromCollapsed))
-            || (collapsesDuringAds && isAdBreakNow)) && !isExpanded
+        NotchCardLayout.isCollapsed(collapsesWhenPaused: collapsesWhenPaused, isPlaying: isPlayingNow,
+                                    hideWhenNotPlaying: hideWhenNotPlaying, vanishesFromCollapsed: vanishesFromCollapsed,
+                                    collapsesDuringAds: collapsesDuringAds, isAdBreak: isAdBreakNow, isExpanded: isExpanded)
     }
 
     /// 这一次缩进刘海是从收起态开始的:暂停着、已经收起时才打开「暂停时隐藏」。收起判据里 `!hideWhenNotPlaying` 那一项

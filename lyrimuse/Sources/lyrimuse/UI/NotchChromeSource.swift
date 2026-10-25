@@ -54,6 +54,10 @@ enum NotchMetrics {
     /// 展开态那一列内容(曲目信息头部、歌词行 / 多行歌词、进度条、控制键)的左右内边距。展开态顶行也收到这里,两只耳朵的外沿跟它们
     /// 对齐(`NotchChromeSource.topRowPadding`)。
     static let expandedContentInset: CGFloat = 16
+    /// 交给 Core `NotchCardLayout` 算卡片宽高的那几项固定尺寸。
+    static let cardLayout = NotchCardLayout.Metrics(
+        cardPadding: cardHorizontalPadding, contentInset: expandedContentInset, collapsedEarWidth: collapsedEarWidth,
+        milestonePanelHeight: milestonePanelHeight, trackDropHeight: trackDropHeight, progressLineStrip: progressLineStrip)
     /// 耳朵里「可配模块」与外缘那簇音浪之间的间距(音浪贴哪只耳朵可配,两只耳朵都用得到)。同样要进宽度下限的账(见 `minEarWidth`)。
     static let earWaveSpacing: CGFloat = 5
     /// 耳朵里那枚封面的边长(收起态右耳那枚、稳态耳朵配成「封面」时那枚,同一档)。
@@ -189,127 +193,37 @@ protocol NotchChromeSource: ObservableObject {
 }
 
 extension NotchChromeSource {
-    /// 那一行「正在播放」的歌词行(`lyricRow`,44pt 高)到底画不画 —— 用户关掉「显示歌词」时
-    /// 稳态确实该隐藏(退化成贴着刘海的状态栏,这是那个开关本来的意思);但**展开之后必须
-    /// 照常画**:只放开「下一句预览」那一行不够,这一行也被同一个开关挡着的话,展开后有下一句、
-    /// 却看不到正在播放的当前行。跟
-    /// `showsExpandedLyricPreview` 同一个道理:展开是用户主动选的动作,不该被"平时不想被
-    /// 歌词挡视线"这个理由连累。高度预留(`cardHeight`)和实际渲染(NotchLyricsView 的
-    /// `if controller.showsLyricRow`)必须用同一个值。
-    var showsLyricRow: Bool { hasTrack && (showsLyrics || isExpanded) }
-
-    /// 瞬态横幅画在卡片为它多长的那一截里:关着歌词行、没展开、没收起时(开着歌词行或展开时横幅盖在歌词行上)。
-    /// 高度预留(`cardHeight(expanded:)`)和渲染读同一个值。
-    var showsBannerStrip: Bool {
-        transientBannerActive && hasTrack && !showsLyrics && !isExpanded && !isCollapsed && milestone == nil
+    /// 把承载方此刻的状态填进 Core 的 `NotchCardLayout`:卡片宽高和各块画不画的公式都在那里(selftest 按数值断言),
+    /// 下面这些属性只是转发。真窗口和编辑台读的是同一份。
+    var cardLayout: NotchCardLayout {
+        NotchCardLayout(
+            metrics: NotchMetrics.cardLayout, isCollapsed: isCollapsed, isExpanded: isExpanded, notchWidth: notchWidth,
+            contentTopInset: contentTopInset, steadyCardWidth: steadyCardWidth, expandedCardWidth: expandedCardWidth,
+            lyricRowHeight: lyricRowHeight, expandedLyricListHeight: expandedLyricListHeight, hasTrack: hasTrack,
+            isAdBreak: isAdBreakNow, hasMilestone: milestone != nil, hasTrackDrop: trackDrop != nil,
+            transientBannerActive: transientBannerActive, showsProgressLine: showsProgressLine, showsLyrics: showsLyrics,
+            trackHasLyricPreview: expandedShowsLyricPreview, trackHasScrubber: expandedShowsScrubber,
+            expandedShowsNextLine: expandedShowsNextLine, expandedShowsControls: expandedShowsControls,
+            trackInfoShowsArtwork: expandedTrackInfoShowsArtwork, trackInfoShowsTitle: expandedTrackInfoShowsTitle,
+            trackInfoShowsArtist: expandedTrackInfoShowsArtist, trackInfoShowsAlbum: expandedTrackInfoShowsAlbum,
+            expandedShowsQuickActions: expandedShowsQuickActions)
     }
 
-    /// 底边那根进度线此刻画不画:开着「进度线」、有曲目,没展开(展开区有自己那条进度条)、没收起、没在报喜。
-    var showsBottomProgressLine: Bool {
-        showsProgressLine && hasTrack && !isExpanded && !isCollapsed && milestone == nil
-    }
-
-    /// 展开区里那行「下一句歌词预览」到底画不画 —— 只看这首歌**有没有歌词**,不受
-    /// 「显示歌词」那个开关影响(关掉稳态那一条歌词行之后,指向展开的
-    /// 效果得跟开着歌词时完全一样)。`showsLyrics` 只管稳态那 44pt 的行(见 `showsLyricRow`),
-    /// 不该连带影响展开区——展开是用户主动选的动作,他既然已经点开了,就不该因为"平时不想被
-    /// 歌词挡视线"这个理由被拿掉。高度预留和实际渲染必须读同一个值,否则要么多留一行的空白、
-    /// 要么把它裁掉半截。
-    ///
-    /// `expandedShowsNextLine` 是用户开关、`expandedShowsLyricPreview` 是曲目级数据,两者都成立才画。别把它塞进
-    /// `NotchExpandedMetrics.height` 的入参列表:那会让"这一段到底该不该占高度"有两个真源(一个在这里判、一个在 height()
-    /// 里判),这里判完的结果才是 height() 该吃的唯一输入。
-    ///
-    /// 开着「多行歌词」时这一行不画:列表里本来就有下一句(见 `showsExpandedLyricList`)。
-    var showsExpandedLyricPreview: Bool {
-        expandedShowsLyricPreview && expandedShowsNextLine && expandedLyricListHeight == 0
-    }
-
-    /// 展开时歌词那一格(当前句那一行 + 下一句预览)换成多行列表:开着「多行歌词」、这首有歌词、不在放广告。
-    /// 「有歌词」跟下一句预览是同一个曲目级信号(`expandedShowsLyricPreview`),一首歌里不变,卡片不会唱着唱着跳一下。
-    /// 不看「收起时显示歌词」:展开是用户主动选的动作,同 `showsLyricRow`。高度预留(`cardHeight(expanded:)`)和渲染
-    /// (`NotchLyricsView.cardBodyLayer`)读这同一个值。
-    var showsExpandedLyricList: Bool {
-        expandedLyricListHeight > 0 && hasTrack && expandedShowsLyricPreview && !isAdBreakNow
-    }
-
-    /// 头部那四项曲目字段(封面/歌名/歌手/专辑)此刻能不能画:广告期间一律不画,头部只剩
-    /// 快捷操作那排键(见 `isAdBreakNow`)。高度算术(`expandedTrackInfoHeight`)和渲染
-    /// (`trackInfoArtwork` / `trackInfoTextStack`)必须读同一个值,否则要么留一截空白、要么裁掉半截。
-    var trackInfoShowsTrackFields: Bool { !isAdBreakNow }
-
-    /// 展开区「曲目信息头部」到底画不画——此刻有曲目(没曲目时四者都是空的,画一块空头部没有意义,
-    /// 理由同 `showsLyricRow` 对 `hasTrack` 的处理),且五项(封面/歌名/歌手/专辑/快捷操作)里至少
-    /// 有一项此刻画得出来;广告期间只算快捷操作那一项(`trackInfoShowsTrackFields`)。
-    /// 广告态切换只改这里的算术、不改窗口几何 —— 窗口常驻最大尺寸(`expandedExtraHeightMax`),
-    /// 跟 `hasTrack` 那条空闲面板路一样不需要 `recomputeGeometry`。
-    var showsExpandedTrackInfo: Bool {
-        hasTrack
-            && ((trackInfoShowsTrackFields
-                 && (expandedTrackInfoShowsArtwork || expandedTrackInfoShowsTitle
-                     || expandedTrackInfoShowsArtist || expandedTrackInfoShowsAlbum))
-                // 快捷操作是头部的第五项:四项全关(或广告中)、只开它时头部就是一条按钮行。
-                || expandedShowsQuickActions)
-    }
-
-    /// 曲目信息头部按当前设置算出来的高度,`0` = 不画(见 `showsExpandedTrackInfo`)。单独抽出来是因为 `cardHeight` 和
-    /// `NotchLyricsWindowController.expandedExtraHeight` 都要用同一个值,两处各自现算必然漂。
-    var expandedTrackInfoHeight: CGFloat {
-        guard showsExpandedTrackInfo else { return 0 }
-        let fields = trackInfoShowsTrackFields
-        return NotchExpandedMetrics.trackInfoHeight(
-            showsArtwork: fields && expandedTrackInfoShowsArtwork,
-            showsTitle: fields && expandedTrackInfoShowsTitle,
-            showsArtist: fields && expandedTrackInfoShowsArtist,
-            showsAlbum: fields && expandedTrackInfoShowsAlbum,
-            showsActions: expandedShowsQuickActions)
-    }
-
-    /// 展开区按当前设置**最多**占多高(曲目级数据 —— 这首有没有下一句、有没有时长 —— 一律按「有」算)。真窗口常驻最大形态,
-    /// 窗口高度按它留(换到有歌词的歌时卡片才有地方长);编辑台舞台里卡片那一格也按它留。不看广告态:广告只是此刻少画四项。
-    /// 开着多行歌词时「下一句」预览不会出现(`showsExpandedLyricPreview`),不留它那一截。
-    var expandedExtraHeightMax: CGFloat {
-        NotchExpandedMetrics.maxHeight(
-            hasLyricPreviewPossible: expandedShowsNextLine && expandedLyricListHeight == 0,
-            hasControlsPossible: expandedShowsControls,
-            trackInfoHeight: NotchExpandedMetrics.trackInfoHeight(
-                showsArtwork: expandedTrackInfoShowsArtwork, showsTitle: expandedTrackInfoShowsTitle,
-                showsArtist: expandedTrackInfoShowsArtist, showsAlbum: expandedTrackInfoShowsAlbum,
-                showsActions: expandedShowsQuickActions))
-    }
-
-    /// 曲目信息头部要占的**总**高度(内容本身 + 上下各一份间距)——头部现在是独立渲染在
-    /// 歌词行**之上**的一块("新字段都在最上面,歌词行/下一句挪到
-    /// 最下面"),不再是 `expandedContent` 内部的第一个子视图,所以它自己的 `.frame(height:)`
-    /// 得包含"离下面歌词行的间距"这一截——跟 `NotchExpandedMetrics` 里
-    /// `lyricPreviewBlock`/`scrubberBlock` 那种"值本身含尾随间距"是同一个惯例。
-    /// `expandedContent` 自己那份 `NotchExpandedMetrics.height(...)` 调用因此永远传
-    /// `trackInfoHeight: 0`——这部分高度已经在这里算过一次,不能算两次。
-    ///
-    /// **上面那份间距**不能省:只留尾随间距的话,头部会紧挨在
-    /// 上面的 topRow 下面、零间距,标题首行贴到上边。跟 `NotchExpandedMetrics.height`
-    /// 的注释同步——两份间距都在 `trackInfoSpacing * 2` 里算过,渲染那侧
-    /// (`NotchLyricsView.trackInfoHeader`)只需要在内容顶部真的加一次 `.padding(.top:)`
-    /// 把上面那份"用出来",不需要在这里再调这个函数的返回值分配比例。
-    var expandedTrackInfoHeaderHeight: CGFloat {
-        let height = expandedTrackInfoHeight
-        return height > 0 ? height + NotchExpandedMetrics.trackInfoTopSpacing + NotchExpandedMetrics.trackInfoSpacing : 0
-    }
-
-    /// 顶行两侧此刻的内边距:稳态 / 收起 `cardHorizontalPadding`,展开态收到 `expandedContentInset`(展开宽够时),规则见
-    /// `NotchWidthBounds.topRowPadding`。顶行的 padding、耳宽公式、编辑台的耳朵热区都读它。
-    var topRowPadding: CGFloat {
-        NotchWidthBounds.topRowPadding(expanded: isExpanded, steadyWidth: steadyCardWidth, expandedWidth: expandedCardWidth,
-                                       cardPadding: NotchMetrics.cardHorizontalPadding,
-                                       contentInset: NotchMetrics.expandedContentInset)
-    }
-
-    /// 一只耳朵的宽度(两只恒等宽):卡片宽扣掉刘海空当和两侧内边距后平分。真窗口按 GeometryReader 给的此刻卡片宽算(尺寸动画
-    /// 逐帧跟着变),编辑台的耳朵热区按目标卡片宽算。内边距不能漏扣:漏了顶行比卡片宽 2×padding,ZStack 被撑宽,背景形状超出窗口,
-    /// 底部圆角被窗口裁成直角。
-    func earWidth(cardWidth: CGFloat) -> CGFloat {
-        max(0, (cardWidth - notchWidth - topRowPadding * 2) / 2)
-    }
+    var showsLyricRow: Bool { cardLayout.showsLyricRow }
+    var showsBannerStrip: Bool { cardLayout.showsBannerStrip }
+    var showsBottomProgressLine: Bool { cardLayout.showsBottomProgressLine }
+    var showsExpandedLyricPreview: Bool { cardLayout.showsExpandedLyricPreview }
+    var showsExpandedLyricList: Bool { cardLayout.showsExpandedLyricList }
+    var trackInfoShowsTrackFields: Bool { cardLayout.trackInfoShowsTrackFields }
+    var showsExpandedTrackInfo: Bool { cardLayout.showsExpandedTrackInfo }
+    var expandedTrackInfoHeight: CGFloat { cardLayout.expandedTrackInfoHeight }
+    var expandedTrackInfoHeaderHeight: CGFloat { cardLayout.expandedTrackInfoHeaderHeight }
+    var expandedExtraHeightMax: CGFloat { cardLayout.expandedExtraHeightMax }
+    var topRowPadding: CGFloat { cardLayout.topRowPadding }
+    func earWidth(cardWidth: CGFloat) -> CGFloat { cardLayout.earWidth(cardWidth: cardWidth) }
+    var cardWidth: CGFloat { cardLayout.cardWidth }
+    var cardHeight: CGFloat { cardLayout.cardHeight }
+    func cardHeight(expanded: Bool) -> CGFloat { cardLayout.cardHeight(expanded: expanded) }
 
     /// 卡片此刻是否顶在**宽度下限**上:稳态真实宽已经贴着宽度滑杆能拖到的下界(`NotchLyricsWindowController.usableWidthRange`,
     /// 量化取整已经算在里面)。音浪独占耳朵时只有这个状态居中于可视耳朵段,其余一律贴外缘(`NotchWidthBounds.soloEqualizerInset`)。
@@ -323,47 +237,5 @@ extension NotchChromeSource {
     var cardOutline: NotchCardOutline {
         NotchCardOutline(notchHeight: contentTopInset, collapsedHeight: cardHeight(expanded: false),
                          expandedHeight: cardHeight(expanded: true), isExpanded: isExpanded)
-    }
-
-    /// 卡片当前宽度,全仓唯一一份公式:真窗口(NotchWindowRoot)画卡片、控制器算卡片在屏幕上的矩形(`cardScreenFrame`)都读它。
-    /// 收起态收到两只耳朵,展开态取展开宽。
-    var cardWidth: CGFloat {
-        if isCollapsed {
-            return min(steadyCardWidth, notchWidth + 2 * NotchMetrics.collapsedEarWidth + 2 * NotchMetrics.cardHorizontalPadding)
-        }
-        return isExpanded ? expandedCardWidth : steadyCardWidth
-    }
-
-    /// 卡片当前高度,全仓唯一一份公式:真窗口(NotchWindowRoot)和设置页编辑台(NotchEditorStage)都读它。两处各写一份必然漂,
-    /// 漂的表现是行不见了高度还留着、或反过来把行裁掉半截。
-    var cardHeight: CGFloat {
-        if isCollapsed { return contentTopInset }
-        if milestone != nil { return contentTopInset + NotchMetrics.milestonePanelHeight }
-        return cardHeight(expanded: isExpanded)
-    }
-
-    /// 没展开 / 展开某一种形态下的卡片高度(不看收起态)。`cardHeight` 和圆角两态的高度(`cardOutline`)都走这里。
-    func cardHeight(expanded: Bool) -> CGFloat {
-        // 没有曲目(决策 #31):展开只长出「空闲面板」那一块。走下面的通式的话,歌词行本来就被 hasTrack 守着不留,但展开区照常按
-        // "三键 + 进度条"留 59～76pt,而那块内容(`cardBodyLayer`)整个被 hasTrack 挡掉,hover 上去会长出一大块什么都没有的黑。
-        // 高度预留与实际渲染(`idleExpandedPanel` 的 frame)读同一个值。
-        if !hasTrack {
-            return contentTopInset + (expanded ? NotchExpandedMetrics.idlePanelHeight : 0)
-        }
-        return contentTopInset
-            // 稳态歌词行要不要留高度,同 showsLyricRow(展开时哪怕关着「显示歌词」也要留;这里已经有曲目)。
-            // 展开且开着多行歌词时,这一格换成列表的高度(`showsExpandedLyricList`)。
-            + ((showsLyrics || expanded) ? (expanded && showsExpandedLyricList ? expandedLyricListHeight : lyricRowHeight)
-               // 换歌翻牌、瞬态横幅:关着歌词行时为掉出来的歌名 / 横幅多长一截(开着时盖在歌词行上,不用另长)。
-               : (trackDrop != nil || transientBannerActive ? NotchMetrics.trackDropHeight : 0))
-            // 进度线:关着歌词行时卡片底边就是刘海下沿,线在刘海那一段会被挡住,往下多长一截让它整根露出来。
-            + (!expanded && !showsLyrics && showsProgressLine ? NotchMetrics.progressLineStrip : 0)
-            + (expanded
-               ? NotchExpandedMetrics.height(
-                   hasLyricPreview: showsExpandedLyricPreview,
-                   hasScrubber: expandedShowsScrubber,
-                   hasControls: expandedShowsControls,
-                   trackInfoHeight: expandedTrackInfoHeight)
-               : 0)
     }
 }
