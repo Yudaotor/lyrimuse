@@ -1953,8 +1953,8 @@ func lyricPrimaryQueryArtist(artist string) string {
 // 只保留通用机制(canonicalArtistViaMusicBrainz/cachedQQArtistCanonicalName,见
 // resolveGenericArtistCanonicalName 头注)覆盖不了、或会给出错误答案的六条残留案例——
 // 能靠通用机制查到且结果正确的都已删表交给通用机制处理。这两条通用机制(MusicBrainz +
-// QQ)对这六条有的查不到/帮不上,有的更危险——会**直接给出错误答案**(david tao 一度被
-// MusicBrainz 排到一个无关的德国音乐人头上,不过那条本身返回空、QQ 能正常接手;真正会让
+// QQ)对这六条有的查不到/帮不上,有的更危险——会**直接给出错误答案**(david tao 在
+// MusicBrainz 上会排到一个无关的德国音乐人头上,不过那条本身返回空、QQ 能正常接手;真正会让
 // resolveGenericArtistCanonicalName 提前止步于错误答案的是 lexie liu 和 wanting,见各自
 // 条目注释)——只能继续手工登记,而且这张表必须排在通用机制**前面**查,不能只当兜底:
 var artistAliasTable = map[string]string{

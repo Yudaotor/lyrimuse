@@ -363,7 +363,7 @@ func fetchAppleAlbumHintCandidatesTracked(ctx context.Context, artist, title str
 // appleAlbumHintQueryConcluded:一次候选查询的结果能不能下结论。有候选自然算;空结果只在「至少一个请求真的到了
 // 对面、对面回了话」时才算「Apple 目录里没有」—— 复用 lyricsRoundConfirmsNoResult 那条判据,不另起口径:四个
 // Search 全是传输层失败(断网 / DNS 挂 / ctx 已取消),或者一个请求都没发出去,都不构成证据。
-// 并发混入别的 goroutine 的成功只会让空结果更容易被判成算数,即退回改前的行为,方向上不会更差。
+// 并发混入别的 goroutine 的成功只会让空结果更容易被判成算数(最坏等于不设这道判据、空结果一律算数),方向上不会更差。
 func appleAlbumHintQueryConcluded(n int, attempts, failures int32) bool {
 	return n > 0 || lyricsRoundConfirmsNoResult(attempts, failures)
 }

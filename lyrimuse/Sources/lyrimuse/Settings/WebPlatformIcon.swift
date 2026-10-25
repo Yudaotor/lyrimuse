@@ -7,7 +7,7 @@ import LyrimuseCore
 /// **private** 结构体上的一组 static,而引导页「选择播放器」那一格 YouTube Music 要用同一张图
 /// ("这里也给我加上 youtube music 的选项"),private 类型外面够不着。
 ///
-/// 一度想只把查表函数放开成 internal 了事,行不通:`youtubeMusicIcon` 依赖同文件里的
+/// 别只把查表函数放开成 internal:`youtubeMusicIcon` 依赖同文件里的
 /// `whiteFilledCutouts`(垫白那一步,理由见它的头注),拆开放会把"这张图该长什么样"这件事
 /// 劈成两处。整块搬走之后,两个宿主读同一份实现。
 @MainActor

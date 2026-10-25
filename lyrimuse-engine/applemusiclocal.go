@@ -23,8 +23,7 @@ import (
 //
 // **不是"拿到现在拿不到的逐字"**。这个仓库本来就有逐字:同样那 5 首歌,netease/qq/kugou
 // 给出的 lyrics_yrc 分别是 11212 / 8058 / 6409 / 5826 字,量比 Apple 这份还大。
-// (此处一度写成"lyrimuse 逐字 0 字、译文 0 字" —— 那是统计时读错了字段名
-// (`yrc`/`translation`,真实字段是 `lyrics_yrc`/`lyrics_tr`)得出的结论,不成立。)
+// (统计时字段名是 `lyrics_yrc` / `lyrics_tr`,不是 `yrc` / `translation`;读错字段会得出「逐字 0 字、译文 0 字」。)
 //
 // 真实的增量是三条,都比"填补空白"小:
 //

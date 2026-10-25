@@ -3167,8 +3167,8 @@ struct LyricsWindowView: View {
             // 滚动跟 scrollLineIndex 走而不是 currentLineIndex(对拍 AM):
             // AM 的滚动**先于**染色 —— 一句唱完、下一句还没开始的空档里页面已经滚到下一句
             // 的位置,开唱那一刻只染色、不再滚动。scrollLineIndex 在空档里提前指向下一行
-            // (逐字歌词才知道"唱完"是几点;行级 LRC 不抢跑,两个下标恒等,行为跟改前
-            // 一致),染色/加粗/虚化仍全部看 currentLineIndex。
+            // (逐字歌词才知道"唱完"是几点;行级 LRC 不抢跑,两个下标恒等),
+            // 染色/加粗/虚化仍全部看 currentLineIndex。
             .onChange(of: playback.scrollLineIndex) { old, new in
                 // 窗口面不可见时不做滚动动画(没人看,被遮住/最小化的窗口也不会去合成),
                 // 直接定位;并记一笔,恢复可见时再无动画定位一次兜底(已知坑 #17)。

@@ -21,8 +21,8 @@ func TestRepairQRCLeftoverTokens(t *testing.T) {
 }
 
 // `[kana:…]` 假名标注行里的 `(起始,时长)` **本来就是两数字**,那是它的正常写法。
-// 误修会把假名标注打烂 —— 排查这个问题时我一度把这类行统计成"残缺",本机缓存里有 52 条
-// 酷狗条目带这种行。这条用例就是那道防线。
+// 误修会把假名标注打烂;本机缓存里有 52 条酷狗条目带这种行,别把它们统计成「残缺」。
+// 这条用例就是那道防线。
 func TestRepairQRCLeftoverTokensLeavesKanaLine(t *testing.T) {
 	const kana = "[kana:1せん1き(1119,196)ゃ(1315,196)く(1512,415)1ばん1ら(2311,432)い(2743,204)]"
 	if got, changed := repairQRCLeftoverTokens(kana); changed || got != kana {
