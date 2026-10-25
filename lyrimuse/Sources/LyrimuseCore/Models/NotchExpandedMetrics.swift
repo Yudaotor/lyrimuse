@@ -77,8 +77,7 @@ public enum NotchExpandedMetrics {
     public static let trackInfoAlbumLineHeight: CGFloat = 11
     /// 文字块内部,行与行之间的间距(跟耳朵/歌词那些跑马灯文字的紧凑行距是同一个尺度)。
     public static let trackInfoLineSpacing: CGFloat = 1
-    /// 头部右侧那排「快捷操作」按钮的高度(用户圈出头部右边那块空地:「塞进一些
-    /// 按钮进去…关闭灵动岛、打开设置、搜索歌词、是否显示歌词」)。22 = 展开区播放控制三键的
+    /// 头部右侧那排「快捷操作」按钮(搜索歌词、显示歌词、设置、关闭)的高度。22 = 展开区播放控制三键的
     /// 命中尺寸(`NotchLyricsView.expandedContent` 里 `controlButton(hitSize: 22)`),同一张卡上
     /// 的图标键用同一档。它参与头部高度的 `max`:四个曲目信息项全关、只开快捷操作时,头部退化成
     /// 一条 22pt 高、靠右的按钮行。
@@ -86,12 +85,8 @@ public enum NotchExpandedMetrics {
 
     /// 曲目信息头部要占多高 —— 四个开关(封面/歌名/歌手/专辑)现算,不查表。
     ///
-    /// **封面落点反复过**:最初设计里就带一枚,看过效果后发现"跟歌词行末尾已有的
-    /// 那枚封面重复了",要求并回那一枚(`notchLyricRowShowsArtwork`,只影响
-    /// `NotchLyricsView.lyricRowContent` 内部排列,曾一度不参与这个函数的高度算术);过了
-    /// 后来又要在展开态里单独加一个显示封面,于是重新给头部配上**自己**的一枚,
-    /// 这次没有位置四选一——固定贴文字块左边,所以高度算术只需要"封面和文字块谁更高"的
-    /// `max`,不需要"并排/堆叠"两种模式的复杂度。
+    /// 头部封面是**自己**的一枚,跟歌词行末尾那枚(`notchLyricRowShowsArtwork`,只影响歌词行内部排列、不进这里的算术)
+    /// 是两个独立开关。它固定贴文字块左边、没有位置可选,所以高度只要「封面和文字块谁更高」的 `max`。
     ///
     /// 每一项的高度只看"这个开关开没开",不看"这首歌这个字段是不是空字符串/有没有
     /// 封面数据"——跟 `height(hasLyricPreview:hasScrubber:)` 那条"曲目级信号,不是此刻
@@ -100,7 +95,7 @@ public enum NotchExpandedMetrics {
     ///
     /// `showsActions`:头部右侧那排快捷操作按钮。跟封面一样是**并排**的第三块,
     /// 取 `max` 不取和 —— 三行文字(14+12+11+2 = 39)本来就比它(22)高,常见配置下开关它不改高度;
-    /// 只有文字项全关(或只开一两行矮的)时它才是决定高度的那一块。默认 `false`,老调用点一字不改。
+    /// 只有文字项全关(或只开一两行矮的)时它才是决定高度的那一块。
     public static func trackInfoHeight(showsArtwork: Bool, showsTitle: Bool, showsArtist: Bool, showsAlbum: Bool,
                                        showsActions: Bool = false) -> CGFloat {
         var textHeight: CGFloat = 0

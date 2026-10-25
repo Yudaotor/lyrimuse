@@ -859,8 +859,7 @@ struct NotchEditorStage: View {
     /// 跟渲染同一份的度量(`contentTopInset` / `expandedTrackInfoHeaderHeight` / `lyricRowHeight` /
     /// `NotchExpandedMetrics.lyricPreviewBlock` / `cardHeight`),不另写数字 —— 渲染那边一改这里就跟着对。
     ///
-    /// 「下一句预览」划给**歌词行**那块、不划给展开态(「这个框不应该把这个歌词行也包括
-    /// 进去。选中歌词行的时候,应该把下面那个下一行歌词也包进去」):它在用户眼里是"第二行歌词",跟
+    /// 「下一句预览」划给**歌词行**那块、不划给展开态:它看起来是"第二行歌词",跟
     /// 上面那行是一回事;而且「歌词行」浮层里的「对齐方式」确实也管它。它的开关(`notchExpandedShowsNextLine`)
     /// 仍在「展开态」浮层里,没跟着搬。
     private struct CardHotspot: Identifiable {

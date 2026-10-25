@@ -552,7 +552,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     ///  ① **展开态不画** —— 那时 `adStatusColumn` 右端就是那颗真的「跳过广告」键,再加一枚图标是重复。
     ///  ② **稳态歌词行画得出来时也不画** —— 开着「显示歌词」的人,稳态那份 `lyricRow` 渲染的就是
     ///     `adStatusColumn`(带真键),同理重复。关着的人稳态只剩顶行,那枚喇叭是广告这件事在卡上
-    ///     唯一的落点,提示只能挂在它旁边(用户正是这一档:`notchShowLyrics = 0`)。
+    ///     唯一的落点,提示只能挂在它旁边。
     ///
     /// 刻意**只是个标记、不接点击**:稳态下指针一压上来卡片就展开了,这一格根本没有"被点到"的时机,
     /// 做成按钮只会是又一段永不触发的死代码(同喇叭那条、同悬浮窗那排按钮为什么不是 Button)。
@@ -560,7 +560,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         playback.canSkipAd && !controller.isExpanded && !controller.showsLyrics
     }
 
-    /// 没有曲目时左耳里的 App 图标(用户圈图要的「左侧显示我们的图标」)。
+    /// 没有曲目时左耳里的 App 图标。
     ///
     /// 图标取 `NSApplication.shared.applicationIconImage`(bundle 里的 AppIcon.icns),但**不**直接
     /// `Image(nsImage:).resizable()` 缩 —— 那样 1024px 那档位图会被
@@ -690,9 +690,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 时间类必须套:不套的话每秒跳一格数字宽度就变、整行跟着抖。
     /// 条件收进 **Font 值本身**(`Font.monospacedDigit()` 返回 Font),不走 `if/else` 也不走
     /// `ViewModifier` + `AnyView`:那两种都会在视图树上多一层类型/身份变化,而这里变的只是
-    /// 一个字体属性。(一度写成 `ConditionalMonospacedDigit` 那样一个 modifier,
-    /// 附的理由是"避免分支切换整块重建" —— 那个理由是假的:`isClock` 一变,上面 `earContent`
-    /// 的分支本来就先换了,子树无论如何都要重建。)
+    /// 一个字体属性。别为「避免分支切换整块重建」改回 modifier:`isClock` 一变,上面 `earContent` 的分支本来就先换了,
+    /// 子树无论如何都要重建。
     private func earText(_ text: String, module: NotchEarModule, alignment: Alignment) -> some View {
         let base = Font.system(size: 11.5, weight: module.isPrimary ? .semibold : .medium)
         return LayerMarquee(id: text, restingAlignment: alignment, isActive: surfaceVisible) {
@@ -819,8 +818,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         // —— 那样稳态下最高的那块(展开区)会把整体撑到 220pt、居中后歌词行被顶到卡片上方裁没了,
         // 展开态头部落到了卡片中段。
         return ZStack(alignment: .top) {
-            // 曲目信息头部(歌名/歌手/专辑):画在歌词行**之上**——"新加的这些字段元素都是
-            // 在最上面,然后歌词行和下一行歌词这些都放在最下面"。只在展开时可见:展开是用户主动选的动作。
+            // 曲目信息头部(歌名/歌手/专辑):画在歌词行**之上**,歌词行和下一句在它下面。只在展开时可见。
             if controller.showsExpandedTrackInfo {
                 trackInfoHeader
                     .frame(width: controller.expandedCardWidth, height: headerHeight, alignment: .top)
@@ -1612,10 +1610,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         }
     }
 
-    /// 没有曲目时 hover 展开出来的那一块(现象是「没有播放的展开状态目前看起来不是很友好」)。
-    ///
-    /// 改前的样子:`cardHeight` 照有曲目的通式给展开区留"三键 + 进度条"的 59～76pt,而那块内容整个被
-    /// `hasTrack` 挡掉 —— hover 上去长出一大块什么都没有的黑。现在只长出这一块,排法照曲目信息头部
+    /// 没有曲目时 hover 展开出来的那一块。卡片高度给它留的就是这一块(`cardHeight(expanded:)` 的无曲目分支),
+    /// 不照有曲目的通式留「三键 + 进度条」—— 那块内容整个被 `hasTrack` 挡掉,留了就是一大块空黑。排法照曲目信息头部
     /// (`trackInfoHeader`):左边两行字、右边一排 22pt 图标键,左内边距同样是歌词那一列的 16pt,上面留
     /// `trackInfoTopSpacing`,下面留 `idlePanelBottomSpacing`(它贴底,4pt 太紧)—— 有曲目和没曲目时
     /// 展开出来的是"同一个位置上的同一种东西",不是两套版式。

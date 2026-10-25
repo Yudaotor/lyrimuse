@@ -170,8 +170,7 @@ protocol NotchChromeSource: ObservableObject {
     /// 展开区「曲目信息头部」四个独立开关(封面/歌名/歌手/专辑),同上均走 chrome 现读设置。
     /// 这枚封面(`expandedTrackInfoShowsArtwork`)**不是**歌词行末尾那枚
     /// (`lyricRowShowsArtwork`/`lyricRowArtworkPosition`,走 `NotchPlayback` 而不是这个
-    /// 协议)——两枚封面是独立开关,可以同时开,详见 `AppSettings.notchExpandedShowsArtwork`
-    /// 上面那段的落点简史。
+    /// 协议)——两枚封面是独立开关,可以同时开,见 `AppSettings.notchExpandedShowsArtwork`。
     var expandedTrackInfoShowsArtwork: Bool { get }
     var expandedTrackInfoShowsTitle: Bool { get }
     var expandedTrackInfoShowsArtist: Bool { get }
@@ -192,9 +191,8 @@ protocol NotchChromeSource: ObservableObject {
 extension NotchChromeSource {
     /// 那一行「正在播放」的歌词行(`lyricRow`,44pt 高)到底画不画 —— 用户关掉「显示歌词」时
     /// 稳态确实该隐藏(退化成贴着刘海的状态栏,这是那个开关本来的意思);但**展开之后必须
-    /// 照常画**(回归护栏:只放开「下一句预览」那一行是不够的,这一行
-    /// 也被同一个开关挡着,表现是"展开后有下一句、却看不到正在播放的当前行"这种更怪的
-    /// 半吊子状态——「展开只有一行歌词了，正在播放的那行被你搞没了」)。跟
+    /// 照常画**:只放开「下一句预览」那一行不够,这一行也被同一个开关挡着的话,展开后有下一句、
+    /// 却看不到正在播放的当前行。跟
     /// `showsExpandedLyricPreview` 同一个道理:展开是用户主动选的动作,不该被"平时不想被
     /// 歌词挡视线"这个理由连累。高度预留(`cardHeight`)和实际渲染(NotchLyricsView 的
     /// `if controller.showsLyricRow`)必须用同一个值。
