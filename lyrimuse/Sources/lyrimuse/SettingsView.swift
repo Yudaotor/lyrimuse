@@ -2201,9 +2201,12 @@ private struct LyricsSettingsTab: View {
     }
 
     /// 一个播放器的偏移。没单独配过时显示「跟随「全部播放器」」,步进器里是「全部播放器」那档的值(灰字),
-    /// 按一下就从那个值起改成它自己的一档;单独配过的尾部多一颗 ×,改回跟随。
+    /// 按一下就从那个值起改成它自己的一档;单独配过的尾部多一颗 ×,改回跟随。刚从菜单加进来、还跟随着的
+    /// 那一行也有 ×,作用是把这一行拿掉。
     private func playerOffsetRow(_ bundleID: String) -> some View {
         let follows = offsetFollowsGlobal(bundleID)
+        let removable = follows && addedOffsetPlayers.contains(bundleID)
+        let xLabel = removable ? L10n.t("移除") : L10n.t("改回跟随「全部播放器」")
         let name = playerDisplayName(bundleID)
         return SettingsRow(
             icon: "app",
@@ -2212,7 +2215,7 @@ private struct LyricsSettingsTab: View {
             subtitle: follows ? L10n.t("跟随「全部播放器」") : nil
         ) {
             HStack(spacing: 8) {
-                if !follows {
+                if !follows || removable {
                     Button {
                         setOffset(0, scope: bundleID)
                         addedOffsetPlayers.removeAll { $0 == bundleID }
@@ -2221,8 +2224,8 @@ private struct LyricsSettingsTab: View {
                             .font(.system(size: 9, weight: .semibold))
                     }
                     .buttonStyle(.glassIcon())
-                    .help(L10n.t("改回跟随「全部播放器」"))
-                    .accessibilityLabel(L10n.t("改回跟随「全部播放器」"))
+                    .help(xLabel)
+                    .accessibilityLabel(xLabel)
                 }
                 offsetStepper(scope: bundleID)
             }
@@ -2551,14 +2554,18 @@ private struct LyricsSettingsTab: View {
                 if let lyricsSource = source.source {
                     sourceTileContent(lyricsSource)
                 } else {
-                    Image(systemName: "play.rectangle")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 15, height: 15)
-                        .padding(.leading, 6)
-                    Text(L10n.t("播放器自带歌词"))
-                        .font(.system(size: 12.5))
-                        .hoverNote(L10n.t("KKBOX、Spotify、Amazon Music、洛雪音乐自己缓存的歌词"))
+                    // 间距和内边距照 sourceCheckbox 的格子写,这一行才跟上下的来源行一样高、图标文字对齐。
+                    HStack(spacing: 5) {
+                        Image(systemName: "play.rectangle")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 15, height: 15)
+                        Text(L10n.t("播放器自带歌词"))
+                            .font(.system(size: 12.5))
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 6)
+                    .hoverNote(L10n.t("KKBOX、Spotify、Amazon Music、洛雪音乐自己缓存的歌词"))
                     Spacer()
                 }
                 // 箭头保留:键盘 / VoiceOver 的通路。把手是 Image 不是按钮,VoiceOver 操作不了它。
