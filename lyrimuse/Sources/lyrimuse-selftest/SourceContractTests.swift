@@ -3732,7 +3732,7 @@ func runSourceContractSettingsTests() {
     // (机制、代价与离屏实测见 `EditorToolbarResetReserve` 头注)。占位漏掉既不报错也不影响功能,
     // 只会让两行按钮重新错开一截 —— 正是那种下次重排工具栏时会被顺手删掉、且没人看得出来的东西。
     // 悬浮歌词不在这里:它第二行五颗、第一行三颗,本来对不成列,放了占位只会把五颗的摘要一起压成「…」(19 章决策 19)。
-    // 菜单栏只有一行(四颗加「重置 ▾」,06 章决策 66),不该再有占位。
+    // 菜单栏第二行两颗、第一行三颗,第二行再补一颗隐藏副本凑成同列数。
     do {
         let sourcesDir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -3742,10 +3742,8 @@ func runSourceContractSettingsTests() {
         expectEqual(notch != nil && menuBar != nil, true, "工具栏对齐闸: 两段编辑台的文件都读得到(读不到 = 路径挪了)")
         expectEqual(notch?.contains("EditorToolbarResetReserve()"), true,
                     "工具栏对齐闸: 灵动岛工具栏第二行末尾要有 EditorToolbarResetReserve(),否则这一行整体比第一行宽出「重置 ▾」那一截")
-        expectEqual(menuBar.map { $0.contains("EditorToolbarResetReserve()") || $0.contains("toolbarGhostButton(") }, false,
-                    "工具栏对齐闸: 菜单栏工具栏只有一行,不留第二行的占位")
-        expectEqual(menuBar.map { $0.contains("target: .behavior") && !$0.contains("toolbarRow2") }, true,
-                    "工具栏对齐闸: 菜单栏「行为」在唯一那一行里")
+        expectEqual(menuBar.map { $0.contains("EditorToolbarResetReserve()") && $0.contains("toolbarGhostButton(icon:") }, true,
+                    "工具栏对齐闸: 菜单栏工具栏第二行末尾要有第一行第三颗的隐藏副本和 EditorToolbarResetReserve(),否则两颗比上面宽一截")
     }
 
     // ---- 液态玻璃门控(AGENTS.md「分层边界」成文的那条)----

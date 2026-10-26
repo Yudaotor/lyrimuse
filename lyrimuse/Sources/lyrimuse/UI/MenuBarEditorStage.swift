@@ -10,8 +10,8 @@ import LyrimuseCore
 /// 页顶的固定头部里、点不动。这里的做法是"挪位置 + 换外壳"——把它搬进可滚动内容区,外面套
 /// 一圈工具栏(浮层入口 + 重置)和宽度调整条,不重新实现预览本身。
 ///
-/// 工具栏一行:「布局」「内容」「配色」「字体」「行为」五个浮层入口 +「重置 ▾」(06 章决策 66、67)。
-/// 分组按卡片解剖:「布局」= 这一格放在哪、多宽;「内容」= 格子里显示什么(歌词还是歌名、副行、
+/// 工具栏两行,按「全部设置」抽屉的顺序排:第一行「布局」「内容」「配色」+「重置 ▾」,第二行「字体」「行为」
+/// (06 章决策 66、67、68)。分组按卡片解剖:「布局」= 这一格放在哪、多宽;「内容」= 格子里显示什么(歌词还是歌名、副行、
 /// 旁边的进度图标);「配色」= 颜色;「字体」= 字长什么样;「行为」= 什么状态下显示什么。
 @MainActor
 struct MenuBarEditorStage: View {
@@ -22,9 +22,13 @@ struct MenuBarEditorStage: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            toolbar
-                .overlay(alignment: .top) { probeAnchor(toolbarProbe) }
-                .editorToolbarGlassGroup()
+            VStack(alignment: .leading, spacing: 10) {
+                toolbar
+                    .overlay(alignment: .top) { probeAnchor(row1Probe) }
+                toolbarRow2
+                    .overlay(alignment: .top) { probeAnchor(row2Probe) }
+            }
+            .editorToolbarGlassGroup()
             // 宽度调整条注入给预览条、浮在预览框底部那条通道里,不在这里 overlay 在外面:壁纸底要包住它,
             // 背景 / 高度 / 圆角只能由预览条一处算(见 MenuBarPreviewBar.lane)。
             MenuBarPreviewBar(reservesWidthLane: true) {
@@ -35,18 +39,11 @@ struct MenuBarEditorStage: View {
 
     // MARK: - 工具栏
 
-    /// 「布局」「内容」「配色」「字体」「行为」五个浮层入口 + 「重置 ▾」。按钮宽度在这一行里平分,放不下时
-    /// 只压摘要(`EditorToolbarButtonLabel` 里摘要 `.layoutPriority(-1)`),标题不截;再加入口或把哪个
-    /// 标题改长,先在 499pt 窄档、英文界面下看一眼。
+    /// 第一行:「布局」「内容」「配色」三个浮层入口 + 「重置 ▾」。五颗挤在一行时每颗的摘要都被压成半截,
+    /// 所以分两行。按钮宽度在一行里平分,放不下时只压摘要(`EditorToolbarButtonLabel` 里摘要
+    /// `.layoutPriority(-1)`),标题不截;再加入口或把哪个标题改长,先在 499pt 窄档、英文界面下看一眼。
     private var toolbar: some View {
         HStack(spacing: 8) {
-            // 从「宽度模式」改叫「布局」:这个浮层里现在有三行 —— 宽度模式、
-            // 对齐方式(固定宽度时)、歌词旁的图标。前两行还能算"宽度模式和它的从属选项",
-            // 第三行不是,再挂在「宽度模式」这个标题下面就名不副实了。摘要仍然给宽度模式
-            // (三项里最结构性的那个),跟改名前逐字一致。
-            //
-            // 改名顺带**更省**:「布局」比「宽度模式」少两个字,英文 Layout 也比 Width Mode 短 ——
-            // 省下的正是第三个入口「粗细」要用的预算(账见 toolbar 头注)。
             toolbarButton(
                 icon: "arrow.left.and.right.circle",
                 title: L10n.t("布局"),
@@ -68,10 +65,27 @@ struct MenuBarEditorStage: View {
                 summary: colorSummary,
                 target: .color
             )
-            // 「字体」(用户指着「配色」右边的空位:「把粗细加在这里」;当晚又加字号:
-            // 「帮我再加上字体大小吧,也归类到字体这个下拉选项里面去,替换现在粗细这个大标题」)。
-            // 「粗细」**不放**在「配色」浮层头一行,要跟另外两个同款、做成独立入口。图标跟
-            // 悬浮歌词工具栏「文字」入口同一个 textformat —— 两边都是"这行字本身长什么样"。
+            Spacer(minLength: 8)
+            // 「重置 ▾」逐字复刻悬浮歌词/灵动岛工具栏那颗:Menu 里一条恢复动作 + 一条不可点的
+            // 作用范围说明。范围文案复用灵动岛那条"不含宽度和总开关"——两边排除的东西逐字
+            // 相同(结构性宽度设置 + 总开关),没必要另造一句意思一样的话。
+            //
+            // 动作标题就叫「恢复默认」,范围由下面那条不可点的说明项(「不含宽度和总开关」)交代。
+            // 「简约克制」专项把三个编辑台(悬浮 / 灵动岛 / 菜单栏)的这颗按钮统一成这四个字:
+            // 此前这里念的是工具栏四个入口的名字(「恢复默认布局、配色、字体与行为」),
+            // 更早叫「恢复默认宽度模式与配色」—— 两版都在标题里列举范围,越列越长,而排除项那一行
+            // 本来就在菜单里,标题再列一遍是重复。范围本身(这个编辑台除宽度和总开关外的全部)不变。
+            EditorToolbarResetMenu(scope: L10n.t("不含宽度和总开关")) { MenuBarStyleDefaults.restoreDefaults() }
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 2)
+    }
+
+    /// 第二行:「字体」「行为」,跟第一行逐列对齐。按钮宽度是一行之内平分出来的,末尾补一颗第一行第三颗的
+    /// 隐藏副本和 `EditorToolbarResetReserve`,两颗才跟上面的「布局」「内容」同宽;空位只留在最后。
+    private var toolbarRow2: some View {
+        HStack(spacing: 8) {
+            // 图标同悬浮歌词工具栏的「文字」:都是"这行字本身长什么样"。
             toolbarButton(
                 icon: "textformat",
                 title: L10n.t("字体"),
@@ -84,17 +98,9 @@ struct MenuBarEditorStage: View {
                 summary: behaviorSummary,
                 target: .behavior
             )
+            toolbarGhostButton(icon: "circle.lefthalf.filled", title: L10n.t("配色"), summary: colorSummary)
             Spacer(minLength: 8)
-            // 「重置 ▾」逐字复刻悬浮歌词/灵动岛工具栏那颗:Menu 里一条恢复动作 + 一条不可点的
-            // 作用范围说明。范围文案复用灵动岛那条"不含宽度和总开关"——两边排除的东西逐字
-            // 相同(结构性宽度设置 + 总开关),没必要另造一句意思一样的话。
-            //
-            // 动作标题就叫「恢复默认」,范围由下面那条不可点的说明项(「不含宽度和总开关」)交代。
-            // 「简约克制」专项把三个编辑台(悬浮 / 灵动岛 / 菜单栏)的这颗按钮统一成这四个字:
-            // 此前这里念的是工具栏四个入口的名字(「恢复默认布局、配色、字体与行为」),
-            // 更早叫「恢复默认宽度模式与配色」—— 两版都在标题里列举范围,越列越长,而排除项那一行
-            // 本来就在菜单里,标题再列一遍是重复。范围本身(这个编辑台除宽度和总开关外的全部)不变。
-            EditorToolbarResetMenu(scope: L10n.t("不含宽度和总开关")) { MenuBarStyleDefaults.restoreDefaults() }
+            EditorToolbarResetReserve()
         }
         .font(.system(size: 12))
         .padding(.horizontal, 2)
@@ -127,7 +133,7 @@ struct MenuBarEditorStage: View {
     /// 「字体」按钮摘要:粗细档位显示名(跟下拉里的选项同一份文案)恒报;**只有偏离默认才追加**
     /// 字体族(跟随系统时不是用户的决定,报出来是恒定噪声,跟「布局」按钮摘要里副行那条同一个
     /// 判据)和字号(" Npt",副行开着时字号由行高推出、滑杆让位,见 `MenuBarFontSizeRow`,报出来
-    /// 也是占预算)。副行本身归「布局」,在那颗按钮的摘要里报。
+    /// 也是占预算)。副行本身归「内容」,在那颗按钮的摘要里报。
     private var fontSummary: String {
         var parts: [String] = []
         if !settings.menuBarLyricsFontFamily.isEmpty {
@@ -156,7 +162,7 @@ struct MenuBarEditorStage: View {
         icon: String, title: String, summary: String, target: StagePopover
     ) -> some View {
         Button {
-            popoverMaxHeight = toolbarProbe.popoverHeightLimit()
+            popoverMaxHeight = (target == .font || target == .behavior ? row2Probe : row1Probe).popoverHeightLimit()
             popover = target
         } label: {
             EditorToolbarButtonLabel(icon: icon, title: title, summary: summary)
@@ -170,13 +176,25 @@ struct MenuBarEditorStage: View {
 
     /// 浮层高度上限 = 点开那一刻按钮那一行上沿到屏幕可用区顶的距离(见 toolbarButton)。
     @State private var popoverMaxHeight: CGFloat = SettingsPopoverMetrics.defaultMaxHeight
-    /// 按钮那一行上沿的测量点。
-    @State private var toolbarProbe = StageTopProbe()
+    /// 两行按钮各自上沿的测量点。「字体」「行为」在第二行,其余在第一行;挪了按钮要一起改 toolbarButton 里的取法。
+    @State private var row1Probe = StageTopProbe()
+    @State private var row2Probe = StageTopProbe()
 
     private func probeAnchor(_ probe: StageTopProbe) -> some View {
         Color.clear
             .frame(width: 1, height: 1)
             .background(StageTopProbeView(probe: probe))
+    }
+
+    /// 第二行的对齐占位:跟 `toolbarButton` 同一份 label、同一套按钮样式,因此同宽;但不挂
+    /// popover(同一份 `popover` 状态挂两处会让两个 NSPopover 抢同一个锚点)、不画、不进无障碍树。
+    private func toolbarGhostButton(icon: String, title: String, summary: String) -> some View {
+        Button {} label: {
+            EditorToolbarButtonLabel(icon: icon, title: title, summary: summary)
+        }
+        .editorToolbarButtonStyle()
+        .hidden()
+        .accessibilityHidden(true)
     }
 
     private enum StagePopover: Equatable {
