@@ -476,9 +476,7 @@ final class DiscordPresenceController: ObservableObject {
     }
 
     private func desktopWaiting() -> DiscordPresence.Waiting {
-        let running = DiscordPresence.desktopBundleIDs.contains { bundleID in
-            NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).contains { !$0.isTerminated }
-        }
+        let running = DiscordPresence.desktopBundleIDs.contains { PlayerProcess.isRunning(bundleID: $0) }
         return DiscordPresence.waiting(installed: desktopAppURL() != nil, running: running)
     }
 

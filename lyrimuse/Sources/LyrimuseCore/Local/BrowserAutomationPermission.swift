@@ -194,7 +194,7 @@ public enum BrowserAutomationPermission {
     }
 
     public static func isRunning(bundleID: String) -> Bool {
-        !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+        PlayerProcess.isRunning(bundleID: bundleID, includingAliases: false)
     }
 
     public enum Status: Equatable {

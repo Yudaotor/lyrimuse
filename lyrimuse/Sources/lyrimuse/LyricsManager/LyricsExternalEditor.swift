@@ -188,7 +188,7 @@ final class LyricsExternalEditor {
     }
 
     private static func processEnded(_ pid: pid_t) -> Bool {
-        NSRunningApplication(processIdentifier: pid)?.isTerminated ?? true
+        !PlayerProcess.isAlive(pid)
     }
 
     private func check(_ key: String) {

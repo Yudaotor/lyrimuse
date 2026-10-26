@@ -64,17 +64,15 @@ final class PlayerQuitWatcher {
         return Set(bound.map(\.bundleIdentifier)).subtracting([""])
     }
 
-    /// 退出通知到的那一刻进程表可能还没刷新,刚退的那个按 pid 剔掉(`PlayerLinkage.runningBundleIDs`)。
-    private static func runningBundleIDs(excludingPID gone: pid_t? = nil) -> Set<String> {
-        PlayerLinkage.runningBundleIDs(NSWorkspace.shared.runningApplications.map {
-            .init(bundleID: $0.bundleIdentifier, pid: $0.processIdentifier, isTerminated: $0.isTerminated)
-        }, excludingPID: gone)
+    /// 绑定的播放器里还在跑的。退出通知到的那一刻进程表可能还列着刚退的那个,按 pid 剔掉(`PlayerProcess`)。
+    private func boundRunning(excludingPID gone: pid_t? = nil) -> Set<String> {
+        boundBundleIDs.filter { PlayerProcess.isRunning(bundleID: $0, excludingPID: gone) }
     }
 
     private func playerTerminated(_ bundleID: String, pid: pid_t) {
         guard PlayerLinkage.shouldQuit(terminatedBundleID: bundleID,
                                        boundBundleIDs: boundBundleIDs,
-                                       runningBundleIDs: Self.runningBundleIDs(excludingPID: pid)) else { return }
+                                       runningBundleIDs: boundRunning(excludingPID: pid)) else { return }
         AppExit.logger.notice("followed player quit bundle=\(bundleID, privacy: .public) grace=\(PlayerLinkage.quitGraceSeconds, privacy: .public)s")
         scheduleCheck(after: PlayerLinkage.quitGraceSeconds)
     }
@@ -105,9 +103,8 @@ final class PlayerQuitWatcher {
     private func fireIfStillDue() {
         pendingQuit = nil
         deferredForWindows = false
-        let bound = boundBundleIDs
         // 宽限内又起来了 / 用户把设置改了 —— 到点按当下重算,不信排队那一刻的结论。
-        guard !bound.isEmpty, bound.isDisjoint(with: Self.runningBundleIDs()) else { return }
+        guard !boundBundleIDs.isEmpty, boundRunning().isEmpty else { return }
         if Self.userIsUsingLyrimuseWindows {
             deferredForWindows = true
             AppExit.logger.notice("followed player quit deferred: a Lyrimuse window is open")

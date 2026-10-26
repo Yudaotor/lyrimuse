@@ -209,7 +209,7 @@ enum MusicAutomationPermission {
 
     /// 这个 bundle id 在跑没跑。`.notDetermined` 的两种含义要靠它区分(见 `check(bundleID:)`)。
     static func isRunning(bundleID: String) -> Bool {
-        NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == bundleID }
+        PlayerProcess.isRunning(bundleID: bundleID, includingAliases: false)
     }
 
     /// 同 `ensureMusicAppRunning`,目标任意。
