@@ -78,6 +78,9 @@ step "Localizable.xcstrings 能解析"
 /usr/bin/python3 -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8"))' \
   lyrimuse/Localization/Localizable.xcstrings
 
+step "generate-strings.py 自检"
+/usr/bin/python3 -B lyrimuse/Localization/generate-strings.py --selftest
+
 # 引擎测试由同目录的 go-test-shards.py 分几个进程并行跑(见它的头注),不走 go 自己的测试缓存:那份缓存只核对模块
 # 目录(lyrimuse-engine/)里的文件,引擎测试还读 Swift 源码、README、shared/ 这些模块外的文件。要不要跑、跑哪几个在
 # 这里按改动定:这个目录上一次 go test 通过时的树记在 .build/go-tested-tree,从那棵树到这一棵 lyrimuse-engine/ 下
