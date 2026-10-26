@@ -7,6 +7,7 @@ import Foundation
 
 @MainActor
 func runPlayerIdentityTests() {
+    pausedFocusChecks()
     // ---- bundleID → 数据源档位映射 ----
     do {
         typealias L = LocalPlaybackSource
@@ -293,7 +294,7 @@ func runPlayerIdentityTests() {
                         "控制分派(契约): dispatch 按焦点回退目标与「焦点被占、没有 AppleScript」分派")
             expectEqual(client.contains("fallingBack: fallbackActive, targetGone: fallbackTargetGone, viaAppleScript: fallbackViaAppleScript")
                         && client.contains("let heldElsewhere = viaProbe || holdingDroppedSession")
-                        && client.contains("directQueryTarget ?? droppedSessionPlayer, heldElsewhere)"), true,
+                        && client.contains("directQueryTarget: directQueryTarget ?? droppedSessionPlayer,"), true,
                         "控制分派(接线): 查询是否成功与目标是否恢复交给同一保护判据;屏上这首是会话被撤后保持出来的,只按它自己的菜单")
             let successful = MediaControlClient.shouldWithholdFocusControls(
                 fallingBack: true, targetGone: false, viaAppleScript: false)
@@ -322,7 +323,7 @@ func runPlayerIdentityTests() {
                                            + "                                                       kasetWasPlaying: kasetWasPlaying, qqWasPaused: qqWasPaused) else { return }"),
                         true, "控制分派(契约): 没发出去时不乐观翻转播放状态、不挪屏上进度")
             expectEqual(client.contains("fallbackViaAppleScript = viaAppleScript")
-                        && client.contains("let scriptTarget = fallbackActive && fallbackViaAppleScript ? lastAcceptedDirectQueryTarget?.player : channelFallbackPlayer"), true,
+                        && client.contains("let fallbackScriptTarget = fallbackActive && fallbackViaAppleScript ? lastAcceptedDirectQueryTarget?.player : channelFallbackPlayer"), true,
                         "控制分派(契约): 只有经 AppleScript 问到的播放器(焦点回退 / 通道坏了时直问)才改发 AppleScript")
             expectEqual(adProbe.contains("if Self.notFoundSuppresses(notedKey: notFoundKey, notedAt: notFoundAt, key: key, now: Date())")
                         && adProbe.contains("if reading == nil, notFound {"), true,

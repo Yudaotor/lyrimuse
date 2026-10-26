@@ -141,10 +141,12 @@ public enum NowPlayingClientsProbe {
     }
 
     /// 系统里每个注册过 now playing 的 App 各自报的一份,不按 bundle id 挑(同一个 bundle id 可能有好几份,比如每个用到网页的
-    /// App 各有一个 WebKit 媒体进程)。没装 helper、跑失败、超时返回 nil。
+    /// App 各有一个 WebKit 媒体进程)。先问常驻的 helper(空的请求行 = 不按 bundle id 挑),用不上再起一个 perl。
+    /// 没装 helper、跑失败、超时返回 nil。
     public static func allSessions() -> [ClientSession]? {
         guard let paths = helperPaths(),
-              let r = ProcessRunner.run("/usr/bin/perl", [paths.script, paths.library], timeout: timeout), r.succeeded
+              let r = snapshotServer.request("", timeout: timeout)
+                ?? ProcessRunner.run("/usr/bin/perl", [paths.script, paths.library], timeout: timeout), r.succeeded
         else { return nil }
         return try? JSONDecoder().decode([ClientSession].self, from: r.stdout)
     }

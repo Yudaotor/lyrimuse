@@ -858,14 +858,14 @@ func runKasetTests() {
                     true, "Kaset 契约: 封面每次取都按此刻认下的播放器挑")
         expectEqual(sourceHas(client, "if snapshot == nil, target.player != .kaset,\n           let probed = NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: target.bundleID) {"), true,
                     "Kaset 契约: 焦点回退不拿系统按 bundle id 存的那份(换歌后常停在上一首)")
-        expectEqual(sourceHas(client, "let found = fetchAutoDetectedSnapshot()\n            noteSystemReading(found)\n            return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(found), wanted: true))"), true,
+        expectEqual(sourceHas(client, "let found = fetchAutoDetectedSnapshot()\n            noteSystemReading(found)\n            let withPlaying = preferringPlayingOverPausedFocus(found, players: players)\n            return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(withPlaying), wanted: true))"), true,
                     "Kaset 契约: 自动识别时系统那边没在放就问它")
         expectEqual(sourceHas(client, "let otherLoading = loading || (found == nil && otherPlayerJustDropped(besides: PlaybackPlayer.kaset.bundleIdentifier))")
                         && sourceHas(client, "|| (found == nil && otherPlayerJustDropped(besides: PlaybackPlayer.lxMusic.bundleIdentifier))")
                         && client.contains("kasetWins(over: found, kaset: synthesized, otherPlayerLoading: otherBetweenTracks, alreadyPreferred: alreadyPreferred)")
                         && sourceHas(client, "let selected = fetchMultiSelectedSnapshot(players)\n        noteSystemReading(selected)"),
                     true, "Kaset / 洛雪契约: 系统刚还在报别的播放器、这一拍空了,两路兜底都当它在切歌,暂停着的不顶上来")
-        expectEqual(client.contains("let withKaset = players.contains(.kaset) ? preferringPlayingKaset(selected) : selected"), true,
+        expectEqual(client.contains("let withKaset = players.contains(.kaset) ? preferringPlayingKaset(withPlaying) : withPlaying"), true,
                     "Kaset 契约: 勾了它的多选同样问,没勾的不问")
         expectEqual(client.contains("if !players.contains(.auto), !players.contains(.kaset) { forgetKasetPreference() }"), true,
                     "Kaset 契约: 设置不认 Kaset 时清掉顶替记录(播放控制别再发给它)")

@@ -867,7 +867,7 @@ func runSourceContractTests() {
                 // radioStationHash,于是电台整层在这一种配置下曾经完全不生效 —— 而判据本身一处
                 // bundleID 都不认,所以这是唯一不生效的配置。退回去直接调 fetchAppleMusicSnapshot
                 // 不会编译失败,只会让电台在那种配置下再次"安静地没有"。
-                expectEqual(mcc.contains("if players == [.appleMusic] { return radioAwareAppleMusicSnapshot() }"), true,
+                expectEqual(sourceHas(mcc, "if players == [.appleMusic] {\n            forgetPausedFocusPreference()\n            return radioAwareAppleMusicSnapshot()\n        }"), true,
                             "电台: 只勾 Apple Music 那条路要过 radioAwareAppleMusicSnapshot,不能直接调 fetchAppleMusicSnapshot")
                 expectEqual(mcc.contains("radio.perTrack ? playable.markedRadio() : playable.withRadio(position: radio.position)"), true,
                             "电台: 纯 JXA 那条路同样要把位置换成单曲表(否则判据补上了、位置还是整档节目的);单曲位置的台保留 AppleScript 读数")

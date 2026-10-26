@@ -458,7 +458,7 @@ private func wiringContracts() {
                 true, "洛雪开放 API: 进度跳了马上补查(恢复卡住、拖进度条)")
     // 洛雪的几级退路都接上了。
     let lxClient = code("LyrimuseCore/Local/MediaControlClient.swift")
-    expectEqual(lxClient.contains("return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(found), wanted: true))")
+    expectEqual(lxClient.contains("return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(withPlaying), wanted: true))")
                 && lxClient.contains("return heldAcrossPlayerGap(preferringLXMusicOpenAPI(withKaset, wanted: lxMusicWanted))")
                 && lxClient.contains("return kasetPreferred ? .kaset : lxMusicPreferred ? .lxMusic : scriptTarget"),
                 true, "洛雪退路: 系统不报洛雪时用开放 API 顶上(自动识别、多选两条路),播放控制跟着发给它")

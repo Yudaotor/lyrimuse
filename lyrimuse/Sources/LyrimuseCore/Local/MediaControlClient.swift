@@ -123,13 +123,18 @@ public enum MediaControlClient {
         if players.contains(.auto) {
             let found = fetchAutoDetectedSnapshot()
             noteSystemReading(found)
-            return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(found), wanted: true))
+            let withPlaying = preferringPlayingOverPausedFocus(found, players: players)
+            return heldAcrossPlayerGap(preferringLXMusicOpenAPI(preferringPlayingKaset(withPlaying), wanted: true))
         }
-        if players == [.appleMusic] { return radioAwareAppleMusicSnapshot() }
+        if players == [.appleMusic] {
+            forgetPausedFocusPreference()
+            return radioAwareAppleMusicSnapshot()
+        }
         guard !players.isEmpty else { return nil }
         let selected = fetchMultiSelectedSnapshot(players)
         noteSystemReading(selected)
-        let withKaset = players.contains(.kaset) ? preferringPlayingKaset(selected) : selected
+        let withPlaying = preferringPlayingOverPausedFocus(selected, players: players)
+        let withKaset = players.contains(.kaset) ? preferringPlayingKaset(withPlaying) : withPlaying
         return heldAcrossPlayerGap(preferringLXMusicOpenAPI(withKaset, wanted: lxMusicWanted))
     }
 
@@ -931,6 +936,193 @@ public enum MediaControlClient {
         return found == nil || kasetMoving
     }
 
+    // MARK: - 系统焦点停在一家暂停着的播放器上、别家在放
+
+    private static let pausedFocusLock = NSLock()
+    /// 此刻顶替系统那份(焦点那家暂停着)、改用按 bundle id 单问到的那家:它是谁、焦点那家是谁、最近一次问到它的时刻;
+    /// 没在顶替为 nil。播放控制据此发给它(`focusControlContext`),封面也按它取(`fetchArtworkExplained`)。
+    private static var pausedFocusPreferred: (target: FocusFallbackTarget, over: String, seenAt: Date)?
+    /// 焦点那份暂停着的这一段:焦点那家和那首(换了就重新算)、从哪一拍起、上一次扫全部会话的时刻。焦点那家在放时为 nil。
+    private static var pausedFocusScan: (focusKey: String, since: Date, scannedAt: Date?)?
+
+    /// 焦点那份暂停后的头 `pausedFocusSlowScanAfter` 秒每隔 `pausedFocusScanInterval` 扫一次全部会话,之后隔
+    /// `pausedFocusSlowScanInterval`。
+    public static let pausedFocusScanInterval: TimeInterval = 4
+    public static let pausedFocusSlowScanAfter: TimeInterval = 60
+    public static let pausedFocusSlowScanInterval: TimeInterval = 20
+    /// 顶上来的那家连着问不到(切歌撤会话)多久才不再认它。
+    public static let pausedFocusMissingGrace: TimeInterval = PlayerGapHold.startWindow
+
+    /// 系统焦点那份是暂停着的,别家可能还在放:系统不一定把焦点交回在放的那家。这时按 bundle id 问别的可认的播放器
+    /// (`pausedFocusTarget`),有在放的就改用它那份。顶上来之后它暂停了、焦点那家仍暂停着,接着认它(「认最近在放的那个」,
+    /// 同 `kasetWins` 的粘性);焦点那家开始放就让回去。焦点那份是 nil(没人在报、在加载、不是歌)这一拍不顶替、记下的也不清,
+    /// 交给切歌间隙保持和单拍宽限。扫全部会话走常驻 helper、按 `pausedFocusScanDue` 节流;顶上来以后每拍只单问它一家。
+    /// 见 02 章决策 192。
+    private static func preferringPlayingOverPausedFocus(_ found: MediaControlSnapshot?,
+                                                         players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {
+        guard let found, let focusID = found.bundleIdentifier else { return found }
+        let now = Date()
+        guard found.playing != true, found.isWaitingToPlay != true else {
+            pausedFocusLock.lock()
+            pausedFocusScan = nil
+            pausedFocusLock.unlock()
+            forgetPausedFocusPreference()
+            return found
+        }
+        let trusted = players.contains(.auto) ? TrustedPlayers.current : [:]
+        let lxMusicOpenAPI = LXMusicOpenAPI.shared.currentState() != nil
+        let accepted = { (id: String) in
+            pausedFocusTarget(forBundleID: id, focusBundleID: focusID, players: players, trusted: trusted,
+                              lxMusicOpenAPIConnected: lxMusicOpenAPI)
+        }
+        let focusKey = focusID + "|" + found.trackKey
+        pausedFocusLock.lock()
+        let current = pausedFocusPreferred
+        if pausedFocusScan?.focusKey != focusKey { pausedFocusScan = (focusKey, now, nil) }
+        let since = pausedFocusScan?.since ?? now
+        let scannedAt = pausedFocusScan?.scannedAt
+        pausedFocusLock.unlock()
+        let currentTarget = current.flatMap { accepted($0.target.bundleID) }
+        let preferred = currentTarget.flatMap { target in pausedFocusReading(target).map { (target, $0) } }
+        var contender: (FocusFallbackTarget, MediaControlSnapshot)?
+        if preferred?.1.playing != true,
+           pausedFocusScanDue(sincePaused: now.timeIntervalSince(since), sinceLastScan: scannedAt.map { now.timeIntervalSince($0) }) {
+            pausedFocusLock.lock()
+            pausedFocusScan?.scannedAt = now
+            pausedFocusLock.unlock()
+            let ids = NowPlayingClientsProbe.allSessions().map {
+                pausedFocusContenders($0, focusBundleID: focusID, accepts: { accepted($0) != nil })
+            } ?? []
+            for id in ids where id != preferred?.0.bundleID {
+                guard let target = accepted(id), let reading = pausedFocusReading(target), reading.playing == true else { continue }
+                contender = (target, reading)
+                break
+            }
+        }
+        let pick: (FocusFallbackTarget, MediaControlSnapshot)?
+        switch pausedFocusPick(preferredPlaying: preferred.map { $0.1.playing == true }, contenderFound: contender != nil) {
+        case .preferred: pick = preferred
+        case .contender: pick = contender
+        case .focus: pick = nil
+        }
+        guard let (target, snapshot) = pick else {
+            if let current, let currentTarget, now.timeIntervalSince(current.seenAt) <= pausedFocusMissingGrace,
+               runningPID(currentTarget.bundleID) != nil { return found }
+            forgetPausedFocusPreference()
+            return found
+        }
+        pausedFocusLock.lock()
+        let changed = pausedFocusPreferred?.target != target
+        pausedFocusPreferred = (target, focusID, now)
+        pausedFocusLock.unlock()
+        if changed {
+            logger.notice("now playing: the system reports \(focusID, privacy: .public) paused; reading \(target.bundleID, privacy: .public) per-client")
+        }
+        return snapshot
+    }
+
+    private static func forgetPausedFocusPreference() {
+        pausedFocusLock.lock()
+        let was = pausedFocusPreferred
+        pausedFocusPreferred = nil
+        pausedFocusLock.unlock()
+        if let was {
+            logger.notice("now playing: back to the system's reading (was \(was.target.bundleID, privacy: .public) over paused \(was.over, privacy: .public))")
+        }
+    }
+
+    /// 此刻顶替焦点那份的那家;没在顶替为 nil。
+    private static func pausedFocusSubstitute() -> FocusFallbackTarget? {
+        pausedFocusLock.lock()
+        defer { pausedFocusLock.unlock() }
+        return pausedFocusPreferred?.target
+    }
+
+    /// 按 bundle id 单问一家,换成能报的那份:有 AppleScript 字典的(Apple Music、Spotify、VOX)走跟焦点在它身上时同一条适配
+    /// (`adaptedSnapshot`,位置用它自己的钟,不跟单问那份的锚点叠);其余同焦点回退的第二级(Pine 过它那块表、Amazon 换成
+    /// 日志时钟)。过跟主路径同样的闸,挡下、问不到为 nil。这一拍的失败原因不动:调用方交回的是焦点那份,不是 nil。
+    private static func pausedFocusReading(_ target: FocusFallbackTarget) -> MediaControlSnapshot? {
+        guard let probed = NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: target.bundleID) else { return nil }
+        let failure = lastSnapshotFailure
+        defer { setSnapshotFailure(failure) }
+        let now = Date()
+        var snapshot: MediaControlSnapshot? = probed.snapshot
+        switch target.player {
+        case .appleMusic?, .spotify?, .vox?:
+            snapshot = adaptedSnapshot(bundleID: target.bundleID, mediaControl: probed.snapshot)
+        default:
+            if target.bundleID == PinePlayerInfo.bundleID {
+                snapshot = pineProbedSnapshot(probed.snapshot, anchor: probed.anchor, now: now)
+            }
+            if let reading = amazonMusicReading(
+                bundleID: target.bundleID, trackKey: probed.snapshot.trackKey, title: probed.snapshot.title,
+                metadataTimestamp: probed.anchor.timestamp.map { Date(timeIntervalSince1970: $0) },
+                playing: probed.snapshot.playing == true, pid: probed.anchor.processIdentifier.map { Int($0) },
+                duration: probed.snapshot.duration, now: now) {
+                guard !reading.staleMetadata else { return nil }
+                snapshot = probed.snapshot.withPlayerClock(reading.position, capturedAt: now)
+            }
+        }
+        guard let s = snapshot,
+              !playerContentNotMusic(bundleID: target.bundleID, snapshot: s),
+              !artistNotYetReported(bundleID: target.bundleID, snapshot: s),
+              !trustedPlaybackRejected(bundleID: target.bundleID, snapshot: s) else { return nil }
+        return s
+    }
+
+    /// 焦点那份暂停着时能顶上来的那家:多选下是勾选的,自动识别下是内置的和「其他 App」里信任的(浏览器除外,同焦点回退的
+    /// `focusFallbackTarget`)。焦点那家自己、Kaset(系统按 bundle id 存的那份换歌后常停在上一首,它走 `preferringPlayingKaset`)、
+    /// 开放 API 连着的洛雪(走 `preferringLXMusicOpenAPI`)不算。纯函数,selftest 覆盖。
+    public static func pausedFocusTarget(forBundleID bundleID: String, focusBundleID: String, players: Set<PlaybackPlayer>,
+                                         trusted: [String: String], lxMusicOpenAPIConnected: Bool) -> FocusFallbackTarget? {
+        guard bundleID != focusBundleID, bundleID != PlaybackPlayer.kaset.bundleIdentifier,
+              !(lxMusicOpenAPIConnected && bundleID == PlaybackPlayer.lxMusic.bundleIdentifier) else { return nil }
+        if players.contains(.auto) { return focusFallbackTarget(forBundleID: bundleID, trusted: trusted) }
+        guard let player = directQueryPlayer(forBundleID: bundleID), players.contains(player) else { return nil }
+        return FocusFallbackTarget(bundleID: bundleID, player: player)
+    }
+
+    /// 全部会话里在放的别家(报在放、速率大于 0),按 bundle id 去重(别的版本换成本体),最近发布锚点的排前面。纯函数,selftest 覆盖。
+    public static func pausedFocusContenders(_ sessions: [NowPlayingClientsProbe.ClientSession], focusBundleID: String,
+                                             accepts: (String) -> Bool) -> [String] {
+        var seen = Set<String>()
+        return sessions
+            .filter { $0.playing == true && ($0.playbackRate ?? 0) > 0 }
+            .sorted { ($0.timestamp ?? 0) > ($1.timestamp ?? 0) }
+            .compactMap { $0.bundleIdentifier.map(PlayerBundleAliases.canonical) }
+            .filter { $0 != focusBundleID && accepts($0) && seen.insert($0).inserted }
+    }
+
+    /// 这一拍要不要扫全部会话:这一段第一拍扫;之后头 `pausedFocusSlowScanAfter` 秒隔 `pausedFocusScanInterval`,再往后隔
+    /// `pausedFocusSlowScanInterval`。刚暂停那一阵最可能是别家还在放,停久了别家开播多半会自己拿走焦点。纯函数,selftest 覆盖。
+    public static func pausedFocusScanDue(sincePaused: TimeInterval, sinceLastScan: TimeInterval?) -> Bool {
+        guard let sinceLastScan else { return true }
+        let interval = sincePaused < pausedFocusSlowScanAfter ? pausedFocusScanInterval : pausedFocusSlowScanInterval
+        return sinceLastScan >= interval
+    }
+
+    public enum PausedFocusPick: Equatable, Sendable { case focus, preferred, contender }
+
+    /// 焦点那份暂停着时这一拍认谁。`preferredPlaying`:上一拍顶上来的那家这一拍问到的在不在放(nil = 没在顶替或没问到);
+    /// `contenderFound`:扫出了在放的别家。顶上来的那家还在放就接着认它,不换给别家;它停了、别家在放就换过去;都没在放
+    /// 接着认它。纯函数,selftest 覆盖。
+    public static func pausedFocusPick(preferredPlaying: Bool?, contenderFound: Bool) -> PausedFocusPick {
+        if preferredPlaying == true { return .preferred }
+        if contenderFound { return .contender }
+        return preferredPlaying == false ? .preferred : .focus
+    }
+
+    /// 播放控制按顶替焦点那份的那家发(`substitute`):有脚本的(Apple Music、Spotify、VOX)发脚本,其余标成焦点在别处、
+    /// 交给定向通路(菜单、洛雪本体),没有定向通路的不发 —— media-control 的指令会落到焦点上那家暂停着的播放器身上,把它
+    /// 放起来。`substitute` 为 nil 原样交回。纯函数,selftest 覆盖。
+    public static func pausedFocusControl(substitute: FocusFallbackTarget?, scriptTarget: PlaybackPlayer?,
+                                          directQueryTarget: PlaybackPlayer?, heldElsewhere: Bool)
+        -> (scriptTarget: PlaybackPlayer?, directQueryTarget: PlaybackPlayer?, heldElsewhere: Bool) {
+        guard let substitute else { return (scriptTarget, directQueryTarget, heldElsewhere) }
+        if let player = substitute.player, [.appleMusic, .spotify, .vox].contains(player) { return (player, nil, false) }
+        return (nil, substitute.player, true)
+    }
+
     // MARK: - VOX
 
     /// 问一次 VOX(`VoxPlayerInfo.script`)。拿不到(没在跑、停住、没授「自动化」权限、超时)返回 nil。换歌那一拍位置还是
@@ -1662,8 +1854,9 @@ public enum MediaControlClient {
         let kasetPreferred = kasetPreferredOver != nil
         let lxMusicPreferred = lxMusicPreferredOver != nil
         kasetLock.unlock()
+        let substitute = pausedFocusSubstitute()
         appleMusicFocusLock.lock()
-        let scriptTarget = fallbackActive && fallbackViaAppleScript ? lastAcceptedDirectQueryTarget?.player : channelFallbackPlayer
+        let fallbackScriptTarget = fallbackActive && fallbackViaAppleScript ? lastAcceptedDirectQueryTarget?.player : channelFallbackPlayer
         let directQueryTarget = fallbackActive ? lastAcceptedDirectQueryTarget?.player : nil
         let viaProbe = shouldWithholdFocusControls(
             fallingBack: fallbackActive, targetGone: fallbackTargetGone, viaAppleScript: fallbackViaAppleScript)
@@ -1673,10 +1866,17 @@ public enum MediaControlClient {
         let droppedSessionPlayer = holdingDroppedSession
             ? PlaybackPlayer.builtin(forBundleID: gapHoldLast?.snapshot.bundleIdentifier) : nil
         let holdingAcrossGap = gapHoldingSince != nil
+        let heldBundleID = gapHoldLast?.snapshot.bundleIdentifier
         gapHoldLock.unlock()
+        // 切歌间隙保持着别家时屏上不是顶上来的那家,照回退目标发(同 `controlScriptTarget`)。
+        let routed = pausedFocusControl(
+            substitute: holdingAcrossGap && heldBundleID != substitute?.bundleID ? nil : substitute,
+            scriptTarget: fallbackScriptTarget, directQueryTarget: directQueryTarget ?? droppedSessionPlayer,
+            heldElsewhere: heldElsewhere)
+        let scriptTarget = routed.scriptTarget
         let target = controlScriptTarget(kasetPreferred: kasetPreferred, lxMusicPreferred: lxMusicPreferred,
                                          holdingAcrossGap: holdingAcrossGap, scriptTarget: scriptTarget)
-        return (target, directQueryTarget ?? droppedSessionPlayer, heldElsewhere)
+        return (target, routed.directQueryTarget, routed.heldElsewhere)
     }
 
     /// 播放控制按哪家的脚本发。Kaset / 洛雪顶替了系统那边的读数时发给它们;但切歌间隙保持(`heldAcrossPlayerGap`)把屏上
@@ -2229,6 +2429,13 @@ public enum MediaControlClient {
         let channelFallback = channelFallbackPlayer
         appleMusicFocusLock.unlock()
         if channelFallback == .vox, let art = voxArtwork(tryingFolder: true) { return (art, nil) }
+        // 焦点那家暂停着、屏上是顶上来的那家:系统那份是焦点那家的图。
+        if let target = pausedFocusSubstitute() {
+            if !SourceKnockout.isOut(.systemArtwork),
+               let art = NowPlayingClientsProbe.artwork(forBundleID: target.bundleID) { return (art, nil) }
+            if target.bundleID == VoxPlayerInfo.bundleID, let art = voxArtwork(tryingFolder: true) { return (art, nil) }
+            return (nil, "the focused player is paused and \(target.bundleID) gave no artwork")
+        }
         if let target = activeFocusFallbackTarget() {
             if !SourceKnockout.isOut(.systemArtwork),
                let art = NowPlayingClientsProbe.artwork(forBundleID: target.bundleID) { return (art, nil) }
