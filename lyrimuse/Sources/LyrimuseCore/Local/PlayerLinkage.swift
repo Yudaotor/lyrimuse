@@ -39,6 +39,27 @@ public enum PlayerLinkage {
         return boundBundleIDs.isDisjoint(with: runningBundleIDs)
     }
 
+    /// 进程表里的一项:`NSRunningApplication` 判「还在跑」要用的三样。
+    public struct RunningApp: Equatable, Sendable {
+        public let bundleID: String?
+        public let pid: Int32
+        public let isTerminated: Bool
+
+        public init(bundleID: String?, pid: Int32, isTerminated: Bool) {
+            self.bundleID = bundleID
+            self.pid = pid
+            self.isTerminated = isTerminated
+        }
+    }
+
+    /// 还在跑的 bundle id(别名换成本体):去掉已结束的,也去掉刚报退出的那个 pid。退出通知送到时
+    /// `NSWorkspace.runningApplications` 里可能还留着刚退出的那一份,不剔掉就会判成「绑定的播放器还在跑」,
+    /// 这次退出整个漏掉(见 02 章决策 193)。
+    public static func runningBundleIDs(_ apps: [RunningApp], excludingPID gone: Int32? = nil) -> Set<String> {
+        Set(apps.filter { !$0.isTerminated && $0.pid != gone }
+            .compactMap(\.bundleID).map(PlayerBundleAliases.canonical))
+    }
+
     /// 宽限期(秒)。播放器崩溃自动重启、用户手动重启、Spotify 更新后重启都会让进程短暂消失,被参考的做法
     /// 没有宽限、会让歌词整个消失再出现一次;5 秒内任一个绑定的播放器又起来就取消。
     public static let quitGraceSeconds: TimeInterval = 5

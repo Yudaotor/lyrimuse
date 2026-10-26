@@ -33,8 +33,10 @@ final class PlayerQuitWatcher {
         let center = NSWorkspace.shared.notificationCenter
         observers.append(center.addObserver(forName: NSWorkspace.didTerminateApplicationNotification,
                                             object: nil, queue: .main) { [weak self] note in
-            guard let bundleID = Self.bundleID(from: note) else { return }
-            MainActor.assumeIsolated { self?.playerTerminated(bundleID) }
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  let bundleID = app.bundleIdentifier.map(PlayerBundleAliases.canonical) else { return }
+            let pid = app.processIdentifier
+            MainActor.assumeIsolated { self?.playerTerminated(bundleID, pid: pid) }
         })
         observers.append(center.addObserver(forName: NSWorkspace.didLaunchApplicationNotification,
                                             object: nil, queue: .main) { [weak self] note in
@@ -62,14 +64,17 @@ final class PlayerQuitWatcher {
         return Set(bound.map(\.bundleIdentifier)).subtracting([""])
     }
 
-    private static var runningBundleIDs: Set<String> {
-        Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier).map(PlayerBundleAliases.canonical))
+    /// 退出通知到的那一刻进程表可能还没刷新,刚退的那个按 pid 剔掉(`PlayerLinkage.runningBundleIDs`)。
+    private static func runningBundleIDs(excludingPID gone: pid_t? = nil) -> Set<String> {
+        PlayerLinkage.runningBundleIDs(NSWorkspace.shared.runningApplications.map {
+            .init(bundleID: $0.bundleIdentifier, pid: $0.processIdentifier, isTerminated: $0.isTerminated)
+        }, excludingPID: gone)
     }
 
-    private func playerTerminated(_ bundleID: String) {
+    private func playerTerminated(_ bundleID: String, pid: pid_t) {
         guard PlayerLinkage.shouldQuit(terminatedBundleID: bundleID,
                                        boundBundleIDs: boundBundleIDs,
-                                       runningBundleIDs: Self.runningBundleIDs) else { return }
+                                       runningBundleIDs: Self.runningBundleIDs(excludingPID: pid)) else { return }
         AppExit.logger.notice("followed player quit bundle=\(bundleID, privacy: .public) grace=\(PlayerLinkage.quitGraceSeconds, privacy: .public)s")
         scheduleCheck(after: PlayerLinkage.quitGraceSeconds)
     }
@@ -102,7 +107,7 @@ final class PlayerQuitWatcher {
         deferredForWindows = false
         let bound = boundBundleIDs
         // 宽限内又起来了 / 用户把设置改了 —— 到点按当下重算,不信排队那一刻的结论。
-        guard !bound.isEmpty, bound.isDisjoint(with: Self.runningBundleIDs) else { return }
+        guard !bound.isEmpty, bound.isDisjoint(with: Self.runningBundleIDs()) else { return }
         if Self.userIsUsingLyrimuseWindows {
             deferredForWindows = true
             AppExit.logger.notice("followed player quit deferred: a Lyrimuse window is open")

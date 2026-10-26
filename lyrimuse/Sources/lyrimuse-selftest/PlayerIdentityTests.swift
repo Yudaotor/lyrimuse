@@ -2507,6 +2507,17 @@ func runPlayerIdentityTests() {
                     "跟随退出: 绑了两个只退一个 → 不退(可能只是换播放器听)")
         expectEqual(PL.shouldQuit(terminatedBundleID: "com.apple.Music", boundBundleIDs: [], runningBundleIDs: []), false,
                     "跟随退出: 没绑定任何播放器 → 永不退")
+        let goneSpotify = PL.RunningApp(bundleID: "com.spotify.client", pid: 501, isTerminated: false)
+        expectEqual(PL.runningBundleIDs([goneSpotify, .init(bundleID: "com.apple.Music", pid: 502, isTerminated: false)],
+                                        excludingPID: 501), ["com.apple.Music"],
+                    "跟随退出: 进程表里还留着刚退出的那一份 → 按 pid 剔掉")
+        expectEqual(PL.shouldQuit(terminatedBundleID: "com.spotify.client", boundBundleIDs: ["com.spotify.client"],
+                                  runningBundleIDs: PL.runningBundleIDs([goneSpotify], excludingPID: 501)), true,
+                    "跟随退出: 进程表没刷新也照样退")
+        expectEqual(PL.runningBundleIDs([.init(bundleID: "com.spotify.client", pid: 7, isTerminated: true),
+                                         .init(bundleID: nil, pid: 8, isTerminated: false),
+                                         .init(bundleID: "com.digipine.pineplayer.pro", pid: 9, isTerminated: false)]),
+                    ["com.digipine.pineplayer"], "跟随退出: 已结束的不算、没 bundle id 的跳过、别名换成本体")
         expectEqual(PL.quitGraceSeconds, 5, "跟随退出: 5 秒宽限,盖住播放器崩溃自动重启 / 手动重启 / 更新后重启")
         expectEqual(PL.migratedLaunchSet(legacyEnabled: true, selectedPlayers: [.qqMusic], requiresSole: true), [.qqMusic],
                     "联动迁移: 布尔年代「打开 Lyrimuse 时启动 X」true + 唯一具体播放器 → 那一个")
