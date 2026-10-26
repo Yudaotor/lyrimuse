@@ -369,7 +369,7 @@ func runNotchTests() {
         expectEqual(with { $0.showsProgressLine = true }.showsBottomProgressLine, true, "卡片布局: 稳态画底边进度线")
         expectEqual(with { $0.showsProgressLine = true; $0.isExpanded = true }.showsBottomProgressLine, false, "卡片布局: 展开不画底边进度线")
         expectEqual(with { $0.showsProgressLine = true; $0.isCollapsed = true }.showsBottomProgressLine, false, "卡片布局: 收起不画底边进度线")
-        // 「耳朵」那一档:卡片不为它变高;关着歌词行时掉歌名 / 横幅那一截伸出来就让开;线按顶行(+ 歌词行)那么高画。
+        // 「耳朵」那一档:卡片不为它变高;关着歌词行时掉歌名 / 横幅那一截伸出来就让开。
         func ears(_ change: (inout L) -> Void = { _ in }) -> L {
             with { $0.showsProgressLine = true; $0.progressLineStyle = .ears; change(&$0) }
         }
@@ -377,8 +377,6 @@ func runNotchTests() {
                     "进度线耳朵: 稳态画耳朵那根、不画底边那根")
         expectEqual(with { $0.progressLineStyle = .ears }.showsEarProgressLine, false, "进度线耳朵: 关着进度线不画")
         expectEqual(ears { $0.showsLyrics = false }.cardHeight, 32, "进度线耳朵: 关着歌词行时卡片不为它多长")
-        expectEqual([ears().earProgressHeight, ears { $0.showsLyrics = false }.earProgressHeight], [76, 32],
-                    "进度线耳朵: 按顶行(+ 歌词行)的高度画")
         expectEqual([ears { $0.showsLyrics = false; $0.hasTrackDrop = true }.showsEarProgressLine,
                      ears { $0.showsLyrics = false; $0.transientBannerActive = true }.showsEarProgressLine,
                      ears { $0.hasTrackDrop = true }.showsEarProgressLine], [false, false, true],
@@ -398,6 +396,9 @@ func runNotchTests() {
                     "进度线耳朵: 没有肩膀时从竖段顶端直接起笔")
         expectEqual(E(width: 360, height: 76, notchWidth: 180, notchHeight: 32, shoulder: 4, cardCornerRadius: 19,
                       inset: 1.75).endX, 180, "进度线耳朵: 开着歌词行时底边露在刘海下面,走到正中")
+        expectEqual([32, 38, 44, 60].map {
+            E(width: 360, height: $0, notchWidth: 180, notchHeight: 32, shoulder: 4, cardCornerRadius: 8, inset: 1).endX
+        }, [90, 135, 180, 180], "进度线耳朵: 卡片变形时底边露出刘海的头 12pt 里终点从刘海边平滑挪到正中,不跳")
         expectEqual(E(width: 360, height: 24, notchWidth: 0, notchHeight: 24, shoulder: 3, cardCornerRadius: 6,
                       inset: 1.75).endX, 180, "进度线耳朵: 无刘海屏走到正中")
         expectEqual(E(width: 360, height: 32, notchWidth: 180, notchHeight: 32, shoulder: 4, cardCornerRadius: 1,
@@ -2645,12 +2646,15 @@ func runNotchTests() {
                     "进度线: 开着时常驻、只切透明度,藏着时停表")
         let progressLine = src("NotchProgressLine.swift")
         expectEqual(sourceHas(v, "if controller.showsProgressLine && controller.progressLineStyle == .ears {\n let shows = controller.showsEarProgressLine")
-                    && sourceHas(v, "active: surfaceVisible && shows, outline: controller.cardOutline,\n notchWidth: controller.notchWidth)")
-                    && sourceHas(v, ".frame(width: controller.steadyCardWidth, height: controller.earProgressHeight)\n .animation(NotchProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {")
+                    && sourceHas(v, "active: surfaceVisible && shows, outline: controller.cardOutline,\n notchWidth: controller.notchWidth,")
+                    && sourceHas(v, "cardSize: CGSize(width: controller.cardWidth, height: controller.cardHeight))\n .animation(NotchEarProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {")
+                    && sourceHas(progressLine, "var animatableData: AnimatablePair<CGFloat, CGFloat> {\n get { AnimatablePair(cardSize.width, cardSize.height) }")
                     && sourceHas(v, "let (s, r) = cornerMetrics(in: rect)")
-                    && progressLine.contains("let corner = outline.shape(corners).cornerMetrics(in: rect)")
-                    && progressLine.contains("NotchProgressLineTiming.interval(durationMs: total, width: path.length)"), true,
-                    "进度线耳朵: 外框是稳态卡片、肩膀和底角跟卡片外形读同一处、常驻只切透明度、重画间隔按半边长度算")
+                    && sourceHas(progressLine, "func path(in rect: CGRect) -> Path {\n let path = Self.geometry(size: cardSize, card: card, notchWidth: notchWidth, notchHeight: notchHeight)")
+                    && progressLine.contains("let corner = card.cornerMetrics(in: CGRect(origin: .zero, size: size))")
+                    && progressLine.contains("TimelineView(NotchEarLineSchedule(interval: NotchProgressLineTiming.interval(durationMs: total, width: length),")
+                    && progressLine.components(separatedBy: "TimelineView(").count == 3, true,
+                    "进度线耳朵: 卡片尺寸是形状的可动画值、路径按它逐帧算(展开收回跟着外沿走)、肩膀和底角跟卡片外形读同一处、常驻只切透明度、重画间隔按半边长度算")
         expectEqual(sourceHas(v, "NotchExpandedLyricList(tint: accentOrWhite)")
                     && sourceHas(v, ".modifier(NotchCardLayerActive(active: expanded, staggered: staggered, waitsForResize: true))")
                     && sourceHas(v, "if waitsForResize { return curve.delay(Self.resizeSettleDelay) }")

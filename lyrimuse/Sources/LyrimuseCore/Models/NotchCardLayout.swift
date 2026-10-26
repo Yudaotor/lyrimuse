@@ -135,15 +135,10 @@ public struct NotchCardLayout: Equatable, Sendable {
     }
 
     /// 沿耳朵那根进度线画不画:条件同底边那根,另外关着歌词行时掉歌名 / 横幅那一截伸出来的时候让开
-    /// (线按 `earProgressHeight` 画,卡片多长的那一截会让它横在卡片中间)。
+    /// (卡片临时多长一截,底边离开刘海,线的终点会从刘海边挪到正中、整根跟着变长)。
     public var showsEarProgressLine: Bool {
         showsProgressLine && progressLineStyle == .ears && hasTrack && !isExpanded && !isCollapsed && !hasMilestone
             && (showsLyrics || !(hasTrackDrop || transientBannerActive))
-    }
-
-    /// 沿耳朵那根进度线按多高的卡片画:顶行,开着歌词行时再加歌词行。不含掉歌名 / 横幅那一截。
-    public var earProgressHeight: CGFloat {
-        contentTopInset + (showsLyrics ? lyricRowHeight : 0)
     }
 
     /// 展开区那行「下一句预览」画不画:这首有下一句、开关开着、没开「多行歌词」(列表里本来就有下一句)。

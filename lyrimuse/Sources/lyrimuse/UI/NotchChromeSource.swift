@@ -216,7 +216,6 @@ extension NotchChromeSource {
     var showsBannerStrip: Bool { cardLayout.showsBannerStrip }
     var showsBottomProgressLine: Bool { cardLayout.showsBottomProgressLine }
     var showsEarProgressLine: Bool { cardLayout.showsEarProgressLine }
-    var earProgressHeight: CGFloat { cardLayout.earProgressHeight }
     var showsExpandedLyricPreview: Bool { cardLayout.showsExpandedLyricPreview }
     var showsExpandedLyricList: Bool { cardLayout.showsExpandedLyricList }
     var trackInfoShowsTrackFields: Bool { cardLayout.trackInfoShowsTrackFields }

@@ -47,7 +47,8 @@ public enum NotchProgressLineChoice: String, CaseIterable, Sendable {
 ///
 /// 从屏幕上沿起笔,先顺着肩膀那段内凹圆弧弯进侧边,沿侧边往下,绕过底角圆弧,再沿底边往中间走,每一段都跟卡片外沿同心,
 /// 线贴着外沿、看起来是卡片的边亮起来。底边被刘海挡住时(有刘海、卡片不比刘海高,即关着歌词行)停在刘海左沿;底边露在
-/// 刘海下面时(开着歌词行、无刘海屏)走到卡片正中,两半在那里接上。见 05 章决策 111。
+/// 刘海下面时(开着歌词行、无刘海屏)走到卡片正中,两半在那里接上。卡片在两者之间变形时(展开 / 收回),底边露出刘海的
+/// 头 `bottomRevealSpan` 里终点从刘海边平滑挪到正中,线跟着外沿走、不跳。见 05 章决策 111。
 public struct NotchEarProgressPath: Equatable, Sendable {
     /// 肩膀圆心的 y(圆心在卡片左沿 x = 0 上),也是肩膀弧和竖段的交点高度。没有肩膀时为 0。
     public var shoulderCenterY: CGFloat
@@ -67,6 +68,9 @@ public struct NotchEarProgressPath: Equatable, Sendable {
     /// - Parameters:
     ///   - shoulder / cardCornerRadius: 卡片外形此刻的肩膀和底角半径(App 侧 `NotchHangingShape.cornerMetrics`)。
     ///   - notchHeight: 顶行高度(真刘海屏 = 刘海高)。
+    /// 底边露出刘海下沿多少之后终点走到正中。
+    public static let bottomRevealSpan: CGFloat = 12
+
     public init(width: CGFloat, height: CGFloat, notchWidth: CGFloat, notchHeight: CGFloat,
                 shoulder: CGFloat, cardCornerRadius: CGFloat, inset: CGFloat) {
         x = shoulder + inset
@@ -76,8 +80,8 @@ public struct NotchEarProgressPath: Equatable, Sendable {
         bottomY = max(0, height - inset)
         cornerRadius = max(0, min(cardCornerRadius - inset, bottomY - shoulderCenterY))
         let center = width / 2
-        let bottomUnderNotch = notchWidth > 0 && height <= notchHeight + 0.5
-        endX = max(x + cornerRadius, bottomUnderNotch ? center - notchWidth / 2 : center)
+        let revealed = notchWidth > 0 ? min(1, max(0, (height - notchHeight) / Self.bottomRevealSpan)) : 1
+        endX = max(x + cornerRadius, center - notchWidth / 2 * (1 - revealed))
     }
 
     /// 肩膀那段弧扫过的角度(弧度):从起笔点转到弧和竖段的交点。

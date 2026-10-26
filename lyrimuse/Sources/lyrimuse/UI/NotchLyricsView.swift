@@ -171,8 +171,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                         .accessibilityHidden(!shows)
                 }
             }
-            // 「耳朵」那一档:沿稳态卡片外沿走到刘海,外框钉成稳态卡片的宽和 `earProgressHeight`(不含掉歌名 / 横幅那一截,
-            // 那一截伸出来时线让开)。常驻、只切透明度,理由同上。
+            // 「耳朵」那一档:沿卡片外沿走到刘海。卡片尺寸作为形状的可动画值传进去,跟外层同一次尺寸弹簧逐帧插值,
+            // 展开 / 收回时线跟着外沿走,透明度用自己那条曲线(`NotchEarProgressLine.fade`)一边变形一边淡出 / 淡入。
+            // 常驻、只切透明度。
             .overlay(alignment: .top) {
                 if controller.showsProgressLine && controller.progressLineStyle == .ears {
                     let shows = controller.showsEarProgressLine
@@ -180,9 +181,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                                          durationMs: (playback.anchor?.durationMs).flatMap { $0 > 0 ? $0 : nil }
                                              ?? playback.currentDurationMs, tint: accentOrWhite,
                                          active: surfaceVisible && shows, outline: controller.cardOutline,
-                                         notchWidth: controller.notchWidth)
-                        .frame(width: controller.steadyCardWidth, height: controller.earProgressHeight)
-                        .animation(NotchProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {
+                                         notchWidth: controller.notchWidth,
+                                         cardSize: CGSize(width: controller.cardWidth, height: controller.cardHeight))
+                        .animation(NotchEarProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {
                             $0.opacity(shows ? 1 : 0)
                         }
                         .opacity(revealContentOpacity)
