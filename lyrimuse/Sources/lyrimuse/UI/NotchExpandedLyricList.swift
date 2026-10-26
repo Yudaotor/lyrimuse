@@ -32,6 +32,7 @@ struct NotchExpandedLyricList: View {
                 onTapLine: { _ in },
                 interactive: false,
                 minimumEdgePadding: 0,
+                placement: placement(height: proxy.size.height),
                 handle: listHandle)
         }
         .overlay {
@@ -63,6 +64,18 @@ struct NotchExpandedLyricList: View {
         guard PlaybackCoordinator.shared.acceptsSeek, lines.indices.contains(index) else { return }
         PlaybackCoordinator.shared.seek(
             toMs: max(0, lines[index].timeMs - PlaybackCoordinator.shared.currentLyricsOffsetMs))
+    }
+
+    /// 当前句上面正好放下整数行、渐隐只淡行距那道缝(`NotchExpandedMetrics.lyricListActiveAnchor` / `lyricListEdgeFade`)。
+    /// 行数从这一格的高度反推:高度就是行数 × 每行高度。
+    private func placement(height: CGFloat) -> LyricsLayerListPlacement {
+        let secondary = feed.secondaryLine.showsLyricListSecondary
+        let pitch = NotchExpandedMetrics.lyricListPitch(secondaryRow: secondary)
+        let count = max(1, Int((height / pitch).rounded()))
+        let fade = height > 0 ? min(0.5, NotchExpandedMetrics.lyricListEdgeFade / height) : 0
+        return LyricsLayerListPlacement(
+            activeAnchor: NotchExpandedMetrics.lyricListActiveAnchor(lineCount: count, secondaryRow: secondary),
+            topClear: 0, topOpaque: fade, bottomOpaque: 1 - fade, bottomClear: 1)
     }
 
     private func spec(width: CGFloat) -> LyricsLayerList.Spec {

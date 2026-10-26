@@ -2689,6 +2689,14 @@ func runNotchTests() {
         expectEqual(M.lyricListHeight(lineCount: 5, secondaryRow: false), 115, "多行歌词: 5 行高 115")
         expectEqual(M.lyricListHeight(lineCount: 3, secondaryRow: false), 69, "多行歌词: 3 行高 69")
         expectEqual(M.lyricListHeight(lineCount: 7, secondaryRow: true), 308, "多行歌词: 7 行带译文高 308")
+        // 当前句上面放下 (行数 − 1) / 2 整行:锚 a 满足 a × (视口 − 行高) = 上面那几行的高度。
+        expectEqual([3, 5, 7].map { M.lyricListActiveAnchor(lineCount: $0, secondaryRow: false) },
+                    [23.0 / 53, 46.0 / 99, 69.0 / 145], "多行歌词: 3 / 5 / 7 行时当前句上面正好 1 / 2 / 3 整行")
+        expectEqual(M.lyricListActiveAnchor(lineCount: 3, secondaryRow: true), 44.0 / 95,
+                    "多行歌词: 带译文 / 读音时按带小字的行高算")
+        let anchor3 = M.lyricListActiveAnchor(lineCount: 3, secondaryRow: false)
+        expectEqual(abs((anchor3 * (69 - 16)) - 23) < 1e-9 && M.lyricListEdgeFade == 3.5, true,
+                    "多行歌词: 3 行时当前句顶在第 23pt(上一句整行在视口里),渐隐只有行距一半")
         expectEqual([0, 4, 6, 100].map(M.clampedLyricListLineCount), [3, 3, 5, 7],
                     "多行歌词: 存下的行数不在 3 / 5 / 7 里时取最近一档,一样近取小的")
         expectEqual(LyricSecondaryLine.allCases.map(\.showsLyricListSecondary), [false, false, true, true],
@@ -2716,7 +2724,7 @@ func runNotchTests() {
                     "多行歌词: 编辑台舞台按列表留高度,两项进「恢复默认」")
         expectEqual(sourceHas(stage, "if chrome.isExpanded, chrome.showsExpandedLyricList {\n lyricHeight = chrome.expandedLyricListHeight"),
                     true, "多行歌词: 编辑台预览卡上「歌词行」那块可点区域框整段列表,「展开态」那块从列表下面开始")
-        expectEqual(sourceHas(list, "interactive: false,\n minimumEdgePadding: 0,\n handle: listHandle)")
+        expectEqual(sourceHas(list, "interactive: false,\n minimumEdgePadding: 0,\n placement: placement(height: proxy.size.height),\n handle: listHandle)")
                     && sourceHas(src("LyricsLayerList.swift"), "var y = max(minimumEdgePadding, viewport * 0.395)"), true,
                     "多行歌词: 列表留白不套歌词窗口那条 88pt 下限,没有当前句时第一句不掉到视口下沿")
         expectEqual(sourceHas(list, "suspendsBlur: true,")

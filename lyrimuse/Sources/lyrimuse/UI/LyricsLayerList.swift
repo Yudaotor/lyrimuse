@@ -50,6 +50,8 @@ struct LyricsLayerList: NSViewRepresentable {
     /// 列表上下留白的下限(留白本身按视口比例算,见 `LyricsLayerListView.relayout`)。88 是给歌词窗口这种大视口的;
     /// 视口只有一百来 pt 的(灵动岛)传 0,不然还没有当前句时第一句落在视口下沿。
     var minimumEdgePadding: CGFloat = 88
+    /// 当前句滚到视口的哪个比例、上下边渐隐多宽。默认是歌词窗口那套;视口只有几行高的(灵动岛)另给。
+    var placement: LyricsLayerListPlacement = .window
     /// 宿主自己接鼠标时拿它找到列表视图(`interactive` 那条)。
     var handle: LyricsLayerListHandle? = nil
 
@@ -61,9 +63,27 @@ struct LyricsLayerList: NSViewRepresentable {
         view.interactive = interactive
         handle?.view = view
         view.minimumEdgePadding = minimumEdgePadding
+        view.placement = placement
         view.bindChromeFade(chromeFade)
         view.apply(spec)
     }
+}
+
+/// 图层列表的版式:当前句锚在视口哪个比例处,上下边渐隐的范围。
+struct LyricsLayerListPlacement: Equatable {
+    /// 当前行滚到视口从上往下这个比例处(行内同一比例的点对过去)。
+    var activeAnchor: CGFloat
+    /// 上下边渐隐(视口高度的比例):顶边 `topClear` 之上全透明、到 `topOpaque` 全显;底边 `bottomOpaque` 起变淡、
+    /// `bottomClear` 之下全透明。
+    var topClear: CGFloat
+    var topOpaque: CGFloat
+    var bottomOpaque: CGFloat
+    var bottomClear: CGFloat
+
+    /// 歌词窗口:锚 37%(同 SwiftUI 版 `activeLineAnchor`,07 章决策 87);顶部一直全透明到胶囊下沿之后才显现、
+    /// 底边被窗口直切处淡掉(同 SwiftUI 版那条 mask)。
+    static let window = LyricsLayerListPlacement(activeAnchor: 0.37, topClear: 0.075, topOpaque: 0.2,
+                                                 bottomOpaque: 0.9, bottomClear: 1)
 }
 
 @MainActor
@@ -74,6 +94,14 @@ final class LyricsLayerListView: NSView {
     var rendersDetached = false
     /// 见 `LyricsLayerList.minimumEdgePadding`。
     var minimumEdgePadding: CGFloat = 88
+    /// 见 `LyricsLayerList.placement`。改了锚位要重新滚一次,改了渐隐要重设 mask。
+    var placement: LyricsLayerListPlacement = .window {
+        didSet {
+            guard placement != oldValue else { return }
+            applyFadeLocations()
+            if let spec { relayout(spec, transition: .none) }
+        }
+    }
     /// 见 `LyricsLayerList.interactive`。关着时 `hitTest` 返回 nil、不挂跟踪区。
     var interactive = true {
         didSet {
@@ -149,8 +177,7 @@ final class LyricsLayerListView: NSView {
     }
     /// 重装填色动画的漂移门:动画此刻推到的位置跟播放时钟差过它才重装(同悬浮歌词 `resyncToleranceMs`)。
     private static let resyncToleranceMs = 250
-    /// 当前行滚到视口从上往下这个比例处(同 SwiftUI 版 `activeLineAnchor`,07 章决策 87);开场滚第一句、锚 0.52。
-    private static let activeAnchor: CGFloat = 0.37
+    /// 开场(还没有当前行、有前奏点)滚第一句、锚 0.52。当前行的锚位在 `placement`。
     private static let introAnchor: CGFloat = 0.52
     private static let staggerKey = "lyrimuse.layer-list.shift"
     /// 整张重建一次各花了多久(debug 级,`log stream --level debug` 才看得到)。
@@ -178,10 +205,10 @@ final class LyricsLayerListView: NSView {
         rowsLayer.actions = ["position": NSNull(), "bounds": NSNull(), "sublayers": NSNull()]
         document.layer?.addSublayer(rowsLayer)
         document.onMouse = { [weak self] event, kind in self?.handleMouse(event, kind) }
-        // 上下边缘渐隐:顶部一直全透明到胶囊下沿之后才显现、底边被窗口直切处淡掉(同 SwiftUI 版那条 mask)。
+        // 上下边缘渐隐,范围在 `placement`。
         fadeMask.colors = [NSColor.clear.cgColor, NSColor.clear.cgColor, NSColor.black.cgColor,
                            NSColor.black.cgColor, NSColor.clear.cgColor]
-        fadeMask.locations = [0, 0.075, 0.2, 0.9, 1]
+        applyFadeLocations()
         fadeMask.startPoint = CGPoint(x: 0.5, y: 0)
         fadeMask.endPoint = CGPoint(x: 0.5, y: 1)
         fadeMask.actions = ["position": NSNull(), "bounds": NSNull()]
@@ -203,6 +230,11 @@ final class LyricsLayerListView: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
 
     override func hitTest(_ point: NSPoint) -> NSView? { interactive ? super.hitTest(point) : nil }
+
+    private func applyFadeLocations() {
+        let p = placement
+        fadeMask.locations = [0, p.topClear, p.topOpaque, p.bottomOpaque, p.bottomClear].map { NSNumber(value: Double($0)) }
+    }
 
     override func layout() {
         super.layout()
@@ -514,9 +546,9 @@ final class LyricsLayerListView: NSView {
         func aligned(_ top: CGFloat, _ height: CGFloat, _ anchor: CGFloat) -> CGFloat {
             min(maxScroll, max(0, top + anchor * height - anchor * viewport))
         }
-        if let g = gapView?.index, g >= 0 { return aligned(gapY, s.style.fontSize * 0.5, Self.activeAnchor) }
+        if let g = gapView?.index, g >= 0 { return aligned(gapY, s.style.fontSize * 0.5, placement.activeAnchor) }
         if let i = s.scrollLineIndex ?? s.currentLineIndex, rowY.indices.contains(i) {
-            return aligned(rowY[i], rows[i].size.height, Self.activeAnchor)
+            return aligned(rowY[i], rows[i].size.height, placement.activeAnchor)
         }
         if !rowY.isEmpty, s.gapMarkers[-1] != nil { return aligned(rowY[0], rows[0].size.height, Self.introAnchor) }
         return nil

@@ -140,6 +140,20 @@ public enum NotchExpandedMetrics {
         CGFloat(clampedLyricListLineCount(lineCount)) * lyricListPitch(secondaryRow: secondaryRow)
     }
 
+    /// 当前句滚到视口从上往下的哪个比例(传给图层列表,含义同它的 `activeAnchor`:行内这个比例的点对到视口这个比例处)。
+    /// 让当前句上面正好放下 (行数 − 1) / 2 整行(3 行时上一句、当前句、下一句各占一行),不按歌词窗口的 37%:
+    /// 视口只有几行高时 37% 会把上一句顶出去半截(05 章决策 112)。
+    public static func lyricListActiveAnchor(lineCount: Int, secondaryRow: Bool) -> CGFloat {
+        let count = clampedLyricListLineCount(lineCount)
+        let pitch = lyricListPitch(secondaryRow: secondaryRow)
+        let rowHeight = pitch - lyricListLineSpacing
+        let viewport = CGFloat(count) * pitch
+        return CGFloat((count - 1) / 2) * pitch / (viewport - rowHeight)
+    }
+
+    /// 列表上下边渐隐的宽度:行距的一半,只淡掉行与行之间那道缝,不吃进整行的字。
+    public static let lyricListEdgeFade: CGFloat = lyricListLineSpacing / 2
+
     // MARK: - 没有曲目时的空闲面板
 
     /// 空闲面板离卡片**底边**的间距。它是展开态最下面(也是唯一)的一块,不像曲目信息头部
