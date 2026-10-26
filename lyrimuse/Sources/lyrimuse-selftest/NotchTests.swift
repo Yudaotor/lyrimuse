@@ -387,11 +387,15 @@ func runNotchTests() {
                      ears { $0.hasMilestone = true }.showsEarProgressLine, ears { $0.hasTrack = false }.showsEarProgressLine],
                     [false, false, false, false], "进度线耳朵: 展开、收起、报喜、没曲目时不画")
         typealias E = NotchEarProgressPath
-        // 卡片 360 宽,刘海 180 宽 32 高;肩膀 4、卡片底角 8,线心内缩 1.75。
-        let low = E(width: 360, height: 32, notchWidth: 180, notchHeight: 32, shoulder: 4, cardCornerRadius: 8, inset: 1.75)
-        expectEqual([low.x, low.bottomY, low.cornerRadius, low.endX], [5.75, 30.25, 6.25, 90],
-                    "进度线耳朵: 关着歌词行时贴着外沿走,停在刘海左沿")
-        expectEqual(abs(low.length - (24 + .pi / 2 * 6.25 + 78)) < 1e-9, true, "进度线耳朵: 半边长 = 竖段 + 四分之一圆弧 + 底边段")
+        // 卡片 360 宽,刘海 180 宽 32 高;肩膀 4、卡片底角 8,线心内缩 1(2pt 线贴着外沿)。
+        let low = E(width: 360, height: 32, notchWidth: 180, notchHeight: 32, shoulder: 4, cardCornerRadius: 8, inset: 1)
+        expectEqual([low.startX, low.shoulderRadius, low.x, low.bottomY, low.cornerRadius, low.endX], [3, 5, 5, 31, 7, 90],
+                    "进度线耳朵: 关着歌词行时从屏幕上沿顺着肩膀弯进侧边、贴着外沿走,停在刘海左沿")
+        expectEqual(abs(low.length - (5 * asin(0.8) + 20 + .pi / 2 * 7 + 78)) < 1e-9, true,
+                    "进度线耳朵: 半边长 = 肩膀弧 + 竖段 + 底角四分之一圆弧 + 底边段")
+        let noShoulder = E(width: 360, height: 24, notchWidth: 0, notchHeight: 24, shoulder: 0, cardCornerRadius: 6, inset: 1)
+        expectEqual([noShoulder.startX, noShoulder.shoulderRadius, noShoulder.shoulderSweep], [1, 0, 0],
+                    "进度线耳朵: 没有肩膀时从竖段顶端直接起笔")
         expectEqual(E(width: 360, height: 76, notchWidth: 180, notchHeight: 32, shoulder: 4, cardCornerRadius: 19,
                       inset: 1.75).endX, 180, "进度线耳朵: 开着歌词行时底边露在刘海下面,走到正中")
         expectEqual(E(width: 360, height: 24, notchWidth: 0, notchHeight: 24, shoulder: 3, cardCornerRadius: 6,

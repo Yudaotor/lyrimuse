@@ -80,7 +80,8 @@ struct NotchProgressLine: View {
 /// 卡片不为它变高。位置口径、重画间隔、显隐曲线同底边那根(`NotchProgressLine`),重画间隔按半边的长度算。
 ///
 /// 外框由调用方给成稳态卡片那么大(宽 = 稳态宽,高 = `earProgressHeight`),肩膀和底角从同一个外形取
-/// (`NotchHangingShape.cornerMetrics`),线跟卡片外沿保持同一个距离。
+/// (`NotchHangingShape.cornerMetrics`)。线贴着卡片外沿(线宽一半的内缩),只画已播的那段、不画底槽,颜色从上往下渐亮
+/// (上端淡进菜单栏),底下垫一层同色的淡光晕,看起来是卡片的边亮起来,不是另描的一圈框。
 struct NotchEarProgressLine: View {
     let anchor: ProgressAnchor?
     let pausedPositionMs: Int?
@@ -92,8 +93,9 @@ struct NotchEarProgressLine: View {
     let notchWidth: CGFloat
     @ObservedObject private var corners = NotchCornerLive.shared
 
-    /// 线心离卡片外沿的距离,同底边那根(1pt 留白 + 半根线宽)。
-    static let inset: CGFloat = 1 + NotchProgressLine.thickness / 2
+    static let thickness: CGFloat = 2
+    /// 线心离卡片外沿的距离:半根线宽,线的外侧正好贴着外沿。
+    static let inset: CGFloat = thickness / 2
 
     var body: some View {
         GeometryReader { proxy in
@@ -117,13 +119,17 @@ struct NotchEarProgressLine: View {
     @ViewBuilder
     private func halves(_ path: NotchEarProgressPath, width: CGFloat, fraction: Double?) -> some View {
         if let fraction {
-            ZStack {
+            let played = ZStack {
                 ForEach([false, true], id: \.self) { mirrored in
-                    let shape = NotchEarProgressShape(path: path, width: width, mirrored: mirrored)
-                    shape.stroke(tint.opacity(0.16), lineWidth: NotchProgressLine.thickness)
-                    shape.trim(from: 0, to: fraction)
-                        .stroke(tint.opacity(0.85), style: StrokeStyle(lineWidth: NotchProgressLine.thickness, lineCap: .round))
+                    NotchEarProgressShape(path: path, width: width, mirrored: mirrored)
+                        .trim(from: 0, to: fraction)
+                        .stroke(style: StrokeStyle(lineWidth: Self.thickness, lineCap: .round))
                 }
+            }
+            let fill = LinearGradient(colors: [tint.opacity(0.3), tint.opacity(0.95)], startPoint: .top, endPoint: .bottom)
+            ZStack {
+                fill.mask(played).blur(radius: 2.5).opacity(0.45)
+                fill.mask(played)
             }
         }
     }
@@ -138,7 +144,11 @@ struct NotchEarProgressShape: Shape {
     func path(in rect: CGRect) -> Path {
         let r = path.cornerRadius
         var p = Path()
-        p.move(to: CGPoint(x: path.x, y: 0))
+        p.move(to: CGPoint(x: path.startX, y: 0))
+        if path.shoulderRadius > 0 {
+            p.addArc(center: CGPoint(x: 0, y: path.shoulderCenterY), radius: path.shoulderRadius,
+                     startAngle: .radians(-Double(path.shoulderSweep)), endAngle: .zero, clockwise: false)
+        }
         p.addLine(to: CGPoint(x: path.x, y: path.bottomY - r))
         p.addArc(center: CGPoint(x: path.x + r, y: path.bottomY - r), radius: r,
                  startAngle: .degrees(180), endAngle: .degrees(90), clockwise: true)
