@@ -693,6 +693,7 @@ public enum SettingsSearchCatalog {
                                                         "推到", "全部渠道", "选择渠道"]),
         account("bark", path: ["推送提醒"], "数据来源", kw: ["数据源", "Last.fm", "ListenBrainz", "听歌报告"]),
         account("bark", path: ["推送提醒"], "每类列出", kw: ["条数", "前几名", "Top", "排行", "歌手", "专辑", "歌曲", "听歌报告"]),
+        account("bark", path: ["推送提醒"], "推送内容", kw: ["模板", "自定义", "占位符", "文案", "标题", "正文", "格式", "听歌报告"]),
         account("bark", path: ["推送提醒"], "每周听歌小结", kw: ["周报", "推送", "Bark"]),
         account("bark", path: ["推送提醒"], "每日听歌报告", kw: ["日报", "推送", "Bark"]),
         account("bark", path: ["推送提醒"], "每月听歌小结", kw: ["月报", "推送", "Bark", "专辑"]),

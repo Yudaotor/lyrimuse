@@ -51,7 +51,7 @@ func (a *alerter) sendMessage(msg notifyMessage) error {
 	if a == nil {
 		return errNoNotifyChannel
 	}
-	event, title := msg.Event, msg.Title
+	event, key := msg.Event, msg.dedupKey()
 	targets := routedNotifyChannels(a.channels, a.routes, event)
 	if len(targets) == 0 {
 		return errNoNotifyChannel
@@ -60,7 +60,7 @@ func (a *alerter) sendMessage(msg notifyMessage) error {
 	delivered := false
 	since := time.Now().Add(-notifyDigestRedeliverWindow).Unix()
 	for _, ch := range targets {
-		if notifyEventIsDigest(event) && notifyDeliveredSince(ch.ID, event, title, since) {
+		if notifyEventIsDigest(event) && notifyDeliveredSince(ch.ID, event, key, since) {
 			log.Printf("notify: skipping %s, it already got this digest (event=%s)", ch.Platform, event)
 			delivered = true
 			continue
@@ -79,8 +79,8 @@ func (a *alerter) sendMessage(msg notifyMessage) error {
 	return firstErr
 }
 
-// notifyDigestRedeliverWindow:send 往回查多久的推送记录认「这个渠道已经收到过这份报告」。报告标题都带着所属的日期区间,
-// 不会跟下一期撞上。
+// notifyDigestRedeliverWindow:send 往回查多久的推送记录认「这个渠道已经收到过这份报告」。认的是默认标题(notifyMessage.Key),
+// 它带着所属的日期区间,不会跟下一期撞上;用户自定义的标题可能每期都一样,不能拿来认。
 const notifyDigestRedeliverWindow = 7 * 24 * time.Hour
 
 func notifyEventIsDigest(event string) bool {
@@ -95,10 +95,20 @@ func notifyEventIsDigest(event string) bool {
 func (a *alerter) push(title, body string) error { return a.send("", title, body) }
 
 // notifyMessage 是要推的一条消息。Digest:听歌报告的那份数,按平台排版(notifyrich.go)照它排,Body 是纯文本那一份;
-// 其余消息(测一下)为 nil。
+// 其余消息(测一下)为 nil。Key:判「这个渠道收到过这一期没有」用的标题,听歌报告是默认标题,空 = 用 Title。
+// Custom:标题正文是用户自定义的(digesttemplate.go),不套卡片排版。
 type notifyMessage struct {
 	Event, Title, Body string
 	Digest             *digestStats
+	Key                string
+	Custom             bool
+}
+
+func (m notifyMessage) dedupKey() string {
+	if m.Key != "" {
+		return m.Key
+	}
+	return m.Title
 }
 
 // alerterPushTimeout:一次推送的总预算。Telegram 要够「直连探路 + 走系统代理」两次尝试

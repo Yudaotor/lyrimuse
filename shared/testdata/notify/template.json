@@ -1,0 +1,50 @@
+{
+  "_comment": "听歌报告自定义内容(推送提醒页「推送内容」)的渲染样例。数据用同目录 preview.json 的 samples(kind = daily / weekly,每类截前 top_n 条),默认标题用 preview.json 的 daily_title / weekly_title,默认正文是那一份按默认拼出来的正文。引擎 digesttemplate_test.go、App selftest 各读一遍,两边渲染出来的必须逐字一样。",
+  "cases": [
+    {
+      "name": "周报:各种占位符",
+      "kind": "weekly",
+      "top_n": 3,
+      "title": "我的{source}周报 · {plays} 次",
+      "body": "一共听了 {plays} 次，约 {duration}\n比{prev_label}（{prev_plays}）{change}\n最爱的歌手：{top_artist}\n最爱的专辑：{top_album}\n\n{top_tracks}\n新歌手 {new_artists} 位：{new_artist_names}\n{unknown} 原样留着",
+      "want_title": "我的Last.fm周报 · 286 次",
+      "want_body": "一共听了 286 次，约 17 小时 52 分\n比前一周（241）↑19%\n最爱的歌手：方大同\n最爱的专辑：方大同 - JTW 西游记\n\n1. 方大同 - NMW（11）\n2. 周杰伦 - 晴天（9）\n3. Prince - For You（8）\n新歌手 5 位：D'Angelo、林忆莲、卢广仲\n{unknown} 原样留着"
+    },
+    {
+      "name": "日报:同一份模板,取不到「跟上一期比」的那一行整行不写",
+      "kind": "daily",
+      "top_n": 3,
+      "title": "我的{source}周报 · {plays} 次",
+      "body": "一共听了 {plays} 次，约 {duration}\n比{prev_label}（{prev_plays}）{change}\n最爱的歌手：{top_artist}\n最爱的专辑：{top_album}\n\n{top_tracks}\n新歌手 {new_artists} 位：{new_artist_names}\n{unknown} 原样留着",
+      "want_title": "我的Last.fm周报 · 42 次",
+      "want_body": "一共听了 42 次，约 2 小时 46 分\n最爱的歌手：周杰伦\n最爱的专辑：周杰伦 - 叶惠美\n\n1. 周杰伦 - 晴天（4）\n2. 方大同 - 春风吹（3）\n3. 陈绮贞 - 越洋电话（3）\n新歌手 2 位：Prince、D'Angelo\n{unknown} 原样留着"
+    },
+    {
+      "name": "在默认内容前后加字;标题没改按默认",
+      "kind": "daily",
+      "top_n": 1,
+      "title": "",
+      "body": "晚上好，这是{title}\n\n{body}\n\n—— {summary}",
+      "want_title": "🎧 今日听歌报告（10-20）",
+      "want_body": "晚上好，这是🎧 今日听歌报告（10-20）\n\n共播放 42 次 · 约 2 小时 46 分\n\nTop 歌手：\n1. 周杰伦（12）\n\nTop 专辑：\n1. 周杰伦 - 叶惠美（6）\n\nTop 歌曲：\n1. 周杰伦 - 晴天（4）\n\n新听了 2 位歌手：Prince、D'Angelo\n\n—— 共播放 42 次 · 约 2 小时 46 分"
+    },
+    {
+      "name": "渲染出来是空的那一段退回默认",
+      "kind": "daily",
+      "top_n": 2,
+      "title": "{prev_plays}",
+      "body": "{link}\n\n",
+      "want_title": "🎧 今日听歌报告（10-20）",
+      "want_body": "共播放 42 次 · 约 2 小时 46 分\n\nTop 歌手：\n1. 周杰伦（12）\n2. 方大同（8）\n\nTop 专辑：\n1. 周杰伦 - 叶惠美（6）\n2. 方大同 - 15（5）\n\nTop 歌曲：\n1. 周杰伦 - 晴天（4）\n2. 方大同 - 春风吹（3）\n\n新听了 2 位歌手：Prince、D'Angelo"
+    },
+    {
+      "name": "标题多行合成一行;歌手榜按条数截",
+      "kind": "weekly",
+      "top_n": 2,
+      "title": "{plays} 次\n{top_artist}",
+      "body": "{top_artists}\n{top_albums}",
+      "want_title": "286 次 方大同",
+      "want_body": "1. 方大同（61）\n2. 周杰伦（48）\n1. 方大同 - JTW 西游记（29）\n2. 周杰伦 - 叶惠美（21）"
+    }
+  ]
+}

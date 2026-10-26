@@ -24,6 +24,9 @@ const richColor = 0xE5484D
 // buildRichPayload 拼排过版的请求体。ok=false 表示这个平台、这条消息不排,用纯文本那份(buildNotifyPayload)。
 func buildRichPayload(ch notifyChannel, msg notifyMessage) (payload []byte, contentType string, ok bool, err error) {
 	d := msg.Digest
+	if msg.Custom && ch.Platform != platformBark && ch.Platform != "" {
+		return nil, "", false, nil
+	}
 	var v any
 	switch ch.Platform {
 	case platformTelegram:

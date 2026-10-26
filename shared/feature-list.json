@@ -1848,9 +1848,9 @@
             "zh-Hant": "日報、週報、月報和年度聆聽小結"
           },
           "desc": {
-            "zh-Hans": "推送到你设置的渠道，可同时设置多个：Bark、ntfy、Server酱、飞书、钉钉、企业微信、Telegram、Discord、Slack，或通用 Webhook。每个渠道都可预览推送效果、发送测试；推送记录中可查看每次是否送达，未送达的可重发。报告写明跟上一期比、这期新听了哪些歌手、听了多久，各平台按自己的格式排版，带专辑封面和完整榜单链接。四种小结各有独立开关，有多个渠道时可分别选推到哪些渠道；可设推送时间（按这台 Mac 当前的时区）和每类列出几名。位于「实验室」中。",
-            "en": "Pushed to the channels you set up, as many as you like: Bark, ntfy, ServerChan, Feishu, DingTalk, WeCom, Telegram, Discord, Slack or a generic webhook. Each channel can preview how a push will look and send a test, and the delivery history shows whether each push arrived, with a resend for the ones that didn't. Reports compare with the previous period, name the artists you listened to for the first time and estimate how long you listened, formatted for each platform with the album cover and a link to the full chart. Each of the four has its own switch and, with several channels, its own choice of channels; you pick the time they're pushed (in the Mac's current time zone) and how many top items each list shows. Under Labs.",
-            "zh-Hant": "推播到你設定的管道，可同時設定多個：Bark、ntfy、Server醬、飛書、釘釘、企業微信、Telegram、Discord、Slack，或通用 Webhook。每個管道都可預覽推播效果、傳送測試；推播記錄中可查看每次是否送達，未送達的可重新傳送。報告寫明與上一期相比、這期新聽了哪些歌手、聽了多久，各平台依自己的格式排版，附專輯封面與完整排行連結。四種小結各有獨立開關，有多個管道時可分別選擇推播到哪些管道；可設定推播時間（依這台 Mac 目前的時區）和每類列出幾名。位於「實驗室」中。"
+            "zh-Hans": "推送到你设置的渠道，可同时设置多个：Bark、ntfy、Server酱、飞书、钉钉、企业微信、Telegram、Discord、Slack，或通用 Webhook。每个渠道都可预览推送效果、发送测试；推送记录中可查看每次是否送达，未送达的可重发。报告写明跟上一期比、这期新听了哪些歌手、听了多久，各平台按自己的格式排版，带专辑封面和完整榜单链接。四种小结各有独立开关，有多个渠道时可分别选推到哪些渠道；可设推送时间（按这台 Mac 当前的时区）和每类列出几名；标题和正文也可自定义，用占位符填入这一期的数据。位于「实验室」中。",
+            "en": "Pushed to the channels you set up, as many as you like: Bark, ntfy, ServerChan, Feishu, DingTalk, WeCom, Telegram, Discord, Slack or a generic webhook. Each channel can preview how a push will look and send a test, and the delivery history shows whether each push arrived, with a resend for the ones that didn't. Reports compare with the previous period, name the artists you listened to for the first time and estimate how long you listened, formatted for each platform with the album cover and a link to the full chart. Each of the four has its own switch and, with several channels, its own choice of channels; you pick the time they're pushed (in the Mac's current time zone) and how many top items each list shows, and can write your own title and body with placeholders for the period's data. Under Labs.",
+            "zh-Hant": "推播到你設定的管道，可同時設定多個：Bark、ntfy、Server醬、飛書、釘釘、企業微信、Telegram、Discord、Slack，或通用 Webhook。每個管道都可預覽推播效果、傳送測試；推播記錄中可查看每次是否送達，未送達的可重新傳送。報告寫明與上一期相比、這期新聽了哪些歌手、聽了多久，各平台依自己的格式排版，附專輯封面與完整排行連結。四種小結各有獨立開關，有多個管道時可分別選擇推播到哪些管道；可設定推播時間（依這台 Mac 目前的時區）和每類列出幾名；標題和內文也可自訂，用預留位置填入這一期的資料。位於「實驗室」中。"
           },
           "default": "off",
           "check": {
@@ -1876,6 +1876,10 @@
             [
               "推送提醒",
               "每类列出"
+            ],
+            [
+              "推送提醒",
+              "推送内容"
             ],
             [
               "推送提醒",

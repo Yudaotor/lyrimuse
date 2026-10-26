@@ -7,8 +7,9 @@ import SwiftUI
 /// (Core `NotificationPreview.sample`),底部写明。正文跟引擎真推出去的逐字一样,条数跟「每类列出」走;外框是照各平台样子画的
 /// 示意,颜色写死、不随系统深浅色变。
 /// 发件人名字用渠道「名称」,头像用平台图标 —— 群机器人、Telegram Bot 真正的名字和头像是在平台上设的,App 不知道。
-/// 照引擎 notifyrich.go 各平台的排法画(推送一律按平台排版):加粗、分栏、卡片;封面用真实数据里的专辑封面
+/// 照引擎 notifyrich.go 各平台的排法画:加粗、分栏、卡片;封面用真实数据里的专辑封面
 /// (测试数据、没取到封面时画占位方块),飞书不画(群机器人带不了图)。见 15 章决策 75。
+/// 自定义了推送内容(Core `DigestTemplate`)时按模板出标题正文,画成一条纯文本消息;Bark、ntfy 照旧带封面,通用 Webhook 照旧带 data。
 struct NotificationPreviewCard: View {
     let platform: NotificationPlatform
     let senderName: String
@@ -29,9 +30,14 @@ struct NotificationPreviewCard: View {
 
     fileprivate var stats: NotificationPreview.Stats { real?.stats ?? NotificationPreview.sample(kind) }
 
+    private var custom: Bool { features.digestTemplate.isCustom }
+
     var body: some View {
-        let title = real?.title ?? NotificationPreview.title(kind, now: now)
-        let text = NotificationPreview.body(stats, topN: features.digestTopN)
+        let defaultTitle = real?.title ?? NotificationPreview.title(kind, now: now)
+        let defaultText = NotificationPreview.body(stats, topN: features.digestTopN)
+        let (title, text) = custom
+            ? features.digestTemplate.render(defaultTitle: defaultTitle, defaultBody: defaultText, stats: stats, topN: features.digestTopN)
+            : (defaultTitle, defaultText)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text(L10n.t("预览"))
@@ -135,6 +141,8 @@ struct NotificationPreviewCard: View {
     private func stage(title: String, text: String) -> some View {
         if platform == .webhook {
             webhook(title: title, text: text)
+        } else if custom && platform != .bark && platform != .ntfy {
+            plainMessage(title: title, text: text)
         } else {
             richStage(title: title, text: text)
         }
@@ -178,6 +186,29 @@ struct NotificationPreviewCard: View {
                 .foregroundStyle(Color.white.opacity(0.85))
         }
         .padding(14)
+    }
+
+    /// 自定义内容按纯文本推:一条消息气泡,标题一行、正文原样。
+    private func plainMessage(title: String, text: String) -> some View {
+        let dark = platform == .discord
+        return HStack(alignment: .top, spacing: 8) {
+            avatar(32)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(senderName).font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(dark ? Color.white.opacity(0.85) : Color.black.opacity(0.55))
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title).font(.system(size: 13, weight: .semibold))
+                    Text(text).font(.system(size: 12.5))
+                }
+                .foregroundStyle(dark ? Color(hex: 0xDBDEE1) : Color(hex: 0x1F2329))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(dark ? Color(hex: 0x2B2D31) : Color.white))
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 24)
+        }
+        .padding(12)
     }
 
     /// 通用 Webhook:请求头和 JSON 原样给出。

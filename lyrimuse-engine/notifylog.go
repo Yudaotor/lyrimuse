@@ -39,6 +39,9 @@ type notifyLogEntry struct {
 	ElapsedMS   int64  `json:"elapsed_ms"`
 	// Digest:听歌报告的那份数,重发时照它重新排版(notifyrich.go)。
 	Digest *digestStats `json:"digest,omitempty"`
+	// Key、Custom 同 notifyMessage:判重认的默认标题(空 = 认 Title)、标题正文是用户自定义的(重发也不排版)。
+	Key    string `json:"key,omitempty"`
+	Custom bool   `json:"custom,omitempty"`
 }
 
 type notifyLogFile struct {
@@ -69,6 +72,10 @@ func recordNotifyDelivery(ch notifyChannel, msg notifyMessage, r notifyResult) {
 		ID: newNotifyLogID(), At: time.Now().Unix(), Channel: ch.ID, ChannelName: ch.Name, Platform: ch.Platform,
 		Event: msg.Event, Title: msg.Title, OK: r.OK, Kind: r.Kind, Status: r.Status, Code: r.Code,
 		Body: msg.Body, Detail: r.Detail, ElapsedMS: r.Elapsed.Milliseconds(), Digest: msg.Digest,
+		Custom: msg.Custom,
+	}
+	if msg.Key != msg.Title {
+		e.Key = msg.Key
 	}
 	f.Entries = append(f.Entries, e)
 	if n := len(f.Entries); n > notifyLogMax {
@@ -98,14 +105,14 @@ func findNotifyLogEntry(id string) (notifyLogEntry, bool) {
 }
 
 // notifyDeliveredSince:推送记录里有没有 since(unix 秒)及以后推到 channel、同一事件同一期(digestTitleKey)、推成了的一条。
-func notifyDeliveredSince(channel, event, title string, since int64) bool {
+func notifyDeliveredSince(channel, event, key string, since int64) bool {
 	notifyLogMu.Lock()
 	defer notifyLogMu.Unlock()
 	if notifyLogPath == "" {
 		return false
 	}
 	for _, e := range readNotifyLog(notifyLogPath).Entries {
-		if e.OK && e.At >= since && e.Channel == channel && e.Event == event && digestTitleKey(e.Title) == digestTitleKey(title) {
+		if e.OK && e.At >= since && e.Channel == channel && e.Event == event && digestTitleKey(e.dedupKey()) == digestTitleKey(key) {
 			return true
 		}
 	}
@@ -116,6 +123,13 @@ func notifyDeliveredSince(channel, event, title string, since int64) bool {
 // 就换了写法;去掉这两个字再比,失败后补推和手动重发才认得出是同一份。
 func digestTitleKey(title string) string {
 	return strings.NewReplacer("今日", "", "昨日", "").Replace(title)
+}
+
+func (e notifyLogEntry) dedupKey() string {
+	if e.Key != "" {
+		return e.Key
+	}
+	return e.Title
 }
 
 func newNotifyLogID() string {

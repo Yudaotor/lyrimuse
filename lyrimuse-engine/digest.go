@@ -438,9 +438,15 @@ func topTallies(tallies []digestTally) []digestTally {
 
 // digestPush 推送一条听歌报告——各 cadence 各自算好 title、拿到 stats 后调用同一份文案
 // 拼装逻辑(digestBody)。一个渠道都没收下才返回错误，调用方不记「已推送」，下次检查重推。
-// 正文是纯文本那一份(推送记录、纯文本平台用);按平台排版的由 notifyrich.go 照 stats 另排。
+// 正文是纯文本那一份(推送记录、纯文本平台用);按平台排版的由 notifyrich.go 照 stats 另排。用户自定义了推送内容时
+// 标题、正文按模板出(digesttemplate.go),按纯文本推;判「这一期推过没有」仍按默认标题(notifyMessage.Key)。
 func digestPush(a *alerter, event, title string, stats digestStats) error {
-	return a.sendMessage(notifyMessage{Event: event, Title: title, Body: digestBody(stats), Digest: &stats})
+	msg := notifyMessage{Event: event, Title: title, Body: digestBody(stats), Digest: &stats, Key: title}
+	if t := features().DigestTemplate; t.custom() {
+		msg.Title, msg.Body = renderDigestTemplate(t, title, msg.Body, stats, digestTopN())
+		msg.Custom = true
+	}
+	return a.sendMessage(msg)
 }
 
 // digestShown:某一类要不要列。只有超过 1 条时才列(只有一条时排名没有意义)，「每类列出」设成 1 时例外：用户要的就是各类第一名。

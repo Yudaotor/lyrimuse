@@ -171,6 +171,7 @@
 "Last.fm 仅接受两周内的收听记录" = "Last.fm only accepts plays from the last two weeks";
 "Last.fm 已直接连接 Spotify，Lyrimuse 也在记录，保留其中一方即可" = "Last.fm is connected to Spotify directly, and Lyrimuse is scrobbling Spotify too. Keep just one";
 "Last.fm 已确认收到这次播放" = "Last.fm has acknowledged this play";
+"Last.fm 或 ListenBrainz" = "Last.fm or ListenBrainz";
 "Last.fm 拒绝写入，Scrobble 已暂停，授权可能已在网站上被撤销" = "Last.fm is rejecting scrobbles, so scrobbling is paused. Your authorization may have been revoked on the Last.fm website";
 "Last.fm 账号" = "Last.fm Account";
 "Last.fm 账号建议" = "Last.fm Account Suggestions";
@@ -273,7 +274,9 @@
 "三" = "W";
 "三个步骤，约需一分钟" = "Three steps, about a minute";
 "三连音符" = "Three Notes";
+"上一期怎么称呼，如「前一周」" = "What the previous period is called, such as “前一周”";
 "上一期未上榜" = "Not in the previous chart";
+"上一期的播放次数，日报没有" = "Plays in the previous period, not in daily reports";
 "上一期（%@ – %@）无收听记录，不显示排名变化" = "No scrobbles in the previous period (%@ – %@), so no rank changes";
 "上一步" = "Back";
 "上一轮扫描尚未完成，稍后将自动继续" = "The previous run hasn't finished; it resumes automatically";
@@ -283,6 +286,8 @@
 "上屏" = "Shown";
 "上屏延迟" = "Display delay";
 "上方的「Scrobble 到 Last.fm」已关闭，此处设置暂不生效" = "“Scrobble to Last.fm” above is off, so these settings have no effect right now";
+"上期名称" = "Previous period";
+"上期次数" = "Previous plays";
 "上次保存：%@" = "Last saved: %@";
 "上次刷新失败，当前显示 %@ 的内容" = "Last refresh failed; showing content from %@";
 "上次刷新：%@" = "Last refreshed: %@";
@@ -321,6 +326,8 @@
 "不含时间戳" = "No timestamps";
 "不显示" = "None";
 "不标注读音" = "No romanization";
+"不自定义时的整份正文" = "The whole default body";
+"不自定义时的标题，带这一期的日期" = "The default title, with this period's dates";
 "不足 1 分钟" = "under a minute";
 "不转换" = "As-is";
 "不透明度" = "Opacity";
@@ -341,6 +348,8 @@
 "专辑 A→Z" = "Album A→Z";
 "专辑 Z→A" = "Album Z→A";
 "专辑吻合" = "Album match";
+"专辑榜" = "Top albums";
+"专辑榜，按「每类列出」的条数，一行一张" = "Top albums, as many as “Items per List”, one per line";
 "专辑简介" = "Album Notes";
 "专辑：%@" = "on %@";
 "丢帧" = "Dropped";
@@ -762,6 +771,7 @@
 "向 Discord 好友展示正在收听的歌曲" = "Let your Discord friends see what you're listening to";
 "向指定地址 POST 一段 JSON，适用于对接 Home Assistant、n8n 或自建服务" = "POSTs JSON to a URL you choose. Suitable for Home Assistant, n8n or your own service";
 "含明文凭证；导出为设置与歌词库两个文件，导入将覆盖全部设置" = "Contains credentials in plain text; exports two files, settings and lyrics library; importing replaces all settings";
+"听了多久，如「17 小时 52 分」" = "Listening time, such as “17 小时 52 分”";
 "听歌报告" = "Listening Digests";
 "听歌报告会推到所有启用的渠道；有多个渠道时，可在下方「听歌报告」里为每一档单独选择。点一行可编辑或发送测试，右键可删除" = "Listening reports go to every enabled channel. With several channels, pick channels for each report under Listening Reports below. Click a row to edit or send a test; right-click to delete";
 "启动与通知" = "Startup & Notifications";
@@ -778,6 +788,7 @@
 "唯一的差异是胜者在「%1$@」一项多 %2$d 分" = "The only difference: the winner scored %2$d more on “%1$@”";
 "喜欢" = "Favorite";
 "喜欢/取消喜欢" = "Favorite/Remove Favorite";
+"四档报告共用。一行里的占位符都没有数据时，这一行不发送" = "Shared by all four reports. A line is left out when none of its placeholders has data";
 "回到逐句编辑" = "Back to Line Editing";
 "因网络不可用已停止" = "Stopped: no connection";
 "因连续失败暂时跳过：%@" = "Temporarily skipped after repeated failures: %@";
@@ -812,6 +823,7 @@
 "在 KKBOX 中显示歌手" = "Show Artist in KKBOX";
 "在 Last.fm 上喜欢" = "Love on Last.fm";
 "在 Last.fm 上打开" = "Open on Last.fm";
+"在 Last.fm 或 ListenBrainz 上看完整榜单的地址" = "Link to the full chart on Last.fm or ListenBrainz";
 "在 Last.fm 网站查看主页" = "View My Profile on Last.fm";
 "在 Telegram 中向 @BotFather 发送 /newbot 创建机器人，并将获得的 Token 填入「机器人 Token」。然后向机器人发送任意消息，在浏览器中打开 https://api.telegram.org/bot你的Token/getUpdates，chat 下的 id 即为 Chat ID" = "In Telegram, message @BotFather with /newbot to create a bot and paste the token it gives you into “Bot Token”. Then send your bot a message and open https://api.telegram.org/bot<your token>/getUpdates in a browser. The id under chat is your Chat ID";
 "在 api.slack.com/apps 新建应用（From scratch）并选择工作区，开启 Incoming Webhooks，点按「Add New Webhook」并选择目标频道，授权后拷贝 Webhook URL" = "Create an app at api.slack.com/apps (From scratch) and pick your workspace. Turn on Incoming Webhooks, click “Add New Webhook”, choose the channel to post to, then copy the Webhook URL";
@@ -1085,6 +1097,7 @@
 "已由「自动识别」接管，取消「自动识别」后将仅识别勾选的播放器" = "Covered by Auto-detect. Turn it off to recognize only the selected players";
 "已缓存读音" = "Cached Romanization";
 "已自动跳过广告" = "Ad skipped automatically";
+"已自定义，按纯文本推送" = "Customized, sent as plain text";
 "已补 %@ 条" = "%@ backfilled";
 "已补全「%1$@」的歌词（%2$@ 分）" = "Filled in lyrics from “%1$@” (%2$@ pts)";
 "已解锁 %@ 首" = "Unlocked %@ songs";
@@ -1163,6 +1176,7 @@
 "开始使用" = "Get Started";
 "开始扫描" = "Start Scanning";
 "开始播放时自动展开" = "Expand When Playback Starts";
+"开始日期" = "Start date";
 "开机启动" = "Launch at Login";
 "开机时自动启动 Lyrimuse" = "Launch Lyrimuse at login";
 "开源推送服务：在手机或电脑上安装 ntfy 并订阅主题即可接收，无需注册，也可自建服务器" = "An open-source push service. Install ntfy on your phone or computer and subscribe to a topic; no sign-up needed, and you can self-host it";
@@ -1334,6 +1348,7 @@
 "接近平分，但内容印证不完整" = "Nearly tied, but not fully corroborated";
 "推到" = "Send to";
 "推荐。为每个歌词源评分，选用最高分的结果" = "Recommended. Scores every source and keeps the best match";
+"推送内容" = "Message Content";
 "推送地址" = "Push URL";
 "推送提醒" = "Push Alerts";
 "推送时间" = "Push Time";
@@ -1372,6 +1387,7 @@
 "播放控制位置" = "Controls Position";
 "播放时显示动画，暂停时静止" = "Animates while music plays and stays still when paused";
 "播放来源" = "Played In";
+"播放次数" = "Plays";
 "播放歌曲后，歌词将自动显示" = "Play a song and lyrics will appear here";
 "播放热力图" = "Listening Heatmap";
 "播放记录" = "Play History";
@@ -1422,7 +1438,10 @@
 "断开…" = "Disconnect…";
 "斯里兰卡国家体系，如 ලංකා → laṅkā" = "Sri Lanka's national system, e.g. ලංකා → laṅkā";
 "新" = "New";
+"新听的歌手里听得最多的几位" = "The most played of your new artists";
 "新播放器提醒" = "New Player Alerts";
+"新歌手名单" = "New artist names";
+"新歌手数" = "New artists";
 "新添加的渠道会自动勾上" = "New channels are checked automatically";
 "方向" = "Direction";
 "方糖 · 服务通知" = "Fangtang · Service Notification";
@@ -1581,6 +1600,9 @@
 "最后一句的时间越接近曲长，得分越高，最高 300" = "The closer the last line's time is to the track length, the higher the score — up to 300";
 "最多 32 个字" = "Up to 32 characters";
 "最大宽度" = "Max Width";
+"最常听的专辑" = "Top album";
+"最常听的歌手" = "Top artist";
+"最常听的歌曲" = "Top track";
 "最近一次解析时无任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲无歌词。稍后将自动重试，也可立即重新自动匹配" = "No lyrics source responded during the last lookup, possibly because the network was unavailable; it doesn't mean the song has no lyrics. It will be retried automatically, or you can auto re-match now";
 "最近一次评估" = "Latest evaluation";
 "最近完成" = "Recently Finished";
@@ -1724,6 +1746,7 @@
 "标注罗马字，或只给汉字标注平假名" = "Romaji, or hiragana for kanji only";
 "标注读音的语言" = "Romanization Languages";
 "标点、空格写法不同" = "punctuation and spacing differ";
+"标题" = "Title";
 "标题反查：Apple 原产地商店" = "Title lookup: Apple home storefront";
 "标题反查：专辑曲目表" = "Title lookup: album track list";
 "标题反查：去除歌名中的英文" = "Title lookup: English part dropped";
@@ -1742,7 +1765,9 @@
 "检测是否已生效" = "Check If It Works";
 "检测未通过：%@" = "Check failed: %@";
 "检索到的曲目与本条目曲名不符，仅用于合并播放次数，不参与歌词同步" = "The matched track's title differs from this entry, so it only merges play counts and doesn't sync lyrics";
+"概况" = "Summary";
 "榜单" = "Charts";
+"榜单链接" = "Chart link";
 "次" = "plays";
 "欢迎使用 Lyrimuse" = "Welcome to Lyrimuse";
 "歌名" = "Title";
@@ -1765,11 +1790,15 @@
 "歌手、专辑、歌曲各列前几名" = "How many top artists, albums, and tracks to list";
 "歌手别名" = "Artist alias";
 "歌手地区分布" = "Artist Regions";
+"歌手榜" = "Top artists";
+"歌手榜，按「每类列出」的条数，一行一位" = "Top artists, as many as “Items per List”, one per line";
 "歌手简介" = "Artist Bio";
 "歌曲" = "Track";
 "歌曲信息" = "Song Info";
 "歌曲开始播放后将显示歌词" = "Lyrics will show once the song starts";
 "歌曲无歌词或仍在搜索时，在歌词位置显示歌名，不收起为小图标；获取歌词后立即切换为歌词。暂停时仍收起为图标，广告期间不显示" = "While a song has no lyrics or is still being searched, keep the lyrics slot with the song title instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads";
+"歌曲榜" = "Top tracks";
+"歌曲榜，按「每类列出」的条数，一行一首" = "Top tracks, as many as “Items per List”, one per line";
 "歌曲简介" = "Song Notes";
 "歌词" = "Lyrics";
 "歌词一致性" = "Lyrics Consistency";
@@ -1885,6 +1914,7 @@
 "正在重新匹配…（%1$@/%2$@）" = "Re-matching… (%1$@/%2$@)";
 "正在首次同步历史记录，完整数据稍后将自动显示" = "First-time history sync — the full data will appear shortly";
 "正在验证…" = "Checking…";
+"正文" = "Body";
 "此 Mac 未安装 Discord" = "Discord isn't installed on this Mac";
 "此 Mac 未配备触控栏" = "This Mac Doesn't Have a Touch Bar";
 "此为上限：窗口足够大时使用此字号，窗口缩小时文字随之缩小，以免超出窗口" = "This is a ceiling: the text uses this size when the window is large enough, and shrinks with the window so it never overflows";
@@ -1955,6 +1985,7 @@
 "浓淡" = "Density";
 "浮在所有窗口之上" = "Floats above all windows";
 "消息里没有自定义关键词" = "The message doesn't contain the custom keyword";
+"涨跌" = "Change";
 "淡化时点按将穿透到下层窗口；按住 ⌥ 可恢复不透明并进行操作" = "While faded, clicks pass through to the window below. Hold ⌥ to make it opaque and interact with it";
 "淡化时点按穿透" = "Click Through While Faded";
 "深度链接" = "Deep Links";
@@ -2146,6 +2177,7 @@
 "经典白字" = "Classic White";
 "经典黑字" = "Classic Black";
 "经由其他同曲条目间接关联" = "Linked indirectly through other entries";
+"结束日期" = "End date";
 "结束点获印证" = "End time corroborated";
 "结果" = "Result";
 "统一使用" = "Use for All";
@@ -2240,6 +2272,7 @@
 "自动隐藏" = "Auto-Hide";
 "自动（默认）：按对唱声部在左 / 右 / 居中之间切换。\n其他：忽略声部，固定在同一位置" = "Automatic (default): switches between left / right / center by duet vocal part.\nOthers: ignore vocal parts and stay fixed in one position";
 "自定义" = "Custom";
+"自定义内容按纯文本推送，不套用各平台的卡片排版" = "Custom content is sent as plain text, without each platform's card layout";
 "自定义按钮" = "Custom Button";
 "自定义颜色" = "Custom Color";
 "自带译文" = "Has translation";
@@ -2402,6 +2435,7 @@
 "资料卡「正在收听 ××」中的 ××。iOS 版和网页版 Discord 不支持此项，仍显示播放器名\n选择歌名或歌手时，用户名下方无法再选择「播放器」" = "The “××” in “Listening to ××” on your profile. Discord on iOS and the web ignores this and keeps showing the player\nWith Title or Artist here, “Shown Under Your Name” can’t show the player";
 "超薄" = "Ultra Thin";
 "足迹" = "Footprint";
+"跟上一期比的涨跌，如「↑12%」" = "Change from the previous period, such as “↑12%”";
 "跟随「全部播放器」" = "Following “All players”";
 "跟随「全部播放器」：%@" = "Following “All players”: %@";
 "跟随刘海" = "Match Notch";
@@ -2451,6 +2485,13 @@
 "还没有推送渠道" = "No push channels yet";
 "还没有连接 Last.fm 或 ListenBrainz，先用测试数据示意" = "Last.fm or ListenBrainz isn't connected yet, so sample data is shown";
 "还需 %@ 次" = "%@ to go";
+"这一期听得最多的专辑" = "The album you played most this period";
+"这一期听得最多的歌手" = "The artist you played most this period";
+"这一期听得最多的歌曲" = "The track you played most this period";
+"这一期新听的歌手有几位" = "How many artists you heard for the first time";
+"这一期的播放次数" = "Plays in this period";
+"这一期的最后一天" = "Last day of this period";
+"这一期的第一天" = "First day of this period";
 "这一期还没有收听记录，先用测试数据示意" = "No listens in this period yet, so sample data is shown";
 "这一档推到哪些渠道" = "Channels this report goes to";
 "这一档的数据来源" = "Data Source for This Digest";
@@ -2708,6 +2749,9 @@
 "默认" = "Default";
 "默认标注日文、韩文、中文和粤语" = "On by default for Japanese, Korean, Chinese and Cantonese";
 "默认标注日文、韩文和粤语" = "On by default for Japanese, Korean and Cantonese";
+"默认标题" = "Default title";
+"默认正文" = "Default body";
+"默认正文的第一行：次数、跟上一期比、时长" = "First line of the default body: plays, change from last period, listening time";
 "默认跟随系统菜单栏字号，可在 10～16pt 之间调整，16pt 仍在菜单栏高度范围内。拖回系统字号即恢复跟随" = "Follows the system menu bar by default; adjustable from 10 to 16pt, and 16pt still fits the menu bar. Drag back to the system size to follow it again";
 "（%@）" = " (%@)";
 "（已调）" = " (adjusted)";

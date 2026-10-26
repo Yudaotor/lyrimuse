@@ -2103,6 +2103,9 @@ struct AccountLinkingTab: View {
                 // 四档共用的推送时刻,跟「数据来源」「每类列出」一样放卡顶;下面四档的副标题按它写什么时候推。
                 DigestPushTimeRow()
                 CardDivider()
+                // 四档共用的自定义标题正文(DigestTemplateRow),跟上面几行一样放在四档开关之前。
+                DigestTemplateRow()
+                CardDivider()
                 let time = DigestPushTime.clockText(features.digestPushMinutes)
                 digestRow(icon: "sun.max", title: L10n.t("每日听歌报告"),
                           schedule: DigestPushTime.dailyCoversSameDay(features.digestPushMinutes)

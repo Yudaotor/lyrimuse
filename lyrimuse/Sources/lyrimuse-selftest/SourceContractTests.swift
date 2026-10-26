@@ -4016,6 +4016,11 @@ func runSourceContractSettingsTests() {
                         && sourceHas(featureStore, "digestTopN = DigestTopN.resolved(f.digestTopN) digestPushMinutes = DigestPushTime.resolved(f.digestPushTime)")
                         && sourceHas(featureStore, "case digestPushTime = \"digest_push_time\""),
                     true, "推送时间: 每类列出、推送时间进 features.json 的整份快照、加载时读回")
+        expectEqual(sourceHas(tab, "DigestPushTimeRow()") && tab.contains("DigestTemplateRow()")
+                        && sourceHas(featureStore, "digestTemplate: DigestTemplateFile(digestTemplate),")
+                        && sourceHas(featureStore, "digestTemplate = DigestTemplate.resolved(title: f.digestTemplate?.title, body: f.digestTemplate?.body)")
+                        && sourceHas(featureStore, "case digestTemplate = \"digest_template\""),
+                    true, "推送内容: 那一行在听歌报告卡里,自定义内容进 features.json 的 digest_template、加载时读回(15 章决策 84)")
         // 推送记录展开全部时高度封顶、在卡里滚;这一页的下拉 / 步进器 / 按钮用设计系统的玻璃件(15 章决策 83)。
         let logCard = sourceBody("struct NotificationLogCard: View {", in: section)
         expectEqual(sourceHas(logCard, ".frame(maxHeight: Self.expandedMaxHeight)\n.fixedSize(horizontal: false, vertical: true)")

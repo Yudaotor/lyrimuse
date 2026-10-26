@@ -554,6 +554,34 @@ func runSettingsInteractionTests() {
         var cut = P.sample(.weekly)
         cut.truncated = true
         expectEqual(P.summaryLine(cut), "共播放 286 次以上（记录太多，只统计了最近这些） · 约 17 小时 52 分", "预览真实数据: 记录被截断时同引擎")
+
+        // 自定义推送内容(15 章决策 84):同一份模板渲染出来跟引擎逐字一样(共用样例 template.json,引擎 digesttemplate_test.go 读同一份)。
+        let templateSample = (try? Data(contentsOf: samples.appendingPathComponent("template.json")))
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+        let templateCases = templateSample["cases"] as? [[String: Any]] ?? []
+        expectEqual(templateCases.count >= 4, true, "推送内容: 共用样例里有用例")
+        for c in templateCases {
+            let kind = P.Kind(rawValue: c["kind"] as? String ?? "") ?? .daily
+            let n = c["top_n"] as? Int ?? 3
+            let name = c["name"] as? String ?? ""
+            let defTitle = kind == .daily ? preview["daily_title"] as? String ?? "" : preview["weekly_title"] as? String ?? ""
+            let tpl = DigestTemplate.resolved(title: c["title"] as? String, body: c["body"] as? String)
+            let out = tpl.render(defaultTitle: defTitle, defaultBody: P.body(P.sample(kind), topN: n), stats: P.sample(kind), topN: n)
+            expectEqual(out.title, c["want_title"] as? String ?? "", "推送内容: \(name) 标题同引擎")
+            expectEqual(out.body, c["want_body"] as? String ?? "", "推送内容: \(name) 正文同引擎")
+        }
+        expectEqual(DigestTemplate.resolved(title: " {title} ", body: "{body}\r\n").isCustom, false, "推送内容: 跟默认一样不算自定义")
+        expectEqual(DigestTemplate.resolved(title: "{title}", body: "嗨\n{body}"), DigestTemplate(title: "", body: "嗨\n{body}"),
+                    "推送内容: 只改正文时标题存空")
+        expectEqual(DigestTemplate.renderText("{{plays}} {Plays} {plays", values: ["plays": "3"]), "{3} {Plays} {plays",
+                    "推送内容: 只认 {小写字母和下划线},别的原样")
+        let repoRoot = samples.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let goTemplate = (try? String(contentsOf: repoRoot.appendingPathComponent("lyrimuse-engine/digesttemplate.go"), encoding: .utf8)) ?? ""
+        let goNames = goTemplate.components(separatedBy: "var digestPlaceholderNames = []string{").dropFirst().first?
+            .components(separatedBy: "}").first ?? ""
+        let goList = goNames.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\"")) }
+            .filter { !$0.isEmpty }
+        expectEqual(goList, DigestTemplate.placeholders, "推送内容: 占位符两边一致、顺序一致")
     }
 
     // ---- 推送提醒第二期:按档选渠道、推送时间、每类列出(15 章决策 72;默认渠道已去掉,见 15 章决策 76;静默时段换成推送时间,见 15 章决策 77)----

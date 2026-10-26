@@ -323,6 +323,9 @@ struct FeatureFlagsFile: Codable, Equatable {
     var digestTopN: Int?
     /// 四档报告的推送时间(推送提醒页「推送时间」),本地时间 "HH:MM",缺失 = 22:00。见 Core `DigestPushTime`、引擎 digestschedule.go。
     var digestPushTime: String?
+    /// 四档报告的自定义标题和正文(推送提醒页「推送内容」),跟默认一样的那一段不写。见 Core `DigestTemplate`、
+    /// 引擎 digesttemplate.go。缺失 = 按默认推。
+    var digestTemplate: DigestTemplateFile?
     var lyricsSources: [String]?
     /// **迁移标记,不是开关**,只 App 读。lyrics_sources 是白名单,而老配置写的时候后来加的源还不存在,列表里
     /// 不可能有它 —— 直接按白名单办等于对所有老用户默认关闭,而"没列出"在这里的真实含义是"当时没这个选项"。
@@ -409,6 +412,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case yearlyDigestSource = "yearly_digest_source"
         case digestTopN = "digest_top_n"
         case digestPushTime = "digest_push_time"
+        case digestTemplate = "digest_template"
         case lyricsSources = "lyrics_sources"
         case amllLyrics = "amll_lyrics"
         case lyricFindLyrics = "lyricfind_lyrics"
@@ -595,6 +599,8 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var digestTopN = DigestTopN.defaultValue
     /// 见 FeatureFlagsFile.digestPushTime。零点起的分钟数。
     @Published public var digestPushMinutes = DigestPushTime.defaultMinutes
+    /// 见 FeatureFlagsFile.digestTemplate。跟默认一样的那一段是空串。
+    @Published public var digestTemplate = DigestTemplate()
     @Published public var lyricsSources: Set<LyricsSource> = Set(LyricsSource.allCases)
     @Published public var lyricsSourceMode: LyricsSourceMode = .smart
     // 始终是全部源加「播放器自带歌词」的一个排列(不是"只放启用的那几个")——启用/禁用状态单独由
@@ -721,6 +727,7 @@ public final class FeatureSettingsStore: ObservableObject {
             yearlyDigestSource: yearlyDigestSource.isEmpty ? nil : yearlyDigestSource,
             digestTopN: DigestTopN.resolved(digestTopN),
             digestPushTime: DigestPushTime.clockText(digestPushMinutes),
+            digestTemplate: DigestTemplateFile(digestTemplate),
             lyricsSources: (lyricsSources.map(\.rawValue) + unknownLyricsSources).sorted(),
             // 只要保存过一次就落这个字段,值如实反映集合状态。它的作用是让上面那条
             // "老配置补 amll"的迁移**只生效一次** —— 之后用户取消勾选才不会被补回来。
@@ -966,6 +973,7 @@ public final class FeatureSettingsStore: ObservableObject {
         yearlyDigestSource = f.yearlyDigestSource ?? ""
         digestTopN = DigestTopN.resolved(f.digestTopN)
         digestPushMinutes = DigestPushTime.resolved(f.digestPushTime)
+        digestTemplate = DigestTemplate.resolved(title: f.digestTemplate?.title, body: f.digestTemplate?.body)
         // 缺失/空数组(旧配置文件没这个字段,或者曾经被清空过)都按"全部启用"处理。
         let decodedSources = (f.lyricsSources ?? []).compactMap(LyricsSource.init(rawValue:))
         unknownLyricsSources = Self.unknownNames(f.lyricsSources) { LyricsSource(rawValue: $0) != nil }
@@ -1191,4 +1199,16 @@ public final class FeatureSettingsStore: ObservableObject {
         return true
     }
 
+}
+
+/// features.json 的 `digest_template`。两段都没自定义时整个不写(init 返回 nil),只自定义了一段时另一段不写。
+struct DigestTemplateFile: Codable, Equatable {
+    var title: String?
+    var body: String?
+
+    init?(_ t: DigestTemplate) {
+        guard t.isCustom else { return nil }
+        title = t.title.isEmpty ? nil : t.title
+        body = t.body.isEmpty ? nil : t.body
+    }
 }

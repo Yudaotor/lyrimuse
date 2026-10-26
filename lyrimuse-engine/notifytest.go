@@ -137,13 +137,14 @@ func resendTarget(entryID string) (notifyChannel, notifyMessage, notifyResult, b
 	if !found || e.OK {
 		return notifyChannel{}, notifyMessage{}, notifyResult{Kind: notifyKindConfig, Detail: "delivery record not found"}, false
 	}
-	if notifyDeliveredSince(e.Channel, e.Event, e.Title, e.At) {
+	if notifyDeliveredSince(e.Channel, e.Event, e.dedupKey(), e.At) {
 		return notifyChannel{ID: e.Channel, Platform: e.Platform}, notifyMessage{},
 			notifyResult{OK: true, Kind: notifyKindOK, Detail: "already delivered"}, false
 	}
 	for _, ch := range configNotifyChannels(liveConfig()) {
 		if ch.ID == e.Channel {
-			return ch, notifyMessage{Event: e.Event, Title: e.Title, Body: e.Body, Digest: e.Digest}, notifyResult{}, true
+			return ch, notifyMessage{Event: e.Event, Title: e.Title, Body: e.Body, Digest: e.Digest, Key: e.Key, Custom: e.Custom},
+				notifyResult{}, true
 		}
 	}
 	return notifyChannel{}, notifyMessage{}, notifyResult{Kind: notifyKindConfig, Detail: "channel no longer exists"}, false
