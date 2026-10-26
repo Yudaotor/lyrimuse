@@ -3726,41 +3726,26 @@ func runSourceContractSettingsTests() {
                     "抽屉镜像(触控栏): 浮层里的行视图抽屉都要装配")
     }
 
-    // ---- 编辑台工具栏第二行的对齐占位(灵动岛、菜单栏) ----
+    // ---- 编辑台工具栏第二行的对齐占位(灵动岛) ----
     //
     // 按钮宽度是**一行之内平分**出来的,第一行末尾那颗「重置 ▾」占掉的一截就是两行错位的全部原因
     // (机制、代价与离屏实测见 `EditorToolbarResetReserve` 头注)。占位漏掉既不报错也不影响功能,
     // 只会让两行按钮重新错开一截 —— 正是那种下次重排工具栏时会被顺手删掉、且没人看得出来的东西。
     // 悬浮歌词不在这里:它第二行五颗、第一行三颗,本来对不成列,放了占位只会把五颗的摘要一起压成「…」(19 章决策 19)。
+    // 菜单栏只有一行(四颗加「重置 ▾」,06 章决策 66),不该再有占位。
     do {
         let sourcesDir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let stages = [
-            ("灵动岛", "lyrimuse/UI/NotchEditorStage.swift"),
-            ("菜单栏", "lyrimuse/UI/MenuBarEditorStage.swift"),
-        ]
-        var missing: [String] = []
-        var unreadable: [String] = []
-        var menuBarGhosts = -1
-        for (surface, rel) in stages {
-            let path = sourcesDir.appendingPathComponent(rel).path
-            guard let text = try? String(contentsOfFile: path, encoding: .utf8) else {
-                unreadable.append(surface)
-                continue
-            }
-            if !text.contains("EditorToolbarResetReserve()") { missing.append(surface) }
-            if surface == "菜单栏" {
-                menuBarGhosts = text.components(separatedBy: "toolbarGhostButton(icon: \"").count - 1
-            }
-        }
-        expectEqual(unreadable, [], "工具栏对齐闸: 两段编辑台的文件都读得到(读不到 = 路径挪了)")
-        expectEqual(missing, [],
-                    "工具栏对齐闸: 工具栏第二行末尾要有 EditorToolbarResetReserve(),否则这一行整体比第一行宽出「重置 ▾」那一截")
-        // 菜单栏第二行只有「行为」一颗,还要靠两份 ghost 补上第一行「配色」「字体」的位置,
-        // 平分出来的宽度才跟第一行的「布局」相同。
-        expectEqual(menuBarGhosts, 2,
-                    "工具栏对齐闸: 菜单栏第二行要两份 toolbarGhostButton 占位(第一行有三颗入口,第二行只有一颗)")
+        let notch = try? String(contentsOfFile: sourcesDir.appendingPathComponent("lyrimuse/UI/NotchEditorStage.swift").path, encoding: .utf8)
+        let menuBar = try? String(contentsOfFile: sourcesDir.appendingPathComponent("lyrimuse/UI/MenuBarEditorStage.swift").path, encoding: .utf8)
+        expectEqual(notch != nil && menuBar != nil, true, "工具栏对齐闸: 两段编辑台的文件都读得到(读不到 = 路径挪了)")
+        expectEqual(notch?.contains("EditorToolbarResetReserve()"), true,
+                    "工具栏对齐闸: 灵动岛工具栏第二行末尾要有 EditorToolbarResetReserve(),否则这一行整体比第一行宽出「重置 ▾」那一截")
+        expectEqual(menuBar.map { $0.contains("EditorToolbarResetReserve()") || $0.contains("toolbarGhostButton(") }, false,
+                    "工具栏对齐闸: 菜单栏工具栏只有一行,不留第二行的占位")
+        expectEqual(menuBar.map { $0.contains("target: .behavior") && !$0.contains("toolbarRow2") }, true,
+                    "工具栏对齐闸: 菜单栏「行为」在唯一那一行里")
     }
 
     // ---- 液态玻璃门控(AGENTS.md「分层边界」成文的那条)----

@@ -911,7 +911,7 @@ func runSettingsInteractionTests() {
                     && design.contains("GlassEffectContainer(spacing: 0) { self }"), true,
                     "编辑台工具栏(契约): editorToolbarGlassGroup 在 macOS 26 上单独套一层 GlassEffectContainer")
         let uses: [(String, Int)] = [("UI/OverlayEditorStage.swift", 2), ("UI/NotchEditorStage.swift", 2),
-                                     ("UI/MenuBarEditorStage.swift", 2), ("UI/TouchBarSettingsRows.swift", 1),
+                                     ("UI/MenuBarEditorStage.swift", 1), ("UI/TouchBarSettingsRows.swift", 1),
                                      ("SettingsView.swift", 1)]
         for (file, count) in uses {
             expectEqual(appSource(file).components(separatedBy: ".editorToolbarGlassGroup()").count - 1, count,
