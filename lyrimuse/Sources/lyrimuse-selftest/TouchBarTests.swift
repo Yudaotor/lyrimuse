@@ -788,9 +788,9 @@ func runTouchBarTests() {
                         && controller.contains("try? await Task.sleep(for: .milliseconds(TouchBarAutoPresent.settleExpandDelayMs))")
                         && controller.contains("self.performAuto(self.autoPresent.settleElapsed("), true,
                     "触控栏自动展开: 控制器接线(先记状态再订阅、防抖、认出用户操作、暂停计时、开始播放后再确认)")
-        expectEqual(rows.contains("ForEach(TouchBarSettingsGroup.allCases, id: \\.self)")
-                        && !rows.contains("EditorToolbarResetReserve()") && !rows.contains("ghostButton("), true,
-                    "触控栏自动展开: 「行为」跟另外三颗在工具栏同一行,不留第二行的占位")
+        expectEqual(rows.contains("private static let secondRow: [TouchBarSettingsGroup] = [.layout, .behavior]")
+                        && sourceHas(rows, "Spacer(minLength: 8)\n                EditorToolbarResetReserve()") && !rows.contains("ghostButton("), true,
+                    "触控栏自动展开: 工具栏两行两颗,「行为」在第二行,末尾补「重置 ▾」等宽占位、不用隐藏按钮")
         // 「更多」页(17 章决策 47):换页改 defaultItemIdentifiers(弹出式触控栏项在系统模态条里弹不出来);「更多」页左端收起键照旧;
         // 返回、8 秒没有操作、收起、换歌、停用都回到歌词;这一页的键由 TouchBarMorePageBar 建。漏一处不报错,只表现成点了没反应、
         // 回不到歌词,或者收起键没了。

@@ -1,7 +1,7 @@
 import LyrimuseCore
 import SwiftUI
 
-// 「歌词显示 › 触控栏」那一段的编辑台:预览上面一行工具栏(歌词 / 样式 / 布局 / 行为四个浮层 + 「重置 ▾」),预览下面是总开关卡和
+// 「歌词显示 › 触控栏」那一段的编辑台:预览上面两行工具栏(歌词 / 样式 + 「重置 ▾」,布局 / 行为,四个浮层),预览下面是总开关卡和
 // 默认折叠的「全部设置」抽屉。浮层和抽屉装配同一份行视图(`TouchBarLyricsRows` / `TouchBarStyleRows` / `TouchBarLayoutRows` /
 // `TouchBarBehaviorRows`),四组的顺序和标题两边一致。预览上点歌词那一格、封面、三键这些也能打开对应的浮层(`TouchBarPreviewStage`,弹的是同一份
 // `TouchBarSettingsGroup.popoverContent`),工具栏照歌词窗口那一段摆在预览上面。
@@ -297,24 +297,38 @@ enum TouchBarStyleDefaults {
 
 // MARK: - 工具栏
 
-/// 预览上面那排工具栏:胶囊按钮(图标 · 标题 · 当前值摘要)点开是浮层。一行四颗加右端「重置 ▾」,同灵动岛工具栏第一行;
-/// 按钮宽度在这一行里平分,放不下时只压摘要、标题不截(17 章决策 53)。
+/// 预览上面那排工具栏:胶囊按钮(图标 · 标题 · 当前值摘要)点开是浮层。按抽屉的顺序排成两行两颗:第一行「歌词」「样式」
+/// +「重置 ▾」,第二行「布局」「行为」+ 等宽占位 `EditorToolbarResetReserve`,两行逐列对齐。四颗挤一行时摘要只剩一两个字
+/// (17 章决策 53)。
 struct TouchBarEditorToolbar: View {
     @ObservedObject private var settings = AppSettings.shared
     @State private var popover: TouchBarSettingsGroup?
     /// 浮层高度上限 = 点开那一刻按钮那一行上沿到屏幕顶的距离(见 toolbarButton)。
     @State private var popoverMaxHeight: CGFloat = SettingsPopoverMetrics.defaultMaxHeight
-    @State private var toolbarProbe = StageTopProbe()
+    @State private var row1Probe = StageTopProbe()
+    @State private var row2Probe = StageTopProbe()
+
+    /// 第二行那两颗;挪了按钮要一起改 toolbarButton 里测量点的取法。
+    private static let secondRow: [TouchBarSettingsGroup] = [.layout, .behavior]
 
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(TouchBarSettingsGroup.allCases, id: \.self) { group in
-                toolbarButton(group)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                toolbarButton(.lyrics)
+                toolbarButton(.style)
+                Spacer(minLength: 8)
+                EditorToolbarResetMenu(scope: TouchBarStyleDefaults.scope) { TouchBarStyleDefaults.restoreDefaults() }
             }
-            Spacer(minLength: 8)
-            EditorToolbarResetMenu(scope: TouchBarStyleDefaults.scope) { TouchBarStyleDefaults.restoreDefaults() }
+            .overlay(alignment: .top) { probeAnchor(row1Probe) }
+            HStack(spacing: 8) {
+                ForEach(Self.secondRow, id: \.self) { group in
+                    toolbarButton(group)
+                }
+                Spacer(minLength: 8)
+                EditorToolbarResetReserve()
+            }
+            .overlay(alignment: .top) { probeAnchor(row2Probe) }
         }
-        .overlay(alignment: .top) { probeAnchor(toolbarProbe) }
         .font(.system(size: 12))
         .padding(.horizontal, 2)
         .editorToolbarGlassGroup()
@@ -331,7 +345,7 @@ struct TouchBarEditorToolbar: View {
     /// 不让系统翻下来(同悬浮歌词、灵动岛编辑台,04 章决策 34、61)。
     private func toolbarButton(_ group: TouchBarSettingsGroup) -> some View {
         Button {
-            popoverMaxHeight = toolbarProbe.popoverHeightLimit()
+            popoverMaxHeight = (Self.secondRow.contains(group) ? row2Probe : row1Probe).popoverHeightLimit()
             popover = group
         } label: {
             EditorToolbarButtonLabel(icon: group.icon, title: group.title, summary: summary(for: group))
