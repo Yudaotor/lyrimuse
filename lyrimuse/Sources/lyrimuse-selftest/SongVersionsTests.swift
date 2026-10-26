@@ -343,9 +343,11 @@ func runSongVersionsTests() {
                     && sourceBytes(sheet, contain: "currentMissing: c.players.isEmpty, otherMissing: v.players.isEmpty")
                     && sourceBytes(sheet, contain: "currentMissing: c.durationSecs == nil, otherMissing: v.durationSecs == nil")
                     && sourceBytes(sheet, contain: "other: reportedText(v), compared: false)")
+                    && sourceBytes(sheet, contain: "let players = v.playersInferred ? [] : v.players")
+                    && sourceBytes(sheet, contain: "?? L10n.t(\"与条目名相同\")")
                     && sourceBytes(sheet, contain: "var neverPlayed: Bool { players.isEmpty && durationSecs == nil }")
                     && sourceBytes(sheet, contain: "return v.neverPlayed ? L10n.t(\"未播放过\") : L10n.t(\"未记录\")"), true,
-                    "其他写法(契约): 逐项对照缺的一边不算不一样,原始写法不比,没放过的写「未播放过」")
+                    "其他写法(契约): 逐项对照缺的一边不算不一样,原始写法不比、每个放过的播放器一行,没放过的写「未播放过」")
         let rematchEngine = read(engine, "lyricsrematch.go")
         expectEqual(sourceBytes(manager, contain: "let followers = LyricsRematch.followers(of: LyricsRematch.current, key: key)")
                     && sourceBytes(rematchEngine, contain: "Followers int `json:\"followers,omitempty\"`"), true,

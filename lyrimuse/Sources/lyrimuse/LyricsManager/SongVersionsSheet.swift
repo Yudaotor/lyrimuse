@@ -908,11 +908,23 @@ struct SongVersionsSheet: View {
 
     /// 一份原始写法:「歌名 · 歌手 · 专辑（播放器）」,空的那段不写。
     static func reportedLine(_ r: SongVersions.ReportedName) -> String {
-        let name = [r.title, r.artist, r.album].filter { !$0.isEmpty }.joined(separator: " · ")
-        return String(format: L10n.t("%1$@（%2$@）"), name, playerDisplayName(r.bundleID))
+        String(format: L10n.t("%1$@（%2$@）"), reportedName(r), playerDisplayName(r.bundleID))
     }
 
-    private func reportedText(_ v: Version) -> String { v.reported.map(Self.reportedLine).joined(separator: "\n") }
+    private static func reportedName(_ r: SongVersions.ReportedName) -> String {
+        [r.title, r.artist, r.album].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// 信息表、对照表的「原始写法」:放过这条的播放器各一行,按播放来源的顺序。引擎只记跟条目名不一样的写法,没记的那家写
+    /// 「与条目名相同」;播放器是按 id 推断的不下这个结论,只列记下的。
+    private func reportedText(_ v: Version) -> String {
+        let players = v.playersInferred ? [] : v.players
+        let ids = players + v.reported.map(\.bundleID).filter { !players.contains($0) }
+        return ids.map { id in
+            let name = v.reported.first { $0.bundleID == id }.map(Self.reportedName) ?? L10n.t("与条目名相同")
+            return String(format: L10n.t("%1$@：%2$@"), playerName(id), name)
+        }.joined(separator: "\n")
+    }
 
     private func playersText(_ v: Version) -> String {
         guard !v.players.isEmpty else { return v.neverPlayed ? L10n.t("未播放过") : L10n.t("未记录") }
