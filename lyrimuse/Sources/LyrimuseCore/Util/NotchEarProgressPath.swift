@@ -9,7 +9,7 @@ public enum NotchProgressLineStyle: String, Codable, Hashable, CaseIterable, Sen
     case ears
 }
 
-/// 「进度线」那一行的三档。存成两个设置(开关 + `NotchProgressLineStyle`):旧版只有开关,开着时就是底边那一档。
+/// 「进度线」那一行的三档。存成两个设置:开关 + `NotchProgressLineStyle`。
 public enum NotchProgressLineChoice: String, CaseIterable, Sendable {
     case off
     case bottom
@@ -58,12 +58,12 @@ public struct NotchEarProgressPath: Equatable, Sendable {
     /// 终点的 x。
     public var endX: CGFloat
 
-    /// - Parameters:
-    ///   - shoulder / cardCornerRadius: 卡片外形此刻的肩膀和底角半径(App 侧 `NotchHangingShape.cornerMetrics`)。
-    ///   - notchHeight: 顶行高度(真刘海屏 = 刘海高)。
     /// 底边露出刘海下沿多少之后终点走到正中。
     public static let bottomRevealSpan: CGFloat = 12
 
+    /// - Parameters:
+    ///   - shoulder / cardCornerRadius: 卡片外形此刻的肩膀和底角半径(App 侧 `NotchHangingShape.cornerMetrics`)。
+    ///   - notchHeight: 顶行高度(真刘海屏 = 刘海高)。
     public init(width: CGFloat, height: CGFloat, notchWidth: CGFloat, notchHeight: CGFloat,
                 shoulder: CGFloat, cardCornerRadius: CGFloat, inset: CGFloat) {
         x = shoulder + inset
