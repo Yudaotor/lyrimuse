@@ -106,13 +106,17 @@ func checkLyricsWindowLaunchRestore() {
                 true, "静默启动: 菜单、快捷键、深链要设置窗口时记一笔,那扇不关")
     expectEqual(sourceHas(settingsView, "if LaunchWindowPlan.dropsSettingsWindow(launching: LaunchPhase.isLaunching,\n"
                             + "                                                    requested: LaunchPhase.settingsRequested) {\n"
+                            + "                let animation = window.animationBehavior\n"
+                            + "                window.animationBehavior = .none\n"
                             + "                window.alphaValue = 0\n"
                             + "                DispatchQueue.main.async {\n"
                             + "                    window.close()\n"
                             + "                    window.alphaValue = 1\n"
+                            + "                    window.animationBehavior = animation\n"
                             + "                }\n"
                             + "            }"),
-                true, "启动时开窗: SwiftUI 默认开的设置窗口先透明、下一拍关掉,关完还原透明度")
+                true, "启动时开窗: SwiftUI 默认开的设置窗口先透明、下一拍关掉,关完还原透明度;期间关掉窗口动画,"
+                    + "不然动画结束时透明度被还原成 0,再开设置是一扇看不见的窗(14 章决策 141)")
     let settings = source("lyrimuse/Settings/AppSettings.swift")
     expectEqual(sourceHas(settings, "defaults.set(silentLaunch, forKey: Keys.silentLaunch)\n"
                             + "            // 打开时顺带关掉「在 Dock 中显示」,只留菜单栏图标;之后用户再把 Dock 打开不拦(14 章决策 62)。\n"

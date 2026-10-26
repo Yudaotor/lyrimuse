@@ -8242,12 +8242,17 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
             window.toolbarStyle = .unified
             // 启动流程里 SwiftUI 按默认开出来的这扇当场关掉。先透明、下一拍再关,不闪一下;
             // 关完把透明度还原,Settings 场景下次可能还用这扇窗(14 章决策 62)。
+            // 关窗期间不许有窗口动画:开 / 关动画结束时会把透明度还原成动画开始时的 0,盖掉这里设回的 1,
+            // 之后再开设置复用的就是一扇看不见的窗(14 章决策 141)。
             if LaunchWindowPlan.dropsSettingsWindow(launching: LaunchPhase.isLaunching,
                                                     requested: LaunchPhase.settingsRequested) {
+                let animation = window.animationBehavior
+                window.animationBehavior = .none
                 window.alphaValue = 0
                 DispatchQueue.main.async {
                     window.close()
                     window.alphaValue = 1
+                    window.animationBehavior = animation
                 }
             }
         }
