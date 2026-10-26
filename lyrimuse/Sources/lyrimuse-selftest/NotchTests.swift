@@ -98,6 +98,8 @@ func runNotchTests() {
         expectEqual(M.height(hasLyricPreview: true, hasScrubber: true, trackInfoHeight: threeLines),
                     76 + threeLines + M.trackInfoTopSpacing + M.trackInfoSpacing,
                     "展开区高度: 有头部时整块 + 上下各一份间距一次性加上")
+        expectEqual(M.trackInfoSpacing >= 2 * M.lyricListLineSpacing, true,
+                    "曲目信息头部: 离歌词的间距不能小于歌词行距的两倍,不然专辑名看着像歌词的第一行")
 
         // maxHeight 的两个新维度各自独立生效,且跟对应的 height(...) 严丝合缝(真正的不变量:
         // 窗口按 max 开、内容按当前设置算,给定同一组设置,两者必须相等,否则要么裁按钮要么白留空)
@@ -164,8 +166,6 @@ func runNotchTests() {
                     M.trackInfoHeight(showsArtwork: false, showsTitle: true, showsArtist: true, showsAlbum: false,
                                       showsActions: true) + M.trackInfoTopSpacing + M.idlePanelBottomSpacing,
                     "空闲面板: 高度 = 头部两行字(含快捷键那一档) + 顶部间距 + 底部间距")
-        expectEqual(M.idlePanelBottomSpacing > M.trackInfoSpacing, true,
-                    "空闲面板: 贴底那份间距要比头部接歌词行的 4pt 宽,不然贴底太紧")
     }
 
     // MARK: - VocalEnvelope:灵动岛音浪的人声包络(起音脉冲 + 换气泄放)
@@ -314,7 +314,7 @@ func runNotchTests() {
     // ---- NotchCardLayout:卡片宽高、各块画不画、收起判据(真窗口和编辑台读同一份,05 章决策 109)----
     //
     // 数字按 NotchExpandedMetrics 现行尺寸手算:展开区满配 = 三键 35 + 下一句 17 + 进度条 24 = 76;头部三行字 14+12+11+2、
-    // 封面 32、快捷操作 22,上 12 下 4 两份间距;空闲面板 = 27 + 12 + 10 = 49。
+    // 封面 32、快捷操作 22,上 12 下 14 两份间距;空闲面板 = 27 + 12 + 10 = 49。
     do {
         typealias L = NotchCardLayout
         let m = L.Metrics(cardPadding: 10, contentInset: 16, collapsedEarWidth: 34,
@@ -425,19 +425,19 @@ func runNotchTests() {
         // 展开头部:按开关现算,广告期间只剩快捷操作。
         let header = with { $0.isExpanded = true; $0.trackInfoShowsArtwork = true; $0.trackInfoShowsTitle = true; $0.trackInfoShowsArtist = true }
         expectEqual(header.expandedTrackInfoHeight, 32, "卡片布局: 头部高 = max(封面 32, 两行字 27)")
-        expectEqual(header.expandedTrackInfoHeaderHeight, 48, "卡片布局: 头部总高 = 内容 + 上 12 下 4")
-        expectEqual(header.cardHeight, 200, "卡片布局: 展开区满配 76 + 头部 48")
+        expectEqual(header.expandedTrackInfoHeaderHeight, 58, "卡片布局: 头部总高 = 内容 + 上 12 下 14")
+        expectEqual(header.cardHeight, 210, "卡片布局: 展开区满配 76 + 头部 58")
         let adHeader = with { $0.isExpanded = true; $0.trackInfoShowsTitle = true; $0.isAdBreak = true }
         expectEqual(adHeader.showsExpandedTrackInfo, false, "卡片布局: 广告期间四项曲目字段不画,头部整块不画")
         expectEqual(with { $0.isExpanded = true; $0.trackInfoShowsTitle = true; $0.isAdBreak = true; $0.expandedShowsQuickActions = true }
-                        .expandedTrackInfoHeaderHeight, 38, "卡片布局: 广告期间头部只剩快捷操作那排 22")
+                        .expandedTrackInfoHeaderHeight, 48, "卡片布局: 广告期间头部只剩快捷操作那排 22")
         // 展开区上限:按设置留,不看这首有没有下一句、有没有时长,不看广告。
         expectEqual(base.expandedExtraHeightMax, 76, "卡片布局: 展开区上限满配 76")
         expectEqual(with { $0.trackHasLyricPreview = false; $0.trackHasScrubber = false }.expandedExtraHeightMax, 76,
                     "卡片布局: 展开区上限不看曲目级数据")
         expectEqual(with { $0.expandedShowsNextLine = false }.expandedExtraHeightMax, 59, "卡片布局: 关掉下一句预览省 17")
         expectEqual(with { $0.expandedLyricListHeight = 120 }.expandedExtraHeightMax, 59, "卡片布局: 开着多行歌词不留下一句那截")
-        expectEqual(with { $0.trackInfoShowsArtwork = true; $0.isAdBreak = true }.expandedExtraHeightMax, 124,
+        expectEqual(with { $0.trackInfoShowsArtwork = true; $0.isAdBreak = true }.expandedExtraHeightMax, 134,
                     "卡片布局: 展开区上限不看广告态")
         // 顶行内边距与耳宽。
         expectEqual(base.topRowPadding, 10, "卡片布局: 稳态顶行内边距 10")

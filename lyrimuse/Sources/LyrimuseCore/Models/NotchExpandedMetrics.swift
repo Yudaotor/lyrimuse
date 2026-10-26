@@ -57,15 +57,11 @@ public enum NotchExpandedMetrics {
 
     // MARK: - 曲目信息头部
 
-    /// 头部本身跟下一行内容之间的间距。
-    public static let trackInfoSpacing: CGFloat = 4
+    /// 头部跟下面歌词之间的间距。不能小于歌词行距的两倍(`lyricListLineSpacing`):比歌词行与行之间的空隙还窄时,
+    /// 灰色的专辑名看着就是歌词的第一行(05 章决策 113)。
+    public static let trackInfoSpacing: CGFloat = 14
 
-    /// 头部跟**上面** topRow 之间的间距。
-    ///
-    /// 从跟 `trackInfoSpacing` 共用一个值(4)拆出来单独放大到 12——
-    /// 「把这个整体再往下移一点」(展开态里封面+歌名/歌手/专辑那一整块贴刘海太近)。
-    /// **只放大上面这一份**:下面那份是"头部离歌词行"的间距,截图上本来就够,一起放大
-    /// 会让整块显得松散,而且卡片会白长两倍的高度。
+    /// 头部跟**上面** topRow 之间的间距(封面 + 歌名 / 歌手 / 专辑那一整块离刘海的距离)。
     public static let trackInfoTopSpacing: CGFloat = 12
     /// 头部里封面缩略图的边长——跟歌词行尾端那枚同一档(`NotchMetrics.artworkSide` 的
     /// 上限 32),两处都在同一张卡片里,没理由长得不一样大。
@@ -156,8 +152,7 @@ public enum NotchExpandedMetrics {
 
     // MARK: - 没有曲目时的空闲面板
 
-    /// 空闲面板离卡片**底边**的间距。它是展开态最下面(也是唯一)的一块,不像曲目信息头部
-    /// 下面还接着歌词行 —— 头部那 4pt 的尾随间距对贴底的东西太紧,跟播放控制三键那块的
+    /// 空闲面板离卡片**底边**的间距。它是展开态最下面(也是唯一)的一块,跟播放控制三键那块的
     /// 10pt 底边距(`controlsBlock` 里那份)取同一档。
     public static let idlePanelBottomSpacing: CGFloat = 10
 
