@@ -593,9 +593,9 @@ final class AppSettings: ObservableObject {
     static let defaultNotchShowsTrackDrop = true
     /// 默认开:指针在灵动岛上时,两指左右滑切歌、上下滑调系统音量。
     static let defaultNotchGestures = true
-    /// 默认关:卡片底边那根进度线。
-    static let defaultNotchShowsProgressLine = false
-    static let defaultNotchProgressLineStyle: NotchProgressLineStyle = .bottom
+    /// 默认开、沿耳朵画(卡片不为它变高)。旧版只开过底边那根的,样式见 `NotchProgressLineStyle.stored`。
+    static let defaultNotchShowsProgressLine = true
+    static let defaultNotchProgressLineStyle: NotchProgressLineStyle = .ears
     /// 默认关:换歌时弹一条系统通知(歌名、「歌手 — 专辑」、封面),见 `NowPlayingNotifier`。
     static let defaultNowPlayingNotifications = false
     static let defaultNotchShowLyrics = true
@@ -2578,10 +2578,10 @@ final class AppSettings: ObservableObject {
         notchShowsTrackDrop = (defaults.object(forKey: Keys.notchShowsTrackDrop) as? Bool)
             ?? Self.defaultNotchShowsTrackDrop
         notchGestures = (defaults.object(forKey: Keys.notchGestures) as? Bool) ?? Self.defaultNotchGestures
-        notchShowsProgressLine = (defaults.object(forKey: Keys.notchShowsProgressLine) as? Bool)
-            ?? Self.defaultNotchShowsProgressLine
-        notchProgressLineStyle = defaults.string(forKey: Keys.notchProgressLineStyle)
-            .flatMap(NotchProgressLineStyle.init(rawValue:)) ?? Self.defaultNotchProgressLineStyle
+        let storedShowsProgressLine = defaults.object(forKey: Keys.notchShowsProgressLine) as? Bool
+        notchShowsProgressLine = storedShowsProgressLine ?? Self.defaultNotchShowsProgressLine
+        notchProgressLineStyle = NotchProgressLineStyle.stored(defaults.string(forKey: Keys.notchProgressLineStyle),
+                                                               showsProgressLineStored: storedShowsProgressLine)
         // 只认这四个值,别的(手改 / 导入的)按跟随系统:不然语言下拉一个都勾不上。
         appLanguage = defaults.string(forKey: Keys.appLanguage)
             .flatMap { ["system", "zh-hans", "zh-hant", "en"].contains($0) ? $0 : nil } ?? "system"

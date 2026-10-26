@@ -7,6 +7,13 @@ public enum NotchProgressLineStyle: String, Codable, Hashable, CaseIterable, Sen
     case bottom
     /// 沿卡片外沿从屏幕上沿往下、绕过底角走到刘海,左右两半同时走。卡片不为它变高。
     case ears
+
+    /// 存盘值 → 样式。没存过样式时:开关明确存着「开」的是只有底边那一档时打开的,仍是底边;其余(新装、没碰过这一项)
+    /// 按耳朵。
+    public static func stored(_ raw: String?, showsProgressLineStored: Bool?) -> NotchProgressLineStyle {
+        if let style = raw.flatMap(NotchProgressLineStyle.init(rawValue:)) { return style }
+        return showsProgressLineStored == true ? .bottom : .ears
+    }
 }
 
 /// 「进度线」那一行的三档。存成两个设置(开关 + `NotchProgressLineStyle`):旧版只有开关,开着时就是底边那一档。

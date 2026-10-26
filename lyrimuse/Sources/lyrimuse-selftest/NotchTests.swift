@@ -409,6 +409,12 @@ func runNotchTests() {
                     [.off, .bottom, .ears], "进度线: 开关关着就是不显示,开着按样式分底边 / 耳朵")
         expectEqual(C.allCases.map(\.shows), [false, true, true], "进度线: 选底边 / 耳朵时打开开关")
         expectEqual(C.allCases.map(\.style), [nil, .bottom, .ears], "进度线: 选不显示时样式留着上一次的")
+        typealias PS = NotchProgressLineStyle
+        expectEqual([PS.stored(nil, showsProgressLineStored: nil), PS.stored(nil, showsProgressLineStored: false),
+                     PS.stored(nil, showsProgressLineStored: true), PS.stored("ears", showsProgressLineStored: true),
+                     PS.stored("bottom", showsProgressLineStored: nil), PS.stored("side", showsProgressLineStored: true)],
+                    [.ears, .ears, .bottom, .ears, .bottom, .bottom],
+                    "进度线: 没存样式时按耳朵,只有旧版明确开过进度线(那时只有底边)的仍是底边;存了样式按存的")
         // 多行歌词:展开时歌词那一格换成列表,不画下一句预览;广告时退回一行歌词。
         let list = with { $0.isExpanded = true; $0.expandedLyricListHeight = 120 }
         expectEqual(list.showsExpandedLyricList, true, "卡片布局: 开着多行歌词时展开换成列表")
