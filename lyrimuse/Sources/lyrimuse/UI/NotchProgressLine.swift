@@ -93,7 +93,7 @@ struct NotchEarProgressLine: View {
     let notchWidth: CGFloat
     @ObservedObject private var corners = NotchCornerLive.shared
 
-    static let thickness: CGFloat = 2
+    static let thickness: CGFloat = 2.5
     /// 线心离卡片外沿的距离:半根线宽,线的外侧正好贴着外沿。
     static let inset: CGFloat = thickness / 2
 
@@ -126,9 +126,9 @@ struct NotchEarProgressLine: View {
                         .stroke(style: StrokeStyle(lineWidth: Self.thickness, lineCap: .round))
                 }
             }
-            let fill = LinearGradient(colors: [tint.opacity(0.3), tint.opacity(0.95)], startPoint: .top, endPoint: .bottom)
+            let fill = LinearGradient(colors: [tint.opacity(0.7), tint], startPoint: .top, endPoint: .bottom)
             ZStack {
-                fill.mask(played).blur(radius: 2.5).opacity(0.45)
+                fill.mask(played).blur(radius: 3).opacity(0.7)
                 fill.mask(played)
             }
         }
