@@ -29,7 +29,7 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<script src="assets/lp.js?v=202610240322" defer fetchpriority="high"></script>
+<script src="assets/lp.js?v=202610261522" defer fetchpriority="high"></script>
 <style>:root {
 --bg: #fbfbfd;
 --bg-alt: #f5f5f7;
@@ -1162,7 +1162,7 @@ background: var(--card); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0
 @media (max-width: 820px) {
 .ch { contain-intrinsic-size: auto 620px; }
 .ch.watch { contain-intrinsic-size: auto 470px; }
-.ch-more { contain-intrinsic-size: auto 830px; }
+.ch-more { contain-intrinsic-size: auto 760px; }
 .news { contain-intrinsic-size: auto 450px; }
 .faq-sec { contain-intrinsic-size: auto 680px; }
 .final { contain-intrinsic-size: auto 490px; }
@@ -1257,6 +1257,10 @@ transition: transform .3s var(--ease-out), background .2s, opacity .2s;
 .seg:has(> .seg-btn:nth-child(6)) { gap: 0; }
 .seg:has(> .seg-btn:nth-child(6)) .seg-btn { padding: 8px; font-size: 12.5px; }
 .seg:has(> .seg-btn:nth-child(6)) .seg-bar { left: 7px; right: 7px; }
+.more-list { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.pill { gap: 12px; padding: 10px 14px 10px 10px; border-radius: 16px; font-size: 15px; }
+.pill-ico { width: 34px; height: 34px; border-radius: 10px; }
+.pill-ico svg { width: 18px; height: 18px; }
 }
 @media (max-width: 370px) {
 .seg:has(> .seg-btn:nth-child(6)) .seg-btn { padding: 7px 6px; font-size: 11.5px; }
@@ -1265,10 +1269,6 @@ transition: transform .3s var(--ease-out), background .2s, opacity .2s;
 @media (max-width: 340px) {
 .seg-btn { padding: 7px 8px; font-size: 12px; }
 .rd-lines { --fs: 25px; }
-.more-list { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-.pill { gap: 12px; padding: 10px 14px 10px 10px; border-radius: 16px; font-size: 15px; }
-.pill-ico { width: 34px; height: 34px; border-radius: 10px; }
-.pill-ico svg { width: 18px; height: 18px; }
 }
 @media (prefers-color-scheme: dark) {
 :root {
@@ -1396,7 +1396,7 @@ html { scroll-behavior: auto; }
       "name": "Which permissions does it need?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The first time it reads Apple Music or Spotify, macOS asks whether Lyrimuse may control it (Automation); allow it. QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX and Amazon Music need nothing extra."
+        "text": "The first time it reads Apple Music, Spotify or Kaset, macOS asks whether Lyrimuse may control it (Automation); allow it. The other players need nothing to show lyrics. Accessibility is optional: it adds Favorite, shuffle and repeat buttons for some players, and keeps playback controls reaching QQ Music, NetEase Cloud Music and Soda Music while a browser video holds the media keys."
       }
     },
     {
@@ -1436,7 +1436,7 @@ html { scroll-behavior: auto; }
       "name": "How is it different from LyricsX?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "LyricsX's last release is v1.6.3 from April 2022. Lyrimuse needs macOS 14 or later and adds QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music and YouTube Music, scored lyric matching, Jyutping and Japanese romaji, and Last.fm scrobbling. See the fact-checked comparison."
+        "text": "LyricsX's last release is v1.6.3 from April 2022. Lyrimuse needs macOS 14 or later and adds QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, YouTube Music, LX Music and reAMP, scored lyric matching, Jyutping and Japanese romaji, and Last.fm scrobbling. See the fact-checked comparison."
       }
     }
   ]
@@ -1844,7 +1844,7 @@ html { scroll-behavior: auto; }
   <header class="ch-head reveal">
     <p class="k">Discord status</p>
     <h2><span class="lead">Let your Discord friends</span> <span class="fx">see what you&#x27;re listening to.</span></h2>
-    <p class="ch-lede">The song, artist, album and cover show on your Discord profile, with progress that keeps moving. It&#x27;s off until you turn it on, and it only talks to the Discord app on this Mac.</p>
+    <p class="ch-lede">The song, artist, album and cover show on your Discord profile, with progress that keeps moving, plus the line being sung if you like. It&#x27;s off until you turn it on, and it only talks to the Discord app on this Mac.</p>
   </header>
   <div class="show reveal">
     <div class="ch-stage">
@@ -1984,7 +1984,7 @@ html { scroll-behavior: auto; }
       <li class="pill glass" style="--i:4"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 7h12l-3.2-3.2M16.5 13h-12l3.2 3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Lyrics in Simplified or Traditional</span></li>
       <li class="pill glass" style="--i:5"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.8 10h3.4M13.8 10h3.4M15.5 8.3v3.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="10" r="2.4" fill="currentColor"/></svg></i><span>Nudge lyric timing</span></li>
       <li class="pill glass" style="--i:6"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.4 3.7v5l4.2-2.5z" fill="currentColor"/><path d="M10.5 6.2h6.3M3.6 11.3h13.2M3.6 15.6h8.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Upcoming tracks resolved in advance</span></li>
-      <li class="pill glass" style="--i:7"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 15.5h8.2a3.3 3.3 0 0 0 .5-6.6A5 5 0 0 0 5 8.4a3.6 3.6 0 0 0 1 7.1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m8 11.3 1.6 1.6L12.5 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Works offline</span></li>
+      <li class="pill glass" style="--i:7"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5.8" y="2.5" width="8.4" height="15" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.8 14.6h2.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Lyrics on your phone or in OBS</span></li>
       <li class="pill glass" style="--i:8"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4.17A5 5 0 1 1 6 4.17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.4 3.9 6 4.17l-1.05 2.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m12.1 12.1 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Missing lyrics retried automatically</span></li>
     </ul>
   </div>
@@ -2009,12 +2009,12 @@ html { scroll-behavior: auto; }
     <div class="faq-list reveal">
       <details class="qa" style="--i:0"><summary><span class="qa-q">Which Macs does it support?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>macOS 14 Sonoma or later, on Apple Silicon and Intel; Intel Macs use a separate build. Translating lyrics on your Mac needs macOS 15 or later.</p></div></details>
       <details class="qa" style="--i:1"><summary><span class="qa-q">How do I install it?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>With Homebrew: copy the install command above and paste it into Terminal. It takes care of the one-time Gatekeeper prompt, and you don't need an Apple Developer account. Or download the DMG and drag Lyrimuse into Applications. The app isn't notarized by Apple, so macOS blocks the first launch: open System Settings → Privacy & Security, scroll to the bottom and click Open Anyway. You only do this once. Updates come through the app after that.</p></div></details>
-      <details class="qa" style="--i:2"><summary><span class="qa-q">Which permissions does it need?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>The first time it reads Apple Music or Spotify, macOS asks whether Lyrimuse may control it (Automation); allow it. QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX and Amazon Music need nothing extra.</p></div></details>
+      <details class="qa" style="--i:2"><summary><span class="qa-q">Which permissions does it need?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>The first time it reads Apple Music, Spotify or Kaset, macOS asks whether Lyrimuse may control it (Automation); allow it. The other players need nothing to show lyrics. Accessibility is optional: it adds Favorite, shuffle and repeat buttons for some players, and keeps playback controls reaching QQ Music, NetEase Cloud Music and Soda Music while a browser video holds the media keys.</p></div></details>
       <details class="qa" style="--i:3"><summary><span class="qa-q">Does any of my data leave my Mac?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>There's no account, no telemetry and no analytics, so nothing about you or what you play goes to the developer. To find lyrics it asks the lyric sources about the song that's playing, and translation happens on your Mac by default. The <a href="privacy/">privacy policy</a> lists every server it talks to.</p></div></details>
       <details class="qa" style="--i:4"><summary><span class="qa-q">Do lyrics work offline?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>Yes. Lyrics it has found once are cached on your Mac and show without a connection. The first lookup for a song needs one, and so does online translation.</p></div></details>
       <details class="qa" style="--i:5"><summary><span class="qa-q">Does the Dynamic Island capsule work on a Mac without a notch?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>Yes. On a screen without a notch, like an older MacBook or an external display, the capsule sits at the top center, as tall as the menu bar. You pick the screen in Settings.</p></div></details>
       <details class="qa" style="--i:6"><summary><span class="qa-q">What if the lyrics are wrong or out of sync?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>If the timing's off, shift it for that song and it's remembered. If it's the wrong version, open manual search and pick another one; your pick stays locked. You can also edit any song's lyrics in Lyrics Manager.</p></div></details>
-      <details class="qa" style="--i:7"><summary><span class="qa-q">How is it different from LyricsX?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>LyricsX's last release is v1.6.3 from April 2022. Lyrimuse needs macOS 14 or later and adds QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music and YouTube Music, scored lyric matching, Jyutping and Japanese romaji, and Last.fm scrobbling. See the <a href="compare/">fact-checked comparison</a>.</p></div></details>
+      <details class="qa" style="--i:7"><summary><span class="qa-q">How is it different from LyricsX?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>LyricsX's last release is v1.6.3 from April 2022. Lyrimuse needs macOS 14 or later and adds QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, YouTube Music, LX Music and reAMP, scored lyric matching, Jyutping and Japanese romaji, and Last.fm scrobbling. See the <a href="compare/">fact-checked comparison</a>.</p></div></details>
     </div>
   </div>
 </section>

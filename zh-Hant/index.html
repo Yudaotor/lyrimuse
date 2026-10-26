@@ -17,7 +17,7 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<script src="../assets/lp.js?v=202610240322" defer fetchpriority="high"></script>
+<script src="../assets/lp.js?v=202610261522" defer fetchpriority="high"></script>
 <style>:root {
 --bg: #fbfbfd;
 --bg-alt: #f5f5f7;
@@ -1150,7 +1150,7 @@ background: var(--card); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0
 @media (max-width: 820px) {
 .ch { contain-intrinsic-size: auto 620px; }
 .ch.watch { contain-intrinsic-size: auto 470px; }
-.ch-more { contain-intrinsic-size: auto 830px; }
+.ch-more { contain-intrinsic-size: auto 760px; }
 .news { contain-intrinsic-size: auto 450px; }
 .faq-sec { contain-intrinsic-size: auto 680px; }
 .final { contain-intrinsic-size: auto 490px; }
@@ -1245,6 +1245,10 @@ transition: transform .3s var(--ease-out), background .2s, opacity .2s;
 .seg:has(> .seg-btn:nth-child(6)) { gap: 0; }
 .seg:has(> .seg-btn:nth-child(6)) .seg-btn { padding: 8px; font-size: 12.5px; }
 .seg:has(> .seg-btn:nth-child(6)) .seg-bar { left: 7px; right: 7px; }
+.more-list { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.pill { gap: 12px; padding: 10px 14px 10px 10px; border-radius: 16px; font-size: 15px; }
+.pill-ico { width: 34px; height: 34px; border-radius: 10px; }
+.pill-ico svg { width: 18px; height: 18px; }
 }
 @media (max-width: 370px) {
 .seg:has(> .seg-btn:nth-child(6)) .seg-btn { padding: 7px 6px; font-size: 11.5px; }
@@ -1253,10 +1257,6 @@ transition: transform .3s var(--ease-out), background .2s, opacity .2s;
 @media (max-width: 340px) {
 .seg-btn { padding: 7px 8px; font-size: 12px; }
 .rd-lines { --fs: 25px; }
-.more-list { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-.pill { gap: 12px; padding: 10px 14px 10px 10px; border-radius: 16px; font-size: 15px; }
-.pill-ico { width: 34px; height: 34px; border-radius: 10px; }
-.pill-ico svg { width: 18px; height: 18px; }
 }
 @media (prefers-color-scheme: dark) {
 :root {
@@ -1384,7 +1384,7 @@ html { scroll-behavior: auto; }
       "name": "需要給哪些權限？",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Apple Music 和 Spotify 第一次使用時，macOS 會問你要不要允許 Lyrimuse 控制它們（「自動化」權限），同意就好；QQ 音樂、網易雲音樂、酷狗、汽水音樂、KKBOX、Amazon Music 都不用額外授權。"
+        "text": "Apple Music、Spotify 和 Kaset 第一次使用時，macOS 會問你要不要允許 Lyrimuse 控制它們（「自動化」權限），同意就好；其他播放器顯示歌詞不用額外授權。「輔助使用」權限可選：開啟後，部分播放器的喜歡、隨機和循環鍵會出現在歌詞視窗裡，瀏覽器影片佔著播放鍵時，也照樣能控制 QQ 音樂、網易雲音樂和汽水音樂。"
       }
     },
     {
@@ -1424,7 +1424,7 @@ html { scroll-behavior: auto; }
       "name": "和 LyricsX 有什麼差別？",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3。Lyrimuse 需要 macOS 14 以上，多支援了 QQ 音樂、網易雲音樂、酷狗、汽水音樂、KKBOX、Amazon Music 和 YouTube Music，歌詞按評分挑選，有粵拼和日文羅馬拼音，還能記錄到 Last.fm。詳見逐項查證過的對比。"
+        "text": "LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3。Lyrimuse 需要 macOS 14 以上，多支援了 QQ 音樂、網易雲音樂、酷狗、汽水音樂、KKBOX、Amazon Music、YouTube Music、洛雪音樂和 reAMP，歌詞按評分挑選，有粵拼和日文羅馬拼音，還能記錄到 Last.fm。詳見逐項查證過的對比。"
       }
     }
   ]
@@ -1832,7 +1832,7 @@ html { scroll-behavior: auto; }
   <header class="ch-head reveal">
     <p class="k">Discord 狀態</p>
     <h2><span class="lead"><span class="wu">讓</span> <span class="wu">Discord</span> <span class="wu pe">好友，</span></span><span class="fx"><span class="wu">看到你正在</span><span class="wu pe">聆聽的歌。</span></span></h2>
-    <p class="ch-lede">歌名、歌手、專輯和封面顯示在你的 Discord 資料卡上，進度跟著走。預設關閉，開啟後只和本機的 Discord 桌面版通訊。</p>
+    <p class="ch-lede">歌名、歌手、專輯和封面顯示在你的 Discord 資料卡上，進度跟著走，還可以顯示正在唱的這句歌詞。預設關閉，開啟後只和本機的 Discord 桌面版通訊。</p>
   </header>
   <div class="show reveal">
     <div class="ch-stage">
@@ -1972,7 +1972,7 @@ html { scroll-behavior: auto; }
       <li class="pill glass" style="--i:4"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 7h12l-3.2-3.2M16.5 13h-12l3.2 3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>歌詞簡繁切換</span></li>
       <li class="pill glass" style="--i:5"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.8 10h3.4M13.8 10h3.4M15.5 8.3v3.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="10" r="2.4" fill="currentColor"/></svg></i><span>歌詞時間軸微調</span></li>
       <li class="pill glass" style="--i:6"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.4 3.7v5l4.2-2.5z" fill="currentColor"/><path d="M10.5 6.2h6.3M3.6 11.3h13.2M3.6 15.6h8.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>待播歌曲提前解析</span></li>
-      <li class="pill glass" style="--i:7"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 15.5h8.2a3.3 3.3 0 0 0 .5-6.6A5 5 0 0 0 5 8.4a3.6 3.6 0 0 0 1 7.1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m8 11.3 1.6 1.6L12.5 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>離線可用</span></li>
+      <li class="pill glass" style="--i:7"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5.8" y="2.5" width="8.4" height="15" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.8 14.6h2.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>手機副螢幕與 OBS 直播</span></li>
       <li class="pill glass" style="--i:8"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4.17A5 5 0 1 1 6 4.17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.4 3.9 6 4.17l-1.05 2.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m12.1 12.1 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>缺失歌詞自動補搜</span></li>
     </ul>
   </div>
@@ -1997,12 +1997,12 @@ html { scroll-behavior: auto; }
     <div class="faq-list reveal">
       <details class="qa" style="--i:0"><summary><span class="qa-q">支援哪些 Mac？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>macOS 14 Sonoma 以上，Apple Silicon 和 Intel 都支援，Intel 用單獨的安裝包。想在本機翻譯歌詞，需要 macOS 15 以上。</p></div></details>
       <details class="qa" style="--i:1"><summary><span class="qa-q">怎麼安裝？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>推薦用 Homebrew：點上面的「複製 Homebrew 安裝指令」，貼到終端機執行，第一次打開時的 Gatekeeper 提示它會順手處理，也不需要 Apple 開發者帳號。也可以下載 DMG，把 Lyrimuse 拖進「應用程式」。App 沒有經過 Apple 公證，第一次打開會被系統擋下：打開「系統設定 → 隱私權與安全性」，捲到最底部按「強制打開」，只需要這一次。之後的更新都在 App 裡完成。</p></div></details>
-      <details class="qa" style="--i:2"><summary><span class="qa-q">需要給哪些權限？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>Apple Music 和 Spotify 第一次使用時，macOS 會問你要不要允許 Lyrimuse 控制它們（「自動化」權限），同意就好；QQ 音樂、網易雲音樂、酷狗、汽水音樂、KKBOX、Amazon Music 都不用額外授權。</p></div></details>
+      <details class="qa" style="--i:2"><summary><span class="qa-q">需要給哪些權限？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>Apple Music、Spotify 和 Kaset 第一次使用時，macOS 會問你要不要允許 Lyrimuse 控制它們（「自動化」權限），同意就好；其他播放器顯示歌詞不用額外授權。「輔助使用」權限可選：開啟後，部分播放器的喜歡、隨機和循環鍵會出現在歌詞視窗裡，瀏覽器影片佔著播放鍵時，也照樣能控制 QQ 音樂、網易雲音樂和汽水音樂。</p></div></details>
       <details class="qa" style="--i:3"><summary><span class="qa-q">我的資料會上傳嗎？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>沒有帳號、沒有遙測、沒有統計，關於你和你聽什麼，不會有任何資訊傳到開發者那裡。找歌詞時會把正在播的這首歌拿去問各個歌詞來源，翻譯預設在本機完成。完整清單見<a href="privacy/">隱私政策</a>。</p></div></details>
       <details class="qa" style="--i:4"><summary><span class="qa-q">沒有網路能看歌詞嗎？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>可以。找過一次的歌詞會存在本機，之後不連網也能顯示；第一次找歌詞和線上翻譯需要網路。</p></div></details>
       <details class="qa" style="--i:5"><summary><span class="qa-q">沒有瀏海的 Mac 能用動態島嗎？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>可以。在沒有瀏海的螢幕上（舊款 MacBook 或外接顯示器），膠囊貼在螢幕頂部置中，跟選單列一樣高，放在哪個螢幕可以在設定裡選。</p></div></details>
       <details class="qa" style="--i:6"><summary><span class="qa-q">歌詞不對或不同步怎麼辦？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>時間對不上，就幫這首歌調個偏移，之後會一直記住；版本不對，就打開手動搜尋換一份，選中的那份會被鎖定。也可以在「歌詞管理」裡直接修改。</p></div></details>
-      <details class="qa" style="--i:7"><summary><span class="qa-q">和 LyricsX 有什麼差別？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3。Lyrimuse 需要 macOS 14 以上，多支援了 QQ 音樂、網易雲音樂、酷狗、汽水音樂、KKBOX、Amazon Music 和 YouTube Music，歌詞按評分挑選，有粵拼和日文羅馬拼音，還能記錄到 Last.fm。詳見<a href="compare/">逐項查證過的對比</a>。</p></div></details>
+      <details class="qa" style="--i:7"><summary><span class="qa-q">和 LyricsX 有什麼差別？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3。Lyrimuse 需要 macOS 14 以上，多支援了 QQ 音樂、網易雲音樂、酷狗、汽水音樂、KKBOX、Amazon Music、YouTube Music、洛雪音樂和 reAMP，歌詞按評分挑選，有粵拼和日文羅馬拼音，還能記錄到 Last.fm。詳見<a href="compare/">逐項查證過的對比</a>。</p></div></details>
     </div>
   </div>
 </section>
