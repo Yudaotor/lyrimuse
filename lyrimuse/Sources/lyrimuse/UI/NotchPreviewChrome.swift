@@ -54,6 +54,7 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     var trackDrop: NotchTrackDrop? { nil }
     var transientBannerActive: Bool { false }
     var showsProgressLine: Bool { AppSettings.shared.notchShowsProgressLine }
+    var progressLineStyle: NotchProgressLineStyle { AppSettings.shared.notchProgressLineStyle }
     /// 预览不掉歌名,耳朵里的封面也不等揭晓。
     func revealsTrack(_ key: String) -> Bool { true }
 

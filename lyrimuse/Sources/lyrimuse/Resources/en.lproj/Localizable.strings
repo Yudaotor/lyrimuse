@@ -1144,6 +1144,7 @@
 "应用主题前手动调整的配色，点按即可恢复" = "The colors you set before applying a theme. Click to restore them";
 "应答" = "Responded";
 "应答源最少" = "Fewest sources responded";
+"底边" = "Bottom Edge";
 "底部居中" = "Bottom Center";
 "底部颜色" = "Bottom Color";
 "延后" = "Delay";
@@ -1609,7 +1610,7 @@
 "未填写服务地址（可选）" = "Server URL not set yet (optional)";
 "未填写访问令牌（可选）" = "Access token not set yet (optional)";
 "未完成" = "Not done";
-"未展开时在卡片底边显示播放进度" = "Shows playback progress along the bottom edge when not expanded";
+"未展开时显示播放进度" = "Shows playback progress when not expanded";
 "未应答" = "No response";
 "未开启" = "Disabled";
 "未开启 · 开启后播放进度更准确，并可调节洛雪音乐的音量" = "Off · Turn it on for more accurate timing and LX Music volume control";
@@ -2198,6 +2199,7 @@
 "翻译语言包" = "Translation Languages";
 "耗时" = "Time taken";
 "耗时%@，可随时停止" = "Takes %@; you can stop at any time";
+"耳朵" = "Ears";
 "联动" = "Linkage";
 "联网搜索候选歌词" = "Search Online for Lyrics";
 "联网逐首搜索，可随时停止" = "Searches online one song at a time; you can stop at any time";

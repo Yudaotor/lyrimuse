@@ -52968,25 +52968,25 @@
         }
       }
     },
-    "未展开时在卡片底边显示播放进度" : {
+    "未展开时显示播放进度" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Shows playback progress along the bottom edge when not expanded"
+            "value" : "Shows playback progress when not expanded"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未展开时在卡片底边显示播放进度"
+            "value" : "未展开时显示播放进度"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未展開時在卡片底部邊緣顯示播放進度"
+            "value" : "未展開時顯示播放進度"
           }
         }
       }
@@ -55839,6 +55839,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "主行"
+          }
+        }
+      }
+    },
+    "底边" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bottom Edge"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "底边"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "底邊"
+          }
+        }
+      }
+    },
+    "耳朵" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ears"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "耳朵"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "耳朵"
           }
         }
       }

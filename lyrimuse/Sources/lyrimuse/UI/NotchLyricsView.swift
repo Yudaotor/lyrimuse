@@ -155,7 +155,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // (`NotchProgressLine.fade`,只套在 opacity 上),别写成 if + transition 交给卡片那条尺寸弹簧:线停在稳态底边的高度上,
             // 跟着弹簧慢慢淡出 / 淡入时会横在正在变形的卡片中间。见 05 章决策 94。
             .overlay(alignment: .bottom) {
-                if controller.showsProgressLine {
+                if controller.showsProgressLine && controller.progressLineStyle == .bottom {
                     let shows = controller.showsBottomProgressLine
                     NotchProgressLine(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
                                       // 有锚点时用锚点自己的时长,跟外推的位置同一次采样(同展开区的 NotchScrubber),换歌那一拍不跳。
@@ -163,6 +163,25 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                                           ?? playback.currentDurationMs, tint: accentOrWhite,
                                       active: surfaceVisible && shows, outline: controller.cardOutline)
                         .padding(.bottom, 1)
+                        .animation(NotchProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {
+                            $0.opacity(shows ? 1 : 0)
+                        }
+                        .opacity(revealContentOpacity)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(!shows)
+                }
+            }
+            // 「耳朵」那一档:沿稳态卡片外沿走到刘海,外框钉成稳态卡片的宽和 `earProgressHeight`(不含掉歌名 / 横幅那一截,
+            // 那一截伸出来时线让开)。常驻、只切透明度,理由同上。
+            .overlay(alignment: .top) {
+                if controller.showsProgressLine && controller.progressLineStyle == .ears {
+                    let shows = controller.showsEarProgressLine
+                    NotchEarProgressLine(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
+                                         durationMs: (playback.anchor?.durationMs).flatMap { $0 > 0 ? $0 : nil }
+                                             ?? playback.currentDurationMs, tint: accentOrWhite,
+                                         active: surfaceVisible && shows, outline: controller.cardOutline,
+                                         notchWidth: controller.notchWidth)
+                        .frame(width: controller.steadyCardWidth, height: controller.earProgressHeight)
                         .animation(NotchProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {
                             $0.opacity(shows ? 1 : 0)
                         }

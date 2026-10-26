@@ -400,6 +400,7 @@ final class AppSettings: ObservableObject {
         static let notchShowsTrackDrop = "np:notchShowsTrackDrop"
         static let notchGestures = "np:notchGestures"
         static let notchShowsProgressLine = "np:notchShowsProgressLine"
+        static let notchProgressLineStyle = "np:notchProgressLineStyle"
         static let overlayFadeOnHover = "np:overlayFadeOnHover"
         static let overlayDragNeedsLongPress = "np:overlayDragNeedsLongPress"
         // 悬浮歌词跟不跟着当前窗口换屏,见 overlayFollowsActiveScreen。
@@ -594,6 +595,7 @@ final class AppSettings: ObservableObject {
     static let defaultNotchGestures = true
     /// 默认关:卡片底边那根进度线。
     static let defaultNotchShowsProgressLine = false
+    static let defaultNotchProgressLineStyle: NotchProgressLineStyle = .bottom
     /// 默认关:换歌时弹一条系统通知(歌名、「歌手 — 专辑」、封面),见 `NowPlayingNotifier`。
     static let defaultNowPlayingNotifications = false
     static let defaultNotchShowLyrics = true
@@ -1367,6 +1369,10 @@ final class AppSettings: ObservableObject {
     /// 进度线:没展开时卡片底边画一根细进度线(关着歌词行时卡片为它多长 `NotchMetrics.progressLineStrip`)。
     @Published var notchShowsProgressLine: Bool {
         didSet { defaults.set(notchShowsProgressLine, forKey: Keys.notchShowsProgressLine) }
+    }
+    /// 进度线画在底边还是沿耳朵(`NotchProgressLineStyle`),开着「进度线」时才起作用。
+    @Published var notchProgressLineStyle: NotchProgressLineStyle {
+        didSet { defaults.set(notchProgressLineStyle.rawValue, forKey: Keys.notchProgressLineStyle) }
     }
     // 指针划过悬浮歌词时让它淡下去,离开再恢复。**只对桌面悬浮歌词生效**(灵动岛贴在刘海
     // 上、hover 是它展开的手势,让开会互相打架)。
@@ -2574,6 +2580,8 @@ final class AppSettings: ObservableObject {
         notchGestures = (defaults.object(forKey: Keys.notchGestures) as? Bool) ?? Self.defaultNotchGestures
         notchShowsProgressLine = (defaults.object(forKey: Keys.notchShowsProgressLine) as? Bool)
             ?? Self.defaultNotchShowsProgressLine
+        notchProgressLineStyle = defaults.string(forKey: Keys.notchProgressLineStyle)
+            .flatMap(NotchProgressLineStyle.init(rawValue:)) ?? Self.defaultNotchProgressLineStyle
         // 只认这四个值,别的(手改 / 导入的)按跟随系统:不然语言下拉一个都勾不上。
         appLanguage = defaults.string(forKey: Keys.appLanguage)
             .flatMap { ["system", "zh-hans", "zh-hant", "en"].contains($0) ? $0 : nil } ?? "system"

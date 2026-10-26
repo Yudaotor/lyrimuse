@@ -209,6 +209,10 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/notch-behavior?hide-when-not-playing=1"),
                     .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: true)), "debug: 只开灵动岛暂停时隐藏")
         expectEqual(link("lyrimuse://debug/notch-behavior"), nil, "debug: 灵动岛行为什么都没带不认")
+        expectEqual(link("lyrimuse://debug/notch-behavior?progress-line=Ears"),
+                    .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, progressLine: .ears)),
+                    "debug: 灵动岛进度线只带样式")
+        expectEqual(link("lyrimuse://debug/notch-behavior?progress-line=side"), nil, "debug: 灵动岛进度线认不出的档不认")
         expectEqual(link("lyrimuse://debug/menubar-center?screen=auto"),
                     .debug(.menuBarCenter(center: nil, ignoreNotch: nil, screen: "auto")), "debug: 只改正中放哪几块屏")
         expectEqual(link("lyrimuse://debug/japanese-reading?style=Kana"), .debug(.japaneseReading(.kana)),
@@ -341,6 +345,8 @@ func runDeepLinkTests() {
             .debug(.stall(ms: 1)), .debug(.stall(ms: 2000)), .debug(.milestonePreview),
             .debug(.notchBehavior(collapseWhenPaused: true, hideWhenNotPlaying: nil)),
             .debug(.notchBehavior(collapseWhenPaused: false, hideWhenNotPlaying: true)),
+            .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, progressLine: .off)),
+            .debug(.notchBehavior(collapseWhenPaused: true, hideWhenNotPlaying: nil, progressLine: .bottom)),
             .debug(.knockout(leg: .voxScript, on: false)), .debug(.knockout(leg: .systemArtwork, on: true)),
             .debug(.menuBarCenter(center: true, ignoreNotch: true)), .debug(.menuBarCenter(center: false, ignoreNotch: nil)),
             .debug(.menuBarCenter(center: nil, ignoreNotch: false)),

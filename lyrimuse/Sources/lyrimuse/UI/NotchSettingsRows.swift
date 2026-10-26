@@ -126,8 +126,26 @@ struct NotchStyleSettingsRows: View {
                 cornerRadiusRow(icon: "rectangle.bottomhalf.filled", title: L10n.t("展开圆角"), slot: .expanded,
                                 cardHeight: card.cardHeight(expanded: true))
                 CardDivider()
-                SettingsRow(icon: "minus", title: L10n.t("进度线"), help: L10n.t("未展开时在卡片底边显示播放进度")) {
-                    Toggle("", isOn: $settings.notchShowsProgressLine)
+                SettingsRow(icon: "minus", title: L10n.t("进度线"), help: L10n.t("未展开时显示播放进度")) {
+                    SettingsGlassMenuPicker(
+                        selection: Binding(
+                            get: {
+                                NotchProgressLineChoice(shows: settings.notchShowsProgressLine,
+                                                        style: settings.notchProgressLineStyle)
+                            },
+                            set: { choice in
+                                // 相等守卫,理由同上面的背景下拉。
+                                if let style = choice.style, settings.notchProgressLineStyle != style {
+                                    settings.notchProgressLineStyle = style
+                                }
+                                if settings.notchShowsProgressLine != choice.shows {
+                                    settings.notchShowsProgressLine = choice.shows
+                                }
+                            }),
+                        options: NotchProgressLineChoice.allCases,
+                        label: \.displayName,
+                        compact: true
+                    )
                 }
             }
         }
@@ -272,6 +290,17 @@ enum NotchStyleDefaults {
         settings.notchShowsTrackDrop = AppSettings.defaultNotchShowsTrackDrop
         settings.notchGestures = AppSettings.defaultNotchGestures
         settings.notchShowsProgressLine = AppSettings.defaultNotchShowsProgressLine
+        settings.notchProgressLineStyle = AppSettings.defaultNotchProgressLineStyle
+    }
+}
+
+extension NotchProgressLineChoice {
+    var displayName: String {
+        switch self {
+        case .off: return L10n.t("不显示")
+        case .bottom: return L10n.t("底边")
+        case .ears: return L10n.t("耳朵")
+        }
     }
 }
 

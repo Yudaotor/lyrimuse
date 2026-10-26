@@ -65,6 +65,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     @Published private(set) var transientBannerActive = false
     /// 要不要画底边那根进度线,真值在 `AppSettings.notchShowsProgressLine`,镜像理由同 `showsEqualizer`。
     @Published private(set) var showsProgressLine: Bool = AppSettings.shared.notchShowsProgressLine
+    @Published private(set) var progressLineStyle: NotchProgressLineStyle = AppSettings.shared.notchProgressLineStyle
     /// `isExpanded` 的两个输入(拆开):hover 那一路的兑现结果,和「发现新播放器」主动提醒的
     /// 撑开(`NotchUnknownPlayerPrompt.isAlerting` 的镜像)。任一为 true 卡片就是展开的,见 refreshExpanded ——
     /// 提醒期间光标进出卡片改的是 hoverExpanded,不会把提醒撑开的卡片提前收掉;提醒到点时光标还停在上面,
@@ -472,6 +473,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         .store(in: &subscriptions)
         AppSettings.shared.$notchShowsProgressLine.removeDuplicates().sink { [weak self] shows in
             self?.showsProgressLine = shows
+        }
+        .store(in: &subscriptions)
+        AppSettings.shared.$notchProgressLineStyle.removeDuplicates().sink { [weak self] style in
+            self?.progressLineStyle = style
         }
         .store(in: &subscriptions)
 

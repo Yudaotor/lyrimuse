@@ -981,7 +981,7 @@ Every setting in the Settings window, by where it lives: 291 in all. Type a name
 
 - **Corners**
 - **Expanded Corners**
-- **Progress Line**: Shows playback progress along the bottom edge when not expanded
+- **Progress Line**: Shows playback progress when not expanded
 
 ### Lyrics Display › Notch › Left Ear
 

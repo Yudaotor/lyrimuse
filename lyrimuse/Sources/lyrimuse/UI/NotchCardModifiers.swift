@@ -111,7 +111,8 @@ struct NotchHangingShape: Shape {
         self.corner = corner
     }
 
-    func path(in rect: CGRect) -> Path {
+    /// 这个矩形上的肩膀和底角半径。沿耳朵的进度线(`NotchEarProgressLine`)也读这里,跟外形不会对不上。
+    func cornerMetrics(in rect: CGRect) -> (shoulder: CGFloat, radius: CGFloat) {
         let s = notchHeight.map { NotchOutline.shoulder(width: rect.width, height: rect.height, notchHeight: $0) } ?? 0
         let bodyWidth = rect.width - 2 * s
         // 圆角只由这一帧的矩形决定(按高度挑 / 混合规则),尺寸动画里自然连续,不靠插值。
@@ -124,6 +125,11 @@ struct NotchHangingShape: Shape {
         } else {
             r = NotchOutline.bottomRadius(height: rect.height, bodyWidth: bodyWidth)
         }
+        return (s, r)
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let (s, r) = cornerMetrics(in: rect)
         let left = rect.minX + s
         let right = rect.maxX - s
         var path = Path()

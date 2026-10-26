@@ -57,6 +57,8 @@ public struct NotchCardLayout: Equatable, Sendable {
     public var transientBannerActive: Bool
     /// 「进度线」开关。
     public var showsProgressLine: Bool
+    /// 进度线画在底边还是沿耳朵。
+    public var progressLineStyle: NotchProgressLineStyle
     /// 「收起时显示歌词」开关(真窗口上还叠了「纯音乐 / 无歌词时收起歌词行」)。
     public var showsLyrics: Bool
     /// 这首歌有没有下一句可预览(曲目级信号,一首歌里不变,不是「此刻有没有下一句」)。
@@ -75,8 +77,8 @@ public struct NotchCardLayout: Equatable, Sendable {
     public init(metrics: Metrics, isCollapsed: Bool, isExpanded: Bool, notchWidth: CGFloat, contentTopInset: CGFloat,
                 steadyCardWidth: CGFloat, expandedCardWidth: CGFloat, lyricRowHeight: CGFloat,
                 expandedLyricListHeight: CGFloat, hasTrack: Bool, isAdBreak: Bool, hasMilestone: Bool,
-                hasTrackDrop: Bool, transientBannerActive: Bool, showsProgressLine: Bool, showsLyrics: Bool,
-                trackHasLyricPreview: Bool, trackHasScrubber: Bool, expandedShowsNextLine: Bool,
+                hasTrackDrop: Bool, transientBannerActive: Bool, showsProgressLine: Bool,
+                progressLineStyle: NotchProgressLineStyle, showsLyrics: Bool, trackHasLyricPreview: Bool, trackHasScrubber: Bool, expandedShowsNextLine: Bool,
                 expandedShowsControls: Bool, trackInfoShowsArtwork: Bool, trackInfoShowsTitle: Bool,
                 trackInfoShowsArtist: Bool, trackInfoShowsAlbum: Bool, expandedShowsQuickActions: Bool) {
         self.metrics = metrics
@@ -94,6 +96,7 @@ public struct NotchCardLayout: Equatable, Sendable {
         self.hasTrackDrop = hasTrackDrop
         self.transientBannerActive = transientBannerActive
         self.showsProgressLine = showsProgressLine
+        self.progressLineStyle = progressLineStyle
         self.showsLyrics = showsLyrics
         self.trackHasLyricPreview = trackHasLyricPreview
         self.trackHasScrubber = trackHasScrubber
@@ -126,9 +129,21 @@ public struct NotchCardLayout: Equatable, Sendable {
         transientBannerActive && hasTrack && !showsLyrics && !isExpanded && !isCollapsed && !hasMilestone
     }
 
-    /// 底边那根进度线画不画:开着「进度线」、有曲目,没展开(展开区有自己那条进度条)、没收起、没报喜。
+    /// 底边那根进度线画不画:开着「进度线」、选的是底边、有曲目,没展开(展开区有自己那条进度条)、没收起、没报喜。
     public var showsBottomProgressLine: Bool {
-        showsProgressLine && hasTrack && !isExpanded && !isCollapsed && !hasMilestone
+        showsProgressLine && progressLineStyle == .bottom && hasTrack && !isExpanded && !isCollapsed && !hasMilestone
+    }
+
+    /// 沿耳朵那根进度线画不画:条件同底边那根,另外关着歌词行时掉歌名 / 横幅那一截伸出来的时候让开
+    /// (线按 `earProgressHeight` 画,卡片多长的那一截会让它横在卡片中间)。
+    public var showsEarProgressLine: Bool {
+        showsProgressLine && progressLineStyle == .ears && hasTrack && !isExpanded && !isCollapsed && !hasMilestone
+            && (showsLyrics || !(hasTrackDrop || transientBannerActive))
+    }
+
+    /// 沿耳朵那根进度线按多高的卡片画:顶行,开着歌词行时再加歌词行。不含掉歌名 / 横幅那一截。
+    public var earProgressHeight: CGFloat {
+        contentTopInset + (showsLyrics ? lyricRowHeight : 0)
     }
 
     /// 展开区那行「下一句预览」画不画:这首有下一句、开关开着、没开「多行歌词」(列表里本来就有下一句)。
@@ -213,7 +228,7 @@ public struct NotchCardLayout: Equatable, Sendable {
     ///
     /// 没有曲目时展开只长出「空闲面板」那一块:那时歌词行和展开区的内容整个被 `hasTrack` 挡掉,照通式留「三键 + 进度条」
     /// 就是一大块空黑。有曲目时 = 顶行 + 歌词那一格(稳态按「显示歌词」、展开总留;展开且开着多行歌词时换成列表高度;
-    /// 关着歌词行时只给掉出来的歌名 / 横幅留一截)+ 关着歌词行时进度线那一截 + 展开区。
+    /// 关着歌词行时只给掉出来的歌名 / 横幅留一截)+ 关着歌词行时底边进度线那一截 + 展开区。
     public func cardHeight(expanded: Bool) -> CGFloat {
         if !hasTrack {
             return contentTopInset + (expanded ? NotchExpandedMetrics.idlePanelHeight : 0)
@@ -224,7 +239,8 @@ public struct NotchCardLayout: Equatable, Sendable {
         } else {
             lyricCell = hasTrackDrop || transientBannerActive ? metrics.trackDropHeight : 0
         }
-        let progressStrip = !expanded && !showsLyrics && showsProgressLine ? metrics.progressLineStrip : 0
+        let progressStrip = !expanded && !showsLyrics && showsProgressLine && progressLineStyle == .bottom
+            ? metrics.progressLineStrip : 0
         let expandedArea = expanded
             ? NotchExpandedMetrics.height(hasLyricPreview: showsExpandedLyricPreview, hasScrubber: trackHasScrubber,
                                           hasControls: expandedShowsControls, trackInfoHeight: expandedTrackInfoHeight)

@@ -322,7 +322,8 @@ func runNotchTests() {
         let base = L(metrics: m, isCollapsed: false, isExpanded: false, notchWidth: 180, contentTopInset: 32,
                      steadyCardWidth: 360, expandedCardWidth: 468, lyricRowHeight: 44, expandedLyricListHeight: 0,
                      hasTrack: true, isAdBreak: false, hasMilestone: false, hasTrackDrop: false, transientBannerActive: false,
-                     showsProgressLine: false, showsLyrics: true, trackHasLyricPreview: true, trackHasScrubber: true,
+                     showsProgressLine: false, progressLineStyle: .bottom, showsLyrics: true, trackHasLyricPreview: true,
+                     trackHasScrubber: true,
                      expandedShowsNextLine: true, expandedShowsControls: true, trackInfoShowsArtwork: false,
                      trackInfoShowsTitle: false, trackInfoShowsArtist: false, trackInfoShowsAlbum: false,
                      expandedShowsQuickActions: false)
@@ -368,6 +369,42 @@ func runNotchTests() {
         expectEqual(with { $0.showsProgressLine = true }.showsBottomProgressLine, true, "卡片布局: 稳态画底边进度线")
         expectEqual(with { $0.showsProgressLine = true; $0.isExpanded = true }.showsBottomProgressLine, false, "卡片布局: 展开不画底边进度线")
         expectEqual(with { $0.showsProgressLine = true; $0.isCollapsed = true }.showsBottomProgressLine, false, "卡片布局: 收起不画底边进度线")
+        // 「耳朵」那一档:卡片不为它变高;关着歌词行时掉歌名 / 横幅那一截伸出来就让开;线按顶行(+ 歌词行)那么高画。
+        func ears(_ change: (inout L) -> Void = { _ in }) -> L {
+            with { $0.showsProgressLine = true; $0.progressLineStyle = .ears; change(&$0) }
+        }
+        expectEqual([ears().showsEarProgressLine, ears().showsBottomProgressLine], [true, false],
+                    "进度线耳朵: 稳态画耳朵那根、不画底边那根")
+        expectEqual(with { $0.progressLineStyle = .ears }.showsEarProgressLine, false, "进度线耳朵: 关着进度线不画")
+        expectEqual(ears { $0.showsLyrics = false }.cardHeight, 32, "进度线耳朵: 关着歌词行时卡片不为它多长")
+        expectEqual([ears().earProgressHeight, ears { $0.showsLyrics = false }.earProgressHeight], [76, 32],
+                    "进度线耳朵: 按顶行(+ 歌词行)的高度画")
+        expectEqual([ears { $0.showsLyrics = false; $0.hasTrackDrop = true }.showsEarProgressLine,
+                     ears { $0.showsLyrics = false; $0.transientBannerActive = true }.showsEarProgressLine,
+                     ears { $0.hasTrackDrop = true }.showsEarProgressLine], [false, false, true],
+                    "进度线耳朵: 关着歌词行时掉歌名 / 横幅那截伸出来就让开,开着歌词行时不让")
+        expectEqual([ears { $0.isExpanded = true }.showsEarProgressLine, ears { $0.isCollapsed = true }.showsEarProgressLine,
+                     ears { $0.hasMilestone = true }.showsEarProgressLine, ears { $0.hasTrack = false }.showsEarProgressLine],
+                    [false, false, false, false], "进度线耳朵: 展开、收起、报喜、没曲目时不画")
+        typealias E = NotchEarProgressPath
+        // 卡片 360 宽,刘海 180 宽 32 高;肩膀 4、卡片底角 8,线心内缩 1.75。
+        let low = E(width: 360, height: 32, notchWidth: 180, notchHeight: 32, shoulder: 4, cardCornerRadius: 8, inset: 1.75)
+        expectEqual([low.x, low.bottomY, low.cornerRadius, low.endX], [5.75, 30.25, 6.25, 90],
+                    "进度线耳朵: 关着歌词行时贴着外沿走,停在刘海左沿")
+        expectEqual(abs(low.length - (24 + .pi / 2 * 6.25 + 78)) < 1e-9, true, "进度线耳朵: 半边长 = 竖段 + 四分之一圆弧 + 底边段")
+        expectEqual(E(width: 360, height: 76, notchWidth: 180, notchHeight: 32, shoulder: 4, cardCornerRadius: 19,
+                      inset: 1.75).endX, 180, "进度线耳朵: 开着歌词行时底边露在刘海下面,走到正中")
+        expectEqual(E(width: 360, height: 24, notchWidth: 0, notchHeight: 24, shoulder: 3, cardCornerRadius: 6,
+                      inset: 1.75).endX, 180, "进度线耳朵: 无刘海屏走到正中")
+        expectEqual(E(width: 360, height: 32, notchWidth: 180, notchHeight: 32, shoulder: 4, cardCornerRadius: 1,
+                      inset: 1.75).cornerRadius, 0, "进度线耳朵: 卡片底角比内缩还小时直角拐弯")
+        expectEqual(E(width: 196, height: 32, notchWidth: 180, notchHeight: 32, shoulder: 4, cardCornerRadius: 8,
+                      inset: 1.75).endX, 12, "进度线耳朵: 耳朵窄到刘海左沿在圆弧里时终点停在圆弧末端,不倒退")
+        typealias C = NotchProgressLineChoice
+        expectEqual([C(shows: false, style: .ears), C(shows: true, style: .bottom), C(shows: true, style: .ears)],
+                    [.off, .bottom, .ears], "进度线: 开关关着就是不显示,开着按样式分底边 / 耳朵")
+        expectEqual(C.allCases.map(\.shows), [false, true, true], "进度线: 选底边 / 耳朵时打开开关")
+        expectEqual(C.allCases.map(\.style), [nil, .bottom, .ears], "进度线: 选不显示时样式留着上一次的")
         // 多行歌词:展开时歌词那一格换成列表,不画下一句预览;广告时退回一行歌词。
         let list = with { $0.isExpanded = true; $0.expandedLyricListHeight = 120 }
         expectEqual(list.showsExpandedLyricList, true, "卡片布局: 开着多行歌词时展开换成列表")
@@ -2591,11 +2628,19 @@ func runNotchTests() {
         expectEqual(v.contains("showsProgressLine: showsProgressLine,")
                     && v.contains("var showsBottomProgressLine: Bool { cardLayout.showsBottomProgressLine }"), true,
                     "灵动岛五项: 进度线只在没展开时画,关着歌词行时卡片为它多长一截")
-        expectEqual(sourceHas(v, "if controller.showsProgressLine {\n let shows = controller.showsBottomProgressLine")
+        expectEqual(sourceHas(v, "if controller.showsProgressLine && controller.progressLineStyle == .bottom {\n let shows = controller.showsBottomProgressLine")
                     && sourceHas(v, "active: surfaceVisible && shows, outline: controller.cardOutline)")
                     && sourceHas(v, ".animation(NotchProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {\n $0.opacity(shows ? 1 : 0)\n }")
                     && !v.contains("if controller.showsBottomProgressLine {"), true,
                     "进度线: 开着时常驻、只切透明度,藏着时停表")
+        let progressLine = src("NotchProgressLine.swift")
+        expectEqual(sourceHas(v, "if controller.showsProgressLine && controller.progressLineStyle == .ears {\n let shows = controller.showsEarProgressLine")
+                    && sourceHas(v, "active: surfaceVisible && shows, outline: controller.cardOutline,\n notchWidth: controller.notchWidth)")
+                    && sourceHas(v, ".frame(width: controller.steadyCardWidth, height: controller.earProgressHeight)\n .animation(NotchProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {")
+                    && sourceHas(v, "let (s, r) = cornerMetrics(in: rect)")
+                    && progressLine.contains("let corner = outline.shape(corners).cornerMetrics(in: rect)")
+                    && progressLine.contains("NotchProgressLineTiming.interval(durationMs: total, width: path.length)"), true,
+                    "进度线耳朵: 外框是稳态卡片、肩膀和底角跟卡片外形读同一处、常驻只切透明度、重画间隔按半边长度算")
         expectEqual(sourceHas(v, "NotchExpandedLyricList(tint: accentOrWhite)")
                     && sourceHas(v, ".modifier(NotchCardLayerActive(active: expanded, staggered: staggered, waitsForResize: true))")
                     && sourceHas(v, "if waitsForResize { return curve.delay(Self.resizeSettleDelay) }")
@@ -2611,7 +2656,8 @@ func runNotchTests() {
         expectEqual(stage.contains("var transientBannerActive: Bool { false }"), true, "灵动岛五项: 预览不长横幅条")
         expectEqual(v.contains("\"airplayaudio\""), false, "灵动岛五项: 展开态快捷操作里不放输出设备键(只在换设备时闪横幅)")
         expectEqual(stage.contains("settings.notchGestures = AppSettings.defaultNotchGestures")
-                    && stage.contains("settings.notchShowsProgressLine = AppSettings.defaultNotchShowsProgressLine"), true,
+                    && stage.contains("settings.notchShowsProgressLine = AppSettings.defaultNotchShowsProgressLine")
+                    && stage.contains("settings.notchProgressLineStyle = AppSettings.defaultNotchProgressLineStyle"), true,
                     "灵动岛五项: 两个新开关进「恢复默认」")
         let settingsSrc = app("Settings/AppSettings.swift")
         expectEqual(sourceHas(settingsSrc, "case playCount\n    /// 正在放的播放器的图标")

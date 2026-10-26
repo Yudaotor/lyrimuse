@@ -140,6 +140,8 @@ protocol NotchChromeSource: ObservableObject {
     var transientBannerActive: Bool { get }
     /// 要不要画底边那根进度线(`AppSettings.notchShowsProgressLine`)。关着歌词行时卡片为它多长 `NotchMetrics.progressLineStrip`。
     var showsProgressLine: Bool { get }
+    /// 进度线画在底边还是沿耳朵(`AppSettings.notchProgressLineStyle`)。沿耳朵时卡片不为它变高。
+    var progressLineStyle: NotchProgressLineStyle { get }
     /// 换歌翻牌:`key`(`NotchTrackDropRules.key`)这一首揭晓了没有(真窗口 = 控制器最近一次揭晓的那首;预览恒 true)。
     /// 耳朵里的封面换歌后等它为 true 才翻,跟歌名掉下来同一拍。
     func revealsTrack(_ key: String) -> Bool
@@ -201,7 +203,8 @@ extension NotchChromeSource {
             contentTopInset: contentTopInset, steadyCardWidth: steadyCardWidth, expandedCardWidth: expandedCardWidth,
             lyricRowHeight: lyricRowHeight, expandedLyricListHeight: expandedLyricListHeight, hasTrack: hasTrack,
             isAdBreak: isAdBreakNow, hasMilestone: milestone != nil, hasTrackDrop: trackDrop != nil,
-            transientBannerActive: transientBannerActive, showsProgressLine: showsProgressLine, showsLyrics: showsLyrics,
+            transientBannerActive: transientBannerActive, showsProgressLine: showsProgressLine,
+            progressLineStyle: progressLineStyle, showsLyrics: showsLyrics,
             trackHasLyricPreview: expandedShowsLyricPreview, trackHasScrubber: expandedShowsScrubber,
             expandedShowsNextLine: expandedShowsNextLine, expandedShowsControls: expandedShowsControls,
             trackInfoShowsArtwork: expandedTrackInfoShowsArtwork, trackInfoShowsTitle: expandedTrackInfoShowsTitle,
@@ -212,6 +215,8 @@ extension NotchChromeSource {
     var showsLyricRow: Bool { cardLayout.showsLyricRow }
     var showsBannerStrip: Bool { cardLayout.showsBannerStrip }
     var showsBottomProgressLine: Bool { cardLayout.showsBottomProgressLine }
+    var showsEarProgressLine: Bool { cardLayout.showsEarProgressLine }
+    var earProgressHeight: CGFloat { cardLayout.earProgressHeight }
     var showsExpandedLyricPreview: Bool { cardLayout.showsExpandedLyricPreview }
     var showsExpandedLyricList: Bool { cardLayout.showsExpandedLyricList }
     var trackInfoShowsTrackFields: Bool { cardLayout.trackInfoShowsTrackFields }
