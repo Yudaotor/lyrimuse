@@ -193,33 +193,39 @@
     m.run.style.transform = `translateX(${-off.toFixed(1)}px)`;
   }
 
+  // The fill is a CSS animation per char (wfill on the registered --p in lp.css), started once per line on each
+  // surface on screen and stopped when it leaves, so the frame itself writes no styles for it.
+  function arm(o, spans, t) {
+    const key = shown(o) ? ver : 0;
+    if (o.armed === key && o.armedSpans === spans) return;
+    o.armed = key; o.armedSpans = spans;
+    line.chars.forEach((c, k) => {
+      if (!c.sp) spans[k].style.animation = key ? `wfill ${c.dur.toFixed(0)}ms linear ${(c.start - t).toFixed(0)}ms both` : 'none';
+    });
+  }
   function paint(t) {
-    const vals = line.chars.map((c) => (c.sp ? null : (Math.min(1, Math.max(0, (t - c.start) / c.dur)) * 124 - 12).toFixed(1) + '%'));
-    const fill = (spans) => vals.forEach((v, k) => { if (v) spans[k].style.setProperty('--p', v); });
-    for (const m of mains) if (m.paint && shown(m)) fill(m.spans);
-    for (const L of lists) if (shown(L)) fill(L.spans);
+    // a surface off screen still holds an older line's spans until it comes back (sync)
+    for (const m of mains) if (m.paint && m.ver === ver) arm(m, m.spans, t);
+    for (const L of lists) if (L.ver === ver) arm(L, L.spans, t);
     for (const m of mains) if (m.run && shown(m)) follow(m, t);
   }
+  function paintAll() {
+    const fill = (spans) => spans.forEach((s) => s.style.setProperty('--p', '112%'));
+    for (const m of mains) if (m.paint && m.spans) fill(m.spans);
+    for (const L of lists) fill(L.spans);
+  }
 
-  // Vocal envelope drives the equalizer, as in the app: full inside a sung char, 0.6 between.
+  // Vocal envelope drives the equalizer, as in the app: full inside a sung char, 0.6 between. The bars themselves
+  // move by a CSS loop (lp.css); the frame only flips the quieter amplitude when the envelope changes.
   function eq(now, t) {
-    const singing = line.chars.some((c) => !c.sp && t >= c.start && t < c.start + c.dur);
-    const amp = singing ? 1 : 0.6;
-    const s = now / 1000;
-    for (const e of eqs) {
-      if (!shown(e)) continue;
-      e.bars.forEach((b, k) => {
-        const ph = k * 2.399963;
-        const w = (Math.sin(2 * Math.PI * 2.2 * s + ph) + Math.sin(2 * Math.PI * 3.6 * s + ph * 1.7)) / 4 + 0.5;
-        b.style.height = 'calc(' + (2.5 + 13.5 * Math.min(1, w * amp)).toFixed(2) + ' * var(--u))';
-      });
-    }
+    const quiet = !line.chars.some((c) => !c.sp && t >= c.start && t < c.start + c.dur);
+    for (const e of eqs) if (e.quiet !== quiet && shown(e)) { e.quiet = quiet; e.el.classList.toggle('quiet', quiet); }
   }
 
   // Every progress readout follows the lyrics: the demo starts at the song's chorus.
   function clock(t) {
     const played = DEMO.startMs + ((loopStart + Math.min(t, line.cycle)) % loopMs);
-    const w = (played / DEMO.songMs * 100).toFixed(2) + '%';
+    const w = (played / DEMO.songMs * 100).toFixed(1) + '%';
     // only what is on screen, and only when the value changes: the readouts change once a second
     const put = (list, v, set) => { for (const s of list) if (s.v !== v && live(s)) { set(s.el, v); s.v = v; } };
     put(progs, w, (el, v) => { el.style.width = v; });
@@ -230,7 +236,7 @@
 
   show(0);
   if (reduce) {
-    paint(1e9);
+    paintAll();
     clock(0);
   } else {
     const tick = (now) => {
@@ -284,6 +290,8 @@
   const secs = [...document.querySelectorAll('.ch, .news, .faq-sec, .final')];
   const farIO = new IntersectionObserver((es) => es.forEach((e) => e.target.classList.toggle('far', !e.isIntersecting)), { rootMargin: '100% 0px' });
   secs.forEach((s) => farIO.observe(s));
+  const heroEl = document.querySelector('.hero');
+  if (heroEl) farIO.observe(heroEl);
   const idle = window.requestIdleCallback || ((f) => setTimeout(f, 150));
   const warm = () => {
     const s = secs.find((x) => !x.classList.contains('warm'));
@@ -557,6 +565,17 @@
         rf.style.setProperty('--p', at(p));
       }
     }
+    // the moving fill: one wfill per char and one for the reading under the group, started once per line and replay
+    let armedCur = null, armedR0 = -1;
+    function rdArm(t) {
+      if (armedCur === cur && armedR0 === r0) return;
+      armedCur = cur; armedR0 = r0;
+      const go = (el, start, dur) => { el.style.animation = `wfill ${dur.toFixed(0)}ms linear ${(start - t).toFixed(0)}ms both`; };
+      for (const { g, spans, rf } of cur.groups) {
+        spans.forEach((s, k) => go(s, g.s + k * g.d / spans.length, g.d / spans.length));
+        go(rf, g.s, g.d);
+      }
+    }
     ctl.dur = cycleOf(EX[0]) + HOLD;
     ctl.onSelect = (i) => {
       ctl.dur = cycleOf(EX[i]) + HOLD + FADE;
@@ -583,7 +602,7 @@
       const tick = (now) => {
         if (rdVisible && cur && !swapping) {
           const t = now - r0;
-          rdPaint(t);
+          rdArm(t);
           // once the user has picked a language, that line keeps replaying
           if (!ctl.auto && t > cur.cycle + HOLD) r0 = now;
         }
@@ -705,75 +724,22 @@
   // Document positions are cached (layout positions, so the reveal transforms don't skew them) and refreshed
   // when the page reflows; the scroll frame itself reads nothing from the layout.
   const docTop = (el) => { let y = 0; for (let n = el; n; n = n.offsetParent) y += n.offsetTop; return y; };
-  const stages = [...document.querySelectorAll('.ch-stage')].map((el) => ({ el, wall: el.querySelector('.ch-wall'), top: 0, h: 0, par: 2 }));
   const navEl = document.querySelector('.nav');
-  let maxScroll = 1, phone = false, devTop = 0;
+  let maxScroll = 1;
   const recache = () => {
     maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
-    phone = innerWidth <= 820;
-    stages.forEach((s) => { s.top = docTop(s.el); s.h = s.el.offsetHeight; });
     fills.forEach((f) => { f.top = docTop(f.el); });
-    const dev = document.querySelector('.device');
-    devTop = dev ? docTop(dev) : 0;
   };
 
-  // The hero laptop: it leans toward the pointer (eased), and once its top has scrolled past the upper fifth
-  // of the window it tips back a little while the player icons drift outward at their own depths.
-  const device = document.querySelector('.device');
-  const heroWall = document.querySelector('.hero .wall');
-  const floats = [...document.querySelectorAll('.fl')].map((el) => ({
-    el, d: +el.dataset.d || 1, fx: +el.dataset.fx || 0, fy: +el.dataset.fy || 0, r: +el.dataset.r || 0,
-  }));
-  const H = { tx: 0, ty: 0, mx: 0, my: 0, hs: 0, raf: 0 };
-  function heroPaint() {
-    if (!device) return;
-    const { mx, my, hs } = H;
-    device.style.transform = `perspective(1600px) translateY(${(hs * 24).toFixed(1)}px) scale(${(1 - hs * 0.045).toFixed(4)}) ` +
-      `rotateX(${(-my * 1.6 + hs * 7).toFixed(2)}deg) rotateY(${(mx * 2.4).toFixed(2)}deg)`;
-    if (heroWall) heroWall.style.translate = `${(-mx * 8).toFixed(1)}px ${(-my * 6).toFixed(1)}px`;
-    floats.forEach((f) => {
-      f.el.style.transform = `translate3d(${(mx * f.d * 18 + f.fx * hs * 80).toFixed(1)}px, ${(my * f.d * 14 - hs * f.fy).toFixed(1)}px, 0) rotate(${f.r}deg)`;
-    });
-  }
-  if (device && fine && !reduce) {
-    const hero = document.querySelector('.hero');
-    const ease = () => {
-      H.mx += (H.tx - H.mx) * 0.08;
-      H.my += (H.ty - H.my) * 0.08;
-      const done = Math.abs(H.tx - H.mx) < 0.001 && Math.abs(H.ty - H.my) < 0.001;
-      if (done) { H.mx = H.tx; H.my = H.ty; }
-      heroPaint();
-      H.raf = done ? 0 : requestAnimationFrame(ease);
-    };
-    const kick = () => { if (!H.raf) H.raf = requestAnimationFrame(ease); };
-    hero.addEventListener('pointermove', (e) => {
-      const r = device.getBoundingClientRect();
-      H.tx = clamp((e.clientX - (r.left + r.width / 2)) / (r.width / 2), -1, 1);
-      H.ty = clamp((e.clientY - (r.top + r.height / 2)) / (r.height / 2), -1, 1);
-      kick();
-    });
-    hero.addEventListener('pointerleave', () => { H.tx = 0; H.ty = 0; kick(); });
-  }
-
-  // One scroll frame: the reading progress in the nav, the stage wallpapers drifting against the scroll,
-  // the hero tipping back, the chapter headings filling.
+  // One scroll frame: the reading progress in the nav and the chapter headings filling. Nothing else follows the
+  // scroll: content that moves on its own while the page scrolls makes every scroll frame repaint it, which Firefox
+  // and Safari show as stutter.
   let queued = false;
   function frame() {
     queued = false;
     const y = scrollY, vh = innerHeight;
     if (navEl) navEl.style.setProperty('--sp', clamp(y / maxScroll).toFixed(4));
     if (reduce) return;
-    const amp = phone ? 40 : 60;
-    stages.forEach((s) => {
-      const mid = s.top - y + s.h / 2;
-      if (mid < -vh || mid > 2 * vh) return;
-      const par = clamp((mid - vh / 2) / vh, -1, 1);
-      if (Math.abs(par - s.par) < 0.001) return;
-      s.par = par;
-      if (s.wall) s.wall.style.transform = `translate3d(0, ${(par * amp).toFixed(1)}px, 0)`;
-    });
-    const hs = clamp((y - (devTop - vh * 0.2)) / (vh * 0.8));
-    if (hs !== H.hs) { H.hs = hs; heroPaint(); }
     fills.forEach((f) => {
       const top = f.top - y;
       if (top < -vh || top > 2 * vh) return;
