@@ -99,6 +99,10 @@ struct MenuBarPreviewBar<Lane: View>: View {
     /// 那边的窄,而这条预览总高只有 69pt,留 44pt 会让预览条本身显得很挤。
     var reservesWidthLane = false
 
+    /// 预览上点主行、副行、歌词旁的图标、正中时右边那枚图标,打开编辑台对应的浮层(06 章决策 69)。默认 false,理由同
+    /// `reservesWidthLane`:只有编辑台那个宿主有浮层可开。
+    var opensSettingsPopovers = false
+
     /// 浮在那条通道里的东西(编辑台的宽度调整条)。
     ///
     /// 从"宿主在外面套一层 `.overlay(alignment: .bottom)`"改成由这里注入:
@@ -113,6 +117,10 @@ struct MenuBarPreviewBar<Lane: View>: View {
     @ObservedObject private var settings = AppSettings.shared
     /// 舞台整块按**真实菜单栏**的明暗渲染(见 stage 末尾那段);菜单栏由亮转暗时要重画。
     @ObservedObject private var menuBarAppearance = MenuBarAppearanceStore.shared
+    /// 设置窗口自己的深浅色。舞台整块换成了菜单栏的明暗(见 `stage`),从可点区域弹的浮层要换回这一份。
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var hoveredHotspot: Hotspot?
+    @State private var presentedHotspot: Hotspot?
     @State private var currentLine: SyncedLyricLine?
     /// 正在放的歌名和歌手,「显示内容」选了歌名(带不带歌手)时按 `MenuBarSlotPolicy.songTitleText` 拼出来演。
     @State private var songTitleParts: (title: String, artist: String) = ("", "")
@@ -349,6 +357,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
                 // 钉住行高:caption 常态是一行,但"预览"和"预览 · 本句会横向滚动"来回切时
                 // 不该让整块高度抖一下(同 stageHeight 上面那条不变量)。
                 .frame(height: SectionPreviewMetrics.captionHeight)
+                .accessibilityHidden(true)
         }
         .frame(maxWidth: .infinity)
         .onReceive(PlaybackCoordinator.shared.$currentLine.removeDuplicates()) { currentLine = $0 }
@@ -363,7 +372,6 @@ struct MenuBarPreviewBar<Lane: View>: View {
         .onReceive(PlaybackCoordinator.shared.$currentLyricsOffsetMs) { lyricsOffsetMs = $0 }
         .onReceive(PlaybackCoordinator.shared.$isPlayingNow) { isPlayingNow = $0 }
         .onReceive(PlaybackCoordinator.shared.$menuBarSongRowWidth) { songRowWidth = $0 }
-        .accessibilityHidden(true)
     }
 
     /// 舞台:一小片**屏幕顶端**——壁纸铺满整块,仿菜单栏那一条贴在它的上边缘,底下那条
@@ -473,27 +481,30 @@ struct MenuBarPreviewBar<Lane: View>: View {
             // 垂直不用给偏移:16pt 的符号盒(15×18)在 24pt 条里居中后墨迹中心 12.13,时钟文字
             // 墨迹中心 12.375,差 0.25pt —— 比系统自己那条(差 0.50pt)还准。
             // 12 是跟右簇 `.padding(.trailing, 12)` 对称来的。
-            //
-            // 无障碍什么都不用加:整条预览在 `body` 最外层就挂了 `.accessibilityHidden(true)`,
-            // 这棵子树对辅助技术一律不可见,再补一遍是冗余。
             Image(systemName: "apple.logo")
                 .font(.system(size: 16))
                 .foregroundStyle(Color(nsColor: .labelColor).opacity(0.55))
                 .padding(.leading, 12)
+                // 这一条里给辅助技术的只有可点区域(和通道里的宽度条),画出来的东西各自藏掉。
+                .accessibilityHidden(true)
             // 这个 Spacer 别删:它把歌词格顶到右边,那是对真机的还原(第三方状态栏项都在
             // 右边)。它原来还兼任这一条的左边距,现在左边距由上面那枚苹果自己的 padding 提供,
             // 这里的 12 剩下的作用是"苹果和歌词格之间至少留这么多"。
             Spacer(minLength: 12)
             // 放在菜单栏正中时歌词格挪到整条中间(下面的 overlay),这里只留状态栏那一格剩下的图标。
             if centerInUse {
-                if let source = MenuBarIconArtwork.currentSource(), let cover = MenuBarIconArtwork.iconImage(
-                    source: source, style: settings.menuBarIconStyle, size: settings.menuBarIconSize) {
-                    Image(nsImage: cover)
-                } else {
-                    Image(nsImage: MenuBarIconStyle.cachedImage(for: settings.menuBarIconStyle, size: settings.menuBarIconSize))
-                        .renderingMode(.template)
-                        .foregroundStyle(Color(nsColor: .labelColor).opacity(0.55))
+                Group {
+                    if let source = MenuBarIconArtwork.currentSource(), let cover = MenuBarIconArtwork.iconImage(
+                        source: source, style: settings.menuBarIconStyle, size: settings.menuBarIconSize) {
+                        Image(nsImage: cover)
+                    } else {
+                        Image(nsImage: MenuBarIconStyle.cachedImage(for: settings.menuBarIconStyle, size: settings.menuBarIconSize))
+                            .renderingMode(.template)
+                            .foregroundStyle(Color(nsColor: .labelColor).opacity(0.55))
+                    }
                 }
+                .accessibilityHidden(true)
+                .overlay { hotspot(.statusIcon) }
             } else {
                 outlinedLyricsSlot(p)
             }
@@ -506,6 +517,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
             }
             .font(Font(MenuBarMarqueeRenderer.font))
             .foregroundStyle(Color(nsColor: .labelColor).opacity(0.55))
+            .accessibilityHidden(true)
             .padding(.leading, 14)
             .padding(.trailing, 12)
         }
@@ -532,6 +544,10 @@ struct MenuBarPreviewBar<Lane: View>: View {
     /// 歌词格连同它那圈虚线边界与上限标记。
     private func outlinedLyricsSlot(_ p: MenuBarMarqueeRenderer.Presentation) -> some View {
         lyricsSlot(p)
+            // 歌词格里是 AppKit 视图,不关掉它自己的点按,盖在上面的可点区域收不到点击。
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .overlay { slotHotspots }
             // 左右各加 3pt 让虚线离文字有点呼吸空间(不加的话虚线会贴着文字,观感不好)——
             // 虚线因此比 windowWidth 本身宽了 6pt,跟"这一格
             // 恒等于真实宽度"这条不变量有一点点出入,但这一圈线本来就是给人看的示意
@@ -550,6 +566,99 @@ struct MenuBarPreviewBar<Lane: View>: View {
                         widthHeadroomMarker(slotWidth: lyricsSlotWidth(p))
                     }
             }
+    }
+
+    /// 预览上能点的几块,各开编辑台的哪个浮层(06 章决策 69)。主行开「字体」,副行和歌词旁的图标开「内容」(副行、
+    /// 图标的开关都在那里),同悬浮歌词编辑台主行开「文字」、读音 / 译文这些行开「内容」;正中时右边那枚图标开「布局」
+    /// (歌词放在图标旁还是正中)。「颜色」「行为」没有对应的一块,从工具栏进。
+    private enum Hotspot: Hashable {
+        case mainLine, secondaryLine, icon, statusIcon
+
+        var group: MenuBarSettingsGroup {
+            switch self {
+            case .mainLine: return .font
+            case .secondaryLine, .icon: return .content
+            case .statusIcon: return .layout
+            }
+        }
+    }
+
+    /// 旁白读的那一句。单行时主行那一块就是整格歌词,只读「打开「字体」设置」;其余带上这一块的名字。
+    private func hotspotLabel(_ spot: Hotspot) -> String {
+        let open = String(format: L10n.t("打开「%@」设置"), spot.group.title)
+        let region: String?
+        switch spot {
+        case .mainLine: region = twoRows ? L10n.t("主行") : nil
+        case .secondaryLine: region = L10n.t("副行")
+        case .icon: region = L10n.t("歌词旁的图标")
+        case .statusIcon: region = L10n.t("菜单栏图标")
+        }
+        return region.map { "\($0) · \(open)" } ?? open
+    }
+
+    /// 歌词格上的可点区域:主行、副行(双排时上下各占一半)、歌词旁的图标(靠哪边就占哪一段,宽同 `reservedIconWidth`)。
+    private var slotHotspots: some View {
+        let iconOnLeading = previewIconBadge?.position == .leading
+        return HStack(spacing: 0) {
+            if reservedIconWidth > 0, iconOnLeading { hotspot(.icon).frame(width: reservedIconWidth) }
+            VStack(spacing: 0) {
+                hotspot(.mainLine)
+                if twoRows { hotspot(.secondaryLine) }
+            }
+            if reservedIconWidth > 0, !iconOnLeading { hotspot(.icon).frame(width: reservedIconWidth) }
+        }
+    }
+
+    /// 一块可点区域:平时透明,悬停或浮层开着时描一圈白色虚线细框 + 极淡的白底,指针换成手形;点一下在这一块下面弹出
+    /// 对应的浮层,不压在仿菜单栏这一条上。线型、透明度同触控栏预览的可点区域(`TouchBarPreviewStage.hotspot`),白色
+    /// 不跟深浅色走,理由同 `slotEdgeOutline`。框往外多画 2pt,点按范围不扩:双排两行上下紧挨着,扩了会互相盖住。
+    @ViewBuilder
+    private func hotspot(_ spot: Hotspot) -> some View {
+        if opensSettingsPopovers {
+            let lit = hoveredHotspot == spot || presentedHotspot == spot
+            Color.clear
+                .contentShape(Rectangle())
+                .background {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.white.opacity(lit ? 0.07 : 0))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .strokeBorder(Color.white.opacity(lit ? 0.7 : 0),
+                                              style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                        .shadow(color: .black.opacity(lit ? 0.55 : 0), radius: 1)
+                        .padding(-2)
+                }
+                .onHover { inside in
+                    if inside {
+                        hoveredHotspot = spot
+                        NSCursor.pointingHand.push()
+                    } else {
+                        if hoveredHotspot == spot { hoveredHotspot = nil }
+                        NSCursor.pop()
+                    }
+                }
+                // 指针还停在上面时这块被拿掉(关掉副行 / 图标、改了歌词位置),离开事件不会来:在这里把手形指针弹掉。
+                .onDisappear {
+                    if hoveredHotspot == spot {
+                        hoveredHotspot = nil
+                        NSCursor.pop()
+                    }
+                }
+                .onTapGesture { presentedHotspot = spot }
+                .animation(.easeOut(duration: 0.12), value: lit)
+                .popover(isPresented: Binding(
+                    get: { presentedHotspot == spot },
+                    set: { shown in if !shown, presentedHotspot == spot { presentedHotspot = nil } }),
+                         arrowEdge: .bottom) {
+                    // 浮层随挂它的视图继承环境:舞台换成了菜单栏的明暗,不换回窗口那一份,字和底会是同一档、读不清。
+                    spot.group.popoverContent()
+                        .environment(\.colorScheme, colorScheme)
+                }
+                .accessibilityElement()
+                .accessibilityLabel(hotspotLabel(spot))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { presentedHotspot = spot }
+        }
     }
 
     /// 歌词那一格的虚线边界("跟悬浮歌词一样把清晰的边界用虚线画出来")。

@@ -13,10 +13,12 @@ import LyrimuseCore
 /// 工具栏两行,按「全部设置」抽屉的顺序排:第一行「布局」「内容」「颜色」+「重置 ▾」,第二行「字体」「行为」
 /// (06 章决策 66、67、68)。分组按卡片解剖:「布局」= 这一格放在哪、多宽;「内容」= 格子里显示什么(歌词还是歌名、副行、
 /// 旁边的进度图标);「颜色」= 卡拉OK 和文字颜色;「字体」= 字长什么样;「行为」= 什么状态下显示什么。
+/// 预览上点主行、副行、歌词旁的图标、正中时右边那枚图标也能打开对应的浮层(`MenuBarPreviewBar`,弹的是同一份
+/// `MenuBarSettingsGroup.popoverContent`)。
 @MainActor
 struct MenuBarEditorStage: View {
     @ObservedObject private var settings = AppSettings.shared
-    @State private var popover: StagePopover?
+    @State private var popover: MenuBarSettingsGroup?
     /// 舞台宽度条拖动中节流提交(同 `MenuBarWidthRow`)。
     @State private var widthThrottle = SliderCommitThrottle()
 
@@ -31,7 +33,7 @@ struct MenuBarEditorStage: View {
             .editorToolbarGlassGroup()
             // 宽度调整条注入给预览条、浮在预览框底部那条通道里,不在这里 overlay 在外面:壁纸底要包住它,
             // 背景 / 高度 / 圆角只能由预览条一处算(见 MenuBarPreviewBar.lane)。
-            MenuBarPreviewBar(reservesWidthLane: true) {
+            MenuBarPreviewBar(reservesWidthLane: true, opensSettingsPopovers: true) {
                 stageWidthBar.padding(.bottom, 8)
             }
         }
@@ -150,7 +152,7 @@ struct MenuBarEditorStage: View {
     /// 浮层挂在按钮上往上弹(`arrowEdge: .top`),不往下压在预览上;高度封顶在按钮那一行上方的空间里,放不下时
     /// 在浮层里滚,不让系统翻下来(同另外几段编辑台,04 章决策 34、61)。
     private func toolbarButton(
-        icon: String, title: String, summary: String, target: StagePopover
+        icon: String, title: String, summary: String, target: MenuBarSettingsGroup
     ) -> some View {
         Button {
             popoverMaxHeight = (target == .font || target == .behavior ? row2Probe : row1Probe).popoverHeightLimit()
@@ -160,7 +162,7 @@ struct MenuBarEditorStage: View {
         }
         .editorToolbarButtonStyle()
         .popover(isPresented: popoverBinding(target), arrowEdge: .top) {
-            popoverContent(for: target)
+            target.popoverContent()
                 .environment(\.settingsPopoverMaxHeight, popoverMaxHeight)
         }
     }
@@ -188,31 +190,12 @@ struct MenuBarEditorStage: View {
         .accessibilityHidden(true)
     }
 
-    private enum StagePopover: Equatable {
-        case layout
-        case content
-        case color
-        case font
-        case behavior
-    }
-
-    private func popoverBinding(_ target: StagePopover) -> Binding<Bool> {
+    private func popoverBinding(_ target: MenuBarSettingsGroup) -> Binding<Bool> {
         Binding(
             get: { popover == target },
             set: { shown in
                 if shown { popover = target } else if popover == target { popover = nil }
             })
-    }
-
-    @ViewBuilder
-    private func popoverContent(for target: StagePopover) -> some View {
-        switch target {
-        case .layout: MenuBarLayoutPopover()
-        case .content: MenuBarContentPopover()
-        case .color: MenuBarColorPopover()
-        case .font: MenuBarFontPopover()
-        case .behavior: MenuBarBehaviorPopover()
-        }
     }
 
     // MARK: - 宽度条
@@ -1109,5 +1092,36 @@ struct MenuBarAllSettingsDrawer: View {
         .accessibilityLabel(L10n.t("全部设置"))
         .accessibilityAddTraits(isExpanded ? .isSelected : [])
         .accessibilityValue(isExpanded ? L10n.t("已展开") : L10n.t("已折叠"))
+    }
+}
+
+/// 编辑台的五个浮层。工具栏的按钮和预览上的可点区域(`MenuBarPreviewBar`)弹的是同一份 `popoverContent()`。
+enum MenuBarSettingsGroup: Equatable {
+    case layout
+    case content
+    case color
+    case font
+    case behavior
+
+    /// 跟工具栏按钮的标题同一份文案。
+    var title: String {
+        switch self {
+        case .layout: return L10n.t("布局")
+        case .content: return L10n.t("内容")
+        case .color: return L10n.t("颜色")
+        case .font: return L10n.t("字体")
+        case .behavior: return L10n.t("行为")
+        }
+    }
+
+    @MainActor @ViewBuilder
+    func popoverContent() -> some View {
+        switch self {
+        case .layout: MenuBarLayoutPopover()
+        case .content: MenuBarContentPopover()
+        case .color: MenuBarColorPopover()
+        case .font: MenuBarFontPopover()
+        case .behavior: MenuBarBehaviorPopover()
+        }
     }
 }

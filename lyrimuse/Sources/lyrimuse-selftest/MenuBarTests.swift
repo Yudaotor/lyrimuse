@@ -1882,6 +1882,22 @@ func runMenuBarTests() {
         let stage = (try? String(contentsOf: ui.appendingPathComponent("UI/MenuBarEditorStage.swift"), encoding: .utf8)) ?? ""
         expectEqual(stage.components(separatedBy: "= SliderCommitThrottle()").count - 1, 2,
                     "菜单栏编辑台: 舞台宽度条和「最大宽度」行拖动中节流提交")
+        // 预览上的可点区域(06 章决策 69):主行开「字体」,副行和歌词旁的图标开「内容」,正中时右边那枚图标开「布局」,
+        // 浮层同工具栏那一份并换回窗口的深浅色。漏了不报错,只表现成点了没反应、浮层字和底同一档读不清,或旁白读不到。
+        let preview = (try? String(contentsOf: ui.appendingPathComponent("UI/SectionPreviewBars.swift"), encoding: .utf8)) ?? ""
+        expectEqual(stage.contains("MenuBarPreviewBar(reservesWidthLane: true, opensSettingsPopovers: true)")
+                        && stage.contains("target.popoverContent()")
+                        && preview.contains("spot.group.popoverContent()")
+                        && preview.contains(".environment(\\.colorScheme, colorScheme)"), true,
+                    "菜单栏预览: 可点区域跟工具栏弹同一份浮层,浮层换回窗口的深浅色")
+        expectEqual(sourceHas(preview, "case .mainLine: return .font\ncase .secondaryLine, .icon: return .content\ncase .statusIcon: return .layout"),
+                    true, "菜单栏预览: 主行开「字体」,副行和图标开「内容」,正中时的图标开「布局」")
+        expectEqual(sourceHas(preview, "lyricsSlot(p)\n// 歌词格里是 AppKit 视图,不关掉它自己的点按,盖在上面的可点区域收不到点击。\n.allowsHitTesting(false)\n.accessibilityHidden(true)\n.overlay { slotHotspots }")
+                        && preview.contains(".overlay { hotspot(.statusIcon) }")
+                        && sourceHas(preview, "hotspot(.mainLine)\nif twoRows { hotspot(.secondaryLine) }"), true,
+                    "菜单栏预览: 歌词格和正中时的图标挂了可点区域")
+        expectEqual(sourceHas(preview, ".onReceive(PlaybackCoordinator.shared.$menuBarSongRowWidth) { songRowWidth = $0 }\n}"), true,
+                    "菜单栏预览: 整条不再整棵藏起来,可点区域要进无障碍树")
         let settingsSrc = (try? String(contentsOf: ui.appendingPathComponent("Settings/AppSettings.swift"), encoding: .utf8)) ?? ""
         expectEqual(settingsSrc.contains("(defaults.object(forKey: Keys.menuBarLyricsWidth) as? Double) ?? 250, to: Self.menuBarLyricsWidthRange))")
                     && settingsSrc.contains(".flatMap { LyricsRestingAlignment.menuBarOptions.contains($0) ? $0 : nil }"), true,

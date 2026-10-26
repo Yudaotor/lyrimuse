@@ -3679,10 +3679,11 @@ func runSourceContractSettingsTests() {
         expectEqual(notchDrawerStruct.contains("commitWidths(steady:") && notchDrawerStruct.contains("commitWidths(expanded:"), true,
                     "抽屉镜像(灵动岛): 抽屉那两行写回走编辑台同一个 commitWidths")
 
-        // 菜单栏:popoverContent(for:) 的每个 case 是一个 MenuBarXxxPopover,它的 body 里是一份 MenuBarXxxRows。
-        let menuBarStageCases = enumCases("private enum StagePopover: Equatable {", in: menuBarStage)
+        // 菜单栏:MenuBarSettingsGroup.popoverContent() 的每个 case 是一个 MenuBarXxxPopover,它的 body 里是一份 MenuBarXxxRows。
+        let menuBarGroup = sourceBody("enum MenuBarSettingsGroup: Equatable {", in: menuBarStage)
+        let menuBarStageCases = enumCases("enum MenuBarSettingsGroup: Equatable {", in: menuBarStage)
         let menuBarCases = captures(#"case \.(\w+): (MenuBar\w+Popover)\(\)"#,
-                                    in: sourceBody("private func popoverContent(for target: StagePopover) -> some View {", in: menuBarStage))
+                                    in: sourceBody("func popoverContent() -> some View {", in: menuBarGroup))
         expectEqual(menuBarStageCases.isEmpty, false, "抽屉镜像(菜单栏): 认得出浮层枚举")
         expectEqual(Set(menuBarCases.map { $0[0] }), menuBarStageCases,
                     "抽屉镜像(菜单栏): 每个浮层都是一个 MenuBarXxxPopover")
