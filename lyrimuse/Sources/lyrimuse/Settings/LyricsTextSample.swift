@@ -2,7 +2,8 @@ import LyrimuseCore
 import SwiftUI
 
 /// 「歌词 › 语言 › 文字」卡顶上的示例:三句样句和它们此刻的读音,改一项立刻看到结果。算法在 Core
-/// `LyricsReadingSample`(播放时同一套读音和繁简函数),这里只管排版。
+/// `LyricsReadingSample`(播放时同一套读音和繁简函数),这里只管排版:读音对得上字时逐词标在字下面
+/// (`LyricsRubyLine`,同歌词窗口的逐词标注),对不上时整句写在原文下面。
 struct LyricsTextSample: View {
     let scripts: RomanizationScripts
     let japaneseReading: JapaneseReadingStyle
@@ -17,14 +18,21 @@ struct LyricsTextSample: View {
                 ForEach(Array(LyricsReadingSample.lines(scripts: scripts, japaneseReading: japaneseReading,
                                                        chineseVariant: chineseVariant).enumerated()),
                         id: \.offset) { _, line in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(verbatim: line.original)
-                            .font(.system(size: 13, weight: .medium))
-                        Text(line.reading ?? L10n.t("不标注读音"))
-                            .font(.system(size: 11))
-                            .foregroundStyle(line.reading == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
+                    Group {
+                        if let groups = line.groups {
+                            LyricsRubyLine(groups: groups, marks: [], weight: .medium, color: .primary,
+                                           textSize: 13, readingSize: 11)
+                        } else {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(verbatim: line.original)
+                                    .font(.system(size: 13, weight: .medium))
+                                Text(line.reading ?? L10n.t("不标注读音"))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(line.reading == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
+                            }
+                            .lineLimit(1)
+                        }
                     }
-                    .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }

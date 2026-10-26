@@ -1277,22 +1277,24 @@ private struct LyricsCompareOtherLine: View {
 }
 
 /// 读音标在对应的字下面:一组字一列,字在上、读音在下,放不下时整组折行(同歌词窗口的逐词标注)。`marks` 是整句里
-/// 对不上的字(按 `Character` 下标),按组拆开标色。
+/// 对不上的字(按 `Character` 下标),按组拆开标色。设置页「语言 › 文字」的示例也用它,字号缩小。
 struct LyricsRubyLine: View {
     let groups: [LyricsRubyGroup]
     let marks: Set<Int>
     let weight: Font.Weight
     let color: Color
+    var textSize: CGFloat = 16
+    var readingSize: CGFloat = 12
 
     var body: some View {
         WrapLayout(horizontalSpacing: 3, verticalSpacing: 4, rowAlignment: .leading) {
             ForEach(Array(cells.enumerated()), id: \.offset) { _, cell in
                 VStack(alignment: .center, spacing: 1) {
                     Text(LyricsCompareLayout.marked(cell.group.text, marks: cell.marks))
-                        .font(.system(size: 16, weight: weight))
+                        .font(.system(size: textSize, weight: weight))
                         .foregroundStyle(color)
                     Text(cell.group.romanization ?? " ")
-                        .font(.system(size: 12))
+                        .font(.system(size: readingSize))
                         .foregroundStyle(.secondary)
                 }
                 .fixedSize()

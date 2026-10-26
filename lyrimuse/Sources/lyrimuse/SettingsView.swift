@@ -1815,9 +1815,16 @@ private struct LyricsSettingsTab: View {
         .background { LastfmGlassGlow() }
     }
 
+    /// 跳到「歌词显示」并点亮管译文、读音位置的那几行,哪一段哪几行见 Core `SettingsSearchCatalog.displayPlacementTargets`。
     private var displayPlacementLink: some View {
         Button {
-            AppActions.shared.requestSettings(.tab(.appearance))
+            let target = SettingsSearchCatalog.displayPlacementTargets(
+                appearanceSection: UserDefaults.standard.string(forKey: LyricsSurface.appearanceSectionStorageKey),
+                hasTouchBar: TouchBarAvailability.shared.isPresent)
+            let revealed = SettingsSearchRouter.shared.revealEntry(
+                titleKey: target.titleKeys[0], sectionValue: target.sectionValue,
+                alsoHighlighting: Array(target.titleKeys.dropFirst()))
+            if !revealed { AppActions.shared.requestSettings(.tab(.appearance)) }
         } label: {
             HStack(spacing: 4) {
                 Text(L10n.t("在「歌词显示」中选择译文和读音的显示位置"))

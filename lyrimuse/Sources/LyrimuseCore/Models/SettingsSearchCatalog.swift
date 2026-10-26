@@ -197,6 +197,24 @@ public enum SettingsSearchCatalog {
         return gates
     }()
 
+    /// 「歌词 › 语言」顶上「在「歌词显示」中选择译文和读音的显示位置」跳过去点亮哪几行:「歌词显示」停在哪一段就点那一段
+    /// 管译文、读音的行(灵动岛 / 菜单栏 / 触控栏是「副行」,悬浮歌词 / 歌词窗口是「读音」「译文」),别的值、从没打开过,
+    /// 或停在「触控栏」而这台 Mac 没有触控栏(那一段只有一张说明卡)时落到悬浮歌词。`appearanceSection` 是
+    /// `LyricsSurface.appearanceSectionStorageKey` 里存的值。
+    public static func displayPlacementTargets(appearanceSection: String?,
+                                               hasTouchBar: Bool) -> (sectionValue: String, titleKeys: [String]) {
+        switch appearanceSection {
+        case LyricsSurface.notch.appearanceSectionRawValue, LyricsSurface.menuBar.appearanceSectionRawValue:
+            return (appearanceSection!, ["副行"])
+        case touchBarSectionValue where hasTouchBar:
+            return (touchBarSectionValue, ["副行"])
+        case lyricsWindowSectionValue:
+            return (lyricsWindowSectionValue, ["读音", "译文"])
+        default:
+            return (LyricsSurface.overlay.appearanceSectionRawValue, ["读音", "译文"])
+        }
+    }
+
     /// 搜到的这一行此刻不在页面上时该落到哪一行的标题(键);在页面上返回 nil。按 `rowGates` 的顺序找第一条条件为假的;
     /// 落点自己也藏着(灵动岛「展开时预览下一句」→「副行」→「收起时显示歌词」)就接着往上找,最多几层。
     public static func gateTitle(path: [String], title: String, isTrue: (String) -> Bool) -> String? {

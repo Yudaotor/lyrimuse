@@ -294,4 +294,10 @@ func checkWorldRomanization() {
     expectEqual(trad.last, Sample.Line(original: "後來的我們", reading: nil), "示例: 转繁体、普通话没勾就不标")
     expectEqual(Sample.lines(scripts: [], japaneseReading: .romaji, chineseVariant: .off).map(\.reading), [nil, nil, nil],
                 "示例: 一种都没勾就都不标")
+    // 读音逐词对到字上:分组拼回原句,日语按词、普通话一字一音节;没勾的那句没有分组。
+    expectEqual(defaults.map { $0.groups?.map(\.text).joined() }, defaults.map(\.original), "示例: 分组拼回原句")
+    expectEqual(defaults[0].groups?.first { $0.text == "名前" }?.romanization, "namae", "示例: 日语读音标在词下面")
+    expectEqual(defaults[2].groups?.map(\.romanization), ["hòu", "lái", "de", "wǒ", "men"], "示例: 普通话一字一音节")
+    expectEqual(kana[0].groups?.first { $0.text == "の" }.map { $0.romanization == nil }, true, "示例: 假名档只给汉字标")
+    expectEqual(trad.last?.groups == nil, true, "示例: 没勾的那句没有分组")
 }

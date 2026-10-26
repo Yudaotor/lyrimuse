@@ -2,6 +2,9 @@ import AppKit
 import Combine
 import LyrimuseCore
 import SwiftUI
+import os
+
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "settings-search")
 
 // 设置搜索:侧栏顶部一个搜索框,按 Core `SettingsSearchCatalog` 出结果,
 // 命中后翻到那一页、切到那一段、展开那个抽屉、把那一行高亮一下并滚进视野。
@@ -59,9 +62,9 @@ final class SettingsSearchIndex {
         return SettingsSearchMatcher.ranked(all, query: query, title: { $0.title }, secondary: { $0.secondary })
     }
 
-    /// 目录里标题键为 `titleKey` 的那一条(本地化好的);不止一条时取第一条。
-    func hit(titleKey: String) -> SettingsSearchHit? {
-        hits().first { $0.entry.titleKey == titleKey }
+    /// 目录里标题键为 `titleKey` 的那一条(本地化好的);不止一条时取第一条。给了 `sectionValue` 只认落在那一段的。
+    func hit(titleKey: String, sectionValue: String? = nil) -> SettingsSearchHit? {
+        hits().first { $0.entry.titleKey == titleKey && (sectionValue == nil || $0.entry.sectionValue == sectionValue) }
     }
 
     private func hits() -> [SettingsSearchHit] {
@@ -142,17 +145,27 @@ final class SettingsSearchRouter: ObservableObject {
 
     /// 从设置窗里别的地方跳到目录里的某一行:写分段 → 翻面板 → 高亮,同搜索命中那一套(SettingsView.openSettingsSearchHit,
     /// 那边是私有的;翻面板走 AppActions.requestSettings,窗口开着时当场生效)。只处理落在某个设置分类里的条目。
-    /// `alsoHighlighting`:同一张卡里一起点亮的别的行(标题键)。
-    func revealEntry(titleKey: String, alsoHighlighting extra: [String] = []) {
-        guard let hit = SettingsSearchIndex.shared.hit(titleKey: titleKey) else { return }
+    /// `alsoHighlighting`:同一张卡里一起点亮的别的行(标题键)。同名的行不止一处时用 `sectionValue` 指定哪一段。
+    /// 找不到这一条返回 false,什么都不做。
+    @discardableResult
+    func revealEntry(titleKey: String, sectionValue: String? = nil, alsoHighlighting extra: [String] = []) -> Bool {
+        guard let hit = SettingsSearchIndex.shared.hit(titleKey: titleKey, sectionValue: sectionValue) else {
+            logger.notice("reveal entry not found title=\(titleKey, privacy: .public) section=\(sectionValue ?? "-", privacy: .public)")
+            return false
+        }
         let entry = hit.entry
         if let key = entry.sectionKey, let value = entry.sectionValue {
             UserDefaults.standard.set(value, forKey: key)
         }
-        guard case .tab(let raw) = entry.destination, let tab = SettingsTab(rawValue: raw) else { return }
+        guard case .tab(let raw) = entry.destination, let tab = SettingsTab(rawValue: raw) else { return false }
         AppActions.shared.requestSettings(.tab(tab))
-        reveal(hit)
-        highlightedTitles.formUnion(extra.map(L10n.t))
+        // 高亮等翻页之后的下一轮主线程再设:跟翻页挤在同一次按钮动作里,新页面上的行不画高亮底色。
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            reveal(hit)
+            highlightedTitles.formUnion(extra.map(L10n.t))
+        }
+        return true
     }
 
     /// 搜到的行此刻因为某项设置没显示时,把决定它出不出现的那一行也点亮(滚过去的就是那一行)。哪一行看哪个条件在 Core

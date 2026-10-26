@@ -215,7 +215,7 @@ public struct LyricsPreviewRow: Equatable {
 }
 
 /// 预览里读音对字的一组:几个字和它们的读音(标点、空格这类没有读音的为 nil)。
-public struct LyricsRubyGroup: Equatable {
+public struct LyricsRubyGroup: Equatable, Sendable {
     public let text: String
     public let romanization: String?
 

@@ -461,4 +461,26 @@ func runSettingsSearchTests() {
                     && sourceHas(search, "highlightedTitles = hit.highlightTitles.union(Self.gateTitles(for: hit.entry))"),
                     true, "搜索门: 菜单栏各行显隐条件与搜索喂的条件同步")
     }
+
+    // 「歌词 › 语言」顶上那颗链接:「歌词显示」停在哪一段就点那一段管译文、读音的行,每个落点都在目录里那一段。
+    typealias Catalog = SettingsSearchCatalog
+    for section: String? in [nil, "overlay", "notch", "menuBar", Catalog.touchBarSectionValue, Catalog.lyricsWindowSectionValue, "bogus"] {
+        let target = Catalog.displayPlacementTargets(appearanceSection: section, hasTouchBar: true)
+        for key in target.titleKeys {
+            expectEqual(entries.contains { $0.titleKey == key && $0.sectionValue == target.sectionValue }, true,
+                        "显示位置链接: \(section ?? "nil") →「\(key)」在目录的 \(target.sectionValue) 段")
+        }
+    }
+    expectEqual(Catalog.displayPlacementTargets(appearanceSection: "notch", hasTouchBar: true).titleKeys, ["副行"],
+                "显示位置链接: 灵动岛点副行")
+    expectEqual(Catalog.displayPlacementTargets(appearanceSection: Catalog.lyricsWindowSectionValue, hasTouchBar: true).titleKeys,
+                ["读音", "译文"], "显示位置链接: 歌词窗口点读音、译文")
+    expectEqual(Catalog.displayPlacementTargets(appearanceSection: nil, hasTouchBar: true).sectionValue, "overlay",
+                "显示位置链接: 没开过落到悬浮歌词")
+    expectEqual(Catalog.displayPlacementTargets(appearanceSection: Catalog.touchBarSectionValue, hasTouchBar: false).sectionValue,
+                "overlay", "显示位置链接: 没有触控栏时停在触控栏段落到悬浮歌词")
+    let lyricsPage = source("SettingsView.swift")
+    expectEqual(sourceHas(lyricsPage, "hasTouchBar: TouchBarAvailability.shared.isPresent)")
+                && sourceHas(lyricsPage, "SettingsSearchRouter.shared.revealEntry(\ntitleKey: target.titleKeys[0], sectionValue: target.sectionValue,"),
+                true, "显示位置链接: 按钮按触控栏有无取落点、走 revealEntry 点亮那几行")
 }
