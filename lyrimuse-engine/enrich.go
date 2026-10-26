@@ -5107,6 +5107,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	corroborated := corroboratedEndings(cands, durationSecs)
 	consensusPeers := contentConsensusPeers(artist, title, cands, durationSecs)
 	inheritIdentityTerms(title, album, cands, consensusPeers)
+	applyLineScoreReference(cands)
 	out := make([]scoredLyricCandidateResult, 0, len(ordered)+1)
 	// "合并后有没有**标记那个源自己**的真候选"。按标记的 Source 判,别写死 lrclib ——
 	// 纯音乐标记也可能来自网易云(见 scoreAndSort 里的 instrumentalMarker),写死会让
@@ -5590,6 +5591,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// 每轮全量重算)。artist/title 已是 toSimplified 后的搜索关键词,与打分入参一致。
 	consensusPeers := contentConsensusPeers(artist, title, candidates, durationSecs)
 	inheritIdentityTerms(title, album, candidates, consensusPeers)
+	applyLineScoreReference(candidates)
 	// lrclib 明确说这首歌是纯音乐、且没有真的歌词候选(lrclibLyr=="")时,搭车塞一条
 	// Score:-1 的标记进 results——见 Instrumental 字段定义处的注释,不参与打分/排序,
 	// 不会被 pickLyricCandidate 选中,只是把这个信号原样带出这个函数。

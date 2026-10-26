@@ -260,7 +260,7 @@
       },
       {
         "source": "lrclib",
-        "score": 768,
+        "score": 775,
         "terms": [
           {
             "kind": "duration",
@@ -268,7 +268,7 @@
           },
           {
             "kind": "lines",
-            "points": 57
+            "points": 64
           },
           {
             "kind": "album",

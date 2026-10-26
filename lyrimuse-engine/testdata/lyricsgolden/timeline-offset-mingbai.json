@@ -181,7 +181,7 @@
       },
       {
         "source": "netease",
-        "score": 1140,
+        "score": 1151,
         "terms": [
           {
             "kind": "duration",
@@ -193,7 +193,7 @@
           },
           {
             "kind": "lines",
-            "points": 25
+            "points": 36
           },
           {
             "kind": "album",
@@ -212,7 +212,7 @@
       },
       {
         "source": "applemusic",
-        "score": 758,
+        "score": 760,
         "terms": [
           {
             "kind": "duration",
@@ -220,7 +220,7 @@
           },
           {
             "kind": "lines",
-            "points": 34
+            "points": 36
           },
           {
             "kind": "album",
@@ -238,7 +238,7 @@
       },
       {
         "source": "lrclib",
-        "score": 744,
+        "score": 753,
         "terms": [
           {
             "kind": "duration",
@@ -246,7 +246,7 @@
           },
           {
             "kind": "lines",
-            "points": 27
+            "points": 36
           },
           {
             "kind": "album",
@@ -334,7 +334,7 @@
       },
       {
         "source": "migu",
-        "score": 2,
+        "score": 1,
         "terms": [
           {
             "kind": "duration",
@@ -342,7 +342,7 @@
           },
           {
             "kind": "lines",
-            "points": 37
+            "points": 36
           },
           {
             "kind": "titleMatch",

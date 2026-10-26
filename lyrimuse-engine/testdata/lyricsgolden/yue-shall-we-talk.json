@@ -114,7 +114,7 @@
     "ranked": [
       {
         "source": "qq",
-        "score": 966,
+        "score": 949,
         "terms": [
           {
             "kind": "duration",
@@ -126,7 +126,7 @@
           },
           {
             "kind": "lines",
-            "points": 69
+            "points": 52
           },
           {
             "kind": "titleMatch",
@@ -142,7 +142,7 @@
       },
       {
         "source": "kugou",
-        "score": 966,
+        "score": 949,
         "terms": [
           {
             "kind": "duration",
@@ -154,7 +154,7 @@
           },
           {
             "kind": "lines",
-            "points": 69
+            "points": 52
           },
           {
             "kind": "titleMatch",
@@ -169,7 +169,7 @@
       },
       {
         "source": "lrclib",
-        "score": 520,
+        "score": 537,
         "terms": [
           {
             "kind": "duration",
@@ -177,7 +177,7 @@
           },
           {
             "kind": "lines",
-            "points": 34
+            "points": 51
           },
           {
             "kind": "titleMatch",
@@ -191,7 +191,7 @@
       },
       {
         "source": "netease",
-        "score": 457,
+        "score": 467,
         "terms": [
           {
             "kind": "duration",
@@ -199,7 +199,7 @@
           },
           {
             "kind": "lines",
-            "points": 41
+            "points": 51
           },
           {
             "kind": "album",

@@ -115,7 +115,7 @@
     "ranked": [
       {
         "source": "qq",
-        "score": 1312,
+        "score": 1305,
         "terms": [
           {
             "kind": "duration",
@@ -127,7 +127,7 @@
           },
           {
             "kind": "lines",
-            "points": 56
+            "points": 49
           },
           {
             "kind": "album",
@@ -152,7 +152,7 @@
       },
       {
         "source": "lrclib",
-        "score": 852,
+        "score": 855,
         "terms": [
           {
             "kind": "duration",
@@ -160,7 +160,7 @@
           },
           {
             "kind": "lines",
-            "points": 46
+            "points": 49
           },
           {
             "kind": "album",
@@ -178,7 +178,7 @@
       },
       {
         "source": "musixmatch",
-        "score": 778,
+        "score": 780,
         "terms": [
           {
             "kind": "duration",
@@ -186,7 +186,7 @@
           },
           {
             "kind": "lines",
-            "points": 45
+            "points": 47
           },
           {
             "kind": "album",
@@ -206,7 +206,7 @@
       },
       {
         "source": "kugou",
-        "score": 52,
+        "score": 51,
         "terms": [
           {
             "kind": "duration",
@@ -218,7 +218,7 @@
           },
           {
             "kind": "lines",
-            "points": 43
+            "points": 42
           },
           {
             "kind": "versionTags",

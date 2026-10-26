@@ -121,7 +121,7 @@
     "ranked": [
       {
         "source": "netease",
-        "score": 1129,
+        "score": 1123,
         "terms": [
           {
             "kind": "duration",
@@ -133,7 +133,7 @@
           },
           {
             "kind": "lines",
-            "points": 30
+            "points": 24
           },
           {
             "kind": "album",
@@ -183,7 +183,7 @@
       },
       {
         "source": "lrclib",
-        "score": 591,
+        "score": 592,
         "terms": [
           {
             "kind": "duration",
@@ -191,7 +191,7 @@
           },
           {
             "kind": "lines",
-            "points": 21
+            "points": 22
           },
           {
             "kind": "album",
@@ -200,6 +200,32 @@
           {
             "kind": "titleMatch",
             "points": 30
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          }
+        ]
+      },
+      {
+        "source": "musixmatch",
+        "score": 9,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 216
+          },
+          {
+            "kind": "lines",
+            "points": 23
+          },
+          {
+            "kind": "versionTags",
+            "points": -600
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
           },
           {
             "kind": "consensus",
@@ -225,7 +251,7 @@
           },
           {
             "kind": "lines",
-            "points": 22
+            "points": 21
           },
           {
             "kind": "album",
@@ -245,32 +271,6 @@
           }
         ],
         "has_word_timing": true
-      },
-      {
-        "source": "musixmatch",
-        "score": 1,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 216
-          },
-          {
-            "kind": "lines",
-            "points": 14
-          },
-          {
-            "kind": "versionTags",
-            "points": -600
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
-          }
-        ]
       }
     ],
     "winner_fingerprint": "11bb39cb934d87b6"

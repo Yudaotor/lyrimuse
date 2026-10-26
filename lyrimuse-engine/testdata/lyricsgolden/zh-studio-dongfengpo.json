@@ -113,7 +113,7 @@
     "ranked": [
       {
         "source": "amll",
-        "score": 1163,
+        "score": 1161,
         "terms": [
           {
             "kind": "duration",
@@ -125,7 +125,7 @@
           },
           {
             "kind": "lines",
-            "points": 32
+            "points": 30
           },
           {
             "kind": "album",
@@ -237,7 +237,7 @@
       },
       {
         "source": "lrclib",
-        "score": 756,
+        "score": 758,
         "terms": [
           {
             "kind": "duration",
@@ -245,7 +245,7 @@
           },
           {
             "kind": "lines",
-            "points": 35
+            "points": 37
           },
           {
             "kind": "album",

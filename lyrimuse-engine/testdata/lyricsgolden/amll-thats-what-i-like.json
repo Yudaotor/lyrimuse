@@ -130,7 +130,7 @@
     "ranked": [
       {
         "source": "amll",
-        "score": 1341,
+        "score": 1320,
         "terms": [
           {
             "kind": "duration",
@@ -142,7 +142,7 @@
           },
           {
             "kind": "lines",
-            "points": 92
+            "points": 71
           },
           {
             "kind": "album",
@@ -167,7 +167,7 @@
       },
       {
         "source": "qq",
-        "score": 1324,
+        "score": 1319,
         "terms": [
           {
             "kind": "duration",
@@ -179,7 +179,7 @@
           },
           {
             "kind": "lines",
-            "points": 83
+            "points": 78
           },
           {
             "kind": "album",
@@ -204,7 +204,7 @@
       },
       {
         "source": "kugou",
-        "score": 1324,
+        "score": 1319,
         "terms": [
           {
             "kind": "duration",
@@ -216,7 +216,7 @@
           },
           {
             "kind": "lines",
-            "points": 83
+            "points": 78
           },
           {
             "kind": "album",
@@ -241,7 +241,7 @@
       },
       {
         "source": "netease",
-        "score": 1310,
+        "score": 1314,
         "terms": [
           {
             "kind": "duration",
@@ -253,7 +253,7 @@
           },
           {
             "kind": "lines",
-            "points": 68
+            "points": 72
           },
           {
             "kind": "album",
@@ -278,7 +278,7 @@
       },
       {
         "source": "lrclib",
-        "score": 863,
+        "score": 871,
         "terms": [
           {
             "kind": "duration",
@@ -286,7 +286,7 @@
           },
           {
             "kind": "lines",
-            "points": 73
+            "points": 81
           },
           {
             "kind": "album",
@@ -304,7 +304,7 @@
       },
       {
         "source": "musixmatch",
-        "score": 533,
+        "score": 541,
         "terms": [
           {
             "kind": "duration",
@@ -316,7 +316,7 @@
           },
           {
             "kind": "lines",
-            "points": 73
+            "points": 81
           },
           {
             "kind": "titleMatch",

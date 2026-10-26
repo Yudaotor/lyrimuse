@@ -221,7 +221,7 @@
       },
       {
         "source": "lrclib",
-        "score": 14,
+        "score": 40,
         "terms": [
           {
             "kind": "duration",
@@ -229,7 +229,7 @@
           },
           {
             "kind": "lines",
-            "points": 34
+            "points": 60
           },
           {
             "kind": "liveAlbumConflict",

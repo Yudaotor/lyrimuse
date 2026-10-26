@@ -122,7 +122,7 @@
     "ranked": [
       {
         "source": "lrclib",
-        "score": 867,
+        "score": 870,
         "terms": [
           {
             "kind": "duration",
@@ -130,7 +130,7 @@
           },
           {
             "kind": "lines",
-            "points": 55
+            "points": 58
           },
           {
             "kind": "album",
@@ -148,7 +148,7 @@
       },
       {
         "source": "netease",
-        "score": 603,
+        "score": 596,
         "terms": [
           {
             "kind": "duration",
@@ -156,7 +156,7 @@
           },
           {
             "kind": "lines",
-            "points": 32
+            "points": 25
           },
           {
             "kind": "album",
@@ -212,7 +212,7 @@
           },
           {
             "kind": "lines",
-            "points": 50
+            "points": 52
           },
           {
             "kind": "album",
@@ -249,7 +249,7 @@
           },
           {
             "kind": "lines",
-            "points": 54
+            "points": 53
           },
           {
             "kind": "titleMatch",

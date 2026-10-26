@@ -216,7 +216,7 @@
       },
       {
         "source": "musixmatch",
-        "score": 649,
+        "score": 673,
         "terms": [
           {
             "kind": "corroborated",
@@ -224,7 +224,7 @@
           },
           {
             "kind": "lines",
-            "points": 29
+            "points": 53
           },
           {
             "kind": "album",
@@ -242,7 +242,7 @@
       },
       {
         "source": "lrclib",
-        "score": 640,
+        "score": 673,
         "terms": [
           {
             "kind": "corroborated",
@@ -250,7 +250,7 @@
           },
           {
             "kind": "lines",
-            "points": 20
+            "points": 53
           },
           {
             "kind": "album",

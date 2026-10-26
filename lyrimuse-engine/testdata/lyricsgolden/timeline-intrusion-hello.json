@@ -195,7 +195,7 @@
       },
       {
         "source": "netease",
-        "score": 1208,
+        "score": 1211,
         "terms": [
           {
             "kind": "duration",
@@ -207,7 +207,7 @@
           },
           {
             "kind": "lines",
-            "points": 27
+            "points": 30
           },
           {
             "kind": "album",
@@ -232,7 +232,7 @@
       },
       {
         "source": "applemusic",
-        "score": 1181,
+        "score": 1178,
         "terms": [
           {
             "kind": "duration",
@@ -244,7 +244,7 @@
           },
           {
             "kind": "lines",
-            "points": 33
+            "points": 30
           },
           {
             "kind": "album",
@@ -265,7 +265,7 @@
       },
       {
         "source": "qq",
-        "score": 1141,
+        "score": 1145,
         "terms": [
           {
             "kind": "duration",
@@ -277,7 +277,7 @@
           },
           {
             "kind": "lines",
-            "points": 28
+            "points": 32
           },
           {
             "kind": "album",
@@ -302,7 +302,7 @@
       },
       {
         "source": "lrclib",
-        "score": 786,
+        "score": 780,
         "terms": [
           {
             "kind": "duration",
@@ -310,7 +310,7 @@
           },
           {
             "kind": "lines",
-            "points": 36
+            "points": 30
           },
           {
             "kind": "album",
@@ -330,7 +330,7 @@
       },
       {
         "source": "migu",
-        "score": 751,
+        "score": 747,
         "terms": [
           {
             "kind": "duration",
@@ -338,7 +338,7 @@
           },
           {
             "kind": "lines",
-            "points": 34
+            "points": 30
           },
           {
             "kind": "titleMatch",
@@ -358,7 +358,7 @@
       },
       {
         "source": "musixmatch",
-        "score": 644,
+        "score": 653,
         "terms": [
           {
             "kind": "duration",
@@ -370,7 +370,7 @@
           },
           {
             "kind": "lines",
-            "points": 35
+            "points": 44
           },
           {
             "kind": "album",

@@ -116,7 +116,7 @@
     "ranked": [
       {
         "source": "netease",
-        "score": 1239,
+        "score": 1255,
         "terms": [
           {
             "kind": "duration",
@@ -128,44 +128,7 @@
           },
           {
             "kind": "lines",
-            "points": 81
-          },
-          {
-            "kind": "album",
-            "points": 40
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
-          },
-          {
-            "kind": "translation",
-            "points": 50
-          }
-        ],
-        "has_word_timing": true,
-        "has_translation": true,
-        "translation_lang": "zh"
-      },
-      {
-        "source": "qq",
-        "score": 1210,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 249
-          },
-          {
-            "kind": "wordTiming",
-            "points": 400
-          },
-          {
-            "kind": "lines",
-            "points": 101
+            "points": 97
           },
           {
             "kind": "album",
@@ -190,7 +153,7 @@
       },
       {
         "source": "kugou",
-        "score": 1210,
+        "score": 1208,
         "terms": [
           {
             "kind": "duration",
@@ -202,7 +165,44 @@
           },
           {
             "kind": "lines",
-            "points": 101
+            "points": 99
+          },
+          {
+            "kind": "album",
+            "points": 40
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "qq",
+        "score": 1207,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 249
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 98
           },
           {
             "kind": "album",
@@ -227,7 +227,7 @@
       },
       {
         "source": "lrclib",
-        "score": 891,
+        "score": 894,
         "terms": [
           {
             "kind": "duration",
@@ -235,7 +235,7 @@
           },
           {
             "kind": "lines",
-            "points": 110
+            "points": 113
           },
           {
             "kind": "album",

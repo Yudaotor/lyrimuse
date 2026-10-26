@@ -386,6 +386,9 @@ type lyricCandidate struct {
 	// 批级算好)。打分时这两项取自己的和继承的里较大的那个。
 	inheritedAlbumPoints int
 	inheritedTitlePoints int
+	// lineWordsRef:这一批候选每行正文的词数中位(applyLineScoreReference 批级算好),行数项拿正文词数除以它折成行数。
+	// 没算过(0)时行数项按实际行数。
+	lineWordsRef float64
 }
 
 // songLanguageCantonese/songLanguageMandarin:lyricCandidate.language 与
@@ -542,7 +545,7 @@ const lyricOvershootToleranceSecs = 5.0
 // (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
 const lyricsScoringVersion = 30
 
-const lyricsScoringRevision = 1
+const lyricsScoringRevision = 2
 
 // lyricsScoringStamp 是一条歌词按哪一版打分规则选出来的:主版本号 + 开发修订号。存成两个整数、按这两段比大小,
 // 不存小数:小数比大小时 29.10 会排在 29.9 前面。
@@ -1013,8 +1016,8 @@ func scoreLyricCandidateDetailed(
 	//
 	// 完全同分时的先后交给**稳定排序 + 候选构造顺序**(见 scoredLyricCandidates 里
 	// candidates 的追加次序),不再用分数假装那是质量判断。
-	// 行数只数真的在唱的行(contentLineCount),封顶 200。见 09 章决策 49、207。
-	add(scoreTermLines, min(contentLineCount(c.lyrics), 200))
+	// 行数只数真的在唱的行,按正文量折算(contentLineEquivalent),封顶 200。见 09 章决策 49、207、341。
+	add(scoreTermLines, min(contentLineEquivalent(c), 200))
 	// 版本限定词对不上 → 重扣。理由见 versionMismatchPenalty。判定同时看歌名和**专辑名**,
 	// 理由见 versionTagsMismatch。v8 加一道窄豁免:时长逐位吻合+专辑亲和+多出的限定词
 	// 只是演奏方式(acoustic 家族)时,是同一次录音的命名差异,不是版本差异 —— 见
@@ -3691,11 +3694,10 @@ func lyricConsensusBody(lyrics string) string {
 	return b.String()
 }
 
-// contentLineCount 数"真的在唱的行",给打分的行数项用:元信息标签行、空行、只有演唱者标记的行、职员表行都不算。
-// 口径跟 lyricConsensusBody 逐条对齐,区别只是它数行、那边拼正文,两边要一起改。
-func contentLineCount(lyrics string) int {
+// eachContentLyricLine 逐行交出"真的在唱的"正文(去掉时间戳,演唱者标记行只交标记后面那段):元信息标签行、空行、
+// 只有演唱者标记的行、职员表行都跳过。口径跟 lyricConsensusBody 逐条对齐,两边要一起改。
+func eachContentLyricLine(lyrics string, fn func(text string)) {
 	speakers := lyricSpeakerLabels(lyrics)
-	n := 0
 	for _, line := range splitLyricLines(lyrics) {
 		if isLRCMetaTagLine(line) {
 			continue
@@ -3705,18 +3707,86 @@ func contentLineCount(lyrics string) int {
 			continue
 		}
 		if label, rest, ok := lyricSplitLabel(text); ok && speakers[label] {
-			if rest == "" {
-				continue
+			if rest != "" {
+				fn(rest)
 			}
-			n++
 			continue
 		}
 		if isCreditLine(text) {
 			continue
 		}
-		n++
+		fn(text)
 	}
+}
+
+// contentLineCount 数"真的在唱的行"(eachContentLyricLine 交出的行)。
+func contentLineCount(lyrics string) int {
+	n := 0
+	eachContentLyricLine(lyrics, func(string) { n++ })
 	return n
+}
+
+// contentWordCount 数正文有多少词:汉字、假名、谚文一个字算一个,其余字母数字连成的一段算一个。跟断行无关,
+// 也不随拼写长短变(「2」和「to」都是一个)。
+func contentWordCount(lyrics string) int {
+	n := 0
+	eachContentLyricLine(lyrics, func(text string) {
+		inWord := false
+		for _, r := range text {
+			switch {
+			case unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul):
+				n++
+				inWord = false
+			case unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.Is(unicode.Mn, r):
+				if !inWord {
+					n++
+				}
+				inWord = true
+			case r == '\'' || r == '’':
+				// 词中的撇号(don't、rock'n'roll)不断词
+			default:
+				inWord = false
+			}
+		}
+	})
+	return n
+}
+
+// applyLineScoreReference 给整批候选填上 lineWordsRef:正文够 lineScoreRefMinLines 行的候选里,每行词数的中位。
+// 一条候选也照算,折出来就是它自己的行数。
+func applyLineScoreReference(candidates []lyricCandidate) {
+	var perLine []float64
+	for _, c := range candidates {
+		if c.plainTextOnly || !isTimedLRC(c.lyrics) {
+			continue
+		}
+		if lines := contentLineCount(c.lyrics); lines >= lineScoreRefMinLines {
+			perLine = append(perLine, float64(contentWordCount(c.lyrics))/float64(lines))
+		}
+	}
+	ref := 0.0
+	if len(perLine) > 0 {
+		slices.Sort(perLine)
+		mid := len(perLine) / 2
+		ref = perLine[mid]
+		if len(perLine)%2 == 0 {
+			ref = (perLine[mid-1] + perLine[mid]) / 2
+		}
+	}
+	for i := range candidates {
+		candidates[i].lineWordsRef = ref
+	}
+}
+
+const lineScoreRefMinLines = 5
+
+// contentLineEquivalent 是行数项数的"行":正文词数按这一批每行词数的中位折成行数。同一句拆成两三行的那份不多拿分,
+// 真少了段落的照样少拿(见 09 章决策 341)。批级参照没算过时按实际行数。
+func contentLineEquivalent(c lyricCandidate) int {
+	if c.lineWordsRef <= 0 {
+		return contentLineCount(c.lyrics)
+	}
+	return int(math.Round(float64(contentWordCount(c.lyrics)) / c.lineWordsRef))
 }
 
 // lyricGram3Set 返回字符 3-gram 集合。用 3-gram 而不是行集合:对各源的行切分差异鲁棒

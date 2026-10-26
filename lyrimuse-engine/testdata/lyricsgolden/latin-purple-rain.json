@@ -122,7 +122,7 @@
     "ranked": [
       {
         "source": "netease",
-        "score": 1101,
+        "score": 1104,
         "terms": [
           {
             "kind": "corroborated",
@@ -134,7 +134,7 @@
           },
           {
             "kind": "lines",
-            "points": 31
+            "points": 34
           },
           {
             "kind": "album",
@@ -233,7 +233,7 @@
       },
       {
         "source": "lrclib",
-        "score": 651,
+        "score": 654,
         "terms": [
           {
             "kind": "corroborated",
@@ -241,7 +241,7 @@
           },
           {
             "kind": "lines",
-            "points": 31
+            "points": 34
           },
           {
             "kind": "album",

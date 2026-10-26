@@ -110,7 +110,7 @@
     "ranked": [
       {
         "source": "netease",
-        "score": 1199,
+        "score": 1208,
         "terms": [
           {
             "kind": "duration",
@@ -122,42 +122,11 @@
           },
           {
             "kind": "lines",
-            "points": 49
+            "points": 58
           },
           {
             "kind": "album",
             "points": 150
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
-          }
-        ],
-        "has_word_timing": true
-      },
-      {
-        "source": "kugou",
-        "score": 1125,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 242
-          },
-          {
-            "kind": "wordTiming",
-            "points": 400
-          },
-          {
-            "kind": "lines",
-            "points": 73
-          },
-          {
-            "kind": "album",
-            "points": 40
           },
           {
             "kind": "titleMatch",
@@ -185,6 +154,37 @@
           {
             "kind": "lines",
             "points": 56
+          },
+          {
+            "kind": "album",
+            "points": 40
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          }
+        ],
+        "has_word_timing": true
+      },
+      {
+        "source": "kugou",
+        "score": 1107,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 242
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 55
           },
           {
             "kind": "album",
