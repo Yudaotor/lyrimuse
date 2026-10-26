@@ -22405,29 +22405,6 @@
         }
       }
     },
-    "配色" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Color"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "配色"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "配色"
-          }
-        }
-      }
-    },
     "配色主题" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -10,9 +10,9 @@ import LyrimuseCore
 /// 页顶的固定头部里、点不动。这里的做法是"挪位置 + 换外壳"——把它搬进可滚动内容区,外面套
 /// 一圈工具栏(浮层入口 + 重置)和宽度调整条,不重新实现预览本身。
 ///
-/// 工具栏两行,按「全部设置」抽屉的顺序排:第一行「布局」「内容」「配色」+「重置 ▾」,第二行「字体」「行为」
+/// 工具栏两行,按「全部设置」抽屉的顺序排:第一行「布局」「内容」「颜色」+「重置 ▾」,第二行「字体」「行为」
 /// (06 章决策 66、67、68)。分组按卡片解剖:「布局」= 这一格放在哪、多宽;「内容」= 格子里显示什么(歌词还是歌名、副行、
-/// 旁边的进度图标);「配色」= 颜色;「字体」= 字长什么样;「行为」= 什么状态下显示什么。
+/// 旁边的进度图标);「颜色」= 卡拉OK 和文字颜色;「字体」= 字长什么样;「行为」= 什么状态下显示什么。
 @MainActor
 struct MenuBarEditorStage: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -39,7 +39,7 @@ struct MenuBarEditorStage: View {
 
     // MARK: - 工具栏
 
-    /// 第一行:「布局」「内容」「配色」三个浮层入口 + 「重置 ▾」。五颗挤在一行时每颗的摘要都被压成半截,
+    /// 第一行:「布局」「内容」「颜色」三个浮层入口 + 「重置 ▾」。五颗挤在一行时每颗的摘要都被压成半截,
     /// 所以分两行。按钮宽度在一行里平分,放不下时只压摘要(`EditorToolbarButtonLabel` 里摘要
     /// `.layoutPriority(-1)`),标题不截;再加入口或把哪个标题改长,先在 499pt 窄档、英文界面下看一眼。
     private var toolbar: some View {
@@ -58,23 +58,14 @@ struct MenuBarEditorStage: View {
                 target: .content
             )
             toolbarButton(
-                // 跟悬浮歌词工具栏「配色」浮层同一个图标——两者都是"这一段的配色设置",
-                // 概念相同就用同一个符号,不新造一套语言。
-                icon: "circle.lefthalf.filled",
-                title: L10n.t("配色"),
+                // 同悬浮歌词工具栏的「颜色」:装的都是卡拉OK 和几种文字颜色,同名同图标。
+                icon: "paintpalette",
+                title: L10n.t("颜色"),
                 summary: colorSummary,
                 target: .color
             )
             Spacer(minLength: 8)
-            // 「重置 ▾」逐字复刻悬浮歌词/灵动岛工具栏那颗:Menu 里一条恢复动作 + 一条不可点的
-            // 作用范围说明。范围文案复用灵动岛那条"不含宽度和总开关"——两边排除的东西逐字
-            // 相同(结构性宽度设置 + 总开关),没必要另造一句意思一样的话。
-            //
-            // 动作标题就叫「恢复默认」,范围由下面那条不可点的说明项(「不含宽度和总开关」)交代。
-            // 「简约克制」专项把三个编辑台(悬浮 / 灵动岛 / 菜单栏)的这颗按钮统一成这四个字:
-            // 此前这里念的是工具栏四个入口的名字(「恢复默认布局、配色、字体与行为」),
-            // 更早叫「恢复默认宽度模式与配色」—— 两版都在标题里列举范围,越列越长,而排除项那一行
-            // 本来就在菜单里,标题再列一遍是重复。范围本身(这个编辑台除宽度和总开关外的全部)不变。
+            // 范围文案同灵动岛那颗「重置 ▾」:两边排除的都是宽度和总开关。动作标题不列范围,范围只写在说明项里。
             EditorToolbarResetMenu(scope: L10n.t("不含宽度和总开关")) { MenuBarStyleDefaults.restoreDefaults() }
         }
         .font(.system(size: 12))
@@ -98,7 +89,7 @@ struct MenuBarEditorStage: View {
                 summary: behaviorSummary,
                 target: .behavior
             )
-            toolbarGhostButton(icon: "circle.lefthalf.filled", title: L10n.t("配色"), summary: colorSummary)
+            toolbarGhostButton(icon: "paintpalette", title: L10n.t("颜色"), summary: colorSummary)
             Spacer(minLength: 8)
             EditorToolbarResetReserve()
         }
@@ -122,7 +113,7 @@ struct MenuBarEditorStage: View {
         return parts.joined(separator: " · ")
     }
 
-    /// 「配色」按钮摘要——两个候选都是**现成的**既有文案(卡拉OK开关自己的标题 / 颜色
+    /// 「颜色」按钮摘要——两个候选都是**现成的**既有文案(卡拉OK开关自己的标题 / 颜色
     /// 重置按钮自己的标题),不新造描述句,理由同 `NotchEditorStage.lyricRowSummary` 那组
     /// "摘要复用现成 item 标题"的纪律。(标题随开关改名「卡拉OK效果」,宽度预算见
     /// toolbar 头注:比原「卡拉OK染色」等长,不用重量。)
@@ -429,7 +420,7 @@ struct MenuBarTitleFallbackTile: View {
 
 // MARK: - 恢复默认
 
-/// 「重置」按钮的动作本体——把工具栏五个浮层(布局 / 内容 / 配色 / 字体 / 行为)里的**每一项**恢复默认。
+/// 「重置」按钮的动作本体——把工具栏五个浮层(布局 / 内容 / 颜色 / 字体 / 行为)里的**每一项**恢复默认。
 ///
 /// **只排除两样**("这里的重置需要把这部分所有配置都改为默认,除了宽度"):
 ///  - `menuBarLyricsWidth`(最大宽度)—— 留;它也是唯一一项常驻在舞台上、不在
@@ -456,7 +447,7 @@ enum MenuBarStyleDefaults {
         settings.menuBarLyricsContent = AppSettings.defaultMenuBarLyricsContent
         settings.menuBarSecondaryLine = AppSettings.defaultMenuBarSecondaryLine
         settings.menuBarLyricsIconPosition = AppSettings.defaultMenuBarLyricsIconPosition
-        // 「配色」浮层
+        // 「颜色」浮层
         settings.menuBarLyricsKaraoke = AppSettings.defaultMenuBarLyricsKaraoke
         settings.menuBarLyricsTextColorHex = AppSettings.defaultMenuBarLyricsTextColorHex
         settings.menuBarLyricsFillColorHex = AppSettings.defaultMenuBarLyricsFillColorHex
@@ -589,7 +580,7 @@ struct MenuBarBehaviorPopover: View {
 /// 「全部设置」抽屉都要渲染这一行,只留一份实现。
 ///
 /// **两处要注意**:
-///   ① 这一行(以及「配色」那三行)在浮层/抽屉里是**顶层**设置项,不是挂在某个「主行」
+///   ① 这一行(以及「颜色」那三行)在浮层/抽屉里是**顶层**设置项,不是挂在某个「主行」
 ///      下面的从属选项,所以用 `SettingsRow(icon:)` 不用 `SettingsSubRow`——后者标题左边
 ///      带一条"子项"竖线,是给真正的主从关系准备的(标题缩进到跟主行标题同一列),这里
 ///      没有主行可对齐,套上去就是多余的装饰。跟 `NotchBehaviorItem`/`NotchBehaviorToggleRow`
@@ -768,13 +759,13 @@ struct MenuBarAlignmentRow: View {
     }
 }
 
-// MARK: - 「配色」浮层
+// MARK: - 「颜色」浮层
 
-/// 「配色」浮层:只放三行颜色。「粗细」先放在这里头一行、几分钟后按
+/// 「颜色」浮层:只放三行颜色。「粗细」先放在这里头一行、几分钟后按
 /// 挪成工具栏第三个入口(`MenuBarFontPopover`),这里不再混进非颜色的项。
 struct MenuBarColorPopover: View {
     var body: some View {
-        SettingsPopoverShell(title: L10n.t("配色"), width: 360) {
+        SettingsPopoverShell(title: L10n.t("颜色"), width: 360) {
             MenuBarColorRows()
         }
     }
@@ -819,7 +810,7 @@ struct MenuBarFontFamilyRow: View {
 
 /// 「字体」浮层:内容就是 `MenuBarFontRows`。
 /// 宽度用 `SettingsPopoverShell` 的默认 380 —— 那正是悬浮歌词「文字」浮层(同样装着字号滑杆
-/// 150 + 读数 46 那一行)量出来的值;字号这一行英文标题 Font Size 加滑杆比「配色」的三行都宽,
+/// 150 + 读数 46 那一行)量出来的值;字号这一行英文标题 Font Size 加滑杆比「颜色」的三行都宽,
 /// 330 不够。真要收窄先按 `MenuBarWidthModeRow` 头注那条方法论量一次。
 struct MenuBarFontPopover: View {
     var body: some View {
@@ -932,7 +923,7 @@ struct MenuBarFontWeightRow: View {
     }
 }
 
-/// 「配色」组(浮层与抽屉共用同一份):卡拉OK效果一块开关,下面「文字颜色 / 未唱颜色」+「已唱颜色」(条件显示)一框。
+/// 「颜色」组(浮层与抽屉共用同一份):卡拉OK效果一块开关,下面「文字颜色 / 未唱颜色」+「已唱颜色」(条件显示)一框。
 ///
 /// 颜色两行用 `SettingsRow(icon:)` 不用 `SettingsSubRow`:它们是顶层设置项,不该带"子项"竖线(见 `MenuBarWidthModeRow`
 /// 上面那条)。最宽一行离屏量过中文 288.0pt / 英文 308.0pt,框在浮层里两侧各缩 10pt,浮层宽 360。
@@ -1033,7 +1024,7 @@ struct MenuBarColorRows: View {
 
 // MARK: - 「全部设置」抽屉
 
-/// 菜单栏歌词的「全部设置」抽屉。分组、顺序、标题跟工具栏四个入口一一对应(布局 → 配色 → 字体 → 最大宽度 → 行为
+/// 菜单栏歌词的「全部设置」抽屉。分组、顺序、标题跟工具栏五个入口一一对应(布局 → 内容 → 颜色 → 字体 → 最大宽度 → 行为
 /// → 恢复默认;每一组调的是浮层背后同一份 `MenuBarXxxRows`),照着工具栏的记忆到抽屉里也找得到。「最大宽度」不属于
 /// 任何一组(舞台上那条常驻调整条的兜底副本,跟灵动岛 / 悬浮歌词抽屉里的宽度滑杆同一个摆法)。
 /// 默认折叠,理由同另外两个抽屉:键盘/VoiceOver 全量兜底通路,不是新配置项的收纳盒。
@@ -1051,7 +1042,7 @@ struct MenuBarAllSettingsDrawer: View {
             if isExpanded {
                 SettingsGroupCard(title: L10n.t("布局")) { MenuBarLayoutRows() }
                 SettingsGroupCard(title: L10n.t("内容")) { MenuBarContentRows() }
-                SettingsGroupCard(title: L10n.t("配色")) { MenuBarColorRows() }
+                SettingsGroupCard(title: L10n.t("颜色")) { MenuBarColorRows() }
                 SettingsGroupCard(title: L10n.t("字体")) { MenuBarFontRows() }
                 SettingsGroupCard(title: L10n.t("宽度")) {
                     SettingsRowGroup { MenuBarWidthRow() }
@@ -1072,7 +1063,7 @@ struct MenuBarAllSettingsDrawer: View {
         SettingsSearchRouter.shared.consumeDrawer(.menuBar)
     }
 
-    /// 「恢复默认布局、配色、字体与行为」——抽屉里的兜底入口(补;随「行为」入口改名)。
+    /// 「恢复默认」——抽屉里的兜底入口。
     ///
     /// 动作本体跟工具栏那颗「重置 ▾」是**同一个函数**(`MenuBarStyleDefaults.restoreDefaults()`)。
     /// 补这一行的理由、以及"两个入口的标题/副标题必须一字不差"这条,见灵动岛那份
@@ -1107,7 +1098,7 @@ struct MenuBarAllSettingsDrawer: View {
                     .font(.system(size: 13))
                 Spacer(minLength: 12)
                 if !isExpanded {
-                    AllSettingsGroupNames([L10n.t("布局"), L10n.t("内容"), L10n.t("配色"), L10n.t("字体"), L10n.t("宽度"), L10n.t("行为")])
+                    AllSettingsGroupNames([L10n.t("布局"), L10n.t("内容"), L10n.t("颜色"), L10n.t("字体"), L10n.t("宽度"), L10n.t("行为")])
                 }
             }
             .padding(.horizontal, SettingsRowMetrics.horizontalPadding)

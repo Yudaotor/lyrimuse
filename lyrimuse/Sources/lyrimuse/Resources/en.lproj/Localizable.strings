@@ -2566,7 +2566,6 @@
 "配置文件 %@ 无法读取，为避免覆盖，所有保存已暂停" = "The configuration file %@ can't be read. Saving is paused so it won't be overwritten";
 "配置文件夹" = "Config Folder";
 "配置文件无法解析，为避免覆盖已取消保存" = "The configuration file can't be parsed; saving was skipped so it won't be overwritten";
-"配色" = "Color";
 "配色主题" = "Color Theme";
 "酷我音乐" = "Kuwo Music";
 "酷狗音乐" = "Kugou Music";
