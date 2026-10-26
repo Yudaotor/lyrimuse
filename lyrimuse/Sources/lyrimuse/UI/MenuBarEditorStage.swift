@@ -10,9 +10,9 @@ import LyrimuseCore
 /// 页顶的固定头部里、点不动。这里的做法是"挪位置 + 换外壳"——把它搬进可滚动内容区,外面套
 /// 一圈工具栏(浮层入口 + 重置)和宽度调整条,不重新实现预览本身。
 ///
-/// 工具栏一行:「布局」「配色」「字体」「行为」四个浮层入口 +「重置 ▾」,四颗加重置的排法同灵动岛第一行
-/// (06 章决策 66)。分组按卡片解剖:「布局」= 这一格怎么占位、几行、旁边有没有图标;「配色」= 颜色;
-/// 「字体」= 字长什么样;「行为」= 什么状态下显示什么。
+/// 工具栏一行:「布局」「内容」「配色」「字体」「行为」五个浮层入口 +「重置 ▾」(06 章决策 66、67)。
+/// 分组按卡片解剖:「布局」= 这一格放在哪、多宽;「内容」= 格子里显示什么(歌词还是歌名、副行、
+/// 旁边的进度图标);「配色」= 颜色;「字体」= 字长什么样;「行为」= 什么状态下显示什么。
 @MainActor
 struct MenuBarEditorStage: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -35,7 +35,7 @@ struct MenuBarEditorStage: View {
 
     // MARK: - 工具栏
 
-    /// 「布局」「配色」「字体」「行为」四个浮层入口 + 「重置 ▾」。按钮宽度在这一行里平分,放不下时
+    /// 「布局」「内容」「配色」「字体」「行为」五个浮层入口 + 「重置 ▾」。按钮宽度在这一行里平分,放不下时
     /// 只压摘要(`EditorToolbarButtonLabel` 里摘要 `.layoutPriority(-1)`),标题不截;再加入口或把哪个
     /// 标题改长,先在 499pt 窄档、英文界面下看一眼。
     private var toolbar: some View {
@@ -52,6 +52,13 @@ struct MenuBarEditorStage: View {
                 title: L10n.t("布局"),
                 summary: layoutSummary,
                 target: .layout
+            )
+            // 图标同悬浮歌词工具栏的「内容」。
+            toolbarButton(
+                icon: "checklist",
+                title: L10n.t("内容"),
+                summary: contentSummary,
+                target: .content
             )
             toolbarButton(
                 // 跟悬浮歌词工具栏「配色」浮层同一个图标——两者都是"这一段的配色设置",
@@ -93,16 +100,17 @@ struct MenuBarEditorStage: View {
         .padding(.horizontal, 2)
     }
 
-    /// 「布局」按钮摘要:宽度模式(三项里最结构性的那个),副行**非默认**时再追加「副行 · 译文」——
-    /// 四选一不是开关,套不进"只列开着的";默认那一档(是「下一句」,此前是「不显示」)是多数人的状态,无条件报出来是恒定噪声
-    /// (灵动岛「歌词行」摘要同一条规则)。歌词旁的图标不报:它在预览上一眼就看得见。放在菜单栏正中时报「菜单栏正中」
-    /// 顶替宽度模式(那时宽度模式管不到)。
+    /// 「布局」按钮摘要:宽度模式;放在菜单栏正中时报「菜单栏正中」顶替(那时宽度模式管不到)。
     private var layoutSummary: String {
-        var parts = [MenuBarPlacementRow.centerInUse(settings)
-            ? MenuBarPlacementRow.label(for: .screenCenter) : settings.menuBarLyricsWidthMode.displayName]
-        if settings.menuBarLyricsContent.showsSongTitle {
-            parts.append(MenuBarContentRow.label(for: settings.menuBarLyricsContent))
-        } else if settings.menuBarSecondaryLine != AppSettings.defaultMenuBarSecondaryLine {
+        MenuBarPlacementRow.centerInUse(settings)
+            ? MenuBarPlacementRow.label(for: .screenCenter) : settings.menuBarLyricsWidthMode.displayName
+    }
+
+    /// 「内容」按钮摘要:显示内容;显示歌词且副行**非默认**时再追加「副行 · 译文」—— 默认那一档是多数人的状态,
+    /// 无条件报出来是恒定噪声(灵动岛「歌词行」摘要同一条规则)。歌词旁的图标不报:它在预览上一眼就看得见。
+    private var contentSummary: String {
+        var parts = [MenuBarContentRow.label(for: settings.menuBarLyricsContent)]
+        if settings.menuBarLyricsContent == .lyrics, settings.menuBarSecondaryLine != AppSettings.defaultMenuBarSecondaryLine {
             parts.append("\(L10n.t("副行")) · \(settings.menuBarSecondaryLine.displayName)")
         }
         return parts.joined(separator: " · ")
@@ -173,6 +181,7 @@ struct MenuBarEditorStage: View {
 
     private enum StagePopover: Equatable {
         case layout
+        case content
         case color
         case font
         case behavior
@@ -190,6 +199,7 @@ struct MenuBarEditorStage: View {
     private func popoverContent(for target: StagePopover) -> some View {
         switch target {
         case .layout: MenuBarLayoutPopover()
+        case .content: MenuBarContentPopover()
         case .color: MenuBarColorPopover()
         case .font: MenuBarFontPopover()
         case .behavior: MenuBarBehaviorPopover()
@@ -401,7 +411,7 @@ struct MenuBarTitleFallbackTile: View {
 
 // MARK: - 恢复默认
 
-/// 「重置」按钮的动作本体——把工具栏四个浮层(布局 / 配色 / 字体 / 行为)里的**每一项**恢复默认。
+/// 「重置」按钮的动作本体——把工具栏五个浮层(布局 / 内容 / 配色 / 字体 / 行为)里的**每一项**恢复默认。
 ///
 /// **只排除两样**("这里的重置需要把这部分所有配置都改为默认,除了宽度"):
 ///  - `menuBarLyricsWidth`(最大宽度)—— 留;它也是唯一一项常驻在舞台上、不在
@@ -420,13 +430,14 @@ enum MenuBarStyleDefaults {
     static func restoreDefaults() {
         let settings = AppSettings.shared
         // 「布局」浮层
-        settings.menuBarLyricsContent = AppSettings.defaultMenuBarLyricsContent
         settings.menuBarLyricsWidthMode = AppSettings.defaultMenuBarLyricsWidthMode
         settings.menuBarLyricsAlignment = AppSettings.defaultMenuBarLyricsAlignment
-        settings.menuBarSecondaryLine = AppSettings.defaultMenuBarSecondaryLine
-        settings.menuBarLyricsIconPosition = AppSettings.defaultMenuBarLyricsIconPosition
         settings.menuBarLyricsPlacement = AppSettings.defaultMenuBarLyricsPlacement
         settings.menuBarCenterScreen = AppSettings.defaultMenuBarCenterScreen
+        // 「内容」浮层
+        settings.menuBarLyricsContent = AppSettings.defaultMenuBarLyricsContent
+        settings.menuBarSecondaryLine = AppSettings.defaultMenuBarSecondaryLine
+        settings.menuBarLyricsIconPosition = AppSettings.defaultMenuBarLyricsIconPosition
         // 「配色」浮层
         settings.menuBarLyricsKaraoke = AppSettings.defaultMenuBarLyricsKaraoke
         settings.menuBarLyricsTextColorHex = AppSettings.defaultMenuBarLyricsTextColorHex
@@ -443,12 +454,33 @@ enum MenuBarStyleDefaults {
 
 // MARK: - 「布局」浮层
 
-/// 「布局」组的行(浮层与抽屉同一份):宽度模式(固定宽度下的对齐方式)→ 副行 → 歌词旁的图标。
-/// 三样都是"这一格怎么占位":占多宽、排几行、旁边有没有图标。「副行」从「字体」搬过来 —— 悬浮歌词的
-/// 「双行显示」在「排版」、灵动岛的「副行」在「歌词行」,三个面上"排几行"都归版面,不归字形;它顺带让
-/// 「字号」失效这件事由「字号」那一行自己说(`MenuBarFontSizeRow`)。悬停 / 无歌词两颗行为开关同日
-/// 搬去了 `MenuBarBehaviorRows`。
+/// 「布局」组的行(浮层与抽屉同一份):歌词位置 →(放在正中时)屏幕 →(用不上正中时)宽度模式与对齐方式。
+/// 都是"这一格放在哪、多宽"。
 struct MenuBarLayoutRows: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        SettingsRowGroup {
+            VStack(spacing: 0) {
+                MenuBarPlacementRow()
+                CardDivider()
+                if settings.menuBarLyricsPlacement == .screenCenter {
+                    MenuBarCenterScreenRow()
+                    if !MenuBarPlacementRow.centerInUse(settings) { CardDivider() }
+                }
+                // 放在菜单栏正中时窗口宽跟着内容走、恒居中,宽度模式与对齐方式管不到;用不上正中(菜单栏不常驻)时
+                // 歌词还在图标那一格,照常显示。选了正中就有屏幕那一行,不选就有这一行,所以上面那条分隔线下面总有一行。
+                if !MenuBarPlacementRow.centerInUse(settings) {
+                    MenuBarWidthModeRow()
+                }
+            }
+        }
+    }
+}
+
+/// 「内容」组的行(浮层与抽屉同一份):显示内容 → 副行 → 歌词旁的图标,都是"格子里显示什么"。「副行」管排几行,
+/// 也让「字号」失效,这件事由「字号」那一行自己说(`MenuBarFontSizeRow`)。
+struct MenuBarContentRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
@@ -456,18 +488,6 @@ struct MenuBarLayoutRows: View {
             VStack(spacing: 0) {
                 MenuBarContentRow()
                 CardDivider()
-                MenuBarPlacementRow()
-                CardDivider()
-                if settings.menuBarLyricsPlacement == .screenCenter {
-                    MenuBarCenterScreenRow()
-                    CardDivider()
-                }
-                // 放在菜单栏正中时窗口宽跟着内容走、恒居中,宽度模式与对齐方式管不到;用不上正中(菜单栏不常驻)时
-                // 歌词还在图标那一格,照常显示。
-                if !MenuBarPlacementRow.centerInUse(settings) {
-                    MenuBarWidthModeRow()
-                    CardDivider()
-                }
                 // 显示歌名时没有歌词句,副行无从谈起。
                 if settings.menuBarLyricsContent == .lyrics {
                     MenuBarSecondaryLineRow()
@@ -506,18 +526,21 @@ struct MenuBarContentRow: View {
     }
 }
 
-/// 「布局」浮层 —— 内容就是 `MenuBarLayoutRows`。
-///
-/// 宽度从 430 放宽到 470。430 是当初为**宽度模式那一行**离屏量出来的
-/// (中文 370.0 / 英文 414.0),而新加的「歌词旁的图标」行标题更长、尾部是个三段选择器 ——
-/// 按同样的字数比例估英文大约 460pt,压着 430 会重演当时那个坑:`SettingsRow` 的尾部控件
-/// `.fixedSize()` 之后容器一窄,SwiftUI 把亏空全摊给**标题**,标题被压没只剩一个 "?"。
-/// 这个数是**估的、没离屏量过**,但估宽的方向是安全的那一侧(浮层宽一点只是留白多一点,
-/// 窄了才会画坏);真要收紧回去,先按 `MenuBarWidthModeRow` 头注那条方法论量一次再改。
+/// 「布局」浮层 —— 内容就是 `MenuBarLayoutRows`。宽 470 是估的、宁宽勿窄:`SettingsRow` 的尾部控件
+/// `.fixedSize()` 之后容器一窄,SwiftUI 把亏空全摊给标题,标题被压没只剩一个 "?"(量法见 `MenuBarWidthModeRow` 头注)。
 struct MenuBarLayoutPopover: View {
     var body: some View {
         SettingsPopoverShell(title: L10n.t("布局"), width: 470) {
             MenuBarLayoutRows()
+        }
+    }
+}
+
+/// 「内容」浮层 —— 内容就是 `MenuBarContentRows`。宽度同「布局」浮层。
+struct MenuBarContentPopover: View {
+    var body: some View {
+        SettingsPopoverShell(title: L10n.t("内容"), width: 470) {
+            MenuBarContentRows()
         }
     }
 }
@@ -1009,6 +1032,7 @@ struct MenuBarAllSettingsDrawer: View {
             }
             if isExpanded {
                 SettingsGroupCard(title: L10n.t("布局")) { MenuBarLayoutRows() }
+                SettingsGroupCard(title: L10n.t("内容")) { MenuBarContentRows() }
                 SettingsGroupCard(title: L10n.t("配色")) { MenuBarColorRows() }
                 SettingsGroupCard(title: L10n.t("字体")) { MenuBarFontRows() }
                 SettingsGroupCard(title: L10n.t("宽度")) {
@@ -1065,7 +1089,7 @@ struct MenuBarAllSettingsDrawer: View {
                     .font(.system(size: 13))
                 Spacer(minLength: 12)
                 if !isExpanded {
-                    AllSettingsGroupNames([L10n.t("布局"), L10n.t("配色"), L10n.t("字体"), L10n.t("宽度"), L10n.t("行为")])
+                    AllSettingsGroupNames([L10n.t("布局"), L10n.t("内容"), L10n.t("配色"), L10n.t("字体"), L10n.t("宽度"), L10n.t("行为")])
                 }
             }
             .padding(.horizontal, SettingsRowMetrics.horizontalPadding)

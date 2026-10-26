@@ -278,8 +278,8 @@ The current line right in the menu bar, scrolling when it is too long instead of
 - Off by default
 - Settings: Lyrics Display › Menu Bar › Menu Bar Lyrics
 - Settings: Lyrics Display › Menu Bar › Layout › Lyrics Position
-- Settings: Lyrics Display › Menu Bar › Layout › What's Shown
-- Settings: Lyrics Display › Menu Bar › Layout › Second Line
+- Settings: Lyrics Display › Menu Bar › Content › What's Shown
+- Settings: Lyrics Display › Menu Bar › Content › Second Line
 - Settings: Keyboard Shortcuts › Show/Hide Menu Bar Lyrics
 
 <a id="feature-touch-bar-lyrics"></a>
@@ -1031,15 +1031,18 @@ Every setting in the Settings window, by where it lives: 291 in all. Type a name
 - **Max Width**
 - **Reset to Defaults**: Width and the master toggle are left alone
 
-### Lyrics Display › Menu Bar › Layout
+### Lyrics Display › Menu Bar › Content
 
 - **What's Shown**
+- **Second Line**
+- **Icon Beside Lyrics**: Shows the menu bar icon at the far left or right of the lyrics area, filling from the bottom up to show playback progress: the filled part uses Sung Color and the rest Unsung Color. Appears only while lyrics are shown
+
+### Lyrics Display › Menu Bar › Layout
+
 - **Lyrics Position**: Menu Bar Center: lyrics appear in the middle of the menu bar, clear of app menus, the icons on the right and the notch
 - **Display**
 - **Width Mode**: Fixed: every song uses the set width. Adaptive: each song gets its own width from its lyrics, up to the set width
 - **Alignment**
-- **Second Line**
-- **Icon Beside Lyrics**: Shows the menu bar icon at the far left or right of the lyrics area, filling from the bottom up to show playback progress: the filled part uses Sung Color and the rest Unsung Color. Appears only while lyrics are shown
 
 ### Lyrics Display › Menu Bar › Color
 

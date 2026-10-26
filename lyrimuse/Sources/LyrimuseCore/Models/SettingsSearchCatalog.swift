@@ -491,13 +491,13 @@ public enum SettingsSearchCatalog {
 
         // ---- 歌词显示 › 菜单栏 ----
         surface(.menuBar, "菜单栏歌词", kw: ["开关", "跑马灯", "总开关"], inDrawer: false),
-        surface(.menuBar, "显示内容", kw: ["歌名", "歌手", "只显示歌名", "歌曲名"], group: "布局"),
+        surface(.menuBar, "显示内容", kw: ["歌名", "歌手", "只显示歌名", "歌曲名"], group: "内容"),
         surface(.menuBar, "歌词位置", kw: ["菜单栏正中", "图标旁", "中间", "居中", "刘海"], group: "布局"),
         surface(.menuBar, "屏幕", kw: ["显示在", "全部屏幕", "所有屏幕", "自动", "指定屏幕", "显示器", "外接屏", "多屏"], group: "布局"),
         surface(.menuBar, "宽度模式", kw: ["固定", "自适应", "宽度"], group: "布局"),
         surface(.menuBar, "对齐方式", kw: ["居中", "左对齐", "右对齐"], group: "布局"),
-        surface(.menuBar, "副行", kw: ["下一句", "译文", "读音", "罗马音", "双排", "两行"], group: "布局"),
-        surface(.menuBar, "歌词旁的图标", kw: ["进度图标", "图标"], group: "布局"),
+        surface(.menuBar, "副行", kw: ["下一句", "译文", "读音", "罗马音", "双排", "两行"], group: "内容"),
+        surface(.menuBar, "歌词旁的图标", kw: ["进度图标", "图标"], group: "内容"),
         surface(.menuBar, "卡拉OK效果", kw: ["逐字", "染色", "karaoke"], group: "配色"),
         surface(.menuBar, "文字颜色", alt: ["未唱颜色"], kw: ["字色", "颜色", "跟随系统"], group: "配色"),
         surface(.menuBar, "已唱颜色", kw: ["染色", "高亮色"], group: "配色"),
