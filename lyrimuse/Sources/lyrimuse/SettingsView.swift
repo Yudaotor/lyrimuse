@@ -4182,7 +4182,7 @@ struct NotchLyricRowSettingsRows: View {
 }
 
 /// 「字体」组 —— 工具栏第二行「字体」浮层(`NotchFontPopover`)与「全部设置」抽屉的「字体」组
-/// 调的是这同一份。三行照搬悬浮歌词「字形」浮层的三行(`OverlayTypeSettingsRows`):同一个
+/// 调的是这同一份。三行照搬悬浮歌词「字体」浮层的三行(`OverlayTypeSettingsRows`):同一个
 /// `FontFamilyPicker`、同一个六档粗细下拉、同一根 `SteppedSlider`,只是绑到灵动岛自己的三个键。
 /// 控件形态的理由(下拉不用分段、`.fixedSize()` 不能省、`SteppedSlider` 不画刻度点、相等守卫)
 /// 都写在那边,这里不复述。

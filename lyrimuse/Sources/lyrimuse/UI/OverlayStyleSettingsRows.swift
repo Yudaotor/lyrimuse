@@ -19,13 +19,10 @@ import SwiftUI
 // 两个宿主绑的是同一个 AppSettings.shared,所以"浮层里改"和"卡片里改"天然同步,不需要
 // 任何双向绑定代码 —— 这也是不把设置值往上提成 @State 的理由:一提就多出一份要同步的真相。
 
-// MARK: - 字形
+// MARK: - 字体
 
-/// 「字形」那一组:字体 / 粗细 / 字号 —— 字长什么样。颜色、描边、卡拉OK 在「颜色」(`OverlayColorSettingsRows`),
-/// 版面在「排版」,一键套一整套配色在「主题」:按"这个字段改的是哪一层"归组。
-///
-/// 原来的「文字」组(字形 + 卡拉OK + 字色 + 描边)和「背景」组在往上弹、只有按钮上方约 200pt 的浮层里放不下,
-/// 重分成「字形」「颜色」两组,工具栏仍是三颗(第一行横向预算见 `OverlayEditorStage.toolbar`)。
+/// 「字体」那一组:字体 / 粗细 / 字号 —— 字长什么样,跟灵动岛、菜单栏的「字体」同名。颜色、描边、卡拉OK 在「颜色」
+/// (`OverlayColorSettingsRows`),版面在「排版」,一键套一整套配色在「主题」:按"这个字段改的是哪一层"归组。
 @MainActor
 struct OverlayTypeSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared

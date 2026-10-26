@@ -20,7 +20,7 @@ import SwiftUI
 // 舞台上只有一张壁纸,按舞台宽度铺满、不随 `overlayWidth` 变化;窗口不自带壁纸
 // (`showsDesktopUnderlay: false`),拖宽度调整条时背景纹丝不动。窗口边界由常驻虚线轮廓
 // 标出 —— 它是"调整条正在改的是这扇窗的宽度"唯一的视觉锚点,别删。画布上没有任何直接
-// 拖拽/点击热区:宽度走调整条,其余一律走工具栏(「文字」「配色」「重置 ▾」)。文字命中带
+// 拖拽/点击热区:宽度走调整条,其余一律走工具栏。文字命中带
 // 用真视图报上来的文字实际矩形(`onLyricsTextRectChange`)—— 编辑台本身不消费这个
 // 回调,但真视图仍要上报,真窗口的「鼠标经过时避开」靠它当判据,别把上报那头也删了。
 //
@@ -415,7 +415,7 @@ struct OverlayEditorStage: View {
     /// → 「内容」)只是快捷方式:关着的那一行在预览里根本不存在,要打开它还得走这里。
     ///
     /// 分组:「主题」(配色主题 / 我的配色主题,「跟随封面」也在这里,见 `OverlayThemeSettingsRows` 头注)、
-    /// 「字形」(字体 / 粗细 / 字号)、「颜色」(卡拉OK / 描边 / 毛玻璃三个开关 + 文字、未唱、描边、背景几种颜色)。
+    /// 「字体」(字体 / 粗细 / 字号)、「颜色」(卡拉OK / 描边 / 毛玻璃三个开关 + 文字、未唱、描边、背景几种颜色)。
     /// 原来是「主题 / 文字 / 背景」,「文字」八行在往上弹的浮层里放不下,跟「背景」一起重分成后两组,按钮数不变。
     /// **顺序跟「全部设置」抽屉的渲染顺序逐字一致** —— 抽屉的职责是工具栏浮层的全量兜底通路,
     /// 两个宿主分组或顺序不一样,用户按记忆去另一边找就会落空。
@@ -443,7 +443,7 @@ struct OverlayEditorStage: View {
             )
             toolbarButton(
                 icon: "textformat",
-                title: L10n.t("字形"),
+                title: L10n.t("字体"),
                 summary: OverlayStyleSummary.text,
                 target: .type
             )
@@ -610,7 +610,7 @@ struct OverlayEditorStage: View {
         var title: String {
             switch self {
             case .theme: return L10n.t("主题")
-            case .type: return L10n.t("字形")
+            case .type: return L10n.t("字体")
             case .color: return L10n.t("颜色")
             case .content: return L10n.t("内容")
             case .layout: return L10n.t("排版")
@@ -621,7 +621,7 @@ struct OverlayEditorStage: View {
         }
 
         /// 各浮层按自己内容的自然宽度取值。「主题」720:7 张预览卡排成一行,浮层更矮,更容易放进舞台上方;
-        /// 「排版」600:对齐方式那组分段选择器加上不折行的标题,间距三格要放下英文「Romanization Spacing」;「字形」380:字号滑杆;
+        /// 「排版」600:对齐方式那组分段选择器加上不折行的标题,间距三格要放下英文「Romanization Spacing」;「字体」380:字号滑杆;
         /// 「内容」560:三格一行要放下英文「Romanization」;「颜色」「行为」见下;「位置」420。
         var width: CGFloat {
             switch self {

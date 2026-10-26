@@ -50,7 +50,7 @@ struct OverlayAllSettingsDrawer: View {
                 //
                 // 「我的配色主题」在「主题」组里(OverlayThemeSettingsRows 的第二段),不单独占一组。
                 SettingsGroupCard(title: L10n.t("主题")) { OverlayThemeSettingsRows() }
-                SettingsGroupCard(title: L10n.t("字形")) { OverlayTypeSettingsRows() }
+                SettingsGroupCard(title: L10n.t("字体")) { OverlayTypeSettingsRows() }
                 SettingsGroupCard(title: L10n.t("颜色")) { OverlayColorSettingsRows() }
                 // 跟工具栏「内容」浮层同名、同一份视图。
                 SettingsGroupCard(title: L10n.t("内容")) { OverlayContentSettingsRows() }
@@ -133,7 +133,7 @@ struct OverlayAllSettingsDrawer: View {
 
     /// 抽屉头右侧那串组名,顺序跟 body 里各组卡的顺序一致(改了分组两处一起改)。
     private static var groupNames: String {
-        [L10n.t("主题"), L10n.t("字形"), L10n.t("颜色"), L10n.t("内容"), L10n.t("排版"),
+        [L10n.t("主题"), L10n.t("字体"), L10n.t("颜色"), L10n.t("内容"), L10n.t("排版"),
          L10n.t("行为"), L10n.t("位置"), L10n.t("OBS")].joined(separator: " · ")
     }
 

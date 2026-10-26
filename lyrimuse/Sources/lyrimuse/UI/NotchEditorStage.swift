@@ -370,7 +370,7 @@ struct NotchEditorStage: View {
         .padding(.horizontal, 2)
     }
 
-    /// 「字体」按钮摘要:「系统字体 较粗 13pt」,跟悬浮歌词「文字」按钮那截是**同一个函数**
+    /// 「字体」按钮摘要:「系统字体 较粗 13pt」,跟悬浮歌词「字体」按钮那截是**同一个函数**
     /// (`OverlayStyleSummary.fontText`)—— 三项全报、字体名"空串 = 系统字体"的口径都在那边定,两个编辑台
     /// 各拼一遍迟早漂开。
     private var fontSummary: String {

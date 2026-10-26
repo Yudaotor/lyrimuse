@@ -367,7 +367,7 @@ Font (the system's, or your own .ttf / .otf), size, weight, text and background 
 
 - Settings: Lyrics Display › Floating Lyrics › Theme › Color Theme
 - Settings: Lyrics Display › Floating Lyrics › Theme › My Themes
-- Settings: Lyrics Display › Floating Lyrics › Type › Font
+- Settings: Lyrics Display › Floating Lyrics › Font › Font
 - Settings: Lyrics Display › Floating Lyrics › Color › Frosted Glass Background
 - Settings: Keyboard Shortcuts › Increase Floating Lyrics Font Size
 - Settings: Keyboard Shortcuts › Decrease Floating Lyrics Font Size
@@ -922,7 +922,7 @@ Every setting in the Settings window, by where it lives: 291 in all. Type a name
 - **Color Theme**
 - **My Themes**
 
-### Lyrics Display › Floating Lyrics › Type
+### Lyrics Display › Floating Lyrics › Font
 
 - **Font**
 - **Weight**
