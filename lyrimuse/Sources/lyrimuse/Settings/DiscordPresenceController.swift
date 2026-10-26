@@ -187,7 +187,7 @@ final class DiscordPresenceController: ObservableObject {
         } else {
             playStateMismatchSince = nil
         }
-        // QQ 这一首是不是有声节目还没判出来:保持上一份,结论到了(或到点)再看。
+        // QQ、酷狗这一首是不是有声节目还没判出来:保持上一份,结论到了(或到点)再看。
         if let until = LocalPlaybackSource.shared.spokenAudioPendingUntil(now: now) {
             wake(at: until)
             return
@@ -500,7 +500,7 @@ final class DiscordPresenceController: ObservableObject {
 
     private func makeTrack(now: Date, lookingUp: Bool) -> DiscordPresence.Track? {
         let playback = PlaybackCoordinator.shared
-        // QQ 音乐的有声节目不显示成在听歌(见 QQSpokenAudio)。
+        // QQ 音乐、酷狗的有声节目不显示成在听歌(见 LocalPlaybackSource.isCurrentTrackSpokenAudio)。
         guard !playback.title.isEmpty, !playback.isCurrentTrackAdBreak, !playback.isRadioTalkBreak,
               !LocalPlaybackSource.shared.isCurrentTrackSpokenAudio else { return nil }
         let reported = LocalPlaybackSource.shared.lastResolvedBundleID

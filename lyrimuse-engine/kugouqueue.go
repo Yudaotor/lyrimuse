@@ -407,15 +407,26 @@ type kugouLibraryRow struct {
 // (kugouAlbumIDByHash,按 hash 记住),专辑简介、专辑页用它(05 章决策 93)。要起 plutil、sqlite3 子进程、可能联网,
 // 调用方不能持着 enrichMu。
 func kugouPlayingSong(artist, title string, durationSecs float64) (mixID, albumID string) {
-	if mixID, albumID, ok := kugouPlayingSongFromPlist(artist, title, durationSecs); ok {
-		return mixID, albumID
-	}
-	// 推荐流:plist 被清空,当前这首在 sqlite 那份队列里,条目自带歌曲 id 和专辑 id(payAlbumID)。见 05 章决策 93。
-	if s, ok := kugouPlayingQueueSong(artist, title, durationSecs); ok {
-		return rawDigitsID(s.Mix), rawDigitsID(s.Album)
-	}
-	return "", ""
+	mixID, albumID, _ = kugouPlayingSongInfo(artist, title, durationSecs)
+	return mixID, albumID
 }
+
+// kugouPlayingSongInfo:同 kugouPlayingSong,另带这一首是不是听书里的有声内容(spoken):sqlite 那份队列里它的条目类是
+// kugouSoundReadClass。plist 那份队列只装歌,从它认出来的一律不是。见 02 章决策 195。
+func kugouPlayingSongInfo(artist, title string, durationSecs float64) (mixID, albumID string, spoken bool) {
+	if mixID, albumID, ok := kugouPlayingSongFromPlist(artist, title, durationSecs); ok {
+		return mixID, albumID, false
+	}
+	// 推荐流、听书:plist 被清空,当前这首在 sqlite 那份队列里,条目自带歌曲 id 和专辑 id(payAlbumID)。见 05 章决策 93。
+	if s, ok := kugouPlayingQueueSong(artist, title, durationSecs); ok {
+		return rawDigitsID(s.Mix), rawDigitsID(s.Album), s.Class == kugouSoundReadClass
+	}
+	return "", "", false
+}
+
+// kugouSoundReadClass:酷狗队列里听书(有声书、相声、评书等)条目的类名。歌是 CollectSongEntity、SinglesRecSongInfo、
+// LocalMusicSongInfo 等,听书页里的电台轻音乐是 KGHotRadioAduioInfo,都不是它。
+const kugouSoundReadClass = "KGSoundReadInfo"
 
 // kugouPlayingSongFromPlist:「此刻在播」那份 plist 里当前曲目是这首、曲库里查得到它的 hash 时的歌曲 id 与专辑 id;
 // 否则 ok 为 false。
@@ -444,14 +455,15 @@ func kugouPlayingSongFromPlist(artist, title string, durationSecs float64) (mixI
 	return mixID, albumID, true
 }
 
-// kugouQueueSongSQL:sqlite 那份队列里每首认当前这首要用的字段,以及它自带的歌曲 id、专辑 id、专辑图。
+// kugouQueueSongSQL:sqlite 那份队列里每首认当前这首要用的字段,以及它自带的歌曲 id、专辑 id、专辑图、条目类名。
 const kugouQueueSongSQL = `SELECT
   json_extract(cast(songInfo as text),'$.musicName') AS n,
   json_extract(cast(songInfo as text),'$.showName') AS sn,
   json_extract(cast(songInfo as text),'$.musicTime') AS d,
   json_extract(cast(songInfo as text),'$.mixId') AS m,
   json_extract(cast(songInfo as text),'$.payAlbumID') AS a,
-  json_extract(cast(songInfo as text),'$.albumImgUrl') AS c
+  json_extract(cast(songInfo as text),'$.albumImgUrl') AS c,
+  json_extract(cast(songInfo as text),'$.classname') AS k
 FROM CurrentSongList ORDER BY songIndex LIMIT 2000`
 
 // kugouQueueSongRow 是 kugouQueueSongSQL 的一行。payAlbumID 就是酷狗的专辑 id(实测跟 getSongInfo 回的 albumid 一致)。
@@ -462,6 +474,7 @@ type kugouQueueSongRow struct {
 	Mix      json.RawMessage `json:"m"`
 	Album    json.RawMessage `json:"a"`
 	Cover    string          `json:"c"`
+	Class    string          `json:"k"`
 }
 
 // kugouPlayingQueueSong:sqlite 那份队列(推荐流时酷狗写在这里)里正在放的这首:歌名(showName,没有时 musicName 的后半)一致、

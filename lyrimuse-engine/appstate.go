@@ -61,7 +61,8 @@ type appStateTrack struct {
 	YouTubeMusicVideoID string `json:"youtube_music_video_id,omitempty"`
 	// LocalFile:放本地文件的播放器(reAMP)正在放的文件路径,App 按它的进程号找到的;别的播放器、没找到时为空。
 	LocalFile string `json:"local_file,omitempty"`
-	// Spoken:QQ 音乐这一条是不是有声书 / 有声节目(App 按 QQ 歌曲详情判的);App 还没判出来、或者不是 QQ 时没有这个键。
+	// Spoken:QQ 音乐、酷狗这一条是不是有声书 / 有声节目(QQ 是 App 按歌曲详情判的,酷狗是 App 转述引擎记在条目里的
+	// PlayerSpoken);App 还没判出来、或者不是这两家时没有这个键。
 	Spoken *bool `json:"spoken,omitempty"`
 }
 

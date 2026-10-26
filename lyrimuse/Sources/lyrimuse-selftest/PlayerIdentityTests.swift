@@ -162,6 +162,29 @@ func runPlayerIdentityTests() {
             expectEqual(encoded(true).contains(#""spoken":true"#), true, "播放状态: 有声节目写 spoken:true")
             expectEqual(encoded(nil).contains(#""spoken""#), false, "播放状态: 还没判出来不写这个键(引擎按「还在判」等)")
         }
+        // 酷狗听书:引擎读它的队列判,记进条目的 player_spoken;App 拿条目下结论(02 章决策 195)。
+        expectEqual(EnrichCacheReader.spokenVerdict(playerSpoken: true, playerSongID: "780459243"), true, "酷狗有声: 条目记了有声")
+        expectEqual(EnrichCacheReader.spokenVerdict(playerSpoken: true, playerSongID: nil), true, "酷狗有声: 只记了有声也算")
+        expectEqual(EnrichCacheReader.spokenVerdict(playerSpoken: nil, playerSongID: "1"), false,
+                    "酷狗有声: 引擎读过队列记了歌曲 id、没记有声是歌")
+        expectEqual(EnrichCacheReader.spokenVerdict(playerSpoken: nil, playerSongID: nil) == nil, true, "酷狗有声: 都没有还在判")
+        expectEqual(EnrichCacheReader.spokenVerdict(playerSpoken: false, playerSongID: "") == nil, true, "酷狗有声: 空 id 不算读过")
+        do {
+            let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            func src(_ path: String) -> String {
+                (try? String(contentsOf: sourcesRoot.appendingPathComponent(path), encoding: .utf8)) ?? ""
+            }
+            let reader = src("LyrimuseCore/Local/EnrichCacheReader.swift")
+            let source = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
+            expectEqual(reader.contains(#"case playerSpoken = "player_spoken""#)
+                        && reader.contains("playerSongID: entry.playerSongIDs?[PlaybackPlayer.kugou.bundleIdentifier])"), true,
+                        "酷狗有声: 读引擎的 player_spoken 和酷狗那一项歌曲 id")
+            expectEqual(source.contains("static let spokenAudioPlayers: Set<String> = [PlaybackPlayer.qqMusic.bundleIdentifier, PlaybackPlayer.kugou.bundleIdentifier]")
+                        && source.contains("spoken: Self.spokenAudioPlayers.contains(bundleID) && spokenAudioKey == snapshot.identityKey")
+                        && sourceHas(source, "guard let verdict = EnrichCacheReader.kugouSpokenVerdict(artist: artist, title: title, album: album) else { return }\n"
+                                     + "applySpokenAudio(verdict, mid: \"kugou\")\nif verdict { publishPlaybackState() }"), true,
+                        "酷狗有声: 结论进 Discord 那份判定、写回播放状态")
+        }
         do {
             typealias Command = PlaybackMenuControl.Command
             for player in [PlaybackPlayer.qqMusic, .netease] {

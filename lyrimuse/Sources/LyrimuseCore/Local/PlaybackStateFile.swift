@@ -96,7 +96,8 @@ public enum PlaybackStateFile {
         /// Pine Player 在它开着的文件里按标签认,`PinePlayerInfo`;QQ 音乐、网易云、酷狗放本机文件时按进程号找,`PlayerOpenFile`),
         /// 引擎读同目录同名的 .lrc 和内嵌歌词;别的播放器、放在线歌时为 nil。
         public var localFile: String? = nil
-        /// QQ 音乐这一条是不是有声书 / 有声节目(`QQSpokenAudio`)。还没判出来、不是 QQ 为 nil(不写这个键,引擎按「QQ 还在判」等一会)。
+        /// QQ 音乐、酷狗这一条是不是有声书 / 有声节目(`LocalPlaybackSource.isCurrentTrackSpokenAudio`)。还没判出来、不是这两家为 nil
+        /// (不写这个键;QQ 的引擎按「还在判」等一会,酷狗的引擎开播时自己读它的队列判)。
         public var spoken: Bool? = nil
 
         enum CodingKeys: String, CodingKey {

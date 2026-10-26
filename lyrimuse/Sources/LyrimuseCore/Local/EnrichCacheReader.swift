@@ -128,6 +128,8 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     let youtubeMusicAlbum: String?
     // 用 Kaset 放的这一版是 MV 版本(引擎的 enrichEntry.YouTubeMusicMV),界面专辑位写「MV」。
     let youtubeMusicMV: Bool?
+    // 播放器本机数据把这一首记成有声内容(引擎的 enrichEntry.PlayerSpoken,酷狗听书)。只喂 kugouSpokenVerdict。
+    let playerSpoken: Bool?
     // 这首歌的语种真值(lyrimuse-engine/enrich.go 的 enrichEntry.SongLanguage,取值
     // "yue"=粤语/"cmn"=普通话/空=没判出来),给粤拼罗马音开关用——光看歌词文字认不出
     // 粤语和普通话(汉字一样),得靠引擎那边已经判出来的这个字段。
@@ -217,6 +219,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         case publicCoverFor = "public_cover_for"
         case youtubeMusicAlbum = "youtube_music_album"
         case youtubeMusicMV = "youtube_music_mv"
+        case playerSpoken = "player_spoken"
         case songLanguage = "song_language"
         case inferredArtist = "inferred_artist"
         case inferredAlbum = "inferred_album"
@@ -301,6 +304,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         publicCoverFor = try c.decodeIfPresent(String.self, forKey: .publicCoverFor)
         youtubeMusicAlbum = try c.decodeIfPresent(String.self, forKey: .youtubeMusicAlbum)
         youtubeMusicMV = try c.decodeIfPresent(Bool.self, forKey: .youtubeMusicMV)
+        playerSpoken = try? c.decodeIfPresent(Bool.self, forKey: .playerSpoken)
         songLanguage = try c.decodeIfPresent(String.self, forKey: .songLanguage)
         inferredArtist = try c.decodeIfPresent(String.self, forKey: .inferredArtist)
         inferredAlbum = try c.decodeIfPresent(String.self, forKey: .inferredAlbum)
@@ -703,6 +707,22 @@ public enum EnrichCacheReader {
     public static func youtubeMusicIsMV(artist: String, title: String, album: String) -> Bool {
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         return currentEntry(key)?.youtubeMusicMV == true
+    }
+
+    /// 用酷狗放的这一首是不是听书里的有声内容(引擎读酷狗的队列判的,见 lyrimuse-engine/kugouqueue.go 的
+    /// kugouPlayingSongInfo)。零网络,两级匹配同上;条目还没有、引擎还没读到它的队列为 nil。
+    public static func kugouSpokenVerdict(artist: String, title: String, album: String) -> Bool? {
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        guard let entry = currentEntry(key) else { return nil }
+        return spokenVerdict(playerSpoken: entry.playerSpoken,
+                             playerSongID: entry.playerSongIDs?[PlaybackPlayer.kugou.bundleIdentifier])
+    }
+
+    /// 条目里的有声标记 → 结论:记了有声是 true;没记、但引擎已经按这家播放器的本机数据记下了歌曲 id(同一次读出来的)是 false;
+    /// 都没有为 nil。纯函数,selftest 覆盖。
+    public nonisolated static func spokenVerdict(playerSpoken: Bool?, playerSongID: String?) -> Bool? {
+        if playerSpoken == true { return true }
+        return (playerSongID?.isEmpty == false) ? false : nil
     }
 
     /// 这首歌的**真实曲长**(秒),来自引擎写进缓存的那份。零网络,沿用 lookup/sourceInfo

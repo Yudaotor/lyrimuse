@@ -74,7 +74,7 @@ var songEntityFieldClasses = map[string]songFieldClass{
 	"soda_artist_id": songFieldArtist, "youtube_music_artist_id": songFieldArtist,
 
 	"duration_secs": songFieldVariant, "player_covers": songFieldVariant, "public_cover_url": songFieldVariant,
-	"public_cover_for": songFieldVariant, "video_frame_url": songFieldVariant, "youtube_music_mv": songFieldVariant,
+	"public_cover_for": songFieldVariant, "video_frame_url": songFieldVariant, "youtube_music_mv": songFieldVariant, "player_spoken": songFieldVariant,
 	"lyrics_native_video_id": songFieldVariant, "lyrics_listed_album": songFieldVariant,
 	"lyrics_search_title": songFieldVariant, "ts": songFieldVariant, "peripheral_ts": songFieldVariant,
 	"peripheral_retry_count": songFieldVariant, "peripheral_pending": songFieldVariant, "song": songFieldVariant, "song_share": songFieldVariant, "players": songFieldVariant,

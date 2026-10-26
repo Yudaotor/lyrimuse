@@ -1336,6 +1336,9 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		p.recentFinalized = nil
 		if p.cur.Spoken {
 			p.sess.isSpoken = true
+		} else if playerMarksSpoken(p.cur) {
+			p.sess.isSpoken = true
+			log.Printf("spoken audio: %q - %q marked by the player, showing subtitles without now playing, listens or prefetch", p.cur.Artist, p.cur.Title)
 		}
 		// QQ 这一条是不是有声节目还没判出来:正在播放和待播预取先等,见 awaitsSpokenVerdict。
 		waiting := awaitsSpokenVerdict(p.cur, p.sess.startedAt, now)
@@ -1385,7 +1388,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 			sodaPreviewPending: p.cur.SodaPreviewPending}
 		p.noteListeningTick(now)
 		p.sess.isAd = p.detectAdAtSessionStart()
-		p.sess.isSpoken = p.cur.Spoken
+		p.sess.isSpoken = p.cur.Spoken || playerMarksSpoken(p.cur)
 		p.sess.lastfmExcluded = lastfmExcluded(p.cur.Bundle)
 		log.Printf("loop restart: %s - %s", p.cur.Artist, p.cur.Title)
 		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.lyricsDurationSecs(), true, p.cur.Radio)) > 0 {

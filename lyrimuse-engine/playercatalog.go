@@ -42,9 +42,10 @@ const (
 
 // playerCatalogIDs:song 是歌曲页(只有汽水走这里),album / artist 是那家自己的 id,songID 是播放器报的这一首的歌曲 id、
 // songAlbum 是它所在的专辑 id(QQ 音乐、网易云走这里,成对记进 PlayerSongIDs / PlayerAlbumIDs)。qqSong / neteaseSong 是
-// 洛雪给的这一首在 QQ / 网易云的歌曲页。
+// 洛雪给的这一首在 QQ / 网易云的歌曲页。spoken:播放器本机数据把这一首记成有声内容(只有酷狗,见 kugouPlayingSongInfo)。
 type playerCatalogIDs struct {
 	song, album, artist, songID, songAlbum, qqSong, neteaseSong string
+	spoken                                                      bool
 }
 
 var (
@@ -97,7 +98,7 @@ func playerCatalogIDsFor(bundleID, artist, title, album string, durationSecs flo
 	case neteaseMusicBundleID:
 		ids.songID, ids.songAlbum = neteasePlayingSong(artist, title, durationSecs)
 	case kugouMusicBundleID:
-		ids.songID, ids.songAlbum = kugouPlayingSong(artist, title, durationSecs)
+		ids.songID, ids.songAlbum, ids.spoken = kugouPlayingSongInfo(artist, title, durationSecs)
 	case lxMusicBundleID:
 		ids = lxMusicPlayingCatalogIDs(artist, title, durationSecs)
 	}
@@ -128,7 +129,11 @@ func playerCatalogIDsFor(bundleID, artist, title, album string, durationSecs flo
 // 客户端会自己清理本机数据,记下过的仍然是它给这首的。调用方持有 enrichMu。
 func applyPlayerCatalogIDsLocked(e *enrichEntry, bundleID string, ids playerCatalogIDs) bool {
 	if bundleID == qqMusicBundleID || bundleID == neteaseMusicBundleID || bundleID == kugouMusicBundleID {
-		return notePlayerSongLocked(e, bundleID, ids.songID, ids.songAlbum)
+		changed := notePlayerSongLocked(e, bundleID, ids.songID, ids.songAlbum)
+		if ids.spoken && !e.PlayerSpoken {
+			e.PlayerSpoken, changed = true, true
+		}
+		return changed
 	}
 	if bundleID == lxMusicBundleID {
 		// 歌曲页只在空着时补:已有的是检索配的那一版,不拿洛雪这条去盖(同 locallibrarylinks.go 头注)。

@@ -351,6 +351,7 @@ func mergePeripheralInto(winner, loser enrichEntry) enrichEntry {
 			notePlayerSongLocked(&winner, b, loser.PlayerSongIDs[b], loser.PlayerAlbumIDs[b])
 		}
 	}
+	winner.PlayerSpoken = winner.PlayerSpoken || loser.PlayerSpoken
 	if winner.SpotifyCanvasURL == "" {
 		winner.SpotifyCanvasURL = loser.SpotifyCanvasURL
 	}

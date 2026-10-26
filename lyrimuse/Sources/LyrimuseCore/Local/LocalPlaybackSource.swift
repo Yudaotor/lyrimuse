@@ -149,17 +149,20 @@ public final class LocalPlaybackSource: ObservableObject {
     // (广告的标题/歌手压根不会被写进歌词缓存,见 lyrimuse-engine/enrich.go trackEnrichment
     // 的对应守卫,hasLyricsContent 永远拿不到内容)。
     @Published public private(set) var isCurrentTrackAdBreak: Bool = false
-    /// QQ 音乐这一首判成了有声书 / 有声节目(见 QQSpokenAudio):字幕照常显示,Discord 不显示,引擎不当歌。
+    /// QQ 音乐、酷狗这一首判成了有声书 / 有声节目(QQ 见 QQSpokenAudio,酷狗见 EnrichCacheReader.kugouSpokenVerdict):
+    /// 字幕照常显示,Discord 不显示,引擎不当歌。
     @Published public private(set) var isCurrentTrackSpokenAudio: Bool = false
-    /// 这一首(身份)的结论;nil = 还没判出来。不是 QQ 时 key 为 nil。
+    /// 会判有声内容的播放器。
+    static let spokenAudioPlayers: Set<String> = [PlaybackPlayer.qqMusic.bundleIdentifier, PlaybackPlayer.kugou.bundleIdentifier]
+    /// 这一首(身份)的结论;nil = 还没判出来。不是上面那几家时 key 为 nil。
     private var spokenAudioKey: String?
     private var spokenAudioVerdict: Bool?
     /// 这一首(身份)从什么时候开始等结论,见 spokenAudioPendingUntil。
     private var spokenAudioKeySince: Date?
-    /// 换到 QQ 的新一首之后,结论没到时 Discord 最多保持上一份这么久(实测结论 0.4 秒左右到)。
+    /// 换到 QQ、酷狗的新一首之后,结论没到时 Discord 最多保持上一份这么久(实测 QQ 的结论 0.4 秒左右到)。
     public static let spokenAudioPendingSecs: TimeInterval = 2
 
-    /// QQ 这一首还在等是不是有声节目的结论:等到什么时候;不在等为 nil。Discord 这段时间保持上一份,别先把一集有声节目
+    /// QQ、酷狗这一首还在等是不是有声节目的结论:等到什么时候;不在等为 nil。Discord 这段时间保持上一份,别先把一集有声节目
     /// 显示出去(见 DiscordPresenceController)。
     public func spokenAudioPendingUntil(now: Date) -> Date? {
         guard spokenAudioKey != nil, spokenAudioVerdict == nil, let since = spokenAudioKeySince else { return nil }
@@ -3552,7 +3555,7 @@ public final class LocalPlaybackSource: ObservableObject {
                                                    title: snapshot.title ?? "")
                     ?? PlayerOpenFile.currentFilePath(bundleID: bundleID, artist: snapshot.artist ?? "",
                                                       title: snapshot.title ?? ""),
-            spoken: bundleID == PlaybackPlayer.qqMusic.bundleIdentifier && spokenAudioKey == snapshot.identityKey
+            spoken: Self.spokenAudioPlayers.contains(bundleID) && spokenAudioKey == snapshot.identityKey
                 ? spokenAudioVerdict : nil)
         PlaybackStatePublisher.shared.publish(input, now: now)
     }
@@ -3691,7 +3694,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// QQ 音乐这一首是不是有声节目:每拍轮询收尾看一次。缓存里有了这首的 QQ 歌曲页才问得了;判出来就当场重写一次播放状态。
     private func refreshSpokenAudio() {
         guard !title.isEmpty, let snapshot = lastSnapshot,
-              snapshot.bundleIdentifier == PlaybackPlayer.qqMusic.bundleIdentifier else {
+              Self.spokenAudioPlayers.contains(snapshot.bundleIdentifier ?? "") else {
             spokenAudioKey = nil
             spokenAudioVerdict = nil
             if isCurrentTrackSpokenAudio { isCurrentTrackSpokenAudio = false }
@@ -3704,8 +3707,15 @@ public final class LocalPlaybackSource: ObservableObject {
             spokenAudioVerdict = nil
             if isCurrentTrackSpokenAudio { isCurrentTrackSpokenAudio = false }
         }
-        guard spokenAudioVerdict == nil,
-              let mid = EnrichCacheReader.platformLinks(artist: artist, title: title, album: album)?.qqSong
+        guard spokenAudioVerdict == nil else { return }
+        if snapshot.bundleIdentifier == PlaybackPlayer.kugou.bundleIdentifier {
+            // 酷狗:引擎开播时读它的队列判,结论跟着这一首的缓存条目过来(见 EnrichCacheReader.kugouSpokenVerdict)。
+            guard let verdict = EnrichCacheReader.kugouSpokenVerdict(artist: artist, title: title, album: album) else { return }
+            applySpokenAudio(verdict, mid: "kugou")
+            if verdict { publishPlaybackState() }
+            return
+        }
+        guard let mid = EnrichCacheReader.platformLinks(artist: artist, title: title, album: album)?.qqSong
                 .flatMap({ PlatformLinks.qqSongMID(songPage: $0.absoluteString) }) else { return }
         if let known = QQSpokenAudio.shared.cached(mid: mid) { return applySpokenAudio(known, mid: mid) }
         QQSpokenAudio.shared.classify(mid: mid) { [weak self] verdict in
@@ -3721,7 +3731,7 @@ public final class LocalPlaybackSource: ObservableObject {
         spokenAudioVerdict = verdict
         if verdict != isCurrentTrackSpokenAudio { isCurrentTrackSpokenAudio = verdict }
         if verdict {
-            logger.notice("qq spoken audio: mid=\(mid, privacy: .public) title=\(self.title, privacy: .public), showing subtitles, not reported as a song")
+            logger.notice("spoken audio: id=\(mid, privacy: .public) title=\(self.title, privacy: .public), showing subtitles, not reported as a song")
         }
     }
 

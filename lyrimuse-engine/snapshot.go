@@ -36,7 +36,7 @@ type snapshot struct {
 	// SodaPreviewPending:汽水这一拍可能是非会员试听、试听段还没有结论(sodaPreviewLookupPending)—— Duration 可能还是
 	// 试听段长度,拿它解析歌词会另开一个时长变体。poller 在它为真时先不解析、不提交收听(见 sodapreview.go)。
 	SodaPreviewPending bool
-	// Spoken:App 认出这一条是 QQ 音乐的有声书 / 有声节目(appStateTrack.Spoken)。字幕照常解析显示,
+	// Spoken:App 认出这一条是 QQ 音乐、酷狗的有声书 / 有声节目(appStateTrack.Spoken)。字幕照常解析显示,
 	// 正在播放、收听提交、待播预取、网页中继都不做,见 playSession.isSpoken。
 	Spoken bool
 	// SpokenPending:QQ 音乐的这一条,App 还没给出是不是有声节目的结论(见 awaitsSpokenVerdict)。
