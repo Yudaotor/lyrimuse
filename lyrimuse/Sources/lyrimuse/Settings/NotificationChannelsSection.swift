@@ -203,8 +203,9 @@ struct NotificationChannelsCard: View {
                 } label: {
                     Label(L10n.t("添加渠道"), systemImage: "plus")
                 }
-                .buttonStyle(.borderless)
                 .controlSize(.small)
+                .settingsGlassButtons()
+                .buttonBorderShape(.capsule)
             }
             if config.notificationChannels.isEmpty {
                 emptyState
@@ -280,8 +281,9 @@ struct NotificationChannelsCard: View {
             }
             Spacer(minLength: 8)
             Button(L10n.t("预览")) { previewing = channel.id }
-                .buttonStyle(.borderless)
                 .controlSize(.small)
+                .settingsGlassButtons()
+                .buttonBorderShape(.capsule)
                 .help(L10n.t("用这一期的真实数据看看推送在这个平台上的样子"))
                 .popover(isPresented: Binding(get: { previewing == channel.id }, set: { if !$0 { previewing = nil } }), arrowEdge: .bottom) {
                     NotificationPreviewCard(platform: platform ?? .bark, senderName: channel.displayName,
@@ -373,30 +375,8 @@ struct NotificationClockField: View {
     @Binding var minutes: Int
 
     var body: some View {
-        Menu {
-            ForEach(Self.choices(including: minutes), id: \.self) { m in
-                Button { minutes = m } label: {
-                    if m == minutes { Label(Self.text(m), systemImage: "checkmark") } else { Text(Self.text(m)) }
-                }
-            }
-        } label: {
-            HStack(spacing: 3) {
-                Text(Self.text(minutes)).monospacedDigit()
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .font(.system(size: 12))
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
-            .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.08)))
-            .contentShape(Rectangle())
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help(label)
+        SettingsGlassMenuPicker(selection: $minutes, options: Self.choices(including: minutes), label: Self.text, compact: true)
+            .help(label)
     }
 
     private static func normalized(_ minutes: Int) -> Int { ((minutes % 1440) + 1440) % 1440 }
@@ -435,14 +415,15 @@ struct NotificationRoutePicker: View {
                         .font(.system(size: 8, weight: .semibold))
                         .foregroundStyle(.secondary)
                 }
-                .font(.system(size: 11.5))
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2)
-                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.08)))
-                .frame(maxWidth: 150, alignment: .trailing)
-                .contentShape(Rectangle())
+                .font(.system(size: 12))
+                .padding(.horizontal, 12)
+                .frame(height: 28)
+                .contentShape(Capsule())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SettingsGlassHoverButtonStyle(isOpen: open))
+            .settingsCardBackground(cornerRadius: 14)
+            // 名字长时截断:封顶放在玻璃外面,胶囊贴着字、不被撑满 150。
+            .frame(maxWidth: 150, alignment: .trailing)
             .help(L10n.t("这一档推到哪些渠道"))
             .popover(isPresented: $open, arrowEdge: .bottom) { popover }
         }
@@ -509,7 +490,7 @@ struct NotificationRoutePicker: View {
 
 // MARK: - 每类列出
 
-/// 「每类列出」那一行的小步进器:− 数字 +,1～10(`DigestTopN.range`)。
+/// 「每类列出」那一行的小步进器:− 数字 + 的玻璃胶囊(同「时间轴偏移」那颗),1～10(`DigestTopN.range`),到头那颗变灰。
 struct DigestTopNStepper: View {
     @Binding var value: Int
 
@@ -518,21 +499,22 @@ struct DigestTopNStepper: View {
             step("minus", enabled: value > DigestTopN.range.lowerBound) { value -= 1 }
             Text("\(value)")
                 .font(.system(size: 12, weight: .medium).monospacedDigit())
-                .frame(minWidth: 22)
+                .frame(minWidth: 20)
             step("plus", enabled: value < DigestTopN.range.upperBound) { value += 1 }
         }
-        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.08)))
+        .buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))
+        .settingsCardBackground(cornerRadius: 14)
+        .fixedSize()
     }
 
     private func step(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 9, weight: .semibold))
-                .frame(width: 22, height: 20)
+                .font(.system(size: 10, weight: .semibold))
+                .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(enabled ? .primary : .tertiary)
+        .foregroundStyle(enabled ? .secondary : .tertiary)
         .disabled(!enabled)
     }
 }
@@ -688,7 +670,7 @@ struct NotificationChannelEditor: View {
                                 Image(systemName: revealURL ? "eye.slash" : "eye")
                                     .foregroundStyle(.secondary)
                             }
-                            .buttonStyle(.borderless)
+                            .buttonStyle(.glassIcon())
                             .help(revealURL ? L10n.t("隐藏") : L10n.t("显示"))
                         }
                     }
@@ -849,6 +831,7 @@ struct NotificationChannelEditor: View {
 // MARK: - 推送记录
 
 /// 「推送记录」卡:最近几次推送,没成的写原因、可以重发;点一行展开看推出去的完整内容和渠道、耗时、平台返回。
+/// 平时列最近 6 条;点「全部」后列出引擎留着的全部记录(最多 100 条),高度封顶、在卡里滚,不把页面越撑越长。
 /// 没有记录时整张卡不出现。
 struct NotificationLogCard: View {
     @ObservedObject var config: ConfigStore
@@ -859,8 +842,12 @@ struct NotificationLogCard: View {
     @State private var resendOutcome: (entry: String, outcome: NotificationTestRunner.Outcome)?
     /// 展开着的记录。
     @State private var expanded: Set<String> = []
+    /// 刚点开的那条:列表在滚时把它展开的内容滚进来。
+    @State private var revealing: String?
 
     private static let collapsedCount = 6
+    /// 「全部」时列表的最高高度,约 8 条收起的记录。
+    private static let expandedMaxHeight: CGFloat = 440
 
     var body: some View {
         if !log.entries.isEmpty {
@@ -870,17 +857,43 @@ struct NotificationLogCard: View {
                         Button(showAll ? L10n.t("收起") : String(format: L10n.t("全部 %d 条"), log.entries.count)) {
                             showAll.toggle()
                         }
-                        .buttonStyle(.borderless)
                         .controlSize(.small)
+                        .settingsGlassButtons()
+                        .buttonBorderShape(.capsule)
                     }
                 }
-                let shown = showAll ? log.entries : Array(log.entries.prefix(Self.collapsedCount))
-                ForEach(Array(shown.enumerated()), id: \.element.id) { index, entry in
-                    if index > 0 { CardDivider() }
-                    row(entry)
+                if showAll {
+                    ScrollViewReader { reader in
+                        ScrollView {
+                            LazyVStack(spacing: 0) { rows(log.entries) }
+                                .padding(.bottom, 4)
+                        }
+                        .frame(maxHeight: Self.expandedMaxHeight)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .onChange(of: revealing) { _, id in
+                            guard let id else { return }
+                            revealing = nil
+                            // 等展开的内容排好再滚,同一帧里按收起时的高度算。
+                            DispatchQueue.main.async { withAnimation(.easeOut(duration: 0.2)) { reader.scrollTo(id) } }
+                        }
+                    }
+                } else {
+                    rows(Array(log.entries.prefix(Self.collapsedCount)))
+                        .padding(.bottom, 4)
                 }
-                .padding(.bottom, 4)
             }
+            .settingsGlassButtons()
+        }
+    }
+
+    @ViewBuilder
+    private func rows(_ entries: [NotificationDeliveryLog.Entry]) -> some View {
+        ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+            VStack(spacing: 0) {
+                if index > 0 { CardDivider() }
+                row(entry)
+            }
+            .id(entry.id)
         }
     }
 
@@ -937,6 +950,7 @@ struct NotificationLogCard: View {
             withAnimation(.easeOut(duration: 0.15)) {
                 if isOpen { expanded.remove(entry.id) } else { expanded.insert(entry.id) }
             }
+            if !isOpen { revealing = entry.id }
         }
         if isOpen {
             details(entry, platform: platform, channelName: channelName)

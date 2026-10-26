@@ -4016,6 +4016,20 @@ func runSourceContractSettingsTests() {
                         && sourceHas(featureStore, "digestTopN = DigestTopN.resolved(f.digestTopN) digestPushMinutes = DigestPushTime.resolved(f.digestPushTime)")
                         && sourceHas(featureStore, "case digestPushTime = \"digest_push_time\""),
                     true, "推送时间: 每类列出、推送时间进 features.json 的整份快照、加载时读回")
+        // 推送记录展开全部时高度封顶、在卡里滚;这一页的下拉 / 步进器 / 按钮用设计系统的玻璃件(15 章决策 83)。
+        let logCard = sourceBody("struct NotificationLogCard: View {", in: section)
+        expectEqual(sourceHas(logCard, ".frame(maxHeight: Self.expandedMaxHeight)\n.fixedSize(horizontal: false, vertical: true)")
+                        && logCard.contains("ScrollView {"), true,
+                    "推送记录: 展开全部时高度封顶、在卡里滚,不把页面越撑越长")
+        expectEqual(section.contains("Color.primary.opacity(0.08)") || section.contains(".buttonStyle(.borderless)")
+                        || section.contains(" Menu {"), false,
+                    "推送提醒: 页面里不再有手画淡底的控件、无边框按钮和原生菜单")
+        expectEqual(sourceHas(sourceBody("struct NotificationClockField: View {", in: section), "SettingsGlassMenuPicker(selection: $minutes,")
+                        && sourceHas(sourceBody("struct DigestTopNStepper: View {", in: section),
+                                     ".buttonStyle(SettingsGlassHoverButtonStyle(pressScale: 0.9))\n.settingsCardBackground(cornerRadius: 14)")
+                        && sourceHas(sourceBody("struct NotificationRoutePicker: View {", in: section),
+                                     ".buttonStyle(SettingsGlassHoverButtonStyle(isOpen: open))\n.settingsCardBackground(cornerRadius: 14)"),
+                    true, "推送提醒: 推送时间、每类列出、推到哪些渠道三个控件是玻璃件")
 
         // 两边常量对账:事件名、推送时间缺省与「推当天」的分界、条数缺省与上下限。
         let channelGo = engine("notifychannel.go")

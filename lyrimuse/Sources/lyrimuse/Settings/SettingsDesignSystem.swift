@@ -2028,17 +2028,36 @@ struct SettingsGlassPopoverMenu<Item: Hashable>: View {
         .settingsCardBackground(cornerRadius: height / 2)
         .fixedSize()
         .popover(isPresented: $shown, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(items, id: \.self) { item in
-                    GlassPopoverMenuRow(title: itemLabel(item), checked: isChecked(item)) {
-                        shown = false
-                        onPick(item)
-                    }
+            if items.count > Self.scrollThreshold {
+                // 选项多(「推送时间」半小时一档,48 个)时浮层封顶、自己滚,打开时把当前项滚到中间。
+                ScrollViewReader { reader in
+                    ScrollView { list }
+                        .frame(height: Self.scrollHeight)
+                        .onAppear {
+                            guard let hit = items.first(where: isChecked) else { return }
+                            reader.scrollTo(hit, anchor: .center)
+                        }
+                }
+            } else {
+                list
+            }
+        }
+    }
+
+    private static var scrollThreshold: Int { 14 }
+    private static var scrollHeight: CGFloat { 320 }
+
+    private var list: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(items, id: \.self) { item in
+                GlassPopoverMenuRow(title: itemLabel(item), checked: isChecked(item)) {
+                    shown = false
+                    onPick(item)
                 }
             }
-            .padding(5)
-            .frame(minWidth: 140)
         }
+        .padding(5)
+        .frame(minWidth: 140)
     }
 }
 
