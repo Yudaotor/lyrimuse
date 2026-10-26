@@ -266,14 +266,15 @@
 
   // Reveal on scroll. The first screen (the headline block and the players strip) comes in by itself from lp.css,
   // so it is left out here. If the observer is late, whatever is already on screen (or above it) shows anyway;
-  // what is further down still plays its entrance when it is scrolled to.
+  // what is further down still plays its entrance when it is scrolled to. The entrance starts a little before the
+  // block reaches the window, and its fade is short (lp.css), so nothing sits on screen still invisible.
   const io = new IntersectionObserver((entries) => {
     for (const e of entries) {
       if (!e.isIntersecting) continue;
       e.target.classList.add('in');
       io.unobserve(e.target);
     }
-  }, { threshold: 0.12 });
+  }, { rootMargin: '0px 0px 6% 0px' });
   const reveals = [...document.querySelectorAll('.reveal')].filter((el) => !el.closest('.hero') && !el.classList.contains('players'));
   reveals.forEach((el) => io.observe(el));
   setTimeout(() => reveals.forEach((el) => { if (el.getBoundingClientRect().top < innerHeight) el.classList.add('in'); }), 1500);

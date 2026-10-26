@@ -29,7 +29,7 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<script src="assets/lp.js?v=202610261619" defer fetchpriority="high"></script>
+<script src="assets/lp.js?v=202610261832" defer fetchpriority="high"></script>
 <style>:root {
 --bg: #fbfbfd;
 --bg-alt: #f5f5f7;
@@ -1222,11 +1222,11 @@ background: var(--card); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0
 .faq-sec { contain-intrinsic-size: auto 680px; }
 .final { contain-intrinsic-size: auto 490px; }
 }
-.js .reveal { opacity: 0; transform: translateY(18px); filter: blur(6px); transition: opacity .9s var(--ease-out), transform .9s var(--ease-out), filter .9s var(--ease-out); }
-.js .show.reveal, .js .more-stage.reveal { transform: perspective(1400px) rotateX(10deg) translateY(56px) scale(.94); transform-origin: 50% 100%; transition-duration: 1.2s; }
+.js .reveal { opacity: 0; transform: translateY(18px); filter: blur(6px); transition: opacity .45s var(--ease-out), transform .9s var(--ease-out), filter .45s var(--ease-out); }
+.js .show.reveal, .js .more-stage.reveal { transform: perspective(1400px) rotateX(10deg) translateY(56px) scale(.94); transform-origin: 50% 100%; transition-duration: .45s, 1.2s, .45s; }
 .js .reveal.in { opacity: 1; transform: none; filter: none; }
 .js .ch-head.reveal { opacity: 1; transform: none; filter: none; }
-.js .ch-head.reveal > * { opacity: 0; transform: translateY(16px); filter: blur(5px); transition: opacity .8s var(--ease-out), transform .9s var(--ease-out), filter .8s var(--ease-out); }
+.js .ch-head.reveal > * { opacity: 0; transform: translateY(16px); filter: blur(5px); transition: opacity .45s var(--ease-out), transform .9s var(--ease-out), filter .45s var(--ease-out); }
 .js .ch-head.reveal > :nth-child(2) { transition-delay: .08s; }
 .js .ch-head.reveal > :nth-child(3) { transition-delay: .16s; }
 .js .ch-head.reveal.in > * { opacity: 1; transform: none; filter: none; }
