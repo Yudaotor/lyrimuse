@@ -278,6 +278,18 @@
   const reveals = [...document.querySelectorAll('.reveal')].filter((el) => !el.closest('.hero') && !el.classList.contains('players'));
   reveals.forEach((el) => io.observe(el));
   setTimeout(() => reveals.forEach((el) => { if (el.getBoundingClientRect().top < innerHeight) el.classList.add('in'); }), 1500);
+  // The sections below the first screen start out skipped (content-visibility in lp.css), which keeps the first
+  // screen quick. Once the page has loaded they are rendered one at a time while the browser is idle and then kept
+  // (.warm), so scrolling never meets a blank section; one far from the window (.far) pauses its animations.
+  const secs = [...document.querySelectorAll('.ch, .news, .faq-sec, .final')];
+  const farIO = new IntersectionObserver((es) => es.forEach((e) => e.target.classList.toggle('far', !e.isIntersecting)), { rootMargin: '100% 0px' });
+  secs.forEach((s) => farIO.observe(s));
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 150));
+  const warm = () => {
+    const s = secs.find((x) => !x.classList.contains('warm'));
+    if (s) { s.classList.add('warm'); idle(warm, { timeout: 1500 }); }
+  };
+  if (document.readyState === 'complete') idle(warm); else addEventListener('load', () => idle(warm), { once: true });
   // the page's inline script shows everything if this flag never appears (the script failed before here)
   window.lpReady = true;
 

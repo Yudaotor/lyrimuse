@@ -1331,6 +1331,10 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
    That also clips what hangs outside a section's box (paint containment): the margin leaves room for the stages'
    long shadows. */
 .ch, .news, .faq-sec, .final { content-visibility: auto; contain-intrinsic-size: auto 1000px; overflow-clip-margin: 160px; }
+/* lp.js renders them one by one once the page has loaded and keeps them rendered (.warm); a section far from the
+   window (.far) pauses its animations instead */
+.ch.warm, .news.warm, .faq-sec.warm, .final.warm { content-visibility: visible; }
+.warm.far, .warm.far *, .warm.far *::before, .warm.far *::after { animation-play-state: paused !important; }
 /* stand-ins for the content height (padding comes on top), close to the laid-out ones so the scrollbar barely
    moves as sections come in */
 .ch.watch { contain-intrinsic-size: auto 960px; }

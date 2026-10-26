@@ -17,7 +17,7 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<script src="../assets/lp.js?v=202610261832" defer fetchpriority="high"></script>
+<script src="../assets/lp.js?v=202610261939" defer fetchpriority="high"></script>
 <style>:root {
 --bg: #fbfbfd;
 --bg-alt: #f5f5f7;
@@ -1197,6 +1197,8 @@ background: var(--card); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0
 .foot-links a:hover { color: var(--ink); }
 .foot-note { margin: 18px 0 0; font-size: 12px; color: var(--ink-3); max-width: 60em; }
 .ch, .news, .faq-sec, .final { content-visibility: auto; contain-intrinsic-size: auto 1000px; overflow-clip-margin: 160px; }
+.ch.warm, .news.warm, .faq-sec.warm, .final.warm { content-visibility: visible; }
+.warm.far, .warm.far *, .warm.far *::before, .warm.far *::after { animation-play-state: paused !important; }
 .ch.watch { contain-intrinsic-size: auto 960px; }
 .ch-more { contain-intrinsic-size: auto 590px; }
 .news { contain-intrinsic-size: auto 170px; }
