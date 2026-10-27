@@ -419,10 +419,6 @@ func runNotchTests() {
                     [true, true, true, true, true, true, true],
                     "进度线耳朵: 亮点沿路径按长度取点(起点、终点、竖段、底角中点、底边),超出 0～1 夹住")
         typealias Motion = NotchEarProgressMotion
-        let pulses = stride(from: 0.0, through: 3.6, by: 0.05).map(Motion.headPulse(seconds:))
-        expectEqual([abs(Motion.headPulse(seconds: 0) - 0.55) < 1e-9, abs(Motion.headPulse(seconds: 0.9) - 1) < 1e-9,
-                     pulses.allSatisfy { $0 >= 0.55 - 1e-9 && $0 <= 1 + 1e-9 }], [true, true, true],
-                    "进度线耳朵: 亮点呼吸 1.8 秒一个来回,亮度在 0.55～1 之间")
         let t0 = Date(timeIntervalSince1970: 1_800_000_000)
         let playing = ProgressAnchor(durationMs: 200_000, progressMs: 30_000, rate: 1, progressTs: nil, baseAgeMs: 0, fetchedAt: t0)
         let seeked = ProgressAnchor(durationMs: 200_000, progressMs: 90_000, rate: 1, progressTs: nil, baseAgeMs: 0,
@@ -2674,7 +2670,7 @@ func runNotchTests() {
         let progressLine = src("NotchProgressLine.swift")
         expectEqual(sourceHas(v, "if controller.showsProgressLine && controller.progressLineStyle == .ears {\n let shows = controller.showsEarProgressLine")
                     && sourceHas(v, "active: surfaceVisible && shows, outline: controller.cardOutline,\n notchWidth: controller.notchWidth,")
-                    && sourceHas(v, "cardSize: CGSize(width: controller.cardWidth, height: controller.cardHeight),\n visible: shows)\n .animation(NotchEarProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {")
+                    && sourceHas(v, "cardSize: CGSize(width: controller.cardWidth, height: controller.cardHeight))\n .animation(NotchEarProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {")
                     && sourceHas(progressLine, "var animatableData: AnimatablePair<CGFloat, CGFloat> {\n get { AnimatablePair(cardSize.width, cardSize.height) }")
                     && sourceHas(v, "let (s, r) = cornerMetrics(in: rect)")
                     && sourceHas(progressLine, "func path(in rect: CGRect) -> Path {\n let path = Self.geometry(size: cardSize, card: card, notchWidth: notchWidth, notchHeight: notchHeight)")
@@ -2684,12 +2680,10 @@ func runNotchTests() {
                     "进度线耳朵: 卡片尺寸是形状的可动画值、路径按它逐帧算(展开收回跟着外沿走)、肩膀和底角跟卡片外形读同一处、常驻只切透明度、重画间隔按半边长度算")
         expectEqual(sourceHas(progressLine, ".animation(reduceMotion ? nil : .easeInOut(duration: 0.45),\n value: NotchEarProgressMotion.jumpKey(anchor: anchor, now: Date()))")
                     && sourceHas(progressLine, "$0.opacity(paused ? Self.pausedOpacity : 1)")
-                    && sourceHas(progressLine, "let pulse = CABasicAnimation(keyPath: \"opacity\")")
                     && !progressLine.contains("FrameTimeline(") && !progressLine.contains("repeatForever")
-                    && sourceHas(progressLine, "breathing: ticking && !paused && !reduceMotion,\n opacity: visible ? (paused ? Self.pausedOpacity : 1) : 0,")
-                    && sourceHas(progressLine, "view.update(path: geometry, fraction: CGFloat(fraction), cardWidth: cardSize.width,")
-                    && sourceHas(progressLine, "let anim = CAKeyframeAnimation(keyPath: \"position\")"), true,
-                    "进度线耳朵动效: 跳进度才滑、暂停变暗、亮点呼吸交给 Core Animation(别用 SwiftUI 逐帧 / 循环动画)、亮点自己按显隐淡出、跳进度沿路径滑、跟线按同一条路径取点")
+                    && sourceHas(progressLine, "NotchEarHeadShape(card: shape, notchWidth: notchWidth, notchHeight: outline.notchHeight,\n cardSize: cardSize, fraction: fraction)\n .fill(Color.white.opacity(0.9))")
+                    && sourceHas(progressLine, "let head = geometry.point(atFraction: CGFloat(fraction))"), true,
+                    "进度线耳朵动效: 跳进度才滑、暂停变暗、线头白点不闪不带光晕、跟线按同一条路径取点(变形和跳进度都随线走)")
         expectEqual(sourceHas(v, "NotchExpandedLyricList(tint: accentOrWhite)")
                     && sourceHas(v, ".modifier(NotchCardLayerActive(active: expanded, staggered: staggered, waitsForResize: true))")
                     && sourceHas(v, "if waitsForResize { return curve.delay(Self.resizeSettleDelay) }")

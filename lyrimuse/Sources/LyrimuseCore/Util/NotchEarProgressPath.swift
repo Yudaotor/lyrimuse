@@ -90,7 +90,7 @@ public struct NotchEarProgressPath: Equatable, Sendable {
 }
 
 extension NotchEarProgressPath {
-    /// 沿左半边按长度走过 `fraction` 处的点(进度头那颗亮点的位置,跟线的 `trim` 同一种按长度的走法)。
+    /// 沿左半边按长度走过 `fraction` 处的点(线头那颗白点的位置,跟线的 `trim` 同一种按长度的走法)。
     public func point(atFraction fraction: CGFloat) -> CGPoint {
         var d = min(1, max(0, fraction)) * length
         let shoulderArc = shoulderRadius * shoulderSweep
@@ -113,15 +113,8 @@ extension NotchEarProgressPath {
     }
 }
 
-/// 「耳朵」进度线的动效:进度头亮点的呼吸、换歌 / 跳进度时线滑过去的判据。
+/// 「耳朵」进度线的动效:换歌 / 跳进度时线和线头滑过去的判据。
 public enum NotchEarProgressMotion {
-    /// 呼吸一个来回的秒数。
-    public static let pulsePeriod: Double = 1.8
-    /// 亮点在播放时的亮度(0.55～1 之间按余弦来回)。
-    public static func headPulse(seconds: Double) -> Double {
-        0.55 + 0.45 * (0.5 - 0.5 * cos(2 * .pi * seconds / pulsePeriod))
-    }
-
     /// 「这首从墙钟哪个时刻开始播」按这个粒度分桶。
     public static let jumpBucketSeconds: Double = 1.5
 
