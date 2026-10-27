@@ -116,9 +116,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case stall(ms: Int)
         /// 灵动岛摆一次报喜,跟设置页「收听里程碑」旁那颗「试用」走同一条路(`debug/milestone-preview`)。
         case milestonePreview
-        /// 灵动岛「暂停时收起」「暂停时隐藏」「进度线」,跟设置页那几项走同一个设置:
-        /// `debug/notch-behavior?collapse-when-paused=1&hide-when-not-playing=0&progress-line=off|bottom|ears`,至少带一个。
-        case notchBehavior(collapseWhenPaused: Bool?, hideWhenNotPlaying: Bool?, progressLine: NotchProgressLineChoice? = nil)
+        /// 灵动岛「暂停时收起」「暂停时隐藏」「进度线」「所有屏幕」,跟设置页那几项走同一个设置:
+        /// `debug/notch-behavior?collapse-when-paused=1&hide-when-not-playing=0&progress-line=off|bottom|ears&all-screens=1`,
+        /// 至少带一个。
+        case notchBehavior(collapseWhenPaused: Bool?, hideWhenNotPlaying: Bool?, progressLine: NotchProgressLineChoice? = nil,
+                           allScreens: Bool? = nil)
     }
 
     /// `debug/stall` 的上限(毫秒)。再长就是把 App 卡死了。
@@ -259,8 +261,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let collapse = value("collapse-when-paused").flatMap(Self.parseBool)
             let hide = value("hide-when-not-playing").flatMap(Self.parseBool)
             let progressLine = value("progress-line").flatMap { NotchProgressLineChoice(rawValue: $0.lowercased()) }
-            guard collapse != nil || hide != nil || progressLine != nil else { return nil }
-            self = .debug(.notchBehavior(collapseWhenPaused: collapse, hideWhenNotPlaying: hide, progressLine: progressLine))
+            let allScreens = value("all-screens").flatMap(Self.parseBool)
+            guard collapse != nil || hide != nil || progressLine != nil || allScreens != nil else { return nil }
+            self = .debug(.notchBehavior(collapseWhenPaused: collapse, hideWhenNotPlaying: hide, progressLine: progressLine,
+                                         allScreens: allScreens))
         case ("debug", "/japanese-reading"):
             guard let style = value("style").flatMap({ JapaneseReadingStyle(rawValue: $0.lowercased()) }) else { return nil }
             self = .debug(.japaneseReading(style))
@@ -392,11 +396,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                     + (iconSize.map { [URLQueryItem(name: "icon-size", value: $0)] } ?? [])
                     + (iconStyle.map { [URLQueryItem(name: "icon-style", value: $0)] } ?? [])
                     + (hoverControls.map { [URLQueryItem(name: "hover-controls", value: $0 ? "1" : "0")] } ?? [])
-            case let .notchBehavior(collapse, hide, progressLine):
+            case let .notchBehavior(collapse, hide, progressLine, allScreens):
                 components.path = "/notch-behavior"
                 components.queryItems = (collapse.map { [URLQueryItem(name: "collapse-when-paused", value: $0 ? "1" : "0")] } ?? [])
                     + (hide.map { [URLQueryItem(name: "hide-when-not-playing", value: $0 ? "1" : "0")] } ?? [])
                     + (progressLine.map { [URLQueryItem(name: "progress-line", value: $0.rawValue)] } ?? [])
+                    + (allScreens.map { [URLQueryItem(name: "all-screens", value: $0 ? "1" : "0")] } ?? [])
             case let .japaneseReading(style):
                 components.path = "/japanese-reading"
                 components.queryItems = [URLQueryItem(name: "style", value: style.rawValue)]
