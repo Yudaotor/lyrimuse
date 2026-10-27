@@ -97,14 +97,18 @@ enum DebugDeepLinks {
             MenuBarStatusItem.shared.debugCenterInput(
                 hover: hover, click: click.map { $0 == "right" ? MenuBarCenterLyrics.Click.menu : .primary })
             logger.notice("debug menubar center=\(String(describing: center), privacy: .public) ignoreNotch=\(String(describing: ignoreNotch), privacy: .public)")
-        case let .menuBarDisplay(artwork, content, iconSize, iconStyle, hoverControls, secondary):
+        case let .menuBarDisplay(artwork, content, iconSize, iconStyle, hoverControls, secondary, alignment):
             if let artwork { AppSettings.shared.menuBarIconShowsArtwork = artwork }
             if let value = content.flatMap(MenuBarLyricsContent.init(rawValue:)) { AppSettings.shared.menuBarLyricsContent = value }
             if let value = iconSize.flatMap(MenuBarIconSize.init(rawValue:)) { AppSettings.shared.menuBarIconSize = value }
             if let value = iconStyle.flatMap(MenuBarIconStyle.init(rawValue:)) { AppSettings.shared.menuBarIconStyle = value }
             if let hoverControls { AppSettings.shared.menuBarHoverShowsControls = hoverControls }
             if let value = secondary.flatMap(MenuBarSecondaryChoice.init(rawValue:)) { AppSettings.shared.menuBarSecondaryChoice = value }
-            logger.notice("debug menubar display artwork=\(String(describing: artwork), privacy: .public) content=\(content ?? "-", privacy: .public) iconSize=\(iconSize ?? "-", privacy: .public) iconStyle=\(iconStyle ?? "-", privacy: .public) secondary=\(secondary ?? "-", privacy: .public)")
+            if let value = alignment.flatMap(LyricsRestingAlignment.init(rawValue:)),
+               LyricsRestingAlignment.menuBarOptions.contains(value) {
+                AppSettings.shared.menuBarLyricsAlignment = value
+            }
+            logger.notice("debug menubar display artwork=\(String(describing: artwork), privacy: .public) content=\(content ?? "-", privacy: .public) iconSize=\(iconSize ?? "-", privacy: .public) iconStyle=\(iconStyle ?? "-", privacy: .public) secondary=\(secondary ?? "-", privacy: .public) alignment=\(alignment ?? "-", privacy: .public)")
         case let .japaneseReading(style):
             AppSettings.shared.japaneseReadingStyle = style
             LocalPlaybackSource.shared.japaneseReading = style

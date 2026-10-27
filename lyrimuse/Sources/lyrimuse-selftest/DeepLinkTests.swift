@@ -208,6 +208,8 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/menubar-display?secondary=translationInline"),
                     .debug(.menuBarDisplay(artwork: nil, content: nil, secondary: "translationInline")),
                     "debug: 只改菜单栏副行")
+        expectEqual(link("lyrimuse://debug/menubar-display?alignment=trailing"),
+                    .debug(.menuBarDisplay(artwork: nil, content: nil, alignment: "trailing")), "debug: 只改菜单栏对齐方式")
         expectEqual(link("lyrimuse://debug/menubar-display"), nil, "debug: 菜单栏显示什么都没带不认")
         expectEqual(link("lyrimuse://debug/notch-behavior?hide-when-not-playing=1"),
                     .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: true)), "debug: 只开灵动岛暂停时隐藏")
@@ -366,6 +368,7 @@ func runDeepLinkTests() {
             .debug(.menuBarDisplay(artwork: nil, content: nil, iconSize: "large", iconStyle: "classic")),
             .debug(.menuBarDisplay(artwork: nil, content: nil, hoverControls: false)),
             .debug(.menuBarDisplay(artwork: nil, content: "translation", secondary: "off")),
+            .debug(.menuBarDisplay(artwork: nil, content: nil, alignment: "center")),
             .debug(.settingsSearch(query: "OBS 输出")),
             .setPlayMode(.list), .setPlayMode(.shuffle), .setPlayMode(.repeatAll), .setPlayMode(.repeatOne),
         ] + LyrimuseAction.allCases.map { .action($0, on: nil, stepSeconds: nil) }

@@ -107,10 +107,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 菜单栏图标用不用封面(`artwork`)、那一格显示什么(`content`:lyrics / translation / title / titleArtist,同设置页
         /// 「显示内容」四档)、图标大小(`icon-size`:small / standard / large)、图标款式(`icon-style`:
         /// `MenuBarIconStyle` 的 rawValue)、悬停显示播放控制(`hover-controls`)、副行(`secondary`:off / nextLine /
-        /// translation / translationInline / romanization,同设置页「副行」五档),跟设置页走同一个设置:
-        /// `debug/menubar-display?artwork=1&content=title&icon-size=large&icon-style=vinyl&hover-controls=1&secondary=off`,至少带一个。
+        /// translation / translationInline / romanization,同设置页「副行」五档)、对齐方式(`alignment`:leading / center /
+        /// trailing),跟设置页走同一个设置:
+        /// `debug/menubar-display?artwork=1&content=title&icon-size=large&icon-style=vinyl&hover-controls=1&secondary=off&alignment=trailing`,
+        /// 至少带一个。
         case menuBarDisplay(artwork: Bool?, content: String?, iconSize: String? = nil, iconStyle: String? = nil,
-                            hoverControls: Bool? = nil, secondary: String? = nil)
+                            hoverControls: Bool? = nil, secondary: String? = nil, alignment: String? = nil)
         /// 日语读音标罗马字还是假名,跟设置页「日语读音」走同一条路(`debug/japanese-reading?style=romaji|kana`)。
         case japaneseReading(JapaneseReadingStyle)
         /// 主线程原地睡这么多毫秒(`debug/stall?ms=`,1…`maxStallMs`):造出「别的窗口把主线程占住」那一下,验动画扛不扛得住。
@@ -256,10 +258,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let iconStyle = value("icon-style").flatMap { $0.isEmpty ? nil : $0 }
             let hoverControls = value("hover-controls").flatMap(Self.parseBool)
             let secondary = value("secondary").flatMap { $0.isEmpty ? nil : $0 }
+            let alignment = value("alignment").flatMap { $0.isEmpty ? nil : $0 }
             guard artwork != nil || content != nil || iconSize != nil || iconStyle != nil || hoverControls != nil
-                    || secondary != nil else { return nil }
+                    || secondary != nil || alignment != nil else { return nil }
             self = .debug(.menuBarDisplay(artwork: artwork, content: content, iconSize: iconSize, iconStyle: iconStyle,
-                                          hoverControls: hoverControls, secondary: secondary))
+                                          hoverControls: hoverControls, secondary: secondary, alignment: alignment))
         case ("debug", "/notch-behavior"):
             let collapse = value("collapse-when-paused").flatMap(Self.parseBool)
             let hide = value("hide-when-not-playing").flatMap(Self.parseBool)
@@ -392,7 +395,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                     + (screen.map { [URLQueryItem(name: "screen", value: $0)] } ?? [])
                     + (hover.map { [URLQueryItem(name: "hover", value: $0 ? "1" : "0")] } ?? [])
                     + (click.map { [URLQueryItem(name: "click", value: $0)] } ?? [])
-            case let .menuBarDisplay(artwork, content, iconSize, iconStyle, hoverControls, secondary):
+            case let .menuBarDisplay(artwork, content, iconSize, iconStyle, hoverControls, secondary, alignment):
                 components.path = "/menubar-display"
                 var items: [URLQueryItem] = []
                 if let artwork { items.append(URLQueryItem(name: "artwork", value: artwork ? "1" : "0")) }
@@ -401,6 +404,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 if let iconStyle { items.append(URLQueryItem(name: "icon-style", value: iconStyle)) }
                 if let hoverControls { items.append(URLQueryItem(name: "hover-controls", value: hoverControls ? "1" : "0")) }
                 if let secondary { items.append(URLQueryItem(name: "secondary", value: secondary)) }
+                if let alignment { items.append(URLQueryItem(name: "alignment", value: alignment)) }
                 components.queryItems = items
             case let .notchBehavior(collapse, hide, progressLine, allScreens):
                 components.path = "/notch-behavior"
