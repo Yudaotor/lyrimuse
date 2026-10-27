@@ -162,6 +162,8 @@ struct NotchEarProgressLine: View {
                 played
             }
             .mask(LinearGradient(colors: [.white.opacity(0.85), .white], startPoint: .top, endPoint: .bottom))
+            // 光晕和遮罩先合成一张再交给卡片外形裁剪,同卡片背景(05 章决策 114)。
+            .compositingGroup()
         }
     }
 }

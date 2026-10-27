@@ -249,6 +249,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // 中间露出上面那块打底色,同一首歌换上高清封面(两张模糊图几乎一样)时表现为整卡暗一下再亮回来。
                 NotchCrossfadeBackdrop(image: image, size: size, overlayOpacity: playback.backdropOverlayOpacity)
             }
+            // 先把这几层合成一张再交给卡片外形裁剪:带位图的图层被裁时渲染器另走一条路,底角边缘多出约 0.04px 的台阶
+            // (05 章决策 114)。背景平时不变,合成一次就一直用。
+            .compositingGroup()
         } else {
             playback.notchCardStyle.backdrop
         }
