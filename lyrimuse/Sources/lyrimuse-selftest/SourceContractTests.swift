@@ -1626,12 +1626,13 @@ func runSourceContractSurfaceTests() {
                         "菜单栏双排: 预览跟真机同一条岔路,双排走图层")
         }
         if let stage = read("UI/MenuBarEditorStage.swift") {
-            expectEqual(stage.contains("settings.menuBarSecondaryLine = AppSettings.defaultMenuBarSecondaryLine"), true,
-                        "菜单栏双排: 「重置」要覆盖副行、且读默认值常量")
+            expectEqual(stage.contains("settings.menuBarSecondaryLine = AppSettings.defaultMenuBarSecondaryLine")
+                        && stage.contains("settings.menuBarTranslationInline = AppSettings.defaultMenuBarTranslationInline"),
+                        true, "菜单栏双排: 「重置」要覆盖副行和「同一行」、且读默认值常量")
             // 「字号」那一行常显、副行开着时尾部换成「由副行决定」(滑杆让位),浮层与抽屉调同一份
             // MenuBarFontRows —— 判据只在 MenuBarFontSizeRow 里出现一次。「显示内容」选了歌名时没有副行,滑杆照常。
-            expectEqual(stage.components(separatedBy: "if settings.menuBarSecondaryLine.showsSecondaryRow && settings.menuBarLyricsContent == .lyrics {").count - 1, 1,
-                        "菜单栏双排: 「字号」滑杆在副行开着时让位(判据只在 MenuBarFontSizeRow 一处)")
+            expectEqual(stage.components(separatedBy: "if settings.menuBarUsesTwoRows {").count - 1, 1,
+                        "菜单栏双排: 「字号」滑杆在排两行时让位(判据只在 MenuBarFontSizeRow 一处;同一行接着译文时照常)")
             expectEqual(stage.components(separatedBy: "MenuBarFontRows()").count - 1, 2,
                         "菜单栏双排: 「字体」浮层与抽屉「字体」组调同一份 MenuBarFontRows(两处装配)")
         }
@@ -1693,8 +1694,8 @@ func runSourceContractSurfaceTests() {
             // ① 两个形态都要有「副行」。共用同一个枚举、各存各的键,所以是同一个行组件传两个 Binding。
             expectEqual(panel.contains("secondaryLineRow(selection: $settings.notchSecondaryLine)"), true,
                         "面板旋钮: 灵动岛那格要有「副行」(设置页 2026-09-06 就加了,别再漏回补)")
-            expectEqual(panel.contains("secondaryLineRow(selection: $settings.menuBarSecondaryLine)"), true,
-                        "面板旋钮: 菜单栏那格要有「副行」(设置页 2026-09-06 就加了,别再漏回补)")
+            expectEqual(panel.contains("PanelGlassMenuPicker(selection: $settings.menuBarSecondaryChoice,"), true,
+                        "面板旋钮: 菜单栏那格要有「副行」(设置页 2026-09-06 就加了,别再漏回补;五档含「译文(同一行)」)")
             // ② 两个形态都要有「字号」——三个形态里原先只有悬浮歌词有,那是漏补不是判过不收。
             expectEqual(panel.contains("Self.notchFontSizeRange"), true,
                         "面板旋钮: 灵动岛那格要有「字号」(设置页 2026-09-09 就加了)")
@@ -1708,8 +1709,8 @@ func runSourceContractSurfaceTests() {
                         "面板旋钮: 菜单栏字号区间读 renderer 真源(10…16 由状态栏项 22pt 高推出)")
             // ④ 菜单栏字号在副行开着时让位成一句灰字,跟设置页 MenuBarFontSizeRow 同进同出 ——
             //    两行字号由行高推出,滑杆翻了没效果;整行隐藏会变成"字号去哪了",所以是让位不是隐藏。
-            expectEqual(panel.contains("settings.menuBarSecondaryLine.showsSecondaryRow && settings.menuBarLyricsContent == .lyrics"), true,
-                        "面板旋钮: 菜单栏「字号」要跟设置页一样在副行开着时让位(显示歌名时没有副行,不让位)")
+            expectEqual(panel.contains("if settings.menuBarUsesTwoRows {"), true,
+                        "面板旋钮: 菜单栏「字号」要跟设置页一样在排两行时让位(显示歌名、译文、同一行时不让位)")
             expectEqual(panel.contains("selection: $settings.menuBarLyricsContent"), true,
                         "面板旋钮: 菜单栏那格要有「显示内容」(藏副行的原因得在面板里看得见)")
             expectEqual(panel.contains("由副行决定"), true,

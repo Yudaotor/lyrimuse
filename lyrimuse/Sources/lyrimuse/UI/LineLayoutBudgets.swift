@@ -38,11 +38,16 @@ final class LineLayoutBudgets {
                 },
             Publishers.CombineLatest4(s.$menuBarLyricsWidth, s.$menuBarLyricsFontFamily,
                                       s.$menuBarLyricsFontWeight, s.$menuBarLyricsFontSize)
-                .combineLatest(s.$menuBarSecondaryLine)
-                .sink { values, secondary in
+                .combineLatest(Publishers.CombineLatest3(s.$menuBarSecondaryLine, s.$menuBarLyricsContent,
+                                                         s.$menuBarTranslationInline))
+                .sink { values, layout in
                     let (width, family, weight, size) = values
+                    let (secondary, content, inline) = layout
+                    // 两种译文排法(只显示译文 / 同一行)都按单行字号断句,同 `AppSettings.menuBarLayoutSecondaryLine`。
+                    let mode = MenuBarLyricText.mode(translationOnly: content == .translation,
+                                                     secondary: secondary, inline: inline)
                     Self.reportMenuBar(width: width, family: family, weight: weight, size: size,
-                                       secondary: secondary)
+                                       secondary: MenuBarLyricText.layoutSecondary(mode: mode, secondary: secondary))
                 },
             Publishers.CombineLatest4(notchWidth.removeDuplicates(), s.$notchMainNSFont,
                                       s.$notchSecondaryNSFont, s.$notchSecondaryLine)

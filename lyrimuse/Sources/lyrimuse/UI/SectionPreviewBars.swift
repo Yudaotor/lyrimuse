@@ -144,14 +144,22 @@ struct MenuBarPreviewBar<Lane: View>: View {
     /// 整首的起步槽宽(`PlaybackCoordinator.menuBarSongRowWidth`),跟本体喂同一份。
     @State private var songRowWidth: CGFloat?
 
-    private var fullText: String {
-        if songTitleOnly { return songTitleShown }
-        if let text = line?.plainText, !text.isEmpty { return text }
-        return L10n.t("这里是一句歌词示例")
+    private var fullText: String { composedText.text }
+
+    /// 主行文字和同一行译文从第几个字起,跟本体同一个函数(`MenuBarLyricText.text`)。示例句(没在播放)不编译文:
+    /// 只显示译文时演档位名「译文」,同一行时在示例句后面接「译文」,跟副行示例给档位名同一原则。
+    private var composedText: (text: String, translationStart: Int?) {
+        if songTitleOnly { return (songTitleShown, nil) }
+        let mode = settings.menuBarLyricTextMode
+        if let text = line?.plainText, !text.isEmpty {
+            return MenuBarLyricText.text(plainText: text, translation: line?.translation, mode: mode)
+        }
+        let sample = L10n.t("这里是一句歌词示例")
+        return MenuBarLyricText.text(plainText: sample, translation: mode == .original ? nil : L10n.t("译文"), mode: mode)
     }
 
-    /// 副行档位(双排),跟本体 `MenuBarStatusItem.refresh` 同一份设置。
-    private var secondaryKind: LyricSecondaryLine { settings.menuBarSecondaryLine }
+    /// 副行档位(双排),跟本体 `MenuBarStatusItem.refresh` 同一份设置:两种译文排法都按单行。
+    private var secondaryKind: LyricSecondaryLine { settings.menuBarLayoutSecondaryLine }
     private var twoRows: Bool { secondaryKind.showsSecondaryRow && !songTitleOnly }
     /// 主行字体:双排 10pt / 单行跟设置 —— 跟本体同一个入口(`mainFont(for:twoRows:)`),测宽、排版、
     /// 逐字边界三处都用它。
@@ -182,7 +190,8 @@ struct MenuBarPreviewBar<Lane: View>: View {
             mainWidth: mainW, secondaryWidth: secondaryW, twoRows: twoRows,
             secondaryKind: secondaryKind, maxWidth: settings.menuBarLyricsWidth)
         return MenuBarSlotPolicy.songSlotWidth(
-            naturalWidth: naturalW, songRowWidth: (line?.plainText ?? "").isEmpty ? nil : songRowWidth,
+            naturalWidth: naturalW,
+            songRowWidth: (line?.plainText ?? "").isEmpty || settings.menuBarLyricTextMode != .original ? nil : songRowWidth,
             maxWidth: settings.menuBarLyricsWidth)
     }
     /// Representable 的 frame 高:双排要给满按钮那 22pt(两行在里面按 MenuBarLyricRows.layout 落位),
@@ -199,8 +208,9 @@ struct MenuBarPreviewBar<Lane: View>: View {
     /// 有逐字数据时,这里给的是**完全真实**的数据,不是演示。
     private var karaokeFillPath: [MenuBarMarquee.KaraokeFillPoint]? {
         guard settings.menuBarLyricsKaraoke,
-              let line, let words = line.words, !words.isEmpty,
-              line.plainText == fullText else { return nil }
+              let line, let words = line.words, !words.isEmpty, let plain = line.plainText,
+              composedText.translationStart == nil
+                  ? plain == fullText : fullText.hasPrefix(plain + MenuBarLyricText.inlineSeparator) else { return nil }
         let path = MenuBarMarquee.karaokeFillPath(
             words: words, wordEndXs: MenuBarMarqueeRenderer.wordEndXs(for: words, font: mainFont))
         return path.isEmpty ? nil : path
@@ -758,14 +768,16 @@ struct MenuBarPreviewBar<Lane: View>: View {
             let w = adaptiveWindowWidth(for: visible)
             if visible == fullText, MenuBarSlotPolicy.adaptiveDrawsWithLayers(
                 hasFillPath: karaokeFillPath != nil, hasIcon: previewIconBadge != nil, twoRows: twoRows,
-                windowWidth: w, textWidth: MenuBarMarqueeRenderer.width(of: visible, font: mainFont)) {
+                windowWidth: w, textWidth: MenuBarMarqueeRenderer.width(of: visible, font: mainFont),
+                inlineTranslation: composedText.translationStart != nil) {
                 MenuBarScrollingLabel.Representable(
                     text: visible, windowWidth: w, pacing: nil, fillPath: karaokeFillPath,
                     followPath: followReadingPath, karaokePositionMs: karaokePositionMs,
                     karaokeRate: anchor?.rate ?? 0, karaokePlaying: isPlayingNow,
                     icon: previewIconBadge, progressPositionMs: progressPositionMs,
                     progressDurationMs: progressDurationMs,
-                    secondaryText: secondaryText, secondaryKind: secondaryKind)
+                    secondaryText: secondaryText, secondaryKind: secondaryKind,
+                    inlineTranslationStart: composedText.translationStart)
                     .frame(width: w + reservedIconWidth, height: rowsHeight)
             } else {
                 // 跟本体 showStaticText 同一套:字重按这段文字取、颜色走「文字颜色」设置(空 = 系统文字色)。
@@ -786,6 +798,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
                 icon: previewIconBadge, progressPositionMs: progressPositionMs,
                 progressDurationMs: progressDurationMs,
                 secondaryText: secondaryText, secondaryKind: secondaryKind,
+                inlineTranslationStart: composedText.translationStart,
                 alignmentOverride: centerInUse ? .center : nil)
                 .frame(width: windowWidth + reservedIconWidth, height: rowsHeight)
         }

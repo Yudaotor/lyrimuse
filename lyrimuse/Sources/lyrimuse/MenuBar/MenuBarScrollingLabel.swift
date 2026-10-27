@@ -168,6 +168,8 @@ final class MenuBarScrollingLabel: NSView {
         /// 副行四选一。`.off` = 单行排法;其余 = 双排,主行换成 10pt、副行 9pt
         /// (见 MenuBarLyricRows)。它同时决定副行图层的透明度(译文 / 罗马音 / 下一句各一档)。
         var secondaryKind: LyricSecondaryLine
+        /// 主行接着译文排成一行时,译文那段(含分隔符)从第几个 UTF-16 单元起,那段画淡(`MenuBarLyricText`);nil = 没有。
+        var inlineTranslationStart: Int?
         /// 这一档是前奏/间奏三点时,那段间奏的起止(歌词时间轴毫秒)。点亮进度按它算。
         /// nil = 这一档不是三点,或者拿不到窗口(那时三颗点只呼吸、不推进点亮)。
         var gapWindow: GapWindow?
@@ -328,7 +330,7 @@ final class MenuBarScrollingLabel: NSView {
     /// 否则每次 recompute 都会把滚动打回开头,用户永远看不到后半句。
     /// - Parameter secondaryText / secondaryKind: 副行(双排),见 Plan 里两个字段的注释。
     ///   默认 nil / .off = 单行。
-    /// - Parameter clockPaced: 见 Plan 同名字段。
+    /// - Parameter clockPaced / inlineTranslationStart: 见 Plan 同名字段。
     func present(text: String, windowWidth: CGFloat, pacing: MenuBarMarquee.ScrollPacing?,
                  fillPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
                  followPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
@@ -336,6 +338,7 @@ final class MenuBarScrollingLabel: NSView {
                  icon: IconBadge? = nil,
                  secondaryText: String? = nil,
                  secondaryKind: LyricSecondaryLine = .off,
+                 inlineTranslationStart: Int? = nil,
                  gapWindow: GapWindow? = nil) {
         let next = Plan(text: text, windowWidth: windowWidth,
                         alignment: alignmentOverride
@@ -347,6 +350,7 @@ final class MenuBarScrollingLabel: NSView {
                         pacing: pacing, fillPath: fillPath, followPath: followPath,
                         clockPaced: clockPaced, icon: icon,
                         secondaryText: secondaryText, secondaryKind: secondaryKind,
+                        inlineTranslationStart: inlineTranslationStart,
                         gapWindow: gapWindow)
         guard next != plan else {
             isHidden = false
@@ -371,6 +375,7 @@ final class MenuBarScrollingLabel: NSView {
             // 副行文字 / 档位变了要重出位图(副行那张,以及单双排切换时主行那张 —— 字号变了)。
             && plan?.secondaryText == next.secondaryText
             && plan?.secondaryKind == next.secondaryKind
+            && plan?.inlineTranslationStart == next.inlineTranslationStart
         // 滚动动画只在**滚动参数**(文字/槽宽/配速)真的变了时才重启。fillPath 从 nil 变成
         // 非 nil **不算** —— 那是"开唱那一刻把逐字填色挂上"(菜单栏订了 compactLine 和
         // currentLine 两条流,后者就管这一下,见 MenuBarStatusItem)。算进来的话会
@@ -850,6 +855,7 @@ final class MenuBarScrollingLabel: NSView {
         var fontFamily: String
         var secondaryText: String?
         var secondaryKind: LyricSecondaryLine
+        var inlineTranslationStart: Int?
         var tint: NSColor
         var fill: NSColor
         var scale: CGFloat
@@ -881,6 +887,7 @@ final class MenuBarScrollingLabel: NSView {
             text: plan.text, hasFill: plan.fillPath != nil, icon: plan.icon,
             fontWeight: plan.fontWeight, fontSize: plan.fontSize, fontFamily: plan.fontFamily,
             secondaryText: plan.secondaryText, secondaryKind: plan.secondaryKind,
+            inlineTranslationStart: plan.inlineTranslationStart,
             tint: tintColor, fill: karaokeFillColor, scale: menuBarBitmapScale,
             appearance: effectiveAppearance.name)
     }
@@ -922,10 +929,12 @@ final class MenuBarScrollingLabel: NSView {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             guard cached == nil else { return }
             built = MenuBarMarqueeRenderer.prepare(text: plan.text, color: color, scale: scale,
-                                                   font: mainFont, exactBox: twoRows)
+                                                   font: mainFont, exactBox: twoRows,
+                                                   dimmedFrom: plan.inlineTranslationStart)
             if plan.fillPath != nil {
                 fillBuilt = MenuBarMarqueeRenderer.prepare(text: plan.text, color: karaokeFillColor,
-                                                           scale: scale, font: mainFont, exactBox: twoRows)
+                                                           scale: scale, font: mainFont, exactBox: twoRows,
+                                                           dimmedFrom: plan.inlineTranslationStart)
             }
             if twoRows, let secondary = plan.secondaryText {
                 secondaryBuilt = MenuBarMarqueeRenderer.prepare(
@@ -1055,6 +1064,8 @@ final class MenuBarScrollingLabel: NSView {
         /// 不编一句假译文。
         let secondaryText: String?
         let secondaryKind: LyricSecondaryLine
+        /// 同 `present(inlineTranslationStart:)`。
+        var inlineTranslationStart: Int? = nil
         /// 同 `MenuBarScrollingLabel.alignmentOverride`:演「菜单栏正中」时固定居中。
         var alignmentOverride: LyricsRestingAlignment? = nil
 
@@ -1072,7 +1083,8 @@ final class MenuBarScrollingLabel: NSView {
             // present 对"参数没变"是空操作,所以设置页每次重算 body 都不会把滚动打回开头。
             view.present(text: text, windowWidth: windowWidth, pacing: pacing, fillPath: fillPath,
                          followPath: followPath, icon: icon,
-                         secondaryText: secondaryText, secondaryKind: secondaryKind)
+                         secondaryText: secondaryText, secondaryKind: secondaryKind,
+                         inlineTranslationStart: inlineTranslationStart)
             // 预览实例不在 MenuBarStatusItem 的颜色订阅覆盖范围内,靠宿主 body 重算带一次
             // 重排 —— 用户在旁边拖「文字颜色」色轮时预览才跟手(重排一句位图 sub-ms 级)。
             view.refreshColors()

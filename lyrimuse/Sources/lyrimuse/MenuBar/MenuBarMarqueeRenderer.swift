@@ -342,8 +342,11 @@ enum MenuBarMarqueeRenderer {
     /// - Parameter exactBox: 双排用 —— 位图高与基线按 `doubleRowMetrics(for:)`,不留单行那上下各 1pt 的富余。
     ///   false = 单行老口径,逐像素不变。
     /// - Parameter translation: 这段是译文(排字语言按译文判,见 `LyricTypesetting`)。
+    /// - Parameter dimmedFrom: 从这个 UTF-16 位置起到末尾画淡(`MenuBarLyricText.inlineTranslationOpacity`):主行接着译文时
+    ///   那段译文。宽度不变,只改颜色。
     static func prepare(text: String, color: NSColor, scale: CGFloat,
-                        font: NSFont? = nil, exactBox: Bool = false, translation: Bool = false) -> PreparedLine? {
+                        font: NSFont? = nil, exactBox: Bool = false, translation: Bool = false,
+                        dimmedFrom: Int? = nil) -> PreparedLine? {
         guard !text.isEmpty else { return nil }
         let lineFont = font ?? Self.font(for: text)
         let rowMetrics = exactBox ? doubleRowMetrics(for: lineFont) : nil
@@ -364,7 +367,16 @@ enum MenuBarMarqueeRenderer {
         // 动态色(labelColor 等)在这里按调用方套好的外观解析成定值:图层真正调 draw(in:) 的时候
         // 已经不在那层 performAsCurrentDrawingAppearance 里了。
         var drawAttributes = attributes
-        drawAttributes[.foregroundColor] = NSColor(cgColor: color.cgColor) ?? color
+        let resolved = NSColor(cgColor: color.cgColor) ?? color
+        drawAttributes[.foregroundColor] = resolved
+        let drawn = NSMutableAttributedString(string: text, attributes: drawAttributes)
+        let length = (text as NSString).length
+        if let dimmedFrom, dimmedFrom > 0, dimmedFrom < length {
+            drawn.addAttribute(.foregroundColor,
+                               value: resolved.withAlphaComponent(resolved.alphaComponent
+                                                                  * MenuBarLyricText.inlineTranslationOpacity),
+                               range: NSRange(location: dimmedFrom, length: length - dimmedFrom))
+        }
         let paint = MenuBarPainting { ctx in
             guard !isGapDots else { return }
             NSGraphicsContext.saveGraphicsState()
@@ -372,11 +384,10 @@ enum MenuBarMarqueeRenderer {
             // flipped: false → 原点在左下、y 向上。
             if let rowMetrics {
                 // 双排:不带 usesLineFragmentOrigin 时 rect 的原点就是基线,文字按系统字体的基线落位。
-                (text as NSString).draw(with: NSRect(x: 0, y: rowMetrics.baseline, width: textWidth, height: box),
-                                        options: [], attributes: drawAttributes)
+                drawn.draw(with: NSRect(x: 0, y: rowMetrics.baseline, width: textWidth, height: box), options: [])
             } else {
-                // 单行:NSString.draw(at:) 收的是文本框左下角,y 给 1 就是"底部留 1pt 内边距"。
-                (text as NSString).draw(at: NSPoint(x: 0, y: 1), withAttributes: drawAttributes)
+                // 单行:draw(at:) 收的是文本框左下角,y 给 1 就是"底部留 1pt 内边距"。
+                drawn.draw(at: NSPoint(x: 0, y: 1))
             }
             NSGraphicsContext.restoreGraphicsState()
         }

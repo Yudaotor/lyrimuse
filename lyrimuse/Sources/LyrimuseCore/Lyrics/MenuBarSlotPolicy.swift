@@ -120,15 +120,16 @@ public enum MenuBarSlotPolicy {
 
     /// 自适应模式下装得下的这一句交给谁画:true = 图层(`MenuBarScrollingLabel`),false = 按钮自己画 title。
     ///
-    /// 逐字染色、进度图标、双排都画不进 button.title;**歌词格比文字宽**(起步宽度、占位兜底撑出来的空)时也走图层:
+    /// 逐字染色、进度图标、双排、同一行接着译文(那段画淡,`MenuBarLyricText`)都画不进 button.title;**歌词格比文字宽**(起步宽度、占位兜底撑出来的空)时也走图层:
     /// NSStatusBarButton 的 title 恒在按钮里居中,`alignment` 和段落样式都不认(离屏探针),落不到图层那条路
     /// 「贴左」的位置,两条路并存的话同一首歌里有的句子居中、有的贴左(见 06 章决策 56)。
     /// 按钮自己画只剩「格子正好等于文字宽」这一种,那时左、中、右画出来是同一个位置。
     /// 菜单栏本体和设置页预览共用这一份判据。
     public static func adaptiveDrawsWithLayers(
-        hasFillPath: Bool, hasIcon: Bool, twoRows: Bool, windowWidth: CGFloat, textWidth: CGFloat
+        hasFillPath: Bool, hasIcon: Bool, twoRows: Bool, windowWidth: CGFloat, textWidth: CGFloat,
+        inlineTranslation: Bool = false
     ) -> Bool {
-        hasFillPath || hasIcon || twoRows || windowWidth > textWidth
+        hasFillPath || hasIcon || twoRows || inlineTranslation || windowWidth > textWidth
     }
 
     /// 占位态的槽宽该给多少。

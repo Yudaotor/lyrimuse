@@ -109,8 +109,11 @@ struct MenuBarEditorStage: View {
     /// 无条件报出来是恒定噪声(灵动岛「歌词行」摘要同一条规则)。歌词旁的图标不报:它在预览上一眼就看得见。
     private var contentSummary: String {
         var parts = [MenuBarContentRow.label(for: settings.menuBarLyricsContent)]
-        if settings.menuBarLyricsContent == .lyrics, settings.menuBarSecondaryLine != AppSettings.defaultMenuBarSecondaryLine {
-            parts.append("\(L10n.t("副行")) · \(settings.menuBarSecondaryLine.displayName)")
+        if settings.menuBarLyricsContent == .lyrics,
+           settings.menuBarSecondaryChoice
+            != MenuBarSecondaryChoice(secondary: AppSettings.defaultMenuBarSecondaryLine,
+                                      inline: AppSettings.defaultMenuBarTranslationInline) {
+            parts.append("\(L10n.t("副行")) · \(settings.menuBarSecondaryChoice.displayName)")
         }
         return parts.joined(separator: " · ")
     }
@@ -133,8 +136,7 @@ struct MenuBarEditorStage: View {
             parts.append(FontFamilyPicker.displayName(for: settings.menuBarLyricsFontFamily))
         }
         parts.append(settings.menuBarLyricsFontWeight.displayName)
-        if !settings.menuBarSecondaryLine.showsSecondaryRow || settings.menuBarLyricsContent.showsSongTitle,
-           settings.menuBarLyricsFontSize > 0 {
+        if !settings.menuBarUsesTwoRows, settings.menuBarLyricsFontSize > 0 {
             parts.append(String(format: L10n.t("%@pt"), "\(Int(MenuBarMarqueeRenderer.font.pointSize))"))
         }
         return parts.joined(separator: " ")
@@ -429,6 +431,7 @@ enum MenuBarStyleDefaults {
         // 「内容」浮层
         settings.menuBarLyricsContent = AppSettings.defaultMenuBarLyricsContent
         settings.menuBarSecondaryLine = AppSettings.defaultMenuBarSecondaryLine
+        settings.menuBarTranslationInline = AppSettings.defaultMenuBarTranslationInline
         settings.menuBarLyricsIconPosition = AppSettings.defaultMenuBarLyricsIconPosition
         // 「颜色」浮层
         settings.menuBarLyricsKaraoke = AppSettings.defaultMenuBarLyricsKaraoke
@@ -498,6 +501,7 @@ struct MenuBarContentRow: View {
     static func label(for content: MenuBarLyricsContent) -> String {
         switch content {
         case .lyrics: return L10n.t("歌词")
+        case .translation: return L10n.t("译文")
         case .title: return L10n.t("歌名")
         case .titleArtist: return L10n.t("歌名和歌手")
         }
@@ -507,7 +511,9 @@ struct MenuBarContentRow: View {
         SettingsRow(
             icon: "text.quote",
             title: L10n.t("显示内容"),
-            help: L10n.t("歌名、歌名和歌手：不随歌词切换，暂停时仍收起为图标")
+            help: settings.menuBarLyricsContent == .translation
+                ? L10n.t("显示每一句的译文，没有译文的句子显示原文")
+                : L10n.t("歌名、歌名和歌手：不随歌词切换，暂停时仍收起为图标")
         ) {
             SettingsPillSegmentedControl(
                 selection: $settings.menuBarLyricsContent,
@@ -818,11 +824,13 @@ struct MenuBarSecondaryLineRow: View {
         SettingsRow(
             icon: "text.append",
             title: L10n.t("副行"),
-            help: L10n.t("在主歌词下方增加一行，高度不变（两行分别为 10pt / 9pt，「字号」不生效）。译文和读音对应当前句，「下一句」显示即将演唱的歌词；开启副行时，主行不再提前切换到下一句。副行不滚动，空间不足时末尾渐隐")
+            help: settings.menuBarSecondaryChoice == .translationInline
+                ? L10n.t("译文接在原文后面，排成一行，「字号」照常生效")
+                : L10n.t("在主歌词下方增加一行，高度不变（两行分别为 10pt / 9pt，「字号」不生效）。译文和读音对应当前句，「下一句」显示即将演唱的歌词；开启副行时，主行不再提前切换到下一句。副行不滚动，空间不足时末尾渐隐")
         ) {
             SettingsGlassMenuPicker(
-                selection: $settings.menuBarSecondaryLine,
-                options: LyricSecondaryLine.allCases,
+                selection: $settings.menuBarSecondaryChoice,
+                options: MenuBarSecondaryChoice.allCases,
                 label: \.displayName,
                 compact: true
             )
@@ -852,7 +860,7 @@ struct MenuBarFontSizeRow: View {
             // 之间这一行是整行隐藏的;「副行」搬去「布局」浮层之后,这里再藏整行就成了"字号去哪了",
             // 改成行留着、尾部换一句灰字「由副行决定」指向原因(跟悬浮歌词「文字颜色」在跟随封面时的做法
             // 同款)。这是**值**的位置,不是可点的控件。
-            if settings.menuBarSecondaryLine.showsSecondaryRow && settings.menuBarLyricsContent == .lyrics {
+            if settings.menuBarUsesTwoRows {
                 Text(L10n.t("由副行决定"))
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)

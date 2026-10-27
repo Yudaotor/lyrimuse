@@ -1538,6 +1538,7 @@
 "显示歌曲简介" = "Show Song Notes";
 "显示歌词" = "Show Lyrics";
 "显示歌词校准" = "Show Lyrics Calibration";
+"显示每一句的译文，没有译文的句子显示原文" = "Shows each line's translation; lines without one show the original";
 "显示灵动岛歌词" = "Show Notch Lyrics";
 "显示简介" = "Show Info";
 "显示菜单栏歌词" = "Show Menu Bar Lyrics";
@@ -2361,8 +2362,10 @@
 "诊断信息导出失败，请选择其他位置后重试" = "Couldn't export diagnostics. Try saving them somewhere else";
 "译文" = "Translation";
 "译文与读音" = "Translation & Romanization";
+"译文接在原文后面，排成一行，「字号」照常生效" = "The translation follows the original on one line, and Font Size still applies";
 "译文语言" = "Translation Language";
 "译文间距" = "Translation Spacing";
+"译文（同一行）" = "Translation (Same Line)";
 "译文（机器翻译）" = "Translation (machine)";
 "译文（歌词源自带）" = "Translation (from the source)";
 "试用" = "Try It";

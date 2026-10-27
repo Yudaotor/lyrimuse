@@ -490,13 +490,9 @@ struct PanelQuickSettings: View {
             }
         case .surface(.menuBar):
             row(L10n.t("显示内容")) {
-                // 三档里「歌名和歌手」最长,按设置页的每档 52pt 下限排,英文标题在 296pt 宽的面板里只剩一截;按字宽排。
-                SettingsPillSegmentedControl(
-                    selection: $settings.menuBarLyricsContent,
-                    options: MenuBarLyricsContent.allCases,
-                    label: MenuBarContentRow.label(for:),
-                    minWidth: 0
-                )
+                // 下拉,不用设置页那排胶囊:四档胶囊按字宽排英文也要约 260pt,296pt 宽的面板减去标题只剩约 195pt。
+                PanelGlassMenuPicker(selection: $settings.menuBarLyricsContent,
+                                     options: MenuBarLyricsContent.allCases, label: MenuBarContentRow.label(for:))
             }
             row(L10n.t("歌词位置")) {
                 SettingsPillSegmentedControl(
@@ -545,7 +541,10 @@ struct PanelQuickSettings: View {
             // 「字号」属「字体」组,排在它下面正好让下面那句「由副行决定」的原因就在上一行。
             // 显示歌名时没有歌词句、没有副行,判据同设置页 `MenuBarContentRows`(原因在最上面「显示内容」那行)。
             if settings.menuBarLyricsContent == .lyrics {
-                secondaryLineRow(selection: $settings.menuBarSecondaryLine)
+                row(L10n.t("副行")) {
+                    PanelGlassMenuPicker(selection: $settings.menuBarSecondaryChoice,
+                                         options: MenuBarSecondaryChoice.allCases, label: { $0.displayName })
+                }
             }
             menuBarFontSizeRow
         case .touchBar:
@@ -768,7 +767,7 @@ struct PanelQuickSettings: View {
     /// 符合这块面板"停用/隐藏一个旋钮的前提是把为什么摆在它上面"那条(见菜单栏「对齐方式」处)。
     @ViewBuilder private var menuBarFontSizeRow: some View {
         row(L10n.t("字号")) {
-            if settings.menuBarSecondaryLine.showsSecondaryRow && settings.menuBarLyricsContent == .lyrics {
+            if settings.menuBarUsesTwoRows {
                 Text(L10n.t("由副行决定"))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)

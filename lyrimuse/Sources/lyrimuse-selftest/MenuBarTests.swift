@@ -1301,8 +1301,8 @@ func runMenuBarTests() {
                     "菜单栏三点(契约): 前奏/间奏占位喂的是三点记号串,不是音符")
         expectEqual(statusSrc.contains("let raw = coordinator.rawGapWindow"), true,
                     "菜单栏三点(契约): 点亮进度走**不设门槛**的 rawGapWindow —— 门槛版会让短前奏/短间奏拿不到窗口")
-        expectEqual(sourceHas(statusSrc, "AppSettings.shared.menuBarSecondaryLine.gapDotsWindow(\nraw, compactPlaceholder: coordinator.menuBarLyrics.compactPlaceholder)"), true,
-                    "菜单栏三点(契约): 单行时下一句提前亮出来,点在那一刻走完(同灵动岛 gapDotsWindow)")
+        expectEqual(sourceHas(statusSrc, "AppSettings.shared.menuBarLayoutSecondaryLine.gapDotsWindow(\nraw, compactPlaceholder: coordinator.menuBarLyrics.compactPlaceholder)"), true,
+                    "菜单栏三点(契约): 单行时下一句提前亮出来,点在那一刻走完(同灵动岛 gapDotsWindow;按实际排法,两种译文排法算单行)")
     }
 
     // ---- 间隙里不许闪图标(否则表现为「菜单栏歌词有时消失、过一会儿又回来」)----
@@ -1615,6 +1615,39 @@ func runMenuBarTests() {
         expectEqual(layers(fill: true, window: 98.5, text: 98.5), true, "画法: 逐字染色走图层")
         expectEqual(layers(icon: true, window: 98.5, text: 98.5), true, "画法: 进度图标走图层")
         expectEqual(layers(twoRows: true, window: 98.5, text: 98.5), true, "画法: 双排走图层")
+        expectEqual(MenuBarSlotPolicy.adaptiveDrawsWithLayers(hasFillPath: false, hasIcon: false, twoRows: false,
+                                                              windowWidth: 98.5, textWidth: 98.5, inlineTranslation: true),
+                    true, "画法: 同一行接着译文走图层(译文那段要画淡,button.title 只有一种颜色)")
+    }
+
+    // ---- 主行显示译文 / 原文接着译文(06 章决策 70) ----
+    do {
+        typealias T = MenuBarLyricText
+        expectEqual([T.mode(translationOnly: true, secondary: .nextLine, inline: false),
+                     T.mode(translationOnly: false, secondary: .translation, inline: true),
+                     T.mode(translationOnly: false, secondary: .translation, inline: false),
+                     T.mode(translationOnly: false, secondary: .romanization, inline: true)],
+                    [.translationOnly, .inlineTranslation, .original, .original],
+                    "菜单栏译文: 「显示内容」选译文优先;「同一行」只在副行是译文时起作用")
+        expectEqual([T.layoutSecondary(mode: .translationOnly, secondary: .romanization),
+                     T.layoutSecondary(mode: .inlineTranslation, secondary: .translation),
+                     T.layoutSecondary(mode: .original, secondary: .translation)],
+                    [.off, .off, .translation], "菜单栏译文: 两种译文排法都按单行排版")
+        expectEqual(T.text(plainText: "Hello", translation: " 你好 ", mode: .translationOnly).text, "你好",
+                    "菜单栏译文: 只显示译文,首尾空白剔掉")
+        expectEqual([T.text(plainText: "Hello", translation: nil, mode: .translationOnly).text,
+                     T.text(plainText: "Hello", translation: "  ", mode: .translationOnly).text],
+                    ["Hello", "Hello"], "菜单栏译文: 这一句没有译文时显示原文")
+        let inline = T.text(plainText: "Hello", translation: "你好", mode: .inlineTranslation)
+        expectEqual(inline.text, "Hello" + T.inlineSeparator + "你好", "菜单栏译文: 同一行是原文 + 分隔符 + 译文")
+        expectEqual(inline.translationStart, 5, "菜单栏译文: 画淡从原文末尾(UTF-16 位置)起,分隔符一起淡")
+        expectEqual(T.text(plainText: "😀é", translation: "x", mode: .inlineTranslation).translationStart,
+                    ("😀é" as NSString).length, "菜单栏译文: 画淡位置按 UTF-16 数,不按字符数")
+        expectEqual(T.text(plainText: "Hello", translation: nil, mode: .inlineTranslation).translationStart == nil
+                    && T.text(plainText: "Hello", translation: "你好", mode: .original).text == "Hello",
+                    true, "菜单栏译文: 同一行没有译文时只有原文、不画淡;原文排法不拼译文")
+        expectEqual(T.text(plainText: "مرحبا", translation: "你好", mode: .inlineTranslation).text, "مرحبا",
+                    "菜单栏译文: 原文从右往左时不拼进同一行")
     }
 
     // ---- 面板头部点歌名 / 歌手名 / 专辑名翻到简介(06 章决策 51) ----

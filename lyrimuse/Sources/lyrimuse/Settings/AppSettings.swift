@@ -117,11 +117,47 @@ enum MenuBarLyricsPlacement: String, Codable, Hashable, CaseIterable {
 // (判据在 Core 的 `MenuBarSlotPolicy.displayText`)。
 enum MenuBarLyricsContent: String, Codable, Hashable, CaseIterable {
     case lyrics
+    /// 主行显示这一句的译文,没有译文的句子显示原文(`MenuBarLyricText.Mode.translationOnly`)。单行,不排副行。
+    case translation
     case title
     case titleArtist
 
     /// 显示的是歌名(带不带歌手都算),不是歌词。
-    var showsSongTitle: Bool { self != .lyrics }
+    var showsSongTitle: Bool { self == .title || self == .titleArtist }
+}
+
+/// 菜单栏「副行」下拉的五档:四档副行之外多一档「译文(同一行)」。存成 `menuBarSecondaryLine`(选它时是译文)和
+/// `menuBarTranslationInline` 两个设置:副行那个枚举灵动岛、触控栏也在用,不为菜单栏一处加档。
+enum MenuBarSecondaryChoice: String, CaseIterable, Hashable {
+    case off
+    case nextLine
+    case translation
+    case translationInline
+    case romanization
+
+    init(secondary: LyricSecondaryLine, inline: Bool) {
+        switch secondary {
+        case .off: self = .off
+        case .nextLine: self = .nextLine
+        case .translation: self = inline ? .translationInline : .translation
+        case .romanization: self = .romanization
+        }
+    }
+
+    var secondary: LyricSecondaryLine {
+        switch self {
+        case .off: return .off
+        case .nextLine: return .nextLine
+        case .translation, .translationInline: return .translation
+        case .romanization: return .romanization
+        }
+    }
+
+    var inline: Bool { self == .translationInline }
+
+    var displayName: String {
+        self == .translationInline ? L10n.t("译文（同一行）") : secondary.displayName
+    }
 }
 
 // 菜单栏图标的大小:图标独占那一格、歌词旁那枚进度图标、封面方块、播放时的动画一起按 `scale` 缩放。
@@ -340,6 +376,7 @@ final class AppSettings: ObservableObject {
         static let menuBarLyricsFontWeight = "np:menuBarLyricsFontWeight"
         static let menuBarLyricsFontSize = "np:menuBarLyricsFontSize"
         static let menuBarSecondaryLine = "np:menuBarSecondaryLine"
+        static let menuBarTranslationInline = "np:menuBarTranslationInline"
         static let menuBarHoverShowsControls = "np:menuBarHoverShowsControls"
         static let menuBarShowsTitleWhenNoLyrics = "np:menuBarShowsTitleWhenNoLyrics"
         static let menuBarIconStyle = "np:menuBarIconStyle"
@@ -672,6 +709,8 @@ final class AppSettings: ObservableObject {
     static let defaultMenuBarShowsTitleWhenNoLyrics = true
     /// 菜单栏那一格显示歌词还是歌名。在「重置」范围内(`MenuBarStyleDefaults.restoreDefaults()`)。
     static let defaultMenuBarLyricsContent = MenuBarLyricsContent.lyrics
+    /// 见 `menuBarTranslationInline`。在「重置」范围内。
+    static let defaultMenuBarTranslationInline = false
     static let defaultMenuBarLyricsTextColorHex = ""
     static let defaultMenuBarLyricsFillColorHex = ""
     /// 菜单栏歌词的字体族。空串 = 跟随系统菜单栏(`FontFamilyPicker` 那套"空串 = 跟随系统"哨兵,
@@ -1198,6 +1237,32 @@ final class AppSettings: ObservableObject {
     /// 开着时主行 10pt / 副行 9pt、`menuBarLyricsFontSize` 不生效,见 `MenuBarLyricRows`。
     @Published var menuBarSecondaryLine: LyricSecondaryLine {
         didSet { defaults.set(menuBarSecondaryLine.rawValue, forKey: Keys.menuBarSecondaryLine) }
+    }
+    /// 副行选译文时,译文接在原文后面排成一行(「副行」下拉里的「译文(同一行)」,`MenuBarSecondaryChoice`)。
+    /// 副行不是译文时不起作用。
+    @Published var menuBarTranslationInline: Bool {
+        didSet { defaults.set(menuBarTranslationInline, forKey: Keys.menuBarTranslationInline) }
+    }
+    /// 「副行」下拉那一格,读写上面两个设置。
+    var menuBarSecondaryChoice: MenuBarSecondaryChoice {
+        get { MenuBarSecondaryChoice(secondary: menuBarSecondaryLine, inline: menuBarTranslationInline) }
+        set {
+            if menuBarSecondaryLine != newValue.secondary { menuBarSecondaryLine = newValue.secondary }
+            if menuBarTranslationInline != newValue.inline { menuBarTranslationInline = newValue.inline }
+        }
+    }
+    /// 菜单栏主行的排法:原文 / 只显示译文 / 原文接着译文(`MenuBarLyricText`)。
+    var menuBarLyricTextMode: MenuBarLyricText.Mode {
+        MenuBarLyricText.mode(translationOnly: menuBarLyricsContent == .translation,
+                              secondary: menuBarSecondaryLine, inline: menuBarTranslationInline)
+    }
+    /// 菜单栏实际按哪种副行排版:两种译文排法都按单行。
+    var menuBarLayoutSecondaryLine: LyricSecondaryLine {
+        MenuBarLyricText.layoutSecondary(mode: menuBarLyricTextMode, secondary: menuBarSecondaryLine)
+    }
+    /// 菜单栏此刻排两行(显示歌词、副行开着、不是同一行译文)。「字号」让位成「由副行决定」按它判。
+    var menuBarUsesTwoRows: Bool {
+        menuBarLyricsContent == .lyrics && menuBarLayoutSecondaryLine.showsSecondaryRow
     }
     /// 鼠标停在菜单栏歌词上时,歌词收掉、换成「上一曲 / 播放暂停 / 下一曲」三个键。默认**关**:
     /// 它改的是既有手势的语义(悬停时歌词看不见了、左键那一下可能落到某个键上而不是弹面板),
@@ -2513,6 +2578,8 @@ final class AppSettings: ObservableObject {
             (defaults.object(forKey: Keys.menuBarLyricsFontSize) as? Double) ?? Double(Self.defaultMenuBarLyricsFontSize))
         menuBarSecondaryLine = defaults.string(forKey: Keys.menuBarSecondaryLine)
             .flatMap(LyricSecondaryLine.init(rawValue:)) ?? Self.defaultMenuBarSecondaryLine
+        menuBarTranslationInline = (defaults.object(forKey: Keys.menuBarTranslationInline) as? Bool)
+            ?? Self.defaultMenuBarTranslationInline
         // 默认关,理由见属性上那段注释(改的是既有手势的语义)。
         menuBarHoverShowsControls = (defaults.object(forKey: Keys.menuBarHoverShowsControls) as? Bool)
             ?? Self.defaultMenuBarHoverShowsControls

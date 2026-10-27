@@ -56946,6 +56946,75 @@
           }
         }
       }
+    },
+    "译文（同一行）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translation (Same Line)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "译文（同一行）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "譯文（同一行）"
+          }
+        }
+      }
+    },
+    "显示每一句的译文，没有译文的句子显示原文" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows each line's translation; lines without one show the original"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示每一句的译文，没有译文的句子显示原文"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示每一句的譯文，沒有譯文的句子顯示原文"
+          }
+        }
+      }
+    },
+    "译文接在原文后面，排成一行，「字号」照常生效" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation follows the original on one line, and Font Size still applies"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "译文接在原文后面，排成一行，「字号」照常生效"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "譯文接在原文後面，排成一行，「字級」照常生效"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

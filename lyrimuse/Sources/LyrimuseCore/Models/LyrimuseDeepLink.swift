@@ -104,12 +104,13 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// `hover=1|0`、`click=left|right`:当作指针进出、在正中第一扇正中点了一下(左键 / 右键),不动真鼠标验交互;
         /// 右键弹出的菜单 3 秒后自己收。
         case menuBarCenter(center: Bool?, ignoreNotch: Bool?, screen: String? = nil, hover: Bool? = nil, click: String? = nil)
-        /// 菜单栏图标用不用封面(`artwork`)、那一格显示什么(`content`:lyrics / title / titleArtist,同设置页
-        /// 「显示内容」三档)、图标大小(`icon-size`:small / standard / large)、图标款式(`icon-style`:
-        /// `MenuBarIconStyle` 的 rawValue)、悬停显示播放控制(`hover-controls`),跟设置页走同一个设置:
-        /// `debug/menubar-display?artwork=1&content=title&icon-size=large&icon-style=vinyl&hover-controls=1`,至少带一个。
+        /// 菜单栏图标用不用封面(`artwork`)、那一格显示什么(`content`:lyrics / translation / title / titleArtist,同设置页
+        /// 「显示内容」四档)、图标大小(`icon-size`:small / standard / large)、图标款式(`icon-style`:
+        /// `MenuBarIconStyle` 的 rawValue)、悬停显示播放控制(`hover-controls`)、副行(`secondary`:off / nextLine /
+        /// translation / translationInline / romanization,同设置页「副行」五档),跟设置页走同一个设置:
+        /// `debug/menubar-display?artwork=1&content=title&icon-size=large&icon-style=vinyl&hover-controls=1&secondary=off`,至少带一个。
         case menuBarDisplay(artwork: Bool?, content: String?, iconSize: String? = nil, iconStyle: String? = nil,
-                            hoverControls: Bool? = nil)
+                            hoverControls: Bool? = nil, secondary: String? = nil)
         /// 日语读音标罗马字还是假名,跟设置页「日语读音」走同一条路(`debug/japanese-reading?style=romaji|kana`)。
         case japaneseReading(JapaneseReadingStyle)
         /// 主线程原地睡这么多毫秒(`debug/stall?ms=`,1…`maxStallMs`):造出「别的窗口把主线程占住」那一下,验动画扛不扛得住。
@@ -254,9 +255,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let iconSize = value("icon-size").flatMap { $0.isEmpty ? nil : $0 }
             let iconStyle = value("icon-style").flatMap { $0.isEmpty ? nil : $0 }
             let hoverControls = value("hover-controls").flatMap(Self.parseBool)
-            guard artwork != nil || content != nil || iconSize != nil || iconStyle != nil || hoverControls != nil else { return nil }
+            let secondary = value("secondary").flatMap { $0.isEmpty ? nil : $0 }
+            guard artwork != nil || content != nil || iconSize != nil || iconStyle != nil || hoverControls != nil
+                    || secondary != nil else { return nil }
             self = .debug(.menuBarDisplay(artwork: artwork, content: content, iconSize: iconSize, iconStyle: iconStyle,
-                                          hoverControls: hoverControls))
+                                          hoverControls: hoverControls, secondary: secondary))
         case ("debug", "/notch-behavior"):
             let collapse = value("collapse-when-paused").flatMap(Self.parseBool)
             let hide = value("hide-when-not-playing").flatMap(Self.parseBool)
@@ -389,13 +392,16 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                     + (screen.map { [URLQueryItem(name: "screen", value: $0)] } ?? [])
                     + (hover.map { [URLQueryItem(name: "hover", value: $0 ? "1" : "0")] } ?? [])
                     + (click.map { [URLQueryItem(name: "click", value: $0)] } ?? [])
-            case let .menuBarDisplay(artwork, content, iconSize, iconStyle, hoverControls):
+            case let .menuBarDisplay(artwork, content, iconSize, iconStyle, hoverControls, secondary):
                 components.path = "/menubar-display"
-                components.queryItems = (artwork.map { [URLQueryItem(name: "artwork", value: $0 ? "1" : "0")] } ?? [])
-                    + (content.map { [URLQueryItem(name: "content", value: $0)] } ?? [])
-                    + (iconSize.map { [URLQueryItem(name: "icon-size", value: $0)] } ?? [])
-                    + (iconStyle.map { [URLQueryItem(name: "icon-style", value: $0)] } ?? [])
-                    + (hoverControls.map { [URLQueryItem(name: "hover-controls", value: $0 ? "1" : "0")] } ?? [])
+                var items: [URLQueryItem] = []
+                if let artwork { items.append(URLQueryItem(name: "artwork", value: artwork ? "1" : "0")) }
+                if let content { items.append(URLQueryItem(name: "content", value: content)) }
+                if let iconSize { items.append(URLQueryItem(name: "icon-size", value: iconSize)) }
+                if let iconStyle { items.append(URLQueryItem(name: "icon-style", value: iconStyle)) }
+                if let hoverControls { items.append(URLQueryItem(name: "hover-controls", value: hoverControls ? "1" : "0")) }
+                if let secondary { items.append(URLQueryItem(name: "secondary", value: secondary)) }
+                components.queryItems = items
             case let .notchBehavior(collapse, hide, progressLine, allScreens):
                 components.path = "/notch-behavior"
                 components.queryItems = (collapse.map { [URLQueryItem(name: "collapse-when-paused", value: $0 ? "1" : "0")] } ?? [])
