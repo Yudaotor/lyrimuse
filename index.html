@@ -29,7 +29,7 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<script src="assets/lp.js?v=202610262239" defer fetchpriority="high"></script>
+<script src="assets/lp.js?v=202610271453" defer fetchpriority="high"></script>
 <style>:root {
 --bg: #fbfbfd;
 --bg-alt: #f5f5f7;
@@ -195,10 +195,15 @@ h1 > span { display: inline-block; max-width: 100%; }
 :lang(zh) h1 { letter-spacing: -.015em; line-height: 1.1; }
 :lang(zh) .lede { letter-spacing: 0; }
 .lede { max-width: 760px; margin: 0; font-size: clamp(18px, 2vw, 22px); line-height: 1.45; letter-spacing: -.01em; font-weight: 500; text-wrap: balance; }
-.lede span { color: var(--ink-3); }
+.lede span { display: block; color: var(--ink-3); }
 .lede, .ch-lede { word-break: keep-all; overflow-wrap: anywhere; }
 .nw { white-space: nowrap; }
 .cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 34px; }
+.btn-send { display: none; }
+@media (hover: none) and (pointer: coarse) {
+.js .btn-send { display: inline-flex; }
+.js .cta .dl-download, .js #copyBrew { display: none; }
+}
 .fine { margin: 18px 0 0; font-size: 13px; color: var(--ink-3); letter-spacing: .01em; }
 @property --fp { syntax: "<percentage>"; inherits: false; initial-value: -12%; }
 @property --p { syntax: "<percentage>"; inherits: false; initial-value: 0%; }
@@ -465,6 +470,47 @@ background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, .14) 46
 #profile .ch-stage { --wx: 70%; --wy: 20%; }
 #discord .ch-stage { --wx: 40%; --wy: 85%; }
 #custom .ch-stage { --wx: 8%; --wy: 70%; --wz: 170%; }
+.ch-head.ch-split {
+max-width: none; display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 56px; align-items: end; text-align: left;
+}
+.ch-split h2 { font-size: clamp(34px, 4.4vw, 58px); }
+.ch-split .k { margin-left: 0; }
+.ch-split .ch-lede { margin: 0 0 8px; max-width: 30em; }
+.wall-lilac .ch-wall { background-image: radial-gradient(120% 60% at 50% 4%, rgba(255, 255, 255, .28), transparent 60%), url("assets/img/wallpaper-lilac.webp"); }
+.wall-peach .ch-wall { background-image: radial-gradient(120% 60% at 50% 4%, rgba(255, 255, 255, .28), transparent 60%), url("assets/img/wallpaper-peach.webp"); }
+.ch.ch-duo {
+--ink: #f5f5f7; --ink-2: rgba(245, 245, 247, .7); --ink-3: rgba(245, 245, 247, .42);
+max-width: none; margin-top: 150px; padding: 110px 24px 130px; color: var(--ink);
+background: radial-gradient(60% 50% at 50% 0%, rgba(176, 71, 159, .28), transparent 70%), #141117;
+}
+.duo { max-width: 1132px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.62fr) minmax(0, 1fr); gap: 24px; }
+.duo-card { display: flex; flex-direction: column; min-width: 0; }
+.duo-card h3 { margin: 0 0 6px; font-size: 21px; font-weight: 650; letter-spacing: -.015em; }
+.duo-card > p { margin: 0 0 22px; font-size: 15px; line-height: 1.55; color: var(--ink-2); min-height: 3.1em; }
+.duo-card .show { flex: 1; display: flex; flex-direction: column; }
+.duo-card .ch-stage { box-shadow: 0 0 0 1px rgba(255, 255, 255, .08); }
+.duo-wide .ch-stage { aspect-ratio: 16 / 11; }
+.ch-dc .ch-stage { flex: 1; aspect-ratio: auto; }
+.voices { list-style: none; max-width: 1132px; margin: 0 auto; padding: 0; columns: 3 300px; column-gap: 20px; }
+.voice {
+break-inside: avoid; margin: 0 0 20px; padding: 24px 24px 20px; border-radius: 22px; background: var(--card);
+box-shadow: 0 0 0 1px var(--line), 0 18px 40px -30px rgba(60, 20, 60, .35);
+}
+.voice blockquote { margin: 0 0 16px; font-size: 17px; line-height: 1.6; letter-spacing: -.005em; }
+.voice .who { margin: 0; font-size: 14px; color: var(--ink-2); }
+.voice .who b { color: var(--ink); font-weight: 600; }
+.voice .who a { color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.voice .who a:hover { color: var(--brand-ink); }
+.voice .tr { margin: 4px 0 0; font-size: 12px; color: var(--ink-3); }
+@media (max-width: 820px) {
+.ch-head.ch-split { display: block; text-align: center; }
+.ch-split .k { margin-left: auto; }
+.ch-split .ch-lede { margin: 22px auto 0; }
+.ch.ch-duo { margin-top: 104px; padding: 80px 16px 96px; }
+.duo { grid-template-columns: minmax(0, 1fr); gap: 56px; }
+.duo-card > p { min-height: 0; }
+.ch-dc .ch-stage { flex: none; aspect-ratio: 4 / 3.5; }
+}
 .view {
 position: absolute; inset: 0; z-index: 1; margin: 0; padding: 6% 7% 100px;
 display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center;
@@ -1217,6 +1263,8 @@ background: var(--card); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0
 .hero.far, .hero.far *, .hero.far *::before, .hero.far *::after { animation-play-state: paused !important; }
 .ch.watch { contain-intrinsic-size: auto 960px; }
 .ch-more { contain-intrinsic-size: auto 590px; }
+.ch-duo { contain-intrinsic-size: auto 1080px; }
+.ch-voices { contain-intrinsic-size: auto 720px; }
 .news { contain-intrinsic-size: auto 170px; }
 .faq-sec { contain-intrinsic-size: auto 600px; }
 .final { contain-intrinsic-size: auto 470px; }
@@ -1224,6 +1272,8 @@ background: var(--card); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0
 .ch { contain-intrinsic-size: auto 620px; }
 .ch.watch { contain-intrinsic-size: auto 470px; }
 .ch-more { contain-intrinsic-size: auto 760px; }
+.ch-duo { contain-intrinsic-size: auto 1500px; }
+.ch-voices { contain-intrinsic-size: auto 1450px; }
 .news { contain-intrinsic-size: auto 450px; }
 .faq-sec { contain-intrinsic-size: auto 680px; }
 .final { contain-intrinsic-size: auto 490px; }
@@ -1554,7 +1604,7 @@ html { scroll-behavior: auto; }
   <a class="eyebrow reveal" href="changelog/#v1.11.0"><span class="orbit" aria-hidden="true"><i></i></span><span class="dot"></span>New in 1.11.0: Liquid Glass and web lyrics <span class="arrow">›</span></a>
 
   <h1 class="reveal sing"><span>Desktop lyrics,</span> <span>reimagined for the Mac.</span></h1>
-  <p class="lede reveal">Lyric, meet Muse. <span>Hand the lyrics to your muse. You just listen.</span></p>
+  <p class="lede reveal">Word-synced lyrics on your desktop, in the menu bar and under the notch. <span>Works with Apple Music, Spotify and 9 more players.</span></p>
 
   <div class="cta reveal">
     <div class="dl dl-download"><a class="btn btn-dark dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5v9m0 0-3.5-3.5M8 10.5l3.5-3.5M2.5 13.5h11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Download Lyrimuse<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
@@ -1565,6 +1615,7 @@ html { scroll-behavior: auto; }
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>All downloads on GitHub</b><em>Every version, ZIPs and checksums</em></span></a>
       <p class="dl-note">Lyrimuse isn&#x27;t notarized by Apple, so macOS blocks its first launch from the DMG: open System Settings → Privacy &amp; Security and click Open Anyway. Homebrew takes care of this.</p>
     </div></div>
+    <button class="btn btn-dark btn-send" type="button" data-copied="Link copied. Open it on your Mac."><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V1.8m0 0L5 4.8m3-3 3 3M5.5 7H4a1.5 1.5 0 0 0-1.5 1.5v4.5A1.5 1.5 0 0 0 4 14.5h8a1.5 1.5 0 0 0 1.5-1.5V8.5A1.5 1.5 0 0 0 12 7h-1.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="send-label">Send to my Mac</span></button>
     <button class="btn btn-light" type="button" id="copyBrew" data-copy="brew tap yudaotor/lyrimuse&#10;brew trust --cask yudaotor/lyrimuse/lyrimuse&#10;brew install --cask lyrimuse" data-copied="Copied. Paste it into Terminal."><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 3.5V3a1.5 1.5 0 0 0-1.5-1.5h-6A1.5 1.5 0 0 0 2 3v6a1.5 1.5 0 0 0 1.5 1.5H4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="copy-label">Copy Homebrew install</span></button>
   </div>
   <p class="fine reveal"><span class="nw">Open source</span> · <span class="nw">macOS 14 or later</span> · <span class="nw">Apple Silicon and Intel</span></p>
@@ -1771,10 +1822,10 @@ html { scroll-behavior: auto; }
   </div>
 </section>
 
-<section class="ch" id="matching">
-  <header class="ch-head reveal">
-    <p class="k">Lyric matching</p>
-    <h2><span class="lead">Fourteen lyric sources,</span> <span class="fx">one right answer.</span></h2>
+<section class="ch ch-split wall-lilac" id="matching">
+  <header class="ch-head ch-split reveal">
+    <div class="ch-title"><p class="k">Lyric matching</p>
+    <h2><span class="lead">Fourteen lyric sources,</span> <span class="fx">one right answer.</span></h2></div>
     <p class="ch-lede">Every result is scored the same way and the best one wins. Wrong one? Search or edit it, and your pick stays locked.</p>
   </header>
   <div class="show reveal">
@@ -1863,15 +1914,18 @@ html { scroll-behavior: auto; }
   </div>
 </section>
 
-<section class="ch" id="profile">
+<section class="ch ch-duo" id="listen">
   <header class="ch-head reveal">
-    <p class="k">Listening profile</p>
-    <h2><span class="lead">Every play,</span> <span class="fx">kept in your listening profile.</span></h2>
-    <p class="ch-lede">Scrobbles to Last.fm and ListenBrainz, with stats, charts and a year-long footprint.</p>
+    <p class="k">Listening profile and Discord</p>
+    <h2><span class="lead">Keep every play,</span> <span class="fx">and let friends see what&#x27;s on.</span></h2>
   </header>
-  <div class="show reveal">
-    <div class="ch-stage">
-      <i class="ch-wall" aria-hidden="true"></i><i class="spot" aria-hidden="true"></i>
+  <div class="duo">
+    <div class="duo-card duo-wide" id="profile">
+      <h3>Listening profile</h3>
+      <p>Scrobbles to Last.fm, with stats, charts and a year-long footprint.</p>
+      <div class="show reveal">
+        <div class="ch-stage">
+          <i class="ch-wall" aria-hidden="true"></i><i class="spot" aria-hidden="true"></i>
       <figure class="view v-pn on"><div class="pn pn-lf" role="img" aria-label="Plays today, this week and in total, with recent scrobbles"><div class="pn-in lf">
         <div class="lf-card lf-nums">
           <div><b data-count="128">128</b><span>Today</span></div>
@@ -1927,19 +1981,15 @@ html { scroll-behavior: auto; }
         <div class="lf-card fp-otd"><header><b>On This Day</b><span class="dim">3 years ago today: 42 plays, most on repeat</span></header><ul><li><img class="cv" src="assets/img/demo/blinding-lights.webp" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>Blinding Lights</b><span>The Weeknd</span></span><span class="dim">×9</span></li><li><img class="cv" src="assets/img/demo/covers/taylor-lover.webp" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>Cruel Summer</b><span>Taylor Swift</span></span><span class="dim">×6</span></li><li><img class="cv" src="assets/img/demo/covers/coldplay-parachutes.webp" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>Yellow</b><span>Coldplay</span></span><span class="dim">×5</span></li></ul></div>
       </div></div></figure>
       <div class="seg glass" role="tablist" aria-label="Listening profile"><span class="seg-thumb" aria-hidden="true"></span><button class="seg-btn" type="button" role="tab" aria-selected="true"><span>Stats</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Top Artists</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Top Albums</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Footprint</span><i class="seg-bar" aria-hidden="true"></i></button></div>
+        </div>
+      </div>
     </div>
-  </div>
-</section>
-
-<section class="ch ch-dc" id="discord">
-  <header class="ch-head reveal">
-    <p class="k">Discord status</p>
-    <h2><span class="lead">Let your Discord friends</span> <span class="fx">see what you&#x27;re listening to.</span></h2>
-    <p class="ch-lede">The song, artist, album and cover show on your Discord profile, with progress that keeps moving, plus the line being sung if you like. It&#x27;s off until you turn it on, and it only talks to the Discord app on this Mac.</p>
-  </header>
-  <div class="show reveal">
-    <div class="ch-stage">
-      <i class="ch-wall" aria-hidden="true"></i><i class="spot" aria-hidden="true"></i>
+    <div class="duo-card ch-dc" id="discord">
+      <h3>Discord status</h3>
+      <p>Song, artist, album and cover on your Discord profile, plus the line being sung if you like.</p>
+      <div class="show reveal">
+        <div class="ch-stage">
+          <i class="ch-wall" aria-hidden="true"></i><i class="spot" aria-hidden="true"></i>
       <figure class="view v-dc on"><div class="dcz live" role="img" aria-label="A Discord profile card showing the song you&#x27;re listening to, with its cover, album and progress, beside the friends list"><div class="dc-win"><div class="dc-pop">
             <div class="dc-banner"></div>
             <span class="dc-big dc-you">Y<i class="dc-on"></i></span>
@@ -1956,14 +2006,16 @@ html { scroll-behavior: auto; }
               </div>
             </div>
           </div><ul class="dc-list"><li class="dc-grp">Online — 4</li><li class="dc-row dc-friend"><span class="dc-av">M<i class="dc-on"></i></span><span class="dc-nm"><b>Momo</b><span class="dc-st">Playing Minecraft</span></span></li><li class="dc-row dc-me"><span class="dc-av dc-you">Y<i class="dc-on"></i></span><span class="dc-nm"><b>You</b><span class="dc-st"><em>♫</em><span data-t="title"></span></span></span></li><li class="dc-row dc-friend"><span class="dc-av">R<i class="dc-on"></i></span><span class="dc-nm"><b>Ryan</b></span></li><li class="dc-row dc-friend"><span class="dc-av"><img src="assets/img/yudaotor.webp" alt="" loading="lazy" decoding="async"><i class="dc-on"></i></span><span class="dc-nm"><b>Yudaotor</b></span></li></ul></div></div></figure>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-<section class="ch" id="custom">
-  <header class="ch-head reveal">
-    <p class="k">Make it yours</p>
-    <h2><span class="lead">Tune every detail,</span> <span class="fx">and watch it change as you do.</span></h2>
+<section class="ch ch-split wall-peach" id="custom">
+  <header class="ch-head ch-split reveal">
+    <div class="ch-title"><p class="k">Make it yours</p>
+    <h2><span class="lead">Tune every detail,</span> <span class="fx">and watch it change as you do.</span></h2></div>
     <p class="ch-lede">Fonts, colours, widths and positions, each page with a live preview. Drag the slider to try it.</p>
   </header>
   <div class="show reveal">
@@ -2082,6 +2134,22 @@ html { scroll-behavior: auto; }
   <p class="watch-more reveal"><a href="features/">See every feature and setting <span aria-hidden="true">›</span></a></p>
 </section>
 
+<section class="ch ch-voices" id="voices">
+  <header class="ch-head reveal">
+    <p class="k">What people say</p>
+    <h2><span class="lead">From the people</span> <span class="fx">who use it.</span></h2>
+  </header>
+  <ul class="voices">
+    <li class="voice reveal"><blockquote>Works great in real use. The interface looks much better, and the developer updates fast: I filed two issues and both were fixed in the next version.</blockquote><p class="who"><b>kimiyeah001</b> · <a href="https://github.com/ddddxxx/LyricsX/issues/648#issuecomment-5628778428" rel="noopener">on LyricsX&#x27;s GitHub</a></p><p class="tr">Translated from Chinese</p></li>
+    <li class="voice reveal"><blockquote>Great app. Its lyric search is better than LyricsX&#x27;s.</blockquote><p class="who"><b>何慕菱</b> · <a href="https://www.bilibili.com/video/BV1CXH66yEUJ#reply320536319264" rel="noopener">Bilibili comment</a></p><p class="tr">Translated from Chinese</p></li>
+    <li class="voice reveal"><blockquote>I&#x27;ve been using it for a week. The UI really is beautiful, and it&#x27;s pretty convenient overall…</blockquote><p class="who"><b>BilyHurington</b> · <a href="https://www.bilibili.com/video/BV1CXH66yEUJ#reply319765695248" rel="noopener">Bilibili comment</a></p><p class="tr">Translated from Chinese</p></li>
+    <li class="voice reveal"><blockquote>The Dynamic Island UI is really refined and beautiful, so I use it all the time…</blockquote><p class="who"><b>Reggie-pan</b> · <a href="https://github.com/Yudaotor/lyrimuse/issues/48#issuecomment-6283280390" rel="noopener">GitHub issue</a></p><p class="tr">Translated from Chinese</p></li>
+    <li class="voice reveal"><blockquote>Thank you so much for this project! Compared with LyricsX and the like, it brings lots of great new experiences!…</blockquote><p class="who"><b>TheEwwtube</b> · <a href="https://www.bilibili.com/video/BV1CXH66yEUJ#reply316010924657" rel="noopener">Bilibili comment</a></p><p class="tr">Translated from Chinese</p></li>
+    <li class="voice reveal"><blockquote>Love that you took matters into your own hands. I never realized lyrics come from one studio session and are applied to every version of the song.</blockquote><p class="who"><b>Jake Haug</b> · <a href="https://www.producthunt.com/products/lyrimuse?comment=5851419" rel="noopener">Product Hunt</a></p></li>
+    <li class="voice reveal"><blockquote>…Lyrimuse is the perfect successor to LyricsX. …Both the display styles and the other features (especially the listening profile) are very well thought out…</blockquote><p class="who"><b>Newlearner</b> · <a href="https://t.me/NewlearnerChannel/15982" rel="noopener">Telegram tech channel</a></p><p class="tr">Translated from Chinese</p></li>
+  </ul>
+</section>
+
 <section class="news reveal" aria-labelledby="newsTitle">
   <div class="news-in">
     <div class="news-meta"><p class="news-k">Latest update</p><h2 id="newsTitle"><a href="changelog/#v1.11.0">v1.11.0</a></h2><time datetime="2026-10-20">20 October 2026</time></div>
@@ -2129,6 +2197,7 @@ html { scroll-behavior: auto; }
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>All downloads on GitHub</b><em>Every version, ZIPs and checksums</em></span></a>
       <p class="dl-note">Lyrimuse isn&#x27;t notarized by Apple, so macOS blocks its first launch from the DMG: open System Settings → Privacy &amp; Security and click Open Anyway. Homebrew takes care of this.</p>
     </div></div>
+      <button class="btn btn-white btn-send" type="button" data-copied="Link copied. Open it on your Mac."><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V1.8m0 0L5 4.8m3-3 3 3M5.5 7H4a1.5 1.5 0 0 0-1.5 1.5v4.5A1.5 1.5 0 0 0 4 14.5h8a1.5 1.5 0 0 0 1.5-1.5V8.5A1.5 1.5 0 0 0 12 7h-1.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="send-label">Send to my Mac</span></button>
       <a class="btn btn-ghost mag" href="https://github.com/Yudaotor/lyrimuse">View on GitHub</a>
       <a class="btn btn-ghost mag btn-sponsor" href="https://github.com/sponsors/Yudaotor"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14s-5.5-3.3-5.5-7.2A3 3 0 0 1 8 4.9a3 3 0 0 1 5.5 1.9C13.5 10.7 8 14 8 14z"/></svg>Sponsor</a>
     </div>

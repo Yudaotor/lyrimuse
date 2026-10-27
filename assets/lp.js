@@ -789,6 +789,27 @@
     });
   });
 
+  // Send to my Mac (phones and tablets): the share sheet (AirDrop, Messages, Mail) where there is one, otherwise the
+  // link is copied and the label says so for a moment.
+  document.querySelectorAll('.btn-send').forEach((btn) => {
+    const label = btn.querySelector('.send-label');
+    const orig = label.textContent;
+    btn.addEventListener('click', async () => {
+      const url = location.origin + location.pathname;
+      if (navigator.share) {
+        try { await navigator.share({ title: 'Lyrimuse', url }); } catch {}
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        label.textContent = btn.dataset.copied;
+      } catch {
+        label.textContent = url;
+      }
+      setTimeout(() => { label.textContent = orig; }, 2400);
+    });
+  });
+
   // Copy the Homebrew commands; labels come from the button's data attributes.
   const copyBtn = $('copyBrew');
   if (copyBtn) {
