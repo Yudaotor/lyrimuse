@@ -126,17 +126,10 @@ struct NotchEarProgressLine: View {
             let fraction = ticking
                 ? anchor.map { NotchProgressLine.fraction(total: total, positionMs: $0.extrapolatedPositionMs(now: Date())) }
                 : NotchProgressLine.frozenFraction(anchor: anchor, pausedPositionMs: pausedPositionMs, durationMs: durationMs)
-            ZStack {
-                halves(card: shape, fraction: fraction)
-                if let fraction {
-                    NotchEarHeadShape(card: shape, notchWidth: notchWidth, notchHeight: outline.notchHeight,
-                                      cardSize: cardSize, fraction: fraction)
-                        .fill(Color.white.opacity(0.9))
-                }
-            }
-            // 换歌、跳进度时线和亮点滑过去;平时一拍拍往前走不补间(`NotchEarProgressMotion.jumpKey`)。
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.45),
-                       value: NotchEarProgressMotion.jumpKey(anchor: anchor, now: Date()))
+            halves(card: shape, fraction: fraction)
+                // 换歌、跳进度时线滑过去;平时一拍拍往前走不补间(`NotchEarProgressMotion.jumpKey`)。
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.45),
+                           value: NotchEarProgressMotion.jumpKey(anchor: anchor, now: Date()))
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.35)) {
             $0.opacity(paused ? Self.pausedOpacity : 1)
@@ -160,39 +153,6 @@ struct NotchEarProgressLine: View {
                 fill.mask(played)
             }
         }
-    }
-}
-
-/// 「耳朵」进度线的线头:左右两半各一颗白点,不闪、不带光晕。位置按同一条路径算(`NotchEarProgressPath.point(atFraction:)`),
-/// 卡片尺寸和进度都是可动画值:跟线一起变形,跳进度时沿路径滑过去(不走直线斜穿卡片)。
-struct NotchEarHeadShape: Shape {
-    let card: NotchHangingShape
-    let notchWidth: CGFloat
-    let notchHeight: CGFloat
-    var cardSize: CGSize
-    var fraction: Double
-
-    static let radius: CGFloat = 1.6
-
-    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, Double> {
-        get { AnimatablePair(AnimatablePair(cardSize.width, cardSize.height), fraction) }
-        set {
-            cardSize = CGSize(width: newValue.first.first, height: newValue.first.second)
-            fraction = newValue.second
-        }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        let geometry = NotchEarProgressShape.geometry(size: cardSize, card: card, notchWidth: notchWidth,
-                                                      notchHeight: notchHeight)
-        let head = geometry.point(atFraction: CGFloat(fraction))
-        let left = rect.midX - cardSize.width / 2
-        let r = Self.radius
-        var p = Path()
-        for x in [left + head.x, left + cardSize.width - head.x] {
-            p.addEllipse(in: CGRect(x: x - r, y: rect.minY + head.y - r, width: r * 2, height: r * 2))
-        }
-        return p
     }
 }
 

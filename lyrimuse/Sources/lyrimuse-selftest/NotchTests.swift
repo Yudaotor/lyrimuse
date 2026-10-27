@@ -405,19 +405,6 @@ func runNotchTests() {
                       inset: 1.75).cornerRadius, 0, "进度线耳朵: 卡片底角比内缩还小时直角拐弯")
         expectEqual(E(width: 196, height: 32, notchWidth: 180, notchHeight: 32, shoulder: 4, cardCornerRadius: 8,
                       inset: 1.75).endX, 12, "进度线耳朵: 耳朵窄到刘海左沿在圆弧里时终点停在圆弧末端,不倒退")
-        // 进度头亮点:沿路径按长度取点,起点在屏幕上沿、终点在刘海边,中间落在竖段 / 底角 / 底边上。
-        func near(_ a: CGPoint, _ b: CGPoint) -> Bool { abs(a.x - b.x) < 1e-6 && abs(a.y - b.y) < 1e-6 }
-        let shoulderArc: CGFloat = 5 * asin(0.8)
-        expectEqual([near(low.point(atFraction: 0), CGPoint(x: 3, y: 0)),
-                     near(low.point(atFraction: 1), CGPoint(x: 90, y: 31)),
-                     near(low.point(atFraction: (shoulderArc + 10) / low.length), CGPoint(x: 5, y: 14)),
-                     near(low.point(atFraction: (shoulderArc + 20 + CGFloat.pi / 4 * 7) / low.length),
-                          CGPoint(x: 12 - 7 * cos(CGFloat.pi / 4), y: 24 + 7 * sin(CGFloat.pi / 4))),
-                     near(low.point(atFraction: (shoulderArc + 20 + CGFloat.pi / 2 * 7 + 30) / low.length), CGPoint(x: 42, y: 31)),
-                     near(low.point(atFraction: -0.5), CGPoint(x: 3, y: 0)),
-                     near(low.point(atFraction: 1.5), CGPoint(x: 90, y: 31))],
-                    [true, true, true, true, true, true, true],
-                    "进度线耳朵: 亮点沿路径按长度取点(起点、终点、竖段、底角中点、底边),超出 0～1 夹住")
         typealias Motion = NotchEarProgressMotion
         let t0 = Date(timeIntervalSince1970: 1_800_000_000)
         let playing = ProgressAnchor(durationMs: 200_000, progressMs: 30_000, rate: 1, progressTs: nil, baseAgeMs: 0, fetchedAt: t0)
@@ -1279,14 +1266,25 @@ func runNotchTests() {
                     "音符色: 纯灰封面没有鲜艳色,画白")
         expectEqual(ArtworkVividColor.color(rgba: vividPixels { $0 < vividCount / 100 ? (220, 20, 30) : (40, 40, 40) }) == nil,
                     true, "音符色: 鲜艳的像素不到 2% 不算")
-        // 进度线那档(`Tone.deep`):同一块红取到的是饱和、不偏白的红,对比只留 2:1。
+        // 进度线那档(`Tone.deep`):同一块红取到的是不偏白的红,对比只留 2:1。
         if let deep = ArtworkVividColor.color(rgba: redOnGray, tone: .deep),
            let note = ArtworkVividColor.color(rgba: redOnGray) {
             let maxC = max(deep.r, deep.g, deep.b), minC = min(deep.r, deep.g, deep.b)
-            expectEqual(deep.r > deep.g && deep.r > deep.b && (maxC - minC) / maxC > 0.8 && minC < note.g, true,
-                        "进度线色: 灰封面上一块红,取到饱和的红(比音符色更深更艳,最暗那一路明显更低)")
+            expectEqual(deep.r > deep.g && deep.r > deep.b && (maxC - minC) / maxC > 0.7 && minC < note.g, true,
+                        "进度线色: 灰封面上一块红,取到不偏白的红(比音符色更深,最暗那一路明显更低)")
         } else {
             expectEqual(false, true, "进度线色: 灰封面上一块红,应该取得到")
+        }
+        // 大片暗蓝紫上一块亮洋红:音符色取最亮最艳的洋红,进度线取整体的紫(蓝 > 红)。
+        let violetWithMagenta = vividPixels { i in
+            i < vividCount * 4 / 10 ? (60, 40, 140) : i < vividCount * 65 / 100 ? (230, 40, 200) : (30, 28, 34)
+        }
+        if let deep = ArtworkVividColor.color(rgba: violetWithMagenta, tone: .deep),
+           let note = ArtworkVividColor.color(rgba: violetWithMagenta) {
+            expectEqual(note.r > note.b, true, "音符色: 蓝紫混洋红的封面取最亮的洋红")
+            expectEqual(deep.b > deep.r && deep.r > deep.g, true, "进度线色: 蓝紫混洋红的封面取整体的紫,不是洋红")
+        } else {
+            expectEqual(false, true, "进度线色: 蓝紫混洋红的封面应该取得到")
         }
         if let gold = ArtworkVividColor.color(rgba: vividPixels { _ in (200, 150, 40) }) {
             expectEqual(gold.r >= gold.g && gold.g > gold.b, true, "音符色: 金色封面取到的还是金色")
@@ -2690,12 +2688,11 @@ func runNotchTests() {
         expectEqual(sourceHas(progressLine, ".animation(reduceMotion ? nil : .easeInOut(duration: 0.45),\n value: NotchEarProgressMotion.jumpKey(anchor: anchor, now: Date()))")
                     && sourceHas(progressLine, "$0.opacity(paused ? Self.pausedOpacity : 1)")
                     && !progressLine.contains("FrameTimeline(") && !progressLine.contains("repeatForever")
-                    && sourceHas(progressLine, "NotchEarHeadShape(card: shape, notchWidth: notchWidth, notchHeight: outline.notchHeight,\n cardSize: cardSize, fraction: fraction)\n .fill(Color.white.opacity(0.9))")
-                    && sourceHas(progressLine, "let head = geometry.point(atFraction: CGFloat(fraction))"), true,
-                    "进度线耳朵动效: 跳进度才滑、暂停变暗、线头白点不闪不带光晕、跟线按同一条路径取点(变形和跳进度都随线走)")
+                    && !progressLine.contains("HeadShape"), true,
+                    "进度线耳朵动效: 跳进度才滑、暂停变暗、不画线头")
         expectEqual(v.components(separatedBy: "?? playback.currentDurationMs, tint: progressLineTint,").count == 3
                     && sourceHas(v, "private var progressLineTint: Color {\n playback.vividDeepAccent ?? accentOrWhite\n }"), true,
-                    "进度线: 底边和耳朵两档都用封面最鲜艳那种色相的深艳版,没有时退回前景色")
+                    "进度线: 底边和耳朵两档都用封面大片那种色相的深色版,没有时退回前景色")
         expectEqual(sourceHas(v, "NotchExpandedLyricList(tint: accentOrWhite)")
                     && sourceHas(v, ".modifier(NotchCardLayerActive(active: expanded, staggered: staggered, waitsForResize: true))")
                     && sourceHas(v, "if waitsForResize { return curve.delay(Self.resizeSettleDelay) }")

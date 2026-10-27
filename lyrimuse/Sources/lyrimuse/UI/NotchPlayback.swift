@@ -114,7 +114,7 @@ final class NotchPlayback: ObservableObject {
     /// 换歌翻牌那条歌名前那枚音符的颜色:封面(高清替代优先)里最鲜艳的那种(`ArtworkVividColor`);没有封面、或封面里
     /// 没有够鲜艳的颜色时为 nil(画白)。换图时在后台算,只认最后一次换图的结果。
     @Published private(set) var vividAccent: Color?
-    /// 同一种色相的深而艳版本(`ArtworkVividColor.Tone.deep`),进度线用;nil 的条件同 `vividAccent`。
+    /// 进度线用的那份(`ArtworkVividColor.Tone.deep`):封面大片的那种色相、深色版;nil 的条件同 `vividAccent`。
     @Published private(set) var vividDeepAccent: Color?
     private var vividGeneration = 0
     /// 歌词行末尾那枚封面缩略图要不要显示、贴哪一边。走这里现读而不是

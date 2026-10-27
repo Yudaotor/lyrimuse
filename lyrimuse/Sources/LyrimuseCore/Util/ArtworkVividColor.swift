@@ -1,30 +1,39 @@
 import CoreGraphics
 import Foundation
 
-/// 封面里最鲜艳的那种颜色,调成深底上读得清的亮色。换歌翻牌那条歌名前的音符用它:封面平均色(强调色的来源)往往是
-/// 一片灰米色,做点缀颜色不够。
+/// 封面里有彩色的那部分取一种颜色,调成深底上看得清的颜色。换歌翻牌那条歌名前的音符、灵动岛进度线用它:封面平均色
+/// (强调色的来源)往往是一片灰米色,做点缀颜色不够。
 ///
-/// 缩到 64×64,只看饱和度 ≥ 0.35、亮度 ≥ 0.3 的像素,按色相分 24 格、以「饱和度 × 亮度」加权,取最重的相邻三格的
-/// 加权平均色;这些像素占不到 2% 就算没有(nil,调用方画白)。再按 `Tone` 定 HSL 饱和度和亮度,最后跟强调色同一道对比修正:
-/// 对「封面平均色 × (1 − 压暗)」那块估计底色拉开 `Tone.minContrast`(`LocalPlaybackSource.accentAgainstStroke`)。
+/// 缩到 64×64,只看饱和度 ≥ 0.35、亮度 ≥ `Tone.minBrightness` 的像素,按色相分 24 格加权(`Tone.weighsBrightness`),
+/// 取最重的连续 `2 × Tone.hueSpread + 1` 格的加权平均色;这些像素占不到 2% 就算没有(nil,调用方画白)。再按 `Tone`
+/// 定 HSL 饱和度和亮度,最后跟强调色同一道对比修正:对「封面平均色 × (1 − 压暗)」那块估计底色拉开 `Tone.minContrast`
+/// (`LocalPlaybackSource.accentAgainstStroke`)。
 public enum ArtworkVividColor {
     public static let side = 64
     private static let minSaturation = 0.35
-    private static let minBrightness = 0.3
     private static let hueBins = 24
     private static let minShare = 0.02
 
     /// 取到色相之后调成什么样。
     public struct Tone: Equatable, Sendable {
+        /// 取色相时看最重格两侧各几格。
+        public var hueSpread: Int
+        public var minBrightness: Double
+        /// 按「饱和度 × 亮度」加权(偏向最亮最艳的那一小块);否则只按饱和度(偏向占地方最多的那片颜色)。
+        public var weighsBrightness: Bool
         public var saturationRange: ClosedRange<Double>
         public var lightness: Double
         public var minContrast: Double
 
-        /// 音符色:深底上读得清的亮色(饱和度 0.6~0.92、亮度 0.74、对比 4.5:1)。
-        public static let note = Tone(saturationRange: 0.6...0.92, lightness: 0.74, minContrast: 4.5)
-        /// 进度线:深而艳,饱和度拉满、亮度在纯色那一档(0.5)。对比只留 2:1:提亮是往白里混,3:1 在中灰的封面底上
-        /// 就会把纯红提成粉色;2:1 只在真快看不见时(深蓝在黑底上)提一点。
-        public static let deep = Tone(saturationRange: 0.9...1, lightness: 0.5, minContrast: 2)
+        /// 音符色:封面里最鲜艳的那种色相(相邻三格、按饱和度 × 亮度),深底上读得清的亮色(饱和度 0.6~0.92、
+        /// 亮度 0.74、对比 4.5:1)。
+        public static let note = Tone(hueSpread: 1, minBrightness: 0.3, weighsBrightness: true,
+                                      saturationRange: 0.6...0.92, lightness: 0.74, minContrast: 4.5)
+        /// 进度线:封面大片的那种色相(连续 7 格即 105°、只按饱和度、暗到 0.15 的像素也算),蓝紫混洋红的封面取到紫,
+        /// 不是最亮的那块洋红。饱和度 0.6~0.75、亮度在纯色那一档(0.5)。对比只留 2:1:提亮是往白里混,3:1 在中灰的
+        /// 封面底上就会把红提成粉色;2:1 只在真快看不见时(深蓝在黑底上)提一点。
+        public static let deep = Tone(hueSpread: 3, minBrightness: 0.15, weighsBrightness: false,
+                                      saturationRange: 0.6...0.75, lightness: 0.5, minContrast: 2)
     }
 
     /// 居中裁方、高质量缩到 `side × side`(`ArtworkThumbnail.squareBitmap`)再取色。建不出来或没有够鲜艳的颜色返回 nil。
@@ -62,26 +71,30 @@ public enum ArtworkVividColor {
             meanB += b
             let maxC = max(r, g, b), minC = min(r, g, b)
             let saturation = maxC <= 0 ? 0 : (maxC - minC) / maxC
-            guard saturation >= minSaturation, maxC >= minBrightness else { continue }
+            guard saturation >= minSaturation, maxC >= tone.minBrightness else { continue }
             let bin = Int(hue(r: r, g: g, b: b, maxC: maxC, minC: minC) * Double(hueBins)) % hueBins
-            let k = saturation * maxC
+            let k = tone.weighsBrightness ? saturation * maxC : saturation
             weight[bin] += k
             hits[bin] += 1
             sumR[bin] += r * k
             sumG[bin] += g * k
             sumB[bin] += b * k
         }
+        let spread = min(max(tone.hueSpread, 0), (hueBins - 1) / 2)
+        func bins(around bin: Int) -> [Int] {
+            (-spread...spread).map { (bin + $0 + hueBins) % hueBins }
+        }
         var best = -1
         var bestWeight = 0.0
         for bin in 0..<hueBins {
-            let w = weight[(bin + hueBins - 1) % hueBins] + weight[bin] + weight[(bin + 1) % hueBins]
+            let w = bins(around: bin).reduce(0.0) { $0 + weight[$1] }
             if w > bestWeight {
                 bestWeight = w
                 best = bin
             }
         }
         guard best >= 0 else { return nil }
-        let window = [(best + hueBins - 1) % hueBins, best, (best + 1) % hueBins]
+        let window = bins(around: best)
         guard Double(window.reduce(0) { $0 + hits[$1] }) / Double(pixels) >= minShare else { return nil }
         let rawR = window.reduce(0.0) { $0 + sumR[$1] } / bestWeight
         let rawG = window.reduce(0.0) { $0 + sumG[$1] } / bestWeight
