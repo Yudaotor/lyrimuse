@@ -566,36 +566,55 @@ public enum Romanizer {
         return out
     }
 
-    /// 韩语按空格切词的"片段"——跟 japaneseSegments 形状一致(UTF16 范围 + 读音),但来源
-    /// 不是分词器,是文本自带的词间空格:韩语原文本来就按空格分词,罗马字转写(服务端给的
-    /// 或 ICU 现算的)会保留同样的词间空格,不需要跟日语一样现分词。实测坐实:
-    /// "나는 너를 사랑해"(3 词)→ ICU 给的 "naneun neoleul salanghae" 恰好也是 3 个空格
-    /// 分隔的词、顺序不变;而单字块内部(比如"안녕"→"annyeong")ICU 不插空格,所以这里
-    /// 是按**词**跟逐字词做归并,不是按谚文字符——一个词常常横跨好几个逐字词(酷狗式的
-    /// 逐字切分一个谚文字一个词很常见),归并算法复用 mergeSegmentsIntoWordGroups 那套。
+    /// 韩语一行的"片段"——跟 japaneseSegments 形状一致(UTF16 范围 + 读音),一个谚文音节一段,读音标在各自的音节下面,
+    /// 归并成逐字词的组复用 mergeSegmentsIntoWordGroups 那套(一个逐字词横跨几个音节时,组里各音节的读音空格连起来)。
     ///
-    /// 词数(空格分隔的段数)对不上时返回 nil——多半是罗马字来源对这一行的标点/空格做了
-    /// 什么改写,宁可放弃对齐、退回整行罗马音,也不要猜错位置(跟 hanRomanization 那条
-    /// 分支同一个安全网思路)。
-    ///
-    /// 罗马音按音节加空格(「틀을 깨」→「teu reul  kkae」)时词数对不上,按 `readingSpans` 逐音节对上,一个词的
-    /// 读音是它那几个音节连起来(「teureul」)。
+    /// 整行罗马音先按 `readingSpans` 跟原文逐段对上,对不上返回 nil(视图退回整行罗马音)。罗马音按音节加空格
+    /// (「틀을 깨」→「teu reul  kkae」)时直接一个音节一段;按词连写(「사랑해요」→「saranghaeyo」)时按
+    /// `KoreanRomanization.syllableReadings` 切成音节,切出来连起来跟那个词的读音字母一样才用(大小写原样取罗马音里的),
+    /// 不一样(别的拼法,「salanghae」)或词里夹着汉字、英文时,这个词照旧整个一段。见 10 章决策 58。
     public static func koreanSegments(_ text: String, romanization: String) -> [JapaneseSegment]? {
         guard let spans = readingSpans(text, romanization: romanization) else { return nil }
         let roman = romanization as NSString
+        let line = text as NSString
         var segs: [JapaneseSegment] = []
-        var s = 0
-        for word in whitespaceSeparated(text) {
-            var pieces: [String] = []
-            while s < spans.count, spans[s].textEnd <= word.end {
-                pieces.append(roman.substring(with: NSRange(location: spans[s].romanStart,
-                                                            length: spans[s].romanEnd - spans[s].romanStart)))
-                s += 1
+        for span in spans {
+            let latin = roman.substring(with: NSRange(location: span.romanStart, length: span.romanEnd - span.romanStart))
+            let piece = line.substring(with: NSRange(location: span.textStart, length: span.textEnd - span.textStart))
+            if let syllables = koreanSyllableSegments(piece, start: span.textStart, reading: latin) {
+                segs.append(contentsOf: syllables)
+            } else {
+                segs.append(JapaneseSegment(utf16Start: span.textStart, utf16Length: span.textEnd - span.textStart,
+                                            latin: latin))
             }
-            guard !pieces.isEmpty else { continue }
-            segs.append(JapaneseSegment(utf16Start: word.start, utf16Length: word.end - word.start, latin: pieces.joined()))
         }
         return segs.isEmpty ? nil : segs
+    }
+
+    /// 一个韩文词跟它连写的读音按音节切开(`koreanSegments` 那条按词连写的路)。词里的谚文音节得连成一段,前后只许有
+    /// 标点;标点并进挨着的那个音节。只有一个音节、或对不上时返回 nil。
+    static func koreanSyllableSegments(_ word: String, start: Int, reading: String) -> [JapaneseSegment]? {
+        let runs = syllableRuns(word, offset: start)
+        let hangul = runs.indices.filter { runs[$0].syllable }
+        guard hangul.count >= 2, let first = hangul.first, let last = hangul.last,
+              hangul == Array(first...last),
+              hangul.allSatisfy({ runs[$0].text.unicodeScalars.allSatisfy { (0xAC00...0xD7A3).contains($0.value) } }),
+              !runs.contains(where: { !$0.syllable && $0.text.unicodeScalars.contains { CharacterSet.alphanumerics.contains($0) } }),
+              let pieces = KoreanRomanization.syllableReadings(hangul.map { runs[$0].text }.joined())
+        else { return nil }
+        let letters = Array(reading).filter { $0.isLetter || $0.isNumber }
+        guard String(letters).lowercased() == pieces.joined().lowercased() else { return nil }
+        var out: [JapaneseSegment] = []
+        var offset = 0
+        for (n, index) in hangul.enumerated() {
+            let length = pieces[n].count
+            let segStart = n == 0 ? start : runs[index].start
+            let segEnd = n == hangul.count - 1 ? start + word.utf16.count : runs[index].end
+            out.append(JapaneseSegment(utf16Start: segStart, utf16Length: segEnd - segStart,
+                                       latin: String(letters[offset..<offset + length])))
+            offset += length
+        }
+        return out
     }
 
     /// 原文的一段(UTF-16 范围)跟整行罗马音里的一截(UTF-16 范围,首尾不含空白)。

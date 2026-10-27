@@ -2496,10 +2496,8 @@ public final class LyricsSyncEngine {
     //   toJyutpingLine 的注释),不需要分词,直接按下标一一配对(空白词不算字、
     //   不占音节,见下面那段);字数与音节数对不上
     //   (标点/多字词等边界情形)时保守放弃,让视图退回整行罗马音,不猜、不硬凑。
-    // - 韩语(koreanRomanization):跟日语一样可能有"一个词横跨好几个
-    //   逐字词"的情况(酷狗式逐字切分一个谚文字一个词很常见),但韩语原文本来就按
-    //   空格分词、罗马字转写保留同样的空格(见 Romanizer.koreanSegments 的实测注释),
-    //   不需要跟日语一样现分词,片段直接从空格切出来,复用同一套合并算法。
+    // - 韩语(koreanRomanization):一个谚文音节一个片段(Romanizer.koreanSegments),
+    //   逐字词横跨几个音节时复用同一套合并算法。
     public static func buildWordGroups(
         words: [SyncedLyricWord], line: String, japanese: Bool,
         marks: [KanaAnnotation.Mark] = [],

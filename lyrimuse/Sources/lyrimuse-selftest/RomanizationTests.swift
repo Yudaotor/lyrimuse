@@ -192,17 +192,21 @@ func runRomanizationTests() {
         Romanizer.romanize("Baby I love you", japanese: true), nil,
         "Romanizer: 日文歌里的英文行没有罗马音可言")
 
-    // ---- 韩语按空格切词的片段:跟日语分词器形状一致,但来源是原文自带的空格 ----
+    // ---- 韩语片段:一个谚文音节一段,读音按音节切 ----
     do {
-        // 单词内部(谚文字符之间)ICU 不插空格,整个词是一个片段。
+        // 按词连写的读音按音节切开,连读的收音归后一个音节。
         let one = Romanizer.koreanSegments("안녕하세요", romanization: "annyeonghaseyo")
-        expectEqual(one?.count, 1, "韩语片段: 单词(5 个谚文字符)→ 1 个片段,内部不拆")
-        expectEqual(one?.first?.latin, "annyeonghaseyo", "韩语片段: 读音就是整个词的转写")
-        expectEqual(one?.first?.utf16Start, 0, "韩语片段: 起点在行首")
-        expectEqual(one?.first?.utf16Length, "안녕하세요".utf16.count, "韩语片段: 长度覆盖整个词")
-        // 多词按空格切,词数与罗马字词数必须一一对应、顺序不变。
+        expectEqual(one?.map(\.latin), ["an", "nyeong", "ha", "se", "yo"], "韩语片段: 连写的读音按音节切开")
+        expectEqual(one?.map(\.utf16Start), [0, 1, 2, 3, 4], "韩语片段: 一个音节一段,位置按音节")
+        expectEqual(Romanizer.koreanSegments("음악이", romanization: "eumagi")?.map(\.latin), ["eu", "ma", "gi"],
+                    "韩语片段: 连读挪过去的收音算后一个音节的")
+        expectEqual(Romanizer.koreanSegments("사랑해요,", romanization: "Saranghaeyo,")?.map(\.latin),
+                    ["Sa", "rang", "hae", "yo"], "韩语片段: 大小写原样、标点不进读音")
+        expectEqual(Romanizer.koreanSegments("사랑해요,", romanization: "Saranghaeyo,")?.last.map { $0.utf16End },
+                    "사랑해요,".utf16.count, "韩语片段: 词尾的标点并进最后一个音节")
+        // 拼法跟我们的转写不一样(「neoleul」「salanghae」)的词照旧整个一段,对得上的(「naneun」)按音节切。
         let three = Romanizer.koreanSegments("나는 너를 사랑해", romanization: "naneun neoleul salanghae")
-        expectEqual(three?.map(\.latin), ["naneun", "neoleul", "salanghae"], "韩语片段: 3 词对 3 词,顺序不变")
+        expectEqual(three?.map(\.latin), ["na", "neun", "neoleul", "salanghae"], "韩语片段: 拼法对不上的词整个一段")
         // 词数对不上时放弃,不猜、不错位。
         expectEqual(
             Romanizer.koreanSegments("나는 너를 사랑해", romanization: "naneun salanghae") == nil,
@@ -210,11 +214,25 @@ func runRomanizationTests() {
         expectEqual(Romanizer.koreanSegments("", romanization: "") == nil, true, "韩语片段: 空输入放弃")
         // 罗马音按音节加空格(词间两个空格、英文照抄):按音节对上,一个词的读音是它那几个音节连起来。
         let syllabic = Romanizer.koreanSegments("틀을 깨 Can't stop", romanization: "teu reul  kkae  Can't stop")
-        expectEqual(syllabic?.map(\.latin), ["teureul", "kkae", "Can't", "stop"],
-                    "韩语片段: 罗马音按音节加空格时逐音节对上")
-        expectEqual(syllabic?.map(\.utf16Start), [0, 3, 5, 11], "韩语片段: 按音节对上时各词的位置不变")
-        expectEqual(Romanizer.koreanSegments("봐, 지금", romanization: "bwa  ji geum")?.map(\.latin), ["bwa", "jigeum"],
+        expectEqual(syllabic?.map(\.latin), ["teu", "reul", "kkae", "Can't", "stop"],
+                    "韩语片段: 罗马音按音节加空格时一个音节一段")
+        expectEqual(syllabic?.map(\.utf16Start), [0, 1, 3, 5, 11], "韩语片段: 按音节对上时各段的位置")
+        expectEqual(Romanizer.koreanSegments("봐, 지금", romanization: "bwa  ji geum")?.map(\.latin), ["bwa", "ji", "geum"],
                     "韩语片段: 罗马音里省掉的标点不占音节")
+        // 按音节给读音:音变跨音节算,算完按音节切。
+        let syl = KoreanRomanization.syllableReadings
+        expectEqual(syl("같이"), ["ga", "chi"], "韩文音节读音: 腭化")
+        expectEqual(syl("좋아"), ["jo", "a"], "韩文音节读音: ㅎ 收音碰上元音不念")
+        expectEqual(syl("몰라"), ["mol", "la"], "韩文音节读音: ㄹㄹ 一边一个 l")
+        expectEqual(syl("국민"), ["gung", "min"], "韩文音节读音: 鼻音化")
+        expectEqual(syl("축하"), ["chu", "ka"], "韩文音节读音: 送气音并进后一个音节")
+        expectEqual(syl("있는"), ["in", "neun"], "韩文音节读音: 紧音不写、鼻音化")
+        expectEqual(syl("사랑 해") == nil, true, "韩文音节读音: 夹着空格不算一串音节")
+        expectEqual(syl("") == nil, true, "韩文音节读音: 空串")
+        expectEqual(KoreanRomanization.syllableReadings("안녕하세요")?.joined(), KoreanRomanization.romanize("안녕하세요"),
+                    "韩文音节读音: 连起来跟整串转写一样")
+        expectEqual(Romanizer.koreanSegments("愛해", romanization: "aehae")?.map(\.latin), ["aehae"],
+                    "韩语片段: 词里夹汉字的不切")
         expectEqual(Romanizer.koreanSegments("나는", romanization: "naneun neoleul") == nil, true,
                     "韩语片段: 一个音节配上不像一个音节的罗马音时放弃")
         expectEqual(Romanizer.koreanSegments("이제 Pick", romanization: "i je  Kick") == nil, true,
@@ -228,7 +246,8 @@ func runRomanizationTests() {
             words: [SyncedLyricWord(text: "틀을 ", startMs: 0, durationMs: 300),
                     SyncedLyricWord(text: "깨", startMs: 300, durationMs: 300)],
             line: "틀을 깨", japanese: false, koreanRomanization: "teu reul  kkae")
-        expectEqual(syllabicGroups?.map(\.romanization), ["teureul", "kkae"], "韩语: 罗马音按音节加空格时也分得出组")
+        expectEqual(syllabicGroups?.map(\.romanization), ["teu reul", "kkae"],
+                    "韩语: 逐字词是整个词时,组里各音节的读音空格连起来")
         // 韩文整行罗马音逐段对不上(两种空格夹着写、多带一截和声):按英文锚点和读音长度切;英文对不上的不切。
         func offset(_ s: String, _ sub: String) -> Int { s.utf16.distance(from: s.utf16.startIndex, to: s.range(of: sub)!.lowerBound) }
         let mixedText = "간직해왔던 불꽃을 일으켜", mixedRoma = "ganji kae watdeon bul kkocheul  i reukyeo"
@@ -299,9 +318,8 @@ func runRomanizationTests() {
         expectEqual(jaWithHan?.first?.romanization != "wrong", true,
                     "日文行不该被 hanRomanization 顶替,分词器结果优先")
 
-        // ---- 韩语的逐词对齐:像日语一样可能"一个词横跨好几个逐字词" ----
-        // 酷狗式逐字切分:「나는」被拆成「나」「는」两个逐字词,罗马字词汇"naneun"要标在
-        // 这两个逐字词合起来的那一组上,不是各标半个词。
+        // ---- 韩语的逐词对齐:酷狗式逐字切分一个音节一个逐字词 ----
+        // 「나는」的读音按音节切开、各标各的;「너를」的拼法(neoleul)切不开,整个词标在两个逐字词合起来的那一组上。
         let koWords = [w("나", 0, 150), w("는", 150, 150), w(" ", 300, 0),
                        w("너", 300, 150), w("를", 450, 150)]
         let koGroups = LyricsSyncEngine.buildWordGroups(
@@ -311,9 +329,9 @@ func runRomanizationTests() {
             let flat = koGroups.flatMap { g in g.words.map(\.text) }.joined()
             expectEqual(flat, "나는 너를", "韩语: 分组必须完整覆盖原行、不丢字不重复")
             expectEqual(koGroups.contains { $0.words.count > 1 }, true,
-                        "韩语: 「나는」这种跨多个逐字词的词必须并成一组")
+                        "韩语: 切不开的词跨多个逐字词时并成一组")
             expectEqual(koGroups.map { $0.romanization }.compactMap { $0 },
-                        ["naneun", "neoleul"], "韩语: 两个词各自标对读音,不串位")
+                        ["na", "neun", "neoleul"], "韩语: 各音节、各词标对读音,不串位")
         }
         // 词数对不上时保守放弃。
         expectEqual(
@@ -1354,20 +1372,17 @@ func runRomanizationTests() {
 
         // ---- 逐字歌词的韩语对齐:酷狗式一个谚文字一个逐字词,要合并成"词"再对齐 ----
         do {
-            // 「안녕」两个谚文字被切成两个逐字词(酷狗式一字一词、词间**没有**空格——
-            // 这两个字本来就是同一个词的两个音节块,YRC 原文里紧挨着,不像"作词 "那种
-            // 后面跟真实空格的整词),罗马字("annyeong")是整个词一份、不拆开,必须合并成
-            // 一组才能对上,不能各标半个读音。
+            // 「안녕」两个谚文字被切成两个逐字词(酷狗式一字一词),整词的罗马字("annyeong")按音节切开,
+            // 一个逐字词一组、各标各的音节。
             let koYRC = "[0,1000](0,150,0)안(150,150,0)녕\n"
             let koRomaLRC = "[00:00.00]annyeong\n"
             let engine = LyricsSyncEngine()
             engine.load(lyrics: "", lyricsTr: "", lyricsRoma: koRomaLRC, lyricsYRC: koYRC,
                         romanizationScripts: [.korean])
             let line = engine.activeLine(atMs: 100)
-            expectEqual(line?.wordGroups?.count, 1, "端到端: 韩语「안녕」两个逐字词合并成一组")
-            expectEqual(line?.wordGroups?.first?.words.count, 2, "端到端: 那一组里包含两个逐字词")
-            expectEqual(line?.wordGroups?.first?.romanization, "annyeong",
-                        "端到端: 整组标的是这个词完整的罗马字,不是拆开的半个读音")
+            expectEqual(line?.wordGroups?.count, 2, "端到端: 韩语「안녕」两个逐字词各成一组")
+            expectEqual(line?.wordGroups?.map(\.romanization), ["an", "nyeong"],
+                        "端到端: 每组标自己那个音节的读音")
             // 关掉韩语罗马音开关后退回没有 wordGroups。
             let engineOff = LyricsSyncEngine()
             engineOff.load(lyrics: "", lyricsTr: "", lyricsRoma: koRomaLRC, lyricsYRC: koYRC,
@@ -1582,8 +1597,8 @@ func runRomanizationTests() {
         expectEqual(Romanizer.romanize("사랑 愛"), "sarang ài", "Romanizer: 韩文行里的汉字照旧走 ICU")
         expectEqual(Romanizer.romanize("Привет"), "Privet", "Romanizer: 西里尔字母照旧走 ICU")
         expectEqual(Romanizer.koreanSegments("나는 너를 사랑해", romanization: Romanizer.romanize("나는 너를 사랑해") ?? "")?
-                        .map(\.latin), ["naneun", "neoreul", "saranghae"],
-                    "Romanizer: 按读音的转写词数不变,逐词对齐照旧对得上")
+                        .map(\.latin), ["na", "neun", "neo", "reul", "sa", "rang", "hae"],
+                    "Romanizer: 客户端自己转写的读音每个音节都切得开")
 
         // 整份 LRC(引擎预生成那条)与启动迁移用的「是不是旧版」判定。
         let lyrics = "[00:01.00]사랑해\n[00:02.00]같이 가자\n[00:03.00]Yeah yeah"

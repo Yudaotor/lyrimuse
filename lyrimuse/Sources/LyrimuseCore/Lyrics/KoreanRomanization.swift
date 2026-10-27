@@ -19,14 +19,8 @@ import Foundation
 public enum KoreanRomanization {
     public static func romanize(_ text: String) -> String {
         guard text.unicodeScalars.contains(where: { isSyllable($0) || isJamo($0) }) else { return text }
-        var jamo = decomposed(insertingNieun(text))
-        for rule in rules {
-            jamo = rule.regex.stringByReplacingMatches(
-                in: jamo, range: NSRange(location: 0, length: (jamo as NSString).length),
-                withTemplate: rule.template)
-        }
         var out = String.UnicodeScalarView()
-        for scalar in jamo.unicodeScalars {
+        for scalar in pronounced(text).unicodeScalars {
             if let latin = latinByJamo[scalar] {
                 out.append(contentsOf: latin.unicodeScalars)
             } else {
@@ -34,6 +28,70 @@ public enum KoreanRomanization {
             }
         }
         return String(out)
+    }
+
+    /// 一串连写的谚文音节(中间不夹别的字符)按音节给读音,音变跟 `romanize` 一样跨音节算:算完每个音节仍恰好留一个
+    /// 中声,收音归前一个音节、初声归后一个(같이 → ga / chi),ㄹㄹ 的「ll」一边一个,送气音前的连字符不要。规则里没挪的
+    /// 收音碰上后一个音节开头不发音的 ㅇ 时也归后一个(음악이 → eu / ma / gi),ㅇ 收音(ng)除外。不是纯谚文音节、或切出来的
+    /// 段数跟音节数对不上时返回 nil。
+    public static func syllableReadings(_ syllables: String) -> [String]? {
+        let count = syllables.unicodeScalars.count
+        guard count > 0, syllables.unicodeScalars.allSatisfy(isSyllable) else { return nil }
+        let scalars = Array(pronounced(syllables).unicodeScalars)
+        var pieces: [String] = []
+        var current = ""
+        var hasMedial = false
+        var trailingFinal: Unicode.Scalar?
+        func startPiece() {
+            pieces.append(current)
+            current = ""
+            hasMedial = false
+        }
+        var i = 0
+        while i < scalars.count {
+            let s = scalars[i]
+            switch s.value {
+            case 0x1100...0x1112:
+                var carried = ""
+                if s.value == 0x110B, let final = trailingFinal, final.value != 0x11BC,
+                   let latin = latinByJamo[final], current.hasSuffix(latin) {
+                    current.removeLast(latin.count)
+                    carried = latin
+                }
+                if hasMedial { startPiece() }
+                current += carried + (latinByJamo[s] ?? "")
+            case 0x1161...0x1175:
+                if hasMedial { startPiece() }
+                current += latinByJamo[s] ?? ""
+                hasMedial = true
+            case 0x11A8...0x11C2:
+                current += latinByJamo[s] ?? ""
+            case 0x6C where i + 1 < scalars.count && scalars[i + 1].value == 0x6C:
+                current += "l"
+                startPiece()
+                current = "l"
+                i += 1
+            case 0x2D:
+                break
+            default:
+                return nil
+            }
+            trailingFinal = (0x11A8...0x11C2).contains(s.value) ? s : nil
+            i += 1
+        }
+        if !current.isEmpty { pieces.append(current) }
+        return pieces.count == count && !pieces.contains(where: \.isEmpty) ? pieces : nil
+    }
+
+    /// 补 ㄴ、拆成字母、按顺序套完读音规则之后的字母串(还没换成拉丁字母)。
+    private static func pronounced(_ text: String) -> String {
+        var jamo = decomposed(insertingNieun(text))
+        for rule in rules {
+            jamo = rule.regex.stringByReplacingMatches(
+                in: jamo, range: NSRange(location: 0, length: (jamo as NSString).length),
+                withTemplate: rule.template)
+        }
+        return jamo
     }
 
     private static let syllableBase: UInt32 = 0xAC00
