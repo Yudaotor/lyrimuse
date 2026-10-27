@@ -4,8 +4,7 @@ import Foundation
 /// 悬浮歌词图层行(`OverlayScrollingLyricRow`)的横向排版:每个字的起止位置、逐词读音的落点、
 /// 整张长图多宽。文字宽度由调用方传进来(Core 里没有字体)。
 ///
-/// 开了逐词罗马音时一组一列:上面是这一组的字,下面是它的读音,两行都左对齐;列宽取上下两行
-/// 更宽的那个。读音左右各留 `romaSidePadding(strokeInset:)`,没有读音的组按一个空格占位 —— 滚动
+/// 开了逐词罗马音时一组一列:上面是这一组的字,下面是它的读音,两行都左对齐;列宽见 `columnWidth`。读音左右各留 `romaSidePadding(strokeInset:)`,没有读音的组按一个空格占位 —— 滚动
 /// 模式、换行模式(`WrappedKaraokeRows` 每行一条图层行,同样走这里)和前奏首句的逐词列(SwiftUI)
 /// 都读这一个函数,列宽一致,开唱或切换模式那一刻读音不挪位,相邻两组读音也不会首尾相接。
 public enum OverlayRowLayout {
@@ -17,6 +16,18 @@ public enum OverlayRowLayout {
     /// 描边之外看到的字缝跟不描边时一样宽。三处排版都读这里,别各写一个数。
     public static func romaSidePadding(strokeInset: CGFloat) -> CGFloat {
         romaSidePadding + max(0, strokeInset)
+    }
+
+    /// 一组(字 + 读音一列)的列宽:字和「读音 + 两侧留白」里更宽的那个。组末尾带空白(词与词之间的空格)时,读音后面
+    /// 再让出这段空白:读音比字宽的组不会吃掉词间的空格、跟下一个词的读音连成一串。按组排读音的几处(图层行、换行模式、
+    /// 断句量宽、歌词窗口、前奏首句的逐词列)都按这一条算,各写一个式子的话同一句在不同地方折行位置不一样。
+    public static func columnWidth(main: CGFloat, roma: CGFloat, trailingSpace: CGFloat) -> CGFloat {
+        max(main, roma + trailingSpace)
+    }
+
+    /// 一组字末尾的空白(没有就是空串),按主行字体量出来交给 `columnWidth`。
+    public static func trailingWhitespace(of words: [SyncedLyricWord]) -> String {
+        String(words.map(\.text).joined().reversed().prefix { $0.isWhitespace }.reversed())
     }
 
     /// 图层行一行字的高度:主行字高;开了逐词读音再加读音间距(可以是负的,见 `OverlayRowSpacing.perWordReadingGap`)
@@ -82,7 +93,9 @@ public enum OverlayRowLayout {
                 let wordsWidth = place(g.words, from: columnStart)
                 let romaWidth = measureRoma(g.romanization ?? " ") + pad * 2
                 if let r = g.romanization { romas.append(RomaPlacement(x: columnStart + pad, text: r)) }
-                cursor = columnStart + max(wordsWidth, romaWidth)
+                let tail = trailingWhitespace(of: g.words)
+                cursor = columnStart + columnWidth(main: wordsWidth, roma: romaWidth,
+                                                   trailingSpace: tail.isEmpty ? 0 : measureMain(tail))
                 if !g.words.isEmpty { fills += ends[fills.count...].dropLast() + [cursor] }
             }
         } else {

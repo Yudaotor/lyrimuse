@@ -604,9 +604,21 @@ extension LyricsLayerRowPlan {
                 let mainH = ids.map { wordMetrics[$0].height }.max() ?? 0
                 let text = g.romanization ?? " "
                 let rm = LyricsLayerListText.metrics(text, font: romaFont)
+                let tail = OverlayRowLayout.trailingWhitespace(of: g.words)
+                let columnW = OverlayRowLayout.columnWidth(
+                    main: mainW, roma: rm.width + 4,
+                    trailingSpace: tail.isEmpty ? 0 : MenuBarMarqueeRenderer.measure(tail, font: font))
                 units.append(Unit(tokens: ids,
                                   roma: (text, rm, g.startMs, max(1, g.endMs - g.startMs), g.romanization != nil),
-                                  size: CGSize(width: max(mainW, rm.width + 4), height: mainH + rm.height), mainHeight: mainH))
+                                  size: CGSize(width: columnW, height: mainH + rm.height), mainHeight: mainH))
+            }
+            // 各列等高:字那一格取整句最高的。组末尾的空格落在拉丁字体上,这一组的行框比纯谚文的组高;各列高矮不一的话,
+            // 折行按行高把每列居中,读音就跟着一高一低,对不成一条线。
+            let mainTallest = units.map(\.mainHeight).max() ?? 0
+            let romaTallest = units.map { $0.size.height - $0.mainHeight }.max() ?? 0
+            for k in units.indices {
+                units[k].mainHeight = mainTallest
+                units[k].size.height = mainTallest + romaTallest
             }
         } else {
             units = words.indices.map { i in

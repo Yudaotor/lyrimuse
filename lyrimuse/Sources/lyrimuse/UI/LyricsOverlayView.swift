@@ -1497,8 +1497,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     .font(nextLinePreviewFont)
                     .foregroundStyle(color)
                     .lyricTypesetting(g.words.map(\.text).joined())
-                // 列宽规则跟图层行同一套(`OverlayRowLayout.romaSidePadding(strokeInset:)`),
+                // 列宽规则跟图层行同一套(`OverlayRowLayout.columnWidth`:读音两侧留白,组末尾的空白让在读音后面),
                 // 开唱那一刻列宽不变。
+                let tail = OverlayRowLayout.trailingWhitespace(of: g.words)
                 Text(g.romanization ?? " ")
                     .font(playback.romanizationFont)
                     .foregroundStyle(color)
@@ -1506,6 +1507,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     .fixedSize()
                     .padding(.horizontal, OverlayRowLayout.romaSidePadding(
                         strokeInset: playback.textStrokeEnabled ? LyricsTextStrokeMetrics.inset : 0))
+                    .padding(.trailing, tail.isEmpty ? 0 : OverlayNaturalWidth.width(tail, font: nextLinePreviewNSFont))
                     .opacity(g.romanization == nil ? 0 : 1)
             }
             .fixedSize()

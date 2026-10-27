@@ -16,7 +16,7 @@ public struct LineLayoutBudget {
         }
     }
 
-    /// 逐词读音(读音标在每个词底下):一组的宽 = 词宽与「读音宽 + 两侧留白」的较大者。
+    /// 逐词读音(读音标在每个词底下):一组的宽见 `columnWidth`。
     public struct WordRomanization {
         public let measure: (String) -> CGFloat
         public let sidePadding: CGFloat
@@ -24,6 +24,14 @@ public struct LineLayoutBudget {
         public init(measure: @escaping (String) -> CGFloat, sidePadding: CGFloat) {
             self.measure = measure
             self.sidePadding = sidePadding
+        }
+
+        /// 一组的列宽,式子同图层行(`OverlayRowLayout.columnWidth`)。`main` 是这一组字的宽,`measureMain` 量组末尾的空白。
+        public func columnWidth(main: CGFloat, words: [SyncedLyricWord], romanization: String?,
+                                measureMain: (String) -> CGFloat) -> CGFloat {
+            let tail = OverlayRowLayout.trailingWhitespace(of: words)
+            return OverlayRowLayout.columnWidth(main: main, roma: measure(romanization ?? " ") + sidePadding * 2,
+                                                trailingSpace: tail.isEmpty ? 0 : measureMain(tail))
         }
     }
 
@@ -266,8 +274,8 @@ public enum LyricsSegmenter {
 
     // MARK: - 放不放得下
 
-    /// 主行宽:逐词相加(图层行这样排)和整串量(菜单栏、行级歌词这样排)取较大者;逐词读音按组量(组宽 = 词宽
-    /// 与读音宽 + 两侧留白的较大者)。断句判「放不放得下」和悬浮歌词算对唱留白(`LyricsOverlayView.cardNaturalWidth`)
+    /// 主行宽:逐词相加(图层行这样排)和整串量(菜单栏、行级歌词这样排)取较大者;逐词读音按组量(组宽见
+    /// `OverlayRowLayout.columnWidth`)。断句判「放不放得下」和悬浮歌词算对唱留白(`LyricsOverlayView.cardNaturalWidth`)
     /// 用的是这同一个量法,两处不一致的话,留白会把贴满一行的句子末尾挤到下一行。
     public static func mainWidth(words: [SyncedLyricWord]?, groups: [SyncedLyricWordGroup]?, text: String,
                                  measure: (String) -> CGFloat,
@@ -277,7 +285,7 @@ public enum LyricsSegmenter {
         if let groups, let wr = wordRomanization {
             let sum = groups.reduce(CGFloat(0)) { acc, g in
                 let w = g.words.reduce(CGFloat(0)) { $0 + measure($1.text) }
-                return acc + max(w, wr.measure(g.romanization ?? " ") + wr.sidePadding * 2)
+                return acc + wr.columnWidth(main: w, words: g.words, romanization: g.romanization, measureMain: measure)
             }
             return max(sum, whole)
         }
@@ -444,7 +452,8 @@ public enum LyricsSegmenter {
                 offset += g.words.count
                 let w = ws.reduce(CGFloat(0)) { $0 + budget.main.measure($1.text) }
                 return Unit(words: ws, romanization: g.romanization,
-                            width: max(w, wr.measure(g.romanization ?? " ") + wr.sidePadding * 2))
+                            width: wr.columnWidth(main: w, words: ws, romanization: g.romanization,
+                                                  measureMain: budget.main.measure))
             }
         }
         var units: [Unit] = []
@@ -581,7 +590,8 @@ public enum LyricsSegmenter {
                     offset += g.words.count
                     let w = ws.reduce(CGFloat(0)) { $0 + budget.main.measure($1.text) }
                     return Unit(words: ws, romanization: g.romanization,
-                                width: max(w, wr.measure(g.romanization ?? " ") + wr.sidePadding * 2))
+                                width: wr.columnWidth(main: w, words: ws, romanization: g.romanization,
+                                                      measureMain: budget.main.measure))
                 }
                 if let parts = soft(regrouped, grouped: true) { return parts }
             }

@@ -795,6 +795,15 @@ func runOverlayTests() {
         let firstEnd = tight.romaPlacements[0].x + roma("tung3")
         expectEqual(tight.romaPlacements[1].x - firstEnd, 2 * pad, "图层排版: 相邻读音之间隔两份留白")
 
+        // 组末尾带空白(词与词之间的空格)时读音后面再让出这段空白,读音比字宽的组不会吃掉词间的空格。
+        let spaced = SyncedLyricWordGroup(id: 0, words: [w("면 ")], romanization: "myeon")   // 字 20,读音 30+4,空白 10
+        let afterSpace = L.layOut(words: [], groups: [spaced, SyncedLyricWordGroup(id: 1, words: [w("끝")], romanization: "kkeu")],
+                                  inset: 0, measureMain: main, measureRoma: roma)
+        expectEqual(afterSpace.wordStartXs[1], 30 + 2 * pad + 10, "图层排版: 组末尾的空格让在读音后面,词间的空格不被读音吃掉")
+        expectEqual(L.columnWidth(main: 40, roma: 10, trailingSpace: 10), 40, "图层排版: 字比读音 + 空格宽时列宽仍取字宽")
+        expectEqual(L.trailingWhitespace(of: [w("가"), w("나 ")]), " ", "图层排版: 组末尾的空白取整组的最后一段")
+        expectEqual(L.trailingWhitespace(of: [w("가 "), w("나")]), "", "图层排版: 组中间的空白不算")
+
         // 描边开着:每侧再让一份描边外扩,描边之外看到的字缝跟不描边时一样宽。
         let stroke: CGFloat = 2.4
         expectEqual(L.romaSidePadding(strokeInset: 0), pad, "图层排版: 不描边时留白就是基础值")
@@ -804,6 +813,23 @@ func runOverlayTests() {
         let strokedGap = stroked.romaPlacements[1].x - (stroked.romaPlacements[0].x + roma("tung3"))
         expectEqual(abs(strokedGap - 2 * stroke - 2 * pad) < 0.001, true, "图层排版: 描边时扣掉两侧描边,看得见的字缝仍是两份基础留白")
         expectEqual(abs(stroked.romaPlacements[0].x - (pad + stroke)) < 0.001, true, "图层排版: 描边时读音从列首 + 加宽后的留白起画")
+    }
+
+    // ---- 按组排读音的列宽(契约):各处都按 OverlayRowLayout.columnWidth 算;歌词窗口各列等高 ----
+    do {
+        let src = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func read(_ rel: String) -> String {
+            (try? String(contentsOf: src.appendingPathComponent(rel), encoding: .utf8)) ?? ""
+        }
+        for rel in ["lyrimuse/UI/WrappedKaraokeRows.swift", "lyrimuse/UI/LyricsLayerListRow.swift",
+                    "LyrimuseCore/Lyrics/LyricsSegmenter.swift"] {
+            expectEqual(sourceHas(read(rel), "OverlayRowLayout.columnWidth("), true,
+                        "读音列宽(契约): \(rel) 按 OverlayRowLayout.columnWidth 算列宽")
+        }
+        expectEqual(sourceHas(read("lyrimuse/UI/LyricsOverlayView.swift"), "OverlayRowLayout.trailingWhitespace(of: g.words)"),
+                    true, "读音列宽(契约): 前奏首句的逐词列也把组末尾的空白让在读音后面")
+        expectEqual(sourceHas(read("lyrimuse/UI/LyricsLayerListRow.swift"), "units[k].mainHeight = mainTallest"), true,
+                    "读音列宽(契约): 歌词窗口各列字那一格等高,读音对成一条线")
     }
 
     // ---- OverlayRowSpacing:读音 / 译文 / 下一句各自离上一行多远 ----

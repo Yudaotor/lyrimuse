@@ -491,6 +491,12 @@ func runSyncEngineTests() {
         expectEqual(LyricsSegmenter.mainWidth(words: twoWords, groups: readingGroups, text: "abcdef", measure: kerned,
                                               wordRomanization: .init(measure: { CGFloat($0.count) * 5 }, sidePadding: 3)),
                     76, "主行宽: 逐词读音按组量,一组取词宽与读音宽 + 两侧留白的较大者")
+        let spacedWord = [SyncedLyricWord(text: "a ", startMs: 0, durationMs: 100)]
+        expectEqual(LyricsSegmenter.mainWidth(words: spacedWord,
+                                              groups: [SyncedLyricWordGroup(id: 0, words: spacedWord, romanization: "xxxxxxxx")],
+                                              text: "a ", measure: kerned,
+                                              wordRomanization: .init(measure: { CGFloat($0.count) * 5 }, sidePadding: 3)),
+                    56, "主行宽: 组末尾的空格让在读音后面(同图层行的列宽)")
 
         // 悬浮歌词对唱的合唱行贴满一行时,弹性留白算富余要用「主行宽 + 两侧描边预留」(跟排版占的一样)。
         let overlayCardWidth: CGFloat = 402 - 40
