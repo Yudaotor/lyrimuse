@@ -13,7 +13,7 @@ import (
 )
 
 // 放本地文件的播放器正在放的那首,同目录同名的 .lrc —— 用户自己给这个文件配的歌词。App 找到正在放的文件
-// (reAMP 和放本机文件的 QQ 音乐、网易云、酷狗按进程号找开着的文件,VOX 由脚本接口直接给,Pine 读界面,Apple Music 换歌时
+// (reAMP 和放本机文件的 QQ 音乐、网易云、酷狗、Spotify 按进程号找开着的文件,VOX 由脚本接口直接给,Pine 读界面,Apple Music 换歌时
 // 问一次脚本的 location),把路径写进播放状态(local_file);只在正用它放这首时读。
 //
 // 不是歌词源:不进源清单,同 KKBOX 本地歌词(16 章 4.3)。players.json 里 reAMP、VOX、Pine 的 nativeLyricSource 填它
@@ -40,11 +40,12 @@ func playsLocalFiles(bundleID string) bool {
 }
 
 // playsLocalFilesBesidesStreaming:自家另有歌词源、也放用户自己文件的播放器:放资料库里本地文件的 Apple Music、放本地列表的
-// 洛雪(文件路径由引擎从洛雪的列表读,lxMusicLocalFilePath)、用「打开文件」放本机文件的 QQ 音乐、网易云、酷狗(App 按进程号
-// 找开着的文件,PlayerOpenFile)。放本地文件时文件旁的 .lrc、文件标签里的歌词就是它自己的那份,同源加权也算 localfile。
+// 洛雪(文件路径由引擎从洛雪的列表读,lxMusicLocalFilePath)、用「打开文件」放本机文件的 QQ 音乐、网易云、酷狗和从「本地文件」
+// 列表放的 Spotify(App 按进程号找开着的文件,PlayerOpenFile)。放本地文件时文件旁的 .lrc、文件标签里的歌词就是它自己的
+// 那份,同源加权也算 localfile。
 func playsLocalFilesBesidesStreaming(player string) bool {
 	switch player {
-	case playerAppleMusic, playerLXMusic, playerQQMusic, playerNetease, playerKugou:
+	case playerAppleMusic, playerLXMusic, playerQQMusic, playerNetease, playerKugou, playerSpotify:
 		return true
 	}
 	return false

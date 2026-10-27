@@ -93,7 +93,7 @@ public enum PlaybackStateFile {
         /// Kaset 放这首时它报的 YouTube Music videoId(引擎拼成歌曲页存进缓存);别的播放器为 nil。
         public var youtubeMusicVideoID: String? = nil
         /// 放本地文件的播放器正在放的文件路径(reAMP 按进程号找,`PlayerTitleSplit`;VOX 由脚本接口给,`VoxPlayerInfo`;
-        /// Pine Player 在它开着的文件里按标签认,`PinePlayerInfo`;QQ 音乐、网易云、酷狗放本机文件时按进程号找,`PlayerOpenFile`),
+        /// Pine Player 在它开着的文件里按标签认,`PinePlayerInfo`;QQ 音乐、网易云、酷狗、Spotify 放本机文件时按进程号找,`PlayerOpenFile`),
         /// 引擎读同目录同名的 .lrc 和内嵌歌词;别的播放器、放在线歌时为 nil。
         public var localFile: String? = nil
         /// QQ 音乐、酷狗这一条是不是有声书 / 有声节目(`LocalPlaybackSource.isCurrentTrackSpokenAudio`)。还没判出来、不是这两家为 nil

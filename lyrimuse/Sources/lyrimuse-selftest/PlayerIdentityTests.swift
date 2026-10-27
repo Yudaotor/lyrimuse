@@ -908,7 +908,7 @@ func runPlayerIdentityTests() {
         expectEqual(P.identity(from: mayday).map { "\($0.artist)|\($0.title)" }, "五月天|倔強",
                     "文件标签: 分开判的话「五月天」按 GBK 是成串假名,连上歌名一起判才是 Big5")
 
-        // QQ 音乐、网易云、酷狗用「打开文件」放本机文件:三种报法都认得出是哪个文件(报法见 02 章决策 188)。
+        // QQ 音乐、网易云、酷狗用「打开文件」、Spotify 从「本地文件」列表放本机文件:三种报法都认得出是哪个文件(报法见 02 章决策 188、196)。
         do {
             typealias O = PlayerOpenFile
             let tagged = Tags(title: "Tag Title", artist: "Tag Artist", album: "Tag Album", duration: 90.04)
@@ -917,6 +917,9 @@ func runPlayerIdentityTests() {
                 O.fileMatches(reportedArtist: artist, reportedTitle: title, reportedDuration: duration, tags: tags, fileName: name)
             }
             expectEqual(open("Tag Artist", "Tag Title", 90, tagged), true, "开着的文件: QQ 报标签里的歌手歌名")
+            expectEqual(open("Tag Artist", "Tag Title", 90, tagged, file: "LyrimuseC4Test.mp3"), true,
+                        "开着的文件: Spotify 报标签里的歌手歌名,文件名跟歌名无关")
+            expectEqual(O.bundleIDs.contains(PlaybackPlayer.spotify.bundleIdentifier), true, "开着的文件: Spotify 放本地文件也找")
             expectEqual(open("别人", "Tag Title", 90, tagged), false, "开着的文件: 歌名一样、歌手不同不是这首")
             expectEqual(open("Tag Artist", file, 90.25, tagged), true, "开着的文件: 网易云把带扩展名的文件名报成歌名")
             expectEqual(open("Name Artist", "Name Song", 90, tagged), true, "开着的文件: 酷狗按文件名拆歌手歌名")
@@ -938,18 +941,22 @@ func runPlayerIdentityTests() {
             let dir = FileManager.default.temporaryDirectory.appendingPathComponent("lyrimuse-openfile-\(UUID().uuidString)")
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: dir) }
-            let wav = dir.appendingPathComponent("Open Artist - Open Song.wav")
             func resolved(_ path: String?) -> String? { path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path } }
-            var header = Data("RIFF".utf8)
             func le32(_ v: UInt32) -> Data { withUnsafeBytes(of: v.littleEndian) { Data($0) } }
             func le16(_ v: UInt16) -> Data { withUnsafeBytes(of: v.littleEndian) { Data($0) } }
-            let samples = Data(count: 16000)
-            let parts: [Data] = [le32(36 + UInt32(samples.count)), Data("WAVEfmt ".utf8), le32(16), le16(1), le16(1),
-                                 le32(8000), le32(16000), le16(2), le16(16), Data("data".utf8), le32(UInt32(samples.count))]
-            for part in parts { header.append(part) }
-            try? (header + samples).write(to: wav)
-            let handle = try? FileHandle(forReadingFrom: wav)
-            defer { try? handle?.close() }
+            func openWAV(_ name: String) -> (url: URL, handle: FileHandle?) {
+                let url = dir.appendingPathComponent(name)
+                var header = Data("RIFF".utf8)
+                let samples = Data(count: 16000)
+                let parts: [Data] = [le32(36 + UInt32(samples.count)), Data("WAVEfmt ".utf8), le32(16), le16(1), le16(1),
+                                     le32(8000), le32(16000), le16(2), le16(16), Data("data".utf8), le32(UInt32(samples.count))]
+                for part in parts { header.append(part) }
+                try? (header + samples).write(to: url)
+                return (url, try? FileHandle(forReadingFrom: url))
+            }
+            let (wav, handle) = openWAV("Open Artist - Open Song.wav")
+            let (spotifyWAV, spotifyHandle) = openWAV("Spot Artist - Spot Song.wav")
+            defer { try? handle?.close(); try? spotifyHandle?.close() }
             let kugou = PlaybackPlayer.kugou.bundleIdentifier, netease = PlaybackPlayer.netease.bundleIdentifier
             var snap = MediaControlSnapshot.forReplay(title: "Open Song", artist: "Open Artist", duration: 1, elapsedTime: 0,
                                                       playing: true, bundleIdentifier: kugou, anchorElapsedTime: 0)
@@ -970,7 +977,15 @@ func runPlayerIdentityTests() {
                         "开着的文件: 封面载荷的身份跟换过的快照一致")
             expectEqual(resolved(O.currentFilePath(bundleID: netease, artist: "Open Artist", title: "Open Song")), resolved(wav.path),
                         "开着的文件: 换过身份后照样交出路径")
-            expectEqual(O.currentFilePath(bundleID: PlaybackPlayer.spotify.bundleIdentifier, artist: "Open Artist",
+            let spotify = PlaybackPlayer.spotify.bundleIdentifier
+            var spotifySnap = MediaControlSnapshot.forReplay(title: "Spot Song", artist: "Spot Artist", duration: 1,
+                                                             elapsedTime: 0, playing: true, bundleIdentifier: spotify,
+                                                             anchorElapsedTime: 0)
+            spotifySnap.processIdentifier = Int(getpid())
+            _ = O.applied(to: spotifySnap)
+            expectEqual(resolved(O.currentFilePath(bundleID: spotify, artist: "Spot Artist", title: "Spot Song")),
+                        resolved(spotifyWAV.path), "开着的文件: Spotify 放的本地文件路径也交出")
+            expectEqual(O.currentFilePath(bundleID: PlaybackPlayer.kkbox.bundleIdentifier, artist: "Open Artist",
                                           title: "Open Song") == nil, true, "开着的文件: 别家不找")
 
             let local = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -979,6 +994,9 @@ func runPlayerIdentityTests() {
                 (try? String(contentsOfFile: local.appendingPathComponent(name).path, encoding: .utf8)) ?? ""
             }
             let client = text("MediaControlClient.swift")
+            expectEqual(sourceBytes(text("PlayerOpenFile.swift"),
+                                    contain: "pid: snapshot.processIdentifier ?? PlayerProcess.pid(bundleID: bundleID)"),
+                        true, "开着的文件 接线: 快照没带进程号(Spotify 走脚本)时按 bundle id 找主进程")
             expectEqual(sourceBytes(client, contain: "to: PlayerOpenFile.applied(to: PlayerTitleSplit.applied(to: PinePlayerInfo.adapted(raw))), state: fixState))")
                         && sourceBytes(client, contain: "?? PlayerOpenFile.currentFilePath(bundleID: bundleID, rawArtist: raw.artist, rawTitle: raw.title)"),
                         true, "开着的文件 接线: 快照公开出口换身份、封面按它找同目录的图")

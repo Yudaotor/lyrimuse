@@ -248,9 +248,9 @@ func TestNativeSourcesForAppleMusicIncludeLocalFile(t *testing.T) {
 	if !isNativeLyricSource(lyricSourceAppleMusic) || !isNativeLyricSource(localFileLyricsSource) {
 		t.Error("Apple Music:自家源和本地文件都算同源")
 	}
-	setNativeLyricSourcesForPlayer(spotifyBundleID)
+	setNativeLyricSourcesForPlayer(kkboxBundleID)
 	if isNativeLyricSource(localFileLyricsSource) || isNativeLyricSource(lyricSourceAppleMusic) {
-		t.Error("换到 Spotify 要整份换掉")
+		t.Error("换到 KKBOX 要整份换掉")
 	}
 	setNativeLyricSourcesForPlayer(reampBundleID)
 	if !isNativeLyricSource(localFileLyricsSource) || isNativeLyricSource(lyricSourceAppleMusic) {
@@ -258,11 +258,12 @@ func TestNativeSourcesForAppleMusicIncludeLocalFile(t *testing.T) {
 	}
 }
 
-// QQ 音乐、网易云、酷狗用「打开文件」放本机文件时,文件里的歌词跟它自家的源一样算同源。
+// QQ 音乐、网易云、酷狗用「打开文件」、Spotify 从「本地文件」列表放本机文件时,文件里的歌词跟它自家的源一样算同源。
 func TestNativeSourcesForStreamingClientsIncludeLocalFile(t *testing.T) {
 	t.Cleanup(func() { setNativeLyricSourcesForPlayer("") })
 	for _, c := range []struct{ bundleID, own string }{
 		{qqMusicBundleID, lyricSourceQQ}, {neteaseMusicBundleID, lyricSourceNetease}, {kugouMusicBundleID, lyricSourceKugou},
+		{spotifyBundleID, lyricSourceMusixmatch},
 	} {
 		setNativeLyricSourcesForPlayer(c.bundleID)
 		if !isNativeLyricSource(c.own) || !isNativeLyricSource(localFileLyricsSource) {

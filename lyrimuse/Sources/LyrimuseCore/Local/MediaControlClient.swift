@@ -96,7 +96,7 @@ public enum MediaControlClient {
         // 见 PlayerArtistFix。
         // 汽水非会员试听换回原曲口径(见 PlayerPreviewFix);排在署名纠正之后,比对用的署名与引擎发布时一致。
         // 把「歌手 - 歌名」拼在标题里的播放器先拆回来(见 PlayerTitleSplit),Pine Player 按它开着的文件换回歌手和专辑
-        // (见 PinePlayerInfo),QQ 音乐、网易云、酷狗放本机文件时按它开着的文件换成标签(见 PlayerOpenFile),排在最前。
+        // (见 PinePlayerInfo),QQ 音乐、网易云、酷狗、Spotify 放本机文件时按它开着的文件换成标签(见 PlayerOpenFile),排在最前。
         let fixState = PlayerArtistFix.current
         let snapshot = PlayerPreviewFix.applied(
             to: PlayerArtistFix.applied(to: PlayerOpenFile.applied(to: PlayerTitleSplit.applied(to: PinePlayerInfo.adapted(raw))), state: fixState))
@@ -2465,7 +2465,7 @@ public enum MediaControlClient {
             (keyTitle, keyArtist, filePath) = PinePlayerInfo.artworkIdentity(title: raw.title, artist: raw.artist)
         }
         guard !SourceKnockout.isOut(.systemArtwork), let imageData = artworkImageData(base64: raw.artworkData) else {
-            // 放本地文件的播放器(reAMP、VOX,放本机文件的 QQ 音乐、网易云、酷狗)只报文件里嵌着的封面:没嵌的改用正在放的文件
+            // 放本地文件的播放器(reAMP、VOX,放本机文件的 QQ 音乐、网易云、酷狗、Spotify)只报文件里嵌着的封面:没嵌的改用正在放的文件
             // 同目录里的那张(见 PlayerTitleSplit)。
             if let path = filePath, let cover = PlayerTitleSplit.folderCover(forAudioFile: path) {
                 return ((cover.data, cover.mimeType,

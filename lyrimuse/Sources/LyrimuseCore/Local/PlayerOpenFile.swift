@@ -1,15 +1,16 @@
 import Foundation
 import os
 
-/// QQ 音乐、网易云、酷狗用「打开文件」放本机的音频文件时,按快照里的进程号找到它开着的那个文件(`ProcessOpenFiles`):
+/// QQ 音乐、网易云、酷狗用「打开文件」、Spotify 从它的「本地文件」列表放本机的音频文件时,按快照里的进程号找到它开着的
+/// 那个文件(`ProcessOpenFiles`;快照没带进程号时按 bundle id 找主进程,Spotify 的快照来自脚本、不带):
 /// 路径写进播放状态(`local_file`,引擎读同名 .lrc 和文件里的歌词)、没报封面时用同目录的图;标签里有歌名时换成标签里的
 /// 歌手、歌名、专辑和精确时长(网易云把带扩展名的文件名报成歌名,酷狗不读标签、按文件名拆歌手歌名)。
-/// 在线播放时它们开着的是自己的缓存(网易云 `.uc!`),不在 `PlayerTitleSplit.audioExtensions` 里,不会认成本机文件。
-/// 见 02 章决策 188。
+/// 在线播放时它们开着的是自己的缓存(网易云 `.uc!`、Spotify 没有扩展名的缓存文件),不在 `PlayerTitleSplit.audioExtensions`
+/// 里,不会认成本机文件。见 02 章决策 188、196。
 public enum PlayerOpenFile {
     public static let bundleIDs: Set<String> = [
         PlaybackPlayer.qqMusic.bundleIdentifier, PlaybackPlayer.netease.bundleIdentifier,
-        PlaybackPlayer.kugou.bundleIdentifier,
+        PlaybackPlayer.kugou.bundleIdentifier, PlaybackPlayer.spotify.bundleIdentifier,
     ]
 
     private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "player-file")
@@ -74,7 +75,8 @@ public enum PlayerOpenFile {
         guard let snapshot, let bundleID = snapshot.bundleIdentifier, bundleIDs.contains(bundleID),
               let title = snapshot.title, !title.isEmpty,
               let file = fileIdentity(artist: snapshot.artist, title: title, duration: snapshot.duration,
-                                      pid: snapshot.processIdentifier, now: now) else { return snapshot }
+                                      pid: snapshot.processIdentifier ?? PlayerProcess.pid(bundleID: bundleID).map { Int($0) },
+                                      now: now) else { return snapshot }
         var out = snapshot.withTitle(file.title)
         if !file.artist.isEmpty { out = out.withArtist(file.artist) }
         if !file.album.isEmpty { out = out.withAlbum(file.album) }
@@ -82,7 +84,8 @@ public enum PlayerOpenFile {
         return out
     }
 
-    static func fileIdentity(artist: String?, title: String, duration: Double?, pid: Int?,
+    /// `pid` 只在要读盘时才取(缓存命中时不找进程)。
+    static func fileIdentity(artist: String?, title: String, duration: Double?, pid: @autoclosure () -> Int?,
                              now: Date = Date()) -> PlayerTitleSplit.FileIdentity? {
         let key = cacheKey(artist: artist, title: title)
         if let hit = cache.withLock({ $0[key] }),
@@ -90,7 +93,7 @@ public enum PlayerOpenFile {
                                               sinceChecked: now.timeIntervalSince(hit.checkedAt)) {
             return hit.identity
         }
-        guard let pid, pid > 0 else { return nil }
+        guard let pid = pid(), pid > 0 else { return nil }
         let found = lookUp(artist: artist ?? "", title: title, duration: duration, pid: pid_t(pid))
         cache.withLock { entries in
             if entries.count > 64 { entries.removeAll() }

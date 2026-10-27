@@ -79,7 +79,8 @@ public struct MediaControlSnapshot: Decodable {
     /// Kaset 的快照在用内嵌网页那份会话的时钟时填(`KasetPlayerInfo.snapshot`),洛雪开放 API 推的进度在走时填(`withLXMusicClock`)。`with…` 系列副本不带它,理由同 `isWaitingToPlay`。
     public var positionIsPrecise: Bool? = nil
     /// 发布这份会话的进程号(media-control 的 `processIdentifier`)。只有 media-control 那条路在构造时填;`with…` 系列副本
-    /// 不带它。reAMP 按它找正在放的文件读标签(`PlayerTitleSplit`),别的地方不用。
+    /// 不带它。reAMP 按它找正在放的文件读标签(`PlayerTitleSplit`),放本机文件的流媒体客户端按它找开着的文件
+    /// (`PlayerOpenFile`,没带时按 bundle id 找主进程)。
     public var processIdentifier: Int? = nil
 
     public var trackKey: String { Self.trackKey(artist: artist, title: title) }
