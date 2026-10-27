@@ -106,16 +106,15 @@ func runSourceContractTests() {
                     "调度器: 菜单栏状态项的订阅都 receive(on: DispatchQueue.main)")
     }
 
-    // 菜单栏歌词静止时的对齐:「对齐方式」那一行只在固定宽度下出现,自适应一律贴左、不读这个设置;
-    // 按钮自己画字那条路恒居中,格子比文字宽的句子改走图层,两条路落点一致(06 章决策 56)。
+    // 菜单栏歌词静止时的对齐:两种宽度模式都按「对齐方式」;按钮自己画字那条路恒居中,格子比文字宽的句子
+    // 改走图层,两条路落点一致(06 章决策 56、71)。
     do {
         let menuBar = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse/MenuBar")
         let label = (try? String(contentsOfFile: menuBar.appendingPathComponent("MenuBarScrollingLabel.swift").path, encoding: .utf8)) ?? ""
-        expectEqual(label.contains("widthMode == .fixed ? setting : .leading")
-                        && sourceHas(label, "alignment: alignmentOverride\n?? Self.restingAlignment(widthMode: AppSettings.shared.menuBarLyricsWidthMode,\nsetting: AppSettings.shared.menuBarLyricsAlignment)")
-                        && !label.contains("alignment: AppSettings.shared.menuBarLyricsAlignment,"), true,
-                    "菜单栏对齐: 自适应一律贴左,固定宽度才按「对齐方式」")
+        expectEqual(sourceHas(label, "alignment: alignmentOverride\n?? Self.restingAlignment(setting: AppSettings.shared.menuBarLyricsAlignment),")
+                        && !label.contains("widthMode == .fixed ? setting : .leading"), true,
+                    "菜单栏对齐: 两种宽度模式都按「对齐方式」(正中那份标签固定居中)")
     }
 
     // 音符 / 歌词列表 / 三连音符 / 麦克风的摇摆绕图标中心转:挂裸图层 movingPart,不挂 imageView 的背板层

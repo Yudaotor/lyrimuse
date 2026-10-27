@@ -416,10 +416,10 @@ func runSettingsSearchTests() {
         }
         expectEqual(gate(menuBar, "屏幕", false: ["menuBar.centerSelected"]), "歌词位置", "搜索门: 没选菜单栏正中时「显示在」落到「歌词位置」")
         expectEqual(gate(menuBar, "屏幕", false: []), nil, "搜索门: 行在页面上不加门")
-        expectEqual(gate(menuBar, "对齐方式", false: ["menuBar.centerIdle", "menuBar.widthFixed"]), "歌词位置",
-                    "搜索门: 两条都不满足时按登记顺序取第一条")
-        expectEqual(gate(menuBar, "对齐方式", false: ["menuBar.widthFixed"]), "宽度模式", "搜索门: 自适应时对齐方式落到「宽度模式」")
-        expectEqual(gate(notch, "对齐方式", false: ["menuBar.widthFixed"]), nil, "搜索门: 按段区分,菜单栏的条件管不到灵动岛同名行")
+        expectEqual(gate(menuBar, "对齐方式", false: ["menuBar.centerIdle"]), "歌词位置",
+                    "搜索门: 放在菜单栏正中时对齐方式落到「歌词位置」")
+        expectEqual(gate(menuBar, "对齐方式", false: []), nil, "搜索门: 两种宽度模式都有对齐方式,不加门")
+        expectEqual(gate(notch, "对齐方式", false: ["menuBar.centerIdle"]), nil, "搜索门: 按段区分,菜单栏的条件管不到灵动岛同名行")
         expectEqual(gate(notch, "封面位置", false: ["notch.lyricRowArtwork"]), "显示封面", "搜索门: 灵动岛封面位置落到「显示封面」")
         expectEqual(gate(notch, "封面位置", false: ["notch.showLyrics", "notch.lyricRowArtwork"]), "收起时显示歌词",
                     "搜索门: 歌词行整组藏着时落到「收起时显示歌词」")
@@ -449,13 +449,13 @@ func runSettingsSearchTests() {
         let stage = source("UI/MenuBarEditorStage.swift")
         expectEqual(sourceHas(stage, "if settings.menuBarLyricsPlacement == .screenCenter {\nMenuBarCenterScreenRow()")
                     && sourceHas(stage, "if !MenuBarPlacementRow.centerInUse(settings) {\nMenuBarWidthModeRow()")
-                    && sourceHas(stage, "if settings.menuBarLyricsWidthMode == .fixed {\nCardDivider()\nMenuBarAlignmentRow()")
+                    && sourceHas(stage, "CardDivider()\nMenuBarAlignmentRow()")
+                    && !stage.contains("menuBarLyricsWidthMode == .fixed")
                     && sourceHas(stage, "if settings.menuBarLyricsKaraoke || settings.menuBarLyricsIconPosition != .off {")
                     && sourceHas(stage, "if settings.menuBarLyricsContent == .lyrics {\nMenuBarSecondaryLineRow()")
                     && sourceHas(search, "case \"menuBar.showsLyrics\": return s.menuBarLyricsContent == .lyrics")
                     && sourceHas(search, "case \"menuBar.centerSelected\": return s.menuBarLyricsPlacement == .screenCenter")
                     && sourceHas(search, "case \"menuBar.centerIdle\": return !MenuBarPlacementRow.centerInUse(s)")
-                    && sourceHas(search, "case \"menuBar.widthFixed\": return s.menuBarLyricsWidthMode == .fixed")
                     && sourceHas(search, "case \"menuBar.fillColorShown\": return s.menuBarLyricsKaraoke || s.menuBarLyricsIconPosition != .off")
                     && sourceHas(search, "highlightedTitles = hit.highlightTitles.union(Self.gateTitles(for: hit.entry))"),
                     true, "搜索门: 菜单栏各行显隐条件与搜索喂的条件同步")

@@ -7363,25 +7363,25 @@
         }
       }
     },
-    "仅影响能完整显示的短句在固定宽度区域内的位置。显示不下的句子会横向滚动，对齐设置对其无效" : {
+    "能完整显示的句子在这一格里靠哪边，显示不下的会横向滚动" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Only affects lines that fit: which side of the fixed-width slot they sit on. Lines too long to fit scroll horizontally — there is no spare space, so alignment does nothing"
+            "value" : "Where lines that fit sit in the slot. Lines that don't fit scroll"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "仅影响能完整显示的短句在固定宽度区域内的位置。显示不下的句子会横向滚动，对齐设置对其无效"
+            "value" : "能完整显示的句子在这一格里靠哪边，显示不下的会横向滚动"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "僅影響能完整顯示的短句在固定寬度區域內的位置。顯示不下的句子會橫向捲動，對齊設定對其無效"
+            "value" : "能完整顯示的句子在這一格裡靠哪邊，顯示不下的會橫向捲動"
           }
         }
       }

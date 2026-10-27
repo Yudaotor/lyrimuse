@@ -525,13 +525,8 @@ struct PanelQuickSettings: View {
                onEditingChanged: {
                    menuBarWidthThrottle.editingChanged($0, commit: settings.setMenuBarLyricsWidth(fromSlider:))
                })
-            // **只在固定宽度模式下出现**,判据跟设置页那一行一字不差
-            // (`MenuBarLayoutRows` 里那个 `if`)——自适应模式下那一格的宽度就等于文字宽度,
-            // 没有多余空间,三个选项画出来一模一样(完整理由见 `LyricsRestingAlignment` 头注)。
-            // 这里跟着藏是**说得通**的:「宽度模式」就在上面两行,原因看得见 —— 灵动岛那条
-            // 现在也是同一个道理(「显示歌词」搬进面板后,它的对齐方式也跟着藏了),
-            // 三个形态在这件事上口径一致:**藏一个旋钮的前提是把"为什么"摆在它上面**。
-            if settings.menuBarLyricsWidthMode == .fixed && !centerInUse {
+            // 两种宽度模式都有,放在菜单栏正中时藏(恒居中),判据跟设置页那一行同(`MenuBarWidthModeRow`)。
+            if !centerInUse {
                 alignmentRow(selection: $settings.menuBarLyricsAlignment,
                              options: LyricsRestingAlignment.menuBarOptions,
                              label: LyricsAlignmentSegmentedControl.label(for:))

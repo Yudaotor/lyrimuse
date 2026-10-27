@@ -313,13 +313,11 @@ final class MenuBarScrollingLabel: NSView {
 
     // MARK: - 对外
 
-    /// 静止的短句在格子里靠哪边。固定宽度按「对齐方式」;自适应一律贴左 —— 设置里那一行只在固定宽度下出现,
-    /// 自适应下藏起来的设置不能照样生效。自适应的格子从整首的起步宽度起(06 章决策 34),短句在格里是有空位的,
-    /// 贴左让同一首歌里每句的起点不动,进度图标在左(默认)时字也贴着图标、间距不随句子变(见 06 章决策 56)。
-    /// 按钮自己画字那条路不认对齐,格子比文字宽的句子都改走图层(`MenuBarSlotPolicy.adaptiveDrawsWithLayers`)。
-    static func restingAlignment(widthMode: MenuBarLyricsWidthMode,
-                                 setting: LyricsRestingAlignment) -> LyricsRestingAlignment {
-        widthMode == .fixed ? setting : .leading
+    /// 静止的短句在格子里靠哪边:两种宽度模式都按「对齐方式」。自适应的格子从整首的起步宽度起、同一首里不回缩
+    /// (06 章决策 34),短句在格里同样有空位。按钮自己画字那条路不认对齐,格子比文字宽的句子都改走图层
+    /// (`MenuBarSlotPolicy.adaptiveDrawsWithLayers`),格子正好等于文字宽时三种对齐是同一个位置。见 06 章决策 71。
+    static func restingAlignment(setting: LyricsRestingAlignment) -> LyricsRestingAlignment {
+        setting
     }
 
     /// 不按设置、固定靠这一边。「菜单栏正中」那份标签用(`MenuBarCenterLyrics`):窗口宽跟着内容走、以屏幕中线居中,
@@ -342,8 +340,7 @@ final class MenuBarScrollingLabel: NSView {
                  gapWindow: GapWindow? = nil) {
         let next = Plan(text: text, windowWidth: windowWidth,
                         alignment: alignmentOverride
-                            ?? Self.restingAlignment(widthMode: AppSettings.shared.menuBarLyricsWidthMode,
-                                                     setting: AppSettings.shared.menuBarLyricsAlignment),
+                            ?? Self.restingAlignment(setting: AppSettings.shared.menuBarLyricsAlignment),
                         fontWeight: AppSettings.shared.menuBarLyricsFontWeight,
                         fontSize: AppSettings.shared.menuBarLyricsFontSize,
                         fontFamily: AppSettings.shared.menuBarLyricsFontFamily,

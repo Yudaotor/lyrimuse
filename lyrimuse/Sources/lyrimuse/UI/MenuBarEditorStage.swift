@@ -612,18 +612,10 @@ struct MenuBarWidthModeRow: View {
                 }
             )
         }
-        // 「对齐模式」只在**固定宽度**下出现(用户自己先判断出来的:"看起来是不是
-        // 只会在固定宽度模式下生效?我理解自适应的模式下不存在对齐模式" —— 对的)。自适应
-        // 模式下那一格的宽度就等于文字宽度,没有多余空间,三个选项画出来一模一样;摆一个
-        // 恒无效果的控件比不摆更糟。完整判据见 LyricsRestingAlignment 头注。
-        //
-        // 用 if 整行不渲染、不用 .disabled:这一段的既有做法就是"不适用就不显示"(见
-        // MenuBarColorRows 里「已唱颜色」那行跟着染色开关显隐),灰着摆在那儿会让人
-        // 去猜"要满足什么条件才能点"。
-        if settings.menuBarLyricsWidthMode == .fixed {
-            CardDivider()
-            MenuBarAlignmentRow()
-        }
+        // 「对齐方式」两种宽度模式都有:自适应的格子从整首的起步宽度起、同一首里不回缩,短句在格里同样有空位
+        // (`MenuBarScrollingLabel.restingAlignment`)。跟这一行一起只在不放菜单栏正中时出现(正中恒居中)。
+        CardDivider()
+        MenuBarAlignmentRow()
     }
 }
 
@@ -738,7 +730,7 @@ struct MenuBarAlignmentRow: View {
             // (OverlayStyleSettingsRows),统一措辞正是为了"和软件其他地方对齐"。
             // 顺带复用已有词条(含 Left-Aligned/Center/Right-Aligned 三个选项名)。
             title: L10n.t("对齐方式"),
-            help: L10n.t("仅影响能完整显示的短句在固定宽度区域内的位置。显示不下的句子会横向滚动，对齐设置对其无效")
+            help: L10n.t("能完整显示的句子在这一格里靠哪边，显示不下的会横向滚动")
         ) {
             // 跟灵动岛「对齐方式」共用同一个控件(搬到 UI/
             // LyricsAlignmentSegmentedControl.swift,原来长在这个文件里)。

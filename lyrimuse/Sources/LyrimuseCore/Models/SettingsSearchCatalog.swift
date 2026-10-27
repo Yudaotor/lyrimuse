@@ -154,7 +154,6 @@ public enum SettingsSearchCatalog {
             RowGate(menuBar, "屏幕", "menuBar.centerSelected", "歌词位置"),
             RowGate(menuBar, "宽度模式", "menuBar.centerIdle", "歌词位置"),
             RowGate(menuBar, "对齐方式", "menuBar.centerIdle", "歌词位置"),
-            RowGate(menuBar, "对齐方式", "menuBar.widthFixed", "宽度模式"),
             RowGate(menuBar, "副行", "menuBar.showsLyrics", "显示内容"),
             RowGate(menuBar, "已唱颜色", "menuBar.fillColorShown", "卡拉OK效果"),
         ]
