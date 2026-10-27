@@ -188,11 +188,11 @@ struct MenuBarPreviewBar<Lane: View>: View {
         // 跟本体同一个函数(副行是「下一句」时不撑宽),别再各写一份。
         let naturalW = MenuBarSlotPolicy.naturalWidth(
             mainWidth: mainW, secondaryWidth: secondaryW, twoRows: twoRows,
-            secondaryKind: secondaryKind, maxWidth: settings.menuBarLyricsWidth)
+            secondaryKind: secondaryKind, maxWidth: MenuBarMarqueeRenderer.lyricsMaxWidth(settings))
         return MenuBarSlotPolicy.songSlotWidth(
             naturalWidth: naturalW,
             songRowWidth: (line?.plainText ?? "").isEmpty || settings.menuBarLyricTextMode != .original ? nil : songRowWidth,
-            maxWidth: settings.menuBarLyricsWidth)
+            maxWidth: MenuBarMarqueeRenderer.lyricsMaxWidth(settings))
     }
     /// Representable 的 frame 高:双排要给满按钮那 22pt(两行在里面按 MenuBarLyricRows.layout 落位),
     /// 单行照旧一行行高。
@@ -285,14 +285,14 @@ struct MenuBarPreviewBar<Lane: View>: View {
             } ?? 0) : 0
             let naturalW = MenuBarSlotPolicy.naturalWidth(
                 mainWidth: mainW, secondaryWidth: secondaryW, twoRows: twoRows,
-                secondaryKind: secondaryKind, maxWidth: settings.menuBarLyricsWidth)
+                secondaryKind: secondaryKind, maxWidth: MenuBarMarqueeRenderer.lyricsMaxWidth(settings))
             return MenuBarMarqueeRenderer.presentation(
-                for: fullText, windowWidth: min(settings.menuBarLyricsWidth, naturalW.rounded(.up)),
+                for: fullText, windowWidth: min(MenuBarMarqueeRenderer.lyricsMaxWidth(settings), naturalW.rounded(.up)),
                 dwellSeconds: line == nil ? nil : PlaybackCoordinator.shared.currentLineDwellSeconds,
                 leadInSeconds: 0, widthMode: .fixed, font: mainFont)
         }
         return MenuBarMarqueeRenderer.presentation(
-            for: fullText, windowWidth: settings.menuBarLyricsWidth,
+            for: fullText, windowWidth: MenuBarMarqueeRenderer.lyricsMaxWidth(settings),
             // 演的是示例句(没在播放)时没有"这句会显示多久"可言,给 nil 走固定速度。
             //
             // 这个值是在 **body 求值时**现读的,不是在上面那个 onReceive 里存下来的。
@@ -725,7 +725,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
     /// 起点跟着虚线框的左缘走,所以它跟框一样带着那 3pt 呼吸松量 —— 两条线的口径一致。
     @ViewBuilder
     private func widthHeadroomMarker(slotWidth: CGFloat) -> some View {
-        let headroom = settings.menuBarLyricsWidth - slotWidth
+        let headroom = MenuBarMarqueeRenderer.lyricsMaxWidth(settings) - slotWidth
         if settings.menuBarLyricsWidthMode == .adaptive, !centerInUse, headroom > 1 {
             ZStack(alignment: .leading) {
                 // 余量区:淡到只够读出"这里还能长",不跟虚线框抢注意力。

@@ -1384,11 +1384,12 @@ final class MenuBarStatusItem: NSObject {
             }
             return
         }
+        let maxWidth = MenuBarMarqueeRenderer.lyricsMaxWidth(settings)
         // "装得下还是要滚"这个判定跟设置页那条预览共用同一个函数,两边不可能漂 ——
         // 见 MenuBarMarqueeRenderer.Presentation。
         switch MenuBarMarqueeRenderer.presentation(
             for: text,
-            windowWidth: settings.menuBarLyricsWidth,
+            windowWidth: maxWidth,
             // 让长句子在换到下一句之前滚完,而不是永远按固定速度爬。
             // 单行用 compactDwellSeconds 而不是 lineDwellSeconds:显示窗口不同(唱完就切走),
             // 用后者会把 dwell 算大 —— 长句后面接长间奏时按偏大的 dwell 配速,句子会在只滚出
@@ -1419,7 +1420,7 @@ final class MenuBarStatusItem: NSObject {
             // 设置页预览调的是同一个函数。装不下就走尾部渐隐,那条路本来就有。
             let naturalW = MenuBarSlotPolicy.naturalWidth(
                 mainWidth: mainW, secondaryWidth: secondaryW, twoRows: rowState.twoRows,
-                secondaryKind: secondaryKind, maxWidth: settings.menuBarLyricsWidth)
+                secondaryKind: secondaryKind, maxWidth: maxWidth)
             // 槽宽从整首定的起步宽度起(不超过「最大宽度」),比它宽的句子照旧撑宽:槽宽每变一次都要等静默窗才重建,
             // 等的时候新的一句画在旧槽里就会滚(见 present 头注)。按宽度断句开着时起步宽度是整首最宽的一行,一首之内
             // 不变;没开时是 `MenuBarSlotPolicy.songRowQuantile` 那一行。起步宽度按原文量,主行换成译文 / 接着译文时不用,
@@ -1427,13 +1428,13 @@ final class MenuBarStatusItem: NSObject {
             let songW = MenuBarSlotPolicy.songSlotWidth(
                 naturalWidth: naturalW,
                 songRowWidth: songTitleOnly || textMode != .original ? 0 : coordinator.menuBarSongRowWidth,
-                maxWidth: settings.menuBarLyricsWidth)
+                maxWidth: maxWidth)
             // 占位态给槽宽兜个底:让它现在就有即将到来那一句要的宽度,那一句出现时几何
             // 已经到位、不必再改一次。判据是 Core 的纯函数(有 selftest),这里只喂数 ——
             // "下一句"怎么量在 `upcomingLineSlotWidth`,"该不该用它"在 `MenuBarSlotPolicy.slotWidth`。
             let textW = MenuBarSlotPolicy.slotWidth(
                 naturalWidth: songW, upcomingWidth: upcomingW,
-                isPlaceholder: placeholderNow, maxWidth: settings.menuBarLyricsWidth)
+                isPlaceholder: placeholderNow, maxWidth: maxWidth)
             // 同一首歌内小幅回缩不缩槽(MenuBarSlotFloor),判据、代价与"为什么是换歌而不是换行重置"
             // 都在它的声明处。只套在**自适应**这条(.text)分支上:.fixed 那条的槽宽本来就是常量。
             let naturalSlotW = textW + reserved + Self.lyricsSlotPadding
@@ -1510,7 +1511,7 @@ final class MenuBarStatusItem: NSObject {
         var placed: [NSScreen] = []
         for screen in screens {
             guard let span = centerLyrics.span(on: screen) else { continue }
-            let cap = min(AppSettings.shared.menuBarLyricsWidth,
+            let cap = min(MenuBarMarqueeRenderer.lyricsMaxWidth(AppSettings.shared),
                           span.upperBound - span.lowerBound - reserved - Self.lyricsSlotPadding)
             guard cap > 0 else { continue }
             let naturalW = MenuBarSlotPolicy.naturalWidth(

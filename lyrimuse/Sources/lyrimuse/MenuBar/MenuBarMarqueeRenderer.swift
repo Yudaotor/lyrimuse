@@ -157,6 +157,16 @@ enum MenuBarMarqueeRenderer {
     }
 
     /// 这段文字画出来有多宽(点)。取窗宽度和滚动距离都靠它算。
+    /// 菜单栏这一格此刻最宽多少:「最大宽度」,同一行接着译文时原文、译文各算一份(`MenuBarLyricText.slotMaxWidth`)。
+    /// 状态栏那一格、菜单栏正中、设置页预览都读它,别直接读 `menuBarLyricsWidth` 排版。
+    static func lyricsMaxWidth(_ settings: AppSettings) -> CGFloat {
+        MenuBarLyricText.slotMaxWidth(
+            maxWidth: settings.menuBarLyricsWidth,
+            separatorWidth: width(of: MenuBarLyricText.inlineSeparator, font: font),
+            mode: settings.menuBarLyricTextMode,
+            upperBound: CGFloat(AppSettings.menuBarLyricsWidthRange.upperBound))
+    }
+
     static func width(of text: String) -> CGFloat {
         // 三颗点不是文字,量字形宽度会得到「•••」那三个字符的宽度,跟真正画出来的圆点对不上。
         if text == gapDotsToken { return gapDotsWidth(fontSize: font.pointSize) }

@@ -1648,6 +1648,28 @@ func runMenuBarTests() {
                     true, "菜单栏译文: 同一行没有译文时只有原文、不画淡;原文排法不拼译文")
         expectEqual(T.text(plainText: "مرحبا", translation: "你好", mode: .inlineTranslation).text, "مرحبا",
                     "菜单栏译文: 原文从右往左时不拼进同一行")
+        expectEqual([T.slotMaxWidth(maxWidth: 160, separatorWidth: 12, mode: .inlineTranslation, upperBound: 600),
+                     T.slotMaxWidth(maxWidth: 400, separatorWidth: 12, mode: .inlineTranslation, upperBound: 600),
+                     T.slotMaxWidth(maxWidth: 600, separatorWidth: 12, mode: .inlineTranslation, upperBound: 600),
+                     T.slotMaxWidth(maxWidth: 160, separatorWidth: 12, mode: .translationOnly, upperBound: 600),
+                     T.slotMaxWidth(maxWidth: 160, separatorWidth: 12, mode: .original, upperBound: 600)],
+                    [332, 600, 600, 160, 160],
+                    "菜单栏译文: 同一行时原文、译文各算一份最大宽度加分隔符,封顶滑杆上限;其余排法就是最大宽度")
+        do {
+            let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            func read(_ rel: String) -> String {
+                (try? String(contentsOf: root.appendingPathComponent(rel), encoding: .utf8)) ?? ""
+            }
+            let item = read("lyrimuse/MenuBar/MenuBarStatusItem.swift")
+            let preview = read("lyrimuse/UI/SectionPreviewBars.swift")
+            expectEqual(item.components(separatedBy: "settings.menuBarLyricsWidth,").count == 1
+                        && item.components(separatedBy: "settings.menuBarLyricsWidth)").count == 1
+                        && item.contains("let maxWidth = MenuBarMarqueeRenderer.lyricsMaxWidth(settings)")
+                        && item.contains("let cap = min(MenuBarMarqueeRenderer.lyricsMaxWidth(AppSettings.shared),")
+                        && !preview.contains("settings.menuBarLyricsWidth)") && !preview.contains("settings.menuBarLyricsWidth,")
+                        && !preview.contains("settings.menuBarLyricsWidth -"),
+                        true, "菜单栏译文: 状态栏那一格、正中、预览排版都读 lyricsMaxWidth,不直接读最大宽度")
+        }
     }
 
     // ---- 面板头部点歌名 / 歌手名 / 专辑名翻到简介(06 章决策 51) ----
