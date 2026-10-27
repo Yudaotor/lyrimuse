@@ -24,8 +24,9 @@ func localCacheClientPaths() map[string][]string {
 	return map[string][]string{
 		"kugou": {kugouLocalLyricDir(), kugouUpcomingPath(), kugouQueuePlistPath(),
 			kugouConfigPlistPath(), kugouLibraryDBPath(), kugouNowPlayingPath()},
-		"qq":         {qqLocalDBPath(), qqUpcomingPath(), qqRRCachePath()},
-		"netease":    {neteaseLocalDBPath(), neteaseUpcomingPath(), neteaseFMPath()},
+		"qq": {qqLocalDBPath(), qqUpcomingPath(), qqRRCachePath()},
+		"netease": {neteaseContainerPath(neteaseLibraryRel), neteaseContainerPath(neteaseQueueRel),
+			neteaseContainerPath(neteaseFMRel)},
 		"soda":       {sodaContainerPath(sodaQueueRel), sodaContainerPath(sodaPreloadRel)},
 		"applemusic": {applemusicLocalCacheDir()},
 		"spotify":    {spotifyISRCUsersDir()},
@@ -71,9 +72,21 @@ func localCacheProbeTargets(paths map[string][]string) map[string][]string {
 }
 
 // probeLocalCacheAccess 由 main() 在设好状态文件路径之后调一次。容器目录不存在(没装 / 没打开过)
-// 的来源跳过,不发布任何结论;只列目录、不读内容。
+// 的来源跳过,不发布任何结论;只列目录、不读内容。此刻读的是容器外那一份的来源不探容器,记成不用授权。
 func probeLocalCacheAccess() {
-	probeLocalCacheTargets(localCacheProbeTargets(localCacheClientPaths()))
+	targets := localCacheProbeTargets(localCacheClientPaths())
+	for source, outside := range localCacheReadsOutsideContainer() {
+		if outside {
+			delete(targets, source)
+			noteLocalCacheUnprotected(source)
+		}
+	}
+	probeLocalCacheTargets(targets)
+}
+
+// localCacheReadsOutsideContainer:有非沙盒安装包的来源 → 此刻读的那一份是不是在私有容器外。
+func localCacheReadsOutsideContainer() map[string]bool {
+	return map[string]bool{"netease": neteaseUsesStandalone()}
 }
 
 func probeLocalCacheTargets(targets map[string][]string) {

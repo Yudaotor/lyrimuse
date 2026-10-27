@@ -857,7 +857,7 @@ struct OnboardingView: View {
                     Text(fullDiskAccess.stillDeniedNote)
                         .foregroundStyle(Color.orange)
                 case .idle:
-                    Text(fullDiskAccess.steps)
+                    Text(fullDiskAccess.steps(targets))
                 }
                 // 歌词引擎没在跑(没装上、被跳过)或者正在装的时候不给这颗按钮:重启一个不存在的服务只会白转圈,
                 // 跟正在进行的安装撞在一起还可能互相杀掉对方刚拉起的进程。

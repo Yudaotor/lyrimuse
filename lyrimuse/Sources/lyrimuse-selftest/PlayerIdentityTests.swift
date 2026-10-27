@@ -1772,6 +1772,15 @@ func runPlayerIdentityTests() {
         let legacy = try? JSONDecoder().decode(A.State.self, from: Data(#"{"updatedAt":1,"denied":["kugou"]}"#.utf8))
         expectEqual(legacy?.readable, [], "授权结论: 旧版状态文件没有 readable 字段也能解")
         expectEqual(A.grant(for: ["kugou"], state: legacy), .denied, "授权结论: 旧版状态文件照样报得出被拒")
+        expectEqual(legacy?.unprotected, [], "授权结论: 旧版状态文件没有 unprotected 字段也能解")
+        let standalone = try? JSONDecoder().decode(A.State.self, from: Data(
+            #"{"updatedAt":1,"denied":[],"readable":["qq"],"unprotected":["netease"]}"#.utf8))
+        expectEqual(A.needsGrant("netease", state: standalone), false, "授权结论: 引擎说读的那一份在容器外,就不替它要授权")
+        expectEqual(A.needsGrant("qq", state: standalone), true, "授权结论: 别的来源照旧要授权")
+        expectEqual(A.needsGrant("netease", state: nil), true, "授权结论: 读不到状态时照旧要授权")
+        expectEqual(A.isRevoked(.denied, everGranted: true), true, "授权失效: 授权过、现在被拒")
+        expectEqual(A.isRevoked(.unknown, everGranted: true), false, "授权失效: 只是还没确认不算失效")
+        expectEqual(A.isRevoked(.denied, everGranted: false), false, "授权失效: 从没授权过只算未获授权")
     }
 
     // ---- YouTube Music 广告判据----

@@ -43,11 +43,12 @@ final class FullDiskAccessPermission: ObservableObject {
         noteGranted()
     }
 
-    /// 这套选择下要替哪几家说话:需要授权 ∩ 装了。没装的播放器没有容器,引擎不会探它,
-    /// 摆出来就是一行永远确认不了的状态。
+    /// 这套选择下要替哪几家说话:需要授权 ∩ 装了 ∩ 引擎没说它读的那一份不用授权。没装的播放器没有容器,
+    /// 引擎不会探它,摆出来就是一行永远确认不了的状态;非沙盒版网易云同理(`LocalCacheAccess.needsGrant`)。
     func visiblePlayers(for selection: Set<PlaybackPlayer>) -> [PlaybackPlayer] {
         selection.playersNeedingFullDiskAccess.filter { player in
             PlayerBundleAliases.isInstalled(player)
+                && player.localCacheSource.map { LocalCacheAccess.needsGrant($0, state: state) } ?? true
         }
     }
 
@@ -134,9 +135,13 @@ final class FullDiskAccessPermission: ObservableObject {
         }
     }
 
-    /// 没授权时怎么补,两个界面共用。授权过的直接讲删掉再加回来:失效的那条留在列表里、开关亮着,关了再开不管用。
-    var steps: String {
-        everGranted
+    /// 没授权时怎么补,两个界面共用。授权过又确实被拒的直接讲删掉再加回来:失效的那条留在列表里、开关亮着,关了再开不管用。
+    func steps(_ players: [PlaybackPlayer]) -> String {
+        steps(denied: grant(players) == .denied)
+    }
+
+    func steps(denied: Bool) -> String {
+        LocalCacheAccess.isRevoked(denied ? .denied : .unknown, everGranted: everGranted)
             ? L10n.t("更新后原有授权已失效。请在系统设置中通过「−」移除 Lyrimuse，再通过「+」重新添加，然后点按「重启歌词引擎」")
             : L10n.t("请在系统设置中开启 Lyrimuse，然后点按「重启歌词引擎」。若已开启但仍未生效，请通过「−」移除 Lyrimuse，再通过「+」重新添加")
     }
@@ -161,7 +166,7 @@ struct FullDiskAccessGuide: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(model.steps)
+            Text(model.steps(players))
                 .fixedSize(horizontal: false, vertical: true)
             switch model.restartPhase {
             case .waiting:

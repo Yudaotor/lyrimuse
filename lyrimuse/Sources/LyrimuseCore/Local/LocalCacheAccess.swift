@@ -28,9 +28,11 @@ public enum LocalCacheAccess {
         public let denied: [String]
         /// 确认读得到的来源名,同一套取值。旧版引擎不写这个字段,解出来是空。
         public let readable: [String]
+        /// 此刻读的那一份不在私有容器里、不用授权的来源(非沙盒版网易云)。旧版引擎不写这个字段,解出来是空。
+        public let unprotected: [String]
 
         enum CodingKeys: String, CodingKey {
-            case updatedAt, denied, readable
+            case updatedAt, denied, readable, unprotected
         }
 
         public init(from decoder: Decoder) throws {
@@ -38,12 +40,14 @@ public enum LocalCacheAccess {
             updatedAt = try c.decodeIfPresent(Int64.self, forKey: .updatedAt) ?? 0
             denied = try c.decodeIfPresent([String].self, forKey: .denied) ?? []
             readable = try c.decodeIfPresent([String].self, forKey: .readable) ?? []
+            unprotected = try c.decodeIfPresent([String].self, forKey: .unprotected) ?? []
         }
 
-        public init(updatedAt: Int64 = 0, denied: [String] = [], readable: [String] = []) {
+        public init(updatedAt: Int64 = 0, denied: [String] = [], readable: [String] = [], unprotected: [String] = []) {
             self.updatedAt = updatedAt
             self.denied = denied
             self.readable = readable
+            self.unprotected = unprotected
         }
     }
 
@@ -63,6 +67,16 @@ public enum LocalCacheAccess {
         if sources.contains(where: state.denied.contains) { return .denied }
         if sources.allSatisfy(state.readable.contains) { return .granted }
         return .unknown
+    }
+
+    /// 这个来源要不要替它要「完全磁盘访问」:引擎确认它读的那一份在容器外就不要;读不到状态照旧要。
+    public static func needsGrant(_ source: String, state: State? = current) -> Bool {
+        !(state?.unprotected.contains(source) ?? false)
+    }
+
+    /// 授权过、现在**确实被拒**才算失效;只是还没确认(`.unknown`)不算,别据此让用户删掉再加回来。
+    public static func isRevoked(_ grant: Grant, everGranted: Bool) -> Bool {
+        everGranted && grant == .denied
     }
 
     public static let stateURL = LyrimusePaths.configFile("lyrimuse-local-cache-access.json")

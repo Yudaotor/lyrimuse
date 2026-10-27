@@ -1059,16 +1059,19 @@ private func runPermissionGuideContracts() {
     expectEqual(fda.contains("case .denied: return everGranted ? L10n.t(\"授权已失效\")")
                 && fda.contains("guard !everGranted, let state, !state.readable.isEmpty else { return }"), true,
                 "权限说明(契约): 完全磁盘访问被拒且授权过 → 「授权已失效」;引擎读得到任意一家就记授权过")
-    expectEqual(ax.contains("Text(model.steps)") && fda.contains("Text(model.steps)")
+    expectEqual(ax.contains("Text(model.steps)") && fda.contains("Text(model.steps(players))")
                 && !ax.contains("showsReason") && !fda.contains("showsReason"), true,
                 "权限说明(契约): 设置页那段只讲怎么补,用途在「?」里不重复")
     expectEqual(onboarding.contains("Text(accessibility.steps)")
                 && onboarding.contains("accessibility.prompted || accessibility.everGranted")
-                && onboarding.contains("Text(fullDiskAccess.steps)")
+                && onboarding.contains("Text(fullDiskAccess.steps(targets))")
                 && onboarding.contains("Text(fullDiskAccess.stillDeniedNote)")
-                && lockHelp.contains("Text(fullDiskAccess.steps)")
+                && lockHelp.contains("Text(fullDiskAccess.steps(denied: true))")
                 && lockHelp.contains("Text(fullDiskAccess.stillDeniedNote)"), true,
                 "权限说明(契约): 引导页与锁说明用同一份步骤文案")
+    expectEqual(fda.contains("LocalCacheAccess.isRevoked(denied ? .denied : .unknown, everGranted: everGranted)")
+                && fda.contains("LocalCacheAccess.needsGrant($0, state: state)"), true,
+                "权限说明(契约): 只在确实被拒时讲「更新后原有授权已失效」;引擎说不用授权的来源不列进那一行")
     expectEqual([ax, fda, onboarding, lockHelp, settings].contains { $0.contains("取消勾选后重新勾选") }, false,
                 "权限说明(契约): 失效的授权关了再开不管用,别再这么教")
 

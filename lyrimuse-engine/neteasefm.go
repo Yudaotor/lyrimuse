@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -21,12 +20,7 @@ func neteaseFMPath() string {
 	if neteaseFMOverride != "" {
 		return neteaseFMOverride
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, "Library/Containers/com.netease.163music/Data/Documents",
-		"storage/file_storage/webdata/file/fmPlay")
+	return neteaseDataPath(neteaseFMRel)
 }
 
 // neteaseFMFile 只摘用得上的字段。曲目直接放在 queue 的元素上(playingList 套了一层 track),id 是数字。

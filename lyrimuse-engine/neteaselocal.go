@@ -10,7 +10,6 @@ import (
 	neturl "net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
@@ -47,17 +46,12 @@ import (
 // neteaseLocalDBOverride 让单测把库指到临时路径。空 = 用真实路径。
 var neteaseLocalDBOverride string
 
-// neteaseLocalDBPath 是网易云客户端的主数据库。 外部 App 的路径,不走 paths.go 那套。
+// neteaseLocalDBPath 是网易云客户端的主数据库。 外部 App 的路径,不走 paths.go 那套;在哪一处见 neteaseDataRoot。
 func neteaseLocalDBPath() string {
 	if neteaseLocalDBOverride != "" {
 		return neteaseLocalDBOverride
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, "Library/Containers/com.netease.163music/Data",
-		"Documents/storage/sqlite_storage.sqlite3")
+	return neteaseDataPath(neteaseLibraryRel)
 }
 
 const neteaseLocalRescanMin = 60 * time.Second
@@ -428,12 +422,7 @@ func neteaseUpcomingPath() string {
 	if neteaseUpcomingOverride != "" {
 		return neteaseUpcomingOverride
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, "Library/Containers/com.netease.163music/Data/Documents",
-		"storage/file_storage/webdata/file/playingList")
+	return neteaseDataPath(neteaseQueueRel)
 }
 
 // neteaseUpcomingFile 只摘这条路径用得上的字段。每个条目还带着几十个别的(推荐算法标记、
