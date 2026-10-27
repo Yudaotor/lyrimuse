@@ -1306,6 +1306,32 @@ func runNotchTests() {
         } else {
             expectEqual(false, true, "进度线色: 蓝紫混洋红的封面应该取得到")
         }
+        // 染了青色调的黑白照片上一小块橙(暗部偏青、按 HSV 饱和度过线,占大头):进度线取橙;橙不到 2% 时仍是青;
+        // 真有颜色的深藏青大片上一块肤色,彩度高过灰的那一档,仍取蓝。见 05 章决策 115。
+        let tintedGrayWithOrange = vividPixels { i in
+            i < vividCount * 3 / 100 ? (204, 128, 51) : i < vividCount * 30 / 100 ? (38, 62, 62) : (150, 150, 150)
+        }
+        if let deep = ArtworkVividColor.color(rgba: tintedGrayWithOrange, tone: .deep) {
+            expectEqual(deep.r > deep.g && deep.g > deep.b, true, "进度线色: 染青的黑白照上一块橙,取到橙不是青")
+        } else {
+            expectEqual(false, true, "进度线色: 染青的黑白照上一块橙,应该取得到")
+        }
+        let tintedGrayTinyOrange = vividPixels { i in
+            i < vividCount / 100 ? (204, 128, 51) : i < vividCount * 30 / 100 ? (38, 62, 62) : (150, 150, 150)
+        }
+        if let deep = ArtworkVividColor.color(rgba: tintedGrayTinyOrange, tone: .deep) {
+            expectEqual(deep.g > deep.r && deep.b > deep.r, true, "进度线色: 鲜艳的像素不到 2% 时不改选,仍是青")
+        } else {
+            expectEqual(false, true, "进度线色: 染青的黑白照应该取得到")
+        }
+        let navyWithSkin = vividPixels { i in
+            i < vividCount * 15 / 100 ? (220, 160, 120) : i < vividCount * 50 / 100 ? (25, 35, 75) : (20, 20, 22)
+        }
+        if let deep = ArtworkVividColor.color(rgba: navyWithSkin, tone: .deep) {
+            expectEqual(deep.b > deep.r, true, "进度线色: 深藏青大片上一块肤色,仍取蓝")
+        } else {
+            expectEqual(false, true, "进度线色: 深藏青大片应该取得到")
+        }
         if let gold = ArtworkVividColor.color(rgba: vividPixels { _ in (200, 150, 40) }) {
             expectEqual(gold.r >= gold.g && gold.g > gold.b, true, "音符色: 金色封面取到的还是金色")
         } else {
