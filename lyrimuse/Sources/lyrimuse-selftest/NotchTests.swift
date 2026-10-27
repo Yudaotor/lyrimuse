@@ -2713,9 +2713,11 @@ func runNotchTests() {
                     && sourceHas(src("NotchCardModifiers.swift"), "let n = ArcFlattening.segments(radius: radius, sweep: CGFloat(a1 - a0))")
                     && sourceHas(progressLine, ".mask(LinearGradient(colors: [.white.opacity(0.85), .white], startPoint: .top, endPoint: .bottom))\n // 光晕和遮罩先合成一张再交给卡片外形裁剪,同卡片背景(05 章决策 114)。\n .compositingGroup()")
                     && sourceHas(v, "NotchCrossfadeBackdrop(image: image, size: size, overlayOpacity: playback.backdropOverlayOpacity)\n }\n // 先把这几层合成一张再交给卡片外形裁剪")
+                    && sourceHas(src("NotchRevealShape.swift"), "content.clipShape(shape)\n .background {\n if displayScale < 1.5 {\n NotchLowResEdgeShadow(shape: shape)")
+                    && sourceHas(src("NotchRevealShape.swift"), ".mask(NotchOutsideShape(inner: shape).fill(style: FillStyle(eoFill: true)))")
                     && sourceHas(progressLine, ".stroke(tint, style: StrokeStyle(lineWidth: Self.strokeWidth, lineCap: .round))")
                     && progressLine.components(separatedBy: "value: tint)").count == 3, true,
-                    "进度线耳朵动效: 跳进度才滑、暂停变暗、不画线头、换封面时颜色渐变(纯色描边,底边那档同样);卡片外形和线的圆弧自己拆折线,封面背景和线先合成再裁")
+                    "进度线耳朵动效: 跳进度才滑、暂停变暗、不画线头、换封面时颜色渐变(纯色描边,底边那档同样);卡片外形和线的圆弧自己拆折线,封面背景和线先合成再裁,1x 屏卡片外垫一圈只在外面的柔边")
         expectEqual(v.components(separatedBy: "?? playback.currentDurationMs, tint: progressLineTint,").count == 3
                     && sourceHas(v, "private var progressLineTint: Color {\n playback.vividDeepAccent ?? accentOrWhite\n }"), true,
                     "进度线: 底边和耳朵两档都用封面大片那种色相的深色版,没有时退回前景色")

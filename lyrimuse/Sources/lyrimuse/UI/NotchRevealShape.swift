@@ -38,11 +38,15 @@ struct NotchRevealShape: Shape {
 
 /// 真窗口挂 `NotchRevealShape` 的那一层。圆角从 `NotchCornerLive` 取、由这一层自己观察:拖圆角滑杆时只重算这道裁剪,
 /// `NotchWindowRoot` 和整张卡片都不跟着重算。
+///
+/// 1x 屏上卡片外面再垫一圈柔边(`NotchLowResEdgeShadow`):一个点只有一个像素,圆角的抗锯齿过渡带只有一像素宽,深色卡片压在
+/// 浅色菜单栏上看得出台阶。2x 屏上不画。见 05 章决策 114。
 struct NotchRevealClip: ViewModifier {
     var widthFraction: CGFloat
     var heightFraction: CGFloat
     var outline: NotchCardOutline
     @ObservedObject private var live = NotchCornerLive.shared
+    @Environment(\.displayScale) private var displayScale
 
     init(widthFraction: CGFloat, heightFraction: CGFloat, outline: NotchCardOutline) {
         self.widthFraction = widthFraction
@@ -51,8 +55,41 @@ struct NotchRevealClip: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        content.clipShape(NotchRevealShape(widthFraction: widthFraction, heightFraction: heightFraction,
-                                           notchHeight: outline.notchHeight, corner: outline.corner(live)))
+        let shape = NotchRevealShape(widthFraction: widthFraction, heightFraction: heightFraction,
+                                     notchHeight: outline.notchHeight, corner: outline.corner(live))
+        content.clipShape(shape)
+            .background {
+                if displayScale < 1.5 {
+                    NotchLowResEdgeShadow(shape: shape)
+                }
+            }
+    }
+}
+
+/// 卡片外形外面那圈柔边:同形状填黑、模糊,再把卡片本身那块挖掉。只留外面那一圈,半透明的风格(磨砂玻璃)里面不被压暗。
+/// 形状跟裁剪是同一个值,出场、展开收回、退场缩放都一起走。
+struct NotchLowResEdgeShadow: View {
+    let shape: NotchRevealShape
+
+    static let radius: CGFloat = 0.6
+    static let opacity: Double = 0.55
+
+    var body: some View {
+        shape.fill(Color.black.opacity(Self.opacity))
+            .blur(radius: Self.radius)
+            .mask(NotchOutsideShape(inner: shape).fill(style: FillStyle(eoFill: true)))
+            .allowsHitTesting(false)
+    }
+}
+
+/// `inner` 外面的那一圈(外扩一段的矩形减去 `inner`,奇偶填充)。
+struct NotchOutsideShape: Shape {
+    let inner: NotchRevealShape
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path(rect.insetBy(dx: -8, dy: -8))
+        path.addPath(inner.path(in: rect))
+        return path
     }
 }
 
