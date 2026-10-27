@@ -137,21 +137,35 @@ struct NotchHangingShape: Shape {
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
         if s > 0 {
             // 右肩:圆心在主体外侧,从顶边弯进右侧边 —— 内凹。
-            path.addArc(center: CGPoint(x: rect.maxX, y: rect.minY + s), radius: s,
-                        startAngle: .degrees(-90), endAngle: .degrees(-180), clockwise: true)
+            path.addFlattenedArc(center: CGPoint(x: rect.maxX, y: rect.minY + s), radius: s,
+                                 from: .degrees(-90), to: .degrees(-180))
         }
         path.addLine(to: CGPoint(x: right, y: rect.maxY - r))
-        path.addArc(center: CGPoint(x: right - r, y: rect.maxY - r), radius: r,
-                    startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+        path.addFlattenedArc(center: CGPoint(x: right - r, y: rect.maxY - r), radius: r,
+                             from: .degrees(0), to: .degrees(90))
         path.addLine(to: CGPoint(x: left + r, y: rect.maxY))
-        path.addArc(center: CGPoint(x: left + r, y: rect.maxY - r), radius: r,
-                    startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+        path.addFlattenedArc(center: CGPoint(x: left + r, y: rect.maxY - r), radius: r,
+                             from: .degrees(90), to: .degrees(180))
         if s > 0 {
             path.addLine(to: CGPoint(x: left, y: rect.minY + s))
-            path.addArc(center: CGPoint(x: rect.minX, y: rect.minY + s), radius: s,
-                        startAngle: .degrees(0), endAngle: .degrees(-90), clockwise: true)
+            path.addFlattenedArc(center: CGPoint(x: rect.minX, y: rect.minY + s), radius: s,
+                                 from: .degrees(0), to: .degrees(-90))
         }
         path.closeSubpath()
         return path
+    }
+}
+
+extension Path {
+    /// 从 `start` 到 `end`(角度直接插值,走的是两者之间那一段)的圆弧,按 `ArcFlattening` 拆成折线;先从当前点连线到
+    /// 弧的起点。别换回 `addArc` / `addCurve`:渲染器拆曲线拆得粗,弧线边缘有台阶。
+    mutating func addFlattenedArc(center: CGPoint, radius: CGFloat, from start: Angle, to end: Angle) {
+        let a0 = start.radians, a1 = end.radians
+        let n = ArcFlattening.segments(radius: radius, sweep: CGFloat(a1 - a0))
+        for k in 0...n {
+            let a = a0 + (a1 - a0) * Double(k) / Double(n)
+            let point = CGPoint(x: center.x + radius * cos(a), y: center.y + radius * sin(a))
+            if k == 0, isEmpty { move(to: point) } else { addLine(to: point) }
+        }
     }
 }

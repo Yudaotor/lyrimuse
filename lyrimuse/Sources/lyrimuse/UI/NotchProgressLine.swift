@@ -84,7 +84,7 @@ struct NotchProgressLine: View {
 /// 卡片内部一上来就按终态尺寸布局,变形动画只在外层(`NotchWindowRoot` 的尺寸弹簧和裁剪)逐帧插值,所以形状不能靠
 /// `path(in:)` 拿到的矩形:卡片尺寸作为形状的可动画值(`NotchEarProgressShape.cardSize`)传进去,跟同一次弹簧逐帧插值,
 /// 路径按它算、在矩形里水平居中贴顶,跟卡片外形重合。肩膀和底角跟卡片外形读同一处(`NotchHangingShape.cornerMetrics`)。
-/// 展开 / 收回时线跟着外沿走,同时淡出 / 淡入(`fade`),不会停在终态的尺寸上横在变形的卡片中间。线贴着外沿(线宽一半的内缩),只画已播的那段、不画底槽,颜色从上往下渐亮
+/// 展开 / 收回时线跟着外沿走,同时淡出 / 淡入(`fade`),不会停在终态的尺寸上横在变形的卡片中间。线贴着外沿(往外多伸 `overshoot`、被卡片外形裁掉),只画已播的那段、不画底槽,颜色从上往下渐亮
 /// (上端淡进菜单栏),底下垫一层同色的淡光晕,看起来是卡片的边亮起来,不是另描的一圈框。
 struct NotchEarProgressLine: View {
     let anchor: ProgressAnchor?
@@ -105,9 +105,13 @@ struct NotchEarProgressLine: View {
     /// 换封面时线的颜色渐变过去(同换歌掉歌名那枚音符)。
     static let tintChange: Animation = .easeInOut(duration: 0.35)
 
+    /// 卡片里露出来的线宽。
     static let thickness: CGFloat = 2.5
-    /// 线心离卡片外沿的距离:半根线宽,线的外侧正好贴着外沿。
-    static let inset: CGFloat = thickness / 2
+    /// 线往卡片外沿外面多伸出去的宽度,被卡片外形裁掉。外沿那圈半透明像素里只有线色、没有卡片底色,不会描出一圈暗边。
+    static let overshoot: CGFloat = 1
+    static let strokeWidth: CGFloat = thickness + overshoot
+    /// 线心离卡片外沿的距离。
+    static let inset: CGFloat = thickness - strokeWidth / 2
 
     /// 线显隐的透明度曲线。线跟着外沿变形,所以两头都补间:藏起来(展开、收起)跟着卡片长开淡掉,
     /// 露出来(回到稳态)跟着卡片收拢淡入。
@@ -150,7 +154,7 @@ struct NotchEarProgressLine: View {
                     NotchEarProgressShape(card: card, notchWidth: notchWidth, notchHeight: outline.notchHeight,
                                           cardSize: cardSize, mirrored: mirrored)
                         .trim(from: 0, to: fraction)
-                        .stroke(tint, style: StrokeStyle(lineWidth: Self.thickness, lineCap: .round))
+                        .stroke(tint, style: StrokeStyle(lineWidth: Self.strokeWidth, lineCap: .round))
                 }
             }
             ZStack {
@@ -204,12 +208,12 @@ struct NotchEarProgressShape: Shape {
         var p = Path()
         p.move(to: CGPoint(x: path.startX, y: 0))
         if path.shoulderRadius > 0 {
-            p.addArc(center: CGPoint(x: 0, y: path.shoulderCenterY), radius: path.shoulderRadius,
-                     startAngle: .radians(-Double(path.shoulderSweep)), endAngle: .zero, clockwise: false)
+            p.addFlattenedArc(center: CGPoint(x: 0, y: path.shoulderCenterY), radius: path.shoulderRadius,
+                              from: .radians(-Double(path.shoulderSweep)), to: .zero)
         }
         p.addLine(to: CGPoint(x: path.x, y: path.bottomY - r))
-        p.addArc(center: CGPoint(x: path.x + r, y: path.bottomY - r), radius: r,
-                 startAngle: .degrees(180), endAngle: .degrees(90), clockwise: true)
+        p.addFlattenedArc(center: CGPoint(x: path.x + r, y: path.bottomY - r), radius: r,
+                          from: .degrees(180), to: .degrees(90))
         p.addLine(to: CGPoint(x: path.endX, y: path.bottomY))
         let left = rect.midX - cardSize.width / 2
         let flip = mirrored ? CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: cardSize.width, ty: 0) : .identity

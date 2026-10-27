@@ -405,6 +405,17 @@ func runNotchTests() {
                       inset: 1.75).cornerRadius, 0, "进度线耳朵: 卡片底角比内缩还小时直角拐弯")
         expectEqual(E(width: 196, height: 32, notchWidth: 180, notchHeight: 32, shoulder: 4, cardCornerRadius: 8,
                       inset: 1.75).endX, 12, "进度线耳朵: 耳朵窄到刘海左沿在圆弧里时终点停在圆弧末端,不倒退")
+        // 卡片外形和沿外沿的线自己把圆弧拆成折线:每段弦的拱高不超过 0.005pt,正负扫角一样,退化情形 1 段。
+        let arcCases: [(CGFloat, CGFloat)] = [(4, .pi / 2), (14.5, .pi / 2), (30, -.pi / 2), (0.5, .pi / 2), (60, .pi)]
+        expectEqual(arcCases.allSatisfy { r, sweep in
+            let n = ArcFlattening.segments(radius: r, sweep: sweep)
+            let sagitta = r * (1 - cos(abs(sweep) / CGFloat(n) / 2))
+            return sagitta <= ArcFlattening.maxDeviation + 1e-9 && n >= 2
+                && (n == 2 || r * (1 - cos(abs(sweep) / CGFloat(n - 1) / 2)) > ArcFlattening.maxDeviation)
+        }, true, "外形圆弧拆折线: 段数刚好够把拱高压在 0.005pt 以内,不多拆")
+        expectEqual([ArcFlattening.segments(radius: 0, sweep: 1), ArcFlattening.segments(radius: 10, sweep: 0),
+                     ArcFlattening.segments(radius: 1e6, sweep: 2 * .pi)], [1, 1, ArcFlattening.maxSegments],
+                    "外形圆弧拆折线: 半径或扫角为 0 时 1 段,封顶 maxSegments")
         typealias Motion = NotchEarProgressMotion
         let t0 = Date(timeIntervalSince1970: 1_800_000_000)
         let playing = ProgressAnchor(durationMs: 200_000, progressMs: 30_000, rate: 1, progressTs: nil, baseAgeMs: 0, fetchedAt: t0)
@@ -2698,9 +2709,11 @@ func runNotchTests() {
                     && sourceHas(progressLine, "$0.opacity(paused ? Self.pausedOpacity : 1)")
                     && !progressLine.contains("FrameTimeline(") && !progressLine.contains("repeatForever")
                     && !progressLine.contains("HeadShape")
-                    && sourceHas(progressLine, ".stroke(tint, style: StrokeStyle(lineWidth: Self.thickness, lineCap: .round))")
+                    && !progressLine.contains(".addArc(") && !src("NotchCardModifiers.swift").contains(".addArc(")
+                    && sourceHas(src("NotchCardModifiers.swift"), "let n = ArcFlattening.segments(radius: radius, sweep: CGFloat(a1 - a0))")
+                    && sourceHas(progressLine, ".stroke(tint, style: StrokeStyle(lineWidth: Self.strokeWidth, lineCap: .round))")
                     && progressLine.components(separatedBy: "value: tint)").count == 3, true,
-                    "进度线耳朵动效: 跳进度才滑、暂停变暗、不画线头、换封面时颜色渐变(纯色描边,底边那档同样)")
+                    "进度线耳朵动效: 跳进度才滑、暂停变暗、不画线头、换封面时颜色渐变(纯色描边,底边那档同样);卡片外形和线的圆弧自己拆折线")
         expectEqual(v.components(separatedBy: "?? playback.currentDurationMs, tint: progressLineTint,").count == 3
                     && sourceHas(v, "private var progressLineTint: Color {\n playback.vividDeepAccent ?? accentOrWhite\n }"), true,
                     "进度线: 底边和耳朵两档都用封面大片那种色相的深色版,没有时退回前景色")
