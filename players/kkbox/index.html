@@ -15,9 +15,9 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<link rel="stylesheet" href="../../assets/lp.css?v=202610271453">
-<link rel="stylesheet" href="../../assets/sub.css?v=202610271453">
-<script src="../../assets/sub.js?v=202610271453" defer fetchpriority="high"></script>
+<link rel="stylesheet" href="../../assets/lp.css?v=202610271707">
+<link rel="stylesheet" href="../../assets/sub.css?v=202610271707">
+<script src="../../assets/sub.js?v=202610271707" defer fetchpriority="high"></script>
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://yudaotor.github.io/lyrimuse/players/kkbox/">
 <meta property="og:locale" content="en_US">
@@ -128,22 +128,35 @@
 
 <footer class="foot">
   <div class="foot-in">
-    <div class="foot-brand"><img src="../../assets/img/app-icon.webp" alt="" width="22" height="22"><span>Lyrimuse</span></div>
-    <nav class="foot-links" aria-label="Footer">
-      <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
-      <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
-      <a href="../../changelog/">Changelog</a>
-      <a href="../">Supported players</a>
-      <a href="../../features/">Feature list</a>
-      <a href="https://github.com/sponsors/Yudaotor">Sponsor</a>
-      <a href="../../privacy/">Privacy</a>
-      <a href="../../terms/">Terms</a>
-      <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>
-      <a href="../../zh/players/kkbox/" lang="zh-Hans">简体中文</a> <a href="../../zh-Hant/players/kkbox/" lang="zh-Hant">繁體中文</a>
-    </nav>
+    <div class="foot-top">
+      <div class="foot-brand"><img src="../../assets/img/app-icon.webp" alt="" width="22" height="22"><span>Lyrimuse</span></div>
+      <nav class="foot-cols" aria-label="Footer">
+        <div class="foot-col"><p class="foot-h">Product</p><ul><li><a href="../../features/">Feature list</a></li><li><a href="../">Supported players</a></li><li><a href="../../changelog/">Changelog</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a></li></ul></div>
+        <div class="foot-col"><p class="foot-h">Help</p><ul><li><a href="../../#faq">FAQ</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/issues/new/choose">Report a problem</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a">Ask a question</a></li><li><a href="../../privacy/">Privacy</a></li><li><a href="../../terms/">Terms</a></li></ul></div>
+        <div class="foot-col"><p class="foot-h">About</p><ul><li><a href="https://github.com/Yudaotor/lyrimuse">GitHub</a></li><li><a href="https://youtu.be/0CRK4arrBOc">Video tour</a></li><li><a href="https://github.com/sponsors/Yudaotor">Sponsor</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a></li></ul></div>
+        <div class="foot-col"><p class="foot-h">Language</p><ul><li><a href="./" lang="en" aria-current="page">English</a></li><li><a href="../../zh/players/kkbox/" lang="zh-Hans">简体中文</a></li><li><a href="../../zh-Hant/players/kkbox/" lang="zh-Hant">繁體中文</a></li></ul></div>
+      </nav>
+    </div>
     <p class="foot-note">Apple Music, Spotify, KKBOX and other names and icons belong to their owners. Lyrimuse is an independent open-source project and isn&#x27;t affiliated with any of them.</p>
   </div>
 </footer>
+
+<div class="install-guide" id="install-guide" popover role="dialog" aria-labelledby="ig-title">
+  <div class="ig-head"><img src="../../assets/img/app-icon.webp" alt="" width="40" height="40"><div><h2 id="ig-title">Downloading now. Two more steps</h2>
+    <p class="ig-sub">Download didn&#x27;t start? <a class="ig-again" href="https://github.com/Yudaotor/lyrimuse/releases/latest">Try again</a></p></div>
+    <button class="fp-close" type="button" popovertarget="install-guide" popovertargetaction="hide" aria-label="Close"><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button></div>
+  <ol class="ig-steps">
+    <li><div class="ig-txt"><h3>Drag Lyrimuse into Applications</h3><p>Open the .dmg you downloaded and drag Lyrimuse onto the Applications folder next to it.</p></div>
+      <div class="ig-art ig-dmg" aria-hidden="true"><span class="ig-item"><img src="../../assets/img/app-icon.webp" alt="" width="52" height="52"><i>Lyrimuse</i></span>
+        <svg class="ig-arrow" viewBox="0 0 40 16"><path d="M2 8h33m-7-6 7 6-7 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="ig-item"><svg class="ig-folder" viewBox="0 0 64 52" aria-hidden="true"><path d="M4 9a5 5 0 0 1 5-5h14l6 6h26a5 5 0 0 1 5 5v30a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="#2f8be6"/><path d="M4 17h56v28a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="#5bb0f6"/><path d="M24 37h16M27 37l5-12 5 12M28.6 33h6.8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><i>Applications</i></span></div></li>
+    <li><div class="ig-txt"><h3>Allow the first launch</h3><p>macOS blocks the first launch. Click Done, then open System Settings → Privacy &amp; Security, scroll to the bottom and click Open Anyway. After that it opens normally.</p></div>
+      <div class="ig-art ig-sec" aria-hidden="true"><b>Security</b><span class="ig-row"><span>“Lyrimuse” was blocked to protect your Mac.</span><span class="ig-btn">Open Anyway</span></span></div></li>
+  </ol>
+  <div class="ig-fix"><p>Says Lyrimuse is damaged, or there&#x27;s no Open Anyway? Run this in Terminal:</p>
+    <div class="ig-cmd"><code>xattr -dr com.apple.quarantine /Applications/Lyrimuse.app</code><button class="ig-copy" type="button" data-copy="xattr -dr com.apple.quarantine /Applications/Lyrimuse.app" data-done="Copied">Copy</button></div></div>
+</div>
+<script>(function(){var g=document.getElementById('install-guide');if(!g||!g.showPopover)return;document.addEventListener('click',function(e){var t=e.target.closest?e.target:null;if(!t)return;var a=t.closest('a.dl-item[data-arch]');if(a){g.querySelector('.ig-again').href=a.href;try{g.showPopover()}catch(x){}return}var c=t.closest('.ig-copy');if(c&&navigator.clipboard)navigator.clipboard.writeText(c.dataset.copy).then(function(){c.textContent=c.dataset.done},function(){})})})()</script>
 
 </body>
 </html>

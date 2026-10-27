@@ -15,9 +15,9 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<link rel="stylesheet" href="../../../assets/lp.css?v=202610271453">
-<link rel="stylesheet" href="../../../assets/sub.css?v=202610271453">
-<script src="../../../assets/sub.js?v=202610271453" defer fetchpriority="high"></script>
+<link rel="stylesheet" href="../../../assets/lp.css?v=202610271707">
+<link rel="stylesheet" href="../../../assets/sub.css?v=202610271707">
+<script src="../../../assets/sub.js?v=202610271707" defer fetchpriority="high"></script>
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://yudaotor.github.io/lyrimuse/zh-Hant/players/kkbox/">
 <meta property="og:locale" content="zh_TW">
@@ -128,22 +128,35 @@
 
 <footer class="foot">
   <div class="foot-in">
-    <div class="foot-brand"><img src="../../../assets/img/app-icon.webp" alt="" width="22" height="22"><span>Lyrimuse</span></div>
-    <nav class="foot-links" aria-label="頁尾">
-      <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-Hant.md">GitHub（繁體中文說明）</a>
-      <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
-      <a href="../../changelog/">更新記錄</a>
-      <a href="../">支援的播放器</a>
-      <a href="../../features/">功能清單</a>
-      <a href="https://github.com/sponsors/Yudaotor">贊助</a>
-      <a href="../../privacy/">隱私政策</a>
-      <a href="../../terms/">使用條款</a>
-      <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>
-      <a href="../../../players/kkbox/" lang="en">English</a> <a href="../../../zh/players/kkbox/" lang="zh-Hans">简体中文</a>
-    </nav>
+    <div class="foot-top">
+      <div class="foot-brand"><img src="../../../assets/img/app-icon.webp" alt="" width="22" height="22"><span>Lyrimuse</span></div>
+      <nav class="foot-cols" aria-label="頁尾">
+        <div class="foot-col"><p class="foot-h">產品</p><ul><li><a href="../../features/">功能清單</a></li><li><a href="../">支援的播放器</a></li><li><a href="../../changelog/">更新記錄</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a></li></ul></div>
+        <div class="foot-col"><p class="foot-h">支援</p><ul><li><a href="../../#faq">常見問題</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/issues/new/choose">回報問題</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a">使用提問</a></li><li><a href="../../privacy/">隱私政策</a></li><li><a href="../../terms/">使用條款</a></li></ul></div>
+        <div class="foot-col"><p class="foot-h">關於</p><ul><li><a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-Hant.md">GitHub（繁體中文說明）</a></li><li><a href="https://youtu.be/-NurKoxyxuc">影片介紹</a></li><li><a href="https://github.com/sponsors/Yudaotor">贊助</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a></li></ul></div>
+        <div class="foot-col"><p class="foot-h">語言</p><ul><li><a href="../../../players/kkbox/" lang="en">English</a></li><li><a href="../../../zh/players/kkbox/" lang="zh-Hans">简体中文</a></li><li><a href="./" lang="zh-Hant" aria-current="page">繁體中文</a></li></ul></div>
+      </nav>
+    </div>
     <p class="foot-note">Apple Music、Spotify、KKBOX 等名稱和圖示歸各自的所有者，Lyrimuse 是獨立的開源專案，與它們沒有隸屬或合作關係。</p>
   </div>
 </footer>
+
+<div class="install-guide" id="install-guide" popover role="dialog" aria-labelledby="ig-title">
+  <div class="ig-head"><img src="../../../assets/img/app-icon.webp" alt="" width="40" height="40"><div><h2 id="ig-title">下載開始了，還差兩步</h2>
+    <p class="ig-sub">沒開始下載？ <a class="ig-again" href="https://github.com/Yudaotor/lyrimuse/releases/latest">再點一次</a></p></div>
+    <button class="fp-close" type="button" popovertarget="install-guide" popovertargetaction="hide" aria-label="關閉"><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button></div>
+  <ol class="ig-steps">
+    <li><div class="ig-txt"><h3>把 Lyrimuse 拖進 Applications</h3><p>打開下載好的 .dmg，把 Lyrimuse 拖到旁邊的 Applications 檔案夾上。</p></div>
+      <div class="ig-art ig-dmg" aria-hidden="true"><span class="ig-item"><img src="../../../assets/img/app-icon.webp" alt="" width="52" height="52"><i>Lyrimuse</i></span>
+        <svg class="ig-arrow" viewBox="0 0 40 16"><path d="M2 8h33m-7-6 7 6-7 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="ig-item"><svg class="ig-folder" viewBox="0 0 64 52" aria-hidden="true"><path d="M4 9a5 5 0 0 1 5-5h14l6 6h26a5 5 0 0 1 5 5v30a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="#2f8be6"/><path d="M4 17h56v28a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="#5bb0f6"/><path d="M24 37h16M27 37l5-12 5 12M28.6 33h6.8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><i>Applications</i></span></div></li>
+    <li><div class="ig-txt"><h3>第一次打開時放行一次</h3><p>第一次打開會被系統擋下，先按「完成」。再打開「系統設定 → 隱私權與安全性」，捲到最下面，按「強制打開」並確認。之後就能正常打開了。</p></div>
+      <div class="ig-art ig-sec" aria-hidden="true"><b>安全性</b><span class="ig-row"><span>已阻擋「Lyrimuse」以保護你的Mac。</span><span class="ig-btn">強制打開</span></span></div></li>
+  </ol>
+  <div class="ig-fix"><p>提示「已損毀，無法打開」，或者找不到「強制打開」？在終端機裡執行：</p>
+    <div class="ig-cmd"><code>xattr -dr com.apple.quarantine /Applications/Lyrimuse.app</code><button class="ig-copy" type="button" data-copy="xattr -dr com.apple.quarantine /Applications/Lyrimuse.app" data-done="已複製">複製</button></div></div>
+</div>
+<script>(function(){var g=document.getElementById('install-guide');if(!g||!g.showPopover)return;document.addEventListener('click',function(e){var t=e.target.closest?e.target:null;if(!t)return;var a=t.closest('a.dl-item[data-arch]');if(a){g.querySelector('.ig-again').href=a.href;try{g.showPopover()}catch(x){}return}var c=t.closest('.ig-copy');if(c&&navigator.clipboard)navigator.clipboard.writeText(c.dataset.copy).then(function(){c.textContent=c.dataset.done},function(){})})})()</script>
 
 </body>
 </html>

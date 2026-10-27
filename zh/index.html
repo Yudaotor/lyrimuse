@@ -17,7 +17,7 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<script src="../assets/lp.js?v=202610271453" defer fetchpriority="high"></script>
+<script src="../assets/lp.js?v=202610271707" defer fetchpriority="high"></script>
 <style>:root {
 --bg: #fbfbfd;
 --bg-alt: #f5f5f7;
@@ -392,6 +392,9 @@ animation: flpop .7s cubic-bezier(.3, 1.45, .5, 1) backwards; animation-delay: c
 @keyframes flpop { from { opacity: 0; scale: .3; } }
 .players { padding: 56px 0 72px; text-align: center; }
 .kicker { margin: 0 0 22px; font-size: 13px; font-weight: 600; letter-spacing: .08em; color: var(--ink-3); text-transform: uppercase; }
+.players-req { margin: 30px 0 0; font-size: 14px; color: var(--ink-3); }
+.players-req a { color: var(--ink-2); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.players-req a:hover { color: var(--ink); text-decoration-color: currentColor; }
 .marquee { overflow: hidden; padding: 10px 0 24px; margin: -10px 0 -24px; -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
 .track { display: flex; gap: 14px; width: max-content; animation: marquee 40s linear infinite; }
 .marquee:hover .track { animation-play-state: paused; }
@@ -1240,11 +1243,61 @@ background: var(--card); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0
 .featured-pop li a:hover { background: var(--wash-2); }
 .foot { border-top: 1px solid var(--line); padding: 36px 24px 48px; }
 .foot-in { max-width: 1120px; margin: 0 auto; }
-.foot-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 14px; }
+.foot-top { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(0, 4fr); gap: 24px 40px; align-items: start; }
+.foot-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .foot-brand img { border-radius: 5px; }
-.foot-links { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 14px; color: var(--ink-2); }
-.foot-links a:hover { color: var(--ink); }
-.foot-note { margin: 18px 0 0; font-size: 12px; color: var(--ink-3); max-width: 60em; }
+.foot-cols { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
+.foot-h { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--ink); }
+.foot-col ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 9px; font-size: 14px; }
+.foot-col a { color: var(--ink-2); }
+.foot-col a:hover { color: var(--ink); }
+.foot-col a[aria-current] { color: var(--ink); font-weight: 600; }
+.foot-note { margin: 32px 0 0; font-size: 12px; color: var(--ink-3); max-width: 60em; }
+@media (max-width: 820px) {
+.foot-top { grid-template-columns: minmax(0, 1fr); }
+.foot-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 20px; }
+}
+.install-guide { display: none; }
+.install-guide:popover-open {
+display: block; width: min(600px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto;
+margin: auto; padding: 24px 24px 20px; border: 1px solid var(--line); border-radius: 22px;
+background: var(--card); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0, .22);
+}
+.install-guide::backdrop { background: rgba(0, 0, 0, .28); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+@media (prefers-reduced-motion: no-preference) {
+.install-guide:popover-open { transition: opacity .2s, translate .25s var(--ease-out); }
+@starting-style { .install-guide:popover-open { opacity: 0; translate: 0 8px; } }
+}
+.ig-head { display: flex; align-items: flex-start; gap: 14px; }
+.ig-head > img { flex: none; border-radius: 10px; }
+.ig-head > div { flex: 1; min-width: 0; }
+.ig-head h2 { margin: 2px 0 4px; font-size: 20px; line-height: 1.25; letter-spacing: -.01em; }
+.ig-sub { margin: 0; font-size: 13.5px; color: var(--ink-3); }
+.ig-sub a, .ig-fix a { color: var(--brand-ink); }
+.ig-steps { margin: 20px 0 0; padding: 0; list-style: none; counter-reset: ig; display: grid; gap: 12px; }
+.ig-steps > li { counter-increment: ig; display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 16px; align-items: center; padding: 16px; border-radius: 16px; background: var(--bg-alt); }
+.ig-txt h3 { margin: 0 0 6px; font-size: 15.5px; }
+.ig-txt h3::before { content: counter(ig); display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 8px; border-radius: 50%; background: var(--ink); color: var(--on-ink); font-size: 12px; vertical-align: 1px; }
+.ig-txt p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink-2); }
+.ig-art { border-radius: 12px; background: var(--card); box-shadow: 0 0 0 1px var(--line); }
+.ig-dmg { display: flex; align-items: center; justify-content: space-around; padding: 14px 10px; }
+.ig-item { display: grid; justify-items: center; gap: 6px; }
+.ig-item i { font-style: normal; font-size: 11.5px; color: var(--ink-2); }
+.ig-item img, .ig-folder { width: 48px; height: 48px; }
+.ig-folder { height: 40px; margin: 4px 0; }
+.ig-arrow { width: 34px; height: 14px; color: var(--ink-3); }
+.ig-sec { display: grid; gap: 8px; padding: 12px; font-size: 11.5px; }
+.ig-sec b { font-size: 12px; }
+.ig-row { display: grid; gap: 8px; color: var(--ink-2); line-height: 1.4; }
+.ig-btn { justify-self: end; padding: 3px 10px; border-radius: 999px; background: var(--wash-2); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 2px var(--brand); }
+.ig-fix { margin: 16px 0 0; font-size: 13.5px; color: var(--ink-2); }
+.ig-fix p { margin: 0 0 8px; }
+.ig-cmd { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-radius: 12px; background: var(--bg-alt); }
+.ig-cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font: 12.5px var(--mono); }
+.ig-copy { flex: none; padding: 5px 12px; border: 0; border-radius: 999px; background: var(--ink); color: var(--on-ink); font: inherit; font-size: 12.5px; cursor: pointer; }
+@media (max-width: 560px) {
+.ig-steps > li { grid-template-columns: minmax(0, 1fr); }
+}
 .ch, .news, .faq-sec, .final { content-visibility: auto; contain-intrinsic-size: auto 1000px; overflow-clip-margin: 160px; }
 .ch.warm, .news.warm, .faq-sec.warm, .final.warm { content-visibility: visible; }
 .warm.far, .warm.far *, .warm.far *::before, .warm.far *::after,
@@ -1580,7 +1633,7 @@ html { scroll-behavior: auto; }
       <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">17 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">32 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下载</b><em>全部版本、ZIP 与校验文件</em></span></a>
-      <p class="dl-note">DMG 没有经过 Apple 公证，第一次打开会被系统拦下：到「系统设置 → 隐私与安全性」点「仍要打开」。用 Homebrew 装不会遇到。</p>
+      <p class="dl-note">DMG 没有经过 Apple 公证，第一次打开会被系统拦下：到「系统设置 → 隐私与安全」点「仍要打开」。用 Homebrew 装不会遇到。</p>
     </div></div>
     <a class="nav-sponsor" href="https://yudaotor.github.io/donate/" aria-label="用支付宝或微信赞助作者" title="用支付宝或微信赞助作者"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14s-5.5-3.3-5.5-7.2A3 3 0 0 1 8 4.9a3 3 0 0 1 5.5 1.9C13.5 10.7 8 14 8 14z"/></svg></a>
   </div>
@@ -1601,7 +1654,7 @@ html { scroll-behavior: auto; }
       <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">17 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">32 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下载</b><em>全部版本、ZIP 与校验文件</em></span></a>
-      <p class="dl-note">DMG 没有经过 Apple 公证，第一次打开会被系统拦下：到「系统设置 → 隐私与安全性」点「仍要打开」。用 Homebrew 装不会遇到。</p>
+      <p class="dl-note">DMG 没有经过 Apple 公证，第一次打开会被系统拦下：到「系统设置 → 隐私与安全」点「仍要打开」。用 Homebrew 装不会遇到。</p>
     </div></div>
     <button class="btn btn-dark btn-send" type="button" data-copied="链接已复制，到 Mac 上打开"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V1.8m0 0L5 4.8m3-3 3 3M5.5 7H4a1.5 1.5 0 0 0-1.5 1.5v4.5A1.5 1.5 0 0 0 4 14.5h8a1.5 1.5 0 0 0 1.5-1.5V8.5A1.5 1.5 0 0 0 12 7h-1.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="send-label">发到我的 Mac</span></button>
     <button class="btn btn-light" type="button" id="copyBrew" data-copy="brew tap yudaotor/lyrimuse&#10;brew trust --cask yudaotor/lyrimuse/lyrimuse&#10;brew install --cask lyrimuse" data-copied="已复制，粘贴到终端运行"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 3.5V3a1.5 1.5 0 0 0-1.5-1.5h-6A1.5 1.5 0 0 0 2 3v6a1.5 1.5 0 0 0 1.5 1.5H4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="copy-label">复制 Homebrew 安装命令</span></button>
@@ -1686,6 +1739,7 @@ html { scroll-behavior: auto; }
       <a class="pl" href="players/reamp/"><img data-icon="../assets/img/players/Reamp.webp" alt="">reAMP</a>
     </div>
   </div>
+  <p class="players-req"><a href="https://github.com/Yudaotor/lyrimuse/issues/new?template=3-player.yml">没看到你用的播放器？申请支持</a> <span aria-hidden="true">›</span></p>
 </section>
 
 <section class="ch watch" id="video">
@@ -2183,7 +2237,7 @@ html { scroll-behavior: auto; }
       <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">17 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">32 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下载</b><em>全部版本、ZIP 与校验文件</em></span></a>
-      <p class="dl-note">DMG 没有经过 Apple 公证，第一次打开会被系统拦下：到「系统设置 → 隐私与安全性」点「仍要打开」。用 Homebrew 装不会遇到。</p>
+      <p class="dl-note">DMG 没有经过 Apple 公证，第一次打开会被系统拦下：到「系统设置 → 隐私与安全」点「仍要打开」。用 Homebrew 装不会遇到。</p>
     </div></div>
       <button class="btn btn-white btn-send" type="button" data-copied="链接已复制，到 Mac 上打开"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V1.8m0 0L5 4.8m3-3 3 3M5.5 7H4a1.5 1.5 0 0 0-1.5 1.5v4.5A1.5 1.5 0 0 0 4 14.5h8a1.5 1.5 0 0 0 1.5-1.5V8.5A1.5 1.5 0 0 0 12 7h-1.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="send-label">发到我的 Mac</span></button>
       <a class="btn btn-ghost mag" href="https://github.com/Yudaotor/lyrimuse">在 GitHub 上查看</a>
@@ -2197,22 +2251,35 @@ html { scroll-behavior: auto; }
 
 <footer class="foot">
   <div class="foot-in">
-    <div class="foot-brand"><img src="../assets/img/app-icon.webp" alt="" width="22" height="22"><span>Lyrimuse</span></div>
-    <nav class="foot-links" aria-label="页脚">
-      <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-CN.md">GitHub（中文说明）</a>
-      <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
-      <a href="changelog/">更新日志</a>
-      <a href="players/">支持的播放器</a>
-      <a href="features/">功能清单</a>
-      <a href="https://yudaotor.github.io/donate/">赞助</a>
-      <a href="privacy/">隐私政策</a>
-      <a href="terms/">使用条款</a>
-      <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>
-      <a href="../" lang="en">English</a> <a href="../zh-Hant/" lang="zh-Hant">繁體中文</a>
-    </nav>
+    <div class="foot-top">
+      <div class="foot-brand"><img src="../assets/img/app-icon.webp" alt="" width="22" height="22"><span>Lyrimuse</span></div>
+      <nav class="foot-cols" aria-label="页脚">
+        <div class="foot-col"><p class="foot-h">产品</p><ul><li><a href="features/">功能清单</a></li><li><a href="players/">支持的播放器</a></li><li><a href="changelog/">更新日志</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a></li></ul></div>
+        <div class="foot-col"><p class="foot-h">帮助</p><ul><li><a href="#faq">常见问题</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/issues/new/choose">反馈问题</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a">使用求助</a></li><li><a href="privacy/">隐私政策</a></li><li><a href="terms/">使用条款</a></li></ul></div>
+        <div class="foot-col"><p class="foot-h">关于</p><ul><li><a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-CN.md">GitHub（中文说明）</a></li><li><a href="https://www.bilibili.com/video/BV1CXH66yEUJ/">视频介绍</a></li><li><a href="https://yudaotor.github.io/donate/">赞助</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a></li></ul></div>
+        <div class="foot-col"><p class="foot-h">语言</p><ul><li><a href="../" lang="en">English</a></li><li><a href="./" lang="zh-Hans" aria-current="page">简体中文</a></li><li><a href="../zh-Hant/" lang="zh-Hant">繁體中文</a></li></ul></div>
+      </nav>
+    </div>
     <p class="foot-note">Apple Music、Spotify、KKBOX 等名称和图标归各自所有者，Lyrimuse 是独立的开源项目，与它们没有隶属或合作关系。</p>
   </div>
 </footer>
+
+<div class="install-guide" id="install-guide" popover role="dialog" aria-labelledby="ig-title">
+  <div class="ig-head"><img src="../assets/img/app-icon.webp" alt="" width="40" height="40"><div><h2 id="ig-title">下载开始了，还差两步</h2>
+    <p class="ig-sub">没开始下载？ <a class="ig-again" href="https://github.com/Yudaotor/lyrimuse/releases/latest">再点一次</a></p></div>
+    <button class="fp-close" type="button" popovertarget="install-guide" popovertargetaction="hide" aria-label="关闭"><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button></div>
+  <ol class="ig-steps">
+    <li><div class="ig-txt"><h3>把 Lyrimuse 拖进 Applications</h3><p>打开下载好的 .dmg，把 Lyrimuse 拖到旁边的 Applications 文件夹上。</p></div>
+      <div class="ig-art ig-dmg" aria-hidden="true"><span class="ig-item"><img src="../assets/img/app-icon.webp" alt="" width="52" height="52"><i>Lyrimuse</i></span>
+        <svg class="ig-arrow" viewBox="0 0 40 16"><path d="M2 8h33m-7-6 7 6-7 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="ig-item"><svg class="ig-folder" viewBox="0 0 64 52" aria-hidden="true"><path d="M4 9a5 5 0 0 1 5-5h14l6 6h26a5 5 0 0 1 5 5v30a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="#2f8be6"/><path d="M4 17h56v28a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="#5bb0f6"/><path d="M24 37h16M27 37l5-12 5 12M28.6 33h6.8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><i>Applications</i></span></div></li>
+    <li><div class="ig-txt"><h3>第一次打开时放行一次</h3><p>第一次打开会被系统拦下，先点「完成」。再打开「系统设置 → 隐私与安全」，滚到最下面，点「仍要打开」并确认。之后就能正常打开了。</p></div>
+      <div class="ig-art ig-sec" aria-hidden="true"><b>安全性</b><span class="ig-row"><span>已阻止“Lyrimuse”以保护Mac。</span><span class="ig-btn">仍要打开</span></span></div></li>
+  </ol>
+  <div class="ig-fix"><p>提示「已损坏，无法打开」，或者找不到「仍要打开」？在终端里运行：</p>
+    <div class="ig-cmd"><code>xattr -dr com.apple.quarantine /Applications/Lyrimuse.app</code><button class="ig-copy" type="button" data-copy="xattr -dr com.apple.quarantine /Applications/Lyrimuse.app" data-done="已复制">复制</button></div></div>
+</div>
+<script>(function(){var g=document.getElementById('install-guide');if(!g||!g.showPopover)return;document.addEventListener('click',function(e){var t=e.target.closest?e.target:null;if(!t)return;var a=t.closest('a.dl-item[data-arch]');if(a){g.querySelector('.ig-again').href=a.href;try{g.showPopover()}catch(x){}return}var c=t.closest('.ig-copy');if(c&&navigator.clipboard)navigator.clipboard.writeText(c.dataset.copy).then(function(){c.textContent=c.dataset.done},function(){})})})()</script>
 
 <script type="application/json" id="demoData">
 {
