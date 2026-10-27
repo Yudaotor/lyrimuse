@@ -8,13 +8,15 @@ import (
 	"time"
 )
 
-// 网易云、QQ 音乐、汽水各有两种安装包,数据各在一处、两处底下的相对路径一样:App Store 的沙盒版在
+// 网易云、汽水各有两种安装包,数据各在一处、两处底下的相对路径一样:App Store 的沙盒版在
 // `~/Library/Containers/<bundle id>/Data/…`(读它要「完全磁盘访问」),官网下载的非沙盒版在
 // `~/Library/Application Support/…`(不用授权)。每家要读的几份文件都从 clientDataRoots.root 挑出的同一个根读。
-// 见 09 章决策 342 与 09 章决策 343。
+// QQ 音乐的官网版也写进容器(容器不在就自己建一个),所以只登记容器那一处。
+// 见 09 章决策 342、09 章决策 343 与 09 章决策 344。
 
 type clientDataRoots struct {
-	// container 是沙盒版那一处的根,standalone 是非沙盒版那一处;取不到家目录时都是 ""。
+	// container 是沙盒版那一处的根,standalone 是非沙盒版那一处;取不到家目录时都是 "",
+	// 只有容器那一处的播放器 standalone 也是 ""。
 	container, standalone string
 	// files 是根下要读的那几份(相对路径),挑根时比它们的修改时间。
 	files []string
@@ -51,9 +53,8 @@ func neteaseDataRoots() clientDataRoots {
 
 func qqDataRoots() clientDataRoots {
 	return clientDataRoots{
-		container:  homeSubdir("Library/Containers/com.tencent.QQMusicMac/Data/Library/Application Support/QQMusicMac"),
-		standalone: homeSubdir("Library/Application Support/QQMusicMac"),
-		files:      []string{qqLibraryRel, qqQueueRel, qqRRCacheRel},
+		container: homeSubdir("Library/Containers/com.tencent.QQMusicMac/Data/Library/Application Support/QQMusicMac"),
+		files:     []string{qqLibraryRel, qqQueueRel, qqRRCacheRel},
 	}
 }
 
@@ -70,7 +71,6 @@ func sodaDataRoots() clientDataRoots {
 func clientDataRootsBySource() map[string]clientDataRoots {
 	return map[string]clientDataRoots{
 		"netease": neteaseDataRoots(),
-		"qq":      qqDataRoots(),
 		"soda":    sodaDataRoots(),
 	}
 }

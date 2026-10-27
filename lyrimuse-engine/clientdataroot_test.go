@@ -91,8 +91,6 @@ func TestStandaloneOnlyClientsPathsAndProbe(t *testing.T) {
 	}{
 		{"netease", "Library/Application Support/com.netease.163music/Documents", "Library/Containers/com.netease.163music/Data",
 			map[string]func() string{neteaseLibraryRel: neteaseLocalDBPath, neteaseQueueRel: neteaseUpcomingPath, neteaseFMRel: neteaseFMPath}},
-		{"qq", "Library/Application Support/QQMusicMac", "Library/Containers/com.tencent.QQMusicMac/Data",
-			map[string]func() string{qqLibraryRel: qqLocalDBPath, qqQueueRel: qqUpcomingPath, qqRRCacheRel: qqRRCachePath}},
 		{"soda", "Library/Application Support/SodaMusic", "Library/Containers/com.soda.music/Data",
 			map[string]func() string{sodaQueueRel: sodaLocalQueuePath, sodaPreloadRel: sodaPreloadPath}},
 	}
@@ -146,6 +144,33 @@ func TestStandaloneOnlyClientsPathsAndProbe(t *testing.T) {
 				t.Errorf("此刻读的不是容器,不该探容器给出授权结论,got readable=%v denied=%v", st.Readable, st.Denied)
 			}
 		})
+	}
+}
+
+// QQ 音乐的官网版也写进容器:Application Support 底下就算有同名目录、文件更新,也照旧读容器。
+func TestQQReadsOnlyContainer(t *testing.T) {
+	overrides := []*string{&qqLocalDBOverride, &qqUpcomingOverride, &qqRRCacheOverride}
+	saved := make([]string, len(overrides))
+	for i, o := range overrides {
+		saved[i], *o = *o, ""
+	}
+	defer func() {
+		for i, o := range overrides {
+			*o = saved[i]
+		}
+	}()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	container := filepath.Join(home, "Library/Containers/com.tencent.QQMusicMac/Data/Library/Application Support/QQMusicMac")
+	writeClientFile(t, filepath.Join(container, qqLibraryRel), time.Now().Add(-time.Hour))
+	writeClientFile(t, filepath.Join(home, "Library/Application Support/QQMusicMac", qqLibraryRel), time.Now())
+	for rel, path := range map[string]func() string{qqLibraryRel: qqLocalDBPath, qqQueueRel: qqUpcomingPath, qqRRCacheRel: qqRRCachePath} {
+		if got, want := path(), filepath.Join(container, rel); got != want {
+			t.Errorf("QQ 只读容器:got %s,want %s", got, want)
+		}
+	}
+	if _, ok := clientDataRootsBySource()["qq"]; ok {
+		t.Error("QQ 不该登记进 clientDataRootsBySource:它的官网版也写容器,登记了启动探测会把它判成不用授权")
 	}
 }
 
