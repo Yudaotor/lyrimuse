@@ -7,10 +7,14 @@ import Foundation
 /// 的 js/src/koroman.core.js,`romanize` 默认选项那条路),顺序与写法照搬:补 ㄴ(「잎」)→ 音节拆成字母 →
 /// 按顺序整串替换读音规则 → 字母换成拉丁字母。许可证全文见 THIRD_PARTY_LICENSES。
 ///
-/// 跟原版不同的两处:
+/// 跟原版不同的几处:
 ///  - 没有原版「연음」段开头那两条「ㄱ / ㄹ 收音 + ㅇ + ㅑㅒㅕㅖㅛㅠ → 补 ㄴ」:它分不出复合词和词尾变化,
 ///    필요해、움직여、죽여、말야 都会多出一个 ㄴ。代价是 열여섯、알약 这类真该补的也不补。
 ///  - 不改大小写:原版默认整串转小写,这里只换谚文,其余字符原样(歌词里的英文要保留大小写)。
+///  - 补了标准发音法里几条:ㅅ ㅆ ㅊ ㅌ 收音 + ㅎ → ㅌ(못해 → motae);ㄺ + ㄱ 念 ㄹ(붉게 → bulge),
+///    ㄺ + ㅎ 合成送气音(밝혀 → balkyeo);收音碰上实词「없」先变代表音再连读(끝없이 → kkeudeopsi);
+///    ㅀ ㄾ + ㄴ 流音化(잃는 → illeun)。ㄴ + ㄹ 一律念 ㄹㄹ(난로 → nallo),念 ㄴㄴ 的只认 `nieunNieunWords`
+///    里那几个词(原版按「后面接 ㅗ」判,난로、본론 会念错)。见 10 章决策 59。
 ///
 /// 只换组合好的谚文音节(U+AC00–U+D7A3)和拆开的现代谚文字母(初声 U+1100–U+1112、中声 U+1161–U+1175、
 /// 终声 U+11A8–U+11C2);古谚文字母、兼容字母(ㅋㅋ)和别的文字原样留给调用方。规则有先后,前一条的输出是
@@ -85,7 +89,7 @@ public enum KoreanRomanization {
 
     /// 补 ㄴ、拆成字母、按顺序套完读音规则之后的字母串(还没换成拉丁字母)。
     private static func pronounced(_ text: String) -> String {
-        var jamo = decomposed(insertingNieun(text))
+        var jamo = decomposed(insertingNieun(nieunNieunApplied(text)))
         for rule in rules {
             jamo = rule.regex.stringByReplacingMatches(
                 in: jamo, range: NSRange(location: 0, length: (jamo as NSString).length),
@@ -129,6 +133,24 @@ public enum KoreanRomanization {
         return String(view)
     }
 
+    /// ㄴ + ㄹ 念 ㄴㄴ 的词(标准发音法第 20 项「다만」所列,加上路名 신문로):其余的 ㄴ + ㄹ 一律流音化念 ㄹㄹ。
+    /// 值是把那个 ㄹ 换成 ㄴ 的写法,只换这一处,音节数不变(`syllableReadings` 靠音节数对位)。
+    private static let nieunNieunWords: [(String, String)] = [
+        ("의견란", "의견난"), ("임진란", "임진난"), ("생산량", "생산냥"), ("결단력", "결단녁"), ("공권력", "공권녁"),
+        ("동원령", "동원녕"), ("상견례", "상견녜"), ("횡단로", "횡단노"), ("이원론", "이원논"), ("입원료", "입원뇨"),
+        ("구근류", "구근뉴"), ("신문로", "신문노"),
+    ]
+
+    private static func nieunNieunApplied(_ text: String) -> String {
+        guard text.contains(where: { $0 == "란" || $0 == "량" || $0 == "력" || $0 == "령" || $0 == "례" || $0 == "로"
+                || $0 == "론" || $0 == "료" || $0 == "류" }) else { return text }
+        var out = text
+        for (word, spoken) in nieunNieunWords where out.contains(word) {
+            out = out.replacingOccurrences(of: word, with: spoken)
+        }
+        return out
+    }
+
     /// 原版 splitHangulToJamos:音节拆成初声(U+1100…)、中声(U+1161…)、终声(U+11A8…),别的字符原样。
     private static func decomposed(_ text: String) -> String {
         var out = String.UnicodeScalarView()
@@ -158,14 +180,17 @@ public enum KoreanRomanization {
     private static let rules: [Rule] = [
         // 不用的终声 U+11A7 去掉。
         rule(#"ᆧ"#, ""),
+        // 收音碰上实词「없」:先变代表音再连读(끝없이 → 끄덥씨),不是直接把收音挪过去。
+        rule(#"[ᆺᆻᆽᆾᇀ](?=없)"#, "\u{11AE}"),
+        rule(#"[ᆩᆿ](?=없)"#, "\u{11A8}"),
+        rule(#"ᇁ(?=없)"#, "\u{11B8}"),
         // 鼻音化:收音碰上 ㄴ / ㅁ。
         rule(#"[ᆸᇁᆹᆲᆵ](?=[ᄂᄆ])"#, "\u{11B7}"),
         rule(#"[ᆮᇀᆽᆾᆺᆻᇂ](?=[ᄂᄆ])"#, "\u{11AB}"),
         rule(#"[ᆨᆩᆿᆪᆰ](?=[ᄂᄆ])"#, "\u{11BC}"),
         // ㄹ 的鼻音化与流音化。
         rule(#"[ᆨᆼ]ᄅ"#, "\u{11BC}\u{1102}"),
-        rule(#"ᆫᄅ(?=ᅩ)"#, "\u{11AB}\u{1102}"),
-        rule(#"ᆯᄂ|ᆫᄅ"#, "\u{11AF}\u{1105}"),
+        rule(#"[ᆯᆶᆴ]ᄂ|ᆫᄅ"#, "\u{11AF}\u{1105}"),
         rule(#"[ᆷᆸ]ᄅ"#, "\u{11B7}\u{1102}"),
         rule(#"ᆰᄅ"#, "\u{11A8}\u{1105}"),
         // 收音与同部位送气音之间加连字符。
@@ -184,6 +209,10 @@ public enum KoreanRomanization {
         rule(#"ᆵᄋ"#, "\u{11AF}\u{1111}"),
         rule(#"ᆶᄋ"#, "\u{11AF}\u{110B}"),
         rule(#"ᆹᄋ"#, "\u{11B8}\u{1109}"),
+        // ㄺ 碰上 ㅎ:ㄱ 跟 ㅎ 合成 ㅋ,ㄹ 留下(下面拆双收音时 ㄺ 拆成「ㄱ 在前」,送气那条接不上)。
+        rule(#"ᆰᄒ"#, "\u{11AF}\u{110F}"),
+        // ㄺ 碰上 ㄱ 念 ㄹ(붉게、읽고)。
+        rule(#"ᆰ(?=ᄀ)"#, "\u{11AF}"),
         // 「밟」在辅音前念 ㅂ。
         rule(#"밟(?=[ᄀ-ᄊᄌ-ᄒ])"#, "\u{1107}\u{1161}\u{11B8}"),
         // 双收音拆开,要念的那个放前面,最后一条只留前一个。
@@ -217,6 +246,7 @@ public enum KoreanRomanization {
         rule(#"ᇂᄀ|ᆨᄒ"#, "\u{110F}"),
         rule(#"ᇂᄃ|ᆮᄒ"#, "\u{1110}"),
         rule(#"ᇂᄌ|ᆽᄒ"#, "\u{110E}"),
+        rule(#"[ᆺᆻᆾᇀ]ᄒ"#, "\u{1110}"),
         rule(#"ᇂᄇ"#, "\u{1107}"),
         rule(#"ᆸᄒ"#, "\u{1111}"),
         // ㄹㄹ 写 ll;词中落单的 ㅎ 收音去掉;剩下的连续两个收音只留前一个。

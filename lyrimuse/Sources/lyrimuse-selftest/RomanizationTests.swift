@@ -1577,6 +1577,23 @@ func runRomanizationTests() {
         for (hangul, latin) in lyricWords {
             expectEqual(kr(hangul), latin, "韩文读音(歌词高频词): \(hangul) → \(latin)")
         }
+        // 标准发音法里补的几条:ㅅㅆㅊㅌ + ㅎ → ㅌ、ㄺ + ㄱ 念 ㄹ、ㄺㄼㄵ + ㅎ、收音碰上实词「없」先变代表音、ㅀㄾ + ㄴ、
+        // ㄴ + ㄹ 一律 ㄹㄹ(例外词念 ㄴㄴ)。
+        let standardRules: [(String, String)] = [
+            ("못해", "motae"), ("따뜻한", "ttatteutan"), ("깨끗해", "kkaekkeutae"), ("꽃향기", "kkotyanggi"),
+            ("붉게", "bulge"), ("읽고", "ilgo"), ("밝혀", "balkyeo"), ("넓혀", "neolpyeo"), ("앉혀", "anchyeo"),
+            ("끝없이", "kkeudeopsi"), ("끝없는", "kkeudeomneun"), ("맛없어", "madeopseo"), ("맛있어", "masisseo"),
+            ("잃는", "illeun"), ("싫네", "sille"), ("난로", "nallo"), ("본론", "bollon"),
+            ("의견란", "uigyeonnan"), ("생산량", "saengsannyang"), ("횡단로", "hoengdanno"),
+            ("닭이", "dalgi"), ("읽는", "ingneun"), ("맞혀", "machyeo"),
+        ]
+        for (hangul, latin) in standardRules {
+            expectEqual(kr(hangul), latin, "韩文读音(标准发音法): \(hangul) → \(latin)")
+        }
+        expectEqual(KoreanRomanization.syllableReadings("못해"), ["mo", "tae"], "韩文音节读音: 送气音并进后一个音节")
+        expectEqual(KoreanRomanization.syllableReadings("끝없이"), ["kkeu", "deop", "si"], "韩文音节读音: 代表音连到「없」上")
+        expectEqual(KoreanRomanization.syllableReadings("잃는"), ["il", "leun"], "韩文音节读音: 流音化的 ll 一边一个")
+        expectEqual(KoreanRomanization.syllableReadings("의견란"), ["ui", "gyeon", "nan"], "韩文音节读音: 例外词音节数不变")
         // 原版「ㄱ / ㄹ 收音 + ㅇ + y 元音 → 补 ㄴ」两条不收:词尾变化不能多出 ㄴ。代价是 열여섯、알약、학여울 也不补。
         let noNieun: [(String, String)] = [
             ("필요해", "piryohae"), ("움직여", "umjigyeo"), ("죽여", "jugyeo"), ("녹여", "nogyeo"),
