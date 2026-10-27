@@ -64,6 +64,9 @@ type appStateTrack struct {
 	// Spoken:QQ 音乐、酷狗这一条是不是有声书 / 有声节目(QQ 是 App 按歌曲详情判的,酷狗是 App 转述引擎记在条目里的
 	// PlayerSpoken);App 还没判出来、或者不是这两家时没有这个键。
 	Spoken *bool `json:"spoken,omitempty"`
+	// AppleCatalogStream:Apple Music 从资料库放的这首是它目录里的音频(订阅 / 购买),App 问过 Music.app;CatalogTrackID 这时是
+	// 资料库 persistent ID,不是目录 ID。别的情形没有这个键。
+	AppleCatalogStream bool `json:"apple_catalog_stream,omitempty"`
 }
 
 type appStatePosition struct {

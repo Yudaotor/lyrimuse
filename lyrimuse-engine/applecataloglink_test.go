@@ -30,6 +30,39 @@ func TestAppleCatalogLookupKeepsTrackViewURL(t *testing.T) {
 	}
 }
 
+// 资料库里的目录音频认目录 ID:署名、专辑、时长、音轨号都对得上才认;时长未知、不是 Apple Music、旧锚点没有页面地址不认。
+func TestAppleLibraryCatalogTrackID(t *testing.T) {
+	withAppleCatalogState(t)
+	appleCatalogMu.Lock()
+	appleCatalogCache = map[string]appleCatalogTrack{
+		"152197590": {TrackName: "太聪明", ArtistName: "陈绮贞", AlbumName: "吉他手", DurationSecs: 263.173, TrackNumber: 2,
+			TrackViewURL: "https://music.apple.com/cn/album/x/152197408?i=152197590&uo=4"},
+		"312654337": {TrackName: "唯一", ArtistName: "王力宏", AlbumName: "The Only One", DurationSecs: 262.013, TrackNumber: 1},
+	}
+	appleCatalogMu.Unlock()
+	cases := []struct {
+		name, bundle, artist, title, album string
+		number                             int
+		secs                               float64
+		want                               int64
+	}{
+		{"都对得上", appleMusicBundleID, "陈绮贞", "太聪明", "吉他手", 2, 263.173, 152197590},
+		{"本地没有音轨号", appleMusicBundleID, "陈绮贞", "太聪明", "吉他手", 0, 263, 152197590},
+		{"音轨号对不上", appleMusicBundleID, "陈绮贞", "太聪明", "吉他手", 5, 263.173, 0},
+		{"时长未知", appleMusicBundleID, "陈绮贞", "太聪明", "吉他手", 2, 0, 0},
+		{"时长差得远", appleMusicBundleID, "陈绮贞", "太聪明", "吉他手", 2, 240, 0},
+		{"别人的同名歌", appleMusicBundleID, "周杰伦", "太聪明", "吉他手", 2, 263.173, 0},
+		{"不是 Apple Music", spotifyBundleID, "陈绮贞", "太聪明", "吉他手", 2, 263.173, 0},
+		{"旧锚点没有页面地址", appleMusicBundleID, "王力宏", "唯一", "The Only One", 1, 262, 0},
+	}
+	for _, c := range cases {
+		got, ok := appleLibraryCatalogTrackID(c.bundle, c.number, c.artist, c.title, c.album, c.secs)
+		if got != c.want || ok != (c.want != 0) {
+			t.Errorf("%s: 得到 %d ok=%v,想要 %d", c.name, got, ok, c.want)
+		}
+	}
+}
+
 // 取链接:署名、专辑、时长都要对得上;同一张专辑上同名的两条按时长分;播放路径填的索引优先;旧锚点没有页面地址时给空。
 func TestAppleCatalogLinkFor(t *testing.T) {
 	withAppleCatalogState(t)

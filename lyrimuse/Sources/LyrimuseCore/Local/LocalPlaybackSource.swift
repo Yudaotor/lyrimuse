@@ -3528,6 +3528,10 @@ public final class LocalPlaybackSource: ObservableObject {
         } ?? webSpotifyTrackID.flatMap { web -> String? in
             web.key == snapshot.identityKey && web.bundleID == bundleID ? web.id : nil
         }
+        let appleLibraryTrack = bundleID == PlaybackPlayer.appleMusic.bundleIdentifier
+            ? AppleMusicLocalFile.current(artist: snapshot.artist ?? "", title: snapshot.title ?? "",
+                                          catalogTrackID: provenance?.identifiers?.catalogTrackID)
+            : nil
         let input = PlaybackStateFile.Input(
             player: bundleID, title: tags.title, artist: tags.artist, album: tags.album,
             raw: provenance?.raw ?? tags, appliedFixRev: provenance?.appliedFixRev ?? 0,
@@ -3549,14 +3553,14 @@ public final class LocalPlaybackSource: ObservableObject {
                 : bundleID == PinePlayerInfo.bundleID
                 ? PinePlayerInfo.currentFilePath(artist: snapshot.artist ?? "", title: snapshot.title ?? "")
                 : bundleID == PlaybackPlayer.appleMusic.bundleIdentifier
-                ? AppleMusicLocalFile.currentFilePath(artist: snapshot.artist ?? "", title: snapshot.title ?? "",
-                                                      catalogTrackID: provenance?.identifiers?.catalogTrackID)
+                ? appleLibraryTrack?.path
                 : PlayerTitleSplit.currentFilePath(bundleID: bundleID, artist: snapshot.artist ?? "",
                                                    title: snapshot.title ?? "")
                     ?? PlayerOpenFile.currentFilePath(bundleID: bundleID, artist: snapshot.artist ?? "",
                                                       title: snapshot.title ?? ""),
             spoken: Self.spokenAudioPlayers.contains(bundleID) && spokenAudioKey == snapshot.identityKey
-                ? spokenAudioVerdict : nil)
+                ? spokenAudioVerdict : nil,
+            appleCatalogStream: appleLibraryTrack?.catalogStream == true ? true : nil)
         PlaybackStatePublisher.shared.publish(input, now: now)
     }
 

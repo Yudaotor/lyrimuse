@@ -99,6 +99,9 @@ public enum PlaybackStateFile {
         /// QQ 音乐、酷狗这一条是不是有声书 / 有声节目(`LocalPlaybackSource.isCurrentTrackSpokenAudio`)。还没判出来、不是这两家为 nil
         /// (不写这个键;QQ 的引擎按「还在判」等一会,酷狗的引擎开播时自己读它的队列判)。
         public var spoken: Bool? = nil
+        /// Apple Music 从资料库放的这首是它目录里的音频(订阅 / 购买,`AppleMusicLocalFile`),引擎据此按锚点认目录 ID。
+        /// 别的播放器、带目录 ID、还没问出来、不是目录音频时为 nil(不写这个键)。
+        public var appleCatalogStream: Bool? = nil
 
         enum CodingKeys: String, CodingKey {
             case playSeq = "play_seq"
@@ -115,6 +118,7 @@ public enum PlaybackStateFile {
             case youtubeMusicVideoID = "youtube_music_video_id"
             case localFile = "local_file"
             case spoken
+            case appleCatalogStream = "apple_catalog_stream"
         }
     }
 
@@ -233,13 +237,14 @@ public enum PlaybackStateFile {
         public var youtubeMusicVideoID: String?
         public var localFile: String?
         public var spoken: Bool?
+        public var appleCatalogStream: Bool?
 
         public init(player: String, title: String, artist: String, album: String, raw: Tags,
                     appliedFixRev: Int64, playing: Bool, durationSecs: Double?,
                     catalogTrackID: Int64? = nil, trackNumber: Int? = nil, mediaType: String? = nil,
                     musicVideo: Bool = false, radio: Radio? = nil, ad: Bool = false, positionSecs: Double?,
                     spotifyTrackID: String? = nil, amazonTrackID: String? = nil, youtubeMusicVideoID: String? = nil,
-                    localFile: String? = nil, spoken: Bool? = nil) {
+                    localFile: String? = nil, spoken: Bool? = nil, appleCatalogStream: Bool? = nil) {
             self.player = player
             self.title = title
             self.artist = artist
@@ -260,6 +265,7 @@ public enum PlaybackStateFile {
             self.youtubeMusicVideoID = youtubeMusicVideoID
             self.localFile = localFile
             self.spoken = spoken
+            self.appleCatalogStream = appleCatalogStream
         }
 
         public static func idle() -> Input {
@@ -318,7 +324,7 @@ public enum PlaybackStateFile {
                 catalogTrackID: input.catalogTrackID, trackNumber: input.trackNumber, mediaType: input.mediaType,
                 musicVideo: input.musicVideo, radio: input.radio, ad: input.ad, spotifyTrackID: input.spotifyTrackID,
                 amazonTrackID: input.amazonTrackID, youtubeMusicVideoID: input.youtubeMusicVideoID,
-                localFile: input.localFile, spoken: input.spoken)
+                localFile: input.localFile, spoken: input.spoken, appleCatalogStream: input.appleCatalogStream)
             return Content(state: input.playing ? .playing : .paused, player: input.player, track: track,
                            position: published, artwork: artwork)
         }

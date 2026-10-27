@@ -233,28 +233,53 @@ func runPlaybackStateTests() {
                              "guard heartbeat == nil || heartbeatEvery != interval else { return }"), true,
                 "保活: 每次发布按当前状态对一次计时器,换档时重建")
 
-    // ---- Apple Music 放资料库里的本地文件:换歌时问一次脚本的 location,写进 local_file(02 章决策 178)----
+    // ---- Apple Music 放资料库里的曲目:换歌时问一次脚本,本地文件写 local_file(02 章决策 178),目录音频写 apple_catalog_stream(02 章决策 197)----
     do {
         typealias A = AppleMusicLocalFile
-        expectEqual(A.parse("稻香\t/Users/x/Music/稻香.m4a\n", title: "稻香"), "/Users/x/Music/稻香.m4a", "Apple Music 本地文件: 歌名对上交路径")
-        expectEqual(A.parse("夜曲\t/Users/x/Music/夜曲.m4a", title: "稻香"), nil, "Apple Music 本地文件: 问的时候已经换歌,不认")
-        expectEqual(A.parse("", title: "稻香"), nil, "Apple Music 本地文件: 不是 file track 回空串")
-        expectEqual(A.parse("稻香\tMacintosh HD:Users:x", title: "稻香"), nil, "Apple Music 本地文件: 不是 POSIX 路径不认")
-        expectEqual(A.parse("A\tB\t/m/a\tb.mp3", title: "A\tB"), nil, "Apple Music 本地文件: 按第一个 tab 分,歌名里不该有 tab")
+        expectEqual(A.parse("稻香\tfile\t/Users/x/Music/稻香.m4a\n", title: "稻香"), A.Answer(path: "/Users/x/Music/稻香.m4a", catalogStream: false),
+                    "Apple Music 资料库: 本地文件歌名对上交路径")
+        expectEqual(A.parse("夜曲\tfile\t/Users/x/Music/夜曲.m4a", title: "稻香"), nil, "Apple Music 资料库: 问的时候已经换歌,不认")
+        expectEqual(A.parse("", title: "稻香"), nil, "Apple Music 资料库: 停着 / 出错回空串")
+        expectEqual(A.parse("稻香\tfile\tMacintosh HD:Users:x", title: "稻香"), nil, "Apple Music 资料库: 不是 POSIX 路径不认")
+        expectEqual(A.parse("A\tB\tfile\t/m/a.mp3", title: "A\tB"), nil, "Apple Music 资料库: 按第一个 tab 分,歌名里不该有 tab")
+        expectEqual(A.parse("稻香\tcloud\tsubscription", title: "稻香"), A.Answer(path: nil, catalogStream: true),
+                    "Apple Music 资料库: 订阅曲目是目录音频")
+        expectEqual(A.parse("稻香\tcloud\tpurchased\n", title: "稻香"), A.Answer(path: nil, catalogStream: true),
+                    "Apple Music 资料库: 购买的曲目是目录音频")
+        expectEqual(A.parse("稻香\tcloud\tmatched", title: "稻香")?.catalogStream, false, "Apple Music 资料库: 匹配的不算目录音频")
+        expectEqual(A.parse("稻香\tcloud\tuploaded", title: "稻香")?.catalogStream, false, "Apple Music 资料库: 上传的不算目录音频")
+        expectEqual(A.parse("稻香\tremote\tx", title: "稻香"), nil, "Apple Music 资料库: 认不出的回答不认")
         expectEqual(A.shouldAsk(title: "稻香", catalogTrackID: nil) && A.shouldAsk(title: "稻香", catalogTrackID: 0), true,
-                    "Apple Music 本地文件: 没有目录 ID 才问")
-        expectEqual(A.shouldAsk(title: "稻香", catalogTrackID: 1440841426), false, "Apple Music 本地文件: 带目录 ID(流媒体)不问")
+                    "Apple Music 资料库: 没有目录 ID 才问")
+        expectEqual(A.shouldAsk(title: "稻香", catalogTrackID: 1440841426), false, "Apple Music 资料库: 带目录 ID(从目录直接放)不问")
         expectEqual(A.shouldAsk(title: "稻香", catalogTrackID: -2274568625394189619), true,
-                    "Apple Music 本地文件: 负数是资料库 persistent ID(本地文件也报),照样问")
-        expectEqual(A.shouldAsk(title: "", catalogTrackID: nil), false, "Apple Music 本地文件: 没歌名不问")
+                    "Apple Music 资料库: 负数是资料库 persistent ID,照样问")
+        expectEqual(A.shouldAsk(title: "稻香", catalogTrackID: 5575739204559516306), true,
+                    "Apple Music 资料库: 满量程的正数也是资料库 persistent ID,照样问")
+        expectEqual(A.shouldAsk(title: "", catalogTrackID: nil), false, "Apple Music 资料库: 没歌名不问")
         expectEqual(sourceHas(A.script, #"if application "Music" is not running then return """#)
                     && sourceHas(A.script, "if player state is stopped then return")
-                    && sourceHas(A.script, "if class of t is not file track then return"), true,
-                    "Apple Music 本地文件: 脚本不拉起 Music、停着不问、只认 file track")
+                    && sourceHas(A.script, "if class of t is file track then")
+                    && sourceHas(A.script, "(cloud status of t as text)"), true,
+                    "Apple Music 资料库: 脚本不拉起 Music、停着不问、file track 交路径、别的交云状态")
+        let amSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/AppleMusicLocalFile.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(amSource, "s.failed = (key, Date())")
+                    && sourceHas(amSource, "now.timeIntervalSince(f.at) < retryInterval { return (nil, false) }"), true,
+                    "Apple Music 资料库: 没问出结论不记成「什么都不是」,隔一会儿再问")
         let localSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/LocalPlaybackSource.swift"), encoding: .utf8)) ?? ""
-        expectEqual(sourceHas(localSource, "bundleID == PlaybackPlayer.appleMusic.bundleIdentifier ? AppleMusicLocalFile.currentFilePath("),
-                    true, "Apple Music 本地文件: 播放状态的 local_file 接上")
+        expectEqual(sourceHas(localSource, "? AppleMusicLocalFile.current(artist:")
+                    && sourceHas(localSource, "? appleLibraryTrack?.path")
+                    && sourceHas(localSource, "appleCatalogStream: appleLibraryTrack?.catalogStream == true ? true : nil"),
+                    true, "Apple Music 资料库: 播放状态的 local_file、apple_catalog_stream 接上")
+        var tracker = PlaybackStateFile.Tracker()
+        var input = PlaybackStateFile.Input(player: "com.apple.Music", title: "稻香", artist: "周杰伦", album: "魔杰座",
+                                            raw: .init(title: "稻香", artist: "周杰伦", album: "魔杰座"), appliedFixRev: 0,
+                                            playing: true, durationSecs: 223, positionSecs: 1)
+        input.appleCatalogStream = true
+        let written = (try? JSONEncoder().encode(tracker.advance(input, now: Date()).track)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        expectEqual(written.contains(#""apple_catalog_stream":true"#), true, "Apple Music 资料库: 目录音频写进播放状态")
     }
 
     // ---- 放歌时持有系统活动(防 App Nap 推迟保活),别的状态不持有(02 章决策 89)----

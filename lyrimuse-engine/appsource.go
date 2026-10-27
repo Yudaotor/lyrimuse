@@ -44,14 +44,17 @@ type appPlaybackJudge struct {
 	neteaseTrial func(bundle, title, artist, album string, duration float64) (fullSecs float64, ok bool)
 	// catalog:Apple 目录锚点,核对通过时 ok=true;durationSecs 可能为 0(目录不报时长)。
 	catalog func(bundle string, trackID int64, trackNumber int, artist, title, album string) (durationSecs float64, ok bool)
+	// libraryCatalog:Apple Music 从资料库放目录音频、系统没给目录 ID 时,按锚点认出目录 ID 记下。
+	libraryCatalog func(bundle string, trackNumber int, artist, title, album string, durationSecs float64)
 }
 
 var liveAppPlaybackJudge = appPlaybackJudge{
-	fixedTrack:   liveAppFixedTrack,
-	fixRev:       currentPlayerArtistFixRev,
-	sodaPreview:  liveAppSodaPreview,
-	neteaseTrial: liveNeteaseTrialFull,
-	catalog:      liveAppCatalog,
+	fixedTrack:     liveAppFixedTrack,
+	fixRev:         currentPlayerArtistFixRev,
+	sodaPreview:    liveAppSodaPreview,
+	neteaseTrial:   liveNeteaseTrialFull,
+	catalog:        liveAppCatalog,
+	libraryCatalog: liveAppLibraryCatalog,
 }
 
 // searchAppPlaybackJudge:search-lyrics 用的判定。同 liveAppPlaybackJudge,只是不查汽水试听段 —— 那一步会联网、
@@ -118,6 +121,14 @@ func liveAppCatalog(bundle string, trackID int64, trackNumber int, artist, title
 	return anchor.DurationSecs, true
 }
 
+// liveAppLibraryCatalog:资料库里的目录音频,按锚点认出的目录 ID 记成播放提示(歌词按它直取、算同源)。时长不拿锚点的顶:
+// 身份是按名字和时长认的,不反过来改时长。见 02 章决策 197。
+func liveAppLibraryCatalog(bundle string, trackNumber int, artist, title, album string, durationSecs float64) {
+	if id, ok := appleLibraryCatalogTrackID(bundle, trackNumber, artist, title, album, durationSecs); ok {
+		notePlayingAppleCatalogID(artist, title, album, id)
+	}
+}
+
 // appPlaybackMarks:上一份用过的 App 状态里,认起播 / 重新对齐要比的几项。
 type appPlaybackMarks struct {
 	pid       int
@@ -170,14 +181,20 @@ func appPlaybackTickFor(rec appStateRecord, prev appPlaybackMarks, now time.Time
 		s.Duration, s.ReportedDuration = full, full
 	}
 	catalogDuration := 0.0
+	number := 0
+	if t.TrackNumber != nil {
+		number = *t.TrackNumber
+	}
+	anchored := false
 	if t.CatalogTrackID != nil {
-		number := 0
-		if t.TrackNumber != nil {
-			number = *t.TrackNumber
-		}
-		if d, ok := j.catalog(rec.Player, *t.CatalogTrackID, number, s.Artist, s.Title, s.Album); ok && d > 0 {
+		d, ok := j.catalog(rec.Player, *t.CatalogTrackID, number, s.Artist, s.Title, s.Album)
+		anchored = ok
+		if ok && d > 0 {
 			catalogDuration = d
 		}
+	}
+	if !anchored && t.AppleCatalogStream {
+		j.libraryCatalog(rec.Player, number, s.Artist, s.Title, s.Album, s.Duration)
 	}
 	if s.Radio || catalogDuration > 0 {
 		s.Duration = catalogDuration

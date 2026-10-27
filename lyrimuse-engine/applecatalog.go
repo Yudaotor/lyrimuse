@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -277,6 +278,29 @@ func saveAppleCatalogCache() {
 // appleCatalogPlausibleID:这个 uniqueIdentifier 值有没有可能是目录 ID。见文件头 1。
 func appleCatalogPlausibleID(trackID int64) bool {
 	return trackID > 0 && trackID < appleCatalogMaxPlausibleID
+}
+
+// appleLibraryCatalogTrackID:Apple Music 从资料库放目录音频(订阅 / 购买)时,系统报的 uniqueIdentifier 是资料库 persistent ID,
+// 不是目录 ID(正负都有,见 02 章决策 11)。按锚点缓存里核对过的条目认目录 ID:署名、专辑对得上、时长差
+// appleCatalogAnchorDurationTolerance 以内(appleCatalogLinkFor),再逐字核曲名、专辑、音轨号(appleCatalogAnchorVerified)。
+// 时长必须已知:身份不是播放器给的,同一张专辑上同名的几条只能靠时长分。缓存里没有这一条、或较早落盘的锚点没有页面地址时认不出。
+// 调用方必须已经确认放的是目录音频(App 的 apple_catalog_stream),本地文件、上传的曲目不走这里。见 02 章决策 197。
+func appleLibraryCatalogTrackID(bundleID string, trackNumber int, artist, title, album string, durationSecs float64) (int64, bool) {
+	if bundleID != appleMusicBundleID || durationSecs <= 0 {
+		return 0, false
+	}
+	id, err := strconv.ParseInt(appleCatalogIDFromURL(appleCatalogLinkFor(artist, title, album, durationSecs)), 10, 64)
+	if err != nil || !appleCatalogPlausibleID(id) {
+		return 0, false
+	}
+	t, ok := appleCatalogTrackCachedOnly(id)
+	if !ok {
+		return 0, false
+	}
+	if _, ok := appleCatalogAnchorVerified(t, trackNumber, title, album); !ok {
+		return 0, false
+	}
+	return id, true
 }
 
 // appleCatalogLookupURL 只为单测可改。

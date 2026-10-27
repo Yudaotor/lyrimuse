@@ -18,8 +18,47 @@ func plainAppJudge() appPlaybackJudge {
 		sodaPreview: func(string, string, string, string, float64) (float64, float64, bool, bool) {
 			return 0, 0, false, false
 		},
-		neteaseTrial: func(string, string, string, string, float64) (float64, bool) { return 0, false },
-		catalog:      func(string, int64, int, string, string, string) (float64, bool) { return 0, false },
+		neteaseTrial:   func(string, string, string, string, float64) (float64, bool) { return 0, false },
+		catalog:        func(string, int64, int, string, string, string) (float64, bool) { return 0, false },
+		libraryCatalog: func(string, int, string, string, string, float64) {},
+	}
+}
+
+// 资料库里的目录音频:系统给的不是目录 ID(锚点立不起)、App 说是目录音频时按名字和时长认;锚点立起来了、或不是目录音频时不认。
+func TestAppPlaybackTickLibraryCatalog(t *testing.T) {
+	now := time.Unix(1_790_000_000, 0)
+	rec := appSourceRec(7, 1, 1, "太聪明", now)
+	persistent, number := int64(5575739204559516306), 2
+	rec.Track.CatalogTrackID, rec.Track.TrackNumber = &persistent, &number
+	rec.Track.AppleCatalogStream = true
+	type call struct {
+		number int
+		title  string
+		secs   float64
+	}
+	var calls []call
+	j := plainAppJudge()
+	j.libraryCatalog = func(bundle string, trackNumber int, artist, title, album string, durationSecs float64) {
+		if bundle == appleMusicBundleID && artist == "Singer" && album == "Album" {
+			calls = append(calls, call{trackNumber, title, durationSecs})
+		}
+	}
+	tick, _ := appPlaybackTickFor(rec, appPlaybackMarks{}, now, j)
+	if len(calls) != 1 || calls[0] != (call{2, "太聪明", 200}) || tick.snap.Duration != 200 {
+		t.Fatalf("目录音频、锚点立不起:按名字和时长认一次、时长不动,实得 %+v duration=%.3f", calls, tick.snap.Duration)
+	}
+	calls = nil
+	j.catalog = func(string, int64, int, string, string, string) (float64, bool) { return 0, true }
+	if appPlaybackTickFor(rec, appPlaybackMarks{}, now, j); len(calls) != 0 {
+		t.Fatalf("系统给的就是目录 ID:不再按名字认,实得 %+v", calls)
+	}
+	j.catalog = plainAppJudge().catalog
+	rec.Track.AppleCatalogStream = false
+	if appPlaybackTickFor(rec, appPlaybackMarks{}, now, j); len(calls) != 0 {
+		t.Fatalf("不是目录音频(本地文件、上传、还没问出来):不认,实得 %+v", calls)
+	}
+	if liveAppPlaybackJudge.libraryCatalog == nil || searchAppPlaybackJudge().libraryCatalog == nil {
+		t.Fatal("常驻进程和 search-lyrics 的判定都要接上 libraryCatalog")
 	}
 }
 
