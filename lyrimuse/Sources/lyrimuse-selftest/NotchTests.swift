@@ -1253,7 +1253,8 @@ func runNotchTests() {
                 sum.g += Double(redOnGray[i + 1])
                 sum.b += Double(redOnGray[i + 2])
             }
-            let dim = (1 - LocalPlaybackSource.notchCoverArtOverlayOpacity) / Double(vividCount) / 255
+            let overlay = NotchBackdropTone.bright(rgba: redOnGray)?.overlayOpacity ?? 1
+            let dim = (1 - overlay) / Double(vividCount) / 255
             let backdrop = LocalPlaybackSource.relativeLuminance(r: sum.r * dim, g: sum.g * dim, b: sum.b * dim)
             let own = LocalPlaybackSource.relativeLuminance(r: red.r, g: red.g, b: red.b)
             expectEqual(LocalPlaybackSource.contrastRatio(backdrop, own) >= 4.5 - 1e-6, true,
@@ -1274,6 +1275,14 @@ func runNotchTests() {
                         "进度线色: 灰封面上一块红,取到不偏白的红(比音符色更深,最暗那一路明显更低)")
         } else {
             expectEqual(false, true, "进度线色: 灰封面上一块红,应该取得到")
+        }
+        // 浅灰底红字:卡片对亮封面压得更深(`NotchBackdropTone.overlayOpacity`),底色按它估,进度线取到的是红、不被提成粉。
+        let redOnWhite = vividPixels { $0 < vividCount * 15 / 100 ? (200, 30, 40) : (200, 200, 200) }
+        if let deep = ArtworkVividColor.color(rgba: redOnWhite, tone: .deep) {
+            expectEqual(deep.r > 0.8 && deep.g < 0.2 && deep.b < 0.2, true,
+                        "进度线色: 浅灰底红字的封面取到红,不是粉(底色按卡片实际压暗估)")
+        } else {
+            expectEqual(false, true, "进度线色: 浅灰底红字的封面应该取得到")
         }
         // 大片暗蓝紫上一块亮洋红:音符色取最亮最艳的洋红,进度线取整体的紫(蓝 > 红)。
         let violetWithMagenta = vividPixels { i in
@@ -2688,8 +2697,10 @@ func runNotchTests() {
         expectEqual(sourceHas(progressLine, ".animation(reduceMotion ? nil : .easeInOut(duration: 0.45),\n value: NotchEarProgressMotion.jumpKey(anchor: anchor, now: Date()))")
                     && sourceHas(progressLine, "$0.opacity(paused ? Self.pausedOpacity : 1)")
                     && !progressLine.contains("FrameTimeline(") && !progressLine.contains("repeatForever")
-                    && !progressLine.contains("HeadShape"), true,
-                    "进度线耳朵动效: 跳进度才滑、暂停变暗、不画线头")
+                    && !progressLine.contains("HeadShape")
+                    && sourceHas(progressLine, ".stroke(tint, style: StrokeStyle(lineWidth: Self.thickness, lineCap: .round))")
+                    && progressLine.components(separatedBy: "value: tint)").count == 3, true,
+                    "进度线耳朵动效: 跳进度才滑、暂停变暗、不画线头、换封面时颜色渐变(纯色描边,底边那档同样)")
         expectEqual(v.components(separatedBy: "?? playback.currentDurationMs, tint: progressLineTint,").count == 3
                     && sourceHas(v, "private var progressLineTint: Color {\n playback.vividDeepAccent ?? accentOrWhite\n }"), true,
                     "进度线: 底边和耳朵两档都用封面大片那种色相的深色版,没有时退回前景色")

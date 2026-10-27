@@ -7,7 +7,8 @@ import Foundation
 /// 缩到 64×64,只看饱和度 ≥ 0.35、亮度 ≥ `Tone.minBrightness` 的像素,按色相分 24 格加权(`Tone.weighsBrightness`),
 /// 取最重的连续 `2 × Tone.hueSpread + 1` 格的加权平均色;这些像素占不到 2% 就算没有(nil,调用方画白)。再按 `Tone`
 /// 定 HSL 饱和度和亮度,最后跟强调色同一道对比修正:对「封面平均色 × (1 − 压暗)」那块估计底色拉开 `Tone.minContrast`
-/// (`LocalPlaybackSource.accentAgainstStroke`)。
+/// (`LocalPlaybackSource.accentAgainstStroke`)。压暗跟卡片背景同一个量法(`NotchBackdropTone.overlayOpacity`,亮封面压得
+/// 更深),别写成固定的 `notchCoverArtOverlayOpacity`:白封面上会把底色估亮一倍,颜色被往白里提成粉彩。
 public enum ArtworkVividColor {
     public static let side = 64
     private static let minSaturation = 0.35
@@ -102,7 +103,8 @@ public enum ArtworkVividColor {
         let hsl = toHSL(r: rawR, g: rawG, b: rawB)
         let saturation = min(max(hsl.s, tone.saturationRange.lowerBound), tone.saturationRange.upperBound)
         let lifted = fromHSL(h: hsl.h, s: saturation, l: tone.lightness)
-        let dim = (1 - LocalPlaybackSource.notchCoverArtOverlayOpacity) / Double(pixels)
+        let overlay = NotchBackdropTone.bright(rgba: rgba)?.overlayOpacity ?? LocalPlaybackSource.notchCoverArtOverlayOpacity
+        let dim = (1 - overlay) / Double(pixels)
         return LocalPlaybackSource.accentAgainstStroke(
             r: lifted.r, g: lifted.g, b: lifted.b,
             strokeR: meanR * dim, strokeG: meanG * dim, strokeB: meanB * dim,

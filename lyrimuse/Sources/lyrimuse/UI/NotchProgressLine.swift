@@ -15,6 +15,7 @@ struct NotchProgressLine: View {
     let active: Bool
     let outline: NotchCardOutline
     @ObservedObject private var corners = NotchCornerLive.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let thickness: CGFloat = 1.5
 
@@ -41,6 +42,7 @@ struct NotchProgressLine: View {
             }
             .frame(width: width)
             .frame(maxWidth: .infinity)
+            .animation(reduceMotion ? nil : NotchEarProgressLine.tintChange, value: tint)
         }
         .frame(height: Self.thickness)
     }
@@ -100,6 +102,8 @@ struct NotchEarProgressLine: View {
 
     /// 暂停(没有锚点或锚点冻住)时整根线的透明度。
     static let pausedOpacity: Double = 0.45
+    /// 换封面时线的颜色渐变过去(同换歌掉歌名那枚音符)。
+    static let tintChange: Animation = .easeInOut(duration: 0.35)
 
     static let thickness: CGFloat = 2.5
     /// 线心离卡片外沿的距离:半根线宽,线的外侧正好贴着外沿。
@@ -130,12 +134,14 @@ struct NotchEarProgressLine: View {
                 // 换歌、跳进度时线滑过去;平时一拍拍往前走不补间(`NotchEarProgressMotion.jumpKey`)。
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.45),
                            value: NotchEarProgressMotion.jumpKey(anchor: anchor, now: Date()))
+                .animation(reduceMotion ? nil : Self.tintChange, value: tint)
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.35)) {
             $0.opacity(paused ? Self.pausedOpacity : 1)
         }
     }
 
+    // 线直接用纯色描边、上淡下实靠一层静态的透明度遮罩,别把颜色写进渐变里再拿线当遮罩:那样换封面时颜色不补间,硬切。
     @ViewBuilder
     private func halves(card: NotchHangingShape, fraction: Double?) -> some View {
         if let fraction {
@@ -144,14 +150,14 @@ struct NotchEarProgressLine: View {
                     NotchEarProgressShape(card: card, notchWidth: notchWidth, notchHeight: outline.notchHeight,
                                           cardSize: cardSize, mirrored: mirrored)
                         .trim(from: 0, to: fraction)
-                        .stroke(style: StrokeStyle(lineWidth: Self.thickness, lineCap: .round))
+                        .stroke(tint, style: StrokeStyle(lineWidth: Self.thickness, lineCap: .round))
                 }
             }
-            let fill = LinearGradient(colors: [tint.opacity(0.85), tint], startPoint: .top, endPoint: .bottom)
             ZStack {
-                fill.mask(played).blur(radius: 3).opacity(0.7)
-                fill.mask(played)
+                played.blur(radius: 3).opacity(0.7)
+                played
             }
+            .mask(LinearGradient(colors: [.white.opacity(0.85), .white], startPoint: .top, endPoint: .bottom))
         }
     }
 }
