@@ -48,6 +48,19 @@ if [ -n "${PRIVATE_COMMIT_CHANGED:-}" ] && [ -f "$PRIVATE_COMMIT_CHANGED" ]; the
   fi
 fi
 
+# 只读源码和数据文件、不依赖编译产物的几步排在 swift build 前面,几秒内就报错(见 15 章决策 85)。
+if [ -f scripts/gen-feature-list.py ]; then
+  step "功能清单与数据一致"
+  /usr/bin/python3 scripts/gen-feature-list.py --check
+fi
+
+step "Localizable.xcstrings 能解析"
+/usr/bin/python3 -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8"))' \
+  lyrimuse/Localization/Localizable.xcstrings
+
+step "generate-strings.py 自检"
+/usr/bin/python3 -B lyrimuse/Localization/generate-strings.py --selftest
+
 step "swift build"
 (cd lyrimuse && swift build)
 if [ -n "${PRIVATE_COMMIT_COMPILED_MARK:-}" ] && [ -n "${PRIVATE_COMMIT_TREE:-}" ]; then
@@ -66,20 +79,8 @@ else
   sh scripts/test-nowplaying-clients.sh
 fi
 
-if [ -f scripts/gen-feature-list.py ]; then
-  step "功能清单与数据一致"
-  /usr/bin/python3 scripts/gen-feature-list.py --check
-fi
-
 step "发布版写过的偏好键删掉后登记成死键"
 /usr/bin/python3 -B scripts/check-retired-defaults.py --repo "${PRIVATE_COMMIT_REPO:-.}"
-
-step "Localizable.xcstrings 能解析"
-/usr/bin/python3 -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8"))' \
-  lyrimuse/Localization/Localizable.xcstrings
-
-step "generate-strings.py 自检"
-/usr/bin/python3 -B lyrimuse/Localization/generate-strings.py --selftest
 
 # 引擎测试由同目录的 go-test-shards.py 分几个进程并行跑(见它的头注),不走 go 自己的测试缓存:那份缓存只核对模块
 # 目录(lyrimuse-engine/)里的文件,引擎测试还读 Swift 源码、README、shared/ 这些模块外的文件。要不要跑、跑哪几个在
