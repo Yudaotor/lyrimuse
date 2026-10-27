@@ -21,13 +21,14 @@ import (
 // 新接一条读客户端文件的路径必须在这里登记:启动探测和 players.json `needsFullDiskAccess`
 // 的一致性测试(TestPlayersNeedFullDiskAccessMatchesClientPaths)都读这一张表。
 func localCacheClientPaths() map[string][]string {
+	netease, qq, soda := neteaseDataRoots(), qqDataRoots(), sodaDataRoots()
 	return map[string][]string{
 		"kugou": {kugouLocalLyricDir(), kugouUpcomingPath(), kugouQueuePlistPath(),
 			kugouConfigPlistPath(), kugouLibraryDBPath(), kugouNowPlayingPath()},
-		"qq": {qqLocalDBPath(), qqUpcomingPath(), qqRRCachePath()},
-		"netease": {neteaseContainerPath(neteaseLibraryRel), neteaseContainerPath(neteaseQueueRel),
-			neteaseContainerPath(neteaseFMRel)},
-		"soda":       {sodaContainerPath(sodaQueueRel), sodaContainerPath(sodaPreloadRel)},
+		"qq": {qq.containerPath(qqLibraryRel), qq.containerPath(qqQueueRel), qq.containerPath(qqRRCacheRel)},
+		"netease": {netease.containerPath(neteaseLibraryRel), netease.containerPath(neteaseQueueRel),
+			netease.containerPath(neteaseFMRel)},
+		"soda":       {soda.containerPath(sodaQueueRel), soda.containerPath(sodaPreloadRel)},
 		"applemusic": {applemusicLocalCacheDir()},
 		"spotify":    {spotifyISRCUsersDir()},
 		"kkbox":      {kkboxLocalStorageDir(), kkboxCacheDir()},
@@ -75,18 +76,13 @@ func localCacheProbeTargets(paths map[string][]string) map[string][]string {
 // 的来源跳过,不发布任何结论;只列目录、不读内容。此刻读的是容器外那一份的来源不探容器,记成不用授权。
 func probeLocalCacheAccess() {
 	targets := localCacheProbeTargets(localCacheClientPaths())
-	for source, outside := range localCacheReadsOutsideContainer() {
-		if outside {
+	for source, roots := range clientDataRootsBySource() {
+		if roots.usesStandalone() {
 			delete(targets, source)
 			noteLocalCacheUnprotected(source)
 		}
 	}
 	probeLocalCacheTargets(targets)
-}
-
-// localCacheReadsOutsideContainer:有非沙盒安装包的来源 → 此刻读的那一份是不是在私有容器外。
-func localCacheReadsOutsideContainer() map[string]bool {
-	return map[string]bool{"netease": neteaseUsesStandalone()}
 }
 
 func probeLocalCacheTargets(targets map[string][]string) {

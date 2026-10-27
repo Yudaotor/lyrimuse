@@ -10,7 +10,6 @@ import (
 	neturl "net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
@@ -22,7 +21,7 @@ import (
 // 的整行,纯音乐那条是明文提示句)、`<id>_yinyi.lrc`(粤语歌的音译)、`<id>.taginfo`(各轨版本号)和别的缓存,这里都不读:
 // 整行和音译跟接口哪个字段对应没核过。没有罗马音那一轨,所以只有接口本来就不给罗马音的语种才先用它(qqLocalLyricsFirst)。
 //
-// 数字 id 照旧经 qqSongMetaByMid 取。表在 QQ 的沙盒容器里,读它要「完全磁盘访问」。全程失败当没命中:没装 QQ、没放过这首、
+// 数字 id 照旧经 qqSongMetaByMid 取。沙盒版的表在 QQ 的私有容器里,读它要「完全磁盘访问」;官网版的不在,见 clientDataRoots。全程失败当没命中:没装 QQ、没放过这首、
 // 读不动、格式变了,调用方照常联网。见 09 章决策 340。
 
 // qqRRCacheOverride 让单测把库指到临时路径。空 = 用真实路径。
@@ -35,12 +34,7 @@ func qqRRCachePath() string {
 	if qqRRCacheOverride != "" {
 		return qqRRCacheOverride
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, "Library/Containers/com.tencent.QQMusicMac/Data/Library",
-		"Application Support/QQMusicMac/iRRCache/rrdbcache.sqlite")
+	return qqDataRoots().path(qqRRCacheRel)
 }
 
 // qqLocalLyricsFirst:这个语种(单曲详情的 language)本机缓存先用、不先联网。只认国语(0)、英语(5):接口对它们不给罗马音,

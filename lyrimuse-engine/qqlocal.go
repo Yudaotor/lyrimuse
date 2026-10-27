@@ -10,7 +10,6 @@ import (
 	neturl "net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -48,17 +47,12 @@ import (
 var qqLocalDBOverride string
 
 // qqLocalDBPath 是 QQ 音乐客户端的曲库。 这是**外部 App** 的路径,不是这个项目自己的
-// 数据位置,所以不走 paths.go 那套身份口径。
+// 数据位置,所以不走 paths.go 那套身份口径。在哪一处见 clientDataRoots。
 func qqLocalDBPath() string {
 	if qqLocalDBOverride != "" {
 		return qqLocalDBOverride
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, "Library/Containers/com.tencent.QQMusicMac/Data/Library",
-		"Application Support/QQMusicMac/qqmusic.sqlite")
+	return qqDataRoots().path(qqLibraryRel)
 }
 
 // qqLocalRescanMin:两次重扫之间的最小间隔。客户端**每切一首歌**就写这个库(实测 mtime
@@ -306,12 +300,7 @@ func qqUpcomingPath() string {
 	if qqUpcomingOverride != "" {
 		return qqUpcomingOverride
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, "Library/Containers/com.tencent.QQMusicMac/Data/Library",
-		"Application Support/QQMusicMac/iTemp/PlayingList.archive")
+	return qqDataRoots().path(qqQueueRel)
 }
 
 // qqDeref 把 NSKeyedArchiver 的对象引用解成实际对象。不是引用就原样返回 ——

@@ -4,13 +4,10 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
-	"errors"
 	"io"
-	"io/fs"
 	"log"
 	"math"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -19,8 +16,9 @@ import (
 
 // 汽水音乐客户端的播放队列缓存 —— 只贡献一条信号:纯音乐判定的兜底。
 //
-// 文件在哪:沙盒版(2.9 起)在私有容器 `~/Library/Containers/com.soda.music/Data/Library/Application Support/SodaMusic/`,
-// 要「完全磁盘访问」;更早的版本在 `~/Library/Application Support/SodaMusic/`。怎么挑见 pickSodaDataPath。
+// 文件在哪:App Store 的沙盒版在私有容器 `~/Library/Containers/com.soda.music/Data/Library/Application Support/SodaMusic/`,
+// 要「完全磁盘访问」;官网下载的非沙盒版(也是 2.9 之前各版的位置)在 `~/Library/Application Support/SodaMusic/`。
+// 怎么挑见 clientDataRoots。
 //
 // 文件格式:4 字节魔数 "LUNA" + 原生 gzip + 明文 JSON,无加密。
 //
@@ -67,57 +65,7 @@ func sodaLocalQueuePath() string {
 	if sodaLocalQueueOverride != "" {
 		return sodaLocalQueueOverride
 	}
-	return sodaDataPath(sodaQueueRel)
-}
-
-// 汽水数据目录 `SodaMusic/` 底下要读的两个文件。
-const (
-	sodaQueueRel   = "LunaStorage/QueueCache"
-	sodaPreloadRel = "LunaCacheV2/entries.db"
-)
-
-// sodaContainerPath 是沙盒版汽水(2.9 起)的数据文件,在它的私有容器里,读它要「完全磁盘访问」。
-// 启动探测和 players.json `needsFullDiskAccess` 的对账按这一处登记(localCacheClientPaths)。
-func sodaContainerPath(rel string) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, "Library/Containers/com.soda.music/Data/Library/Application Support/SodaMusic", rel)
-}
-
-// sodaLegacyPath 是沙盒之前的版本的位置。升级之后它留在盘上、不再更新。
-func sodaLegacyPath(rel string) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, "Library/Application Support/SodaMusic", rel)
-}
-
-// sodaDataPath 是真正去读的那一份,见 pickSodaDataPath。
-func sodaDataPath(rel string) string {
-	return pickSodaDataPath(sodaContainerPath(rel), sodaLegacyPath(rel))
-}
-
-// pickSodaDataPath 在容器里那份和老位置那份之间挑:默认容器里的;容器里没有这个文件(还是老版本)才用老位置;
-// 两处都有取改得晚的那份。容器读不了(没授权)照样返回容器路径,让读的那一步把拒绝报出来(noteLocalCacheDenied),
-// 别退回老位置 —— 那份队列早就过期,里面的曲目 id 不是正在放的那首,拿去取歌词会取错。
-func pickSodaDataPath(container, legacy string) string {
-	cst, cerr := os.Stat(container)
-	if cerr != nil && !errors.Is(cerr, fs.ErrNotExist) {
-		return container
-	}
-	lst, lerr := os.Stat(legacy)
-	switch {
-	case lerr != nil:
-		return container
-	case cerr != nil:
-		return legacy
-	case lst.ModTime().After(cst.ModTime()):
-		return legacy
-	}
-	return container
+	return sodaDataRoots().path(sodaQueueRel)
 }
 
 // sodaLocalTrack 只摘这条路径用得上的字段。每首歌还带着几十个别的(音质档位、商业化

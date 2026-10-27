@@ -47,7 +47,7 @@ func sodaPreloadPath() string {
 	if sodaPreloadOverride != "" {
 		return sodaPreloadOverride
 	}
-	return sodaDataPath(sodaPreloadRel)
+	return sodaDataRoots().path(sodaPreloadRel)
 }
 
 // sodaPreloadedTrack 是一段预载缓存对应的曲目。

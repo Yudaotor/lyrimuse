@@ -20,7 +20,7 @@ func neteaseFMPath() string {
 	if neteaseFMOverride != "" {
 		return neteaseFMOverride
 	}
-	return neteaseDataPath(neteaseFMRel)
+	return neteaseDataRoots().path(neteaseFMRel)
 }
 
 // neteaseFMFile 只摘用得上的字段。曲目直接放在 queue 的元素上(playingList 套了一层 track),id 是数字。
