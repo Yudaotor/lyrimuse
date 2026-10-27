@@ -114,6 +114,8 @@ final class NotchPlayback: ObservableObject {
     /// 换歌翻牌那条歌名前那枚音符的颜色:封面(高清替代优先)里最鲜艳的那种(`ArtworkVividColor`);没有封面、或封面里
     /// 没有够鲜艳的颜色时为 nil(画白)。换图时在后台算,只认最后一次换图的结果。
     @Published private(set) var vividAccent: Color?
+    /// 同一种色相的深而艳版本(`ArtworkVividColor.Tone.deep`),进度线用;nil 的条件同 `vividAccent`。
+    @Published private(set) var vividDeepAccent: Color?
     private var vividGeneration = 0
     /// 歌词行末尾那枚封面缩略图要不要显示、贴哪一边。走这里现读而不是
     /// `NotchChromeSource` 协议——它只影响 `lyricRowContent` 内部的 HStack 排列,不影响
@@ -209,18 +211,23 @@ final class NotchPlayback: ObservableObject {
         let generation = vividGeneration
         guard let cgImage = image?.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             if vividAccent != nil { vividAccent = nil }
+            if vividDeepAccent != nil { vividDeepAccent = nil }
             return
         }
         Task.detached(priority: .utility) { [weak self] in
-            let rgb = ArtworkVividColor.color(image: cgImage)
-            await self?.applyVividAccent(rgb, generation: generation)
+            let note = ArtworkVividColor.color(image: cgImage)
+            let deep = ArtworkVividColor.color(image: cgImage, tone: .deep)
+            await self?.applyVividAccent(note, deep: deep, generation: generation)
         }
     }
 
-    private func applyVividAccent(_ rgb: (r: Double, g: Double, b: Double)?, generation: Int) {
+    private func applyVividAccent(_ rgb: (r: Double, g: Double, b: Double)?, deep: (r: Double, g: Double, b: Double)?,
+                                  generation: Int) {
         guard generation == vividGeneration else { return }
         let next = rgb.map { Color(.sRGB, red: $0.r, green: $0.g, blue: $0.b) }
         if vividAccent != next { vividAccent = next }
+        let nextDeep = deep.map { Color(.sRGB, red: $0.r, green: $0.g, blue: $0.b) }
+        if vividDeepAccent != nextDeep { vividDeepAccent = nextDeep }
     }
 
     deinit {

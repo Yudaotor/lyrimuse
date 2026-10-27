@@ -5,20 +5,30 @@ import Foundation
 /// 一片灰米色,做点缀颜色不够。
 ///
 /// 缩到 64×64,只看饱和度 ≥ 0.35、亮度 ≥ 0.3 的像素,按色相分 24 格、以「饱和度 × 亮度」加权,取最重的相邻三格的
-/// 加权平均色;这些像素占不到 2% 就算没有(nil,调用方画白)。再把 HSL 饱和度夹进 0.6~0.92、亮度定在 0.74,最后跟
-/// 强调色同一道对比修正:对「封面平均色 × (1 − 压暗)」那块估计底色拉开 4.5:1(`LocalPlaybackSource.accentAgainstStroke`)。
+/// 加权平均色;这些像素占不到 2% 就算没有(nil,调用方画白)。再按 `Tone` 定 HSL 饱和度和亮度,最后跟强调色同一道对比修正:
+/// 对「封面平均色 × (1 − 压暗)」那块估计底色拉开 `Tone.minContrast`(`LocalPlaybackSource.accentAgainstStroke`)。
 public enum ArtworkVividColor {
     public static let side = 64
     private static let minSaturation = 0.35
     private static let minBrightness = 0.3
     private static let hueBins = 24
     private static let minShare = 0.02
-    private static let saturationRange: ClosedRange<Double> = 0.6...0.92
-    private static let lightness = 0.74
-    private static let minContrast = 4.5
+
+    /// 取到色相之后调成什么样。
+    public struct Tone: Equatable, Sendable {
+        public var saturationRange: ClosedRange<Double>
+        public var lightness: Double
+        public var minContrast: Double
+
+        /// 音符色:深底上读得清的亮色(饱和度 0.6~0.92、亮度 0.74、对比 4.5:1)。
+        public static let note = Tone(saturationRange: 0.6...0.92, lightness: 0.74, minContrast: 4.5)
+        /// 进度线:深而艳,饱和度拉满、亮度在纯色那一档(0.5)。对比只留 2:1:提亮是往白里混,3:1 在中灰的封面底上
+        /// 就会把纯红提成粉色;2:1 只在真快看不见时(深蓝在黑底上)提一点。
+        public static let deep = Tone(saturationRange: 0.9...1, lightness: 0.5, minContrast: 2)
+    }
 
     /// 居中裁方、高质量缩到 `side × side`(`ArtworkThumbnail.squareBitmap`)再取色。建不出来或没有够鲜艳的颜色返回 nil。
-    public static func color(image: CGImage) -> (r: Double, g: Double, b: Double)? {
+    public static func color(image: CGImage, tone: Tone = .note) -> (r: Double, g: Double, b: Double)? {
         guard let small = ArtworkThumbnail.squareBitmap(from: image, pixelSide: side),
               let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
         var rgba = [UInt8](repeating: 0, count: side * side * 4)
@@ -30,11 +40,11 @@ public enum ArtworkVividColor {
             ctx.draw(small, in: CGRect(x: 0, y: 0, width: side, height: side))
             return true
         }
-        return drawn ? color(rgba: rgba) : nil
+        return drawn ? color(rgba: rgba, tone: tone) : nil
     }
 
     /// `rgba`:逐像素 RGBA 各一字节(封面不透明,alpha 不看)。
-    public static func color(rgba: [UInt8]) -> (r: Double, g: Double, b: Double)? {
+    public static func color(rgba: [UInt8], tone: Tone = .note) -> (r: Double, g: Double, b: Double)? {
         let pixels = rgba.count / 4
         guard pixels > 0 else { return nil }
         var weight = [Double](repeating: 0, count: hueBins)
@@ -77,13 +87,13 @@ public enum ArtworkVividColor {
         let rawG = window.reduce(0.0) { $0 + sumG[$1] } / bestWeight
         let rawB = window.reduce(0.0) { $0 + sumB[$1] } / bestWeight
         let hsl = toHSL(r: rawR, g: rawG, b: rawB)
-        let saturation = min(max(hsl.s, saturationRange.lowerBound), saturationRange.upperBound)
-        let lifted = fromHSL(h: hsl.h, s: saturation, l: lightness)
+        let saturation = min(max(hsl.s, tone.saturationRange.lowerBound), tone.saturationRange.upperBound)
+        let lifted = fromHSL(h: hsl.h, s: saturation, l: tone.lightness)
         let dim = (1 - LocalPlaybackSource.notchCoverArtOverlayOpacity) / Double(pixels)
         return LocalPlaybackSource.accentAgainstStroke(
             r: lifted.r, g: lifted.g, b: lifted.b,
             strokeR: meanR * dim, strokeG: meanG * dim, strokeB: meanB * dim,
-            minContrast: minContrast)
+            minContrast: tone.minContrast)
     }
 
     /// 色相,0..<1。

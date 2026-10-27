@@ -266,10 +266,11 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     }
 
     /// 掉下来那条歌名前那枚音符的颜色:「跟随封面」风格下用封面里最鲜艳的那种,其余风格跟别的前景一样白。
-    /// 进度线(底边 / 耳朵)的颜色:封面里最鲜艳的那种(`vividAccent`,已按卡片底色拉开 4.5:1),封面里没有够鲜艳的颜色时
-    /// 退回前景色。前景色是封面平均色提亮来的,当文字够用、当一根细线太灰。不看卡片风格:线是点缀,不跟文字走。
+    /// 进度线(底边 / 耳朵)的颜色:封面里最鲜艳的那种色相,深而艳(`vividDeepAccent`,饱和度拉满、亮度在纯色那一档,
+    /// 只为看得见留 2:1),封面里没有够鲜艳的颜色时退回前景色。前景色和音符色都提亮过,画成细线偏白。不看卡片风格:
+    /// 线是点缀,不跟文字走。
     private var progressLineTint: Color {
-        playback.vividAccent ?? accentOrWhite
+        playback.vividDeepAccent ?? accentOrWhite
     }
 
     private var trackDropNoteTint: Color {

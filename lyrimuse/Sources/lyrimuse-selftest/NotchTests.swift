@@ -1279,6 +1279,15 @@ func runNotchTests() {
                     "音符色: 纯灰封面没有鲜艳色,画白")
         expectEqual(ArtworkVividColor.color(rgba: vividPixels { $0 < vividCount / 100 ? (220, 20, 30) : (40, 40, 40) }) == nil,
                     true, "音符色: 鲜艳的像素不到 2% 不算")
+        // 进度线那档(`Tone.deep`):同一块红取到的是饱和、不偏白的红,对比只留 2:1。
+        if let deep = ArtworkVividColor.color(rgba: redOnGray, tone: .deep),
+           let note = ArtworkVividColor.color(rgba: redOnGray) {
+            let maxC = max(deep.r, deep.g, deep.b), minC = min(deep.r, deep.g, deep.b)
+            expectEqual(deep.r > deep.g && deep.r > deep.b && (maxC - minC) / maxC > 0.8 && minC < note.g, true,
+                        "进度线色: 灰封面上一块红,取到饱和的红(比音符色更深更艳,最暗那一路明显更低)")
+        } else {
+            expectEqual(false, true, "进度线色: 灰封面上一块红,应该取得到")
+        }
         if let gold = ArtworkVividColor.color(rgba: vividPixels { _ in (200, 150, 40) }) {
             expectEqual(gold.r >= gold.g && gold.g > gold.b, true, "音符色: 金色封面取到的还是金色")
         } else {
@@ -2685,8 +2694,8 @@ func runNotchTests() {
                     && sourceHas(progressLine, "let head = geometry.point(atFraction: CGFloat(fraction))"), true,
                     "进度线耳朵动效: 跳进度才滑、暂停变暗、线头白点不闪不带光晕、跟线按同一条路径取点(变形和跳进度都随线走)")
         expectEqual(v.components(separatedBy: "?? playback.currentDurationMs, tint: progressLineTint,").count == 3
-                    && sourceHas(v, "private var progressLineTint: Color {\n playback.vividAccent ?? accentOrWhite\n }"), true,
-                    "进度线: 底边和耳朵两档都用封面最鲜艳的那种颜色,没有时退回前景色")
+                    && sourceHas(v, "private var progressLineTint: Color {\n playback.vividDeepAccent ?? accentOrWhite\n }"), true,
+                    "进度线: 底边和耳朵两档都用封面最鲜艳那种色相的深艳版,没有时退回前景色")
         expectEqual(sourceHas(v, "NotchExpandedLyricList(tint: accentOrWhite)")
                     && sourceHas(v, ".modifier(NotchCardLayerActive(active: expanded, staggered: staggered, waitsForResize: true))")
                     && sourceHas(v, "if waitsForResize { return curve.delay(Self.resizeSettleDelay) }")
