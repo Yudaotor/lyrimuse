@@ -854,8 +854,9 @@ enum WebLyricsPages {
         #card { position: relative; box-sizing: border-box; max-width: 96vw; line-height: normal; }
         .row { white-space: pre-wrap; overflow-wrap: break-word; }
         .row > .in { display: inline-block; max-width: 100%; vertical-align: top; }
-        .row > .in.cols { display: inline-flex; flex-wrap: wrap; align-items: flex-start; }
-        .col { display: inline-flex; flex-direction: column; align-items: center; white-space: pre; }
+        .row > .in.cols { display: inline-flex; flex-wrap: wrap; align-items: stretch; }
+        .col { display: inline-flex; flex-direction: column; justify-content: space-between; align-items: center; white-space: pre; }
+        .gap { white-space: pre; }
         #card.scroll .row { white-space: pre; overflow: hidden; }
         #card.scroll .row > .in { max-width: none; will-change: transform; }
         #card.scroll .row > .in.cols { flex-wrap: nowrap; }
@@ -1020,9 +1021,13 @@ enum WebLyricsPages {
             return ws.map((w) => fill ? `<span class="w" data-s="${w[0]}" data-d="${w[1]}">${esc(w[2])}</span>` : esc(w[2])).join('');
           }
           // 逐词读音:一组一列,字在上、读音在下;读音按整组起止填色,已唱是前景色 75%,未唱同主行。
+          // 一行里各列拉成同高、读音贴列底(.in.cols 的 stretch、.col 的 space-between):汉字、假名落在苹方 / 冬青黑体上,
+          // line-height: normal 下行框比拉丁字母高,按列顶排的话夹英文的句子里读音一高一低。
+          // 组末尾的空白(词间的空格)挪到列外单独占位、读音两侧留一点白:留在列里的话读音比字宽时空格被读音盖住,
+          // 相邻两组读音首尾相接(同原生排版的 `OverlayRowLayout.columnWidth`)。
           function columns(line, fill, mainEm) {
             const u = unit();
-            const readStyle = `font-size:${.65 / mainEm}em;font-weight:${style.weights[1]};margin-top:${(style.spacing[0] - 4) * u}px;` +
+            const readStyle = `font-size:${.65 / mainEm}em;font-weight:${style.weights[1]};margin-top:${(style.spacing[0] - 4) * u}px;padding:0 .12em;` +
               (fill ? '--sung:var(--sung-reading)' : '');
             let i = 0, html = '';
             for (const [n, reading] of line.g) {
@@ -1031,9 +1036,12 @@ enum WebLyricsPages {
               if (!ws.length) continue;
               const s = ws[0][0], e = ws[ws.length - 1][0] + ws[ws.length - 1][1];
               const r = esc(reading || ' ');
-              html += `<span class="col"><span>${wordSpans(ws, fill)}</span>` +
+              const last = ws[ws.length - 1];
+              const tail = (String(last[2]).match(/\\s+$/) || [''])[0];
+              const body = tail ? [...ws.slice(0, -1), [last[0], last[1], String(last[2]).slice(0, -tail.length)]] : ws;
+              html += `<span class="col"><span>${wordSpans(body, fill)}</span>` +
                 (fill ? `<span class="w" data-s="${s}" data-d="${Math.max(1, e - s)}" style="${readStyle}">${r}</span>`
-                      : `<span style="${readStyle}">${r}</span>`) + '</span>';
+                      : `<span style="${readStyle}">${r}</span>`) + '</span>' + (tail ? `<span class="gap">${esc(tail)}</span>` : '');
             }
             if (i < line.w.length) html += `<span class="col"><span>${wordSpans(line.w.slice(i), fill)}</span></span>`;
             return html;

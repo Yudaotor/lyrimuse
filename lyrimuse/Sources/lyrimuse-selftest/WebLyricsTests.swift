@@ -683,6 +683,12 @@ func runWebLyricsTests() {
         let pages = app("WebLyrics/WebLyricsPages.swift")
         expectEqual(sourceBytes(pages, contain: "get('preview') === '1') document.body.classList.add('preview');"), true,
                     "网页歌词: OBS 页带 preview=1 时铺棋盘格底")
+        expectEqual(sourceHas(pages, ".row > .in.cols { display: inline-flex; flex-wrap: wrap; align-items: stretch; }")
+                        && sourceHas(pages, "justify-content: space-between; align-items: center;"), true,
+                    "网页歌词: 逐词读音各列同高、读音贴列底(汉字假名的行框比拉丁字母高,按列顶排读音一高一低)")
+        expectEqual(sourceBytes(pages, contain: "(tail ? `<span class=\"gap\">${esc(tail)}</span>` : '')")
+                        && sourceBytes(pages, contain: "padding:0 .12em;"), true,
+                    "网页歌词: 组末尾的空格挪到列外、读音两侧留白,相邻读音不首尾相接")
         expectEqual(sourceBytes(pages, contain: "height: 100vh") || sourceBytes(pages, contain: "height:100vh"), false,
                     "网页歌词: 画布、视频别按 100vh 铺(iOS Safari 比看得见的高度多出工具栏那截,上下留黑边)")
         expectEqual(sourceBytes(pages, contain: "const box = canvas.getBoundingClientRect();")
