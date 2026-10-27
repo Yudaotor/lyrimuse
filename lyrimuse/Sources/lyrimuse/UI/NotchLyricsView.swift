@@ -182,7 +182,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                                              ?? playback.currentDurationMs, tint: accentOrWhite,
                                          active: surfaceVisible && shows, outline: controller.cardOutline,
                                          notchWidth: controller.notchWidth,
-                                         cardSize: CGSize(width: controller.cardWidth, height: controller.cardHeight))
+                                         cardSize: CGSize(width: controller.cardWidth, height: controller.cardHeight),
+                                         visible: shows)
                         .animation(NotchEarProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {
                             $0.opacity(shows ? 1 : 0)
                         }

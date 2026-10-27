@@ -88,3 +88,50 @@ public struct NotchEarProgressPath: Equatable, Sendable {
             + (endX - x - cornerRadius)
     }
 }
+
+extension NotchEarProgressPath {
+    /// 沿左半边按长度走过 `fraction` 处的点(进度头那颗亮点的位置,跟线的 `trim` 同一种按长度的走法)。
+    public func point(atFraction fraction: CGFloat) -> CGPoint {
+        var d = min(1, max(0, fraction)) * length
+        let shoulderArc = shoulderRadius * shoulderSweep
+        if shoulderArc > 0, d <= shoulderArc {
+            let angle = -shoulderSweep + d / shoulderRadius
+            return CGPoint(x: shoulderRadius * cos(angle), y: shoulderCenterY + shoulderRadius * sin(angle))
+        }
+        d -= shoulderArc
+        let side = max(0, bottomY - cornerRadius - shoulderCenterY)
+        if d <= side { return CGPoint(x: x, y: shoulderCenterY + d) }
+        d -= side
+        let cornerArc = .pi / 2 * cornerRadius
+        if cornerRadius > 0, d <= cornerArc {
+            let angle = .pi - d / cornerRadius
+            return CGPoint(x: x + cornerRadius + cornerRadius * cos(angle),
+                           y: bottomY - cornerRadius + cornerRadius * sin(angle))
+        }
+        d -= cornerArc
+        return CGPoint(x: min(endX, x + cornerRadius + d), y: bottomY)
+    }
+}
+
+/// 「耳朵」进度线的动效:进度头亮点的呼吸、换歌 / 跳进度时线滑过去的判据。
+public enum NotchEarProgressMotion {
+    /// 呼吸一个来回的秒数。
+    public static let pulsePeriod: Double = 1.8
+    /// 亮点在播放时的亮度(0.55～1 之间按余弦来回)。
+    public static func headPulse(seconds: Double) -> Double {
+        0.55 + 0.45 * (0.5 - 0.5 * cos(2 * .pi * seconds / pulsePeriod))
+    }
+
+    /// 「这首从墙钟哪个时刻开始播」按这个粒度分桶。
+    public static let jumpBucketSeconds: Double = 1.5
+
+    /// 换歌、跳进度时这个值会变,线和亮点跟着滑过去;平时一拍拍往前走它不变,不补间(补间要逐帧重画)。
+    /// 取的是锚点倒推出的开播时刻(此刻 − 位置 / 倍速)所在的桶:正常播放时它不动,跳了多远它就挪多远。
+    /// 没有锚点或锚点冻住(暂停)时为 nil。
+    public static func jumpKey(anchor: ProgressAnchor?, now: Date) -> Int? {
+        guard let anchor, anchor.durationMs > 0, !anchor.isFrozen else { return nil }
+        let rate = anchor.rate > 0 ? anchor.rate : 1
+        let start = now.timeIntervalSince1970 - Double(anchor.extrapolatedPositionMs(now: now)) / 1000 / rate
+        return Int((start / jumpBucketSeconds).rounded(.down))
+    }
+}

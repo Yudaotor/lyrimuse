@@ -95,7 +95,13 @@ struct NotchEarProgressLine: View {
     let notchWidth: CGFloat
     /// 卡片此刻的目标尺寸(`cardWidth` × `cardHeight`)。
     let cardSize: CGSize
+    /// 这根线此刻该不该露出来(`showsEarProgressLine`)。线头亮点是原生图层,外层的淡出管不到它,按这个自己淡。
+    let visible: Bool
     @ObservedObject private var corners = NotchCornerLive.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// 暂停(没有锚点或锚点冻住)时整根线的透明度。
+    static let pausedOpacity: Double = 0.45
 
     static let thickness: CGFloat = 2.5
     /// 线心离卡片外沿的距离:半根线宽,线的外侧正好贴着外沿。
@@ -116,12 +122,28 @@ struct NotchEarProgressLine: View {
         let ticking = anchor != nil && active && total > 0
         let length = NotchEarProgressShape.geometry(size: cardSize, card: shape, notchWidth: notchWidth,
                                                     notchHeight: outline.notchHeight).length
+        let paused = anchor.map(\.isFrozen) ?? true
         TimelineView(NotchEarLineSchedule(interval: NotchProgressLineTiming.interval(durationMs: total, width: length),
                                           paused: !ticking)) { _ in
-            halves(card: shape, fraction: ticking
-                   ? anchor.map { NotchProgressLine.fraction(total: total, positionMs: $0.extrapolatedPositionMs(now: Date())) }
-                   : NotchProgressLine.frozenFraction(anchor: anchor, pausedPositionMs: pausedPositionMs,
-                                                      durationMs: durationMs))
+            let fraction = ticking
+                ? anchor.map { NotchProgressLine.fraction(total: total, positionMs: $0.extrapolatedPositionMs(now: Date())) }
+                : NotchProgressLine.frozenFraction(anchor: anchor, pausedPositionMs: pausedPositionMs, durationMs: durationMs)
+            ZStack {
+                halves(card: shape, fraction: fraction)
+                if let fraction {
+                    NotchEarProgressHead(card: shape, notchWidth: notchWidth, notchHeight: outline.notchHeight,
+                                         cardSize: cardSize, fraction: fraction, tint: tint,
+                                         breathing: ticking && !paused && !reduceMotion,
+                                         opacity: visible ? (paused ? Self.pausedOpacity : 1) : 0,
+                                         reduceMotion: reduceMotion)
+                }
+            }
+            // 换歌、跳进度时线和亮点滑过去;平时一拍拍往前走不补间(`NotchEarProgressMotion.jumpKey`)。
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.45),
+                       value: NotchEarProgressMotion.jumpKey(anchor: anchor, now: Date()))
+        }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.35)) {
+            $0.opacity(paused ? Self.pausedOpacity : 1)
         }
     }
 
@@ -141,6 +163,182 @@ struct NotchEarProgressLine: View {
                 fill.mask(played).blur(radius: 3).opacity(0.7)
                 fill.mask(played)
             }
+        }
+    }
+}
+
+/// 「耳朵」进度线的线头:一颗小白点、外面一圈同色淡光,位置按同一条路径算(`NotchEarProgressPath.point(atFraction:)`)。
+///
+/// 两颗点是 Core Animation 图层,动效全由图层自己做,App 平时不重画:呼吸(透明度来回)交给渲染进程循环跑;显隐、暂停变暗、
+/// 变形 / 跳进度时的位移也是图层动画。别改成 SwiftUI 做呼吸(按帧算亮度、或循环的隐式动画):都要逐帧重算,常驻时 CPU
+/// 明显变高(见 05 章决策 111)。外层给线做的淡出管不到原生视图,所以透明度由这里自己按同样的时长做(`opacity` 传目标值)。
+struct NotchEarProgressHead: NSViewRepresentable {
+    let card: NotchHangingShape
+    let notchWidth: CGFloat
+    let notchHeight: CGFloat
+    let cardSize: CGSize
+    let fraction: Double
+    let tint: Color
+    let breathing: Bool
+    /// 目标透明度:藏着 0、暂停时 `NotchEarProgressLine.pausedOpacity`、其余 1。
+    let opacity: Double
+    let reduceMotion: Bool
+
+    func makeNSView(context: Context) -> NotchEarHeadView { NotchEarHeadView() }
+
+    func updateNSView(_ view: NotchEarHeadView, context: Context) {
+        let geometry = NotchEarProgressShape.geometry(size: cardSize, card: card, notchWidth: notchWidth,
+                                                      notchHeight: notchHeight)
+        view.update(path: geometry, fraction: CGFloat(fraction), cardWidth: cardSize.width, tint: NSColor(tint),
+                    breathing: breathing, opacity: Float(opacity), reduceMotion: reduceMotion)
+    }
+}
+
+/// 两侧线头各一组图层(淡光 + 白点)。不接鼠标。
+final class NotchEarHeadView: NSView {
+    private let container = CALayer()
+    private let halos = [CALayer(), CALayer()]
+    private let cores = [CALayer(), CALayer()]
+    private static let haloRadius: CGFloat = 5
+    private static let coreRadius: CGFloat = 1.6
+    private static let pulseKey = "pulse"
+    /// 线头一次挪得超过这么多(pt)就滑过去(变形、跳进度),小于它是正常往前走、直接挪。
+    private static let slideThreshold: CGFloat = 3
+    private var path: NotchEarProgressPath?
+    private var fraction: CGFloat = 0
+    private var cardWidth: CGFloat = 0
+    private var breathing = false
+    private var reduceMotion = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        container.actions = ["position": NSNull(), "bounds": NSNull(), "opacity": NSNull(), "sublayers": NSNull()]
+        layer?.addSublayer(container)
+        for (dot, radius) in zip(halos + cores, [Self.haloRadius, Self.haloRadius, Self.coreRadius, Self.coreRadius]) {
+            dot.bounds = CGRect(x: 0, y: 0, width: radius * 2, height: radius * 2)
+            dot.cornerRadius = radius
+            dot.opacity = 0.8
+            dot.actions = ["position": NSNull(), "bounds": NSNull(), "opacity": NSNull(), "backgroundColor": NSNull()]
+            container.addSublayer(dot)
+        }
+        cores.forEach { $0.backgroundColor = NSColor.white.cgColor }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        container.frame = bounds
+        CATransaction.commit()
+        place()
+    }
+
+    /// 两种滑法:卡片变形(宽度变了)时走直线,跟着外沿往外 / 往回;同一张卡上跳进度时沿路径走(按路径取一串点),
+    /// 走直线会从卡片中间斜穿过去。藏着时也滑:收回时亮点从展开那一刻的位置一边淡入一边滑回来,直接跳过去会在还没收拢的
+    /// 卡片中间先冒出来。第一次摆(还没有位置)直接放。
+    func update(path: NotchEarProgressPath, fraction: CGFloat, cardWidth: CGFloat, tint: NSColor, breathing: Bool,
+                opacity: Float, reduceMotion: Bool) {
+        self.reduceMotion = reduceMotion
+        let old = self.path.map { ($0, self.fraction) }
+        let morphed = cardWidth != self.cardWidth
+        self.path = path
+        self.fraction = fraction
+        self.cardWidth = cardWidth
+        halos.forEach { $0.backgroundColor = tint.withAlphaComponent(tint.alphaComponent * 0.45).cgColor }
+        if let old, !reduceMotion {
+            let from = old.0.point(atFraction: old.1), to = path.point(atFraction: fraction)
+            if morphed {
+                place(slide: .straight)
+            } else if hypot(to.x - from.x, to.y - from.y) > Self.slideThreshold {
+                place(slide: .alongPath(from: old.1))
+            } else {
+                place(slide: nil)
+            }
+        } else {
+            place(slide: nil)
+        }
+        fade(to: opacity)
+        setBreathing(breathing)
+    }
+
+    private enum Slide {
+        case straight
+        case alongPath(from: CGFloat)
+    }
+
+    /// 卡片在本视图里水平居中、贴顶(同线的 `NotchEarProgressShape`);图层坐标原点在左下,y 要翻过来。
+    private func place(slide: Slide? = nil) {
+        guard let path else { return }
+        let left = bounds.midX - cardWidth / 2
+        func screen(_ p: CGPoint, mirrored: Bool) -> CGPoint {
+            CGPoint(x: left + (mirrored ? cardWidth - p.x : p.x), y: bounds.height - p.y)
+        }
+        let head = path.point(atFraction: fraction)
+        for (i, mirrored) in [false, true].enumerated() {
+            let to = screen(head, mirrored: mirrored)
+            for dot in [halos[i], cores[i]] {
+                switch slide {
+                case .straight:
+                    let anim = CABasicAnimation(keyPath: "position")
+                    anim.fromValue = NSValue(point: dot.presentation()?.position ?? dot.position)
+                    anim.toValue = NSValue(point: to)
+                    anim.duration = 0.4
+                    anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    dot.add(anim, forKey: "slide")
+                case .alongPath(let start):
+                    let steps = 24
+                    let anim = CAKeyframeAnimation(keyPath: "position")
+                    anim.values = (0...steps).map { k in
+                        let f = start + (fraction - start) * CGFloat(k) / CGFloat(steps)
+                        return NSValue(point: screen(path.point(atFraction: f), mirrored: mirrored))
+                    }
+                    anim.duration = 0.45
+                    anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    dot.add(anim, forKey: "slide")
+                case nil:
+                    break
+                }
+                dot.position = to
+            }
+        }
+    }
+
+    /// 时长同线:藏 0.16 秒、露 0.28 秒,暂停变暗 / 恢复 0.35 秒(`NotchEarProgressLine.fade`、`pausedOpacity`)。
+    private func fade(to target: Float) {
+        guard container.opacity != target else { return }
+        let from = container.presentation()?.opacity ?? container.opacity
+        let duration: Double = target == 0 ? 0.16 : (from == 0 ? 0.28 : 0.35)
+        if !reduceMotion {
+            let anim = CABasicAnimation(keyPath: "opacity")
+            anim.fromValue = from
+            anim.toValue = target
+            anim.duration = duration
+            anim.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            container.add(anim, forKey: "fade")
+        }
+        container.opacity = target
+    }
+
+    private func setBreathing(_ on: Bool) {
+        guard on != breathing || (on && cores[0].animation(forKey: Self.pulseKey) == nil) else { return }
+        breathing = on
+        for dot in halos + cores {
+            dot.removeAnimation(forKey: Self.pulseKey)
+            guard on else { continue }
+            let pulse = CABasicAnimation(keyPath: "opacity")
+            pulse.fromValue = 0.55
+            pulse.toValue = 1
+            pulse.duration = NotchEarProgressMotion.pulsePeriod / 2
+            pulse.autoreverses = true
+            pulse.repeatCount = .infinity
+            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            dot.add(pulse, forKey: Self.pulseKey)
         }
     }
 }

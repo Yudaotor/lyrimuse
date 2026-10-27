@@ -405,6 +405,39 @@ func runNotchTests() {
                       inset: 1.75).cornerRadius, 0, "进度线耳朵: 卡片底角比内缩还小时直角拐弯")
         expectEqual(E(width: 196, height: 32, notchWidth: 180, notchHeight: 32, shoulder: 4, cardCornerRadius: 8,
                       inset: 1.75).endX, 12, "进度线耳朵: 耳朵窄到刘海左沿在圆弧里时终点停在圆弧末端,不倒退")
+        // 进度头亮点:沿路径按长度取点,起点在屏幕上沿、终点在刘海边,中间落在竖段 / 底角 / 底边上。
+        func near(_ a: CGPoint, _ b: CGPoint) -> Bool { abs(a.x - b.x) < 1e-6 && abs(a.y - b.y) < 1e-6 }
+        let shoulderArc: CGFloat = 5 * asin(0.8)
+        expectEqual([near(low.point(atFraction: 0), CGPoint(x: 3, y: 0)),
+                     near(low.point(atFraction: 1), CGPoint(x: 90, y: 31)),
+                     near(low.point(atFraction: (shoulderArc + 10) / low.length), CGPoint(x: 5, y: 14)),
+                     near(low.point(atFraction: (shoulderArc + 20 + CGFloat.pi / 4 * 7) / low.length),
+                          CGPoint(x: 12 - 7 * cos(CGFloat.pi / 4), y: 24 + 7 * sin(CGFloat.pi / 4))),
+                     near(low.point(atFraction: (shoulderArc + 20 + CGFloat.pi / 2 * 7 + 30) / low.length), CGPoint(x: 42, y: 31)),
+                     near(low.point(atFraction: -0.5), CGPoint(x: 3, y: 0)),
+                     near(low.point(atFraction: 1.5), CGPoint(x: 90, y: 31))],
+                    [true, true, true, true, true, true, true],
+                    "进度线耳朵: 亮点沿路径按长度取点(起点、终点、竖段、底角中点、底边),超出 0～1 夹住")
+        typealias Motion = NotchEarProgressMotion
+        let pulses = stride(from: 0.0, through: 3.6, by: 0.05).map(Motion.headPulse(seconds:))
+        expectEqual([abs(Motion.headPulse(seconds: 0) - 0.55) < 1e-9, abs(Motion.headPulse(seconds: 0.9) - 1) < 1e-9,
+                     pulses.allSatisfy { $0 >= 0.55 - 1e-9 && $0 <= 1 + 1e-9 }], [true, true, true],
+                    "进度线耳朵: 亮点呼吸 1.8 秒一个来回,亮度在 0.55～1 之间")
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        let playing = ProgressAnchor(durationMs: 200_000, progressMs: 30_000, rate: 1, progressTs: nil, baseAgeMs: 0, fetchedAt: t0)
+        let seeked = ProgressAnchor(durationMs: 200_000, progressMs: 90_000, rate: 1, progressTs: nil, baseAgeMs: 0,
+                                    fetchedAt: t0.addingTimeInterval(5))
+        let reanchored = ProgressAnchor(durationMs: 200_000, progressMs: 35_000, rate: 1, progressTs: nil, baseAgeMs: 0,
+                                        fetchedAt: t0.addingTimeInterval(5))
+        let frozen = ProgressAnchor(durationMs: 200_000, progressMs: 35_000, rate: 0, progressTs: nil, baseAgeMs: 0,
+                                    fetchedAt: t0.addingTimeInterval(5), isFrozen: true)
+        let startKey = Motion.jumpKey(anchor: playing, now: t0.addingTimeInterval(0.2))
+        expectEqual([Motion.jumpKey(anchor: playing, now: t0.addingTimeInterval(7.2)) == startKey,
+                     Motion.jumpKey(anchor: reanchored, now: t0.addingTimeInterval(5.2)) == startKey,
+                     Motion.jumpKey(anchor: seeked, now: t0.addingTimeInterval(5.2)) != startKey,
+                     Motion.jumpKey(anchor: frozen, now: t0.addingTimeInterval(5.2)) == nil,
+                     Motion.jumpKey(anchor: nil, now: t0) == nil], [true, true, true, true, true],
+                    "进度线耳朵: 正常往前走、重新对表时判据不变(不补间),跳了进度会变(滑过去),暂停为 nil")
         typealias C = NotchProgressLineChoice
         expectEqual([C(shows: false, style: .ears), C(shows: true, style: .bottom), C(shows: true, style: .ears)],
                     [.off, .bottom, .ears], "进度线: 开关关着就是不显示,开着按样式分底边 / 耳朵")
@@ -2641,7 +2674,7 @@ func runNotchTests() {
         let progressLine = src("NotchProgressLine.swift")
         expectEqual(sourceHas(v, "if controller.showsProgressLine && controller.progressLineStyle == .ears {\n let shows = controller.showsEarProgressLine")
                     && sourceHas(v, "active: surfaceVisible && shows, outline: controller.cardOutline,\n notchWidth: controller.notchWidth,")
-                    && sourceHas(v, "cardSize: CGSize(width: controller.cardWidth, height: controller.cardHeight))\n .animation(NotchEarProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {")
+                    && sourceHas(v, "cardSize: CGSize(width: controller.cardWidth, height: controller.cardHeight),\n visible: shows)\n .animation(NotchEarProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {")
                     && sourceHas(progressLine, "var animatableData: AnimatablePair<CGFloat, CGFloat> {\n get { AnimatablePair(cardSize.width, cardSize.height) }")
                     && sourceHas(v, "let (s, r) = cornerMetrics(in: rect)")
                     && sourceHas(progressLine, "func path(in rect: CGRect) -> Path {\n let path = Self.geometry(size: cardSize, card: card, notchWidth: notchWidth, notchHeight: notchHeight)")
@@ -2649,6 +2682,14 @@ func runNotchTests() {
                     && progressLine.contains("TimelineView(NotchEarLineSchedule(interval: NotchProgressLineTiming.interval(durationMs: total, width: length),")
                     && progressLine.components(separatedBy: "TimelineView(").count == 3, true,
                     "进度线耳朵: 卡片尺寸是形状的可动画值、路径按它逐帧算(展开收回跟着外沿走)、肩膀和底角跟卡片外形读同一处、常驻只切透明度、重画间隔按半边长度算")
+        expectEqual(sourceHas(progressLine, ".animation(reduceMotion ? nil : .easeInOut(duration: 0.45),\n value: NotchEarProgressMotion.jumpKey(anchor: anchor, now: Date()))")
+                    && sourceHas(progressLine, "$0.opacity(paused ? Self.pausedOpacity : 1)")
+                    && sourceHas(progressLine, "let pulse = CABasicAnimation(keyPath: \"opacity\")")
+                    && !progressLine.contains("FrameTimeline(") && !progressLine.contains("repeatForever")
+                    && sourceHas(progressLine, "breathing: ticking && !paused && !reduceMotion,\n opacity: visible ? (paused ? Self.pausedOpacity : 1) : 0,")
+                    && sourceHas(progressLine, "view.update(path: geometry, fraction: CGFloat(fraction), cardWidth: cardSize.width,")
+                    && sourceHas(progressLine, "let anim = CAKeyframeAnimation(keyPath: \"position\")"), true,
+                    "进度线耳朵动效: 跳进度才滑、暂停变暗、亮点呼吸交给 Core Animation(别用 SwiftUI 逐帧 / 循环动画)、亮点自己按显隐淡出、跳进度沿路径滑、跟线按同一条路径取点")
         expectEqual(sourceHas(v, "NotchExpandedLyricList(tint: accentOrWhite)")
                     && sourceHas(v, ".modifier(NotchCardLayerActive(active: expanded, staggered: staggered, waitsForResize: true))")
                     && sourceHas(v, "if waitsForResize { return curve.delay(Self.resizeSettleDelay) }")
