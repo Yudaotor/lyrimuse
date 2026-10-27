@@ -2684,6 +2684,9 @@ func runNotchTests() {
                     && sourceHas(progressLine, "NotchEarHeadShape(card: shape, notchWidth: notchWidth, notchHeight: outline.notchHeight,\n cardSize: cardSize, fraction: fraction)\n .fill(Color.white.opacity(0.9))")
                     && sourceHas(progressLine, "let head = geometry.point(atFraction: CGFloat(fraction))"), true,
                     "进度线耳朵动效: 跳进度才滑、暂停变暗、线头白点不闪不带光晕、跟线按同一条路径取点(变形和跳进度都随线走)")
+        expectEqual(v.components(separatedBy: "?? playback.currentDurationMs, tint: progressLineTint,").count == 3
+                    && sourceHas(v, "private var progressLineTint: Color {\n playback.vividAccent ?? accentOrWhite\n }"), true,
+                    "进度线: 底边和耳朵两档都用封面最鲜艳的那种颜色,没有时退回前景色")
         expectEqual(sourceHas(v, "NotchExpandedLyricList(tint: accentOrWhite)")
                     && sourceHas(v, ".modifier(NotchCardLayerActive(active: expanded, staggered: staggered, waitsForResize: true))")
                     && sourceHas(v, "if waitsForResize { return curve.delay(Self.resizeSettleDelay) }")

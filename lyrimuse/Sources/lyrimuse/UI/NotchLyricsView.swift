@@ -160,7 +160,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     NotchProgressLine(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
                                       // 有锚点时用锚点自己的时长,跟外推的位置同一次采样(同展开区的 NotchScrubber),换歌那一拍不跳。
                                       durationMs: (playback.anchor?.durationMs).flatMap { $0 > 0 ? $0 : nil }
-                                          ?? playback.currentDurationMs, tint: accentOrWhite,
+                                          ?? playback.currentDurationMs, tint: progressLineTint,
                                       active: surfaceVisible && shows, outline: controller.cardOutline)
                         .padding(.bottom, 1)
                         .animation(NotchProgressLine.fade(showing: shows, reduceMotion: reduceMotion)) {
@@ -179,7 +179,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     let shows = controller.showsEarProgressLine
                     NotchEarProgressLine(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
                                          durationMs: (playback.anchor?.durationMs).flatMap { $0 > 0 ? $0 : nil }
-                                             ?? playback.currentDurationMs, tint: accentOrWhite,
+                                             ?? playback.currentDurationMs, tint: progressLineTint,
                                          active: surfaceVisible && shows, outline: controller.cardOutline,
                                          notchWidth: controller.notchWidth,
                                          cardSize: CGSize(width: controller.cardWidth, height: controller.cardHeight))
@@ -266,6 +266,12 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     }
 
     /// 掉下来那条歌名前那枚音符的颜色:「跟随封面」风格下用封面里最鲜艳的那种,其余风格跟别的前景一样白。
+    /// 进度线(底边 / 耳朵)的颜色:封面里最鲜艳的那种(`vividAccent`,已按卡片底色拉开 4.5:1),封面里没有够鲜艳的颜色时
+    /// 退回前景色。前景色是封面平均色提亮来的,当文字够用、当一根细线太灰。不看卡片风格:线是点缀,不跟文字走。
+    private var progressLineTint: Color {
+        playback.vividAccent ?? accentOrWhite
+    }
+
     private var trackDropNoteTint: Color {
         playback.notchCardStyle == .coverArt ? (playback.vividAccent ?? .white) : .white
     }

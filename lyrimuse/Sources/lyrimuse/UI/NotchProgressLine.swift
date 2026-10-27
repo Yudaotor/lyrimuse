@@ -154,7 +154,7 @@ struct NotchEarProgressLine: View {
                         .stroke(style: StrokeStyle(lineWidth: Self.thickness, lineCap: .round))
                 }
             }
-            let fill = LinearGradient(colors: [tint.opacity(0.7), tint], startPoint: .top, endPoint: .bottom)
+            let fill = LinearGradient(colors: [tint.opacity(0.85), tint], startPoint: .top, endPoint: .bottom)
             ZStack {
                 fill.mask(played).blur(radius: 3).opacity(0.7)
                 fill.mask(played)
