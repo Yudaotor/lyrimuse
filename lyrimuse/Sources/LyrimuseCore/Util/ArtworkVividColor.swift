@@ -5,8 +5,8 @@ import Foundation
 /// (强调色的来源)往往是一片灰米色,做点缀颜色不够。
 ///
 /// 缩到 64×64,只看饱和度 ≥ 0.35、亮度 ≥ `Tone.minBrightness` 的像素,按色相分 24 格加权(`Tone.weighsBrightness`),
-/// 取最重的连续 `2 × Tone.hueSpread + 1` 格的加权平均色;这些像素占不到 2% 就算没有(nil,调用方画白)。选中的那一片很灰
-/// (`Tone.grayWindowChroma`)、封面里另有够多真鲜艳的像素时,只用够鲜艳的像素再选一次。再按 `Tone`
+/// 取最重的连续 `2 × Tone.hueSpread + 1` 格的加权平均色;这些像素占不到 2% 就算没有(nil,调用方画白)。封面大部分没有
+/// 颜色时(`Tone.neutralShare`)不挑点缀色,取整张的平均色、只留一点冷暖。再按 `Tone`
 /// 定 HSL 饱和度和亮度,最后跟强调色同一道对比修正:对「封面平均色 × (1 − 压暗)」那块估计底色拉开 `Tone.minContrast`
 /// (`LocalPlaybackSource.accentAgainstStroke`)。压暗跟卡片背景同一个量法(`NotchBackdropTone.overlayOpacity`,亮封面压得
 /// 更深),别写成固定的 `notchCoverArtOverlayOpacity`:白封面上会把底色估亮一倍,颜色被往白里提成粉彩。
@@ -15,10 +15,10 @@ public enum ArtworkVividColor {
     private static let minSaturation = 0.35
     private static let hueBins = 24
     private static let minShare = 0.02
-    /// 彩度(最大通道 − 最小通道)到这么多才算「真鲜艳」,`Tone.grayWindowChroma` 那一步数它够不够 `minShare`。
-    private static let vividChroma = 0.25
-    /// `Tone.grayWindowChroma` 那一步重选时,像素彩度至少这么多。
-    private static let reselectChroma = 0.15
+    /// 彩度(最大通道 − 最小通道)不到这么多的像素算没有颜色:黑、白、灰,和只染了一层色调的暗部。
+    private static let neutralChroma = 0.12
+    /// 封面大部分没有颜色时,平均色的 HSL 饱和度最多留这么多:暖棕调的暗照片是暖灰,不是棕。
+    private static let neutralMaxSaturation = 0.2
 
     /// 取到色相之后调成什么样。
     public struct Tone: Equatable, Sendable {
@@ -30,10 +30,9 @@ public enum ArtworkVividColor {
         public var saturationRange: ClosedRange<Double>
         public var lightness: Double
         public var minContrast: Double
-        /// 选中那一片像素彩度的中位数低于它、封面里彩度 ≥ `vividChroma` 的像素又够 `minShare` 时,只用彩度 ≥ `reselectChroma`
-        /// 的像素重选。染了一层色调的黑白照片,暗部只偏一点色,按 HSV 算饱和度却很高,会压过占地方小的那块真颜色;
-        /// 深藏青、墨绿这类真有颜色的深色大片彩度高过它,不受影响。nil = 不做这一步。见 05 章决策 115。
-        public var grayWindowChroma: Double? = nil
+        /// 没有颜色的像素(`neutralChroma`)占到这么多时,取整张的平均色(饱和度最多 `neutralMaxSaturation`、亮度 `lightness`),
+        /// 不挑点缀色:黑白、灰调、暗底配一小块彩色的封面,线是灰的。nil = 不做这一步。见 05 章决策 115。
+        public var neutralShare: Double? = nil
 
         /// 音符色:封面里最鲜艳的那种色相(相邻三格、按饱和度 × 亮度),深底上读得清的亮色(饱和度 0.6~0.92、
         /// 亮度 0.74、对比 4.5:1)。
@@ -43,7 +42,7 @@ public enum ArtworkVividColor {
         /// 不是最亮的那块洋红。饱和度 0.6~0.75、亮度在纯色那一档(0.5)。对比只留 2:1:提亮是往白里混,3:1 在中灰的
         /// 封面底上就会把红提成粉色;2:1 只在真快看不见时(深蓝在黑底上)提一点。
         public static let deep = Tone(hueSpread: 3, minBrightness: 0.15, weighsBrightness: false,
-                                      saturationRange: 0.6...0.75, lightness: 0.5, minContrast: 2, grayWindowChroma: 0.11)
+                                      saturationRange: 0.6...0.75, lightness: 0.5, minContrast: 2, neutralShare: 0.85)
     }
 
     /// 居中裁方、高质量缩到 `side × side`(`ArtworkThumbnail.squareBitmap`)再取色。建不出来或没有够鲜艳的颜色返回 nil。
@@ -68,6 +67,7 @@ public enum ArtworkVividColor {
         guard pixels > 0 else { return nil }
         var colored: [ColoredPixel] = []
         var meanR = 0.0, meanG = 0.0, meanB = 0.0
+        var neutral = 0
         for pixel in 0..<pixels {
             let r = Double(rgba[pixel * 4]) / 255
             let g = Double(rgba[pixel * 4 + 1]) / 255
@@ -76,22 +76,24 @@ public enum ArtworkVividColor {
             meanG += g
             meanB += b
             let maxC = max(r, g, b), minC = min(r, g, b)
+            if maxC - minC < neutralChroma { neutral += 1 }
             let saturation = maxC <= 0 ? 0 : (maxC - minC) / maxC
             guard saturation >= minSaturation, maxC >= tone.minBrightness else { continue }
             let bin = Int(hue(r: r, g: g, b: b, maxC: maxC, minC: minC) * Double(hueBins)) % hueBins
             colored.append(ColoredPixel(r: r, g: g, b: b, weight: tone.weighsBrightness ? saturation * maxC : saturation,
-                                        chroma: maxC - minC, bin: bin))
+                                        bin: bin))
         }
-        guard var window = heaviestWindow(colored, spread: tone.hueSpread) else { return nil }
-        if let gray = tone.grayWindowChroma, window.medianChroma < gray,
-           Double(colored.filter { $0.chroma >= vividChroma }.count) / Double(pixels) >= minShare,
-           let vivid = heaviestWindow(colored.filter { $0.chroma >= reselectChroma }, spread: tone.hueSpread) {
-            window = vivid
+        let lifted: (r: Double, g: Double, b: Double)
+        if let share = tone.neutralShare, Double(neutral) / Double(pixels) >= share {
+            let hsl = toHSL(r: meanR / Double(pixels), g: meanG / Double(pixels), b: meanB / Double(pixels))
+            lifted = fromHSL(h: hsl.h, s: min(hsl.s, neutralMaxSaturation), l: tone.lightness)
+        } else {
+            guard let window = heaviestWindow(colored, spread: tone.hueSpread),
+                  Double(window.hits) / Double(pixels) >= minShare else { return nil }
+            let hsl = toHSL(r: window.sumR / window.weight, g: window.sumG / window.weight, b: window.sumB / window.weight)
+            let saturation = min(max(hsl.s, tone.saturationRange.lowerBound), tone.saturationRange.upperBound)
+            lifted = fromHSL(h: hsl.h, s: saturation, l: tone.lightness)
         }
-        guard Double(window.hits) / Double(pixels) >= minShare else { return nil }
-        let hsl = toHSL(r: window.sumR / window.weight, g: window.sumG / window.weight, b: window.sumB / window.weight)
-        let saturation = min(max(hsl.s, tone.saturationRange.lowerBound), tone.saturationRange.upperBound)
-        let lifted = fromHSL(h: hsl.h, s: saturation, l: tone.lightness)
         let overlay = NotchBackdropTone.bright(rgba: rgba)?.overlayOpacity ?? LocalPlaybackSource.notchCoverArtOverlayOpacity
         let dim = (1 - overlay) / Double(pixels)
         return LocalPlaybackSource.accentAgainstStroke(
@@ -102,15 +104,14 @@ public enum ArtworkVividColor {
 
     /// 过了饱和度、亮度两道门的像素。
     private struct ColoredPixel {
-        var r, g, b, weight, chroma: Double
+        var r, g, b, weight: Double
         var bin: Int
     }
 
-    /// 选中的连续几格:加权和、像素数、彩度中位数。
+    /// 选中的连续几格:加权和、像素数。
     private struct HueWindow {
         var weight = 0.0, sumR = 0.0, sumG = 0.0, sumB = 0.0
         var hits = 0
-        var medianChroma = 0.0
     }
 
     /// 按色相分 `hueBins` 格加权,取最重的连续 `2 × spread + 1` 格。一个像素都没有返回 nil。
@@ -133,17 +134,13 @@ public enum ArtworkVividColor {
         guard best >= 0 else { return nil }
         let inWindow = Set(bins(around: best))
         var window = HueWindow()
-        var chromas: [Double] = []
         for p in colored where inWindow.contains(p.bin) {
             window.weight += p.weight
             window.sumR += p.r * p.weight
             window.sumG += p.g * p.weight
             window.sumB += p.b * p.weight
             window.hits += 1
-            chromas.append(p.chroma)
         }
-        chromas.sort()
-        window.medianChroma = chromas.isEmpty ? 0 : chromas[chromas.count / 2]
         return window
     }
 

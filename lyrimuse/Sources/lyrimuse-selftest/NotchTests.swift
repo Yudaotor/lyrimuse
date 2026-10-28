@@ -1278,9 +1278,10 @@ func runNotchTests() {
                     "音符色: 纯灰封面没有鲜艳色,画白")
         expectEqual(ArtworkVividColor.color(rgba: vividPixels { $0 < vividCount / 100 ? (220, 20, 30) : (40, 40, 40) }) == nil,
                     true, "音符色: 鲜艳的像素不到 2% 不算")
-        // 进度线那档(`Tone.deep`):同一块红取到的是不偏白的红,对比只留 2:1。
-        if let deep = ArtworkVividColor.color(rgba: redOnGray, tone: .deep),
-           let note = ArtworkVividColor.color(rgba: redOnGray) {
+        // 进度线那档(`Tone.deep`):红占两成的灰封面取到的是不偏白的红,对比只留 2:1(红只占一成时整张算灰,见下面)。
+        let redOnGrayFifth = vividPixels { $0 < vividCount / 5 ? (200, 30, 40) : (120, 118, 115) }
+        if let deep = ArtworkVividColor.color(rgba: redOnGrayFifth, tone: .deep),
+           let note = ArtworkVividColor.color(rgba: redOnGrayFifth) {
             let maxC = max(deep.r, deep.g, deep.b), minC = min(deep.r, deep.g, deep.b)
             expectEqual(deep.r > deep.g && deep.r > deep.b && (maxC - minC) / maxC > 0.7 && minC < note.g, true,
                         "进度线色: 灰封面上一块红,取到不偏白的红(比音符色更深,最暗那一路明显更低)")
@@ -1288,7 +1289,7 @@ func runNotchTests() {
             expectEqual(false, true, "进度线色: 灰封面上一块红,应该取得到")
         }
         // 浅灰底红字:卡片对亮封面压得更深(`NotchBackdropTone.overlayOpacity`),底色按它估,进度线取到的是红、不被提成粉。
-        let redOnWhite = vividPixels { $0 < vividCount * 15 / 100 ? (200, 30, 40) : (200, 200, 200) }
+        let redOnWhite = vividPixels { $0 < vividCount * 20 / 100 ? (200, 30, 40) : (200, 200, 200) }
         if let deep = ArtworkVividColor.color(rgba: redOnWhite, tone: .deep) {
             expectEqual(deep.r > 0.8 && deep.g < 0.2 && deep.b < 0.2, true,
                         "进度线色: 浅灰底红字的封面取到红,不是粉(底色按卡片实际压暗估)")
@@ -1306,23 +1307,27 @@ func runNotchTests() {
         } else {
             expectEqual(false, true, "进度线色: 蓝紫混洋红的封面应该取得到")
         }
-        // 染了青色调的黑白照片上一小块橙(暗部偏青、按 HSV 饱和度过线,占大头):进度线取橙;橙不到 2% 时仍是青;
-        // 真有颜色的深藏青大片上一块肤色,彩度高过灰的那一档,仍取蓝。见 05 章决策 115。
+        // 封面大部分没有颜色(染青的黑白照上一小块橙、灰底上一成红):进度线取整张的灰,不挑点缀色;彩色占到一成半以上的
+        // (黑底大块红字)仍取红;深藏青大片配一块肤色仍取蓝。见 05 章决策 115。
         let tintedGrayWithOrange = vividPixels { i in
             i < vividCount * 3 / 100 ? (204, 128, 51) : i < vividCount * 30 / 100 ? (38, 62, 62) : (150, 150, 150)
         }
         if let deep = ArtworkVividColor.color(rgba: tintedGrayWithOrange, tone: .deep) {
-            expectEqual(deep.r > deep.g && deep.g > deep.b, true, "进度线色: 染青的黑白照上一块橙,取到橙不是青")
+            let maxC = max(deep.r, deep.g, deep.b), minC = min(deep.r, deep.g, deep.b)
+            expectEqual(maxC - minC < 0.15 && maxC > 0.3, true, "进度线色: 染青的黑白照上一块橙,取到看得见的灰,不是橙也不是青")
         } else {
-            expectEqual(false, true, "进度线色: 染青的黑白照上一块橙,应该取得到")
+            expectEqual(false, true, "进度线色: 大部分没颜色的封面也给一种灰,不是 nil")
         }
-        let tintedGrayTinyOrange = vividPixels { i in
-            i < vividCount / 100 ? (204, 128, 51) : i < vividCount * 30 / 100 ? (38, 62, 62) : (150, 150, 150)
-        }
-        if let deep = ArtworkVividColor.color(rgba: tintedGrayTinyOrange, tone: .deep) {
-            expectEqual(deep.g > deep.r && deep.b > deep.r, true, "进度线色: 鲜艳的像素不到 2% 时不改选,仍是青")
+        if let deep = ArtworkVividColor.color(rgba: redOnGray, tone: .deep) {
+            expectEqual(max(deep.r, deep.g, deep.b) - min(deep.r, deep.g, deep.b) < 0.15, true, "进度线色: 灰底上只占一成的红,线是灰的")
         } else {
-            expectEqual(false, true, "进度线色: 染青的黑白照应该取得到")
+            expectEqual(false, true, "进度线色: 灰底上一成红也给一种灰")
+        }
+        let redTextOnBlack = vividPixels { $0 < vividCount * 20 / 100 ? (210, 30, 40) : (18, 18, 20) }
+        if let deep = ArtworkVividColor.color(rgba: redTextOnBlack, tone: .deep) {
+            expectEqual(deep.r > deep.g * 2 && deep.r > deep.b * 2, true, "进度线色: 黑底上占两成的红字,仍取红")
+        } else {
+            expectEqual(false, true, "进度线色: 黑底大块红字应该取得到")
         }
         let navyWithSkin = vividPixels { i in
             i < vividCount * 15 / 100 ? (220, 160, 120) : i < vividCount * 50 / 100 ? (25, 35, 75) : (20, 20, 22)
