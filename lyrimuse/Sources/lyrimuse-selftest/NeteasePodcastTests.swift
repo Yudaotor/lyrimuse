@@ -38,7 +38,7 @@ func runNeteasePodcastTests() {
         defer { try? FileManager.default.removeItem(at: url) }
         try! state([["title": "一集", "host": "主播"]]).write(to: url)
         func check(_ bundle: String? = Q.bundleID, title: String = "一集") -> Bool {
-            Q.isEpisode(bundleID: bundle, title: title, artist: "主播", stateURL: url)
+            Q.isEpisode(bundleID: bundle, title: title, artist: "主播", stateURLs: [url])
         }
         expectEqual(check(), true, "网易云播客: 名单里有这一集")
         expectEqual(check("com.tencent.QQMusicMac"), false, "网易云播客: 别的播放器不看")
@@ -48,8 +48,26 @@ func runNeteasePodcastTests() {
         try! FileManager.default.setAttributes([.modificationDate: later], ofItemAtPath: url.path)
         expectEqual(check(), false, "网易云播客: 名单改写后重读(列表换成了歌)")
         let missing = url.appendingPathExtension("missing")
-        expectEqual(Q.isEpisode(bundleID: Q.bundleID, title: "一集", artist: "主播", stateURL: missing), false,
+        expectEqual(Q.isEpisode(bundleID: Q.bundleID, title: "一集", artist: "主播", stateURLs: [missing]), false,
                     "网易云播客: 名单不在(没授权、引擎没在跑)就不认")
+
+        let iPad = url.appendingPathExtension("ipad")
+        defer { try? FileManager.default.removeItem(at: iPad) }
+        try! state([["title": "卖酱香饼和当老师，哪个更有前途？", "host": "网易每日轻松一刻"]]).write(to: iPad)
+        expectEqual(Q.isEpisode(bundleID: Q.bundleID, title: "卖酱香饼和当老师，哪个更有前途？", artist: "网易每日轻松一刻",
+                                stateURLs: [missing, iPad]), true,
+                    "网易云播客: Mac 版名单不在时 iPad 版名单里有这一集也认")
+        expectEqual(Q.isEpisode(bundleID: Q.bundleID, title: "一集", artist: "主播", stateURLs: [url, iPad]), false,
+                    "网易云播客: 两份名单都没有就不认")
+        let same = Date().addingTimeInterval(-60)
+        try! state([["title": "甲集", "host": "甲"]]).write(to: url)
+        try! state([["title": "乙集", "host": "乙"]]).write(to: iPad)
+        for file in [url, iPad] { try! FileManager.default.setAttributes([.modificationDate: same], ofItemAtPath: file.path) }
+        expectEqual([Q.isEpisode(bundleID: Q.bundleID, title: "甲集", artist: "甲", stateURLs: [url]),
+                     Q.isEpisode(bundleID: Q.bundleID, title: "乙集", artist: "乙", stateURLs: [iPad])], [true, true],
+                    "网易云播客: 两份名单各缓存各的(大小、修改时间一样也不串)")
+        expectEqual(Q.stateURLs.map(\.lastPathComponent), ["lyrimuse-netease-episodes.json", "lyrimuse-netease-ipad-episodes.json"],
+                    "网易云播客: 默认认 Mac 版和 iPad 版两份名单(文件名跟引擎写的一致)")
     }
 
     // ---- 接线契约(扫源码)----

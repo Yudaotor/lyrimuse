@@ -653,10 +653,13 @@ func neteaseQueueArtists(f neteaseUpcomingFile, i int) string {
 }
 
 // neteasePlayingSong:网易云播放队列里此刻在放的这首的歌曲 id 与所在专辑的 id(播放器自己报的这一首,18 章决策 65、67)。
-// 两边时长都知道时要对得上;认不出返回空串。
+// 两边时长都知道时要对得上;队列里认不出时看 iPad 版此刻记的那一首(neteaseIPadPlaying);都认不出返回空串。
 func neteasePlayingSong(artist, title string, durationSecs float64) (id, albumID string) {
 	f, _, _, pos := neteaseQueueAt(artist, title)
 	if pos < 0 {
+		if it, ok := neteaseIPadPlaying(artist, title, durationSecs); ok {
+			return it.ID, it.AlbumID
+		}
 		return "", ""
 	}
 	tr := f.List[pos].Track
@@ -668,10 +671,13 @@ func neteasePlayingSong(artist, title string, durationSecs float64) (id, albumID
 
 // neteasePlayingTrack:网易云播放队列里此刻在放的这首,换成本机曲库那种形状(neteaseLocalTrack:id、歌名、署名、专辑 id /
 // 名字 / 封面、时长、mark)。认法同 neteasePlayingSong;两边专辑都知道又对不上时也不认(队列里同名的另一版排在前面)。
-// 认不出、单集、id 不是数字时 ok=false。
+// 认不出、单集、id 不是数字时 ok=false。队列里没有这首时看 iPad 版此刻记的那一首,认法相同。
 func neteasePlayingTrack(artist, title, album string, durationSecs float64) (neteaseLocalTrack, bool) {
 	f, _, _, pos := neteaseQueueAt(artist, title)
-	if pos < 0 || neteaseVoiceTypes[f.List[pos].ResourceType] {
+	if pos < 0 {
+		return neteaseIPadPlayingTrack(artist, title, album, durationSecs)
+	}
+	if neteaseVoiceTypes[f.List[pos].ResourceType] {
 		return neteaseLocalTrack{}, false
 	}
 	tr := f.List[pos].Track
