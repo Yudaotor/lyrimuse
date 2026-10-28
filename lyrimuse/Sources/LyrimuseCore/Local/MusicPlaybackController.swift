@@ -723,12 +723,12 @@ public enum MusicPlaybackController {
             return ExtendedControlsState(favorited: nil,
                                          mode: ReampMenuControl.readMode()
                                              .map { PlaybackModeState(mode: $0, options: ReampMenuControl.options) },
-                                         volume: nil)
+                                         volume: ReampVolume.read())
         case .pinePlayer:
             return ExtendedControlsState(favorited: nil,
                                          mode: PineMenuControl.readMode()
                                              .map { PlaybackModeState(mode: $0, options: PineMenuControl.options) },
-                                         volume: nil)
+                                         volume: PineVolume.read())
         case .vox:
             guard let c = voxControls() else { return .empty }
             return ExtendedControlsState(favorited: nil,

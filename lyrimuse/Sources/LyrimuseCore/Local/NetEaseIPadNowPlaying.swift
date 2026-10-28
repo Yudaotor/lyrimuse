@@ -81,6 +81,9 @@ public enum NetEaseIPadNowPlaying {
     /// 不准的重报跟开播锚点推过来的最多差这么多秒;差得更多的是拖动过,照原样。
     static let earlyReportMaxDrift: Double = 1
 
+    /// 两个时间戳差这么多秒以内算开播那一行:单问会话报的秒数跟事件流截成的整微秒,同一刻也会差 1 微秒。
+    static let startStampTolerance: TimeInterval = 0.001
+
     private static let lock = NSLock()
     nonisolated(unsafe) private static var shared = Memory()
 
@@ -92,8 +95,10 @@ public enum NetEaseIPadNowPlaying {
         return normalized(frame, memory: &shared)
     }
 
-    /// 整份 JSON 载荷(单问会话那一路,解出来的快照字段不能改)里的 title / artist / 时长换成整理过的,别的键原样留着。
+    /// 整份 JSON 载荷(单问会话那一路,解出来的快照字段不能改)里的 title / artist / 时长 / 进度换成整理过的,别的键原样留着。
     /// 不是 iPad 版报的、解不开的原样交回。时长键带 `Micros` 后缀的(`--micros`)按微秒读写。
+    /// helper 那份的时间戳是 epoch 秒数(换成事件流同一种写法再比),锚点进度在 `anchorElapsedTime`、`elapsedTime` 是外推到此刻的:
+    /// 按锚点进度整理,补的提前量几个进度键一起挪。
     public static func normalizedPayload(_ data: Data) -> Data {
         guard var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               object["bundleIdentifier"] as? String == Self.bundleID else { return data }
@@ -108,19 +113,21 @@ public enum NetEaseIPadNowPlaying {
                 object[key] = value
             }
         }
-        let elapsed = seconds("elapsedTime")
+        let anchor = seconds("anchorElapsedTime") ?? seconds("elapsedTime")
         let timestamp = object["timestamp"] as? String
+            ?? (object["timestamp"] as? NSNumber).flatMap { MediaControlMicros.timestampString(($0.doubleValue * 1_000_000).rounded()) }
             ?? MediaControlMicros.timestampString((object["timestampEpochMicros"] as? NSNumber)?.doubleValue)
         let frame = normalized(
             Frame(title: object["title"] as? String, artist: object["artist"] as? String, album: object["album"] as? String,
-                  duration: seconds("duration"), elapsed: elapsed, timestamp: timestamp),
+                  duration: seconds("duration"), elapsed: anchor, timestamp: timestamp),
             bundleID: Self.bundleID)
         object["title"] = frame.title ?? NSNull()
         object["artist"] = frame.artist ?? NSNull()
         if let duration = frame.duration { write("duration", duration) }
-        if let elapsed, let lead = frame.elapsed.map({ $0 - elapsed }), lead != 0 {
-            write("elapsedTime", elapsed + lead)
-            if let now = seconds("elapsedTimeNow") { write("elapsedTimeNow", now + lead) }
+        if let anchor, let lead = frame.elapsed.map({ $0 - anchor }), lead != 0 {
+            for key in ["anchorElapsedTime", "elapsedTime", "elapsedTimeNow"] {
+                if let value = seconds(key) { write(key, value + lead) }
+            }
         }
         return (try? JSONSerialization.data(withJSONObject: object)) ?? data
     }
@@ -185,12 +192,22 @@ public enum NetEaseIPadNowPlaying {
         var frame = normalizedNames(raw, memory: &memory)
         guard let timestamp = raw.timestamp, let start = memory.bareStartTimestamp, let elapsed = frame.elapsed else { return frame }
         let lead = memory.fullStart ? fullStartLead : bareStartLead
-        if timestamp == start {
+        if isStartStamp(timestamp, start: start) {
             if abs(elapsed) < 0.001 { frame.elapsed = lead }
         } else if let carried = carriedFromStart(elapsed: elapsed, timestamp: timestamp, start: start, lead: lead) {
             frame.elapsed = carried
         }
         return frame
+    }
+
+    /// 是不是开播那一行的时间戳(差 `startStampTolerance` 以内)。纯函数,selftest 覆盖。
+    public static func isStartStamp(_ timestamp: String?, start: String?) -> Bool {
+        guard let timestamp, let start else { return false }
+        if timestamp == start { return true }
+        guard let at = MediaControlClient.parseTimestamp(timestamp), let startAt = MediaControlClient.parseTimestamp(start) else {
+            return false
+        }
+        return abs(at.timeIntervalSince(startAt)) <= startStampTolerance
     }
 
     /// 开播后头几秒的重报按开播锚点推过来的进度;不是那种重报的给 nil。
@@ -220,7 +237,7 @@ public enum NetEaseIPadNowPlaying {
             return Frame(title: frame.title, artist: frame.artist, album: frame.album, duration: real.duration,
                          elapsed: frame.elapsed)
         }
-        let isFullStart = memory.fullStart && raw.timestamp != nil && raw.timestamp == memory.bareStartTimestamp
+        let isFullStart = memory.fullStart && isStartStamp(raw.timestamp, start: memory.bareStartTimestamp)
         if !isFullStart, let real = memory.real,
            isTornLyricFrame(frame, real: real, lyricTitle: memory.lyricTitle, last: memory.last) {
             return Frame(title: real.title, artist: real.artist, album: real.album, duration: real.duration,

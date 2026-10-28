@@ -325,13 +325,13 @@ public enum PinePlayhead {
         static let durationSlack: Double = 1.5
         /// 时长到这么长不去找进度条(网络电台报的时长是 Int64 上限)。
         static let maxDuration: Double = 1e7
+        /// 跨进程查询超时,App 元素和往下取到的每个元素都设。
+        static let axTimeout: Float = 0.25
 
         /// 等进度条跳下一格:跳到的格值和那一刻。找不到进度条、读不到、窗口里没有跳格的返回 nil。阻塞最多 `window`。
         static func nextTick(pid: pid_t, duration: Double) -> (value: Int, at: Date)? {
-            let app = AXUIElementCreateApplication(pid)
-            AXUIElementSetMessagingTimeout(app, 0.25)
+            let app = MenuBarAX.timed(AXUIElementCreateApplication(pid), timeout: axTimeout)
             guard let bar = find(in: app, duration: duration) else { return nil }
-            AXUIElementSetMessagingTimeout(bar, 0.25)
             guard var last = value(bar) else { return nil }
             let end = Date().addingTimeInterval(window)
             while Date() < end {
@@ -345,10 +345,12 @@ public enum PinePlayhead {
 
         /// 各窗口第一、二层子元素里最大值对得上时长的那根滑块。
         static func find(in app: AXUIElement, duration: Double) -> AXUIElement? {
-            for window in children(app, kAXWindowsAttribute) {
-                for child in children(window, kAXChildrenAttribute) {
+            for window in MenuBarAX.children(app, attribute: kAXWindowsAttribute, timeout: axTimeout) {
+                for child in MenuBarAX.children(window, timeout: axTimeout) {
                     if isBar(child, duration: duration) { return child }
-                    if let hit = children(child, kAXChildrenAttribute).first(where: { isBar($0, duration: duration) }) { return hit }
+                    if let hit = MenuBarAX.children(child, timeout: axTimeout).first(where: { isBar($0, duration: duration) }) {
+                        return hit
+                    }
                 }
             }
             return nil
@@ -367,10 +369,6 @@ public enum PinePlayhead {
         private static func attribute(_ element: AXUIElement, _ name: String) -> AnyObject? {
             var value: AnyObject?
             return AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success ? value : nil
-        }
-
-        private static func children(_ element: AXUIElement, _ name: String) -> [AXUIElement] {
-            (attribute(element, name) as? [AXUIElement]) ?? []
         }
     }
 }

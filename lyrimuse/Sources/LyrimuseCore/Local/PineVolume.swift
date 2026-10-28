@@ -44,14 +44,16 @@ public enum PineVolume {
         return AXUIElementSetAttributeValue(slider, kAXValueAttribute as CFString, value as CFNumber) == .success
     }
 
+    /// 跨进程查询超时,App 元素和往下取到的每个元素都设。
+    static let axTimeout: Float = 0.25
+
     private static func volumeSlider() -> AXUIElement? {
         guard AXIsProcessTrusted(), let pid = PlayerProcess.pid(bundleID: PinePlayerInfo.bundleID) else { return nil }
-        let app = AXUIElementCreateApplication(pid)
-        AXUIElementSetMessagingTimeout(app, 0.25)
+        let app = MenuBarAX.timed(AXUIElementCreateApplication(pid), timeout: axTimeout)
         var found: [(element: AXUIElement, slider: Slider)] = []
-        for window in children(app, kAXWindowsAttribute) {
-            for child in children(window, kAXChildrenAttribute) {
-                for element in [child] + children(child, kAXChildrenAttribute) {
+        for window in MenuBarAX.children(app, attribute: kAXWindowsAttribute, timeout: axTimeout) {
+            for child in MenuBarAX.children(window, timeout: axTimeout) {
+                for element in [child] + MenuBarAX.children(child, timeout: axTimeout) {
                     guard (attribute(element, kAXRoleAttribute) as? String) == kAXSliderRole,
                           let min = (attribute(element, kAXMinValueAttribute) as? NSNumber)?.doubleValue,
                           let max = (attribute(element, kAXMaxValueAttribute) as? NSNumber)?.doubleValue,
@@ -66,9 +68,5 @@ public enum PineVolume {
     private static func attribute(_ element: AXUIElement, _ name: String) -> AnyObject? {
         var value: AnyObject?
         return AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success ? value : nil
-    }
-
-    private static func children(_ element: AXUIElement, _ name: String) -> [AXUIElement] {
-        (attribute(element, name) as? [AXUIElement]) ?? []
     }
 }

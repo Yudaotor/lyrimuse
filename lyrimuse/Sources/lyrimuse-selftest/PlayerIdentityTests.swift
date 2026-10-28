@@ -1238,6 +1238,33 @@ func runPlayerIdentityTests() {
             expectEqual(caseLabels(s.body), players(s.column),
                         "决定表(源码): \(s.name) 的 switch 点名的就是表里「\(s.column.rawValue)」那几家")
         }
+        // 换歌走的合并回读跟单读音量同口径:soundVolume(for:) 读得出音量的那几家,extendedControlsState 那一支不能写死
+        // `volume: nil`,不然每次换歌刷新都把音量胶囊清掉。
+        func caseBlocks(_ body: String) -> [String: String] {
+            guard let re = try? NSRegularExpression(pattern: #"^\s*(?:case\s+\.(\w+)|default)\s*:"#, options: [.anchorsMatchLines])
+            else { return [:] }
+            let ns = body as NSString
+            let hits = re.matches(in: body, range: NSRange(location: 0, length: ns.length))
+            var out: [String: String] = [:]
+            for (i, m) in hits.enumerated() where m.range(at: 1).location != NSNotFound {
+                let name = ns.substring(with: m.range(at: 1))
+                let end = i + 1 < hits.count ? hits[i + 1].range.location : ns.length
+                if out[name] == nil {
+                    out[name] = ns.substring(with: NSRange(location: m.range.upperBound, length: end - m.range.upperBound))
+                }
+            }
+            return out
+        }
+        let volumeReads = caseBlocks(sourceBody("public static func soundVolume(for player: PlaybackPlayer) -> Int? {", in: controller))
+            .filter { _, block in
+                block.split(separator: "\n").map { $0.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false).first ?? "" }
+                    .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } != ["return nil"]
+            }.keys.sorted()
+        let merged = caseBlocks(sourceBody("public static func extendedControlsState(", in: controller))
+        expectEqual(volumeReads.contains("pinePlayer") && volumeReads.contains("reamp") && volumeReads.contains("appleMusic"), true,
+                    "决定表(源码): soundVolume(for:) 读得出音量的几家解析得出来")
+        expectEqual(volumeReads.filter { merged[$0] == nil || merged[$0]!.contains("volume: nil") }, [],
+                    "决定表(源码): soundVolume(for:) 读得出音量的,extendedControlsState 那一支也读音量")
         // 通道坏了那条的 default 分支直接问 Spotify,case 里没有它,所以连 default 问的那一家一起算。
         let broken = sourceBody("private static func snapshotWhileChannelBroken(players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {",
                           in: client)
@@ -3261,7 +3288,7 @@ private func menuControlDispatchTests() {
             (try? String(contentsOf: local.appendingPathComponent(name), encoding: .utf8)) ?? ""
         }
         let menuBar = read("MenuTitleFavorite.swift")
-        expectEqual(sourceBytes(menuBar, contain: "return ((value as? [AXUIElement]) ?? []).map(timed)")
+        expectEqual(sourceBytes(menuBar, contain: "return ((value as? [AXUIElement]) ?? []).map { timed($0, timeout: timeout) }")
                     && sourceBytes(menuBar, contain: "return timed(value as! AXUIElement)")
                     && sourceBytes(menuBar, contain: "guard MenuBarAX.press(found.element) else { return false }"), true,
                     "播放器控制(契约): 菜单栏取到的每个元素都设超时,按「喜欢」之前看它灰没灰")

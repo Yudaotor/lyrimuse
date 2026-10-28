@@ -385,6 +385,31 @@ func runNetEaseIPadTests() {
         expectEqual((rewritten?["elapsedTimeMicros"] as? NSNumber)?.int64Value, 450_000, "iPad 网易云 开播: 单问载荷的进度补提前量")
         expectEqual((rewritten?["elapsedTimeNowMicros"] as? NSNumber)?.int64Value, 570_000, "iPad 网易云 开播: 外推的进度一起挪")
 
+        // 单问会话 helper 的原样输出:时间戳是 epoch 秒数(跟事件流截成的整微秒差 1 微秒),锚点在 anchorElapsedTime,
+        // elapsedTime 是外推到此刻的。
+        func helperLine(anchor: Double, live: Double, timestamp: String, bundle: String = N.bundleID) -> Data {
+            Data(("{\"bundleIdentifier\":\"\(bundle)\",\"title\":\"致你\",\"artist\":\"yihuik苡慧\",\"album\":\"致你\","
+                + "\"duration\":200,\"playbackRate\":1,\"playing\":true,\"isMusicApp\":true,\"processIdentifier\":4242,"
+                + "\"anchorElapsedTime\":\(anchor),\"elapsedTime\":\(live),\"timestamp\":\(timestamp)}").utf8)
+        }
+        let probed = NowPlayingClientsProbe.decodeSnapshot(helperLine(anchor: 0, live: 0.12, timestamp: "1793154659.900001"))
+        expectEqual(abs((probed?.snapshot.anchorElapsedTime ?? -1) - N.bareStartLead) < 0.000_1, true,
+                    "iPad 网易云 开播: 单问会话的锚点补提前量")
+        expectEqual(abs((probed?.snapshot.elapsedTime ?? -1) - (0.12 + N.bareStartLead)) < 0.000_1, true,
+                    "iPad 网易云 开播: 单问会话外推的进度一起挪")
+        let reReport = NowPlayingClientsProbe.decodeSnapshot(helperLine(anchor: 1.53, live: 1.6, timestamp: "1793154661.9"))
+        expectEqual(abs((reReport?.snapshot.anchorElapsedTime ?? -1) - (2 + N.bareStartLead)) < 0.000_1, true,
+                    "iPad 网易云 开播: 单问会话头几秒的重报按开播锚点推过来")
+        expectEqual(abs((reReport?.snapshot.elapsedTime ?? -1) - (1.6 + 2 + N.bareStartLead - 1.53)) < 0.000_1, true,
+                    "iPad 网易云 开播: 单问会话头几秒的重报外推的进度一起挪")
+        let macProbed = NowPlayingClientsProbe.decodeSnapshot(helperLine(anchor: 0, live: 0.12, timestamp: "1793154659.900001",
+                                                                         bundle: mac))
+        expectEqual([macProbed?.snapshot.anchorElapsedTime, macProbed?.snapshot.elapsedTime], [0, 0.12],
+                    "iPad 网易云 开播: Mac 版的单问会话原样")
+        expectEqual([N.isStartStamp("@1793154659900001", start: ts), N.isStartStamp("@1793154659902000", start: ts),
+                     N.isStartStamp(nil, start: ts)], [true, false, false],
+                    "iPad 网易云 开播: 差 1 微秒算开播那一行,差 2 毫秒不算")
+
         var macFields = d2.merged; macFields["bundleIdentifier"] = mac
         expectEqual((N.normalizedFields(macFields)["elapsedTime"] as? NSNumber)?.doubleValue, 0, "iPad 网易云 开播: Mac 版的原样")
 

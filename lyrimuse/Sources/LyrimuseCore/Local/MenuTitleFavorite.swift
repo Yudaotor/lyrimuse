@@ -6,7 +6,7 @@ import Foundation
 /// 不把它拉到前台;跨进程查询每个元素 1 秒超时(超时只属于设它的那个元素,不会从 App 元素带到下面取到的菜单项上,
 /// 取到一个设一个)。没有「辅助功能」权限、它没在跑时读不到。
 public enum MenuBarAX {
-    static let messagingTimeout: Float = 1
+    public static let messagingTimeout: Float = 1
 
     public static func menuBar(bundleID: String) -> AXUIElement? {
         application(bundleID: bundleID).flatMap { element($0, kAXMenuBarAttribute) }
@@ -18,10 +18,10 @@ public enum MenuBarAX {
         return timed(AXUIElementCreateApplication(pid))
     }
 
-    /// 给取到的元素设上跨进程查询超时。
+    /// 给取到的元素设上跨进程查询超时(默认 `messagingTimeout`)。
     @discardableResult
-    public static func timed(_ e: AXUIElement) -> AXUIElement {
-        AXUIElementSetMessagingTimeout(e, messagingTimeout)
+    public static func timed(_ e: AXUIElement, timeout: Float = messagingTimeout) -> AXUIElement {
+        AXUIElementSetMessagingTimeout(e, timeout)
         return e
     }
 
@@ -34,11 +34,12 @@ public enum MenuBarAX {
         return AXUIElementPerformAction(e, kAXPressAction as CFString) == .success
     }
 
-    /// 一组子元素(默认 `AXChildren`,也可以是 `AXWindows`);读不到为空。
-    public static func children(_ e: AXUIElement, attribute: String = kAXChildrenAttribute) -> [AXUIElement] {
+    /// 一组子元素(默认 `AXChildren`,也可以是 `AXWindows`),每个都设上 `timeout`;读不到为空。
+    public static func children(_ e: AXUIElement, attribute: String = kAXChildrenAttribute,
+                                timeout: Float = messagingTimeout) -> [AXUIElement] {
         var value: AnyObject?
         guard AXUIElementCopyAttributeValue(e, attribute as CFString, &value) == .success else { return [] }
-        return ((value as? [AXUIElement]) ?? []).map(timed)
+        return ((value as? [AXUIElement]) ?? []).map { timed($0, timeout: timeout) }
     }
 
     public static func element(_ e: AXUIElement, _ name: String) -> AXUIElement? {

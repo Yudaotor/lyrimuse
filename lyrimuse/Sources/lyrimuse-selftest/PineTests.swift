@@ -499,9 +499,15 @@ func runPineTests() {
         expectEqual(sourceHas(head, "(attribute(element, kAXValueAttribute) as? NSNumber).flatMap { Int(exactly: $0.doubleValue.rounded()) }")
                     && sourceHas(head, "duration > 0, duration < ProgressBar.maxDuration, startSampling("), true,
                     "Pine 接线: 进度条读到 NaN / 超大值不 trap,电台那种时长不去找进度条")
-        expectEqual(sourceHas(head, "defer { sampling.withLock { $0 = false } }")
-                    && sourceHas(head, "AXUIElementSetMessagingTimeout(bar, 0.25)"), true,
-                    "Pine 接线: 读完写回再放开采样;滑块元素也设短超时")
+        expectEqual(sourceHas(head, "defer { sampling.withLock { $0 = false } }"), true, "Pine 接线: 读完写回再放开采样")
+        // 跨进程查询超时只属于设它的那个元素:往下取到的窗口、子元素都要经 MenuBarAX 设上,不然卡住的播放器每个元素各等约 6 秒。
+        for path in ["LyrimuseCore/Local/PinePlayhead.swift", "LyrimuseCore/Local/PineVolume.swift", "LyrimuseCore/Local/ReampVolume.swift"] {
+            let text = sourceText(path)
+            expectEqual([sourceHas(text, "MenuBarAX.timed(AXUIElementCreateApplication(pid), timeout: axTimeout)"),
+                         sourceHas(text, "MenuBarAX.children(app, attribute: kAXWindowsAttribute, timeout: axTimeout)"),
+                         text.contains("as? [AXUIElement]"), text.contains("AXUIElementSetMessagingTimeout(")],
+                        [true, true, false, false], "AX 超时: \(path) 的 App 元素和往下取到的每个元素都设短超时")
+        }
         expectEqual(sourceHas(head, "guard !SourceKnockout.isOut(.pineSlider), AXIsProcessTrusted() else { return false }"), true,
                     "Pine 接线: 进度条那条腿能拔、没权限不读")
         let probe = sourceText("LyrimuseCore/Local/NowPlayingClientsProbe.swift")
