@@ -122,6 +122,15 @@ func runLyricsOffsetTests() {
         // 空指纹段(歌词还没解析出来时调过偏移)也要能搬,不能崩
         let emptyFp = LyricsOffsetStore.migratedOffsetKeys(["丁世光|不散的筵席（I Miss You）|": 300])
         expectEqual(emptyFp, ["丁世光|不散的筵席|": 300], "key 搬迁: 指纹段为空也照搬")
+
+        // 时长变体条目:trackKey 剥掉歌名末尾 ~durN,存量 key 也要剥,否则播放侧和歌词管理都查不到。搬两遍结果不变。
+        let variant = LyricsOffsetStore.migratedOffsetKeys(["丁世光|不散的筵席~dur2|\(fp)": 400])
+        expectEqual(variant, [canonical: 400], "key 搬迁: 歌名末尾的时长变体位剥掉")
+        let played = LyricsOffsetStore.trackKey(artist: "丁世光", title: "不散的筵席~dur2", lyrics: "", lyricsYRC: "")
+        expectEqual(variant.keys.first, played + fp, "key 搬迁: 剥完跟 trackKey 的前两段一致")
+        expectEqual(LyricsOffsetStore.migratedOffsetKeys(variant), variant, "key 搬迁: 幂等")
+        expectEqual(LyricsOffsetStore.migratedOffsetKeys(["丁世光|不散的筵席~dur2|\(fp)": 400, canonical: 700]), [canonical: 700],
+                    "key 搬迁: 变体跟不带变体位的撞车时不带的那条胜出")
     }
 
     // MARK: - 歌词时间轴偏移:基准(全部 / 按播放器,二选一)+ 单曲微调
@@ -129,7 +138,7 @@ func runLyricsOffsetTests() {
     // 加全局偏移时补的,补上「按播放器」那层。
     //
     // 播放器那层跟「全部」是**二选一、不相加**(改的语义:「不要和那个全部
-    // 相加,只有要么全部,要么单个」)。零值不落盘,所以"配过"="非零",调回 0 就是撤掉单独设置、
+    // 相加,只有要么全部,要么单个」)。"配过"看键在不在,单独配成 0 也算;点 × 删键才是撤掉单独设置、
     // 重新跟随「全部」。
     //
     // 真正容易写错的不是那个加法,而是几档之间的**独立性**:「重置这首歌」绝不能把设备侧的基准
@@ -145,7 +154,7 @@ func runLyricsOffsetTests() {
         // lyrimuse-selftest,污染不到用户的 App;但那份 plist 跨运行持久,不清会读到上次的残留)。
         store.setGlobalOffset(0)
         store.reset(forKey: key, pinKey: "", siblings: .none)
-        for id in store.playerOffsets.keys { store.setPlayerOffset(0, forBundleID: id) }
+        for id in store.playerOffsets.keys { store.removePlayerOffset(forBundleID: id) }
         expectEqual(store.effectiveOffset(forKey: key, siblings: .none), 0, "偏移: 各层都没调时是 0")
 
         store.setGlobalOffset(300)
@@ -207,9 +216,18 @@ func runLyricsOffsetTests() {
         expectEqual(store.effectiveOffset(forKey: key, siblings: .none), 50,
                     "按播放器: 省略 bundleID 时用全部那档,不猜播放器")
 
-        // 把单独那档调回 0 = 撤掉单独设置,重新跟随「全部」(零值不落盘,两件事是同一件)。
+        // 「全部」非零时单独设成 0:存下 0、不再跟随「全部」。只有删键(设置页那颗 ×)才改回跟随。
         store.setPlayerOffset(0, forBundleID: arc)
-        expectEqual(store.baseOffsetMs(forBundleID: arc), 100, "按播放器: 调回 0 就重新跟随全部")
+        expectEqual(store.baseOffsetMs(forBundleID: arc), 0, "按播放器: 全部为 100 时单独设成 0 就是 0")
+        expectEqual(store.playerOffsets[arc], 0, "按播放器: 单独设成 0 留在字典里(设置页照样列出、带 ×)")
+        expectEqual(UserDefaults.standard.string(forKey: "np:lyricsOffsetsByPlayerJSON")?.contains("\"\(arc)\":0"), true,
+                    "按播放器: 显式 0 落盘")
+        store.removePlayerOffset(forBundleID: arc)
+        expectEqual(store.playerOffsets[arc] == nil, true, "按播放器: 删键即撤掉单独设置")
+        expectEqual(store.baseOffsetMs(forBundleID: arc), 100, "按播放器: 删键后重新跟随全部")
+        expectEqual(LyricsOffsetStore.decodedPlayerOffsets("{\"a\":0,\"b\":-150}"), ["a": 0, "b": -150],
+                    "按播放器: 读回落盘那份时 0 照样留着")
+        expectEqual(LyricsOffsetStore.decodedPlayerOffsets("坏的"), [:], "按播放器: 读不懂就是空")
 
         // 负值同理:单独那档为负、全部为正,生效的只有单独那档。
         store.setGlobalOffset(300)
@@ -218,10 +236,8 @@ func runLyricsOffsetTests() {
         expectEqual(store.effectiveOffset(forKey: key, bundleID: arc, siblings: .none), -250,
                     "按播放器: 单独那档为负时也不叠加全部(-200 - 50)")
 
-        // 零值不落盘 —— 设置页那个下拉框靠"字典里有谁"来列"配过的播放器",留一个 0 进去就会
-        // 多列一项;归零也是"我不要这档了"的唯一表达方式。
-        store.setPlayerOffset(0, forBundleID: arc)
-        expectEqual(store.playerOffsets[arc] == nil, true, "按播放器: 归零即从字典里删掉")
+        store.removePlayerOffset(forBundleID: arc)
+        expectEqual(store.playerOffsets[arc] == nil, true, "按播放器: 删键从字典里拿掉")
 
         // 落盘原文断言(照 pin 那边跨语言契约的范式):键名写错/被人"顺手"改回旧键,纯内存断言
         // 一律是绿的,而回归的表现是"用户为已修好的 bug 调出来的旧值复活、歌词反被拖慢",界面上
@@ -236,7 +252,7 @@ func runLyricsOffsetTests() {
         // 收尾:别把测试值留在 UserDefaults 里
         store.setGlobalOffset(0)
         store.reset(forKey: key, pinKey: "", siblings: .none)
-        for id in store.playerOffsets.keys { store.setPlayerOffset(0, forBundleID: id) }
+        for id in store.playerOffsets.keys { store.removePlayerOffset(forBundleID: id) }
     }
 
     // ---- 下拉框「作用于哪个播放器」的候选集(LyricsOffsetScope)----
@@ -387,7 +403,7 @@ func runLyricsOffsetTests() {
 
         // 收尾
         store.setGlobalOffset(0)
-        for id in store.playerOffsets.keys { store.setPlayerOffset(0, forBundleID: id) }
+        for id in store.playerOffsets.keys { store.removePlayerOffset(forBundleID: id) }
     }
 
     // ---- 单曲偏移按同一首歌读穿(18 章决策 27)----
@@ -547,6 +563,15 @@ func runLyricsOffsetTests() {
         expectEqual(sourceBytes(manager, contain: "offsetSiblings = EnrichCacheReader.offsetSiblings(forKey: key)")
                     && !sourceBytes(manager, contain: "siblings: .none"), true, "读穿接线(契约): 歌词管理的偏移输入框按这首的其它写法读穿")
         expectEqual(sourceBytes(app, contain: "LyricsOffsetStore.shared.backfillPinContent()"), true, "读穿接线(契约): 启动时补记校准对着的歌词")
+
+        // 设置页播放器那一行的 × 删键改回跟随「全部播放器」,不是写 0(写 0 是单独设成不偏移)。
+        let settings = read("lyrimuse/SettingsView.swift")
+        let row = sourceBody("private func playerOffsetRow(", in: settings)
+        expectEqual(sourceHas(row, "clearPlayerOffset(bundleID)") && !sourceHas(row, "setOffset(0, scope: bundleID)"), true,
+                    "按播放器(契约): 设置页的 × 删键,不写 0")
+        expectEqual(sourceHas(settings, "PlaybackCoordinator.shared.clearPlayerLyricsOffset(forBundleID: bundleID)")
+                    && sourceHas(lps, "LyricsOffsetStore.shared.removePlayerOffset(forBundleID: bundleID)"), true,
+                    "按播放器(契约): × 经协调器、播放源走到 removePlayerOffset")
     }
 
     // ---- Apple Music 放空间音频版时用歌词带的偏移 ----

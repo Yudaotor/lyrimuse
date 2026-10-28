@@ -582,6 +582,25 @@ func runSettingsInteractionTests() {
         let goList = goNames.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\"")) }
             .filter { !$0.isEmpty }
         expectEqual(goList, DigestTemplate.placeholders, "推送内容: 占位符两边一致、顺序一致")
+
+        // 真实预览缓存:数据源、每类列几名、每日报告推哪一天任一样变了就换键,不拿旧结果(引擎缓存键同一组输入)。
+        let base = P.previewCacheKey(.daily, source: "", topN: 3, pushMinutes: 22 * 60)
+        expectEqual(base == P.previewCacheKey(.daily, source: "", topN: 3, pushMinutes: 13 * 60), true,
+                    "预览缓存: 同是推当天的两个推送时间共用一份")
+        expectEqual(base == P.previewCacheKey(.daily, source: "", topN: 5, pushMinutes: 22 * 60), false, "预览缓存: 每类列几名进键")
+        expectEqual(base == P.previewCacheKey(.daily, source: "lastfm", topN: 3, pushMinutes: 22 * 60), false, "预览缓存: 数据源进键")
+        expectEqual(base == P.previewCacheKey(.daily, source: "", topN: 3, pushMinutes: 8 * 60), false,
+                    "预览缓存: 推当天还是前一天进键")
+        expectEqual(base == P.previewCacheKey(.weekly, source: "", topN: 3, pushMinutes: 22 * 60), false, "预览缓存: 日报周报分开")
+        expectEqual(P.previewCacheKey(.weekly, source: "", topN: 3, pushMinutes: 8 * 60)
+                    == P.previewCacheKey(.weekly, source: "", topN: 3, pushMinutes: 22 * 60), true, "预览缓存: 周报不看推送时间")
+        let previewCard = (try? String(contentsOf: repoRoot.appendingPathComponent("lyrimuse/Sources/lyrimuse/Settings/NotificationPreviewCard.swift"),
+                                       encoding: .utf8)) ?? ""
+        let loader = sourceBody("enum NotificationPreviewLoader {", in: previewCard)
+        expectEqual(sourceHas(loader, "cache[cacheKey(kind)]") && sourceHas(loader, "cache[key] = (Date(), state)")
+                    && sourceHas(loader, "NotificationPreview.previewCacheKey(kind, source: source, topN: features.digestTopN, pushMinutes: features.digestPushMinutes)")
+                    && !sourceHas(loader, "cache[kind]"), true,
+                    "预览缓存(契约): App 侧按 previewCacheKey 取、存")
     }
 
     // ---- 推送提醒第二期:按档选渠道、推送时间、每类列出(15 章决策 72;默认渠道已去掉,见 15 章决策 76;静默时段换成推送时间,见 15 章决策 77)----

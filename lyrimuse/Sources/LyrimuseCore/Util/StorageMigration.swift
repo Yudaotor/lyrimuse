@@ -10,8 +10,8 @@ public enum StorageMigration {
         public var copiedRoot = false
         /// 合并时挪进数据目录的条目数(整个子目录挪过去算一条)。
         public var mergedItems = 0
-        /// 合并时两边都有、内容不同的条目数。数据目录搬过(有标记)时以它为准,旧的那份留在 `keptLeftover` 里;没搬过(新装的)
-        /// 时以旧目录为准,数据目录里被换下来的那份挪进 `replacedBackup`。
+        /// 合并时两边都有、内容不同的条目数。数据目录搬过(有标记)或建好满 `freshInstallAge` 时以它为准,旧的那份留在
+        /// `keptLeftover` 里;否则(新版本刚装出来的)以旧目录为准,数据目录里被换下来的那份挪进 `replacedBackup`。
         public var conflicts = 0
         /// 合并时数据目录里被旧目录换下来的那些文件存到了哪(`backups/<时刻>-storage-migration-replaced`)。
         public var replacedBackup: String?
@@ -72,7 +72,7 @@ public enum StorageMigration {
             removeCompatLink(roots, &outcome)
         }
         if StorageLayout.hasLegacyToAbsorb(roots) {
-            absorbLegacy(roots, forceCopy: forceCopy, &outcome)
+            absorbLegacy(roots, forceCopy: forceCopy, now: now, &outcome)
         }
         let data = StorageLayout.activeDataDir(roots)
         if var pending = pendingRewrite(in: data) {
@@ -99,10 +99,9 @@ public enum StorageMigration {
 
     /// 数据目录里还没有 Lyrimuse 的数据(不存在、空的、或只有别的东西):空的先删掉,整份改名过去;同卷一次 `rename(2)`,
     /// 跨卷(`~/.config` 被链到别的盘)先拷进旁边的暂存目录、核对文件清单和大小再换上去,旧目录改名留着。数据目录已经有数据时
-    /// 逐项合并(`mergeTree`),冲突听谁的看数据目录搬没搬过:搬过(有标记)→ 旧目录是之后又冒出来的残留,听数据目录的;没搬过
-    /// → 数据目录是新版本新装出来的,旧目录是用户带来的(换机器时拷过来、dotfiles 工具铺的),听旧目录的。旧位置空出来后
-    /// 留一个指向数据目录的软链接(`makeCompatLink`)。失败的那一步不动旧目录,下次启动重试。
-    static func absorbLegacy(_ roots: StorageLayout.Roots, forceCopy: Bool, _ outcome: inout Outcome) {
+    /// 逐项合并(`mergeTree`),冲突听谁的看 `legacyWins`。旧位置空出来后留一个指向数据目录的软链接(`makeCompatLink`)。
+    /// 失败的那一步不动旧目录,下次启动重试。
+    static func absorbLegacy(_ roots: StorageLayout.Roots, forceCopy: Bool, now: Date, _ outcome: inout Outcome) {
         guard FileIO.createDirectory(roots.data.deletingLastPathComponent()) else {
             outcome.failures.append("create \(roots.data.deletingLastPathComponent().path)")
             return
@@ -126,9 +125,8 @@ public enum StorageMigration {
                 return
             }
         }
-        let legacyWins = !StorageLayout.exists(roots.data.appendingPathComponent(markerName))
         let replaced = roots.data.appendingPathComponent("backups/\(stamp(Date()))\(backupSuffix)\(replacedSuffix)")
-        mergeTree(from: roots.legacy, into: roots.data, relative: "", legacyWins: legacyWins ? replaced : nil, &outcome)
+        mergeTree(from: roots.legacy, into: roots.data, relative: "", legacyWins: legacyWins(roots, now: now) ? replaced : nil, &outcome)
         writeMarker(pending, in: roots.data, &outcome)
         pruneEmptyDirectories(roots.legacy)
         if StorageLayout.exists(roots.legacy) {
@@ -141,6 +139,21 @@ public enum StorageMigration {
             outcome.keptLeftover = kept.path
         }
         makeCompatLink(roots, &outcome)
+    }
+
+    /// 数据目录没有搬迁标记、建好不到这么久,算新版本刚装出来的:旧目录冒出来时听旧目录的。按数据目录本身的创建时刻算,
+    /// 里面的文件原子改写会换掉文件自己的创建时刻,目录的不变。
+    static let freshInstallAge: TimeInterval = 3 * 24 * 3600
+
+    /// 合并时内容冲突听旧目录的。搬过(有标记)→ 旧目录是之后又冒出来的残留,听数据目录的。没搬过:数据目录里还没有 Lyrimuse 的
+    /// 数据,或建好不到 `freshInstallAge` → 数据目录是新版本新装出来的,旧目录是用户带来的(换机器时拷过来、dotfiles 工具铺的),
+    /// 听旧目录的;满了 → 数据目录是新装用户一直在用的那份,旧目录是装回只认旧位置的版本时建出来的,听数据目录的。
+    static func legacyWins(_ roots: StorageLayout.Roots, now: Date) -> Bool {
+        guard !StorageLayout.exists(roots.data.appendingPathComponent(markerName)) else { return false }
+        guard StorageLayout.hasLyrimuseData(roots.data) else { return true }
+        var st = stat()
+        guard stat(roots.data.path, &st) == 0 else { return true }
+        return now.timeIntervalSince1970 - TimeInterval(st.st_birthtimespec.tv_sec) < freshInstallAge
     }
 
     // MARK: - 留给旧版本的软链接

@@ -1358,6 +1358,11 @@ func runSourceContractTests() {
                         && fresh.contains("hasNoLyricsFiles(in: effectiveLyricsDir) { lyricsWordFormats = [.ttml] }")
                         && sourceHas(store, "@Published public var lyricsWordFormats: [LyricsWordFormat] = [.yrc]"), true,
                         "逐字歌词格式: 只有全新装机、歌词文件夹还空时默认 TTML,初值仍是 YRC")
+            let featureList = (try? String(contentsOf: sourcesRoot.deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("shared/feature-list.json"), encoding: .utf8)) ?? ""
+            expectEqual(featureList.contains("逐字时间轴默认存为 TTML") && featureList.contains("Word timing is saved as TTML by default")
+                        && featureList.contains("逐字時間軸預設存為 TTML"), true,
+                        "逐字歌词格式: 对外功能清单三语都写新装默认 TTML")
             expectEqual(count(view, "joined(separator: \"、\")"), 0,
                         "设置页列表拼接: 用 L10n.list(按界面语言拼),写死「、」英文界面会显示成 YRC、TTML")
         } else {

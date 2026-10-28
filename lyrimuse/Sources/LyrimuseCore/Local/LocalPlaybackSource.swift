@@ -4868,6 +4868,13 @@ public final class LocalPlaybackSource: ObservableObject {
         applyOffsets()
     }
 
+    /// 撤掉某个播放器单独那档、改回跟随「全部播放器」(设置页那颗 ×)。重算的条件同上。
+    public func clearPlayerLyricsOffset(forBundleID bundleID: String) {
+        LyricsOffsetStore.shared.removePlayerOffset(forBundleID: bundleID)
+        guard lastSnapshot?.bundleIdentifier == bundleID else { return }
+        applyOffsets()
+    }
+
     /// 把「全局基准 + 这个播放器那档 + 这首歌的微调」算出来灌进引擎,并把两个对外属性刷成一致。
     ///
     /// 所有入口(换歌词内容、nudge、reset、改全局基准/从 store 重读)都走这里。

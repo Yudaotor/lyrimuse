@@ -20,7 +20,7 @@ public enum LyricsOffsetScope {
     ///   target 的 `FeatureSettingsStore.swift`(依赖 `AppSettings`/`L10n`),LyrimuseCore
     ///   不能反向依赖它,所以顺序作为参数从外面传进来,而不是这个函数自己在内部读。
     /// - `trusted`: 用户信任的未知播放器(`TrustedPlayers.current`,bundleID → 显示名)。
-    /// - `configured`: 已经配过非零偏移的 bundleID(`LyricsOffsetStore.playerOffsets.keys`)。
+    /// - `configured`: 已经单独配过偏移(含配成 0)的 bundleID(`LyricsOffsetStore.playerOffsets.keys`)。
     /// - `nowPlaying`: 此刻真正在放的那个,没有就传 nil。
     ///
     /// 四组并集,每组内部按 bundle id 排序(字典遍历顺序不稳定,不排会每次启动乱跳),
@@ -30,7 +30,7 @@ public enum LyricsOffsetScope {
     ///     语义本来就由「全部播放器」承担。
     ///  2. 信任的未知播放器 —— 浏览器就在这一组,是这个功能的动机。
     ///  3. **已经配过偏移的** —— 哪怕它既不是内置、也已经不在信任名单里(取消信任了、App
-    ///     卸了)也必须列出来,否则那个非零偏移会变成看不见、改不动的隐形值。
+    ///     卸了)也必须列出来,否则那个单独设置会变成看不见、改不动的隐形值。
     ///  4. 此刻正在放的那个 —— 可能是还没加进信任名单的 App,用户往往正是为它才来调。
     public static func options(builtInOrder: [PlaybackPlayer] = PlaybackPlayer.allCases,
                               trusted: [String: String],

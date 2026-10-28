@@ -230,8 +230,8 @@ struct NotificationPreviewCard: View {
 
 // MARK: 真实数据
 
-/// 请引擎算这一期的真实报告(请求走「测一下」那条通道,结果见 `NotificationTest.previewResult`)。同一档十分钟内不重取:
-/// 来回切平台、关了再开预览都直接用上次的。
+/// 请引擎算这一期的真实报告(请求走「测一下」那条通道,结果见 `NotificationTest.previewResult`)。同一档、同样的数据源、
+/// 条数、推送时间档(`NotificationPreview.previewCacheKey`)十分钟内不重取:来回切平台、关了再开预览都直接用上次的。
 @MainActor
 enum NotificationPreviewLoader {
     enum State: Equatable {
@@ -241,25 +241,32 @@ enum NotificationPreviewLoader {
     }
 
     private static let ttl: TimeInterval = 600
-    private static var cache: [NotificationPreview.Kind: (at: Date, state: State)] = [:]
+    private static var cache: [String: (at: Date, state: State)] = [:]
     private static let requestURL = LyrimusePaths.configFile(NotificationTest.requestFileName)
     private static let resultURL = LyrimusePaths.configFile(NotificationTest.previewResultFileName)
 
     static func cached(_ kind: NotificationPreview.Kind) -> State? {
-        guard let hit = cache[kind], Date().timeIntervalSince(hit.at) < ttl, case .real = hit.state else { return nil }
+        guard let hit = cache[cacheKey(kind)], Date().timeIntervalSince(hit.at) < ttl, case .real = hit.state else { return nil }
         return hit.state
+    }
+
+    private static func cacheKey(_ kind: NotificationPreview.Kind) -> String {
+        let features = FeatureSettingsStore.shared
+        let source = kind == .daily ? features.dailyDigestSource : features.weeklyDigestSource
+        return NotificationPreview.previewCacheKey(kind, source: source, topN: features.digestTopN, pushMinutes: features.digestPushMinutes)
     }
 
     /// 任务被取消(预览关了、切了档)时返回 nil。
     static func load(_ kind: NotificationPreview.Kind) async -> State? {
         let id = UUID().uuidString
+        let key = cacheKey(kind)
         guard (try? NotificationTest.previewBody(id: id, kind: kind).writeSecurely(to: requestURL)) != nil else { return .unavailable(nil) }
         let deadline = Date().addingTimeInterval(NotificationTest.previewTimeout)
         while Date() < deadline {
             do { try await Task.sleep(nanoseconds: 400_000_000) } catch { return nil }
             guard let data = FileIO.read(resultURL), let result = NotificationTest.previewResult(id: id, in: data) else { continue }
             let state: State = result.stats.map { .real(title: result.title, stats: $0) } ?? .unavailable(result.reason)
-            cache[kind] = (Date(), state)
+            cache[key] = (Date(), state)
             return state
         }
         return .unavailable(nil)

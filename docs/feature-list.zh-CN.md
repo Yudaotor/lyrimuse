@@ -167,7 +167,7 @@ Apple Music、Spotify、酷狗音乐、KKBOX、Amazon Music 和洛雪音乐保�
 
 ### 离线可用，歌词以 .lrc 文件保存
 
-已找到的歌词均缓存在本机，离线时也能显示。每首歌曲保存一份 .lrc，有译文、读音时另存 .tr.lrc 和 .roma.lrc，逐字时间轴默认存为 .yrc，也可改存 TTML、增强 LRC、QRC 或 KRC。默认位于 ~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/，位置可更改。
+已找到的歌词均缓存在本机，离线时也能显示。每首歌曲保存一份 .lrc，有译文、读音时另存 .tr.lrc 和 .roma.lrc，逐字时间轴默认存为 TTML，也可改存 .yrc、增强 LRC、QRC 或 KRC。默认位于 ~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/，位置可更改。
 
 - 设置位置：歌词 › 歌词库 › 歌词文件夹
 - 设置位置：歌词 › 歌词库 › 逐字歌词格式

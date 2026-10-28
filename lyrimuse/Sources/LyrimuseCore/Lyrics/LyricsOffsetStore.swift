@@ -95,8 +95,8 @@ public final class LyricsOffsetStore: ObservableObject {
     ///
     /// **语义是「要么全部、要么单个」,不是相加**:某个播放器单独配过,
     /// 那它就**只用**自己这一档,「全部播放器」那档对它完全不生效;没单独配过才用「全部」。
-    /// 零值不落盘,所以"配过"和"非零"是同一件事 —— 把某个播放器调回 0(或点「重置」)就是
-    /// 撤掉它的单独设置、重新跟随「全部」。
+    /// 「配过」看字典里有没有这个键,值可以是 0(「全部」非零时单独设成不偏移);撤掉单独设置、重新跟随「全部」
+    /// 只走 `removePlayerOffset`(设置页那颗 ×)。
     ///
     /// 为什么这层有存在价值(而"全局 + 单曲"两层不够):偏差的成因分三类,各自的作用域不同 ——
     ///  - **设备侧**(蓝牙耳机/声卡缓冲):跟播放器、歌都无关 → 全局那层;
@@ -107,9 +107,8 @@ public final class LyricsOffsetStore: ObservableObject {
     ///    **换首歌照旧、换个播放器就没了**,正好落在"播放器"这个维度上;
     ///  - **这份歌词自己**的时间轴不准 → 单曲那层(key 里带内容指纹)。
     ///
-    /// 零值一律**不落盘**(见 setPlayerOffset):字典里留着的就是"用户真的配过的播放器",
-    /// 设置页那个下拉框据此把它们全列出来 —— 哪怕这个 App 已经不在受信任名单里了,也不能让
-    /// 一个非零偏移变成看不见、改不动的隐形值(08-18 那版正是这么翻的车)。
+    /// 字典里留着的就是"用户单独配过的播放器"(含配成 0 的),设置页据此把它们全列出来 —— 哪怕这个 App
+    /// 已经不在受信任名单里了,也不能让一个单独设置变成看不见、改不动的隐形值。
     @Published public private(set) var playerOffsets: [String: Int]
 
     /// 这个播放器**自己那一档的原始值**(设置页显示/编辑的就是它),没配过是 0。
@@ -121,21 +120,23 @@ public final class LyricsOffsetStore: ObservableObject {
         return playerOffsets[bundleID] ?? 0
     }
 
+    /// 给这个播放器单独设一档,0 也存(存了就不再跟随「全部」)。
     public func setPlayerOffset(_ ms: Int, forBundleID bundleID: String) {
-        guard !bundleID.isEmpty else { return }
-        guard playerOffsets[bundleID] ?? 0 != ms else { return }
-        if ms == 0 {
-            playerOffsets.removeValue(forKey: bundleID)
-        } else {
-            playerOffsets[bundleID] = ms
-        }
+        guard !bundleID.isEmpty, playerOffsets[bundleID] != ms else { return }
+        playerOffsets[bundleID] = ms
+        persistPlayerOffsets()
+    }
+
+    /// 撤掉这个播放器的单独设置,重新跟随「全部播放器」。
+    public func removePlayerOffset(forBundleID bundleID: String) {
+        guard playerOffsets.removeValue(forKey: bundleID) != nil else { return }
         persistPlayerOffsets()
     }
 
     /// 这一刻该用的**基准**偏移:这个播放器单独配过就用它那档,否则用「全部播放器」那档。
     ///
-    /// 二选一、**不相加**(语义)。零值不落盘,所以"字典里没有这个 key"
-    /// 就是"没单独配过",退回「全部」。
+    /// 二选一、**不相加**(语义)。"字典里没有这个 key"就是"没单独配过",退回「全部」;
+    /// 单独配成 0 的就是 0。
     ///
     /// `bundleID` 为 nil / 空串(relay 中继模式没有播放器身份、或者还没拿到第一份快照)时用
     /// 「全部」那档 —— 那是唯一有意义的兜底:绝不能"猜一个播放器",把浏览器的补偿套到
@@ -188,7 +189,7 @@ public final class LyricsOffsetStore: ObservableObject {
     /// 两者成因不同:按曲目那层修的是"这份歌词文件自己的时间轴不准"(换个播放器照样不准),
     /// 这一层修的是"电台的元数据比声音晚"。同一首歌可能两样都占,所以相加(见 effectiveOffset)。
     ///
-    /// 零值不落盘,跟另外两层同一个约定 —— 字典里留着的就是"用户真的调过的"。
+    /// 零值不落盘 —— 字典里留着的就是"用户真的调过的"。
     @Published public private(set) var radioOffsetCount: Int
 
     /// 拼 key。台标哈希或曲目 key 缺一就返回空串 = "这一层不适用",调用方据此跳过。
@@ -298,8 +299,8 @@ public final class LyricsOffsetStore: ObservableObject {
         return out
     }
 
-    /// `歌手|歌名|指纹` → 前两段归一化后的同形 key。段数不对(不是这个仓库写出来的 key)
-    /// 就原样返回,不猜。歌手/歌名本身不含 `|`(enrichKey 那套 SplitN 3 的既有约定),所以
+    /// `歌手|歌名|指纹` → 前两段归一化后的同形 key,歌名的时长变体位(`~dur2`)跟 trackKey 一样剥掉。
+    /// 段数不对(不是这个仓库写出来的 key)就原样返回,不猜。歌手/歌名本身不含 `|`(enrichKey 那套 SplitN 3 的既有约定),所以
     /// 从右边切出指纹段、再从左边切出歌手段是安全的。
     private nonisolated static func normalizedTrackKey(_ key: String) -> String {
         guard let lastSep = key.lastIndex(of: "|") else { return key }
@@ -308,7 +309,7 @@ public final class LyricsOffsetStore: ObservableObject {
         guard let firstSep = head.firstIndex(of: "|") else { return key }
         let artist = String(head[head.startIndex..<firstSep])
         let title = String(head[head.index(after: firstSep)...])
-        return "\(EnrichCacheKeys.cleanTag(artist))|\(EnrichCacheKeys.normalizedTitle(title))|\(fingerprint)"
+        return "\(EnrichCacheKeys.cleanTag(artist))|\(EnrichCacheKeys.normalizedTitle(EnrichCacheKeys.strippingDurationVariantTitle(title)))|\(fingerprint)"
     }
 
     /// 开头的 BOM(U+FEFF)不算内容:两条读缓存的路对它处理不一样 —— 播放侧 EnrichCacheReader 用
@@ -552,14 +553,16 @@ public final class LyricsOffsetStore: ObservableObject {
     }
 
     private static func loadPlayerOffsets() -> [String: Int] {
+        decodedPlayerOffsets(UserDefaults.standard.string(forKey: playerDefaultsKey))
+    }
+
+    /// 落盘那份 JSON(bundle id → 毫秒)读回字典。值为 0 的是单独配成不偏移,照样留着;读不懂就是空。
+    public nonisolated static func decodedPlayerOffsets(_ json: String?) -> [String: Int] {
         guard
-            let json = UserDefaults.standard.string(forKey: playerDefaultsKey),
-            let data = json.data(using: .utf8),
+            let data = json?.data(using: .utf8),
             let decoded = try? JSONDecoder().decode([String: Int].self, from: data)
         else { return [:] }
-        // 零值理论上进不来(setPlayerOffset 不写零),真读到就顺手滤掉 —— 否则下拉框会
-        // 列出一个"配过但其实是 0"的播放器。
-        return decoded.filter { $0.value != 0 }
+        return decoded
     }
 
     /// 单曲偏移每落一次盘加一:开着的界面(歌词管理的输入框)据它跟上菜单、快捷键改的值。

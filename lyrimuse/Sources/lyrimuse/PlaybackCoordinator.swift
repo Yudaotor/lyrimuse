@@ -471,6 +471,10 @@ final class PlaybackCoordinator: ObservableObject {
         LocalPlaybackSource.shared.setPlayerLyricsOffset(ms, forBundleID: bundleID)
     }
 
+    func clearPlayerLyricsOffset(forBundleID bundleID: String) {
+        LocalPlaybackSource.shared.clearPlayerLyricsOffset(forBundleID: bundleID)
+    }
+
     /// 这一刻真正在播的那个 App 的 bundle id —— 设置页拿它在下拉框里标出"正在播放"那一项,
     /// 用户不用自己猜"我现在这首是哪个 App 在放"。故意不做成 @Published(理由见
     /// LocalPlaybackSource.lastResolvedBundleID):设置页本来就有 2 秒的轮询在跑。

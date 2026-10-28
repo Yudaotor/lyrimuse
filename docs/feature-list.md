@@ -167,7 +167,7 @@ From the lyrics window's ⋯ menu, search for other lyrics, run matching again, 
 
 ### Works offline; lyrics are plain .lrc files
 
-Every lyric found is cached on your Mac and shows without a connection. Each song has an .lrc file, plus .tr.lrc and .roma.lrc for translations and romanization. Word timing is saved as .yrc by default, or as TTML, Enhanced LRC, QRC or KRC. They live in ~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/ by default, and the folder can be moved.
+Every lyric found is cached on your Mac and shows without a connection. Each song has an .lrc file, plus .tr.lrc and .roma.lrc for translations and romanization. Word timing is saved as TTML by default, or as .yrc, Enhanced LRC, QRC or KRC. They live in ~/Library/Application Support/me.yudaotor.lyrimuse/lyrics/ by default, and the folder can be moved.
 
 - Settings: Lyrics › Lyrics Library › Lyrics Folder
 - Settings: Lyrics › Lyrics Library › Word-by-Word Lyrics Format

@@ -339,6 +339,11 @@ func runStorageLayoutChecks() {
             .appendingPathComponent("lyrimuse/StorageMigrationRunner.swift"), encoding: .utf8)) ?? ""
         expectEqual(sourceHas(sourceBody("static func runAtLaunch()", in: runner), "_ = FileIO.createDirectory(roots.logs)"), true,
                     "日志: App 启动最早处先建日志目录(stdout 重定向、卡顿采样、launchd 给引擎开日志都不建上一层)")
+        let settingsView = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/SettingsView.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(settingsView, "subtitle: HomeFolderAccess.displayPath(LogFiles.engine.path) + \" · \""), true,
+                    "日志: 设置页「运行日志」显示引擎日志的实际路径")
+        expectEqual(sourceBytes(settingsView, contain: "\"~/Library/Logs/\""), false, "日志: 设置页不写死日志所在目录")
     }
 
     do {
@@ -447,7 +452,8 @@ func runStorageLayoutChecks() {
         write("{\"token\":\"t\"}", roots.legacy.appendingPathComponent("config.json"))
         write("[00:01.00]旧", roots.legacy.appendingPathComponent("lyrics/a.lrc"))
         write("[00:01.00]新装", roots.data.appendingPathComponent("lyrics/a.lrc"))
-        let outcome = StorageMigration.run(roots, cacheNames: [])
+        // 数据目录建好 2 天后才拷来:还算新装出来的。
+        let outcome = StorageMigration.run(roots, cacheNames: [], now: Date().addingTimeInterval(2 * 24 * 3600))
         expectEqual(outcome.failures, [], "存储搬迁(带来的旧目录): 没有失败")
         expectEqual(outcome.conflicts, 2, "存储搬迁(带来的旧目录): 两处冲突")
         expectEqual(read(roots.data.appendingPathComponent("lyrimuse-app-settings.json")), "{\"v\":\"mine\"}",
@@ -468,6 +474,41 @@ func runStorageLayoutChecks() {
                     "存储搬迁(带来的旧目录): 认得出被换下来的那份")
         expectEqual(StorageLayout.diagnosticLine(roots: roots, active: roots.data).contains("-storage-migration-replaced"), true,
                     "存储搬迁(带来的旧目录): 诊断行报出被换下来的那份")
+    }
+
+    do {
+        // 新装用户(从没有旧目录、数据目录没有搬迁标记)用了几天后装回只认 ~/.config/lyrimuse 的版本、又升级回来:旧位置那份是
+        // 旧版本新建的,冲突听数据目录的,旧的那份留在 leftover 里;收完补上标记。
+        let (_, roots) = makeHome("settled")
+        let later = Date().addingTimeInterval(4 * 24 * 3600)
+        write("{\"v\":\"mine\"}", roots.data.appendingPathComponent("lyrimuse-app-settings.json"))
+        write("{\"token\":\"t\"}", roots.data.appendingPathComponent("config.json"))
+        write("{\"v\":\"downgrade\"}", roots.legacy.appendingPathComponent("lyrimuse-app-settings.json"))
+        write("old-only", roots.legacy.appendingPathComponent("lyrimuse-feature-flags.json"))
+        expectEqual(StorageLayout.activeDataDir(roots), roots.data, "存储搬迁(新装用户降级再升级): 升级回来时用数据目录")
+        let outcome = StorageMigration.run(roots, cacheNames: [], now: later)
+        expectEqual(outcome.failures, [], "存储搬迁(新装用户降级再升级): 没有失败")
+        expectEqual(outcome.conflicts, 1, "存储搬迁(新装用户降级再升级): 一处冲突")
+        expectEqual(read(roots.data.appendingPathComponent("lyrimuse-app-settings.json")), "{\"v\":\"mine\"}",
+                    "存储搬迁(新装用户降级再升级): 数据目录建好满 3 天,冲突听数据目录的")
+        expectEqual(outcome.replacedBackup, nil, "存储搬迁(新装用户降级再升级): 数据目录里的不被换下来")
+        expectEqual(read(roots.data.appendingPathComponent("lyrimuse-feature-flags.json")), "old-only",
+                    "存储搬迁(新装用户降级再升级): 只在旧目录的照样收进来")
+        let kept = outcome.keptLeftover.map { URL(fileURLWithPath: $0) }
+        expectEqual(kept.flatMap { read($0.appendingPathComponent("lyrimuse-app-settings.json")) }, "{\"v\":\"downgrade\"}",
+                    "存储搬迁(新装用户降级再升级): 旧的那份留在 leftover 里,不删")
+        expectEqual(fm.fileExists(atPath: roots.data.appendingPathComponent("lyrimuse-storage-migration.json").path), true,
+                    "存储搬迁(新装用户降级再升级): 收完写上搬迁标记")
+
+        // 数据目录满 3 天、里面却没有 Lyrimuse 的数据(别的东西先建出来的):旧目录才是用户的,冲突仍听旧目录的。
+        let (_, other) = makeHome("settled-foreign")
+        write("x", other.data.appendingPathComponent("unrelated"))
+        write("[00:01.00]别的", other.data.appendingPathComponent("lyrics/a.lrc"))
+        write("{}", other.legacy.appendingPathComponent("config.json"))
+        write("[00:01.00]旧", other.legacy.appendingPathComponent("lyrics/a.lrc"))
+        _ = StorageMigration.run(other, cacheNames: [], now: later)
+        expectEqual(read(other.data.appendingPathComponent("lyrics/a.lrc")), "[00:01.00]旧",
+                    "存储搬迁(新装用户降级再升级): 数据目录里没有 Lyrimuse 的数据时不看建了多久,听旧目录的")
     }
 
     do {

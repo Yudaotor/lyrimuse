@@ -222,6 +222,13 @@ public enum NotificationPreview {
         return out
     }
 
+    /// App 侧真实预览缓存的键:哪一档、这一档的数据源偏好(空串 = 自动)、每类列几名、每日报告推当天还是前一天。跟引擎
+    /// digestpreview.go 的缓存键同一组输入(引擎那边是解析后的数据源和这一期的起点),任何一样变了就不用旧的结果。
+    public static func previewCacheKey(_ kind: Kind, source: String, topN: Int, pushMinutes: Int) -> String {
+        let day = kind == .daily ? (DigestPushTime.dailyCoversSameDay(pushMinutes) ? "today" : "yesterday") : "-"
+        return "\(kind.rawValue)|\(source)|\(DigestTopN.resolved(topN))|\(day)"
+    }
+
     /// 这一期的起止日期(含两头,YYYY-MM-DD),通用 Webhook 的 data 里写。日报是 `now` 那天,周报是上一周的周一到周日。
     public static func period(_ kind: Kind, now: Date, calendar: Calendar = .current) -> (from: String, to: String) {
         let today = calendar.startOfDay(for: now)

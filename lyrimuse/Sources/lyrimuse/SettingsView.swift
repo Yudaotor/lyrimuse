@@ -858,8 +858,8 @@ private struct LyricsSettingsTab: View {
 
     // MARK: - 时间轴偏移那一行的「作用于哪个播放器」
 
-    /// 「时间轴偏移」卡里这次在「为其他播放器单独设置」菜单里刚加的播放器。只是界面状态:偏移为 0 不落盘
-    /// (`LyricsOffsetStore.setPlayerOffset`),调过一次才真的存下来。
+    /// 「时间轴偏移」卡里这次在「为其他播放器单独设置」菜单里刚加的播放器。只是界面状态:加进来时不落盘,
+    /// 调过一次(`LyricsOffsetStore.setPlayerOffset`)才真的存下来。
     @State private var addedOffsetPlayers: [String] = []
     /// 标「正在播放」用。**必须拿播放态兜一道**:LocalPlaybackSource 从不清 lastSnapshot,
     /// 停播之后 lastResolvedBundleID 是"陈旧但非 nil"的,直接用会一直指着最后那个播放器说
@@ -877,7 +877,7 @@ private struct LyricsSettingsTab: View {
     ///     `setPlayerOffset` 静默丢掉;"自动"这层语义本来就由「全部播放器」承担。
     ///  2. 用户信任的未知播放器(浏览器就在这一组 —— 这个功能的动机)。
     ///  3. **已经配过偏移的** —— 哪怕它已经不在信任名单里(取消信任了、App 卸了)也必须列出来,
-    ///     否则那个非零偏移会变成看不见、改不动的隐形值(见 LyricsOffsetStore.playerOffsets 注释)。
+    ///     否则那个单独设置会变成看不见、改不动的隐形值(见 LyricsOffsetStore.playerOffsets 注释)。
     ///  4. 此刻正在放的那个 —— 可能是还没加进信任名单的 App,用户往往正是为它才来调这个。
     /// 并集 / 去重 / 排序的规则在 LyrimuseCore.LyricsOffsetScope 里(纯函数,selftest 覆盖);displayOrder 在
     /// App target 里,所以从这里传进去。
@@ -927,6 +927,11 @@ private struct LyricsSettingsTab: View {
         } else {
             PlaybackCoordinator.shared.setPlayerLyricsOffset(ms, forBundleID: scope)
         }
+    }
+
+    /// × 走这里:删掉这个播放器单独那档,改回跟随「全部播放器」。步进器调到 0 是单独设成 0,不算撤掉。
+    private func clearPlayerOffset(_ bundleID: String) {
+        PlaybackCoordinator.shared.clearPlayerLyricsOffset(forBundleID: bundleID)
     }
 
     @AppStorage("settings:lyricsSection") private var sectionRaw = Section.fetch.rawValue
@@ -2224,7 +2229,7 @@ private struct LyricsSettingsTab: View {
             HStack(spacing: 8) {
                 if !follows || removable {
                     Button {
-                        setOffset(0, scope: bundleID)
+                        clearPlayerOffset(bundleID)
                         addedOffsetPlayers.removeAll { $0 == bundleID }
                     } label: {
                         Image(systemName: "xmark")
@@ -8140,7 +8145,7 @@ private struct AboutSettingsTab: View {
                 icon: "doc.plaintext",
                 title: L10n.t("运行日志"),
                 // 说明单独成键,设置搜索目录的副标题用同一个键。
-                subtitle: "~/Library/Logs/" + LyrimuseIdentity.current.logFileName + " · " + L10n.t("歌词引擎的原始日志，供自行排查")
+                subtitle: HomeFolderAccess.displayPath(LogFiles.engine.path) + " · " + L10n.t("歌词引擎的原始日志，供自行排查")
             ) {
                 Button(L10n.t("在访达中显示")) {
                     let url = LogFiles.engine
