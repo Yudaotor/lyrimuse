@@ -1,16 +1,14 @@
 import LyrimuseCore
 import SwiftUI
 
-/// 「与播放器联动」卡里的一行:标题 + 尾部一排播放器图标芯片,点图标勾选 / 取消。
+/// 「与播放器联动」卡里的一行:标题一行,下面一排播放器图标芯片(对齐标题左缘,放不下就换行),点图标勾选 / 取消。
 ///
-/// 为什么是图标芯片而不是三个 Toggle 或一个多选菜单:上面那张播放器网格已经用同一套图标(`PlayerIconView`
-/// 三级兜底取图)教过"哪个图标是哪个播放器",这里沿用同一种语言,一眼就能看出每项联动绑了谁;候选最多
-/// 五个,一排放得下。未勾选的芯片去饱和 + 半透明,勾选的带强调色描边,跟 `PlayerChoiceCard` 的选中态同源。
+/// 图标芯片沿用上面那张播放器网格的同一套图标(`PlayerIconView` 三级兜底取图),一眼看出每项联动绑了谁。
+/// 芯片别摆回行尾:候选最多十几个,跟标题挤在一行时标题会被压成竖排的几个字。
+/// 未勾选的芯片去饱和 + 半透明,勾选的带强调色描边,跟 `PlayerChoiceCard` 的选中态同源。
 ///
-/// **没有副标题**。它曾经把勾选结果再用文字写一遍(「Apple Music、Spotify」/「未勾选,此项关闭」),
-/// 而右边那排芯片已经把同一件事说清楚了 —— 三行摞在一起就是三行灰字复述右边的图标,把卡片撑高一倍。
-/// 旁白那条通道**不靠副标题**:每枚芯片自己带 `.accessibilityLabel` + `.isSelected`(见 `PlayerChip`),
-/// 去掉文字不会让 VoiceOver 听不出勾没勾。
+/// **没有副标题**:勾了哪几个芯片已经说清楚,再用文字写一遍只是复述。旁白靠每枚芯片自己的
+/// `.accessibilityLabel` + `.isSelected`(见 `PlayerChip`)。
 struct PlayerLinkageRow: View {
     let icon: String
     let title: String
@@ -21,13 +19,22 @@ struct PlayerLinkageRow: View {
     let onChange: (Set<PlaybackPlayer>) -> Void
 
     var body: some View {
-        SettingsRow(icon: icon, title: title, help: help) {
-            PlayerLinkageChips(candidates: candidates, chosen: chosen) { player in
-                var next = chosen
-                if next.contains(player) { next.remove(player) } else { next.insert(player) }
-                onChange(next)
+        SettingsRawRow(insetToText: true, icon: icon) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 13))
+                    if let help { HelpButton(text: help) }
+                }
+                PlayerLinkageChips(candidates: candidates, chosen: chosen) { player in
+                    var next = chosen
+                    if next.contains(player) { next.remove(player) } else { next.insert(player) }
+                    onChange(next)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .settingsSearchHighlight(title: title)
     }
 }
 
@@ -37,7 +44,7 @@ private struct PlayerLinkageChips: View {
     let toggle: (PlaybackPlayer) -> Void
 
     var body: some View {
-        HStack(spacing: PlayerChipMetrics.spacing) {
+        SettingsFlowRow(spacing: PlayerChipMetrics.spacing) {
             ForEach(candidates) { player in
                 PlayerChip(selected: chosen.contains(player), label: player.displayName) {
                     toggle(player)
@@ -46,8 +53,6 @@ private struct PlayerLinkageChips: View {
                 }
             }
         }
-        // 钉住理想宽度:SettingsRow 的三个可伸缩成员均分剩余宽度,不钉的话芯片会被压扁(04 章决策 #15 同款坑)。
-        .fixedSize()
     }
 }
 
