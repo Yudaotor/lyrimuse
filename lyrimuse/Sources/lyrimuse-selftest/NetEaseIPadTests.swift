@@ -406,6 +406,35 @@ func runNetEaseIPadTests() {
         expectEqual(abs(carriedElapsed - (2.432 + N.fullStartLead)) < 0.000_1, true, "iPad 网易云 开播: 头一句重报按开播锚点推过来")
     }
 
+
+    // ---- 事件流手动换歌(撕裂帧 → 真名帧 → 只翻速率 → 歌词帧,录到的真实序列):真名帧那一行报换歌 ----
+    do {
+        N.resetForTesting()
+        defer { N.resetForTesting() }
+        func full(_ title: String, _ artist: String, _ album: String, _ duration: Int, _ elapsed: Int, _ ts: Int, _ rate: Int) -> Data {
+            Data(("{\"type\":\"data\",\"diff\":false,\"payload\":{\"bundleIdentifier\":\"\(N.bundleID)\",\"title\":\"\(title)\","
+                + "\"artist\":\"\(artist)\",\"album\":\"\(album)\",\"playing\":\(rate == 1),\"playbackRate\":\(rate),"
+                + "\"elapsedTimeMicros\":\(elapsed),\"timestampEpochMicros\":\(ts),\"durationMicros\":\(duration)}}").utf8)
+        }
+        let lines = [
+            full("阴天快乐", "陈奕迅", "Rice & Shine", 260_000_000, 30_000_000, 1_793_178_100_000_000, 1),
+            full("那个酒窝", "陈奕迅/阴天快乐", "Rice & Shine", 260_000_000, 79_000_000, 1_793_178_179_000_000, 1),
+            full("那个酒窝", "胡夏/同桌的你", "同桌的你", 270_000_000, 0, 1_793_178_200_000_000, 0),
+            full("同桌的你", "胡夏", "同桌的你", 270_000_000, 0, 1_793_178_200_500_000, 0),
+            Data("{\"type\":\"data\",\"diff\":true,\"payload\":{\"playbackRate\":1,\"timestampEpochMicros\":1793178201000000}}".utf8),
+            full("作词: 高晓松", "胡夏/同桌的你", "同桌的你", 270_000_000, 1_000_000, 1_793_178_202_000_000, 1),
+        ]
+        var merged: [String: Any] = [:]
+        var changes: [String?] = []
+        for line in lines {
+            let d = MediaControlStreamWatcher.digest(line: line, merged: merged, arrivedAt: Date(timeIntervalSince1970: 1_793_178_300))
+            merged = d.merged
+            changes.append(d.trackChangeKey)
+        }
+        expectEqual(changes, ["陈奕迅|阴天快乐", nil, nil, "胡夏|同桌的你", nil, nil],
+                    "iPad 网易云 事件流: 手动换歌在真名帧那一行报换歌,撕裂帧那一行不报")
+    }
+
     // ---- 接线契约 ----
     do {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -418,9 +447,10 @@ func runNetEaseIPadTests() {
                     true, "iPad 网易云 接线: 取封面那一路的曲目标识按真名算")
         let watcher = sourceText("LyrimuseCore/Local/MediaControlStreamWatcher.swift")
         expectEqual([sourceHas(watcher, "let identity = NetEaseIPadNowPlaying.normalizedFields(next)"),
+                     sourceHas(watcher, "let changed = changedTrackKey(before: before, after: identity)"),
                      sourceHas(watcher, "artist: identity[\"artist\"] as? String, title: identity[\"title\"] as? String,"),
                      sourceHas(watcher, "\"bundleIdentifier\", \"duration\", \"album\"] where payload.keys.contains(key) {")],
-                    [true, true, true], "iPad 网易云 接线: 事件流判换歌、算锚点身份用整理过的,合并状态存专辑")
+                    [true, true, true, true], "iPad 网易云 接线: 事件流判换歌、算锚点身份用整理过的,合并状态存专辑")
         expectEqual([sourceHas(client, "elapsed: times.elapsedTime, timestamp: times.timestamp),"),
                      sourceHas(client, "bundleID: bundleIdentifier, playing: playing, elapsed: names.elapsed,"),
                      sourceHas(client, "elapsedNow: times.elapsedTimeNow.map { $0 + lead }, rate: rate,"),

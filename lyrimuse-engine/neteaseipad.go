@@ -171,6 +171,7 @@ var (
 )
 
 // neteaseIPadNowPlaying 是 iPad 版此刻记的那一项;库和 -wal 都没变时用上一次读到的。没装、没授权、读不出时 ok=false。
+// 读得到、被拒都不记进 "netease" 的访问状态:那一份是 Mac 版的(设置页「完全磁盘访问」那一行),两边混记会来回翻。
 func neteaseIPadNowPlaying() (neteaseIPadItem, bool) {
 	path := neteaseIPadKVPath()
 	if path == "" {
@@ -178,7 +179,6 @@ func neteaseIPadNowPlaying() (neteaseIPadItem, bool) {
 	}
 	stamp, err := neteaseIPadStampOf(path)
 	if err != nil {
-		noteLocalCacheDenied("netease", path, err)
 		return neteaseIPadItem{}, false
 	}
 	neteaseIPadMu.Lock()
@@ -188,9 +188,6 @@ func neteaseIPadNowPlaying() (neteaseIPadItem, bool) {
 	}
 	it, err := neteaseIPadQueryNowPlaying(path)
 	neteaseIPadSeenPath, neteaseIPadSeenStamp, neteaseIPadSeenItem, neteaseIPadSeenOK = path, stamp, it, err == nil
-	if err == nil {
-		noteLocalCacheReadable("netease")
-	}
 	return it, err == nil
 }
 
@@ -257,7 +254,6 @@ func (p *neteaseIPadEpisodesPublisher) refresh() bool {
 		return p.written != nil
 	}
 	if err != nil {
-		noteLocalCacheDenied("netease", p.dbPath, err)
 		p.forget()
 		return false
 	}
@@ -267,7 +263,6 @@ func (p *neteaseIPadEpisodesPublisher) refresh() bool {
 		p.withdraw()
 		return false
 	}
-	noteLocalCacheReadable("netease")
 	episodes := []neteaseEpisode{}
 	if it.Program {
 		episodes = append(episodes, neteaseEpisode{Title: it.Name, Host: strings.Join(it.Artists, "/")})
