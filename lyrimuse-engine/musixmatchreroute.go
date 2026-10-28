@@ -152,7 +152,8 @@ var (
 	clashProxyReadAt time.Time
 )
 
-// clashProxyURL:Clash 控制口报的 mixed-port(没有就 port),连得上才算。跟 systemProxyURL 同样缓存 systemProxyCacheTTL。
+// clashProxyURL:Clash 控制口报的 mixed-port(没有就 port),连得上才算。跟 systemProxyURL 同样缓存 systemProxyCacheTTL,
+// 读取时刻只记墙钟(睡眠时单调时钟不走)。
 // 「代理」设置自动档在系统代理没开时用它:开着 Clash 却没开系统代理、也没开 TUN 时,请求不经过 Clash。
 func clashProxyURL() *neturl.URL {
 	clashProxyMu.Lock()
@@ -160,7 +161,7 @@ func clashProxyURL() *neturl.URL {
 	if !clashProxyReadAt.IsZero() && time.Since(clashProxyReadAt) < systemProxyCacheTTL {
 		return clashProxyValue
 	}
-	clashProxyValue, clashProxyReadAt = readClashProxyURL(), time.Now()
+	clashProxyValue, clashProxyReadAt = readClashProxyURL(), time.Now().Round(0)
 	return clashProxyValue
 }
 

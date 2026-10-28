@@ -363,8 +363,11 @@ type poller struct {
 	// 身份缓存旧条目下一轮补核的时刻(见 identityrecheck.go)。
 	identityRecheckAt time.Time
 
+	// 四档报告全渠道永久失败后各自挡到哪一刻,键是推送事件(见 digestHeld)。
+	digestHolds map[string]digestHold
+
 	// 上面四档报告与 Top 歌手榜在后台 goroutine 里跑,有一轮在跑时为 true(见 runDigestsAsync)。
-	// 这几组 *State / *LastCheckedAt / *Run 字段只由那个 goroutine 读写。
+	// 这几组 *State / *LastCheckedAt / *Run 字段和 digestHolds 只由那个 goroutine 读写。
 	digestBusy atomic.Bool
 
 	nullStreak int
@@ -828,9 +831,13 @@ func (p *poller) relayShouldPush(now time.Time, key string, payload map[string]a
 		}
 	}
 	// 同一个状态、内容变了(先上屏的那份歌词定案、译文翻好、改了歌词、换了源、封面换了一张):新内容稳定
-	// relayContentSettle 再推,接连到的几样并成一次写;来回抖的字段永远等不满,不会每拍写。重锚那一拍照推、顺带带上。
+	// relayContentSettle 再推,接连到的几样并成一次写;来回抖的字段(含退回已推那份)永远等不满,不会每拍写。重锚那一拍照推、
+	// 顺带带上。内容跟已推的一样时清掉在等的那份,下次变化重新从头等。
 	digest := relayContentDigest(payload)
 	contentChanged := !changed && key != "empty" && digest != p.relayLastDigest
+	if !contentChanged {
+		p.relayContentDigestSeen, p.relayContentSince = 0, time.Time{}
+	}
 	if contentChanged && !reanchored {
 		if digest != p.relayContentDigestSeen {
 			p.relayContentDigestSeen, p.relayContentSince = digest, now

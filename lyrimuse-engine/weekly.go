@@ -263,6 +263,9 @@ func (p *poller) weeklyDigest(now time.Time, env digestEnv) {
 	if to <= p.weeklyState.load() {
 		return // 已经推送过了
 	}
+	if p.digestHeld(notifyEventWeekly, now, env.alerter) {
+		return
+	}
 
 	var stats digestStats
 	var err error
@@ -279,7 +282,9 @@ func (p *poller) weeklyDigest(now time.Time, env digestEnv) {
 		return
 	}
 	addDigestExtras(env, source, weeklyDigestPeriod(from, to), &stats, now)
-	if digestPush(env.alerter, notifyEventWeekly, weeklyDigestTitle(source, from, to), stats) != nil {
+	err = digestPush(env.alerter, notifyEventWeekly, weeklyDigestTitle(source, from, to), stats)
+	p.noteDigestPushResult(notifyEventWeekly, now, env.alerter, err)
+	if err != nil {
 		return
 	}
 	p.weeklyState.save(to)

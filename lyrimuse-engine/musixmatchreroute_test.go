@@ -356,3 +356,28 @@ func TestProxyFallbackTransportProxyURL(t *testing.T) {
 		t.Fatalf("proxyURL 说没有就是没有,得到 %v", got)
 	}
 }
+
+// Clash 代理口的缓存时刻只记墙钟:macOS 睡眠时单调时钟不走,睡着时改了 Clash,醒来照样过期重读。
+func TestClashProxyURLCacheUsesWallClock(t *testing.T) {
+	savedSockets := clashControllerSockets
+	clashControllerSockets = []string{filepath.Join(t.TempDir(), "missing.sock")}
+	clashProxyMu.Lock()
+	savedValue, savedAt := clashProxyValue, clashProxyReadAt
+	clashProxyValue, clashProxyReadAt = nil, time.Time{}
+	clashProxyMu.Unlock()
+	t.Cleanup(func() {
+		clashControllerSockets = savedSockets
+		clashProxyMu.Lock()
+		clashProxyValue, clashProxyReadAt = savedValue, savedAt
+		clashProxyMu.Unlock()
+	})
+	if u := clashProxyURL(); u != nil {
+		t.Fatalf("控制口不在时没有代理: %v", u)
+	}
+	clashProxyMu.Lock()
+	at := clashProxyReadAt
+	clashProxyMu.Unlock()
+	if at.IsZero() || at != at.Round(0) {
+		t.Fatalf("缓存时刻不该带单调读数: %v", at)
+	}
+}

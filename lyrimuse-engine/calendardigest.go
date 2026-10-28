@@ -128,6 +128,9 @@ func (p *poller) calendarDigest(now time.Time, env digestEnv, kind calendarDiges
 	if key <= run.state.load() {
 		return // 已经推送过了
 	}
+	if p.digestHeld(event, now, env.alerter) {
+		return
+	}
 
 	lastfmConfigured := env.cfg.LastfmUser != "" && env.cfg.lastfmBridgeAPIKey() != ""
 	lbConfigured := env.cfg.User != "" && env.cfg.Token != ""
@@ -162,7 +165,9 @@ func (p *poller) calendarDigest(now time.Time, env digestEnv, kind calendarDiges
 		return
 	}
 	addDigestExtras(env, source, calendarDigestPeriod(kind, from, to, source == digestSourceListenBrainz), &stats, now)
-	if digestPush(env.alerter, event, calendarDigestTitle(kind, from), stats) != nil {
+	err := digestPush(env.alerter, event, calendarDigestTitle(kind, from), stats)
+	p.noteDigestPushResult(event, now, env.alerter, err)
+	if err != nil {
 		return
 	}
 	run.state.save(key)

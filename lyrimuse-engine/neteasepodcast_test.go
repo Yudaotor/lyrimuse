@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -149,7 +150,7 @@ func TestNeteaseEpisodesWatcherFollowsRenamedQueue(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		runNeteaseEpisodesWatcher(ctx, p, time.Hour)
+		runNeteaseEpisodesWatcher(ctx, p, time.Hour, time.Hour, func() string { return p.queuePath })
 	}()
 	defer func() {
 		cancel()
@@ -185,4 +186,52 @@ func TestNeteaseEpisodesWatcherFollowsRenamedQueue(t *testing.T) {
 	if _, ok := readTestNeteaseEpisodes(t, p.statePath); ok {
 		t.Fatal("stopped watcher left the list behind")
 	}
+}
+
+// 网易云沙盒版、非沙盒版换着用时列表换了根:盯着的时候重新取路径,变了就换目录重盯,新根里的单集照样进名单。
+func TestNeteaseEpisodesWatcherFollowsQueueToAnotherRoot(t *testing.T) {
+	dir := t.TempDir()
+	oldRoot, newRoot := filepath.Join(dir, "container"), filepath.Join(dir, "standalone")
+	for _, d := range []string{oldRoot, newRoot} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldQueue, newQueue := filepath.Join(oldRoot, "playingList"), filepath.Join(newRoot, "playingList")
+	if err := os.WriteFile(oldQueue, neteaseTestQueue(t, neteaseTestSong("歌", "人")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var current atomic.Value
+	current.Store(oldQueue)
+	p := &neteaseEpisodesPublisher{statePath: filepath.Join(dir, "episodes.json")}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runNeteaseEpisodesWatcher(ctx, p, time.Hour, 10*time.Millisecond, func() string { return current.Load().(string) })
+	}()
+	defer func() {
+		cancel()
+		<-done
+	}()
+	waitFor := func(what string, n int) {
+		t.Helper()
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			if s, ok := readTestNeteaseEpisodes(t, p.statePath); ok && len(s.Episodes) == n {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("watcher did not publish %s", what)
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	waitFor("the empty list from the old root", 0)
+
+	if err := os.WriteFile(newQueue, neteaseTestQueue(t, neteaseTestVoice("voice", "一集", "主播")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	current.Store(newQueue)
+	waitFor("the episode from the new root", 1)
 }

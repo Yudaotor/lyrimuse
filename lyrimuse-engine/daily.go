@@ -69,6 +69,9 @@ func (p *poller) dailyDigest(now time.Time, env digestEnv) {
 	if day <= p.dailyState.load() {
 		return // 这一期已经推送过了
 	}
+	if p.digestHeld(notifyEventDaily, now, env.alerter) {
+		return
+	}
 
 	lastfmConfigured := env.cfg.LastfmUser != "" && env.cfg.lastfmBridgeAPIKey() != ""
 	lbConfigured := env.cfg.User != "" && env.cfg.Token != ""
@@ -92,8 +95,10 @@ func (p *poller) dailyDigest(now time.Time, env digestEnv) {
 		return
 	}
 	addDigestExtras(env, source, dailyDigestPeriod(from, to), &stats, now)
-	if digestPush(env.alerter, notifyEventDaily, title, stats) != nil {
-		return // 推送没成功,不标记已推送,下次检查再推
+	err = digestPush(env.alerter, notifyEventDaily, title, stats)
+	p.noteDigestPushResult(notifyEventDaily, now, env.alerter, err)
+	if err != nil {
+		return // 推送没成功,不标记已推送,下次检查再推(永久失败等到下一个推送时刻)
 	}
 	p.dailyState.save(day)
 }

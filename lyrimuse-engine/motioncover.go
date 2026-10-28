@@ -482,7 +482,7 @@ func motionCoverIdentityFor(ctx context.Context, albumID int64, coverURL string)
 //
 // 按需才查:只有"这张专辑确有动画、首帧比对又没过"时才走到这里,量级是个位数张专辑,查一次
 // 就记进 motion 缓存(AlbumArtworkChecked),不重复问。第二个返回值同 motionCoverFor:
-// false = 这一轮没查成(在飞 / 请求失败),调用方别据此钉死结论。
+// false = 这一轮没查成(在飞 / 请求失败 / 各区都查空),调用方别据此钉死结论。
 //
 // 只补 AlbumArtwork / AlbumArtworkChecked,**不动** Master 等:那些已经被 enrich 记录引用着。
 func motionCoverAlbumArtworkFor(ctx context.Context, collectionID int64) (string, bool) {
@@ -504,8 +504,8 @@ func motionCoverAlbumArtworkFor(ctx context.Context, collectionID int64) (string
 	}
 	motionCoverMu.Unlock()
 
-	// 先中国区、查空再美区(同 motionCoverStorefronts)。都查空只算这一轮没有、不记下:专辑页刚取到过,查空更像抖动或
-	// 只在别的区上架,记下就永久判身份核不上。
+	// 先中国区、查空再美区(同 motionCoverStorefronts)。都查空按没查成算、不记下:专辑页刚取到过,查空更像抖动或
+	// 只在别的区上架,当成定论就判身份核不上、被钉死。
 	var art string
 	for _, sf := range motionCoverStorefronts {
 		a, ok := itunesCollectionArtwork(ctx, collectionID, sf)
@@ -517,7 +517,7 @@ func motionCoverAlbumArtworkFor(ctx context.Context, collectionID int64) (string
 		}
 	}
 	if art == "" {
-		return "", true
+		return "", false
 	}
 	motionCoverMu.Lock()
 	cur, still := motionCoverCache[key]

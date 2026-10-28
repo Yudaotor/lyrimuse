@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"io"
@@ -40,7 +41,8 @@ func (a *alerter) configured(event string) bool {
 var errNoNotifyChannel = errors.New("notify: no enabled channel for this event")
 
 // send 把一条消息推到 event 该去的每个渠道,每个渠道的结果记进推送记录。至少一个渠道收下就返回 nil,调用方据此
-// 记「已推送」:再推一遍的话收下的那几个会收到两份。一个都没收下才返回错误,下次检查整条重推。
+// 记「已推送」:再推一遍的话收下的那几个会收到两份。一个都没收下才返回错误,下次检查整条重推;每个渠道都是重推也
+// 不会好的失败(notifyFailurePermanent)时错误带 errNotifyPermanent。
 // 听歌报告重推时,notifyDigestRedeliverWindow 内已经推成过同一标题的渠道(用户在推送页点了重发)跳过、算收下。
 func (a *alerter) send(event, title, body string) error {
 	return a.sendMessage(notifyMessage{Event: event, Title: title, Body: body})
@@ -57,7 +59,7 @@ func (a *alerter) sendMessage(msg notifyMessage) error {
 		return errNoNotifyChannel
 	}
 	var firstErr error
-	delivered := false
+	delivered, permanent := false, true
 	since := time.Now().Add(-notifyDigestRedeliverWindow).Unix()
 	for _, ch := range targets {
 		if notifyEventIsDigest(event) && notifyDeliveredSince(ch.ID, event, key, since) {
@@ -69,14 +71,35 @@ func (a *alerter) sendMessage(msg notifyMessage) error {
 		recordNotifyDelivery(ch, msg, r)
 		if r.OK {
 			delivered = true
-		} else if firstErr == nil {
+			continue
+		}
+		if firstErr == nil {
 			firstErr = r.err()
 		}
+		permanent = permanent && notifyFailurePermanent(r)
 	}
 	if delivered {
 		return nil
 	}
+	if permanent {
+		return fmt.Errorf("%w: %w", errNotifyPermanent, firstErr)
+	}
 	return firstErr
+}
+
+// errNotifyPermanent:这条消息推到的每个渠道都是重推也不会好的失败,调用方别按检查间隔整条重推。
+var errNotifyPermanent = errors.New("notify: every channel failed for a reason a retry will not fix")
+
+// notifyFailurePermanent:不改设置、不换内容,重推照样失败的:鉴权、地址不存在、渠道没填齐,以及 HTTP 413 内容超限。
+// notifyKindRejected 是认不出的业务码的兜底,里面可能有一会儿就好的,不算;限流、平台 5xx、网络不通也不算。
+func notifyFailurePermanent(r notifyResult) bool {
+	switch r.Kind {
+	case notifyKindAuth, notifyKindNotFound, notifyKindConfig:
+		return true
+	case notifyKindRejected:
+		return r.Status == http.StatusRequestEntityTooLarge
+	}
+	return false
 }
 
 // notifyDigestRedeliverWindow:send 往回查多久的推送记录认「这个渠道已经收到过这份报告」。认的是默认标题(notifyMessage.Key),

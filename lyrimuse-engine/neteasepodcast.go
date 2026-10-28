@@ -21,7 +21,11 @@ import (
 // 读不到列表(被拒、文件不在)时也删掉。
 
 // neteaseEpisodesRetryInterval:网易云的列表目录还不在(没装、没打开过)或者盯不了时,隔这么久再试。
-const neteaseEpisodesRetryInterval = 5 * time.Minute
+// neteaseEpisodesPathCheckInterval:盯着的时候隔这么久重新挑一次列表在哪个根(沙盒版、非沙盒版换着用时会换根)。
+const (
+	neteaseEpisodesRetryInterval     = 5 * time.Minute
+	neteaseEpisodesPathCheckInterval = 30 * time.Second
+)
 
 type neteaseEpisode struct {
 	Title string `json:"title"`
@@ -129,29 +133,34 @@ func (p *neteaseEpisodesPublisher) forget() {
 // startNeteaseEpisodesWatcher 由 run() 单开 goroutine:盯网易云播放列表所在的目录(客户端写临时文件再改名,
 // 盯目录收得到),一有改动就更新名单。网易云在单集开播前约 1 秒写这份列表,App 收到这一集时名单已经在了。
 func startNeteaseEpisodesWatcher(ctx context.Context) {
-	p := &neteaseEpisodesPublisher{statePath: configFilePath(clientName + "-netease-episodes.json"), queuePath: neteaseUpcomingPath()}
+	p := &neteaseEpisodesPublisher{statePath: configFilePath(clientName + "-netease-episodes.json")}
 	p.forget()
-	if p.queuePath == "" {
-		return
-	}
-	runNeteaseEpisodesWatcher(ctx, p, neteaseEpisodesRetryInterval)
+	runNeteaseEpisodesWatcher(ctx, p, neteaseEpisodesRetryInterval, neteaseEpisodesPathCheckInterval, neteaseUpcomingPath)
 }
 
-func runNeteaseEpisodesWatcher(ctx context.Context, p *neteaseEpisodesPublisher, retry time.Duration) {
-	dir := filepath.Dir(p.queuePath)
+// runNeteaseEpisodesWatcher:每轮按 pathFor 重新取列表路径再盯它的目录;盯着时每 recheck 重取一次,路径变了当场换目录。
+func runNeteaseEpisodesWatcher(ctx context.Context, p *neteaseEpisodesPublisher, retry, recheck time.Duration, pathFor func() string) {
 	for {
-		writes := make(chan struct{}, 1)
+		p.queuePath = pathFor()
+		moved, ok := false, false
+		var stopped <-chan struct{}
 		watchCtx, cancel := context.WithCancel(ctx)
-		stopped, ok := startDirWatch(watchCtx, dir, writes)
-		if ok {
-			p.refresh()
-			neteaseEpisodesFollow(watchCtx, p, writes, stopped)
+		if p.queuePath != "" {
+			writes := make(chan struct{}, 1)
+			stopped, ok = startDirWatch(watchCtx, filepath.Dir(p.queuePath), writes)
+			if ok {
+				p.refresh()
+				moved = neteaseEpisodesFollow(watchCtx, p, writes, stopped, recheck, pathFor)
+			}
 		}
 		cancel()
 		if ok && stopped != nil {
 			<-stopped
 		}
 		p.forget()
+		if moved {
+			continue
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -160,16 +169,24 @@ func runNeteaseEpisodesWatcher(ctx context.Context, p *neteaseEpisodesPublisher,
 	}
 }
 
-// neteaseEpisodesFollow 跟着目录的改动刷新名单,直到 ctx 结束或监听停了。
-func neteaseEpisodesFollow(ctx context.Context, p *neteaseEpisodesPublisher, writes <-chan struct{}, stopped <-chan struct{}) {
+// neteaseEpisodesFollow 跟着目录的改动刷新名单,直到 ctx 结束、监听停了,或 pathFor 给的路径不再是 p.queuePath
+// (返回 true,调用方换目录重盯)。
+func neteaseEpisodesFollow(ctx context.Context, p *neteaseEpisodesPublisher, writes <-chan struct{}, stopped <-chan struct{},
+	recheck time.Duration, pathFor func() string) bool {
+	ticker := time.NewTicker(recheck)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return false
 		case <-stopped:
-			return
+			return false
 		case <-writes:
 			p.refresh()
+		case <-ticker.C:
+			if pathFor() != p.queuePath {
+				return true
+			}
 		}
 	}
 }

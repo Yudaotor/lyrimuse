@@ -493,4 +493,30 @@ func TestKugouPlayingSongAlbumByHash(t *testing.T) {
 	if mix, album := kugouPlayingSong("甲", "第一首", 200); mix != "586000009" || album != "966846" {
 		t.Errorf("曲库专辑 id 是 -1 时按 hash 取: %q %q", mix, album)
 	}
+
+	// 还没有结论的 hash:当场不问,交给后台;这一拍的记忆标成还在问。
+	env.writeQueue([]testKugouPlistSong{{"甲 - 第二首", "甲", "BBBB02", 210}}, 0)
+	writeTestKugouLibrary(t, []testKugouLibRow{{"甲 - 第二首", "甲", "bbbb02", 210, "586000010", -1, 3}})
+	kugouAlbumMu.Lock()
+	oldAsking, oldGo := kugouAlbumIDAsking, kugouAlbumIDGo
+	kugouAlbumIDAsking = map[string]bool{}
+	var queued int
+	kugouAlbumIDGo = func(func()) { queued++ }
+	kugouAlbumMu.Unlock()
+	playerCatalogMu.Lock()
+	oldMemo := playerCatalogMemo
+	playerCatalogMemo = map[string]playerCatalogAt{}
+	playerCatalogMu.Unlock()
+	t.Cleanup(func() {
+		kugouAlbumMu.Lock()
+		kugouAlbumIDAsking, kugouAlbumIDGo = oldAsking, oldGo
+		kugouAlbumMu.Unlock()
+		playerCatalogMu.Lock()
+		playerCatalogMemo = oldMemo
+		playerCatalogMu.Unlock()
+	})
+	ids := playerCatalogIDsFor(kugouMusicBundleID, "甲", "第二首", "", 210)
+	if ids.songID != "586000010" || ids.songAlbum != "" || !ids.albumPending || queued != 1 {
+		t.Errorf("没有结论时交给后台问、记成还在问: %+v queued=%d", ids, queued)
+	}
 }

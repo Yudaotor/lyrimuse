@@ -172,7 +172,7 @@ func TestMotionCoverPageFallsBackToUSStorefront(t *testing.T) {
 	}
 }
 
-// 官方封面查空(中国区、美区都没给):只算这一轮没有,不记成「查过了、目录里没有」。
+// 官方封面查空(中国区、美区都没给):按这一轮没查成算,不记成「查过了、目录里没有」,身份留空、不判核不上。
 func TestMotionCoverAlbumArtworkEmptyIsNotPersisted(t *testing.T) {
 	var asked []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -194,8 +194,8 @@ func TestMotionCoverAlbumArtworkEmptyIsNotPersisted(t *testing.T) {
 		motionCoverMu.Unlock()
 	})
 	art, done := motionCoverAlbumArtworkFor(context.Background(), 92)
-	if art != "" || !done {
-		t.Fatalf("查空:这一轮没有官方封面, art=%q done=%v", art, done)
+	if art != "" || done {
+		t.Fatalf("查空按没查成算, art=%q done=%v", art, done)
 	}
 	if strings.Join(asked, ",") != "cn,us" {
 		t.Fatalf("中国区查空再查美区,实际问了 %v", asked)
@@ -205,5 +205,8 @@ func TestMotionCoverAlbumArtworkEmptyIsNotPersisted(t *testing.T) {
 	motionCoverMu.Unlock()
 	if checked {
 		t.Fatal("查空不记下,下次再查")
+	}
+	if got := motionCoverIdentityFor(context.Background(), 92, "https://cover/x.jpg"); got != motionIdentityUndecided {
+		t.Fatalf("查空不当定论,身份待定: %v", got)
 	}
 }

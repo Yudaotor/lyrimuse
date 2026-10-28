@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -440,6 +441,32 @@ func topTallies(tallies []digestTally) []digestTally {
 // 拼装逻辑(digestBody)。一个渠道都没收下才返回错误，调用方不记「已推送」，下次检查重推。
 // 正文是纯文本那一份(推送记录、纯文本平台用);按平台排版的由 notifyrich.go 照 stats 另排。用户自定义了推送内容时
 // 标题、正文按模板出(digesttemplate.go),按纯文本推;判「这一期推过没有」仍按默认标题(notifyMessage.Key)。
+// digestHold:某一档报告全渠道永久失败(errNotifyPermanent)后挡到哪一刻、当时用的是哪一份推送配置(alerter)。
+type digestHold struct {
+	until   time.Time
+	alerter *alerter
+}
+
+// digestHeld:这一档报告还挡着:没到挡到的那一刻,推送配置也没换(改了渠道设置会重建 alerter,当场放开)。挡着时不取数、不推。
+// 只在报告 goroutine 里调。
+func (p *poller) digestHeld(event string, now time.Time, a *alerter) bool {
+	h, ok := p.digestHolds[event]
+	return ok && h.alerter == a && now.Before(h.until)
+}
+
+// noteDigestPushResult:全渠道永久失败时这一档挡到下一个推送时刻,同一期不按检查间隔重拉重推(每次推都记一条推送记录);
+// 别的失败照旧按检查间隔重推。只在报告 goroutine 里调。
+func (p *poller) noteDigestPushResult(event string, now time.Time, a *alerter, err error) {
+	if !errors.Is(err, errNotifyPermanent) {
+		delete(p.digestHolds, event)
+		return
+	}
+	if p.digestHolds == nil {
+		p.digestHolds = map[string]digestHold{}
+	}
+	p.digestHolds[event] = digestHold{until: firstDigestPushAtOrAfter(now.Add(time.Second), digestPushMinutes()), alerter: a}
+}
+
 func digestPush(a *alerter, event, title string, stats digestStats) error {
 	msg := notifyMessage{Event: event, Title: title, Body: digestBody(stats), Digest: &stats, Key: title}
 	if t := features().DigestTemplate; t.custom() {

@@ -403,9 +403,9 @@ type kugouLibraryRow struct {
 
 // kugouPlayingSong:酷狗此刻在放的这首(「此刻在播」那份 plist 里当前曲目的 strFileHash)在客户端曲库里的歌曲 id(mixId)与
 // 专辑 id(18 章决策 69)。plist 记的要跟播放器报的是同一首(歌名一致、署名对得上),两边时长都知道时要对得上;认不出、曲库里
-// 没有这个 hash 返回空串。曲库的专辑 id 一律是 -1(本机曲库不记专辑),这时按这个文件的 hash 问酷狗一次它属于哪张专辑
-// (kugouAlbumIDByHash,按 hash 记住),专辑简介、专辑页用它(05 章决策 93)。要起 plutil、sqlite3 子进程、可能联网,
-// 调用方不能持着 enrichMu。
+// 没有这个 hash 返回空串。曲库的专辑 id 一律是 -1(本机曲库不记专辑),这时按这个文件的 hash 问酷狗它属于哪张专辑
+// (kugouPlayingAlbumID:只读已问到的结论,没有就交给后台去问),专辑简介、专辑页用它(05 章决策 93)。要起 plutil、
+// sqlite3 子进程,调用方不能持着 enrichMu。
 func kugouPlayingSong(artist, title string, durationSecs float64) (mixID, albumID string) {
 	mixID, albumID, _ = kugouPlayingSongInfo(artist, title, durationSecs)
 	return mixID, albumID
@@ -414,14 +414,20 @@ func kugouPlayingSong(artist, title string, durationSecs float64) (mixID, albumI
 // kugouPlayingSongInfo:同 kugouPlayingSong,另带这一首是不是听书里的有声内容(spoken):sqlite 那份队列里它的条目类是
 // kugouSoundReadClass。plist 那份队列只装歌,从它认出来的一律不是。见 02 章决策 195。
 func kugouPlayingSongInfo(artist, title string, durationSecs float64) (mixID, albumID string, spoken bool) {
-	if mixID, albumID, ok := kugouPlayingSongFromPlist(artist, title, durationSecs); ok {
-		return mixID, albumID, false
+	mixID, albumID, spoken, _ = kugouPlayingSongIDs(artist, title, durationSecs)
+	return mixID, albumID, spoken
+}
+
+// kugouPlayingSongIDs:同 kugouPlayingSongInfo,另带专辑 id 是否还在后台问(albumPending)。
+func kugouPlayingSongIDs(artist, title string, durationSecs float64) (mixID, albumID string, spoken, albumPending bool) {
+	if mixID, albumID, pending, ok := kugouPlayingSongFromPlist(artist, title, durationSecs); ok {
+		return mixID, albumID, false, pending
 	}
 	// 推荐流、听书:plist 被清空,当前这首在 sqlite 那份队列里,条目自带歌曲 id 和专辑 id(payAlbumID)。见 05 章决策 93。
 	if s, ok := kugouPlayingQueueSong(artist, title, durationSecs); ok {
-		return rawDigitsID(s.Mix), rawDigitsID(s.Album), s.Class == kugouSoundReadClass
+		return rawDigitsID(s.Mix), rawDigitsID(s.Album), s.Class == kugouSoundReadClass, false
 	}
-	return "", "", false
+	return "", "", false, false
 }
 
 // kugouSoundReadClass:酷狗队列里听书(有声书、相声、评书等)条目的类名。歌是 CollectSongEntity、SinglesRecSongInfo、
@@ -429,30 +435,27 @@ func kugouPlayingSongInfo(artist, title string, durationSecs float64) (mixID, al
 const kugouSoundReadClass = "KGSoundReadInfo"
 
 // kugouPlayingSongFromPlist:「此刻在播」那份 plist 里当前曲目是这首、曲库里查得到它的 hash 时的歌曲 id 与专辑 id;
-// 否则 ok 为 false。
-func kugouPlayingSongFromPlist(artist, title string, durationSecs float64) (mixID, albumID string, ok bool) {
+// 否则 ok 为 false。albumPending:专辑 id 还在后台问。
+func kugouPlayingSongFromPlist(artist, title string, durationSecs float64) (mixID, albumID string, albumPending, ok bool) {
 	path := kugouNowPlayingPath()
 	if path == "" {
-		return "", "", false
+		return "", "", false, false
 	}
 	t, read := kugouReadNowPlaying(path)
 	h := strings.ToUpper(strings.TrimSpace(t.hash))
 	if !read || !isHexString(h) || normLoose(t.title) != normLoose(title) || !kugouCreditMatches(t.credit, t.artist, artist) {
-		return "", "", false
+		return "", "", false, false
 	}
 	var rows []kugouLibraryRow
 	if !kugouLibraryQuery("SELECT ifnull(musictime, 0) AS t, mixId AS m, albumId AS a FROM Allmusic WHERE upper(musichash) = '"+h+"' LIMIT 1", &rows) ||
 		len(rows) == 0 || (rows[0].Time > 0 && durationSecs > 0 && !sourceDurationFits(durationSecs, rows[0].Time)) {
-		return "", "", false
+		return "", "", false, false
 	}
 	mixID, albumID = rawDigitsID(rows[0].Mix), rawDigitsID(rows[0].Album)
 	if mixID != "" && albumID == "" {
-		// 为正在放的这首问,按前台发:后台请求要给存量导入、预取让路,5 秒内常排不上。
-		ctx, cancel := withCancelAfter(context.Background(), 5*time.Second)
-		defer cancel()
-		albumID = kugouAlbumIDByHash(ctx, h)
+		albumID, albumPending = kugouPlayingAlbumID(h)
 	}
-	return mixID, albumID, true
+	return mixID, albumID, albumPending, true
 }
 
 // kugouQueueSongSQL:sqlite 那份队列里每首认当前这首要用的字段,以及它自带的歌曲 id、专辑 id、专辑图、条目类名。
@@ -560,7 +563,59 @@ var (
 	kugouAlbumMu      sync.Mutex
 	kugouAlbumIDCache = map[string]string{}       // 大写 hash → 专辑 id
 	kugouAlbumCache   = map[string][]albumTrack{} // 专辑 id → 曲目表
+	// 正在放的这首交给后台问专辑 id:在问的 hash、上次没问成的时刻。
+	kugouAlbumIDAsking   = map[string]bool{}
+	kugouAlbumIDFailedAt = map[string]time.Time{}
 )
+
+// kugouAlbumIDRetryAfter:正在放的这首没问成专辑 id 后,隔多久才再交给后台问。
+const kugouAlbumIDRetryAfter = 3 * time.Minute
+
+// kugouAlbumIDGo 起后台查询的那一步,测试换成同步执行。
+var kugouAlbumIDGo = func(f func()) { go f() }
+
+// kugouPlayingAlbumID:正在放的这首(大写文件 hash)的专辑 id。在轮询主循环上调,不联网:只读已问到的结论;没有结论时
+// 交给后台去问(同一个 hash 同时只问一份,没问成的 kugouAlbumIDRetryAfter 内不再问),pending 为 true;问完丢掉
+// playerCatalogMemo 里还在等专辑 id 的那几条,下一拍重读就用上。
+func kugouPlayingAlbumID(hash string) (id string, pending bool) {
+	kugouAlbumMu.Lock()
+	if id, ok := kugouAlbumIDCache[hash]; ok {
+		kugouAlbumMu.Unlock()
+		return id, false
+	}
+	if kugouAlbumIDAsking[hash] {
+		kugouAlbumMu.Unlock()
+		return "", true
+	}
+	if at, ok := kugouAlbumIDFailedAt[hash]; ok && time.Since(at) < kugouAlbumIDRetryAfter {
+		kugouAlbumMu.Unlock()
+		return "", false
+	}
+	kugouAlbumIDAsking[hash] = true
+	kugouAlbumMu.Unlock()
+	kugouAlbumIDGo(func() { askKugouPlayingAlbumID(hash) })
+	kugouAlbumMu.Lock()
+	defer kugouAlbumMu.Unlock()
+	id, answered := kugouAlbumIDCache[hash]
+	return id, !answered && kugouAlbumIDAsking[hash]
+}
+
+// askKugouPlayingAlbumID 是 kugouPlayingAlbumID 交给后台的那一问。为正在放的这首问,按前台发:后台请求要给存量导入、
+// 预取让路,常排不上。
+func askKugouPlayingAlbumID(hash string) {
+	ctx, cancel := withCancelAfter(context.Background(), 10*time.Second)
+	defer cancel()
+	_, answered := kugouAlbumIDByHashOK(ctx, hash)
+	kugouAlbumMu.Lock()
+	delete(kugouAlbumIDAsking, hash)
+	if answered {
+		delete(kugouAlbumIDFailedAt, hash)
+	} else {
+		kugouAlbumIDFailedAt[hash] = time.Now()
+	}
+	kugouAlbumMu.Unlock()
+	forgetPendingPlayerCatalogIDs()
+}
 
 // kugouAlbumTracks 是酷狗的同专辑兜底:在队列里找到当前这首,拿它的 strFileHash 问酷狗这首属于哪张专辑
 // (getSongInfo 的 albumid),再取那张专辑的曲目表(album/song)。曲目表里的「歌手 - 歌名」是酷狗自己的
@@ -592,10 +647,16 @@ func kugouAlbumTracks(artist, title, album string) ([]albumTrack, bool) {
 // kugouAlbumIDByHash 按文件 hash 问这首属于哪张专辑。查不到返回 ""。问成了的结论按 hash 记住(没有专辑也记,不反复问);
 // 没问成的不记,下次再问。
 func kugouAlbumIDByHash(ctx context.Context, hash string) string {
+	id, _ := kugouAlbumIDByHashOK(ctx, hash)
+	return id
+}
+
+// kugouAlbumIDByHashOK:同 kugouAlbumIDByHash,另带是否问成了(answered 为 false 是没问成,不是没有专辑)。
+func kugouAlbumIDByHashOK(ctx context.Context, hash string) (id string, answered bool) {
 	kugouAlbumMu.Lock()
 	if id, ok := kugouAlbumIDCache[hash]; ok {
 		kugouAlbumMu.Unlock()
-		return id
+		return id, true
 	}
 	kugouAlbumMu.Unlock()
 	var out struct {
@@ -603,16 +664,16 @@ func kugouAlbumIDByHash(ctx context.Context, hash string) string {
 	}
 	u := "http://m.kugou.com/app/i/getSongInfo.php?cmd=playInfo&hash=" + neturl.QueryEscape(hash)
 	if err := kugouGet(ctx, u, &out); err != nil {
-		return ""
+		return "", false
 	}
-	id := out.AlbumID.String()
+	id = out.AlbumID.String()
 	if id == "0" {
 		id = ""
 	}
 	kugouAlbumMu.Lock()
 	kugouAlbumIDCache[hash] = id
 	kugouAlbumMu.Unlock()
-	return id
+	return id, true
 }
 
 // kugouAlbumSongList 取一张专辑的曲目表。area_code=1 必须带:不带时接口返回 status=1 但列表为空(实测)。

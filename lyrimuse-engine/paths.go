@@ -129,8 +129,8 @@ func alignConfigDirWithFlag(cfgPath, defaultDir string) {
 }
 
 // backupDir 是引擎动手改数据之前留的备份:数据目录下 backups/<时刻>-<用途>。放在数据目录里,别放它的上一层 ——
-// 那是 ~/Library/Application Support,别的程序也在用。旧版本写在 ~/.config/lyrimuse-backups,那里已有的不搬
-// (song-entity-share.json 里记着它们的绝对路径)。拿不到数据目录时返回空串。
+// 那是 ~/Library/Application Support,别的程序也在用。旧版本留在 ~/.config/lyrimuse-backups 的歌曲实体备份由 App 启动时的
+// 迁移(StorageMigration.swift)按名字认出来搬进这里,并改写 song-entity-share.json 里记的路径。拿不到数据目录时返回空串。
 func backupDir(now time.Time, purpose string) string {
 	dir := configDir()
 	if dir == "" {

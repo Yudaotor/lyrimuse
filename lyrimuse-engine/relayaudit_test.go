@@ -13,7 +13,7 @@ import (
 // 13 章网页中继审计:内容变了补推、等待点到点叫醒、失败时续心跳、上次播放不倒退、运行中补种、封面令牌切换、
 // 目录监听退回、Top 歌手的 mbid 与头像、QQ 规范名没问成不缓存。
 
-// 同一个状态里歌词变了:新内容稳定 relayContentSettle 才推一次(原因 content);来回抖的不推;「空」不看内容。
+// 同一个状态里歌词变了:新内容稳定 relayContentSettle 才推一次(原因 content);来回抖的(含退回已推那份)不推;「空」不看内容。
 func TestRelayShouldPushContentChange(t *testing.T) {
 	const key = "mac|t|a|b|c"
 	first := map[string]any{"artwork": "https://x/a.jpg", "lyrics": "[00:01]先上屏"}
@@ -49,6 +49,18 @@ func TestRelayShouldPushContentChange(t *testing.T) {
 		}
 		if _, ok := flap.relayShouldPush(t0.Add(time.Duration(i)*time.Second), key, payload, false); ok {
 			t.Fatalf("内容每秒来回变,第 %d 拍不该推", i)
+		}
+	}
+
+	back := &poller{relayLastState: key, relayLastAt: t0.Add(-time.Minute), relayStateSince: t0.Add(-time.Minute),
+		relayLastDigest: relayContentDigest(first)}
+	for i := range 20 {
+		payload := final
+		if i%2 == 1 {
+			payload = first
+		}
+		if _, ok := back.relayShouldPush(t0.Add(time.Duration(i)*time.Second), key, payload, false); ok {
+			t.Fatalf("内容在已推那份和新的一份之间来回变,第 %d 拍不该推", i)
 		}
 	}
 

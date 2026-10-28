@@ -857,3 +857,91 @@ func TestTopArtistsCLIAllPeriodsToleratesOneFailure(t *testing.T) {
 		t.Errorf("每档按 -limit 截断且保持名次: %+v", rows)
 	}
 }
+
+// statusSink 收到推送一律回 status,记次数。
+func statusSink(t *testing.T, status int) (*httptest.Server, *int) {
+	t.Helper()
+	n := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n++
+		w.WriteHeader(status)
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &n
+}
+
+// 日报全渠道永久失败(鉴权错):到下一个推送时刻前不再取数、不再推(补推昨天那期也等着);改了渠道设置(alerter 重建)
+// 当场放开;到下一个推送时刻照推。
+func TestDailyDigestPermanentFailureWaitsForNextPushTime(t *testing.T) {
+	useDigestFeatures(t, featureFlags{DailyDigest: true, DailyDigestSource: digestSourceLastfm})
+	f := useFakeLastfmRead(t, chartRoutes())
+	sink, n := statusSink(t, http.StatusUnauthorized)
+	env := lastfmDigestEnv(sink.URL)
+	p := &poller{dailyState: dailyDigestState{path: filepath.Join(t.TempDir(), "daily.json")}}
+	check := func(at time.Time, env digestEnv) {
+		p.dailyLastCheckedAt = time.Time{}
+		p.dailyDigest(at, env)
+	}
+
+	check(time.Date(2026, 9, 25, 22, 30, 0, 0, time.Local), env)
+	if *n != 1 || p.dailyState.load() != "" {
+		t.Fatalf("到点推一次、失败不记: pushes=%d state=%q", *n, p.dailyState.load())
+	}
+	requests := f.count()
+	check(time.Date(2026, 9, 25, 23, 30, 0, 0, time.Local), env)
+	check(time.Date(2026, 9, 26, 0, 17, 0, 0, time.Local), env)
+	if *n != 1 || f.count() != requests {
+		t.Fatalf("永久失败后到下一个推送时刻前不推也不取数: pushes=%d requests=%d→%d", *n, requests, f.count())
+	}
+
+	changed := lastfmDigestEnv(sink.URL)
+	check(time.Date(2026, 9, 26, 0, 47, 0, 0, time.Local), changed)
+	if *n != 2 {
+		t.Fatalf("改了渠道设置当场放开: pushes=%d", *n)
+	}
+	check(time.Date(2026, 9, 26, 22, 5, 0, 0, time.Local), changed)
+	if *n != 3 {
+		t.Fatalf("到下一个推送时刻照推: pushes=%d", *n)
+	}
+
+	// 平台 5xx 不算永久失败,照旧按检查间隔重推。
+	srv, m := statusSink(t, http.StatusInternalServerError)
+	q := &poller{dailyState: dailyDigestState{path: filepath.Join(t.TempDir(), "daily.json")}}
+	transient := lastfmDigestEnv(srv.URL)
+	q.dailyDigest(time.Date(2026, 9, 25, 22, 30, 0, 0, time.Local), transient)
+	q.dailyLastCheckedAt = time.Time{}
+	q.dailyDigest(time.Date(2026, 9, 25, 23, 0, 0, 0, time.Local), transient)
+	if *m != 2 {
+		t.Fatalf("5xx 照旧重推: pushes=%d", *m)
+	}
+}
+
+// 推送全失败时只有每个渠道都是重推也不会好的失败(401 / 404 / 413)才带 errNotifyPermanent;5xx、兜底的「被拒」、
+// 永久和临时混着的都不带。
+func TestAlerterPermanentFailure(t *testing.T) {
+	channel := func(id string, status int) notifyChannel {
+		srv, _ := statusSink(t, status)
+		return notifyChannel{ID: id, Platform: platformBark, URL: srv.URL, Enabled: true}
+	}
+	for name, c := range map[string]struct {
+		statuses  []int
+		permanent bool
+	}{
+		"401":       {[]int{http.StatusUnauthorized}, true},
+		"404":       {[]int{http.StatusNotFound}, true},
+		"413":       {[]int{http.StatusRequestEntityTooLarge}, true},
+		"500":       {[]int{http.StatusInternalServerError}, false},
+		"400 兜底被拒":  {[]int{http.StatusBadRequest}, false},
+		"401 + 500": {[]int{http.StatusUnauthorized, http.StatusInternalServerError}, false},
+		"401 + 404": {[]int{http.StatusUnauthorized, http.StatusNotFound}, true},
+	} {
+		var chs []notifyChannel
+		for i, s := range c.statuses {
+			chs = append(chs, channel(strconv.Itoa(i), s))
+		}
+		err := (&alerter{channels: chs}).send(notifyEventDaily, "标题", "正文")
+		if err == nil || errors.Is(err, errNotifyPermanent) != c.permanent {
+			t.Errorf("%s: err=%v, want permanent=%v", name, err, c.permanent)
+		}
+	}
+}

@@ -8,9 +8,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -196,7 +196,7 @@ func TestKugouAlbumIDByHashFallsBackToHTTPS(t *testing.T) {
 	}
 }
 
-// 按 hash 问专辑:问成了的结论记住(没有专辑也记,不反复问),没问成的不记;认出歌曲、专辑 id 还空着的按没读到算,隔 20 秒再问。
+// 按 hash 问专辑:问成了的结论记住(没有专辑也记,不反复问),没问成的不记。
 func TestKugouAlbumIDByHashRemembersAnswers(t *testing.T) {
 	f := withKugouFakeReq(t, func(r *http.Request, target string) (int, string) {
 		switch r.URL.Query().Get("hash") {
@@ -245,18 +245,104 @@ func TestKugouAlbumIDByHashRemembersAnswers(t *testing.T) {
 	if remembered {
 		t.Error("没问成的不记,下次再问")
 	}
+}
 
-	if (playerCatalogAt{ids: playerCatalogIDs{songID: "65176349"}}).ttl() != playerCatalogMissTTL {
-		t.Error("认出歌曲、专辑 id 空着的按没读到算")
+// 正在放的这首问专辑 id 不在轮询主循环上联网:只读已有结论,没有就交给后台(同一 hash 只问一份),问完丢掉在等的记忆;
+// 没问成的 kugouAlbumIDRetryAfter 内不再问。只有「还在问」按没读到算,有歌曲 id 没专辑 id 的结论按读到算。
+func TestKugouPlayingAlbumIDAsksInBackground(t *testing.T) {
+	var answered atomic.Bool
+	f := withKugouFakeReq(t, func(r *http.Request, target string) (int, string) {
+		if !answered.Load() {
+			return 500, ""
+		}
+		return 200, `{"albumid":966846}`
+	})
+	kugouAlbumMu.Lock()
+	savedIDs, savedAsking, savedFailed, savedGo := kugouAlbumIDCache, kugouAlbumIDAsking, kugouAlbumIDFailedAt, kugouAlbumIDGo
+	kugouAlbumIDCache, kugouAlbumIDAsking, kugouAlbumIDFailedAt = map[string]string{}, map[string]bool{}, map[string]time.Time{}
+	var queued []func()
+	kugouAlbumIDGo = func(fn func()) { queued = append(queued, fn) }
+	kugouAlbumMu.Unlock()
+	playerCatalogMu.Lock()
+	savedMemo := playerCatalogMemo
+	playerCatalogMemo = map[string]playerCatalogAt{}
+	playerCatalogMu.Unlock()
+	t.Cleanup(func() {
+		kugouAlbumMu.Lock()
+		kugouAlbumIDCache, kugouAlbumIDAsking, kugouAlbumIDFailedAt, kugouAlbumIDGo = savedIDs, savedAsking, savedFailed, savedGo
+		kugouAlbumMu.Unlock()
+		playerCatalogMu.Lock()
+		playerCatalogMemo = savedMemo
+		playerCatalogMu.Unlock()
+	})
+	hits := func() int {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		n := 0
+		for _, v := range f.hits {
+			n += v
+		}
+		return n
+	}
+	runQueued := func() {
+		fns := queued
+		queued = nil
+		for _, fn := range fns {
+			fn()
+		}
+	}
+	pendingMemo := func() {
+		playerCatalogMu.Lock()
+		playerCatalogMemo["k"] = playerCatalogAt{at: time.Now(), ids: playerCatalogIDs{songID: "65176349", albumPending: true}}
+		playerCatalogMu.Unlock()
+	}
+	memoKept := func() bool {
+		playerCatalogMu.Lock()
+		defer playerCatalogMu.Unlock()
+		_, ok := playerCatalogMemo["k"]
+		return ok
+	}
+
+	if id, pending := kugouPlayingAlbumID("H1"); id != "" || !pending || hits() != 0 || len(queued) != 1 {
+		t.Fatalf("没有结论时交给后台、不当场联网: %q %v hits=%d queued=%d", id, pending, hits(), len(queued))
+	}
+	if _, pending := kugouPlayingAlbumID("H1"); !pending || len(queued) != 1 {
+		t.Fatalf("同一 hash 在问时不再交一份: %v queued=%d", pending, len(queued))
+	}
+	pendingMemo()
+	runQueued()
+	if hits() == 0 || memoKept() {
+		t.Fatalf("后台问过了、在等的记忆该丢掉: hits=%d kept=%v", hits(), memoKept())
+	}
+	before := hits()
+	if id, pending := kugouPlayingAlbumID("H1"); id != "" || pending || len(queued) != 0 {
+		t.Fatalf("没问成的短时间内不再问: %q %v queued=%d", id, pending, len(queued))
+	}
+	kugouAlbumMu.Lock()
+	kugouAlbumIDFailedAt["H1"] = time.Now().Add(-kugouAlbumIDRetryAfter - time.Second)
+	kugouAlbumMu.Unlock()
+	answered.Store(true)
+	setSharedHostGuard(newHostGuard(time.Now)) // 上一轮的 500 让酷狗进了冷却
+	setSharedLyricSourceBreaker(newLyricSourceBreaker(time.Now))
+	if _, pending := kugouPlayingAlbumID("H1"); !pending || len(queued) != 1 {
+		t.Fatalf("过了重试间隔再交给后台: %v queued=%d", pending, len(queued))
+	}
+	pendingMemo()
+	runQueued()
+	if hits() == before || memoKept() {
+		t.Fatalf("问成了也丢掉在等的记忆: kept=%v", memoKept())
+	}
+	if id, pending := kugouPlayingAlbumID("H1"); id != "966846" || pending || len(queued) != 0 {
+		t.Fatalf("下一拍用上问到的专辑 id: %q %v queued=%d", id, pending, len(queued))
+	}
+
+	if (playerCatalogAt{ids: playerCatalogIDs{songID: "65176349", albumPending: true}}).ttl() != playerCatalogMissTTL {
+		t.Error("专辑 id 还在后台问的按没读到算")
+	}
+	if (playerCatalogAt{ids: playerCatalogIDs{songID: "65176349"}}).ttl() != playerCatalogHitTTL {
+		t.Error("有歌曲 id 没专辑 id 的结论(洛雪、酷狗听书)按读到算")
 	}
 	if (playerCatalogAt{ids: playerCatalogIDs{songID: "65176349", songAlbum: "966846"}}).ttl() != playerCatalogHitTTL {
 		t.Error("歌曲、专辑都有的按读到算")
-	}
-	src, err := os.ReadFile("kugouqueue.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !containsCode(string(src), "ctx, cancel := withCancelAfter(context.Background(), 5*time.Second)\n\t\tdefer cancel()\n\t\talbumID = kugouAlbumIDByHash(ctx, h)") {
-		t.Error("为正在放的这首问专辑按前台发")
 	}
 }

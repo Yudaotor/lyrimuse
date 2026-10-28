@@ -33,8 +33,8 @@ import (
 // 专辑页、歌手页只有 App 用,跟 QQAlbumMid 一样不进 fields()。
 
 // 同一首多久再读一次:trackEnrichment 在同一首歌的播放期间每几秒进来一次,本机数据不必每次都读;客户端开播后才把
-// 这首写进去(Spotify 的曲目 id 也是换曲那一拍才记下),没读到的隔一会儿再试。认出了歌曲、专辑 id 还空着的也按没读到算
-// (酷狗的专辑 id 要联网问,开播那会儿可能没问成)。
+// 这首写进去(Spotify 的曲目 id 也是换曲那一拍才记下),没读到的隔一会儿再试。酷狗的专辑 id 还在后台问(albumPending)的
+// 也按没读到算,问完 forgetPendingPlayerCatalogIDs 直接丢掉;别家、酷狗已有结论的「有歌曲 id 没专辑 id」按读到算。
 const (
 	playerCatalogHitTTL  = 10 * time.Minute
 	playerCatalogMissTTL = 20 * time.Second
@@ -43,9 +43,10 @@ const (
 // playerCatalogIDs:song 是歌曲页(只有汽水走这里),album / artist 是那家自己的 id,songID 是播放器报的这一首的歌曲 id、
 // songAlbum 是它所在的专辑 id(QQ 音乐、网易云走这里,成对记进 PlayerSongIDs / PlayerAlbumIDs)。qqSong / neteaseSong 是
 // 洛雪给的这一首在 QQ / 网易云的歌曲页。spoken:播放器本机数据把这一首记成有声内容(只有酷狗,见 kugouPlayingSongInfo)。
+// albumPending:songAlbum 还在后台问(只有酷狗,见 kugouPlayingAlbumID)。
 type playerCatalogIDs struct {
 	song, album, artist, songID, songAlbum, qqSong, neteaseSong string
-	spoken                                                      bool
+	spoken, albumPending                                        bool
 }
 
 var (
@@ -59,10 +60,21 @@ type playerCatalogAt struct {
 }
 
 func (m playerCatalogAt) ttl() time.Duration {
-	if m.ids == (playerCatalogIDs{}) || (m.ids.songID != "" && m.ids.songAlbum == "") {
+	if m.ids == (playerCatalogIDs{}) || m.ids.albumPending {
 		return playerCatalogMissTTL
 	}
 	return playerCatalogHitTTL
+}
+
+// forgetPendingPlayerCatalogIDs 丢掉还在等专辑 id 的记忆,下一拍重读。
+func forgetPendingPlayerCatalogIDs() {
+	playerCatalogMu.Lock()
+	defer playerCatalogMu.Unlock()
+	for k, m := range playerCatalogMemo {
+		if m.ids.albumPending {
+			delete(playerCatalogMemo, k)
+		}
+	}
 }
 
 // playerCatalogIDsFor:当前播放器给这首记下的 id;不是上面那几家、本机数据里没有都返回空。要读别的 App 的本机文件,
@@ -98,7 +110,7 @@ func playerCatalogIDsFor(bundleID, artist, title, album string, durationSecs flo
 	case neteaseMusicBundleID:
 		ids.songID, ids.songAlbum = neteasePlayingSong(artist, title, durationSecs)
 	case kugouMusicBundleID:
-		ids.songID, ids.songAlbum, ids.spoken = kugouPlayingSongInfo(artist, title, durationSecs)
+		ids.songID, ids.songAlbum, ids.spoken, ids.albumPending = kugouPlayingSongIDs(artist, title, durationSecs)
 	case lxMusicBundleID:
 		ids = lxMusicPlayingCatalogIDs(artist, title, durationSecs)
 	}
@@ -107,6 +119,9 @@ func playerCatalogIDsFor(bundleID, artist, title, album string, durationSecs flo
 	}
 	if ids.songID == "" || !playerSongIDOK(bundleID, ids.songAlbum) {
 		ids.songAlbum = ""
+	}
+	if ids.songID == "" || ids.songAlbum != "" {
+		ids.albumPending = false
 	}
 	if !playerCatalogIDOK(bundleID, ids.album) {
 		ids.album = ""
