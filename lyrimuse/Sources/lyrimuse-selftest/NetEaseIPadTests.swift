@@ -202,6 +202,30 @@ func runNetEaseIPadTests() {
         expectEqual(third.title, "Flower In A Hurricane", "iPad 网易云: 拆出来的真名记下,后面的帧照它还原")
     }
 
+    // ---- 冷启动 / 放到一半才开始读:头一份是歌词帧,第二份拆出真名,不当撕裂按住(录到的真实序列) ----
+    do {
+        var memory = N.Memory()
+        let artist = "Imagine Dragons/JID/英雄联盟/双城之战"
+        let title = "Enemy (from the series Arcane League of Legends) (动画剧集《英雄联盟：双城之战》全球主题曲)"
+        let first = N.normalized(F(title: "（Look out for yourself）", artist: artist + "/" + title, album: "Enemy", duration: 173,
+                                   elapsed: 0), memory: &memory)
+        let second = N.normalized(F(title: "I wake up to the sounds of the silence that allows", artist: artist + "/" + title,
+                                    album: "Enemy", duration: 173, elapsed: 7), memory: &memory)
+        expectEqual([second.title, second.artist], [title, artist], "iPad 网易云 冷启动: 第二份歌词帧拆出真名")
+        func fields(_ f: F) -> TornTrackHold.Fields {
+            .init(title: f.title ?? "", artist: f.artist ?? "", album: f.album ?? "", bundle: mac, duration: f.duration ?? 0,
+                  isRadio: false)
+        }
+        expectEqual(TornTrackHold.isTorn(current: fields(first), next: fields(second)), false,
+                    "iPad 网易云 冷启动: 从歌词帧还原出的真名不当撕裂按住")
+        expectEqual(TornTrackHold.isTorn(current: fields(F(title: "别的歌词", artist: "某人/另一首", album: "Enemy", duration: 173,
+                                                            elapsed: 0)), next: fields(second)), true,
+                    "iPad 网易云 冷启动: 上一份不是这一首的歌词帧时照旧按时长没跟上判")
+        expectEqual(TornTrackHold.isTorn(current: fields(F(title: "（Look out for yourself）", artist: artist + "/" + title,
+                                                            album: "Other", duration: 173, elapsed: 0)), next: fields(second)), true,
+                    "iPad 网易云 冷启动: 专辑不同的不算这一首的歌词帧")
+    }
+
     // ---- 锁屏歌词关着:多位歌手的「/」不拆 ----
     do {
         var memory = N.Memory()

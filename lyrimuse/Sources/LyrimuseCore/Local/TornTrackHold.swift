@@ -63,12 +63,21 @@ public struct TornTrackHold: Sendable {
         if current.isRadio || next.isRadio || current.title.isEmpty || next.title.isEmpty || current.title == next.title {
             return false
         }
+        if isLyricLineOfNext(current: current, next: next) { return false }
         if durationLags(current: current, next: next) { return true }
         if current.artist.isEmpty || current.artist != next.artist || current.album != next.album
             || current.bundle != next.bundle {
             return false
         }
         return current.duration > 0 && abs(current.duration - next.duration) < 0.01
+    }
+
+    /// 网易云(iPad 版按它认):上一份是这一首「锁屏歌词」写法的歌词帧(artist 正好是这一份的「歌手/歌名」),这一份是从歌词帧还原出来的
+    /// 真名,同一首歌,不是撕裂。Lyrimuse 在它放着时才启动、或它冷启动直接报歌词帧时,头一份只能原样显示,第二份才还原得出来。
+    /// 见 02 章决策 198。
+    static func isLyricLineOfNext(current: Fields, next: Fields) -> Bool {
+        next.bundle == PlaybackPlayer.netease.bundleIdentifier && current.bundle == next.bundle && !next.artist.isEmpty
+            && current.artist == next.artist + "/" + next.title && current.album == next.album
     }
 
     /// 网易云、汽水、洛雪换歌时,新歌的第一份快照常带着上一首的时长(歌名、歌手、专辑已经换了;汽水、洛雪连位置也是上一首的)。
