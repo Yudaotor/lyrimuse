@@ -2805,6 +2805,62 @@ func runNotchTests() {
         expectEqual(LyricSecondaryLine.allCases.map(\.showsLyricListSecondary), [false, false, true, true],
                     "多行歌词: 副行选译文 / 读音时每句下面跟一行小字,「下一句」不跟")
 
+        // 摆法:格高正好整数行时跟锚位公式一致;格高按带小字定、这首却一句小字都没有时,边上不露半截行。
+        for (lines, secondary) in [(3, false), (5, false), (7, false), (3, true), (7, true)] {
+            let h = M.lyricListHeight(lineCount: lines, secondaryRow: secondary)
+            let p = M.lyricListPlacement(height: h, secondaryRow: secondary)
+            let fade = min(0.5, M.lyricListEdgeFade / h)
+            expectEqual(abs(p.activeAnchor - M.lyricListActiveAnchor(lineCount: lines, secondaryRow: secondary)) < 1e-9
+                        && p.topClear == 0 && abs(p.topOpaque - fade) < 1e-9 && abs(p.bottomOpaque - (1 - fade)) < 1e-9
+                        && p.bottomClear == 1, true,
+                        "多行歌词: \(lines) 行\(secondary ? "带小字" : "")正好整数行时锚位、渐隐跟原来一样")
+        }
+        for lines in M.lyricListLineCounts {
+            let h = M.lyricListHeight(lineCount: lines, secondaryRow: true)
+            let p = M.lyricListPlacement(height: h, secondaryRow: false)
+            let pitch = M.lyricListPitch(secondaryRow: false), rowHeight = pitch - M.lyricListLineSpacing
+            let currentTop = p.activeAnchor * (h - rowHeight)
+            // 从当前句往上下逐行走,露在全透明区外面的必须是整行。
+            var partial: [CGFloat] = []
+            var visible = 0
+            for k in -20...20 {
+                let top = currentTop + CGFloat(k) * pitch, bottom = top + rowHeight
+                let shownTop = max(top, p.topClear * h), shownBottom = min(bottom, p.bottomClear * h)
+                guard shownBottom > shownTop + 1e-6 else { continue }
+                if shownBottom - shownTop < rowHeight - 1e-6 { partial.append(top) } else { visible += 1 }
+            }
+            expectEqual(partial, [], "多行歌词: \(lines) 行的格高、这首没有小字时边上不露半截行")
+            expectEqual(visible, Int(h / pitch), "多行歌词: \(lines) 行的格高、这首没有小字时放得下几整行就排几行")
+        }
+        let noSecondary = M.lyricListPlacement(height: 132, secondaryRow: false)
+        expectEqual(abs(noSecondary.topClear * 132 - 8.5) < 1e-9 && abs(noSecondary.activeAnchor * (132 - 16) - 54.5) < 1e-9, true,
+                    "多行歌词: 3 行带小字的格高(132)里排 5 行不带小字的,多出的 17pt 上下各 8.5,当前句在中间那行")
+        expectEqual(M.lyricListPlacement(height: 0, secondaryRow: false).activeAnchor, 0, "多行歌词: 还没量到高度时不算锚位")
+
+        // 这首有没有小字按真有的算:选译文时至少一句带译文,选读音时至少一句带读音或逐词标注。
+        func row(roma: String? = nil, translation: String? = nil, groups: Bool = false) -> SyncedLyricLine {
+            let words = [SyncedLyricWord(text: "故事", startMs: 0, durationMs: 400)]
+            return SyncedLyricLine(romanization: roma, translation: translation, mainText: "故事",
+                                   words: groups ? words : nil,
+                                   wordGroups: groups ? [SyncedLyricWordGroup(id: 0, words: words, romanization: "gu shi")] : nil,
+                                   side: nil)
+        }
+        let plain = [row(), row()]
+        expectEqual(LyricSecondaryLine.translation.showsLyricListSecondary(in: plain), false,
+                    "多行歌词: 选译文、这首一句译文都没有时不算带小字")
+        expectEqual(LyricSecondaryLine.translation.showsLyricListSecondary(in: plain + [row(translation: "")]), false,
+                    "多行歌词: 空译文不算")
+        expectEqual(LyricSecondaryLine.translation.showsLyricListSecondary(in: plain + [row(translation: "Story")]), true,
+                    "多行歌词: 有一句带译文就按带小字算")
+        expectEqual(LyricSecondaryLine.romanization.showsLyricListSecondary(in: plain + [row(translation: "Story")]), false,
+                    "多行歌词: 选读音时只看读音")
+        expectEqual(LyricSecondaryLine.romanization.showsLyricListSecondary(in: plain + [row(roma: "gu shi")])
+                    && LyricSecondaryLine.romanization.showsLyricListSecondary(in: plain + [row(groups: true)]), true,
+                    "多行歌词: 整行读音或逐词标注都算带小字")
+        expectEqual(LyricSecondaryLine.nextLine.showsLyricListSecondary(in: [row(roma: "a", translation: "b")])
+                    || LyricSecondaryLine.off.showsLyricListSecondary(in: [row(roma: "a", translation: "b")]), false,
+                    "多行歌词: 副行选「下一句」/ 不显示时列表不带小字")
+
         let uiDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse/UI")
         func src(_ n: String) -> String { (try? String(contentsOf: uiDir.appendingPathComponent(n), encoding: .utf8)) ?? "" }
@@ -2830,6 +2886,16 @@ func runNotchTests() {
         expectEqual(sourceHas(list, "interactive: false,\n minimumEdgePadding: 0,\n placement: placement(height: proxy.size.height),\n handle: listHandle)")
                     && sourceHas(src("LyricsLayerList.swift"), "var y = max(minimumEdgePadding, viewport * 0.395)"), true,
                     "多行歌词: 列表留白不套歌词窗口那条 88pt 下限,没有当前句时第一句不掉到视口下沿")
+        expectEqual(sourceHas(list, "NotchExpandedMetrics.lyricListPlacement(height: height, secondaryRow: feed.showsSecondaryRow)")
+                    && sourceHas(list, "secondary.showsLyricListSecondary(in: MiniLyricsSelection.lines(all, karaoke: karaoke).lazy.map(\\.line))")
+                    && !list.contains("feed.secondaryLine.showsLyricListSecondary"), true,
+                    "多行歌词: 摆法按这首歌实际有没有小字算行距,不按设置里的副行")
+        expectEqual(sourceHas(v, "if showsList {\n NotchTransientHost(tint: accentOrWhite) { NotchExpandedLyricList(tint: accentOrWhite) }"), true,
+                    "多行歌词: 列表那一格也是横幅的宿主,展开且显示列表时横幅照样看得见")
+        let layerActiveBody = sourceBody("struct NotchCardLayerActive: ViewModifier", in: src("NotchCardModifiers.swift"))
+        expectEqual(sourceHas(layerActiveBody, ".allowsHitTesting(active)")
+                    && sourceHas(layerActiveBody, ".accessibilityHidden(!active)"), true,
+                    "灵动岛卡片: 藏着的那一块不吃点击、对读屏隐藏(NotchCardLayerActive)")
         expectEqual(sourceHas(list, "suspendsBlur: true,")
                     && sourceHas(list, "surfaceVisible: layerActive,"), true,
                     "多行歌词: 不做景深模糊、所在那一层看不见时停表")

@@ -58,7 +58,9 @@ struct NotchCardLayerActive: ViewModifier {
             .transformEnvironment(\.notchCardLayerActive) { $0 = $0 && active }
             // 曲线只套在透明度上,位置照跟卡片那条弹簧(见头注)。
             .animation(fade) { $0.opacity(active ? 1 : 0) }
-                .accessibilityHidden(!active)
+            // 藏着的不吃点击,别只靠透明:淡出过程中那份还半透明,照样接得到点击。
+            .allowsHitTesting(active)
+            .accessibilityHidden(!active)
     }
 }
 

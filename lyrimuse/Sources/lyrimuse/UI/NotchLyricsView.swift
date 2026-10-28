@@ -24,8 +24,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 设置页开着时就会跟着真广告对用户的浏览器发 AppleScript —— 预览不产生副作用。
     var drivesAdSkipGate = false
     // 不整对象订阅 PlaybackCoordinator/AppSettings —— 见 NotchPlayback 的注释。
-    // NotchTransientCenter 也不在这里订阅:banner 只被歌词行消费,订阅下沉到
-    // NotchTransientHost 子视图,横幅出现/消失只失效那一行,不打醒整卡。
+    // NotchTransientCenter 也不在这里订阅:banner 只被歌词行 / 多行歌词那一格消费,订阅下沉到
+    // NotchTransientHost 子视图,横幅出现/消失只失效那一格,不打醒整卡。
     // 进度条拖动的三个交互状态(@GestureState/宽度/悬停)同理下沉进 NotchScrubber,挂在这里的话拖动时每个指针事件都整卡重估。
     @StateObject var playback = NotchPlayback()
     @Environment(\.accessibilityReduceMotion) var reduceMotion
@@ -141,7 +141,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     .padding(.top, controller.contentTopInset)
                     .opacity(revealContentOpacity)
             }
-            // 瞬态横幅:关着歌词行时画在卡片为它多长的那一截里(开着时在歌词行里,见 NotchTransientHost)。
+            // 瞬态横幅:关着歌词行时画在卡片为它多长的那一截里(开着时在歌词行里,展开且显示多行歌词时在列表那一格里,
+            // 见 NotchTransientHost)。
             .overlay(alignment: .top) {
                 if controller.showsBannerStrip {
                     NotchTransientHost(tint: accentOrWhite) { Color.clear }
@@ -345,8 +346,10 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 .frame(width: controller.expandedCardWidth, height: controller.lyricRowHeight)
                 .padding(.top, top + headerHeight)
                 .modifier(NotchCardLayerActive(active: expanded && !showsList, staggered: staggered))
+            // 列表那一格同样是横幅的宿主:展开那份歌词行这时藏着,横幅盖在列表上。`showsTransientBanner` 认定展开态显示得了
+            // 横幅,展开态里每一种歌词那一格都得接得住。
             if showsList {
-                NotchExpandedLyricList(tint: accentOrWhite)
+                NotchTransientHost(tint: accentOrWhite) { NotchExpandedLyricList(tint: accentOrWhite) }
                     .frame(width: controller.expandedCardWidth, height: controller.expandedLyricListHeight)
                     .padding(.top, top + headerHeight)
                     .modifier(NotchCardLayerActive(active: expanded, staggered: staggered, waitsForResize: true))
@@ -370,10 +373,11 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     }
 }
 
-/// 歌词行上「瞬态横幅盖歌词」这层壳,单独订阅 NotchTransientCenter:banner 只被这一行消费,订阅挂在 NotchLyricsView 根上的话,
-/// 音量连调时每档一次的 @Published 变化会打醒整卡 body(含封面背景/跑马灯/音浪)。下沉之后横幅出现/消失只失效这一行。
+/// 歌词行 / 多行歌词那一格上「瞬态横幅盖歌词」这层壳,单独订阅 NotchTransientCenter:banner 只被这一格消费,订阅挂在
+/// NotchLyricsView 根上的话,音量连调时每档一次的 @Published 变化会打醒整卡 body(含封面背景/跑马灯/音浪)。下沉之后横幅
+/// 出现/消失只失效这一格。
 ///
-/// 歌词行常驻,横幅盖上来时只藏起来(`NotchCardLayerActive`:透明、停表、对读屏隐藏),别写回 `if let banner … else` 换视图:
+/// 歌词常驻,横幅盖上来时只藏起来(`NotchCardLayerActive`:透明、不吃点击、停表、对读屏隐藏),别写回 `if let banner … else` 换视图:
 /// 那样每弹一次横幅歌词行就拆掉重建,长句跑马灯从句首重来,逐字行重画整行位图。横幅自己的淡入淡出单独包一层,
 /// `.animation(_:value:)` 的作用域不罩到歌词行上(05 章决策 101)。
 struct NotchTransientHost<Fallback: View>: View {

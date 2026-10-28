@@ -66,16 +66,12 @@ struct NotchExpandedLyricList: View {
             toMs: max(0, lines[index].timeMs - PlaybackCoordinator.shared.currentLyricsOffsetMs))
     }
 
-    /// 当前句上面正好放下整数行、渐隐只淡行距那道缝(`NotchExpandedMetrics.lyricListActiveAnchor` / `lyricListEdgeFade`)。
-    /// 行数从这一格的高度反推:高度就是行数 × 每行高度。
+    /// 当前句上面正好放下整数行、渐隐只淡行距那道缝(`NotchExpandedMetrics.lyricListPlacement`)。行距按这首歌实际排出来的算:
+    /// 格高按设置里的副行定,这首一句译文 / 读音都没有时每句只有一行,别按带小字的行距摆,不然边上露出半截行。
     private func placement(height: CGFloat) -> LyricsLayerListPlacement {
-        let secondary = feed.secondaryLine.showsLyricListSecondary
-        let pitch = NotchExpandedMetrics.lyricListPitch(secondaryRow: secondary)
-        let count = max(1, Int((height / pitch).rounded()))
-        let fade = height > 0 ? min(0.5, NotchExpandedMetrics.lyricListEdgeFade / height) : 0
-        return LyricsLayerListPlacement(
-            activeAnchor: NotchExpandedMetrics.lyricListActiveAnchor(lineCount: count, secondaryRow: secondary),
-            topClear: 0, topOpaque: fade, bottomOpaque: 1 - fade, bottomClear: 1)
+        let p = NotchExpandedMetrics.lyricListPlacement(height: height, secondaryRow: feed.showsSecondaryRow)
+        return LyricsLayerListPlacement(activeAnchor: p.activeAnchor, topClear: p.topClear, topOpaque: p.topOpaque,
+                                        bottomOpaque: p.bottomOpaque, bottomClear: p.bottomClear)
     }
 
     private func spec(width: CGFloat) -> LyricsLayerList.Spec {
@@ -132,6 +128,8 @@ private final class NotchLyricListFeed: ObservableObject {
     @Published private(set) var fontWeight = AppSettings.shared.notchFontWeight
     @Published private(set) var secondaryLine = AppSettings.shared.notchSecondaryLine
     @Published private(set) var alignment = AppSettings.shared.notchLyricsAlignment
+    /// 这首歌每句下面真有那行小字(`LyricSecondaryLine.showsLyricListSecondary(in:)`),摆法按它算行距。
+    @Published private(set) var showsSecondaryRow = false
     private var subs: [AnyCancellable] = []
 
     init() {
@@ -164,5 +162,13 @@ private final class NotchLyricListFeed: ObservableObject {
             s.$notchSecondaryLine.removeDuplicates().sink { [weak self] in self?.secondaryLine = $0 },
             s.$notchLyricsAlignment.removeDuplicates().sink { [weak self] in self?.alignment = $0 },
         ]
+        // 跟 `lines` 同一份来源(压成整行之后),小字在不在跟列表真正排出来的一致。
+        subs.append(
+            Publishers.CombineLatest3(p.$allLines, s.$notchLyricsKaraoke, s.$notchSecondaryLine)
+                .map { all, karaoke, secondary in
+                    secondary.showsLyricListSecondary(in: MiniLyricsSelection.lines(all, karaoke: karaoke).lazy.map(\.line))
+                }
+                .removeDuplicates()
+                .sink { [weak self] in self?.showsSecondaryRow = $0 })
     }
 }

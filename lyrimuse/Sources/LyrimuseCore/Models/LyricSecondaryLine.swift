@@ -34,6 +34,21 @@ public enum LyricSecondaryLine: String, CaseIterable, Sendable {
     /// 灵动岛展开态的多行歌词每句下面跟不跟一行小字:选译文 / 读音时跟;「下一句」在列表里本来就看得到,不跟。
     public var showsLyricListSecondary: Bool { self == .translation || self == .romanization }
 
+    /// 这首歌在多行歌词里真有没有那行小字:选了译文 / 读音,且至少一句带着(读音含逐词标注)。一句都没有时每句只排一行,
+    /// 行距按不带小字算。判据跟图层列表排小字的条件一致(`LyricsLayerRowPlan` 那几个 `isEmpty`)。
+    public func showsLyricListSecondary<Lines: Sequence>(in lines: Lines) -> Bool where Lines.Element == SyncedLyricLine {
+        switch self {
+        case .translation:
+            return lines.contains { $0.translation?.isEmpty == false }
+        case .romanization:
+            return lines.contains {
+                $0.romanization?.isEmpty == false || ($0.wordGroups?.isEmpty == false && $0.words != nil)
+            }
+        case .off, .nextLine:
+            return false
+        }
+    }
+
     /// 副行要显示的文字:下一句 / 当前句译文 / 当前句罗马音,首尾空白剔掉、空的算没有(nil)。
     /// 灵动岛(`NotchPlayback.secondaryText`)和菜单栏(`MenuBarStatusItem.refresh`)都调这一份,
     /// 两处各写一遍 switch 迟早漂开(比如一边 trim 一边不 trim)。
