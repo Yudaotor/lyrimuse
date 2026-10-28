@@ -155,6 +155,32 @@ func runNetEaseIPadTests() {
                     "iPad 网易云 多位歌手: 这一帧再整理一次结果不变")
     }
 
+    // ---- 多位歌手、自动连播整帧开播:那一行是真名,不当撕裂帧(录到的真实序列) ----
+    do {
+        var memory = N.Memory()
+        let ts = "@1793178273127000"
+        _ = N.normalized(F(title: "Forever", artist: "The Little Dippers", album: "Forever", duration: 144, elapsed: 0), memory: &memory)
+        _ = N.normalized(F(title: "forever", artist: "The Little Dippers/Forever", album: "Forever", duration: 144, elapsed: 144,
+                           timestamp: "@1793178272560000"), memory: &memory)
+        let raw = F(title: "Chevrolet (feat. Jelly Roll)", artist: "Jelly Roll/Dustin Lynch", album: "Chevrolet", duration: 184,
+                    elapsed: 0, timestamp: ts)
+        let primed = memory
+        var manual = primed
+        expectEqual(N.normalized(raw, memory: &manual).title, "Forever", "iPad 网易云 多位歌手: 没记到整帧开播那一行时照旧按上一首报")
+        memory.bareStartTimestamp = ts
+        memory.fullStart = true
+        let start = N.normalized(raw, memory: &memory)
+        expectEqual([start.title, start.artist], ["Chevrolet (feat. Jelly Roll)", "Jelly Roll/Dustin Lynch"],
+                    "iPad 网易云 多位歌手: 自动连播整帧开播那一行原样")
+        expectEqual(start.elapsed, N.fullStartLead, "iPad 网易云 多位歌手: 自动连播那一行补整帧的提前量")
+        var bare = primed
+        bare.bareStartTimestamp = ts
+        expectEqual(N.normalized(raw, memory: &bare).title, "Forever", "iPad 网易云 多位歌手: 只翻速率的开播差量那一行不豁免")
+        let lyric = N.normalized(F(title: "Wanna get lost on the backroads", artist: "Jelly Roll/Dustin Lynch/Chevrolet (feat. Jelly Roll)",
+                                   album: "Chevrolet", duration: 184, elapsed: 38.2, timestamp: "@1793178311089000"), memory: &memory)
+        expectEqual(lyric.title, "Chevrolet (feat. Jelly Roll)", "iPad 网易云 多位歌手: 之后的歌词帧认回真名")
+    }
+
     // ---- 锁屏歌词开着、没有撕裂帧:单个歌手的新歌真名帧原样 ----
     do {
         var memory = N.Memory()
@@ -286,7 +312,7 @@ func runNetEaseIPadTests() {
         expectEqual(N.normalizedPayload(garbage), garbage, "iPad 网易云: 解不开的载荷原样交回")
     }
 
-    // ---- 开播只翻速率的差量晚约 0.45 秒:认出那一行、记下时间戳,进度 0 的那个锚点补提前量 ----
+    // ---- 开播那一行(只翻速率的差量、自动连播的整帧)晚:认出那一行、记下时间戳和是哪一种,进度 0 的那个锚点补提前量,头几秒的重报按它推 ----
     do {
         N.resetForTesting()
         defer { N.resetForTesting() }
@@ -297,8 +323,10 @@ func runNetEaseIPadTests() {
         expectEqual(N.isBareStart(payload: bare, merged: merged), true, "iPad 网易云 开播: 只翻速率、进度 0 的差量认出来")
         var resumed = merged; resumed["elapsedTime"] = 9.04
         expectEqual(N.isBareStart(payload: bare, merged: resumed), false, "iPad 网易云 开播: 恢复播放(进度不是 0)不算")
-        expectEqual(N.isBareStart(payload: ["playbackRate": 1, "timestamp": ts, "elapsedTime": 0.0], merged: merged), false,
-                    "iPad 网易云 开播: 带着进度整帧报的不算")
+        expectEqual(N.isBareStart(payload: ["playbackRate": 1, "timestamp": ts, "elapsedTime": 0.0], merged: merged), true,
+                    "iPad 网易云 开播: 自动连播整帧带进度 0 报的也算")
+        expectEqual(N.isBareStart(payload: ["playbackRate": 1, "timestamp": ts, "elapsedTime": 3.0], merged: resumed), false,
+                    "iPad 网易云 开播: 整帧带的进度不是 0 不算")
         expectEqual(N.isBareStart(payload: ["playbackRate": 0, "timestamp": ts], merged: merged), false, "iPad 网易云 开播: 速率 0 不算")
         expectEqual(N.isBareStart(payload: ["playbackRate": 1], merged: merged), false, "iPad 网易云 开播: 没有时间戳不算")
         var macMerged = merged; macMerged["bundleIdentifier"] = mac
@@ -313,6 +341,24 @@ func runNetEaseIPadTests() {
         var later = start; later.elapsed = 3.62
         expectEqual(N.normalized(later, memory: &memory).elapsed, 3.62, "iPad 网易云 开播: 同一时间戳进度不是 0 不补")
         expectEqual(N.bareStartLead > 0.4 && N.bareStartLead < 0.5, true, "iPad 网易云 开播: 提前量在实测 0.41~0.48 之间")
+        expectEqual(N.fullStartLead > 0.2 && N.fullStartLead < 0.4, true, "iPad 网易云 开播: 整帧的提前量在实测中位 0.3 上下")
+
+        // 开播后头几秒的重报(实测报小 0.1~0.5 秒)按开播锚点推过来的报。
+        var early = F(title: "致你", artist: "yihuik苡慧", album: "致你", duration: 200, elapsed: 1.53, timestamp: "@1793154661900000")
+        let carried = N.normalized(early, memory: &memory).elapsed ?? -1
+        expectEqual(abs(carried - (2 + N.bareStartLead)) < 0.000_1, true, "iPad 网易云 开播: 头几秒的重报按开播锚点推过来")
+        expectEqual(N.normalized(early, memory: &memory).elapsed, carried, "iPad 网易云 开播: 头几秒的重报再整理一次结果不变")
+        early.elapsed = 3.5
+        expectEqual(N.normalized(early, memory: &memory).elapsed, 3.5, "iPad 网易云 开播: 跟开播锚点差出 1 秒的(拖动过)照原样")
+        var steady = early; steady.elapsed = 4.3; steady.timestamp = "@1793154664100000"
+        expectEqual(N.normalized(steady, memory: &memory).elapsed, 4.3, "iPad 网易云 开播: 进度过了 4 秒的重报照原样")
+        var fullMemory = N.Memory(bareStartTimestamp: ts, fullStart: true)
+        expectEqual(N.normalized(start, memory: &fullMemory).elapsed, N.fullStartLead, "iPad 网易云 开播: 整帧开播补整帧的提前量")
+        early.elapsed = 1.53
+        let fullCarried = N.normalized(early, memory: &fullMemory).elapsed ?? -1
+        expectEqual(abs(fullCarried - (2 + N.fullStartLead)) < 0.000_1, true, "iPad 网易云 开播: 整帧开播之后的重报按整帧的提前量推")
+        var noStart = N.Memory()
+        expectEqual(N.normalized(early, memory: &noStart).elapsed, 1.53, "iPad 网易云 开播: 没记到开播那一行时照原样")
 
         // 事件流:暂停帧 → 只翻速率的差量;这一行的锚点身份带提前量,跟轮询整理出来的同一份。
         let fullLine = Data(("{\"type\":\"data\",\"diff\":false,\"payload\":{\"bundleIdentifier\":\"\(N.bundleID)\","
@@ -341,6 +387,23 @@ func runNetEaseIPadTests() {
 
         var macFields = d2.merged; macFields["bundleIdentifier"] = mac
         expectEqual((N.normalizedFields(macFields)["elapsedTime"] as? NSNumber)?.doubleValue, 0, "iPad 网易云 开播: Mac 版的原样")
+
+        // 事件流:自动连播整帧开播 → 2 秒后报小了的重报;两行的锚点身份都按整帧的提前量。
+        let autoLine = Data(("{\"type\":\"data\",\"diff\":false,\"payload\":{\"bundleIdentifier\":\"\(N.bundleID)\","
+            + "\"title\":\"晚安\",\"artist\":\"颜人中\",\"album\":\"晚安\",\"playing\":true,\"playbackRate\":1,"
+            + "\"elapsedTimeMicros\":0,\"timestampEpochMicros\":1793175185011000,\"durationMicros\":289000000}}").utf8)
+        let d3 = MediaControlStreamWatcher.digest(line: autoLine, merged: [:], arrivedAt: arrival)
+        expectEqual(d3.anchorKey, MediaControlClient.anchorKey(artist: "颜人中", title: "晚安", elapsedTime: N.fullStartLead,
+                                                              timestamp: "@1793175185011000"),
+                    "iPad 网易云 开播: 自动连播那一行的锚点身份带整帧的提前量")
+        let lyricLine = Data(("{\"type\":\"data\",\"diff\":false,\"payload\":{\"bundleIdentifier\":\"\(N.bundleID)\","
+            + "\"title\":\"编曲: 关天天\",\"artist\":\"颜人中/晚安\",\"album\":\"晚安\",\"playing\":true,\"playbackRate\":1,"
+            + "\"elapsedTimeMicros\":2177709,\"timestampEpochMicros\":1793175187443000,\"durationMicros\":289000000}}").utf8)
+        let d4 = MediaControlStreamWatcher.digest(line: lyricLine, merged: d3.merged, arrivedAt: arrival)
+        let carriedFields = N.normalizedFields(d4.merged)
+        expectEqual(carriedFields["title"] as? String, "晚安", "iPad 网易云 开播: 头一句重报认回真名")
+        let carriedElapsed = (carriedFields["elapsedTime"] as? NSNumber)?.doubleValue ?? -1
+        expectEqual(abs(carriedElapsed - (2.432 + N.fullStartLead)) < 0.000_1, true, "iPad 网易云 开播: 头一句重报按开播锚点推过来")
     }
 
     // ---- 接线契约 ----
@@ -361,7 +424,7 @@ func runNetEaseIPadTests() {
         expectEqual([sourceHas(client, "elapsed: times.elapsedTime, timestamp: times.timestamp),"),
                      sourceHas(client, "bundleID: bundleIdentifier, playing: playing, elapsed: names.elapsed,"),
                      sourceHas(client, "elapsedNow: times.elapsedTimeNow.map { $0 + lead }, rate: rate,"),
-                     sourceHas(watcher, "NetEaseIPadNowPlaying.noteBareStart(timestamp: timestamp)"),
+                     sourceHas(watcher, "NetEaseIPadNowPlaying.noteBareStart(timestamp: timestamp, full: payload[\"elapsedTime\"] != nil)"),
                      sourceHas(watcher, "let elapsed = (identity[\"elapsedTime\"] as? NSNumber)?.doubleValue")],
                     [true, true, true, true, true], "iPad 网易云 接线: 开播提前量轮询、事件流两路都用整理过的进度")
         let probe = sourceText("LyrimuseCore/Local/NowPlayingClientsProbe.swift")

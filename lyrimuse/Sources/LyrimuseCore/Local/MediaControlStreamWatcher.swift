@@ -358,7 +358,7 @@ public final class MediaControlStreamWatcher {
         // 合并状态里留原样(下一行只带 title 的 diff 才拼得回 iPad 版网易云的歌词模式),判换歌、算锚点身份用整理过的,
         // 跟轮询那一路逐字一致(见 NetEaseIPadNowPlaying)。开播差量要在整理之前记下,这一行的锚点身份才带上提前量。
         if NetEaseIPadNowPlaying.isBareStart(payload: payload, merged: next), let timestamp = next["timestamp"] as? String {
-            NetEaseIPadNowPlaying.noteBareStart(timestamp: timestamp)
+            NetEaseIPadNowPlaying.noteBareStart(timestamp: timestamp, full: payload["elapsedTime"] != nil)
         }
         let identity = NetEaseIPadNowPlaying.normalizedFields(next)
         let changed = changedTrackKey(before: NetEaseIPadNowPlaying.normalizedFields(merged), after: identity)

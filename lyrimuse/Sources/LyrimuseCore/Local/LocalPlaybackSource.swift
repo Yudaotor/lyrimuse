@@ -1019,7 +1019,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 恢复认得晚(没等到恢复信号、靠暂停档轮询才看到)时,上限按兜底的 2 秒算,会把准的读数削掉一截(见 02 章决策 152)。
     /// Pine Player 的位置是 `PinePlayhead` 从它恢复那份锚点起算的(暂停前的位置接上,或进度条校准过),同样原样采信。
     /// iPad 版网易云(`client`:这份会话实际是谁报的)恢复那一拍的锚点对真值在 0.01 秒上下,换歌开播那一拍补过提前量
-    /// (`NetEaseIPadNowPlaying.bareStartLead`),同样原样采信,不然提前量被削成信号至今那一截。见 02 章决策 198。
+    /// (`NetEaseIPadNowPlaying.bareStartLead` / `fullStartLead`),同样原样采信,不然提前量被削成信号至今那一截。见 02 章决策 198。
     /// 别的播放器照旧削。纯函数,selftest 覆盖。
     public nonisolated static func resumeReadingNeverLeads(bundleID: String?, client: String? = nil) -> Bool {
         bundleID == PlaybackPlayer.kaset.bundleIdentifier || bundleID == PlaybackPlayer.vox.bundleIdentifier

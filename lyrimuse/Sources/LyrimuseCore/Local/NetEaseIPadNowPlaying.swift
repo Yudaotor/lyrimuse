@@ -10,11 +10,14 @@ import Foundation
 /// - 换歌那一刻第一帧还是上一首的 title / artist、时长已经是新歌的:按上一首的时长报,不然新歌那一帧会被当成「时长没跟上」的撕裂按住
 ///   (`TornTrackHold.durationLags`)。「锁屏歌词」开着时第一帧多半是 title 还是上一首的某一句歌词(它在后台时不逐句重报,未必是报过的
 ///   那句)、artist 已是新歌的「歌手/歌名」写法、专辑时长也是新歌的:整帧按上一首报,不然它被当成新歌,紧跟着的真名帧只换了 title,
-///   会被当成撕裂按住十几秒。真名帧之后紧跟的歌词帧(artist 正好是上一帧的「歌手/歌名」)把上一帧认回真名。
+///   会被当成撕裂按住十几秒。真名帧之后紧跟的歌词帧(artist 正好是上一帧的「歌手/歌名」)把上一帧认回真名。撕裂帧只出现在手动换歌
+///   那一帧暂停帧里;自动连播整帧开播的那一行(多位歌手的 artist 也带「/」)不按撕裂帧认。
 /// - 含不良内容的歌 title 末尾带「🅴」,去掉。
-/// - 换歌开播时多数只补一行速率翻 1 的差量(不带进度,进度还是暂停帧那个 0),比真实起播晚约 0.45 秒;整帧带着进度 0 一起报的
-///   那种不晚。差量带不带进度只有媒体事件流看得到:它认出这一行(`isBareStart`)就记下时间戳(`noteBareStart`),之后哪条路
-///   整理到这个时间戳、进度 0 的锚点都报成 `bareStartLead`。
+/// - 开播那一行比真实起播晚:手动换歌多数只补一行速率翻 1 的差量(不带进度,进度还是暂停帧那个 0),晚约 0.45 秒;自动连播是整帧
+///   带着进度 0、速率 1 报,晚 0~0.46 秒、多在 0.3 上下。这一行只有媒体事件流看得到:它认出这一行(`isBareStart`)就记下时间戳和
+///   是哪一种(`noteBareStart`),之后哪条路整理到这个时间戳、进度 0 的锚点都补上那一种的提前量(`bareStartLead` / `fullStartLead`)。
+/// - 开播后头几秒逐句重报的进度报小了 0.1~0.5 秒,之后的才准:进度不到 `earlyReportMaxElapsed`、跟开播锚点推过来的差不出
+///   `earlyReportMaxDrift` 的,按开播锚点推过来的报。
 ///
 /// 轮询、媒体事件流、单问会话和封面几条路都过这里,状态共用一份;同一帧再过一次结果不变(事件流会把上一帧再整理一次来比)。
 /// 见 02 章决策 198。
@@ -46,15 +49,19 @@ public enum NetEaseIPadNowPlaying {
         public var real: Frame?
         /// 上一帧原样报上来的。
         public var last: Frame?
-        /// 最近一次只翻速率的开播差量的时间戳。
+        /// 最近一次开播那一行的时间戳。
         public var bareStartTimestamp: String?
+        /// 那一行是整帧带着进度 0 报的(自动连播)。
+        public var fullStart: Bool
         /// 这份真名报过的最近一句歌词(歌词帧的 title);不为空 = 「锁屏歌词」开着。
         public var lyricTitle: String?
 
-        public init(real: Frame? = nil, last: Frame? = nil, bareStartTimestamp: String? = nil, lyricTitle: String? = nil) {
+        public init(real: Frame? = nil, last: Frame? = nil, bareStartTimestamp: String? = nil,
+                    fullStart: Bool = false, lyricTitle: String? = nil) {
             self.real = real
             self.last = last
             self.bareStartTimestamp = bareStartTimestamp
+            self.fullStart = fullStart
             self.lyricTitle = lyricTitle
         }
     }
@@ -62,8 +69,17 @@ public enum NetEaseIPadNowPlaying {
     /// 换歌那一帧的进度上限:撕裂那一帧报在开头。
     static let tornFrameMaxElapsed: Double = 0.5
 
-    /// 只翻速率的开播差量比真实起播晚多少秒,以它自己暂停帧、逐句重报的进度为准(见 02 章决策 198)。
+    /// 只翻速率的开播差量比真实起播晚多少秒,以它开播几秒后逐句重报的进度为准(见 02 章决策 198)。
     public static let bareStartLead: Double = 0.45
+
+    /// 整帧带进度 0 的开播(自动连播)比真实起播晚多少秒,同上。
+    public static let fullStartLead: Double = 0.3
+
+    /// 开播后进度不到这么多秒的重报不准。
+    static let earlyReportMaxElapsed: Double = 4
+
+    /// 不准的重报跟开播锚点推过来的最多差这么多秒;差得更多的是拖动过,照原样。
+    static let earlyReportMaxDrift: Double = 1
 
     private static let lock = NSLock()
     nonisolated(unsafe) private static var shared = Memory()
@@ -127,21 +143,22 @@ public enum NetEaseIPadNowPlaying {
         return out
     }
 
-    /// 媒体事件流这一行是不是只翻速率的开播差量:iPad 版报的、这一行带速率 1 和时间戳、不带进度,合并之后进度是 0。
-    /// `payload` 是这一行(时间已换成秒),`merged` 是合并了这一行之后的状态。恢复播放也是这种差量,但进度不是 0。
+    /// 媒体事件流这一行是不是开播:iPad 版报的、这一行带速率 1 和时间戳,合并之后进度是 0(只翻速率的差量,或整帧带进度 0)。
+    /// `payload` 是这一行(时间已换成秒),`merged` 是合并了这一行之后的状态。恢复播放也是只翻速率的差量,但进度不是 0。
     /// 纯函数,selftest 覆盖。
     public static func isBareStart(payload: [String: Any], merged: [String: Any]) -> Bool {
         guard merged["bundleIdentifier"] as? String == Self.bundleID,
-              (payload["playbackRate"] as? NSNumber)?.doubleValue == 1, payload["elapsedTime"] == nil,
+              (payload["playbackRate"] as? NSNumber)?.doubleValue == 1,
               payload["timestamp"] is String,
               let elapsed = (merged["elapsedTime"] as? NSNumber)?.doubleValue else { return false }
         return abs(elapsed) < 0.001
     }
 
-    /// 记下开播差量的时间戳(见 `isBareStart`)。
-    public static func noteBareStart(timestamp: String) {
+    /// 记下开播那一行的时间戳(见 `isBareStart`);`full`:这一行整帧带着进度 0(自动连播)。
+    public static func noteBareStart(timestamp: String, full: Bool) {
         lock.lock()
         shared.bareStartTimestamp = timestamp
+        shared.fullStart = full
         lock.unlock()
     }
 
@@ -166,11 +183,24 @@ public enum NetEaseIPadNowPlaying {
     /// 纯函数(状态由调用方给),selftest 覆盖。
     public static func normalized(_ raw: Frame, memory: inout Memory) -> Frame {
         var frame = normalizedNames(raw, memory: &memory)
-        if let timestamp = raw.timestamp, timestamp == memory.bareStartTimestamp,
-           let elapsed = frame.elapsed, abs(elapsed) < 0.001 {
-            frame.elapsed = bareStartLead
+        guard let timestamp = raw.timestamp, let start = memory.bareStartTimestamp, let elapsed = frame.elapsed else { return frame }
+        let lead = memory.fullStart ? fullStartLead : bareStartLead
+        if timestamp == start {
+            if abs(elapsed) < 0.001 { frame.elapsed = lead }
+        } else if let carried = carriedFromStart(elapsed: elapsed, timestamp: timestamp, start: start, lead: lead) {
+            frame.elapsed = carried
         }
         return frame
+    }
+
+    /// 开播后头几秒的重报按开播锚点推过来的进度;不是那种重报的给 nil。
+    static func carriedFromStart(elapsed: Double, timestamp: String, start: String, lead: Double) -> Double? {
+        guard elapsed < earlyReportMaxElapsed, let at = MediaControlClient.parseTimestamp(timestamp),
+              let startAt = MediaControlClient.parseTimestamp(start) else { return nil }
+        let since = at.timeIntervalSince(startAt)
+        guard since > 0 else { return nil }
+        let carried = since + lead
+        return abs(carried - elapsed) <= earlyReportMaxDrift ? carried : nil
     }
 
     static func normalizedNames(_ raw: Frame, memory: inout Memory) -> Frame {
@@ -190,7 +220,9 @@ public enum NetEaseIPadNowPlaying {
             return Frame(title: frame.title, artist: frame.artist, album: frame.album, duration: real.duration,
                          elapsed: frame.elapsed)
         }
-        if let real = memory.real, isTornLyricFrame(frame, real: real, lyricTitle: memory.lyricTitle, last: memory.last) {
+        let isFullStart = memory.fullStart && raw.timestamp != nil && raw.timestamp == memory.bareStartTimestamp
+        if !isFullStart, let real = memory.real,
+           isTornLyricFrame(frame, real: real, lyricTitle: memory.lyricTitle, last: memory.last) {
             return Frame(title: real.title, artist: real.artist, album: real.album, duration: real.duration,
                          elapsed: frame.elapsed)
         }
