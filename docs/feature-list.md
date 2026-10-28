@@ -852,8 +852,8 @@ Every setting in the Settings window, by where it lives: 292 in all. Type a name
 - **Translation Language**
 - **Translate When None Is Provided**: Translates on this Mac first, and online when that isn’t possible
 - **Translation Languages**: System languages used for on-device translation
-- **Chinese Script**: Show Chinese lyrics in Simplified or Traditional characters
-- **Romanization Languages**: Adds romanization for the languages you check
+- **Chinese Script**
+- **Romanization Languages**
 - **Japanese Reading**: Romaji, or hiragana for kanji only
 
 ### Lyrics › Timing

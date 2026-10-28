@@ -196,24 +196,6 @@ public enum SettingsSearchCatalog {
         return gates
     }()
 
-    /// 「歌词 › 语言」顶上「在「歌词显示」中选择译文和读音的显示位置」跳过去点亮哪几行:「歌词显示」停在哪一段就点那一段
-    /// 管译文、读音的行(灵动岛 / 菜单栏 / 触控栏是「副行」,悬浮歌词 / 歌词窗口是「读音」「译文」),别的值、从没打开过,
-    /// 或停在「触控栏」而这台 Mac 没有触控栏(那一段只有一张说明卡)时落到悬浮歌词。`appearanceSection` 是
-    /// `LyricsSurface.appearanceSectionStorageKey` 里存的值。
-    public static func displayPlacementTargets(appearanceSection: String?,
-                                               hasTouchBar: Bool) -> (sectionValue: String, titleKeys: [String]) {
-        switch appearanceSection {
-        case LyricsSurface.notch.appearanceSectionRawValue, LyricsSurface.menuBar.appearanceSectionRawValue:
-            return (appearanceSection!, ["副行"])
-        case touchBarSectionValue where hasTouchBar:
-            return (touchBarSectionValue, ["副行"])
-        case lyricsWindowSectionValue:
-            return (lyricsWindowSectionValue, ["读音", "译文"])
-        default:
-            return (LyricsSurface.overlay.appearanceSectionRawValue, ["读音", "译文"])
-        }
-    }
-
     /// 搜到的这一行此刻不在页面上时该落到哪一行的标题(键);在页面上返回 nil。按 `rowGates` 的顺序找第一条条件为假的;
     /// 落点自己也藏着(灵动岛「展开时预览下一句」→「副行」→「收起时显示歌词」)就接着往上找,最多几层。
     public static func gateTitle(path: [String], title: String, isTrue: (String) -> Bool) -> String? {
@@ -370,8 +352,8 @@ public enum SettingsSearchCatalog {
         lyrics("translation", "无译文时自动翻译", alt: ["系统兜底翻译"], sub: "优先在本机翻译，无法翻译时再联网翻译",
                kw: ["机翻", "Google", "MyMemory", "翻译"]),
         lyrics("translation", "翻译语言包", sub: "本机翻译要用到的系统语言包", kw: ["下载", "语言包", "Apple 翻译"]),
-        lyrics("translation", "繁简转换", sub: "中文歌词统一成简体或繁体", kw: ["繁体", "简体", "OpenCC"]),
-        lyrics("translation", "标注读音的语言", alt: ["标注的语言"], sub: "为勾选的语言标注读音",
+        lyrics("translation", "繁简转换", kw: ["繁体", "简体", "OpenCC"]),
+        lyrics("translation", "标注读音的语言", alt: ["标注的语言"],
                kw: ["日语", "韩语", "普通话", "粤语", "中文", "拼音", "粤拼", "读音", "罗马音", "罗马字", "注音", "发音",
                     "俄语", "希腊语", "泰语", "印地语", "阿拉伯语", "其他文字"]),
         lyrics("translation", "日语读音", sub: "标注罗马字，或只给汉字标注平假名", kw: ["假名", "平假名", "振假名", "furigana", "罗马字", "罗马音", "汉字读音", "注音"]),

@@ -188,7 +188,8 @@ func runSettingsSearchTests() {
         // 「封面」同「背景」:迷你「顶部信息」里有一行真的叫这个名字、已登记在目录里,
         // 所以完整尺寸那张同名卡头顺带被目录覆盖,不能再留在白名单里(两者必须不相交)。
         "顶部信息", "布局",                                       // 歌词显示 › 歌词窗口 的卡头
-        "断句",                                                   // 歌词 › 时间与断句 的卡头(歌词 › 语言 的「文字」卡头见上一行)
+        "断句",                                                   // 歌词 › 时间与断句 的卡头
+        "繁简",                                                   // 歌词 › 语言 的卡头(「读音」卡头跟悬浮歌词「内容」里那一行同名,已登记)
         "批量匹配", "存储",                                 // 歌词 › 歌词库 的卡头
         "选定之后",                                         // 歌词 › 来源 的卡头(歌词 › 语言 的「译文」卡头跟悬浮歌词「内容」里那一行同名,已登记)
         "其他文字",                                         // 歌词 › 语言:读音语言收起来的那一行,语言名在「标注读音的语言」的关键词里
@@ -461,25 +462,9 @@ func runSettingsSearchTests() {
                     true, "搜索门: 菜单栏各行显隐条件与搜索喂的条件同步")
     }
 
-    // 「歌词 › 语言」顶上那颗链接:「歌词显示」停在哪一段就点那一段管译文、读音的行,每个落点都在目录里那一段。
-    typealias Catalog = SettingsSearchCatalog
-    for section: String? in [nil, "overlay", "notch", "menuBar", Catalog.touchBarSectionValue, Catalog.lyricsWindowSectionValue, "bogus"] {
-        let target = Catalog.displayPlacementTargets(appearanceSection: section, hasTouchBar: true)
-        for key in target.titleKeys {
-            expectEqual(entries.contains { $0.titleKey == key && $0.sectionValue == target.sectionValue }, true,
-                        "显示位置链接: \(section ?? "nil") →「\(key)」在目录的 \(target.sectionValue) 段")
-        }
-    }
-    expectEqual(Catalog.displayPlacementTargets(appearanceSection: "notch", hasTouchBar: true).titleKeys, ["副行"],
-                "显示位置链接: 灵动岛点副行")
-    expectEqual(Catalog.displayPlacementTargets(appearanceSection: Catalog.lyricsWindowSectionValue, hasTouchBar: true).titleKeys,
-                ["读音", "译文"], "显示位置链接: 歌词窗口点读音、译文")
-    expectEqual(Catalog.displayPlacementTargets(appearanceSection: nil, hasTouchBar: true).sectionValue, "overlay",
-                "显示位置链接: 没开过落到悬浮歌词")
-    expectEqual(Catalog.displayPlacementTargets(appearanceSection: Catalog.touchBarSectionValue, hasTouchBar: false).sectionValue,
-                "overlay", "显示位置链接: 没有触控栏时停在触控栏段落到悬浮歌词")
+    // 「歌词 › 语言」:译文、繁简、读音各一张卡,顶上不再挂跳去「歌词显示」的链接。
     let lyricsPage = source("SettingsView.swift")
-    expectEqual(sourceHas(lyricsPage, "hasTouchBar: TouchBarAvailability.shared.isPresent)")
-                && sourceHas(lyricsPage, "SettingsSearchRouter.shared.revealEntry(\ntitleKey: target.titleKeys[0], sectionValue: target.sectionValue,"),
-                true, "显示位置链接: 按钮按触控栏有无取落点、走 revealEntry 点亮那几行")
+    expectEqual(sourceHas(lyricsPage, "VStack(spacing: 14) {\ntranslationCard\nif showsChineseVariant { chineseVariantCard }\nreadingCard\n}")
+                && !lyricsPage.contains("displayPlacementLink"),
+                true, "歌词语言页: 译文 / 繁简 / 读音三张卡,没有顶上那颗链接")
 }

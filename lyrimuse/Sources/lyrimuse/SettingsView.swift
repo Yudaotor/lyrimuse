@@ -1806,42 +1806,17 @@ private struct LyricsSettingsTab: View {
         }
     }
 
-    // 「语言」这一段:歌词读成什么语言、写成什么字 —— 译文、繁简、读音,所有展示面看到的是同一份结果。
-    // 各展示面显不显示译文和读音是它们自己的开关,在「歌词显示」里(04 章决策 42):这一段顶上用一颗链接说一次,
-    // 不在每一行的副标题里重复。
+    // 「语言」这一段:歌词读成什么语言、写成什么字 —— 译文、繁简、读音各一张卡,所有展示面看到的是同一份结果。
+    // 各展示面显不显示译文和读音是它们自己的开关,在「歌词显示」里(04 章决策 42)。
     private var languageSection: some View {
         // 间距同 SettingsPage 的卡间距(14):包一层只为挂同一片背景光,同「来源」那一段。
         VStack(spacing: 14) {
-            displayPlacementLink
             translationCard
-            textCard
+            if showsChineseVariant { chineseVariantCard }
+            readingCard
         }
         // 玻璃要背后有东西才看得出来,跟 Last.fm 各段同一份淡色光(12 章决策 63)。
         .background { LastfmGlassGlow() }
-    }
-
-    /// 跳到「歌词显示」并点亮管译文、读音位置的那几行,哪一段哪几行见 Core `SettingsSearchCatalog.displayPlacementTargets`。
-    private var displayPlacementLink: some View {
-        Button {
-            let target = SettingsSearchCatalog.displayPlacementTargets(
-                appearanceSection: UserDefaults.standard.string(forKey: LyricsSurface.appearanceSectionStorageKey),
-                hasTouchBar: TouchBarAvailability.shared.isPresent)
-            let revealed = SettingsSearchRouter.shared.revealEntry(
-                titleKey: target.titleKeys[0], sectionValue: target.sectionValue,
-                alsoHighlighting: Array(target.titleKeys.dropFirst()))
-            if !revealed { AppActions.shared.requestSettings(.tab(.appearance)) }
-        } label: {
-            HStack(spacing: 4) {
-                Text(L10n.t("在「歌词显示」中选择译文和读音的显示位置"))
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .font(.system(size: 11.5))
-        }
-        .controlSize(.small)
-        .settingsGlassButtons()
-        .buttonBorderShape(.capsule)
     }
 
     private var translationCard: some View {
@@ -1895,11 +1870,38 @@ private struct LyricsSettingsTab: View {
         AppSettings.userReadsChinese || settings.hasSeenChineseLyrics || settings.lyricsChineseVariant != .off
     }
 
-    /// 「文字」卡:示例 → 繁简 → 标注读音的语言(常用四种 + 其他文字)→ 日语读音。示例按这张卡此刻的设置现算,
-    /// 改一项立刻看到结果。
-    private var textCard: some View {
+    /// 「繁简」卡:只有繁简转换一行,收起来的条件见 `showsChineseVariant`。
+    private var chineseVariantCard: some View {
         SettingsCard(cornerRadius: 18) {
-            SettingsCardHeader(title: L10n.t("文字"))
+            SettingsCardHeader(title: L10n.t("繁简"))
+            SettingsRow(icon: "character.bubble", title: L10n.t("繁简转换")) {
+                SettingsGlassTabPicker(
+                    selection: Binding(
+                        get: { settings.lyricsChineseVariant },
+                        set: { newValue in
+                            settings.lyricsChineseVariant = newValue
+                            local.chineseVariant = newValue
+                        }
+                    ),
+                    options: ChineseVariant.allCases,
+                    label: { variant in
+                        switch variant {
+                        case .off: return L10n.t("不转换")
+                        case .simplified: return L10n.t("简体")
+                        case .traditional: return L10n.t("繁体")
+                        }
+                    },
+                    compact: true
+                )
+            }
+        }
+    }
+
+    /// 「读音」卡:示例 → 标注读音的语言(常用四种 + 其他文字)→ 日语读音。示例按此刻的设置现算(繁简也算进去),
+    /// 改一项立刻看到结果。
+    private var readingCard: some View {
+        SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("读音"))
             SettingsRawRow(insetToText: true) {
                 LyricsTextSample(
                     scripts: settings.romanizationScripts,
@@ -1908,42 +1910,11 @@ private struct LyricsSettingsTab: View {
                 )
                 .padding(.bottom, 6)
             }
-            if showsChineseVariant {
-                CardDivider()
-                SettingsRow(
-                    icon: "character.bubble",
-                    title: L10n.t("繁简转换"),
-                    subtitle: L10n.t("中文歌词统一成简体或繁体")
-                ) {
-                    SettingsGlassTabPicker(
-                        selection: Binding(
-                            get: { settings.lyricsChineseVariant },
-                            set: { newValue in
-                                settings.lyricsChineseVariant = newValue
-                                local.chineseVariant = newValue
-                            }
-                        ),
-                        options: ChineseVariant.allCases,
-                        label: { variant in
-                            switch variant {
-                            case .off: return L10n.t("不转换")
-                            case .simplified: return L10n.t("简体")
-                            case .traditional: return L10n.t("繁体")
-                            }
-                        },
-                        compact: true
-                    )
-                }
-            }
             CardDivider()
             // 按语言分别开关 —— 同一个人对不同语言的需求常常是相反的:听日文歌要罗马字才跟得上,听中文歌完全
             // 不需要拼音。这一行只决定哪些语言产出读音、所有展示面共用。选项一律写**语言名**(标题问的就是语言),
             // 标成什么方案放在各自的悬停说明里;常用四种的格子里再写一个转写示例。
-            SettingsRow(
-                icon: "textformat.alt",
-                title: L10n.t("标注读音的语言"),
-                subtitle: L10n.t("为勾选的语言标注读音")
-            ) {
+            SettingsRow(icon: "textformat.alt", title: L10n.t("标注读音的语言")) {
                 Text(String(format: L10n.t("已开启 %@ / %@"),
                             "\(Self.allReadings.filter { settings.romanizationScripts.contains($0.option) }.count)",
                             "\(Self.allReadings.count)"))
