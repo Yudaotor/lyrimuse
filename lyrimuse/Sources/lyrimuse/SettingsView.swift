@@ -3086,7 +3086,6 @@ private struct AppearanceSettingsTab: View {
             .background(StageTopProbeView(probe: probe))
     }
 
-    /// 背景几档的名字,工具栏摘要和「背景」那一行的胶囊分段共用。
     /// 「背景」那颗的摘要:纯色 / 渐变用到的颜色全是不透明度 0 时写「透明」,不写档名 —— 那样读起来像铺了一块颜色。
     /// `colors` 是起止两色,纯色只看第一个。
     private func lyricsWindowBackgroundSummary(_ mode: LyricsWindowBackgroundMode, colors: [String]) -> String {
@@ -3099,6 +3098,7 @@ private struct AppearanceSettingsTab: View {
         }
     }
 
+    /// 背景几档的名字,工具栏摘要和「背景」那一行的胶囊分段共用。
     private func lyricsWindowBackgroundModeName(_ mode: LyricsWindowBackgroundMode) -> String {
         switch mode {
         case .artwork: L10n.t("跟随封面")

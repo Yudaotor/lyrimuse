@@ -65,6 +65,7 @@ final class MenuBarStatusItem: NSObject {
         hoverControls.onHoverChange = { [weak self] inside in self?.handleHoverChange(inside) }
         centerLyrics.onHoverChange = { [weak self] _ in self?.evaluateCenterHoverEngagement() }
         centerLyrics.onClick = { [weak self] click, view, point in self?.centerLyricsClicked(click, view: view, at: point) }
+        centerLyrics.isAnchoringPanel = { [weak self] view in self?.panelController.isAnchored(to: view) ?? false }
         positionHintController.onVisibilityChange = { [weak self] open in
             self?.positionHintIsOpen = open
             if !open { self?.refresh() }
@@ -1240,6 +1241,8 @@ final class MenuBarStatusItem: NSObject {
         var mainFont: NSFont
         /// 同一行接着译文时,译文那段(含分隔符)从第几个 UTF-16 单元起(`MenuBarLyricText.text`);其余 nil。
         var inlineTranslationStart: Int? = nil
+        /// 主行这一句在展示面里的下标(跟 `displayedLine` 取的同一句);兜底、回声、占位为 nil。
+        var lineIndex: Int? = nil
         var twoRows: Bool { kind.showsSecondaryRow }
     }
     private var rowState = RowState(kind: .off, secondaryText: nil, mainFont: NSFont.menuBarFont(ofSize: 0))
@@ -1335,7 +1338,10 @@ final class MenuBarStatusItem: NSObject {
             secondaryText: twoRows
                 ? secondaryKind.secondaryText(currentLine: line, nextLineText: coordinator.menuBarLyrics.nextText) : nil,
             mainFont: MenuBarMarqueeRenderer.mainFont(for: text, twoRows: twoRows),
-            inlineTranslationStart: display?.isFallback == false && text == lyricText ? composed?.translationStart : nil)
+            inlineTranslationStart: display?.isFallback == false && text == lyricText ? composed?.translationStart : nil,
+            lineIndex: display?.isFallback == false && line != nil
+                ? (secondaryKind.showsSecondaryRow ? coordinator.menuBarLyrics.lineIndex : coordinator.menuBarLyrics.compactLineIndex)
+                : nil)
         let lyricsActive = display != nil
         // 占位态(「♪ 歌名」兜底 / 间奏 ♪)按**即将到来的那一句**定宽。
         // 判据见 `upcomingLineSlotWidth`;非占位态恒 0,对正常歌词句零影响。
@@ -1524,7 +1530,8 @@ final class MenuBarStatusItem: NSObject {
             placed.append(screen)
             let label = centerLyrics.show(on: screen, span: span, contentWidth: win + reserved + Self.lyricsSlotPadding)
             label.present(text: lineText, windowWidth: win, pacing: pacing,
-                          fillPath: fillPath, followPath: followPath, clockPaced: clockPaced, icon: icon,
+                          fillPath: fillPath, followPath: followPath, clockPaced: clockPaced,
+                          lineIndex: rowState.lineIndex, icon: icon,
                           secondaryText: rowState.secondaryText, secondaryKind: rowState.kind,
                           inlineTranslationStart: rowState.inlineTranslationStart,
                           gapWindow: gap)
@@ -1773,7 +1780,8 @@ final class MenuBarStatusItem: NSObject {
 
         scrollingLabel.frame = button.bounds
         scrollingLabel.present(text: text, windowWidth: windowWidth, pacing: pacing,
-                               fillPath: fillPath, followPath: followPath, clockPaced: clockPaced, icon: icon,
+                               fillPath: fillPath, followPath: followPath, clockPaced: clockPaced,
+                               lineIndex: rowState.lineIndex, icon: icon,
                                secondaryText: rowState.secondaryText, secondaryKind: rowState.kind,
                                inlineTranslationStart: rowState.inlineTranslationStart,
                                gapWindow: gapWindow)

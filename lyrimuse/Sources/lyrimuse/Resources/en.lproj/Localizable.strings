@@ -256,7 +256,7 @@
 "「%@」已是内置播放器，在上方「播放器」卡片中勾选即可" = "“%@” is already a built-in player — just tick it in the Players card above";
 "「%@」无法用于同步歌词进度。此功能需要浏览器执行一段 JavaScript 来读取播放进度，而该应用未提供相应的脚本命令。Firefox 目前不支持，非浏览器应用同样不支持" = "“%@” can’t be used to sync lyric timing. This feature reads playback position by having the browser run a small piece of JavaScript, and this app provides no scripting command for that. Firefox doesn’t support it, and neither do apps that aren’t browsers";
 "「%@」有未保存的修改" = "“%@” Has Unsaved Changes";
-"「全部屏幕」在每块屏幕的菜单栏上各显示一份；「自动」优先主屏幕；指定的屏幕断开时按「自动」显示。灵动岛所在的屏幕不显示" = "All Displays shows a copy in the menu bar of every display; Automatic prefers the main display; a chosen display that is disconnected falls back to Automatic. Not shown on the display with Notch Lyrics";
+"「全部屏幕」在每块屏幕的菜单栏上各显示一份；「自动」优先主屏幕；指定的屏幕断开时按「自动」显示" = "All Displays shows a copy in the menu bar of every display; Automatic prefers the main display; a chosen display that is disconnected falls back to Automatic";
 "「在播放器上收听」" = "“Listen on Player”";
 "「当前歌词」行最多每 4 秒切换一句，过短的句子将跳过；间奏、暂停或这首歌曲无歌词时显示专辑，专辑已占用一行时留空" = "The “Current Lyric” line changes at most every 4 seconds, so very short lines are skipped. During instrumental breaks, while paused, or when the song has no lyrics, it shows the album, or stays empty if the album already has its own line";
 "「正在收听」后面显示" = "After “Listening to”";

@@ -701,7 +701,7 @@ struct MenuBarCenterScreenRow: View {
         SettingsRow(
             icon: "display",
             title: L10n.t("显示在"),
-            help: L10n.t("「全部屏幕」在每块屏幕的菜单栏上各显示一份；「自动」优先主屏幕；指定的屏幕断开时按「自动」显示。灵动岛所在的屏幕不显示")
+            help: L10n.t("「全部屏幕」在每块屏幕的菜单栏上各显示一份；「自动」优先主屏幕；指定的屏幕断开时按「自动」显示")
         ) {
             let options = options
             SettingsGlassMenuPicker(

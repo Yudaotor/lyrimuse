@@ -74,6 +74,12 @@ func checkLyricsWindowHoverFade() {
                  Luma.allTransparent(hexes: []), Luma.allTransparent(hexes: ["nope"])],
                 [true, true, false, false, false, false],
                 "背景摘要: 颜色全是不透明度 0 才算透明;缺 alpha 位、空、读不出来都不算")
+    let backgroundModel = source("LyrimuseCore/Models/LyricsWindowBackground.swift")
+    expectEqual(sourceHas(backgroundModel, "设置页「背景」摘要据此写「透明」。\n    public static func allTransparent(")
+                && sourceHas(backgroundModel, "表现成\"颜色莫名其妙变了\"。\n    public static func parse(hex: String)")
+                && sourceHas(settingsView, "胶囊分段共用。\n    private func lyricsWindowBackgroundModeName(")
+                && sourceHas(settingsView, "纯色只看第一个。\n    private func lyricsWindowBackgroundSummary("), true,
+                "背景摘要: 透明判定、解析颜色、档名、摘要几处 doc 注释各挂在自己的函数上")
     expectEqual(sourceBytes(window, contain: "hoverFade.attach(window, isMini: $isMini.eraseToAnyPublisher())")
                 && sourceBytes(window, contain: "self?.hoverFade.windowClosed()"), true,
                 "迷你悬浮淡化: 窗口 attach 时接上、跟着进出迷你,关窗复位")

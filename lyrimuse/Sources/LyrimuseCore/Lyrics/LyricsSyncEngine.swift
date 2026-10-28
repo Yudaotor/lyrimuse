@@ -2334,7 +2334,7 @@ public final class LyricsSyncEngine {
     /// 且汉字都是日文字集里的,或者是一整句日文),补完是按中文给的(`SourceReadingResidue.readsAsChinese`:源把汉字按普通话读了,或者给的是中文谐音字)时整行现算。
     /// 中日、中韩混排的行里中文部分本来就标拼音,照源给的。见 10 章决策 57。
     private func sourceReading(_ source: String, for line: String) -> String? {
-        let filled = fillingResidue(source)
+        let filled = fillingResidue(source, line: line)
         let noChinese = Romanizer.looksJapanese(line)
             ? !Romanizer.containsHan(line) || (songLooksJapanese && Romanizer.kanjiAllJapanese(line))
                 || Romanizer.looksJapaneseSentence(line)
@@ -2350,15 +2350,26 @@ public final class LyricsSyncEngine {
     /// 源读音里没转的原文片段按现算补上(`SourceReadingResidue`)。按源读音行缓存:每一拍都调。
     private var residueCache: [String: String] = [:]
 
-    private func fillingResidue(_ source: String) -> String {
-        if let cached = residueCache[source] { return cached }
+    /// 日文歌里按日文读的行,片段里的汉字、假名按日文分词读,开关跟整行走(调用方已按整行判过):孤立的一个简体字
+    /// 单独判会判成中文写的(`looksChineseWritten`),拼音关着时留原文、开着时补成普通话。其余片段单独判开关、单独现算。
+    private func fillingResidue(_ source: String, line: String) -> String {
+        let japaneseLine = songLooksJapanese && Romanizer.readsAsJapanese(line, songLooksJapanese: true)
+        let cacheKey = japaneseLine ? "ja\u{1F}" + source : source
+        if let cached = residueCache[cacheKey] { return cached }
         let patched = SourceReadingResidue.patched(source) { residue in
+            if japaneseLine, !Romanizer.containsHangul(residue),
+                Romanizer.containsHan(residue) || Romanizer.looksJapanese(residue)
+            {
+                return Romanizer.lineReading(
+                    residue, songLooksJapanese: true, songScript: songScript,
+                    segments: cachedJapaneseSegments(for: residue), japaneseLine: true)
+            }
             guard romanizationAllowed(for: residue) else { return nil }
             // 客户端没有粤拼,粤语歌的汉字现算出来是普通话拼音。
             if songScript == .cantonese, Romanizer.containsHan(residue) { return nil }
             return computedReading(residue)
         }
-        residueCache[source] = patched
+        residueCache[cacheKey] = patched
         return patched
     }
 

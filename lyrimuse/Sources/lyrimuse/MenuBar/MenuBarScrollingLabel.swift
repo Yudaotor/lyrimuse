@@ -160,6 +160,8 @@ final class MenuBarScrollingLabel: NSView {
         /// 暂停就停、倍速跟着变、走完停在句尾不循环。false = 按墙钟循环滚(设置页预览、「♪ 歌名」兜底这类
         /// 没有显示时长的文字)。
         var clockPaced: Bool
+        /// 这一句在展示面里的下标(nil = 调用方给不出)。只给按播放时钟配速的起点认句用(`pacedStart`)。
+        var lineIndex: Int?
         /// 歌词旁那枚带播放进度的图标(nil = 关着)。跟 fillPath 一样只描述"画什么",
         /// 进度到哪儿了是另一条时钟通道(updateProgressClock)。
         var icon: IconBadge?
@@ -204,9 +206,9 @@ final class MenuBarScrollingLabel: NSView {
 
     private var karaokeClock: KaraokeClock?
 
-    /// 按播放时钟配速的那一句从哪个时刻起算(歌词时间轴毫秒)。按文字记:同一句只换槽宽、悬停接管后放回来都接着走,
-    /// 不从句首重滚;换了一句、或 `clear()` 才重记。
-    private var pacedStart: (text: String, ms: Int)?
+    /// 按播放时钟配速的那一句从哪个时刻起算(歌词时间轴毫秒)。按文字 + `Plan.lineIndex` 认句:同一句只换槽宽、
+    /// 悬停接管后放回来都接着走,不从句首重滚;换了一句(含文字相同的下一句)、或 `clear()` 才重记。
+    private var pacedStart: MenuBarMarquee.PacedScrollStart?
 
     /// 整首歌的播放时钟快照(进度图标用)。跟上面那份 `KaraokeClock` 长得像但**不是**
     /// 同一份,刻意不合并:
@@ -328,11 +330,12 @@ final class MenuBarScrollingLabel: NSView {
     /// 否则每次 recompute 都会把滚动打回开头,用户永远看不到后半句。
     /// - Parameter secondaryText / secondaryKind: 副行(双排),见 Plan 里两个字段的注释。
     ///   默认 nil / .off = 单行。
-    /// - Parameter clockPaced / inlineTranslationStart: 见 Plan 同名字段。
+    /// - Parameter clockPaced / lineIndex / inlineTranslationStart: 见 Plan 同名字段。
     func present(text: String, windowWidth: CGFloat, pacing: MenuBarMarquee.ScrollPacing?,
                  fillPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
                  followPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
                  clockPaced: Bool = false,
+                 lineIndex: Int? = nil,
                  icon: IconBadge? = nil,
                  secondaryText: String? = nil,
                  secondaryKind: LyricSecondaryLine = .off,
@@ -345,7 +348,7 @@ final class MenuBarScrollingLabel: NSView {
                         fontSize: AppSettings.shared.menuBarLyricsFontSize,
                         fontFamily: AppSettings.shared.menuBarLyricsFontFamily,
                         pacing: pacing, fillPath: fillPath, followPath: followPath,
-                        clockPaced: clockPaced, icon: icon,
+                        clockPaced: clockPaced, lineIndex: lineIndex, icon: icon,
                         secondaryText: secondaryText, secondaryKind: secondaryKind,
                         inlineTranslationStart: inlineTranslationStart,
                         gapWindow: gapWindow)
@@ -354,8 +357,8 @@ final class MenuBarScrollingLabel: NSView {
             return
         }
         // 起点按存底时钟记;还没对过表就等 updateKaraokeClock 第一次喂进来时补记。
-        if clockPaced, pacedStart?.text != text {
-            pacedStart = karaokeClock.map { (text, $0.positionMs()) }
+        if clockPaced, pacedStart?.belongs(toText: text, line: lineIndex) != true {
+            pacedStart = karaokeClock.map { .init(text: text, line: lineIndex, ms: $0.positionMs()) }
         }
         // 只有**位图内容会变**时才重排(PreparedLine.color 注释说的那类幂等):位图内容只由 text+解析色+
         // 要不要染色决定,几何推迟落地这类"同一句只换槽宽/配速"的调用(interim → 重建落地)不该把逐像素
@@ -384,6 +387,7 @@ final class MenuBarScrollingLabel: NSView {
         let scrollUnchanged = prepared != nil && (plan.map {
             $0.text == next.text && $0.windowWidth == next.windowWidth && $0.pacing == next.pacing
                 && $0.followPath == next.followPath && $0.clockPaced == next.clockPaced
+                && $0.lineIndex == next.lineIndex
                 && $0.fontWeight == next.fontWeight && $0.fontSize == next.fontSize
                 && $0.fontFamily == next.fontFamily
                 // 单双排切换主行字体从 13 变 10,滚动距离跟着变 → 算滚动参数;只换副行文字 / 在译文和
@@ -427,8 +431,8 @@ final class MenuBarScrollingLabel: NSView {
         let next = KaraokeClock(baseMs: positionMs, rate: rate, playing: playing, capturedAt: Date())
         // 按播放时钟配速、present 时还没对过表的那一句:这一刻就是它的起点,紧接着把墙钟那条换下来。
         var startsPacedScroll = false
-        if let plan, plan.clockPaced, pacedStart?.text != plan.text {
-            pacedStart = (plan.text, positionMs)
+        if let plan, plan.clockPaced, pacedStart?.belongs(toText: plan.text, line: plan.lineIndex) != true {
+            pacedStart = .init(text: plan.text, line: plan.lineIndex, ms: positionMs)
             startsPacedScroll = true
         }
         if !force, !startsPacedScroll, playing, let old = karaokeClock, old.playing, old.rate == rate,
@@ -1159,7 +1163,7 @@ final class MenuBarScrollingLabel: NSView {
         if let reading = plan.followPath {
             path = MenuBarMarquee.followScrollPath(
                 reading: reading, windowWidth: plan.windowWidth, textWidth: prepared.textWidth)
-        } else if plan.clockPaced, let start = pacedStart, start.text == plan.text {
+        } else if plan.clockPaced, let start = pacedStart, start.belongs(toText: plan.text, line: plan.lineIndex) {
             path = MenuBarMarquee.pacedScrollPath(
                 startMs: start.ms, pacing: pacing, maxOffset: prepared.textWidth - plan.windowWidth)
         } else {

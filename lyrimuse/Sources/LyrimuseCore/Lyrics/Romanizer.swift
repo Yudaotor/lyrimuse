@@ -439,21 +439,24 @@ public enum Romanizer {
     ///   (CFStringTokenizer 不便宜),而调用方常常持有按行缓存的分词结果。求值必须是惰性的,
     ///   否则纯英文歌的每一行都要白分一次词。
     /// - Parameter songScript: 整首歌的文字种类,西里尔字母按它认出的语言转(App 和 helper 都按 `songScript(of:)` 算)。
+    /// - Parameter japaneseLine: `line` 是一整行里的一段,调用方已判定那一行按日文读(源读音里没转的残留片段):
+    ///   含汉字、假名的这一段不再自己判中日,一律按日文分词读;读不出返回 nil,不退到 ICU 音译。
     public static func lineReading(
         _ line: String,
         songLooksJapanese: Bool,
         songScript: LyricScript = .other,
-        segments: @autoclosure () -> [JapaneseSegment]
+        segments: @autoclosure () -> [JapaneseSegment],
+        japaneseLine: Bool = false
     ) -> String? {
         guard looksJapanese(line) || containsHangul(line) || containsHan(line) else {
             let reading = WorldRomanization.romanize(line, song: songScript)
             return reading == line ? nil : reading
         }
-        if readsAsJapanese(line, songLooksJapanese: songLooksJapanese),
-            let reading = readingFromSegments(segments(), original: line)
-        {
+        let japanese = (japaneseLine && !containsHangul(line)) || readsAsJapanese(line, songLooksJapanese: songLooksJapanese)
+        if japanese, let reading = readingFromSegments(segments(), original: line) {
             return reading
         }
+        if japanese, japaneseLine { return nil }
         return romanize(line, japanese: false, songScript: songScript)
     }
 

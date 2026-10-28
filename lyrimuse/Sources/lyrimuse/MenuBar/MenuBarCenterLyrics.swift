@@ -291,6 +291,8 @@ final class MenuBarCenterLyrics {
     var onClick: ((Click, NSView, NSPoint) -> Void)?
     /// 指针进 / 出正中那几扇(参数是此刻在不在任何一扇上)。
     var onHoverChange: ((Bool) -> Void)?
+    /// 这一扇的内容视图上此刻锚着左键面板。锚着的那一扇 `keep(only:)` / `hide` 都不收,面板收起后的那次重算再落地。
+    var isAnchoringPanel: ((NSView) -> Bool)?
 
     private var slots: [String: Slot] = [:]
     /// 指针停在哪一扇上。
@@ -392,10 +394,10 @@ final class MenuBarCenterLyrics {
         return span
     }
 
-    /// 只留这几块屏上的那一扇,别的立刻收掉、拆掉(换了「显示在」、拔了显示器、某块屏两侧挤得放不下)。
+    /// 只留这几块屏上的那一扇,别的立刻收掉、拆掉(换了「显示在」、拔了显示器、某块屏两侧挤得放不下);锚着面板的那一扇除外。
     func keep(only screens: [NSScreen]) {
         let wanted = Set(screens.map(Self.key(of:)))
-        for (id, slot) in slots where !wanted.contains(id) {
+        for (id, slot) in slots where !wanted.contains(id) && isAnchoringPanel?(slot.content) != true {
             slot.panel.orderOut(nil)
             slot.label.clear()
             forgetPointer(on: id)
@@ -428,7 +430,7 @@ final class MenuBarCenterLyrics {
         return slot.label
     }
 
-    /// `delay` 秒后全部收起(期间又 `show` 就作罢)。歌词消失常是一两秒的间隙或假暂停,跟状态栏那一格同样先留一会儿。
+    /// `delay` 秒后全部收起(期间又 `show` 就作罢;锚着面板的那一扇留着)。歌词消失常是一两秒的间隙或假暂停,跟状态栏那一格同样先留一会儿。
     func hide(after delay: TimeInterval = 0) {
         guard slots.values.contains(where: { $0.panel.isVisible }) else { return }
         if delay > 0 {
@@ -458,7 +460,7 @@ final class MenuBarCenterLyrics {
         pendingHide?.cancel()
         pendingHide = nil
         var hidden = false
-        for (id, slot) in slots where slot.panel.isVisible {
+        for (id, slot) in slots where slot.panel.isVisible && isAnchoringPanel?(slot.content) != true {
             slot.panel.orderOut(nil)
             slot.label.clear()
             forgetPointer(on: id)

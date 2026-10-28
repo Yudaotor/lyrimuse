@@ -307,6 +307,14 @@ func runMenuBarTests() {
                     "按给定配速: 中途按播放位置取偏移(暂停就停在这里)")
         expectEqual(MenuBarMarquee.pacedScrollPath(startMs: 0, pacing: given, maxOffset: 0).isEmpty,
                     true, "按给定配速: 装得下不滚")
+        // 起点认句:同一句(文字、下标都同)接着用;副歌重复的下一句文字相同、下标不同,要重记。
+        let chorusStart = MenuBarMarquee.PacedScrollStart(text: "副歌这一句很长", line: 7, ms: 30_000)
+        expectEqual(chorusStart.belongs(toText: "副歌这一句很长", line: 7), true, "按时钟配速起点: 同一句接着用")
+        expectEqual(chorusStart.belongs(toText: "副歌这一句很长", line: 8), false,
+                    "按时钟配速起点: 文字相同的下一句不沿用上一句的起点")
+        expectEqual(chorusStart.belongs(toText: "下一句", line: 7), false, "按时钟配速起点: 换了文字重记")
+        expectEqual(MenuBarMarquee.PacedScrollStart(text: "预览", line: nil, ms: 0).belongs(toText: "预览", line: nil), true,
+                    "按时钟配速起点: 给不出下标时只按文字认")
         expectEqual(MenuBarMarquee.pacedScrollPath(
             startMs: 0, pacing: .init(pointsPerSecond: 0, headHoldSeconds: 1, tailHoldSeconds: 1), maxOffset: 60).isEmpty,
                     true, "按给定配速: 速度为 0 不滚")
@@ -1779,6 +1787,11 @@ func runMenuBarTests() {
             .appendingPathComponent("lyrimuse/MenuBar/MenuBarCenterLyrics.swift").path, encoding: .utf8)) ?? ""
         expectEqual(!center.isEmpty && !center.contains("notchOverlayEnabled") && !center.contains("NotchLyricsWindowController"), true,
                     "正中选屏: 开着灵动岛也照放,不看灵动岛在哪块屏")
+        let editorStage = (try? String(contentsOfFile: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI/MenuBarEditorStage.swift").path, encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(editorStage, "help: L10n.t(\"「全部屏幕」在每块屏幕的菜单栏上各显示一份")
+                        && !editorStage.contains("灵动岛所在的屏幕不显示"), true,
+                    "正中选屏: 「显示在」的说明不再说灵动岛所在的屏幕不显示")
 
         let span = L.usableSpan(screenMinX: 0, screenMaxX: 1440, menusMaxX: 400, statusItemsMinX: 1000)
         expectEqual(span, 416...984, "正中区间: 两侧各让出 clearance")
@@ -1905,6 +1918,12 @@ func runMenuBarTests() {
                     "菜单栏: 重建、换形态后按指针位置重判悬停接管,重建后补读自己那一格的位置")
         expectEqual(sourceHas(sourceBody("private func popUpFullMenu()", in: item), "if panelIsOpen { panelController.close() }"), true,
                     "菜单栏: 面板开着时右键 / ⌃左键同一个图标先收面板")
+        expectEqual(sourceHas(sourceBody("func keep(only screens: [NSScreen])", in: center),
+                              "where !wanted.contains(id) && isAnchoringPanel?(slot.content) != true {")
+                    && sourceHas(sourceBody("private func hideNow()", in: center),
+                                 "where slot.panel.isVisible && isAnchoringPanel?(slot.content) != true {")
+                    && sourceHas(item, "centerLyrics.isAnchoringPanel = { [weak self] view in self?.panelController.isAnchored(to: view) ?? false }"),
+                    true, "菜单栏正中: 面板锚着的那一扇不收不拆,面板收起后的重算再落地")
         expectEqual(item.contains("NSColor.systemColorsDidChangeNotification")
                     && sourceHas(item, "for label in [self.scrollingLabel] + self.centerLyrics.labels { label.systemColorsDidChange() }"), true,
                     "菜单栏: 换了系统强调色,状态栏那一格和正中几扇都重排")
@@ -1914,8 +1933,17 @@ func runMenuBarTests() {
                     "菜单栏正中: 没有逐字时间轴的长句按播放时钟配速,快捷键回声照旧循环")
         let label = src("MenuBarScrollingLabel.swift")
         expectEqual(sourceHas(sourceBody("private func clockScrollPath()", in: label),
-                              "} else if plan.clockPaced, let start = pacedStart, start.text == plan.text {"), true,
+                              "} else if plan.clockPaced, let start = pacedStart, start.belongs(toText: plan.text, line: plan.lineIndex) {"), true,
                     "菜单栏标签: 按时钟配速的路径从这一句记下的起点排")
+        expectEqual(sourceHas(sourceBody("func present(text: String", in: label),
+                              "if clockPaced, pacedStart?.belongs(toText: text, line: lineIndex) != true {")
+                    && sourceHas(sourceBody("func updateKaraokeClock(", in: label),
+                                 "pacedStart?.belongs(toText: plan.text, line: plan.lineIndex) != true {")
+                    && sourceHas(sourceBody("func present(text: String", in: label), "&& $0.lineIndex == next.lineIndex"), true,
+                    "菜单栏标签: 按时钟配速的起点按文字 + 句下标认,文字相同的下一句重记起点、重装滚动")
+        expectEqual(sourceHas(item, "? (secondaryKind.showsSecondaryRow ? coordinator.menuBarLyrics.lineIndex : coordinator.menuBarLyrics.compactLineIndex)")
+                    && sourceCount(item, "lineIndex: rowState.lineIndex, icon: icon,") == 2, true,
+                    "菜单栏: 状态栏那一格和正中几扇都把显示那一句的下标交给标签")
         expectEqual(sourceHas(sourceBody("func clear()", in: label), "pacedStart = nil"), true,
                     "菜单栏标签: 收起后起点作废")
         expectEqual(sourceHas(sourceBody("private func applyFollowScroll()", in: label), "guard let path = clockScrollPath() else { return false }"), true,

@@ -112,7 +112,8 @@ public enum CyrillicRomanization {
 
     // MARK: - 转写
 
-    /// 一行里的西里尔字母按 `language` 的体系换成拉丁字母,其余字符原样保留。
+    /// 一行里的西里尔字母按 `language` 的体系换成拉丁字母,其余字符原样保留。撇号只在前后都是西里尔字母时
+    /// (п’ять、Знам’янка)按语言规则写,英文缩写(don't)、引号('слово')里的照原样。
     public static func romanize(_ text: String, language: CyrillicLanguage) -> String {
         guard containsCyrillic(text) else { return text }
         let composed = normalized(text)
@@ -121,7 +122,7 @@ public enum CyrillicRomanization {
         for i in chars.indices {
             let ch = chars[i]
             let lower = Character(ch.lowercased())
-            guard ch.unicodeScalars.allSatisfy(isCyrillic) || isApostrophe(ch) else {
+            guard ch.unicodeScalars.allSatisfy(isCyrillic) || isWordApostrophe(chars, at: i) else {
                 out.append(ch)
                 continue
             }
@@ -129,7 +130,7 @@ public enum CyrillicRomanization {
             let next = i + 1 < chars.count ? Character(chars[i + 1].lowercased()) : nil
             let context = Context(
                 previous: previous, next: next,
-                wordInitial: previous.map { !isLetter($0) && !isApostrophe($0) } ?? true,
+                wordInitial: previous.map { !isLetter($0) && !isWordApostrophe(chars, at: i - 1) } ?? true,
                 wordFinal: next.map { !isLetter($0) } ?? true)
             guard let latin = latin(lower, language: language, context: context) else {
                 out.append(ch)
@@ -156,6 +157,16 @@ public enum CyrillicRomanization {
 
     private static func isLetter(_ c: Character) -> Bool { c.isLetter }
     private static func isApostrophe(_ c: Character) -> Bool { "'’ʼ".contains(c) }
+
+    private static func isCyrillicLetter(_ c: Character) -> Bool {
+        c.isLetter && c.unicodeScalars.allSatisfy(isCyrillic)
+    }
+
+    /// 词中的撇号:前后都是西里尔字母。
+    private static func isWordApostrophe(_ chars: [Character], at i: Int) -> Bool {
+        isApostrophe(chars[i]) && i > 0 && i + 1 < chars.count
+            && isCyrillicLetter(chars[i - 1]) && isCyrillicLetter(chars[i + 1])
+    }
 
     private static func cased(_ latin: String, original: Character, neighbours: (Character?, Character?)) -> String {
         guard original.isUppercase else { return latin }

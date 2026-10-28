@@ -349,6 +349,25 @@ public enum MenuBarMarquee {
                 KaraokeFillPoint(ms: moveStart + travelMs, x: maxOffset)]
     }
 
+    /// 按播放时钟配速那一句的起点(`pacedScrollPath` 的 `startMs`)记给了哪一句。按文字加这一句在展示面里的下标认:
+    /// 同一句只换槽宽、重画都接着走;相邻两句文字相同(副歌重复)时下标不同,第二句要重记起点。
+    /// `line` 为 nil = 调用方给不出下标,只按文字认。
+    public struct PacedScrollStart: Equatable, Sendable {
+        public let text: String
+        public let line: Int?
+        public let ms: Int
+
+        public init(text: String, line: Int?, ms: Int) {
+            self.text = text
+            self.line = line
+            self.ms = ms
+        }
+
+        public func belongs(toText text: String, line: Int?) -> Bool {
+            self.text == text && self.line == line
+        }
+    }
+
     // MARK: - 跟唱滚动:有逐字时间轴时,滚动跟着正在唱的字走
 
     // 有逐字时间轴的句子,滚动跟着正在唱的字走。上面那套按 dwell 倒推速度的配速不知道这一句唱到哪儿,只能假设匀速,

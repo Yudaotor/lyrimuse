@@ -22,6 +22,12 @@ func checkWorldRomanization() {
         expectEqual(cyr(ua, .ukrainian), latin, "乌克兰语: \(ua) → \(latin)")
     }
 
+    expectEqual(cyr("Я кажу I don't care", .ukrainian), "Ya kazhu I don't care", "乌克兰语: 英文缩写里的撇号照原样")
+    expectEqual(cyr("'слово' ’яблуко’ п'ять", .ukrainian), "'slovo' ’yabluko’ piat",
+                "乌克兰语: 引号照原样、引号后的 я 算词首;词中撇号不写")
+    expectEqual(cyr("Я кажу I don't care, 'сям'я'", .belarusian), "Ja kažu I don't care, 'siamja'",
+                "白俄罗斯语: 撇号只在两个西里尔字母之间不写")
+
     // ---- 保加利亚语 2009 ----
     expectEqual(cyr("Обичам България", .bulgarian), "Obicham Bulgaria", "保加利亚语: 国名按《音译法》例外写 Bulgaria")
     expectEqual(cyr("БЪЛГАРИЯ", .bulgarian), "BULGARIA", "保加利亚语: 国名例外整词大写")
@@ -231,6 +237,22 @@ func checkWorldRomanization() {
     expectEqual(sourceReading("[00:01.00]つかめ! 描いた梦を\n[00:02.00]空", roma: jaRoma,
                               scripts: RomanizationScripts.default.subtracting(.chinese)),
                 "tsukame ! egai ta yume o", "接入: 拼音开关关着,日文歌源读音里的简体字照样按日文补")
+    // 不在日文字集里的简体字单独成片段:按整行(日文)读、归日文开关,不单独判成中文。
+    let jisOutsideRoma = "[00:01.00]tsukame ! egai ta 尘 o\n[00:02.00]sora"
+    let jisOutsideLyrics = "[00:01.00]つかめ! 描いた尘を\n[00:02.00]空"
+    let dustPinyinOff = sourceReading(jisOutsideLyrics, roma: jisOutsideRoma)
+    let dustPinyinOn = sourceReading(jisOutsideLyrics, roma: jisOutsideRoma, scripts: RomanizationScripts.default.union(.chinese))
+    expectEqual(dustPinyinOff.map { !$0.contains("尘") && $0.hasPrefix("tsukame ! egai ta ") }, true,
+                "接入: 日文字集外的简体字片段,拼音开关关着也按日文补:\(dustPinyinOff ?? "")")
+    expectEqual(dustPinyinOn.map { !$0.contains("chén") && !$0.contains("chen") } == true && dustPinyinOn == dustPinyinOff, true,
+                "接入: 日文字集外的简体字片段,拼音开关开着也不补成普通话:\(dustPinyinOn ?? "")")
+    let dustAlone = Romanizer.lineReading("尘", songLooksJapanese: true, songScript: .japanese,
+                                          segments: Romanizer.japaneseSegments("尘"), japaneseLine: true)
+    expectEqual(dustAlone.map { !Romanizer.containsHan($0) && !$0.contains("chén") }, true,
+                "整行按日文读的片段: 单独一个简体字也按日文读:\(dustAlone ?? "")")
+    expectEqual(Romanizer.lineReading("们", songLooksJapanese: true, songScript: .japanese,
+                                      segments: Romanizer.japaneseSegments("们"), japaneseLine: true), nil,
+                "整行按日文读的片段: 日文读不出就不给,不退到普通话")
     expectEqual(sourceReading("[00:01.00]В очите ѝ тогава ще ме припознаеш",
                               roma: "[00:01.00]V ochite ѝ togava shte me pripoznaesh"),
                 "V ochite i togava shte me pripoznaesh", "接入: 源读音里没转的西里尔字母按整首认出的语言补")
