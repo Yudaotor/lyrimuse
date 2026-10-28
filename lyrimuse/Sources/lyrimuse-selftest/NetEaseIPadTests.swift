@@ -107,6 +107,72 @@ func runNetEaseIPadTests() {
         expectEqual(later.title, "那个酒窝", "iPad 网易云: 换了真名之后不再按上一首的歌词认")
     }
 
+    // ---- 歌词撕裂帧的 title 是没报过的那一句(它在后台时不逐句重报,录到的真实序列) ----
+    do {
+        var memory = N.Memory()
+        let previous = F(title: "成都", artist: "赵雷", album: "成都", duration: 328, elapsed: 0)
+        _ = N.normalized(previous, memory: &memory)
+        _ = N.normalized(F(title: "作词: 赵雷", artist: "赵雷/成都", album: "成都", duration: 328, elapsed: 0), memory: &memory)
+        let torn = N.normalized(F(title: "成都 带不走的 只有你", artist: "方大同/Billie Jean(Live)", album: "Timeless演唱会",
+                                  duration: 292, elapsed: 0), memory: &memory)
+        expectEqual(torn, previous, "iPad 网易云: title 是没报过的歌词也按上一首报")
+        let newSong = F(title: "Billie Jean(Live)", artist: "方大同", album: "Timeless演唱会", duration: 292, elapsed: 0)
+        expectEqual(N.normalized(newSong, memory: &memory), newSong, "iPad 网易云: 后面的真名帧原样")
+    }
+
+    // ---- 多位歌手:撕裂帧之后的真名帧 artist 本身带「/」,不当撕裂帧 ----
+    do {
+        var memory = N.Memory()
+        let previous = F(title: "成都", artist: "赵雷", album: "成都", duration: 328, elapsed: 0)
+        _ = N.normalized(previous, memory: &memory)
+        _ = N.normalized(F(title: "作词: 赵雷", artist: "赵雷/成都", album: "成都", duration: 328, elapsed: 0), memory: &memory)
+        let torn = N.normalized(F(title: "走到玉林路的尽头", artist: "Justice/Tame Impala/SZA/Flower In A Hurricane", album: "VI",
+                                  duration: 224, elapsed: 0), memory: &memory)
+        expectEqual(torn, previous, "iPad 网易云 多位歌手: 撕裂帧按上一首报")
+        let newSong = F(title: "Flower In A Hurricane", artist: "Justice/Tame Impala/SZA", album: "VI", duration: 224, elapsed: 0)
+        expectEqual(N.normalized(newSong, memory: &memory), newSong, "iPad 网易云 多位歌手: 紧跟着的真名帧原样")
+    }
+
+    // ---- 多位歌手、没有撕裂帧:真名帧先按上一首报,下一帧歌词帧把它认回来 ----
+    do {
+        var memory = N.Memory()
+        let previous = F(title: "成都", artist: "赵雷", album: "成都", duration: 328, elapsed: 0)
+        _ = N.normalized(previous, memory: &memory)
+        _ = N.normalized(F(title: "作词: 赵雷", artist: "赵雷/成都", album: "成都", duration: 328, elapsed: 0), memory: &memory)
+        let held = N.normalized(F(title: "Flower In A Hurricane", artist: "Justice/Tame Impala/SZA", album: "VI", duration: 224,
+                                  elapsed: 0), memory: &memory)
+        expectEqual(held, previous, "iPad 网易云 多位歌手: 分不出撕裂帧和真名帧时先按上一首报")
+        var otherAlbum = memory
+        expectEqual(N.normalized(F(title: "作曲: Justice", artist: "Justice/Tame Impala/SZA/Flower In A Hurricane", album: "Other",
+                                   duration: 224, elapsed: 0), memory: &otherAlbum).title, "成都",
+                    "iPad 网易云 多位歌手: 专辑不同的不认回上一帧")
+        let lyric = N.normalized(F(title: "作曲: Justice", artist: "Justice/Tame Impala/SZA/Flower In A Hurricane", album: "VI",
+                                   duration: 224, elapsed: 0), memory: &memory)
+        expectEqual([lyric.title, lyric.artist], ["Flower In A Hurricane", "Justice/Tame Impala/SZA"],
+                    "iPad 网易云 多位歌手: 下一帧歌词帧认回上一帧的真名")
+        expectEqual(N.normalized(F(title: "作曲: Justice", artist: "Justice/Tame Impala/SZA/Flower In A Hurricane", album: "VI",
+                                   duration: 224, elapsed: 0), memory: &memory).title, "Flower In A Hurricane",
+                    "iPad 网易云 多位歌手: 这一帧再整理一次结果不变")
+    }
+
+    // ---- 锁屏歌词开着、没有撕裂帧:单个歌手的新歌真名帧原样 ----
+    do {
+        var memory = N.Memory()
+        _ = N.normalized(F(title: "成都", artist: "赵雷", album: "成都", duration: 328, elapsed: 0), memory: &memory)
+        _ = N.normalized(F(title: "作词: 赵雷", artist: "赵雷/成都", album: "成都", duration: 328, elapsed: 0), memory: &memory)
+        let newSong = F(title: "Billie Jean(Live)", artist: "方大同", album: "Timeless演唱会", duration: 292, elapsed: 0)
+        expectEqual(N.normalized(newSong, memory: &memory), newSong, "iPad 网易云: 单个歌手的新歌真名帧不按住")
+    }
+
+    // ---- 锁屏歌词关着(上一首没报过歌词帧):多位歌手的新歌原样 ----
+    do {
+        var memory = N.Memory()
+        _ = N.normalized(F(title: "成都", artist: "赵雷", album: "成都", duration: 328, elapsed: 0), memory: &memory)
+        _ = N.normalized(F(title: "成都", artist: "赵雷", album: "成都", duration: 328, elapsed: 80), memory: &memory)
+        let newSong = F(title: "Flower In A Hurricane", artist: "Justice/Tame Impala/SZA", album: "VI", duration: 224, elapsed: 0)
+        expectEqual(N.normalized(newSong, memory: &memory), newSong, "iPad 网易云 锁屏歌词关着: 多位歌手的新歌不按住")
+    }
+
     // ---- 歌词撕裂帧之后直接是新歌的歌词帧:照「没记到真名」拆 ----
     do {
         var memory = N.Memory()

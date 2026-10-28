@@ -8,8 +8,9 @@ import Foundation
 ///   时,连着两帧歌手、专辑、时长都没变、只有 title 在变,而且 artist 里有「/」,按最后一个「/」拆出真名。关掉这个开关时 title 不会变,
 ///   碰不到这一条。
 /// - 换歌那一刻第一帧还是上一首的 title / artist、时长已经是新歌的:按上一首的时长报,不然新歌那一帧会被当成「时长没跟上」的撕裂按住
-///   (`TornTrackHold.durationLags`)。另一种第一帧是 title 还是上一首最后一句歌词、artist / 专辑 / 时长已是新歌的:整帧按上一首报,
-///   不然它被当成新歌,紧跟着的真名帧只换了 title,会被当成撕裂按住十几秒。
+///   (`TornTrackHold.durationLags`)。「锁屏歌词」开着时第一帧多半是 title 还是上一首的某一句歌词(它在后台时不逐句重报,未必是报过的
+///   那句)、artist 已是新歌的「歌手/歌名」写法、专辑时长也是新歌的:整帧按上一首报,不然它被当成新歌,紧跟着的真名帧只换了 title,
+///   会被当成撕裂按住十几秒。真名帧之后紧跟的歌词帧(artist 正好是上一帧的「歌手/歌名」)把上一帧认回真名。
 /// - 含不良内容的歌 title 末尾带「🅴」,去掉。
 /// - 换歌开播时多数只补一行速率翻 1 的差量(不带进度,进度还是暂停帧那个 0),比真实起播晚约 0.45 秒;整帧带着进度 0 一起报的
 ///   那种不晚。差量带不带进度只有媒体事件流看得到:它认出这一行(`isBareStart`)就记下时间戳(`noteBareStart`),之后哪条路
@@ -47,7 +48,7 @@ public enum NetEaseIPadNowPlaying {
         public var last: Frame?
         /// 最近一次只翻速率的开播差量的时间戳。
         public var bareStartTimestamp: String?
-        /// 这份真名最近一句歌词(歌词帧的 title)。
+        /// 这份真名报过的最近一句歌词(歌词帧的 title);不为空 = 「锁屏歌词」开着。
         public var lyricTitle: String?
 
         public init(real: Frame? = nil, last: Frame? = nil, bareStartTimestamp: String? = nil, lyricTitle: String? = nil) {
@@ -180,16 +181,16 @@ public enum NetEaseIPadNowPlaying {
             return Frame(title: real.title, artist: real.artist, album: frame.album, duration: frame.duration,
                          elapsed: frame.elapsed)
         }
-        if let last = memory.last, let split = lyricLineSplit(frame, last: last) {
+        if let last = memory.last, let split = lyricLineSplit(frame, last: last) ?? lyricLineOfLast(frame, last: last) {
             memory.real = split
             memory.lyricTitle = frame.title
-            return split
+            return Frame(title: split.title, artist: split.artist, album: frame.album, duration: frame.duration, elapsed: frame.elapsed)
         }
         if let real = memory.real, isTornFirstFrame(frame, real: real) {
             return Frame(title: frame.title, artist: frame.artist, album: frame.album, duration: real.duration,
                          elapsed: frame.elapsed)
         }
-        if let real = memory.real, isTornLyricFrame(frame, real: real, lyricTitle: memory.lyricTitle) {
+        if let real = memory.real, isTornLyricFrame(frame, real: real, lyricTitle: memory.lyricTitle, last: memory.last) {
             return Frame(title: real.title, artist: real.artist, album: real.album, duration: real.duration,
                          elapsed: frame.elapsed)
         }
@@ -222,11 +223,21 @@ public enum NetEaseIPadNowPlaying {
         return (frame.elapsed ?? 0) <= tornFrameMaxElapsed
     }
 
-    /// title 还是这份真名最近一句歌词,artist 已不是它的「歌手/歌名」,进度在开头。
-    static func isTornLyricFrame(_ frame: Frame, real: Frame, lyricTitle: String?) -> Bool {
-        guard let lyricTitle, frame.title == lyricTitle, let realArtist = real.artist, let realTitle = real.title,
-              frame.artist != realArtist + "/" + realTitle else { return false }
+    /// 「锁屏歌词」开着时新歌的第一帧:artist 是带「/」的歌词帧写法、不是这份真名的,进度在开头。上一帧的 artist 正好是这一帧的
+    /// 「歌手/歌名」的,是紧跟在撕裂帧后面的真名帧(多位歌手的 artist 本身也带「/」),不算。
+    static func isTornLyricFrame(_ frame: Frame, real: Frame, lyricTitle: String?, last: Frame?) -> Bool {
+        guard lyricTitle != nil, let artist = frame.artist, artist.contains("/"), let realArtist = real.artist,
+              let realTitle = real.title, artist != realArtist + "/" + realTitle, artist != realArtist else { return false }
+        if let title = frame.title, let lastArtist = last?.artist, lastArtist == artist + "/" + title { return false }
         return (frame.elapsed ?? 0) <= tornFrameMaxElapsed
+    }
+
+    /// 上一帧是真名帧、这一帧是它的歌词帧:artist 正好是上一帧的「歌手/歌名」、专辑相同、title 变了。认回上一帧的真名。
+    static func lyricLineOfLast(_ frame: Frame, last: Frame) -> Frame? {
+        guard let artist = frame.artist, let lastArtist = last.artist, let lastTitle = last.title, !lastArtist.isEmpty,
+              !lastTitle.isEmpty, artist == lastArtist + "/" + lastTitle, frame.album == last.album,
+              frame.title != lastTitle else { return nil }
+        return Frame(title: lastTitle, artist: lastArtist, album: last.album, duration: last.duration, elapsed: frame.elapsed)
     }
 
     static func withoutExplicitMark(_ frame: Frame) -> Frame {
