@@ -71,6 +71,7 @@
       "bundleID": "com.netease.163music",
       "goBundleConst": "neteaseMusicBundleID",
       "processName": "NeteaseMusic",
+      "otherProcessNames": ["neteasemusic"],
       "displayName": {"l10n": "网易云音乐"},
       "scrobbleLabel": "NetEase Cloud Music (macOS)",
       "nativeLyricSource": "netease",

@@ -113,8 +113,13 @@ var playerProcessNames = map[string]string{
 	playerPinePlayer:  "Pine Player",
 }
 
-// knownPlayerProcessNames 是上表的全部取值 —— 选了「自动识别」时盯全部。
-var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "Reamp", "lx-music-desktop", "VOX", "Pine Player"}
+// playerOtherProcessNames 是同一个播放器其他版本的可执行文件名,跟随启动跟上表一起盯。
+var playerOtherProcessNames = map[string][]string{
+	playerNetease: {"neteasemusic"},
+}
+
+// knownPlayerProcessNames 是上面两张表的全部取值 —— 选了「自动识别」时盯全部。
+var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "neteasemusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "Reamp", "lx-music-desktop", "VOX", "Pine Player"}
 
 // playerScrobbleLabels 是「bundle id → ListenBrainz 的 media_player 标签」。
 var playerScrobbleLabels = map[string]string{

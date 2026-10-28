@@ -258,7 +258,7 @@ func companionLaunchProcessNames() []string {
 	} else {
 		candidates = make([]string, 0, len(features().Players))
 		for player := range features().Players {
-			candidates = append(candidates, playerProcessNameFor(player))
+			candidates = append(candidates, playerProcessNamesFor(player)...)
 		}
 	}
 	// 「跟随播放器启动」按播放器逐个勾选(features().LaunchLyrimuseOnPlayers):只盯勾了的、且仍在候选
@@ -266,11 +266,12 @@ func companionLaunchProcessNames() []string {
 	// 同一条规则。
 	names := make([]string, 0, len(features().LaunchLyrimuseOnPlayers))
 	for player := range features().LaunchLyrimuseOnPlayers {
-		name := playerProcessNameFor(player)
-		for _, candidate := range candidates {
-			if candidate == name {
-				names = append(names, name)
-				break
+		for _, name := range playerProcessNamesFor(player) {
+			for _, candidate := range candidates {
+				if candidate == name {
+					names = append(names, name)
+					break
+				}
 			}
 		}
 	}
@@ -294,6 +295,12 @@ func playerProcessNameFor(player string) string {
 		return name
 	}
 	return "Music"
+}
+
+// playerProcessNamesFor 是这个播放器要盯的全部可执行文件名:本体,加上同一个播放器其他版本的
+// (playerOtherProcessNames,iPad 版网易云的 neteasemusic)。
+func playerProcessNamesFor(player string) []string {
+	return append([]string{playerProcessNameFor(player)}, playerOtherProcessNames[player]...)
 }
 
 // launchLyrimuseApp 用 bundle id(不是路径)启动 Lyrimuse.app——不依赖它具体装在哪个

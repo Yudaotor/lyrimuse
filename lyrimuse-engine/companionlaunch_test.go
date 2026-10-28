@@ -144,6 +144,18 @@ func TestCompanionLaunchProcessNamesHonorsChosenPlayers(t *testing.T) {
 		t.Errorf("只勾 qq 时应只盯 QQMusic, got %v", got)
 	}
 
+	// 网易云连 iPad 版的进程名一起盯(大小写不同,pgrep -x 分得开)。
+	featuresRef().Players = map[string]bool{playerNetease: true}
+	featuresRef().LaunchLyrimuseOnPlayers = map[string]bool{playerNetease: true}
+	if got := companionLaunchProcessNames(); len(got) != 2 || got[0] != "NeteaseMusic" || got[1] != "neteasemusic" {
+		t.Errorf("只勾网易云时应盯 NeteaseMusic 和 neteasemusic, got %v", got)
+	}
+	featuresRef().Players = map[string]bool{playerAuto: true}
+	if got := companionLaunchProcessNames(); len(got) != 2 {
+		t.Errorf("自动识别 + 勾网易云 应盯两个进程名, got %v", got)
+	}
+	featuresRef().Players = map[string]bool{playerQQMusic: true, playerKugou: true}
+
 	// 勾了但没选中的播放器不算(勾选记录保留,选回来自动恢复 —— 跟 Swift 侧 PlayerLinkage.effective 同一规则)。
 	featuresRef().LaunchLyrimuseOnPlayers = map[string]bool{playerSpotify: true}
 	if got := companionLaunchProcessNames(); len(got) != 0 {

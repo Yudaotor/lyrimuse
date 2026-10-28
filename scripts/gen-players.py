@@ -28,6 +28,8 @@ CI 跑 `--check` 保证生成物没被手改、也没忘记重新生成。
 - goBundleConst Go 侧 bundle id 常量名;auto 为 null
 - processName   可执行文件名,companion-launch 的 pgrep -x 用;auto 为 null
                 内核 p_comm 上限 16 字节,UTF-8 中文名要数字节
+- otherProcessNames  可选:同一个播放器其他版本的可执行文件名(iPad 版网易云是 neteasemusic),
+                跟随启动一起盯;没有就不写。只生成 Go 侧
 - displayName   {"literal": …} 直接用 / {"l10n": …} 走 L10n.t(词条要在 .strings 里登记)
 - scrobbleLabel ListenBrainz 的 media_player 标签;auto 为 null
                 apple_music 那条同时是「认不出来源」时的兜底值
@@ -88,13 +90,15 @@ ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / "shared" / "players.json"
 ICON_DIR = ROOT / "lyrimuse" / "Sources" / "lyrimuse" / "Resources"
 
-# 每条播放器记录必须写全的字段,顺序同上面的文档字符串。
+# 每条播放器记录必须写全的字段,顺序同上面的文档字符串。可选字段另列在 OPTIONAL_FIELDS。
 FIELDS = (
     "id", "swiftCase", "goConst", "bundleID", "goBundleConst", "processName", "displayName", "scrobbleLabel",
     "nativeLyricSource", "positionTier", "republishesZeroAnchor", "playingFromRate", "artistArrivesLate",
     "artistlessNotMusic", "dropsSessionBetweenTracks", "dropsSessionWhilePlaying", "ignoresSeekCommand", "needsAutomationPermission",
     "needsFullDiskAccess", "needsAccessibilityPermission", "tint", "fallbackSymbol", "bundledIcon", "note",
 )
+
+OPTIONAL_FIELDS = ("otherProcessNames",)
 
 CORE_SWIFT = "lyrimuse/Sources/LyrimuseCore/Local/PlaybackPlayer+Generated.swift"
 APP_SWIFT = "lyrimuse/Sources/lyrimuse/Settings/PlaybackPlayerMeta+Generated.swift"
@@ -118,7 +122,7 @@ def load():
     players = spec["players"]
     for p in players:
         missing = [f for f in FIELDS if f not in p]
-        unknown = [k for k in p if k not in FIELDS and not k.startswith("$")]
+        unknown = [k for k in p if k not in FIELDS and k not in OPTIONAL_FIELDS and not k.startswith("$")]
         if missing or unknown:
             sys.exit(f"players.json 的 {p.get('id')!r}: 少了 {missing} / 认不出 {unknown}"
                      "(每个字段都要写出来,不适用的写 null / false;字段表见 scripts/gen-players.py 开头)")
@@ -216,9 +220,16 @@ def render_go(spec, players):
         out.append("\t%s: %s,\n" % (p["goConst"], go_quote(p["processName"])))
     out.append("}\n")
 
-    out.append("\n// knownPlayerProcessNames 是上表的全部取值 —— 选了「自动识别」时盯全部。\n"
+    out.append("\n// playerOtherProcessNames 是同一个播放器其他版本的可执行文件名,跟随启动跟上表一起盯。\n"
+               "var playerOtherProcessNames = map[string][]string{\n")
+    for p in concrete:
+        if p.get("otherProcessNames"):
+            out.append("\t%s: {%s},\n" % (p["goConst"], ", ".join(go_quote(n) for n in p["otherProcessNames"])))
+    out.append("}\n")
+
+    out.append("\n// knownPlayerProcessNames 是上面两张表的全部取值 —— 选了「自动识别」时盯全部。\n"
                "var knownPlayerProcessNames = []string{")
-    out.append(", ".join(go_quote(p["processName"]) for p in concrete))
+    out.append(", ".join(go_quote(n) for p in concrete for n in [p["processName"], *p.get("otherProcessNames", [])]))
     out.append("}\n")
 
     out.append("\n// playerScrobbleLabels 是「bundle id → ListenBrainz 的 media_player 标签」。\n"
