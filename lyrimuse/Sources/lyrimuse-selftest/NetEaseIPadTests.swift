@@ -75,6 +75,53 @@ func runNetEaseIPadTests() {
         expectEqual([lyric.title, lyric.artist], ["沢の河城工務店 (山涧的河城工务店)", "Foxtail-Grass Studio"], "iPad 网易云: 新歌的歌词帧还原")
     }
 
+    // ---- 换歌:第一帧 title 还是上一首最后一句歌词、artist / 专辑 / 时长已是新歌的(录到的真实序列) ----
+    do {
+        var memory = N.Memory()
+        let previous = F(title: "阴天快乐", artist: "陈奕迅", album: "Rice & Shine", duration: 260, elapsed: 0)
+        _ = N.normalized(previous, memory: &memory)
+        _ = N.normalized(F(title: "那个酒窝", artist: "陈奕迅/阴天快乐", album: "Rice & Shine", duration: 260, elapsed: 79),
+                         memory: &memory)
+        var midSong = memory
+        let notAtStart = F(title: "那个酒窝", artist: "胡夏/同桌的你 (电影《同桌的你》片尾主题曲)", album: "同桌的你", duration: 270,
+                           elapsed: 30)
+        expectEqual(N.normalized(notAtStart, memory: &midSong), notAtStart, "iPad 网易云: 进度不在开头的不当歌词撕裂帧")
+        let tornRaw = F(title: "那个酒窝", artist: "胡夏/同桌的你 (电影《同桌的你》片尾主题曲)", album: "同桌的你", duration: 270,
+                        elapsed: 0)
+        let torn = N.normalized(tornRaw, memory: &memory)
+        expectEqual(torn, previous, "iPad 网易云: 歌词撕裂帧整帧按上一首报")
+        expectEqual(N.normalized(tornRaw, memory: &memory), previous, "iPad 网易云: 歌词撕裂帧再整理一次结果不变")
+        let newSong = F(title: "同桌的你 (电影《同桌的你》片尾主题曲)", artist: "胡夏", album: "同桌的你", duration: 270, elapsed: 0)
+        expectEqual(N.normalized(newSong, memory: &memory), newSong, "iPad 网易云: 歌词撕裂帧之后的真名帧原样")
+        expectEqual(memory.lyricTitle, nil, "iPad 网易云: 换了真名就忘掉上一首的歌词")
+        expectEqual(TornTrackHold.isTorn(current: .init(title: torn.title ?? "", artist: torn.artist ?? "", album: torn.album ?? "",
+                                                        bundle: mac, duration: torn.duration ?? 0, isRadio: false),
+                                         next: .init(title: newSong.title ?? "", artist: newSong.artist ?? "", album: newSong.album ?? "",
+                                                     bundle: mac, duration: 270, isRadio: false)),
+                    false, "iPad 网易云: 歌词撕裂帧之后的真名帧不会被按住")
+        let lyric = N.normalized(F(title: "老师们都已想不起", artist: "胡夏/同桌的你 (电影《同桌的你》片尾主题曲)", album: "同桌的你",
+                                   duration: 270, elapsed: 18.3), memory: &memory)
+        expectEqual([lyric.title, lyric.artist], ["同桌的你 (电影《同桌的你》片尾主题曲)", "胡夏"], "iPad 网易云: 新歌的歌词帧还原")
+        let later = N.normalized(F(title: "那个酒窝", artist: "陈奕迅/阴天快乐", album: "Rice & Shine", duration: 260, elapsed: 30),
+                                 memory: &memory)
+        expectEqual(later.title, "那个酒窝", "iPad 网易云: 换了真名之后不再按上一首的歌词认")
+    }
+
+    // ---- 歌词撕裂帧之后直接是新歌的歌词帧:照「没记到真名」拆 ----
+    do {
+        var memory = N.Memory()
+        _ = N.normalized(F(title: "阴天快乐", artist: "陈奕迅", album: "Rice & Shine", duration: 260, elapsed: 0), memory: &memory)
+        _ = N.normalized(F(title: "那个酒窝", artist: "陈奕迅/阴天快乐", album: "Rice & Shine", duration: 260, elapsed: 79),
+                         memory: &memory)
+        _ = N.normalized(F(title: "那个酒窝", artist: "胡夏/同桌的你", album: "同桌的你", duration: 270, elapsed: 0), memory: &memory)
+        let lyric = N.normalized(F(title: "作词: 高晓松", artist: "胡夏/同桌的你", album: "同桌的你", duration: 270, elapsed: 1),
+                                 memory: &memory)
+        expectEqual([lyric.title, lyric.artist], ["同桌的你", "胡夏"], "iPad 网易云: 没等到真名帧也拆得出新歌")
+        let past = N.normalized(F(title: "那个酒窝", artist: "胡夏/同桌的你", album: "同桌的你", duration: 270, elapsed: 0.2),
+                                memory: &memory)
+        expectEqual(past.title, "同桌的你", "iPad 网易云: 歌词跟上一首重名的也按新歌还原")
+    }
+
     // ---- 没记到真名(放到一半才开始读):连着两帧只有 title 在变才拆 ----
     do {
         var memory = N.Memory()
