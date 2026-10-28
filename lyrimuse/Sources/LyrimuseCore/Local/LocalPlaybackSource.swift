@@ -1018,10 +1018,12 @@ public final class LocalPlaybackSource: ObservableObject {
     /// `resumeSeedSeconds` 削。VOX 的位置是它 AppleScript 报的播放头,跟真实出声差几毫秒、暂停期间不走,同样原样采信:
     /// 恢复认得晚(没等到恢复信号、靠暂停档轮询才看到)时,上限按兜底的 2 秒算,会把准的读数削掉一截(见 02 章决策 152)。
     /// Pine Player 的位置是 `PinePlayhead` 从它恢复那份锚点起算的(暂停前的位置接上,或进度条校准过),同样原样采信。
+    /// iPad 版网易云(`client`:这份会话实际是谁报的)恢复那一拍的锚点对真值在 0.01 秒上下,换歌开播那一拍补过提前量
+    /// (`NetEaseIPadNowPlaying.bareStartLead`),同样原样采信,不然提前量被削成信号至今那一截。见 02 章决策 198。
     /// 别的播放器照旧削。纯函数,selftest 覆盖。
-    public nonisolated static func resumeReadingNeverLeads(bundleID: String?) -> Bool {
+    public nonisolated static func resumeReadingNeverLeads(bundleID: String?, client: String? = nil) -> Bool {
         bundleID == PlaybackPlayer.kaset.bundleIdentifier || bundleID == PlaybackPlayer.vox.bundleIdentifier
-            || bundleID == PlaybackPlayer.pinePlayer.bundleIdentifier
+            || bundleID == PlaybackPlayer.pinePlayer.bundleIdentifier || client == NetEaseIPadNowPlaying.bundleID
     }
 
     /// 冻结检测:曲目/广告结尾 Spotify 会把 MediaRemote 锚点冻住 ——
@@ -1571,10 +1573,12 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 稳定播放时偏差过了 `republishedAnchorSnapSecs` 就直接对齐读数、不走 EMA 慢慢收的播放器:跟随重发锚点的(KKBOX),
     /// 加上位置是按它自己的日志算出来的 Amazon Music(读数就是干净的时钟,界面校准改提前量时一步到位,别被 EMA 拆成
     /// 每拍半秒的几次小跳),和位置是 `PinePlayhead` 那块表的 Pine Player(进度条校准改的零点几秒要当拍到屏上)。
+    /// iPad 版网易云(`client`:这份会话实际是谁报的)也是:「锁屏歌词」开着时它每换一句都带着准的进度重报一次,开播那个锚点却
+    /// 早晚不定(实测早 0.1~0.3 秒或晚 0.45 秒),按网易云 Mac 版那档(只往前纠)早了的整首纠不回来。见 02 章决策 198。
     /// 只管伺服这一处;暂停锚点判旧等 KKBOX 专属的规则仍只看 `followsRepublishedAnchors`。纯函数,selftest 直接覆盖。
-    public nonisolated static func snapsToReportedPosition(bundleID: String?) -> Bool {
+    public nonisolated static func snapsToReportedPosition(bundleID: String?, client: String? = nil) -> Bool {
         followsRepublishedAnchors(bundleID: bundleID) || bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier
-            || bundleID == PlaybackPlayer.pinePlayer.bundleIdentifier
+            || bundleID == PlaybackPlayer.pinePlayer.bundleIdentifier || client == NetEaseIPadNowPlaying.bundleID
     }
 
     /// 跟随重发锚点的播放器,偏差 EMA 过了这个值就对齐读数。
@@ -2288,7 +2292,9 @@ public final class LocalPlaybackSource: ObservableObject {
                 let awaitingAudio = lastSnapshot?.bundleIdentifier == PlaybackPlayer.lxMusic.bundleIdentifier && !lxOpenAPIActive
                     && lxColdStart.map { $0.audioAt == nil } ?? false
                 // 洛雪开放 API 推的是它音频元素的进度,恢复时声音没走起来它也停着,跟 Kaset 一样原样采信。
-                trackPosSeconds = Self.resumeReadingNeverLeads(bundleID: lastSnapshot?.bundleIdentifier) || lxOpenAPIActive
+                trackPosSeconds = Self.resumeReadingNeverLeads(
+                    bundleID: lastSnapshot?.bundleIdentifier,
+                    client: MediaControlClient.reportingClient(forBundleID: lastSnapshot?.bundleIdentifier)) || lxOpenAPIActive
                     ? reported
                     : Self.resumeSeedSeconds(
                         reported: reported,
@@ -2612,7 +2618,9 @@ public final class LocalPlaybackSource: ObservableObject {
         // 不然校正只改了内部累加器、UI 用的锚点还在按旧基准外推,校正根本到不了屏幕。
         let (newEMA, snap) = Self.servoDecision(errEMA: posErrEMA, error: reported - predicted, tier: tier)
         posErrEMA = newEMA
-        let followsAnchors = Self.snapsToReportedPosition(bundleID: lastSnapshot?.bundleIdentifier)
+        let followsAnchors = Self.snapsToReportedPosition(
+            bundleID: lastSnapshot?.bundleIdentifier,
+            client: MediaControlClient.reportingClient(forBundleID: lastSnapshot?.bundleIdentifier))
         if snap || (followsAnchors && abs(newEMA) > Self.republishedAnchorSnapSecs) {
             trackPosSeconds = tier == .precise || followsAnchors ? reported : predicted + newEMA
             posErrEMA = 0

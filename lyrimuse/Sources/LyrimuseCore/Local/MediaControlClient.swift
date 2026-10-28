@@ -1461,8 +1461,8 @@ public enum MediaControlClient {
         /// 换算回原键名,下游只认一套字段。
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            title = try c.decodeIfPresent(String.self, forKey: .title)
-            artist = try c.decodeIfPresent(String.self, forKey: .artist)
+            let reportedTitle = try c.decodeIfPresent(String.self, forKey: .title)
+            let reportedArtist = try c.decodeIfPresent(String.self, forKey: .artist)
             album = try c.decodeIfPresent(String.self, forKey: .album)
             bundleIdentifier = try c.decodeIfPresent(String.self, forKey: .bundleIdentifier)
             playing = try c.decodeIfPresent(Bool.self, forKey: .playing)
@@ -1479,12 +1479,22 @@ public enum MediaControlClient {
             trackNumber = try? c.decodeIfPresent(Int.self, forKey: .trackNumber)
             mediaType = try? c.decodeIfPresent(String.self, forKey: .mediaType)
             let times = try MediaControlMicros.TimeFields(from: decoder)
-            duration = times.duration
+            // iPad 版网易云「锁屏歌词」开着时 title 是歌词、artist 是「歌手/歌名」,先还原成真名;开播晚的那种锚点补上提前量
+            // (见 NetEaseIPadNowPlaying)。
+            let names = NetEaseIPadNowPlaying.normalized(
+                .init(title: reportedTitle, artist: reportedArtist, album: album, duration: times.duration,
+                      elapsed: times.elapsedTime, timestamp: times.timestamp),
+                bundleID: bundleIdentifier)
+            title = names.title
+            artist = names.artist
+            duration = names.duration
             timestamp = times.timestamp
+            var lead = 0.0
+            if let normalized = names.elapsed, let reported = times.elapsedTime { lead = normalized - reported }
             // VOX 那份播放中缺位置、恢复后速率报 0,补成能外推的锚点(见 VoxPlayerInfo.systemAnchor)。
             let anchor = VoxPlayerInfo.systemAnchor(
-                bundleID: bundleIdentifier, playing: playing, elapsed: times.elapsedTime,
-                elapsedNow: times.elapsedTimeNow, rate: rate, hasTimestamp: times.timestamp != nil)
+                bundleID: bundleIdentifier, playing: playing, elapsed: names.elapsed,
+                elapsedNow: times.elapsedTimeNow.map { $0 + lead }, rate: rate, hasTimestamp: times.timestamp != nil)
             elapsedTime = anchor.elapsed
             elapsedTimeNow = anchor.elapsedNow
             playbackRate = anchor.rate
@@ -2456,7 +2466,8 @@ public enum MediaControlClient {
             return (nil, prefix + "the system reports \(raw.bundleIdentifier ?? "no player"), which is not accepted")
         }
         // VOX 这份载荷的歌手是「歌手 — 专辑」、没写标签时歌名是小写文件名:换成跟快照同一份再算曲目标识(见 VoxPlayerInfo)。
-        var keyTitle = raw.title, keyArtist = raw.artist
+        // iPad 版网易云的歌名按记住的真名还原(见 NetEaseIPadNowPlaying)。
+        var (keyTitle, keyArtist) = NetEaseIPadNowPlaying.names(title: raw.title, artist: raw.artist, bundleID: raw.bundleIdentifier)
         var filePath = PlayerTitleSplit.currentFilePath(bundleID: bundleID, title: raw.title)
             ?? PlayerOpenFile.currentFilePath(bundleID: bundleID, rawArtist: raw.artist, rawTitle: raw.title)
         if bundleID == VoxPlayerInfo.bundleID {
@@ -3426,6 +3437,7 @@ public enum MediaControlClient {
         let owner = reportedBundleID == safariMediaProcessBundleID
             ? raw.processIdentifier.flatMap { responsibleBundleID(ofPID: $0) } : nil
         let bundleID = reportingPlayerBundleID(reportedBundleID, owner: owner)
+        noteReportingClient(reportedBundleID, forBundleID: bundleID)
         // 真读到了一份快照:通道是好的,自检留下的「坏了」也作废。
         noteChannelReadSnapshot()
         setNowPlayingIdentifiers(bundleID: bundleID, title: raw.title, artist: raw.artist,
@@ -3660,6 +3672,25 @@ public enum MediaControlClient {
     public static func reportingPlayerBundleID(_ reported: String, owner: String?) -> String {
         reported == safariMediaProcessBundleID && owner == PlaybackPlayer.kaset.bundleIdentifier
             ? PlaybackPlayer.kaset.bundleIdentifier : PlayerBundleAliases.canonical(reported)
+    }
+
+    private static let reportingClientLock = NSLock()
+    nonisolated(unsafe) private static var reportingClients: [String: String] = [:]
+
+    /// 记下这个播放器最近一份会话实际是谁报的(换成本体之前的 bundle id)。不挂在快照上:`with…` 系列副本不带附加字段。
+    public static func noteReportingClient(_ reported: String, forBundleID bundleID: String) {
+        reportingClientLock.lock()
+        reportingClients[bundleID] = reported
+        reportingClientLock.unlock()
+    }
+
+    /// 这个播放器最近一份会话实际是谁报的;没记过为 nil。另一个程序的版本(`PlayerBundleAliases.otherClients`)位置行为跟本体不同时
+    /// 按它分(iPad 版网易云,`LocalPlaybackSource.snapsToReportedPosition`)。
+    public static func reportingClient(forBundleID bundleID: String?) -> String? {
+        guard let bundleID else { return nil }
+        reportingClientLock.lock()
+        defer { reportingClientLock.unlock() }
+        return reportingClients[bundleID]
     }
 
     private typealias ResponsiblePIDFunction = @convention(c) (pid_t) -> pid_t

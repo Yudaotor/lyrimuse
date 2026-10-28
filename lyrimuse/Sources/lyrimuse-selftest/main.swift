@@ -52,6 +52,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "position-replay", summary: "位置状态机回放:一串快照 + 暂停 / 恢复通知 → 屏上位置 / 暂停残差 / 偏置 / 学习表", run: runPositionReplayTests),
     TestGroup(name: "players", summary: "播放器身份 / 信任列表 / 播放模式 / 多选 / 广告判据 / 健康徽标", run: runPlayerIdentityTests),
     TestGroup(name: "amazon-music", summary: "Amazon Music 位置:日志重放 / 自记时 / 开播校准 / 陈旧元数据(样例与引擎共用)", run: runAmazonMusicTests),
+    TestGroup(name: "netease-ipad", summary: "iPad 版网易云:按 Mac 版认 / 锁屏歌词占掉的歌名还原 / 换歌那一帧的撕裂 / 🅴 / 接线契约", run: runNetEaseIPadTests),
     TestGroup(name: "netease-podcast", summary: "网易云播客单集:按引擎写的单集名单认出当前这一条 / 名单缓存 / 接线契约 / App 不读别家容器", run: runNeteasePodcastTests),
     TestGroup(name: "kaset", summary: "Kaset:AppleScript 读数解读 / 广告·加载·卡住 / 署名清理 / 跟系统那份的取舍 / 接线契约", run: runKasetTests),
     TestGroup(name: "vox", summary: "VOX:AppleScript 读数解读 / 没写标签的文件名·乱码·精确时长 / 换歌撕裂 / 系统那份的歌手专辑 / 循环音量 / 接线契约", run: runVoxTests),

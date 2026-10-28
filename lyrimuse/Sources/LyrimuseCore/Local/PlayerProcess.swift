@@ -6,10 +6,10 @@ import Darwin
 /// 一个都没有时按内核进程表再找一遍:LaunchServices 给出这个 bundle id 的 App 在哪,可执行文件在它 `Contents/MacOS/`
 /// 底下的进程就是它。
 public enum PlayerProcess {
-    /// 同一个播放器的别的版本(`PlayerBundleAliases`)也算,本体优先。没在跑为 nil。`excludingPID`:刚报退出的那个进程,
-    /// 退出通知到的那一刻它可能还没被回收。
+    /// 同一个播放器的别的版本(`PlayerBundleAliases`)也算,本体优先;另一个程序的那几个(`otherClients`)不算:要进程号的都是按本体的
+    /// 菜单、界面或开着的文件做事。没在跑为 nil。`excludingPID`:刚报退出的那个进程,退出通知到的那一刻它可能还没被回收。
     public static func pid(bundleID: String, excludingPID gone: pid_t? = nil) -> pid_t? {
-        let ids = PlayerBundleAliases.all(for: bundleID)
+        let ids = PlayerBundleAliases.all(for: bundleID, includingOtherClients: false)
         return firstPID(ids: ids, excludingPID: gone)
     }
 

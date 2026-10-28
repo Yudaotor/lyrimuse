@@ -44,10 +44,11 @@ final class FullDiskAccessPermission: ObservableObject {
     }
 
     /// 这套选择下要替哪几家说话:需要授权 ∩ 装了 ∩ 引擎没说它读的那一份不用授权。没装的播放器没有容器,
-    /// 引擎不会探它,摆出来就是一行永远确认不了的状态;非沙盒版网易云同理(`LocalCacheAccess.needsGrant`)。
+    /// 引擎不会探它,摆出来就是一行永远确认不了的状态;非沙盒版网易云同理(`LocalCacheAccess.needsGrant`)。只装了另一个程序的版本
+    /// (iPad 版网易云)也不算,引擎读的是本体的数据。
     func visiblePlayers(for selection: Set<PlaybackPlayer>) -> [PlaybackPlayer] {
         selection.playersNeedingFullDiskAccess.filter { player in
-            PlayerBundleAliases.isInstalled(player)
+            PlayerBundleAliases.isInstalled(player, includingOtherClients: false)
                 && player.localCacheSource.map { LocalCacheAccess.needsGrant($0, state: state) } ?? true
         }
     }

@@ -472,14 +472,14 @@ func runPineTests() {
         expectEqual(sourceHas(client, "|| PinePlayerInfo.isVideo(snapshot)"), true, "Pine 接线: 视频当不是歌")
         expectEqual(sourceHas(sourceText("LyrimuseCore/Local/PinePlaylist.swift"),
                               "rows.map { track($0, video: isVideo($0, directory: directory)) }"), true, "Pine 接线: 列表里的视频行不预取")
-        expectEqual([sourceHas(sourceText("LyrimuseCore/Local/PlayerProcess.swift"), "let ids = PlayerBundleAliases.all(for: bundleID)"),
+        expectEqual([sourceHas(sourceText("LyrimuseCore/Local/PlayerProcess.swift"), "let ids = PlayerBundleAliases.all(for: bundleID, includingOtherClients: false)"),
                      sourceHas(sourceText("LyrimuseCore/Local/NowPlayingClientsProbe.swift"), "for id in PlayerBundleAliases.inProbeOrder(for: bundleID) {"),
                      sourceHas(sourceText("LyrimuseCore/Local/PlayerPickerLayout.swift"),
                                "PlayerBundleAliases.applicationURL(forBundleID: player.bundleIdentifier) != nil")],
                     [true, true, true], "Pine 别名: 找进程、单问会话、判装没装都把别名试一遍")
         expectEqual([sourceHas(client, "guard let bundleID = raw.bundleIdentifier.map(PlayerBundleAliases.canonical), artworkBundleIDMatches(bundleID, players: players) else {"),
                      sourceHas(sourceText("LyrimuseCore/Local/NowPlayingClientsProbe.swift"), "\"/usr/bin/perl\", [paths.script, paths.library, id, \"artwork\"]"),
-                     sourceHas(sourceText("lyrimuse/Settings/AccessibilityPermission.swift"), "PlayerBundleAliases.isInstalled(player)"),
+                     sourceHas(sourceText("lyrimuse/Settings/AccessibilityPermission.swift"), "PlayerBundleAliases.isInstalled(player, includingOtherClients: false)"),
                      sourceHas(sourceText("lyrimuse/AppDelegate.swift"), "let playerURL = PlayerBundleAliases.applicationURL(forBundleID: player.bundleIdentifier)")],
                     [true, true, true, true], "Pine 别名: 封面载荷换成本体的 id、单问封面也试别名、辅助功能那一行和启动播放器认别的版本")
         let local = sourceText("LyrimuseCore/Local/LocalPlaybackSource.swift")

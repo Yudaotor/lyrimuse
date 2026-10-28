@@ -746,8 +746,8 @@ func runKasetTests() {
                         && sourceHas(src("LyrimuseCore/Local/LocalPlaybackSource.swift"), "if snapshot.positionIsPrecise == true {\n                    usedBrowserProbe = true\n                    browserProbePrecise = true"), true,
                     "Kaset 契约: 在走时位置用网页时钟,播放源当精确真值采信")
         expectEqual(client.contains("step = KasetPlayerInfo.webClockStep(reading, web: web, at: t, check: previous)")
-                        && src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(
-                            "trackPosSeconds = Self.resumeReadingNeverLeads(bundleID: lastSnapshot?.bundleIdentifier)"), true,
+                        && sourceHas(src("LyrimuseCore/Local/LocalPlaybackSource.swift"),
+                                     "trackPosSeconds = Self.resumeReadingNeverLeads( bundleID: lastSnapshot?.bundleIdentifier,"), true,
                     "Kaset 契约: 网页时钟跟读数对上才用;恢复那一拍按播放器决定削不削")
         let playbackSource = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
         expectEqual(playbackSource.contains("if isMusicVideo, snapshot.bundleIdentifier == PlaybackPlayer.kaset.bundleIdentifier,")

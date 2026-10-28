@@ -222,7 +222,8 @@ public final class MediaControlStreamWatcher {
     /// stream 输出里"当前 Now Playing"的合并状态:`diff:false` 的行整份替换,`diff:true` 的行
     /// 只带变化的字段。只留拼锚点身份要用的四个键(artist/title/elapsedTime/timestamp),外加判暂停
     /// 信号要用的 bundleIdentifier(见 `digest` 里的 `playingFromRate`)、认「这份锚点带着下一首时长」
-    /// 要用的 duration(见 `lastAnchorTitle`),别的字段一概不存 —— 见文件头那段"唯一的例外"。
+    /// 要用的 duration(见 `lastAnchorTitle`)、还原 iPad 版网易云歌名要比的 album(见 `NetEaseIPadNowPlaying`),
+    /// 别的字段一概不存 —— 见文件头那段"唯一的例外"。
     private var mergedPayload: [String: Any] = [:]
     /// 上一份锚点的标题与时长:下一份锚点标题没变、时长变了,就是下一首的第一份
     /// (见 `MediaControlClient.nextTrackDurationUnderOldTitle`)。
@@ -335,7 +336,7 @@ public final class MediaControlStreamWatcher {
         let payload = MediaControlMicros.normalized(rawPayload)
         let isDiff = object["diff"] as? Bool ?? false
         var next: [String: Any] = isDiff ? merged : [:]
-        for key in ["artist", "title", "elapsedTime", "timestamp", "bundleIdentifier", "duration"] where payload.keys.contains(key) {
+        for key in ["artist", "title", "elapsedTime", "timestamp", "bundleIdentifier", "duration", "album"] where payload.keys.contains(key) {
             if payload[key] is NSNull {
                 next.removeValue(forKey: key)
             } else {
@@ -354,13 +355,19 @@ public final class MediaControlStreamWatcher {
         let resumed = (payload["playing"] as? Bool) == true
         // 曲目换没换,跟锚点判定完全无关:只带 title/artist 的 diff 行(实测电台换歌就有这种形态)会在
         // 下面那道"没有 elapsedTime/timestamp 就早退"的闸之前返回,所以这一步必须在闸之前算。
-        let changed = changedTrackKey(before: merged, after: next)
+        // 合并状态里留原样(下一行只带 title 的 diff 才拼得回 iPad 版网易云的歌词模式),判换歌、算锚点身份用整理过的,
+        // 跟轮询那一路逐字一致(见 NetEaseIPadNowPlaying)。开播差量要在整理之前记下,这一行的锚点身份才带上提前量。
+        if NetEaseIPadNowPlaying.isBareStart(payload: payload, merged: next), let timestamp = next["timestamp"] as? String {
+            NetEaseIPadNowPlaying.noteBareStart(timestamp: timestamp)
+        }
+        let identity = NetEaseIPadNowPlaying.normalizedFields(next)
+        let changed = changedTrackKey(before: NetEaseIPadNowPlaying.normalizedFields(merged), after: identity)
         guard payload.keys.contains("elapsedTime") || payload.keys.contains("timestamp") else {
             return MediaControlAnchorDigest(merged: next, anchorKey: nil, tight: false, anchorAge: nil,
                                             pausedAtArrival: paused, resumedAtArrival: resumed,
                                             trackChangeKey: changed, trackChangeAt: changed == nil ? nil : arrivedAt)
         }
-        let elapsed = (next["elapsedTime"] as? NSNumber)?.doubleValue
+        let elapsed = (identity["elapsedTime"] as? NSNumber)?.doubleValue
         let timestamp = next["timestamp"] as? String
         guard elapsed != nil || timestamp != nil else {
             return MediaControlAnchorDigest(merged: next, anchorKey: nil, tight: false, anchorAge: nil,
@@ -368,7 +375,7 @@ public final class MediaControlStreamWatcher {
                                             trackChangeKey: changed, trackChangeAt: changed == nil ? nil : arrivedAt)
         }
         let key = MediaControlClient.anchorKey(
-            artist: next["artist"] as? String, title: next["title"] as? String,
+            artist: identity["artist"] as? String, title: identity["title"] as? String,
             elapsedTime: elapsed, timestamp: timestamp)
         let age = MediaControlClient.parseTimestamp(timestamp).map { arrivedAt.timeIntervalSince($0) }
         // 年龄略负(时钟毛刺)也放行;没有可解析的时间戳就没法判"刚打好",只能 loose。

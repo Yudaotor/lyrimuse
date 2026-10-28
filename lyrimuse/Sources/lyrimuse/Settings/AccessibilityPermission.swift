@@ -26,10 +26,11 @@ final class AccessibilityPermission: ObservableObject {
         noteGranted()
     }
 
-    /// 这套选择下要替哪几家说话:需要 ∩ 装了。没装的播放器没有界面可读。
+    /// 这套选择下要替哪几家说话:需要 ∩ 装了。没装的播放器没有界面可读;只装了另一个程序的版本(iPad 版网易云)也不算,
+    /// 读的是本体的菜单和界面。
     func visiblePlayers(for selection: Set<PlaybackPlayer>) -> [PlaybackPlayer] {
         selection.playersNeedingAccessibility.filter { player in
-            PlayerBundleAliases.isInstalled(player)
+            PlayerBundleAliases.isInstalled(player, includingOtherClients: false)
         }
     }
 
