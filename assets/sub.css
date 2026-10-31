@@ -10,7 +10,7 @@
 .sub-h1 { margin: 0; font-size: clamp(32px, 4.6vw, 56px); line-height: 1.06; letter-spacing: -.04em; font-weight: 700; text-wrap: balance; word-break: keep-all; }
 .sub-h1 > span { display: block; }
 .sub-h1 > span + span { color: var(--ink-3); }
-:lang(zh) .sub-h1, :lang(zh) .sec-h2 { letter-spacing: -.015em; line-height: 1.14; }
+:is(:lang(zh), :lang(ja), :lang(ko)) .sub-h1, :is(:lang(zh), :lang(ja), :lang(ko)) .sec-h2 { letter-spacing: -.015em; line-height: 1.14; }
 /* Chinese ledes break at punctuation and spaces, not inside a word; keep each clause short enough for a 320 px phone */
 .sub-lede { margin: 22px auto 0; max-width: 36em; font-size: clamp(17px, 1.6vw, 20px); line-height: 1.6; color: var(--ink-2); text-wrap: balance; word-break: keep-all; overflow-wrap: anywhere; }
 .sub-meta { margin: 16px 0 0; font-size: 13px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
@@ -108,7 +108,7 @@
 .doc { max-width: 1120px; margin: 0 auto; padding: 88px 24px 110px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 64px; align-items: start; }
 .doc-head { margin: 0 0 28px; }
 .doc-h1 { margin: 0; font-size: clamp(36px, 4.6vw, 56px); line-height: 1.08; letter-spacing: -.035em; font-weight: 700; }
-:lang(zh) .doc-h1 { letter-spacing: -.01em; }
+:is(:lang(zh), :lang(ja), :lang(ko)) .doc-h1 { letter-spacing: -.01em; }
 .doc-head .sub-meta { margin-top: 12px; }
 .doc-toc { position: sticky; top: 84px; padding-top: 14px; font-size: 14px; }
 .doc-toc p { margin: 0 0 10px 10px; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--ink-3); }

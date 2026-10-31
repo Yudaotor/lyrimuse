@@ -638,26 +638,46 @@
     });
   }
 
-  // Headings light up like a lyric line: one span per CJK character (with the punctuation after it) or per
-  // Latin word, weighted by its length so the fill moves at an even speed.
-  const WORD = /[A-Za-z0-9'’\-]/, TRAIL = /[，。、！？；：,.!?;:]/;
+  // Headings light up like a lyric line: one span per Chinese character, Latin word, Korean word or Japanese
+  // phrase (each with the punctuation after it), weighted by its length so the fill moves at an even speed.
+  // Chrome breaks a line between any two spans, whatever word-break says, so a span must never split a word:
+  // Korean words end at a space; Japanese phrases come from the browser's word segmenter, with all-hiragana
+  // words (particles, inflections) kept on the word before them and a run of katakana kept whole (without the
+  // segmenter, every character is a unit, as in Chinese).
+  const WORD = /[A-Za-z0-9'’\-]/, HANGUL = /[ᄀ-ᇿ㄰-㆏가-힯]/, TRAIL = /[，。、！？；：,.!?;:」』）]/;
+  const jaWords = document.documentElement.lang === 'ja' && window.Intl && Intl.Segmenter ? new Intl.Segmenter('ja', { granularity: 'word' }) : null;
+  function phraseEnds(text) {
+    const ends = new Set();
+    if (!jaWords) return ends;
+    let k = 0, prev = '';
+    for (const { segment: t } of jaWords.segment(text)) {
+      const kind = /^[\s\p{P}]+$/u.test(t) ? 'punct' : /^[぀-ゟー]+$/.test(t) ? 'hira' : /^[゠-ヿ]+$/.test(t) ? 'kata' : 'word';
+      const joins = (kind === 'hira' && prev && prev !== 'punct') || (kind === 'kata' && prev === 'kata') || kind === 'punct';
+      if (k > 0 && !joins) ends.add(k);
+      k += [...t].length;
+      prev = kind === 'hira' && prev && prev !== 'punct' ? prev : kind;
+    }
+    ends.add(k);
+    return ends;
+  }
   function lightable(el) {
     const parts = [];
     const walk = (node) => [...node.childNodes].forEach((n) => {
       if (n.nodeType === 1) { if (n.tagName !== 'BR') walk(n); return; }
       if (n.nodeType !== 3) return;
-      const s = [...n.textContent], frag = document.createDocumentFragment();
+      const s = [...n.textContent], frag = document.createDocumentFragment(), ends = phraseEnds(n.textContent);
       for (let i = 0; i < s.length;) {
         if (/\s/.test(s[i])) { let j = i; while (j < s.length && /\s/.test(s[j])) j++; frag.append(s.slice(i, j).join('')); i = j; continue; }
-        const latin = WORD.test(s[i]);
         let j = i + 1;
-        if (latin) while (j < s.length && WORD.test(s[j])) j++;
+        if (ends.size) while (j < s.length && !ends.has(j) && !/\s/.test(s[j])) j++;
+        else if (WORD.test(s[i]) || HANGUL.test(s[i])) while (j < s.length && (WORD.test(s[j]) || HANGUL.test(s[j]))) j++;
         while (j < s.length && TRAIL.test(s[j])) j++;
         const c = document.createElement('span');
         c.className = 'c';
         c.textContent = s.slice(i, j).join('');
         frag.append(c);
-        parts.push({ el: c, w: latin ? Math.max(1, (j - i) * 0.55) : 1 });
+        const w = s.slice(i, j).reduce((sum, ch) => sum + (TRAIL.test(ch) ? 0 : WORD.test(ch) ? 0.55 : 1), 0);
+        parts.push({ el: c, w: Math.max(1, w) });
         i = j;
       }
       n.replaceWith(frag);
