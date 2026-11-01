@@ -306,7 +306,8 @@
 "上次检查：%@" = "Last checked: %@";
 "上次检测通过（%@）" = "Verified working (%@)";
 "上次自动匹配 %1$@ 首，找到 %2$@ 首" = "Last run: searched %1$@, found %2$@";
-"上次自动导入：%1$@，%2$@ 份" = "Last automatic import: %1$@, %2$@ files";
+"上次自动导入：%1$@，共 %2$@ 份" = "Last automatic import: %1$@, %2$@ files";
+"上次自动导入：%1$@，共 %2$@ 份#one" = "Last automatic import: %1$@, %2$@ file";
 "上次解析于 %@" = "Last looked up %@";
 "上次解析时无任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲无歌词。重新自动匹配通常可找到歌词" = "No lyrics source responded during the last lookup, possibly because the network was unavailable; it doesn’t mean the song has no lyrics. Auto re-match usually finds them";
 "上次：检查 %1$@ 首后停止，更新 %2$@ 首" = "Last run: stopped after checking %1$@, updated %2$@";
@@ -2208,6 +2209,9 @@
 "皇家学术院转写（RTGS），如 สวัสดี → sawatdi" = "Royal Thai General System (RTGS), e.g. สวัสดี → sawatdi";
 "监视" = "Watch";
 "监视文件夹" = "Watched Folder";
+"监视文件夹不能是歌词文件夹，也不能包含它或在它里面" = "The watched folder can’t be the lyrics folder, contain it, or be inside it";
+"监视文件夹与歌词文件夹重叠，已暂停自动导入" = "The watched folder overlaps the lyrics folder, so automatic import is paused";
+"监视的文件夹已不存在" = "The watched folder no longer exists";
 "直连失败时，经下方代理服务器重试" = "If a direct connection fails, retry through the proxy server below";
 "直连失败时，经系统代理或本机检测到的代理重试" = "If a direct connection fails, retry through the system proxy or a proxy detected on this Mac";
 "相邻短句可容纳于一行时合并显示" = "Adjacent short lines are merged when they fit on one line";
@@ -2392,6 +2396,7 @@
 "自动备份失败，为避免数据无法恢复，本次未执行删除。请检查磁盘空间和配置文件夹的写入权限后重试" = "The automatic backup couldn’t be written, so nothing was deleted this time to keep it recoverable. Check your disk space and write access to the config folder, then try again";
 "自动备份失败，为避免数据无法恢复，本次未执行导入。请检查磁盘空间和配置文件夹的写入权限后重试" = "The automatic backup failed, so nothing was imported to keep your data recoverable. Check disk space and write access to the configuration folder, then try again";
 "自动对齐" = "Auto Align";
+"自动导入失败，文件夹有变动时会重试" = "Automatic import failed and will retry when the folder changes";
 "自动展开" = "Auto-Expand";
 "自动检查" = "Check Automatically";
 "自动识别" = "Auto-detect";

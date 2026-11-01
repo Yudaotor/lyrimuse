@@ -306,7 +306,8 @@
 "上次检查：%@" = "Zuletzt geprüft: %@";
 "上次检测通过（%@）" = "Zuletzt erfolgreich geprüft (%@)";
 "上次自动匹配 %1$@ 首，找到 %2$@ 首" = "Zuletzt: %1$@ gesucht, %2$@ gefunden";
-"上次自动导入：%1$@，%2$@ 份" = "Letzter automatischer Import: %1$@, %2$@ Dateien";
+"上次自动导入：%1$@，共 %2$@ 份" = "Letzter automatischer Import: %1$@, %2$@ Dateien";
+"上次自动导入：%1$@，共 %2$@ 份#one" = "Letzter automatischer Import: %1$@, %2$@ Datei";
 "上次解析于 %@" = "Zuletzt gesucht: %@";
 "上次解析时无任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲无歌词。重新自动匹配通常可找到歌词" = "Bei der letzten Suche hat keine Liedtextquelle geantwortet, vielleicht war das Netzwerk nicht verfügbar; das heißt nicht, dass der Titel keinen Text hat. Eine neue automatische Zuordnung findet ihn meist";
 "上次：检查 %1$@ 首后停止，更新 %2$@ 首" = "Zuletzt: %1$@ geprüft, dann gestoppt, %2$@ aktualisiert";
@@ -2208,6 +2209,9 @@
 "皇家学术院转写（RTGS），如 สวัสดี → sawatdi" = "Royal Thai General System (RTGS), z. B. สวัสดี → sawatdi";
 "监视" = "Überwachen";
 "监视文件夹" = "Überwachter Ordner";
+"监视文件夹不能是歌词文件夹，也不能包含它或在它里面" = "Der überwachte Ordner darf nicht der Liedtext-Ordner sein, ihn enthalten oder darin liegen";
+"监视文件夹与歌词文件夹重叠，已暂停自动导入" = "Der überwachte Ordner überschneidet sich mit dem Liedtext-Ordner, der automatische Import ist pausiert";
+"监视的文件夹已不存在" = "Der überwachte Ordner existiert nicht mehr";
 "直连失败时，经下方代理服务器重试" = "Wenn eine direkte Verbindung scheitert, erneut über den Proxyserver unten versuchen";
 "直连失败时，经系统代理或本机检测到的代理重试" = "Wenn eine direkte Verbindung scheitert, erneut über den System-Proxy oder einen auf diesem Mac erkannten Proxy versuchen";
 "相邻短句可容纳于一行时合并显示" = "Benachbarte kurze Zeilen werden zusammengefasst, wenn sie in eine Zeile passen";
@@ -2392,6 +2396,7 @@
 "自动备份失败，为避免数据无法恢复，本次未执行删除。请检查磁盘空间和配置文件夹的写入权限后重试" = "Das automatische Backup ist fehlgeschlagen, daher wurde nichts gelöscht, damit alles wiederherstellbar bleibt. Prüfe den Speicherplatz und die Schreibrechte für den Konfigurationsordner und versuche es erneut";
 "自动备份失败，为避免数据无法恢复，本次未执行导入。请检查磁盘空间和配置文件夹的写入权限后重试" = "Die automatische Sicherung ist fehlgeschlagen. Damit deine Daten wiederherstellbar bleiben, wurde nichts importiert. Prüfe den Speicherplatz und die Schreibrechte für den Konfigurationsordner und versuch es erneut";
 "自动对齐" = "Auto-Ausrichtung";
+"自动导入失败，文件夹有变动时会重试" = "Automatischer Import fehlgeschlagen, neuer Versuch, sobald sich der Ordner ändert";
 "自动展开" = "Auto-Ausklappen";
 "自动检查" = "Automatisch prüfen";
 "自动识别" = "Automatisch erkennen";

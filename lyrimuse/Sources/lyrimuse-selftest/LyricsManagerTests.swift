@@ -2011,6 +2011,22 @@ func runLyricsManagerTests() {
                     && librarySource.contains("LyricsBatchImport.discardStaleStaging(olderThan: 0)")
                     && view.contains("LyricsImportLibrarySheet()"), true,
                     "导入库: 启动时开始监视并清掉残留暂存,监视按 library 方式写入、不打快照,删除走引擎改动请求")
+        expectEqual(batchSource.contains(".interactiveDismissDisabled(importPhase != nil)")
+                    && batchSource.contains("if Task.isCancelled || closed {")
+                    && batchSource.contains("let chosen = Self.dedupe(selectedItems)")
+                    && batchSource.contains("tooLarge: true")
+                    && batchSource.contains("if mode == .fill, item.plainText == true, t.hasPlain == true { return .hasLyrics }"), true,
+                    "导入歌词文件夹: 导入中关不了面板、读取中关了面板删暂存、同一首只发一组、超限文件只交文件名、只补不换已有纯文本")
+        let backupSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/Settings/LyricsBackupStore.swift"), encoding: .utf8)) ?? ""
+        expectEqual(librarySource.contains("kFSEventStreamCreateFlagWatchRoot")
+                    && librarySource.contains("guard !Self.overlapsLyricsFolder(folder) else {")
+                    && librarySource.contains("EnrichCacheStore.shared.dropImportedFromWatchFiles(")
+                    && librarySource.contains("for path in prepared.stagedPaths where changed.contains(path)")
+                    && librarySource.contains("for chunk in Self.chunks(changed: changed, fingerprints: current)")
+                    && librarySource.contains("L10n.plural(\"上次自动导入：%1$@，共 %2$@ 份\"")
+                    && backupSource.contains("return await restore(from: data, snapshotAt: snapshot.date)"), true,
+                    "监视文件夹: 跟着文件夹改名删除、不跟歌词文件夹重叠、删了文件作废记录、只记读进去的、分批交引擎;快照恢复带上快照时刻")
         expectEqual(sheet.contains("let groups = LyricsCandidateGroups.groups(")
                     && sheet.contains("if layout.sameExpanded {") && sheet.contains("if layout.excludedExpanded {")
                     && sheet.contains("layout.excludedForced = layout.current == nil && layout.imported == nil && layout.main.isEmpty && layout.same.isEmpty")

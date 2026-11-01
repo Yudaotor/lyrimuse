@@ -146982,59 +146982,6 @@
         }
       }
     },
-    "上次自动导入：%1$@，%2$@ 份" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Letzter automatischer Import: %1$@, %2$@ Dateien"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last automatic import: %1$@, %2$@ files"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Última importación automática: %1$@, %2$@ archivos"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dernière importation automatique : %1$@, %2$@ fichiers"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "前回の自動読み込み：%1$@、%2$@ 件"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "마지막 자동 가져오기: %1$@, %2$@개"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上次自动导入：%1$@，%2$@ 份"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上次自動匯入：%1$@，%2$@ 份"
-          }
-        }
-      }
-    },
     "文件夹中新增或修改的歌词文件会自动导入：对应的歌曲没有歌词时直接补上，已有歌词的不变" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -147932,6 +147879,319 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "迷你尺寸下，搜尋確認無歌詞後才隱藏，搜尋期間照常顯示"
+          }
+        }
+      }
+    },
+    "监视文件夹不能是歌词文件夹，也不能包含它或在它里面" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der überwachte Ordner darf nicht der Liedtext-Ordner sein, ihn enthalten oder darin liegen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The watched folder can’t be the lyrics folder, contain it, or be inside it"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La carpeta vigilada no puede ser la carpeta de letras, contenerla ni estar dentro de ella"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le dossier surveillé ne peut pas être le dossier des paroles, le contenir ni s’y trouver"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "監視フォルダには歌詞フォルダ自体、それを含むフォルダ、その中のフォルダは指定できません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "감시 폴더는 가사 폴더이거나 가사 폴더를 포함하거나 그 안에 있을 수 없음"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "监视文件夹不能是歌词文件夹，也不能包含它或在它里面"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "監視資料夾不能是歌詞資料夾，也不能包含它或在它裡面"
+          }
+        }
+      }
+    },
+    "监视的文件夹已不存在" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der überwachte Ordner existiert nicht mehr"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The watched folder no longer exists"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La carpeta vigilada ya no existe"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le dossier surveillé n’existe plus"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "監視フォルダが見つかりません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "감시 폴더가 더 이상 없음"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "监视的文件夹已不存在"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "監視的資料夾已不存在"
+          }
+        }
+      }
+    },
+    "监视文件夹与歌词文件夹重叠，已暂停自动导入" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der überwachte Ordner überschneidet sich mit dem Liedtext-Ordner, der automatische Import ist pausiert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The watched folder overlaps the lyrics folder, so automatic import is paused"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La carpeta vigilada se solapa con la carpeta de letras, así que la importación automática está en pausa"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le dossier surveillé chevauche le dossier des paroles : l’importation automatique est en pause"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "監視フォルダが歌詞フォルダと重なっているため、自動読み込みを停止しています"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "감시 폴더가 가사 폴더와 겹쳐 자동 가져오기를 일시 중지함"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "监视文件夹与歌词文件夹重叠，已暂停自动导入"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "監視資料夾與歌詞資料夾重疊，已暫停自動匯入"
+          }
+        }
+      }
+    },
+    "自动导入失败，文件夹有变动时会重试" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatischer Import fehlgeschlagen, neuer Versuch, sobald sich der Ordner ändert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic import failed and will retry when the folder changes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La importación automática falló; se reintentará cuando cambie la carpeta"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’importation automatique a échoué ; nouvel essai dès que le dossier change"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動読み込みに失敗しました。フォルダが変更されたときに再試行します"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "자동 가져오기에 실패했으며 폴더가 바뀌면 다시 시도함"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动导入失败，文件夹有变动时会重试"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動匯入失敗，資料夾有變動時會重試"
+          }
+        }
+      }
+    },
+    "上次自动导入：%1$@，共 %2$@ 份" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Letzter automatischer Import: %1$@, %2$@ Datei"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Letzter automatischer Import: %1$@, %2$@ Dateien"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Last automatic import: %1$@, %2$@ file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Last automatic import: %1$@, %2$@ files"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Última importación automática: %1$@, %2$@ archivo"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Última importación automática: %1$@, %2$@ archivos"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Dernière importation automatique : %1$@, %2$@ fichier"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Dernière importation automatique : %1$@, %2$@ fichiers"
+                }
+              }
+            }
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "前回の自動読み込み：%1$@、%2$@ 件"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "마지막 자동 가져오기: %1$@, %2$@개"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次自动导入：%1$@，共 %2$@ 份"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次自動匯入：%1$@，共 %2$@ 份"
           }
         }
       }

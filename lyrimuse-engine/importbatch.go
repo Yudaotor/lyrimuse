@@ -95,6 +95,9 @@ func groupImportFiles(files []importLyricsFile) []importFileGroup {
 
 type importIdentity struct {
 	artist, title, album string
+	// loose:文件名里没有带空格的分隔符、按无空格的连字符硬拆出来的(「周杰伦-晴天」,也可能是「Ob-La-Di」),只拿来对歌词库,
+	// 不当身份存进导入库。
+	loose bool
 }
 
 var (
@@ -102,17 +105,18 @@ var (
 	importTrackNumRe   = regexp.MustCompile(`^\d{1,3}$`)
 	importTrackPrefRe  = regexp.MustCompile(`^\d{1,3}\s*[.)_]\s*`)
 	importStemSplitter = regexp.MustCompile(`\s+[-–—－]\s+`)
+	importStemTightRe  = regexp.MustCompile(`[-–—－]`)
 )
 
 // importIdentityGuesses:这一组可能是哪首歌,按可信程度排:文件里写的(标签、TTML / QRC 的头部、Lyrimuse 自己的文件头),
-// 再是文件名里的「歌手 - 歌名」「歌名 - 歌手」「歌手 - 歌名 - 专辑」(Lyrimuse 导出的命名)、「歌手 - 专辑 - 歌名」、只有歌名;
-// 文件名开头的音轨号去掉。
+// 再是文件名里的「歌手 - 歌名」「歌名 - 歌手」「歌手 - 歌名 - 专辑」(Lyrimuse 导出的命名)、「歌手 - 专辑 - 歌名」、
+// 「歌手 - 歌名里带 - 的」、只有歌名;文件名开头的音轨号去掉,全角空格这类先折成普通空格。
 func importIdentityGuesses(stem string, c *scoredLyricCandidateResult) []importIdentity {
 	var out []importIdentity
 	if c != nil && strings.TrimSpace(c.Title) != "" {
 		out = append(out, importIdentity{artist: c.Artist, title: c.Title, album: c.Album})
 	}
-	s := strings.TrimSpace(importStemHashRe.ReplaceAllString(stem, ""))
+	s := strings.TrimSpace(importStemHashRe.ReplaceAllString(cleanMediaTag(stem), ""))
 	s = strings.TrimSpace(importTrackPrefRe.ReplaceAllString(s, ""))
 	var parts []string
 	for _, p := range importStemSplitter.Split(s, -1) {
@@ -131,12 +135,19 @@ func importIdentityGuesses(stem string, c *scoredLyricCandidateResult) []importI
 	case 0:
 	case 1:
 		out = append(out, importIdentity{title: parts[0]})
+		if loc := importStemTightRe.FindStringIndex(parts[0]); loc != nil {
+			a, b := strings.TrimSpace(parts[0][:loc[0]]), strings.TrimSpace(parts[0][loc[1]:])
+			if a != "" && b != "" {
+				out = append(out, importIdentity{artist: a, title: b, loose: true}, importIdentity{artist: b, title: a, loose: true})
+			}
+		}
 	case 2:
 		out = append(out, importIdentity{artist: parts[0], title: parts[1]}, importIdentity{artist: parts[1], title: parts[0]})
 	default:
 		out = append(out,
 			importIdentity{artist: parts[0], title: parts[1], album: strings.Join(parts[2:], " - ")},
-			importIdentity{artist: parts[0], title: parts[len(parts)-1], album: strings.Join(parts[1:len(parts)-1], " - ")})
+			importIdentity{artist: parts[0], title: parts[len(parts)-1], album: strings.Join(parts[1:len(parts)-1], " - ")},
+			importIdentity{artist: parts[0], title: strings.Join(parts[1:], " - ")})
 	}
 	return out
 }
@@ -144,13 +155,15 @@ func importIdentityGuesses(stem string, c *scoredLyricCandidateResult) []importI
 type importLibEntry struct {
 	key, artist, title, album string
 	dur                       float64
-	hasLyrics, manual         bool
+	hasLyrics, manual, plain  bool
 	source                    string
 }
 
 type importLibrary struct {
 	entries []importLibEntry
 	byTitle map[string][]int
+	// byBareTitle:歌名带合作署名(「(feat. X)」「ft. X」)的条目,按去掉署名后的歌名再记一份,文件名没写署名时用。
+	byBareTitle map[string][]int
 }
 
 func importNormTitle(t string) string {
@@ -162,7 +175,7 @@ func importNormName(s string) string {
 }
 
 func buildImportLibrary(cache map[string]enrichEntry) importLibrary {
-	lib := importLibrary{byTitle: map[string][]int{}}
+	lib := importLibrary{byTitle: map[string][]int{}, byBareTitle: map[string][]int{}}
 	keys := make([]string, 0, len(cache))
 	for k := range cache {
 		keys = append(keys, k)
@@ -182,27 +195,60 @@ func buildImportLibrary(cache map[string]enrichEntry) importLibrary {
 		lib.entries = append(lib.entries, importLibEntry{
 			key: k, artist: artist, title: title, album: album, dur: dur,
 			hasLyrics: e.Lyrics.Len() > 0 || e.BodyFields&32 != 0 || e.Instrumental, manual: e.ManualLyrics, source: e.LyricsSource,
+			plain: e.PlainLyrics.Len() > 0 || e.BodyFields&8 != 0,
 		})
 		n := importNormTitle(title)
 		lib.byTitle[n] = append(lib.byTitle[n], len(lib.entries)-1)
+		if bare := titleWithoutFeatCredit(title); bare != "" {
+			b := importNormTitle(bare)
+			lib.byBareTitle[b] = append(lib.byBareTitle[b], len(lib.entries)-1)
+		}
 	}
 	return lib
 }
 
-// match:按猜测的先后找第一组对得上的条目。有歌手时歌手要对得上;有专辑、又有专辑也对得上的,只留那几条。
+// titleCandidates:歌名对得上的条目。先按原样;对不上时两边都去掉合作署名再比(文件名、库里只有一边写了「feat. X」)。
+func (lib importLibrary) titleCandidates(title string) []int {
+	if list := lib.byTitle[importNormTitle(title)]; len(list) > 0 {
+		return list
+	}
+	bare := titleWithoutFeatCredit(title)
+	if bare != "" {
+		if list := lib.byTitle[importNormTitle(bare)]; len(list) > 0 {
+			return list
+		}
+	} else {
+		bare = title
+	}
+	return lib.byBareTitle[importNormTitle(bare)]
+}
+
+// importArtistFits:歌手对不对得上。对不上时去掉合作署名、只看第一位再比一次(「A feat. B」「A & B」)。
+func importArtistFits(libArtist, guess string) bool {
+	if importNormName(libArtist) == importNormName(guess) || artistMatches(libArtist, guess) {
+		return true
+	}
+	pg, pl := primaryCreditedArtist(guess), primaryCreditedArtist(libArtist)
+	if pg == "" || pl == "" {
+		return false
+	}
+	return importNormName(pl) == importNormName(pg) || artistMatches(libArtist, pg) || artistMatches(pl, guess)
+}
+
+// match:按猜测的先后找第一组歌手、歌名都对得上的条目;有专辑、又有专辑也对得上的,只留那几条。没写歌手的猜测(文件里只有
+// [ti:]、文件名只有歌名)对上了先记着,后面带歌手的猜测都对不上才用它。
 // byTitleOnly:是只凭歌名对上的(猜测里没有歌手),调用方别自动认定。
 func (lib importLibrary) match(guesses []importIdentity) (hits []int, byTitleOnly bool) {
+	var titleOnly []int
 	for _, g := range guesses {
-		list := lib.byTitle[importNormTitle(g.title)]
+		list := lib.titleCandidates(g.title)
 		if len(list) == 0 {
 			continue
 		}
 		if g.artist != "" {
 			var kept []int
-			na := importNormName(g.artist)
 			for _, i := range list {
-				e := lib.entries[i]
-				if importNormName(e.artist) == na || artistMatches(e.artist, g.artist) {
+				if importArtistFits(lib.entries[i].artist, g.artist) {
 					kept = append(kept, i)
 				}
 			}
@@ -223,9 +269,15 @@ func (lib importLibrary) match(guesses []importIdentity) (hits []int, byTitleOnl
 				list = sameAlbum
 			}
 		}
-		return list, g.artist == ""
+		if g.artist == "" {
+			if titleOnly == nil {
+				titleOnly = list
+			}
+			continue
+		}
+		return list, false
 	}
-	return nil, false
+	return titleOnly, titleOnly != nil
 }
 
 type importPlanOption struct {
@@ -235,8 +287,10 @@ type importPlanOption struct {
 	Album        string  `json:"album"`
 	DurationSecs float64 `json:"duration_secs,omitempty"`
 	HasLyrics    bool    `json:"has_lyrics"`
-	Manual       bool    `json:"manual"`
-	Source       string  `json:"source,omitempty"`
+	// HasPlain:有纯文本歌词(「只补」时导入纯文本不换掉它)。
+	HasPlain bool   `json:"has_plain,omitempty"`
+	Manual   bool   `json:"manual"`
+	Source   string `json:"source,omitempty"`
 }
 
 // 预览清单一行的状态。
@@ -333,7 +387,7 @@ func planLyricsImport(files []importLyricsFile, trTarget string, cache map[strin
 			e := lib.entries[i]
 			item.Options = append(item.Options, importPlanOption{
 				Key: e.key, Artist: e.artist, Title: e.title, Album: e.album, DurationSecs: e.dur,
-				HasLyrics: e.hasLyrics, Manual: e.manual, Source: e.source,
+				HasLyrics: e.hasLyrics, HasPlain: e.plain, Manual: e.manual, Source: e.source,
 			})
 		}
 		switch {
@@ -392,7 +446,7 @@ func importStoreIdentities(stem string, c *scoredLyricCandidateResult) []importe
 	// 纯数字的「歌手」多半是音轨号(「01 - 歌名」),存进去永远对不上;只留给 match 在歌词库里比对。
 	var out []importedIdentity
 	for _, g := range importIdentityGuesses(stem, nil) {
-		if g.artist != "" && g.title != "" && !importTrackNumRe.MatchString(g.artist) {
+		if g.artist != "" && g.title != "" && !g.loose && !importTrackNumRe.MatchString(g.artist) {
 			out = append(out, importedIdentity{Artist: g.artist, Title: g.title})
 		}
 	}
@@ -475,6 +529,8 @@ type importBatchPrepared struct {
 type importPreparedGroup struct {
 	stem  string
 	names []string
+	// paths:各文件在所选文件夹里的相对路径(监视文件夹的记录据此记下来源)。
+	paths []string
 	c     *scoredLyricCandidateResult
 }
 
@@ -496,10 +552,17 @@ func prepareImportBatch(req enrichEditRequest) *importBatchPrepared {
 		}
 		g := groups[it.ID]
 		names := make([]string, 0, len(g.Files))
+		paths := make([]string, 0, len(g.Files))
 		for _, f := range g.Files {
 			names = append(names, f.Name)
+			rel := f.Path
+			if rel == "" {
+				rel = f.Name
+			}
+			paths = append(paths, rel)
 		}
-		out.groups[it.ID] = importPreparedGroup{stem: g.Stem, names: names, c: parseImportedLyrics(g.Files, trTarget).Candidate}
+		out.groups[it.ID] = importPreparedGroup{stem: g.Stem, names: names, paths: paths,
+			c: parseImportedLyrics(g.Files, trTarget).Candidate}
 	}
 	return out
 }
@@ -523,12 +586,24 @@ func applyImportBatchLocked(req enrichEditRequest) enrichEditOutcome {
 	now := time.Now()
 	var exports, dropped []string
 	var recs []importedLyricsRecord
-	stored := 0
+	stored, written := 0, 0
+	// 监视文件夹存进来的记录记下来源文件,文件删了、挪走了跟着作废(dropImportedLyricsFromWatchFiles)。
+	watchFiles := func(g importPreparedGroup) []string {
+		if req.Mode != importModeLibrary || req.WatchFolder == "" {
+			return nil
+		}
+		out := make([]string, 0, len(g.paths))
+		for _, p := range g.paths {
+			out = append(out, filepath.Join(req.WatchFolder, filepath.FromSlash(p)))
+		}
+		return out
+	}
 	keyedRecord := func(key string, g importPreparedGroup) importedLyricsRecord {
 		c := g.c
 		return importedLyricsRecord{
 			Key: key, Lyrics: c.Lyrics, Tr: c.LyricsTr, TrLang: c.LyricsTrLang, Roma: c.LyricsRoma, YRC: c.LyricsYRC,
 			BG: c.LyricsBG, Title: c.Title, Artist: c.Artist, Album: c.Album, Files: g.names, ImportedAt: now.Unix(),
+			WatchFiles: watchFiles(g),
 		}
 	}
 	for _, it := range req.ImportItems {
@@ -540,6 +615,7 @@ func applyImportBatchLocked(req enrichEditRequest) enrichEditOutcome {
 		if it.Key == "" {
 			if it.Store {
 				if rec, ok := importStoreRecord(g, now); ok {
+					rec.WatchFiles = watchFiles(g)
 					recs = append(recs, rec)
 					stored++
 				}
@@ -554,7 +630,8 @@ func applyImportBatchLocked(req enrichEditRequest) enrichEditOutcome {
 		if c.PlainTextOnly && hasLyrics {
 			continue
 		}
-		if req.Mode == importModeFill && (hasLyrics || e.Instrumental) {
+		// 「只补」:已有逐行歌词、标了纯音乐的不动;导入的是纯文本时,已有纯文本也算有(别拿一份纯文本换掉另一份)。
+		if req.Mode == importModeFill && (hasLyrics || e.Instrumental || (c.PlainTextOnly && e.PlainLyrics.Len() > 0)) {
 			continue
 		}
 		if req.Mode == importModeLibrary && (hasLyrics || e.Instrumental || e.PlainLyrics.Len() > 0) {
@@ -582,6 +659,7 @@ func applyImportBatchLocked(req enrichEditRequest) enrichEditOutcome {
 		enrichCache[it.Key] = e
 		cancelInFlightEnrichLocked(it.Key)
 		exports = append(exports, it.Key)
+		written++
 		if req.Mode == importModeManual {
 			dropped = append(dropped, it.Key)
 			if songEntitySharing() {
@@ -599,7 +677,8 @@ func applyImportBatchLocked(req enrichEditRequest) enrichEditOutcome {
 			noteFileErr("write", importedLyricsDir(), err)
 		}
 	}
-	return enrichEditOutcome{changed: len(exports) + stored, exports: exports}
+	// 改了几首只数请求里的这几首:「锁定」时同一首歌的其他写法跟着改(shareManualEditLocked),不算进去。
+	return enrichEditOutcome{changed: written + stored, exports: exports}
 }
 
 // importStoreRecord:库里没有对应歌曲的一组,做成按身份存的导入库记录。纯文本、认不出歌手歌名的不存。

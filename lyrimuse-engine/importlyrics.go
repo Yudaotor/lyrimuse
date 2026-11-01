@@ -14,8 +14,9 @@ import (
 // 导入歌词文件:用户在「搜索候选歌词」面板里选的(或拖进来的)歌词文件,解析成一条来源为 import 的候选,
 // 面板照常预览、采用(采用走 save_edit,见 enrichedit.go)。文件由 App 读出来交过来:引擎是另一个进程,
 // 读不了「桌面」「文稿」这类受系统保护的目录,用户在选择框里点了的文件只有 App 有权限读。
-// 格式认后缀、认不出再看内容:TTML、QRC / KRC(加密或明文)、YRC、增强 LRC(带逐字)、LRC、纯文本;同名的
-// .tr.lrc / .roma.lrc 当译文 / 读音配上。编码按 decodeLyricBytes 的规矩转。见 11 章决策 149。
+// 格式认后缀、认不出再看内容:TTML、QRC / KRC(加密或明文)、YRC、增强 LRC(带逐字)、LyricsX 的 .lrcx(译文、逐字行)、LRC、
+// 纯文本;同名的 .tr.lrc / .roma.lrc 当译文 / 读音配上。文本先过 importNormalizeText(UTF-16、末尾 NUL、换行),再按
+// decodeLyricBytes 的规矩转码。见 11 章决策 149。
 
 // importLyricsSource:导入的那份候选、以及采用后条目的来源名。
 const importLyricsSource = "import"
@@ -29,6 +30,8 @@ type importLyricsFile struct {
 	// Path:批量导入时这个文件在所选文件夹里的相对路径(含文件名),分组看它的目录;单首导入不带。
 	Path string `json:"path,omitempty"`
 	Data []byte `json:"data"`
+	// TooLarge:App 读到上限就停、不带内容交过来的(多半拖错了文件),只为报「文件过大」。
+	TooLarge bool `json:"too_large,omitempty"`
 }
 
 // importLyricsResult:解析结果。认不出时 Candidate 为 nil、Error 说明原因(empty / unrecognized / too-large)。
@@ -64,10 +67,11 @@ var importLyricsKindNames = map[importLyricsKind]string{
 var (
 	importYRCLineRe = regexp.MustCompile(`(?m)^\[\d+,\d+\]`)
 	importLRCLineRe = regexp.MustCompile(`(?m)^\s*\[\d+:\d+(?:[.:]\d{1,3})?\]`)
-	// 正文开头别人家的身份标签:读出来当候选的歌名歌手专辑。
-	importTagRe = regexp.MustCompile(`(?m)^\s*\[(ar|ti|al):\s*(.*?)\s*\]\s*$`)
-	// importCreditLineRe:身份、署名这类标签行,读完身份就从正文里去掉(不显示,也别算进行数)。[offset:] 不在里面,显示层要用。
-	importCreditLineRe = regexp.MustCompile(`(?m)^[ \t]*\[(?:ar|ti|al|by|au|re|ve|length|tool):[^\]\n]*\][ \t]*(?:\r?\n|$)`)
+	// 正文开头别人家的身份标签(不分大小写,值里可以带方括号:「[ti:Song [Live]]」):读出来当候选的歌名歌手专辑。
+	importTagRe = regexp.MustCompile(`(?mi)^\s*\[(ar|ti|al):\s*(.*?)\s*\]\s*$`)
+	// importTagLineRe:一整行只是「[字母键:值]」的标签行(身份、署名、酷狗 / QQ 的 id / hash / sign / total…),读完身份就从正文里
+	// 去掉(不显示,也别算进行数)。[offset:] 留着,显示层要用;时间戳以数字开头,不会命中。
+	importTagLineRe = regexp.MustCompile(`(?mi)^[ \t]*\[([a-z][a-z0-9_]*):.*\][ \t]*$`)
 )
 
 // importLyricsKindOf 按后缀认,认不出(或后缀是 .txt / 没有)再看内容。
@@ -148,10 +152,13 @@ func parseImportedLyrics(files []importLyricsFile, trTarget string) importLyrics
 	all := make([]entry, 0, len(files))
 	tooLarge := false
 	for _, f := range files {
-		if len(f.Data) > lyricsImportMaxBytes {
+		if f.TooLarge || len(f.Data) > lyricsImportMaxBytes {
 			res.Ignored = append(res.Ignored, f.Name)
 			tooLarge = true
 			continue
+		}
+		if !importEncryptedName(f.Name) && !bytes.HasPrefix(f.Data, []byte("krc1")) {
+			f.Data = importNormalizeText(f.Data)
 		}
 		if len(bytes.TrimSpace(f.Data)) == 0 {
 			res.Ignored = append(res.Ignored, f.Name)
@@ -164,21 +171,30 @@ func parseImportedLyrics(files []importLyricsFile, trTarget string) importLyrics
 		}
 		all = append(all, entry{file: f, kind: kind})
 	}
+	mains := 0
 	for i := range all {
 		e := &all[i]
-		switch e.kind {
-		case importKindTr:
-			if tr == nil {
-				tr = e
-			}
-		case importKindRoma:
-			if roma == nil {
-				roma = e
-			}
-		default:
+		if e.kind != importKindTr && e.kind != importKindRoma {
+			mains++
 			if main == nil || e.kind < main.kind {
 				main = e
 			}
+		}
+	}
+	// 译文 / 读音配同名的正文;只给了一份正文时,跟它一起给的那一份就是它的。
+	for i := range all {
+		e := &all[i]
+		if main == nil || (e.kind != importKindTr && e.kind != importKindRoma) {
+			continue
+		}
+		if mains > 1 && !importCompanionMatches(main.file.Name, e.file.Name) {
+			continue
+		}
+		if e.kind == importKindTr && (tr == nil || !importCompanionMatches(main.file.Name, tr.file.Name)) {
+			tr = e
+		}
+		if e.kind == importKindRoma && (roma == nil || !importCompanionMatches(main.file.Name, roma.file.Name)) {
+			roma = e
 		}
 	}
 	if main == nil {
@@ -240,6 +256,10 @@ func parseImportedLyrics(files []importLyricsFile, trTarget string) importLyrics
 		text, _ := openPlainLyricsText(main.file.Data)
 		body, id := importBody(text)
 		own = id
+		if lrc, lyricsXTr, isLyricsX := splitLyricsXLRC(body); isLyricsX {
+			body = lrc
+			c.LyricsTr = lyricsXTr
+		}
 		if lines, yrc, split := splitWordTimedLRC(body); split {
 			c.Lyrics, c.LyricsYRC = lines, yrc
 			res.Format = "elrc"
@@ -257,7 +277,9 @@ func parseImportedLyrics(files []importLyricsFile, trTarget string) importLyrics
 	if res.Format == "" {
 		res.Format = importLyricsKindNames[main.kind]
 	}
-	if strings.TrimSpace(c.Lyrics) == "" && strings.TrimSpace(c.LyricsYRC) == "" {
+	// 身份读完再去掉标签行;只有标签、只有时间戳、一个字都没有的不当歌词(下载器搜不到时留下的空文件)。
+	c.Lyrics = strings.TrimSpace(importStripTagLines(c.Lyrics))
+	if !importHasLyricText(c.Lyrics) && !importHasLyricText(yrcToLineLRC(c.LyricsYRC)) {
 		res.Error = "unrecognized"
 		return res
 	}
@@ -272,7 +294,7 @@ func parseImportedLyrics(files []importLyricsFile, trTarget string) importLyrics
 	}
 	if tagText != "" {
 		for _, m := range importTagRe.FindAllStringSubmatch(tagText, -1) {
-			switch m[1] {
+			switch strings.ToLower(m[1]) {
 			case "ar":
 				if c.Artist == "" {
 					c.Artist = m[2]
@@ -288,7 +310,6 @@ func parseImportedLyrics(files []importLyricsFile, trTarget string) importLyrics
 			}
 		}
 	}
-	c.Lyrics = strings.TrimSpace(importCreditLineRe.ReplaceAllString(c.Lyrics, ""))
 	if !c.PlainTextOnly {
 		if tr != nil {
 			text, _ := openPlainLyricsText(tr.file.Data)
@@ -303,14 +324,37 @@ func parseImportedLyrics(files []importLyricsFile, trTarget string) importLyrics
 			res.Used = append(res.Used, roma.file.Name)
 		}
 	}
+	used := map[string]bool{}
+	for _, n := range res.Used {
+		used[n] = true
+	}
 	for _, e := range all {
-		if e.file.Name != main.file.Name && (tr == nil || e.file.Name != tr.file.Name) && (roma == nil || e.file.Name != roma.file.Name) {
+		if !used[e.file.Name] {
 			res.Ignored = append(res.Ignored, e.file.Name)
 		}
 	}
 	c.HasWordTiming = c.LyricsYRC != ""
 	res.Candidate = &c
 	return res
+}
+
+// importEncryptedName:后缀是加密的逐字格式(QRC / KRC),字节原样交给解密,不做文本整理。
+func importEncryptedName(name string) bool {
+	lower := strings.ToLower(name)
+	return strings.HasSuffix(lower, ".qrc") || strings.HasSuffix(lower, ".krc")
+}
+
+// importStripTagLines:去掉整行只是「[字母键:值]」的标签行,[offset:] 留着。
+func importStripTagLines(text string) string {
+	lines := strings.Split(text, "\n")
+	out := lines[:0]
+	for _, l := range lines {
+		if m := importTagLineRe.FindStringSubmatch(l); m != nil && !strings.EqualFold(m[1], "offset") {
+			continue
+		}
+		out = append(out, l)
+	}
+	return strings.Join(out, "\n")
 }
 
 // yrcToLineLRC:YRC 每一行压成整行 LRC(行始 + 词连起来)。没有计时行时回空。

@@ -111,8 +111,14 @@ type enrichEditRequest struct {
 	Staging     string            `json:"staging,omitempty"`
 	Mode        string            `json:"mode,omitempty"`
 	ImportItems []importBatchItem `json:"items,omitempty"`
-	// drop_imported_lyrics(importstore.go):导入库里要删的记录文件名;Value 为真时整个导入库清空。
+	// WatchFolder:监视文件夹(mode=library)的绝对路径,存进导入库的记录据此记下来源文件(importedLyricsRecord.WatchFiles)。
+	WatchFolder string `json:"watch_folder,omitempty"`
+	// drop_imported_lyrics(importstore.go):导入库里要删的记录文件名;Value 为真时整个导入库清空;WatchFiles 是监视文件夹里
+	// 删掉、挪走的文件(绝对路径),从它们存进来的记录一起作废。
 	ImportNames []string `json:"import_names,omitempty"`
+	WatchFiles  []string `json:"watch_files,omitempty"`
+	// adopt_restore:从自动快照恢复时快照是什么时候打的(Unix 秒),那之后才存进导入库的记录一起作废。
+	SnapshotAt int64 `json:"snapshot_at,omitempty"`
 	// importPrepared:import_lyrics_batch 在拿锁之前读好、解析好的暂存(prepareImportBatch),不从请求文件里来。
 	importPrepared *importBatchPrepared
 }
@@ -167,7 +173,7 @@ func applyEnrichEdit(req enrichEditRequest) enrichEditResult {
 		res.OK = true
 		return res
 	case "adopt_restore":
-		out = adoptRestoreEdit()
+		out = adoptRestoreEdit(req.SnapshotAt)
 	case "split_song":
 		out = splitSongEdit(req.Keys, time.Now())
 	case "resolve_manual_conflict":
@@ -269,6 +275,9 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 	case "import_lyrics_batch":
 		return applyImportBatchLocked(req)
 	case "drop_imported_lyrics":
+		if len(req.WatchFiles) > 0 {
+			return enrichEditOutcome{changed: dropImportedLyricsFromWatchFiles(req.WatchFiles)}
+		}
 		return enrichEditOutcome{changed: dropImportedLyricsFiles(req.ImportNames, req.Value)}
 	case "save_plain_text":
 		if req.Key == "" {
@@ -516,13 +525,18 @@ func cancelInFlightEnrichLocked(key string) {
 // adoptRestoreEdit:「从自动快照恢复」已经把歌词文件铺进歌词目录、把非歌词字段留在待采纳文件里,
 // 这里把两样都收进缓存(字段先采纳,歌词文件赢),再整份导出。启动迁移水位作废:恢复进来的是更早
 // 形态的数据,下次启动让存量迁移照常全量跑。
-func adoptRestoreEdit() enrichEditOutcome {
+// snapshotAt > 0:从自动快照恢复,快照之后才存进导入库的记录作废(导入前打的快照就是撤销那次导入,不作废的话那批记录下一轮
+// 选词带着加分又被挑回来)。
+func adoptRestoreEdit(snapshotAt int64) enrichEditOutcome {
 	// 先记一次改动序号再采纳:采纳字段、导入几千个文件要几秒,这期间收尾的首轮解析带着旧序号,不先记就核对得过,
 	// 会把刚恢复的条目盖掉。收完再记一次,把这几秒里起跑的也作废。
 	enrichMu.Lock()
 	markEnrichEditedLocked(true)
 	enrichMu.Unlock()
 	adopted := enrichRestorePath != "" && adoptEnrichRestore(enrichRestorePath)
+	if snapshotAt > 0 {
+		dropImportedLyricsSince(snapshotAt)
+	}
 	// 常驻进程运行中:不清歌词临时文件,可能是另一轮导出正写到一半的(见 importLyricsFromOpts)。
 	imported := len(importLyricsFromOpts(lyricsDir(), true, false))
 	if adopted || imported > 0 {

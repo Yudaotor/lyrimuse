@@ -44,6 +44,8 @@ type importedLyricsRecord struct {
 	ImportedAt int64    `json:"imported_at"`
 	// Identities:按身份存的那种(Key 为空)认哪几种「歌手 + 歌名」。文件名「A - B」分不清谁是歌手时两种都记。
 	Identities []importedIdentity `json:"identities,omitempty"`
+	// WatchFiles:监视文件夹自动存进来的,来源文件的绝对路径;文件删了、挪走了这份跟着作废。
+	WatchFiles []string `json:"watch_files,omitempty"`
 }
 
 type importedIdentity struct {
@@ -130,11 +132,59 @@ func loadImportedLyricsIndexLocked() {
 		return
 	}
 	if err := json.Unmarshal(data, &idx); err != nil {
+		// 读不出来就按各记录文件自带的 key、身份重建一份,坏的那份留着(index.json.corrupt);不重建的话下一次存入
+		// 会拿空索引整份覆盖,原有的记录就成了查不到、删不掉的孤儿。
 		noteFileErr("decode", path, err)
+		if err := os.Rename(path, path+".corrupt"); err != nil {
+			noteFileErr("rename", path, err)
+		}
+		rebuildImportedLyricsIndexLocked(dir)
 		return
 	}
 	setImportedLyricsIndexLocked(dir, info.ModTime(), idx.Keys)
 	importedLyricsIndex.titles = idx.Titles
+}
+
+// importedLyricsRecordFiles:导入库目录里的记录文件名(不含 index.json)。
+func importedLyricsRecordFiles(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			noteFileErr("read", dir, err)
+		}
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		if n := e.Name(); !e.IsDir() && strings.HasSuffix(n, ".json") && n != "index.json" {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// rebuildImportedLyricsIndexLocked:按各记录文件自带的 key、身份重建索引并写回。调用方持锁。
+func rebuildImportedLyricsIndexLocked(dir string) {
+	keys := map[string]string{}
+	importedLyricsIndex.titles = map[string][]string{}
+	for _, name := range importedLyricsRecordFiles(dir) {
+		rec, ok := readImportedLyricsRecord(dir, name)
+		if !ok {
+			continue
+		}
+		if rec.Key != "" {
+			keys[rec.Key] = name
+			continue
+		}
+		for _, id := range rec.Identities {
+			t := importNormTitle(id.Title)
+			if !slices.Contains(importedLyricsIndex.titles[t], name) {
+				importedLyricsIndex.titles[t] = append(importedLyricsIndex.titles[t], name)
+			}
+		}
+	}
+	setImportedLyricsIndexLocked(dir, time.Time{}, keys)
+	writeImportedLyricsIndexLocked(dir)
 }
 
 func setImportedLyricsIndexLocked(dir string, mtime time.Time, keys map[string]string) {
@@ -316,6 +366,70 @@ func dropImportedLyricsFiles(names []string, all bool) int {
 	return removed
 }
 
+// dropImportedLyricsWhere:逐个读记录文件,符合 drop 的删掉、从索引里摘掉,返回删了几份。要读整个目录,只给少见的操作用
+// (监视文件夹里删了文件、从快照恢复)。
+func dropImportedLyricsWhere(drop func(importedLyricsRecord) bool) int {
+	dir := importedLyricsDir()
+	if dir == "" {
+		return 0
+	}
+	importedLyricsIndex.Lock()
+	defer importedLyricsIndex.Unlock()
+	loadImportedLyricsIndexLocked()
+	gone := map[string]bool{}
+	for _, name := range importedLyricsRecordFiles(dir) {
+		rec, ok := readImportedLyricsRecord(dir, name)
+		if !ok || !drop(rec) {
+			continue
+		}
+		if err := os.Remove(filepath.Join(dir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			noteFileErr("remove", filepath.Join(dir, name), err)
+			continue
+		}
+		gone[name] = true
+	}
+	if len(gone) == 0 {
+		return 0
+	}
+	for k, name := range importedLyricsIndex.keys {
+		if gone[name] {
+			delete(importedLyricsIndex.keys, k)
+		}
+	}
+	for t, list := range importedLyricsIndex.titles {
+		kept := slices.DeleteFunc(slices.Clone(list), func(n string) bool { return gone[n] })
+		if len(kept) == 0 {
+			delete(importedLyricsIndex.titles, t)
+		} else {
+			importedLyricsIndex.titles[t] = kept
+		}
+	}
+	setImportedLyricsIndexLocked(dir, importedLyricsIndex.mtime, importedLyricsIndex.keys)
+	writeImportedLyricsIndexLocked(dir)
+	return len(gone)
+}
+
+// dropImportedLyricsFromWatchFiles:监视文件夹里删掉、挪走了这几个文件(绝对路径),从它们存进来的记录作废。
+func dropImportedLyricsFromWatchFiles(paths []string) int {
+	gone := map[string]bool{}
+	for _, p := range paths {
+		gone[filepath.Clean(p)] = true
+	}
+	return dropImportedLyricsWhere(func(rec importedLyricsRecord) bool {
+		for _, f := range rec.WatchFiles {
+			if gone[filepath.Clean(f)] {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+// dropImportedLyricsSince:这个时刻(Unix 秒)之后存进导入库的记录作废(从这之前打的快照恢复)。
+func dropImportedLyricsSince(t int64) int {
+	return dropImportedLyricsWhere(func(rec importedLyricsRecord) bool { return rec.ImportedAt > t })
+}
+
 // importedLyricsRecordFor:这首有没有导入的歌词。先按原 key 找,找不到按宽松 key(繁简、大小写、空格、多歌手分隔符、
 // 时长变体位)找。
 func importedLyricsRecordFor(key string) (importedLyricsRecord, bool) {
@@ -340,15 +454,24 @@ func importedLyricsRecordLookup(key string) (importedLyricsRecord, bool, bool) {
 	return rec, exact, ok
 }
 
-// importedIdentityMatches:按身份存的这份认不认这首:歌手对得上(折平后相同,或 artistMatches)。
+// importedIdentityMatches:按身份存的这份认不认这首:歌名对得上,歌手对得上(importArtistFits,合作署名只看第一位也算)。
 func importedIdentityMatches(rec importedLyricsRecord, artist, title string) bool {
-	t, a := importNormTitle(title), importNormName(artist)
+	t := importNormTitle(title)
 	for _, id := range rec.Identities {
-		if importNormTitle(id.Title) == t && (importNormName(id.Artist) == a || artistMatches(id.Artist, artist)) {
+		if importNormTitle(id.Title) == t && importArtistFits(id.Artist, artist) {
 			return true
 		}
 	}
 	return false
+}
+
+// importTitleVariants:按身份找时试哪几种歌名:原样,带合作署名的再加去掉署名的(存的时候文件名多半没写「feat. X」)。
+// 读(importedLyricsRecordBySong)和删(dropImportedLyricsForSong)用同一份。
+func importTitleVariants(title string) []string {
+	if bare := titleWithoutFeatCredit(title); bare != "" {
+		return []string{title, bare}
+	}
+	return []string{title}
 }
 
 func readImportedLyricsRecord(dir, name string) (importedLyricsRecord, bool) {
@@ -373,16 +496,18 @@ func importedLyricsRecordBySong(artist, title string, durationSecs float64) (imp
 	if dir == "" || title == "" || artist == "" {
 		return importedLyricsRecord{}, false
 	}
-	importedLyricsIndex.Lock()
-	loadImportedLyricsIndexLocked()
-	names := slices.Clone(importedLyricsIndex.titles[importNormTitle(title)])
-	importedLyricsIndex.Unlock()
-	for _, name := range names {
-		rec, ok := readImportedLyricsRecord(dir, name)
-		if !ok || !importedIdentityMatches(rec, artist, title) || !importedLyricsFitsDuration(rec, durationSecs) {
-			continue
+	for _, t := range importTitleVariants(title) {
+		importedLyricsIndex.Lock()
+		loadImportedLyricsIndexLocked()
+		names := slices.Clone(importedLyricsIndex.titles[importNormTitle(t)])
+		importedLyricsIndex.Unlock()
+		for _, name := range names {
+			rec, ok := readImportedLyricsRecord(dir, name)
+			if !ok || !importedIdentityMatches(rec, artist, t) || !importedLyricsFitsDuration(rec, durationSecs) {
+				continue
+			}
+			return rec, true
 		}
-		return rec, true
 	}
 	return importedLyricsRecord{}, false
 }
@@ -402,29 +527,35 @@ func dropImportedLyricsForSong(key string) {
 	importedLyricsIndex.Lock()
 	defer importedLyricsIndex.Unlock()
 	loadImportedLyricsIndexLocked()
-	t := importNormTitle(title)
-	var kept []string
 	changed := false
-	for _, name := range importedLyricsIndex.titles[t] {
-		rec, ok := readImportedLyricsRecord(dir, name)
-		if ok && !importedIdentityMatches(rec, artist, title) {
-			kept = append(kept, name)
+	for _, variant := range importTitleVariants(title) {
+		t := importNormTitle(variant)
+		var kept []string
+		hit := false
+		for _, name := range importedLyricsIndex.titles[t] {
+			rec, ok := readImportedLyricsRecord(dir, name)
+			if ok && !importedIdentityMatches(rec, artist, variant) {
+				kept = append(kept, name)
+				continue
+			}
+			if err := os.Remove(filepath.Join(dir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				noteFileErr("remove", filepath.Join(dir, name), err)
+			}
+			hit = true
+		}
+		if !hit {
 			continue
 		}
-		if err := os.Remove(filepath.Join(dir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			noteFileErr("remove", filepath.Join(dir, name), err)
-		}
 		changed = true
+		if len(kept) == 0 {
+			delete(importedLyricsIndex.titles, t)
+		} else {
+			importedLyricsIndex.titles[t] = kept
+		}
 	}
-	if !changed {
-		return
+	if changed {
+		writeImportedLyricsIndexLocked(dir)
 	}
-	if len(kept) == 0 {
-		delete(importedLyricsIndex.titles, t)
-	} else {
-		importedLyricsIndex.titles[t] = kept
-	}
-	writeImportedLyricsIndexLocked(dir)
 }
 
 // importedLyricsFor:选词的候选池用。先按这首的 key、再按宽松 key、最后按身份找(importedLyricsRecordBySong)。身份按这首本地的

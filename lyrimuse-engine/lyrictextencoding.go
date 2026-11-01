@@ -13,8 +13,9 @@ import (
 // 要是还带着非法字节,按原样算出的正文校验值就跟读回来的内容永远对不上,每次启动都判成损坏。
 
 // decodeLyricBytes 把一份歌词文件的字节转成文本:合法 UTF-8 原样用;不是的话按行判 —— 合法 UTF-8 的行原样留,
-// 其余的行按 GB18030(GBK 的超集,咪咕个别文件是这个编码)转,看着像 Big5 的先按 Big5 转(looksLikeBig5);还转不了
-// 就把非法字节换成 U+FFFD。ok=false = 有的行既不是 UTF-8 也不是 GB18030 / Big5。
+// 其余的行按 GB18030(GBK 的超集,咪咕个别文件是这个编码)转,看着像 Big5 的先按 Big5 转(looksLikeBig5),看着像日文
+// Shift_JIS、韩文 EUC-KR 的先按它们转(looksLikeShiftJIS / looksLikeEUCKR);还转不了就把非法字节换成 U+FFFD。
+// ok=false = 有的行哪种都转不了。
 //
 // 别整份转:一份文件可能只有一部分是 GBK(引擎用 UTF-8 写的头部和正文里混进了一段咪咕的 GBK 译文),整份按 GB18030
 // 转会把 UTF-8 的中文歌手名、歌名也转成乱码,而歌词文件夹导入拿主歌词文件的头部当这首歌的身份,乱码身份会新建
@@ -44,7 +45,12 @@ func decodeLyricBytesRaw(data []byte) (text string, ok bool) {
 	// 坏行拼在一起只起一次转码进程;转出来的行数对不上就当没转成。
 	joined := bytes.Join(src, []byte("\n"))
 	converters := []func([]byte) ([]byte, error){gb18030ToUTF8}
-	if looksLikeBig5(joined) {
+	switch {
+	case looksLikeShiftJIS(joined):
+		converters = []func([]byte) ([]byte, error){shiftJISToUTF8, gb18030ToUTF8}
+	case looksLikeEUCKR(joined):
+		converters = []func([]byte) ([]byte, error){eucKRToUTF8, gb18030ToUTF8}
+	case looksLikeBig5(joined):
 		converters = []func([]byte) ([]byte, error){big5ToUTF8, gb18030ToUTF8}
 	}
 	for _, convert := range converters {
@@ -105,11 +111,79 @@ func looksLikeBig5(b []byte) bool {
 	return pairs > 0 && odd*20 >= pairs && oddRows >= 2 && level1+level2 > 0 && level1*10 >= (level1+level2)*9
 }
 
+// looksLikeShiftJIS:是不是日文 Shift_JIS。按 Shift_JIS 的字节结构走一遍(双字节首字节 81–9F、E0–FC,半角片假名 A1–DF
+// 单字节),结构对不上就不是;平假名、片假名的首字节(82、83)占双字节的四分之一以上才算:日文歌词假名多,中文 GBK 正文
+// 这两个首字节是生僻字区,几乎不出现。按 GB18030 转 Shift_JIS 不报错、只是满屏怪字,认不出来就会交出乱码。
+func looksLikeShiftJIS(b []byte) bool {
+	var pairs, kana int
+	for i := 0; i < len(b); {
+		c := b[i]
+		switch {
+		case c < 0x80 || (c >= 0xA1 && c <= 0xDF):
+			i++
+			continue
+		case (c >= 0x81 && c <= 0x9F) || (c >= 0xE0 && c <= 0xFC):
+			if i+1 >= len(b) {
+				return false
+			}
+			if t := b[i+1]; t < 0x40 || t == 0x7F || t > 0xFC {
+				return false
+			}
+			pairs++
+			if c == 0x82 || c == 0x83 {
+				kana++
+			}
+			i += 2
+		default:
+			return false
+		}
+	}
+	return pairs >= 4 && kana*4 >= pairs
+}
+
+// looksLikeEUCKR:是不是韩文 EUC-KR(含 CP949 的扩展区)。标准区两个字节都在 A1–FE,韩文音节在首字节 B0–C8,韩文里的汉字
+// 在 CA–FD;CP949 扩展区(首字节 81–C6、尾字节落在 41–5A、61–7A、81–A0)全是音节。韩文歌词几乎全是音节,中文 GBK 正文按
+// 这张表读有一半上下落进汉字区,所以音节要占九成以上才算。
+func looksLikeEUCKR(b []byte) bool {
+	var hangul, hanja int
+	for i := 0; i < len(b); {
+		c := b[i]
+		if c < 0x80 {
+			i++
+			continue
+		}
+		if i+1 >= len(b) || c == 0x80 || c == 0xFF {
+			return false
+		}
+		t := b[i+1]
+		switch {
+		case c >= 0xA1 && t >= 0xA1 && t <= 0xFE:
+			switch {
+			case c >= 0xB0 && c <= 0xC8:
+				hangul++
+			case c >= 0xCA && c <= 0xFD:
+				hanja++
+			}
+		case c <= 0xC6 && (t >= 0x41 && t <= 0x5A || t >= 0x61 && t <= 0x7A || t >= 0x81 && t <= 0xFE):
+			hangul++
+		default:
+			return false
+		}
+		i += 2
+	}
+	return hangul >= 4 && hangul*10 >= (hangul+hanja)*9
+}
+
 // gb18030ToUTF8 / big5ToUTF8 用系统自带的 iconv 转码:引擎不引入外部依赖,这条路只有遇到非 UTF-8 的歌词文件才走到。单测替换。
 // Big5 按 CP950(微软的 Big5)转:Windows 上产出的繁体歌词文件多是它。
 var gb18030ToUTF8 = func(data []byte) ([]byte, error) { return iconvToUTF8("GB18030", data) }
 
 var big5ToUTF8 = func(data []byte) ([]byte, error) { return iconvToUTF8("CP950", data) }
+
+// Shift_JIS 按 CP932、EUC-KR 按 CP949(都是微软的超集,Windows 上产出的文件多是它们)转。
+var shiftJISToUTF8 = func(data []byte) ([]byte, error) { return iconvToUTF8("CP932", data) }
+
+var eucKRToUTF8 = func(data []byte) ([]byte, error) { return iconvToUTF8("CP949", data) }
 
 func iconvToUTF8(from string, data []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)

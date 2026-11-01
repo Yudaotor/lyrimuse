@@ -306,7 +306,8 @@
 "上次检查：%@" = "Dernière vérification : %@";
 "上次检测通过（%@）" = "Vérifié, fonctionnel (%@)";
 "上次自动匹配 %1$@ 首，找到 %2$@ 首" = "Dernière fois : %1$@ recherchés, %2$@ trouvés";
-"上次自动导入：%1$@，%2$@ 份" = "Dernière importation automatique : %1$@, %2$@ fichiers";
+"上次自动导入：%1$@，共 %2$@ 份" = "Dernière importation automatique : %1$@, %2$@ fichiers";
+"上次自动导入：%1$@，共 %2$@ 份#one" = "Dernière importation automatique : %1$@, %2$@ fichier";
 "上次解析于 %@" = "Dernière recherche : %@";
 "上次解析时无任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲无歌词。重新自动匹配通常可找到歌词" = "Aucune source de paroles n’a répondu lors de la dernière recherche, peut-être faute de réseau ; cela ne signifie pas que le morceau n’a pas de paroles. Une réassociation automatique les trouve généralement";
 "上次：检查 %1$@ 首后停止，更新 %2$@ 首" = "Dernière fois : arrêté après %1$@ vérifiés, %2$@ mis à jour";
@@ -2208,6 +2209,9 @@
 "皇家学术院转写（RTGS），如 สวัสดี → sawatdi" = "Système général royal thaï (RTGS), ex. สวัสดี → sawatdi";
 "监视" = "Surveiller";
 "监视文件夹" = "Dossier surveillé";
+"监视文件夹不能是歌词文件夹，也不能包含它或在它里面" = "Le dossier surveillé ne peut pas être le dossier des paroles, le contenir ni s’y trouver";
+"监视文件夹与歌词文件夹重叠，已暂停自动导入" = "Le dossier surveillé chevauche le dossier des paroles : l’importation automatique est en pause";
+"监视的文件夹已不存在" = "Le dossier surveillé n’existe plus";
 "直连失败时，经下方代理服务器重试" = "Si la connexion directe échoue, réessayer via le serveur proxy ci-dessous";
 "直连失败时，经系统代理或本机检测到的代理重试" = "Si la connexion directe échoue, réessayer via le proxy du système ou un proxy détecté sur ce Mac";
 "相邻短句可容纳于一行时合并显示" = "Les lignes courtes voisines sont fusionnées si elles tiennent sur une ligne";
@@ -2392,6 +2396,7 @@
 "自动备份失败，为避免数据无法恢复，本次未执行删除。请检查磁盘空间和配置文件夹的写入权限后重试" = "La sauvegarde automatique a échoué : rien n’a été supprimé, pour que tout reste récupérable. Vérifiez l’espace disque et l’accès en écriture au dossier de configuration, puis réessayez";
 "自动备份失败，为避免数据无法恢复，本次未执行导入。请检查磁盘空间和配置文件夹的写入权限后重试" = "La sauvegarde automatique a échoué ; rien n’a été importé pour que vos données restent récupérables. Vérifiez l’espace disque et l’accès en écriture au dossier de configuration, puis réessayez";
 "自动对齐" = "Alignement auto";
+"自动导入失败，文件夹有变动时会重试" = "L’importation automatique a échoué ; nouvel essai dès que le dossier change";
 "自动展开" = "Développement auto";
 "自动检查" = "Vérifier automatiquement";
 "自动识别" = "Détection auto";

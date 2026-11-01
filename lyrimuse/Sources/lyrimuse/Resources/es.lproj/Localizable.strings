@@ -306,7 +306,8 @@
 "上次检查：%@" = "Última comprobación: %@";
 "上次检测通过（%@）" = "Verificado, funciona (%@)";
 "上次自动匹配 %1$@ 首，找到 %2$@ 首" = "Última vez: %1$@ buscadas, %2$@ encontradas";
-"上次自动导入：%1$@，%2$@ 份" = "Última importación automática: %1$@, %2$@ archivos";
+"上次自动导入：%1$@，共 %2$@ 份" = "Última importación automática: %1$@, %2$@ archivos";
+"上次自动导入：%1$@，共 %2$@ 份#one" = "Última importación automática: %1$@, %2$@ archivo";
 "上次解析于 %@" = "Última búsqueda: %@";
 "上次解析时无任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲无歌词。重新自动匹配通常可找到歌词" = "Ninguna fuente de letras respondió en la última búsqueda, quizá porque no había red; no significa que la canción no tenga letra. Volver a buscar suele encontrarla";
 "上次：检查 %1$@ 首后停止，更新 %2$@ 首" = "Última vez: detenido tras revisar %1$@, %2$@ actualizadas";
@@ -2208,6 +2209,9 @@
 "皇家学术院转写（RTGS），如 สวัสดี → sawatdi" = "Sistema real de transcripción tailandés (RTGS), p. ej. สวัสดี → sawatdi";
 "监视" = "Vigilar";
 "监视文件夹" = "Carpeta vigilada";
+"监视文件夹不能是歌词文件夹，也不能包含它或在它里面" = "La carpeta vigilada no puede ser la carpeta de letras, contenerla ni estar dentro de ella";
+"监视文件夹与歌词文件夹重叠，已暂停自动导入" = "La carpeta vigilada se solapa con la carpeta de letras, así que la importación automática está en pausa";
+"监视的文件夹已不存在" = "La carpeta vigilada ya no existe";
 "直连失败时，经下方代理服务器重试" = "Si falla la conexión directa, reintentar a través del servidor proxy de abajo";
 "直连失败时，经系统代理或本机检测到的代理重试" = "Si falla la conexión directa, reintentar a través del proxy del sistema o de uno detectado en este Mac";
 "相邻短句可容纳于一行时合并显示" = "Las líneas cortas contiguas se unen si caben en una línea";
@@ -2392,6 +2396,7 @@
 "自动备份失败，为避免数据无法恢复，本次未执行删除。请检查磁盘空间和配置文件夹的写入权限后重试" = "No se pudo crear la copia de seguridad automática, así que no se eliminó nada para que se pueda recuperar. Comprueba el espacio en disco y el permiso de escritura en la carpeta de configuración y vuelve a intentarlo";
 "自动备份失败，为避免数据无法恢复，本次未执行导入。请检查磁盘空间和配置文件夹的写入权限后重试" = "La copia de seguridad automática falló, así que no se importó nada para que tus datos sigan siendo recuperables. Comprueba el espacio en disco y el permiso de escritura en la carpeta de configuración e inténtalo de nuevo";
 "自动对齐" = "Alineación automática";
+"自动导入失败，文件夹有变动时会重试" = "La importación automática falló; se reintentará cuando cambie la carpeta";
 "自动展开" = "Expandir automáticamente";
 "自动检查" = "Comprobar automáticamente";
 "自动识别" = "Detección automática";

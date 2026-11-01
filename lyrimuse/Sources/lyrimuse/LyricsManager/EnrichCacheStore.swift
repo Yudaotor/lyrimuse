@@ -1433,8 +1433,16 @@ public final class EnrichCacheStore: ObservableObject {
 
     /// 监视文件夹的自动导入(LyricsImportWatcher):按 `library` 方式交引擎,只补没有歌词的条目、其余进导入库,不打快照。
     /// 返回写了几首加存了几份;nil = 引擎没执行。
-    func importLyricsLibrary(staging: URL, items: [[String: Any]]) async -> Int? {
-        let result = await commit("import_lyrics_batch", ["staging": staging.path, "mode": "library", "items": items])
+    /// `watchFolder`:监视的文件夹,引擎据此给存进导入库的记录记下来源文件。
+    func importLyricsLibrary(staging: URL, items: [[String: Any]], watchFolder: String) async -> Int? {
+        let result = await commit("import_lyrics_batch", ["staging": staging.path, "mode": "library", "items": items,
+                                                          "watch_folder": watchFolder])
+        return result.ok ? result.changed : nil
+    }
+
+    /// 监视文件夹里删掉、挪走了这几个文件(绝对路径):从它们存进导入库的记录作废。返回作废了几份;nil = 引擎没执行。
+    func dropImportedFromWatchFiles(_ paths: [String]) async -> Int? {
+        let result = await commit("drop_imported_lyrics", ["watch_files": paths])
         return result.ok ? result.changed : nil
     }
 

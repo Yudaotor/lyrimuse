@@ -870,6 +870,20 @@ extension LyricsSearchService {
         struct File: Encodable {
             let name: String
             let data: Data
+            /// 大过上限:只交文件名,引擎报「文件过大」;别把几 MB 的内容塞进请求(几个大文件合起来会超过引擎读请求的上限)。
+            var tooLarge = false
+
+            enum CodingKeys: String, CodingKey {
+                case name, data
+                case tooLarge = "too_large"
+            }
+
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(name, forKey: .name)
+                try c.encode(data, forKey: .data)
+                if tooLarge { try c.encode(true, forKey: .tooLarge) }
+            }
         }
         let files: [File]
     }
@@ -895,6 +909,7 @@ extension LyricsSearchService {
             guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
             defer { try? handle.close() }
             guard let data = try? handle.read(upToCount: importMaxBytes + 1) else { return nil }
+            if data.count > importMaxBytes { return ImportRequest.File(name: url.lastPathComponent, data: Data(), tooLarge: true) }
             return ImportRequest.File(name: url.lastPathComponent, data: data)
         }
         guard !urls.isEmpty else { return ImportResult(candidate: nil, format: "", ignored: [], error: .empty) }

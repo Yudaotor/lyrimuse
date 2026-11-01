@@ -51,6 +51,8 @@ enum LyricsBatchImport {
         let album: String
         let durationSecs: Double?
         let hasLyrics: Bool
+        /// 有纯文本歌词(「只补」时导入纯文本不换掉它)。
+        let hasPlain: Bool?
         let manual: Bool
         let source: String?
         var id: String { key }
@@ -59,6 +61,7 @@ enum LyricsBatchImport {
             case key, artist, title, album, manual, source
             case durationSecs = "duration_secs"
             case hasLyrics = "has_lyrics"
+            case hasPlain = "has_plain"
         }
     }
 
@@ -100,6 +103,8 @@ enum LyricsBatchImport {
         let folder: URL
         let staging: URL
         let plan: Plan
+        /// 实际读进暂存的文件(相对路径);读不了的不在里面,监视文件夹据此只把这些记成处理过。
+        let stagedPaths: Set<String>
     }
 
     enum PrepareError: Error {
@@ -113,6 +118,21 @@ enum LyricsBatchImport {
             let name: String
             let path: String
             let data: Data
+            /// 大过单个文件的上限:只交文件名,引擎据此报「文件过大」,不把几 MB 的内容塞进暂存。
+            var tooLarge = false
+
+            enum CodingKeys: String, CodingKey {
+                case name, path, data
+                case tooLarge = "too_large"
+            }
+
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(name, forKey: .name)
+                try c.encode(path, forKey: .path)
+                try c.encode(data, forKey: .data)
+                if tooLarge { try c.encode(true, forKey: .tooLarge) }
+            }
         }
         let files: [File]
     }
@@ -155,8 +175,13 @@ enum LyricsBatchImport {
             guard let handle = try? FileHandle(forReadingFrom: url) else { continue }
             defer { try? handle.close() }
             guard let data = try? handle.read(upToCount: LyricsSearchService.importMaxBytes + 1) else { continue }
+            guard files.count < maxFiles else { return .failure(.tooMany) }
+            if data.count > LyricsSearchService.importMaxBytes {
+                files.append(.init(name: url.lastPathComponent, path: rel, data: Data(), tooLarge: true))
+                continue
+            }
             total += data.count
-            guard files.count < maxFiles, total <= maxTotalBytes else { return .failure(.tooMany) }
+            guard total <= maxTotalBytes else { return .failure(.tooMany) }
             files.append(.init(name: url.lastPathComponent, path: rel, data: data))
         }
         guard !files.isEmpty else { return .failure(.noFiles) }
@@ -173,7 +198,7 @@ enum LyricsBatchImport {
             discard(staging)
             return .failure(.failed)
         }
-        return .success(Prepared(folder: folder, staging: staging, plan: plan))
+        return .success(Prepared(folder: folder, staging: staging, plan: plan, stagedPaths: Set(files.map(\.path))))
     }
 
     static func discard(_ staging: URL) {
@@ -227,6 +252,8 @@ struct LyricsBatchImportSheet: View {
     /// 这次存进导入库的个数(结果页分开说)。
     @State private var storedCount = 0
     @State private var importFailed = false
+    /// 面板已经关了(随歌词管理窗口一起关):还在跑的导入收尾时自己删暂存。
+    @State private var closed = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -237,9 +264,12 @@ struct LyricsBatchImportSheet: View {
             footer
         }
         .frame(minWidth: 760, idealWidth: 900, minHeight: 520, idealHeight: 640)
+        // 导入进行中不能关:关了也停不下来(快照照打、引擎照写),还会删掉引擎要读的暂存。
+        .interactiveDismissDisabled(importPhase != nil)
         .task { await load() }
         .onDisappear {
-            if let prepared { LyricsBatchImport.discard(prepared.staging) }
+            closed = true
+            if let prepared, importPhase == nil { LyricsBatchImport.discard(prepared.staging) }
         }
     }
 
@@ -322,6 +352,8 @@ struct LyricsBatchImportSheet: View {
             if t.manual { return .manual }
             // 纯文本盖不住已有的逐行歌词,引擎不写(applyImportBatchLocked)。
             if mode == .fill || item.plainText == true, t.hasLyrics { return .hasLyrics }
+            // 「只补」时纯文本也不换掉已有的纯文本(引擎同一条规则)。
+            if mode == .fill, item.plainText == true, t.hasPlain == true { return .hasLyrics }
             return .ready
         }
     }
@@ -514,6 +546,7 @@ struct LyricsBatchImportSheet: View {
                 Button(L10n.t("取消")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                     .settingsGlassButtons(inSheet: true)
+                    .disabled(importPhase != nil)
                 let count = selectedItems.count
                 Button(importButtonTitle(count: count)) {
                     Task { await runImport() }
@@ -537,7 +570,13 @@ struct LyricsBatchImportSheet: View {
 
     private func load() async {
         guard prepared == nil, prepareError == nil else { return }
-        switch await LyricsBatchImport.prepare(folder: folder) {
+        let result = await LyricsBatchImport.prepare(folder: folder)
+        // 读的时候面板已经关了:读好的暂存没人用,删掉(onDisappear 那时还没有它)。
+        if Task.isCancelled || closed {
+            if case .success(let p) = result { LyricsBatchImport.discard(p.staging) }
+            return
+        }
+        switch result {
         case .success(let p): prepared = p
         case .failure(let e): prepareError = e
         }
@@ -545,14 +584,15 @@ struct LyricsBatchImportSheet: View {
 
     private func runImport() async {
         guard let prepared, importPhase == nil else { return }
-        let items: [[String: Any]] = selectedItems.compactMap { item in
+        let chosen = Self.dedupe(selectedItems) { target($0)?.key }
+        let items: [[String: Any]] = chosen.compactMap { item in
             if item.status == .unmatched { return ["id": item.id, "key": "", "store": true] }
             guard let key = target(item)?.key else { return nil }
             var entry: [String: Any] = ["id": item.id, "key": key]
             if forced.contains(item.id) { entry["force"] = true }
             return entry
         }
-        let storing = selectedItems.filter { $0.status == .unmatched }.count
+        let storing = chosen.filter { $0.status == .unmatched }.count
         importPhase = .backingUp
         importFailed = false
         let changed = await EnrichCacheStore.shared.importLyricsBatch(
@@ -564,6 +604,34 @@ struct LyricsBatchImportSheet: View {
             LyricsBatchImport.discard(prepared.staging)
         } else {
             importFailed = true
+            if closed { LyricsBatchImport.discard(prepared.staging) }
+        }
+    }
+
+    /// 同一首歌只导一组:挑歌之后几组对到同一首(「01. 晴天」挑了《晴天》、又有「周杰伦 - 晴天」),或几个子文件夹里有同一首
+    /// 库里没有的歌,各发一组的话后写的盖掉先写的、结果页也多算。留带逐字的、再是行数多的那组。
+    static func dedupe(_ items: [LyricsBatchImport.Item], target: (LyricsBatchImport.Item) -> String?) -> [LyricsBatchImport.Item] {
+        func groupKey(_ item: LyricsBatchImport.Item) -> String? {
+            if item.status == .unmatched {
+                guard let title = item.title, !title.isEmpty else { return nil }
+                return "id:" + (item.artist ?? "").lowercased() + "|" + title.lowercased()
+            }
+            return target(item).map { "key:" + $0 }
+        }
+        func better(_ a: LyricsBatchImport.Item, _ b: LyricsBatchImport.Item) -> Bool {
+            let wa = a.hasWordTiming == true, wb = b.hasWordTiming == true
+            if wa != wb { return wa }
+            return (a.lines ?? 0) > (b.lines ?? 0)
+        }
+        var best: [String: LyricsBatchImport.Item] = [:]
+        for item in items {
+            guard let k = groupKey(item) else { continue }
+            if let cur = best[k], !better(item, cur) { continue }
+            best[k] = item
+        }
+        return items.filter { item in
+            guard let k = groupKey(item) else { return true }
+            return best[k]?.id == item.id
         }
     }
 }

@@ -3688,9 +3688,6 @@ struct LyricsManagerView: View {
         }
     }
 
-    /// 链接要的「同曲条目」面板:带了写法键先选中那一条,没带就是详情页正显示的那条;条件跟「⋯」里那一项一样(这条有实体 id)。
-    /// 取了就清,开没开成都一样;信箱只认 60 秒内的请求。有没保存的修改时 select 先问一句,这一下不开面板。开着别的面板时不动,
-    /// 免得换掉它底下那一条;开着的就是同曲条目时换成链接要的那一首。
     /// 取走要弹的导入面板(`AppActions.requestLyricsManagerSheet`)。已经开着别的面板时不弹,请求作废。
     private func consumeLyricsManagerSheetRequest() {
         guard let pending = AppActions.shared.pendingLyricsManagerSheet else { return }
@@ -3703,6 +3700,9 @@ struct LyricsManagerView: View {
         }
     }
 
+    /// 链接要的「同曲条目」面板:带了写法键先选中那一条,没带就是详情页正显示的那条;条件跟「⋯」里那一项一样(这条有实体 id)。
+    /// 取了就清,开没开成都一样;信箱只认 60 秒内的请求。有没保存的修改时 select 先问一句,这一下不开面板。开着别的面板时不动,
+    /// 免得换掉它底下那一条;开着的就是同曲条目时换成链接要的那一首。
     private func consumeSongVersionsRequest() {
         guard let request = AppActions.shared.pendingSongVersions else { return }
         AppActions.shared.pendingSongVersions = nil

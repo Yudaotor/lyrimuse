@@ -84,8 +84,10 @@ enum LyricsImportLibrary {
 }
 
 /// 监视文件夹:文件夹里有新的或改过的歌词文件,就交引擎按 `library` 方式自动导入(不弹预览、不打快照):对得上歌词库里的
-/// 歌的存进导入库,条目里没有歌词的直接补上,已有的不动、等下一轮选词跟各源比;库里没有的按身份存。只在 App 里监视:文件夹
-/// 可能在受保护的目录里,常驻引擎读不到。处理过的文件按「大小 + 修改时间」记在 `stateFileName`,换了文件夹就重来。
+/// 歌的存进导入库,条目里没有歌词的直接补上,已有的不动、等下一轮选词跟各源比;库里没有的按身份存。文件删了、挪走了,从它
+/// 存进导入库的记录跟着作废。只在 App 里监视:文件夹可能在受保护的目录里,常驻引擎读不到。处理过的文件按「大小 + 修改时间」
+/// 记在 `stateFileName`(只记真读进去的),换了文件夹就重来。不能跟歌词文件夹互相包含:引擎导出的歌词会被当成新文件导回来,
+/// 每一份自动选的歌词都进导入库、白拿加分。
 @MainActor
 final class LyricsImportWatcher: ObservableObject {
     static let shared = LyricsImportWatcher()
@@ -99,9 +101,25 @@ final class LyricsImportWatcher: ObservableObject {
         let changed: Int
     }
 
+    /// 监视没在正常工作的原因,面板和设置页照实说。
+    enum Problem: Equatable {
+        case missing
+        case overlapsLyricsFolder
+        case failed
+
+        var message: String {
+            switch self {
+            case .missing: L10n.t("监视的文件夹已不存在")
+            case .overlapsLyricsFolder: L10n.t("监视文件夹与歌词文件夹重叠，已暂停自动导入")
+            case .failed: L10n.t("自动导入失败，文件夹有变动时会重试")
+            }
+        }
+    }
+
     @Published private(set) var folder: URL?
     @Published private(set) var lastRun: Run?
     @Published private(set) var running = false
+    @Published private(set) var problem: Problem?
 
     private var stream: FSEventStreamRef?
     private var pendingScan: DispatchWorkItem?
@@ -124,35 +142,71 @@ final class LyricsImportWatcher: ObservableObject {
         }
     }
 
-    /// 换监视的文件夹;nil = 停止监视。
-    func setFolder(_ url: URL?) {
+    /// 换监视的文件夹;nil = 停止监视。跟歌词文件夹互相包含时不换,返回 false(调用方提示)。
+    @discardableResult
+    func setFolder(_ url: URL?) -> Bool {
+        if let url, Self.overlapsLyricsFolder(url) { return false }
         stopStream()
         folder = url
         lastRun = nil
+        problem = nil
         UserDefaults.standard.set(url?.path, forKey: Self.folderDefaultsKey)
-        guard url != nil else { return }
+        guard url != nil else { return true }
         startStream()
         scheduleScan(after: 0)
+        return true
+    }
+
+    /// 跟歌词文件夹是同一个、或一个在另一个里面(按解析过符号链接的路径比)。
+    static func overlapsLyricsFolder(_ folder: URL) -> Bool {
+        func path(_ url: URL) -> String {
+            let p = url.standardizedFileURL.resolvingSymlinksInPath().path
+            return p.hasSuffix("/") ? p : p + "/"
+        }
+        let a = path(folder), b = path(FeatureSettingsStore.shared.effectiveLyricsDir)
+        return a.hasPrefix(b) || b.hasPrefix(a)
+    }
+
+    /// 选文件夹那一步跟歌词文件夹重叠时的提示。
+    static func showOverlapAlert() {
+        let alert = NSAlert()
+        alert.messageText = L10n.t("监视文件夹不能是歌词文件夹，也不能包含它或在它里面")
+        alert.runModal()
     }
 
     private func startStream() {
         guard let folder else { return }
         var context = FSEventStreamContext(
             version: 0, info: Unmanaged.passUnretained(self).toOpaque(), retain: nil, release: nil, copyDescription: nil)
-        let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
+        // WatchRoot:文件夹本身被改名、删掉、挪走时也来一条(RootChanged)。不加的话流还盯着旧位置,之后一条事件都收不到。
+        let callback: FSEventStreamCallback = { _, info, count, _, flags, _ in
             guard let info else { return }
             let watcher = Unmanaged<LyricsImportWatcher>.fromOpaque(info).takeUnretainedValue()
-            MainActor.assumeIsolated { watcher.scheduleScan(after: LyricsImportWatcher.settleDelay) }
+            let rootChanged = (0..<count).contains { flags[$0] & FSEventStreamEventFlags(kFSEventStreamEventFlagRootChanged) != 0 }
+            MainActor.assumeIsolated {
+                if rootChanged {
+                    // 别在流自己的回调里停它:回到主队列再换一条。
+                    DispatchQueue.main.async { watcher.restartStream() }
+                }
+                watcher.scheduleScan(after: LyricsImportWatcher.settleDelay)
+            }
         }
         guard let stream = FSEventStreamCreate(
             nil, callback, &context, [folder.path] as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 1.0,
-            FSEventStreamCreateFlags(kFSEventStreamCreateFlagNoDefer)) else {
+            FSEventStreamCreateFlags(kFSEventStreamCreateFlagNoDefer | kFSEventStreamCreateFlagWatchRoot)) else {
             logger.error("import watch: could not create the event stream")
             return
         }
         FSEventStreamSetDispatchQueue(stream, .main)
         FSEventStreamStart(stream)
         self.stream = stream
+    }
+
+    private func restartStream() {
+        guard folder != nil else { return }
+        stopStream()
+        startStream()
+        scheduleScan(after: Self.settleDelay)
     }
 
     private func stopStream() {
@@ -176,7 +230,7 @@ final class LyricsImportWatcher: ObservableObject {
 
     private var stateURL: URL { LyrimusePaths.configFile(Self.stateFileName) }
 
-    /// 扫一遍:有新的或改过的文件就整个文件夹交引擎出清单,只导含这些文件的组。
+    /// 扫一遍:删掉、挪走的文件让引擎作废它们存进来的记录;新的、改过的按组分批交引擎出清单,只导含这些文件的组。
     private func scan() async {
         guard let folder else { return }
         if running {
@@ -191,31 +245,93 @@ final class LyricsImportWatcher: ObservableObject {
                 scheduleScan(after: Self.settleDelay)
             }
         }
+        guard FileManager.default.fileExists(atPath: folder.path) else {
+            problem = .missing
+            return
+        }
+        // 歌词文件夹换到了跟它重叠的位置(设置页改的):停下,不把引擎导出的文件导回来。
+        guard !Self.overlapsLyricsFolder(folder) else {
+            problem = .overlapsLyricsFolder
+            return
+        }
         let current = await Task.detached(priority: .utility) { Self.fingerprints(of: folder) }.value
         var state = FileIO.read(stateURL).flatMap { try? JSONDecoder().decode(State.self, from: $0) }
         if state?.folder != folder.path { state = State(folder: folder.path, files: [:]) }
-        let changed = Set(current.filter { state?.files[$0.key] != $0.value }.keys)
-        guard !changed.isEmpty else { return }
-        let groups = Set(changed.map(LyricsBatchImport.groupKey))
-        guard case .success(let prepared) = await LyricsBatchImport.prepare(folder: folder, onlyGroups: groups) else { return }
-        defer { LyricsBatchImport.discard(prepared.staging) }
-        let items: [[String: Any]] = prepared.plan.items.compactMap { item in
-            guard item.files.contains(where: changed.contains) else { return nil }
-            switch item.status {
-            case .matched: return item.key.map { ["id": item.id, "key": $0] }
-            case .unmatched: return item.canStore == true ? ["id": item.id, "key": "", "store": true] : nil
-            default: return nil
+        let previous = state?.files ?? [:]
+        let changed = Set(current.filter { previous[$0.key] != $0.value }.keys)
+        let removed = Set(previous.keys).subtracting(current.keys)
+        guard !changed.isEmpty || !removed.isEmpty else {
+            if problem != nil { problem = nil }
+            return
+        }
+        var handled = previous
+        var failed = false
+        var result = 0
+        if !removed.isEmpty {
+            if let n = await EnrichCacheStore.shared.dropImportedFromWatchFiles(removed.map { folder.appendingPathComponent($0).path }) {
+                result += n
+                for path in removed { handled[path] = nil }
+            } else {
+                failed = true
             }
         }
-        var result = 0
-        if !items.isEmpty {
-            guard let n = await EnrichCacheStore.shared.importLyricsLibrary(staging: prepared.staging, items: items) else { return }
-            result = n
+        for chunk in Self.chunks(changed: changed, fingerprints: current) where !failed {
+            switch await LyricsBatchImport.prepare(folder: folder, onlyGroups: chunk) {
+            case .success(let prepared):
+                defer { LyricsBatchImport.discard(prepared.staging) }
+                let items: [[String: Any]] = prepared.plan.items.compactMap { item in
+                    guard item.files.contains(where: changed.contains) else { return nil }
+                    switch item.status {
+                    case .matched: return item.key.map { ["id": item.id, "key": $0] }
+                    case .unmatched: return item.canStore == true ? ["id": item.id, "key": "", "store": true] : nil
+                    default: return nil
+                    }
+                }
+                if !items.isEmpty {
+                    guard let n = await EnrichCacheStore.shared.importLyricsLibrary(
+                        staging: prepared.staging, items: items, watchFolder: folder.path) else {
+                        failed = true
+                        continue
+                    }
+                    result += n
+                }
+                for path in prepared.stagedPaths where changed.contains(path) { handled[path] = current[path] }
+            case .failure(.noFiles):
+                continue
+            case .failure:
+                failed = true
+            }
         }
-        state?.files = current
+        state?.files = handled
         if let state, let data = try? JSONEncoder().encode(state) { FileIO.write(data, to: stateURL) }
+        problem = failed ? .failed : nil
         lastRun = Run(at: Date(), changed: result)
-        logger.notice("import watch: \(changed.count, privacy: .public) changed files, \(result, privacy: .public) imported")
+        logger.notice("import watch: \(changed.count, privacy: .public) changed, \(removed.count, privacy: .public) removed, \(result, privacy: .public) imported, failed=\(failed, privacy: .public)")
+    }
+
+    /// 变动的文件按组(`LyricsBatchImport.groupKey`)分批,每批不超过一次准备上限的一半:第一次设的文件夹可能有上万个文件,
+    /// 整批交会一直超限、一首都导不进去。
+    nonisolated static func chunks(changed: Set<String>, fingerprints: [String: String]) -> [Set<String>] {
+        let byGroup = Dictionary(grouping: changed, by: LyricsBatchImport.groupKey)
+        var out: [Set<String>] = []
+        var current: Set<String> = []
+        var files = 0, bytes = 0
+        for group in byGroup.keys.sorted() {
+            let paths = byGroup[group] ?? []
+            let size = paths.reduce(0) { $0 + (fingerprints[$1].flatMap { Int($0.split(separator: ":").first ?? "") } ?? 0) }
+            if !current.isEmpty,
+               files + paths.count > LyricsBatchImport.maxFiles / 2 || bytes + size > LyricsBatchImport.maxTotalBytes / 2 {
+                out.append(current)
+                current = []
+                files = 0
+                bytes = 0
+            }
+            current.insert(group)
+            files += paths.count
+            bytes += size
+        }
+        if !current.isEmpty { out.append(current) }
+        return out
     }
 
     /// 文件夹里认得的歌词文件:相对路径 → 「大小:修改时间」。
@@ -373,8 +489,10 @@ struct LyricsImportLibrarySheet: View {
                     Label(L10n.t("删除失败，请重试"), systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                 } else if watcher.running {
                     Text(L10n.t("正在导入监视文件夹中的新文件…"))
+                } else if watcher.folder != nil, let problem = watcher.problem {
+                    Label(problem.message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                 } else if let run = watcher.lastRun {
-                    Text(String(format: L10n.t("上次自动导入：%1$@，%2$@ 份"),
+                    Text(String(format: L10n.plural("上次自动导入：%1$@，共 %2$@ 份", count: run.changed),
                                 run.at.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: L10n.locale)),
                                 "\(run.changed)"))
                 } else {
@@ -397,7 +515,7 @@ struct LyricsImportLibrarySheet: View {
         panel.prompt = L10n.t("监视")
         panel.message = L10n.t("选择要监视的歌词文件夹")
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        watcher.setFolder(url)
+        if !watcher.setFolder(url) { LyricsImportWatcher.showOverlapAlert() }
     }
 
     private func reload() async {

@@ -5882,7 +5882,7 @@ func runSourceContractIdentityTests() {
         expectEqual(backup.contains("LyricsBackupArchive.restoreTarget(named: name, in: dir)"), true, "设置判定走 Core: 恢复落盘闸")
         expectEqual(backup.contains("appendingPathComponent(name).standardizedFileURL"), false, "设置判定走 Core: 恢复不许自己另写一份落盘闸")
         // 存量迁移只在引擎启动时跑:恢复交给常驻引擎采纳之后要当场重启它一次。
-        if let adopt = backup.range(of: "EnrichEditChannel.send(\"adopt_restore\")"),
+        if let adopt = backup.range(of: "EnrichEditChannel.send(\"adopt_restore\""),
            let restart = backup.range(of: "EngineRestartCoordinator.shared.requestRestart()") {
             expectEqual(adopt.upperBound < restart.lowerBound, true, "恢复: 采纳之后重启引擎")
         } else {

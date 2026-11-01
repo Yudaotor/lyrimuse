@@ -145,7 +145,8 @@ enum LyricsBackupStore {
     ///
     /// 调用顺序要紧:必须排在 features.json 导入**之后** —— 歌词目录是
     /// `features.lyricsDir`(用户可自定义的绝对路径),先铺后导会铺到旧机器那个目录里去。
-    static func restore(from data: Data) async -> RestoreResult? {
+    /// `snapshotAt`:从自动快照恢复时快照打的时刻,引擎采纳时把那之后才存进导入库的记录一起作废。
+    static func restore(from data: Data, snapshotAt: Date? = nil) async -> RestoreResult? {
         // 目录必须在这一刻(features.json 已经导入完之后)才取。
         let dir = FeatureSettingsStore.shared.effectiveLyricsDir
         let restoreURL = enrichRestoreURL
@@ -206,7 +207,8 @@ enum LyricsBackupStore {
         result.pinsAdded = LyricsPinStore.shared.merge(pins)
         // 铺好的歌词文件和待采纳文件交给引擎收进缓存(它是缓存唯一的写入方,见 EnrichEditChannel)。
         // 失败只记日志:文件已经在歌词目录里了,引擎下次启动也会导入它们。
-        let adopt = await EnrichEditChannel.send("adopt_restore")
+        let adopt = await EnrichEditChannel.send("adopt_restore",
+                                                 snapshotAt.map { ["snapshot_at": Int($0.timeIntervalSince1970)] } ?? [:])
         result.adopted = adopt.ok
         if !adopt.ok {
             logger.error("restore: engine did not adopt the restored files: \(adopt.error ?? "", privacy: .public)")
@@ -311,6 +313,6 @@ enum LyricsBackupStore {
             logger.error("restoreAutoSnapshot: cannot read \(snapshot.url.lastPathComponent, privacy: .public)")
             return nil
         }
-        return await restore(from: data)
+        return await restore(from: data, snapshotAt: snapshot.date)
     }
 }

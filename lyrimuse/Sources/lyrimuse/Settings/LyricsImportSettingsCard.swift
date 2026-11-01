@@ -30,7 +30,12 @@ struct LyricsImportSettingsCard: View {
             SettingsRow(
                 icon: "eye",
                 title: L10n.t("监视文件夹"),
-                subtitle: L10n.t("文件夹中新增或修改的歌词文件会自动导入：对应的歌曲没有歌词时直接补上，已有歌词的不变")
+                subtitle: L10n.t("文件夹中新增或修改的歌词文件会自动导入：对应的歌曲没有歌词时直接补上，已有歌词的不变"),
+                footer: watcher.folder != nil ? watcher.problem.map { problem in
+                    AnyView(Label(problem.message, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange))
+                } : nil
             ) {
                 // 按钮按完整宽度排,放不下时路径先缩短(同「歌词文件夹」那一行)。
                 HStack(spacing: 8) {
@@ -79,6 +84,6 @@ struct LyricsImportSettingsCard: View {
         panel.prompt = L10n.t("监视")
         panel.message = L10n.t("选择要监视的歌词文件夹")
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        watcher.setFolder(url)
+        if !watcher.setFolder(url) { LyricsImportWatcher.showOverlapAlert() }
     }
 }
