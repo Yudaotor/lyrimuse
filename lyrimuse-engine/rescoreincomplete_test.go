@@ -222,7 +222,13 @@ func TestRescoreUndecidableKeepsSourceLists(t *testing.T) {
 // 这一轮被跳过的源不进别名补查名单:补查轮里它照样被跳过,为它解析别名白打请求。
 func TestLyricSourcesWorthAliasRetryDropsSkippedSources(t *testing.T) {
 	saved := features()
-	t.Cleanup(func() { setFeatures(saved) })
+	// 熔断器是进程级的:别的测试记下的传输失败会让 qq 被当成连不上剔掉,结果取决于测试顺序。
+	savedBreaker := sharedLyricSourceBreaker()
+	t.Cleanup(func() {
+		setFeatures(saved)
+		setSharedLyricSourceBreaker(savedBreaker)
+	})
+	setSharedLyricSourceBreaker(newLyricSourceBreaker(time.Now))
 	featuresRef().LyricsSources = map[string]bool{"qq": true, "lrclib": true, "musixmatch": true}
 	results := []scoredLyricCandidateResult{{Source: "musixmatch", Score: 500}}
 	ctx, round := withLyricSourceRound(context.Background())
