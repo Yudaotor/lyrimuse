@@ -99,10 +99,16 @@ final class LyricsLayerElement {
     /// 颜色超过普通白时(「HDR 高亮」)这几层要声明扩展范围,不声明的话屏幕不提亮。
     private static func allowExtendedRange(_ layer: CALayer) {
         layer.wantsExtendedDynamicRangeContent = true
-        if #available(macOS 26.0, *) {
-            layer.preferredDynamicRange = .high
-            layer.contentsHeadroom = LyricsWindowHDR.gain
-        }
+        if #available(macOS 26.0, *) { preferHighDynamicRange(layer) }
+    }
+
+    /// `CADynamicRange.high` 是 macOS 26 才有的弱链接常量,旧系统上它的地址是空的。读它的代码只能放在这个不内联的函数里:
+    /// 内联进调用方后,release 优化会把这次读取提到 `#available` 判断之前,旧系统上一构建行就崩。见 07 章决策 192。
+    @available(macOS 26.0, *)
+    @inline(never)
+    private static func preferHighDynamicRange(_ layer: CALayer) {
+        layer.preferredDynamicRange = .high
+        layer.contentsHeadroom = LyricsWindowHDR.gain
     }
 
     /// 软边中心在词宽里的位置 → 渐变层的 x:渐变正中那条过渡带对准中心。

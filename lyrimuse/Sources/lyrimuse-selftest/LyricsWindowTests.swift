@@ -1575,6 +1575,9 @@ func runLyricsWindowTests() {
         expectEqual(sourceBytes(rows, contain: "self.activeText = style.hdrHighlight ? LyricsWindowHDR.boosted(activeText) : activeText")
                     && sourceHas(rows, "if LyricsWindowHDR.exceedsStandardRange(plan.activeSung) {\n            for layer in [container, fill, gradient] { Self.allowExtendedRange(layer) }"),
                     true, "HDR 高亮: 只提亮当前行已唱那一端,颜色超过普通白的那几层才声明扩展范围")
+        expectEqual(sourceHas(rows, "if #available(macOS 26.0, *) { preferHighDynamicRange(layer) }")
+                    && sourceHas(rows, "@available(macOS 26.0, *)\n    @inline(never)\n    private static func preferHighDynamicRange(_ layer: CALayer) {\n        layer.preferredDynamicRange = .high"),
+                    true, "HDR 高亮: macOS 26 才有的 CADynamicRange.high 只在不内联的函数里读,优化器提不到版本判断之前")
         expectEqual(sourceBytes(settingsView, contain: "hdrHighlight: $settings.lyricsWindowHDRHighlight,"),
                     true, "HDR 高亮: 设置页只有完整尺寸那一支传这颗开关")
     }
