@@ -13,6 +13,9 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 48px 16px; background: var(--bg); color: var(--ink);
   font: 16px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "PingFang TC", "Helvetica Neue", sans-serif; text-align: center; }
+.nf:lang(zh-Hant) { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "Helvetica Neue", sans-serif; }
+.nf:lang(ja) { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Helvetica Neue", sans-serif; }
+.nf:lang(ko) { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Helvetica Neue", sans-serif; }
 main { width: min(560px, 100%); }
 .icon { width: 72px; height: 72px; }
 .code { margin: 14px 0 0; font-size: 13px; font-weight: 600; letter-spacing: .12em; color: var(--brand-ink); }
@@ -45,17 +48,38 @@ p { margin: 0; color: var(--ink-2); }
     <p>可能是連結寫錯了，或者頁面已經移走。</p>
     <p class="nf-links"><a class="primary" href="https://yudaotor.github.io/lyrimuse/zh-Hant/">回到首頁</a><a href="https://yudaotor.github.io/lyrimuse/zh-Hant/changelog/">更新記錄</a><a href="https://github.com/Yudaotor/lyrimuse">GitHub</a></p>
   </section>
+  <section class="nf" lang="ja" data-title="ページが見つかりません · Lyrimuse">
+    <h1>このページは存在しません</h1>
+    <p>リンクが間違っているか、ページが移動した可能性があります。</p>
+    <p class="nf-links"><a class="primary" href="https://yudaotor.github.io/lyrimuse/ja/">ホームに戻る</a><a href="https://yudaotor.github.io/lyrimuse/ja/changelog/">更新履歴</a><a href="https://github.com/Yudaotor/lyrimuse">GitHub</a></p>
+  </section>
+  <section class="nf" lang="ko" data-title="페이지를 찾을 수 없음 · Lyrimuse">
+    <h1>존재하지 않는 페이지입니다</h1>
+    <p>링크가 잘못 입력되었거나 페이지가 이동되었을 수 있습니다.</p>
+    <p class="nf-links"><a class="primary" href="https://yudaotor.github.io/lyrimuse/ko/">홈으로 돌아가기</a><a href="https://yudaotor.github.io/lyrimuse/ko/changelog/">업데이트 내역</a><a href="https://github.com/Yudaotor/lyrimuse">GitHub</a></p>
+  </section>
+  <section class="nf" lang="es" data-title="Página no encontrada · Lyrimuse">
+    <h1>Esta página no existe</h1>
+    <p>Puede que el enlace esté mal escrito o que la página se haya movido.</p>
+    <p class="nf-links"><a class="primary" href="https://yudaotor.github.io/lyrimuse/es/">Volver al inicio</a><a href="https://yudaotor.github.io/lyrimuse/es/changelog/">Novedades</a><a href="https://github.com/Yudaotor/lyrimuse">GitHub</a></p>
+  </section>
+  <section class="nf" lang="fr" data-title="Page introuvable · Lyrimuse">
+    <h1>Cette page n’existe pas</h1>
+    <p>Le lien est peut-être mal saisi, ou la page a été déplacée.</p>
+    <p class="nf-links"><a class="primary" href="https://yudaotor.github.io/lyrimuse/fr/">Retour à l’accueil</a><a href="https://yudaotor.github.io/lyrimuse/fr/changelog/">Nouveautés</a><a href="https://github.com/Yudaotor/lyrimuse">GitHub</a></p>
+  </section>
+  <section class="nf" lang="de" data-title="Seite nicht gefunden · Lyrimuse">
+    <h1>Diese Seite gibt es nicht</h1>
+    <p>Der Link ist vielleicht falsch geschrieben, oder die Seite wurde verschoben.</p>
+    <p class="nf-links"><a class="primary" href="https://yudaotor.github.io/lyrimuse/de/">Zur Startseite</a><a href="https://yudaotor.github.io/lyrimuse/de/changelog/">Versionshinweise</a><a href="https://github.com/Yudaotor/lyrimuse">GitHub</a></p>
+  </section>
 </main>
-<script>(function(){var l='en',p=location.pathname;
-if(/\/zh-Hant\//.test(p))l='zh-Hant';else if(/\/zh\//.test(p))l='zh-Hans';else{
-var s=null;try{s=localStorage.getItem('lyrimuse.lang')}catch(e){}
-if(s==='en'||s==='zh-Hans'||s==='zh-Hant')l=s;else{
-var list=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language||''];
-for(var i=0;i<list.length;i++){var x=String(list[i]).toLowerCase();
-if(x==='en'||x.indexOf('en-')===0)break;
-if(x==='zh'||x.indexOf('zh-')===0){l=/-hant\b|-(tw|hk|mo)\b/.test(x)&&!/-hans\b/.test(x)?'zh-Hant':'zh-Hans';break}}}}
-var blocks=document.querySelectorAll('.nf');for(var k=0;k<blocks.length;k++){
-if(blocks[k].getAttribute('lang')===l){document.title=blocks[k].getAttribute('data-title');document.documentElement.lang=l}
-else blocks[k].hidden=true}})()</script>
+<script>(function(){var want='en',p=location.pathname,dirs={"zh-Hans":"zh/","zh-Hant":"zh-Hant/","ja":"ja/","ko":"ko/","es":"es/","fr":"fr/","de":"de/"},k;
+for(k in dirs)if(p.indexOf('/'+dirs[k])>=0){want=k;break}
+if(want==='en'&&!/\/(zh|zh-Hant|ja|ko|es|fr|de)\//.test(p)){var s=null;try{s=localStorage.getItem('lyrimuse.lang')}catch(e){}
+if(s==='en'||dirs.hasOwnProperty(s))want=s;else{var list=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language||''];for(var i=0;i<list.length;i++){var x=String(list[i]).toLowerCase();if(x==='en'||x.indexOf('en-')===0)break;if(x==='zh'||x.indexOf('zh-')===0){if(dirs.hasOwnProperty('zh-Hans')){want=/-hant\b|-(tw|hk|mo)\b/.test(x)&&!/-hans\b/.test(x)?'zh-Hant':'zh-Hans';break}continue}var px=x.split('-')[0];if(dirs.hasOwnProperty(px)){want=px;break}}}}
+var blocks=document.querySelectorAll('.nf');for(var n=0;n<blocks.length;n++){
+if(blocks[n].getAttribute('lang')===want){document.title=blocks[n].getAttribute('data-title');document.documentElement.lang=want}
+else blocks[n].hidden=true}})()</script>
 </body>
 </html>

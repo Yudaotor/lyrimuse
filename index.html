@@ -8,28 +8,29 @@
 var saved=null;try{saved=localStorage.getItem('lyrimuse.lang')}catch(e){}
 var base=location.pathname.replace(/[^\/]*$/,'');
 if(document.referrer&&document.referrer.indexOf(location.origin+base)===0)return;
-var want=saved;
-if(want!=='en'&&want!=='zh-Hans'&&want!=='zh-Hant'){want='en';
-var list=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language||''];
-for(var i=0;i<list.length;i++){var l=String(list[i]).toLowerCase();
-if(l==='en'||l.indexOf('en-')===0)break;
-if(l==='zh'||l.indexOf('zh-')===0){want=/-hant\b|-(tw|hk|mo)\b/.test(l)&&!/-hans\b/.test(l)?'zh-Hant':'zh-Hans';break}}}
-if(want==='zh-Hans')location.replace('zh/'+location.search+location.hash);
-else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.hash);
+var dirs={"zh-Hans":"zh/","zh-Hant":"zh-Hant/","ja":"ja/","ko":"ko/","es":"es/","fr":"fr/","de":"de/"},want=saved;
+if(want!=='en'&&!dirs.hasOwnProperty(want)){want='en';
+var list=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language||''];for(var i=0;i<list.length;i++){var x=String(list[i]).toLowerCase();if(x==='en'||x.indexOf('en-')===0)break;if(x==='zh'||x.indexOf('zh-')===0){if(dirs.hasOwnProperty('zh-Hans')){want=/-hant\b|-(tw|hk|mo)\b/.test(x)&&!/-hans\b/.test(x)?'zh-Hant':'zh-Hans';break}continue}var px=x.split('-')[0];if(dirs.hasOwnProperty(px)){want=px;break}}}
+if(dirs.hasOwnProperty(want))location.replace(dirs[want]+location.search+location.hash);
 }catch(e){}})()</script>
 <title>Lyrimuse: desktop lyrics for Apple Music and Spotify on Mac</title>
-<meta name="description" content="Open-source Mac desktop lyrics, word by word, for Apple Music, Spotify, YouTube Music and six more players: on your desktop, in the notch or the menu bar.">
+<meta name="description" content="Open-source Mac desktop lyrics, word by word, for Apple Music, Spotify, YouTube Music and eleven more players: on your desktop, in the notch or the menu bar.">
 <link rel="canonical" href="https://yudaotor.github.io/lyrimuse/">
 <link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/">
 <link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/">
 <link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/">
+<link rel="alternate" hreflang="ja" href="https://yudaotor.github.io/lyrimuse/ja/">
+<link rel="alternate" hreflang="ko" href="https://yudaotor.github.io/lyrimuse/ko/">
+<link rel="alternate" hreflang="es" href="https://yudaotor.github.io/lyrimuse/es/">
+<link rel="alternate" hreflang="fr" href="https://yudaotor.github.io/lyrimuse/fr/">
+<link rel="alternate" hreflang="de" href="https://yudaotor.github.io/lyrimuse/de/">
 <link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/">
 <link rel="icon" type="image/png" sizes="64x64" href="assets/img/favicon.png">
 <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<script src="assets/lp.js?v=202610271810" defer fetchpriority="high"></script>
+<script src="assets/lp.js?v=202611011854" defer fetchpriority="high"></script>
 <style>:root {
 --bg: #fbfbfd;
 --bg-alt: #f5f5f7;
@@ -54,6 +55,9 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
 --wallpaper: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1000' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3ClinearGradient id='g0' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23FEF2EC'/%3E%3Cstop offset='1' stop-color='%23F4D1C2'/%3E%3C/linearGradient%3E%3ClinearGradient id='g1' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23FBE0D3'/%3E%3Cstop offset='.55' stop-color='%23F9CBB6'/%3E%3Cstop offset='1' stop-color='%23D7ACA1'/%3E%3C/linearGradient%3E%3ClinearGradient id='g2' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23F7CCD0'/%3E%3Cstop offset='.55' stop-color='%23F2AAB0'/%3E%3Cstop offset='1' stop-color='%23D1919C'/%3E%3C/linearGradient%3E%3ClinearGradient id='g3' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23EFBBCC'/%3E%3Cstop offset='.55' stop-color='%23E48DAA'/%3E%3Cstop offset='1' stop-color='%23C57997'/%3E%3C/linearGradient%3E%3ClinearGradient id='g4' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23DCA9C5'/%3E%3Cstop offset='.55' stop-color='%23C4709F'/%3E%3Cstop offset='1' stop-color='%23AB618E'/%3E%3C/linearGradient%3E%3ClinearGradient id='g5' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23B99BBD'/%3E%3Cstop offset='.55' stop-color='%238A5891'/%3E%3Cstop offset='1' stop-color='%237C4E82'/%3E%3C/linearGradient%3E%3Cfilter id='sh' x='-30%25' y='-10%25' width='160%25' height='120%25'%3E%3CfeDropShadow dx='-22' dy='8' stdDeviation='30' flood-color='%235A2A48' flood-opacity='.30'/%3E%3C/filter%3E%3Cfilter id='soft' x='-10%25' y='-10%25' width='120%25' height='120%25'%3E%3CfeGaussianBlur stdDeviation='10'/%3E%3C/filter%3E%3CradialGradient id='glow' cx='.85' cy='.04' r='.6'%3E%3Cstop offset='0' stop-color='%23FFFFFF' stop-opacity='.42'/%3E%3Cstop offset='1' stop-color='%23FFFFFF' stop-opacity='0'/%3E%3C/radialGradient%3E%3ClinearGradient id='vig' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='.55' stop-color='%232A1030' stop-opacity='0'/%3E%3Cstop offset='1' stop-color='%232A1030' stop-opacity='.2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='1000' fill='url(%23g0)'/%3E%3Cpath d='M180,-120 C800,260 -500,640 -260,1120 L1800,1120 L1800,-120 Z' fill='url(%23g1)' filter='url(%23sh)'/%3E%3Cpath d='M180,-120 C800,260 -500,640 -260,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.12' stroke-width='30' filter='url(%23soft)'/%3E%3Cpath d='M180,-120 C800,260 -500,640 -260,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.6' stroke-width='1.6'/%3E%3Cpath d='M600,-120 C1160,260 -340,640 80,1120 L1800,1120 L1800,-120 Z' fill='url(%23g2)' filter='url(%23sh)'/%3E%3Cpath d='M600,-120 C1160,260 -340,640 80,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.12' stroke-width='30' filter='url(%23soft)'/%3E%3Cpath d='M600,-120 C1160,260 -340,640 80,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.6' stroke-width='1.6'/%3E%3Cpath d='M860,-120 C1380,260 0,640 300,1120 L1800,1120 L1800,-120 Z' fill='url(%23g3)' filter='url(%23sh)'/%3E%3Cpath d='M860,-120 C1380,260 0,640 300,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.12' stroke-width='30' filter='url(%23soft)'/%3E%3Cpath d='M860,-120 C1380,260 0,640 300,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.6' stroke-width='1.6'/%3E%3Cpath d='M1000,-120 C1520,260 150,640 470,1120 L1800,1120 L1800,-120 Z' fill='url(%23g4)' filter='url(%23sh)'/%3E%3Cpath d='M1000,-120 C1520,260 150,640 470,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.12' stroke-width='30' filter='url(%23soft)'/%3E%3Cpath d='M1000,-120 C1520,260 150,640 470,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.6' stroke-width='1.6'/%3E%3Cpath d='M1330,-120 C1770,260 400,640 860,1120 L1800,1120 L1800,-120 Z' fill='url(%23g5)' filter='url(%23sh)'/%3E%3Cpath d='M1330,-120 C1770,260 400,640 860,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.12' stroke-width='30' filter='url(%23soft)'/%3E%3Cpath d='M1330,-120 C1770,260 400,640 860,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.6' stroke-width='1.6'/%3E%3Crect width='1600' height='1000' fill='url(%23glow)'/%3E%3Crect width='1600' height='1000' fill='url(%23vig)'/%3E%3C/svg%3E");
 color-scheme: light dark;
 }
+:root:lang(ja) { --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Helvetica Neue", sans-serif; }
+:root:lang(ko) { --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Apple SD Gothic Neo", "Helvetica Neue", sans-serif; }
+:lang(ja) :is(h1, h2, .lede, .ch-lede, .dl-note, .sub-h1, .sub-lede, .sec-h2) { word-break: normal; word-break: auto-phrase; }
 .ch-stage, .more-stage, .mac { --ink-3: #86868b; }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; background: var(--bg); }
@@ -185,15 +189,17 @@ h1 { font-size: clamp(36px, 6.2vw, 72px); line-height: 1.04; letter-spacing: -.0
 h1 > span { display: inline-block; max-width: 100%; }
 :lang(zh-Hans) .pe { margin-right: -.62em; }
 :lang(zh-Hant) .pe { margin-right: -.32em; }
+:lang(ja) .pe { margin-right: -.58em; }
 .wu { display: inline-block; }
 .hero h1 > .pe:first-child { margin-right: 0; }
 @media (max-width: 480px) {
 :lang(zh-Hans) .hero h1 > .pe:first-child { margin-right: -.62em; }
 :lang(zh-Hant) .hero h1 > .pe:first-child { margin-right: -.32em; }
+:lang(ja) .hero h1 > .pe:first-child { margin-right: -.58em; }
 }
 .sub-h1 > .pe { max-width: none; }
-:lang(zh) h1 { letter-spacing: -.015em; line-height: 1.1; }
-:lang(zh) .lede { letter-spacing: 0; }
+:is(:lang(zh), :lang(ja), :lang(ko)) h1 { letter-spacing: -.015em; line-height: 1.1; }
+:is(:lang(zh), :lang(ja), :lang(ko)) .lede { letter-spacing: 0; }
 .lede { max-width: 760px; margin: 0; font-size: clamp(18px, 2vw, 22px); line-height: 1.45; letter-spacing: -.01em; font-weight: 500; text-wrap: balance; }
 .lede span { display: block; color: var(--ink-3); }
 .lede, .ch-lede { word-break: keep-all; overflow-wrap: anywhere; }
@@ -441,7 +447,7 @@ background: linear-gradient(90deg, #e5486f, #b0479f 60%, #8d4fc7); -webkit-backg
 .ch h2 { margin: 0; font-size: clamp(34px, 5vw, 64px); line-height: 1.06; letter-spacing: -.04em; font-weight: 700; text-wrap: balance; }
 .ch h2 { word-break: keep-all; }
 .ch h2 > span { display: block; }
-:lang(zh) .ch h2, :lang(zh) .faq-side h2 { letter-spacing: -.015em; line-height: 1.14; }
+:is(:lang(zh), :lang(ja), :lang(ko)) .ch h2, :is(:lang(zh), :lang(ja), :lang(ko)) .faq-side h2 { letter-spacing: -.015em; line-height: 1.14; }
 .ch h2 > span:not(.lead) { color: var(--ink-3); }
 .ch-lede { margin: 22px auto 0; max-width: 34em; font-size: clamp(17px, 1.6vw, 20px); line-height: 1.6; color: var(--ink-2); text-wrap: balance; }
 .ch-stage {
@@ -1217,7 +1223,7 @@ animation: glint 5.5s ease-in-out 1.6s 3;
 @keyframes glint { 0%, 60% { background-position: 120% 0; } 100% { background-position: -20% 0; } }
 .final-icon { width: 72px; height: 72px; border-radius: 18px; filter: drop-shadow(0 18px 30px rgba(40, 10, 40, .35)); }
 .final-card h2 { margin: 0 0 26px; font-size: clamp(28px, 4vw, 46px); line-height: 1.1; letter-spacing: -.035em; text-shadow: 0 2px 20px rgba(40, 10, 40, .3); text-wrap: balance; }
-:lang(zh) .final-card h2 { letter-spacing: -.01em; line-height: 1.16; }
+:is(:lang(zh), :lang(ja), :lang(ko)) .final-card h2 { letter-spacing: -.01em; line-height: 1.16; }
 .final-card h2.sing { --fa: #fff; --uc: rgba(255, 255, 255, .38); text-shadow: none; filter: drop-shadow(0 2px 14px rgba(40, 10, 40, .35)); }
 .final-card h2 > .ln { display: block; }
 .final-card .cta { margin-top: 0; }
@@ -1315,7 +1321,7 @@ background: var(--card); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0
 .warm.far, .warm.far *, .warm.far *::before, .warm.far *::after,
 .hero.far, .hero.far *, .hero.far *::before, .hero.far *::after { animation-play-state: paused !important; }
 .ch.watch { contain-intrinsic-size: auto 960px; }
-.ch-more { contain-intrinsic-size: auto 590px; }
+.ch-more { contain-intrinsic-size: auto 680px; }
 .ch-duo { contain-intrinsic-size: auto 1080px; }
 .ch-voices { contain-intrinsic-size: auto 720px; }
 .news { contain-intrinsic-size: auto 170px; }
@@ -1324,7 +1330,7 @@ background: var(--card); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0
 @media (max-width: 820px) {
 .ch { contain-intrinsic-size: auto 620px; }
 .ch.watch { contain-intrinsic-size: auto 470px; }
-.ch-more { contain-intrinsic-size: auto 760px; }
+.ch-more { contain-intrinsic-size: auto 950px; }
 .ch-duo { contain-intrinsic-size: auto 1500px; }
 .ch-voices { contain-intrinsic-size: auto 1450px; }
 .news { contain-intrinsic-size: auto 450px; }
@@ -1513,13 +1519,13 @@ html { scroll-behavior: auto; }
     "priceCurrency": "USD"
   },
   "downloadUrl": "https://github.com/Yudaotor/lyrimuse/releases/latest",
-  "softwareVersion": "1.11.0",
+  "softwareVersion": "1.12.0",
   "releaseNotes": "https://yudaotor.github.io/lyrimuse/changelog/",
   "license": "https://www.gnu.org/licenses/gpl-3.0.html",
   "url": "https://yudaotor.github.io/lyrimuse/",
   "inLanguage": "en",
   "image": "https://yudaotor.github.io/lyrimuse/assets/img/og-banner-en.jpg",
-  "description": "Open-source Mac desktop lyrics, word by word, for Apple Music, Spotify, YouTube Music and six more players: on your desktop, in the notch or the menu bar.",
+  "description": "Open-source Mac desktop lyrics, word by word, for Apple Music, Spotify, YouTube Music and eleven more players: on your desktop, in the notch or the menu bar.",
   "author": {
     "@type": "Person",
     "name": "Yudaotor",
@@ -1560,7 +1566,7 @@ html { scroll-behavior: auto; }
       "name": "Which permissions does it need?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The first time it reads Apple Music, Spotify or Kaset, macOS asks whether Lyrimuse may control it (Automation); allow it. The other players need nothing to show lyrics. Accessibility is optional: it adds Favorite, shuffle and repeat buttons for some players, and keeps playback controls reaching QQ Music, NetEase Cloud Music and Soda Music while a browser video holds the media keys."
+        "text": "The first time it reads Apple Music, Spotify, Kaset or VOX, macOS asks whether Lyrimuse may control it (Automation); allow it. The other players need nothing to show lyrics. Accessibility is optional: it adds Favorite, shuffle, repeat and volume controls for some players, makes Pine Player's timing exact, and keeps playback controls reaching most of the other players while a browser video holds the media keys."
       }
     },
     {
@@ -1568,7 +1574,7 @@ html { scroll-behavior: auto; }
       "name": "Does any of my data leave my Mac?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "There's no account, no telemetry and no analytics, so nothing about you or what you play goes to the developer. To find lyrics it asks the lyric sources about the song that's playing, and translation happens on your Mac by default. The privacy policy lists every server it talks to."
+        "text": "There's no account. Anonymous usage data is on by default: at most once a day it sends a random install ID, the app and macOS versions and which features are on, never song titles, artists or accounts, and you can turn it off in Settings › About. To find lyrics it asks the lyric sources about the song that's playing, and translation happens on your Mac by default. The privacy policy lists every server it talks to."
       }
     },
     {
@@ -1600,7 +1606,7 @@ html { scroll-behavior: auto; }
       "name": "How is it different from LyricsX?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "LyricsX's last release is v1.6.3 from April 2022. Lyrimuse needs macOS 14 or later and adds QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, YouTube Music, LX Music and reAMP, scored lyric matching, Jyutping and Japanese romaji, and Last.fm scrobbling. See the fact-checked comparison."
+        "text": "LyricsX's last release is v1.6.3 from April 2022. Lyrimuse needs macOS 14 or later and adds QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, YouTube Music, LX Music, reAMP, Pine Player and foobar2000, scored lyric matching, Jyutping and Japanese romaji, and Last.fm scrobbling. See the fact-checked comparison."
       }
     }
   ]
@@ -1638,12 +1644,17 @@ html { scroll-behavior: auto; }
       <a class="dl-item" role="menuitem" lang="en" href="./" aria-current="page">English</a>
       <a class="dl-item" role="menuitem" lang="zh-Hans" href="zh/">简体中文</a>
       <a class="dl-item" role="menuitem" lang="zh-Hant" href="zh-Hant/">繁體中文</a>
+      <a class="dl-item" role="menuitem" lang="ja" href="ja/">日本語</a>
+      <a class="dl-item" role="menuitem" lang="ko" href="ko/">한국어</a>
+      <a class="dl-item" role="menuitem" lang="es" href="es/">Español</a>
+      <a class="dl-item" role="menuitem" lang="fr" href="fr/">Français</a>
+      <a class="dl-item" role="menuitem" lang="de" href="de/">Deutsch</a>
     </div></div>
     <div class="dl dl-end dl-download"><a class="btn btn-dark btn-sm dl-trigger" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">Download<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     <div class="dl-menu" role="menu">
-      <p class="dl-head">Latest version <span class="dl-ver">v1.11.0</span></p>
-      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">Recommended</span></b><em>M1 and later · DMG · <span class="dl-size">17 MB</span></em></span></a>
-      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">Recommended</span></b><em>Intel-based Macs · DMG · <span class="dl-size">32 MB</span></em></span></a>
+      <p class="dl-head">Latest version <span class="dl-ver">v1.12.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.12.0/Lyrimuse-v1.12.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">Recommended</span></b><em>M1 and later · DMG · <span class="dl-size">20 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.12.0/Lyrimuse-v1.12.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">Recommended</span></b><em>Intel-based Macs · DMG · <span class="dl-size">38 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>All downloads on GitHub</b><em>Every version, ZIPs and checksums</em></span></a>
       <p class="dl-note">Lyrimuse isn&#x27;t notarized by Apple, so macOS blocks its first launch from the DMG: open System Settings → Privacy &amp; Security and click Open Anyway. Homebrew takes care of this.</p>
     </div></div>
@@ -1654,17 +1665,17 @@ html { scroll-behavior: auto; }
 <main id="top">
 
 <section class="hero">
-  <a class="eyebrow reveal" href="changelog/#v1.11.0"><span class="orbit" aria-hidden="true"><i></i></span><span class="dot"></span>New in 1.11.0: Liquid Glass and web lyrics <span class="arrow">›</span></a>
+  <a class="eyebrow reveal" href="changelog/#v1.12.0"><span class="orbit" aria-hidden="true"><i></i></span><span class="dot"></span>New in 1.12.0: five interface languages and three more players <span class="arrow">›</span></a>
 
   <h1 class="reveal sing"><span>Desktop lyrics,</span> <span>reimagined for the Mac.</span></h1>
-  <p class="lede reveal">Word-synced lyrics on your desktop, in the menu bar and under the notch. <span>Works with Apple Music, Spotify and 9 more players.</span></p>
+  <p class="lede reveal">Word-synced lyrics on your desktop, in the menu bar and under the notch. <span>Works with Apple Music, Spotify and 12 more players.</span></p>
 
   <div class="cta reveal">
     <div class="dl dl-download"><a class="btn btn-dark dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5v9m0 0-3.5-3.5M8 10.5l3.5-3.5M2.5 13.5h11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Download Lyrimuse<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     <div class="dl-menu" role="menu">
-      <p class="dl-head">Latest version <span class="dl-ver">v1.11.0</span></p>
-      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">Recommended</span></b><em>M1 and later · DMG · <span class="dl-size">17 MB</span></em></span></a>
-      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">Recommended</span></b><em>Intel-based Macs · DMG · <span class="dl-size">32 MB</span></em></span></a>
+      <p class="dl-head">Latest version <span class="dl-ver">v1.12.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.12.0/Lyrimuse-v1.12.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">Recommended</span></b><em>M1 and later · DMG · <span class="dl-size">20 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.12.0/Lyrimuse-v1.12.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">Recommended</span></b><em>Intel-based Macs · DMG · <span class="dl-size">38 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>All downloads on GitHub</b><em>Every version, ZIPs and checksums</em></span></a>
       <p class="dl-note">Lyrimuse isn&#x27;t notarized by Apple, so macOS blocks its first launch from the DMG: open System Settings → Privacy &amp; Security and click Open Anyway. Homebrew takes care of this.</p>
     </div></div>
@@ -1749,6 +1760,9 @@ html { scroll-behavior: auto; }
       <a class="pl" href="players/youtube-music/"><img data-icon="assets/img/players/YouTubeMusic.webp" alt="">YouTube Music</a>
       <a class="pl" href="players/lx-music/"><img data-icon="assets/img/players/LXMusic.webp" alt="">LX Music</a>
       <a class="pl" href="players/reamp/"><img data-icon="assets/img/players/Reamp.webp" alt="">reAMP</a>
+      <a class="pl" href="players/vox/"><img data-icon="assets/img/players/Vox.webp" alt="">VOX</a>
+      <a class="pl" href="players/pine-player/"><img data-icon="assets/img/players/PinePlayer.webp" alt="">Pine Player</a>
+      <a class="pl" href="players/foobar2000/"><img data-icon="assets/img/players/Foobar2000.webp" alt="">foobar2000</a>
     </div>
   </div>
   <p class="players-req"><a href="https://github.com/Yudaotor/lyrimuse/issues/new?template=3-player.yml">Don&#x27;t see your player? Request it</a> <span aria-hidden="true">›</span></p>
@@ -1838,7 +1852,7 @@ html { scroll-behavior: auto; }
           </div>
           <div class="mbp-row3"><div class="mbp-tile"><i class="mbp-dot on"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14h-6l-3.5 2.8V14H4A1.5 1.5 0 0 1 2.5 12.5V6A1.5 1.5 0 0 1 4 4.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M6 8h8M6 10.8h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><span>Floating Lyrics</span></div><div class="mbp-tile"><i class="mbp-dot on"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.5" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 8h14" stroke="currentColor" stroke-width="1.6"/></svg></i><span>Notch Lyrics</span></div><div class="mbp-tile"><i class="mbp-dot on"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.5" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 8h14" stroke="currentColor" stroke-width="1.6"/></svg></i><span>Menu Bar Lyrics</span></div></div>
           <div class="mbp-row2"><div class="mbp-tile"><i class="mbp-dot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5h4.5M3.5 9h9M3.5 13h13M3.5 16.5h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12.5 3.2c1.4 0 2.4.8 2.4 2s-1 2-2.2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><span>Lyrics Window</span></div><div class="mbp-tile"><i class="mbp-dot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h7M3.5 9.5h7M3.5 13.5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14 4v8.5" stroke="currentColor" stroke-width="1.8"/><circle cx="12.4" cy="13.2" r="2.2" fill="currentColor"/><path d="M14 4c1.6.3 2.6 1.3 3 2.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><span>Lyrics Manager</span></div></div>
-          <div class="mbp-foot"><span><svg viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M8.6 1.5h2.8l.5 2.3 1.6.7 2-1.2 2 2-1.3 2 .7 1.6 2.3.5v2.8l-2.3.5-.7 1.6 1.3 2-2 2-2-1.3-1.6.7-.5 2.3H8.6l-.5-2.3-1.6-.7-2 1.3-2-2 1.3-2-.7-1.6-2.3-.5V8.6l2.3-.5.7-1.6-1.3-2 2-2 2 1.2 1.6-.7zM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" fill="currentColor"/></svg>Settings…</span><span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Version 1.11.0</span></div>
+          <div class="mbp-foot"><span><svg viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M8.6 1.5h2.8l.5 2.3 1.6.7 2-1.2 2 2-1.3 2 .7 1.6 2.3.5v2.8l-2.3.5-.7 1.6 1.3 2-2 2-2-1.3-1.6.7-.5 2.3H8.6l-.5-2.3-1.6-.7-2 1.3-2-2 1.3-2-.7-1.6-2.3-.5V8.6l2.3-.5.7-1.6-1.3-2 2-2 2 1.2 1.6-.7zM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" fill="currentColor"/></svg>Settings…</span><span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Version 1.12.0</span></div>
         </div>
       </div></div></figure>
       <figure class="view v-tb"><div class="tbz live" role="img" aria-label="Lyrics on the Touch Bar, lighting up word by word beside the cover and playback controls"><div class="tb-deck">
@@ -1879,7 +1893,7 @@ html { scroll-behavior: auto; }
 <section class="ch ch-split wall-lilac" id="matching">
   <header class="ch-head ch-split reveal">
     <div class="ch-title"><p class="k">Lyric matching</p>
-    <h2><span class="lead">Fourteen lyric sources,</span> <span class="fx">one right answer.</span></h2></div>
+    <h2><span class="lead">Fifteen lyric sources,</span> <span class="fx">one right answer.</span></h2></div>
     <p class="ch-lede">Every result is scored the same way and the best one wins. Wrong one? Search or edit it, and your pick stays locked.</p>
   </header>
   <div class="show reveal">
@@ -1901,7 +1915,7 @@ html { scroll-behavior: auto; }
             <div class="dp-top"><span class="src" style="--c:#c23bb4">LRCLIB</span><b>903</b><em>-385</em><i class="dp-bar" style="--c:#c23bb4;--w:70.1%"><s></s></i></div>
             <p>Word timing -400 · Duration match +20 · Lines -5</p></li></ul>
         <p class="dp-tie">All 5 candidates scored identically on: Title match +120 · Content corroborated +250</p>
-        <p class="dp-foot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>5 of 14 sources answered</p>
+        <p class="dp-foot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>5 of 15 sources answered</p>
       </div></div></figure>
       <figure class="view v-pn"><div class="pn pn-ms" role="img" aria-label="Manual search: every result with its score, word timing and translation"><div class="pn-in ms">
         <aside class="ms-side">
@@ -2183,6 +2197,9 @@ html { scroll-behavior: auto; }
       <li class="pill glass" style="--i:6"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.4 3.7v5l4.2-2.5z" fill="currentColor"/><path d="M10.5 6.2h6.3M3.6 11.3h13.2M3.6 15.6h8.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Upcoming tracks resolved in advance</span></li>
       <li class="pill glass" style="--i:7"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5.8" y="2.5" width="8.4" height="15" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.8 14.6h2.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Lyrics on your phone or in OBS</span></li>
       <li class="pill glass" style="--i:8"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4.17A5 5 0 1 1 6 4.17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.4 3.9 6 4.17l-1.05 2.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m12.1 12.1 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Missing lyrics retried automatically</span></li>
+      <li class="pill glass" style="--i:9"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.8 10h14.4M10 2.7c2.1 2.2 3.1 4.6 3.1 7.3s-1 5.1-3.1 7.3c-2.1-2.2-3.1-4.6-3.1-7.3s1-5.1 3.1-7.3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Interface in eight languages</span></li>
+      <li class="pill glass" style="--i:10"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.8a7.2 7.2 0 0 0 0 14.4c1 0 1.6-.6 1.6-1.4 0-.9-.8-1.2-.8-2 0-.7.6-1.3 1.3-1.3h1.6a3.5 3.5 0 0 0 3.5-3.5c0-3.4-3.2-6.2-7.2-6.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.4" cy="9" r="1" fill="currentColor"/><circle cx="8.6" cy="6" r="1" fill="currentColor"/><circle cx="12.4" cy="6.2" r="1" fill="currentColor"/></svg></i><span>A flowing rainbow lyric colour</span></li>
+      <li class="pill glass" style="--i:11"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m4.5 14 4-4 3 3 2-2 2.5 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="13" cy="7.6" r="1.3" fill="currentColor"/></svg></i><span>Lyrics shared as an image card</span></li>
     </ul>
   </div>
   <p class="watch-more reveal"><a href="features/">See every feature and setting <span aria-hidden="true">›</span></a></p>
@@ -2206,8 +2223,8 @@ html { scroll-behavior: auto; }
 
 <section class="news reveal" aria-labelledby="newsTitle">
   <div class="news-in">
-    <div class="news-meta"><p class="news-k">Latest update</p><h2 id="newsTitle"><a href="changelog/#v1.11.0">v1.11.0</a></h2><time datetime="2026-10-20">20 October 2026</time></div>
-    <ul class="news-list"><li>Redesigned Settings, the menu bar panel, the lyrics window, the lyrics manager and onboarding with Liquid Glass on macOS 26</li><li>Added web lyrics (Beta): use a phone or tablet as a second screen with controls, or show lyrics in OBS</li><li>Lyrimuse now treats the same song across players and versions as one, sharing lyrics, corrections and play counts</li></ul>
+    <div class="news-meta"><p class="news-k">Latest update</p><h2 id="newsTitle"><a href="changelog/#v1.12.0">v1.12.0</a></h2><time datetime="2026-11-01">1 November 2026</time></div>
+    <ul class="news-list"><li>Added Japanese, Korean, Spanish, French and German as interface languages</li><li>Added a What's New card after updates, also available from the menu bar right-click menu</li><li>Added VOX, Pine Player and foobar2000 as built-in players, bringing the total to fourteen</li></ul>
     <a class="news-all" href="changelog/">See every update <span aria-hidden="true">›</span></a>
   </div>
 </section>
@@ -2222,12 +2239,12 @@ html { scroll-behavior: auto; }
     <div class="faq-list reveal">
       <details class="qa" style="--i:0"><summary><span class="qa-q">Which Macs does it support?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>macOS 14 Sonoma or later, on Apple Silicon and Intel; Intel Macs use a separate build. Translating lyrics on your Mac needs macOS 15 or later.</p></div></details>
       <details class="qa" style="--i:1"><summary><span class="qa-q">How do I install it?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>With Homebrew: copy the install command above and paste it into Terminal. It takes care of the one-time Gatekeeper prompt, and you don't need an Apple Developer account. Or download the DMG and drag Lyrimuse into Applications. The app isn't notarized by Apple, so macOS blocks the first launch: open System Settings → Privacy & Security, scroll to the bottom and click Open Anyway. You only do this once. Updates come through the app after that.</p></div></details>
-      <details class="qa" style="--i:2"><summary><span class="qa-q">Which permissions does it need?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>The first time it reads Apple Music, Spotify or Kaset, macOS asks whether Lyrimuse may control it (Automation); allow it. The other players need nothing to show lyrics. Accessibility is optional: it adds Favorite, shuffle and repeat buttons for some players, and keeps playback controls reaching QQ Music, NetEase Cloud Music and Soda Music while a browser video holds the media keys.</p></div></details>
-      <details class="qa" style="--i:3"><summary><span class="qa-q">Does any of my data leave my Mac?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>There's no account, no telemetry and no analytics, so nothing about you or what you play goes to the developer. To find lyrics it asks the lyric sources about the song that's playing, and translation happens on your Mac by default. The <a href="privacy/">privacy policy</a> lists every server it talks to.</p></div></details>
+      <details class="qa" style="--i:2"><summary><span class="qa-q">Which permissions does it need?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>The first time it reads Apple Music, Spotify, Kaset or VOX, macOS asks whether Lyrimuse may control it (Automation); allow it. The other players need nothing to show lyrics. Accessibility is optional: it adds Favorite, shuffle, repeat and volume controls for some players, makes Pine Player's timing exact, and keeps playback controls reaching most of the other players while a browser video holds the media keys.</p></div></details>
+      <details class="qa" style="--i:3"><summary><span class="qa-q">Does any of my data leave my Mac?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>There's no account. Anonymous usage data is on by default: at most once a day it sends a random install ID, the app and macOS versions and which features are on, never song titles, artists or accounts, and you can turn it off in Settings › About. To find lyrics it asks the lyric sources about the song that's playing, and translation happens on your Mac by default. The <a href="privacy/">privacy policy</a> lists every server it talks to.</p></div></details>
       <details class="qa" style="--i:4"><summary><span class="qa-q">Do lyrics work offline?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>Yes. Lyrics it has found once are cached on your Mac and show without a connection. The first lookup for a song needs one, and so does online translation.</p></div></details>
       <details class="qa" style="--i:5"><summary><span class="qa-q">Does the Dynamic Island capsule work on a Mac without a notch?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>Yes. On a screen without a notch, like an older MacBook or an external display, the capsule sits at the top center, as tall as the menu bar. You pick the screen in Settings.</p></div></details>
       <details class="qa" style="--i:6"><summary><span class="qa-q">What if the lyrics are wrong or out of sync?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>If the timing's off, shift it for that song and it's remembered. If it's the wrong version, open manual search and pick another one; your pick stays locked. You can also edit any song's lyrics in Lyrics Manager.</p></div></details>
-      <details class="qa" style="--i:7"><summary><span class="qa-q">How is it different from LyricsX?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>LyricsX's last release is v1.6.3 from April 2022. Lyrimuse needs macOS 14 or later and adds QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, YouTube Music, LX Music and reAMP, scored lyric matching, Jyutping and Japanese romaji, and Last.fm scrobbling. See the <a href="compare/">fact-checked comparison</a>.</p></div></details>
+      <details class="qa" style="--i:7"><summary><span class="qa-q">How is it different from LyricsX?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>LyricsX's last release is v1.6.3 from April 2022. Lyrimuse needs macOS 14 or later and adds QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, YouTube Music, LX Music, reAMP, Pine Player and foobar2000, scored lyric matching, Jyutping and Japanese romaji, and Last.fm scrobbling. See the <a href="compare/">fact-checked comparison</a>.</p></div></details>
     </div>
   </div>
 </section>
@@ -2245,9 +2262,9 @@ html { scroll-behavior: auto; }
     <div class="cta">
       <div class="dl dl-download"><a class="btn btn-white dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">Download Lyrimuse<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
       <div class="dl-menu" role="menu">
-      <p class="dl-head">Latest version <span class="dl-ver">v1.11.0</span></p>
-      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">Recommended</span></b><em>M1 and later · DMG · <span class="dl-size">17 MB</span></em></span></a>
-      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.11.0/Lyrimuse-v1.11.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">Recommended</span></b><em>Intel-based Macs · DMG · <span class="dl-size">32 MB</span></em></span></a>
+      <p class="dl-head">Latest version <span class="dl-ver">v1.12.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.12.0/Lyrimuse-v1.12.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">Recommended</span></b><em>M1 and later · DMG · <span class="dl-size">20 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.12.0/Lyrimuse-v1.12.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">Recommended</span></b><em>Intel-based Macs · DMG · <span class="dl-size">38 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>All downloads on GitHub</b><em>Every version, ZIPs and checksums</em></span></a>
       <p class="dl-note">Lyrimuse isn&#x27;t notarized by Apple, so macOS blocks its first launch from the DMG: open System Settings → Privacy &amp; Security and click Open Anyway. Homebrew takes care of this.</p>
     </div></div>
@@ -2269,7 +2286,7 @@ html { scroll-behavior: auto; }
         <div class="foot-col"><p class="foot-h">Product</p><ul><li><a href="features/">Feature list</a></li><li><a href="players/">Supported players</a></li><li><a href="changelog/">Changelog</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a></li></ul></div>
         <div class="foot-col"><p class="foot-h">Help</p><ul><li><a href="#faq">FAQ</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/issues/new/choose">Report a problem</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a">Ask a question</a></li><li><a href="privacy/">Privacy</a></li><li><a href="terms/">Terms</a></li></ul></div>
         <div class="foot-col"><p class="foot-h">About</p><ul><li><a href="https://github.com/Yudaotor/lyrimuse">GitHub</a></li><li><a href="https://youtu.be/0CRK4arrBOc">Video tour</a></li><li><a href="https://github.com/sponsors/Yudaotor">Sponsor</a></li><li><a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a></li></ul></div>
-        <div class="foot-col"><p class="foot-h">Language</p><ul><li><a href="./" lang="en" aria-current="page">English</a></li><li><a href="zh/" lang="zh-Hans">简体中文</a></li><li><a href="zh-Hant/" lang="zh-Hant">繁體中文</a></li></ul></div>
+        <div class="foot-col"><p class="foot-h">Language</p><ul><li><a href="./" lang="en" aria-current="page">English</a></li><li><a href="zh/" lang="zh-Hans">简体中文</a></li><li><a href="zh-Hant/" lang="zh-Hant">繁體中文</a></li><li><a href="ja/" lang="ja">日本語</a></li><li><a href="ko/" lang="ko">한국어</a></li><li><a href="es/" lang="es">Español</a></li><li><a href="fr/" lang="fr">Français</a></li><li><a href="de/" lang="de">Deutsch</a></li></ul></div>
       </nav>
     </div>
     <p class="foot-note">Apple Music, Spotify, KKBOX and other names and icons belong to their owners. Lyrimuse is an independent open-source project and isn&#x27;t affiliated with any of them.</p>

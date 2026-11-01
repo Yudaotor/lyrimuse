@@ -1465,7 +1465,7 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
 /* stand-ins for the content height (padding comes on top), close to the laid-out ones so the scrollbar barely
    moves as sections come in */
 .ch.watch { contain-intrinsic-size: auto 960px; }
-.ch-more { contain-intrinsic-size: auto 590px; }
+.ch-more { contain-intrinsic-size: auto 680px; }
 .ch-duo { contain-intrinsic-size: auto 1080px; }
 .ch-voices { contain-intrinsic-size: auto 720px; }
 .news { contain-intrinsic-size: auto 170px; }
@@ -1474,7 +1474,7 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
 @media (max-width: 820px) {
   .ch { contain-intrinsic-size: auto 620px; }
   .ch.watch { contain-intrinsic-size: auto 470px; }
-  .ch-more { contain-intrinsic-size: auto 760px; }
+  .ch-more { contain-intrinsic-size: auto 950px; }
   .ch-duo { contain-intrinsic-size: auto 1500px; }
   .ch-voices { contain-intrinsic-size: auto 1450px; }
   .news { contain-intrinsic-size: auto 450px; }
