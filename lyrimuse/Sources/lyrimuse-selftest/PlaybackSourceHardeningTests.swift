@@ -839,12 +839,13 @@ private func scriptServerTests() {
     // 进程被前一个请求占着:等锁也算在 timeout 里,等不到交 nil(调用方起子进程),不排到前一个答完。
     let busy = server(recycle: 100)
     _ = busy.request("warm", timeout: 5)
-    let hanging = Thread { _ = busy.request("hang", timeout: 0.4) }
+    // 占锁的请求要比断言窗口长得多:CI 机器慢,线程起来、拿到锁都可能要上百毫秒。
+    let hanging = Thread { _ = busy.request("hang", timeout: 2) }
     hanging.start()
-    Thread.sleep(forTimeInterval: 0.05)
+    Thread.sleep(forTimeInterval: 0.3)
     let waitStarted = Date()
     let queued = busy.request("x", timeout: 0.1)
-    expectEqual(queued == nil && Date().timeIntervalSince(waitStarted) < 0.3, true, "常驻脚本: 等锁超时交 nil")
+    expectEqual(queued == nil && Date().timeIntervalSince(waitStarted) < 1, true, "常驻脚本: 等锁超时交 nil")
     busy.stop()
     let clientSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift"), encoding: .utf8)) ?? ""
