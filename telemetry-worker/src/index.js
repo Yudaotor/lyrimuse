@@ -243,24 +243,27 @@ async function stats(request, env, url) {
   const since = utcDay(now - (days - 1) * DAY_MS);
   const since7 = utcDay(now - 6 * DAY_MS);
   const db = env.DB;
+  // excluded_installs 里的安装(作者自己的机器、测试机)不进任何统计;原始数据照存,删掉那一行就恢复统计。
+  const kept = (col = "install_id") => `${col} NOT IN (SELECT install_id FROM excluded_installs)`;
   const [daily, fresh, totals, latest, activity, crashes] = await Promise.all([
-    db.prepare(`SELECT day, COUNT(*) AS n FROM heartbeats WHERE day >= ?1 GROUP BY day ORDER BY day`).bind(since).all(),
-    db.prepare(`SELECT first_day AS day, COUNT(*) AS n FROM installs WHERE first_day >= ?1 GROUP BY first_day ORDER BY first_day`)
+    db.prepare(`SELECT day, COUNT(*) AS n FROM heartbeats WHERE day >= ?1 AND ${kept()} GROUP BY day ORDER BY day`).bind(since).all(),
+    db.prepare(`SELECT first_day AS day, COUNT(*) AS n FROM installs WHERE first_day >= ?1 AND ${kept()} GROUP BY first_day ORDER BY first_day`)
       .bind(since).all(),
-    db.prepare(`SELECT (SELECT COUNT(*) FROM installs) AS installs,
-                       (SELECT COUNT(DISTINCT install_id) FROM heartbeats WHERE day >= ?1) AS active7,
-                       (SELECT COUNT(DISTINCT install_id) FROM heartbeats WHERE day >= ?2) AS active_window`)
+    db.prepare(`SELECT (SELECT COUNT(*) FROM installs WHERE ${kept()}) AS installs,
+                       (SELECT COUNT(DISTINCT install_id) FROM heartbeats WHERE day >= ?1 AND ${kept()}) AS active7,
+                       (SELECT COUNT(DISTINCT install_id) FROM heartbeats WHERE day >= ?2 AND ${kept()}) AS active_window,
+                       (SELECT COUNT(*) FROM excluded_installs) AS excluded`)
       .bind(since7, since).first(),
     // 窗口内每台机器最近的那条心跳:版本、系统、功能分布都按它算。
-    db.prepare(`SELECT h.* FROM heartbeats h JOIN (SELECT install_id, MAX(day) AS d FROM heartbeats WHERE day >= ?1
+    db.prepare(`SELECT h.* FROM heartbeats h JOIN (SELECT install_id, MAX(day) AS d FROM heartbeats WHERE day >= ?1 AND ${kept()}
                 GROUP BY install_id) l ON h.install_id = l.install_id AND h.day = l.d`).bind(since).all(),
-    db.prepare(`SELECT install_id, players_played, hangs FROM activity WHERE day >= ?1`).bind(since).all(),
+    db.prepare(`SELECT install_id, players_played, hangs FROM activity WHERE day >= ?1 AND ${kept()}`).bind(since).all(),
     db.prepare(`SELECT signature, process, exception_type, termination_indicator, COUNT(*) AS n,
                        COUNT(DISTINCT install_id) AS installs, GROUP_CONCAT(DISTINCT app_version) AS versions,
                        MAX(received_at) AS last_at,
-                       (SELECT frames FROM crashes c2 WHERE c2.signature = c.signature ORDER BY received_at DESC LIMIT 1) AS frames,
-                       (SELECT termination_reasons FROM crashes c3 WHERE c3.signature = c.signature ORDER BY received_at DESC LIMIT 1) AS reasons
-                FROM crashes c WHERE day >= ?1 GROUP BY signature ORDER BY n DESC LIMIT 50`).bind(since).all(),
+                       (SELECT frames FROM crashes c2 WHERE c2.signature = c.signature AND ${kept("c2.install_id")} ORDER BY received_at DESC LIMIT 1) AS frames,
+                       (SELECT termination_reasons FROM crashes c3 WHERE c3.signature = c.signature AND ${kept("c3.install_id")} ORDER BY received_at DESC LIMIT 1) AS reasons
+                FROM crashes c WHERE day >= ?1 AND ${kept("c.install_id")} GROUP BY signature ORDER BY n DESC LIMIT 50`).bind(since).all(),
   ]);
   const rows = latest.results.map((r) => ({ ...r, features: safeJSON(r.features, {}) }));
   const featureFlags = ["translation", "romanization", "machine_translation", "show_in_dock", "launch_at_login", "beta_updates"];
@@ -275,7 +278,7 @@ async function stats(request, env, url) {
   return json({
     window_days: days,
     since,
-    totals: { installs: totals.installs, active_7d: totals.active7, active_window: totals.active_window },
+    totals: { installs: totals.installs, active_7d: totals.active7, active_window: totals.active_window, excluded: totals.excluded },
     daily_active: daily.results,
     new_installs: fresh.results,
     breakdown: {
