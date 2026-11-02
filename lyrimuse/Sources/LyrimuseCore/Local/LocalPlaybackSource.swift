@@ -1311,6 +1311,53 @@ public final class LocalPlaybackSource: ObservableObject {
     }
     public nonisolated static let startLeadFastSamples = 3
 
+    /// 一份暂停样本怎么处理:离已学值不远就学;偏出 `leadOutlierSecs` 以上的先扣着,下一份同向、
+    /// 跟它差不出 `leadOutlierAgreeSecs` 的偏离样本到了才两份一起学,中间来了正常样本就把它丢掉。
+    /// 还没学够(`established` 为 false)时照学,不拦先验离真值远的那几次。纯函数,selftest 直接覆盖。见 02 章决策 220。
+    public enum LeadSampleVerdict: Equatable { case learn, hold, learnHeldThenThis }
+    public nonisolated static func leadSampleVerdict(deviation: Double, heldDeviation: Double?, established: Bool) -> LeadSampleVerdict {
+        guard established, abs(deviation) > leadOutlierSecs else { return .learn }
+        if let held = heldDeviation, abs(held) > leadOutlierSecs, (held > 0) == (deviation > 0),
+           abs(held - deviation) <= leadOutlierAgreeSecs {
+            return .learnHeldThenThis
+        }
+        return .hold
+    }
+    public nonisolated static let leadOutlierSecs = 0.35
+    public nonisolated static let leadOutlierAgreeSecs = 0.25
+
+    /// 暂停那一拍量到、还没学进去的样本。摘下 AirPods 时耳机先让 Spotify 暂停、几秒后系统才把默认输出换掉,
+    /// 那一拍量的是换设备途中的残差:样本先挂着,下一次回到在播时、默认输出还是暂停时那台才学;期间输出一换就丢掉。
+    private struct PendingPauseLearn {
+        var routeUID: String?
+        var probeResidual: Double?
+        var startLead: (kind: SpotifyStartKind, sample: Double)?
+    }
+    private var pendingPauseLearn: PendingPauseLearn?
+    /// 被扣着的偏离样本(见 leadSampleVerdict):起播领先量按档记,探针领先量按输出设备记,存的是样本本身的值。
+    private var heldStartLeadOutlier: [SpotifyStartKind: Double] = [:]
+    private var heldProbeLeadOutlier: [String: Double] = [:]
+
+    private func queuePauseLearn(probeResidual: Double? = nil, startLead: (kind: SpotifyStartKind, sample: Double)? = nil) {
+        guard !PlaybackSimulation.isActive else { return }
+        var pending = pendingPauseLearn ?? PendingPauseLearn(routeUID: currentOutputRoute?.uid)
+        if pending.routeUID != currentOutputRoute?.uid { pending = PendingPauseLearn(routeUID: currentOutputRoute?.uid) }
+        if let probeResidual { pending.probeResidual = probeResidual }
+        if let startLead { pending.startLead = startLead }
+        pendingPauseLearn = pending
+    }
+
+    private func commitPendingPauseLearn() {
+        guard let pending = pendingPauseLearn else { return }
+        pendingPauseLearn = nil
+        guard pending.routeUID == currentOutputRoute?.uid else {
+            logger.notice("pause samples dropped: output route differs from the one at pause")
+            return
+        }
+        if let residual = pending.probeResidual { learnProbeLead(residual: residual) }
+        if let start = pending.startLead { learnSpotifyStartLead(kind: start.kind, sample: start.sample) }
+    }
+
     private static let spotifyStartLeadDefaultsKey = "np:spotifyStartLeadByKind"
     /// 每一档学过几个样本(决定 `learnedStartLead` 的 α)。旧版本没有这张表,按 0 算。
     private static let spotifyStartLeadSamplesDefaultsKey = "np:spotifyStartLeadSamplesByKind"
@@ -1353,6 +1400,25 @@ public final class LocalPlaybackSource: ObservableObject {
 
     private func learnSpotifyStartLead(kind: SpotifyStartKind, sample: Double) {
         guard !PlaybackSimulation.isActive else { return }
+        let current = loadStartLeadTable()[kind.rawValue] ?? Self.spotifyStartLeadPrior(kind)
+        let samplesSoFar = (env.defaults.dictionary(forKey: Self.spotifyStartLeadSamplesDefaultsKey) as? [String: Int])?[kind.rawValue] ?? 0
+        let held = heldStartLeadOutlier[kind]
+        switch Self.leadSampleVerdict(deviation: sample - current, heldDeviation: held.map { $0 - current },
+                                      established: samplesSoFar >= Self.startLeadFastSamples) {
+        case .hold:
+            heldStartLeadOutlier[kind] = sample
+            logger.notice("spotify start lead outlier held: kind=\(kind.rawValue, privacy: .public) sample=\(sample, format: .fixed(precision: 3)) current \(current, format: .fixed(precision: 3))")
+        case .learn:
+            heldStartLeadOutlier[kind] = nil
+            applySpotifyStartLeadSample(kind: kind, sample: sample)
+        case .learnHeldThenThis:
+            heldStartLeadOutlier[kind] = nil
+            if let held { applySpotifyStartLeadSample(kind: kind, sample: held) }
+            applySpotifyStartLeadSample(kind: kind, sample: sample)
+        }
+    }
+
+    private func applySpotifyStartLeadSample(kind: SpotifyStartKind, sample: Double) {
         var table = loadStartLeadTable()
         let current = table[kind.rawValue] ?? Self.spotifyStartLeadPrior(kind)
         var counts = (env.defaults.dictionary(forKey: Self.spotifyStartLeadSamplesDefaultsKey) as? [String: Int]) ?? [:]
@@ -1708,6 +1774,24 @@ public final class LocalPlaybackSource: ObservableObject {
     private func learnProbeLead(residual: Double) {
         guard !PlaybackSimulation.isActive else { return }
         guard let route = currentOutputRoute else { return }
+        let current = probeLeadSecs
+        let held = heldProbeLeadOutlier[route.uid]
+        switch Self.leadSampleVerdict(deviation: residual, heldDeviation: held.map { $0 - current },
+                                      established: probeLeadByDevice[route.uid] != nil) {
+        case .hold:
+            heldProbeLeadOutlier[route.uid] = current + residual
+            logger.notice("probe lead outlier held: residual=\(residual, format: .fixed(precision: 3)) (\(route.transport.rawValue, privacy: .public)) lead \(current, format: .fixed(precision: 3))")
+        case .learn:
+            heldProbeLeadOutlier[route.uid] = nil
+            applyProbeLeadResidual(residual, route: route)
+        case .learnHeldThenThis:
+            heldProbeLeadOutlier[route.uid] = nil
+            if let held { applyProbeLeadResidual(held - current, route: route) }
+            applyProbeLeadResidual(current + residual - probeLeadSecs, route: route)
+        }
+    }
+
+    private func applyProbeLeadResidual(_ residual: Double, route: AudioOutputRoute.Current) {
         let prior = probeLeadByDevice[route.uid]
         let next = Self.learnedProbeLead(current: prior ?? Self.probeLeadPrior(for: route.transport),
                                          residual: residual, hasPrior: prior != nil)
@@ -1724,6 +1808,10 @@ public final class LocalPlaybackSource: ObservableObject {
         guard route != currentOutputRoute else { return }
         let before = probeLeadSecs
         currentOutputRoute = route
+        if pendingPauseLearn != nil {
+            pendingPauseLearn = nil
+            logger.notice("pause samples dropped: output route changed before playback resumed")
+        }
         logger.notice("output route changed: \(route?.name ?? "-", privacy: .private) (\(route?.transport.rawValue ?? "-", privacy: .public)) probe lead \(before, format: .fixed(precision: 3)) -> \(self.probeLeadSecs, format: .fixed(precision: 3))")
         if posBiasFromProbe, posWasPlaying,
            lastSnapshot?.bundleIdentifier == PlaybackPlayer.spotify.bundleIdentifier {
@@ -4411,7 +4499,7 @@ public final class LocalPlaybackSource: ObservableObject {
                let frozen = snapshot.anchorElapsedTime {
                 let oursMs = anchor == nil ? pausedPositionMs : anchor?.extrapolatedPositionMs(now: now)
                 if let oursMs {
-                    learnProbeLead(residual: Double(oursMs) / 1000 - frozen)
+                    queuePauseLearn(probeResidual: Double(oursMs) / 1000 - frozen)
                 }
             }
             // Spotify 自己的钟按起播方式给的偏置:暂停那一拍拿冻结值反推这一段真实的领先量,学进那一档
@@ -4460,6 +4548,7 @@ public final class LocalPlaybackSource: ObservableObject {
         let isFirstObservationSinceLaunch = !posBiasRestoreChecked
         posBiasRestoreChecked = true
         if playing, let duration = snapshot.trackDuration {
+            commitPendingPauseLearn()
             // 切歌/加载瞬间 Spotify 会短暂报 rate=0(playing 仍 true),按 1 计——与
             // 引擎的 reconcile 规则一致。不归一的话 predicted 停走,下一拍正常
             // 前进的读数会被误判成 seek 跳变,顺手把自然切歌偏置也清了(
@@ -4707,7 +4796,7 @@ public final class LocalPlaybackSource: ObservableObject {
             // 屏上位置得是被暂停事件当场冻住的那一刻(frozenByEvent),淡出量那个常数才对得上。
             if pauseAnchorWasFrozenByEvent, let learn = pauseLearnStart,
                let sample = Self.pauseResidualLead(bias: learn.bias, pauseDelta: Double(paused - shown) / 1000) {
-                learnSpotifyStartLead(kind: learn.kind, sample: sample)
+                queuePauseLearn(startLead: (learn.kind, sample))
             }
         }
         // 无论这一轮是否在播放,都要更新这三个状态,供下一轮判断"是不是刚从暂停里恢复

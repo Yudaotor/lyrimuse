@@ -1011,6 +1011,33 @@ func runPlaybackPositionTests() {
             expectEqual(r3(LocalPlaybackSource.learnedStartLead(current: 0.36, sample: 0.26,
                                                                 samplesSoFar: LocalPlaybackSource.startLeadFastSamples)), 0.33,
                         "起播领先学习: 第 4 个样本起回到 α=0.3")
+            // 暂停样本把关:换输出设备途中的暂停能偏出 +0.67,正常样本偏差在 0.04 以内。见 02 章决策 220。
+            typealias Verdict = LocalPlaybackSource.LeadSampleVerdict
+            expectEqual(LocalPlaybackSource.leadSampleVerdict(deviation: 0.674, heldDeviation: nil, established: true), Verdict.hold,
+                        "领先样本把关: 学够之后单独一份偏 0.67 的先扣着")
+            expectEqual(LocalPlaybackSource.leadSampleVerdict(deviation: -0.028, heldDeviation: 0.674, established: true), Verdict.learn,
+                        "领先样本把关: 正常样本照学(扣着的那份随之作废)")
+            expectEqual(LocalPlaybackSource.leadSampleVerdict(deviation: 0.6, heldDeviation: 0.674, established: true), Verdict.learnHeldThenThis,
+                        "领先样本把关: 接连两份同向偏离且彼此接近 → 真变了,两份一起学")
+            expectEqual(LocalPlaybackSource.leadSampleVerdict(deviation: -0.6, heldDeviation: 0.674, established: true), Verdict.hold,
+                        "领先样本把关: 反向的偏离不互相确认")
+            expectEqual(LocalPlaybackSource.leadSampleVerdict(deviation: 1.1, heldDeviation: 0.5, established: true), Verdict.hold,
+                        "领先样本把关: 两份偏离差出 0.25 以上不互相确认")
+            expectEqual(LocalPlaybackSource.leadSampleVerdict(deviation: 0.674, heldDeviation: nil, established: false), Verdict.learn,
+                        "领先样本把关: 还没学够时照学(先验可能离真值远)")
+            expectEqual(LocalPlaybackSource.leadSampleVerdict(deviation: 0.34, heldDeviation: nil, established: true), Verdict.learn,
+                        "领先样本把关: 门槛以内照学")
+            do {
+                let src = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                    .appendingPathComponent("LyrimuseCore/Local/LocalPlaybackSource.swift"), encoding: .utf8)) ?? ""
+                expectEqual(sourceHas(src, "queuePauseLearn(probeResidual: Double(oursMs) / 1000 - frozen)")
+                            && sourceHas(src, "queuePauseLearn(startLead: (learn.kind, sample))"), true,
+                            "暂停样本: 暂停那一拍只挂起、不当场学")
+                expectEqual(sourceHas(src, "if playing, let duration = snapshot.trackDuration {\n            commitPendingPauseLearn()"), true,
+                            "暂停样本: 回到在播才提交")
+                expectEqual(sourceHas(src, "currentOutputRoute = route\n        if pendingPauseLearn != nil {\n            pendingPauseLearn = nil"), true,
+                            "暂停样本: 挂着期间默认输出一换就丢掉")
+            }
             // 开播钟起步晚:真机首笔 0.001、1.3s 后 0.087,扣完偏置 −0.167、外推 1.061。
             expectEqual(LocalPlaybackSource.playerClockStartedLate(raw: 0.087, reported: -0.167, predicted: 1.061), true,
                         "开播起步晚: 曲首读数落在外推后面 → 跟着钟重新对准、偏置保留")
