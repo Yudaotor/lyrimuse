@@ -1207,11 +1207,10 @@ public final class LocalPlaybackSource: ObservableObject {
 
     // ---- Spotify 自己的钟:按起播方式分档的领先量 ----
     //
-    // `player position` 是解码器的钟,每次起播都先于出声跑一截,量取决于那一刻缓冲了多少,
-    // **按起播方式分得很开、同一种方式里很稳**(ScreenCaptureKit 截 Spotify 的音频当真值直接量的,
-    // 数据见 02 章「订正:自然切歌之后偏快、暂停才对齐」):手动点播 / 没预载的换歌 ~0.24,播放中拖动 ~0.45,预载好的无缝换歌 0.49~0.73
-    // (这一档波动最大,先验取均值)。
-    // 暂停后恢复那一档不在这里 —— 那一拍有真值,当场量(resumeLead)。
+    // `player position` 比恢复播放后的那套钟(暂停冻结值 + 恢复后走过的时间,见 resumeLead)领先一截,
+    // **按起播方式分得很开、同一种方式里很稳**:手动点播 / 没预载的换歌 ~0,播放中拖动 ~0.22,
+    // 预载好的无缝换歌 ~0.23、广告之后 ~0.25(暂停反推的样本,见 02 章决策 222)。
+    // 暂停后恢复那一档不在这里 —— 那一拍当场量(resumeLead)。
     //
     // 别拿"上一首连续放完 = 新曲真值"去估新曲的领先量:交界处声音并不连续(实测新曲出声比
     // 旧曲名义结尾晚 0.5~0.8s,随曲目变),连续性一估就小、甚至估成负数被拒,整首偏快。
@@ -1228,13 +1227,13 @@ public final class LocalPlaybackSource: ObservableObject {
         /// 预载好的无缝换歌(新曲的钟在旧曲名义结尾那一刻就开始走),含单曲循环回绕。
         case gapless
         /// 广告放完接着放的那首。广告报的时长不准(实测报 29.99、29.09 就结束),"钟接不接得上"那道判据
-        /// 在这里判不准;领先量跟预载无缝换歌同一量级,不能学进 fresh(会把手动点播那档抬高一倍多)。
+        /// 在这里判不准;领先量跟预载无缝换歌同一量级,不能学进 fresh(会把手动点播那档抬高 ~0.25s)。
         case afterAd
     }
 
     /// 同一首歌里读数跳回开头时,这是重新起播还是拖动。纯函数,selftest 直接覆盖。
     ///
-    /// 两者在读数上一模一样(同曲、位置回到 ~0),领先量却差一截(重新起播同 fresh ~0.25,拖动 ~0.45~0.5)。
+    /// 两者在读数上一模一样(同曲、位置回到 ~0),领先量却差一截(重新起播同 fresh ~0,拖动 ~0.2)。
     /// 能分开它们的是 Spotify 的分布式通知:重新起播(点同一首 / `play track`)先后发 `Stopped` 与
     /// `Playing, Playback Position 0`,拖动一条都不发。数据见 02 章「Spotify 重新起播」。
     ///
@@ -1250,10 +1249,10 @@ public final class LocalPlaybackSource: ObservableObject {
 
     public nonisolated static func spotifyStartLeadPrior(_ kind: SpotifyStartKind) -> Double {
         switch kind {
-        case .fresh: return 0.24
-        case .seek: return 0.45
-        case .gapless: return 0.66
-        case .afterAd: return 0.66
+        case .fresh: return spotifyStartLeadFloorSecs
+        case .seek: return 0.22
+        case .gapless: return 0.23
+        case .afterAd: return 0.25
         }
     }
 
@@ -1283,25 +1282,26 @@ public final class LocalPlaybackSource: ObservableObject {
         abs(clockOverrun) <= naturalAdvanceWindowSecs && abs(raw - clockOverrun) <= preloadedClockToleranceSecs
     }
     /// 实测:预载时两者差 −0.9~+0.65s,没预载时新曲的钟晚 1.9s,容差取两簇之间。别收回 0.5:差 0.6~0.9 的预载换歌
-    /// 会落进 fresh,把手动点播那档(真实 ~0.25)学到 0.6,点播的歌到第一次暂停前一直偏慢(见 02 章决策 100)。
+    /// 会落进 fresh,把手动点播那档(真实 ~0)学高 ~0.35s,点播的歌到第一次暂停前一直偏慢(见 02 章决策 100)。
     public nonisolated static let preloadedClockToleranceSecs = 1.2
-
-    /// 暂停那一拍 Spotify 发布的冻结值比我们停在的位置**本来就大**这么多:发出暂停后声音还要淡出
-    /// ~0.25s 才停(实测 0.246~0.318),冻结值对应的是停下那一刻。偏置量得准时 `pause transition` 的
-    /// delta 实测 +0.25~+0.30。
-    public nonisolated static let spotifyPauseFadeSecs = 0.27
 
     /// 暂停那一拍反推这一段真实的领先量。纯函数,selftest 直接覆盖。
     /// - bias: 这一段在用的偏置(暂停作废之前的值)
     /// - pauseDelta: 冻结值 − 暂停那一刻屏上位置
-    /// 真实领先 = 在用的偏置 + (淡出量 − delta)。残差超过 1s 多半是别的事(暂停前拖过 / 事件没跟上),不学。
+    /// 冻结值是 Spotify 收到暂停那一刻的读数;暂停事件要等声音放完淡出(~0.23s)才到,恢复后声音从停下的地方接着放、
+    /// 屏上从冻结值接着走。所以偏置跟恢复后那套钟一致时,事件那一刻屏上位置 = 冻结值,真实领先 = 在用的偏置 − delta。
+    /// 别给 delta 加一个「淡出量」再比:目标偏多少,暂停前就整首比恢复后慢多少,暂停一下才对齐(见 02 章决策 222)。
+    /// 残差超过 1s 多半是别的事(暂停前拖过 / 事件没跟上),不学;略负(手动点播那档真值 ≈0)按下限学。
     public nonisolated static func pauseResidualLead(bias: Double, pauseDelta: Double) -> Double? {
-        let residual = spotifyPauseFadeSecs - pauseDelta
-        guard abs(residual) <= 1.0 else { return nil }
-        let lead = bias + residual
-        guard lead >= 0, lead <= naturalAdvanceMaxBiasSecs else { return nil }
-        return lead
+        guard abs(pauseDelta) <= 1.0 else { return nil }
+        let lead = bias - pauseDelta
+        guard lead >= -leadNegativeSlackSecs, lead <= naturalAdvanceMaxBiasSecs else { return nil }
+        return max(lead, spotifyStartLeadFloorSecs)
     }
+    /// 起播领先量不低于这个值:偏置为 0 时不记起播档(setReportedBias),那一档就再也收不到暂停样本。
+    public nonisolated static let spotifyStartLeadFloorSecs = 0.02
+    /// 反推出的领先量比 0 还低这么多就不学(多半是暂停前拖过)。
+    public nonisolated static let leadNegativeSlackSecs = 0.1
 
     /// 学到的领先量怎么更新:EMA,这一档学过的样本不到 `startLeadFastSamples` 个时 α=0.5,之后 α=0.3。
     /// 先验只在一台机器上量过几次,离这台机器的真值可以差出 0.3~0.4s,而样本只在暂停时才有一个;全程 α=0.3
@@ -1369,13 +1369,19 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 里作废那一档(按规则作废,不按数值大小猜哪个坏了)。没有版本号的旧表算 1。
     /// 2:广告之后那首从 fresh 拆出成 afterAd,旧 fresh 值里混着广告之后的样本,作废(见决策 47)。
     /// 3:认预载的容差放宽(preloadedClockToleranceSecs),旧 fresh 值里混着被判成 fresh 的预载换歌,作废(见 02 章决策 100)。
-    public nonisolated static let spotifyStartLeadSchema = 3
+    /// 4:暂停样本以「事件那一刻屏上 = 冻结值」为准(pauseResidualLead),每个样本比版本 3 恰好小
+    /// `startLeadSchema4ShiftSecs`;EMA 是线性的,旧值逐档减这么多就等于按新规则重学,样本数保留(见 02 章决策 222)。
+    public nonisolated static let spotifyStartLeadSchema = 4
+    public nonisolated static let startLeadSchema4ShiftSecs = 0.27
 
     /// 把按旧规则学的表迁到当前版本。纯函数,selftest 直接覆盖。
     public nonisolated static func migratedStartLeadTable(_ table: [String: Double], fromSchema: Int) -> [String: Double] {
         var migrated = table
         // 2、3 两版都只改了 fresh 的判定。
         if fromSchema < 3 { migrated.removeValue(forKey: SpotifyStartKind.fresh.rawValue) }
+        if fromSchema < 4 {
+            migrated = migrated.mapValues { max($0 - startLeadSchema4ShiftSecs, spotifyStartLeadFloorSecs) }
+        }
         return migrated
     }
 
@@ -1444,7 +1450,8 @@ public final class LocalPlaybackSource: ObservableObject {
     ///
     /// 那个钟是解码器的钟,**每次重新起播都先跑一截**:恢复后第一笔读数比「暂停值 + 恢复后走过的时间」
     /// 领先 0~1.5s(实测见 02 章「订正:自然切歌之后偏快、暂停才对齐」),下一拍伺服就吸附过去、整首偏快,直到下一次暂停它才对回来。
-    /// 播种值(resumeSeedSeconds:暂停值 + 状态信号至今)就是真声,差值即领先量。守卫与自然切歌同一套。
+    /// 播种值(resumeSeedSeconds:暂停值 + 状态信号至今)是起播领先量也对齐的那套钟(见 pauseResidualLead),
+    /// 差值即领先量。守卫与自然切歌同一套。
     public nonisolated static func resumeLead(raw: Double, seed: Double) -> Double? {
         let lead = raw - seed
         guard lead > naturalAdvanceMinBiasSecs, lead <= naturalAdvanceMaxBiasSecs else { return nil }
@@ -2493,7 +2500,7 @@ public final class LocalPlaybackSource: ObservableObject {
                     resumeAnchorWatch = Self.resumeAnchorWatchStart(bundleID: lastSnapshot?.bundleIdentifier,
                                                                     anchorElapsed: anchorElapsedTime, now: now)
                 }
-                // Spotify 自己的钟恢复播放后重新领先(见 resumeLead):播种值就是真声,差值折进偏置。
+                // Spotify 自己的钟恢复播放后重新领先(见 resumeLead):差值折进偏置,屏上从播种值接着走。
                 if gaplessLeadBundleID != nil, anchorElapsedTime == nil, resumeSignalAge != nil || freshSignalAge != nil,
                    pausedPositionMs != nil,
                    let lead = Self.resumeLead(raw: rawReported, seed: trackPosSeconds) {
@@ -4809,7 +4816,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if let shown = pauseShownMs, let paused = newPausedPositionMs {
             // 播放→暂停翻转的那一拍。delta<0 = 显示往回退,>0 = 往前补。
             logger.notice("pause transition: shown=\(Double(shown) / 1000, format: .fixed(precision: 3)) frozenRaw=\(snapshot.elapsedTime ?? -1, format: .fixed(precision: 3)) bias=\(self.posReportedBiasSecs, format: .fixed(precision: 3)) paused=\(Double(paused) / 1000, format: .fixed(precision: 3)) delta=\(Double(paused - shown) / 1000, format: .fixed(precision: 3)) frozenByEvent=\(pauseAnchorWasFrozenByEvent) errEMA=\(self.posErrEMA, format: .fixed(precision: 3))")
-            // 屏上位置得是被暂停事件当场冻住的那一刻(frozenByEvent),淡出量那个常数才对得上。
+            // 屏上位置得是被暂停事件当场冻住的那一刻(frozenByEvent),跟冻结值比才有意义。
             if pauseAnchorWasFrozenByEvent, let learn = pauseLearnStart,
                let sample = Self.pauseResidualLead(bias: learn.bias, pauseDelta: Double(paused - shown) / 1000) {
                 queuePauseLearn(startLead: (learn.kind, sample))
