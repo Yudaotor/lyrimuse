@@ -31,6 +31,8 @@ public enum WebLyricsObsPayload {
         public var alignment: OverlayDuetAlignmentOverride
         public var overflow: OverlayLineOverflow
         public var spacing: OverlayRowSpacing.Values
+        /// 读音 / 译文 / 下一句的字号占主句的比例,同悬浮歌词(`OverlayRowFontScale`)。
+        public var scale: OverlayRowFontScale.Values
         public var width: Double
         public var hideWhenPaused: Bool
         public var lineChangeAnimation: Bool
@@ -44,7 +46,7 @@ public enum WebLyricsObsPayload {
         public init(fontFamily: String, fontSize: Double, weights: [Int], sung: String, unsung: String,
                     stroke: String?, card: String?, showRomanization: Bool, showTranslation: Bool, showNextLine: Bool,
                     karaoke: Bool, alignment: OverlayDuetAlignmentOverride, overflow: OverlayLineOverflow,
-                    spacing: OverlayRowSpacing.Values, width: Double, hideWhenPaused: Bool, lineChangeAnimation: Bool,
+                    spacing: OverlayRowSpacing.Values, scale: OverlayRowFontScale.Values = .standard, width: Double, hideWhenPaused: Bool, lineChangeAnimation: Bool,
                     duetStageInset: Double, duetCenterInset: Double, songCard: SongCard = .off, rainbow: Bool = false) {
             self.fontFamily = fontFamily
             self.fontSize = fontSize
@@ -60,6 +62,7 @@ public enum WebLyricsObsPayload {
             self.alignment = alignment
             self.overflow = overflow
             self.spacing = spacing
+            self.scale = scale
             self.width = width
             self.hideWhenPaused = hideWhenPaused
             self.lineChangeAnimation = lineChangeAnimation
@@ -80,6 +83,7 @@ public enum WebLyricsObsPayload {
             "sung": s.sung, "unsung": s.unsung, "roma": s.showRomanization, "tr": s.showTranslation,
             "next": s.showNextLine, "karaoke": s.karaoke, "align": s.alignment.rawValue, "overflow": s.overflow.rawValue,
             "spacing": [s.spacing.romanization, s.spacing.translation, s.spacing.nextLine],
+            "scale": [s.scale.romanization, s.scale.translation, s.scale.nextLine],
             "width": s.width, "hidePaused": s.hideWhenPaused, "anim": s.lineChangeAnimation,
             "duet": [s.duetStageInset, s.duetCenterInset], "songCard": s.songCard.rawValue,
         ]

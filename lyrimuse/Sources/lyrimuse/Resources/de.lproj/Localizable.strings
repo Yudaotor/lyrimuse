@@ -315,6 +315,7 @@
 "上移" = "Nach oben";
 "下一个里程碑" = "Nächster Meilenstein";
 "下一句" = "Nächste Zeile";
+"下一句大小" = "Größe nächste Zeile";
 "下一句间距" = "Abstand nächste Zeile";
 "下一步" = "Weiter";
 "下一页" = "Nächste";
@@ -2496,6 +2497,7 @@
 "诊断信息导出失败，请选择其他位置后重试" = "Diagnose konnte nicht exportiert werden. Versuche einen anderen Speicherort";
 "译文" = "Übersetzung";
 "译文与读音" = "Übersetzung & Umschrift";
+"译文大小" = "Größe Übersetzung";
 "译文接在原文后面，排成一行，「字号」照常生效" = "Die Übersetzung folgt dem Original in derselben Zeile, „Größe“ gilt weiterhin";
 "译文语言" = "Übersetzungssprache";
 "译文间距" = "Abstand Übersetzung";
@@ -2563,6 +2565,7 @@
 "读取播放状态，获取歌词和封面" = "Liest den Wiedergabestatus und lädt Liedtext und Cover";
 "读取本地记录文件失败" = "Lokale Datensatzdatei nicht lesbar";
 "读音" = "Umschrift";
+"读音大小" = "Größe Umschrift";
 "读音间距" = "Abstand Umschrift";
 "调整" = "Anpassen";
 "调整宽度" = "Breite anpassen";

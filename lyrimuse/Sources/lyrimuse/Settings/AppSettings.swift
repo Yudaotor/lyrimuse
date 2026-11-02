@@ -342,6 +342,9 @@ final class AppSettings: ObservableObject {
         static let overlayRomanizationSpacing = "np:overlayRomanizationSpacing"
         static let overlayTranslationSpacing = "np:overlayTranslationSpacing"
         static let overlayNextLineSpacing = "np:overlayNextLineSpacing"
+        static let overlayRomanizationScale = "np:overlayRomanizationScale"
+        static let overlayTranslationScale = "np:overlayTranslationScale"
+        static let overlayNextLineScale = "np:overlayNextLineScale"
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
         static let showLyricsInTouchBar = "np:showLyricsInTouchBar"
         static let touchBarLyricsKaraoke = "np:touchBarLyricsKaraoke"
@@ -1106,6 +1109,30 @@ final class AppSettings: ObservableObject {
     var overlayRowSpacing: OverlayRowSpacing.Values {
         .init(romanization: overlayRomanizationSpacing, translation: overlayTranslationSpacing,
               nextLine: overlayNextLineSpacing)
+    }
+    /// 悬浮歌词读音 / 译文 / 下一句的字号占主句的比例。存原值,读的地方夹回范围,见 `OverlayRowFontScale`。
+    @Published var overlayRomanizationScale: Double {
+        didSet {
+            defaults.set(overlayRomanizationScale, forKey: Keys.overlayRomanizationScale)
+            recomputeFonts()
+        }
+    }
+    @Published var overlayTranslationScale: Double {
+        didSet {
+            defaults.set(overlayTranslationScale, forKey: Keys.overlayTranslationScale)
+            recomputeFonts()
+        }
+    }
+    @Published var overlayNextLineScale: Double {
+        didSet {
+            defaults.set(overlayNextLineScale, forKey: Keys.overlayNextLineScale)
+            recomputeFonts()
+        }
+    }
+    /// 上面三项合成一组(夹回范围)。
+    var overlayRowFontScale: OverlayRowFontScale.Values {
+        .init(romanization: overlayRomanizationScale, translation: overlayTranslationScale,
+              nextLine: overlayNextLineScale)
     }
     // 默认关闭:状态栏平时只是个不起眼的小图标,打开后会换成当前歌词行的文字,占用
     // 面积明显变大——不应该在谁都没主动选择的情况下就改变状态栏原有的观感。
@@ -2374,30 +2401,33 @@ final class AppSettings: ObservableObject {
     @Published private(set) var notchSecondaryNSFont: NSFont = .systemFont(ofSize: 11, weight: .medium)
 
     // 四行的字重从**用户选的那一档**推导(档位差见 `OverlayFontWeight`,那边有 selftest 钉着阶梯)。
+    // 副行三行的字号 = 主句字号 × `overlayRowFontScale` 那一项。
     private func recomputeFonts() {
         let weight = overlayFontWeight
+        let size = CGFloat(fontSize)
+        let scale = overlayRowFontScale
         mainFont = .overlayFont(
-            familyName: fontFamilyName, size: CGFloat(fontSize), weight: weight)
+            familyName: fontFamilyName, size: size, weight: weight)
         romanizationFont = .overlayFont(
-            familyName: fontFamilyName, size: CGFloat(fontSize) * 0.65,
+            familyName: fontFamilyName, size: size * scale.romanization,
             weight: weight.lighter(by: OverlayFontWeight.romanizationSteps))
         translationFont = .overlayFont(
-            familyName: fontFamilyName, size: CGFloat(fontSize) * 0.7,
+            familyName: fontFamilyName, size: size * scale.translation,
             weight: weight.lighter(by: OverlayFontWeight.translationSteps))
         previewFont = .overlayFont(
-            familyName: fontFamilyName, size: CGFloat(fontSize) * 0.7,
+            familyName: fontFamilyName, size: size * scale.nextLine,
             weight: weight.lighter(by: OverlayFontWeight.nextLinePreviewSteps))
         // AppKit 孪生:同一组入参、同一次派生,别在别处另算一遍。
         overlayNSFonts = OverlayNSFonts(
-            main: .overlayFont(familyName: fontFamilyName, size: CGFloat(fontSize), weight: weight),
+            main: .overlayFont(familyName: fontFamilyName, size: size, weight: weight),
             romanization: .overlayFont(
-                familyName: fontFamilyName, size: CGFloat(fontSize) * 0.65,
+                familyName: fontFamilyName, size: size * scale.romanization,
                 weight: weight.lighter(by: OverlayFontWeight.romanizationSteps)),
             translation: .overlayFont(
-                familyName: fontFamilyName, size: CGFloat(fontSize) * 0.7,
+                familyName: fontFamilyName, size: size * scale.translation,
                 weight: weight.lighter(by: OverlayFontWeight.translationSteps)),
             preview: .overlayFont(
-                familyName: fontFamilyName, size: CGFloat(fontSize) * 0.7,
+                familyName: fontFamilyName, size: size * scale.nextLine,
                 weight: weight.lighter(by: OverlayFontWeight.nextLinePreviewSteps)))
     }
 
@@ -2574,6 +2604,12 @@ final class AppSettings: ObservableObject {
             ?? OverlayRowSpacing.defaultValue
         overlayNextLineSpacing = (defaults.object(forKey: Keys.overlayNextLineSpacing) as? Double)
             ?? OverlayRowSpacing.defaultValue
+        overlayRomanizationScale = (defaults.object(forKey: Keys.overlayRomanizationScale) as? Double)
+            ?? OverlayRowFontScale.Item.romanization.defaultValue
+        overlayTranslationScale = (defaults.object(forKey: Keys.overlayTranslationScale) as? Double)
+            ?? OverlayRowFontScale.Item.translation.defaultValue
+        overlayNextLineScale = (defaults.object(forKey: Keys.overlayNextLineScale) as? Double)
+            ?? OverlayRowFontScale.Item.nextLine.defaultValue
         showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false
         showLyricsInTouchBar = (defaults.object(forKey: Keys.showLyricsInTouchBar) as? Bool) ?? false
         touchBarLyricsKaraoke = (defaults.object(forKey: Keys.touchBarLyricsKaraoke) as? Bool) ?? Self.defaultTouchBarLyricsKaraoke

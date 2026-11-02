@@ -1046,9 +1046,11 @@ enum WebLyricsPages {
           // line-height: normal 下行框比拉丁字母高,按列顶排的话夹英文的句子里读音一高一低。
           // 组末尾的空白(词间的空格)挪到列外单独占位、读音两侧留一点白:留在列里的话读音比字宽时空格被读音盖住,
           // 相邻两组读音首尾相接(同原生排版的 `OverlayRowLayout.columnWidth`)。
+          // 读音 / 译文 / 下一句的字号占主句的比例(style.scale,同悬浮歌词的「副行」三项)。
+          function rowEm(i) { return (style.scale || [.65, .7, .7])[i]; }
           function columns(line, fill, mainEm) {
             const u = unit();
-            const readStyle = `font-size:${.65 / mainEm}em;font-weight:${style.weights[1]};margin-top:${(style.spacing[0] - 4) * u}px;padding:0 .12em;` +
+            const readStyle = `font-size:${rowEm(0) / mainEm}em;font-weight:${style.weights[1]};margin-top:${(style.spacing[0] - 4) * u}px;padding:0 .12em;` +
               (fill ? '--sung:var(--sung-reading)' : '');
             let i = 0, html = '';
             for (const [n, reading] of line.g) {
@@ -1075,12 +1077,12 @@ enum WebLyricsPages {
           function secondaryRows(line, side, cls) {
             let html = '';
             if (style.roma && line.roma && !perWord(line)) {
-              html += row(esc(line.roma), { em: .65, weight: style.weights[1], color: color(60), pct: 60, top: style.spacing[0], side, cls });
+              html += row(esc(line.roma), { em: rowEm(0), weight: style.weights[1], color: color(60), pct: 60, top: style.spacing[0], side, cls });
             }
             // 紧跟读音(整行或逐词)的译文不往上挤:网页的行框比原生卡片里的窄,负的行距会让读音的下伸部(g、p)压到译文上。
             const afterReading = (style.roma && line.roma) || perWord(line);
             const trTop = afterReading ? Math.max(0, style.spacing[1]) : style.spacing[1];
-            if (style.tr && line.tr) html += row(esc(line.tr), { em: .7, weight: style.weights[2], color: color(75), pct: 75, top: trTop, side, cls });
+            if (style.tr && line.tr) html += row(esc(line.tr), { em: rowEm(1), weight: style.weights[2], color: color(75), pct: 75, top: trTop, side, cls });
             return html;
           }
           function nextRow(next, em, weight, upcoming) {
@@ -1105,7 +1107,7 @@ enum WebLyricsPages {
               if (style.next && next) {
                 // 下一句换了个人唱时用主行的字号,换过去那一刻不跳。
                 const big = style.align === 'automatic' && !!next.s && next.s !== line.s;
-                html += nextRow(next, big ? 1 : .7, style.weights[big ? 0 : 3], false);
+                html += nextRow(next, big ? 1 : rowEm(2), style.weights[big ? 0 : 3], false);
               }
             }
             card.innerHTML = html;
@@ -1164,7 +1166,7 @@ enum WebLyricsPages {
             ghost.style.paddingTop = '0px';
             for (const r of card.querySelectorAll(':scope > .row.main, :scope > .row.sub')) ghost.appendChild(r.cloneNode(true));
             return { ghost, mainTop: main.getBoundingClientRect().top, next: next ? next.getBoundingClientRect() : null,
-                     nextEm: next ? parseFloat(next.style.fontSize) || .7 : 1 };
+                     nextEm: next ? parseFloat(next.style.fontSize) || rowEm(2) : 1 };
           }
           function animateRise(before) {
             const main = card.querySelector(':scope > .row.main');

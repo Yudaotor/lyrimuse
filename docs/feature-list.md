@@ -888,7 +888,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 305 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 308 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -984,6 +984,9 @@ Every setting in the Settings window, by where it lives: 305 in all. Type a name
 - **Font**
 - **Weight**
 - **Font Size**
+- **Romanization Size**
+- **Translation Size**
+- **Next Line Size**
 
 ### Lyrics Display › Floating Lyrics › Color
 

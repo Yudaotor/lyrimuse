@@ -35,49 +35,63 @@ struct OverlayTypeSettingsRows: View {
     }
 
     var body: some View {
-        SettingsRowGroup {
-            VStack(spacing: 0) {
-                SettingsRow(icon: "character", title: L10n.t("字体")) {
-                    // 系统装了什么就能选什么(带搜索、每行用字体自己渲染),见 FontFamilyPicker 顶部注释。
-                    FontFamilyPicker(selection: $settings.fontFamilyName)
-                }
-                CardDivider()
-                // 粗细排在字体和字号之间:粗细是"这个字体族的哪一个粗细",跟字体是同一件事的两半,中间隔着字号会把它
-                // 读成一个独立维度。
-                //
-                // 界面上叫「粗细」不叫「字重」:「字重」是排版行话,界面用日常说法。代码里的标识符仍然叫
-                // `overlayFontWeight` / `OverlayFontWeight`,行业术语在那边更准确;这条不对称是有意的,别为了"统一"把界面文案改回去。
-                //
-                // 这里选的是主歌词行那一档,罗马音/译文/下一句三行按固定档位差自动跟着细(见 `OverlayFontWeight`)。
-                // 不做成四行各自可调:那是四个滑杆的复杂度,换来的是可以把译文调得比主歌词还粗——一个没人想要的状态。
-                //
-                // 六个档位:分段放不下(英文更放不下),用玻璃下拉,同 `FontFamilyPicker` 那一行的形态。
-                SettingsRow(icon: "bold", title: L10n.t("粗细")) {
-                    SettingsGlassMenuPicker(
-                        selection: $settings.overlayFontWeight,
-                        options: OverlayFontWeight.allCases,
-                        label: \.displayName,
-                        compact: true
-                    )
-                }
-                CardDivider()
-                SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
-                    HStack(spacing: 8) {
-                        // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点
-                        // (「没有意义,不好看」),量化语义一模一样。
-                        // 拖动中节流提交(SliderCommitThrottle):每写一次 fontSize,didSet 都要 recomputeFonts()
-                        // 一写五发、写盘,真窗口和编辑台各重排一次。
-                        SteppedSlider(value: Binding(
-                            get: { fontSizeThrottle.value(or: settings.fontSize) },
-                            set: { fontSizeThrottle.update($0, commit: commitFontSize) }
-                        ), in: AppSettings.overlayFontSizeRange, step: 1,
-                           onEditingChanged: { fontSizeThrottle.editingChanged($0, commit: commitFontSize) })
-                            .frame(width: 150)
-                        Text(String(format: L10n.t("%@pt"), "\(Int(fontSizeThrottle.value(or: settings.fontSize)))"))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .frame(width: 46, alignment: .trailing)
-                    }
+        SettingsRowGroupStack {
+            SettingsRowGroup { mainRows }
+            // 读音 / 译文 / 下一句的字号占主句的比例,按卡片里从上到下的顺序三格一行,同「排版」里三项间距的样子。
+            // 那一行在「内容」里关着时这一格置灰。范围与默认值见 OverlayRowFontScale。
+            SettingsTileGrid(title: L10n.t("副行"), columns: 3) {
+                OverlayRowFontScaleCell(item: .romanization, title: L10n.t("读音大小"))
+                    .disabled(!settings.overlayShowRomanization)
+                OverlayRowFontScaleCell(item: .translation, title: L10n.t("译文大小"))
+                    .disabled(!settings.overlayShowTranslation)
+                OverlayRowFontScaleCell(item: .nextLine, title: L10n.t("下一句大小"))
+                    .disabled(!settings.showNextLinePreview)
+            }
+        }
+    }
+
+    private var mainRows: some View {
+        VStack(spacing: 0) {
+            SettingsRow(icon: "character", title: L10n.t("字体")) {
+                // 系统装了什么就能选什么(带搜索、每行用字体自己渲染),见 FontFamilyPicker 顶部注释。
+                FontFamilyPicker(selection: $settings.fontFamilyName)
+            }
+            CardDivider()
+            // 粗细排在字体和字号之间:粗细是"这个字体族的哪一个粗细",跟字体是同一件事的两半,中间隔着字号会把它
+            // 读成一个独立维度。
+            //
+            // 界面上叫「粗细」不叫「字重」:「字重」是排版行话,界面用日常说法。代码里的标识符仍然叫
+            // `overlayFontWeight` / `OverlayFontWeight`,行业术语在那边更准确;这条不对称是有意的,别为了"统一"把界面文案改回去。
+            //
+            // 这里选的是主歌词行那一档,罗马音/译文/下一句三行按固定档位差自动跟着细(见 `OverlayFontWeight`)。
+            // 不做成四行各自可调:那是四个滑杆的复杂度,换来的是可以把译文调得比主歌词还粗——一个没人想要的状态。
+            //
+            // 六个档位:分段放不下(英文更放不下),用玻璃下拉,同 `FontFamilyPicker` 那一行的形态。
+            SettingsRow(icon: "bold", title: L10n.t("粗细")) {
+                SettingsGlassMenuPicker(
+                    selection: $settings.overlayFontWeight,
+                    options: OverlayFontWeight.allCases,
+                    label: \.displayName,
+                    compact: true
+                )
+            }
+            CardDivider()
+            SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
+                HStack(spacing: 8) {
+                    // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点
+                    // (「没有意义,不好看」),量化语义一模一样。
+                    // 拖动中节流提交(SliderCommitThrottle):每写一次 fontSize,didSet 都要 recomputeFonts()
+                    // 一写五发、写盘,真窗口和编辑台各重排一次。
+                    SteppedSlider(value: Binding(
+                        get: { fontSizeThrottle.value(or: settings.fontSize) },
+                        set: { fontSizeThrottle.update($0, commit: commitFontSize) }
+                    ), in: AppSettings.overlayFontSizeRange, step: 1,
+                       onEditingChanged: { fontSizeThrottle.editingChanged($0, commit: commitFontSize) })
+                        .frame(width: 150)
+                    Text(String(format: L10n.t("%@pt"), "\(Int(fontSizeThrottle.value(or: settings.fontSize)))"))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 46, alignment: .trailing)
                 }
             }
         }
@@ -361,7 +375,39 @@ final class OverlayRowSpacingDraft: ObservableObject {
     }
 }
 
-/// 「排版」里三项间距共用的滑杆 + 读数,样式同「文字」里「字号」那一行(150pt 滑杆、等宽数字读数)。
+/// 悬浮歌词副行那几格共用的外观:名字和读数一行,滑杆铺满这一格。三格排一行:一行一根滑杆时浮层放不下。
+@MainActor
+struct OverlayRowSliderTile: View {
+    let title: String
+    let reading: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+    let onEditingChanged: (Bool) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.system(size: 12.5))
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text(verbatim: reading)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            SteppedSlider(value: $value, in: range, step: step, onEditingChanged: onEditingChanged)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.05)))
+        .settingsSearchHighlight(title: title)
+    }
+}
+
+/// 「排版」里三项间距的一格,样式同「字体」里「字号」那一行的读数。
 /// 拖动中只改 `OverlayRowSpacingDraft`、松手才提交,读数跟着临时值走。
 @MainActor
 struct OverlayRowSpacingCell: View {
@@ -372,33 +418,53 @@ struct OverlayRowSpacingCell: View {
 
     private var value: Double { (draft.values ?? settings.overlayRowSpacing)[item] }
 
-    // 名字和读数一行,滑杆铺满这一格。三格排一行:一行一根滑杆时浮层放不下。
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 4) {
-                Text(title)
-                    .font(.system(size: 12.5))
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                Text(String(format: L10n.t("%@pt"), "\(Int(value.rounded()))"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-            SteppedSlider(
-                value: Binding(get: { value }, set: { draft.set(item, to: $0) }),
-                in: item.range, step: 1,
-                onEditingChanged: { editing in
-                    if !editing { draft.commit() }
-                })
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.05)))
+        OverlayRowSliderTile(
+            title: title,
+            reading: String(format: L10n.t("%@pt"), "\(Int(value.rounded()))"),
+            value: Binding(get: { value }, set: { draft.set(item, to: $0) }),
+            range: item.range, step: 1,
+            onEditingChanged: { editing in
+                if !editing { draft.commit() }
+            })
         // 浮层在拖动中途被关掉时收不到松手那一下,别把临时值留在预览上。
         .onDisappear { draft.commit() }
-        .settingsSearchHighlight(title: title)
+    }
+}
+
+/// 「字体」里副行三项字号比例的一格。拖动中节流提交(`SliderCommitThrottle`),同「字号」那一行:每写一次都要
+/// recomputeFonts(),真窗口和编辑台各重排一次。
+@MainActor
+struct OverlayRowFontScaleCell: View {
+    let item: OverlayRowFontScale.Item
+    let title: String
+    @ObservedObject private var settings = AppSettings.shared
+    @State private var throttle = SliderCommitThrottle()
+
+    private var value: Double { throttle.value(or: settings.overlayRowFontScale[item]) }
+
+    /// 相等守卫:等值赋值照样广播,didSet 还会 recomputeFonts()。
+    private func commit(_ next: Double) {
+        let settings = AppSettings.shared
+        switch item {
+        case .romanization:
+            if settings.overlayRomanizationScale != next { settings.overlayRomanizationScale = next }
+        case .translation:
+            if settings.overlayTranslationScale != next { settings.overlayTranslationScale = next }
+        case .nextLine:
+            if settings.overlayNextLineScale != next { settings.overlayNextLineScale = next }
+        }
+    }
+
+    var body: some View {
+        OverlayRowSliderTile(
+            title: title,
+            reading: OverlayRowFontScale.percentText(value),
+            value: Binding(get: { value }, set: { throttle.update($0, commit: commit) }),
+            range: OverlayRowFontScale.range, step: OverlayRowFontScale.step,
+            onEditingChanged: { throttle.editingChanged($0, commit: commit) })
+        // 浮层在拖动中途被关掉时收不到松手那一下,把拖到的值提交掉。
+        .onDisappear { throttle.editingChanged(false, commit: commit) }
     }
 }
 
@@ -706,6 +772,10 @@ enum OverlayStyleDefaults {
         // 字重跟字体/字号同属「文字」那一组,"恢复默认文字与配色"必须把它一起带上,
         // 否则点完之后字体字号回默认、粗细还停在用户上次选的档,那不叫恢复默认。
         settings.overlayFontWeight = AppSettings.defaultOverlayFontWeight
+        // 副行三项字号比例同在「字体」那一组。
+        settings.overlayRomanizationScale = OverlayRowFontScale.Item.romanization.defaultValue
+        settings.overlayTranslationScale = OverlayRowFontScale.Item.translation.defaultValue
+        settings.overlayNextLineScale = OverlayRowFontScale.Item.nextLine.defaultValue
         settings.foregroundColorHex = ColorTheme.defaultTheme.foregroundColorHex
         settings.backgroundColorHex = ColorTheme.defaultTheme.backgroundColorHex
         // 毛玻璃是背景那一组的第八个字段,"恢复默认文字与配色"一起带回默认的关。

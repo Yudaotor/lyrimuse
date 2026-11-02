@@ -888,7 +888,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 305. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 308. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -984,6 +984,9 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 305. Gib einen N
 - **Schrift**
 - **Stärke**
 - **Größe**
+- **Größe Umschrift**
+- **Größe Übersetzung**
+- **Größe nächste Zeile**
 
 ### Liedtext-Anzeige › Schwebender Text › Farbe
 

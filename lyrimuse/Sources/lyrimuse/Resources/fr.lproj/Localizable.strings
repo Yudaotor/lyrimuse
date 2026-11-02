@@ -315,6 +315,7 @@
 "上移" = "Monter";
 "下一个里程碑" = "Prochain palier";
 "下一句" = "Ligne suivante";
+"下一句大小" = "Ligne suivante";
 "下一句间距" = "Ligne suivante";
 "下一步" = "Suivant";
 "下一页" = "Suivant";
@@ -2496,6 +2497,7 @@
 "诊断信息导出失败，请选择其他位置后重试" = "Impossible d’exporter le diagnostic. Essayez un autre emplacement";
 "译文" = "Traduction";
 "译文与读音" = "Traduction et romanisation";
+"译文大小" = "Traduction";
 "译文接在原文后面，排成一行，「字号」照常生效" = "La traduction suit l’original sur la même ligne, et « Taille » s’applique toujours";
 "译文语言" = "Langue de traduction";
 "译文间距" = "Traduction";
@@ -2563,6 +2565,7 @@
 "读取播放状态，获取歌词和封面" = "Lit l’état de lecture et récupère paroles et illustrations";
 "读取本地记录文件失败" = "Impossible de lire le fichier des enregistrements locaux";
 "读音" = "Romanisation";
+"读音大小" = "Romanisation";
 "读音间距" = "Romanisation";
 "调整" = "Ajuster";
 "调整宽度" = "Ajuster la largeur";

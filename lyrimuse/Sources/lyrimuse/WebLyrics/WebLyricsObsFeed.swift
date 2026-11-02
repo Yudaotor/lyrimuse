@@ -72,6 +72,9 @@ final class WebLyricsObsFeed {
             s.$overlayRomanizationSpacing.map { _ in () }.eraseToAnyPublisher(),
             s.$overlayTranslationSpacing.map { _ in () }.eraseToAnyPublisher(),
             s.$overlayNextLineSpacing.map { _ in () }.eraseToAnyPublisher(),
+            s.$overlayRomanizationScale.map { _ in () }.eraseToAnyPublisher(),
+            s.$overlayTranslationScale.map { _ in () }.eraseToAnyPublisher(),
+            s.$overlayNextLineScale.map { _ in () }.eraseToAnyPublisher(),
             s.$overlayWidth.map { _ in () }.eraseToAnyPublisher(),
             s.$hideWhenNotPlaying.map { _ in () }.eraseToAnyPublisher(),
             s.$overlayLineChangeAnimation.map { _ in () }.eraseToAnyPublisher(),
@@ -174,7 +177,7 @@ final class WebLyricsObsFeed {
             showRomanization: s.overlayShowRomanization, showTranslation: s.overlayShowTranslation,
             showNextLine: s.showNextLinePreview, karaoke: s.overlayLyricsKaraoke,
             alignment: s.overlayDuetAlignmentOverride, overflow: s.overlayLineOverflow,
-            spacing: s.overlayRowSpacing, width: s.overlayWidth, hideWhenPaused: s.hideWhenNotPlaying,
+            spacing: s.overlayRowSpacing, scale: s.overlayRowFontScale, width: s.overlayWidth, hideWhenPaused: s.hideWhenNotPlaying,
             lineChangeAnimation: s.overlayLineChangeAnimation, duetStageInset: duet.stage, duetCenterInset: duet.center,
             songCard: s.obsSongCard, rainbow: s.overlayRainbow))
     }

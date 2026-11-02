@@ -1019,6 +1019,42 @@ func runOverlayTests() {
                     "行间距接线: 真窗口不接临时值,松手提交后才跟上")
     }
 
+    // ---- 副行字号比例:读音 / 译文 / 下一句各占主句多少 ----
+    do {
+        typealias S = OverlayRowFontScale
+        expectEqual(S.Values.standard, S.Values(romanization: 0.65, translation: 0.7, nextLine: 0.7),
+                    "副行字号: 默认比例 = 原来写死的 0.65 / 0.7 / 0.7")
+        let wild = S.Values(romanization: 0.1, translation: 3, nextLine: .nan)
+        expectEqual([wild.romanization, wild.translation, wild.nextLine], [S.range.lowerBound, 1, 0.7],
+                    "副行字号: 夹回 0.4~1,不是有限数按那一项的默认值")
+        expectEqual(S.range.upperBound, 1, "副行字号: 上限 1,副行不比主句大")
+        expectEqual(S.Item.allCases.map { S.Values.standard[$0] }, [0.65, 0.7, 0.7], "副行字号: 按项取值")
+        expectEqual([S.percentText(0.65), S.percentText(0.7), S.percentText(1)], ["65%", "70%", "100%"],
+                    "副行字号: 读数是占主句的百分比")
+
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let settings = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/Settings/AppSettings.swift"),
+                                    encoding: .utf8)) ?? ""
+        let fonts = sourceBody("private func recomputeFonts()", in: settings)
+        expectEqual(fonts.contains("0.65") || fonts.contains("0.7"), false,
+                    "副行字号接线: 四行字体不再写死比例")
+        expectEqual(["size * scale.romanization", "size * scale.translation", "size * scale.nextLine"]
+                        .allSatisfy { fonts.components(separatedBy: $0).count - 1 == 2 }, true,
+                    "副行字号接线: SwiftUI 字体和 AppKit 孪生各用一次同一个比例")
+        expectEqual(["overlayRomanizationScale", "overlayTranslationScale", "overlayNextLineScale"].allSatisfy {
+            sourceHas(settings, "defaults.set(\($0), forKey: Keys.\($0))\n            recomputeFonts()")
+        }, true, "副行字号接线: 三项改了都重算字体")
+        let rows = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/UI/OverlayStyleSettingsRows.swift"),
+                                encoding: .utf8)) ?? ""
+        expectEqual(sourceHas(rows, "settings.overlayRomanizationScale = OverlayRowFontScale.Item.romanization.defaultValue")
+                        && sourceHas(rows, "settings.overlayTranslationScale = OverlayRowFontScale.Item.translation.defaultValue")
+                        && sourceHas(rows, "settings.overlayNextLineScale = OverlayRowFontScale.Item.nextLine.defaultValue"), true,
+                    "副行字号接线: 「恢复默认文字与配色」带上三项比例")
+        expectEqual(sourceHas(rows, ".disabled(!settings.overlayShowRomanization)")
+                        && sourceHas(rows, "OverlayRowFontScaleCell(item: .nextLine"), true,
+                    "副行字号接线: 三格在「字体」组里,那一行关着时置灰")
+    }
+
     // ---- WrapLayoutMath ----
     //
     // 逐字歌词那个自动换行容器的几何。以前长在 LyricsOverlayView 里，改一次就只能盯屏幕看。

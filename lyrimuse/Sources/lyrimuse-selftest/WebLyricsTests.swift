@@ -581,6 +581,20 @@ func runWebLyricsTests() {
         expectEqual(duet.center, Double(LyricDuetLayout.insets(for: .leading, availableWidth: 600, fontSize: 31).trailing),
                     "网页歌词: 合唱两侧留白同悬浮歌词")
         expectEqual(styleObject?["spacing"] as? [Double], [4, 6, OverlayRowSpacing.range.upperBound], "网页歌词: style 行距夹回范围")
+        expectEqual(styleObject?["scale"] as? [Double], [0.65, 0.7, 0.7], "网页歌词: style 不给比例时按默认副行字号")
+        let scaledJSON = WebLyricsObsPayload.style(.init(
+            fontFamily: "", fontSize: 31, weights: [600, 400, 300, 400], sung: "rgba(255,255,255,1.0)", unsung: "rgba(255,255,255,0.45)",
+            stroke: nil, card: nil, showRomanization: true, showTranslation: true, showNextLine: true, karaoke: true,
+            alignment: .leading, overflow: .wrap, spacing: .standard,
+            scale: .init(romanization: 0.5, translation: 0.9, nextLine: 2), width: 640, hideWhenPaused: false,
+            lineChangeAnimation: false, duetStageInset: 76, duetCenterInset: 84))
+        let scaled = (try? JSONSerialization.jsonObject(with: Data(scaledJSON.utf8))) as? [String: Any]
+        expectEqual(scaled?["scale"] as? [Double], [0.5, 0.9, 1], "网页歌词: style 带副行字号比例,夹回范围")
+        let obsPage = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/WebLyrics/WebLyricsPages.swift"), encoding: .utf8)) ?? ""
+        expectEqual(["{ em: rowEm(0),", "{ em: rowEm(1),", "big ? 1 : rowEm(2)", "font-size:${rowEm(0) / mainEm}em;"]
+                        .allSatisfy { obsPage.contains($0) }, true,
+                    "网页歌词: 读音 / 译文 / 下一句的字号按 style.scale 排")
 
         let withWords = LyricsSyncEngine()
         _ = withWords.load(lyrics: "[00:01.00]あい\n[00:05.00]うえ", lyricsTr: "[00:01.00]啊\n[00:05.00]呜", lyricsRoma: "",
