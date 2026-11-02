@@ -175,9 +175,11 @@ function cleanFrames(v) {
 }
 
 // 同一种崩溃的归并键:进程 + 异常类型 + 前三帧落在自家镜像里的符号(没有就前三帧),再不行用终止原因。
+// 带异常调用栈的(未捕获的 Objective-C 异常)按异常调用栈取帧:故障线程那几帧每份都是 abort / 重抛。
 function crashSignature(c) {
-  const own = c.frames.filter((f) => f.image && /^(lyrimuse|lyrimuse-engine|collector|LyrimuseCore)/i.test(f.image));
-  const picked = (own.length ? own : c.frames).slice(0, 3).map((f) => f.symbol || `${f.image}+${f.offset}`);
+  const pool = c.exception_frames.length ? c.exception_frames : c.frames;
+  const own = pool.filter((f) => f.image && /^(lyrimuse|lyrimuse-engine|collector|LyrimuseCore)/i.test(f.image));
+  const picked = (own.length ? own : pool).slice(0, 3).map((f) => f.symbol || `${f.image}+${f.offset}`);
   const head = [c.process, c.exception_type || c.termination_namespace || "?"].join(" ");
   const tail = picked.length ? picked.join(" | ") : (c.termination_indicator || "no frames");
   return `${head} :: ${tail}`.slice(0, 500);
@@ -202,15 +204,16 @@ async function crash(request, env) {
     termination_reasons: Array.isArray(body.termination_reasons)
       ? body.termination_reasons.slice(0, 3).map((r) => str(r, 300)).filter(Boolean) : [],
     frames: cleanFrames(body.frames),
+    exception_frames: cleanFrames(body.exception_frames),
   };
   await env.DB.prepare(
     `INSERT OR IGNORE INTO crashes (install_id, report_id, received_at, day, process, app_version, os_version, occurred_at,
        exception_type, exception_signal, termination_namespace, termination_indicator, termination_reasons, frames,
-       signature, env)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)`
+       exception_frames, signature, env)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)`
   ).bind(installID, body.report_id, now, day, c.process, c.app_version, c.os_version, c.occurred_at, c.exception_type,
          c.exception_signal, c.termination_namespace, c.termination_indicator, JSON.stringify(c.termination_reasons),
-         JSON.stringify(c.frames), crashSignature(c), JSON.stringify(cleanEnv(body.env))).run();
+         JSON.stringify(c.frames), JSON.stringify(c.exception_frames), crashSignature(c), JSON.stringify(cleanEnv(body.env))).run();
   return json({ ok: true });
 }
 
@@ -262,7 +265,8 @@ async function stats(request, env, url) {
                        COUNT(DISTINCT install_id) AS installs, GROUP_CONCAT(DISTINCT app_version) AS versions,
                        MAX(received_at) AS last_at,
                        (SELECT frames FROM crashes c2 WHERE c2.signature = c.signature AND ${kept("c2.install_id")} ORDER BY received_at DESC LIMIT 1) AS frames,
-                       (SELECT termination_reasons FROM crashes c3 WHERE c3.signature = c.signature AND ${kept("c3.install_id")} ORDER BY received_at DESC LIMIT 1) AS reasons
+                       (SELECT termination_reasons FROM crashes c3 WHERE c3.signature = c.signature AND ${kept("c3.install_id")} ORDER BY received_at DESC LIMIT 1) AS reasons,
+                       (SELECT exception_frames FROM crashes c4 WHERE c4.signature = c.signature AND ${kept("c4.install_id")} ORDER BY received_at DESC LIMIT 1) AS exception_frames
                 FROM crashes c WHERE day >= ?1 AND ${kept("c.install_id")} GROUP BY signature ORDER BY n DESC LIMIT 50`).bind(since).all(),
   ]);
   const rows = latest.results.map((r) => ({ ...r, features: safeJSON(r.features, {}) }));
@@ -302,7 +306,7 @@ async function stats(request, env, url) {
     crashes: crashes.results.map(({ versions, ...c }) => {
       const sorted = (versions || "").split(",").filter(Boolean).sort(compareVersions);
       return { ...c, min_version: sorted[0] || null, max_version: sorted[sorted.length - 1] || null,
-               frames: safeJSON(c.frames, []), reasons: safeJSON(c.reasons, []) };
+               frames: safeJSON(c.frames, []), exception_frames: safeJSON(c.exception_frames, []), reasons: safeJSON(c.reasons, []) };
     }),
   });
 }
@@ -404,10 +408,13 @@ function render(s) {
   html += '<div class="card"><h2>崩溃(按归并键)</h2>' + (s.crashes.length ? s.crashes.map((c) =>
     "<details><summary><b>" + c.n + " 次 · " + c.installs + " 台</b> " + esc(c.signature) + ' <span class="muted">' +
     esc(c.min_version) + (c.max_version !== c.min_version ? "–" + esc(c.max_version) : "") + "</span></summary><pre>" +
-    esc([...(c.reasons || []), ...(c.frames || []).map((f, i) => i + "  " + (f.image || "?") + "  " + (f.symbol || "+" + f.offset))].join("\\n")) +
+    esc([...(c.reasons || []),
+         ...((c.exception_frames || []).length ? ["抛出异常处:", ...c.exception_frames.map(frameLine), "故障线程:"] : []),
+         ...(c.frames || []).map(frameLine)].join("\\n")) +
     "</pre></details>").join("") : '<p class="muted">窗口内没有崩溃</p>') + "</div>";
   $("out").innerHTML = html;
 }
+function frameLine(f, i) { return i + "  " + (f.image || "?") + "  " + (f.symbol || "+" + f.offset); }
 async function load() {
   const token = $("token").value.trim();
   if (!token) return;

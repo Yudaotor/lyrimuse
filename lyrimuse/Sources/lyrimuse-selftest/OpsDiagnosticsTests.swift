@@ -858,6 +858,30 @@ func runOpsDiagnosticsTests() {
             expectEqual(text.contains("lyrimuse  sym0 + 1000  (Foo.swift:42)"), true, "崩溃报告: 帧行格式")
             expectEqual(text.contains("sym15"), false, "崩溃报告: 第 16 帧起不渲染")
             expectEqual(text.contains("note: header unreadable"), true, "崩溃报告: note 渲染出来")
+            expectEqual(crash.exceptionFrames.isEmpty && !text.contains("last exception backtrace"), true,
+                        "崩溃报告: 没有 lastExceptionBacktrace 就不出这一段")
+        }
+
+        // 未捕获的 Objective-C 异常:故障线程只有 abort / 重抛,抛异常的位置在 lastExceptionBacktrace。
+        let thrownJSON = (["__exceptionPreprocess", "objc_exception_throw"] + (0..<18).map { "thrown\($0)" }).enumerated().map { i, symbol in
+            "{\"imageIndex\":\(i < 2 ? 1 : 0),\"imageOffset\":\(2000 + i),\"symbol\":\"\(symbol)\"}"
+        }.joined(separator: ",")
+        let abortBody = """
+        {"procName":"lyrimuse","exception":{"type":"EXC_CRASH","signal":"SIGABRT"},"faultingThread":0,"threads":[{"frames":[{"imageIndex":1,"imageOffset":7,"symbol":"__pthread_kill"}]}],"lastExceptionBacktrace":[\(thrownJSON)],"usedImages":[{"name":"AppKit"},{"name":"libobjc.A.dylib"}]}
+        """
+        let abort = CrashReportSummary.parse(fileName: "lyrimuse-2026-11-02-144000.ips", data: ips("{}", abortBody))
+        expectEqual(abort != nil, true, "崩溃报告: 带异常调用栈的报告解得出来")
+        if let abort {
+            expectEqual(abort.exceptionFrames.first?.symbol, "thrown0", "崩溃报告: 异常调用栈跳过开头抛异常的公共入口")
+            expectEqual(abort.exceptionFrames.first?.imageName, "AppKit", "崩溃报告: 异常调用栈的库名")
+            expectEqual(abort.totalExceptionFrames, 18, "崩溃报告: 异常调用栈总帧数不算公共入口")
+            expectEqual(abort.exceptionFrames.count, CrashReportSummary.maxFrames, "崩溃报告: 异常调用栈只留前 15 帧")
+            expectEqual(abort.frames.first?.symbol, "__pthread_kill", "崩溃报告: 故障线程照旧解")
+            let text = abort.renderLines().joined(separator: "\n")
+            expectEqual(text.contains("last exception backtrace: showing 15 of 18 frames"), true, "崩溃报告: 渲染异常调用栈")
+            expectEqual(text.contains("AppKit  thrown0 + 2002"), true, "崩溃报告: 异常调用栈帧行格式")
+            let exceptionAt = text.range(of: "last exception backtrace")?.lowerBound, faultingAt = text.range(of: "faulting thread 0")?.lowerBound
+            expectEqual(exceptionAt != nil && faultingAt != nil && exceptionAt! < faultingAt!, true, "崩溃报告: 异常调用栈排在故障线程前")
         }
 
         let collectorHeader = """

@@ -5,7 +5,7 @@ Receives Lyrimuse's anonymous usage data ("Share Anonymous Usage Data" in Settin
 | Endpoint | What |
 |---|---|
 | `POST /v1/heartbeat` | At most one per machine per day: random install ID, app and macOS version, chip, languages, which features are on, which built-in players played music and how many hangs on previous days |
-| `POST /v1/crash` | One summary per crash report: exception, termination reason, top stack frames (paths already removed by the app) |
+| `POST /v1/crash` | One summary per crash report: exception, termination reason, top frames of the crashed thread and, for an uncaught exception, of the backtrace where it was thrown (paths already removed by the app) |
 | `GET /v1/stats` | Aggregates; needs `Authorization: Bearer <ADMIN_TOKEN>` |
 | `GET /` | Dashboard that reads `/v1/stats` with the token |
 
@@ -20,6 +20,12 @@ npx wrangler deploy
 npx wrangler secret put ADMIN_TOKEN
 ```
 
+A database created before the `exception_frames` column existed needs it added once, before deploying the worker that writes it:
+
+```sh
+npx wrangler d1 execute lyrimuse-telemetry --remote --command "ALTER TABLE crashes ADD COLUMN exception_frames TEXT"
+```
+
 ---
 
-接收 Lyrimuse 的匿名使用数据（设置 › 关于 › 诊断与数据「发送匿名使用数据」，默认开），跑在 Cloudflare Workers + D1 上，域名 `telemetry.yudaotor.me`。只存白名单字段，不存 IP，只存 Cloudflare 按 IP 给的国家 / 地区码。App 不发歌名、歌手、本机路径、账号名和凭据。部署步骤同上。
+接收 Lyrimuse 的匿名使用数据（设置 › 关于 › 诊断与数据「发送匿名使用数据」，默认开），跑在 Cloudflare Workers + D1 上，域名 `telemetry.yudaotor.me`。只存白名单字段，不存 IP，只存 Cloudflare 按 IP 给的国家 / 地区码。App 不发歌名、歌手、本机路径、账号名和凭据。部署步骤同上；`exception_frames` 这一列之前建的库，部署前先按上面那条 `ALTER TABLE` 补一次。

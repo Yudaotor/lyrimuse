@@ -9,6 +9,9 @@ import Foundation
 /// 「Library missing」、1 份是 Launch Constraint Violation,故障线程一帧都没有,能说明问题的只有 termination 的
 /// indicator / reasons / details。帧只在有的时候附,最多 `maxFrames` 帧。
 ///
+/// 未捕获的 Objective-C 异常(EXC_CRASH / SIGABRT)故障线程只有 abort / terminate / AppKit 重抛这几帧,真正抛异常的
+/// 位置在正文的 `lastExceptionBacktrace` 里,单独解成 `exceptionFrames`。
+///
 /// 解析必须宽容:.ips 的结构随 macOS 版本变;两段任一坏了就只用另一段(parseNotes 记下哪段没解出来),两段都坏
 /// 返回 nil(调用方退成一行说明)。纯逻辑、不碰文件系统——目录扫描与读文件在 App 侧 DiagnosticsExporter,这里的
 /// 三种样本(DYLD 缺库 / 签名约束 / 带帧的 EXC_BAD_ACCESS)由 selftest ops-diagnostics 组钉着。
@@ -51,6 +54,10 @@ public struct CrashReportSummary: Equatable {
     public var faultingThreadIndex: Int?
     public var frames: [Frame] = []
     public var totalFrames = 0
+    /// `lastExceptionBacktrace`:抛出未捕获异常时的调用栈,去掉开头抛异常的公共入口(`__exceptionPreprocess`、
+    /// `objc_exception_throw`),最多 `maxFrames` 帧。没有异常的崩溃为空。
+    public var exceptionFrames: [Frame] = []
+    public var totalExceptionFrames = 0
     /// 哪一段没解出来("header unreadable" / "body unreadable"),写进报告让读的人知道信息不全。
     public var parseNotes: [String] = []
 
@@ -122,20 +129,30 @@ public struct CrashReportSummary: Equatable {
                index >= 0, index < threads.count,
                let rawFrames = threads[index]["frames"] as? [[String: Any]] {
                 summary.totalFrames = rawFrames.count
-                summary.frames = rawFrames.prefix(maxFrames).map { raw in
-                    var frame = Frame()
-                    if let imageIndex = intish(raw["imageIndex"]), imageIndex >= 0, imageIndex < images.count {
-                        frame.imageName = images[imageIndex]["name"] as? String
-                    }
-                    frame.symbol = raw["symbol"] as? String
-                    frame.imageOffset = intish(raw["imageOffset"])
-                    frame.sourceFile = raw["sourceFile"] as? String
-                    frame.sourceLine = intish(raw["sourceLine"])
-                    return frame
-                }
+                summary.frames = rawFrames.prefix(maxFrames).map { frame($0, images: images) }
+            }
+            if let rawFrames = body["lastExceptionBacktrace"] as? [[String: Any]] {
+                let thrown = rawFrames.drop { exceptionThrowSymbols.contains(($0["symbol"] as? String) ?? "") }
+                summary.totalExceptionFrames = thrown.count
+                summary.exceptionFrames = thrown.prefix(maxFrames).map { frame($0, images: images) }
             }
         }
         return summary
+    }
+
+    /// 异常调用栈开头抛异常的公共入口,每份都一样,不带信息。
+    static let exceptionThrowSymbols: Set<String> = ["__exceptionPreprocess", "objc_exception_throw"]
+
+    private static func frame(_ raw: [String: Any], images: [[String: Any]]) -> Frame {
+        var frame = Frame()
+        if let imageIndex = intish(raw["imageIndex"]), imageIndex >= 0, imageIndex < images.count {
+            frame.imageName = images[imageIndex]["name"] as? String
+        }
+        frame.symbol = raw["symbol"] as? String
+        frame.imageOffset = intish(raw["imageOffset"])
+        frame.sourceFile = raw["sourceFile"] as? String
+        frame.sourceLine = intish(raw["sourceLine"])
+        return frame
     }
 
     private static func looksLikeBody(_ object: [String: Any]) -> Bool {
@@ -224,20 +241,27 @@ public struct CrashReportSummary: Equatable {
         }
         for reason in terminationReasons { out.append("  reason: \(reason)") }
         for detail in terminationDetails { out.append("  detail: \(detail)") }
+        func appendFrames(_ list: [Frame]) {
+            for (position, frame) in list.enumerated() {
+                var line = String(format: "    %2d  ", position) + (frame.imageName ?? "?")
+                if let symbol = frame.symbol { line += "  \(symbol)" }
+                if let offset = frame.imageOffset { line += " + \(offset)" }
+                if let file = frame.sourceFile {
+                    line += "  (\(file)" + (frame.sourceLine.map { ":\($0)" } ?? "") + ")"
+                }
+                out.append(line)
+            }
+        }
+        if !exceptionFrames.isEmpty {
+            out.append("  last exception backtrace: showing \(exceptionFrames.count) of \(totalExceptionFrames) frames")
+            appendFrames(exceptionFrames)
+        }
         if let index = faultingThreadIndex {
             if frames.isEmpty {
                 out.append("  faulting thread \(index): no frames recorded")
             } else {
                 out.append("  faulting thread \(index): showing \(frames.count) of \(totalFrames) frames")
-                for (position, frame) in frames.enumerated() {
-                    var line = String(format: "    %2d  ", position) + (frame.imageName ?? "?")
-                    if let symbol = frame.symbol { line += "  \(symbol)" }
-                    if let offset = frame.imageOffset { line += " + \(offset)" }
-                    if let file = frame.sourceFile {
-                        line += "  (\(file)" + (frame.sourceLine.map { ":\($0)" } ?? "") + ")"
-                    }
-                    out.append(line)
-                }
+                appendFrames(frames)
             }
         }
         if !parseNotes.isEmpty { out.append("  note: " + parseNotes.joined(separator: "; ")) }

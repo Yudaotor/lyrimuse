@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS crashes (
   termination_indicator TEXT,
   termination_reasons   TEXT,
   frames                TEXT,
+  exception_frames      TEXT,
   signature             TEXT,
   env                   TEXT,
   PRIMARY KEY (install_id, report_id)

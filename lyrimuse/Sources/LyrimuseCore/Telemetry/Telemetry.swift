@@ -246,6 +246,8 @@ public struct TelemetryCrash: Codable, Equatable, Sendable {
     public var terminationIndicator: String?
     public var terminationReasons: [String]
     public var frames: [Frame]
+    /// 抛出未捕获异常时的调用栈(`CrashReportSummary.exceptionFrames`),同样截到 `Telemetry.maxCrashFrames`;没有就是空。
+    public var exceptionFrames: [Frame]
     public var env: TelemetryEnvironment
 
     enum CodingKeys: String, CodingKey {
@@ -253,7 +255,7 @@ public struct TelemetryCrash: Codable, Equatable, Sendable {
         case osVersion = "os_version", occurredAt = "occurred_at", exceptionType = "exception_type"
         case exceptionSignal = "exception_signal", terminationNamespace = "termination_namespace"
         case terminationIndicator = "termination_indicator", terminationReasons = "termination_reasons"
-        case frames, env
+        case frames, exceptionFrames = "exception_frames", env
     }
 
     /// 由崩溃报告摘要组出要发的那份:路径换成 `<path>`,源码文件与行号不带,帧数截到 `Telemetry.maxCrashFrames`。
@@ -275,10 +277,14 @@ public struct TelemetryCrash: Codable, Equatable, Sendable {
         terminationReasons = summary.terminationReasons.prefix(3).map {
             String(Telemetry.redactPaths($0).prefix(Telemetry.crashReasonLimit))
         }
-        frames = summary.frames.prefix(Telemetry.maxCrashFrames).map {
-            Frame(image: redact($0.imageName, Telemetry.crashImageLimit), symbol: redact($0.symbol, Telemetry.crashSymbolLimit),
-                  offset: $0.imageOffset)
+        func payload(_ list: [CrashReportSummary.Frame]) -> [Frame] {
+            list.prefix(Telemetry.maxCrashFrames).map {
+                Frame(image: redact($0.imageName, Telemetry.crashImageLimit), symbol: redact($0.symbol, Telemetry.crashSymbolLimit),
+                      offset: $0.imageOffset)
+            }
         }
+        frames = payload(summary.frames)
+        exceptionFrames = payload(summary.exceptionFrames)
         self.env = env
     }
 }

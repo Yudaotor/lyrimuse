@@ -90,6 +90,19 @@ func runTelemetryTests() {
         expectEqual(crash.terminationReasons, ["Library not loaded: <path>", "a", "b"], "终止原因: 脱敏、最多三条")
         expectEqual(crash.frames.count, Telemetry.maxCrashFrames, "帧: 截到上限")
         expectEqual(crash.frames.first, TelemetryCrash.Frame(image: "lyrimuse", symbol: "f0", offset: 0), "帧: 只带镜像、符号、偏移")
+        expectEqual(crash.exceptionFrames, [], "异常调用栈: 报告里没有就是空")
+        var thrown = summary
+        thrown.exceptionFrames = (0..<20).map { (i: Int) in
+            CrashReportSummary.Frame(imageName: "/Users/alice/x/AppKit", symbol: "e\(i)", imageOffset: i,
+                                     sourceFile: "/Users/alice/src/Bar.swift", sourceLine: 3)
+        }
+        let withException = TelemetryCrash(summary: thrown, reportID: id, executableName: "lyrimuse", installID: "i", env: env)
+        expectEqual(withException.exceptionFrames.count, Telemetry.maxCrashFrames, "异常调用栈: 截到上限")
+        expectEqual(withException.exceptionFrames.first, TelemetryCrash.Frame(image: "<path>", symbol: "e0", offset: 0),
+                    "异常调用栈: 镜像脱敏,不带源码文件")
+        let exceptionJSON = (try? JSONEncoder().encode(withException)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        expectEqual(exceptionJSON.contains("\"exception_frames\""), true, "异常调用栈: 键名 exception_frames")
+        expectEqual(exceptionJSON.contains("alice") || exceptionJSON.contains("Bar.swift"), false, "异常调用栈: 不带路径、源码文件")
         var huge = summary
         huge.terminationReasons = [String(repeating: "x", count: 5000)]
         huge.frames = [CrashReportSummary.Frame(imageName: "lyrimuse", symbol: String(repeating: "S", count: 5000), imageOffset: 1)]
@@ -163,7 +176,7 @@ func runTelemetryTests() {
         let worker = (try? String(contentsOfFile: root.appendingPathComponent("../../telemetry-worker/src/index.js").path,
                                   encoding: .utf8)) ?? ""
         let fields = keys(env) + keys(features) + ["install_id", "report_id", "players_played", "hangs",
-                                                   "exception_type", "termination_indicator", "frames"]
+                                                   "exception_type", "termination_indicator", "frames", "exception_frames"]
         let missing = fields.filter { !worker.contains($0) }
         expectEqual(missing, [], "Worker: 认得 App 发的每个字段")
         // Worker 的两个白名单正则要放过 App 真实会发的每个取值(只比键名测不出取值被丢)。
