@@ -319,12 +319,36 @@ func runRomanizationTests() {
         expectEqual(yueGroups?.allSatisfy { $0.words.count == 1 } ?? false, true,
                     "粤语: 中文/粤语没有日语那种多字并一组的歧义,每组恰好一个字")
 
-        // 字数与音节数对不上时(标点/词典缺字等边界情形)保守放弃,不猜、不硬凑、不错位。
+        // 标点自成一个词时不占音节,其余照字配
+        let withPunct = LyricsSyncEngine.buildWordGroups(
+            words: [w("你", 0, 300), w("好", 300, 300), w("！", 600, 100)],
+            line: "你好！", japanese: false, hanRomanization: "nei5 hou2")
+        expectEqual(withPunct?.map(\.romanization), ["nei5", "hou2", nil], "粤语: 标点那个词不标读音")
+
+        // 逐字数据把几个字并成一个词(Apple Music 粤语歌):按每个词的字数切读音,一个词标它那几个音节
+        let merged = LyricsSyncEngine.buildWordGroups(
+            words: [w("望", 0, 500), w("住 ", 500, 600), w("我怎麼敢去", 1600, 1900),
+                    w("唱", 3500, 700), w("情", 4700, 500), w("歌", 5200, 600)],
+            line: "望住 我怎麼敢去唱情歌", japanese: false,
+            hanRomanization: "mong6 zyu6 ngo5 zam2 mo1 gam2 heoi3 coeng3 cing4 go1")
+        expectEqual(merged?.map(\.romanization),
+                    ["mong6", "zyu6", "ngo5 zam2 mo1 gam2 heoi3", "coeng3", "cing4", "go1"],
+                    "粤语: 多字词标它那几个音节,前后不串位")
+        expectEqual(merged?.map { $0.words.count }, [1, 1, 1, 1, 1, 1], "粤语: 不拆逐字词,一个词一组")
+        expectEqual(LyricsSyncEngine.hanSyllableCount("OK啦"), 2, "字母串算一个音节、汉字各一个")
+        expectEqual(LyricsSyncEngine.hanSyllableCount("don't 你"), 2, "撇号连着字母串算同一个")
+
+        // 两种数法都对不上(词典缺字等)时保守放弃,不猜、不硬凑、不错位
         expectEqual(
             LyricsSyncEngine.buildWordGroups(
-                words: [w("你", 0, 300), w("好", 300, 300), w("！", 600, 100)],
-                line: "你好！", japanese: false, hanRomanization: "nei5 hou2") == nil,
-            true, "粤语: 字数(3)与音节数(2)对不上时放弃分组,退回整行罗马音")
+                words: [w("你", 0, 300), w("好嗎", 300, 300), w("呀", 600, 300)],
+                line: "你好嗎呀", japanese: false, hanRomanization: "nei5 hou2") == nil,
+            true, "粤语: 字数(4)、词数(3)都跟音节数(2)对不上时放弃分组,退回整行罗马音")
+        // 两种数法都对得上时按字数切:一词一音节会把末尾的音节错配给标点
+        let both = LyricsSyncEngine.buildWordGroups(
+            words: [w("你", 0, 300), w("好嗎", 300, 300), w("！", 600, 100)],
+            line: "你好嗎！", japanese: false, hanRomanization: "nei5 hou2 maa3")
+        expectEqual(both?.map(\.romanization), ["nei5", "hou2 maa3", nil], "粤语: 先按字数切,标点不吃音节")
 
         // 日文优先于中文/粤语:同时给了 japanese=true 且行内确实有假名时,不该被 hanRomanization
         // 抢走(理论上调用方不会真的这么传,这里验证的是函数自身的优先级顺序稳)。

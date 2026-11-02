@@ -2531,8 +2531,8 @@ public final class LyricsSyncEngine {
     // - 中文/粤语(hanRomanization):汉字没有"一个字对应半个词"的歧义,
     //   引擎生成拼音/粤拼时就是**严格一字一音节、空格分隔**(见 jyutping.go
     //   toJyutpingLine 的注释),不需要分词,直接按下标一一配对(空白词不算字、
-    //   不占音节,见下面那段);字数与音节数对不上
-    //   (标点/多字词等边界情形)时保守放弃,让视图退回整行罗马音,不猜、不硬凑。
+    //   不占音节,见下面那段);一个词里有好几个字时按每个词的音节数切读音
+    //   (`hanSyllableCount`),两种数法都对不上时保守放弃,让视图退回整行罗马音,不猜、不硬凑。
     // - 韩语(koreanRomanization):一个谚文音节一个片段(Romanizer.koreanSegments),
     //   逐字词横跨几个音节时复用同一套合并算法。
     public static func buildWordGroups(
@@ -2562,9 +2562,23 @@ public final class LyricsSyncEngine {
             let sungIndices = words.indices.filter {
                 !words[$0].text.trimmingCharacters(in: .whitespaces).isEmpty
             }
-            guard tokens.count == sungIndices.count, !sungIndices.isEmpty else { return nil }
+            guard !sungIndices.isEmpty else { return nil }
             var romaByIndex: [Int: String] = [:]
-            for (i, token) in zip(sungIndices, tokens) { romaByIndex[i] = String(token) }
+            // 先按每个词占几个音节切:逐字数据常把几个字并成一个词(Apple Music 的粤语歌:「望」「住 」
+            // 「我怎麼敢去」「唱」…),读音仍是一字一音节,一个词下面标它那几个音节;标点词不占音节。
+            // 数不对再退回一词一音节。见 10 章决策 69。
+            let counts = words.map { hanSyllableCount($0.text) }
+            if counts.reduce(0, +) == tokens.count {
+                var cursor = 0
+                for (i, n) in counts.enumerated() where n > 0 {
+                    romaByIndex[i] = tokens[cursor ..< cursor + n].joined(separator: " ")
+                    cursor += n
+                }
+            } else if tokens.count == sungIndices.count {
+                for (i, token) in zip(sungIndices, tokens) { romaByIndex[i] = String(token) }
+            } else {
+                return nil
+            }
             return words.indices.map { i in
                 SyncedLyricWordGroup(id: i, words: [words[i]], romanization: romaByIndex[i])
             }
@@ -2575,6 +2589,27 @@ public final class LyricsSyncEngine {
             return mergeSegmentsIntoWordGroups(words: words, segs: segs)
         }
         return nil
+    }
+
+    /// 一个逐字词在拼音 / 粤拼行里占几个音节:每个汉字一个,一串连着的字母、数字(含撇号)算一个,
+    /// 标点和空白不占。跟引擎生成读音的切法一致(jyutping.go `toJyutpingLine`)。
+    public static func hanSyllableCount(_ text: String) -> Int {
+        var count = 0
+        var inRun = false
+        for scalar in text.unicodeScalars {
+            let props = scalar.properties
+            if props.isIdeographic {
+                count += 1
+                inRun = false
+            } else if props.isAlphabetic || props.numericType != nil
+                        || (inRun && (scalar == "'" || scalar == "\u{2019}")) {
+                if !inRun { count += 1 }
+                inRun = true
+            } else {
+                inRun = false
+            }
+        }
+        return count
     }
 
     /// 把"片段"(带 UTF16 范围和读音)跟逐字词按边界合并成组——日语/韩语共用同一套算法,
