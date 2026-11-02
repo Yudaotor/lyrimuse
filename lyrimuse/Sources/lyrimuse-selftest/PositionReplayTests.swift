@@ -902,6 +902,9 @@ private func replaySpotifyManualStart() {
     let jumps = rig.source.pauseJumpHistory.deltasByBundleID["com.spotify.client"] ?? []
     expectEqual(jumps.count == 1 && near(jumps[0], prior - trueLead, 0.002), true,
                 "回放·Spotify 手动点播: 暂停那一拍的跳变量记进诊断记录(\(jumps))")
+    let npValues = rig.defaults.dictionaryRepresentation().filter { $0.key.hasPrefix("np:") }
+    expectEqual(JSONSerialization.isValidJSONObject(npValues), true,
+                "回放·Spotify 手动点播: 写进偏好的 np: 键都能写成 JSON(AppSettingsMirror 整份写 JSON,Data 会让 App 退出)")
     rig.tick(spotify("蝴蝶", raw: frozen + 1, duration: 283.2), at: at(22))
     let learned = rig.startLeadTable["fresh"]
     expectEqual(near(learned, prior * 0.5 + trueLead * 0.5, 0.002), true,

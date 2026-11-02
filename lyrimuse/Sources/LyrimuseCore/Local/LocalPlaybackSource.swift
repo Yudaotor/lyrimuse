@@ -1364,17 +1364,17 @@ public final class LocalPlaybackSource: ObservableObject {
     private static let pauseJumpHistoryDefaultsKey = "np:pauseJumpHistory"
 
     /// 各播放器最近几次暂停的跳变量,给诊断报告读(见 PauseJumpHistory)。
+    /// 存成 `[String: [Double]]` 的 plist 字典,别存成 Data:`AppSettingsMirror` 会把 np: 键整份写成 JSON,
+    /// Data 写不进去,会抛 NSInvalidArgumentException 让 App 退出(见 02 章决策 223)。
     public var pauseJumpHistory: PauseJumpHistory {
-        guard let data = env.defaults.data(forKey: Self.pauseJumpHistoryDefaultsKey),
-              let history = try? JSONDecoder().decode(PauseJumpHistory.self, from: data) else { return PauseJumpHistory() }
-        return history
+        PauseJumpHistory(deltasByBundleID: env.defaults.dictionary(forKey: Self.pauseJumpHistoryDefaultsKey) as? [String: [Double]] ?? [:])
     }
 
     private func recordPauseJump(_ delta: Double, bundleID: String) {
         guard !PlaybackSimulation.isActive else { return }
         var history = pauseJumpHistory
         let turnedBiased = history.record(delta, bundleID: bundleID)
-        if let data = try? JSONEncoder().encode(history) { env.defaults.set(data, forKey: Self.pauseJumpHistoryDefaultsKey) }
+        env.defaults.set(history.deltasByBundleID, forKey: Self.pauseJumpHistoryDefaultsKey)
         if turnedBiased, let median = history.median(bundleID) {
             logger.notice("pause jump biased: \(bundleID, privacy: .public) median \(median, format: .fixed(precision: 3))s over last \(history.deltasByBundleID[bundleID]?.count ?? 0) pauses (> 0 = lyrics were behind before the pause)")
         }
