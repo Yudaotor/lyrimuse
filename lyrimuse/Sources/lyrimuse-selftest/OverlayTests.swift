@@ -1090,6 +1090,15 @@ func runOverlayTests() {
         expectEqual([sourceHas(preview, "lyricStroke(upcomingWordRows(words, color: color))"),
                      sourceHas(preview, "lyricStroke(ScaledWidthProposal(ratio: nextLineBreakWidthRatio) {")],
                     [true, true], "下一句断行: 换行模式下逐字的下一句走按主行断点的那一支,整行文字按宽度比收窄")
+        expectEqual(sourceHas(wordRows, ".frame(width: MenuBarMarqueeRenderer.width(of: w.text, font: nextLinePreviewNSFont), alignment: .leading)"),
+                    true, "下一句断行: 逐字的下一句每个字按 AppKit 量宽,字尾空格不丢")
+        expectEqual([sourceHas(columns, ".frame(width: upcomingColumnWidth(g), alignment: .leading)"),
+                     sourceHas(sourceBody("private func upcomingColumnWidth", in: overlay),
+                               "font: nextLinePreviewNSFont, romaFont: nextLineReadingNSFont")],
+                    [true, true], "下一句断行: 逐词列的列宽按图层行的式子用预览字号算,组末尾的空格不丢")
+        expectEqual([sourceHas(wordRows, "Text(Self.droppingTrailingWhitespace(w.text))"),
+                     sourceHas(columns, "Text(Self.droppingTrailingWhitespace(g.words.map(\\.text).joined()))")],
+                    [true, true], "下一句断行: 字尾空格不进 Text,靠右对齐时字不被顶右一格")
         let ratio = sourceBody("private var nextLineBreakWidthRatio: CGFloat", in: overlay)
         expectEqual([sourceHas(ratio, "OverlayNaturalWidth.width(next, font: nextLinePreviewNSFont) / main"),
                      sourceHas(ratio, "nextLinePreviewNSFont != playback.overlayNSFonts.main else { return 1 }")],
@@ -1134,6 +1143,23 @@ func runOverlayTests() {
         expectEqual(rowIndices(WrapLayoutMath.rows(sizes: small, breakWidths: [45, 45, 45, 45, 45], maxWidth: 100,
                                                    horizontalSpacing: 0)),
                     [[0, 1, 2]], "按主字号断: 个数对不上按自己的尺寸断")
+
+        // 行内对齐扣掉行尾那一项的末尾空白:靠右的行贴右边,居中的行不左偏。
+        let words = [sz(40), sz(40)]
+        let wordRows = WrapLayoutMath.rows(sizes: words, maxWidth: 100, horizontalSpacing: 0)
+        let bounds = CGRect(x: 0, y: 0, width: 100, height: 10)
+        expectEqual(WrapLayoutMath.placements(rows: wordRows, sizes: words, bounds: bounds, horizontalSpacing: 0,
+                                              verticalSpacing: 0, rowAlignment: .trailing,
+                                              trailingSpaces: [4, 4]).map(\.origin.x), [24, 64],
+                    "行尾空白: 靠右的行扣掉最后一项的末尾空白再贴右")
+        expectEqual(WrapLayoutMath.placements(rows: wordRows, sizes: words, bounds: bounds, horizontalSpacing: 0,
+                                              verticalSpacing: 0, rowAlignment: .center,
+                                              trailingSpaces: [4, 4]).map(\.origin.x), [12, 52],
+                    "行尾空白: 居中的行按去掉末尾空白的宽居中")
+        expectEqual(WrapLayoutMath.placements(rows: wordRows, sizes: words, bounds: bounds, horizontalSpacing: 0,
+                                              verticalSpacing: 0, rowAlignment: .trailing,
+                                              trailingSpaces: [4]).map(\.origin.x), [20, 60],
+                    "行尾空白: 个数对不上不扣")
 
         // 画的时候按多宽折行:跟定高度时的提议宽度只差像素对齐那一点,就按提议宽度折。
         expectEqual(WrapLayoutMath.drawWidth(sized: 261.1, bounds: 260.5), 261.1, "折行宽: 只差像素对齐那一点时按定高度那次的宽度")

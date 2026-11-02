@@ -1505,6 +1505,17 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         return min(1, OverlayNaturalWidth.width(next, font: nextLinePreviewNSFont) / main)
     }
 
+    static func droppingTrailingWhitespace(_ text: String) -> String {
+        String(text.reversed().drop { $0.isWhitespace }.reversed())
+    }
+
+    /// 下一句逐词列这一组的列宽:同图层行的列宽式子,字体换成预览那两份。
+    private func upcomingColumnWidth(_ group: SyncedLyricWordGroup) -> CGFloat {
+        WrappedKaraokeRowsView.Geometry.itemWidths(
+            words: group.words, groups: [group], font: nextLinePreviewNSFont, romaFont: nextLineReadingNSFont,
+            strokeInset: playback.textStrokeEnabled ? LyricsTextStrokeMetrics.inset : 0).first ?? 0
+    }
+
     /// 开唱后主行那一句每一项的宽(字或一组),下一句预览按它断行。
     private func upcomingBreakWidths(words: [SyncedLyricWord], groups: [SyncedLyricWordGroup]?) -> [CGFloat] {
         WrappedKaraokeRowsView.Geometry.itemWidths(
@@ -1566,13 +1577,20 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                               breakFont: playback.mainFont, breakRomaFont: playback.romanizationFont,
                               stroked: playback.textStrokeEnabled)),
                           breakBefore: WrapLayoutMath.breakOpportunities(texts: words.map(\.text)),
+                          trailingSpaceWidths: words.map { w in
+                              let tail = String(w.text.reversed().prefix { $0.isWhitespace }.reversed())
+                              return tail.isEmpty ? 0 : MenuBarMarqueeRenderer.width(of: tail, font: nextLinePreviewNSFont)
+                          },
                           breakWidths: upcomingBreakWidths(words: words, groups: nil)) {
+            // 每个字的宽按 AppKit 量(同主行):`Text` 自己报的尺寸不算字尾的空格,英文词会粘成一串。
+            // 字尾的空格不进 `Text`、只占宽度:这一行带着按声部的文字对齐,挂在末尾的空格会把字往右顶一格。
             ForEach(Array(words.enumerated()), id: \.offset) { _, w in
-                Text(w.text)
+                Text(Self.droppingTrailingWhitespace(w.text))
                     .font(nextLinePreviewFont)
                     .foregroundStyle(color)
                     .lyricTypesetting(text)
                     .fixedSize()
+                    .frame(width: MenuBarMarqueeRenderer.width(of: w.text, font: nextLinePreviewNSFont), alignment: .leading)
             }
         }
     }
@@ -1586,7 +1604,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         let columns = ForEach(groups) { g in
             // 字跟读音之间按读音间距挪,跟图层行同一个差值(`OverlayRowSpacing.perWordReadingGap`)。
             VStack(alignment: .leading, spacing: rowSpacing.perWordReadingGap) {
-                Text(g.words.map(\.text).joined())
+                // 组末尾的空格不进 `Text`(同 `upcomingWordRows`),由列宽占住。
+                Text(Self.droppingTrailingWhitespace(g.words.map(\.text).joined()))
                     .font(nextLinePreviewFont)
                     .foregroundStyle(color)
                     .lyricTypesetting(g.words.map(\.text).joined())
@@ -1604,6 +1623,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     .opacity(g.romanization == nil ? 0 : 1)
             }
             .fixedSize()
+            // 列宽按图层行的式子用预览字号算(`Geometry.itemWidths`):`Text` 自己报的尺寸不算组末尾的空格,
+            // 相邻两组会贴在一起。
+            .frame(width: upcomingColumnWidth(g), alignment: .leading)
         }
         if playback.lineOverflow == .scroll {
             HStack(alignment: .top, spacing: 0) { columns }
@@ -2447,6 +2469,8 @@ struct WrapLayout: Layout {
     /// 每个子视图前面能不能断行(见 `WrapLayoutMath.rows` 的 breakBefore)。nil = 处处能断。
     /// 由文本决定,文本已经在 contentKey 里,所以不另进缓存 key。
     var breakBefore: [Bool]? = nil
+    /// 每个子视图末尾空白的宽,行内对齐时扣掉每行最后一项的那一截(见 `WrapLayoutMath.placements` 的 trailingSpaces)。
+    var trailingSpaceWidths: [CGFloat]? = nil
     /// 非 nil = 在哪儿换行按这组宽度定,不按子视图自己的尺寸(下一句预览按开唱后主行的字宽断,
     /// 见 `WrapLayoutMath.rows(sizes:breakWidths:…)`)。影响它的输入(主行字体等)调用方要放进 contentKey。
     var breakWidths: [CGFloat]? = nil
@@ -2535,7 +2559,7 @@ struct WrapLayout: Layout {
             rows: rows,
             sizes: cache.sizes, bounds: bounds,
             horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing,
-            rowAlignment: rowAlignment)
+            rowAlignment: rowAlignment, trailingSpaces: trailingSpaceWidths)
         {
             subviews[p.index].place(
                 at: p.origin, anchor: .topLeading, proposal: ProposedViewSize(p.size))

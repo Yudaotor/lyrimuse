@@ -99,7 +99,12 @@ enum DebugDeepLinks {
             window.setFrameOrigin(NSPoint(x: x, y: mainHeight - y - window.frame.height))
             logger.notice("debug move window \(title, privacy: .public) to \(x, privacy: .public),\(y, privacy: .public)")
         case let .overlayLayout(width, lineChange, nextLine):
-            if let width { AppSettings.shared.overlayWidth = OverlayEditorStage.snappedWidth(width) }
+            if let width {
+                let snapped = OverlayEditorStage.snappedWidth(width)
+                AppSettings.shared.overlayWidth = snapped
+                // 同抽屉那根宽度滑杆:开着时窗口当场跟着变,关着时不碰 `.shared`(读一下就会建出窗口)。
+                if AppSettings.shared.classicOverlayEnabled { LyricsOverlayWindowController.shared.setWidth(snapped) }
+            }
             if let lineChange { AppSettings.shared.overlayLineChangeAnimation = lineChange }
             if let nextLine {
                 AppSettings.shared.overlayNextLineScale = OverlayRowFontScale.clamped(nextLine, item: .nextLine)

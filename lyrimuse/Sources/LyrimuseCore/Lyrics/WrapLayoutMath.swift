@@ -263,16 +263,20 @@ public enum WrapLayoutMath {
     }
 
     /// 带 rows 的版本,理由见 totalSize(rows:) 注释。
+    /// `trailingSpaces`:每一项末尾空白的宽,对齐时一行的宽扣掉这一行最后一项的那一截(同悬浮歌词逐字主行,
+    /// 不然居中的行左偏半个空格、靠右的行离右边差一个空格)。nil 或个数对不上 = 不扣。
     public static func placements(
         rows: [Row], sizes: [CGSize], bounds: CGRect,
         horizontalSpacing: CGFloat, verticalSpacing: CGFloat,
-        rowAlignment: RowAlignment
+        rowAlignment: RowAlignment, trailingSpaces: [CGFloat]? = nil
     ) -> [Placement] {
         var result: [Placement] = []
         result.reserveCapacity(sizes.count)
         var y = bounds.minY
+        let spaces = trailingSpaces?.count == sizes.count ? trailingSpaces : nil
         for row in rows {
-            let slack = max(0, bounds.width - row.width)
+            let tail = spaces.flatMap { s in row.indices.last.map { s[$0] } } ?? 0
+            let slack = max(0, bounds.width - (row.width - tail))
             let indent: CGFloat
             switch rowAlignment {
             case .center: indent = slack / 2
