@@ -148214,13 +148214,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tamaño de romanización"
+            "value" : "Tamaño romanización"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Romanisation"
+            "value" : "Taille romanisation"
           }
         },
         "ja" : {
@@ -148267,13 +148267,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tamaño de traducción"
+            "value" : "Tamaño traducción"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Traduction"
+            "value" : "Taille traduction"
           }
         },
         "ja" : {
@@ -148320,13 +148320,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tamaño de línea siguiente"
+            "value" : "Tamaño sig. línea"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ligne suivante"
+            "value" : "Taille ligne suivante"
           }
         },
         "ja" : {

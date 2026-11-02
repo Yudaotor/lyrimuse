@@ -1053,6 +1053,12 @@ func runOverlayTests() {
         expectEqual(sourceHas(rows, ".disabled(!settings.overlayShowRomanization)")
                         && sourceHas(rows, "OverlayRowFontScaleCell(item: .nextLine"), true,
                     "副行字号接线: 三格在「字体」组里,那一行关着时置灰")
+        let stage = (try? String(contentsOfFile: sources.appendingPathComponent("lyrimuse/UI/OverlayEditorStage.swift").path,
+                                 encoding: .utf8)) ?? ""
+        expectEqual([sourceHas(stage, "case .content: OverlayContentSettingsRows(showsRowSizes: true)"),
+                     sourceHas(sourceBody("struct OverlayContentSettingsRows: View", in: rows),
+                               "if showsRowSizes {\n                SettingsTileGrid(columns: 3) { OverlayRowFontScaleCells() }")],
+                    [true, true], "副行字号接线: 点预览读音 / 译文 / 下一句那块打开的「内容」浮层里也有三格大小")
     }
 
     // ---- WrapLayoutMath ----

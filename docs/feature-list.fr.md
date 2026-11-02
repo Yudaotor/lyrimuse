@@ -984,9 +984,9 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 308 au 
 - **Police**
 - **Graisse**
 - **Taille**
-- **Romanisation**
-- **Traduction**
-- **Ligne suivante**
+- **Taille romanisation**
+- **Taille traduction**
+- **Taille ligne suivante**
 
 ### Affichage des paroles › Paroles flottantes › Couleur
 

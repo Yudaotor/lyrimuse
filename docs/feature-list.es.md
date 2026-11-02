@@ -984,9 +984,9 @@ Todos los ajustes de la ventana Ajustes, según dónde están: 308 en total. Esc
 - **Fuente**
 - **Grosor**
 - **Tamaño**
-- **Tamaño de romanización**
-- **Tamaño de traducción**
-- **Tamaño de línea siguiente**
+- **Tamaño romanización**
+- **Tamaño traducción**
+- **Tamaño sig. línea**
 
 ### Mostrar letra › Letra flotante › Color
 

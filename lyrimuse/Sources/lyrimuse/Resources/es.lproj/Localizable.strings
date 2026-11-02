@@ -315,7 +315,7 @@
 "上移" = "Subir";
 "下一个里程碑" = "Próximo hito";
 "下一句" = "Línea siguiente";
-"下一句大小" = "Tamaño de línea siguiente";
+"下一句大小" = "Tamaño sig. línea";
 "下一句间距" = "Espaciado de línea siguiente";
 "下一步" = "Siguiente";
 "下一页" = "Siguiente";
@@ -2497,7 +2497,7 @@
 "诊断信息导出失败，请选择其他位置后重试" = "No se pudo exportar el diagnóstico. Prueba a guardarlo en otro lugar";
 "译文" = "Traducción";
 "译文与读音" = "Traducción y romanización";
-"译文大小" = "Tamaño de traducción";
+"译文大小" = "Tamaño traducción";
 "译文接在原文后面，排成一行，「字号」照常生效" = "La traducción sigue al original en la misma línea y «Tamaño» se sigue aplicando";
 "译文语言" = "Idioma de traducción";
 "译文间距" = "Espaciado de traducción";
@@ -2565,7 +2565,7 @@
 "读取播放状态，获取歌词和封面" = "Lee el estado de reproducción y obtiene la letra y la ilustración";
 "读取本地记录文件失败" = "No se pudo leer el archivo de registros local";
 "读音" = "Romanización";
-"读音大小" = "Tamaño de romanización";
+"读音大小" = "Tamaño romanización";
 "读音间距" = "Espaciado de romanización";
 "调整" = "Ajustar";
 "调整宽度" = "Ajustar ancho";

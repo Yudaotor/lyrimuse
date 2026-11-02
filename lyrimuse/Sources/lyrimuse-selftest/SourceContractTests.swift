@@ -3744,9 +3744,10 @@ func runSourceContractSettingsTests() {
         expectEqual([overlayStage, overlayDrawerFile, notchStage, menuBarStage, settingsView].filter(\.isEmpty).count, 0,
                     "抽屉镜像: 编辑台和抽屉的宿主文件都读得到(读不到 = 路径挪了)")
 
-        // 悬浮歌词:popoverRows(for:) 的每个 case 直接是一份行视图;抽屉 body 里装配的组是本文件的 private var,展开一层再找。
+        // 悬浮歌词:popoverRows(for:) 的每个 case 直接是一份行视图(可以带只在编辑台用的参数,如「内容」的 showsRowSizes);
+        // 抽屉 body 里装配的组是本文件的 private var,展开一层再找。
         let overlayStageCases = enumCases("private enum StagePopover: Hashable, CaseIterable {", in: overlayStage)
-        let overlayRows = captures(#"case \.(\w+): (Overlay\w+SettingsRows)\(\)"#,
+        let overlayRows = captures(#"case \.(\w+): (Overlay\w+SettingsRows)\([^)\n]*\)"#,
                                    in: sourceBody("private func popoverRows(for target: StagePopover) -> some View {", in: overlayStage))
         expectEqual(overlayStageCases.isEmpty, false, "抽屉镜像(悬浮歌词): 认得出浮层枚举")
         expectEqual(Set(overlayRows.map { $0[0] }), overlayStageCases,

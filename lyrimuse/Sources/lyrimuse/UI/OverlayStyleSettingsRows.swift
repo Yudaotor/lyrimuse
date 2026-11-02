@@ -39,14 +39,7 @@ struct OverlayTypeSettingsRows: View {
             SettingsRowGroup { mainRows }
             // 读音 / 译文 / 下一句的字号占主句的比例,按卡片里从上到下的顺序三格一行,同「排版」里三项间距的样子。
             // 那一行在「内容」里关着时这一格置灰。范围与默认值见 OverlayRowFontScale。
-            SettingsTileGrid(title: L10n.t("副行"), columns: 3) {
-                OverlayRowFontScaleCell(item: .romanization, title: L10n.t("读音大小"))
-                    .disabled(!settings.overlayShowRomanization)
-                OverlayRowFontScaleCell(item: .translation, title: L10n.t("译文大小"))
-                    .disabled(!settings.overlayShowTranslation)
-                OverlayRowFontScaleCell(item: .nextLine, title: L10n.t("下一句大小"))
-                    .disabled(!settings.showNextLinePreview)
-            }
+            SettingsTileGrid(title: L10n.t("副行"), columns: 3) { OverlayRowFontScaleCells() }
         }
     }
 
@@ -242,13 +235,37 @@ struct OverlayColorSettingsRows: View {
 @MainActor
 struct OverlayContentSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
+    /// 编辑台的「内容」浮层(点预览上读音 / 译文 / 下一句那一块打开的就是它)在三个开关下面再摆一排三格大小,
+    /// 每格对着上面那一行的开关;跟「字体」里的「副行」三格是同一组设置。全部设置抽屉里「字体」那张卡已经有,这里不再摆。见 04 章决策 82。
+    var showsRowSizes = false
 
     var body: some View {
-        SettingsTileGrid(columns: 3) {
-            SettingsToggleTile(icon: "textformat.alt", title: L10n.t("读音"), isOn: $settings.overlayShowRomanization)
-            SettingsToggleTile(icon: "text.bubble", title: L10n.t("译文"), isOn: $settings.overlayShowTranslation)
-            SettingsToggleTile(icon: "rectangle.grid.1x2", title: L10n.t("下一句"), isOn: $settings.showNextLinePreview)
+        SettingsRowGroupStack {
+            SettingsTileGrid(columns: 3) {
+                SettingsToggleTile(icon: "textformat.alt", title: L10n.t("读音"), isOn: $settings.overlayShowRomanization)
+                SettingsToggleTile(icon: "text.bubble", title: L10n.t("译文"), isOn: $settings.overlayShowTranslation)
+                SettingsToggleTile(icon: "rectangle.grid.1x2", title: L10n.t("下一句"), isOn: $settings.showNextLinePreview)
+            }
+            if showsRowSizes {
+                SettingsTileGrid(columns: 3) { OverlayRowFontScaleCells() }
+            }
         }
+    }
+}
+
+/// 读音 / 译文 / 下一句的字号三格,按卡片里从上到下的顺序;那一行在「内容」里关着时这一格置灰。「字体」的「副行」和编辑台
+/// 「内容」浮层共用。
+@MainActor
+struct OverlayRowFontScaleCells: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        OverlayRowFontScaleCell(item: .romanization, title: L10n.t("读音大小"))
+            .disabled(!settings.overlayShowRomanization)
+        OverlayRowFontScaleCell(item: .translation, title: L10n.t("译文大小"))
+            .disabled(!settings.overlayShowTranslation)
+        OverlayRowFontScaleCell(item: .nextLine, title: L10n.t("下一句大小"))
+            .disabled(!settings.showNextLinePreview)
     }
 }
 

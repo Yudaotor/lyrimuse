@@ -621,7 +621,7 @@ struct OverlayEditorStage: View {
 
         /// 各浮层按自己内容的自然宽度取值。「主题」720:7 张预览卡排成一行,浮层更矮,更容易放进舞台上方;
         /// 「排版」600:对齐方式那组分段选择器加上不折行的标题,间距三格要放下英文「Romanization Spacing」;「字体」600:副行三格同「排版」的间距三格;
-        /// 「内容」560:三格一行要放下英文「Romanization」;「颜色」「行为」见下;「位置」420。
+        /// 「内容」600:开关三格下面是大小三格,同「字体」的副行;「颜色」「行为」见下;「位置」420。
         var width: CGFloat {
             switch self {
             case .theme: return 720
@@ -629,7 +629,7 @@ struct OverlayEditorStage: View {
             // 「颜色」开关三列、颜色两列,一格要放下名字 + 「跟随封面」下拉 + 取色块(英文「Unsung Color」「Transparent」最长)。
             case .color: return 620
             case .layout: return 600
-            case .content: return 560
+            case .content: return 600
             case .placement: return 420
             // 「OBS」浏览器源地址那一行要放下地址和「预览」「拷贝」两颗按钮。
             case .obs: return 460
@@ -662,7 +662,7 @@ struct OverlayEditorStage: View {
         case .theme: OverlayThemeSettingsRows()
         case .type: OverlayTypeSettingsRows()
         case .color: OverlayColorSettingsRows()
-        case .content: OverlayContentSettingsRows()
+        case .content: OverlayContentSettingsRows(showsRowSizes: true)
         case .layout: OverlayLayoutSettingsRows()
         case .behavior: OverlayBehaviorSettingsRows()
         case .placement: OverlayPlacementSettingsRows()
