@@ -9,6 +9,7 @@ import OSLog
 @main
 enum AppEntry {
     static func main() {
+        SwallowedExceptionGuard.install()
         StorageMigrationRunner.runAtLaunch()
         LyrimuseApp.main()
     }

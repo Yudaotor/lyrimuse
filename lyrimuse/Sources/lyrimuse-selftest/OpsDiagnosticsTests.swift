@@ -884,6 +884,37 @@ func runOpsDiagnosticsTests() {
             expectEqual(exceptionAt != nil && faultingAt != nil && exceptionAt! < faultingAt!, true, "崩溃报告: 异常调用栈排在故障线程前")
         }
 
+        // 装了异常预处理器(SwallowedExceptionGuard):__exceptionPreprocess 和 objc_exception_throw 之间夹着预处理器的帧。
+        let guardedJSON = ["__exceptionPreprocess", "closure #1 in static SwallowedExceptionGuard.install()",
+                           "@objc closure #1 in static SwallowedExceptionGuard.install()", "objc_exception_throw",
+                           "-[NSException raise]", "culprit()"].enumerated().map { i, symbol in
+            "{\"imageIndex\":0,\"imageOffset\":\(3000 + i),\"symbol\":\"\(symbol)\"}"
+        }.joined(separator: ",")
+        let guardedBody = """
+        {"procName":"lyrimuse","exception":{"type":"EXC_CRASH","signal":"SIGABRT"},"faultingThread":0,"threads":[{"frames":[]}],"lastExceptionBacktrace":[\(guardedJSON)],"usedImages":[{"name":"lyrimuse"}]}
+        """
+        let guarded = CrashReportSummary.parse(fileName: "lyrimuse-2026-11-02-180000.ips", data: ips("{}", guardedBody))
+        expectEqual(guarded?.exceptionFrames.map { $0.symbol ?? "" }, ["-[NSException raise]", "culprit()"],
+                    "崩溃报告: 异常调用栈从 objc_exception_throw 的下一帧起,预处理器的帧不算")
+
+        // 吞掉的异常守卫:普通同步代码和正在跑的任务里都不算「线程上残留着任务」。
+        do {
+            expectEqual(SwallowedExceptionGuard.taskLeftOnCurrentThread(), false, "异常守卫: 不在任务里时不报")
+            let done = DispatchSemaphore(value: 0)
+            nonisolated(unsafe) var seen: (inTask: Bool, left: Bool) = (false, true)
+            Task.detached {
+                seen = (withUnsafeCurrentTask { $0 != nil }, SwallowedExceptionGuard.taskLeftOnCurrentThread())
+                done.signal()
+            }
+            done.wait()
+            expectEqual(seen.inTask, true, "异常守卫: 任务里读得到当前任务")
+            expectEqual(seen.left, false, "异常守卫: 正在跑的任务栈里有并发运行时的帧,不算残留")
+            let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            let entry = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/StorageMigrationRunner.swift"), encoding: .utf8)) ?? ""
+            expectEqual(sourceHas(sourceBody("static func main()", in: entry), "SwallowedExceptionGuard.install() StorageMigrationRunner.runAtLaunch() LyrimuseApp.main()"), true,
+                        "异常守卫(契约): App 入口在一切别的代码之前装上")
+        }
+
         let collectorHeader = """
         {"app_name":"collector","timestamp":"2026-09-06 01:00:00.00 +0800","app_version":"???","bug_type":"309","os_version":"macOS 27.0 (26A5416b)","incident_id":"BBBB"}
         """

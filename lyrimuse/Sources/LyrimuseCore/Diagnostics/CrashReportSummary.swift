@@ -132,7 +132,7 @@ public struct CrashReportSummary: Equatable {
                 summary.frames = rawFrames.prefix(maxFrames).map { frame($0, images: images) }
             }
             if let rawFrames = body["lastExceptionBacktrace"] as? [[String: Any]] {
-                let thrown = rawFrames.drop { exceptionThrowSymbols.contains(($0["symbol"] as? String) ?? "") }
+                let thrown = exceptionThrowSite(rawFrames)
                 summary.totalExceptionFrames = thrown.count
                 summary.exceptionFrames = thrown.prefix(maxFrames).map { frame($0, images: images) }
             }
@@ -142,6 +142,15 @@ public struct CrashReportSummary: Equatable {
 
     /// 异常调用栈开头抛异常的公共入口,每份都一样,不带信息。
     static let exceptionThrowSymbols: Set<String> = ["__exceptionPreprocess", "objc_exception_throw"]
+
+    /// 从抛异常处起的帧:开头几帧里有 `objc_exception_throw` 就从它下一帧起(装了异常预处理器时
+    /// `__exceptionPreprocess` 和它之间夹着预处理器自己的帧,`SwallowedExceptionGuard`),否则跳过开头的公共入口。
+    static func exceptionThrowSite(_ frames: [[String: Any]]) -> ArraySlice<[String: Any]> {
+        if let i = frames.prefix(8).firstIndex(where: { ($0["symbol"] as? String) == "objc_exception_throw" }) {
+            return frames[(i + 1)...]
+        }
+        return frames.drop { exceptionThrowSymbols.contains(($0["symbol"] as? String) ?? "") }
+    }
 
     private static func frame(_ raw: [String: Any], images: [[String: Any]]) -> Frame {
         var frame = Frame()
