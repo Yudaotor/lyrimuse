@@ -1390,6 +1390,8 @@ func runMenuBarTests() {
         if let text = try? String(contentsOfFile: item.path, encoding: .utf8) {
             expectEqual(text.contains("static let lyricsSlotPadding: CGFloat = 4"), true,
                         "内边距: 歌词态只留 4pt 防裁边")
+            expectEqual(text.contains("return max(NSStatusBar.system.thickness, ceil(footprint.width))"), true,
+                        "内边距: 图标态取系统标准方形宽和图宽里大的那个,槽里不另留边")
             // 反推内容宽的两处必须跟申请用**同一个**常量,差一截就是
             // 「点暂停生效上一首」的形状。
             let lyricsUses = text.components(separatedBy: "Self.lyricsSlotPadding").count - 1

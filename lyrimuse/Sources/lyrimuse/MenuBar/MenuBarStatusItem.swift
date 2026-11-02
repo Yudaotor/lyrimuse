@@ -553,8 +553,8 @@ final class MenuBarStatusItem: NSObject {
     /// 算出来的宽度跟真实槽宽差一截,悬停三键的点击会落到隔壁键上。
     private static let lyricsSlotPadding: CGFloat = 4
 
-    /// 图标态默认使用系统标准方形槽宽;大图标超出时按实际图宽扩展,避免裁切。
-    /// 显式给出出生宽度,保留状态栏重排的兼容规则,不再额外叠加 18pt 留白。
+    /// 图标态的槽宽:系统标准方形宽(`NSStatusBar.system.thickness`),图标或封面比它宽时按实际图宽撑开。
+    /// 项与项之间的间距由系统在项外面加,槽里不留边(见 06 章决策 81)。
     private var iconSlotLength: CGFloat {
         let settings = AppSettings.shared
         let footprint = MenuBarIconArtwork.footprint(style: settings.menuBarIconStyle,
