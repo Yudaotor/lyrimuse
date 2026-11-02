@@ -544,13 +544,6 @@ final class MenuBarStatusItem: NSObject {
     /// (见 present),这个值给落定窗、过渡渲染、悬停三键和快捷键回声判断"现在是不是歌词槽"用。
     private var displayClass = ""
 
-    /// **图标态**的槽宽 = 图标宽 + 这个数。这 18pt 全是我们自己留的:按钮宽恒等于申请的槽宽
-    /// (只做取整),AppKit 不额外吃内边距。
-    ///
-    /// 图标态**需要**它:`showIcon` 走 `button.image`,AppKit 把图片在按钮里居中,18pt 给出
-    /// 左右各 9pt,正好跟别的状态栏图标观感一致(实测相邻系统图标之间 23pt)。
-    /// 歌词态**不需要**这么多,见 `lyricsSlotPadding`。
-    private static let fixedSlotPadding: CGFloat = 18
     /// **歌词态**的槽宽 = 内容宽 + 这个数。
     ///
     /// 歌词态不像图标态那样靠 AppKit 居中:内容贴按钮前缘、图层由我们自己摆,多留的宽度会整块落到
@@ -560,13 +553,14 @@ final class MenuBarStatusItem: NSObject {
     /// 算出来的宽度跟真实槽宽差一截,悬停三键的点击会落到隔壁键上。
     private static let lyricsSlotPadding: CGFloat = 4
 
-    /// 图标态的槽宽:当前图标款式按「图标大小」出的图宽(「封面当图标」开着时按 `MenuBarIconArtwork.footprint`)
-    /// + `fixedSlotPadding`。
+    /// 图标态默认使用系统标准方形槽宽;大图标超出时按实际图宽扩展,避免裁切。
+    /// 显式给出出生宽度,保留状态栏重排的兼容规则,不再额外叠加 18pt 留白。
     private var iconSlotLength: CGFloat {
         let settings = AppSettings.shared
-        return MenuBarIconArtwork.footprint(style: settings.menuBarIconStyle,
-                                            showsArtwork: settings.menuBarIconShowsArtwork,
-                                            size: settings.menuBarIconSize).width + Self.fixedSlotPadding
+        let footprint = MenuBarIconArtwork.footprint(style: settings.menuBarIconStyle,
+                                                    showsArtwork: settings.menuBarIconShowsArtwork,
+                                                    size: settings.menuBarIconSize)
+        return max(NSStatusBar.system.thickness, ceil(footprint.width))
     }
 
     /// 两次重建之间的最小静默间隔(见 present 头注铁律 2):实测相隔 1.1s 的两次重建就会排坏,取 3s
@@ -1384,9 +1378,9 @@ final class MenuBarStatusItem: NSObject {
         }
         centerLyrics.keep(only: [])
 
-        // 没开菜单栏歌词 / 没在播放 / 当前句为空:收回小图标槽。槽宽 = 当前图标款式的
-        // 图宽 + fixedSlotPadding,跟歌词态同一套"出生就带显式宽度"规则(variableLength 出生、
-        // 图片事后再设,会踩"出生后不重排",收不回去留大缺口)。
+        // 没开菜单栏歌词 / 没在播放 / 当前句为空:收回图标槽。
+        // iconSlotLength 给出系统标准方形宽度,并为大图标保留足够空间;出生就带显式宽度,
+        // 避免 variableLength 出生、图片事后再设导致的邻居不重排和收缩缺口。
         //
         // 收缩观察窗只给"开关开着但此刻没词"(歌词间隙/暂停/广告,常在 1~2s 内结束);
         // 用户手动关开关是明确意图,立刻缩回(仍受重建静默节流保护)。

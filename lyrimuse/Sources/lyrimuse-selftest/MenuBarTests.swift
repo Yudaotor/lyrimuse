@@ -910,10 +910,8 @@ func runMenuBarTests() {
     // MenuBarHoverControls 里,UI 层只剩一层薄绑定。
     do {
         typealias H = MenuBarHoverControls
-        // 固定宽度模式的**最小**槽宽:滑杆下限 80 + 系统内边距 18(MenuBarStatusItem
-        // .fixedSlotPadding)。三个键必须在这一档就装得下 —— 否则"开了这个开关却没反应"
-        // 会变成一个只在窄配置下出现的谜。
-        let minimumFixedSlot = CGRect(x: 0, y: 0, width: 98, height: 22)
+        // 用 98pt 的窄歌词槽检查三键的居中与命中;接管门槛另在下面检查。
+        let fixedSlot = CGRect(x: 0, y: 0, width: 98, height: 22)
 
         expectEqual(H.minimumWidth, 72, "三键总宽 = 24pt 一格 × 3(命中区连续,键之间没有死缝)")
 
@@ -922,19 +920,19 @@ func runMenuBarTests() {
                     "悬停三键: 比总宽差一点点也不接管")
         expectEqual(H.layout(in: CGRect(x: 0, y: 0, width: 72, height: 22)) == nil, false,
                     "悬停三键: 刚好等于总宽就接管")
-        // 自适应宽度模式下一句 ♪ 的槽宽实测约 24.5pt、图标槽约 38.5pt —— 两者都必须不接管。
+        // 自适应模式下一句 ♪ 的槽宽实测约 24.5pt、标准图标槽为 22pt —— 两者都必须不接管。
         expectEqual(H.layout(in: CGRect(x: 0, y: 0, width: 24.5, height: 22)) == nil, true,
                     "悬停三键: 自适应模式的 ♪ 占位槽(~24.5pt)不接管")
-        expectEqual(H.layout(in: CGRect(x: 0, y: 0, width: 38.5, height: 22)) == nil, true,
-                    "悬停三键: 图标槽(~38.5pt)不接管")
+        expectEqual(H.layout(in: CGRect(x: 0, y: 0, width: 22, height: 22)) == nil, true,
+                    "悬停三键: 标准图标槽(22pt)不接管")
         expectEqual(H.layout(in: CGRect(x: 0, y: 0, width: 200, height: 0)) == nil, true,
                     "悬停三键: 高度为 0(尺寸还没落定)不接管")
-        expectEqual(H.layout(in: minimumFixedSlot) == nil, false,
-                    "悬停三键: 固定宽度模式的最小槽宽(80+18)装得下")
+        expectEqual(H.layout(in: fixedSlot) == nil, false,
+                    "悬停三键: 98pt 的窄歌词槽装得下")
 
         // 下面这些都要三个格子在手。用 if let 而不是 guard-return:这一节现在排在最后,
         // 用 return 早退的话以后谁在后面加一节就被静默跳过了(else 分支照旧大声失败)。
-        if let rects = H.layout(in: minimumFixedSlot),
+        if let rects = H.layout(in: fixedSlot),
            let prev = rects[.previous], let mid = rects[.playPause], let nxt = rects[.next] {
             // ② 三格等宽、纵向占满、整块居中
             expectEqual(rects.count, 3, "悬停三键: 恰好三个键")
@@ -981,7 +979,7 @@ func runMenuBarTests() {
                         CGRect(x: 19, y: 5, width: 12, height: 12),
                         "字形: 在 24×22 的格子里居中")
         } else {
-            expectEqual(true, false, "悬停三键: 最小槽宽(98pt)应当排得出三个键(排不出 = 门槛算错了)")
+            expectEqual(true, false, "悬停三键: 98pt 的窄歌词槽应当排得出三个键(排不出 = 门槛算错了)")
         }
 
         // ⑧ 开着「歌词旁的图标」时,三个键只占**歌词那一格**,图标那一块整个留给"弹面板"
@@ -1381,19 +1379,15 @@ func runMenuBarTests() {
         }
     }
 
-    // ---- 图标态 / 歌词态的内边距是**两个**数----
+    // ---- 歌词态的内边距与内容宽度反推必须同源 ----
     //
-    // 实测对账 `requested` / `button.bounds.width` / `item.length`:按钮宽恒等于我们申请的槽宽,
-    // **AppKit 一点都没多要** —— 那 18pt 全是我们自己留的。图标态需要它(showIcon 走
-    // button.image,AppKit 居中,18 给出左右各 9,跟别的状态栏图标一致);歌词态我们自己摆图层、
-    // 又贴了前缘,18pt 会整块堆在尾部(用户圈图:「这右边的也帮我缩一下」),所以只留 4pt 防裁边。
+    // 图标态跟随系统标准方形宽度;歌词态自己摆图层并贴着前缘,只留 4pt 防裁边。
+    // 申请槽宽和反推内容宽必须使用同一个内边距,否则悬停控制会与歌词错位。
     do {
         let item = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/lyrimuse/MenuBar/MenuBarStatusItem.swift")
         if let text = try? String(contentsOfFile: item.path, encoding: .utf8) {
-            expectEqual(text.contains("static let fixedSlotPadding: CGFloat = 18"), true,
-                        "内边距: 图标态仍是 18(AppKit 居中 → 左右各 9,跟别的状态栏图标齐)")
             expectEqual(text.contains("static let lyricsSlotPadding: CGFloat = 4"), true,
                         "内边距: 歌词态只留 4pt 防裁边")
             // 反推内容宽的两处必须跟申请用**同一个**常量,差一截就是
@@ -1401,8 +1395,6 @@ func runMenuBarTests() {
             let lyricsUses = text.components(separatedBy: "Self.lyricsSlotPadding").count - 1
             expectEqual(lyricsUses, 8,
                         "内边距: 歌词态八处(text 申请 / fixed 申请 / 两处反推 / 地板槽宽反推歌词格 / 菜单栏正中两处 / 正中悬停三键反推)同源,实际 \(lyricsUses)")
-            let iconUses = text.components(separatedBy: "Self.fixedSlotPadding").count - 1
-            expectEqual(iconUses, 1, "内边距: 图标态只剩那一处申请,实际 \(iconUses)")
         } else {
             expectEqual(true, false, "内边距: 读不到 MenuBarStatusItem.swift(路径挪了?)")
         }
