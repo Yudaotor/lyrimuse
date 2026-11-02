@@ -1011,6 +1011,29 @@ func runPlaybackPositionTests() {
                         "暂停残差: 手动点播反推出略负,按下限学")
             expectEqual(LocalPlaybackSource.pauseResidualLead(bias: 0.24, pauseDelta: -1.5) == nil, true, "暂停残差: 残差超过 1s 不学")
             expectEqual(LocalPlaybackSource.pauseResidualLead(bias: 0, pauseDelta: 0.9) == nil, true, "暂停残差: 反推出负得多的领先不学")
+            // 暂停跳变记录:同一个播放器长期偏向一边才标出来(真机 Spotify 版本 3 的表下四次暂停 +0.27~+0.30)。
+            do {
+                let sp = "com.spotify.client", am = "com.apple.Music"
+                var h = PauseJumpHistory()
+                for d in [0.273, 0.300, 0.270, 0.272, 0.281] { expectEqual(h.record(d, bundleID: sp), false, "暂停跳变: 不满 6 次不下结论") }
+                expectEqual(h.isBiased(sp), false, "暂停跳变: 5 次还不算偏")
+                expectEqual(h.record(0.276, bundleID: sp), true, "暂停跳变: 第 6 次让它翻成偏向一边,返回 true(日志只打这一下)")
+                expectEqual(h.record(0.29, bundleID: sp), false, "暂停跳变: 已经偏了不再返回 true")
+                expectEqual(h.diagnosticLines().contains { $0.contains(sp) && $0.contains("BIASED") }, true, "暂停跳变: 报告里标 BIASED")
+                for d in [-0.06, -0.04, 0.033, -0.005, 0.04, -0.039, 0.02] { h.record(d, bundleID: am) }
+                expectEqual(h.isBiased(am), false, "暂停跳变: ±0.06 以内的噪声不算偏")
+                expectEqual(h.record(1.5, bundleID: am), false, "暂停跳变: 超过 1s 的不记")
+                expectEqual(h.deltasByBundleID[am]?.count, 7, "暂停跳变: 超过 1s 的没进记录")
+                for _ in 0..<PauseJumpHistory.capacity { h.record(0.01, bundleID: sp) }
+                expectEqual(h.deltasByBundleID[sp]?.count, PauseJumpHistory.capacity, "暂停跳变: 每个播放器只留最近 12 次")
+                expectEqual(h.isBiased(sp), false, "暂停跳变: 修好之后旧的几次被挤掉,不再标偏")
+                expectEqual(PauseJumpHistory(deltasByBundleID: [sp: [0.1, 0.3, -0.2, 0.0]]).median(sp), 0.05, "暂停跳变: 偶数个取中间两个的平均")
+                expectEqual(PauseJumpHistory().diagnosticLines(), ["Pause jumps: none recorded"], "暂停跳变: 没记录时报告一行")
+                let exporter = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                    .appendingPathComponent("lyrimuse/Settings/DiagnosticsExporter.swift"), encoding: .utf8)) ?? ""
+                expectEqual(sourceHas(exporter, "lines.append(contentsOf: LocalPlaybackSource.shared.pauseJumpHistory.diagnosticLines())"), true,
+                            "暂停跳变: 诊断报告的播放时钟段带上这几行")
+            }
             expectEqual(r3(LocalPlaybackSource.learnedStartLead(current: 0.72, sample: 1.2, samplesSoFar: 5)), 0.864,
                         "起播领先学习: 学够样本后 EMA α=0.3")
             // 先验 0.66、这台机器真值 0.26:α=0.5 两次到 0.36,α=0.3 两次还在 0.46。

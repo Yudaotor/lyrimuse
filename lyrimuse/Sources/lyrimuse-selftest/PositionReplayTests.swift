@@ -899,6 +899,9 @@ private func replaySpotifyManualStart() {
     expectEqual(near(rig.shown(at: at(19.8)), frozen, 0.001), true, "回放·Spotify 手动点播: 暂停后屏上 = 冻结值")
     expectEqual(rig.source.replayReportedBiasSecs, 0, "回放·Spotify 手动点播: 暂停作废偏置")
     expectEqual(rig.startLeadTable["fresh"], nil, "回放·Spotify 手动点播: 暂停那一拍只挂起样本、还没学")
+    let jumps = rig.source.pauseJumpHistory.deltasByBundleID["com.spotify.client"] ?? []
+    expectEqual(jumps.count == 1 && near(jumps[0], prior - trueLead, 0.002), true,
+                "回放·Spotify 手动点播: 暂停那一拍的跳变量记进诊断记录(\(jumps))")
     rig.tick(spotify("蝴蝶", raw: frozen + 1, duration: 283.2), at: at(22))
     let learned = rig.startLeadTable["fresh"]
     expectEqual(near(learned, prior * 0.5 + trueLead * 0.5, 0.002), true,

@@ -269,6 +269,8 @@ enum DiagnosticsExporter {
         // 当前行填色是否已定格 —— 四个展示面 TimelineView 的停表条件,恒为 false 意味着
         // 有一条动画路径在空转。
         lines.append("Current line fill settled: \(clock.fillSettled)")
+        // 暂停那一拍屏上跳了多少:同一个播放器长期偏向一边 = 暂停前整首偏快 / 偏慢,暂停一下才对齐。只有 bundle id 和数字。
+        lines.append(contentsOf: LocalPlaybackSource.shared.pauseJumpHistory.diagnosticLines())
         lines.append("")
 
         return lines

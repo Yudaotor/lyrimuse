@@ -1361,6 +1361,24 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     private static let spotifyStartLeadDefaultsKey = "np:spotifyStartLeadByKind"
+    private static let pauseJumpHistoryDefaultsKey = "np:pauseJumpHistory"
+
+    /// 各播放器最近几次暂停的跳变量,给诊断报告读(见 PauseJumpHistory)。
+    public var pauseJumpHistory: PauseJumpHistory {
+        guard let data = env.defaults.data(forKey: Self.pauseJumpHistoryDefaultsKey),
+              let history = try? JSONDecoder().decode(PauseJumpHistory.self, from: data) else { return PauseJumpHistory() }
+        return history
+    }
+
+    private func recordPauseJump(_ delta: Double, bundleID: String) {
+        guard !PlaybackSimulation.isActive else { return }
+        var history = pauseJumpHistory
+        let turnedBiased = history.record(delta, bundleID: bundleID)
+        if let data = try? JSONEncoder().encode(history) { env.defaults.set(data, forKey: Self.pauseJumpHistoryDefaultsKey) }
+        if turnedBiased, let median = history.median(bundleID) {
+            logger.notice("pause jump biased: \(bundleID, privacy: .public) median \(median, format: .fixed(precision: 3))s over last \(history.deltasByBundleID[bundleID]?.count ?? 0) pauses (> 0 = lyrics were behind before the pause)")
+        }
+    }
     /// 每一档学过几个样本(决定 `learnedStartLead` 的 α)。旧版本没有这张表,按 0 算。
     private static let spotifyStartLeadSamplesDefaultsKey = "np:spotifyStartLeadSamplesByKind"
     private static let spotifyStartLeadSchemaDefaultsKey = "np:spotifyStartLeadSchema"
@@ -4816,6 +4834,9 @@ public final class LocalPlaybackSource: ObservableObject {
         if let shown = pauseShownMs, let paused = newPausedPositionMs {
             // 播放→暂停翻转的那一拍。delta<0 = 显示往回退,>0 = 往前补。
             logger.notice("pause transition: shown=\(Double(shown) / 1000, format: .fixed(precision: 3)) frozenRaw=\(snapshot.elapsedTime ?? -1, format: .fixed(precision: 3)) bias=\(self.posReportedBiasSecs, format: .fixed(precision: 3)) paused=\(Double(paused) / 1000, format: .fixed(precision: 3)) delta=\(Double(paused - shown) / 1000, format: .fixed(precision: 3)) frozenByEvent=\(pauseAnchorWasFrozenByEvent) errEMA=\(self.posErrEMA, format: .fixed(precision: 3))")
+            if pauseAnchorWasFrozenByEvent, let bundleID = snapshot.bundleIdentifier {
+                recordPauseJump(Double(paused - shown) / 1000, bundleID: bundleID)
+            }
             // 屏上位置得是被暂停事件当场冻住的那一刻(frozenByEvent),跟冻结值比才有意义。
             if pauseAnchorWasFrozenByEvent, let learn = pauseLearnStart,
                let sample = Self.pauseResidualLead(bias: learn.bias, pauseDelta: Double(paused - shown) / 1000) {
