@@ -1489,6 +1489,30 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         }
     }
 
+    /// 下一句的逐字(开唱后主行按它折行),只在换行模式下给预览定断点用。设置页示例行在场时、从右往左的文字恒为 nil。
+    private var upcomingWords: [SyncedLyricWord]? {
+        guard !showingPreviewLine, let words = playback.nextLineWords, !words.isEmpty,
+              !LyricTextDirection.isRightToLeft(words.map(\.text).joined()) else { return nil }
+        return words
+    }
+
+    /// 下一句预览的断点按开唱后的主行定:主字号、同一个可用宽度、同一个折行函数,画的时候用预览字号(04 章决策 84)。
+    /// 只有整行文字(没有逐字)时主行是系统折行,预览的折行宽度按这一句预览字号与主字号的宽度比收窄。
+    private var nextLineBreakWidthRatio: CGFloat {
+        guard let next = nextLineText, nextLinePreviewNSFont != playback.overlayNSFonts.main else { return 1 }
+        let main = OverlayNaturalWidth.width(next, font: playback.overlayNSFonts.main)
+        guard main > 0 else { return 1 }
+        return min(1, OverlayNaturalWidth.width(next, font: nextLinePreviewNSFont) / main)
+    }
+
+    /// 开唱后主行那一句每一项的宽(字或一组),下一句预览按它断行。
+    private func upcomingBreakWidths(words: [SyncedLyricWord], groups: [SyncedLyricWordGroup]?) -> [CGFloat] {
+        WrappedKaraokeRowsView.Geometry.itemWidths(
+            words: words, groups: groups, font: playback.overlayNSFonts.main,
+            romaFont: playback.overlayNSFonts.romanization,
+            strokeInset: playback.textStrokeEnabled ? LyricsTextStrokeMetrics.inset : 0)
+    }
+
     /// 下一句能不能把罗马音逐词标在底下(前奏 / 间奏「•••」下方那句和唱着时的下一句预览都一样)—— 判据同
     /// `usesPerWordRomanization`,数据取自下一行。设置页示例行在场时恒为 nil。
     private var upcomingWordGroups: [SyncedLyricWordGroup]? {
@@ -1518,12 +1542,38 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             stillUpcomingText(next, font: nextLinePreviewFont, color: color)
         } else if let groups = upcomingWordGroups {
             lyricStroke(upcomingGroupColumns(groups, key: next, color: color))
+        } else if let words = upcomingWords {
+            lyricStroke(upcomingWordRows(words, color: color))
         } else {
-            lyricStroke(Text(next)
-                .font(nextLinePreviewFont)
-                .foregroundStyle(color)
-                .lyricTypesetting(next)
-                .overlayLineFit(playback.lineOverflow))
+            lyricStroke(ScaledWidthProposal(ratio: nextLineBreakWidthRatio) {
+                Text(next)
+                    .font(nextLinePreviewFont)
+                    .foregroundStyle(color)
+                    .lyricTypesetting(next)
+                    .overlayLineFit(playback.lineOverflow)
+            })
+        }
+    }
+
+    /// 换行模式下带逐字的下一句:一个字一项,断点按开唱后主行(`WrappedKaraokeRows`)的字宽和断行规则定,
+    /// 预览断成几行、断在哪个词,开唱后就是那样。
+    private func upcomingWordRows(_ words: [SyncedLyricWord], color: Color) -> some View {
+        let text = words.map(\.text).joined()
+        return WrapLayout(rowAlignment: nextLineRowAlignment,
+                          contentKey: AnyHashable(UpcomingBreakKey(
+                              line: OverlayLineKey(text: text, roma: false, mainFont: nextLinePreviewFont,
+                                                   romaFont: nextLinePreviewFont, romaGap: 0),
+                              breakFont: playback.mainFont, breakRomaFont: playback.romanizationFont,
+                              stroked: playback.textStrokeEnabled)),
+                          breakBefore: WrapLayoutMath.breakOpportunities(texts: words.map(\.text)),
+                          breakWidths: upcomingBreakWidths(words: words, groups: nil)) {
+            ForEach(Array(words.enumerated()), id: \.offset) { _, w in
+                Text(w.text)
+                    .font(nextLinePreviewFont)
+                    .foregroundStyle(color)
+                    .lyricTypesetting(text)
+                    .fixedSize()
+            }
         }
     }
 
@@ -1559,10 +1609,15 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             HStack(alignment: .top, spacing: 0) { columns }
                 .fixedSize()
         } else {
+            // 断点按开唱后主行的列宽定(`upcomingBreakWidths`),预览断在哪一组,开唱后就断在哪一组。
             WrapLayout(rowAlignment: nextLineRowAlignment,
-                       contentKey: AnyHashable(OverlayLineKey(
-                           text: key, roma: true, mainFont: nextLinePreviewFont, romaFont: nextLineReadingFont,
-                           romaGap: rowSpacing.perWordReadingGap))) {
+                       contentKey: AnyHashable(UpcomingBreakKey(
+                           line: OverlayLineKey(
+                               text: key, roma: true, mainFont: nextLinePreviewFont, romaFont: nextLineReadingFont,
+                               romaGap: rowSpacing.perWordReadingGap),
+                           breakFont: playback.mainFont, breakRomaFont: playback.romanizationFont,
+                           stroked: playback.textStrokeEnabled)),
+                       breakWidths: upcomingBreakWidths(words: groups.flatMap(\.words), groups: groups)) {
                 columns
             }
         }
@@ -1969,6 +2024,14 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         let romaFont: Font
         /// 逐词读音的间距改行高,也算排版身份(`WrapLayout` 按这个 key 缓存子视图尺寸)。
         let romaGap: CGFloat
+    }
+
+    /// 下一句预览的排版身份:除了画出来的字,定断点用的主行字体和描边(量列宽时的读音留白)变了也要重排。
+    private struct UpcomingBreakKey: Hashable {
+        let line: OverlayLineKey
+        let breakFont: Font
+        let breakRomaFont: Font
+        let stroked: Bool
     }
 }
 
@@ -2384,6 +2447,9 @@ struct WrapLayout: Layout {
     /// 每个子视图前面能不能断行(见 `WrapLayoutMath.rows` 的 breakBefore)。nil = 处处能断。
     /// 由文本决定,文本已经在 contentKey 里,所以不另进缓存 key。
     var breakBefore: [Bool]? = nil
+    /// 非 nil = 在哪儿换行按这组宽度定,不按子视图自己的尺寸(下一句预览按开唱后主行的字宽断,
+    /// 见 `WrapLayoutMath.rows(sizes:breakWidths:…)`)。影响它的输入(主行字体等)调用方要放进 contentKey。
+    var breakWidths: [CGFloat]? = nil
 
     // 量一次子视图尺寸就存住,别每次调用都重量一遍。
     //
@@ -2427,7 +2493,10 @@ struct WrapLayout: Layout {
         if let rows = cache.rows, cache.rowsWidth == maxWidth, cache.rowsSpacing == horizontalSpacing {
             return rows
         }
-        let rows = WrapLayoutMath.rows(
+        let rows = breakWidths.map {
+            WrapLayoutMath.rows(sizes: cache.sizes, breakWidths: $0, maxWidth: maxWidth,
+                                horizontalSpacing: horizontalSpacing, breakBefore: breakBefore)
+        } ?? WrapLayoutMath.rows(
             sizes: cache.sizes, maxWidth: maxWidth, horizontalSpacing: horizontalSpacing,
             breakBefore: breakBefore)
         cache.rows = rows
@@ -2471,6 +2540,25 @@ struct WrapLayout: Layout {
             subviews[p.index].place(
                 at: p.origin, anchor: .topLeading, proposal: ProposedViewSize(p.size))
         }
+    }
+}
+
+/// 把宽度提案按比例收窄再交给唯一的子视图,报子视图自己的尺寸。下一句预览只有整行文字时用:
+/// 小字号在收窄后的宽度里折行,断点跟开唱后主字号在整宽里折的一致(04 章决策 84)。
+struct ScaledWidthProposal: Layout {
+    var ratio: CGFloat
+
+    private func narrowed(_ proposal: ProposedViewSize) -> ProposedViewSize {
+        guard let width = proposal.width, width.isFinite else { return proposal }
+        return ProposedViewSize(width: width * ratio, height: proposal.height)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        subviews.first?.sizeThatFits(narrowed(proposal)) ?? .zero
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, anchor: .topLeading, proposal: narrowed(proposal))
     }
 }
 

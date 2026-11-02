@@ -98,10 +98,13 @@ enum DebugDeepLinks {
             }
             window.setFrameOrigin(NSPoint(x: x, y: mainHeight - y - window.frame.height))
             logger.notice("debug move window \(title, privacy: .public) to \(x, privacy: .public),\(y, privacy: .public)")
-        case let .overlayLayout(width, lineChange):
+        case let .overlayLayout(width, lineChange, nextLine):
             if let width { AppSettings.shared.overlayWidth = OverlayEditorStage.snappedWidth(width) }
             if let lineChange { AppSettings.shared.overlayLineChangeAnimation = lineChange }
-            logger.notice("debug overlay layout width=\(width.map { String($0) } ?? "nil", privacy: .public) lineChange=\(String(describing: lineChange), privacy: .public)")
+            if let nextLine {
+                AppSettings.shared.overlayNextLineScale = OverlayRowFontScale.clamped(nextLine, item: .nextLine)
+            }
+            logger.notice("debug overlay layout width=\(width.map { String($0) } ?? "nil", privacy: .public) lineChange=\(String(describing: lineChange), privacy: .public) nextLine=\(nextLine.map { String($0) } ?? "nil", privacy: .public)")
         case let .notchStyle(style, expanded):
             if let style, let parsed = NotchCardStyle(rawValue: style) { AppSettings.shared.notchCardStyle = parsed }
             if let expanded {

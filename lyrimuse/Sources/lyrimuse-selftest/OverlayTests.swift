@@ -1069,8 +1069,31 @@ func runOverlayTests() {
                                    encoding: .utf8)) ?? ""
         let columns = sourceBody("private func upcomingGroupColumns", in: overlay)
         expectEqual([sourceHas(columns, ".font(nextLineReadingFont)"), sourceHas(columns, "romaFont: nextLineReadingFont"),
-                     sourceHas(columns, "playback.romanizationFont")], [true, true, false],
+                     sourceHas(columns, ".font(playback.romanizationFont)")], [true, true, false],
                     "副行字号接线: 下一句逐词列的读音用缩小的那份字体,折行缓存键跟着它")
+        let preview = sourceBody("private func nextLinePreviewContent", in: overlay)
+        let wordRows = sourceBody("private func upcomingWordRows", in: overlay)
+        let breakWidths = sourceBody("private func upcomingBreakWidths", in: overlay)
+        let karaoke = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/UI/WrappedKaraokeRows.swift"),
+                                   encoding: .utf8)) ?? ""
+        let wrapLayout = sourceBody("struct WrapLayout: Layout", in: overlay)
+        expectEqual([sourceHas(columns, "breakWidths: upcomingBreakWidths(words: groups.flatMap(\\.words), groups: groups)"),
+                     sourceHas(wordRows, "breakWidths: upcomingBreakWidths(words: words, groups: nil)"),
+                     sourceHas(wordRows, "breakBefore: WrapLayoutMath.breakOpportunities(texts: words.map(\\.text))"),
+                     sourceHas(breakWidths, "WrappedKaraokeRowsView.Geometry.itemWidths("),
+                     sourceHas(breakWidths, "font: playback.overlayNSFonts.main"),
+                     sourceHas(sourceBody("init(spec: WrappedKaraokeRows.Spec, width: CGFloat?)", in: karaoke),
+                               "Self.itemWidths(words: spec.words, groups: spec.groups"),
+                     sourceHas(wrapLayout, "let rows = breakWidths.map {\n            WrapLayoutMath.rows(sizes: cache.sizes, breakWidths: $0")],
+                    [true, true, true, true, true, true, true],
+                    "下一句断行: 逐词列和逐字的下一句按开唱后主行的字宽、同一个量法定断点")
+        expectEqual([sourceHas(preview, "lyricStroke(upcomingWordRows(words, color: color))"),
+                     sourceHas(preview, "lyricStroke(ScaledWidthProposal(ratio: nextLineBreakWidthRatio) {")],
+                    [true, true], "下一句断行: 换行模式下逐字的下一句走按主行断点的那一支,整行文字按宽度比收窄")
+        let ratio = sourceBody("private var nextLineBreakWidthRatio: CGFloat", in: overlay)
+        expectEqual([sourceHas(ratio, "OverlayNaturalWidth.width(next, font: nextLinePreviewNSFont) / main"),
+                     sourceHas(ratio, "nextLinePreviewNSFont != playback.overlayNSFonts.main else { return 1 }")],
+                    [true, true], "下一句断行: 收窄比例 = 这一句预览字号宽 / 主字号宽,下一句用主字号时不收窄")
     }
 
     // ---- WrapLayoutMath ----
@@ -1098,6 +1121,19 @@ func runOverlayTests() {
                     [[0]], "WrapLayout: 单个超宽元素独占一行,不能被丢掉")
         expectEqual(rowIndices(WrapLayoutMath.rows(sizes: [sz(10), sz(500), sz(10)], maxWidth: 100, horizontalSpacing: 0)),
                     [[0], [1], [2]], "WrapLayout: 超宽元素夹在中间也不丢")
+
+        // 断点按另一组宽度定(下一句预览按开唱后主字号的宽度断),行宽行高按画出来的尺寸报。
+        let small = [sz(30, 7), sz(30, 7), sz(30, 7)]
+        let split = WrapLayoutMath.rows(sizes: small, breakWidths: [45, 45, 45], maxWidth: 100, horizontalSpacing: 0)
+        expectEqual(rowIndices(split), [[0, 1], [2]], "按主字号断: 小字号一行放得下,按主字号的宽度断成两行")
+        expectEqual(split.map(\.width), [60, 30], "按主字号断: 行宽按画出来的尺寸")
+        expectEqual(split.map(\.height), [7, 7], "按主字号断: 行高按画出来的尺寸")
+        expectEqual(rowIndices(WrapLayoutMath.rows(sizes: small, breakWidths: [45, 45, 45], maxWidth: 100,
+                                                   horizontalSpacing: 0, breakBefore: [true, false, true])),
+                    [[0, 1], [2]], "按主字号断: 守同一份断行禁则")
+        expectEqual(rowIndices(WrapLayoutMath.rows(sizes: small, breakWidths: [45, 45, 45, 45, 45], maxWidth: 100,
+                                                   horizontalSpacing: 0)),
+                    [[0, 1, 2]], "按主字号断: 个数对不上按自己的尺寸断")
 
         // 画的时候按多宽折行:跟定高度时的提议宽度只差像素对齐那一点,就按提议宽度折。
         expectEqual(WrapLayoutMath.drawWidth(sized: 261.1, bounds: 260.5), 261.1, "折行宽: 只差像素对齐那一点时按定高度那次的宽度")

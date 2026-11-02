@@ -256,6 +256,9 @@ func runDeepLinkTests() {
                     && link("lyrimuse://debug/move-window?x=1&y=2") == nil, true, "debug: 挪窗口缺标题或坐标不认")
         expectEqual(link("lyrimuse://debug/overlay-layout?width=1270&line-change=0"),
                     .debug(.overlayLayout(width: 1270, lineChange: false)), "debug: 悬浮歌词宽度、换句动画一起设")
+        expectEqual(link("lyrimuse://debug/overlay-layout?next-line=0.7"),
+                    .debug(.overlayLayout(width: nil, lineChange: nil, nextLine: 0.7)), "debug: 只设下一句字号比例")
+        expectEqual(link("lyrimuse://debug/overlay-layout?next-line=-1"), nil, "debug: 下一句字号比例不是正数不认")
         expectEqual(link("lyrimuse://debug/overlay-layout?width=abc") == nil
                     && link("lyrimuse://debug/overlay-layout?width=-5") == nil
                     && link("lyrimuse://debug/overlay-layout") == nil, true, "debug: 宽度不是正数、什么都没带不认")
@@ -436,6 +439,7 @@ func runDeepLinkTests() {
             .debug(.overlayLayout(width: 640, lineChange: true)),
             .debug(.moveWindow(title: "搜索歌词…", x: 7, y: 33)),
             .debug(.overlayLayout(width: nil, lineChange: false)),
+            .debug(.overlayLayout(width: nil, lineChange: nil, nextLine: 0.75)),
             .debug(.notchPassThrough(x: 120.5, y: 48)), .debug(.notchPassThroughOff), .debug(.notchPointer(x: 30, y: 12.5)),
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, showLyrics: true)),
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, lyricRowFade: false)),

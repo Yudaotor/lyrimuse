@@ -144,9 +144,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         /// 灵动岛「风格」里的「背景」「展开背景」,跟设置页走同两个设置:`debug/notch-style?style=coverArt&expanded=solidBlack|same`
         /// (值是 `NotchCardStyle` 的 rawValue,`same` = 展开背景「同上」),至少带一个。认不认得这个值由 App 判。
         case notchStyle(style: String?, expanded: String?)
-        /// 悬浮歌词的宽度(pt,按设置的区间夹取、量化)和「换句动画」,跟设置页走同两个设置:
-        /// `debug/overlay-layout?width=1270&line-change=0|1`,至少带一个。
-        case overlayLayout(width: Double?, lineChange: Bool?)
+        /// 悬浮歌词的宽度(pt,按设置的区间夹取、量化)、「换句动画」和下一句字号占主句的比例(按设置的区间夹取),
+        /// 跟设置页走同三个设置:`debug/overlay-layout?width=1270&line-change=0|1&next-line=0.7`,至少带一个。
+        case overlayLayout(width: Double?, lineChange: Bool?, nextLine: Double? = nil)
         /// 把标题为 `title` 的那扇 App 窗口挪到 (x, y):全局坐标、左上角原点(同 `check-windows.swift` 打印的),不改大小、
         /// 不激活。`debug/move-window?title=搜索歌词…&x=-200&y=-1200`:把预览会停表的窗口挪到没被盖住的屏上再录帧。
         case moveWindow(title: String, x: Double, y: Double)
@@ -359,8 +359,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/overlay-layout"):
             let width = value("width").flatMap(Double.init).flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
             let lineChange = value("line-change").flatMap(Self.parseBool)
-            guard width != nil || lineChange != nil else { return nil }
-            self = .debug(.overlayLayout(width: width, lineChange: lineChange))
+            let nextLine = value("next-line").flatMap(Double.init).flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+            guard width != nil || lineChange != nil || nextLine != nil else { return nil }
+            self = .debug(.overlayLayout(width: width, lineChange: lineChange, nextLine: nextLine))
         case ("debug", "/notch-style"):
             let style = value("style").flatMap { $0.isEmpty ? nil : $0 }
             let expanded = value("expanded").flatMap { $0.isEmpty ? nil : $0 }
@@ -566,10 +567,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 components.path = "/move-window"
                 components.queryItems = [URLQueryItem(name: "title", value: title),
                                          URLQueryItem(name: "x", value: String(x)), URLQueryItem(name: "y", value: String(y))]
-            case let .overlayLayout(width, lineChange):
+            case let .overlayLayout(width, lineChange, nextLine):
                 components.path = "/overlay-layout"
                 components.queryItems = (width.map { [URLQueryItem(name: "width", value: String($0))] } ?? [])
                     + (lineChange.map { [URLQueryItem(name: "line-change", value: $0 ? "1" : "0")] } ?? [])
+                    + (nextLine.map { [URLQueryItem(name: "next-line", value: String($0))] } ?? [])
             case let .notchStyle(style, expanded):
                 components.path = "/notch-style"
                 components.queryItems = (style.map { [URLQueryItem(name: "style", value: $0)] } ?? [])

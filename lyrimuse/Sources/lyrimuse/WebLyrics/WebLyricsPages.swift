@@ -855,6 +855,7 @@ enum WebLyricsPages {
         .row { white-space: pre-wrap; overflow-wrap: break-word; }
         .row > .in { display: inline-block; max-width: 100%; vertical-align: top; }
         .row > .in.cols { display: inline-flex; flex-wrap: wrap; align-items: stretch; }
+        .row.next > .in { max-width: calc(100% * var(--fit, 1)); }
         .col { display: inline-flex; flex-direction: column; justify-content: space-between; align-items: center; white-space: pre; }
         .gap { white-space: pre; }
         #card.scroll .row { white-space: pre; overflow: hidden; }
@@ -1034,7 +1035,7 @@ enum WebLyricsPages {
           function row(inner, o) {
             const fade = style.rainbow && o.pct ? `opacity:${o.pct / 100};` : '';
             const rb = inner.includes('class="w"') ? '' : ' rb';
-            return `<div class="row tx${rb}${o.cls ? ' ' + o.cls : ''}" data-side="${o.side || ''}" style="font-size:${o.em}em;font-weight:${o.weight};` +
+            return `<div class="row tx${rb}${o.cls ? ' ' + o.cls : ''}" data-side="${o.side || ''}" style="font-size:${o.em}em;font-weight:${o.weight};${o.fit ? `--fit:${o.fit};` : ''}` +
               `color:${o.color};${fade}margin-top:${(o.top || 0) * unit()}px"><span class="in${o.cols ? ' cols' : ''}">${inner}</span></div>`;
           }
           function perWord(line) { return !!(style.karaoke && style.roma && line.w && line.g); }
@@ -1086,8 +1087,9 @@ enum WebLyricsPages {
             return html;
           }
           // 下一句同样逐词标读音,读音按这一行的字号缩(columns 的 mainEm 传 1):开唱那一刻各列不挪位,整块放大。
+          // 下一句那一块最宽只到行宽 × 字号比例:按小字号折行的断点跟开唱后主句按整宽折的一致(04 章决策 84)。
           function nextRow(next, em, weight) {
-            const opts = { em, weight, color: color(40), pct: 40, top: style.spacing[2], side: next.s, cls: 'next' };
+            const opts = { em, weight, color: color(40), pct: 40, top: style.spacing[2], side: next.s, cls: 'next', fit: em };
             if (perWord(next)) return row(columns(next, false, 1), { ...opts, cols: true });
             return row(esc(next.text), opts);
           }

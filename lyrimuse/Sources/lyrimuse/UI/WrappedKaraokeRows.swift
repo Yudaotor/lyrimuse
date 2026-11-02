@@ -93,6 +93,25 @@ final class WrappedKaraokeRowsView: NSView {
         var wrapWidth: CGFloat
         var size: CGSize
 
+        /// 每一项的宽:一个字,或开了逐词罗马音时的一组。下一句预览拿它定断点(`WrapLayout.breakWidths`),
+        /// 开唱后跟这里断在同一处,两边必须是同一个量法(04 章决策 84)。
+        @MainActor
+        static func itemWidths(words: [SyncedLyricWord], groups: [SyncedLyricWordGroup]?, font: NSFont,
+                               romaFont: NSFont, strokeInset inset: CGFloat) -> [CGFloat] {
+            guard let groups else { return words.map { MenuBarMarqueeRenderer.width(of: $0.text, font: font) } }
+            // 列宽按 `OverlayRowLayout.columnWidth`;读音两侧留白、没有读音的组按一个空格占位 ——
+            // 跟 `OverlayRowLayout.layOut` 逐项一致,两边量出来的行宽才对得上。
+            let pad = OverlayRowLayout.romaSidePadding(strokeInset: inset)
+            return groups.map { g in
+                let main = g.words.reduce(CGFloat(0)) { $0 + MenuBarMarqueeRenderer.width(of: $1.text, font: font) }
+                let r = MenuBarMarqueeRenderer.width(of: g.romanization ?? " ", font: romaFont) + pad * 2
+                let tail = OverlayRowLayout.trailingWhitespace(of: g.words)
+                return OverlayRowLayout.columnWidth(
+                    main: main, roma: r,
+                    trailingSpace: tail.isEmpty ? 0 : MenuBarMarqueeRenderer.width(of: tail, font: font))
+            }
+        }
+
         @MainActor
         init(spec: WrappedKaraokeRows.Spec, width: CGFloat?) {
             let inset = spec.strokeColor == nil ? 0 : LyricsTextStrokeMetrics.inset
@@ -103,22 +122,8 @@ final class WrappedKaraokeRowsView: NSView {
             self.inset = inset
             self.pitch = pitch
             rightToLeft = LyricTextDirection.isRightToLeft(spec.words.map(\.text).joined())
-            let widths: [CGFloat]
-            if let groups = spec.groups {
-                // 列宽按 `OverlayRowLayout.columnWidth`;读音两侧留白、没有读音的组按一个空格占位 ——
-                // 跟 `OverlayRowLayout.layOut` 逐项一致,两边量出来的行宽才对得上。
-                let pad = OverlayRowLayout.romaSidePadding(strokeInset: inset)
-                widths = groups.map { g in
-                    let words = g.words.reduce(CGFloat(0)) { $0 + MenuBarMarqueeRenderer.width(of: $1.text, font: spec.font) }
-                    let r = MenuBarMarqueeRenderer.width(of: g.romanization ?? " ", font: spec.romaFont) + pad * 2
-                    let tail = OverlayRowLayout.trailingWhitespace(of: g.words)
-                    return OverlayRowLayout.columnWidth(
-                        main: words, roma: r,
-                        trailingSpace: tail.isEmpty ? 0 : MenuBarMarqueeRenderer.width(of: tail, font: spec.font))
-                }
-            } else {
-                widths = spec.words.map { MenuBarMarqueeRenderer.width(of: $0.text, font: spec.font) }
-            }
+            let widths = Self.itemWidths(words: spec.words, groups: spec.groups, font: spec.font,
+                                         romaFont: spec.romaFont, strokeInset: inset)
             itemWidths = widths
             // 按组排时一组末尾是读音那一列,不扣。
             trailingSpaceWidths = spec.groups == nil

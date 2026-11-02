@@ -69,6 +69,26 @@ public enum WrapLayoutMath {
         return rows
     }
 
+    /// 断点按 `breakWidths` 定、每行的宽高按 `sizes` 报:画出来的字是一套尺寸,在哪儿换行要跟另一套尺寸断在同一处。
+    /// 悬浮歌词的下一句预览按小字号画、按主字号的宽度断,开唱放大后跟主行断在同一个词上(04 章决策 84)。
+    /// 两组个数对不上时按 `sizes` 自己断。
+    public static func rows(
+        sizes: [CGSize], breakWidths: [CGFloat], maxWidth: CGFloat, horizontalSpacing: CGFloat,
+        breakBefore: [Bool]? = nil
+    ) -> [Row] {
+        guard breakWidths.count == sizes.count else {
+            return rows(sizes: sizes, maxWidth: maxWidth, horizontalSpacing: horizontalSpacing, breakBefore: breakBefore)
+        }
+        let decided = rows(sizes: breakWidths.map { CGSize(width: $0, height: 0) }, maxWidth: maxWidth,
+                           horizontalSpacing: horizontalSpacing, breakBefore: breakBefore)
+        return decided.map { row in
+            Row(indices: row.indices,
+                width: row.indices.reduce(CGFloat(0)) { $0 + sizes[$1].width }
+                    + CGFloat(max(0, row.indices.count - 1)) * horizontalSpacing,
+                height: row.indices.map { sizes[$0].height }.max() ?? 0)
+        }
+    }
+
     private static func clusteredRows(
         sizes: [CGSize], maxWidth: CGFloat, horizontalSpacing: CGFloat, breakBefore: [Bool]
     ) -> [Row] {

@@ -892,6 +892,10 @@ func runWebLyricsTests() {
         expectEqual(sourceHas(sourceBody("function nextRow(next, em, weight) {", in: pagesSource),
                               "if (perWord(next)) return row(columns(next, false, 1), { ...opts, cols: true });"), true,
                     "网页歌词: 下一句不论间奏还是唱着都逐词标读音,读音跟这一行一起缩(同悬浮歌词)")
+        expectEqual([sourceHas(sourceBody("function nextRow(next, em, weight) {", in: pagesSource), "cls: 'next', fit: em }"),
+                     sourceHas(pagesSource, ".row.next > .in { max-width: calc(100% * var(--fit, 1)); }"),
+                     sourceHas(pagesSource, "#card.scroll .row > .in { max-width: none;")],
+                    [true, true, true], "网页歌词: 下一句最宽只到行宽 × 字号比例,断点跟开唱后一致;滚动模式不限")
         // 歌名卡什么时候显示:取出 OBS 页里那个纯函数,在 JavaScriptCore 里跑
         do {
             let obsPage = pagesSource
