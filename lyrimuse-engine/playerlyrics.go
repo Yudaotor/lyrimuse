@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"maps"
+	"math"
 	"time"
 )
 
@@ -14,8 +15,9 @@ import (
 // 主歌词只对得上其中一份音频;在别的播放器里放时,它自家平台按本机认出的这一首取的歌词才对得上它放的那份。
 // 这一首在播放器 B 里放、主歌词不是 B 自家源时,只问 B 自家那个源一次:本机认得出这一首(IdentityFromLocalClient)才算数,
 // 跟主歌词按正文配对比时间轴,整体错开 timelineNearMs 以上就记进 PlayerLyrics[B],App 在 B 里放时改用它;对齐或判不了只记
-// 比对过。每一项都绑着比对时主歌词的指纹(MainFP),主歌词换了就作废,下次在 B 里放时重比。正文手改过、标了纯音乐的不比。
-// 见 09 章决策 351。
+// 比对过。每一项都绑着比对时主歌词的指纹(MainFP),主歌词换了就作废,下次在 B 里放时重比。标了纯音乐的不比。
+// 歌词是用户采纳或手改的不比、已记的那份也不用;B 放的音频跟选主歌词时的曲长差不到 timelineNearMs 时,是同一个母版,
+// 错开说明是哪份时间轴错了而不是母版不同,同样不比、不用。见 09 章决策 351、355。
 
 // playerLyricsAlt:PlayerLyrics 的一项。Lyrics 为空 = 比对过、不用换。
 type playerLyricsAlt struct {
@@ -42,15 +44,46 @@ func mainLyricsFingerprint(e enrichEntry) string {
 	return lyricSpeakersFingerprint(e.Lyrics.String(), e.LyricsYRC.String())
 }
 
-// needsPlayerLyricsCheck:在 bundleID 这个播放器里放这首时,要不要问一次它自家源。纯函数(读设置的开关),单测覆盖。
-func needsPlayerLyricsCheck(e enrichEntry, bundleID string) bool {
+// needsPlayerLyricsCheck:在 bundleID 这个播放器里放这首(它报的曲长 durationSecs)时,要不要问一次它自家源。
+// 纯函数(读设置的开关),单测覆盖。
+func needsPlayerLyricsCheck(e enrichEntry, bundleID string, durationSecs float64) bool {
 	native := playerNativeLyricSource(playerForBundleID(bundleID))
-	if native == "" || !lyricSourceEnabled(native) || e.Lyrics.IsZero() || e.Instrumental || e.lyricsHandEdited() ||
-		e.LyricsSource == native {
+	if native == "" || !lyricSourceEnabled(native) || e.Lyrics.IsZero() || e.Instrumental || e.lyricsFromUser() ||
+		e.LyricsSource == native || playerPlaysResolvedLength(e, durationSecs) {
 		return false
 	}
 	alt, ok := e.PlayerLyrics[bundleID]
 	return !ok || alt.MainFP != mainLyricsFingerprint(e)
+}
+
+// playerPlaysResolvedLength:播放器报的曲长跟选主歌词时用的曲长(ResolvedDurationSecs)差在 timelineNearMs 以内。两者有一个
+// 不知道时为 false。
+func playerPlaysResolvedLength(e enrichEntry, durationSecs float64) bool {
+	if e.ResolvedDurationSecs <= 0 || durationSecs <= 0 {
+		return false
+	}
+	return math.Abs(e.ResolvedDurationSecs-durationSecs)*1000 < timelineNearMs
+}
+
+// dropUnusablePlayerLyricsLocked:在 bundleID 里放(报的曲长 durationSecs)时,记着的那份按现在的规则不该用(歌词是用户采纳或
+// 手改的,或者这个播放器放的就是选主歌词时那个长度),从条目里删掉,返回删没删。调用方持 enrichMu、负责落盘。
+func dropUnusablePlayerLyricsLocked(key string, e *enrichEntry, bundleID string, durationSecs float64) bool {
+	alt, ok := e.PlayerLyrics[bundleID]
+	if !ok || alt.Lyrics == "" {
+		return false
+	}
+	fromUser := e.lyricsFromUser()
+	if !fromUser && !playerPlaysResolvedLength(*e, durationSecs) {
+		return false
+	}
+	e.PlayerLyrics = maps.Clone(e.PlayerLyrics)
+	delete(e.PlayerLyrics, bundleID)
+	if len(e.PlayerLyrics) == 0 {
+		e.PlayerLyrics = nil
+	}
+	log.Printf("player lyrics: %s  dropped %s's own %s lyrics (fromUser=%v resolved=%.2fs playing=%.2fs)",
+		key, bundleID, alt.Source, fromUser, e.ResolvedDurationSecs, durationSecs)
+	return true
 }
 
 // playerLyricsCheckOnce:这一进程里第一次为这条主歌词问这个播放器时返回 true。调用方持 enrichMu。
@@ -89,7 +122,7 @@ func checkPlayerLyrics(ctx context.Context, key, artist, title, album string, du
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	enrichMu.Unlock()
-	if !ok || !needsPlayerLyricsCheck(e, bundleID) {
+	if !ok || !needsPlayerLyricsCheck(e, bundleID, durationSecs) {
 		return
 	}
 	native := playerNativeLyricSource(playerForBundleID(bundleID))

@@ -1063,6 +1063,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			e.LyricsSearchTitle = st
 			spotifyHintDirty = true
 		}
+		if dropUnusablePlayerLyricsLocked(key, &e, bundleID, durationSecs) {
+			spotifyHintDirty = true
+		}
 		if spotifyHintDirty {
 			enrichCache[key] = e
 			enrichDirty = true
@@ -1170,7 +1173,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			// 日文歌补借假名标注、让生成的罗马音用上它,不动正文(见 kanabackfill.go)。
 			enrichInflight[key] = true
 			go backfillLyricsKana(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs)
-		} else if needsPlayerLyricsCheck(e, bundleID) && !enrichInflight[key] && playerLyricsCheckOnce(key, bundleID, e) {
+		} else if needsPlayerLyricsCheck(e, bundleID, durationSecs) && !enrichInflight[key] && playerLyricsCheckOnce(key, bundleID, e) {
 			// 在这个播放器里放、主歌词不是它自家源:只问它自家那个源、比一次时间轴(见 playerlyrics.go)。
 			enrichInflight[key] = true
 			go checkPlayerLyrics(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs, bundleID)

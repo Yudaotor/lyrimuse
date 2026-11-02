@@ -582,5 +582,12 @@ func runLyricsParsingTests() {
                                "syncPinToOffset(forKey: currentOffsetKey, pinKey: offsetPinKey)"),
                      playback.components(separatedBy: "pinKey: currentPinKey").count - 1],
                     [true, true, 0] as [AnyHashable], "按播放器的那份 接线: 显示它时单曲校正值不钉主歌词、不在两份间挪值")
+        let sheet = (try? String(contentsOfFile: root.appendingPathComponent("lyrimuse/LyricsManager/LyricsSearchSheet.swift").path,
+                                 encoding: .utf8)) ?? ""
+        expectEqual([sourceHas(reload, "PlayerLyricsShown(bundleID: snapshot.bundleIdentifier ?? \"\", source: $0.source, shiftMs: $0.shiftMs)"),
+                     sourceHas(sheet, "LocalPlaybackSource.shared.$currentPlayerLyricsShown"),
+                     sourceHas(sourceBody("private var currentSection: some View", in: sheet),
+                               "if isSongPlaying, let shown = nowPlaying.playerLyrics {")],
+                    [true, true, true], "按播放器的那份 接线: 搜索面板正在放这首、屏上换成它时在「当前使用」下面说明")
     }
 }

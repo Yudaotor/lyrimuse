@@ -826,6 +826,14 @@ struct LyricsSearchSheet: View {
                     .font(.headline)
                     .padding(.horizontal, 4)
                 candidateRow(current)
+                // 正在放这首、屏上换成了这个播放器自家那份(09 章决策 351):「当前使用」标的是主歌词,这里照实说屏上用的是哪份。
+                if isSongPlaying, let shown = nowPlaying.playerLyrics {
+                    Label(playerLyricsVersionText(bundleID: shown.bundleID, source: shown.source, shiftMs: shown.shiftMs),
+                          systemImage: "arrow.triangle.swap")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                }
             }
             .padding(.top, 6)
         }
@@ -2241,7 +2249,10 @@ struct LyricsSearchSheet: View {
 @MainActor
 private final class LyricsSearchNowPlaying: ObservableObject {
     @Published private(set) var key: String?
+    /// 屏上换成了播放器自家那份时是哪份,显示主歌词时 nil。
+    @Published private(set) var playerLyrics: PlayerLyricsShown?
     private var sub: AnyCancellable?
+    private var playerLyricsSub: AnyCancellable?
 
     init() {
         let p = PlaybackCoordinator.shared
@@ -2253,6 +2264,9 @@ private final class LyricsSearchNowPlaying: ObservableObject {
             }
             .removeDuplicates()
             .sink { [weak self] in self?.key = $0 }
+        playerLyricsSub = LocalPlaybackSource.shared.$currentPlayerLyricsShown
+            .removeDuplicates()
+            .sink { [weak self] in self?.playerLyrics = $0 }
     }
 }
 

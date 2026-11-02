@@ -1,5 +1,19 @@
 import Foundation
 
+/// 此刻显示的是哪个播放器自家那份(`LocalPlaybackSource.currentPlayerLyricsShown`)。
+public struct PlayerLyricsShown: Equatable, Sendable {
+    public let bundleID: String
+    public let source: String
+    /// 那份相对主歌词的中位偏移(毫秒),正数 = 那份整体晚。
+    public let shiftMs: Int
+
+    public init(bundleID: String, source: String, shiftMs: Int) {
+        self.bundleID = bundleID
+        self.source = source
+        self.shiftMs = shiftMs
+    }
+}
+
 /// 引擎按播放器记的「在它里面放时改用它自家平台那份」(enrichEntry.PlayerLyrics,playerlyrics.go)。同一首歌在不同平台常是
 /// 不同母版,时间轴整体差一两秒,主歌词只对得上其中一份音频。每一项绑着引擎比对时主歌词的指纹,主歌词换了就不用。
 /// 正文为空的一项是「比对过、对齐了」,不换。见 08 章决策 65。

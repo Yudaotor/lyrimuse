@@ -395,6 +395,8 @@ public final class LocalPlaybackSource: ObservableObject {
     private var lastAppliedBundleID: String?
     /// 正在显示的是这个播放器自家平台那份时,那份的来源(引擎的源名);显示的是主歌词时为 nil。见 PlayerLyricsVersion。
     @Published public private(set) var currentPlayerLyricsSource: String?
+    /// 同上,连同是哪个播放器、那份相对主歌词错开多少;给搜索面板「当前使用」下面那行说明用。
+    @Published public private(set) var currentPlayerLyricsShown: PlayerLyricsShown?
     /// 已落 UserDefaults 的「最后播放器/最后曲目」内存镜像(去重用,见 apply() 里的写点)。
     private var lastPersistedPlayerBundleID: String?
     private var lastPersistedTrackTitle: String?
@@ -5220,6 +5222,10 @@ public final class LocalPlaybackSource: ObservableObject {
             found?.playerVersions ?? [:], bundleID: snapshot.bundleIdentifier,
             lyrics: found?.lyrics ?? "", lyricsYRC: found?.lyricsYRC ?? "")
         if playerVersion?.source != currentPlayerLyricsSource { currentPlayerLyricsSource = playerVersion?.source }
+        let shown = playerVersion.map {
+            PlayerLyricsShown(bundleID: snapshot.bundleIdentifier ?? "", source: $0.source, shiftMs: $0.shiftMs)
+        }
+        if shown != currentPlayerLyricsShown { currentPlayerLyricsShown = shown }
         let shownTr = playerVersion?.lyricsTr ?? found?.lyricsTr ?? ""
         let shownRoma = playerVersion == nil ? found?.lyricsRoma ?? "" : ""
         let shownYRC = playerVersion?.lyricsYRC ?? found?.lyricsYRC ?? ""

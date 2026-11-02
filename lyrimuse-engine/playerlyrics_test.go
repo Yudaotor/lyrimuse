@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 )
@@ -31,34 +32,85 @@ func TestNeedsPlayerLyricsCheck(t *testing.T) {
 	handEdited.ManualLyrics, handEdited.ManualPickSHA = true, "edited"
 	picked := base
 	picked.ManualLyrics, picked.ManualPickSHA = true, manualPickFingerprint(base.Lyrics.String())
+	pickedUnlocked := base
+	pickedUnlocked.ManualPickSHA = manualPickFingerprint(base.Lyrics.String())
+	resolved := base
+	resolved.ResolvedDurationSecs = 232.25
 
 	cases := []struct {
-		name   string
-		e      enrichEntry
-		bundle string
-		want   bool
+		name     string
+		e        enrichEntry
+		bundle   string
+		duration float64
+		want     bool
 	}{
-		{"主歌词不是这个播放器自家源:要比", base, soda, true},
-		{"比过、主歌词没变:不再比", checked, soda, false},
-		{"比过、主歌词换了:重比", stale, soda, true},
-		{"主歌词就是它自家源:不比", sameSource, soda, false},
-		{"纯音乐不比", instrumental, soda, false},
-		{"正文手改过不比", handEdited, soda, false},
-		{"原样采纳的候选照比", picked, soda, true},
-		{"认不出的播放器不比", base, "com.example.unknown", false},
-		{"没有歌词不比", enrichEntry{LyricsSource: "applemusic"}, soda, false},
+		{"放的跟选主歌词时同一个长度:不比", resolved, soda, 232.0, false},
+		{"放的比选主歌词时长 4.7 秒:要比", resolved, soda, 236.95, true},
+		{"播放器没报曲长:照比", resolved, soda, 0, true},
+		{"主歌词不是这个播放器自家源:要比", base, soda, 0, true},
+		{"比过、主歌词没变:不再比", checked, soda, 0, false},
+		{"比过、主歌词换了:重比", stale, soda, 0, true},
+		{"主歌词就是它自家源:不比", sameSource, soda, 0, false},
+		{"纯音乐不比", instrumental, soda, 0, false},
+		{"正文手改过不比", handEdited, soda, 0, false},
+		{"原样采纳的候选不比(锁定着)", picked, soda, 0, false},
+		{"原样采纳的候选不比(没锁定)", pickedUnlocked, soda, 0, false},
+		{"认不出的播放器不比", base, "com.example.unknown", 0, false},
+		{"没有歌词不比", enrichEntry{LyricsSource: "applemusic"}, soda, 0, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := needsPlayerLyricsCheck(c.e, c.bundle); got != c.want {
+			if got := needsPlayerLyricsCheck(c.e, c.bundle, c.duration); got != c.want {
 				t.Fatalf("needsPlayerLyricsCheck = %v, 期望 %v", got, c.want)
 			}
 		})
 	}
 
 	withFeaturesFile(t, `{"lyrics_sources":["applemusic","qq"]}`)
-	if needsPlayerLyricsCheck(base, soda) {
+	if needsPlayerLyricsCheck(base, soda, 0) {
 		t.Fatal("这个播放器的自家源在设置里关着:不比")
+	}
+}
+
+func TestDropUnusablePlayerLyrics(t *testing.T) {
+	soda := playerBundleIDs[playerSoda]
+	music := playerBundleIDs[playerAppleMusic]
+	base := enrichEntry{Lyrics: bt(testPlayerLRC(0)), LyricsSource: "applemusic", ResolvedDurationSecs: 232.25}
+	base.PlayerLyrics = map[string]playerLyricsAlt{
+		soda:  {MainFP: mainLyricsFingerprint(base), Source: "soda", Lyrics: testPlayerLRC(2500), ShiftMs: 2500},
+		music: {MainFP: mainLyricsFingerprint(base)},
+	}
+
+	e := base
+	if dropUnusablePlayerLyricsLocked("k", &e, soda, 240) || len(e.PlayerLyrics) != 2 {
+		t.Fatalf("曲长不同、主歌词不是用户给的:留着, %+v", e.PlayerLyrics)
+	}
+	e = base
+	if !dropUnusablePlayerLyricsLocked("k", &e, soda, 232.0) {
+		t.Fatal("放的跟选主歌词时同一个长度:该删")
+	}
+	if _, ok := e.PlayerLyrics[soda]; ok || len(e.PlayerLyrics) != 1 || len(base.PlayerLyrics) != 2 {
+		t.Fatalf("只删这个播放器那一项、不改原 map, 得到 %+v / 原 %+v", e.PlayerLyrics, base.PlayerLyrics)
+	}
+	e = base
+	e.ManualPickSHA = manualPickFingerprint(e.Lyrics.String())
+	if !dropUnusablePlayerLyricsLocked("k", &e, soda, 240) {
+		t.Fatal("主歌词是用户采纳的:该删")
+	}
+	e = base
+	if dropUnusablePlayerLyricsLocked("k", &e, music, 232.0) {
+		t.Fatal("只记了「比过」的那一项没有正文,不动")
+	}
+}
+
+// 播放时记着的那份按现在的规则不该用就删掉:接在命中缓存那一支顺手修条目的地方,跟着一起落盘。
+func TestDropUnusablePlayerLyricsWiredOnPlay(t *testing.T) {
+	src, err := os.ReadFile("enrich.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsCode(string(src), "if dropUnusablePlayerLyricsLocked(key, &e, bundleID, durationSecs) {\n\t\t\tspotifyHintDirty = true\n\t\t}\n\t\tif spotifyHintDirty {") {
+		t.Fatal("enrich.go 命中缓存那一支没在落盘判断之前删掉不该用的播放器那份")
 	}
 }
 
