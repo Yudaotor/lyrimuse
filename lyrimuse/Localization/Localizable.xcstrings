@@ -148354,6 +148354,112 @@
           }
         }
       }
+    },
+    "按音量键时提示" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei Lautstärketasten anzeigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show for Volume Keys"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar con teclas de volumen"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher avec les touches de volume"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音量キーでも表示"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음량 키에도 표시"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按音量键时提示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按音量鍵時提示"
+          }
+        }
+      }
+    },
+    "关闭后只在灵动岛上滑动调节音量时显示音量提示，键盘音量键等只显示系统自带的提示" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn deaktiviert, erscheint die Lautstärkeanzeige nur, wenn du über der Notch streichst, um die Lautstärke zu ändern; Lautstärketasten und andere Änderungen zeigen nur die Systemanzeige"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When off, the volume indicator appears only when you swipe on the notch to adjust the volume; volume keys and other changes show only the system indicator"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si se desactiva, el indicador de volumen solo aparece al deslizar sobre el notch para ajustar el volumen; con las teclas de volumen y otros cambios solo se ve el del sistema"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Désactivé, l’indicateur de volume n’apparaît que lorsque vous balayez l’encoche pour régler le volume ; les touches de volume et les autres changements n’affichent que celui du système"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オフにすると、ノッチ上でスワイプして音量を調整したときだけ音量表示を出し、キーボードの音量キーなどではシステムの表示だけになります"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "끄면 노치 위에서 쓸어 넘겨 음량을 조절할 때만 음량 표시가 나타나고, 키보드 음량 키 등에서는 시스템 표시만 나타납니다"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭后只在灵动岛上滑动调节音量时显示音量提示，键盘音量键等只显示系统自带的提示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "關閉後只在動態島上滑動調整音量時顯示音量提示，鍵盤音量鍵等只顯示系統內建的提示"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -548,6 +548,7 @@ With the pointer over the notch, swipe left or right with two fingers to change 
 
 - On by default
 - Settings: Lyrics Display › Notch › Behavior › Trackpad Gestures
+- Settings: Lyrics Display › Notch › Behavior › Show for Volume Keys
 
 <a id="feature-notch-lyric-row-fade"></a>
 
@@ -888,7 +889,7 @@ At most once a day, sends the version, macOS, which features are on and crash su
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 308 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 309 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Source
 
@@ -1091,6 +1092,7 @@ Every setting in the Settings window, by where it lives: 308 in all. Type a name
 - **Show on Lock Screen**
 - **Listening Milestones**
 - **Show Title on Song Change**
+- **Show for Volume Keys**
 - **Trackpad Gestures**
 
 ### Lyrics Display › Menu Bar

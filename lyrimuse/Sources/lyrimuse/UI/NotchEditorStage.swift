@@ -418,7 +418,7 @@ struct NotchEditorStage: View {
 
     /// 「行为」浮层**跨两个枚举**:`NotchBehaviorItem.collapseWhenPaused`
     /// (`.showLyrics` 在「歌词行」浮层,见 `lyricRowSummary`)+ `AutoHideItem`
-    /// 各项 + `NotchBehaviorItem` 的全屏隐藏 / 锁屏时显示 / 换歌显示歌名 / 收听里程碑 / 触控板手势。
+    /// 各项 + `NotchBehaviorItem` 的全屏隐藏 / 锁屏时显示 / 换歌显示歌名 / 收听里程碑 / 按音量键时提示 / 触控板手势。
     ///
     /// **两个来源必须都算,而且要跟 `NotchBehaviorSettingsRows`(「行为」浮层和抽屉「行为」组都调它)
     /// 的内容一致**:少算自动隐藏那几项不会编译报错,
@@ -430,7 +430,8 @@ struct NotchEditorStage: View {
             + AutoHideItem.allCases.map {
                 (title: $0.title(for: .notch), isOn: $0.binding(for: .notch).wrappedValue)
             }
-            + [NotchBehaviorItem.hideInFullScreen, .showOnLockScreen, .trackDrop, .listenMilestones, .gestures]
+            + [NotchBehaviorItem.hideInFullScreen, .showOnLockScreen, .trackDrop, .listenMilestones, .volumeKeyBanner,
+               .gestures]
                 .map { (title: $0.title, isOn: $0.binding.wrappedValue) }
     }
 

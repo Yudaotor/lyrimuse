@@ -548,6 +548,7 @@ Ist der Zeiger über der Notch, streiche mit zwei Fingern nach links oder rechts
 
 - Standardmäßig ein
 - Einstellungen: Liedtext-Anzeige › Notch › Verhalten › Trackpad-Gesten
+- Einstellungen: Liedtext-Anzeige › Notch › Verhalten › Bei Lautstärketasten anzeigen
 
 <a id="feature-notch-lyric-row-fade"></a>
 
@@ -888,7 +889,7 @@ Sendet höchstens einmal täglich Version, macOS, aktivierte Funktionen und Abst
 
 ## Alle Einstellungen
 
-Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 308. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
+Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 309. Gib einen Namen in das Suchfeld oben in der Seitenleiste der Einstellungen ein, um direkt dorthin zu springen.
 
 ### Liedtext › Quelle
 
@@ -1091,6 +1092,7 @@ Alle Einstellungen des Einstellungsfensters nach Ort: insgesamt 308. Gib einen N
 - **Auf Sperrbildschirm zeigen**
 - **Meilensteine**
 - **Titel bei Wechsel anzeigen**
+- **Bei Lautstärketasten anzeigen**
 - **Trackpad-Gesten**
 
 ### Liedtext-Anzeige › Menüleiste

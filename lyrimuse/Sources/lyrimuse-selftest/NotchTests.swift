@@ -2679,6 +2679,37 @@ func runNotchTests() {
                     "自画图标: 设置行、快捷设置头部、菜单项不再直接拿符号名画系统符号")
     }
 
+    // ---- 按音量键时提示:关着时音量横幅只弹灵动岛自己调的(NotchVolumeBannerPolicy) ----
+    do {
+        typealias P = NotchVolumeBannerPolicy
+        expectEqual([P.shows(forVolumeKeys: true, sinceOwnAdjust: nil),
+                     P.shows(forVolumeKeys: true, sinceOwnAdjust: 30)], [true, true],
+                    "音量键提示: 开着时音量怎么变的都弹")
+        expectEqual([P.shows(forVolumeKeys: false, sinceOwnAdjust: nil),
+                     P.shows(forVolumeKeys: false, sinceOwnAdjust: 0.05),
+                     P.shows(forVolumeKeys: false, sinceOwnAdjust: P.ownAdjustWindow - 0.01),
+                     P.shows(forVolumeKeys: false, sinceOwnAdjust: P.ownAdjustWindow),
+                     P.shows(forVolumeKeys: false, sinceOwnAdjust: 5),
+                     P.shows(forVolumeKeys: false, sinceOwnAdjust: -1)],
+                    [false, true, true, false, false, false],
+                    "音量键提示: 关着时只认灵动岛刚写过音量的那一下,没写过、隔久了、时钟倒退都不弹")
+        let appDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func app(_ n: String) -> String {
+            (try? String(contentsOf: appDir.appendingPathComponent(n), encoding: .utf8)) ?? ""
+        }
+        let volume = app("Settings/VolumeMonitor.swift")
+        let adjust = sourceBody("static func adjustSystemVolume(by delta: Float)", in: volume)
+        expectEqual([sourceHas(adjust, "var off = UInt32(0)\nlastOwnAdjustAt = Date()\nAudioObjectSetPropertyData(device, &mute"),
+                     sourceHas(adjust, "guard next != value else { return }\nlastOwnAdjustAt = Date()\nlet status = AudioObjectSetPropertyData("),
+                     sourceHas(volume, "shared.start { volume, muted in\n// 回调时现读设置(不是 Combine sink,读到的就是当前值)。\nguard NotchVolumeBannerPolicy.shows(\nforVolumeKeys: AppSettings.shared.notchVolumeBannerForVolumeKeys,\nsinceOwnAdjust: lastOwnAdjustAt.map { Date().timeIntervalSince($0) }) else { return }")],
+                    [true, true, true],
+                    "音量键提示: 写音量和解除静音之前都记下时刻,横幅弹之前按设置和这个时刻判")
+        let rows = app("UI/NotchSettingsRows.swift")
+        expectEqual(rows.contains("settings.notchVolumeBannerForVolumeKeys = AppSettings.defaultNotchVolumeBannerForVolumeKeys"), true,
+                    "音量键提示: 进「恢复默认」")
+    }
+
     // ---- 触控板手势:左右滑切歌、上下滑调音量(NotchScrollGesture) ----
     do {
         typealias G = NotchScrollGesture

@@ -505,6 +505,7 @@ public enum SettingsSearchCatalog {
         surface(.notch, "锁屏时显示", kw: ["锁屏", "锁定", "锁屏歌词", "锁屏显示", "lock screen"], group: "行为"),
         surface(.notch, "收听里程碑", kw: ["里程碑", "第 100 次", "累计", "报喜", "纪念", "Last.fm"], group: "行为"),
         surface(.notch, "换歌时显示歌名", kw: ["换歌", "切歌", "歌名", "歌手", "刘海", "滑出", "掉下来", "换歌翻牌"], group: "行为"),
+        surface(.notch, "按音量键时提示", kw: ["音量", "音量键", "音量提示", "重复", "两个音量", "系统提示", "HUD", "volume"], group: "行为"),
         surface(.notch, "触控板手势", kw: ["手势", "滑动", "切歌", "音量", "双指", "trackpad", "swipe"], group: "行为"),
         surface(.notch, "恢复默认", sub: "不含宽度和「灵动岛歌词」开关", kw: ["重置"]),
 

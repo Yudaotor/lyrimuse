@@ -65,6 +65,9 @@ enum DebugDeepLinks {
         case let .volume(percent):
             PlaybackCoordinator.shared.setVolume(percent)
             logger.notice("debug volume \(percent, privacy: .public)")
+        case let .notchVolume(up):
+            VolumeMonitor.adjustSystemVolume(by: up ? NotchScrollGesture.wheelStep : -NotchScrollGesture.wheelStep)
+            logger.notice("debug notch volume \(up ? "up" : "down", privacy: .public)")
         case let .settingsSearch(query):
             NotificationCenter.default.post(name: settingsSearchNotification, object: query)
             logger.notice("debug settings search \(query, privacy: .public)")
@@ -74,7 +77,8 @@ enum DebugDeepLinks {
         case let .stall(ms):
             logger.notice("debug stall: blocking main thread \(ms, privacy: .public) ms")
             usleep(UInt32(ms) * 1000)
-        case let .notchBehavior(collapse, hide, progressLine, allScreens, showLyrics, lyricRowFade):
+        case let .notchBehavior(collapse, hide, progressLine, allScreens, showLyrics, lyricRowFade, volumeKeyBanner):
+            if let volumeKeyBanner { AppSettings.shared.notchVolumeBannerForVolumeKeys = volumeKeyBanner }
             if let showLyrics { AppSettings.shared.notchShowLyrics = showLyrics }
             if let lyricRowFade { AppSettings.shared.notchFadeLyricRowOnHover = lyricRowFade }
             if let collapse { AppSettings.shared.notchCollapsesWhenPaused = collapse }
@@ -84,7 +88,7 @@ enum DebugDeepLinks {
                 if let style = progressLine.style { AppSettings.shared.notchProgressLineStyle = style }
                 AppSettings.shared.notchShowsProgressLine = progressLine.shows
             }
-            logger.notice("debug notch behavior collapse=\(String(describing: collapse), privacy: .public) hide=\(String(describing: hide), privacy: .public) progressLine=\(progressLine?.rawValue ?? "nil", privacy: .public) allScreens=\(String(describing: allScreens), privacy: .public) showLyrics=\(String(describing: showLyrics), privacy: .public) lyricRowFade=\(String(describing: lyricRowFade), privacy: .public)")
+            logger.notice("debug notch behavior collapse=\(String(describing: collapse), privacy: .public) hide=\(String(describing: hide), privacy: .public) progressLine=\(progressLine?.rawValue ?? "nil", privacy: .public) allScreens=\(String(describing: allScreens), privacy: .public) showLyrics=\(String(describing: showLyrics), privacy: .public) lyricRowFade=\(String(describing: lyricRowFade), privacy: .public) volumeKeyBanner=\(String(describing: volumeKeyBanner), privacy: .public)")
         case let .moveWindow(title, x, y):
             // 全局坐标的原点是主屏左上角;NSWindow 的原点在左下角、y 朝上。
             guard let window = NSApp.windows.first(where: { $0.title == title && $0.isVisible }),

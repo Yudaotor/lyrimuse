@@ -3,6 +3,7 @@ import AppKit
 // AudioHardwareService.h 里,不在 CoreAudio 里 —— 只 import CoreAudio 会报"找不到符号"。
 import AudioToolbox
 import CoreAudio
+import LyrimuseCore
 import OSLog
 
 // 监听系统输出音量的变化,用来在灵动岛上闪一条音量提示。
@@ -175,7 +176,8 @@ final class VolumeMonitor {
 
     // MARK: - 调音量
 
-    /// 把系统输出音量加减 `delta`(0...1 的量纲),灵动岛手势用;调大时顺手解除静音。音量横幅由上面那条监听照常弹。
+    /// 把系统输出音量加减 `delta`(0...1 的量纲),灵动岛手势用;调大时顺手解除静音。音量横幅由上面那条监听照常弹,
+    /// 写之前记下 `lastOwnAdjustAt`,「按音量键时提示」关着时靠它认出是自己调的(`NotchVolumeBannerPolicy`)。
     /// 默认输出设备的音量归下游硬件管(没有可写的音量属性,HDMI、部分 USB DAC)时什么都不做。
     static func adjustSystemVolume(by delta: Float) {
         var deviceAddr = defaultDeviceAddress
@@ -201,17 +203,21 @@ final class VolumeMonitor {
             var muteSize = UInt32(MemoryLayout<UInt32>.size)
             if AudioObjectGetPropertyData(device, &mute, 0, nil, &muteSize, &muted) == noErr, muted != 0 {
                 var off = UInt32(0)
+                lastOwnAdjustAt = Date()
                 AudioObjectSetPropertyData(device, &mute, 0, nil, muteSize, &off)
             }
         }
         var next = min(1, max(0, value + delta))
         adjustBurst = (device, next, now)
         guard next != value else { return }
+        lastOwnAdjustAt = Date()
         let status = AudioObjectSetPropertyData(device, &addr, 0, nil, UInt32(MemoryLayout<Float32>.size), &next)
         if status != noErr { logger.error("set volume failed: \(status)") }
     }
 
     private static var adjustBurst: (device: AudioObjectID, target: Float32, at: Date)?
+    /// 灵动岛上一次写系统音量或解除静音的时刻。
+    private static var lastOwnAdjustAt: Date?
 
     // MARK: - 属性地址
 
@@ -255,6 +261,10 @@ extension VolumeMonitor {
             return
         }
         shared.start { volume, muted in
+            // 回调时现读设置(不是 Combine sink,读到的就是当前值)。
+            guard NotchVolumeBannerPolicy.shows(
+                forVolumeKeys: AppSettings.shared.notchVolumeBannerForVolumeKeys,
+                sinceOwnAdjust: lastOwnAdjustAt.map { Date().timeIntervalSince($0) }) else { return }
             let percent = Int((volume * 100).rounded())
             let icon: String
             if muted || percent == 0 {

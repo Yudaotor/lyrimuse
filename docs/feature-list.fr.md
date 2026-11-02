@@ -548,6 +548,7 @@ Le pointeur sur l’encoche, balayez à deux doigts vers la gauche ou la droite 
 
 - Activée par défaut
 - Réglages : Affichage des paroles › Encoche › Comportement › Gestes du trackpad
+- Réglages : Affichage des paroles › Encoche › Comportement › Afficher avec les touches de volume
 
 <a id="feature-notch-lyric-row-fade"></a>
 
@@ -888,7 +889,7 @@ Au plus une fois par jour, envoie la version, macOS, les fonctions activées et 
 
 ## Tous les réglages
 
-Tous les réglages de la fenêtre Réglages, classés par emplacement : 308 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
+Tous les réglages de la fenêtre Réglages, classés par emplacement : 309 au total. Tapez un nom dans le champ de recherche en haut de la barre latérale des Réglages pour y aller directement.
 
 ### Paroles › Source
 
@@ -1091,6 +1092,7 @@ Tous les réglages de la fenêtre Réglages, classés par emplacement : 308 au 
 - **Afficher sur l’écran verrouillé**
 - **Paliers d’écoute**
 - **Afficher le titre au changement**
+- **Afficher avec les touches de volume**
 - **Gestes du trackpad**
 
 ### Affichage des paroles › Barre des menus

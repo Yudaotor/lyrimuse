@@ -3979,6 +3979,8 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
     case trackDrop
     /// 触控板手势(`AppSettings.notchGestures`)。归「行为」。
     case gestures
+    /// 按音量键时提示(`AppSettings.notchVolumeBannerForVolumeKeys`)。归「行为」的提示那一组。
+    case volumeKeyBanner
     /// 悬浮淡化(`AppSettings.notchFadeLyricRowOnHover`)。归「歌词行」。
     case lyricRowFade
     case lyricRowArtwork
@@ -4004,6 +4006,7 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         case .listenMilestones: return "trophy"
         case .trackDrop: return "rectangle.topthird.inset.filled"
         case .gestures: return "hand.draw"
+        case .volumeKeyBanner: return "speaker.wave.2"
         case .lyricRowFade: return "cursorarrow.motionlines"
         case .lyricRowArtwork: return "photo"
         case .expandedNextLine: return "text.bubble"
@@ -4027,6 +4030,7 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         case .listenMilestones: return L10n.t("收听里程碑")
         case .trackDrop: return L10n.t("换歌时显示歌名")
         case .gestures: return L10n.t("触控板手势")
+        case .volumeKeyBanner: return L10n.t("按音量键时提示")
         case .lyricRowFade: return L10n.t("悬停时淡化")
         case .lyricRowArtwork: return L10n.t("显示封面")
         // 标题里要把"只在展开时"说出来,否则跟上一行「副行 · 下一句」读起来像同一个开关的两种写法。
@@ -4057,6 +4061,8 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
             return L10n.t("切歌时新歌名从刘海下方滑出，数秒后收回")
         case .gestures:
             return L10n.t("指针停在灵动岛上时，双指左右滑动切歌，上下滑动调节音量")
+        case .volumeKeyBanner:
+            return L10n.t("关闭后只在灵动岛上滑动调节音量时显示音量提示，键盘音量键等只显示系统自带的提示")
         case .lyricRowFade:
             return L10n.t("指针在歌词行上时不展开，歌词行淡化，点按穿透到下层窗口")
         case .expandedShowsQuickActions:
@@ -4090,6 +4096,9 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
                             set: { settings.notchShowsTrackDrop = $0 })
         case .gestures:
             return Binding(get: { settings.notchGestures }, set: { settings.notchGestures = $0 })
+        case .volumeKeyBanner:
+            return Binding(get: { settings.notchVolumeBannerForVolumeKeys },
+                            set: { settings.notchVolumeBannerForVolumeKeys = $0 })
         case .lyricRowFade:
             return Binding(get: { settings.notchFadeLyricRowOnHover }, set: { settings.notchFadeLyricRowOnHover = $0 })
         case .lyricRowArtwork:
@@ -4525,7 +4534,7 @@ private struct NotchExpandedLyricListRows: View {
 /// 「行为」组 —— 工具栏「行为」浮层(`NotchBehaviorPopover`)与抽屉 `behaviorGroup` 同一份:
 /// 「暂停时收起」+ 自动隐藏那几行(`AutoHideSettingsRows`,跟悬浮歌词共用同一份视图、靠 `surface`
 /// 分流到灵动岛那几个键,无歌词那一行在灵动岛上是收起歌词行)+「全屏时隐藏」(只有灵动岛有,所以不进 `AutoHideItem`)+「锁屏时显示」+「换歌时显示歌名」+「收听里程碑」
-/// +「触控板手势」。
+/// +「按音量键时提示」+「触控板手势」。
 ///
 /// 工具栏「行为」按钮的摘要(`NotchEditorStage.behaviorSummary`)要把这里每一项都算进去 ——
 /// 少算不会编译报错,只会让按钮在漏掉的那项开着时照旧显示「全部关闭」。
@@ -4561,6 +4570,7 @@ struct NotchBehaviorSettingsRows: View {
         NotchBehaviorToggleTile(item: .showOnLockScreen)
         NotchBehaviorToggleTile(item: .trackDrop)
         NotchListenMilestonesTile()
+        NotchBehaviorToggleTile(item: .volumeKeyBanner)
     }
 }
 

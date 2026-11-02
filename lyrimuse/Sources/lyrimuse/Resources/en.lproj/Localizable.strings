@@ -570,6 +570,7 @@
 "关闭全部" = "All Off";
 "关闭后不显示进度条，Discord 将改为显示已播放时长，该计时无法关闭" = "When off, there’s no progress bar; Discord shows the elapsed time instead, which can’t be turned off";
 "关闭后仅保留菜单栏图标" = "When off, only the menu bar icon remains";
+"关闭后只在灵动岛上滑动调节音量时显示音量提示，键盘音量键等只显示系统自带的提示" = "When off, the volume indicator appears only when you swipe on the notch to adjust the volume; volume keys and other changes show only the system indicator";
 "关闭后平时只保留刘海高度，悬停展开时照常显示" = "When off, only the notch-height strip stays until you hover to expand";
 "关闭后暂停推送到这个渠道，填写的内容会保留" = "Turn off to pause pushes to this channel; what you filled in is kept";
 "关闭后，仅在悬停显示播放控制时出现" = "When off, appears only while the playback controls show on hover";
@@ -1411,6 +1412,7 @@
 "按这台 Mac 当前的时区（%@）" = "In this Mac’s current time zone (%@)";
 "按钮" = "Buttons";
 "按钮文字" = "Button Text";
+"按音量键时提示" = "Show for Volume Keys";
 "换一句" = "Another line";
 "换句动画" = "Line Transition";
 "换句时，下一句从原来的位置移到当前行；关闭时直接切换" = "When the lyric changes, the next line moves up into place. When off, lines switch instantly";

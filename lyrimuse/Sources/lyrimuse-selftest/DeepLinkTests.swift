@@ -303,6 +303,13 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://debug/volume?percent=35"), .debug(.volume(percent: 35)), "debug: 音量")
         expectEqual(link("lyrimuse://debug/volume?percent=101") == nil && link("lyrimuse://debug/volume") == nil, true,
                     "debug: 音量超出 0…100、没带取值都认不出")
+        expectEqual([link("lyrimuse://debug/notch-volume?step=up"), link("lyrimuse://debug/notch-volume?step=Down"),
+                     link("lyrimuse://debug/notch-volume"), link("lyrimuse://debug/notch-volume?step=left")],
+                    [.debug(.notchVolume(up: true)), .debug(.notchVolume(up: false)), nil, nil],
+                    "debug: 灵动岛调系统音量认 up / down,别的不认")
+        expectEqual(link("lyrimuse://debug/notch-behavior?volume-key-banner=0"),
+                    .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, volumeKeyBanner: false)),
+                    "debug: 只关灵动岛按音量键时提示")
         expectEqual([link("lyrimuse://debug/notify-channel"), link("lyrimuse://debug/notify-channel?id="),
                      link("lyrimuse://debug/notify-channel?id=Legacy")],
                     [.debug(.editNotifyChannel(id: nil)), .debug(.editNotifyChannel(id: nil)), .debug(.editNotifyChannel(id: "Legacy"))],
@@ -420,6 +427,8 @@ func runDeepLinkTests() {
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, progressLine: .off)),
             .debug(.notchBehavior(collapseWhenPaused: true, hideWhenNotPlaying: nil, progressLine: .bottom)),
             .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, allScreens: false)),
+            .debug(.notchBehavior(collapseWhenPaused: nil, hideWhenNotPlaying: nil, volumeKeyBanner: true)),
+            .debug(.notchVolume(up: true)), .debug(.notchVolume(up: false)),
             .debug(.notchStyle(style: "solidBlack", expanded: "coverArt")),
             .debug(.notchStyle(style: nil, expanded: "same")),
             .debug(.wordFormatSwitch(state: "finished", format: "ttml", done: nil, total: 17564)),

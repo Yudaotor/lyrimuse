@@ -443,6 +443,7 @@ final class AppSettings: ObservableObject {
         // 换歌时显示歌名:新歌名从刘海里掉出来(NotchTrackDropStrip)。耳朵里的封面那一翻一直开,不看设置。
         static let notchShowsTrackDrop = "np:notchShowsTrackDrop"
         static let notchGestures = "np:notchGestures"
+        static let notchVolumeBannerForVolumeKeys = "np:notchVolumeBannerForVolumeKeys"
         static let notchFadeLyricRowOnHover = "np:notchFadeLyricRowOnHover"
         static let notchShowsProgressLine = "np:notchShowsProgressLine"
         static let notchProgressLineStyle = "np:notchProgressLineStyle"
@@ -647,6 +648,8 @@ final class AppSettings: ObservableObject {
     static let defaultNotchShowsTrackDrop = true
     /// 默认开:指针在灵动岛上时,两指左右滑切歌、上下滑调系统音量。
     static let defaultNotchGestures = true
+    /// 默认开:系统音量怎么变的都弹音量横幅。
+    static let defaultNotchVolumeBannerForVolumeKeys = true
     static let defaultNotchFadeLyricRowOnHover = false
     /// 默认开、沿耳朵画(卡片不为它变高)。
     static let defaultNotchShowsProgressLine = true
@@ -1491,6 +1494,11 @@ final class AppSettings: ObservableObject {
     /// 灵动岛窗口收到滚动事件时现读。
     @Published var notchGestures: Bool {
         didSet { defaults.set(notchGestures, forKey: Keys.notchGestures) }
+    }
+    /// 按音量键时提示:关着时音量横幅只在灵动岛自己调音量时弹,键盘音量键等只出系统的提示(`NotchVolumeBannerPolicy`)。
+    /// `VolumeMonitor` 收到变化时现读。
+    @Published var notchVolumeBannerForVolumeKeys: Bool {
+        didSet { defaults.set(notchVolumeBannerForVolumeKeys, forKey: Keys.notchVolumeBannerForVolumeKeys) }
     }
     /// 悬浮淡化:指针压在灵动岛稳态的歌词行上时不展开,那一截整条淡化、点击穿透到下层窗口(`NotchLyricRowPassThrough`)。
     /// 关着时整张卡悬停展开。灵动岛控制器订阅它。
@@ -2759,6 +2767,8 @@ final class AppSettings: ObservableObject {
         notchShowsTrackDrop = (defaults.object(forKey: Keys.notchShowsTrackDrop) as? Bool)
             ?? Self.defaultNotchShowsTrackDrop
         notchGestures = (defaults.object(forKey: Keys.notchGestures) as? Bool) ?? Self.defaultNotchGestures
+        notchVolumeBannerForVolumeKeys = (defaults.object(forKey: Keys.notchVolumeBannerForVolumeKeys) as? Bool)
+            ?? Self.defaultNotchVolumeBannerForVolumeKeys
         notchFadeLyricRowOnHover = (defaults.object(forKey: Keys.notchFadeLyricRowOnHover) as? Bool)
             ?? Self.defaultNotchFadeLyricRowOnHover
         notchShowsProgressLine = (defaults.object(forKey: Keys.notchShowsProgressLine) as? Bool)

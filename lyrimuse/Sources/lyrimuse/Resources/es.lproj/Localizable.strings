@@ -570,6 +570,7 @@
 "关闭全部" = "Desactivar todo";
 "关闭后不显示进度条，Discord 将改为显示已播放时长，该计时无法关闭" = "Si se desactiva, no hay barra de progreso; Discord muestra el tiempo transcurrido, que no se puede desactivar";
 "关闭后仅保留菜单栏图标" = "Si se desactiva, solo queda el icono de la barra de menús";
+"关闭后只在灵动岛上滑动调节音量时显示音量提示，键盘音量键等只显示系统自带的提示" = "Si se desactiva, el indicador de volumen solo aparece al deslizar sobre el notch para ajustar el volumen; con las teclas de volumen y otros cambios solo se ve el del sistema";
 "关闭后平时只保留刘海高度，悬停展开时照常显示" = "Si se desactiva, solo queda la franja a la altura del notch hasta que pases el puntero para expandir";
 "关闭后暂停推送到这个渠道，填写的内容会保留" = "Desactívalo para pausar los envíos a este canal; lo que rellenaste se conserva";
 "关闭后，仅在悬停显示播放控制时出现" = "Si se desactiva, solo aparece cuando se muestran los controles al pasar el puntero";
@@ -1411,6 +1412,7 @@
 "按这台 Mac 当前的时区（%@）" = "Según la zona horaria actual de este Mac (%@)";
 "按钮" = "Botones";
 "按钮文字" = "Texto del botón";
+"按音量键时提示" = "Mostrar con teclas de volumen";
 "换一句" = "Otra línea";
 "换句动画" = "Transición de líneas";
 "换句时，下一句从原来的位置移到当前行；关闭时直接切换" = "Al cambiar de línea, la siguiente sube a su sitio. Si está desactivado, las líneas cambian al instante";

@@ -97,6 +97,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case seek(seconds: Double)
         /// 把播放器音量设成 0…100,跟拖歌词窗口的音量条走同一条路(`debug/volume?percent=`)。
         case volume(percent: Int)
+        /// 系统音量调大 / 调小一格,跟灵动岛上滚一格滚轮走同一条路(`debug/notch-volume?step=up|down`)。
+        case notchVolume(up: Bool)
         /// 设置窗口里搜这个词、打开第一条结果:翻页、切分段、展开抽屉,把那一行高亮并滚进可见区
         /// (`debug/settings-search?q=`)。设置窗口要先开着。
         case settingsSearch(query: String)
@@ -133,11 +135,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case stall(ms: Int)
         /// 灵动岛摆一次报喜,跟设置页「收听里程碑」旁那颗「试用」走同一条路(`debug/milestone-preview`)。
         case milestonePreview
-        /// 灵动岛「暂停时收起」「暂停时隐藏」「进度线」「所有屏幕」「显示歌词」「悬浮淡化」,跟设置页那几项走同一个设置:
-        /// `debug/notch-behavior?collapse-when-paused=1&hide-when-not-playing=0&progress-line=off|bottom|ears&all-screens=1&show-lyrics=1&lyric-row-fade=1`,
+        /// 灵动岛「暂停时收起」「暂停时隐藏」「进度线」「所有屏幕」「显示歌词」「悬浮淡化」「按音量键时提示」,跟设置页那几项走同一个设置:
+        /// `debug/notch-behavior?collapse-when-paused=1&hide-when-not-playing=0&progress-line=off|bottom|ears&all-screens=1&show-lyrics=1&lyric-row-fade=1&volume-key-banner=0`,
         /// 至少带一个。
         case notchBehavior(collapseWhenPaused: Bool?, hideWhenNotPlaying: Bool?, progressLine: NotchProgressLineChoice? = nil,
-                           allScreens: Bool? = nil, showLyrics: Bool? = nil, lyricRowFade: Bool? = nil)
+                           allScreens: Bool? = nil, showLyrics: Bool? = nil, lyricRowFade: Bool? = nil,
+                           volumeKeyBanner: Bool? = nil)
         /// 灵动岛「风格」里的「背景」「展开背景」,跟设置页走同两个设置:`debug/notch-style?style=coverArt&expanded=solidBlack|same`
         /// (值是 `NotchCardStyle` 的 rawValue,`same` = 展开背景「同上」),至少带一个。认不认得这个值由 App 判。
         case notchStyle(style: String?, expanded: String?)
@@ -276,6 +279,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("debug", "/volume"):
             guard let percent = value("percent").flatMap(Int.init), (0...100).contains(percent) else { return nil }
             self = .debug(.volume(percent: percent))
+        case ("debug", "/notch-volume"):
+            switch value("step")?.lowercased() {
+            case "up": self = .debug(.notchVolume(up: true))
+            case "down": self = .debug(.notchVolume(up: false))
+            default: return nil
+            }
         case ("debug", "/config-save"):
             self = .debug(.saveConfig)
         case ("debug", "/stall"):
@@ -336,10 +345,12 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             let allScreens = value("all-screens").flatMap(Self.parseBool)
             let showLyrics = value("show-lyrics").flatMap(Self.parseBool)
             let lyricRowFade = value("lyric-row-fade").flatMap(Self.parseBool)
+            let volumeKeyBanner = value("volume-key-banner").flatMap(Self.parseBool)
             guard collapse != nil || hide != nil || progressLine != nil || allScreens != nil || showLyrics != nil
-                    || lyricRowFade != nil else { return nil }
+                    || lyricRowFade != nil || volumeKeyBanner != nil else { return nil }
             self = .debug(.notchBehavior(collapseWhenPaused: collapse, hideWhenNotPlaying: hide, progressLine: progressLine,
-                                         allScreens: allScreens, showLyrics: showLyrics, lyricRowFade: lyricRowFade))
+                                         allScreens: allScreens, showLyrics: showLyrics, lyricRowFade: lyricRowFade,
+                                         volumeKeyBanner: volumeKeyBanner))
         case ("debug", "/move-window"):
             guard let title = value("title"), !title.isEmpty,
                   let x = value("x").flatMap(Double.init), let y = value("y").flatMap(Double.init),
@@ -490,6 +501,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             case let .volume(percent):
                 components.path = "/volume"
                 components.queryItems = [URLQueryItem(name: "percent", value: String(percent))]
+            case let .notchVolume(up):
+                components.path = "/notch-volume"
+                components.queryItems = [URLQueryItem(name: "step", value: up ? "up" : "down")]
             case let .settingsSearch(query):
                 components.path = "/settings-search"
                 components.queryItems = [URLQueryItem(name: "q", value: query)]
@@ -535,7 +549,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 if let secondary { items.append(URLQueryItem(name: "secondary", value: secondary)) }
                 if let alignment { items.append(URLQueryItem(name: "alignment", value: alignment)) }
                 components.queryItems = items
-            case let .notchBehavior(collapse, hide, progressLine, allScreens, showLyrics, lyricRowFade):
+            case let .notchBehavior(collapse, hide, progressLine, allScreens, showLyrics, lyricRowFade, volumeKeyBanner):
                 components.path = "/notch-behavior"
                 var items: [URLQueryItem] = []
                 if let collapse { items.append(URLQueryItem(name: "collapse-when-paused", value: collapse ? "1" : "0")) }
@@ -544,6 +558,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
                 if let allScreens { items.append(URLQueryItem(name: "all-screens", value: allScreens ? "1" : "0")) }
                 if let showLyrics { items.append(URLQueryItem(name: "show-lyrics", value: showLyrics ? "1" : "0")) }
                 if let lyricRowFade { items.append(URLQueryItem(name: "lyric-row-fade", value: lyricRowFade ? "1" : "0")) }
+                if let volumeKeyBanner {
+                    items.append(URLQueryItem(name: "volume-key-banner", value: volumeKeyBanner ? "1" : "0"))
+                }
                 components.queryItems = items
             case let .moveWindow(title, x, y):
                 components.path = "/move-window"
