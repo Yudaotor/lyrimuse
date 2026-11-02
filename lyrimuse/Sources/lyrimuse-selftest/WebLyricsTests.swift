@@ -889,6 +889,9 @@ func runWebLyricsTests() {
         expectEqual(sourceHas(app("WebLyrics/WebLyricsScreen.swift"),
                               "JSONSerialization.data(withJSONObject: [\"type\": \"links\", \"items\": items], options: [.sortedKeys]),"), true,
                     "网页歌词: 链接位置消息按排好序的键序列化,没变就不重发")
+        expectEqual(sourceHas(sourceBody("function nextRow(next, em, weight) {", in: pagesSource),
+                              "if (perWord(next)) return row(columns(next, false, 1), { ...opts, cols: true });"), true,
+                    "网页歌词: 下一句不论间奏还是唱着都逐词标读音,读音跟这一行一起缩(同悬浮歌词)")
         // 歌名卡什么时候显示:取出 OBS 页里那个纯函数,在 JavaScriptCore 里跑
         do {
             let obsPage = pagesSource

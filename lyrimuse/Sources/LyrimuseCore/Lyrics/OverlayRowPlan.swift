@@ -84,14 +84,14 @@ public enum OverlayRowPlan {
         public var translation: Row?
         /// 下一句预览。
         public var next: Row?
-        /// 没有当前行时,接下来那句的读音逐词标在它底下。
+        /// 接下来那句的读音逐词标在它底下(有没有当前行都一样,开唱那一刻各列不挪位)。
         public var nextPerWordRomanization: Bool
     }
 
     public static func resolve(_ i: Input) -> Plan {
         let scroll = i.overflow == .scroll
         let perWord = i.hasLine && i.showRomanization && i.lineHasWordGroups
-        let nextPerWord = !i.hasLine && i.showRomanization && i.nextHasWordGroups
+        let nextPerWord = i.showRomanization && i.nextHasWordGroups
         // 按时长配速只给真实的当前行:示例行没有时间轴,没有当前行时那几行是还没唱的内容。
         let paced = scroll && i.hasLine && !i.isPreviewLine && i.hasTimingWindow
         let fallback: Motion = scroll ? .marquee : .wrap
@@ -113,7 +113,8 @@ public enum OverlayRowPlan {
             main = paced ? .paced : fallback
         }
 
-        let romanization: Row? = (i.showRomanization && !perWord && !nextPerWord)
+        // 没有当前行时整行罗马音是接下来那句的,那句逐词标了就让位;有当前行时这一行属于当前行。
+        let romanization: Row? = (i.showRomanization && !perWord && !(nextPerWord && !i.hasLine))
             ? secondary(i.hasLine ? i.lineRomanization : i.nextRomanization) : nil
         let translation: Row? = i.showTranslation
             ? secondary(i.hasLine ? i.lineTranslation : i.nextTranslation) : nil

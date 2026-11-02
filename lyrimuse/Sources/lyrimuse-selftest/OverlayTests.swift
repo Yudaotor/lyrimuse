@@ -731,8 +731,12 @@ func runOverlayTests() {
         let gapPerWord = plan(.scroll, line: false, nextGroups: true)
         expectEqual(gapPerWord.nextPerWordRomanization, true, "行排版: 前奏首句分得出词组就逐词标")
         expectEqual(gapPerWord.romanization == nil, true, "行排版: 前奏首句逐词标时整行罗马音让位")
-        expectEqual(plan(.scroll, nextGroups: true).nextPerWordRomanization, false,
-                    "行排版: 有当前行时下一句预览不逐词标(那是另一句的小字预览)")
+        // 唱着时的下一句预览也逐词标,开唱那一刻各列不挪位;当前行的整行罗马音不受它影响。
+        let nextPerWord = plan(.scroll, nextGroups: true)
+        expectEqual(nextPerWord.nextPerWordRomanization, true, "行排版: 唱着时下一句预览分得出词组也逐词标")
+        expectEqual(nextPerWord.romanization, row("cur-roma", .paced), "行排版: 下一句逐词标时当前行的整行罗马音照旧")
+        expectEqual(plan(.scroll, roma: false, nextGroups: true).nextPerWordRomanization, false,
+                    "行排版: 罗马音关掉下一句预览也不逐词标")
 
         // 开关关掉就不出现。
         let romaOff = plan(.scroll, groups: true, roma: false)
@@ -1039,7 +1043,7 @@ func runOverlayTests() {
         expectEqual(fonts.contains("0.65") || fonts.contains("0.7"), false,
                     "副行字号接线: 四行字体不再写死比例")
         expectEqual(["size * scale.romanization", "size * scale.translation", "size * scale.nextLine"]
-                        .allSatisfy { fonts.components(separatedBy: $0).count - 1 == 2 }, true,
+                        .allSatisfy { fonts.components(separatedBy: $0 + ",").count - 1 == 2 }, true,
                     "副行字号接线: SwiftUI 字体和 AppKit 孪生各用一次同一个比例")
         expectEqual(["overlayRomanizationScale", "overlayTranslationScale", "overlayNextLineScale"].allSatisfy {
             sourceHas(settings, "defaults.set(\($0), forKey: Keys.\($0))\n            recomputeFonts()")
@@ -1059,6 +1063,14 @@ func runOverlayTests() {
                      sourceHas(sourceBody("struct OverlayContentSettingsRows: View", in: rows),
                                "if showsRowSizes {\n                SettingsTileGrid(columns: 3) { OverlayRowFontScaleCells() }")],
                     [true, true], "副行字号接线: 点预览读音 / 译文 / 下一句那块打开的「内容」浮层里也有三格大小")
+        expectEqual(fonts.components(separatedBy: "size * scale.nextLine * scale.romanization").count - 1, 2,
+                    "副行字号接线: 下一句逐词读音按读音比例再乘下一句比例,SwiftUI 字体和 AppKit 孪生各一次")
+        let overlay = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/UI/LyricsOverlayView.swift"),
+                                   encoding: .utf8)) ?? ""
+        let columns = sourceBody("private func upcomingGroupColumns", in: overlay)
+        expectEqual([sourceHas(columns, ".font(nextLineReadingFont)"), sourceHas(columns, "romaFont: nextLineReadingFont"),
+                     sourceHas(columns, "playback.romanizationFont")], [true, true, false],
+                    "副行字号接线: 下一句逐词列的读音用缩小的那份字体,折行缓存键跟着它")
     }
 
     // ---- WrapLayoutMath ----

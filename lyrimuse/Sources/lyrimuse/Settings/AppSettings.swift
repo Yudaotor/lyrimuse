@@ -2382,7 +2382,9 @@ final class AppSettings: ObservableObject {
     @Published private(set) var romanizationFont: Font = .system(size: 13, weight: .medium)
     @Published private(set) var translationFont: Font = .system(size: 14, weight: .regular)
     @Published private(set) var previewFont: Font = .system(size: 14, weight: .medium)
-    /// 上面四份字体的 AppKit 孪生。悬浮窗要知道"这一行不换行得多宽"才能决定对唱两侧留白让多少
+    /// 下一句逐词读音:读音字号再乘下一句的比例,下一句连同读音是它开唱后的等比缩小版(04 章决策 83)。
+    @Published private(set) var previewRomanizationFont: Font = .system(size: 9, weight: .medium)
+    /// 上面几份字体的 AppKit 孪生。悬浮窗要知道"这一行不换行得多宽"才能决定对唱两侧留白让多少
     /// (见 `OverlayCardGeometry.elasticInsetScale`),而测宽只能用 `NSFont`。必须跟对应的
     /// `Font` 在**同一次** `recomputeFonts()` 里由同一组入参派生 —— 各算各的迟早会漂,而漂了不会
     /// 报错,只会让留白让多让少差一点(同 `notchMainNSFont` 那条)。
@@ -2417,6 +2419,9 @@ final class AppSettings: ObservableObject {
         previewFont = .overlayFont(
             familyName: fontFamilyName, size: size * scale.nextLine,
             weight: weight.lighter(by: OverlayFontWeight.nextLinePreviewSteps))
+        previewRomanizationFont = .overlayFont(
+            familyName: fontFamilyName, size: size * scale.nextLine * scale.romanization,
+            weight: weight.lighter(by: OverlayFontWeight.romanizationSteps))
         // AppKit 孪生:同一组入参、同一次派生,别在别处另算一遍。
         overlayNSFonts = OverlayNSFonts(
             main: .overlayFont(familyName: fontFamilyName, size: size, weight: weight),
@@ -2428,7 +2433,10 @@ final class AppSettings: ObservableObject {
                 weight: weight.lighter(by: OverlayFontWeight.translationSteps)),
             preview: .overlayFont(
                 familyName: fontFamilyName, size: size * scale.nextLine,
-                weight: weight.lighter(by: OverlayFontWeight.nextLinePreviewSteps)))
+                weight: weight.lighter(by: OverlayFontWeight.nextLinePreviewSteps)),
+            previewRomanization: .overlayFont(
+                familyName: fontFamilyName, size: size * scale.nextLine * scale.romanization,
+                weight: weight.lighter(by: OverlayFontWeight.romanizationSteps)))
     }
 
     /// 灵动岛那三个派生字体。字体族空串 = 系统字体、族名没装时回落系统字体,都由 `Font.overlayFont`

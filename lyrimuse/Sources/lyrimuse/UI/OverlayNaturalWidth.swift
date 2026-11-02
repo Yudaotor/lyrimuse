@@ -11,6 +11,8 @@ struct OverlayNSFonts: Equatable {
     var romanization: NSFont = .systemFont(ofSize: 13, weight: .medium)
     var translation: NSFont = .systemFont(ofSize: 14, weight: .regular)
     var preview: NSFont = .systemFont(ofSize: 14, weight: .medium)
+    /// 下一句逐词读音:读音字号再乘下一句的比例。
+    var previewRomanization: NSFont = .systemFont(ofSize: 9, weight: .medium)
 }
 
 /// "这段文字不换行的话要多宽" —— 对唱两侧留白让多少全靠它

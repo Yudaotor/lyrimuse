@@ -1085,9 +1085,10 @@ enum WebLyricsPages {
             if (style.tr && line.tr) html += row(esc(line.tr), { em: rowEm(1), weight: style.weights[2], color: color(75), pct: 75, top: trTop, side, cls });
             return html;
           }
-          function nextRow(next, em, weight, upcoming) {
+          // 下一句同样逐词标读音,读音按这一行的字号缩(columns 的 mainEm 传 1):开唱那一刻各列不挪位,整块放大。
+          function nextRow(next, em, weight) {
             const opts = { em, weight, color: color(40), pct: 40, top: style.spacing[2], side: next.s, cls: 'next' };
-            if (upcoming && perWord(next)) return row(columns(next, false, em), { ...opts, cols: true });
+            if (perWord(next)) return row(columns(next, false, 1), { ...opts, cols: true });
             return row(esc(next.text), opts);
           }
           function render(v) {
@@ -1097,7 +1098,7 @@ enum WebLyricsPages {
               html += '<div class="row dots"><i></i><i></i><i></i></div>';
               const up = lines[v.next];
               if (up) {
-                if (style.next) html += nextRow(up, 1, style.weights[0], true);
+                if (style.next) html += nextRow(up, 1, style.weights[0]);
                 html += secondaryRows(up, up.s, 'sub');
               }
             } else {
@@ -1107,7 +1108,7 @@ enum WebLyricsPages {
               if (style.next && next) {
                 // 下一句换了个人唱时用主行的字号,换过去那一刻不跳。
                 const big = style.align === 'automatic' && !!next.s && next.s !== line.s;
-                html += nextRow(next, big ? 1 : rowEm(2), style.weights[big ? 0 : 3], false);
+                html += nextRow(next, big ? 1 : rowEm(2), style.weights[big ? 0 : 3]);
               }
             }
             card.innerHTML = html;

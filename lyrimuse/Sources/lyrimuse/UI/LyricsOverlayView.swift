@@ -132,6 +132,7 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var romanizationFont: Font = .system(size: 13, weight: .medium)
     @Published private(set) var translationFont: Font = .system(size: 14, weight: .regular)
     @Published private(set) var previewFont: Font = .system(size: 14, weight: .medium)
+    @Published private(set) var previewRomanizationFont: Font = .system(size: 9, weight: .medium)
     @Published private(set) var textStrokeEnabled = false
     @Published private(set) var textStrokeColor: Color = .black.opacity(0.65)
     /// 卡拉OK"未唱到"那一段实际显示用的颜色——跟 displayForegroundColor
@@ -248,6 +249,7 @@ private final class OverlayPlayback: ObservableObject {
             s.$romanizationFont.removeDuplicates().sink { [weak self] in self?.romanizationFont = $0 },
             s.$translationFont.removeDuplicates().sink { [weak self] in self?.translationFont = $0 },
             s.$previewFont.removeDuplicates().sink { [weak self] in self?.previewFont = $0 },
+            s.$previewRomanizationFont.removeDuplicates().sink { [weak self] in self?.previewRomanizationFont = $0 },
             s.$textStrokeEnabled.removeDuplicates().sink { [weak self] in self?.textStrokeEnabled = $0 },
             s.$textStrokeColor.removeDuplicates().sink { [weak self] in self?.textStrokeColor = $0 },
             // 跟随封面时**不能**直接给 accent 本身:已唱色(displayForegroundColor)在
@@ -773,12 +775,18 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         // 整行的罗马音也参与取最大;逐词标注时读音已经算进上面的主行宽,这里再按整行量一遍只会更宽、不会更窄。
         widest = max(widest, OverlayNaturalWidth.width(
             romanizationRowText ?? (usesPerWordRomanization ? line?.romanization : nil)
-                ?? (upcomingWordGroups != nil ? playback.nextLineRomanization : nil),
+                ?? (line == nil && upcomingWordGroups != nil ? playback.nextLineRomanization : nil),
             font: fonts.romanization))
         widest = max(widest, OverlayNaturalWidth.width(translationRowText, font: fonts.translation, translation: true))
-        if playback.showNextLinePreview {
-            // 下一句预览换人唱时会放大到主字号(见 nextLinePreviewFont),量宽要跟着换。
-            widest = max(widest, OverlayNaturalWidth.width(nextLineText, font: nextLinePreviewNSFont))
+        if playback.showNextLinePreview, let next = nextLineText {
+            // 下一句预览换人唱时会放大到主字号(见 nextLinePreviewFont),量宽要跟着换;逐词标读音时按组量,量法同主行。
+            let font = nextLinePreviewNSFont, readingFont = nextLineReadingNSFont
+            let groups = upcomingWordGroups
+            widest = max(widest, LyricsSegmenter.mainWidth(
+                words: groups == nil ? nil : playback.nextLineWords, groups: groups, text: next,
+                measure: { OverlayNaturalWidth.width($0, font: font) },
+                wordRomanization: .init(measure: { OverlayNaturalWidth.width($0, font: readingFont) },
+                                        sidePadding: OverlayRowLayout.romaSidePadding(strokeInset: strokeInset))))
         }
         guard widest > 0 else { return 0 }
         // 每一行四周都留着描边那圈(开着时各 `LyricsTextStrokeMetrics.inset`),排版要占这么宽:漏算的话留白正好把这一截
@@ -842,6 +850,18 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// `nextLinePreviewFont` 的 AppKit 孪生:量宽、定指示条的高和位置都用它,跟 `nextLinePreviewFont` 逐条一致。
     private var nextLinePreviewNSFont: NSFont {
         nextLinePreviewFont == playback.mainFont ? playback.overlayNSFonts.main : playback.overlayNSFonts.preview
+    }
+
+    /// 下一句逐词列里读音的字体:下一句按主句字号显示时就是读音那一份,否则按下一句的比例缩小,
+    /// 字和读音同一个比例,开唱那一刻整块放大回主句的样子。
+    private var nextLineReadingFont: Font {
+        nextLinePreviewFont == playback.mainFont ? playback.romanizationFont : playback.previewRomanizationFont
+    }
+
+    /// `nextLineReadingFont` 的 AppKit 孪生。
+    private var nextLineReadingNSFont: NSFont {
+        nextLinePreviewFont == playback.mainFont
+            ? playback.overlayNSFonts.romanization : playback.overlayNSFonts.previewRomanization
     }
 
     private func horizontalAlignment(for side: LyricDuet.Side) -> HorizontalAlignment {
@@ -1082,7 +1102,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             nextText: nextLineText,
             nextRomanization: playback.nextLineRomanization,
             nextTranslation: playback.nextLineTranslation,
-            nextHasWordGroups: playback.nextLineWordGroups?.isEmpty == false))
+            // 示例行在场时下一句是示例那句,真实歌曲的分组配不上它。
+            nextHasWordGroups: !showingPreviewLine && playback.nextLineWordGroups?.isEmpty == false))
     }
 
     /// `.paced` 那几行的显示窗口。只在 `rowPlan` 判成 `.paced` 时取用(那时它必不为 nil)。
@@ -1468,8 +1489,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         }
     }
 
-    /// 前奏/间奏「•••」下方那句(`line` 为 nil)能不能把罗马音逐词标在底下 —— 判据同
-    /// `usesPerWordRomanization`,数据取自下一行。设置页示例行在场时 `line` 不为 nil,恒为 nil。
+    /// 下一句能不能把罗马音逐词标在底下(前奏 / 间奏「•••」下方那句和唱着时的下一句预览都一样)—— 判据同
+    /// `usesPerWordRomanization`,数据取自下一行。设置页示例行在场时恒为 nil。
     private var upcomingWordGroups: [SyncedLyricWordGroup]? {
         guard rowPlan.nextPerWordRomanization, let groups = playback.nextLineWordGroups, !groups.isEmpty
         else { return nil }
@@ -1523,7 +1544,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 // 开唱那一刻列宽不变。
                 let tail = OverlayRowLayout.trailingWhitespace(of: g.words)
                 Text(g.romanization ?? " ")
-                    .font(playback.romanizationFont)
+                    .font(nextLineReadingFont)
                     .foregroundStyle(color)
                     .lineLimit(1)
                     .fixedSize()
@@ -1540,7 +1561,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         } else {
             WrapLayout(rowAlignment: nextLineRowAlignment,
                        contentKey: AnyHashable(OverlayLineKey(
-                           text: key, roma: true, mainFont: nextLinePreviewFont, romaFont: playback.romanizationFont,
+                           text: key, roma: true, mainFont: nextLinePreviewFont, romaFont: nextLineReadingFont,
                            romaGap: rowSpacing.perWordReadingGap))) {
                 columns
             }
