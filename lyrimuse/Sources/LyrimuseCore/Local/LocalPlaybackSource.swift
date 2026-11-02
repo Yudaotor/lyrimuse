@@ -1604,12 +1604,19 @@ public final class LocalPlaybackSource: ObservableObject {
         bundleID == PlaybackPlayer.soda.bundleIdentifier ? sodaAnchorLagLearnAlpha : anchorLagLearnAlpha
     }
 
-    /// 这一拍快照报的位置,按读到的时刻补到处理那一刻(见 MediaControlSnapshot.capturedAt)。读到之后超过 2s 才处理的
-    /// 当读数本身不可信,不补。
+    /// 这一拍快照报的位置,按读到的时刻补到处理那一刻(见 MediaControlSnapshot.capturedAt)。读到之后超过
+    /// `staleCaptureSecs` 才处理的当读数本身不可信,不补(Spotify 自己的钟那份在播时整拍不用,见 isStaleCapture)。
     nonisolated static func reportedSeconds(_ snapshot: MediaControlSnapshot, rate: Double, now: Date) -> Double {
         let captureLag = snapshot.capturedAt.map { now.timeIntervalSince($0) } ?? 0
-        let lagFix = captureLag > 0 && captureLag <= 2 ? captureLag * rate : 0
+        let lagFix = captureLag > 0 && captureLag <= staleCaptureSecs ? captureLag * rate : 0
         return (snapshot.elapsedTime ?? 0) + lagFix
+    }
+    nonisolated static let staleCaptureSecs = 2.0
+
+    /// 读到之后隔了 `staleCaptureSecs` 以上才轮到处理(App 刚启动、主线程还在忙)。纯函数,selftest 直接覆盖。
+    public nonisolated static func isStaleCapture(_ snapshot: MediaControlSnapshot, now: Date) -> Bool {
+        guard let capturedAt = snapshot.capturedAt else { return false }
+        return now.timeIntervalSince(capturedAt) > staleCaptureSecs
     }
 
     /// 按设备 UID 学到的领先量表。lazy:第一次用到时从 UserDefaults 读,顺带迁移旧的单值键。
@@ -4473,6 +4480,13 @@ public final class LocalPlaybackSource: ObservableObject {
         // 不记:同一首留着原来的锚点接着外推;换了歌先拿掉上一首的锚点,等有时长的那一拍按换歌处理。
         if playing, snapshot.trackDuration == nil {
             if key != posTrackingKey, anchor != nil { anchor = nil }
+            return
+        }
+        // Spotify 自己的钟(AppleScript 那份)在播、但读数是好几秒前读的:位置同样算不了,照上面那支处理。拿它起锚的话,
+        // 下一拍新读数领先好几秒、被当成拖动按 seek 档扣领先量,重启接回偏置的连续性签名也对不上。只对 Spotify 这一份。见 02 章决策 221。
+        if playing, isSpotifyNative, snapshot.anchorElapsedTime == nil, Self.isStaleCapture(snapshot, now: now) {
+            if key != posTrackingKey, anchor != nil { anchor = nil }
+            logger.notice("stale snapshot skipped for position: captured \(now.timeIntervalSince(snapshot.capturedAt ?? now), format: .fixed(precision: 3))s ago")
             return
         }
         // 暂停/恢复那一拍的诊断:用户看到"一按暂停歌词进度变一下",要量的就是

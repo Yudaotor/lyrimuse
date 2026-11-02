@@ -76,9 +76,11 @@ private func near(_ actual: Double?, _ expected: Double, _ tol: Double = 0.02) -
 private let spotifyID = PlaybackPlayer.spotify.bundleIdentifier
 
 /// Spotify AppleScript 那份读数:读的是它自己的钟,没有锚点信息。
-private func spotify(_ title: String, artist: String = "陶喆", raw: Double, duration: Double, playing: Bool = true) -> MediaControlSnapshot {
+private func spotify(_ title: String, artist: String = "陶喆", raw: Double, duration: Double, playing: Bool = true,
+                     capturedAt: Date? = nil) -> MediaControlSnapshot {
     .forReplay(title: title, artist: artist, album: "黑色柳丁", duration: duration, elapsedTime: raw,
-               playing: playing, playbackRate: playing ? 1 : 0, bundleIdentifier: spotifyID, anchorElapsedTime: nil)
+               playing: playing, playbackRate: playing ? 1 : 0, bundleIdentifier: spotifyID, anchorElapsedTime: nil,
+               capturedAt: capturedAt)
 }
 
 private let safariMediaID = "com.apple.WebKit.GPU"
@@ -94,6 +96,7 @@ private func mediaControl(_ bundle: String, _ title: String, anchor: Double, ela
 @MainActor
 func runPositionReplayTests() {
     replaySpotifyManualStart()
+    replaySpotifyStaleFirstReadingAfterLaunch()
     replaySpotifyAfterAd()
     replaySpotifySameTrackJump()
     replaySpotifyStartLeadMigration()
@@ -900,6 +903,22 @@ private func replaySpotifyManualStart() {
     expectEqual(near(learned, 0.24 * 0.5 + trueLead * 0.5, 0.002), true,
                 "回放·Spotify 手动点播: 暂停反推的 0.271 按头几个样本的 α=0.5 学进 fresh(\(learned.map { String(format: "%.4f", $0) } ?? "nil"))")
     expectEqual(rig.startLeadTable["afterAd"], nil, "回放·Spotify 手动点播: 不碰 afterAd")
+}
+
+/// App 在歌放到一半时启动:主线程还在忙,第一份读数读到 3.7s 后才处理。不拿它起锚,等下一拍新读数按「首次观察」处理
+/// (fresh 先验);拿它起锚的话下一拍领先 3.7s,被当成拖动按 seek 档扣。见 02 章决策 221。
+@MainActor
+private func replaySpotifyStaleFirstReadingAfterLaunch() {
+    let rig = ReplayRig("spotify-stale-first")
+    defer { rig.tearDown() }
+    rig.tick(spotify("180度", raw: 106.454, duration: 259, capturedAt: at(-3.7)), at: at(0))
+    expectEqual(rig.shown(at: at(0)) == nil, true, "回放·Spotify 启动时旧读数: 读到 3.7s 后才处理的那拍不起锚")
+    rig.tick(spotify("180度", raw: 110.160, duration: 259, capturedAt: at(0.3)), at: at(0.33))
+    expectEqual(near(rig.source.replayReportedBiasSecs, LocalPlaybackSource.spotifyStartLeadPrior(.fresh), 0.001), true,
+                "回放·Spotify 启动时旧读数: 下一拍按首次观察给 fresh、不当拖动(\(String(format: "%.3f", rig.source.replayReportedBiasSecs)))")
+    rig.tick(spotify("180度", raw: 112.16, duration: 259, capturedAt: at(2.33)), at: at(2.33))
+    expectEqual(near(rig.shown(at: at(2.33)), 112.16 - LocalPlaybackSource.spotifyStartLeadPrior(.fresh), 0.05), true,
+                "回放·Spotify 启动时旧读数: 之后照常跟着钟走")
 }
 
 /// 广告放完接着放:广告报 29.99s、29.09s 就结束。上一首是广告时归 afterAd(先验 0.66),暂停反推的真实领先 0.766
