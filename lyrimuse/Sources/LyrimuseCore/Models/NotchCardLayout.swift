@@ -208,10 +208,15 @@ public struct NotchCardLayout: Equatable, Sendable {
         max(0, (cardWidth - notchWidth - topRowPadding * 2) / 2)
     }
 
-    /// 卡片当前宽度:收起态收到两只耳朵(不比稳态宽),展开态取展开宽。
+    /// 没有刘海的屏(外接屏)收起时,两只耳朵中间按这么宽的一块刘海留空,跟 MacBook 内建屏(刘海约 180pt)收起时一样大。
+    /// 别按真实刘海宽 0 算:那样只剩两只耳朵、缩成 88pt 一小块。见 05 章决策 128。
+    public static let collapsedGapWithoutNotch: CGFloat = 180
+
+    /// 卡片当前宽度:收起态收到刘海加两只耳朵(不比稳态宽),展开态取展开宽。
     public var cardWidth: CGFloat {
         if isCollapsed {
-            return min(steadyCardWidth, notchWidth + 2 * metrics.collapsedEarWidth + 2 * metrics.cardPadding)
+            let gap = notchWidth > 0 ? notchWidth : Self.collapsedGapWithoutNotch
+            return min(steadyCardWidth, gap + 2 * metrics.collapsedEarWidth + 2 * metrics.cardPadding)
         }
         return isExpanded ? expandedCardWidth : steadyCardWidth
     }

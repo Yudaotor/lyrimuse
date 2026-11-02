@@ -355,6 +355,9 @@ func runNotchTests() {
         expectEqual(collapsed.cardHeight, 32, "卡片布局: 收起只留顶行")
         expectEqual(collapsed.cardWidth, 268, "卡片布局: 收起宽 = 刘海 + 两只收起耳朵 + 两侧内边距")
         expectEqual(with { $0.isCollapsed = true; $0.steadyCardWidth = 250 }.cardWidth, 250, "卡片布局: 收起宽不比稳态宽")
+        expectEqual(with { $0.isCollapsed = true; $0.notchWidth = 0 }.cardWidth, 268,
+                    "卡片布局: 没有刘海的屏收起时中间按 180pt 留空,跟内建屏一样大,不缩成两只耳朵那 88pt")
+        expectEqual(with { $0.notchWidth = 0 }.cardWidth, 360, "卡片布局: 没有刘海的屏稳态宽不变")
         expectEqual(with { $0.hasMilestone = true }.cardHeight, 108, "卡片布局: 报喜 = 顶行 + 报喜面板")
         expectEqual(with { $0.hasMilestone = true; $0.isCollapsed = true }.cardHeight, 32, "卡片布局: 收起优先于报喜")
         // 没有曲目:稳态只剩顶行,展开只长出空闲面板。
