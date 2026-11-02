@@ -1789,7 +1789,7 @@ public final class LyricsSyncEngine {
         // 逐字数据始终解析:要不要逐字填色是悬浮歌词 / 灵动岛 / 菜单栏各自的开关,由各展示面在消费点把行压成整行
         // (`SyncedLyricLine.lineLevel`),引擎不替任何一个面做这个决定。
         let normalizedYRC = LyricTimelineNormalizer.normalize(YRCParser.parse(lyricsYRC))
-        let yrc = normalizedYRC.lines
+        let yrc = Self.splittingHanWords(normalizedYRC.lines)
         keptOverlapLineTimes = normalizedYRC.keptOverlapLineTimes
         LyricTimelineNormalizer.logSummary(normalizedYRC.report, track: trackTitle)
         // 过滤前先把整份的文本取出来判一次(结构化规则是整份粒度的,见
@@ -2589,6 +2589,52 @@ public final class LyricsSyncEngine {
             return mergeSegmentsIntoWordGroups(words: words, segs: segs)
         }
         return nil
+    }
+
+    /// 中文行里一个逐字词含好几个汉字时(Apple Music 常把「我怎麼敢去」记成一个词),按时长均分拆成一字一个词,
+    /// 逐词读音才能一个音节标在一个字下面。汉字等宽,均分后填色扫过的速度跟整段一样。只拆全是汉字的词,
+    /// 词首、词尾的空白跟着第一个、最后一个字走;行里有假名或谚文时整行不拆。见 10 章决策 70。
+    public static func splittingHanWords(_ lines: [LyricLineWords]) -> [LyricLineWords] {
+        lines.map { line in
+            guard line.words.contains(where: { hanCore(of: $0.text) != nil }),
+                  !line.words.contains(where: { $0.text.unicodeScalars.contains(where: isKanaOrHangul) })
+            else { return line }
+            var words: [LyricWord] = []
+            for w in line.words {
+                guard let (leading, chars, trailing) = hanCore(of: w.text) else {
+                    words.append(w)
+                    continue
+                }
+                let n = chars.count
+                for (i, c) in chars.enumerated() {
+                    let start = w.startMs + w.durationMs * i / n
+                    let end = w.startMs + w.durationMs * (i + 1) / n
+                    let text = (i == 0 ? leading : "") + String(c) + (i == n - 1 ? trailing : "")
+                    words.append(LyricWord(startMs: start, durationMs: end - start, text: text))
+                }
+            }
+            return LyricLineWords(timeMs: line.timeMs, words: words, durationMs: line.durationMs)
+        }
+    }
+
+    /// 词去掉首尾空白后是两个以上汉字(每个字一个码位)时,返回首空白、各字、尾空白;否则 nil。
+    private static func hanCore(of text: String) -> (String, [Character], String)? {
+        let leading = String(text.prefix { $0.isWhitespace })
+        let rest = text.dropFirst(leading.count)
+        let trailing = String(rest.reversed().prefix { $0.isWhitespace }.reversed())
+        let chars = Array(rest.dropLast(trailing.count))
+        guard chars.count >= 2, chars.allSatisfy({
+            $0.unicodeScalars.count == 1 && $0.unicodeScalars.first!.properties.isIdeographic
+        }) else { return nil }
+        return (leading, chars, trailing)
+    }
+
+    private static func isKanaOrHangul(_ s: Unicode.Scalar) -> Bool {
+        switch s.value {
+        case 0x3040...0x30FF, 0x31F0...0x31FF, 0xFF66...0xFF9F,
+             0x1100...0x11FF, 0x3130...0x318F, 0xAC00...0xD7AF: true
+        default: false
+        }
     }
 
     /// 一个逐字词在拼音 / 粤拼行里占几个音节:每个汉字一个,一串连着的字母、数字(含撇号)算一个,

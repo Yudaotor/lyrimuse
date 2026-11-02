@@ -1617,6 +1617,32 @@ func runSyncEngineTests() {
         expectEqual(nbspLine?.wordGroups?.count, 11,
                     "内容匹配: 命中之后逐字对齐应正常生效(11字11音节严格一一对应,不退回整行)")
 
+        // ③.6c 逐字数据把几个汉字记成一个词(Apple Music 粤语歌):加载时按时长均分拆成一字一个词,读音一个音节标一个字
+        let engineSplit = LyricsSyncEngine()
+        engineSplit.load(
+            lyrics: "[00:18.616]望住 我怎麼敢去唱情歌",
+            lyricsTr: "",
+            lyricsRoma: "[00:18.616]mong6 zyu6 ngo5 zam2 mo1 gam2 heoi3 coeng3 cing4 go1",
+            lyricsYRC: "[18616,5881](18616,543,0)望(19159,657,0)住 (20263,1930,0)我怎麼敢去" +
+                "(22192,744,0)唱(23370,518,0)情(23888,609,0)歌")
+        let splitLine = engineSplit.allLines(idPrefix: "t").first?.line
+        expectEqual(splitLine?.words?.map(\.text), ["望", "住 ", "我", "怎", "麼", "敢", "去", "唱", "情", "歌"],
+                    "多字词: 拆成一字一个词,词尾空格留在原来那个字上")
+        expectEqual(splitLine?.words?[2...6].map(\.startMs), [20263, 20649, 21035, 21421, 21807],
+                    "多字词: 按时长均分,首字从原词起点开始")
+        expectEqual(splitLine?.words.map { $0[6].startMs + $0[6].durationMs }, 22193, "多字词: 末字收在原词终点")
+        expectEqual(splitLine?.wordGroups?.map(\.romanization),
+                    ["mong6", "zyu6", "ngo5", "zam2", "mo1", "gam2", "heoi3", "coeng3", "cing4", "go1"],
+                    "多字词: 拆开后读音一个音节对一个字")
+        let kept = LyricsSyncEngine.splittingHanWords([
+            LyricLineWords(timeMs: 0, words: [LyricWord(startMs: 0, durationMs: 400, text: "東京"),
+                                              LyricWord(startMs: 400, durationMs: 200, text: "へ")]),
+            LyricLineWords(timeMs: 1000, words: [LyricWord(startMs: 1000, durationMs: 400, text: "OK啦"),
+                                                 LyricWord(startMs: 1400, durationMs: 300, text: "好")]),
+        ])
+        expectEqual(kept.map { $0.words.map(\.text) }, [["東京", "へ"], ["OK啦", "好"]],
+                    "多字词: 行里有假名、或词里夹着字母时不拆")
+
         // ③.6d 逐字数据把相邻两句整行并成一行:它的键是两句键拼起来的,单句键查不到,时间兜底
         // 只会挂上其中一句。合并行要同时带两句的译文;第三句是独立的逐字行,照常按单句键命中。
         let engineMerged = LyricsSyncEngine()
