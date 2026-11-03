@@ -1437,11 +1437,12 @@ private struct MenuBarPanelView: View {
             }
             .contentShape(Rectangle())
             .gesture(tileDragGesture(slot.tile))
+            // 两个角标都压在格子里面:往外探的话,左格右上和右格左上那两颗在 9pt 的缝里挤成一团。
             .overlay(alignment: .topLeading) {
                 PanelEditBadge(symbol: "minus", tint: Color(nsColor: .systemGray), label: L10n.t("移除")) {
                     updateLayout { $0.remove(slot.tile) }
                 }
-                .offset(x: -5, y: -5)
+                .padding(5)
             }
             .overlay(alignment: .topTrailing) {
                 PanelEditBadge(symbol: next.units > slot.size.units ? "arrow.up.left.and.arrow.down.right"
@@ -1450,7 +1451,7 @@ private struct MenuBarPanelView: View {
                                label: String(format: L10n.t("调整大小：%@"), next.panelName)) {
                     updateLayout { $0.setSize(next, for: slot.tile) }
                 }
-                .offset(x: 5, y: -5)
+                .padding(5)
             }
             .contextMenu {
                 ForEach(MenuBarPanelLayout.Size.allCases, id: \.self) { size in
@@ -1512,7 +1513,7 @@ private struct MenuBarPanelView: View {
                 PanelEditBadge(symbol: "plus", tint: .accentColor, label: L10n.t("添加")) {
                     updateLayout { $0.add(tile) }
                 }
-                .offset(x: -5, y: -5)
+                .padding(5)
             }
             .accessibilityAction(named: L10n.t("添加")) { updateLayout { $0.add(tile) } }
             .layoutValue(key: PanelTileUnits.self, value: MenuBarPanelLayout.Size.medium.units)
