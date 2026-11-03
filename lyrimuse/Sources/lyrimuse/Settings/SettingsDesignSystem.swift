@@ -1215,76 +1215,129 @@ struct SettingsRow<Trailing: View>: View {
     var footer: AnyView?
     /// 标题后面标「Beta」(`SettingsBetaBadge`)。
     var beta = false
+    /// 尾部控件跟标题排一行放不下(标题单行宽 + 控件宽超出行宽)时,把控件挪到标题和副标题下面、跟文字左对齐。
+    /// 给定宽、压不扁的宽控件用(四档分段这类):并排硬挤会把左边的标题和副标题压成一两个字一行。
+    var trailingWrapsBelow = false
     @ViewBuilder let trailing: () -> Trailing
 
     var body: some View {
-        // 图标、标题那一行、尾部控件三者的**中线**对齐(见 settingsRowTitleLine)。按顶端对齐的话,
-        // 比一行字高的控件(分段选择器、开关、下拉框)会让标题看起来整体偏上。
-        HStack(alignment: .settingsRowTitleLine, spacing: SettingsRowMetrics.iconTextSpacing) {
-            // 即使这一行没有图标也占住同宽的位置——同一张卡里有的行有图标、有的没有时,
-            // 标题必须仍然对齐在同一条竖线上。
-            Group {
-                if let iconImage {
-                    Image(nsImage: iconImage)
-                        .resizable()
-                        .frame(width: SettingsRowMetrics.iconWidth, height: SettingsRowMetrics.iconWidth)
-                } else if let icon {
-                    // 系统符号名、自画图标的名字(`SurfaceGlyph`)都收。
-                    SymbolImage(name: icon, size: 13)
-                        .foregroundStyle(iconTint ?? Color.secondary)
-                        // 锁定成拉丁语区:SF Symbols 里 textformat / textformat.alt /
-                        // textformat.size 这类"字母造型"的符号带 CJK 本地化变体,中文界面下
-                        // 会被渲染成汉字「格式」——实机截图里"显示读音"那一行
-                        // 的图标位就是一个「格式」二字,夹在一列线条图标中间像是漏了个标签。
-                        // 图标列要的是图形而不是本地化文字,这里显式钉住拉丁变体(其余不带
-                        // 变体的符号不受任何影响)。
-                        .environment(\.locale, Locale(identifier: "en"))
+        Group {
+            if trailingWrapsBelow {
+                // 判据靠并排那一档里副标题、footer 的理想宽度是 0(只拿标题单行宽去比),别去掉那个 idealWidth。
+                ViewThatFits(in: .horizontal) {
+                    inlineRow(measuringTitleOnly: true)
+                    stackedRow
                 }
+            } else {
+                inlineRow(measuringTitleOnly: false)
             }
-            .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(title)
-                        .font(.system(size: 13))
-                        .settingsTitleFit(title)
-                    if beta { SettingsBetaBadge() }
-                    if let help { HelpButton(text: help) }
-                }
-                // 对齐基准取标题这一行,不取整块文字:有副标题时控件对着标题,副标题往下排。
-                .alignmentGuide(.settingsRowTitleLine) { d in d[VerticalAlignment.center] }
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(subtitleTint.map(AnyShapeStyle.init) ?? AnyShapeStyle(.secondary))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let footer { footer }
-            }
-
-            Spacer(minLength: 12)
-
-            trailing()
-                // 控件本身自带的标签一律不显示——标题已经在左边了,再显示一遍就是同一句
-                // 话并排两次(原生 Form 里 Toggle/Picker 的标签就是这么来的)。
-                .labelsHidden()
-                // 必须显式指定 .switch:macOS 上 Toggle 的默认样式是**复选框**,只有放在
-                // Form/List 里才会自动变成右侧那个开关。这套卡片是自己用 ScrollView+VStack
-                // 搭的、不在 Form 里,不写这一句所有开关都会画成 ☑ 复选框(
-                // 实机截图就是这个样子),跟参考设计差得很远。
-                .toggleStyle(.switch)
-                .settingsGlassButtons()
-                // 高过 SettingsRowMetrics.trailingAlignBand 的尾部(多行内容)只拿顶上那一截的中线去对,
-                // 不然标题会被拉到整块内容的正中间。
-                .alignmentGuide(.settingsRowTitleLine) { d in
-                    min(d.height, SettingsRowMetrics.trailingAlignBand) / 2
-                }
         }
         .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
         .modifier(SettingsRowVerticalPadding())
         // 设置搜索命中时高亮 + 滚进视野(Settings/SettingsSearch.swift)。只读 Environment,
         // 设置窗口之外用到这个组件的地方拿到的是空集,这一句等于没有。
         .settingsSearchHighlight(title: title)
+    }
+
+    private func inlineRow(measuringTitleOnly: Bool) -> some View {
+        // 图标、标题那一行、尾部控件三者的**中线**对齐(见 settingsRowTitleLine)。按顶端对齐的话,
+        // 比一行字高的控件(分段选择器、开关、下拉框)会让标题看起来整体偏上。
+        HStack(alignment: .settingsRowTitleLine, spacing: SettingsRowMetrics.iconTextSpacing) {
+            iconColumn
+
+            VStack(alignment: .leading, spacing: 2) {
+                titleLine
+                if measuringTitleOnly {
+                    subtitleAndFooter
+                        .frame(minWidth: 0, idealWidth: 0, alignment: .leading)
+                } else {
+                    subtitleAndFooter
+                }
+            }
+
+            Spacer(minLength: 12)
+
+            styledTrailing
+                // 高过 SettingsRowMetrics.trailingAlignBand 的尾部(多行内容)只拿顶上那一截的中线去对,
+                // 不然标题会被拉到整块内容的正中间。
+                .alignmentGuide(.settingsRowTitleLine) { d in
+                    min(d.height, SettingsRowMetrics.trailingAlignBand) / 2
+                }
+        }
+    }
+
+    private var iconColumn: some View {
+        // 即使这一行没有图标也占住同宽的位置——同一张卡里有的行有图标、有的没有时,
+        // 标题必须仍然对齐在同一条竖线上。
+        Group {
+            if let iconImage {
+                Image(nsImage: iconImage)
+                    .resizable()
+                    .frame(width: SettingsRowMetrics.iconWidth, height: SettingsRowMetrics.iconWidth)
+            } else if let icon {
+                // 系统符号名、自画图标的名字(`SurfaceGlyph`)都收。
+                SymbolImage(name: icon, size: 13)
+                    .foregroundStyle(iconTint ?? Color.secondary)
+                    // 锁定成拉丁语区:SF Symbols 里 textformat / textformat.alt /
+                    // textformat.size 这类"字母造型"的符号带 CJK 本地化变体,中文界面下
+                    // 会被渲染成汉字「格式」——实机截图里"显示读音"那一行
+                    // 的图标位就是一个「格式」二字,夹在一列线条图标中间像是漏了个标签。
+                    // 图标列要的是图形而不是本地化文字,这里显式钉住拉丁变体(其余不带
+                    // 变体的符号不受任何影响)。
+                    .environment(\.locale, Locale(identifier: "en"))
+            }
+        }
+        .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
+    }
+
+    /// 放不下并排时:控件排在副标题下面,跟文字同一条左边线。
+    private var stackedRow: some View {
+        HStack(alignment: .settingsRowTitleLine, spacing: SettingsRowMetrics.iconTextSpacing) {
+            iconColumn
+            VStack(alignment: .leading, spacing: 2) {
+                titleLine
+                subtitleAndFooter
+                styledTrailing
+                    .padding(.top, 6)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var titleLine: some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .font(.system(size: 13))
+                .settingsTitleFit(title)
+            if beta { SettingsBetaBadge() }
+            if let help { HelpButton(text: help) }
+        }
+        // 对齐基准取标题这一行,不取整块文字:有副标题时控件对着标题,副标题往下排。
+        .alignmentGuide(.settingsRowTitleLine) { d in d[VerticalAlignment.center] }
+    }
+
+    @ViewBuilder private var subtitleAndFooter: some View {
+        if let subtitle, !subtitle.isEmpty {
+            Text(subtitle)
+                .font(.system(size: 11))
+                .foregroundStyle(subtitleTint.map(AnyShapeStyle.init) ?? AnyShapeStyle(.secondary))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        if let footer { footer }
+    }
+
+    /// 标题行对齐由并排那一档自己挂:叠排时 VStack 里只许标题那一行给出 settingsRowTitleLine。
+    private var styledTrailing: some View {
+        trailing()
+            // 控件本身自带的标签一律不显示——标题已经在左边了,再显示一遍就是同一句
+            // 话并排两次(原生 Form 里 Toggle/Picker 的标签就是这么来的)。
+            .labelsHidden()
+            // 必须显式指定 .switch:macOS 上 Toggle 的默认样式是**复选框**,只有放在
+            // Form/List 里才会自动变成右侧那个开关。这套卡片是自己用 ScrollView+VStack
+            // 搭的、不在 Form 里,不写这一句所有开关都会画成 ☑ 复选框(
+            // 实机截图就是这个样子),跟参考设计差得很远。
+            .toggleStyle(.switch)
+            .settingsGlassButtons()
     }
 }
 

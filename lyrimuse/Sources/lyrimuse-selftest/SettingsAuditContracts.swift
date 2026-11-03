@@ -264,6 +264,11 @@ func runSettingsAuditContracts() {
                 && sourceHas(touchBarRows, "SettingsRow(icon: \"paintpalette\", title: L10n.t(\"文字颜色\"),")
                 && sourceHas(touchBarRows, "if settings.touchBarLyricsKaraoke { parts.append(L10n.t(\"卡拉OK效果\")) }"), true,
                 "触控栏: 组名「内容 / 颜色 / 布局 / 行为」,颜色那一行叫文字颜色,布局图标同另外几个形态")
+    let settingsRowBody = sourceBody("struct SettingsRow<Trailing: View>: View {", in: designSystem)
+    expectEqual(sourceHas(touchBarRows, "? L10n.t(\"歌词使用封面主色；无法获取时为白色\") : nil,\ntrailingWrapsBelow: true) {")
+                && sourceHas(settingsRowBody, "ViewThatFits(in: .horizontal) {\ninlineRow(measuringTitleOnly: true)\nstackedRow\n}")
+                && sourceHas(settingsRowBody, ".frame(minWidth: 0, idealWidth: 0, alignment: .leading)"), true,
+                "触控栏「文字颜色」: 四档跟标题排不下一行时换到标题下面,判据只拿标题单行宽去比(17 章决策 57)")
     expectEqual(sourceHas(menuBarStage, "icon: \"rectangle.split.1x2\",\ntitle: L10n.t(\"布局\"),"), true,
                 "菜单栏: 「布局」入口图标同歌词窗口、触控栏")
     let overlayColors = sourceBody("struct OverlayColorSettingsRows: View {", in: styleRows)

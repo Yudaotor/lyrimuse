@@ -99,7 +99,7 @@ struct TouchBarContentRows: View {
     }
 }
 
-/// 「颜色」组:卡拉OK效果、文字颜色(白色 / 跟随封面 / 自定义 / 彩虹,自定义时挂色块)、暗部亮度。底色恒黑,自选色照原色画,
+/// 「颜色」组:卡拉OK效果、文字颜色(白色 / 跟随封面 / 自定义 / 彩虹,自定义时挂色块;四档跟标题排不下一行时换到标题下面,17 章决策 57)、暗部亮度。底色恒黑,自选色照原色画,
 /// 没唱到的部分和副行仍有亮度下限(17 章决策 30、51)。系统开了「减弱动态效果」时卡拉OK效果那一行多一句副标题,
 /// 说明这时不逐字填色(17 章决策 43)。
 struct TouchBarColorRows: View {
@@ -120,7 +120,8 @@ struct TouchBarColorRows: View {
                 CardDivider()
                 SettingsRow(icon: "paintpalette", title: L10n.t("文字颜色"),
                             subtitle: settings.touchBarLyricsColorMode == .cover
-                                ? L10n.t("歌词使用封面主色；无法获取时为白色") : nil) {
+                                ? L10n.t("歌词使用封面主色；无法获取时为白色") : nil,
+                            trailingWrapsBelow: true) {
                     HStack(spacing: 8) {
                         SettingsGlassTabPicker(
                             selection: $settings.touchBarLyricsColorMode,
