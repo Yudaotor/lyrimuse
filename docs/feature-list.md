@@ -4,7 +4,7 @@
 
 English · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md)
 
-Lyrimuse is an open-source (GPL-3.0) Mac app for word-by-word synced lyrics, for macOS 14 or later on Apple Silicon and Intel. It shows lyrics for Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, reAMP, VOX, Pine Player, foobar2000, and YouTube Music or Spotify Web playing in a browser: floating on the desktop, beside the notch, in the menu bar, on the Touch Bar or in a full lyrics window, with translations and romanization (pinyin, Cantonese Jyutping, Japanese romaji, Korean romanization). It scrobbles to Last.fm and ListenBrainz and can show what you play on Discord. The interface is in English, Simplified Chinese, Traditional Chinese, Japanese, Korean, Spanish, French, German, Italian, Brazilian Portuguese and Vietnamese.
+Lyrimuse is an open-source (GPL-3.0) Mac app for word-by-word synced lyrics, for macOS 14 or later on Apple Silicon and Intel. It shows lyrics for Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, and YouTube Music or Spotify Web playing in a browser: floating on the desktop, beside the notch, in the menu bar, on the Touch Bar or in a full lyrics window, with translations and romanization (pinyin, Cantonese Jyutping, Japanese romaji, Korean romanization). It scrobbles to Last.fm and ListenBrainz and can show what you play on Discord. The interface is in English, Simplified Chinese, Traditional Chinese, Japanese, Korean, Spanish, French, German, Italian, Brazilian Portuguese and Vietnamese.
 
 This list covers every Lyrimuse feature: what it does, where it lives in Settings, and whether it is on or off after you install; every setting in the Settings window is listed at the end. It is kept with the code and updated whenever features change.
 
@@ -588,9 +588,9 @@ Lyrics in a web browser. Web Lyrics shows exactly what the lyrics window shows; 
 
 <a id="feature-players"></a>
 
-### Fourteen players, pick several or detect automatically
+### Fifteen players, pick several or detect automatically
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, the Winamp-style reAMP, the lossless and hi-res local player VOX, the free local player Pine Player, which plays nearly every format, the classic local player foobar2000, ported from Windows, and the YouTube Music app Kaset. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, the Winamp-style reAMP, the lossless and hi-res local player VOX, the free local player Pine Player, which plays nearly every format, the classic local player foobar2000, ported from Windows, the YouTube Music app Kaset, and the open-source YouTube Music desktop app Pear Desktop. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.
 
 - Settings: Player › Music Apps
 

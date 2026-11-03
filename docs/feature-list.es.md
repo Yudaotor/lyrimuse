@@ -4,7 +4,7 @@
 
 [English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · Español · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md)
 
-Lyrimuse es una app de código abierto (GPL-3.0) para Mac con letra sincronizada palabra por palabra, para macOS 14 o posterior en Apple Silicon e Intel. Muestra la letra de Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, reAMP, VOX, Pine Player, foobar2000, y de YouTube Music o Spotify Web en el navegador: como letra flotante en el escritorio, en el notch, en la barra de menús, en la Touch Bar o en la ventana de letra, con traducción y romanización (pinyin, jyutping cantonés, romaji japonés, romanización coreana). Hace scrobble en Last.fm y ListenBrainz, y puede mostrar en Discord lo que escuchas. La interfaz está en chino simplificado, chino tradicional, inglés, japonés, coreano, español, francés, alemán, italiano, portugués de Brasil y vietnamita.
+Lyrimuse es una app de código abierto (GPL-3.0) para Mac con letra sincronizada palabra por palabra, para macOS 14 o posterior en Apple Silicon e Intel. Muestra la letra de Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, y de YouTube Music o Spotify Web en el navegador: como letra flotante en el escritorio, en el notch, en la barra de menús, en la Touch Bar o en la ventana de letra, con traducción y romanización (pinyin, jyutping cantonés, romaji japonés, romanización coreana). Hace scrobble en Last.fm y ListenBrainz, y puede mostrar en Discord lo que escuchas. La interfaz está en chino simplificado, chino tradicional, inglés, japonés, coreano, español, francés, alemán, italiano, portugués de Brasil y vietnamita.
 
 Esta lista recoge cada función de Lyrimuse: qué hace, dónde está en Ajustes y si viene activada o desactivada al instalarla; al final aparecen todos los ajustes de la ventana Ajustes. Se mantiene junto con el código y se actualiza cada vez que cambian las funciones.
 
@@ -588,9 +588,9 @@ Muestra la letra en un navegador. «Letra web» muestra lo mismo que la ventana 
 
 <a id="feature-players"></a>
 
-### Catorce reproductores, varios a la vez o detección automática
+### Quince reproductores, varios a la vez o detección automática
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP (al estilo de Winamp), VOX (reproductor local centrado en audio sin pérdida y de alta resolución), Pine Player (reproductor local gratuito compatible con casi cualquier formato), foobar2000 (veterano reproductor local llegado de Windows) y Kaset, una app de YouTube Music. Puedes elegir varios a la vez o dejar la detección automática, que sigue al reproductor que aparece en «Reproduciendo» de macOS. Admite la radio de Apple Music: cuando habla el locutor, muestra el nombre y el logotipo de la emisora.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, reAMP (al estilo de Winamp), VOX (reproductor local centrado en audio sin pérdida y de alta resolución), Pine Player (reproductor local gratuito compatible con casi cualquier formato), foobar2000 (veterano reproductor local llegado de Windows), Kaset, una app de YouTube Music, y Pear Desktop, una app de escritorio de código abierto para YouTube Music. Puedes elegir varios a la vez o dejar la detección automática, que sigue al reproductor que aparece en «Reproduciendo» de macOS. Admite la radio de Apple Music: cuando habla el locutor, muestra el nombre y el logotipo de la emisora.
 
 - Ajustes: Reproductor › Apps de música
 

@@ -4,7 +4,7 @@
 
 [English](feature-list.md) · [简体中文](feature-list.zh-CN.md) · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · 한국어 · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md)
 
-Lyrimuse는 macOS 14 이상을 지원하고 Apple Silicon과 Intel 칩 모두와 호환되는 오픈 소스(GPL-3.0) macOS 단어별 가사 앱입니다. Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, reAMP, VOX, Pine Player, foobar2000, 그리고 브라우저에서 재생하는 YouTube Music과 Spotify 웹 플레이어의 가사를 단어 단위로 동기화해 표시합니다. 데스크탑 플로팅 가사, 노치, 메뉴 막대, Touch Bar, 가사 윈도우에 표시할 수 있고, 번역과 로마자 표기(병음, 광둥어 Jyutping, 일본어 로마자, 한국어 로마자)를 제공하며, 재생 기록을 Last.fm과 ListenBrainz에 스크로블하고 Discord에 지금 듣고 있는 노래를 표시할 수도 있습니다. 인터페이스는 중국어 간체, 중국어 번체, 영어, 일본어, 한국어, 스페인어, 프랑스어, 독일어, 이탈리아어, 브라질 포르투갈어, 베트남어를 지원합니다.
+Lyrimuse는 macOS 14 이상을 지원하고 Apple Silicon과 Intel 칩 모두와 호환되는 오픈 소스(GPL-3.0) macOS 단어별 가사 앱입니다. Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, LX Music, Kaset, Pear Desktop, reAMP, VOX, Pine Player, foobar2000, 그리고 브라우저에서 재생하는 YouTube Music과 Spotify 웹 플레이어의 가사를 단어 단위로 동기화해 표시합니다. 데스크탑 플로팅 가사, 노치, 메뉴 막대, Touch Bar, 가사 윈도우에 표시할 수 있고, 번역과 로마자 표기(병음, 광둥어 Jyutping, 일본어 로마자, 한국어 로마자)를 제공하며, 재생 기록을 Last.fm과 ListenBrainz에 스크로블하고 Discord에 지금 듣고 있는 노래를 표시할 수도 있습니다. 인터페이스는 중국어 간체, 중국어 번체, 영어, 일본어, 한국어, 스페인어, 프랑스어, 독일어, 이탈리아어, 브라질 포르투갈어, 베트남어를 지원합니다.
 
 Lyrimuse의 모든 기능을 무엇을 하는지, 설정의 어디에 있는지, 설치 직후 켜져 있는지 꺼져 있는지와 함께 정리했습니다. 마지막에는 설정 윈도우의 모든 항목을 실었습니다. 이 목록은 코드와 함께 관리되며 기능이 바뀔 때마다 갱신됩니다.
 
@@ -588,9 +588,9 @@ Apple Music, QQ Music 또는 NetEase Cloud Music에서 움직이는 아트워크
 
 <a id="feature-players"></a>
 
-### 14개 플레이어, 여러 개 선택 또는 자동 감지
+### 15개 플레이어, 여러 개 선택 또는 자동 감지
 
-Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, Winamp 스타일의 reAMP, 무손실 및 고해상도 음질을 내세운 로컬 플레이어 VOX, 무료이면서 거의 모든 형식을 지원하는 로컬 플레이어 Pine Player, Windows에서 이식된 전통 있는 로컬 플레이어 foobar2000, 그리고 YouTube Music 앱 Kaset. 여러 개를 동시에 선택하거나, 자동 감지로 두어 macOS ‘지금 재생 중’의 플레이어를 따를 수 있습니다. Apple Music 라디오를 지원하며, 진행자가 말하는 동안 방송국 이름과 로고를 표시합니다.
+Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, LX Music, KKBOX, Amazon Music, Winamp 스타일의 reAMP, 무손실 및 고해상도 음질을 내세운 로컬 플레이어 VOX, 무료이면서 거의 모든 형식을 지원하는 로컬 플레이어 Pine Player, Windows에서 이식된 전통 있는 로컬 플레이어 foobar2000, YouTube Music 앱 Kaset, 그리고 오픈 소스 YouTube Music 데스크톱 앱 Pear Desktop. 여러 개를 동시에 선택하거나, 자동 감지로 두어 macOS ‘지금 재생 중’의 플레이어를 따를 수 있습니다. Apple Music 라디오를 지원하며, 진행자가 말하는 동안 방송국 이름과 로고를 표시합니다.
 
 - 설정 위치: 플레이어 › 음악 앱
 

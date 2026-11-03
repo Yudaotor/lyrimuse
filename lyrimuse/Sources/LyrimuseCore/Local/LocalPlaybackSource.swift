@@ -1139,10 +1139,14 @@ public final class LocalPlaybackSource: ObservableObject {
     ///
     /// 洛雪不开:它换歌不是无缝的(会话撤掉、重新加载再开播),新歌的锚点是落后真声、不是超前,按连续性估出来的是负数;
     /// 自然连播晚到的那一截由 `lxMusicNaturalStartLead` 按实测补。见 02 章决策 128。
+    ///
+    /// Pear Desktop 不开:同洛雪,换歌先撤会话、新歌先发一份速率 0 的占位再发开播锚点,锚点落后真声;
+    /// 晚的那一截由锚点滞后学习补(暂停那一拍报的是真实位置)。见 02 章决策 224。
     public nonisolated static func carriesGaplessLead(tier: PositionSourceTier, bundleID: String?) -> Bool {
         if bundleID == PlaybackPlayer.kugou.bundleIdentifier { return false }
         if bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier { return false }
         if bundleID == PlaybackPlayer.lxMusic.bundleIdentifier { return false }
+        if bundleID == PlaybackPlayer.pearDesktop.bundleIdentifier { return false }
         return tier == .cleanExtrapolated || bundleID == PlaybackPlayer.spotify.bundleIdentifier
     }
 

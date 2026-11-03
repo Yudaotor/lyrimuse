@@ -1268,6 +1268,7 @@
 "开机启动" = "Launch at Login";
 "开机时自动启动 Lyrimuse" = "Launch Lyrimuse at Login";
 "开源推送服务：在手机或电脑上安装 ntfy 并订阅主题即可接收，无需注册，也可自建服务器" = "An open-source push service. Install ntfy on your phone or computer and subscribe to a topic; no sign-up needed, and you can self-host it";
+"开源的 YouTube Music 桌面客户端" = "An open-source desktop client for YouTube Music";
 "开源的音乐播放器，曲库来自国内各大平台" = "An open-source player for music from Chinese streaming platforms";
 "开源组件与词典" = "Open-source components and dictionaries";
 "开源许可证" = "Open-Source License";

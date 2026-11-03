@@ -4,7 +4,7 @@
 
 [English](feature-list.md) · 简体中文 · [繁體中文](feature-list.zh-Hant.md) · [日本語](feature-list.ja.md) · [한국어](feature-list.ko.md) · [Español](feature-list.es.md) · [Français](feature-list.fr.md) · [Deutsch](feature-list.de.md) · [Italiano](feature-list.it.md) · [Português (Brasil)](feature-list.pt-BR.md) · [Tiếng Việt](feature-list.vi.md)
 
-Lyrimuse 是一款开源（GPL-3.0）的 macOS 逐字歌词 App，支持 macOS 14 及以上版本，兼容 Apple Silicon 和 Intel 芯片。它为 Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、洛雪音乐、Kaset、reAMP、VOX、Pine Player、foobar2000，以及浏览器中的 YouTube Music 和 Spotify 网页版显示逐字同步的歌词：可显示在桌面悬浮歌词、灵动岛、菜单栏、触控栏和歌词窗口中，并提供译文和读音标注（拼音、粤拼、日语罗马音、韩语罗马字），还可将收听记录打卡到 Last.fm 和 ListenBrainz，并在 Discord 上显示正在收听的歌曲。界面支持简体中文、繁体中文、英文、日文、韩文、西班牙文、法文、德文、意大利文、巴西葡萄牙文和越南文。
+Lyrimuse 是一款开源（GPL-3.0）的 macOS 逐字歌词 App，支持 macOS 14 及以上版本，兼容 Apple Silicon 和 Intel 芯片。它为 Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、洛雪音乐、Kaset、Pear Desktop、reAMP、VOX、Pine Player、foobar2000，以及浏览器中的 YouTube Music 和 Spotify 网页版显示逐字同步的歌词：可显示在桌面悬浮歌词、灵动岛、菜单栏、触控栏和歌词窗口中，并提供译文和读音标注（拼音、粤拼、日语罗马音、韩语罗马字），还可将收听记录打卡到 Last.fm 和 ListenBrainz，并在 Discord 上显示正在收听的歌曲。界面支持简体中文、繁体中文、英文、日文、韩文、西班牙文、法文、德文、意大利文、巴西葡萄牙文和越南文。
 
 这份清单列出 Lyrimuse 的每一项功能：做什么、在设置的哪里、装好后默认开着还是关着；最后附上设置窗口里的全部设置项。清单跟代码一起维护，功能有增减时同步更新。
 
@@ -588,9 +588,9 @@ Apple Music、QQ 音乐或网易云音乐上带动态封面的专辑，在完整
 
 <a id="feature-players"></a>
 
-### 十四款播放器，可多选或自动识别
+### 十五款播放器，可多选或自动识别
 
-Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、洛雪音乐、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打无损和高解析音质的本地播放器 VOX、免费且格式支持很全的本地播放器 Pine Player、从 Windows 移植来的老牌本地播放器 foobar2000，以及 YouTube Music 客户端 Kaset。可同时选择多个，也可保持自动识别，跟随 macOS「正在播放」中的播放器。支持 Apple Music 电台，主持人讲话时显示电台名称和台标。
+Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、洛雪音乐、KKBOX、Amazon Music、仿 Winamp 的 reAMP、主打无损和高解析音质的本地播放器 VOX、免费且格式支持很全的本地播放器 Pine Player、从 Windows 移植来的老牌本地播放器 foobar2000、YouTube Music 客户端 Kaset，以及开源的 YouTube Music 桌面客户端 Pear Desktop。可同时选择多个，也可保持自动识别，跟随 macOS「正在播放」中的播放器。支持 Apple Music 电台，主持人讲话时显示电台名称和台标。
 
 - 设置位置：播放器 › 音乐 App
 

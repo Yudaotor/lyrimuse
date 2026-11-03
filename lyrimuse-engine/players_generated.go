@@ -17,6 +17,7 @@ const (
 	playerSpotify     = "spotify"
 	playerAmazonMusic = "amazon_music"
 	playerKaset       = "kaset"
+	playerPearDesktop = "pear_desktop"
 	playerReamp       = "reamp"
 	playerLXMusic     = "lx_music"
 	playerVox         = "vox"
@@ -36,6 +37,7 @@ const (
 	spotifyBundleID      = "com.spotify.client"
 	amazonMusicBundleID  = "com.amazon.music"
 	kasetBundleID        = "com.sertacozercan.Kaset"
+	pearDesktopBundleID  = "com.github.th-ch.youtube-music"
 	reampBundleID        = "ru.alexfreud.ReAmp"
 	lxMusicBundleID      = "cn.toside.music.desktop"
 	voxBundleID          = "com.coppertino.Vox"
@@ -54,6 +56,7 @@ var allPlayerIDs = []string{
 	playerSpotify,
 	playerAmazonMusic,
 	playerKaset,
+	playerPearDesktop,
 	playerReamp,
 	playerLXMusic,
 	playerVox,
@@ -74,6 +77,7 @@ var playerBundleIDs = map[string]string{
 	playerSpotify:     spotifyBundleID,
 	playerAmazonMusic: amazonMusicBundleID,
 	playerKaset:       kasetBundleID,
+	playerPearDesktop: pearDesktopBundleID,
 	playerReamp:       reampBundleID,
 	playerLXMusic:     lxMusicBundleID,
 	playerVox:         voxBundleID,
@@ -93,6 +97,7 @@ var builtinPlayerBundleIDs = map[string]bool{
 	spotifyBundleID:      true,
 	amazonMusicBundleID:  true,
 	kasetBundleID:        true,
+	pearDesktopBundleID:  true,
 	reampBundleID:        true,
 	lxMusicBundleID:      true,
 	voxBundleID:          true,
@@ -112,6 +117,7 @@ var playerProcessNames = map[string]string{
 	playerSpotify:     "Spotify",
 	playerAmazonMusic: "Amazon Music",
 	playerKaset:       "Kaset",
+	playerPearDesktop: "YouTube Music",
 	playerReamp:       "Reamp",
 	playerLXMusic:     "lx-music-desktop",
 	playerVox:         "VOX",
@@ -125,7 +131,7 @@ var playerOtherProcessNames = map[string][]string{
 }
 
 // knownPlayerProcessNames 是上面两张表的全部取值 —— 选了「自动识别」时盯全部。
-var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "neteasemusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "Reamp", "lx-music-desktop", "VOX", "Pine Player", "foobar2000"}
+var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "neteasemusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset", "YouTube Music", "Reamp", "lx-music-desktop", "VOX", "Pine Player", "foobar2000"}
 
 // playerScrobbleLabels 是「bundle id → ListenBrainz 的 media_player 标签」。
 var playerScrobbleLabels = map[string]string{
@@ -138,6 +144,7 @@ var playerScrobbleLabels = map[string]string{
 	spotifyBundleID:      "Spotify (macOS)",
 	amazonMusicBundleID:  "Amazon Music (macOS)",
 	kasetBundleID:        "Kaset (macOS)",
+	pearDesktopBundleID:  "Pear Desktop (macOS)",
 	reampBundleID:        "reAMP (macOS)",
 	lxMusicBundleID:      "LX Music (macOS)",
 	voxBundleID:          "VOX (macOS)",
@@ -160,6 +167,7 @@ var playerNativeLyricSources = map[string]string{
 	playerSpotify:     "musixmatch",
 	playerAmazonMusic: "amazon",
 	playerKaset:       "lyricfind",
+	playerPearDesktop: "lyricfind",
 	playerReamp:       "localfile",
 	playerLXMusic:     "lxmusic",
 	playerVox:         "localfile",
